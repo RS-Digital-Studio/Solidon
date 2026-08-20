@@ -1206,7 +1206,15 @@ class MainWindow(QMainWindow):
 
         self.object_tree.selectionChanged.connect(self._on_selection)
         self.object_tree.featureSelected.connect(self._on_feature_selected)
-        self.object_tree.operationRequested.connect(self.run_operation)
+        # **Über ``launch_operation``, nicht ``run_operation``.** Genau dieser
+        # Fehler ist für Menü und Palette schon behoben worden, das Kontextmenü
+        # blieb hängen: Drei Operationen mit Gestenfeld stehen dort am Körper —
+        # „Formen", „Stellung geben" und „Tasche schneiden" —, und ein
+        # Rechtsklick darauf öffnete einen Dialog mit einem Textfeld für Züge
+        # statt des Pinsels. Die Operation lief, änderte nichts und hinterließ
+        # einen leeren Schritt im Verlauf. Der Rechtsklick auf den Körper ist
+        # der Weg, den §2.6 „den kürzesten Weg vom Sehen zum Tun" nennt.
+        self.object_tree.operationRequested.connect(self.launch_operation)
         self.object_tree.visibilityRequested.connect(self._on_visibility)
         self.object_tree.isolateRequested.connect(self._on_isolate)
         self.parameters.parameterEdited.connect(self._on_parameter_edited)

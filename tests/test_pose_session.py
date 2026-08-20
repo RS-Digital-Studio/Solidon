@@ -322,3 +322,39 @@ def test_a_bound_angle_bends_the_body_and_follows_the_parameter(qt_app: QApplica
     assert zehn_grad != fuenfundvierzig, (
         "der gebeugte Koerper haengt am Parameter — sonst steht ein altes Ergebnis im Cache"
     )
+
+
+def test_the_context_menu_opens_the_editor_and_not_a_raw_dialog(window: MainWindow) -> None:
+    """Das Kontextmenü führte drei Gesten-Operationen in einen Rohdialog.
+
+    Genau dieser Fehler ist für Menü und Palette schon behoben worden — der
+    Docstring von ``launch_operation`` beschreibt ihn: „„Formen" über
+    Strg+Umschalt+P endete in einem Rohdialog: die Operation lief, veränderte
+    nichts und hinterließ einen leeren Schritt im Verlauf." Das Kontextmenü blieb
+    an ``run_operation`` hängen, und drei Operationen mit Gestenfeld stehen dort
+    am Körper: „Formen", „Stellung geben" und „Tasche schneiden".
+
+    Der Rechtsklick auf den Körper ist der Weg, den §2.6 „den kürzesten Weg vom
+    Sehen zum Tun" nennt. Geprüft wird das Signal, nicht die Methode: die
+    Verbindung ist die Aussage.
+    """
+    from app.core.registry import REGISTRY
+
+    with_a_body(window)
+    gesture = {"sketch", "strokes", "armature"}
+    offered = [
+        spec
+        for spec in REGISTRY.all()
+        if spec.consumes == 1 and {entry.kind for entry in spec.params.spec()} & gesture
+    ]
+    assert len(offered) >= 3, f"nur {len(offered)} Gesten-Operationen im Kontextmenü?"
+
+    for spec in offered:
+        window.object_tree.operationRequested.emit(spec)
+        QApplication.processEvents()
+        opened = window._sketch_panel is not None or window.sculpting() or window.setting_armature()
+        assert opened, f"{spec.title} landete nicht in ihrem Editor"
+        # Zurück auf Anfang, sonst prüft der zweite Durchgang die Sitzung des
+        # ersten.
+        window._escape()
+        QApplication.processEvents()
