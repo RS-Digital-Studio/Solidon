@@ -1258,3 +1258,38 @@ def test_a_number_field_stays_as_wide_as_a_number(window: MainWindow) -> None:
             )
     finally:
         dialog.deleteLater()
+
+
+def test_switching_to_an_expression_starts_from_millimetres(window: MainWindow) -> None:
+    """Der Ausdruck beginnt bei der Größe, nicht bei ihrer Anzeige.
+
+    Ein Parameterausdruck rechnet in Millimetern (§13). Vorbelegt wurde er aus
+    dem Drehfeld, also aus dem Anzeigewert: In Zoll stand nach einem Klick auf
+    den Umschalter „=1.5748" dort, wo 40 mm gemeint waren — und der Hinweis
+    darunter beschriftete es mit „mm", bezeugte den Fehler also selbst.
+
+    Ein Anzeigefehler wäre halb so schlimm. Der Ausdruck landet im Dokument.
+    """
+    from app.ui.labels import set_display_unit
+
+    spec = REGISTRY.get("create_box")
+    entry = _length_param(spec)
+    default_mm = float(entry.default)
+
+    set_display_unit("in")
+    dialog = OperationDialog(spec, {}, window)
+    try:
+        field = dialog._editors[entry.name]
+        assert field.spin.value() == pytest.approx(default_mm / 25.4, abs=1e-4), (
+            "das Feld muss Zoll zeigen, sonst prüft der Test nichts"
+        )
+
+        field.toggle.setChecked(True)
+
+        assert field.text.text() == f"={default_mm:g}", field.text.text()
+        # Und der Hinweis stimmt mit dem Ausdruck überein, statt ihn zu widerlegen.
+        assert f"{default_mm:g} mm" in field.hint.text(), field.hint.text()
+        # Was der Stapel bekommt, ist der Ausdruck — wörtlich, in Millimetern.
+        assert dialog.values()[entry.name] == f"={default_mm:g}"
+    finally:
+        dialog.deleteLater()

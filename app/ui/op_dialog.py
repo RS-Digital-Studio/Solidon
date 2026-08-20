@@ -246,6 +246,17 @@ class ValueField(QWidget):
             # in eine Zahl zu verwandeln — die Bindung wäre weg, und §13 rechnet
             # ohnehin in Millimetern.
             return entered
+        return self._number()
+
+    def _number(self) -> float:
+        """Die Zahl des Feldes in Millimetern, gleich was gerade sichtbar ist.
+
+        Eine eigene Methode, weil zwei Stellen sie brauchen: ``value()`` und
+        das Umschalten in den Ausdrucksmodus. Letzteres las die Zahl vorher
+        direkt aus dem Drehfeld, also **als Anzeigewert** — in Zoll wurde aus
+        40 mm der Ausdruck „=1.5748", und weil §13 in Millimetern rechnet, war
+        das ein Datenfehler und kein Anzeigefehler.
+        """
         shown = float(self.spin.value())
         if self._core is not None and self._unchanged(shown):
             # Angesehen, nicht angefasst: Dann gilt der Wert, der hereinkam.
@@ -274,8 +285,12 @@ class ValueField(QWidget):
         self.hint.setVisible(to_expression)
         if to_expression and not self.text.text().strip():
             # Aus der stehenden Zahl wird der Anfang des Ausdrucks: wer
-            # umschaltet, will meist dieselbe Größe anders ausdrücken.
-            self.text.setText(f"={self.spin.value():g}")
+            # umschaltet, will meist dieselbe Größe anders ausdrücken. Also die
+            # Größe und nicht ihre Anzeige — ein Ausdruck rechnet in
+            # Millimetern (§13), und der Hinweis darunter beschriftet ihn auch
+            # so. „= 1.5748 mm" unter einem Feld, in dem 40 mm gemeint waren,
+            # war die Anzeige, die ihren eigenen Fehler bezeugt.
+            self.text.setText(f"={self._number():g}")
         self._describe()
         self.changed.emit()
 
