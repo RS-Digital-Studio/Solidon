@@ -89,23 +89,34 @@ Linux-Suite nicht heran. Und jemand muss PyInstaller und Inno Setup 6
 installieren, einen Tag setzen und unsigniert veröffentlichen — oder die
 Warteliste stehen lassen.
 
-## 3. Zwei Beispielprojekte begrüßen mit Warnungen
+## 3. Zwei Beispielprojekte begrüßten mit Warnungen — erledigt
 
-Heute nachgemessen, beide stehen noch:
+Der Verdacht war, es handle sich um Entscheidungen über **Beispielinhalte**
+(andere Ausgangsdatei, andere Parameter). Er war falsch: Hinter beiden stand
+ein Fehler im Code, und beide sind behoben (`b5bd8d3`).
 
-* **`weg3-generiert-aufbereiten`**: zehn Befunde, davon drei Warnungen —
-  „Es gibt sehr kleine Einzelteile. Gelöscht wurde nichts.", „Das Modell ist
-  nicht geschlossen." und „Kleinstteile wurden gelöscht." Die erste und die
-  dritte widersprechen sich für den, der die Herkunft nicht liest; dass der
-  Tooltip inzwischen den Schritt nennt, mildert es und behebt es nicht. Weg 3
-  ist einer der vier Einstiege.
-* **`dose-mit-deckel`**: „Die Passung sitzt loser als vorgesehen." Das
-  Vorzeigebeispiel für Passungen zeigt eine verletzte Passung.
+* **`dose-mit-deckel`** meldete „Die Passung sitzt loser als vorgesehen",
+  gemessen 0,90 mm gegen 0,25 mm erwartet. `clearance` ist im ganzen Haus ein
+  **Durchmessermaß** — ein Passstift bekommt seine Bohrung als
+  `diameter + play`, die Passungsprüfung rechnet
+  `hole_diameter - pin_diameter`. Nur der Deckelkragen wurde damit *radial*
+  eingezogen und bekam so das Doppelte. Dazu kam `COLLAR_RELIEF = 0.2`, eine
+  Zahlenkonstante für eine Toleranz — Regel 7 verbietet genau das, und sie
+  untergrub die Kalibrierung (§28.3): Wer sein Material misst und 0,15 mm
+  einträgt, bekam trotzdem 0,55 mm je Seite. Dass ein Kragen nicht klemmt, ist
+  die Aufgabe des Gleitspiels aus dem Profil.
+* **`weg3-generiert-aufbereiten`** zeigte drei Warnungen, zwei davon drei
+  Schritte später behoben. `SETTLED_BY` (`scene/evaluate.py`) streicht einen
+  Befund, sobald einer aus seiner Menge an einem **späteren** Schritt und am
+  **selben Körper** steht. Gestrichen und nicht herabgestuft: „Das Modell ist
+  nicht geschlossen" steht im Präsens und beschreibt einen Zustand, den es
+  nicht mehr gibt. Übrig bleibt eine Warnung, und die stimmt: Kleinstteile
+  wurden gelöscht.
 
-Beides sind Entscheidungen über **Beispielinhalte** (andere Ausgangsdatei,
-andere Parameter), nicht über Code. Wer sie ändert, ändert `tools/make_examples.py`
-und muss `tests/test_tour.py` mitziehen — die Erkennungswerte der Touren hängen
-daran.
+`tools/make_examples.py` und `tests/test_tour.py` mussten dafür nicht angefasst
+werden — die Beispieldateien tragen Operationen, keine Geometrie.
+`test_no_example_greets_with_a_contradiction` hält alle neun gegen die drei
+Befundcodes.
 
 ## 4. Ein Kürzelschema nannte falsche Tasten — erledigt
 
