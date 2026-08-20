@@ -10,6 +10,23 @@
 # gebunden bleibt. OpenSCAD und die Slicer stehen unter der GPL und werden
 # deshalb ausschließlich als extern installierte Programme aufgerufen, nie
 # mitgeliefert.
+#
+# **Was extern läuft, steht trotzdem hier.** Die Prüfung unten sieht nur, was
+# in der eigenen Laufzeit installiert ist — ein Programm, das Solidon bloß
+# aufruft, kommt darin nicht vor und wäre damit die einzige Abhängigkeit ohne
+# Aktenlage. Deshalb die Aufzählung, auch wenn kein Test sie liest:
+#
+#   OpenSCAD          GPL-3.0   extern aufgerufen (§32), nie mitgeliefert
+#   PrusaSlicer       AGPL-3.0  extern aufgerufen (§29), nie mitgeliefert
+#   OrcaSlicer        AGPL-3.0  dito
+#   CuraEngine        AGPL-3.0  dito
+#   ComfyUI           GPL-3.0   extern, eigener Prozess — Weg 3 (§27)
+#   TripoSG           MIT       Gewichte und Modell, in ComfyUI geladen
+#
+# TripoSG ist der Grund, warum Weg 3 überhaupt geht: Die naheliegende
+# Alternative war lizenzrechtlich in Europa nicht nutzbar. Die Knoten unter
+# ``tools/comfyui/`` sind eigener Code und liegen im Repository, damit sie
+# mitversioniert sind; die Gewichte lädt ``tools/setup_comfyui.py``.
 
 [policy]
 # Lizenzkennungen, die in Ordnung sind. Verglichen wird ohne Rücksicht auf
