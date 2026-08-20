@@ -31,6 +31,7 @@ import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import quote
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -38,6 +39,15 @@ for _stream in (sys.stdout, sys.stderr):
 
 WEBSITE = Path(__file__).resolve().parent.parent / "website"
 STORE = WEBSITE / "dl"
+
+#: Worüber die Verweise laufen. Nicht ``/dl/`` unmittelbar: Dazwischen steht
+#: ``api/count.php``, das den Download zählt und dann auf die Datei
+#: weiterleitet — sonst wüsste niemand, ob die Demo überhaupt geladen wird.
+#: Ausgeliefert wird sie danach wieder vom Webserver selbst, damit ein
+#: abgebrochener Download fortsetzbar bleibt. Fehlt die PHP-Datei auf dem
+#: Server, führt der Verweis ins Leere — sie gehört zu jedem Hochladen dazu,
+#: so wie ``api/support.php``.
+COUNTER = "/api/count.php?f="
 
 #: Die Startseiten, die einen Download-Kasten tragen.
 PAGES = ("index.html", *(f"{code}/index.html" for code in ("en", "es", "fr", "it", "pt")))
@@ -249,7 +259,8 @@ def links(packages: list[Package], language: str) -> str:
         label += variant_of(package.name, language)
         css_class = "btn" if position == 0 else "btn ghost"
         rows.append(
-            f'\n            <a class="{css_class}" href="/dl/{package.name}" download>\n'
+            f'\n            <a class="{css_class}" href="{COUNTER}{quote(package.name)}"'
+            f' download="{package.name}">\n'
             '              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"'
             ' stroke-width="2" aria-hidden="true">\n'
             '                <path d="M12 3v12" stroke-linecap="round"/>'

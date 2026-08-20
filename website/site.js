@@ -1,8 +1,10 @@
 /* Solidon3D — das Einzige, was diese Website ohne Skript nicht kann.
  *
- * Zwei Dinge stehen hier, und beide sind Zugabe: die Sprungliste der
- * Funktionsseite markiert den Block, der gerade gelesen wird, und der
- * Download-Kasten der Startseite zählt die Zeit bis zur Demo herunter. Alles
+ * Drei Dinge stehen hier, und alle sind Zugabe: die Sprungliste der
+ * Funktionsseite markiert den Block, der gerade gelesen wird, der
+ * Download-Kasten der Startseite zählt die Zeit bis zur Demo herunter, und
+ * ganz unten meldet eine Zeile dem eigenen Server, dass diese Seite
+ * geöffnet wurde. Alles
  * andere bleibt CSS: die Bewegung der Zeichnungen läuft über scroll-gesteuerte
  * Zeitachsen (`animation-timeline: view()`), und die gehören dorthin — sie
  * laufen im Compositor, ein Skript müsste bei jedem Bildlauf rechnen.
@@ -193,7 +195,13 @@
     const first = shelf.querySelector("a[href]");
     for (const link of document.querySelectorAll("[data-release-href]")) {
       link.href = first.getAttribute("href");
-      if (link.hasAttribute("data-release-download")) link.setAttribute("download", "");
+      /* Den Dateinamen mitnehmen, nicht nur das leere Attribut: Der Verweis
+         zeigt auf den Zählpunkt und wird von dort weitergeleitet, und ein
+         `download` ohne Namen überließe es dem Browser, sich einen aus der
+         Adresse zu bauen — die dann `count.php` heißt. */
+      if (link.hasAttribute("data-release-download")) {
+        link.setAttribute("download", first.getAttribute("download") || "");
+      }
     }
     for (const node of document.querySelectorAll("[data-release-text]")) {
       node.textContent = node.dataset.releaseText;
@@ -212,4 +220,42 @@
      dem Bereich, den ein Zeitgeber sicher trägt (gut 24 Tage), wird nicht
      gewartet — dann ist der Termin ohnehin keine Sitzung entfernt. */
   if (rest < 2 ** 31 - 1) setTimeout(arrive, rest);
+})();
+
+/* Der Zählruf.
+ *
+ * Ohne ihn weiß niemand, ob diese Seiten gelesen werden — und die Frage ist
+ * berechtigt, auch wenn die Antwort darauf sonst über Google Analytics
+ * gegeben wird. Hier geht eine Zeile an den eigenen Server, mehr nicht:
+ * welcher Pfad geöffnet wurde. Kein Cookie, kein Kennzeichen im Browser,
+ * kein fremder Server, keine gespeicherte IP-Adresse. Was daraus wird, steht
+ * in `api/count.php`.
+ *
+ * `sendBeacon` und nicht `fetch`: Der Ruf muss auch dann noch hinausgehen,
+ * wenn der Besucher im selben Moment weiterklickt — ein gewöhnlicher Abruf
+ * würde beim Seitenwechsel abgebrochen.
+ *
+ * Wer im Browser „nicht verfolgen" eingestellt hat, wird nicht gezählt. Das
+ * kostet ein paar Prozent der Zahl und ist es wert: Eine Website, die
+ * Datensparsamkeit verspricht, hält sich an eine Einstellung, die genau das
+ * verlangt — auch wenn niemand es nachprüfen würde.
+ *
+ * Downloads zählt diese Datei nicht. Sie laufen über `api/count.php` selbst
+ * und werden dort gezählt, wo sie ankommen — ein Skript, das der Besucher
+ * blockt, hätte sonst die eine Zahl verschluckt, auf die es ankommt.
+ */
+(() => {
+  "use strict";
+
+  if (navigator.doNotTrack === "1" || window.doNotTrack === "1" || navigator.globalPrivacyControl) return;
+
+  const body = new URLSearchParams({ p: location.pathname || "/" });
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon("/api/count.php", body);
+  } else if (window.fetch) {
+    /* Der Rückfall für alles, was `sendBeacon` nicht kennt. `keepalive`
+       versucht dasselbe zu erreichen; klappt es nicht, fehlt ein Aufruf in
+       der Statistik und sonst nichts. */
+    fetch("/api/count.php", { method: "POST", body, keepalive: true }).catch(() => {});
+  }
 })();

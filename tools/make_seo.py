@@ -127,13 +127,22 @@ def sitemap() -> str:
 
 
 def robots() -> str:
-    """``robots.txt`` — alles erlaubt, und der Weg zur Sitemap."""
+    """``robots.txt`` — alle Seiten erlaubt, die Maschinerie darunter nicht.
+
+    ``/api/`` steht auf der Sperrliste, seit dort mehr liegt als die
+    Rückmeldung: der Zählpunkt und die Auswertung dazu. Beide sind keine
+    Seiten, und die Auswertung ist ohnehin hinter einer Anmeldung — in einem
+    Suchindex haben sie nichts verloren.
+    """
     return (
         "# Solidon3D — solidon3d.de\n"
-        "# Die Seite hat nichts zu verbergen: kein Konto, kein Zählpixel,\n"
-        "# keine Ansicht, die nur für angemeldete Besucher gilt.\n"
+        "# Die Seite hat nichts zu verbergen: kein Konto, keine Ansicht, die\n"
+        "# nur für angemeldete Besucher gilt. Gezählt wird auf dem eigenen\n"
+        "# Server und ohne Cookie; was dabei entsteht, steht in der\n"
+        "# Datenschutzerklärung.\n"
         "User-agent: *\n"
         "Allow: /\n"
+        "Disallow: /api/\n"
         "\n"
         f"Sitemap: {SITE}sitemap.xml\n"
     )

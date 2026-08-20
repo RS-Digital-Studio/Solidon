@@ -158,6 +158,12 @@ def test_every_file_the_page_refers_to_exists(page: str) -> None:
         # Sprungmarke: `/#preis` meint die Startseite und darin die Stelle.
         # Hier zählt die Datei davor — die Marke prüft der Test darunter.
         target = target.split("#", 1)[0]
+        # Und seit der Download über den Zähler läuft, trägt er eine Abfrage:
+        # `/api/count.php?f=Solidon3D-Setup-0.1.1.exe`. Auch hier zählt die
+        # Datei davor — was hinter dem Fragezeichen steht, ist ein Argument
+        # und kein Pfad, und ohne diese Zeile wäre jeder Verweis mit einer
+        # Abfrage ein Fehlbefund.
+        target = target.split("?", 1)[0]
         if not target:
             continue
         # **Die Pakete zählen nicht mit.** ``website/dl/`` steht in

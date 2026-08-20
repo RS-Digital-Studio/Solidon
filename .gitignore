@@ -75,3 +75,19 @@ htmlcov/
 # Repository haben ein paar hundert Megabyte je Fassung nichts verloren. Die
 # Verweise darauf stehen in den Seiten und sind versioniert, die Dateien nicht.
 website/dl/
+
+# --- Zugang zur Zugriffsstatistik ---------------------------------------------
+# Der Passwort-Hash für website/api/stats.php. Er schützt die einzige Seite der
+# Domain, die nicht öffentlich ist; ein Hash im Repository ist zwar kein
+# Klartext, aber auch kein Geheimnis mehr. Wie die Datei entsteht, steht im Kopf
+# von stats.php — hochgeladen wird sie einzeln:
+#   tools/upload_website.py website/api/.stats-zugang.php
+/website/api/.stats-zugang.php
+
+# Was der Zähler auf dem Server schreibt. Falls jemand die PHP-Dateien lokal
+# ausprobiert, entsteht derselbe Ordner hier — er gehört dem Server, nicht der
+# Versionsgeschichte.
+/website/api/.stats/
+# Und derselbe Ordner an seinem eigentlichen Ort: Auf dem Server liegt er
+# neben dem Dokumentenstamm, lokal landet er damit im Wurzelverzeichnis.
+/solidon-stats/
