@@ -7,11 +7,13 @@ from __future__ import annotations
 import ast
 import os
 import re
+import unicodedata
 from pathlib import Path
 
 import pytest
 
 import app
+from app.core.knowledge.parts.registry import GROUPS
 from app.i18n import SOURCE_LANGUAGE, TranslatableText, set_language
 from app.i18n.catalog import available_languages, install_language, read_catalog
 from app.i18n.extract import message_ids
@@ -296,3 +298,47 @@ def test_every_choice_has_a_name_someone_can_read() -> None:
                 offenders.append(f"{spec.name}.{entry.name}: {value!r}")
 
     assert not offenders, "choice values shown as keys:\n" + "\n".join(sorted(offenders))
+
+
+#: Ab wie vielen gemeinsamen Anfangsbuchstaben zwei Katalogruppen einer Sprache
+#: als derselbe Name gelten. Gefunden am französischen Paar
+#: „Fixations" (Verbindungen) und „Fixation" (Befestigung): ein Buchstabe
+#: Unterschied, und im Katalog stehen sie untereinander. Portugiesisch hatte
+#: dasselbe mit „Fixações" gegen „Fixação" — von einem Abstandsmaß über die
+#: ganzen Wörter unbemerkt, weil drei Zeichen dazwischen liegen. Was die zwei
+#: Fälle verbindet, ist nicht der Abstand, sondern der gemeinsame Wortstamm,
+#: und den sieht man am Anfang.
+GROUP_STEM = 5
+
+
+def _stem(text: str) -> str:
+    """Der Wortanfang ohne Akzente und Kleinschreibung — soweit er zählt."""
+    stripped = unicodedata.normalize("NFKD", text.casefold())
+    letters = "".join(sign for sign in stripped if not unicodedata.combining(sign))
+    return letters[:GROUP_STEM]
+
+
+@pytest.mark.parametrize("language", list(available_languages()))
+def test_two_catalogue_groups_never_read_almost_the_same(language: str) -> None:
+    """Sieben Gruppen ordnen den Bausteinkatalog (§24.3), und sie ordnen nur,
+    solange der Nutzer sie auseinanderhalten kann.
+
+    Geprüft wird der Wortstamm, nicht die Gleichheit: Zwei verschiedene
+    Zeichenketten sind noch kein Unterschied, den jemand im Vorbeigehen sieht.
+    """
+    install_language(language)
+    names = {key: title.translate(language) for key, title in GROUPS.items()}
+    assert language == SOURCE_LANGUAGE or names != {
+        key: title.msgid for key, title in GROUPS.items()
+    }, f"{language}: nothing was translated — the test would be measuring German"
+
+    seen: dict[str, str] = {}
+    clashes = []
+    for key, name in sorted(names.items()):
+        stem = _stem(name)
+        if stem in seen:
+            clashes.append(f"{seen[stem]} / {key}: {names[seen[stem]]!r} vs {name!r}")
+        else:
+            seen[stem] = key
+
+    assert not clashes, f"{language}: catalogue groups too alike\n" + "\n".join(clashes)
