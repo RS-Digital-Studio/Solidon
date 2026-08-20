@@ -123,7 +123,7 @@ from app.core.scene import (
     values_for_object,
 )
 from app.core.scene.cancel import CancelSignal
-from app.core.scene.project import find_recovery
+from app.core.scene.project import clear_autosave, find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import total as estimate_total
@@ -2453,6 +2453,11 @@ class MainWindow(QMainWindow):
             # Wer den Dateidialog abbricht, hat nicht gespeichert — und will
             # dann ganz sicher nicht, dass die Arbeit trotzdem verschwindet.
             return not self.session.modified
+        # Verworfen heißt verworfen. Die automatische Sicherung ist für den
+        # Absturz da (§38) — nicht dafür, eine Entscheidung des Nutzers zu
+        # überstimmen. Bleibt sie liegen, bietet das nächste Öffnen genau den
+        # Stand wieder an, den er hier gerade weggeworfen hat.
+        clear_autosave(self.session.path)
         return True
 
     def open_path(self, path: Path) -> None:
@@ -5859,6 +5864,10 @@ class MainWindow(QMainWindow):
             tr("Ein Projekt aus einer früheren Sitzung wurde nie gespeichert."),
             tr("Leer beginnen"),
         ):
+            # Dieselbe Begründung wie beim benannten Fall: sonst begrüßt
+            # dieselbe Frage jeden Start, bis irgendwann jemand die Datei von
+            # Hand löscht.
+            clear_autosave(None)
             return
         try:
             self.session.recover(candidate)
@@ -6210,6 +6219,11 @@ class MainWindow(QMainWindow):
         lines = [tr("Sicherung: {backup}").format(backup=self._when(candidate))]
         if saved is not None:
             lines.append(tr("Gespeicherter Stand: {saved}").format(saved=self._when(saved)))
+        # Was das Ablehnen kostet, steht dabei. Die Sicherung wird danach
+        # gelöscht — sonst käme dieselbe Frage bei jedem Öffnen wieder —, und
+        # eine Löschung, die niemand angekündigt hat, ist ein Datenverlust
+        # mit Ansage an die falsche Adresse.
+        lines.append(tr("Wird die Sicherung nicht geöffnet, wird sie verworfen."))
         box.setInformativeText("\n".join(lines))
         restore = box.addButton(tr("Sicherung öffnen"), QMessageBox.ButtonRole.AcceptRole)
         box.addButton(decline, QMessageBox.ButtonRole.RejectRole)
@@ -6218,7 +6232,14 @@ class MainWindow(QMainWindow):
         return box.clickedButton() is restore
 
     def _offer_recovery(self, path: Path) -> None:
-        """Eine Sicherung anbieten, die neuer ist als die Datei (§38)."""
+        """Eine Sicherung anbieten, die neuer ist als die Datei (§38).
+
+        **Einmal gefragt, nicht bei jedem Öffnen.** Die abgelehnte Sicherung
+        blieb liegen, und weil sie weiter neuer war als die Datei, stellte das
+        nächste Öffnen dieselbe Frage — und das übernächste auch. Gemessen:
+        sechs Öffnungen, sechs Fragen. Eine Entscheidung, die nicht hält, ist
+        keine.
+        """
         candidate = find_recovery(path)
         if candidate is None:
             return
@@ -6228,11 +6249,18 @@ class MainWindow(QMainWindow):
             tr("Es gibt eine automatische Sicherung, die neuer ist als die Datei."),
             tr("Gespeicherten Stand behalten"),
         ):
+            clear_autosave(path)
             return
         # Dieselbe synchrone Lesung wie in ``open_path``, also derselbe
         # Zeiger (§2.8).
+        #
+        # Über ``recover`` und nicht über ``open_project``: Letzteres machte
+        # die Sicherung zum Projekt, und ein „Speichern" danach schrieb in
+        # `…p3d.autosave` statt in die Datei des Nutzers. Seine eigentliche
+        # Datei blieb dabei unangetastet — die wiederhergestellte Arbeit war
+        # beim nächsten Öffnen wieder fort.
         with waiting():
-            self.session.open_project(candidate)
+            self.session.recover(candidate, path)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
         if (
@@ -6361,8 +6389,12 @@ class MainWindow(QMainWindow):
         if self._remote is not None:
             self._remote.stop()
             self._remote = None
-        if self.session.modified:
-            self.session.autosave()
+        # Hier stand eine Sicherung. Sie lief **nach** der Frage darüber, und
+        # dort kann nur noch stehen, wer gerade *Verwerfen* geklickt hat —
+        # gespeichert hätte ``modified`` geräumt. Sie schrieb also genau den
+        # Stand weg, den der Nutzer eben weggeworfen hatte, und das nächste
+        # Öffnen bot ihn wieder an. Wer im Betrieb abstürzt, ist weiter
+        # abgedeckt: der Zeitgeber sichert im Lauf (``AUTOSAVE_INTERVAL_MS``).
         # Wie das Fenster verlassen wird, so kommt es wieder — maximiert ist
         # nur die Vorgabe für den ersten Start.
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")

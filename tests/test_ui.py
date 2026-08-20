@@ -5038,6 +5038,89 @@ def test_both_recovery_questions_name_their_action_and_the_age(
     assert [eintrag["saved"] is None for eintrag in bestellt] == [True, False]
 
 
+def test_a_declined_backup_is_not_offered_again(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wer die Sicherung ablehnt, hat entschieden — auch beim nächsten Öffnen.
+
+    Sie blieb liegen und war weiter neuer als die Datei, also fragte jedes
+    Öffnen erneut. Gemessen an der laufenden Oberfläche: sechs Öffnungen,
+    sechs Fragen. Das ist keine Rückfrage mehr, das ist Nörgeln.
+    """
+    from app.core.scene.project import write_autosave
+
+    gefragt: list[Path] = []
+
+    def ablehnen(
+        self: MainWindow, candidate: Path, saved: Path | None, question: str, decline: str
+    ) -> bool:
+        gefragt.append(candidate)
+        return False
+
+    monkeypatch.setattr(MainWindow, "_ask_recovery", ablehnen)
+
+    named = tmp_path / "projekt.p3d"
+    window.session.save_project(named)
+    write_autosave(window.session.project, named)
+
+    window._offer_recovery(named)
+    window._offer_recovery(named)
+    window._offer_recovery(named)
+
+    assert len(gefragt) == 1, f"{len(gefragt)} Fragen für eine abgelehnte Sicherung"
+
+
+def test_discarding_at_the_end_really_discards(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Verwerfen* am Schließen darf keine Sicherung hinterlassen.
+
+    Das Fenster fragte, der Nutzer verwarf — und danach schrieb ``closeEvent``
+    genau diesen Stand als automatische Sicherung weg. Beim nächsten Öffnen
+    bot die Anwendung ihm an, was er weggeworfen hatte.
+    """
+    from PySide6.QtGui import QCloseEvent
+
+    from app.core.scene.project import autosave_path, find_recovery, write_autosave
+
+    named = tmp_path / "projekt.p3d"
+    window.session.save_project(named)
+
+    # So sieht es aus, wenn der Zeitgeber im Lauf gesichert hat und danach
+    # weitergearbeitet wurde: eine Sicherung liegt da, das Dokument ist
+    # geändert. Genau in diesem Zustand wird geschlossen.
+    write_autosave(window.session.project, named)
+    window.session._dirty = True
+    monkeypatch.setattr("app.ui.main_window.confirm_unsaved", lambda *args, **kwargs: "discard")
+
+    window.closeEvent(QCloseEvent())
+
+    assert not autosave_path(named).is_file(), "die verworfene Sicherung liegt noch da"
+    assert find_recovery(named) is None
+
+
+def test_a_recovered_project_saves_into_the_users_file(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Sicherung wird geöffnet, aber sie wird nicht zur Datei des Nutzers.
+
+    ``open_project`` machte sie dazu: ein „Speichern" danach schrieb in
+    ``projekt.p3d.autosave``, und die eigentliche Datei blieb unberührt — die
+    wiederhergestellte Arbeit war beim nächsten Öffnen wieder fort.
+    """
+    from app.core.scene.project import write_autosave
+
+    named = tmp_path / "projekt.p3d"
+    window.session.save_project(named)
+    write_autosave(window.session.project, named)
+    monkeypatch.setattr(MainWindow, "_ask_recovery", lambda *args, **kwargs: True)
+
+    window._offer_recovery(named)
+
+    assert window.session.path == named, f"gespeichert würde nach {window.session.path}"
+    assert window.session.modified, "der Stand weicht von der Datei ab — genau darum ging es"
+
+
 def test_no_question_box_asks_yes_or_no(window: MainWindow) -> None:
     """Bauart-Prüfung: „Ja"/„Nein" ist in dieser Oberfläche keine Frage.
 

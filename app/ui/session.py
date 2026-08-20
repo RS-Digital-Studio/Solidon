@@ -417,18 +417,26 @@ class Session(QObject):
         self.pending_foreign_check = True
         self._reset_for(path)
 
-    def recover(self, path: Path) -> None:
+    def recover(self, path: Path, into: Path | None = None) -> None:
         """Öffnet eine automatische Sicherung, ohne sie zum Projekt zu machen.
 
-        Der Pfad bleibt leer: die Sicherung ist nicht die Datei, die der
-        Nutzer pflegt, und ein „Speichern" darauf würde sie überschreiben,
-        statt nach einem Namen zu fragen.
+        Die Sicherung ist nicht die Datei, die der Nutzer pflegt, und ein
+        „Speichern" darauf würde sie überschreiben, statt die eigentliche
+        Datei zu schreiben.
+
+        ``into`` ist genau diese Datei: die Sicherung gehört zu ihr, also
+        speichert ein „Speichern" dorthin. Ohne ``into`` bleibt der Pfad leer
+        — der namenlose Fall hat keine Datei, und dort fragt „Speichern" nach
+        einem Namen.
+
+        Geändert ist der Stand in beiden Fällen: er weicht von dem ab, was auf
+        der Platte liegt. Genau das war der Grund, ihn wiederherzustellen.
         """
         self.project = load(path)
         self.pending_orphan_check = True
         self.pending_part_check = True
         self.pending_foreign_check = True
-        self._reset_for(None)
+        self._reset_for(into)
         self._dirty = True
         self.projectChanged.emit()
 
