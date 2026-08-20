@@ -117,11 +117,30 @@ jobs:
         # Die Liste wird nicht gepflegt, sondern gesucht — wer eine neue
         # Oberflächendatei anlegt, bekommt ihren eigenen Prozess, ohne hier
         # etwas zu ändern.
+        #
+        # **Gesucht wird nach dem Aufbau, nicht nach der Erwähnung.** Nach
+        # `MainWindow` allein fehlten zwei Dateien, die einen `Viewport` bauen,
+        # ohne das Fenster zu nennen: `tests/test_cursors.py` mit acht Aufbauten
+        # und `tests/test_plates.py` mit einem. Neun VTK-Fenster mehr im großen
+        # Stapel, ohne dass es auffiel — bei einem Absturz, der genau an dieser
+        # Zahl hängt.
+        #
+        # Nach `Viewport(` mit Klammer und nicht nach dem nackten Namen: sieben
+        # weitere Dateien *erwähnen* ihn oder `pyvista` nur, in einem Import,
+        # einem Kommentar, der Lizenzliste von `test_licences.py`. Die bekämen
+        # sonst einen eigenen Prozess für nichts.
+        #
+        # Nachgemessen am 20.08.2026, lokal auf Windows in *einem* Prozess: die
+        # ganze Suite brach bei 5 % mit einer Zugriffsverletzung ab, im
+        # `window`-Fixture von `test_analysis_ui.py` (`QThread.__init__`,
+        # Exit 139). Dieselbe Datei allein: dreimal grün, 103 Tests. Je
+        # Fensterdatei ein Prozess: 4021 Tests grün, kein Absturz. Es ist die
+        # Zahl der Fenster und nichts an einem einzelnen Test.
         env:
           QT_QPA_PLATFORM: xcb
         run: |
           set -e
-          windowed=$(grep -l "MainWindow" tests/test_*.py | tr '\n' ' ')
+          windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
           ignores=""
           for file in $windowed; do ignores="$ignores --ignore=$file"; done
           run() { xvfb-run -a --server-args="-screen 0 1920x1080x24" python -m pytest -q "$@"; }

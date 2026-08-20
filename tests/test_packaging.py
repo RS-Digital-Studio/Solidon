@@ -252,3 +252,37 @@ def test_qt_has_a_catalogue_for_every_language_we_offer() -> None:
         f"Qt bringt für diese Sprachen keinen Katalog mit: {missing} — "
         "die Standardknöpfe bleiben dort englisch."
     )
+
+
+def test_the_workflow_finds_every_file_that_builds_a_window() -> None:
+    """Die CI gibt jeder Fensterdatei einen eigenen Prozess — sie muss sie finden.
+
+    Der Absturz auf den Linux-Runnern hängt an der Zahl der VTK-Fenster, die ein
+    Prozess nacheinander aufbaut; deshalb laufen die Fensterdateien einzeln. Die
+    Liste wird gesucht und nicht gepflegt, und genau daran ist sie
+    zurückgeblieben: Nach `MainWindow` allein fehlten `test_cursors.py` (acht
+    Viewport-Aufbauten) und `test_plates.py` (einer) — neun Fenster mehr im
+    großen Stapel, ohne dass es auffiel.
+
+    Geprüft wird das Suchmuster aus dem Workflow gegen die Dateien, die
+    wirklich eines **bauen**. Erwähnungen zählen nicht: ein Import oder die
+    Lizenzliste bekämen sonst einen eigenen Prozess für nichts.
+    """
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    found = re.search(r'windowed=\$\(grep -lE "([^"]+)"', workflow)
+    assert found, "das Suchmuster der Fensterdateien steht nicht mehr im Workflow"
+    pattern = re.compile(found.group(1))
+
+    builders = re.compile(r"\b(MainWindow|Viewport|SketchPanel|OverlayHost|Plotter)\(")
+    missed = []
+    for path in sorted((ROOT / "tests").glob("test_*.py")):
+        source = path.read_text(encoding="utf-8")
+        if not builders.search(source):
+            continue
+        if not pattern.search(source):
+            missed.append(path.name)
+
+    assert not missed, (
+        f"Diese Dateien bauen ein Fenster und laufen trotzdem im großen Stapel: {missed}. "
+        "Das Suchmuster in .github/workflows/build.yml findet sie nicht."
+    )
