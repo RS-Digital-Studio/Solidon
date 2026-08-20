@@ -8,9 +8,24 @@
  * einzelnen Besucher über den Tag hinaus. Was hier nicht steht, steht auch in
  * den Daten nicht.
  *
- * Aufruf: https://solidon3d.de/api/stats.php — das Anmeldefenster verlangt
- * einen Benutzernamen, geprüft wird aber nur das Passwort. Was im Namensfeld
- * steht, ist gleichgültig.
+ * Aufruf: https://solidon3d.de/api/stats.php — ein Feld, ein Passwort, und
+ * danach dreißig Tage Ruhe.
+ *
+ * **Warum kein Basic-Auth.** Das war der erste Versuch, und er hatte zwei
+ * Fehler. Das Anmeldefenster des Browsers verlangt einen Benutzernamen, den
+ * hier niemand vergeben hat — wer davorsteht, muss raten, was dort hingehört.
+ * Und es kam bei jedem Aufruf wieder: Läuft PHP als CGI oder FastCGI, was auf
+ * Plesk die Regel ist, reicht der Webserver den `Authorization`-Kopf gar nicht
+ * an PHP durch. Das richtige Passwort kommt dann nie an, die Seite antwortet
+ * mit 401, und der Browser fragt erneut — von außen sieht das aus, als wäre
+ * das Passwort falsch.
+ *
+ * Stattdessen ein eigenes Formular und ein signiertes Cookie. Das Cookie
+ * trägt einen Ablaufzeitpunkt und dessen HMAC, abgeleitet aus dem
+ * Passwort-Hash; auf dem Server liegt dafür nichts, es gibt keine
+ * Sitzungsdateien und keinen Zustand, der volllaufen könnte. Wer das Cookie
+ * fälschen will, braucht den Hash — und der liegt in einer Datei, die der
+ * Webserver nicht herausgibt.
  *
  * **Einrichtung — ohne diesen Schritt bleibt die Seite zu.** Neben dieser
  * Datei muss `.stats-zugang.php` liegen und den Hash eines Passworts
@@ -52,16 +67,28 @@ const DISPLAY_ZONE = 'Europe/Berlin';
 /** Wie viele Zeilen die Ranglisten zeigen. */
 const TOP = 25;
 
+/** Wie das Cookie heißt, das die Anmeldung merkt. */
+const COOKIE = 'solidon_stats';
+
+/** Wie lange es gilt. Lang genug, dass man es vergisst; kurz genug, dass ein
+ *  liegengelassener Rechner nicht ewig offensteht. */
+const COOKIE_DAYS = 30;
+
+/** Wie viele Fehlversuche in einer Viertelstunde erlaubt sind. bcrypt bremst
+ *  Rateversuche schon von sich aus auf wenige je Sekunde; das hier ist die
+ *  zweite Wand dahinter. */
+const MAX_TRIES = 10;
+
 // --- Anmeldung -------------------------------------------------------------
 
 /**
- * Die Seite bleibt zu, bis sich jemand ausweist.
+ * Der Passwort-Hash — oder eine Seite, die sagt, was ihm fehlt.
  *
  * Fehlt die Zugangsdatei, gibt es kein Ersatzpasswort und keinen offenen
  * Zustand: Eine Statistikseite, die im Zweifel offen ist, ist schlimmer als
  * keine.
  */
-function require_login(): void
+function stored_hash(): string
 {
     $access = @include ACCESS_FILE;
     $hash = is_array($access) ? (string) ($access['hash'] ?? '') : '';
@@ -90,31 +117,178 @@ function require_login(): void
         exit;
     }
 
-    // **Der Benutzername zählt nicht.** Ein Anmeldefenster verlangt beide
-    // Felder, aber hier gibt es nur einen Leser — ein zweites Geheimnis, das
-    // niemand vergeben hat, wäre keine Sicherheit, sondern eine Stelle, an der
-    // man sich selbst aussperrt. Was im Namensfeld steht, ist gleichgültig;
-    // geprüft wird das Passwort.
-    $password = (string) ($_SERVER['PHP_AUTH_PW'] ?? '');
+    return $hash;
+}
 
-    // Manche Server reichen den Authorization-Kopf nicht an PHP durch, sondern
-    // legen ihn in eine Umgebungsvariable. Ohne diese Zeilen käme dort nie
-    // ein Passwort an, und die Seite bliebe auch mit richtigem Passwort zu.
-    if ($password === '') {
-        $header = (string) ($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-        if (stripos($header, 'basic ') === 0) {
-            $pair = explode(':', (string) base64_decode(substr($header, 6)), 2);
-            $password = $pair[1] ?? '';
+/**
+ * Der Schlüssel, mit dem das Cookie unterschrieben wird.
+ *
+ * Abgeleitet aus dem Passwort-Hash und nicht aus dem Passwort: Der Hash liegt
+ * ohnehin auf dem Server, es kommt also kein neues Geheimnis dazu, das
+ * irgendwo hinterlegt werden müsste. Und wer das Passwort ändert, macht damit
+ * jedes ausgestellte Cookie ungültig — genau das, was man von einem
+ * Passwortwechsel erwartet.
+ */
+function signing_key(string $hash): string
+{
+    return hash('sha256', 'solidon-stats|' . $hash);
+}
+
+/** Ein frisches Cookie: bis wann es gilt, und die Unterschrift darüber. */
+function make_token(string $hash): string
+{
+    $until = time() + COOKIE_DAYS * 86400;
+    return $until . '.' . hash_hmac('sha256', (string) $until, signing_key($hash));
+}
+
+/**
+ * Ob ein mitgebrachtes Cookie gilt.
+ *
+ * ``hash_equals`` und nicht ``===``: Ein gewöhnlicher Vergleich bricht beim
+ * ersten ungleichen Zeichen ab, und aus der Zeit, die er dafür braucht, lässt
+ * sich die richtige Unterschrift Zeichen für Zeichen erraten.
+ */
+function token_ok(string $token, string $hash): bool
+{
+    $parts = explode('.', $token, 2);
+    if (count($parts) !== 2) {
+        return false;
+    }
+    [$until, $signature] = $parts;
+    if (!ctype_digit($until) || (int) $until < time()) {
+        return false;
+    }
+    return hash_equals(hash_hmac('sha256', $until, signing_key($hash)), $signature);
+}
+
+/** Wo die Fehlversuche gezählt werden — beim Zähler, nicht im Dokumentenstamm. */
+function tries_file(): string
+{
+    return store_dir() . '/anmeldeversuche.json';
+}
+
+/** Wie viele Fehlversuche in der letzten Viertelstunde stehen. */
+function recent_tries(): int
+{
+    $stamps = @json_decode((string) @file_get_contents(tries_file()), true);
+    if (!is_array($stamps)) {
+        return 0;
+    }
+    $since = time() - 900;
+    return count(array_filter($stamps, static fn ($t): bool => is_int($t) && $t > $since));
+}
+
+/** Einen Fehlversuch vermerken; ältere fallen dabei heraus. */
+function note_try(): void
+{
+    $stamps = @json_decode((string) @file_get_contents(tries_file()), true);
+    $since = time() - 900;
+    $kept = is_array($stamps)
+        ? array_values(array_filter($stamps, static fn ($t): bool => is_int($t) && $t > $since))
+        : [];
+    $kept[] = time();
+    @file_put_contents(tries_file(), json_encode($kept), LOCK_EX);
+}
+
+/** Das Cookie setzen oder löschen, mit allem, was dazugehört. */
+function set_cookie(string $value, int $expires): void
+{
+    setcookie(COOKIE, $value, [
+        'expires' => $expires,
+        // Nur unterhalb von /api/ — die öffentlichen Seiten sehen es nie und
+        // bleiben damit die cookiefreien Seiten, die sie versprechen.
+        'path' => '/api/',
+        'secure' => true,
+        'httponly' => true,
+        'samesite' => 'Strict',
+    ]);
+}
+
+/**
+ * Die Seite bleibt zu, bis sich jemand ausweist.
+ *
+ * Nach erfolgreicher Anmeldung wird umgeleitet statt gleich angezeigt: Sonst
+ * steht das Passwort im letzten Formular, und ein Neuladen schickt es erneut.
+ */
+function require_login(): void
+{
+    $hash = stored_hash();
+
+    if (isset($_GET['abmelden'])) {
+        set_cookie('', time() - 3600);
+        header('Location: ' . strtok((string) ($_SERVER['REQUEST_URI'] ?? ''), '?'), true, 303);
+        exit;
+    }
+
+    if (token_ok((string) ($_COOKIE[COOKIE] ?? ''), $hash)) {
+        return;
+    }
+
+    $message = '';
+    if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+        if (recent_tries() >= MAX_TRIES) {
+            $message = 'Zu viele Versuche. Eine Viertelstunde warten.';
+        } elseif (password_verify((string) ($_POST['password'] ?? ''), $hash)) {
+            set_cookie(make_token($hash), time() + COOKIE_DAYS * 86400);
+            header('Location: ' . strtok((string) ($_SERVER['REQUEST_URI'] ?? ''), '?'), true, 303);
+            exit;
+        } else {
+            note_try();
+            $message = 'Das war es nicht.';
         }
     }
 
-    if ($password === '' || !password_verify($password, $hash)) {
-        header('WWW-Authenticate: Basic realm="Solidon3D"');
-        http_response_code(401);
-        header('Content-Type: text/plain; charset=utf-8');
-        echo "Nicht angemeldet.\n";
-        exit;
-    }
+    login_page($message);
+    exit;
+}
+
+/** Das Anmeldeformular. Ein Feld, sonst nichts. */
+function login_page(string $message): void
+{
+    http_response_code($message === '' ? 401 : 403);
+    header('Content-Type: text/html; charset=utf-8');
+    $note = $message === ''
+        ? ''
+        : '<p class="fehler" role="alert">' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</p>';
+    echo <<<HTML
+        <!doctype html>
+        <html lang="de">
+        <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="robots" content="noindex, nofollow">
+        <title>Zugriffe — Solidon3D</title>
+        <style>
+          :root { color-scheme: light dark; --line: #d8d8d4; --dim: #6b6b66; }
+          @media (prefers-color-scheme: dark) { :root { --line: #3a3a38; --dim: #9a9a94; } }
+          body { font: 16px/1.5 system-ui, sans-serif; margin: 0; min-height: 100vh;
+                 display: grid; place-items: center; padding: 2rem; }
+          form { width: min(22rem, 100%); }
+          h1 { font-size: 1.25rem; margin: 0 0 .25rem; }
+          p { color: var(--dim); margin: 0 0 1.5rem; }
+          p.fehler { color: inherit; font-weight: 600; margin: 0 0 1rem; }
+          label { display: block; font-size: .85rem; color: var(--dim); margin: 0 0 .35rem; }
+          input { width: 100%; box-sizing: border-box; font: inherit; padding: .6rem .75rem;
+                  border: 1px solid var(--line); border-radius: .4rem; background: transparent;
+                  color: inherit; }
+          button { margin-top: .75rem; font: inherit; padding: .6rem 1.25rem;
+                   border: 1px solid var(--line); border-radius: .4rem; background: transparent;
+                   color: inherit; cursor: pointer; }
+        </style>
+        </head>
+        <body>
+        <form method="post" autocomplete="on">
+          <h1>Zugriffe auf solidon3d.de</h1>
+          <p>Nicht öffentlich. Ein Passwort, kein Benutzername.</p>
+          {$note}
+          <label for="password">Passwort</label>
+          <input id="password" name="password" type="password" autocomplete="current-password"
+                 autofocus required>
+          <button type="submit">Ansehen</button>
+        </form>
+        </body>
+        </html>
+        HTML;
 }
 
 require_login();
@@ -258,6 +432,7 @@ function e(string $text): string
   @media (prefers-color-scheme: dark) { :root { --line: #3a3a38; --dim: #9a9a94; --bar: #6fa3d8; } }
   body { font: 16px/1.5 system-ui, sans-serif; margin: 0 auto; padding: 2rem 1.5rem 4rem; max-width: 60rem; }
   h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+  h1 .abmelden { font-size: .8rem; font-weight: normal; margin-left: .75rem; vertical-align: middle; }
   h2 { font-size: 1.1rem; margin: 2.5rem 0 .75rem; }
   .sub { color: var(--dim); margin: 0 0 2rem; }
   .zahlen { display: flex; flex-wrap: wrap; gap: 1.5rem; margin: 0 0 1rem; }
@@ -277,10 +452,12 @@ function e(string $text): string
 </head>
 <body>
 
-<h1>Zugriffe auf solidon3d.de</h1>
-<p class="sub">Monat <?= e($month) ?>, Zeiten in <?= e(DISPLAY_ZONE) ?>. Ohne Cookies,
-ohne gespeicherte IP-Adressen — Besucher sind je Tag gezählt und lassen sich
-über den Tag hinaus nicht zusammenführen.</p>
+<h1>Zugriffe auf solidon3d.de <a class="abmelden" href="?abmelden=1">abmelden</a></h1>
+<p class="sub">Monat <?= e($month) ?>, Zeiten in <?= e(DISPLAY_ZONE) ?>. Die Besucher
+kommen ohne Cookie und ohne gespeicherte IP-Adresse zustande, je Tag gezählt und
+über den Tag hinaus nicht zusammenführbar. (Ein Cookie gibt es hier doch: dieses
+Fenster. Es merkt sich die Anmeldung, gilt nur unterhalb von <code>/api/</code>
+und geht keinen Besucher etwas an.)</p>
 
 <?php if (count($available) > 1): ?>
 <nav>Monat:
