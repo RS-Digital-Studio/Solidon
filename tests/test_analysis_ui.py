@@ -1936,13 +1936,22 @@ def test_a_body_below_the_plate_throws_nothing_forward() -> None:
     assert sunk[0][1] == pytest.approx(7.0)
 
 
-def test_the_shadow_always_falls_away_from_the_viewer() -> None:
-    """Der Kern der Sache: das Licht hängt an der Kamera, der Schatten auch.
+def test_the_shadow_steps_beside_the_body_and_never_towards_the_viewer() -> None:
+    """Zur Seite, weil hinten das Teil selbst steht.
 
-    Hier stand eine feste Weltrichtung, und die passte zu keinem Blickwinkel.
-    In der Ansicht, mit der die Anwendung startete, fiel der Schatten mit 0,81
-    seiner Länge **auf den Betrachter zu** — genau davor, wo der Kommentar an
-    der Konstante versprach, er falle dahinter.
+    Das Licht hängt an der Kamera, und ein Schatten, der von der Kamera weg
+    fällt, liegt hinter dem Teil — von der Kamera aus also dort, wo das Teil
+    ist. Er war damit nicht zu sehen: gemessen an zwei Aufnahmen desselben
+    Bildes, einmal mit und einmal ohne die Schattenaktoren, waren von 260 000
+    verglichenen Bildpunkten **vier** dunkler. Zur Seite geworfen sind es
+    2 988, und die Frage aus §18.6 — steht das Teil auf der Platte oder
+    darüber? — bekommt eine Antwort.
+
+    Die Gegenrichtung ist ausdrücklich verboten: Ein Schatten, der auf den
+    Betrachter zu fällt, wäre noch besser zu sehen (gemessen 5 053 Punkte) und
+    behauptete ein Licht hinter dem Teil, dessen Vorderseite hell beleuchtet
+    ist. Das war schon einmal der Stand und wurde aus genau diesem Grund
+    verworfen; ohne diese Zusicherung wäre der Weg zurück offen.
     """
     import numpy as np
 
@@ -1951,11 +1960,19 @@ def test_the_shadow_always_falls_away_from_the_viewer() -> None:
     for name, (position, _up) in VIEW_DIRECTIONS.items():
         if name in {"top", "bottom"}:
             continue  # Senkrecht von oben gibt es kein Hinten; siehe unten.
-        direction = np.array([*shadow_direction(position, (0.0, 0.0, 0.0)), 0.0])
-        forward = np.array([-position[0], -position[1], 0.0])
+        step = np.array(shadow_direction(position, (0.0, 0.0, 0.0)))
+        forward = np.array([-position[0], -position[1]], dtype=float)
         forward /= np.linalg.norm(forward)
-        away = float(np.dot(direction / np.linalg.norm(direction), forward))
-        assert away > 0.9, f"in der Ansicht {name!r} läuft der Schatten nicht nach hinten"
+        sideways = np.array([-forward[1], forward[0]])
+        along = float(np.dot(step, forward))
+        across = float(np.dot(step, sideways))
+        assert abs(across) > abs(along), (
+            f"in der Ansicht {name!r} läuft der Schatten hinter das Teil: "
+            f"{along:.2f} nach hinten, {across:.2f} zur Seite"
+        )
+        assert along >= 0.0, (
+            f"in der Ansicht {name!r} fällt der Schatten auf den Betrachter zu ({along:.2f})"
+        )
 
 
 def test_looking_straight_down_the_shadow_still_has_a_direction() -> None:
@@ -1967,6 +1984,41 @@ def test_looking_straight_down_the_shadow_still_has_a_direction() -> None:
     from app.ui.viewport import SHADOW_REACH, SHADOW_SIDE, shadow_direction
 
     assert shadow_direction((0.0, 0.0, 100.0), (0.0, 0.0, 0.0)) == (SHADOW_SIDE, SHADOW_REACH)
+
+
+def test_the_shadow_of_a_standing_body_reaches_past_its_own_footprint() -> None:
+    """Ein Schatten, der unter dem Teil bleibt, ist keiner.
+
+    Die Richtung allein sagt es nicht: Erst zusammen mit der Höhe entsteht der
+    Versatz, und der muss den eigenen Umriss verlassen, sonst deckt das Teil
+    seinen Schatten selbst ab. Gerechnet an einem 40er Würfel — 20 mm hoch,
+    also 12,6 mm Versatz — gegen die Hälfte seiner Kantenlänge.
+    """
+    import numpy as np
+
+    from app.ui.viewport import VIEW_DIRECTIONS, shadow_direction, shadow_points
+
+    hull = np.array(
+        [(x, y, z) for x in (-20.0, 20.0) for y in (-20.0, 20.0) for z in (0.0, 20.0)],
+        dtype=float,
+    )
+    for name, (position, _up) in VIEW_DIRECTIONS.items():
+        if name in {"top", "bottom"}:
+            continue  # Senkrecht von oben verdeckt das Teil seinen Schatten immer.
+        step = shadow_direction(position, (0.0, 0.0, 0.0))
+        cast = shadow_points(hull, step)
+        forward = np.array([-position[0], -position[1]], dtype=float)
+        forward /= np.linalg.norm(forward)
+        sideways = np.array([-forward[1], forward[0]])
+        # Gemessen wird **quer** zur Blickrichtung: nach hinten hinaus liegt
+        # der Schatten hinter dem Teil, und von dort sieht ihn niemand.
+        reach = float(np.max(np.abs(cast[:, :2] @ sideways))) - float(
+            np.max(np.abs(hull[:, :2] @ sideways))
+        )
+        assert reach > 5.0, (
+            f"in der Ansicht {name!r} tritt der Schatten nur {reach:.1f} mm "
+            "seitlich unter dem Teil hervor"
+        )
 
 
 def test_the_shadow_keeps_its_length_whatever_the_view() -> None:

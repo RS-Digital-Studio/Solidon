@@ -279,9 +279,30 @@ SHADOW_OPACITY = 0.35
 #: er in jeder Ansicht hinter dem Teil hervor — was der alte Kommentar
 #: versprach und keine Ansicht einlöste.
 #:
-#: Die Länge ist die alte: 0,57 mm Versatz je Millimeter Höhe.
-SHADOW_REACH = 0.54
-SHADOW_SIDE = 0.18
+#: **Und mehr zur Seite als nach hinten**, denn nach hinten heißt: hinter dem
+#: Teil, und das ist von der Kamera aus dort, wo das Teil selbst steht. Bei
+#: 0,54 nach hinten und 0,18 zur Seite blieb der Schatten eines 8 mm hohen
+#: Bodens ein Streifen von 4 mm hinter einem 70 mm langen Körper — verdeckt.
+#: Gemessen an zwei Aufnahmen desselben Bildes, einmal mit und einmal ohne die
+#: Schattenaktoren: von 260 000 verglichenen Bildpunkten waren **vier**
+#: dunkler. Ein Schatten, den man nicht sieht, beantwortet die Frage nicht, für
+#: die er da ist (§18.6): steht das Teil auf der Platte oder darüber?
+#:
+#: Physikalisch ist ein Licht in der Kamera genau das — ein Schatten, der sich
+#: hinter dem Gegenstand versteckt. Deshalb sitzt das Licht hier seitlich über
+#: der Kamera, wie in jedem CAD: Der Schatten tritt neben dem Teil hervor, und
+#: sein Versatz wächst weiter mit der Höhe.
+#:
+#: Gemessen wurde auch die Gegenrichtung: Ein Schatten, der auf den Betrachter
+#: zu fällt, ist am besten zu sehen (5 053 Punkte) — und er behauptet ein Licht
+#: hinter dem Teil, während dessen Vorderseite hell beleuchtet ist. Das war
+#: schon einmal der Stand und aus genau diesem Grund verworfen. Seitlich sind
+#: es 2 988 Punkte, und die Aussage bleibt richtig.
+#:
+#: Die Länge bleibt dieselbe (0,63 mm Versatz je Millimeter Höhe), nur ihre
+#: Richtung ist gedreht.
+SHADOW_REACH = 0.10
+SHADOW_SIDE = 0.62
 
 #: Ab wann für die Schattenhülle nur noch eine Stichprobe gerechnet wird.
 #:
