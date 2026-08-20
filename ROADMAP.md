@@ -31,6 +31,7 @@ bekommt einen roten Lauf.
 | Die zwei Dreieckszahl-Grenzen zusammenbringen | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Entscheidung: Merkmale ab 200 000 oder wasserdicht bleiben — beides zugleich geht erst, wenn `decimate` sauber arbeitet |
 | `decimate` zerlegt glatte Körper | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Vereinfachung, die die Topologie hält; die Reparaturkette holt nur die Teilzahl zurück, nicht die Wasserdichtheit |
 | Erscheinungstermin steht zweimal je Startseite | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | einen ruhigen Tag — bis dahin hält ein Test Zähler und Umschaltung zusammen |
+| Passwort für die Zugriffsstatistik | Preis, und eine Zahl über die Besucher (20.08.2026) | einen Hash in `website/api/.stats-zugang.php` — von Hand gesetzt, einzeln hochgeladen, nicht im Repository |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
@@ -48,6 +49,7 @@ bekommt einen roten Lauf.
 | Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | eine Entscheidung, was aus der Zeile verschwindet — und einen Test, der sein Thema selbst setzt |
 | Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird — Kachelhöhe, Ablagefläche oder die Liste der zuletzt geöffneten Projekte; Umschichten ist ausgereizt |
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
+| Benannte Merkmale überstehen keine Boolesche Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung darüber, wann ein benanntes Merkmal wirklich fort ist — vierzehn Ops geben `features={}` zurück, und `_with_features` liest die generierten nur aus der Ausgabe |
 
 ---
 
@@ -8373,3 +8375,78 @@ siehe unten.
       Zylinderschnitt, und die anderen Bohrungs-Ops (senken, verschließen)
       stünden danach vor derselben Frage. §25 legt für die Bohrungen keinen
       Kern fest; §30.1 tut es nur für die Skizzen-Ops.
+
+- [ ] **Benannte Merkmale überstehen keine Boolesche Operation — und damit
+      zerbricht die Passung.** Gemessen am eigenen Vorzeigebeispiel: „Dose mit
+      Deckel" öffnen, `label_text` auf die Dose anwenden, und der Prüfbericht
+      meldet `fit.missing_feature` als **Fehler**. Der Deckel-Ablauf benennt
+      `lid_cavity` und `lid_collar` (§14, sie tragen `provenance="generated"`);
+      `label_text` gibt `features={}` zurück, und `_with_features` sucht die
+      generierten nur in der **Ausgabe** der Operation — in der Eingabe stehen
+      sie noch, werden dort aber ausdrücklich aussortiert
+      (`provenance != "generated"`). Vierzehn Operationen geben `features={}`
+      zurück; es ist also das Muster und kein Ausreißer, und `label_text` ist
+      nur der Fall, an dem es weh tut.
+
+      Der Fix liegt an **einer** Stelle (`_with_features` rettet die
+      generierten aus `previous`, wenn die Operation keine mitgibt), aber er
+      braucht eine Entscheidung: Wann ist ein benanntes Merkmal wirklich fort?
+      Bei `split_pinned` bekämen sonst beide Hälften alle Merkmale der
+      Eingabe. `_outside()` filtert bereits nach Hüllquader und wäre der
+      Ansatz. Der Satz im Bericht nennt seitdem wenigstens den Grund und
+      einen Weg — zurücknehmen und vor der Passung ausführen.
+
+---
+
+## Preis, und eine Zahl über die Besucher (20.08.2026)
+
+Zwei Dinge an einem Tag, beide außerhalb des Programms: Der Preis stand zu
+niedrig und trug einen Streichpreis, den es nie gegeben hat — und niemand
+konnte sagen, ob die Seiten überhaupt gelesen werden.
+
+- [x] **Der Preis steht jetzt bei 69 €, später 99 €.** Vorher waren es 49 €
+      „statt 79 €". Zwei Gründe: Die Durchsicht vom 16.08. hatte den Korridor
+      auf 69–99 € beziffert („unter 49 € wirkt es wie ein Tool"), und
+      Plasticity nimmt für einen reinen B-Rep-Modellierer ohne Druckanalyse,
+      ohne Agenten und ohne Bausteinbibliothek 175 USD bei nur zwölf Monaten
+      Aktualisierungen. Von 69 € brutto bleiben nach Umsatzsteuer und
+      Zahlungsdienst etwa 54 € — bei 49 € waren es 38,60 €, und eine einzige
+      Rückfrage zu einer CAD-Anwendung kostet mehr Zeit, als diese Spanne
+      hergibt. Geändert in allen sechs Startseiten samt `priceValidUntil` in
+      der JSON-LD-Auszeichnung, dazu Pressemitteilung und Anschreiben.
+- [x] **Der Streichpreis ist weg, an seiner Stelle steht eine Frist.** „49 €
+      statt 79 €" nannte einen früheren Preis, den nie jemand gezahlt hat; das
+      ist in Deutschland ein abmahnfähiger Fantasiepreis. Jetzt steht dort
+      „69 €, Einführungspreis bis 31.01.2027, danach 99 €" — eine Ankündigung
+      des künftigen Preises statt der Behauptung eines vergangenen. Zulässig,
+      und mit einem Datum stärker als ohne.
+- [x] **Ein eigener Zähler für Aufrufe und Downloads** (`website/api/count.php`,
+      Auswertung in `website/api/stats.php`). Die üblichen Antworten heißen
+      Google Analytics oder Matomo, und beide widersprechen dem, womit diese
+      Website wirbt. Hier: kein Cookie, kein fremder Server, keine
+      gespeicherte IP-Adresse. Besucher werden über einen gekürzten Hash aus
+      IP, Browserkennung und einem täglich neu gewürfelten Zufallswert
+      zusammengefasst, der nirgends aufgehoben wird — dieselbe Bauart wie bei
+      Plausible, einwilligungsfrei nach § 25 Abs. 2 TDDDG. Wer „Do Not Track"
+      gesetzt hat, wird nicht gezählt.
+- [x] **Downloads zählen serverseitig, nicht im Skript.** Der Verweis im
+      Kasten zeigt auf `api/count.php?f=…`, das zählt und dann auf `/dl/`
+      weiterleitet; ausgeliefert wird die Datei weiter vom Webserver selbst,
+      damit ein abgebrochener Download fortsetzbar bleibt. Ein Zähler im
+      Skript hätte genau die Zahl verschluckt, auf die es ankommt — die
+      blockt ein Werbefilter zuerst. `tools/make_download.py` erzeugt den
+      Verweis so; die sechs bestehenden Kästen sind nachgezogen.
+- [x] **Datenschutzerklärung und `robots.txt` nachgezogen.** Beide behaupteten
+      das Gegenteil dessen, was jetzt läuft — die eine „keine Analyse- oder
+      Tracking-Dienste", die andere wörtlich „kein Zählpixel". Der erste Satz
+      stimmt weiter, sobald er von *Diensten Dritter* spricht; der Rest steht
+      jetzt vollständig da, samt Rechtsgrundlage und Widerspruchsweg. `/api/`
+      ist für Suchmaschinen gesperrt.
+
+### Offen
+
+- [ ] **Die Auswertung hat noch kein Passwort.** `stats.php` bleibt zu, bis
+      neben ihr eine `.stats-zugang.php` mit einem Passwort-Hash liegt; wie
+      sie entsteht, steht im Kopf der Datei. Sie ist in `.gitignore` und wird
+      einzeln hochgeladen. Ohne diesen Schritt antwortet die Seite mit 503 und
+      sagt, was fehlt — offen ist sie nie.

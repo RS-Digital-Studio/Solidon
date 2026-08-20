@@ -75,11 +75,24 @@ def _check_one(scene: Scene, fit: Fit, profile: Profile) -> list[Finding]:
     first = resolve(scene, fit.a)
     second = resolve(scene, fit.b)
     if first is None or second is None:
+        # **Der Satz nennt den Grund und einen Weg.** Er nannte keinen von
+        # beiden, und der häufigste Fall ist einer, in den ein Kunde ohne
+        # Warnung hineinläuft: Er öffnet „Dose mit Deckel", schreibt seinen
+        # Namen darauf — und der Prüfbericht meldet einen Fehler. Eine
+        # Boolesche Operation baut den Körper neu, die Merkmale werden neu
+        # erkannt, und die vom Deckel *benannten* (`lid_cavity`) sind dabei
+        # nicht mehr. Wer das nicht weiß, sucht den Fehler in seiner
+        # Beschriftung.
         return [
             Finding(
                 code="fit.missing_feature",
                 severity="error",
-                message=_("Eine Passung verweist auf ein Merkmal, das es nicht mehr gibt."),
+                message=_(
+                    "Eine Passung verweist auf ein Merkmal, das es nicht mehr gibt: eine "
+                    "Operation danach hat den Körper neu gebaut, und benannte Merkmale "
+                    "überstehen das nicht. Die Schritte ab dort zurücknehmen und vor der "
+                    "Passung ausführen."
+                ),
                 values={"fit": fit.name, "a": str(fit.a), "b": str(fit.b)},
             )
         ]

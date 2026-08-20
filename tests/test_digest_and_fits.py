@@ -431,6 +431,15 @@ def test_a_fit_pointing_at_nothing_is_an_error(profile: Profile) -> None:
     findings = fit_check.check(scene, profile)
     assert findings and findings[0].code == "fit.missing_feature"
     assert findings[0].severity == "error"
+    # §2.7: der Satz nennt den Grund und einen Weg. Er nannte keinen von
+    # beiden — und der häufigste Fall ist einer, in den ein Kunde ohne Warnung
+    # hineinläuft: „Dose mit Deckel" öffnen, den eigenen Namen daraufschreiben,
+    # und der Prüfbericht meldet einen Fehler. Wer nicht weiß, dass eine
+    # Boolesche Operation die benannten Merkmale kostet, sucht ihn in seiner
+    # Beschriftung.
+    message = str(findings[0].message)
+    assert "neu gebaut" in message, message
+    assert "zurücknehmen" in message, "der Satz muss eine Handlung nennen"
 
 
 def test_fits_can_be_added_and_removed() -> None:

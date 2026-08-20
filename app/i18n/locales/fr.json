@@ -991,7 +991,7 @@
   "Eine Mutternfalle: die sechseckige Tasche, in die beim Drucken eine Sechskantmutter eingelegt wird.": "Un piège à écrou : la poche hexagonale dans laquelle un écrou six pans est déposé pendant l'impression.",
   "Eine Operation ausführen": "Exécuter une opération",
   "Eine Passung ist entfallen — ihr Teil wurde noch einmal geteilt. Die neuen Nahtstellen haben ihre eigenen.": "Un ajustement a disparu — sa pièce a été séparée une fois de plus. Les nouvelles jonctions ont les leurs.",
-  "Eine Passung verweist auf ein Merkmal, das es nicht mehr gibt.": "Un ajustement renvoie à une caractéristique qui n'existe plus.",
+  "Eine Passung verweist auf ein Merkmal, das es nicht mehr gibt: eine Operation danach hat den Körper neu gebaut, und benannte Merkmale überstehen das nicht. Die Schritte ab dort zurücknehmen und vor der Passung ausführen.": "Un ajustement renvoie à une entité qui n'existe plus : une opération ultérieure a reconstruit le corps, et les entités nommées n'y survivent pas. Annulez les étapes à partir de là et exécutez-les avant l'ajustement.",
   "Eine Quelle stimmt nicht mit ihrer Prüfsumme überein.": "Une source ne correspond pas à sa somme de contrôle.",
   "Eine Rastnase: der federnde Arm mit der schrägen Nase, die beim Fügen ausweicht und danach zurückschnappt.": "Un ergot d'encliquetage : le bras élastique avec le nez incliné, qui s'efface à l'assemblage puis revient en place.",
   "Eine Schicht über drei Vierteln des Düsendurchmessers haftet nicht sicher auf der darunterliegenden.": "Une couche au-delà des trois quarts du diamètre de la buse n'adhère pas sûrement à celle du dessous.",

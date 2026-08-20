@@ -991,7 +991,7 @@
   "Eine Mutternfalle: die sechseckige Tasche, in die beim Drucken eine Sechskantmutter eingelegt wird.": "A nut trap: the hexagonal pocket into which a hex nut is dropped during printing.",
   "Eine Operation ausführen": "Run one operation",
   "Eine Passung ist entfallen — ihr Teil wurde noch einmal geteilt. Die neuen Nahtstellen haben ihre eigenen.": "A fit has been dropped — its part was split once more. The new seams have fits of their own.",
-  "Eine Passung verweist auf ein Merkmal, das es nicht mehr gibt.": "A fit refers to a feature that no longer exists.",
+  "Eine Passung verweist auf ein Merkmal, das es nicht mehr gibt: eine Operation danach hat den Körper neu gebaut, und benannte Merkmale überstehen das nicht. Die Schritte ab dort zurücknehmen und vor der Passung ausführen.": "A fit refers to a feature that no longer exists: an operation after it rebuilt the body, and named features do not survive that. Undo the steps from there and run them before the fit.",
   "Eine Quelle stimmt nicht mit ihrer Prüfsumme überein.": "A source does not match its checksum.",
   "Eine Rastnase: der federnde Arm mit der schrägen Nase, die beim Fügen ausweicht und danach zurückschnappt.": "A snap fit: the springy arm with the angled lug that gives way when joined and snaps back afterwards.",
   "Eine Schicht über drei Vierteln des Düsendurchmessers haftet nicht sicher auf der darunterliegenden.": "A layer above three quarters of the nozzle diameter does not bond safely to the one below it.",
