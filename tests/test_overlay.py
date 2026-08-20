@@ -647,3 +647,72 @@ def test_the_tab_card_keeps_its_border_too(window: MainWindow) -> None:
 
     assert "QTabWidget#overlayCard::pane" in sheet
     assert f"margin: 0px {CARD_PADDING}px {CARD_PADDING}px {CARD_PADDING}px" in sheet
+
+
+def test_no_card_is_pushed_outside_its_section(window: MainWindow) -> None:
+    """Zeilen lagen außerhalb der Karte — und waren damit unerreichbar.
+
+    Die Zuteilung teilte ``room`` allein unter den Karten, obwohl in der Zone
+    noch Abschnittsköpfe, die Parameterleiste und die Layoutabstände stehen: bei
+    zwanzig aufgeklappten Körpern bekam der Objektbaum 500 Pixel in einem
+    Abschnitt, der 121 hoch war. Die 379 dazwischen schnitt das Elternwidget
+    weg, und weil der Baum von seiner eigenen Höhe ausging, meldete sein
+    Rollbalken dazu nichts — abgeschnitten wäre schlimm, unerreichbar ist
+    schlimmer.
+
+    Zwei Ursachen, beide hier festgehalten: das nicht abgezogene Beiwerk
+    (:func:`overlay.extra_height`) und die Böden der Karten, die die anteilige
+    Verteilung nicht kannte (``RoomTaker.least_height``).
+
+    Zweimal umgelegt, weil Qt die Kinder erst im nächsten Durchlauf legt — im
+    laufenden Fenster ist das ein Bild.
+    """
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.ui.overlay import RoomTaker, extra_height
+
+    tree = window.object_tree.tree
+    for number in range(20):
+        item = QTreeWidgetItem([f"Körper {number}", "10 x 10 x 10 mm"])
+        item.addChild(QTreeWidgetItem([f"Bohrung {number}", "4 mm"]))
+        tree.addTopLevelItem(item)
+    tree.expandAll()
+    window.object_tree._fit()
+    for _ in range(2):
+        window.overlay.reflow()
+        QApplication.processEvents()
+
+    zone = window.overlay.left
+    layout = zone.layout()
+    assert layout is not None
+    assert extra_height(zone) > 0, "ohne Beiwerk prüft dieser Test nichts"
+    checked = 0
+    for index in range(layout.count()):
+        item = layout.itemAt(index)
+        section = item.widget() if item is not None else None
+        if section is None:
+            continue
+        for taker in section.findChildren(QWidget):
+            if not isinstance(taker, RoomTaker) or not taker.isVisibleTo(zone):
+                continue
+            checked += 1
+            assert taker.height() <= section.height(), (
+                f"{type(taker).__name__} ragt um {taker.height() - section.height()} "
+                "Pixel aus seinem Abschnitt heraus"
+            )
+    assert checked >= 2, "beide Karten der linken Spalte gehören geprüft"
+
+    # Und die letzte Zeile ist erreichbar: ganz nach unten gerollt steht sie im
+    # Sichtfeld des Baums, nicht dahinter.
+    bar = tree.verticalScrollBar()
+    assert bar is not None and bar.maximum() > 0, "vierzig Zeilen in eine Karte, ohne zu rollen?"
+    bar.setValue(bar.maximum())
+    QApplication.processEvents()
+    last = tree.topLevelItem(19)
+    assert last is not None
+    deepest = last.child(0)
+    viewport = tree.viewport()
+    assert viewport is not None
+    assert tree.visualItemRect(deepest).bottom() <= viewport.height(), (
+        "am Rollbalkenende bleibt die letzte Zeile außerhalb"
+    )

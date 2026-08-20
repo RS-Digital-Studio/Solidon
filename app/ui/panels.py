@@ -545,6 +545,12 @@ class ObjectTree(QWidget):
         """Die Höhe, bei der jede Zeile zu sehen wäre."""
         return view_chrome(self.tree) + self._rows() * row_height_of(self.tree)
 
+    def least_height(self) -> int:
+        """Und die, unter die diese Karte nicht geht (siehe ``fit_to_rows``)."""
+        if self.tree.topLevelItemCount() == 0:
+            return least_empty_height(self._empty)
+        return least_height_of(self.tree)
+
     def set_room(self, pixels: int) -> None:
         """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
         if pixels == self._room:
@@ -995,6 +1001,17 @@ class HistoryPanel(QWidget):
     def wanted_height(self) -> int:
         """Die Höhe, bei der jeder Schritt zu sehen wäre."""
         return view_chrome(self.list) + self.list.count() * row_height_of(self.list)
+
+    def least_height(self) -> int:
+        """Und die, unter die diese Karte nicht geht (siehe ``fit_to_rows``).
+
+        Der leere Verlauf ist der Fall, an dem es auffiel: ``wanted_height``
+        meldete vier Pixel, der Boden gab hundertzwölf, und die Überlagerung
+        verteilte nach den vier.
+        """
+        if self.list.count() == 0:
+            return least_empty_height(self._empty)
+        return least_height_of(self.list)
 
     def set_room(self, pixels: int) -> None:
         """Wie hoch diese Karte werden darf (siehe ``fit_to_rows``)."""
@@ -1604,9 +1621,36 @@ def fit_to_rows(view: QAbstractItemView, rows: int, *, room: int | None = None) 
     chrome = view_chrome(view)
     row_height = row_height_of(view)
     wanted = chrome + max(rows, 0) * row_height
-    floor = chrome + MIN_ROWS * row_height
     ceiling = room if room is not None else chrome + MAX_ROWS * row_height
-    view.setFixedHeight(max(floor, min(wanted, ceiling)))
+    view.setFixedHeight(max(least_height_of(view), min(wanted, ceiling)))
+
+
+def least_height_of(view: QAbstractItemView) -> int:
+    """Unter diese Höhe geht eine Liste nicht, was auch zugeteilt wird.
+
+    Dieselbe Zahl, die ``fit_to_rows`` als Boden durchsetzt — und deshalb muss
+    die Überlagerung sie kennen: Sie verteilte den Platz anteilig am Bedarf und
+    rechnete damit für eine leere Verlaufsliste mit vier Pixeln, während der
+    Boden ihr hundertzwölf gab. Die Summe der Zuteilungen lag danach über dem
+    Platz, den es gab, und die Karte darüber wurde vom Layout zusammengedrückt,
+    bis Zeilen außerhalb lagen.
+    """
+    return view_chrome(view) + MIN_ROWS * row_height_of(view)
+
+
+def least_empty_height(label: QLabel) -> int:
+    """Der Boden einer Karte, die gerade ihren leeren Zustand zeigt.
+
+    Der leere Zustand tritt an die *Stelle* der Liste, und seine Höhe kommt aus
+    dem umbrochenen Satz (``fit_wrapped``), nicht aus ``fit_to_rows``. Der
+    leere Verlauf nannte deshalb 64 Pixel als Boden und stand auf 112 — die 48
+    Pixel Unterschied fehlten der Karte darüber, und ihre letzten Zeilen lagen
+    außerhalb des Abschnitts.
+
+    Beide Zahlen hängen an der festen Spaltenbreite und nicht an der
+    Zuteilung — die Bedingung, unter der die Spalte stillsteht.
+    """
+    return max(label.minimumHeight(), label.sizeHint().height())
 
 
 def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidget:

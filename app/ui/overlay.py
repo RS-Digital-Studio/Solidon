@@ -58,6 +58,16 @@ class RoomTaker(Protocol):
         """Die Höhe, bei der alles zu sehen wäre."""
         ...
 
+    def least_height(self) -> int:
+        """Die Höhe, unter die die Karte nicht geht, was auch zugeteilt wird.
+
+        Ohne diese Auskunft ist die Zuteilung eine Bitte: Die Verlaufskarte
+        setzt drei Zeilen als Boden durch, meldete als Bedarf aber vier Pixel,
+        und was anteilig danach verteilt wurde, ergab in der Summe mehr Höhe,
+        als die Zone hatte.
+        """
+        ...
+
     def set_room(self, pixels: int) -> None:
         """Die Höhe, die zur Verfügung steht."""
         ...
@@ -298,6 +308,49 @@ def natural_height(zone: QWidget) -> int:
         needs = max(inner.height(), inner.sizeHint().height())
         wanted += max(needs - viewport.height(), 0)
     return max(wanted, 0)
+
+
+def extra_height(zone: QWidget) -> int:
+    """Was in der Zone Platz braucht und keiner Karte gehört.
+
+    Abschnittsköpfe, die Parameterleiste, die Abstände des Layouts. Wer das
+    nicht abzieht, verteilt mehr Höhe, als die Zone hat: bei zwanzig
+    aufgeklappten Körpern auf 1366x768 bekam der Objektbaum 500 Pixel in einem
+    Abschnitt, der 121 hoch war. Die 379 dazwischen schnitt das Elternwidget
+    weg — und der Rollbalken wusste nichts davon, also waren die Zeilen nicht
+    abgeschnitten, sondern unerreichbar.
+
+    **Gerechnet wird strukturell und nie über die gesetzten Höhen.** Das ist
+    die Bedingung dafür, dass die Spalte stillsteht (siehe
+    ``OverlayHost._share_room``): ``natural_height`` taugt hier nicht, sie liest
+    für ihre Rollbereiche die gelegten Höhen und schwankte zwischen 389 und
+    1275 Pixeln, je nachdem was zuletzt zugeteilt wurde. Diese Rechnung nimmt je
+    Posten den Unterschied zwischen dem, was er als Ganzes wünscht, und dem, was
+    die Karten darin wünschen — beide Wünsche wandern gemeinsam, der Unterschied
+    bleibt der Kopf. Gemessen über Zuteilungen von 60 bis 900 Pixeln: 217, jedes
+    Mal.
+    """
+    layout = zone.layout()
+    if layout is None:
+        return 0
+    margins = layout.contentsMargins()
+    total = margins.top() + margins.bottom() + max(layout.count() - 1, 0) * layout.spacing()
+    for index in range(layout.count()):
+        item = layout.itemAt(index)
+        widget = item.widget() if item is not None else None
+        if widget is None or not widget.isVisibleTo(zone):
+            continue
+        takers = [
+            child
+            for child in widget.findChildren(QWidget)
+            if isinstance(child, RoomTaker) and child.isVisibleTo(zone)
+        ]
+        if not takers:
+            total += widget.sizeHint().height()
+            continue
+        inside = sum(child.sizeHint().height() for child in takers)
+        total += max(widget.sizeHint().height() - inside, 0)
+    return total
 
 
 class OverlayHost(QWidget):
@@ -613,17 +666,44 @@ class OverlayHost(QWidget):
         # setzt wieder, und die Karte läuft auf und ab. Bei einem einzigen
         # Aufklappen waren es neunhundertfünf Geometriewechsel.
         #
-        # Der Preis ist, dass Überschriften und Parameterleiste in ``room``
-        # nicht abgezogen sind: bei Überfüllung rollt eine Karte ein paar
-        # Zeilen früher als nötig. Das ist der bessere Tausch.
-        wants = [max(child.wanted_height(), 1) for child in takers]
-        total = sum(wants)
-        if total <= room:
+        # **Abgezogen wird, was nicht den Karten gehört.** Hier stand, das sei
+        # der Preis der Stillstandsbedingung: Abschnittsköpfe und
+        # Parameterleiste blieben in ``room`` stehen, und bei Überfüllung rolle
+        # eine Karte „ein paar Zeilen früher als nötig". Der Satz beschrieb den
+        # Fehler in die falsche Richtung. Ungekürzt ist ``room`` **größer** als
+        # der Platz, den es gibt: Bei „gehaeuse-mit-bausteinen" auf 1366x768,
+        # einmal auf den Aufklapppfeil des Gehäusebodens geklickt, verteilte es
+        # 592 Pixel auf Baum (411) und Verlauf (180) — die drei Köpfe (3 mal 24),
+        # die Parameterleiste (96) und die Layoutabstände waren nicht dabei.
+        # Der Abschnitt „Objekte" hatte 234 Pixel, der Baum stand auf 411; 177
+        # Pixel lagen außerhalb der Karte und wurden weggeschnitten, der
+        # Rollbalken meldete dazu max=2. Zehn Zeilen waren damit nicht
+        # abgeschnitten, sondern **unerreichbar** — darunter der zweite Körper.
+        #
+        # Die Stillstandsbedingung bleibt gewahrt, denn beide Summanden hängen
+        # am Inhalt und nicht an der Zuteilung: ``natural_height`` ersetzt den
+        # Beitrag jeder Liste durch das, was ihre Zeilen brauchen, und
+        # ``wanted_height`` ist dasselbe Maß. Was übrig bleibt, ist genau das
+        # Beiwerk — und das ist so hoch, wie es ist.
+        floors = [child.least_height() for child in takers]
+        wants = [
+            max(child.wanted_height(), floor) for child, floor in zip(takers, floors, strict=True)
+        ]
+        budget = max(room - extra_height(zone), sum(floors))
+        if sum(wants) <= budget:
             for child, want in zip(takers, wants, strict=True):
                 child.set_room(want)
             return
-        for child, want in zip(takers, wants, strict=True):
-            child.set_room(max(room * want // total, 1))
+        # **Erst die Böden, dann der Rest nach Bedarf.** Anteilig an den ganzen
+        # Wünschen zu teilen war die zweite Hälfte des Fehlers: Der leere
+        # Verlauf wünschte vier Pixel und bekam anteilig drei — durchgesetzt
+        # wurden aber seine hundertzwölf, und die fehlten oben. Verteilt wird
+        # deshalb nur, was über den Böden liegt.
+        spare = budget - sum(floors)
+        appetite = [want - floor for want, floor in zip(wants, floors, strict=True)]
+        hunger = sum(appetite)
+        for child, floor, share in zip(takers, floors, appetite, strict=True):
+            child.set_room(floor + (spare * share // hunger if hunger else 0))
 
     def _bottom_room(self) -> int:
         """Wie viel Höhe die Werkzeugzeile unten für sich braucht."""
