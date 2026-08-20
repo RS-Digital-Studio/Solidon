@@ -169,14 +169,28 @@ class BackendUnavailable(ExternalToolError):
 # --- Gehostet, mit dem eigenen Schlüssel des Nutzers -------------------------------
 
 
-DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"
+DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-5"
 """Das Modell, gegen das gefahren wird, wenn der Nutzer keines einträgt.
 
-Der Name ist ein Alias auf einen Schnappschuss (``claude-sonnet-4-5-20250929``)
-und trägt ein vorläufiges Rückzugsdatum — „not sooner than September 29, 2026".
-Ein Wechsel ist damit eine Frage der Zeit und keine des Geschmacks; er gehört
-aber gemessen, nicht geraten (§35: die Suite vorher und nachher), und deshalb
-steht hier weiter der Stand, gegen den zuletzt gemessen wurde.
+Bis zum 19.08.2026 stand hier ``claude-sonnet-4-5`` — ein Alias auf den
+Schnappschuss vom 29.09.2025, mit vorläufigem Rückzugsdatum („not sooner than
+September 29, 2026"). Der Nachfolger kostet weniger (2 statt 3 USD Eingabe je
+Mio. Token) und trägt das fünffache Kontextfenster: eine Million Token statt
+zweihunderttausend. Bei einem Prompt, dessen Werkzeugschemata allein 110 KB
+wiegen, ist das der Unterschied, der zählt.
+
+**Gegen dieses Modell ist die Agenten-Suite nicht gefahren** — entschieden von
+Robert am 19.08.2026, in Kenntnis dessen. §35 verlangt die Messung vorher und
+nachher; sie steht als offener Punkt in der ROADMAP und kostet zwei Läufe über
+den Schlüssel des Nutzers. Was hier steht, ist deshalb die begründete Vorgabe
+und nicht die gemessene.
+
+Zwei Eigenheiten der Thinking-Modelle, die niemandem auffallen, bevor er sie
+sucht: Die ``thinking``-Blöcke der Antwort reisen bei einem mehrschrittigen Zug
+**nicht** zurück — :func:`_from_anthropic` liest nur ``text`` und ``tool_use``,
+und der nächste Schritt baut seine Nachrichten neu auf. Das kostet Kontext,
+aber es bricht nichts. Und ``stop_reason`` kann ``"refusal"`` heißen; der Wert
+wird durchgereicht, aber nicht eigens behandelt.
 """
 
 #: Modelle, die ``temperature`` noch annehmen.

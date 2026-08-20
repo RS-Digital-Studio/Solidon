@@ -41,7 +41,7 @@ bekommt einen roten Lauf.
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
-| Die Vorgabe für das Anthropic-Modell | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung samt zwei Suite-Läufen — der Alias trägt ein Rückzugsdatum |
+| Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | D4 — ViewCube und Ansichtsleiste, wieder offen | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung: Würfel zurück, Leiste bauen oder beides lassen |
 | B1 — gehosteter Erzeugungsdienst als zweiter Weg | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung, nicht Code |
 
@@ -6903,14 +6903,20 @@ Konzeptdateien und deshalb hier und nicht dort:
       über den Namensanfang, weil dieselbe Fassung unter dem Alias und unter
       ihrem Schnappschuss erreichbar ist. Zwei Tests in
       `tests/test_backends.py`.
-- [ ] **Welches Anthropic-Modell die Vorgabe wird, ist offen.**
-      `DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"` ist ein Alias auf den
-      Schnappschuss vom 29.09.2025 und trägt ein vorläufiges Rückzugsdatum
-      („not sooner than September 29, 2026"); der Nachfolger `claude-sonnet-5`
-      kostet weniger und hat das fünffache Kontextfenster. Der Wechsel ist
-      damit eine Frage der Zeit — aber §35 verlangt die Suite vorher und
-      nachher, und die kostet Geld. Deshalb steht hier weiter der Stand, gegen
-      den zuletzt gemessen wurde.
+- [x] **Die Vorgabe steht auf `claude-sonnet-5`** (entschieden von Robert am
+      19.08.2026). Sie kostet weniger — 2 statt 3 USD Eingabe je Mio. Token —
+      und trägt das fünffache Kontextfenster: eine Million Token statt
+      zweihunderttausend. Bei einem Prompt, dessen Werkzeugschemata allein
+      110 KB wiegen, ist das der Unterschied, der zählt. `temperature` fällt
+      durch die Positivliste von selbst weg.
+- [ ] **Gegen Sonnet 5 ist die Suite nicht gefahren.** Der Wechsel ist in
+      Kenntnis dessen entschieden; §35 verlangt die Messung vorher und nachher,
+      und sie kostet zwei Läufe über den Schlüssel des Nutzers. Bis dahin ist
+      die Trefferquote des Agenten eine Annahme — die letzte gemessene (28/39)
+      gilt für Sonnet 4.5 und für ein lokales Modell, nicht für dieses.
+      Nebenbei zu prüfen, wenn gemessen wird: Die `thinking`-Blöcke reisen bei
+      einem mehrschrittigen Zug nicht zurück, und `stop_reason: "refusal"` ist
+      nicht eigens behandelt.
 - [x] **Drei Docstrings beschrieben einen überholten Stand.** `PinPlan.shape`
       kennt jetzt den Schnappverbinder samt seiner Mindestnaht von 5,4 mm;
       `start_screen` zählt nicht mehr acht Beispiele, sondern sagt „einen

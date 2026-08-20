@@ -545,8 +545,14 @@ def test_temperature_reaches_only_a_model_that_still_takes_it(
     monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
 
     transport = Recorder(anthropic_answer())
+    AnthropicBackend(model="claude-sonnet-4-5", transport=transport).complete(
+        [Message(role="user", content="x")]
+    )
+    assert transport.calls[0][2]["temperature"] == 0.0, "die älteren Modelle nehmen ihn"
+
+    transport = Recorder(anthropic_answer())
     AnthropicBackend(transport=transport).complete([Message(role="user", content="x")])
-    assert transport.calls[0][2]["temperature"] == 0.0, "die heutige Vorgabe nimmt ihn"
+    assert "temperature" not in transport.calls[0][2], "die heutige Vorgabe nimmt ihn nicht"
 
     for model in ("claude-opus-4-7", "claude-opus-5", "claude-sonnet-5", "claude-fable-5"):
         transport = Recorder(anthropic_answer())

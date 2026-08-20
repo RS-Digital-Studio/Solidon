@@ -140,6 +140,18 @@ und ein Programm für Fortgeschrittene.
 AdamCAD, wo wir mit deren Kapital konkurrieren. „Das heruntergeladene Teil
 passt nicht — mach es passend" stellt uns neben zwei eingestellte Programme.
 
+> **Umgesetzt, und zwar wörtlich** (nachgesehen am 19.08.2026). Die deutsche
+> Startseite trägt als `h1`: „Das heruntergeladene Teil passt nicht. Mach es
+> passend." Die englische: „The model you downloaded does not fit. Make it
+> fit." Weg 1 steht auch in der Wegeliste an erster Stelle und ist Beispiel 1
+> von neun auf dem Startbildschirm (`app/core/examples.py`). Von „Beschreibe
+> das Teil" ist an keiner der beiden Startseiten etwas übrig.
+>
+> Der Befund dahinter wird davon nur wichtiger: Meshy bietet die
+> Druckbarkeitsprüfung seit kurzem als **kostenlosen** API-Aufruf an, mit
+> derselben Liste, die unser Prüfbericht führt. Die Position stimmt also — sie
+> muss jetzt verteidigt werden, nicht mehr eingenommen.
+
 ### 2.4 Generieren (Säule B)
 
 **Stand:** ComfyUI lokal über HTTP, Hunyuan3D 2.1 als Graph in einer Datendatei,
