@@ -429,7 +429,42 @@ Zahl ein Datenfehler und kein Anzeigefehler. Und **ein Suffix allein zu
 tauschen ist falsch**: Ein Feld mit „in" über einem Wert von 20 mm behauptet
 20 Zoll. Eingabefelder umzustellen heißt Wert **und** Grenzen in beide
 Richtungen umzurechnen, ohne einen Parameterausdruck anzufassen — ein eigener
-Schritt.
+Schritt. Dieselbe Grenze gilt beim **Umschalten in den Ausdrucksmodus**:
+`ValueField` belegte ihn aus dem Drehfeld vor, also aus der Anzeige, und in
+Zoll stand „=1.5748" dort, wo 40 mm gemeint waren. Der Hinweis darunter
+beschriftet mit `entry.unit` und las „= 1.5748 mm" — eine Anzeige, die ihren
+eigenen Fehler bezeugt. `_number()` ist die eine Quelle für beide Stellen.
+
+Drei weitere Lehren liegen **hinter** dem Umbau, denn sie betreffen nicht das
+Umstellen, sondern das Lesen an ihm vorbei:
+
+* **`valueChanged` ist eine Lesestelle, die die Umrechnung überspringt.** Der
+  Docstring von `LengthSpin` versprach, es gebe keine — „`value()` heißt hier
+  nicht mehr, was der Kern will". Qts Signal trägt aber genau die Zahl aus dem
+  Feld, und dafür muss niemand `value()` schreiben. Sechs Stellen im Fenster
+  nahmen sie: Der Pinselradius kam als 0,1969 in der Szene an, wo 5 mm
+  eingestellt waren, und `stroke_at` schrieb damit **Geometrie ins Dokument**.
+  `valueChangedMm` ist dieselbe Nachricht in der Einheit des Kerns;
+  `valueChanged` bleibt für alles, was den Wert fallen lässt und selbst
+  `value_mm()` liest.
+* **Ein Einheitenwechsel meldet nichts.** `refresh_unit` legte die neue Spanne,
+  während noch der Wert der alten stand — Qt klemmt ihn und feuert damit. Ein
+  Feld auf 10 mm gab seinem Empfänger 99,9998, bevor es 10,0 gab. In
+  Millimetern ändert sich beim Wechsel nichts, also gibt es nichts zu melden:
+  der Tausch läuft unter `blockSignals`.
+* **Gelesen wird über die Leiste, nicht an ihr vorbei.** `SculptBar.values()`
+  beantwortete die Frage des Zugs mit den richtigen Einheiten und hatte
+  **keinen Aufrufer**, während das Fenster dieselben vier Werte aus den Widgets
+  neu zusammenstellte. Zwei Wege zu derselben Auskunft sind einer zu viel, und
+  welcher benutzt wird, entscheidet nicht der Vorsatz. Der Rückgabetyp heißt
+  deshalb `StrokeValues` und nicht `dict[str, object]`: Mit Namen im Typ prüft
+  mypy das Auspacken, ohne sie nimmt es jede Verwechslung hin.
+
+Und der Grund, aus dem all das durch eine grüne Suite kam: **kein Test fuhr
+eine Leiste je in Zoll.** Die Umschaltung war an ihren Anzeigen geprüft und an
+keiner Handlung. `tests/test_sculpt_session.py` fährt jetzt einen Pinselzug in
+Zoll bis in den `Stroke` hinein — der eine Test, der alle drei Funde gefangen
+hätte.
 
 Wer den Zustand in einem Test setzt, bekommt ihn zurückgesetzt
 (`tests/conftest.py`); sonst nähme ein Test jeden folgenden mit.

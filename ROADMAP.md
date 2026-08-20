@@ -7635,3 +7635,97 @@ offen** bleibt.
       Beides erledigt eine zweite Zeile. Nachher gemessen: Karte **132** statt
       241, Leiste 59 statt 168, keine unsichtbare Beschriftung mehr — und die
       anderen sieben Werkzeugkarten unverändert bei 81 bis 112.
+
+
+## Die eigene Arbeit im Review (20.08.2026)
+
+Durchgesehen wurden die vierzehn Commits dieser Sitzung, nicht der Arbeitsbaum:
+dort lagen fremde Änderungen einer parallel laufenden Sitzung und die neu
+aufgenommenen Handbuchbilder. Vier Funde, alle vier gegen einen Lauf
+reproduziert, alle vier behoben. Und sieben neue Tests, die gegen den Stand von
+vorher fallen — nachgewiesen in einem `git worktree` auf HEAD, nicht behauptet.
+
+**Drei der vier sind derselbe Fehler, und er ist meiner.** Beim Umbau auf die
+prozessweite Anzeigeeinheit (§19.3) habe ich `set_value`, `value()` und die
+Grenzen umgestellt und die Stellen übersehen, an denen jemand *an* der
+Umrechnung vorbeigreift. Was sie verband, ist ein fehlender Test: **keiner fuhr
+eine Leiste oder einen Umschalter je in Zoll.** Geprüft war die Umschaltung an
+ihren Anzeigen und an keiner Handlung — und genau dort, wo aus einer Anzeige ein
+Dokumentwert wird, saßen alle drei.
+
+### Behoben
+
+- [x] **Sechs Stellen lasen die Bildhauerleiste in Anzeigewerten**
+      (`0492b43`). `sculpt_bar.radius`/`.strength` mit `.value()` statt
+      `.value_mm()`: In Zoll lief ein Pinsel von 0,2 mm, wo 5 mm eingestellt
+      waren. Zwei der sechs gaben das an `stroke_at` — **Geometrie ins
+      Dokument**. Eine verglich gegen `median_edge` in Millimetern, worauf die
+      Warnung „Netz zu grob" grundlos erschien; eine rechnete daraus die
+      Kantenlänge fürs Vernetzen; und eine gab den Wert als Pinselring in die
+      Szene, wo er ein Fünfundzwanzigstel des Pinsels groß war.
+
+      **Die Ursache lag tiefer als die sechs Zeilen.** `SculptBar.values()`
+      beantwortete genau diese Frage, mit den richtigen Einheiten — und hatte
+      **keinen Aufrufer**. Das Fenster baute dasselbe Wörterbuch daneben neu.
+      Zwei Wege zu derselben Auskunft sind einer zu viel, und welcher benutzt
+      wird, entscheidet nicht der Vorsatz. Jetzt gibt es einen; sein
+      Rückgabetyp heißt `StrokeValues` und nicht `dict[str, object]`, denn mit
+      Namen im Typ prüft mypy das Auspacken, und ohne sie nimmt es jede
+      Verwechslung hin.
+
+      Der Pinselring hing an `valueChanged` — Qts Signal, das die Zahl aus dem
+      Feld trägt. Das war die Lesestelle, von der der Docstring von
+      `LengthSpin` behauptete, es gebe sie nicht: Man überspringt die
+      Umrechnung, ohne `value()` zu schreiben. `valueChangedMm` ist dieselbe
+      Nachricht in der Einheit des Kerns.
+
+- [x] **Ein Einheitenwechsel meldete einen geklemmten Zwischenwert**
+      (`0492b43`). `refresh_unit` legte die neue Spanne, während noch der
+      Wert der alten stand. Ein Feld auf 10 mm gab seinem Empfänger erst
+      99,9998 und dann 10,0 — gemessen, nicht geschlossen. Getroffen hat es
+      auch die Schnittleiste, deren `_typed` den Schieber nachzieht: Die
+      Schnittebene wäre beim Umschalten der Einheit gesprungen. In Millimetern
+      ändert sich beim Wechsel nichts, also gibt es nichts zu melden — der
+      Tausch läuft unter `blockSignals`.
+
+- [x] **Der Ausdrucksmodus übernahm den Anzeigewert** (`56c4ed0`). Ein Klick
+      auf den Umschalter belegte das Ausdrucksfeld aus dem Drehfeld vor: In
+      Zoll stand „=1.5748" dort, wo 40 mm gemeint waren, und weil ein
+      Parameterausdruck nach §13 in Millimetern rechnet, war das ein
+      Datenfehler und kein Anzeigefehler — der Ausdruck landet im Dokument.
+
+      Der Hinweis darunter beschriftet mit `entry.unit` und las „= 1.5748 mm".
+      Eine Anzeige, die ihren eigenen Fehler bezeugt, und niemand hatte
+      hingesehen — dieselbe Sorte Fund wie beim Schattenwurf, wo der Kommentar
+      beschrieb, wohin der Schatten fallen sollte, und keiner nachsah, wohin er
+      fiel. `_number()` ist jetzt die eine Quelle für `value()` und das
+      Umschalten.
+
+- [x] **Die Flatpak-Quelle war der Ordner, in den der Bau selbst schreibt**
+      (`ba8f101`). `path: ../dist` nahm alles unter `dist` mit, und dorthin
+      schreiben `build_flatpak` (`flatpak-repo`, `flatpak-build`) und
+      `build_appimage` (`Solidon3D.AppDir`) ihre Ergebnisse: Der zweite Lauf
+      hätte die Zwischenausgabe des ersten eingepackt, nach einem
+      AppImage-Bau eine vollständige zweite Kopie der Anwendung dazu. Verengt
+      auf `../dist/Solidon3D`, `dest` hält das Unterverzeichnis, das die
+      Baubefehle nennen.
+
+      Aufgefallen wäre es nie: Der Bau braucht Linux und zwei externe
+      Programme, und gelaufen ist er noch nie (Veröffentlichungskonzept §2 F).
+      Ein Rezept, das niemand ausführt, prüft nur ein Test — der Drift-Test
+      vom 20.08. hat beim Nachziehen prompt zugeschlagen und das eingecheckte
+      Manifest als älter als seinen Erzeuger gemeldet.
+
+### Was der Review entlastet hat
+
+Geprüft und nicht beanstandet: alle elf `depends_on`-Deklarationen gegen den
+Code, den sie beschreiben; die fünf `LengthSpin`-Verwender (`paint_bar`,
+`sculpt_bar`, `section_bar`, `transform_bar`, `sketch_editor`), die alle
+`value_mm()` nach außen geben; die achtzehn `valueChanged`-Anschlüsse, von denen
+genau einer den rohen Wert weitergab; `caveat_line` über alle vier Oberflächen;
+und die drei Rundungspfade, die 40 mm über beide Richtungen bei 40 mm halten.
+
+`section_bar.position` sah nach einem sechsten Fund aus (`value()`, geteilt
+durch `STEPS_PER_MM`) und ist keiner: ein `QSlider`, dessen `value()` Schritte
+zählt und keine Millimeter. Der Unterschied zwischen einem Fund und einem
+Verdacht ist eine Zeile nachsehen.
