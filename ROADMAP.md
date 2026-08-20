@@ -4787,6 +4787,35 @@ den Webserver und die Paketierung. Fünf Funde:
       das nicht, und deshalb ist `pytest -q` hier nicht der richtige Aufruf.
       Wer das lokale Tor grün sehen will, teilt auf — und für `test_ui.py`
       bleibt die Frage offen, warum fünf Fenster genügen.
+
+      **Aufteilen allein genügt auch nicht mehr, und das schärft den Befund**
+      (gemessen am 20.08.2026, dieselbe Maschine, je Datei ein Prozess wie in
+      der CI): Von achtzehn Abschnitten waren sechzehn grün — Hauptblock
+      **3 775 Tests in 192 s** — und zwei starben mit `access violation`,
+      `test_analysis_ui.py` und `test_operation_ui.py`. `test_ui.py`, bisher
+      der sichere Kandidat, lief diesmal durch.
+
+      **Dieselben zwei Dateien unmittelbar danach je dreimal einzeln: sechs
+      von sechs grün** (110 und 48 Tests). Der Unterschied zwischen rot und
+      grün war nicht die Datei und nicht die Zahl der Fenster in ihrem
+      Prozess — beide Male ein frischer Prozess mit demselben Inhalt —,
+      sondern was **davor** auf der Maschine lief: im roten Fall der
+      Hauptblock und fünfzehn weitere Dateien im selben Zug.
+
+      Damit ist die Ursache eine Stufe größer als „die Zahl der VTK-Fenster,
+      die ein Prozess aufbaut": Es ist der Zustand der Maschine nach einem
+      langen Zug — Handles, Grafikkontexte, Speicher, die ein beendeter
+      Prozess nicht sofort zurückgibt. Das erklärt, warum der Absturz auf den
+      Runnern häufiger zuschlägt als hier, warum ein zweiter Anlauf oft
+      genügt, und warum er wandert.
+
+      **Der Stapel von heute zeigt zusätzlich die Richtung:** Er steht im
+      *Aufbau* des nächsten Fensters, nicht im Abbau des vorigen —
+      `QThread.__init__` aus `session.py:1021 evaluate_async`, über
+      `main_window.py:2488 open_path`, aus dem `window`-Fixture heraus. Wer
+      hier weitersucht, sucht nicht nach einer Referenz, die zu lange hält,
+      sondern nach einer Ressource, die beim Anlegen des Threads nicht mehr
+      da ist.
 - [ ] **Auf einem fremden Rechner installieren** (ohne Python, ohne venv, ohne
       OpenSCAD/Ollama/ComfyUI). Der Punkt, der erfahrungsgemäß mehr findet als
       alle Tests.
