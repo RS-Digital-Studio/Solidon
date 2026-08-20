@@ -1131,6 +1131,14 @@ class HistoryPanel(QWidget):
         menu.exec(self.list.viewport().mapToGlobal(position))
 
 
+#: Ab wie vielen Befunden der Bericht seine Filterzeile zeigt.
+#:
+#: Zwei, denn bei einem einzigen Befund kann ein Filter nur ihn treffen oder die
+#: Zeile „Kein Befund passt zu …" erzeugen — und bei null zeigte der Bericht ein
+#: Suchfeld, eine Filterauswahl und einen leeren Kasten für nichts.
+FILTER_FROM = 2
+
+
 class ReportPanel(QWidget):
     """Befunde aus Einlesen, Operationen und Prüfungen (§17.3)."""
 
@@ -1209,6 +1217,10 @@ class ReportPanel(QWidget):
         filter_row.setContentsMargins(0, 0, 0, 0)
         filter_row.addWidget(self.search, stretch=1)
         filter_row.addWidget(self.severity)
+        # Der leere Bericht ist der häufigste — und er zeigte ein Suchfeld, eine
+        # Filterauswahl und einen leeren Kasten darunter. Drei Bedienelemente
+        # für nichts, und der Satz „Keine Befunde." dazwischen. Was es nicht zu
+        # filtern gibt, bekommt keinen Filter (siehe ``_show_controls``).
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
@@ -1227,6 +1239,29 @@ class ReportPanel(QWidget):
         layout.addLayout(filter_row)
         layout.addWidget(self._nothing)
         layout.addWidget(self.list)
+
+    def _show_controls(self) -> None:
+        """Filterzeile und Liste nur, wenn es etwas zu filtern gibt.
+
+        Ein Bericht ohne Befunde ist der Normalfall — und er zeigte ein
+        Suchfeld, eine Filterauswahl und einen leeren Listenkasten. Drei
+        Elemente, von denen keines etwas tun kann, und der einzige Satz mit
+        Inhalt („Keine Befunde.") stand darüber wie eine Überschrift.
+
+        Die Schwelle ist **zwei**, nicht eins: Bei einem einzigen Befund kann
+        ein Filter nur ihn selbst treffen oder die Zeile „Kein Befund passt zu
+        …" erzeugen. Beides ist keine Auskunft, die jemand gesucht hat.
+        """
+        count = self.list.count()
+        self.list.setVisible(bool(count))
+        for widget in (self.search, self.severity):
+            widget.setVisible(count >= FILTER_FROM)
+        if count < FILTER_FROM and (self.search.text() or self.severity.currentIndex()):
+            # Ein Filter, der verschwindet, nimmt seine Wirkung mit — sonst
+            # bliebe eine Auswahl gesetzt, die niemand mehr sehen und
+            # zurücknehmen kann.
+            self.search.clear()
+            self.severity.setCurrentIndex(0)
 
     def _refilter(self) -> None:
         """Blendet aus, was nicht passt — gelöscht wird nichts.
@@ -1283,6 +1318,7 @@ class ReportPanel(QWidget):
         self._count_up()
         self._measure_up(result)
         self._refilter()
+        self._show_controls()
         self._grew()
 
     def add_findings(self, findings: list[Finding]) -> None:
@@ -1308,6 +1344,9 @@ class ReportPanel(QWidget):
         self._resort()
         self._count_up()
         self._refilter()
+        # Auch hier: ein Befund, der nachkommt, bringt die Filterzeile mit —
+        # sonst hängt sie an dem Stand, den die Auswertung hinterließ.
+        self._show_controls()
         self._grew()
         if fresh:
             # Nach dem Ordnen steht der neue Befund nicht mehr unten, sondern

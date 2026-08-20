@@ -2628,3 +2628,50 @@ def test_the_context_menu_follows_the_titles_like_the_menu_bar() -> None:
     assert any(title.startswith("Ü") for title in titles), (
         "ohne Umlaut am Wortanfang prüft der Vergleich den Sortierschlüssel nicht"
     )
+
+
+def test_an_empty_report_offers_nothing_to_filter(qt_app: QApplication) -> None:
+    """Der leere Bericht zeigte Suchfeld, Filterauswahl und einen leeren Kasten.
+
+    Drei Bedienelemente, von denen keines etwas tun kann, und der einzige Satz
+    mit Inhalt — „Keine Befunde." — stand darüber wie eine Überschrift. Das ist
+    der häufigste Zustand des Berichts, nicht ein Randfall.
+
+    Die Schwelle ist zwei: Bei einem einzigen Befund kann ein Filter nur ihn
+    treffen oder die Zeile „Kein Befund passt zu …" erzeugen.
+    """
+    from app.ui.panels import FILTER_FROM, ReportPanel
+
+    finding = Finding(
+        code="arrange.out_of_build_volume",
+        severity="warning",
+        message="Ein Objekt steht über den Bauraum hinaus.",
+        object_id="obj_1",
+        values={"object": "Halter"},
+    )
+    panel = ReportPanel()
+    try:
+        panel.show_result(None)
+        assert panel.list.isHidden(), "der leere Kasten steht noch da"
+        assert panel.search.isHidden(), "gesucht wird in nichts"
+        assert panel.severity.isHidden(), "gefiltert auch"
+        assert panel.summary.text(), "und der Satz, der etwas sagt, bleibt"
+
+        panel.add_findings([finding])
+        assert not panel.list.isHidden(), "ein Befund gehört gezeigt"
+        assert panel.search.isHidden(), f"ein Filter für {FILTER_FROM - 1} Befund"
+
+        second = dataclasses.replace(finding, object_id="obj_2", values={"object": "Deckel"})
+        panel.add_findings([second])
+        assert not panel.search.isHidden(), "ab zwei Befunden gibt es etwas zu filtern"
+        assert not panel.severity.isHidden()
+
+        # Und ein Filter, der wieder verschwindet, nimmt seine Wirkung mit:
+        # sonst bliebe eine Auswahl gesetzt, die niemand mehr zurücknehmen kann.
+        panel.search.setText("Bauraum")
+        panel.severity.setCurrentIndex(1)
+        panel.show_result(None)
+        assert panel.search.text() == "", "der Suchbegriff überlebt sein Feld"
+        assert panel.severity.currentIndex() == 0, "und die Stufe ihre Auswahl"
+    finally:
+        panel.deleteLater()
