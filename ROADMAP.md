@@ -7596,6 +7596,16 @@ offen** bleibt.
       Der zweite Teil desselben Funds ist behoben: Im **Skizzenmodus** war Pos1
       doppelt belegt und feuerte deshalb gar nicht (`3bf12fd`).
 
+- [ ] **Der Startbildschirm braucht ein Höhenbudget.** Drei Kachelspalten statt
+      zwei und schmalere Außenränder haben den Rollweg auf 1920x1080 von 198 auf
+      16 Pixel gebracht (`571422e`) — auf 1600x900 bleiben 156. Damit passt er
+      nicht überall ohne Rollen, und weiter kommt man nicht durch Umschichten:
+      Es fehlt eine Entscheidung darüber, **was kleiner wird**. Kandidaten,
+      gemessen: die Kachelhöhe (122 Pixel, davon 96 Vorschaubild), die
+      Ablagefläche (140) und „Zuletzt geöffnet" mit seiner Leerzeile. Jede
+      einzelne kostet etwas — die Vorschau ist der Grund, aus dem die Kacheln
+      erkennbar sind.
+
 - [ ] **Der Trennen-Bereich hat laut Fund 130 Punkte Totraum.** Offscreen
       gemessen kommt das Gegenteil heraus — die Leiste wünscht 146 Pixel und
       bekommt 24 —, weil Qt dort ohne Schriftfamilien andere Metriken rechnet.
