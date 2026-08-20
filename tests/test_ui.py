@@ -4829,3 +4829,87 @@ def test_the_view_bar_stays_out_of_the_way(window: MainWindow) -> None:
     bar.adjustSize()
     assert bar.width() <= 260, f"{bar.width()} px — die Leiste frisst den Viewport"
     assert bar.height() <= 48, f"{bar.height()} px hoch"
+
+
+# --- Die Wiederherstellung fragt zweimal dasselbe (§38) -------------------------
+
+
+def test_both_recovery_questions_name_their_action_and_the_age(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Beide Fälle gehen über denselben Aufbau — und der nennt Handlung und Alter.
+
+    Der namenlose Fall stand auf „Ja"/„Nein" und ohne jede Angabe, während sein
+    Zwilling daneben beides längst hatte. Geprüft wird deshalb nicht der Dialog
+    (der hängt modal), sondern **womit** die beiden Aufrufer ihn bestellen:
+    Wer hier einen zweiten Aufbau daneben stellt, bekommt einen roten Lauf.
+
+    Gemessen wird **im** Aufruf. Danach ginge es nicht mehr: Ein Projekt zu
+    speichern räumt die namenlose Sicherung weg, und die Prüfung liefe gegen
+    eine Datei, die es zu Recht nicht mehr gibt.
+    """
+    from app.core.scene.project import write_autosave
+
+    bestellt: list[dict[str, Any]] = []
+
+    def merken(
+        self: MainWindow, candidate: Path, saved: Path | None, question: str, decline: str
+    ) -> bool:
+        bestellt.append(
+            {
+                "vorhanden": candidate.is_file(),
+                "alter": MainWindow._when(candidate),
+                "saved": saved,
+                "question": question,
+                "decline": decline,
+            }
+        )
+        return False
+
+    monkeypatch.setattr(MainWindow, "_ask_recovery", merken)
+
+    # Der namenlose Fall: die Sicherung liegt im Nutzerverzeichnis, das
+    # conftest in einen Temp-Ordner umbiegt (§38).
+    write_autosave(window.session.project, None)
+    window._offer_unsaved_recovery()
+
+    # Und der benannte daneben.
+    named = tmp_path / "projekt.p3d"
+    window.session.save_project(named)
+    write_autosave(window.session.project, named)
+    window._offer_recovery(named)
+
+    assert len(bestellt) == 2, "beide Fälle müssen über _ask_recovery gehen"
+    for eintrag in bestellt:
+        assert eintrag["vorhanden"], "gefragt wird nur zu einer Sicherung, die es gibt"
+        assert eintrag["question"].strip(), "die Frage sagt, worum es geht"
+        # Das Alter steht im Dialog — ohne es entscheidet niemand zwischen
+        # „vor fünf Minuten" und „vor drei Wochen".
+        assert eintrag["alter"].strip()
+        assert eintrag["alter"] != tr("unbekannt")
+        # Der Knopf heißt nach seiner Handlung. „Ja" verlangt, die Frage im
+        # Kopf zu behalten — dieselbe Begründung wie bei confirm_discard.
+        decline = eintrag["decline"]
+        assert decline not in {"Ja", "Nein", "Yes", "No"}, decline
+        assert len(decline.split()) >= 2, f"{decline!r} benennt keine Handlung"
+
+    # Nur der benannte Fall hat einen gespeicherten Stand zum Vergleichen; der
+    # namenlose hat die Sicherung und sonst nichts.
+    assert [eintrag["saved"] is None for eintrag in bestellt] == [True, False]
+
+
+def test_no_question_box_asks_yes_or_no(window: MainWindow) -> None:
+    """Bauart-Prüfung: „Ja"/„Nein" ist in dieser Oberfläche keine Frage.
+
+    Der letzte Ja/Nein-Dialog war der namenlose Wiederherstellungsfall. Diese
+    Zeile hält es dabei — sonst ist der nächste in einem halben Jahr wieder da,
+    und er liest sich beim Schreiben jedes Mal harmlos.
+    """
+    import app.ui
+
+    quellen = sorted(Path(app.ui.__file__).parent.glob("*.py"))
+    assert quellen, "keine Oberflächenquellen gefunden"
+    for path in quellen:
+        text = path.read_text(encoding="utf-8")
+        assert "QMessageBox.question" not in text, f"{path.name}: Ja/Nein-Frage"
+        assert "StandardButton.Yes" not in text, f"{path.name}: Ja-Knopf"

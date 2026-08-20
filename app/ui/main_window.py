@@ -5529,17 +5529,12 @@ class MainWindow(QMainWindow):
         candidate = find_recovery(None)
         if candidate is None:
             return
-        answer = QMessageBox.question(
-            self,
-            tr("Wiederherstellung"),
-            tr(
-                "Ein Projekt aus einer früheren Sitzung wurde nie gespeichert. "
-                "Die automatische Sicherung öffnen?"
-            ),
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.Yes,
-        )
-        if answer != QMessageBox.StandardButton.Yes:
+        if not self._ask_recovery(
+            candidate,
+            None,
+            tr("Ein Projekt aus einer früheren Sitzung wurde nie gespeichert."),
+            tr("Leer beginnen"),
+        ):
             return
         try:
             self.session.recover(candidate)
@@ -5853,36 +5848,55 @@ class MainWindow(QMainWindow):
             return tr("vor einer Stunde") if hours == 1 else tr("vor {n} Stunden").format(n=hours)
         return written.strftime("%d.%m.%Y %H:%M")
 
-    def _offer_recovery(self, path: Path) -> None:
-        """Eine Sicherung anbieten, die neuer ist als die Datei (§38).
+    def _ask_recovery(
+        self, candidate: Path, saved: Path | None, question: str, decline: str
+    ) -> bool:
+        """Die Frage nach einer automatischen Sicherung — eine für beide Fälle.
 
-        Zwei Dinge, die die Frage vorher nicht leistete. Sie stand auf „Ja"
-        und „Nein" — dieselbe Stelle, an der ``confirm_discard`` begründet,
-        warum das nicht taugt: wer „Ja" liest, muss die Frage im Kopf behalten,
-        um zu wissen, was er auslöst. Und sie sagte nicht, *wie* neu die
-        Sicherung ist. Zwischen „von vor fünf Minuten" und „von vor drei
-        Wochen" liegt die ganze Entscheidung.
+        Zwei Dialoge stellten dieselbe Entscheidung, und nur einer hatte die
+        Lehre daraus gezogen. Sie steht hier, damit sie für beide gilt:
+
+        **Die Knöpfe heißen nach ihrer Handlung**, nicht „Ja" und „Nein" —
+        dieselbe Begründung wie bei ``confirm_discard``: wer „Ja" liest, muss
+        die Frage im Kopf behalten, um zu wissen, was er auslöst.
+
+        **Das Alter der Sicherung steht dabei.** Zwischen „von vor fünf
+        Minuten" und „von vor drei Wochen" liegt die ganze Entscheidung. Der
+        namenlose Fall hatte davon gar nichts: dort ist die Sicherung das
+        Einzige, was es gibt, und sie wurde ohne jede Angabe angeboten.
+
+        Getrennt gepflegt driftet das wieder auseinander — der Unterschied
+        zwischen den beiden Fällen ist der Text, nicht der Aufbau.
         """
+        box = QMessageBox(self)
+        box.setWindowTitle(tr("Wiederherstellung"))
+        box.setText(question)
+        lines = [tr("Sicherung: {backup}").format(backup=self._when(candidate))]
+        if saved is not None:
+            lines.append(tr("Gespeicherter Stand: {saved}").format(saved=self._when(saved)))
+        box.setInformativeText("\n".join(lines))
+        restore = box.addButton(tr("Sicherung öffnen"), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton(decline, QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(restore)
+        box.exec()
+        return box.clickedButton() is restore
+
+    def _offer_recovery(self, path: Path) -> None:
+        """Eine Sicherung anbieten, die neuer ist als die Datei (§38)."""
         candidate = find_recovery(path)
         if candidate is None:
             return
-        box = QMessageBox(self)
-        box.setWindowTitle(tr("Wiederherstellung"))
-        box.setText(tr("Es gibt eine automatische Sicherung, die neuer ist als die Datei."))
-        box.setInformativeText(
-            tr("Sicherung: {backup}\nGespeicherter Stand: {saved}").format(
-                backup=self._when(candidate), saved=self._when(path)
-            )
-        )
-        restore = box.addButton(tr("Sicherung öffnen"), QMessageBox.ButtonRole.AcceptRole)
-        box.addButton(tr("Gespeicherten Stand behalten"), QMessageBox.ButtonRole.RejectRole)
-        box.setDefaultButton(restore)
-        box.exec()
-        if box.clickedButton() is restore:
-            # Dieselbe synchrone Lesung wie in ``open_path``, also derselbe
-            # Zeiger (§2.8).
-            with waiting():
-                self.session.open_project(candidate)
+        if not self._ask_recovery(
+            candidate,
+            path,
+            tr("Es gibt eine automatische Sicherung, die neuer ist als die Datei."),
+            tr("Gespeicherten Stand behalten"),
+        ):
+            return
+        # Dieselbe synchrone Lesung wie in ``open_path``, also derselbe
+        # Zeiger (§2.8).
+        with waiting():
+            self.session.open_project(candidate)
 
     def dragEnterEvent(self, event: QDragEnterEvent) -> None:  # noqa: N802 - Qt name
         if (
