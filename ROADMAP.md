@@ -4840,12 +4840,41 @@ Vier Anläufe, alle gemessen, keiner erfolgreich:
 
 - [ ] **Offen: den helikalen Gang so bauen, dass er überall schließt.** Der
       Verdacht liegt nicht mehr bei der Vereinigung, sondern beim Gang selbst
-      (`MakePipeShell`) — dort wäre der nächste Griff `SetTransitionMode`,
-      oder das Gewinde als Rotationskörper statt als Sweep. Bis dahin trägt
+      (`MakePipeShell`). Bis dahin trägt
       `tests/test_sketch_ops.py::test_a_sound_thread_still_goes_through` ein
       `xfail` für Linux, nicht `strict`: sobald eine Fassung es dort kann,
       wird der Lauf grün und die Marke fällt auf. Für die Demo ist die Wirkung
       begrenzt — sie erscheint für Windows, und dort geht es.
+
+      **Drei Kandidaten sind am 20.08.2026 gemessen und widerlegt worden** —
+      alle auf Windows, wo das Gewinde schließt, also als Regressionsprobe und
+      nicht als Beweis für Linux. Hier steht, was sie ergaben, damit niemand
+      sie ein zweites Mal versucht:
+
+      - **`SetTransitionMode`** — der Griff, der bisher an dieser Stelle stand
+        — ist **wirkungslos**: Alle drei Modi (`Transformed`, `RightCorner`,
+        `RoundCorner`) liefern dasselbe Volumen bis auf die Dezimale. Der
+        Grund ist einsichtig, sobald man ihn ausspricht: Transition-Modi
+        regeln, was an **Ecken des Spine** passiert, und eine Helix hat keine.
+      - **`SetMode(False)`** (Corrected Frenet statt Frenet) **bricht zwei von
+        drei Größen**: M10 und M20 scheitern mit `GeometryError`, M6 kommt mit
+        anderem Volumen heraus.
+      - **`SetMode(gp_Ax2)`** — ein festes Bezugssystem statt der Torsion zu
+        folgen — ist der lehrreichste Fehlschlag: Es liefert für alle drei
+        Größen einen wasserdichten Körper mit richtigem Hüllmaß **und einem
+        Volumen unter dem Kernvolumen**. Der Gang schneidet in den Kern, statt
+        darauf zu liegen. Geometrisch unmöglich, und der bestehende Test hätte
+        es durchgelassen.
+
+- [x] **Aus dem letzten Fehlschlag ist eine Schranke geworden.**
+      `test_a_thread_holds_more_material_than_its_core` prüft, was der Test
+      daneben nicht prüfte: Ein Gewindebolzen liegt zwischen zwei Zylindern,
+      die man ausrechnen kann — weniger Material als sein Kern (`d3 = d −
+      1,0825 · P` nach ISO 68-1) kann er nicht haben, mehr als seine Hülle
+      auch nicht. „Wasserdicht und außen sechs Millimeter" war das falsche
+      Gewinde ebenfalls. **Die Hülle zu prüfen sagt nichts über das Material
+      darin** — und das ist der eigentliche Gewinn dieser Runde, nicht der
+      Gang, der weiter offen ist.
 
 ### Der Absturz, der die CI eine Woche lang rot hielt (13.08.2026)
 
@@ -4902,7 +4931,20 @@ Windows, der Plattform der Demo, läuft er.
 - [ ] **Offen: dieser eine Test.** Der Verdacht liegt bei VTKs Zustand über
       mehrere Fenster hinweg — dieselbe Wand, an der `deleteLater` und
       `gc.collect()` gescheitert sind. Wer ihn angeht, findet die vier
-      gemessenen Irrwege oben und braucht sie nicht zu wiederholen.
+      gemessenen Irrwege oben und braucht sie nicht zu wiederholen. **Von
+      Windows aus ist er nicht zu beheben:** Der Absturz tritt dort nicht auf,
+      und was man nicht auslösen kann, kann man nicht als behoben nachweisen.
+
+- [x] **Die Zusage dahinter ist jetzt trotzdem überall geprüft** (20.08.2026).
+      Das war die eigentliche Lücke: Der übersprungene Test prüft §26.5 auf dem
+      realistischen Weg — zwei Fernaufrufe, zwei Auswertungen, zwei
+      Szenenaufbauten —, und genau daran stirbt er. Damit war der Selbstschutz
+      des Rückgängig-Knopfs auf Linux **gar nicht** geprüft: Die teure Hälfte
+      des Tests hat die billige mit sich genommen.
+      `test_the_applied_undo_refuses_a_transaction_it_cannot_find` prüft den
+      Kern ohne Geometrie — eine gemerkte Transaktion, die es nicht gibt, darf
+      nichts zurücknehmen —, und läuft auf jeder Plattform. Der Absturz bleibt,
+      die Lücke nicht.
 
 ---
 

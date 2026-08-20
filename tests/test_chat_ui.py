@@ -330,6 +330,34 @@ def test_the_applied_bar_clears_when_something_newer_is_on_top(window: MainWindo
     assert window._applied_transaction is None
 
 
+def test_the_applied_undo_refuses_a_transaction_it_cannot_find(window: MainWindow) -> None:
+    """Derselbe Selbstschutz wie im Test darüber, ohne Szenenaufbau — und
+    deshalb auf **jeder** Plattform.
+
+    Der Test darüber prüft die Zusage auf dem realistischen Weg: zwei
+    Fernaufrufe, zwei Auswertungen, zwei Szenenaufbauten. Genau daran stirbt er
+    auf den Linux-Runnern (siehe seine ``skipif``-Begründung), und damit war
+    §26.5 dort **gar nicht** geprüft — die teure Hälfte des Tests hat die
+    billige mit sich genommen.
+
+    Der Kern der Zusage braucht keine Geometrie: Der Knopf merkt sich eine
+    Transaktion, und wenn die nicht mehr die oberste ist, nimmt er nichts
+    zurück, sondern räumt sich weg. Eine Kennung, die es gar nicht gibt, ist
+    davon der härteste Fall.
+    """
+    window._applied_transaction = "gibt-es-nicht"
+    window.chat.decision.setVisible(True)
+    before = len(window.session.project.document.transactions)
+
+    window._on_applied_undone()
+
+    assert len(window.session.project.document.transactions) == before, (
+        "der Knopf hat etwas zurückgenommen, das er nicht versprochen hatte"
+    )
+    assert window._applied_transaction is None
+    assert not window.chat.decision.isVisibleTo(window.chat)
+
+
 def test_the_applied_bar_does_not_survive_a_new_project(window: MainWindow) -> None:
     """Die Leiste überlebte sogar den Projektwechsel und stand mit aktivem
     Rückgängig über einem leeren Projekt.

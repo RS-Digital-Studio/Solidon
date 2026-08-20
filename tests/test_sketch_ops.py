@@ -362,6 +362,31 @@ def test_a_sound_thread_still_goes_through() -> None:
         assert body.bounds.size[0] == pytest.approx(major, rel=0.01)
 
 
+def test_a_thread_holds_more_material_than_its_core() -> None:
+    """Ein Gewindebolzen liegt zwischen zwei Zylindern, und beide kann man
+    ausrechnen: Weniger Material als sein **Kern** kann er nicht haben, mehr
+    als seine **Hülle** auch nicht.
+
+    Die Schranke steht hier, weil der Test darüber sie nicht hat. Wasserdicht
+    und außen sechs Millimeter war ein Gewinde auch dann noch, als der Gang in
+    den Kern hineinschnitt statt darauf zu liegen: Am 20.08.2026 lieferte der
+    Kandidat ``SetMode(gp_Ax2)`` für alle drei Größen ein Volumen **unter** dem
+    Kernvolumen — wasserdicht, eine Komponente, richtiges Hüllmaß, und
+    geometrisch unmöglich. Die Hülle zu prüfen sagt nichts über das Material
+    darin.
+
+    Der Kerndurchmesser folgt ISO 68-1: ``d3 = d − 1,0825 · P``.
+    """
+    for major, pitch in ((6.0, 1.0), (10.0, 1.5), (20.0, 2.5)):
+        body = solid_of(run("thread_exact", diameter=major, pitch=pitch, length=12.0))
+        core = math.pi * ((major - 1.0825 * pitch) / 2.0) ** 2 * 12.0
+        hull = math.pi * (major / 2.0) ** 2 * 12.0
+        assert core <= body.volume <= hull, (
+            f"M{major:.0f}: {body.volume:.1f} mm³ liegt nicht zwischen "
+            f"Kern {core:.1f} und Hülle {hull:.1f}"
+        )
+
+
 def test_the_draft_angle_matches_the_closed_form() -> None:
     """draft_faces: ein Quader mit angestellten Seiten ist ein Integral, das
     man von Hand rechnen kann — V = WDH − (W+D)H²·tanα + 4/3·H³·tan²α."""
