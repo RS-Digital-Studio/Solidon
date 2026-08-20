@@ -862,3 +862,44 @@ def test_the_staged_texts_of_the_figures_cover_every_language() -> None:
         assert len(findings) == 4, language
         assert all(text.strip() for text in findings), language
         assert SAMPLE_OBJECT[language].strip(), language
+
+
+def test_the_start_screen_button_opens_the_chapter_it_names(qt_app: object) -> None:
+    """Der Knopf versprach „die ersten fünfzehn Minuten" und öffnete „Was Solidon ist".
+
+    ``pages()`` liefert die Einführung zuerst, und das Handbuchfenster stellte
+    auf Zeile null — den ersten von über vierzig Einträgen. Wer den einzigen
+    Hilfe-Knopf des Startbildschirms drückt, musste das zugesagte Kapitel danach
+    selbst suchen. ``ManualWindow.show_page`` konnte es seit je und wurde von
+    keiner Stelle der Anwendung gerufen, nur vom Test.
+
+    Geprüft wird über den **Klick**, nicht über die Methode: Die Verdrahtung ist
+    die Aussage. Und der Knopftext wird gegen den Seitentitel gehalten — wer das
+    eine ändert und das andere vergisst, hat wieder ein Versprechen ohne Deckung.
+    """
+    from app.core import manual as manual_module
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_screen.manual_button.click()
+        opened = window._manual
+        assert opened is not None, "der Knopf öffnete kein Handbuch"
+
+        row = opened.contents.currentRow()
+        assert row >= 0
+        page = opened._visible[row]
+        assert page.key == manual_module.FIRST_MINUTES, (
+            f"geoeffnet wurde {page.title} statt des zugesagten Kapitels"
+        )
+        # Ohne Rücksicht auf die Großschreibung: Der Knopf schreibt „… die
+        # ersten fünfzehn Minuten" mitten im Satz, die Seite „Die ersten …".
+        assert str(page.title).casefold() in window.start_screen.manual_button.text().casefold(), (
+            f"der Knopf sagt {window.start_screen.manual_button.text()}, "
+            f"die Seite heisst {page.title}"
+        )
+    finally:
+        window.close()
+        window.deleteLater()

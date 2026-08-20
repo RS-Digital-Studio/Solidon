@@ -73,6 +73,19 @@ class Page:
 #: Ein Bildverweis im Fließtext einer Seite.
 FIGURE_PATTERN: Final = re.compile(r"!\[\]\(figure:([a-z0-9-]+)\)")
 
+#: Das Kapitel, auf das der Startbildschirm zeigt.
+#:
+#: Sein Knopf heißt „Handbuch — die ersten fünfzehn Minuten" und öffnete „Was
+#: Solidon ist", den ersten von über vierzig Einträgen: ``pages()`` liefert die
+#: Einführung zuerst, und das Handbuchfenster stellte auf Zeile null. Wer den
+#: einzigen Hilfe-Knopf des Startbildschirms drückt, musste das zugesagte
+#: Kapitel danach selbst suchen.
+#:
+#: Der Schlüssel steht hier und nicht in der Oberfläche: Welche Seite gemeint
+#: ist, weiß das Handbuch. ``tests/test_manual.py`` hält Knopftext und
+#: Seitentitel zusammen.
+FIRST_MINUTES: Final = "start"
+
 
 #: Die geschriebenen Seiten, in der Reihenfolge, in der sie jemand liest.
 INTRODUCTION: Final[tuple[Page, ...]] = (

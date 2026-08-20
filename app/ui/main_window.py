@@ -52,7 +52,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME, APP_VERSION, PROJECT_SUFFIX, SUPPORT_ADDRESS
-from app.core import activation, examples, updates
+from app.core import activation, examples, manual, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
 from app.core.agent.session import (
@@ -1197,7 +1197,8 @@ class MainWindow(QMainWindow):
         self.start_screen.fileDropped.connect(self.open_path)
         self.start_screen.urlDropped.connect(self.download_model)
         self.start_screen.forgetRequested.connect(self._forget_recent)
-        self.start_screen.manualRequested.connect(self.action_manual)
+        # Mit Kapitel: Der Knopf nennt es, also schlägt er es auf.
+        self.start_screen.manualRequested.connect(lambda: self.action_manual(manual.FIRST_MINUTES))
 
         self.stack = QStackedWidget(self)
         self.stack.addWidget(self.start_screen)
@@ -2744,19 +2745,32 @@ class MainWindow(QMainWindow):
             self._palette_action.shortcut().toString(QKeySequence.SequenceFormat.NativeText),
         ).exec()
 
-    def action_manual(self) -> None:
+    def action_manual(self, page: str = "") -> None:
         """Das Handbuch — ein Fenster, kein Dialog.
 
         Es bleibt offen, während gearbeitet wird; ein Handbuch, das man zum
         Weiterarbeiten schließen muss, wird kein zweites Mal geöffnet. Und es
         wird wiederverwendet, damit nicht bei jedem Aufruf eines mehr auf dem
         Bildschirm steht.
+
+        ``page`` schlägt das Kapitel auf, das der Aufrufer meint. Ohne Angabe
+        bleibt es beim ersten Eintrag — richtig für *Hilfe → Handbuch*, falsch
+        für einen Knopf, der ein bestimmtes Kapitel verspricht: Der
+        Startbildschirm bot „Handbuch — die ersten fünfzehn Minuten" an und
+        öffnete „Was Solidon ist", den ersten von über vierzig Einträgen. Wer den
+        einzigen Hilfe-Knopf des Startbildschirms drückt, hat das zugesagte
+        Kapitel danach selbst gesucht. ``ManualWindow.show_page`` konnte das seit
+        je und wurde von keiner Stelle der Anwendung gerufen — nur vom Test.
         """
         window = self._manual
         if window is None:
             window = ManualWindow(self)
             self._manual = window
         window.show()
+        if page:
+            # Nach ``show``, denn erst dort steht die Liste der sichtbaren
+            # Seiten; davor wäre die Zeile eine, die es noch nicht gibt.
+            window.show_page(page)
         window.raise_()
         window.activateWindow()
 
