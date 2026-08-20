@@ -5044,3 +5044,45 @@ def test_the_theme_stands_before_anything_is_shown(
         )
     finally:
         qt_app.setPalette(before)
+
+
+def test_the_unlock_dialog_does_not_close_on_an_empty_field(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """„Eintragen" mit leerem Feld schloss den Dialog wortlos.
+
+    Das ist der Zustand, in dem jemand nicht weiter weiß, und die Antwort war
+    ein verschwundenes Fenster — auf den einen Knopf hin, der etwas versprach.
+    ``_remember`` rief ``reject()``, sobald das Feld leer war.
+
+    Jetzt ist der Knopf gesperrt, solange nichts dasteht, und sagt im Tooltip
+    warum (Regel 19, §2.7). Über die Tastatur bleibt er erreichbar — dann sagt
+    der Dialog es, statt zu gehen.
+    """
+    from app.core import activation
+    from app.core.activation import store
+    from app.ui.dialogs import ActivationDialog
+
+    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path)
+    activation.forget_cache()
+    try:
+        dialog = ActivationDialog()
+        try:
+            assert not dialog.check_button.isEnabled(), "leeres Feld, und der Knopf verspricht was"
+            assert dialog.check_button.toolTip(), "gesperrt ohne Grund ist die halbe Antwort"
+
+            closed: list[bool] = []
+            dialog.rejected.connect(lambda: closed.append(True))
+            dialog._remember()
+            assert closed == [], "der Dialog ging zu, statt zu sagen was fehlt"
+
+            dialog.field.setPlainText("SOLIDON3D-1-AAAAAAAA")
+            assert dialog.check_button.isEnabled(), "mit Schlüssel muss er können"
+            assert not dialog.check_button.toolTip(), "und dann ohne Grund dastehen"
+
+            dialog.field.setPlainText("   ")
+            assert not dialog.check_button.isEnabled(), "Leerzeichen sind kein Schlüssel"
+        finally:
+            dialog.deleteLater()
+    finally:
+        activation.forget_cache()

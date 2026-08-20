@@ -324,11 +324,17 @@ TOURS: Final[tuple[Tour, ...]] = (
         steps=(
             TourStep(
                 shows="history",
+                # **Fünf, nicht vier**, und der Gemeinte ist der letzte. Der
+                # Verlauf dieses Beispiels führt Quader, Kugel, Versetzen,
+                # Verschmelzen und Vernetzen — nachgezählt. „Der dritte" war
+                # das Versetzen, gemeint war das Vernetzen. Eine Anleitung, die
+                # neben einer Liste steht und anders zählt als sie, ist
+                # schlechter als keine. ``tests/test_tour.py`` hält die Zahl.
                 text=_(
-                    "Im Verlauf stehen vier Schritte: zwei Grundkörper, weich "
-                    "verschmolzen, dann gleichmäßig vernetzt. Der dritte ist der, den "
-                    "man auslässt und danach vermisst — ohne ihn hat der Pinsel zu "
-                    "wenige Eckpunkte."
+                    "Im Verlauf stehen fünf Schritte: zwei Grundkörper, einer davon "
+                    "versetzt, beide weich verschmolzen, dann gleichmäßig vernetzt. Der "
+                    "letzte ist der, den man auslässt und danach vermisst — ohne ihn hat "
+                    "der Pinsel zu wenige Eckpunkte."
                 ),
             ),
             TourStep(

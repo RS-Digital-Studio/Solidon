@@ -548,6 +548,12 @@ class ActivationDialog(QDialog):
             tr("Eintragen"), QDialogButtonBox.ButtonRole.AcceptRole
         )
         self.check_button.clicked.connect(self._remember)
+        # **Ohne Schlüssel kann er nichts eintragen, und sagt es vorher.**
+        # „Eintragen" mit leerem Feld rief ``reject()``: Der Dialog verschwand
+        # wortlos — genau in dem Zustand, in dem jemand nicht weiter weiß, und
+        # als Antwort auf den einen Knopf, der etwas versprach. Ausgegraut mit
+        # Grund ist die Regel dieses Hauses (Regel 19, §2.7).
+        self.field.textChanged.connect(self._follow_field)
         self.forget_button = buttons.addButton(
             tr("Schlüssel entfernen"), QDialogButtonBox.ButtonRole.DestructiveRole
         )
@@ -563,6 +569,7 @@ class ActivationDialog(QDialog):
         layout.addWidget(self.field)
         layout.addWidget(buttons)
         self._show_state()
+        self._follow_field()
 
     def _show_state(self) -> None:
         state = activation.state()
@@ -618,10 +625,25 @@ class ActivationDialog(QDialog):
             )
             set_level(self.state_label, "warning")
 
+    def _follow_field(self) -> None:
+        """„Eintragen" kann nur, wenn etwas im Feld steht.
+
+        Der Grund steht am Knopf, nicht erst hinterher: Ein Dialog, der sich auf
+        einen Klick hin wortlos schließt, hat die Frage nicht beantwortet,
+        sondern weggeräumt.
+        """
+        filled = bool(self.field.toPlainText().strip())
+        self.check_button.setEnabled(filled)
+        self.check_button.setToolTip(
+            "" if filled else str(tr("Fügen Sie den Schlüssel aus der Bestellmail ein."))
+        )
+
     def _remember(self) -> None:
         text = self.field.toPlainText().strip()
         if not text:
-            self.reject()
+            # Erreichbar bleibt das über die Tastatur; geschlossen wird deshalb
+            # nicht, sondern gesagt, was fehlt.
+            self._follow_field()
             return
         try:
             activation.remember(text)

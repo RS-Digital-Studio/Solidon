@@ -398,3 +398,44 @@ def test_the_first_tour_describes_the_report_it_really_gets() -> None:
     last = str(tour.steps[-1].text)
     assert "drei Hinweise" in last, "der Text nennt die Zahl nicht mehr, die hier geprüft wird"
     assert "gefunden hat" not in last, "die alte Behauptung steht wieder da"
+
+
+def test_every_tour_counts_the_steps_its_example_really_has() -> None:
+    """Die Weg-4-Tour sagte „vier Schritte", im Verlauf stehen fünf.
+
+    Quader, Kugel, Versetzen, Verschmelzen, Vernetzen — nachgezählt. Und „der
+    dritte ist der, den man auslässt" meinte das Vernetzen, also den fünften;
+    der dritte ist das Versetzen. Eine Anleitung, die neben einer Liste steht und
+    anders zählt als sie, ist schlechter als keine.
+
+    Geprüft wird jede Tour, die eine Zahl nennt: Steht sie im Text, muss sie die
+    Länge des Verlaufs sein. Damit fällt auch der nächste Schritt auf, der einem
+    Beispiel hinzugefügt wird, ohne den Text nachzuziehen.
+    """
+    zahlwoerter = {
+        "einen": 1,
+        "zwei": 2,
+        "drei": 3,
+        "vier": 4,
+        "fünf": 5,
+        "sechs": 6,
+        "sieben": 7,
+        "acht": 8,
+        "neun": 9,
+        "zehn": 10,
+    }
+
+    geprueft = 0
+    for tour in TOURS:
+        project = load(examples.directory() / f"{tour.example_id}.p3d")
+        schritte = len(project.document.ops)
+        for step in tour.steps:
+            text = str(step.text)
+            for wort, zahl in zahlwoerter.items():
+                if f"{wort} Schritte" not in text and f"{wort} Schritt" not in text:
+                    continue
+                geprueft += 1
+                assert zahl == schritte, (
+                    f"{tour.example_id}: die Tour sagt {wort} ({zahl}), der Verlauf hat {schritte}"
+                )
+    assert geprueft, "keine Tour nennt eine Zahl — dann prüft dieser Test nichts"
