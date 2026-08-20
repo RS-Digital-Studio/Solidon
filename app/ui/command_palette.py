@@ -29,7 +29,13 @@ from app.i18n import tr
 #: Wer „aushoehlen" tippt, meint „Aushöhlen"; wer „Größe" tippt, soll auch das
 #: finden, was im Register „groesse" heißt. Gefaltet wird nur der Vergleich —
 #: angezeigt bleibt, was dasteht.
-_FOLDED: Final = {
+#:
+#: **Nicht dasselbe wie ``i18n.sort_key``**, und das ist Absicht: Sortiert wird
+#: nach DIN 5007-1, wo „ä" wie „a" zählt, damit „Ändern" zwischen „Analyse" und
+#: „Anordnen" steht. Gesucht wird nach der Ersatzschreibweise der Tastatur, wo
+#: „ä" zu „ae" wird. Eine Tabelle für beides täte einer von beiden Aufgaben
+#: unrecht.
+_FOLDED: Final[dict[str, str]] = {
     "ä": "ae",
     "ö": "oe",
     "ü": "ue",
@@ -53,6 +59,13 @@ _FOLDED: Final = {
     "ñ": "n",
 }
 
+
+def fold(text: str) -> str:
+    """Kleinschreibung, Umlaute ausgeschrieben, Akzente weg."""
+    lowered = text.casefold()
+    return "".join(_FOLDED.get(letter, letter) for letter in lowered)
+
+
 #: Ab wie vielen Zeichen ein Wortstamm als Suchbegriff durchgeht.
 #:
 #: Vier, weil darunter jedes zweite Wort passt: „ver" fände Verrunden,
@@ -75,12 +88,6 @@ def stem_of(word: str) -> str:
     für die Bedeutung.
     """
     return word[: max(STEM_LENGTH, len(word) - STEM_CUT)]
-
-
-def fold(text: str) -> str:
-    """Kleinschreibung, Umlaute ausgeschrieben, Akzente weg."""
-    lowered = text.casefold()
-    return "".join(_FOLDED.get(letter, letter) for letter in lowered)
 
 
 def rank(entry: PaletteEntry, query: str) -> int:

@@ -49,7 +49,7 @@ from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Finding, ObjectId
 from app.core.units import LengthUnit
-from app.i18n import format_decimal, tr
+from app.i18n import format_decimal, sort_key, tr
 from app.ui.dialogs import handlers_of
 from app.ui.icons import icon
 from app.ui.labels import (
@@ -709,7 +709,18 @@ class ObjectTree(QWidget):
         in der Menüleiste). Welche das sind, entscheidet
         :meth:`kinds_of_selection` beim Bauen des Menüs.
         """
-        return tuple(spec for spec in REGISTRY.all() if spec.consumes == 1)
+        # Nach Titel sortiert, wie die Menüleiste: ``REGISTRY.all()`` liefert
+        # nach dem internen englischen Namen, und im Kontextmenü stand damit
+        # „An Merkmal ausrichten" vor „Textur aufbringen" vor „Auf dem Bett
+        # anordnen". Sortiert wird mit ``sort_key`` wie dort, sonst rutscht
+        # „Überhangfächer" hinter das letzte Z — „Ü" steht im Zeichensatz
+        # hinter „z".
+        return tuple(
+            sorted(
+                (spec for spec in REGISTRY.all() if spec.consumes == 1),
+                key=lambda spec: sort_key(spec.title),
+            )
+        )
 
     def kinds_of_selection(self) -> list[str]:
         """Die Bauart jedes gewählten Körpers — Netz oder exakt.

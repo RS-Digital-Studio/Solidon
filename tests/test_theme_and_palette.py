@@ -435,3 +435,45 @@ def test_a_hit_in_the_title_beats_a_hit_in_the_description(qt_app: object) -> No
         if "bohrung" in f"{e.doc}".casefold() and "Bohrung" not in str(e.title)
     )
     assert rank(im_titel, "bohrung") < rank(nur_im_text, "bohrung")
+
+
+def test_the_palette_is_sorted_by_what_the_reader_reads() -> None:
+    """Die Liste kam nach dem internen englischen Namen.
+
+    ``Registry.all()`` sortiert danach, und die Palette gab das ungefiltert
+    weiter: „An Merkmal ausrichten", „Textur aufbringen", „Auf dem Bett
+    anordnen", „Slot zuweisen" — für einen deutschen Leser eine Zufallsfolge.
+    Die Menüleiste daneben sortiert nach Titel, und ihr Docstring sagt auch,
+    warum: „Sortiert wird nach dem, was auf dem Eintrag steht."
+
+    Mit gewähltem Merkmal bleibt die passende Gruppe vorn (§2.6) — sortiert
+    wird innerhalb der Gruppen, nicht über sie hinweg.
+
+    Verglichen wird mit ``i18n.sort_key``, demselben Schlüssel, mit dem die
+    Menüleiste ihre Einträge ordnet. ``str.casefold`` allein genügt nicht: 23
+    der 85 Titel tragen einen Umlaut, und „Überhangfächer" landete damit hinter
+    dem letzten Z.
+    """
+    from app.core.registry import palette_entries
+    from app.i18n import sort_key
+
+    titles = [str(entry.title) for entry in palette_entries()]
+    assert titles == sorted(titles, key=sort_key), "die Palette folgt nicht dem Titel"
+    assert any(title.startswith("Ü") for title in titles), (
+        "ohne Umlaut am Wortanfang prüft der Vergleich die Faltung nicht"
+    )
+
+    # ``PaletteEntry`` trägt kein ``applies_to`` — welche Operation zu einer
+    # Bohrung passt, weiß das Register, und genau daran wird die Reihenfolge
+    # gemessen.
+    from app.core.registry import REGISTRY
+
+    fits = {spec.name for spec in REGISTRY.all() if "hole" in spec.applies_to}
+    assert fits, "ohne passende Operationen prüft dieser Test nichts"
+    with_feature = palette_entries(for_feature="hole")
+    front = list(with_feature[: len(fits)])
+    assert {entry.name for entry in front} == fits, "was zur Auswahl passt, steht vorn"
+    inside = [str(entry.title) for entry in front]
+    assert inside == sorted(inside, key=sort_key), "und innerhalb der Gruppe nach Titel"
+    behind = [str(entry.title) for entry in with_feature[len(fits) :]]
+    assert behind == sorted(behind, key=sort_key), "und dahinter genauso"

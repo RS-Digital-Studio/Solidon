@@ -2604,3 +2604,27 @@ def test_a_finding_says_which_step_reported_it(window: MainWindow) -> None:
         assert wanted in item.toolTip(), (
             f"{finding.message!r} nennt seinen Schritt nicht: {item.toolTip()!r}"
         )
+
+
+def test_the_context_menu_follows_the_titles_like_the_menu_bar() -> None:
+    """Das Kontextmenü ordnete nach dem internen englischen Namen.
+
+    ``REGISTRY.all()`` sortiert danach, und ``operations_for_object`` gab das
+    ungefiltert weiter: „An Merkmal ausrichten", „Textur aufbringen", „Auf dem
+    Bett anordnen", „Slot zuweisen" — dieselbe Zufallsfolge, die auch die
+    Befehlspalette zeigte, während die Menüleiste daneben nach Titel sortiert.
+    Drei Wege in dieselbe Funktion, zwei Ordnungen.
+
+    Verglichen wird mit ``i18n.sort_key``, dem Schlüssel der Menüleiste: „Ü"
+    steht im Zeichensatz hinter „z", und „Überhangfächer" landete roh
+    verglichen hinter allem anderen.
+    """
+    from app.i18n import sort_key
+    from app.ui.panels import ObjectTree
+
+    titles = [str(spec.title) for spec in ObjectTree.operations_for_object(None)]  # type: ignore[arg-type]
+    assert titles, "ohne Operationen prüft dieser Test nichts"
+    assert titles == sorted(titles, key=sort_key), "das Kontextmenü folgt nicht dem Titel"
+    assert any(title.startswith("Ü") for title in titles), (
+        "ohne Umlaut am Wortanfang prüft der Vergleich den Sortierschlüssel nicht"
+    )

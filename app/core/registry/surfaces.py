@@ -33,7 +33,7 @@ from app.core.registry.registry import (
     group_title,
 )
 from app.core.types import ParamSpec
-from app.i18n import TranslatableText, _, format_decimal
+from app.i18n import TranslatableText, _, format_decimal, sort_key
 
 
 def menu_tree(registry: Registry | None = None) -> tuple[MenuSection, ...]:
@@ -141,6 +141,25 @@ def palette_entries(
     stehen auf der Nicht-bauen-Liste.
     """
     specs = list((registry or REGISTRY).all())
+    # **Nach dem Titel, nicht nach dem Namen.** ``Registry.all()`` sortiert nach
+    # dem internen englischen Bezeichner, und die Palette gab das ungefiltert
+    # weiter: „An Merkmal ausrichten", „Textur aufbringen", „Auf dem Bett
+    # anordnen", „Slot zuweisen" — für einen deutschen Leser eine Zufallsfolge,
+    # während die Menüleiste daneben nach Titel sortiert (``by_category``, mit
+    # genau dieser Begründung im Docstring).
+    #
+    # Zuerst nach Titel, dann stabil nach ``applies_to``: Python sortiert
+    # stabil, also steht die passende Gruppe vorn und innerhalb jeder Gruppe
+    # alphabetisch.
+    #
+    # Über ``sort_key``, denselben Schlüssel wie ``by_category`` in der
+    # Menüleiste — nicht bloß ``str``: 23 der 85 Titel tragen einen Umlaut, und
+    # nach Codepunkt verglichen landet „Überhangfächer" hinter allem anderen,
+    # weil „Ü" hinter „z" steht. Nicht zu verwechseln mit der Suchfaltung der
+    # Palette (``command_palette.fold``, „ä" → „ae"): hier zählt „ä" wie „a"
+    # nach DIN 5007-1, dort wie es auf einer Tastatur ohne Umlaute geschrieben
+    # wird.
+    specs.sort(key=lambda spec: sort_key(spec.title))
     if for_feature:
         specs.sort(key=lambda spec: for_feature not in spec.applies_to)
     return tuple(
