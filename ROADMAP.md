@@ -41,6 +41,10 @@ bekommt einen roten Lauf.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
+| `caveat` erreicht nur das Handbuch | Die Bedienverträge durchgesehen (20.08.2026) | `surfaces.py`, das am 20.08. eine parallele Sitzung in Arbeit hatte — der Vorbehalt gehört in Dialog, Menü-Tooltip und `tool_schemas` |
+| Die Anzeigeeinheit erreicht drei von siebenundzwanzig Stellen | Die Bedienverträge durchgesehen (20.08.2026) | eine Entscheidung über den Ort: Prozesszustand neben der Sprache, oder die Einheit durch 24 Konstruktoren reichen |
+| `agent.not_watertight` trägt keine Handlung | Die Bedienverträge durchgesehen (20.08.2026) | `panels.py`, dieselbe parallele Sitzung; dazu die fehlende `object_id` an `ingest.not_watertight` |
+| Bedingte Wirkung gehört an den Parameter | Die Bedienverträge durchgesehen (20.08.2026) | eine Entscheidung über den Vertrag aus §10 — `ParamSpec` bekäme ein Feld, das alle vier Oberflächen lesen |
 
 ---
 
@@ -7082,3 +7086,143 @@ sagt.** Die Konzepte tragen ihre Befunde treu — ihre Erledigung tragen sie
 nicht.
 
 ---
+
+
+## Die Bedienverträge durchgesehen (20.08.2026)
+
+Geprüft wurde, was die Anwendung dem Nutzer *zusagt*, gegen das, was sie tut —
+Registerfeld, Dialogtext, Knopf, Docstring, Testname. Der Begriff stand
+nirgends im Repository; er kommt aus den fünf Commits davor, die alle dasselbe
+Muster hatten. Durchgesehen: 85 Operationen mit 446 Parametern, 17 Bausteine
+mit 79 Parametern, 22 Einstellungen, 126 Befundcodes, 29 Oberflächendateien.
+
+**Was hält, und das ist der größere Teil.** Alle 446 Operationsparameter und
+alle 79 Bausteinparameter werden gelesen — die drei Verdachtsfälle löste eine
+Hilfsfunktion auf. Alle 22 Einstellungen werden gelesen. `takes_whole_scene`
+beachten alle vier Oberflächen. Regel 19: genau eine Bestätigung, und sie
+bewacht das Festschreiben einer Formsitzung. Regel 21: der Vorschau-Rückfall
+`_no_questions` hält an, statt zu raten. `show_error` führt die gewählte
+Handlung selbst aus und bietet nur an, was verdrahtet ist. Der Schnittschieber
+ist entprellt.
+
+### Behoben
+
+- [x] **Zwei Wiederherstellungsdialoge, eine Lehre — und die war nur an einem
+      angekommen.** `_offer_recovery` begründet seit einer früheren Runde
+      ausführlich, warum „Ja"/„Nein" nicht taugt und warum das Alter der
+      Sicherung dabeistehen muss. Sein Zwilling für namenlose Projekte,
+      dreihundert Zeilen darüber, hatte beides nicht: `QMessageBox.question`
+      mit Yes/No, und kein Wort dazu, wie alt die Sicherung ist — dabei ist sie
+      dort das Einzige, was es gibt. `_ask_recovery` ist jetzt der Aufbau für
+      beide Fälle; der Unterschied zwischen ihnen ist der Text und nicht die
+      Bauart. `_when` gilt damit auch für den namenlosen Fall.
+
+      **Ein Bruch zwischen Code und Katalog fiel dabei mit heraus.** Der Code
+      fragte `„Sicherung: {backup}\nGespeicherter Stand: {saved}"` ab — einen
+      Schlüssel, den **kein** Katalog trug, während die drei aufgeteilten leer
+      danebenstanden. `test_translations.py` war deshalb rot, in allen fünf
+      Sprachen; der Text fiel im Dialog auf die deutsche Quelle zurück.
+
+      Und eine Bauart-Prüfung dazu: `QMessageBox.question` und
+      `StandardButton.Yes` kommen in `app/ui/` nicht mehr vor, und
+      `test_no_question_box_asks_yes_or_no` hält es dabei. Der nächste Ja/Nein-
+      Dialog liest sich beim Schreiben jedes Mal harmlos.
+- [x] **Ein Feld ohne Wirkung sagt es — an elf statt an einer Stelle.**
+      `DEPENDENT_FIELDS` hatte einen Eintrag, während fünf Operationen bedingte
+      Felder trugen. *Kopien in Reihe oder Kreis* allein sechs: Wer auf
+      „kreisförmig" stellte, sah *Abstand* und *Richtung X/Y/Z* bedienbar
+      dastehen, und die Operation liest sie im anderen Zweig. Bei *Textur
+      aufbringen* ist es schärfer als ein Übergehen — beim Umlaufen setzt der
+      Code die Drehung auf `0.0`, überschreibt den eingetragenen Wert also,
+      wortlos.
+
+      **Die `doc`-Sätze wussten es längst** („Von Mitte zu Mitte, bei der
+      linearen Art", „Nur beim Umlaufen", „die Tiefe zählt dann nicht"). Die
+      Angabe stand im Tooltip eines Feldes und nicht dort, wo sie wirkt.
+
+      Der Haken ist eine neue Sorte in dieser Tabelle und brauchte zwei Dinge:
+      einen **typtreuen** Vergleich, denn über `str()` hieße der gesuchte Wert
+      „True" — und `1 == True` machte eine Anzahl von 1 zu einem gesetzten
+      Haken; und einen eigenen Satz, denn „Wirkt nur, wenn „Gründlich suchen"
+      auf „True" steht" ist die Bauart der Anwendung und nicht ihre Bedienung.
+
+      **Der lehrreichste Fall stand in keiner der beiden Durchsichten, die dem
+      Test vorausgingen:** `sketch_pocket.depth`. *Tiefe* steht vorn,
+      *Durchgehend* hinten, und dessen doc-Satz sagt selbst, dass die Tiefe
+      dann nicht zählt. Gefunden hat ihn erst der Test — Grund genug, ihn zu
+      haben: `test_a_field_without_effect_says_so` liest den Quelltext jeder
+      Operation und meldet jeden Parameter, dessen sämtliche Lesestellen in
+      einem Zweig über einen Umschalter derselben Operation liegen.
+
+      Zwei Verfeinerungen brauchte die Heuristik, und beide sind der Grund,
+      warum sie brauchbar ist statt abgeschaltet: **in genau einem Zweig**
+      gelesen, denn `apply_texture` liest seine sechs Platzierungswerte in
+      beiden und wirkt damit immer; und **kein Aufruf, der den ganzen
+      Parametersatz weitergibt**, denn `arrange_bed` liest sein `spacing` in
+      `_arranged_by_material(ctx, params)`, wo der Blick von außen endet. Ohne
+      die zweite Regel meldete die Prüfung acht Funde, von denen sieben keine
+      waren.
+
+      **Die Tabelle steht damit über ihrer eigenen Schwelle.** Ihr Kopf sagt
+      seit je: „Wächst die Liste über eine Handvoll hinaus, gehört die
+      Abhängigkeit an den Parameter." Elf Einträge sind darüber. Der Satz ist
+      jetzt kein stiller Vorbehalt mehr, sondern benennt den fälligen Umbau —
+      `ParamSpec` bekäme ein Feld, das Dialog, Kommandozeile, Handbuch und
+      Agent gleichermaßen lesen. Das ist eine Entscheidung über den Vertrag aus
+      §10 und keine Zeile in `op_dialog.py`, also steht sie unten als offener
+      Punkt und nicht als Nebenwirkung.
+
+### Offen
+
+- [ ] **`caveat` erreicht nur das Handbuch.** Zwölf Operationen tragen einen
+      Vorbehalt („Nicht ohne Entlüftung, wenn im Slicer Stützen entstehen"),
+      und die einzige Lesestelle im ganzen Programm ist `documentation()` in
+      `app/core/registry/surfaces.py`. Der Menüeintrag setzt `spec.doc` als
+      Tooltip, der Dialog zeigt `spec.doc` als Beschreibung, `tool_schemas`
+      gibt dem Agenten `spec.doc` — an keiner dieser drei Stellen kommt der
+      Vorbehalt an, also nirgends dort, wo jemand die Operation gerade wählt.
+      Der Docstring des Feldes argumentiert selbst mit der Oberfläche („dann
+      steht neben jedem Menüeintrag eine Warnung"); er nimmt an, dass das Feld
+      dort ankommt.
+- [ ] **Die Anzeigeeinheit erreicht drei Anzeigen, und der Test, der das
+      Gegenteil behauptet, prüft zwei.** `test_the_display_unit_reaches_
+      everything_that_shows_a_length` prüft Statusleiste und Objektbaum. Es
+      folgen drei Stellen (dazu die Kopfzeile). Nicht folgen: **jeder
+      Operationsdialog** — die Beschriftung ist `[mm]` aus dem Parameterschema;
+      **13 Eingabefelder** mit fest `DISPLAY_UNITS[0]` (Pinselradius,
+      Formstärke, Schnittposition, Scheibendicke, Fangweite, Versatz, Messfeld,
+      Rasterweite, Zugleiste); **11 Textausgaben** über die Vorgabe
+      `unit="mm"` (ganzer Skizzeneditor, Analyseleiste, Schnittleiste,
+      Merkmalsbeschriftungen). Und die Kopfzeile hängt einen Schritt nach:
+      `set_display_unit` frischt sie nicht auf, obwohl `action_settings`
+      zusagt, die Einheit wirke sofort.
+
+      Wer auf Zoll stellt, liest im selben Fenster gleichzeitig Zoll und
+      Millimeter — im Skizzeneditor als Zahl ohne Einheit. Das ist schlechter
+      als gar keine Umschaltung, und §19.3 verlangt sie trotzdem: zu bauen ist
+      also die Umschaltung und nicht ihr Rückbau. Ein Weg wäre die
+      Anzeigeeinheit als Prozesszustand neben der Sprache, damit jede
+      `length()`-Ausgabe ihr folgt, statt sie durch 24 Konstruktoren zu
+      reichen.
+- [ ] **`agent.not_watertight` trägt keine Handlung.** Drei Befunde melden
+      dasselbe Problem; `export.not_watertight` und `ingest.not_watertight`
+      tragen beide *Reparieren und erneut versuchen* und *Stellen zeigen*,
+      `agent.not_watertight` trägt die Objektkennung und kein Menü. Wer über
+      den Chat ein Objekt aufreißt, bekommt den Satz und sonst nichts.
+      Umgekehrt trägt `ingest.not_watertight` **keine** `object_id` — dort
+      greift die Handlung über `_object_of` auf die Auswahl zurück, also auf
+      eine Vermutung, die bei einer 3MF-Baugruppe falsch ist. Dieselbe Sorte
+      Fund wie bei `check_build_volume` in der Durchsicht davor.
+- [ ] **Die bedingte Wirkung gehört an den Parameter, nicht in eine Tabelle
+      der Oberfläche.** Siehe oben: `DEPENDENT_FIELDS` steht mit elf Einträgen
+      über der Schwelle, die ihr eigener Kopf nennt. Betrifft `ParamSpec`,
+      `param()` und die vier Oberflächen, die das Schema lesen — Vertrag aus
+      §10, also mit Ansage.
+
+> **Drei der vier offenen Punkte liegen in Dateien, die am 20.08. eine
+> parallele Sitzung in Arbeit hatte** (`surfaces.py` für den caveat,
+> `panels.py` für den Befund und für einen Teil der Anzeigeeinheit).
+> Gleichzeitig dort zu schreiben hieße, sich gegenseitig zu überbügeln — das
+> ist der Grund, warum sie offen stehen und nicht behoben sind, und nicht ihr
+> Umfang. Zweimal hat dieses Repository das schon anders gelernt („Zwei
+> Sitzungen, dieselbe Woche, dieselben Dateien"; „Zwei Sitzungen, ein Index").

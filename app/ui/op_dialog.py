@@ -288,16 +288,83 @@ class ImageSourceField(QWidget):
         return str(data) if data is not None else self.combo.currentText()
 
 
+def _same_choice(entered: Any, wanted: str | bool) -> bool:
+    """Ob der eingetragene Wert der gesuchte ist — ohne ``str()`` dazwischen.
+
+    ``bool`` und ``int`` sind in Python vergleichbar (``1 == True``), und ein
+    Auswahlwert ist eine Zeichenkette. Verglichen wird deshalb erst die Art,
+    dann der Wert: Sonst machte eine Anzahl von 1 einen Haken wahr.
+    """
+    if isinstance(wanted, bool):
+        return isinstance(entered, bool) and entered is wanted
+    return isinstance(entered, str) and entered == wanted
+
+
+def _why_inactive(field: str, wanted: str | bool) -> str:
+    """Warum dieses Feld gerade nichts tut — als Satz, nicht als Wert.
+
+    Ein Haken hat keinen Auswahlwert, den man nennen könnte: „Wirkt nur, wenn
+    „Gründlich suchen" auf „True" steht" wäre die Bauart der Anwendung und
+    nicht ihre Bedienung. Beide Richtungen stehen hier, weil ein Feld genauso
+    gut am *ausgeschalteten* Haken hängen kann — eine Verzweigung über einen
+    Wahrheitswert mit nur einem Ausgang ist eine Falle für den Nächsten.
+    """
+    if isinstance(wanted, bool):
+        if wanted:
+            return str(tr("Wirkt nur, wenn „{field}“ angehakt ist.")).format(field=field)
+        return str(tr("Wirkt nur, wenn „{field}“ nicht angehakt ist.")).format(field=field)
+    return str(tr("Wirkt nur, wenn „{field}“ auf „{value}“ steht.")).format(
+        field=field, value=choice_label(wanted)
+    )
+
+
 #: Felder, die nur bei einer bestimmten Wahl im selben Dialog etwas bewirken.
 #:
 #: Schlüssel ist (Operation, Feld), Wert das steuernde Feld und die Werte, bei
 #: denen das Feld wirkt. Die Tabelle steht hier und nicht im Schema, weil sie
 #: eine Aussage über den *Dialog* ist: Der Kern übergeht den Wert ohnehin
 #: schweigend, und dass man ihn dann gar nicht erst eintragen soll, ist eine
-#: Wegbeschreibung — dieselbe Art Angabe wie ``TWIN_TOGGLES``. Wächst die
-#: Liste über eine Handvoll hinaus, gehört die Abhängigkeit an den Parameter.
-DEPENDENT_FIELDS: dict[tuple[str, str], tuple[str, tuple[str, ...]]] = {
+#: Wegbeschreibung — dieselbe Art Angabe wie ``TWIN_TOGGLES``.
+#:
+#: **Die Handvoll ist überschritten**, und das steht hier, statt sich zu
+#: verlaufen: Mit einem Eintrag angelegt, sind es nach der Durchsicht elf —
+#: fünf Operationen, deren Felder je nur für eine Wahl gelten. Die Schwelle war
+#: von Anfang an genannt („wächst die Liste über eine Handvoll hinaus, gehört
+#: die Abhängigkeit an den Parameter"), und sie zu nennen und dann zu übergehen
+#: wäre genau die Sorte Zusage, deren Nachlassen diese Tabelle gerade behoben
+#: hat. Der Umbau ins Schema ist damit fällig, aber er ist eine Entscheidung
+#: über den Vertrag aus §10 und keine Zeile hier: ``ParamSpec`` bekäme ein Feld,
+#: das Dialog, Kommandozeile, Handbuch und Agent gleichermaßen lesen. Bis
+#: dahin ist die Liste vollständig, und ``tests/test_operation_ui.py`` hält sie
+#: dabei — driften kann sie nicht mehr, nur wachsen.
+DEPENDENT_FIELDS: dict[tuple[str, str], tuple[str, tuple[str | bool, ...]]] = {
     ("displace_image", "at_feature"): ("projection", ("face",)),
+    # *Kopien in Reihe oder Kreis* ist die Operation, an der die Tabelle
+    # auffiel: Sechs ihrer Felder gelten je nur für eine der beiden Arten, und
+    # keines sagte das. Wer auf „kreisförmig“ stellte, sah *Richtung X/Y/Z* und
+    # *Abstand* bedienbar dastehen — die Operation liest sie im Zweig darüber
+    # und übergeht sie hier wortlos. Ihre eigenen ``doc``-Sätze wussten es
+    # längst („Von Mitte zu Mitte, bei der linearen Art“).
+    ("pattern", "dx"): ("kind", ("linear",)),
+    ("pattern", "dy"): ("kind", ("linear",)),
+    ("pattern", "dz"): ("kind", ("linear",)),
+    ("pattern", "spacing"): ("kind", ("linear",)),
+    ("pattern", "axis"): ("kind", ("circular",)),
+    ("pattern", "angle"): ("kind", ("circular",)),
+    # Beim Umlaufen setzt die Operation die Drehung auf null, statt den
+    # eingetragenen Wert zu nehmen — das ist kein Übergehen, das ist ein
+    # Überschreiben, und wortlos war es beides.
+    ("apply_texture", "angle"): ("wrap", ("flat",)),
+    ("apply_texture", "wrap_diameter"): ("wrap", ("cylinder",)),
+    # Der einzige Fall an einem Haken: ohne *Gründlich suchen* läuft die
+    # P2-Heuristik, und die kennt keine Kandidaten. Das Feld steht hinten, der
+    # Haken vorn — wer ihn ausmacht, sieht die Zahl nicht mehr an.
+    ("orient_for_print", "candidates"): ("thorough", (True,)),
+    # Und der Fall, den erst die Prüfung fand: *Tiefe* steht vorn,
+    # *Durchgehend* hinten, und dessen eigener doc-Satz sagt es seit je —
+    # „die Tiefe zählt dann nicht“. Wer den Haken hinten setzt, lässt vorn
+    # ein Feld stehen, das nichts mehr tut.
+    ("sketch_pocket", "depth"): ("through", (False,)),
 }
 
 #: Die drei Achsen einer Knochenstellung, in der Reihenfolge, in der
@@ -652,17 +719,16 @@ class OperationDialog(QDialog):
             entered = self.values()
             for name, controller, wanted in rules:
                 editor = self._editors[name]
-                active = str(entered.get(controller, "")) in wanted
+                # Typtreu verglichen, nicht über ``str()``: Der eine Haken in
+                # der Tabelle käme dort als „True" an, und dann stünde ein
+                # Python-Detail in einer Zusage an den Nutzer.
+                active = any(_same_choice(entered.get(controller), want) for want in wanted)
                 editor.setEnabled(active)
                 label = self._rows[name].labelForField(editor)
                 if label is not None:
                     label.setEnabled(active)
                 editor.setToolTip(
-                    docs[name]
-                    if active
-                    else str(tr("Wirkt nur, wenn „{field}“ auf „{value}“ steht.")).format(
-                        field=titles[controller], value=choice_label(wanted[0])
-                    )
+                    docs[name] if active else _why_inactive(titles[controller], wanted[0])
                 )
 
         self.valuesChanged.connect(follow)

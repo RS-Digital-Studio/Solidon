@@ -14,7 +14,12 @@ modalen Meldung. Alles, was scheitern *soll*, läuft darum auf einer nackten
 
 from __future__ import annotations
 
+import ast
+import inspect
+import textwrap
+from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -26,7 +31,7 @@ from app.core.errors import ValidationError
 from app.core.registry import REGISTRY
 from app.core.scene import OperationDraft
 from app.ui.main_window import MainWindow
-from app.ui.op_dialog import OperationDialog
+from app.ui.op_dialog import DEPENDENT_FIELDS, OperationDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 
@@ -708,3 +713,183 @@ def test_a_bound_angle_keeps_its_expression(qt_app: QApplication) -> None:
     field.text.setText("=@beugung")
 
     assert "=@beugung" in str(dialog.values()["pose"])
+
+
+# --- Ein Feld ohne Wirkung sagt es (Regel: gestufte Tiefe, §2.4) -----------------
+
+
+def _read_names(nodes: Iterable[ast.AST], allowed: set[str]) -> set[str]:
+    """Welche Parameternamen in diesen Teilbäumen als Attribut gelesen werden."""
+    found: set[str] = set()
+    for node in nodes:
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Attribute) and sub.attr in allowed:
+                found.add(sub.attr)
+    return found
+
+
+def _hands_on_the_whole_set(branches: Iterable[ast.AST], holder: str) -> bool:
+    """Gibt dieser Zweig den ganzen Parametersatz an eine Funktion weiter?
+
+    Dann endet die Einsicht an der Funktionsgrenze, und ein Wert, der von hier
+    aus übergangen aussieht, wird dort gelesen: ``arrange_bed`` tut das mit
+    ``_arranged_by_material(ctx, params)`` und liest sein ``spacing`` erst
+    darin. Ohne diese Ausnahme meldete die Prüfung einen Fund, den es nicht
+    gibt — und eine Prüfung, die das tut, wird abgeschaltet.
+    """
+    for branch in branches:
+        for sub in ast.walk(branch):
+            if not isinstance(sub, ast.Call):
+                continue
+            arguments = (*sub.args, *(keyword.value for keyword in sub.keywords))
+            if any(isinstance(item, ast.Name) and item.id == holder for item in arguments):
+                return True
+    return False
+
+
+def conditional_fields(spec: Any) -> dict[str, set[str]]:
+    """Parameter, die nur unter einer Wahl im selben Dialog etwas bewirken.
+
+    Gelesen wird der Quelltext der Operation: Ein Feld gilt als bedingt, wenn
+    **alle** seine Lesestellen in einem ``if`` über einen Auswahl- oder
+    Hakenparameter derselben Operation liegen und es in genau einem der beiden
+    Zweige vorkommt. In beiden Zweigen heißt: es wirkt immer, und die
+    Verzweigung betrifft etwas anderes.
+    """
+    names = {entry.name for entry in spec.params.spec()}
+    switches = {entry.name for entry in spec.params.spec() if entry.choices or entry.kind == "bool"}
+    if not switches:
+        return {}
+    try:
+        source = textwrap.dedent(inspect.getsource(spec.fn))
+    except (OSError, TypeError):  # pragma: no cover - nur bei erzeugtem Code
+        return {}
+    tree = ast.parse(source)
+
+    total = dict.fromkeys(names, 0)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and node.attr in names:
+            total[node.attr] += 1
+
+    found: dict[str, set[str]] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        governing = _read_names([node.test], switches)
+        if not governing or _hands_on_the_whole_set((*node.body, *node.orelse), "params"):
+            continue
+        one_branch = (_read_names(node.body, names) ^ _read_names(node.orelse, names)) - governing
+        for name in one_branch:
+            inside = sum(
+                1 for sub in ast.walk(node) if isinstance(sub, ast.Attribute) and sub.attr == name
+            )
+            if inside >= total[name]:
+                found.setdefault(name, set()).update(governing)
+    return found
+
+
+def test_a_field_without_effect_says_so() -> None:
+    """Jede bedingte Wirkung steht in ``DEPENDENT_FIELDS`` (§2.4).
+
+    Von Hand gepflegt heißt driften, und hier war es schon gedriftet: Die
+    Tabelle hatte einen Eintrag, während fünf Operationen bedingte Felder
+    trugen — *Kopien in Reihe oder Kreis* allein sechs. Wer auf „kreisförmig"
+    stellte, sah *Abstand* und *Richtung X/Y/Z* bedienbar dastehen, und die
+    Operation übergeht sie im anderen Zweig wortlos.
+
+    Gefunden wird das im Quelltext der Operation und nicht durch Nachdenken —
+    ``sketch_pocket.depth`` stand in keiner der beiden Durchsichten, die diesem
+    Test vorausgingen, und ist trotzdem der klarste Fall: *Tiefe* vorn,
+    *Durchgehend* hinten, und dessen ``doc``-Satz sagt selbst, dass die Tiefe
+    dann nicht zählt.
+    """
+    missing: list[str] = []
+    for spec in REGISTRY.all():
+        for name, switches in conditional_fields(spec).items():
+            if (spec.name, name) in DEPENDENT_FIELDS:
+                continue
+            missing.append(f"{spec.name}.{name} hängt an {', '.join(sorted(switches))}")
+    assert not missing, "bedingte Felder ohne Eintrag in DEPENDENT_FIELDS:\n" + "\n".join(missing)
+
+
+def test_every_dependent_field_exists_and_names_a_real_switch() -> None:
+    """Und andersherum: kein Eintrag zeigt auf etwas, das es nicht gibt.
+
+    Ein Eintrag auf einen umbenannten Parameter wäre stumm wirkungslos — die
+    Regel in ``_dependent_fields`` verlangt beide Namen im Dialog und
+    überspringt, was sie nicht findet. Er stünde da und täte nichts, also
+    genau das, was die Tabelle verhindern soll.
+    """
+    for (op, field), (controller, wanted) in DEPENDENT_FIELDS.items():
+        spec = REGISTRY.get(op)
+        entries = {entry.name: entry for entry in spec.params.spec()}
+        assert field in entries, f"{op}: kein Parameter {field!r}"
+        assert controller in entries, f"{op}: kein Steuerfeld {controller!r}"
+        assert wanted, f"{op}.{field}: keine Werte genannt"
+        governing = entries[controller]
+        for value in wanted:
+            if isinstance(value, bool):
+                assert governing.kind == "bool", f"{op}.{controller} ist kein Haken"
+            else:
+                assert value in governing.choices, f"{op}.{controller}: {value!r} ist keine Wahl"
+
+
+def _title_of(spec: Any, name: str) -> str:
+    """Der angezeigte Titel eines Parameters — über den Namen, nicht den Platz.
+
+    Über den Index gesucht wäre die Prüfung beim ersten neuen Parameter still
+    falsch: Sie träfe dann einen anderen Titel und ginge weiter durch.
+    """
+    for entry in spec.params.spec():
+        if entry.name == name:
+            return str(entry.title)
+    raise AssertionError(f"{spec.name}: kein Parameter {name!r}")
+
+
+def test_a_dependent_choice_field_greys_out_with_a_reason(window: MainWindow) -> None:
+    """*Abstand* gilt nur bei der linearen Art — und sagt es, statt zu warten.
+
+    Grau allein wäre die halbe Antwort (Regel 18): Wer ein Feld ausgegraut
+    sieht, weiß nicht, welcher Schalter es freigibt. Der Tooltip nennt ihn.
+    """
+    spec = REGISTRY.get("pattern")
+    dialog = OperationDialog(spec, {}, window)
+
+    kind = dialog._editors["kind"]
+    spacing = dialog._editors["spacing"]
+    axis = dialog._editors["axis"]
+
+    kind.setCurrentIndex(kind.findData("linear"))
+    assert spacing.isEnabled(), "linear reiht mit Abstand auf"
+    assert not axis.isEnabled(), "eine Achse hat nur der Kranz"
+
+    kind.setCurrentIndex(kind.findData("circular"))
+    assert not spacing.isEnabled(), "kreisförmig zählt der Winkel, nicht der Abstand"
+    assert axis.isEnabled()
+    hint = spacing.toolTip()
+    assert hint, "ausgegraut ohne Begründung ist die halbe Antwort"
+    assert _title_of(spec, "kind") in hint, hint
+
+
+def test_a_dependent_field_behind_a_tick_says_which_tick(window: MainWindow) -> None:
+    """Der Haken ist die zweite Sorte, und sie brauchte einen eigenen Satz.
+
+    Über ``str()`` verglichen hieße der gesuchte Wert „True", und genau das
+    stand dann im Tooltip: eine Aussage über die Bauart der Anwendung, nicht
+    über ihre Bedienung. Geprüft wird deshalb beides — dass das Feld dem Haken
+    folgt, und dass der Satz den Haken benennt statt seinen Wert.
+    """
+    spec = REGISTRY.get("orient_for_print")
+    dialog = OperationDialog(spec, {}, window)
+
+    thorough = dialog._editors["thorough"]
+    candidates = dialog._editors["candidates"]
+
+    thorough.setChecked(True)
+    assert candidates.isEnabled(), "gründlich rechnet Kandidaten durch"
+
+    thorough.setChecked(False)
+    assert not candidates.isEnabled(), "ohne gründlich läuft die Heuristik"
+    hint = candidates.toolTip()
+    assert "True" not in hint, f"Bauart statt Bedienung: {hint!r}"
+    assert _title_of(spec, "thorough") in hint, hint
