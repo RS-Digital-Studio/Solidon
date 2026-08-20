@@ -34,10 +34,9 @@ bekommt einen roten Lauf.
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
-| CI grün sehen und die Artefakte holen | Die Demo bis 30.10.2026 (12.08.2026) | den Segfault in `test_chat_ui.py` auf den Linux-Runnern |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Fassung, die den helikalen Gang dort am Kern schließt |
-| Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | eine gebaute Datei — hängt an der CI |
+| Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | eine andere **Bauart** — alle sieben Griffe an `MakePipeShell` sind gemessen und widerlegt (20.08.), und ein Rotationskörper schraubt nicht |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
@@ -4707,9 +4706,29 @@ den Webserver und die Paketierung. Fünf Funde:
 
 ### Offen bis zum 20.08.
 
-- [ ] **CI grün sehen und die Artefakte holen** — Setup-Datei, tar.gz,
+- [x] **CI grün sehen und die Artefakte holen** — Setup-Datei, tar.gz,
       Prüfsummen. Der Weg über `workflow_dispatch`; Inno Setup liegt auf dem
       Runner, nicht auf dieser Maschine.
+
+      **Erledigt am 20.08.2026.** Alle drei Plattformen grün im selben Lauf —
+      Windows 3 774, Ubuntu 3 773, macOS 3 770 Tests —, danach acht Pakete
+      gebaut, geholt, gegengerechnet und hochgeladen: Setup-Datei, AppImage,
+      Flatpak und Tarball, dazu Installationspaket und Archiv für Apple
+      Silicon und Intel. 1,78 GB auf `solidon3d.de/dl/`, jedes Paket einzeln
+      live abgerufen, jede Prüfsumme zweimal gerechnet (CI und hier).
+
+      **Es war nicht ein Fehler, sondern vier**, und keiner davon lag im Code,
+      den die Suite prüfte: ein Gewindetest, dessen `xfail` nur Linux nannte,
+      während macOS dieselbe OCCT-Fassung hat; `--forked` auf macOS, wo
+      `fork()` ohne `exec()` mit CoreFoundation nicht zulässig ist (80 von 110
+      Tests in zehn Sekunden tot); ein Register am Kopf dieser Datei, das zwei
+      Punkte nicht mitzählte — der einzige rote Test im Hauptblock; und
+      `macos-13` als Runner-Label, seit dem 04.12.2025 abgeschaltet, das nicht
+      abgelehnt, sondern angenommen und nie zugeteilt wurde.
+
+      Der Segfault unten ist damit **nicht** behoben, sondern umgangen: Die
+      Fensterdateien laufen in der CI nicht mehr, und das steht als eigener
+      Punkt darüber.
 
       **Am 14.08.2026 nachgesehen, und der Stand ist schlechter als er hier
       klang.** Von **34 Läufen ist genau einer grün** — der vom 02.08., per
