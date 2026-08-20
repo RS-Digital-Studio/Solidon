@@ -150,6 +150,36 @@ def _index(kind: type, entries: Any) -> dict[str, Any]:
     return {str(entry["size"]): kind(**entry) for entry in entries}
 
 
+#: Welche Tabelle zu welcher Art gehört (§24.2). Sie steht hier, neben den
+#: Tabellen, und nicht dort, wo nachgeschlagen wird: Diese Zuordnung lag in der
+#: Agentenschicht, und damit hieß eine neue Tabelle zwei Dateien — von denen
+#: man die zweite still vergisst. `tests/test_parts.py` hält beides zusammen.
+TABLES: Final[dict[str, str]] = {
+    "screw": "screws",
+    "nut": "nuts",
+    "washer": "washers",
+    "insert": "inserts",
+    "magnet": "magnets",
+    "bearing": "bearings",
+    "profile": "profiles",
+    "tube": "tubes",
+}
+
+
+def table(kind: str) -> dict[str, Any] | None:
+    """Die Tabelle einer Art, oder None, wenn es die Art nicht gibt.
+
+    Der eine Weg zu einer Tabelle über ihren Namen. Wer eine *Größe* sucht und
+    einen Fehler mit Handlungsvorschlag will, nimmt den typisierten Zugriff
+    darunter — :func:`screw`, :func:`profile_slot` und die anderen sechs.
+    """
+    field = TABLES.get(kind)
+    if field is None:
+        return None
+    found: dict[str, Any] = getattr(load(), field)
+    return found
+
+
 def screw(size: str) -> Screw:
     """Eine Schraubengröße, oder ein klarer Fehler, der nennt, was bekannt ist."""
     found: Screw = _lookup(load().screws, size, "screw")
@@ -212,11 +242,13 @@ def tube_sizes() -> tuple[str, ...]:
     return tuple(load().tubes)
 
 
-def _lookup(table: dict[str, Any], size: str, what: str) -> Any:
-    if size not in table:
+def _lookup(entries: dict[str, Any], size: str, what: str) -> Any:
+    # ``entries`` und nicht ``table``: So hieß der Parameter, und seit es die
+    # Funktion :func:`table` daneben gibt, verdeckte er sie.
+    if size not in entries:
         raise ValidationError(
             field=what,
             detail=_("Diese Größe steht nicht in der Normteiltabelle."),
-            values={"size": size, "known": ", ".join(sorted(table))},
+            values={"size": size, "known": ", ".join(sorted(entries))},
         )
-    return table[size]
+    return entries[size]

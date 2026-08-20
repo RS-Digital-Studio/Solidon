@@ -671,19 +671,6 @@ def _from(severity: str) -> set[str]:
     return set(order[order.index(severity) :])
 
 
-#: Welches Feld der Normteiltabellen zu welcher Werkzeug-Art gehört.
-_STANDARD_TABLES = {
-    "screw": "screws",
-    "nut": "nuts",
-    "washer": "washers",
-    "insert": "inserts",
-    "magnet": "magnets",
-    "bearing": "bearings",
-    "profile": "profiles",
-    "tube": "tubes",
-}
-
-
 def standard_text(kind: str, size: str) -> str:
     """Ein Normteil in einer Zeile (§24.2) — für Sitzung und Fernsteuerung.
 
@@ -691,17 +678,22 @@ def standard_text(kind: str, size: str) -> str:
     Maße mit ihren Feldnamen, was ein Baustein daraus macht, bleibt beim
     Baustein. Eine unbekannte Größe nennt die bekannten, statt zu scheitern —
     für das Modell ist die Liste die nützlichere Antwort.
+
+    Welche Arten es gibt, sagt ``standards.TABLES`` und nicht diese Datei. Die
+    Zuordnung stand hier, mit einem ``getattr`` daneben — also lag das Wissen
+    über die Tabellen in der Agentenschicht, und eine neunte Tabelle hätte
+    zwei Dateien gebraucht.
     """
     from dataclasses import asdict
 
     from app.core.knowledge import standards
 
-    if kind not in _STANDARD_TABLES:
+    table = standards.table(kind)
+    if table is None:
         # Die Funktion ist öffentlich, und beide heutigen Aufrufer prüfen
         # vorher — der dritte wird es vergessen, und ein KeyError trägt
         # keinen Vorschlag (Regel 17).
-        return f"{tr('Diese Tabelle gibt es nicht')}: {kind} ({', '.join(_STANDARD_TABLES)})"
-    table: dict[str, Any] = getattr(standards.load(), _STANDARD_TABLES[kind])
+        return f"{tr('Diese Tabelle gibt es nicht')}: {kind} ({', '.join(standards.TABLES)})"
     entry = table.get(size) or table.get(size.upper())
     if entry is None:
         known = ", ".join(sorted(table))

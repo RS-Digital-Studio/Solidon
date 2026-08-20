@@ -196,6 +196,36 @@ def test_every_screw_has_the_holes_that_belong_to_it() -> None:
         assert entry.pitch > 0.0
 
 
+def test_every_table_can_be_looked_up_by_its_kind() -> None:
+    """§24.2 verlangt jede Tabelle als Nachschlagewert, und der Weg dorthin
+    geht über ``standards.TABLES``.
+
+    Die Zuordnung Art → Tabelle lag in ``agent/session.py``, mit einem
+    ``getattr`` daneben — eine neunte Tabelle hätte also zwei Dateien
+    gebraucht, und die zweite vergisst man still. Sie steht jetzt neben den
+    Tabellen, und dieser Test hält beides zusammen: Jedes Feld von ``Tables``
+    ist über eine Art erreichbar, und jede Art zeigt auf ein Feld, das es
+    gibt.
+    """
+    import dataclasses
+
+    tables = standards.load()
+    fields = {
+        field.name
+        for field in dataclasses.fields(tables)
+        if isinstance(getattr(tables, field.name), dict)
+    }
+
+    assert set(standards.TABLES.values()) == fields, (
+        "Tabelle ohne Art oder Art ohne Tabelle — "
+        f"benannt {sorted(standards.TABLES.values())}, vorhanden {sorted(fields)}"
+    )
+    for kind in standards.TABLES:
+        found = standards.table(kind)
+        assert found, f"{kind} liefert keine Tabelle"
+    assert standards.table("kein-normteil") is None
+
+
 def test_an_unknown_size_says_what_is_known() -> None:
     from app.core.errors import ValidationError
 

@@ -50,9 +50,6 @@ bekommt einen roten Lauf.
 | Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird — Kachelhöhe, Ablagefläche oder die Liste der zuletzt geöffneten Projekte; Umschichten ist ausgereizt |
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 | Benannte Merkmale überstehen keine Boolesche Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung darüber, wann ein benanntes Merkmal wirklich fort ist — vierzehn Ops geben `features={}` zurück, und `_with_features` liest die generierten nur aus der Ausgabe |
-| `sketch_solve_200` hält seinen eigenen Vergleich nicht | Ein Durchgang durchs Haus, und was dabei liegen blieb (20.08.2026) | eine Entscheidung: eigene Schwelle, Aufwärmlauf, oder die kleinen Messungen vor die großen — der absolute Zielwert aus §31 ist um das Sechsfache erfüllt |
-| Handbuch-Abbildungen merken sich ihre Breite | Ein Durchgang durchs Haus, und was dabei liegen blieb (20.08.2026) | eine Entscheidung, ob Neuskalieren beim Ziehen am Rand den Aufwand lohnt; die Breite gehört dann in den Cache-Schlüssel |
-| `profile_slot` ist Vorarbeit ohne Baustein | Ein Durchgang durchs Haus, und was dabei liegen blieb (20.08.2026) | einen Baustein für die Nut im Aluprofil; die Normteilmaße für 2020, 3030 und 4040 stehen |
 
 ---
 
@@ -8646,34 +8643,75 @@ sie bei 75 Prozent mit einer Zugriffsverletzung in `test_sculpt_session.py` ab
 beschreibt, eine Beschädigung, die über Dateigrenzen kumuliert. Je Datei ein
 Prozess: nur `test_performance.py` rot, und dort nur der *relative* Teil.
 
-### Was dabei auffiel und liegen bleibt
+### Was dabei auffiel — und noch am selben Tag behoben wurde
 
-- [ ] **`sketch_solve_200` kann seinen eigenen Vergleich nicht halten.** Die
-      Bestmarke steht bei 117 ms, im Lauf der ganzen Datei kommt der Test auf
-      155 — das ist 1,33fach und reißt die Schwelle von 1,25. Direkt gemessen,
-      zweimal fünf Läufe, liegt der Median bei 115 ms und damit *unter* der
-      Marke; allein gefahren ist der Test grün. Die Ursache steht im Docstring
-      der Datei selbst: derselbe Löser braucht „allein 114 ms und hinter
-      `test_slice.py` 162", also achtunddreißig Prozent Unterschied bei einer
-      Schwelle von fünfundzwanzig. Vor ihm laufen in derselben Datei eine
-      Million Dreiecke durch Lesen und Einlesen und eine Merkmalserkennung auf
-      200 000 — der Prozess ist danach ein anderer. Der absolute Zielwert aus
-      §31 ist um das Sechsfache erfüllt; unbrauchbar ist nur der Vergleich.
-      Zu entscheiden ist, was daraus folgt: eine eigene Schwelle für diese
-      Messung, ein Aufwärmlauf, oder die kleinen Messungen vor die großen.
-- [ ] **Die Abbildungen des Handbuchs merken sich ihre Breite.**
-      `ManualWindow._image` legt sie unter `(key, theme)` ab, skaliert sie aber
-      auf `viewport().width() - 40`. Wird das Fenster größer, bleiben schon
-      gezeigte Abbildungen in der alten Breite — die Breite steht nicht im
-      Schlüssel, und ein `resizeEvent` gibt es nicht. `forget_images` wäre das
-      Werkzeug dafür gewesen und ist mit diesem Durchgang gefallen, weil es
-      keinen Aufrufer hatte; die saubere Lösung ist ohnehin die Breite im
-      Schlüssel und nicht ein Leeren von außen. Zu entscheiden ist, ob es sich
-      lohnt: Neuskalieren bei jedem Ziehen am Rand will eine Verzögerung, und
-      beschwert hat sich bisher niemand.
-- [ ] **`profile_slot` ist Vorarbeit für einen Baustein, den es nicht gibt.**
-      Die Normteiltabelle führt 2020, 3030 und 4040, `standards.profile_slot`
-      holt sie heraus, und kein Baustein fragt danach — die Gruppe „Struktur"
-      hat bis heute nur die Versteifungsrippe. Nicht gelöscht, weil der Zugriff
-      einer von sechs symmetrischen über dieselbe Tabelle ist und die Daten
-      echt sind; wer eine Nut für Aluprofil baut, findet ihn vor.
+- [x] **`sketch_solve_200` konnte seinen eigenen Vergleich nicht halten — es
+      war der Müll seiner Vorgänger.** Die Bestmarke stand bei 117 ms, im Lauf
+      der ganzen Datei kam der Test auf 155, also 1,33fach bei einer Schwelle
+      von 1,25. Der Docstring der Datei nannte denselben Effekt seit je
+      („allein 114 ms und hinter `test_slice.py` 162"), ohne seine Ursache.
+      Gemessen wurde sie mit je drei frischen Prozessen und den fünf großen
+      Messungen davor: ohne Aufräumen 142, 139 und 151 ms, mit `gc.collect()`
+      126, 122 und 121 — und ein **Aufwärmlauf ändert nichts** (146, 149, 144).
+      Es sind also keine trägen Importe und keine kalte erste Runde: Der Haufen
+      ist nach einer Million Dreiecken gewachsen, die nächste
+      Generation-2-Sammlung läuft über alles, und sie fällt dem zur Last, der
+      gerade gemessen wird.
+
+      `measure()` räumt jetzt **vor** der Uhr auf. Nicht während — was die
+      gemessene Arbeit selbst an Müll erzeugt, kostet sie weiter Zeit, und das
+      soll sie auch: Eine Prozedur, die den Speicher vollschreibt, bezahlt das.
+      Weg ist nur die Rechnung des Vorgängers, und damit misst dieselbe
+      Rechnung dasselbe, egal was vor ihr lief. Kein `gc.disable()` — das wäre
+      Schönrechnen. Gegenprobe bei gleicher Marke und gleicher Reihenfolge:
+      ohne den Aufruf wieder 1,33fach und rot, mit ihm 19 von 19 grün.
+- [x] **Die Abbildungen des Handbuchs merken sich ihre Breite nicht mehr.**
+      Der Cache lag unter `(key, theme)`, das gespeicherte Bild war aber schon
+      auf `viewport().width() - 40` skaliert — die Breite fehlte im Schlüssel
+      und steckte im Wert. Gemessen: bei 400 Punkten Spaltenbreite stand der
+      Startbildschirm auf 374 und blieb dort, auch als das Fenster auf 1600
+      aufging. Ein Schlüssel mit Breite allein hätte nichts geholfen, denn
+      **Qt fragt nicht wieder** — nach zwei Größenänderungen kamen null
+      weitere `loadResource`-Rufe an.
+
+      Zwei Änderungen. Der Cache hält jetzt das **Urbild**, das von der
+      Spaltenbreite nicht abhängt; das Skalieren passiert bei jedem Abruf und
+      kostet nichts. Und `resizeEvent` legt die Abbildungen der offenen Seite
+      über `addResource` neu ins Dokument, verzögert um 150 ms, weil ein Zug
+      am Fensterrand hunderte Ereignisse schickt. Über `addResource` und nicht
+      über ein neues `setMarkdown`: Das setzte die Leseposition zurück, mitten
+      im Lesen.
+
+      Gemerkt wird dabei **nur, was teuer ist** — das Rastern eines SVG. Die
+      sechs Bildschirmfotos wiegen entpackt 51 MB, drei davon je 14; wer ihre
+      Urbilder behält, um sie später anders skalieren zu können, tauscht ein
+      Bildproblem gegen ein Speicherproblem. Sie kommen bei Bedarf von der
+      Platte, und das passiert je Seitenwechsel einmal, weil Qt das Ergebnis
+      selbst behält. Gegenprobe: mit stillgelegtem `_refit` bleiben alle fünf
+      Abbildungen der Seite auf 374 Punkten, schmal wie breit.
+- [x] **`profile_slot` war keine Vorarbeit ohne Zweck — der Fund war falsch
+      begründet.** Bauplan §24.2 nennt „Aluprofil-Nutmaße" ausdrücklich als
+      Teil der Normteiltabelle, und zwar als *Nachschlagewert*: „Loch für
+      M4-Einpressmutter" muss eines sein. Die Erstbestückung in §24.1 listet
+      dagegen keinen Aluprofil-Baustein — es fehlt also nichts. Und erreichbar
+      ist der Wert längst: `standard_text("profile", "2020")` antwortet, für
+      den Agenten und für die Fernsteuerung. Ein Baustein dafür wäre die volle
+      Achter-Checkliste plus ein Maß, das die Tabelle nicht führt (die
+      Kammertiefe), und damit eine Bauplanänderung — nicht Aufräumen.
+
+      Beim Prüfen fiel ein **echter** Fund an, und der ist behoben: Die
+      Zuordnung Art → Tabelle stand als `_STANDARD_TABLES` in
+      `agent/session.py`, mit einem `getattr(standards.load(), …)` daneben.
+      Damit lag das Wissen über die Tabellen in der Agentenschicht, an den acht
+      typisierten Zugriffen vorbei, und eine neunte Tabelle hätte zwei Dateien
+      gebraucht — von denen man die zweite still vergisst. Sie heißt jetzt
+      `standards.TABLES` und steht neben den Tabellen; `standards.table(kind)`
+      ist der eine Weg über den Namen, die typisierten Zugriffe bleiben der
+      Weg über die Größe, weil nur sie einen Fehler mit Handlungsvorschlag
+      werfen (Regel 17). `test_every_table_can_be_looked_up_by_its_kind` hält
+      beides zusammen: jedes Tabellenfeld über eine Art erreichbar, jede Art
+      auf ein Feld, das es gibt. Gegenprobe gefahren — `"profile"` aus der
+      Zuordnung genommen, Test rot.
+
+      Nebenbei verdeckte der Parameter `table` in `_lookup` nun die neue
+      Modulfunktion gleichen Namens; er heißt `entries`.
