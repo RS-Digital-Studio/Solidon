@@ -161,6 +161,75 @@ def test_the_website_page_carries_the_generated_reference(language: str) -> None
     )
 
 
+#: Die Ordner mit den erzeugten Abbildungen, je Sprache einer.
+FIGURE_FOLDERS = {
+    language: Path(__file__).parent.parent / "website" / "handbuch" / language
+    for language in ("de", "en", "es", "fr", "it", "pt")
+}
+
+
+@pytest.mark.parametrize("language", sorted(FIGURE_FOLDERS))
+def test_the_drawn_figures_are_the_ones_the_code_draws(language: str) -> None:
+    """Jede eingecheckte Zeichnung ist die, die der Code heute zeichnet.
+
+    **Der Fund, aus dem dieser Test entstand:** `ways.svg` zeigte drei Wege, und
+    zwar in allen sechs Sprachen. Der vierte war seit P16 gebaut, das Handbuch
+    beschrieb ihn, `EXAMPLES` führte sein Beispiel — und die Abbildung daneben
+    zeigte weiter drei Zeilen, weil niemand `tools/make_manual.py` laufen ließ.
+    Gefangen hätte es kein Test: der Nachbar prüft die Kapitelüberschriften, der
+    andere die Sprungmarken, der dritte den Referenztext. Ein Bild sagt keines
+    davon.
+
+    Geprüft werden nur die **gezeichneten** (``kind == "drawn"``): Sie entstehen
+    aus `core.drawing` ohne Qt und sind damit Zeichen für Zeichen dieselbe
+    Datei. Gerendertes und Bildschirmfotos hängen an VTK, an Schriften und am
+    Bildschirm — die zu vergleichen hieße, die Maschine zu prüfen und nicht die
+    Anwendung.
+    """
+    from app.core import figures
+    from app.i18n import install_catalog, set_language
+    from app.i18n.catalog import read_catalog
+
+    folder = FIGURE_FOLDERS[language]
+    assert folder.is_dir(), f"{folder.name} fehlt — tools/make_manual.py läuft nicht?"
+
+    if language != "de":
+        install_catalog(language, read_catalog(language))
+    set_language(language)
+    # Der Vorrat wird geleert, wie es der Erzeuger tut: Abbildungen werden
+    # gemerkt, und ohne das kaeme sechsmal die deutsche Fassung zurueck.
+    figures.forget()
+    try:
+        stale: list[str] = []
+        for figure in figures.FIGURES:
+            if figure.kind != "drawn":
+                continue
+            for scheme, suffix in (("light", ".svg"), ("dark", "-dark.svg")):
+                drawn = figures.svg(figure.key, scheme)
+                if drawn is None:
+                    continue
+                path = folder / f"{figure.key}{suffix}"
+                if not path.is_file():
+                    stale.append(f"{path.name} fehlt")
+                    continue
+                # Zeilenenden bleiben außen vor: ``write_text`` setzt auf
+                # Windows CRLF, unter Linux LF, und das ist keine Aussage über
+                # das Bild.
+                if path.read_text(encoding="utf-8").replace("\r\n", "\n") != drawn.replace(
+                    "\r\n", "\n"
+                ):
+                    stale.append(path.name)
+    finally:
+        set_language("de")
+        figures.forget()
+
+    assert not stale, (
+        f"website/handbuch/{language}: diese Zeichnungen sind älter als der Code:\n"
+        + "\n".join(stale)
+        + "\n\nNeu erzeugen: .venv\\Scripts\\python.exe tools/make_manual.py"
+    )
+
+
 # --- was drinsteht ---------------------------------------------------------------
 
 

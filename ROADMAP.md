@@ -41,6 +41,7 @@ bekommt einen roten Lauf.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
+| Die Bildschirmfotos des Handbuchs sind nicht eingecheckt | Die Bedienverträge durchgesehen (20.08.2026) | einen ruhigen Baum — dann `tools/make_manual.py` und alles zusammen einchecken |
 
 ---
 
@@ -7389,3 +7390,45 @@ ist entprellt.
 > ist der Grund, warum sie offen stehen und nicht behoben sind, und nicht ihr
 > Umfang. Zweimal hat dieses Repository das schon anders gelernt („Zwei
 > Sitzungen, dieselbe Woche, dieselben Dateien"; „Zwei Sitzungen, ein Index").
+
+### Nachtrag: die Abbildung zeigte drei Wege (20.08.2026)
+
+Beim Neuerzeugen des Handbuchs für den Punkt darüber fiel ein Fund heraus, der
+mit den Bedienverträgen nichts zu tun hat und alles mit demselben Muster:
+`ways.svg` zeigte **drei** Wege, in allen sechs Sprachen.
+
+- [x] **Der vierte Weg fehlte im Bild, seit es ihn gibt.** Der Eintrag zu Weg 4
+      (19.08.) nennt die Ursache selbst: „die gezeichnete Abbildung im Handbuch
+      zeigte drei Zeilen, während der Text daneben vier beschrieb; ihre Höhe
+      folgt jetzt der Zahl der Zeilen". Der **Code** wurde damals repariert. Die
+      **eingecheckte Datei** nicht — sie entsteht in `tools/make_manual.py`, und
+      der lief nie. Sechs Sprachen, zweimal je Sprache (hell und dunkel):
+      `viewBox="0 0 620 260"` gegen die 318, die vier Zeilen brauchen.
+
+      Gefangen hätte es kein Test. Der eine prüft die Kapitelüberschriften der
+      Seite, der zweite ihre Sprungmarken, der dritte — seit heute — ihren
+      Referenztext. Ein Bild sagt keiner von ihnen etwas.
+
+      `test_the_drawn_figures_are_the_ones_the_code_draws` vergleicht jetzt jede
+      **gezeichnete** Abbildung Zeichen für Zeichen mit dem, was
+      `figures.svg()` heute zeichnet — dreizehn Abbildungen, hell und dunkel,
+      sechs Sprachen. Das geht, weil `core.drawing` ohne Qt arbeitet und damit
+      dieselbe Datei liefert. Gerendertes und Bildschirmfotos bleiben außen vor:
+      Sie hängen an VTK, an Schriften und am Bildschirm, und die zu vergleichen
+      hieße die Maschine prüfen und nicht die Anwendung.
+
+      Zwei Fallen steckten im Test selbst. Ohne `figures.forget()` kommt sechsmal
+      die deutsche Fassung zurück — die Abbildungen werden gemerkt, und der
+      Erzeuger leert den Vorrat bei jedem Sprachwechsel. Und die Zeilenenden
+      bleiben außen vor: `write_text` setzt unter Windows CRLF und unter Linux
+      LF, was keine Aussage über das Bild ist.
+
+- [ ] **Die Bildschirmfotos des Handbuchs sind neu aufgenommen und nicht
+      eingecheckt.** Derselbe Lauf hat sie erneuert — sechs je Sprache, unter
+      anderem mit dem neuen Vorbehalts-Label im Operationsdialog. Sie liegen
+      ungesichert im Baum, weil am 20.08. eine parallele Sitzung an der
+      Oberfläche arbeitete (Objektbaum, Palette, Druckdialog): Ein
+      Bildschirmfoto von einer Baustelle zeigt die Baustelle.
+
+      Zu tun ist nichts weiter, als `tools/make_manual.py` noch einmal laufen zu
+      lassen, wenn der Baum ruhig ist — und dann alles zusammen einzuchecken.
