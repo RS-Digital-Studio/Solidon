@@ -16,11 +16,11 @@ Mehr als erwartet. Der Weg steht vollständig:
 | Baustein | Datei | Stand |
 |---|---|---|
 | Einstellungen halten | `knowledge/print_settings.py` | Stufe + Material + Drucker zu einem `PrintSettings` |
-| In die Sprache des Slicers | `export/slicer_keys.py` | 50 Zuordnungen für Orca, dazu Prusa und Cura |
+| In die Sprache des Slicers | `export/slicer_keys.py` | 57 Zuordnungen für Orca, 58 für Prusa, 224 Werte für Cura (§8) |
 | Profil schreiben, Slicer rufen | `export/handover.py` | Konsolenlauf, Zeitlimit, G-Code zurücklesen |
 | Profile des Slicers finden | `export/slicer_profiles.py` | Maschine und Prozess, Erbkette der Verträglichkeit |
 | Aus der Geometrie schließen | `slice/advise.py` | Stützen, Haftung, Linienbreite, Schichtzeit, Volumenstrom, Passungstempo |
-| Gegenprobe | `handover.verify` | liest die Konfigurationskommentare der erzeugten Datei |
+| Gegenprobe | `handover.verify` | liest die Konfigurationskommentare der erzeugten Datei — bei Cura steht dort nichts, siehe §8 |
 | Baugruppe schreiben | `export/threemf.py` | mehrere Körper, Materialslots über `merge_slots` |
 
 `advise.py` ist dabei genau die richtige Idee: jeder Vorschlag trägt seinen
@@ -326,3 +326,83 @@ am Bett. Genau dafür ist `profile_differences` da.
 
 Punkt 3 ist der eigentliche Maßstab. Was ein Mensch für ein Projekt von Hand
 einstellen musste, ist die Liste dessen, was die Anwendung können soll.
+
+---
+
+## 8. Nachtrag vom 20.08.2026 — was die Durchsicht gegen die echten Slicer ergab
+
+Alle drei Familien wurden gegen die installierten Programme durchgemessen:
+PrusaSlicer 2.9.6, ElegooSlicer 1.5.3.4, CuraEngine 5.13.0. Der ganze Befund
+steht in `ROADMAP.md`; hier steht nur, was am **Konzept** nachzuziehen ist.
+
+### Die Bestandstabelle in §1 stimmt so nicht mehr
+
+Zwei Zeilen sind überholt:
+
+- **„50 Zuordnungen für Orca, dazu Prusa und Cura"** — es sind 57 für Orca,
+  58 für Prusa und 224 für Cura. Die Zahl bei Cura ist kein Fleiß, sondern
+  eine Eigenheit der Rechenmaschine, siehe unten.
+- **„Gegenprobe: liest die Konfigurationskommentare der erzeugten Datei"** —
+  das trägt weit, aber nicht überall gleich weit. Gemessen: PrusaSlicer nennt
+  53 von 53 geschriebenen Schlüsseln in der Druckdatei, ElegooSlicer 56 von
+  56, **CuraEngine null von 47**. Es schreibt seine Einstellungen dort nicht.
+  Der Mechanismus, der die Zuordnung selbst prüft, war genau dort blind, wo
+  die meisten Fehler saßen. Für Cura leistet das jetzt `unknown_keys()` gegen
+  `fdmprinter.def.json` der installierten Fassung.
+
+### Die Grenze in §6 braucht einen Satz mehr
+
+„Kein eigener Slicer — auch keine Nachbildung seiner Profillogik" bleibt
+richtig, aber der Wortlaut deckt einen Fall nicht ab, den die Durchsicht
+erzwungen hat.
+
+`CuraEngine` ist nicht die Kommandozeile eines Slicers, sondern die
+Rechenmaschine hinter dem Fenster. In `fdmprinter.def.json` trägt jede
+abgeleitete Einstellung zweierlei: einen `value`-Ausdruck und einen
+`default_value`. **Das Fenster wertet den Ausdruck aus, die Rechenmaschine
+nimmt den Vorgabewert.** Ein geschriebener Wert bleibt damit an seinem
+Schlüssel stehen: die Bahnbreite erreicht die zwölf Bahnbreiten nicht, die
+Füllung ihren Linienabstand nicht. Gemessen an einem 20-mm-Würfel kostete das
+**1100 mm Filament statt 818** — ein Drittel zu viel, weil die Füllung mit
+2 mm Linienabstand rechnete statt mit 5,6.
+
+Wer diese Rechnung nicht nachzieht, kann die Einstellung genauso gut
+weglassen. Also wird sie nachgezogen, und die Grenze verläuft eine Stelle
+weiter innen, als der Satz sie zog:
+
+> **Nachgerechnet wird, was in der Definition des Slicers steht. Ausgedacht
+> wird nichts.** Jede Zeile in `CURA_MIRRORED`, `CURA_SCALED` und
+> `_cura_computed` ist die Formel aus `fdmprinter.def.json` — nicht eine
+> Meinung darüber, was besser wäre. Was absichtlich wegbleibt, steht mit
+> Begründung in `CURA_UNTOUCHED`, und ein Test lässt keine dritte
+> Möglichkeit zu.
+
+Der naheliegendere Weg — die Ausdrücke zur Laufzeit auswerten — ist
+ausgeschlossen: das wäre `eval` auf fremdem Text (Regel 10). Eine Tabelle ist
+Daten, prüfbar gegen die Definition, und genau das prüft
+`test_nothing_cura_derives_is_left_to_its_default`.
+
+Für PrusaSlicer und die Orca-Familie bleibt es beim alten Satz: beide lösen
+ihre Erbketten selbst auf, und Solidon legt nur seine Werte darüber.
+
+### Die Abnahme aus §7 ist erfüllt, Punkt 1 und 2
+
+Punkt 1: Ein Lauf gegen ElegooSlicer, bei dem `verify` keine Abweichung
+meldet — erreicht, und ebenso gegen PrusaSlicer. Punkt 2: Der Testfall gegen
+den Profilbestand steht als `test_every_orca_setting_sits_in_the_profile_it_claims`,
+und daneben stehen jetzt zwei für Cura. Punkt 3, das Gewürzset als Referenz,
+bleibt offen.
+
+### Was dazukam und im Konzept fehlte
+
+**Winkel zählen nicht überall gleich.** Solidon misst den Stützwinkel gegen
+die Senkrechte, PrusaSlicer und die Orca-Familie gegen die Horizontale. Ein
+Zahlenwert, an alle drei geschickt, hieß an den Rändern das Gegenteil. Das ist
+keine Umsetzungsfrage, sondern eine Eigenschaft der Zielprogramme, mit der
+jede weitere Zuordnung rechnen muss.
+
+**Die exportierte Datei trägt ihre Einstellungen für beide Familien.** Stufe 5
+hatte das für die Orca-Familie gebaut; PrusaSlicer liest dasselbe aus
+`Metadata/Slic3r_PE.config`, und dort stand nichts. Für Cura bleibt es beim
+STL und der Kommandozeile — seine 3MF-Seite sitzt im Fenster, nicht in der
+Rechenmaschine.
