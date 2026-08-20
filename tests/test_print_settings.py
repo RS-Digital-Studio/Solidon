@@ -9,7 +9,8 @@ braucht, steht ausdrücklich dabei.
 from __future__ import annotations
 
 import json
-from dataclasses import replace
+import re
+from dataclasses import fields, replace
 from pathlib import Path
 from typing import get_args, get_type_hints
 
@@ -497,23 +498,154 @@ def test_every_setting_in_a_table_actually_exists(flavour: str) -> None:
         assert entry.key, f"{entry.path} hat keinen Namen beim Slicer"
 
 
+#: Einstellungen, die ein Slicer nicht kennt — mit dem Grund daneben.
+#:
+#: Der Test darunter prüft **alle** Einstellungen gegen alle drei Familien.
+#: Wer eine neue anlegt und irgendwo nicht zuordnet, muss sich hier erklären;
+#: eine Liste ohne Begründung wäre nur eine Liste von Ausreden.
+UNREACHABLE: dict[str, dict[str, str]] = {
+    "prusa": {
+        "shell.precise_outer_wall": "PrusaSlicer kompensiert die Bahnbreite immer, ohne Schalter.",
+        "adhesion.kind": "kennt keine Art, nur die Maße — ``ADHESION_KEYS`` nullt die anderen.",
+    },
+    "orca": {
+        "adhesion.kind": "in ``brim_type`` enthalten, das die Tabelle schreibt.",
+    },
+    "cura": {
+        "shell.wall_generator": "CuraEngine rechnet immer mit variabler Bahnbreite.",
+        "shell.precise_outer_wall": "wie oben — es gibt keinen Schalter dafür.",
+        "adhesion.kind": "in ``adhesion_type`` enthalten, das die Tabelle schreibt.",
+        "retraction.wipe": "kennt kein Abstreifen beim Rückzug, nur das zwischen den Schichten.",
+        "filament.density": "steht im Materialprofil des Fensters, nicht in der Rechenmaschine.",
+        "filament.colour": "wie oben",
+        "filament.cost_per_kg": "wie oben",
+    },
+}
+
+
 @pytest.mark.parametrize("flavour", ["prusa", "orca", "cura"])
-def test_the_core_settings_reach_every_slicer(flavour: str) -> None:
-    """Was die Oberfläche anbietet, muss überall ankommen — sonst stellt der
-    Nutzer etwas ein, das für seinen Slicer folgenlos bleibt."""
-    covered = {entry.path for entry in slicer_keys.TABLES[flavour]}  # type: ignore[index]
-    for path in (
-        "layers.layer_height",
-        "shell.wall_count",
-        "infill.density",
-        "temperature.nozzle",
-        "temperature.bed",
-        "cooling.fan_speed",
-        "speed.outer_wall",
-        "support.style",
-        "retraction.length",
+def test_every_setting_reaches_every_slicer(flavour: str) -> None:
+    """Was der Dialog anbietet, muss überall ankommen — sonst stellt der
+    Nutzer etwas ein, das für seinen Slicer folgenlos bleibt.
+
+    Genau das war der Fall: ``support.placement`` erreichte PrusaSlicer nicht,
+    obwohl es dort ``support_material_buildplate_only`` heißt, und die
+    Stützdichte kam bei zwei von drei Familien nie an. Neun handverlesene
+    Pfade zu prüfen hat das nicht gefunden — alle zu prüfen schon.
+    """
+    profile = profiles.make_profile()
+    base = print_settings.resolve(profile)
+    excused = UNREACHABLE[flavour]
+    for path in _every_setting():
+        if path in excused:
+            continue
+        # Ein Haftungsmaß gilt nur für seine Art — die anderen werden
+        # ausdrücklich genullt (``_only_chosen_adhesion``). Also erst die Art
+        # einstellen, sonst prüft der Test die Nullung statt die Zuordnung.
+        settings = _with_context(base, path)
+        # Gegen ``values_for`` und nicht gegen die Tabelle: was der Slicer
+        # bekommt, ist die Frage — ob es aus der Zuordnung kommt oder aus der
+        # Ableitungsstufe, ist seine Sache nicht.
+        before = handover.values_for(settings, profile, flavour)  # type: ignore[arg-type]
+        after = handover.values_for(
+            print_settings.with_path(settings, path, _other_value(settings, path)),
+            profile,
+            flavour,  # type: ignore[arg-type]
+        )
+        assert before != after, f"{flavour} bekommt {path} nicht, und nichts begründet das"
+
+
+def _with_context(
+    settings: print_settings.PrintSettings, path: str
+) -> print_settings.PrintSettings:
+    """Stellt ein, was der Pfad braucht, um überhaupt wirksam zu sein."""
+    needed = {
+        "adhesion.skirt_loops": "skirt",
+        "adhesion.skirt_distance": "skirt",
+        "adhesion.brim_width": "brim",
+        "adhesion.raft_layers": "raft",
+    }.get(path)
+    if needed is not None:
+        settings = print_settings.with_path(settings, "adhesion.kind", needed)
+    if path.startswith("support.") and path != "support.style":
+        settings = print_settings.with_path(settings, "support.style", "grid")
+    return settings
+
+
+def _every_setting() -> list[str]:
+    """Jede Einstellung als Punktpfad, aus dem Modell gelesen."""
+    settings = print_settings.resolve(profiles.make_profile())
+    paths: list[str] = []
+    for group in (
+        "layers",
+        "shell",
+        "infill",
+        "temperature",
+        "cooling",
+        "speed",
+        "support",
+        "adhesion",
+        "retraction",
+        "filament",
     ):
-        assert path in covered, f"{flavour} bekommt {path} nicht"
+        paths += [f"{group}.{field.name}" for field in fields(getattr(settings, group))]
+    return paths
+
+
+def _other_value(settings: print_settings.PrintSettings, path: str) -> object:
+    """Irgendein anderer Wert derselben Art — für die Frage, ob er ankommt."""
+    current = print_settings.read_path(settings, path)
+    if isinstance(current, bool):
+        return not current
+    if isinstance(current, int):
+        return current + 3
+    if isinstance(current, float):
+        return current + 3.0
+    choices = {
+        "shell.seam_position": "rear",
+        "shell.wall_generator": "classic",
+        "infill.pattern": "gyroid",
+        "support.style": "tree",
+        "support.placement": "build_plate",
+        "adhesion.kind": "raft",
+        "filament.colour": "#123456",
+    }
+    return choices[path]
+
+
+def test_the_support_angle_is_counted_from_the_right_side() -> None:
+    """Derselbe Zahlenwert heißt in zwei Zählweisen das Gegenteil.
+
+    Solidon misst gegen die Senkrechte — 0° stützt jeden Überhang, 90° keinen.
+    Das ist Curas Zählweise; PrusaSlicer und die Orca-Familie messen gegen die
+    Horizontale. Gemessen an einem Keil mit 30° Neigung: die beiden kippten
+    zwischen 20 und 40, Cura zwischen 50 und 70 — an den Rändern wurde aus
+    „stütze fast alles" ein „stütze fast nichts".
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(
+        print_settings.resolve(profile), "support.threshold_angle", 50.0
+    )
+
+    assert handover.as_mapping(settings, "cura")["support_angle"] == "50"
+    assert handover.as_mapping(settings, "prusa")["support_material_threshold"] == "40"
+    assert handover.as_mapping(settings, "orca")["support_threshold_angle"] == "40"
+
+
+def test_no_support_at_all_never_becomes_automatic() -> None:
+    """Der Rand, an dem die Umrechnung kippen würde.
+
+    Solidons 90° heißen „stütze nichts". Umgerechnet wäre das eine 0 — und
+    die heißt bei PrusaSlicer „automatische Erkennung", bei Orca „nimm beim
+    Baum 30". Aus der Absicht würde ihr Gegenteil.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.with_path(
+        print_settings.resolve(profile), "support.threshold_angle", 90.0
+    )
+
+    assert handover.as_mapping(settings, "prusa")["support_material_threshold"] == "1"
+    assert handover.as_mapping(settings, "orca")["support_threshold_angle"] == "1"
 
 
 def test_shares_are_written_as_percentages() -> None:
@@ -919,6 +1051,155 @@ def test_every_orca_setting_sits_in_the_profile_it_claims() -> None:
         if found and entry.section not in found:
             misplaced.append(f"{entry.key}: laut Tabelle {entry.section}, laut Slicer {found}")
     assert not misplaced, "Werte im falschen Profil:\n  " + "\n  ".join(misplaced)
+
+
+def _cura_definitions() -> dict[str, dict[str, object]] | None:
+    """Curas Einstellungsdefinition aus einer Installation, flach gelesen.
+
+    Sie liegt neben jeder ``CuraEngine`` und nennt jeden gültigen Schlüssel,
+    seine Einheit und seinen Vorgabewert. Das ist die einzige Auskunft
+    darüber, ob eine Zuordnung trifft — und sie kommt vom Programm selbst,
+    nicht aus einer Dokumentation, die für die installierte Fassung gelten mag
+    oder nicht. Bei Prusa und Orca leistet das die Gegenprobe im G-Code; bei
+    Cura kann sie es nicht, weil dort keine Einstellung in der Druckdatei
+    steht.
+    """
+    flat: dict[str, dict[str, object]] = {}
+
+    def walk(node: dict[str, object]) -> None:
+        for key, value in node.items():
+            if isinstance(value, dict):
+                flat[key] = value
+                children = value.get("children")
+                if isinstance(children, dict):
+                    walk(children)
+
+    found = False
+    for base in (Path("C:/Program Files"), Path("/usr/share"), Path("/opt")):
+        if not base.is_dir():
+            continue
+        for folder in base.iterdir():
+            for definitions in (
+                folder / "share" / "cura" / "resources" / "definitions",
+                folder / "resources" / "definitions",
+            ):
+                for name in ("fdmprinter.def.json", "fdmextruder.def.json"):
+                    path = definitions / name
+                    if not path.is_file():
+                        continue
+                    try:
+                        loaded = json.loads(path.read_text(encoding="utf-8"))
+                    except (OSError, ValueError):
+                        continue
+                    settings = loaded.get("settings")
+                    if isinstance(settings, dict):
+                        walk(settings)
+                        found = True
+    return flat if found else None
+
+
+def test_every_cura_key_exists_in_the_definition() -> None:
+    """Ein Schlüssel, den Cura nicht kennt, wird stillschweigend verworfen.
+
+    Genau das geschah mit ``outer_inset_first``: den Namen kennt Cura 5 nicht
+    mehr, er heißt dort ``inset_direction``. Der Wert war geschrieben,
+    gemessen wurde nichts davon — null von fünfzig Lagen begannen außen.
+    Auffallen konnte es nicht, weil die Gegenprobe bei Cura nichts findet:
+    ``CuraEngine`` schreibt seine Einstellungen nicht in die Druckdatei.
+    """
+    known = _cura_definitions()
+    if known is None:
+        pytest.skip("keine Cura-Installation, deren Definition sich lesen ließe")
+
+    profile = profiles.make_profile()
+    written = handover.values_for(print_settings.resolve(profile), profile, "cura")
+    unknown = sorted(key for key in written if key not in known)
+    assert not unknown, "Schlüssel, die Cura nicht kennt: " + ", ".join(unknown)
+
+
+def test_nothing_cura_derives_is_left_to_its_default() -> None:
+    """Die Gegenprobe zur Ableitungsstufe — und der Grund, warum es sie gibt.
+
+    ``CuraEngine`` löst keine Vererbung auf: was Solidon schreibt, erreicht
+    die abgeleiteten Schlüssel nicht, und die bleiben bei ihrem Vorgabewert.
+    Gemessen an einem 20-mm-Würfel kostete das 1100 mm Filament statt 818.
+
+    Geprüft wird beides: dass nichts offen bleibt, und dass keine Ausnahme in
+    ``CURA_UNTOUCHED`` steht, die es nicht mehr braucht. Eine Liste, die nur
+    wächst, erklärt am Ende nichts mehr.
+    """
+    known = _cura_definitions()
+    if known is None:
+        pytest.skip("keine Cura-Installation, deren Definition sich lesen ließe")
+
+    profile = profiles.make_profile()
+    written = handover.values_for(print_settings.resolve(profile), profile, "cura")
+    derived: set[str] = set()
+    frontier, seen = set(written), set(written)
+    while frontier:
+        found = set()
+        for key, spec in known.items():
+            if key in seen:
+                continue
+            formula = spec.get("value")
+            if not isinstance(formula, str):
+                continue
+            if any(re.search(rf"\b{re.escape(source)}\b", formula) for source in frontier):
+                found.add(key)
+                derived.add(key)
+        seen |= found
+        frontier = found
+
+    open_ended = sorted(derived - set(slicer_keys.CURA_UNTOUCHED))
+    assert not open_ended, "bleibt auf Curas Vorgabe stehen: " + ", ".join(open_ended)
+    stale = sorted(set(slicer_keys.CURA_UNTOUCHED) - derived)
+    assert not stale, "in CURA_UNTOUCHED, aber ohne Anlass: " + ", ".join(stale)
+
+
+def test_a_key_cura_does_not_know_becomes_a_finding(tmp_path: Path) -> None:
+    """Was der Gegenprobe bei Cura fehlt, holt die Definition nach.
+
+    ``CuraEngine`` schreibt seine Einstellungen nicht in die Druckdatei —
+    ``verify`` findet dort null von den geschriebenen Schlüsseln wieder. Ein
+    Name, den diese Fassung nicht kennt, wird stillschweigend verworfen; die
+    Definition daneben ist die einzige Stelle, an der es auffallen kann.
+    """
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    engine = tmp_path / "CuraEngine.exe"
+    engine.write_bytes(b"")
+    setup = handover.SlicerSetup(executable=engine, flavour="cura")
+
+    # Eine Definition, die alles kennt außer einem — so ist der Befund genau
+    # der eine und nicht eine Liste von zweihundert.
+    written = sorted(handover.values_for(settings, profile, "cura"))
+    dropped = written[0]
+    definitions = tmp_path / "share" / "cura" / "resources" / "definitions"
+    definitions.mkdir(parents=True)
+    (definitions / "fdmprinter.def.json").write_text(
+        json.dumps(
+            {"settings": {"alles": {"children": {key: {} for key in written[1:]}}}},
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    findings = handover.unknown_keys(settings, profile, setup)
+
+    assert findings and findings[0].code == "slicer.unknown_key"
+    assert findings[0].values["count"] == 1
+    assert findings[0].values["settings"] == dropped
+
+
+def test_without_a_definition_nothing_is_claimed(tmp_path: Path) -> None:
+    """Liegt keine Definition da, läuft der Slicer aus einem Paket, dessen
+    Aufbau Solidon nicht kennt — dann wird auch nichts behauptet."""
+    engine = tmp_path / "CuraEngine.exe"
+    engine.write_bytes(b"")
+    profile = profiles.make_profile()
+    setup = handover.SlicerSetup(executable=engine, flavour="cura")
+
+    assert not handover.unknown_keys(print_settings.resolve(profile), profile, setup)
 
 
 def test_a_missing_model_says_so_before_starting_anything(tmp_path: Path) -> None:

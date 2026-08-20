@@ -19,6 +19,7 @@ kein fremder Quelltext läuft, sondern ein Programm auf eine Datei zeigt.
 from __future__ import annotations
 
 import json
+import math
 import re
 import subprocess
 import tempfile
@@ -58,6 +59,26 @@ GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g")
 #: den Rückzug auf ``nil`` stellt, widerspricht Solidon nicht — es überlässt
 #: den Wert dem Drucker.
 _NO_STATEMENT: Final = frozenset({"nil", "", "none"})
+
+#: Vorgabewerte aus ``fdmprinter.def.json``, die in eine gerechnete Ableitung
+#: eingehen und die Solidon selbst nicht setzt (siehe :func:`_cura_rated`).
+#: Ausgeschrieben, weil eine Zahl mitten in einer Formel niemandem sagt, woher
+#: sie kommt — und weil die Definition nicht auf jedem Rechner liegt.
+_SUPPORT_SKIP_PER_MM: Final = 20.0
+_SKIN_OVERLAP: Final = 5.0
+_INFILL_OVERLAP: Final = 10.0
+_MAX_RESOLUTION: Final = 0.5
+_IRONING_FLOW: Final = 10.0
+_TRAVEL_ACCELERATION: Final = 5000.0
+_SUPPORT_GROWTH: Final = 0.4
+_SUPPORT_BRIM_LINES: Final = 3.0
+_STAIR_STEP: Final = 0.3
+#: Bis zu dieser Fülldichte stützt Cura die Deckfläche zusätzlich ab. Darüber
+#: trägt die Füllung selbst genug.
+_SKIN_SUPPORT_BELOW: Final = 0.4
+#: Ab dieser Fülldichte lässt Cura die Überlappung weg — die Füllung stößt
+#: dann ohnehin an die Wand.
+_DENSE_INFILL: Final = 0.95
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,10 +167,15 @@ def detect(executable: Path | str) -> SlicerSetup:
 def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str]:
     """Die Einstellungen in der Sprache dieses Slicers (§29).
 
-    Ohne Datei und ohne Aufruf — die Oberfläche zeigt damit an, was übergeben
-    würde, und die Tests prüfen die Zuordnung, ohne dass ein Slicer installiert
-    sein muss. Alle Profile zusammen, weil die Gegenprobe die Druckdatei als
-    Ganzes liest und dort nicht mehr steht, aus welchem Profil ein Wert kam.
+    Ohne Datei und ohne Aufruf — die Tests prüfen die Zuordnung, ohne dass ein
+    Slicer installiert sein muss, und die Gegenprobe vergleicht dagegen. Alle
+    Profile zusammen, weil die Gegenprobe die Druckdatei als Ganzes liest und
+    dort nicht mehr steht, aus welchem Profil ein Wert kam.
+
+    Was hier herauskommt, ist die **Einstellungsseite**: die Zuordnung, und was
+    sich allein aus den Einstellungen umrechnen lässt. Die Maschine kommt in
+    :func:`_machine_keys` dazu, das Abgeleitete in :func:`_cura_dependants` —
+    beides führt :func:`values_for` zusammen, und nur diese eine Stelle.
     """
     written: dict[str, str] = {}
     for entry in slicer_keys.TABLES[flavour]:
@@ -160,7 +186,26 @@ def as_mapping(settings: PrintSettings, flavour: SlicerFlavour) -> dict[str, str
         # verglichen meldete er eine Abweichung von nichts.
         if value != "":
             written[entry.key] = value
-    return _cura_dependants(_only_chosen_adhesion(written, settings, flavour), flavour)
+    chosen = _only_chosen_adhesion(written, settings, flavour)
+    if flavour == "cura":
+        return _first_layer_width(chosen)
+    return _support_spacing(chosen, settings, flavour)
+
+
+def values_for(settings: PrintSettings, profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
+    """Alles, was dieser Slicer bekommt — Einstellungen, Maschine, Abgeleitetes.
+
+    Die eine Stelle, an der die drei Stufen zusammenkommen. Sie hat einen
+    Grund, und der ist die Reihenfolge: ``CuraEngine`` rechnet aus der
+    Bahnbreite zwölf weitere und aus dem Düsendurchmesser sieben, und der
+    Düsendurchmesser steht in der Maschine. Wer die Ableitung vor dem
+    Zusammenführen laufen ließe, bekäme die Hälfte.
+    """
+    values = as_mapping(settings, flavour)
+    values |= _machine_keys(profile, flavour)
+    if flavour == "cura":
+        return _cura_dependants(values, settings)
+    return values
 
 
 def by_section(
@@ -172,12 +217,23 @@ def by_section(
     nur an, wenn er im richtigen Profil steht. Eine Düsentemperatur im
     Prozessprofil wird stillschweigend übergangen — kein Fehler, keine
     Warnung, gedruckt wird mit dem, was zuletzt im Slicer eingestellt war.
+
+    Was die Zuordnungstabelle nicht kennt, geht in den Prozess. Das sind die
+    abgeleiteten Werte aus :func:`_cura_dependants`, und sie hier
+    wegzusortieren hieße, sie gar nicht zu schreiben: die Aufteilung ist eine
+    Aufteilung und kein zweiter Filter. Für Cura ist der Prozess ohnehin der
+    einzige Satz, den es gibt.
     """
     complete = as_mapping(settings, flavour)
-    split: dict[slicer_keys.ProfileSection, dict[str, str]] = {}
+    split: dict[slicer_keys.ProfileSection, dict[str, str]] = {"process": {}}
+    placed: set[str] = set()
     for entry in slicer_keys.TABLES[flavour]:
         if entry.key in complete:
             split.setdefault(entry.section, {})[entry.key] = complete[entry.key]
+            placed.add(entry.key)
+    for key, value in complete.items():
+        if key not in placed:
+            split["process"][key] = value
     return split
 
 
@@ -190,6 +246,12 @@ def object_keys(
     Haftungsart auf Brim stellt, braucht auch dessen Breite — und die Maße der
     Arten, die *nicht* gewählt sind, müssen auf null, sonst läuft unter dem
     Teil zusätzlich ein Raft mit (siehe :func:`_only_chosen_adhesion`).
+
+    Dazu, was sich sonst noch geändert hat. Nicht jeder Schlüssel steht in der
+    Zuordnungstabelle: die Stützdichte etwa wird für PrusaSlicer und die
+    Orca-Familie erst zu einem Linienabstand gerechnet, und über die Gruppe
+    allein wäre sie nicht zu finden. Ein Vergleich findet sie, ohne dass
+    irgendwo eine zweite Liste gepflegt werden muss.
     """
     if not advice:
         return {}
@@ -197,8 +259,9 @@ def object_keys(
     keys = {
         entry.key for entry in slicer_keys.TABLES[flavour] if entry.path.partition(".")[0] in groups
     }
+    before = as_mapping(settings, flavour)
     changed = as_mapping(_applied(settings, advice), flavour)
-    return {key: value for key, value in changed.items() if key in keys}
+    return {key: value for key, value in changed.items() if key in keys or before.get(key) != value}
 
 
 def _applied(settings: PrintSettings, advice: Sequence[SettingAdvice]) -> PrintSettings:
@@ -238,29 +301,219 @@ def _only_chosen_adhesion(
     return written
 
 
-def _cura_dependants(written: dict[str, str], flavour: SlicerFlavour) -> dict[str, str]:
-    """Was bei ``CuraEngine`` von einem anderen Wert abhängt (§29).
+def _support_spacing(
+    written: dict[str, str], settings: PrintSettings, flavour: SlicerFlavour
+) -> dict[str, str]:
+    """Die Stützdichte, wo der Slicer sie als Abstand führt (§29).
 
-    Zwei Fälle, beide an einem echten Lauf gegen PrusaSlicer gemessen — derselbe
-    Würfel, dieselben Einstellungen:
+    Solidon sagt „15 Prozent", Cura auch. PrusaSlicer und die Orca-Familie
+    kennen dort keinen Anteil, sondern den Abstand zweier Stützlinien in
+    Millimetern — ``support_material_spacing`` beim einen,
+    ``support_base_pattern_spacing`` beim anderen. Ohne die Umrechnung war die
+    Einstellung für zwei von drei Slicern folgenlos, und der Dialog bot sie
+    trotzdem an.
 
-    **Die erste Bahnbreite ist dort ein Anteil, kein Maß.**
+    Gerechnet wie Cura es rechnet: Bahnbreite mal hundert durch Prozent —
+    ohne dessen Kreuzungsfaktor, denn beide legen ihre Stützfüllung als *eine*
+    Linienschar. Eine Dichte von null heißt „keine Füllung"; der Abstand dazu
+    ist keine Zahl, und der Slicer meint mit 0 dasselbe.
+    """
+    key = {"prusa": "support_material_spacing", "orca": "support_base_pattern_spacing"}.get(flavour)
+    if key is None:
+        return written
+    density = settings.support.density
+    written[key] = "0" if density <= 0.0 else f"{settings.layers.line_width / density:g}"
+    return written
+
+
+def _cura_dependants(written: dict[str, str], settings: PrintSettings) -> dict[str, str]:
+    """Was ``CuraEngine`` aus einem geschriebenen Wert nicht selbst ableitet (§29).
+
+    ``fdmprinter.def.json`` gibt jeder abgeleiteten Einstellung zweierlei mit:
+    einen ``value``-Ausdruck und einen ``default_value``. Das Fenster wertet
+    den Ausdruck aus, die Rechenmaschine dahinter nimmt den Vorgabewert.
+    Solidons Wert bleibt damit an seinem Schlüssel stehen und erreicht die
+    nicht, aus denen gerechnet wird — die Bahnbreite die zwölf Bahnbreiten,
+    die Beschleunigung die einundzwanzig Beschleunigungen, die Füllung ihren
+    Linienabstand.
+
+    Gemessen an einem 20-mm-Würfel, zweimal derselbe Lauf: **1100 mm Filament
+    gegen 818, 753 Sekunden gegen 660.** Ein Drittel zu viel, und der größte
+    Posten war ``infill_line_distance``: es blieb bei 2 mm, wo 5,6 gemeint
+    waren — also gut vierzig Prozent Füllung statt fünfzehn.
+
+    Die reinen Kopien stehen als Tabelle in
+    :data:`app.core.export.slicer_keys.CURA_MIRRORED`. Hier steht, was Cura
+    **rechnet** — jede Zeile die Formel aus der Definition, nicht eine eigene
+    Meinung darüber, was richtig wäre.
+    """
+    # Erst rechnen, dann spiegeln: ``support_line_distance`` und
+    # ``skin_preshrink`` sind selbst Quellen für weitere Schlüssel.
+    _cura_computed(written, settings)
+    for source, targets in slicer_keys.CURA_MIRRORED.items():
+        copied = written.get(source)
+        if copied is not None:
+            for target in targets:
+                written[target] = copied
+    for target, source, factor in slicer_keys.CURA_SCALED:
+        number = _as_float(written.get(source))
+        if number is not None:
+            written[target] = f"{number * factor:g}"
+    # Der einzige Wert mit einem Summanden statt einem Faktor — eine eigene
+    # Tabellenspalte für einen Fall wäre mehr Aufwand als diese Zeile.
+    raft = _as_float(written.get("raft_interface_line_width"))
+    if raft is not None:
+        written["raft_interface_line_spacing"] = f"{raft + 0.2:g}"
+    return written
+
+
+def _first_layer_width(written: dict[str, str]) -> dict[str, str]:
+    """Die erste Bahnbreite ist bei ``CuraEngine`` ein Anteil, kein Maß.
+
     ``initial_layer_line_width_factor`` will Prozent von ``line_width``.
     Solidon schrieb den Millimeterwert hinein: 0,449 wurde zu 0,449 Prozent,
     und die erste Schicht bekam ein Zweihundertstel der Breite, die sie haben
-    sollte.
+    sollte. Gemessen an einem Lauf gegen PrusaSlicer, derselbe Würfel.
 
-    Der Schalter, ohne den die Beschleunigungswerte nicht gelten, steht
-    daneben in :func:`_machine_keys` — hier fiele er durch, weil
-    :func:`by_section` nur behält, was in der Zuordnungstabelle steht.
+    Steht hier und nicht in :func:`_cura_dependants`, weil die Gegenprobe den
+    umgerechneten Wert sehen muss — sie vergleicht gegen :func:`as_mapping`.
     """
-    if flavour != "cura":
-        return written
     width = _as_float(written.get("line_width"))
     first = _as_float(written.get("initial_layer_line_width_factor"))
     if width and first:
         written["initial_layer_line_width_factor"] = f"{first / width * 100.0:g}"
     return written
+
+
+def _cura_computed(written: dict[str, str], settings: PrintSettings) -> None:
+    """Die gerechneten Ableitungen — je Zeile die Formel aus der Definition.
+
+    Keine eigene Meinung darüber, was richtig wäre: was hier steht, hätte das
+    Cura-Fenster genauso gerechnet, bevor es die Werte weitergibt.
+    """
+    _from_line_width(written, settings)
+    _for_supports(written, settings)
+    _for_speeds(written, settings)
+
+
+def _from_line_width(written: dict[str, str], settings: PrintSettings) -> None:
+    """Was Cura aus der Bahnbreite rechnet — der Wert mit den meisten Erben."""
+    width = _as_float(written.get("line_width"))
+    if not width:
+        return
+    crossings = slicer_keys.CURA_INFILL_CROSSINGS.get(written.get("infill_pattern", ""), 1.0)
+    density = settings.infill.density
+    written["infill_line_distance"] = "0" if density <= 0.0 else f"{width * crossings / density:g}"
+    # Wie weit die Deckflächen unter die Wände greifen: ``wall_line_width_0 +
+    # (n-1) * wall_line_width_x``, und beide Breiten sind hier dieselbe.
+    preshrink = width * settings.shell.wall_count
+    written["skin_preshrink"] = f"{preshrink:g}"
+    written["expand_skins_expand_distance"] = f"{preshrink:g}"
+    written["skin_overlap_mm"] = f"{width * _SKIN_OVERLAP / 100.0:g}"
+    written["infill_overlap_mm"] = (
+        "0" if density >= _DENSE_INFILL else f"{width * _INFILL_OVERLAP / 100.0:g}"
+    )
+    written["infill_overlap"] = "0" if density >= _DENSE_INFILL else f"{_INFILL_OVERLAP:g}"
+    written["skin_support"] = "true" if density < _SKIN_SUPPORT_BELOW else "false"
+    written["meshfix_maximum_travel_resolution"] = f"{min(_MAX_RESOLUTION, 2.0 * width):g}"
+    # Ab welcher Länge eine Wand als Brücke gilt.
+    written["bridge_wall_min_length"] = f"{width + settings.support.xy_gap + 1.0:g}"
+    # Beim Bügeln: wie weit die Bahn von der Kante wegbleibt.
+    written["ironing_inset"] = f"{width / 2.0 + width * (1.0 - _IRONING_FLOW / 100.0) / 2.0:g}"
+
+    brim = _as_float(written.get("brim_width"))
+    first_width = _as_float(written.get("initial_layer_line_width_factor"))
+    if brim is not None and first_width:
+        # Wie viele Runden ein Brim bekommt. Ohne die Zahl blieben es zwanzig
+        # aus der Definition — bei fünf Millimetern Breite fast doppelt so
+        # viel Rand, wie eingestellt war.
+        strand = width * first_width / 100.0
+        written["brim_line_count"] = str(math.ceil(brim / strand)) if strand > 0.0 else "0"
+        written["support_brim_width"] = f"{strand * _SUPPORT_BRIM_LINES:g}"
+        written["support_brim_line_count"] = f"{_SUPPORT_BRIM_LINES:g}"
+        written["support_brim_minimum_hole_area"] = f"{width * width * 100.0:g}"
+
+    # Die Außenwand rückt nach innen, wenn sie schmaler ist als die Düse —
+    # außer sie wird zuerst gefahren, dann liegt sie ohnehin auf Maß.
+    diameter = _as_float(written.get("machine_nozzle_size"))
+    if diameter and width < diameter and not settings.shell.outer_wall_first:
+        written["wall_0_inset"] = f"{(diameter - width) / 2.0:g}"
+    else:
+        written["wall_0_inset"] = "0"
+
+
+def _for_supports(written: dict[str, str], settings: PrintSettings) -> None:
+    """Die Stützen. Ihre Schnittstelle ist bei Cura eine Höhe, keine Schichtzahl."""
+    width = _as_float(written.get("line_width"))
+    density = settings.support.density
+    if width:
+        distance = width * slicer_keys.CURA_SUPPORT_CROSSINGS / density if density > 0.0 else 0.0
+        written["support_line_distance"] = f"{distance:g}"
+        # Auf den eben gerechneten Abstand, nicht noch einmal auf die Breite:
+        # zwei Formeln für dieselbe Sache laufen irgendwann auseinander.
+        written["support_zag_skip_count"] = (
+            "0" if distance <= 0.0 else str(round(_SUPPORT_SKIP_PER_MM / distance))
+        )
+        # Die Schnittstelle steht bei Cura auf voller Dichte; ihr Linienabstand
+        # ist dann genau eine Bahnbreite.
+        for key in ("support_roof_line_distance", "support_bottom_line_distance"):
+            written[key] = f"{width:g}"
+        # Die Stütze wächst um eine Bahnbreite plus Curas festen Zuschlag —
+        # beim Baum um nichts.
+        tree = settings.support.style == "tree"
+        written["support_offset"] = "0" if tree else f"{width + _SUPPORT_GROWTH:g}"
+        written["support_wall_count"] = "1" if tree else "0"
+
+    # Ohne den Schalter entsteht gar keine Schnittstelle, und ohne die Höhe
+    # wurden aus zwei Schichten zwei Millimeter — das Zehnfache bei 0,2ern.
+    layers = settings.support.interface_layers
+    written["support_interface_height"] = f"{layers * settings.layers.layer_height:g}"
+    for key in ("support_interface_enable", "support_roof_enable", "support_bottom_enable"):
+        written[key] = "true" if layers > 0 else "false"
+    written["support_bottom_stair_step_height"] = "0" if layers > 0 else f"{_STAIR_STEP:g}"
+    written["support_tree_top_rate"] = "30" if layers > 0 else "10"
+    written["support_tree_rest_preference"] = (
+        "buildplate" if settings.support.placement == "build_plate" else "graceful"
+    )
+    # Der Baum bekommt seinen eigenen Winkel, gedeckelt wie in der Definition.
+    angle = settings.support.threshold_angle
+    written["support_tree_angle"] = f"{max(min(angle, 85.0), 20.0):g}"
+
+
+def _for_speeds(written: dict[str, str], settings: PrintSettings) -> None:
+    """Geschwindigkeiten, Temperaturen und die Schalter, ohne die sie nicht gelten."""
+    # Ohne diesen gelten weder die Brückengeschwindigkeit noch der
+    # Brückenlüfter — beide stehen in Cura dahinter, und Solidon schreibt beide.
+    written["bridge_settings_enabled"] = "true"
+    # Beide Muster, die Cura für Solidons Füllungen ausrechnet, fallen auf
+    # dieselbe Antwort: ``cross`` und ``cubicsubdiv`` werden hier nicht
+    # angeboten.
+    written["connect_infill_polygons"] = "false"
+    written["skirt_height"] = "3" if settings.adhesion.skirt_distance > 0.0 else "1"
+    written["acceleration_travel_layer_0"] = f"{_TRAVEL_ACCELERATION:g}"
+
+    printing = _as_float(written.get("speed_print"))
+    if printing:
+        # ``speed_support_interface = speed_support / 1.5``, und die beiden
+        # Seiten der Schnittstelle erben davon.
+        interface = f"{printing / 1.5:g}"
+        for key in ("speed_support_interface", "speed_support_roof", "speed_support_bottom"):
+            written[key] = interface
+        first_layer = _as_float(written.get("speed_layer_0"))
+        travel = _as_float(written.get("speed_travel"))
+        if first_layer and travel:
+            written["speed_travel_layer_0"] = f"{first_layer * travel / printing:g}"
+
+    surface = _as_float(written.get("speed_topbottom"))
+    if surface:
+        written["speed_ironing"] = f"{surface * 20.0 / 30.0:g}"
+
+    nozzle = _as_float(written.get("material_print_temperature"))
+    if nozzle:
+        # Curas Vorgabe fährt die Düse vor dem ersten und nach dem letzten
+        # Zug etwas kühler. Nachgerechnet, nicht überstimmt.
+        written["material_initial_print_temperature"] = f"{nozzle - 10.0:g}"
+        written["material_final_print_temperature"] = f"{nozzle - 15.0:g}"
 
 
 def _as_float(value: str | None) -> float | None:
@@ -295,12 +548,28 @@ def _machine_keys(profile: Profile, flavour: SlicerFlavour) -> dict[str, str]:
             "machine_nozzle_size": f"{profile.printer.nozzle_diameter:g}",
             # Solidon rechnet um den Ursprung, hier wie bei Prusa.
             "machine_center_is_zero": "true",
-            # Zwei Einstellungen aus `fdmprinter.def.json` tragen keinen
-            # Vorgabewert — das Fenster füllt sie aus dem Qualitätsprofil.
-            # Ohne sie bricht der Lauf mit „Trying to retrieve setting with
-            # no value given" ab, bevor er die erste Schicht ansieht.
+            # Wo „hinten" liegt, wenn die Naht dorthin soll. Cura sucht den
+            # Konturpunkt, der diesem hier am nächsten liegt; ohne die Angabe
+            # stünde er bei (100, 100) und damit rechts hinten statt hinten.
+            # Gelesen wird er nur bei ``z_seam_type=back``, geschrieben immer:
+            # ein Punkt, den niemand abfragt, kostet nichts.
+            "z_seam_x": "0",
+            "z_seam_y": f"{depth / 2.0:g}",
+            "machine_heated_build_volume": "true" if profile.printer.enclosed else "false",
+            # Einstellungen, die `CuraEngine` abfragt und in keiner Definition
+            # findet, die es geladen hat — das Fenster füllt sie aus Qualitäts-
+            # und Materialprofil. Ohne sie bricht der Lauf mit „Trying to
+            # retrieve setting with no value given" ab, bevor er die erste
+            # Schicht ansieht.
+            #
+            # Die beiden Stützwerte sind teuer erkauft: mit eingeschalteten
+            # Stützen endete `grid` in einer Speicherzugriffsverletzung und
+            # `tree` ohne jede Datei. Solidon meldete beides als „der Slicer
+            # hat das Modell nicht verarbeitet" — richtig, aber ratlos.
             "roofing_layer_count": "0",
             "flooring_layer_count": "0",
+            "support_z_seam_away_from_model": "false",
+            "min_wall_line_width": f"{profile.printer.nozzle_diameter * 0.85:g}",
             # Und einer, ohne den zwei geschriebene Werte nicht gelten:
             # ``CuraEngine`` rechnet ohne ihn mit ``machine_acceleration``
             # weiter und übergeht `acceleration_print` und
@@ -390,9 +659,7 @@ def write_config(
     Profilnamen (``MaterialSlot.material``), wird der als Unterlage genommen;
     sonst gilt für alle das eine aus dem ``setup``.
     """
-    split = by_section(settings, setup.flavour)
-    values = {key: value for section in split.values() for key, value in section.items()}
-    values |= _machine_keys(profile, setup.flavour)
+    values = values_for(settings, profile, setup.flavour)
 
     if setup.flavour == "prusa":
         target = directory / "solidon.ini"
@@ -402,6 +669,7 @@ def write_config(
         return SlicerConfig(process=target)
 
     if setup.flavour == "orca":
+        split = by_section(settings, setup.flavour)
         target = directory / "solidon_process.json"
         target.write_text(
             json.dumps(
@@ -780,6 +1048,73 @@ def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Fin
     ]
 
 
+def unknown_keys(settings: PrintSettings, profile: Profile, setup: SlicerSetup) -> list[Finding]:
+    """Schlüssel, die diese Cura-Fassung nicht kennt (§29, §28.2).
+
+    Was :func:`verify` für PrusaSlicer und die Orca-Familie leistet, kann es
+    für Cura nicht: ``CuraEngine`` schreibt seine Einstellungen nicht in die
+    Druckdatei, und die Gegenprobe findet dort null von den geschriebenen
+    Schlüsseln wieder. Genau in dieser Lücke saß ``outer_inset_first`` — ein
+    Name aus Cura 4, in Cura 5 verworfen, ohne Fehler und ohne Warnung.
+
+    Die Auskunft, die es stattdessen gibt, liegt neben dem Programm:
+    ``fdmprinter.def.json`` nennt jeden gültigen Schlüssel der **installierten
+    Fassung**. Damit prüft sich auch eine Cura, die beim Bauen der Tabelle
+    niemand vorliegen hatte — dieselbe Absicht wie bei der Gegenprobe, nur
+    aus der einzigen Quelle, die dieser Slicer hergibt.
+
+    Liegt die Datei nicht da, wird nichts behauptet: dann läuft der Slicer aus
+    einem Paket, dessen Aufbau Solidon nicht kennt.
+    """
+    if setup.flavour != "cura":
+        return []
+    known: set[str] = set()
+    for name in ("fdmprinter.def.json", "fdmextruder.def.json"):
+        path = _cura_definition(setup.executable, name)
+        if path:
+            known |= _definition_keys(Path(path))
+    if not known:
+        return []
+
+    written = values_for(settings, profile, setup.flavour)
+    strange = sorted(key for key in written if key not in known)
+    if not strange:
+        return []
+    _log.warning("cura does not know %d key(s): %s", len(strange), ", ".join(strange[:5]))
+    return [
+        Finding(
+            code="slicer.unknown_key",
+            severity="warning",
+            message=_(
+                "Diese Fassung des Slicers kennt einige Einstellungen nicht — "
+                "sie werden ohne Meldung übergangen."
+            ),
+            values={"count": len(strange), "settings": ", ".join(strange[:10])},
+            source="internal",
+        )
+    ]
+
+
+def _definition_keys(path: Path) -> set[str]:
+    """Alle Einstellungsnamen einer Cura-Definition, über alle Ebenen."""
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return set()
+    found: set[str] = set()
+
+    def walk(node: object) -> None:
+        if not isinstance(node, dict):
+            return
+        for key, value in node.items():
+            if isinstance(value, dict):
+                found.add(key)
+                walk(value.get("children"))
+
+    walk(loaded.get("settings"))
+    return found
+
+
 def _command(
     setup: SlicerSetup,
     models: Sequence[Path],
@@ -1111,7 +1446,12 @@ def slice_model(
             kept.write_bytes(produced.read_bytes())
             produced = kept
 
-    findings = [*profile_differences(settings, setup), *ignored, *gcode.findings_for(metrics)]
+    findings = [
+        *profile_differences(settings, setup),
+        *unknown_keys(settings, profile, setup),
+        *ignored,
+        *gcode.findings_for(metrics),
+    ]
     findings.append(
         Finding(
             code="slicer.handover",
