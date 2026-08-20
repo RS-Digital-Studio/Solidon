@@ -175,20 +175,58 @@ eigenes Produkt: **netcup Webhosting 2000**.
    *Installieren*, dabei `www.solidon3d.de` mit einschließen. Das Zertifikat
    erneuert sich selbst. `core/updates.py` fragt über `https://` an; ohne
    Zertifikat schlägt der Update-Hinweis fehl.
-5. **Postfach `support@solidon3d.de` anlegen.** In Plesk unter *E-Mail* →
-   *E-Mail-Adresse erstellen*. Die MX-Einträge setzt netcup für seine eigene
-   Zone automatisch — das betrifft ausschließlich `solidon3d.de`, die
-   Workspace-Mail von `rs-digital.org` bleibt davon unberührt. Dazu gehören
-   in dieselbe Zone:
+5. **Postfächer anlegen.** ✓ Erledigt; am 20.08.2026 stehen vier:
+   `support@`, `marketing@`, `abrechnung@` und `noreply@`. In Plesk unter
+   *E-Mail* → *E-Mail-Adresse erstellen*. Die MX-Einträge setzt netcup für
+   seine eigene Zone automatisch — das betrifft ausschließlich
+   `solidon3d.de`, die Workspace-Mail von `rs-digital.org` bleibt davon
+   unberührt. Dazu gehören in dieselbe Zone:
 
    ```
-   TXT   @        v=spf1 include:_spf.netcup.net ~all
+   TXT   @        v=spf1 mx a include:_spf.webhosting.systems ~all
    TXT   _dmarc   v=DMARC1; p=quarantine; rua=mailto:support@solidon3d.de
    ```
 
-   DKIM aktiviert Plesk auf Wunsch bei der Domain selbst. Die genaue
-   SPF-Include-Kennung steht im netcup-Helpcenter — vor dem Setzen ablesen,
-   nicht aus dieser Datei abschreiben.
+   **Gemessener Stand vom 20.08.2026** (gegen `8.8.8.8`): SPF steht wie
+   oben, DKIM ist aktiv unter dem Selektor `key1`, und der Reverse-Eintrag
+   von `188.68.47.35` zeigt sauber auf `mx2f23.netcup.net`. **`_dmarc` fehlt
+   als einziges** — ohne ihn landet Post an Gmail und Outlook.com häufiger
+   im Spam, was sich anfühlt wie „Senden geht nicht", obwohl die Nachricht
+   längst draußen ist. Die Include-Kennung heißt bei diesem Paket
+   `_spf.webhosting.systems`, nicht `_spf.netcup.net`; vor dem Setzen
+   ablesen, nicht abschreiben.
+
+   **Ein Mailprogramm einrichten — drei Fallen.** Der Server selbst ist
+   unauffällig: Postfix und Dovecot auf `188.68.47.35`, die Ports 993 und
+   465 offen, Anmeldung über `PLAIN` und `LOGIN`, kein OAuth. Trotzdem hat
+   die Einrichtung am 20.08.2026 einen halben Tag gekostet, an drei Stellen,
+   die keine Fehlermeldung benennt:
+
+   - **Der Servername ist `mx2f23.netcup.net`, nicht `mail.solidon3d.de`.**
+     Beide zeigen auf dieselbe Maschine, aber das Zertifikat lautet
+     `*.netcup.net` und passt unter dem eigenen Domainnamen nicht. Der
+     Client bricht ab — beim Senden eher als beim Empfangen.
+   - **Outlook rät den Postausgang als `smtp.netcup.net`.** Das ist ein
+     anderer Rechner (`46.38.225.170`), der die Postfächer dieses Pakets
+     nicht kennt; dort scheitert jede Anmeldung, unabhängig vom Passwort.
+     Ein- und Ausgang tragen denselben Namen.
+   - **`autodiscover.solidon3d.de` zeigt auf den Webserver** und liefert ein
+     abgelaufenes Plesk-Selbstsignat statt einer Konfiguration. Die
+     automatische Einrichtung ist damit unbrauchbar — von Hand einrichten.
+     Für Outlook überbrückt das eine lokale Autodiscover-Datei zusammen mit
+     `PreferLocalXML`.
+
+   Und die Ports, die Plesk unter *Link zur E-Mail-Konfiguration* in den
+   blauen Kacheln zeigt (143, 110, 25), sind die **unverschlüsselten**. Die
+   richtigen stehen daneben im Kleingedruckten: 993 für IMAP, 465 für SMTP,
+   beide mit SSL/TLS.
+
+   Das neue Outlook taugt für diese Postfächer nicht: Es synchronisiert
+   IMAP-Konten über die Microsoft-Cloud, und weil Absender und Empfänger
+   dann beide `@solidon3d.de` heißen, versucht Microsoft die Zustellung im
+   eigenen Haus und weist sie ab. Der Unzustellbarkeitsbericht kommt
+   erkennbar von Microsoft, nicht von Postfix — dann liegt der Fehler nie
+   auf dem Server. Das klassische Outlook nehmen.
 6. **Hochladen.** ✓ Erstmals erledigt am 08.08.2026 (86 Dateien per SFTP).
    Passwort für SSH/SFTP im CCP unter *Webhosting-Zugang* setzen, dann den
    Inhalt dieses Ordners (ohne diese README) nach `solidon3d.de/httpdocs`
@@ -221,6 +259,19 @@ eigenes Produkt: **netcup Webhosting 2000**.
   ausgeliefert wird — sie steht auf beiden Startseiten, im Impressum, im
   Über-Dialog und im Fehlerbericht der Anwendung. Eine Adresse, die im
   Programm steht und keine Post annimmt, ist schlimmer als keine.
+
+  **Am 20.08.2026 geprüft, und zwar der ganze Weg:** `api/support.php` liegt
+  unter `httpdocs/api/` und antwortet, `tools/check_support.py` hat eine
+  echte Sendung durchgebracht (Vorgang `S-20260820-589ee2`), und der
+  Mailserver hat für alle vier Adressen von außen eingelieferte Post
+  angenommen — eine erfundene Adresse derselben Domain lehnt er dagegen mit
+  `550 User unknown` ab, die Annahme ist also echt und kein Catch-All.
+  **Offen bleibt der letzte Zentimeter:** angenommen ist nicht gelesen. Das
+  bestätigt erst ein Blick ins Postfach, und der ging bisher nicht, weil
+  Webmail für die Domain abgeschaltet ist (`/webmail` antwortet mit 404) und
+  kein Mailprogramm das Postfach erreichte. Webmail in Plesk unter
+  *E-Mail-Einstellungen* der Domain auf Roundcube stellen — dann ist der
+  Nachweis eine Minute Arbeit und hängt an keinem Client.
 - Den Installer in das Verzeichnis legen und den Download-Kasten in beiden
   `index.html` auf den echten Link umstellen. Die Dateien kommen aus der CI
   (oder lokal aus `tools/make_installer.py`) und heißen
