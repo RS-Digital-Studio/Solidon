@@ -6973,6 +6973,7 @@ eigene Konfigurationsdatei in der 3MF läse.
 
 Der 3MF-Weg zu ElegooSlicer wurde mitgeprüft und ist in Ordnung: geschrieben,
 geöffnet, gerechnet, und die Gegenprobe meldet keine Abweichung.
+
 ## Die Werkzeugleiste zeigt nur noch Zeichen (20.08.2026)
 
 Auf Wunsch: die Leiste über dem Fenster trägt keine Beschriftungen mehr. Sieben
