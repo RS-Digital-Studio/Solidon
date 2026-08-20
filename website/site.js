@@ -160,10 +160,25 @@
 
   const page = document.body;
   const moment = Date.parse(page.dataset.release || "");
+  if (Number.isNaN(moment)) return;
   const file = (page.dataset.download || "").trim();
-  if (Number.isNaN(moment) || !file) return;
 
   const arrive = () => {
+    /* Zwei Bedingungen, und sie sind nicht dieselbe.
+     *
+     * Ein Satz wie „die Demo erscheint am 20. August" wird am 21. falsch,
+     * ganz gleich ob eine Datei liegt — der Termin vergeht von selbst. Ein
+     * Knopf, der „Demo laden" heißt, wird dagegen erst richtig, wenn es
+     * etwas zu laden gibt. Wer beides an dieselbe Bedingung hängt, bekommt
+     * entweder einen toten Knopf oder einen Satz, der auf die Datei wartet.
+     */
+    for (const node of document.querySelectorAll("[data-past-text]")) {
+      node.textContent = node.dataset.pastText;
+    }
+    page.dataset.past = "true";
+
+    if (!file) return;
+
     /* Erst der Knopf, dann die Texte: Ein Knopf, der schon „Demo laden"
        heißt, aber noch auf das Postfach zeigt, ist für den Bruchteil einer
        Sekunde eine Lüge. */

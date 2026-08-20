@@ -1824,11 +1824,17 @@ p.footnote {
   gap: 1.75rem 1.5rem;
 }
 
-/* Sechs Stücke wollen zwei Reihen zu dritt, nicht fünf und eines. Ohne
-   Obergrenze füllt `auto-fit` die breite Spalte, und das einzelne Stück in
-   der zweiten Reihe sieht aus wie ein Nachzügler. */
+/* Sechs Stücke gehen in sechs, drei oder zwei Spalten glatt auf — in vier
+   oder fünf nicht, und dann steht das letzte allein da wie ein Nachzügler.
+   `auto-fit` kennt diesen Unterschied nicht und füllt die Zeile, so weit sie
+   reicht. Also werden die Teiler von sechs gesetzt, statt die Breite zu
+   deckeln: auf einem breiten Schirm stehen alle sechs nebeneinander. */
 @media (min-width: 58rem) {
   .schau:not(.tight) { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (min-width: 92rem) {
+  .schau:not(.tight) { grid-template-columns: repeat(6, 1fr); gap: 1.5rem 1.25rem; }
 }
 
 .schau figure { margin: 0; }
