@@ -347,6 +347,33 @@ def test_autosave_sits_next_to_the_project(filled: Project, tmp_path: Path) -> N
     assert find_recovery(path) is None
 
 
+def test_a_locked_autosave_does_not_stop_the_window_from_closing(
+    filled: Project, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Eine Sicherung, die sich nicht löschen lässt, ist kein Grund zum Werfen.
+
+    ``clear_autosave`` läuft seit „Verworfen heißt verworfen" auch aus dem
+    ``closeEvent`` — und auf Windows hält ein Virenscanner eine gerade
+    geschriebene Datei gern noch einen Moment fest. Ein ``PermissionError`` von
+    dort wäre ein Fenster, das sich nicht schließen lässt, wegen einer Datei,
+    die niemanden mehr interessiert.
+    """
+    path = tmp_path / "projekt.p3d"
+    save(filled, path)
+    write_autosave(filled, path)
+
+    def refuse(self: Path, *args: object, **kwargs: object) -> None:
+        raise PermissionError(32, "Der Prozess kann nicht auf die Datei zugreifen")
+
+    monkeypatch.setattr(Path, "unlink", refuse)
+
+    clear_autosave(path)  # wirft nicht
+
+    # Und die Sicherung liegt noch da — das ist der Preis, und er ist der
+    # kleinere: eine überflüssige Frage beim nächsten Öffnen.
+    assert autosave_path(path).is_file()
+
+
 def test_an_autosave_older_than_the_project_is_not_offered(filled: Project, tmp_path: Path) -> None:
     path = tmp_path / "projekt.p3d"
     write_autosave(filled, path)

@@ -374,10 +374,27 @@ def find_recovery(path: Path | None) -> Path | None:
 
 
 def clear_autosave(path: Path | None) -> None:
-    """Nach einem erfolgreichen Speichern gibt es nichts mehr wiederherzustellen."""
+    """Die Sicherung ist erledigt — nach dem Speichern und nach dem Verwerfen.
+
+    Der Docstring nannte lange nur den ersten Fall, und dabei blieb es nicht:
+    Seit „Verworfen heißt verworfen" räumt auch der Weg über ``_may_discard``
+    hier auf, und der läuft im ``closeEvent``.
+
+    **Deshalb wirft die Funktion nicht.** Eine ``.autosave``, die im selben
+    Augenblick von einem Virenscanner gehalten wird, ist auf Windows kein
+    seltener Fall — und ein ``PermissionError`` mitten im Schließen wäre ein
+    Fenster, das sich nicht schließen lässt, wegen einer Datei, die niemanden
+    mehr interessiert. Bleibt sie liegen, kostet das eine überflüssige Frage
+    beim nächsten Öffnen; das ist die kleinere Störung, und sie steht im
+    Protokoll.
+    """
     candidate = autosave_path(path)
-    if candidate.is_file():
+    if not candidate.is_file():
+        return
+    try:
         candidate.unlink()
+    except OSError as problem:
+        _log.warning("could not remove the autosave %s: %s", candidate.name, problem)
 
 
 def project_data(path: Path) -> dict[str, Any]:
