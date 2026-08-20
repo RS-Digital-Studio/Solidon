@@ -237,6 +237,49 @@ def viewport_colours(theme: Theme) -> dict[str, str]:
     }
 
 
+#: Die Ersatzfarbe eines Materialslots, dem niemand eine gegeben hat.
+#:
+#: Drei der vier Stellen, die Slots anlegen, lassen ``colour`` auf ``None``:
+#: der Pinsel (§20), die Schrift und „Slot zuweisen" mit leerem Feld. Nur die
+#: Texturzerlegung setzt echte Farben, denn sie liest sie aus dem Bild. Die
+#: Ansicht nahm für einen Slot ohne Farbe die Körperfarbe — bei zwei bemalten
+#: Slots waren das zwei gleiche Einträge in derselben Farbtabelle, und wer
+#: zweifarbig bemalte, sah das Ergebnis zum ersten Mal im Slicer. Genau das,
+#: was der Docstring von ``Viewport._slot_colours`` als behoben beschreibt.
+#:
+#: Die Farbe steht **nicht** im Dokument: keine Farbe zu haben ist ein
+#: Zustand, den der Nutzer über „Slot zuweisen" auflöst, und eine geratene
+#: Zahl in der Projektdatei wäre eine Behauptung. Hier ist sie eine Anzeige.
+#:
+#: Genommen ist die Palette von Okabe und Ito — acht Farben, die auch bei den
+#: drei häufigen Farbsinnstörungen auseinander bleiben; Schwarz ist heraus, es
+#: liest sich auf dem dunklen Verlauf als Loch. Sieben Einträge für die Slots
+#: 1 bis 7: Slot 0 ist das unbemalte Teil und behält die Körperfarbe. Und die
+#: Farbe ist nie die einzige Auskunft (Regel 18) — die Pinselleiste nennt Name
+#: und Nummer daneben, der Prüfbericht und der Export nennen sie auch.
+SLOT_COLOURS: Final = (
+    "#e69f00",  # Orange
+    "#56b4e9",  # Himmelblau
+    "#009e73",  # Blaugrün
+    "#f0e442",  # Gelb
+    "#0072b2",  # Blau
+    "#d55e00",  # Zinnoberrot
+    "#cc79a7",  # Purpur
+)
+
+
+def slot_colour(index: int) -> str | None:
+    """Welche Farbe ein Slot ohne eigene bekommt (siehe :data:`SLOT_COLOURS`).
+
+    ``None`` für Slot 0: Er ist das unbemalte Teil, und welche Farbe das ist,
+    weiß das Thema des Anrufers und nicht diese Tabelle. Über die Palette
+    hinaus wird von vorn gezählt; ``MAX_SLOTS`` ist acht, die Palette reicht.
+    """
+    if index <= 0:
+        return None
+    return SLOT_COLOURS[(index - 1) % len(SLOT_COLOURS)]
+
+
 def relative_luminance(colour: str) -> float:
     """WCAG-Luminanz — die Grundlage der Kontrastprüfung in den Tests."""
     channels = []

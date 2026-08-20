@@ -165,3 +165,56 @@ def test_stopping_switches_it_off(qt_app: QApplication) -> None:
     bar.stop()
 
     assert not bar.painting
+
+
+def test_two_painted_slots_do_not_look_the_same(profile: Profile) -> None:
+    """Bemalen war im Bild folgenlos.
+
+    Der Pinsel legt einen Slot ohne Farbe an (``colour=None``) — dieselbe Lücke
+    hat die Schrift und „Slot zuweisen" mit leerem Feld. Die Ansicht nahm für
+    einen Slot ohne Farbe die Körperfarbe, und damit standen in der Farbtabelle
+    zwei gleiche Einträge: Wer zweifarbig bemalte, sah das Ergebnis zum ersten
+    Mal im Slicer. Genau das, was der Docstring von ``_slot_colours`` als
+    behoben beschreibt — behoben war es nur für Slots, die schon eine Farbe
+    hatten.
+
+    Geprüft wird die Tabelle und nicht das Bild: Offscreen gibt es keinen
+    Plotter, und die Aussage steckt in den Farben, nicht im Rendern.
+    """
+    from app.ui.theme import SLOT_COLOURS, slot_colour
+
+    entry = SceneObject(id="obj_1", name="Deckel", mesh=plate())
+    first = run("paint_slot", entry, profile, slot=1, radius=1000.0, z=10.0).outputs[0]
+    painted = run("paint_slot", first, profile, slot=2, radius=8.0, x=20.0, z=5.0).outputs[0]
+
+    assert [slot.colour for slot in painted.material_slots] == [None, None], (
+        "der Pinsel setzt keine Farbe — genau darum geht es hier"
+    )
+    colours = [slot_colour(slot.index) for slot in painted.material_slots]
+    assert len(set(colours)) == len(colours), "zwei bemalte Slots bekommen dieselbe Farbe"
+    assert all(colour in SLOT_COLOURS for colour in colours)
+    assert slot_colour(0) is None, "Slot 0 ist das unbemalte Teil und behält seine Farbe"
+
+
+def test_the_bar_shows_the_colour_and_the_name_not_just_a_number(qt_app: QApplication) -> None:
+    """„Slot 1" sagt nicht, was auf dem Teil landet.
+
+    Die Leiste hatte ein Zahlenfeld und sonst nichts: Welche Farbe dabei
+    herauskommt, erfuhr man, indem man malte. Jetzt steht das Farbfeld daneben
+    und der Name dahinter — Farbe **und** Wort, denn allein die Farbe wäre
+    keine Auskunft (Regel 18).
+    """
+    from app.core.types import MaterialSlot
+
+    bar = PaintBar()
+    bar.slot.setValue(1)
+
+    assert bar.swatch.pixmap().isNull() is False, "kein Farbfeld neben der Nummer"
+    assert bar.slot_name.text() == "neu", "ein Slot, den es nicht gibt, sagt das"
+
+    bar.set_slots([MaterialSlot(index=1, name="Rot")])
+    assert bar.slot_name.text() == "Rot", "die Leiste nennt den Slot nicht, wie er heißt"
+
+    bar.slot.setValue(0)
+    assert bar.swatch.pixmap().isNull(), "Slot 0 behauptet eine Farbe, die er nicht hat"
+    assert bar.slot_name.text(), "und sagt trotzdem, was er ist"

@@ -699,9 +699,24 @@ class BaseParams:
         Die Baustein-Operationen tun genau das (§24.1): die Parameter eines
         Bausteins plus eine Platzierung werden ein Schema, und der Neuaufbau
         braucht die Deklarationen, nicht nur das abgeleitete Schema.
+
+        **Ein Satz ohne Felder gibt nichts zurück und wirft nicht.** Eine
+        Operation darf parameterlos sein — *Objekt löschen* ist es, und ihr
+        Parametersatz ist deshalb diese Klasse selbst. ``dataclasses.fields``
+        wirft dort ein nacktes ``TypeError`` („must be called with a dataclass
+        type or instance"), und das ist auf zwei Weisen falsch: Es ist kein
+        ``AppError`` und trägt damit keinen Handlungsvorschlag (Regel 17), und
+        es gibt gar nichts zu beheben — kein Parameter *ist* eine gültige
+        Antwort, sie heißt leer.
         """
         import dataclasses
 
+        # Gefragt wird nach dem Merkmal und nicht über ``is_dataclass``: dessen
+        # ``TypeGuard`` engt die Ja-Seite auf einen Dataclass-Typ ein, und weil
+        # diese Klasse selbst keiner ist, hält mypy die Zeile darunter für
+        # unerreichbar. Das Merkmal ist dasselbe, nur ohne die Verengung.
+        if not hasattr(cls, "__dataclass_fields__"):
+            return ()
         return tuple(dataclasses.fields(cls))  # type: ignore[arg-type]
 
     def as_dict(self) -> dict[str, Any]:

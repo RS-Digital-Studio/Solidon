@@ -137,3 +137,23 @@ def test_every_operation_reaches_every_surface() -> None:
     assert {schema["name"] for schema in tool_schemas()} == names
     text = documentation()
     assert all(f"`{name}`" in text for name in names)
+
+
+@pytest.mark.parametrize("spec", registered(), ids=ids)
+def test_a_parameter_set_can_always_be_taken_apart(spec: OperationSpec) -> None:
+    """``fields()`` warf bei einer parameterlosen Operation.
+
+    *Objekt löschen* braucht keine Parameter, und ihr Parametersatz ist deshalb
+    ``BaseParams`` selbst — keine Dataclass. ``dataclasses.fields`` wirft dort
+    ein nacktes ``TypeError``, das weder ein ``AppError`` ist noch einen
+    Handlungsvorschlag trägt (Regel 17); zu beheben gibt es dabei nichts, denn
+    „kein Parameter" ist eine gültige Antwort. Wer über das Register läuft — die
+    Baustein-Operationen tun es (§24.1) — traf damit auf einen Abbruch statt auf
+    eine leere Liste.
+
+    Und die Felder gehören zum Schema: Was das eine kennt, kennt das andere.
+    """
+    entries = spec.params.fields()
+    assert {entry.name for entry in entries} >= {entry.name for entry in spec.params.spec()}, (
+        f"{spec.name}: das Schema nennt Parameter, die als Feld fehlen"
+    )
