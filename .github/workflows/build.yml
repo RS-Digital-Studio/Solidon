@@ -167,7 +167,27 @@ jobs:
           # Prozess je Datei — der Absturz hängt an der Zahl der VTK-Fenster in
           # *einem* Prozess, und die bleibt so ebenfalls klein.
           if [ "$RUNNER_OS" = "Windows" ]; then forked=""; else forked="--forked"; fi
-          run -m "not performance" $ignores
+
+          # **Ein Absturz wird einmal wiederholt.** Nicht jeder Fehlschlag: nur
+          # dieser Aufruf als Ganzes, und nur ein zweites Mal. VTK stirbt auf
+          # den Runnern gelegentlich mit SIGSEGV — am 20.08.2026 einmal in
+          # `test_header.py` unter Linux (fünf andere Tests derselben Datei
+          # grün, lokal dreimal grün) und einmal im Dateilauf unter Windows.
+          # Der Absturz wandert, hängt an keinem Test und ist seit Wochen als
+          # offener Punkt notiert.
+          #
+          # Was er anrichtet, ist unverhältnismäßig: Der Paketier-Job hängt an
+          # dieser Suite, also verhindert ein zufälliger Absturz die
+          # Auslieferung aller vier Plattformen. Ein zweiter Anlauf trennt den
+          # Zufall vom Befund — was zweimal an derselben Stelle stirbt, ist
+          # keiner, und der Lauf wird rot wie vorher.
+          attempt() {
+            run "$@" || {
+              echo "::warning::Zweiter Anlauf für: $*"
+              run "$@"
+            }
+          }
+          attempt -m "not performance" $ignores
           for file in $windowed; do
             echo "::group::$file"
             # Je Test ein eigener Prozess. Ein Fenster darf hier weder sterben
@@ -185,7 +205,7 @@ jobs:
             # nicht der Suite: Ein eigenes Leck fiele im großen Lauf darüber
             # weiter auf. Sie fällt weg, sobald `--forked` durch etwas ersetzt
             # wird, das seine Rohre selbst schließt.
-            run -m "not performance" $forked -W "ignore::ResourceWarning" "$file"
+            attempt -m "not performance" $forked -W "ignore::ResourceWarning" "$file"
             echo "::endgroup::"
           done
 

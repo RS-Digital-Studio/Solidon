@@ -7,6 +7,7 @@ scheitert — sie prüfen, dass kein Lauf stattfindet.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -296,6 +297,10 @@ def _environment() -> dict[str, str]:
     return {name: os.environ[name] for name in keep if name in os.environ}
 
 
+@pytest.mark.skipif(
+    sys.platform == "darwin",
+    reason="Darwin setzt RLIMIT_AS nicht durch — die Speichergrenze wirkt dort nicht",
+)
 def test_the_memory_limit_actually_bites(tmp_path: Path) -> None:
     """§32 verlangt Zeit **und** Speicher. Geprüft wird die Wirkung.
 
@@ -306,6 +311,16 @@ def test_the_memory_limit_actually_bites(tmp_path: Path) -> None:
 
     Gemessen an Python statt an OpenSCAD: die Grenze gehört dem Aufruf, nicht
     dem Programm, und OpenSCAD ist auf einem Bauserver nicht installiert.
+
+    **Auf macOS gibt es diese Grenze nicht**, und der Test behauptet es auch
+    nicht. Darwin nimmt ``RLIMIT_AS`` entgegen und setzt es nicht durch; wo es
+    den Wert zurückweist, scheiterte bis zum 20.08.2026 sogar der ganze
+    Aufruf, weil eine Ausnahme im ``preexec_fn`` als ``SubprocessError`` im
+    Elternprozess ankommt — OpenSCAD war auf dem Mac unbenutzbar. Der Start
+    ist repariert, die Grenze bleibt dort eine Lücke: Es bleibt beim
+    Zeitlimit, und das greift überall. Wer sie schließen will, braucht einen
+    anderen Weg als ``setrlimit`` — ein eigenes Sandkastenverfahren, und das
+    ist kein Einzeiler.
     """
     import sys
 

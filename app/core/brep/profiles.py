@@ -453,6 +453,14 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
 #: bringt die Boolesche Operation ganz zum Aufgeben.
 ROD_FUZZ_RATIOS: Final = (1e-4, 1e-3, 1e-2)
 
+#: Wie weit die Nahtreparatur aufmachen darf, gemessen an der Steigung.
+#:
+#: Ein Prozent ist bei M6 ein Hundertstel Millimeter: genug für eine Naht, die
+#: zwei Flächen um eine Rundungsstelle auseinanderhält, zu wenig, um eine
+#: Flanke zu verrücken. Weiter aufzumachen hieße, die Geometrie zu ändern,
+#: statt sie zu schließen — und dann stimmt das Gewinde nicht mehr.
+ROD_SEW_SHARE: Final = 0.01
+
 
 def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
     """Kern und Gang zusammenfügen — in Stufen, wie die Boolesche Kette (§17.2).
@@ -481,6 +489,16 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
     if _is_sound_rod(sewn):
         return sewn
     _log.info("thread rod: sewing did not close it either (%s)", _rod_state(sewn))
+    # Zweiter Anlauf mit einer Naht-Toleranz, die zur Steigung passt: Auf dem
+    # macOS-Runner blieb der Bolzen ein Stück und war doch nicht dicht, und
+    # genau dafür ist diese Stufe da. Ein Prozent der Steigung ist bei M6 ein
+    # Hundertstel Millimeter — genug für eine Naht, zu wenig, um eine Flanke
+    # zu verrücken.
+    widened = _sewn(solid, tolerance=pitch * ROD_SEW_SHARE)
+    if _is_sound_rod(widened):
+        return widened
+    _log.info("thread rod: sewing with tolerance did not close it (%s)", _rod_state(widened))
+    sewn = widened
     for ratio in ROD_FUZZ_RATIOS:
         try:
             coarse = _fuzzy_boolean("union", core, ridge, tolerance=pitch * ratio)
@@ -570,17 +588,32 @@ def _rod_state(solid: Solid) -> str:
     )
 
 
-def _sewn(solid: Solid) -> Solid:
+def _sewn(solid: Solid, tolerance: float = 0.0) -> Solid:
     """Offene Nähte schließen, ohne die Geometrie zu verrücken.
 
     ``ShapeFix_Shape`` ist OCCTs eigener Weg dafür. Er wird hier **nur** als
     zweiter Anlauf gerufen: Was beim ersten Mal geschlossen herauskam, geht
     unverändert weiter — eine Reparatur, die immer läuft, kostet Zeit und
     verdeckt, dass sie gebraucht wurde.
+
+    ``tolerance`` sagt, wie weit auseinander zwei Kanten liegen dürfen, damit
+    er sie noch zusammenzieht; ohne Angabe bleibt es bei der Toleranz, die die
+    Form mitbringt. Auf dem macOS-Runner reichte die nicht: Der Bolzen kam als
+    **ein** Stück heraus (`components=1`, Volumen wie erwartet) und war
+    trotzdem nicht dicht — eine offene Naht, keine zwei Teile wie unter Linux.
+    Dieselbe Rechnung, andere Übersetzung, andere Stelle, an der eine Zahl
+    kippt.
+
+    Weit aufmachen darf man ihn nicht: Was über die Naht hinausgeht, verrückt
+    Flächen, und dann stimmt das Gewinde nicht mehr. Deshalb kommt die Grenze
+    von der Größe, um die es geht — der Steigung —, und nicht als runde Zahl.
     """
     from OCP.ShapeFix import ShapeFix_Shape
 
     fix = ShapeFix_Shape(solid.shape)
+    if tolerance > 0.0:
+        fix.SetPrecision(tolerance)
+        fix.SetMaxTolerance(tolerance)
     fix.Perform()
     return Solid(fix.Shape(), deflection=solid.deflection)
 

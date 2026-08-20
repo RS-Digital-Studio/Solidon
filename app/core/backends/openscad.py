@@ -234,12 +234,29 @@ def _limit_this_process(limit: int) -> None:  # pragma: no cover - läuft im Kin
 
     Nur auf POSIX; Windows kennt ``RLIMIT_AS`` nicht und bekommt weiter unten
     ein Job-Objekt.
+
+    **Und die Grenze darf den Start nicht verhindern.** Was hier scheitert,
+    scheitert im Kindprozess zwischen ``fork`` und ``exec``; Python macht
+    daraus einen ``SubprocessError`` im Elternprozess, und der nimmt den
+    ganzen Lauf mit. Auf macOS ist genau das passiert: Darwin setzt
+    ``RLIMIT_AS`` nicht durch und weist den Wert zurück — OpenSCAD ließ sich
+    dort **überhaupt nicht** aufrufen, und zwar für jeden Aufruf, nicht nur
+    für große. Aufgefallen ist es erst, als die Suite auf dem Mac zum ersten
+    Mal wirklich lief.
+
+    Dieselbe Abwägung wie beim Windows-Job eine Etage tiefer: Eine
+    Rückfallebene, die gar nicht startet, ist der schlechtere Tausch. Ohne
+    Grenze bleibt das Zeitlimit, und das greift überall.
     """
     if sys.platform == "win32":
         return
+    import contextlib
     import resource
 
-    resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+    # Kein Protokoll im Fehlerfall: Zwischen fork und exec ist der Prozess ein
+    # halber, und ein Logger, der hier eine Sperre anfasst, hängt ihn auf.
+    with contextlib.suppress(OSError, ValueError):
+        resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
 
 
 def _memory_capped_job(limit: int) -> int | None:
