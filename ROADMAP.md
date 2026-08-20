@@ -38,7 +38,7 @@ bekommt einen roten Lauf.
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | eine andere **Bauart** — alle sieben Griffe an `MakePipeShell` sind gemessen und widerlegt (20.08.), und ein Rotationskörper schraubt nicht |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
-| Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
+| Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Die Bildschirmfotos des Handbuchs sind nicht eingecheckt | Die Bedienverträge durchgesehen (20.08.2026) | einen ruhigen Baum — dann `tools/make_manual.py` und alles zusammen einchecken |
@@ -6086,6 +6086,31 @@ Fehler der Umgebung.**
       weitermacht, braucht viele Läufe je Messpunkt — bei einer Rate um zwanzig
       Prozent sagt ein einzelner Lauf nichts, und genau daran ist in dieser
       Sitzung schon ein A/B-Schluss gescheitert.
+
+      **Dreißig Läufe am 20.08.2026, und die zwanzig Prozent fallen.** Kein
+      einziger Abbruch in den siebenundzwanzig auswertbaren Läufen. Bei der
+      angenommenen Rate wäre das mit **0,24 %** Wahrscheinlichkeit passiert
+      (0,8²⁷); bei fünf Prozent wären es 25 %. Die Zahl, mit der dieser Punkt
+      seit dem 14.08. rechnet, ist damit widerlegt — sie war aus fünf und acht
+      Läufen geschätzt, und genau davor warnt der Punkt selbst.
+
+      **Abgehakt ist er damit nicht, und zwar aus einem Grund, der schwerer
+      wiegt als die Zahl:** `panels.py` — die Stelle, an der der Absturz saß —
+      ist seit dem Fund fünfmal geändert worden. Gemessen wurde also nicht der
+      Code von damals. Die Reihe sagt, dass *dieser* Stand in dreißig Läufen
+      hielt; sie sagt nichts darüber, ob der Fehler behoben oder nur nicht
+      getroffen ist. Ihn für behoben zu erklären, wäre dieselbe Sorte Schluss,
+      an der in der Ursprungssitzung schon ein A/B-Versuch gescheitert ist.
+
+      **Und eine Lehre über das Messen selbst.** Drei Läufe (14, 15, 16) fielen
+      aus — direkt hintereinander, was zuerst wie ein Bündel aussah und die
+      interessantere Spur gewesen wäre. Es war keine: Alle drei tragen denselben
+      `ImportError` auf `install_navigation_keys`, weil eine parallele Sitzung in
+      genau diesen Minuten `shortcut_schemes.py` und `main_window.py` umbaute.
+      Mein Erkennungsmerkmal — „kein `passed` und kein `failed` in der Ausgabe"
+      — hielt einen **Sammelfehler** für einen Prozessabbruch. Wer hier
+      weitermisst, prüft auf `error in` mit, und misst auf einem Baum, an dem
+      niemand sonst arbeitet.
 
       **Nächster Schritt**, wenn er drankommt: ein Lauf unter Valgrind oder
       gegen ein Python mit Adress-Sanitizer, gezielt auf
