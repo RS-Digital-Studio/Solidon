@@ -28,16 +28,17 @@ def stl(name: str = "cube_clean.stl") -> bytes:
 
 
 #: Was ein Rechner mit dieser Ausstattung zur Auswahl stellt, samt der Fallen:
-#: der Formkern liegt unter denselben Checkpoints wie die Bildmodelle, und im
-#: VAE-Ordner liegt nicht nur die eine, die gemeint ist.
+#: unter den Checkpoints liegt neben den Bildmodellen auch ein Formkern aus
+#: einer früheren Installation, und neben dem gemeinten TripoSG steht die
+#: Kritzel-Fassung, die für ein Lichtbild das falsche Modell wäre. Beide
+#: stehen mit Absicht vor der richtigen Antwort.
 OFFERED: dict[str, list[str]] = {
     "CheckpointLoaderSimple.ckpt_name": [
         "hunyuan_3d_v2.1.safetensors",
         "Juggernaut-X-v10.safetensors",
         "animagine-xl-4.0-opt.safetensors",
     ],
-    "Hy3DMeshGenerator.model": ["hunyuan3d-dit-v2-1-fp16.ckpt"],
-    "Hy3D21VAELoader.model_name": ["sdxl_vae.safetensors", "Hunyuan3D-vae-v2-1-fp16.ckpt"],
+    "TripoSGLoader.model": ["TripoSG-scribble", "TripoSG"],
 }
 
 
@@ -284,11 +285,10 @@ def test_the_models_come_from_the_machine_it_runs_on() -> None:
     chosen = {
         node["class_type"]: node["inputs"]
         for node in graph.values()
-        if node["class_type"] in ("CheckpointLoaderSimple", "Hy3DMeshGenerator", "Hy3D21VAELoader")
+        if node["class_type"] in ("CheckpointLoaderSimple", "TripoSGLoader")
     }
-    assert chosen["Hy3DMeshGenerator"]["model"] == "hunyuan3d-dit-v2-1-fp16.ckpt"
-    assert chosen["Hy3D21VAELoader"]["model_name"] == "Hunyuan3D-vae-v2-1-fp16.ckpt", (
-        "nicht die sdxl_vae, die im selben Ordner liegt"
+    assert chosen["TripoSGLoader"]["model"] == "TripoSG", (
+        "nicht die Kritzel-Fassung, die davor in der Liste steht"
     )
     assert chosen["CheckpointLoaderSimple"]["ckpt_name"] == "Juggernaut-X-v10.safetensors", (
         "nicht der Formkern, der unter denselben Checkpoints liegt"
@@ -344,13 +344,25 @@ def test_a_missing_model_names_the_role_not_the_setting() -> None:
 
 
 def test_the_machine_is_asked_once_per_input_not_once_per_node() -> None:
-    """Drei Rollen heißen drei Fragen, nicht eine je Knoten des Graphen."""
+    """Je Eingang eine Frage, nicht eine je Knoten des Graphen.
+
+    Die Zahl steht nicht fest im Test: Wie viele Rollen der mitgelieferte
+    Graph benennt, ist eine Frage des Graphen und ändert sich mit ihm. Fest
+    steht, dass keine zweimal gefragt wird.
+    """
     server = Comfy()
+    graph = json.loads((WORKFLOW_DIR / "text_to_mesh.json").read_text(encoding="utf-8"))
+    rollen = {
+        f"{node['class_type']}.{field}"
+        for node in graph.values()
+        for field, value in node["inputs"].items()
+        if isinstance(value, str) and value.startswith("{model:")
+    }
 
     backend(server).text_to_mesh("ein Halter")
 
     asked = [entry for entry in server.requests if "/object_info/" in entry]
-    assert len(asked) == len(set(asked)) == 3
+    assert len(asked) == len(set(asked)) == len(rollen)
 
 
 def test_nothing_running_means_not_available() -> None:
