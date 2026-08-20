@@ -1319,13 +1319,29 @@ _POLL_SECONDS: Final = 0.2
 
 
 def _stop(process: subprocess.Popen[bytes]) -> None:
-    """Beendet den Kindprozess — erst höflich, dann endgültig."""
-    process.terminate()
+    """Beendet den Kindprozess — erst höflich, dann endgültig — und schließt
+    seine Rohre.
+
+    **Das Schließen ist nicht Kosmetik.** ``communicate`` räumt die Pipes
+    selbst ab; wer den Prozess abbricht, ruft es nie zu Ende, und die beiden
+    offenen Enden bleiben liegen, bis der Speicherbereiniger sie einsammelt.
+    Der meldet dann eine ``ResourceWarning`` — aus seinem eigenen Lauf heraus,
+    also ohne Stapel und an beliebiger Stelle. In der Suite steht
+    ``filterwarnings = ["error"]``, und dort wurden daraus zwei Fehler in
+    einem Test, der mit Rohren nichts zu tun hatte; unter Windows fiel es nie
+    auf, weil der Bereiniger dort früher zugreift.
+    """
     try:
-        process.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait(timeout=5)
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=5)
+    finally:
+        for pipe in (process.stdout, process.stderr):
+            if pipe is not None:
+                pipe.close()
 
 
 def slice_model(

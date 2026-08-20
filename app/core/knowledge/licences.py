@@ -33,6 +33,31 @@ _DATA_FILE: Final = Path(__file__).parent / "data" / "licences.toml"
 #: gezeigt.
 RUNTIME_EXTRAS: Final[tuple[str, ...]] = ("geom", "ui", "agent", "brep")
 
+#: Pakete, die nur auf **einer** Plattform installiert werden, mit ihrer
+#: Lizenz.
+#:
+#: ``runtime_packages()`` liest, was hier installiert ist — und das ist auf
+#: jedem Betriebssystem etwas anderes: ``keyring`` zieht unter Linux
+#: ``SecretStorage`` und ``jeepney`` nach (und mit ihnen ``cryptography``,
+#: ``cffi``, ``pycparser``), unter Windows ``pywin32-ctypes``. Eine auf
+#: Windows erzeugte Hinweisdatei nennt die fünf Linux-Pakete deshalb nicht,
+#: und in der CI wurde ``test_the_notice_file_names_every_runtime_package``
+#: unter Linux rot — an einer Datei, die auf der Maschine, die sie erzeugt
+#: hat, vollständig war.
+#:
+#: Die Hinweisdatei reist mit dem Paket und wird für **alle** Plattformen
+#: gebaut. Also nennt sie alle, gleich wo sie entstanden ist. Die Lizenzen
+#: stehen hier und nicht in ``licences.toml``, weil das die Freigabeliste ist
+#: (was ist erlaubt) und dies eine Feststellung (was ist es).
+PLATFORM_PACKAGES: Final[dict[str, str]] = {
+    "SecretStorage": "BSD-3-Clause",
+    "jeepney": "MIT",
+    "cryptography": "Apache-2.0 OR BSD-3-Clause",
+    "cffi": "MIT",
+    "pycparser": "BSD-3-Clause",
+    "pywin32-ctypes": "BSD-3-Clause",
+}
+
 _REQUIREMENT_NAME = re.compile(r"^\s*([A-Za-z0-9][A-Za-z0-9._-]*)")
 _EXTRA_MARKER = re.compile(r"extra\s*==\s*[\"']([^\"']+)[\"']")
 
@@ -197,7 +222,13 @@ def notices(extras: Iterable[str] = RUNTIME_EXTRAS) -> str:
     lines = ["| Paket | Lizenz |", "|---|---|"]
     policy = load_policy()
     known = {normalise(key): value for key, value in policy.known.items()}
-    for package, licence in sorted(runtime_packages(extras).items()):
+    # Was hier installiert ist, **und** was auf einer anderen Plattform
+    # dazukommt: Die Datei reist mit jedem Paket, und ein Hinweis, der nur die
+    # Pakete des Baurechners nennt, fehlt auf allen anderen.
+    found = dict(runtime_packages(extras))
+    for package, licence in PLATFORM_PACKAGES.items():
+        found.setdefault(package, licence)
+    for package, licence in sorted(found.items()):
         text = licence or known.get(normalise(package), {}).get("licence", "—")
         lines.append(f"| {package} | {text} |")
     return "\n".join(lines) + "\n"

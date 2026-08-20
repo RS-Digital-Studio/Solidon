@@ -72,6 +72,44 @@ def test_a_heading_spans_the_row(qt_app: QApplication) -> None:
         assert not heading.flags() & Qt.ItemFlag.ItemIsSelectable
 
 
+def test_every_group_starts_its_own_row(qt_app: QApplication) -> None:
+    """Jede Gruppe fängt links an, keine Überschrift steht neben Kacheln.
+
+    Die Breite allein reichte nicht: Der Kachelmodus rechnet seine Zeilen beim
+    Einfügen und nimmt ein ``setSizeHint``, das danach kommt, zur Kenntnis, ohne
+    es anzuwenden. Sichtbar wurde das erst auf einem breiten Dialog —
+    „Verbindungen", „Einlegeteile" und „Mechanik" standen nebeneinander in der
+    obersten Zeile, jede über den Kacheln einer fremden Gruppe. Deshalb wird
+    hier die *Lage* geprüft und nicht der Hinweis darauf: Der Hinweis stimmte.
+    """
+    catalog = PartCatalog()
+    catalog.resize(1560, 1000)
+    catalog.show()
+    qt_app.processEvents()
+    qt_app.processEvents()
+
+    rows = [
+        (row, catalog.list.item(row))
+        for row in range(catalog.list.count())
+        if catalog.list.item(row).data(Qt.ItemDataRole.UserRole) is None
+    ]
+    catalog.close()
+
+    assert len(rows) > 1, "mit einer Gruppe prüft dieser Test nichts"
+    left = min(catalog.list.visualItemRect(item).x() for _row, item in rows)
+    for row, heading in rows:
+        rect = catalog.list.visualItemRect(heading)
+        assert rect.x() == left, (
+            f"„{heading.text()}“ steht bei x={rect.x()} statt bei {left} — "
+            "die Überschrift hat keine eigene Zeile"
+        )
+        following = catalog.list.item(row + 1)
+        if following is not None:
+            assert catalog.list.visualItemRect(following).y() > rect.y(), (
+                f"die erste Kachel unter „{heading.text()}“ steht in derselben Zeile"
+            )
+
+
 def test_insert_stays_shut_until_something_is_chosen(qt_app: QApplication) -> None:
     """Ein Knopf, der nichts tun kann, verspricht auch nichts.
 
@@ -147,12 +185,25 @@ def test_the_catalogue_grows_with_the_screen(qt_app: QApplication) -> None:
     )
     from app.ui.style import NORMAL
 
-    assert catalog_size() == CATALOG_MIN, "ohne Bildschirm bleibt es bei der Mindestgröße"
-
     def for_screen(width: int, height: int) -> tuple[int, int]:
         return (
             max(CATALOG_MIN[0], min(int(width * CATALOG_SHARE), CATALOG_MAX[0])),
             max(CATALOG_MIN[1], min(int(height * CATALOG_SHARE), CATALOG_MAX[1])),
+        )
+
+    # Gefragt wird nach dem Bildschirm, den dieser Lauf hat, statt einen
+    # anzunehmen. Offscreen gibt es keinen und die Mindestgröße gilt; unter
+    # Xvfb — so läuft die CI, seit VTK dort einen GL-Kontext braucht — gibt es
+    # einen von 1920 mal 1080, und dann ist genau die Rechnung oben das
+    # erwartete Ergebnis. Die Annahme „hier ist nie ein Bildschirm" hat diesen
+    # Test in der CI rot gemacht, ohne dass am Katalog etwas falsch war.
+    screen = QApplication.primaryScreen() if QApplication.screens() else None
+    if screen is None:
+        assert catalog_size() == CATALOG_MIN, "ohne Bildschirm bleibt es bei der Mindestgröße"
+    else:
+        area = screen.availableGeometry()
+        assert catalog_size() == for_screen(area.width(), area.height()), (
+            "der Katalog folgt dem Bildschirm nicht"
         )
 
     def per_row(width: int) -> int:

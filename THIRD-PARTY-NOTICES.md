@@ -22,12 +22,15 @@ Neu erzeugen:
 | PySide6_Essentials | LGPL-3.0-only OR GPL-2.0-only OR GPL-3.0-only |
 | Pygments | BSD-2-Clause |
 | QtPy | MIT License |
+| SecretStorage | BSD-3-Clause |
 | attrs | MIT |
 | cadquery-ocp-novtk | Apache Software License |
 | cadquery-ocp-proxy | Apache Software License |
 | certifi | Mozilla Public License 2.0 (MPL 2.0) |
+| cffi | MIT |
 | charset-normalizer | MIT |
 | contourpy | BSD License |
+| cryptography | Apache-2.0 OR BSD-3-Clause |
 | cycler | BSD License |
 | cyclopts | Apache-2.0 |
 | docstring_parser | MIT License |
@@ -37,6 +40,7 @@ Neu erzeugen:
 | jaraco.classes | MIT License |
 | jaraco.context | MIT |
 | jaraco.functools | MIT |
+| jeepney | MIT |
 | keyring | MIT |
 | kiwisolver | BSD License |
 | lazy-loader | BSD-3-Clause |
@@ -52,6 +56,7 @@ Neu erzeugen:
 | pillow | MIT-CMU |
 | platformdirs | MIT |
 | pooch | BSD-3-Clause |
+| pycparser | BSD-3-Clause |
 | pyparsing | MIT |
 | python-dateutil | BSD License, Apache Software License |
 | pyvista | MIT |
@@ -74,4 +79,3 @@ Neu erzeugen:
 | urllib3 | MIT |
 | vhacdx | BSD-3-Clause |
 | vtk | BSD License |
-
