@@ -672,10 +672,17 @@ def kind_requirement(spec: Any, kinds: Sequence[str]) -> str | None:
         return None
     if all(kind == spec.requires_kind for kind in kinds):
         return None
+    # Der Satz sagte, woher exakte Körper *kommen*, und ließ offen, was man
+    # jetzt tun soll: „aus den Grundformen mit „Exakt"" liest sich wie ein
+    # eigener Menüeintrag, den es nicht gibt. Es ist ein Haken im Dialog, den
+    # man beim Anlegen sieht — und nur dort: nachträglich lässt sich ein Netz
+    # nicht exakt machen, und ein Satz, der es andeutet, schickt jemanden auf
+    # die Suche nach einem Schalter, den es nicht gibt.
     return str(
         tr(
-            "Diese Operation braucht einen exakten Körper (B-Rep). Exakte Körper "
-            "kommen aus einer STEP-Datei oder aus den Grundformen mit „Exakt“."
+            "Diese Operation braucht einen exakten Körper (B-Rep). Beim Anlegen einer "
+            "Grundform macht der Haken „Exakter Körper“ einen daraus — nachträglich "
+            "geht das nicht. Auch eine STEP-Datei bringt einen mit."
         )
     )
 

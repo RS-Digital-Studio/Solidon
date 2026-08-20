@@ -122,10 +122,16 @@ MENU_TWINS: Final[dict[str, str]] = {
 #: Satz beim nächsten Nachbessern auseinanderläuft.
 _EXACT_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
     _("Exakter Körper (B-Rep) — echte Flächen und Kanten"),
+    # Der Satz nannte den STEP-Export und „spätere Verrundungen"; die anderen
+    # fünf Werkzeuge, die daran hängen, standen nirgends. Wer eine Tasche
+    # schneiden wollte, hatte keinen Anlass, den Haken zu setzen — und fand
+    # sie später grau, ohne Weg zurück. Sie werden deshalb aufgezählt: die
+    # Entscheidung fällt hier, und was sie kostet, muss hier stehen.
     _(
-        "Rechnet im exakten Kern statt als Netz: STEP-Export und spätere "
-        "Verrundungen bleiben möglich. Netz-Feinheiten wie Verankerung oder "
-        "Segmentzahl entfallen."
+        "Rechnet im exakten Kern statt als Netz. Nur damit lassen sich später "
+        "Fase, Verrundung, Formschräge, Fläche versetzen, exaktes Aushöhlen "
+        "und Tasche schneiden anwenden, und nur damit geht der STEP-Export. "
+        "Netz-Feinheiten wie Verankerung oder Segmentzahl entfallen."
     ),
 )
 

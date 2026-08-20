@@ -3108,6 +3108,36 @@ def test_the_sketch_field_knows_as_much_as_the_sketch_mode(window: MainWindow) -
         dialog.reject()
 
 
+def test_the_exact_toggle_is_visible_without_unfolding(window: MainWindow) -> None:
+    """Der Umschalter der Rechenkerne stand unter „Weitere Einstellungen".
+
+    Dort findet ihn niemand, der nicht schon weiß, dass es ihn gibt — und an
+    ihm hängen sieben Werkzeuge: Fase, Verrundung, Formschräge, Fläche
+    versetzen, exaktes Aushöhlen, Tasche schneiden und die Umwandlung ins
+    Netz. Wer den Quader ohne ihn anlegt, findet sie später alle grau, und
+    zurück führt kein Weg (``kind_requirement`` sagt genau das).
+
+    §2.4 stellt hinten hin, was Toleranz, Auflösung oder Rückfallverhalten
+    ist. Eine Entscheidung darüber, was mit dem Ergebnis später überhaupt geht,
+    ist keins davon.
+    """
+    from PySide6.QtWidgets import QCheckBox
+
+    window.run_operation(REGISTRY.get("create_box"))
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    try:
+        exact = next(box for box in dialog.findChildren(QCheckBox) if "B-Rep" in box.text())
+
+        assert exact.isVisibleTo(dialog), "der Umschalter liegt wieder eingeklappt"
+        advanced = getattr(dialog, "advanced", None)
+        if advanced is not None:
+            assert not advanced.isChecked(), "gemessen wird mit zugeklapptem Bereich"
+        # Und er sagt, was er entscheidet: die Werkzeuge beim Namen.
+        assert "Tasche" in exact.toolTip(), exact.toolTip()
+    finally:
+        dialog.reject()
+
+
 def test_the_exact_twin_runs_through_the_partner_dialog(window: MainWindow) -> None:
     """Die zusammengelegten Zwillinge: derselbe Dialog, ein Umschalter, und
     erst er entscheidet den Rechenkern. Die Parameter werden auf das Schema

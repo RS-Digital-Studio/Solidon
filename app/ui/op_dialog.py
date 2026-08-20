@@ -749,7 +749,20 @@ class OperationDialog(QDialog):
         layout.addStretch(1)
 
         if extra is not None:
-            advanced.addRow("", extra)
+            # **Vorn, nicht hinten.** Der Haken stand unter „Weitere
+            # Einstellungen", und dort findet ihn niemand, der nicht schon
+            # weiß, dass es ihn gibt. Er ist aber keine Feineinstellung: an
+            # ihm hängt, ob sieben Werkzeuge später überhaupt anklickbar sind
+            # — Fase, Verrundung, Formschräge, Fläche versetzen, exakt
+            # Aushöhlen, Tasche schneiden und die Umwandlung ins Netz. Wer den
+            # Quader ohne ihn anlegt, findet sie später alle grau, und der
+            # einzige Weg zurück ist, von vorn anzufangen.
+            #
+            # §2.4 stellt vorn hin, „was man ändert", und hinten „Toleranzen,
+            # Auflösungen, Rückfallverhalten". Eine Entscheidung darüber, was
+            # man mit dem Ergebnis noch tun kann, ist keins von beidem — sie
+            # gehört dorthin, wo sie getroffen wird.
+            front.addRow("", extra)
         if advanced.rowCount():
             # Eine ankreuzbare Gruppe graut ihre Felder aus, statt sie
             # wegzuklappen — die gestufte Tiefe aus §2.4 war damit gedacht und
