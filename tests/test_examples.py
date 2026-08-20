@@ -215,3 +215,35 @@ def test_no_example_ships_a_duplicate_operation_id(example: examples.Example) ->
             f"{example.filename}: Transaktion {transaction.id} nennt Operationen, "
             f"die es nicht gibt — {missing}"
         )
+
+
+@pytest.mark.parametrize("example", examples.EXAMPLES, ids=lambda entry: entry.id)
+def test_no_example_shows_a_corpus_filename_as_an_object_name(
+    example: examples.Example, profile: Profile
+) -> None:
+    """Das erste Objekt, das ein Demonutzer sah, hieß „plate_holes".
+
+    Die ``load``-Op nimmt den Dateinamen, wenn ihr keiner gegeben wird — und die
+    Datei ist hier ein Netz aus dem Testkorpus. Jedes andere Beispiel benennt
+    seine Körper („Halter", „Figur", „Gehäuseboden", „Schild"); ausgerechnet das
+    eine, das zuerst geöffnet wird, tat es nicht.
+
+    Geprüft wird die Form, nicht ein einzelner Name: ein Objektname mit
+    Unterstrich oder Dateiendung ist keiner, den jemand geschrieben hat.
+    """
+    project = load(examples.directory() / example.filename)
+    result = evaluate(
+        project.document,
+        profiles.make_profile(
+            project.document.printer or "centauri-carbon-2",
+            project.document.material or "petg",
+        ),
+        sources=ProjectSources(project),
+    )
+
+    for entry in result.scene.objects.values():
+        assert "_" not in entry.name, f"{entry.name} liest sich wie ein Dateiname"
+        assert not entry.name.lower().endswith((".stl", ".3mf", ".obj", ".step", ".stp")), (
+            f"{entry.name} traegt eine Dateiendung"
+        )
+        assert entry.name.strip() == entry.name and entry.name, "ein Name ohne Text ist keiner"

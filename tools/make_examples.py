@@ -41,8 +41,14 @@ def way_one() -> Project:
     project = new_project("centauri-carbon-2", "petg")
     with_source(project, "src_1", "plate_holes.stl")
     history = History(project.document)
+    # **Mit Namen.** Ohne ihn nimmt die Op den Dateinamen, und der ist hier der
+    # eines Testkorpus-Netzes: Das erste Objekt, das ein Demonutzer je im
+    # Objektbaum sieht, hieß „plate_holes". Jedes andere Beispiel benennt seine
+    # Körper ("Halter", "Figur", "Gehäuseboden", "Schild") — dieses eine,
+    # das zuerst geöffnet wird, tat es nicht.
     history.apply(
-        _("Modell laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+        _("Modell laden"),
+        [OperationDraft(op="load", params={"source": "src_1", "unit": "mm", "name": "Halterung"})],
     )
     history.apply(_("Reparieren"), [OperationDraft(op="repair", inputs=("obj_1",), params={})])
     history.apply(_("Auf das Bett"), [OperationDraft(op="place_on_bed", inputs=("obj_1",))])
