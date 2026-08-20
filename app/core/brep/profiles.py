@@ -454,9 +454,36 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     if not _is_sound_rod(trimmed):
         _log.info("thread rod: the trimmed ridge is already unsound (%s)", _rod_state(trimmed))
     rod = _joined_rod(core, trimmed, major, pitch)
-    # Die Feinheit gilt dem Ergebnis, und sie wird einmal gesetzt: Jede
+    # Die Feinheit gilt dem Ergebnis, und sie wird am Ende gesetzt: Jede
     # Zwischenstufe damit zu vernetzen wäre Arbeit für Dreiecke, die niemand
     # sieht.
+    return _finely_meshed(rod, fineness)
+
+
+def _finely_meshed(rod: Solid, fineness: float) -> Solid:
+    """Vernetzt den Bolzen so fein, dass sein Netz dicht ist.
+
+    **Gefragt wird das Netz, nicht eine Formel.** Ein Zwanzigstel der Steigung
+    reicht meistens; bei einem Millimeter Steigung ist das genau die
+    Standardfeinheit, und auf dem macOS-Runner riss die Flanke dort trotzdem
+    auf — dieselbe Rechnung, andere Übersetzung. Eine festere Zahl wäre
+    geraten: zu grob für die eine Plattform oder zu fein für alle anderen, und
+    jede Halbierung vervierfacht die Dreiecke.
+
+    Also wird nachgesehen und höchstens zweimal halbiert. Der Körper selbst
+    ist zu diesem Zeitpunkt längst geprüft (:func:`_is_sound_rod` fragt die
+    Topologie); hier geht es allein um die Dreiecke, aus denen STL und
+    Schichtanalyse entstehen. Bleibt das Netz auch dann offen, kommt der
+    Bolzen trotzdem heraus — er trägt STEP und jede weitere Operation, und ein
+    Befund über ein grobes Netz ist besser als eine Absage über einen
+    gelungenen Körper.
+    """
+    for _attempt in range(3):
+        meshed = Solid(rod.shape, deflection=fineness)
+        if meshed.is_watertight:
+            return meshed
+        fineness /= 2.0
+        _log.info("thread rod: mesh had gaps, refining to %.4f mm", fineness)
     return Solid(rod.shape, deflection=fineness)
 
 

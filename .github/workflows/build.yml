@@ -64,6 +64,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libegl1 libgl1 libdbus-1-3 xvfb \
+            libgl1-mesa-dri \
             libxkbcommon0 libxkbcommon-x11-0 \
             libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 \
             libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 \
@@ -152,6 +153,18 @@ jobs:
           # offscreen stehen. Hier stand „xcb" für alle drei — eine Plattform,
           # die es außerhalb von Linux nicht gibt.
           QT_QPA_PLATFORM: ${{ runner.os == 'Linux' && 'xcb' || 'offscreen' }}
+          # **Software-Rendering, ausdrücklich.** Kein Runner hat eine
+          # Grafikkarte; VTK sucht trotzdem einen echten GL-Kontext und
+          # bekommt einen halb emulierten. Dabei stirbt es mit SIGSEGV — auf
+          # Linux im geforkten Test, auf Windows ohne Fork, in beiden Fällen
+          # wandernd und lokal nie: `test_chat_ui.py` läuft hier in sieben
+          # Sekunden mit fünfundzwanzig grünen Tests durch.
+          #
+          # Mesa ausdrücklich zu verlangen ist der Weg, den pyvista für CI
+          # nennt, und er nimmt die Zufälligkeit heraus: langsamer, aber
+          # derselbe Kontext auf jedem Lauf.
+          LIBGL_ALWAYS_SOFTWARE: 1
+          GALLIUM_DRIVER: llvmpipe
         run: |
           set -e
           windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
