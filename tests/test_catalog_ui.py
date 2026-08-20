@@ -7,12 +7,15 @@ Kachel bekommt.
 
 from __future__ import annotations
 
+import time
+from collections.abc import Callable
+
 import pytest
 
 pytest.importorskip("PySide6")
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QListView
+from PySide6.QtWidgets import QApplication, QListView, QListWidgetItem
 
 from app.core.knowledge.parts import PARTS
 from app.ui.catalog import TILE_WIDTH, PartCatalog
@@ -26,6 +29,36 @@ def catalog_names(catalog: PartCatalog) -> set[str]:
         if item is not None and item.data(Qt.ItemDataRole.UserRole) is not None:
             names.add(item.data(Qt.ItemDataRole.UserRole))
     return names
+
+
+def headings_of(catalog: PartCatalog) -> list[QListWidgetItem]:
+    """Die Gruppenüberschriften — sie tragen als einzige keinen Bausteinnamen."""
+    return [
+        item
+        for row in range(catalog.list.count())
+        if (item := catalog.list.item(row)) is not None
+        and item.data(Qt.ItemDataRole.UserRole) is None
+    ]
+
+
+def wait_until(ready: Callable[[], bool], what: str, timeout_ms: int = 5000) -> None:
+    """Wartet auf eine Wirkung statt auf eine Anzahl Ereignisdurchläufe.
+
+    **Zwei ``processEvents`` waren eine Annahme, keine Bedingung.** Der Katalog
+    zieht die Überschriftenbreiten in einem ``QTimer.singleShot(0, …)`` nach,
+    der erst nach dem Resize der Liste läuft. Unter Windows kommt beides in den
+    ersten beiden Durchläufen an, unter Xvfb kommt das Resize später — dort maß
+    der Test ein Layout, das es noch nicht gab, und meldete ``assert 8 > 8``:
+    Überschrift und erste Kachel in derselben Zeile, weil die Zeile noch gar
+    nicht umgebrochen war.
+    """
+    application = QApplication.instance()
+    assert application is not None
+    deadline = time.monotonic() + timeout_ms / 1000
+    while not ready():
+        if time.monotonic() > deadline:
+            raise AssertionError(f"{what} kam in {timeout_ms} ms nicht zustande")
+        application.processEvents()
 
 
 def test_the_catalogue_is_a_grid_not_a_list(qt_app: QApplication) -> None:
@@ -55,17 +88,17 @@ def test_a_heading_spans_the_row(qt_app: QApplication) -> None:
     # Die Breite einer Zeile kennt erst das gezeigte Fenster — vorher hat der
     # Viewport der Liste keine; genau darum zieht resizeEvent die Hinweise nach.
     catalog.show()
-    # Zweimal: der erste Durchlauf trägt das Resize aus, der zweite den
-    # nachgelagerten Abgleich der Überschriftenbreiten.
-    qt_app.processEvents()
-    qt_app.processEvents()
+    # Gewartet wird auf die Vorbedingung, nicht auf das Ergebnis: dass der
+    # Viewport seine Breite hat. Was er daraus macht, ist die Behauptung
+    # darunter — und die wäre keine mehr, wenn hier schon auf sie gewartet
+    # würde.
+    wait_until(
+        lambda: catalog.list.viewport().width() > TILE_WIDTH,
+        "der Viewport bekam nie seine Breite",
+    )
+    headings = headings_of(catalog)
     catalog.close()
 
-    headings = [
-        catalog.list.item(row)
-        for row in range(catalog.list.count())
-        if catalog.list.item(row).data(Qt.ItemDataRole.UserRole) is None
-    ]
     assert headings, "ohne Gruppen prüft dieser Test nichts"
     for heading in headings:
         assert heading.sizeHint().width() > TILE_WIDTH
@@ -85,13 +118,20 @@ def test_every_group_starts_its_own_row(qt_app: QApplication) -> None:
     catalog = PartCatalog()
     catalog.resize(1560, 1000)
     catalog.show()
-    qt_app.processEvents()
-    qt_app.processEvents()
+    # Gewartet wird darauf, dass die Überschriften ihre Zeilenbreite *bekommen*
+    # haben — geprüft wird darunter, ob das Raster sie auch *angewandt* hat.
+    # Das ist genau der Unterschied, um den es in diesem Test geht: Der Hinweis
+    # stimmte schon immer, die Lage nicht.
+    wait_until(
+        lambda: all(item.sizeHint().width() > TILE_WIDTH for item in headings_of(catalog)),
+        "die Überschriften bekamen nie ihre Zeilenbreite",
+    )
 
     rows = [
-        (row, catalog.list.item(row))
+        (row, item)
         for row in range(catalog.list.count())
-        if catalog.list.item(row).data(Qt.ItemDataRole.UserRole) is None
+        if (item := catalog.list.item(row)) is not None
+        and item.data(Qt.ItemDataRole.UserRole) is None
     ]
     catalog.close()
 
