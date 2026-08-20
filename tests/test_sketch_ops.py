@@ -128,6 +128,39 @@ def test_a_pocket_on_a_mesh_says_it_needs_a_brep_body() -> None:
     assert "Exakt aushöhlen" in str(raised.value)
 
 
+@pytest.mark.parametrize(
+    ("title", "params"),
+    [
+        ("Oberkante unter dem Körper", {"z": -20.0}),
+        ("Oberkante an der Unterseite", {"z": -10.0}),
+        ("Ort weit daneben", {"x": 200.0}),
+        ("Ort knapp daneben", {"x": 40.0}),
+    ],
+    ids=lambda entry: entry if isinstance(entry, str) else "",
+)
+def test_a_pocket_that_misses_the_body_says_so(title: str, params: dict[str, float]) -> None:
+    """Eine Tasche, die nichts abträgt, lief stumm durch (§2.7).
+
+    Gemessen an der laufenden Oberfläche: vier Fälle, in denen das Volumen
+    unverändert blieb, und in allen vieren kein Befund. Im Verlauf stand ein
+    Schritt, im Bild dasselbe Teil — und der Nutzer sucht den Fehler in der
+    Geometrie statt in der Position. Denselben Satz bekommt seit je, wer eine
+    Magnettasche neben den Körper setzt.
+    """
+    result = run("sketch_pocket", brep_box(), shape="rectangle", length=10, width=10, **params)
+
+    assert solid_of(result).volume == pytest.approx(24000.0), "diese Tasche trägt nichts ab"
+    codes = {finding.code for finding in result.findings}
+    assert "boolean.without_effect" in codes, f"{title}: stumm geblieben"
+
+
+def test_a_pocket_that_works_stays_quiet() -> None:
+    """Die Gegenprobe: wo etwas abgetragen wird, ist kein Befund fällig."""
+    result = run("sketch_pocket", brep_box(), shape="rectangle", length=10, width=10, depth=5)
+
+    assert "boolean.without_effect" not in {finding.code for finding in result.findings}
+
+
 # --- Rotieren -------------------------------------------------------------------
 
 

@@ -21,6 +21,7 @@ from app.core.brep import edit, profiles
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
 from app.core.errors import Action, NeedsSolidError, ValidationError
+from app.core.geom.boolean import without_effect
 from app.core.registry import op_params, param, register_op
 from app.core.sketch import shapes
 from app.core.sketch.planes import frame_for, frame_of, height_to, is_feature_plane
@@ -385,8 +386,15 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
         bottom, reach = top - params.depth, params.depth + 1.0
     tool = edit.moved(profiles.extrude(profile, reach), (0.0, 0.0, bottom))
     solid = edit.boolean("difference", [body, tool])
+    # Eine Tasche, die den Körper verfehlt, lief stumm durch: im Verlauf ein
+    # Schritt, im Bild dasselbe Teil, und keine Zeile, die das erklärt.
+    # Gemessen an vier Fällen — Oberkante unter dem Körper, Ort daneben —, und
+    # in allen vieren sagte niemand etwas. Denselben Satz bekommt seit je, wer
+    # eine Magnettasche daneben setzt (`geom/boolean.without_effect`).
+    nothing = without_effect(body, solid, "difference")
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=features_of(solid))]
+        outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=features_of(solid))],
+        findings=[nothing] if nothing is not None else [],
     )
 
 

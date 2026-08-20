@@ -20,7 +20,7 @@ schnell (§31).
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Literal, Protocol
 
 import numpy as np
 import trimesh
@@ -37,6 +37,18 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 BooleanKind = Literal["union", "difference", "intersection"]
+
+
+class HasVolume(Protocol):
+    """Was :func:`without_effect` von einem Körper braucht — und mehr nicht.
+
+    ``MeshData`` und der exakte ``Solid`` haben nichts gemeinsam außer diesem
+    Wert, und für die Frage „hat sich etwas geändert" genügt er beiden.
+    """
+
+    @property
+    def volume(self) -> float: ...
+
 
 #: Die volle Kette, und die verkürzte für Entwurfsqualität (§31).
 FULL_CHAIN: tuple[SolverStage, ...] = ("direct", "welded", "jittered", "voxel")
@@ -372,7 +384,7 @@ def _findings_for(stage: SolverStage) -> list[Finding]:
     ]
 
 
-def without_effect(before: MeshData, after: MeshData, kind: BooleanKind) -> Finding | None:
+def without_effect(before: HasVolume, after: HasVolume, kind: BooleanKind) -> Finding | None:
     """Hat die Operation am Körper überhaupt etwas geändert? (Regel 17, §2.7)
 
     Eine Magnettasche, die neben dem Körper liegt, schnitt nichts und sagte
@@ -388,6 +400,12 @@ def without_effect(before: MeshData, after: MeshData, kind: BooleanKind) -> Find
 
     Ein Befund und kein Fehler: die Operation ist gelaufen, sie hat nur nichts
     bewirkt — und was daran falsch war, weiß der Nutzer besser als der Kern.
+
+    **Netz oder exakter Körper — die Frage ist dieselbe.** Verlangt wird nur
+    ein Volumen; ``Solid`` bringt eines mit wie ``MeshData``. Die Skizzen-Ops
+    rechnen im exakten Kern (§30.1) und hatten deshalb keinen Zugang zu dieser
+    Auskunft: eine Tasche neben dem Körper lief dort genauso stumm durch, wie
+    es die Magnettasche einmal tat.
     """
     change = abs(after.volume - before.volume)
     if change > EPS_GEOM:
