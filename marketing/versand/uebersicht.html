@@ -1,0 +1,258 @@
+<title>Presseverteiler Solidon3D</title>
+<style>
+  :root {
+    --grund: #ffffff;
+    --schrift: #1a1a1a;
+    --gedaempft: #5c5c5c;
+    --linie: #e0ddd8;
+    --karte: #faf9f7;
+    --akzent: #8a5a2b;
+    --erledigt: #2f6b3a;
+    --offen: #8a5a2b;
+    --gesperrt: #8a2b2b;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --grund: #16150f;
+      --schrift: #ece8e0;
+      --gedaempft: #a09a90;
+      --linie: #322f28;
+      --karte: #1e1c16;
+      --akzent: #d9a066;
+      --erledigt: #7fb98a;
+      --offen: #d9a066;
+      --gesperrt: #d98a8a;
+    }
+  }
+  :root[data-theme="dark"] {
+    --grund: #16150f;
+    --schrift: #ece8e0;
+    --gedaempft: #a09a90;
+    --linie: #322f28;
+    --karte: #1e1c16;
+    --akzent: #d9a066;
+    --erledigt: #7fb98a;
+    --offen: #d9a066;
+    --gesperrt: #d98a8a;
+  }
+
+  body {
+    background: var(--grund);
+    color: var(--schrift);
+    font: 16px/1.6 "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+    margin: 0;
+    padding: 3rem 1.5rem 5rem;
+  }
+  main { max-width: 60rem; margin: 0 auto; }
+  h1 { font-size: 1.9rem; margin: 0 0 .3rem; letter-spacing: -.01em; }
+  .unterzeile { color: var(--gedaempft); margin: 0 0 2.5rem; font-size: .95rem; }
+  h2 {
+    font-size: 1.05rem;
+    text-transform: uppercase;
+    letter-spacing: .09em;
+    color: var(--gedaempft);
+    border-bottom: 1px solid var(--linie);
+    padding-bottom: .5rem;
+    margin: 2.8rem 0 1rem;
+    font-family: system-ui, sans-serif;
+    font-weight: 600;
+  }
+  .zeile {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: .4rem 1.5rem;
+    align-items: baseline;
+    padding: .85rem 1rem;
+    border: 1px solid var(--linie);
+    border-radius: 6px;
+    background: var(--karte);
+    margin-bottom: .5rem;
+  }
+  .zeile a.name {
+    font-weight: 600;
+    color: var(--schrift);
+    text-decoration: none;
+    border-bottom: 2px solid var(--akzent);
+    font-size: 1.05rem;
+  }
+  .zeile a.name:hover { color: var(--akzent); }
+  .adresse {
+    grid-column: 1 / -1;
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: .87rem;
+    color: var(--gedaempft);
+    word-break: break-all;
+  }
+  .adresse a { color: var(--gedaempft); }
+  .stand {
+    font-family: system-ui, sans-serif;
+    font-size: .75rem;
+    text-transform: uppercase;
+    letter-spacing: .07em;
+    white-space: nowrap;
+    font-weight: 600;
+  }
+  .stand.erledigt { color: var(--erledigt); }
+  .stand.erledigt::before { content: "\2713\00a0"; }
+  .stand.offen { color: var(--offen); }
+  .stand.offen::before { content: "\25CF\00a0"; }
+  .stand.formular { color: var(--gesperrt); }
+  .stand.formular::before { content: "\2192\00a0"; }
+  .hinweis {
+    border-left: 3px solid var(--akzent);
+    padding: .2rem 0 .2rem 1rem;
+    margin: 0 0 2rem;
+    color: var(--gedaempft);
+    font-size: .95rem;
+  }
+  .fuss {
+    margin-top: 3rem;
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--linie);
+    color: var(--gedaempft);
+    font-size: .85rem;
+  }
+</style>
+
+<main>
+  <h1>Presseverteiler Solidon3D</h1>
+  <p class="unterzeile">Demo-Start, August 2026 &middot; 16 Empf&auml;nger &middot; Entw&uuml;rfe liegen in <code>marketing/versand/</code></p>
+
+  <p class="hinweis">
+    Verschickt ist bisher <strong>eine</strong> Mail: 3Druck.com. Alles &Uuml;brige liegt als
+    <code>.eml</code> bereit und wartet auf deinen Sendeklick. Vorher: DMARC setzen und
+    die Downloadangabe pr&uuml;fen.
+  </p>
+
+  <h2>National</h2>
+
+  <div class="zeile">
+    <a class="name" href="https://3druck.com/" target="_blank" rel="noopener">3Druck.com</a>
+    <span class="stand erledigt">verschickt 20.08.</span>
+    <span class="adresse">&uuml;ber das Kontaktformular</span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://3d-grenzenlos.de/impressum/" target="_blank" rel="noopener">3D-grenzenlos.de</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:pressemitteilung@3d-grenzenlos.de">pressemitteilung@3d-grenzenlos.de</a> &middot; Chefredakteur Marcel Thum</span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://www.heise.de/make/" target="_blank" rel="noopener">Make Magazin (heise)</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:mail@make-magazin.de">mail@make-magazin.de</a></span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://stadt-bremerhaven.de/" target="_blank" rel="noopener">Caschys Blog</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:carsten.knobloch@gmail.com">carsten.knobloch@gmail.com</a> &middot; kurz halten, keine Pressemitteilung</span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://www.golem.de/" target="_blank" rel="noopener">Golem.de</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:redaktion@golem.de">redaktion@golem.de</a></span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://t3n.de/" target="_blank" rel="noopener">t3n</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:redaktion@t3n.de">redaktion@t3n.de</a></span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://www.3dnatives.com/de/kontakt/" target="_blank" rel="noopener">3Dnatives DE</a>
+    <span class="stand formular">nur Formular</span>
+    <span class="adresse">keine Adresse ver&ouml;ffentlicht &mdash; Text aus der deutschen Fassung einf&uuml;gen</span>
+  </div>
+
+  <h2>International</h2>
+
+  <div class="zeile">
+    <a class="name" href="https://all3dp.com/contact-the-editors/" target="_blank" rel="noopener">All3DP</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:editors@all3dp.com">editors@all3dp.com</a> &middot; gr&ouml;&szlig;te Hobby-Reichweite</span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://www.fabbaloo.com/contact" target="_blank" rel="noopener">Fabbaloo</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:info@fabbaloo.com">info@fabbaloo.com</a></span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://3dprintingindustry.com/contact-us/" target="_blank" rel="noopener">3D Printing Industry</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:info@3dprintingindustry.com">info@3dprintingindustry.com</a></span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://3dprint.com/contact-us/" target="_blank" rel="noopener">3DPrint.com</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:digest@3dprint.com">digest@3dprint.com</a> &middot; Chefredakteur <a href="mailto:joris@3dprint.com">joris@3dprint.com</a></span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://www.voxelmatters.com/about/contact/" target="_blank" rel="noopener">VoxelMatters</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:info@voxelmatters.com">info@voxelmatters.com</a></span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://3dprinting.com/contact-us/" target="_blank" rel="noopener">3Dprinting.com</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:service@3dprinting.com">service@3dprinting.com</a></span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://hackaday.com/submit-a-tip/" target="_blank" rel="noopener">Hackaday</a>
+    <span class="stand offen">eigener Text</span>
+    <span class="adresse"><a href="mailto:tips@hackaday.com">tips@hackaday.com</a> &middot; Pr&uuml;fst&uuml;ck-Kalibrierung und die Grenze um das Sprachmodell</span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://make.co/contact" target="_blank" rel="noopener">Make: (US)</a>
+    <span class="stand formular">nur Formular</span>
+    <span class="adresse">englische Fassung einf&uuml;gen</span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://www.tctmagazine.com/" target="_blank" rel="noopener">TCT Magazine</a>
+    <span class="stand formular">nur Formular</span>
+    <span class="adresse">industrienah, geringe Trefferquote &mdash; zuletzt</span>
+  </div>
+
+  <h2>YouTube &mdash; zuletzt, wenn die Demo ein paar Tage stabil l&auml;uft</h2>
+
+  <div class="zeile">
+    <a class="name" href="https://www.cnckitchen.com/impressum" target="_blank" rel="noopener">CNC Kitchen</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:contact@cnckitchen.com">contact@cnckitchen.com</a> &middot; ausdr&uuml;cklich nur Gesch&auml;ftsanfragen</span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://toms3d.org/" target="_blank" rel="noopener">Made with Layers &middot; Thomas Sanladerer</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:im2404@toms3d.org">im2404@toms3d.org</a></span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://www.makersmuse.com/contact.html" target="_blank" rel="noopener">Maker's Muse</a>
+    <span class="stand offen">Entwurf bereit</span>
+    <span class="adresse"><a href="mailto:sales@makersmuse.com">sales@makersmuse.com</a></span>
+  </div>
+
+  <div class="zeile">
+    <a class="name" href="https://teachingtechyt.github.io/contact.html" target="_blank" rel="noopener">Teaching Tech</a>
+    <span class="stand formular">nur Formular</span>
+    <span class="adresse">Tutorial-Publikum, genau die Zielgruppe</span>
+  </div>
+
+  <p class="fuss">
+    Adressen am 20.08.2026 von den Impressums- und Kontaktseiten abgelesen.
+    Vier Empf&auml;nger ver&ouml;ffentlichen keine Adresse &mdash; dort ist das Formular der Weg,
+    nicht eine geratene Adresse.
+  </p>
+</main>
