@@ -5,8 +5,9 @@ Gezeigt, wenn etwas schiefgeht, das nicht der Nutzer verursacht hat — ein
 Nutzers aussehen, und das hier ist die andere Hälfte dieser Regel: er sieht
 anders aus, und er bietet etwas an, das man dagegen tun kann.
 
-Gesendet wird nichts. Der Dialog schreibt einen Ordner und öffnet ihn; ob
-irgendetwas irgendwohin geht, ist die Entscheidung des Nutzers. Das Angebot,
+Gesendet wird nichts. Der Dialog schreibt einen Ordner, sagt wo er liegt und
+bietet an, ihn zu öffnen; ob irgendetwas irgendwohin geht, ist die Entscheidung
+des Nutzers — und deshalb geht der Ordner auch nicht von selbst auf. Das Angebot,
 das Projekt anzuhängen, sagt klar, dass die Geometrie mitreist — denn genau das
 muss jemand wissen, bevor er eine Datei einem Fremden gibt.
 """
@@ -16,6 +17,8 @@ from __future__ import annotations
 import traceback
 from pathlib import Path
 
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -79,8 +82,28 @@ class ErrorReportDialog(QDialog):
         self.with_project.setEnabled(project is not None and project.is_file())
         self.with_project.toggled.connect(self._refresh)
 
+        # **Wohin es gelegt wurde, ist die halbe Auskunft.** Die Kopfzeile
+        # darüber bittet, „den abgelegten Ordner" zu schicken — welcher das ist,
+        # stand nirgends: Der Pfad ging in die Vorschau und im gleichen Atemzug
+        # kam ``accept()``, also war er weg, bevor ihn jemand lesen konnte. Er
+        # steht jetzt in einer eigenen Zeile, auswählbar, und bleibt stehen.
+        self.location = QLabel(self)
+        self.location.setWordWrap(True)
+        self.location.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.location.hide()
+
         buttons = QDialogButtonBox(self)
-        buttons.addButton(tr("Bericht ablegen"), QDialogButtonBox.ButtonRole.AcceptRole)
+        self.write_button = buttons.addButton(
+            tr("Bericht ablegen"), QDialogButtonBox.ButtonRole.AcceptRole
+        )
+        # ``ActionRole`` löst weder ``accepted`` noch ``rejected`` aus — der
+        # Knopf soll den Dialog ja gerade **nicht** schließen, sonst wäre der
+        # Pfad wieder weg. Verbunden wird deshalb sein eigenes ``clicked``.
+        self.reveal_button = buttons.addButton(
+            tr("Ordner öffnen"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        self.reveal_button.clicked.connect(self._reveal)
+        self.reveal_button.hide()
         buttons.addButton(tr("Schließen"), QDialogButtonBox.ButtonRole.RejectRole)
         buttons.accepted.connect(self._write)
         buttons.rejected.connect(self.reject)
@@ -90,6 +113,7 @@ class ErrorReportDialog(QDialog):
         layout.addWidget(self.preview, stretch=1)
         layout.addWidget(self.with_log)
         layout.addWidget(self.with_project)
+        layout.addWidget(self.location)
         layout.addWidget(buttons)
 
         self.written: Path | None = None
@@ -100,10 +124,31 @@ class ErrorReportDialog(QDialog):
         self.preview.setPlainText(reports.as_text(self.report))
 
     def _write(self) -> None:
+        """Ablegen — und offen bleiben, damit man den Ort noch lesen kann.
+
+        Hier stand ``accept()``, direkt hinter der Zeile, die den Pfad in die
+        Vorschau schrieb: Der Dialog nannte den Ordner und verschwand im
+        gleichen Augenblick. Wer danach die Bitte aus der Kopfzeile erfüllen
+        wollte — „senden Sie den abgelegten Ordner an …" —, musste den
+        Ablageort erraten.
+
+        Ein zweiter Druck auf „Bericht ablegen" würde einen zweiten Ordner
+        anlegen; der Knopf ist danach also fertig, nicht bloß gedrückt.
+        """
         self._refresh()
         self.written = reports.write(self.report, self.project)
-        self.preview.setPlainText(
-            f"{reports.as_text(self.report)}\n\n{tr('Abgelegt unter')}: {self.written}"
-        )
+        self.location.setText(f"{tr('Abgelegt unter')}: {self.written}")
+        self.location.show()
+        self.reveal_button.show()
+        self.write_button.setEnabled(False)
         _log.info("error report prepared in %s", self.written)
-        self.accept()
+
+    def _reveal(self) -> None:
+        """Den abgelegten Ordner im Dateiverwalter zeigen.
+
+        Von Hand und nicht von selbst: Ein Fenster, das sich nach einem Absturz
+        ungefragt über die Anwendung legt, ist ein zweiter Schreck.
+        """
+        if self.written is None:
+            return
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.written)))

@@ -331,3 +331,77 @@ def test_nothing_is_downloaded() -> None:
 
     assert "urlretrieve" not in source
     assert "subprocess" not in source
+
+
+def test_the_report_says_where_it_went_and_stays_open(
+    qt_app: QApplication, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Dialog nannte den Ablageort und schloss sich im gleichen Augenblick.
+
+    Der Pfad ging in die Vorschau, die nächste Zeile war ``accept()``. Die
+    Kopfzeile bittet aber darum, „den abgelegten Ordner" an den Support zu
+    senden — welcher das ist, konnte danach niemand mehr sehen. Auch der
+    Modul-Docstring versprach, der Dialog öffne den Ordner; getan hat er es
+    nie.
+
+    Geöffnet wird jetzt auf Knopfdruck und nicht von selbst: ein Fenster, das
+    sich nach einem Absturz ungefragt über die Anwendung legt, ist ein zweiter
+    Schreck.
+    """
+    from PySide6.QtCore import QUrl
+
+    from app.ui import report_dialog as module
+
+    monkeypatch.setattr(reports, "user_data_dir", lambda: tmp_path)
+    dialog = ErrorReportDialog(summary="Fehler", error=ValueError("kaputt"))
+    assert dialog.location.isHidden(), "vor dem Ablegen gibt es keinen Ort zu nennen"
+    assert dialog.reveal_button.isHidden(), "und nichts zu öffnen"
+
+    dialog._write()
+
+    assert dialog.result() != ErrorReportDialog.DialogCode.Accepted, (
+        "der Dialog schließt sich, bevor der Ort gelesen werden kann"
+    )
+    assert dialog.written is not None
+    assert not dialog.location.isHidden(), "der Ablageort steht nirgends"
+    assert str(dialog.written) in dialog.location.text(), "genannt wird nicht der Ordner"
+    assert not dialog.reveal_button.isHidden(), "und niemand kann ihn öffnen"
+    assert not dialog.write_button.isEnabled(), "ein zweiter Druck legte einen zweiten Ordner an"
+
+    opened: list[str] = []
+    monkeypatch.setattr(
+        module.QDesktopServices, "openUrl", staticmethod(lambda url: opened.append(url.toString()))
+    )
+    dialog._reveal()
+    assert opened == [QUrl.fromLocalFile(str(dialog.written)).toString()], (
+        "der Knopf zeigt nicht auf den abgelegten Ordner"
+    )
+
+
+def test_the_first_run_says_the_language_waits_for_a_restart(qt_app: QApplication) -> None:
+    """Der Erststart nahm eine andere Sprache stumm an.
+
+    Der Katalog wird beim Start installiert; wer hier „Español" wählt, sieht
+    danach weiter eine deutsche Oberfläche. Der Einstellungsdialog sagt das seit
+    je mit demselben Satz — an der Stelle, an der die Sprache zum ersten Mal
+    überhaupt gewählt wird, stand er nicht, und eine Einstellung ohne sichtbare
+    Wirkung sieht kaputt aus, nicht aufgeschoben.
+
+    Bei der eigenen Sprache bleibt der Hinweis weg: Wer nichts ändert, braucht
+    keine Ankündigung.
+    """
+    settings = UiSettings()
+    dialog = FirstRunDialog(settings)
+    assert not dialog.language_note.isVisible(), "ohne Änderung gibt es nichts anzukündigen"
+
+    other = next(
+        index
+        for index in range(dialog.language.count())
+        if str(dialog.language.itemData(index)) != settings.language
+    )
+    dialog.language.setCurrentIndex(other)
+    assert not dialog.language_note.isHidden(), "die andere Sprache wird stumm angenommen"
+
+    back = dialog.language.findData(settings.language)
+    dialog.language.setCurrentIndex(back)
+    assert dialog.language_note.isHidden(), "zurückgestellt bleibt der Hinweis nicht stehen"

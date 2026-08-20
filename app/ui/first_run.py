@@ -137,6 +137,16 @@ class FirstRunDialog(QDialog):
         for entry in available_languages():
             self.language.addItem(language_name(entry), entry)
         self.language.setCurrentIndex(self.language.findData(settings.language))
+        # **Und sie wirkt erst beim nächsten Start.** Der Einstellungsdialog sagt
+        # das seit je, hier stand es nicht — an der Stelle, an der eine andere
+        # Sprache am ehesten gewählt wird: Wer beim ersten Start „Español"
+        # einstellt und danach eine deutsche Oberfläche vor sich hat, hält die
+        # Einstellung für wirkungslos, nicht für aufgeschoben. Derselbe Satz und
+        # derselbe Auslöser wie dort, damit beide Stellen dasselbe versprechen.
+        self.language_note = QLabel(tr("Eine andere Sprache erscheint beim nächsten Start."), self)
+        self.language_note.setWordWrap(True)
+        self.language_note.setVisible(False)
+        self.language.currentIndexChanged.connect(self._language_changed)
 
         self.printer = QComboBox(self)
         for identifier, printer in by_title(profiles.printer_profiles()):
@@ -151,6 +161,7 @@ class FirstRunDialog(QDialog):
 
         form = QFormLayout()
         form.addRow(tr("Sprache"), self.language)
+        form.addRow("", self.language_note)
         form.addRow(tr("Drucker"), self.printer)
         form.addRow(tr("Material"), self.material)
 
@@ -195,6 +206,17 @@ class FirstRunDialog(QDialog):
         layout.addWidget(self.chat_button)
         layout.addWidget(self.open_button)
         layout.addWidget(buttons)
+
+    def _language_changed(self) -> None:
+        """§38: eine Änderung, die erst nach dem Neustart wirkt, sagt das.
+
+        Wortgleich mit ``SettingsDialog._language_changed`` und aus demselben
+        Grund: Der Sprachkatalog wird beim Start installiert, und was schon auf
+        dem Bildschirm steht, wechselt nicht mit. Hier fehlte der Hinweis — und
+        hier trifft es am ehesten zu, denn das ist die Stelle, an der die
+        Sprache überhaupt gewählt wird.
+        """
+        self.language_note.setVisible(str(self.language.currentData()) != self.settings.language)
 
     # --- result -----------------------------------------------------------------
 
