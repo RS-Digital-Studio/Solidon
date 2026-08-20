@@ -11,7 +11,11 @@ der zehn Sekunden schläft, prüft die Uhr und nicht das Verhalten.
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import textwrap
 import time
+from pathlib import Path
 
 import pytest
 
@@ -113,3 +117,38 @@ def test_a_second_run_starts_its_own_clock(qt_app: QApplication) -> None:
         assert veil.remaining() == "", "die Uhr des vorigen Laufs lief weiter"
     finally:
         veil.deleteLater()
+
+
+def test_the_splash_can_appear_before_the_heavy_half_is_loaded() -> None:
+    """Zwei der zweikommavier Sekunden vor dem Ladebildschirm waren Importe.
+
+    Gemessen: ``import app.ui.app`` kostete 2 393 ms, davon 2 462 ms für
+    ``app.ui.main_window`` allein (die Zahlen überlappen, weil beide dieselbe
+    Kette laden) — ``app.core.scene`` zieht trimesh und networkx nach. Diese
+    Zeit lag **vor** dem ersten Bild: Der Ladebildschirm kann erst gebaut
+    werden, wenn das Modul geladen ist, das ihn baut. Ein leerer Bildschirm ist
+    nach §2.8 ab zwei Sekunden keine Anzeige.
+
+    Geprüft wird in einem eigenen Prozess, denn in der laufenden Suite ist
+    längst alles geladen — dieser Test wäre dort immer grün.
+    """
+    code = textwrap.dedent(
+        """
+        import sys
+        import app.ui.app
+        heavy = [name for name in ("app.ui.main_window", "app.ui.session", "trimesh")
+                 if name in sys.modules]
+        print(",".join(heavy))
+        """
+    )
+    finished = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).resolve().parent.parent,
+        check=True,
+    )
+
+    assert finished.stdout.strip() == "", (
+        f"diese Module gehören hinter den Ladebildschirm, nicht davor: {finished.stdout.strip()}"
+    )

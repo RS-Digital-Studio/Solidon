@@ -1895,6 +1895,45 @@ def test_an_unreadable_gcode_file_says_so(
     assert gezeigt[0].suggestions, "und der Fehler trägt keinen Handlungsvorschlag"
 
 
+def test_reading_a_gcode_file_stands_under_the_wait_cursor(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2.8: Ein Strom von 10 MB kostet gemessen 520 ms — dafür gilt die
+    mittlere Zeile der Tabelle.
+
+    ``action_check_gcode`` las die Datei und zerlegte sie im Qt-Hauptthread,
+    ohne dass irgendetwas davon zu sehen war: dreihunderttausend Zeilen sind
+    ein mittleres Teil, eine volle Platte ein Mehrfaches davon. Gemessen wird
+    am Zeiger während des Zerlegens, nicht an der Rechnung danach.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.core.slice import gcode as gcode_module
+
+    datei = tmp_path / "platte.gcode"
+    datei.write_text(";LAYER:0\nG1 X10 Y10 E0.5 F1800\nG1 Z0.2\n", encoding="utf-8")
+    monkeypatch.setattr(
+        QFileDialog,
+        "getOpenFileName",
+        staticmethod(lambda *args, **kwargs: (str(datei), "")),
+    )
+    gesehen: list[Any] = []
+    echt = gcode_module.parse
+
+    def beobachtet(text: str, *args: Any, **kwargs: Any) -> Any:
+        gesehen.append(QApplication.overrideCursor())
+        return echt(text, *args, **kwargs)
+
+    monkeypatch.setattr("app.ui.main_window.gcode.parse", beobachtet)
+
+    window.action_check_gcode()
+
+    assert gesehen, "zerlegt wurde nichts — der Test misst am falschen Ort"
+    assert gesehen[0] is not None, "zerlegt wurde ohne Wartezeiger"
+    assert gesehen[0].shape() == Qt.CursorShape.WaitCursor
+    assert QApplication.overrideCursor() is None, "der Wartezeiger blieb stehen"
+
+
 def wait_for_export(window: MainWindow) -> None:
     """§2.8: Exportiert wird im Arbeiter, der Test wartet also wie das Fenster.
 
@@ -4939,3 +4978,56 @@ def test_no_question_box_asks_yes_or_no(window: MainWindow) -> None:
         text = path.read_text(encoding="utf-8")
         assert "QMessageBox.question" not in text, f"{path.name}: Ja/Nein-Frage"
         assert "StandardButton.Yes" not in text, f"{path.name}: Ja-Knopf"
+
+
+def test_the_theme_stands_before_anything_is_shown(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Der Ladebildschirm stand knapp drei Sekunden im Systemgrau.
+
+    Gesetzt hat das Thema erst ``build_application`` — und davor liegen der
+    Ladebildschirm und ``load_operations()``. Gemessen: die Palette steht
+    solange auf #efefef, danach auf #343a45. Der erste Eindruck der Anwendung
+    war ein hellgrauer Kasten, der mitten im Laden die Farbe wechselt.
+
+    Geprüft am kürzesten Weg durch ``main``: eine abgelaufene Demo kehrt mit 1
+    zurück, bevor irgendein Fenster gebaut wird. Ist die Palette dann schon
+    gefärbt, steht das Thema früh genug — und der Abschiedsdialog, das einzige
+    Fenster dieses Starts, ist mit gedeckt.
+    """
+    import datetime
+
+    from app.core.activation import Activation
+    from app.ui import app as app_module
+    from app.ui.theme import THEMES
+
+    themed = THEMES["dark"]["window"]
+    # Die Palette gehört der ganzen Anwendung: wer sie in einem Test umstellt,
+    # stellt sie für jeden folgenden um. Dieselbe Sorgfalt wie bei der
+    # Anzeigeeinheit (siehe ``tests/conftest.py``) — nur hier lokal, weil kein
+    # zweiter Test das braucht.
+    before = qt_app.palette()
+    qt_app.setPalette(QApplication.style().standardPalette())
+    assert qt_app.palette().window().color().name() != themed, (
+        "ohne Thema ist die Palette die des Systems — sonst prüft der Test nichts"
+    )
+
+    # Eine Demo, deren Stichtag herum ist: ``main`` kehrt mit 1 zurück, bevor
+    # ein Fenster gebaut wird. Was bis dahin gesetzt ist, ist früh genug.
+    gone = Activation(licence=None, days_left=0, deadline=datetime.date(2000, 1, 1))
+    assert gone.over, "sonst läuft der Test durch den ganzen Start"
+    monkeypatch.setattr(app_module.activation, "state", lambda: gone)
+
+    shown: list[bool] = []
+    monkeypatch.setattr(
+        "app.ui.dialogs.show_expired_demo", lambda state: shown.append(True), raising=False
+    )
+
+    assert app_module.main([]) == 1, "eine abgelaufene Demo startet nicht"
+    assert shown == [True], "und sagt es"
+    try:
+        assert qt_app.palette().window().color().name() == themed, (
+            "die Palette steht noch auf dem Systemgrau"
+        )
+    finally:
+        qt_app.setPalette(before)

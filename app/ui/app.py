@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QByteArray, QCoreApplication, QLibraryInfo, QLocale, QTranslator
 from PySide6.QtWidgets import QApplication
@@ -19,13 +20,13 @@ from app.core.bootstrap import load_operations, load_user_parts
 from app.core.log import configure, get_logger
 from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
-from app.ui.dialogs import show_expired_demo
 from app.ui.icons import application_icon
-from app.ui.main_window import MainWindow
-from app.ui.session import Session
 from app.ui.settings import load_settings
 from app.ui.splash import SplashScreen
 from app.ui.theme import apply_theme, enable_hidpi
+
+if TYPE_CHECKING:
+    from app.ui.main_window import MainWindow
 
 _log = get_logger(__name__)
 
@@ -65,6 +66,16 @@ def build_application(
     Suite baut die Anwendung so, und ein Fenster, das nur für einen Test
     entsteht, braucht kein Startbild.
     """
+
+    # Erst hier und nicht oben im Modulkopf: Der Import von ``main_window``
+    # zieht ``app.core.scene`` und damit trimesh und networkx nach, und das
+    # sind gemessen 2,2 der 2,4 Sekunden, die ``import app.ui.app`` kostete —
+    # vergangen, **bevor** der Ladebildschirm überhaupt gebaut werden konnte.
+    # Ein leerer Bildschirm ist nach §2.8 ab zwei Sekunden keine Anzeige.
+    # Jetzt liegt die Zeit hinter dem Ladebildschirm, unter der Zeile
+    # „Operationen werden geladen …", die sie ohnehin schon beschrieb.
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
 
     def report(text: str, done: float) -> None:
         if progress is not None:
@@ -118,8 +129,24 @@ def main(argv: list[str] | None = None) -> int:
     install_language(settings.language)
     set_language(settings.language)
     install_qt_translations(application, settings.language)
+    # **Das Thema, bevor irgendetwas zu sehen ist.** Gesetzt hat es bisher erst
+    # ``build_application`` — und dazwischen liegen der Ladebildschirm und das
+    # Laden der Operationen. Gemessen: die Palette steht dort auf dem
+    # Systemgrau #efefef, danach auf #343a45, und zwischen beiden liegen knapp
+    # drei Sekunden. Der erste Eindruck war ein hellgrauer Kasten, der mitten
+    # im Laden die Farbe wechselt. Dieselbe Zeile deckt den Abschiedsdialog
+    # einer abgelaufenen Demo darunter ab: der wäre sonst das einzige Fenster
+    # dieses Starts gewesen — und ungefärbt. ``build_application`` setzt es
+    # danach noch einmal; das kostet nichts und bleibt die Stelle, an der ein
+    # Themenwechsel im Betrieb ankommt.
+    apply_theme(application, settings.theme)  # type: ignore[arg-type]
     state = activation.state()
     if state.over:
+        # Auch dieser Import ist schwer (``app.core.scene`` über
+        # ``app.ui.dialogs``), und er gilt für einen von hundert Starts. Wer
+        # eine laufende Demo hat, soll ihn nicht bezahlen.
+        from app.ui.dialogs import show_expired_demo
+
         _log.info("demo ended on %s, not starting", state.deadline)
         show_expired_demo(state)
         # Kein Erfolg und kein Fehler: die Anwendung hat nicht gearbeitet, und
