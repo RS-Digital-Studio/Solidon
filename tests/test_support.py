@@ -7,6 +7,10 @@ nichts hinausgeht.
 
 from __future__ import annotations
 
+import re
+import shutil
+import subprocess
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -231,3 +235,86 @@ def test_every_failure_carries_a_suggestion() -> None:
     """Regel 17, für die Ausnahme dieses Moduls."""
     assert issubclass(support.SendFailed, AppError)
     assert support.SendFailed().suggestions
+
+
+# --- die Gegenstelle -------------------------------------------------------------------
+
+ENDPOINT = Path(__file__).parent.parent / "website" / "api" / "support.php"
+
+
+def test_the_endpoint_reads_every_field_the_client_sends() -> None:
+    """Client und Gegenstelle kennen dieselben Feldnamen.
+
+    Der Modulkopf von ``support.php`` sagt es so: „Feldnamen und Antwortformat
+    stehen dort fest; wer hier etwas umbenennt, benennt es dort mit um." Nur
+    stand dahinter nichts, was es prüft — und ein umbenanntes Feld fällt nicht
+    auf, es kommt einfach leer an.
+
+    Geprüft wird die Richtung, die weh tut: Was der Server liest, muss der
+    Client schicken. Umgekehrt ist harmlos — ``environment`` reist mit und
+    wird drüben nicht gelesen, weil dieselben Angaben schon im Text stehen.
+    """
+    import inspect
+
+    source = inspect.getsource(support._package)
+    endpoint = ENDPOINT.read_text(encoding="utf-8")
+    read_by_server = set(re.findall(r"\$_POST\['([a-z_]+)'\]", endpoint))
+    sent_by_client = set(re.findall(r'^\s*"([a-z_]+)":', source, re.MULTILINE))
+
+    missing = read_by_server - sent_by_client
+    assert not missing, (
+        f"Die Gegenstelle liest Felder, die niemand schickt: {sorted(missing)}. "
+        "Sie kommen leer an, und niemand merkt es."
+    )
+
+
+@pytest.mark.skipif(shutil.which("php") is None, reason="ohne PHP nicht prüfbar")
+def test_the_endpoint_is_valid_php() -> None:
+    """Die Datei wird nie hier ausgeführt — also prüft sie hier auch niemand.
+
+    Sie liegt im Repository, geht per FTPS auf den Server und läuft erst dort.
+    Ein Tippfehler fällt damit frühestens dem ersten Nutzer auf, der etwas
+    schickt, und der bekommt eine leere Antwort statt einer Fehlermeldung.
+    """
+    php = shutil.which("php")
+    assert php is not None  # für mypy — skipif hat es schon geprüft
+    done = subprocess.run([php, "-l", str(ENDPOINT)], capture_output=True, text=True, timeout=30)
+
+    assert done.returncode == 0, f"{done.stdout}\n{done.stderr}"
+
+
+@pytest.mark.skipif(shutil.which("php") is None, reason="ohne PHP nicht prüfbar")
+def test_the_subject_never_exceeds_a_mime_word() -> None:
+    """RFC 2047 erlaubt 75 Zeichen je Wort, der Betreff darf 200 tragen.
+
+    Als ein einziges Wort kodiert wurden daraus über 270. Die meisten Zusteller
+    nehmen das hin, manche stutzen die Kopfzeile — und dann steht im
+    Posteingang kein Betreff.
+
+    Geprüft wird an der echten Funktion, nicht an einem Nachbau: Das Skript
+    daneben schneidet sie aus ``support.php`` heraus und lässt sie laufen.
+    """
+    php = shutil.which("php")
+    assert php is not None  # skipif hat es geprüft, mypy weiß das nicht
+
+    # Ohne ``php.ini`` sucht PHP seine Erweiterungen unter dem eingebauten
+    # Standardpfad — bei einer entpackten Installation liegen sie neben der
+    # ausführbaren Datei. Gibt es dort ein ``ext``, wird es gesagt; sonst hat
+    # dieses PHP eine ini und weiß es selbst.
+    options = ["-d", "extension=mbstring"]
+    extensions = Path(php).parent / "ext"
+    if extensions.is_dir():
+        options[:0] = ["-d", f"extension_dir={extensions}"]
+    done = subprocess.run(
+        [
+            php,
+            *options,
+            str(Path(__file__).parent / "data" / "check_subject.php"),
+            str(ENDPOINT),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert done.stdout == "ok", f"{done.stdout}\n{done.stderr}"
