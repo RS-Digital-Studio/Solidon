@@ -25,7 +25,7 @@ bekommt einen roten Lauf.
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | die Entscheidung, ob `_chain` mit ausgeliefert wird; der kompilierte Kern steht und bringt 1,34× — was jetzt oben liegt, ist `_plane_segments` |
+| Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | die Entscheidung, ob `_chain` mit ausgeliefert wird; der kompilierte Kern steht und bringt 1,34× — oben liegt der Polygonaufbau in GEOS (446 von 1256 ms, profiliert am 20.08.), und der ist von Python aus nicht zu beschleunigen |
 | CI-Bauläufe, Signierung, AppImage/Flatpak | P8 — Erste Veröffentlichung | die beiden Linux-Formate; die Signierung braucht ein Zertifikat |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
@@ -42,6 +42,8 @@ bekommt einen roten Lauf.
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Die Bildschirmfotos des Handbuchs sind nicht eingecheckt | Die Bedienverträge durchgesehen (20.08.2026) | einen ruhigen Baum — dann `tools/make_manual.py` und alles zusammen einchecken |
+| Nackte Tasten gehören dem Fokus | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Regel, die Pos1 an die Liste gibt, ohne den Ziffern 1 bis 6 ihre Wirkung zu nehmen — der Viewport hat `NoFocus` und kann sie nicht halten |
+| Der Trennen-Bereich und seine 130 Punkte Totraum | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | die echte Plattform — offscreen rechnet Qt ohne Schriftfamilien andere Metriken und liefert das Gegenteil |
 
 ---
 
@@ -225,6 +227,41 @@ bekommt einen roten Lauf.
       das war unterblieben. Marke gestrichen, der nächste Lauf setzt sie neu.
       Die Datei ist gitignored, also gilt das für diese Maschine; wer den Test
       anderswo laufen lässt, fängt ohnehin bei null an
+
+      **Profiliert am 20.08.2026, und das Register nannte die falsche Stelle.**
+      Dort stand „was jetzt oben liegt, ist `_plane_segments`". Gemessen liegt
+      oben, was der Docstring des Tests seit je sagt — der Polygonaufbau:
+
+      | Stelle | eigene Zeit | Anteil |
+      |---|---|---|
+      | `shapely.polygonize` (400 Aufrufe, einer je Schicht) | 446 ms | 36 % |
+      | `_plane_segments` | 212 ms | 17 % |
+      | `shapely.linestrings` | 51 ms | 4 % |
+      | `argsort` (2 Aufrufe) | 50 ms | 4 % |
+
+      Gesamt 1256 ms auf 328 000 Dreiecken bei 0,2 mm. `polygonize` ist damit
+      mehr als das Doppelte von `_plane_segments`, und es ist ein GEOS-Aufruf:
+      Von Python aus bleibt nur, ihn seltener oder mit weniger Daten zu rufen.
+      Das bestätigt den Satz von damals — „braucht einen kompilierten Kern,
+      keine weitere Python-Idee" — und nimmt der Registerzeile ihre Aussage.
+
+      **Eine Python-Idee war doch noch drin, und zwar die billigste Sorte.**
+      Die vierte Zeile der Tabelle: `_plane_segments` suchte die zwei
+      kreuzenden Kanten je Dreieck mit `argsort(~crossing, axis=1)`. Zwei
+      Zeilen darüber hatte `keep` gerade dafür gesorgt, dass **genau zwei**
+      Kreuzungen übrig sind — und wo die Zahl feststeht, ist ein Sort über drei
+      Spalten Arbeit für nichts. `np.nonzero(crossing)[1].reshape(-1, 2)` gibt
+      dieselben Spalten, zeilenweise aufsteigend. Gemessen an 600 000 Zeilen:
+      **50,9 ms gegen 11,5 ms**, und im Profil fällt `_plane_segments` von
+      313 auf 276 ms.
+
+      Die beiden anderen `argsort` in der Datei bleiben: Sie sortieren nach
+      Schicht und nach Knoten, und dort ist die Reihenfolge das Ergebnis und
+      nicht ein Nebenprodukt.
+
+      Was das §31-Ziel angeht, ändert es nichts — drei Prozent von 1256 ms sind
+      keine 300. Der Punkt bleibt offen, und er wartet weiter auf dieselbe
+      Entscheidung.
 
 ## P4 — Agent auf Säule C
 - [x] `LLMBackend`, Schlüssel im Schlüsselbund, lokal über Ollama — kein

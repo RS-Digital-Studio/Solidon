@@ -333,7 +333,16 @@ def _plane_segments(mesh: MeshData, heights: Any) -> tuple[Any, Any, Any]:
     rows = np.arange(len(corners))[:, None]
     # Die zwei kreuzenden Kanten, in der Reihenfolge, in der das Dreieck sie
     # benennt.
-    edges = np.argsort(~crossing, axis=1, kind="stable")[:, :2]
+    #
+    # **Ohne Sortierung.** ``keep`` hat gerade dafür gesorgt, dass jede Zeile
+    # genau zwei Kreuzungen trägt — und wo die Zahl feststeht, ist ein Sort über
+    # drei Spalten Arbeit für nichts: ``nonzero`` gibt die Spalten zeilenweise
+    # aufsteigend zurück, also dasselbe Ergebnis. Gemessen an 600 000 Zeilen:
+    # 50,9 ms mit ``argsort``, 11,5 ms so. Auf dem Netz des Leistungstests
+    # (328 000 Dreiecke, 0,2 mm) sind das rund drei Prozent der ganzen
+    # Schichtanalyse — nicht die Rettung des §31-Ziels, aber der billigste Teil
+    # davon.
+    edges = np.nonzero(crossing)[1].reshape(-1, 2)
 
     start = corners[rows, edges]
     end = corners[rows, (edges + 1) % 3]
