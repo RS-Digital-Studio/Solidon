@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QDoubleSpinBox,
     QFormLayout,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -2082,6 +2083,28 @@ TOOL_KEYS: dict[str, str] = {
     "trim": "T",
 }
 
+#: Wie viele Zeichen das Ebenenfeld zugeklappt breit ist.
+#:
+#: Zwanzig: „Draufsicht (XY) — l…" — der Anfang trägt die Aussage, und der
+#: ganze Eintrag steht aufgeklappt da. Ohne diese Grenze macht Qt das Feld so
+#: breit wie den längsten Eintrag, und das waren gemessene 612 Bildpunkte.
+PLANE_FIELD_CHARS = 20
+
+#: Wie breit ein Zahlenfeld der Werkzeugzeile höchstens wird.
+#:
+#: Ihr Bereich reicht bis ±1000 beziehungsweise 10 000, und danach rechnet Qt
+#: die bevorzugte Breite: 199 Bildpunkte je Feld, für Werte, die im Regelfall
+#: „2,00 mm" heißen. Zwei solche Felder stehen in der Werkzeugzeile.
+TOOLBAR_FIELD_WIDTH = 120
+
+#: Wie viele Bedingungsknöpfe in eine Zeile passen.
+#:
+#: Fünf, weil die zehn zusammen 1332 Bildpunkte brauchen und ein Laptopschirm
+#: sie nicht hat: Bei 1366 Fensterbreite bekam jeder Knopf 71 statt 146, bei
+#: 1024 noch 36 — alle zehn Beschriftungen abgeschnitten. Zwei Zeilen à fünf
+#: brauchen 754 und stehen auf jedem Schirm vollständig da.
+CONSTRAINTS_PER_ROW = 5
+
 #: Kürzel, die kein Werkzeug wählen, sondern etwas tun.
 ACTION_KEYS: dict[str, str] = {
     "rectangle": "R",
@@ -2245,6 +2268,17 @@ class SketchPanel(QWidget):
         self.plane_choice.setToolTip(
             tr("Worauf gezeichnet wird. Die Ziffern 1, 2 und 3 wechseln direkt.")
         )
+        # Das Feld so breit wie sein längster Eintrag zu machen ist Qts
+        # Vorgabe, und der längste ist hier „Seitenansicht (YZ) — stehend, von
+        # der Seite  (3)": gemessene 612 Bildpunkte für eine Zeile, die eine
+        # von drei Ansichten nennt. Mit 1129 Bildpunkten Mindestbreite ihrer
+        # Zeile drückte sie alles darunter zusammen — bei 1366 Fensterbreite
+        # bekamen die zehn Bedingungsknöpfe je 71 statt 146. Aufgeklappt steht
+        # der ganze Eintrag weiter da; zugeklappt genügt, was hineinpasst.
+        self.plane_choice.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.plane_choice.setMinimumContentsLength(PLANE_FIELD_CHARS)
         self.plane_choice.setCurrentIndex(
             max(0, self.plane_choice.findData(self.canvas.sketch.plane))
         )
@@ -2284,6 +2318,8 @@ class SketchPanel(QWidget):
         self.snap_step.setValue(self.canvas.snap_step)
         self.snap_step.setSuffix(f" {DISPLAY_UNITS[0]}")
         self.snap_step.setToolTip(tr("Auf welche Weite ein Klick fällt."))
+        self.snap_step.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        self.snap_step.setAccessibleName(tr("Raster"))
         self.snap_toggle.toggled.connect(self._snapping_changed)
         self.snap_step.valueChanged.connect(lambda _value: self._snapping_changed())
         self._snapping_changed()
@@ -2306,6 +2342,10 @@ class SketchPanel(QWidget):
         # Einheitentabelle (§11.1).
         self.offset_distance.setSuffix(f" {DISPLAY_UNITS[0]}")
         self.offset_distance.setToolTip(tr("Um wie viel versetzt wird. Negativ ist nach innen."))
+        self.offset_distance.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        # Ohne Namen liest ein Vorleser hier „Drehfeld, 2,00 mm" vor. Der
+        # Name ist der des Werkzeugs, zu dem das Feld gehört.
+        self.offset_distance.setAccessibleName(tr("Versetzen"))
 
         offset_button = QToolButton(self)
         offset_button.setIcon(icons.icon("sketch_offset", offset_button))
@@ -2358,6 +2398,8 @@ class SketchPanel(QWidget):
         self.measure_field.setToolTip(
             tr("Länge oder Durchmesser eintippen und mit der Eingabetaste setzen.")
         )
+        self.measure_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        self.measure_field.setAccessibleName(tr("Abstand"))
         self.measure_field.editingFinished.connect(
             lambda: self.canvas.place_measured(self.measure_field.value())
         )
@@ -2388,9 +2430,17 @@ class SketchPanel(QWidget):
         undo_button.clicked.connect(self.canvas.undo)
         tools.addWidget(undo_button)
 
-        constraints_row = QHBoxLayout()
+        # Zehn beschriftete Knöpfe in einer Zeile passen auf keinen
+        # Laptopschirm. Gemessen an Qts eigener Rechnung: bei 1366 Bildpunkten
+        # Fensterbreite bekam jeder 71 von den 146, die „Abstand  D" braucht,
+        # bei 1024 noch 36 — alle zehn Beschriftungen abgeschnitten, und zwar
+        # an der Stelle, an der jemand *lernen* soll, was eine Bedingung ist.
+        # Fünf je Zeile brauchen zusammen 754 Bildpunkte und stehen damit auch
+        # auf einem 1024er Schirm vollständig da.
+        constraints_row = QGridLayout()
+        constraints_row.setContentsMargins(0, 0, 0, 0)
         self._constraint_buttons: dict[SketchConstraintKind, QPushButton] = {}
-        for kind in _NEEDS:
+        for position, kind in enumerate(_NEEDS):
             key = ACTION_KEYS.get(kind, "")
             label = _constraint_label(kind)
             constraint_button = QPushButton(f"{label}  {key}" if key else label, self)
@@ -2404,8 +2454,13 @@ class SketchPanel(QWidget):
                 lambda _checked=False, chosen=kind: self.request_constraint(chosen)
             )
             self._constraint_buttons[kind] = constraint_button
-            constraints_row.addWidget(constraint_button)
-        constraints_row.addStretch(1)
+            constraints_row.addWidget(
+                constraint_button, position // CONSTRAINTS_PER_ROW, position % CONSTRAINTS_PER_ROW
+            )
+        # Die Dehnung liegt in der Spalte dahinter: sonst zieht das Gitter die
+        # Knöpfe auf einem breiten Schirm auseinander, und aus zehn Knöpfen
+        # würde eine Zeile aus zehn Flächen.
+        constraints_row.setColumnStretch(CONSTRAINTS_PER_ROW, 1)
 
         self.constraint_list = QListWidget(self)
         self.constraint_list.setToolTip(tr("Entf entfernt die gewählte Bedingung."))

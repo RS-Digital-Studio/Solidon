@@ -1857,3 +1857,62 @@ def test_the_constraint_list_says_what_a_constraint_holds(qt_app: QApplication) 
         assert "(1, 2)" in item.toolTip(), "und im Tooltip sind sie weg"
     finally:
         panel.deleteLater()
+
+
+def test_the_constraint_buttons_stay_readable_on_a_laptop(qt_app: QApplication) -> None:
+    """Zehn beschriftete Knöpfe in einer Zeile passen auf keinen Laptopschirm.
+
+    Gemessen an Qts eigener Rechnung, im Fenster bei 1366 Bildpunkten Breite:
+    jeder der zehn Bedingungsknöpfe bekam **71** von den 146, die „Abstand  D"
+    braucht; bei 1024 noch 36. Abgeschnitten war die Beschriftung damit überall
+    außer auf einem sehr breiten Schirm — und zwar an der Stelle, an der jemand
+    ohne CAD-Erfahrung *lernen* soll, was eine Bedingung ist. Dieselbe Sorte
+    Fehler wie „etzt trenne" auf dem Hauptknopf des Trennwerkzeugs, nur
+    zehnmal.
+
+    Zwei Zeilen à fünf brauchen 790 statt 1332 Bildpunkte; dazu ist das
+    Ebenenfeld nicht mehr so breit wie sein längster Eintrag (612 Bildpunkte)
+    und die beiden Zahlenfelder der Werkzeugzeile nicht mehr 199 breit für
+    „2,00 mm". Die Mindestbreite des ganzen Bereichs fiel damit von 1316 auf
+    812 Bildpunkte.
+    """
+    panel = SketchPanel()
+    try:
+        assert panel.minimumSizeHint().width() <= 900, (
+            f"der Bereich verlangt {panel.minimumSizeHint().width()} Bildpunkte Breite"
+        )
+        for width in (1600, 1366, 1280, 1152):
+            panel.resize(width, 700)
+            panel.show()
+            qt_app.processEvents()
+            squeezed = [
+                f"{button.text()!r}: {button.width()} statt {button.sizeHint().width()}"
+                for button in panel._constraint_buttons.values()
+                if button.width() < button.sizeHint().width()
+            ]
+            assert not squeezed, f"bei {width} Bildpunkten Fensterbreite: " + ", ".join(squeezed)
+    finally:
+        panel.deleteLater()
+
+
+def test_every_number_field_of_the_sketch_bar_says_what_it_is(qt_app: QApplication) -> None:
+    """Drei Zahlenfelder standen unbeschriftet in der Leiste.
+
+    „2,00 mm", „0,00 mm", „1,00 mm" — dazu ein Hinweis, den nur sieht, wer mit
+    der Maus darüber fährt, und ein Vorleser sagte „Drehfeld, 2,00 mm". Der
+    Name gehört ans Feld, und er ist der des Werkzeugs, zu dem es gehört.
+    """
+    panel = SketchPanel()
+    try:
+        felder = {
+            "Versatz": panel.offset_distance,
+            "Maß": panel.measure_field,
+            "Raster": panel.snap_step,
+        }
+        ohne = [name for name, field in felder.items() if not field.accessibleName()]
+        assert not ohne, f"ohne Namen: {ohne}"
+        for name, field in felder.items():
+            assert field.toolTip(), f"{name} ohne Hinweis"
+            assert field.maximumWidth() <= 200, f"{name} ist {field.maximumWidth()} breit"
+    finally:
+        panel.deleteLater()
