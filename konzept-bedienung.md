@@ -1,5 +1,24 @@
 # Konzept — Bedienung, Gestaltung und Zeichnen
 
+Stand 04./05.08.2026, nachrecherchiert am 19.08.2026.
+
+> **Der Haupttext ist eine Momentaufnahme vom 4. August 2026 und beschreibt
+> nichts, was heute noch so wäre.** Zwischen jenem Lauf und dem 19.08.2026
+> liegen **520 Commits**; von fünfzehn nachgeprüften Aussagen über den Code
+> hält genau **eine**. Schon der eigene Nachtrag vom 5. August entwertet
+> Teile davon, ohne sie zu berichtigen.
+>
+> Das ist kein Mangel des Dokuments: Es ist ein Bedienprotokoll, und ein
+> Protokoll altert, sobald man danach handelt. Genau das ist geschehen. **Wer
+> den Zustand der Anwendung sucht, findet ihn hier nicht** — er steht in
+> `ROADMAP.md` und in den späteren Durchsichten (`konzept-kundensicht`,
+> `konzept-erstnutzer`, `konzept-durchsicht-2026-08-14`). Was hier steht, ist
+> die Begründung, warum bestimmte Dinge geändert wurden, und der Blick eines
+> Nutzers auf ein Fenster, das es so nicht mehr gibt.
+>
+> Die Einzelheiten stehen im Abschnitt „Nachrecherchiert am 19.08.2026" am
+> Dateiende.
+
 Aus einem Lauf am echten Programm, 4. August 2026. Gestartet über
 `app.ui.app`, bedient über Maus und Tastatur; kein Aufruf über die API. Zum
 Vergleich lief Autodesk Fusion daneben, weil das die Anwendung ist, aus der
@@ -915,6 +934,23 @@ Merkmalsüberlagerung beschriftet auch, was im Material steckt.
 
 **Teilweise**
 
+> **Dieser Abschnitt ist der einzige Teil des Dokuments, der am 19.08.2026
+> noch trägt** — und er trägt vollständig: Alle vier Punkte sind unverändert
+> offen.
+>
+> - `place_on_bed` steht weiter auf `False` (`app/core/ingest/ops.py:53–57`,
+>   `loader.py:161`).
+> - Ein Absturzprotokoll gibt es weiterhin nicht: weder `excepthook` noch
+>   `faulthandler` kommen in `app/` vor; es bleibt beim rotierenden `app.log`,
+>   das eine Zugriffsverletzung ohne Python-Ausnahme nicht auffängt.
+> - Die Merkmalsbeschriftungen stehen dauerhaft
+>   (`app/ui/viewport.py:2765–2783`, `always_visible=True`); eine Beschriftung
+>   beim Überfahren gibt es nicht.
+> - `announce()` schreibt weiterhin ausschließlich in die Statusleiste
+>   (`app/ui/main_window.py:5180–5199`) — ein zweiter Ort existiert nicht.
+>
+> Alles darüber im Dokument ist erledigt; diese vier sind der Rest.
+
 * **5** — die Bauraumprüfung läuft nach jeder Auswertung. Was fehlt: der
   Import legt nicht auf die Platte. `load` hat den Parameter (`place_on_bed`),
   seine Vorgabe ist `False`, und sie zu drehen ändert jedes bestehende
@@ -1008,3 +1044,50 @@ einmal, an einer Anwendung, die inzwischen anders aussieht.
   dass keines Pflicht ist.
 * **Material kalibrieren** erklärt in zwei Sätzen, warum gemessene Werte ins
   Profil und nicht ins Modell gehören.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Fünfzehn Aussagen über den Code geprüft: **eine stimmt, vierzehn sind
+überholt.** Das ist kein Urteil über die Arbeit, sondern über das Alter: 520
+Commits liegen zwischen dem Lauf und heute, und fast jeder Befund dieses
+Dokuments ist der Grund für einen davon gewesen.
+
+**Was heute anders ist als in Teil 1 bis 9 beschrieben** — die wichtigsten:
+
+- **Der Viewport nimmt Klicks entgegen.** `_left_down` kehrt im Cura-Schema
+  weiterhin früh zurück, aber das Picking sitzt inzwischen im Loslassen
+  (`viewport.py:3844–3857`): Wer klickt, ohne zu ziehen, wählt aus.
+- **Die Formsprache existiert.** Sechs `setStyleSheet`, zwei Schriftgrößen und
+  ein Abstandsraster ohne Regel — daraus sind `app/ui/style.py` und
+  `app/ui/theme.py` geworden, mit eigenen Tests
+  (`tests/test_style.py`, `tests/test_theme_and_palette.py`).
+- **Das helle Thema ist fertig**, die Auswahlfarbe ist einheitlich, und der
+  Viewport folgt dem Thema mit einem Test, der mehr prüft als
+  Ungleichheit.
+- **Der Startbildschirm kommt zurück**, der Op-Dialog ist nicht mehr modal
+  über dem Teil, die Kürzel im Skizzeneditor greifen, und der
+  Tastenkürzel-Dialog ist deutsch und vollständig.
+- **Die Touren beginnen nicht mehr mit einem Beobachtungsschritt** — und es
+  sind neun Beispiele, nicht sieben.
+
+**Der eigene Nachtrag ist ebenfalls überholt**: aus 59 Commits und 2736 Tests
+sind 520 Commits und 4251 gesammelte Tests geworden, und der Schlusssatz
+„offen bleibt der nächste Lauf" hat sich mehrfach erfüllt — es hat seither
+vier weitere Bedienläufe gegeben (`konzept-kundensicht`, `konzept-erstnutzer`,
+`konzept-durchsicht-2026-08-14`, `.claude/durchsicht-2026-08-16`).
+
+**Was trägt, ist der Abschnitt „Teilweise"** mit seinen vier Punkten — alle
+vier sind unverändert offen, siehe den Vermerk dort.
+
+**Zur Außenwelt:** Der Vergleich lief gegen **Autodesk Fusion**. Dessen Stand
+ist heute Build v.2704.1.53 (06.08.2026); gewerblich kostet es 703 €/Jahr in
+Deutschland, die Privatnutzung bleibt kostenlos mit zehn aktiven Dokumenten.
+An dem, was dieses Dokument aus dem Vergleich zieht — Kameraverhalten,
+Vorschau am Zeiger, Bemaßung während des Zeichnens —, ändert das nichts.
+
+**Nicht wiederholt und deshalb offen gelassen:** der Bedienlauf selbst. Ein
+Protokoll wird nicht dadurch aktuell, dass man seine Zahlen austauscht; es
+wird durch einen neuen Lauf ersetzt. Die vier späteren Durchsichten sind
+genau das.

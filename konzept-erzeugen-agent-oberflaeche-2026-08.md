@@ -1,4 +1,4 @@
-# Konzept — Erzeugen, Agent, Oberfläche (12.08.2026)
+# Konzept — Erzeugen, Agent, Oberfläche (Stand 12.08.2026, Zahlen nachgezogen am 18.08.2026, nachrecherchiert am 19.08.2026)
 
 Aus vier Fragen: Wie steht die Oberfläche gegen die anderen? Klappt Bild zu 3D,
 und lässt sich das Ergebnis danach über den Agenten anpassen? Was geht mit dem
@@ -12,6 +12,17 @@ erste Einschätzung falsch war, steht die Korrektur dabei.
 Verhältnis zu den anderen Papieren: `konzept-wettbewerb-2026-08.md` zieht das
 Feld auf und bewertet alle Bereiche; dieses geht in die drei Bereiche hinein,
 die dort nur eine Zeile bekommen haben, und trägt die Messwerte nach.
+
+> **Das Papier ist abgearbeitet, und es hat sieben Tage lang nicht davon
+> erzählt.** Sechs der sieben Punkte aus Teil 9 wurden am 12.08.2026 umgesetzt
+> — `ROADMAP.md:4663`, „Das Erzeugen-und-Agent-Konzept abgearbeitet". Zwei
+> fielen dabei anders aus als hier vorgeschlagen (A1, L1), einer war von
+> Anfang an keiner (der Viewport-Befund war ein Messartefakt), und **einer ist
+> offen geblieben: B1**, das zweite Netz-Backend — der einzige Punkt, den
+> keine Liste führt. Am 18.08. wurden in Teil 5 die Zählwerte nachgezogen,
+> die Vorschläge zwei Absätze darunter blieben stehen, als wären sie offen.
+> Die Vermerke unten lösen das auf; geprüft am 19.08.2026 gegen `main`
+> (b0415d6).
 
 ---
 
@@ -39,6 +50,24 @@ nativen OpenGL-Fenster: `WA_NoSystemBackground` steht auf `False`, und der
 `OverlayHost` darüber trägt ein Stylesheet — beides zusammen lässt Qt den
 Bereich übermalen, in den VTK gezeichnet hat.
 
+> **Erledigt — und der Befund war keiner: das Messgerät hat ihn erzeugt.** Die
+> Prüfskripte fuhren `processEvents()` statt `app.exec()`; ein natives
+> OpenGL-Fenster zeichnet so nur, solange etwas passiert. Dazu kommt, dass
+> beide Aufnahmewege lügen: `plotter.screenshot` rendert neu und repariert
+> damit genau den Zustand, den es zeigen soll, `QWidget.grab()` lässt den
+> OpenGL-Bereich schwarz. In der normal gestarteten Anwendung stand das Bild —
+> auch auf dem Stand vom 08.08., gegen den die Gegenprobe lief. Die Lehre steht
+> in `ROADMAP.md:4697–4706`: *„Ein Messgerät, das seinen Gegenstand verändert,
+> misst nichts."*
+>
+> Beide Änderungen sind trotzdem drin und richtig: `_render_now()` in
+> `app/ui/viewport.py:1621`, aus `show_scene` gerufen, und die „nächste Spur"
+> ist abgearbeitet — `app/ui/viewport.py:1196` setzt `WA_NoSystemBackground`
+> heute auf `True`, mit dem Kommentarblock ab `:1188`, der genau die Begründung
+> dieses Absatzes trägt. Was hier als sporadischer Fehler beschrieben ist, war
+> die Sporadik der Prüfumgebung, nicht die der Anwendung. (Nachgeprüft am
+> 19.08.2026.)
+
 ---
 
 ## Teil 2 — Bild zu 3D: es klappt, und dann hört es auf
@@ -46,7 +75,9 @@ Bereich übermalen, in den VTK gezeichnet hat.
 ### 2.1 Gemessen, durch den Dialog gefahren
 
 Nicht gegen den Kern, sondern über *Datei → Modell erzeugen*, mit einem Bild
-aus dem Druckordner. ComfyUI lief lokal auf einer RTX 4080 (16 GB).
+aus dem Druckordner. ComfyUI lief lokal auf einer RTX 4080 (16 GB). **Gemessen
+am 12.08.2026**; nachfahren ließ sich der Lauf am 19.08. nicht, weil hier kein
+ComfyUI läuft — die Zahlen bleiben als Messwerte jenes Tages stehen.
 
 | | |
 |---|---|
@@ -80,12 +111,35 @@ Merkmalsgrenze bringt, sichtbar im Stapel und mit einem Klick rücknehmbar. Der
 Wert kommt nicht aus dem Bauch: die Grenze, an der `perceive` abwinkt, steht im
 Code und ist die Zahl, gegen die dezimiert wird.
 
+> **Erledigt.** Die Kette hat die vierte Transaktion: *Modell erzeugen* → *Auf
+> Arbeitsgröße bringen* → *Reparaturkette* → *Auf Arbeitsauflösung bringen*
+> (`op="decimate_mesh"`, `app/core/generate.py:234–248`). Sie läuft, sobald das
+> Netz `GENERATED_TRIANGLE_LIMIT` = 500 000 Dreiecke übersteigt, und bringt auf
+> `GENERATED_TRIANGLE_TARGET` = 200 000 (`app/core/generate.py:68` und `:73`) —
+> genau die Zahl, an der `FEATURE_LIMIT_TRIANGLES` steht
+> (`app/core/scene/evaluate.py:72`, Prüfung `:394`). Als eigene Transaktion und
+> nicht als stiller Teil der Reparatur, damit ein Undo sie zurücknimmt.
+> Abgesichert durch `tests/test_way_three.py:265`
+> `test_a_generated_mesh_arrives_workable` („Laden, Reparieren, Dezimieren").
+> Commit `da6e821`, 12.08.2026 — „Erzeugt, repariert — und dann konnte niemand
+> etwas damit anfangen"; `ROADMAP.md:4678`.
+
 ### 2.3 Anspruchsvolle Figuren
 
 Was aus Hunyuan3D herauskommt, ist keine Kiste — die Netze tragen Falten,
 Rundungen und Hinterschnitte. Was fehlt, ist nicht die Ausgabequalität, sondern
 alles danach: Ohne Dezimieren keine Merkmale, ohne Merkmale keine Bohrung, kein
 Baustein, keine Passung. Die Figur kommt an, sie ist nur nicht bearbeitbar.
+
+> **Erledigt — die Sackgasse ist zu.** Seit dem 12.08.2026 dezimiert die Kette
+> selbst auf 200 000 Dreiecke, und darunter greift die Merkmalserkennung: die
+> Prüfung in `app/core/scene/evaluate.py:394` ist ein `>`, 200 000 liegt also
+> nicht mehr darüber. Nachgerechnet am 19.08.2026 gegen eine Icosphäre mit
+> 1 310 720 Dreiecken: `decimate(…, GENERATED_TRIANGLE_TARGET)` liefert exakt
+> 200 000. Das Ziel ist bewusst deutlich unter der Grenze gewählt, damit eine
+> spätere Boolesche Operation nicht sofort wieder darüber landet — und immer
+> noch fein genug, dass die Figur ihre Falten behält
+> (`app/core/generate.py:70–73`).
 
 ---
 
@@ -190,9 +244,25 @@ Kontextmenü bereits) plus die elf eigenen. Das ist kein neues Konzept, sondern
 dieselbe Sortierung, die die Oberfläche schon benutzt — angewandt auf das, was
 ins Modell geht.
 
+> **Umgesetzt, aber ausdrücklich nicht so — und das ist wichtig, weil der
+> Vorschlag oben in seiner Form gegen §2.6 verstößt.** Wer nach `applies_to`
+> filtert, gibt dem Agenten je nach Auswahl einen anderen Werkzeugkasten:
+> eine Betriebsart mit anderem Namen. Gebaut wurde deshalb das Kürzen statt
+> des Weglassens — `compact=True` für Ollama
+> (`app/core/agent/session.py:194`), und der Kommentar dort sagt es wörtlich:
+> „``compact`` kürzt die Beschreibungen, **ohne ein Werkzeug wegzulassen**"
+> (`app/core/agent/tools.py:75–82`). Wirkung heute nachgemessen: **110,2 KB →
+> 86,9 KB, alle 96 Werkzeuge bleiben.** Der größte Posten waren nicht die
+> Operationstexte, sondern die Parametertexte. `ROADMAP.md:4681`, Commit
+> `6a3b5ad`.
+
 **Vorschlag A2 — sagen, was Sache ist.** Wer Ollama einträgt, soll im Chat
 lesen, was gemessen wurde: welches Modell hier wie oft trifft. `check_local_model`
 liefert die Zahlen, sie stehen nur nirgends, wo jemand sie sieht.
+
+> **Erledigt.** `local_model_expectation()`
+> (`app/core/backends/llm.py:605`) liefert die gemessenen Zahlen, der Satz
+> steht an der Chatleiste (`app/ui/main_window.py:3032`). `ROADMAP.md:4685`.
 
 ---
 
@@ -241,7 +311,16 @@ Beispiele als Kacheln mit gerendertem Vorschaubild und einem Satz, „Zuletzt
 geöffnet", und der Weg ins Handbuch steht neben den Knöpfen, zu denen er
 gehört. Das Hauptfenster hält die drei Zonen aus §2.5 ein und wächst nicht:
 neun Menüs, sechs Werkzeuge in der Zeile unter dem Modell, links drei
-einklappbare Abschnitte, rechts Bericht oder Chat. Der Operationsdialog zeigt
+einklappbare Abschnitte, rechts Bericht oder Chat.
+
+> **Zwei Zahlen nachgezählt am 19.08.2026, eine davon war schon am 12.08.
+> falsch.** Es sind **neun** Beispielkacheln (`weg4-figur-formen` kam am
+> 14.08. dazu, `5a9418c`) und **acht** Werkzeuge in der Zeile — nicht sechs:
+> `section · measure · transform · analysis · layers · explode · split ·
+> paint`. Am Dokumentstand waren es sieben, `split` kam am 14.08. dazu; sechs
+> waren es nie. Die neun Menüs und die drei einklappbaren Abschnitte stimmen.
+> *Nebenbei:* Der Docstring `app/ui/start_screen.py:474` sagt weiterhin „acht
+> Beispiele" und ist damit selbst veraltet. Der Operationsdialog zeigt
 die gestufte Tiefe wörtlich — vorn sechs Werte, hinten „Weitere Einstellungen",
 und an jedem Zahlenfeld ein `fx` für den Projektparameter.
 
@@ -258,6 +337,11 @@ Wir zeigen die Änderung nach dem Übernehmen.
   („100 × 99,98 × 89,79 …") — während in der Mitte ein 20-mm-Würfel in einer
   leeren Fläche von zwei Metern Breite steht. Die Spalten sind für 1920 gebaut
   und wachsen nicht mit.
+
+  > **Erledigt am selben Tag** (`f48a7e3`, 12.08.2026): Die Karten wachsen
+  > anteilig mit dem Fenster, mit Deckel bei 420 und 460 px; unter etwa
+  > 2000 px ändert sich nichts. Dazu startet die Anwendung seit `7fd9303`
+  > (15.08.) bildschirmfüllend statt auf 1280 × 820.
 * **Der Musterdialog war zweisprachig, ohne es zu wollen.** „Art: raised",
   „Auflegen: flat" — behoben, samt der 24 weiteren Auswahlwerte im Register,
   siehe `konzept-wettbewerb-2026-08.md`.
@@ -275,6 +359,10 @@ Toleranzen, Bausteine, Chat, Fernsteuerung und ein Wörterbuch — dazu je eine
 **erzeugte** Seite pro Registerkategorie, mit jeder Operation, jedem Wert,
 jedem Bereich und jeder Vorgabe. Die erzeugte Hälfte kann nicht veralten.
 
+> **Nachgezählt am 19.08.2026: 40 Seiten, 21 geschriebene und 19 erzeugte,
+> rund 24.900 Wörter.** Die harte Zahl ist die Seitenzahl (`manual.pages()`);
+> die Wortzahl hängt an der Zählweise.
+
 **Der Vergleich fällt zu unseren Gunsten aus — mit einer Lücke.** Was bei Meshy
 „API-Referenz" heißt, ist bei uns über zwei Orte verteilt: die
 Fernsteuerungsseite erklärt MCP in fünf Absätzen, und die Werkzeuge, die
@@ -286,9 +374,33 @@ Werkzeuge gibt es, mit diesen Parametern".
 Registerreferenz zeigt und sagt, dass jede dort beschriebene Operation ein
 Werkzeug ist. Zwei Sätze, kein neues Kapitel.
 
+> **Erledigt, und mehr als vorgeschlagen.** Der Absatz steht
+> (`app/core/manual.py:921–927`): „Jede Operation der folgenden Kapitel ist
+> eines … Eine eigene Schnittstellenliste gibt es deshalb nicht." Dazu kam
+> eine **erzeugte** Seite *Die Werkzeuge der Fernsteuerung*
+> (`app/core/manual.py:1383`, gebaut aus `remote_tools()`) — heute **94
+> Einträge**: die 96 Werkzeuge minus `create_from_scad` und `ask_user`, die
+> absichtlich nicht durch die Leitung gehen (`DENIED` in
+> `app/core/agent/remote.py`). Der Satz oben, man finde nirgends „diese 88
+> Werkzeuge gibt es", ist damit überholt.
+
 ---
 
 ## Teil 9 — Was daraus zu tun ist
+
+> **Abgearbeitet — der Stand am 19.08.2026, Punkt für Punkt.**
+>
+> | Punkt | Stand |
+> |---|---|
+> | 1. Viewport-Befund | hinfällig: das Messgerät hat ihn erzeugt (`ROADMAP.md:4697`) |
+> | 2. L1 Zeichenketten | halb erledigt, halb bewusst verworfen (`:4671`, `:4674`) |
+> | 3. D1 Dezimieren | erledigt (`app/core/generate.py:234`) |
+> | 4. A1/A2 | erledigt, A1 anders: kompakt statt gefiltert (`:4681`, `:4685`) |
+> | 5. M1 und H1 | erledigt, beide weiter als vorgeschlagen (`:4688`) |
+> | 6. Linke Spalte | erledigt (`f48a7e3`) |
+>
+> **Offen ist einer, und er steht in keiner Liste:** B1 — die Frage, ob ein
+> gehosteter Erzeugungsdienst als zweiter Weg neben ComfyUI treten soll.
 
 Nach Wirkung, nicht nach Aufwand:
 
@@ -311,3 +423,40 @@ Rigging, ein Abo. Alles drei würde uns von dem wegführen, worin wir vorn sind.
 
 *Beschlossenes wandert nach `ROADMAP.md`; der Bauplan ändert sich nur mit
 Ansage.*
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Fünfzehn Aussagen dieses Dokuments über den eigenen Code nachgeprüft:
+**vier stimmen, acht sind überholt, eine war falsch, zwei sind nicht
+prüfbar.** Das Papier ist abgearbeitet — `ROADMAP.md:4663` führt sechs
+seiner sieben Punkte mit Haken — und hat sieben Tage lang nicht davon
+gewusst.
+
+**Der gefährlichste Satz war Vorschlag A1.** In seiner ursprünglichen Form
+ist er eine Anleitung zu einem Regelverstoss: Nach `applies_to` zu filtern
+hätte dem Agenten je nach Auswahl einen anderen Werkzeugkasten gegeben —
+eine Betriebsart mit anderem Namen, die §2.6 verbietet. Gebaut wurde
+stattdessen das Kürzen der Beschreibungen: 110,2 KB auf 86,9 KB, kein
+Werkzeug fällt weg. Die Begründung dagegen stand bis heute nur im Code und
+in der ROADMAP.
+
+**Was anders ausfiel als vorgeschlagen:** L1 zur Hälfte — das Freistellmodell
+ist getauscht (`RMBG-2.0` unter CC BY-NC ist raus, `INSPYRENET` unter MIT ist
+drin, abgesichert durch `test_the_shipped_graphs_name_no_non_commercial_model`),
+der Formkern nicht: Hunyuan3D bleibt, weil ein Wechsel eine andere
+ComfyUI-Knotensammlung verlangt. Stattdessen sagen Modulkopf, Handbuch und
+Website, dass die Lizenz für die EU nicht gilt und welche Modelle frei sind.
+
+**Was der Zähler überholt hat:** acht Beispielkacheln → neun · sechs
+Werkzeuge in der Zeile → acht (sechs waren es nie) · 35 Handbuchseiten → 40 ·
+19.578 Wörter → rund 24.900 · „88 Werkzeuge, die nirgends stehen" → 94, die
+auf einer eigenen erzeugten Handbuchseite stehen.
+
+**Offen ist genau einer:** B1, der gehostete Erzeugungsdienst als zweiter Weg.
+Er steht in keiner Arbeitsliste — weder hier noch in der ROADMAP.
+
+**Nicht prüfbar und deshalb offen gelassen:** die ComfyUI-Messung (der Dienst
+läuft auf dieser Maschine nicht) und der Ollama-Lauf (die Gegenstelle
+antwortet nicht). Beide Messwerte bleiben als datierte Angaben stehen.

@@ -1,5 +1,7 @@
 # Überblick über einen langen Agentenlauf
 
+Stand 01.08.2026, nachrecherchiert am 19.08.2026.
+
 Bedienkonzept für Claude Code, entworfen an einem echten Fall: der
 Übersetzungsrunde vom 31.07. bis 01.08.2026 — 21 Commits, 289 Dateien, 16 269
 eingefügte Zeilen, mehrere hundert Werkzeugaufrufe. Die Arbeit war richtig. Was
@@ -92,8 +94,15 @@ Entwurfs — siehe Konzept E.
 ## 4. Konzept B — Kapitel
 
 Eine Sitzung hat Abschnitte, ob sie markiert sind oder nicht. Diese hatte elf:
-`app/core/scene`, `geom`, `brep+registry+agent`, `perceive+slice`, `knowledge`,
-`ui+cli`, dann viermal `tests/`. Markiert war keiner.
+`core/types` (die Verträge), `app/core/scene`, `geom`,
+`brep+registry+agent`, `perceive+slice`, `knowledge`, `ui+cli`, dann viermal
+`tests/` und zuletzt `tools/`. Markiert war keiner.
+
+> **Der Satz sagte „elf" und zählte zehn auf** — der erste Schub
+> (`core/types`) und `tools/` fehlten. Beide stehen anderswo im Dokument sehr
+> wohl: §3 zeigt `7/11`, §5 rechnet „7 von 11 Paketen" und führt `tools/`
+> unter *Offen*. Die Gesamtzahl war also richtig, nur die Liste zu kurz;
+> oben ergänzt (nachgezählt am 19.08.2026 gegen den `git log` der Runde).
 
 ### Ablauf: Kapitel entsteht
 
@@ -281,17 +290,33 @@ Zeilen, wie sie entfernt (`27/26`); ein Umbau nicht (`125/6`).
 
 Ohne Änderung an Claude Code selbst, allein in `.claude/` dieses Projekts:
 
-| Konzept | Heute umsetzbar als | Aufwand |
-|---|---|---|
-| B Kapitel | Kapitelmarken konsequent setzen — das Werkzeug gibt es, benutzt wurde es nicht | keiner, nur Disziplin |
-| C `/stand` | Skill neben `/pruefen` und `/roadmap`, liest Arbeitsliste + `git log` + letzten Lauf | klein |
-| D Bericht | Skill `/bericht`, Aufbau aus §6 | klein |
-| E Bekannt-rot | Basislinie beim ersten Lauf in den Scratchpad, `/pruefen` vergleicht | mittel |
-| F Fremde Hand | Regel in `AGENTS.md` plus Prüfung im `/regelcheck` vor dem Commit | klein |
-| A Sitzungsleiste | braucht Claude Code selbst | — |
+| Konzept | Heute umsetzbar als | Aufwand | Stand 19.08.2026 |
+|---|---|---|---|
+| B Kapitel | Kapitelmarken konsequent setzen — das Werkzeug gibt es, benutzt wurde es nicht | keiner, nur Disziplin | **nicht umgesetzt** |
+| C `/stand` | Skill neben `/pruefen` und `/roadmap`, liest Arbeitsliste + `git log` + letzten Lauf | klein | **nicht umgesetzt** |
+| D Bericht | Skill `/bericht`, Aufbau aus §6 | klein | **nicht umgesetzt** |
+| E Bekannt-rot | Basislinie beim ersten Lauf in den Scratchpad, `/pruefen` vergleicht | mittel | **nicht umgesetzt** — der Hook speichert nur einen Zeitstempel |
+| F Fremde Hand | Regel in `AGENTS.md` plus Prüfung im `/regelcheck` vor dem Commit | klein | **ein Drittel**, an anderer Stelle: der Stop-Hook warnt seit `8e11a66` |
+| A Sitzungsleiste | braucht Claude Code selbst | — | außerhalb des Repositories |
 
 Fünf von sechs Konzepten sind Repo-Arbeit. Die Sitzungsleiste ist das einzige,
 was ins Werkzeug gehört — und sie ist das, was den Rest zusammenhält.
+
+> **Diese Tabelle nennt den Weg, nicht den Stand — und `CLAUDE.md` verweist
+> auf sie, als nenne sie den Stand.** Dort steht über beide
+> Bedienkonzept-Dateien: „Entwurf, noch nicht Praxis — was daraus umgesetzt
+> ist, steht dort in der Schlusstabelle." Wer dem folgt und hier nachschlägt,
+> liest fünf Zeilen mit Aufwandsschätzung und hält sie für erledigt.
+>
+> **Umgesetzt ist in achtzehn Tagen und rund 686 Commits keine davon.** Die
+> Spalte *Stand* ist deshalb neu. Was in `.claude/` seit dem 01.08.2026
+> dazugekommen ist, gehört zu anderen Konzepten; die Hooks und die
+> Freigabeliste in `settings.json` stammen aus `7129984` (31.07.2026), also
+> von **vor** diesem Dokument. Der einzige Teil, der trägt, ist der Hinweis
+> auf fremde Hand im Stop-Hook — und der stand schon vorher dort.
+>
+> Entweder wird der Satz in `CLAUDE.md` umformuliert, oder diese Tabelle
+> behält ihre vierte Spalte gepflegt. Beides zugleich braucht es nicht.
 
 ---
 
@@ -303,3 +328,52 @@ Sekunden** weiß: *läuft es, ist etwas kaputt, muss ich eingreifen.*
 Diese Sitzung hätte dafür etwa hundert Zeilen Transkript gebraucht. Konzept A
 und C beantworten es in einem Blick, Konzept E entscheidet die dritte Frage
 allein.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Elf Aussagen geprüft: **sechs stimmen, zwei sind überholt, drei sind falsch.**
+Der Kern — die sechs Konzepte und ihre Begründung — hält vollständig.
+
+**Der schwerste Fund betrifft nicht dieses Dokument, sondern den Verweis
+darauf.** `CLAUDE.md` schreibt, der Umsetzungsstand stehe „dort in der
+Schlusstabelle". §10 nennt aber den Umsetzungs*weg* mit Aufwandsschätzung.
+Umgesetzt ist nach achtzehn Tagen und rund 686 Commits **keine** der fünf
+Zeilen. Die Tabelle hat deshalb eine vierte Spalte bekommen; der Satz in
+`CLAUDE.md` gehört umformuliert.
+
+**Was die Zeit überholt hat:** „1926 grün · 1 rot" — die Suite ist auf **4246**
+Tests gewachsen. Die Zahl steht an vier Stellen in den Ablaufskizzen; dort
+bleibt sie als Beispiel stehen, denn sie illustriert eine Anzeige, keinen
+Messwert.
+
+**Was falsch war:** die Kapitelliste in §4 (sagt elf, zählte zehn auf — der
+erste Schub und `tools/` fehlten), und die Herleitung der Wartezeit-Tabelle aus
+Bauplan §2.8 in §1: Die Quelle stimmt, die Rechnung „zwei Größenordnungen"
+nicht.
+
+**Zu Claude Code selbst** — die Konzepte behaupten über das Werkzeug, in dem
+sie laufen, und diese Behauptungen sind einzeln geprüft worden:
+
+- **Kapitelmarken gibt es** als Werkzeug, und benutzt werden sie hier bis
+  heute nicht. Der Satz in §10 stimmt.
+- **`run_in_background` gibt es** — diese Durchsicht selbst hat ihre Läufe
+  damit gestartet.
+- **Die Sitzungsleiste gibt es nicht.** In drei festen Zeilen über der
+  Eingabezeile mit Fortschritt und Abbrechen — so existiert sie nicht. Für
+  Hintergrundläufe gibt es inzwischen eine eigene Ansicht (`claude agents`),
+  die mehr kann als die hier skizzierte Leiste, aber an anderer Stelle sitzt.
+- **Worktrees isolieren heute je Sitzung.** Der Satz „zwei parallele Sitzungen
+  auf einem Arbeitsbaum sind der Normalfall" beschreibt weiterhin die Praxis
+  in diesem Projekt — der Stop-Hook dieser Sitzung hat genau davor gewarnt —,
+  aber das Werkzeug bietet inzwischen den isolierten Weg an.
+
+Eine Recherche zu diesen Punkten hatte zunächst behauptet, `argument-hint`,
+`run_in_background` und die Kapitelmarken gebe es nicht, weil sie in der
+Dokumentation fehlen. Das ist widerlegt: Sieben Skills dieses Projekts führen
+`argument-hint`, und die anderen beiden sind in dieser Sitzung benutzt worden.
+**„Nicht dokumentiert" ist keine Aussage über die Existenz** — die Lehre
+gehört zu diesem Dokument, weil es überwiegend aus Beobachtung am laufenden
+Werkzeug geschrieben ist und diese Beobachtung damit besser belegt als jede
+Dokumentation.

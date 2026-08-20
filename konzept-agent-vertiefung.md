@@ -1,6 +1,15 @@
 # Konzept — Der Agent wird Teil der Anwendung
 
-Stand 08.08.2026, aus einer vollständigen Gegenüberstellung von Ist
+> **Umgesetzt und abgenommen (08.08.2026, Nachbesserungen 09.08.2026).**
+> Alle sechs Schritte aus Abschnitt 7 stehen in `ROADMAP.md:3806–3878` mit
+> Haken; die Nachher-Messung steht bei `ROADMAP.md:3888–3895`. Dieses
+> Dokument ist ab hier **Begründungsgedächtnis, keine Arbeitsliste** — der
+> Haupttext steht weiter im Futur, weil er beim Planen so geschrieben wurde.
+> Was jeweils daraus wurde, sagen die Erledigt-Vermerke darunter. Der Stand
+> steht in `ROADMAP.md`, Abschnitt „Die Agent-Vertiefung".
+
+Stand 08.08.2026, ergänzt am 14.08.2026, nachrecherchiert am 19.08.2026,
+aus einer vollständigen Gegenüberstellung von Ist
 (`app/core/agent/`, `app/ui/chat.py`, `app/core/backends/`) und Soll
 (Bauplan, ROADMAP). Der Unterbau der Agentenschicht ist richtig gebaut:
 eine Werkzeugoberfläche aus dem Register, ein Vorschlag ist genau eine
@@ -15,6 +24,15 @@ Messreihen entstanden unter einem still abgeschnittenen Prompt (der
 `num_ctx`-Fund: unter 32768 Token fiel der Systemprompt weg, 0/3 statt 3/3
 bei Bausteinen). Wer auf diesem Stand „verbessert", misst gegen Rauschen.
 Deshalb steht die neue Basislinie vor jedem anderen Punkt.
+
+> **Erledigt.** Die Basislinie ist gefahren: 17/33 mit vollem Fenster
+> (08.08.2026 mittags), nach der Umsetzung 28/39 = 72 %
+> (`ROADMAP.md:3888–3895`). `num_ctx` steht fest bei 32768
+> (`app/core/backends/llm.py:373` `OLLAMA_CONTEXT_TOKENS`, gesetzt in jedem
+> Aufruf, `:475`). Werkzeugmengen-Tabelle und Modellvergleich sind bis heute
+> (19.08.2026) **nicht** wiederholt worden — sie bleiben zurückgezogen.
+> Gegen Anthropic ist die Suite weiterhin nicht gefahren (kein Schlüssel
+> hinterlegt, `ROADMAP.md:3909`).
 
 ---
 
@@ -57,6 +75,33 @@ der Modellvergleich gelten bis zur Wiederholung als zurückgezogen. Jede
 misst gegen diese Basislinie — Verschlechterung heißt zurücknehmen, wie bei
 der Regelsammlung (§39).
 
+> **Erledigt — der lokale Teil.** 17/33 vorher, 28/39 nachher (auf den 33
+> alten Fällen 25/33 = 76 %), `qwen3:14b`, volles Fenster
+> (`ROADMAP.md:3888–3895`). Die 8/33 ist damit ersetzt; sie steht nur noch
+> historisch (`ROADMAP.md:2813`, `:3059`). Die Suite umfasst heute **39**
+> Referenzanfragen (21 zu Säule C, 18 zu Säule A) — die Zahl 15 + 18 oben
+> war schon 08.08. überholt; festgehalten in `AGENTS.md:231`,
+> `3d-agent-bauplan.md:1569` und
+> `tests/test_agent_suite.py:156 test_the_suite_has_the_size_the_plan_asks_for`.
+
+> **Offen — der Lauf gegen Anthropic.** Er steht aus, und bevor er gefahren
+> wird, ist außen zweierlei passiert (Recherche 19.08.2026):
+> `DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"` (`llm.py:172`) ist ein
+> Bequemlichkeits-Alias auf den Schnappschuss `claude-sonnet-4-5-20250929`,
+> kein festgenageltes Modell — ab der 4.6-Generation gibt es keine Aliase
+> mehr, dort ist die datumslose ID selbst der Schnappschuss
+> (https://platform.claude.com/docs/en/about-claude/models/model-ids-and-versions).
+> Und dieser Schnappschuss trägt ein vorläufiges Rückzugsdatum „not sooner
+> than September 29, 2026" bei Status „Active"; eine Abkündigung ist nicht
+> ausgesprochen
+> (https://platform.claude.com/docs/en/about-claude/model-deprecations).
+> Der Nachfolger `claude-sonnet-5` kostet 2 USD Eingabe / 10 USD Ausgabe je
+> Mio. Token bei 1 Mio. Kontext gegen 3/15 USD bei 200k für Sonnet 4.5
+> (https://platform.claude.com/docs/en/about-claude/models/overview) — der
+> Wechsel ist billiger und größer, nicht bloß fällig. Eine Basislinie gegen
+> ein Modell zu fahren, das in sechs Wochen zurückgezogen werden darf, misst
+> die falsche Zahl; die Modellwahl gehört vor den Lauf, nicht danach.
+
 ### 2.2 Die tote Kennzahl zum Leben bringen
 
 `TARGET_VALID = 0.95` und `Outcome.invalid` stehen in
@@ -65,6 +110,14 @@ nie. Die Sitzung lehnt schemaungültige Ops bereits ab — diese Ablehnungen
 werden gezählt und je Fall ausgewiesen. Der Anteil schemagültiger Aufrufe im
 ersten Versuch ist genau die Kennzahl, die sagt, ob die Werkzeugschemata für
 das Modell verständlich sind.
+
+> **Erledigt.** Die Kennzahl misst: `run_case` füllt `outcome.invalid` aus
+> `proposal.invalid_calls` (`tools/run_agent_suite.py:127`), weist sie je
+> Fall aus (`:181`) und als Quote (`:196–201`); `Proposal` führt `tool_calls`
+> und `invalid_calls` (`app/core/agent/proposal.py:54,56`). Gemessen: **156
+> von 160 = 98 %** im ersten Versuch, Ziel `TARGET_VALID = 0.95` erfüllt
+> (`ROADMAP.md:3893`). Tests: `tests/test_agent_suite.py:319
+> test_invalid_calls_are_counted`, dazu `:707` und `:750`.
 
 ### 2.3 Zwischenspeicherung und Antwortbudget im Anthropic-Backend
 
@@ -79,6 +132,31 @@ das Modell verständlich sind.
   Zugbudget von 120 000 ist unbegründet; der Wert wird ein Parameter des
   Backends mit Vorgabe 8192, gedeckelt durch das verbleibende Zugbudget.
 
+> **Erledigt, beides.** `cache_control` (ephemeral) sitzt auf dem
+> Systemblock (`app/core/backends/llm.py:231`) und auf dem letzten
+> Werkzeugschema (`:239`); `max_tokens` ist ein Backend-Parameter mit
+> Vorgabe 8192 (`:185`), gedeckelt über `limit` (`:215`) im Payload
+> (`:222`). `MAX_STEPS = 8` und `MAX_TOKENS = 120_000` stehen unverändert
+> (`app/core/agent/session.py:78–79`).
+
+> **Die Zahl ist gewachsen.** Die ~99 KB oben sind die Messung vom
+> 08.08.2026; heute (19.08.2026) sind es **110 KB JSON aus 96 Schemata**
+> (85 Ops plus 11 Zusatzwerkzeuge) — die ROADMAP hielt am 08.08. noch 86
+> Schemata fest (`ROADMAP.md:3897`). Neu über die Leitung gehen sie nur
+> beim ersten Schritt eines Zuges; ab dem zweiten greift die
+> Zwischenspeicherung. Die Aussage bleibt also richtig, nur ihr Grund ist
+> jetzt behoben statt offen.
+
+> **Ein Außenfakt, der diesen Payload betrifft (Recherche 19.08.2026).**
+> `AnthropicBackend.complete` sendet `temperature` unbedingt mit
+> (`llm.py:223`, Vorgabe 0.0). `temperature`, `top_p` und `top_k` sind ab
+> Claude Opus 4.7 abgekündigt: ein Nicht-Standardwert liefert einen
+> 400-Fehler
+> (https://platform.claude.com/docs/en/about-claude/model-deprecations).
+> Mit Sonnet 4.5 und 4.6 geht es weiter; mit jedem neueren Modell scheitert
+> der Aufruf. Das ist keine Aufgabe dieses Konzepts, aber es gehört an die
+> Stelle, an der jemand als Nächstes das Modell wechselt.
+
 ### 2.4 Eine Werkzeuglogik statt zwei
 
 Die drei Zusatzwerkzeuge sind in `main_window.run_remote` ein zweites Mal
@@ -89,6 +167,17 @@ Ausführung wandert in ein Kernmodul (`agent/toolexec.py` oder direkt in
 was dieses Konzept an Werkzeugen ergänzt, entsteht von vornherein nur dort —
 sonst verdoppelt sich die Pflege mit jedem Punkt dieses Konzepts.
 
+> **Erledigt — die gemeinsame Logik liegt in `session.py`, ein
+> `toolexec.py` ist nie entstanden.** `_remote_report`
+> (`app/ui/main_window.py:4718`), `_remote_fit` (`:4731`) und
+> `_remote_parameter` (`:4748`) heißen weiter so, sind aber nur noch
+> Weiterleitungen auf `report_text`, `build_fit` und `parse_number` in
+> `app/core/agent/session.py:608,641,624` (die Docstrings nennen „Konzept
+> 2.4"). Dazu kamen `standard_text` (`session.py:687`), `find_part_text`
+> (`:755`) und `analysis_text` (`app/core/agent/analysis.py:66`). Ein
+> eigenes Modul hätte nur einen Namen mehr gekostet — der Vorschlag oben
+> nannte es als Möglichkeit, nicht als Bedingung.
+
 ---
 
 ## 3. Wahrnehmung: der Agent sieht, was der Nutzer sieht
@@ -97,6 +186,12 @@ Heute arbeitet der Agent halbblind: Nach `drill_hole` kennt er die ID der
 neuen Bohrung nicht, bestehende Passungen sieht er nie, Analysen erreichen
 ihn nicht, und die gerenderten Ansichten, die §23 neben dem Steckbrief
 verlangt, existieren im Kontext nicht.
+
+> **Erledigt — dieser Absatz beschreibt den Stand vom 08.08.2026 vormittags,
+> nicht den heutigen.** Alle vier Lücken sind zu: Merkmals-IDs im
+> Op-Ergebnis, `read_digest`, `read_analysis` und die beiden gerenderten
+> Ansichten (`ROADMAP.md:3814–3874`). Die Einzelnachweise stehen bei den
+> Unterabschnitten.
 
 ### 3.1 Frischer Steckbrief mitten im Zug — der größte Quotenhebel
 
@@ -113,6 +208,17 @@ Zwei Maßnahmen, die zusammengehören:
    aktuellen Steckbrief der Arbeitskopie, im selben Format wie das Weltbild
    zu Zugbeginn. Für den Fall, dass der Agent nach mehreren Schritten den
    Überblick neu braucht, statt ihn aus Einzelergebnissen zu rekonstruieren.
+
+> **Erledigt — und teurer bezahlt als geplant.** Beides ist gebaut
+> (`ROADMAP.md:3814–3821`); `read_digest` steht in der Werkzeugliste
+> (`app/core/agent/tools.py:30–40`). Der Weg dorthin legte zwei Kernfehler
+> frei, die nichts mit dem Agenten zu tun hatten: ein gebohrtes Loch wurde
+> nie ein Merkmal, weil `apply_mapping` das unzugeordnete neue Merkmal über
+> einen Überlebenden schrieb — eines von beiden verschwand wortlos aus der
+> Szene; und darunter lag der vorzeichenempfindliche Achsenvergleich in
+> `cost`, der nach einer 25°-Drehung die Hälfte der Löcher verwaiste. Eine
+> Bohrungsachse ist eine Linie, keine Richtung. Beide Fälle hält
+> `tests/test_matching.py` fest (`ROADMAP.md:3822–3835`).
 
 ### 3.2 Der Steckbrief wird vollständig
 
@@ -136,6 +242,12 @@ Zwei Maßnahmen, die zusammengehören:
 Der Steckbrief wächst damit; die Deckelung (Kurzformen, Grenzwerte) gehört
 in denselben Schritt, und die Suite misst, ob der größere Kontext trägt.
 
+> **Erledigt, alle vier Blöcke.** `app/core/perceive/digest.py`: Passungen
+> mit Verletzt-Zustand (`:66–84`), Druckeinstellungen in einer Zeile
+> (`:87–101`), Quellen (`:113–119`), Verlauf mit Parametern samt Deckelung
+> als benannte Grenze (`:272–296`). Der größere Kontext trägt: die Quote
+> stieg von 52 % auf 72 %, statt einzubrechen (`ROADMAP.md:3897–3899`).
+
 ### 3.3 Analysen erreichbar: `read_analysis`
 
 Ein lesendes Zusatzwerkzeug neben `read_report`, mit `kind` und optional
@@ -146,8 +258,17 @@ Ein lesendes Zusatzwerkzeug neben `read_report`, mit `kind` und optional
 | `printability` | Überhangfläche, Stützvolumen, Inseln, Brückenweiten, minimale Strukturbreite, erste Schichtfläche | `slice/analysis.py` |
 | `estimate` | Druckzeit- und Materialschätzung | `slice/estimate.py` |
 | `advice` | Einstellungsvorschläge mit Begründung (Pfad, alter/neuer Wert) | `slice/advise.py` |
-| `maps` | die aggregierten Kennzahlen der Analysekarten (Wandstärke, Überhang, Defekte, …) | `perceive/maps.py` |
 | `orientation` | die besten Orientierungen mit Kennzahlen | `slice/orientation.py` |
+
+> **Erledigt — mit vier Arten statt fünf.** `ANALYSIS_KINDS` führt
+> `printability`, `estimate`, `advice` und `orientation`
+> (`app/core/agent/analysis.py:43`); dasselbe Enum steht im Werkzeugschema
+> (`app/core/agent/tools.py:304`) und im Bauplan (`3d-agent-bauplan.md:1230`).
+> **`maps` ist bei der Umsetzung entfallen** und stand bis heute nur noch
+> hier — die Zeile ist deshalb gestrichen. Die Kennzahlen der Analysekarten
+> stecken in `printability`; als eigene Art hätte sie keinen Zug beantwortet,
+> den die vier nicht schon beantworten. Wer sie doch braucht, trägt sie
+> nach — aber dann in `analysis.py`, nicht in dieser Tabelle.
 
 Regeln dazu:
 
@@ -155,6 +276,16 @@ Regeln dazu:
   Zeitdeckel je Aufruf; `orientation` ist die teuerste und bekommt den
   engsten. Ein überschrittener Deckel ist ein Ergebnis („Analyse nach n s
   abgebrochen — Teilstand: …"), kein Fehler.
+
+  > **Anders gebaut: der Deckel zählt Dreiecke, nicht Sekunden.**
+  > `TRIANGLE_LIMIT = 500_000` steht vorab prüfbar in
+  > `app/core/agent/analysis.py:45–48`, und der Kommentar dort sagt den
+  > Grund: „Ein Zeitlimit mitten in einer laufenden Rechnung gäbe es nur mit
+  > Gewalt gegen den Thread." Damit gibt es auch keinen Teilstand nach
+  > Zeitablauf — eine zu große Szene bekommt vorher eine Absage mit Grund.
+  > Die Orientierungssuche fährt 24 Kandidaten mit festem Startwert
+  > (`:51–58`). `ROADMAP.md:3849` nennt es „harter Dreiecksdeckel statt
+  > Zeitgewalt".
 - **Herkunft immer ausweisen** (Regel 14): alles hier ist Schichtanalyse,
   nie G-Code. Der Ergebnistext sagt das mit einem festen Präfix, damit die
   Zahl im Chat nicht als Slicer-Wahrheit weiterläuft.
@@ -171,6 +302,10 @@ Heute ist die Tabelle nur indirekt über Bausteinparameter erreichbar;
 „welches Kernloch für M6?" kann der Agent nicht beantworten, obwohl die
 Zahl im Programm steht.
 
+> **Erledigt.** `read_standard` steht in der Werkzeugliste
+> (`app/core/agent/tools.py:30–40`), die gemeinsame Ausführung als
+> `standard_text` in `app/core/agent/session.py:687`.
+
 ### 3.5 Gerenderte Ansichten (§23) — der Agent bekommt Augen
 
 §23 verlangt die gerenderten Ansichten neben dem Steckbrief; `context.py`
@@ -182,10 +317,18 @@ Ausbau, in drei Teilen entlang der bestehenden Schnitte:
    `supports_images`; ein Backend ohne sie bekommt Nachrichten ohne
    Bildteile — der Textpfad bleibt für jedes Modell vollständig, Bilder
    sind Zugabe, nie Voraussetzung (Leitprinzip 8).
-2. **`AnthropicBackend`** baut daraus `image`-Blöcke (base64);
-   **`OllamaBackend`** füllt das `images`-Feld, aber nur wenn das gewählte
-   Modell Vision beherrscht — die Fähigkeit wird wie `ollama_tool_check`
-   einmal geprüft, nicht vermutet.
+2. **`AnthropicBackend`** baut daraus `image`-Blöcke (base64).
+   **`OllamaBackend`** meldet `supports_images = False` und bekommt deshalb
+   nie Bildteile; eine Fähigkeitsprüfung wie `ollama_tool_check` gehört
+   dorthin, sobald ein Vision-Modell gemessen ist.
+
+   > **Hier stand ein Widerspruch, und er war schon beim Schreiben einer.**
+   > Punkt 2 versprach, Ollama fülle das `images`-Feld „wenn das gewählte
+   > Modell Vision beherrscht" — Punkt 3 desselben Abschnitts nahm es im
+   > selben Atemzug zurück („bleibt vorerst fest ohne Bilder"). Gebaut ist
+   > Punkt 3: `supports_images` gibt fest `False` zurück
+   > (`app/core/backends/llm.py:429–434`), und keine Stelle füllt für Ollama
+   > ein `images`-Feld. Punkt 2 ist oben auf den gebauten Stand gebracht.
 3. **Gerendert wird in der Oberfläche, nicht im Kern** — korrigiert bei der
    Umsetzung (08.08.2026): `figures.py` rendert SVG (die Netzprojektion aus
    `drawing.py`), und die Modelle nehmen PNG; ein Rasterweg im Kern wäre
@@ -203,9 +346,29 @@ Bild nicht — und die drei absichtlich mehrdeutigen Suite-Fälle messen genau
 das. Die Erwartung bleibt trotzdem `ask_user` bei echter Mehrdeutigkeit;
 das Bild reduziert die falschen Sicherheiten, es ersetzt die Rückfrage nicht.
 
+> **Erledigt, alle drei Teile.** `Message.images`
+> (`app/core/backends/llm.py:65`), `LLMBackend.supports_images` (`:101`),
+> Anthropic `True` (`:200`) mit base64-`image`-Blöcken (`:264–275`), Ollama
+> fest `False` (`:429`); `app/core/agent/context.py:66,72` reicht die
+> Ansichten als `images` herein. Der Test dazu heißt
+> `test_views_reach_only_a_backend_that_can_see`
+> (`tests/test_agent_suite.py:578`). Die drei mehrdeutigen Fälle fragen
+> weiterhin 3/3 (`ROADMAP.md:3892`).
+>
+> **Ein Satz fehlte hier und ist nachgetragen:** Gerendert wird im
+> **Hauptthread**, in `propose_async`, bevor der Arbeiter startet
+> (`app/ui/session.py:1077`). VTK im Arbeiter-Thread war eine Absturzfamilie
+> (`ROADMAP.md:3922–3925`) — wer die Ansichten später anfasst, muss das
+> wissen.
+
 ---
 
 ## 4. Sichtbarkeit: der Nutzer sieht, was der Agent tut
+
+> **Erledigt — alle fünf Punkte.** Die Belege stehen bei den
+> Unterabschnitten; die Sammelstelle ist `ROADMAP.md:3836–3845` (Schritt 2)
+> und `:3860–3870` (Schritt 4). Das „Heute:" in 4.1 und das „fehlt" in 4.4
+> beschreiben den 08.08.2026 vormittags, nicht den heutigen Stand.
 
 ### 4.1 Fortschritt statt endlosem Balken
 
@@ -216,6 +379,11 @@ je Schritt Schrittnummer und Werkzeugtitel aus dem Register. Der Chat zeigt
 „Schritt 3 — Bohren auf obj_1" mit Schrittzähler; der Abbrechen-Knopf bleibt
 unverändert (Prüfung zwischen den Schritten, wie heute). Fragt der Agent
 (`ask_user`), sagt die Statuszeile das, bevor der Dialog aufgeht.
+
+> **Erledigt.** Der Rückruf sitzt im Kern (`app/core/agent/session.py:159`
+> `progress: ProgressFn | None`, gemeldet in `:199` und `:224`), die
+> Statuszeile „Schritt 3/8 — …" in `app/ui/chat.py:509–512`. Test:
+> `test_the_turn_reports_its_progress` (`tests/test_agent_suite.py:523`).
 
 ### 4.2 Der Vorschlag zeigt seine Kosten und seine Fragen
 
@@ -228,6 +396,11 @@ ausgeschrieben: „Nach 8 Schritten angehalten — der Vorschlag zeigt den
 Stand bis hierhin." Damit ist der harte Deckel aus §26.5 nicht nur
 vorhanden, sondern sichtbar.
 
+> **Erledigt.** Schritte und Token stehen in der Entscheidungszeile
+> (`app/ui/chat.py:502–515`), die Rückfragen samt Antworten aufklappbar
+> (`:196–203`, `:350–357`), und die erreichte Grenze steht ausgeschrieben
+> (`:517–521`).
+
 ### 4.3 Der Chat ist auch ein Suchfeld (§2.6)
 
 Der Bauplan verlangt: „Wie mache ich das Loch größer?" wird mit dem
@@ -239,6 +412,17 @@ Erklär- und Wie-Fragen nennt die Antwort den Menüort in der Form
 `PROMPT_VERSION` zählt hoch, die Suite bekommt zwei Fälle, die genau das
 erwarten (eine reine Wie-Frage, eine Wie-Frage mit anschließendem „mach
 es").
+
+> **Erledigt — der Menüort steht in der Werkzeugbeschreibung, nicht im
+> Systemprompt.** `PROMPT_VERSION` steht auf `"3"`
+> (`app/core/agent/prompt.py:28`), und der Kommentar darüber sagt, warum:
+> „der steht seither in jeder Werkzeugbeschreibung, das Modell muss ihn nur
+> nennen". Gebaut in `app/core/agent/tools.py:109–113` über `menu_path` —
+> und dort steht auch, warum es der volle Pfad sein muss: **nur Gruppe und
+> Titel zu nennen traf für 72 von 77 Ops den falschen Ort.** Die zwei
+> Suite-Fälle heißen `where_menu` und `where_hollow`
+> (`tests/agent_cases.py:146–159`); der zweite ist eine reine Wo-Frage
+> geworden statt der geplanten Wie-Frage mit „mach es".
 
 ### 4.4 Automatische Übernahme eindeutig umkehrbarer Vorschläge (§26.5)
 
@@ -260,6 +444,18 @@ Festlegung:
   Betriebsarten-Umschaltung im Sinn von §41). Vorgabe: an — das ist die
   Linie des Bauplans.
 
+> **Erledigt, alle drei Punkte.** Die vier Bedingungen stehen in
+> `auto_acceptable` (`app/core/agent/apply.py:39`), die Einstellung heißt
+> `auto_accept_reversible` mit Vorgabe `True` (`app/ui/settings.py:89–93`,
+> Dialog `app/ui/settings_dialog.py:108–114`), ausgelöst wird sie in
+> `app/ui/main_window.py:4185`, und die Übernommen-Leiste sitzt in
+> `app/ui/chat.py:84,316–326`.
+>
+> **Eine Nachbesserung am 09.08. gehört dazu:** Der Rückgängig-Knopf prüfte
+> nicht, welche Transaktion obenauf liegt — wer nach der Übernahme weiter
+> arbeitete und dann drückte, nahm die falsche zurück. Er hängt jetzt am
+> Dokument und prüft selbst (`ROADMAP.md:3917–3921`).
+
 ### 4.5 Der gedeckelte Verlauf sagt, dass er gedeckelt ist
 
 `HISTORY_LIMIT = 12`: ältere Chatbeiträge verschwinden aus dem Kontext ohne
@@ -267,6 +463,10 @@ Hinweis — der Agent widerspricht sich dann scheinbar grundlos. Fallen
 Beiträge weg, steht am Anfang des mitreisenden Verlaufs eine Zeile
 „[n ältere Beiträge nicht mitgesendet]". Eine Zeile, kein neues Verhalten —
 aber das Modell weiß, dass es Vorgeschichte gibt, und rät nicht.
+
+> **Erledigt.** `app/core/agent/context.py:119–128` rechnet
+> `skipped = len(entries) - HISTORY_LIMIT` und setzt die Zeile, wenn etwas
+> wegfällt; der Kommentar dort verweist auf diesen Abschnitt.
 
 ---
 
@@ -296,6 +496,11 @@ nur das Werkzeug fehlt. Ein Werkzeug mit zwei optionalen Feldern
 (`printer`, `material`), Werte gegen die bekannten Profile geprüft,
 Toleranzen bleiben `auto:<material>` (Regel 7) und rechnen sich beim
 Materialwechsel von selbst um — genau dafür ist die Verweisform da.
+
+> **Erledigt.** `set_print_target` steht in der Werkzeugliste
+> (`app/core/agent/tools.py:30–40`); der Suite-Fall dazu prüft, dass Drucker
+> und Material als `DocumentChange` reisen und ein Undo beide zurücknimmt
+> (`tests/agent_cases.py:144`).
 
 ### 5.3 Skizzen über benannte Grundformen (§30.1)
 
@@ -342,8 +547,10 @@ Dieses Konzept verlangt vier Ergänzungen am Bauplan; sie werden vor der
 Umsetzung der jeweiligen Punkte eingetragen:
 
 1. **§26.2 Werkzeugliste** wächst um `read_digest`, `read_analysis`,
-   `read_standard`, `set_print_setting`, `set_print_target`. Die Liste
-   bleibt abschließend — was dort nicht steht, gibt es nicht.
+   `read_standard`, `set_print_target`. Die Liste bleibt abschließend — was
+   dort nicht steht, gibt es nicht. (Hier stand bis zum 19.08.2026 ein
+   fünftes, `set_print_setting` — derselbe Rest des zurückgenommenen
+   Setzers, der schon in der Tabelle von Abschnitt 7 stand.)
 2. **§30.1** bekommt das `shape`-Schema der benannten Grundformen
    (Formenliste, Ankerprinzip, Verbot der Punktliste ausgeschrieben).
 3. **§35/§40 Suite-Umfang:** die 33 Referenzanfragen wachsen um die Fälle
@@ -360,6 +567,21 @@ Werkzeuge — die lesenden sind unkritisch, die schreibenden laufen wie jede
 Op als eigene Transaktion mit Herkunft), §22.5/Regel 14 (Herkunftstrennung
 wird von `read_analysis` ausdrücklich eingehalten, nicht aufgeweicht).
 
+> **Erledigt — alle vier Ergänzungen stehen im Bauplan.**
+> §26.2: `3d-agent-bauplan.md:1228–1231`, dazu die Begründung, warum es
+> keinen Setzer gibt (`:1233–1239`). §30.1: `:1412–1415` („Der Agent erzeugt
+> Skizzen ausschließlich über benannte Grundformen"). §35: `:1569`
+> („39 Referenzanfragen — 21 zu Säule C, 18 zu Säule A"). §23: `:1065–1069`
+> (Ansichten „erreichen nur ein Backend, das Bilder versteht; an jedes
+> andere entfallen sie ersatzlos").
+>
+> **Ein Rest ist beim Übertragen liegengeblieben:** `3d-agent-bauplan.md:1244`
+> sagt „Die **fünf** Werkzeuge ab `read_digest` kamen mit der
+> Agent-Vertiefung dazu" — aufgezählt sind vier. Das ist wieder der
+> zurückgenommene `set_print_setting`. Die Zahl gehört auf vier; eine
+> Bauplanänderung wird angesagt und nicht nebenbei gemacht, deshalb steht
+> sie hier und nicht dort.
+
 ---
 
 ## 7. Reihenfolge und Abnahme
@@ -368,6 +590,10 @@ Sechs Schritte, jeder einzeln lieferbar, die Suite nach jedem grün und
 nicht schlechter als die Basislinie. Innerhalb eines Schritts gilt die
 Arbeitsweise des Hauses: kleine Schritte, Test zuerst, `/pruefen` vor jedem
 Commit.
+
+> **Alle sechs Schritte sind abgenommen** (`ROADMAP.md:3806–3878`,
+> Nachbesserungen am 09.08. bei `:3912–3950`). Die Tabelle steht als
+> Begründung dessen, was gebaut wurde, nicht mehr als Arbeitsliste.
 
 | Schritt | Inhalt | Abnahme |
 |---|---|---|
@@ -405,6 +631,13 @@ Schritt 3 — die neuen Werkzeuge entstehen nur einmal.
   Fortschritt (4.1) zeigt den laufenden Schritt, und der Deckel liefert
   einen Teilstand statt eines Fehlers.
 
+  > **Eingetreten — und deshalb in der Fernsteuerung abgelehnt.** Im
+  > Hauptthread gemessen: 5,3 s. `read_analysis(orientation)` ist über MCP
+  > gesperrt, bis die Fernsteuerung einen Arbeiter hat
+  > (`ROADMAP.md:3939–3941`). Das ist der einzige Punkt dieses Konzepts, der
+  > noch eine Adresse in der Zukunft hat. Einen Teilstand gibt es nicht, der
+  > Deckel zählt Dreiecke (siehe 3.3).
+
 ---
 
 ## 8. Abdeckung — jeder Fund der Durchsicht hat eine Adresse
@@ -435,3 +668,66 @@ Schritt 3 — die neuen Werkzeuge entstehen nur einmal.
 | Export/Slicing ohne Werkzeug | 5.4 — bewusst so, mit Begründung |
 | Redo ohne Werkzeug | 5.4 — bewusst so, mit Begründung |
 | Kostendeckel nur als Token, nicht als Geld | 4.2 macht ihn sichtbar; eine Geldrechnung braucht Preisdaten je Modell und bleibt Ausbaustufe |
+
+Jede Zeile dieser Tabelle ist eingelöst — die Nachweise stehen bei den
+Abschnitten, auf die sie zeigt. Offen ist allein die letzte, und die war nie
+ein Fund, sondern eine Ausbaustufe.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Dieses Dokument war ein Umsetzungsplan, und der Plan ist abgearbeitet. Von
+fünfzehn nachgeprüften Aussagen über den eigenen Code waren **zwei noch
+richtig, zwölf überholt und eine falsch** — der Haupttext stand durchgehend
+im Futur und las sich als offene Arbeit, während ROADMAP alle sechs Schritte
+mit Haken führt. Der Kopfvermerk sagt das jetzt vorweg, die Erledigt-Vermerke
+darunter sagen es im Einzelnen, samt Stelle im Code.
+
+**Was anders gebaut wurde, als hier stand** — und ohne diese Durchsicht
+nirgends stünde:
+
+- `read_analysis(maps)` ist nie entstanden; die Tabelle in 3.3 war die
+  letzte Stelle im Repository, die das Werkzeug noch versprach.
+- Der Zeitdeckel wurde ein **Dreiecksdeckel**, weil ein Zeitlimit mitten in
+  der Rechnung nur mit Gewalt gegen den Thread ginge.
+- Der Menüort steht in der **Werkzeugbeschreibung**, nicht im Systemprompt —
+  und er muss der volle Pfad sein: Gruppe und Titel allein trafen für 72 von
+  77 Ops den falschen Ort.
+- Die gemeinsame Werkzeuglogik liegt in `agent/session.py`; ein
+  `toolexec.py` gibt es nicht.
+- Gerendert wird im Hauptthread, nicht im Arbeiter — VTK im Arbeiter-Thread
+  war eine Absturzfamilie.
+
+**Ein Widerspruch war von Anfang an einer:** 3.5 Punkt 2 versprach Bilder
+für Ollama, Punkt 3 nahm sie im selben Abschnitt zurück. Gebaut ist Punkt 3.
+
+**Was die Außenrecherche geändert hat.** Die Aussagen über das
+Anthropic-Backend hängen an einem Modell, das sich bewegt:
+
+- `DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"` (`llm.py:172`) ist ein
+  Alias auf den Schnappschuss `claude-sonnet-4-5-20250929`, Status aktiv,
+  vorläufiges Rückzugsdatum „not sooner than September 29, 2026". Ab der
+  4.6-Generation gibt es keine Aliase mehr — dort ist die datumslose ID
+  selbst der Schnappschuss.
+- Der Nachfolger `claude-sonnet-5` kostet weniger und kann mehr: 2 USD
+  Eingabe / 10 USD Ausgabe je Mio. Token bei 1 Mio. Kontext gegen 3/15 USD
+  bei 200k.
+- **`temperature` wird unbedingt mitgesendet** (`llm.py:223`, Vorgabe 0.0).
+  Ab Claude Opus 4.7 ist der Parameter abgekündigt und ein
+  Nicht-Standardwert liefert einen 400er. Mit Sonnet 4.5 und 4.6 geht es
+  weiter; mit jedem neueren Modell scheitert der Aufruf. Das ist keine
+  Aufgabe dieses Konzepts, aber wer als Nächstes das Modell wechselt, muss
+  es wissen.
+
+Die Zahlen in 2.3 sind mitgewachsen: aus ~99 KB in 86 Schemata wurden
+**110 KB in 96 Schemata** (85 Operationen plus elf Zusatzwerkzeuge).
+
+**Nicht belegbar und deshalb offen gelassen:** Die Suite ist gegen Anthropic
+weiterhin nicht gefahren — es liegt kein Schlüssel vor. Werkzeugmengen-
+Tabelle und Modellvergleich sind seit dem `num_ctx`-Fund nicht wiederholt
+worden und bleiben zurückgezogen; keine Zahl in diesem Dokument ersetzt sie.
+
+**Ein Nebenbefund außerhalb dieser Datei:** `3d-agent-bauplan.md:1244` zählt
+fünf neue Werkzeuge und nennt vier. Eine Bauplanänderung wird angesagt, nicht
+nebenbei gemacht — deshalb steht der Fund hier.

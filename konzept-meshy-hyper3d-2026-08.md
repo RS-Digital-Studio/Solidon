@@ -1,4 +1,4 @@
-# Konzept — Solidon3D gegen Meshy und Hyper3D Rodin (12.08.2026)
+# Konzept — Solidon3D gegen Meshy und Hyper3D Rodin (12.08.2026, nachrecherchiert am 19.08.2026)
 
 Anlass ist eine Frage in vier Teilen: *Wie stehen Oberfläche, Funktionen,
 Handbuch und Schnittstelle gegen die beiden führenden KI-3D-Generatoren?
@@ -76,6 +76,29 @@ ein vollständiger 3D-Druck-Arbeitsablauf drumherum.
 | **Ökosystem** | Erweiterungen für Bambu Studio, Creality Print, OrcaSlicer, Cura, **Elegoo Slicer**, Lychee, Snapmaker, Flash Studio, dazu Blender, Unity, Unreal, Godot, Maya, 3ds Max, Roblox. Veröffentlichen nach MakerWorld, Printables, Thingiverse. Druckservice mit Versand. |
 | **Größe** | Eigene Angabe: 100 Mio. erzeugte Modelle, 12 Mio. Nutzer, 10 Mio. Besuche im Monat, G2 und Trustpilot je 4,8 |
 
+> **Nachrecherchiert am 19.08.2026 — die Preisstufen stimmen unverändert, und
+> zwei Dinge sind dazugekommen.**
+>
+> **Meshy 7 ging am 10.08.2026 live**, zwei Tage vor diesem Dokument: ein
+> Bild-zu-3D-Grundlagenmodell, das auf die Ausrichtung zwischen Eingabebild
+> und Ergebnis zielt. Meshy 6 (18.01.2026) hatte den Low-Poly-Modus und den
+> ausdrücklichen Mehrfarb-3D-Druck gebracht — Texturen werden zu sauberen
+> Farbblöcken für FDM zusammengefasst.
+>
+> **Die Preise je Aufruf sind jetzt belegt**, und eine Zahl darin ist für uns
+> die interessanteste des ganzen Dokuments: Text-zu-3D kostet 20 Guthaben,
+> Textur 10 bis 15, Mehrfarbdruck 10, **Druckbarkeit prüfen kostenlos**,
+> Druckbarkeit reparieren 10. Die Prüfung meldet Wasserdichtheit, nicht-
+> mannigfaltige Kanten, Löcher als Randschleifen und entartete Flächen. Das
+> ist die Liste, die Solidons Prüfbericht führt — bei Meshy kostet sie nichts
+> und läuft über eine REST-Schnittstelle.
+>
+> Ausgabeformate der API: GLB, FBX, USDZ, OBJ, MTL, STL, 3MF. Topologie
+> wahlweise quad-dominant oder dezimiertes Dreiecksnetz; regulärer Remesh 100
+> bis 300.000 Flächen, Smart Topology 100 bis 15.000. Seit dem 08.04.2026 gibt
+> es „Print with Form Now" — ein erzeugtes Modell geht direkt in den
+> Fertigungsdienst von Formlabs.
+
 Der Werbesatz auf der Startseite lautet sinngemäß, Meshy sei die einzige 3D-KI,
 die fürs Drucken trainiert wurde — wasserdicht, mannigfaltig, beim ersten
 Versuch bereit zum Slicen.
@@ -99,6 +122,13 @@ Unternehmen, nicht auf den Drucker.
 | **Werkzeugkasten** | OmniCraft: HDRI-Erzeuger, Texturerzeuger, Bild- und Videoerzeuger, SVG→3D, Mesh-Editor, KI-Avatare |
 | **Unternehmen** | SSO über SAML 2.0, Identity-Provider-Anbindung, domänenbasierter Zugang, Teams und Rollen, geteilte Asset-Arbeitsbereiche, Prüfprotokolle |
 | **3D-Druck** | Nur als Anwendungsfall genannt, plus STL im Export. Keine Druckbarkeitsprüfung, keine Slicer-Anbindung, kein Mehrfarbdruck. |
+
+> **Nachgeprüft am 19.08.2026 — die Preisstufen stimmen, und eine Schranke ist
+> schärfer, als sie hier steht:** Den **API-Zugang gibt es erst ab Business**
+> (120 $/Monat), dort mit 120 bis 240 Anfragen je Minute. Free und Creator
+> haben keinen. Die kostenlose Stufe erlaubt zehn private Objekte bei
+> eingeschränkter kommerzieller Nutzung; Creator kostet 30 $ im Monat
+> beziehungsweise 288 $ im Jahr.
 
 ### 1.3 Der Befund, aus dem alles andere folgt
 
@@ -451,7 +481,7 @@ Der Anlass für diesen Abschnitt war eine Beobachtung am laufenden Programm:
 stimmt, und der Grund ist im Code eindeutig belegbar.
 
 **Die Farbe existiert und ist gut gewählt.** `theme.py:30` setzt
-`_SELECTION = "#f0a54a"` — Bernstein, 69,2 % Sättigung, Kontrast **7,27**
+`_SELECTION = "#f0a54a"` — Bernstein, 69,2 % Sättigung, Kontrast **5,54**
 gegen die Fensterfarbe. Sie ist in beiden Themen dieselbe und mit Bedacht
 gewählt: derselbe Ton, in dem der Viewport einen gewählten Körper färbt, damit
 Liste und Bild dieselbe Handlung gleich färben.
@@ -509,7 +539,7 @@ sichtbaren Rahmen kein Knopf ist, sondern Text". Der Schritt war richtig und
 zu klein.
 
 **Damit ist der Eindruck erklärt.** Es fehlt nicht an Farbe — es fehlt an
-Hierarchie. Ein einziger, sehr kräftiger Ton (7,27) markiert Flüchtiges; alles
+Hierarchie. Ein einziger, sehr kräftiger Ton (5,54) markiert Flüchtiges; alles
 Bleibende teilt sich ein Helligkeitsband, in dem nichts vor oder zurücktritt.
 Ein Fenster ohne Auswahl ist deshalb wörtlich einfarbig, und die Struktur —
 was ist Panel, was ist Viewport, welcher Reiter gilt — muss der Betrachter aus
@@ -878,7 +908,7 @@ dieselbe Frage: *Was habe ich hinterher in der Hand?*
 
 Der Befund aus 4.3, in Zahlen: Panel gegen Fenster 1,10 · Zebrazeile gegen
 Panel 1,16 · Viewport-Verlauf 1,21 · Trennlinie gegen Fenster 1,43. Sieben
-Flächenrollen zwischen 1,3 % und 5,0 % Helligkeit. Der Akzent hat 7,27
+Flächenrollen zwischen 1,3 % und 5,0 % Helligkeit. Der Akzent hat 5,54
 Kontrast und erscheint ausschließlich bei Auswahl, Fokus, Hover, gedrücktem
 Knopf und laufendem Fortschritt — also nie im Ruhezustand.
 
@@ -888,7 +918,7 @@ Zwei Teile, verschieden teuer:
 mindestens 1,5, Trennlinie auf 3,0, Viewport-Verlauf spürbar. Kein
 Logikeingriff, keine neue Regel — aber sämtliche Bildschirmfotos des Handbuchs
 müssen danach neu aufgenommen werden (`tools/make_figures.py`, **nicht**
-offscreen, sonst fehlen die Schriften), und `tests/test_accessibility.py` prüft
+offscreen, sonst fehlen die Schriften), und `tests/test_theme_and_palette.py` prüft
 die Kontraste mit.
 
 **Teil B, der Akzent an fünf bleibende Zustände (mittel).** Aktiver Reiter,
@@ -1106,3 +1136,53 @@ Abbildungskatalog nicht hat. Die Website läuft mit 1456 px in einem Fenster von
 1265 px über — der Überlauf steht schon vor diesen Änderungen im HEAD, kein
 Element ragt über den Rand. Und in der Statuszeile überlappen sich „Keine
 Auswahl" und der Demo-Hinweis; beides gehört nicht zu diesen Befunden.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Fünfundvierzig Einzelaussagen über den eigenen Stand geprüft: **17 stimmen, 23
+sind überholt, 4 sind falsch, eine ist nicht prüfbar.** Dazwischen liegen P16,
+der Sprung von zwei auf sechs Sprachen und die Durchsicht vom 14.08.
+
+**Zwei Zahlen waren falsch, nicht überholt:**
+
+- Der Kontrast des Bernstein-Akzents gegen die Fensterfarbe beträgt **5,54**,
+  nicht 7,27. Der Kommentar in `theme.py:38` sagt es selbst („Gegen das dunkle
+  Fenster bringt er 5,4"). 7,93 ist der Kontrast von Bernstein gegen die
+  *Schrift darauf* — vermutlich die verwechselte Zahl. Beide Farben stehen
+  unverändert seit vor dem 12.08.; die Zahl war also schon damals falsch.
+- **`tests/test_accessibility.py` hat nie existiert.** Die Kontraste prüft
+  `tests/test_theme_and_palette.py`.
+
+**Was die Zeit überholt hat:** 77 Operationen → 85, zwei Sprachen → sechs, und
+sämtliche Zeilennummern.
+
+**Die Außenrecherche trifft den Kern dieses Dokuments** — die Frage lautete, ob
+wir mithalten:
+
+- **Meshy 7 ging am 10.08.2026 live**, zwei Tage vor diesem Papier: ein
+  Bild-zu-3D-Grundlagenmodell, das auf die Ausrichtung zwischen Eingabebild und
+  Ergebnis zielt.
+- **Die Druckbarkeitsprüfung kostet bei Meshy nichts.** „Analyze Printability"
+  ist als API-Aufruf kostenlos und meldet Wasserdichtheit, nicht-mannigfaltige
+  Kanten, Löcher als Randschleifen und entartete Flächen — dieselbe Liste, die
+  Solidons Prüfbericht führt. Die Reparatur kostet 10 Guthaben, der
+  Mehrfarbdruck 10.
+- **Das Kreativlabor rechnet in Millimetern.** Die Endpunkte erschienen am
+  01.06.2026; der Schlüsselanhänger nimmt die Kantenlänge des umschließenden
+  Quadrats in Millimetern (0 bis 400). Das ist die Richtung, aus der ein
+  Generator in unser Feld kommt: nicht über bessere Netze, sondern über echte
+  Maße an fertigen Produkten.
+- **Seit dem 08.04.2026 gibt es eine Formlabs-Anbindung** — „Print with Form
+  Now" schickt ein Modell direkt in den Fertigungsdienst.
+- **Bei Hyper3D Rodin ist die API-Schranke höher, als hier steht:** Zugang erst
+  ab Business (120 $/Monat), Free und Creator haben keinen.
+
+**Nicht belegbar und deshalb offen gelassen:** die Nutzer- und Modellzahlen, die
+Meshy über sich selbst angibt (100 Mio. Modelle, 12 Mio. Nutzer). Sie stehen im
+Dokument als Selbstauskunft und bleiben es.
+
+**Was sich am Urteil nicht ändert:** Rodin bleibt der ungefährlichere. Meshy
+steht weiter auf unserem Feld — und ist ihm seit dem 12.08. einen Schritt näher
+gekommen, nicht ferner.

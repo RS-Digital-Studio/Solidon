@@ -10,8 +10,11 @@ die sie widerlegt hat.
 Die Frage war nicht „ist es fertig", sondern: **Wer das hier zum ersten Mal
 öffnet — sieht der, was er sehen muss?**
 
-> **Stand 14.08.2026.** Abgearbeitet, jeder Fund mit Test und am laufenden
-> Fenster nachgemessen. Offen bleiben vier, und zwar als Entscheidung.
+> **Stand 14.08.2026, nachrecherchiert am 19.08.2026.** Abgearbeitet, jeder
+> Fund mit Test und am laufenden Fenster nachgemessen. Am 19.08. gegen den
+> Kopfcommit `b0415d6` nachgeprüft: ein weiterer Befund ist zugegangen (5.6),
+> drei standen von Anfang an in keiner Zeile dieser Tabelle (4.4, 5.7, 5.9)
+> und sind bis heute offen. Offen bleiben damit sechs.
 >
 > | Befund | Stand |
 > |---|---|
@@ -26,20 +29,30 @@ Die Frage war nicht „ist es fertig", sondern: **Wer das hier zum ersten Mal
 > | 5.1 Kettenabbruch verweist auf zugehaltenes Fenster | behoben — `46e2b7c` |
 > | 5.2 Fehlertext der Rückfallkette | behoben — `c2bd852` |
 > | 5.3 Zwei Schalter für die Schichtansicht | behoben — `b0cb0d1` |
-> | 5.4 Legende aus `face_10`, Kartenname, Gradzeichen | behoben — `5902211` |
+> | 5.4 Legende aus `face_10`, Kartenname, Gradzeichen | behoben — `5902211`; der Name *Feature-Zuordnung* steht noch im Handbuch |
 > | 5.5 Tabulator · Objektbaum ohne Anfang | behoben — `799fce5`, `9aa7df9` |
-> | 5.8 Elf englische Docstrings | behoben — `799fce5`, jetzt null |
+> | 5.6 Kürzel für die Werkzeuge | behoben — `Alt+1` bis `Alt+8` (ROADMAP.md:5592) |
+> | 5.8 Elf englische Docstrings in `app/` | behoben — `799fce5`, in `app/` jetzt null; in `tests/` stehen zwölf, die die Zählung nie erfasst hatte |
 > | **2.1 Karten nutzen die Fensterhöhe nicht** | **offen** |
 > | **2.5 Import landet im vorhandenen Körper** | **offen, als Entscheidung** |
 > | **3.1 Verteilermenüs · 3.4 Kontextmenü** | **offen, als Entscheidung** |
-> | **5.6 Kürzel für die Werkzeuge** | **offen, als Entscheidung** |
+> | **4.4 „plate_holes" im ersten Beispielprojekt** | **offen — stand nie in dieser Tabelle** |
+> | **5.7 Zwei Klappen, zwei Verhalten** | **offen — stand nie in dieser Tabelle; der abgeschnittene Vorschlag ist behoben** |
+> | **5.9 Zwei modale Fehlerfenster** | **offen — stand nie in dieser Tabelle** |
 >
 > Nicht behoben und bewusst so: **3.2** (alphabetische Sortierung der
 > Grundformen) — sie ist eine begründete Entscheidung, die
-> `test_a_menu_is_sorted_the_way_it_is_read` festhält. **4.1** (halb
+> `test_a_menu_is_sorted_the_way_it_is_read`
+> (`tests/test_interface_limits.py:484`) festhält. **4.1** (halb
 > umgeschaltetes Thema nach dem Zeichenmodus) und **4.3** (Fokus sieht aus wie
 > Mausüberfahrt) sind geblieben; beide brauchen mehr als eine Zeile und keinen
-> Befund über sich hinaus.
+> Befund über sich hinaus. Bei 4.3 hat sich der Code seither bewegt, ohne dass
+> der Befund ganz verschwunden wäre — siehe dort.
+>
+> **Wo der Fließtext unten im Präsens steht, beschreibt er den 14. August.**
+> Was seither eingelöst wurde, trägt an Ort und Stelle einen Erledigt-Vermerk;
+> die Messwerte bleiben stehen, weil ein Messwert vom 14. August am 19. August
+> nicht falsch ist, sondern datiert.
 
 Vorweg, damit die Liste unten nicht das falsche Bild gibt: Startbildschirm,
 Erststart-Dialog, Operationsdialoge, Prüfbericht, Bausteinkatalog und Handbuch
@@ -68,20 +81,31 @@ Gemessen, direkt nach `start_empty()`:
 
 | | Kameraposition | Bauraum |
 |---|---|---|
-| wie geliefert | `(1.0, −1.0, 0.8)` | 220 × 220 mm gesetzt |
-| nach `reset_camera()` | `(474.7, −474.7, 504.7)` | dieselbe |
+| vor `2f56d93` (13.08.2026) | `(1.0, −1.0, 0.8)` | 220 × 220 mm gesetzt |
+| nach `reset_camera()`, und seit `2f56d93` von selbst | `(474.7, −474.7, 504.7)` | dieselbe |
 
-Die Kamera steht anderthalb Millimeter vom Ursprung entfernt in einem
-220-Millimeter-Bauraum. Ein Druck auf `Pos1` („Alles einpassen") repariert es
+Die Kamera stand anderthalb Millimeter vom Ursprung entfernt in einem
+220-Millimeter-Bauraum. Ein Druck auf `Pos1` („Alles einpassen") reparierte es
 sofort — die Druckplatte steht dann mit Raster und Maßzahlen im Bild.
 
-Die Ursache steht in `app/ui/viewport.py:3171`: `_fit_once_for` passt nur ein,
+Die Ursache stand in `app/ui/viewport.py`: `_fit_once_for` passte nur ein,
 wenn `has_objects` wahr ist. Die Startkamera wird beim Aufbau über
-`view_from("iso")` gesetzt (`viewport.py:1056`) — zu einem Zeitpunkt, an dem
+`view_from("iso")` gesetzt — zu einem Zeitpunkt, an dem
 der Bauraum noch nicht bekannt ist. Danach kommt `show_build_volume`, aber
-niemand richtet die Kamera daran aus. `reset_camera` könnte es: sein Docstring
-sagt ausdrücklich „Ohne Körper bleibt der Bauraum das Maß" — er wird in diesem
-Fall bloß nie gerufen.
+niemand richtete die Kamera daran aus. `reset_camera` könnte es: sein Docstring
+sagt ausdrücklich „Ohne Körper bleibt der Bauraum das Maß" — er wurde in
+diesem Fall bloß nie gerufen.
+
+> **Erledigt.** `_fit_once_for` (`app/ui/viewport.py:3492`) hat den Zweig „Die
+> leere Szene hat auch etwas zu zeigen: den Bauraum" und erzählt den Befund im
+> eigenen Docstring nach (`2f56d93`, 14.08.2026). Die erste Zeile der Tabelle
+> oben gibt es nicht mehr; die zweite ist heute die einzige. Der Bauraum ist
+> unverändert `generic-220` (`app/core/knowledge/data/printers.toml:13`,
+> `build_volume = [220.0, 220.0, 250.0]`).
+>
+> **Die drei Zeilennummern im Text stimmen nicht mehr** (Stand 19.08.2026):
+> `_fit_once_for` steht bei 3492 statt 3171, `view_from("iso")` bei 1166 statt
+> 1056, `reset_camera` bei 3466. Die Datei ist auf 3926 Zeilen gewachsen.
 
 Belege: `20-leer-wie-geliefert.png`, `21-leer-nach-einpassen.png`.
 
@@ -110,6 +134,18 @@ Darunter liegen konkret:
 Die Ebenenwahl ist laut Gebietsregel „die Angabe, die in der Projektdatei
 landet" und trägt eigens die Ziffern 1, 2, 3 als Kürzel. Sichtbar ist von ihr
 der rechte Rand.
+
+> **Erledigt.** `443058f` (14.08.2026) — „Ausweichen, das die eigene Breite
+> nicht kennt, weicht nicht aus". Die Messung oben bleibt als Zustand vom
+> 14. August stehen.
+>
+> Der Fall hat eine Norm hinter sich, die im Befund noch fehlte: WCAG 2.2
+> nennt seit ihrer Veröffentlichung das Erfolgskriterium **2.4.11 Focus Not
+> Obscured (Minimum), Stufe AA** — ein fokussiertes Bedienelement darf nicht
+> von anderem Inhalt verdeckt werden. Eine Ebenenwahl, von der nur der rechte
+> Rand sichtbar ist, ist genau dieser Fall.
+> <https://www.w3.org/WAI/standards-guidelines/wcag/new-in-22/> (abgerufen
+> 19.08.2026)
 
 Beleg: `60-zeichnen-ueberdeckung.png`, Messung im Laufprotokoll.
 
@@ -141,6 +177,16 @@ Zwei verschiedene Ursachen, eine gemeinsame Lücke:
 Für die Scheine ist Abschneiden die richtige Antwort. Für die Tabelle nicht —
 abgeschnitten wäre sie unlesbar; sie braucht einen eigenen `overflow-x: auto`.
 
+> **Erledigt, und genau so, wie der Befund es trennt.** `website/style.css:67`
+> trägt `overflow-x: clip` am `:root` (zusätzlich Zeile 93 am `body`), die
+> Zahlen 111 und 270 stehen dort im Kommentar. `website/handbuch.html:86` und
+> `tools/make_manual.py:133` geben Tabellen `display: block; overflow-x: auto`
+> — der Erzeuger und die erzeugte Seite, sonst wäre es beim nächsten Lauf
+> wieder weg (`61fbc01`, 14.08.2026).
+>
+> Die Browsermessungen selbst waren am 19.08.2026 nicht nachprüfbar; belegt
+> ist die Ursachenbehebung im Quelltext, nicht ein neuer Messwert.
+
 ---
 
 ## Teil 2 — Übersichtlichkeit auf einem großen Bildschirm
@@ -154,8 +200,14 @@ gleichzeitig schneidet die Tour ihre eigenen Schritte ab. Im Bild
 je mit „…", und die Karte hat einen eigenen Rollbalken.
 
 Das ist nicht der alte Befund „Karten wachsen nicht mit dem Inhalt" (behoben,
-`b017fde`) — sie wachsen mit dem Inhalt, aber sie nehmen sich den freien Platz
-darunter nicht, wenn der Inhalt mehr bräuchte als der Inhalt hergibt.
+`b017fde`, 08.08.2026) — sie wachsen mit dem Inhalt, aber sie nehmen sich den
+freien Platz darunter nicht, wenn der Inhalt mehr bräuchte als der Inhalt
+hergibt.
+
+> **Weiter offen** (19.08.2026). `app/ui/overlay.py` ist seit dem 14.08.2026
+> unverändert; die ROADMAP-Stelle zur Spaltenhöhe (ROADMAP.md:3749, „Die linke
+> Spalte rechnete sich um zweihundert Pixel zu kurz") datiert auf den
+> 08.08.2026 und liegt damit **vor** diesem Befund, löst ihn also nicht ein.
 
 ### 2.2 Der Chat ist eine leere schwarze Box
 
@@ -168,6 +220,28 @@ kann. Der Erststart-Dialog wirbt für den Chat, das Handbuch hat ein Kapitel
 darüber, die Website zeigt ihn — und die Stelle selbst sagt nichts. Drei bis
 vier anklickbare Beispielanfragen im leeren Zustand wären hier die billigste
 gute Tat des ganzen Programms.
+
+> **Erledigt.** `app/ui/chat.py:54` führt `STARTERS` — anklickbare
+> Beispielanfragen im leeren Gespräch (`7fe7c30`, 14.08.2026, „Der Chat ist
+> das Versprechen der Anwendung und stand leer da").
+>
+> Dazu ein Außenfakt, der am 14. August noch Zukunft war und es nicht mehr
+> ist: **AI Act Artikel 50 gilt seit dem 02.08.2026.** Er verlangt, dass ein
+> Nutzer erfährt, dass er mit einem KI-System spricht, sofern das nicht
+> offensichtlich ist — Text, nicht Farbe, nicht Symbol allein. Die Zeile
+> „Modell: …" ist ein Modellname, keine solche Angabe.
+> <https://artificialintelligenceact.eu/article/50/> (abgerufen 19.08.2026)
+>
+> Offen und aus dem Wortlaut nicht zu entscheiden: ob ein per LLM erzeugtes
+> 3D-Modell oder erzeugter OpenSCAD-Quelltext unter die Kennzeichnungspflicht
+> für „synthetische Inhalte" fällt. Artikel 50 nennt Audio, Bild, Video und
+> Text; 3D wird nicht genannt, und ein Leitliniendokument der Kommission dazu
+> war am 19.08.2026 nicht auffindbar. Das bleibt hier offen und wird nicht
+> geraten.
+>
+> Die Vorbelegung „ollama:qwen3:14b" ist eine Bildschirmbeobachtung vom
+> 14.08.2026 und steht so stehen — ob dieses Modell heute noch die
+> Voreinstellung ist, war extern nicht belegbar.
 
 Beleg: `31-rechts-1.png`.
 
@@ -195,6 +269,19 @@ Dasselbe auf dem Startbildschirm: dort ist die Menüleiste auf *Datei* und
 Knöpfe, „Speichern" und „Zeichnen" eingeschlossen. Zwei Maßstäbe in einem
 Fenster.
 
+> **Erledigt, und schärfer als vorgeschlagen.** Offscreen nachgemessen am
+> 19.08.2026: auf dem Startbildschirm ist die Werkzeugleiste gar nicht mehr da
+> (`isVisible() == False`), und bei leerer Szene sind **alle acht** Werkzeuge
+> `enabled == False` (`b07bcfb`, 14.08.2026, „Bemalen auf einer leeren Szene
+> ist ein Pinsel für nichts").
+>
+> Die sechs Zeilen oben sind der Stand vom 14. August. Die Leiste führt heute
+> acht Werkzeuge — `explode` und `split` sind dazugekommen.
+>
+> Auch die Zahl 34 gilt weiter, ihre Zusammensetzung nicht: unter *Ändern*
+> stehen heute Verbinden 4, Transformation 9, Formgebung 5, Bohrungen 3,
+> Oberfläche 3, Netz 9, Reparatur 1.
+
 ### 2.4 Eine Warnung bleibt unsichtbar, solange eine Tour läuft
 
 Ein fremdes Netz eingefügt, das nicht geschlossen ist. Der Prüfbericht hat es
@@ -205,6 +292,11 @@ sieht aus wie vorher: kein Zähler, kein Zeichen, keine Farbe.
 Dass der Sprung der aktiven Tour den Reiter lässt, ist die richtige
 Entscheidung (sie steht so in der Gebietsregel). Dann muss aber der Reiter
 selbst sprechen — „Prüfbericht · 1 ⚠" statt „Prüfbericht".
+
+> **Erledigt, genau so.** `app/ui/main_window.py:5678` setzt den Reitertext auf
+> „Prüfbericht · n" (`46e2b7c`, 14.08.2026). Der zweite Teil desselben Commits
+> gehört zu 5.1: `_focus_report(force=True)` überstimmt die Tour, wenn die
+> Kette anhält.
 
 Belege: `62-fremdmodell-befunde.png` gegen `ausschnitt-bericht.png`.
 
@@ -433,6 +525,14 @@ Von 83 registrierten Operationen tragen sechs ein Kürzel. Das ist derselbe
 offene Punkt wie 2.7 aus der Kundensicht-Durchsicht — nur ist die Zahl der
 Operationen seither von 77 auf 83 gewachsen und die der Kürzel nicht.
 
+> **Behoben, und beide Zahlen sind überholt** (nachgezählt am 19.08.2026).
+> Die Werkzeuge der unteren Leiste haben `Alt+1` bis `Alt+8`
+> (`ROADMAP.md:5592`). `window_commands()` führt heute **60** Fensterbefehle,
+> 23 davon ohne Kürzel — die Liste ist gewachsen, nicht die Lücke. Und das
+> Register zählt **85** Operationen statt 83; sechs mit Kürzel, das stimmt
+> weiter. Der offene Punkt 2.7 aus der Kundensicht bleibt es: Kürzel für die
+> Operationen selbst sind eine Vergabe in einem Zug, keine Nebenarbeit.
+
 ### 5.7 Im Druckdialog steht ein zugeklappter Bereich offen
 
 *Weitere Einstellungen* ist zugeklappt und zeigt nichts — richtig. *Profile des
@@ -490,9 +590,19 @@ Bausteinkatalog, 0 in den Touren, alle sieben Werkzeughinweise übersetzt. Der
 eine Treffer meiner Suche war „…Nothing is lost here: und…" — Qts eigene
 Kürzung von „undo".
 
+> **Aus zwei Sprachen sind sechs geworden.** Am 16.08.2026 kamen Spanisch,
+> Französisch, Italienisch und Portugiesisch dazu (`app/i18n/locales/`);
+> `tests/test_translations.py` prüft seither jede gefundene Datei, nicht mehr
+> nur die englische. Die Menüleiste zählt heute 136 Zeilen statt 127, und die
+> untere Leiste trägt acht Werkzeuge statt sieben.
+
 **Jede Operation sagt, was sie tut.** 83 Operationen: keine ohne
 Beschreibungssatz, kein Parameter ohne Erklärung. Der vollste Dialog hat acht
 Felder auf der Vorderseite (`label_text`), die Grenze liegt bei acht.
+
+> **85 Operationen** (19.08.2026) — die Aussage selbst gilt weiter: kein
+> Registereintrag ohne `doc`, kein Parameter ohne `doc`, keine Vorderseite mit
+> mehr als acht Feldern.
 
 **Die Website ist handwerklich sauber.** Sieben Bilder, alle mit Alt-Text; kein
 toter Sprungmarken-Verweis auf sieben Seiten; Impressum, AGB, EULA, Widerruf
@@ -539,3 +649,52 @@ Sie stehen hier, weil sie sonst als Befund im Bericht stünden:
   nicht ein Attribut `advanced`. Richtig gezählt liegt keine über acht.
 * Auf der englischen Seite schien der Preis zu fehlen. Sie schreibt „€49", die
   deutsche „49 €".
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Neunzehn Aussagen dieses Dokuments über den eigenen Code nachgeprüft: **vier
+stimmen, neun sind überholt, eine war falsch, eine ist nicht prüfbar.** Dazu
+kamen drei Widersprüche im Dokument selbst.
+
+**Der schwerste Fund ist eine Lücke, kein Fehler.** Die Statustabelle im Kopf
+führte siebzehn behobene und vier offene Befunde — und ließ **4.4, 5.7 und
+5.9** ganz aus. Wer die Tabelle las, hielt sie für vollständig; alle drei sind
+bis heute offen. Sie stehen jetzt drin:
+
+- **4.4** — `app/examples/weg1-halterung-anpassen.p3d` führt weiter
+  `sources/plate_holes.stl`, und `app/core/ingest/ops.py:227` benennt das
+  Objekt nach dem Dateinamen. Im Baum steht also weiter `plate_holes`.
+- **5.7** — `app/ui/print_settings_dialog.py:1004` klappt „Weitere
+  Einstellungen" wirklich zu; `slicer_box` (`:1047`) ist ebenfalls
+  `setCheckable(True)`, hat aber keine Verbindung — die Felder bleiben
+  sichtbar. Der zweite Teil des Befunds ist entschärft (`profile_note`
+  bricht um, `:1076`).
+- **5.9** — kein Stapelschutz gegen zwei modale Fehlerfenster
+  (`app/ui/report_dialog.py`, `app/ui/dialogs.py`), und kein Eintrag in der
+  ROADMAP.
+
+**Ein Befund ist seit dem Schreiben zugegangen:** 5.6, die Tastenkürzel der
+Werkzeugleiste (`Alt+1` bis `Alt+8`). Offen bleiben damit sechs statt vier.
+
+**Was der Zähler überholt hat:** 83 Operationen → 85 · 127 Menüzeilen → 136 ·
+22 Fensterbefehle → 60 (23 ohne Kürzel) · sieben Werkzeuge → acht · acht
+Beispielkacheln → neun · zwei Sprachen → **sechs**. Unverändert: sieben
+Analysekarten, sechs Operationen mit Kürzel, 34 Einträge unter *Ändern*, acht
+Felder als Maximum der Vorderseite, Bauraum 220 × 220 mm.
+
+**Eine Zahl war falsch, nicht überholt:** „fünf englische Docstrings in
+`tests/`". Es waren zwölf, und sie sind es noch — die Zählung hat sie nie
+vollständig erfasst. In `app/` sind es dagegen heute null, wie behauptet.
+
+**Alle Zeilennummern in diesem Dokument sind verfallen.** Geprüft wurden acht
+Verweise (`viewport.py:3171`, `main_window.py:4675`, `settings_dialog.py:129`
+und fünf weitere) — keiner zeigt noch auf das, was er benennt. Das ist kein
+Vorwurf an das Dokument, sondern die Eigenschaft von Zeilennummern in einem
+Repository mit hundert Commits pro Woche. Künftig gehören Symbolnamen dorthin.
+
+**Nicht prüfbar und deshalb offen gelassen:** die Website-Messwerte (scrollX,
+`hero::before`, Schriftgrößen) — sie stammen aus dem installierten
+QtWebEngine, und ohne denselben Aufbau wäre jede neue Zahl eine andere
+Messung. Die Ursachenbehebung dahinter (`61fbc01`) ist am Code belegt.

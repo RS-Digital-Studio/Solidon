@@ -41,6 +41,14 @@ bekommt einen roten Lauf.
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | viele Läufe je Messpunkt — bei einer Rate um zwanzig Prozent sagt ein einzelner nichts |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
+| `CLAUDE.md` nennt `trimesh<5` als Grenze | Die Konzepte nachrecherchiert (19.08.2026) | einen Satz — die Grenze ist am 14.08. gefallen |
+| `CLAUDE.md` verweist auf die Bedienkonzept-Tabellen als „Stand" | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung: Satz nachziehen oder streichen |
+| Der Bauplan zählt fünf Werkzeuge und nennt vier | Die Konzepte nachrecherchiert (19.08.2026) | eine Bauplanänderung mit Ansage |
+| „Achter Umschalter" in dieser Datei | Die Konzepte nachrecherchiert (19.08.2026) | eine Ziffer — es ist der siebte, `Alt+7` |
+| `temperature` und die Modellvorgabe im Anthropic-Backend | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung über das Zielmodell; ab Opus 4.7 bricht der Aufruf |
+| Drei Docstrings mit überholtem Stand | Die Konzepte nachrecherchiert (19.08.2026) | drei Sätze — Schnapper, neun Beispiele, PETG-Volumenstrom |
+| D4 — ViewCube und Ansichtsleiste, wieder offen | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung: Würfel zurück, Leiste bauen oder beides lassen |
+| B1 — gehosteter Erzeugungsdienst als zweiter Weg | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung, nicht Code |
 
 ---
 
@@ -6757,3 +6765,165 @@ und die Zahlenfelder der Skizzenleiste erklären sich über Tooltips. Fünf
 gemeldete Funde sind an der Gegenprüfung gestorben — darunter die Behauptung,
 der Startbildschirm trage einen veralteten Produktnamen: Die Domain heißt
 `solidon3d.de`, und „Solidon3D" ist der Name, nicht der Rest eines alten.
+
+
+## Die Konzepte nachrecherchiert (19.08.2026)
+
+Anlass war ein Auftrag in einem Satz: *alle Konzepte ansehen, online
+nachrecherchieren, auf einen aktuellen und vollständigen Stand bringen.*
+Achtzehn Dokumente, zwei Richtungen — nach innen gegen den Code, nach außen
+gegen die Welt. Fünf Tage nach der Durchsicht vom 14.08., die dasselbe ohne
+den Blick nach außen tat.
+
+**Der Umfang.** Je Dokument wurden die prüfbaren Behauptungen einzeln
+nachgeschlagen: 300 über die Außenwelt, 265 über den eigenen Code. Für die
+Außenseite entstanden 469 belegte Faktenkarten aus dreizehn Themenfeldern,
+jede mit Quelle und Abrufdatum. Ergebnis der inneren Prüfung über alle
+achtzehn: **102 Aussagen stimmen, 168 sind überholt, 26 waren schon beim
+Schreiben falsch, 15 nicht mehr prüfbar.**
+
+**Das Muster ist immer dasselbe, und es ist nicht Schlamperei.** Ein Konzept
+wird geschrieben, danach wird nach ihm gearbeitet — und der Text bleibt im
+Futur stehen, während der Code ihn einlöst. Am teuersten sind die Stellen, an
+denen ein Nachtrag „erledigt" sagt und der Haupttext zwanzig Zeilen darüber
+weiter „fehlt": Wer nur eine der beiden Stellen liest, baut etwas, das es
+gibt, oder hält etwas für fertig, was offen ist. Neun Dokumente hatten genau
+diesen Widerspruch in sich.
+
+- [x] **Achtzehn Dokumente nachgezogen.** Jedes trägt jetzt sein Stand-Datum,
+      einen Abschnitt „Nachrecherchiert am 19.08.2026" und an jeder
+      berichtigten Stelle einen Vermerk mit Beleg — Datei und Zeile, Commit,
+      Testname. 2182 Zeilen dazu, 112 geändert. Was Messung war, bleibt
+      stehen und bekommt den heutigen Wert daneben: Ein Messwert vom 5. August
+      ist am 19. August nicht falsch, sondern datiert.
+- [x] **Vier Aussagen führten zu falscher Arbeit** und sind an beiden Stellen
+      aufgelöst. `konzept-wettbewerb` ließ den GLB-Export als Aufgabe stehen,
+      obwohl die eigene Befundtabelle ihn als erledigt führt (gebaut am
+      11.08., einen Tag vor dem Dokument); es empfahl „Sprachen zuerst", die
+      seit dem 13.08. liegen, und nannte das fehlende macOS-Paket den
+      härtesten Befund, während seit dem 13.08. dafür paketiert wird.
+      `konzept-erzeugen-agent-oberflaeche` beschrieb in Vorschlag A1 eine
+      Umsetzung, die **gegen §2.6 verstoßen hätte** — nach `applies_to` zu
+      filtern hätte dem Agenten je nach Auswahl einen anderen Werkzeugkasten
+      gegeben. Gebaut wurde das Kürzen statt des Weglassens; die Begründung
+      dagegen stand bis heute nur im Code.
+- [x] **Sechsundzwanzig Aussagen waren von Anfang an falsch.** Die
+      folgenreichsten: Das Trennwerkzeug ist der **siebte** Umschalter
+      (`Alt+7`), nicht der achte — das Handbuch hatte immer recht.
+      `hole_compensation` wird von `drill_hole` seit dem 28.07. angewandt,
+      nicht erst „zu entscheiden". Der Volumenstrom von PETG war nie 12 mm³/s,
+      sondern 10 — 12 ist PLA. Der Bernstein-Akzent hat 5,54 Kontrast gegen
+      das Fenster, nicht 7,27. `tests/test_accessibility.py` hat nie
+      existiert. Und zwei Zahlen zählten Baumzeilen statt Dinge: 23
+      „Bausteine" waren 16 Bausteine unter 7 Gruppenköpfen, 42
+      „Kürzelgruppen" 36 Kürzel unter 6.
+- [x] **Der Faktor hundert ist ein Faktor 5,2.** Der Vergleich, der in
+      `konzept-organische-modellierung` §7.2 die Trennung von `remesh_mesh`
+      und `remesh_uniform` am eindrücklichsten begründet, ist unter trimesh
+      5.0.0 zusammengefallen: 160 084 statt 3 260 416 Dreiecke gegen
+      unveränderte 30 648. Die Entscheidung trägt weiter, aber auf dem anderen
+      Bein — der Streuung der Kantenlängen, 2,224 gegen 0,41.
+- [x] **Das Veröffentlichungskonzept wusste nicht, dass es einen Nachfolger
+      hat.** Von siebzehn Aussagen hielt eine; der Grund ist die Wende vom
+      12.08. von Testlauf-und-Verkauf zur kostenlosen Demo. Der Kopf sagt es
+      jetzt und verweist auf das Demo-Konzept.
+- [x] **P15 hakte einen ViewCube ab, den es seit dem 12.08. nicht mehr gibt**
+      (`f04c35d` ersetzte ihn durch das Achsenkreuz). Damit steht D4 wieder
+      ganz offen: Die Ansichtsleiste war mit dem Argument gestrichen worden,
+      der Würfel decke sie ab.
+
+**Was die Außenrecherche gebracht hat.** Drei Themenfelder haben sich in acht
+bis siebzehn Tagen so bewegt, dass Entscheidungen daran hängen:
+
+- [x] **Signierung — die Empfehlung dreht sich.** Azure Trusted Signing heißt
+      heute **Azure Artifact Signing** und ist für Einzelpersonen faktisch
+      verschlossen: Es verlangt eine Organisation mit drei Jahren
+      nachweisbarer Existenz und ein zahlendes Azure-Abonnement. **EV umgeht
+      SmartScreen nicht mehr** — Microsoft schreibt es ausdrücklich. Die
+      Laufzeit sank am 01.03.2026 von 39 Monaten auf 460 Tage. Dafür gibt es
+      einen Weg, den beide Konzepte nicht kannten: **Certum gibt ein
+      Cloud-OV-Zertifikat auf den Namen einer Privatperson** aus, 139 $ im
+      ersten Jahr, ohne Hardware-Token.
+- [x] **Meshy ist einen Schritt näher gekommen, nicht ferner.** Meshy 7 ging
+      am 10.08.2026 live. Die **Druckbarkeitsprüfung ist als API-Aufruf
+      kostenlos** und meldet dieselbe Liste, die Solidons Prüfbericht führt;
+      die Reparatur kostet 10 Guthaben. Das Kreativlabor rechnet seit dem
+      01.06. in **Millimetern** — das ist die Richtung, aus der ein Generator
+      in unser Feld kommt: über echte Maße an fertigen Produkten, nicht über
+      bessere Netze.
+- [x] **SindriCAD ist davongelaufen.** Von Fassung 0.1.81 auf **0.1.171**, von
+      20 auf **141 Sterne**, 69 Commits in der letzten Woche — sämtlich vom
+      Eigentümer. Architektur jetzt belegt: Python-Sidecar mit build123d auf
+      OpenCASCADE, Oberfläche TypeScript/Three.js in einer Tauri-Hülle,
+      Skizzenlöser **PlaneGCS**. Keine KI-Funktion im Programm, angekündigt am
+      09.08. Und die Aussage „doppelt so viele Texturmuster wie SindriCAD"
+      trägt nicht mehr: acht gegen sechs, und SindriCAD nimmt zusätzlich
+      Graustufenbilder als Höhenkarte.
+- [x] **Zwei Rechtsfristen sind eingetreten oder stehen an.** AI Act Artikel
+      50 gilt **seit dem 02.08.2026** (er nennt Audio, Bild, Video und Text —
+      3D-Modelle nicht, und dazu war kein Leitliniendokument auffindbar). Die
+      **CRA-Meldepflichten greifen ab dem 11.09.2026**, also mitten in der
+      Demo-Phase; die Ausnahme für freie Software gilt nur bei
+      unentgeltlicher Bereitstellung.
+- [x] **Der Fassungssatz hat wieder eine Arbeitsliste.** PySide6 und
+      shiboken6 6.11.2 (18.08.), und **vtk 9.7.0 ist da, aber nicht ziehbar**:
+      pyvista 0.48.4 verlangt in seinen Metadaten `vtk<9.7.0`. Hier entsteht
+      die nächste Obergrenze, und sie liegt nicht in unserer Hand. Python
+      3.15.0rc1 ist erschienen (Freigabe 01.10.), aber PySide6 deklariert
+      `Python <3.15` — P5 bleibt die Wahl zwischen 3.13 und 3.14.
+
+**Was die Durchsicht nebenbei am Code gefunden hat**, jeweils außerhalb der
+Konzeptdateien und deshalb hier und nicht dort:
+
+- [ ] **`CLAUDE.md:95` nennt `trimesh<5` als „aufgeschobene Migration".** Der
+      Satz ist seit dem 14.08. falsch — `pyproject.toml:26` verlangt
+      `trimesh>=5.0`, installiert ist 5.0.0, und damit steht dort **keine
+      einzige Obergrenze mehr**. Er sitzt an einer Stelle, die jede Sitzung
+      liest.
+- [ ] **`CLAUDE.md` schickt den Leser für den Umsetzungsstand der
+      Bedienkonzepte in ihre Schlusstabellen** — die nennen den Weg und den
+      Aufwand, nicht den Stand. Umgesetzt ist von sechzehn Regeln und sechs
+      Konzepten bis heute keines; drei sind auf anderem Weg eingelöst worden.
+      Beide Tabellen haben jetzt eine Stand-Spalte; der Satz in `CLAUDE.md`
+      gehört nachgezogen oder gestrichen.
+- [ ] **`3d-agent-bauplan.md:1244` zählt fünf neue Werkzeuge und nennt vier.**
+      Der Rest des zurückgenommenen `set_print_setting`. Eine Bauplanänderung
+      wird angesagt, nicht nebenbei gemacht.
+- [ ] **`ROADMAP.md:5511` sagt „Achter Umschalter in der Werkzeugzeile".** Es
+      ist der siebte, `Alt+7`.
+- [ ] **`app/core/backends/llm.py:223` sendet `temperature` unbedingt mit.**
+      Ab Claude Opus 4.7 ist der Parameter abgekündigt; ein Nicht-Standardwert
+      liefert einen 400er. Mit Sonnet 4.5 und 4.6 geht es weiter, mit jedem
+      neueren Modell scheitert der Aufruf. Dazu ist
+      `DEFAULT_ANTHROPIC_MODEL = "claude-sonnet-4-5"` ein Alias auf den
+      Schnappschuss vom 29.09.2025 mit vorläufigem Rückzugsdatum „not sooner
+      than September 29, 2026"; der Nachfolger `claude-sonnet-5` kostet
+      weniger und hat das fünffache Kontextfenster.
+- [ ] **Drei Docstrings beschreiben einen überholten Stand.**
+      `app/core/geom/pins.py:111` kennt den Schnappverbinder nicht, obwohl
+      `plan_pins` ihn verarbeitet; `app/ui/start_screen.py:474` sagt „acht
+      Beispiele", es sind neun; `app/core/export/handover.py:722–731` trägt
+      den PETG-Volumenstrom 12 statt 10.
+- [ ] **D4 steht wieder offen** — ViewCube und Ansichtsleiste, siehe oben. Die
+      sieben Kameravoreinstellungen liegen wieder allein im Menü.
+- [ ] **B1 aus dem Erzeugen-Konzept steht in keiner Arbeitsliste** — die
+      Frage, ob ein gehosteter Erzeugungsdienst als zweiter Weg neben ComfyUI
+      treten soll. Jetzt steht sie hier.
+
+**Was nicht belegbar war und deshalb offen blieb.** Die Durchsicht hat an
+neunzehn Stellen ausdrücklich nichts eingetragen: Messwerte, die einen
+bestimmten Aufbau brauchen (Fahrgerüst mit echter Qt-Plattform, ComfyUI,
+Ollama, Browsermessungen), Zahlen, die ein Anbieter nicht herausgibt
+(SindriCADs Downloadzahlen, Patreon-Stände, Alibre- und nTop-Preise), und die
+Frage, ob ein erzeugtes 3D-Modell unter die Kennzeichnungspflicht des AI Act
+fällt. Eine ehrliche Lücke ist wertvoller als eine plausible Zahl — die
+Vorarbeit dazu liegt in `.claude/.state/konzept-durchsicht-2026-08-19/`.
+
+**Eine Lehre für die nächste Durchsicht.** Eine Recherche, die aus „steht
+nicht in der Dokumentation" auf „gibt es nicht" schließt, ist keine. Der
+Rechercheur zu Claude Code hat auf diesem Weg drei richtige Aussagen der
+Bedienkonzepte für falsch erklärt — `argument-hint` etwa steht in sieben
+Skills dieses Projekts und funktioniert. Der Korrekturvermerk liegt bei der
+Vorarbeit.
+
+---

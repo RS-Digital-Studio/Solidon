@@ -6,7 +6,8 @@ und den VTK-Interactor — also über dieselben Wege, die eine Maus nimmt. Alles
 unten ist gemessen oder fotografiert, nicht abgeleitet. Wo eine erste Messung
 falsch war, steht die Korrektur dabei.
 
-> **Stand 08.08.2026.** Die Befunde 1.1 bis 2.6 sind behoben, jeder mit Test
+> **Stand 08.08.2026, nachrecherchiert am 19.08.2026.** Die Befunde 1.1 bis 2.6
+> sind behoben, jeder mit Test
 > und am laufenden Fenster nachgemessen; die Zahlen dazu stehen im
 > [Nachtrag](#nachtrag--was-daraus-wurde-08082026-derselbe-tag) am Ende dieser
 > Datei. Offen bleibt allein 2.7, und zwar als Entscheidung: welche
@@ -28,11 +29,27 @@ falsch war, steht die Korrektur dabei.
 > Nachgereicht am selben Tag: die Karte wuchs weiterhin nicht, wenn Befunde
 > **nach** der Auswertung dazukamen — im Handbuchbild acht im Kopf gezählt,
 > zwei zu sehen (`f49a7fa`).
+>
+> **Elf Tage später, 19.08.2026:** Die Behebungen halten, keine ist
+> zurückgenommen, jede trägt ihren Test — `tests/test_overlay.py:332`
+> `test_a_wrapped_finding_is_measured_at_its_real_height`, `:363`
+> `test_findings_that_arrive_later_make_the_card_grow`, `:408`
+> `test_a_card_uses_the_room_a_tall_window_offers`, `:439`
+> `test_one_action_moves_a_card_once`, dazu `tests/test_analysis_ui.py:412`
+> und `:432` für die beiden Kontextmenüs. Was **nicht** hält, sind die
+> Zählungen: 295 Commits liegen dazwischen, und fast jede Zahl unten ist heute
+> eine andere. Zwei davon waren schon am 08.08. keine Zählung, sondern eine
+> Fehlzählung — die 23 Bausteine und die 42 Kürzelgruppen (siehe Teil 3). Der
+> heutige Wert steht jeweils daneben; die Sammelübersicht am Ende unter
+> [Nachrecherchiert am 19.08.2026](#nachrecherchiert-am-19082026).
 
 **Durchgegangen:** Erstinbetriebnahme mit frischem Nutzerverzeichnis ·
-Startbildschirm mit allen acht Beispielen · alle neun Menüs mit 127 Einträgen ·
-alle 77 registrierten Operationen, davon 72 Dialoge einzeln geöffnet und
-vermessen · Viewport mit Auswahl, Merkmalen, Kontextmenü, beiden Messarten ·
+Startbildschirm mit allen acht Beispielen (heute neun — `weg4-figur-formen.p3d`
+kam am 14.08.2026 dazu, `5a9418c`) · alle neun Menüs mit 127 Einträgen (heute
+136) · alle 77 damals registrierten Operationen (heute 85), davon 72 Dialoge
+einzeln geöffnet und
+vermessen (heute 80 mit Dialog, fünf ohne) · Viewport mit Auswahl, Merkmalen,
+Kontextmenü, beiden Messarten ·
 alle sieben Analysekarten · Schichtenvorschau · Objektbaum, Parameterleiste,
 Verlauf, Prüfbericht, Chat, Tour · Bausteinkatalog mit Suche · Skizzeneditor ·
 Kalibrieren, Einstellungen, Varianten, Tastenkürzel, Über, Fehlerbericht,
@@ -70,18 +87,18 @@ in derselben Karte, übereinander.
 
 **Zwei Ursachen, beide belegbar.**
 
-Links ist es ein fester Zeilendeckel. `MAX_ROWS = 12` in
-[panels.py:981](app/ui/panels.py:981), gesetzt über `setFixedHeight` in
-[`fit_to_rows`](app/ui/panels.py:1018). Zwölf Zeilen sind zwölf Zeilen — ob
+Links ist es ein fester Zeilendeckel. `MAX_ROWS = 12` in `app/ui/panels.py`
+(am 08.08. Zeile 981, heute 1483), gesetzt über `setFixedHeight` in
+`panels.fit_to_rows` (heute `panels.py:1522`). Zwölf Zeilen sind zwölf Zeilen — ob
 das Fenster 800 px hoch ist oder 1369. Der Kommentar dort nennt den Grund
 („damit ein Baum mit fünfzig Teilen nicht die ganze Spalte nimmt"), und der
 ist richtig; die Antwort darauf darf nur keine Konstante sein.
 
-Rechts ist es die Höhenrechnung der Zone.
-[`natural_height`](app/ui/overlay.py:160) summiert `sizeHint()` plus die
+Rechts ist es die Höhenrechnung der Zone. `overlay.natural_height` (am 08.08.
+Zeile 160, heute `overlay.py:258`) summiert `sizeHint()` plus die
 Korrektur aus `rows_height`, und `rows_height` fragt für ein `QListWidget`
 über `sizeHintForRow`. Der Prüfbericht setzt aber `setWordWrap(True)`
-([panels.py:756](app/ui/panels.py:756)) — ein umgebrochener Befund ist zwei
+(am 08.08. `panels.py:756`, heute `panels.py:1095`) — ein umgebrochener Befund ist zwei
 oder drei Zeilen hoch, und die Rechnung hält ihn für eine. Deshalb wird die
 Zone auf einen Wert gedeckelt, der kleiner ist als ihr eigener Inhalt: bei
 **fünf** Befunden steht ein Rollbalken da, mit 872 px freier Fläche daneben.
@@ -94,14 +111,22 @@ kein Chatfenster, das ist ein Briefschlitz.
 
 1. Der Zeilendeckel wird ein Anteil der verfügbaren Höhe statt einer Zahl.
    Die drei Abschnitte links teilen sich, was übrig ist, statt es an
-   `addStretch(1)` ([main_window.py:548](app/ui/main_window.py:548)) zu
-   verlieren.
+   `addStretch(1)` (am 08.08. `main_window.py:548`, heute `main_window.py:845`)
+   zu verlieren.
 2. `rows_height` rechnet für umbrechende Listen mit `heightForWidth` der
    Zeile statt mit `sizeHintForRow`. Prüfbar an genau dem Fall, der jetzt
    scheitert: fünf Befunde im Prüfbericht, kein Rollbalken.
 3. Chat und Prüfbericht bekommen eine Mindesthöhe, die sich am Platz
    bemisst und nicht am Inhalt. Ein leerer Chat auf 600 px sieht aus wie ein
    Chat; einer auf 170 px sieht aus wie ein Fehler.
+
+> **Erledigt — und die beschriebene Ursache gibt es nicht mehr.** `rows_height`
+> misst heute über `visualRect` statt über `sizeHintForRow` allein
+> (`app/ui/overlay.py:238`), und `MAX_ROWS` ist kein Deckel mehr, sondern die
+> Rückfallzahl für den Fall, dass die Überlagerung gar keinen Raum zugeteilt
+> hat: `panels.py:1541` rechnet
+> `ceiling = room if room is not None else chrome + MAX_ROWS * row_height`
+> (`b017fde`, 08.08.2026; nachgereicht `f49a7fa`). Geprüft am 19.08.2026.
 
 ---
 
@@ -129,7 +154,10 @@ Maß ist jeder Wert neu — das ist die Handlung, um die es geht.
 
 Ohne Fremdlast gemessen (1 % CPU, kein anderes Programm), dreimal
 wiederholt. Das ist der Faktor fünf bis sieben über dem eigenen Budget, an der
-Stelle, die der Bauplan als zweiten von drei Hauptwegen führt.
+Stelle, die der Bauplan als zweiten von drei Hauptwegen führt. *(Es sind
+inzwischen **vier**: §2.2 heißt seit P16 „Vier Hauptwege"
+(`3d-agent-bauplan.md:101`), und `tests/test_examples.py:23`
+`test_there_is_one_example_per_way` prüft `ways == ["1","2","3","4"]`.)*
 
 **Zu tun**
 
@@ -141,9 +169,21 @@ Stelle, die der Bauplan als zweiten von drei Hauptwegen führt.
 3. Bis das gelöst ist: die Vorschau während des Ziehens in Entwurfsqualität
    und das Feine erst beim Loslassen — §31 sieht die zwei Stufen vor.
 
+> **Erledigt, und seither ein zweites Mal angefasst.** `b3de01e` (08.08.2026)
+> nahm die 113168 Anfragen aus der Slot-Übertragung heraus. Am 18.08.2026 kam
+> `61d863d` dazu: „Die Live-Vorschau rechnete den ganzen Stapel neu, obwohl ihr
+> Docstring seit jeher das Gegenteil zusagt … Der Aufruf reichte ihn nie durch"
+> (`ROADMAP.md:6514`). Die 1,47 s aus dem Nachtrag wurden **vor** dieser
+> Änderung gemessen und sind damit ein Wert vom 08.08., kein heutiger.
+
 ---
 
 ### 1.3 Der Prozess stirbt gelegentlich mitten in der Arbeit
+
+> **Behoben am 08.08.2026** — nicht durch eine eigene Maßnahme, sondern als
+> Nebenwirkung von `b3de01e`: derselbe Vorfilter, der 1.2 und 2.6 löst, nimmt
+> dem rtree-Index 99 von 100 Anfragen ab. Wer den Index kaum noch fragt, greift
+> auch kaum noch daneben.
 
 In diesem Audit einmal in zehn Läufen: nach einer Parameteränderung eine
 Zugriffsverletzung in `rtree`, unmittelbar danach
@@ -152,12 +192,15 @@ Zugriffsverletzung in `rtree`, unmittelbar danach
 SystemError: setobject.c:2676: bad argument to internal function
 ```
 
-in [features.py:261](app/core/perceive/features.py:261) — beim Nachschlagen in
+in `app/core/perceive/features.py` (am 08.08. Zeile 261; die Zeile ist seither
+verschoben, die Datei zählt heute 478) — beim Nachschlagen in
 einem gewöhnlichen Python-Set. Danach ein Segmentation fault, der Prozess weg.
 
-Der Code kennt die Ursache und sagt es offen
-([mesh.py:169](app/core/geom/mesh.py:169)): rtree greift „reproduzierbar
-daneben — eine Zugriffsverletzung in etwa jedem zwanzigsten Lauf". Der
+Der Code kannte die Ursache und sagte es offen (am 08.08. `mesh.py:169`): rtree
+greift „reproduzierbar
+daneben — eine Zugriffsverletzung in etwa jedem zwanzigsten Lauf". *(Der Satz
+steht dort nicht mehr: `app/core/geom/mesh.py:182–189` nennt heute 113168 → 1180
+Anfragen und „sechzig Auswertungen ohne Fehlgriff".)* Der
 Wiederholversuch an einer Kopie ist die richtige Antwort auf den *Aufruf*.
 Er heilt aber nicht den Speicher: wenn eine Fremdbibliothek in fremde Seiten
 schreibt, fällt kurz darauf etwas anderes um — hier ein Set, das mit Geometrie
@@ -178,6 +221,15 @@ laufende Sitzung ist trotzdem fort.
 3. Die Häufigkeit belegen statt schätzen: denselben Ablauf hundertmal fahren
    und zählen. „Jeder zwanzigste Lauf" steht als Kommentar im Code und ist
    die einzige Zahl, die es dazu gibt.
+
+> **Erledigt über Weg 1 — der Index wird kaum noch gefragt.** Statt ihn in einen
+> eigenen Prozess zu legen, fällt er weitgehend weg: 113168 → 1180 Anfragen je
+> Auswertung, 0 Fehlgriffe in 60 Läufen (`app/core/geom/mesh.py:182–189`). Die
+> Häufigkeit ist damit gezählt, nicht mehr geschätzt — aber nur *nach* dem
+> Vorfilter. **Offen bleibt**, wie oft libspatialindex daneben greift, wenn man
+> ihn oft fragt: die Recherche vom 19.08.2026 hat zum Fehlerbild von rtree /
+> libspatialindex nichts gefunden, die „jeder zwanzigste Lauf" bleiben eine
+> Beobachtung dieses Hauses ohne Beleg von außen.
 
 ---
 
@@ -356,9 +408,35 @@ Kapiteln in 2,5 s. Tastenkürzel-Fenster mit 42 Gruppen. Rückgängig stellt den
 Stapel wieder her (7 → 8 → 7). Die Abfrage beim Schließen mit ungesicherten
 Änderungen ist richtig — Schließen ist nicht rücknehmbar.
 
+> **Zwei dieser vier Zahlen zählen Baumzeilen, nicht Dinge — und taten das
+> schon am 08.08.** Der Katalog baut einen Baum aus Gruppen
+> (`app/ui/catalog.py:157–162`): 16 Bausteine unter 7 Gruppenköpfen ergaben
+> genau die 23 gezählten Zeilen. Es waren nie 23 Bausteine; heute sind es
+> **17 in sieben Gruppen**. Dasselbe beim Kürzel-Fenster: 36 Kürzelzeilen
+> plus 6 fettgedruckte Gruppenköpfe (`app/ui/shortcuts_window.py:100–110`)
+> sind 42 Baumzeilen — es sind **sechs** Gruppen, nicht 42.
+>
+> Von den anderen beiden ist eine gewachsen und eine nicht mehr
+> nachvollziehbar: Das Handbuch hat heute **40 Kapitel** (`manual.pages()`).
+> Der Skizzeneditor trägt 15 Werkzeugknöpfe, 8 Einträge in deren
+> Aufklappmenüs und 10 Bedingungsknöpfe; welche Teilmenge davon 24 ergab,
+> lässt sich nicht rekonstruieren.
+>
+> Richtig hieße der Satz: „Bausteinkatalog mit 17 Bausteinen in sieben
+> Gruppen · Skizzeneditor mit 15 Werkzeugen und 10 Bedingungen · Handbuch mit
+> 40 Kapiteln · Tastenkürzel-Fenster mit 36 Tasten in sechs Gruppen."
+
 ---
 
 ## Teil 4 — Vorschlag zur Reihenfolge
+
+> **Alle sechs Punkte sind abgearbeitet — diese Liste ist Geschichte, keine
+> Arbeit.** Sie steht hier als Begründung der Reihenfolge, in der gebaut
+> wurde. Wer sie als Rückstand liest, liest sie falsch: Der Nachtrag am Ende
+> desselben Dokuments meldete schon am 08.08.2026 alle Befunde 1.1 bis 2.6
+> als behoben, und die Behebungen halten bis heute (19.08.2026, nachgeprüft
+> an `main`). Die Belege stehen bei den Befunden selbst; die Sammelstelle ist
+> `ROADMAP.md`, Abschnitt „Aus Kundensicht vollständig nachgefahren".
 
 1. **Die Höhenrechnung der Karten** (1.1). Ein Tag Arbeit, sichtbar auf jedem
    Bildschirmfoto, betrifft jede Zone. Prüfbar an fünf Befunden ohne
@@ -453,3 +531,47 @@ grün, in der Suite rot. Er prüft jetzt, dass etwas angemeldet ist, nicht wie
 lange es dauert.
 
 Stand danach: **3168 Tests grün**, ruff und mypy sauber.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Fünfzehn Aussagen dieses Dokuments über den eigenen Code nachgeprüft, 295
+Commits nach seinem Stand: **drei stimmen, sieben sind überholt, zwei waren
+schon am 08.08. falsch, drei sind nicht mehr prüfbar.**
+
+**Die Befunde selbst sind nicht das Problem — sie halten alle.** Überholt sind
+fast ausschließlich *Zahlen*, und das war absehbar: Ein Dokument, das den
+Zustand eines Fensters zählt, altert mit jedem Commit an diesem Fenster.
+
+**Zwei Fehlzählungen von Anfang an**, beide derselben Art: Es wurden
+Baumzeilen gezählt und Dinge dazugeschrieben. 23 „Bausteine" waren 16
+Bausteine unter 7 Gruppenköpfen, 42 „Kürzelgruppen" waren 36 Kürzel unter 6
+Gruppenköpfen. Wer eine Baumansicht zählt, zählt die Köpfe mit.
+
+**Ein Widerspruch im Dokument selbst:** Abschnitt 2.4 nennt `fit.violated` als
+Warnung des Dose-Beispiels und erklärt, die Tour gehe absichtlich darauf ein —
+der Nachtrag zählt dasselbe Beispiel dann als warnungsfrei. Es sind **zwei**
+Beispiele mit Warnung, nicht eines: `weg3-generiert-aufbereiten` (drei
+Warnungen, das ist sein Zweck) und `dose-mit-deckel` (`fit.violated`). Derselbe
+Fehler steht in `ROADMAP.md:3400`, dort zusätzlich mit der inzwischen falschen
+Acht.
+
+**Kein einziger der neun Zeilenverweise stimmt noch.** `panels.py:981` zeigt
+heute mitten in `fit_wrapped`, `main_window.py:2665` in den
+Druckeinstellungs-Dialog, `overlay.py:160` vor `rows_height`. Die Lehre steht
+in der Zahl: Zeilennummern in einem Dokument, das derselbe Tag schon überholt
+hat, sind Zahlen mit Verfallsdatum — künftig nur noch Symbolnamen
+(`panels.MAX_ROWS`, `overlay.natural_height`).
+
+**Was gewachsen ist:** 77 Operationen → 85 (80 mit Dialog, fünf ohne) · 127
+Menüeinträge → 136 · acht Beispiele → neun · 33 Handbuchkapitel → 40 · 1986
+englische Katalogeinträge → 2564 · 3168 Tests → 4246. Sieben Analysekarten und
+14 Fehlerklassen sind unverändert.
+
+**Nicht mehr prüfbar und deshalb offen gelassen:** die Nachher-Messwerte
+(Parameteränderung 1,47 s, erstes Öffnen 1,55 s, 1180 rtree-Anfragen, null
+Fehlgriffe in 60 Läufen, die Pixelhöhen) und die Zeiten der Analysekarten. Sie
+stammen aus einem Fahrgerüst mit echter Qt-Plattform im Vollbild; der Aufbau
+ist hier nicht wiederholt worden, und ohne ihn wäre jede neue Zahl eine andere
+Messung, kein Vergleich. Sie bleiben als datierte Messwerte stehen.

@@ -1,5 +1,7 @@
 # Konzept P15 — Konstruieren und Zeigen
 
+Stand 03.08.2026, erledigt am 08.08.2026, nachrecherchiert am 19.08.2026.
+
 > **Erledigt.** Dieser Satz stand hier bis zum 08.08.2026 als „Entwurf, noch
 > nicht beschlossen" — beschlossen und gebaut wurde er längst. Die ROADMAP
 > führt P15 als „vollständig abgearbeitet"; von zweiundzwanzig Lücken sind
@@ -173,7 +175,16 @@ sich niemand sonst leistet.
 
 ## 2. Ist-Stand Solidon — gemessen, nicht behauptet
 
-Erhoben am 03.08.2026 gegen den Arbeitsbaum:
+Erhoben am 03.08.2026 gegen den Arbeitsbaum — also **vor** den Etappen dieses
+Konzepts. Was sie daran geändert haben, steht in §7.
+
+> **Nachgezählt am 19.08.2026:** 85 Operationen in 15 Kategorien, 17
+> Bausteine, 4232 Tests (ohne `performance`). Export kann zusätzlich **GLB**
+> (seit `d4dea28`, 11.08.2026). Kantenglättung, Umgebungsverdeckung,
+> Kontaktschatten und Feature-Kanten sind gebaut
+> (`app/ui/viewport.py:1258`, `:1286`, `:403`, `:1716`); **Studiolicht,
+> Ansichtsleiste und Druckerverbindung fehlen weiterhin** — die ersten beiden
+> bewusst, die dritte als notierte Nicht-Aufgabe (D22).
 
 * **55 Operationen** im Register, 16 Kategorien; **16 Bausteine**
 * **2211 Tests grün** (`-m "not performance"`, 158 s), keine Importfehler
@@ -675,6 +686,19 @@ zu hängen, wird rot — nachgewiesen an einem Wegwerf-Eintrag.
       zweite Leiste daneben wäre Doppelung, die Viewport-Fläche kostet — genau
       das, was §5 verhindern soll. Menüeinträge und Kürzel bleiben, weil eine
       Ansicht keine Operation ist (§19.2)
+
+      > **Den Würfel gibt es seit dem 12.08.2026 nicht mehr.** `f04c35d` („Der
+      > Zeiger sagt jetzt, was ein Klick täte") hat
+      > `add_camera_orientation_widget()` durch `add_axes(...)` ersetzt; der
+      > Docstring von `_add_orientation_widget` (`app/ui/viewport.py:1192 ff.`)
+      > sagt es unumwunden: „Von den zwei Anzeigen, die damals doppelt im Bild
+      > standen, ist **der Würfel gegangen** und dieses Kreuz geblieben."
+      >
+      > Damit steht D4 heute wieder offen — **und zwar ganz**: Die
+      > Ansichtsleiste war mit dem Argument gestrichen worden, der Würfel decke
+      > sie ab. Der Würfel deckt nichts mehr ab. Sieben Kameravoreinstellungen
+      > liegen wieder allein im Menü, genau wie es §2 beschrieb.
+      > (Nachgeprüft am 19.08.2026.)
 - [x] Leistungsschutz: die Kantensuche hört bei 200 000 Dreiecken je Körper
       auf (0,15 ms je tausend, gemessen) — dieselbe Zahl wie das
       Dezimierungsziel, weil es dieselbe Frage ist
@@ -1035,3 +1059,43 @@ zehn Etappen. **Einfach bleiben** steht in §5 als sieben Zahlen, die rot
 werden. Die zweite Hälfte ist die schwierigere: Funktionen kann man
 nachliefern, eine überfüllte Oberfläche nicht zurücknehmen, ohne jemandem etwas
 wegzunehmen.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Siebzehn Aussagen über den eigenen Stand geprüft: **fünf stimmen, elf sind
+überholt, eine ist falsch.** Die Begründung des Konzepts trägt unverändert; die
+Bestandsaufnahme in §2 ist an praktisch jeder Zahl überholt, und das ist keine
+Überraschung — sie wurde vor den Etappen erhoben, die dieses Konzept auslöste.
+
+**Der eine Fund, der zählt: Etappe 1 hakt einen ViewCube ab, den es nicht mehr
+gibt.** Am 12.08.2026 hat `f04c35d` ihn durch das Achsenkreuz ersetzt. Damit
+steht **D4 wieder ganz offen** — die Ansichtsleiste war mit dem Argument
+gestrichen worden, der Würfel decke sie ab; er deckt nichts mehr ab. Wer die
+Etappenliste liest, hält den Punkt für erledigt. Der Docstring im Viewport sagt
+die Wahrheit, die Etappenliste nicht.
+
+**Was sich sonst gedreht hat:** 55 Operationen → 85, 16 Kategorien → 15 (nicht
+gewachsen, sondern anders geschnitten), 16 Bausteine → 17, 2211 Tests → 4232,
+und GLB steht seit dem 11.08. auch auf der Exportseite.
+
+**Was weiterhin fehlt und richtig als fehlend beschrieben ist:** Studiolicht,
+Ansichtsleiste, Druckerverbindung. Die dritte ist im Dokument selbst als
+Nicht-Aufgabe geführt (D22) und bleibt es.
+
+**Zur Außenwelt** — die drei Programme, gegen die dieses Konzept sich misst:
+
+- **SindriCAD** ist seit dem 4. August von Fassung 0.1.81 auf 0.1.171 gelaufen
+  und von 20 auf 141 Sterne. Sein Skizzenlöser ist PlaneGCS, seine Geometrie
+  ein Python-Sidecar mit build123d auf OpenCASCADE.
+- **FreeCAD** steht auf 1.1.3 und stellt auf kalendarische Fassungen um; die
+  MCP-Anbindung, die dieses Konzept als Signal liest, hat inzwischen
+  Gesellschaft bekommen: **Autodesk hat zwei eigene MCP-Server veröffentlicht**,
+  einen davon lokal für Fusion.
+- **Autodesk Fusion** kostet gewerblich 703 €/Jahr in Deutschland; die
+  Privatnutzung bleibt kostenlos, mit zehn aktiven Dokumenten.
+
+**Zu den Kontrastwerten in den Barrierefreiheitsargumenten:** WCAG verlangt
+weiterhin 3:1 für Bedienelemente und grafische Objekte und 4,5:1 für Text —
+daran hat sich nichts geändert.

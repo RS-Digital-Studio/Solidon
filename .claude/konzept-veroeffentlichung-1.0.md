@@ -1,7 +1,22 @@
 # Konzept: Erste Veröffentlichung (Solidon 1.0)
 
-Stand 06.08.2026. Deckt ROADMAP-P8 ab und geht darüber hinaus: die Website
-nennt seit ihrer Entstehung ein Bezahlmodell, für das im Code nichts existiert.
+> **Dieses Dokument hat einen Nachfolger, und es wusste es bis zum 19.08.2026
+> nicht.** Am 12.08.2026 ist aus dem Vierzehn-Tage-Testlauf mit Verkauf eine
+> **kostenlose öffentliche Demo bis zum 30.10.2026** geworden —
+> `.claude/konzept-demo-2026-10.md`, `ROADMAP.md:4465`. Der Kern trägt die
+> Änderung längst: `app/core/activation/store.py:50` führt
+> `DEMO_UNTIL = date(2026, 10, 30)`.
+>
+> Damit sind §2 A, §2 C, §3, die Schritte V5 bis V9 und die halbe
+> Fortschrittstabelle nicht falsch geschrieben, sondern **überholt**. Von
+> siebzehn geprüften Aussagen über den eigenen Stand hält heute genau eine.
+> Was hier steht, bleibt als Begründung der Entscheidungen lesbar; **den Weg
+> beschreibt das Demo-Konzept.** Wer nach dem nächsten Schritt sucht, sucht
+> ihn dort.
+
+Stand 06.08.2026, nachrecherchiert am 19.08.2026. Deckt ROADMAP-P8 ab und geht
+darüber hinaus: die Website nennt seit ihrer Entstehung ein Bezahlmodell, für
+das im Code nichts existiert.
 
 Dieses Dokument ist die fachliche SSOT der Veröffentlichung. Der Umsetzungsplan
 in §4 referenziert die §§, statt sie zu wiederholen. Jede Ist-Aussage in §1 ist
@@ -276,11 +291,45 @@ Drei Optionen, und keine davon ist gratis:
 | **Azure Trusted Signing** | ~10 $/Monat | signiert; Reputation baut sich auf. Verlangt Nachweise zum Unternehmen |
 | **OV-Zertifikat auf Token/HSM** | ~250–400 €/Jahr | signiert; Reputation baut sich auf. Der Token muss beim Signieren erreichbar sein — CI wird damit unbequem |
 
+> **Nachrecherchiert am 19.08.2026 — vier Dinge haben sich geändert, und eines
+> davon kippt die Empfehlung.**
+>
+> 1. **Der Dienst heißt nicht mehr Azure Trusted Signing, sondern Azure
+>    Artifact Signing.** Der Preis stimmt: Basic 9,99 $ je Monat und Konto,
+>    5000 Signaturen inbegriffen.
+> 2. **Er ist für Einzelpersonen faktisch verschlossen.** Öffentlich
+>    vertrauenswürdige Zertifikate gibt es dort für **Organisationen** mit
+>    drei Jahren nachweisbarer Existenz; kostenlose oder gesponserte
+>    Azure-Abonnements werden nicht unterstützt, ein zahlendes ist Pflicht.
+>    Die Identitätsprüfung läuft über Microsoft Verified ID und AU10TIX und
+>    dauert 1 bis 20 Werktage.
+> 3. **EV-Zertifikate umgehen SmartScreen nicht mehr** — Microsoft schreibt
+>    ausdrücklich, das frühere Verhalten (sofortige positive Reputation)
+>    existiere nicht mehr. Damit fällt das teuerste Argument für EV weg. Auch
+>    ein gültig signiertes, frisch gebautes Binary löst zunächst die Warnung
+>    „unbekannte App" aus — immerhin mit geprüftem Herausgebernamen.
+> 4. **Die Laufzeiten sind kürzer geworden:** seit dem 01.03.2026 höchstens
+>    **460 Tage** statt 39 Monate (CA/Browser-Forum-Beschluss CSC-31). Wer
+>    dreijährig kalkuliert, kalkuliert falsch.
+>
+> **Und es gibt einen Weg, den dieses Kapitel nicht kennt:** Certum bietet ein
+> Cloud-OV-Zertifikat **auf den Namen einer Privatperson** — 139 $ für ein
+> Jahr, 115 $/Jahr bei drei Jahren, ohne Hardware-Token. Deutsche
+> Wiederverkäufer nennen 97–99 € im Jahr. Das ist die Lücke zwischen „gar
+> nicht" und „Firma gründen", und sie war am 06.08. noch nicht in der Tabelle.
+
 **Empfehlung:** Azure Trusted Signing ansehen, weil es ohne Hardware in die CI
 passt. Wenn die Voraussetzungen nicht erfüllt sind, für 1.0 **unsigniert
 ausliefern und es auf der Download-Seite erklären** — ein Satz „Diese Datei ist
 noch nicht signiert, deshalb warnt Windows; hier ist die SHA-256-Prüfsumme"
 kostet nichts und ist ehrlicher als eine Warnung ohne Erklärung.
+
+> **Die Empfehlung dreht sich damit um.** Azure Artifact Signing setzt eine
+> Organisation voraus; für einen Einzelentwickler ist der Certum-Weg der
+> naheliegende, und er kostet weniger als die hier genannten 250–400 €.
+> Bleibt es beim unsignierten Ausliefern, gilt zusätzlich: **die Reputation
+> baut sich für jede neue Fassung bei null neu auf** — sie wandert nicht von
+> der Vorversion mit.
 
 **Der Signierschritt in `build.yml` muss so oder so angefasst werden**: heute
 überspringt er sich ohne Secret und wäre mit einem heutigen Zertifikat falsch.
@@ -406,6 +455,37 @@ beide Artefakte (Setup-Datei und tar.gz) heruntergeladen und geöffnet.
    fünf Stellen (`branding.py:29`, Über-Dialog, Fehlerbericht, beide
    Startseiten)
 6. Die Texte fachlich prüfen lassen (§2 D, Warnkasten)
+
+> **Vier Fristen von außen, nachrecherchiert am 19.08.2026.** Sie stehen hier
+> als Fundstellen, nicht als Rechtsrat — Punkt 6 bleibt genau deshalb stehen.
+>
+> - **Widerrufsrecht bei digitalen Inhalten (§ 356 Abs. 6 BGB).** Es erlischt
+>   nur, wenn **vier** Dinge zusammenkommen: ausdrückliche Zustimmung des
+>   Verbrauchers zum vorzeitigen Beginn, seine Kenntnisnahme vom Erlöschen,
+>   die Bestätigung des Unternehmers nach § 312f Abs. 3 BGB — und darin muss
+>   festgehalten sein, dass der Verbraucher zugestimmt hat. Ein Haken im
+>   Checkout allein genügt nicht; die Bestätigung muss es dokumentieren. Das
+>   betrifft Punkt 4 und ist mit dem Merchant of Record zu klären.
+> - **Cyber Resilience Act** (Verordnung (EU) 2024/2847): Die
+>   **Meldepflichten nach Artikel 14 greifen ab dem 11.09.2026** — also drei
+>   Wochen nach diesem Stand —, die vollen Anforderungen später. Wer Software
+>   gegen Geld vertreibt, ist Hersteller im Sinn der Verordnung; die Ausnahme
+>   für freie Software gilt nur, wenn sie **unentgeltlich** bereitgestellt
+>   wird. Für Solidon greift sie also nicht.
+> - **AI Act, Artikel 50** gilt **seit dem 02.08.2026**. Die Norm nennt
+>   ausdrücklich synthetische Audio-, Bild-, Video- und Textinhalte —
+>   **3D-Modelle nennt sie nicht.** Ob ein erzeugtes Netz darunterfällt, ist
+>   damit offen und gehört zu den Fragen für Punkt 6, nicht zu den Antworten.
+> - **Barrierefreiheitsstärkungsgesetz.** Als *Produkte* erfasst sind nur
+>   Hardwaresysteme, Terminals, Lesegeräte und dergleichen — eine verkaufte
+>   Desktop-Anwendung steht nicht darunter. Als *Dienstleistung* im
+>   elektronischen Geschäftsverkehr könnte der Verkauf über die eigene Seite
+>   erfasst sein; dafür gibt es die **Kleinstunternehmer-Ausnahme** (§ 3
+>   Abs. 3). Auch das ist eine Frage für die fachliche Prüfung.
+> - **GPSR** gilt seit dem 13.12.2024. Artikel 9 verlangt eine Typen-,
+>   Chargen- oder Seriennummer am Produkt sowie Name und Postanschrift des
+>   Herstellers — bei Software ist die Anwendbarkeit strittig, die
+>   Fassungsnummer und das Impressum decken die Angaben ohnehin ab.
 
 **Verifikation:** keine `[PLATZHALTER]` mehr in `website/` · Testmail an die
 Adresse kommt an · der Installer zeigt den EULA-Text, nicht die
@@ -768,3 +848,44 @@ Zwei Dinge, die beim Bauen aufgefallen sind und im Code als Kommentar stehen:
 * **`WEBSITE_URL` stand an zwei Stellen.** `tools/make_installer.py` trug die
   Adresse selbst, obwohl §37.1 sagt, dass alles Namensbezogene in
   `app/branding.py` steht. Jetzt dort, und der Kaufknopf liest dieselbe.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Siebzehn Aussagen über den eigenen Stand geprüft: **eine stimmt, vierzehn sind
+überholt, eine ist falsch, eine nicht prüfbar.** Der Grund ist keine
+Schlamperei, sondern eine Richtungsänderung, die das Dokument nicht kennt —
+siehe den Kasten am Kopf.
+
+**Was die Außenrecherche geändert hat**, und das ist hier der wertvollere Teil:
+
+- **Azure Trusted Signing heißt Azure Artifact Signing** und ist für
+  Einzelpersonen faktisch verschlossen: öffentlich vertrauenswürdige
+  Zertifikate gibt es dort für Organisationen mit drei Jahren nachweisbarer
+  Existenz, ein zahlendes Azure-Abonnement ist Pflicht, die Prüfung dauert 1
+  bis 20 Werktage. Der Preis von rund 10 $/Monat stimmt (Basic: 9,99 $, 5000
+  Signaturen).
+- **EV-Zertifikate umgehen SmartScreen nicht mehr.** Microsoft schreibt
+  ausdrücklich, das frühere Verhalten existiere nicht mehr. Damit fällt das
+  teuerste Argument für EV weg.
+- **Code-Signing-Zertifikate laufen seit dem 01.03.2026 höchstens 460 Tage**
+  statt 39 Monate.
+- **Ein Weg fehlt in der Tabelle:** Certum gibt ein Cloud-OV-Zertifikat auf den
+  Namen einer **Privatperson** aus — 139 $ im ersten Jahr, 115 $/Jahr bei drei
+  Jahren, ohne Hardware-Token. Das ist die Lücke zwischen „gar nicht" und
+  „Firma gründen".
+- **Vier Rechtsfristen** sind nachgetragen (bei V2): das
+  Vier-Punkte-Erfordernis des § 356 Abs. 6 BGB, die **CRA-Meldepflichten ab
+  dem 11.09.2026**, der seit dem 02.08.2026 geltende Artikel 50 des AI Act
+  (der 3D-Modelle nicht nennt), und die Frage, ob das BFSG den Verkauf über
+  die eigene Seite als Dienstleistung erfasst.
+
+**Nicht belegbar und deshalb offen gelassen:** die Gebührensätze im Einzelnen
+für Lemon Squeezy nach der Übernahme durch Stripe — Paddle nennt 5 % + 50 Cent
+je Transaktion, Polar.sh staffelt ab 5 % + 50 Cent. Wer sich entscheidet, holt
+die Sätze am Tag der Entscheidung.
+
+**Und der Satz aus dem Warnkasten in §2 D gilt unverändert:** Dies ist keine
+Rechtsberatung. Die Fundstellen oben ersetzen die fachliche Prüfung nicht, sie
+sagen nur, wonach zu fragen ist.

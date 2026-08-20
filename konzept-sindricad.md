@@ -1,5 +1,7 @@
 # Konzept — SindriCAD als Maßstab
 
+Stand 04.08.2026, nachrecherchiert am 19.08.2026.
+
 Anlass sind vier Fundstellen zu **SindriCAD**, einem freien parametrischen
 CAD-Programm für den 3D-Druck, das am 2. August 2026 als öffentliche Beta
 erschienen ist. Die Frage dahinter: *sowas wollen wir auch.*
@@ -40,6 +42,35 @@ als zweiten Konstruktionskern beschreibt (§30) — build123d über OpenCASCADE,
 genau die dort genannte Option. Solidon hat diesen Kern seit P12, aber als
 *zweiten* neben dem Mesh-Kern. SindriCAD hat nur diesen einen.
 
+> **Nachrecherchiert am 19.08.2026 — und die Technikzeile ist genauer, als
+> sie hier steht.** Die Geometrie rechnet ein **Python-Sidecar** mit build123d
+> auf OpenCASCADE; die Oberfläche ist TypeScript mit Three.js in der
+> Tauri-Hülle (Rust), beide reden JSON über einen lokalen WebSocket. Der
+> Skizzenlöser ist **PlaneGCS** — derselbe wie in FreeCAD. Die Projektdatei
+> `.sindri` ist JSON: eine Parametertabelle und eine geordnete Liste von
+> Features, jedes Zahlenfeld entweder ein Literal oder ein Parametername.
+> (Quelle: README des Projekts, geholt am 19.08.2026.)
+>
+> **In siebzehn Tagen ist daraus etwas anderes geworden.** Am 4. August stand
+> hier Fassung 0.1.81 mit 20 Sternen und 6 Forks. Am 19.08.2026:
+>
+> | | 04.08.2026 | 19.08.2026 |
+> |---|---|---|
+> | Fassung | 0.1.81 | **0.1.171** |
+> | Sterne | 20 | **141** |
+> | Forks | 6 | 13 |
+> | Größe | 13,4 MB | 17,3 MB |
+>
+> Das Repository wurde am 17.06.2026 angelegt, gut sieben Wochen vor der
+> Beta. Der letzte Commit auf `main` stammt vom 19.08.2026; die
+> Commitstatistik der letzten neun Wochen lautet 25, 7, 5, 51, 34, 51, 49, 80,
+> 69 — **sämtlich vom Eigentümer, kein einziger Fremdcommit.** Es gibt genau
+> ein Tag namens `beta`: ein Rolling Release, das aus jedem grünen
+> `main`-Build neu entsteht. Zwei Fehlerberichte sind offen, einer davon:
+> „Sign the macOS build (Apple Developer certificate)".
+> (Quellen: `api.github.com/repos/MakerViking/sindricad` samt `/tags`,
+> `/releases/tags/beta`, `/stats/participation`, abgerufen am 19.08.2026.)
+
 ### 1.2 Funktionsumfang, wie beworben
 
 * **Volumenmodellierung:** Extrudieren, Rotieren, Loften, Verrunden, Fasen,
@@ -72,6 +103,16 @@ Dazu eine radikal offene Finanzierung: 335 $ im Monat Sockelkosten, 19 % des
 Ziels erreicht, ein Monat ohne Entwicklung, weil die Werkzeuge unbezahlt
 blieben, 99 $ für das Apple-Entwicklerkonto als benannter Engpass. Ehrlichkeit
 als Marketing — und es funktioniert.
+
+> **Die Finanzierungszahlen ließen sich am 19.08.2026 nicht nachprüfen** und
+> bleiben deshalb als Angaben vom 4. August stehen: Patreon liefert die
+> Mitglieder- und Prozentstände nicht aus, und die Domain ist für das
+> Abrufwerkzeug gesperrt. Nachprüfbar ist nur, dass die Finanzierung weiter
+> offen kommuniziert wird und die Signierkosten weiter offen sind — der
+> Entwickler nennt am 18.08. neben den 99 $ für Apple auch ein
+> Windows-Zertifikat, ohne Betrag; der zugehörige Fehlerbericht (#7) ist seit
+> dem 04.08. offen. In welchem Monat die Entwicklung wegen unbezahlter
+> Werkzeuge stillstand, sagt er nicht — nur „once this year".
 
 ### 1.4 Das Umfeld, in dem das erscheint
 
@@ -117,6 +158,19 @@ committet. Die Zahlen unten stehen auf dem Stand danach.
 | Oberflächenmodule | 35 |
 | Phasen | P0 bis P15, Arbeitsliste bis auf einen Punkt abgetragen |
 
+> **Nachgezählt am 19.08.2026, 568 Commits später.** Jede Zeile dieser Tabelle
+> außer den Texturmustern ist gewachsen:
+>
+> | | 04.08.2026 | 19.08.2026 |
+> |---|---|---|
+> | Anwendung | 178 Dateien, 51.565 Zeilen | **208 Dateien, 80.743 Zeilen** |
+> | Tests | 95 Dateien, 25.678 Zeilen | **134 Dateien, 51.815 Zeilen** |
+> | Operationen | 61 | **85** |
+> | Bausteine | 16 | **17** |
+> | Texturmuster | 8 | 8 |
+> | Oberflächenmodule | 35 | **50** |
+> | Phasen | bis P15 | **bis P16** (Organische Modellierung), 12 offene Punkte gegen 444 erledigte |
+
 ### 2.2 Das Tor
 
 | Prüfung | Ergebnis |
@@ -126,7 +180,13 @@ committet. Die Zahlen unten stehen auf dem Stand danach.
 | `ruff check` | grün |
 | `pytest` | **2598 grün** in 3:35 min |
 
-### 2.3 Zwei Befunde aus der Kontrolle — beide erledigt
+### 2.3 Zwei Befunde aus der Kontrolle — einer erledigt, einer offen
+
+> **Die Überschrift hieß „beide erledigt" und widersprach dem Absatz
+> darunter**, der im Fettdruck sagt: „Das heißt: der Absturz ist selten, nicht
+> weg." Wer nur die Überschrift las, hielt einen offenen Punkt für abgehakt.
+> Die ROADMAP führt ihn bis heute (`:5793`, `:5913`), mit einem Messpunkt vom
+> 19.08.2026.
 
 **Der rote Übersetzungstest war kein Übersetzungsfehler.**
 `test_every_text_is_translated[en]` meldete drei **verwaiste** englische
@@ -172,10 +232,10 @@ dieses Dokuments.
 | Parametrische Historie | Op-Stack, non-destruktiv (Leitprinzip 2), Undo auf Transaktionsebene |
 | Benannte Parameter | Projektparameter §13 mit **eigener Grammatik ohne `eval`** (Regel 10) |
 | Zwangsbedingungen | 9 Bedingungen, eigener 2D-Solver auf scipy, Vollbestimmtheit wird erkannt und benannt |
-| Texturen: 4 Muster | **8 Muster** — `rib`, `wave`, `knurl_straight`, `knurl_diamond`, `hexagon`, `dimple`, `voronoi`, `noise` |
+| Texturen: 4 Muster (19.08.: **6 plus Höhenkarte**) | **8 Muster** — `rib`, `wave`, `knurl_straight`, `knurl_diamond`, `hexagon`, `dimple`, `voronoi`, `noise` |
 | Mehrfarbe über 3MF | `assign_slot`, `paint_slot`, `slots_from_texture`, 3MF mit Farbgruppen (§29) |
 | Messen, Schnitt | beides vorhanden, dazu Explosions- und Analyseleisten |
-| Import STEP/BREP/STL/3MF/OBJ/GLB | dieselben **plus** PLY, OFF, GLTF, SVG, DXF |
+| Import STEP/BREP/STL/3MF/OBJ/GLB | dieselben **bis auf BREP**, plus PLY, OFF, GLTF, SVG, DXF |
 | Export STL/STEP/3MF | dieselben plus OBJ, mit Exportprüfung als Bericht statt Blockade (§29) |
 | Ein Slicer (Orca) | **drei** — Prusa, Orca, Cura, mit Rückprüfung der geschriebenen Werte |
 | Vertraute Kürzel | `shortcut_schemes.py` mit Fusion-Belegung — **aber nur fürs Modellieren**, siehe 3.2 |
@@ -243,6 +303,16 @@ Alleinstellungsmerkmal mit Bild, Absatz und Bewegtbild.
 Kein Funktionsproblem. Ein Darstellungsproblem — und das ist bei
 gleichwertiger Substanz das teurere.
 
+> **„Doppelt so viele" gilt nicht mehr** (nachrecherchiert am 19.08.2026).
+> SindriCADs README nennt heute sechs benannte Muster — Rändel, Sechseck,
+> Rippe, Welle, Voronoi, Rauschen — **und dazu beliebige Graustufenbilder als
+> Höhenkarte**. Acht gegen sechs ist kein Vorsprung, den man vorzeigt, und
+> die Höhenkarte ist eine Gattung, die Solidon nicht hat. Der Befund selbst
+> wird dadurch nur schärfer: Wenn der Abstand in der Sache schrumpft, zählt
+> die Darstellung mehr, nicht weniger. Die facettierten Muster baut SindriCAD
+> als exakte Gitter — auch das ist ein Unterschied in der Art, nicht in der
+> Zahl.
+
 ### B3 — Die letzte Meile zum Drucker fehlt
 
 Solidon kommt weit: Exportprüfung, Slicer-Profil, Aufruf von Prusa, Orca oder
@@ -262,6 +332,14 @@ G-Code **erzeugen**. Der eigene Slicer bleibt ausgeschlossen (§41, AGENTS.md).
 `READABLE_SUFFIXES` liest `.glb` und `.gltf`; `writer.py` schreibt `stl`,
 `3mf`, `obj`, `step`. SindriCAD schreibt GLB. Nutzen: Vorschau und Weitergabe
 ohne CAD-Programm. Kleiner Punkt, kleine Arbeit.
+
+> **Erledigt — und es war wirklich kleine Arbeit.** `ExportFormat` führt seit
+> `d4dea28` (11.08.2026, „GLB kam herein und ging nicht hinaus") `stl`, `3mf`,
+> `obj`, **`ply`**, **`glb`**, `step` (`app/core/export/writer.py:54`,
+> `_glb_bytes` bei `:665`). Drei Tests halten es fest, darunter
+> `test_glb_keeps_the_measurements_it_was_given` und
+> `test_glb_carries_the_slot_colours` (`tests/test_export.py:206`, `:220`) —
+> die Farbzuordnung reist also mit.
 
 ### B5 — Es gibt uns nicht, solange niemand über uns schreibt
 
@@ -412,3 +490,49 @@ entscheidet, was „sowas wollen wir auch" heißen kann:
 **Diese Frage bleibt offen und wird nicht stillschweigend beantwortet**
 (Regel 21). Die Bausteine A bis D sind von ihr unabhängig und können sofort
 beginnen.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Zwei Seiten geprüft: die eigenen Zahlen gegen den Code (568 Commits nach dem
+Stand vom 4. August) und SindriCAD gegen sein eigenes Repository.
+
+**Innen: stimmt 5 · überholt 8 · falsch 1.** Fast alle Kennzahlen dieses
+Dokuments sind gewachsen — 61 Operationen auf 85, 16 Bausteine auf 17, 178
+Quelldateien auf 208, 35 Oberflächenmodule auf 50, die höchste Phase von P15
+auf P16. Der wichtigste Einzelfund: **B4 ist erledigt**, GLB geht seit dem
+11.08. auch hinaus. Eine Zeile war von Anfang an falsch: Solidon liest **kein**
+`.brep`, nur STEP — „dieselben Formate" stimmte an dieser einen Endung nicht.
+
+**Ein Widerspruch im Dokument:** Die Überschrift 2.3 sagte „beide erledigt",
+der Absatz darunter „der Absturz ist selten, nicht weg". Die Überschrift ist
+berichtigt.
+
+**Außen: SindriCAD ist in siebzehn Tagen davongelaufen.** Fassung 0.1.81 →
+**0.1.171**, 20 Sterne → **141**, 6 Forks → 13. In den letzten drei Wochen 51,
+49, 80 und 69 Commits — und kein einziger davon von jemand anderem als dem
+Eigentümer. Das Bild eines Einzelprojekts hat sich damit nicht geändert, sein
+Tempo schon.
+
+**Was die Recherche über die Technik ergänzt:** Die Geometrie rechnet ein
+Python-Sidecar mit build123d auf OpenCASCADE, die Oberfläche ist
+TypeScript/Three.js in einer Tauri-Hülle, beide reden JSON über einen lokalen
+WebSocket. Der Skizzenlöser ist **PlaneGCS** — derselbe wie in FreeCAD. Die
+Projektdatei ist JSON aus Parametertabelle und Featureliste. Eine KI-Funktion
+gibt es nicht; angekündigt hat der Entwickler sie am 09.08.
+
+**Eine Aussage dieses Dokuments trägt nicht mehr:** „doppelt so viele
+Texturmuster wie SindriCAD". Es sind acht gegen sechs, und SindriCAD nimmt
+zusätzlich beliebige Graustufenbilder als Höhenkarte — eine Gattung, die
+Solidon nicht hat. Der Befund B2 wird dadurch nicht schwächer, sondern
+dringlicher: Wenn der Abstand in der Sache schrumpft, zählt die Darstellung
+mehr.
+
+**Nicht belegbar und deshalb offen gelassen:** die Finanzierungszahlen (335 $,
+19 %, der Monat ohne Entwicklung) — Patreon liefert die Stände nicht aus, und
+der Entwickler datiert den Stillstand nur mit „once this year". Ebenso: die
+Downloadzahlen der Beta (die GitHub-Zähler taugen nicht, weil das Rolling-Tag
+sie bei jedem Build zurücksetzt), ein Datum für die stabile Fassung (All3DP
+schreibt ausdrücklich, es gebe keines), und das Echo auf Reddit und Hacker
+News. Wer diese Zahlen zitiert, zitiert den 4. August.

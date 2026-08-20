@@ -10,9 +10,20 @@ Leiste in drei Zuständen gerendert und **angesehen**.
 Zwei der Befunde unten stammen aus genau diesem Ansehen und wären am
 Quelltext nie aufgefallen.
 
-> **Stand 14.08.2026.** Alles unter „Behoben" ist umgesetzt und hat einen
-> Test. Alles unter „Offen" ist gemessen und mit Absicht liegen geblieben —
-> mit dem Grund daneben.
+> **Nachgezählt am 19.08.2026.** Beide Zahlen oben sind Messwerte vom 14.08.
+> und keine Invarianten. Die Menüleiste hat allein auf der leeren Szene 136
+> anklickbare Zeilen (dazu 32 Untermenüs, zusammen 168 Einträge), und das
+> Register zählt **85** Operationen statt 84 — 68 statische plus 17, die
+> `app/core/knowledge/parts/ops.py` je Baustein als `insert_<name>` erzeugt.
+> Die 85. kam mit dem Schnappverbinder aus Teil 4 (33031da) noch am Abend des
+> 14.08. dazu; `git show 33031da^` zählt 84, `git show 33031da` zählt 85. Wer
+> die Zahl zitiert, zitiert einen Stichtag: Mit jedem Baustein steigt sie.
+
+> **Stand 14.08.2026, nachrecherchiert am 19.08.2026.** Alles unter „Behoben"
+> ist umgesetzt und hat einen Test. Alles unter „Offen" ist gemessen und mit
+> Absicht liegen geblieben — mit dem Grund daneben. Was die Nachrecherche
+> berichtigt hat, steht als Blockzitat unter der jeweiligen Stelle; die
+> Zusammenfassung am Dateiende.
 
 ---
 
@@ -23,8 +34,10 @@ erstaunlich einheitliches Bild.
 
 **Gelobt wird Einfachheit, und zwar ausschließlich.** Tinkercad wird für seine
 Oberfläche gelobt und für nichts sonst; die Kritik daran ist immer dieselbe —
-es kann zu wenig. Fusion 360 wird für seinen Umfang gelobt und für seine
-Lernkurve kritisiert. Die Empfehlung, die in fast jedem Vergleich steht, lautet
+es kann zu wenig. Autodesk Fusion (bis 2023 als *Fusion 360* geführt; der
+Hersteller nennt es heute durchgehend Autodesk Fusion) wird für seinen Umfang
+gelobt und für seine Lernkurve kritisiert. Die Empfehlung, die in fast jedem
+Vergleich steht, lautet
 sinngemäß: *fang mit dem Einfachen an und wechsle, wenn es nicht mehr reicht*.
 Das ist genau die Lücke, in die Solidons gestufte Tiefe zielt — vorn zwei
 Felder, hinten alles.
@@ -65,11 +78,38 @@ Jetzt: **Werkzeugzeile → Trennen → zwei Klicks → Jetzt trennen.**
 
 | | |
 |---|---|
-| Werkzeug | achter Umschalter der Werkzeugzeile, Symbol `split` |
+| Werkzeug | siebter Umschalter der Werkzeugzeile, Symbol `split`, `Alt+7` |
 | Geste | zwei Punkte auf dem Teil; der dritte Klick fängt von vorn an |
 | Ebene | die Linie plus die Blickrichtung — der Schnitt geht gerade in den Bildschirm hinein |
 | Verbindung | vorgewählt: Stifte in der einen Hälfte, Löcher in der anderen |
-| Ergebnis | eine Transaktion, ein Undo — plus ein Passungspaar je Stift (§14) |
+| Ergebnis | eine Transaktion, ein Undo — Passungen inbegriffen (§14) |
+
+> **Hier stand „achter Umschalter", und das war schon am 14.08. falsch.**
+> `main_window` meldet die Werkzeuge in der Reihenfolge `section · measure ·
+> transform · analysis · layers · explode · split · paint` an
+> (`app/ui/main_window.py:894–990`), und `ToolStrip.add` hängt jeden Knopf
+> ans Ende (`app/ui/tool_strip.py:185`). `split` ist der **siebte**, `paint`
+> der achte; die Kürzel vergibt `enumerate(..., start=1)`
+> (`main_window.py:807`), also `Alt+7`. Das Handbuch hatte recht und dieses
+> Dokument unrecht — „Werkzeug *Trennen* unten in der Werkzeugzeile (Alt+7)"
+> steht so in `app/core/manual.py` und in allen fünf Katalogen.
+> `git show 49d4c73:app/ui/main_window.py` — der Commit, der das Werkzeug
+> **und** dieses Dokument anlegt — zeigt dieselbe Reihenfolge. Derselbe
+> Fehler steht in `ROADMAP.md:5511`.
+
+> **Und die Passungen liefen damals an der Transaktion vorbei.** Der Satz
+> „ein Undo — plus ein Passungspaar je Stift" stimmte am 14.08. nicht: Die
+> Paare wurden nach dem Aufruf ins Dokument geschrieben, ein Undo nahm die
+> Teilung zurück und ließ sie stehen. Behoben am 15.08. mit `5f5cfd4` über
+> `History.apply(..., changes=ChangeFn)`
+> (`app/core/scene/history.py:206–226`) — seitdem stimmt er.
+>
+> „Je Stift ein Paar" gilt inzwischen mit zwei ausgewiesenen Ausnahmen: Wird
+> ein schon geschnittenes Stück erneut geteilt, entfallen die geerbten Paare
+> mit dem Hinweis `split.fit_dropped` (`app/core/split.py:212,280,305`); und
+> wo hinter der Naht zu wenig Material steht, entstehen gar keine Stifte —
+> `plan_pins` misst die Tiefe und meldet `split.seam_too_thin` (`52826ef`,
+> 15.08.).
 
 **Die Verbindung ist vorgewählt, nicht versteckt.** Zwei geklebte Hälften ohne
 Stifte muss jemand von Hand in Deckung halten, während der Kleber greift; das
@@ -93,6 +133,12 @@ Gemessen: 11 Geometrietests (Ebene aus zwei Punkten, schiefer Schnitt gegen
 das analytische Volumen, Stiftachse gleich Ebenennormale, zweimal gerechnet
 gleich) und 15 Oberflächentests am gebauten Fenster.
 
+> **Nachgezählt am 19.08.2026: 28 und 34.** Die Zahlen oben sind der Stand
+> des ersten Commits (`49d4c73`) und waren noch am selben Tag überholt
+> (`33031da`: 25 und 25). Heute zählt `--collect-only`: 28 in
+> `tests/test_split_line.py`, 25 in `tests/test_split_tool.py`, 9 in
+> `tests/test_split_ui.py`.
+
 ### Was das Werkzeug nicht kann, und warum
 
 **Der Schnitt ist eine Ebene, keine Kurve.** Die Linie legt fest, wo und wie
@@ -106,6 +152,23 @@ Registereintrag und damit im Dialog, im Handbuch und beim Agenten.
 als Querschnitt zur Wahl, in der Leiste direkt neben der Stiftzahl. Der
 Schnapper fehlt mit Absicht: Er ist kein Querschnitt, sondern ein federnder Arm
 — siehe Teil 4.
+
+> **Dieser Absatz widerspricht Teil 4 desselben Dokuments, und Teil 4 hat
+> recht.** Der Schnapper ist gebaut, im selben Commit wie dieses Dokument
+> (`33031da`, 14.08.2026): `CONNECTOR_SHAPES = ("round", "hex", "dovetail",
+> "snap")` (`app/core/geom/prepare_ops.py:74`), die Leiste bietet alle vier
+> an (`app/ui/split_bar.py:108–111`), das Handbuch listet vier Punkte. Der
+> Kommentar über der Liste beantwortet genau den Einwand oben: „Der
+> Schnapper ist kein Querschnitt … er steht hier trotzdem in derselben
+> Liste, weil er für den Nutzer dieselbe Entscheidung ist."
+>
+> Es sind also **vier Verbinder**: drei Querschnitte und ein Mechanismus mit
+> eigenem Baustein. Der braucht eine Naht von mindestens 5,4 mm, sonst wird
+> rund daraus (`split.snap_too_small`).
+>
+> *Nebenbefund im Code:* Der Docstring von `PinPlan.shape`
+> (`app/core/geom/pins.py:111`) nennt weiterhin nur „``round``, ``hex`` oder
+> ``dovetail``", obwohl `plan_pins` „snap" verarbeitet (`:205`).
 
 ---
 
@@ -186,9 +249,9 @@ nichts als die zwei Rechenkerne. Die Beschriftungen liegen jetzt in
 Dialog des Partners. *An Ebene teilen* lebt seither unter *Teilen*, mit der
 Null im Feld *Passstifte*.
 
-**4.2 Sechs Kürzel auf 84 Operationen** — die acht Werkzeuge haben jetzt
-`Alt+1` bis `Alt+8`. Für die Operationen selbst bleibt es bei sechs; das ist
-eine Vergabe in einem Zug und keine Nebenarbeit.
+**4.2 Sechs Kürzel auf 84 Operationen** (heute 85) — die acht Werkzeuge haben
+jetzt `Alt+1` bis `Alt+8`. Für die Operationen selbst bleibt es bei sechs; das
+ist eine Vergabe in einem Zug und keine Nebenarbeit.
 
 **4.3 Die Hälften hießen „A" und „B"** — behoben, sie heißen jetzt
 „… A · Stifte" und „… B · Löcher".
@@ -235,14 +298,14 @@ zehn zu eins und zwei Außenwänden folgen 8 mm Mindestlänge, und die Naht muss
 Gezielt gesucht und nicht gefunden — steht hier, weil es dieselbe Arbeit
 gekostet hat.
 
-**Jede der 84 Operationen hat einen Beschreibungssatz**, und keiner davon
-erklärt den Namen; sie erklären die Wirkung. Der vollste Dialog hat acht Felder
-auf der Vorderseite (`label_text`), die Grenze liegt bei acht. Kein Parameter
-ohne `doc`.
+**Jede der 84 Operationen hat einen Beschreibungssatz** (heute 85), und keiner
+davon erklärt den Namen; sie erklären die Wirkung. Der vollste Dialog hat acht
+Felder auf der Vorderseite (`label_text`), die Grenze liegt bei acht. Kein
+Parameter ohne `doc`. Am 19.08.2026 nachgeprüft: alles drei gilt weiter.
 
 **Die Menüs grauen vorbildlich aus.** Auf der leeren Szene ist unter *Ändern*
 keine Zeile anklickbar, *Objekt* ist ganz aus, und die Werkzeugzeile folgt
-derselben Regel — der achte Umschalter von selbst mit, weil `set_usable` alle
+derselben Regel — jeder Umschalter geht von selbst mit, weil `set_usable` alle
 nimmt.
 
 **Die Sprachkataloge sind vollständig geblieben.** 26 neue Texte für das
@@ -319,3 +382,40 @@ Netzen gemessen, das Kürzelverhalten mit `QTest.keyClick` gegen ein
 fokussiertes Eingabefeld nachgestellt, und die zwei Testdateien, die in diesem
 Container abbrechen, gegen einen Worktree auf dem unveränderten Ausgangsstand
 gehalten — sechs Läufe hier, sechs dort. Sie brechen dort genauso ab.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Fünfzehn Aussagen dieses Dokuments über den eigenen Code nachgeprüft, gegen
+`main` (b0415d6), 103 Commits nach dem Stand vom 14.08.: **acht stimmen, vier
+sind überholt, zwei waren schon damals falsch, eine ist nicht mehr prüfbar.**
+
+**Die beiden Fehler von Anfang an** — beide in Teil 1, beide von Teil 4
+desselben Dokuments widerlegt:
+
+- Das Trennwerkzeug ist der **siebte** Umschalter (`Alt+7`), nicht der achte.
+  Das Handbuch sagte es die ganze Zeit richtig. Derselbe Fehler steht in
+  `ROADMAP.md:5511`.
+- „Drei Formen, kein Schnapper" — es sind **vier**, und der Schnapper kam im
+  selben Commit wie dieses Dokument.
+
+**Was die Zeit überholt hat:** die 84 Operationen (heute 85 — die 85. kam noch
+am Abend des 14.08. mit dem Schnappverbinder), die 128 Menüzeilen (136 allein
+auf der leeren Szene), die Testzahlen 11 und 15 (heute 28 und 34), und die
+Zusage „ein Undo — plus ein Passungspaar je Stift": Die Passungen liefen am
+14.08. an der Transaktion vorbei und wurden erst am 15.08. hineingezogen.
+
+**Was unverändert gilt:** kein Registereintrag ohne `doc`, kein Parameter ohne
+`doc`, `label_text` als vollster Vorderseiten-Dialog mit acht Feldern, die
+Kamera außerhalb des Stapels, `plan_pins` mit Ebene statt Achse, die
+ausgrauenden Menüs, `style.make_primary()` mit sieben Hauptknöpfen.
+
+**Ein Nebenbefund im Code:** Der Docstring von `PinPlan.shape`
+(`app/core/geom/pins.py:111`) kennt den Schnapper nicht, obwohl `plan_pins`
+ihn verarbeitet.
+
+**Zur Außenwelt** hat dieses Dokument wenig zu sagen, und das wenige stimmt
+weiter: Tinkercad wird für seine Einfachheit gelobt und für seinen Umfang
+kritisiert, Fusion umgekehrt. Ein Name hat sich geändert — *Fusion 360* heißt
+seit 2023 **Autodesk Fusion**; im Text oben ist er nachgezogen.

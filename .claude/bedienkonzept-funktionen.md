@@ -1,5 +1,7 @@
 # Bedienkonzepte je Funktion
 
+Stand 01.08.2026, nachrecherchiert am 19.08.2026.
+
 Ergänzung zu `bedienkonzept-ueberblick.md`. Dort ging es um die Sitzung als
 Ganzes; hier um jede Funktion einzeln, die in der täglichen Arbeit an diesem
 Projekt vorkommt.
@@ -44,6 +46,26 @@ umgangen und ist damit nur beim letzten Mal im Einsatz. **Jeder Skill braucht
 eine schmale Form.** `/pruefen tests/test_slice.py` muss dasselbe tun wie
 `/pruefen`, nur auf weniger — das `argument-hint` steht schon in der Datei, der
 Ablauf nutzt es nicht.
+
+> **Der letzte Halbsatz war schon beim Schreiben falsch.** `/pruefen` kann die
+> schmale Form seit `82ffe26` (31.07.2026) — einen Tag **vor** diesem
+> Dokument: „Wenn ein Argument übergeben wurde, läuft `pytest` nur darauf; die
+> anderen drei Läufe bleiben vollständig", samt `$ARGUMENTS` im Befehl
+> (`.claude/skills/pruefen/SKILL.md:20–27`). `git show
+> bad9f86:.claude/skills/pruefen/SKILL.md` zeigt denselben Satz.
+>
+> Der Befund selbst bleibt richtig — die vier Befehle wurden vierzehnmal von
+> Hand getippt —, aber seine Ursache ist eine andere: **nicht der Skill konnte
+> es nicht, sondern niemand hat seine Fassung gelesen.** Damit ändert sich
+> auch die Regel. Sie muss nicht lauten „jeder Skill braucht eine schmale
+> Form" (heute tragen sieben von acht ein `argument-hint`, und alle sieben
+> benutzen es auch im Ablauf), sondern: **Ein Skill mit schmaler Form nützt
+> nichts, solange niemand weiß, dass er sie hat.** Der Hinweis gehört in die
+> Rückmeldung des Skills, nicht nur in seinen Kopf.
+>
+> Der achte Skill, `liefern`, hat bewusst kein `argument-hint`: Er ist mit
+> `disable-model-invocation: true` markiert und beendet eine Arbeitseinheit
+> als Ganzes. (Nachgeprüft am 19.08.2026.)
 
 ---
 
@@ -325,6 +347,23 @@ denen nichts anderes passierte. Ein Hintergrundlauf hätte das gedeckt.
 Ergebnis nicht sofort gebraucht wird. Beim vollen Testlauf ist das die Regel,
 nicht die Ausnahme: er bestätigt, er entscheidet nichts.
 
+> **Die drei Minuten sind 22 geworden, und der Lauf kommt am Stück nicht mehr
+> durch** (gemessen am 19.08.2026): 1324 Sekunden, und am Ende steht keine
+> Ergebniszeile, sondern ein `faulthandler`-Stapelabzug — der Prozess stirbt
+> nativ, nachdem er über 3 GB gewachsen ist. Es ist derselbe rtree-Abriss, den
+> `.claude/durchsicht-2026-08-16.md:12–14` festhält; dort wurde die Suite
+> **portionsweise in acht Blöcken** gefahren: 4009 Tests grün.
+>
+> Die Zwei-Minuten-Regel wird davon nicht falsch, sondern gegenstandslos in
+> die andere Richtung: **Ein Lauf, der zweiundzwanzig Minuten braucht und dann
+> abstürzt, gehört nicht in den Hintergrund, sondern aufgeteilt.** Genau das
+> ist seit dem 16.08. die Praxis — ohne dass es irgendwo als Regel stünde.
+>
+> Nebenbei verschiebt sich damit das Gewicht im Tor: Sammlung 2,9 s für 4251
+> Tests, `ruff check` und `ruff format --check` zusammen 1 s über 428 Dateien,
+> `mypy` 2 s über 209 Quelldateien. **Das Tor besteht zeitlich nur noch aus
+> `pytest`.**
+
 ---
 
 ## C4. MCP-Server
@@ -486,3 +525,76 @@ Nutzer sieht die Zahl steigen.**
 und drei sind kleine Dateien in `.claude/`. Vier gehören ins Werkzeug selbst,
 und die schwerwiegendste davon ist C4: ein Dienst, der sechsmal von sich redet
 und nie gebraucht wird, kostet mehr Aufmerksamkeit als jede fehlende Anzeige.
+
+> **Die Aufschlüsselung deckt nur zehn der zwölf.** Sieben Haltung plus drei
+> kleine Dateien sind zehn; A2 („Haltung + `/roadmap`") und D3 („Skill +
+> Leiste") fallen zwischen die Kategorien. Und D3 ist keine reine Repo-Arbeit:
+> Die Leiste braucht laut Überblick §10 ausdrücklich Claude Code selbst.
+> Streng gerechnet gehören **fünf** der sechzehn Regeln ganz oder teilweise
+> ins Werkzeug, nicht vier.
+>
+> **Die Tabelle nennt den Ort, nicht den Stand — und `CLAUDE.md` verweist auf
+> sie, als nenne sie den Stand.** Dasselbe gilt für den Überblick; dort ist es
+> in §10 vermerkt. Der Stand am 19.08.2026, Zeile für Zeile gegen `.claude/`:
+>
+> | # | Stand |
+> |---|---|
+> | A1 | **war schon erfüllt, bevor die Zeile geschrieben wurde** — siehe oben |
+> | A2 | nicht umgesetzt; `/roadmap` zählt nichts, es liest das Register |
+> | A3 | nicht umgesetzt — die Freigabeliste steht seit `7129984` (31.07.) unverändert |
+> | A4, B2, C3, D4 | Haltung, am Repository nicht prüfbar; D4 ist gelebte Praxis (678 Commits seit `bad9f86`) |
+> | B1 | keine Spur |
+> | B3 | **kein Gedächtnisort vorhanden** |
+> | B4 | die vierzehn Agenten stehen unverändert |
+> | C1 | **nicht umgesetzt — und der ändernde Hook ist der eigene:** `solidon3d_hooks.py:149` ruft `ruff("format", …)` und meldet die Formatierung nirgends |
+> | C2 | in der Praxis eingelöst: `.claude/.state/` trägt heute ganze Durchsichten |
+> | C4 | **faktisch erledigt, außerhalb des Repositories** — alle Erweiterungen sind abgeschaltet, das Projekt hat keine `.mcp.json` |
+> | D1 | nicht umgesetzt, aber anerkannt: der Stop-Hook sagt selbst, dass er den Urheber nicht kennt (`solidon3d_hooks.py:231–235`) |
+> | D2 | nicht umgesetzt — kein `env`-Block in `.claude/settings.json` |
+> | D3 | nicht umgesetzt — weder `/stand` noch `/bericht` noch eine Leiste |
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Vierzehn Aussagen geprüft: **acht stimmen, drei sind überholt, zwei sind
+falsch, eine ist nicht prüfbar.** Als Protokoll einer Sitzung hält das Dokument;
+als Mängelliste war es an zwei Stellen schon am Tag der Niederschrift falsch.
+
+**Der teuerste Fund ist eine Zahl, die sich versiebenfacht hat.** Der volle
+Testlauf dauerte drei Minuten. Heute braucht er **22 Minuten und kommt am Stück
+nicht mehr durch** — 1324 Sekunden, dann ein nativer Abriss bei über 3 GB, ohne
+Ergebniszeile. Seit dem 16.08. wird die Suite in acht Blöcken gefahren (4009
+Tests grün), und das steht nirgends als Regel. Die Zwei-Minuten-Schwelle aus C3
+ist damit nicht falsch, sondern gegenstandslos: Ein solcher Lauf gehört nicht in
+den Hintergrund, sondern aufgeteilt.
+
+**Was schon beim Schreiben falsch war:** A1 — `/pruefen` konnte die schmale
+Form einen Tag vor diesem Dokument. Der Befund („vierzehnmal von Hand getippt")
+stimmt, seine Ursache nicht: nicht der Skill konnte es nicht, sondern seine
+Fassung war ungelesen. Die Regel ändert sich dadurch. Und die Zahl der
+Subagenten war nie fünfzehn, sondern vierzehn.
+
+**Ein Widerspruch, den dieses Dokument mit dem Überblick teilt:** `CLAUDE.md`
+schickt den Leser in die Schlusstabelle, um den Umsetzungsstand zu erfahren —
+die Tabelle nennt aber nur den Ort und den Aufwand. Sie hat jetzt eine
+Standübersicht darunter. Von sechzehn Regeln ist bis heute **keine als Regel
+umgesetzt**; drei sind auf anderem Weg eingelöst worden (C2 durch
+`.claude/.state/`, C4 durch abgeschaltete Erweiterungen, D4 als gelebte Praxis),
+und eine war von Anfang an erfüllt.
+
+**Eine Ironie, die die Durchsicht nebenbei fand:** C1 verlangt, ein ändernder
+Hook solle sagen, was er geändert hat. Der ändernde Hook ist der eigene —
+`solidon3d_hooks.py:149` formatiert mit `ruff` und meldet es nirgends.
+
+**Zur Rechnung in der Zusammenfassung:** „sieben Haltung plus drei Dateien"
+deckt zehn der zwölf. A2 und D3 fallen zwischen die Kategorien, und D3 braucht
+die Sitzungsleiste — also das Werkzeug. Fünf der sechzehn gehören ganz oder
+teilweise dorthin, nicht vier.
+
+**Nicht prüfbar und deshalb offen gelassen:** alles, was das Dokument als
+*Haltung* führt (A4, B2, C3, D4) — Haltung hinterlässt keine Spur im
+Repository. Und die Beobachtungen über Meldungstexte des Werkzeugs: Sie stammen
+aus einer echten Sitzung im Juli/August 2026 und stehen nicht in der
+Dokumentation, was nichts über ihre Richtigkeit sagt. Wer sie prüfen will,
+prüft sie am laufenden Werkzeug, nicht an einer Seite.

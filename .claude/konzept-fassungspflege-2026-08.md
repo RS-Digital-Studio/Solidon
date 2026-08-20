@@ -1,6 +1,6 @@
 # Konzept: die Fassungen aktualisieren
 
-Stand 14.08.2026. Anlass: Der festgeschriebene Satz in `constraints.txt` ist
+Stand 14.08.2026, nachrecherchiert am 19.08.2026. Anlass: Der festgeschriebene Satz in `constraints.txt` ist
 gepflegt genug, dass nichts bricht — aber niemand hat je nachgesehen, was es
 Neues gibt. `tools/check_env.py --outdated` sagt es seit heute. Dieses Konzept
 sagt, was damit geschieht.
@@ -12,12 +12,29 @@ Es gilt zusammen mit `AGENTS.md` (Checkliste „neue Abhängigkeit"), `CLAUDE.md
 
 ## §0 Ist-Zustand, nachgesehen am 14.08.2026
 
+> **Dieser Abschnitt beschreibt den Vormittag des 14.08.2026 — und er war am
+> Abend desselben Tages überholt.** §5 hält fest, dass der Sprung an
+> demselben Tag gemacht wurde; §0 und §3 stehen weiter im Präsens davor. Das
+> Dokument widerspricht sich damit auf seinem eigenen Stichtag, an vier
+> Stellen. Sie sind unten einzeln vermerkt. Nachgeprüft am 19.08.2026 gegen
+> `main` (`b0415d6`).
+
 Jede Aussage hier ist gemessen oder im Code belegt, nicht erinnert.
 
 **Der Satz und seine Grenzen.** `constraints.txt` führt 91 Zeilen, davon rund
 72 feste Fassungen. In `pyproject.toml` steht **genau eine Obergrenze** —
 `trimesh>=4.4,<5` (Zeile 23). Alle übrigen 22 Abhängigkeiten haben offene
 Untergrenzen; keine davon verbietet eine Aktualisierung.
+
+> **Die Obergrenze gibt es nicht mehr, und die Datei ist gewachsen.**
+> `pyproject.toml:26` verlangt heute `trimesh>=5.0` — P6 ist durch, gemacht
+> am Abend des 14.08. `constraints.txt` führt 93 Zeilen mit 73 festen
+> Fassungen (Stand 19.08.2026). **Damit steht in `pyproject.toml` heute keine
+> einzige Obergrenze mehr.**
+>
+> *Ein Nebenbefund außerhalb dieses Dokuments:* `CLAUDE.md:95` nennt
+> `trimesh<5` weiterhin als „aufgeschobene Migration". Der Satz ist seit dem
+> 14.08. falsch und führt jede Sitzung in die Irre, die ihn liest.
 
 **Was der Index neuer anbietet** (gemessen mit `--outdated`):
 
@@ -34,6 +51,29 @@ Untergrenzen; keine davon verbietet eine Aktualisierung.
 | fast_simplification | 0.1.13 | 0.2.0 | **Fassung unter 1, und sie dezimiert Netze** |
 | trimesh | 4.12.2 | 5.0.0 | **durch `<5` ausgeschlossen** |
 
+> **Diese Tabelle war am Abend desselben Tages abgearbeitet** — der Commit
+> sagt es wörtlich: „`--outdated` sagt jetzt: nichts ist neuer." Sie liest
+> sich als offene Arbeitsliste und ist keine.
+>
+> **Am 19.08.2026 ist sie wieder eine, mit drei Zeilen** (recherchiert gegen
+> PyPI und die Freigabeankündigungen):
+>
+> | Paket | fest | neu | Einschätzung |
+> |---|---|---|---|
+> | PySide6 / shiboken6 | 6.11.1 | **6.11.2** (18.08.2026) | Qt 6.11.2 mit rund 400 Fehlerbehebungen; abi3-Räder für 3.10 bis 3.14 |
+> | vtk | 9.6.2 | **9.7.0** (15.08.2026) | **gesperrt durch pyvista** — dessen Metadaten verlangen `vtk<9.7.0` |
+> | pillow | 12.3.0 | 12.3.0 | unverändert; die festgeschriebene Fassung schließt CVE-2026-55798 bereits ein |
+>
+> Der VTK-Fall ist der interessante: Die neue Fassung ist da, aber pyvista
+> 0.48.4 schließt sie in seinen Metadaten aus. Wer sie trotzdem zieht, bricht
+> die Auflösung — hier entsteht die nächste Obergrenze, und zwar nicht in
+> unserer Hand. VTK 9.7 verlangt außerdem mindestens Python 3.10 und bildet
+> numpy-Typen jetzt über den zugrunde liegenden C-Typ ab.
+>
+> Alles andere ist auf Stand: numpy 2.5.2, scipy 1.18.0, trimesh 5.0.0,
+> manifold3d 3.5.2, shapely 2.1.2, scikit-image 0.26.0, matplotlib 3.11.1,
+> networkx 3.6.1, pyvistaqt 0.12.0 — jeweils die neueste Fassung.
+
 **Warum trimesh gesperrt ist.** Beim ersten echten CI-Lauf zog ein frisches
 Environment trimesh 5.0.0. Der Sprung riss mypy — die neuen Annotationen geben
 für `concatenate` den Obertyp `Geometry` statt `Trimesh` — und mehrere Tests
@@ -43,6 +83,13 @@ Engführung auf `Trimesh` lebt seither an **einer** Stelle
 festgenagelt. Am 01.08.2026 ist 5.0 erschienen; der Eintrag in der ROADMAP
 nennt die Voxelkette über `trimesh.voxel.ops` als empfindlichste Stelle und
 drei zusätzliche rote Tests unter Windows.
+
+> **Sie ist nicht mehr gesperrt.** Der Absatz steht im Präsens und beschreibt
+> einen Zustand, den derselbe Tag beendet hat: `pyproject.toml:26` verlangt
+> `trimesh>=5.0`, installiert ist 5.0.0. Er bleibt als Begründung stehen,
+> warum die Sperre einmal richtig war — nicht als Beschreibung von heute.
+> trimesh 5.0.0 (01.08.2026) ist weiterhin die neueste Fassung; eine 6er-Reihe
+> gibt es nicht (nachgesehen am 19.08.2026).
 
 **Wie groß die trimesh-Migration wirklich ist.** 37 Dateien unter `app/` mit
 194 Fundstellen, dazu 47 Testdateien. Die beiden Stellen, an denen es hängt,
@@ -60,6 +107,16 @@ Voxelstufe ihre Rundung ausweist — die Migration hat also einen Wächter.
 `3.13` (Zeilen 55, 159, 390 in `build.yml`), die Arbeitsumgebung fährt 3.14.2.
 Das ist erlaubt und gewollt, aber es heißt: **Was hier grün ist, ist unter der
 Fassung grün, die niemand ausliefert.**
+
+> **Der Satz gilt weiter, und P5 bekommt eine Frist von außen** (recherchiert
+> am 19.08.2026). Die Arbeitsumgebung fährt inzwischen 3.14.7 (05.08.2026),
+> die CI weiter 3.13. Neu ist der Zeitplan darüber: **Python 3.15.0rc1 ist am
+> 04.08.2026 erschienen, rc2 steht für den 01.09. und die endgültige Freigabe
+> für den 01.10.2026.** Damit rückt die Frage nach, ob die CI auf 3.14 geht,
+> bevor 3.15 da ist — und eine Antwort gibt es schon: **PySide6 6.11.2
+> deklariert `Python <3.15, >=3.10`.** Auf 3.15 gibt es also vorerst kein Qt,
+> und P5 bleibt eine Entscheidung zwischen 3.13 und 3.14, nicht zwischen 3.13
+> und dem Neuesten.
 
 **Was schon läuft.** Der wöchentliche CI-Job „Neueste Fassungen" (montags 5 Uhr,
 ohne `constraints.txt`) meldet eine Fassung, die etwas bricht. Der
@@ -200,6 +257,11 @@ Vorgehen:
 sind. Wird P6 abgebrochen, kostet das nichts — der Zustand davor ist der
 ausgelieferte.
 
+> **Diesen Rückweg gibt es nicht mehr.** P6 ist durch (`d526a53`, 14.08.2026),
+> der Pin ist gelöst. Gemessen wurde dabei: 22 636 statt 815 104 Dreiecke bei
+> gleicher Kantenlänge — die Voxelkette rechnet unter trimesh 5 anders, und
+> das war der Grund, sie einzeln zu prüfen.
+
 ---
 
 ## §4 Leitplanken
@@ -261,3 +323,52 @@ Die Werkzeuge dafür stehen seit dem 14.08.2026: `tools/check_env.py` mit
 `tests/test_toolchain.py`, und die Erinnerung im Sitzungsstart-Hook. Wichtig
 beim Anheben: `--upgrade-strategy eager`, sonst lässt pip alles stehen, was die
 offenen Untergrenzen schon erfüllt — und das sind sie fast alle.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Fünfzehn Aussagen über den eigenen Stand geprüft — **zehn stimmen, vier sind
+überholt, eine ist falsch** — und der festgeschriebene Satz gegen PyPI
+gehalten.
+
+**Das Dokument widerspricht sich auf seinem eigenen Stichtag, an vier
+Stellen.** §0 und §3 beschreiben den Vormittag des 14.08.2026, §5 hält fest,
+dass der Sprung am Abend desselben Tages gemacht wurde. Wer §0 liest, hält
+`trimesh<5` für geltendes Recht; wer §5 liest, weiß es besser. Alle vier
+Stellen tragen jetzt einen Vermerk.
+
+**In `pyproject.toml` steht heute keine einzige Obergrenze mehr.** Das ist die
+Kernaussage dieses Dokuments, und sie hat sich umgedreht: Die eine Grenze,
+`trimesh>=4.4,<5`, ist zu `trimesh>=5.0` geworden.
+
+**Ein Nebenbefund außerhalb dieses Dokuments, und kein kleiner:**
+`CLAUDE.md:95` nennt `trimesh<5` weiter als „aufgeschobene Migration, kein
+Versehen". Der Satz ist seit fünf Tagen falsch und steht an einer Stelle, die
+jede Sitzung liest.
+
+**Was der Index heute neuer anbietet** — die Tabelle in §0 war am Abend des
+14.08. leer und hat wieder drei Zeilen:
+
+- **PySide6 und shiboken6 6.11.2** (18.08.2026), Qt 6.11.2 mit rund 400
+  Fehlerbehebungen. Ein gewöhnlicher Pflegesprung.
+- **vtk 9.7.0** (15.08.2026) — **nicht ziehbar**: pyvista 0.48.4 verlangt in
+  seinen Metadaten `vtk<9.7.0`. Hier entsteht die nächste Obergrenze, und sie
+  liegt nicht in unserer Hand. VTK 9.7 bildet numpy-Typen jetzt über den
+  zugrunde liegenden C-Typ ab — ein Sprung, den man ohnehin nicht nebenbei
+  macht.
+- Alles andere ist auf Stand: numpy 2.5.2, scipy 1.18.0, trimesh 5.0.0,
+  manifold3d 3.5.2, shapely 2.1.2, scikit-image 0.26.0, matplotlib 3.11.1,
+  networkx 3.6.1, pyvistaqt 0.12.0, pillow 12.3.0 (schließt CVE-2026-55798
+  ein).
+
+**P5 bekommt eine Frist von außen.** Python 3.15.0rc1 ist am 04.08.2026
+erschienen, die endgültige Freigabe steht für den 01.10.2026. Die Antwort auf
+die Frage, ob man gleich auf 3.15 zielt, steht schon fest: **PySide6 6.11.2
+deklariert `Python <3.15`.** P5 bleibt damit die Wahl zwischen 3.13 und 3.14.
+
+**Nicht geprüft und deshalb offen gelassen:** ob die vier Tore heute grün sind.
+Dieser Abgleich hat gelesen und gezählt, nicht `/pruefen` gefahren; und im
+Arbeitsbaum liegen Änderungen einer parallelen Sitzung, die nicht zu dieser
+Durchsicht gehören. P0 („der Volllauf bricht nativ ab") bleibt darum stehen,
+wie es steht.

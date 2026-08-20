@@ -1,19 +1,32 @@
 # Konzept — was die Live-Durchsicht gegen Fusion und den ElegooSlicer ergeben hat
 
-Datum: 5. August 2026. Geprüft wurde die laufende Anwendung gegen die beiden
+Datum: 5. August 2026, nachrecherchiert am 19.08.2026. Geprüft wurde die laufende Anwendung gegen die beiden
 Programme, die auf dieser Maschine installiert sind und die Roberts Arbeit
 tatsächlich einrahmen: **Autodesk Fusion 2704.1.36** als Maßstab fürs
 Konstruieren und **ElegooSlicer 1.5.3.4** als Empfänger des Ergebnisses.
 Nicht die Suite, nicht der Quelltext — die Programme selbst, mit Zahlen aus
 beiden.
 
-> **Stand 08.08.2026: abgearbeitet.** Die fünfzehn Funde sind in drei Paketen
+> **Stand 08.08.2026: abgearbeitet.** Die fünfzehn Funde sind in vier Paketen
 > erledigt — die ROADMAP führt sie unter „Live gegen Fusion und den
-> ElegooSlicer" einzeln mit Haken. Offen blieb allein die fehlende Passung,
-> die dort ebenfalls vermerkt ist. Was hier steht, sind die Messwerte und die
+> ElegooSlicer" einzeln mit Haken. Was hier steht, sind die Messwerte und die
 > Begründungen, nicht die Arbeitsliste.
+>
+> **Berichtigt am 19.08.2026:** Hier stand „drei Pakete" und „offen blieb
+> allein die fehlende Passung". Beides widerlegt das Dokument selbst — der
+> Nachtrag in Abschnitt 3 zählt **vier** Pakete auf, und der Vermerk unter B3
+> sagt, die Passung sei erledigt, nur nicht in den Ops: Sie entsteht in
+> `app/core/lid_flow.py` (Regel 3 verbietet der Op die Dokumentänderung),
+> abgesichert durch sieben Tests in `tests/test_lid_flow.py`. `ROADMAP.md:2336`
+> führt „Keine Operation legt eine Passung an" mit Haken; von den fünfzehn
+> Punkten des Abschnitts ist keiner offen.
 
 Ausgangslage: `pytest -m "not performance"` grün, 2756 Tests in 267 s.
+
+> **Am 19.08.2026 sind es 4232** (von 4251 gesammelten, 19 abgewählt) — rund
+> 1480 Tests mehr in vierzehn Tagen. Die Zeit ist nicht vergleichbar: Der volle
+> Lauf kommt am Stück nicht mehr durch und wird seit dem 16.08. in Blöcken
+> gefahren.
 
 Bezug: Bauplan §11 (Zahlen), §17 (Eingangsstufe), §21 (Wahrnehmung), §25
 (Operationen), §28 (Rückkopplung), §29 (Export und Übergabe), §30 (zweiter
@@ -143,6 +156,13 @@ nach der Checkliste in `AGENTS.md`.
 > schon (abziehend baut unter dem Ursprung), drei brachen sie —
 > `magnet_pocket`, `keyhole`, `cable_gland`. Sie bauen jetzt nach unten,
 > `keyhole` nicht mehr quer in Y. Die Bibliothek steht auf Version 2, der
+>
+> > **Zwei Zahlen sind weitergezogen** (19.08.2026): Es sind heute
+> > **siebzehn** Bausteine, und die Bibliothek steht auf **Version 3** —
+> > `LIBRARY_VERSION = "3"` (`app/core/knowledge/parts/registry.py:258`), weil
+> > das Spiel von Mutternfalle und Gewinde seither aus dem Materialprofil
+> > kommt statt aus einer festen Vorgabe.
+>
 > Änderungseintrag `MOUTH_AT_ORIGIN` sagt, was das für alte Projekte heißt.
 > Der neue Test misst nicht Koordinaten, sondern Wirkung: jeder abziehende
 > Baustein auf die Oberseite einer Platte gesetzt, danach muss sie leichter
@@ -321,7 +341,16 @@ beiden Stellen. Prüfbar ohne Fenster wird es nicht — der Test ist ein Klick a
 die Mitte einer Fläche in einem sichtbaren Fenster, und er gehört in die Liste
 der Dinge, die von Hand geprüft werden, weil offscreen kein Plotter existiert.
 
-> **Erledigt.** `vtkCellPicker` an beiden Stellen; der Viewport gibt das
+> **Erledigt — aber nicht „an beiden Stellen".** Es gibt nur noch eine:
+> `vtkCellPicker` steht genau einmal in `app/ui/`, in `_world_at`
+> (`app/ui/viewport.py:3657`, Toleranz `PICK_TOLERANCE` bei `:3665`). Die
+> zweite Stelle wurde **entfernt**, nicht umgestellt — `_enable_picking`
+> (`:3682`) hat heute einen leeren Rumpf, mit der Begründung im Code: „Nichts
+> mehr zu tun — der eigene Stil löst das Picking selbst aus. Vorher stand hier
+> `plotter.enable_point_picking`. Das hat nie funktioniert …" (nachgeprüft am
+> 19.08.2026).
+>
+> **Erledigt.** `vtkCellPicker`; der Viewport gibt das
 > Getroffene über `objectPicked` heraus, und daran hängen Auswahl,
 > Kontextmenü, Messen und die Flächenübernahme in den Dialog — die vier Dinge,
 > die dieser Befund als Folge nennt. Die Vorhersage über den Test hat sich
@@ -550,3 +579,44 @@ Alle Zahlen stammen aus Läufen auf dieser Maschine am 5. August 2026.
 * **Solidon:** aus dem Arbeitsbaum, `.venv`, ohne Änderungen am Code. Die
   Oberfläche wurde mit echter Maus und Tastatur bedient (synthetische Eingaben
   auf Fensterebene), die Bilder sind Aufnahmen des laufenden Fensters.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Fünfzehn Aussagen über den eigenen Code geprüft: **acht stimmen, fünf sind
+überholt, eine ist falsch, eine nicht prüfbar.** Die Substanz des Dokuments —
+fünfzehn gemessene Funde und ihre Behebung — hält vollständig.
+
+**Zwei Widersprüche im Dokument selbst**, beide im Kopfkasten und beide vom
+eigenen Nachtrag widerlegt: Es waren **vier** Pakete, nicht drei, und die
+fehlende Passung blieb **nicht** offen — sie entsteht in `lid_flow.py`, weil
+Regel 3 der Operation die Dokumentänderung verbietet. Genau solche Abweichungen
+verschwinden, wenn niemand den Vermerk nachzieht; hier stand er zwanzig Zeilen
+tiefer und oben das Gegenteil.
+
+**Eine Formulierung war falsch:** `vtkCellPicker` steht nicht „an beiden
+Stellen", sondern genau einmal. Die zweite Stelle wurde entfernt, nicht
+umgestellt — `_enable_picking` hat heute einen leeren Rumpf mit der Begründung
+im Code.
+
+**Zahlen, die weitergezogen sind:** 2756 Tests → 4232 · sechzehn Bausteine →
+siebzehn · Bibliotheksversion 2 → 3 · und sämtliche Zeilennummern in den
+Fix-Vermerken, die auf `main_window.py` zeigen.
+
+**Was unverändert gilt:** der bitgenaue STEP-Weg, `Solid.bounds` über
+`BRepBndLib.AddOptimal_s`, die Migration 6 → 7 samt Beispieldatei, der Satz
+über den wirkungslosen Schnitt in `geom/boolean.py`, `History._outputs_for`,
+und der dreifache `gcode.compare`.
+
+**Nicht prüfbar und deshalb unverändert stehen geblieben:** die Gegenüberstellung
+Schätzung gegen G-Code (12 g / 46 min gegen 10,0 g / 37 min). Sie stammt aus
+einem echten Lauf gegen den installierten ElegooSlicer; der Hinweis, dass
+`slice/estimate.py` Arbeit braucht, ist davon unberührt und weiterhin offen.
+
+**Zur Außenwelt:** Die beiden Programme, gegen die hier gemessen wurde, tragen
+in diesem Dokument ihre Fassungsnummern — **Autodesk Fusion 2704.1.36** und
+**ElegooSlicer 1.5.3.4**. Sie bleiben stehen, wie sie stehen: Eine Messung
+gegen eine bestimmte Fassung wird nicht dadurch besser, dass man die Nummer
+später überschreibt. Wer neu misst, misst gegen die dann installierte Fassung
+und schreibt sie dazu.

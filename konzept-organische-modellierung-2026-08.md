@@ -1,5 +1,7 @@
 # Konzept — Organische Modellierung (P16)
 
+Stand 13.08.2026, nachrecherchiert am 19.08.2026.
+
 **Anlass:** Die Frage, ob Solidon organische Formen und Figuren nicht nur
 generieren, sondern *machen* kann — mit Sculpting-Pinsel, Subdivision,
 Symmetrie, Displacement und Posing. Ausdrücklicher Auftrag dazu: Regel 2
@@ -658,6 +660,18 @@ Netz feiner, nicht gleichmäßiger. Bezahlt wird das mit 3 260 416 Dreiecken fü
 1,5 mm; `remesh_uniform` (`simplify` + `refine_to_length`) kommt auf 30 648 bei
 einer Streuung von 0,41.
 
+> **Der Abstand ist eingebrochen — und mit ihm das eindrücklichste Argument
+> dieses Abschnitts.** Seit trimesh 5.0.0 (eingezogen am 14.08.2026) braucht
+> `remesh_mesh` für dieselbe Zielkantenlänge **160 084** Dreiecke statt
+> 3 260 416; `remesh_uniform` bleibt bei 30 648. Aus Faktor hundert wird
+> **Faktor 5,2**, weil trimesh 5 sparsamer teilt. Der Test hält die neue Zahl
+> fest: `test_uniform_remeshing_costs_a_fraction_of_the_triangles`
+> (`tests/test_subdivision.py:129–140`).
+>
+> **Die Entscheidung trägt trotzdem**, aber aus dem anderen Grund, der hier
+> schon steht: die Streuung 2,224 gegen 0,41. Zwei verschiedene Zusagen
+> bleiben zwei Operationen — auch bei Faktor fünf.
+
 Zwei verschiedene Zusagen, deshalb zwei Operationen: Die eine teilt nur und
 verschiebt nie einen Punkt. Die andere teilt *und* fasst zusammen, in einer
 zugesagten Schranke, und sagt, was das gekostet hat.
@@ -931,7 +945,7 @@ Jedes Paket endet mit grünem Tor (`pytest`, `ruff check`, `ruff format`,
 | **P16.6** | Sculpting-Sitzung im Viewport: Pinselring, Leiste, Vorschau, Wandstärke live, Editor-Undo | **XL** | offscreen wie `test_sketch_editor.py`; Grenzen aus `test_interface_limits.py` | **fertig** — 19 Tests, Grenzen gehalten |
 | **P16.7** | `displace_image` samt Bild in `sources/` und Profilprüfung | L | Relief unter Düsenbreite wird gemeldet | **fertig** — 17 Tests, drei Projektionen |
 | **P16.8** | `pose_armature`: Skelett, Gewichte, Vorwärtskinematik, Skeletteditor | **XL** | Pose deterministisch; Gelenkwinkel als Projektparameter | **fertig** — 16 + 14 Tests |
-| **P16.9** | Dateiformat 7→8, Migration, Beispieldatei, Einbacken (D) | L | alte Datei öffnet und rechnet | **fertig** — 18 Tests; Nachfrage in der Oberfläche offen |
+| **P16.9** | Dateiformat 7→8, Migration, Beispieldatei, Einbacken (D) | L | alte Datei öffnet und rechnet | **fertig** — 18 Tests, Nachfrage in der Oberfläche steht (14.08.2026) |
 | **P16.10** | Handbuch, Weg 4, Website, Beispielprojekt, Übersetzungen, Regelsammlung + Agenten-Suite vorher/nachher (§18) | L | Sprachdateien vollständig; Suitenquote nicht schlechter | **bis auf die Regelsammlung fertig** — die braucht den Suite-Lauf |
 | **P16.11** | **Prüfpunkt Käfigmodellierung** (H2): Reicht Primitive + `blend_union` + Pinsel als Basisnetz für die Korpusfiguren? | S | Kriterium **vor** P16.5 festgeschrieben; Ergebnis dokumentiert, nicht passend gemacht | **fertig** — 4 von 5 Bedingungen erfüllt (H2) |
 
@@ -1053,14 +1067,17 @@ die versteckte Naht.
 
 - **P16.1** (`a046a05`) — Regel 2 in `AGENTS.md` neu gefasst, dieselbe
   Formulierung in Bauplan-Absicht in `.claude/rules/operationen.md`
-  nachgezogen. `tests/test_gesture_ops.py`: 26 Tests, prüfen fünf
-  Eigenschaften von Sammelparametern über das ganze Register. Befund B13 im
+  nachgezogen. `tests/test_gesture_ops.py`: 26 Tests (heute **44**), prüfen
+  fünf Eigenschaften von Sammelparametern über das ganze Register (heute
+  sieben — `test_a_gesture_operation_is_reversible` und
+  `test_the_document_keeps_the_gathered_value` kamen dazu). Befund B13 im
   Meshy-Konzept mit Datum zurückgenommen (technische Hälfte bleibt gültig).
 - **P16.3** — `remesh_uniform` und `subdivide_surface` in `mesh_ops.py`,
   `tests/test_subdivision.py` mit 15 Tests, zwei Leistungszeilen in §10.
   Die Prüffrage („gehört das gleichmäßige Vernetzen in `remesh_mesh`?") ist
   mit Zahlen beantwortet — nein, Faktor hundert an Dreiecken und eine andere
-  Zusage (§7.2). Zwei Funde in bestehendem Code mitbehoben: ein
+  Zusage (§7.2). *(Der Faktor ist seit trimesh 5.0.0 auf 5,2 gefallen; die
+  Zusage trägt weiter — siehe den Vermerk in §7.2.)* Zwei Funde in bestehendem Code mitbehoben: ein
   Handlungsvorschlag, der die Zahl nannte, die er gerade abgelehnt hatte
   (Regel 17), und ein Übergang in den exakten Netzkern über `float32`, wo
   `Mesh64` dieselbe Arbeit in doppelter Genauigkeit tut (Regel 6). Die
@@ -1072,7 +1089,8 @@ die versteckte Naht.
   Netze brauchen vor dem Sculpten `GENERATED_REPAIR` + `refine` — Kette für
   Weg 3 jetzt vollständig benannt in §2.4 dieses Dokuments.
 
-**Voller Tor-Lauf zuletzt bestätigt:** 3553 pytest-Tests (aufgeteilt wie die
+**Voller Tor-Lauf zuletzt bestätigt:** 3553 pytest-Tests (am 19.08.2026 sind
+es 4251 gesammelte) (aufgeteilt wie die
 CI es tut — elf Fensterdateien einzeln, wegen des bekannten,
 vorbestehenden VTK-Absturzes bei vielen Fenstern in einem Prozess), 16
 Leistungstests, `ruff check`, `ruff format --check`, `mypy` — alle grün.
@@ -1205,3 +1223,56 @@ eine Ansage, deshalb stehen sie hier und nicht im Code:
   das nicht — spätestens dort ist zu entscheiden, ob `organic` als Kategorie
   entsteht und unter welche Menügruppe sie fällt. Ein eigenes Menü ist es
   nicht: `test_interface_limits.py` deckelt bei neun, und neun sind es.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Fünfzehn Aussagen über den eigenen Stand geprüft: **drei stimmen, zehn sind
+überholt, eine ist falsch, eine nicht prüfbar.** Die Substanz trägt — alle
+sechs Operationen stehen, die Kategorie `organic` ist wie beschrieben nicht
+entstanden, das Dateiformat ist 8, und die Abnahme hängt weiterhin allein an
+der Agenten-Regelsammlung.
+
+**Der Fund mit der größten Folge steht in §7.2:** Der Vergleich, der die
+Trennung von `remesh_mesh` und `remesh_uniform` am eindrücklichsten begründet,
+ist unter trimesh 5.0.0 zusammengefallen — aus 3 260 416 gegen 30 648 Dreiecke
+(Faktor hundert) wurden **160 084 gegen 30 648 (Faktor 5,2)**. Die Entscheidung
+bleibt richtig, aber sie steht jetzt auf dem anderen Bein, das dort ohnehin
+schon stand: der Streuung der Kantenlängen, 2,224 gegen 0,41. Wer mit dem
+Faktor hundert argumentiert, argumentiert mit einer Zahl, die es nicht mehr
+gibt.
+
+**Ein Widerspruch, den dieses Projekt schon mehrfach hatte:** Die §15-Tabelle
+führte P16.9 mit „Nachfrage in der Oberfläche offen", die Übergabenotiz zwei
+Absätze weiter sagt „steht (14.08.2026)". Der Code gibt der Notiz recht — der
+Weg ist vollständig, von `bakeRequested` über `bake_sculpt` bis `bake_strokes`.
+Der Nachtrag war richtig, die Tabelle darüber stehengeblieben.
+
+**Zahlen, die weitergezogen sind:** `test_gesture_ops.py` hat 44 Tests statt
+26 und sieben Testfunktionen statt fünf · 3553 Tests → 4251 gesammelte · 77
+Operationen auf der Website → 85 · zwei Sprachen → sechs.
+
+**Was die Außenrecherche beisteuert** — das Feld, gegen das dieses Konzept
+sich abgrenzt:
+
+- **Blender 5.2 LTS** (14.07.2026) hat den Sculpt-Mode ausgebaut: Primitive
+  direkt im Sculpt-Mode, ein „Scene Project"-Pinsel, und — für uns die
+  interessanteste Zeile — **der Voxel-Remesher interpoliert jetzt Vertex- und
+  Corner-Attribute**, statt den Wert des nächstgelegenen Punkts zu übernehmen.
+  Genau der Fehler, den ein selbstgebauter VDB-Remesh im ersten Anlauf auch
+  macht.
+- **ZBrush gibt es nur noch im Abonnement** — 49 $/Monat oder 399 $/Jahr;
+  unbefristete Lizenzen sind seit Dezember 2023 abgeschafft. Der Vergleich
+  „einmal kaufen gegen mieten" fällt damit noch deutlicher zu unseren Gunsten
+  aus.
+- **3DCoat 2026** kostet 379 € als Dauerlizenz und bringt volumetrische
+  Texturen, die Stützstrukturen im Modellinneren erzeugen. **Womp** verkauft
+  „Hollow printing for lighter, cheaper prints" ab 9,99 $/Monat.
+- **OpenVDB 13.0.0 steht unter Apache-2.0** — für einen VDB-Remesh ohne
+  GPL-Bindung also weiterhin der gangbare Weg (Regel 15).
+
+**Nicht belegbar und deshalb offen gelassen:** die Millisekundenwerte der
+Leistungstests. Sie stammen aus Läufen unter `pytest.mark.performance` auf
+dieser Maschine; ohne denselben Lauf wäre jede neue Zahl eine andere Messung.
+Sie bleiben als datierte Messwerte stehen.

@@ -1,4 +1,4 @@
-# Konzept — Solidon3D gegen das Wettbewerbsfeld (11.08.2026)
+# Konzept — Solidon3D gegen das Wettbewerbsfeld (11.08.2026, nachrecherchiert am 19.08.2026)
 
 Ein Durchgang durch **alle** Bereiche der Anwendung, jeder gegen die Programme
 gehalten, die denselben Bereich bedienen. Anlass ist keine einzelne Fundstelle,
@@ -16,6 +16,24 @@ Plattform, Sprache, Sichtbarkeit, Preis.
 **Methode.** Der Ist-Stand ist gemessen, nicht erinnert: Register, Bausteine,
 Formate, Backends und Profile aus dem laufenden Code ausgelesen. Der Marktstand
 kommt aus Recherche vom 11.08.2026; Preise sind Anhaltspunkte, keine Zusagen.
+
+> **Nachrecherchiert am 19.08.2026.** Der Marktstand ist neu erhoben; was sich
+> geändert hat, steht bei der jeweiligen Stelle, die Zusammenfassung am
+> Dateiende. Die wichtigsten Bewegungen in acht Tagen:
+>
+> - **Autodesk Fusion** kostet gewerblich **703 €/Jahr** in Deutschland
+>   (680 USD in den USA), Stand v.2704.1.53 vom 06.08.2026. Die Privatnutzung
+>   bleibt kostenlos, läuft als Dreijahres-Abonnement und ist auf **10 aktive
+>   Dokumente** beschränkt.
+> - **Autodesk hat zwei MCP-Server veröffentlicht** — einen lokalen für Fusion
+>   selbst. Die KI-gesteuerte CAD-Bedienung, die dieses Dokument als Signal
+>   liest, kommt damit vom Marktführer.
+> - **FreeCAD** steht auf 1.1.3 (25.07.2026) und **wechselt auf kalendarische
+>   Fassungen**: drei Ausgaben im Jahr, die erste ist 26.3, deren Zweig am
+>   30.09.2026 aufmacht.
+> - **SindriCAD** ist von 0.1.81 auf 0.1.171 gelaufen, von 20 auf 141 Sterne;
+>   die Lizenz ist genauer als hier notiert: **AGPL-3.0-only mit
+>   Beitragendenvertrag**, der dem Betreuer kommerzielle Bedingungen offenhält.
 
 ---
 
@@ -60,6 +78,11 @@ Empfehlung. Das Urteil ist eine von drei Marken — **führend**, **gleichauf**,
 **Stand:** 77 Operationen im Register (16 davon aus der Bausteinbibliothek), Projektparameter mit
 eigener Grammatik ohne `eval`, Passungen in vier Arten, Op-Stack
 non-destruktiv, Undo auf Transaktionsebene.
+
+> **Heute 85 Operationen, davon 17 aus der Bibliothek** (19.08.2026). Jede
+> Zahl dieses Dokuments ist ein Stichtag: acht Tage sind hier rund 200
+> Commits. Auf der Website hält `tests/test_website.py` die Zahl gegen das
+> Register — in einem Konzeptpapier tut das niemand.
 
 **Wer es besser kann:** Fusion und SolidWorks haben eine echte Feature-Historie
 mit Referenzen auf Modellkanten, Baugruppen, Gelenke und Zeichnungsableitung.
@@ -211,6 +234,12 @@ Ordner.
 `konzept-sindricad.md`, unverändert offen. Ebenso **B4: GLB kommt herein und
 geht nicht hinaus** — die Formatliste bestätigt es heute noch.
 
+> **GLB geht hinaus, seit dem 11.08.2026** — also schon am Tag vor diesem
+> Dokument (`d4dea28`, `app/core/export/writer.py:54`). Die eigene
+> Befundtabelle in Teil 5 sagt es unter W7 auch („erledigt"); nur dieser
+> Abschnitt und die Empfehlung darunter stehen weiter dagegen. Wer hier
+> aufschlägt, baut etwas, das es gibt.
+
 **Empfehlung:** GLB-Export ist eine kleine Arbeit mit sichtbarem Nutzen (Teilen
 ohne CAD-Programm) und sollte einfach passieren. Der Netzwerkdruck ist eine
 Bauplanänderung (§28/§29 kennen ihn nicht) und braucht deine Ansage — siehe
@@ -260,6 +289,19 @@ es überhaupt starten kann.
 **Empfehlung:** Sprachen zuerst, weil billig und rein additiv. macOS als
 Entscheidung, siehe Teil 5.
 
+> **Beide Befunde sind erledigt, und beide widersprechen bereits der eigenen
+> Tabelle in Teil 5** (W3) und Teil 7 (Frage 1).
+>
+> - **Sechs Sprachen** seit dem 13.08.2026: Deutsch als Quelle, dazu `en`,
+>   `es`, `fr`, `it`, `pt` (`app/i18n/locales/`). `tests/test_translations.py`
+>   prüft seither jede gefundene Datei, nicht mehr nur die englische. Die
+>   Empfehlung „Sprachen zuerst" ist eingelöst.
+> - **macOS wird seit dem 13.08.2026 paketiert.** Der Satz „kein macOS-Paket"
+>   war der härteste Befund des Durchgangs und ist es nicht mehr.
+>
+> Wer nur diesen Abschnitt liest, hält zwei erledigte Punkte für die
+> dringendsten offenen. (Nachgeprüft am 19.08.2026.)
+
 ### 2.11 Sichtbarkeit und Ökosystem
 
 **Stand:** Website deutsch und englisch, Handbuch, Rechtstexte, Paddle als
@@ -285,6 +327,21 @@ Ablauf, erzeugte Modelle gehören dem Nutzer.
 Dokumente, eingeschränkte Exportformate). Plasticity ~150 $ einmalig mit
 12 Monaten Aktualisierungen. Shapr3D ~299 $/Jahr, kein Einmalkauf. Slicer und
 FreeCAD kostenlos.
+
+> **Nachgeprüft am 19.08.2026 — die Aufstellung trägt weiter, zwei Zahlen sind
+> genauer.** Fusion Personal: kostenlos, Dreijahres-Abonnement mit
+> Neuantragspflicht, **10 aktive Dokumente**, Export auf STEP, STL, OBJ, F3D,
+> F3Z, IPT, FBX, SMT, SKP und DXF beschränkt, Fertigung nur 2,5- und
+> 3-Achs-Fräsen. Gewerblich sind es **703 €/Jahr** (Deutschland, inkl.
+> geschätzter Mehrwertsteuer) beziehungsweise 680 USD.
+> **Plasticity** kostet heute **175 USD** (Indie) und 299 USD (Studio), beides
+> unbefristet mit 12 Monaten Aktualisierungen — nicht 150.
+> **Shapr3D Pro:** 299 USD je Sitz und Jahr, unverändert.
+>
+> Ein Vergleichspunkt ist dazugekommen, den dieses Dokument noch nicht führt:
+> **SindriCAD kostet nichts, ist AGPL und zielt auf denselben Nutzer.** Es
+> finanziert sich freiwillig über Patreon. Wer „warum nicht das kostenlose"
+> fragt, meint ab August 2026 nicht mehr nur Fusion Personal.
 
 **Urteil: führend in der Aufstellung.** Einmalkauf ohne Konto ist 2026 selten
 genug, um selbst ein Argument zu sein — der Sprung von kostenlos auf 299 $/Jahr
@@ -333,7 +390,7 @@ die Arbeit ist.
 |---|---|---|---|
 | **W1** | **Niemand weiß, dass es uns gibt.** | Entscheidung | **offen** — B5, siehe Teil 7 |
 | **W2** | **Kein macOS-Paket** — ein spürbarer Teil der Zielgruppe kann nicht starten | mittel + Entscheidung | **offen** — Entscheidung, siehe Teil 7 |
-| ~~W3~~ | ~~Nur zwei Sprachen — ES, FR, IT, PT fehlen, Gerüst steht~~ | klein je Sprache | **erledigt** — sechs Sprachen, je 2279 Einträge |
+| ~~W3~~ | ~~Nur zwei Sprachen — ES, FR, IT, PT fehlen, Gerüst steht~~ | klein je Sprache | **erledigt** — sechs Sprachen, je 2647 Einträge (19.08.2026) |
 | ~~W4~~ | ~~Weg 1 ist unsere Stärke und nicht unser Versprechen — Website führt mit Säule A~~ | klein | **erledigt** — Überschrift ist Weg 1 |
 | **W5** | **Letzte Meile zum Drucker** — Datei bleibt im Ordner | mittel + Bauplanänderung | **offen** — B3, Entscheidung, siehe Teil 7 |
 | ~~W6~~ | ~~Acht Texturmuster, die niemand sieht~~ | klein | **erledigt** — Musterbild auf der Seite |
@@ -395,9 +452,11 @@ Entscheidung.**
    richtiggestellt, Weg 1 nach vorn, Texturen mit Bild. Kein Code, größter
    sichtbarer Gewinn.
 2. ~~**W3**~~ — **erledigt am 13.08.2026.** Spanisch, Französisch, Italienisch,
-   Portugiesisch liegen vollständig in `app/i18n/locales/`, je 2279 Einträge,
-   abgenommen von `tests/test_translations.py` (104 Fälle) und mitgetragen von
-   Handbuch- und Website-Tests (460 Fälle). Die Vorhersage „additiv, prüfbar"
+   Portugiesisch liegen vollständig in `app/i18n/locales/`, je **2647**
+   Einträge (Stand 19.08.2026; die 2279 fanden sich an keinem Stand — am
+   13.08. waren es 2366), abgenommen von `tests/test_translations.py`
+   (**112** Fälle) und mitgetragen von Handbuch- und Website-Tests
+   (**90** Fälle, nicht 460). Die Vorhersage „additiv, prüfbar"
    hat gestimmt: keine Zeile Code, die eine Sprache kennt. Was sie nicht
    vorhergesagt hat, war der Preis der Parallelität — acht gleichzeitig
    arbeitende Agenten gegen einen Katalog, der während des Laufs um fünfzehn
@@ -472,3 +531,58 @@ Vier Fragen, die dieses Dokument nicht beantworten kann. **Alle vier sind am
 
 *Beschlossenes wandert nach `ROADMAP.md`; der Bauplan ändert sich nur mit
 Ansage.*
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Zweiundzwanzig Aussagen über den eigenen Stand geprüft — **neun stimmen, neun
+sind überholt, drei waren falsch, eine ist nicht prüfbar** — und das Marktfeld
+neu erhoben.
+
+**Vier Stellen führen den Leser zu falscher Arbeit**, und drei davon
+widersprechen bereits einer anderen Stelle desselben Dokuments:
+
+1. **2.8** lässt den GLB-Export als Arbeit stehen — er ist seit dem 11.08.
+   gebaut, einen Tag vor diesem Papier, und die eigene Tabelle in Teil 5 sagt
+   es unter W7 auch.
+2. **2.10** empfiehlt „Sprachen zuerst" — sechs Sprachen liegen seit dem 13.08.
+   vor (W3 sagt es).
+3. **2.10** nennt das fehlende macOS-Paket den härtesten Befund des Durchgangs
+   — seit dem 13.08. wird für macOS paketiert (Teil 7 Frage 1 sagt es).
+4. **W9 „auslassen"** — der Netzimport lag am 11.08. schon im Baum und steht
+   heute auf der Startseite. Wer die Entscheidung ernst nähme, baute etwas
+   zurück.
+
+**Drei Zahlen waren falsch, nicht überholt:** sechs Normteiltabellen (es sind
+**acht** mit zusammen 40 Maßen, und das galt schon am Tag der Niederschrift),
+2279 Katalogeinträge (an keinem Stand — am 13.08. waren es 2366, heute 2647)
+sowie die Testfallzahlen 104 und 460 (heute 112 und 90).
+
+**Was der Markt in acht Tagen gemacht hat:**
+
+- **Autodesk Fusion:** 703 €/Jahr gewerblich in Deutschland, 680 USD in den
+  USA; Build v.2704.1.53 vom 06.08.2026. Personal bleibt kostenlos, mit
+  Dreijahres-Abonnement und zehn aktiven Dokumenten.
+- **Autodesk hat zwei MCP-Server veröffentlicht**, einen davon lokal für
+  Fusion. Der dritte Punkt in Teil 1 — „der Agentenzugang ist zum Standard
+  geworden, nicht zum Merkmal" — bekommt damit seinen stärksten Beleg: Er
+  kommt jetzt vom Marktführer selbst.
+- **FreeCAD** steht auf 1.1.3 (25.07.2026) und stellt auf kalendarische
+  Fassungen um — drei Ausgaben im Jahr, die erste ist 26.3 ab dem 30.09.2026.
+- **SindriCAD** ist in siebzehn Tagen von 0.1.81 auf 0.1.171 gelaufen und von
+  20 auf 141 Sterne. Die Lizenz ist AGPL-3.0-**only**, mit einem
+  Beitragendenvertrag, der dem Betreuer kommerzielle Bedingungen offenhält.
+- **Plasticity** kostet 175 USD (Indie) und 299 USD (Studio), nicht 150.
+
+**Der Preisvergleich in 2.13 trägt weiter** — aber er hat einen Vergleichspunkt
+dazubekommen, den dieses Dokument noch nicht führt: SindriCAD ist kostenlos,
+quelloffen und zielt auf denselben Nutzer. „Warum nicht das kostenlose" meint
+seit August 2026 nicht mehr nur Fusion Personal.
+
+**Nicht belegbar und deshalb offen gelassen:** die Preise von Alibre (der
+Hersteller nennt keine und verweist auf Händler) und nTop (Preisseite liefert
+einen Serverfehler), der Nettopreis von Fusion in Euro, sowie die
+Downloadzahlen von SindriCAD. Auch die FreeCAD-Lizenz ist hier **nicht** neu
+geprüft worden — sie steht in diesem Dokument nicht als Zahl, aber wer sie
+zitieren will, holt sie sich beim Projekt.

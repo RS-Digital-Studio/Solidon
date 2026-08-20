@@ -1,6 +1,6 @@
 # Konzept: Öffentliche Demo bis 30.10.2026
 
-Stand 12.08.2026. Baut auf `.claude/konzept-veroeffentlichung-1.0.md` auf und
+Stand 12.08.2026, nachrecherchiert am 19.08.2026. Baut auf `.claude/konzept-veroeffentlichung-1.0.md` auf und
 ändert dessen §7-Entscheidung „keine Beta-Fassung" — mit Begründung, siehe §2 A.
 Dieses Dokument ist die fachliche SSOT der Demo-Phase; alles, was den späteren
 Verkauf betrifft, bleibt im Veröffentlichungskonzept.
@@ -92,6 +92,22 @@ also auch kein Download. Der Stand dort ist allerdings 205 Commits alt, und
 seither ist an genau diesen Dateien viel gearbeitet worden (unter anderem
 „VTK/Qt-Referenzen halten zu lange"). Ob der Absturz noch existiert, weiß
 niemand, bevor gepusht wurde. **Deshalb steht der Push jetzt ganz vorn.**
+
+> **Der Push ist nicht mehr das Nadelöhr** (19.08.2026): `git rev-list --count
+> origin/main..main` → **0**. Alles ist draußen, `origin/main` steht auf dem
+> Tagesstand. Das Repository ist öffentlich und umbenannt
+> (`ROADMAP.md:4498–4517`) — die Zusatzbedingung „vorher Fund a) entscheiden"
+> ist damit entfallen.
+>
+> **Der Absturz ist geblieben, aber er sitzt woanders, als hier steht.** Sein
+> Ort ist zufällig, weil er kumuliert: Vier Läufe fielen nach 228, 480, 3698
+> und 3907 Tests (`ROADMAP.md:5899`, `c1ff696` vom 18.08.). Die Kopftabelle
+> der ROADMAP nennt als Rest `tests/test_chat_ui.py`, nicht
+> `test_operation_ui.py`. Die Suche nach *der* abstürzenden Datei war deshalb
+> falsch angelegt.
+>
+> Offen bleibt, was zählt: **ein grüner CI-Lauf und ein Artefakt daraus.**
+> Ohne grüne Suite kein Paket — dieser Satz gilt unverändert.
 
 **d) Die Setup-Datei ließ sich nicht bauen.** Behoben am 12.08.: Die Spec baute
 nach `dist/Solidon`, `tools/make_installer.py` suchte unter `dist/Solidon3D`
@@ -340,13 +356,27 @@ Stichtag; ein gelöschter Testlaufmarker verlängert nichts · mit
 unverändert weiter) · `tests/test_licence_boundary.py` bleibt Fall für Fall
 grün, in beide Richtungen.
 
-### D1 — Version und Kennzeichnung (S)
+### D1 — Version und Kennzeichnung (S) — **erledigt, mit anderer Zahl**
 
-`app/branding.py` und `pyproject.toml` auf `0.9.0`. `website/version.json`
+`app/branding.py` und `pyproject.toml` auf `0.1.0`. `website/version.json`
 bleibt zunächst auf dem Demo-Stand — es wird erst zum Schluss angefasst (§4).
 
 **Abnahme:** `tests/test_website.py` und der Versionstest grün · eine erzeugte
-Projektdatei trägt `app_version: 0.9.0`.
+Projektdatei trägt `app_version: 0.1.0`.
+
+> **Hier stand `0.9.0`, und das war seit dem 14.08.2026 überholt.** Robert hat
+> die Fassung auf **0.1.0** heruntergesetzt (`ROADMAP.md:4526`); sie steht
+> heute an sieben Stellen so — `app/branding.py:68`, `pyproject.toml:7`,
+> `website/version.json`, `README.md:13`, `EULA.md:13` und `:60`.
+> `test_the_version_is_the_same_in_both_places_that_carry_it`
+> (`tests/test_toolchain.py:108`) hält die beiden Handstellen zusammen.
+>
+> **Der Widerspruch zog sich durch das ganze Dokument:** §9 Punkt 1 führte die
+> Fassungsnummer noch als offene Entscheidung („Bis zum Widerspruch wird
+> `0.9.0` gebaut"), und D6, §5 und §6 rechnen mit `0.9.1`, `0.9.2` und
+> `0.9.5`. Nach der Zählregel aus §2 D heißt der nächste Bau **`0.1.1`**, die
+> zweite Demo entsprechend `0.1.5`. Die Ziffern stehen unten, wie sie standen —
+> gemeint ist jeweils die nächste Punktfassung.
 
 ### D2 — Die Texte in der Anwendung (S–M)
 
@@ -686,3 +716,56 @@ die Deckblätter von `website/handbuch.html` und `website/en/manual.html` über
 **Was bis zum Start bleibt:** D7 (die CI grün sehen und die Artefakte holen),
 D8 (der fremde Rechner), der Download-Kasten mit echter Datei und Prüfsumme —
 der zugleich die Abnahme von D6 ist —, und der Stichtag in `kern.md`.
+
+---
+
+## Nachrecherchiert am 19.08.2026
+
+Fünfzehn Aussagen über den eigenen Stand geprüft: **sieben stimmen, sieben sind
+überholt, eine ist falsch.** Dieses Dokument ist die SSOT der laufenden
+Demo-Phase — von den achtzig Tagen bis zum Stichtag sind noch zweiundsiebzig.
+
+**Der Widerspruch, der sich durch das ganze Dokument zieht:** D1 schreibt
+Fassung `0.9.0` vor, §9 führt sie als offene Entscheidung — entschieden ist seit
+dem 14.08.2026 **`0.1.0`**, und sie steht an sieben Stellen so im Code. Die
+Folgeziffern (`0.9.1`, `0.9.2`, `0.9.5`) meinen nach der eigenen Zählregel
+`0.1.1` und `0.1.5`.
+
+**Was sich zum Guten geändert hat:** Der Push ist erledigt — `origin/main`
+steht auf dem Tagesstand, das Repository ist öffentlich und umbenannt. Damit
+fällt der Punkt weg, der hier „ganz vorn" stand. Der Segmentierungsfehler
+besteht weiter, sitzt aber nicht dort, wo dieses Dokument ihn vermutet: Sein
+Ort ist zufällig, weil er kumuliert.
+
+**Was gewachsen ist:** 77 Operationen → 85 · drei Hauptwege → **vier** · acht
+Beispielprojekte → neun · zwei Sprachen → sechs · 33 Handbuchseiten → 40. Die
+Abbildungszahl war schon am 12.08. falsch: 25, nicht 28.
+
+**Die Außenrecherche trifft dieses Dokument an einer Stelle hart** — D6, die
+Signierung:
+
+- **Azure Trusted Signing heißt heute Azure Artifact Signing** und ist für
+  Einzelpersonen faktisch verschlossen: Es verlangt eine Organisation mit drei
+  Jahren nachweisbarer Existenz und ein zahlendes Azure-Abonnement; die Prüfung
+  dauert 1 bis 20 Werktage. Der Plan „in 0.9.1 nachziehen, sobald Azure durch
+  ist" hat damit eine Voraussetzung, die dieses Dokument nicht kennt.
+- **Der Ersatzweg existiert:** Certum gibt ein Cloud-OV-Zertifikat auf den Namen
+  einer Privatperson aus, 139 $ im ersten Jahr, ohne Hardware-Token.
+- **EV-Zertifikate umgehen SmartScreen nicht mehr** — auch ein gültig
+  signiertes, frisch gebautes Setup löst zunächst die Warnung aus. Der Nutzen
+  der Signatur ist der geprüfte Herausgebername, nicht das Ausbleiben der
+  Warnung.
+- **Ohne Signatur baut sich die Reputation für jede neue Fassung bei null neu
+  auf.** Bei einer Demo, die in Punktversionen nachgeschoben wird, heißt das:
+  jede Fassung warnt von vorn.
+
+**Zwei Fristen von außen, die im Zeitplan fehlen:** Die **CRA-Meldepflichten
+greifen ab dem 11.09.2026**, also mitten in der Demo-Phase; die Ausnahme für
+freie Software gilt nur bei unentgeltlicher Bereitstellung — für eine
+kostenlose Demo, die auf einen Verkauf zielt, ist das zu klären. Und **Artikel
+50 des AI Act gilt seit dem 02.08.2026**; er nennt synthetische Bild-, Ton-,
+Video- und Textinhalte, **3D-Modelle nicht**.
+
+**Nicht belegbar und deshalb offen gelassen:** ob die CI heute grün läuft und
+ob ein Artefakt entsteht. Beides entscheidet sich auf dem Runner, nicht hier —
+und es bleibt der kritische Punkt dieses Plans.
