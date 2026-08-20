@@ -69,6 +69,21 @@ COLUMN_WIDTH = 900
 #: Vorschaubild links, daneben Titel und Satz.
 TILE_COLUMNS = 2
 
+#: Wie schmal eine Kachel werden darf, bevor Titel und Satz aneinander kleben.
+#:
+#: Gemessen an der Zweispaltigkeit, die es seit je gibt: 900 Pixel Spalte, zwei
+#: Kacheln, gut 430 je Stück. Darunter wird der Satz zur Wortkolonne.
+TILE_MIN_WIDTH = 420
+
+#: Wie breit die Spalte wird, wenn drei Kacheln nebeneinander passen.
+#:
+#: Auf 1920 mal 1080 blieben neben der 900 Pixel breiten Spalte gut 900 leer,
+#: während unten die neunte Kachel und „Zuletzt geöffnet" unter der Kante lagen
+#: — gemessen: Sichtfeld 956, Inhalt 1154. Fünf Kachelzeilen wurden zu vier,
+#: sobald die Breite genutzt wird. Der Satz über :data:`COLUMN_WIDTH` gilt
+#: weiter für Text; hier geht es um ein Raster aus Bildern.
+WIDE_COLUMN_WIDTH = 1360
+
 
 class DropArea(QFrame):
     """Die große Ablagefläche. Nimmt Projekte und Modelle gleichermaßen.
@@ -392,11 +407,25 @@ class StartScreen(QWidget):
 
         # §37.2: die Beispielprojekte sind Inhalt des Startbildschirms und kein
         # Ordner, den jemand suchen muss.
+        #
+        # **Zwei Raster und nicht eines.** Der Code kennt die Zweiteilung seit
+        # je — ``examples.py`` sagt es im Kommentar: „Die vier oben beantworten
+        # >wie fange ich an<, diese >was kann das eigentlich<." Die Oberfläche
+        # zeigte neun gleich aussehende Kacheln unter einer Überschrift, und der
+        # Erstnutzer musste aus den Titeln „Weg 1 … Weg 4" schließen, dass genau
+        # diese vier der Anfang sind. Das Wort „Weg" erklärt der Startbildschirm
+        # nirgends; es stammt aus Bauplan §2.2.
         self.examples_area = QWidget(self)
         self.examples_grid = QGridLayout(self.examples_area)
         self.examples_grid.setContentsMargins(0, 0, 0, 0)
         self.examples_grid.setSpacing(NORMAL)
+        self.more_area = QWidget(self)
+        self.more_grid = QGridLayout(self.more_area)
+        self.more_grid.setContentsMargins(0, 0, 0, 0)
+        self.more_grid.setSpacing(NORMAL)
         self.tiles: list[ExampleTile] = []
+        self._columns = TILE_COLUMNS
+        """Wie viele Kacheln gerade in eine Zeile gelegt werden."""
         self.show_examples()
 
         # Der Hauptknopf sieht aus wie einer. Vorher standen beide in
@@ -430,6 +459,8 @@ class StartScreen(QWidget):
         buttons.addStretch(1)
 
         column = QWidget(self)
+        self.column = column
+        """Die Spalte, deren Breite über die Zahl der Kachelspalten entscheidet."""
         column.setMaximumWidth(COLUMN_WIDTH)
         inner = QVBoxLayout(column)
         inner.setContentsMargins(0, 0, 0, 0)
@@ -437,8 +468,10 @@ class StartScreen(QWidget):
         inner.addWidget(title)
         inner.addWidget(drop)
         inner.addLayout(buttons)
-        inner.addWidget(_caption(tr("Beispiele — die vier Wege und was darauf bereitliegt"), self))
+        inner.addWidget(_caption(tr("Wo fange ich an?"), self))
         inner.addWidget(self.examples_area)
+        inner.addWidget(_caption(tr("Was kann das noch?"), self))
+        inner.addWidget(self.more_area)
         inner.addWidget(_caption(tr("Zuletzt geöffnet"), self))
         inner.addWidget(self.recent_empty)
         inner.addWidget(self.recent_list)
@@ -446,7 +479,10 @@ class StartScreen(QWidget):
 
         centred = QWidget(self)
         middle = QHBoxLayout(centred)
-        middle.setContentsMargins(WIDE * 3, WIDE * 3, WIDE * 3, WIDE * 3)
+        # Zwei statt drei Weiten Rand: Die drei waren Luft, die oben und unten
+        # zusammen zweiunddreißig Pixel kostete — bei einem Inhalt, der auf
+        # 1920 mal 1080 um 198 Pixel über das Sichtfeld hinausragte.
+        middle.setContentsMargins(WIDE * 2, WIDE * 2, WIDE * 2, WIDE * 2)
         middle.addStretch(1)
         middle.addWidget(column)
         middle.addStretch(1)
@@ -464,6 +500,37 @@ class StartScreen(QWidget):
 
         self._order_the_tab_chain()
         self.show_recent([])
+
+    def _fit_the_columns(self) -> None:
+        """Wie viele Kacheln in eine Zeile passen — und wie breit die Spalte dafür ist.
+
+        Auf 1920 mal 1080 blieben neben der 900 Pixel breiten Spalte gut 900
+        leer, während unten die neunte Kachel und „Zuletzt geöffnet" unter der
+        Kante lagen: Sichtfeld 956, Inhalt 1154. Die Breite lag da und wurde
+        nicht benutzt.
+
+        Drei Spalten machen aus fünf Kachelzeilen vier. Sie brauchen eine
+        breitere Spalte, und die ist kein Widerspruch zum Satz über
+        :data:`COLUMN_WIDTH`: Der gilt für Text — hier geht es um ein Raster aus
+        Bildern, und die Beschriftungen darüber bleiben kurz.
+
+        Neu gelegt wird nur, wenn sich die Zahl **ändert**. Bei jedem
+        Größenereignis neun Kacheln neu zu bauen wäre ein Ruck bei jedem Zug am
+        Fensterrand.
+        """
+        available = self.width() - 2 * WIDE * 2
+        wide_enough = available >= 3 * TILE_MIN_WIDTH
+        self.column.setMaximumWidth(WIDE_COLUMN_WIDTH if wide_enough else COLUMN_WIDTH)
+        columns = 3 if wide_enough else TILE_COLUMNS
+        if columns == self._columns:
+            return
+        self._columns = columns
+        self.show_examples()
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        """Beim Breiterwerden das Kachelraster neu teilen."""
+        super().resizeEvent(event)
+        self._fit_the_columns()
 
     def _order_the_tab_chain(self) -> None:
         """Die Knöpfe vor die Kacheln, für den, der ohne Maus kommt (§19.2).
@@ -505,20 +572,31 @@ class StartScreen(QWidget):
 
     def show_examples(self) -> None:
         """Die Beispielprojekte, soweit sie installiert sind."""
-        while self.examples_grid.count():
-            item = self.examples_grid.takeAt(0)
-            widget = item.widget() if item is not None else None
-            if widget is not None:
-                widget.deleteLater()
+        for grid in (self.examples_grid, self.more_grid):
+            while grid.count():
+                item = grid.takeAt(0)
+                widget = item.widget() if item is not None else None
+                if widget is not None:
+                    widget.deleteLater()
         self.tiles = []
 
-        for index, path in enumerate(examples.paths()):
+        columns = self._columns
+        placed = {True: 0, False: 0}
+        for path in examples.paths():
             entry = examples.by_path(path)
             if entry is None:
                 continue
-            tile = ExampleTile(entry, path, self.examples_area)
+            # Ein Beispiel mit ``way`` ist ein Einstieg, eines ohne eine
+            # Funktionsschau — dieselbe Zweiteilung, die ``examples.py``
+            # beschreibt, nur jetzt auch sichtbar.
+            starts = bool(entry.way)
+            grid = self.examples_grid if starts else self.more_grid
+            parent = self.examples_area if starts else self.more_area
+            tile = ExampleTile(entry, path, parent)
             tile.chosen.connect(self.openRequested)
-            self.examples_grid.addWidget(tile, index // TILE_COLUMNS, index % TILE_COLUMNS)
+            index = placed[starts]
+            grid.addWidget(tile, index // columns, index % columns)
+            placed[starts] = index + 1
             self.tiles.append(tile)
 
         # Neue Kacheln stehen am Ende der Tabulatorkette, wo Qt sie anlegt —

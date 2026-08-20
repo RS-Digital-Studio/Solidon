@@ -183,3 +183,63 @@ def test_a_missing_picture_leaves_the_tile_standing(qt_app: QApplication) -> Non
 
     assert tile.preview.isHidden()
     assert unknown.title in [label.text() for label in tile.findChildren(type(tile.preview))]
+
+
+def test_the_examples_stand_in_two_groups(screen: StartScreen) -> None:
+    """Neun gleich aussehende Kacheln unter einer Überschrift.
+
+    Der Code kennt die Zweiteilung seit je — ``examples.py`` sagt im Kommentar:
+    „Die vier oben beantworten ‚wie fange ich an', diese ‚was kann das
+    eigentlich'." Die Oberfläche zeigte sie nicht, und der Erstnutzer musste aus
+    den Titeln „Weg 1 … Weg 4" schließen, dass genau diese vier der Anfang sind.
+    Das Wort „Weg" erklärt der Startbildschirm nirgends; es stammt aus Bauplan
+    §2.2.
+
+    Geteilt wird nach ``way`` und nicht nach der Reihenfolge: Ein fünfter Weg
+    fände von selbst in die obere Gruppe.
+    """
+    from app.core import examples
+
+    ways = [entry for entry in examples.EXAMPLES if entry.way]
+    others = [entry for entry in examples.EXAMPLES if not entry.way]
+    assert ways and others, "ohne beide Sorten prüft dieser Test nichts"
+
+    assert screen.examples_grid.count() == len(ways), (
+        f"{screen.examples_grid.count()} Einstiege statt {len(ways)}"
+    )
+    assert screen.more_grid.count() == len(others), (
+        f"{screen.more_grid.count()} Funktionsschauen statt {len(others)}"
+    )
+    assert len(screen.tiles) == len(ways) + len(others), "eine Kachel ist unterwegs verloren"
+
+    # Und jede Kachel steht in dem Raster, in das sie gehört.
+    for index in range(screen.examples_grid.count()):
+        item = screen.examples_grid.itemAt(index)
+        tile = item.widget() if item is not None else None
+        assert tile is not None and tile.entry.way, f"{tile.entry.id} ist kein Einstieg"
+
+
+def test_the_tiles_use_the_width_they_have(screen: StartScreen) -> None:
+    """Die neunte Kachel lag unter der Kante, daneben blieben 900 Pixel leer.
+
+    Gemessen im maximierten Fenster auf 1920 mal 1080: Sichtfeld 956, Inhalt
+    1154, Rollbalken sichtbar — und die Spalte 900 Pixel breit in einem 1906
+    Pixel breiten Fenster. Drei Kachelspalten machen aus fünf Kachelzeilen vier.
+
+    Bei einem schmalen Fenster bleibt es bei zwei: drei Kacheln unter
+    ``TILE_MIN_WIDTH`` wären drei Wortkolonnen.
+    """
+    from app.ui.start_screen import TILE_COLUMNS, TILE_MIN_WIDTH
+
+    screen.show()
+    screen.resize(3 * TILE_MIN_WIDTH + 200, 900)
+    QApplication.processEvents()
+    assert screen._columns == 3, "die Breite ist da und wird nicht benutzt"
+
+    screen.resize(2 * TILE_MIN_WIDTH + 40, 900)
+    QApplication.processEvents()
+    assert screen._columns == TILE_COLUMNS, "drei Spalten in einem schmalen Fenster"
+
+    # Und die Kacheln sind alle noch da, in der richtigen Gruppe.
+    assert len(screen.tiles) == screen.examples_grid.count() + screen.more_grid.count()
+    screen.hide()
