@@ -670,3 +670,53 @@ def test_the_palette_knows_every_line_of_the_menu_bar(qt_app: object) -> None:
     finally:
         window.close()
         window.deleteLater()
+
+
+def test_the_shortcut_list_knows_every_key_the_window_holds(window: MainWindow) -> None:
+    """Die Übersicht kannte dreizehn Tasten nicht — darunter alle acht Werkzeuge.
+
+    Gelesen wurde ausschließlich die Menüleiste, und der Docstring begründete
+    das mit „dort landet jede Aktion, die ein Mensch findet". Nachgezählt am
+    gebauten Fenster: 36 Menütasten gegen 49 belegte. Es fehlten ``Alt+1`` bis
+    ``Alt+8`` für die acht Werkzeuge, ``Strg+Tab`` und ``Strg+Umschalt+Tab``,
+    die beiden Zoom-Tasten und ``Esc`` — ausgerechnet die acht, von denen ein
+    Kommentar in ``main_window`` sagt, sie stünden „im Tooltip des Knopfes und
+    in der Kürzelübersicht".
+
+    Dieser Test ist die Bremse gegen das Wiederauftreten: Er vergleicht mit den
+    ``QShortcut``-Kindern des Fensters und wird rot, sobald einer dazukommt, den
+    :data:`WINDOW_KEYS` nicht nennt.
+    """
+    from PySide6.QtGui import QKeySequence, QShortcut
+
+    from app.ui.shortcuts_window import entries
+
+    def native(sequence: QKeySequence) -> str:
+        return sequence.toString(QKeySequence.SequenceFormat.NativeText)
+
+    listed = entries(window.menuBar(), window)
+    named = {key for _group, _title, key in listed}
+
+    owned = {
+        native(item.key()) for item in window.findChildren(QShortcut) if not item.key().isEmpty()
+    }
+    assert owned, "ohne Fenstertasten prüft dieser Test nichts"
+    assert owned <= named, f"die Übersicht kennt diese Tasten des Fensters nicht: {owned - named}"
+
+    # Die acht Werkzeugtasten einzeln, denn sie sind der Anlass.
+    for number in range(1, 9):
+        key = native(QKeySequence(f"Alt+{number}"))
+        assert key in named, f"{key} fehlt — das Werkzeug dazu ist unauffindbar"
+
+    # Und die Reihenfolge ist die der Menüleiste, nicht das Alphabet: „Ändern"
+    # stand hinter allem anderen, weil „Ä" im Zeichensatz hinter „z" liegt.
+    groups = list(dict.fromkeys(group for group, _title, _key in listed))
+    menus = [
+        action.text().replace("&", "")
+        for action in window.menuBar().actions()
+        if action.menu() is not None
+    ]
+    from_menus = [group for group in groups if group in menus]
+    assert from_menus == [name for name in menus if name in groups], (
+        f"die Gruppen folgen nicht der Menüleiste: {from_menus} gegen {menus}"
+    )

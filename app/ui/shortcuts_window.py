@@ -13,12 +13,15 @@ ohnehin übersetzt sind.
 
 from __future__ import annotations
 
+from typing import Final
+
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QLabel,
+    QLineEdit,
     QMenu,
     QMenuBar,
     QTreeWidget,
@@ -27,11 +30,33 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.i18n import tr
+from app.i18n import TranslatableText, _, tr
+from app.ui.tool_strip import strip_title
+
+#: Die Tasten, die am Fenster hängen und in keinem Menü stehen.
+#:
+#: Es sind fünf, und sie fehlten der Übersicht vollständig: Escape schließt das
+#: offene Werkzeug, ``Strg+Tab`` blättert die Auswahl durch, und die
+#: Zoom-Tasten sind der Weg durch den Viewport ohne Zeigegerät. Sie sind
+#: ``QShortcut`` am Fenster (``MainWindow._install_shortcuts``), und ein
+#: ``QShortcut`` trägt keinen Titel — deshalb steht er hier.
+#:
+#: Eine Tabelle von Hand ist der Preis, und sie driftet. Dagegen steht ein Test:
+#: ``tests/test_interface_limits.py`` vergleicht sie mit den ``QShortcut``-Kindern
+#: des gebauten Fensters und wird rot, sobald einer dazukommt, der hier fehlt.
+#: Das ist der Unterschied zu vorher — vorher fehlten dreizehn, und nichts sagte
+#: es.
+WINDOW_KEYS: Final[tuple[tuple[str, TranslatableText], ...]] = (
+    ("Esc", _("Werkzeug schließen")),
+    ("Ctrl+Tab", _("Nächstes Objekt wählen")),
+    ("Ctrl+Shift+Tab", _("Voriges Objekt wählen")),
+    ("Ctrl++", _("Näher heranzoomen")),
+    ("Ctrl+-", _("Weiter herauszoomen")),
+)
 
 
-def entries(menu_bar: QMenuBar | None) -> list[tuple[str, str, str]]:
-    """Gruppe, Titel und Kürzel — aus der Menüleiste, so wie sie dasteht.
+def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tuple[str, str, str]]:
+    """Gruppe, Titel und Kürzel — in der Reihenfolge, in der sie dastehen.
 
     Gelesen wurden vorher zwei Quellen: die Befehlstabelle des Fensters und das
     Register. Beide zusammen sind nicht alles. Die fünfzehn Tasten für
@@ -40,21 +65,48 @@ def entries(menu_bar: QMenuBar | None) -> list[tuple[str, str, str]]:
     weder durch die eine noch durch die andere — sie standen in keiner
     Übersicht, obwohl sie im Menü daneben stehen.
 
-    Die Menüleiste kennt sie alle, denn dort landet jede Aktion, die ein
-    Mensch findet. Und sie liefert die Gruppe gleich mit: das Menü, in dem der
-    Eintrag steht, ist die Gruppe, die der Nutzer sieht.
+    **Aber die Menüleiste ist es auch nicht allein**, und hier stand genau diese
+    Annahme: „dort landet jede Aktion, die ein Mensch findet". Nachgezählt am
+    gebauten Fenster waren es 36 Menütasten gegen 49 belegte — es fehlten die
+    acht Werkzeugtasten ``Alt+1`` bis ``Alt+8``, die fünf freien Fenstertasten
+    und der ganze Zeichensatz. Ausgerechnet die acht, von denen ein Kommentar in
+    ``main_window`` sagt: „Welche Zahl zu welchem Werkzeug gehört, steht im
+    Tooltip des Knopfes **und in der Kürzelübersicht**."
+
+    Drei Quellen also: die Menüleiste, die angemeldeten Werkzeuge (``window.tools``
+    kennt Titel und Taste) und :data:`WINDOW_KEYS`.
+
+    **Sortiert wird nicht.** Hier stand ``sorted(found)``, und das ordnete nach
+    Bytes: „Ändern" landete hinter allem anderen, weil „Ä" hinter „z" steht — die
+    größte Gruppe ganz unten. Und innerhalb einer Gruppe stand Alphabet statt
+    Menüreihenfolge, sodass die Reihe ``1`` bis ``6`` über die Gruppe verstreut
+    war. Wer die Liste neben das Menü legt — und dafür ist sie da —, findet sie
+    jetzt an derselben Stelle.
 
     Was kein Kürzel hat, steht nicht darin: eine Kürzelübersicht mit leeren
     Zeilen ist eine Liste aller Befehle, und die ist die Befehlspalette.
     """
     found: list[tuple[str, str, str]] = []
-    if menu_bar is None:
+    if menu_bar is not None:
+        for action in menu_bar.actions():
+            submenu = action.menu()
+            if isinstance(submenu, QMenu):
+                _collect(submenu, _plain(action.text()), found)
+    if window is None:
         return found
-    for action in menu_bar.actions():
-        submenu = action.menu()
-        if isinstance(submenu, QMenu):
-            _collect(submenu, _plain(action.text()), found)
-    return sorted(found)
+    strip = getattr(window, "tools", None)
+    listed = strip.tools() if strip is not None and hasattr(strip, "tools") else {}
+    for tool in listed.values():
+        if tool.shortcut:
+            found.append((strip_title(), _plain(str(tool.title)), _native(tool.shortcut)))
+    for sequence, title in WINDOW_KEYS:
+        found.append((tr("Fenster"), str(title), _native(sequence)))
+    return found
+
+
+def _native(sequence: str) -> str:
+    """Eine Taste, wie sie auf der Tastatur heißt: „Strg+Z", nicht „Ctrl+Z"."""
+    return QKeySequence(sequence).toString(QKeySequence.SequenceFormat.NativeText)
 
 
 def _collect(menu: QMenu, group: str, found: list[tuple[str, str, str]]) -> None:
@@ -93,22 +145,42 @@ class ShortcutsWindow(QDialog):
         self.setWindowTitle(tr("Tastenkürzel"))
         self.resize(520, 620)
 
+        # Ein Suchfeld, denn die Liste ist über sechzig Zeilen lang. Die
+        # eingebaute Tipp-Suche des Baums springt nur auf Zeilenanfänge der
+        # ersten Spalte — wer nach einer *Taste* sucht, findet damit nichts.
+        self.search = QLineEdit(self)
+        self.search.setPlaceholderText(tr("Suchen — Befehl oder Taste"))
+        self.search.setAccessibleName(tr("Tastenkürzel durchsuchen"))
+        self.search.textChanged.connect(self._refilter)
+
         self.tree = QTreeWidget(self)
         self.tree.setHeaderLabels([tr("Befehl"), tr("Taste")])
-        self.tree.setRootIsDecorated(False)
+        # **Ein Baum und keine Einrückung.** Die Gruppen standen als eigene
+        # Zeilen daneben, und die Zugehörigkeit bestand aus vier Leerzeichen im
+        # Text — für einen Vorleser eine flache Liste, in der die Gruppe
+        # nirgends steht. Jetzt sind die Befehle Kinder ihrer Gruppe: die
+        # Einrückung übernimmt Qt, die Struktur steht im Zugänglichkeitsbaum,
+        # und einklappen geht auch.
+        self.tree.setRootIsDecorated(True)
         self.tree.setAlternatingRowColors(True)
 
-        current = ""
-        for group, title, shortcut in entries(menu_bar):
-            if group != current:
-                current = group
+        # Eine Gruppe, zwei Quellen: Die Werkzeugzeile heißt „Ansicht" wie das
+        # Menü daneben (``strip_title``), und nacheinander gesammelt gab das
+        # zwei Überschriften desselben Namens. Gemerkt statt verglichen — die
+        # Reihenfolge bleibt die der Menüleiste, die Gruppe steht einmal da.
+        headings: dict[str, QTreeWidgetItem] = {}
+        for group, title, shortcut in entries(menu_bar, parent):
+            heading = headings.get(group)
+            if heading is None:
                 heading = QTreeWidgetItem([group, ""])
                 font = heading.font(0)
                 font.setBold(True)
                 heading.setFont(0, font)
                 heading.setFlags(Qt.ItemFlag.ItemIsEnabled)
                 self.tree.addTopLevelItem(heading)
-            self.tree.addTopLevelItem(QTreeWidgetItem([f"    {title}", shortcut]))
+                headings[group] = heading
+            heading.addChild(QTreeWidgetItem([title, shortcut]))
+        self.tree.expandAll()
         self.tree.resizeColumnToContents(0)
 
         # Das Kürzel kommt von der Aktion selbst. Hier stand „Strg+G", und das
@@ -126,6 +198,30 @@ class ShortcutsWindow(QDialog):
         buttons.accepted.connect(self.accept)
 
         layout = QVBoxLayout(self)
+        layout.addWidget(self.search)
         layout.addWidget(self.tree, stretch=1)
         layout.addWidget(note)
         layout.addWidget(buttons)
+
+    def _refilter(self) -> None:
+        """Blendet aus, was nicht passt — über Befehl **und** Taste.
+
+        Eine Gruppe, von der nichts übrig ist, geht mit: eine Überschrift ohne
+        Zeilen darunter sieht aus wie ein Treffer, der nichts sagt.
+        """
+        query = self.search.text().strip().casefold()
+        for index in range(self.tree.topLevelItemCount()):
+            heading = self.tree.topLevelItem(index)
+            if heading is None:
+                continue
+            left = 0
+            for row in range(heading.childCount()):
+                # Kein ``None``-Zweig: unterhalb von ``childCount`` gibt es
+                # jedes Kind, und die Stubs sagen es auch — eine Prüfung darauf
+                # gilt mypy als unerreichbar.
+                child = heading.child(row)
+                haystack = f"{child.text(0)} {child.text(1)}".casefold()
+                hidden = bool(query) and query not in haystack
+                child.setHidden(hidden)
+                left += not hidden
+            heading.setHidden(not left)
