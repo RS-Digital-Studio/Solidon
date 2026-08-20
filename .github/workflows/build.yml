@@ -611,4 +611,19 @@ jobs:
       - name: Tests
         env:
           QT_QPA_PLATFORM: offscreen
-        run: python -m pytest -q -m "not performance"
+        # **Dieselbe Auslassung wie in der Suite**, und aus demselben Grund:
+        # VTK stirbt auf einem Runner ohne Grafikkarte mit SIGSEGV. Ohne sie
+        # war dieser Job am 20.08.2026 rot, obwohl er nichts gefunden hatte —
+        # der `union-attr`-Fund davor war echt und ist behoben, dahinter kam
+        # der Absturz zum Vorschein.
+        #
+        # Ein Wächter, der immer schreit, warnt vor nichts mehr: Dieser Job
+        # existiert, um zu melden, wenn eine neue Paketfassung etwas bricht.
+        # Steht er dauerhaft auf rot, sieht niemand mehr hin, und die Meldung
+        # geht unter — er prüft deshalb, was er hier prüfen kann.
+        run: |
+          windowed=$(grep -lE "MainWindow|Viewport\(" tests/test_*.py | tr '\n' ' ')
+          ignores=""
+          for file in $windowed; do ignores="$ignores --ignore=$file"; done
+          echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
+          python -m pytest -q -m "not performance" $ignores
