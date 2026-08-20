@@ -59,10 +59,6 @@ class Profile:
     circle: tuple[Point2, float] | None = None
     holes: tuple[Profile, ...] = ()
 
-    @property
-    def is_circle(self) -> bool:
-        return self.circle is not None
-
 
 def profile_of(solved: SolvedSketch) -> Profile:
     """Verkettet die Elemente einer gelösten Skizze zu **einem** Umriss.

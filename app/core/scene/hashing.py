@@ -83,9 +83,3 @@ def operation_hash(
 def object_hash(operation_key: str, position: int) -> str:
     """Die Identität eines Ausgabeobjekts einer Operation."""
     return digest(operation_key, position)
-
-
-def source_hash(sha256: str) -> str:
-    """Die Identität eines importierten Netzes — seine Prüfsumme ist schon
-    stabil (§16.1)."""
-    return digest("source", sha256)

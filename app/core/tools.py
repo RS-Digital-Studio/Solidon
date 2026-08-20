@@ -194,8 +194,3 @@ def set_location(tool_id: str, location: str) -> None:
     Eine leere Angabe nimmt die Festlegung zurück und sucht wieder selbst.
     """
     discover.remember(tool_id, location)
-
-
-def language_model_available() -> bool:
-    """§27: mit Schlüssel oder lokalem Server läuft der Chat, sonst ist er aus."""
-    return llm.first_available() is not None

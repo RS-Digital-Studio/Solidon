@@ -97,11 +97,6 @@ def install_catalog(language: str, catalog: dict[str, str]) -> None:
     _catalogs.setdefault(language, {}).update(catalog)
 
 
-def known_languages() -> tuple[str, ...]:
-    """Sprachen mit installiertem Katalog, plus die Quellsprache."""
-    return tuple(dict.fromkeys((SOURCE_LANGUAGE, *sorted(_catalogs))))
-
-
 #: Was beim Sortieren wie ein Grundbuchstabe zählt (DIN 5007-1). Ohne das
 #: landet „Ändern" hinter „Zylinder": Python sortiert nach Codepunkt, und
 #: „ä" steht dort hinter „z".

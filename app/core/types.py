@@ -636,9 +636,6 @@ class Report:
     def for_object(self, object_id: ObjectId) -> tuple[Finding, ...]:
         return tuple(f for f in self.findings if f.object_id == object_id)
 
-    def with_findings(self, findings: Sequence[Finding]) -> Report:
-        return Report(findings=(*self.findings, *findings))
-
 
 # --- Szene ---------------------------------------------------------------------
 

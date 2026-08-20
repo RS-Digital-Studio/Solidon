@@ -90,10 +90,6 @@ class PageView(QTextBrowser):
         """Ob gerade das dunkle Thema läuft — die Abbildung richtet sich danach."""
         return self.palette().window().color().lightness() < 128
 
-    def forget_images(self) -> None:
-        """Gemerkte Bilder wegwerfen — nach einem Sprach- oder Themenwechsel."""
-        self._images.clear()
-
 
 class ManualWindow(QMainWindow):
     """Das Handbuch: Seiten links, Text rechts, Suche darüber."""

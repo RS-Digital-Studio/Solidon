@@ -767,8 +767,3 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
         op_id=operation.id,
         values=values,
     )
-
-
-def evaluated_object_ids(result: EvaluationResult) -> Sequence[ObjectId]:
-    """Die Objekte, bei denen die Szene gelandet ist, in Einfügereihenfolge."""
-    return tuple(result.scene.objects)

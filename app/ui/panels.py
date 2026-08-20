@@ -66,7 +66,7 @@ from app.ui.labels import (
 )
 from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
-from app.ui.style import NORMAL, ROOMY, TIGHT, set_level
+from app.ui.style import NORMAL, TIGHT, set_level
 
 _log = get_logger(__name__)
 
@@ -1596,28 +1596,6 @@ class ReportPanel(QWidget):
         # kommen aus dem Fehlerdialog. Ein Befund ist keiner, trägt aber
         # dieselben zwei Angaben, die sie brauchen: den Körper und die Zahlen.
         handlers[chosen[picked].id](as_error(finding))
-
-
-class ChatPlaceholder(QWidget):
-    """Ohne LLM-Schlüssel funktioniert alles außer dem Chat — ein Hinweis,
-    kein Nörgeln (§2.3).
-    """
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        hint = QLabel(
-            tr(
-                "Der Chat braucht einen Zugang zu einem Sprachmodell. "
-                "Alles andere funktioniert ohne."
-            ),
-            self,
-        )
-        hint.setWordWrap(True)
-        hint.setAlignment(Qt.AlignmentFlag.AlignTop)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(ROOMY, ROOMY, ROOMY, ROOMY)
-        layout.addWidget(hint)
-        layout.addStretch(1)
 
 
 class MeasurementLabel(QLabel):

@@ -50,6 +50,9 @@ bekommt einen roten Lauf.
 | Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird — Kachelhöhe, Ablagefläche oder die Liste der zuletzt geöffneten Projekte; Umschichten ist ausgereizt |
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 | Benannte Merkmale überstehen keine Boolesche Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung darüber, wann ein benanntes Merkmal wirklich fort ist — vierzehn Ops geben `features={}` zurück, und `_with_features` liest die generierten nur aus der Ausgabe |
+| `sketch_solve_200` hält seinen eigenen Vergleich nicht | Ein Durchgang durchs Haus, und was dabei liegen blieb (20.08.2026) | eine Entscheidung: eigene Schwelle, Aufwärmlauf, oder die kleinen Messungen vor die großen — der absolute Zielwert aus §31 ist um das Sechsfache erfüllt |
+| Handbuch-Abbildungen merken sich ihre Breite | Ein Durchgang durchs Haus, und was dabei liegen blieb (20.08.2026) | eine Entscheidung, ob Neuskalieren beim Ziehen am Rand den Aufwand lohnt; die Breite gehört dann in den Cache-Schlüssel |
+| `profile_slot` ist Vorarbeit ohne Baustein | Ein Durchgang durchs Haus, und was dabei liegen blieb (20.08.2026) | einen Baustein für die Nut im Aluprofil; die Normteilmaße für 2020, 3030 und 4040 stehen |
 
 ---
 
@@ -8538,3 +8541,139 @@ konnte sagen, ob die Seiten überhaupt gelesen werden.
       Formular mit einem signierten Cookie: kein Sitzungszustand auf dem
       Server, dreißig Tage gültig, nur unterhalb von `/api/`, und ein
       Passwortwechsel entwertet jedes ausgestellte Cookie.
+
+## Ein Durchgang durchs Haus, und was dabei liegen blieb (20.08.2026)
+
+Ein Auftrag ohne Ziel: aufräumen und optimieren. Das ist die Sorte, bei der man
+am Ende viel angefasst und nichts verbessert hat, wenn man nicht vorher messen
+geht. Also zuerst gemessen.
+
+**Was strengere Regeln finden würden, ist jetzt eine Zahl und keine Ahnung.**
+`pyproject.toml` schließt `PERF` und `DTZ` mit Begründung aus; über die übrigen
+Regelfamilien stand dort nichts. Nachgezählt: `PLE` (echte Fehler) 0, `RET` 0,
+`TID` 0, `PGH` 0 — die vier Familien, in denen ein Befund ein Mangel wäre, sind
+leer. Die großen Zahlen sind durchweg Stil: `S` 6773 (fast alles `assert` in
+Tests), `D` 3571 (Docstring-Form), `SLF` 865 (Tests greifen auf private Namen,
+wie sie sollen), `ARG` 797. Von `PLW` bleiben 48, davon 18 `subprocess.run`
+ohne `check` — alle in `tools/` und `tests/`, alle mit eigener Auswertung des
+Rückgabewerts, keiner im Programm. Die 23 `PERF`-Befunde sind ausnahmslos
+`PERF401` und keiner steht in einer heißen Schleife: Handbuchtext,
+G-Code-*Lesen*, Register, Tests. Der Ausschluss bleibt, aber er ist jetzt
+nachgemessen und nicht behauptet.
+
+**Toter Code: 24 Kandidaten auf 2946 Definitionen.** Gesucht über den
+Syntaxbaum von `app/`, gezählt gegen `app/`, `tests/`, `tools/`, `.claude/`,
+`website/` und jede Markdown-Datei des Projekts — ein Name, der nur an seiner
+eigenen Definitionsstelle vorkommt, ruft niemand. Vierzehn der
+vierundzwanzig waren Rückrufe des Rahmens (`paintEvent`, `dropEvent`,
+`do_POST`) oder Registereinträge, die über `@register_op` und `@register_part`
+gefunden werden: richtig gezählt, falsch verdächtigt. Zehn waren echt.
+
+- **`ChatPlaceholder` (`ui/panels.py`) war ein überholtes Duplikat.** Ein ganzes
+  Widget mit dem Hinweis aus §2.3 — „Der Chat braucht einen Zugang zu einem
+  Sprachmodell" —, das niemand baut. Denselben Satz zeigt
+  `ChatPanel.set_available()` in `ui/chat.py`, und die kann mehr: einen Knopf
+  zum Einrichten und den gesperrten Zustand nach Ablauf des Testlaufs. Der
+  Beweis kam beim Löschen von selbst — danach war `ROOMY` in der Datei
+  ungenutzt, das Widget war also ihre einzige Nutzerin.
+- **`describe_plan` (`core/export/writer.py`) versprach zwei Aufrufer, die es
+  nicht gibt.** „Für Statusleiste und Kommandozeile": Die Kommandozeile
+  schreibt stattdessen eine Zeile je Datei, was mehr sagt als „3 Dateien ·
+  42 mm · 12,3 cm³". Auch hier fiel ein Import mit — `tr` wurde in dieser Datei
+  nur von ihr gebraucht.
+- **`known_languages` (`i18n/__init__.py`) stand gegen `available_languages()`.**
+  `AGENTS.md` nennt die zweite als *den* Weg, Sprachen zu finden; die erste
+  zählte die geladenen Kataloge und war eine zweite Antwort auf dieselbe Frage.
+- **`forget_images` (`ui/manual_window.py`) hatte nichts mehr zu tun.** Ihr
+  Docstring nannte Sprach- und Themenwechsel: Das Thema steht längst im
+  Cache-Schlüssel, und eine andere Sprache erscheint laut Einstellungsdialog
+  „beim nächsten Start" — im laufenden Prozess wechselt sie nicht.
+- Dazu `_cavity` (`geom/hollow.py`), `evaluated_object_ids` (`scene/evaluate.py`,
+  eine Zeile um `tuple(result.scene.objects)`), `source_hash`
+  (`scene/hashing.py` — die Identität läuft über `object_hash`),
+  `with_findings` (`types.py`), `is_circle` (`sketch/profile.py`) und
+  `language_model_available` (`core/tools.py` — die Oberfläche fragt
+  `llm.first_available()` selbst).
+
+Keiner der zehn Namen steht im Bauplan, und das war die Bedingung: Regel 5 sagt,
+dass Signaturen aus §9 feststehen, bevor ein Modul entsteht. Eine davon zu
+löschen wäre eine Bauplanänderung und kein Aufräumen.
+
+**Kein verwaistes Modul.** Dieselbe Suche über ganze Dateien nannte sieben von
+191 — und alle sieben waren Fehltreffer meines Ausdrucks: mehrzeilige Importe
+(`parts/__init__.py` holt `mounting`, `structure` und `testbodies` in einer
+Klammer) und die Ladeliste in `bootstrap.py`, die `colour_ops` sehr wohl nennt.
+
+**Der wirkungslose Dezimaltrenner im Download-Kasten ist weg.** Der Fund vom
+20.08. stand als Entscheidung da, und sie ist gefallen: `Package.size` schrieb
+`f"{…:.0f} MB".replace(".", DECIMAL_MARK[language])`, und bei null
+Dezimalstellen steht dort nie ein Punkt. Also die Ersetzung weg und nicht eine
+Stelle mehr — „173 MB" ist, was eine Downloadseite zeigt, und eine Tabelle für
+sechs Sprachen, die seit dem ersten Tag ohne Wirkung war, verdient keine
+Dezimalstelle als Rechtfertigung. Mit ihr fällt der Parameter: `size` ist jetzt
+eine Eigenschaft ohne Sprache. Der Grund steht im Docstring, für den Fall, dass
+jemand den Trenner zurückholen will.
+
+**Zwei Katalogruppen hießen fast gleich — in zwei Sprachen, nicht in einer.**
+Der Fund vom 20.08. nannte Französisch: „Fixations" für Verbindungen neben
+„Fixation" für Befestigung, im Katalog untereinander, ein Buchstabe
+Unterschied. Portugiesisch hatte dasselbe mit „Fixações" gegen „Fixação", und
+das hatte niemand gesehen. Die Gruppe `fasteners` trägt Mutternfalle, Gewinde
+und Schraubenloch mit Senkung, also reine Schraubenware; `mounting` trägt
+Wandhalter, Magnettasche und Schlüsselloch, also das Anbringen an etwas. Damit
+heißen sie jetzt „Visserie" und „Parafusos e roscas", und „Fixation"
+beziehungsweise „Fixação" bleibt der Befestigung.
+
+**Der Wächter dazu war beim ersten Versuch hohl.** Er rief `install_language`
+und las `str(GROUPS[…])` — `install_language` *lädt* einen Katalog, umschalten
+tut `set_language`. Sechs Sprachen liefen also sechsmal gegen die deutschen
+Namen und waren grün, auch mit den alten Werten wieder eingesetzt. Gezeigt hat
+das erst die Gegenprobe. Jetzt löst der Test über `title.translate(language)`
+auf — kein globaler Zustand, keine Reihenfolge — und prüft zuerst, dass
+überhaupt etwas übersetzt wurde, sonst misst er wieder Deutsch.
+
+Geprüft wird der **Wortstamm** und nicht die Gleichheit: Zwei verschiedene
+Zeichenketten sind noch kein Unterschied, den jemand im Vorbeigehen sieht. Ein
+Abstandsmaß über die ganzen Wörter hätte Portugiesisch durchgelassen, denn
+zwischen „fixacao" und „fixacoes" liegen drei Änderungen. Was die beiden Fälle
+verbindet, ist der gemeinsame Anfang, und den prüft der Test: die ersten fünf
+Buchstaben ohne Akzente und Großschreibung. Gegenprobe gefahren, beide Sprachen
+rot, danach beide grün.
+
+**Die Suite: 4595 Tests, 132 von 133 Dateien grün.** Am Stück gefahren brach
+sie bei 75 Prozent mit einer Zugriffsverletzung in `test_sculpt_session.py` ab
+— der offene Punkt, den `tools/run_suite_isolated.py` in seinem Docstring
+beschreibt, eine Beschädigung, die über Dateigrenzen kumuliert. Je Datei ein
+Prozess: nur `test_performance.py` rot, und dort nur der *relative* Teil.
+
+### Was dabei auffiel und liegen bleibt
+
+- [ ] **`sketch_solve_200` kann seinen eigenen Vergleich nicht halten.** Die
+      Bestmarke steht bei 117 ms, im Lauf der ganzen Datei kommt der Test auf
+      155 — das ist 1,33fach und reißt die Schwelle von 1,25. Direkt gemessen,
+      zweimal fünf Läufe, liegt der Median bei 115 ms und damit *unter* der
+      Marke; allein gefahren ist der Test grün. Die Ursache steht im Docstring
+      der Datei selbst: derselbe Löser braucht „allein 114 ms und hinter
+      `test_slice.py` 162", also achtunddreißig Prozent Unterschied bei einer
+      Schwelle von fünfundzwanzig. Vor ihm laufen in derselben Datei eine
+      Million Dreiecke durch Lesen und Einlesen und eine Merkmalserkennung auf
+      200 000 — der Prozess ist danach ein anderer. Der absolute Zielwert aus
+      §31 ist um das Sechsfache erfüllt; unbrauchbar ist nur der Vergleich.
+      Zu entscheiden ist, was daraus folgt: eine eigene Schwelle für diese
+      Messung, ein Aufwärmlauf, oder die kleinen Messungen vor die großen.
+- [ ] **Die Abbildungen des Handbuchs merken sich ihre Breite.**
+      `ManualWindow._image` legt sie unter `(key, theme)` ab, skaliert sie aber
+      auf `viewport().width() - 40`. Wird das Fenster größer, bleiben schon
+      gezeigte Abbildungen in der alten Breite — die Breite steht nicht im
+      Schlüssel, und ein `resizeEvent` gibt es nicht. `forget_images` wäre das
+      Werkzeug dafür gewesen und ist mit diesem Durchgang gefallen, weil es
+      keinen Aufrufer hatte; die saubere Lösung ist ohnehin die Breite im
+      Schlüssel und nicht ein Leeren von außen. Zu entscheiden ist, ob es sich
+      lohnt: Neuskalieren bei jedem Ziehen am Rand will eine Verzögerung, und
+      beschwert hat sich bisher niemand.
+- [ ] **`profile_slot` ist Vorarbeit für einen Baustein, den es nicht gibt.**
+      Die Normteiltabelle führt 2020, 3030 und 4040, `standards.profile_slot`
+      holt sie heraus, und kein Baustein fragt danach — die Gruppe „Struktur"
+      hat bis heute nur die Versteifungsrippe. Nicht gelöscht, weil der Zugriff
+      einer von sechs symmetrischen über dieselbe Tabelle ist und die Daten
+      echt sind; wer eine Nut für Aluprofil baut, findet ihn vor.

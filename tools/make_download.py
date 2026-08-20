@@ -131,10 +131,6 @@ VARIANT_MARKS: tuple[tuple[str, dict[str, str]], ...] = (
     ),
 )
 
-#: „245 MB" heißt in sechs Sprachen fast gleich — das Trennzeichen der
-#: Dezimalstelle nicht.
-DECIMAL_MARK = {"de": ",", "en": ".", "es": ",", "fr": ",", "it": ",", "pt": ","}
-
 #: Wie die Systeme im Fehlt-noch-Satz heißen. „Windows" heißt überall Windows,
 #: die anderen beiden auch — die Namen sind Marken und werden nicht übersetzt.
 SYSTEM_NAMES = {"windows": "Windows", "linux": "Linux", "macos": "macOS"}
@@ -169,8 +165,16 @@ class Package:
     bytes_: int
     hash_: str
 
-    def size(self, language: str) -> str:
-        return f"{self.bytes_ / 1_000_000:.0f} MB".replace(".", DECIMAL_MARK[language])
+    @property
+    def size(self) -> str:
+        """Ganze Megabyte — in jeder Sprache dieselbe Zeichenkette.
+
+        Hier nahm die Methode eine Sprache und ersetzte den Dezimalpunkt durch
+        das Trennzeichen des Landes. Bei ``:.0f`` steht nie einer da: Die
+        Tabelle für sechs Sprachen war ohne Wirkung, solange der Kasten steht.
+        Wer sie zurückholen will, braucht zuerst eine Dezimalstelle.
+        """
+        return f"{self.bytes_ / 1_000_000:.0f} MB"
 
 
 def kind_of(path: Path) -> str:
@@ -236,7 +240,7 @@ def read_packages(paths: list[Path]) -> list[Package]:
 
         package = Package(kind, path.name, target.stat().st_size, digest.hexdigest())
         found.append(package)
-        print(f"  {kind:8s} {path.name}  {package.size('de')}  {digest.hexdigest()[:16]}…")
+        print(f"  {kind:8s} {path.name}  {package.size}  {digest.hexdigest()[:16]}…")
 
     # Die Reihenfolge im Kasten ist die der Plattformen, und innerhalb einer
     # Plattform die der übergebenen Dateien. Die erste ist zugleich das Ziel
@@ -285,12 +289,12 @@ CLOSE_LABEL = {
 }
 
 
-def download_link(package: Package, language: str, label: str, css_class: str) -> str:
+def download_link(package: Package, label: str, css_class: str) -> str:
     """Ein Ladeknopf für genau eine Datei."""
     return (
         f'\n            <a class="{css_class}" href="{COUNTER}{quote(package.name)}"'
         f' download="{package.name}">'
-        f"{ARROW} {label} — {package.size(language)}</a>"
+        f"{ARROW} {label} — {package.size}</a>"
     )
 
 
@@ -329,15 +333,13 @@ def links(packages: list[Package], language: str) -> str:
             # ist eine Überraschung an der falschen Stelle. Bei Windows liefert
             # `variant_of` nichts, und dann steht auch nichts da.
             rows.append(
-                download_link(
-                    mine[0], language, system + variant_of(mine[0].name, language), css_class
-                )
+                download_link(mine[0], system + variant_of(mine[0].name, language), css_class)
             )
             continue
 
         count = CHOICE_LABEL[language].format(count=len(mine))
         auswahl = "".join(
-            download_link(package, language, variant_of(package.name, language).strip(" ()"), "btn")
+            download_link(package, variant_of(package.name, language).strip(" ()"), "btn")
             for package in mine
         )
         rows.append(

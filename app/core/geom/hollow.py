@@ -176,14 +176,6 @@ def _meshed(matrix: np.ndarray, origin: Vec3, pitch: float, like: MeshData) -> M
     return like.replacing(body) if len(body.faces) else None
 
 
-def _cavity(mesh: MeshData, wall: float) -> MeshData | None:
-    """Das Innere des Körpers, eingezogen um die Wandstärke."""
-    inner = _inner_field(mesh, wall)
-    if inner is None:
-        return None
-    return _meshed(inner[0], inner[1], inner[2], mesh)
-
-
 def _mouth(matrix: np.ndarray) -> np.ndarray | None:
     """Das Raster der Öffnung: der oberste Querschnitt des Hohlraums, nach oben
     durchgezogen.

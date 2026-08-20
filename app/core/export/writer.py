@@ -41,7 +41,7 @@ from app.core.types import (
     Source,
 )
 from app.core.units import EPS_GEOM, format_length
-from app.i18n import _, tr
+from app.i18n import _
 
 if TYPE_CHECKING:
     # Nur für die Signatur: zur Laufzeit zieht ``handover`` die
@@ -786,13 +786,3 @@ def _step_bytes(body: Mesh | None, name: str = "") -> bytes:
             values={"field": "format", "constraint": "needs_brep"},
         )
     return brep_step.write(body, name)  # type: ignore[arg-type]
-
-
-def describe_plan(plan: ExportPlan) -> str:
-    """Eine kurze Zusammenfassung für Statusleiste und Kommandozeile."""
-    total = sum(entry.mesh.volume for entry in plan.entries) / 1000.0
-    return (
-        f"{len(plan.entries)} {tr('Dateien')} · "
-        f"{format_length(sum(entry.mesh.bounds.size[2] for entry in plan.entries))} · "
-        f"{total:.1f} cm³"
-    )
