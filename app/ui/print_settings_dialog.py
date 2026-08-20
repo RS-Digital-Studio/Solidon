@@ -21,7 +21,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QColor
@@ -43,6 +43,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSpinBox,
     QTabWidget,
+    QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
     QVBoxLayout,
@@ -73,6 +74,7 @@ from app.i18n import tr
 from app.ui.dialogs import show_error
 from app.ui.labels import by_title, colour_name
 from app.ui.leash import WorkerLeash
+from app.ui.panels import collapsible
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.style import make_primary
@@ -127,6 +129,17 @@ FITTING_OPS: frozenset[str] = frozenset(
 
 #: Gruppen in der Reihenfolge, in der sie erscheinen.
 GROUPS = ("layers", "shell", "infill", "temperature", "cooling", "speed", "support", "other")
+
+#: Wie breit ein Feld höchstens wird, je Art des Werts. Ein Haken steht nicht
+#: dabei: bei ihm ist die breite Fläche ein größeres Ziel und kein gedehnter
+#: Kasten. Die Zahlen sind Höchstmaße — wer mehr braucht, bekommt mehr
+#: (:meth:`PrintSettingsDialog._editor`).
+FIELD_WIDTH: Final[dict[str, int]] = {
+    "float": 130,
+    "int": 130,
+    "enum": 280,
+    "colour": 160,
+}
 
 
 def group_title(group: str) -> str:
@@ -623,6 +636,17 @@ FIELDS: tuple[Field, ...] = (
 )
 
 
+def _toggle_of(section: QWidget) -> QToolButton | None:
+    """Der Umschalter eines Abschnitts aus :func:`panels.collapsible`.
+
+    Der Helfer gibt die Hülle zurück und nicht den Knopf; hier wird der Knopf
+    zweimal gebraucht — einmal, um den Dehnungsfaktor des Dialogs nachzuziehen,
+    einmal, um einen Abschnitt von selbst aufzuklappen, wenn eine Entscheidung
+    darin ansteht.
+    """
+    return section.findChild(QToolButton)
+
+
 def _select_data(box: QComboBox, identifier: str) -> None:
     """Wählt den Eintrag mit dieser Kennung, wenn es ihn gibt."""
     index = box.findData(identifier)
@@ -1000,12 +1024,16 @@ class PrintSettingsDialog(QDialog):
         return box
 
     def _build_tabs(self) -> QWidget:
-        box = QGroupBox(tr("Weitere Einstellungen"), self)
-        box.setCheckable(True)
-        box.setChecked(False)
-        outer = QVBoxLayout(box)
+        """Die hinteren sechsundvierzig Felder, hinter einem Dreieck.
 
-        self.tabs = QTabWidget(box)
+        Vorher war es eine ankreuzbare Gruppe, und darüber hat dieselbe
+        Anwendung an zwei anderen Stellen schon entschieden (siehe
+        ``op_dialog`` und ``generate_dialog``): Ein Häkchen liest sich wie ein
+        Schalter, der etwas bewirkt — „Weitere Einstellungen ☐" sagt nicht
+        „zugeklappt", es sagt „aus". Der Umschalter aus ``panels.collapsible``
+        ist derselbe wie dort, mit Dreieck und ganzer Zeile als Klickfläche.
+        """
+        self.tabs = QTabWidget(self)
         for group in GROUPS:
             page = QWidget(self.tabs)
             form = QFormLayout(page)
@@ -1016,9 +1044,10 @@ class PrintSettingsDialog(QDialog):
             area.setWidget(page)
             area.setWidgetResizable(True)
             self.tabs.addTab(area, group_title(group))
-        outer.addWidget(self.tabs)
-        self.tabs.setVisible(False)
-        box.toggled.connect(self._unfold_tabs)
+        box = collapsible(tr("Weitere Einstellungen"), self.tabs, open_now=False)
+        self.tabs_toggle = _toggle_of(box)
+        if self.tabs_toggle is not None:
+            self.tabs_toggle.toggled.connect(self._unfold_tabs)
         return box
 
     def _unfold_tabs(self, open_now: bool) -> None:
@@ -1028,7 +1057,6 @@ class PrintSettingsDialog(QDialog):
         Dehnungsfaktor und damit den ganzen freien Raum des Dialogs — ein
         leerer Kasten, in dem nichts stand.
         """
-        self.tabs.setVisible(open_now)
         layout = self.layout()
         box = self.tabs.parentWidget()
         if isinstance(layout, QVBoxLayout) and box is not None:
@@ -1043,18 +1071,22 @@ class PrintSettingsDialog(QDialog):
         und benennt sein Standard-Prozessprofil. Getroffen wird beides
         automatisch — hier steht es, damit man abweichen kann, nicht damit man
         muss.
-        """
-        self.slicer_box = QGroupBox(tr("Profile des Slicers"), self)
-        self.slicer_box.setCheckable(True)
-        self.slicer_box.setChecked(False)
-        form = QFormLayout(self.slicer_box)
 
-        self.machine_choice = QComboBox(self.slicer_box)
+        Zugeklappt hinter einem Dreieck und nicht hinter einem Häkchen: Als
+        ankreuzbare Gruppe stand hier „Profile des Slicers ☐" über drei grauen
+        Auswahlfeldern — zu lesen als „Profile: aus", also als eine Sperre, und
+        das ist es nicht. Es ist der Abschnitt, den im Regelfall niemand
+        braucht.
+        """
+        self.slicer_inner = QWidget(self)
+        form = QFormLayout(self.slicer_inner)
+
+        self.machine_choice = QComboBox(self.slicer_inner)
         self.machine_choice.setEnabled(False)
         self.machine_choice.currentIndexChanged.connect(self._machine_chosen)
-        self.process_choice = QComboBox(self.slicer_box)
+        self.process_choice = QComboBox(self.slicer_inner)
         self.process_choice.setEnabled(False)
-        self.filament_choice = QComboBox(self.slicer_box)
+        self.filament_choice = QComboBox(self.slicer_inner)
         self.filament_choice.setEnabled(False)
         self.filament_choice.activated.connect(self._filament_chosen)
         """``activated`` und nicht ``currentIndexChanged``: das eine meint die
@@ -1072,10 +1104,23 @@ class PrintSettingsDialog(QDialog):
         self.slot_rows: list[tuple[QLabel, QComboBox]] = []
         self.slot_form = form
         self._build_slot_rows(form)
-        self.profile_note = QLabel(tr("Der Profilbestand wird durchgesehen …"), self.slicer_box)
+        self.profile_note = QLabel(tr("Der Profilbestand wird durchgesehen …"), self.slicer_inner)
         self.profile_note.setWordWrap(True)
         form.addRow(self.profile_note)
+        self.slicer_box = collapsible(tr("Profile des Slicers"), self.slicer_inner, open_now=False)
+        self.slicer_toggle = _toggle_of(self.slicer_box)
         return self.slicer_box
+
+    def _open_slicer_section(self) -> None:
+        """Den Abschnitt aufklappen, weil darin etwas zu entscheiden ist.
+
+        Drei Stellen tun das: kein Profil passt von selbst, der Slicer verlangt
+        ein Druckerprofil, er verlangt ein Prozessprofil. Ein Hinweis, der auf
+        eine Auswahl zeigt, die zugeklappt ist, wäre einer, dem man nicht
+        folgen kann.
+        """
+        if self.slicer_toggle is not None:
+            self.slicer_toggle.setChecked(True)
 
     def _start_profile_search(self) -> None:
         found = self._slicer_path
@@ -1156,7 +1201,7 @@ class PrintSettingsDialog(QDialog):
             self.profile_note.setText(
                 tr("Zu diesem Drucker passt kein Profil von selbst — bitte auswählen.")
             )
-            self.slicer_box.setChecked(True)
+            self._open_slicer_section()
         else:
             self.profile_note.setText(
                 tr(
@@ -1273,11 +1318,11 @@ class PrintSettingsDialog(QDialog):
             return
         stored = self.settings.slot_profiles
         for index, slot in enumerate(slots):
-            box = QComboBox(self.slicer_box)
+            box = QComboBox(self.slicer_inner)
             box.setEnabled(bool(self._profiles))
             box.activated.connect(lambda _i, position=index: self._slot_filament_chosen(position))
             caption = slot.name or tr("Slot {nummer}").replace("{nummer}", str(index + 1))
-            label = QLabel(f"   {caption}", self.slicer_box)
+            label = QLabel(f"   {caption}", self.slicer_inner)
             form.addRow(label, box)
             self.slot_rows.append((label, box))
             if index < len(stored) and stored[index]:
@@ -1445,6 +1490,19 @@ class PrintSettingsDialog(QDialog):
         return f"{field.title} [{field.unit}]" if field.unit else field.title
 
     def _editor(self, field: Field) -> QWidget:
+        """Ein Feld je Einstellung — und keines breiter, als sein Wert ist.
+
+        Ein ``QFormLayout`` gibt der Spalte der Editoren allen Platz, den es
+        hat. Im Kasten „Das Wichtigste" waren das gemessene 726 von 970
+        Bildpunkten je Zeile, für Werte wie ``0,200`` und ``215``: Die Zahl
+        stand links in einem handbreiten Kasten, ihre Beschriftung am anderen
+        Ende der Zeile, und zusammengehört haben sie trotzdem. Acht Zeilen
+        davon sind das erste, was jemand von diesem Dialog sieht.
+
+        Haken bleiben ungedeckelt: Bei ihnen ist die breite Fläche kein
+        gedehnter Kasten, sondern ein größeres Ziel — zu sehen ist ohnehin nur
+        das Kästchen.
+        """
         editor: QWidget
         if field.kind == "bool":
             editor = QCheckBox(self)
@@ -1473,6 +1531,12 @@ class PrintSettingsDialog(QDialog):
             number.setDecimals(field.decimals)
             number.valueChanged.connect(self._editor_changed)
             editor = number
+        limit = FIELD_WIDTH.get(field.kind)
+        if limit is not None:
+            # Nie schmaler als der eigene Bedarf: „Auf Berührungsflächen" in
+            # der Stützenauswahl braucht 246 Bildpunkte, und ein abgeschnittener
+            # Auswahlwert wäre schlechter als ein zu weiter Kasten.
+            editor.setMaximumWidth(max(limit, editor.sizeHint().width()))
         self._editors[field.path] = editor
         self._fields[field.path] = field
         return editor
@@ -1737,7 +1801,7 @@ class PrintSettingsDialog(QDialog):
         # (`_machine_keys`) — für Cura gibt es strukturell keine Profile zu
         # wählen, und die Forderung war eine Wahl aus einer leeren Liste.
         if setup.flavour == "orca" and not setup.machine_profile:
-            self.slicer_box.setChecked(True)
+            self._open_slicer_section()
             self.state.setText(
                 tr("Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen.")
             )
@@ -1750,7 +1814,7 @@ class PrintSettingsDialog(QDialog):
         # Druckdatei geschrieben" — ein Satz über das Ende, nicht über die
         # Ursache.
         if setup.flavour == "orca" and not setup.base_process:
-            self.slicer_box.setChecked(True)
+            self._open_slicer_section()
             self.state.setText(
                 tr("Dieser Slicer braucht auch ein Prozessprofil — bitte eines auswählen.")
             )

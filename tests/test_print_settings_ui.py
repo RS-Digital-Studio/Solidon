@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
+    QGroupBox,
     QSpinBox,
 )
 
@@ -27,7 +28,13 @@ from app.core.export.slicer_profiles import SlicerProfile
 from app.core.knowledge import print_settings, profiles
 from app.core.slice import gcode
 from app.core.types import Feature
-from app.ui.print_settings_dialog import FIELDS, GROUPS, PrintSettingsDialog, _ColourButton
+from app.ui.print_settings_dialog import (
+    FIELD_WIDTH,
+    FIELDS,
+    GROUPS,
+    PrintSettingsDialog,
+    _ColourButton,
+)
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 
@@ -346,6 +353,78 @@ def test_the_advice_list_is_never_empty_of_words(dialog: PrintSettingsDialog) ->
     assert dialog.advice_view.topLevelItemCount() >= 1
     first = dialog.advice_view.topLevelItem(0)
     assert first is not None and first.text(0)
+
+
+# --- Aussehen und gestufte Tiefe ----------------------------------------------------
+
+
+def test_no_field_stretches_across_the_whole_dialog(dialog: PrintSettingsDialog) -> None:
+    """Ein Wert wie 0,200 stand in einem 726 Bildpunkte breiten Kasten.
+
+    Ein `QFormLayout` gibt der Spalte der Editoren allen Platz, den es hat —
+    gemessen waren das im Kasten „Das Wichtigste" 726 von 970 Bildpunkten je
+    Zeile. Die Zahl links, ihre Beschriftung eine Handbreit daneben, und acht
+    solche Zeilen sind das erste, was jemand von diesem Dialog sieht.
+
+    Gemessen wird am gezeigten Fenster und nicht an `maximumWidth`: Dass eine
+    Grenze gesetzt ist, heißt nicht, dass das Layout sie einhält.
+    """
+    dialog.resize(960, 760)
+    dialog.show()
+    QApplication.processEvents()
+
+    assert dialog.width() >= 900, "der Test taugt nur an einem breiten Fenster"
+    too_wide = []
+    for path, editor in dialog._editors.items():
+        limit = FIELD_WIDTH.get(dialog._fields[path].kind)
+        if limit is None:
+            continue
+        allowed = max(limit, editor.sizeHint().width())
+        if editor.width() > allowed:
+            too_wide.append(f"{path}: {editor.width()} statt höchstens {allowed}")
+    assert not too_wide, "\n".join(too_wide)
+
+
+def test_the_deeper_settings_fold_away_instead_of_greying_out(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """„Weitere Einstellungen ☐" sagt nicht „zugeklappt", es sagt „aus".
+
+    Dieselbe Anwendung hat das an zwei anderen Stellen schon entschieden — der
+    Operationsdialog und der Generierungsdialog nehmen den Umschalter mit dem
+    Dreieck aus `panels.collapsible`. Hier standen zwei ankreuzbare Gruppen:
+    „Weitere Einstellungen" und „Profile des Slicers", letztere über drei
+    grauen Auswahlfeldern, was sich wie eine Sperre liest.
+    """
+    dialog.show()
+    QApplication.processEvents()
+
+    checkable = [box.title() for box in dialog.findChildren(QGroupBox) if box.isCheckable()]
+    assert not checkable, f"ankreuzbar statt aufklappbar: {checkable}"
+
+    for toggle, content in ((dialog.tabs_toggle, dialog.tabs), (dialog.slicer_toggle, None)):
+        assert toggle is not None, "ohne Umschalter kommt niemand an den Inhalt"
+        assert toggle.arrowType() == Qt.ArrowType.RightArrow, toggle.text()
+        assert not toggle.isChecked(), "zu ist der Anfangszustand (§2.4)"
+        if content is not None:
+            assert not content.isVisibleTo(dialog), "zugeklappt heißt weg, nicht grau"
+
+    dialog.tabs_toggle.setChecked(True)
+    QApplication.processEvents()
+    assert dialog.tabs.isVisibleTo(dialog)
+    assert dialog.tabs_toggle.arrowType() == Qt.ArrowType.DownArrow
+
+
+def test_a_hint_that_points_into_a_folded_section_opens_it(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Drei Hinweise zeigen auf die Profilauswahl. Zugeklappt wäre das ein
+    Rat, dem man nicht folgen kann."""
+    dialog._open_slicer_section()
+
+    assert dialog.slicer_toggle is not None
+    assert dialog.slicer_toggle.isChecked()
+    assert dialog.slicer_inner.isVisibleTo(dialog.slicer_box)
 
 
 # --- ohne Slicer --------------------------------------------------------------------
