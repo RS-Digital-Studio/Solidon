@@ -503,10 +503,24 @@ class KeyDialog(QDialog):
         self.accept()
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802 — Qt gibt den Namen vor
-        """Kein Arbeiter überlebt seinen Dialog."""
+        """Kein Arbeiter überlebt seinen Dialog.
+
+        **Über die Halteleine, nicht mit eigenem Warten.** Hier stand
+        ``self._probe.wait()`` ohne Grenze, und die Probe dauert laut ihrem
+        eigenen Docstring „Sekunden bis Minuten" — abbrechen lässt sie sich
+        nicht, sie hängt an einer Antwort von Ollama. Wer den Dialog währenddessen
+        schloss, hatte eine eingefrorene Anwendung, bis das Modell fertig war.
+
+        Schlimmer war die Zeile danach: ``self._probe = None`` gab die einzige
+        Referenz auf, und wäre das Warten je vorzeitig zurückgekommen, hätte der
+        Speicherbereiniger das QThread-Objekt unter dem laufenden Thread
+        weggeräumt — die Zugriffsverletzung, gegen die es die Leine gibt.
+        ``retire`` tut beides richtig: Es hält ihn, und ``wait_all`` wartet mit
+        Frist und schreibt auf, wenn sie reißt.
+        """
         if self._probe is not None:
-            self._probe.wait()
-            self._probe = None
+            probe, self._probe = self._probe, None
+            self._leash.retire(probe)
         self._leash.wait_all()
         super().closeEvent(event)
 
