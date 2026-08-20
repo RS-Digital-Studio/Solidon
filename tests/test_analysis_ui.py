@@ -2675,3 +2675,53 @@ def test_an_empty_report_offers_nothing_to_filter(qt_app: QApplication) -> None:
         assert panel.severity.currentIndex() == 0, "und die Stufe ihre Auswahl"
     finally:
         panel.deleteLater()
+
+
+def test_the_object_tree_gives_the_names_the_larger_half(qt_app: QApplication) -> None:
+    """Beide Körper des ersten Beispiels standen als derselbe Text da.
+
+    Der Kommentar über der Kopfzeile sagt: „Die Maßspalte nimmt, was sie
+    braucht; der Rest gehört den Namen." Gegolten hat er nicht —
+    ``stretchLastSection`` steht auf Qts Vorgabe ``True`` und überstimmt das
+    ``ResizeToContents`` der letzten Spalte. Gemessen: 128 zu 128 bei 258 Pixeln
+    Baumbreite, und nach Abzug von Einzug und Vorschaubild blieben für
+    „Gehäuseboden" und „Gehäuseboden (Kopie) Prüfstück" dieselbe abgeschnittene
+    Zeichenkette.
+
+    Den Deckel nur abzuschalten kippt es um: dann nimmt die Maßspalte ihre
+    Inhaltsbreite, und bei „60 x 40 x 12 mm" waren das 186 von 258 — 70 für den
+    Namen. Geprüft wird deshalb das Verhältnis und nicht der Schalter: Der Name
+    behält die Mehrheit, das Maß bekommt höchstens seinen Anteil, und über die
+    Breite hinweg bleibt beides so.
+    """
+    from PySide6.QtWidgets import QTreeWidgetItem
+
+    from app.ui.panels import MEASURE_SHARE, ObjectTree
+
+    panel = ObjectTree()
+    try:
+        panel.resize(258, 400)
+        panel.show()
+        for name, size in (
+            ("Gehäuseboden", "60 x 40 x 12 mm"),
+            ("Gehäuseboden (Kopie) Prüfstück", "20 x 20 x 5 mm"),
+        ):
+            panel.tree.addTopLevelItem(QTreeWidgetItem([name, size]))
+        QApplication.processEvents()
+
+        header = panel.tree.header()
+        assert not header.stretchLastSection(), (
+            "der Deckel überstimmt jede Einstellung der letzten Spalte"
+        )
+        for width in (258, 420, 700):
+            panel.resize(width, 400)
+            QApplication.processEvents()
+            panel._size_columns()
+            QApplication.processEvents()
+            names, measures = header.sectionSize(0), header.sectionSize(1)
+            assert names > measures, f"bei {width} px: Name {names}, Maß {measures}"
+            assert measures <= int(panel.tree.viewport().width() * MEASURE_SHARE) + 1, (
+                f"bei {width} px nimmt die Maßspalte {measures} und damit mehr als ihren Anteil"
+            )
+    finally:
+        panel.deleteLater()

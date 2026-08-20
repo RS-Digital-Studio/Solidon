@@ -319,8 +319,25 @@ class ObjectTree(QWidget):
         # Fensterbreite gezogen blieb die Maßspalte schmal, während links
         # jeder Merkmalsname abgeschnitten war.
         header = self.tree.header()
+        # **Der Satz darüber galt nicht.** ``stretchLastSection`` steht auf Qts
+        # Vorgabe ``True`` und überstimmt das ``ResizeToContents`` der letzten
+        # Spalte: gemessen standen beide auf genau der Hälfte, 128 zu 128 bei
+        # 258 Pixeln Baumbreite. Nach Abzug von Einzug und Vorschaubild blieb
+        # für den Namen so wenig, dass „Gehäuseboden" und „Gehäuseboden (Kopie)
+        # Prüfstück" — die zwei Körper des ersten Beispielprojekts — als
+        # dieselbe abgeschnittene Zeichenkette dastanden.
+        #
+        # Den Deckel nur abzuschalten kippt es aber bloß um: dann nimmt die
+        # Maßspalte, was ihr Inhalt braucht, und bei „60 x 40 x 12 mm" waren das
+        # 186 von 258 Pixeln — 70 für den Namen, schlechter als vorher. Beide
+        # Spalten wollen Platz, und die Frage ist nicht, wer ihn bekommt,
+        # sondern in welchem Verhältnis. Die Maßspalte bekommt, was sie braucht,
+        # und höchstens :data:`MEASURE_SHARE`; der Rest gehört dem Namen. Gesetzt
+        # wird in ``_size_columns``, denn beides ändert sich: der Inhalt und die
+        # Breite.
+        header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Interactive)
         # §25: Vereinigen, Abziehen und Schnittmenge nehmen zwei Körper. Mit
         # Einfachauswahl war keine davon über das Menü ausführbar — die
         # Operation bekam einen Eingang, wo sie zwei erwartet, und lehnte ab.
@@ -568,6 +585,24 @@ class ObjectTree(QWidget):
         self._room = pixels
         self._fit()
 
+    def _size_columns(self) -> None:
+        """Die Maßspalte so breit wie ihr Inhalt, höchstens ein Teil des Ganzen.
+
+        Aufgerufen, wenn sich der Inhalt ändert und wenn sich die Breite ändert
+        — an beidem hängt das Ergebnis. Ohne Breite (vor dem ersten Legen) gibt
+        es nichts zu teilen.
+        """
+        width = self.tree.viewport().width()
+        if width <= 0:
+            return
+        needed = self.tree.sizeHintForColumn(1)
+        self.tree.header().resizeSection(1, max(0, min(needed, int(width * MEASURE_SHARE))))
+
+    def resizeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
+        """Beim Breiterwerden neu teilen."""
+        super().resizeEvent(event)
+        self._size_columns()
+
     def _fit(self) -> None:
         """So hoch wie der Inhalt — aufgeklappte Merkmale zählen mit.
 
@@ -584,6 +619,7 @@ class ObjectTree(QWidget):
         self._empty.setVisible(empty)
         self.tree.setVisible(not empty)
         fit_to_rows(self.tree, self._rows(), room=self._room)
+        self._size_columns()
         self.setMinimumHeight(self.sizeHint().height())
         self.updateGeometry()
 
@@ -1599,6 +1635,16 @@ class MeasurementLabel(QLabel):
             f"{volume(content, self._unit)}"
         )
 
+
+#: Höchstanteil der Maßspalte im Objektbaum.
+#:
+#: Beide Spalten wollen Platz: der Name, weil zwei Körper eines Projekts sich
+#: sonst nicht unterscheiden, und das Maß, weil eine halbe Zahl keine ist. Bei
+#: 258 Pixeln Breite bekam der Name mit Qts Vorgabe 128 und mit reiner
+#: Inhaltsbreite der Maßspalte 70 — beides zu wenig. Zwei Fünftel für das Maß
+#: lassen dem Namen die Mehrheit und reichen für „60 x 40 x 12 mm" in der
+#: Schrift, mit der wirklich gezeichnet wird.
+MEASURE_SHARE = 0.4
 
 #: Wie viele Zeilen eine Karte der linken Spalte mindestens hoch wird — drei,
 #: damit der leere Zustand seinen Satz zeigen kann.
