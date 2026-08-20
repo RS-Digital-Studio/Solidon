@@ -8443,6 +8443,16 @@ konnte sagen, ob die Seiten überhaupt gelesen werden.
       jetzt vollständig da, samt Rechtsgrundlage und Widerspruchsweg. `/api/`
       ist für Suchmaschinen gesperrt.
 
+- [x] **Hochgeladen und am echten Server nachgemessen.** Elf Dateien, und
+      danach die Probe gegen solidon3d.de: Preis und JSON-LD stehen auf 69,
+      der Zählruf antwortet mit 204, der Download mit 302 auf die echte
+      Datei, ein erfundener Name und `?f=../support.php` mit 404, die
+      Auswertung mit 503, und `/api/.stats/` ist von außen nicht abrufbar.
+      Der erste Anlauf scheiterte an `530 Login incorrect` — über FTPS heißt
+      das wirklich das Passwort und nicht den SSH-Schalter, also nach
+      **einem** Versuch angehalten statt ein zweites zu probieren; drei in
+      Folge wären bei fail2ban eine gesperrte IP.
+
 ### Offen
 
 - [ ] **Die Auswertung hat noch kein Passwort.** `stats.php` bleibt zu, bis
