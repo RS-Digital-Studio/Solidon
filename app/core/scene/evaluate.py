@@ -23,7 +23,7 @@ import dataclasses
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from functools import cache
-from typing import Any
+from typing import Any, Final
 
 from app.core.errors import AmbiguityError, AppError, InternalError, OperationCancelled
 from app.core.geom.mesh import MeshData
@@ -349,6 +349,9 @@ def evaluate(
             scene = dataclasses.replace(scene, report=Report(tuple(findings)))
     if stopped_at is not None:
         _log.warning("evaluation stopped at op %s", stopped_at)
+    settled = _without_settled(findings)
+    if len(settled) != len(findings):
+        scene = dataclasses.replace(scene, report=Report(tuple(settled)))
     return EvaluationResult(
         scene=scene,
         completed=tuple(completed),
@@ -356,6 +359,54 @@ def evaluate(
         object_hashes=hashes,
         solvers=solvers,
     )
+
+
+#: Welcher Befund welchen aufhebt: der Schlüssel wird gestrichen, sobald einer
+#: aus seiner Menge an einem **späteren** Schritt steht.
+#:
+#: Das Beispiel „Weg 3" zeigte, warum das nötig ist. Es begrüßte mit drei
+#: Warnungen, und zwei davon waren beim Lesen längst erledigt: „Das Modell ist
+#: nicht geschlossen. „Reparieren" schließt die offenen Stellen." stand über
+#: „Offene Stellen wurden geschlossen.", und „Es gibt sehr kleine Einzelteile.
+#: Gelöscht wurde nichts." über „Kleinstteile wurden gelöscht." — für den, der
+#: die Herkunft nicht Zeile für Zeile mitliest, ein Widerspruch.
+#:
+#: Gestrichen und nicht herabgestuft: Beide Sätze stehen im Präsens und
+#: beschreiben einen Zustand, den es nicht mehr gibt. Als Hinweis wären sie
+#: nicht milder, sondern falsch. Was übrig bleibt, ist der Satz des Schritts,
+#: der es behoben hat — und der erzählt die ganze Geschichte.
+SETTLED_BY: Final[dict[str, frozenset[str]]] = {
+    "ingest.not_watertight": frozenset({"repair.holes_filled"}),
+    "ingest.small_components": frozenset({"repair.components_removed"}),
+}
+
+
+def _without_settled(findings: Sequence[Finding]) -> list[Finding]:
+    """Streicht Befunde, die ein späterer Schritt aufgehoben hat (§17.3).
+
+    **Später** ist die ganze Bedingung: Ein Reparieren *vor* dem Einlesen des
+    nächsten Modells hebt dessen Befunde nicht auf. Verglichen wird über die
+    ``op_id``, und ein Befund ohne sie zählt als am Anfang stehend — die
+    Prüfungen am Ende der Auswertung (Passungen, Bauraum) tragen keine.
+    """
+    if not any(entry.code in SETTLED_BY for entry in findings):
+        return list(findings)
+
+    def step(entry: Finding) -> int:
+        return entry.op_id if entry.op_id is not None else -1
+
+    kept: list[Finding] = []
+    for entry in findings:
+        healers = SETTLED_BY.get(entry.code)
+        if healers is not None and any(
+            other.code in healers
+            and step(other) > step(entry)
+            and other.object_id == entry.object_id
+            for other in findings
+        ):
+            continue
+        kept.append(entry)
+    return kept
 
 
 def _same_size(first: BoundingBox, second: BoundingBox) -> bool:

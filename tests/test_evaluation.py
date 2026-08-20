@@ -595,3 +595,77 @@ def test_a_finding_of_two_bodies_stays_silent_about_which(
     entry = next(item for item in result.scene.report.findings if item.code == "test.both")
     assert entry.object_id is None, "zu welchem der beiden? — das weiß hier niemand"
     assert entry.op_id == 1, "die Operation steht trotzdem dabei"
+
+
+# --- Was ein späterer Schritt behoben hat, warnt nicht mehr (§17.3) -------------
+
+
+def _finding(code: str, severity: str, op_id: int | None, object_id: str = "obj_1") -> Finding:
+    return Finding(code=code, severity=severity, message=code, op_id=op_id, object_id=object_id)
+
+
+def test_a_warning_that_a_later_step_fixed_is_dropped() -> None:
+    """„Weg 3" begrüßte mit drei Warnungen, zwei davon längst erledigt.
+
+    „Das Modell ist nicht geschlossen. „Reparieren" schließt die offenen
+    Stellen." stand über „Offene Stellen wurden geschlossen." — für den, der
+    die Herkunft nicht Zeile für Zeile mitliest, ein Widerspruch. Gestrichen
+    und nicht herabgestuft: Der Satz steht im Präsens und beschreibt einen
+    Zustand, den es nicht mehr gibt.
+    """
+    from app.core.scene.evaluate import _without_settled
+
+    kept = _without_settled(
+        [
+            _finding("ingest.not_watertight", "warning", 1),
+            _finding("repair.holes_filled", "info", 3),
+        ]
+    )
+
+    assert [entry.code for entry in kept] == ["repair.holes_filled"]
+
+
+def test_an_earlier_repair_does_not_settle_a_later_import() -> None:
+    """**Später** ist die ganze Bedingung.
+
+    Ein Reparieren vor dem Einlesen des nächsten Modells hebt dessen Befunde
+    nicht auf — sonst verschwände die Warnung an einem Körper, an dem nie
+    jemand etwas repariert hat.
+    """
+    from app.core.scene.evaluate import _without_settled
+
+    kept = _without_settled(
+        [
+            _finding("repair.holes_filled", "info", 1),
+            _finding("ingest.not_watertight", "warning", 3),
+        ]
+    )
+
+    assert [entry.code for entry in kept] == ["repair.holes_filled", "ingest.not_watertight"]
+
+
+def test_a_repair_on_another_body_settles_nothing() -> None:
+    """Und es muss derselbe Körper sein. Zwei Modelle in einer Szene teilen
+    sich den Bericht, nicht ihre Löcher."""
+    from app.core.scene.evaluate import _without_settled
+
+    kept = _without_settled(
+        [
+            _finding("ingest.not_watertight", "warning", 1, "obj_1"),
+            _finding("repair.holes_filled", "info", 3, "obj_2"),
+        ]
+    )
+
+    assert [entry.code for entry in kept] == ["ingest.not_watertight", "repair.holes_filled"]
+
+
+def test_findings_without_a_settling_partner_stay() -> None:
+    """Die Regel greift nur, wo ein Paar dasteht — sonst bleibt alles."""
+    from app.core.scene.evaluate import _without_settled
+
+    findings = [
+        _finding("ingest.not_watertight", "warning", 1),
+        _finding("repair.welded", "info", 3),
+    ]
+
+    assert _without_settled(findings) == findings

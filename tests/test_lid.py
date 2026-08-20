@@ -14,7 +14,6 @@ import trimesh
 
 from app.core.bootstrap import load_operations
 from app.core.errors import ValidationError
-from app.core.geom import lid as lid_module
 from app.core.geom.boolean import shared_volume
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import profiles
@@ -76,7 +75,10 @@ def test_the_collar_is_the_cavity_less_the_clearance(profile: Profile) -> None:
     result = make_lid(housing(), profile, thickness=2.4, collar=4.0)
     body = result.outputs[1].mesh.raw
 
-    gap = profiles.material("petg").clearance + lid_module.COLLAR_RELIEF
+    # Halbes Spiel je Seite: ``clearance`` ist ein Durchmessermaß, wie bei
+    # jedem Passstift auch. Hier stand einmal eine feste Zugabe von 0,2 mm
+    # daneben, und die machte aus 0,25 mm Spiel 0,90 mm.
+    gap = profiles.material("petg").clearance / 2.0
     collar = body.slice_plane([0.0, 0.0, 29.0], [0.0, 0.0, -1.0])
     width = collar.bounds[1][:2] - collar.bounds[0][:2]
 

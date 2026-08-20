@@ -51,9 +51,24 @@ BELOW_RIM = 0.1
 #: würfe ihn weg.
 MIN_CAVITY = 100.0
 
-#: Wie weit der Kragen über das Spiel hinaus eingezogen wird, damit der Deckel
-#: nicht auf dem Kragen sitzt statt auf dem Rand.
-COLLAR_RELIEF = 0.2
+#: Wie der Kragen zu seinem Maß kommt — und warum hier keine Zahl mehr steht.
+#:
+#: Es stand eine: ``COLLAR_RELIEF = 0.2``, „damit der Deckel nicht auf dem
+#: Kragen sitzt statt auf dem Rand". Das ist eine Zahlenkonstante für eine
+#: Toleranz, und genau die verbietet Regel 7 — sie untergräbt die
+#: Kalibrierung (§28.3): Wer sein Material misst und 0,15 mm einträgt, bekam
+#: trotzdem 0,55 mm Luft je Seite.
+#:
+#: Dass der Kragen nicht klemmt, ist die Aufgabe des Gleitspiels aus dem
+#: Materialprofil. Dafür ist es da, und dafür wird es gemessen.
+#:
+#: **Und es ist ein Durchmessermaß**, wie überall sonst im Haus: Ein
+#: Passstift bekommt seine Bohrung als ``diameter + play``
+#: (``knowledge/parts/mechanics.py``), und die Passungsprüfung rechnet
+#: ``hole_diameter - pin_diameter`` (``scene/fits.py``). Der Kragen wurde als
+#: einziger radial eingezogen — der Deckel bekam damit das doppelte Spiel,
+#: und die Passung des Beispiels „Dose mit Deckel" meldete bei jedem Öffnen
+#: 0,90 mm statt 0,25 mm.
 
 #: Die beiden Merkmale, die ein Deckel und seine Schachtel teilen. Sie tragen
 #: feste Namen, weil eine Passung auf Namen zeigt und nicht auf Geometrie
@@ -250,7 +265,8 @@ def build(
 
     bodies = list(plates)
     for cavity in cavities if collar > EPS_GEOM else []:
-        shrunk = cavity.buffer(-(clearance + COLLAR_RELIEF), join_style=2)
+        # Halbes Spiel je Seite, denn ``clearance`` ist ein Durchmessermaß.
+        shrunk = cavity.buffer(-clearance / 2.0, join_style=2)
         if shrunk.is_empty or shrunk.area <= EPS_GEOM:
             continue
         for piece in getattr(shrunk, "geoms", [shrunk]):
@@ -387,7 +403,7 @@ def create_lid(ctx: OpContext) -> OpResult:
                             # schmaler als die Öffnung — beidseitig, also
                             # zweimal. Dieselbe Rechnung, die ``build`` mit
                             # ``buffer`` an der Kontur macht.
-                            _narrowest(cavities) - 2.0 * (clearance + COLLAR_RELIEF),
+                            _narrowest(cavities) - clearance,
                         )
                     ]
                 ),

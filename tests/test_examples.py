@@ -247,3 +247,35 @@ def test_no_example_shows_a_corpus_filename_as_an_object_name(
             f"{entry.name} traegt eine Dateiendung"
         )
         assert entry.name.strip() == entry.name and entry.name, "ein Name ohne Text ist keiner"
+
+
+def test_no_example_greets_with_a_contradiction(profile: Profile) -> None:
+    """Ein Beispiel ist Dokumentation. Was darin warnt, ist eine Aussage über
+    die Anwendung — und die erste, die ein neuer Nutzer liest.
+
+    Zwei taten es. „Weg 3" nannte drei Warnungen, davon zwei, die drei Schritte
+    später behoben waren: „Es gibt sehr kleine Einzelteile. Gelöscht wurde
+    nichts." stand über „Kleinstteile wurden gelöscht.". Und ausgerechnet das
+    Beispiel für Passungen zeigte eine verletzte — der Deckelkragen bekam das
+    doppelte Spiel, weil ``clearance`` dort radial gerechnet wurde und überall
+    sonst diametral.
+
+    Geprüft wird gegen die Befundcodes und nicht gegen die Zahl der Warnungen:
+    Eine Warnung, die etwas Wahres sagt („Kleinstteile wurden gelöscht"),
+    gehört dorthin.
+    """
+    verboten = {"ingest.not_watertight", "ingest.small_components", "fit.violated"}
+    for entry in examples.EXAMPLES:
+        project = load(examples.directory() / entry.filename)
+        result = evaluate(
+            project.document,
+            profiles.make_profile(
+                project.document.printer or "centauri-carbon-2",
+                project.document.material or "petg",
+            ),
+            sources=ProjectSources(project),
+        )
+        found = {
+            finding.code for finding in result.scene.report.findings if finding.code in verboten
+        }
+        assert not found, f"{entry.id}: {sorted(found)}"
