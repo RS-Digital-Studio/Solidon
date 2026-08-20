@@ -148,8 +148,15 @@ def flatpak_manifest() -> str:
         f"      - install -Dm644 {METAINFO_FILE.name}"
         f" /app/share/metainfo/{APP_ID}.metainfo.xml\n"
         f"    sources:\n"
+        # Die Quelle ist **das Anwendungsverzeichnis**, nicht ``dist``: Dorthin
+        # schreibt der Bau selbst — ``flatpak-repo`` und ``flatpak-build`` aus
+        # dem Vorlauf, dazu das AppDir des AppImage-Baus. Ungenau gefasst
+        # packte das Flatpak seine eigene Zwischenausgabe mit ein und wuchs bei
+        # jedem Lauf. ``dest`` hält das Unterverzeichnis, das die Baubefehle
+        # oben nennen, damit die unverändert bleiben.
         f"      - type: dir\n"
-        f"        path: ../dist\n"
+        f"        path: ../dist/{APP_NAME}\n"
+        f"        dest: {APP_NAME}\n"
         f"      - type: file\n"
         f"        path: {DESKTOP_FILE.name}\n"
         f"      - type: file\n"

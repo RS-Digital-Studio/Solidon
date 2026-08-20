@@ -409,3 +409,37 @@ def test_the_workflow_builds_both_linux_formats() -> None:
     assert "make_linux_packages.py" in workflow, "die CI ruft das Werkzeug nicht"
     assert ".AppImage" in workflow, "das AppImage wird nicht mitgenommen"
     assert ".flatpak" in workflow, "das Flatpak wird nicht mitgenommen"
+
+
+def test_the_flatpak_source_is_the_app_and_not_the_output_folder() -> None:
+    """Die Quelle darf nicht der Ordner sein, in den der Bau selbst schreibt.
+
+    ``path: ../dist`` nahm alles unter ``dist`` mit — und dorthin schreiben
+    ``build_flatpak`` (``flatpak-repo``, ``flatpak-build``) und
+    ``build_appimage`` (``<APP_NAME>.AppDir``) ihre Ergebnisse. Der zweite Lauf
+    hätte die Zwischenausgabe des ersten mit eingepackt, und nach einem
+    AppImage-Bau eine vollständige zweite Kopie der Anwendung dazu.
+
+    Aufgefallen ist es nie, weil kein Bau je gelaufen ist: Er braucht Linux und
+    zwei externe Programme. Ein Rezept, das niemand ausführt, prüft nur ein
+    Test.
+    """
+    from app.branding import APP_NAME
+    from tools import make_linux_packages as tool
+
+    manifest = tool.flatpak_manifest()
+    quellen = [
+        zeile.split("path:", 1)[1].strip() for zeile in manifest.splitlines() if "path:" in zeile
+    ]
+    verzeichnis = [
+        (tool.FLATPAK_MANIFEST.parent / pfad).resolve()
+        for pfad in quellen
+        if (tool.FLATPAK_MANIFEST.parent / pfad).resolve() == tool.OUTPUT_DIR
+    ]
+
+    assert not verzeichnis, f"die Quelle ist der Ausgabeordner: {verzeichnis}"
+    assert f"path: ../dist/{APP_NAME}" in manifest, "die Anwendung selbst fehlt als Quelle"
+    # ``dest`` hält das Unterverzeichnis, das die Baubefehle nennen — ohne es
+    # läge der Inhalt flach im Bauordner und ``cp -r <APP_NAME>/*`` griffe ins Leere.
+    assert f"dest: {APP_NAME}" in manifest
+    assert f"cp -r {APP_NAME}/*" in manifest, "Quelle und Kopierbefehl sind auseinandergelaufen"
