@@ -112,6 +112,44 @@ Eine Op, die beide gleich behandelt, sollte das bewusst tun.
 Findings zurückgeben, nicht selbst protokollieren. Der Prüfbericht setzt sie
 zusammen, der Agent liest sie über `read_report`.
 
+**Eine Operation, die nichts bewirkt hat, sagt das.** Das steht unterhalb
+dessen, was Regel 17 erfasst — dort geht es um Ausnahmen, und hier gab es
+keine: im Verlauf ein Schritt, im Bild dasselbe Teil, und der Nutzer sucht den
+Fehler in der Geometrie statt in der Position. `boolean.without_effect`
+vergleicht die Volumina und verlangt dafür nur ein `volume` (`HasVolume`) —
+`MeshData` und der exakte `Solid` bringen beide eines mit. Die Skizzen-Ops
+rechnen im exakten Kern (§30.1) und kamen deshalb lange nicht daran: eine
+Tasche neben dem Körper lief genauso stumm durch, wie es die Magnettasche
+einmal tat. Gemessen wurde an vier Fällen — Oberkante unter dem Körper, Ort
+daneben —, und in allen vieren sagte niemand etwas.
+
+**Was ein späterer Schritt behoben hat, warnt nicht mehr.** `SETTLED_BY`
+(`scene/evaluate.py`) streicht einen Befund, sobald einer aus seiner Menge an
+einem **späteren** Schritt und am **selben Körper** steht. Beides gehört zur
+Bedingung: Ein Reparieren vor dem Einlesen des nächsten Modells hebt dessen
+Befunde nicht auf, und zwei Modelle in einer Szene teilen sich den Bericht,
+nicht ihre Löcher. Gestrichen und nicht herabgestuft — „Das Modell ist nicht
+geschlossen" steht im Präsens und beschreibt einen Zustand, den es nicht mehr
+gibt; als Hinweis wäre der Satz nicht milder, sondern falsch. Übrig bleibt der
+Satz des Schritts, der es behoben hat, und der erzählt die ganze Geschichte.
+
+## Toleranzen sind Durchmessermaße
+
+`clearance` und `press` aus dem Materialprofil gelten **im Durchmesser**, wie
+überall im Haus: Ein Passstift bekommt seine Bohrung als `diameter + play`
+(`knowledge/parts/mechanics.py`), und die Passungsprüfung rechnet
+`hole_diameter - pin_diameter` (`scene/fits.py`). Wer eine Kontur radial
+einzieht, nimmt die Hälfte.
+
+Der Deckelkragen tat es nicht und bekam damit das doppelte Spiel — die Passung
+des Beispiels „Dose mit Deckel" meldete bei jedem Öffnen 0,90 mm statt
+0,25 mm. Daneben stand `COLLAR_RELIEF = 0.2`, „damit der Deckel nicht auf dem
+Kragen sitzt": eine Zahlenkonstante für eine Toleranz, also ein Verstoß gegen
+Regel 7 im Gewand einer Fertigungszugabe. Sie untergrub die Kalibrierung
+(§28.3) — wer sein Material misst und 0,15 mm einträgt, bekam trotzdem 0,55 mm
+je Seite. **Dass etwas nicht klemmt, ist die Aufgabe des Gleitspiels aus dem
+Profil**; dafür ist es da, und dafür wird es gemessen.
+
 ## Test
 
 Kennzahlen gegen eine Datei aus `tests/data/`, nicht gegen ein selbst

@@ -99,6 +99,58 @@ Toleranzen, Auflösungen, Rückfallverhalten. Die Vorgaben kommen aus dem
 Drucker- und Materialprofil. **Eine gute Vorgabe ist mehr wert als eine gute
 Einstellmöglichkeit.**
 
+**Was entscheidet, was später überhaupt geht, gehört nach vorn.** Der
+Umschalter der zwei Rechenkerne stand hinten, zugeklappt — und an ihm hängen
+sieben Operationen: Fase, Verrundung, Formschräge, Fläche versetzen, exaktes
+Aushöhlen, Tasche schneiden, Umwandeln. Wer den Quader ohne ihn anlegte, fand
+sie später alle grau. Das ist weder Toleranz noch Auflösung noch
+Rückfallverhalten; die Regel oben trennt nach *Häufigkeit der Änderung*, und
+eine Entscheidung, die man einmal trifft und nie wieder ändern kann, fällt
+durch beide Raster. Sein Hinweis zählt die Werkzeuge auf, statt „STEP-Export
+und spätere Verrundungen" zu nennen — wer eine Tasche wollte, hatte damit
+keinen Anlass, den Haken zu setzen.
+
+**Und derselbe Umschalter steht im Verlauf.** `History.change_kernel` stellt
+einen Schritt auf seinen Zwilling um, `edit_operation` zeigt den Haken auf dem
+Stand, der im Dokument steht — an beiden Enden des Paars, also auch zum
+Abwählen. Ohne ihn war ein Quader, den jemand ohne den Haken angelegt hatte,
+endgültig ein Netz: der einzige Weg dorthin war, den Schritt zu löschen und
+alles darüber neu zu bauen. Getauscht wird nur zwischen `MENU_TWINS` —
+beliebige Operationen gegeneinander wäre kein Bearbeiten mehr, sondern ein
+Umschreiben der Geschichte. Und der Dialog wird immer aus dem **sichtbaren**
+Zwilling gebaut, gleich welcher im Verlauf steht: aus dem exakten heraus gäbe
+es kein `anchor`, und wer den Haken abwählte, bekäme einen Dialog ohne die
+Felder, die er gerade freigeschaltet hat.
+
+**Ein gesperrtes Werkzeug kennt zwei Lagen, nicht eine.** Der Körper war nie
+exakt — dann geht es um den Haken. Oder er war es und ist es nicht mehr, weil
+eine Mesh-Operation dazwischen liegt; dann hilft kein Haken.
+`spoiled_the_exact_body()` liest den Schuldigen aus
+`evaluate.exact_became_mesh` und `kind_requirement` nennt ihn beim Titel. Der
+Vorschlag muss dabei ausführbar sein: Der erste Entwurf schlug vor, „den
+Schritt im Verlauf nach hinten zu nehmen" — und das kann der Verlauf nicht,
+aus gutem Grund (spätere Operationen bauen auf seinen Ausgaben auf).
+
+## Die automatische Sicherung
+
+Sie ist für den **Absturz** da (§38) und nie dafür, eine Entscheidung des
+Nutzers zu überstimmen. Drei Regeln, alle drei einmal gebrochen gewesen:
+
+* **Verworfen heißt verworfen.** `_may_discard` räumt die Sicherung, wenn der
+  Nutzer *Verwerfen* wählt. `closeEvent` schrieb dort eine — nach der Frage,
+  also genau dann, wenn jemand gerade Nein gesagt hatte.
+* **Abgelehnt heißt einmal gefragt.** Eine Sicherung, die man nicht öffnen
+  will, wird gelöscht; sonst ist sie weiter neuer als die Datei und dieselbe
+  Frage kommt bei jedem Öffnen wieder. Gemessen waren es sechs Öffnungen und
+  sechs Fragen. Was das Ablehnen kostet, steht im Dialog — eine Löschung ohne
+  Ansage wäre der nächste Fehler.
+* **Angenommen speichert in die Datei des Nutzers.** `Session.recover(candidate,
+  path)` nimmt den Inhalt der Sicherung und behält den Pfad des Projekts.
+  Über `open_project(candidate)` wurde die Sicherung zum Projekt: ein
+  „Speichern" schrieb nach `…p3d.autosave`, die eigentliche Datei blieb
+  unberührt, und die wiederhergestellte Arbeit war beim nächsten Öffnen wieder
+  fort.
+
 ## Die Oberfläche wächst nicht mit
 
 Vielseitigkeit gehört in die Tiefe, nicht an die Oberfläche (§2). Die Zahlen

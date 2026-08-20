@@ -36,8 +36,6 @@ bekommt einen roten Lauf.
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | CI grün sehen und die Artefakte holen | Die Demo bis 30.10.2026 (12.08.2026) | den Segfault in `test_chat_ui.py` auf den Linux-Runnern |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | eine gebaute Datei — hängt an der CI |
-| Download-Kasten mit Datei und Prüfsumme | Die Demo bis 30.10.2026 (12.08.2026) | dieselbe Datei |
-| Hochladen | Die Demo bis 30.10.2026 (12.08.2026) | den Stand nach dem Bau; live steht noch eine ältere `version.json` |
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | eine andere **Bauart** — alle sieben Griffe an `MakePipeShell` sind gemessen und widerlegt (20.08.), und ein Rotationskörper schraubt nicht |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
@@ -49,6 +47,7 @@ bekommt einen roten Lauf.
 | Französisch nennt zwei Katalogruppen fast gleich | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | zwei Wörter, die sich um mehr als einen Buchstaben unterscheiden |
 | Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | eine Entscheidung, was aus der Zeile verschwindet — und einen Test, der sein Thema selbst setzt |
 | Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird — Kachelhöhe, Ablagefläche oder die Liste der zuletzt geöffneten Projekte; Umschichten ist ausgereizt |
+| Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 
 ---
 
@@ -8317,3 +8316,60 @@ Datei da, Alt-Text da, `width`/`height` gleich den Pixeln.
       verschwindet — die zweite Zahl, die Grundformen oder ein Kürzel-Menü —,
       und der Test sollte danach sein Thema selbst setzen, sonst misst er
       weiterhin etwas, das niemand sieht.
+
+---
+
+## Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde)
+
+Auftrag: die Beispielprojekte durchsehen, Text aufbringen und ein Stück aus
+einer Fläche ausschneiden — alles über die Oberfläche, mit Blick auf
+Einfachheit für den Kunden. Die Skripte und Messungen liegen in
+`.claude/.state/durchsicht-2026-08-20b/`.
+
+**Alle neun Beispiele öffnen und rechnen** (1,5–3,8 s). Die zwei, die mit
+Warnungen begrüßten, tun es nicht mehr — dahinter standen zwei echte Fehler,
+siehe unten.
+
+### Behoben — jeder mit Test und Gegenprobe gegen HEAD
+
+- [x] **Sechs Öffnungen, sechs Mal dieselbe Frage nach der Sicherung**
+      (`4e7531b`). Drei Fehler in einer Kette: `closeEvent` sicherte, *nachdem*
+      der Nutzer *Verwerfen* geklickt hatte; die abgelehnte Sicherung blieb
+      liegen und war weiter neuer als die Datei; und wer sie annahm, arbeitete
+      danach in `…p3d.autosave` weiter, während seine eigentliche Datei
+      unberührt blieb. Nachher: null Fragen.
+- [x] **Die Tasche schnitt daneben, und niemand sagte etwas** (`ee2e9a1`). Vier
+      Fälle gemessen, in denen `sketch_pocket` das Volumen unverändert lässt —
+      Oberkante unter dem Körper, Ort daneben —, und alle vier stumm.
+      `boolean.without_effect` verlangt jetzt nur noch ein Volumen und gilt
+      damit auch im exakten Kern.
+- [x] **Ob die Fläche zu ist, stand nirgends** (`8079a15`). Die Zeile sagt es ab
+      dem ersten Strich („Noch offen · 4 Freiheitsgrade sind noch frei").
+      Verschieben gab es gar nicht — nur Punkt für Punkt; `edit.move` schiebt
+      die Auswahl, ab Qts Ziehschwelle. Löschen lag allein auf Entf und steht
+      jetzt im Kontextmenü.
+- [x] **Sieben Werkzeuge hingen an einem Haken, den niemand sah** (`3fdfe3f`).
+      Der Umschalter „Exakter Körper" lag unter „Weitere Einstellungen",
+      zugeklappt; sein Hinweis nannte STEP und Verrundungen, nicht die Tasche.
+- [x] **Ein Quader blieb ein Netz, weil der Haken nur beim Anlegen dastand**
+      (`a342e81`). `History.change_kernel` stellt einen Schritt auf seinen
+      Zwilling um, und der Dialog im Verlauf trägt denselben Haken.
+- [x] **Zwei Beispiele begrüßten mit Warnungen, und beide hatten recht**
+      (`b5bd8d3`). Der Deckelkragen bekam das doppelte Spiel (`clearance`
+      radial statt diametral, plus eine feste Zugabe von 0,2 mm gegen Regel 7);
+      und „Weg 3" zeigte zwei Warnungen, die drei Schritte später behoben waren
+      — `SETTLED_BY` streicht sie.
+
+### Offen
+
+- [ ] **Der exakte Zweig überlebt keine Mesh-Operation.** Wer einen exakten
+      Quader anlegt und eine Bohrung setzt, hat danach ein Netz — die
+      Auswertung sagt es (`evaluate.exact_became_mesh`), und der Hinweis am
+      gesperrten Werkzeug nennt seit `a342e81` den Schritt beim Namen. Aber der
+      Ausweg bleibt mühsam: die Schritte ab dort zurücknehmen, die exakte
+      Operation anwenden, den Rest neu setzen. Für „Quader mit Bohrung **und**
+      Tasche" gibt es keinen bequemen Weg. Zu entscheiden ist, ob `drill_hole`
+      einen exakten Zwilling bekommt — im B-Rep-Kern ist eine Bohrung ein
+      Zylinderschnitt, und die anderen Bohrungs-Ops (senken, verschließen)
+      stünden danach vor derselben Frage. §25 legt für die Bohrungen keinen
+      Kern fest; §30.1 tut es nur für die Skizzen-Ops.
