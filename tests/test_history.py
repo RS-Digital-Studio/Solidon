@@ -402,3 +402,75 @@ def test_a_transaction_without_operations_and_without_changes_is_refused(
 ) -> None:
     with pytest.raises(ValidationError):
         history.apply(_("Nichts"))
+
+
+# --- Denselben Schritt im anderen Rechenkern (§15.4, MENU_TWINS) -----------------
+
+
+def test_a_step_can_be_switched_to_its_exact_twin() -> None:
+    """Ein Netz-Quader ließ sich nachträglich nicht exakt machen.
+
+    Die Oberfläche behandelt die beiden Rechenkerne seit je als **eine**
+    Handlung: ein Menüeintrag, ein Dialog, ein Haken darin. Beim Nachbearbeiten
+    fehlte genau das — wer den Quader ohne den Haken angelegt hatte, fand
+    später sieben Werkzeuge grau, und der einzige Weg dorthin war, den Schritt
+    zu löschen und alles darüber neu zu bauen.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project()
+    history = History(project.document)
+    history.apply(
+        "Quader", [OperationDraft(op="create_box", params={"width": 30.0, "anchor": "centre"})]
+    )
+    op_id = project.document.ops[0].id
+
+    changed = history.change_kernel(op_id, "create_brep_box", {"width": 30.0})
+
+    assert changed.op == "create_brep_box"
+    assert [entry.op for entry in project.document.ops] == ["create_brep_box"]
+    # Das Schema des exakten Kerns kennt kein ``anchor`` — verschmolzen würde
+    # es hier stehen und die Operation beim Rechnen ablehnen.
+    assert "anchor" not in changed.params
+
+
+def test_a_step_switches_back_as_well() -> None:
+    """Beide Richtungen: der Haken lässt sich auch wieder abwählen."""
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project()
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_brep_box", params={"width": 30.0})])
+    op_id = project.document.ops[0].id
+
+    history.change_kernel(op_id, "create_box", {"width": 30.0, "anchor": "centre"})
+
+    assert project.document.ops[0].op == "create_box"
+
+
+def test_only_twins_may_be_switched() -> None:
+    """Beliebige Operationen zu tauschen wäre kein Bearbeiten, sondern ein
+    Umschreiben der Geschichte.
+
+    Ein Schritt trägt Eingänge und Ausgänge; was ihn ersetzen darf, muss
+    dieselben haben. ``MENU_TWINS`` ist genau die Liste der Paare, für die das
+    gilt — und die die Oberfläche ohnehin schon als eine Handlung zeigt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import new_project
+
+    load_operations()
+    project = new_project()
+    history = History(project.document)
+    history.apply("Quader", [OperationDraft(op="create_box", params={"width": 30.0})])
+    op_id = project.document.ops[0].id
+
+    with pytest.raises(ValidationError) as raised:
+        history.change_kernel(op_id, "create_sphere", {"diameter": 20.0})
+
+    assert "Zwilling" in str(raised.value)
+    assert project.document.ops[0].op == "create_box", "abgelehnt heißt unverändert"

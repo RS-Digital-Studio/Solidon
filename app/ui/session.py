@@ -639,6 +639,21 @@ class Session(QObject):
         self.projectChanged.emit()
         self.evaluate_async()
 
+    def change_kernel(self, op_id: int, op_name: str, params: dict[str, Any]) -> None:
+        """Denselben Schritt im anderen Rechenkern (§15.4, ``MENU_TWINS``).
+
+        Derselbe Weg wie :meth:`change_params` — der Umschalter im Dialog
+        entscheidet nur, welche der beiden Operationen es wird.
+        """
+        try:
+            self.history.change_kernel(op_id, op_name, params)
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+
     def bake_strokes(self, op_id: int) -> bool:
         """Den Stand einer Formsitzung festschreiben (Entscheidung D).
 

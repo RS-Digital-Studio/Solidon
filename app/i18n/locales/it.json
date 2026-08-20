@@ -720,7 +720,7 @@
   "Diese Objekte gibt es nicht": "Questi oggetti non esistono",
   "Diese Operation arbeitet nur auf Netzen.": "Questa operazione lavora solo su mesh.",
   "Diese Operation arbeitet nur auf einem exakten Körper.": "Questa operazione lavora solo su un corpo esatto.",
-  "Diese Operation braucht einen exakten Körper (B-Rep). Beim Anlegen einer Grundform macht der Haken „Exakter Körper“ einen daraus — nachträglich geht das nicht. Auch eine STEP-Datei bringt einen mit.": "Questa operazione richiede un corpo esatto (B-Rep). Alla creazione di una forma base, la casella «Corpo esatto» ne produce uno; in seguito non è più possibile. Anche un file STEP ne porta uno.",
+  "Diese Operation braucht einen exakten Körper (B-Rep). Der Haken „Exakter Körper“ im Dialog der Grundform macht einen daraus — auch nachträglich, über den Schritt im Verlauf. Auch eine STEP-Datei bringt einen mit.": "Questa operazione richiede un corpo esatto (B-Rep). La casella «Corpo esatto» nella finestra della forma base ne produce uno, anche in seguito tramite il passo nella cronologia. Anche un file STEP ne porta uno.",
   "Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.": "Questa operazione richiede due oggetti. Aggiungi il secondo con Ctrl e clic.",
   "Diese Operation gibt es im Verlauf nicht.": "Questa operazione non è nella cronologia.",
   "Diese Operation gibt es nicht": "Questa operazione non esiste",
@@ -751,6 +751,7 @@
   "Diese Transaktion steht nicht mehr im Verlauf.": "Questa transazione non è più nella cronologia.",
   "Diese Werkzeuge stehen in keinem Menü — sie sind die Auskunft, die eine Gegenstelle braucht, bevor sie etwas ändert.": "Questi strumenti non stanno in nessun menu — sono l'informazione che serve a una controparte prima che cambi qualcosa.",
   "Diese Werte gelten für das nächste neue Projekt. Drucker und Material eines offenen Projekts ändert die Druckvorbereitung.": "Questi valori valgono per il prossimo progetto nuovo. La stampante e il materiale di un progetto aperto si cambiano nella preparazione di stampa.",
+  "Diese beiden Operationen sind kein Paar — ein Schritt im Verlauf lässt sich nur auf seinen Zwilling umstellen.": "Queste due operazioni non formano una coppia: un passo della cronologia può essere commutato solo sul suo gemello.",
   "Diese Änderung verwirft {count} zurückgenommene Schritte.": "Questa modifica scarta {count} passi annullati.",
   "Diese Änderung ändert die Anzahl der Objekte, und spätere Operationen arbeiten damit. Dafür die Operation zurücknehmen und neu anwenden.": "Questa modifica cambia il numero degli oggetti, e operazioni successive ci lavorano. Per farlo, annulla l'operazione e applicala di nuovo.",
   "Diese ältere Datei enthält einen Wert, der in der neuen Fassung wie ein Verweis auf ausgelagerte Daten aussieht.": "Questo file più vecchio contiene un valore che nella nuova versione sembra un riferimento a dati esternalizzati.",
@@ -2745,5 +2746,6 @@
   "öffnet den Schritt wieder — die Zahl ändern genügt": "riapre il passo — basta cambiare il numero",
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "saltato — la mesh è troppo grande per questo turno, la mappa di analisi nella finestra ce la fa.",
   "— keines —": "— nessuno —",
-  "„profiles“ zeigt, was zur Auswahl steht.": "«profiles» mostra ciò che è tra le scelte."
+  "„profiles“ zeigt, was zur Auswahl steht.": "«profiles» mostra ciò che è tra le scelte.",
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» ha trasformato il corpo esatto in una mesh: le operazioni del kernel esatto funzionano solo prima. Annullare i passi da lì, applicare questa operazione e rifare il resto."
 }

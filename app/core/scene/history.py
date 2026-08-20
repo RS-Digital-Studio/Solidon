@@ -382,6 +382,57 @@ class History:
         _log.info("changed parameters of op %s (%s)", op_id, entry.op)
         return changed
 
+    def change_kernel(self, op_id: OpId, op_name: str, params: Mapping[str, Any]) -> Operation:
+        """Stellt einen Schritt auf seinen Zwilling um — denselben Schritt im
+        anderen Rechenkern (§15.4, ``MENU_TWINS``).
+
+        Die Oberfläche behandelt die beiden Kerne seit je als **eine**
+        Handlung: ein Menüeintrag, ein Dialog, und ein Haken darin entscheidet.
+        Beim Nachbearbeiten fehlte genau das. Wer den Quader ohne den Haken
+        angelegt hatte, fand später sieben Werkzeuge grau — Fase, Verrundung,
+        Formschräge, Fläche versetzen, exaktes Aushöhlen, Tasche schneiden,
+        Umwandeln — und der einzige Weg dorthin war, den Schritt zu löschen
+        und alles darüber neu zu bauen.
+
+        **Nur Zwillinge.** Beliebige Operationen im Verlauf gegeneinander zu
+        tauschen wäre kein Bearbeiten mehr, sondern ein Umschreiben der
+        Geschichte: Ein Schritt trägt Eingänge und Ausgänge, und was ihn
+        ersetzen darf, muss dieselben haben. ``MENU_TWINS`` ist genau die
+        Liste der Paare, für die das gilt und die die Oberfläche ohnehin schon
+        als eines behandelt.
+
+        Die Parameter kommen gefiltert an — der exakte Quader kennt kein
+        ``anchor``. Was danach passiert, entscheidet die Auswertung: Ein
+        späterer Schritt, der mit der neuen Art nicht kann, hält die Kette an
+        und sagt das. Rücknehmbar ist der Tausch wie jeder andere Schritt.
+        """
+        from app.core.registry import MENU_TWINS
+
+        entry = self.operation(op_id)
+        if op_name != entry.op:
+            pairs = {(hidden, shown) for hidden, shown in MENU_TWINS.items()}
+            if (op_name, entry.op) not in pairs and (entry.op, op_name) not in pairs:
+                raise ValidationError(
+                    field="op",
+                    detail=_(
+                        "Diese beiden Operationen sind kein Paar — ein Schritt im Verlauf "
+                        "lässt sich nur auf seinen Zwilling umstellen."
+                    ),
+                    constraint="not_a_twin",
+                    values={"op": entry.op, "wanted": op_name},
+                )
+
+        spec = self._registry.get(op_name)
+        self._check_params(spec.name, spec.params.spec(), params)
+        # **Nicht** mit den alten verschmelzen, anders als ``change_params``:
+        # Die beiden Schemata sind verschieden, und ein ``anchor`` aus dem
+        # Netz-Quader wäre am exakten ein unbekannter Parameter.
+        self._forget_undone()
+        changed = dataclasses.replace(entry, op=op_name, params=dict(params))
+        self.document.ops[self.document.ops.index(entry)] = changed
+        _log.info("switched op %s from %s to %s", op_id, entry.op, op_name)
+        return changed
+
     def _later_users(self, op_id: OpId, objects: tuple[ObjectId, ...]) -> set[OpId]:
         """Operationen nach dieser, die eine ihrer Ausgaben nehmen."""
         wanted = set(objects)

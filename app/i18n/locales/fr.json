@@ -720,7 +720,7 @@
   "Diese Objekte gibt es nicht": "Ces objets n'existent pas",
   "Diese Operation arbeitet nur auf Netzen.": "Cette opération ne travaille que sur des maillages.",
   "Diese Operation arbeitet nur auf einem exakten Körper.": "Cette opération ne travaille que sur un corps exact.",
-  "Diese Operation braucht einen exakten Körper (B-Rep). Beim Anlegen einer Grundform macht der Haken „Exakter Körper“ einen daraus — nachträglich geht das nicht. Auch eine STEP-Datei bringt einen mit.": "Cette opération exige un corps exact (B-Rep). À la création d'une forme de base, la case « Corps exact » en produit un — impossible après coup. Un fichier STEP en apporte un également.",
+  "Diese Operation braucht einen exakten Körper (B-Rep). Der Haken „Exakter Körper“ im Dialog der Grundform macht einen daraus — auch nachträglich, über den Schritt im Verlauf. Auch eine STEP-Datei bringt einen mit.": "Cette opération exige un corps exact (B-Rep). La case « Corps exact » dans la boîte de dialogue de la forme de base en produit un — après coup également, via l'étape dans l'historique. Un fichier STEP en apporte un aussi.",
   "Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.": "Cette opération demande deux objets. Ajouter le second avec Ctrl et un clic.",
   "Diese Operation gibt es im Verlauf nicht.": "Cette opération ne figure pas dans l'historique.",
   "Diese Operation gibt es nicht": "Cette opération n'existe pas",
@@ -751,6 +751,7 @@
   "Diese Transaktion steht nicht mehr im Verlauf.": "Cette transaction ne figure plus dans l'historique.",
   "Diese Werkzeuge stehen in keinem Menü — sie sind die Auskunft, die eine Gegenstelle braucht, bevor sie etwas ändert.": "Ces outils ne figurent dans aucun menu — ils sont le renseignement dont une contrepartie a besoin avant de changer quoi que ce soit.",
   "Diese Werte gelten für das nächste neue Projekt. Drucker und Material eines offenen Projekts ändert die Druckvorbereitung.": "Ces valeurs valent pour le prochain nouveau projet. L'imprimante et le matériau d'un projet ouvert se changent dans la préparation de l'impression.",
+  "Diese beiden Operationen sind kein Paar — ein Schritt im Verlauf lässt sich nur auf seinen Zwilling umstellen.": "Ces deux opérations ne forment pas une paire — une étape de l'historique ne peut être basculée que vers son jumeau.",
   "Diese Änderung verwirft {count} zurückgenommene Schritte.": "Cette modification abandonne {count} étapes retirées.",
   "Diese Änderung ändert die Anzahl der Objekte, und spätere Operationen arbeiten damit. Dafür die Operation zurücknehmen und neu anwenden.": "Cette modification change le nombre d'objets, et des opérations ultérieures travaillent avec eux. Pour cela, retirer l'opération et l'appliquer de nouveau.",
   "Diese ältere Datei enthält einen Wert, der in der neuen Fassung wie ein Verweis auf ausgelagerte Daten aussieht.": "Ce fichier plus ancien contient une valeur qui, dans la nouvelle version, ressemble à une référence vers des données externalisées.",
@@ -2745,5 +2746,6 @@
   "öffnet den Schritt wieder — die Zahl ändern genügt": "rouvre l'étape — changer le nombre suffit",
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "ignoré — le maillage est trop grand pour ce tour, la carte d'analyse dans la fenêtre y arrive.",
   "— keines —": "— aucun —",
-  "„profiles“ zeigt, was zur Auswahl steht.": "« profiles » montre ce qui est disponible."
+  "„profiles“ zeigt, was zur Auswahl steht.": "« profiles » montre ce qui est disponible.",
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "« {step} » a transformé le corps exact en maillage — les opérations du noyau exact ne fonctionnent qu'avant. Annulez les étapes à partir de là, appliquez cette opération, puis refaites le reste."
 }

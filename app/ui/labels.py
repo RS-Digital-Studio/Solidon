@@ -653,7 +653,34 @@ def value_line(key: str, value: object) -> str:
     return f"{value_label(key)}: {localised_value(value)}"
 
 
-def kind_requirement(spec: Any, kinds: Sequence[str]) -> str | None:
+def spoiled_the_exact_body(result: Any) -> str:
+    """Welcher Schritt aus dem exakten Körper ein Netz gemacht hat — als Titel.
+
+    Die Auswertung meldet es als ``evaluate.exact_became_mesh``, und dort steht
+    auch, welche Operation es war. Ohne diese Auskunft rät der Hinweis am
+    gesperrten Eintrag am eigentlichen Fall vorbei: Er spricht vom Haken beim
+    Anlegen, während der Körper längst exakt angelegt wurde und eine Bohrung
+    drei Schritte später ihn zum Netz gemacht hat.
+
+    Neben :func:`kind_requirement` und nicht in den zwei Ansichten, die den
+    Satz zeigen — aus demselben Grund, aus dem der Satz selbst hier steht:
+    zwei Stellen mit derselben Auskunft driften.
+
+    Der Titel und nicht der Name: „drill_hole" steht in keinem Menü.
+    """
+    from app.core.registry import REGISTRY
+
+    if result is None:
+        return ""
+    for finding in result.scene.report.findings:
+        if finding.code != "evaluate.exact_became_mesh":
+            continue
+        name = str(finding.values.get("op", ""))
+        return str(REGISTRY.get(name).title) if REGISTRY.has(name) else name
+    return ""
+
+
+def kind_requirement(spec: Any, kinds: Sequence[str], spoiled_by: str = "") -> str | None:
     """Warum diese Operation auf dieser Auswahl nicht geht — oder ``None``.
 
     Eine Operation des exakten Kerns trägt ``requires_kind="brep"``; auf einem
@@ -667,22 +694,41 @@ def kind_requirement(spec: Any, kinds: Sequence[str]) -> str | None:
     einen Dialog aus und bekam danach eine Absage: genau die Sackgasse, die die
     Menüleiste zwei Dateien weiter vermeidet. Zwei Stellen, dieselbe Auskunft —
     also gehört sie in diese Datei und nicht zweimal in die Oberfläche.
+
+    ``spoiled_by`` ist der Titel des Schritts, der aus einem exakten Körper ein
+    Netz gemacht hat — die Auswertung meldet ihn als
+    ``evaluate.exact_became_mesh``. Damit gibt es zwei ganz verschiedene Lagen,
+    und ein Satz für beide wäre für eine davon falsch: Der Körper war nie
+    exakt, dann geht es um den Haken beim Anlegen. Oder er war es und ist es
+    nicht mehr — dann hilft kein Haken, sondern nur die Reihenfolge.
     """
     if not spec.requires_kind or not kinds:
         return None
     if all(kind == spec.requires_kind for kind in kinds):
         return None
+    if spoiled_by:
+        # **Kein Umsortieren vorschlagen.** Der Satz hieß erst „diesen Schritt
+        # im Verlauf nach hinten nehmen" — und das kann der Verlauf nicht, aus
+        # gutem Grund: spätere Operationen bauen auf den Ausgaben des Schritts
+        # auf (`HistoryPanel._on_context_menu`). Ein Handlungsvorschlag, den
+        # niemand ausführen kann, ist schlechter als keiner.
+        return str(
+            tr(
+                "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des "
+                "exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese "
+                "Operation anwenden und den Rest neu setzen."
+            )
+        ).format(step=spoiled_by)
     # Der Satz sagte, woher exakte Körper *kommen*, und ließ offen, was man
     # jetzt tun soll: „aus den Grundformen mit „Exakt"" liest sich wie ein
-    # eigener Menüeintrag, den es nicht gibt. Es ist ein Haken im Dialog, den
-    # man beim Anlegen sieht — und nur dort: nachträglich lässt sich ein Netz
-    # nicht exakt machen, und ein Satz, der es andeutet, schickt jemanden auf
-    # die Suche nach einem Schalter, den es nicht gibt.
+    # eigener Menüeintrag, den es nicht gibt. Es ist ein Haken im Dialog — und
+    # er ist nicht nur beim Anlegen zu haben: derselbe Haken steht im Dialog
+    # des Schritts, wenn man ihn im Verlauf wieder öffnet.
     return str(
         tr(
-            "Diese Operation braucht einen exakten Körper (B-Rep). Beim Anlegen einer "
-            "Grundform macht der Haken „Exakter Körper“ einen daraus — nachträglich "
-            "geht das nicht. Auch eine STEP-Datei bringt einen mit."
+            "Diese Operation braucht einen exakten Körper (B-Rep). Der Haken „Exakter "
+            "Körper“ im Dialog der Grundform macht einen daraus — auch nachträglich, "
+            "über den Schritt im Verlauf. Auch eine STEP-Datei bringt einen mit."
         )
     )
 

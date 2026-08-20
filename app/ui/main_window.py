@@ -172,6 +172,7 @@ from app.ui.labels import (
     feature_label,
     kind_requirement,
     length,
+    spoiled_the_exact_body,
 )
 from app.ui.labels import set_display_unit as set_length_unit
 from app.ui.leash import WorkerLeash
@@ -2223,7 +2224,7 @@ class MainWindow(QMainWindow):
             )
         # Der Satz steht in ``labels``: das Kontextmenü am Körper braucht ihn
         # auch, und zwei Stellen mit derselben Auskunft driften.
-        return kind_requirement(spec, kinds)
+        return kind_requirement(spec, kinds, spoiled_the_exact_body(self.session.last_result))
 
     @staticmethod
     def _button_tip(label: str, source: QAction | None, own_hint: str) -> str:
@@ -5121,26 +5122,70 @@ class MainWindow(QMainWindow):
             self.session.failed.emit(error)
             return
 
+        # Der Umschalter der Rechenkerne gehört auch hierher. Beim Anlegen gab
+        # es ihn seit je, beim Nachbearbeiten nicht — und damit war ein
+        # Quader, den jemand ohne ihn angelegt hatte, endgültig ein Netz. Sieben
+        # Operationen blieben ihm für immer grau, und der einzige Weg dorthin
+        # war, den Schritt zu löschen und alles darüber neu zu bauen.
+        #
+        # Gezeigt wird er an **beiden** Enden des Paars: Der Schritt kann schon
+        # der exakte sein, und dann heißt Umschalten, den Haken wegzunehmen.
+        shown = MENU_TWINS.get(spec.name, spec.name)
+        hidden = next((name for name, partner in MENU_TWINS.items() if partner == shown), None)
+        exact: QCheckBox | None = None
+        if hidden is not None and hidden in TWIN_TOGGLES:
+            label, hint = TWIN_TOGGLES[hidden]
+            exact = QCheckBox(str(label), self)
+            exact.setToolTip(str(hint))
+            exact.setChecked(spec.name == hidden)
+
+        def chosen_spec() -> OperationSpec:
+            if exact is not None and hidden is not None:
+                return REGISTRY.get(hidden if exact.isChecked() else shown)
+            return spec
+
+        def fitted(entered: Mapping[str, Any]) -> dict[str, Any]:
+            allowed = {item.name for item in chosen_spec().params.spec()}
+            return {key: value for key, value in entered.items() if key in allowed}
+
         dialog = OperationDialog(
-            spec,
+            # Gebaut wird immer aus dem **sichtbaren** Zwilling, gleich welcher
+            # von beiden gerade im Verlauf steht: Sein Schema trägt die Felder,
+            # die der andere auch hat, und dazu die des Netzkerns. Aus dem
+            # exakten heraus gäbe es kein ``anchor``, und wer den Haken
+            # abwählte, bekäme einen Dialog ohne die Felder, die er gerade
+            # freigeschaltet hat.
+            REGISTRY.get(shown),
             self._object_names(),
             self,
             values=entry.params,
             sources=self._source_names(),
             parameter_values=self._parameter_values(),
             features=self._feature_names(),
+            extra=exact,
             surroundings=self._sketch_surroundings(),
             images=self._image_names(),
             pick_image=self._pick_image_source,
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
+        if exact is not None:
+            exact.toggled.connect(lambda: dialog.switch_variant(chosen_spec()))
+            exact.toggled.connect(dialog.valuesChanged)
+            dialog.switch_variant(chosen_spec())
         # Auch beim Korrigieren zeigt die Vorschau den Zweig, wie er würde —
         # gerechnet als geänderte Operation, nicht als neuer Schritt (§15.4).
         self._wire_preview(dialog, None, change_op=op_id)
         dialog.place_beside(self.viewport)
-        self._open_operation_dialog(
-            dialog, lambda: self.session.change_params(op_id, dialog.values())
-        )
+
+        def apply_change() -> None:
+            picked = chosen_spec()
+            values = fitted(dialog.values())
+            if picked.name == entry.op:
+                self.session.change_params(op_id, values)
+                return
+            self.session.change_kernel(op_id, picked.name, values)
+
+        self._open_operation_dialog(dialog, apply_change)
 
     def _parameter_values(self) -> dict[str, float]:
         """Die aufgelösten Projektparameter — der Skizzeneditor rechnet

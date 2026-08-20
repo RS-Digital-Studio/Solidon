@@ -720,7 +720,7 @@
   "Diese Objekte gibt es nicht": "Estes objetos não existem",
   "Diese Operation arbeitet nur auf Netzen.": "Esta operação só trabalha sobre malhas.",
   "Diese Operation arbeitet nur auf einem exakten Körper.": "Esta operação só trabalha sobre um corpo exato.",
-  "Diese Operation braucht einen exakten Körper (B-Rep). Beim Anlegen einer Grundform macht der Haken „Exakter Körper“ einen daraus — nachträglich geht das nicht. Auch eine STEP-Datei bringt einen mit.": "Esta operação precisa de um corpo exato (B-Rep). Ao criar uma forma básica, a caixa «Corpo exato» produz um — depois já não é possível. Um ficheiro STEP também traz um.",
+  "Diese Operation braucht einen exakten Körper (B-Rep). Der Haken „Exakter Körper“ im Dialog der Grundform macht einen daraus — auch nachträglich, über den Schritt im Verlauf. Auch eine STEP-Datei bringt einen mit.": "Esta operação precisa de um corpo exato (B-Rep). A caixa «Corpo exato» na janela da forma básica produz um — também posteriormente, através do passo no histórico. Um ficheiro STEP também traz um.",
   "Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.": "Esta operação precisa de dois objetos. O segundo junta-se com Ctrl e um clique.",
   "Diese Operation gibt es im Verlauf nicht.": "Esta operação não está no histórico.",
   "Diese Operation gibt es nicht": "Esta operação não existe",
@@ -751,6 +751,7 @@
   "Diese Transaktion steht nicht mehr im Verlauf.": "Esta transação já não está no histórico.",
   "Diese Werkzeuge stehen in keinem Menü — sie sind die Auskunft, die eine Gegenstelle braucht, bevor sie etwas ändert.": "Estas ferramentas não estão em nenhum menu — são a informação de que uma contraparte precisa antes de alterar seja o que for.",
   "Diese Werte gelten für das nächste neue Projekt. Drucker und Material eines offenen Projekts ändert die Druckvorbereitung.": "Estes valores valem para o próximo projeto novo. A impressora e o material de um projeto aberto alteram-se na preparação da impressão.",
+  "Diese beiden Operationen sind kein Paar — ein Schritt im Verlauf lässt sich nur auf seinen Zwilling umstellen.": "Estas duas operações não formam um par — um passo do histórico só pode ser mudado para o seu gémeo.",
   "Diese Änderung verwirft {count} zurückgenommene Schritte.": "Esta alteração descarta {count} passos retirados.",
   "Diese Änderung ändert die Anzahl der Objekte, und spätere Operationen arbeiten damit. Dafür die Operation zurücknehmen und neu anwenden.": "Esta alteração muda o número de objetos, e operações posteriores trabalham com eles. Para isso, retirar a operação e voltar a aplicá-la.",
   "Diese ältere Datei enthält einen Wert, der in der neuen Fassung wie ein Verweis auf ausgelagerte Daten aussieht.": "Este ficheiro mais antigo contém um valor que na nova versão parece uma referência a dados externalizados.",
@@ -2745,5 +2746,6 @@
   "öffnet den Schritt wieder — die Zahl ändern genügt": "volta a abrir o passo — basta alterar o número",
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "ignorado — a malha é demasiado grande para esta vez; o mapa de análise na janela consegue.",
   "— keines —": "— nenhum —",
-  "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” mostra o que está disponível."
+  "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” mostra o que está disponível.",
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» transformou o corpo exato numa malha — as operações do núcleo exato só funcionam antes. Anule os passos a partir daí, aplique esta operação e refaça o resto."
 }

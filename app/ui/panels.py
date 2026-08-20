@@ -60,6 +60,7 @@ from app.ui.labels import (
     kind_requirement,
     length,
     localised_value,
+    spoiled_the_exact_body,
     value_line,
     volume,
 )
@@ -876,7 +877,7 @@ class ObjectTree(QWidget):
         # und bekam danach eine Absage — die Sackgasse, die Regel 19 ausschließt
         # und die die Menüleiste seit je vermeidet. Der Satz kommt aus
         # ``labels``, damit beide Menüs dasselbe sagen.
-        reason = kind_requirement(spec, kinds)
+        reason = kind_requirement(spec, kinds, spoiled_the_exact_body(self._result))
         if reason:
             action.setEnabled(False)
             action.setStatusTip(reason)

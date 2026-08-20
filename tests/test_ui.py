@@ -5348,3 +5348,88 @@ def test_the_finder_event_opens_what_it_names(tmp_path: Path, qt_app: QApplicati
 
     assert handled, "das Ereignis wurde durchgereicht statt beantwortet"
     assert opened == [project]
+
+
+def test_a_step_can_be_made_exact_afterwards(window: MainWindow) -> None:
+    """Der Weg, den es nicht gab: erst bauen, dann exakt brauchen.
+
+    Beim Anlegen gab es den Umschalter seit je, beim Nachbearbeiten nicht — und
+    damit war ein Quader, den jemand ohne ihn angelegt hatte, endgültig ein
+    Netz. Sieben Operationen blieben ihm für immer gesperrt, und der einzige
+    Weg dorthin war, den Schritt zu löschen und alles darüber neu zu bauen.
+    """
+    from PySide6.QtWidgets import QCheckBox
+
+    window.session.start_new()
+    window.run_operation(REGISTRY.get("create_box"))
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    dialog.accept()
+    window.session.wait_for_idle()
+    assert [entry.op for entry in window.session.project.document.ops] == ["create_box"]
+
+    op_id = window.session.project.document.ops[0].id
+    window.edit_operation(op_id)
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    exact = next(box for box in dialog.findChildren(QCheckBox) if "B-Rep" in box.text())
+    assert not exact.isChecked(), "der Haken steht auf dem, was im Verlauf steht"
+    assert exact.isVisibleTo(dialog), "und er ist zu sehen, ohne aufzuklappen"
+    exact.setChecked(True)
+    dialog.accept()
+    window.session.wait_for_idle()
+
+    assert [entry.op for entry in window.session.project.document.ops] == ["create_brep_box"]
+    body = next(iter(window.session.last_result.scene.objects.values()))
+    assert body.kind == "brep", "der Körper ist jetzt wirklich exakt"
+
+
+def test_the_edit_dialog_shows_the_toggle_on_an_exact_step_too(window: MainWindow) -> None:
+    """Auch am anderen Ende des Paars: der Haken steht dann gesetzt da.
+
+    Gebaut wird der Dialog aus dem sichtbaren Zwilling, gleich welcher von
+    beiden im Verlauf steht — aus dem exakten heraus gäbe es kein ``anchor``,
+    und wer den Haken abwählte, bekäme einen Dialog ohne die Felder, die er
+    gerade freigeschaltet hat.
+    """
+    from PySide6.QtWidgets import QCheckBox
+
+    window.session.start_new()
+    window.session.apply(
+        "Quader", [OperationDraft(op="create_brep_box", inputs=[], params={"width": 30.0})]
+    )
+    window.session.wait_for_idle()
+
+    op_id = window.session.project.document.ops[0].id
+    window.edit_operation(op_id)
+    dialog = next(child for child in window.findChildren(OperationDialog) if child.isVisible())
+    try:
+        exact = next(box for box in dialog.findChildren(QCheckBox) if "B-Rep" in box.text())
+        assert exact.isChecked(), "der Schritt ist der exakte — der Haken sagt es"
+        assert "anchor" in dialog._editors, "der Dialog kennt die Felder des Netzkerns"
+    finally:
+        dialog.reject()
+
+
+def test_a_locked_tool_names_the_step_that_spoiled_the_exact_body(window: MainWindow) -> None:
+    """Der Hinweis sprach vom Haken beim Anlegen — auch dann, wenn der Körper
+    längst exakt angelegt war und ein späterer Schritt ihn zum Netz gemacht hat.
+
+    In dem Fall hilft kein Haken. Die Auswertung weiß, welcher Schritt es war
+    (``evaluate.exact_became_mesh``), und der Satz nennt ihn.
+    """
+    window.session.start_new()
+    window.session.apply(
+        "Quader", [OperationDraft(op="create_brep_box", inputs=[], params={"width": 40.0})]
+    )
+    window.session.wait_for_idle()
+    body = next(iter(window.session.last_result.scene.objects))
+    window.session.apply(
+        "Bohrung", [OperationDraft(op="drill_hole", inputs=[body], params={"diameter": 5.0})]
+    )
+    window.session.wait_for_idle()
+
+    window.object_tree.select_object(next(iter(window.session.last_result.scene.objects)))
+    window._update_actions()
+    hint = window._op_actions["sketch_pocket"].toolTip()
+
+    assert str(REGISTRY.get("drill_hole").title) in hint, hint
+    assert "zurücknehmen" in hint, "der Satz nennt eine Handlung, die es gibt"

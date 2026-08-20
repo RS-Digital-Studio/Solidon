@@ -720,7 +720,7 @@
   "Diese Objekte gibt es nicht": "There are no such objects",
   "Diese Operation arbeitet nur auf Netzen.": "This operation only works on meshes.",
   "Diese Operation arbeitet nur auf einem exakten Körper.": "This operation only works on an exact solid.",
-  "Diese Operation braucht einen exakten Körper (B-Rep). Beim Anlegen einer Grundform macht der Haken „Exakter Körper“ einen daraus — nachträglich geht das nicht. Auch eine STEP-Datei bringt einen mit.": "This operation needs an exact body (B-Rep). When creating a primitive, the “Exact body” checkbox makes one — this cannot be changed afterwards. A STEP file also brings one along.",
+  "Diese Operation braucht einen exakten Körper (B-Rep). Der Haken „Exakter Körper“ im Dialog der Grundform macht einen daraus — auch nachträglich, über den Schritt im Verlauf. Auch eine STEP-Datei bringt einen mit.": "This operation needs an exact body (B-Rep). The “Exact body” checkbox in the primitive's dialog makes one — afterwards too, via the step in the history. A STEP file also brings one along.",
   "Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.": "This operation needs two objects. Ctrl-click to add the second one.",
   "Diese Operation gibt es im Verlauf nicht.": "This operation is not in the history.",
   "Diese Operation gibt es nicht": "There is no such operation",
@@ -751,6 +751,7 @@
   "Diese Transaktion steht nicht mehr im Verlauf.": "That transaction is no longer in the history.",
   "Diese Werkzeuge stehen in keinem Menü — sie sind die Auskunft, die eine Gegenstelle braucht, bevor sie etwas ändert.": "These tools appear in no menu — they are the information a remote end needs before it changes anything.",
   "Diese Werte gelten für das nächste neue Projekt. Drucker und Material eines offenen Projekts ändert die Druckvorbereitung.": "These apply to the next new project. The printer and material of an open project are changed in the print settings.",
+  "Diese beiden Operationen sind kein Paar — ein Schritt im Verlauf lässt sich nur auf seinen Zwilling umstellen.": "These two operations are not a pair — a step in the history can only be switched to its twin.",
   "Diese Änderung verwirft {count} zurückgenommene Schritte.": "This change discards {count} undone steps.",
   "Diese Änderung ändert die Anzahl der Objekte, und spätere Operationen arbeiten damit. Dafür die Operation zurücknehmen und neu anwenden.": "This change alters how many objects there are, and later operations work with them. For that, undo the operation and apply it again.",
   "Diese ältere Datei enthält einen Wert, der in der neuen Fassung wie ein Verweis auf ausgelagerte Daten aussieht.": "This older file holds a value that looks like a reference to externalised data in the new format.",
@@ -2745,5 +2746,6 @@
   "öffnet den Schritt wieder — die Zahl ändern genügt": "reopens the step — changing the number is enough",
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "skipped — the mesh is too large for this turn, the analysis map in the window can handle it.",
   "— keines —": "— none —",
-  "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” shows what is available."
+  "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” shows what is available.",
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "“{step}” turned the exact body into a mesh — exact-kernel operations only work before it. Undo the steps from there, apply this operation, and redo the rest."
 }
