@@ -379,21 +379,46 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     BRepLib.BuildCurves3d_s(helix)
     spine = BRepBuilderAPI_MakeWire(helix).Wire()
 
-    # Dreiecksprofil am Helixstart, Fuß leicht in den Kern versenkt, Spitze
-    # radial nach außen.
+    # Das Gangprofil am Helixstart: die Flanken laufen von der Fußbreite zur
+    # Spitze, und unter dem Kern steht ein gerader Sockel.
+    #
+    # **Der Sockel ist der Unterschied zwischen einem Bolzen und zwei Teilen.**
+    # Hier saß der Fuß mit einem festen Zehntelmillimeter im Kern, und auf dem
+    # Linux-Runner blieben Kern und Gang danach zwei getrennte Stücke: Die
+    # Vereinigung meldete `components=2` bei einem Volumen, in dem beide
+    # steckten — sie lagen aneinander, ohne sich zu durchdringen. Ein Zehntel
+    # ist bei M6 knapp vier Prozent des Kernradius, und wo die Rechnung anders
+    # rundet, taucht der Fuß stellenweise auf; dann gibt es nichts zu
+    # vereinigen. Auf dieser Maschine kam dasselbe Maß durch — dieselbe
+    # OCCT-Fassung, anders übersetzt.
+    #
+    # **Der Sockel und nicht ein tieferer Fuß.** Den Fuß einfach nach innen zu
+    # schieben, ändert die Flanke: Sie läuft dann über eine längere Strecke zur
+    # selben Spitze, wird flacher, und das Gewinde verliert die Hälfte seines
+    # Gangs (gemessen: 57 statt 106 mm³ bei M10). Der Sockel läuft senkrecht
+    # nach innen, die Flanken bleiben, wo sie waren, und was im Kern liegt,
+    # verschwindet ohnehin in der Vereinigung.
     half = pitch * _THREAD_FOOT_SHARE
-    seat = core_radius - 0.1
-    profile = BRepBuilderAPI_MakeWire(
-        BRepBuilderAPI_MakeEdge(
-            gp_Pnt(seat, 0.0, -pitch - half), gp_Pnt(seat, 0.0, -pitch + half)
-        ).Edge(),
-        BRepBuilderAPI_MakeEdge(
-            gp_Pnt(seat, 0.0, -pitch + half), gp_Pnt(core_radius + ridge, 0.0, -pitch)
-        ).Edge(),
-        BRepBuilderAPI_MakeEdge(
-            gp_Pnt(core_radius + ridge, 0.0, -pitch), gp_Pnt(seat, 0.0, -pitch - half)
-        ).Edge(),
-    ).Wire()
+    foot = core_radius - 0.1
+    seat = core_radius - max(0.1, ridge)
+    corners = (
+        (seat, -pitch - half),
+        (foot, -pitch - half),
+        (core_radius + ridge, -pitch),
+        (foot, -pitch + half),
+        (seat, -pitch + half),
+    )
+    # Kante für Kante statt alle auf einmal: Der Konstruktor nimmt höchstens
+    # vier, und das Profil hat seit dem Sockel fünf.
+    outline = BRepBuilderAPI_MakeWire()
+    for index in range(len(corners)):
+        start, end = corners[index - 1], corners[index]
+        outline.Add(
+            BRepBuilderAPI_MakeEdge(
+                gp_Pnt(start[0], 0.0, start[1]), gp_Pnt(end[0], 0.0, end[1])
+            ).Edge()
+        )
+    profile = outline.Wire()
 
     pipe = BRepOffsetAPI_MakePipeShell(spine)
     pipe.SetMode(True)
