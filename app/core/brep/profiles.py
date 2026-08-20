@@ -445,9 +445,11 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
     solid = _fuzzy_boolean("union", core, ridge)
     if _is_sound_rod(solid):
         return solid
+    _log.info("thread rod: fine union did not close (%s)", _rod_state(solid))
     sewn = _sewn(solid)
     if _is_sound_rod(sewn):
         return sewn
+    _log.info("thread rod: sewing did not close it either (%s)", _rod_state(sewn))
     for ratio in ROD_FUZZ_RATIOS:
         try:
             coarse = _fuzzy_boolean("union", core, ridge, tolerance=pitch * ratio)
@@ -468,6 +470,12 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
         mended = _sewn(coarse)
         if _is_sound_rod(mended):
             return mended
+        _log.info(
+            "thread rod: coarse union at %.4f mm did not close (%s), sewn (%s)",
+            pitch * ratio,
+            _rod_state(coarse),
+            _rod_state(mended),
+        )
         sewn = mended
     return _checked_rod(sewn, major, pitch)
 
@@ -494,6 +502,7 @@ def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
     if not _is_sound_rod(solid):
         solid = _sewn(solid)
     if not _is_sound_rod(solid):
+        _log.warning("thread rod refused: d=%.2f pitch=%.2f (%s)", major, pitch, _rod_state(solid))
         raise GeometryError(
             detail=_(
                 "Aus diesem Durchmesser und dieser Steigung entsteht kein "
@@ -513,6 +522,21 @@ def _is_sound_rod(solid: Solid) -> bool:
     """Ob dieser Bolzen etwas ist, das man weiterreichen kann: Volumen,
     geschlossen, ein Stück."""
     return solid.volume > EPS_GEOM and solid.is_watertight and solid.component_count == 1
+
+
+def _rod_state(solid: Solid) -> str:
+    """Woran eine Stufe gescheitert ist, in einer Zeile fürs Protokoll.
+
+    **Eine Absage ohne Messwert ist eine Absage ohne Diagnose.** Der Bolzen
+    kann auf drei Arten unbrauchbar sein — kein Volumen, offen, zerfallen —,
+    und welche es war, stand nirgends. Auf dieser Maschine ist das
+    gleichgültig, weil hier alles schließt; auf dem Linux-Runner war es der
+    Unterschied zwischen einer Vermutung und einer Ursache.
+    """
+    return (
+        f"volume={solid.volume:.3f} watertight={solid.is_watertight} "
+        f"components={solid.component_count}"
+    )
 
 
 def _sewn(solid: Solid) -> Solid:

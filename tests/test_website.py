@@ -160,6 +160,15 @@ def test_every_file_the_page_refers_to_exists(page: str) -> None:
         target = target.split("#", 1)[0]
         if not target:
             continue
+        # **Die Pakete zählen nicht mit.** ``website/dl/`` steht in
+        # ``.gitignore``: Eine Setup-Datei wiegt hundertsiebzig Megabyte, und
+        # ein Repository ist kein Dateiablage. Auf dem Rechner, der sie gebaut
+        # und hochgeladen hat, liegen sie; in einem frischen Klon nie — und
+        # dort wurde dieser Test rot, sobald der Download-Kasten zum ersten Mal
+        # eine echte Datei nannte. Dass die Datei auf dem Server wirklich
+        # liegt, prüft kein Test, sondern der Abruf nach dem Hochladen.
+        if target.startswith("/dl/"):
+            continue
         # Ein führender Schrägstrich meint die Wurzel der Website, kein
         # Wurzelverzeichnis der Festplatte.
         base = WEBSITE if target.startswith("/") else source.parent
