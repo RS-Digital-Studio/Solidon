@@ -353,3 +353,12 @@ Systemvoraussetzungen, Bruchpunkte, Aussehen).
 
 Unverändert das Ende von `FORTSETZUNG.md`: PyInstaller, Inno Setup 6, der
 Download-Kasten auf der Webseite, die Signatur, das Veröffentlichungsdatum.
+
+## Warum diese Datei im Repository liegt
+
+`/.claude/.state/` steht in `.gitignore`, und das bleibt so — dort arbeiten
+laufende Sitzungen, auch fremde. Drei Dinge dieser Sitzung sind mit `add -f`
+trotzdem hereingekommen (`716d1bb`), weil sie nach der Sitzung mehr wert sind
+als während ihr: diese Datei, `skripte-sitzung-2/` mit den fünfzehn Messskripten
+und ihrer README, und `aufnahmen-sitzung-2/` mit vierzehn Aufnahmen. Der Ordner
+der ersten Sitzung bleibt ungetrackt; er gehört ihr.
