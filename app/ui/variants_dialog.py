@@ -40,6 +40,7 @@ from app.core.scene.project import ProjectSources
 from app.core.scene.variants import MAX_VARIANTS
 from app.i18n import tr
 from app.ui.dialogs import show_error
+from app.ui.leash import WAIT_TIMEOUT_MS
 from app.ui.session import Session
 
 _log = get_logger(__name__)
@@ -260,14 +261,23 @@ class VariantsDialog(QDialog):
         freizugeben ist die Zugriffsverletzung ohne Zeile. Gewartet wird
         deshalb — und weil dieser Dialog modal ist und genau einen Arbeiter
         führt, genügt das hier. Die Halteleine des Hauptfensters
-        (``_hold_until_done``) braucht es für mehrere gleichzeitig.
+        (:class:`~app.ui.leash.WorkerLeash`) braucht es für mehrere
+        gleichzeitig.
+
+        **Mit Frist.** Hier stand ``wait()`` ohne Grenze, und aus
+        :meth:`closeEvent` heraus war das ein Fenster, das beim Schließen
+        einfriert: Der Abbruch greift zwischen zwei Auswertungen, eine einzelne
+        aber läuft zu Ende, und solange sie das tut, steht der
+        Oberflächen-Thread still — ohne Balken, ohne Abbrechen, ohne Zeile.
+        Dieselbe Grenze wie an der Halteleine, und derselbe Umgang damit: nicht
+        erzwingen, sondern aufschreiben.
         """
         worker = self._worker
         self._worker = None
         self.progress.setVisible(False)
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(True)
-        if worker is not None:
-            worker.wait()
+        if worker is not None and not worker.wait(WAIT_TIMEOUT_MS):
+            _log.warning("variant worker did not finish within %d ms", WAIT_TIMEOUT_MS)
 
     def closeEvent(self, event: Any) -> None:  # noqa: N802 - Qt gibt den Namen
         """Ein laufender Arbeiter überlebt seinen Dialog nicht.

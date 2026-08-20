@@ -19,10 +19,20 @@ from typing import Any, Final
 
 from PySide6.QtCore import QObject, QTimer
 
+from app.core.log import get_logger
+
+_log = get_logger(__name__)
+
 #: Wie lange bis zum nächsten Blick, wenn ein fertiger Arbeiter beim ersten
 #: noch lief. Der eine Versuch von früher ließ ihn dauerhaft in der Liste,
 #: und ``wait_all`` lief ihn bei jedem Aufruf mit ab.
 RELEASE_RETRY_MS: Final = 50
+
+#: Wie lange am Fensterende auf einen Arbeiter gewartet wird. Er hat ein
+#: Abbruch-Token und sollte längst zurück sein; die Grenze ist für den Fall,
+#: dass er es nicht ist — ein Fenster, das beim Schließen unbegrenzt wartet,
+#: ist eingefroren und sagt es nicht.
+WAIT_TIMEOUT_MS: Final = 2000
 
 
 class WorkerLeash:
@@ -64,6 +74,12 @@ class WorkerLeash:
         """
         if worker is None or not worker.isRunning():
             return
+        if worker in self._held:
+            # Zweimal zurückgestellt heißt nicht zweimal gehalten: sonst stünde
+            # er doppelt in der Liste, ``_release`` nähme nur das erste
+            # Vorkommen heraus, und an ``finished`` hinge eine zweite Leitung,
+            # die dasselbe noch einmal tut.
+            return
         self._held.append(worker)
         # Nicht beim Signal selbst loslassen — dieselbe Begründung wie in
         # ``hold_until_done``, und derselbe Weg hinaus, damit es nur einen
@@ -83,11 +99,24 @@ class WorkerLeash:
         """Was gerade gehalten wird — für das Warten am Fensterende."""
         return tuple(self._held)
 
-    def wait_all(self, timeout_ms: int = 2000) -> None:
+    def wait_all(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
         """Auf alle gehaltenen Arbeiter warten — am Ende eines Fensters.
 
-        Ein Thread, der sein Fenster überlebt, nimmt den Prozess mit.
+        Ein Thread, der sein Fenster überlebt, nimmt den Prozess mit. Genau
+        dieser Fall stand hier stumm: ``wait`` gibt ``False`` zurück, wenn die
+        Frist reißt, und der Rückgabewert wurde nicht angesehen. Der Abriss kam
+        dann später und ohne Zeile — dieselbe Sorte Absturz, gegen die es
+        dieses Modul überhaupt gibt.
+
+        Erzwungen wird nichts: ``terminate`` bricht einen Thread mitten im
+        Rechnen ab und hinterlässt genau die halb freigegebenen Objekte, die
+        den Absturz ausmachen. Was hier steht, ist die Zeile im Protokoll, die
+        den nächsten Abriss erklärt.
         """
         for worker in self.pending():
-            if worker.isRunning():
-                worker.wait(timeout_ms)
+            if worker.isRunning() and not worker.wait(timeout_ms):
+                _log.warning(
+                    "worker %s did not finish within %d ms — the process may crash on exit",
+                    type(worker).__name__,
+                    timeout_ms,
+                )
