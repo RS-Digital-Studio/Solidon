@@ -248,23 +248,32 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Zwei Macs, keine Doppelung: `macos-15-intel` läuft auf Intel,
+        # Zwei Macs, keine Doppelung: `macos-26-intel` läuft auf Intel,
         # `macos-latest` auf Apple Silicon. PyInstaller packt, was unter ihm
         # liegt — ein auf arm64 gebautes Paket startet auf einem Intel-Mac
         # nicht, und das betrifft jedes Gerät vor 2020.
         #
-        # **Hier stand `macos-13`, und das war kein Runner mehr.** Das Image
-        # ist seit dem 04.12.2025 abgeschaltet; ein Job mit diesem Label wird
-        # nicht abgelehnt, sondern **angenommen und nie zugeteilt** — er stand
-        # am 20.08.2026 siebenundzwanzig Minuten in der Warteschlange und wäre
-        # nach dem Sechs-Stunden-Timeout gestorben. Von außen sieht das aus wie
-        # ein langsamer Lauf, nicht wie ein Fehler, und genau deshalb fiel es
-        # nie auf: Der Job kam vorher nie so weit, weil die Suite schon rot war.
+        # **Drei der vier Labels enden auf `-latest`, und das ist der Punkt.**
+        # Ein `-latest` wandert mit; eine feste Nummer veraltet und stirbt
+        # irgendwann. Hier stand `macos-13`, seit dem 04.12.2025 abgeschaltet,
+        # und ein Job mit einem toten Label wird nicht abgelehnt — er wird
+        # **angenommen und nie zugeteilt.** Am 20.08.2026 stand er
+        # siebenundzwanzig Minuten in der Warteschlange und wäre nach dem
+        # Sechs-Stunden-Timeout gestorben. Von außen sieht das aus wie ein
+        # langsamer Lauf, nicht wie ein Fehler. Aufgefallen ist es erst, als
+        # die Suite zum ersten Mal seit Wochen grün war und der Paketier-Job
+        # überhaupt so weit kam.
         #
-        # Intel ist auf Abruf: Apple hat x86_64 aufgegeben, GitHub trägt es bis
-        # zur Ausmusterung des 15er-Images (Herbst 2027). Fällt es weg, fällt
-        # die Intel-Fassung — dann sagt die Website das, statt sie anzubieten.
-        os: [windows-latest, ubuntu-latest, macos-15-intel, macos-latest]
+        # Für Intel gibt es kein `-latest`: `macos-latest` ist arm64, und
+        # x64 gibt es nur unter seiner Nummer. Diese eine Zeile veraltet also
+        # zwangsläufig und ist die einzige, die **nachgesehen werden muss** —
+        # aktuell ist `macos-26-intel` (GA seit 26.02.2026).
+        #
+        # Und sie hat ein Ablaufdatum: Apple hat x86_64 aufgegeben, GitHub
+        # trägt Intel bis zur Ausmusterung des 26er-Images. Fällt es weg,
+        # fällt die Intel-Fassung — dann sagt die Website das, statt eine
+        # Fassung anzubieten, die niemand mehr baut.
+        os: [windows-latest, ubuntu-latest, macos-26-intel, macos-latest]
     env:
       # Absichtlich auf Job-Ebene: ein Schritt kann den `secrets`-Kontext nicht
       # im eigenen `if` lesen, und sein eigenes `env` dort auch nicht. Dies ist
