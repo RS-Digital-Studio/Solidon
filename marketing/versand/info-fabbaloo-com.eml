@@ -1,0 +1,54 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: info@fabbaloo.com
+Subject:
+ Solidon3D: free demo of a desktop app that makes downloaded STL files fit
+Reply-To: marketing@solidon3d.de
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+Dear Editors,
+
+Over the past months I have developed a desktop application for 3D
+printing: Solidon3D. It closes the gap between "model downloaded" and
+"part fits" =E2=80=94 without having to learn a CAD program first.
+
+Four routes lead to a finished part:
+
+* Adapt =E2=80=94 import someone else's model, repair defects automatically,
+  place a hole, widen a cutout
+* Construct =E2=80=94 rebuild from named dimensions and tested building block=
+s:
+  nut traps, heat-set inserts, threads, hinges, cable grommets
+* Generate =E2=80=94 create a model from text or an image and run it through =
+the
+  repair chain
+* Sculpt =E2=80=94 model organic shapes freely
+
+Nothing about this is final: every step stays in the history as an
+operation and can be changed at any time. Change one dimension and the
+model recomputes =E2=80=94 even twenty steps later. On top of that: layer
+analysis with overhangs, islands and support requirements, tolerances
+taken from material profiles, and export to STL, 3MF and STEP.
+
+The AI sits on top and is optional: you can describe what you want in the
+chat instead of clicking through menus. On request it runs entirely
+locally on your own graphics card =E2=80=94 that needs additional software, b=
+ut no
+data goes to the cloud. Without AI, without an account and without an
+internet connection, everything else remains fully usable. Geometry is
+always computed by code, never by the language model.
+
+You can take a look here: https://solidon3d.de/en/
+
+The current release is a complete demo =E2=80=94 free, no account, usable unt=
+il
+the end of October. Windows 10/11, around 173 MB; the macOS and Linux package=
+s are following.
+
+I am happy to supply print-quality screenshots on request.
+
+Kind regards
+Robert Schneider
+marketing@solidon3d.de
+https://solidon3d.de/en/

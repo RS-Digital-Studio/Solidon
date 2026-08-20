@@ -1,0 +1,62 @@
+From: Solidon3D <marketing@solidon3d.de>
+To: mail@make-magazin.de
+Subject: Solidon3D: kostenlose Demo einer Desktop-Software, die fremde STLs
+ passend macht
+Reply-To: marketing@solidon3d.de
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+Sehr geehrte Redaktion,
+
+ich habe in den letzten Monaten eine Desktop-Anwendung f=C3=BCr den 3D-Druck
+entwickelt: Solidon3D. Sie schlie=C3=9Ft die L=C3=BCcke zwischen =E2=80=9EMod=
+ell
+heruntergeladen=E2=80=9C und =E2=80=9ETeil passt=E2=80=9C =E2=80=94 ohne dass=
+ man daf=C3=BCr ein CAD-Programm
+lernen muss.
+
+Vier Wege f=C3=BChren zum fertigen Teil:
+
+* Anpassen =E2=80=94 fremdes Modell einlesen, Fehler automatisch reparieren,
+  Bohrung setzen, Ausschnitt vergr=C3=B6=C3=9Fern
+* Konstruieren =E2=80=94 aus benannten Ma=C3=9Fen und gepr=C3=BCften Baustein=
+en neu
+  aufbauen: Mutternfallen, Heat-Set-Buchsen, Gewinde, Scharniere,
+  Kabeldurchf=C3=BChrungen
+* Generieren =E2=80=94 aus Text oder Bild ein Modell erzeugen und durch die
+  Reparaturkette schicken
+* Formen =E2=80=94 organische Formen frei ausmodellieren
+
+Dabei ist nichts endg=C3=BCltig: Jeder Schritt bleibt als Operation im Verlauf
+stehen und ist jederzeit =C3=A4nderbar. =C3=84ndert man ein Ma=C3=9F, rechnet=
+ das Modell
+neu =E2=80=94 auch zwanzig Schritte sp=C3=A4ter. Dazu kommen Schichtanalyse m=
+it
+=C3=9Cberh=C3=A4ngen, Inseln und St=C3=BCtzbedarf, Toleranzen aus Materialpro=
+filen sowie
+Export nach STL, 3MF und STEP.
+
+Die KI sitzt obendrauf und ist optional: Man kann im Chat beschreiben, was
+werden soll, statt durch Men=C3=BCs zu klicken. Sie l=C3=A4uft auf Wunsch kom=
+plett
+lokal auf der eigenen Grafikkarte =E2=80=94 daf=C3=BCr ist Zusatzsoftware n=
+=C3=B6tig, es
+gehen aber keine Daten in die Cloud. Ohne KI, ohne Konto und ohne
+Internetverbindung bleibt alles =C3=9Cbrige uneingeschr=C3=A4nkt nutzbar. Die
+Geometrie rechnet ohnehin immer Code, nie das Sprachmodell.
+
+Ansehen kann man sich das hier: https://solidon3d.de
+
+Die aktuelle Fassung ist eine vollst=C3=A4ndige Demo =E2=80=94 kostenlos, ohn=
+e Konto,
+nutzbar bis Ende Oktober. Windows 10/11, rund 173 MB; die Pakete f=C3=BCr mac=
+OS und Linux folgen.
+
+Bildschirmfotos in Druckqualit=C3=A4t stelle ich Ihnen gern zur Verf=C3=BCgun=
+g.
+
+Mit freundlichen Gr=C3=BC=C3=9Fen
+Robert Schneider
+marketing@solidon3d.de
+https://solidon3d.de
