@@ -90,6 +90,22 @@ Wer eine Zahl erhöhen will, tut das mit Absicht und begründet es im Commit.
 Die Werkzeugzeile ist voll: Ein neuntes Werkzeug heißt, dass eines der acht
 kein Werkzeug mehr ist.
 
+**Ein Zeichen trägt allein, wo die Welt sich auf das Bild geeinigt hat — sonst
+steht das Wort daneben.** Die obere Werkzeugleiste zeigt nur Zeichen (Blatt,
+Ordner, Diskette; `ToolButtonIconOnly`), der Skizzeneditor auch (Linie, Kreis,
+Bogen). Die Werkzeugzeile unter dem Viewport bleibt beschriftet: für „Schnitt"
+und „Explosion" gibt es dieses Bild nicht, und ein geratenes Zeichen ist
+schlechter als ein gelesenes Wort. Regel 18 verlangt eine zweite Kodierung
+neben der **Farbe**, nicht eine Beschriftung neben jedem Zeichen.
+
+Wo das Wort vom Knopf verschwindet, muss es an drei Stellen weiterstehen: am
+`QAction` (Barrierefreiheitsbaum), im Tooltip und im `statusTip`. Der
+`statusTip` ist nicht nur Anzeige — `_lock_hint` und `_pick_hint` stellen den
+eigenen Hinweis daraus wieder her, und ein ungesetzter macht den Knopf nach dem
+Freischalten stumm. Beide Helfer ersetzen den Hinweis vollständig; damit am
+unbeschrifteten Knopf nicht ein Bild und ein zusammenhangloser Satz übrig
+bleiben, stellt `_with_name` den Namen voran (Merkmal `wordless` am `QAction`).
+
 **Eine Operation je Handlung, nicht je Variante.** Neun Texturmuster sind ein
 Menüeintrag mit einem Auswahlparameter, nicht neun Einträge. Rechteck aus zwei
 Ecken oder aus Mitte und Maß ist dasselbe Werkzeug mit einem Umschalter. Die
