@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import ftplib
+import ipaddress
 import json
 import ssl
 import subprocess
@@ -43,7 +44,7 @@ ACCESS_FILE = ROOT / ".webserver.json"
 LOCAL_ROOT = ROOT / "website"
 
 #: Was in der Zugangsdatei stehen muss.
-VORLAGE: dict[str, Any] = {
+TEMPLATE: dict[str, Any] = {
     "host": "188.68.47.33",
     "user": "hosting245877",
     "password": "hier eintragen",
@@ -61,7 +62,7 @@ def read_access() -> dict[str, Any]:
             "  Sie ist in .gitignore und bleibt auf dieser Maschine."
         )
     access = json.loads(ACCESS_FILE.read_text(encoding="utf-8"))
-    missing = [key for key in VORLAGE if not str(access.get(key, "")).strip()]
+    missing = [key for key in TEMPLATE if not str(access.get(key, "")).strip()]
     if missing:
         raise SystemExit(f"In {ACCESS_FILE.name} fehlt: {', '.join(missing)}")
     return dict(access)
@@ -71,7 +72,7 @@ def write_template() -> int:
     if ACCESS_FILE.exists():
         print(f"{ACCESS_FILE.name} gibt es schon — sie wird nicht überschrieben.")
         return 1
-    ACCESS_FILE.write_text(json.dumps(VORLAGE, ensure_ascii=False, indent=2) + "\n", "utf-8")
+    ACCESS_FILE.write_text(json.dumps(TEMPLATE, ensure_ascii=False, indent=2) + "\n", "utf-8")
     print(f"{ACCESS_FILE.name} angelegt. Jetzt das Passwort eintragen.")
     print("Sie steht in .gitignore und wird nie mitcommittet.")
     return 0
@@ -174,17 +175,43 @@ def remote_name(path: Path) -> str:
     return path.resolve().relative_to(LOCAL_ROOT).as_posix()
 
 
+def is_address(host: str) -> bool:
+    """Ob der Zugang eine IP nennt statt eines Namens.
+
+    Der Unterschied entscheidet, wie weit die Zertifikatsprüfung reicht: Auf
+    eine IP stellt kein Hoster ein Zertifikat aus, auf seinen Namen schon.
+    """
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return True
+
+
 def connect(access: dict[str, Any]) -> ftplib.FTP_TLS:
-    """Eine Anmeldung. Scheitert sie, endet der Lauf — siehe Modulkopf."""
+    """Eine Anmeldung. Scheitert sie, endet der Lauf — siehe Modulkopf.
+
+    **Das Zertifikat wird geprüft.** Hier stand einmal ``CERT_NONE`` mit der
+    Begründung, damit werde „die Verschlüsselung geprüft, nicht der Name" —
+    das ist nicht, was ``CERT_NONE`` tut. Es prüft gar nichts: Kette, Ablauf
+    und Aussteller fallen mit weg, und ein Zertifikat, das sich jemand selbst
+    ausgestellt hat, wird angenommen wie das echte. Über diese Leitung geht
+    das Passwort zum Produktivserver.
+
+    Was gemeint war, ist ``CERT_REQUIRED`` ohne Namensprüfung — Kette und
+    Ablauf werden geprüft, nur der Name nicht. Nötig ist das allein, solange
+    der Zugang eine IP nennt; steht dort ein Name, bleibt auch die
+    Namensprüfung an, und dann ist die Verbindung vollständig abgesichert.
+    """
+    host = str(access["host"])
     context = ssl.create_default_context()
-    # Das Zertifikat gehört dem Hoster und läuft auf einen anderen Namen als
-    # die IP. Geprüft wird damit die Verschlüsselung, nicht der Name; für den
-    # Dateitransfer in ein eigenes Paket ist das die Abwägung wert.
-    context.check_hostname = False
-    context.verify_mode = ssl.CERT_NONE
+    if is_address(host):
+        context.check_hostname = False
+        print("  Hinweis: Zugang nennt eine IP — Zertifikatsname ungeprüft.")
+        print("           Ein Hostname in .webserver.json schließt die Lücke.")
 
     session = ftplib.FTP_TLS(context=context)
-    session.connect(str(access["host"]), int(access.get("port", 21)), timeout=30)
+    session.connect(host, int(access.get("port", 21)), timeout=30)
     session.login(str(access["user"]), str(access["password"]))
     session.prot_p()
     return session
@@ -216,39 +243,51 @@ def upload(session: ftplib.FTP_TLS, access: dict[str, Any], path: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Dateien aus website/ hochladen.")
     parser.add_argument("files", nargs="*", type=Path, help="Dateien unter website/")
+    # **Der Schalter heißt deutsch, das Feld dahinter englisch.** Die
+    # Kommandozeile ist Oberfläche und spricht die Sprache des Bedieners; was
+    # argparse daraus macht, ist ein Bezeichner und fällt unter die
+    # Sprachregelung. Ohne ``dest`` ist es beides zugleich — und dann hängt es
+    # vom Zufall ab, ob das Wort in der kuratierten Liste von
+    # ``test_language_rules`` steht oder nicht.
     parser.add_argument(
         "--geaendert",
+        dest="changed",
         action="store_true",
         help="alles nehmen, was git unter website/ als geändert führt",
     )
     parser.add_argument(
         "--seit",
+        dest="since",
         metavar="COMMIT",
         default="",
         help="alles nehmen, was sich seit diesem Commit unter website/ geändert hat",
     )
     parser.add_argument(
         "--fehlend",
+        dest="missing",
         action="store_true",
         help="den Serverstand listen und alles laden, was fehlt oder anders groß ist",
     )
     parser.add_argument(
-        "--vorlage", action="store_true", help=f"{ACCESS_FILE.name} anlegen und aufhören"
+        "--vorlage",
+        dest="template",
+        action="store_true",
+        help=f"{ACCESS_FILE.name} anlegen und aufhören",
     )
     arguments = parser.parse_args()
 
-    if arguments.vorlage:
+    if arguments.template:
         return write_template()
 
-    if arguments.seit:
-        files = files_since(arguments.seit)
-    elif arguments.geaendert:
+    if arguments.since:
+        files = files_since(arguments.since)
+    elif arguments.changed:
         files = changed_files()
-    elif arguments.fehlend:
+    elif arguments.missing:
         files = []
     else:
         files = [path.resolve() for path in arguments.files]
-    if not files and not arguments.fehlend:
+    if not files and not arguments.missing:
         print("Nichts zu tun. Dateien nennen, --geaendert, --seit oder --fehlend benutzen.")
         return 1
 
@@ -260,14 +299,29 @@ def main() -> int:
 
     access = read_access()
     root = str(access["root"]).strip("/")
-    session = connect(access)
     try:
-        if arguments.fehlend:
-            oben = remote_index(session, "/" + root)
+        session = connect(access)
+    except ssl.SSLCertVerificationError as problem:
+        # Seit die Prüfung wirklich prüft, kann sie auch scheitern — und dann steht
+        # hier ein Satz statt eines Stapelabzugs. Die drei Wege hinaus in der
+        # Reihenfolge, in der man sie gehen sollte.
+        raise SystemExit(
+            f"Das Zertifikat des Servers wurde abgelehnt: {problem.verify_message or problem}\n"
+            "  Abgelaufen? Beim Hoster erneuern.\n"
+            "  Auf einen anderen Namen ausgestellt? Diesen Namen als 'host' in "
+            f"{ACCESS_FILE.name} eintragen statt der IP.\n"
+            "  Eigene Zertifizierungsstelle? Ihr Wurzelzertifikat gehört in den "
+            "Speicher des Systems, nicht in eine Ausnahme hier."
+        ) from problem
+    try:
+        if arguments.missing:
+            remote = remote_index(session, "/" + root)
             files = [
-                path for path in local_files() if oben.get(remote_name(path)) != path.stat().st_size
+                path
+                for path in local_files()
+                if remote.get(remote_name(path)) != path.stat().st_size
             ]
-            print(f"{len(oben)} Dateien oben, {len(files)} davon fehlen oder weichen ab")
+            print(f"{len(remote)} Dateien oben, {len(files)} davon fehlen oder weichen ab")
             if not files:
                 print("Der Server hat alles.")
                 return 0

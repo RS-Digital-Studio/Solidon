@@ -289,8 +289,8 @@ def test_the_upload_tool_carries_no_password_of_its_own() -> None:
     """Die Vorlage nennt Host und Benutzer, das Passwort trägt sie nicht."""
     import tools.upload_website as upload
 
-    assert upload.VORLAGE["password"] == "hier eintragen"
-    assert "@" not in upload.VORLAGE["host"], "kein Zugang in der Adresse"
+    assert upload.TEMPLATE["password"] == "hier eintragen"
+    assert "@" not in upload.TEMPLATE["host"], "kein Zugang in der Adresse"
 
 
 def test_only_files_below_the_website_go_up(tmp_path: Path) -> None:
