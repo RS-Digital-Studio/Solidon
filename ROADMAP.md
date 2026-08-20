@@ -31,7 +31,6 @@ bekommt einen roten Lauf.
 | Die zwei Dreieckszahl-Grenzen zusammenbringen | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Entscheidung: Merkmale ab 200 000 oder wasserdicht bleiben — beides zugleich geht erst, wenn `decimate` sauber arbeitet |
 | `decimate` zerlegt glatte Körper | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | eine Vereinfachung, die die Topologie hält; die Reparaturkette holt nur die Teilzahl zurück, nicht die Wasserdichtheit |
 | Erscheinungstermin steht zweimal je Startseite | Der Erzeuger steht jetzt auf einer Lizenz, die hier gilt (20.08.2026) | einen ruhigen Tag — bis dahin hält ein Test Zähler und Umschaltung zusammen |
-| Passwort für die Zugriffsstatistik | Preis, und eine Zahl über die Besucher (20.08.2026) | einen Hash in `website/api/.stats-zugang.php` — von Hand gesetzt, einzeln hochgeladen, nicht im Repository |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
@@ -8453,10 +8452,16 @@ konnte sagen, ob die Seiten überhaupt gelesen werden.
       **einem** Versuch angehalten statt ein zweites zu probieren; drei in
       Folge wären bei fail2ban eine gesperrte IP.
 
-### Offen
-
-- [ ] **Die Auswertung hat noch kein Passwort.** `stats.php` bleibt zu, bis
-      neben ihr eine `.stats-zugang.php` mit einem Passwort-Hash liegt; wie
-      sie entsteht, steht im Kopf der Datei. Sie ist in `.gitignore` und wird
-      einzeln hochgeladen. Ohne diesen Schritt antwortet die Seite mit 503 und
-      sagt, was fehlt — offen ist sie nie.
+- [x] **Die Auswertung hat ihr Passwort.** `.stats-zugang.php` liegt auf dem
+      Server, der Hash ist gültig — die Seite antwortet mit dem Formular
+      statt mit „noch nicht eingerichtet", und ein falsches Passwort bekommt
+      „Das war es nicht." statt der Meldung über einen unbrauchbaren Hash.
+      Damit ist die Kette vom Zählruf bis zur Zahl geschlossen.
+- [x] **Basic-Auth war der falsche Weg und ist ersetzt** (`c9288f0`). Das
+      Browserfenster verlangte einen Benutzernamen, den niemand vergeben
+      hatte, und es kam bei jedem Aufruf wieder: Unter CGI oder FastCGI —
+      auf Plesk die Regel — reicht der Webserver den `Authorization`-Kopf
+      nicht an PHP durch, das Passwort kam also nie an. Jetzt ein eigenes
+      Formular mit einem signierten Cookie: kein Sitzungszustand auf dem
+      Server, dreißig Tage gültig, nur unterhalb von `/api/`, und ein
+      Passwortwechsel entwertet jedes ausgestellte Cookie.
