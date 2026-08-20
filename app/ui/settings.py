@@ -70,6 +70,14 @@ class UiSettings:
     """Größe und Lage des Fensters beim letzten Schließen, als Hex aus
     ``saveGeometry``. Leer heißt: erster Start, dann bildschirmfüllend —
     danach findet jeder das Fenster wieder, wie er es verlassen hat."""
+    support_contact: str = ""
+    """Die Rückadresse aus dem Rückmeldungsdialog (§37.2).
+
+    Freiwillig und leer, bis jemand eine einträgt: Ohne sie geht die
+    Rückmeldung trotzdem raus, es kommt nur keine Antwort zurück. Gemerkt
+    wird sie, weil niemand seine Adresse zweimal tippen möchte — und sie
+    steht hier und nicht im Schlüsselbund, weil eine E-Mail-Adresse kein
+    Zugangsdatum ist."""
     first_run_done: bool = False
     shortcut_scheme: str = "default"
     """Welche Kürzelbelegung gilt (Konzept P15, E7). Die Vorgabe ist die des

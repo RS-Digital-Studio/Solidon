@@ -160,6 +160,8 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF", "A", "C4", "FURB", "ICN",
 "app/core/backends/openscad.py" = ["N818"]
 # GenerationFailed sagt, was passiert ist — und das liest der Nutzer (§33.1).
 "app/core/backends/mesh.py" = ["N818"]
+# SendFailed steht in derselben Reihe: was passiert ist, nicht wie es heißt.
+"app/core/support.py" = ["N818"]
 # BRepUnavailable ist ein Zustand wie die beiden oben, §33.1 legt die Namen fest.
 "app/core/brep/kernel.py" = ["N818"]
 # SetupFailed sagt wie GenerationFailed, was passiert ist, und der Satz daneben

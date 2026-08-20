@@ -98,7 +98,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "sein.\n\n"
             "**Was es nicht ist:** kein Slicer — die Druckdatei kommt weiter "
             "aus dem Slicer, Solidon sucht und bewertet nur. Keine Cloud — kein "
-            "Konto, keine Telemetrie, nichts, was den Rechner verlässt.\n\n"
+            "Konto, keine Telemetrie, nichts, was den Rechner von allein verlässt.\n\n"
             "Ohne Netz, ohne Konto und ohne Sprachmodell bleibt alles außer dem "
             "Chat benutzbar."
         ),
@@ -985,7 +985,12 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "vereinfachen — die Dreieckszahl steht im Objektbaum.\n\n"
             "**Grundsätzlich gilt:** Kein Fehler in Solidon endet bei der "
             "Feststellung. Steht keine Handlung dabei, mit der es weitergeht, "
-            "ist das ein Fehler in Solidon und einen Bericht wert."
+            "ist das ein Fehler in Solidon und einen Bericht wert. Der Weg "
+            "dahin ist *Hilfe → Rückmeldung senden*: Bildschirmfoto, "
+            "Protokoll und auf Wunsch die laufende Sitzung gehen mit, die "
+            "Vorschau zeigt vorher alles, und ein Knopf schickt es an den "
+            "Support. Wer nichts aus der Hand geben möchte, legt im selben "
+            "Dialog stattdessen einen Ordner auf dem eigenen Rechner ab."
         ),
     ),
     Page(

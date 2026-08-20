@@ -28,6 +28,33 @@ Namen. Ein Fehler endet nie mit „fehlgeschlagen": erst was nicht ging, dann
 warum, dann was jetzt möglich ist, als anklickbare Handlungen (§2.7). Kein
 Stapelabzug im Nutzerdialog.
 
+## Rückmeldung und Fehlerbericht
+
+Ein Dialog für beides (`app/ui/support_dialog.py`), aufgerufen aus *Hilfe →
+Rückmeldung senden* und aus `report_error` — dort mit `kind=crash`, eigenem
+Titel und der Ansage „Das war ein Programmfehler, nicht Ihre Schuld" (§33.1).
+Zwei Fenster, die zu vier Fünfteln dasselbe taten, waren zwei Menüeinträge zu
+viel.
+
+Vier Zusagen, alle vier tragend:
+
+* **Von allein geht nichts.** `support.send()` hat genau einen Aufrufer, und
+  der hängt am Knopf; `tests/test_support.py` zählt ihn. Was die Grenze zur
+  verbotenen Telemetrie hält, ist nicht die Formulierung, sondern diese Zahl.
+* **Nichts ungesehen.** Die Vorschau zeigt den vollständigen Text der Sendung
+  samt Anhängen und Gesamtgröße, bevor gesendet wird.
+* **Das Bildschirmfoto entsteht vor dem Dialog.** Eine Sekunde später zeigt es
+  den Dialog statt dessen, was darunter schiefging — `window_shot(self)` steht
+  deshalb im Fenster und nicht im Dialog. `grab()` und nicht der Bildschirm:
+  was daneben offen ist, geht den Support nichts an.
+* **Der abgelegte Ordner ist ein Weg, kein Notausgang.** *Bericht ablegen*
+  steht dauerhaft in der Knopfleiste (§37.2); *Selbst per E-Mail senden*
+  erscheint erst, wenn ein Versand scheiterte — ein zweiter Weg neben einem
+  Knopf, der gerade funktioniert, liest sich wie eine Warnung.
+
+Die Sitzung wird für den Anhang **einmal** gespeichert und behalten: zweimal
+hieße, dass die Vorschau eine andere Größe nennt als die Sendung trägt.
+
 ## Fenster
 
 Höchstens drei sichtbare Zonen: links Objektbaum, Parameter und Verlauf als

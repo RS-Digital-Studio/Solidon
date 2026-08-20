@@ -11,20 +11,19 @@ Kommandozeile, sobald sie deklariert ist (§10).
 
 from __future__ import annotations
 
-import platform
 import time
+import traceback
 from collections.abc import Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
 from dataclasses import replace
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QPoint, Qt, QThread, QTimer, QUrl, QUrlQuery, Signal, qVersion
+from PySide6.QtCore import QPoint, Qt, QThread, QTimer, Signal
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
     QCloseEvent,
-    QDesktopServices,
     QDragEnterEvent,
     QDropEvent,
     QKeySequence,
@@ -51,7 +50,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.branding import APP_NAME, APP_VERSION, PROJECT_SUFFIX, SUPPORT_ADDRESS
+from app.branding import APP_NAME, APP_VERSION, PROJECT_SUFFIX
 from app.core import activation, examples, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
@@ -127,6 +126,7 @@ from app.core.scene.project import find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import total as estimate_total
+from app.core.support import KIND_CRASH, KIND_IDEA
 from app.core.tour import tour_for
 from app.core.types import (
     Bone,
@@ -186,7 +186,6 @@ from app.ui.panels import (
 from app.ui.pose_bar import PoseBar
 from app.ui.print_settings_dialog import PrintSettingsDialog, remembered_setup
 from app.ui.remote_server import RemoteServer, WindowBridge
-from app.ui.report_dialog import ErrorReportDialog
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
 from app.ui.session import AskRequest, Session
@@ -197,6 +196,7 @@ from app.ui.sketch_editor import SketchPanel, Surroundings
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
 from app.ui.style import NORMAL, TIGHT, make_primary
+from app.ui.support_dialog import SupportDialog, window_shot
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
 from app.ui.tour import TourPanel
@@ -1705,17 +1705,10 @@ class MainWindow(QMainWindow):
         )
         self._add_action(
             help_menu,
-            tr("Fehlerbericht erstellen …"),
-            None,
-            self.action_report,
-            tr("Einen Ordner mit Protokoll und Umgebung anlegen. Verschickt wird nichts."),
-        )
-        self._add_action(
-            help_menu,
-            tr("Rückmeldung schreiben …"),
+            tr("Rückmeldung senden …"),
             None,
             self.action_feedback,
-            tr("Eine Mail an den Support vorbereiten — Fassung und System stehen schon drin."),
+            tr("Vorschlag, Fehler oder Frage an den Support — auf Wunsch mit Bild und Sitzung."),
         )
         help_menu.addSeparator()
         self._add_action(
@@ -3016,15 +3009,6 @@ class MainWindow(QMainWindow):
         name = catalog.chosen()
         if name:
             self.run_operation(REGISTRY.get(part_op_name(name)))
-
-    def action_report(self) -> None:
-        """§37.2: ein Bericht lässt sich erstellen, ohne dass etwas schiefging."""
-        dialog = ErrorReportDialog(
-            summary=tr("Vom Nutzer angelegter Bericht."),
-            project=self.session.path,
-            parent=self,
-        )
-        dialog.exec()
 
     def action_calibrate(self) -> None:
         """§28.3: gemessene Werte ins Materialprofil, und alles folgt."""
@@ -5679,44 +5663,56 @@ class MainWindow(QMainWindow):
         self.announce(tr("Es wird nach einer neuen Fassung gesehen …"))
         self._check_for_updates()
 
-    def action_feedback(self) -> None:
-        """Eine vorbereitete Mail an den Support — geschickt wird sie vom
-        Nutzer, nicht von hier.
+    def action_feedback(self, kind: str = KIND_IDEA) -> None:
+        """Vorschlag, Fehler oder Frage — geschrieben, gesehen, gesendet (§37.2).
 
-        Dieselbe Haltung wie beim Fehlerbericht: die Anwendung legt etwas
-        bereit und verschickt nichts. Was drinsteht, sieht der Absender vorher
-        — Fassung, System und Qt-Fassung, damit die Antwort nicht mit drei
-        Rückfragen beginnt.
+        Vorher war das eine vorbereitete Mail: Solidon öffnete das
+        Mailprogramm, und ab da lag alles beim Nutzer — Anhänge suchen,
+        Bildschirmfoto selbst machen, Projektdatei finden. Der Weg endete
+        meistens genau dort. Jetzt hängen Bild, Sitzung und Protokoll schon
+        dran, und der Knopf schickt sie los.
+
+        Was das **nicht** ist: Telemetrie. Es geht nichts von allein, es geht
+        nichts unbesehen, und der abgelegte Ordner steht als Weg daneben.
         """
-        body = "\n".join(
-            (
-                "",
-                "",
-                "--",
-                f"{APP_NAME} {APP_VERSION}",
-                f"{platform.system()} {platform.release()}",
-                f"Qt {qVersion()}",
-            )
-        )
-        address = QUrl(f"mailto:{SUPPORT_ADDRESS}")
-        query = QUrlQuery()
-        query.addQueryItem("subject", f"{APP_NAME} {APP_VERSION} — {tr('Rückmeldung')}")
-        query.addQueryItem("body", body)
-        address.setQuery(query)
-        QDesktopServices.openUrl(address)
+        dialog = self._support_dialog(kind)
+        dialog.exec()
+        self._remember_contact(dialog)
 
     def report_error(self, error: BaseException, summary: str = "") -> None:
         """§33.1: ein Programmfehler bekommt ein Berichtsangebot, keinen
         Vorschlag.
+
+        Das Bildschirmfoto entsteht **vor** dem Dialog: eine Sekunde später
+        zeigte es den Fehlerdialog statt dessen, was darunter schiefging.
         """
-        dialog = ErrorReportDialog(
-            summary=summary or tr("Im Programm ist ein unerwarteter Fehler aufgetreten."),
-            detail=str(error),
-            error=error,
-            project=self.session.path,
-            parent=self,
+        dialog = self._support_dialog(
+            KIND_CRASH,
+            detail="\n".join(
+                filter(None, (summary, str(error), "".join(traceback.format_exception(error))))
+            ),
         )
         dialog.exec()
+        self._remember_contact(dialog)
+
+    def _support_dialog(self, kind: str, detail: str = "") -> SupportDialog:
+        """Der Rückmeldungsdialog mit allem, was dieses Fenster beisteuern kann."""
+        return SupportDialog(
+            kind,
+            detail=detail,
+            screenshot=window_shot(self),
+            session=self.session,
+            contact=self.settings.support_contact,
+            parent=self,
+        )
+
+    def _remember_contact(self, dialog: SupportDialog) -> None:
+        """Die Rückadresse überlebt den Dialog — sie zweimal zu tippen ist
+        einmal zu viel."""
+        address = dialog.contact.text().strip()
+        if address and address != self.settings.support_contact:
+            self.settings.support_contact = address
+            save_settings(self.settings)
 
     # --- window -----------------------------------------------------------------
 

@@ -4,6 +4,10 @@ Keine Telemetrie. Nichts verlässt diesen Rechner, außer der Nutzer sendet es
 selbst — das ist der ganze Unterschied zwischen einem Bericht und dem, was der
 Bauplan verbietet.
 
+Dieses Modul **schreibt** den Bericht und schickt ihn nie: Der Ordner ist der
+Weg, der ohne Netz auskommt. Wer ihn stattdessen abschicken will, geht über
+:mod:`app.core.support` — dort hängt der Versand an einem Knopf, und nur dort.
+
 Was der Dialog anbietet, ist ein Ordner mit drei Dingen: dem Fehlertext, den
 Versionsdaten und auf Wunsch dem Projektcontainer. Der Container reproduziert
 den Fehler exakt, samt Startwerten und Rückfallstufen (§16.2) — und er enthält
