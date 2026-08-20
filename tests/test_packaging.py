@@ -27,7 +27,9 @@ Doppelklick.
 from __future__ import annotations
 
 import re
+import shutil
 import struct
+import subprocess
 from pathlib import Path
 from typing import Final
 
@@ -770,3 +772,78 @@ def test_a_manifest_that_no_longer_covers_the_boundary_files_stops_the_build() -
 
     assert name in reason, f"die verstellte Datei wird nicht genannt: {reason!r}"
     assert "build_licence_module" in reason, "ohne den Weg zurück ist es eine Absage"
+
+
+def test_the_linux_installer_never_deletes_a_shared_directory(tmp_path: Path) -> None:
+    """Was das Skript löscht, muss ihm auch gehören.
+
+    Es prüfte ``$TARGET/$NAME`` und löschte ``$TARGET`` — bei den Vorgaben
+    (``/opt/solidon3d``) ist das genau richtig. Nur heißt der Schalter
+    ``--prefix``, und wer den von autotools kennt, gibt ``/usr/local`` an: Der
+    erste Lauf legt dort ``Solidon3D`` ab, der zweite findet es und räumt
+    ``/usr/local`` ab — mit allem, was sonst darin liegt.
+
+    Geprüft wird die Rechnung selbst, nicht ihr Wortlaut: Der Abschnitt wird
+    aus dem erzeugten Skript geschnitten und mit ``sh`` gefahren.
+    """
+    from tools import make_linux_packages as tool
+
+    script = tool.install_script()
+    found = re.search(r"\ncase \"\$TARGET\" in\n  \*/\"\$SHORT\"\).*?\nesac\n", script, re.DOTALL)
+    assert found is not None, (
+        "Das Skript normalisiert das Ziel nicht mehr auf ein eigenes Verzeichnis. "
+        "Ohne diesen Abschnitt trifft das rm -rf darunter, was der Nutzer angibt."
+    )
+
+    shared = tmp_path / "usr-local"
+    (shared / "bin").mkdir(parents=True)
+    (shared / "bin" / "andere-anwendung").write_text("wichtig", encoding="utf-8")
+
+    sh = shutil.which("sh")
+    assert sh is not None, "ohne sh lässt sich ein sh-Skript nicht prüfen"
+    done = subprocess.run(
+        [
+            sh,
+            "-c",
+            f'SHORT=solidon3d\nTARGET="{shared.as_posix()}"\n{found.group(0)}\nprintf %s "$TARGET"',
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert done.returncode == 0, done.stderr
+    assert done.stdout == f"{shared.as_posix()}/solidon3d", (
+        f"„{done.stdout}“ ist das Verzeichnis des Nutzers, nicht das der Anwendung — "
+        "und genau das würde gelöscht."
+    )
+    assert (shared / "bin" / "andere-anwendung").is_file()
+
+
+def test_the_linux_installer_keeps_its_own_directory_as_it_is() -> None:
+    """Die Vorgaben enden schon auf den eigenen Namen und dürfen ihn nicht
+    doppelt bekommen.
+
+    Sonst läge die Anwendung nach dem Fix in ``/opt/solidon3d/solidon3d``, und
+    die Deinstallation räumte an der falschen Stelle.
+    """
+    from tools import make_linux_packages as tool
+
+    script = tool.install_script()
+    found = re.search(r"\ncase \"\$TARGET\" in\n  \*/\"\$SHORT\"\).*?\nesac\n", script, re.DOTALL)
+    assert found is not None
+
+    sh = shutil.which("sh")
+    assert sh is not None
+    done = subprocess.run(
+        [
+            sh,
+            "-c",
+            f'SHORT=solidon3d\nTARGET=/opt/solidon3d\n{found.group(0)}\nprintf %s "$TARGET"',
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert done.stdout == "/opt/solidon3d", f"aus der Vorgabe wurde {done.stdout}"

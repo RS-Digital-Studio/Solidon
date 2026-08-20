@@ -260,6 +260,16 @@ case "$TARGET" in
   *) TARGET="$(pwd)/$TARGET" ;;
 esac
 
+# Das Ziel bekommt immer ein eigenes Verzeichnis. Der Schalter heißt --prefix,
+# und wer das von autotools kennt, gibt /usr/local an — dorthin gehört ein
+# Programm aber nicht als Haufen Dateien, und vor allem darf das rm -rf
+# darunter ein solches Verzeichnis niemals treffen. Endet das Ziel schon auf
+# den eigenen Namen, bleibt es unangetastet; die Vorgaben tun das bereits.
+case "$TARGET" in
+  */"$SHORT") ;;
+  *) TARGET="$TARGET/$SHORT" ;;
+esac
+
 if [ -e "$TARGET" ] && [ ! -d "$TARGET" ]; then
   say "Dort liegt eine Datei, kein Verzeichnis: $TARGET" \
       "That is a file, not a directory: $TARGET"
@@ -268,6 +278,9 @@ fi
 if [ -e "$TARGET/$NAME" ]; then
   say "Eine vorhandene Fassung an dieser Stelle wird ersetzt." \
       "An existing version in this place is being replaced."
+  # Gelöscht wird das Verzeichnis der Anwendung — dass es eines ist, stellt
+  # der Fall oben sicher. Ohne ihn machte ein --prefix /usr/local aus dem
+  # zweiten Lauf ein rm -rf /usr/local, mit allem, was sonst darin liegt.
   rm -rf "$TARGET"
 fi
 
