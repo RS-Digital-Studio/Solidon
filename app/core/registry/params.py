@@ -46,9 +46,13 @@ def param(
     choices: tuple[str, ...] = (),
     placement: ParamPlacement = "front",
     doc: TranslatableText | str | None = None,
+    depends_on: tuple[str, tuple[str | bool, ...]] | None = None,
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
     an einer Stelle.
+
+    ``depends_on`` nennt das Feld, das diesen Parameter wirksam macht, und die
+    Werte, bei denen es das tut — siehe :attr:`app.core.types.ParamSpec.depends_on`.
     """
     metadata = {
         _METADATA_KEY: {
@@ -60,6 +64,7 @@ def param(
             "choices": tuple(choices),
             "placement": placement,
             "doc": doc,
+            "depends_on": depends_on,
         }
     }
     if default is MISSING:
@@ -114,6 +119,7 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 choices=choices,
                 placement=metadata["placement"],
                 doc=metadata["doc"],
+                depends_on=metadata["depends_on"],
             )
         )
     data_class.__param_spec__ = tuple(specs)  # type: ignore[attr-defined]
@@ -241,6 +247,40 @@ _JSON_TYPE: dict[ParamKind, str] = {
 GATHERED_KINDS: Final[frozenset[str]] = frozenset({"sketch", "strokes", "armature"})
 
 
+def condition_text(entry: ParamSpec, schema: tuple[ParamSpec, ...], keys: bool = False) -> str:
+    """Unter welcher Bedingung dieser Parameter wirkt — als Satz, oder leer.
+
+    Für Handbuch und Agent. Der Dialog formuliert es eigenständig („Wirkt nur,
+    wenn …"), weil er einen Tooltip an einem ausgegrauten Feld schreibt und die
+    Auswahlwerte durch ``choice_label`` schickt — dasselbe zweimal zu sagen ist
+    hier kein Drift, denn die **Quelle** ist eine: ``ParamSpec.depends_on``.
+
+    Der Agent braucht sie so dringend wie ein Mensch: Ein Wert, den die
+    Operation im anderen Zweig verwirft, ist ein Zug, der nichts tut, und die
+    Prüfung danach sieht nur, dass sich nichts geändert hat.
+
+    ``keys`` entscheidet über die **Anrede**, nicht über den Inhalt. Ein
+    Handbuchleser sieht „Gilt bei Art = circular." und findet *Art* im Dialog;
+    der Agent kennt kein *Art*, er setzt ``kind`` — und ein Satz, der ihm einen
+    Namen nennt, den seine Werkzeugbeschreibung nicht führt, ist eine
+    Zuordnung, die er raten müsste.
+
+    Sie steht hier und nicht bei den Oberflächen, weil ``json_schema`` sie
+    braucht — und ``surfaces`` importiert dieses Modul, nicht umgekehrt.
+    """
+    if entry.depends_on is None:
+        return ""
+    controller, wanted = entry.depends_on
+    titles = {item.name: str(item.title) for item in schema}
+    name = controller if keys else titles.get(controller, controller)
+    if any(isinstance(value, bool) for value in wanted):
+        if all(value is True for value in wanted):
+            return str(_("Gilt bei angehaktem {field}.")).format(field=name)
+        return str(_("Gilt bei nicht angehaktem {field}.")).format(field=name)
+    shown = ", ".join(str(value) for value in wanted)
+    return str(_("Gilt bei {field} = {value}.")).format(field=name, value=shown)
+
+
 def json_schema(params_class: type[BaseParams]) -> dict[str, Any]:
     """JSON-Schema für die Werkzeugbeschreibung des Agenten (§10, §26.2)."""
     properties: dict[str, Any] = {}
@@ -256,6 +296,13 @@ def json_schema(params_class: type[BaseParams]) -> dict[str, Any]:
         description = str(spec.doc) if spec.doc is not None else str(spec.title)
         if spec.unit:
             description = f"{description} [{spec.unit}]"
+        # Wann dieser Wert überhaupt wirkt (§10). Ohne die Angabe setzte der
+        # Agent einen Wert, den die Operation im anderen Zweig verwirft — ein
+        # Zug, der nichts tut, und die Prüfung danach sieht nur, dass sich
+        # nichts geändert hat.
+        condition = condition_text(spec, params_class.spec(), keys=True)
+        if condition:
+            description = f"{description} {condition}"
         entry["description"] = description
         if spec.minimum is not None:
             entry["minimum"] = spec.minimum

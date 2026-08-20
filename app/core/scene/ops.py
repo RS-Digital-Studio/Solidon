@@ -179,6 +179,7 @@ class PatternParams(BaseParams):
         unit="mm",
         minimum=0.0,
         doc=_("Von Mitte zu Mitte, bei der linearen Art. Kreisförmig zählt der Winkel."),
+        depends_on=("kind", ("linear",)),
     )
     angle: float = param(
         title=_("Winkel"),
@@ -190,6 +191,7 @@ class PatternParams(BaseParams):
             "Über welchen Bogen die Kopien verteilt werden. Volle 360 Grad "
             "schließen den Kranz, ohne dass zwei Kopien aufeinanderfallen."
         ),
+        depends_on=("kind", ("circular",)),
     )
     axis: str = param(
         title=_("Achse"),
@@ -197,24 +199,28 @@ class PatternParams(BaseParams):
         choices=("x", "y", "z"),
         placement="advanced",
         doc=_("Um welche Achse der Kranz läuft. Sie geht durch den Ursprung."),
+        depends_on=("kind", ("circular",)),
     )
     dx: float = param(
         title=_("Richtung X"),
         default=1.0,
         placement="advanced",
         doc=_("Richtung der linearen Reihe. Ohne Richtung lägen alle Kopien übereinander."),
+        depends_on=("kind", ("linear",)),
     )
     dy: float = param(
         title=_("Richtung Y"),
         default=0.0,
         placement="advanced",
         doc=_("Zweite Achse der Richtung — siehe Richtung X."),
+        depends_on=("kind", ("linear",)),
     )
     dz: float = param(
         title=_("Richtung Z"),
         default=0.0,
         placement="advanced",
         doc=_("Dritte Achse der Richtung — siehe Richtung X."),
+        depends_on=("kind", ("linear",)),
     )
 
 

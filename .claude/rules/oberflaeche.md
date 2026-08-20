@@ -121,9 +121,22 @@ Sonderfall im Aufbau. Das Feld wird **grau und begründet**, nicht unsichtbar �
 verschwinden darf nur, was die gewählte Variante gar nicht kennt; wer eine
 Zeile vermisst, sucht sie.
 
-**Von Hand gepflegt heißt gedriftet**, und hier war es gedriftet: Die Tabelle
-hatte einen Eintrag, während fünf Operationen bedingte Felder trugen — *Kopien
-in Reihe oder Kreis* allein sechs. `tests/test_operation_ui.py` liest deshalb
+**Die Angabe steht am Parameter** (`ParamSpec.depends_on`), nicht in einer
+Tabelle der Oberfläche. Als Tabelle hatte sie einen Eintrag, während fünf
+Operationen bedingte Felder trugen — *Kopien in Reihe oder Kreis* allein sechs —
+und sie hatte damit ihre eigene Begründung widerlegt: Dieselbe Auskunft brauchen
+vier Oberflächen, und genau eine hatte sie. Der Dialog graut aus und begründet,
+das Handbuch schreibt die Bedingung in die Parametertabelle, der Agent bekommt
+sie in der Werkzeugbeschreibung, die Kommandozeile liest dasselbe `json_schema`.
+
+**Agent und Mensch bekommen verschiedene Anreden, nicht verschiedene Inhalte.**
+„Gilt bei Art = circular" hilft im Handbuch; der Agent kennt kein *Art*, er
+setzt `kind` (`condition_text(..., keys=True)`). Der Dialog formuliert
+eigenständig („Wirkt nur, wenn …"), weil er einen Tooltip an einem ausgegrauten
+Feld schreibt und die Werte durch `choice_label` schickt — zwei Formulierungen,
+eine Quelle.
+
+`tests/test_operation_ui.py` liest deshalb
 den Quelltext jeder Operation und meldet jeden Parameter, dessen sämtliche
 Lesestellen in einem Zweig über einen Umschalter derselben Operation liegen.
 Zwei Regeln machen die Prüfung brauchbar statt abgeschaltet: **in genau einem
@@ -137,10 +150,9 @@ braucht: einen typtreuen Vergleich — über `str()` hieße der gesuchte Wert
 und einen eigenen Satz. „Wirkt nur, wenn „Gründlich suchen" auf „True" steht"
 ist die Bauart der Anwendung und nicht ihre Bedienung.
 
-Die Tabelle steht mit elf Einträgen **über ihrer eigenen Schwelle** („wächst
-die Liste über eine Handvoll hinaus, gehört die Abhängigkeit an den
-Parameter"). Der Umbau ins Schema ist fällig und in der Arbeitsliste; er
-betrifft `ParamSpec` und die vier Oberflächen, die es lesen.
+Wer eine neue Abhängigkeit deklariert, prüft die **Art** des Umschalters mit:
+Ein Wahrheitswert an einem Aufklappmenü oder ein Auswahlwert an einem Haken wäre
+eine Bedingung, die nie zutrifft — und ein Feld, das immer grau bleibt.
 
 **Ein Sammelparameter bekommt seinen Editor, nicht sein Speicherformat.** Der
 Skizzentext hat ihn seit je, die Stellung eines Skeletts bekam ihn spät:

@@ -31,7 +31,7 @@ from app.core.errors import ValidationError
 from app.core.registry import REGISTRY
 from app.core.scene import OperationDraft
 from app.ui.main_window import MainWindow
-from app.ui.op_dialog import DEPENDENT_FIELDS, OperationDialog
+from app.ui.op_dialog import OperationDialog
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 
@@ -789,13 +789,14 @@ def conditional_fields(spec: Any) -> dict[str, set[str]]:
 
 
 def test_a_field_without_effect_says_so() -> None:
-    """Jede bedingte Wirkung steht in ``DEPENDENT_FIELDS`` (§2.4).
+    """Jede bedingte Wirkung steht am Parameter (``depends_on``, §2.4, §10).
 
     Von Hand gepflegt heißt driften, und hier war es schon gedriftet: Die
-    Tabelle hatte einen Eintrag, während fünf Operationen bedingte Felder
-    trugen — *Kopien in Reihe oder Kreis* allein sechs. Wer auf „kreisförmig"
-    stellte, sah *Abstand* und *Richtung X/Y/Z* bedienbar dastehen, und die
-    Operation übergeht sie im anderen Zweig wortlos.
+    Angabe lag als Tabelle in der Oberfläche und hatte einen Eintrag, während
+    fünf Operationen bedingte Felder trugen — *Kopien in Reihe oder Kreis*
+    allein sechs. Wer auf „kreisförmig" stellte, sah *Abstand* und *Richtung
+    X/Y/Z* bedienbar dastehen, und die Operation übergeht sie im anderen Zweig
+    wortlos.
 
     Gefunden wird das im Quelltext der Operation und nicht durch Nachdenken —
     ``sketch_pocket.depth`` stand in keiner der beiden Durchsichten, die diesem
@@ -805,33 +806,43 @@ def test_a_field_without_effect_says_so() -> None:
     """
     missing: list[str] = []
     for spec in REGISTRY.all():
+        declared = {entry.name for entry in spec.params.spec() if entry.depends_on is not None}
         for name, switches in conditional_fields(spec).items():
-            if (spec.name, name) in DEPENDENT_FIELDS:
+            if name in declared:
                 continue
             missing.append(f"{spec.name}.{name} hängt an {', '.join(sorted(switches))}")
-    assert not missing, "bedingte Felder ohne Eintrag in DEPENDENT_FIELDS:\n" + "\n".join(missing)
+    assert not missing, "bedingte Felder ohne ``depends_on``:\n" + "\n".join(missing)
 
 
-def test_every_dependent_field_exists_and_names_a_real_switch() -> None:
-    """Und andersherum: kein Eintrag zeigt auf etwas, das es nicht gibt.
+def test_every_dependent_field_names_a_real_switch() -> None:
+    """Und andersherum: keine Angabe zeigt auf etwas, das es nicht gibt.
 
-    Ein Eintrag auf einen umbenannten Parameter wäre stumm wirkungslos — die
-    Regel in ``_dependent_fields`` verlangt beide Namen im Dialog und
-    überspringt, was sie nicht findet. Er stünde da und täte nichts, also
-    genau das, was die Tabelle verhindern soll.
+    Ein ``depends_on`` auf einen umbenannten Parameter wäre stumm wirkungslos —
+    die Regel in ``_dependent_fields`` verlangt beide Namen im Dialog und
+    überspringt, was sie nicht findet. Es stünde da und täte nichts, also genau
+    das, was die Angabe verhindern soll.
+
+    Geprüft wird auch die **Art** des Umschalters: Ein Wahrheitswert an einem
+    Aufklappmenü oder ein Auswahlwert an einem Haken wäre eine Bedingung, die
+    nie zutrifft.
     """
-    for (op, field), (controller, wanted) in DEPENDENT_FIELDS.items():
-        spec = REGISTRY.get(op)
+    for spec in REGISTRY.all():
         entries = {entry.name: entry for entry in spec.params.spec()}
-        assert field in entries, f"{op}: kein Parameter {field!r}"
-        assert controller in entries, f"{op}: kein Steuerfeld {controller!r}"
-        assert wanted, f"{op}.{field}: keine Werte genannt"
-        governing = entries[controller]
-        for value in wanted:
-            if isinstance(value, bool):
-                assert governing.kind == "bool", f"{op}.{controller} ist kein Haken"
-            else:
-                assert value in governing.choices, f"{op}.{controller}: {value!r} ist keine Wahl"
+        for entry in spec.params.spec():
+            if entry.depends_on is None:
+                continue
+            controller, wanted = entry.depends_on
+            assert controller in entries, f"{spec.name}: kein Steuerfeld {controller!r}"
+            assert wanted, f"{spec.name}.{entry.name}: keine Werte genannt"
+            assert controller != entry.name, f"{spec.name}.{entry.name} hängt an sich selbst"
+            governing = entries[controller]
+            for value in wanted:
+                if isinstance(value, bool):
+                    assert governing.kind == "bool", f"{spec.name}.{controller} ist kein Haken"
+                else:
+                    assert value in governing.choices, (
+                        f"{spec.name}.{controller}: {value!r} ist keine Wahl"
+                    )
 
 
 def _title_of(spec: Any, name: str) -> str:
@@ -1095,3 +1106,74 @@ def test_looking_at_a_dialog_in_inches_changes_nothing(window: MainWindow) -> No
             if abs(float(back) - float(entry.default)) > 1e-9:
                 verschoben.append(f"{spec.name}.{entry.name}: {entry.default} → {back}")
     assert not verschoben, "Ansehen hat Maße verschoben:\n" + "\n".join(verschoben)
+
+
+def test_the_condition_reaches_every_surface(window: MainWindow) -> None:
+    """Eine Quelle, vier Oberflächen — das war der Grund für den Umbau.
+
+    Die Angabe lag als Tabelle in ``op_dialog`` und hatte damit genau *eine*
+    Oberfläche: den Dialog. Ihr eigener Kopf nannte die Schwelle, ab der sie an
+    den Parameter gehört, und mit elf Einträgen stand sie darüber. Jetzt liest
+    jede Oberfläche ``ParamSpec.depends_on``:
+
+    * der **Dialog** graut das Feld aus und sagt, woran es liegt,
+    * das **Handbuch** schreibt die Bedingung in die Parametertabelle,
+    * der **Agent** bekommt sie in der Werkzeugbeschreibung.
+
+    Die vierte ist die Kommandozeile, und sie liest dasselbe Schema — geprüft
+    wird sie über ``json_schema``, aus dem auch ihre Argumente entstehen.
+
+    Der Agent bekommt dabei **Schlüssel**, der Mensch **Namen**: „Gilt bei Art
+    = circular" hilft im Handbuch und wäre für den Agenten eine Zuordnung, die
+    er raten müsste — er setzt ``kind``.
+    """
+    from app.core.registry import documentation, tool_schemas
+    from app.core.registry.params import condition_text
+
+    conditional = [
+        (spec, entry)
+        for spec in REGISTRY.all()
+        for entry in spec.params.spec()
+        if entry.depends_on is not None
+    ]
+    assert len(conditional) >= 10, f"nur {len(conditional)} bedingte Felder gefunden"
+
+    schemas = {item["name"]: item["input_schema"]["properties"] for item in tool_schemas()}
+    handbook = documentation()
+
+    for spec, entry in conditional:
+        schema = spec.params.spec()
+
+        # Der Agent — mit Schlüsseln, und nur wenn er den Parameter überhaupt
+        # angeboten bekommt (Gestenfelder bekommt er nicht, §26).
+        properties = schemas[spec.name]
+        if entry.name in properties:
+            keyed = condition_text(entry, schema, keys=True)
+            assert keyed, f"{spec.name}.{entry.name}: kein Satz"
+            assert entry.depends_on[0] in keyed, f"{spec.name}.{entry.name}: {keyed}"
+            assert keyed in properties[entry.name]["description"], (
+                f"{spec.name}.{entry.name} fehlt dem Agenten"
+            )
+
+        # Das Handbuch — mit Namen.
+        named = condition_text(entry, schema)
+        assert named in handbook, f"{spec.name}.{entry.name} fehlt im Handbuch: {named}"
+
+        # Und der Dialog: das Feld folgt seinem Umschalter.
+        dialog = OperationDialog(spec, {}, window)
+        if entry.name not in dialog._editors:
+            continue
+        controller, wanted = entry.depends_on
+        switch = dialog._editors[controller]
+        field = dialog._editors[entry.name]
+        if isinstance(wanted[0], bool):
+            switch.setChecked(not wanted[0])
+        else:
+            other = next(
+                value
+                for value in next(item for item in schema if item.name == controller).choices
+                if value not in wanted
+            )
+            switch.setCurrentIndex(switch.findData(other))
+        assert not field.isEnabled(), f"{spec.name}.{entry.name} bleibt bedienbar"
+        assert field.toolTip(), f"{spec.name}.{entry.name}: ausgegraut ohne Begründung"

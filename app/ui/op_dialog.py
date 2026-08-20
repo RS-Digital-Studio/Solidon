@@ -386,55 +386,6 @@ def _why_inactive(field: str, wanted: str | bool) -> str:
     )
 
 
-#: Felder, die nur bei einer bestimmten Wahl im selben Dialog etwas bewirken.
-#:
-#: Schlüssel ist (Operation, Feld), Wert das steuernde Feld und die Werte, bei
-#: denen das Feld wirkt. Die Tabelle steht hier und nicht im Schema, weil sie
-#: eine Aussage über den *Dialog* ist: Der Kern übergeht den Wert ohnehin
-#: schweigend, und dass man ihn dann gar nicht erst eintragen soll, ist eine
-#: Wegbeschreibung — dieselbe Art Angabe wie ``TWIN_TOGGLES``.
-#:
-#: **Die Handvoll ist überschritten**, und das steht hier, statt sich zu
-#: verlaufen: Mit einem Eintrag angelegt, sind es nach der Durchsicht elf —
-#: fünf Operationen, deren Felder je nur für eine Wahl gelten. Die Schwelle war
-#: von Anfang an genannt („wächst die Liste über eine Handvoll hinaus, gehört
-#: die Abhängigkeit an den Parameter"), und sie zu nennen und dann zu übergehen
-#: wäre genau die Sorte Zusage, deren Nachlassen diese Tabelle gerade behoben
-#: hat. Der Umbau ins Schema ist damit fällig, aber er ist eine Entscheidung
-#: über den Vertrag aus §10 und keine Zeile hier: ``ParamSpec`` bekäme ein Feld,
-#: das Dialog, Kommandozeile, Handbuch und Agent gleichermaßen lesen. Bis
-#: dahin ist die Liste vollständig, und ``tests/test_operation_ui.py`` hält sie
-#: dabei — driften kann sie nicht mehr, nur wachsen.
-DEPENDENT_FIELDS: dict[tuple[str, str], tuple[str, tuple[str | bool, ...]]] = {
-    ("displace_image", "at_feature"): ("projection", ("face",)),
-    # *Kopien in Reihe oder Kreis* ist die Operation, an der die Tabelle
-    # auffiel: Sechs ihrer Felder gelten je nur für eine der beiden Arten, und
-    # keines sagte das. Wer auf „kreisförmig“ stellte, sah *Richtung X/Y/Z* und
-    # *Abstand* bedienbar dastehen — die Operation liest sie im Zweig darüber
-    # und übergeht sie hier wortlos. Ihre eigenen ``doc``-Sätze wussten es
-    # längst („Von Mitte zu Mitte, bei der linearen Art“).
-    ("pattern", "dx"): ("kind", ("linear",)),
-    ("pattern", "dy"): ("kind", ("linear",)),
-    ("pattern", "dz"): ("kind", ("linear",)),
-    ("pattern", "spacing"): ("kind", ("linear",)),
-    ("pattern", "axis"): ("kind", ("circular",)),
-    ("pattern", "angle"): ("kind", ("circular",)),
-    # Beim Umlaufen setzt die Operation die Drehung auf null, statt den
-    # eingetragenen Wert zu nehmen — das ist kein Übergehen, das ist ein
-    # Überschreiben, und wortlos war es beides.
-    ("apply_texture", "angle"): ("wrap", ("flat",)),
-    ("apply_texture", "wrap_diameter"): ("wrap", ("cylinder",)),
-    # Der einzige Fall an einem Haken: ohne *Gründlich suchen* läuft die
-    # P2-Heuristik, und die kennt keine Kandidaten. Das Feld steht hinten, der
-    # Haken vorn — wer ihn ausmacht, sieht die Zahl nicht mehr an.
-    ("orient_for_print", "candidates"): ("thorough", (True,)),
-    # Und der Fall, den erst die Prüfung fand: *Tiefe* steht vorn,
-    # *Durchgehend* hinten, und dessen eigener doc-Satz sagt es seit je —
-    # „die Tiefe zählt dann nicht“. Wer den Haken hinten setzt, lässt vorn
-    # ein Feld stehen, das nichts mehr tut.
-    ("sketch_pocket", "depth"): ("through", (False,)),
-}
-
 #: Die drei Achsen einer Knochenstellung, in der Reihenfolge, in der
 #: :func:`app.core.geom.pose.pose_to_text` sie schreibt. Beschriftungen, keine
 #: Schlüssel — deshalb stehen sie hier und nicht im Kern.
@@ -800,10 +751,18 @@ class OperationDialog(QDialog):
         ist nur gerade wirkungslos. Sie wird deshalb grau und sagt, woran es
         liegt, statt zu verschwinden — wer sie verschwinden sähe, suchte sie.
         """
+        # **Aus dem Schema, nicht aus einer Tabelle daneben.** Die Angabe stand
+        # als ``DEPENDENT_FIELDS`` hier im Modul und war mit einem Eintrag
+        # angelegt, während elf Parameter sie brauchten. Ihr eigener Kopf nannte
+        # die Schwelle: über eine Handvoll hinaus gehört die Abhängigkeit an den
+        # Parameter — dort steht sie jetzt (``ParamSpec.depends_on``), und
+        # Handbuch und Agent lesen dieselbe Quelle.
         rules = [
-            (name, controller, wanted)
-            for (op, name), (controller, wanted) in DEPENDENT_FIELDS.items()
-            if op == self.spec.name and name in self._editors and controller in self._editors
+            (entry.name, *entry.depends_on)
+            for entry in self.spec.params.spec()
+            if entry.depends_on is not None
+            and entry.name in self._editors
+            and entry.depends_on[0] in self._editors
         ]
         if not rules:
             return

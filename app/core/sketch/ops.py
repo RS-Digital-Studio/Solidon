@@ -305,6 +305,7 @@ class SketchPocketParams(BaseParams):
         minimum=0.1,
         maximum=1000.0,
         doc=_("Wie tief die Tasche von ihrer Oberkante nach unten schneidet."),
+        depends_on=("through", (False,)),
     )
     through: bool = param(
         title=_("Durchgehend"),

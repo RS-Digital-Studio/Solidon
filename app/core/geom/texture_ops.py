@@ -417,6 +417,7 @@ class TextureParams(BaseParams):
             "Der Durchmesser, um den das Muster läuft. Nur beim Umlaufen. Eine "
             "angeklickte Zylinderfläche trägt ihn selbst ein."
         ),
+        depends_on=("wrap", ("cylinder",)),
     )
     angle: float = param(
         title=_("Drehung"),
@@ -426,6 +427,7 @@ class TextureParams(BaseParams):
         maximum=360.0,
         placement="advanced",
         doc=_("Dreht das Muster in der Fläche."),
+        depends_on=("wrap", ("flat",)),
     )
     x: float = param(
         title=_("Position X"),

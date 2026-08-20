@@ -286,6 +286,7 @@ class DisplaceParams(BaseParams):
             "Auf welche erkannte Fläche das Bild gelegt wird. Nur für „Auf eine Fläche“ — "
             "die anderen Arten brauchen keine."
         ),
+        depends_on=("projection", ("face",)),
     )
     middle: float = param(
         title=_("Nulllage"),

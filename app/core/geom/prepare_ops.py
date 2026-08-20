@@ -971,6 +971,7 @@ class OrientParams(BaseParams):
             "Wie viele Lagen durchgerechnet werden. Mehr findet feinere "
             "Verbesserungen und dauert entsprechend länger."
         ),
+        depends_on=("thorough", (True,)),
     )
 
 

@@ -774,6 +774,23 @@ class ParamSpec:
     choices: tuple[str, ...] = ()
     placement: ParamPlacement = "front"
     doc: TranslatableText | str | None = None
+    depends_on: tuple[str, tuple[str | bool, ...]] | None = None
+    """Der Parameter, der diesen wirksam macht, und die Werte, bei denen er es tut.
+
+    ``("kind", ("linear",))`` heißt: Dieses Feld wirkt nur, solange *Art* auf
+    „linear" steht — sonst übergeht die Operation es. Elf Parameter in fünf
+    Operationen sind so gebaut, und keiner sagte es: Wer bei *Kopien in Reihe
+    oder Kreis* auf „kreisförmig" stellte, sah *Abstand* und *Richtung X/Y/Z*
+    bedienbar dastehen.
+
+    **Im Schema und nicht in der Oberfläche**, weil vier Oberflächen dieselbe
+    Auskunft brauchen: Der Dialog graut das Feld aus und sagt warum, das
+    Handbuch schreibt die Bedingung in die Parametertabelle, und der Agent soll
+    einen Wert nicht setzen, den die Operation gleich verwirft. Als Tabelle in
+    ``op_dialog`` hat genau eine davon sie gehabt.
+
+    Die Werte sind Auswahlwerte oder Wahrheitswerte — ein Haken ist ein
+    Umschalter wie ein Aufklappmenü, nur mit zwei Ständen."""
 
 
 @runtime_checkable

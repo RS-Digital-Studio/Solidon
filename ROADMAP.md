@@ -43,7 +43,7 @@ bekommt einen roten Lauf.
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Dreizehn Felder in den Leisten tragen weiter `mm` | Die Bedienverträge durchgesehen (20.08.2026) | denselben Umbau wie im Dialog, nur ohne Schema — eigene `QDoubleSpinBox` in sechs Leisten |
 | Ein Befund weiß nicht, zu welchem Objekt er gehört | Die Bedienverträge durchgesehen (20.08.2026) | die Auswertung, die Befunde mit den Kennungen ihrer Ausgaben anreichert — gilt dann für jede Operation |
-| Bedingte Wirkung gehört an den Parameter | Die Bedienverträge durchgesehen (20.08.2026) | eine Entscheidung über den Vertrag aus §10 — `ParamSpec` bekäme ein Feld, das alle vier Oberflächen lesen |
+| Kein Test hält das Handbuch an seinem Erzeuger | Die Bedienverträge durchgesehen (20.08.2026) | einen Vergleich des Referenzteils der eingecheckten Seite gegen `documentation()` |
 
 ---
 
@@ -7306,11 +7306,46 @@ ist entprellt.
       Das gilt dann für jeden Befund jeder Operation und nicht nur für diesen —
       dieselbe Sorte Fund wie bei `check_build_volume` in der Durchsicht davor,
       nur eine Ebene tiefer.
-- [ ] **Die bedingte Wirkung gehört an den Parameter, nicht in eine Tabelle
-      der Oberfläche.** Siehe oben: `DEPENDENT_FIELDS` steht mit elf Einträgen
-      über der Schwelle, die ihr eigener Kopf nennt. Betrifft `ParamSpec`,
-      `param()` und die vier Oberflächen, die das Schema lesen — Vertrag aus
-      §10, also mit Ansage.
+- [x] **Die bedingte Wirkung steht jetzt am Parameter** (`ParamSpec.depends_on`).
+      `DEPENDENT_FIELDS` ist weg. Die Tabelle hatte mit elf Einträgen die
+      Schwelle gerissen, die ihr eigener Kopf nannte — und damit ihre eigene
+      Begründung widerlegt: Sie stand in der Oberfläche, „weil sie eine Aussage
+      über den *Dialog*" sei. Das war sie nie. Dieselbe Auskunft brauchen vier
+      Oberflächen, und genau eine hatte sie.
+
+      Jetzt liest jede das Schema: Der **Dialog** graut das Feld aus und sagt,
+      woran es liegt; das **Handbuch** schreibt die Bedingung in die
+      Parametertabelle; der **Agent** bekommt sie in der Werkzeugbeschreibung;
+      die **Kommandozeile** liest dasselbe `json_schema`.
+
+      **Agent und Mensch bekommen verschiedene Anreden, nicht verschiedene
+      Inhalte.** „Gilt bei Art = circular" hilft im Handbuch, denn *Art* steht
+      so im Dialog. Der Agent kennt kein *Art* — er setzt `kind`, und ein Satz
+      mit einem Namen, den seine Werkzeugbeschreibung nicht führt, wäre eine
+      Zuordnung, die er raten müsste. `condition_text(..., keys=True)` macht
+      den Unterschied, und die Quelle bleibt eine.
+
+      Der Dialog formuliert weiter eigenständig („Wirkt nur, wenn …"), weil er
+      einen Tooltip an einem ausgegrauten Feld schreibt und die Auswahlwerte
+      durch `choice_label` schickt. Zwei Formulierungen, eine Quelle — das ist
+      kein Drift.
+
+      Nebenbefund, und er bleibt offen: **Die Drift zwischen `documentation()`
+      und den eingecheckten Handbuchseiten fängt kein Test.** `test_manual.py`
+      prüft die Sprungmarken der Datei, nicht ihren Inhalt gegen den Erzeuger.
+      Wer den Erzeuger ändert und `tools/make_manual.py` nicht laufen lässt,
+      bekommt keinen roten Lauf — bemerkt habe ich es nur, weil ich es selbst
+      war.
+- [ ] **Kein Test hält das erzeugte Handbuch an seinem Erzeuger.**
+      `documentation()` zu ändern und `tools/make_manual.py` nicht laufen zu
+      lassen bleibt unbemerkt: Der Test daneben prüft die Sprungmarken der
+      eingecheckten Seite, nicht ihren Text. Bei dieser Runde ist es
+      aufgefallen, weil der Ändernde und der Prüfende dieselbe Person waren —
+      das ist keine Absicherung, sondern ein Zufall.
+
+      Ein Weg wäre, den Referenzteil der eingecheckten Seite gegen
+      `documentation()` zu halten; die geschriebenen Kapitel bleiben außen vor,
+      denn die stehen in `app/core/manual.py` und nicht im Register.
 
 > **Drei der vier offenen Punkte liegen in Dateien, die am 20.08. eine
 > parallele Sitzung in Arbeit hatte** (`surfaces.py` für den caveat,

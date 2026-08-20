@@ -19,7 +19,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
-from app.core.registry.params import json_schema
+from app.core.registry.params import condition_text, json_schema
 from app.core.registry.registry import (
     CATEGORIES,
     FEATURE_TITLES,
@@ -342,6 +342,22 @@ def documentation(registry: Registry | None = None, category: str = "") -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _meaning_of(entry: ParamSpec, schema: tuple[ParamSpec, ...]) -> str:
+    """Was ein Parameter tut — und wann er es tut.
+
+    Die Bedingung als **eigener Satz** hinter der Bedeutung und nicht in sie
+    hineingeschoben: „Von Mitte zu Mitte, bei der linearen Art" sagt es
+    beiläufig, „Gilt bei Art = linear." sagt es nachprüfbar. Eine siebte Spalte
+    wäre die Alternative gewesen, und eine Tabelle mit sieben Spalten liest
+    niemand.
+    """
+    condition = condition_text(entry, schema)
+    meaning = str(entry.doc or "")
+    if not condition:
+        return meaning
+    return f"{meaning} {condition}".strip()
+
+
 def _span_of(entry: ParamSpec) -> str:
     """Der zulässige Bereich als Text, oder nichts."""
     if entry.choices:
@@ -397,7 +413,7 @@ def parameter_table(parameters: tuple[ParamSpec, ...]) -> list[str]:
         (str(_("Einheit")), lambda entry: entry.unit or ""),
         (str(_("Vorgabe")), _default_of),
         (str(_("Bereich")), _span_of),
-        (str(_("Bedeutung")), lambda entry: str(entry.doc or "")),
+        (str(_("Bedeutung")), lambda entry: _meaning_of(entry, parameters)),
     )
     shown = [
         (title, value)
