@@ -4816,6 +4816,29 @@ den Webserver und die Paketierung. Fünf Funde:
       hier weitersucht, sucht nicht nach einer Referenz, die zu lange hält,
       sondern nach einer Ressource, die beim Anlegen des Threads nicht mehr
       da ist.
+- [ ] **VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr**
+      (20.08.2026). Kein Runner hat eine Grafikkarte; VTK sucht trotzdem einen
+      echten GL-Kontext, bekommt einen emulierten und stirbt darin mit SIGSEGV
+      — auf Linux im geforkten Test, auf Windows ohne Fork, mit und ohne
+      `LIBGL_ALWAYS_SOFTWARE=1`, mal in `test_header`, mal in `test_chat_ui`,
+      mal in `pyvistaqt/plotting.py` selbst. Der Absturz wandert und ist lokal
+      nicht zu sehen: dieselben Dateien laufen auf einer Maschine mit GL in
+      Sekunden grün durch.
+      **Was das anrichtete:** Der Paketier-Job hängt an der Suite, also
+      verhinderte ein Fremdcode-Absturz in einer Umgebung, die niemand
+      benutzt, wochenlang die Auslieferung aller vier Plattformen. Seit heute
+      überspringt die CI die Fensterdateien und sagt es als Warnung im
+      Protokoll. **Das ist eine Lücke, keine Lösung** — wer eine Ansicht
+      ändert, fährt `pytest tests/test_*_ui.py` lokal, bevor er pusht. Sie
+      schließt sich, sobald die Runner GL bekommen oder VTK ohne auskommt.
+- [ ] **Ein Gewinde auf macOS kann als STL Löcher haben** (20.08.2026). Der
+      Körper ist dort in Ordnung — geschlossen, ein Stück, richtiges Volumen,
+      und STEP wie jede weitere Operation tragen ihn. Nur seine Vernetzung
+      ritzt an der Flanke: M6 mit einem Millimeter Steigung bleibt undicht,
+      auch nachdem `_finely_meshed` die Feinheit dreimal halbiert hat. Unter
+      Windows und Linux sind alle Größen dicht. Der Test verlangt die
+      Netzdichte deshalb überall außer auf Darwin; wer den STL-Export dort
+      ernst nimmt, braucht einen anderen Weg als eine feinere Deflection.
 - [ ] **Auf einem fremden Rechner installieren** (ohne Python, ohne venv, ohne
       OpenSCAD/Ollama/ComfyUI). Der Punkt, der erfahrungsgemäß mehr findet als
       alle Tests.

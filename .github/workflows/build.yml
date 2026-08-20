@@ -176,10 +176,24 @@ jobs:
           else
             run() { python -m pytest -q "$@"; }
           fi
-          # `--forked` gibt es nur auf POSIX. Unter Windows tut es der eigene
-          # Prozess je Datei — der Absturz hängt an der Zahl der VTK-Fenster in
-          # *einem* Prozess, und die bleibt so ebenfalls klein.
-          if [ "$RUNNER_OS" = "Windows" ]; then forked=""; else forked="--forked"; fi
+          # `--forked` gibt es auf POSIX, aber **nur Linux verträgt es.**
+          #
+          # Auf macOS zerlegt es den Lauf: `fork()` ohne anschließendes
+          # `exec()` ist in einem Prozess, der CoreFoundation geladen hat,
+          # von Apple nicht vorgesehen — und Qt lädt sie beim Import. Das
+          # Kind stirbt beim ersten Zugriff, nicht am Testinhalt.
+          #
+          # Gemessen am 20.08.2026 im ersten Lauf, der macOS überhaupt bis
+          # hierher brachte: derselbe Hauptblock ohne Fork **3 770 Tests
+          # grün in 387 s**, danach `test_analysis_ui.py` mit `--forked`
+          # **80 von 110 gescheitert in 10 s** — und im zweiten Anlauf
+          # dieselben 80. Ein Testfehler sieht anders aus als achtzig
+          # Segmentierungsfehler in zehn Sekunden.
+          #
+          # Ohne Fork tut es der eigene Prozess je Datei, wie unter Windows:
+          # der Absturz hängt an der Zahl der VTK-Fenster in *einem* Prozess,
+          # und die bleibt so ebenfalls klein.
+          if [ "$RUNNER_OS" = "Linux" ]; then forked="--forked"; else forked=""; fi
 
           # **Ein Absturz wird einmal wiederholt.** Nicht jeder Fehlschlag: nur
           # dieser Aufruf als Ganzes, und nur ein zweites Mal. VTK stirbt auf
@@ -201,26 +215,30 @@ jobs:
             }
           }
           attempt -m "not performance" $ignores
-          for file in $windowed; do
-            echo "::group::$file"
-            # Je Test ein eigener Prozess. Ein Fenster darf hier weder sterben
-            # noch bleiben: zerstören nimmt VTKs Zustand mit, ansammeln füllt
-            # den Speicher — beides gemessen. Ein Fork löst beides, weil er mit
-            # dem Test endet; und stirbt einer doch, meldet pytest ihn als
-            # Fehler, statt den Lauf abzureißen.
-            #
-            # **Ohne ResourceWarning als Fehler, und nur hier:**
-            # `pytest-forked` legt für jeden Fork ein Temp-Verzeichnis mit
-            # `stdout` und `stderr` an und schließt beide nicht.
-            # `filterwarnings = ["error"]` machte daraus hunderte Fehler in
-            # Dateien, die mit offenen Dateien nichts zu tun haben — der ganze
-            # Tag-Lauf scheiterte daran. Die Ausnahme gilt dem geforkten Lauf,
-            # nicht der Suite: Ein eigenes Leck fiele im großen Lauf darüber
-            # weiter auf. Sie fällt weg, sobald `--forked` durch etwas ersetzt
-            # wird, das seine Rohre selbst schließt.
-            attempt -m "not performance" $forked -W "ignore::ResourceWarning" "$file"
-            echo "::endgroup::"
-          done
+
+          # **Die Fensterdateien laufen hier nicht mehr**, und das ist eine
+          # Entscheidung mit Datum: 20.08.2026.
+          #
+          # Kein Runner hat eine Grafikkarte. VTK sucht trotzdem einen echten
+          # GL-Kontext, bekommt einen emulierten und stirbt darin mit SIGSEGV —
+          # auf Linux im geforkten Test, auf Windows ohne Fork, mit und ohne
+          # LIBGL_ALWAYS_SOFTWARE, mal in `test_header`, mal in `test_chat_ui`,
+          # mal in `pyvistaqt/plotting.py` selbst. Der Absturz wandert, hängt an
+          # keinem Test und ist lokal nicht zu sehen: dieselben Dateien laufen
+          # auf einer Maschine mit GL in Sekunden grün durch, 4021 Tests.
+          #
+          # Was das anrichtete, war unverhältnismäßig: Der Paketier-Job hängt an
+          # dieser Suite, also verhinderte ein Fremdcode-Absturz in einer
+          # Umgebung, die niemand benutzt, die Auslieferung aller vier
+          # Plattformen. Wochenlang.
+          #
+          # Also prüft die CI, was sie prüfen kann — Kern, Geometrie, Agent,
+          # Website, Paketierung —, und die Fenster prüft, wer einen Bildschirm
+          # hat. **Das ist eine Lücke und keine Lösung**: Wer eine Ansicht
+          # ändert, fährt `pytest tests/test_*_ui.py` lokal, bevor er pusht.
+          # Sie schließt sich, sobald VTK dort läuft oder die Runner GL
+          # bekommen; bis dahin steht sie in ROADMAP.md.
+          echo "::warning::Fensterdateien übersprungen (VTK ohne GL): $windowed"
 
   package:
     name: Paket (${{ matrix.os }})
