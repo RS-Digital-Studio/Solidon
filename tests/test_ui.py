@@ -9,6 +9,7 @@ Arbeiter.
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from typing import Any, cast
 
@@ -5298,6 +5299,27 @@ def test_options_and_missing_files_are_stepped_over(tmp_path: Path) -> None:
     assert requested_file(["Solidon3D.exe", "-style", "fusion"]) is None
     assert requested_file(["Solidon3D.exe", str(tmp_path / "gibtsnicht.p3d")]) is None
     assert requested_file(["Solidon3D.exe", "--platform", str(project)]) == project
+
+
+def test_a_directory_is_not_reported_as_missing(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ein Verzeichnis ist keine Datei — aber es fehlt auch nicht.
+
+    Beides lief in dieselbe Zeile: „file … does not exist". Wer im Protokoll
+    sucht, warum sein Doppelklick nichts tat, liest genau diese und sucht
+    danach an der falschen Stelle weiter.
+    """
+    from app.ui.app import requested_file
+
+    ordner = tmp_path / "projekte"
+    ordner.mkdir()
+
+    with caplog.at_level(logging.WARNING):
+        assert requested_file(["Solidon3D.exe", str(ordner)]) is None
+
+    assert "does not exist" not in caplog.text, "das Verzeichnis gibt es"
+    assert "not a file" in caplog.text
 
 
 def test_the_finder_event_opens_what_it_names(tmp_path: Path, qt_app: QApplication) -> None:

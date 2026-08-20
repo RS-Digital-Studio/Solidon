@@ -84,7 +84,13 @@ def requested_file(argv: list[str]) -> Path | None:
         candidate = Path(entry)
         if candidate.is_file():
             return candidate
-        _log.warning("file given on the command line does not exist: %s", entry)
+        # Zwei Fälle, zwei Sätze: „gibt es nicht" ist die falsche Auskunft über
+        # ein Verzeichnis, das es sehr wohl gibt — und wer im Protokoll danach
+        # sucht, warum sein Doppelklick nichts tat, liest genau diese Zeile.
+        if candidate.exists():
+            _log.warning("what was given on the command line is not a file: %s", entry)
+        else:
+            _log.warning("file given on the command line does not exist: %s", entry)
     return None
 
 
@@ -107,7 +113,14 @@ class FileOpenListener(QObject):
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
         if isinstance(event, QFileOpenEvent):
-            path = Path(event.file() or event.url().toLocalFile())
+            # Beide Felder können leer sein, und ``Path("")`` ist ``Path(".")``
+            # — die Warnung meldete dann „.", was niemandem sagt, dass gar
+            # nichts mitkam.
+            named = event.file() or event.url().toLocalFile()
+            if not named:
+                _log.warning("open event came without a file")
+                return True
+            path = Path(named)
             if path.is_file():
                 self._window.open_path(path)
             else:
