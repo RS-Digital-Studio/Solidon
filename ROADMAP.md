@@ -43,7 +43,6 @@ bekommt einen roten Lauf.
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | D4 — ViewCube und Ansichtsleiste, wieder offen | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung: Würfel zurück, Leiste bauen oder beides lassen |
-| Die Rückfallebene ohne Grafikkarte (B1 im Erzeugen-Konzept) | Die Konzepte nachrecherchiert (19.08.2026) | eine Entscheidung über den Dienst — sie kostet Geld, nicht Tage |
 
 ---
 
@@ -6926,14 +6925,18 @@ Konzeptdateien und deshalb hier und nicht dort:
       beim PRO.
 - [ ] **D4 steht wieder offen** — ViewCube und Ansichtsleiste, siehe oben. Die
       sieben Kameravoreinstellungen liegen wieder allein im Menü.
-- [ ] **Die Rückfallebene für Rechner ohne Grafikkarte steht in keiner
-      Arbeitsliste** — B1 im Erzeugen-Konzept: ein zweites Mesh-Backend gegen
-      einen gehosteten Dienst (dort fal.ai, 0,16 $ je Lauf), das ohne Umbau in
-      das `MeshBackend`-Protokoll passt. ComfyUI bleibt der erste Weg; das hier
-      ist der für Maschinen ohne 16 GB Grafikspeicher. Am Code geprüft
-      (19.08.2026): Es gibt `ComfyBackend` und eine Test-Attrappe, kein
-      gehostetes Backend — der Modulkopf von `backends/mesh.py` hat die
-      Schnittstelle dafür ausdrücklich vorbereitet.
+- [x] **Die Rückfallebene für Rechner ohne Grafikkarte kommt nicht** —
+      entschieden von Robert am 20.08.2026. B1 im Erzeugen-Konzept schlug ein
+      zweites Mesh-Backend gegen einen gehosteten Dienst vor (dort fal.ai,
+      0,16 $ je Lauf), das ohne Umbau in das `MeshBackend`-Protokoll gepasst
+      hätte. Es wird nicht gebaut.
+
+      **Was das kostet, ausgesprochen:** Weg 3 bleibt an eine Maschine mit
+      Grafikkarte gebunden — ComfyUI und rund 16 GB Grafikspeicher. Wer die
+      nicht hat, hat drei von vier Wegen. Das ist keine Lücke mehr, sondern
+      eine Grenze, und Grenzen gehören auf die Website und nicht in eine
+      Fußnote (dieselbe Auflage wie bei „kein Netzwerkdruck" und
+      „kein macOS-Zertifikat").
 
       **Vorsicht beim Zitieren:** „B1" bezeichnet in drei Konzepten drei
       verschiedene Dinge — hier die Rückfallebene, in `konzept-sindricad.md`

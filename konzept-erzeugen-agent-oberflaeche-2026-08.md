@@ -210,6 +210,17 @@ Backend gegen fal.ai passt ohne Umbau in das `MeshBackend`-Protokoll — zwei
 Aufrufe, kein Zustand, Schlüssel im Schlüsselbund. Das ist P11 aus dem Bauplan,
 nur mit einem fremden Betreiber statt einem eigenen Server.
 
+> **Entschieden: nein** (Robert, 20.08.2026). Der Vorschlag war der letzte
+> offene Punkt dieses Papiers und ist damit keiner mehr — er wird nicht
+> gebaut, und zwar nicht „später", sondern gar nicht.
+>
+> **Was daraus folgt, gehört ausgesprochen:** Weg 3 bleibt an eine Maschine
+> mit Grafikkarte gebunden. Wer keine hat, hat drei von vier Wegen. Das ist
+> ab jetzt eine Grenze und keine Lücke — und Grenzen gehören auf die
+> Download-Seite, wie „kein Netzwerkdruck" und „kein Apple-Zertifikat" auch.
+> Die Kostentabelle darüber bleibt stehen: Sie hat die Entscheidung getragen,
+> und wer sie später umdrehen will, findet dort die Zahlen.
+
 ---
 
 ## Teil 5 — Der lokale Agent: gemessen, nicht vermutet
