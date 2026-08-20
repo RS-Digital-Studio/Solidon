@@ -30,7 +30,6 @@ bekommt einen roten Lauf.
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
-| G-Code an die Maschine senden (B3) | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | eine Bauplanentscheidung, nicht auf Code |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | CI grün sehen und die Artefakte holen | Die Demo bis 30.10.2026 (12.08.2026) | den Segfault in `test_chat_ui.py` auf den Linux-Runnern |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | eine gebaute Datei — hängt an der CI |
@@ -4448,9 +4447,23 @@ bevor die falsche Zahl auf der Seite stand.
       **Notarisierung**. `xcrun notarytool` und `stapler` kommen im Auftrag
       nirgends vor, und ohne sie hält Gatekeeper eine geladene Anwendung auch
       dann an, wenn sie signiert ist.
-- [ ] **G-Code an die Maschine senden** (B3). §28 meint mit „Drucker" das
-      Zurücklesen; Senden wäre eine Bauplanänderung. Wenn, dann über ein
-      offenes Protokoll für viele Maschinen.
+- [x] **G-Code an die Maschine senden** (B3) — **entschieden: nein**, am
+      13.08.2026 (`konzept-wettbewerb-2026-08.md`, Teil 7 Frage 2). §28 meint
+      mit „Drucker" das Zurücklesen; Senden wäre eine Bauplanänderung, und die
+      wird nicht gemacht: **Die Übergabe an den Slicer bleibt die Grenze, die
+      Datei bleibt im Ordner.**
+
+      Der Punkt stand danach noch sieben Tage als offen im Register — eine
+      Entscheidung, die getroffen ist, gehört nicht in eine Arbeitsliste.
+      Geschlossen am 20.08.2026.
+
+      **Was das kostet, gehört dazu:** Der letzte Meter bleibt beim Wettbewerb.
+      Bambu, Orca und Prusa schicken die Datei über das Netz an die Maschine,
+      SindriCAD sogar an den Snapmaker U1; wir hören beim Ordner auf. Der
+      Tausch ist bewusst — eine ganze Klasse von Netzwerkfehlern, die wir nicht
+      stützen müssen — und er gehört ausgesprochen, wie „kein macOS-Zertifikat"
+      und „keine Rückfallebene ohne Grafikkarte" auch. Grenzen stehen auf der
+      Download-Seite, nicht in einer Fußnote.
 - [x] **Weitere Sprachen befüllen.** Erledigt und am 14.08.2026 nachgezählt:
       `app/i18n/locales/` führt fünf Kataloge — `en`, `es`, `fr`, `it`, `pt` —
       mit je **2 426 Einträgen**, keiner leer. Was in einem Katalog wie die
