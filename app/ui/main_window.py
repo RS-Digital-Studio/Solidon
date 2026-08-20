@@ -4749,6 +4749,16 @@ class MainWindow(QMainWindow):
                 values=values,
                 sources=self._source_names(),
                 parameter_values=self._parameter_values(),
+                # **Auch hier die Merkmale**, nicht nur beim Korrigieren einer
+                # bestehenden Operation. Ohne sie baut der Dialog seine
+                # Auswahl aus dem *Wert*, den er mitbekommt: Aus „hole_1"
+                # wurde ein Eintrag „hole_1", und die übrigen Flächen des
+                # Körpers kannte die Liste nicht. Das ist der Hauptweg — das
+                # Kontextmenü am Merkmal (Weg 1) und die Menüs *Erzeugen* und
+                # *Ändern* laufen hier durch —, und der Docstring des
+                # Parameters verspricht die lesbare Bezeichnung. Gemessen:
+                # ohne Liste „hole_1", mit Liste „Bohrung 1 · Ø5,2".
+                features=self._feature_names(),
                 extra=exact,
                 surroundings=self._sketch_surroundings(),
                 images=self._image_names(),

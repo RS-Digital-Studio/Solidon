@@ -1177,3 +1177,29 @@ def test_the_condition_reaches_every_surface(window: MainWindow) -> None:
             switch.setCurrentIndex(switch.findData(other))
         assert not field.isEnabled(), f"{spec.name}.{entry.name} bleibt bedienbar"
         assert field.toolTip(), f"{spec.name}.{entry.name}: ausgegraut ohne Begründung"
+
+
+def test_both_ways_into_a_dialog_carry_the_feature_names(window: MainWindow) -> None:
+    """Auf dem Menüweg zeigte das Feld „An Fläche" die rohe Kennung.
+
+    ``launch_operation`` — der Weg des Kontextmenüs am Merkmal (Weg 1) und der
+    Menüs *Erzeugen* und *Ändern* — baute den Dialog ohne ``features``. Ohne
+    Liste macht der Dialog seine Auswahl aus dem *Wert*: Aus „hole_1" wurde ein
+    Eintrag „hole_1", und die übrigen Flächen des Körpers kannte er nicht.
+    Gemessen: ohne Liste „hole_1", mit Liste „Bohrung 1 · Ø5,2".
+
+    Nur ``edit_operation`` übergab sie. Geprüft wird deshalb nicht der Dialog —
+    den halten die Tests daneben längst fest —, sondern **beide Aufrufer**: Wer
+    einen dritten baut, soll hier auffallen.
+    """
+    import inspect
+
+    from app.ui import main_window as module
+
+    source = inspect.getsource(module.MainWindow)
+    calls = source.count("dialog = OperationDialog(")
+    assert calls >= 2, "es gibt nicht mehr zwei Wege in den Dialog — dieser Test ist veraltet"
+    assert source.count("features=self._feature_names(),") == calls, (
+        f"{calls} Aufrufe von OperationDialog, aber "
+        f"{source.count('features=self._feature_names(),')} übergeben die Merkmale"
+    )
