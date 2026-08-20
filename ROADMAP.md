@@ -6952,6 +6952,15 @@ Konzeptdateien und deshalb hier und nicht dort:
       Deshalb kam auch kein einziger neuer Katalogeintrag dazu.
       `test_the_view_bar_stays_out_of_the_way` hält die Breite fest, damit ein
       Zusatz sie nicht lautlos zurücknimmt.
+
+      **Wo diese Arbeit liegt, sagt ihre Commit-Meldung nicht.** Sie steckt in
+      `051c4cb` („Die Kommandozeile konnte drei Formate nicht, die dasselbe
+      Programm liest") — eine parallel laufende Sitzung hat committet, während
+      die Dateien hier gestaged waren, und sie mitgenommen. Nichts ist verloren
+      und nichts vermischt: Der Baum ist grün, und die Begründung stand ohnehin
+      dort, wo sie hingehört — im Docstring von `ViewBar` und in diesem
+      Abschnitt. Verloren ist nur die Spur im Verlauf, und dieser Satz ersetzt
+      sie. Wer die Ansichtsleiste über `git log` sucht, sucht sonst vergeblich.
 - [x] **Die Rückfallebene für Rechner ohne Grafikkarte kommt nicht** —
       entschieden von Robert am 20.08.2026. B1 im Erzeugen-Konzept schlug ein
       zweites Mesh-Backend gegen einen gehosteten Dienst vor (dort fal.ai,
