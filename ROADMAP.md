@@ -7432,3 +7432,38 @@ mit den Bedienverträgen nichts zu tun hat und alles mit demselben Muster:
 
       Zu tun ist nichts weiter, als `tools/make_manual.py` noch einmal laufen zu
       lassen, wenn der Baum ruhig ist — und dann alles zusammen einzuchecken.
+
+## Die Oberflächendurchsicht, zweiter Teil (20.08.2026)
+
+Fortsetzung von `.claude/.state/oberflaechen-durchsicht-2026-08-19/`. Behoben
+wurde Fund für Fund mit Test und Gegenprobe; hier steht nur, was **bewusst
+offen** bleibt.
+
+### Offen
+
+- [ ] **Nackte Tasten gehören dem Fokus — außer Entf, und das ist zu wenig
+      durchdacht.** `_BARE_KEYS` kennt genau `Del`, und die Begründung dafür
+      („Entf war fensterweit gebunden und löschte den Körper, auch wenn der
+      Fokus im Verlauf lag") gilt wörtlich auch für `Pos1`: Gemessen mit Fokus
+      im Objektbaum und in der Verlaufsliste feuert Pos1 beide Male den
+      Fensterbefehl „Alles einpassen", und der Sprung zur ersten Zeile, den jede
+      Liste unter dieser Taste kennt, findet nicht statt.
+
+      Der naheliegende Fix ist der falsche. „Jede Sequenz ohne Zusatztaste wird
+      widget-gebunden" nähme den Ziffern 1 bis 6 ihre Wirkung, sobald der Fokus
+      in einer Liste steht — und das ist der Normalfall, nicht der Sonderfall.
+      Und an den Viewport zu binden geht gar nicht: er hat `NoFocus`, ein
+      widget-gebundenes Kürzel würde dort nie feuern (nachgemessen). Was bleibt,
+      ist eine Entscheidung je Taste: Welche Bedeutung gewinnt, wenn eine Liste
+      den Fokus hat? Für `Pos1` spricht viel für die Liste, für die Ziffern
+      nichts. Das ist eine Abwägung und kein Einzeiler.
+
+      Der zweite Teil desselben Funds ist behoben: Im **Skizzenmodus** war Pos1
+      doppelt belegt und feuerte deshalb gar nicht (`3bf12fd`).
+
+- [ ] **Der Trennen-Bereich hat laut Fund 130 Punkte Totraum.** Offscreen
+      gemessen kommt das Gegenteil heraus — die Leiste wünscht 146 Pixel und
+      bekommt 24 —, weil Qt dort ohne Schriftfamilien andere Metriken rechnet.
+      Dieser Fund braucht die echte Plattform, so wie die Abbildungen sie
+      brauchen; aus dem Offscreen-Lauf ist er nicht zu entscheiden.
+
