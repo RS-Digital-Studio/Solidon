@@ -122,3 +122,50 @@ def test_the_search_narrows_and_empties_the_grid(qt_app: QApplication) -> None:
 
     catalog.search.setText("")
     assert catalog.list.count() == everything
+
+
+def test_the_catalogue_grows_with_the_screen(qt_app: QApplication) -> None:
+    """Der Katalog zeigte vier Kacheln von neunzehn.
+
+    ``resize(980, 640)`` galt auf jedem Bildschirm: die Rasterfläche war 718 mal
+    562, also vier Kacheln je Zeile und zweieinhalb Zeilen, und der Rollbalken
+    hatte 1240 Pixel Weg. §2.6 will eine Bibliothek, die man *sieht* — vier von
+    neunzehn ist eine Liste, durch die man sich arbeitet.
+
+    Nicht die Kachel ist der Grund: Ihre Breite kommt vom Text, und wer sie
+    schrumpft, schneidet „Schraubenloch mit Senkung" ab. Also wächst der Dialog.
+    Gerechnet wird hier und nicht am Fenster gemessen — offscreen gibt es keinen
+    Bildschirm, und dort gilt die Mindestgröße.
+    """
+    from app.ui.catalog import (
+        CATALOG_MAX,
+        CATALOG_MIN,
+        CATALOG_SHARE,
+        DETAIL_WIDTH,
+        TILE_WIDTH,
+        catalog_size,
+    )
+    from app.ui.style import NORMAL
+
+    assert catalog_size() == CATALOG_MIN, "ohne Bildschirm bleibt es bei der Mindestgröße"
+
+    def for_screen(width: int, height: int) -> tuple[int, int]:
+        return (
+            max(CATALOG_MIN[0], min(int(width * CATALOG_SHARE), CATALOG_MAX[0])),
+            max(CATALOG_MIN[1], min(int(height * CATALOG_SHARE), CATALOG_MAX[1])),
+        )
+
+    def per_row(width: int) -> int:
+        return max(1, (width - DETAIL_WIDTH - 6 * NORMAL) // (TILE_WIDTH + NORMAL))
+
+    small = for_screen(1024, 768)
+    assert small == CATALOG_MIN, "auf einem kleinen Bildschirm bleibt es, wie es war"
+
+    wide = for_screen(1920, 1040)
+    assert wide[0] <= CATALOG_MAX[0] and wide[1] <= CATALOG_MAX[1], "gewachsen wird mit Deckel"
+    assert per_row(wide[0]) >= per_row(CATALOG_MIN[0]) + 2, (
+        f"{per_row(wide[0])} statt {per_row(CATALOG_MIN[0])} Kacheln je Zeile ist keine Änderung"
+    )
+
+    huge = for_screen(5120, 2880)
+    assert huge == CATALOG_MAX, "auf einer Wand hört das Wachsen auf"

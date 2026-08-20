@@ -18,6 +18,7 @@ from PySide6.QtCore import QByteArray, QEvent, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QFont, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QDialogButtonBox,
     QLabel,
@@ -63,6 +64,50 @@ TILE_HEIGHT = 190
 #: Wortkolonne.
 DETAIL_WIDTH = 220
 
+#: Die Größe, mit der der Katalog aufgeht — kleinste und größte.
+#:
+#: Es stand eine Zahl da, 980 mal 640, und die galt auf jedem Bildschirm. Bei
+#: 24 Einträgen zeigte sie **vier Kacheln von neunzehn**: die Rasterfläche war
+#: 718 mal 562, also vier je Zeile und zweieinhalb Zeilen, und der Rollbalken
+#: hatte 1240 Pixel Weg. §2.6 will eine Bibliothek, die man *sieht*; vier von
+#: neunzehn ist eine Liste, durch die man sich arbeitet.
+#:
+#: Die Kachel selbst ist nicht der Grund, obwohl das Verhältnis danach aussieht
+#: (164 mal 190 für ein 96er Bild): Ihre Breite kommt vom Text — „Schraubenloch
+#: mit Senkung" braucht zwei Zeilen —, und ihre Höhe von Bild plus vier
+#: Textzeilen. Wer sie schrumpft, schneidet Titel ab.
+CATALOG_MIN = (980, 640)
+CATALOG_MAX = (1560, 1000)
+
+#: Wie viel vom freien Bildschirm der Katalog nimmt, wenn er darf.
+#:
+#: Vier Fünftel und nicht alles: ein Dialog, der den Bildschirm füllt, sieht
+#: aus wie ein Fenster, das nicht mehr weggeht, und man verliert den Bezug zu
+#: dem, was darunter liegt.
+CATALOG_SHARE = 0.8
+
+
+def catalog_size() -> tuple[int, int]:
+    """Wie groß der Katalog aufgeht — nach dem Bildschirm, nicht nach einer Zahl.
+
+    Auf 1920x1080 kommen 1536 mal 864 heraus: sieben Kacheln je Zeile, vier
+    Zeilen, alle neunzehn auf einen Blick. Auf einem kleinen Bildschirm bleibt
+    es bei den 980 mal 640 von vorher — kleiner darf er nicht werden, sonst
+    passt die Detailspalte nicht mehr neben das Raster.
+
+    Ohne Bildschirm (offscreen, in der Suite) gilt die Mindestgröße. Gefragt
+    wird über ``screens()`` und nicht über ``primaryScreen()``, aus demselben
+    Grund wie in ``splash.py``: die Stubs versprechen dort einen Bildschirm,
+    und eine Prüfung auf ``None`` gilt mypy als unerreichbar.
+    """
+    if not QApplication.screens():
+        return CATALOG_MIN
+    area = QApplication.primaryScreen().availableGeometry()
+    return (
+        max(CATALOG_MIN[0], min(int(area.width() * CATALOG_SHARE), CATALOG_MAX[0])),
+        max(CATALOG_MIN[1], min(int(area.height() * CATALOG_SHARE), CATALOG_MAX[1])),
+    )
+
 
 class PartCatalog(QDialog):
     """Bilder, Beschreibungen und ein Suchfeld."""
@@ -72,7 +117,7 @@ class PartCatalog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle(tr("Bausteine"))
-        self.resize(980, 640)
+        self.resize(*catalog_size())
 
         self.search = QLineEdit(self)
         self.search.setPlaceholderText(tr("Suchen — zum Beispiel Mutter, Magnet, Kabel"))

@@ -564,13 +564,18 @@ def test_a_reference_measure_shows_what_is_there(qt_app: QApplication) -> None:
     In Klammern wie in jedem CAD, damit man es nie mit einem treibenden Maß
     verwechselt — das zeigt seinen Ausdruck, auch wenn der Solver ihn gerade
     nicht erfüllen konnte.
+
+    **Mit Einheit**, und die Erwartung hier stand vorher ohne. „50,00" ist eine
+    Zahl ohne Angabe, wovon; solange alles Millimeter waren, konnte man sie sich
+    denken, aber seit die Anzeigeeinheit umschaltbar ist (§19.3), ist sie eine
+    Vermutung.
     """
     from app.core.types import SketchConstraint
     from app.ui.sketch_editor import measure_label
 
     points = [(0.0, 0.0), (30.0, 40.0)]
     reference = SketchConstraint(kind="reference", targets=(0, 1))
-    assert measure_label(reference, points) == "(50,00)", "drei, vier, fünf"
+    assert measure_label(reference, points) == "(50,00 mm)", "drei, vier, fünf"
 
     driving = SketchConstraint(kind="distance", targets=(0, 1), value="=@width")
     assert measure_label(driving, points) == "=@width", "ein Ausdruck bleibt der Ausdruck"
@@ -828,9 +833,10 @@ def test_a_measure_is_shown_rounded_but_stored_exactly(qt_app: QApplication) -> 
     from app.ui.sketch_editor import readable_measure
 
     # Gelesen wird der gespeicherte Wert — der trägt einen Punkt, weil er eine
-    # Zahl ist. Geschrieben wird in der Schreibweise der Anzeigesprache.
-    assert readable_measure("40.000000000") == "40,00"
-    assert readable_measure("12.345000000") == "12,35"
+    # Zahl ist. Geschrieben wird in der Schreibweise der Anzeigesprache, und mit
+    # Einheit: ohne sie stand in der Bedingungsliste „Abstand 30,00".
+    assert readable_measure("40.000000000") == "40,00 mm"
+    assert readable_measure("12.345000000") == "12,35 mm"
     # Ein Ausdruck bleibt, was er ist: ihn auszurechnen verbärge den Parameter.
     assert readable_measure("=@width / 2") == "=@width / 2"
 
@@ -1792,3 +1798,62 @@ def test_escape_has_exactly_one_owner_in_the_sketch_mode(qt_app: QApplication) -
         assert not window.sketching(), "beim zweiten Mal verlässt es die Skizze"
     finally:
         window.deleteLater()
+
+
+def test_the_constraint_list_says_what_a_constraint_holds(qt_app: QApplication) -> None:
+    """Die Liste zeigte die rohen Punktindizes.
+
+    „Deckung  (1, 2)" ist die flache Nummerierung der Skizze — Elemente der
+    Reihe nach, Punkte je Element der Reihe nach. Lesbar ist sie für niemanden,
+    der sie nicht im Kopf hat; das Aufleuchten beim Überfahren (E19) half nur
+    dem, der die Maus schon dort hatte, und ausgedruckt half es gar nicht.
+
+    Liegen alle Ziele auf einem Element, steht es einmal da: „Waagerecht —
+    Linie 1", nicht „Linie 1 Anfang, Linie 1 Ende". Die Zahlen bleiben im
+    Tooltip, denn wer eine Bedingung aus einer Solvermeldung sucht, sucht nach
+    ihnen.
+    """
+    from app.core.types import Sketch, SketchConstraint, SketchElement
+    from app.ui.sketch_editor import point_names, targets_phrase
+
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (30.0, 0.0))),
+            SketchElement(kind="line", points=((30.0, 0.0), (30.0, 20.0))),
+            SketchElement(kind="circle", points=((10.0, 10.0), (14.0, 10.0))),
+            SketchElement(kind="arc", points=((0.0, 20.0), (5.0, 20.0), (0.0, 25.0))),
+        ),
+    )
+
+    assert point_names(sketch)[:4] == (
+        "Linie 1 Anfang",
+        "Linie 1 Ende",
+        "Linie 2 Anfang",
+        "Linie 2 Ende",
+    )
+    assert point_names(sketch)[4:6] == ("Kreis 1 Mitte", "Kreis 1 Rand")
+    assert point_names(sketch)[6:] == ("Bogen 1 Mitte", "Bogen 1 Anfang", "Bogen 1 Ende")
+
+    assert targets_phrase(sketch, (1, 2)) == "Linie 1 Ende, Linie 2 Anfang"
+    assert targets_phrase(sketch, (0, 1)) == "Linie 1", "ein ganzes Element wird einmal genannt"
+    assert targets_phrase(sketch, (6, 8)) == "Bogen 1 Mitte, Bogen 1 Ende"
+    assert targets_phrase(sketch, (99,)) == "", "ein Index, den es nicht gibt, wird nicht geraten"
+
+    panel = SketchPanel(sketch_to_text(shapes.rectangle(40.0, 20.0)))
+    try:
+        panel.canvas.set_sketch(
+            Sketch(
+                plane="plane:xy",
+                elements=sketch.elements,
+                constraints=(SketchConstraint(kind="coincident", targets=(1, 2)),),
+            )
+        )
+        panel._refresh_constraints()
+        item = panel.constraint_list.item(0)
+        assert item is not None
+        assert "Linie 1 Ende" in item.text(), f"die Liste sagt es nicht: {item.text()!r}"
+        assert "(1, 2)" not in item.text(), "die rohen Nummern stehen weiter im Eintrag"
+        assert "(1, 2)" in item.toolTip(), "und im Tooltip sind sie weg"
+    finally:
+        panel.deleteLater()

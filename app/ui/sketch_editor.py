@@ -18,7 +18,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, Final
 
 from PySide6.QtCore import QPoint, QPointF, Qt, Signal
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QPen, QShortcut
@@ -50,6 +50,7 @@ from app.core.types import (
     SketchConstraint,
     SketchConstraintKind,
     SketchElement,
+    SketchElementKind,
     SolvedSketch,
 )
 from app.core.units import DISPLAY_UNITS, EPS_DISPLAY
@@ -159,6 +160,93 @@ def _constraint_label(kind: SketchConstraintKind) -> str:
     }[kind]
 
 
+#: Wie ein Element heißt und wie seine Punkte heißen (§30.1).
+#:
+#: Die Bedingungsliste zeigte die rohen Punktindizes: „Deckung (1, 2)". Das ist
+#: die flache Nummerierung der Skizze — Elemente der Reihe nach, Punkte je
+#: Element der Reihe nach —, und lesbar ist sie für niemanden, der sie nicht im
+#: Kopf hat. Das Aufleuchten beim Überfahren (E19) half dem, der die Maus
+#: darüber hielt; die Liste selbst blieb eine Zahlenkolonne.
+#:
+#: Die Rollen kommen aus dem Docstring von ``SketchElement``: Linie hat Anfang
+#: und Ende, Kreis Mitte und einen Punkt auf dem Rand, Bogen Mitte, Anfang und
+#: Ende. Der Spline hat keine feste Punktzahl und zählt deshalb durch.
+_ELEMENT_NAMES: Final[dict[SketchElementKind, str]] = {
+    "point": "Punkt",
+    "line": "Linie",
+    "circle": "Kreis",
+    "arc": "Bogen",
+    "spline": "Kurve",
+}
+
+
+def _element_name(kind: SketchElementKind, number: int) -> str:
+    """„Linie 2" — der Name eines Elements, je Art durchgezählt."""
+    return f"{tr(_ELEMENT_NAMES[kind])} {number}"
+
+
+def _point_role(kind: SketchElementKind, position: int) -> str:
+    """Was ein Punkt seinem Element bedeutet — „Anfang", „Mitte", „Rand"."""
+    roles: dict[SketchElementKind, tuple[str, ...]] = {
+        "point": (),
+        "line": (tr("Anfang"), tr("Ende")),
+        "circle": (tr("Mitte"), tr("Rand")),
+        "arc": (tr("Mitte"), tr("Anfang"), tr("Ende")),
+        "spline": (),
+    }
+    known = roles[kind]
+    if position < len(known):
+        return known[position]
+    if kind == "spline":
+        return f"{tr('Punkt')} {position + 1}"
+    return ""
+
+
+def point_names(sketch: Sketch) -> tuple[str, ...]:
+    """Ein Name je Punkt der flachen Punktliste — „Linie 1 Ende".
+
+    Dieselbe Reihenfolge, die ``SketchConstraint.targets`` meint. Ein Punkt für
+    sich trägt keine Rolle: „Punkt 1" ist schon der ganze Name.
+    """
+    names: list[str] = []
+    seen: dict[str, int] = {}
+    for element in sketch.elements:
+        seen[element.kind] = seen.get(element.kind, 0) + 1
+        label = _element_name(element.kind, seen[element.kind])
+        for position in range(len(element.points)):
+            role = _point_role(element.kind, position)
+            names.append(f"{label} {role}".strip() if role else label)
+    return tuple(names)
+
+
+def targets_phrase(sketch: Sketch, targets: tuple[int, ...]) -> str:
+    """Woran eine Bedingung hängt, in Worten statt in Indizes.
+
+    Liegen alle Ziele auf **einem** Element, steht es einmal da: „Waagerecht —
+    Linie 1" und nicht „Linie 1 Anfang, Linie 1 Ende". Das ist der häufigste
+    Fall, und er ist auch der, in dem die Aufzählung nur Platz kostet.
+
+    Ein Index, den die Skizze nicht hat, wird übersprungen statt geraten — er
+    kommt vor, während ein Element gerade entsteht.
+    """
+    names = point_names(sketch)
+    owners: list[int] = []
+    for number, element in enumerate(sketch.elements):
+        owners.extend([number] * len(element.points))
+    inside = [target for target in targets if 0 <= target < len(names)]
+    if not inside:
+        return ""
+    if len({owners[target] for target in inside}) == 1:
+        element = sketch.elements[owners[inside[0]]]
+        if len(inside) == len(element.points) or len(element.points) == 1:
+            # Alle Punkte des Elements, oder ein Element mit nur einem: dann
+            # ist das Element gemeint und nicht eine Auswahl daraus.
+            return (
+                names[inside[0]].rsplit(" ", 1)[0] if len(element.points) > 1 else names[inside[0]]
+            )
+    return ", ".join(names[target] for target in inside)
+
+
 def free_dof_phrase(free: int) -> str:
     """Wie viele Freiheitsgrade offen sind, als Halbsatz hinter einem Trenner.
 
@@ -182,12 +270,17 @@ def readable_measure(expression: str) -> str:
     Ein Ausdruck, der keine reine Zahl ist, bleibt wörtlich stehen —
     ``=@width / 2`` ist die Aussage, und sie auszurechnen würde verbergen,
     dass hier ein Parameter hängt.
+
+    **Mit Einheit.** Hier stand ``with_unit=False``, und in der
+    Bedingungsliste las sich das als „Abstand 30,00" — eine Zahl ohne Angabe,
+    wovon. Solange alles Millimeter waren, konnte man sie sich denken; seit die
+    Anzeigeeinheit umschaltbar ist (§19.3), ist eine nackte Zahl eine Vermutung.
     """
     try:
         value = float(expression)
     except ValueError:
         return expression
-    return length(value, with_unit=False)
+    return length(value)
 
 
 def measure_label(constraint: SketchConstraint, points: list[tuple[float, float]]) -> str:
@@ -205,7 +298,7 @@ def measure_label(constraint: SketchConstraint, points: list[tuple[float, float]
         return ""
     ax, ay = points[first]
     bx, by = points[second]
-    return f"({length(math.hypot(bx - ax, by - ay), with_unit=False)})"
+    return f"({length(math.hypot(bx - ax, by - ay))})"
 
 
 def measured_expression(points: Sequence[tuple[float, float]], targets: tuple[int, ...]) -> str:
@@ -2316,6 +2409,10 @@ class SketchPanel(QWidget):
 
         self.constraint_list = QListWidget(self)
         self.constraint_list.setToolTip(tr("Entf entfernt die gewählte Bedingung."))
+        # Umbruch, weil die Einträge jetzt sagen, woran sie hängen: „Deckung —
+        # Linie 1 Ende, Linie 2 Anfang" ist länger als die 254 Pixel der Spalte,
+        # und ein abgeschnittener Eintrag wäre schlechter als die Zahlen vorher.
+        self.constraint_list.setWordWrap(True)
         # Überfahren lässt die betroffene Geometrie aufleuchten (E19). Ohne das
         # ist „Deckung (1, 2)" nicht lesbar: welche zwei Punkte das sind, weiß
         # nur, wer die flache Nummerierung im Kopf hat.
@@ -2568,8 +2665,17 @@ class SketchPanel(QWidget):
             shown = measure_label(entry, self.canvas.points())
             if shown:
                 label = f"{label} {shown}"
-            targets = ", ".join(str(target) for target in entry.targets)
-            text = f"{label}  ({targets})"
+            # **Woran sie hängt, in Worten.** Hier stand die rohe
+            # Punktnummerierung — „Deckung  (1, 2)" —, und die ist die flache
+            # Liste der Skizze: Elemente der Reihe nach, Punkte je Element der
+            # Reihe nach. Lesbar war sie für niemanden, der sie nicht im Kopf
+            # hat; das Aufleuchten beim Überfahren (E19) half nur dem, der die
+            # Maus schon dort hatte. Die Nummern stehen weiter im Tooltip: wer
+            # eine Bedingung aus einer Fehlermeldung des Solvers sucht, sucht
+            # nach ihnen.
+            where = targets_phrase(self.canvas.sketch, entry.targets)
+            text = f"{label} — {where}" if where else label
+            numbers = ", ".join(str(target) for target in entry.targets)
             if index in conflict:
                 # Das Zeichen trägt die Aussage, die Farbe verstärkt sie nur
                 # (Regel 18) — und die Liste ist einfarbig, sobald jemand sie
@@ -2577,6 +2683,7 @@ class SketchPanel(QWidget):
                 text = f"{CONFLICT_MARKER} {text}"
             item = QListWidgetItem(text)
             item.setData(Qt.ItemDataRole.UserRole, entry.targets)
+            item.setToolTip(f"{text}  ({numbers})")
             if index in conflict:
                 item.setForeground(QColor(text_colour("warning", self._surface())))
                 item.setToolTip(
