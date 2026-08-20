@@ -42,6 +42,12 @@ SITE = "https://solidon3d.de/"
 _INDEX = re.compile(r"(^|/)index\.html$")
 
 _NOINDEX = re.compile(r'<meta name="robots" content="[^"]*noindex')
+
+#: Der Nachweis für die Google Search Console. Es ist eine Datei mit einer
+#: Zeile, kein Dokument: sie muss unter ihrem Namen erreichbar sein und sonst
+#: nichts. In der Sitemap wäre sie eine angebotene Seite ohne Inhalt — und
+#: genau darüber meldet die Search Console dann einen Fehler.
+_VERIFICATION = re.compile(r"^google[0-9a-f]+\.html$")
 _ALTERNATE = re.compile(r'<link rel="alternate" hreflang="([^"]+)" href="([^"]+)">')
 _TITLE = re.compile(r"<title>(.*?)</title>", re.DOTALL)
 _DESCRIPTION = re.compile(r'<meta name="description" content="([^"]*)"')
@@ -69,8 +75,13 @@ def page_url(path: Path) -> str:
 
 
 def pages() -> list[Path]:
-    """Alle ausgelieferten Seiten, oberste Ebene und Sprachordner."""
-    return sorted([*WEBSITE.glob("*.html"), *WEBSITE.glob("*/*.html")])
+    """Alle ausgelieferten Seiten, oberste Ebene und Sprachordner.
+
+    Ohne den Nachweis der Search Console: der liegt zwar als ``.html`` dort,
+    ist aber eine Zeile Text und keine Seite.
+    """
+    found = [*WEBSITE.glob("*.html"), *WEBSITE.glob("*/*.html")]
+    return sorted(p for p in found if not _VERIFICATION.match(p.name))
 
 
 def listed_pages() -> list[Path]:

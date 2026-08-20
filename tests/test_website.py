@@ -465,9 +465,17 @@ def test_every_page_with_a_countdown_loads_the_script_that_runs_it() -> None:
 # --------------------------------------------------------------------------
 
 
+#: Der Nachweis für die Search Console — eine Zeile Text mit der Endung
+#: ``.html``, keine Seite. Er muss unter seinem Namen erreichbar sein und
+#: gehört genau deshalb weder in die Sitemap noch in eine Prüfung, die
+#: Seiten meint.
+VERIFICATION = re.compile(r"^google[0-9a-f]+\.html$")
+
+
 def _delivered_pages() -> list[Path]:
     """Jede ausgelieferte Seite: oberste Ebene und Sprachordner."""
-    return sorted([*WEBSITE.glob("*.html"), *WEBSITE.glob("*/*.html")])
+    found = [*WEBSITE.glob("*.html"), *WEBSITE.glob("*/*.html")]
+    return sorted(p for p in found if not VERIFICATION.match(p.name))
 
 
 def _address(page: Path) -> str:
