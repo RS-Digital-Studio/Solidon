@@ -9,9 +9,19 @@ from __future__ import annotations
 
 import sys
 from collections.abc import Callable
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from PySide6.QtCore import QByteArray, QCoreApplication, QLibraryInfo, QLocale, QTranslator
+from PySide6.QtCore import (
+    QByteArray,
+    QCoreApplication,
+    QEvent,
+    QLibraryInfo,
+    QLocale,
+    QObject,
+    QTranslator,
+)
+from PySide6.QtGui import QFileOpenEvent
 from PySide6.QtWidgets import QApplication
 
 from app.branding import APP_ID, APP_NAME, APP_VERSION
@@ -52,6 +62,58 @@ def install_qt_translations(application: QCoreApplication, language: str) -> QTr
         return None
     application.installTranslator(translator)
     return translator
+
+
+def requested_file(argv: list[str]) -> Path | None:
+    """Die Datei, die beim Start mitkam — oder ``None``.
+
+    Unter Windows und Linux ist das der ganze Mechanismus hinter einer
+    Dateizuordnung: Ein Doppelklick auf ein Projekt startet die Anwendung mit
+    dessen Pfad als Argument. Bis hierher wurde er an ``QApplication``
+    weitergereicht und dort verworfen — die Zuordnung, die der Menüeintrag
+    unter Linux längst versprach, ging ins Leere.
+
+    Genommen wird die erste Angabe, die keine Option ist und die es gibt. Was
+    es nicht gibt, wird protokolliert und übergangen: Ein leeres Fenster ist
+    die bessere Antwort auf einen Tippfehler als eine Fehlermeldung vor dem
+    ersten Blick auf das Programm.
+    """
+    for entry in argv[1:]:
+        if entry.startswith("-"):
+            continue
+        candidate = Path(entry)
+        if candidate.is_file():
+            return candidate
+        _log.warning("file given on the command line does not exist: %s", entry)
+    return None
+
+
+class FileOpenListener(QObject):
+    """Öffnet, was der Finder der laufenden Anwendung zuschickt.
+
+    **Nur macOS schickt es.** Dort startet ein Doppelklick keine zweite
+    Anwendung mit einem Argument, sondern sendet der schon laufenden ein
+    ``QFileOpenEvent`` — auch dann, wenn sie gerade erst durch diesen
+    Doppelklick gestartet wurde. Ohne diesen Filter bliebe die Zuordnung im
+    Bundle ein Eintrag ohne Wirkung, und der Nutzer sähe ein leeres Fenster.
+
+    Auf den anderen Systemen kostet der Filter einen Vergleich je Ereignis und
+    tut sonst nichts.
+    """
+
+    def __init__(self, window: MainWindow, parent: QObject | None = None) -> None:
+        super().__init__(parent)
+        self._window = window
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
+        if isinstance(event, QFileOpenEvent):
+            path = Path(event.file() or event.url().toLocalFile())
+            if path.is_file():
+                self._window.open_path(path)
+            else:
+                _log.warning("open event names something that is not a file: %s", path)
+            return True
+        return super().eventFilter(watched, event)
 
 
 def build_application(
@@ -188,6 +250,18 @@ def main(argv: list[str] | None = None) -> int:
     # Der erste Start und der Update-Hinweis gehören hinter das sichtbare
     # Fenster (§38) — und nur hierher, wo wirklich ein Mensch hinsieht.
     window.start()
+
+    # Was per Doppelklick oder von der Kommandozeile mitkam, wird geöffnet —
+    # nach ``start()``, damit der erste Start seine Fragen zuerst stellt.
+    opening = requested_file(argv or sys.argv)
+    if opening is not None:
+        window.open_path(opening)
+    # Auf dem Mac kommt die Datei nicht über argv: Der Finder schickt der
+    # laufenden Anwendung ein Ereignis, und ohne diesen Filter fällt es unter
+    # den Tisch — die Zuordnung im Bundle wäre dort ein Versprechen ohne
+    # Wirkung.
+    application.installEventFilter(FileOpenListener(window, application))
+
     _log.info("%s %s started", APP_NAME, APP_VERSION)
     return int(application.exec())
 

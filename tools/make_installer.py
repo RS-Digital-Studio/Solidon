@@ -20,7 +20,14 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.branding import APP_ID, APP_NAME, APP_VENDOR, APP_VERSION, WEBSITE_URL
+from app.branding import (
+    APP_ID,
+    APP_NAME,
+    APP_VENDOR,
+    APP_VERSION,
+    PROJECT_SUFFIX,
+    WEBSITE_URL,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_DIR = ROOT / "dist" / APP_NAME
@@ -28,9 +35,15 @@ OUTPUT_DIR = ROOT / "dist"
 SCRIPT = ROOT / "packaging" / "solidon3d.iss"
 
 #: Wo ISCC üblicherweise liegt, wenn es nicht auf dem PATH steht.
+#:
+#: Der dritte Ort ist der, an dem ``winget install JRSoftware.InnoSetup``
+#: landet: ins Nutzerprofil, ohne Adminrechte und ohne PATH-Eintrag. Ohne ihn
+#: meldet dieses Werkzeug „nicht gefunden" neben einer Installation, die
+#: einwandfrei daliegt.
 COMPILER_CANDIDATES = (
     Path("C:/Program Files (x86)/Inno Setup 6/ISCC.exe"),
     Path("C:/Program Files/Inno Setup 6/ISCC.exe"),
+    Path.home() / "AppData/Local/Programs/Inno Setup 6/ISCC.exe",
 )
 
 
@@ -104,6 +117,10 @@ def main() -> int:
             f"/DAppVendor={APP_VENDOR}",
             f"/DAppId={APP_ID}",
             f"/DAppUrl={WEBSITE_URL}",
+            # Die Endung der Projektdatei — der Installer trägt sie in die
+            # Registrierung ein. Auch sie steht in app/branding.py und
+            # nirgends sonst.
+            f"/DProjectSuffix={PROJECT_SUFFIX}",
             f"/DSourceDir={SOURCE_DIR}",
             f"/DOutputDir={OUTPUT_DIR}",
             f"/DLicenseFile={_licence_file()}",

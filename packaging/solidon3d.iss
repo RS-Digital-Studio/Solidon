@@ -70,8 +70,40 @@ Name: "french"; MessagesFile: "compiler:Languages\French.isl"
 Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
 Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
 
+; Wie der Dateityp im Explorer heißt. Eine Zeile je Sprache, und der Name
+; kommt auch hier aus app/branding.py.
+[CustomMessages]
+german.ProjectFileType={#AppName}-Projekt
+english.ProjectFileType={#AppName} project
+spanish.ProjectFileType=Proyecto de {#AppName}
+french.ProjectFileType=Projet {#AppName}
+italian.ProjectFileType=Progetto {#AppName}
+portuguese.ProjectFileType=Projeto {#AppName}
+
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
+; Die Dateizuordnung steht **angehakt** da, anders als das Desktop-Symbol: Wer
+; ein Programm für Projektdateien installiert, will sie damit öffnen. Abwählbar
+; bleibt sie trotzdem — auf einem Rechner mit zwei Fassungen nebeneinander ist
+; genau das die Frage, die zählt.
+Name: "associate"; Description: "{cm:AssocFileExtension,{#AppName},{#ProjectSuffix}}"
+
+; Die Zuordnung von {#ProjectSuffix}. Sie hängt an der Aufgabe darüber und
+; verschwindet mit der Deinstallation wieder — ``uninsdeletekey`` auf dem
+; eigenen Schlüssel, ``uninsdeletevalue`` auf dem fremden unter der Endung, wo
+; andere Programme ihre eigenen Einträge haben.
+;
+; HKA ist HKLM bei einer Installation für alle und HKCU bei einer fürs eigene
+; Profil — dieselbe Wahl, die der Nutzer oben schon getroffen hat.
+[Registry]
+Root: HKA; Subkey: "Software\Classes\{#ProjectSuffix}\OpenWithProgids";   ValueType: string; ValueName: "{#AppId}.project"; ValueData: "";   Flags: uninsdeletevalue; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#AppId}.project";   ValueType: string; ValueName: ""; ValueData: "{cm:ProjectFileType}";   Flags: uninsdeletekey; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#AppId}.project\DefaultIcon";   ValueType: string; ValueName: ""; ValueData: "{app}\{#AppName}.exe,0"; Tasks: associate
+Root: HKA; Subkey: "Software\Classes\{#AppId}.project\shell\open\command";   ValueType: string; ValueName: ""; ValueData: """{app}\{#AppName}.exe"" ""%1""";   Tasks: associate
+; Damit die Anwendung auch im Dialog „Öffnen mit" steht, wenn die Zuordnung
+; abgewählt wurde oder ein anderes Programm sie später übernimmt.
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\shell\open\command";   ValueType: string; ValueName: ""; ValueData: """{app}\{#AppName}.exe"" ""%1""";   Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\Applications\{#AppName}.exe\SupportedTypes";   ValueType: string; ValueName: "{#ProjectSuffix}"; ValueData: ""
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs ignoreversion

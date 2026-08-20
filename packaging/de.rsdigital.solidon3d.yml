@@ -23,6 +23,7 @@ modules:
       - install -Dm644 solidon3d.desktop /app/share/applications/de.rsdigital.solidon3d.desktop
       - install -Dm644 icon.svg /app/share/icons/hicolor/scalable/apps/de.rsdigital.solidon3d.svg
       - install -Dm644 de.rsdigital.solidon3d.metainfo.xml /app/share/metainfo/de.rsdigital.solidon3d.metainfo.xml
+      - install -Dm644 de.rsdigital.solidon3d.xml /app/share/mime/packages/de.rsdigital.solidon3d.xml
     sources:
       - type: dir
         path: ../dist/Solidon3D
@@ -31,6 +32,8 @@ modules:
         path: solidon3d.desktop
       - type: file
         path: de.rsdigital.solidon3d.metainfo.xml
+      - type: file
+        path: de.rsdigital.solidon3d.xml
       - type: file
         path: ../app/images/icon/solidon3d.svg
         dest-filename: icon.svg

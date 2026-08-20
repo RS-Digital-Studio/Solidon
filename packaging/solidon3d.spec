@@ -24,7 +24,7 @@ ROOT = Path(SPECPATH).resolve().parent
 # im Installer zeigten Startmenüeintrag und Deinstallationssymbol auf eine
 # Solidon3D.exe, die es nicht gab.
 sys.path.insert(0, str(ROOT))
-from app.branding import APP_ID, APP_NAME, APP_VERSION, COPYRIGHT  # noqa: E402
+from app.branding import APP_ID, APP_NAME, APP_VERSION, COPYRIGHT, PROJECT_SUFFIX  # noqa: E402
 
 # Windows will ein ICO, macOS ein ICNS. Beide entstehen aus derselben SVG-
 # Quelle in tools/make_icon.py und liegen daneben — hier wird nur gewählt.
@@ -199,5 +199,40 @@ if sys.platform == "darwin":
             "NSHighResolutionCapable": True,
             # Die älteste Fassung, auf der die mitgelieferten Qt-Räder laufen.
             "LSMinimumSystemVersion": "12.0",
+            # Die eigene Projektdatei, damit ein Doppelklick im Finder hier
+            # ankommt. Zwei Einträge, und beide werden gebraucht: die
+            # Deklaration sagt dem System, dass es den Typ überhaupt gibt und
+            # woran es ihn erkennt (an der Endung), der Dokumenttyp sagt, dass
+            # diese Anwendung ihn öffnet. Ohne die Deklaration kennt macOS die
+            # Endung nicht und ordnet sie niemandem zu.
+            #
+            # `LSHandlerRank: Owner` heißt: Wir sind der Eigentümer dieses
+            # Typs, nicht ein Programm, das ihn auch lesen kann.
+            #
+            # Abgeholt wird das Ereignis in app/ui/app.py (`FileOpenListener`)
+            # — auf dem Mac kommt der Pfad nicht über argv, und ohne den
+            # Filter wäre dieser Eintrag ein Versprechen ohne Wirkung.
+            "CFBundleDocumentTypes": [
+                {
+                    "CFBundleTypeName": f"{APP_NAME} project",
+                    "CFBundleTypeRole": "Editor",
+                    "LSHandlerRank": "Owner",
+                    "LSItemContentTypes": [f"{APP_ID}.project"],
+                }
+            ],
+            "UTExportedTypeDeclarations": [
+                {
+                    "UTTypeIdentifier": f"{APP_ID}.project",
+                    "UTTypeDescription": f"{APP_NAME} project",
+                    # Eine Projektdatei ist ein ZIP-Archiv mit JSON darin
+                    # (§16.1) — das gehört hier gesagt, sonst hält der Finder
+                    # sie für ein Archiv und bietet „Öffnen mit Archivierungs-
+                    # programm" an.
+                    "UTTypeConformsTo": ["public.data", "public.zip-archive"],
+                    "UTTypeTagSpecification": {
+                        "public.filename-extension": [PROJECT_SUFFIX.lstrip(".")]
+                    },
+                }
+            ],
         },
     )

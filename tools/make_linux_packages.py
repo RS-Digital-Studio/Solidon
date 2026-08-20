@@ -40,6 +40,7 @@ from app.branding import (
     APP_VENDOR,
     APP_VERSION,
     DISTRIBUTION_NAME,
+    PROJECT_SUFFIX,
     WEBSITE_URL,
 )
 
@@ -58,6 +59,28 @@ METAINFO_FILE = PACKAGING / f"{APP_ID}.metainfo.xml"
 #: der auf Linux die beiden Fragen stellt, die der Windows-Installer stellt:
 #: den Lizenzvertrag und den Ort.
 INSTALL_SCRIPT = PACKAGING / "install.sh"
+
+#: Die MIME-Beschreibung der Projektdatei für shared-mime-info.
+MIME_FILE = PACKAGING / f"{APP_ID}.xml"
+
+#: Wie der Typ heißt. Der Menüeintrag nennt ihn seit je in seiner
+#: ``MimeType``-Zeile — **ohne dass ihn jemand definiert hätte**. Eine
+#: Zuordnung auf einen Typ, den das System nicht kennt, ordnet nichts zu: Der
+#: Doppelklick auf ein Projekt landete beim Archivierungsprogramm, denn eine
+#: Projektdatei ist ein ZIP (§16.1), und das erkennt shared-mime-info am
+#: Inhalt.
+MIME_TYPE = f"application/x-{DISTRIBUTION_NAME}-project"
+
+#: Wie der Dateimanager den Typ nennt. Der englische Text steht als
+#: ``<comment>`` ohne Sprache und ist zugleich der Rückfall für jede Sprache,
+#: die hier fehlt.
+MIME_COMMENTS = {
+    "de": f"{APP_NAME}-Projekt",
+    "es": f"Proyecto de {APP_NAME}",
+    "fr": f"Projet {APP_NAME}",
+    "it": f"Progetto {APP_NAME}",
+    "pt": f"Projeto {APP_NAME}",
+}
 
 #: Was der Eintrag im Menü sagt. Kurz, denn die Software-Verwaltung schneidet
 #: ab, und ohne Punkt am Ende — so hält es die Freedesktop-Empfehlung.
@@ -123,12 +146,14 @@ if [ "$(id -u)" = 0 ]; then
   APP_DIR="/usr/share/applications"
   ICON_DIR="/usr/share/icons/hicolor/scalable/apps"
   META_DIR="/usr/share/metainfo"
+  MIME_DIR="/usr/share/mime"
 else
   DEFAULT_TARGET="$HOME/.local/lib/$SHORT"
   BIN_DIR="$HOME/.local/bin"
   APP_DIR="$HOME/.local/share/applications"
   ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
   META_DIR="$HOME/.local/share/metainfo"
+  MIME_DIR="$HOME/.local/share/mime"
 fi
 
 TARGET=""
@@ -246,7 +271,7 @@ if [ -e "$TARGET/$NAME" ]; then
   rm -rf "$TARGET"
 fi
 
-mkdir -p "$TARGET" "$BIN_DIR" "$APP_DIR" "$ICON_DIR" "$META_DIR"
+mkdir -p "$TARGET" "$BIN_DIR" "$APP_DIR" "$ICON_DIR" "$META_DIR" "$MIME_DIR/packages"
 cp -a "$HERE/$NAME/." "$TARGET/"
 chmod 755 "$TARGET/$NAME"
 
@@ -264,8 +289,23 @@ cp "$HERE/icon.svg" "$ICON_DIR/$IDENTIFIER.svg"
 if [ -f "$HERE/$IDENTIFIER.metainfo.xml" ]; then
   cp "$HERE/$IDENTIFIER.metainfo.xml" "$META_DIR/$IDENTIFIER.metainfo.xml"
 fi
+
+# Der Dateityp. Ohne ihn nennt der Menüeintrag einen MIME-Typ, den das System
+# nicht kennt — und ein Doppelklick auf ein Projekt landet beim
+# Archivierungsprogramm, weil eine Projektdatei ein ZIP ist. Die Datenbank muss
+# danach neu gebaut werden; ohne den Lauf liegt die Beschreibung da und gilt
+# nicht.
+if [ -f "$HERE/$IDENTIFIER.xml" ]; then
+  cp "$HERE/$IDENTIFIER.xml" "$MIME_DIR/packages/$IDENTIFIER.xml"
+  if command -v update-mime-database >/dev/null 2>&1; then
+    update-mime-database "$MIME_DIR" >/dev/null 2>&1 || true
+  fi
+fi
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -f -t "${ICON_DIR%/scalable/apps}" >/dev/null 2>&1 || true
 fi
 
 cat > "$TARGET/uninstall.sh" <<UNINSTALL
@@ -276,6 +316,13 @@ echo "$NAME wird entfernt / removing $NAME"
 rm -f "$BIN_DIR/$NAME" "$BIN_DIR/$SHORT"
 rm -f "$APP_DIR/$IDENTIFIER.desktop" "$ICON_DIR/$IDENTIFIER.svg"
 rm -f "$META_DIR/$IDENTIFIER.metainfo.xml"
+rm -f "$MIME_DIR/packages/$IDENTIFIER.xml"
+if command -v update-mime-database >/dev/null 2>&1; then
+  update-mime-database "$MIME_DIR" >/dev/null 2>&1 || true
+fi
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
+fi
 rm -rf "$TARGET"
 UNINSTALL
 chmod 755 "$TARGET/uninstall.sh"
@@ -382,6 +429,11 @@ def flatpak_manifest() -> str:
         f" /app/share/icons/hicolor/scalable/apps/{APP_ID}.svg\n"
         f"      - install -Dm644 {METAINFO_FILE.name}"
         f" /app/share/metainfo/{APP_ID}.metainfo.xml\n"
+        # Der Dateityp reist mit: Flatpak trägt ihn beim Installieren in die
+        # MIME-Datenbank des Systems ein, und erst damit führt ein Doppelklick
+        # auf ein Projekt hierher statt zum Archivierungsprogramm.
+        f"      - install -Dm644 {MIME_FILE.name}"
+        f" /app/share/mime/packages/{APP_ID}.xml\n"
         f"    sources:\n"
         # Die Quelle ist **das Anwendungsverzeichnis**, nicht ``dist``: Dorthin
         # schreibt der Bau selbst — ``flatpak-repo`` und ``flatpak-build`` aus
@@ -396,6 +448,8 @@ def flatpak_manifest() -> str:
         f"        path: {DESKTOP_FILE.name}\n"
         f"      - type: file\n"
         f"        path: {METAINFO_FILE.name}\n"
+        f"      - type: file\n"
+        f"        path: {MIME_FILE.name}\n"
         f"      - type: file\n"
         f"        path: ../app/images/icon/{DISTRIBUTION_NAME}.svg\n"
         f"        dest-filename: icon.svg\n"
@@ -447,6 +501,38 @@ def metainfo() -> str:
     )
 
 
+def mime_definition() -> str:
+    """Die Typbeschreibung für shared-mime-info.
+
+    Drei Angaben, und jede hat eine Aufgabe: ``glob`` erkennt die Datei an der
+    Endung, ``sub-class-of`` sagt, dass sie ein ZIP ist (§16.1) — ohne das
+    ordnet die Erkennung sie beim Öffnen wieder dem Archivierungsprogramm zu,
+    weil der Inhalt eben ein ZIP ist —, und ``icon`` gibt ihr das Symbol der
+    Anwendung im Dateimanager.
+
+    Die Kommentare stehen in allen Sprachen, die die Anwendung spricht: Was der
+    Dateimanager unter „Art" anzeigt, kommt von hier, und es auf Englisch
+    stehen zu lassen wäre die einzige Stelle der Auslieferung, an der eine
+    Übersetzung fehlt.
+    """
+    comments = "".join(
+        f'    <comment xml:lang="{code}">{text}</comment>\n' for code, text in MIME_COMMENTS.items()
+    )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        "<!-- Erzeugt von tools/make_linux_packages.py — Werte aus app/branding.py. -->\n"
+        '<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">\n'
+        f'  <mime-type type="{MIME_TYPE}">\n'
+        f"    <comment>{APP_NAME} project</comment>\n"
+        f"{comments}"
+        '    <sub-class-of type="application/zip" />\n'
+        f'    <glob pattern="*{PROJECT_SUFFIX}" />\n'
+        f'    <icon name="{APP_ID}" />\n'
+        "  </mime-type>\n"
+        "</mime-info>\n"
+    )
+
+
 def install_script() -> str:
     """Das Installationsskript, das im Archiv neben dem Bau liegt.
 
@@ -480,17 +566,18 @@ def install_script() -> str:
 
 
 def write_files() -> list[Path]:
-    """Schreibt alle vier Beschreibungen und gibt zurück, was entstanden ist."""
+    """Schreibt alle fünf Beschreibungen und gibt zurück, was entstanden ist."""
     PACKAGING.mkdir(parents=True, exist_ok=True)
     DESKTOP_FILE.write_text(desktop_entry(), encoding="utf-8", newline="\n")
     FLATPAK_MANIFEST.write_text(flatpak_manifest(), encoding="utf-8", newline="\n")
     METAINFO_FILE.write_text(metainfo(), encoding="utf-8", newline="\n")
+    MIME_FILE.write_text(mime_definition(), encoding="utf-8", newline="\n")
     INSTALL_SCRIPT.write_text(install_script(), encoding="utf-8", newline="\n")
     # Auf Windows ohne Wirkung, auf Linux der Unterschied zwischen „ausführbar"
     # und „./install.sh: Permission denied". Das Archiv unten trägt das Recht
     # dann weiter.
     INSTALL_SCRIPT.chmod(0o755)
-    return [DESKTOP_FILE, FLATPAK_MANIFEST, METAINFO_FILE, INSTALL_SCRIPT]
+    return [DESKTOP_FILE, FLATPAK_MANIFEST, METAINFO_FILE, MIME_FILE, INSTALL_SCRIPT]
 
 
 def build_tarball() -> int:
@@ -527,6 +614,7 @@ def build_tarball() -> int:
     shutil.copyfile(licence, staging / "eula.txt")
     shutil.copyfile(DESKTOP_FILE, staging / DESKTOP_FILE.name)
     shutil.copyfile(METAINFO_FILE, staging / METAINFO_FILE.name)
+    shutil.copyfile(MIME_FILE, staging / MIME_FILE.name)
     shutil.copyfile(
         ROOT / "app" / "images" / "icon" / f"{DISTRIBUTION_NAME}.svg", staging / "icon.svg"
     )

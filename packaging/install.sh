@@ -49,12 +49,14 @@ if [ "$(id -u)" = 0 ]; then
   APP_DIR="/usr/share/applications"
   ICON_DIR="/usr/share/icons/hicolor/scalable/apps"
   META_DIR="/usr/share/metainfo"
+  MIME_DIR="/usr/share/mime"
 else
   DEFAULT_TARGET="$HOME/.local/lib/$SHORT"
   BIN_DIR="$HOME/.local/bin"
   APP_DIR="$HOME/.local/share/applications"
   ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
   META_DIR="$HOME/.local/share/metainfo"
+  MIME_DIR="$HOME/.local/share/mime"
 fi
 
 TARGET=""
@@ -172,7 +174,7 @@ if [ -e "$TARGET/$NAME" ]; then
   rm -rf "$TARGET"
 fi
 
-mkdir -p "$TARGET" "$BIN_DIR" "$APP_DIR" "$ICON_DIR" "$META_DIR"
+mkdir -p "$TARGET" "$BIN_DIR" "$APP_DIR" "$ICON_DIR" "$META_DIR" "$MIME_DIR/packages"
 cp -a "$HERE/$NAME/." "$TARGET/"
 chmod 755 "$TARGET/$NAME"
 
@@ -190,8 +192,23 @@ cp "$HERE/icon.svg" "$ICON_DIR/$IDENTIFIER.svg"
 if [ -f "$HERE/$IDENTIFIER.metainfo.xml" ]; then
   cp "$HERE/$IDENTIFIER.metainfo.xml" "$META_DIR/$IDENTIFIER.metainfo.xml"
 fi
+
+# Der Dateityp. Ohne ihn nennt der Menüeintrag einen MIME-Typ, den das System
+# nicht kennt — und ein Doppelklick auf ein Projekt landet beim
+# Archivierungsprogramm, weil eine Projektdatei ein ZIP ist. Die Datenbank muss
+# danach neu gebaut werden; ohne den Lauf liegt die Beschreibung da und gilt
+# nicht.
+if [ -f "$HERE/$IDENTIFIER.xml" ]; then
+  cp "$HERE/$IDENTIFIER.xml" "$MIME_DIR/packages/$IDENTIFIER.xml"
+  if command -v update-mime-database >/dev/null 2>&1; then
+    update-mime-database "$MIME_DIR" >/dev/null 2>&1 || true
+  fi
+fi
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
+fi
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+  gtk-update-icon-cache -f -t "${ICON_DIR%/scalable/apps}" >/dev/null 2>&1 || true
 fi
 
 cat > "$TARGET/uninstall.sh" <<UNINSTALL
@@ -202,6 +219,13 @@ echo "$NAME wird entfernt / removing $NAME"
 rm -f "$BIN_DIR/$NAME" "$BIN_DIR/$SHORT"
 rm -f "$APP_DIR/$IDENTIFIER.desktop" "$ICON_DIR/$IDENTIFIER.svg"
 rm -f "$META_DIR/$IDENTIFIER.metainfo.xml"
+rm -f "$MIME_DIR/packages/$IDENTIFIER.xml"
+if command -v update-mime-database >/dev/null 2>&1; then
+  update-mime-database "$MIME_DIR" >/dev/null 2>&1 || true
+fi
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database "$APP_DIR" >/dev/null 2>&1 || true
+fi
 rm -rf "$TARGET"
 UNINSTALL
 chmod 755 "$TARGET/uninstall.sh"

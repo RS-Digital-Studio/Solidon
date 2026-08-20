@@ -88,6 +88,30 @@ PLATFORMS: tuple[tuple[str, tuple[str, ...], dict[str, str]], ...] = (
 #: Dezimalstelle nicht.
 DECIMAL_MARK = {"de": ",", "en": ".", "es": ",", "fr": ",", "it": ",", "pt": ","}
 
+#: Wie die Systeme im Fehlt-noch-Satz heißen. „Windows" heißt überall Windows,
+#: die anderen beiden auch — die Namen sind Marken und werden nicht übersetzt.
+SYSTEM_NAMES = {"windows": "Windows", "linux": "Linux", "macos": "macOS"}
+
+#: Das Wort zwischen den letzten beiden Namen einer Aufzählung.
+CONJUNCTION = {"de": "und", "en": "and", "es": "y", "fr": "et", "it": "e", "pt": "e"}
+
+#: Der Satz, der im Kasten steht, solange nicht jede Plattform ein Paket hat.
+#:
+#: **Er steht da, weil die Seite drei Systeme nennt.** In den
+#: Systemanforderungen und in der Zusicherungsliste verspricht sie Windows,
+#: macOS und Linux; wer das liest und dann einen einzigen Knopf findet, hält
+#: entweder die Seite für kaputt oder das Versprechen für eine Lüge. Der Satz
+#: verschwindet von selbst, sobald alle Pakete übergeben werden — gepflegt
+#: wird er nicht.
+MISSING_NOTE = {
+    "de": "Für {systems} sind die Pakete noch im Bau. Eine Nachricht, sobald sie liegen:",
+    "en": "The {systems} packages are still building. A note as soon as they are up:",
+    "es": "Los paquetes para {systems} aún se están creando. Aviso en cuanto estén:",
+    "fr": "Les paquets pour {systems} sont encore en construction. Un message dès qu'ils sont là :",
+    "it": "I pacchetti per {systems} sono ancora in costruzione. Un avviso appena ci sono:",
+    "pt": "Os pacotes para {systems} ainda estão a ser criados. Um aviso assim que existirem:",
+}
+
 
 @dataclass(frozen=True, slots=True)
 class Package:
@@ -168,7 +192,30 @@ def links(packages: list[Package], language: str) -> str:
             "            </a>\n"
             f'            <code class="pruefsumme">SHA-256 {package.hash_}</code>'
         )
-    return "".join(rows) + "\n          "
+    return "".join(rows) + missing_note(packages, language) + "\n          "
+
+
+def missing_note(packages: list[Package], language: str) -> str:
+    """Was noch fehlt, in einem Satz — oder nichts, wenn nichts fehlt."""
+    from app.branding import SUPPORT_ADDRESS
+
+    missing = [
+        SYSTEM_NAMES[kind]
+        for kind, _, _ in PLATFORMS
+        if not any(package.kind == kind for package in packages)
+    ]
+    if not missing or not packages:
+        return ""
+
+    if len(missing) == 1:
+        systems = missing[0]
+    else:
+        systems = f"{', '.join(missing[:-1])} {CONJUNCTION[language]} {missing[-1]}"
+    return (
+        f'\n            <p class="pruefhinweis">'
+        f"{MISSING_NOTE[language].format(systems=systems)} "
+        f'<a href="mailto:{SUPPORT_ADDRESS}">{SUPPORT_ADDRESS}</a></p>'
+    )
 
 
 def write_pages(packages: list[Package]) -> None:

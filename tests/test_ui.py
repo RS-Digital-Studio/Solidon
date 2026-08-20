@@ -10,7 +10,7 @@ Arbeiter.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -5148,3 +5148,68 @@ def test_the_unlock_dialog_does_not_close_on_an_empty_field(
             dialog.deleteLater()
     finally:
         activation.forget_cache()
+
+
+# --- Die Projektdatei als Argument (Dateizuordnung) -----------------------------
+
+
+def test_a_project_given_on_the_command_line_is_found(tmp_path: Path) -> None:
+    """Was per Doppelklick mitkommt, findet die Anwendung im Aufruf.
+
+    Unter Windows und Linux ist das der ganze Mechanismus hinter einer
+    Dateizuordnung — der Explorer startet die Anwendung mit dem Pfad als
+    Argument. Bis dahin wurde er an ``QApplication`` weitergereicht und dort
+    verworfen, und die Zuordnung, die der Linux-Menüeintrag längst versprach,
+    ging ins Leere.
+    """
+    from app.ui.app import requested_file
+
+    project = tmp_path / "dose.p3d"
+    project.write_bytes(b"PK\x03\x04")
+
+    assert requested_file(["Solidon3D.exe", str(project)]) == project
+
+
+def test_options_and_missing_files_are_stepped_over(tmp_path: Path) -> None:
+    """Eine Qt-Option ist kein Dateiname, und ein Tippfehler ist keine Datei.
+
+    Beides würde sonst als Projekt geöffnet und endete in einer Fehlermeldung
+    vor dem ersten Blick auf das Programm.
+    """
+    from app.ui.app import requested_file
+
+    project = tmp_path / "halter.p3d"
+    project.write_bytes(b"PK\x03\x04")
+
+    assert requested_file(["Solidon3D.exe"]) is None
+    assert requested_file(["Solidon3D.exe", "-style", "fusion"]) is None
+    assert requested_file(["Solidon3D.exe", str(tmp_path / "gibtsnicht.p3d")]) is None
+    assert requested_file(["Solidon3D.exe", "--platform", str(project)]) == project
+
+
+def test_the_finder_event_opens_what_it_names(tmp_path: Path, qt_app: QApplication) -> None:
+    """Auf dem Mac kommt die Datei als Ereignis, nicht als Argument.
+
+    Ohne diesen Filter wäre der Dokumenttyp im Bundle ein Eintrag ohne Wirkung:
+    Der Finder startet die Anwendung und schickt ihr den Pfad, und niemand hört
+    zu. Geprüft wird über das echte Ereignis und nicht über einen direkten
+    Aufruf von ``open_path`` — die Verbindung dazwischen ist die Sache.
+    """
+    from PySide6.QtGui import QFileOpenEvent
+
+    from app.ui.app import FileOpenListener
+
+    project = tmp_path / "deckel.p3d"
+    project.write_bytes(b"PK\x03\x04")
+
+    opened: list[Path] = []
+
+    class Recorder:
+        def open_path(self, path: Path) -> None:
+            opened.append(path)
+
+    listener = FileOpenListener(cast(Any, Recorder()))
+    handled = listener.eventFilter(qt_app, QFileOpenEvent(str(project)))
+
+    assert handled, "das Ereignis wurde durchgereicht statt beantwortet"
+    assert opened == [project]

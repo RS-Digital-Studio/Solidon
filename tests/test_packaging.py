@@ -611,3 +611,120 @@ def test_the_workflow_builds_the_macos_installer_package() -> None:
 
     assert "make_macos_package.py" in workflow, "die CI ruft das Werkzeug nicht"
     assert "*-macos-*.pkg" in workflow, "die .pkg wird nicht hochgeladen"
+
+
+# --- Die Projektdatei gehört der Anwendung (Dateizuordnung) ---------------------
+
+
+def test_the_windows_installer_registers_the_project_extension() -> None:
+    """Ein Doppelklick auf ein Projekt muss hier landen, nicht im Nirgendwo.
+
+    Fünf Einträge, und jeder einzelne macht die Zuordnung sonst wertlos: die
+    Endung muss auf die Kennung zeigen, die Kennung einen Namen und ein Symbol
+    haben, und der Öffnen-Befehl muss den Pfad als Argument weitergeben. Ohne
+    ``"%1"`` startet die Anwendung mit leerem Fenster — der häufigste Fehler an
+    dieser Stelle, und einer, den man erst nach dem Installieren sieht.
+    """
+    from app.branding import APP_ID, PROJECT_SUFFIX
+
+    script = INSTALLER_SCRIPT.read_text(encoding="utf-8")
+
+    assert "[Registry]" in script, "die Zuordnung fehlt ganz"
+    assert "{#ProjectSuffix}\\OpenWithProgids" in script
+    assert "{#AppId}.project" in script, "die Kennung steht fest verdrahtet statt als Define"
+    assert '""%1""' in script, "der Öffnen-Befehl gibt den Pfad nicht weiter"
+    assert "DefaultIcon" in script, "die Projektdatei bekäme ein leeres Symbol"
+    assert "Tasks: associate" in script, "die Zuordnung hängt an keiner Aufgabe"
+    # Und die Endung kommt aus branding, nicht aus dem Skript — sonst stünde
+    # nach einer Änderung dort die alte und hier die neue.
+    assert PROJECT_SUFFIX not in script, "die Endung steht fest im Installer"
+    assert APP_ID not in script, "die Kennung steht fest im Installer"
+
+    tool = (ROOT / "tools" / "make_installer.py").read_text(encoding="utf-8")
+    assert "/DProjectSuffix={PROJECT_SUFFIX}" in tool, (
+        "make_installer.py reicht die Endung nicht als Define herein — "
+        "das Skript oben bekäme einen Kompilierfehler"
+    )
+
+
+def test_the_bundle_owns_the_project_type_on_macos() -> None:
+    """Das Bundle meldet den Dokumenttyp an — und erklärt ihn auch.
+
+    Beide Einträge werden gebraucht: Die Deklaration sagt dem System, dass es
+    den Typ gibt und woran es ihn erkennt, der Dokumenttyp sagt, wer ihn
+    öffnet. Fehlt die Deklaration, kennt macOS die Endung nicht und ordnet sie
+    niemandem zu.
+    """
+    from app.branding import APP_ID, PROJECT_SUFFIX
+
+    spec = SPEC.read_text(encoding="utf-8")
+
+    assert "CFBundleDocumentTypes" in spec
+    assert "UTExportedTypeDeclarations" in spec
+    assert f"{APP_ID}.project" not in spec or 'f"{APP_ID}.project"' in spec
+    assert '"LSHandlerRank": "Owner"' in spec, "wir wären nur ein Programm unter vielen"
+    # Eine Projektdatei ist ein ZIP (§16.1) — ohne diese Zeile hält der Finder
+    # sie für ein Archiv.
+    assert "public.zip-archive" in spec
+    assert 'PROJECT_SUFFIX.lstrip(".")' in spec, "die Endung steht fest in der Spec"
+    assert PROJECT_SUFFIX not in spec.replace("PROJECT_SUFFIX", "")
+
+
+def test_the_linux_type_is_defined_and_not_only_claimed() -> None:
+    """Der Menüeintrag nannte einen Typ, den niemand definiert hatte.
+
+    Eine ``MimeType``-Zeile ordnet nichts zu, solange das System den Typ nicht
+    kennt: Eine Projektdatei ist ein ZIP, und ohne eigene Beschreibung erkennt
+    shared-mime-info sie als Archiv — der Doppelklick landete beim
+    Archivierungsprogramm.
+    """
+    import xml.etree.ElementTree as ET
+
+    from app.branding import PROJECT_SUFFIX
+    from tools import make_linux_packages as tool
+
+    root = ET.fromstring(tool.mime_definition())
+    space = "{http://www.freedesktop.org/standards/shared-mime-info}"
+
+    entry = root.find(f"{space}mime-type")
+    assert entry is not None and entry.get("type") == tool.MIME_TYPE
+
+    glob = entry.find(f"{space}glob")
+    assert glob is not None and glob.get("pattern") == f"*{PROJECT_SUFFIX}"
+
+    parent = entry.find(f"{space}sub-class-of")
+    assert parent is not None and parent.get("type") == "application/zip", (
+        "ohne diese Zeile gewinnt die Inhaltserkennung, und die sieht ein ZIP"
+    )
+
+    # Menüeintrag und Beschreibung müssen denselben Typ meinen.
+    assert f"MimeType={tool.MIME_TYPE};" in tool.desktop_entry()
+
+    # Und der Dateimanager nennt ihn in jeder Sprache, die die Anwendung spricht.
+    from app.i18n.catalog import available_languages
+
+    named = {node.get("{http://www.w3.org/XML/1998/namespace}lang") for node in entry}
+    missing = sorted(set(available_languages()) - named - {"en"})
+    assert not missing, f"der Typ bleibt in diesen Sprachen englisch: {missing}"
+
+
+def test_the_linux_installer_registers_the_type() -> None:
+    """Die Beschreibung liegt nur dann richtig, wenn sie auch eingetragen wird.
+
+    Kopieren allein genügt nicht: Ohne ``update-mime-database`` liegt die Datei
+    da und gilt nicht.
+    """
+    from tools import make_linux_packages as tool
+
+    script = tool.install_script()
+
+    assert "$MIME_DIR/packages/" in script, "die Typbeschreibung wird nicht installiert"
+    assert "update-mime-database" in script, "die Datenbank wird nicht neu gebaut"
+    assert script.count("update-mime-database") >= 2, (
+        "beim Entfernen muss sie ebenfalls neu gebaut werden"
+    )
+    assert "$MIME_DIR/packages/$IDENTIFIER.xml" in tool.install_script()
+
+    # Und im Flatpak reist sie mit — dort trägt die Installation sie selbst ein.
+    manifest = tool.flatpak_manifest()
+    assert "/app/share/mime/packages/" in manifest
