@@ -116,8 +116,32 @@ class UserError(AppError):
     default_suggestions: ClassVar[tuple[Action, ...]] = (CORRECT_INPUT, CANCEL)
 
 
+#: Die Beschränkungen, für die „außerhalb des zulässigen Bereichs" zutrifft.
+#:
+#: Alle anderen sind keine Zahlenspanne: leer, unlesbar, falscher Typ, fehlend,
+#: kein Umriss, kein Profil, unbekanntes Objekt. Von rund 170 Stellen, die eine
+#: :class:`ValidationError` werfen, betreffen acht eine Spanne.
+_RANGE_CONSTRAINTS: Final = frozenset({"minimum", "maximum", "range"})
+
+
 class ValidationError(UserError):
-    """Ein Parameter hat sein Schema verletzt (§10)."""
+    """Ein Parameter hat sein Schema verletzt (§10).
+
+    **Der Titel folgt der Beschränkung, nicht der Klasse.** „Ein Wert liegt
+    außerhalb des zulässigen Bereichs." stand über *jeder* dieser Ausnahmen —
+    auch über „Diese Datei ist keine STEP-Datei." und „Der Parametername fehlt
+    hinter dem @". Die Oberfläche zeichnet den Titel groß und das Detail klein:
+    Wer hinsieht, liest zuerst einen Satz, der nicht stimmt, und sucht dann bei
+    den Zahlen.
+
+    Drei Klassen sind genau deswegen entstanden — :class:`NeedsSolidError`,
+    :class:`SketchConflictError`, :class:`UnitUnknownError` —, jede mit
+    demselben Vermerk im Docstring. Sie bleiben, denn sie tragen eigene
+    Vorschläge; was hier dazukommt, ist die Ursache statt des nächsten
+    Einzelfalls: Wo keine Spanne verletzt wurde, gilt der Satz der Oberklasse,
+    „Die Eingabe war so nicht verwendbar." Er ist allgemein, aber er lügt
+    nicht — und das Detail daneben sagt weiter, was gemeint ist.
+    """
 
     default_title: ClassVar[TranslatableText] = _(
         "Ein Wert liegt außerhalb des zulässigen Bereichs."
@@ -132,6 +156,8 @@ class ValidationError(UserError):
         constraint: str = "",
         **kwargs: Any,
     ) -> None:
+        if kwargs.get("title") is None and constraint not in _RANGE_CONSTRAINTS:
+            kwargs["title"] = UserError.default_title
         super().__init__(detail=detail, **_with_values(kwargs, field=field, constraint=constraint))
         self.field = field
         self.value = value

@@ -126,3 +126,33 @@ def test_boolean_failure_keeps_stages_and_seed() -> None:
 
 def test_cancelling_is_not_an_error() -> None:
     assert not issubclass(errors.OperationCancelled, AppError)
+
+
+def test_the_title_follows_the_constraint_not_the_class() -> None:
+    """„Ein Wert liegt außerhalb des zulässigen Bereichs." stand über allem.
+
+    Auch über „Diese Datei ist keine STEP-Datei." und über einem fehlenden
+    Parameternamen hinter dem @. Die Oberfläche zeichnet den Titel groß und das
+    Detail klein: Wer hinsieht, liest zuerst einen Satz, der nicht stimmt, und
+    sucht dann bei den Zahlen.
+
+    Von rund 170 Stellen, die diese Ausnahme werfen, betreffen acht eine
+    Zahlenspanne. Drei eigene Klassen sind aus genau diesem Missverhältnis
+    entstanden; hier steht die Ursache statt des nächsten Einzelfalls.
+    """
+    from app.core.errors import UserError, ValidationError
+
+    for constraint in ("minimum", "maximum", "range"):
+        error = ValidationError(field="wall", constraint=constraint, detail="Zu dünn.")
+        assert "Bereichs" in str(error.title), f"{constraint} ist eine Spanne"
+
+    for constraint in ("empty", "type", "unknown_object", "required", ""):
+        error = ValidationError(field="source", constraint=constraint, detail="Keine STEP-Datei.")
+        assert str(error.title) == str(UserError.default_title), (
+            f"{constraint!r} ist keine Spanne — der Titel darf keine behaupten"
+        )
+
+    # Ein selbst gesetzter Titel bleibt unberührt: acht Stellen nennen ihren
+    # eigenen, und der ist immer genauer als beide Vorgaben.
+    own = ValidationError(title="Dieses Profil gibt es nicht.", detail="…")
+    assert str(own.title) == "Dieses Profil gibt es nicht."

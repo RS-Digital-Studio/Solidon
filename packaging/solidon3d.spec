@@ -64,6 +64,33 @@ datas = [
 datas += collect_data_files("trimesh")
 datas += collect_data_files("pyvista")
 
+# **Qts eigene Sprachkataloge.** Die Standardknöpfe beschriftet Qt aus
+# ``qtbase_<sprache>.qm``, nicht aus unserem Katalog; ``install_qt_translations``
+# lädt sie über ``QLibraryInfo.TranslationsPath``. In der Entwicklungsumgebung
+# liegen sie neben PySide6 und alle sechs laden — im Paket hängt es daran, ob
+# PyInstallers Hook sie von selbst einsammelt. Tut er es nicht, steht auf jedem
+# zweiten Dialog „Cancel" statt „Abbrechen", und zwar nur im gebauten Programm.
+# Ausdrücklich mitgenommen sind es ein paar hundert Kilobyte und eine Frage
+# weniger.
+#
+# Nur die Sprachen, die es gibt, und die Liste wird nicht gepflegt: sie kommt
+# aus dem Verzeichnis der Kataloge, wie überall sonst (§4.1). **Deutsch steht
+# dazu**, denn es ist die Quellsprache und hat dort keine Datei — ausgerechnet
+# die Vorgabe hätte englische Knöpfe getragen.
+import PySide6  # noqa: E402
+
+_QT_TRANSLATIONS = Path(PySide6.__file__).parent / "translations"
+_LANGUAGES = {"de"} | {path.stem for path in (ROOT / "app" / "i18n" / "locales").glob("*.json")}
+for _code in sorted(_LANGUAGES):
+    # Mit Varianten gesucht: Portugiesisch liegt bei Qt nur als ``pt_BR`` vor,
+    # und ``QTranslator.load`` findet es von dort aus selbst. Wer stur
+    # ``qtbase_pt.qm`` mitnimmt, nimmt nichts mit.
+    _found = sorted(_QT_TRANSLATIONS.glob(f"qtbase_{_code}*.qm"))
+    if _found:
+        datas.extend((str(entry), "PySide6/translations") for entry in _found)
+    else:
+        print(f"Hinweis: Qt hat keinen Katalog für {_code} — Standardknöpfe bleiben englisch.")
+
 binaries = [
     # Die kompilierten Erweiterungen des Prüfmoduls, an der Stelle des
     # Python-Pakets. Der Import findet sie über den Paketpfad im

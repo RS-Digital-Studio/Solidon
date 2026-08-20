@@ -173,3 +173,44 @@ def test_an_error_states_what_is_possible_now(
     printed = capsys.readouterr().err
     assert "Projektdatei" in printed
     assert "-" in printed, "the suggestions are listed, not just the failure"
+
+
+def test_export_refuses_a_halted_chain(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Eine halbe Datei mit ganzem Namen ist schlimmer als keine — sie wird gedruckt.
+
+    ``command_export`` wertete aus und schrieb das Ergebnis ungeprüft. Hält die
+    Kette bei einer Operation an, enthält die Szene den Stand davor: Der Export
+    schrieb ihn, meldete „Geschrieben: …" und gab 0 zurück. ``info`` sagte den
+    Halt seit je — nur der Befehl, der etwas herausgibt, sah nicht hin.
+
+    Die anhaltende Operation ist hier eine Schnittebene, die den Körper nicht
+    trifft: 500 mm über einem 20-mm-Würfel.
+    """
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path), "--printer", "centauri-carbon-2", "--material", "petg"])
+    main(["import", str(path), str(MESHES / "cube_clean.stl")])
+    # Über das Register angelegt, nicht über ``run``: der Befehl wertet selbst
+    # aus und würde den Halt schon dort melden. Geprüft werden soll der Export
+    # auf einem Projekt, das den Halt **enthält**.
+    from app.core.scene.project import save
+    from app.core.types import Operation
+
+    project = load(path)
+    project.document.ops.append(
+        Operation(
+            id=99,
+            op="split_plane",
+            inputs=("obj_1",),
+            params={"axis": "z", "position": 500.0},
+        )
+    )
+    save(project, path)
+    capsys.readouterr()
+
+    code = main(["export", str(path), str(tmp_path / "out")])
+
+    assert code == 1, "ein Export aus einer angehaltenen Kette ist kein Erfolg"
+    printed = capsys.readouterr()
+    assert "Nichts geschrieben" in printed.err
+    assert "hält" in printed.out, "und der Bericht sagt, wo die Kette stehen bleibt"
+    assert not list((tmp_path / "out").glob("*")), "geschrieben wurde wirklich nichts"

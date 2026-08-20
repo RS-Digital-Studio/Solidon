@@ -757,8 +757,19 @@ def unhandled_advice(
     keiner, und daran ändert sich nichts. Sie werden zu Text — damit hält §2.7
     sein Versprechen („was jetzt möglich ist"), ohne eines zu geben, das die
     Oberfläche nicht einlösen kann.
+
+    **Außer „Abbrechen".** Jede Ausnahme in ``errors.py`` führt es unter ihren
+    Vorschlägen, für keine gibt es einen Handler — es stand also in *jedem*
+    Fehlerdialog als Ratschlag im Text, direkt über dem Abbrechen-Knopf. Der
+    Grundsatz dazu stand längst daneben, bei den Knöpfen: „das Schließen ist
+    kein Vorschlag, es steht ohnehin da" (:func:`offered_actions`). Der Textpfad
+    hatte ihn nur nicht übernommen.
     """
-    return [str(action.label) for action in error.suggestions if action.id not in handlers]
+    return [
+        str(action.label)
+        for action in error.suggestions
+        if action.id not in handlers and action.id != CANCEL.id
+    ]
 
 
 def show_error(

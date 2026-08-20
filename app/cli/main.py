@@ -365,6 +365,24 @@ def command_export(args: argparse.Namespace) -> int:
     project = open_project(path)
     result = run_evaluation(project, path, quiet=True)
 
+    # **Eine angehaltene Kette wird nicht exportiert.** Hier stand nur die
+    # Auswertung, und ihr Ergebnis wurde ungeprüft geschrieben: Hält die Kette
+    # bei der dritten von sieben Operationen an, enthält die Szene den Stand
+    # davor — der Export schrieb ihn, meldete „Geschrieben: …" und gab 0
+    # zurück. Eine halbe Datei mit ganzem Namen ist schlimmer als keine, denn
+    # sie wird gedruckt. ``command_info`` sagte den Halt seit je; nur der
+    # Befehl, der etwas herausgibt, sah nicht hin.
+    if not result.complete:
+        print_report(result)
+        print(
+            tr(
+                "Nichts geschrieben — die Kette hält an. Der Grund steht oben; "
+                "nach der Behebung schreibt derselbe Aufruf die Dateien."
+            ),
+            file=sys.stderr,
+        )
+        return 1
+
     wanted = list(args.on or result.scene.objects)
     unknown = [entry for entry in wanted if entry not in result.scene.objects]
     if unknown:

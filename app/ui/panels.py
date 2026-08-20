@@ -1366,9 +1366,13 @@ class ReportPanel(QWidget):
             if tight == len(meshes)
             else f"{tight}/{len(meshes)} {tr('geschlossen')}"
         )
+        # Hier stand ein Malzeichen vor einem Plural, und das ist falsches
+        # Deutsch: mit Singular hieße es zweimal dasselbe Teil, gemeint sind
+        # zwei. Die Zeile darüber zählt Befunde und behält ihr Malzeichen —
+        # dort steht der Singular dahinter.
         self.facts.setText(
             f"{closed} · {format_decimal(volume / 1000.0, 1)} cm³ · "
-            f"{parts} × {tr('Teil') if parts == 1 else tr('Teile')}"
+            f"{parts} {tr('Teil') if parts == 1 else tr('Teile')}"
         )
         self.facts.setVisible(True)
 

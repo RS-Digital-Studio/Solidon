@@ -672,3 +672,53 @@ def test_the_preparation_operations_are_registered_completely() -> None:
     assert REGISTRY.get("split_plane").produces == 2
     assert REGISTRY.get("arrange_bed").produces == VARIABLE
     assert REGISTRY.get("check_collisions").produces == VARIABLE
+
+
+def test_arranging_names_the_bodies_it_finds_touching(
+    document: Document, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Zwei Objekte überschneiden sich — 0 · 1" stand im Bericht.
+
+    ``check_collisions`` kennt nur die Reihenfolge seiner Liste und schreibt sie
+    in den Befund; ``named_for`` trägt die Namen nach. Die Zwillings-Op
+    ``check_collisions`` tat das seit je, ``arrange_bed`` nicht — dort landeten
+    die Indizes ungefiltert im Bericht.
+
+    Und sie waren nicht einmal die der Szene: geprüft wird **je Platte**, die
+    Liste ist also vorher gefiltert. Die „1" der zweiten Platte ist nicht das
+    zweite Objekt. Deshalb werden die Einträge mitgefiltert und zusammen
+    weitergegeben.
+
+    Geprüft mit einem gestellten Befund: Anordnen legt die Körper gerade
+    *auseinander*, eine echte Kollision danach wäre der Ausnahmefall. Was hier
+    zu prüfen ist, ist die Verdrahtung — dass der Weg durch ``named_for``
+    führt.
+    """
+    from app.core.types import Finding
+
+    def touching(meshes: list[object], clearance: float = 0.0) -> list[Finding]:
+        assert len(meshes) == 2, "beide Körper liegen auf derselben Platte"
+        return [
+            Finding(
+                code="arrange.collision",
+                severity="warning",
+                message=_("Zwei Objekte überschneiden sich."),
+                values={"a": 0, "b": 1},
+            )
+        ]
+
+    monkeypatch.setattr("app.core.geom.prepare_ops.check_collisions", touching)
+
+    project, history = loaded(document, count=2)
+    history.apply(_("Anordnen"), [OperationDraft(op="arrange_bed", inputs=("obj_1", "obj_2"))])
+
+    result = evaluate(document, profile, sources=ProjectSources(project))
+
+    reported = [
+        finding for finding in result.scene.report.findings if finding.code == "arrange.collision"
+    ]
+    assert reported, "der gestellte Befund muss durchkommen"
+    values = reported[0].values
+    assert not isinstance(values["a"], int), f"{values['a']!r} ist ein Listenplatz, kein Name"
+    assert not isinstance(values["b"], int)
+    assert reported[0].object_id, "ein Klick auf die Zeile muss irgendwohin führen"

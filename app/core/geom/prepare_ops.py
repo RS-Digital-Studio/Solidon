@@ -1118,11 +1118,25 @@ def arrange_bed(ctx: OpContext) -> OpResult:
 
     # Kollisionen werden je Platte geprüft: zwei Teile an derselben Stelle auf
     # verschiedenen Platten treffen sich nie.
+    #
+    # **Und mit Namen.** ``check_collisions`` kennt nur die Reihenfolge seiner
+    # Liste und schreibt sie in den Befund; ohne ``named_for`` stand im Bericht
+    # „Zwei Objekte überschneiden sich — 0 · 1". Hier war es doppelt irre, denn
+    # die Liste ist je Platte gefiltert: die 1 der zweiten Platte ist nicht das
+    # zweite Objekt der Szene. Die Einträge werden deshalb mitgefiltert und
+    # zusammen weitergegeben. Die Zwillings-Op darunter macht es seit je so.
     for plate in range(result.plate_count):
         on_plate = [
-            mesh for mesh, entry in zip(result.meshes, result.plates, strict=True) if entry == plate
+            (mesh, entry)
+            for mesh, entry, at in zip(result.meshes, ctx.inputs, result.plates, strict=True)
+            if at == plate
         ]
-        findings.extend(check_collisions(on_plate))
+        findings.extend(
+            named_for(
+                check_collisions([mesh for mesh, _entry in on_plate]),
+                [entry for _mesh, entry in on_plate],
+            )
+        )
 
     return OpResult(
         outputs=[

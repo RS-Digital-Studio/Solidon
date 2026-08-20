@@ -169,18 +169,32 @@ def release_viewport(window: Any) -> None:
     window.viewport.plotter = None
 
 
-def prepared(widget: QWidget, size: tuple[int, int], *, hidden: bool = True) -> QWidget:
+def prepared(
+    widget: QWidget, size: tuple[int, int], *, hidden: bool = True, fit_height: bool = False
+) -> QWidget:
     """Ein Fenster aufbauen — normalerweise, ohne es jemandem zu zeigen.
 
     ``hidden=False`` braucht das Hauptfenster: sein Viewport rendert über
     OpenGL, und OpenGL zeichnet nichts in ein Fenster, das nie auf dem
     Bildschirm war. Ohne das ist die Bildmitte auf dem Bild schwarz — also
     ausgerechnet das Modell, um das es geht.
+
+    ``fit_height`` nimmt die Höhe vom Inhalt statt aus ``size``. Für einen
+    Dialog ist das der Unterschied zwischen einem Bild und einem falschen Bild:
+    er wächst mit seinen Feldern, und auf eine feste Höhe gezogen zeigt er
+    Leerraum, den niemand je sieht.
     """
     if hidden:
         widget.setAttribute(Qt.WidgetAttribute.WA_DontShowOnScreen, True)
-    widget.resize(*size)
+    if fit_height:
+        widget.resize(size[0], widget.sizeHint().height())
+    else:
+        widget.resize(*size)
     widget.show()
+    if fit_height:
+        # Nach dem Anzeigen noch einmal: erst dort kennt Qt die endgültigen
+        # Schriftmaße, und ein umgebrochener Beschreibungssatz ändert die Höhe.
+        widget.resize(size[0], widget.sizeHint().height())
     return widget
 
 
@@ -350,6 +364,12 @@ def take_all(app: QApplication, language: str) -> None:
     shoot(report, "report", language)
     report.close()
 
+    # **Nicht auf DIALOG-Höhe zwingen.** Die Dialoge wachsen mit ihrem Inhalt
+    # (143 bis 427 Bildpunkte, gemessen); auf 460 gezogen standen zweihundert
+    # Punkte Leerraum zwischen dem letzten Feld und „Weitere Einstellungen", und
+    # die Zahlenfelder waren auf 330 Punkte gestreckt. Das Bild zeigte einen
+    # unfertigen Dialog, den es nicht gibt. Die Breite bleibt gesetzt, damit alle
+    # Sprachen dasselbe Maß haben.
     dialog = prepared(
         OperationDialog(
             REGISTRY.get("drill_hole"),
@@ -357,6 +377,7 @@ def take_all(app: QApplication, language: str) -> None:
             values={"diameter": 4.2, "x": 20.0, "y": 0.0},
         ),
         DIALOG,
+        fit_height=True,
     )
     settle(app)
     shoot(dialog, "op-dialog", language)

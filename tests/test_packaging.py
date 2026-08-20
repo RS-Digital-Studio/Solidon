@@ -200,3 +200,55 @@ def test_the_workflow_keeps_the_two_mac_packages_apart() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert "solidon3d-macos-${{ runner.arch }}" in workflow
     assert "macos-$(uname -m)" in workflow
+
+
+def test_the_package_carries_qts_own_catalogues() -> None:
+    """Die Standardknöpfe beschriftet Qt, nicht unser Katalog.
+
+    ``install_qt_translations`` lädt ``qtbase_<sprache>.qm`` über
+    ``QLibraryInfo.TranslationsPath``. In der Entwicklungsumgebung liegen die
+    Dateien neben PySide6 und alle sechs Sprachen laden — im Paket hängt es
+    daran, ob PyInstallers Hook sie einsammelt. Tut er es nicht, steht auf jedem
+    zweiten Dialog „Cancel" statt „Abbrechen", und zwar **nur** im gebauten
+    Programm: in der Entwicklung ist der Fehler unsichtbar.
+
+    Geprüft wird die Absicht in der Spec, nicht das Ergebnis eines Baus — der
+    läuft nur in der CI und nur bei Tags.
+    """
+    source = SPEC.read_text(encoding="utf-8")
+
+    assert "qtbase_" in source, "die Spec nimmt Qts Sprachkataloge nicht ausdrücklich mit"
+    assert "PySide6/translations" in source, "sie müssen dort landen, wo Qt sie sucht"
+    # Die Liste darf nicht von Hand gepflegt sein — sie driftet sonst gegen
+    # app/i18n/locales, wie schon die hiddenimports gegen den Bootstrap.
+    assert 'glob("*.json")' in source, "die Sprachen kommen aus dem Katalogverzeichnis"
+    # Und Deutsch muss dabeistehen: es ist die Quellsprache und hat dort keine
+    # eigene Datei, wäre also ausgerechnet als Vorgabe englisch geblieben.
+    assert '"de"' in source, "die Quellsprache braucht Qts Katalog genauso"
+
+
+def test_qt_has_a_catalogue_for_every_language_we_offer() -> None:
+    """Und die Kataloge müssen existieren, sonst nimmt die Spec nichts mit.
+
+    Portugiesisch ist der Fall, an dem das auffällt: Qt liefert es nur als
+    ``pt_BR``. Deshalb sucht die Spec mit Varianten — ``qtbase_pt.qm`` allein
+    hätte für diese Sprache stillschweigend nichts eingepackt, und ``load``
+    findet die Variante zur Laufzeit selbst.
+    """
+    import pytest
+
+    pytest.importorskip("PySide6")
+    import PySide6
+
+    from app.i18n.catalog import available_languages
+
+    catalogues = Path(PySide6.__file__).parent / "translations"
+    missing = []
+    for code in ("de", *available_languages()):
+        if not sorted(catalogues.glob(f"qtbase_{code}*.qm")):
+            missing.append(code)
+
+    assert not missing, (
+        f"Qt bringt für diese Sprachen keinen Katalog mit: {missing} — "
+        "die Standardknöpfe bleiben dort englisch."
+    )
