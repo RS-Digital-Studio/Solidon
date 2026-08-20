@@ -108,6 +108,47 @@ def _framed(pil: Image.Image, margin: float, background: int) -> Image.Image:
     return canvas
 
 
+#: Unterhalb dieser Kantenlänge — gemessen im Einheitswürfel, in dem TripoSG
+#: rechnet — ist das Ergebnis kein Körper mehr, sondern ein Rest.
+_COLLAPSED_EXTENT = 0.01
+
+#: Und unterhalb dieser Dreieckszahl ebenfalls. Beide zusammen, weil eine
+#: entgleiste Rechnung mal zwei Dreiecke an einem Punkt liefert und mal ein
+#: paar hundert auf einer Fläche ohne Dicke.
+_COLLAPSED_FACES = 64
+
+
+def _collapsed(vertices: np.ndarray, faces: np.ndarray) -> bool:
+    """Ist das kein Körper, sondern ein Rest?"""
+    if vertices.size == 0 or faces.size == 0 or len(faces) < _COLLAPSED_FACES:
+        return True
+    return float(np.ptp(vertices, axis=0).max()) < _COLLAPSED_EXTENT
+
+
+def _refuse_empty(vertices: np.ndarray, faces: np.ndarray, *, seed: int, steps: int) -> None:
+    """Bricht ab, wenn die Rechnung nichts als einen Rest hergegeben hat.
+
+    Beobachtet wurde dieser Fall bisher nicht — geprüft wird er trotzdem, und
+    zwar hier und nicht später. Ein Splitter, der ungeprüft weiterläuft, ist
+    schlimmer als ein Fehler: Die Reparaturkette macht daraus ein Dreieck,
+    jede folgende Operation meldet brav Erfolg, und am Ende steht ein leeres
+    Projekt, dem niemand ansieht, wo es schiefging. Genau so sah es aus, als
+    die Auswahl der größten Komponente noch Volumen mit Dreieckszahl verglich.
+
+    Die Zahlen, die der Nutzer ändern kann, stehen mit im Satz — ohne sie wäre
+    die Meldung nur eine Feststellung (Regel 17).
+    """
+    if not _collapsed(vertices, faces):
+        return
+    raise RuntimeError(
+        f"TripoSG hat keinen Körper geliefert, sondern einen Rest "
+        f"({len(faces)} Dreiecke). Zeigt das Bild kein freigestelltes "
+        f"Einzelobjekt, liegt es daran. Sonst hilft, in dieser Reihenfolge: "
+        f"einen anderen Startwert als {seed} nehmen, die Schritte über {steps} "
+        f"hinaus erhöhen, oder das Modell mit precision=float32 laden."
+    )
+
+
 class TripoSGLoader:
     """Lädt die Pipeline einmal und hält sie."""
 
@@ -193,30 +234,32 @@ class TripoSGImageToMesh:
         mask: torch.Tensor | None = None,
     ) -> tuple[trimesh.Trimesh]:
         prepared = _framed(_as_pil(image, mask), crop_margin, background=255)
-
         device = mm.get_torch_device()
-        generator = torch.Generator(device=device).manual_seed(int(seed))
 
-        output = pipeline(
-            image=prepared,
-            num_inference_steps=int(steps),
-            guidance_scale=float(guidance_scale),
-            generator=generator,
-            # Der hierarchische Pfad braucht kein diso. Beide Tiefen ziehen
-            # mit, sonst arbeitet die feine Stufe auf einem groben Gitter.
-            use_flash_decoder=False,
-            dense_octree_depth=int(octree_depth) - 1,
-            hierarchical_octree_depth=int(octree_depth),
-        )
-
-        vertices = np.asarray(output.samples[0][0], dtype=np.float64)
-        faces = np.asarray(output.samples[0][1], dtype=np.int64)
-        if vertices.size == 0 or faces.size == 0:
-            raise RuntimeError(
-                "TripoSG hat keine Geometrie geliefert. Das passiert, wenn das "
-                "Bild kein freigestelltes Einzelobjekt zeigt — Hintergrund "
-                "entfernen und erneut versuchen."
+        def rechnen(schritte: int) -> tuple[np.ndarray, np.ndarray]:
+            # Der Zufallsgeber wird jedes Mal neu gesetzt: Er führt einen
+            # Zustand, und ein zweiter Lauf auf demselben Objekt wäre sonst
+            # ein anderer — genau das, was ein gespeicherter Startwert
+            # verhindern soll.
+            generator = torch.Generator(device=device).manual_seed(int(seed))
+            output = pipeline(
+                image=prepared,
+                num_inference_steps=schritte,
+                guidance_scale=float(guidance_scale),
+                generator=generator,
+                # Der hierarchische Pfad braucht kein diso. Beide Tiefen ziehen
+                # mit, sonst arbeitet die feine Stufe auf einem groben Gitter.
+                use_flash_decoder=False,
+                dense_octree_depth=int(octree_depth) - 1,
+                hierarchical_octree_depth=int(octree_depth),
             )
+            return (
+                np.asarray(output.samples[0][0], dtype=np.float64),
+                np.asarray(output.samples[0][1], dtype=np.int64),
+            )
+
+        vertices, faces = rechnen(int(steps))
+        _refuse_empty(vertices, faces, seed=int(seed), steps=int(steps))
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)
         mm.soft_empty_cache()
@@ -267,9 +310,14 @@ class TripoSGPostprocess:
         if keep_largest_only:
             parts = work.split(only_watertight=False)
             if len(parts) > 1:
-                # Nach Volumen, nicht nach Dreieckszahl: ein zerknittertes
-                # Fragment kann mehr Dreiecke haben als der eigentliche Körper.
-                work = max(parts, key=lambda part: abs(part.volume) or len(part.faces))
+                # Nach Volumen, und die Dreieckszahl entscheidet nur bei
+                # Gleichstand. Als Tupel und nicht als ``volume or faces``:
+                # Ein offenes Fragment hat das Volumen 0,0 — und weil das
+                # falsch ist im Sinne von Python, fiel der Ausdruck auf seine
+                # Dreieckszahl zurück und verglich sie mit dem *Volumen* der
+                # anderen. Zwei Dreiecke schlugen so einen Körper von 1,57,
+                # und aus einem vollständigen Modell wurde ein Splitter.
+                work = max(parts, key=lambda part: (abs(part.volume), len(part.faces)))
 
         if target_faces and len(work.faces) > target_faces:
             work = work.simplify_quadric_decimation(face_count=target_faces)
