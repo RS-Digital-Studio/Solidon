@@ -57,6 +57,13 @@ htmlcov/
 # Versionsgeschichte — die Website-Dateien schon, die werden hochgeladen.
 /Releases/
 
+# --- Zugang zum Webserver ------------------------------------------------------
+# Host, Benutzer und Passwort des Hosting-Pakets für tools/upload_website.py.
+# Ein Passwort im Repository ist ein veröffentlichtes Passwort — auch in einem
+# privaten. Die Datei liegt auf der Maschine, die hochlädt, und sonst nirgends;
+# `tools/upload_website.py --vorlage` schreibt sie an.
+/.webserver.json
+
 # --- Claude Code -------------------------------------------------------------
 # Die Konfiguration unter .claude/ gehört ins Repository, ihr Laufzeitzustand
 # nicht: die Marke, wann die Suite zuletzt lief, ist Sache dieser Maschine.

@@ -27,6 +27,8 @@ import tomllib
 from pathlib import Path
 from typing import Any, Final
 
+import pytest
+
 import tools.check_env as check_env
 from tools.check_env import (
     mismatches,
@@ -260,3 +262,45 @@ def test_freezing_keeps_the_head_that_explains_the_file(tmp_path, monkeypatch) -
     assert "numpy==2.4.0" not in geschrieben
     # sortiert wie im Bestand, damit ein Diff die Änderung zeigt und nicht die Ordnung
     assert geschrieben.strip().splitlines()[-2:] == ["numpy==2.5.0", "Zebra==1.0"]
+
+
+# --- Der Zugang zum Webserver -------------------------------------------------------
+
+
+def test_the_web_access_never_lands_in_the_repository() -> None:
+    """Ein Passwort im Repository ist ein veröffentlichtes Passwort.
+
+    Auch in einem privaten: Ein Klon davon liegt auf jeder Maschine, auf der
+    jemand einmal gearbeitet hat, und die Versionsgeschichte vergisst nichts.
+    Der Zugang steht deshalb in ``.webserver.json``, und die Datei ist
+    ausgeschlossen.
+    """
+    import tools.upload_website as upload
+
+    root = Path(__file__).resolve().parent.parent
+    ignored = (root / ".gitignore").read_text(encoding="utf-8")
+
+    assert "/.webserver.json" in ignored
+    assert upload.ACCESS_FILE.name == ".webserver.json"
+    assert upload.ACCESS_FILE.parent == root
+
+
+def test_the_upload_tool_carries_no_password_of_its_own() -> None:
+    """Die Vorlage nennt Host und Benutzer, das Passwort trägt sie nicht."""
+    import tools.upload_website as upload
+
+    assert upload.VORLAGE["password"] == "hier eintragen"
+    assert "@" not in upload.VORLAGE["host"], "kein Zugang in der Adresse"
+
+
+def test_only_files_below_the_website_go_up(tmp_path: Path) -> None:
+    """Der Zielpfad wird aus dem lokalen abgeleitet — was daneben liegt, hat
+    dort keinen abzuleiten, und ein geratener wäre schlimmer als eine Absage.
+    """
+    import tools.upload_website as upload
+
+    inside = upload.LOCAL_ROOT / "api" / "support.php"
+    assert upload.remote_name(inside) == "api/support.php"
+
+    with pytest.raises(ValueError):
+        upload.remote_name(tmp_path / "fremd.html")
