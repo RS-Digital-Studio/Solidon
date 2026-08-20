@@ -168,6 +168,33 @@ def test_every_file_the_page_refers_to_exists(page: str) -> None:
     assert not missing, f"{page} verweist auf {missing}"
 
 
+def _webp_size(picture: Path) -> tuple[int, int]:
+    """Breite und Höhe einer WebP-Datei, ohne sie zu dekodieren.
+
+    Anders als PNG kennt WebP drei Kopfvarianten, und sie schreiben das Maß an
+    drei verschiedene Stellen. Wer blind acht Bytes hinter der Signatur liest —
+    wie es beim PNG geht — bekommt hier eine Größe wie 167 772 160 × 268 435 456
+    heraus und hält sie für ein falsch ausgezeichnetes Bild.
+    """
+    payload = picture.read_bytes()
+    kind = payload[12:16]
+    if kind == b"VP8X":
+        # Erweitert (das ist die Variante mit Alphakanal): je drei Bytes,
+        # niederwertig zuerst, und gespeichert wird das Maß minus eins.
+        breite = int.from_bytes(payload[24:27], "little") + 1
+        hoehe = int.from_bytes(payload[27:30], "little") + 1
+        return breite, hoehe
+    if kind == b"VP8L":
+        gepackt = int.from_bytes(payload[21:25], "little")
+        return (gepackt & 0x3FFF) + 1, ((gepackt >> 14) & 0x3FFF) + 1
+    if kind == b"VP8 ":
+        return (
+            int.from_bytes(payload[26:28], "little") & 0x3FFF,
+            int.from_bytes(payload[28:30], "little") & 0x3FFF,
+        )
+    raise AssertionError(f"{picture.name}: unbekannte WebP-Variante {kind!r}")
+
+
 @pytest.mark.parametrize("page", ALL_PAGES)
 def test_every_picture_states_the_size_it_actually_has(page: str) -> None:
     """Falsche Maße lassen die Seite beim Laden springen.
@@ -198,6 +225,8 @@ def test_every_picture_states_the_size_it_actually_has(page: str) -> None:
             )
             assert box is not None, f"{path}: gibt ein Maß an, hat aber keine viewBox"
             actual = (round(float(box.group(1))), round(float(box.group(2))))
+        elif picture.suffix == ".webp":
+            actual = _webp_size(picture)
         else:
             # Die Maße stehen im IHDR-Block, gleich hinter der PNG-Signatur.
             actual = struct.unpack(">II", picture.read_bytes()[16:24])
