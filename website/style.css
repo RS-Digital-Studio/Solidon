@@ -101,6 +101,32 @@ code {
   padding: 0.1em 0.35em;
 }
 
+/* Der Sprung an den Inhalt — die erste Sprungmarke jeder Seite (WCAG 2.4.1).
+   Wer mit der Tastatur bedient, kam vorher an jeder Seite zuerst durch elf
+   Bedienelemente der Kopfzeile: Logo, drei Verweise, das Sprachfeld mit sechs
+   Sprachen darin, den Demo-Knopf. Auf jeder Seite neu, und ohne jede
+   Möglichkeit, sie zu überspringen — `<main>` allein hilft dem Vorleser,
+   nicht der Tabulatortaste.
+
+   Sichtbar wird er nur, wenn er den Fokus hat. Nicht `display: none` und
+   nicht `visibility: hidden`: beides nimmt ihn auch aus der Tabulatorfolge,
+   und dann wäre er ein Verweis, den niemand erreicht. */
+.skip {
+  position: absolute;
+  left: 1.25rem;
+  top: -4rem;
+  z-index: 20;
+  padding: 0.6rem 1rem;
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+  text-decoration: none;
+  transition: top var(--step);
+}
+
+.skip:focus { top: 0.75rem; }
+
 /* 76rem sind 1216 px. Bei 62rem blieben auf einem 1920er Bildschirm 464 px
    Rand je Seite stehen, und der Hero-Text nutzte 32 % der Breite — die
    häufigste Auflösung sah eine Seite, die für ein Notebook gebaut war.

@@ -232,6 +232,42 @@ def test_every_jump_onto_another_page_lands_somewhere(page: str) -> None:
     assert not lost, f"{page} springt auf eine Stelle, die es nicht gibt: {lost}"
 
 
+def test_every_page_lets_the_keyboard_skip_the_header() -> None:
+    """Der Sprung an den Inhalt, auf jeder Seite und vor allem anderen.
+
+    Wer mit der Tastatur bedient, kam auf jeder Seite zuerst durch die
+    Kopfzeile: Logo, drei Verweise, das Sprachfeld mit sechs Sprachen darin,
+    den Demo-Knopf — elf Elemente, auf jeder der neunundzwanzig Seiten neu.
+    ``<main>`` allein hilft dem Vorleser und nicht der Tabulatortaste (WCAG
+    2.4.1).
+
+    Geprüft wird über **alle** Seiten unter ``website/``, nicht über
+    ``ALL_PAGES``: Die Rechtstexte und die fünf Sprachfassungen stehen dort
+    nicht, und ausgerechnet sie werden von Hand angelegt. Die Beschriftung
+    kommt aus derselben Tabelle, aus der die erzeugten Handbuchseiten sie
+    nehmen — zwei Listen wären eine zu viel.
+    """
+    from tools.make_manual import SKIP
+
+    wrong = []
+    for page in sorted([*WEBSITE.glob("*.html"), *WEBSITE.glob("*/*.html")]):
+        text = page.read_text(encoding="utf-8")
+        name = page.relative_to(WEBSITE).as_posix()
+        language = page.parent.name if page.parent != WEBSITE else "de"
+        found = re.search(r'<a class="skip" href="#([^"]+)">([^<]+)</a>', text)
+        if found is None:
+            wrong.append(f"{name}: kein Sprung an den Inhalt")
+            continue
+        target, label = found.groups()
+        if f'id="{target}"' not in text:
+            wrong.append(f"{name}: der Sprung zeigt auf #{target}, das es nicht gibt")
+        if label != SKIP[language]:
+            wrong.append(f"{name}: {label} statt {SKIP[language]}")
+        if found.start() > text.index("<header"):
+            wrong.append(f"{name}: der Sprung steht hinter der Kopfzeile")
+    assert not wrong, "\n".join(wrong)
+
+
 #: Der Runner-Name eines Auftrags sagt, für welche Familie gepackt wird. Die
 #: Paketmatrix steht als Liste da; die Suite-Matrix daneben baut ihre über
 #: ``fromJSON`` und packt nichts — die eckige Klammer trennt beide.

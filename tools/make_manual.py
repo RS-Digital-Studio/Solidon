@@ -371,6 +371,18 @@ HEADER_NAV = {
     "pt": ("Índice", "Experimentar", "index.html#pricing"),
 }
 
+#: Der Sprung an den Inhalt, die erste Sprungmarke jeder Seite (WCAG 2.4.1).
+#: Der Verweis „Inhalt" in der Kopfzeile führt zum Verzeichnis und ist etwas
+#: anderes: Er steht *hinter* den Bedienelementen, die er überspringen müsste.
+SKIP = {
+    "de": "Zum Inhalt springen",
+    "en": "Skip to content",
+    "es": "Saltar al contenido",
+    "fr": "Aller au contenu",
+    "it": "Vai al contenuto",
+    "pt": "Ir para o conteúdo",
+}
+
 #: Der Satz unter dem Titel. Er sagt in einer Zeile, was die Seite ist und
 #: woher sie kommt — nicht über ``tr()``, wie alles hier.
 LEDE = {
@@ -677,7 +689,8 @@ def page_html(language: str, prefix: str) -> str:
         f'type="image/svg+xml">\n'
         f'<link rel="stylesheet" href="{"style.css" if language == "de" else "../style.css"}">\n'
         f"<style>{STYLE}</style>\n</head>\n<body>\n"
-        f"{_header(language)}\n<main>\n"
+        f'<a class="skip" href="#content">{SKIP.get(language, SKIP["de"])}</a>\n'
+        f'{_header(language)}\n<main id="content">\n'
         f"{_cover_block(language)}\n"
         f'<h1 class="no-print">{tr("Handbuch")}</h1>\n'
         f'<p class="lede no-print">{lede}</p>\n'
