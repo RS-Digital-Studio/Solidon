@@ -517,6 +517,41 @@ bekommt einen roten Lauf.
       das läuft ohne jeden Eintrag. Eine Datei `_acme-challenge.txt` im
       Webspace hilft dabei nicht — eine DNS-Challenge wird im DNS abgefragt.
 
+      **Auffindbar erst seit dem 20.08.2026.** Die Seite stand zwölf Tage
+      online und war in keinem Index: `site:solidon3d.de` lieferte null
+      Treffer. Der Kopfbereich war seit je vorbildlich — `canonical`,
+      `hreflang` über alle sechs Sprachen samt `x-default`, Open Graph,
+      `SoftwareApplication` als JSON-LD, und kein einziges Bild ohne
+      alt-Text —, aber die zwei Dateien fehlten, die ein Crawler zuerst holt:
+      `robots.txt` und `sitemap.xml`, beide 404. Ohne Sitemap muss Google 24
+      Seiten über Verweise finden, und eine Domain ohne eingehende Links hat
+      keine. Beides erzeugt jetzt `tools/make_seo.py` aus dem Bestand, dazu
+      `llms.txt` und die `FAQPage`-Auszeichnung der elf Fragen in allen sechs
+      Sprachen; `tests/test_website.py` prüft die Sitemap in beide Richtungen
+      und die Auszeichnung gegen das Markup, aus dem sie stammt.
+
+      Drei Funde waren keine Schönheitsfehler. Die Rechtstexte tragen
+      `noindex` — sie in die Sitemap zu schreiben, hätte der Search Console
+      einen Widerspruch gemeldet, den dann Google auflöst statt wir. Die
+      Kopfzeile des Handbuchs verwies auf `index.html` statt auf den Ordner
+      und legte damit jede Startseite unter eine zweite Adresse. Und
+      `Clear-Site-Data: "cache"` ging bei jeder Antwort mit: ein Übergang vom
+      18.08., der den Cache jedes Besuchers vollständig räumte — ausgerechnet
+      am Tag mit den meisten Erstbesuchern. Er ist raus, Bilder cachen eine
+      Woche, Seiten bleiben auf `no-cache`.
+
+      Zwei Punkte der Durchsicht haben sich beim Nachmessen erledigt: „der
+      Text nennt 3D-Druck nicht" stimmte nur für die exakte Zeichenfolge — der
+      Wortstamm steht vierzehnmal auf der Startseite, in acht Formen —, und
+      ausgehende Verweise auf Autoritätsseiten verbietet die Zusage der Seite
+      selbst (`test_the_page_loads_nothing_from_outside`). Beides blieb
+      unangetastet.
+
+      Was bleibt, liegt außerhalb: **der Name kollidiert.** Eine Suche nach
+      „Solidon3D" liefert SolidWorks, Solid Edge, SolidPrint3D, Solidscape und
+      Solidoodle; Google behandelt „Solidon" als Verschreiber. Dagegen hilft
+      keine Auszeichnung, nur Zeit und Erwähnungen anderswo.
+
       Offen: Postfach `support@solidon3d.de` samt SPF/DMARC und der
       Auftragsverarbeitungsvertrag im CCP. Der Zahlungsdienstleister in den AGB
       ist seit dem 08.08.2026 eingetragen (Paddle); Entwurf bleiben die

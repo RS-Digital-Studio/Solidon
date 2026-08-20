@@ -41,6 +41,35 @@ den Wegen — von Hand auf ihren Endzustand; ohne das lägen beide Zustände
 | `eula.html`, `agb.html`, `widerruf.html` | Rechtstexte — erzeugt von `tools/make_legal.py` aus `EULA.md`, `AGB.md` und `WIDERRUF.md`, nie von Hand ändern |
 | `style.css` | Gestaltung, hell und dunkel über `prefers-color-scheme` |
 | `version.json` | Versionsdatei für den Update-Hinweis (`core/updates.py`) |
+| `robots.txt`, `sitemap.xml`, `llms.txt` | Was Suchmaschinen zuerst holen — erzeugt von `tools/make_seo.py`, nie von Hand ändern |
+| `.htaccess` | Eine Adresse je Seite, Caching, Kompression — von Hand |
+
+## Was Suchmaschinen sehen
+
+`tools/make_seo.py` erzeugt drei Dateien und einen Auszeichnungsblock, alle
+aus dem Bestand abgeleitet. Es läuft **nach** `make_manual.py` und
+`make_legal.py`, denn es liest deren Ergebnis:
+
+* **`sitemap.xml`** führt die 24 indexierbaren Seiten mit ihren
+  Sprachfassungen. Die Zuordnung kommt aus den `hreflang`-Angaben der Seiten
+  selbst — eine zweite Liste liefe beim nächsten Zusatz auseinander. Die fünf
+  Rechtstexte fehlen dort mit Absicht: sie tragen `noindex`, und eine Sitemap,
+  die sie trotzdem anbietet, sagt das Gegenteil dessen, was auf der Seite
+  steht. `tests/test_website.py` prüft beide Richtungen.
+* **`FAQPage`-Auszeichnung** in den sechs Startseiten, gelesen aus dem
+  `<div class="faq">`, das dort ohnehin steht. Damit können die elf Fragen als
+  Rich Result erscheinen, und eine KI-Suche zitiert lieber Ausgezeichnetes als
+  Erratenes. Die Sprungmarke des Abschnitts heißt je Sprache anders (`fragen`,
+  `questions`) und wird abgelesen, nicht angenommen.
+* **`llms.txt`** — dieselbe Übersicht für Sprachmodelle, die keine 24 Seiten
+  crawlen wollen.
+
+**Die Titel sind Suchanfragen, keine Etiketten.** „Funktionen — Solidon3D" war
+zutreffend und trug nichts: nach „Funktionen" sucht niemand, und der
+Markenname findet nur, wer ihn schon kennt — der ist im Umfeld von SolidWorks,
+Solid Edge und SolidPrint3D ohnehin schwer zu halten. Was in den Titeln steht,
+löst die jeweilige Seite auch ein; Begriffe, die auf der Seite nicht vorkommen,
+bleiben draußen.
 
 Die drei Rechtstexte tragen ihren Entwurfshinweis automatisch, solange ein
 Platzhalter darin steht — `tools/make_legal.py` setzt ihn, und er verschwindet

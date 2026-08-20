@@ -64,6 +64,7 @@ zusammen. Weiteres:
 .venv\Scripts\python.exe tools/make_figures.py                  # Bildschirmfotos fürs Handbuch
 .venv\Scripts\python.exe tools/make_manual.py                   # Handbuch als Website und PDF
 .venv\Scripts\python.exe tools/make_icon.py                     # Anwendungssymbol rastern: ICO und Website-Favicon
+.venv\Scripts\python.exe tools/make_seo.py                      # robots.txt, sitemap.xml, llms.txt, FAQ-Auszeichnung — nach den beiden darüber
 .venv\Scripts\python.exe tools/make_installer.py                # Setup-Datei aus dist/Solidon, braucht Inno Setup 6
 .venv\Scripts\python.exe tools/build_slice_core.py              # Konturverkettung übersetzen (optional, 1,34× auf die Schichtanalyse)
 python tools/check_env.py                                       # stimmen die Fassungen? läuft auch ohne .venv
@@ -131,7 +132,8 @@ app/cli/      Kommandozeile auf core
 tests/        eine Datei je Testart, data/ ist der Referenzkorpus
 tools/        Hilfsprogramme, nicht Teil der Anwendung
 website/      öffentliche Seiten; handbuch.html und en/manual.html erzeugt
-              tools/make_manual.py, alles andere ist von Hand gepflegt
+              tools/make_manual.py, die Rechtstexte tools/make_legal.py,
+              robots/sitemap/llms tools/make_seo.py — der Rest von Hand
 3D Drucker/   physische Druckprojekte, eigene CLAUDE.md, nicht im Repository
 ```
 
