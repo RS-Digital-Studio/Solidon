@@ -2536,7 +2536,16 @@ class MainWindow(QMainWindow):
         self._generate(Path(path))
 
     def _generate(self, image: Path | None) -> None:
-        dialog = GenerateDialog(parent=self)
+        # Der Aufbau fragt einmal, ob ein Generator läuft, und das ist ein
+        # Socket mit Zeitlimit — gemessen eine halbe Sekunde. Damit gehört er
+        # in die mittlere Zeile der Wartezeit-Tabelle (§2.8).
+        with waiting():
+            dialog = GenerateDialog(parent=self)
+        # Regel 17: „Es läuft kein Generator" bot nichts an. Von hier führt der
+        # Weg in die Liste der zusätzlichen Programme, und danach sieht der
+        # Dialog noch einmal nach — wer ComfyUI gerade gestartet hat, soll
+        # nicht schließen und neu öffnen müssen.
+        dialog.setupRequested.connect(lambda: self._offer_generator_setup(dialog))
         if image is not None:
             dialog.set_image(image)
         if dialog.exec() != QDialog.DialogCode.Accepted or dialog.result_mesh is None:
@@ -2635,6 +2644,18 @@ class MainWindow(QMainWindow):
     def action_install_extras(self) -> None:
         """§36: was fehlt, wofür es da ist, und ein Knopf, der es holt."""
         InstallDialog(self).exec()
+
+    def _offer_generator_setup(self, dialog: GenerateDialog) -> None:
+        """Aus dem Erzeugungsdialog in die Liste der zusätzlichen Programme.
+
+        Und zurück: Der Dialog fragt danach noch einmal, ob ein Generator
+        läuft. Ohne das wäre der Weg eine Sackgasse mit Umweg — man kommt
+        dorthin, wo es zu beheben ist, und muss dann trotzdem schließen und
+        neu öffnen.
+        """
+        self.action_install_extras()
+        with waiting():
+            dialog.recheck()
 
     def action_shortcuts(self) -> None:
         """Die Kürzelübersicht (§19.2, D6).

@@ -110,9 +110,27 @@ class GenerateDialog(QDialog):
     Körper zurück.
     """
 
+    setupRequested = Signal()
+    """Der Benutzer will den fehlenden Generator einrichten (§2.7, Regel 17).
+
+    Wie im Chat: Das Panel weiß, *dass* etwas fehlt, aber nicht, wo man es
+    holt — das entscheidet das Fenster.
+    """
+
     def __init__(self, backend: MeshBackend | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.backend: MeshBackend = backend or ComfyBackend()
+        self._available = bool(self.backend.available)
+        """Ob ein Generator läuft — **einmal** gefragt und gemerkt.
+
+        ``ComfyBackend.available`` öffnet einen Socket mit einem Zeitlimit von
+        einer Viertelsekunde. Gefragt wurde es aus ``_update_state``, und das
+        hängt an ``textChanged``: Gemessen kostete jeder Tastendruck **510 ms**
+        im Qt-Hauptthread — „Halter" zu tippen hieß drei Sekunden stehendes
+        Fenster (§2.8). Neu gefragt wird, wenn es einen Anlass gibt, und der
+        ist nicht der nächste Buchstabe: beim Aufgehen und nach einem Besuch
+        bei den zusätzlichen Programmen (:meth:`recheck`).
+        """
         self.result_mesh: GeneratedMesh | None = None
         self._image: bytes | None = None
         self._busy = False
@@ -197,6 +215,11 @@ class GenerateDialog(QDialog):
         self.again.setVisible(False)
         self.again.clicked.connect(self._try_again)
 
+        # Der Weg zu dem, was fehlt — siehe :meth:`_update_state`.
+        self.setup = QPushButton(tr("Zusätzliche Programme …"), self)
+        self.setup.setVisible(False)
+        self.setup.clicked.connect(self.setupRequested)
+
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(self.advanced)
@@ -205,6 +228,7 @@ class GenerateDialog(QDialog):
         # von dem Knopf entfernt, den er erklärt.
         layout.addStretch(1)
         layout.addWidget(self.state)
+        layout.addWidget(self.setup)
         layout.addWidget(self.attempts)
         layout.addWidget(self.again)
         layout.addWidget(self.progress)
@@ -217,7 +241,17 @@ class GenerateDialog(QDialog):
 
     @property
     def available(self) -> bool:
-        return bool(self.backend.available)
+        return self._available
+
+    def recheck(self) -> None:
+        """Noch einmal nachsehen, ob jetzt ein Generator läuft.
+
+        Nach dem Besuch bei den zusätzlichen Programmen: Wer ComfyUI gerade
+        gestartet hat, soll nicht den Dialog schließen und neu öffnen müssen,
+        um es zu erfahren.
+        """
+        self._available = bool(self.backend.available)
+        self._update_state()
 
     def _update_state(self) -> None:
         if not self.available:
@@ -229,6 +263,12 @@ class GenerateDialog(QDialog):
             )
         else:
             self.state.setText(tr("Bereit. Das kann einige Minuten dauern."))
+        # Regel 17: Der Satz sagte, was fehlt, und bot nichts an. Derselbe Weg
+        # wie im Chat, wo „Chat einrichten …" neben dem Hinweis steht — hier
+        # führt er in die Liste der zusätzlichen Programme, in der ComfyUI mit
+        # seiner Bezugsadresse steht. Sichtbar nur, solange etwas zu beheben
+        # ist.
+        self.setup.setVisible(not self.available)
         # ``_busy`` gehört hierher und nicht nur in ``_running``: Diese Methode
         # hängt am Textfeld, und das bleibt während des Laufs bedienbar. Wer
         # weitertippte, machte *Erzeugen* wieder klickbar und startete einen

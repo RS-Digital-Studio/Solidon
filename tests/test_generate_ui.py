@@ -38,6 +38,34 @@ def finish(dialog: GenerateDialog, qt_app: QApplication) -> None:
     qt_app.processEvents()
 
 
+class CountingBackend:
+    """Ein Generator, der mitzählt, wie oft jemand nach ihm fragt.
+
+    ``ComfyBackend.available`` ist ein Socket mit Zeitlimit; hier kostet die
+    Frage nichts, und genau darum lässt sich zählen, wie oft sie gestellt
+    wird.
+    """
+
+    def __init__(self, available: bool = False) -> None:
+        self._available = available
+        self.asked = 0
+
+    @property
+    def id(self) -> str:
+        return "counting"
+
+    @property
+    def available(self) -> bool:
+        self.asked += 1
+        return self._available
+
+    def text_to_mesh(self, prompt: str, **kwargs: object) -> object:
+        raise AssertionError("dieser Test erzeugt nichts")
+
+    def image_to_mesh(self, image: bytes, **kwargs: object) -> object:
+        raise AssertionError("dieser Test erzeugt nichts")
+
+
 def test_without_a_generator_the_dialog_explains_itself(qt_app: QApplication) -> None:
     """§27: kein Backend heißt ausgegraut und ein Satz, kein versteckter
     Menüeintrag.
@@ -48,6 +76,53 @@ def test_without_a_generator_the_dialog_explains_itself(qt_app: QApplication) ->
     assert not dialog.available
     assert not ok(dialog).isEnabled()
     assert "ComfyUI" in dialog.state.text()
+
+
+def test_the_missing_generator_comes_with_the_way_to_one(qt_app: QApplication) -> None:
+    """Regel 17: Der Satz sagte, was fehlt, und bot nichts an.
+
+    „Es läuft kein Generator" stand allein über einem gesperrten Knopf — der
+    Weg zu ComfyUI steht in der Liste der zusätzlichen Programme, und von hier
+    führte nichts dorthin. Der Chat macht es an derselben Stelle richtig
+    („Chat einrichten …" neben dem Hinweis).
+    """
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    dialog.show()
+    qt_app.processEvents()
+
+    assert dialog.setup.isVisibleTo(dialog), "ohne Generator steht der Weg dorthin da"
+    asked: list[bool] = []
+    dialog.setupRequested.connect(lambda: asked.append(True))
+    dialog.setup.click()
+    assert asked, "und der Knopf sagt es dem Fenster"
+
+    ready = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
+    ready.show()
+    qt_app.processEvents()
+    assert not ready.setup.isVisibleTo(ready), "wo nichts fehlt, steht auch kein Weg"
+
+
+def test_typing_does_not_ask_the_generator_again(qt_app: QApplication) -> None:
+    """Gemessen: jeder Tastendruck kostete 510 ms im Qt-Hauptthread.
+
+    ``available`` hing an ``textChanged``, und ``ComfyBackend.available``
+    öffnet einen Socket mit einer Viertelsekunde Zeitlimit. „Halter" zu tippen
+    hieß drei Sekunden stehendes Fenster — und das war der Zustand, in dem der
+    Dialog aufgeht, wenn kein Generator läuft: genau dann, wenn jemand ihn zum
+    ersten Mal öffnet und nichts versteht (§2.8).
+    """
+    backend = CountingBackend()
+    dialog = GenerateDialog(backend=backend)
+    after_build = backend.asked
+    assert after_build == 1, "einmal beim Aufgehen, das ist der Anlass"
+
+    for letter in "Halter mit 32 mm":
+        dialog.prompt.insert(letter)
+
+    assert backend.asked == after_build, "und danach kein weiteres Mal"
+
+    dialog.recheck()
+    assert backend.asked == after_build + 1, "wer nachsieht, sieht wirklich nach"
 
 
 def test_the_button_waits_for_something_to_generate_from(
