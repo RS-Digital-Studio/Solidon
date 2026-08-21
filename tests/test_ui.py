@@ -9,6 +9,7 @@ Arbeiter.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 from pathlib import Path
 from typing import Any, cast
@@ -1436,6 +1437,51 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
         assert value.id in known or value.id in postponed, (
             f"{name} wird angeboten, aber nichts führt sie aus"
         )
+
+
+def test_the_finding_below_the_bed_is_one_click_from_being_fixed(window: MainWindow) -> None:
+    """§2.7 zu Ende: der Klick am Befund tut, was der Satz nahelegt.
+
+    Ein geladenes Modell sitzt mittig auf z = 0 und steckt damit zur Hälfte
+    unter der Platte — der häufigste Befund von Weg 1. Die Eingangsstufe setzt
+    es bewusst nicht von selbst auf (§17.1: anbieten, nicht erzwingen), und
+    angeboten war es nirgends: Der Bericht nannte den Fall und bot *Modell
+    teilen* und *Auf den Bauraum verkleinern* an.
+
+    Geprüft wird die ganze Kette — Kennung, Handlung, Handler, Geometrie — und
+    dass ein Undo sie zurücknimmt (Regel 19, §2.1).
+    """
+    from app.ui.panels import FINDING_ACTIONS, as_error
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+
+    result = window.session.last_result
+    sunk = [f for f in result.scene.report.findings if f.code == "arrange.below_bed"]
+    assert sunk, "ein mittig geladenes Modell steckt unter der Platte"
+    before = next(iter(result.scene.objects.values())).mesh.bounds.minimum[2]
+    assert before < 0.0
+
+    offers = FINDING_ACTIONS[sunk[0].code]
+    handlers = window.error_handlers()
+    assert [action.id for action in offers] == ["place_on_bed"]
+    assert offers[0].id in handlers, "angeboten, aber nichts führt es aus"
+
+    handlers[offers[0].id](as_error(sunk[0]))
+    window.session.wait_for_idle()
+
+    after = window.session.last_result
+    assert next(iter(after.scene.objects.values())).mesh.bounds.minimum[2] == pytest.approx(0.0)
+    assert not [f for f in after.scene.report.findings if f.code == "arrange.below_bed"], (
+        "der Befund bleibt stehen, obwohl er behoben ist"
+    )
+
+    window.action_undo()
+    window.session.wait_for_idle()
+    zurueck = window.session.last_result
+    assert next(iter(zurueck.scene.objects.values())).mesh.bounds.minimum[2] == pytest.approx(
+        before
+    ), "ein Undo nimmt die Handlung nicht zurück"
 
 
 def test_only_actions_with_a_handler_are_offered(window: MainWindow) -> None:
@@ -3349,6 +3395,92 @@ def test_dragging_a_face_reaches_the_document(window: MainWindow) -> None:
     moved = window.session.project.document.ops[-1]
     assert moved.params["distance"] == pytest.approx(3.0)
     assert moved.params["nz"] == pytest.approx(1.0)
+
+
+def test_a_late_worker_does_not_switch_off_its_successor(session: Session) -> None:
+    """Der Nachzügler meldete „fertig" mitten in den Lauf seines Nachfolgers.
+
+    Ein Arbeiter ist fertig, bevor Qt sein ``finished`` zugestellt hat; in
+    dieser Lücke startet der nächste Lauf. Der Nachzügler kam dann in
+    ``_on_thread_done`` an, schrieb ``None`` in ``_worker`` — das Feld gehörte
+    da längst dem Nachfolger — und meldete ``busyChanged(False)``.
+
+    **Zu sehen war das an der Stelle, an der jeder anfängt.** Eine Datei auf
+    den Startbildschirm ziehen legt zwei Läufe hintereinander: den leeren des
+    neuen Projekts und den des Imports. Bei einem Modell mit 1,3 Millionen
+    Dreiecken verschwanden Balken und Abbrechen nach einer Zehntelsekunde, und
+    die Anwendung rechnete die restlichen vier Sekunden ohne ein Zeichen von
+    sich — genau das, was §2.8 ab zwei Sekunden verlangt. Unsichtbar, aber
+    schwerer: ``busy`` log danach, ``wait_for_idle`` wartete nicht, und der
+    nächste ``evaluate_async`` hätte einen zweiten Lauf **parallel** gestartet
+    statt ihn einzureihen (§15.6).
+    """
+    from app.ui.session import _EvaluationWorker
+
+    session.import_model(MESHES / "cube_clean.stl")
+    running = session._worker
+    assert running is not None, "der Import hat keinen Lauf gestartet"
+
+    seen: list[bool] = []
+    session.busyChanged.connect(seen.append)
+    # Ein Vorgänger, dessen Signal jetzt erst ankommt. Gestartet wird er nie —
+    # zugestellt wird sein Ende, und darum geht es.
+    session._on_thread_done(_EvaluationWorker(session))
+
+    assert seen == [], "ein alter Lauf meldet das Ende eines fremden"
+    assert session._worker is running, "die Referenz auf den laufenden Lauf ging verloren"
+    assert session.busy, "und damit log auch busy"
+
+    session.wait_for_idle()
+
+
+def test_a_replaced_run_keeps_the_progress_standing(session: Session) -> None:
+    """Ein Ersetzen ist kein Aufhören (§15.6, §2.8).
+
+    ``_rerun_pending`` heißt: dieser Lauf ist überholt, der nächste startet
+    sofort. Dazwischen ``busyChanged(False)`` zu melden nähme Balken und
+    Abbrechen für eine Zehntelsekunde mit — beim Ziehen an einem Schieber im
+    Sekundentakt. Dieselbe Begründung, aus der ``evaluationCancelled`` einen
+    ersetzten Lauf nicht meldet.
+    """
+    session.import_model(MESHES / "cube_clean.stl")
+    running = session._worker
+    assert running is not None
+
+    seen: list[bool] = []
+    session.busyChanged.connect(seen.append)
+    session._rerun_pending = True
+    session._on_thread_done(running)
+
+    assert False not in seen, "der Balken fällt zwischen zwei Läufen aus"
+    assert seen == [True], "und der nächste Lauf meldet sich als laufend"
+
+    session.wait_for_idle()
+
+
+def test_a_late_result_does_not_overwrite_the_current_scene(session: Session) -> None:
+    """§15.3: stehen bleibt der letzte **gültige** Stand.
+
+    Das Ergebnis eines überholten Laufs gehört zu einem Dokument, das es nicht
+    mehr gibt. Eingeblendet wurde es trotzdem — beim Ablegen einer Datei war
+    das die leere Szene des neuen Projekts, über das Modell gelegt, das gerade
+    geladen wurde. Sichtbar als Aufblitzen, und es nahm den Ladeschleier mit,
+    der genau daran hängt, ob ein Körper dasteht.
+    """
+    from app.ui.session import _EvaluationWorker
+
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+    current = session.last_result
+    assert current is not None and current.scene.objects
+
+    session.import_model(MESHES / "two_components.stl")
+    stale = dataclasses.replace(current, scene=dataclasses.replace(current.scene, objects={}))
+    session._on_finished(stale, finished=_EvaluationWorker(session))
+
+    assert session.last_result is current, "eine alte Szene hat die aktuelle ersetzt"
+
+    session.wait_for_idle()
 
 
 def test_every_worker_survives_the_delivery_of_its_own_signal(session: Session) -> None:

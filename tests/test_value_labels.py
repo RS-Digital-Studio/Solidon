@@ -200,6 +200,23 @@ def test_the_report_offers_what_helps(qt_app: object) -> None:
     assert FINDING_ACTIONS["arrange.out_of_build_volume"] == (SPLIT_MODEL, SCALE_TO_FIT)
 
 
+def test_a_body_below_the_bed_gets_the_click_that_helps() -> None:
+    """Teilen und Verkleinern helfen dem verrutschten Koerper nicht.
+
+    Beide Faelle liefen unter einer Kennung, und die Kennung entscheidet, was
+    der Pruefbericht anbietet. Damit bekam der haeufigste Fall von Weg 1 — ein
+    heruntergeladenes Modell sitzt mittig auf z = 0 und steckt zur Haelfte
+    unter der Platte — genau die zwei Handlungen angeboten, die nichts
+    ausrichten. §17.1 sagt zum Aufsetzen „anbieten, nicht erzwingen"; angeboten
+    war es nirgends.
+    """
+    from app.core.errors import ARRANGE_ON_BED, PLACE_ON_BED
+    from app.ui.panels import FINDING_ACTIONS
+
+    assert FINDING_ACTIONS["arrange.below_bed"] == (PLACE_ON_BED,)
+    assert FINDING_ACTIONS["arrange.off_the_plate"] == (ARRANGE_ON_BED,)
+
+
 def test_a_finding_reaches_the_handlers_that_expect_an_error(qt_app: object) -> None:
     """Die Handler kommen aus dem Fehlerdialog und wollen einen ``AppError``.
 

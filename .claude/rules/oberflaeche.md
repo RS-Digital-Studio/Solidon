@@ -437,6 +437,23 @@ def _worker_done(self, worker: Any) -> None:
 `_retire`. `wait_for_workers` wartet am Ende auf alle — auch auf die in
 `_retired`, sonst überlebt einer sein Fenster und nimmt den Prozess mit.
 
+**Und er meldet auch nichts mehr.** Die Regel darüber galt als Sache der
+Stabilität; sie ist genauso eine der Anzeige. Ein Nachzügler, der
+`busyChanged(False)` sendet, räumt Balken, Abbrechen und Ladeanzeige eines
+Laufs ab, der noch rechnet — sichtbar an der Stelle, an der jeder anfängt:
+Eine Datei auf den Startbildschirm zu ziehen legt zwei Läufe hintereinander
+(das leere neue Projekt, dann den Import), und bei 1,3 Millionen Dreiecken war
+die Anzeige nach einer Zehntelsekunde weg und die restlichen vier Sekunden
+stumm. Dasselbe gilt für sein Ergebnis: eingeblendet wurde die leere Szene des
+Vorgängers über dem Modell, das gerade lud (§15.3). `Session._outdated`
+beantwortet die Frage für alle vier Abschluss-Slots; ein Aufruf ohne Absender
+(Tests, Kommandozeile) gilt als aktuell.
+
+**Ein Ersetzen ist dabei kein Aufhören.** Steht `_rerun_pending`, folgt der
+nächste Lauf sofort — dann wird kein `False` gemeldet, sonst flackert die
+Anzeige beim Ziehen an einem Schieber im Sekundentakt. Dieselbe Begründung,
+aus der `evaluationCancelled` einen ersetzten Lauf nicht meldet.
+
 ## Der Mauszeiger
 
 Zeiger kommen aus `app/ui/cursors.py`, nie als `Qt.CursorShape` an der

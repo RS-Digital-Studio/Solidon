@@ -188,6 +188,10 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF", "A", "C4", "FURB", "ICN",
 # Das Handbuch ist Fließtext für Leser: Bauräume stehen dort als „256 × 256 ×
 # 256", mit dem Zeichen, das ein Setzer nähme, nicht mit einem kleinen x.
 "app/core/manual.py" = ["RUF001"]
+# Die Einheitenrückfrage zeigt, wie groß das Modell mit jeder Antwort wäre —
+# „40,0 × 20,0 × 2,5 mm" liest ein Mensch, und der nimmt dasselbe Zeichen wie
+# im Steckbrief.
+"app/core/ingest/ops.py" = ["RUF001"]
 "tests/*" = ["RUF001", "RUF002"]
 
 [tool.mypy]

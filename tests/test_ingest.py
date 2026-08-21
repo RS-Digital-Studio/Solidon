@@ -17,6 +17,7 @@ from app.core.ingest.loader import (
     detect_unit,
     normalise,
 )
+from app.core.ingest.ops import unit_question
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.cache import CachedResult, DiskCache
 from app.core.scene.project import Project, ProjectSources, new_project
@@ -50,6 +51,28 @@ def test_an_empty_model_offers_every_unit() -> None:
     guess = detect_unit(0.0)
     assert not guess.certain
     assert guess.candidates == ("mm", "cm", "in", "m")
+
+
+def test_the_question_says_how_big_each_answer_would_be() -> None:
+    """Eine Frage, die niemand beantworten kann, ist die halbe Regel (§17.1).
+
+    Zur Wahl standen „cm" und „in" — zwei Wörter. In keinem STL steht die
+    Einheit; wer eine fremde Datei herunterlädt, kann sie nicht wissen. Was er
+    weiß, ist, wie groß das Teil sein soll, und genau das steht jetzt neben
+    jeder Antwort.
+    """
+    bounds = mesh_of("bracket_inch.stl").bounds
+    guess = detect_unit(bounds.diagonal)
+    question = unit_question(bounds.size, guess.candidates)
+
+    lines = question.splitlines()
+    assert lines[0] == str(_("In welcher Einheit ist diese Datei gespeichert?"))
+    assert len(lines) == 1 + len(guess.candidates), "je Antwort eine Zeile"
+    for unit in guess.candidates:
+        assert any(line.startswith(f"{unit}:") for line in lines[1:]), unit
+    # Vier Zoll sind 101,6 mm — die Zahl, an der man die Antwort erkennt.
+    assert "101.60" in question
+    assert "40.00" in question, "und in Zentimetern wären es vierzig"
 
 
 # --- reading --------------------------------------------------------------------

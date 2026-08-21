@@ -15,6 +15,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
+from functools import partial
 from pathlib import Path
 from typing import Any
 
@@ -1019,10 +1020,19 @@ class Session(QObject):
         self._cancel_by_user = False
         self.busyChanged.emit(True)
         worker = _EvaluationWorker(self)
-        worker.finishedWith.connect(self._on_finished)
-        worker.failedWith.connect(self._on_failed)
-        worker.cancelled.connect(self._on_cancelled)
-        worker.finished.connect(self._on_thread_done)
+        # **Jeder Slot erfährt, von welchem Lauf er kommt.** Ein Arbeiter ist
+        # fertig, bevor Qt seine Signale zugestellt hat — und in dieser Lücke
+        # startet der nächste. Ohne den Absender hielt der Nachzügler seine
+        # Meldung für die aktuelle: Er löschte ``_worker`` (das Feld gehörte da
+        # längst dem Nachfolger), meldete ``busyChanged(False)`` mitten in
+        # dessen Lauf und schob seine alte Szene ins Fenster. Genau das
+        # passierte beim häufigsten Weg überhaupt — eine Datei auf den
+        # Startbildschirm ziehen legt zwei Läufe hintereinander: den leeren des
+        # neuen Projekts und den des Imports.
+        worker.finishedWith.connect(partial(self._on_finished, finished=worker))
+        worker.failedWith.connect(partial(self._on_failed, finished=worker))
+        worker.cancelled.connect(partial(self._on_cancelled, finished=worker))
+        worker.finished.connect(partial(self._on_thread_done, worker))
         self._worker = worker
         worker.start()
 
@@ -1220,18 +1230,39 @@ class Session(QObject):
 
     # --- worker replies ---------------------------------------------------------
 
-    def _on_finished(self, result: Any) -> None:
+    def _outdated(self, finished: _EvaluationWorker | None) -> bool:
+        """Ob diese Meldung von einem Lauf kommt, den ein neuerer ersetzt hat.
+
+        ``None`` heißt „kein Absender bekannt" und gilt als aktuell: Tests und
+        die Kommandozeile rufen die Slots direkt, und ein Aufruf ohne Arbeiter
+        ist keine Nachzüglermeldung, sondern der Normalfall dort.
+        """
+        return finished is not None and finished is not self._worker
+
+    def _on_finished(self, result: Any, finished: _EvaluationWorker | None = None) -> None:
+        if self._outdated(finished):
+            # §15.3: stehen bleibt der letzte **gültige** Stand. Das Ergebnis
+            # eines überholten Laufs gehört zu einem Dokument, das es nicht
+            # mehr gibt — es einzublenden hieß, die leere Szene des neuen
+            # Projekts über das Modell zu legen, das gerade geladen wird.
+            return
         self.last_result = result
         # §17.2: die Rückfallstufe behalten, die jede Operation getragen hat —
         # damit die Datei morgen gleich nachrechnet.
         self.history.record_solvers(result.solvers)
         self.sceneChanged.emit(result)
 
-    def _on_failed(self, error: Any) -> None:
+    def _on_failed(self, error: Any, finished: _EvaluationWorker | None = None) -> None:
+        if self._outdated(finished):
+            # Der Fehler gilt einem Stapel, an dem niemand mehr arbeitet. Ins
+            # Protokoll gehört er trotzdem — nur nicht als Dialog vor einem
+            # Lauf, der gerade gut läuft.
+            _log.info("evaluation failed after being superseded: %s", error)
+            return
         _log.warning("evaluation failed: %s", error)
         self.failed.emit(error)
 
-    def _on_cancelled(self) -> None:
+    def _on_cancelled(self, finished: _EvaluationWorker | None = None) -> None:
         """Der Lauf hat aufgehört — und das erfuhr bisher nur die Logdatei.
 
         Der Balken verschwand, der Knopf verschwand, die Ansicht blieb auf dem
@@ -1241,6 +1272,8 @@ class Session(QObject):
         Ergebnis ist oder ein alter Stand.
         """
         _log.info("evaluation cancelled")
+        if self._outdated(finished):
+            return
         if self._cancel_by_user:
             self._cancel_by_user = False
             self.evaluationCancelled.emit()
@@ -1262,8 +1295,26 @@ class Session(QObject):
         worker, self._split = self._split, None
         self._leash.hold_until_done(worker)
 
-    def _on_thread_done(self) -> None:
-        self.busyChanged.emit(False)
+    def _on_thread_done(self, finished: _EvaluationWorker | None = None) -> None:
+        """Ein Lauf ist ausgelaufen — und nur der aktuelle darf das melden.
+
+        **Der Nachzügler löschte die Arbeit seines Nachfolgers.** Ein Arbeiter
+        ist fertig, bevor Qt sein ``finished`` zugestellt hat; in dieser Lücke
+        startet der nächste Lauf und trägt sich in ``_worker`` ein. Der
+        Nachzügler kam dann hier an, schrieb ``None`` in dieses Feld und
+        meldete ``busyChanged(False)`` — mitten in einem Lauf, der noch fünf
+        Sekunden rechnete. Sichtbar war das an der Stelle, an der jeder Nutzer
+        anfängt: Eine Datei auf den Startbildschirm gezogen, verschwanden
+        Balken und Abbrechen nach einer Zehntelsekunde, und die Anwendung
+        rechnete den Rest ohne ein Zeichen von sich (§2.8). Unsichtbar, aber
+        schwerer: ``busy`` log danach, ``wait_for_idle`` wartete nicht, und der
+        nächste ``evaluate_async`` hätte einen zweiten Lauf **parallel**
+        gestartet, statt ihn einzureihen (§15.6).
+        """
+        if self._outdated(finished):
+            # Nur an die Leine — halten muss ihn jemand, melden darf er nichts.
+            self._leash.hold_until_done(finished)
+            return
         # Nicht einfach loslassen: der Aufruf hier kommt vom Signal des
         # Arbeiters selbst, und sein Wrapper muss die Zustellung überleben.
         # **An die Leine, nicht in ein Feld** — der nächste Lauf startet gleich
@@ -1271,8 +1322,14 @@ class Session(QObject):
         worker, self._worker = self._worker, None
         self._leash.hold_until_done(worker)
         if self._rerun_pending:
+            # Ein Ersetzen, kein Aufhören: ``busyChanged(False)`` bliebe hier
+            # eine Zehntelsekunde stehen und nähme Balken und Abbrechen mit —
+            # beim Ziehen an einem Schieber im Sekundentakt. Derselbe Grund,
+            # aus dem ``evaluationCancelled`` einen ersetzten Lauf nicht meldet.
             self._rerun_pending = False
             self.evaluate_async()
+            return
+        self.busyChanged.emit(False)
 
     def wait_for_idle(self, timeout_ms: int = 10_000) -> None:
         """Blockiert, bis kein Lauf mehr übrig ist — auch der nicht, den eine

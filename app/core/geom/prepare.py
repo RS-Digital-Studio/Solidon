@@ -526,11 +526,12 @@ def check_build_volume(
             }
             if plates is not None and index < len(plates):
                 values["plate"] = plates[index] + 1
+            code, message = _verdict_for(bounds, allowed, outside)
             findings.append(
                 Finding(
-                    code="arrange.out_of_build_volume",
+                    code=code,
                     severity=_severity_for(bounds, allowed),
-                    message=_message_for(bounds, allowed, outside),
+                    message=message,
                     object_id=(
                         object_ids[index]
                         if object_ids is not None and index < len(object_ids)
@@ -561,10 +562,10 @@ def _severity_for(bounds: BoundingBox, allowed: BoundingBox) -> Severity:
     return "info" if passt else "warning"
 
 
-def _message_for(
+def _verdict_for(
     bounds: BoundingBox, allowed: BoundingBox, outside: Sequence[int]
-) -> TranslatableText:
-    """Der Satz, der zum tatsächlichen Fall passt.
+) -> tuple[str, TranslatableText]:
+    """Kennung und Satz zu dem Fall, der tatsächlich vorliegt.
 
     „Steht über den Bauraum hinaus" liest sich als „zu groß", und beim
     häufigsten Fall von Weg 1 ist das falsch: ein heruntergeladenes Teil ist

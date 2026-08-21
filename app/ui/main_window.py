@@ -5699,6 +5699,8 @@ class MainWindow(QMainWindow):
             "repair_and_retry": self._repair_after_error,
             "split_model": self._split_after_error,
             "scale_to_fit": self._scale_after_error,
+            "place_on_bed": self._place_on_bed_after_error,
+            "arrange_on_bed": self._arrange_after_error,
             "open_settings": lambda _error: self.action_install_extras(),
             "enter_licence_key": lambda _error: self.action_activate(),
             "buy_licence": lambda _error: open_website(),
@@ -5759,6 +5761,37 @@ class MainWindow(QMainWindow):
         object_id = self._object_of(error)
         if object_id is not None:
             self.action_auto_split(object_id)
+
+    def _place_on_bed_after_error(self, error: AppError) -> None:
+        """Ein Klick gegen den häufigsten Befund von Weg 1 (§17.1, §2.7).
+
+        Ein heruntergeladenes Modell ist um den Ursprung zentriert und steckt
+        damit zur Hälfte unter der Platte. Die Eingangsstufe setzt es bewusst
+        nicht von selbst auf — sie soll es *anbieten*, und angeboten war es
+        nirgends: Der Bericht nannte den Fall, und die einzigen Handlungen dazu
+        waren *Modell teilen* und *Auf den Bauraum verkleinern*.
+
+        Kein Dialog davor: die Operation hat keinen Parameter, und ein Undo
+        nimmt sie zurück (Regel 19).
+        """
+        object_id = self._object_of(error)
+        if object_id is None:
+            return
+        spec = REGISTRY.get("place_on_bed")
+        self.session.apply(
+            spec.title, [OperationDraft(op=spec.name, inputs=(object_id,), params={})]
+        )
+
+    def _arrange_after_error(self, error: AppError) -> None:
+        """Neben der Platte heißt verschieben, nicht verkleinern (§29).
+
+        Dieselbe Verwechslung wie beim Aufsetzen, nur in x und y. *Auf dem Bett
+        anordnen* arbeitet über die ganze Szene und braucht darum keinen
+        Körper — es legt alle nebeneinander, auch den, der herausragte.
+        """
+        spec = REGISTRY.get("arrange_bed")
+        self.session.apply(spec.title, [OperationDraft(op=spec.name, params={})])
+
 
     def _scale_after_error(self, error: AppError) -> None:
         """Auf den Bauraum verkleinern — mit dem Faktor, der wirklich passt.

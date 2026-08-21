@@ -48,6 +48,9 @@ bekommt einen roten Lauf.
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
 | Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | die Entscheidung des Bauplans, welche Operation auf ein fertiges Gewinde gehört; bis dahin steht `thread` als benannte Ausnahme im Konsistenztest |
+| Die Handlungen am Befund findet nur, wer rechtsklickt | Die Bedienung an der Uhr gemessen (21.08.2026) | eine Layoutentscheidung im rechten Bereich — eine Knopfzeile unter der Befundliste, die die Handlungen des gewählten Befunds zeigt |
+| Sechs von 86 Operationen führen ein Kürzel | Die Bedienung an der Uhr gemessen (21.08.2026) | eine Entscheidung des Bauplans: §19.2 sagt „kann", und die Palette lehrt nebenbei nur, was auch dasteht |
+| `label_text` füllt die Vorderseite bis an die Grenze | Die Bedienung an der Uhr gemessen (21.08.2026) | eine fachliche Entscheidung, welche der acht Werte nach hinten gehören — §2.4 spricht von zwei bis drei |
 
 ---
 
@@ -9013,3 +9016,83 @@ Reihenfolgefrage. `pytest-randomly` ist in dieser Umgebung gar nicht
 installiert, `-p no:randomly` also wirkungslos — zwei identisch konfigurierte
 Läufe ergaben 19 grün und 5 rot. Reine Messschwankung an der 25-%-Schwelle,
 wie der Punkt weiter oben es beschreibt.
+
+## Die Bedienung an der Uhr gemessen (21.08.2026)
+
+Zweiter Blick auf dieselbe Frage, mit einem anderen Messgerät: nicht durch das
+Register und nicht durch einen Auditlauf, sondern an der **Zeitleiste der
+Signale** einer laufenden Oberfläche. Gemessen wurde, was zwischen dem Ablegen
+einer Datei und dem fertigen Modell passiert — und wann welche Anzeige dabei
+kommt und geht.
+
+Was dabei gehalten hat: Ablegen wirkt auf Fenster, Viewport und Objektbaum
+(§2.3, alle drei geprüft). Der kürzeste Weg vom Sehen zum Tun steht — eine
+angeklickte Bohrung bietet ihre vier Operationen direkt an, eine Fläche ihre
+sechzehn in vier Gruppen. Dialoge sind vorbelegt; leer bleiben fünf Felder im
+ganzen Register, und alle fünf zu Recht (Quelldatei, Name, Text). Rückfragen
+gibt es nur vor dem Unwiderruflichen, beide mit Handlungsnamen auf den Knöpfen
+statt Ja/Nein.
+
+### Behoben, jeder mit Test
+
+- [x] **Der Balken verschwand mitten in der Rechnung.** Ein Arbeiter ist
+      fertig, bevor Qt sein `finished` zugestellt hat; in dieser Lücke startet
+      der nächste Lauf. Der Nachzügler kam dann in `_on_thread_done` an,
+      schrieb `None` in `_worker` — das Feld gehörte längst dem Nachfolger —
+      und meldete `busyChanged(False)`. Zu sehen an der Stelle, an der jeder
+      anfängt: Eine Datei auf den Startbildschirm ziehen legt zwei Läufe
+      hintereinander, und bei `dense_1m.stl` (1,3 Mio Dreiecke) waren Balken,
+      Abbrechen und Ladeanzeige nach 0,12 s weg, während die Anwendung noch
+      4,7 s rechnete — §2.8 verlangt ab zwei Sekunden das Gegenteil. Unsichtbar
+      und schwerer: `busy` log danach, `wait_for_idle` wartete nicht, und der
+      nächste `evaluate_async` hätte einen zweiten Lauf **parallel** gestartet
+      statt ihn einzureihen (§15.6). Dazu blitzte die leere Szene des
+      Vorgängers über dem ladenden Modell auf (§15.3). `Session._outdated`
+      beantwortet die Absenderfrage jetzt für alle vier Abschluss-Slots; ein
+      ersetzter Lauf meldet kein `False` mehr, sonst flackert die Anzeige beim
+      Ziehen an einem Schieber. Die Regel dazu stand in
+      `.claude/rules/oberflaeche.md` — als Sache der Stabilität; sie ist
+      genauso eine der Anzeige, und der Absatz sagt das jetzt.
+- [x] **Die Einheitenfrage war nicht beantwortbar.** „In welcher Einheit ist
+      diese Datei gespeichert?", zur Wahl „cm" und „in" — zwei Wörter. In
+      keinem STL steht die Einheit; wer eine fremde Datei herunterlädt, kann es
+      nicht wissen. Was er weiß, ist, wie groß das Teil sein soll. Neben jeder
+      Antwort steht jetzt, wie groß das Modell mit ihr wäre (`unit_question`):
+      `cm: 40.00 × 20.00 × 2.50 mm`, `in: 101.60 × 50.80 × 6.35 mm`. Anhalten
+      und fragen war schon richtig (Leitprinzip 6) — eine Frage, die niemand
+      beantworten kann, ist die halbe Regel.
+- [x] **Der häufigste Befund von Weg 1 bot die zwei Handlungen an, die nicht
+      helfen.** Ein heruntergeladenes Modell sitzt mittig auf z = 0 und steckt
+      zur Hälfte unter der Platte. Der Kern unterschied den Fall längst im
+      **Satz** und im Schweregrad — „ein Klick behebt sie, und das ist ein
+      Hinweis" steht in `_severity_for` —, nur nicht in der **Kennung**, und
+      der Prüfbericht hängt seine Handlungen an ihr auf. Angeboten wurden
+      *Modell teilen* und *Auf den Bauraum verkleinern*: genau die falsche
+      Fährte, vor der der Docstring daneben warnt. Jetzt `arrange.below_bed`
+      mit *Auf das Bett setzen* und `arrange.off_the_plate` mit *Auf dem Bett
+      anordnen*, beide verdrahtet. §17.1 sagt „anbieten, nicht erzwingen" —
+      angeboten war es nirgends.
+- [x] **Ein Merkmal ohne eigene Operationen gab weniger her als der Körper
+      daneben.** Zu `thread` bestand das Menü aus Ausblenden, obwohl der Körper
+      mitgewählt ist. Fällt die Merkmalsliste leer aus, stehen jetzt die
+      Operationen des Körpers da — dieselbe Überlegung, aus der `applies_to` in
+      der Befehlspalette eine Reihenfolge ist und keine Auswahl. Die offene
+      fachliche Frage (welche Operation auf ein fertiges Gewinde gehört) bleibt
+      offen und steht als benannte Ausnahme im Test.
+
+### Was auffiel und eine Entscheidung braucht
+
+- [ ] **Die Handlungen am Befund findet nur, wer rechtsklickt.** `_on_menu`
+      baut sie vollständig und richtig, und §2.7 verspricht „anklickbare
+      Handlungen" — ein Kontextmenü auf einer Listenzeile ist keines, das
+      jemand sucht. Der Fehlerdialog hat dafür Knöpfe. Die naheliegende Antwort
+      wäre eine Knopfzeile unter der Liste, die die Handlungen des gewählten
+      Befunds zeigt (leer, solange es keine gibt) — das ist eine Layoutfrage im
+      rechten Bereich und keine, die man nebenbei entscheidet.
+- [ ] **Sechs von 86 Operationen führen ein Kürzel.** §19.2 sagt „kann", die
+      Palette zeigt sie daneben, „so lernt man sie nebenbei" — bei sechs ist
+      nebenbei wenig zu lernen. Ob das ein Mangel ist, entscheidet der Bauplan.
+- [ ] **`label_text` zeigt acht Werte auf der Vorderseite**, die Grenze in
+      `test_interface_limits.py` liegt bei acht und §2.4 spricht von zwei bis
+      drei. Sie ist damit die einzige Operation, die den Rahmen ausfüllt statt
+      ihn zu nutzen; was davon nach hinten gehört, ist eine fachliche Frage.

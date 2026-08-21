@@ -37,6 +37,8 @@ from PySide6.QtWidgets import (
 from app.core import drawing
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
+    ARRANGE_ON_BED,
+    PLACE_ON_BED,
     REPAIR_AND_RETRY,
     SCALE_TO_FIT,
     SHOW_LOCATIONS,
@@ -113,6 +115,17 @@ def _by_severity(findings: Iterable[Finding]) -> list[Finding]:
 #: als eines, das nichts tut.
 FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     "arrange.out_of_build_volume": (SPLIT_MODEL, SCALE_TO_FIT),
+    # **Zu groß und nur verrutscht sind zwei Fälle.** Beide meldete der Kern
+    # unter derselben Kennung, also bekam auch das Teil, das bloß zur Hälfte
+    # unter der Platte steckt, *Modell teilen* und *Auf den Bauraum
+    # verkleinern* angeboten — die beiden Handlungen, die hier nichts
+    # ausrichten. Und es ist der häufigste Fall überhaupt: Ein
+    # heruntergeladenes Modell ist um den Ursprung zentriert, und §17.1 setzt
+    # es bewusst nicht von selbst auf (``place_on_bed`` steht auf „aus").
+    # „Anbieten, nicht erzwingen" heißt dann aber, dass es hier auch angeboten
+    # werden muss.
+    "arrange.below_bed": (PLACE_ON_BED,),
+    "arrange.off_the_plate": (ARRANGE_ON_BED,),
     "export.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
     "ingest.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
     # **Dritter Melder derselben Sache, und er stand ohne Menü da.** „Nicht
@@ -828,7 +841,17 @@ class ObjectTree(QWidget):
         self._add_visibility(menu, chosen)
 
         kind = self._feature_kind()
-        entries = self.operations_for_feature(kind) if kind else self.operations_for_object()
+        entries = self.operations_for_feature(kind) if kind else ()
+        if not entries:
+            # **Wer genauer gezeigt hat, bekommt nicht weniger.** Zu einer
+            # Merkmalsart ohne eigene Operationen bestand das Menü aus
+            # Ausblenden — weniger als bei einem Klick auf den Körper daneben,
+            # und der Körper *ist* mitgewählt. Beim Gewinde eines Bausteins
+            # (``thread``) ist das heute der Fall. Dieselbe Überlegung, aus der
+            # ``applies_to`` in der Befehlspalette eine Reihenfolge ist und
+            # keine Auswahl: Was zum Merkmal passt, steht vorn — was nicht dazu
+            # passt, verschwindet deswegen nicht.
+            entries = self.operations_for_object()
         if entries:
             menu.addSeparator()
             self._add_operations(menu, entries, self.kinds_of_selection())

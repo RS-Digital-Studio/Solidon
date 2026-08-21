@@ -429,6 +429,41 @@ def test_a_feature_menu_names_the_operations_of_its_kind(window: MainWindow) -> 
     menu.deleteLater()
 
 
+def test_a_feature_without_operations_of_its_own_offers_the_body(window: MainWindow) -> None:
+    """Wer genauer gezeigt hat, bekommt nicht weniger.
+
+    Zu einer Merkmalsart ohne eigene Operationen bestand das Menü aus
+    *Ausblenden* und *Alles andere ausblenden* — weniger als ein Klick auf den
+    Körper daneben, und der Körper ist mitgewählt. ``thread`` ist heute so eine
+    Art: ein Gewinde entsteht als benanntes Merkmal eines Bausteins, und keine
+    Operation nennt es in ``applies_to``.
+
+    Dieselbe Überlegung, aus der ``applies_to`` in der Befehlspalette eine
+    Reihenfolge ist und keine Auswahl (§2.6).
+    """
+    from app.core.registry import REGISTRY
+
+    assert not REGISTRY.for_feature("thread"), (
+        "sobald eine Operation am Gewinde arbeitet, prüft dieser Test die "
+        "andere Hälfte der Regel — dann eine Art ohne Operationen einsetzen"
+    )
+
+    window.object_tree._feature_kind = lambda: "thread"  # type: ignore[method-assign]
+    select_plate(window)
+    menu = window.object_tree.context_menu()
+
+    assert menu is not None
+    rows = [action for action in menu.actions() if not action.isSeparator()]
+    assert len(rows) > 2, [action.text() for action in rows]
+    offered = {
+        action.text()
+        for entry in rows
+        for action in (entry.menu().actions() if entry.menu() else [entry])
+    }
+    assert any(str(spec.title) in offered for spec in window.object_tree.operations_for_object())
+    menu.deleteLater()
+
+
 def test_a_body_menu_stays_short_enough_to_read(window: MainWindow) -> None:
     """Siebenundfünfzig Zeilen sind kein Menü, sondern ein Register.
 

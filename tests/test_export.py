@@ -106,7 +106,7 @@ def test_a_part_below_the_bed_is_reported(profile: Profile) -> None:
     sunk = normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
     findings = check_before_export([scene_object(mesh=sunk)], profile, {})
 
-    assert "arrange.out_of_build_volume" in {finding.code for finding in findings}
+    assert "arrange.below_bed" in {finding.code for finding in findings}
 
 
 def test_a_part_below_the_bed_is_not_called_too_big(profile: Profile) -> None:
@@ -116,13 +116,21 @@ def test_a_part_below_the_bed_is_not_called_too_big(profile: Profile) -> None:
     darum zur Hälfte unter der Platte — ein 8 mm hohes Teil auf einem
     256-mm-Drucker. „Steht über den Bauraum hinaus" schickt den Nutzer zum
     Skalieren, obwohl ein Aufsetzen genügt.
+
+    **Und die Kennung sagt es mit.** Sie tat es nicht, und der Prüfbericht
+    hängt seine Handlungen an ihr auf: Damit bekam der verrutschte Körper
+    *Modell teilen* und *Auf den Bauraum verkleinern* angeboten — zwei
+    Handlungen, die hier nichts ausrichten (``FINDING_ACTIONS``).
     """
     sunk = normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
     findings = check_before_export([scene_object(mesh=sunk)], profile, {})
 
-    said = str(next(f.message for f in findings if f.code == "arrange.out_of_build_volume"))
+    said = str(next(f.message for f in findings if f.code == "arrange.below_bed"))
     assert "unter der Druckplatte" in said
     assert "hinaus" not in said, "das ist der Satz für zu groß"
+    assert "arrange.out_of_build_volume" not in {f.code for f in findings}, (
+        "the too-big code belongs to the case that really is too big"
+    )
 
 
 def test_a_part_that_really_is_too_big_still_says_so(profile: Profile) -> None:

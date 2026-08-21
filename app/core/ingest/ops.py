@@ -25,8 +25,17 @@ from app.core.ingest.loader import (
     normalise,
 )
 from app.core.registry import VARIABLE, op_params, param, register_op
-from app.core.types import BaseParams, Finding, MaterialSlot, OpContext, OpResult, SceneObject
-from app.core.units import LengthUnit
+from app.core.types import (
+    BaseParams,
+    BoundingBox,
+    Finding,
+    MaterialSlot,
+    OpContext,
+    OpResult,
+    SceneObject,
+    Vec3,
+)
+from app.core.units import LengthUnit, format_length, to_mm
 from app.i18n import _
 
 _UNIT_CHOICES = ("auto", "mm", "cm", "in", "m")
@@ -123,7 +132,10 @@ def load(ctx: OpContext) -> OpResult:
     # Teile einer Baugruppe in verschiedenen Maßstäben herauskommen, und
     # die Frage, die §17.1 dem Nutzer stellt, gilt der Datei, nicht jedem
     # Körper darin.
-    unit = _unit_for(ctx, params, max(part.mesh.bounds.diagonal for part in parts))
+    # Der größte Körper der Datei stellt die Frage: seine Diagonale entscheidet
+    # die Heuristik, und seine Kantenmaße sind das, was die Rückfrage zeigt.
+    biggest = max((part.mesh.bounds for part in parts), key=lambda bounds: bounds.diagonal)
+    unit = _unit_for(ctx, params, biggest)
 
     outputs: list[SceneObject] = []
     findings: list[Finding] = []
@@ -258,20 +270,40 @@ def _colour_groups(
     return MeshData(raw=mesh.raw, slots=groups.slots), list(groups.materials)
 
 
-def _unit_for(ctx: OpContext, params: LoadParams, diagonal: float) -> LengthUnit:
+def unit_question(size: Vec3, candidates: Sequence[LengthUnit]) -> str:
+    """Die Einheitenfrage — mit der Folge jeder Antwort daneben (§17.1).
+
+    Gefragt wurde „In welcher Einheit ist diese Datei gespeichert?", und zur
+    Wahl standen zwei Wörter: „cm" und „in". Wer eine fremde Datei
+    herunterlädt, weiß das nicht — die Einheit steht in keinem STL. Was er
+    weiß, ist, wie groß das Teil sein soll. Also steht jetzt neben jeder
+    Antwort, wie groß das Modell mit ihr wäre; die Frage wird damit von einer
+    Wissensfrage zu einer, die man ansehen kann.
+
+    Anhalten und fragen bleibt richtig (Leitprinzip 6) — eine Frage, die
+    niemand beantworten kann, ist aber nur die halbe Regel.
+    """
+    lines = [str(_("In welcher Einheit ist diese Datei gespeichert?"))]
+    for unit in candidates:
+        measures = " × ".join(format_length(to_mm(value, unit), with_unit=False) for value in size)
+        lines.append(f"{unit}: {measures} mm")
+    return "\n".join(lines)
+
+
+def _unit_for(ctx: OpContext, params: LoadParams, bounds: BoundingBox) -> LengthUnit:
     """Nimmt die gespeicherte Einheit — oder lässt die Heuristik laufen und
     fragt, wenn sie sich nicht sicher ist.
     """
     if params.unit != "auto":
         return cast(LengthUnit, params.unit)
 
-    guess = detect_unit(diagonal)
+    guess = detect_unit(bounds.diagonal)
     if guess.unit is not None:
         return guess.unit
 
     choices = [str(unit) for unit in guess.candidates]
     answer = ctx.ask(
-        str(_("In welcher Einheit ist diese Datei gespeichert?")),
+        unit_question(bounds.size, guess.candidates),
         choices,
     )
     if answer not in choices:

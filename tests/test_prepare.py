@@ -284,7 +284,9 @@ def test_a_body_below_the_bed_is_reported_without_being_asked(profile: Profile) 
     findings = check_placement(scene)
 
     assert findings, "ein Körper unter der Platte ist ein Befund"
-    assert findings[0].code == "arrange.out_of_build_volume"
+    # Eigene Kennung, damit der Prüfbericht die Handlung dazu findet, die
+    # wirklich hilft: *Auf das Bett setzen* statt *Modell teilen* (§2.7).
+    assert findings[0].code == "arrange.below_bed"
     assert findings[0].object_id == "obj_1", "der Befund nennt den Körper, den er meint"
     assert findings[0].values["object"] == "Halter", "und zwar mit Namen, nicht mit Listenplatz"
 
