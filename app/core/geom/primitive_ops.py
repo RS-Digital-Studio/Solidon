@@ -37,7 +37,12 @@ class BoxParams(BaseParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Ausdehnung in X. Darf ein Ausdruck sein, etwa =breite*2."),
+        # Das Beispiel hieß ``=breite*2``, und genau so tippt es niemand
+        # zweimal: Der Auswerter antwortet „Unbekannter Name im Ausdruck.
+        # Parameter werden mit @ geschrieben." Ein Beispiel, das der eigene
+        # Auswerter ablehnt, ist schlechter als keines — es schickt jemanden
+        # los, der die Hilfe gelesen hat.
+        doc=_("Ausdehnung in X. Darf ein Ausdruck sein, etwa =@breite*2."),
     )
     depth: float = param(
         title=_("Tiefe"),

@@ -331,3 +331,50 @@ def test_an_error_carries_its_numbers_into_the_terminal(
     printed = capsys.readouterr().err
     assert "obj_9" in printed, "das angefragte Objekt fehlt"
     assert "obj_1" in printed, "und die, die es gibt, auch"
+
+
+def test_a_swapped_path_says_the_order_instead_of_listing_operations(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """**Der häufigste Fehler ist kein Tippfehler, sondern die Reihenfolge.**
+
+    ``new``, ``info``, ``import``, ``undo`` und ``export`` nehmen den Pfad
+    zuerst — ``run`` nimmt die Operation zuerst. Wer das verwechselt, las
+    „Diese Operation gibt es nicht: C:/…/halter.p3d" und daneben den Vorschlag,
+    sich die Operationen auflisten zu lassen: beides wahr und beides nutzlos.
+    Gefunden beim Nachfahren der Kommandozeile aus Kundensicht.
+    """
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path)])
+    capsys.readouterr()
+
+    assert main(["run", str(path), "create_box", "--width", "40"]) == 1
+
+    gesagt = capsys.readouterr().err
+    assert "Dateipfad" in gesagt
+    assert "Operation zuerst" in gesagt, "Regel 17: was jetzt hilft"
+    assert "solidon3d ops" not in gesagt, "der alte Vorschlag passt hier nicht"
+
+
+def test_a_real_typo_still_gets_suggestions(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Die neue Erkennung darf die alte nicht verdecken."""
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path)])
+    capsys.readouterr()
+
+    assert main(["run", "create_bo", str(path)]) == 1
+
+    gesagt = capsys.readouterr().err
+    assert "Gemeint war vielleicht" in gesagt
+    assert "create_box" in gesagt
+
+
+def test_the_right_order_just_works(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """Und der richtige Aufruf bleibt richtig."""
+    path = tmp_path / "projekt.p3d"
+    main(["new", str(path)])
+    capsys.readouterr()
+
+    assert main(["run", "create_box", str(path), "--width", "40"]) == 0

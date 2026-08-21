@@ -585,6 +585,21 @@ def _mistyped_operation(argv: list[str]) -> int | None:
     wanted = argv[1]
     if wanted.startswith("-") or REGISTRY.has(wanted):
         return None
+    # **Der häufigste Fall ist kein Tippfehler, sondern die Reihenfolge.**
+    # ``new``, ``info``, ``import``, ``undo`` und ``export`` nehmen den Pfad
+    # zuerst — ``run`` nimmt die Operation zuerst. Wer das verwechselt, las
+    # „Diese Operation gibt es nicht: C:/…/halter.p3d" und daneben den
+    # Vorschlag, sich die Operationen auflisten zu lassen: beides wahr und
+    # beides nutzlos. Erkannt wird der Pfad am Namen und nicht am Dateisystem —
+    # ein vertippter Pfad ist derselbe Fall und verdient dieselbe Antwort.
+    if wanted.lower().endswith((".p3d", ".stl", ".3mf", ".obj", ".step")) or "/" in wanted:
+        print(f"\n{tr('Das ist ein Dateipfad und keine Operation')}: {wanted}", file=sys.stderr)
+        print(
+            f"  - {tr('Bei «run» kommt die Operation zuerst, der Pfad danach')}: "
+            "solidon3d run create_box <pfad>",
+            file=sys.stderr,
+        )
+        return 1
     near = difflib.get_close_matches(wanted, [spec.name for spec in REGISTRY.all()], n=3)
     print(f"\n{tr('Diese Operation gibt es nicht')}: {wanted}", file=sys.stderr)
     if near:

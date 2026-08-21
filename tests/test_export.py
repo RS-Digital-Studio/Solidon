@@ -724,3 +724,85 @@ def test_only_the_orca_family_wants_bed_coordinates(tmp_path: Path, profile: Pro
     )
     text = zipfile.ZipFile(BytesIO(orca.read_bytes())).read(threemf.MODEL_PATH).decode("utf-8")
     assert 'transform="1 0 0 0 1 0 0 0 1 128 128 0"' in text
+
+
+def _solid(object_id: str = "obj_2", name: str = "Flansch") -> SceneObject:
+    """Ein Körper, der seine Flächen kennt — als Attrappe, ohne OpenCASCADE.
+
+    ``BRepBody`` ist ein Protokoll (§30), und ``kind_of`` prüft es zur
+    Laufzeit. Zwei Methoden reichen also, und der Test läuft auch dort, wo der
+    zweite Kern nicht installiert ist.
+    """
+
+    class Attrappe:
+        @property
+        def shape(self) -> object:
+            return object()
+
+        def to_mesh(self) -> object:
+            return body()
+
+    return SceneObject(id=object_id, name=name, mesh=Attrappe())  # type: ignore[arg-type]
+
+
+def test_a_mesh_exported_as_step_is_told_before_the_file_is_written(
+    profile: Profile,
+) -> None:
+    """**Der Plan war ohne einen Befund, und der Fehler kam beim Schreiben.**
+
+    Wer ``teil.step`` tippte, wählte Format, Ordner und Namen — und erfuhr erst
+    danach, dass ein Netz keine Flächen hat. Die Auskunft war die ganze Zeit
+    verfügbar: Der Körper weiß, ob er exakt ist, und das Format weiß, ob es das
+    braucht.
+
+    Das Fenster bietet STEP inzwischen nur an, wenn ein exakter Körper dabei
+    ist; die Kommandozeile hat keinen Dialog, der etwas ausgraut, und zeigt die
+    Befunde des Plans **vor** dem Schreiben.
+    """
+    plan = plan_export(
+        [scene_object()], project_name="Projekt", profile=profile, export_format="step"
+    )
+
+    codes = {finding.code for finding in plan.findings}
+    assert "export.needs_solid" in codes
+    finding = next(entry for entry in plan.findings if entry.code == "export.needs_solid")
+    assert finding.severity == "error"
+    assert finding.object_id == "obj_1", "welcher Körper es ist"
+    gesagt = str(finding.message)
+    assert "STL" in gesagt and "3MF" in gesagt, "Regel 17: was jetzt geht"
+
+
+def test_a_solid_exported_as_step_is_not_complained_about(profile: Profile) -> None:
+    """Die Prüfung darf das Format nicht abschaffen, nur erklären."""
+    plan = plan_export([_solid()], project_name="Projekt", profile=profile, export_format="step")
+
+    assert "export.needs_solid" not in {finding.code for finding in plan.findings}
+
+
+def test_a_mixed_selection_names_the_body_that_cannot_go(profile: Profile) -> None:
+    """**Der Fall, der auch im Fenster bleibt.** STEP wird angeboten, sobald
+    *ein* exakter Körper dabei ist — die Netze daneben scheitern einzeln, und
+    dann will der Nutzer wissen, welche.
+    """
+    plan = plan_export(
+        [scene_object(), _solid()],
+        project_name="Projekt",
+        profile=profile,
+        export_format="step",
+    )
+
+    betroffen = [f.object_id for f in plan.findings if f.code == "export.needs_solid"]
+    assert betroffen == ["obj_1"], "nur das Netz, nicht der exakte Körper"
+
+
+@pytest.mark.parametrize("export_format", ["stl", "3mf", "obj", "ply"])
+def test_the_mesh_formats_say_nothing_about_solids(profile: Profile, export_format: str) -> None:
+    """Ein Netz als STL ist der Normalfall und kein Befund."""
+    plan = plan_export(
+        [scene_object()],
+        project_name="Projekt",
+        profile=profile,
+        export_format=export_format,  # type: ignore[arg-type]
+    )
+
+    assert "export.needs_solid" not in {finding.code for finding in plan.findings}

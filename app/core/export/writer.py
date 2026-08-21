@@ -17,7 +17,7 @@ import unicodedata
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Final, Literal
 
 import numpy as np
 import trimesh
@@ -39,6 +39,7 @@ from app.core.types import (
     Profile,
     SceneObject,
     Source,
+    kind_of,
 )
 from app.core.units import EPS_GEOM, format_length
 from app.i18n import _
@@ -192,7 +193,7 @@ def plan_export(
     )
     return ExportPlan(
         entries=entries,
-        findings=tuple(check_before_export(objects, profile, sources or {})),
+        findings=tuple(check_before_export(objects, profile, sources or {}, export_format)),
     )
 
 
@@ -380,12 +381,50 @@ def plates_by_material(objects: Sequence[SceneObject]) -> dict[str, int]:
     return chosen
 
 
+#: Formate, die einen exakten Körper verlangen. STEP hält Flächen und Kanten
+#: fest, und ein Netz hat keine — das ist keine Einstellung, sondern die
+#: Eigenschaft des Formats.
+SOLID_ONLY_FORMATS: Final[frozenset[str]] = frozenset({"step"})
+
+
 def check_before_export(
-    objects: list[SceneObject], profile: Profile, sources: dict[str, Source]
+    objects: list[SceneObject],
+    profile: Profile,
+    sources: dict[str, Source],
+    export_format: ExportFormat = "stl",
 ) -> list[Finding]:
-    """Ein Bericht vor dem Schreiben, keine Sperre (§29)."""
+    """Ein Bericht vor dem Schreiben, keine Sperre (§29).
+
+    **Das Format gehört dazu, und es fehlte.** Wer ``teil.step`` tippte, bekam
+    einen Plan ohne einen einzigen Befund — der Fehler kam erst beim Schreiben,
+    nach dem Klick auf Speichern. Die Auskunft war die ganze Zeit verfügbar:
+    Der Körper weiß, ob er exakt ist, und das Format weiß, ob es das braucht.
+    """
     findings: list[Finding] = []
     meshes = [as_mesh_data(entry.mesh) for entry in objects]
+
+    if export_format in SOLID_ONLY_FORMATS:
+        # Gemeldet wird je Objekt, nicht einmal für alles: Bei gemischter
+        # Auswahl schreibt der Export die exakten Körper und lässt die Netze
+        # aus, und dann will der Nutzer wissen, welche.
+        for entry in objects:
+            # ``kind_of`` und kein zweites ``isinstance``: Welche Sorte ein
+            # Körper ist, entscheidet eine Regel an einem Ort (siehe dort).
+            if kind_of(entry.mesh) != "brep":
+                findings.append(
+                    Finding(
+                        code="export.needs_solid",
+                        severity="error",
+                        message=_(
+                            "Dieses Format hält Flächen und Kanten fest, und dieser "
+                            "Körper ist ein Netz — es hat keine. Als STL oder 3MF "
+                            "geht es; einen exakten Körper liefern die Operationen "
+                            "des zweiten Kerns."
+                        ),
+                        object_id=entry.id,
+                        values={"format": export_format},
+                    )
+                )
 
     for entry, mesh in zip(objects, meshes, strict=True):
         if not mesh.is_watertight:
@@ -555,7 +594,9 @@ def write_assembly(
             constraint="empty",
         )
 
-    findings = check_before_export(chosen, profile, sources or {})
+    # Diese Funktion schreibt immer 3MF — das steht in ihrem Namen und in
+    # ihrem Docstring, also gibt es hier nichts zu wählen.
+    findings = check_before_export(chosen, profile, sources or {}, "3mf")
     if settings is not None:
         # Was erst auf der Platte auffiele: Haftungsränder, die ineinander
         # laufen, und der Preis zweier Filamente in einem Auftrag.

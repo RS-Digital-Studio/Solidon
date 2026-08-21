@@ -318,3 +318,54 @@ def test_no_operation_calls_its_core_function_with_an_argument_it_refuses() -> N
                     )
 
     assert not offenders, "Operationen rufen ihre Kernfunktion falsch auf:\n" + "\n".join(offenders)
+
+
+def test_every_expression_example_in_the_register_actually_evaluates() -> None:
+    """**Ein Beispiel, das der eigene Auswerter ablehnt, ist schlechter als
+    keines.**
+
+    Der Hilfetext von ``create_box --width`` nannte ``=breite*2``. Genau so
+    getippt antwortet der Auswerter „Unbekannter Name im Ausdruck. Parameter
+    werden mit @ geschrieben." — der Kunde wird aufgefangen, aber er wurde
+    vorher falsch losgeschickt. Gefunden beim Lesen der
+    Kommandozeilenhilfe.
+
+    Geprüft wird jeder Text des Registers, der wie ein Ausdrucksbeispiel
+    aussieht: Er muss sich gegen einen Parameter dieses Namens wirklich
+    ausrechnen lassen.
+    """
+    import re
+
+    from app.core.scene import expressions
+    from app.core.types import Parameter
+
+    #: Was in einem Dokumentationstext ein Ausdrucksbeispiel ist: ein
+    #: Gleichheitszeichen, dahinter etwas ohne Leerzeichen. Der Satzpunkt
+    #: gehört nicht dazu.
+    muster = re.compile(r"=[^\s,;.]+")
+
+    texte: list[tuple[str, str]] = []
+    for spec in REGISTRY.all():
+        texte.append((spec.name, str(spec.doc or "")))
+        for entry in spec.params.spec():
+            texte.append((f"{spec.name}.{entry.name}", str(entry.doc or "")))
+            texte.append((f"{spec.name}.{entry.name} (Titel)", str(entry.title or "")))
+
+    geprueft = 0
+    for wo, text in texte:
+        for treffer in muster.findall(text):
+            # Namen der Parameter im Beispiel einsammeln und mit Werten
+            # belegen — der Test prüft die Form, nicht die Zahl.
+            namen = re.findall(r"@([A-Za-z_][A-Za-z_0-9]*)", treffer)
+            werte = {name: Parameter(name=name, value=2.0, unit="mm") for name in namen}
+            werte["_probe"] = Parameter(name="_probe", value=0.0, unit="mm", expression=treffer)
+            try:
+                expressions.resolve(werte)
+            except Exception as problem:
+                raise AssertionError(
+                    f"{wo}: das Beispiel „{treffer}“ lässt sich nicht ausrechnen — "
+                    f"{type(problem).__name__}: {problem}"
+                ) from problem
+            geprueft += 1
+
+    assert geprueft, "es gibt Ausdrucksbeispiele im Register, und sie werden geprüft"

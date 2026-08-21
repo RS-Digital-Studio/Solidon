@@ -10459,3 +10459,133 @@ sie sind der Abstand zwischen „das geht" und „das lohnt".
       auf eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit
       für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile
       ausgraut, solange kein Bildmodell da ist.
+
+## Der Kundendurchgang durch die vier Wege (21.08.2026)
+
+Nach dem Bildweg die anderen drei, und zwar mit denselben Aufrufen, die die
+Menüs machen: die neun Beispielprojekte geöffnet und gerechnet, Weg 2 von Hand
+gefahren, Weg 4 von Hand gefahren, die zehn alten Projektdateien geöffnet und
+im Rundlauf verglichen, und die Kommandozeile von außen bedient. Vier Funde,
+und drei Verdachtsfälle, die sich als richtig gebaut erwiesen haben — die stehen
+mit dabei, weil eine Durchsicht, die nur die Treffer aufschreibt, beim nächsten
+Mal denselben Weg zweimal geht.
+
+### Was gut lief
+
+Die neun Beispielprojekte öffnen alle, rechnen alle, halten nirgends an und
+stellen **keine einzige Rückfrage** — zwischen 0,05 s und 2,9 s. Die zehn alten
+Projektdateien in `tests/data/projects/` migrieren von v1 bis v8 durch, und der
+Rundlauf über `save`/`load` liefert dieselben Objekte samt identischen
+Kennungen. Weg 2 trägt vollständig: Parameter anlegen, `create_box` mit
+`=@breite` daran hängen, die Zahl von 40 auf 60 drehen — das Modell folgt —,
+Undo nimmt es zurück, Export als STL und 3MF schreibt. Weg 4 ebenso: Box und
+Kugel, verschieben, `blend_union` auf 5736 Dreiecke, `remesh_uniform` auf
+10 720, wasserdicht und aus einem Stück.
+
+### Ein Reparaturschritt lief ins Leere, und niemand erfuhr es
+
+- [x] **`resolve_self_intersections` wurde an Netzen versucht, die keine
+      Volumen sind, und musste scheitern.** Die Booleschen Kerne rechnen mit
+      Volumina, und der Aufruf endete in „Not all meshes are volumes!" — einer Fremdmeldung im Protokoll, die niemand liest. Gefunden
+      beim Öffnen von `weg3-generiert-aufbereiten`, also am Beispielprojekt für
+      genau diesen Fall.
+
+      **Die Reihenfolge war die Ursache, und der erste Befund lag daneben.**
+      Naheliegend war: Der Schritt läuft vor dem Löcherschließen, also gehört er
+      dahinter. Gemessen an `broken_open` und `generated_figure` half das nicht
+      — beide sind auch nach `fill_holes` keine Volumen —, und damit schien die
+      Reihenfolge widerlegt. Sie war es nicht: Am Körper des Beispielprojekts
+      gemessen ist er nach dem Schließen **wasserdicht und trotzdem kein
+      Volumen**, weil die Wicklung noch uneinheitlich ist. Das richtet erst
+      `unify_normals`, und das läuft in der Kette danach.
+
+      | Zustand | wasserdicht | Wicklung | Volumen | wirkt |
+      |---|---|---|---|---|
+      | vor dem Schließen | nein | — | nein | nein |
+      | nach dem Schließen | ja | nein | nein | nein |
+      | nach den Normalen | ja | ja | ja | **ja** |
+
+      Der Schritt läuft jetzt **zuletzt**, und die Vorprüfung fragt nach
+      `is_volume` und nicht nach `is_watertight` — eine Prüfung auf Dichtheit
+      hätte den Aufruf durchgelassen und dieselbe Fremdmeldung erzeugt. Teuer
+      ist das nicht: gemessene 0,1 bis 0,2 ms auf derselben Kantentabelle, die
+      die Kette ohnehin aufbaut. Die 1,3 Sekunden, die eine erste Messung für
+      `is_volume` zeigte, waren der erste Aufbau dieser Tabelle auf einem
+      frischen Netz mit 1,3 Millionen Dreiecken — also nichts, was hier
+      dazukommt.
+
+      **Damit tut der Schritt zum ersten Mal, wofür er da ist.** Der Prüfbericht
+      des Beispielprojekts liest sich jetzt schlüssig: Löcher geschlossen,
+      Normalen korrigiert, Selbstdurchdringungen aufgelöst. Vorher stand dort
+      keine dieser drei Zeilen zusammen mit einer wahren vierten.
+
+      Und **was nicht getan wurde, steht im Bericht** (§2.7) — für den einen
+      Fall, der übrig bleibt: `broken_open` ist von sechs geprüften
+      Korpusdateien die einzige, die auch nach der ganzen Kette kein Volumen
+      ist. Der Satz nennt, was dann hilft: neu vernetzen, dann ein zweiter
+      Lauf.
+
+### STEP wurde geplant, ohne dass es gehen konnte
+
+- [x] **Der Exportplan trug keinen einzigen Befund, und der Fehler kam beim
+      Schreiben.** `plan_export` prüft Wasserdichtigkeit, Bauraum, Lizenzen —
+      aber nicht, ob das gewählte Format zum Körpertyp passt. Wer STEP wählte
+      und ein Netz hatte, bekam einen fertigen Plan mit Dateinamen und danach
+      `NeedsSolidError`. Die Auskunft war die ganze Zeit verfügbar: Der Körper
+      weiß, ob er exakt ist, und das Format weiß, ob es das braucht.
+
+      Das Fenster ist hier schon vorsorglich — es bietet STEP nur an, wenn
+      wenigstens ein exakter Körper dabei ist. Zwei Fälle bleiben trotzdem: die
+      **Kommandozeile**, die keinen Dialog hat, der etwas ausgraut und die
+      Befunde des Plans vor dem Schreiben zeigt; und die **gemischte Auswahl**,
+      bei der das Fenster STEP anbietet, weil ein Körper es tragen kann, und
+      die Netze daneben einzeln scheitern. Der Befund nennt deshalb das
+      betroffene Objekt und nicht bloß das Format.
+
+### Ein Hilfetext nannte eine Form, die der eigene Auswerter ablehnt
+
+- [x] **`create_box --width` empfahl `=breite*2` — ohne das `@`.** So getippt
+      antwortet der Auswerter „Unbekannter Name im Ausdruck. Parameter werden
+      mit @ geschrieben." Der Kunde wird also aufgefangen, aber er wurde vorher
+      falsch losgeschickt, und zwar von der Hilfe. Gefunden beim Lesen von
+      `solidon3d run create_box --help`; es war die einzige solche Stelle im
+      ganzen Register.
+
+      Abgesichert ist es jetzt breiter als behoben:
+      `test_every_expression_example_in_the_register_actually_evaluates` nimmt
+      jeden Titel- und `doc`-Text jeder Operation und jedes Parameters, sucht
+      darin nach Ausdrucksbeispielen und rechnet sie gegen den echten Auswerter.
+      Wer künftig ein Beispiel schreibt, das nicht durchgeht, bekommt einen
+      roten Lauf und nicht einen Kunden.
+
+### `run` nimmt die Operation zuerst, alle anderen Befehle den Pfad
+
+- [x] **Wer das verwechselte, las eine wahre und nutzlose Auskunft.** `new`,
+      `info`, `import`, `undo` und `export` nehmen den Pfad als erstes Argument;
+      `run` nimmt die Operation. Beim Vertauschen stand da „Diese Operation gibt
+      es nicht: C:/…/halter.p3d" und darunter der Vorschlag, sich die
+      Operationen auflisten zu lassen — beides richtig und beides am Problem
+      vorbei.
+
+      Der Pfad wird jetzt am Namen erkannt und nicht am Dateisystem: ein
+      vertippter Pfad ist derselbe Fall und verdient dieselbe Antwort. Die
+      Erkennung von Tippfehlern in Operationsnamen bleibt daneben stehen und
+      wird von einem eigenen Test gehalten — sie war das Erste, was die Stelle
+      gelernt hatte, und sollte es nicht wieder verlernen.
+
+### Drei Verdachtsfälle, die keine waren
+
+Aufgeschrieben, damit sie nicht ein zweites Mal geprüft werden:
+
+- **`arrange.below_bed` als `info`** ist richtig: `check_build_volume` schärft
+  die Stufe über `about_to_write`, und während der Konstruktion beantwortet ein
+  Klick dieselbe Frage. Beim Export wiegt die Lage so schwer wie die Größe.
+- **Die Ausdrucksform `=@breite`** steht im Handbuch an drei Stellen, als
+  Platzhalter in zwei Dialogen, in der Menüerklärung zum Parameteranlegen und
+  im Hinweis des Skizzeneditors. Ein Kunde, der eine Zahl durch einen Ausdruck
+  ersetzen will, findet sie.
+- **Die acht `example_v*.p3d` halten beim Rechnen an**, und das ist korrekt:
+  Ihre Operationen tragen `inputs: null`, sie sind für die Migrationsprüfung
+  gebaut und nicht zum Rechnen. Der Befund sagt genau das —
+  `evaluate.too_few_inputs`, „Dieser Operation fehlt das Objekt, auf dem sie
+  arbeiten soll."

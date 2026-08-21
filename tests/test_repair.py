@@ -284,3 +284,133 @@ def test_repair_stitches_only_once(monkeypatch: pytest.MonkeyPatch) -> None:
     repair_module.repair(body, holes=True)
 
     assert len(calls) == 1, "einmal vernähen, nicht doppelt zahlen"
+
+
+def test_a_body_that_is_no_volume_never_asks_the_boolean_kernel() -> None:
+    """**Der Schritt wurde an einem offenen Netz versucht und musste
+    scheitern.**
+
+    Die Booleschen Kerne rechnen mit Volumina; ein Netz mit Löchern ist keines.
+    Der Aufruf endete in „Not all meshes are volumes!" — einer Fremdmeldung im
+    Protokoll, die niemand liest. Gefunden beim Öffnen von
+    ``weg3-generiert-aufbereiten``, also am Beispielprojekt für genau diesen
+    Fall: Der Kunde klickt es an, um zu lernen, wie man erzeugte Netze
+    aufbereitet.
+
+    Geprüft wird, dass der Kern **nicht gefragt** wird — nicht bloß, dass es
+    kein Ergebnis gibt. Sonst bliebe der teure Aufruf stehen und nur seine
+    Meldung verschwände.
+    """
+    from app.core.geom import repair as repair_module
+
+    body = raw("broken_open.stl")
+    assert not body.raw.is_volume, "die Vorbedingung des Tests"
+
+    gefragt: list[object] = []
+
+    def zaehlen(meshes: object, **kwargs: object) -> object:
+        gefragt.append(meshes)
+        raise AssertionError("der Kern darf hier nicht gefragt werden")
+
+    original = trimesh.boolean.union
+    trimesh.boolean.union = zaehlen  # type: ignore[assignment]
+    try:
+        got, changed = repair_module.resolve_self_intersections(body)
+    finally:
+        trimesh.boolean.union = original  # type: ignore[assignment]
+
+    assert not gefragt, "an einem offenen Netz wird der Kern nicht gerufen"
+    assert not changed
+    assert got is body, "und das Netz kommt unverändert zurück"
+
+
+def test_a_closed_body_still_gets_resolved() -> None:
+    """Die Vorprüfung darf den Schritt nicht abschalten, nur abkürzen."""
+    from app.core.geom.repair import resolve_self_intersections
+
+    # Verschweißt, weil die Kette das zuerst tut: Aus der Datei kommt dieses
+    # Netz mit 72 losen Punkten und ist deshalb noch nicht wasserdicht — der
+    # Schritt sieht es immer erst nach ``merge_vertices``.
+    body, _ = merge_vertices(raw("broken_selfint.stl"))
+    assert body.raw.is_volume, "die Vorbedingung des Tests"
+
+    got, changed = resolve_self_intersections(body)
+
+    assert changed, "an einem geschlossenen Körper arbeitet er weiter"
+    assert got.is_watertight
+
+
+def test_a_skipped_step_says_so_in_the_report() -> None:
+    """**Was nicht getan wurde, gehört in den Bericht** (§2.7).
+
+    Vorher stand nichts davon im Prüfbericht — wer ihn las, musste annehmen,
+    dass geprüft wurde, was übersprungen worden war. Und der Satz nennt, was
+    jetzt hilft: neu vernetzen, dann ein zweiter Lauf.
+
+    ``broken_open`` ist der Körper, den auch die ganze Kette nicht zu einem
+    Volumen macht — gemessen an sechs Dateien des Korpus, und er ist die
+    einzige davon.
+    """
+    result = repair(raw("broken_open.stl"), self_intersections=True)
+
+    codes = {finding.code for finding in result.findings}
+    assert "repair.self_intersections_skipped" in codes
+    gesagt = next(
+        str(finding.message)
+        for finding in result.findings
+        if finding.code == "repair.self_intersections_skipped"
+    )
+    assert "geschlossenen Körper" in gesagt
+    assert "zweiter Lauf" in gesagt, "Regel 17: der nächste Schritt gehört dazu"
+
+
+def test_the_step_runs_last_so_that_it_can_run_at_all() -> None:
+    """**Der Schritt stand vor dem Löcherschließen und war damit wirkungslos.**
+
+    Gemessen am Beispielprojekt ``weg3-generiert-aufbereiten``: vor dem
+    Schließen kein Volumen; nach dem Schließen wasserdicht, aber die Wicklung
+    uneinheitlich — also weiter kein Volumen; erst nach ``unify_normals``
+    beides. Ein Netz, das die Kette repariert, bekommt seine
+    Selbstdurchdringungen deshalb nur aufgelöst, wenn dieser Schritt **zuletzt**
+    läuft.
+
+    Geprüft am Ergebnis und nicht an der Quelltextreihenfolge: Was zählt, ist
+    dass der Befund „aufgelöst" kommt und nicht der Befund „übersprungen".
+    """
+    result = repair(raw("generated_figure.stl"), self_intersections=True)
+
+    codes = {finding.code for finding in result.findings}
+    assert "repair.self_intersections" in codes, "der Schritt hat gearbeitet"
+    assert "repair.self_intersections_skipped" not in codes
+    assert result.mesh.raw.is_volume, "und das Ergebnis ist ein Volumen"
+
+
+def test_watertight_alone_is_not_enough_for_the_boolean_kernel() -> None:
+    """**Der Unterschied, an dem der erste Anlauf gescheitert ist.**
+
+    Eine Vorprüfung auf ``is_watertight`` hätte den Aufruf durchgelassen und
+    dieselbe Fremdmeldung erzeugt: Nach dem Löcherschließen war das
+    Beispielnetz wasserdicht und die Wicklung trotzdem uneinheitlich. Gefragt
+    wird deshalb nach ``is_volume``, und das kostet an dieser Stelle gemessene
+    0,1 bis 0,2 ms — dieselbe Kantentabelle, die die Kette ohnehin aufbaut.
+    """
+    body, _ = merge_vertices(raw("broken_open.stl"))
+    genaeht, _ = stitch_t_junctions(body)
+    gefuellt, _ = fill_holes(genaeht, stitch=False)
+
+    if gefuellt.is_watertight and not gefuellt.raw.is_volume:
+        # Der gemessene Fall: dicht, aber kein Volumen.
+        assert not gefuellt.raw.is_winding_consistent
+    # Und in jedem Fall gilt: Volumen ist die Bedingung, nicht Dichtheit.
+    from app.core.geom.repair import resolve_self_intersections
+
+    _, wirkte = resolve_self_intersections(gefuellt)
+    assert wirkte == bool(gefuellt.raw.is_volume)
+
+
+def test_a_closed_body_gets_no_skip_note() -> None:
+    """Kein Befund über etwas, das gelaufen ist."""
+    result = repair(raw("cube_clean.stl"), self_intersections=True)
+
+    codes = {finding.code for finding in result.findings}
+    assert "repair.self_intersections_skipped" not in codes

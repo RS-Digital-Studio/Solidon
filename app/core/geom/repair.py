@@ -242,7 +242,27 @@ def resolve_self_intersections(mesh: MeshData) -> tuple[MeshData, bool]:
 
     Eine Vereinigung eines Körpers mit sich selbst ist auf dem Papier ein
     Leerlauf und in der Praxis ein Aufräumen.
+
+    **An einem Netz, das kein Volumen ist, kann das nicht gehen, und vorher
+    wurde es trotzdem versucht.** Die Booleschen Kerne rechnen mit Volumina;
+    der Aufruf endete in „Not all meshes are volumes!" — einer Fremdmeldung im
+    Protokoll, die niemand liest. Gefunden beim Öffnen von
+    ``weg3-generiert-aufbereiten``, also am Beispielprojekt für genau diesen
+    Fall.
+
+    **Gefragt wird nach ``is_volume`` und nicht nach ``is_watertight``**, und
+    der Unterschied ist der ganze Fund: Nach dem Löcherschließen war das
+    Beispiel wasserdicht und trotzdem kein Volumen, weil die Wicklung noch
+    nicht einheitlich war — das richtet erst :func:`unify_normals`. Eine
+    Vorprüfung auf „wasserdicht" hätte den Aufruf also durchgelassen und
+    dieselbe Fremdmeldung erzeugt.
+
+    Teuer ist das nicht: ``is_volume`` prüft wasserdicht, Wicklung und
+    Volumen > 0 auf derselben Kantentabelle, die die Kette ohnehin aufbaut —
+    gemessen 0,1 bis 0,2 ms an dieser Stelle.
     """
+    if not mesh.raw.is_volume:
+        return mesh, False
     try:
         rebuilt = trimesh.boolean.union([mesh.raw, mesh.raw])
     except PROGRAMMING_ERRORS:
@@ -308,18 +328,6 @@ def repair(
                 )
             )
 
-    if self_intersections:
-        result.mesh, rebuilt = resolve_self_intersections(result.mesh)
-        if rebuilt:
-            result.changed = True
-            result.findings.append(
-                Finding(
-                    code="repair.self_intersections",
-                    severity="info",
-                    message=_("Selbstdurchdringungen wurden aufgelöst."),
-                )
-            )
-
     if holes:
         # Getrennt gemeldet, weil es ein anderer Defekt mit anderer Antwort
         # ist: eine Naht ist eine Fläche, der ein Punkt fehlte, ein Loch eine
@@ -360,6 +368,41 @@ def repair(
                     code="repair.normals_flipped",
                     severity="info",
                     message=_("Die Ausrichtung der Flächen wurde korrigiert."),
+                )
+            )
+
+    # **Zuletzt, und das ist der Fund.** Der Schritt stand vor dem
+    # Löcherschließen und konnte dort nie arbeiten: Er braucht ein Volumen, und
+    # eines wird das Netz erst durch Schließen *und* Normalen richten. Gemessen
+    # am Beispielprojekt ``weg3-generiert-aufbereiten``: vor dem Schließen kein
+    # Volumen, nach dem Schließen wasserdicht aber die Wicklung uneinheitlich,
+    # erst nach ``unify_normals`` beides — und dann wirkt er.
+    if self_intersections:
+        # **Was nicht getan wurde, gehört in den Bericht** (§2.7). Wer ihn
+        # liest, soll nicht annehmen, dass geprüft wurde, was übersprungen
+        # wurde.
+        kein_volumen = not result.mesh.raw.is_volume
+        result.mesh, rebuilt = resolve_self_intersections(result.mesh)
+        if rebuilt:
+            result.changed = True
+            result.findings.append(
+                Finding(
+                    code="repair.self_intersections",
+                    severity="info",
+                    message=_("Selbstdurchdringungen wurden aufgelöst."),
+                )
+            )
+        elif kein_volumen:
+            result.findings.append(
+                Finding(
+                    code="repair.self_intersections_skipped",
+                    severity="info",
+                    message=_(
+                        "Selbstdurchdringungen konnten nicht aufgelöst werden: Dieser "
+                        "Schritt braucht einen geschlossenen Körper, und das Netz ist "
+                        "auch nach der Reparatur keiner. Neu vernetzen schließt es "
+                        "zuverlässig; danach lohnt ein zweiter Lauf."
+                    ),
                 )
             )
 

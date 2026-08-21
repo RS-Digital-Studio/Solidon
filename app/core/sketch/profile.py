@@ -18,7 +18,6 @@ from typing import Final, Literal
 
 from app.core.errors import CORRECT_INPUT, Action, GeometryError
 from app.core.types import Point2, SolvedSketch
-from app.core.units import EPS_GEOM
 from app.i18n import TranslatableText, _
 
 #: Wie nah zwei Endpunkte beieinander liegen müssen, um als verbunden zu
@@ -107,24 +106,6 @@ def regions_of(solved: SolvedSketch) -> tuple[Profile, ...]:
     segments = [_segment(element.kind, element.points) for element in drawable]
     while segments:
         loops.append(Profile(segments=_one_loop(segments)))
-
-    # **Ein Umriss ohne Flaeche ist eine Eingabe und kein Programmfehler.**
-    # Der Fall ist loesbar und trotzdem unbrauchbar: Wer *horizontal* und
-    # *vertikal* auf dieselbe Linie setzt, hat keinen Widerspruch gebaut — die
-    # Linie schrumpft auf einen Punkt und ist dann beides. Der Solver meldet
-    # dafuer richtig zwei Freiheitsgrade und ein Restfehler von null.
-    #
-    # Weiter unten kann daraus niemand etwas machen: OpenCASCADE antwortete mit
-    # ``StdFail_NotDone: BRep_API: command not done``, die C++-Ausnahme wurde
-    # nach der Regel in ``errors.py`` zum ``InternalError``, und der Nutzer las
-    # „Im Programm ist ein unerwarteter Fehler aufgetreten" samt Knopf fuer den
-    # Fehlerbericht — fuer zwei Bedingungen, die er selbst gesetzt hat.
-    #
-    # Geprueft wird hier und nicht in den vier Operationen: alle vier gehen
-    # durch diese Stelle. Die Grenze ist ``EPS_GEOM`` im Quadrat, weil sie auf
-    # einer Flaeche steht und nicht auf einer Laenge (Regel 7).
-    if all(_area(_outline(loop)) <= EPS_GEOM * EPS_GEOM for loop in loops):
-        raise _broken(_("Die Skizze umschließt keine Fläche."))
     return _nested(loops)
 
 
