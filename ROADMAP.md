@@ -45,7 +45,7 @@ bekommt einen roten Lauf.
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 | Benannte Merkmale überstehen keine Boolesche Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung darüber, wann ein benanntes Merkmal wirklich fort ist — vierzehn Ops geben `features={}` zurück, und `_with_features` liest die generierten nur aus der Ausgabe |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
-| Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
+| Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | eine Entscheidung zum Exportdateinamen (wandert er mit der Anzeigesprache?), dann `SceneObject.name` als `TranslatableText | str` durch 65 Lesestellen, dann Schritt 8 → 9 — der Hash ist entgegen der früheren Annahme kein Problem |
 | Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | die Entscheidung des Bauplans, welche Operation auf ein fertiges Gewinde gehört; bis dahin steht `thread` als benannte Ausnahme im Konsistenztest |
 | Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
@@ -8943,18 +8943,37 @@ Kein Verstoß.
 
 ### Was liegen bleibt, und warum
 
-- [ ] **Die Objektnamen der Beispielprojekte bleiben deutsch, und der Weg
-      dorthin ist teurer als er aussieht.** Die saubere Stelle ist das
-      Dateiformat, wie `title_translatable` es für Transaktionstitel vormacht —
-      soweit stimmt die Notiz von heute Morgen. Was sie nicht sagt: Ein
-      `TranslatableText` in `params` reicht bis in `operation_hash`. Der
-      Parametersatz geht durch `_canonical` in den Cache-Schlüssel, ein
-      Dataclass-Wert ist dort nicht darstellbar, und ein Schlüssel, der von der
-      Anzeigesprache abhinge, wäre schlimmer als ein deutscher Name. Dazu ein
-      Schritt 8 → 9 mit Migration, Beispieldatei der alten Fassung, den
-      Leseseiten in `make_examples.py` und neu erzeugten Beispielen. Machbar,
-      aber als eigener Durchgang und nicht neben fünf anderen Punkten.
+- [ ] **Die Objektnamen der Beispielprojekte bleiben deutsch — und der teure
+      Teil ist ein anderer als hier stand.** Nachgesehen am 21.08.: Die
+      Befürchtung war ein `TranslatableText` in `params`, der bis in
+      `operation_hash` reicht. Die trifft nicht zu, weil er dort nicht
+      hingehört. `title_translatable` macht es richtig vor: In der Datei steht
+      die **Message-ID als Zeichenkette** und daneben ein Vermerk, dass sie eine
+      ist. Der Vermerk gehört an `Operation` (ein achtes Feld, etwa
+      `translatable: tuple[str, ...]` mit den betroffenen Parameternamen) und
+      nicht in `params` — `operation_hash` liest nur `op`, `params`,
+      Eingangs-Hashes, Profil, Qualität und Startwert, also bleibt der Schlüssel
+      sprachfrei, ohne dass jemand etwas dafür tun muss.
 
+      **Teuer ist `SceneObject.name`.** Es müsste `TranslatableText | str`
+      werden, und gemessen lesen **65 Stellen** in Oberfläche, Export und
+      Agentenschicht einen Objektnamen direkt: Objektbaum und Kopfzeile,
+      Exportdateinamen (`safe_name`), die 3MF-Baugruppe, die Slicer-Übergabe,
+      der Steckbrief. Jede davon braucht ein `str()` oder eine Entscheidung —
+      und beim Exportdateinamen ist es eine: Heißt die Datei `Halterung.stl`
+      oder `Bracket.stl`, je nach eingestellter Sprache? Ein Dateiname, der mit
+      der Anzeigesprache wandert, ist dieselbe Sorte Fehler wie ein
+      Cache-Schlüssel, der es tut.
+
+      Dazu unverändert: ein Schritt 8 → 9 mit Migration (`carry_over` genügt,
+      alte Namen bleiben wörtlich — dieselbe Begründung wie bei
+      `title_translatable`), eine Beispieldatei der Fassung 8, die vierzehn
+      gesetzten Namen in `make_examples.py`, siebzig Katalogeinträge und neu
+      erzeugte Beispiele.
+
+      Machbar, und die Reihenfolge ist jetzt klar: erst die Entscheidung zum
+      Exportdateinamen, dann `SceneObject.name`, dann das Format. Als eigener
+      Durchgang, nicht neben anderen Punkten.
 ## Der Bedienweg von außen nachgefahren (21.08.2026)
 
 Nicht der Kern geprüft, sondern der Weg: Was sieht jemand, der die Anwendung
