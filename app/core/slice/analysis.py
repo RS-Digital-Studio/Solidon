@@ -624,11 +624,27 @@ def _measure(
 def _islands(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> ShapelyPolygon:
     """Konturen ohne Verbindung nach unten — die brauchen Stützen,
     immer (§22.2).
+
+    **Getragen wird, was eine Fläche gemeinsam hat.** Hier stand
+    ``intersects``, und das ist auch bei einer Berührung wahr — bei einer
+    Überlappung von exakt null. Zwei Konturen, die sich in einer Kante oder
+    einer Ecke treffen, galten damit als verbunden; der obere Teil liegt dann
+    auf einer Linie ohne Breite und fällt im Druck ab. Eine Lücke von einem
+    hundertstel Millimeter wurde dagegen richtig gemeldet — die Erkennung war
+    also genauer beim Getrennten als beim Berührenden.
+
+    Der Fall ist keiner aus dem Testkörper: Eine Sanduhr, eine Pyramide auf
+    der Spitze, zwei Kegel Spitze an Spitze — überall verjüngt sich der
+    Querschnitt auf einen Punkt, und darüber beginnt neues Material.
+
+    Die Grenze ist ``EPS_GEOM`` und keine eigene Zahl (Regel 7). Sie steht auf
+    der Fläche, nicht auf einer Länge: Zwei Konturen mit weniger als einem
+    Quadrat von EPS_GEOM Kantenlänge gemeinsam berühren sich, statt zu tragen.
     """
     if previous is None or previous.is_empty:
         return shape
     parts = getattr(shape, "geoms", [shape])
-    floating = [part for part in parts if not part.intersects(previous)]
+    floating = [part for part in parts if part.intersection(previous).area <= EPS_GEOM * EPS_GEOM]
     return unary_union(floating) if floating else ShapelyPolygon()
 
 

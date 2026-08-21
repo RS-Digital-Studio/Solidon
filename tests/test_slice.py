@@ -127,6 +127,39 @@ def test_a_solid_body_has_no_islands_above_the_plate() -> None:
     assert not above, "nothing starts in mid-air in a cube"
 
 
+def test_a_contour_touching_only_at_a_corner_is_an_island() -> None:
+    """Eine Ecke traegt nichts, und eine Kante auch nicht (§22.2).
+
+    Hier entschied ``intersects``, und das ist in Shapely auch bei einer
+    Beruehrung wahr — bei einer Ueberlappungsflaeche von exakt null. Zwei
+    Wuerfel, die sich in einer Kante treffen, galten damit als verbunden;
+    physikalisch liegt der obere auf einer Linie ohne Breite und faellt im
+    Druck ab. Umgekehrt wurde eine Luecke von einem hundertstel Millimeter
+    korrekt gemeldet — die Erkennung war also genauer beim Getrennten als beim
+    Beruehrenden.
+
+    Der Fall entsteht nicht nur im Testkoerper: Eine Sanduhr, eine Pyramide
+    auf der Spitze, zwei Kegel Spitze an Spitze. Ueberall dort verjuengt sich
+    der Querschnitt auf einen Punkt, und darueber beginnt neues Material.
+
+    Getragen wird, was eine **Flaeche** gemeinsam hat. Die Grenze dafuer ist
+    ``EPS_GEOM`` und keine eigene Zahl (Regel 7).
+    """
+    from shapely.geometry import box as shapely_box
+
+    from app.core.slice.analysis import _islands
+
+    below = shapely_box(0.0, 0.0, 10.0, 10.0)
+
+    edge = _islands(shapely_box(10.0, 0.0, 20.0, 10.0), below)
+    corner = _islands(shapely_box(10.0, 10.0, 20.0, 20.0), below)
+    overlapping = _islands(shapely_box(5.0, 5.0, 15.0, 15.0), below)
+
+    assert not edge.is_empty, "eine Kante ohne Breite traegt nichts"
+    assert not corner.is_empty, "eine Ecke noch weniger"
+    assert overlapping.is_empty, "fuenf Millimeter Ueberlappung tragen"
+
+
 # --- widths ---------------------------------------------------------------------
 
 
