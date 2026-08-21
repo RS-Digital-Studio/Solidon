@@ -123,9 +123,16 @@ def regions_of(solved: SolvedSketch) -> tuple[Profile, ...]:
     # Geprueft wird hier und nicht in den vier Operationen: alle vier gehen
     # durch diese Stelle. Die Grenze ist ``EPS_GEOM`` im Quadrat, weil sie auf
     # einer Flaeche steht und nicht auf einer Laenge (Regel 7).
-    if all(_area(_outline(loop)) <= EPS_GEOM * EPS_GEOM for loop in loops):
+    #
+    # **Verworfen, nicht bloss gezaehlt.** Hier stand ``all(...)`` und warf nur,
+    # wenn *keine* Kette trug — ein Rechteck mit 1200 mm² neben einer
+    # geschrumpften Linie ging damit durch, und die leere Kette wanderte weiter
+    # in den exakten Kern. Was keine Flaeche hat, ist keine Region: Es fliegt
+    # heraus, und erst wenn nichts uebrig bleibt, ist die Skizze der Fehler.
+    bearing = [loop for loop in loops if _area(_outline(loop)) > EPS_GEOM * EPS_GEOM]
+    if not bearing:
         raise _broken(_("Die Skizze umschließt keine Fläche."))
-    return _nested(loops)
+    return _nested(bearing)
 
 
 def _one_loop(segments: list[ProfileSegment]) -> tuple[ProfileSegment, ...]:

@@ -618,3 +618,43 @@ def test_a_sketch_without_area_is_a_user_error_not_a_crash() -> None:
     with pytest.raises(GeometryError) as caught:
         profile_of(solved)
     assert caught.value.suggestions, "ein Fehler ohne Ausweg ist fehlgeschlagen mit mehr Worten"
+
+
+def test_a_degenerate_loop_beside_a_good_one_is_dropped() -> None:
+    """Was keine Fläche hat, fliegt heraus — der Rest bleibt.
+
+    **Der Mischfall, gefunden beim Review des eigenen Fixes.** Erst stand
+    hier ``all(...)``: geworfen wurde nur, wenn *keine* Kette trug. Ein
+    Rechteck von 1200 mm² neben einer auf einen Punkt geschrumpften Linie
+    ging damit durch, und die leere Kette wanderte weiter in den exakten
+    Kern — dorthin, wo sie denselben ``StdFail_NotDone`` ausgelöst hätte,
+    gegen den die Prüfung gebaut wurde.
+
+    Richtig ist das Verwerfen: Eine Kette ohne Fläche ist keine Region.
+    """
+    import dataclasses
+
+    from app.core.sketch import shapes
+    from app.core.sketch.profile import _area, _outline, regions_of
+    from app.core.sketch.solver import solve_sketch
+    from app.core.types import SketchConstraint, SketchElement
+
+    rectangle = shapes.rectangle(40.0, 30.0)
+    points = sum(len(element.points) for element in rectangle.elements)
+    mixed = dataclasses.replace(
+        rectangle,
+        elements=(
+            *rectangle.elements,
+            SketchElement(kind="line", points=((60.0, 0.0), (70.0, 0.0))),
+        ),
+        constraints=(
+            *rectangle.constraints,
+            SketchConstraint(kind="horizontal", targets=(points, points + 1)),
+            SketchConstraint(kind="vertical", targets=(points, points + 1)),
+        ),
+    )
+
+    regions = regions_of(solve_sketch(mixed))
+
+    assert len(regions) == 1, "die geschrumpfte Kette ist keine Region"
+    assert _area(_outline(regions[0])) == pytest.approx(1200.0)
