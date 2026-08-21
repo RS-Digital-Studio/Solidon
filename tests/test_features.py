@@ -117,6 +117,63 @@ def test_a_pin_is_not_reported_as_a_bore() -> None:
     assert detect_holes(pin) == []
 
 
+def test_a_cylinder_bigger_than_its_body_is_no_feature() -> None:
+    """Ein sanft gebogener Arm **ist** örtlich ein Zylinder mit großem Radius —
+    als Merkmal ist er trotzdem keines.
+
+    Gemessen an einem heruntergeladenen Sockel von 160 auf 231 auf 14 mm: Die
+    Erkennung fand dort zehn Zapfen, den dicksten mit Ø 631,6 mm. Ein Zapfen ist
+    das, was man mit einer Bohrung paart (§14), und mit einem Ø 631 paart
+    niemand etwas. Über sieben Modelle waren es 21 von 112 Zapfen und 19 von
+    165 Bohrungen, die breiter waren als ihr eigener Körper.
+
+    Gebogen und nicht gerade, damit die Einpassung überhaupt anspringt: Ein
+    flacher Streifen hat keine gewölbte Fläche, in die ein Zylinder passt.
+    """
+    ring = trimesh.creation.annulus(r_min=290.0, r_max=300.0, height=8.0)
+    # Nur ein Achtel davon — ein flacher Bogen, wie ihn ein Arm hat. Sein
+    # Radius ist 295 mm, sein Körper misst quer zur Achse keine 240.
+    arc = ring.slice_plane([0.0, 0.0, 0.0], [0.0, 1.0, 0.0])
+    arc = arc.slice_plane([0.0, 0.0, 0.0], [-1.0, 1.0, 0.0])
+    body = MeshData.of(arc)
+    across = max(body.bounds.size[0], body.bounds.size[1])
+
+    gefunden = detect_pins(body) + detect_holes(body)
+
+    assert across < 590.0, "der Bogen ist schmaler als der Zylinder, der in ihn passt"
+    for feature in gefunden:
+        assert float(feature.params["diameter"]) <= across + 1e-6, (
+            f"{feature.id} mit Ø {feature.params['diameter']} auf {across:.1f} mm Körper"
+        )
+
+
+def test_a_real_pin_is_kept() -> None:
+    """Die Gegenprobe, und die ist die wichtigere: Ein Zapfen, der in seinen
+    Körper passt, bleibt — sonst hätte die Prüfung die Merkmalserkennung
+    stillgelegt.
+
+    Ø 8 auf einem Körper, der quer zur Achse 22 mm misst: das ist der
+    Sechskantzapfen einer Querstange aus dem Bestand, und der wird gebraucht.
+    """
+    # Der Quader kürzer als der Zapfen, sonst steckt der ganz in ihm und es
+    # gibt keine gewölbte Außenfläche, in die etwas einzupassen wäre.
+    stange = trimesh.creation.box(extents=(22.0, 10.0, 12.0))
+    zapfen = trimesh.creation.cylinder(
+        radius=4.0,
+        height=18.0,
+        sections=48,
+        transform=trimesh.transformations.rotation_matrix(1.5707963, [1.0, 0.0, 0.0]),
+    )
+    body = MeshData.of(trimesh.boolean.union([stange, zapfen]))
+
+    gefunden = detect_pins(body)
+
+    assert gefunden, "der Zapfen wird weiter gefunden"
+    assert any(abs(float(feature.params["diameter"]) - 8.0) < 0.3 for feature in gefunden), [
+        round(float(f.params["diameter"]), 2) for f in gefunden
+    ]
+
+
 # --- faces ----------------------------------------------------------------------
 
 

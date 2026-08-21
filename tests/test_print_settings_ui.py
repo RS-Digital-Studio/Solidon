@@ -924,6 +924,45 @@ def test_a_connector_of_infill_reaches_the_advice_list(
     assert "2 → 3" in passend[0][1], "und er nennt beide Zahlen"
 
 
+def test_a_guessed_pin_never_sets_a_setting(qt_app: QApplication, session: Session) -> None:
+    """Ein „Zapfen" aus der Merkmalserkennung ist eine Vermutung, keine Vorgabe.
+
+    Gemessen an einem heruntergeladenen Sockel von 160 auf 231 auf 14 mm: Die
+    Erkennung fand zehn Zapfen, den dicksten mit Ø 631,6 mm — an einem Teil,
+    das an seiner schmalsten Stelle 14 mm misst. Die Wandregel rechnete daraus
+    **376 Wände**, und *Vorschläge übernehmen* schrieb sie ins Projekt.
+    """
+    session.import_model(Path(__file__).parent / "data" / "meshes" / "cube_clean.stl")
+    session.wait_for_idle()
+    result = session.last_result
+    assert result is not None
+    entry = next(iter(result.scene.objects.values()))
+    entry.features["pin_9"] = Feature(
+        id="pin_9", kind="pin", provenance="detected", params={"diameter": 631.582}
+    )
+
+    dialog = PrintSettingsDialog(session, UiSettings())
+
+    assert dialog._connector_diameters() == (), "eine Vermutung zählt nicht mit"
+    dialog._editors["shell.wall_count"].setValue(2)
+    zeilen = [
+        (
+            dialog.advice_view.topLevelItem(row).text(0),
+            dialog.advice_view.topLevelItem(row).text(1),
+        )
+        for row in range(dialog.advice_view.topLevelItemCount())
+    ]
+    assert not [zeile for zeile in zeilen if "Wände" in zeile[0]], zeilen
+
+    # Und die Gegenprobe in derselben Szene: ein **erzeugter** Zapfen zählt.
+    entry.features["pin_1"] = Feature(
+        id="pin_1", kind="pin", provenance="generated", params={"diameter": 5.04}
+    )
+    zweiter = PrintSettingsDialog(session, UiSettings())
+
+    assert zweiter._connector_diameters() == (5.04,), "der geplante Zapfen schon"
+
+
 # --- Profilauswahl (§29) ------------------------------------------------------------
 
 

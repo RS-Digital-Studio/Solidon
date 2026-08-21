@@ -1635,6 +1635,16 @@ class PrintSettingsDialog(QDialog):
 
         Nur die Zapfen, nicht die Bohrungen — es ist dasselbe Maß plus Spiel,
         und zweimal gezählt sähe es nach doppelt so vielen Verbindern aus.
+
+        **Und nur die erzeugten.** Ein „Zapfen" aus der Merkmalserkennung ist
+        eine Vermutung über eine Form, und sein Durchmesser ist, was der
+        Erkenner hineingepasst hat — an einem gerippten Bogen kann das alles
+        sein. Gemessen an einem heruntergeladenen Sockel von 160 auf 231 auf
+        14 mm: erkannt wurden zehn Zapfen, der dickste mit **Ø 631,6 mm**, und
+        die Wandregel daneben rechnete daraus einen Vorschlag von **376 Wänden**.
+        *Vorschläge übernehmen* schrieb ihn ins Projekt. Eine Vermutung darf
+        keine Einstellung setzen; der Docstring oben sagt es seit je — „wo er
+        steht, ist das **erzeugte** Merkmal".
         """
         result = self.session.last_result
         if result is None:
@@ -1643,7 +1653,9 @@ class PrintSettingsDialog(QDialog):
             float(feature.params["diameter"])
             for entry in result.scene.objects.values()
             for feature in entry.features.values()
-            if feature.kind == "pin" and "diameter" in feature.params
+            if feature.kind == "pin"
+            and feature.provenance == "generated"
+            and "diameter" in feature.params
         )
 
     def _fits_in_play(self) -> tuple[str, ...]:

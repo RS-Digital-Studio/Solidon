@@ -154,7 +154,7 @@ def _cylinders(mesh: MeshData) -> list[tuple[CylinderFit, list[int]]]:
         if len(patch) < MIN_PATCH_FACES:
             continue
         fit = fit_cylinder(body, patch)
-        if fit is not None and fit.good:
+        if fit is not None and fit.good and _fits_in_the_body(mesh, fit):
             found.append((fit, patch))
 
     # Nach Position sortiert, damit die Nummerierung für denselben Körper
@@ -200,6 +200,42 @@ def detect_holes(mesh: MeshData) -> list[Feature]:
         )
         for number, (fit, patch) in enumerate(found, start=1)
     ]
+
+
+def _fits_in_the_body(mesh: MeshData, fit: CylinderFit) -> bool:
+    """Passt dieser Zylinder überhaupt in den Körper, der ihn tragen soll?
+
+    Kein Grenzwert, ein Widerspruch: Eine Bohrung oder ein Zapfen von Ø 631 mm
+    kann nicht auf einem Teil sitzen, das quer zu seiner Achse 231 mm misst.
+    Gemessen wird darum **quer zur eigenen Achse** und nicht an der dünnsten
+    Kante — ein Loch Ø 7,1 durch eine 6,4 mm dünne Scheibe ist normal, dort
+    liegt die dünne Richtung ja in der Achse. Diese Unterscheidung ist der
+    ganze Punkt: nach der dünnsten Kante gemessen fielen 92 von 165 Bohrungen
+    durch, davon die meisten zu Recht vorhanden.
+
+    **Warum es das braucht.** Die Einpassung ist geometrisch nicht falsch: ein
+    sanft gebogener Arm *ist* örtlich ein Zylinder mit großem Radius, und der
+    Rückstand bleibt klein. Als *Merkmal* ist er trotzdem keines — ein Zapfen
+    ist das, was man mit einer Bohrung paart (§14), und mit einem Ø 631 paart
+    niemand etwas. Gemessen an sieben heruntergeladenen Modellen: 21 von 112
+    Zapfen und 19 von 165 Bohrungen waren breiter als ihr eigener Körper.
+
+    Und es blieb nicht bei der Anzeige. Der Vorschlag *Wände* im
+    Druckeinstellungen-Dialog rechnet aus dem dicksten Verbinder, wie viele
+    Wände sich in seiner Mitte treffen — aus Ø 631,6 wurden **376 Wände**, an
+    einem anderen Modell 185 784. Das ist an seiner Wurzel behoben (nur erzeugte
+    Zapfen zählen dort), aber ein Merkmal, das nicht in seinen Körper passt,
+    gehört in keine Liste und in kein Kontextmenü.
+    """
+    import numpy as np
+
+    size = mesh.bounds.size
+    axis = np.abs(np.asarray(fit.axis, dtype=float))
+    if float(np.max(axis)) <= EPS_GEOM:
+        return True
+    along = int(np.argmax(axis))
+    across = max(size[index] for index in range(3) if index != along)
+    return fit.radius * 2.0 <= across + EPS_GEOM
 
 
 def detect_pins(mesh: MeshData) -> list[Feature]:

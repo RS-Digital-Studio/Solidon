@@ -9531,3 +9531,101 @@ eine ebene Fläche unten, die von selbst gewinnt. Erst mit den Fasen **und** den
 zwei Sechskantzapfen an den Enden entsteht der Fall — die Zapfen kosten in der
 liegenden Lage Stützmaterial, in der diagonalen keines. Wer den Körper
 vereinfacht, prüft etwas anderes, als er behauptet.
+
+## Die zweite Hälfte des Kundenwegs (21.08.2026)
+
+Die beiden Durchgänge davor hörten bei der exportierten Datei auf. Für einen
+Kunden fängt dort an, was zählt: Trägt sich das Teil? Was schlägt die Anwendung
+an Einstellungen vor? Was kostet der Druck, und stimmt die Schätzung? Dieser
+Durchgang geht bis zum G-Code — über den echten `PrintSettingsDialog` und seinen
+Knopf *Slicen*, nicht am Fenster vorbei.
+
+**Drei Slicer statt einem.** Solidon behandelt drei Familien verschieden, und
+geprüft war eine: Auf dieser Maschine lag nur der ElegooSlicer. Dazugekommen
+sind **PrusaSlicer 2.9.6** und **CuraEngine 5.13.0** (winget, Hersteller-
+manifeste). Alle drei werden erkannt und laufen; die Zahlen einer Platte mit
+fünf Verbinderstangen:
+
+| | Filament | Druckzeit | Schichten |
+|---|---|---|---|
+| Solidons Schätzung | 89,7 g | 6,28 h | — |
+| PrusaSlicer 2.9.6 | 77,5 g | 7,13 h | 60 |
+| ElegooSlicer 1.5.3.4 (Orca) | 76,4 g | 3,92 h | 60 |
+| CuraEngine 5.13.0 | 70,0 g | 4,54 h | 60 |
+
+Die Schätzung liegt 16 bis 28 Prozent über den Messungen, und die drei Slicer
+sind sich untereinander beim **Faktor 1,8** in der Zeit uneins. Beides steht mit
+ausgewiesener Herkunft im Prüfbericht (`info:gcode.material`,
+`info:gcode.print_time`, Regel 14) — die Abweichung wird gemeldet, nicht
+verrechnet. Curas Kopfzeile schreibt Platzhalter (`;TIME:6666`,
+`;Filament used: 0m`, Hüllquader auf INT_MAX); `grams()` fängt das ab und
+rechnet aus der geförderten Länge, das Fenster zeigt 70,0 g. Der Fall stand
+schon im Docstring.
+
+### Behoben, jeder mit Test und Gegenprobe
+
+- [x] **Eine geratene Form setzte eine Einstellung.** Der Vorschlag *Wände*
+      rechnet aus dem dicksten Verbinder, wie viele Wände sich in seiner Mitte
+      treffen. `_connector_diameters` nahm dafür **jedes** Merkmal der Art
+      `pin` — auch die, die die Merkmalserkennung am eingelesenen Modell geraten
+      hatte. Der Docstring sagte seit je „wo er steht, ist das **erzeugte**
+      Merkmal"; der Filter sagte es nicht. Gemessen: am Sockel ein Vorschlag von
+      **376 Wänden**, an der Ente **185 784**, am Propellersatz 84 — und
+      *Vorschläge übernehmen* schrieb sie ins Projekt. Die Schätzung des Sockels
+      fiel nach dem Fix von 291 g auf 163,5 g, weil die 376 Wände nicht mehr
+      mitgerechnet werden.
+- [x] **Ein Merkmal, das nicht in seinen Körper passt, ist keines.** Die
+      Zapfenerkennung passt Zylinder in nach außen gewölbte Flächen — und ein
+      sanft gebogener Arm *ist* örtlich ein Zylinder mit großem Radius, mit
+      kleinem Rückstand. Am Sockel von 160 auf 231 auf 14 mm kamen so zehn
+      Zapfen heraus, der dickste mit **Ø 631,6 mm**. Über sieben Modelle waren es
+      21 von 112 Zapfen und 19 von 165 Bohrungen, die breiter waren als ihr
+      eigener Körper. `_fits_in_the_body` misst jetzt **quer zur eigenen Achse**
+      und nicht an der dünnsten Kante — die erste Regel hätte 92 von 165
+      Bohrungen verworfen, die meisten davon zu Recht vorhanden: ein Loch Ø 7,1
+      durch eine 6,4 mm dünne Scheibe ist normal, dort liegt die dünne Richtung
+      in der Achse. Kein Grenzwert, ein Widerspruch. Die echten Sechskantzapfen
+      Ø 8,1468 der Querstangen bleiben unverändert erhalten.
+
+### Was der Durchgang bestätigt hat
+
+Die Schichtanalyse liefert je Körper Schichtzahl, Stützvolumen, Überhang
+(gesamt und schlimmste Schicht), dünnste Struktur, Inselhöhen und weiteste
+Brücke — bei 52 Körpern in Sekunden. Die Vorschlagsliste ist wirklich
+teilspezifisch: Der Sockel bekommt die vier Passungsregeln, **weil das
+verstiftete Teilen eine Passung angelegt hat**; die ausgehöhlte Ente bekommt
+Baumstützen und eine längere Mindestschichtzeit; die Querstange den Verbinder-
+vorschlag mit 3 → 5 Wänden. `warning:slice.long_bridge` und
+`warning:arrange.adhesion_too_close` kamen dort, wo sie hingehören.
+
+### Zwei Fehler im Prüflauf, die wie Fehler der Anwendung aussahen
+
+Beide festgehalten, weil sie beim nächsten Mal wieder so aussehen werden.
+**Erstens** brach der Lauf die Slicer ab, indem er zu früh weiterging: Der
+Zustandstext wechselt sofort auf „Der Slicer rechnet …", und wer darauf wartet,
+ist nach einem Wimpernschlag fertig. Im Bericht stand PrusaSlicer
+„Abgebrochen." und Orca „Der Slicer rechnet …", und allein der letzte lief
+durch. Das verlässliche Zeichen ist der Arbeiter (`_worker`).
+**Zweitens** setzte der Lauf den Slicerpfad im offenen Dialog um — kein
+Kundenweg, der wird im Konstruktor einmal gesucht. Die Profilauswahl der
+Orca-Familie blieb dabei stehen, und CuraEngine bekam `-j <Orca-Profil>` und
+starb in 0,1 Sekunden. Daraus wurde „Der Slicer hat keine Druckdatei
+geschrieben" — ein Satz über das Ende, nicht über die Ursache.
+
+### Was auffiel und eine Entscheidung braucht
+
+- [ ] **Der Slicer sagt, was er nicht konnte, und der Nutzer erfährt es nicht.**
+      Eine Platte in Bettkoordinaten (so kommt sie aus einer fremden 3MF) an
+      PrusaSlicer gegeben endet in `exit_code=0` und der Ausgabe „All objects
+      are outside of the print volume." Solidon fängt sie auf und legt sie unter
+      `values["output"]` ab, die Meldung lautet aber „Der Slicer hat keine
+      Druckdatei geschrieben." Was hilft, ist ein Klick auf *Auf dem Bett
+      anordnen* — und das steht nirgends. Regel 17 verlangt den
+      Handlungsvorschlag; wo er hingehört (erkannte Slicer-Ausgaben auf
+      Handlungen abbilden, wie `FINDING_ACTIONS` es für Befunde tut), ist eine
+      Entscheidung.
+- [ ] **Die Profilauswahl bleibt beim Slicerwechsel stehen.** `_start_profile_
+      search` steigt für Prusa und Cura früh aus und lässt die Auswahlfelder,
+      wie sie waren; `_slice` liest sie unbesehen. Heute unerreichbar, weil der
+      Pfad je Dialog feststeht — sobald es eine Slicerwahl im Dialog gibt, ist
+      es ein Fehler.
