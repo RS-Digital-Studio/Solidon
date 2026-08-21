@@ -27,6 +27,7 @@ from app.core.agent.session import AgentSession
 from app.core.backends.llm import (
     AnthropicBackend,
     LLMBackend,
+    Message,
     OllamaBackend,
     first_available,
 )
@@ -141,6 +142,36 @@ def pick(name: str, model: str) -> LLMBackend | None:
     return first_available()
 
 
+def why_unreachable(backend: LLMBackend) -> tuple[str, ...]:
+    """Ein Probeaufruf, bevor neununddreißig Anfragen hinausgehen — oder ().
+
+    **``available`` ist für diesen Läufer zu wenig.** Es fragt, ob ein Socket
+    lauscht, und ``OllamaBackend.available`` sagt auch warum: Die Antwort wird
+    gebraucht, während ein Fenster gebaut wird, und ein HTTP-Aufruf an einen
+    geschlossenen Port kostet dort zu viel. Für ein Fenster ist das richtig.
+
+    Hier nicht. Ein laufendes Ollama ohne geladenes Modell ließ diesen Läufer
+    neununddreißig Mal gegen dieselbe Wand laufen — neununddreißig gleiche
+    Zeilen und am Ende Exit 0. Der Docstring oben versprach das Gegenteil:
+    „ohne eines sagt er das und hält an." Mit einem Schlüssel statt eines
+    lokalen Modells wären es neununddreißig **bezahlte** Fehlversuche.
+
+    Ein Aufruf kostet also einen von vierzig und spart im Fehlerfall alle.
+    """
+    try:
+        backend.complete([Message(role="user", content="ping")], max_output_tokens=1)
+    except Exception as problem:  # jede Art von Fehlschlag zählt hier gleich
+        detail = str(problem)
+        if "not found" in detail and backend.id == "ollama":
+            return (
+                f"Das Modell '{backend.model}' ist nicht installiert.",
+                f"    ollama pull {backend.model}",
+                "Oder ein anderes wählen: --model <name>.",
+            )
+        return (f"Das Sprachmodell antwortet nicht: {detail[:160]}",)
+    return ()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backend", default="", choices=["", "anthropic", "ollama"])
@@ -161,6 +192,12 @@ def main() -> int:
     backend = pick(arguments.backend, arguments.model)
     if backend is None or not backend.available:
         print("Kein Sprachmodell erreichbar. Schlüssel hinterlegen oder Ollama starten.")
+        return 2
+
+    unreachable = why_unreachable(backend)
+    if unreachable:
+        for line in unreachable:
+            print(line)
         return 2
 
     cases = [
