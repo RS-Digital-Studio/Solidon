@@ -242,3 +242,63 @@ def test_every_detected_feature_kind_offers_an_operation() -> None:
     assert produced >= known_gaps, (
         f"Ausnahme für ein Merkmal, das nicht entsteht: {sorted(known_gaps - produced)}"
     )
+
+
+def test_no_operation_calls_its_core_function_with_an_argument_it_refuses() -> None:
+    """Eine Operation ruft nur, was ihre Kernfunktion annimmt.
+
+    **Der Fund, der diese Prüfung veranlasst hat.** ``plug_hole`` übergab
+    ``profile=ctx.profile`` an ``plug()``, und ``plug()`` hatte diesen
+    Parameter nicht. Die Operation „Loch verschließen" konnte damit mit keinem
+    Wert durchlaufen: Der ``TypeError`` wurde zum ``InternalError``, und der
+    Nutzer bekam „Im Programm ist ein unerwarteter Fehler aufgetreten" samt
+    Knopf für den Fehlerbericht — auf einen Klick, an dem nichts falsch war.
+
+    **Warum die Suite geschwiegen hat.** ``tests/test_missing_ops.py`` prüft
+    ``plug()`` — die Funktion, direkt, mit den richtigen Argumenten. Sie ist in
+    Ordnung. Geprüft hat niemand die Zeile *zwischen* Register und Funktion.
+    Genau diesen Blindfleck beschreibt ``errors.py`` bei
+    ``PROGRAMMING_ERRORS``: „ihr Test übersprang sich aus demselben Grund, und
+    der Hinweispfad war zwei Phasen lang tot — hinter einer grünen Suite."
+
+    Geprüft wird statisch und nicht durch Fahren: Ein Lauf über 86 Operationen
+    braucht Eingangskörper, die zu jeder passen, und eine Operation, die aus
+    einem anderen Grund anhält, verdeckt diesen hier. Der Syntaxbaum kennt die
+    Aufrufe, ``inspect`` die Signaturen — das genügt und kostet nichts.
+    """
+    import ast
+    import textwrap
+
+    offenders: list[str] = []
+    for spec in registered():
+        fn = spec.fn
+        namespace = getattr(fn, "__globals__", {})
+        try:
+            source = textwrap.dedent(inspect.getsource(fn))
+            tree = ast.parse(source)
+        except (OSError, SyntaxError, TypeError):  # pragma: no cover - Vorsicht
+            continue
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            target = namespace.get(node.func.id)
+            # Nur echte Funktionen dieses Projekts: Klassen nehmen über
+            # ``__init__`` an, C-Funktionen haben keine lesbare Signatur, und
+            # ein Name, den das Modul nicht kennt, ist ein lokaler.
+            if not inspect.isfunction(target):
+                continue
+            try:
+                parameters = inspect.signature(target).parameters
+            except (TypeError, ValueError):  # pragma: no cover - Vorsicht
+                continue
+            if any(p.kind is p.VAR_KEYWORD for p in parameters.values()):
+                continue
+            for keyword in node.keywords:
+                if keyword.arg and keyword.arg not in parameters:
+                    offenders.append(
+                        f"{spec.name} → {node.func.id}(…, {keyword.arg}=…) "
+                        f"— {node.func.id} nimmt {sorted(parameters)}"
+                    )
+
+    assert not offenders, "Operationen rufen ihre Kernfunktion falsch auf:\n" + "\n".join(offenders)
