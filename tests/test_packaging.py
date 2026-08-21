@@ -183,14 +183,22 @@ def test_the_specification_picks_the_icon_for_its_platform() -> None:
 def test_the_workflow_packages_every_delivered_platform() -> None:
     """Der Arbeitsablauf baut Pakete für Windows, Linux und beide Macs.
 
-    ``macos-13`` ist Intel, ``macos-latest`` Apple Silicon. Fehlt einer von
-    beiden, fehlt die Hälfte der Mac-Nutzer — ein auf arm64 gebautes Paket
-    startet auf einem Intel-Gerät nicht.
+    ``macos-latest`` ist Apple Silicon, daneben muss ein Intel-Mac stehen:
+    Fehlt einer von beiden, fehlt die Hälfte der Mac-Nutzer — ein auf arm64
+    gebautes Paket startet auf einem Intel-Gerät nicht.
+
+    Drei der vier Labels enden auf ``-latest`` und wandern mit. Für Intel gibt
+    es das nicht; x64 läuft nur unter seiner Nummer, und die wechselt — erst
+    ``macos-13``, dann ``macos-26-intel``. Ein festes Label hier hätte den
+    Test nach dem nächsten Wechsel rot stehen lassen, ohne dass am Bau etwas
+    fehlt. Geprüft wird deshalb, *dass* ein Intel-Mac dabei ist, nicht welche
+    Nummer er trägt.
     """
     workflow = WORKFLOW.read_text(encoding="utf-8")
     matrix = next(line for line in workflow.splitlines() if "os: [windows-latest" in line)
-    for runner in ("windows-latest", "ubuntu-latest", "macos-13", "macos-latest"):
+    for runner in ("windows-latest", "ubuntu-latest", "macos-latest"):
         assert runner in matrix, f"{runner} fehlt in der Paket-Matrix"
+    assert "-intel" in matrix, f"kein Intel-Mac in der Paket-Matrix: {matrix.strip()}"
 
 
 def test_the_workflow_keeps_the_two_mac_packages_apart() -> None:
