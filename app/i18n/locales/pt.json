@@ -1219,7 +1219,7 @@
   "Flachziehen": "Aplanar",
   "Flussfaktor": "Fator de fluxo",
   "Fläche": "Face",
-  "Fläche an {object} — {area} mm², {side}": "Face em {object} — {area} mm², {side}",
+  "Fläche an {object} — {area}, {side}": "Face em {object} — {area}, {side}",
   "Fläche aufdicken": "Engrossar a superfície",
   "Fläche unterteilen": "Subdividir a superfície",
   "Fläche versetzen": "Deslocar a face",

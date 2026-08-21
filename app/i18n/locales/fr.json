@@ -1219,7 +1219,7 @@
   "Flachziehen": "Aplanir",
   "Flussfaktor": "Facteur de débit",
   "Fläche": "Face",
-  "Fläche an {object} — {area} mm², {side}": "Face sur {object} — {area} mm², {side}",
+  "Fläche an {object} — {area}, {side}": "Face sur {object} — {area}, {side}",
   "Fläche aufdicken": "Épaissir la surface",
   "Fläche unterteilen": "Subdiviser la surface",
   "Fläche versetzen": "Décaler la face",

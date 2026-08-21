@@ -1219,7 +1219,7 @@
   "Flachziehen": "Appiattisci",
   "Flussfaktor": "Fattore di flusso",
   "Fläche": "Faccia",
-  "Fläche an {object} — {area} mm², {side}": "Faccia su {object} — {area} mm², {side}",
+  "Fläche an {object} — {area}, {side}": "Faccia su {object} — {area}, {side}",
   "Fläche aufdicken": "Ispessisci la superficie",
   "Fläche unterteilen": "Suddividi la superficie",
   "Fläche versetzen": "Scosta la faccia",

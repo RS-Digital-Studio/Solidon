@@ -1219,7 +1219,7 @@
   "Flachziehen": "Flatten",
   "Flussfaktor": "Flow ratio",
   "Fläche": "Face",
-  "Fläche an {object} — {area} mm², {side}": "Face on {object} — {area} mm², {side}",
+  "Fläche an {object} — {area}, {side}": "Face on {object} — {area}, {side}",
   "Fläche aufdicken": "Thicken surface",
   "Fläche unterteilen": "Subdivide surface",
   "Fläche versetzen": "Offset face",
