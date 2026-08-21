@@ -129,7 +129,12 @@ class ScadUnavailable(AppError):
 
     default_title = _("OpenSCAD ist auf diesem Rechner nicht installiert.")
     default_suggestions = (
-        Action(id="install", label=_("OpenSCAD installieren und erneut versuchen.")),
+        # ``install`` ist die Kennung von ``INSTALL_MISSING`` — der Handler des
+        # Fensters hängt daran, und deshalb wird daraus ein Knopf und nicht bloß
+        # ein Satz. Das Label bleibt eigen, weil es das Programm beim Namen
+        # nennt; „und erneut versuchen" stand darin und war ein Versprechen, das
+        # keine Handlung einlöst: installiert wird hier, wiederholt vom Nutzer.
+        Action(id="install", label=_("OpenSCAD installieren …"), primary=True),
         Action(id="use_parts", label=_("Stattdessen einen Baustein verwenden.")),
     )
 

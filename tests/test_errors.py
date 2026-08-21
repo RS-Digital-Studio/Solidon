@@ -192,3 +192,29 @@ def test_a_suggestion_has_to_fit_the_error() -> None:
     assert "correct_input" in ids, "die Antwort auf einen zu großen Radius ist ein kleinerer"
     assert REPAIR_AND_RETRY.id not in ids, "an einem exakten Körper gibt es nichts zu reparieren"
     assert "show_locations" not in ids, "und dieser Fehler nennt keine Stellen"
+
+
+def test_missing_software_offers_the_install_list_and_not_a_bug_report() -> None:
+    """Eine fehlende Zusatzkomponente ist kein Fehler, den man melden könnte.
+
+    ``BRepUnavailable`` nannte keine Vorschläge. ``AppError`` fällt dann auf
+    „Abbrechen" zurück, und einem Dialog, dem sonst nichts bleibt, legt
+    ``dialogs.offered_actions`` den Fehlerbericht bei — wer also eine
+    Verrundung ohne OpenCASCADE versuchte, wurde gebeten, einen Fehler zu
+    melden. ``ScadUnavailable`` schlug ``install`` vor, und weil das Fenster
+    dafür keinen Handler führte, wurde daraus ein grauer Satz statt eines
+    Knopfs.
+
+    Geprüft wird beides an derselben Stelle: die Kennung am Fehler und der
+    Handler im Fenster. Ein Vorschlag ohne Gegenstück ist kein Vorschlag.
+    """
+    from app.core.backends.openscad import ScadUnavailable
+    from app.core.brep.kernel import BRepUnavailable
+    from app.core.errors import INSTALL_MISSING, ExternalToolError
+
+    for problem in (BRepUnavailable(), ScadUnavailable(), ExternalToolError(tool="ComfyUI")):
+        ids = {action.id for action in problem.suggestions}
+        assert INSTALL_MISSING.id in ids, (
+            f"{type(problem).__name__}: der Weg zur Installation fehlt"
+        )
+        assert "report_error" not in ids, "fehlende Software ist kein Fehlerbericht"

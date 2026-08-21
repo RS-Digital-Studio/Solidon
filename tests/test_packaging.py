@@ -79,6 +79,33 @@ def test_every_data_directory_travels_with_the_package() -> None:
         )
 
 
+def test_every_optional_dependency_the_package_needs_is_a_hidden_import() -> None:
+    """Was nur in einer Funktion importiert wird, sieht PyInstaller nicht.
+
+    ``keyring`` fehlte, und das war kein Schönheitsfehler: ``backends/keys.py``
+    importiert es innerhalb von ``_keyring()``, damit die Anwendung ohne es
+    startet. Im gebauten Paket lag es damit nicht bei, ``keys.store()`` gab
+    immer False zurück — **der Kunde konnte seinen Schlüssel nicht ablegen**,
+    und der Rückfall war eine Umgebungsvariable, gedacht für einen Bauserver.
+
+    Geprüft werden die Namen, die die Anwendung zur Laufzeit nachschlägt, und
+    nicht die Liste in der Spec: Die kann nur zu kurz sein, und genau das war
+    sie.
+    """
+    spec = SPEC.read_text(encoding="utf-8")
+    from app.core import install
+
+    for entry in install.REQUIREMENTS:
+        if entry.kind != "package" or not entry.module:
+            continue
+        top = entry.module.split(".")[0]
+        assert f'"{top}' in spec, (
+            f"{entry.id}: {top} steht nicht in den hiddenimports von packaging/"
+            f"solidon3d.spec — im Paket fehlt es dann, und die Anwendung hält es "
+            f"für nicht installiert"
+        )
+
+
 def test_the_spec_names_the_application_from_branding() -> None:
     """Kein zweiter Ort für den Namen. Der erste hat schon eine Umbenennung
     verschlafen.

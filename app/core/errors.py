@@ -46,6 +46,12 @@ PLACE_ON_BED = Action("place_on_bed", _("Auf das Bett setzen"), primary=True)
 ARRANGE_ON_BED = Action("arrange_on_bed", _("Auf dem Bett anordnen"), primary=True)
 CHOOSE_PRINTER = Action("choose_printer", _("Anderes Druckerprofil wählen"))
 OPEN_SETTINGS = Action("open_settings", _("Einstellungen öffnen"), primary=True)
+#: Der Weg zu den zusätzlichen Programmen — wo sie liegen, und ein Knopf, der
+#: sie holt. Nicht ``OPEN_SETTINGS``: Ein fehlender Slicer, ein stilles ComfyUI
+#: und ein nicht installiertes OpenSCAD wurden alle mit „Einstellungen öffnen"
+#: beantwortet, und geöffnet wurde jedes Mal die Liste der externen Programme.
+#: Der Knopf trägt jetzt den Namen des Menüeintrags, unter dem er landet.
+INSTALL_MISSING = Action("install", _("Zusätzliche Programme …"), primary=True)
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
 ENTER_LICENCE_KEY = Action("enter_licence_key", _("Lizenzschlüssel eintragen"), primary=True)
 BUY_LICENCE = Action("buy_licence", _("Solidon kaufen"))
@@ -343,7 +349,7 @@ class ExternalToolError(AppError):
     geantwortet (§27, §28)."""
 
     default_title: ClassVar[TranslatableText] = _("Ein externes Programm hat nicht geantwortet.")
-    default_suggestions: ClassVar[tuple[Action, ...]] = (OPEN_SETTINGS, RETRY, CANCEL)
+    default_suggestions: ClassVar[tuple[Action, ...]] = (INSTALL_MISSING, RETRY, CANCEL)
 
     def __init__(
         self,

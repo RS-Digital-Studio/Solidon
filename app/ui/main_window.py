@@ -5701,7 +5701,17 @@ class MainWindow(QMainWindow):
             "scale_to_fit": self._scale_after_error,
             "place_on_bed": self._place_on_bed_after_error,
             "arrange_on_bed": self._arrange_after_error,
-            "open_settings": lambda _error: self.action_install_extras(),
+            # **Der Draht, der fehlte.** ``install`` vergaben ``ScadUnavailable``
+            # und seit dieser Sitzung ``BRepUnavailable`` und jeder
+            # ``ExternalToolError`` — ohne Handler wurde daraus ein grauer Satz
+            # („OpenSCAD installieren …"), während der Dialog, der genau das
+            # kann, im Hilfe-Menü stand. Zwei Zeilen darunter hing er unter
+            # ``open_settings``, also unter einem Namen, den kein Knopf trug.
+            "install": lambda _error: self.action_install_extras(),
+            # Und der heißt jetzt, was er tut: die Einstellungen. Bis hierhin
+            # öffnete er die Liste der externen Programme, weil der Kern ihn
+            # dafür benutzte — der Knopf log also seinen Namen.
+            "open_settings": lambda _error: self.action_settings(),
             "enter_licence_key": lambda _error: self.action_activate(),
             "buy_licence": lambda _error: open_website(),
         }

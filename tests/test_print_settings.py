@@ -1213,7 +1213,7 @@ def test_a_missing_model_says_so_before_starting_anything(tmp_path: Path) -> Non
     assert raised.value.suggestions
 
 
-def test_a_slicer_that_moved_away_points_at_the_settings(tmp_path: Path) -> None:
+def test_a_slicer_that_moved_away_points_at_the_extra_programs(tmp_path: Path) -> None:
     model = tmp_path / "model.stl"
     model.write_bytes(b"solid x\nendsolid x\n")
     profile = profiles.make_profile()
@@ -1221,7 +1221,7 @@ def test_a_slicer_that_moved_away_points_at_the_settings(tmp_path: Path) -> None
 
     with pytest.raises(ExternalToolError) as raised:
         handover.slice_model(model, print_settings.resolve(profile), profile, setup)
-    assert any(action.id == "open_settings" for action in raised.value.suggestions)
+    assert any(action.id == "install" for action in raised.value.suggestions)
 
 
 def test_the_newest_gcode_in_the_folder_wins(tmp_path: Path) -> None:

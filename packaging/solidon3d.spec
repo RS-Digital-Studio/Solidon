@@ -134,6 +134,20 @@ hiddenimports = [
     "OCP.GeomAbs",
     "OCP.Message",
     "vhacdx",
+    # **Ohne diese Zeile konnte der Kunde seinen Schlüssel nicht ablegen.**
+    # ``keyring`` wird in ``backends/keys.py`` innerhalb einer Funktion
+    # importiert, PyInstaller sieht das nicht, und im gebauten Paket gab
+    # ``keys.store()`` deshalb immer False zurück: Der Chat-Dialog nahm einen
+    # Schlüssel an und behielt ihn nicht. Übrig blieb eine Umgebungsvariable,
+    # gedacht für einen Bauserver. Die Liste der zusätzlichen Programme bot
+    # daneben an, den Schlüsselbund zu installieren — mit einem Knopf, der in
+    # einem Paket nicht drückbar ist.
+    "keyring",
+    # Die Hintertüren des Schlüsselbunds sucht er selbst über Einsprungpunkte;
+    # die des Systems steht damit noch nicht im Archiv.
+    "keyring.backends.Windows",
+    "keyring.backends.macOS",
+    "keyring.backends.SecretService",
 ]
 
 analysis = Analysis(

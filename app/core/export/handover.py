@@ -30,7 +30,7 @@ from pathlib import Path
 from typing import Final
 
 from app.core import activation
-from app.core.errors import OPEN_SETTINGS, Action, ExternalToolError, OperationCancelled
+from app.core.errors import INSTALL_MISSING, Action, ExternalToolError, OperationCancelled
 from app.core.export import slicer_keys, slicer_profiles
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.knowledge.print_settings import read_path, with_path
@@ -1282,7 +1282,7 @@ def _run_slicer(
             detail=_("Der Slicer ließ sich nicht starten."),
             values={"reason": str(problem)},
             suggestions=(
-                OPEN_SETTINGS,
+                INSTALL_MISSING,
                 Action(id="export_only", label=_("Nur exportieren und selbst slicen.")),
             ),
         ) from problem
@@ -1392,7 +1392,7 @@ def slice_model(
         raise ExternalToolError(
             tool=setup.name,
             detail=_("Der eingestellte Slicer liegt nicht mehr an seinem Pfad."),
-            suggestions=(OPEN_SETTINGS, Action(id="export_only", label=_("Nur exportieren."))),
+            suggestions=(INSTALL_MISSING, Action(id="export_only", label=_("Nur exportieren."))),
         )
 
     started = time.perf_counter()

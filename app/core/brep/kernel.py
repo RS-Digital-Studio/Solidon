@@ -22,7 +22,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, cast
 
-from app.core.errors import AppError
+from app.core.errors import CANCEL, INSTALL_MISSING, AppError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import BoundingBox
@@ -43,6 +43,13 @@ class BRepUnavailable(AppError):
     """Der B-Rep-Kern ist nicht installiert."""
 
     default_title = _("Der B-Rep-Kern ist auf diesem Rechner nicht installiert.")
+    # **Ohne diese Zeile bat Solidon um einen Fehlerbericht.** Die Klasse
+    # nannte keine Vorschläge, ``AppError`` fällt dann auf „Abbrechen" zurück,
+    # und für einen Dialog, dem sonst nichts bleibt, tritt der Bericht ein
+    # (``dialogs.offered_actions``). Wer eine Verrundung ohne OpenCASCADE
+    # versuchte, wurde also gebeten, einen Fehler zu melden — bei einer
+    # Komponente, die zwei Klicks entfernt zu installieren ist.
+    default_suggestions = (INSTALL_MISSING, CANCEL)
 
     def __init__(self, detail: str = "") -> None:
         super().__init__(

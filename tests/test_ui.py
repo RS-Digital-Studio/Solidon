@@ -1496,6 +1496,25 @@ def test_only_actions_with_a_handler_are_offered(window: MainWindow) -> None:
     assert "cancel" not in offered, "das Schließen ist kein Vorschlag, es steht ohnehin da"
 
 
+def test_missing_software_gets_a_button_into_the_install_list(window: MainWindow) -> None:
+    """Der Vorschlag war da, der Handler nicht — also stand er als grauer Satz.
+
+    ``ScadUnavailable`` schlägt seit Anfang an ``install`` vor. Verdrahtet war
+    unter dieser Kennung nichts; die Liste der zusätzlichen Programme hing
+    unter ``open_settings``, also unter einem Namen, den kein Knopf trug.
+    Ergebnis: „OpenSCAD installieren …" als Text zum Lesen, während der Dialog,
+    der es holt, zwei Menüs entfernt stand.
+    """
+    from app.core.backends.openscad import ScadUnavailable
+    from app.core.brep.kernel import BRepUnavailable
+    from app.ui.dialogs import offered_actions
+
+    for problem in (ScadUnavailable(), BRepUnavailable()):
+        offered = {action.id for action in offered_actions(problem, window.error_handlers())}
+        assert "install" in offered, f"{type(problem).__name__}: kein Weg zur Installation"
+        assert "report_error" not in offered, "fehlende Software ist kein Fehlerbericht"
+
+
 def test_closing_is_no_advice_either(window: MainWindow) -> None:
     """Derselbe Satz gilt für den Text, und dort galt er nicht.
 

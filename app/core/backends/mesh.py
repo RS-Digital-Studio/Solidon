@@ -67,7 +67,7 @@ from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 from typing import Any, Final, Protocol
 
-from app.core.errors import CANCEL, OPEN_SETTINGS, Action, AppError
+from app.core.errors import CANCEL, INSTALL_MISSING, Action, AppError
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.log import get_logger
 from app.core.types import ProgressFn
@@ -248,7 +248,7 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
                 "Rechner, gehört seine Adresse in die Einstellungen."
             ),
             values={"url": _origin(url), "reason": str(error.reason)},
-            suggestions=(OPEN_SETTINGS, CANCEL),
+            suggestions=(INSTALL_MISSING, CANCEL),
         ) from error
 
 
@@ -418,14 +418,18 @@ class ComfyBackend:
         if class_type not in described:
             raise GenerationFailed(
                 title=_("Die Mesh-Erzeugung konnte nicht starten."),
+                # Der Satz nannte hier „«python tools/setup_comfyui.py»" — einen
+                # Befehl, den ein Kunde nicht ausführen kann: ``tools/`` reist
+                # im Paket nicht mit. Solidon richtet die Knoten selbst ein,
+                # und der Weg dorthin ist der Knopf, den der Vorschlag anbietet.
                 detail=_(
                     "Dieses ComfyUI kennt den Knoten nicht, den der Ablauf "
                     "benutzt. Die Knotensammlung fehlt — nicht das Modell. "
-                    "Einzurichten ist sie mit «python tools/setup_comfyui.py», "
+                    "Einrichten lässt sie sich unter „Zusätzliche Programme“; "
                     "danach ComfyUI neu starten."
                 ),
                 values={"node": class_type},
-                suggestions=(OPEN_SETTINGS, CANCEL),
+                suggestions=(INSTALL_MISSING, CANCEL),
             )
 
         inputs = described.get(class_type, {}).get("input", {})
