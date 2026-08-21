@@ -723,6 +723,15 @@ genau der einen Methode, die benutzt wird.
   `tests/test_value_labels.py` prüft die **Familie**: Befunde mit demselben
   Namen hinter dem Punkt melden dasselbe Problem, und trägt einer eine
   Handlung, müssen es alle.
+- **Die Kennung entscheidet über die Handlung, also muss sie den Fall
+  treffen.** „Passt nicht" und „liegt woanders" sind zwei Fälle, und die
+  Trennlinie ist nicht, über welche Seite ein Körper hinaussteht, sondern ob er
+  überhaupt hineinpasst (`prepare._fits_at_all`). Gemessen am häufigsten
+  Importfall überhaupt: Eine 3MF aus Bambu Studio, Orca oder Elegoo führt
+  **Bettkoordinaten**, ihre Körper liegen also rechts neben dem Bett — 132 mm
+  breit auf einem 256er Bett. Angeboten wurden *Modell teilen*, *Auf den
+  Bauraum verkleinern* und *Anderen Drucker wählen*, dreimal, gleich beim
+  Öffnen. Was hilft, ist *Auf dem Bett anordnen*.
 - **Und sie stehen sichtbar da, nicht im Rechtsklick.** Unter der Befundliste
   liegt eine Knopfzeile mit den Handlungen des gewählten Befunds (leer, solange
   es keine gibt). Gefragt wird über `actions_for(finding)` — dieselbe Quelle,

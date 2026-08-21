@@ -579,7 +579,7 @@ def check_build_volume(
             }
             if plates is not None and index < len(plates):
                 values["plate"] = plates[index] + 1
-            code, message = _verdict_for(bounds, allowed, outside)
+            code, message = _verdict_for(bounds, allowed, outside, profile.printer.extrusion_width)
             findings.append(
                 Finding(
                     code=code,
@@ -631,7 +631,7 @@ def _severity_for(
 
 
 def _verdict_for(
-    bounds: BoundingBox, allowed: BoundingBox, outside: Sequence[int]
+    bounds: BoundingBox, allowed: BoundingBox, outside: Sequence[int], margin: float = 0.0
 ) -> tuple[str, TranslatableText]:
     """Kennung und Satz zu dem Fall, der tatsächlich vorliegt.
 
@@ -655,11 +655,38 @@ def _verdict_for(
         allowed.minimum[axis] - bounds.minimum[axis] > bounds.maximum[axis] - allowed.maximum[axis]
         for axis in outside
     )
-    if not only_below:
+    if not _fits_at_all(bounds, allowed, margin):
         return "arrange.out_of_build_volume", _("Ein Objekt steht über den Bauraum hinaus.")
-    if tuple(outside) == (2,):
+    if tuple(outside) == (2,) and only_below:
         return "arrange.below_bed", _("Ein Objekt steckt unter der Druckplatte.")
     return "arrange.off_the_plate", _("Ein Objekt liegt außerhalb der Druckplatte.")
+
+
+def _fits_at_all(bounds: BoundingBox, allowed: BoundingBox, margin: float) -> bool:
+    """Passt der Körper in den Bauraum — gleich, wo er gerade liegt?
+
+    Das ist die Frage, an der die drei Fälle auseinandergehen, und
+    :func:`_severity_for` stellt sie seit je. :func:`_verdict_for` tat es
+    nicht: Es fragte, über **welche Seite** ein Körper hinaussteht, und nannte
+    alles „über den Bauraum hinaus", was nicht nach unten hing.
+
+    **Damit traf es den häufigsten Fall von Weg 1 falsch.** Eine 3MF aus
+    Bambu Studio, Orca oder Elegoo führt Bettkoordinaten: Gemessen an einer
+    heruntergeladenen Ente liegen die drei Körper bei x 83 bis 216, y 43 bis
+    113 — auf einem 256er Bett um den Ursprung ist das rechts draußen. Der
+    größte ist 132 mm breit und passt dreimal; was fehlt, ist ein Klick auf
+    *Auf dem Bett anordnen*. Angeboten wurden *Modell teilen*, *Auf den Bauraum
+    verkleinern* und *Anderen Drucker wählen* — drei Handlungen, von denen
+    keine hilft, dreimal, gleich beim Öffnen.
+
+    Der Rand ist eine Bahnbreite: Ein Körper, der genau so breit ist wie das
+    Bett, hat seine äußere Wand zur Hälfte daneben, und kein Anordnen holt sie
+    zurück. Deshalb ist das kein Grenzwert für den Geschmack, sondern das Maß
+    der Bahn (Regel 7).
+    """
+    return all(
+        size + margin <= limit for size, limit in zip(bounds.size, allowed.size, strict=True)
+    )
 
 
 #: Welche Felder eines Befunds Indizes in die geprüfte Liste sind. ``object``

@@ -50,6 +50,8 @@ bekommt einen roten Lauf.
 | Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
+| Der Absturz beim Aufräumen kommt auch auf der ruhigen Maschine | Der Kundendurchgang auf der ruhigen Maschine (21.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht — dreimal heute an drei Stellen, jede allein grün, und die Last ist als Erklärung erledigt |
+| Der Schnapper kam nicht durch die Oberfläche | Der Kundendurchgang auf der ruhigen Maschine (21.08.2026) | ein Modell mit einer Naht über 5,4 mm; die Sechskantstange gibt sie nicht her, und der Rückfall auf Rundstifte ist richtig |
 
 ---
 
@@ -10674,3 +10676,129 @@ Aufgeschrieben, damit sie nicht ein zweites Mal geprüft werden:
   gebaut und nicht zum Rechnen. Der Befund sagt genau das —
   `evaluate.too_few_inputs`, „Dieser Operation fehlt das Objekt, auf dem sie
   arbeiten soll."
+
+## Der Kundendurchgang auf der ruhigen Maschine (21.08.2026)
+
+Der Durchgang davor lief, während eine zweite Sitzung im selben Baum drei
+Suiten fuhr: jede Messung lag gleichmäßig 1,35- bis 1,75-fach über dem besten
+bekannten Lauf, und keine Zahl daraus taugte zum Vergleich. Dieser hier lief
+auf einer nachweislich ruhigen Maschine — null fremde Testläufe, Last 8 bis
+28 Prozent, im Bericht je Etappe mitgeschrieben. Der Treiber verweigert den
+Start, solange ein fremder Testlauf läuft.
+
+**Das Leistungsbudget hält.** Alle 19 Messungen aus §31 grün, und jede innerhalb
+weniger Prozent des besten je auf dieser Maschine gemessenen Laufs:
+
+| Messung | jetzt | bester Lauf | Ziel |
+|---|---|---|---|
+| `orient_200` — Orientierungssuche über 200 Lagen | 17 585 ms | 16 378 ms | < 20 000 ms |
+| `ingest_dense` — Eingangsstufe, 1 Mio. Dreiecke | 3 545 ms | 3 082 ms | — |
+| `slice_knurl` — Schichtanalyse am Rändelknopf | 5 373 ms | 4 498 ms | — |
+| `map_wall_medium` — Wandstärkenkarte | 4 345 ms | 4 197 ms | < 3 000 ms je Körper |
+| `subdivide_surface` | 2 153 ms | 2 091 ms | < 3 000 ms |
+| `sketch_solve_200` | 122 ms | 117 ms | — |
+
+`orient_200` war unter Last bei 21 bis 23 Sekunden und riss damit das
+§31-Ziel — nachgemessen am Stand **vor** meiner Änderung an `better()` lag es
+bei denselben 21 Sekunden, also war es die Last und keine Regression. Auf der
+ruhigen Maschine sind es 17,6 Sekunden.
+
+**Neun Modelle, drei Etappen, nichts rot.** Einfügen, optimieren, ausbauen,
+speichern, wieder öffnen, weiterbearbeiten, exportieren, zurücklesen — dann
+Schichtanalyse, Vorschläge, Schätzung — dann drei Slicer-Familien. Dazu die
+drei Nachbauten und das Plattenbild. Die Zeiten für einen Kunden: Einfügen und
+acht Schritte an 52 Körpern in 87 Sekunden, an einem Vierteilesatz in 16.
+
+### Behoben, jeder mit Test und Gegenprobe
+
+- [x] **Die Reinigungsbahn des Slicers war kein Druck neben der Platte.** Der
+      neue Befund `gcode.off_the_bed` meldete beim ersten echten Lauf den
+      falschen Slicer — den ElegooSlicer statt CuraEngine. Zwei Ursachen:
+      `G1 E6 F120` fördert sechs Millimeter, ohne einen zu fahren (die
+      Bedingung „muss X oder Y führen" trägt `_EXTRUSION` seit je, die neue
+      Messung nicht), und die Bahn danach fährt wirklich, steht aber **vor der
+      ersten Schicht** — der Startcode des Maschinenprofils, den die
+      Orca-Familie aus ihrem Bestand mitbringt. Gemessen wird jetzt ab
+      `;LAYER:0` bzw. `;LAYER_CHANGE`. Dazu die dritte Hälfte:
+      `gcode.stated_bed` liest, was die Datei selbst über ihr Bett sagt
+      (`printable_area`, `bed_shape`) — gegen Solidons eigenen Bauraum
+      gemessen hieße „außerhalb" bei der Orca-Familie entweder „daneben
+      gedruckt" oder „zwei Profile meinen verschiedene Maschinen".
+- [x] **Der häufigste Importfall bekam drei Handlungen, die nicht helfen.**
+      Eine 3MF aus Bambu Studio, Orca oder Elegoo führt Bettkoordinaten;
+      gemessen an einer heruntergeladenen Ente liegen die drei Körper bei
+      x 83 bis 216, y 43 bis 113 — auf einem 256er Bett um den Ursprung ist
+      das rechts draußen. Der größte ist 132 mm breit und passt dreimal.
+      `_verdict_for` fragte, über **welche Seite** ein Körper hinaussteht, und
+      nannte alles „über den Bauraum hinaus", was nicht nach unten hing: also
+      *Modell teilen*, *Auf den Bauraum verkleinern*, *Anderen Drucker
+      wählen*. Gefragt wird jetzt zuerst, ob der Körper überhaupt passt
+      (`_fits_at_all`, Rand eine Bahnbreite) — dann ist es
+      `arrange.off_the_plate` und die Handlung *Auf dem Bett anordnen*.
+      Dieselbe Trennlinie stand seit je im Docstring von `_severity_for`; die
+      Kennung hielt sich nicht daran.
+- [x] **Vereinfachen machte aus einem geschlossenen Körper einen offenen — und
+      sagte es nicht.** Am ausgehöhlten Entenmodell: *Netz vereinfachen* auf
+      60 000 Dreiecke, danach nicht mehr wasserdicht, und im Prüfbericht stand
+      „Die Fläche hat sich dabei kaum verschoben" — richtig und vollkommen
+      nebensächlich. `_deviation_findings` meldet jetzt zusätzlich
+      `mesh.not_watertight`; die Kennung endet so, weil Einlesen, Export und
+      Agentenzug dieselbe Sache melden und die Familie dieselben zwei
+      Handlungen trägt.
+- [x] **Nach einem gescheiterten Slicerlauf hatte das Fenster den Lauf
+      vergessen.** `_slice_failed` setzte die Zustandszeile auf leer und zeigte
+      den Fehler. Sobald das Fehlerfenster zuging, stand dort, wo eben noch
+      „Der Slicer rechnet …" stand, nichts mehr. Gemessen: PrusaSlicer lehnte
+      die Platte der Ente ab („Der Slicer sagt, die Teile liegen außerhalb
+      seines Bauraums"). Jetzt trägt die Zeile den Satz des Fehlers — nicht
+      eine zweite eigene Formulierung, die auseinanderdriftet.
+- [x] **Die Schätzung lag systematisch zu hoch, und zwar an der Schale.**
+      `Oberfläche mal Wandstärke` zählt jede Kante doppelt: Beim 20-mm-Würfel
+      3024 mm³ statt 2659. Gemessen gegen PrusaSlicer 2.9.6 an vier
+      analytischen Körpern +5 bis +22 Prozent, an sieben Modellen des
+      Durchgangs +10 bis +41. Gerechnet wird jetzt über die **mittlere
+      Wanddicke** `3V/A` — für Kugel und Würfel genau der Inkugelradius —, und
+      der Kern ist `((Dicke − Wand)/Dicke)³` des Volumens.
+
+      Drei Modelle, dieselben sieben Messungen:
+
+      | Modell | gemessen | Fläche mal Dicke | Hüllquader | 3V/A |
+      |---|---|---|---|---|
+      | Querstangen 210 | 77,7 g | +16 % | −6 % | +7 % |
+      | Querstangen 220 | 82,0 g | +16 % | −5 % | +7 % |
+      | Querstangen ohne Kasten | 77,5 g | +16 % | −6 % | +7 % |
+      | Regalfuß | 140,4 g | +17 % | −41 % | +3 % |
+      | Auslegerarm | 128,7 g | +16 % | −49 % | +1 % |
+      | Kit-Card | 27,5 g | +41 % | −33 % | +20 % |
+      | Propellersatz | 44,2 g | +10 % | −46 % | −2 % |
+      | **Mittel** | | **19 %** | **27 %** | **7 %** |
+
+      Der Hüllquader war der zweite Versuch, und er ist der lehrreiche: Er traf
+      die vier analytischen Körper auf zwei Prozent und hielt zugleich einen
+      flachen Rahmen für einen flachen Klotz. **Ein Modell an vier Körpern zu
+      prüfen, die alle kompakt sind, prüft es nicht.** Deshalb steht neben der
+      gemessenen Tabelle jetzt ein zweiter Test, der einen Rahmen gegen einen
+      Klotz derselben Hüllmaße hält.
+
+### Was offen bleibt
+
+- [ ] **Der Absturz beim Aufräumen kommt auch auf der ruhigen Maschine.**
+      Dreimal heute, an drei verschiedenen Stellen: zweimal in einem vollen
+      Suitenlauf (`test_pose_session.py`, `test_ui.py`) und einmal in der
+      Druckbarkeitsetappe des 52-teiligen Modells, jeweils **nach** der
+      letzten Zeile und mit geschriebenem Bericht, mit `0xC0000409`. Jede der
+      drei Stellen läuft allein grün, zwei Wiederholungen der Etappe ebenso.
+      Damit ist die Last als Erklärung erledigt — sie war die letzte
+      naheliegende. Was bleibt, ist der Weg, der schon beim Fund
+      „Ein Umgebungsartefakt, das keines war" genannt wurde: ein Lauf unter
+      einem Werkzeug, das doppelte Freigaben sieht. Ohne das ist jeder Eingriff
+      geraten, und Raten ist hier teurer als Warten.
+- [ ] **Der Schnapper kam nicht durch die Oberfläche.** Der 220er-Plan teilt
+      seit heute mit Schnappverbindern, damit die korrigierte Fassung 4 des
+      Bausteins durch den Kundenweg läuft. Gemeldet wurde
+      `info:split.snap_too_small`: Die Naht der Sechskantstange gibt die
+      5,4 mm nicht her, die ein Federarm braucht, und Solidon fällt
+      dokumentiert auf Rundstifte zurück. Das ist richtig — aber es heißt, dass
+      die neue Taschengeometrie nur im Test steht und nicht im Durchgang. Was
+      fehlt, ist ein Modell mit einer breiten Naht; die 234er Basis des
+      Bausatzes wäre eines.

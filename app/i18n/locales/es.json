@@ -468,6 +468,7 @@
   "Der Körper hat sich beim Formen umgestülpt — für diese Stärke ist seine Wand zu dünn.": "El cuerpo se ha invertido al modelar: su pared es demasiado fina para esta intensidad.",
   "Der Körper hat sich beim Glätten umgestülpt — für so viele Durchgänge ist seine Wand zu dünn.": "El cuerpo se ha vuelto del revés al suavizarlo — su pared es demasiado delgada para tantas pasadas.",
   "Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen.": "A esta altura el cuerpo es macizo — no hay nada que cerrar.",
+  "Der Körper war geschlossen und ist es jetzt nicht mehr — „Reparieren“ schließt die offenen Stellen.": "El cuerpo estaba cerrado y ya no lo está: «Reparar» cierra las zonas abiertas.",
   "Der Lauf hat keine Eingabe. Die Antwort lässt sich vorab mitgeben — beim Einlesen etwa über „--unit“.": "La ejecución no tiene entrada. La respuesta puede darse por adelantado — al importar, por ejemplo, con «--unit».",
   "Der Materialslot, in den das ganze Objekt kommt.": "La ranura de material a la que va el objeto entero.",
   "Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.": "El nombre debe poder escribirse como @name en una expresión — letras, dígitos y guiones bajos.",

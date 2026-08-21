@@ -793,11 +793,24 @@ def subdivide_surface(ctx: OpContext) -> OpResult:
 def _deviation_findings(before: MeshData, after: MeshData, object_id: str) -> list[Finding]:
     """Sagt, was es gekostet hat — gemessen an der Oberfläche, nicht aus
     Zahlen geraten.
+
+    **Und ob der Körper dabei aufgegangen ist.** Die Abweichung allein
+    beschreibt nur, wie weit sich Flächen verschoben haben; sie sagt nichts
+    darüber, ob danach noch ein Körper da ist. Gemessen an einer
+    heruntergeladenen Ente: *Netz vereinfachen* auf 60 000 Dreiecke machte aus
+    einem geschlossenen Körper einen offenen, und im Prüfbericht stand dazu
+    „Die Fläche hat sich dabei kaum verschoben" — richtig und vollkommen
+    nebensächlich. Wer danach exportiert, bekommt den Befund erst dort, einen
+    Arbeitsschritt zu spät.
+
+    Die Kennung endet bewusst auf ``not_watertight``: Dieselbe Sache melden
+    Einlesen, Export und Agentenzug, und die Familie trägt dieselben zwei
+    Handlungen (``FINDING_ACTIONS``).
     """
     moved = deviation(before, after)
     limit = max(before.bounds.diagonal, 1.0) * DEVIATION_WARN
     severity: Severity = "warning" if moved > limit else "info"
-    return [
+    findings = [
         Finding(
             code="mesh.deviation",
             severity=severity,
@@ -814,6 +827,20 @@ def _deviation_findings(before: MeshData, after: MeshData, object_id: str) -> li
             },
         )
     ]
+    if before.is_watertight and not after.is_watertight:
+        findings.append(
+            Finding(
+                code="mesh.not_watertight",
+                severity="warning",
+                message=_(
+                    "Der Körper war geschlossen und ist es jetzt nicht mehr — "
+                    "„Reparieren“ schließt die offenen Stellen."
+                ),
+                object_id=object_id,
+                values={"before": before.triangle_count, "after": after.triangle_count},
+            )
+        )
+    return findings
 
 
 # --- Aufdicken (Konzept P15 §7 Etappe 6, D15) -----------------------------------

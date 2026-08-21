@@ -2429,7 +2429,20 @@ class PrintSettingsDialog(QDialog):
         )
 
     def _slice_failed(self, problem: AppError) -> None:
-        self.state.setText("")
+        """Der Lauf ist gescheitert: Fehlerfenster **und** Zeile im Dialog.
+
+        Die Zeile stand auf ``""``, und damit hatte das Fenster den Lauf
+        vergessen, sobald jemand das Fehlerfenster zumachte — dort, wo eben
+        noch „Der Slicer rechnet …" stand, war nichts. Gemessen im
+        Kundendurchgang: PrusaSlicer lehnte eine Platte in Bettkoordinaten ab
+        („Der Slicer sagt, die Teile liegen außerhalb seines Bauraums"), der
+        Satz erschien einmal und war danach fort.
+
+        Genommen wird der Satz des Fehlers selbst und keine eigene
+        Formulierung: Zwei Sätze über dieselbe Sache driften auseinander, und
+        der hier trägt schon die Ursache.
+        """
+        self.state.setText(str(problem.detail) if problem.detail else tr("Abgebrochen."))
         show_error(problem, self)
 
     def _slice_finished(self) -> None:

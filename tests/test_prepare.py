@@ -285,12 +285,18 @@ def test_arranging_keeps_the_spacing(profile: Profile) -> None:
 
 
 def test_what_sticks_out_of_the_build_volume_is_reported(profile: Profile) -> None:
-    """§18.6: reported, never quietly scaled."""
+    """§18.6: reported, never quietly scaled.
+
+    Ein Würfel 400 mm neben dem Bett **passt** darauf — er liegt nur woanders.
+    Die Kennung ist deshalb die der Lage und nicht die der Größe: An ihr hängen
+    die anklickbaren Handlungen, und *Auf dem Bett anordnen* behebt genau das
+    (``_fits_at_all``).
+    """
     far_away = apply(cube(), translation((400.0, 0.0, 0.0)))
     findings = check_build_volume([far_away], profile)
 
     assert findings
-    assert findings[0].code == "arrange.out_of_build_volume"
+    assert findings[0].code == "arrange.off_the_plate"
 
 
 def test_a_misplaced_body_weighs_less_than_one_that_does_not_fit(profile: Profile) -> None:

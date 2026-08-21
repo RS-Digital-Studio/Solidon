@@ -159,10 +159,17 @@ def test_an_open_part_is_reported_but_not_blocked(profile: Profile) -> None:
 
 
 def test_a_part_outside_the_build_volume_is_reported(profile: Profile) -> None:
+    """Ein Würfel 400 mm neben dem Bett wird gemeldet — und zwar als **Lage**.
+
+    Er ist 20 mm groß und passt zehnmal auf das Bett; was hilft, ist ein Klick
+    auf *Auf dem Bett anordnen*. „Steht über den Bauraum hinaus" hieße „zu
+    groß" und bot *Modell teilen* und *Verkleinern* an (``_fits_at_all``).
+    """
     far = apply(body(), translation((400.0, 0.0, 0.0)))
     findings = check_before_export([scene_object(mesh=far)], profile, {})
 
-    assert "arrange.out_of_build_volume" in {finding.code for finding in findings}
+    assert "arrange.off_the_plate" in {finding.code for finding in findings}
+    assert "arrange.out_of_build_volume" not in {finding.code for finding in findings}
 
 
 def test_before_writing_a_misplaced_part_is_a_warning(profile: Profile) -> None:
@@ -184,9 +191,7 @@ def test_before_writing_a_misplaced_part_is_a_warning(profile: Profile) -> None:
 
     assert [finding.severity for finding in im_editor] == ["info"], "im Editor behebt ein Klick es"
     schwer = [
-        finding.severity
-        for finding in vor_dem_schreiben
-        if finding.code == "arrange.out_of_build_volume"
+        finding.severity for finding in vor_dem_schreiben if finding.code == "arrange.off_the_plate"
     ]
     assert schwer == ["warning"], vor_dem_schreiben
 
@@ -806,3 +811,36 @@ def test_the_mesh_formats_say_nothing_about_solids(profile: Profile, export_form
     )
 
     assert "export.needs_solid" not in {finding.code for finding in plan.findings}
+
+
+def test_a_part_in_bed_coordinates_is_offered_the_arranging(profile: Profile) -> None:
+    """Der häufigste Fall von Weg 1, und er bekam drei Handlungen, die nicht
+    helfen.
+
+    Eine 3MF aus Bambu Studio, Orca oder Elegoo führt **Bettkoordinaten**.
+    Gemessen an einer heruntergeladenen Ente: die drei Körper liegen bei x 83
+    bis 216 und y 43 bis 113, auf einem Bett um den Ursprung also rechts
+    draußen. Der größte ist 132 mm breit und passt dreimal aufs Bett.
+
+    Angeboten wurden über die Kennung ``arrange.out_of_build_volume`` genau die
+    drei Handlungen, die hier nichts ausrichten — teilen, verkleinern, anderen
+    Drucker wählen (``FINDING_ACTIONS``). Was hilft, ist das Anordnen, und das
+    hängt an ``arrange.off_the_plate``.
+    """
+    from app.ui import panels
+
+    ente = apply(body(), translation((150.0, 78.0, 0.0)))
+    findings = check_before_export([scene_object(mesh=ente)], profile, {})
+
+    codes = {finding.code for finding in findings}
+    assert "arrange.off_the_plate" in codes, codes
+    handlungen = {
+        action.id
+        for finding in findings
+        if finding.code == "arrange.off_the_plate"
+        for action in panels.actions_for(finding)
+    }
+    assert "arrange_on_bed" in handlungen
+    assert not handlungen & {"split_model", "scale_to_fit", "choose_printer"}, (
+        "keine Handlung, die an der Größe ansetzt — die Größe stimmt"
+    )

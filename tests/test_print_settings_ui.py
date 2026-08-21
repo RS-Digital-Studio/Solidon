@@ -1387,3 +1387,36 @@ def test_the_chosen_machine_survives_until_the_dialog_closes(qt_app: QApplicatio
     dialog.reject()
 
     assert settings.slicer_machine_profile == "C:/meine/maschine.json"
+
+
+def test_a_failed_slicer_run_leaves_its_reason_in_the_dialog(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Fenster darf den Lauf nicht vergessen, wenn das Fehlerfenster zugeht.
+
+    Gemessen im Kundendurchgang: PrusaSlicer lehnte eine Platte in
+    Bettkoordinaten ab — „Der Slicer sagt, die Teile liegen außerhalb seines
+    Bauraums", mit *Auf dem Bett anordnen* als erster Handlung. Der Satz
+    erschien einmal; danach stand in der Zeile, die eben noch „Der Slicer
+    rechnet …" sagte, nichts mehr.
+
+    Geprüft wird über den Slot, der am Signal des Arbeiters hängt, und der
+    Fehlerdialog wird dabei stillgelegt: ``exec`` wartet auf einen Menschen.
+    """
+    from app.core.errors import ARRANGE_ON_BED, ExternalToolError
+    from app.ui import print_settings_dialog as modul
+
+    gezeigt: list[object] = []
+    monkeypatch.setattr(modul, "show_error", lambda problem, parent=None: gezeigt.append(problem))
+    dialog.state.setText("Der Slicer rechnet …")
+
+    dialog._slice_failed(
+        ExternalToolError(
+            tool="prusa-slicer",
+            detail="Der Slicer sagt, die Teile liegen außerhalb seines Bauraums.",
+            suggestions=(ARRANGE_ON_BED,),
+        )
+    )
+
+    assert gezeigt, "das Fehlerfenster kommt weiterhin"
+    assert "außerhalb seines Bauraums" in dialog.state.text(), dialog.state.text()

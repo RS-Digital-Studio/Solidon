@@ -269,6 +269,30 @@ bei jedem Lauf zwanzig Fehler meldet, wird nach dem dritten Mal übersehen.
 Verglichen wird nachsichtig — `0.2` gegen `0.20`, `15%` gegen `15`, eine Liste
 aus einem Element gegen dieses Element.
 
+## Die Schätzung ist eine Näherung mit Herkunft, keine Rechnung
+
+`slice/estimate.py` beantwortet „was kostet das" in Mikrosekunden, damit die
+Zahl beim Ziehen an einem Parameter stehen bleiben kann. Zwei Dinge daran sind
+teuer erkauft:
+
+**Die Schale ist die Differenz zweier Körper, nicht Fläche mal Dicke.**
+`Oberfläche mal Wandstärke` zählt jede Kante doppelt — beim 20-mm-Würfel
+3024 mm³ statt 2659 — und der Fehler ist kein Rauschen, sondern ein Aufschlag:
+gemessen +5 bis +22 Prozent an vier analytischen Körpern und +10 bis +41 an
+sieben Modellen. Gerechnet wird über die mittlere Wanddicke `3V/A` (für Kugel
+und Würfel genau der Inkugelradius) und den Kern als deren dritte Potenz.
+
+**Und ein Modell an kompakten Körpern zu prüfen, prüft es nicht.** Der
+Zwischenstand mit Hüllmaßen traf Würfel, Kugel, Blech und Stab auf zwei
+Prozent und lag bei zwei flachen Regalteilen 41 und 49 Prozent zu niedrig: Ein
+Hüllquader hält einen Rahmen aus dünnen Stegen für einen flachen Klotz. Wer die
+Rechnung anfasst, prüft **beide** Familien — kompakt und dünnwandig —, und
+`tests/test_estimate.py` hält je einen Fall dafür.
+
+Was die Schätzung nicht kann und nicht können soll: Stützen, Schürze, Rand,
+Fahrwege, Nahtstellen, Lückenfüllung. Sie trägt `source="internal"`, steht neben
+dem gemessenen Wert und wird nie mit ihm vermischt (Regel 14).
+
 ## Was die Analyse liefert
 
 Überhangfläche je Schicht, Stützvolumen, Querschnittsverlauf, **Inseln**

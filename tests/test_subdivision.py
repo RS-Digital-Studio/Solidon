@@ -344,3 +344,56 @@ def test_subdivision_says_how_far_the_surface_moved(profile: Profile) -> None:
 
     measured = next(f for f in result.findings if f.code == "mesh.deviation")
     assert float(measured.values["deviation_mm"]) > 0.0
+
+
+def _hollow_sphere(profile: Profile) -> MeshData:
+    """Eine dünnwandige Hohlkugel — der Fall, in dem Vereinfachen wehtut.
+
+    Zwei Schalen im Abstand von 1,2 mm, dazu die Entlüftung: 197 000 Dreiecke,
+    von denen die inneren dicht neben den äußeren liegen. Genau so kam die
+    ausgehöhlte Ente aus dem Kundendurchgang heraus.
+    """
+    kugel = MeshData.of(trimesh.creation.icosphere(subdivisions=3, radius=30.0))
+    return run("hollow_object", object_of(kugel), profile, wall=1.2, vents=1).outputs[0].mesh
+
+
+def test_a_body_that_opens_up_while_being_simplified_says_so(profile: Profile) -> None:
+    """Gemessen an einer heruntergeladenen Ente: *Netz vereinfachen* auf 60 000
+    Dreiecke machte aus einem geschlossenen Körper einen offenen.
+
+    Im Prüfbericht stand dazu ein einziger Satz — „Die Fläche hat sich dabei
+    kaum verschoben". Richtig, und vollkommen nebensächlich: Was zählt, ist,
+    dass danach kein Körper mehr da ist, den man drucken kann. Wer es nicht
+    hier erfährt, erfährt es beim Export, einen Arbeitsschritt später.
+
+    Die Kennung endet auf ``not_watertight`` und gehört damit zur Familie, die
+    dieselben zwei Handlungen trägt (``FINDING_ACTIONS``).
+    """
+    hohl = _hollow_sphere(profile)
+    assert hohl.is_watertight, "der Ausgangspunkt des Tests"
+
+    result = run("decimate_mesh", object_of(hohl), profile, triangles=800)
+
+    assert not result.outputs[0].mesh.is_watertight, "so grob geht die Wand auf"
+    assert "mesh.not_watertight" in [entry.code for entry in result.findings]
+
+
+def test_a_simplification_that_holds_stays_quiet(profile: Profile) -> None:
+    """Die Gegenprobe: Wo der Körper geschlossen bleibt, sagt niemand etwas.
+
+    Eine **massive** Kugel übersteht dasselbe Ziel geschlossen — der
+    Unterschied ist die dünne Wand und nicht die Grobheit. Ohne diesen Fall
+    prüfte der Test oben bloß, dass irgendein Befund entsteht, und ein Satz
+    über einen Zustand, der nicht eingetreten ist, ist schlimmer als keiner.
+
+    (Ob eine Hohlkugel bei einem *milderen* Ziel geschlossen bleibt, ist keine
+    Zusage, die hier stehen darf: Gemessen bleibt sie bei 2000 Dreiecken
+    geschlossen und geht bei 20 000 auf — die Reihenfolge der Kantenkollapse
+    entscheidet, nicht die Zahl.)
+    """
+    massiv = MeshData.of(trimesh.creation.icosphere(subdivisions=4, radius=30.0))
+
+    result = run("decimate_mesh", object_of(massiv), profile, triangles=800)
+
+    assert result.outputs[0].mesh.is_watertight, "eine massive Kugel hält das aus"
+    assert "mesh.not_watertight" not in [entry.code for entry in result.findings]

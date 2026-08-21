@@ -151,6 +151,11 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Er ist dabei der einzige der drei, der seine Objektkennung mitbringt:
     # ``_object_of`` muss hier nicht auf die Auswahl raten.
     "agent.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+    # Vierter Melder derselben Sache: eine Netzoperation, die den Körper
+    # aufgemacht hat (``mesh_ops._deviation_findings``). Gemessen beim
+    # Vereinfachen einer Ente — geschlossen hinein, offen heraus, und im
+    # Bericht stand nur, dass sich die Fläche kaum verschoben hat.
+    "mesh.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
 }
 
 #: Kennungen der Befunde, die aus einer Ausnahme einer Operation entstanden

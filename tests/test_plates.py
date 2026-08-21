@@ -216,7 +216,11 @@ def test_the_export_check_knows_which_plate_complains(profile: Profile) -> None:
 
     plan = plan_export(objects, project_name="Kiste", profile=profile)
 
-    outside = [entry for entry in plan.findings if entry.code == "arrange.out_of_build_volume"]
+    # Die Platte weit draußen **passt** auf ein Bett, sie liegt nur woanders —
+    # das ist die Kennung für die Lage und nicht die für die Größe
+    # (``_fits_at_all``). Die Plattennummer ist hier die Aussage, nicht die
+    # Kennung.
+    outside = [entry for entry in plan.findings if entry.code == "arrange.off_the_plate"]
     assert [entry.values["plate"] for entry in outside] == [2]
 
 

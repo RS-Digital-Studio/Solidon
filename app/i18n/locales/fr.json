@@ -468,6 +468,7 @@
   "Der Körper hat sich beim Formen umgestülpt — für diese Stärke ist seine Wand zu dünn.": "Le corps s’est retourné pendant la sculpture — sa paroi est trop mince pour cette intensité.",
   "Der Körper hat sich beim Glätten umgestülpt — für so viele Durchgänge ist seine Wand zu dünn.": "Le lissage a retourné le corps comme un gant — sa paroi est trop mince pour autant de passes.",
   "Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen.": "À cette hauteur, le corps est massif — il n'y a rien à refermer.",
+  "Der Körper war geschlossen und ist es jetzt nicht mehr — „Reparieren“ schließt die offenen Stellen.": "Le corps était fermé et ne l'est plus — « Réparer » referme les endroits ouverts.",
   "Der Lauf hat keine Eingabe. Die Antwort lässt sich vorab mitgeben — beim Einlesen etwa über „--unit“.": "Le lancement n'a pas d'entrée. La réponse peut être donnée d'avance — à l'import, par exemple avec « --unit ».",
   "Der Materialslot, in den das ganze Objekt kommt.": "L'emplacement de matériau où va l'objet entier.",
   "Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.": "Le nom doit pouvoir s'écrire @name dans une expression — lettres, chiffres et tirets bas.",

@@ -468,6 +468,7 @@
   "Der Körper hat sich beim Formen umgestülpt — für diese Stärke ist seine Wand zu dünn.": "The body turned inside out while sculpting — its wall is too thin for this strength.",
   "Der Körper hat sich beim Glätten umgestülpt — für so viele Durchgänge ist seine Wand zu dünn.": "Smoothing turned the body inside out — its wall is too thin for that many passes.",
   "Der Körper ist auf dieser Höhe massiv — es gibt nichts zu verschließen.": "At this height the body is solid — there is nothing to close.",
+  "Der Körper war geschlossen und ist es jetzt nicht mehr — „Reparieren“ schließt die offenen Stellen.": "The body was closed and is not any more — “Repair” closes the open spots.",
   "Der Lauf hat keine Eingabe. Die Antwort lässt sich vorab mitgeben — beim Einlesen etwa über „--unit“.": "The run has no input. The answer can be given up front — when importing, for instance through “--unit”.",
   "Der Materialslot, in den das ganze Objekt kommt.": "The material slot the whole object goes into.",
   "Der Name muss sich in einem Ausdruck als @name schreiben lassen — Buchstaben, Ziffern und Unterstriche.": "The name must be writable as @name in an expression — letters, digits and underscores.",
