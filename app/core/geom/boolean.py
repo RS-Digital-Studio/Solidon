@@ -30,7 +30,7 @@ from app.core.geom.attributes import DEFAULT_CUT_SLOT, transfer
 from app.core.geom.mesh import MeshData
 from app.core.geom.repair import merge_vertices, remove_degenerate_faces
 from app.core.log import get_logger
-from app.core.types import CancelToken, Finding, Quality, SolverInfo, SolverStage
+from app.core.types import CancelToken, Finding, Profile, Quality, SolverInfo, SolverStage
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -384,7 +384,12 @@ def _findings_for(stage: SolverStage) -> list[Finding]:
     ]
 
 
-def without_effect(before: HasVolume, after: HasVolume, kind: BooleanKind) -> Finding | None:
+def without_effect(
+    before: HasVolume,
+    after: HasVolume,
+    kind: BooleanKind,
+    profile: Profile | None = None,
+) -> Finding | None:
     """Hat die Operation am Körper überhaupt etwas geändert? (Regel 17, §2.7)
 
     Eine Magnettasche, die neben dem Körper liegt, schnitt nichts und sagte
@@ -398,6 +403,16 @@ def without_effect(before: HasVolume, after: HasVolume, kind: BooleanKind) -> Fi
     Fläche nur streift, ändert die Vernetzung, ohne etwas abzutragen, und wäre
     sonst eine Meldung wert, die niemanden weiterbringt.
 
+    **Und gemessen an der Düse, nicht an ``EPS_GEOM``.** Ein Werkzeug, das den
+    Körper knapp verfehlt, schneidet keine Null: es nimmt den Span mit, den die
+    beiden Hüllen gemeinsam haben. Gemessen an einer Bohrung Ø4,2 durch eine
+    14 mm dicke Platte, gesetzt in eine Öffnung des Rahmens statt aufs
+    Material: abgetragen wurden 0,002 mm³ statt 194, und weil 0,002 größer ist
+    als ``EPS_GEOM``, sagte niemand etwas. Der Nutzer sah ein unverändertes
+    Teil und einen Schritt im Verlauf — genau das Bild, gegen das diese
+    Funktion geschrieben wurde. Ohne ``profile`` bleibt es beim Rechenepsilon:
+    ein Aufrufer, der keinen Drucker kennt, soll nicht einen erfinden.
+
     Ein Befund und kein Fehler: die Operation ist gelaufen, sie hat nur nichts
     bewirkt — und was daran falsch war, weiß der Nutzer besser als der Kern.
 
@@ -408,7 +423,8 @@ def without_effect(before: HasVolume, after: HasVolume, kind: BooleanKind) -> Fi
     es die Magnettasche einmal tat.
     """
     change = abs(after.volume - before.volume)
-    if change > EPS_GEOM:
+    threshold = profile.smallest_printable_volume if profile is not None else EPS_GEOM
+    if change > threshold:
         return None
     return Finding(
         code="boolean.without_effect",
@@ -424,5 +440,11 @@ def without_effect(before: HasVolume, after: HasVolume, kind: BooleanKind) -> Fi
                 "anderen. Position prüfen."
             )
         ),
-        values={"volume_mm3": round(before.volume, 3)},
+        # ``removed_mm3`` sagt, wie knapp es war: eine glatte Null heißt
+        # „daneben", ein Tausendstel heißt „gestreift", und das sind zwei
+        # verschiedene Handgriffe am Ort.
+        values={
+            "volume_mm3": round(before.volume, 3),
+            "removed_mm3": round(change, 6),
+        },
     )

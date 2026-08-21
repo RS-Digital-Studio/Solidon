@@ -7,6 +7,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+import trimesh
 
 from app.core.geom import mesh as mesh_module
 from app.core.geom.mesh import MeshData, on_surface, read_mesh
@@ -88,6 +89,53 @@ def test_a_bore_hanging_over_the_edge_says_so(profile: Profile) -> None:
     result = drill(body, position=(edge, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
 
     assert "bore.over_the_edge" in {finding.code for finding in result.findings}
+
+
+def frame() -> MeshData:
+    """60 x 60 x 14 mm mit einer 40er Öffnung — ein Rahmen.
+
+    Die Form, an der der Streifschnitt gefunden wurde: der Hüllquader sagt
+    „hier ist Material", und in der Mitte ist keines.
+    """
+    outer = trimesh.creation.box(extents=(60.0, 60.0, 14.0))
+    outer.apply_translation((0.0, 0.0, 7.0))
+    inner = trimesh.creation.box(extents=(40.0, 40.0, 30.0))
+    inner.apply_translation((0.0, 0.0, 7.0))
+    return MeshData.of(trimesh.boolean.difference([outer, inner]))
+
+
+def test_a_bore_that_only_grazes_says_so(profile: Profile) -> None:
+    """Ein Span ist kein Abtrag — und war doch mehr als ``EPS_GEOM``.
+
+    Gemessen am Sockel eines Kunden: eine Bohrung Ø4,2, gesetzt auf die Mitte
+    des Hüllquaders, traf die Öffnung des Rahmens statt das Material. Abgetragen
+    wurden 0,002 mm³ statt 194 — und weil 0,002 größer ist als das
+    Rechenepsilon, blieb es still. Gemessen wird jetzt an der Düse: was unter
+    einem Stück Extrusionsbahn liegt, ist nichts (§2.7).
+    """
+    body = frame()
+    grazing = 17.808
+
+    result = drill(body, position=(grazing, 0.0, 14.0), axis="z", diameter=4.2, profile=profile)
+
+    removed = body.volume - result.mesh.volume
+    assert 0.0 < removed < profile.smallest_printable_volume, f"ein Span, kein Loch: {removed}"
+    assert "boolean.without_effect" in {finding.code for finding in result.findings}
+
+
+def test_a_bore_that_takes_a_visible_bite_stays_quiet(profile: Profile) -> None:
+    """Die Gegenprobe: derselbe Rahmen, drei Hundertstel weiter im Material.
+
+    Ohne sie wäre die Grenze ungeprüft — und eine Warnung, die auch über einem
+    Loch steht, das man sehen kann, ist keine.
+    """
+    body = frame()
+
+    result = drill(body, position=(17.9, 0.0, 14.0), axis="z", diameter=4.2, profile=profile)
+
+    removed = body.volume - result.mesh.volume
+    assert removed > profile.smallest_printable_volume
+    assert "boolean.without_effect" not in {finding.code for finding in result.findings}
 
 
 def test_a_bore_well_inside_stays_quiet(profile: Profile) -> None:

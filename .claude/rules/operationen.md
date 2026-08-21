@@ -123,6 +123,22 @@ Tasche neben dem Körper lief genauso stumm durch, wie es die Magnettasche
 einmal tat. Gemessen wurde an vier Fällen — Oberkante unter dem Körper, Ort
 daneben —, und in allen vieren sagte niemand etwas.
 
+**Wer Boolesches rechnet, fragt danach — ohne Ausnahme.** Bohren, Stopfen, jeder
+Baustein und die Skizzentasche taten es; `label_text` nicht, und darum kam
+„BASIS" graviert auf einem Rahmen mit unverändertem Volumen und unveränderter
+Dreieckszahl zurück, ohne eine Zeile im Prüfbericht. Eine neue Operation mit
+`boolean(...)` ist erst fertig, wenn diese Frage darin steht.
+
+**Und gefragt wird mit dem Profil.** Die Grenze ist nicht `EPS_GEOM`, sondern
+`Profile.smallest_printable_volume` — ein Stück Extrusionsbahn von einer
+Bahnbreite Länge. Ein Werkzeug, das den Körper knapp verfehlt, schneidet keine
+Null: es nimmt den Span mit, den die beiden Hüllen gemeinsam haben. Eine
+Bohrung Ø4,2 durch eine 14 mm dicke Platte, gesetzt in die Öffnung eines
+Rahmens statt aufs Material, trug **0,002 mm³** ab statt 194 — mehr als das
+Rechenepsilon und trotzdem nichts, was jemand je zu sehen bekommt. Ohne
+`profile` bleibt es beim Epsilon: ein Aufrufer, der keinen Drucker kennt, soll
+keinen erfinden (Regel 7).
+
 **Was ein späterer Schritt behoben hat, warnt nicht mehr.** `SETTLED_BY`
 (`scene/evaluate.py`) streicht einen Befund, sobald einer aus seiner Menge an
 einem **späteren** Schritt und am **selben Körper** steht. Beides gehört zur

@@ -568,6 +568,48 @@ def test_engraved_text_takes_away_the_same_volume(profile: Profile) -> None:
     assert result.outputs[0].mesh.bounds.size[2] == pytest.approx(4.0, abs=0.01), "nothing proud"
 
 
+def test_a_label_that_misses_the_body_says_so(profile: Profile) -> None:
+    """Denselben Satz bekommt seit je, wer eine Magnettasche daneben setzt —
+    die Beschriftung bekam ihn nicht.
+
+    So gefunden, an einem Sockel, dessen Hüllquader in der Mitte hohl ist:
+    „BASIS" graviert kam mit unverändertem Volumen und unveränderter
+    Dreieckszahl zurück, und der Prüfbericht hatte dazu keine Zeile. Im
+    Verlauf stand ein Schritt, im Bild dasselbe Teil (§2.7).
+    """
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 4.0))
+    plate.apply_translation((0.0, 0.0, 2.0))
+    entry = SceneObject(id="obj_1", name="Platte", mesh=MeshData.of(plate))
+
+    result = run(
+        "label_text",
+        entry,
+        profile,
+        text="M4",
+        size=8.0,
+        depth=0.6,
+        mode="engraved",
+        x=200.0,
+        z=4.0,
+    )
+
+    assert result.outputs[0].mesh.volume == pytest.approx(3200.0), "nothing was cut"
+    assert "boolean.without_effect" in {finding.code for finding in result.findings}
+
+
+def test_a_label_on_the_body_stays_quiet(profile: Profile) -> None:
+    """Die Gegenprobe — sonst stünde die Warnung unter jeder Beschriftung."""
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 4.0))
+    plate.apply_translation((0.0, 0.0, 2.0))
+    entry = SceneObject(id="obj_1", name="Platte", mesh=MeshData.of(plate))
+
+    result = run(
+        "label_text", entry, profile, text="M4", size=8.0, depth=0.6, mode="engraved", z=4.0
+    )
+
+    assert "boolean.without_effect" not in {finding.code for finding in result.findings}
+
+
 def test_a_label_without_text_is_a_user_error(profile: Profile) -> None:
     entry = SceneObject(id="obj_1", name="Platte", mesh=block())
 

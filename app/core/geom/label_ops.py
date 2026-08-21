@@ -25,7 +25,7 @@ import trimesh
 
 from app.core.errors import ValidationError
 from app.core.geom.attributes import with_slot
-from app.core.geom.boolean import BooleanKind, boolean
+from app.core.geom.boolean import BooleanKind, boolean, without_effect
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import apply, rotation, translation
 from app.core.log import get_logger
@@ -257,11 +257,22 @@ def label_text(ctx: OpContext) -> OpResult:
     kind: BooleanKind = "union" if mode == "raised" else "difference"
     outcome = boolean(kind, [body_mesh, placed], quality=ctx.quality, cut_slot=0)
 
+    # Eine Beschriftung, die den Körper nicht erreicht hat, sagt das (§2.7).
+    #
+    # Die Auskunft gab es überall sonst — beim Bohren, beim Stopfen, bei jedem
+    # Baustein, bei der Skizzentasche —, und hier nicht: gemessen an einem
+    # Rahmen, dessen Hüllquader in der Mitte hohl ist, kam „BASIS" graviert mit
+    # unverändertem Volumen und unveränderter Dreieckszahl zurück, und der
+    # Prüfbericht hatte dazu keine Zeile. Erhaben ist es schlimmer als
+    # graviert: die Buchstaben stehen dann als eigene Komponente neben dem
+    # Teil und reisen bis in den Export mit.
+    nothing = without_effect(body_mesh, outcome.mesh, kind, ctx.profile)
+
     _log.info("labelled with %r, %s", params.text, mode)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={}, material_slots=slots)],
         solver=outcome.solver,
-        findings=outcome.findings,
+        findings=[*outcome.findings, *([nothing] if nothing is not None else [])],
     )
 
 

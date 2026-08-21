@@ -362,6 +362,21 @@ class Profile:
         Regelsammlung (§39)."""
         return 2.0 * self.printer.extrusion_width
 
+    @property
+    def smallest_printable_volume(self) -> float:
+        """Das kleinste Volumen, das dieser Drucker überhaupt hinterlässt — ein
+        Stück Extrusionsbahn von einer Bahnbreite Länge.
+
+        Die Grenze zwischen „hat etwas getan" und „hat nichts getan". Ein
+        Rechenepsilon taugt dafür nicht: eine Bohrung, die den Körper nur
+        streift, trägt ein Tausendstel Kubikmillimeter ab — das ist mehr als
+        ``EPS_GEOM`` und trotzdem nichts, was jemand je zu sehen bekommt.
+        Gemessen an der Düse und nicht an einer Zahl im Code, weil dieselbe
+        Geometrie an einer 0,8er Düse eine andere Antwort verdient (Regel 7,
+        §38).
+        """
+        return self.printer.extrusion_width**2 * self.printer.layer_height
+
 
 # --- Druckeinstellungen (§29) --------------------------------------------------
 #

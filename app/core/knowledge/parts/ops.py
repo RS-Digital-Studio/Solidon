@@ -245,7 +245,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     # Ein Baustein, der den Körper nicht getroffen hat, sagt das. Hier und
     # nicht in jedem einzelnen: die Frage ist für alle dieselbe, und die
     # Antwort steht im Volumen (§2.7).
-    nothing = without_effect(body, as_mesh_data(outcome.mesh), kind)
+    nothing = without_effect(body, as_mesh_data(outcome.mesh), kind, ctx.profile)
 
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features=features)],

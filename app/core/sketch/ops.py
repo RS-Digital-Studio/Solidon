@@ -391,7 +391,7 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
     # Gemessen an vier Fällen — Oberkante unter dem Körper, Ort daneben —, und
     # in allen vieren sagte niemand etwas. Denselben Satz bekommt seit je, wer
     # eine Magnettasche daneben setzt (`geom/boolean.without_effect`).
-    nothing = without_effect(body, solid, "difference")
+    nothing = without_effect(body, solid, "difference", ctx.profile)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=solid, kind="brep", features=features_of(solid))],
         findings=[nothing] if nothing is not None else [],

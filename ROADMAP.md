@@ -9096,3 +9096,136 @@ statt Ja/Nein.
       `test_interface_limits.py` liegt bei acht und §2.4 spricht von zwei bis
       drei. Sie ist damit die einzige Operation, die den Rahmen ausfüllt statt
       ihn zu nutzen; was davon nach hinten gehört, ist eine fachliche Frage.
+
+## Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026)
+
+Nicht der Testkorpus und nicht die Beispiele: neun Dateien, die an einem
+Nachmittag aus dem Netz kamen — drei Verbinderleisten, zwei Sockelplatten, eine
+Kit-Card, ein Propellersatz, eine Ente und eine 3MF mit **52 Körpern**. Jede
+einzeln, jede über die laufende Oberfläche, und jede über die ganze Kette:
+einfügen, optimieren, ausbauen, rückgängig und wieder vor, als Projekt
+speichern, zumachen, wieder aufmachen, weiterbauen, exportieren, das
+Exportierte wieder einlesen.
+
+Gefahren wurde durch die Menüeinträge und die Operationsdialoge, nicht am
+Stapel vorbei: `import_action.trigger()`, `run_operation` mit ausgefüllten
+Feldern und `accept()`, `action_save_as`, `action_open`, `action_export`. Nur
+die Systemdialoge für Datei und Ziel sind vorbelegt statt geöffnet — die
+gehören dem Betriebssystem, und ein Lauf, der auf sie wartet, wartet für immer.
+
+Was gehalten hat: alle neun lesen ein, mit den Körperzahlen, die auch der Kern
+sieht (1 bis 52). Alle neun speichern als Projekt, öffnen wieder und stehen
+dabei Körper für Körper gleich. Alle neun exportieren als 3MF und als STL, und
+alle neun lesen ihr eigenes Exportergebnis mit derselben Körperzahl zurück. Der
+Stapel hält: rückgängig und wieder vor liefert dieselbe Geometrie. 52 Körper
+brauchen für einen Ausbauschritt acht Sekunden — spürbar, aber innerhalb §31.
+
+### Behoben, jeder mit Test
+
+- [x] **Eine Beschriftung, die den Körper verfehlt, sagte nichts.**
+      `boolean.without_effect` gibt es seit der Magnettasche, und jeder, der
+      Boolesches rechnet, fragt danach — Bohren, Stopfen, jeder Baustein, die
+      Skizzentasche. `label_text` nicht. Gemessen an einem Sockel, dessen
+      Hüllquader in der Mitte hohl ist: „BASIS" graviert kam mit unverändertem
+      Volumen **und** unveränderter Dreieckszahl zurück, ein Schritt stand im
+      Verlauf, und der Prüfbericht hatte dazu keine Zeile. Erhaben wäre es
+      schlimmer gewesen als graviert — dann stehen die Buchstaben als eigene
+      Komponente neben dem Teil und reisen bis in den Export mit.
+- [x] **Ein Schnitt, der nur streift, kam durch.** `without_effect` maß gegen
+      `EPS_GEOM`, also gegen ein Rechenepsilon. Eine Bohrung Ø4,2, gesetzt auf
+      die Mitte des Hüllquaders eines Rahmens, trug **0,002 mm³** ab statt 194
+      — mehr als das Epsilon und trotzdem nichts, was jemand je zu sehen
+      bekommt. Gemessen wird jetzt an der Düse: `Profile.smallest_printable_-
+      volume` ist ein Stück Extrusionsbahn von einer Bahnbreite Länge
+      (Bahnbreite² × Schichthöhe, 0,035 mm³ bei 0,4 mm Düse), und alle vier
+      Aufrufstellen geben ihr Profil weiter. Ohne Profil bleibt es beim
+      Epsilon — ein Aufrufer, der keinen Drucker kennt, soll keinen erfinden.
+      Regel 7: die Grenze steht im Profil und nicht im Code.
+- [x] **Die erste Druckplatte blieb leer.** Ein Körper, der tiefer ist als das
+      Bett, reißt die Zeilengrenze auch auf einer leeren Platte — und wanderte
+      dann auf die nächste, die genauso wenig hilft. Zwei Sockel von 231 mm
+      Tiefe auf einem 220er Bett und zwei Platten: **beide** landeten auf
+      Platte 2, aufeinandergestapelt und über den Rand hinaus, während Platte 1
+      leer blieb. Bei drei Platten blieb sie es auch. Weitergeblättert wird
+      jetzt nur, wenn auf der aktuellen Platte schon etwas liegt.
+- [x] **Der Rat „eine Platte mehr würde helfen" stimmte oft nicht.** Derselbe
+      Sockel bekam ihn bei einer, zwei und drei Platten — und mehr Platten
+      hätten nie geholfen, weil 231 mm auf kein 220er Bett passen. Ein
+      Vorschlag, der nichts löst, ist schlimmer als keiner (Regel 17):
+      `_overfull` fragt jetzt, ob wenigstens **zwei** Körper der letzten Platte
+      allein aufs Bett passen würden. Sonst bleibt es bei
+      `arrange.out_of_build_volume`, und das sagt, was wirklich hilft — teilen,
+      verkleinern, anderes Profil.
+- [x] **Ein Verschweißen, das das Netz aufreißt, wird zurückgenommen.** Der
+      Fund kam von einer Datei, die diese Anwendung **selbst geschrieben**
+      hatte: das exportierte 拓展架-3MF trug 17186 Ecken und war wasserdicht,
+      und dieselbe Anwendung meldete es beim Wiedereinlesen als „nicht
+      geschlossen". Schuld war die Eingangsstufe: bei 0,28 µm Toleranz fielen
+      **zwei** Ecken zusammen, und weil sie zu zwei Blättern derselben Fläche
+      gehörten, entstand daraus eine Kante mit vier Nachbarn. Ohne Verschweißen
+      blieb die Datei dicht — gemessen mit `normalise(..., weld=False)`.
+      Verschweißen ist eine Reparatur, und eine Reparatur, die etwas kaputt
+      macht, wird nicht angewendet: war das Netz vorher geschlossen und ist es
+      danach nicht mehr, gilt der unverschweißte Stand, und
+      `ingest.weld_skipped` sagt es. Der Testfall ist derselbe Fall in klein —
+      zwei geschlossene Quader, die eine Fläche teilen.
+- [x] **Mehrere Platten, ein Bett, alles ineinander.** Gemeldet als „bei
+      Projekten mit mehreren Platten sehe ich trotzdem nur eine", und es war
+      genau das: jede Platte hat ihren eigenen Nullpunkt, die Anordnung setzt
+      Platte 2 an denselben Ort wie Platte 1, und der Viewport zeichnete ein
+      Bett und darauf alles. Zwei identische Sockel lagen Punkt auf Punkt
+      übereinander. „Alle" reiht die Betten jetzt mit `PLATE_GAP` nach +X
+      auf (`plate_shift`), die Körper gehen mit, und eine gewählte Einzelplatte
+      zeichnet wieder genau ein Bett an seinem Ort. Die erste Platte bleibt, wo
+      sie war — eine Szene mit einer Platte sieht Bild für Bild aus wie vorher.
+      Ein Klick rechnet über `plate_at` zurück in die Szene; ohne diese
+      Umkehrung setzte ein Klick auf Platte 2 die Bohrung eine Bettbreite
+      daneben, und weil dort meistens nichts ist, hätte er stumm nichts getan.
+
+### Zur Frage nach dem Plattenmaß
+
+Ja: der Viewport zeichnet Bett und Bauraum aus `profile.printer.build_volume`,
+und `check_build_volume` prüft gegen dieselbe Zahl. Die Tabelle
+(`app/core/knowledge/data/printers.toml`, 17 Profile) stimmt mit den
+Herstellerangaben überein — Centauri Carbon 2 mit 256 × 256 × 256, Neptune 4
+mit 225 × 225 × 265, A1 mini und MINI+ mit 180³, Prusa XL mit 360³, MK4S mit
+250 × 210 × 220.
+
+**Eine Falle bleibt, und sie ist keine der Tabelle:** Vorgabe ist
+`generic-220`. Wer den Erststart abbricht oder ohne Drucker weiterklickt,
+bekommt ein 220er Bett — und dann meldet jedes 231 mm tiefe Teil zu Recht
+„über den Bauraum hinaus", nur über einen Drucker, den niemand gemeint hat. Mit
+`centauri-carbon-2` verschwanden dieselben Warnungen restlos.
+
+### Was auffiel und eine Entscheidung braucht
+
+- [ ] **Das Regal-Packen verteilt sehr ungleich.** 52 Körper auf acht erlaubte
+      Platten ergeben 3 / 1 / 10 / 3 / 2 / 5 / 28 — die letzte trägt mehr als
+      die Hälfte, weil eine Zeile, die einmal überläuft, nie wieder von rechts
+      gefüllt wird. Nach Tiefe sortiert wird es nicht besser (1 / 2 / 3 / 7 /
+      16 / 23), also ist die naheliegende Verbesserung keine. „Bewusst
+      einfach" steht im Docstring und hat seinen Grund; ob sieben Platten für
+      52 Teile in Ordnung sind, entscheidet der Bauplan und nicht das Gefühl.
+- [ ] **Der Plattenwähler wohnt im Explodieren.** Er erscheint erst ab zwei
+      Körpern **und** zwei Platten, und er steht in der Explodier-Leiste — wer
+      eine einzelne Platte ansehen will, sucht ihn unter einem Werkzeug, das
+      Teile auseinanderzieht. Jetzt, wo alle Betten nebeneinander stehen, ist
+      das weniger dringend; ein eigener Ort in der Kopfzeile bleibt die
+      naheliegende Antwort.
+- [ ] **Dieselbe Frage kommt bei jeder Auswertung wieder, und das wird
+      schnell viel.** Gezählt über die ganze Kette: die Ente **8** Rückfragen
+      bei **1** verschiedenen, der Propellersatz **32** bei **5**,
+      ALL+PLATES **99** bei **7** — sechzehnmal „Welches Merkmal entspricht
+      pin_1?", sechzehnmal `pin_2`, und so weiter. Es ist je Auswertung
+      dieselbe Frage, weil die Antwort nirgends festgehalten wird. Anhalten und
+      fragen ist Regel 21 und richtig; 99 modale Fenster für 7 Entscheidungen
+      sind es nicht. Wo die Antwort hingehört, ist die eigentliche Frage: in die
+      Operation (dann reist sie mit der Datei und die Auswertung bleibt
+      reproduzierbar, §11.3), ins Dokument oder nur in die Sitzung. Das
+      entscheidet der Bauplan.
+- [ ] **Verrundung und Fase auf einem Netz sagen sauber ab** — `NeedsSolidError`
+      mit dem richtigen Satz. Kein Fehler; nur ist damit für ein
+      heruntergeladenes Modell die halbe Kategorie *Formgebung* zu. Steht so im
+      Bauplan („keine Verrundungen auf Mesh-Kanten vor dem B-Rep-Kern"), und
+      dieser Lauf ist der Beleg, wie oft man dagegenläuft: bei jedem der neun
+      Modelle wäre es der nächste Handgriff gewesen.

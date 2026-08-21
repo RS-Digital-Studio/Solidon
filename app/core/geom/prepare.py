@@ -157,7 +157,7 @@ def drill(
     outcome = boolean("difference", [mesh, MeshData.of(cylinder)], quality=quality, seed=seed)
     findings = list(outcome.findings)
     # Eine Bohrung, die den Körper nicht getroffen hat, sagt das (§2.7).
-    nothing = without_effect(mesh, outcome.mesh, "difference")
+    nothing = without_effect(mesh, outcome.mesh, "difference", profile)
     if nothing is not None:
         findings.append(nothing)
     findings.extend(_over_the_edge(mesh, position, axis, cut_diameter))
@@ -222,6 +222,7 @@ def plug(
     axis: Axis,
     diameter: float,
     depth: float = 0.0,
+    profile: Profile | None = None,
     quality: Quality = "fine",
 ) -> BoreResult:
     """Füllt eine Bohrung wieder auf (§25, „verschließen").
@@ -245,7 +246,7 @@ def plug(
     # Dieselbe Auskunft wie beim Bohren, nur andersherum: ein Stopfen an einer
     # Stelle ohne Bohrung ändert nichts, und das stand nirgends. Zurück blieb
     # ein Schritt im Verlauf und ein unveränderter Körper.
-    nothing = without_effect(mesh, outcome.mesh, "union")
+    nothing = without_effect(mesh, outcome.mesh, "union", profile)
     if nothing is not None:
         findings.append(nothing)
     return BoreResult(
@@ -433,6 +434,7 @@ def arrange_on_bed(
     cursor_x = -width / 2.0 + spacing
     cursor_y = -depth / 2.0 + spacing
     row_depth = 0.0
+    on_this_plate = 0
 
     for mesh in meshes:
         size = mesh.bounds.size
@@ -440,11 +442,23 @@ def arrange_on_bed(
             cursor_x = -width / 2.0 + spacing
             cursor_y += row_depth + spacing
             row_depth = 0.0
-        if cursor_y + size[1] > depth / 2.0 - spacing and plate + 1 < plates:
+        # **Nur weiterblättern, wenn auf dieser Platte schon etwas liegt.**
+        #
+        # Ein Körper, der tiefer ist als das Bett, reißt die Zeilengrenze auch
+        # auf einer leeren Platte — und wanderte dann auf die nächste, die
+        # genauso wenig hilft. Gemessen an zwei Sockeln von 231 mm Tiefe auf
+        # einem 220er Bett und zwei Platten: beide landeten auf Platte 2,
+        # aufeinandergestapelt und über den Rand hinaus, während Platte 1 leer
+        # blieb. Bei drei Platten blieb sie es auch. Wo nichts liegt, ist die
+        # nächste Platte kein besserer Ort — der Befund aus
+        # :func:`check_build_volume` sagt stattdessen, was wirklich hilft:
+        # teilen, verkleinern, anderes Profil.
+        if cursor_y + size[1] > depth / 2.0 - spacing and on_this_plate > 0 and plate + 1 < plates:
             plate += 1
             cursor_x = -width / 2.0 + spacing
             cursor_y = -depth / 2.0 + spacing
             row_depth = 0.0
+            on_this_plate = 0
 
         target = (
             cursor_x + size[0] / 2.0,
@@ -459,9 +473,10 @@ def arrange_on_bed(
 
         cursor_x += size[0] + spacing
         row_depth = max(row_depth, size[1])
+        on_this_plate += 1
 
     findings.extend(check_build_volume(arranged, profile, assigned))
-    if plate + 1 >= plates and _overfull(arranged, assigned, profile):
+    if plate + 1 >= plates and _overfull(arranged, assigned, profile, spacing):
         findings.append(
             Finding(
                 code="arrange.needs_more_plates",
@@ -473,11 +488,42 @@ def arrange_on_bed(
     return Arrangement(meshes=arranged, plates=assigned, findings=findings)
 
 
-def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile) -> bool:
-    """Steht auf der letzten Platte etwas über sie hinaus?"""
+def _overfull(meshes: list[MeshData], plates: list[int], profile: Profile, spacing: float) -> bool:
+    """Steht auf der letzten Platte etwas über sie hinaus — und **läge es auf
+    einer eigenen Platte anders?**
+
+    Der Rat „eine Platte mehr würde helfen" hilft nur, wenn das Gedränge das
+    Problem ist. Liegt auf der letzten Platte ein einziger Körper und passt
+    trotzdem nicht, dann passt er auf keine: gemessen an einem Sockel von
+    231 mm Tiefe auf einem 220er Bett, der bei einer, zwei und drei Platten
+    denselben falschen Vorschlag bekam. Ein Vorschlag, der nichts löst, ist
+    schlimmer als keiner (Regel 17) — hier sagt stattdessen
+    :func:`check_build_volume`, was wirklich hilft.
+    """
     last = max(plates, default=0)
     on_last = [mesh for mesh, plate in zip(meshes, plates, strict=True) if plate == last]
+    if sum(_fits_alone(mesh, profile, spacing) for mesh in on_last) < 2:
+        return False
     return bool(check_build_volume(on_last, profile))
+
+
+def _fits_alone(mesh: MeshData, profile: Profile, spacing: float) -> bool:
+    """Passt dieser Körper auf ein leeres Bett — an seinen Maßen gemessen?
+
+    Nicht an seinem Ort: wo er gerade liegt, entscheidet die Anordnung, und die
+    ist genau die Frage. Was hier zählt, ist, ob eine eigene Platte ihm
+    überhaupt etwas nützen könnte.
+
+    **Mit dem Abstand, mit dem angeordnet wird.** Ohne ihn hieße „passt allein"
+    etwas anderes als „würde allein passend gelegt": ein Teil in genau
+    Bettgröße passt roh und ragt nach dem Anordnen dennoch über den Rand — der
+    Rat wäre dann wieder einer, der nichts löst. In Z gibt es keinen Abstand;
+    dort steht der Körper auf der Platte.
+    """
+    size = mesh.bounds.size
+    room = tuple(profile.printer.build_volume)
+    needed = (size[0] + 2.0 * spacing, size[1] + 2.0 * spacing, size[2])
+    return all(needed[index] <= room[index] + EPS_GEOM for index in range(3))
 
 
 def check_build_volume(

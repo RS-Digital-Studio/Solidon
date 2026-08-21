@@ -836,6 +836,7 @@
   "Doppelklick": "Double-click",
   "Doppelklick auf *Weich verschmelzen* und den Übergang auf 8 stellen: Der Hals wird dicker, ohne dass irgendetwas neu gebaut wird. Das ist der Unterschied zu einem Sculpting-Programm.": "Double-click *Blend together* and set the transition to 8: the neck gets thicker without anything being rebuilt. That is the difference to a sculpting program.",
   "Doppelklick öffnet die Operation und ihre Parameter.": "Double-click opens the operation and its parameters.",
+  "Doppelte Punkte blieben stehen — sie zu verschweißen hätte das geschlossene Netz aufgerissen.": "Duplicate vertices were left in place — welding them would have torn the closed mesh open.",
   "Doppelte Punkte wurden verschweißt.": "Duplicate vertices were welded.",
   "Drahtgitter": "Wireframe",
   "Draufsicht (XY) — liegend": "Top view (XY) — flat",

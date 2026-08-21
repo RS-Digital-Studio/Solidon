@@ -338,6 +338,48 @@ SUPPORT_DIRECTIONS: tuple[tuple[float, float, float], ...] = (
 BED_SURFACE_DROP = 0.2
 
 
+#: Der Abstand zwischen zwei Betten, wenn alle Platten zusammen zu sehen sind.
+#:
+#: Breit genug, dass keine Frage bleibt, welches Teil auf welcher Platte liegt —
+#: und schmal genug, dass vier Platten noch in ein Bild passen.
+PLATE_GAP = 40.0
+
+
+def plate_shift(plate: int, width: float, gap: float = PLATE_GAP) -> tuple[float, float, float]:
+    """Wohin Platte ``plate`` in der Ansicht rückt (§25).
+
+    Die erste bleibt, wo sie ist, die übrigen reihen sich nach +X daneben. Das
+    ist der Grund für die Richtung: eine Szene mit einer Platte sieht danach
+    aus wie vorher, Bild für Bild — und wer eine zweite dazubekommt, sieht sie
+    kommen, statt die erste wegrutschen zu sehen.
+
+    **Nur Darstellung, wie das Auseinanderziehen (§18.8).** Der Stapel, der
+    Export und der Prüfbericht rechnen mit dem Ort, den die Anordnung vergeben
+    hat; Platten stehen dort ohnehin übereinander, weil jede ihr eigenes Bett
+    hat. Genau das war das Bild, das niemand verstand: zwei Platten, ein Bett,
+    die Teile ineinander.
+
+    Als reine Funktion, aus demselben Grund wie :func:`bed_scale`: offscreen
+    gibt es keinen Plotter, und die Rechnung ist das, was ein Test prüfen kann.
+    """
+    return (max(0, plate) * (width + gap), 0.0, 0.0)
+
+
+def plate_at(x: float, plates: int, width: float, gap: float = PLATE_GAP) -> int:
+    """Zu welcher Platte ein Punkt in der Ansicht gehört — die Umkehrung von
+    :func:`plate_shift`.
+
+    Gebraucht beim Klicken: was der Nutzer trifft, liegt in der Ansicht, und
+    was eine Operation als Ort bekommt, muss in der Szene liegen. Ohne diese
+    Umkehrung setzte ein Klick auf Platte 2 die Bohrung um eine Bettbreite
+    daneben.
+    """
+    pitch = width + gap
+    if plates <= 1 or pitch <= 0.0:
+        return 0
+    return max(0, min(plates - 1, round(x / pitch)))
+
+
 #: Schalter für Maschinen und Testläufe ohne brauchbaren OpenGL-Kontext.
 HEADLESS_VARIABLE = f"{ENVIRONMENT_PREFIX}_NO_VIEWPORT"
 
@@ -1355,6 +1397,12 @@ class Viewport(QWidget):
         Nur Darstellung, nie Geometrie."""
         self._plate = -1
         """Welche Druckplatte gezeigt wird; -1 heißt alle (§25)."""
+        self._profile: Profile | None = None
+        """Das Profil, mit dem der Bauraum gezeichnet wurde — gebraucht, wenn
+        eine Platte dazukommt und die Kulisse neu muss."""
+        self._beds_drawn = 0
+        """Wie viele Betten gerade im Bild stehen. Ändert sich die Zahl, wird
+        die Kulisse neu gebaut; bleibt sie, wird nichts angefasst."""
         self._painting = False
         self._sculpting = False
         self._boning = False
@@ -1649,8 +1697,12 @@ class Viewport(QWidget):
         gezeigt wurde — dann gibt es keine Kante, an der zu schneiden wäre.
         """
         mine = self._shadow_ground.get(object_id)
+        # Die Platte dieses Körpers, nicht die erste: die Umrisse der Körper
+        # stehen dort, wo gezeichnet wurde (§25), und ein Schatten, der am
+        # Umriss von Platte 1 geschnitten wird, verschwindet für jeden Körper
+        # auf Platte 2 restlos.
         catchers: list[tuple[float, Any]] = [
-            (0.0, bed_outline(*self._bed_extent) if self._bed_extent is not None else None)
+            (0.0, self._bed_outline_for(object_id) if self._bed_extent is not None else None)
         ]
         if mine is None:
             return catchers
@@ -1755,6 +1807,12 @@ class Viewport(QWidget):
         # noch einmal.
         self._layer_rebuild.stop()
         self._result = result
+        # Eine Platte mehr heißt ein Bett mehr. Die Kulisse gehört
+        # ``show_build_volume``, und die kennt die Szene nicht — hier ist die
+        # Stelle, an der die Zahl bekannt wird. Nur bei Änderung, sonst baute
+        # jede Auswertung vier Betten neu, die schon stehen.
+        if self._profile is not None and self._beds_for_view() != self._beds_drawn:
+            self.show_build_volume(self._profile)
         # Vor dem Plotter-Zweig: ob ein Projekt schon einmal im Bild stand, ist
         # eine Aussage über die Szene und nicht über VTK — offscreen gibt es
         # keinen Plotter, und ein Test, der sich dort überspringt, prüft nie
@@ -1816,7 +1874,7 @@ class Viewport(QWidget):
             faces = np.hstack(
                 [np.full((len(raw.faces), 1), 3, dtype=np.int64), np.asarray(raw.faces)]
             ).ravel()
-            points = np.asarray(raw.vertices, dtype=float) + self._exploded(entry, result)
+            points = np.asarray(raw.vertices, dtype=float) + self._view_offset(entry, result)
             surface = pv.PolyData(points, faces)
             scalars = self._scalars_for(object_id, len(raw.faces))
             extra: dict[str, Any] = {}
@@ -2131,6 +2189,9 @@ class Viewport(QWidget):
         Prüfbericht.
         """
         self._plate = plate
+        # Eine einzelne Platte heißt ein Bett; „Alle" heißt so viele, wie die
+        # Szene belegt. ``show_scene`` zieht die Kulisse nach, sobald sich die
+        # Zahl ändert — und ``_plate`` ist gesetzt, bevor sie gezählt wird.
         self.show_scene(self._result)
 
     def set_explosion(self, factor: float) -> None:
@@ -2143,6 +2204,67 @@ class Viewport(QWidget):
         """
         self._explosion = max(0.0, factor)
         self.show_scene(self._result)
+
+    def _view_offset(self, entry: Any, result: EvaluationResult) -> Any:
+        """Alles, was einen Körper in der Ansicht von seinem Ort in der Szene
+        wegrückt: das Auseinanderziehen (§18.8) und die Platte (§25).
+
+        An einer Stelle zusammengefasst, damit jede Zeichenstelle beides
+        bekommt oder keines. Was hier **nicht** mitgeht, sind die Überlagerungen
+        in Szenenkoordinaten — Maße, Schnittebene, Griffe: sie folgten schon dem
+        Auseinanderziehen nicht, und das gehört zusammen behoben, nicht halb.
+        """
+        return self._exploded(entry, result) + self._plate_offset(entry)
+
+    def _plate_offset(self, entry: Any) -> Any:
+        """Die Verschiebung, mit der die Platte dieses Körpers gezeichnet wird.
+
+        Null, solange eine einzelne Platte betrachtet wird: dann steht ein Bett
+        im Bild, und darauf gehört das, was darauf liegt — an seinen Ort.
+        """
+        import numpy as np
+
+        if self._plate >= 0 or self._beds_drawn < 2 or self._bed_extent is None:
+            return np.zeros(3)
+        return np.asarray(plate_shift(getattr(entry, "plate", 0), self._bed_extent[0]), dtype=float)
+
+    def _bed_outline_for(self, object_id: ObjectId) -> Any:
+        """Der Umriss des Bettes, auf dem dieser Körper gezeichnet wird."""
+        assert self._bed_extent is not None
+        outline = bed_outline(*self._bed_extent)
+        entry = self._result.scene.objects.get(object_id) if self._result else None
+        if entry is None:
+            return outline
+        return outline + self._plate_offset(entry)[:2]
+
+    def _from_view(self, point: Vec3) -> Vec3:
+        """Ein Punkt aus der Ansicht zurück in die Szene (§25).
+
+        Was der Nutzer trifft, liegt auf dem Bett, das er sieht; was eine
+        Operation als Ort bekommt, muss auf dem Bett liegen, das die Szene
+        kennt. Ohne diese Umkehrung setzte ein Klick auf Platte 2 die Bohrung
+        eine Bettbreite daneben — und weil dort meistens nichts ist, hätte er
+        stumm nichts getan.
+        """
+        if self._plate >= 0 or self._beds_drawn < 2 or self._bed_extent is None:
+            return point
+        width = self._bed_extent[0]
+        plate = plate_at(point[0], self._beds_drawn, width)
+        shift = plate_shift(plate, width)
+        return (point[0] - shift[0], point[1] - shift[1], point[2] - shift[2])
+
+    def _plate_count(self) -> int:
+        """Wie viele Platten die Szene belegt (§25)."""
+        if self._result is None:
+            return 1
+        plates = {entry.plate for entry in self._result.scene.objects.values()}
+        return max(plates, default=0) + 1
+
+    def _beds_for_view(self) -> int:
+        """Wie viele Betten gezeichnet werden sollen — eines, wenn eine einzelne
+        Platte betrachtet wird.
+        """
+        return 1 if self._plate >= 0 else self._plate_count()
 
     def _exploded(self, entry: Any, result: EvaluationResult) -> Any:
         """Wie weit dieser Körper von seinem Sitz weg gezeichnet wird, von der
@@ -2265,12 +2387,18 @@ class Viewport(QWidget):
 
     def show_build_volume(self, profile: Profile) -> None:
         """Das Bett als Raster in echter Größe, der Bauraum als Eckwinkel
-        (§18.6).
+        (§18.6) — **je Platte eines** (§25).
 
         **Kein Aufruf hier setzt die Kamera.** Der Bauraum ist Kulisse, und
         pyvista passt bei der ersten Netzfläche einer leeren Szene von selbst
         ein — das machte jedes Einpassen auf die Körper wieder zunichte, weil
         die Kulisse danach gezeichnet wurde.
+
+        **Warum mehrere Betten.** Jede Platte hat ihren eigenen Nullpunkt, und
+        die Anordnung setzt Platte 2 an denselben Ort wie Platte 1. Ein Bett
+        für alle heißt darum: die Teile stehen ineinander, und wer zwei Platten
+        angelegt hat, sieht eine. Gemeldet als „bei Projekten mit mehreren
+        Platten sehe ich trotzdem nur eine" — und es war genau das.
         """
         width, depth, height = profile.printer.build_volume
         # Gemerkt, weil der Kontaktschatten an dieser Kante geschnitten wird —
@@ -2280,6 +2408,12 @@ class Viewport(QWidget):
         # Szene und nicht über VTK.
         self._bed_extent = (width, depth)
         self._build_volume = (width, depth, height)
+        self._profile = profile
+        # Die Zahl **vor** dem Plotter-Zweig, damit ``_plate_offset`` offscreen
+        # dasselbe sagt wie im Bild: sonst hinge die Verschiebung an VTK, und
+        # kein Test käme an sie heran.
+        beds = self._beds_for_view()
+        self._beds_drawn = beds
         if self.plotter is None:
             return
         import pyvista as pv
@@ -2287,6 +2421,27 @@ class Viewport(QWidget):
         for actor in self._frame_actors:
             self.plotter.remove_actor(actor, render=False)
         self._frame_actors.clear()
+        for plate in range(beds):
+            self._draw_one_bed(pv, plate, plate_shift(plate, width)[0], width, depth, height)
+        self._draw()
+
+    def _draw_one_bed(
+        self,
+        pv: Any,
+        plate: int,
+        shift: float,
+        width: float,
+        depth: float,
+        height: float,
+    ) -> None:
+        """Ein Bett samt Bauraum und Maßstab, ``shift`` Millimeter nach +X.
+
+        Die Namen der Actors tragen die Plattennummer: ``name=`` ersetzt in
+        pyvista, was denselben Namen hat — mit festen Namen bliebe von vier
+        Betten eines übrig.
+        """
+        if self.plotter is None:
+            return
 
         # Ein gefüllter Grund unter dem Raster. Bis hierhin war die Platte ein
         # Drahtgitter über dem Hintergrund — hübsch, aber ohne Fläche: ein
@@ -2296,7 +2451,7 @@ class Viewport(QWidget):
         self._frame_actors.append(
             self.plotter.add_mesh(
                 pv.Plane(
-                    center=(0.0, 0.0, -BED_SURFACE_DROP),
+                    center=(shift, 0.0, -BED_SURFACE_DROP),
                     direction=(0.0, 0.0, 1.0),
                     i_size=width,
                     j_size=depth,
@@ -2305,14 +2460,14 @@ class Viewport(QWidget):
                 ambient=0.45,
                 diffuse=0.55,
                 specular=0.0,
-                name="bed_surface",
+                name=f"bed_surface_{plate}",
                 render=False,
                 reset_camera=False,
                 pickable=False,
             )
         )
         bed = pv.Plane(
-            center=(0.0, 0.0, 0.0),
+            center=(shift, 0.0, 0.0),
             direction=(0.0, 0.0, 1.0),
             i_size=width,
             j_size=depth,
@@ -2325,7 +2480,7 @@ class Viewport(QWidget):
                 color=self._bed_colour,
                 style="wireframe",
                 opacity=0.35,
-                name="bed",
+                name=f"bed_{plate}",
                 render=False,
                 reset_camera=False,
             )
@@ -2334,6 +2489,7 @@ class Viewport(QWidget):
 
         segments = volume_edges(width, depth, height)
         points = np.asarray([point for pair in segments for point in pair], dtype=float)
+        points[:, 0] += shift
         lines = np.hstack([[2, 2 * index, 2 * index + 1] for index in range(len(segments))])
         self._frame_actors.append(
             self.plotter.add_mesh(
@@ -2341,7 +2497,7 @@ class Viewport(QWidget):
                 color=self._bed_colour,
                 opacity=0.35,
                 line_width=1,
-                name="build_volume",
+                name=f"build_volume_{plate}",
                 render=False,
                 reset_camera=False,
                 pickable=False,
@@ -2349,21 +2505,22 @@ class Viewport(QWidget):
         )
 
         marks = bed_scale(width, depth)
+        anchors = np.asarray([point for point, _text in marks], dtype=float)
+        anchors[:, 0] += shift
         self._frame_actors.append(
             self.plotter.add_point_labels(
-                np.asarray([point for point, _text in marks], dtype=float),
+                anchors,
                 [text for _point, text in marks],
                 text_color=self._bed_colour,
                 font_size=9,
                 show_points=False,
                 shape=None,
                 always_visible=True,
-                name="bed_scale",
+                name=f"bed_scale_{plate}",
                 render=False,
                 reset_camera=False,
             )
         )
-        self._draw()
 
     # --- theme (§19.3) ----------------------------------------------------------
 
@@ -2769,7 +2926,7 @@ class Viewport(QWidget):
         self._on_picked(point)
 
     def _on_picked(self, point: Any) -> None:
-        picked = (float(point[0]), float(point[1]), float(point[2]))
+        picked = self._from_view((float(point[0]), float(point[1]), float(point[2])))
         if self._splitting:
             self.splitPointRequested.emit(picked)
             return
@@ -3131,7 +3288,7 @@ class Viewport(QWidget):
         corners = np.asarray(raw.vertices, dtype=float)[triangles.ravel()]
         lift = max(self._scene_size() * FEATURE_PATCH_LIFT, EPS_GEOM)
         corners += np.repeat(normals, 3, axis=0) * lift
-        corners += self._exploded(entry, self._result)
+        corners += self._view_offset(entry, self._result)
         count = len(triangles)
         faces = np.hstack(
             [np.full((count, 1), 3, dtype=np.int64), np.arange(count * 3).reshape(count, 3)]

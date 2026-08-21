@@ -119,6 +119,36 @@ def test_welding_turns_a_raw_stl_into_a_solid() -> None:
     assert result.mesh.volume == pytest.approx(8000.0)
 
 
+def test_welding_that_would_tear_the_mesh_open_is_taken_back() -> None:
+    """Verschweißen ist eine Reparatur, und eine Reparatur, die etwas kaputt
+    macht, wird nicht angewendet.
+
+    Gefunden an einer 3MF, die diese Anwendung selbst geschrieben hatte: 17186
+    Ecken, wasserdicht; verschweißt bei 0,28 µm blieben 17184, und der
+    Prüfbericht sagte „Das Modell ist nicht geschlossen" über eine Datei, die es
+    war. Hier derselbe Fall in klein — zwei geschlossene Quader, die eine Fläche
+    teilen: zusammengelegt bekommt jede Kante dieser Fläche vier Nachbarn statt
+    zwei.
+    """
+    import trimesh
+
+    lower = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    lower.apply_translation((0.0, 0.0, 5.0))
+    upper = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    upper.apply_translation((0.0, 0.0, 15.0))
+    stacked = trimesh.util.concatenate([lower, upper])
+    assert stacked.is_watertight, "beide Quader sind für sich geschlossen"
+
+    result = normalise(MeshData.of(stacked), "mm")
+
+    assert result.mesh.is_watertight, "und bleiben es"
+    assert result.mesh.vertex_count == 16, "die geteilten Ecken stehen noch"
+    assert not result.info.welded
+    codes = {finding.code for finding in result.findings}
+    assert "ingest.weld_skipped" in codes
+    assert "ingest.not_watertight" not in codes
+
+
 def test_welding_can_be_switched_off() -> None:
     result = normalise(mesh_of("cube_clean.stl"), "mm", weld=False)
     assert not result.info.welded

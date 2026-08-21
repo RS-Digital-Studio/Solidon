@@ -28,7 +28,7 @@ from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData, face_components
 from app.core.log import get_logger
 from app.core.types import Finding, IngestInfo, ProgressFn
-from app.core.units import EPS_GEOM, LengthUnit, to_mm, weld_tolerance
+from app.core.units import EPS_GEOM, LengthUnit, format_length, to_mm, weld_tolerance
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -187,10 +187,36 @@ def normalise(
     if weld and len(body.faces):
         progress(0.2, str(_("Punkte verschweißen")))
         before = len(body.vertices)
+        was_closed = bool(body.is_watertight)
         tolerance = weld_tolerance(diagonal)
+        unwelded = body.copy() if was_closed else None
         body.merge_vertices(digits_vertex=_digits_for(tolerance))
         welded = len(body.vertices) < before
-        if welded:
+        # **Ein Verschweißen, das das Netz aufreißt, wird zurückgenommen.**
+        #
+        # Zwei Punkte, die dichter beieinanderliegen als die Toleranz, gehören
+        # meist zusammen — manchmal aber zu zwei Blättern derselben Fläche, und
+        # dann schnürt das Zusammenlegen sie zu einer Kante mit drei Nachbarn
+        # ab. Gemessen an einer 3MF, die diese Anwendung selbst geschrieben
+        # hatte: 17186 Ecken, wasserdicht; verschweißt bei 0,28 µm blieben
+        # 17184, und der Prüfbericht sagte „Das Modell ist nicht geschlossen"
+        # über eine Datei, die es war. Verschweißen ist eine Reparatur, und
+        # eine Reparatur, die etwas kaputt macht, wird nicht angewendet.
+        if welded and unwelded is not None and not body.is_watertight:
+            body = unwelded
+            welded = False
+            findings.append(
+                Finding(
+                    code="ingest.weld_skipped",
+                    severity="info",
+                    message=_(
+                        "Doppelte Punkte blieben stehen — sie zu verschweißen hätte das "
+                        "geschlossene Netz aufgerissen."
+                    ),
+                    values={"tolerance": format_length(tolerance)},
+                )
+            )
+        elif welded:
             findings.append(
                 Finding(
                     code="ingest.welded",

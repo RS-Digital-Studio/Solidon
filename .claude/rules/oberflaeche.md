@@ -656,7 +656,40 @@ Grundplatte genau den Teil, der sonst doppelt läge. Dasselbe Schneiden hält de
 Schatten auf der Platte: außerhalb lag er auf blankem Hintergrund und
 behauptete Boden, wo keiner ist. Die Plattenkante kommt aus `_bed_extent`,
 gemerkt in `show_build_volume` — ohne gezeigten Bauraum gibt es nichts zu
-schneiden.
+schneiden. **Und sie gehört der Platte des Körpers**, nicht der ersten
+(`_bed_outline_for`): seit die Betten nebeneinander stehen, liegt der Umriss
+eines Körpers auf Platte 2 eine Bettbreite weiter, und am Umriss von Platte 1
+geschnitten wäre sein Schatten restlos weg.
+
+## Mehrere Druckplatten
+
+Jede Platte hat ihren eigenen Nullpunkt, und `arrange_bed` setzt Platte 2 an
+denselben Ort wie Platte 1 — das ist richtig, denn beide werden einzeln
+gedruckt. Ein Bett für alle zeigt davon das Falsche: zwei identische Sockel
+lagen Punkt auf Punkt übereinander, und gemeldet wurde es als „bei Projekten
+mit mehreren Platten sehe ich trotzdem nur eine".
+
+`show_build_volume` zeichnet deshalb **ein Bett je Platte**, mit `PLATE_GAP`
+nach +X aufgereiht (`plate_shift`); eine gewählte Einzelplatte bekommt wieder
+genau eines. Drei Dinge hängen daran:
+
+* **Die erste Platte bleibt, wo sie ist.** Nach +X und nicht um die Mitte
+  verteilt: Eine Szene mit einer Platte sieht danach Bild für Bild aus wie
+  vorher, und wer eine zweite dazubekommt, sieht sie kommen statt die erste
+  wegrutschen zu sehen.
+* **Die Actors tragen die Nummer im Namen.** pyvistas `name=` ersetzt, was
+  denselben Namen hat — mit festen Namen bliebe von vier Betten eines übrig.
+* **Ein Klick muss zurückgerechnet werden** (`plate_at`, `_from_view`, ganz oben
+  in `_on_picked`). Was der Nutzer trifft, liegt in der Ansicht; was eine
+  Operation als Ort bekommt, muss in der Szene liegen. Ohne die Umkehrung setzte
+  ein Klick auf Platte 2 die Bohrung eine Bettbreite daneben — und weil dort
+  meistens nichts ist, hätte sie stumm nichts getan.
+
+Der Versatz liegt mit dem Auseinanderziehen (§18.8) zusammen in
+`_view_offset`, damit jede Zeichenstelle beides bekommt oder keines. Was
+**nicht** mitgeht, sind die Überlagerungen in Szenenkoordinaten — Maße,
+Schnittebene, Griffe. Sie folgten schon dem Auseinanderziehen nicht; das gehört
+zusammen behoben, nicht halb.
 
 **Was je Bild neu gerechnet wird, wird je Körper vorbereitet.** Der
 Schattenumriss lief als Triangulierung über jeden Punkt des Anzeigenetzes: 129
