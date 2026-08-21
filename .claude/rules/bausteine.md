@@ -21,6 +21,25 @@ und damit Teil des Rechenwegs, nicht bloß Beiwerk.
 - Maße von Normteilen kommen aus der Tabelle, nie hart in den Baustein.
   „Loch für M4-Einpressmutter" ist ein Nachschlagewert.
 
+## Ein abgezogener Baustein liegt unter seiner Mündung
+
+Der Ursprung ist die Fläche, auf die geklickt wurde; was abgetragen wird, liegt
+**darunter** (§24.1). Nach oben gebaut steht der Körper vollständig neben dem
+Bauteil und nimmt nichts weg — zweimal geschehen, bei der Passbohrung und der
+Rasttasche, und beide Male sagte der Docstring es längst.
+
+**Verschieben genügt dabei nicht überall.** Eine Bohrung ist bis auf ihre Fase
+drehsymmetrisch; sie um ihre Tiefe nach unten zu schieben ist richtig, solange
+die Fase eigens an die Mündung gesetzt wird. Ein Körper mit einem Oben und
+einem Unten — eine Rastkante, ein Schwalbenschwanz, jede Sperrfläche — kippt
+dabei um: Die Kante landet am tiefen Ende, wo der Haken erst hinkommt, statt
+zwischen Mündung und Haken zu stehen. Gebaut wird dann **von der Mündung nach
+unten, Stück für Stück**, nicht als Ganzes verschoben.
+
+Und die Prüfung dazu misst die **Richtung**, nicht nur die Berührung: Zwei
+Volumen, die sich treffen, treffen sich am falschen Ende genauso. Was der Test
+sagen muss, ist, an welchem Ende die Sperrfläche sitzt.
+
 ## Test über den ganzen Bereich
 
 Jeder Baustein wird über seinen Parameterbereich durchgerechnet: wasserdicht,

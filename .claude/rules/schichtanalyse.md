@@ -83,6 +83,28 @@ die Datei selbst: die E-Achse für das Material, die letzte `TIME_ELAPSED` für
 die Zeit. Ein Kopfwert gilt weiter, wo er einen trägt — er kennt Vorgänge, die
 keine Bahn zeigt.
 
+**Und der Bauraum wird an den Bahnen nachgemessen.** `gcode.printed_extent`
+liest, wohin die Datei wirklich druckt, `handover.off_the_bed` beurteilt es.
+Der Anlass ist derselbe Slicer: CuraEngine prüft seinen Bauraum **nicht** — ein
+Würfel 150 mm neben der Mitte auf einem Bett von 220 mm kam als Druckdatei
+zurück, die bei x 130,2 bis 169,8 druckt, mit `MINX` auf dem unbesetzten
+Anfangswert. PrusaSlicer rückt in solchen Fällen selbst in die Mitte, die
+Orca-Familie schreibt nichts. Drei Dinge gelten dabei:
+
+- **Die Bogenformen zählen mit.** Eine Kreiswand mit Bogenanpassung besteht
+  **nur** aus `G2`/`G3`; wer nur `G1` liest, verliert genau die Ausmaße eines
+  Zylinders.
+- **Die Stelle wird über alle Bewegungen nachgeführt**, auch die leeren: Z steht
+  so gut wie nie in derselben Zeile wie die Bahn, und ein `G1 Y30 E0.5` behält
+  sein X von vorher.
+- **Der Bauraum hat je Familie andere Koordinaten** (`handover.bed_box`). Cura
+  und PrusaSlicer bekommen von Solidon eine Maschine um den Ursprung, die
+  Orca-Familie lädt ihr eigenes Profil und misst von der Ecke. Beides zu
+  verwechseln kostet einen falschen Befund bei jedem Lauf.
+
+Gemeldet, nicht gesperrt (§29), und unter einer Bahnbreite gar nicht: die Bahn
+liegt mit ihrer halben Breite ohnehin neben der Mitte, die gemessen wird.
+
 ## Vorschlag oder Befund
 
 `slice/advise.py` schließt aus Geometrie, Material und Maschine auf
@@ -144,6 +166,12 @@ Eigenheiten, die dabei nicht angenommen werden dürfen:
 - **Zugeordnet, nicht erfragt.** `printer_model`, Düse und
   `default_print_profile` reichen. Trifft nichts, bleibt die Auswahl leer:
   eine falsche Vorauswahl sieht aus wie eine Entscheidung.
+- **Ein Slicerwechsel leert die Auswahl** (`_clear_profile_choices`), und zwar
+  am **Anfang** der Suche — `_start_profile_search` kehrt für `prusa` und `cura`
+  früh zurück, und was am Ende geleert würde, bliebe dort stehen. Sonst bekommt
+  CuraEngine ein `-j` auf eine Orca-Datei und ist nach einer Zehntelsekunde tot.
+  Umgekehrt gilt: Wo es nichts zu wählen gibt, wird nichts gemerkt, sonst
+  löscht ein Cura-Lauf das Profil des nächsten Orca-Laufs.
 
 ## Was geschrieben wird, ist nicht alles, was im Modell steht
 

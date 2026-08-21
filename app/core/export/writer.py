@@ -413,6 +413,10 @@ def check_before_export(
             profile,
             [entry.plate for entry in objects],
             [entry.id for entry in objects],
+            # Hier entsteht die Datei. Eine falsche Lage ist damit keine Frage
+            # mehr, die ein Klick beantwortet — CuraEngine schreibt eine
+            # Druckdatei, die neben der Platte druckt, und prüft nichts.
+            about_to_write=True,
         )
     )
     findings.extend(_licence_findings(sources))

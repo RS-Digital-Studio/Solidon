@@ -27,6 +27,7 @@ from app.core.export.writer import (
     write_plan,
 )
 from app.core.geom.mesh import MeshData, read_mesh
+from app.core.geom.prepare import check_build_volume
 from app.core.geom.transform import apply, place_on_bed, translation
 from app.core.ingest.loader import normalise
 from app.core.knowledge import print_settings, profiles
@@ -162,6 +163,32 @@ def test_a_part_outside_the_build_volume_is_reported(profile: Profile) -> None:
     findings = check_before_export([scene_object(mesh=far)], profile, {})
 
     assert "arrange.out_of_build_volume" in {finding.code for finding in findings}
+
+
+def test_before_writing_a_misplaced_part_is_a_warning(profile: Profile) -> None:
+    """Derselbe Körper, zwei Anlässe, zwei Schweregrade — und das ist Absicht.
+
+    Im Editor ist eine falsche Lage ein Hinweis: ein Klick auf *Auf dem Bett
+    anordnen* behebt sie, und stünde dort eine Warnung, warnte fast jede
+    geladene Datei (`_severity_for`). Vor dem **Schreiben** fällt genau diese
+    Voraussetzung weg — der Klick ist nicht passiert, und was jetzt entsteht,
+    ist eine Datei. Gemessen: CuraEngine prüft den Bauraum nicht und schreibt
+    eine Druckdatei, die neben der Platte druckt.
+
+    Gesperrt wird trotzdem nichts (§29) — der Befund steht nur nicht mehr
+    zwischen zwei Dutzend Hinweisen.
+    """
+    verschoben = apply(body(), translation((400.0, 0.0, 0.0)))
+    im_editor = check_build_volume([verschoben], profile)
+    vor_dem_schreiben = check_before_export([scene_object(mesh=verschoben)], profile, {})
+
+    assert [finding.severity for finding in im_editor] == ["info"], "im Editor behebt ein Klick es"
+    schwer = [
+        finding.severity
+        for finding in vor_dem_schreiben
+        if finding.code == "arrange.out_of_build_volume"
+    ]
+    assert schwer == ["warning"], vor_dem_schreiben
 
 
 def test_the_licence_of_a_source_is_mentioned_once(profile: Profile) -> None:

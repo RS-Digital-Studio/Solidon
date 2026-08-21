@@ -1119,7 +1119,34 @@ class PrintSettingsDialog(QDialog):
         if self.slicer_toggle is not None:
             self.slicer_toggle.setChecked(True)
 
+    def _clear_profile_choices(self) -> None:
+        """Die Profilauswahl leeren, bevor eine neue Suche etwas hineinschreibt.
+
+        **Ein Slicer kann wechseln, und die Auswahl bleibt sonst stehen.** Wer
+        zwei installiert hat und im Dialog von der Orca-Familie auf Cura
+        umstellt, hatte danach drei gefüllte Auswahlfelder mit Orca-Profilen
+        vor sich — :func:`_start_profile_search` kehrt für ``prusa`` und
+        ``cura`` früh zurück, ohne sie anzufassen. ``_slice`` liest sie
+        unbesehen, und CuraEngine bekam ein ``-j`` auf eine Orca-Datei und war
+        nach einer Zehntelsekunde tot; ``remembered_setup`` schrieb dieselbe
+        Wahl auch noch in die Konfiguration.
+
+        Geleert wird deshalb am Anfang jeder Suche, nicht am Ende — dann gilt
+        es auch für die Wege, die vorzeitig zurückkehren.
+        """
+        self._profiles = []
+        for combo in (self.machine_choice, self.process_choice, self.filament_choice):
+            combo.blockSignals(True)
+            combo.clear()
+            combo.blockSignals(False)
+            combo.setEnabled(False)
+        for _label, box in self.slot_rows:
+            box.clear()
+            box.setEnabled(False)
+        self.profile_note.setText(tr("Der Profilbestand wird durchgesehen …"))
+
     def _start_profile_search(self) -> None:
+        self._clear_profile_choices()
         found = self._slicer_path
         if found is None:
             self.slicer_box.setVisible(False)
@@ -1818,7 +1845,21 @@ class PrintSettingsDialog(QDialog):
         Hintergrund, und wer den Dialog vorher wieder zumacht, hat eine leere
         Auswahl vor sich. Sie zu übernehmen hieße, eine gemerkte Einstellung
         zu löschen, weil niemand hingesehen hat.
+
+        Und wo es **gar nichts zu wählen gibt**, gibt es auch nichts zu
+        merken: Für ``prusa`` und ``cura`` steht die Auswahl leer, weil Solidon
+        die Maschine selbst beschreibt (`_clear_profile_choices`). Das Leere zu
+        merken löschte die Wahl, die zum nächsten Orca-Lauf gehört — dieselbe
+        Falle wie beim Schließen, nur ohne Wartezeit.
+
+        Gefragt sind dabei die Auswahlfelder und nicht ``_profiles``: Leer ist,
+        was der Nutzer leer sieht.
         """
+        if not any(
+            combo.count()
+            for combo in (self.machine_choice, self.process_choice, self.filament_choice)
+        ):
+            return
         machine = str(self.machine_choice.currentData() or "")
         if require_machine and not machine:
             return

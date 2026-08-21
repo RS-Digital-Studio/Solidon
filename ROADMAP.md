@@ -9480,7 +9480,7 @@ kein Nachbau, sondern ein zweiter Entwurf.
 
 ### Zwei Funde, und beide sitzen im Konstruieren
 
-- [ ] **Eine Passbohrung, die Material hinzufügt.** `insert_dowel` heißt
+- [x] **Eine Passbohrung, die Material hinzufügt.** `insert_dowel` heißt
       „Passstift und Passbohrung", hat einen Parameter *Art* mit `pin` und
       `bore`, rechnet für die Bohrung sogar das Spiel dazu (`diameter + play`)
       und gibt ein `bore`-Merkmal zurück. Abgezogen wird trotzdem nichts:
@@ -9508,7 +9508,10 @@ kein Nachbau, sondern ein zweiter Entwurf.
       (`subtractive_when=("kind", "bore")`, passend zu „Die Angabe steht am
       Parameter"), oder als zwei getrennte Bausteine — was der Oberflächenregel
       „Eine Operation je Handlung, nicht je Variante" widerspräche.
-- [ ] **Das Ausrichten stellt Teile auf die Ecke.** `orient_for_print` legte die
+
+      Entschieden wurde die Deklaration am Parameter — der Abschnitt
+      darunter hält die Umsetzung.
+- [x] **Das Ausrichten stellt Teile auf die Ecke.** `orient_for_print` legte die
       nachgebaute Stange auf die Diagonale. Gemessen am selben Körper:
 
       | Lage | Stützvolumen | erste Schicht | Höhe |
@@ -9528,6 +9531,8 @@ kein Nachbau, sondern ein zweiter Entwurf.
       Untergrenze der ersten Schicht herkommt, ist die Entscheidung — aus dem
       Profil wie `smallest_printable_volume`, oder als Verhältnis zur
       Ausgangslage, die `search` als `baseline` ohnehin schon kennt.
+
+      Entschieden wurde das Profil, aus demselben Abschnitt darunter.
 
 ## Die Richtung steht am Parameter, die Untergrenze im Profil (21.08.2026)
 
@@ -9683,7 +9688,7 @@ geschrieben" — ein Satz über das Ende, nicht über die Ursache.
 
 ### Was auffiel und eine Entscheidung braucht
 
-- [ ] **Der Slicer sagt, was er nicht konnte, und der Nutzer erfährt es nicht.**
+- [x] **Der Slicer sagt, was er nicht konnte, und der Nutzer erfährt es nicht.**
       Eine Platte in Bettkoordinaten (so kommt sie aus einer fremden 3MF) an
       PrusaSlicer gegeben endet in `exit_code=0` und der Ausgabe „All objects
       are outside of the print volume." Solidon fängt sie auf und legt sie unter
@@ -9692,12 +9697,14 @@ geschrieben" — ein Satz über das Ende, nicht über die Ursache.
       anordnen* — und das steht nirgends. Regel 17 verlangt den
       Handlungsvorschlag; wo er hingehört (erkannte Slicer-Ausgaben auf
       Handlungen abbilden, wie `FINDING_ACTIONS` es für Befunde tut), ist eine
-      Entscheidung.
-- [ ] **Die Profilauswahl bleibt beim Slicerwechsel stehen.** `_start_profile_
+      Entscheidung. **Entschieden und behoben** im Abschnitt „Der Slicer
+      sagte es, und der Nutzer erfuhr es nicht".
+- [x] **Die Profilauswahl bleibt beim Slicerwechsel stehen.** `_start_profile_
       search` steigt für Prusa und Cura früh aus und lässt die Auswahlfelder,
-      wie sie waren; `_slice` liest sie unbesehen. Heute unerreichbar, weil der
-      Pfad je Dialog feststeht — sobald es eine Slicerwahl im Dialog gibt, ist
-      es ein Fehler.
+      wie sie waren; `_slice` liest sie unbesehen. **Und erreichbar war es
+      schon:** `recheck_slicer` sucht im offenen Dialog neu — genau der Weg,
+      den jemand geht, der einen zweiten Slicer gerade installiert hat.
+      Behoben im Abschnitt „Was CuraEngine schreibt, ohne es zu prüfen".
 
 ## Der Slicer sagte es, und der Nutzer erfuhr es nicht (21.08.2026)
 
@@ -9726,12 +9733,99 @@ Bauraum überhaupt nicht; dagegen steht `arrange.out_of_build_volume` im
 Prüfbericht, und den hat Solidon in derselben Szene dreimal gemeldet. Aus
 geratenen Sätzen eine Handlung zu bauen wäre schlimmer als keine.
 
-- [ ] **Bleibt offen:** Dass CuraEngine eine Datei schreibt, die neben der
+- [x] **Nachgetragen:** Dass CuraEngine eine Datei schreibt, die neben der
       Platte druckt, meldet Solidon als `info` und nicht als Warnung — der
       Schweregrad folgt der Regel „ein Klick behebt es, also ist es ein
       Hinweis". Vor einem Slicerlauf ist das zu leise; der Nutzer schickt die
       Datei an den Drucker. Ob der Schweregrad an der Stelle vom Anlass abhängen
-      soll, ist eine Entscheidung über `_severity_for`.
+      soll, war eine Entscheidung über `_severity_for` — sie ist gefallen, und
+      dazu kam eine Messung an der geschriebenen Datei selbst. Der Abschnitt
+      darunter.
+
+## Was CuraEngine schreibt, ohne es zu prüfen (21.08.2026)
+
+Drei offene Punkte aus den zwei Abschnitten davor, alle drei am selben Ort: die
+Übergabe an den Slicer. Gemessen, nicht wiederholt — ein Würfel von 40 × 40 ×
+20 mm, 150 mm neben der Mitte, auf einem Bett von 220 mm. Erlaubt ist damit
+x −110 bis 110, und derselbe Auftrag ging an alle drei Familien:
+
+| Familie | Ergebnis | gedruckt wird |
+|---|---|---|
+| PrusaSlicer 2.9.6 | Datei | x −23,6 bis 23,6 — **er rückt selbst in die Mitte** |
+| ElegooSlicer (Orca) | keine Datei | — |
+| CuraEngine 5.13.0 | Datei | **x 130,2 bis 169,8** |
+
+CuraEngine prüft seinen Bauraum nicht. Im Kopf der Datei steht dazu
+`;MINX:2.14748e+06`, der unbesetzte Anfangswert eines Ganzzahltyps — also
+nichts. Wer diese Datei an den Drucker schickt, fährt mit der Düse in den
+Rahmen.
+
+**Behoben in drei Schritten, jeder mit Test und Gegenprobe.**
+
+- [x] **Vor dem Schreiben ist derselbe Befund keine Auskunft mehr, sondern eine
+      Warnung.** `check_build_volume` stufte „steht über den Bauraum hinaus" als
+      `info` ein, und mit gutem Grund: ein Klick auf *Auf dem Bett anordnen*
+      behebt es, und §29 sagt „ein Bericht, keine Sperre". Beim **Schreiben**
+      kippt die Rechnung — danach gibt es keinen Klick mehr, nur noch eine
+      Datei. `_severity_for(bounds, allowed, about_to_write)` unterscheidet die
+      zwei Anlässe, `export/writer.py` ist der eine, der `True` übergibt.
+      Gesperrt wird weiterhin nichts.
+- [x] **Und die geschriebene Datei wird selbst gemessen.**
+      `gcode.printed_extent` liest, wohin die Bahnen wirklich fahren — die
+      Stelle über alle Bewegungen nachgeführt, gezählt nur, wo die E-Achse
+      fördert. Aus dem Kopf wäre es nicht zu erfahren; die Bogenformen `G2`/`G3`
+      zählen mit, weil eine Kreiswand mit Bogenanpassung **nur** aus ihnen
+      besteht. `handover.off_the_bed` beurteilt das Maß gegen den Bauraum, und
+      zwar in den Koordinaten, in denen dieser Slicer schreibt: Cura und
+      PrusaSlicer bekommen von Solidon eine Maschine um den Ursprung, die
+      Orca-Familie lädt ihr eigenes Profil und misst von der Ecke. Beides zu
+      verwechseln kostete einen falschen Befund bei jedem Lauf. Unter einer
+      Bahnbreite wird nichts gemeldet. Was herauskommt, ist
+      `error:gcode.off_the_bed` mit `source="gcode"` — gemessen, nie mit der
+      Schätzung vermischt (Regel 14).
+- [x] **Die Profilauswahl wird geleert, bevor eine neue Suche etwas
+      hineinschreibt.** `_start_profile_search` kehrt für `prusa` und `cura`
+      früh zurück; wer im offenen Dialog von der Orca-Familie auf CuraEngine
+      wechselt, hatte danach drei gefüllte Auswahlfelder mit Orca-Profilen vor
+      sich, `_slice` las sie unbesehen, und der Slicer bekam ein `-j` auf eine
+      Orca-Datei. Der Eintrag von vorhin nannte das „heute unerreichbar" — das
+      war falsch: `recheck_slicer` ist genau dieser Weg, und er steht am Ende
+      des Einrichtungsdialogs. Geleert wird am **Anfang** der Suche, damit es
+      auch für die Wege gilt, die vorzeitig zurückkehren. Dazu die Kehrseite:
+      `_remember_slicer_choice` merkt nichts, wo es nichts zu wählen gibt —
+      sonst löschte ein Cura-Lauf das Profil, das zum nächsten Orca-Lauf gehört.
+- [x] **Und die Suite fand einen vierten, aus dem Durchgang von heute Mittag.**
+      „Die Rasttasche trug nichts ab" (d75d9a5) schob den ganzen Taschenkörper
+      um seine Tiefe nach unten — richtig für die Passbohrung, die bis auf ihre
+      Fase drehsymmetrisch ist, und **halb** richtig für den Schnapper: Die
+      Kerbe, die die Rastkante im Bauteil stehen lässt, wanderte mit ans tiefe
+      Ende der Tasche. Dort findet der Haken nichts, was ihn hält; der Verbinder
+      ging zusammen und genauso wieder auseinander. Gebaut wird jetzt von der
+      Mündung nach unten, Schlitz und Kante einzeln gesetzt, `parts_version` auf
+      4 mit Änderungsverlauf (§24.4).
+
+      **Der Test war der Fund, und dann fast der zweite.** Er vergleicht Arm und
+      Tasche als Volumen, und beide Körper liegen seit d75d9a5 in
+      gegenläufigen Rahmen — er verglich zwei Dinge, die sich nicht treffen, und
+      wurde rot. Die halbe Drehung um Y stellt das her, was beim Zusammenstecken
+      wirklich passiert. Damit war er grün — **und mit der Kante am falschen
+      Ende ebenfalls:** Der Haken greift dort genauso, und der ausgewichene Arm
+      geht genauso vorbei. Beide Prüfungen sind blind gegen die Richtung.
+      Dazugekommen ist deshalb die Aussage, um die es eigentlich geht: die Kerbe
+      im Schlitz endet an der Mündung. Mit der Kante am tiefen Ende ist sie rot,
+      und das ist gemessen, nicht angenommen.
+
+### Ein Fehler im Bauen, der hier hingehört
+
+Der erste Anlauf von `printed_extent` fand in einer Datei mit 37 154
+Materialbahnen **keine einzige**. Der Grund lag nicht im Programm: In der
+Achsensuche stand statt der zwei Zeichen `\b` ein einzelnes Byte 0x08 — ein
+echter Rückschritt-Steuerzeichen, hineingeschrieben von einem Hilfsskript, das
+seine Backslashes einmal zu oft aufgelöst hatte. In einem `r"..."`-Muster ist
+das kein Wortanfang, sondern ein Zeichen, das in keiner Datei vorkommt. Sichtbar
+war es nicht: weder `ruff` noch `mypy` noch die Anzeige der Datei zeigen den
+Unterschied. Gefunden hat es die Messung an der echten Datei — der Grund, warum
+sie hier immer gegen einen echten Slicer läuft und nicht gegen eine Attrappe.
 
 ## Dieselbe Zusatzsoftware, einen Schritt weiter gedacht (21.08.2026)
 

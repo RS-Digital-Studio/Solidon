@@ -423,6 +423,13 @@ def _lip(arm: MeshData, socket: MeshData, across: float, depth: float) -> MeshDa
     return boolean("difference", [slot, socket]).mesh
 
 
+def _difference(first: MeshData, second: MeshData) -> MeshData:
+    """Was von ``first`` bleibt, wenn ``second`` herausgenommen wird."""
+    from app.core.geom.boolean import boolean
+
+    return boolean("difference", [first, second]).mesh
+
+
 def _shared(first: MeshData, second: MeshData) -> float:
     """Gemeinsames Volumen. Nichts gemeinsam wirft — das ist dann null."""
     from app.core.errors import BooleanFailedError
@@ -434,7 +441,7 @@ def _shared(first: MeshData, second: MeshData) -> float:
         return 0.0
 
 
-def test_the_snap_connector_catches_and_still_goes_in() -> None:
+def test_the_snap_connector_catches_and_still_goes_in(profile: Profile) -> None:
     """Ein Schnapper, der nur wasserdicht ist, ist noch keiner.
 
     Zwei Eigenschaften machen ihn aus, und beide sind als Volumen messbar:
@@ -448,22 +455,53 @@ def test_the_snap_connector_catches_and_still_goes_in() -> None:
 
     Ohne die zweite Prüfung wäre ein Verbinder zulässig, der zwar hält, aber
     nur, weil man ihn nie zusammenbekommt.
+
+    **Und eine dritte, ohne die die zwei nichts wert sind: die Rastkante muss
+    zwischen Mündung und Haken stehen.** Die Tasche liegt unter ihrer Mündung
+    (§24.1), weil sie abgezogen wird; die zwei Nahtflächen stoßen mit
+    gegenläufigen Normalen aneinander, und die halbe Drehung um Y ist die
+    Bewegung, mit der man die Hälften zusammensteckt. Genau deshalb sind die
+    zwei Volumenprüfungen für sich **blind gegen die Richtung**: Sitzt die Kante
+    am tiefen Ende statt an der Mündung, greift der Haken dort ebenso, und der
+    ausgewichene Arm geht ebenso vorbei. Gemessen wurde das — mit der Kante am
+    falschen Ende blieben beide grün, und der Schnapper hielt trotzdem nichts.
     """
     from app.core.knowledge.parts import shapes
     from app.core.knowledge.parts.mechanics import SNAP_RATIO
 
     diameter, length, play = 6.0, 9.0, 0.2
     arm = _snap(diameter=diameter, length=length, play=play, kind="pin")
-    socket = _snap(diameter=diameter, length=length, play=play, kind="bore")
+    pocket = _snap(diameter=diameter, length=length, play=play, kind="bore")
 
+    # Die Kerbe im vollen Schlitz *ist* die Rastkante: was hier im abgezogenen
+    # Körper fehlt, bleibt im Bauteil stehen. Gebaut aus den Maßen der Tasche
+    # selbst, damit kein Rand mitgemessen wird.
+    low, high = pocket.raw.bounds
+    full = shapes.moved(
+        shapes.box(float(high[0] - low[0]), float(high[1] - low[1]), float(high[2] - low[2])),
+        (0.0, 0.0, float(low[2])),
+    )
+    notch = _difference(full, pocket)
+
+    assert float(notch.raw.bounds[1][2]) == pytest.approx(float(high[2]), abs=1e-6), (
+        "die Rastkante gehört an die Mündung — am tiefen Ende hält sie nichts"
+    )
+
+    socket = shapes.turned(pocket, 180.0, (0.0, 1.0, 0.0))
     thickness = length / SNAP_RATIO
     lip = _lip(arm, socket, 3.0 * thickness + play, length + shapes.SEAT_RELIEF)
 
     pulled = shapes.moved(arm, (0.0, 0.0, -0.1))
     bent = shapes.moved(arm, (0.0, -thickness, 0.0))
 
-    assert _shared(pulled, lip) > 0.0, "beim Ziehen greift nichts — der Haken hält nicht"
-    assert _shared(bent, lip) == 0.0, "der ausgewichene Arm verkeilt sich beim Einführen"
+    # Nicht gegen null, sondern gegen das kleinste Volumen, das ein Drucker
+    # überhaupt legen kann (Regel 6): Die halbe Drehung legt die Mündung der
+    # Tasche und den Boden des Prüfkastens in dieselbe Ebene, und die Boolesche
+    # lässt dort einen Film von 5·10⁻⁴ mm³ stehen — ein Siebzigstel einer Bahn.
+    smallest = profile.smallest_printable_volume
+
+    assert _shared(pulled, lip) > smallest, "beim Ziehen greift nichts — der Haken hält nicht"
+    assert _shared(bent, lip) < smallest, "der ausgewichene Arm verkeilt sich beim Einführen"
 
 
 def test_a_seam_too_narrow_for_a_spring_arm_says_so_and_stays_round() -> None:

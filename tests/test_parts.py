@@ -397,8 +397,11 @@ def test_a_changed_bore_is_announced_to_old_projects() -> None:
 
     Hier ändert sich mehr als ein Maß — aus einem Buckel wird ein Loch. Wer die
     Bohrung bisher benutzt hat, muss das erfahren.
+
+    Der Schnapper steht auf 4, weil Fassung 3 nur halb stimmte: Sie schob die
+    Tasche unter ihre Mündung und nahm die Rastkante mit ans falsche Ende.
     """
-    for name, seit in (("dowel", "2"), ("snap_connector", "3")):
+    for name, seit in (("dowel", "2"), ("snap_connector", "4")):
         spec = PARTS.get(name)
         assert spec.version == seit, name
         letzte = spec.changes[-1]

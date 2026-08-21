@@ -43,6 +43,7 @@ from app.core.knowledge.print_settings import read_path, with_path
 from app.core.log import get_logger
 from app.core.slice import gcode
 from app.core.types import (
+    BoundingBox,
     CancelToken,
     Finding,
     MaterialSlot,
@@ -1350,6 +1351,76 @@ def _stop(process: subprocess.Popen[bytes]) -> None:
                 pipe.close()
 
 
+def bed_box(profile: Profile, flavour: SlicerFlavour) -> BoundingBox:
+    """Der Bauraum in den Koordinaten, in denen **dieser** Slicer schreibt.
+
+    Zwei Welten, und sie zu verwechseln kostet einen falschen Befund bei jedem
+    Lauf: Cura und PrusaSlicer bekommen von Solidon eine Maschine um den
+    Ursprung (:func:`_machine_keys`), die Orca-Familie lädt ihr eigenes
+    Maschinenprofil und misst von der Ecke der Platte.
+    """
+    width, depth, height = profile.printer.build_volume
+    if flavour == "orca":
+        return BoundingBox((0.0, 0.0, 0.0), (width, depth, height))
+    half_width, half_depth = width / 2.0, depth / 2.0
+    return BoundingBox((-half_width, -half_depth, 0.0), (half_width, half_depth, height))
+
+
+def off_the_bed(payload: str, profile: Profile, flavour: SlicerFlavour) -> Finding | None:
+    """Druckt die geschriebene Datei über den Bauraum hinaus? (§29, Regel 14)
+
+    **Gemessen an CuraEngine 5.13.0.** Ein Würfel 150 mm neben der Mitte, ein
+    Bett von 220 mm: PrusaSlicer rückt ihn selbst in die Mitte und druckt bei
+    x -23,6 bis 23,6, die Orca-Familie schreibt ohne Maschinenprofil gar
+    nichts — und CuraEngine schreibt eine Datei, die bei x 130,2 bis 169,8
+    druckt. Sein Bauraum reicht bis 110. Es prüft ihn nicht, und im Kopf der
+    Datei steht dazu ``MINX:2.14748e+06``, also nichts.
+
+    Das ist der einzige Weg, davon zu erfahren.
+    ``arrange.out_of_build_volume`` prüft die **Szene**, und die kann in
+    Ordnung sein; hier geht es um die Datei, die der Slicer daraus gemacht
+    hat — gemessen an ihren Bahnen, mit ``source="gcode"`` und nie mit der
+    Schätzung vermischt.
+
+    Gemeldet, nicht gesperrt (§29): die Datei liegt vor, sie ist rechenbar,
+    und wer ein größeres Bett hat als sein Profil sagt, soll sie behalten
+    dürfen. Der Befund trägt den Schweregrad, den ein Druck verdient, der in
+    den Rahmen fährt.
+
+    Unter einer Bahnbreite wird nichts gemeldet: eine Datei, die auf den
+    Millimeter passt, ist in Ordnung, und die Bahn selbst liegt mit ihrer
+    halben Breite ohnehin neben der Mitte, die hier gemessen wird.
+    """
+    extent = gcode.printed_extent(payload)
+    if extent is None:
+        return None
+    bed = bed_box(profile, flavour)
+    worst, axis = 0.0, 0
+    for index in range(3):
+        over = max(
+            bed.minimum[index] - extent.minimum[index],
+            extent.maximum[index] - bed.maximum[index],
+        )
+        if over > worst:
+            worst, axis = over, index
+    if worst <= profile.printer.extrusion_width:
+        return None
+    return Finding(
+        code="gcode.off_the_bed",
+        severity="error",
+        message=_(
+            "Die Druckdatei fährt über den Bauraum hinaus — der Slicer hat ihn nicht geprüft."
+        ),
+        values={
+            "axis": "XYZ"[axis],
+            "excess_mm": worst,
+            "printed": f"{extent.minimum[axis]:.1f}..{extent.maximum[axis]:.1f}",
+            "allowed": f"{bed.minimum[axis]:.1f}..{bed.maximum[axis]:.1f}",
+        },
+        source="gcode",
+    )
+
+
 def slice_model(
     model: Path | Sequence[Path],
     settings: PrintSettings,
@@ -1472,6 +1543,9 @@ def slice_model(
                 ),
             )
         metrics = gcode.parse(payload)
+        # Und die zweite Gegenprobe, an der Geometrie statt an den Werten:
+        # steht in dieser Datei ein Druck, der auf das Bett passt?
+        beyond = off_the_bed(payload, profile, setup.flavour)
         # Die Gegenprobe: hat der Slicer übernommen, was ihm geschrieben wurde?
         # Das ist die einzige Auskunft, die von ihm selbst kommt statt aus einer
         # Dokumentation, die für die installierte Fassung gelten mag oder nicht.
@@ -1487,6 +1561,7 @@ def slice_model(
         *profile_differences(settings, setup),
         *unknown_keys(settings, profile, setup),
         *ignored,
+        *([beyond] if beyond is not None else []),
         *gcode.findings_for(metrics),
     ]
     findings.append(

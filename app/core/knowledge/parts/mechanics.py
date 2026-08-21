@@ -487,7 +487,7 @@ class SnapConnectorParams(BaseParams):
     title=_("Schnappverbinder für eine Naht"),
     group="mechanics",
     params=SnapConnectorParams,
-    version="3",
+    version="4",
     features=["arm", "catch"],
     doc=_(
         "Federarm und Tasche als Paar — die Hälften rasten ein, statt geklebt zu "
@@ -509,6 +509,18 @@ class SnapConnectorParams(BaseParams):
                 "liegt unter seiner Mündung statt über ihr. Der Docstring sagte es seit "
                 "je — „was hier fehlt, bleibt im Bauteil stehen“ —, die Operation tat es "
                 "nicht."
+            ),
+        ),
+        PartChange(
+            version="4",
+            date="2026-08-21",
+            reason="Die Rastkante lag am tiefen Ende der Tasche statt an der Mündung.",
+            effect=(
+                "Fassung 3 schob die ganze Tasche um ihre Tiefe nach unten — und nahm "
+                "die Kerbe für die Rastkante mit ans andere Ende. Der Haken fand dort "
+                "nichts, was ihn hält: Der Verbinder ging zusammen und wieder "
+                "auseinander. Gebaut wird jetzt von der Mündung nach unten, Schlitz und "
+                "Kante einzeln gesetzt."
             ),
         ),
     ],
@@ -596,20 +608,28 @@ def snap_connector(raw: BaseParams) -> PartResult:
     # Herausgerechnet wird sie und nicht dazugebaut, weil dieser Körper
     # abgezogen wird — was hier fehlt, bleibt im Bauteil stehen.
     depth = params.length + shapes.SEAT_RELIEF
-    slot = shapes.box(width + params.play, across, depth)
-    lip = shapes.box(width + params.play + 2.0 * shapes.OVERLAP, hook, catch)
-    lip = shapes.moved(lip, (0.0, across / 2.0 - hook / 2.0, 0.0))
     # Auch diese Tasche liegt unter ihrer Mündung (§24.1) — dieselbe Rechnung
     # wie bei der Passbohrung, und derselbe Fund: nach oben gebaut lag sie
     # vollständig über der Fläche und trug nichts ab.
-    body = shapes.moved(subtract(slot, lip), (0.0, 0.0, -depth))
+    #
+    # **Verschieben genügt hier aber nicht**, und das ist der Unterschied zur
+    # Passbohrung: Die ist bis auf ihre Fase drehsymmetrisch, diese Tasche hat
+    # ein Oben und ein Unten. Den ganzen Körper um ``-depth`` zu schieben nahm
+    # die Rastkante mit an das **tiefe** Ende — dorthin, wo der Haken erst
+    # hinkommt, statt zwischen Mündung und Haken zu stehen. Der Schnapper hielt
+    # damit nichts, und `tests/test_split_line.py` hat es gemessen. Gebaut wird
+    # deshalb von der Mündung nach unten, Stück für Stück.
+    slot = shapes.moved(shapes.box(width + params.play, across, depth), (0.0, 0.0, -depth))
+    lip = shapes.box(width + params.play + 2.0 * shapes.OVERLAP, hook, catch)
+    lip = shapes.moved(lip, (0.0, across / 2.0 - hook / 2.0, -catch))
+    body = subtract(slot, lip)
     return result(
         body,
         face(
             "catch_1",
             width * hook,
-            (0.0, across / 2.0 - hook / 2.0, catch - depth),
-            (0.0, 0.0, 1.0),
+            (0.0, across / 2.0 - hook / 2.0, -catch),
+            (0.0, 0.0, -1.0),
         ),
     )
 

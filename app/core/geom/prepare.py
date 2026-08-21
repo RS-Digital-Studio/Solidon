@@ -531,8 +531,15 @@ def check_build_volume(
     profile: Profile,
     plates: list[int] | None = None,
     object_ids: Sequence[ObjectId] | None = None,
+    *,
+    about_to_write: bool = False,
 ) -> list[Finding]:
     """Was über den Bauraum hinaussteht, wird gemeldet, nie still skaliert.
+
+    ``about_to_write`` sagt, dass gleich eine Datei entsteht — dann wiegt eine
+    falsche Lage so schwer wie eine falsche Größe, siehe :func:`_severity_for`.
+    Vorgabe ist ``False``: Der Editor fragt dieselbe Frage in einem
+    Zusammenhang, in dem ein Klick sie beantwortet.
 
     ``object_ids`` trägt den Befund an seinen Körper. Ohne sie stand dort nur
     der laufende Index, und ein Bericht, der nicht sagt, **welches** Teil zu
@@ -576,7 +583,7 @@ def check_build_volume(
             findings.append(
                 Finding(
                     code=code,
-                    severity=_severity_for(bounds, allowed),
+                    severity=_severity_for(bounds, allowed, about_to_write),
                     message=message,
                     object_id=(
                         object_ids[index]
@@ -589,10 +596,13 @@ def check_build_volume(
     return findings
 
 
-def _severity_for(bounds: BoundingBox, allowed: BoundingBox) -> Severity:
-    """Wiegt die Platzierungsfrage leichter als die Größenfrage.
+def _severity_for(
+    bounds: BoundingBox, allowed: BoundingBox, about_to_write: bool = False
+) -> Severity:
+    """Wiegt die Platzierungsfrage leichter als die Größenfrage — **außer, wenn
+    die Datei gleich entsteht.**
 
-    Beides stand bisher als Warnung da, und dadurch warnte fast jede geladene
+    Beides stand einmal als Warnung da, und dadurch warnte fast jede geladene
     Datei: ein heruntergeladenes Teil ist meist um den Ursprung zentriert und
     steckt damit zur Hälfte unter der Platte. Dreizehn Warnungen bei vierzehn
     Dateien sind keine Warnung mehr, sondern Grundrauschen — und die eine
@@ -601,11 +611,23 @@ def _severity_for(bounds: BoundingBox, allowed: BoundingBox) -> Severity:
     Die Trennlinie ist, ob das Teil nach dem Aufsetzen hineinpasst. Wenn ja,
     ist es eine Frage der Lage: ein Klick behebt sie, und das ist ein Hinweis.
     Wenn nein, hilft kein Verschieben, und die Warnung bleibt.
+
+    **Beim Schreiben kippt diese Rechnung**, denn ihre Voraussetzung fällt weg:
+    „ein Klick behebt sie" gilt, solange noch geklickt werden kann. Entsteht die
+    Datei jetzt, ist der Klick nicht passiert. Gemessen an einer Platte in
+    Bettkoordinaten, wie sie aus einer fremden 3MF kommt: PrusaSlicer weigert
+    sich („All objects are outside of the print volume"), die Orca-Familie
+    ordnet still neu an, und **CuraEngine schreibt eine Druckdatei, die neben
+    der Platte druckt** — es prüft den Bauraum nicht. Solidon hatte den Befund,
+    und er stand als Hinweis zwischen zwei Dutzend anderen.
+
+    Gesperrt wird trotzdem nichts: §29 sagt „ein Bericht, keine Sperre". Wer
+    trotzdem drucken will, kann das — er weiß dann nur, was er tut.
     """
     passt = all(
         size <= limit + EPS_GEOM for size, limit in zip(bounds.size, allowed.size, strict=True)
     )
-    return "info" if passt else "warning"
+    return "info" if passt and not about_to_write else "warning"
 
 
 def _verdict_for(

@@ -1287,6 +1287,106 @@ def test_any_other_silence_keeps_the_old_answer(
     assert any(action.id == "check_profile" for action in raised.value.suggestions)
 
 
+def _gcode_printing_at(*xs: float) -> str:
+    """Eine kleinste Druckdatei, die genau an diesen X-Stellen Material legt."""
+    lines = ["G90", "M82", "G1 Z0.2 F300"]
+    lines += [f"G1 X{x:g} Y0 E{index / 10.0 + 0.1:g}" for index, x in enumerate(xs)]
+    return "\n".join(lines) + "\n"
+
+
+def _slicer_writing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, payload: str, flavour: str = "cura"
+) -> tuple[Path, handover.SlicerSetup]:
+    """Ein Slicer, der durchläuft und genau diese Datei schreibt.
+
+    Geschrieben wird in ``tmp_path``, denn genau der geht als ``output_dir``
+    hinein — ``_find_gcode`` sucht dort.
+    """
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / f"{flavour}.exe"
+    executable.write_bytes(b"")
+
+    def _writes(*_args: object, **_kwargs: object) -> _Finished:
+        (tmp_path / "geschrieben.gcode").write_text(payload, encoding="utf-8")
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", _writes)
+    return model, handover.SlicerSetup(executable=executable, flavour=flavour)  # type: ignore[arg-type]
+
+
+def test_a_gcode_that_prints_beside_the_bed_becomes_a_finding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gemessen an CuraEngine 5.13.0: ein Würfel 150 mm neben der Mitte, ein
+    Bett von 220 mm — PrusaSlicer rückt ihn selbst in die Mitte, CuraEngine
+    schreibt eine Datei, die bei x 130,2 bis 169,8 druckt. Es prüft den Bauraum
+    nicht, und sein Kopf sagt dazu ``MINX:2.14748e+06``, also nichts.
+
+    Gesperrt wird nichts (§29) — die Datei kommt zurück, der Befund steht
+    daneben, und er trägt ``source="gcode"``, weil er an den Bahnen gemessen
+    ist und nicht geschätzt (Regel 14).
+    """
+    profile = profiles.make_profile()
+    model, setup = _slicer_writing(monkeypatch, tmp_path, _gcode_printing_at(150.0, 170.0))
+
+    outcome = handover.slice_model(
+        model, print_settings.resolve(profile), profile, setup, output_dir=tmp_path
+    )
+
+    beyond = [entry for entry in outcome.findings if entry.code == "gcode.off_the_bed"]
+    assert beyond, [entry.code for entry in outcome.findings]
+    assert beyond[0].severity == "error"
+    assert beyond[0].source == "gcode"
+    assert beyond[0].values["axis"] == "X"
+    # 170 gedruckt, 110 erlaubt — das halbe Bett von 220.
+    assert beyond[0].values["excess_mm"] == pytest.approx(60.0)
+    assert outcome.gcode_path.is_file(), "die Datei bleibt trotzdem"
+
+
+def test_a_gcode_that_stays_on_the_bed_says_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Gegenprobe: derselbe Weg, dieselbe Prüfung, ein Druck in der Mitte.
+
+    Ohne sie prüfte der Test oben bloß, dass irgendein Befund entsteht.
+    """
+    profile = profiles.make_profile()
+    model, setup = _slicer_writing(monkeypatch, tmp_path, _gcode_printing_at(-30.0, 30.0))
+
+    outcome = handover.slice_model(
+        model, print_settings.resolve(profile), profile, setup, output_dir=tmp_path
+    )
+
+    assert not [entry for entry in outcome.findings if entry.code == "gcode.off_the_bed"]
+
+
+def test_the_orca_family_is_measured_from_the_corner() -> None:
+    """Zwei Welten, und sie zu verwechseln kostet einen falschen Befund bei
+    jedem Lauf: Cura und PrusaSlicer bekommen von Solidon eine Maschine um den
+    Ursprung, die Orca-Familie lädt ihr eigenes Profil und misst von der Ecke.
+
+    Dieselbe Datei ist deshalb für die eine Familie in Ordnung und für die
+    andere daneben — und zwar in beide Richtungen.
+    """
+    profile = profiles.make_profile()
+    mitte = _gcode_printing_at(-30.0, 30.0)
+    ecke = _gcode_printing_at(80.0, 140.0)
+
+    assert handover.off_the_bed(mitte, profile, "cura") is None
+    assert handover.off_the_bed(mitte, profile, "orca") is not None, "unter Null gibt es kein Bett"
+    assert handover.off_the_bed(ecke, profile, "orca") is None
+    assert handover.off_the_bed(ecke, profile, "cura") is not None, "140 statt höchstens 110"
+
+
+def test_a_file_without_a_single_path_is_not_judged() -> None:
+    """Eine Datei ohne Materialbahn sagt nichts über den Bauraum — dazu steht
+    schon der Abbruch aus :func:`gcode.extrudes` bereit."""
+    profile = profiles.make_profile()
+
+    assert handover.off_the_bed("G90\nG0 X400 Y400\nM104 S210\n", profile, "cura") is None
+
+
 def test_the_newest_gcode_in_the_folder_wins(tmp_path: Path) -> None:
     """Orca hängt Plattennummern an; ein zweiter Lauf darf nicht die Zahlen des
     ersten melden."""

@@ -23,7 +23,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 
 from app.core.log import get_logger
-from app.core.types import Finding, MetricSource
+from app.core.types import BoundingBox, Finding, MetricSource
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -100,6 +100,17 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
 
 _SUPPORT_TOOL = re.compile(r";\s*TYPE:\s*(?P<type>.+)", re.IGNORECASE)
 _EXTRUSION = re.compile(r"^G1\b(?=.*\bE(?P<e>-?[0-9.]+))(?=.*\b[XY])", re.IGNORECASE)
+
+#: Eine Bewegung — ``G0`` fährt leer, ``G1`` gerade, ``G2``/``G3`` im Bogen.
+#: Die Bogenformen stehen mit dabei, weil eine Kreiswand mit Bogenanpassung
+#: **nur** aus ihnen besteht: Wer sie überliest, verliert genau die Ausmaße
+#: eines Zylinders.
+_MOVE = re.compile(r"^G(?P<code>[0-3])\b", re.IGNORECASE)
+#: Die drei Achsen einzeln, in der Reihenfolge X, Y, Z.
+_AXES = tuple(re.compile(rf"\b{name}(-?[0-9.]+)", re.IGNORECASE) for name in "XYZ")
+#: Die E-Achse ohne die Bedingungen von :data:`_EXTRUSION` — für Bögen, die
+#: kein ``G1`` sind.
+_E_AXIS = re.compile(r"\bE(-?[0-9.]+)", re.IGNORECASE)
 _WARNING = re.compile(r";\s*(?:WARNING|Warnung)[:\s]\s*(?P<text>.+)", re.IGNORECASE)
 
 #: Die Marke, mit der PrusaSlicer jeden Schichtwechsel ankündigt. Gezählt ist
@@ -173,6 +184,72 @@ def extrudes(text: str) -> bool:
     wie ein geglückter Lauf.
     """
     return any(_EXTRUSION.match(line) and float(_e_value(line)) > 0.0 for line in text.splitlines())
+
+
+def printed_extent(text: str) -> BoundingBox | None:
+    """Wohin diese Datei wirklich druckt — aus den Bahnen, nicht aus dem Kopf.
+
+    ``None``, wenn keine einzige Bahn Material fördert; dann sagt
+    :func:`extrudes` das Nötige.
+
+    **Warum aus den Bahnen.** Dieselbe Überlegung wie bei :func:`extrudes`: Der
+    Kopf ist das, was ein Slicer über sich behauptet, die Bewegung ist, was der
+    Drucker tut. CuraEngine schreibt in seinen Kopf ``;MINX:2.14748e+06`` — den
+    unbesetzten Anfangswert —, weil dort sonst das Cura-Fenster nachträglich
+    einträgt; von der Kommandozeile aus bleibt er stehen.
+
+    **Und wozu.** Weil ein Slicer eine Datei schreiben kann, die neben der
+    Platte druckt; wer davon nur aus dem Kopf erfährt, erfährt es nie.
+    :func:`app.core.export.handover.off_the_bed` beurteilt das Maß, das hier
+    herauskommt, und dort steht die Messung.
+
+    Gelesen wird der Absolutwert der Achsen; die Stelle wird über alle
+    Bewegungen nachgeführt, auch über die leeren, denn Z steht so gut wie nie
+    in derselben Zeile wie die Bahn. Relative Bewegungen (``G91``) kommen in
+    Druckdateien für die Platte nicht vor — der Vorschub ja, die Achsen
+    nicht —, und wo doch, fehlt ihnen der Bezug: sie werden übersprungen,
+    statt eine Zahl zu erfinden.
+    """
+    position: list[float | None] = [None, None, None]
+    lowest = [float("inf")] * 3
+    highest = [float("-inf")] * 3
+    seen = False
+    relative = False
+    for line in text.splitlines():
+        head = line[:3].upper()
+        if head == "G91":
+            relative = True
+            continue
+        if head == "G90":
+            relative = False
+            continue
+        move = _MOVE.match(line)
+        if relative or move is None:
+            continue
+        # Erst die Stelle nachführen, dann fragen, ob dort gedruckt wurde: Z
+        # steht so gut wie nie in derselben Zeile wie die Bahn, und ein
+        # ``G1 Y30 E0.5`` behält sein X von vorher.
+        for axis, pattern in enumerate(_AXES):
+            found = pattern.search(line)
+            if found is not None:
+                position[axis] = float(found.group(1))
+        pushed = _E_AXIS.search(line)
+        if move.group("code") == "0" or pushed is None or float(pushed.group(1)) <= 0.0:
+            continue
+        for axis, value in enumerate(position):
+            if value is None:
+                continue
+            lowest[axis] = min(lowest[axis], value)
+            highest[axis] = max(highest[axis], value)
+            seen = True
+    if not seen:
+        return None
+    # Wo eine Achse in keiner Bahn stand, bleibt der Anfangswert stehen — und
+    # daraus wird eine Null, keine Unendlichkeit.
+    for axis in range(3):
+        if lowest[axis] > highest[axis]:
+            lowest[axis] = highest[axis] = 0.0
+    return BoundingBox((lowest[0], lowest[1], lowest[2]), (highest[0], highest[1], highest[2]))
 
 
 def _e_value(line: str) -> str:

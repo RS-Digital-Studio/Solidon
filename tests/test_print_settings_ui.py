@@ -991,6 +991,51 @@ def test_the_found_profiles_fill_both_choices(dialog: PrintSettingsDialog) -> No
     assert dialog.process_choice.count() == 2
 
 
+def test_switching_the_slicer_empties_the_profile_choice(
+    dialog: PrintSettingsDialog, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Wer zwei Slicer hat, wechselt — und die Auswahl darf nicht stehenbleiben.
+
+    Gemessen: Mit gefüllter Orca-Auswahl und danach eingestelltem CuraEngine
+    ging ein ``-j`` auf eine Orca-Datei hinaus, und der Slicer war nach einer
+    Zehntelsekunde tot. ``_start_profile_search`` kehrt für ``cura`` und
+    ``prusa`` früh zurück; geleert wird deshalb am Anfang, nicht am Ende.
+
+    Und die gemerkte Wahl bleibt: das Leere zu merken löschte das Profil, das
+    zum nächsten Orca-Lauf gehört.
+    """
+    from app.core import discover
+
+    machine = _profile(
+        "Elegoo Centauri Carbon 2 0.4 nozzle",
+        "machine",
+        printer_model="Elegoo Centauri Carbon 2",
+        nozzle=0.4,
+        default_process="0.20mm Standard",
+    )
+    dialog._profiles_found([machine, _profile("0.20mm Standard", "process")])
+    assert dialog.machine_choice.count() == 1, "so weit ist es der Orca-Fall"
+    dialog.ui_settings.slicer_machine_profile = str(machine.path)
+
+    engine = tmp_path / "CuraEngine.exe"
+    engine.write_text("")
+    monkeypatch.setattr(discover, "find_program", lambda *_args, **_kwargs: engine)
+
+    dialog.recheck_slicer()
+
+    assert dialog.machine_choice.count() == 0, "kein Orca-Profil für CuraEngine"
+    assert not dialog.machine_choice.isEnabled()
+    assert dialog.process_choice.count() == 0
+    assert dialog.filament_choice.count() == 0
+    assert dialog._profiles == []
+
+    # Und die zweite Zusicherung: was nicht gewählt werden kann, wird nicht
+    # gemerkt — sonst stünde beim nächsten Orca-Lauf nichts mehr da.
+    dialog._remember_slicer_choice(require_machine=False)
+
+    assert dialog.ui_settings.slicer_machine_profile == str(machine.path)
+
+
 def test_the_matching_profile_is_preselected(qt_app: QApplication) -> None:
     """§2.4: eine gute Vorgabe ist mehr wert als eine gute
     Einstellmöglichkeit. Das Maschinenprofil nennt seinen Drucker und sein
