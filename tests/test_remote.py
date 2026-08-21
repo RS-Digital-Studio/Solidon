@@ -110,6 +110,13 @@ def test_openscad_source_never_travels_over_the_wire() -> None:
         "..\\..\\geheim.p3d",
         "../../../etc/shadow",
         "\\\\server\\freigabe\\datei",
+        # Ein Pfad in URL-Form ist ein Pfad. Er stand nicht in dieser Liste
+        # und kam durch: `file:` trifft keines der vier Merkmale von
+        # `looks_like_path` — kein fuehrender Trenner, kein
+        # Laufwerksbuchstabe an zweiter Stelle, kein Netzpfad, kein
+        # Schritt nach oben.
+        "file:///C:/Windows/System32/config",
+        "file:///etc/passwd",
     ],
 )
 def test_a_value_that_looks_like_a_path_is_refused(value: str) -> None:

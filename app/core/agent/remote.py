@@ -141,11 +141,22 @@ def looks_like_path(value: str) -> bool:
     Absichtlich eng gefasst. „Deckel 2" ist ein Name, und eine Sperre, die zu
     breit greift, macht die Schnittstelle unbrauchbar und sieht dabei sicher
     aus. Erkannt wird, was ohne Zweifel ein Pfad ist: ein Laufwerksbuchstabe,
-    ein führender Trenner, ein Netzpfad, oder ein Schritt nach oben.
+    ein führender Trenner, ein Netzpfad, ein Schritt nach oben — oder ein
+    Pfad in URL-Form.
+
+    **``file:`` kam durch**, und zwar weil es keines der anderen vier Merkmale
+    trifft: kein führender Trenner, der Doppelpunkt steht an fünfter Stelle
+    statt an zweiter, kein Netzpfad, kein Schritt nach oben. Heute nimmt keine
+    Operation eine URL an, der Weg war also zu — aber die Auflage aus §26.6
+    sagt „kein Dateipfad", und ein Pfad mit Schema davor bleibt einer. Eine
+    Sperre, die erst greift, wenn irgendwo ein Feld für eine Adresse entsteht,
+    greift zu spät.
     """
     text = value.strip()
     if not text:
         return False
+    if text.lower().startswith("file:"):
+        return True
     if text.startswith(("/", "\\", "~")):
         return True
     if len(text) > 1 and text[1] == ":" and text[0].isalpha():
