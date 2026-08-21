@@ -181,7 +181,7 @@ class ComfySetupDialog(QDialog):
         worker.failed.connect(self._refused)
         worker.finished.connect(lambda done=worker: self._worker_done(done))
         self._worker = worker
-        worker.start()
+        self._leash.start(worker)
 
     def wait_for_setup(self, milliseconds: int = 30_000) -> bool:
         """Auf den Lauf warten. Beim Schließen und in Tests."""

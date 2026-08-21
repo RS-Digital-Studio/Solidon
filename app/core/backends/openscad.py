@@ -30,10 +30,10 @@ import os
 import re
 import subprocess
 import sys
-import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from app.core import discover
 from app.core.errors import Action, AppError, ExternalToolError
 from app.core.log import get_logger
 from app.core.types import Finding
@@ -418,8 +418,10 @@ def render(source: str, *, timeout: float = TIMEOUT_SECONDS) -> RenderResult:
     import time
 
     started = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="solidon-scad-") as directory:
-        workspace = Path(directory)
+    # **Der Ordner muss dort liegen, wo dieses OpenSCAD hinsehen kann.** Ein
+    # Flatpak hat sein eigenes ``/tmp``; die Datei wäre geschrieben, der Aufruf
+    # käme an, und OpenSCAD fände nichts. Siehe ``discover.workspace_for``.
+    with discover.workspace_for(binary, "solidon-scad-") as workspace:
         scad_file = workspace / "model.scad"
         stl_file = workspace / "model.stl"
         scad_file.write_text(source, encoding="utf-8")

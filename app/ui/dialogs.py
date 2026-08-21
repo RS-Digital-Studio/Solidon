@@ -8,6 +8,7 @@ nie in den Dialog.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import dataclass
 from typing import Any, Final
 
 from PySide6.QtCore import Qt, QThread, QUrl, Signal
@@ -319,6 +320,37 @@ class _ToolProbeWorker(QThread):
         self.done.emit(llm.ollama_tool_check(self._model))
 
 
+@dataclass(frozen=True, slots=True)
+class ChatState:
+    """Was über den Chat auf diesem Rechner zu erfahren ist.
+
+    Gemessen kostete das zusammen 2,7 Sekunden — davon 2,07 allein die Frage
+    nach den installierten Modellen. Der Dialog wartete darauf, bevor er
+    erschien.
+    """
+
+    answers: str
+    """Der Satz darüber, was gerade antwortet."""
+    service: tools.ToolState | None
+    installed: tuple[str, ...]
+
+
+class _Look(QThread):
+    """Nachsehen: Schlüsselbund, Dienst, installierte Modelle."""
+
+    done = Signal(object)
+
+    def run(self) -> None:
+        tool = tools.by_id("ollama")
+        self.done.emit(
+            ChatState(
+                answers=_what_answers(),
+                service=tools.state_of(tool) if tool is not None else None,
+                installed=llm.installed_models(),
+            )
+        )
+
+
 class _StartWorker(QThread):
     """Ollama starten und warten, bis sein Port antwortet."""
 
@@ -359,6 +391,25 @@ class _PullWorker(QThread):
                 cancelled=lambda: self._stop,
             )
         )
+
+
+def _what_answers() -> str:
+    """Was gerade antwortet — die Frage, mit der jemand herkommt.
+
+    „Es ist kein Schlüssel hinterlegt" allein liest sich wie „der Chat geht
+    nicht", und das kann falsch sein: läuft ein Modell auf diesem Rechner, geht
+    er. Der Satz nennt darum den Weg, der gerade trägt, nicht bloß den Zustand
+    des Schlüssels.
+
+    Eine Modulfunktion, weil der Arbeiter sie braucht: ``first_available``
+    fragt ein Backend, und das ist ein HTTP-Aufruf.
+    """
+    backend = llm.first_available()
+    if backend is None:
+        return tr("Der Chat ist damit abgeschaltet — es antwortet gerade nichts.")
+    if backend.id == "ollama":
+        return tr("Der Chat läuft trotzdem: über das lokale Modell.")
+    return tr("Der Chat läuft darüber.")
 
 
 class KeyDialog(QDialog):
@@ -403,8 +454,11 @@ class KeyDialog(QDialog):
             "none": tr("Es ist kein Schlüssel hinterlegt."),
         }[keys.source(account)]
 
-        explanation = QLabel(
-            f"{state} {self._what_answers()}\n\n"
+        # Der Satz darüber, was antwortet, kommt nachgereicht: Er fragt ein
+        # Backend, und das ist ein HTTP-Aufruf (:class:`_Look`).
+        self._key_state = state
+        self.explanation = QLabel(
+            f"{state} {tr('Wird nachgesehen …')}\n\n"
             + tr(
                 "Der Schlüssel wird im Schlüsselbund des Systems abgelegt und reist "
                 "nicht mit der Projektdatei mit. Ohne Schlüssel bleibt alles außer "
@@ -412,7 +466,7 @@ class KeyDialog(QDialog):
             ),
             self,
         )
-        explanation.setWordWrap(True)
+        self.explanation.setWordWrap(True)
 
         self.field = QLineEdit(self)
         self.field.setEchoMode(QLineEdit.EchoMode.Password)
@@ -429,25 +483,51 @@ class KeyDialog(QDialog):
         buttons.rejected.connect(self.reject)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(explanation)
+        layout.addWidget(self.explanation)
         layout.addWidget(self.field)
         layout.addWidget(self._local_model_section())
         layout.addWidget(buttons)
 
-    def _what_answers(self) -> str:
-        """Was gerade antwortet — die Frage, mit der jemand herkommt.
+        self._look: _Look | None = None
+        self.look()
 
-        „Es ist kein Schlüssel hinterlegt" allein liest sich wie „der Chat geht
-        nicht", und das kann falsch sein: läuft ein Modell auf diesem Rechner,
-        geht er. Der Satz nennt darum den Weg, der gerade trägt, nicht bloß den
-        Zustand des Schlüssels.
+    # --- nachsehen --------------------------------------------------------------
+
+    def look(self) -> None:
+        """Nachsehen, was auf diesem Rechner ist. Beim Aufbau und nach jedem
+        Schritt.
+
+        **Im Arbeiter**, weil es gemessen 2,7 Sekunden kostet: die Frage nach
+        den installierten Modellen allein 2,07. Der Dialog wartete darauf,
+        bevor er erschien — und das an der Stelle, an der jemand seinen Chat
+        überhaupt erst einrichtet (§2.8, §38).
         """
-        backend = llm.first_available()
-        if backend is None:
-            return tr("Der Chat ist damit abgeschaltet — es antwortet gerade nichts.")
-        if backend.id == "ollama":
-            return tr("Der Chat läuft trotzdem: über das lokale Modell.")
-        return tr("Der Chat läuft darüber.")
+        if self._look is not None and self._look.isRunning():
+            return
+        worker = _Look()
+        worker.done.connect(self._show_state)
+        worker.finished.connect(lambda done=worker: self._worker_finished(done))
+        self._look = worker
+        self._leash.start(worker)
+
+    def wait_for_look(self, milliseconds: int = 30_000) -> bool:
+        """Auf die Erhebung warten. Beim Schließen und in Tests."""
+        worker = self._look
+        return worker.wait(milliseconds) if worker is not None else True
+
+    def _show_state(self, found: object) -> None:
+        """Die Antworten eintragen."""
+        assert isinstance(found, ChatState)
+        self.state = found
+        text = self.explanation.text().split("\n\n", 1)
+        rest = text[1] if len(text) > 1 else ""
+        self.explanation.setText(f"{self._key_state} {found.answers}\n\n{rest}")
+        self._show_service(found.service)
+        self._fill_models(found.installed)
+
+    def reject(self) -> None:
+        self.wait_for_look()
+        super().reject()
 
     def _local_model_section(self) -> QWidget:
         """Der zweite Weg: ein Modell auf diesem Rechner, statt eines Schlüssels.
@@ -513,7 +593,12 @@ class KeyDialog(QDialog):
         inner.addLayout(row)
         inner.addWidget(self.pull_progress)
         inner.addWidget(self.probe_result)
-        self._show_service()
+        # Bis die Erhebung antwortet, steht hier ein Satz und kein Zustand,
+        # den niemand nachgesehen hat.
+        self.service_state.setText(tr("Wird nachgesehen …"))
+        self.service_button.setVisible(False)
+        self.pull_button.setEnabled(False)
+        self.probe_button.setEnabled(False)
         return section
 
     # --- der Dienst -------------------------------------------------------------
@@ -521,10 +606,12 @@ class KeyDialog(QDialog):
     def _ollama(self) -> tools.ExternalTool | None:
         return tools.by_id("ollama")
 
-    def _show_service(self) -> None:
-        """Der Zustand von Ollama als Satz, und der passende Knopf daneben."""
-        tool = self._ollama()
-        state = tools.state_of(tool) if tool is not None else None
+    def _show_service(self, state: tools.ToolState | None) -> None:
+        """Der Zustand von Ollama als Satz, und der passende Knopf daneben.
+
+        Der Zustand kommt von außen: Ihn zu erheben heißt, eine Datei zu
+        suchen und einen Port zu fragen, und das gehört in den Arbeiter.
+        """
         if state is None:
             self.service_state.setText("")
             self.service_button.setVisible(False)
@@ -557,8 +644,7 @@ class KeyDialog(QDialog):
             from app.ui.install_dialog import InstallDialog
 
             InstallDialog(self).exec()
-            self._show_service()
-            self._fill_models()
+            self.look()
             return
         self.service_button.setEnabled(False)
         self.service_state.setText(tr("Ollama wird gestartet …"))
@@ -567,13 +653,12 @@ class KeyDialog(QDialog):
         worker.done.connect(self._started)
         worker.finished.connect(lambda done=worker: self._worker_finished(done))
         self._starter = worker
-        worker.start()
+        self._leash.start(worker)
 
     def _started(self, running: bool) -> None:
         self.service_button.setEnabled(True)
-        self._show_service()
+        self.look()
         if running:
-            self._fill_models()
             return
         self.service_state.setText(
             tr("Ollama ließ sich nicht starten. Von Hand geht es mit „ollama serve“.")
@@ -582,16 +667,18 @@ class KeyDialog(QDialog):
 
     # --- das Modell -------------------------------------------------------------
 
-    def _fill_models(self) -> None:
+    def _fill_models(self, here: tuple[str, ...] = ()) -> None:
         """Was installiert ist, und was sich bewährt hat.
 
         Die installierten stehen oben und ohne Zusatz — sie sind einen Klick
         entfernt. Die empfohlenen darunter mit Größe und dem Satz, der sagt,
         was sie leisten: Zwischen 5 und 9 Gigabyte liegt eine Entscheidung.
+
+        Was installiert ist, kommt von außen: Die Frage danach kostete
+        gemessen 2,07 Sekunden und läuft im Arbeiter.
         """
-        chosen = self.model_field.currentText().strip() or llm.configured_ollama_model()
+        chosen = self._chosen_model() if self.model_field.count() else llm.configured_ollama_model()
         self.model_field.clear()
-        here = llm.installed_models()
         for name in here:
             self.model_field.addItem(name, name)
         for name, gigabytes, what in llm.OLLAMA_SUGGESTIONS:
@@ -644,7 +731,7 @@ class KeyDialog(QDialog):
         worker.done.connect(self._pull_done)
         worker.finished.connect(lambda done=worker: self._worker_finished(done))
         self._pull = worker
-        worker.start()
+        self._leash.start(worker)
 
     def _pull_step(self, status: str, share: float) -> None:
         """Ollamas Zustandszeile, und der Anteil, wenn es einen gibt."""
@@ -659,9 +746,15 @@ class KeyDialog(QDialog):
     def _pull_done(self, problem: object) -> None:
         self.pull_progress.setVisible(False)
         self.pull_button.setText(tr("Modell holen"))
-        self._show_service()
-        self._fill_models()
+        self.look()
         if problem is None:
+            # **Und es gilt sofort, nicht erst beim Speichern.** Wer ein Modell
+            # holt und den Dialog danach mit *Abbrechen* schließt — weil er
+            # keinen Schlüssel eintragen will —, hätte neun Gigabyte geladen
+            # und einen Chat, der weiter auf das alte Modell zeigt. Das
+            # Herunterladen ist eine Tatsache; nur die Eingabefelder warten
+            # auf eine Entscheidung.
+            llm.remember_ollama_model(self._chosen_model())
             self.probe_result.setText(
                 tr("Das Modell liegt jetzt hier. Die Probe sagt, ob es taugt.")
             )
@@ -676,6 +769,8 @@ class KeyDialog(QDialog):
             self._starter = None
         if self._pull is worker:
             self._pull = None
+        if self._look is worker:
+            self._look = None
         self._leash.hold_until_done(worker)
 
     def _probe_tools(self) -> None:
@@ -688,7 +783,7 @@ class KeyDialog(QDialog):
         worker.done.connect(self._probe_done)
         worker.finished.connect(lambda done=worker: self._probe_finished(done))
         self._probe = worker
-        worker.start()
+        self._leash.start(worker)
 
     def _probe_done(self, usable: object) -> None:
         self.probe_button.setEnabled(True)

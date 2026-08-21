@@ -13,11 +13,21 @@ einem Panel, das er noch nie gesehen hat.
 Er endet dort, wo der Bauplan die ersten fünf Minuten enden lässt (§2.3): beim
 ersten Import. Die letzte Seite sagt darum nicht „fertig", sie bietet an, ein
 Modell zu öffnen.
+
+**Nachgesehen wird in einem Arbeiter.** Der Dialog brauchte gemessen 1,88
+Sekunden, bis er auf dem Bildschirm stand — das Allererste, was ein Kunde von
+Solidon sieht, kam fast zwei Sekunden zu spät. Vier Dinge liefen dafür im
+Oberflächen-Thread: die Suche nach den vier Programmen, das Auslesen des
+Slicer-Profils, die Frage an Ollama über HTTP und die Prüfung der optionalen
+Pakete. Keines davon muss fertig sein, damit der Dialog erscheint; er zeigt
+jetzt sofort seine Fragen und trägt die Antworten nach.
 """
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+from dataclasses import dataclass
+
+from PySide6.QtCore import QThread, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -41,6 +51,7 @@ from app.i18n import language_name, tr
 from app.i18n.catalog import available_languages
 from app.ui.icons import icon
 from app.ui.labels import by_title, deadline_date
+from app.ui.leash import WorkerLeash
 from app.ui.settings import UiSettings
 from app.ui.style import NORMAL, TIGHT, set_level
 
@@ -55,6 +66,40 @@ _log = get_logger(__name__)
 #: Das Wort ist geblieben, und ein Zeichen steht jetzt daneben — nicht statt
 #: seiner. Beides zusammen ist, was Regel 18 verlangt: die Form trägt die
 #: Bedeutung mit, das Wort bleibt lesbar.
+
+
+@dataclass(frozen=True, slots=True)
+class Findings:
+    """Was auf diesem Rechner liegt — in einem Durchgang erhoben.
+
+    Vier Antworten, die zusammen 1,88 Sekunden kosteten und keine davon nötig
+    ist, damit der Dialog aufgeht.
+    """
+
+    tools: tuple[tools.ToolState, ...]
+    missing: str
+    chat: str
+    printer: str
+
+
+class _Survey(QThread):
+    """Die Erhebung: Programme suchen, Slicer-Profil lesen, Ollama fragen.
+
+    Kein Abbrechen — es gibt nichts zu bereuen, sie schreibt nichts. Wer den
+    Dialog vorher schließt, wartet über die Halteleine auf sie.
+    """
+
+    done = Signal(object)
+
+    def run(self) -> None:
+        self.done.emit(
+            Findings(
+                tools=tools.survey(),
+                missing=_missing_text(),
+                chat=_chat_text(),
+                printer=_printer_from_slicer(),
+            )
+        )
 
 
 class ToolRow(QWidget):
@@ -151,8 +196,12 @@ class FirstRunDialog(QDialog):
         self.printer = QComboBox(self)
         for identifier, printer in by_title(profiles.printer_profiles()):
             self.printer.addItem(str(printer.title), identifier)
-        chosen = settings.printer or _printer_from_slicer() or profiles.DEFAULT_PRINTER
-        _select(self.printer, chosen)
+        # Was der installierte Slicer zuletzt hatte, kommt mit der Erhebung
+        # nach — es liest Profildateien und gehört damit nicht hierher. Bis
+        # dahin steht die Vorgabe, und nachgezogen wird nur, solange niemand
+        # selbst gewählt hat (:meth:`_show`).
+        self._suggested_printer = settings.printer or profiles.DEFAULT_PRINTER
+        _select(self.printer, self._suggested_printer)
 
         self.material = QComboBox(self)
         for identifier, material in by_title(profiles.material_profiles()):
@@ -169,14 +218,17 @@ class FirstRunDialog(QDialog):
         self._tool_rows = QVBoxLayout(self.tools)
         self._tool_rows.setContentsMargins(0, 0, 0, 0)
         self._tool_rows.setSpacing(TIGHT)
-        self._fill_tools()
+        # Bis die Erhebung antwortet, steht hier ein Satz und keine Behauptung
+        # über etwas, das niemand nachgesehen hat.
+        looking = QLabel(tr("Wird nachgesehen …"), self.tools)
+        set_level(looking, "caption")
+        self._tool_rows.addWidget(looking)
 
-        self.install_button = QPushButton(
-            f"{tr('Fehlendes installieren …')}  ·  {_missing_text()}", self
-        )
+        self.install_button = QPushButton(tr("Fehlendes installieren …"), self)
         self.install_button.clicked.connect(self._install)
+        self.install_button.setEnabled(False)
 
-        self.chat_state = QLabel(_chat_text(), self)
+        self.chat_state = QLabel(tr("Wird nachgesehen …"), self)
         self.chat_state.setWordWrap(True)
 
         self.chat_button = QPushButton(tr("Chat einrichten …"), self)
@@ -207,6 +259,61 @@ class FirstRunDialog(QDialog):
         layout.addWidget(self.open_button)
         layout.addWidget(buttons)
 
+        self._survey: _Survey | None = None
+        self._leash = WorkerLeash(self)
+        """Hält den ausgelaufenen Arbeiter, bis Qt mit ihm durch ist — das
+        Warum steht in :mod:`app.ui.leash`."""
+        self.look()
+
+    # --- nachsehen --------------------------------------------------------------
+
+    def look(self) -> None:
+        """Die Erhebung starten. Beim Aufbau und nach jeder Einrichtung."""
+        if self._survey is not None and self._survey.isRunning():
+            return
+        survey = _Survey()
+        survey.done.connect(self._show)
+        survey.finished.connect(self._survey_done)
+        self._survey = survey
+        # Über die Leine gestartet: Sie hält ihn ab diesem Moment, nicht erst
+        # ab seinem Ende — ein Dialog, der vorher weggeräumt wird, nähme sonst
+        # die letzte Referenz auf einen laufenden Thread mit.
+        self._leash.start(survey)
+
+    def wait_for_survey(self, milliseconds: int = 30_000) -> bool:
+        """Auf die Erhebung warten. Beim Schließen und in Tests."""
+        survey = self._survey
+        return survey.wait(milliseconds) if survey is not None else True
+
+    def _show(self, found: object) -> None:
+        """Die Antworten eintragen."""
+        assert isinstance(found, Findings)
+        self.findings = found
+        self._fill_tools(found.tools)
+        self.install_button.setText(f"{tr('Fehlendes installieren …')}  ·  {found.missing}")
+        self.install_button.setEnabled(True)
+        self.chat_state.setText(found.chat)
+        # **Nur, solange niemand selbst gewählt hat.** Eine gute Vorgabe ist
+        # mehr wert als eine gute Einstellmöglichkeit (§2.4) — aber eine, die
+        # eine getroffene Wahl überschreibt, ist keine Vorgabe mehr.
+        if found.printer and self.printer.currentData() == self._suggested_printer:
+            _select(self.printer, found.printer)
+            self._suggested_printer = found.printer
+
+    def _survey_done(self) -> None:
+        survey = self._survey
+        self._survey = None
+        if survey is not None:
+            self._leash.hold_until_done(survey)
+
+    def reject(self) -> None:
+        self.wait_for_survey()
+        super().reject()
+
+    def accept(self) -> None:
+        self.wait_for_survey()
+        super().accept()
+
     def _language_changed(self) -> None:
         """§38: eine Änderung, die erst nach dem Neustart wirkt, sagt das.
 
@@ -230,18 +337,21 @@ class FirstRunDialog(QDialog):
         settings.first_run_done = True
         return settings
 
-    def _fill_tools(self) -> None:
+    def _fill_tools(self, states: tuple[tools.ToolState, ...]) -> None:
         """Eine Zeile je Programm, neu gebaut statt neu beschriftet.
 
         Was installiert wurde, ändert die Zeichen und die Hinweise; eine Zeile
         einzeln nachzuziehen hieße, dieselbe Zuordnung zweimal zu schreiben.
+
+        Die Zustände kommen von außen und werden hier nicht erhoben: Die Suche
+        kostet Sekunden und läuft im Arbeiter (:class:`_Survey`).
         """
         while self._tool_rows.count():
             item = self._tool_rows.takeAt(0)
             widget = item.widget() if item is not None else None
             if widget is not None:
                 widget.deleteLater()
-        for state in tools.survey():
+        for state in states:
             self._tool_rows.addWidget(ToolRow(state, self.tools))
 
     def _install(self) -> None:
@@ -249,9 +359,7 @@ class FirstRunDialog(QDialog):
         from app.ui.install_dialog import InstallDialog
 
         InstallDialog(self).exec()
-        self._fill_tools()
-        self.install_button.setText(f"{tr('Fehlendes installieren …')}  ·  {_missing_text()}")
-        self.chat_state.setText(_chat_text())
+        self.look()
 
     def _setup_chat(self) -> None:
         """§27: der Zugang für den Chat, vom ersten Start aus erreichbar.
@@ -264,7 +372,7 @@ class FirstRunDialog(QDialog):
         from app.ui.dialogs import KeyDialog
 
         KeyDialog(parent=self).exec()
-        self.chat_state.setText(_chat_text())
+        self.look()
 
     def _open(self) -> None:
         """§2.3: die ersten fünf Minuten enden beim ersten Import, nicht bei

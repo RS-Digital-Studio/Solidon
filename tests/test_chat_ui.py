@@ -657,6 +657,10 @@ def test_the_key_dialog_walks_the_three_steps_to_a_local_model(
     ):
         monkeypatch.setattr(tools, "state_of", lambda _tool, found=state: found)
         dialog = KeyDialog()
+        # Über den echten Weg: Der Zustand kommt aus der Erhebung im Arbeiter,
+        # und ob sie ihn überhaupt einträgt, ist die Hälfte der Aussage.
+        dialog.wait_for_look()
+        qt_app.processEvents()
         seen[name] = (
             dialog.service_state.text(),
             dialog.service_button.text(),
@@ -780,3 +784,153 @@ def test_a_suggested_entry_hands_over_the_name_and_not_its_line(
 
     assert dialog._chosen_model() == llm.DEFAULT_OLLAMA_MODEL
     assert " — " in dialog.model_field.currentText(), "die Zeile erklärt, der Name nicht"
+
+
+def test_a_fetched_model_counts_even_without_saving(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Neun Gigabyte, und dann wäre es beim Abbrechen verfallen.
+
+    Der Dialog heißt „Chat einrichten" und hat *Speichern* und *Abbrechen*.
+    Wer Ollama startet, ein Modell holt und danach abbricht — weil er gar
+    keinen Schlüssel eintragen will —, hatte alles richtig gemacht und einen
+    Chat, der weiter auf das alte Modell zeigte. Das Herunterladen ist eine
+    Tatsache; nur die Eingabefelder warten auf eine Entscheidung.
+    """
+    from app.core.backends import keys, llm
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    llm.remember_ollama_model("")
+    dialog = KeyDialog()
+    dialog.model_field.setEditText("qwen3:8b")
+
+    dialog._pull_done(None)
+
+    try:
+        assert llm.configured_ollama_model() == "qwen3:8b", "gemerkt, ohne Speichern"
+    finally:
+        llm.remember_ollama_model("")
+
+
+def test_a_failed_fetch_changes_no_setting(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Was nicht geladen wurde, wird auch nicht eingestellt."""
+    from app.core.backends import keys, llm
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    llm.remember_ollama_model("")
+    dialog = KeyDialog()
+    dialog.model_field.setEditText("gibtesnicht:1b")
+
+    dialog._pull_done("Ollama hat den Namen nicht angenommen.")
+
+    assert llm.configured_ollama_model() == llm.DEFAULT_OLLAMA_MODEL
+
+
+def test_the_chat_wakes_up_even_when_the_dialog_was_cancelled(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Dialog nimmt nicht nur einen Schlüssel an.
+
+    Er startet Ollama und holt ein Modell — beides getan, sobald es getan ist.
+    Geprüft wurde bis hierhin nur der Rückgabewert von ``exec``, und bei
+    *Abbrechen* kehrte das Fenster um, ohne den Chat noch einmal anzusehen.
+    """
+    from app.ui import main_window as window_module
+
+    class Cancelled:
+        DialogCode = window_module.KeyDialog.DialogCode
+
+        def __init__(self, *_args: object, **_kwargs: object) -> None:
+            pass
+
+        def exec(self) -> object:
+            return window_module.KeyDialog.DialogCode.Rejected
+
+    looked: list[bool] = []
+    monkeypatch.setattr(window_module, "KeyDialog", Cancelled)
+    monkeypatch.setattr(
+        window, "_refresh_chat_availability", lambda probe_local=False: looked.append(probe_local)
+    )
+
+    window.action_llm_key()
+
+    assert looked == [True], "nach dem Dialog wird in jedem Fall nachgesehen"
+
+
+def test_the_chat_dialog_is_there_before_the_answers_are(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§2.8, §38: der Dialog, in dem jemand seinen Chat einrichtet, wartet auf nichts.
+
+    Gemessen 2,98 Sekunden bis auf den Bildschirm, davon 2,07 allein die Frage
+    nach den installierten Modellen. Dazu der Zustand des Dienstes (eine
+    Dateisuche und eine Socket-Probe) und der Satz darüber, was gerade
+    antwortet (ein HTTP-Aufruf) — alles im Oberflächen-Thread.
+    """
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+
+    dialog = KeyDialog()
+
+    assert dialog.field.echoMode() == dialog.field.EchoMode.Password, "die Fragen stehen sofort"
+    assert "nachgesehen" in dialog.explanation.text()
+    assert "nachgesehen" in dialog.service_state.text()
+    assert not dialog.pull_button.isEnabled(), "kein Knopf auf eine Vermutung"
+
+    dialog.wait_for_look()
+    qt_app.processEvents()
+
+    assert "nachgesehen" not in dialog.explanation.text()
+    assert "nachgesehen" not in dialog.service_state.text()
+
+
+def test_looking_for_the_chat_does_not_happen_in_the_gui_thread(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die teuerste Frage des Dialogs, gemessen 2,07 Sekunden."""
+    import threading
+
+    from app.core.backends import keys, llm
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    here = threading.get_ident()
+    seen: list[int] = []
+
+    def watched(*_args: object, **_kwargs: object) -> tuple[str, ...]:
+        seen.append(threading.get_ident())
+        return ()
+
+    monkeypatch.setattr(llm, "installed_models", watched)
+
+    dialog = KeyDialog()
+    dialog.wait_for_look()
+    qt_app.processEvents()
+
+    assert seen, "es wurde überhaupt nicht nachgesehen"
+    assert here not in seen, "die Frage lief im Oberflächen-Thread"
+
+
+def test_the_suggestions_are_there_without_asking_anybody(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Empfehlungen sind Konstanten — sie kosten nichts und stehen sofort da.
+
+    Wer den Dialog öffnet, um ein Modell zu holen, soll die Auswahl nicht erst
+    nach zwei Sekunden sehen.
+    """
+    from app.core.backends import keys, llm
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+
+    dialog = KeyDialog()
+
+    offered = {dialog.model_field.itemData(index) for index in range(dialog.model_field.count())}
+    assert {name for name, _size, _what in llm.OLLAMA_SUGGESTIONS} <= offered

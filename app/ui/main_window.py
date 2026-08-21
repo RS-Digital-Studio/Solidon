@@ -2741,6 +2741,10 @@ class MainWindow(QMainWindow):
         # Dialog noch einmal nach — wer ComfyUI gerade gestartet hat, soll
         # nicht schließen und neu öffnen müssen.
         dialog.setupRequested.connect(lambda: self._offer_generator_setup(dialog))
+        # Und wo ComfyUI läuft, aber die Knoten fehlen, führt der Weg direkt in
+        # die Einrichtung: über die Liste der Programme wären es drei Klicks für
+        # etwas, das der Dialog schon weiß.
+        dialog.nodesRequested.connect(lambda: self._offer_generator_nodes(dialog))
         if image is not None:
             dialog.set_image(image)
         if dialog.exec() != QDialog.DialogCode.Accepted or dialog.result_mesh is None:
@@ -2840,6 +2844,22 @@ class MainWindow(QMainWindow):
         """§36: was fehlt, wofür es da ist, und ein Knopf, der es holt."""
         InstallDialog(self).exec()
 
+    def _offer_slicer_setup(self, dialog: PrintSettingsDialog) -> None:
+        """Aus den Druckeinstellungen in die Liste der zusätzlichen Programme.
+
+        Und zurück: Der Dialog sieht danach noch einmal nach, ob ein Slicer da
+        ist — sonst wäre der Weg eine Sackgasse mit Umweg.
+        """
+        self.action_install_extras()
+        dialog.recheck_slicer()
+
+    def _offer_generator_nodes(self, dialog: GenerateDialog) -> None:
+        """Die Knoten und das Modell einrichten, und danach neu nachsehen."""
+        from app.ui.comfy_dialog import ComfySetupDialog
+
+        ComfySetupDialog(self).exec()
+        dialog.recheck()
+
     def _offer_generator_setup(self, dialog: GenerateDialog) -> None:
         """Aus dem Erzeugungsdialog in die Liste der zusätzlichen Programme.
 
@@ -2932,6 +2952,10 @@ class MainWindow(QMainWindow):
             self._settings_dialog = dialog
             self._slice_of(object_id, self._slice_for_settings)
         dialog.sliced.connect(self._gcode_returned)
+        # Regel 17: „Kein Slicer eingerichtet" sagte, was fehlt, und bot nichts
+        # an — an der Stelle, an der jemand gerade slicen wollte. Von hier
+        # führt der Weg in die Liste, und danach sieht der Dialog neu nach.
+        dialog.setupRequested.connect(lambda: self._offer_slicer_setup(dialog))
         dialog.exec()
         self._settings_dialog = None
 
@@ -3290,9 +3314,16 @@ class MainWindow(QMainWindow):
     def action_llm_key(self) -> None:
         """§27: der eigene Schlüssel des Nutzers, in den Schlüsselbund, und der
         Chat wacht auf.
+
+        **Auch nach „Abbrechen".** Der Dialog nimmt nicht nur einen Schlüssel
+        an: Er startet Ollama und holt ein Modell, und beides ist getan, sobald
+        es getan ist. Wer diese zwei Schritte machte und dann abbrach — weil er
+        gar keinen Schlüssel eintragen wollte —, hatte alles richtig gemacht
+        und einen Chat, der grau blieb. Aufgefrischt wird deshalb in jedem
+        Fall; was der Dialog verändert hat, weiß er selbst nicht besser als
+        eine neue Prüfung.
         """
-        if KeyDialog(parent=self).exec() != KeyDialog.DialogCode.Accepted:
-            return
+        KeyDialog(parent=self).exec()
         self.session.set_agent_backend(None)
         self._refresh_chat_availability(probe_local=True)
 

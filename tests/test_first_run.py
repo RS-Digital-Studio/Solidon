@@ -14,6 +14,7 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication
 
+from app.ui import first_run
 from app.ui.first_run import FirstRunDialog, should_run
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
@@ -194,6 +195,86 @@ def test_a_service_that_does_not_come_up_says_no(
 # --- der Erstlauf (§38) ---------------------------------------------------------------
 
 
+def settled(dialog: FirstRunDialog, qt_app: QApplication) -> FirstRunDialog:
+    """Wartet die Erhebung ab und lässt ihre Antwort ankommen.
+
+    Über denselben Weg, den auch das Schließen nimmt — die Verbindung über die
+    Thread-Grenze ist Teil dessen, was hier zu prüfen ist.
+    """
+    dialog.wait_for_survey()
+    qt_app.processEvents()
+    return dialog
+
+
+def test_the_dialog_is_there_before_the_answers_are(qt_app: QApplication) -> None:
+    """§38, §2.8: das Allererste, was ein Kunde sieht, wartet auf nichts.
+
+    Gemessen brauchte der Dialog 1,88 Sekunden bis auf den Bildschirm — die
+    Suche nach vier Programmen, das Auslesen eines Slicer-Profils und eine
+    HTTP-Frage an Ollama, alles im Oberflächen-Thread. Er zeigt jetzt sofort
+    seine Fragen; wo eine Antwort fehlt, steht ein Satz und keine Behauptung.
+    """
+    dialog = FirstRunDialog(UiSettings())
+
+    assert dialog.language.count() >= 2, "die Fragen stehen sofort"
+    assert dialog.printer.count() >= 1
+    assert "nachgesehen" in dialog.chat_state.text()
+    assert not dialog.install_button.isEnabled(), "kein Knopf auf eine Vermutung"
+
+    settled(dialog, qt_app)
+
+    assert dialog.install_button.isEnabled()
+    assert "nachgesehen" not in dialog.chat_state.text()
+
+
+def test_looking_does_not_happen_in_the_gui_thread(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Erhebung selbst gehört in einen Arbeiter (§38)."""
+    import threading
+
+    here = threading.get_ident()
+    seen: list[int] = []
+    real = tools.survey
+
+    def watched() -> tuple[tools.ToolState, ...]:
+        seen.append(threading.get_ident())
+        return real()
+
+    monkeypatch.setattr(tools, "survey", watched)
+
+    settled(FirstRunDialog(UiSettings()), qt_app)
+
+    assert seen, "es wurde überhaupt nicht gesucht"
+    assert here not in seen, "die Suche lief im Oberflächen-Thread"
+
+
+def test_a_printer_the_user_chose_is_not_overwritten(qt_app: QApplication) -> None:
+    """Eine Vorgabe, die eine getroffene Wahl überschreibt, ist keine (§2.4).
+
+    Der Vorschlag aus dem Slicer-Profil kommt nachgereicht — und trifft
+    vielleicht jemanden, der in der Zwischenzeit selbst gewählt hat.
+    """
+    dialog = FirstRunDialog(UiSettings())
+    dialog.printer.setCurrentIndex(dialog.printer.count() - 1)
+    chosen = dialog.printer.currentData()
+
+    dialog._show(first_run.Findings(tools=(), missing="", chat="x", printer="prusa_mk4"))
+
+    assert dialog.printer.currentData() == chosen, "die eigene Wahl bleibt stehen"
+
+
+def test_a_suggestion_arrives_while_nobody_has_chosen(qt_app: QApplication) -> None:
+    """Und wo niemand gewählt hat, trägt der Vorschlag."""
+    dialog = FirstRunDialog(UiSettings())
+    offered = {dialog.printer.itemData(index) for index in range(dialog.printer.count())}
+    other = next(entry for entry in sorted(offered) if entry != dialog.printer.currentData())
+
+    dialog._show(first_run.Findings(tools=(), missing="", chat="x", printer=other))
+
+    assert dialog.printer.currentData() == other
+
+
 def test_the_first_run_happens_once(qt_app: QApplication) -> None:
     settings = UiSettings()
 
@@ -204,7 +285,7 @@ def test_the_first_run_happens_once(qt_app: QApplication) -> None:
 
 def test_the_first_run_asks_the_four_things(qt_app: QApplication) -> None:
     """§38: language, printer, material, external programs."""
-    dialog = FirstRunDialog(UiSettings())
+    dialog = settled(FirstRunDialog(UiSettings()), qt_app)
 
     assert dialog.language.count() >= 2
     assert dialog.printer.count() >= 1
@@ -225,6 +306,7 @@ def test_the_first_run_offers_the_chat_setup(qt_app: QApplication) -> None:
     """
     dialog = FirstRunDialog(UiSettings())
 
+    settled(dialog, qt_app)
     assert dialog.chat_button.text().startswith("Chat")
     assert dialog.chat_state.text().strip()
 
@@ -237,7 +319,7 @@ def test_the_chat_line_says_what_is_missing(
     """
     monkeypatch.setattr(llm, "first_available", lambda: None)
 
-    dialog = FirstRunDialog(UiSettings())
+    dialog = settled(FirstRunDialog(UiSettings()), qt_app)
 
     assert "Sprachmodell" in dialog.chat_state.text()
     assert "funktioniert" in dialog.chat_state.text()
@@ -251,7 +333,7 @@ def test_the_chat_line_names_the_ready_backend(
     """
     monkeypatch.setattr(llm, "first_available", lambda: llm.OllamaBackend())
 
-    dialog = FirstRunDialog(UiSettings())
+    dialog = settled(FirstRunDialog(UiSettings()), qt_app)
 
     assert "ollama" in dialog.chat_state.text()
     assert llm.DEFAULT_OLLAMA_MODEL in dialog.chat_state.text()

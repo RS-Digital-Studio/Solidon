@@ -64,6 +64,7 @@ import urllib.request
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any, Final, Protocol
 
@@ -273,6 +274,28 @@ def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:
 # --- ComfyUI ----------------------------------------------------------------------
 
 
+class Readiness(StrEnum):
+    """Wie weit dieses ComfyUI vorbereitet ist.
+
+    Vier Antworten statt eines Wahrheitswerts, und jede zieht einen anderen
+    Satz und einen anderen Knopf nach sich: Wo nichts läuft, hilft die Liste
+    der zusätzlichen Programme; wo die Knoten fehlen, hilft der
+    Einrichtungsdialog; und wo etwas antwortet, das wir nicht kennen, wird
+    nichts behauptet.
+    """
+
+    READY = "ready"
+    ABSENT = "absent"
+    NO_NODES = "no_nodes"
+    UNKNOWN = "unknown"
+
+
+#: Woran ein Knoten aus unserer Sammlung zu erkennen ist. Der Ablauf nennt ihn
+#: mit vollem Namen; hier steht nur der Anfang, damit ein zweiter Knoten aus
+#: derselben Sammlung nicht nachgetragen werden muss.
+OWN_NODE_PREFIX: Final = "TripoSG"
+
+
 @dataclass(slots=True)
 class ComfyBackend:
     """ComfyUI auf diesem Rechner, über seine HTTP-API (§27).
@@ -298,6 +321,53 @@ class ComfyBackend:
     @property
     def available(self) -> bool:
         return reachable(self.url)
+
+    def readiness(self) -> Readiness:
+        """Läuft es — und kennt es die Knoten, die der Ablauf anspricht?
+
+        **Zwei Fragen, und bis hierhin wurde nur die erste gestellt.** Der
+        Dialog sagte „Bereit", sobald ein Port antwortete. Wer ComfyUI
+        installiert und gestartet hatte, ohne die Knoten einzurichten, tippte
+        also seinen Satz, drückte *Erzeugen*, wartete — und bekam dann zu
+        lesen, dass die Knotensammlung fehlt. Die Auskunft war die ganze Zeit
+        einen HTTP-Aufruf entfernt.
+
+        Gefragt wird nach dem Knoten, den der mitgelieferte Ablauf wirklich
+        benutzt, und nicht nach einem Namen aus einer zweiten Liste: Wer den
+        Ablauf austauscht (§27), tauscht damit auch, was geprüft wird.
+        """
+        if not reachable(self.url):
+            return Readiness.ABSENT
+        wanted = self._own_node()
+        if wanted is None:
+            return Readiness.READY
+        try:
+            answer = self.transport(
+                f"{self.url}/object_info/{urllib.parse.quote(wanted)}", None, {}
+            )
+            described = json.loads(answer.decode("utf-8"))
+        except (OSError, ValueError):
+            # Antwortet der Port und nicht diese Frage, ist es kein ComfyUI,
+            # das wir kennen — behauptet wird dann nichts.
+            return Readiness.UNKNOWN
+        return Readiness.READY if wanted in described else Readiness.NO_NODES
+
+    def _own_node(self) -> str | None:
+        """Der Knoten aus unserer Sammlung, den der Ablauf anspricht.
+
+        Aus dem Ablauf gelesen und nicht eingetragen: Ein ausgetauschter Graph
+        bringt seine eigenen Knoten mit, und eine feste Liste wäre am Tag
+        danach falsch.
+        """
+        try:
+            graph = json.loads((self.workflows / "image_to_mesh.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        for node in graph.values():
+            kind = str(node.get("class_type", "")) if isinstance(node, dict) else ""
+            if kind.startswith(OWN_NODE_PREFIX):
+                return kind
+        return None
 
     def text_to_mesh(
         self, prompt: str, *, seed: int = 0, progress: ProgressFn = _silent

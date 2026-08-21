@@ -7,7 +7,7 @@ meldet sich unter *App Paths* an und trägt ebenfalls nichts ein. Wer nur den
 PATH fragt, sagt jemandem, das Programm in seinem Startmenü sei nicht da —
 und bietet an, es ein zweites Mal zu installieren.
 
-Ein Programm wird deshalb an vier Stellen gesucht, die billigste zuerst:
+Ein Programm wird deshalb an fünf Stellen gesucht, die billigste zuerst:
 
 1. der Pfad, den der Nutzer angegeben hat — der gewinnt immer, und deshalb ist
    eine portable Installation auf einem anderen Laufwerk keine Sackgasse;
@@ -15,8 +15,19 @@ Ein Programm wird deshalb an vier Stellen gesucht, die billigste zuerst:
    manchmal;
 3. die Windows-Registry unter *App Paths*, wo Installationsprogramme ihre
    ausführbare Datei eintragen;
-4. die üblichen Installationsordner, eine Ebene tief — dort liegen die Dateien
-   auch dann, wenn sich nichts angemeldet hat.
+4. die Startprogramme, die **Flatpak** exportiert — sie heißen wie die
+   Anwendung (``org.openscad.OpenSCAD``) und stehen ausdrücklich nicht im
+   PATH;
+5. die üblichen Installationsordner, zwei Ebenen tief, unter macOS auch in
+   ``Contents/MacOS`` — dort liegen die Dateien auch dann, wenn sich nichts
+   angemeldet hat.
+
+**Die Punkte 4 und 5 kamen dazu, als das Installieren dazukam.** Solange nur
+winget angesteuert wurde, reichte die Registry. Seit ein Knopf auch Homebrew
+und Flatpak bedient, muss gefunden werden, was diese beiden ablegen — sonst
+installiert Solidon ein Programm und führt es danach weiter als „nicht
+gefunden". Das ist die schlechteste aller Antworten: Sie lässt den Nutzer an
+seiner eigenen Handlung zweifeln.
 
 Dienste sind eine andere Frage und bekommen eine andere Antwort. Solidon
 startet ComfyUI und Ollama nie, es redet über HTTP mit ihnen — es zählt also,
@@ -35,13 +46,15 @@ import os
 import shutil
 import socket
 import sys
-from collections.abc import Iterable
+import tempfile
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Final
 from urllib.parse import urlparse
 
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_config_dir
+from app.core.paths import ensure_dir, user_cache_dir, user_config_dir
 
 _log = get_logger(__name__)
 
@@ -55,6 +68,43 @@ PROBE_SECONDS: Final = 0.25
 
 #: Endungen, unter denen ein Programm gesucht wird, in dieser Reihenfolge.
 _SUFFIXES: Final = (".exe", ".com", "") if sys.platform == "win32" else ("",)
+
+
+def parts_for(platform: str) -> tuple[str, ...]:
+    """Unterpfade, in denen eine ausführbare Datei innerhalb eines
+    Installationsordners liegt.
+
+    ``Contents/MacOS`` ist der Grund, warum es diese Funktion gibt: Ein
+    Homebrew-Cask legt ``/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD``
+    ab, und gesucht wurde bis hierhin nur direkt im Ordner und in ``bin``. Der
+    Knopf installierte damit ein Programm, das die Liste danach weiter als
+    „nicht gefunden" führte — die schlechteste aller Antworten, weil sie den
+    Nutzer an seiner eigenen Handlung zweifeln lässt.
+
+    Eine Funktion und keine Zeile mit ``if sys.platform``, damit die Zuordnung
+    von **jeder** Maschine aus prüfbar ist: Ein Test, der die Mac-Pfade nur auf
+    einem Mac sehen kann, prüft sie nirgends.
+    """
+    if platform == "darwin":
+        return (".", "bin", "Contents/MacOS")
+    return (".", "bin")
+
+
+_PARTS: Final = parts_for(sys.platform)
+
+#: Wo Flatpak die Startprogramme installierter Anwendungen ablegt — die
+#: Systeminstallation und die des Nutzers.
+#:
+#: **Diese Verzeichnisse stehen nicht im PATH**, und das ist Absicht von
+#: Flatpak („we're not automatically overriding PATH"). Die Dateien darin heißen
+#: wie die Anwendung, also in umgekehrter Domainschreibweise:
+#: ``org.openscad.OpenSCAD``. Weder ``shutil.which("openscad")`` noch ein
+#: Durchgang durch ``/opt`` und ``/usr/local`` findet das — nach einer
+#: Flatpak-Installation war das Programm für Solidon also nicht vorhanden.
+_FLATPAK_EXPORTS: Final = (
+    "~/.local/share/flatpak/exports/bin",
+    "/var/lib/flatpak/exports/bin",
+)
 
 
 def _install_roots() -> tuple[Path, ...]:
@@ -197,11 +247,100 @@ def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
     if tool_id in _cache:
         return _cache[tool_id]
 
-    found_path = _from_registry(candidates) or _from_folders(candidates)
+    found_path = (
+        _from_registry(candidates) or _from_flatpak(candidates) or _from_folders(candidates)
+    )
     _cache[tool_id] = found_path
     if found_path is not None:
         _log.info("found %s outside the PATH: %s", tool_id, found_path)
     return found_path
+
+
+def plain_name(name: str) -> str:
+    """Ein Programmname ohne Schreibweise: klein, ohne Trenner, ohne Endung.
+
+    „orca-slicer", „OrcaSlicer" und das letzte Stück von
+    „com.orcaslicer.OrcaSlicer" sind dasselbe Programm, und keine der drei
+    Schreibweisen ist die richtige. Verglichen wird deshalb die nackte Form.
+    """
+    stem = name.rsplit("/", 1)[-1]
+    for suffix in (".exe", ".com", ".app"):
+        stem = stem.removesuffix(suffix)
+    return stem.replace("-", "").replace("_", "").replace(" ", "").lower()
+
+
+def _from_flatpak(names: tuple[str, ...]) -> Path | None:
+    """Die Startprogramme, die Flatpak exportiert (siehe :data:`_FLATPAK_EXPORTS`).
+
+    Verglichen wird das letzte Stück der Anwendungskennung:
+    ``org.openscad.OpenSCAD`` ist ``openscad``, und danach fragt der Aufrufer.
+    Das trägt auch für Anwendungen, die niemand hier eingetragen hat — ein
+    selbst installiertes ``com.prusa3d.PrusaSlicer`` wird gefunden, weil sein
+    letztes Stück derselbe Name ist.
+
+    Der Wrapper ist eine gewöhnliche ausführbare Datei; er startet
+    ``flatpak run`` und nimmt dieselben Argumente. Für den Aufrufer ändert sich
+    damit nichts — außer dass es ihn überhaupt gibt.
+    """
+    if not sys.platform.startswith("linux"):
+        return None
+    wanted = {plain_name(name) for name in names}
+    for folder in _FLATPAK_EXPORTS:
+        directory = Path(folder).expanduser()
+        try:
+            entries = sorted(directory.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.is_file() and plain_name(entry.name.rsplit(".", 1)[-1]) in wanted:
+                return entry
+    return None
+
+
+def sandboxed(program: Path | str | None) -> bool:
+    """Läuft dieses Programm in einer Sandbox, die unser ``/tmp`` nicht sieht?
+
+    Wahr für die Startprogramme, die Flatpak exportiert. Der Wrapper selbst ist
+    eine gewöhnliche Datei; was dahinter startet, sieht ein eigenes ``/tmp``
+    und vom Rechner nur, was das Paket sich freigeben ließ.
+    """
+    if program is None:
+        return False
+    text = Path(program).as_posix()
+    return any(Path(folder).expanduser().as_posix() in text for folder in _FLATPAK_EXPORTS)
+
+
+@contextmanager
+def workspace_for(program: Path | str | None, prefix: str) -> Iterator[Path]:
+    """Ein Arbeitsordner, den *dieses* Programm auch lesen kann.
+
+    **Der Fall, der ohne das still scheitert.** OpenSCAD und die Slicer bekommen
+    eine Datei in einen temporären Ordner gelegt und werden darauf gerufen. Unter
+    Linux legt ``tempfile`` nach ``/tmp`` — und ein Flatpak hat sein **eigenes**
+    ``/tmp``. Der Aufruf käme also an, das Programm startete, und es fände die
+    Datei nicht: „Can't open input file". Für den Nutzer sähe das aus wie ein
+    Fehler von Solidon, unmittelbar nachdem er das Programm über einen Knopf
+    installiert hat.
+
+    Nachgesehen, nicht angenommen: Die Flathub-Pakete von OpenSCAD und
+    OrcaSlicer geben beide ``--filesystem=home`` frei und sonst kein
+    Verzeichnis, in dem wir schreiben würden. Der Arbeitsordner liegt für sie
+    deshalb im Nutzer-Cache — der liegt unter ``$HOME``, ist an derselben
+    Stelle sichtbar wie hier, und darf jederzeit gelöscht werden (§38).
+
+    Für jedes andere Programm bleibt es beim Systemtemp: Er wird zuverlässig
+    aufgeräumt, auch wenn Solidon dabei abstürzt.
+    """
+    if not sandboxed(program):
+        with tempfile.TemporaryDirectory(prefix=prefix) as directory:
+            yield Path(directory)
+        return
+    home = ensure_dir(user_cache_dir() / "sandbox")
+    directory = tempfile.mkdtemp(prefix=prefix, dir=home)
+    try:
+        yield Path(directory)
+    finally:
+        shutil.rmtree(directory, ignore_errors=True)
 
 
 def _from_registry(names: tuple[str, ...]) -> Path | None:
@@ -266,7 +405,7 @@ def _below(folder: Path, names: tuple[str, ...]) -> list[Path]:
         folder / part / f"{name}{suffix}"
         for name in names
         for suffix in _SUFFIXES
-        for part in (".", "bin")
+        for part in _PARTS
     ]
 
 

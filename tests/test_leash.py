@@ -77,3 +77,72 @@ def test_two_workers_are_held_side_by_side(qt_app: QApplication) -> None:
 
     assert set(leine.pending()) == {erster, zweiter}, "der zweite hat den ersten verdrängt"
     leine.wait_all()
+
+
+# --- gehalten ab dem Start, nicht ab dem Ende -----------------------------------
+
+
+def test_a_worker_is_held_from_the_moment_it_starts(qt_app: QApplication) -> None:
+    """Der Absturz, den die Erstinbetriebnahme sichtbar gemacht hat.
+
+    Gehalten wurde bisher erst, wenn ein Arbeiter fertig war; solange er lief,
+    hing er allein am Feld seines Dialogs. Ein Dialog, der vorher freigegeben
+    wird, nahm damit die letzte Referenz auf einen **laufenden** Thread mit —
+    und der Speicherbereiniger zerstörte das C++-Objekt darunter.
+    """
+    import app.ui.leash as leash_module
+
+    leine = WorkerLeash(QObject())
+    arbeiter = _Schlaefer()
+
+    leine.start(arbeiter)
+    try:
+        assert arbeiter in leash_module.alive(), "gehalten, während er läuft"
+    finally:
+        arbeiter.wait(2000)
+
+
+def test_a_started_worker_is_let_go_after_it_stopped(qt_app: QApplication) -> None:
+    """Und wieder losgelassen — sonst wäre die Menge ein Leck."""
+    import app.ui.leash as leash_module
+
+    leine = WorkerLeash(QObject())
+    arbeiter = _Schlaefer()
+
+    leine.start(arbeiter)
+    arbeiter.wait(2000)
+    for _ in range(100):
+        qt_app.processEvents()
+        if arbeiter not in leash_module.alive():
+            break
+        arbeiter.msleep(10)
+
+    assert arbeiter not in leash_module.alive()
+
+
+def test_a_worker_survives_the_death_of_its_leash(qt_app: QApplication) -> None:
+    """Der eigentliche Fall: Der Halter geht, der Thread läuft weiter.
+
+    Die Menge ist modulweit und nicht an der Leine, und der Zeitgeber hängt an
+    einem Objekt, das die Widgets überlebt. Ohne beides bliebe hier ein
+    laufender Thread ohne Referenz zurück.
+    """
+    import gc
+
+    import app.ui.leash as leash_module
+
+    arbeiter = _Schlaefer()
+    besitzer = QObject()
+    WorkerLeash(besitzer).start(arbeiter)
+
+    del besitzer
+    gc.collect()
+
+    assert arbeiter in leash_module.alive(), "die modulweite Menge hält ihn"
+    arbeiter.wait(2000)
+    for _ in range(100):
+        qt_app.processEvents()
+        if arbeiter not in leash_module.alive():
+            break
+        arbeiter.msleep(10)
+    assert arbeiter not in leash_module.alive(), "und lässt ihn danach los"

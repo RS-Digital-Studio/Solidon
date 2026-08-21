@@ -676,9 +676,12 @@ Anmerkungen zu P9:
   laufen gegen **TripoSG** (MIT für Quelltext und Gewichte). Hunyuan3D lieferte
   dieselbe Güte, aber seine Lizenz nimmt die Europäische Union ausdrücklich aus
   — für eine Anwendung, die hier verkauft wird, ist das ein Ausschluss und
-  keine Fußnote. Die Knoten dazu stehen unter `tools/comfyui/` und werden mit
-  `python tools/setup_comfyui.py` eingerichtet. Wer andere Knoten installiert
-  hat, ersetzt die Datei — Quelltext ist dafür nicht nötig.
+  keine Fußnote. Die Knoten dazu stehen unter
+  `app/core/backends/data/comfyui/` und werden aus der Anwendung eingerichtet
+  (*Hilfe → Zusätzliche Programme*, dort der Knopf in der Zeile von ComfyUI);
+  `python tools/setup_comfyui.py` tut dasselbe von der Kommandozeile. Wer
+  andere Knoten installiert hat, ersetzt die Datei — Quelltext ist dafür nicht
+  nötig.
 
 ## P10 — Auto Split mit Verstiftung
 - [x] Trennebene über die Schichtanalyse suchen (§22.3), dann konvexe Zerlegung

@@ -2105,3 +2105,54 @@ def test_an_unknown_material_is_reported_not_silent() -> None:
     assert "settings.material_without_profile" in codes
     known_codes = {entry.code for entry in advise.warnings_for(settings, profile)}
     assert "settings.material_without_profile" not in known_codes
+
+
+def test_without_a_slicer_the_dialog_offers_a_way_to_one(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 17 an der Stelle, an der jemand gerade slicen wollte.
+
+    „Kein Slicer eingerichtet — die Einstellungen lassen sich trotzdem
+    pflegen." sagte, was fehlt, und bot nichts an. Der Satz bleibt (§27: das
+    Backend meldet sich ab, es nörgelt nicht), der Weg kommt dazu.
+    """
+    from app.core import discover
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(discover, "find_program", lambda *_args: None)
+    dialog = PrintSettingsDialog(Session(), UiSettings())
+
+    assert not dialog.slice_button.isEnabled(), "ohne Slicer gibt es nichts zu starten"
+    assert not dialog.setup_button.isHidden(), "aber einen Weg zu einem"
+    assert "Kein Slicer" in dialog.state.text()
+
+    asked: list[bool] = []
+    dialog.setupRequested.connect(lambda: asked.append(True))
+    dialog.setup_button.click()
+
+    assert asked == [True]
+
+
+def test_a_slicer_that_arrived_is_picked_up_without_reopening(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Wer einen Slicer gerade installiert hat, soll nicht schließen müssen."""
+    from app.core import discover
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    monkeypatch.setattr(discover, "find_program", lambda *_args: None)
+    dialog = PrintSettingsDialog(Session(), UiSettings())
+    assert not dialog.slice_button.isEnabled()
+
+    program = tmp_path / "orca-slicer.exe"
+    program.write_text("")
+    monkeypatch.setattr(discover, "find_program", lambda *_args: program)
+
+    dialog.recheck_slicer()
+
+    assert dialog.slice_button.isEnabled(), "jetzt gibt es einen"
+    assert dialog.setup_button.isHidden(), "und nichts mehr zu holen"

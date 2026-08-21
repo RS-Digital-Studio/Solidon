@@ -484,3 +484,83 @@ def test_a_cancelled_setup_keeps_what_it_has(
     assert not result.done
     assert "setzt fort" in str(result.reason)
     assert (result.nodes / "nodes.py").is_file(), "der getane Schritt bleibt getan"
+
+
+# --- läuft es, und kennt es die Knoten? (§27) -------------------------------------
+
+
+def _object_info(known: bool, node: str = "TripoSGImageToMesh") -> bytes:
+    """Was ComfyUI auf ``/object_info/<knoten>`` antwortet.
+
+    Ein ComfyUI ohne diesen Knoten antwortet mit einem **leeren Objekt** und
+    nicht mit einem Fehler — genau daran hängt die Unterscheidung.
+    """
+    return json.dumps({node: {"input": {}}} if known else {}).encode("utf-8")
+
+
+def test_a_comfy_that_knows_our_node_is_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.backends import mesh as mesh_module
+
+    node = mesh_module.ComfyBackend()._own_node()
+    assert node, "der mitgelieferte Ablauf nennt einen eigenen Knoten"
+
+    backend = ComfyBackend(transport=lambda url, data, headers: _object_info(True, node))
+    monkeypatch.setattr(mesh_module, "reachable", lambda url, seconds=0.25: True)
+
+    assert backend.readiness() is mesh_module.Readiness.READY
+
+
+def test_a_comfy_without_our_nodes_says_so_before_the_run(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**Der Fall, der einen Kunden Minuten kostete.**
+
+    Geprüft wurde, ob ein Port antwortet — und dann stand „Bereit" da, auch
+    wenn dieses ComfyUI die Knoten des Ablaufs nicht kennt. Wer es installiert
+    und gestartet hatte, ohne sie einzurichten, tippte seinen Satz, drückte
+    *Erzeugen*, wartete, und erfuhr es danach.
+    """
+    from app.core.backends import mesh as mesh_module
+
+    backend = ComfyBackend(transport=lambda url, data, headers: _object_info(False))
+    monkeypatch.setattr(mesh_module, "reachable", lambda url, seconds=0.25: True)
+
+    assert backend.readiness() is mesh_module.Readiness.NO_NODES
+
+
+def test_a_silent_port_is_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.core.backends import mesh as mesh_module
+
+    monkeypatch.setattr(mesh_module, "reachable", lambda url, seconds=0.25: False)
+
+    assert ComfyBackend().readiness() is mesh_module.Readiness.ABSENT
+
+
+def test_something_that_answers_but_not_this_question_claims_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auf dem Port kann alles liegen. Behauptet wird dann nichts."""
+    from app.core.backends import mesh as mesh_module
+
+    def gibberish(url: str, data: object, headers: object) -> bytes:
+        return b"<html>not comfyui</html>"
+
+    backend = ComfyBackend(transport=gibberish)
+    monkeypatch.setattr(mesh_module, "reachable", lambda url, seconds=0.25: True)
+
+    assert backend.readiness() is mesh_module.Readiness.UNKNOWN
+
+
+def test_the_node_comes_from_the_workflow_and_not_from_a_list() -> None:
+    """Wer den Ablauf austauscht, tauscht auch, was geprüft wird (§27).
+
+    Eine zweite Liste im Code wäre am Tag nach dem nächsten Generator falsch.
+    """
+    from app.core.backends import mesh as mesh_module
+
+    node = ComfyBackend()._own_node()
+
+    assert node is not None
+    assert node.startswith(mesh_module.OWN_NODE_PREFIX)
+    graph = json.loads((WORKFLOW_DIR / "image_to_mesh.json").read_text(encoding="utf-8"))
+    assert any(entry.get("class_type") == node for entry in graph.values())

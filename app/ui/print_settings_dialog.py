@@ -885,6 +885,14 @@ class PrintSettingsDialog(QDialog):
     sliced = Signal(object)
     """Die Befunde des Laufs, für den Prüfbericht des Fensters."""
 
+    setupRequested = Signal()
+    """Es ist kein Slicer eingerichtet, und jemand möchte einen.
+
+    Regel 17: „Kein Slicer eingerichtet" sagte, was fehlt, und bot nichts an —
+    an der Stelle, an der jemand gerade slicen wollte. Von hier führt der Weg
+    in die Liste der zusätzlichen Programme, und danach sieht der Dialog noch
+    einmal nach (:meth:`recheck_slicer`)."""
+
     def __init__(
         self,
         session: Session,
@@ -1488,14 +1496,40 @@ class PrintSettingsDialog(QDialog):
         buttons.addButton(self.save_button, QDialogButtonBox.ButtonRole.ActionRole)
         buttons.rejected.connect(self.reject)
 
+        # Der Weg zu einem Slicer, sichtbar nur, solange keiner da ist.
+        self.setup_button = QPushButton(tr("Zusätzliche Programme …"), self)
+        self.setup_button.clicked.connect(self.setupRequested)
+        buttons.addButton(self.setup_button, QDialogButtonBox.ButtonRole.ResetRole)
+
+        self._show_slicer_state()
+        return buttons
+
+    def _show_slicer_state(self) -> None:
+        """Ob ein Slicer da ist — und wenn nicht, der Weg zu einem.
+
+        §27: das Backend meldet sich ab, es nörgelt nicht. Regel 17: aber es
+        sagt, was jetzt möglich ist.
+        """
         found = self._slicer_path
+        self.slice_button.setEnabled(found is not None)
+        self.setup_button.setVisible(found is None)
         if found is None:
-            # §27: das Backend meldet sich ab, es nörgelt nicht.
-            self.slice_button.setEnabled(False)
             self.state.setText(
                 tr("Kein Slicer eingerichtet — die Einstellungen lassen sich trotzdem pflegen.")
             )
-        return buttons
+
+    def recheck_slicer(self) -> None:
+        """Noch einmal nachsehen, ob jetzt ein Slicer da ist.
+
+        Nach dem Besuch bei den zusätzlichen Programmen: Wer einen gerade
+        installiert hat, soll nicht schließen und neu öffnen müssen.
+        """
+        discover.forget_cache()
+        self._slicer_path = discover.find_program("slicer", tools.SLICERS)
+        self._show_slicer_state()
+        if self._slicer_path is not None:
+            self.state.setText("")
+            self._start_profile_search()
 
     def _label(self, field: Field) -> str:
         return f"{field.title} [{field.unit}]" if field.unit else field.title

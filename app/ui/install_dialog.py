@@ -337,7 +337,8 @@ class InstallDialog(QDialog):
         survey.finished.connect(self._survey_done)
         self._survey = survey
         self.progress.setVisible(True)
-        survey.start()
+        # Über die Leine gestartet — siehe :meth:`WorkerLeash.start`.
+        self._leash.start(survey)
 
     def wait_for_survey(self, milliseconds: int = 30_000) -> bool:
         """Auf die Erhebung warten. Beim Schließen und in Tests.
@@ -432,7 +433,7 @@ class InstallDialog(QDialog):
         worker.line.connect(self._note_line)
         worker.finished.connect(self._thread_done)
         self._worker = worker
-        worker.start()
+        self._leash.start(worker)
 
     def _busy_installing(self) -> bool:
         return self._worker is not None and self._worker.isRunning()

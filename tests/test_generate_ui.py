@@ -412,3 +412,90 @@ def test_a_setup_that_cannot_start_says_why_and_offers_the_run_again(
     assert "custom_nodes" in dialog.state.text()
     assert dialog.start_button.text() == "Einrichten", "der Weg zurück ist derselbe Knopf"
     assert dialog.progress.isHidden()
+
+
+def test_the_dialog_names_the_middle_state_before_the_run(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**Drei Lagen, und die mittlere war die schlimmste.**
+
+    „Bereit" stand da, sobald ein Port antwortete. Wer ComfyUI installiert und
+    gestartet hatte, ohne die Knoten einzurichten, tippte seinen Satz, drückte
+    *Erzeugen*, wartete — und erfuhr es danach.
+    """
+    from app.core.backends import mesh
+
+    class Halb:
+        """Ein ComfyUI, das läuft und die Knoten nicht kennt."""
+
+        id = "comfyui"
+        available = True
+
+        def readiness(self) -> mesh.Readiness:
+            return mesh.Readiness.NO_NODES
+
+    dialog = GenerateDialog(backend=Halb())
+
+    assert dialog.readiness is mesh.Readiness.NO_NODES
+    assert not dialog.available, "bereit ist es damit nicht"
+    assert "kennt aber die Knoten" in dialog.state.text()
+    assert not dialog.setup.isHidden(), "und der Weg dorthin steht daneben"
+    assert "einrichten" in dialog.setup.text()
+
+
+def test_the_button_leads_where_the_state_says(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Lagen, zwei Ziele: die Liste der Programme oder die Einrichtung."""
+    from app.core.backends import mesh
+
+    class Lage:
+        id = "comfyui"
+
+        def __init__(self, readiness: mesh.Readiness) -> None:
+            self._readiness = readiness
+            self.available = readiness is not mesh.Readiness.ABSENT
+
+        def readiness(self) -> mesh.Readiness:
+            return self._readiness
+
+    for state, expected in (
+        (mesh.Readiness.ABSENT, "programs"),
+        (mesh.Readiness.NO_NODES, "nodes"),
+    ):
+        dialog = GenerateDialog(backend=Lage(state))
+        asked: list[str] = []
+        # Die Liste wird ausdrücklich gebunden: ein Lambda, das sie aus dem
+        # Schleifenkörper aufliest, zeigt beim zweiten Durchgang noch auf die
+        # erste — und der Test wäre grün, ohne etwas zu prüfen.
+        dialog.setupRequested.connect(lambda box=asked: box.append("programs"))
+        dialog.nodesRequested.connect(lambda box=asked: box.append("nodes"))
+
+        dialog.setup.click()
+
+        assert asked == [expected], state
+
+
+def test_an_unknown_answer_does_not_lock_the_button(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Auf dem Port kann alles liegen — ein gesperrter Knopf wäre eine
+    Behauptung darüber.
+    """
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.core.backends import mesh
+
+    class Fremd:
+        id = "comfyui"
+        available = True
+
+        def readiness(self) -> mesh.Readiness:
+            return mesh.Readiness.UNKNOWN
+
+    dialog = GenerateDialog(backend=Fremd())
+    dialog.prompt.setText("ein Halter")
+
+    assert dialog.buttons.button(QDialogButtonBox.StandardButton.Ok).isEnabled()
+    assert "Versuchen lässt es sich" in dialog.state.text()
+    assert dialog.setup.isHidden(), "es gibt nichts einzurichten, was wir kennen"

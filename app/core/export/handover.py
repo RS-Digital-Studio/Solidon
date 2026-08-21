@@ -22,14 +22,13 @@ import json
 import math
 import re
 import subprocess
-import tempfile
 import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Final
 
-from app.core import activation
+from app.core import activation, discover
 from app.core.errors import (
     ARRANGE_ON_BED,
     INSTALL_MISSING,
@@ -1403,8 +1402,9 @@ def slice_model(
         )
 
     started = time.perf_counter()
-    with tempfile.TemporaryDirectory(prefix="solidon-slice-") as directory:
-        workspace = Path(directory)
+    # Derselbe Grund wie beim OpenSCAD-Aufruf: Ein Slicer als Flatpak sieht
+    # unser ``/tmp`` nicht (``discover.workspace_for``).
+    with discover.workspace_for(setup.executable, "solidon-slice-") as workspace:
         config = write_config(settings, profile, setup, workspace, slots)
         # Aus demselben Grund wie die Modellpfade: der Slicer schreibt sonst
         # neben sein Arbeitsverzeichnis statt dorthin, wo die Datei erwartet

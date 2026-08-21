@@ -34,6 +34,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core.backends import mesh
 from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import CANCEL, AppError
 from app.core.log import get_logger
@@ -105,12 +106,31 @@ class _Worker(QThread):
         self.step.emit(fraction, text)
 
 
+def _look(backend: MeshBackend) -> mesh.Readiness:
+    """Wie weit dieser Generator ist — auch wenn er die Frage nicht kennt.
+
+    ``readiness`` gehört zu ComfyUI; die Schnittstelle aus §27 kennt nur zwei
+    Aufrufe und ``available``. Ein anderes Backend — der Testdoppel, ein
+    späterer gehosteter Dienst — bekommt deshalb die Antwort, die es geben
+    kann, und keine erfundene.
+    """
+    ask = getattr(backend, "readiness", None)
+    if callable(ask):
+        found = ask()
+        assert isinstance(found, mesh.Readiness)
+        return found
+    return mesh.Readiness.READY if backend.available else mesh.Readiness.ABSENT
+
+
 class GenerateDialog(QDialog):
     """Fragt nach einer Beschreibung oder einem Bild und gibt einen erzeugten
     Körper zurück.
     """
 
     setupRequested = Signal()
+    nodesRequested = Signal()
+    """ComfyUI läuft, kennt aber die Knoten nicht — der Weg dorthin ist ein
+    anderer als der zur Liste der Programme."""
     """Der Benutzer will den fehlenden Generator einrichten (§2.7, Regel 17).
 
     Wie im Chat: Das Panel weiß, *dass* etwas fehlt, aber nicht, wo man es
@@ -120,7 +140,7 @@ class GenerateDialog(QDialog):
     def __init__(self, backend: MeshBackend | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.backend: MeshBackend = backend or ComfyBackend()
-        self._available = bool(self.backend.available)
+        self._readiness = _look(self.backend)
         """Ob ein Generator läuft — **einmal** gefragt und gemerkt.
 
         ``ComfyBackend.available`` öffnet einen Socket mit einem Zeitlimit von
@@ -215,10 +235,12 @@ class GenerateDialog(QDialog):
         self.again.setVisible(False)
         self.again.clicked.connect(self._try_again)
 
-        # Der Weg zu dem, was fehlt — siehe :meth:`_update_state`.
+        # Der Weg zu dem, was fehlt — siehe :meth:`_update_state`. Welcher
+        # von beiden, entscheidet die Lage: Wo nichts läuft, hilft die Liste
+        # der Programme; wo die Knoten fehlen, hilft die Einrichtung.
         self.setup = QPushButton(tr("Zusätzliche Programme …"), self)
         self.setup.setVisible(False)
-        self.setup.clicked.connect(self.setupRequested)
+        self.setup.clicked.connect(self._ask_for_setup)
 
         layout = QVBoxLayout(self)
         layout.addLayout(form)
@@ -241,42 +263,76 @@ class GenerateDialog(QDialog):
 
     @property
     def available(self) -> bool:
-        return self._available
+        return self._readiness is mesh.Readiness.READY
+
+    @property
+    def readiness(self) -> mesh.Readiness:
+        """Wie weit der Generator vorbereitet ist — drei Lagen, drei Sätze."""
+        return self._readiness
 
     def recheck(self) -> None:
-        """Noch einmal nachsehen, ob jetzt ein Generator läuft.
+        """Noch einmal nachsehen, wie weit der Generator ist.
 
-        Nach dem Besuch bei den zusätzlichen Programmen: Wer ComfyUI gerade
-        gestartet hat, soll nicht den Dialog schließen und neu öffnen müssen,
-        um es zu erfahren.
+        Nach dem Besuch bei den zusätzlichen Programmen oder bei der
+        Einrichtung: Wer ComfyUI gerade gestartet hat, soll nicht den Dialog
+        schließen und neu öffnen müssen, um es zu erfahren.
         """
-        self._available = bool(self.backend.available)
+        self._readiness = _look(self.backend)
         self._update_state()
 
+    def _ask_for_setup(self) -> None:
+        """Der Knopf führt dorthin, wo die Lage zu beheben ist."""
+        if self._readiness is mesh.Readiness.NO_NODES:
+            self.nodesRequested.emit()
+        else:
+            self.setupRequested.emit()
+
     def _update_state(self) -> None:
-        if not self.available:
+        # **Drei Lagen, und die mittlere war die schlimmste.** Geprüft wurde,
+        # ob ein Port antwortet — und dann stand „Bereit" da, auch wenn dieses
+        # ComfyUI die Knoten des Ablaufs nicht kennt. Wer es installiert und
+        # gestartet hatte, ohne sie einzurichten, tippte seinen Satz, drückte
+        # *Erzeugen*, wartete, und erfuhr es danach. Die Auskunft war die ganze
+        # Zeit einen HTTP-Aufruf entfernt.
+        if self._readiness is mesh.Readiness.ABSENT:
             self.state.setText(
                 tr(
                     "Es läuft kein Generator. Solidon spricht lokal mit ComfyUI — "
                     "ohne das bleibt dieser Weg zu, alles andere funktioniert weiter."
                 )
             )
+            self.setup.setText(tr("Zusätzliche Programme …"))
+        elif self._readiness is mesh.Readiness.NO_NODES:
+            self.state.setText(
+                tr(
+                    "ComfyUI läuft, kennt aber die Knoten dieses Ablaufs noch nicht. "
+                    "Solidon legt sie hinein — danach ComfyUI einmal neu starten."
+                )
+            )
+            self.setup.setText(tr("Knoten und Modell einrichten …"))
+        elif self._readiness is mesh.Readiness.UNKNOWN:
+            self.state.setText(
+                tr(
+                    "Auf dem Port antwortet etwas, das keine Auskunft über seine "
+                    "Knoten gibt. Versuchen lässt es sich; ob es geht, sagt der Lauf."
+                )
+            )
+            self.setup.setText(tr("Zusätzliche Programme …"))
         else:
             self.state.setText(tr("Bereit. Das kann einige Minuten dauern."))
         # Regel 17: Der Satz sagte, was fehlt, und bot nichts an. Derselbe Weg
-        # wie im Chat, wo „Chat einrichten …" neben dem Hinweis steht — hier
-        # führt er in die Liste der zusätzlichen Programme, in der ComfyUI mit
-        # seiner Bezugsadresse steht. Sichtbar nur, solange etwas zu beheben
-        # ist.
-        self.setup.setVisible(not self.available)
+        # wie im Chat, wo „Chat einrichten …" neben dem Hinweis steht.
+        # Sichtbar nur, solange etwas zu beheben ist.
+        self.setup.setVisible(self._readiness in (mesh.Readiness.ABSENT, mesh.Readiness.NO_NODES))
         # ``_busy`` gehört hierher und nicht nur in ``_running``: Diese Methode
         # hängt am Textfeld, und das bleibt während des Laufs bedienbar. Wer
         # weitertippte, machte *Erzeugen* wieder klickbar und startete einen
         # zweiten Arbeiter, der den ersten im Feld ersetzt. Die gesperrte
         # Knopfleiste hatte das verdeckt, nicht verhindert.
-        ready = (
-            self.available and not self._busy and bool(self.prompt.text().strip() or self._image)
-        )
+        # ``UNKNOWN`` darf starten: Dort antwortet etwas, das wir nicht
+        # kennen, und ein gesperrter Knopf wäre eine Behauptung darüber.
+        possible = self._readiness is not mesh.Readiness.ABSENT
+        ready = possible and not self._busy and bool(self.prompt.text().strip() or self._image)
         self.buttons.button(QDialogButtonBox.StandardButton.Ok).setEnabled(ready)
 
     def _choose_image(self) -> None:

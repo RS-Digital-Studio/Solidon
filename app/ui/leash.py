@@ -34,6 +34,39 @@ RELEASE_RETRY_MS: Final = 50
 #: ist eingefroren und sagt es nicht.
 WAIT_TIMEOUT_MS: Final = 2000
 
+#: Jeder gehaltene Arbeiter, über alle Leinen hinweg.
+#:
+#: **Modulweit und nicht nur an der Leine**, und der Grund ist ein Absturz, den
+#: die Erstinbetriebnahme sichtbar gemacht hat: Ihr Dialog startet beim Aufbau
+#: eine Erhebung. Wird er freigegeben — ein Test lässt ihn fallen, ein Fenster
+#: räumt ihn weg —, während der Arbeiter noch läuft oder gerade fertig wurde,
+#: dann geht mit dem Dialog die Leine, mit der Leine ihre Liste und damit die
+#: letzte Referenz auf den ``QThread``. Der Speicherbereiniger zerstört das
+#: C++-Objekt unter einem laufenden Thread, und der Abriss kommt später und
+#: ohne Zeile — genau die Sorte, gegen die es dieses Modul gibt.
+#:
+#: Ein Arbeiter kostet hier nichts als seinen Zeiger, und er verschwindet,
+#: sobald ``isRunning`` nein sagt.
+_alive: set[Any] = set()
+
+#: Der Zeitgeber braucht einen Empfänger, der die Widgets überlebt. Ein
+#: Lambda ohne Empfänger läuft ins Leere, sobald das Fenster weg ist — und
+#: genau dann muss noch jemand nachsehen, ob der Thread ausgelaufen ist.
+_keeper: QObject | None = None
+
+
+def _keeper_object() -> QObject:
+    """Das langlebige Gegenstück zu den Widgets. Beim ersten Bedarf angelegt."""
+    global _keeper
+    if _keeper is None:
+        _keeper = QObject()
+    return _keeper
+
+
+def alive() -> tuple[Any, ...]:
+    """Was insgesamt noch gehalten wird. Für Tests und die Fehlersuche."""
+    return tuple(_alive)
+
 
 class WorkerLeash:
     """Hält fertige und ersetzte Arbeiter, bis Qt wirklich mit ihnen durch ist.
@@ -46,6 +79,29 @@ class WorkerLeash:
     def __init__(self, context: QObject) -> None:
         self._context = context
         self._held: list[Any] = []
+
+    def start(self, worker: Any) -> None:
+        """Einen Arbeiter starten — und ihn ab diesem Moment halten.
+
+        **Der Unterschied zu :meth:`hold_until_done` ist der Zeitpunkt, und er
+        ist der ganze Punkt.** Gehalten wurde bisher erst, wenn ein Arbeiter
+        fertig war; solange er lief, hing er allein am Feld seines Dialogs. Ein
+        Dialog, der vorher freigegeben wird — ein Fenster räumt ihn weg, ein
+        Test lässt ihn fallen —, nimmt damit die letzte Referenz auf einen
+        **laufenden** Thread mit. Sichtbar wurde das, als die
+        Erstinbetriebnahme ihre Erhebung in einen Arbeiter bekam: Die
+        Testdatei brach reproduzierbar an der Stelle ab, an der ein Dialog aus
+        einem vorigen Test einging.
+
+        Wer einen Arbeiter über diese Methode startet, muss ihn nicht mehr
+        selbst am Leben halten; sein Feld ist danach nur noch die Antwort auf
+        „läuft gerade einer".
+        """
+        if worker is None:
+            return
+        _alive.add(worker)
+        worker.finished.connect(lambda done=worker: self.hold_until_done(done))
+        worker.start()
 
     def hold_until_done(self, worker: Any) -> None:
         """Den fertigen Arbeiter halten, bis ``isRunning`` nein sagt.
@@ -63,7 +119,11 @@ class WorkerLeash:
             return
         if worker not in self._held:
             self._held.append(worker)
-        QTimer.singleShot(0, self._context, lambda: self._release(worker))
+        _alive.add(worker)
+        # Der Empfänger überlebt das Widget (siehe :data:`_keeper`): Stirbt der
+        # Dialog zuerst, muss trotzdem noch jemand nachsehen, ob der Thread
+        # ausgelaufen ist — sonst bleibt er für immer gehalten.
+        QTimer.singleShot(0, _keeper_object(), lambda: self._release(worker))
 
     def retire(self, worker: Any) -> None:
         """Hält einen ersetzten Arbeiter fest, bis er ausgelaufen ist.
@@ -81,6 +141,7 @@ class WorkerLeash:
             # die dasselbe noch einmal tut.
             return
         self._held.append(worker)
+        _alive.add(worker)
         # Nicht beim Signal selbst loslassen — dieselbe Begründung wie in
         # ``hold_until_done``, und derselbe Weg hinaus, damit es nur einen
         # gibt.
@@ -88,12 +149,14 @@ class WorkerLeash:
 
     def _release(self, worker: Any) -> None:
         """Einen ausgelaufenen Arbeiter loslassen — und keinen, der noch läuft."""
-        if worker not in self._held:
+        if worker not in _alive:
             return
         if worker.isRunning():
-            QTimer.singleShot(RELEASE_RETRY_MS, self._context, lambda: self._release(worker))
+            QTimer.singleShot(RELEASE_RETRY_MS, _keeper_object(), lambda: self._release(worker))
             return
-        self._held.remove(worker)
+        _alive.discard(worker)
+        if worker in self._held:
+            self._held.remove(worker)
 
     def pending(self) -> tuple[Any, ...]:
         """Was gerade gehalten wird — für das Warten am Fensterende."""
