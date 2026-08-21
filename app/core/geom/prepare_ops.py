@@ -460,6 +460,7 @@ class HollowParams(BaseParams):
         "Teilen, die Kräfte aufnehmen — eine dünne Hülle bricht anders als ein "
         "gefüllter Körper."
     ),
+    shortcut="Ctrl+H",
 )
 def hollow_object(ctx: OpContext) -> OpResult:
     params = cast(HollowParams, ctx.params)
@@ -1115,6 +1116,7 @@ def _arranged_by_material(ctx: OpContext, params: ArrangeParams) -> Arrangement:
     produces=VARIABLE,
     whole_scene=True,
     doc=_("Legt alle Objekte nebeneinander auf das Druckbett."),
+    shortcut="Ctrl+Shift+O",
 )
 def arrange_bed(ctx: OpContext) -> OpResult:
     params = cast(ArrangeParams, ctx.params)

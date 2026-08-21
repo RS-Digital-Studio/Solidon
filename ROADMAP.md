@@ -48,8 +48,6 @@ bekommt einen roten Lauf.
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
 | Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | die Entscheidung des Bauplans, welche Operation auf ein fertiges Gewinde gehört; bis dahin steht `thread` als benannte Ausnahme im Konsistenztest |
-| Sechs von 86 Operationen führen ein Kürzel | Die Bedienung an der Uhr gemessen (21.08.2026) | eine Entscheidung des Bauplans: §19.2 sagt „kann", und die Palette lehrt nebenbei nur, was auch dasteht |
-| `label_text` füllt die Vorderseite bis an die Grenze | Die Bedienung an der Uhr gemessen (21.08.2026) | eine fachliche Entscheidung, welche der acht Werte nach hinten gehören — §2.4 spricht von zwei bis drei |
 | Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
 | Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
@@ -9145,13 +9143,30 @@ war eindeutig: Die häufigsten Vorschläge waren die ohne Wirkung.
 
 ### Was auffiel und eine Entscheidung braucht
 
-- [ ] **Sechs von 86 Operationen führen ein Kürzel.** §19.2 sagt „kann", die
-      Palette zeigt sie daneben, „so lernt man sie nebenbei" — bei sechs ist
-      nebenbei wenig zu lernen. Ob das ein Mangel ist, entscheidet der Bauplan.
-- [ ] **`label_text` zeigt acht Werte auf der Vorderseite**, die Grenze in
-      `test_interface_limits.py` liegt bei acht und §2.4 spricht von zwei bis
-      drei. Sie ist damit die einzige Operation, die den Rahmen ausfüllt statt
-      ihn zu nutzen; was davon nach hinten gehört, ist eine fachliche Frage.
+- [x] **Sechs von 86 Operationen führten ein Kürzel** — und die Palette lehrt
+      nebenbei nur, was auch dasteht (§19.2). Jetzt sind es vierzehn: die drei
+      Booleschen (Strg+Umschalt+V/A/X), die beiden Handgriffe an der Platte
+      (Strg+Umschalt+B und O), *Reparieren* (Strg+Umschalt+R), *Aushöhlen*
+      (Strg+H) und *Spiegeln* (Strg+M). Die Regel dahinter steht in
+      `.claude/rules/oberflaeche.md`: Der Buchstabe kommt aus dem deutschen
+      Titel, bei Belegung kommt Umschalt dazu, und wo auch das belegt ist,
+      bleibt die Operation ohne — *Skalieren* ist der Fall, denn S gehört dem
+      Speichern und Umschalt+S dem Speichern unter.
+
+      **Dabei fiel eine Lücke in der Prüfung auf.**
+      `test_registry_consistency.py` hält die Kürzel der Operationen
+      auseinander, und das Fenster bringt dreiundvierzig weitere mit, die nicht
+      aus dem Register kommen. Eine Dublette dazwischen führt **keine** der
+      beiden Aktionen aus (Qt meldet „Ambiguous shortcut overload") — und
+      aufgefallen wäre sie erst beim Drücken. `test_ui.py` prüft das jetzt am
+      gebauten Fenster.
+- [x] **`label_text` zeigte acht Werte auf der Vorderseite** und füllte damit
+      die Grenze aus `test_interface_limits.py` bis an den Rand, während §2.4
+      von zwei bis drei spricht. *Tiefe* und *Materialslot* stehen jetzt hinten:
+      0,6 mm sind drei Schichten und decken erhaben wie vertieft, und ein
+      Farbwechsel setzt einen zweiten Filamentstrang voraus — wer ihn hat, sucht
+      ihn gezielt. Vorn bleiben Text, Schriftgröße, Art und die Position, also
+      vier Werte.
 
 ## Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026)
 

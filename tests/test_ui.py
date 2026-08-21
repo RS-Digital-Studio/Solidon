@@ -205,6 +205,31 @@ def test_shortcuts_from_the_registry_are_installed(window: MainWindow) -> None:
             assert spec.shortcut.lower() in shortcuts
 
 
+def test_no_two_shortcuts_in_the_window_collide(window: MainWindow) -> None:
+    """Eine doppelt belegte Taste tut **nichts** (§19.2).
+
+    Qt meldet in dem Fall „Ambiguous shortcut overload" und führt keine der
+    beiden Aktionen aus — der Nutzer drückt, und es passiert gar nichts.
+    Geprüft war das nur halb: ``tests/test_registry_consistency.py`` hält die
+    Kürzel der **Operationen** auseinander, und das Fenster bringt dreiundvierzig
+    weitere mit — Ansichten, Werkzeugzeile, Dateibefehle, Navigation.
+
+    Gefunden hätte man die Dublette also erst beim Drücken. Der Test steht hier
+    und nicht dort, weil erst das gebaute Fenster beide Seiten kennt.
+    """
+    from PySide6.QtGui import QAction, QShortcut
+
+    taken: dict[str, list[str]] = {}
+    for action in window.findChildren(QAction):
+        for sequence in action.shortcuts():
+            taken.setdefault(sequence.toString(), []).append(action.text() or "(ohne Text)")
+    for shortcut in window.findChildren(QShortcut):
+        taken.setdefault(shortcut.key().toString(), []).append("QShortcut")
+
+    twice = {key: names for key, names in taken.items() if key and len(names) > 1}
+    assert not twice, f"doppelt belegte Tasten führen keine der beiden Aktionen aus: {twice}"
+
+
 def test_the_window_starts_on_the_start_screen(window: MainWindow) -> None:
     assert window.stack.currentWidget() is window.start_screen
 

@@ -299,6 +299,7 @@ class MirrorParams(BaseParams):
     params=MirrorParams,
     consumes=1,
     produces=1,
+    shortcut="Ctrl+M",
     doc=_(
         "Spiegelt ein Objekt an einer Achse. Für das Gegenstück eines Teils — "
         "linke und rechte Halterung aus derselben Konstruktion."
@@ -390,6 +391,7 @@ class RepairParams(BaseParams):
     # Kontextmenü an einer angeklickten offenen Stelle aus Ausblenden — für
     # den häufigsten Defekt fehlte der kürzeste Weg vom Sehen zum Tun (§2.6).
     applies_to=("edge_loop",),
+    shortcut="Ctrl+Shift+R",
     doc=_("Schließt Löcher, entfernt entartete Dreiecke und richtet die Flächen aus."),
 )
 def repair_object(ctx: OpContext) -> OpResult:
@@ -452,6 +454,18 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     consumes=2,
     produces=1,
     deterministic=False,
+    # **Der Buchstabe kommt aus dem deutschen Titel.** So hält es der Bestand
+    # seit je — *Bohrung setzen* auf Strg+B, *Drehen* auf Strg+R, *Verschieben*
+    # auf Strg+T —, und daran ändert eine Übersetzung nichts: Kürzel sind keine
+    # Texte, sie stehen im Register. Ist der einfache Buchstabe belegt, kommt
+    # Umschalt dazu; ist auch das belegt, bleibt die Operation ohne Kürzel.
+    # *Skalieren* ist der Fall: S gehört dem Speichern und Umschalt+S dem
+    # Speichern unter, und ein erfundener Buchstabe wäre schlechter als keiner.
+    #
+    # Warum überhaupt mehr: §19.2 nennt die Befehlspalette den Universalzugang,
+    # und dort steht das Kürzel neben dem Titel — „so lernt man sie nebenbei".
+    # Bei sechs von sechsundachtzig war nebenbei wenig zu lernen.
+    shortcut="Ctrl+Shift+V",
     doc=_("Verschmilzt zwei Objekte zu einem."),
 )
 def union_objects(ctx: OpContext) -> OpResult:
@@ -466,6 +480,7 @@ def union_objects(ctx: OpContext) -> OpResult:
     consumes=2,
     produces=1,
     deterministic=False,
+    shortcut="Ctrl+Shift+A",
     doc=_("Zieht das zweite Objekt vom ersten ab."),
 )
 def subtract_objects(ctx: OpContext) -> OpResult:
@@ -480,6 +495,9 @@ def subtract_objects(ctx: OpContext) -> OpResult:
     consumes=2,
     produces=1,
     deterministic=False,
+    # „Schnittmenge" beginnt mit S wie das Speichern; X ist das Zeichen für den
+    # Schnitt selbst und in jedem Mengendiagramm dasselbe.
+    shortcut="Ctrl+Shift+X",
     doc=_("Behält nur, was beide Objekte gemeinsam haben."),
 )
 def intersect_objects(ctx: OpContext) -> OpResult:
@@ -498,6 +516,9 @@ class PlaceOnBedParams(BaseParams):
     params=PlaceOnBedParams,
     consumes=1,
     produces=1,
+    # Der häufigste Handgriff von Weg 1: Ein heruntergeladenes Modell sitzt
+    # mittig auf z = 0 und steckt zur Hälfte unter der Platte.
+    shortcut="Ctrl+Shift+B",
     doc=_("Setzt das Objekt mit seiner Unterseite auf Z = 0."),
 )
 def place_object_on_bed(ctx: OpContext) -> OpResult:

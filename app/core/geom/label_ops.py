@@ -143,6 +143,12 @@ class LabelParams(BaseParams):
         unit="mm",
         minimum=0.1,
         maximum=10.0,
+        # **Drei Schichten sind der Wert, der stimmt.** 0,6 mm bei 0,2 mm
+        # Schichthöhe deckt erhaben wie vertieft; wer daran dreht, tut es
+        # einmal für einen Sonderfall. §2.4 will vorn „die zwei bis drei Werte,
+        # die man tatsächlich ändert" — und das sind hier der Text, die Größe
+        # und die Art.
+        placement="advanced",
         doc=_("Wie weit erhaben oder wie tief eingelassen."),
     )
     mode: str = param(
@@ -156,6 +162,10 @@ class LabelParams(BaseParams):
         default=0,
         minimum=0,
         maximum=MAX_SLOTS - 1,
+        # Ein Farbwechsel setzt einen zweiten Filamentstrang voraus. Wer ihn
+        # hat, sucht ihn gezielt; wer einfarbig druckt — das ist die Mehrheit —
+        # hat hier ein Feld ohne Wirkung vor sich (§2.4).
+        placement="advanced",
         doc=_(
             "Legt die Schrift in einen eigenen Slot — der 3MF-Export macht daraus "
             "den Farbwechsel, ohne zweite Datei."

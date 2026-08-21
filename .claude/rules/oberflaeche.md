@@ -453,7 +453,7 @@ Werkzeugprobe des Chat-Dialogs, die es seit je gibt.
 worker.done.connect(self._show)
 worker.finished.connect(lambda done=worker: self._worker_done(done))
 self._worker = worker
-self._leash.start(worker)   # hält ab diesem Moment, nicht ab dem Ende
+self._leash.start(worker)  # hält ab diesem Moment, nicht ab dem Ende
 ```
 
 Zwei Dinge hängen daran, und beide sind nötig: Die Menge der gehaltenen
@@ -607,6 +607,21 @@ genau der einen Methode, die benutzt wird.
   Regenbogen — der erzeugt Kanten, wo keine sind.
 - Alles über die Befehlspalette erreichbar; Kürzel stehen daneben, so lernt man
   sie nebenbei. Undo und Redo gelten überall, auch im Chat.
+
+**Ein Kürzel folgt dem deutschen Titel.** So hält es der Bestand seit je —
+*Bohrung setzen* auf Strg+B, *Drehen* auf Strg+R, *Aushöhlen* auf Strg+H —, und
+eine Übersetzung ändert daran nichts: Kürzel sind keine Texte, sie stehen im
+Register. Ist der einfache Buchstabe belegt, kommt Umschalt dazu (*Vereinigen*
+Strg+Umschalt+V, *Abziehen* Strg+Umschalt+A); ist auch das belegt, **bleibt die
+Operation ohne Kürzel**. *Skalieren* ist der Fall: S gehört dem Speichern,
+Umschalt+S dem Speichern unter, und ein erfundener Buchstabe wäre schlechter als
+keiner. Vierzehn von sechsundachtzig führen eines; wer eine fünfzehnte Taste
+vergibt, prüft vorher am **gebauten Fenster** gegen die dreiundvierzig, die
+nicht aus dem Register kommen — Ansichten, Werkzeugzeile, Dateibefehle,
+Navigation. Eine doppelt belegte Taste führt keine der beiden Aktionen aus
+(„Ambiguous shortcut overload"), und das merkt man erst beim Drücken;
+`tests/test_ui.py` (`test_no_two_shortcuts_in_the_window_collide`) hält es fest,
+`tests/test_registry_consistency.py` allein sähe nur die eine Hälfte.
 - HiDPI, skalierbare Schrift, Kontrast in hellem und dunklem Thema,
   Anzeigeeinheit zwischen Millimeter und Zoll umschaltbar.
 
