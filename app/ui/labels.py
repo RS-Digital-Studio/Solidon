@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from typing import Any, cast
 
 from PySide6.QtCore import QLocale, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QValidator
 from PySide6.QtWidgets import QDoubleSpinBox, QWidget
 
 from app.core import figures
@@ -104,15 +104,24 @@ class NumberSpin(QDoubleSpinBox):
     des Nutzers kommt, trägt das Trennzeichen von dort und nicht das der
     Oberfläche.
 
-    Beide Zeichen heißen hier Komma. Was dabei verloren geht, ist die
-    Tausendertrennung bei der *Eingabe*: „1.000" sind ab jetzt eins, nicht
-    tausend. Das ist die kleinere Not — angezeigt wird ohnehin nie mit
-    Tausendertrennung (``setGroupSeparatorShown`` steht auf falsch), also gibt
-    es keine Schreibweise, die das Feld vormacht und dann nicht liest.
-    ``DragValueBar.typed_value`` im Viewport entscheidet seit je genauso.
+    **Die Regel: Das letzte Trennzeichen ist das Dezimaltrennzeichen, alle
+    davor sind Tausendertrennungen.** Damit liest das Feld „12.5", „12,5",
+    „1.000,50" und „1,000.50" alle richtig, in jeder Sprache — und es braucht
+    dafür nicht zu erraten, was gemeint war.
 
-    Getauscht wird zeichenweise und damit **längentreu**: Die Einfügemarke
-    bleibt dort stehen, wo sie war, und niemand tippt in ein springendes Feld.
+    Die erste Fassung tauschte einfach jeden Punkt gegen ein Komma, und das war
+    ein neuer Fehler derselben Sorte: „1.000,50" wurde damit im deutschen
+    Fenster zu 1,00. Sichtbar war es, aber um den Faktor tausend falsch. Was
+    zweideutig **bleibt**, ist „1.000" ohne Nachkomma — nach dieser Regel eins.
+    Angezeigt wird nie mit Tausendertrennung
+    (``setGroupSeparatorShown`` steht auf falsch), also gibt es keine
+    Schreibweise, die das Feld vormacht und dann nicht liest.
+    ``DragValueBar.typed_value`` im Viewport entscheidet ähnlich, nur ohne die
+    Gruppen.
+
+    Fällt eine Tausendertrennung weg, wird der Text kürzer; ``validate`` hält
+    die Einfügemarke deshalb im Text. Ohne wegfallende Gruppe ist der Tausch
+    längentreu, und dann bleibt sie ohnehin, wo sie war.
 
     **Zwei Überschreibungen, zwei Wege.** ``validate`` deckt alles ab, was
     durch das Eingabefeld geht — Tippen, Einfügen, ``setText`` —, und weil es
@@ -123,16 +132,73 @@ class NumberSpin(QDoubleSpinBox):
     """
 
     def _as_shown(self, text: str) -> str:
-        """Dasselbe Maß mit dem Trennzeichen der Anzeigesprache."""
+        """Dasselbe Maß mit dem Trennzeichen der Anzeigesprache.
+
+        Das letzte Trennzeichen ist das Dezimaltrennzeichen, alle davor sind
+        Tausendertrennungen und fallen weg.
+        """
         separator = QLocale().decimalPoint()
         other = "." if separator == "," else ","
-        return text.replace(other, separator)
+        last = max(text.rfind(separator), text.rfind(other))
+        if last < 0:
+            return text
+        head = text[:last].replace(other, "").replace(separator, "")
+        return head + separator + text[last + 1 :]
+
+    def _as_grouped(self, text: str) -> str:
+        """Dasselbe Maß, wenn *jedes* Trennzeichen eine Tausendertrennung ist."""
+        separator = QLocale().decimalPoint()
+        other = "." if separator == "," else ","
+        return text.replace(other, "").replace(separator, "")
 
     def validate(self, text: str, pos: int) -> object:
-        return super().validate(self._as_shown(text), pos)
+        """Angenommen wird, was in **einer** der beiden Lesarten eine Zahl ist —
+        und zurückgegeben wird der getippte Text, unverändert.
+
+        Der erste Versuch tauschte hier das Trennzeichen und gab den getauschten
+        Text zurück. Qt übernimmt ihn dann ins Feld, und damit war die Absicht
+        beim zweiten Tastendruck entschieden: Wer „1.000,50" tippte, sah nach dem
+        Punkt „1," stehen, und die dritte Null fiel an ``decimals`` weg — heraus
+        kam 100,50. Ein neuer Fehler derselben Sorte, nur in der anderen
+        Richtung.
+
+        Jetzt bleibt der Text, wie er getippt wurde, und geprüft wird gegen beide
+        Lesarten. Gelesen wird erst beim Übernehmen, in :meth:`valueFromText`.
+        """
+        for reading in (self._as_shown(text), self._as_grouped(text)):
+            # Qts Stub sagt ``object``; tatsächlich kommt das Tripel aus
+            # Zustand, Text und Position zurück.
+            checked = cast(
+                "tuple[QValidator.State, str, int]",
+                super().validate(reading, min(pos, len(reading))),
+            )
+            if checked[0] != QValidator.State.Invalid:
+                return checked[0], text, pos
+        return QValidator.State.Invalid, text, pos
+
+    def _digits_only(self, text: str) -> str:
+        """Der Text ohne Vor- und Nachsatz — die Zahl allein."""
+        body = text.strip()
+        prefix, suffix = self.prefix(), self.suffix()
+        if prefix and body.startswith(prefix):
+            body = body[len(prefix) :]
+        if suffix and body.endswith(suffix):
+            body = body[: -len(suffix)]
+        return body.strip()
 
     def valueFromText(self, text: str) -> float:  # noqa: N802 - Qt-Name
-        return super().valueFromText(self._as_shown(text))
+        """Gelesen wird nach der Regel aus :meth:`_as_shown`.
+
+        Selbst geparst und nicht über Qt: Nach dem Zusammenziehen der Gruppen
+        stehen dort mehr Nachkommastellen, als ``decimals`` erlaubt („0,100"
+        bei zwei Stellen), und Qts Auswerter gibt dann nicht die gerundete Zahl
+        zurück, sondern null. Gerundet wird ohnehin beim Setzen.
+        """
+        shown = self._as_shown(text)
+        try:
+            return float(self._digits_only(shown).replace(QLocale().decimalPoint(), "."))
+        except ValueError:
+            return super().valueFromText(shown)
 
 
 class LengthSpin(NumberSpin):

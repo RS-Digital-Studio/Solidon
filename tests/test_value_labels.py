@@ -915,3 +915,101 @@ def test_a_value_that_is_no_number_keeps_the_unit_of_its_key(qt_app: object) -> 
 
     assert value_text("size_mm", "unbekannt") == "unbekannt mm"
     assert value_text("volume_mm3", None) == "None mm³"
+
+
+@pytest.mark.parametrize(
+    ("language", "typed", "expected"),
+    [
+        ("de", "12.5", 12.5),
+        ("de", "12,5", 12.5),
+        ("de", "1.000,50", 1000.5),
+        ("de", "0.100", 0.1),
+        ("en", "12,5", 12.5),
+        ("en", "1,000.50", 1000.5),
+        ("en", "0,100", 0.1),
+        # Die Schreibweise der *anderen* Sprache, wie sie aus einem Datenblatt
+        # oder einer Fundstelle im Netz kommt. Ohne das Zusammenziehen der
+        # Gruppen scheitert hier beides: der eigene Auswerter am zweiten
+        # Trennzeichen und Qts an der fremden Gruppierung.
+        ("de", "1,234.56", 1234.56),
+        ("en", "1.234,56", 1234.56),
+        ("de", "1.234.567,89", 1234567.89),
+        ("en", "12,345,678.9", 12345678.9),
+    ],
+)
+def test_a_number_field_reads_groups_and_decimals_apart(
+    qt_app: object, language: str, typed: str, expected: float
+) -> None:
+    """**Der erste Anlauf tauschte jeden Punkt und baute damit denselben Fehler
+    ein, nur umgekehrt.**
+
+    Er gab den getauschten Text an Qt zurück, Qt übernahm ihn ins Feld — und
+    damit war die Absicht beim zweiten Tastendruck entschieden: Wer im deutschen
+    Fenster „1.000,50" tippte, sah nach dem Punkt „1," stehen, die dritte Null
+    fiel an ``decimals`` weg, und heraus kam 100,50. Um den Faktor tausend
+    falsch, wie das Problem, das die Klasse lösen soll.
+
+    Jetzt bleibt der getippte Text stehen, geprüft wird gegen beide Lesarten,
+    und gelesen wird beim Übernehmen: **das letzte Trennzeichen ist das
+    Dezimaltrennzeichen, alle davor sind Tausendertrennungen.** Ein Satz, der
+    sich aufschreiben lässt — und deshalb steht er auch im Docstring.
+    """
+    from PySide6.QtCore import QLocale
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import NumberSpin
+
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale(language))
+        field = NumberSpin()
+        field.setDecimals(2)
+        field.setRange(0.0, 20_000_000.0)
+        field.setValue(0.0)
+        field.show()
+
+        field.lineEdit().selectAll()
+        QTest.keyClicks(field.lineEdit(), typed)
+        assert field.lineEdit().text() == typed, "der getippte Text bleibt stehen"
+
+        field.interpretText()
+        assert field.value() == pytest.approx(expected), (
+            f"{typed!r} in {language} wurde {field.value()}"
+        )
+    finally:
+        QLocale.setDefault(before)
+
+
+def test_a_number_without_a_decimal_part_stays_ambiguous(qt_app: object) -> None:
+    """„1.000" bleibt zweideutig, und die Regel entscheidet es.
+
+    Tausend oder eins — das sagt kein Zeichen im Text. Nach der Regel ist das
+    letzte Trennzeichen das Dezimaltrennzeichen, also eins. Festgehalten wird
+    das hier, damit die Entscheidung sichtbar ist und nicht aus Versehen
+    kippt: Wer sie ändert, ändert einen Test und nicht nur ein Verhalten.
+
+    Zu sehen ist es außerdem — nach dem Übernehmen steht „1,00" im Feld, nicht
+    „1.000".
+    """
+    from PySide6.QtCore import QLocale
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import NumberSpin
+
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale("de"))
+        field = NumberSpin()
+        field.setDecimals(2)
+        field.setRange(0.0, 30000.0)
+        field.setValue(0.0)
+        field.show()
+
+        field.lineEdit().selectAll()
+        QTest.keyClicks(field.lineEdit(), "1.000")
+        field.interpretText()
+
+        assert field.value() == pytest.approx(1.0)
+        assert field.lineEdit().text() == "1,00", "und das Feld zeigt, was es gelesen hat"
+    finally:
+        QLocale.setDefault(before)

@@ -10129,13 +10129,24 @@ nicht zweimal messen.
       `QDoubleSpinBox`. Im englischen Fenster dasselbe mit dem Komma. Wer ein
       Maß aus einem Datenblatt, einer Fundstelle im Netz oder der eigenen
       Gewohnheit eintippt, trägt das Trennzeichen von dort — und die Anwendung
-      sagte dazu nichts. Jetzt gibt es `NumberSpin`: beide Zeichen heißen
-      Komma, getauscht wird längentreu, also springt die Einfügemarke nicht.
-      Verloren geht die Tausendertrennung bei der Eingabe („1.000" ist eins,
-      nicht tausend) — die kleinere Not, weil angezeigt ohnehin nie eine wird.
-      `DragValueBar.typed_value` im Viewport entschied das seit je genauso; die
+      sagte dazu nichts. Jetzt gibt es `NumberSpin`, und die Leseregel ist ein
+      Satz: **das letzte Trennzeichen ist das Dezimaltrennzeichen, alle davor
+      sind Tausendertrennungen.** Damit lesen alle Felder „12.5", „12,5",
+      „1.000,50", „1,000.50" und „1.234.567,89" richtig, in jeder Sprache.
+      `DragValueBar.typed_value` im Viewport entschied ähnlich seit je; die
       Regel stand nur an einer Stelle und nicht an den anderen neun. Ein
       Regeltest über `app/ui` hält die Klasse geschlossen.
+
+      **Der erste Anlauf war selbst ein Fehler derselben Sorte** — gefunden in
+      der Durchsicht am Abend, nicht von einem Test. Er tauschte jeden Punkt
+      gegen ein Komma und gab den getauschten Text an Qt zurück; Qt übernahm ihn
+      ins Feld, und damit stand die Absicht nach dem zweiten Tastendruck fest:
+      Wer „1.000,50" tippte, sah „1," und verlor die dritte Null an `decimals` —
+      heraus kam 100,50. Um den Faktor tausend falsch, sichtbar, aber falsch.
+      Jetzt bleibt der getippte Text stehen, geprüft wird gegen beide Lesarten,
+      und gelesen wird erst beim Übernehmen. Zweideutig bleibt nur eine Zahl
+      ohne Nachkomma („1.000" ist eins), und was das Feld gelesen hat, steht
+      danach darin.
 - [x] **Dieselbe Zahl in zwei Schreibweisen, in jeder Sprache.** Die
       Gegenrichtung: `localised` gibt es, seit im Objektbaum Maße mit Punkt
       neben einem Feld mit Komma standen — neun weitere Stellen gingen daran

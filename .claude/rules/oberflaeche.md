@@ -104,10 +104,22 @@ umschaltet.
 *Herein:* Ein Zahlenfeld ist eine `NumberSpin` (oder eine `LengthSpin`
 darauf), **kein nacktes `QDoubleSpinBox`**. Qt liest den Punkt in einer
 deutschen Anzeigesprache als Tausendertrennung: Wer „12.5" tippte, bekam 125 —
-ohne Fehler, ohne Rückfrage, ein Teil zehnmal zu groß. `NumberSpin` liest
-beide Trennzeichen als Komma; verloren geht die Tausendertrennung bei der
-Eingabe, und das ist die kleinere Not, weil nie eine angezeigt wird. Als
-Typprüfung bleibt `QDoubleSpinBox` richtig — `isinstance` fragt „ist das ein
+ohne Fehler, ohne Rückfrage, ein Teil zehnmal zu groß.
+
+**Die Leseregel von `NumberSpin`: das letzte Trennzeichen ist das
+Dezimaltrennzeichen, alle davor sind Tausendertrennungen.** Damit liest jedes
+Feld „12.5", „12,5", „1.000,50", „1,000.50" und „1.234.567,89" richtig, in jeder
+Sprache. Zweideutig bleibt allein eine Zahl *ohne* Nachkomma („1.000" ist nach
+der Regel eins) — und was das Feld gelesen hat, steht danach darin.
+
+**Der getippte Text wird dabei nicht angefasst.** Der erste Anlauf tauschte das
+Trennzeichen und gab den getauschten Text an Qt zurück; Qt übernahm ihn ins
+Feld, und damit war die Absicht beim zweiten Tastendruck entschieden — aus
+„1.000,50" wurde 100,50, derselbe Fehler um den Faktor tausend, nur in der
+anderen Richtung. `validate` prüft deshalb gegen **beide** Lesarten und gibt den
+Text unverändert zurück; gelesen wird beim Übernehmen in `valueFromText`.
+
+Als Typprüfung bleibt `QDoubleSpinBox` richtig — `isinstance` fragt „ist das ein
 Dezimalfeld", nicht „ist das unsere Unterklasse".
 
 ## Rückmeldung und Fehlerbericht
