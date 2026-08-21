@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -265,19 +266,34 @@ def test_no_operation_calls_its_core_function_with_an_argument_it_refuses() -> N
     braucht Eingangskörper, die zu jeder passen, und eine Operation, die aus
     einem anderen Grund anhält, verdeckt diesen hier. Der Syntaxbaum kennt die
     Aufrufe, ``inspect`` die Signaturen — das genügt und kostet nichts.
+
+    **Die Bausteine gehen mit.** Sie rufen dieselben Kernfunktionen und stehen
+    in einem eigenen Register; der Fehler von ``plug_hole`` wäre dort genauso
+    möglich und genauso unsichtbar. Gemessen sind sie heute sauber — geprüft
+    waren sie nicht.
     """
     import ast
     import textwrap
 
+    from app.core.knowledge.parts.registry import PARTS
+
+    # **Die Module, nicht nur die eintragenden Funktionen.** Erst prüfte diese
+    # Stelle ``spec.fn`` allein, und eine Gegenprobe zeigte, was das wert ist:
+    # ein erfundenes Schlüsselwort in einer Hilfsfunktion von ``fasteners.py``
+    # blieb unentdeckt. ``plug_hole`` fiel nur auf, weil der falsche Aufruf
+    # zufällig in der Operation selbst stand. Geprüft wird deshalb jedes Modul,
+    # das eine Operation oder einen Baustein hält — mit allem, was darin steht.
+    both: list[Any] = [*registered(), *PARTS.all()]
+    modules = {module for spec in both if (module := inspect.getmodule(spec.fn)) is not None}
     offenders: list[str] = []
-    for spec in registered():
-        fn = spec.fn
-        namespace = getattr(fn, "__globals__", {})
+    for module in sorted(modules, key=lambda entry: entry.__name__):
+        namespace = vars(module)
         try:
-            source = textwrap.dedent(inspect.getsource(fn))
+            source = textwrap.dedent(inspect.getsource(module))
             tree = ast.parse(source)
         except (OSError, SyntaxError, TypeError):  # pragma: no cover - Vorsicht
             continue
+        where = module.__name__
 
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
@@ -297,7 +313,7 @@ def test_no_operation_calls_its_core_function_with_an_argument_it_refuses() -> N
             for keyword in node.keywords:
                 if keyword.arg and keyword.arg not in parameters:
                     offenders.append(
-                        f"{spec.name} → {node.func.id}(…, {keyword.arg}=…) "
+                        f"{where}:{node.lineno} → {node.func.id}(…, {keyword.arg}=…) "
                         f"— {node.func.id} nimmt {sorted(parameters)}"
                     )
 
