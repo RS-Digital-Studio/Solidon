@@ -21,7 +21,26 @@ Keine feste Zeichenkette in der Oberfläche — alles über `tr()`, deutsch und
 englisch. **Das gilt auch für Auswahlwerte**: `raised`, `flat`, `linear` sind
 Schlüssel und keine Beschriftungen. Der Name steht in `_CHOICE_NAMES`
 (`app/ui/labels.py`), und `tests/test_translations.py` lässt nur durch, was
-sein eigener Name ist — M4, 6x3, mm, x, DejaVu Sans, gyroid. Bilder statt
+sein eigener Name ist — M4, 6x3, mm, x, DejaVu Sans.
+
+**Eine Tabelle, und Auswahlwerte stehen an zwei Stellen.** Die
+Druckeinstellungen führen ihre sechsundfünfzig Felder in einer eigenen Liste
+(`print_settings_dialog.FIELDS`), und dort stand auch eine zweite
+Namenstabelle mit einer gleichnamigen `choice_label`-Funktion davor — die eine
+verdeckte die andere. Beide beschrifteten dieselben Schlüssel und waren schon
+auseinandergelaufen: `cubic` hieß hier „Würfelgitter" und dort „Würfel", `none`
+hier „Ohne" und dort „Keine". Zwei Werte hatte keine von beiden, und im
+deutschen Fenster stand „Wandbahnen: classic" und „arachne". Der Test prüft
+deshalb **beide Feldquellen** gegen die eine Tabelle; wer eine dritte Liste von
+Auswahlwerten anlegt, hängt sie dort ein.
+
+Wo der englische Begriff der ist, unter dem der Kunde die Sache in seinem
+Slicer wiederfindet, bleibt er stehen: `skirt`, `brim` und `raft` heißen so,
+und die Felder daneben heißen „Skirt-Runden", „Brim-Breite",
+„Raft-Schichten" — ein Wert, der anders heißt als sein Feld, ist eine Fährte
+ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
+
+Bilder statt
 Wörter, wo ein Wort nichts zeigt: die Texturmuster tragen ihre Kachel aus
 `figures.texture_tile`, erkannt an den Werten des Feldes und nicht an seinem
 Namen. Ein Fehler endet nie mit „fehlgeschlagen": erst was nicht ging, dann
@@ -421,7 +440,7 @@ Dauerzustand.
 class _Survey(Worker):
     done = Signal(object)
 
-    def work(self) -> None:        # nicht run
+    def work(self) -> None:  # nicht run
         self.done.emit(install.statuses())
 ```
 

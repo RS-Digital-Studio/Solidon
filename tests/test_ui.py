@@ -205,6 +205,59 @@ def test_shortcuts_from_the_registry_are_installed(window: MainWindow) -> None:
             assert spec.shortcut.lower() in shortcuts
 
 
+def test_a_dialog_says_which_body_it_works_on(window: MainWindow) -> None:
+    """Zwei Würfel gewählt, ein Loch — und kein Wort dazu, in welchem (Regel 21).
+
+    Eine Operation nimmt so viele Körper, wie sie deklariert, und zwar in
+    Klickreihenfolge (``inputs_for``). Bei zwei gewählten und *Bohrung setzen*
+    bekam einer ein Loch und der andere nicht; im Dialog stand nichts davon,
+    und der Fenstertitel ist beim Klicken nicht im Blick. Das ist kein Raten —
+    die Regel stand nur nirgends, wo jemand sie liest.
+
+    Und im Normalfall steht dort nichts: ein gewählter Körper braucht keine
+    Erklärung, welcher gemeint ist.
+    """
+    from app.ui.main_window import inputs_for
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    first = next(iter(window.session.last_result.scene.objects))
+
+    spec = REGISTRY.get("drill_hole")
+    window.object_tree.select_object(first)
+    QApplication.processEvents()
+    window.run_operation(spec)
+    dialog = window._op_dialog
+    assert dialog is not None
+    assert dialog._note.text() == "", "bei einem gewählten Körper gibt es nichts zu sagen"
+    dialog.reject()
+    QApplication.processEvents()
+
+    window.session.apply(
+        "Objekt duplizieren",
+        [OperationDraft(op="duplicate_object", inputs=(first,), params={})],
+    )
+    window.session.wait_for_idle()
+    window.object_tree.tree.selectAll()
+    QApplication.processEvents()
+    chosen = window.object_tree.selected_objects()
+    assert len(chosen) == 2, chosen
+    taken = inputs_for(spec, list(window.session.last_result.scene.objects), chosen)
+    assert len(taken) == 1, "die Operation nimmt einen Körper"
+
+    window.run_operation(spec)
+    dialog = window._op_dialog
+    assert dialog is not None
+    try:
+        note = dialog._note.text()
+        name = window.session.last_result.scene.objects[taken[0]].name
+        assert name in note, f"der Dialog nennt den Körper nicht: {note!r}"
+        assert "2" in note, f"und nicht, wie viele gewählt sind: {note!r}"
+        assert not dialog._note.isHidden(), "der Satz steht da, aber unsichtbar"
+    finally:
+        dialog.reject()
+
+
 def test_no_two_shortcuts_in_the_window_collide(window: MainWindow) -> None:
     """Eine doppelt belegte Taste tut **nichts** (§19.2).
 

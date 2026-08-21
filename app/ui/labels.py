@@ -394,6 +394,44 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "honeycomb": _("Wabe"),
     "cubic": _("Würfelgitter"),
     "auto": _("Automatisch"),
+    # **Die Druckeinstellungen waren die zweite Feldquelle, und sie stand hier
+    # nicht drin.** ``tests/test_translations.py`` prüft Regel 20 für
+    # Auswahlwerte am Operationsregister; die sechsundfünfzig Felder des
+    # Druckdialogs (``print_settings_dialog.FIELDS``) sind eine eigene Liste
+    # und liefen an der Prüfung vorbei. Im deutschen Fenster stand deshalb
+    # „Naht: aligned", „Wandbahnen: arachne", „Plattenhaftung: brim" — und im
+    # Füllmuster englische Schlüssel **neben** deutschen Namen: grid, lines,
+    # triangles, Wabe, Würfelgitter.
+    #
+    # Wo der englische Begriff der ist, unter dem der Kunde ihn in seinem
+    # Slicer wiederfindet, steht er in Klammern dahinter — dasselbe Muster wie
+    # „Exakter Körper (B-Rep)".
+    "aligned": _("Ausgerichtet"),
+    "nearest": _("Nächstgelegen"),
+    "random": _("Zufällig"),
+    # Nicht „Hinten" und nicht „Rückseite": Das erste ist die **Rückansicht**
+    # im Ansichtsmenü (Strg+2, englisch „Back"), das zweite der Name einer
+    # **Fläche**, deren Normale nach hinten zeigt (``_SIDES``). Ein
+    # Katalogschlüssel trägt genau eine Bedeutung — mit einem für zwei bekäme
+    # eine von ihnen das falsche Wort. (``TranslatableText`` kennt ein
+    # ``context``-Feld, aber der Extraktor liest es nicht; siehe ROADMAP.)
+    "rear": _("Auf der Rückseite"),
+    "classic": _("Klassisch"),
+    # Eigennamen wie „Gyroid": so heißt der Algorithmus, in jedem Slicer und in
+    # jeder Sprache. Dasselbe gilt für die drei Haftarten — im Dialog heißen die
+    # Felder daneben „Skirt-Runden", „Brim-Breite" und „Raft-Schichten", und ein
+    # Wert, der anders heißt als sein Feld, ist eine Fährte ins Nichts.
+    "arachne": _("Arachne"),
+    "gyroid": _("Gyroid"),
+    "grid": _("Gitter"),
+    "lines": _("Linien"),
+    "triangles": _("Dreiecke"),
+    "tree": _("Baum"),
+    "everywhere": _("Überall"),
+    "build_plate": _("Nur von der Platte"),
+    "skirt": _("Skirt"),
+    "brim": _("Brim"),
+    "raft": _("Raft"),
 }
 
 

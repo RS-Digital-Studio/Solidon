@@ -23,7 +23,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any, Final, Literal
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -73,7 +73,7 @@ from app.core.types import (
 from app.core.units import DEGREE_UNIT
 from app.i18n import tr
 from app.ui.dialogs import show_error
-from app.ui.labels import by_title, colour_name
+from app.ui.labels import by_title, choice_label, colour_name
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.session import Session
@@ -156,31 +156,16 @@ def group_title(group: str) -> str:
     }.get(group, group)
 
 
-#: Aufzählungswerte in Worten. Der gespeicherte Wert bleibt englisch — er geht
-#: in die Projektdatei und zum Slicer —, gezeigt wird die Übersetzung (§4.1).
-CHOICE_LABELS: dict[str, str] = {
-    "grid": tr("Gitter"),
-    "gyroid": tr("Gyroid"),
-    "honeycomb": tr("Wabe"),
-    "cubic": tr("Würfel"),
-    "lines": tr("Linien"),
-    "triangles": tr("Dreiecke"),
-    "none": tr("Keine"),
-    "tree": tr("Baum"),
-    "everywhere": tr("Überall"),
-    "build_plate": tr("Nur von der Platte"),
-    "aligned": tr("Ausgerichtet"),
-    "nearest": tr("Nächstgelegen"),
-    "random": tr("Zufällig"),
-    "rear": tr("Hinten"),
-    "skirt": tr("Skirt"),
-    "brim": tr("Brim"),
-    "raft": tr("Raft"),
-}
-
-
-def choice_label(value: str) -> str:
-    return CHOICE_LABELS.get(value, value)
+# **Eine Tabelle für Auswahlwerte, nicht zwei.** Hier stand eine eigene neben
+# ``labels._CHOICE_NAMES``, mit demselben Funktionsnamen davor — die eine
+# verdeckte die andere, und beide beschrifteten dieselben Schlüssel. Sie waren
+# schon auseinandergelaufen: „cubic" hieß dort „Würfelgitter" und hier „Würfel",
+# „none" dort „Ohne" und hier „Keine". Und zwei Werte hatte keine von beiden:
+# Im deutschen Fenster stand „Wandbahnen: classic" und „arachne".
+#
+# Die Gebietsregel nennt den Ort eindeutig — „Der Name steht in
+# ``_CHOICE_NAMES`` (``app/ui/labels.py``)" —, und ``tests/test_translations.py``
+# prüft jetzt beide Feldquellen gegen diese eine Tabelle.
 
 
 FIELDS: tuple[Field, ...] = (

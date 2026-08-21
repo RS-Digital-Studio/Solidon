@@ -614,6 +614,7 @@ class OperationDialog(QDialog):
         surroundings: Any = None,
         images: Mapping[str, str] | None = None,
         pick_image: Callable[[], tuple[str, str] | None] | None = None,
+        note: str = "",
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -743,6 +744,24 @@ class OperationDialog(QDialog):
         caveat.setVisible(bool(warning))
         self._caveat = caveat
         layout.addWidget(caveat)
+
+        # **Woran gearbeitet wird, wenn mehr gewählt ist als gebraucht.** Eine
+        # Operation nimmt so viele Körper, wie sie deklariert, und zwar in
+        # Klickreihenfolge (``inputs_for``). Bei zwei gewählten Würfeln und
+        # *Bohrung setzen* bekam einer ein Loch und der andere nicht — im
+        # Dialog stand kein Wort dazu, und der Fenstertitel ist beim Klicken
+        # nicht im Blick. Das ist kein Raten (Regel 21), die Regel steht nur
+        # nirgends, wo jemand sie liest.
+        #
+        # Eigenes Label wie die Grenze darüber, sichtbar nur mit Inhalt: Der
+        # Normalfall ist ein gewählter Körper, und dann gibt es nichts zu
+        # sagen.
+        applies = QLabel(note, self)
+        applies.setWordWrap(True)
+        set_level(applies, "caption")
+        applies.setVisible(bool(note))
+        self._note = applies
+        layout.addWidget(applies)
         layout.addLayout(front)
         # Der freie Platz sammelt sich hier, zwischen Feldern und Knöpfen, und
         # nicht mehr verteilt über alles.

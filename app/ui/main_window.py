@@ -656,6 +656,28 @@ def _needs_objects(count: int) -> str:
     return tr("Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.")
 
 
+def _works_on(name: str, chosen: int, takes: int) -> str:
+    """Woran die Operation arbeitet, wenn mehr gewählt ist als sie nimmt.
+
+    Eine Operation nimmt so viele Körper, wie sie deklariert, und zwar in
+    Klickreihenfolge (:func:`inputs_for`). Bei zwei gewählten Würfeln und
+    *Bohrung setzen* bekam einer ein Loch und der andere nicht — im Dialog
+    stand kein Wort dazu. Das ist kein Raten (Regel 21): die Regel steht nur
+    nirgends, wo sie jemand liest.
+
+    Leer, wo es nichts zu sagen gibt — und das ist der Normalfall.
+    """
+    if takes <= 0 or chosen <= takes or not name:
+        return ""
+    if takes == 1:
+        return tr("Angewendet wird auf {name} — der zuerst gewählte von {count}.").format(
+            name=name, count=chosen
+        )
+    return tr("Angewendet wird auf die {takes} zuerst gewählten von {count}.").format(
+        takes=takes, count=chosen
+    )
+
+
 def _face_side(normal: Any) -> str:
     """Wo eine Fläche sitzt, in einem Wort.
 
@@ -4944,6 +4966,13 @@ class MainWindow(QMainWindow):
         values.update(self._spacing_for(spec))
         values.update(given or {})
         inputs = inputs_for(spec, objects, chosen)
+        # Was der Dialog über seinen Bezug sagt — leer, solange genau so viel
+        # gewählt ist, wie die Operation nimmt.
+        note = (
+            _works_on(self._object_names().get(inputs[0], ""), len(chosen), spec.consumes)
+            if inputs and not spec.takes_whole_scene
+            else ""
+        )
 
         def run(params: Mapping[str, Any]) -> None:
             if spec.name in LID_OPS and inputs:
@@ -5018,6 +5047,7 @@ class MainWindow(QMainWindow):
                 surroundings=self._sketch_surroundings(),
                 images=self._image_names(),
                 pick_image=self._pick_image_source,
+                note=note,
             )
             if exact is not None:
                 # Die Live-Vorschau (§18.7) muss den Kernwechsel mitmachen —

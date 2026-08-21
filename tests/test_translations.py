@@ -296,21 +296,39 @@ def test_every_choice_has_a_name_someone_can_read() -> None:
     das ganze Register verteilt sechsundzwanzigmal. Ein Schlüssel ist kein
     Text, den jemand liest — auch dann nicht, wenn er zufällig ein englisches
     Wort ist.
+
+    **Und geprüft war nur die eine Hälfte.** Auswahlwerte stehen an zwei
+    Stellen: im Parameterschema der Operationen und in den sechsundfünfzig
+    Feldern der Druckeinstellungen (``print_settings_dialog.FIELDS``). Die
+    zweite lief hier vorbei, und im deutschen Fenster stand deshalb „Naht:
+    aligned", „Wandbahnen: arachne", „Plattenhaftung: brim" — im Füllmuster
+    sogar englische Schlüssel **neben** deutschen Namen (grid, lines,
+    triangles, Wabe, Würfelgitter). Sechzehn Werte, in dem Dialog, den jeder
+    vor dem Drucken öffnet.
     """
     from app.core.bootstrap import load_operations
     from app.core.registry import REGISTRY
     from app.ui.labels import choice_label
+    from app.ui.print_settings_dialog import FIELDS
 
     load_operations()
     sizes = self_naming_sizes()
+
+    def named(value: str) -> bool:
+        return bool(SELF_NAMING.match(value)) or value in sizes or choice_label(value) != value
+
     offenders = []
     for spec in REGISTRY.all():
         for entry in spec.params.spec():
             for choice in entry.choices or ():
                 value = str(choice)
-                if SELF_NAMING.match(value) or value in sizes or choice_label(value) != value:
-                    continue
-                offenders.append(f"{spec.name}.{entry.name}: {value!r}")
+                if not named(value):
+                    offenders.append(f"{spec.name}.{entry.name}: {value!r}")
+    for field in FIELDS:
+        for choice in field.choices or ():
+            value = str(choice)
+            if not named(value):
+                offenders.append(f"Druckeinstellungen {field.path}: {value!r}")
 
     assert not offenders, "choice values shown as keys:\n" + "\n".join(sorted(offenders))
 

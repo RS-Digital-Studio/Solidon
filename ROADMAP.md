@@ -48,6 +48,7 @@ bekommt einen roten Lauf.
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
 | Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | die Entscheidung des Bauplans, welche Operation auf ein fertiges Gewinde gehört; bis dahin steht `thread` als benannte Ausnahme im Konsistenztest |
+| Kein Feld der Druckeinstellungen erklärt sich | Zwei Tabellen für dieselbe Sache (21.08.2026) | eine Entscheidung über den Umfang — fünfzehn Sätze für die Felder mit Fachbegriff oder alle sechsundfünfzig, was 336 Texte in sechs Sprachen sind |
 | Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
 | Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
@@ -9972,3 +9973,64 @@ weit über das Thema hinaus.
       `currentData()`, und leer heißt dort „nicht merken". Wartet auf eine
       Entscheidung, wo der Test seinen Zustand festhält — an den Widgets oder an
       einem gestoppten Arbeiter.
+
+## Zwei Tabellen für dieselbe Sache (21.08.2026)
+
+Diesmal die Blickwinkel, die die beiden Durchgänge davor nicht hatten: die
+langen Läufe an der Uhr, die Tastatur ohne Maus, der Erststart mit leerem
+Profil — und der größte Dialog der Anwendung, den bis dahin keine Durchsicht
+angesehen hatte.
+
+**Was dabei hielt.** Die Orientierungssuche macht es vorbildlich: Balken und
+Abbrechen nach 0,06 s, Prozent von Anfang an, ab acht Prozent eine
+Restzeitschätzung („noch etwa 5 min"), Oberfläche bedienbar, und nach dem
+Abbruch ein Satz, der sagt, was man vor sich hat. Die Analysekarte lehnt ein
+Modell mit 1,3 Millionen Dreiecken mit einem klaren Satz ab statt still zu
+scheitern. Die Fokuskette führt in vierundzwanzig Schritten durch alle Zonen,
+jede Station benannt. Der Erststart fragt drei Dinge und lässt sich
+überspringen, der Startbildschirm nennt alle vier Wege, neun Beispielprojekte
+liegen bei, die Tour zählt „Schritt 1 / 4". Und der Verlauf kodiert einen
+zurückgenommenen Schritt dreifach — Wort, Durchstreichung, Farbe (Regel 18).
+
+### Behoben, jeder mit Test und Gegenprobe
+
+- [x] **Sechzehn englische Schlüssel im deutschen Fenster** — und die Ursache
+      war eine zweite Namenstabelle. Die Druckeinstellungen führten ihre eigene
+      `CHOICE_LABELS` mit einer gleichnamigen `choice_label`-Funktion davor: Die
+      eine verdeckte die andere, beide beschrifteten dieselben Schlüssel, und
+      sie waren schon auseinandergelaufen — `cubic` hieß dort „Würfel" und in
+      `labels` „Würfelgitter", `none` dort „Keine" und hier „Ohne". Zwei Werte
+      hatte **keine** von beiden: Im Feld *Wandbahnen* stand „classic" und
+      „arachne", englische Algorithmusnamen in einer deutschen Auswahl. Jetzt
+      gibt es eine Tabelle (Leitprinzip 3), und die beiden Drifts sind
+      entschieden. `skirt`, `brim` und `raft` bleiben englisch: Die Felder
+      daneben heißen „Skirt-Runden", „Brim-Breite", „Raft-Schichten", und ein
+      Wert, der anders heißt als sein Feld, ist eine Fährte ins Nichts.
+- [x] **Die Prüfung sah nur die eine Hälfte.**
+      `test_translations.py` hält Regel 20 für Auswahlwerte am
+      Operationsregister — die sechsundfünfzig Felder der Druckeinstellungen
+      sind eine eigene Liste und liefen daran vorbei. Genau dort saßen die
+      sechzehn. Geprüft werden jetzt beide Quellen gegen dieselbe Tabelle, und
+      sechs verwaiste Katalogeinträge sind mit dem Pflegewerkzeug gefallen.
+- [x] **Zwei Körper gewählt, ein Loch — und kein Wort dazu, in welchem.** Eine
+      Operation nimmt so viele Körper, wie sie deklariert, und zwar in
+      Klickreihenfolge (`inputs_for`). Bei zwei gewählten Würfeln und *Bohrung
+      setzen* bekam einer ein Loch und der andere nicht; im Dialog stand nichts
+      davon, und der Fenstertitel ist beim Klicken nicht im Blick — das sagt
+      der Kommentar am OK-Knopf selbst. Das war kein Raten (Regel 21), die
+      Regel stand nur nirgends, wo sie jemand liest. Jetzt trägt der Dialog
+      eine Zeile: „Angewendet wird auf cube_clean — der zuerst gewählte von 2."
+      Sichtbar nur, wenn mehr gewählt ist als die Operation nimmt; der
+      Normalfall braucht keine Erklärung.
+
+### Was auffiel und eine Entscheidung braucht
+
+- [ ] **Kein Feld der Druckeinstellungen erklärt sich.** Sechsundfünfzig
+      Felder, keines mit Tooltip — während jeder der 136 Menüeinträge einen
+      Satz trägt und jeder Operationsparameter seinen `doc`-Satz. Bei
+      „Schichthöhe" und „Fülldichte" braucht es keinen; bei „Außenwand auf
+      Sollmaß", „Oberfläche bügeln", „Wände nicht überfahren" und „Abstreifen"
+      schon. Die Entscheidung ist nicht *ob*, sondern *wie weit*: Ein Dialog,
+      in dem fünfzehn von sechsundfünfzig Feldern einen Tooltip haben, lehrt
+      niemanden, dass es Tooltips gibt (Konsistenz vor Vollständigkeit) — alle
+      sechsundfünfzig sind 336 Texte in sechs Sprachen.
