@@ -9229,3 +9229,229 @@ bekommt ein 220er Bett — und dann meldet jedes 231 mm tiefe Teil zu Recht
       Bauplan („keine Verrundungen auf Mesh-Kanten vor dem B-Rep-Kern"), und
       dieser Lauf ist der Beleg, wie oft man dagegenläuft: bei jedem der neun
       Modelle wäre es der nächste Handgriff gewesen.
+
+## Die Zusatzsoftware aus Kundensicht (21.08.2026)
+
+Vier Programme kann Solidon benutzen, keines wird mitgeliefert (§36, §38). Die
+Liste dazu stand seit langem; durchgesehen wurde diesmal der ganze Weg von
+„fehlt" bis „läuft" — und der hatte an sechs Stellen ein Loch.
+
+- [x] **Fehlende Software bat um einen Fehlerbericht.** `BRepUnavailable`
+      nannte keine Vorschläge; `AppError` fällt dann auf „Abbrechen" zurück,
+      und einem Dialog, dem sonst nichts bleibt, legt `offered_actions` den
+      Fehlerbericht bei. Wer eine Verrundung ohne OpenCASCADE versuchte, wurde
+      also gebeten, einen Fehler zu melden. `ScadUnavailable` schlug seit je
+      `install` vor — verdrahtet war unter dieser Kennung **nichts**, die Liste
+      der zusätzlichen Programme hing unter `open_settings`. Der Rat wurde
+      damit ein grauer Satz, während der Dialog, der ihn einlöst, im
+      Hilfe-Menü stand. Beide Enden sind jetzt verbunden, und `OPEN_SETTINGS`
+      heißt wieder, was es tut: `INSTALL_MISSING` trägt den Namen des
+      Menüeintrags, in den es führt (`tests/test_errors.py`,
+      `tests/test_ui.py`).
+- [x] **Der Kunde konnte seinen Schlüssel nicht ablegen.** `keyring` wird in
+      `backends/keys.py` innerhalb einer Funktion importiert, damit die
+      Anwendung ohne es startet — PyInstaller sieht das nicht, und im gebauten
+      Paket lag es nicht bei. `keys.store()` gab dort **immer** False zurück:
+      Der Chat-Dialog nahm einen Schlüssel an und behielt ihn nicht, der
+      Rückfall war eine Umgebungsvariable für Bauserver. Die Liste bot daneben
+      an, den Schlüsselbund zu installieren, mit einem Knopf, der in einem
+      Paket nicht drückbar ist. `tests/test_packaging.py` prüft jetzt jede
+      optionale Abhängigkeit gegen die hiddenimports.
+- [x] **Der Dialog fror knapp drei Sekunden.** Gemessen, offscreen, mit warmem
+      Cache: `InstallDialog()` **2,97 s**, jede Auffrischung weitere **2,10 s**
+      — im Qt-Hauptthread, ohne Wartemarke, obwohl §38 dafür einen Arbeiter
+      verlangt. Der Grund war nicht die Suche, sondern ihre Anzahl: Jede Zeile
+      fragte `tools.state_of` **dreimal** (`present`, Fundort, Erklärung), und
+      bei den zwei Diensten hing an jeder Frage eine Socket-Probe. Erhoben wird
+      jetzt einmal je Zeile (`install.statuses`) in einem Arbeiter — **12 ms**
+      bis zum offenen Dialog, **0 ms** bis zur Rückkehr aus `refresh()`, 1,0 s
+      für die Erhebung selbst. Bis dahin steht ein drittes Zeichen in der
+      Zeile: „?" statt einer Behauptung, die niemand geprüft hat.
+- [x] **Auf macOS und Linux war der ganze Weg eine Sackgasse.** `installable`
+      hing allein an `winget`; wer Solidon aus einem der Linux-Pakete oder von
+      der Mac-Seite hatte, lag an jedem der vier Programme bei demselben Satz —
+      unabhängig davon, ob eine Paketverwaltung fehlte oder das Programm dort
+      keine Kennung hat. Dazugekommen sind **Homebrew** und **Flatpak**, und
+      `apt`/`dnf` fehlen mit Absicht: Sie verlangen `sudo`, und eine
+      Passwortabfrage in einem Unterprozess, den niemand sieht, hängt bis zum
+      Zeitmaß. Flatpak installiert mit `--user`.
+
+      Die Kennungen sind am 21.08.2026 einzeln nachgeschlagen, und zwei davon
+      sind nicht die naheliegenden: Das Homebrew-Cask `openscad` ist als
+      „fails_gatekeeper_check" veraltet und **zum 01.09.2026 abgeschaltet** —
+      eingebaut hätte es in zehn Tagen einen Fehlschlag ausgeliefert, also
+      steht `openscad@snapshot` dort. Und OrcaSlicer liegt auf Flathub unter
+      `com.orcaslicer.OrcaSlicer`, nicht unter der Kennung des ursprünglichen
+      Urhebers, die winget weiterführt. Die Flathub-Kennung wird zur Adresse
+      einer `.flatpakref`: ohne sie bräuchte es eine eingerichtete Quelle, und
+      wer die nicht hat, sähe „remote flathub not found".
+- [x] **„Nach einem Neustart ist es zu sehen."** Das stand nach einer
+      erfolgreichen Installation da, und der Grund war die Umgebung dieses
+      Prozesses: Das Installationsprogramm ergänzt den PATH des *Systems*, die
+      Kopie davon stammt vom Start. `discover.refresh_path()` liest beide
+      Hälften aus der Registry nach, wie Windows sie selbst zusammensetzt —
+      damit ist der Neustart der Ausnahmefall und nicht die Regel.
+- [x] **Sieben Knöpfe einzeln.** *Alles Fehlende installieren* ordnet die
+      Reihenfolge; die Entscheidung bleibt der eine Druck (§36). Dabei fand der
+      Test einen Fehler im ersten Entwurf: Angestoßen aus `_finished`
+      verschluckte die Reihe einen Eintrag, weil `done` kommt, während der
+      Arbeiter noch läuft — `_start` sah ihn als beschäftigt und kehrte um,
+      obwohl der Eintrag schon aus der Warteschlange genommen war. Von vier
+      fehlenden Programmen wurden drei installiert, ohne ein Wort dazu.
+      Weitergeschaltet wird jetzt in `_thread_done`.
+- [x] **Und wo Solidon nicht installieren kann, steht der Befehl da.** „Auf
+      diesem System geht es nicht" ist keine Auskunft, mit der jemand
+      weiterkommt; die Zeile, die es täte, kennt Solidon — sie entsteht aus
+      denselben Konstanten wie der ausgeführte Befehl, steht im Blick und
+      liegt auf einem Knopf in der Ablage.
+
+### Der zweite Schritt, den es nicht gab
+
+Der eigentliche Fund, und er kam als Satz: „hab es installiert, aber danach
+weiß man auch nicht was man machen soll". Beide Dienste brauchen nach der
+Installation etwas, das nirgends stand außer in einem Satz mit einem
+Terminalbefehl darin.
+
+- [x] **Ollama** installiert bringt kein Modell mit und läuft nicht
+      zwangsläufig. Die Auskunft dazu war „«ollama serve» startet es" und
+      „«ollama pull» mit dem Modellnamen holt es" — gerichtet an jemanden, der
+      in einem Fenster sitzt. *Chat einrichten* führt jetzt alle drei Schritte:
+      ein Satz über den Dienst mit dem Knopf, der zu ihm gehört
+      (`tools.start`, losgelassener Prozess, ohne Konsolenfenster, nie von
+      Solidon beendet); eine Auswahl aus dem Installierten und den bewährten
+      Modellen mit Größe und Messwert; und *Modell holen* über `/api/pull` mit
+      echtem Prozentwert aus `total`/`completed` — neun Gigabyte an einem
+      unbestimmten Balken sehen aus wie ein Hänger. Abbrechen geht, und der
+      Satz dazu sagt, dass ein neuer Versuch fortsetzt: Ollama behält, was
+      schon geladen ist.
+- [x] **ComfyUI** braucht die Knoten und das Modell. Die Anwendung nannte
+      dafür „«python tools/setup_comfyui.py»" — einen Befehl, den ein Kunde
+      **nicht ausführen kann**: `tools/` steht nicht in den `datas` der Spec
+      und reist im Paket nicht mit. Die Logik liegt jetzt in
+      `app/core/backends/comfy_setup.py`, die Knoten in
+      `app/core/backends/data/comfyui/` — beides paketiert —, und
+      `app/ui/comfy_dialog.py` führt die vier Schritte mit Fortschritt und
+      Abbrechen. `tools/setup_comfyui.py` ist ein dünner Aufrufer darauf und
+      tut unverändert dasselbe. Ein Test hält fest, dass **kein Text, der durch
+      `_()` oder `tr()` geht**, dieses Skript noch nennt.
+- [x] **Der zweite Schritt ist ein Begriff im Kern**, kein Sonderfall der
+      Oberfläche: `Requirement.follow_up` benennt ihn, die Zeile zeigt seinen
+      Knopf, sobald das Programm da ist, und `tests/test_install.py` prüft, dass
+      zu jeder Kennung ein Zweig steht. Ein Knopf ohne Wirkung ist schlimmer
+      als keiner.
+- [x] **Und eine Handbuchseite** — *Zusätzliche Programme einrichten*, in sechs
+      Sprachen. Sie sagt je Programm, was es bringt und was danach noch zu tun
+      ist, samt der Zahlen, die die Entscheidung tragen: 16 GB für qwen3:14b,
+      sieben Milliarden Parameter als Untergrenze, 7,5 GB für TripoSG, und der
+      Neustart von ComfyUI, ohne den alles liegt und nichts geht.
+- [x] **Die Liste zeigt dem Kunden nur, was ihn angeht.** Von den sieben
+      Einträgen sind drei Python-Pakete; im Paket reisen sie mit, standen dort
+      als „vorhanden" und trugen einen Knopf, der von Entwicklungsumgebungen
+      sprach — Rauschen vor den vier Zeilen, um die es geht. `install.shown()`
+      lässt sie weg, **solange sie da sind**: Ein Paket ohne OpenCASCADE hat
+      keine Fasen und kein STEP, und eine stille Lücke ist das Gegenteil von
+      §36.
+
+## Dieselben neun Modelle, diesmal nachgebaut (21.08.2026)
+
+Zwei Vorwürfe zum vorigen Eintrag, beide berechtigt: die Modelle waren nie
+**nachgebaut**, nur eingelesen und bearbeitet — und die Erweiterungen waren
+austauschbar. Auf jedes Teil kam dasselbe Schraubenloch, dieselbe Beschriftung,
+dieselbe Magnettasche, gleich was das Teil ist.
+
+### Erst hinsehen, dann erweitern
+
+Jedes Modell durch die Oberfläche geladen und angesehen, Körper für Körper.
+Heraus kam, dass sechs der neun Dateien **ein Teilesystem** sind: 底座 (Fuß),
+拓展架 (Auslegerarm) und drei Sätze 连接件 (Querstangen) bilden ein
+Sechskant-Steckregal für Filamentrollen. Die Stangen tragen an beiden Enden
+einen Sechskantzapfen Ø8,147 × 9, die Arme die passenden Buchsen; die Zahl im
+Dateinamen ist die Rollenbreite. Die übrigen drei: eine KitKat-Nachbildung als
+Kit-Card mit vier ausbrechbaren Riegeln, ein Flugpropeller-Spielzeug, eine
+massive Entenfigur — und ein Modellbausatz mit 52 Teilen.
+
+Damit werden die Erweiterungen andere. Die 222er Stange passt auf kein 220er
+Bett, also wird sie **verstiftet geteilt** — mit Sechskantstiften, derselben
+Verbindung, die das System ohnehin benutzt. Der Fuß trägt eine Rolle und kippt,
+also bekommt er **Einpressbuchsen zum Festschrauben**. Die Kit-Card liegt herum,
+also bekommt sie **Magnettaschen in der Unterseite** — nicht auf dem Bild — und
+ein Loch für den Schlüsselring. Die Ente ist massiv, also wird sie
+**ausgehöhlt**. Und dem Modellbausatz wird **nichts** angebaut: ein Bausatz, den
+jemand entworfen hat, will gedruckt werden, nicht ergänzt. Die Arbeit liegt im
+Anordnen und Schließen.
+
+### Nachgebaut, und gemessen
+
+Die Querstange 连接件-1 ist von Null entstanden, über *Neues Projekt* und die
+Operationsdialoge: das Profil als Skizze (22 breit, 12 hoch, unten 1,2 mm
+gefast auf 19,6 Basis, oben 6 mm gefast auf 10,0 Deckel — aus den Flächen des
+Originals gelesen), 139,64 mm hochgezogen, an beiden Enden ein Sechskantzapfen
+über `insert_dowel`.
+
+| | Nachbau | Original | Abweichung |
+|---|---|---|---|
+| Querschnitt | 22,00 × 12,00 | 22,00 × 12,00 | 0,00 mm |
+| Länge | 157,62 | 157,64 | −0,02 mm |
+| Volumen | 32 410,1 mm³ | 32 634,5 mm³ | −0,69 % |
+
+Dazu das Gegenstück, der Sechskantsitz — und genau daran kam ein Fehler heraus
+(siehe unten).
+
+**Was sich nicht nachbauen lässt, und warum.** Die Entenfigur ist organisch;
+sie gehört zu Weg 3 oder 4, nicht zu Weg 2 — mit Grundkörpern kommt man dort
+nicht hin, und das ist keine Lücke, sondern die Arbeitsteilung des Bauplans.
+Der Schutzring des Propellersatzes verjüngt sich über die Höhe (1026 mm²
+Querschnitt in halber Höhe gegen 749 mm² im Mittel): ein Strömungsprofil, kein
+Bauteil aus Zylindern. Und die 52 Teile des Bausatzes einzeln nachzubauen wäre
+kein Nachbau, sondern ein zweiter Entwurf.
+
+### Zwei Funde, und beide sitzen im Konstruieren
+
+- [ ] **Eine Passbohrung, die Material hinzufügt.** `insert_dowel` heißt
+      „Passstift und Passbohrung", hat einen Parameter *Art* mit `pin` und
+      `bore`, rechnet für die Bohrung sogar das Spiel dazu (`diameter + play`)
+      und gibt ein `bore`-Merkmal zurück. Abgezogen wird trotzdem nichts:
+      `subtractive` ist eine **feste Eigenschaft des Bausteins**
+      (`parts/registry.py`), der Dübel setzt sie nicht, und `parts/ops.py`
+      entscheidet allein daran (`"difference" if spec.subtractive else
+      "union"`). Gemessen an einem Klotz von 30 × 30 × 20:
+
+      | Baustein | Art | ΔVolumen |
+      |---|---|---|
+      | `insert_dowel` | `bore` | **+411,7 mm³** |
+      | `insert_dowel` | `pin` | +386,6 mm³ |
+      | `insert_snap_connector` | `bore` | **+108,5 mm³** |
+      | `insert_snap_connector` | `pin` | +43,1 mm³ |
+      | `insert_magnet_pocket` | — | −159,9 mm³ |
+
+      Die Bohrung wird also ein etwas **dickerer** Zapfen als der Zapfen — das
+      Spiel und die Einführungsfase kommen obendrauf. Zwei Folgen über die
+      Geometrie hinaus: Die Szene trägt danach ein `bore`-Merkmal an einer
+      Stelle, an der ein Buckel steht, und `applies_to` bleibt leer (es wird
+      aus `spec.subtractive` abgeleitet) — ein Klick auf eine Fläche bietet den
+      Baustein also gar nicht an. Betroffen sind beide Bausteine mit einem
+      Richtungsparameter. Die Frage ist, wo die Richtung hingehört: als
+      aufrufbare Bedingung an `register_part`, als Deklaration am Parameter
+      (`subtractive_when=("kind", "bore")`, passend zu „Die Angabe steht am
+      Parameter"), oder als zwei getrennte Bausteine — was der Oberflächenregel
+      „Eine Operation je Handlung, nicht je Variante" widerspräche.
+- [ ] **Das Ausrichten stellt Teile auf die Ecke.** `orient_for_print` legte die
+      nachgebaute Stange auf die Diagonale. Gemessen am selben Körper:
+
+      | Lage | Stützvolumen | erste Schicht | Höhe |
+      |---|---|---|---|
+      | liegend, breite Seite unten | 11,1 mm³ | 1424,3 mm² | 12 mm |
+      | diagonal — Sieger der Suche | 0,6 mm³ | **0,1 mm²** | 112 mm |
+
+      Die diagonale Lage gewinnt zu Recht beim Stützmaterial: ihre Flanken
+      stehen 47° zur Waagerechten, also gerade steiler als die Stützschwelle,
+      und brauchen keine. Sie steht dafür auf einem Hundertstel
+      Quadratmillimeter. `better()` vergleicht lexikografisch — Stützvolumen
+      zuerst —, und 0,6 gegen 11,1 ist kein Gleichstand, also kommt die
+      Aufstandsfläche als Entscheider nie zum Zug. Der Docstring nennt die eine
+      Richtung („eine große Aufstandsfläche darf sich nie an echtem
+      Stützmaterial vorbeikaufen"); die andere fehlt: **ein paar Kubikmillimeter
+      Stützmaterial dürfen keine Lage kaufen, die nicht stehen kann.** Wo die
+      Untergrenze der ersten Schicht herkommt, ist die Entscheidung — aus dem
+      Profil wie `smallest_printable_volume`, oder als Verhältnis zur
+      Ausgangslage, die `search` als `baseline` ohnehin schon kennt.
