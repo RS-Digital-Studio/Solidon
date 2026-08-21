@@ -48,7 +48,6 @@ bekommt einen roten Lauf.
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
 | Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | die Entscheidung des Bauplans, welche Operation auf ein fertiges Gewinde gehört; bis dahin steht `thread` als benannte Ausnahme im Konsistenztest |
-| Der Profil-Test ist unter Last wettlaufanfällig | Der dritte Durchgang: was hinter dem Wartezustand lag (21.08.2026) | eine Entscheidung, wo der Test seinen Zustand festhält — an den Widgets oder an einem gestoppten Arbeiter; einmal rot in einem Lauf über 66 Dateien, sonst grün, auch am Stand davor |
 | Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
 | Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
@@ -10057,15 +10056,25 @@ weit über das Thema hinaus.
       Läufen ohne Last. Gegengeprüft: dieselbe Bestwert-Datei in einen Worktree
       auf dem Stand *vor* dieser Arbeit kopiert und gemessen — **identisch
       dreizehn rot**. Wer die Datei zum Vergleich benutzt, kopiert sie mit.
-- [ ] **`test_the_chosen_profiles_are_kept_without_a_slicer_run` ist unter Last
-      wettlaufanfällig.** Einmal rot in einem Lauf über 66 Dateien, grün allein,
-      grün in seiner Datei, grün nach allen Leistungstests, grün am Stand davor.
-      Der Test setzt die drei Profilauswahlen von Hand und ruft `reject()`;
-      läuft dazwischen etwas aus der Ereignisschlange, das die Auswahl leert
-      oder neu füllt, merkt `_remember_slicer_choice` nichts — es prüft
-      `currentData()`, und leer heißt dort „nicht merken". Wartet auf eine
-      Entscheidung, wo der Test seinen Zustand festhält — an den Widgets oder an
-      einem gestoppten Arbeiter.
+- [x] **Der Wettlauf war kein Testproblem, sondern ein Kundenfehler.** Der Test
+      war einmal rot in einem Lauf über 66 Dateien, sonst grün — und die Suche
+      nach dem Grund führte an eine Stelle, die einen echten Schaden anrichtet:
+      `_profiles_found` baut die Auswahl neu und setzt sie auf die gemerkte oder
+      die zugeordnete Maschine. Wer in der Zwischenzeit **selbst** gewählt hat,
+      sah seine Wahl auf etwas anderes springen — und beim Schließen wurde die
+      neue gemerkt, nicht seine.
+
+      Sichtbar wurde das erst mit `recheck_slicer`: Beim ersten Öffnen ist die
+      Auswahl leer, danach nicht mehr. Eine getroffene Wahl bleibt jetzt stehen
+      — dieselbe Regel wie beim Druckervorschlag der Erstinbetriebnahme, eine
+      Vorgabe, die eine Wahl überschreibt, ist keine mehr (§2.4).
+
+      Zwei Fallen lagen dabei im Weg, und beide sind im Test festgehalten. Die
+      Auswahl muss **vor** dem Füllen gelesen werden: Nach dem ersten `addItem`
+      steht der Index auf 0, und „was gewählt ist" wäre Qts Vorbelegung. Und
+      der Test braucht **zwei** Profile — bei genau einem fällt
+      `_profiles_found` auf Index 0 zurück, und der wäre zufällig der eigene
+      Eintrag.
 
 ## Zwei Tabellen für dieselbe Sache (21.08.2026)
 

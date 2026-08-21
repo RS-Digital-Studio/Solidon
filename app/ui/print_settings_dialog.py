@@ -1459,6 +1459,11 @@ class PrintSettingsDialog(QDialog):
             self.slicer_toggle.setChecked(True)
 
     def _profiles_found(self, found: list[slicer_profiles.SlicerProfile]) -> None:
+        # **Zuerst lesen, was schon gewählt ist.** Nach dem ersten ``addItem``
+        # steht der Index auf 0, und „was gewählt ist" wäre dann Qts
+        # Vorbelegung statt einer Entscheidung — die Prüfung unten hielte den
+        # ersten Eintrag des Bestands für die Wahl des Nutzers.
+        already = str(self.machine_choice.currentData() or "")
         self._profiles = found
         machines = slicer_profiles.machines(found)
         if not machines:
@@ -1483,7 +1488,17 @@ class PrintSettingsDialog(QDialog):
         self.filament_choice.setEnabled(True)
 
         chosen, process = slicer_profiles.match(found, self.session.profile.printer)
-        remembered = self.ui_settings.slicer_machine_profile
+        # **Eine getroffene Wahl bleibt stehen.** Die Profilsuche läuft in einem
+        # Arbeiter und antwortet nachgereicht; wer in der Zwischenzeit selbst
+        # eine Maschine gewählt hat, sah sie danach auf etwas anderes springen —
+        # und beim Schließen wurde die *neue* gemerkt, nicht seine. Dieselbe
+        # Regel wie beim Druckervorschlag der Erstinbetriebnahme: Eine Vorgabe,
+        # die eine Wahl überschreibt, ist keine Vorgabe mehr (§2.4).
+        #
+        # Sichtbar wurde es an einem Test, der unter Last einmal rot war: Er
+        # setzt die drei Auswahlen von Hand und schließt den Dialog, und
+        # dazwischen kam die Antwort der Suche.
+        remembered = already or self.ui_settings.slicer_machine_profile
         index = self.machine_choice.findData(remembered) if remembered else -1
         if index < 0 and chosen is not None:
             index = self.machine_choice.findData(str(chosen.path))

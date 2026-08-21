@@ -1328,3 +1328,59 @@ def test_the_slot_choice_survives_the_project_file(tmp_path: Path) -> None:
     zurueck = print_settings_from_data(print_settings_to_data(settings))
 
     assert zurueck.slot_profiles == ("Haus PETG", "Haus PLA weiß")
+
+
+def test_a_late_profile_search_does_not_overwrite_a_choice(qt_app: QApplication) -> None:
+    """**Der Wettlauf, an dem ein Test einmal unter Last hing.**
+
+    Die Profilsuche läuft in einem Arbeiter und antwortet nachgereicht. Wer in
+    der Zwischenzeit selbst eine Maschine gewählt hatte, sah sie danach auf
+    etwas anderes springen — und beim Schließen wurde die *neue* gemerkt, nicht
+    seine. Dieselbe Regel wie beim Druckervorschlag der Erstinbetriebnahme:
+    Eine Vorgabe, die eine Wahl überschreibt, ist keine Vorgabe mehr (§2.4).
+
+    Sichtbar wurde es, seit ``recheck_slicer`` die Suche ein zweites Mal
+    startet: Beim ersten Öffnen ist die Auswahl leer, danach nicht mehr.
+    """
+    session = Session()
+    settings = UiSettings()
+    dialog = PrintSettingsDialog(session, settings)
+
+    # So sieht es aus, wenn jemand gewählt hat, bevor die Suche antwortet.
+    dialog.machine_choice.addItem("Meine Maschine", "C:/meine/maschine.json")
+    dialog.machine_choice.setCurrentIndex(dialog.machine_choice.count() - 1)
+
+    dialog._profiles_found(
+        [
+            _profile("Etwas anderes", "machine", printer_model="Etwas anderes", nozzle=0.4),
+            _profile("Und noch was", "machine", printer_model="Und noch was", nozzle=0.6),
+        ]
+    )
+
+    assert dialog.machine_choice.currentData() == "C:/meine/maschine.json"
+
+
+def test_the_chosen_machine_survives_until_the_dialog_closes(qt_app: QApplication) -> None:
+    """Und sie ist danach gemerkt — das ist der Punkt der Sache (§29, A5).
+
+    Der Test daneben prüft die Auswahl, dieser die Folge: Was im Dialog stand,
+    gilt auch für den Export.
+    """
+    session = Session()
+    settings = UiSettings()
+    dialog = PrintSettingsDialog(session, settings)
+    dialog.machine_choice.addItem("Meine Maschine", "C:/meine/maschine.json")
+    dialog.machine_choice.setCurrentIndex(dialog.machine_choice.count() - 1)
+
+    # Zwei Profile, nicht eines: Bei genau einem fällt ``_profiles_found`` auf
+    # Index 0 zurück, und der wäre zufällig der eigene Eintrag — der Test wäre
+    # grün, ohne etwas zu prüfen.
+    dialog._profiles_found(
+        [
+            _profile("Etwas anderes", "machine", printer_model="Etwas anderes", nozzle=0.4),
+            _profile("Und noch was", "machine", printer_model="Und noch was", nozzle=0.6),
+        ]
+    )
+    dialog.reject()
+
+    assert settings.slicer_machine_profile == "C:/meine/maschine.json"
