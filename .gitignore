@@ -91,3 +91,7 @@ website/dl/
 # Und derselbe Ordner an seinem eigentlichen Ort: Auf dem Server liegt er
 # neben dem Dokumentenstamm, lokal landet er damit im Wurzelverzeichnis.
 /solidon-stats/
+
+# Der Bericht von tools/run_ui_audit.py. Er entsteht bei jedem Lauf neu und
+# gehoert dem Rechner, auf dem er lief — nicht dem Repository.
+ui-audit/

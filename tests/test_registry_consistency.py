@@ -202,3 +202,43 @@ def test_the_shared_placement_names_match_the_parts_library() -> None:
     from app.core.registry.surfaces import PART_PLACEMENT_PARAMS
 
     assert tuple(name for name, _kind, _spec in _PLACEMENT) == PART_PLACEMENT_PARAMS
+
+
+def test_every_detected_feature_kind_offers_an_operation() -> None:
+    """Ein angeklicktes Merkmal führt zu einer Handlung — oder es steht im
+    Ausnahmeverzeichnis unten (§2.6, §18.5).
+
+    **Warum das eine eigene Prüfung braucht.** ``applies_to`` sagt, welche
+    Merkmale eine Operation annimmt; die Gegenrichtung sagt niemand. Sie fiel
+    beim Nachfahren von Weg 1 auf: ``edge_loop`` ist das Merkmal für eine
+    offene Stelle im Netz — genau das, was der Prüfbericht als „Das Modell ist
+    an drei Stellen offen" meldet — und das Kontextmenü daran bot nichts an.
+    Dabei gibt es ``repair`` („Schließt Löcher"), es hatte sich nur für kein
+    Merkmal angemeldet. §2.6 nennt das Kontextmenü „den kürzesten Weg vom
+    Sehen zum Tun"; für den häufigsten Defekt führte er ins Leere.
+
+    Geprüft werden nur Arten, die auch **entstehen**: ``FEATURE_KINDS`` kommt
+    aus dem Typ und führt Vorrat, der noch keinen Erzeuger hat. Ein Merkmal,
+    das niemand anklicken kann, braucht kein Menü.
+    """
+    from app.core.registry import REGISTRY
+
+    #: Erzeugt, aber ohne Operation — mit dem Grund, warum das offen ist.
+    #: Beim Lösen hier streichen, nicht die Prüfung aufweichen.
+    known_gaps = {
+        # Der Gewinde-Baustein gibt dieses Merkmal zurück
+        # (knowledge/parts/build.py). Welche Operation fachlich auf ein
+        # fertiges Gewinde gehört, entscheidet der Bauplan und nicht diese
+        # Prüfung — offener Punkt in der ROADMAP.
+        "thread",
+    }
+    produced = {"hole", "face", "edge_loop", "pin", "thread"}
+
+    empty = {kind for kind in produced if not REGISTRY.for_feature(kind)}
+    assert empty <= known_gaps, (
+        f"Merkmale ohne jede Operation im Kontextmenü: {sorted(empty - known_gaps)} — "
+        "ein Klick darauf endet in einem Menü aus Ausblenden (§2.6)"
+    )
+    assert produced >= known_gaps, (
+        f"Ausnahme für ein Merkmal, das nicht entsteht: {sorted(known_gaps - produced)}"
+    )

@@ -46,6 +46,8 @@ bekommt einen roten Lauf.
 | Benannte Merkmale überstehen keine Boolesche Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung darüber, wann ein benanntes Merkmal wirklich fort ist — vierzehn Ops geben `features={}` zurück, und `_with_features` liest die generierten nur aus der Ausgabe |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
+| „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
+| Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | die Entscheidung des Bauplans, welche Operation auf ein fertiges Gewinde gehört; bis dahin steht `thread` als benannte Ausnahme im Konsistenztest |
 
 ---
 
@@ -8936,3 +8938,78 @@ Kein Verstoß.
       Schritt 8 → 9 mit Migration, Beispieldatei der alten Fassung, den
       Leseseiten in `make_examples.py` und neu erzeugten Beispielen. Machbar,
       aber als eigener Durchgang und nicht neben fünf anderen Punkten.
+
+## Der Bedienweg von außen nachgefahren (21.08.2026)
+
+Nicht der Kern geprüft, sondern der Weg: Was sieht jemand, der die Anwendung
+zum ersten Mal bedient, und wo hört der Weg auf. Das Werkzeug dafür war
+`tools/run_ui_audit.py` — 25 Durchläufe durch die laufende Oberfläche, 9
+Projekte, 15 Modelle, ein Aufbau von Null. **Nichts ist gestolpert**, keine
+Ausnahme. Dazu die Register-Abdeckung: 86 Operationen, 86 im Menü, 86 in der
+Befehlspalette, 86 in der Kommandozeile.
+
+Die gestufte Tiefe hält §2.4: Median drei Werte auf der Vorderseite. Über
+vier stehen vierzehn Operationen, wenn man Position X/Y/Z als den einen Wert
+liest, der sie ist — neun davon sind Bausteine, und ein Baustein braucht
+Größe, Ort und Passung. Das ist keine Nachlässigkeit, sondern die Natur der
+Kategorie.
+
+### Behoben, jeder mit Test
+
+- [x] **Ein Klick auf die offene Stelle bot keine Reparatur an.** `edge_loop`
+      ist das Merkmal für eine offene Kante — genau die Stelle, die der
+      Prüfbericht als „Das Modell ist an drei Stellen offen" meldet. Das
+      Kontextmenü daran bestand aus Ausblenden. Dabei gibt es `repair`
+      („Schließt Löcher"), es hatte sich nur für kein Merkmal angemeldet.
+      §2.6 nennt das Kontextmenü „den kürzesten Weg vom Sehen zum Tun"; für
+      den häufigsten Defekt führte er ins Leere. Jetzt
+      `applies_to=("edge_loop",)`, und `test_registry_consistency.py` prüft
+      die Gegenrichtung von `applies_to`, die vorher niemand prüfte.
+- [x] **Die Senkung war die einzige Operation mit sechs Werten und leerer
+      Rückseite.** Der Winkel steht auf 90 Grad, und der eigene doc-Satz sagt
+      warum: „90 Grad bei metrischen Senkschrauben." Ein Normwert ist keine
+      Wahl. Nach hinten gelegt hat `countersink_hole` jetzt dieselbe
+      Vorderseite wie `drill_hole` und `plug_hole` — Durchmesser, Position,
+      Achse.
+- [x] **`ui-audit/` stand nicht in `.gitignore`.** Jeder Auditlauf legte den
+      Ordner im Arbeitsbaum ab.
+
+### Zwei Funde, die eine Entscheidung brauchen
+
+- [ ] **„Eingabe korrigieren" ist ein Satz und kein Knopf.** `CORRECT_INPUT`
+      ist mit 26 Verwendungen die häufigste Handlung des Kerns und trägt
+      `primary=True` — einen Handler hat sie nicht. Bei `UserError` und
+      `FileWriteError` bleibt damit nur Abbrechen, und `FileWriteError` trifft
+      das Ende jedes Weges, den Export. **Das ist kein Regelverstoß:**
+      `tests/test_ui.py` (`test_an_error_without_a_handler_still_offers_a_way_out`)
+      definiert die Regel ausdrücklich als „entweder eine Handlung mit Wirkung
+      **oder** ein Rat zum Lesen", und die Begründung daneben ist gut — ein
+      Knopf, der nichts tut, ist schlimmer als keiner. Es steht hier, weil
+      §2.1 „keine Sackgassen" verspricht und der häufigste Bedienfehler eine
+      ist. Was ein Handler tun müsste, ist die offene Frage: Bei einem
+      Parameterfehler den Dialog mit den Werten erneut öffnen; bei „andere
+      Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog.
+- [ ] **Ein angeklicktes Gewinde bietet nichts an.** `thread` entsteht
+      wirklich — der Gewinde-Baustein gibt es zurück
+      (`knowledge/parts/build.py`) —, und `REGISTRY.for_feature("thread")` ist
+      leer. Welche Operation fachlich auf ein fertiges Gewinde gehört,
+      entscheidet der Bauplan und nicht eine Prüfung; bis dahin steht das
+      Merkmal als benannte Ausnahme im neuen Test, damit es beim Lösen
+      auffällt statt zu verschwinden.
+
+### Was dabei über das Messen zu lernen war
+
+`pytest -q` am Stück ist für diese Suite der falsche Weg, und das steht im
+Docstring von `tools/run_suite_isolated.py` seit dem 18.08. Der Lauf sammelte
+3,2 GB an und stand nach 56 Minuten noch; dateiweise sind es 16,5 Minuten.
+Zweitens: **zwei Läufe gleichzeitig gehen nicht.** Elf Dateien fielen mit
+pytest-Code 4 — Nutzungsfehler, nicht Testversagen —, weil daneben `ruff`,
+`mypy` und ein zweiter `pytest` liefen und `conftest.py` die
+Nutzerverzeichnisse aller Läufe in denselben Temp-Ordner biegt (§38). Allein
+nachgefahren: alle elf grün.
+
+Drittens, zur Wackelei von `test_performance.py`: Sie ist **keine**
+Reihenfolgefrage. `pytest-randomly` ist in dieser Umgebung gar nicht
+installiert, `-p no:randomly` also wirkungslos — zwei identisch konfigurierte
+Läufe ergaben 19 grün und 5 rot. Reine Messschwankung an der 25-%-Schwelle,
+wie der Punkt weiter oben es beschreibt.

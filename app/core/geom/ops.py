@@ -384,6 +384,12 @@ class RepairParams(BaseParams):
     params=RepairParams,
     consumes=1,
     produces=1,
+    # Am Merkmal „offene Kante" angeboten: Das ist die Stelle, die der
+    # Prüfbericht als „Das Modell ist an drei Stellen offen" meldet, und
+    # „Schließt Löcher" ist die Antwort darauf. Ohne diese Zeile bestand das
+    # Kontextmenü an einer angeklickten offenen Stelle aus Ausblenden — für
+    # den häufigsten Defekt fehlte der kürzeste Weg vom Sehen zum Tun (§2.6).
+    applies_to=("edge_loop",),
     doc=_("Schließt Löcher, entfernt entartete Dreiecke und richtet die Flächen aus."),
 )
 def repair_object(ctx: OpContext) -> OpResult:

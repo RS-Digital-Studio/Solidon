@@ -308,6 +308,12 @@ class CountersinkParams(BaseParams):
         unit=DEGREE_UNIT,
         minimum=30.0,
         maximum=170.0,
+        # Hinten, weil 90 Grad die Norm ist und nicht eine Wahl: Der eigene
+        # doc-Satz sagt es. Damit hat die Senkung dieselbe Vorderseite wie
+        # `drill_hole` und `plug_hole` — Durchmesser, Position, Achse — und war
+        # vorher die einzige Operation mit sechs Werten und leerer Rückseite
+        # (§2.4: vorn die zwei bis drei, die man tatsächlich ändert).
+        placement="advanced",
         doc=_("Voller Kopfwinkel — 90 Grad bei metrischen Senkschrauben."),
     )
     x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE_X)
@@ -388,6 +394,7 @@ def plug_hole(ctx: OpContext) -> OpResult:
         axis=cast(Axis, params.axis),
         diameter=params.diameter,
         depth=params.depth,
+        profile=ctx.profile,
         quality=ctx.quality,
     )
     return OpResult(
