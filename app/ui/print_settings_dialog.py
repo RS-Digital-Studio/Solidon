@@ -367,8 +367,9 @@ FIELDS: tuple[Field, ...] = (
         step=5.0,
         decimals=1,
         note=tr(
-            "Um wie viel die Füllung gedreht liegt. Zu ändern, wenn ihre Richtung mit der "
-            "Belastung zusammenfällt."
+            "Um wie viel die Füllung gedreht liegt. Bahnen längs der Belastung tragen mehr "
+            "als querlaufende — bei einem Teil, das in eine bekannte Richtung belastet wird, "
+            "lohnt das Drehen."
         ),
     ),
     # --- Temperaturen ---
@@ -1496,8 +1497,8 @@ class PrintSettingsDialog(QDialog):
         # die eine Wahl überschreibt, ist keine Vorgabe mehr (§2.4).
         #
         # Sichtbar wurde es an einem Test, der unter Last einmal rot war: Er
-        # setzt die drei Auswahlen von Hand und schließt den Dialog, und
-        # dazwischen kam die Antwort der Suche.
+        # setzt die drei Auswahlen von Hand und schließt den Dialog, und dazwischen
+        # kam die Antwort der Suche.
         remembered = already or self.ui_settings.slicer_machine_profile
         index = self.machine_choice.findData(remembered) if remembered else -1
         if index < 0 and chosen is not None:

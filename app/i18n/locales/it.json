@@ -2333,7 +2333,7 @@
   "Um wie viel Grad die senkrechten Flächen angestellt werden. Die Standfläche behält ihr Maß, nach oben wird der Körper schmaler.": "Di quanti gradi vengono inclinate le facce verticali. La base d'appoggio conserva la sua quota, verso l'alto il corpo si restringe.",
   "Um wie viel Grad jede Fläche flacher wird als die vorige.": "Di quanti gradi ogni faccia diventa più piatta della precedente.",
   "Um wie viel das Spiel von Stufe zu Stufe wächst.": "Di quanto cresce il gioco da un gradino all'altro.",
-  "Um wie viel die Füllung gedreht liegt. Zu ändern, wenn ihre Richtung mit der Belastung zusammenfällt.": "Di quanto è ruotato il riempimento. Da cambiare quando la sua direzione coincide con quella del carico.",
+  "Um wie viel die Füllung gedreht liegt. Bahnen längs der Belastung tragen mehr als querlaufende — bei einem Teil, das in eine bekannte Richtung belastet wird, lohnt das Drehen.": "Di quanto è ruotato il riempimento. I cordoni che corrono lungo il carico portano più di quelli trasversali: su un pezzo caricato in una direzione nota, ruotarlo conviene.",
   "Um wie viel verschoben wird, nicht wohin. Positiv geht nach rechts.": "Di quanto si sposta, non verso dove. Positivo va a destra.",
   "Um wie viel versetzt wird. Negativ ist nach innen.": "Di quanto si sposta parallelamente. Negativo va verso l'interno.",
   "Umgekehrt herum": "Al contrario",

@@ -2333,7 +2333,7 @@
   "Um wie viel Grad die senkrechten Flächen angestellt werden. Die Standfläche behält ihr Maß, nach oben wird der Körper schmaler.": "By how many degrees the vertical faces are tilted. The base keeps its size; the body narrows towards the top.",
   "Um wie viel Grad jede Fläche flacher wird als die vorige.": "By how many degrees each face gets shallower than the one before.",
   "Um wie viel das Spiel von Stufe zu Stufe wächst.": "By how much the clearance grows from step to step.",
-  "Um wie viel die Füllung gedreht liegt. Zu ändern, wenn ihre Richtung mit der Belastung zusammenfällt.": "By how much the infill is rotated. Worth changing when its direction coincides with the load.",
+  "Um wie viel die Füllung gedreht liegt. Bahnen längs der Belastung tragen mehr als querlaufende — bei einem Teil, das in eine bekannte Richtung belastet wird, lohnt das Drehen.": "By how much the infill is rotated. Lines that run along the load carry more than lines across it — on a part that is loaded in a known direction, rotating pays off.",
   "Um wie viel verschoben wird, nicht wohin. Positiv geht nach rechts.": "By how much it moves, not where to. Positive goes right.",
   "Um wie viel versetzt wird. Negativ ist nach innen.": "How far to offset. Negative goes inwards.",
   "Umgekehrt herum": "The other way round",

@@ -2333,7 +2333,7 @@
   "Um wie viel Grad die senkrechten Flächen angestellt werden. Die Standfläche behält ihr Maß, nach oben wird der Körper schmaler.": "Em quantos graus as faces verticais são inclinadas. A base mantém a sua medida; para cima o corpo estreita.",
   "Um wie viel Grad jede Fläche flacher wird als die vorige.": "Em quantos graus cada face fica mais plana do que a anterior.",
   "Um wie viel das Spiel von Stufe zu Stufe wächst.": "Em quanto a folga cresce de degrau para degrau.",
-  "Um wie viel die Füllung gedreht liegt. Zu ändern, wenn ihre Richtung mit der Belastung zusammenfällt.": "Quanto o preenchimento está rodado. A mudar quando a sua direção coincide com a da carga.",
+  "Um wie viel die Füllung gedreht liegt. Bahnen längs der Belastung tragen mehr als querlaufende — bei einem Teil, das in eine bekannte Richtung belastet wird, lohnt das Drehen.": "Quanto o preenchimento está rodado. As linhas que seguem a carga suportam mais do que as transversais — numa peça carregada numa direção conhecida, rodar compensa.",
   "Um wie viel verschoben wird, nicht wohin. Positiv geht nach rechts.": "Em quanto se desloca, não para onde. Positivo vai para a direita.",
   "Um wie viel versetzt wird. Negativ ist nach innen.": "Em quanto se afasta. Negativo é para dentro.",
   "Umgekehrt herum": "Ao contrário",
