@@ -111,6 +111,29 @@ _AXES = tuple(re.compile(rf"\b{name}(-?[0-9.]+)", re.IGNORECASE) for name in "XY
 #: Die E-Achse ohne die Bedingungen von :data:`_EXTRUSION` — für Bögen, die
 #: kein ``G1`` sind.
 _E_AXIS = re.compile(r"\bE(-?[0-9.]+)", re.IGNORECASE)
+
+#: Wo die erste Schicht anfängt — und damit, wo das Modell anfängt. Cura und
+#: die Orca-Familie schreiben ``;LAYER:0``, PrusaSlicer ``;LAYER_CHANGE``.
+#:
+#: **Davor gehört die Datei der Maschine.** Der ElegooSlicer fährt dort seine
+#: Reinigungsbahn, und die liegt bei ``Y -1,2`` — 1,2 mm vor dem Bett, das er
+#: selbst als ``printable_area = 0x0,…`` nennt. Das ist kein Fehler des
+#: Slicers, sondern der Startcode seines Maschinenprofils, den Solidon nicht
+#: kennt und nicht beurteilt (§29). Gemessen wird deshalb ab der ersten
+#: Schicht. Fehlt die Marke, wird alles gemessen: eine Datei ohne Schichtmarke
+#: hat auch keinen Startcode, den man abtrennen könnte.
+_FIRST_LAYER = re.compile(r"^;\s*(?:LAYER\s*:\s*0\b|LAYER_CHANGE\b)", re.IGNORECASE)
+
+#: Wie ein Slicer sein eigenes Bett in die Datei schreibt: Ecken als ``XxY``.
+#: ``printable_area`` ist der Name der Orca-Familie, ``bed_shape`` der von
+#: PrusaSlicer — die Orca-Familie schreibt beide.
+_BED_SHAPE = re.compile(
+    r";\s*(?:printable_area|bed_shape)\s*=\s*(?P<corners>[-0-9.x,\s]+)", re.IGNORECASE
+)
+#: Und die Höhe dazu, unter zwei Namen.
+_BED_HEIGHT = re.compile(
+    r";\s*(?:printable_height|max_print_height)\s*=\s*(?P<height>[0-9.]+)", re.IGNORECASE
+)
 _WARNING = re.compile(r";\s*(?:WARNING|Warnung)[:\s]\s*(?P<text>.+)", re.IGNORECASE)
 
 #: Die Marke, mit der PrusaSlicer jeden Schichtwechsel ankündigt. Gezählt ist
@@ -209,13 +232,28 @@ def printed_extent(text: str) -> BoundingBox | None:
     Druckdateien für die Platte nicht vor — der Vorschub ja, die Achsen
     nicht —, und wo doch, fehlt ihnen der Bezug: sie werden übersprungen,
     statt eine Zahl zu erfinden.
+
+    **Eine Bahn muss sich bewegen.** Dieselbe Bedingung, die
+    :data:`_EXTRUSION` von je trägt, und aus demselben Grund: ``G1 E6 F120``
+    fördert sechs Millimeter Material, ohne einen Millimeter zu fahren — das
+    ist die Reinigung vor dem Druck und keine Bahn. Der ElegooSlicer setzt sie
+    an ``Y -1,2``, also außerhalb des Betts, das er selbst nennt; ohne diese
+    Bedingung stand der ganze Druck 1,2 mm neben der Platte, und die Meldung
+    dazu kam bei **jedem** Orca-Lauf.
     """
     position: list[float | None] = [None, None, None]
     lowest = [float("inf")] * 3
     highest = [float("-inf")] * 3
     seen = False
     relative = False
-    for line in text.splitlines():
+    lines = text.splitlines()
+    # Die Stelle wird von der ersten Zeile an nachgeführt, gemessen wird erst ab
+    # der ersten Schicht — davor gehört die Datei dem Startcode der Maschine
+    # (:data:`_FIRST_LAYER`).
+    printing = not any(_FIRST_LAYER.match(line) for line in lines)
+    for line in lines:
+        if not printing and _FIRST_LAYER.match(line):
+            printing = True
         head = line[:3].upper()
         if head == "G91":
             relative = True
@@ -229,12 +267,20 @@ def printed_extent(text: str) -> BoundingBox | None:
         # Erst die Stelle nachführen, dann fragen, ob dort gedruckt wurde: Z
         # steht so gut wie nie in derselben Zeile wie die Bahn, und ein
         # ``G1 Y30 E0.5`` behält sein X von vorher.
+        travelled = False
         for axis, pattern in enumerate(_AXES):
             found = pattern.search(line)
             if found is not None:
                 position[axis] = float(found.group(1))
+                travelled = travelled or axis < 2
         pushed = _E_AXIS.search(line)
-        if move.group("code") == "0" or pushed is None or float(pushed.group(1)) <= 0.0:
+        if (
+            not printing
+            or move.group("code") == "0"
+            or not travelled
+            or pushed is None
+            or float(pushed.group(1)) <= 0.0
+        ):
             continue
         for axis, value in enumerate(position):
             if value is None:
@@ -250,6 +296,61 @@ def printed_extent(text: str) -> BoundingBox | None:
         if lowest[axis] > highest[axis]:
             lowest[axis] = highest[axis] = 0.0
     return BoundingBox((lowest[0], lowest[1], lowest[2]), (highest[0], highest[1], highest[2]))
+
+
+def stated_bed(text: str) -> BoundingBox | None:
+    """Das Bett, das die Datei **selbst** nennt — ``None``, wenn sie schweigt.
+
+    Dieselbe Haltung wie bei :func:`verify`: Die einzige Auskunft, die vom
+    Programm selbst kommt, ist die, die es in seine Datei schreibt. Gemessen an
+    den drei Familien:
+
+    * die Orca-Familie schreibt ``printable_area`` **und** ``bed_shape``, dazu
+      ``printable_height``,
+    * PrusaSlicer schreibt ``bed_shape`` und ``max_print_height`` — bei ihm
+      genau das, was Solidon ihm gegeben hat,
+    * CuraEngine schreibt nichts davon; dort bleibt es bei dem, was Solidon
+      selbst gesetzt hat (:func:`app.core.export.handover.bed_box`).
+
+    **Und das ist der Unterschied zwischen einer wahren und einer geratenen
+    Aussage.** Bei der Orca-Familie kommt das Maschinenprofil aus dem Bestand
+    des Slicers (§29: es wird nicht erfunden). Gegen Solidons eigenen Bauraum
+    gemessen heißt „außerhalb des Bauraums" dort zweierlei — der Druck liegt
+    daneben, oder die zwei Profile meinen verschiedene Maschinen —, und
+    unterscheiden ließe sich das nicht.
+
+    Die Ecken stehen als ``0x0,256x0,256x256,0x256``; gelesen wird die
+    Hüllbox, nicht das Vieleck. Ein ausgeschnittenes Eck (``bed_exclude_area``)
+    bleibt damit außen vor: Es ist eine Verbotszone innerhalb des Betts, und
+    ein Druck, der sie berührt, ist ein anderer Befund als einer, der über den
+    Rand hinausfährt.
+    """
+    corners: list[tuple[float, float]] = []
+    height: float | None = None
+    for line in text.splitlines():
+        found = _BED_SHAPE.match(line)
+        if found is not None and not corners:
+            for corner in found.group("corners").split(","):
+                parts = corner.strip().split("x")
+                if len(parts) != 2:
+                    return None
+                try:
+                    corners.append((float(parts[0]), float(parts[1])))
+                except ValueError:
+                    return None
+        tall = _BED_HEIGHT.match(line)
+        if tall is not None and height is None:
+            try:
+                height = float(tall.group("height"))
+            except ValueError:
+                return None
+    if not corners:
+        return None
+    xs = [corner[0] for corner in corners]
+    ys = [corner[1] for corner in corners]
+    return BoundingBox(
+        (min(xs), min(ys), 0.0), (max(xs), max(ys), height if height is not None else float("inf"))
+    )
 
 
 def _e_value(line: str) -> str:

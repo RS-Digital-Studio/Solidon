@@ -326,3 +326,86 @@ def test_a_zero_gram_header_falls_back_to_the_length() -> None:
     grams = metrics.grams(density=1.24)
 
     assert grams is not None and grams > 0.0, "die Länge trägt, nicht die leere Kopfzeile"
+
+
+# --- wohin die Datei wirklich druckt (§29) -------------------------------------
+
+#: Ein Anfang, wie der ElegooSlicer ihn schreibt: die Reinigung steht **vor**
+#: der ersten Schicht und 1,2 mm vor dem Bett, das dieselbe Datei nennt.
+ELEGOO_START = """
+; printable_area = 0x0,256x0,256x256,0x256
+; printable_height = 256
+G90
+M83
+G1 X127 Y-1.2 F20000
+G1 Z0.5 F900
+G92 E0 ;Reset Extruder
+G1 E6 F120
+G1 X87 E20 F1200
+;LAYER_COUNT:2
+;LAYER:0
+G1 Z0.2
+G1 X120 Y120 E0.5
+G1 X136 Y136 E0.5
+"""
+
+
+def test_the_start_code_of_the_machine_is_not_the_print() -> None:
+    """Zwei Gründe, aus denen dieselbe Datei sonst 1,2 mm neben der Platte
+    druckt — und beide sind gemessen, nicht gedacht.
+
+    ``G1 E6 F120`` fördert sechs Millimeter, ohne einen zu fahren: das ist die
+    Reinigung, keine Bahn. Und ``G1 X87 E20`` **fährt** dabei, liegt aber vor
+    der ersten Schicht — es ist der Startcode des Maschinenprofils, den die
+    Orca-Familie aus ihrem eigenen Bestand mitbringt und den Solidon nicht
+    beurteilt (§29).
+
+    Übrig bleibt das Modell: zwei Bahnen um die Bettmitte.
+    """
+    box = gcode.printed_extent(ELEGOO_START)
+
+    assert box is not None
+    assert box.minimum[:2] == (120.0, 120.0), "die Reinigungsbahn zählt nicht mit"
+    assert box.maximum[:2] == (136.0, 136.0)
+
+
+def test_without_a_layer_mark_everything_counts() -> None:
+    """Die Gegenprobe: Wo keine Schichtmarke steht, gibt es auch keinen
+    Startcode zum Abtrennen — dann wird die ganze Datei gemessen."""
+    ohne_marke = "\n".join(
+        line for line in ELEGOO_START.splitlines() if not line.startswith(";LAYER")
+    )
+
+    box = gcode.printed_extent(ohne_marke)
+
+    assert box is not None
+    assert box.minimum[1] == pytest.approx(-1.2), "jetzt zählt die Reinigungsbahn mit"
+
+
+def test_a_purge_without_movement_is_never_a_path() -> None:
+    """Und die zweite Hälfte einzeln: eine Förderung ohne Fahrweg ist keine
+    Bahn, gleich wo sie steht (dieselbe Bedingung wie in ``extrudes``)."""
+    stehend = "G90\nG1 X50 Y-9 F9000\nG1 E12 F120\n"
+
+    assert gcode.printed_extent(stehend) is None
+
+
+def test_the_file_says_which_bed_it_printed_on() -> None:
+    """Die einzige Auskunft, die vom Slicer selbst kommt.
+
+    Gemessen an den drei Familien: die Orca-Familie schreibt
+    ``printable_area`` und ``printable_height``, PrusaSlicer ``bed_shape``
+    und ``max_print_height``, CuraEngine keines von beiden. Gegen Solidons
+    eigenen Bauraum zu messen hieße bei den ersten zwei, eine Abweichung
+    zwischen zwei Maschinenprofilen als Druckfehler zu melden.
+    """
+    orca = gcode.stated_bed(ELEGOO_START)
+    prusa = gcode.stated_bed(
+        "; bed_shape = -110x-110,110x-110,110x110,-110x110\n; max_print_height = 250\n"
+    )
+
+    assert orca is not None
+    assert (orca.minimum, orca.maximum) == ((0.0, 0.0, 0.0), (256.0, 256.0, 256.0))
+    assert prusa is not None
+    assert (prusa.minimum, prusa.maximum) == ((-110.0, -110.0, 0.0), (110.0, 110.0, 250.0))
+    assert gcode.stated_bed(CURA) is None, "CuraEngine schreibt seine Bettform nicht"

@@ -1358,6 +1358,11 @@ def bed_box(profile: Profile, flavour: SlicerFlavour) -> BoundingBox:
     Lauf: Cura und PrusaSlicer bekommen von Solidon eine Maschine um den
     Ursprung (:func:`_machine_keys`), die Orca-Familie lädt ihr eigenes
     Maschinenprofil und misst von der Ecke der Platte.
+
+    Das hier ist die **Annahme**. Was die Datei selbst über ihr Bett sagt,
+    liest :func:`gcode.stated_bed`, und das gilt vor — gebraucht wird die
+    Annahme nur, wo der Slicer schweigt, also bei ``cura``, und dort weiß
+    Solidon die Maße genau, weil es sie selbst geschrieben hat.
     """
     width, depth, height = profile.printer.build_volume
     if flavour == "orca":
@@ -1387,6 +1392,16 @@ def off_the_bed(payload: str, profile: Profile, flavour: SlicerFlavour) -> Findi
     dürfen. Der Befund trägt den Schweregrad, den ein Druck verdient, der in
     den Rahmen fährt.
 
+    **Gegen das Bett der Datei, nicht gegen das eigene.** Die Orca-Familie und
+    PrusaSlicer schreiben ihre Bettform in die Datei; dann gilt die
+    (:func:`gcode.stated_bed`). Sonst bleibt es bei
+    :func:`bed_box` — und das trifft genau CuraEngine, dem Solidon die Maße
+    selbst gegeben hat. Der erste Anlauf maß immer gegen den eigenen Bauraum,
+    und der ElegooSlicer bekam damit bei einem Würfel in der Bettmitte einen
+    Befund: sein Maschinenprofil kommt aus seinem eigenen Bestand, und
+    „außerhalb" hieße dort entweder „daneben gedruckt" oder „zwei Profile
+    meinen verschiedene Maschinen".
+
     Unter einer Bahnbreite wird nichts gemeldet: eine Datei, die auf den
     Millimeter passt, ist in Ordnung, und die Bahn selbst liegt mit ihrer
     halben Breite ohnehin neben der Mitte, die hier gemessen wird.
@@ -1394,7 +1409,7 @@ def off_the_bed(payload: str, profile: Profile, flavour: SlicerFlavour) -> Findi
     extent = gcode.printed_extent(payload)
     if extent is None:
         return None
-    bed = bed_box(profile, flavour)
+    bed = gcode.stated_bed(payload) or bed_box(profile, flavour)
     worst, axis = 0.0, 0
     for index in range(3):
         over = max(

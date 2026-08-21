@@ -1379,6 +1379,27 @@ def test_the_orca_family_is_measured_from_the_corner() -> None:
     assert handover.off_the_bed(ecke, profile, "cura") is not None, "140 statt höchstens 110"
 
 
+def test_the_bed_in_the_file_beats_the_one_in_the_profile() -> None:
+    """Wo der Slicer sein Bett selbst nennt, gilt seines.
+
+    Die Orca-Familie und PrusaSlicer schreiben ihre Bettform in die Datei; ihr
+    Maschinenprofil kommt aus dem Bestand des Slicers und nicht von Solidon
+    (§29). Gemessen an einem Würfel in der Mitte eines 256er Betts, während im
+    Dokument ein 220er Drucker steht — bei x 230 bis 250, also jenseits von
+    220 und diesseits von 256. Ohne diese Vorfahrt stünde dort ein
+    Befund über einen Druck, der genau dort liegt, wo er hingehört — und die
+    Ursache wäre nicht der Druck, sondern zwei Profile, die verschiedene
+    Maschinen meinen.
+    """
+    profile = profiles.make_profile()
+    assert profile.printer.build_volume[0] == 220.0, "der Ausgangspunkt des Tests"
+    weit_draussen = _gcode_printing_at(230.0, 250.0)
+    mit_bett = "; printable_area = 0x0,256x0,256x256,0x256\n" + weit_draussen
+
+    assert handover.off_the_bed(weit_draussen, profile, "orca") is not None
+    assert handover.off_the_bed(mit_bett, profile, "orca") is None, "auf seinem Bett liegt es"
+
+
 def test_a_file_without_a_single_path_is_not_judged() -> None:
     """Eine Datei ohne Materialbahn sagt nichts über den Bauraum — dazu steht
     schon der Abbruch aus :func:`gcode.extrudes` bereit."""
