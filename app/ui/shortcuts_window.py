@@ -101,6 +101,56 @@ def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tu
             found.append((strip_title(), _plain(str(tool.title)), _native(tool.shortcut)))
     for sequence, title in WINDOW_KEYS:
         found.append((tr("Fenster"), str(title), _native(sequence)))
+    found.extend(_drawing_keys())
+    return found
+
+
+def _drawing_keys() -> list[tuple[str, str, str]]:
+    """Die Tasten des Zeichenmodus — vierte Quelle (§30.1).
+
+    **Warum sie nicht über das Fenster kommen.** Der Editor ist ein Dialog,
+    seine ``QShortcut`` hängen am ``SketchPanel``, und das Fenster kennt sie
+    nicht. Die Prüfung gegen die Fenstertasten sah an dieser Grenze nichts
+    mehr: Fünf von fünfzehn standen in der Übersicht, die generischen — es
+    fehlten genau die zum Zeichnen. Wer wissen wollte, wie man eine Linie
+    zeichnet, fand es allein im Tooltip des Knopfes.
+
+    Sie stehen in einer eigenen Gruppe, weil sie nur im Zeichenmodus gelten.
+    Eine Taste, die woanders nichts tut, unter „Fenster" zu führen, wäre eine
+    Zusage, die die Anwendung nicht hält.
+    """
+    from app.ui.sketch_editor import ACTION_KEYS, PLANE_KEYS, TOOL_KEYS, VIEW_KEYS
+
+    group = tr("Zeichnen")
+    #: Was die Taste tut, in derselben Sprache wie die Knöpfe daneben.
+    #:
+    #: **Bestehende Texte, keine neuen.** Jeder dieser Sätze steht schon in den
+    #: fünf Katalogen, weil der Editor ihn an seinen Knöpfen und in der
+    #: Ebenenwahl führt. Fünfzehn neue Message-IDs hätten fünf Kataloge
+    #: nachzuziehen verlangt — und dieselben Wörter zweimal übersetzt.
+    titles: dict[str, TranslatableText] = {
+        "select": _("Auswählen"),
+        "line": _("Linie"),
+        "circle": _("Kreis"),
+        "arc": _("Bogen"),
+        "point": _("Punkt"),
+        "spline": _("Spline"),
+        "trim": _("Trimmen"),
+        "rectangle": _("Rechteck"),
+        "distance": _("Abstand"),
+        "offset": _("Versetzen"),
+        "construction": _("Hilfsgeometrie"),
+        "fit": _("Alles einpassen"),
+        "plane:xy": _("Draufsicht (XY) — liegend"),
+        "plane:xz": _("Vorderansicht (XZ) — stehend, von vorn"),
+        "plane:yz": _("Seitenansicht (YZ) — stehend, von der Seite"),
+    }
+    found: list[tuple[str, str, str]] = []
+    for source in (TOOL_KEYS, ACTION_KEYS, VIEW_KEYS, PLANE_KEYS):
+        for name, sequence in source.items():
+            title = titles.get(name)
+            if title is not None:
+                found.append((group, str(title), _native(sequence)))
     return found
 
 

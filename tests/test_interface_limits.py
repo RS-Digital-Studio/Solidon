@@ -848,3 +848,30 @@ def test_the_palette_teaches_the_keys_of_the_active_scheme(qt_app: QApplication)
     finally:
         window.close()
         window.deleteLater()
+
+
+def test_the_shortcut_list_knows_the_drawing_keys(window: MainWindow) -> None:
+    """Auch die Tasten des Zeichenmodus stehen in der Übersicht.
+
+    **Derselbe Fund, eine Ebene tiefer.** Die Prüfung nebenan vergleicht mit
+    den ``QShortcut``-Kindern des *Fensters* und hat damit
+    dreizehn Tasten gefunden. Der Zeichenmodus ist ein Dialog: Seine
+    fünfzehn Tasten hängen am ``SketchPanel``, das Fenster kennt sie nicht,
+    und die Prüfung sah an dieser Grenze nichts mehr.
+
+    Nachgezählt am 21.08.2026 standen fünf von fünfzehn in der Übersicht —
+    die generischen ``Esc``, ``Home`` und ``1`` bis ``3``. Es fehlten genau
+    die zum Zeichnen: ``L`` Linie, ``C`` Kreis, ``A`` Bogen, ``P`` Punkt,
+    ``S`` Spline, ``T`` Trimmen, ``R`` Rechteck, ``D`` Maß, ``O`` Offset und
+    ``X`` Hilfslinie. Wer wissen wollte, wie man eine Linie zeichnet, fand
+    es nur im Tooltip des Knopfes — und der Docstring von ``entries`` nennt
+    „den ganzen Zeichensatz" seit je als das, was fehlte.
+    """
+    from app.ui.shortcuts_window import entries
+    from app.ui.sketch_editor import ACTION_KEYS, PLANE_KEYS, TOOL_KEYS, VIEW_KEYS
+
+    named = {key for _group, _title, key in entries(window.menuBar(), window)}
+    drawing = {**TOOL_KEYS, **ACTION_KEYS, **VIEW_KEYS, **PLANE_KEYS}
+    missing = sorted(key for key in drawing.values() if key not in named)
+
+    assert not missing, f"die Übersicht kennt diese Zeichentasten nicht: {missing}"
