@@ -2906,3 +2906,34 @@ def test_the_object_tree_gives_the_names_the_larger_half(qt_app: QApplication) -
             )
     finally:
         panel.deleteLater()
+
+
+def test_the_layer_readout_follows_the_unit(qt_app: object) -> None:
+    """Die Zeile der Schichtanalyse baute ihre Einheit selbst.
+
+    `f"{layer.area:.0f} mm²"` stand dort, und daneben `z {length(layer.z)}` —
+    dieselbe Zeile mit einer Länge, die umschaltet, und einer Fläche, die es
+    nicht tut. Geprüft wird an der echten Leiste, nicht an einem nachgebauten
+    Satz.
+    """
+    from app.core.types import LayerInfo, SliceResult
+    from app.ui.analysis_bar import LayerBar
+    from app.ui.labels import set_display_unit
+
+    bar = LayerBar()
+    # Eingeschaltet wie im Fenster, sonst bleibt die Zeile leer.
+    bar.set_active(True)
+    layer = LayerInfo(z=1.0, contours=(), area=4334.0, overhang_area=0.0, islands=(), min_width=1.0)
+    bar.show_result(SliceResult(layers=(layer,), support_volume=0.0, first_layer_area=4334.0))
+
+    try:
+        set_display_unit("mm")
+        bar._show_readout()
+        assert "4334 mm²" in bar.readout.text(), bar.readout.text()
+
+        set_display_unit("in")
+        bar._show_readout()
+        assert "6,72 in²" in bar.readout.text(), bar.readout.text()
+        assert "mm²" not in bar.readout.text()
+    finally:
+        set_display_unit("mm")

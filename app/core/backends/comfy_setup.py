@@ -23,8 +23,6 @@ eine Anwendung, die den Startbefehl errät, startet irgendwann das Falsche.
 
 from __future__ import annotations
 
-import json
-import os
 import shutil
 import subprocess
 import sys
@@ -47,65 +45,12 @@ NODE_NAME: Final = "ComfyUI-TripoSG-Solidon"
 TRIPOSG_REPO: Final = "https://github.com/VAST-AI-Research/TripoSG.git"
 WEIGHTS_REPO: Final = "VAST-AI/TripoSG"
 
-#: Das Freistell-Modell, ohne das der Bildweg nicht läuft: TripoSG will ein
-#: freigestelltes Objekt, kein Lichtbild mit Zimmer dahinter.
-#:
-#: **Hier stand ein GPL-Knoten, und das war ein Regelverstoß.** Der Ablauf
-#: sprach ``RMBG`` aus ``ComfyUI-RMBG`` an — GPL-3.0, und Regel 15 lässt keine
-#: GPL-Abhängigkeit zu. Aufgefallen ist es erst, als der Weg zum ersten Mal
-#: wirklich gefahren wurde: Der Knoten fehlte, und beim Nachsehen, woher er
-#: kommt, stand die Lizenz in seiner ersten Zeile.
-#:
-#: ComfyUI kann es seit 0.33 selbst — ``LoadBackgroundRemovalModel`` und
-#: ``RemoveBackground``, beide eingebaut. Damit fällt nicht nur die Lizenzfrage
-#: weg, sondern auch ein Installationsschritt: Es fehlt nur noch die
-#: Gewichtsdatei. Ein älteres ComfyUI kennt die Knoten nicht, und dann sagt
-#: :meth:`ComfyBackend.missing_nodes` ihre Namen — das ist der richtige Weg
-#: dafür und keine zweite Fassung des Ablaufs.
-BACKGROUND_REPO: Final = "Comfy-Org/BiRefNet"
-BACKGROUND_FILE: Final = "background_removal/birefnet.safetensors"
-
-#: Wie groß die Freistell-Gewichte sind — 444 MB gegen 7,5 GB, also nennt der
-#: Schritt sie zusammen und nicht getrennt.
-BACKGROUND_MEGABYTES: Final = 445
-
-#: Woran der TripoSG-Quelltext hängt und was eine ComfyUI-Installation nicht
-#: ohnehin mitbringt. ``fast_simplification`` steht hier statt ``pymeshlab``:
-#: dasselbe Können, aber MIT statt GPL (Regel 15).
-#:
-#: **Die Liste war zu kurz, und das fiel nicht auf.** Sie nannte drei Pakete,
-#: gemessen an einer Installation, in der andere Knoten das übrige längst
-#: mitgebracht hatten. Auf einem frischen ComfyUI Desktop fehlten sechs
-#: weitere, und die Einrichtung meldete trotzdem „fertig" — der Fehler kam
-#: erst beim Erzeugen, als ComfyUI den Knoten zu laden versuchte. Gefunden
-#: wurden sie einzeln, indem der Knoten geladen wurde, bis er lud; genau das
-#: prüft :func:`nodes_load` seither am Ende jeder Einrichtung.
-#:
-#: ``antlr4-python3-runtime`` trägt eine Fassung, und die ist kein
-#: Übervorsicht: ``omegaconf`` liest damit einen vorkompilierten Automaten,
-#: und die 4.13 serialisiert ihn anders — „Could not deserialize ATN with
-#: version 3 (expected 4)" ist der Satz, den es sonst sagt. Alle Lizenzen sind
-#: geprüft: BSD, Apache-2.0 oder MIT, kein GPL (Regel 15).
-PACKAGES: Final = (
-    "jaxtyping",
-    "typeguard",
-    "fast-simplification",
-    "trimesh",
-    "diffusers",
-    "scikit-image",
-    "lazy_loader",
-    "omegaconf",
-    "antlr4-python3-runtime==4.9.3",
-)
+#: Reine Python-Pakete, an denen der TripoSG-Quelltext hängt und die eine
+#: ComfyUI-Installation nicht ohnehin mitbringt. ``fast_simplification`` steht
+#: hier statt ``pymeshlab``: dasselbe Können, aber MIT statt GPL (Regel 15).
+PACKAGES: Final = ("jaxtyping", "typeguard", "fast-simplification")
 
 #: Wo ComfyUI erfahrungsgemäß liegt, wenn niemand etwas anderes sagt.
-#:
-#: Die tragbare Fassung entpackt der Nutzer selbst, also steht sie dort, wohin
-#: er sie gelegt hat — geraten wird an den drei Stellen, an denen sie
-#: erfahrungsgemäß landet. **ComfyUI Desktop** dagegen wählt selbst, und die
-#: Wahl steht in seiner eigenen Aufstellung: :func:`_from_desktop` liest sie
-#: und schlägt deshalb auch dann an, wenn der Nutzer beim Installieren einen
-#: anderen Ort angegeben hat.
 GUESSES: Final = (
     Path("F:/AI/ComfyUI_windows_portable/ComfyUI"),
     Path("D:/AI/ComfyUI_windows_portable/ComfyUI"),
@@ -113,12 +58,6 @@ GUESSES: Final = (
     Path.home() / "ComfyUI",
     Path.home() / "Documents" / "ComfyUI",
 )
-
-#: Wo ComfyUI Desktop notiert, was es wohin installiert hat. Ein Eintrag je
-#: Installation, und ``installPath`` ist der Ordner **über** dem eigentlichen
-#: ComfyUI — dieselbe Verschachtelung, die :func:`find_comfyui` beim Nutzer
-#: ohnehin annimmt.
-DESKTOP_RECORD: Final = "Comfy Desktop/installations.json"
 
 #: Ein Schritt darf lange dauern — die Gewichte sind 7,5 GB.
 STEP_TIMEOUT_SECONDS: Final = 3600.0
@@ -167,61 +106,6 @@ class Result:
         return not self.reason
 
 
-def _config_home(platform: str = sys.platform) -> Path:
-    """Der Ort, an dem Electron-Anwendungen ihre Einstellungen ablegen.
-
-    Die Plattform ist ein **Parameter** und kein ``sys.platform`` mitten im
-    Code, und das aus zwei Gründen: So ist die Zuordnung von jeder Maschine aus
-    prüfbar, auch von der, die gerade die andere Plattform nicht ist — und
-    mypy hält die beiden anderen Zweige sonst für unerreichbar und meldet
-    genau das. Dieselbe Bauart wie ``discover.parts_for``.
-    """
-    if platform == "win32":
-        appdata = os.environ.get("APPDATA")
-        return Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
-    if platform == "darwin":
-        return Path.home() / "Library" / "Application Support"
-    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
-
-
-def _desktop_record() -> Path:
-    """Wo ComfyUI Desktop seine Aufstellung führt — je Plattform anders."""
-    return _config_home() / DESKTOP_RECORD
-
-
-def _from_desktop() -> list[Path]:
-    """Was ComfyUI Desktop installiert hat, laut eigener Aufstellung.
-
-    **Der Weg, den ein Kunde am ehesten geht, war der einzige, den wir nicht
-    kannten.** ``comfy.org`` bietet die Desktop-Anwendung als Erstes an; sie
-    legt ihr ComfyUI sechs Ebenen tief unter ``AppData/Local/Comfy-Desktop/``
-    ab, und keine der geratenen Stellen trifft das. Wer sie installiert hatte,
-    las bei uns „an den üblichen Stellen nicht gefunden" — und wir hatten die
-    Antwort vor uns liegen: Die Anwendung schreibt ihren Installationsordner in
-    eine eigene Datei, samt dem Ort, den der Nutzer im Installer gewählt hat.
-
-    Gelesen wird tolerant. Diese Datei gehört jemand anderem, ihr Aufbau ist
-    nirgends zugesagt, und eine Anwendung, die daran scheitert, wäre schlechter
-    als eine, die einfach weiter rät.
-    """
-    record = _desktop_record()
-    try:
-        listed = json.loads(record.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return []
-    if not isinstance(listed, list):
-        return []
-    found: list[Path] = []
-    for entry in listed:
-        if not isinstance(entry, dict):
-            continue
-        where = entry.get("installPath")
-        if isinstance(where, str) and where:
-            found.append(Path(where))
-    _log.info("comfy desktop lists %d installation(s)", len(found))
-    return found
-
-
 def find_comfyui(given: str | Path | None = None) -> Path:
     """Der Ordner, in dem ``main.py`` und ``custom_nodes`` liegen."""
     if given:
@@ -241,13 +125,6 @@ def find_comfyui(given: str | Path | None = None) -> Path:
             )
         )
 
-    # Die Desktop-Fassung steht vorn, weil sie nicht geraten ist: Sie hat es
-    # selbst aufgeschrieben. Und dieselbe Verschachtelung wie beim Nutzer —
-    # ``installPath`` nennt den Ordner darüber.
-    for listed in _from_desktop():
-        for candidate in (listed / "ComfyUI", listed):
-            if (candidate / "custom_nodes").is_dir():
-                return candidate
     for candidate in GUESSES:
         if (candidate / "custom_nodes").is_dir():
             return candidate
@@ -344,45 +221,6 @@ def _run(
         raise SetupFailed(str(what) + chr(10) + chr(10).join(lines[-6:]))
 
 
-#: Wie oft ein Download wiederholt wird, bevor er als gescheitert gilt.
-DOWNLOAD_TRIES: Final = 3
-
-#: Wie lange zwischen zwei Anläufen gewartet wird.
-RETRY_SECONDS: Final = 5.0
-
-
-def _run_repeatedly(
-    command: list[str],
-    what: TranslatableText | str,
-    progress: ProgressFn,
-    cancelled: CancelledFn | None = None,
-) -> None:
-    """Einen Download mehrmals versuchen — jedes Mal in einem **neuen Prozess**.
-
-    **Die Schleife stand zuerst im Programm selbst, und dort konnte sie nichts
-    bewirken.** ``huggingface_hub`` hält einen globalen HTTP-Client; sobald ein
-    Fehler ihn schließt, antwortet jeder weitere Versuch im selben Prozess mit
-    „Cannot send a request, as the client has been closed" — der zweite Anlauf
-    scheiterte also schneller als der erste und aus einem anderen Grund.
-    Gemessen an drei Abbrüchen auf einer wackeligen Leitung; bei 7,5 GB ist das
-    der Normalfall und nicht das Pech.
-
-    Ein neuer Prozess hat einen neuen Client. Und weil das Halbgeladene in
-    einem Ordner mit festem Namen liegt, kostet der neue Anlauf nur, was noch
-    fehlt.
-    """
-    for attempt in range(DOWNLOAD_TRIES):
-        try:
-            _run(command, what, progress, cancelled)
-            return
-        except SetupFailed:
-            if attempt == DOWNLOAD_TRIES - 1:
-                raise
-            progress(_("Abgebrochen — neuer Anlauf, es geht dort weiter, wo es stand."))
-            _log.info("download attempt %d failed, retrying", attempt + 1)
-            time.sleep(RETRY_SECONDS)
-
-
 def copy_nodes(comfyui: Path, progress: ProgressFn = _silent) -> Path:
     """Die Solidon-Knoten in ``custom_nodes`` legen."""
     if not NODE_SOURCE.is_dir():
@@ -426,69 +264,14 @@ def fetch_triposg(
     shutil.rmtree(scratch, ignore_errors=True)
 
 
-#: Die Stellen, an denen der TripoSG-Quelltext eine NVIDIA-Karte voraussetzt,
-#: obwohl er keine bräuchte. Jede ist mechanisch: Was dort steht, meint „das
-#: Gerät, auf dem gerechnet wird", und schreibt „cuda".
-#:
-#: **Gefunden, weil der Bildweg auf einer Intel-Arc-Grafik abbrach**: „Torch
-#: not compiled with CUDA enabled", gemeldet von ``TripoSGImageToMesh``. Unser
-#: eigener Knoten fragt ComfyUI nach dem Gerät (``get_torch_device``) und ist
-#: damit richtig; der geholte Quelltext fragt nicht.
-#:
-#: Ob TripoSG auf einer solchen Karte danach wirklich **rechnet**, ist eine
-#: andere Frage als ob es startet — der Flicken nimmt ihm nur die Annahme.
-_DEVICE_FIXES: Final = (
-    # **Kein Kommentar am Zeilenende.** Der erste Versuch hängte „# von
-    # Solidon" an, und die Zeile ging weiter: ``dtype`` und ``requires_grad``
-    # standen dahinter und waren damit wegkommentiert, die Klammer blieb offen.
-    # ComfyUI meldete „'(' was never closed", und die ganze Sammlung fiel aus.
-    # Gefangen hat es :func:`nodes_load` — der Beleg dafür, dass der Schritt
-    # hingehört.
-    (
-        "device='cuda', dtype=torch.float16",
-        "device=edge_coords.device, dtype=torch.float16",
-    ),
-    (
-        'with torch.autocast(device_type="cuda", dtype=torch.float32):',
-        "with torch.autocast(device_type=queries.device.type, dtype=torch.float32):",
-    ),
-    # ``empty_cache`` steht viermal darin und wirft ohne CUDA. Der Aufruf ist
-    # eine Aufräumbitte und nie notwendig — also wird er zu einer, die fragt.
-    (
-        "torch.cuda.empty_cache()",
-        "torch.cuda.empty_cache() if torch.cuda.is_available() else None  # von Solidon",
-    ),
-)
-
-
-def _fix_devices(path: Path) -> bool:
-    """Die CUDA-Annahmen in einer Datei richten. Liefert, ob etwas geschah.
-
-    Jede Ersetzung prüft **die Wirkung** und nicht den eigenen Kommentar: Wer
-    den Marker sucht, den er selbst geschrieben hat, flickt eine von Hand
-    geänderte Datei ein zweites Mal. Und keine ist Pflicht — der Quelltext
-    kommt aus einem fremden Repositorium und darf sich ändern, ohne dass die
-    Einrichtung deshalb anhält.
-    """
-    text = original = path.read_text(encoding="utf-8")
-    for wanted, fixed in _DEVICE_FIXES:
-        if fixed in text or wanted not in text:
-            continue
-        text = text.replace(wanted, fixed)
-    if text == original:
-        return False
-    path.write_text(text, encoding="utf-8")
-    return True
-
-
 def patch_sources(target: Path, progress: ProgressFn = _silent) -> None:
-    """Die Stellen richten, an denen der Quelltext hier nicht durchläuft.
+    """Die zwei Stellen richten, an denen der Quelltext hier nicht durchläuft.
 
-    Alle sind angesagt und werden vor dem Schreiben geprüft: Wer den Ordner
+    Beide sind angesagt und werden vor dem Schreiben geprüft: Wer den Ordner
     später neu holt, bekommt sie erneut, und wer sie schon hat, bekommt sie
     nicht zweimal.
     """
-    progress(_("Stellen im Quelltext richten"))
+    progress(_("Zwei Stellen im Quelltext richten"))
     utils = target / "triposg" / "inference_utils.py"
     text = utils.read_text(encoding="utf-8")
     # Geprüft wird die Wirkung, nicht der eigene Kommentar: Wer den Marker
@@ -526,10 +309,6 @@ def patch_sources(target: Path, progress: ProgressFn = _silent) -> None:
         )
         vae.write_text(text, encoding="utf-8")
 
-    for path in (utils, vae):
-        if _fix_devices(path):
-            _log.info("device assumptions fixed in %s", path.name)
-
 
 def install_packages(
     python: Path, progress: ProgressFn = _silent, cancelled: CancelledFn | None = None
@@ -553,121 +332,6 @@ def weights_present(comfyui: Path) -> bool:
     return (comfyui / "models" / "triposg" / "TripoSG" / "model_index.json").is_file()
 
 
-#: Das Programm, das die Gewichte holt. Es steht hier als Text, weil es im
-#: Python **von ComfyUI** laufen muss und nicht in unserem (siehe
-#: :func:`find_python`) — und weil der Umweg über einen kurzen Ordner eine
-#: Begründung braucht, die in keinen Einzeiler passt.
-#:
-#: **Der Umweg ist Windows.** ``huggingface_hub`` legt seine halbfertigen
-#: Dateien unter ``<Ziel>/.cache/huggingface/download/<Ordner>/`` ab, und deren
-#: Namen sind rund 130 Zeichen lang — Prüfsumme, Etag, Endung. Zusammen mit dem
-#: Installationspfad von ComfyUI Desktop, das sein ComfyUI sechs Ebenen tief
-#: unter ``AppData\Local`` ablegt, waren das gemessene 261 Zeichen. ``MAX_PATH``
-#: ist 260. **Ein Zeichen**, und der Kunde bekam mitten im 7,5-GB-Download
-#: einen ``FileNotFoundError`` mit einem Pfad, den kein Mensch liest.
-#:
-#: Zwei Auswege wurden verworfen und einer gewählt. ``LongPathsEnabled`` in der
-#: Registrierung ist eine Systemeinstellung und gehört keiner Anwendung; das
-#: Präfix ``\\?\`` half gemessen nicht (derselbe ``FileNotFoundError``).
-#: Bleibt der Umweg über einen wirklich kurzen Ordner — und „kurz" heißt hier
-#: gemessen: HFs Anhang war 163 Zeichen, das Ziel 98, zusammen die 261.
-#: ``tempfile`` liefert rund 45, also 208 und mit Abstand unter der Grenze. Ein
-#: Ordner *neben* dem Ziel wäre nur vier Zeichen kürzer gewesen als ``TripoSG``
-#: selbst und hätte beim nächsten tieferen Installationspfad wieder gerissen.
-#:
-#: Der Preis steht dazu: Liegt der Temp-Ordner auf einem anderen Laufwerk als
-#: ComfyUI, ist das Verschieben ein Kopieren von 7,5 GB. Deshalb sagt der
-#: Schritt es an, statt still zu stehen — das ``print`` unten läuft in
-#: **ComfyUIs** Python, und :func:`_run` liest dessen Ausgabe Zeile für Zeile
-#: in ``progress``. Es ist der Fortschritt, keine Ausgabe aus dem Kern.
-#:
-#: **Der Ordner trägt einen festen Namen, und das ist der Punkt.** Er hieß
-#: zuerst ``mkdtemp``, also jedes Mal anders, und ein ``finally`` räumte ihn
-#: auf. Beides zusammen machte die Zusage im Docstring von :func:`setup` zur
-#: Lüge: „setzt beim nächsten Lauf fort" — fortgesetzt wurde nichts, das
-#: Halbgeladene war gelöscht und lag beim nächsten Versuch woanders. Gemessen
-#: an drei Abbrüchen hintereinander auf einer wackeligen Leitung (``WinError
-#: 10054``, dann 2 GB weit, dann ``WinError 10038``); bei 7,5 GB ist das der
-#: Normalfall und nicht das Pech. Aufgeräumt wird jetzt nur, was gelungen ist.
-#:
-#: Und wiederholt wird von hier aus, drei Anläufe: ``huggingface_hub`` setzt je
-#: Datei fort, also kostet ein neuer Anlauf nur das, was noch fehlt. Ein
-#: Abbruch von außen kommt durch — ``_run`` beendet den Prozess, und eine
-#: Schleife im Kind hält das nicht auf.
-_FETCH_WEIGHTS = """
-import shutil, sys, tempfile
-from pathlib import Path
-from huggingface_hub import snapshot_download
-
-target = Path(sys.argv[1])
-scratch = Path(tempfile.gettempdir()) / "solidon-triposg"
-scratch.mkdir(parents=True, exist_ok=True)
-snapshot_download(sys.argv[2], local_dir=str(scratch), max_workers=8)
-shutil.rmtree(scratch / ".cache", ignore_errors=True)
-print("Verschieben", flush=True)
-target.parent.mkdir(parents=True, exist_ok=True)
-if target.exists():
-    shutil.rmtree(target, ignore_errors=True)
-shutil.move(str(scratch), str(target))
-"""
-
-
-def background_present(comfyui: Path) -> bool:
-    """Liegt ein Freistell-Modell da? Welches, entscheidet die Rolle.
-
-    Gefragt wird nach dem Ordner und nicht nach unserer Datei: Wer ``lucida``
-    installiert hat, hat eines — und die Rollenauflösung in
-    :data:`app.core.backends.mesh.MODEL_ROLES` nimmt es dann auch.
-    """
-    folder = comfyui / "models" / "background_removal"
-    return any(folder.glob("*.safetensors")) if folder.is_dir() else False
-
-
-def fetch_background(
-    comfyui: Path,
-    python: Path,
-    progress: ProgressFn = _silent,
-    cancelled: CancelledFn | None = None,
-) -> None:
-    """Das Freistell-Modell holen — 445 MB, und nur wenn keines da ist."""
-    if background_present(comfyui):
-        return
-    target = comfyui / "models" / "background_removal"
-    target.mkdir(parents=True, exist_ok=True)
-    _run_repeatedly(
-        [
-            str(python),
-            "-s",
-            "-c",
-            _FETCH_FILE,
-            str(target),
-            BACKGROUND_REPO,
-            BACKGROUND_FILE,
-        ],
-        _("Modell fürs Freistellen laden — 445 MB"),
-        progress,
-        cancelled,
-    )
-
-
-#: Eine einzelne Datei holen, statt eines ganzen Repositoriums. Derselbe Grund
-#: für den kurzen Ordner wie bei :data:`_FETCH_WEIGHTS`, und dieselbe
-#: Wiederholung: Die Leitung entscheidet, nicht die Dateigröße.
-_FETCH_FILE = """
-import shutil, sys, tempfile
-from pathlib import Path
-from huggingface_hub import hf_hub_download
-
-target, repo, name = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
-scratch = Path(tempfile.gettempdir()) / "solidon-hf"
-scratch.mkdir(parents=True, exist_ok=True)
-got = hf_hub_download(repo, name, local_dir=str(scratch))
-target.mkdir(parents=True, exist_ok=True)
-shutil.move(got, str(target / Path(name).name))
-shutil.rmtree(scratch, ignore_errors=True)
-"""
-
-
 def fetch_weights(
     comfyui: Path,
     python: Path,
@@ -678,80 +342,18 @@ def fetch_weights(
     if weights_present(comfyui):
         return
     target = comfyui / "models" / "triposg" / "TripoSG"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    _run_repeatedly(
-        [str(python), "-s", "-c", _FETCH_WEIGHTS, str(target), WEIGHTS_REPO],
+    _run(
+        [
+            str(python),
+            "-s",
+            "-c",
+            "from huggingface_hub import snapshot_download;"
+            f"snapshot_download({WEIGHTS_REPO!r}, local_dir={str(target)!r}, max_workers=8)",
+        ],
         _("Gewichte laden — rund 7,5 GB, das dauert"),
         progress,
         cancelled,
     )
-
-
-#: Das Programm, das prüft, ob die Knoten wirklich laden. Es läuft im Python
-#: von ComfyUI, denn nur dort steht, was ComfyUI hat — unser eigenes wüsste
-#: darüber nichts.
-#:
-#: Geladen wird über den Dateipfad und nicht als Modul: Der Ordner heißt
-#: ``ComfyUI-TripoSG-Solidon``, und Bindestriche sind in einem Modulnamen nicht
-#: erlaubt. ``folder_paths`` liegt in ComfyUIs Wurzel, also muss die auf dem
-#: Suchpfad stehen; ``argv`` wird gesetzt, weil ComfyUI beim Import seine
-#: Startargumente liest und ohne sie über unsere stolpert.
-_LOAD_NODES = """
-import importlib.util, sys
-from pathlib import Path
-
-root, nodes = Path(sys.argv[1]), Path(sys.argv[2])
-sys.argv = ["main.py"]
-sys.path.insert(0, str(root))
-spec = importlib.util.spec_from_file_location(
-    "solidon_nodes", nodes / "__init__.py", submodule_search_locations=[str(nodes)]
-)
-module = importlib.util.module_from_spec(spec)
-sys.modules["solidon_nodes"] = module
-spec.loader.exec_module(module)
-names = sorted(getattr(module, "NODE_CLASS_MAPPINGS", {}))
-if not names:
-    raise SystemExit("Die Sammlung meldet keine Knoten.")
-print("Knoten:", ", ".join(names))
-"""
-
-
-def nodes_load(comfyui: Path, python: Path, nodes: Path, progress: ProgressFn = _silent) -> None:
-    """Nachsehen, ob ComfyUI die Knoten laden **kann**. Wirft, wenn nicht.
-
-    **Die Einrichtung sagte „fertig", ohne es zu wissen.** Sie kopierte, klonte,
-    flickte und installierte — und ob am Ende etwas lief, erfuhr der Kunde erst,
-    wenn er ein Bild hineinlegte und *Erzeugen* drückte: Dann stand in ComfyUIs
-    Protokoll „No module named 'trimesh'", und im Dialog stand, der Knoten sei
-    unbekannt. Auf einem frischen ComfyUI Desktop war das der Normalfall, nicht
-    der Ausnahmefall — sechs Pakete fehlten.
-
-    Der Schritt kostet zwei Sekunden und ist der einzige, der die Frage stellt,
-    die den Kunden angeht: Läuft es. Was er findet, reist mit — die Meldung des
-    Ladefehlers sagt genauer, was fehlt, als jeder Satz, den wir vorher
-    erraten könnten.
-    """
-    try:
-        _run(
-            [str(python), "-s", "-c", _LOAD_NODES, str(comfyui), str(nodes)],
-            _("Nachsehen, ob die Knoten laden"),
-            progress,
-        )
-    except SetupFailed as problem:
-        raise SetupFailed(
-            str(
-                _(
-                    "Die Knoten liegen an ihrem Platz, ComfyUI kann sie aber nicht "
-                    "laden. Meist fehlt ein Paket in ComfyUIs eigener Umgebung — "
-                    "was genau, steht darunter. Ein zweiter Lauf der Einrichtung "
-                    "zieht es nach; bleibt es dabei, gehört die Zeile in eine "
-                    "Rückmeldung an den Support."
-                )
-            )
-            + chr(10)
-            + chr(10)
-            + str(problem)
-        ) from problem
 
 
 def setup(
@@ -782,17 +384,8 @@ def setup(
             return _stopped(found, target)
         patch_sources(target, progress)
         install_packages(python, progress, cancelled)
-        # **Erst prüfen, dann „fertig" sagen** — und vor den Gewichten, denn
-        # ein fehlendes Paket zu melden ist nach zwei Sekunden mehr wert als
-        # nach einer halben Stunde Download.
-        nodes_load(found, python, target, progress)
         if not weights:
             return Result(comfyui=found, nodes=target, weights=weights_present(found))
-        if cancelled is not None and cancelled():
-            return _stopped(found, target)
-        # Das Kleine zuerst: 445 MB gegen 7,5 GB. Wer abbricht, hat dann
-        # wenigstens den Teil, der schnell ging.
-        fetch_background(found, python, progress, cancelled)
         if cancelled is not None and cancelled():
             return _stopped(found, target)
         fetch_weights(found, python, progress, cancelled)

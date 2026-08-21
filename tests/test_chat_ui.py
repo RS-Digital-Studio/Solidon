@@ -17,7 +17,6 @@ pytest.importorskip("PySide6")
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QApplication, QPushButton
 
-from app.core.backends import llm
 from app.core.backends.llm import Reply, ToolCall
 from app.core.backends.scripted import ScriptedBackend
 from app.core.scene.project import new_project
@@ -457,17 +456,19 @@ def test_the_probe_says_what_a_useless_model_means(
     monkeypatch.setattr(keys, "_keyring", lambda: None)
     dialog = KeyDialog()
 
-    dialog._probe_done(False, llm.Speed())
+    dialog._probe_done(False)
     assert "führt aber nichts aus" in dialog.probe_result.text()
 
-    dialog._probe_done(True, llm.Speed())
+    dialog._probe_done(True)
     assert "brauchbar" in dialog.probe_result.text()
 
-    dialog._probe_done(None, llm.Speed())
+    dialog._probe_done(None)
     assert "ollama serve" in dialog.probe_result.text(), "kein Ergebnis ist kein Urteil"
 
 
 def test_the_summary_names_what_would_change(qt_app: QApplication) -> None:
+    from PySide6.QtCore import QLocale
+
     from app.core.agent.proposal import Proposal
     from app.core.geom.difference import Difference, SceneDifference
 
@@ -478,11 +479,25 @@ def test_the_summary_names_what_would_change(qt_app: QApplication) -> None:
     proposal = Proposal(request="x")
     proposal.drafts.append(object())  # type: ignore[arg-type]
 
-    text = describe(ProposalPreview(proposal=proposal, difference=difference))
+    # **Die Sprache festgenagelt, nicht geerbt.** Die Zahl geht durch
+    # ``localised`` und trägt damit das Trennzeichen der Anzeigesprache. Ohne
+    # diese Zeile prüfte der Test die Spracheinstellung der Maschine: auf einem
+    # deutschen Windows stand hier ein Komma, in der CI ein Punkt, und grün war
+    # er nur an einem der beiden Orte.
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale("de"))
+        text = describe(ProposalPreview(proposal=proposal, difference=difference))
 
-    assert "Operation" in text
-    assert "+2.00 cm³" in text
-    assert "-0.50 cm³" in text
+        assert "Operation" in text
+        assert "+2,00 cm³" in text
+        assert "-0,50 cm³" in text
+
+        QLocale.setDefault(QLocale("en"))
+        english = describe(ProposalPreview(proposal=proposal, difference=difference))
+        assert "+2.00 cm³" in english
+    finally:
+        QLocale.setDefault(before)
 
 
 def test_the_proposal_shows_its_costs_and_questions(qt_app: QApplication) -> None:
@@ -992,62 +1007,3 @@ def test_a_broken_pull_frees_the_button(
     assert dialog.pull_button.text() == "Modell holen", "der Knopf ist wieder der, der es holt"
     assert dialog.pull_progress.isHidden()
     assert "schiefgegangen" in dialog.probe_result.text()
-
-
-def test_a_model_on_the_processor_says_so_before_it_is_blamed(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """**Gemessene einundvierzig Minuten, bis die erste Antwort beginnt.**
-
-    Auf einer Maschine mit Intel-Arc-Grafik spricht Ollama die Karte nicht an
-    und rechnet auf dem Prozessor: 7,8 Token je Sekunde beim Einlesen, und der
-    Auftrag dieser Anwendung ist rund 19 000 Token lang. „Das Modell ruft
-    Werkzeuge auf" ist dann wahr und nutzlos — der Kunde sieht ein Fenster, das
-    nichts tut, und hält es für einen Fehler der Anwendung.
-
-    Die Zahlen setzt die Oberfläche ein, nicht der Kern: Dort steht der Satz
-    mit seinen Platzhaltern (§33.1, dasselbe Muster wie ``AppError.values``).
-    """
-    from app.core.backends import keys, llm
-    from app.ui.dialogs import KeyDialog
-
-    monkeypatch.setattr(keys, "_keyring", lambda: None)
-    dialog = KeyDialog()
-    dialog._probe_done(True, llm.Speed(tokens_per_second=7.8))
-
-    gesagt = dialog.probe_result.text()
-    assert "Prozessor" in gesagt
-    assert "7.8" in gesagt, "die gemessene Zahl steht dabei"
-    assert "41" in gesagt, "und was sie für den Kunden bedeutet"
-    assert "{" not in gesagt, "die Platzhalter sind gefüllt"
-    assert "Schlüssel" in gesagt, "Regel 17: der Vorschlag gehört dazu"
-
-
-def test_a_model_on_a_graphics_card_gets_the_plain_answer(
-    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Wo nichts zu warnen ist, wird nicht gewarnt.
-
-    Gesagt wird nur, was der Kunde nicht selbst sehen kann. Ein Modell auf
-    einer Karte bekommt die Antwort auf die Frage, die er gestellt hat.
-    """
-    from app.core.backends import keys, llm
-    from app.ui.dialogs import KeyDialog
-
-    monkeypatch.setattr(keys, "_keyring", lambda: None)
-    dialog = KeyDialog()
-    dialog._probe_done(True, llm.Speed(tokens_per_second=850.0))
-
-    assert "brauchbar" in dialog.probe_result.text()
-    assert "Prozessor" not in dialog.probe_result.text()
-
-
-def test_a_speed_that_was_not_measured_claims_nothing(qt_app: QApplication) -> None:
-    """Ein Server, der schweigt, meldet sich schon über ``available`` ab."""
-    from app.core.backends import llm
-    from app.ui.dialogs import KeyDialog
-
-    dialog = KeyDialog()
-    dialog._probe_done(False, llm.Speed())
-
-    assert "als Text" in dialog.probe_result.text(), "die Werkzeugfrage bleibt beantwortet"

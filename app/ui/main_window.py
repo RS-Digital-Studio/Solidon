@@ -173,8 +173,10 @@ from app.ui.labels import (
     feature_label,
     kind_requirement,
     length,
+    localised,
     spoiled_the_exact_body,
 )
+from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.loading import LoadingVeil, remaining_time
@@ -3334,7 +3336,8 @@ class MainWindow(QMainWindow):
             show_error(error, self)
             return
         self.announce(
-            f"{tr('Kalibriert')}: {calibrated.id} · {tr('Spiel')} {calibrated.clearance:.2f} mm"
+            f"{tr('Kalibriert')}: {calibrated.id} · {tr('Spiel')} "
+            + localised(f"{calibrated.clearance:.2f} mm")
         )
         # Toleranzen sind Verweise (§12), die Szene muss also neu gebaut werden.
         self.session.evaluate_async()
@@ -3624,16 +3627,19 @@ class MainWindow(QMainWindow):
             for feature_id, feature in entry.features.items():
                 if feature.kind != "face":
                     continue
-                area = float(feature.params.get("area", 0.0))
+                size = float(feature.params.get("area", 0.0))
                 normal = feature.params.get("normal", (0.0, 0.0, 1.0))
-                label = tr("Fläche an {object} — {area} mm², {side}").format(
+                label = tr("Fläche an {object} — {area}, {side}").format(
                     object=entry.name,
-                    area=f"{area:.0f}",
+                    # Die Einheit gehört in den Wert und nicht in den Satz: In
+                    # Zoll steht dort „in²", und ein Satz mit eingebautem „mm²"
+                    # könnte das nicht sagen.
+                    area=area_label(size),
                     side=_face_side(normal),
                 )
                 found.append(
                     (
-                        area,
+                        size,
                         feature_id,
                         label,
                         (float(normal[0]), float(normal[1]), float(normal[2])),

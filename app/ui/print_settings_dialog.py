@@ -73,7 +73,7 @@ from app.core.types import (
 from app.core.units import DEGREE_UNIT
 from app.i18n import tr
 from app.ui.dialogs import show_error
-from app.ui.labels import by_title, choice_label, colour_name
+from app.ui.labels import NumberSpin, by_title, choice_label, colour_name, localised
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.session import Session
@@ -1834,10 +1834,16 @@ class PrintSettingsDialog(QDialog):
     def _label(self, field: Field) -> QLabel:
         """Die Beschriftung der Zeile — mit demselben Satz wie das Feld daneben.
 
-        Als Widget und nicht als Zeichenkette: ``addRow`` baut aus einem String
-        selbst ein Label, und an das kommt niemand mehr heran. Wer eine Zeile
-        liest, zeigt auf ihre Beschriftung und nicht auf das Eingabefeld — ein
-        Tooltip, der nur am Feld hängt, findet nur, wer schon dort steht.
+        Wer eine Zeile liest, zeigt auf ihre Beschriftung und nicht auf das
+        Eingabefeld — ein Tooltip, der nur am Feld hängt, findet nur, wer schon
+        dort steht.
+
+        Als Widget und nicht als Zeichenkette, damit der Satz dort steht, wo
+        die Beschriftung entsteht. Erreichbar wäre sie auch danach: ``addRow``
+        baut aus einem String selbst ein `QLabel`, und
+        ``QFormLayout.labelForField`` gibt es heraus — so macht es der
+        Operationsdialog, der seine Zeilen als Zeichenketten anlegt. Beides
+        geht; hier stand die Wahl für die Stelle, an der man es nicht vergisst.
         """
         label = QLabel(f"{field.title} [{field.unit}]" if field.unit else field.title, self)
         if field.note:
@@ -1881,7 +1887,7 @@ class PrintSettingsDialog(QDialog):
             button.changed.connect(self._editor_changed)
             editor = button
         else:
-            number = QDoubleSpinBox(self)
+            number = NumberSpin(self)
             number.setRange(field.minimum, field.maximum)
             number.setSingleStep(field.step)
             number.setDecimals(field.decimals)
@@ -2353,7 +2359,7 @@ class PrintSettingsDialog(QDialog):
             parts.append(f"{tr('Druckzeit')}: {metrics.print_minutes:.0f} min")
         grams = metrics.grams(self.settings.filament.density)
         if grams is not None:
-            parts.append(f"{tr('Material')}: {grams:.1f} g")
+            parts.append(f"{tr('Material')}: " + localised(f"{grams:.1f} g"))
         if metrics.layer_count is not None:
             parts.append(f"{tr('Schichten')}: {metrics.layer_count}")
         if len(outcomes) > 1:

@@ -25,7 +25,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QApplication, QMenu
+from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
 from app.core.errors import ValidationError
 from app.core.registry import REGISTRY
@@ -1293,3 +1293,87 @@ def test_switching_to_an_expression_starts_from_millimetres(window: MainWindow) 
         assert dialog.values()[entry.name] == f"={default_mm:g}"
     finally:
         dialog.deleteLater()
+
+
+# --- Der Satz an beiden Hälften der Zeile ----------------------------------------
+
+
+def _rows_of(dialog: OperationDialog) -> list[tuple[str, QWidget, QWidget | None]]:
+    """Jede Zeile des Dialogs als (Name, Feld, Beschriftung)."""
+    rows = []
+    for name, editor in dialog._editors.items():
+        form = dialog._rows.get(name)
+        rows.append((name, editor, form.labelForField(editor) if form is not None else None))
+    return rows
+
+
+def test_every_parameter_explains_itself_at_both_halves_of_its_row(window: MainWindow) -> None:
+    """457 Parameter tragen einen ``doc``-Satz, und er stand nur am Feld.
+
+    Wer eine Zeile nicht versteht, zeigt auf das unverständliche Wort — auf die
+    Beschriftung, nicht auf den Kasten daneben. Gemessen an vier Dialogen:
+    siebenundvierzig Zeilen, siebenundvierzig Sätze am Feld, null an der
+    Beschriftung. Dieselbe Lücke wie in den Druckeinstellungen, nur eine Ebene
+    höher und mit zehnmal so vielen Feldern.
+
+    Über das ganze Register, nicht über eine Auswahl: Ein Dialog, der als
+    einziger stumm bleibt, ist genau der Fall, den eine Stichprobe verpasst.
+    """
+    silent: list[str] = []
+    without_label = 0
+    checked = 0
+    for spec in REGISTRY.all():
+        dialog = OperationDialog(spec, {}, window)
+        try:
+            docs = {entry.name: str(entry.doc or "") for entry in spec.params.spec()}
+            for name, editor, caption in _rows_of(dialog):
+                sentence = docs.get(name, "")
+                if not sentence:
+                    continue
+                if not editor.isEnabled():
+                    # Eine gesperrte Zeile trägt den Grund und nicht ihren
+                    # eigenen Satz — vier Parameter stehen beim Öffnen so da.
+                    # Geprüft wird das im Test darunter.
+                    continue
+                checked += 1
+                if editor.toolTip() != sentence:
+                    silent.append(f"{spec.name}.{name}: Feld trägt {editor.toolTip()!r}")
+                if editor.accessibleDescription() != sentence:
+                    silent.append(f"{spec.name}.{name}: kein accessibleDescription")
+                if caption is None:
+                    without_label += 1
+                    continue
+                if caption.toolTip() != sentence:
+                    silent.append(f"{spec.name}.{name}: Beschriftung trägt {caption.toolTip()!r}")
+                if caption.statusTip() != sentence:
+                    silent.append(f"{spec.name}.{name}: Beschriftung ohne statusTip")
+        finally:
+            dialog.reject()
+            dialog.deleteLater()
+
+    assert checked > 400, f"nur {checked} Parameter geprüft — die Schleife greift nicht"
+    assert not silent, f"{len(silent)} stumme Hälften:\n" + "\n".join(silent[:25])
+
+
+def test_a_greyed_out_row_says_why_on_both_halves(window: MainWindow) -> None:
+    """Und bei einer gesperrten Zeile ist der Grund die Auskunft, die zählt.
+
+    In ein ausgegrautes Feld zeigt niemand — man zeigt auf das Wort davor und
+    fragt, warum es grau ist. Der Grund stand nur im Feld.
+    """
+    spec = REGISTRY.get("orient_for_print")
+    dialog = OperationDialog(spec, {}, window)
+
+    candidates = dialog._editors["candidates"]
+    caption = dialog._rows["candidates"].labelForField(candidates)
+    assert caption is not None
+
+    dialog._editors["thorough"].setChecked(False)
+    assert not candidates.isEnabled()
+    assert candidates.toolTip() == caption.toolTip(), "beide Hälften sagen dasselbe"
+    assert _title_of(spec, "thorough") in caption.toolTip(), caption.toolTip()
+
+    dialog._editors["thorough"].setChecked(True)
+    assert candidates.isEnabled()
+    assert candidates.toolTip() == caption.toolTip()
+    assert _title_of(spec, "thorough") not in caption.toolTip(), "wieder der eigene Satz"

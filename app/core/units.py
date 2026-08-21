@@ -188,6 +188,31 @@ def format_volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
     return f"{cubic_centimetres:.1f} cm³"
 
 
+def format_area(value_mm2: float, unit: LengthUnit = "mm") -> str:
+    """Eine Fläche in der Einheit, die zur Anzeigelänge passt (§19.3).
+
+    Länge und Volumen folgten der Umschaltung seit je, die Fläche nicht: Wer in
+    Zoll arbeitete, sah Maße in Zoll, Volumen in Kubikzoll — und daneben
+    „4334 mm²". Vier Stellen zeigen Flächen, und alle vier hatten die Einheit
+    fest eingebaut.
+
+    In Millimetern bleibt es bei ganzen Quadratmillimetern; das ist die
+    Schreibweise, die im Prüfbericht und in der Schichtanalyse steht, und eine
+    Nachkommastelle wäre dort eine Genauigkeit, die keine Messung trägt. In Zoll
+    wachsen die Stellen wie beim Volumen, bis zwei geltende Ziffern dastehen —
+    ein Quadratmillimeter ist ein Anderthalbtausendstel Quadratzoll, und mit
+    zwei festen Stellen sähe alles Kleine wie null aus.
+    """
+    if unit == "in":
+        square_inches = value_mm2 / UNIT_TO_MM["in"] ** 2
+        size = abs(square_inches)
+        decimals = 2
+        while decimals < 5 and 0.0 < size < 10.0 ** (1 - decimals):
+            decimals += 1
+        return f"{square_inches:.{decimals}f} in²"
+    return f"{value_mm2:.0f} mm²"
+
+
 def format_length(value_mm: float, unit: LengthUnit = "mm", with_unit: bool = True) -> str:
     """Formatiert eine Kernlänge für die Anzeige in der gewünschten Einheit.
 

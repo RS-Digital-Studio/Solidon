@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 from app.core.perceive.maps import AnalysisMap, MapKind
 from app.core.types import SliceResult
 from app.i18n import tr
-from app.ui.labels import length
+from app.ui.labels import area, length
 from app.ui.palette import LAYER_WIDTHS, ROLES, VIRIDIS, Role, map_colour, readable_on
 from app.ui.panels import origin_label
 from app.ui.style import NORMAL, TIGHT
@@ -322,12 +322,12 @@ class LayerBar(QWidget):
         parts = [
             f"{tr('Schicht')} {self.slider.value() + 1}/{len(result.layers)}",
             f"z {length(layer.z)}",
-            f"{layer.area:.0f} mm²",
+            area(layer.area),
         ]
         if layer.islands:
             parts.append(f"{len(layer.islands)} × {tr('Insel')}")
         if layer.overhang_area > 0.0:
-            parts.append(f"{tr('Überhang')} {layer.overhang_area:.0f} mm²")
+            parts.append(f"{tr('Überhang')} {area(layer.overhang_area)}")
         self.readout.setText(" · ".join(parts))
         self._show_legend(layer)
 

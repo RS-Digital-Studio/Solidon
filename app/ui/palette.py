@@ -161,10 +161,10 @@ class Encoding:
 
     colour: str
     pattern: str
-    """``solid``, ``forward``, ``backward``, ``dots`` — hatching for print and for
-    anyone who cannot tell the colours apart."""
+    """``solid``, ``forward``, ``backward``, ``dots`` — die Schraffur fürs
+    Gedruckte und für jeden, der die Farben nicht auseinanderhält."""
     symbol: str
-    """A single character shown in legends and labels."""
+    """Ein einzelnes Zeichen, das in Legenden und Beschriftungen mitläuft."""
     label_key: str
     """Message-ID der Beschriftung — so bleibt die Legende ohne Farbe lesbar."""
 

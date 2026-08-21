@@ -6069,3 +6069,23 @@ def test_a_finding_names_a_body_a_later_step_has_replaced(qt_app: QApplication) 
     assert any("Dose" in line for line in about_stale), (
         f"der Bericht nennt den Namen nicht, den der Körper trug: {about_stale}"
     )
+
+
+def test_the_face_jump_names_the_area_in_the_chosen_unit(window: MainWindow) -> None:
+    """Und die Beschriftung des Flächensprungs trug die Einheit **im Satz** —
+    „Fläche an {object} — {area} mm², {side}". Ein Satz mit eingebauter Einheit
+    kann nicht in Zoll sprechen; die Einheit gehört in den Wert."""
+    from app.ui.labels import set_display_unit
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    try:
+        set_display_unit("in")
+        faces = window._drawable_faces()
+        assert faces, "der Testkörper hat Flächen"
+        for _feature_id, label, _normal in faces:
+            assert "mm²" not in label, label
+        assert any("in²" in label for _f, label, _n in faces)
+    finally:
+        set_display_unit("mm")

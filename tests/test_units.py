@@ -10,6 +10,7 @@ from app.core.units import (
     EPS_DISPLAY,
     EPS_GEOM,
     clamp,
+    format_area,
     format_length,
     format_volume,
     from_mm,
@@ -106,3 +107,23 @@ def test_formatting_matches_the_display_precision() -> None:
     assert format_length(25.4, "in") == "1.0000 in"
     assert format_length(4.2, with_unit=False) == "4.20"
     assert not format_length(-0.001).startswith("-")
+
+
+def test_an_area_follows_the_display_unit() -> None:
+    """Laenge und Volumen folgten der Umschaltung seit je, die Flaeche nicht.
+
+    Wer in Zoll arbeitete, sah Masse in Zoll, Volumen in Kubikzoll — und
+    daneben "4334 mm2". Vier Stellen der Oberflaeche zeigen Flaechen, und alle
+    vier hatten die Einheit fest eingebaut.
+
+    In Millimetern bleibt es bei ganzen Quadratmillimetern: So steht es im
+    Pruefbericht und in der Schichtanalyse, und eine Nachkommastelle waere dort
+    eine Genauigkeit, die keine Messung traegt. In Zoll wachsen die Stellen wie
+    beim Volumen — ein Quadratmillimeter ist ein Anderthalbtausendstel
+    Quadratzoll.
+    """
+    assert format_area(4334.0) == "4334 mm²"
+    assert format_area(0.6) == "1 mm²"
+    assert format_area(645.16, "in") == "1.00 in²"
+    assert format_area(4334.0, "in") == "6.72 in²"
+    assert float(format_area(1.0, "in").split()[0]) > 0.0, "was nicht null ist, sieht nicht so aus"
