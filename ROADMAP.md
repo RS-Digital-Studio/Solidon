@@ -9715,3 +9715,123 @@ geratenen Sätzen eine Handlung zu bauen wäre schlimmer als keine.
       Hinweis". Vor einem Slicerlauf ist das zu leise; der Nutzer schickt die
       Datei an den Drucker. Ob der Schweregrad an der Stelle vom Anlass abhängen
       soll, ist eine Entscheidung über `_severity_for`.
+
+## Dieselbe Zusatzsoftware, einen Schritt weiter gedacht (21.08.2026)
+
+Der erste Durchgang hat das Installieren gebaut. Der zweite hat gefragt, was
+danach passiert — und dort lagen die schwereren Funde.
+
+### Installiert war es, gefunden nicht
+
+- [x] **Nach einer Flatpak-Installation war das Programm für Solidon nicht
+      vorhanden.** Flatpak legt die Startprogramme unter der
+      Anwendungskennung ab (`org.openscad.OpenSCAD`) und setzt den PATH
+      ausdrücklich nicht — „we're not automatically overriding PATH" steht so
+      in ihrer Begründung. Weder `shutil.which("openscad")` noch der Durchgang
+      durch `/opt` und `/usr/local` findet das. Der Knopf hätte also
+      installiert, und die Zeile daneben hätte weiter „nicht gefunden" gesagt.
+      `discover._from_flatpak` sieht in beiden Exportverzeichnissen nach, und
+      verglichen wird über `plain_name`: „orca-slicer", „OrcaSlicer" und das
+      letzte Stück von „com.orcaslicer.OrcaSlicer" sind derselbe Name. Das
+      trägt auch für Anwendungen, die niemand hier eingetragen hat — ein selbst
+      installiertes `com.prusa3d.PrusaSlicer` wird gefunden.
+- [x] **Dasselbe auf macOS, aus einem anderen Grund.** Ein Homebrew-Cask legt
+      `/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD` ab; gesucht wurde
+      direkt im Ordner und in `bin`. `parts_for()` kennt den Bündelpfad — als
+      Funktion und nicht als Zeile mit `if sys.platform`, damit die Zuordnung
+      von **jeder** Maschine aus prüfbar ist. Ein Test, der die Mac-Pfade nur
+      auf einem Mac sehen kann, prüft sie nirgends.
+- [x] **Und ein Flatpak hätte die Datei nicht lesen können, die es bearbeiten
+      soll.** Es hat sein eigenes `/tmp`, und dorthin legt `tempfile` unter
+      Linux: Der Aufruf käme an, das Programm startete, und es fände nichts —
+      „Can't open input file", unmittelbar nach einer Installation über einen
+      Knopf. Nachgesehen in den Flathub-Manifesten von OpenSCAD und OrcaSlicer:
+      beide geben `--filesystem=home` frei und kein Verzeichnis, in dem wir
+      sonst schreiben. `discover.workspace_for` legt den Arbeitsordner für
+      eingesperrte Programme in den Nutzer-Cache; für jedes andere bleibt es
+      beim Systemtemp, der zuverlässig aufgeräumt wird.
+
+### Drei Dialoge warteten beim Öffnen
+
+Derselbe Fehler wie beim Installationsdialog, an drei weiteren Stellen —
+gemessen, offscreen:
+
+| Dialog | vorher | nachher |
+|---|---|---|
+| Erstinbetriebnahme | 1,88 s | sofort |
+| Chat einrichten | 2,98 s | 0,095 s |
+| Liste der Programme (erster Durchgang) | 2,97 s | 0,012 s |
+
+- [x] **Die Erstinbetriebnahme ist das Allererste, was ein Kunde sieht.** Vier
+      Dinge liefen dafür im Oberflächen-Thread: die Suche nach vier Programmen,
+      das Auslesen eines Slicer-Profils, die HTTP-Frage an Ollama und die
+      Prüfung der optionalen Pakete. Sie sieht jetzt in einem Arbeiter nach.
+      Der Druckervorschlag aus dem Slicer-Profil kommt nachgereicht und
+      überschreibt keine getroffene Wahl — eine Vorgabe, die das täte, wäre
+      keine (§2.4).
+- [x] **Der Chat-Dialog kostete 2,98 Sekunden, davon 2,07 allein die Frage nach
+      den installierten Ollama-Modellen.** Das war ein Einbau aus dem ersten
+      Durchgang: die Modellauswahl, die dem Kunden die Namen nennt, statt sie
+      ihn tippen zu lassen. Gut gemeint und an der falschen Stelle gerechnet.
+
+### Ein Absturz, der älter ist als diese Arbeit
+
+- [x] **Die Halteleine hielt einen Arbeiter erst, wenn er fertig war.** Solange
+      er lief, hing er allein am Feld seines Dialogs — und ein Dialog, der
+      vorher freigegeben wird, nimmt damit die letzte Referenz auf einen
+      laufenden `QThread` mit. Der Speicherbereiniger zerstört das C++-Objekt
+      darunter, und der Abriss kommt später und ohne Zeile: genau die Sorte,
+      gegen die es `app/ui/leash.py` überhaupt gibt.
+
+      Sichtbar wurde es, als die Erstinbetriebnahme ihre Erhebung bekam —
+      `tests/test_first_run.py` brach reproduzierbar an der Stelle ab, an der
+      ein Dialog aus einem vorigen Test einging. `WorkerLeash.start` hält ab
+      dem ersten Moment, die Menge ist **modulweit**, und der Zeitgeber hängt
+      an einem Objekt, das die Widgets überlebt. Betroffen war auch die
+      Werkzeugprobe des Chat-Dialogs, die es seit je gibt.
+
+      Nicht zu verwechseln mit dem offenen Punkt „Der Absturz in einer
+      einzelnen Datei": Der bleibt und hat eine andere Ursache — `test_ui.py`,
+      `test_analysis_ui.py` und `test_way_three.py` in **einem** Lauf stürzen
+      weiterhin ab, einzeln sind alle drei grün, und das war vor dieser Arbeit
+      genauso.
+
+### Drei Wege, die ins Leere liefen
+
+- [x] **„Bereit" stand da, sobald ein Port antwortete.** Wer ComfyUI
+      installiert und gestartet hatte, ohne die Knoten einzurichten, tippte
+      seinen Satz, drückte *Erzeugen*, wartete — und erfuhr es danach. Die
+      Auskunft war die ganze Zeit einen HTTP-Aufruf entfernt.
+      `ComfyBackend.readiness` unterscheidet vier Lagen, der Dialog nennt drei
+      beim Namen, und wo die Knoten fehlen, führt der Knopf direkt in die
+      Einrichtung statt in eine Liste. Gefragt wird nach dem Knoten, den der
+      mitgelieferte Ablauf wirklich benutzt (`_own_node`) — wer ihn austauscht,
+      tauscht damit auch, was geprüft wird (§27). `UNKNOWN` sperrt nichts: Auf
+      dem Port kann alles liegen, und ein gesperrter Knopf wäre eine Behauptung
+      darüber.
+- [x] **Neun Gigabyte, und beim Abbrechen wären sie verfallen.** Der
+      Chat-Dialog heißt „Chat einrichten" und hat *Speichern* und *Abbrechen*.
+      Wer Ollama startete, ein Modell holte und dann abbrach — weil er gar
+      keinen Schlüssel eintragen wollte —, hatte alles richtig gemacht und
+      einen Chat, der weiter auf das alte Modell zeigte und grau blieb. Ein
+      geholtes Modell gilt jetzt sofort; das Herunterladen ist eine Tatsache,
+      nur die Eingabefelder warten auf eine Entscheidung. Und
+      `action_llm_key` frischt in **jedem** Fall auf, nicht nur nach
+      *Speichern*.
+- [x] **„Kein Slicer eingerichtet" bot nichts an** — an der Stelle, an der
+      jemand gerade slicen wollte. Der Satz bleibt (§27: das Backend meldet
+      sich ab, es nörgelt nicht), der Weg kommt dazu, und
+      `recheck_slicer` sieht danach neu nach.
+
+### Was der Test gefunden hat, nicht ich
+
+- [x] Die ComfyUI-Knoten trugen **deutsche Bezeichner** (`rechnen`,
+      `schritte`). In `tools/` hatte die Sprachprüfung sie nie gesehen; seit
+      sie unter `app/` liegen, sieht sie sie.
+- [x] Der Sammelknopf **verschluckte einen Eintrag** der Warteschlange: `done`
+      kommt, während der Arbeiter noch läuft, `_start` sah ihn als beschäftigt
+      und kehrte um — obwohl der Eintrag schon herausgenommen war. Von vier
+      fehlenden Programmen wurden drei installiert, ohne ein Wort dazu.
+- [x] Der Einrichtungsdialog sagte **nicht, woran man den Ordner erkennt**.
+      „Nicht gefunden — der Ordner gehört hier hinein" schickt jemanden suchen,
+      ohne zu sagen, wonach.
