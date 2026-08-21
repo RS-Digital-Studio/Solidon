@@ -582,7 +582,7 @@
 <table><thead><tr><th>Parámetros</th><th>Valor por defecto</th><th>Rango</th><th>Significado</th></tr></thead><tbody><tr><td>Cantidad <code>count</code></td><td>2</td><td>1 … 100</td><td>Cuántos ejemplares hay después. Dos es una copia — así la cantidad vive en la pila y no en el nombre del archivo.</td></tr><tr><td>Nombre de la copia <code>name</code></td><td></td><td></td><td>Dejar vacío deriva el nombre del original.</td></tr></tbody></table>
 <h4>Organizar sobre la cama (<code>arrange_bed</code>)</h4>
 <p>Coloca todos los objetos uno junto a otro sobre la placa de impresión.</p>
-<p>Objetos: 0 → -1 · reversible · determinista</p>
+<p>Objetos: 0 → -1 · reversible · determinista · Atajo <code>Ctrl+Shift+O</code></p>
 <table><thead><tr><th>Parámetros</th><th>Unidad</th><th>Valor por defecto</th><th>Rango</th><th>Significado</th></tr></thead><tbody><tr><td>Distancia <code>spacing</code></td><td>mm</td><td>5</td><td>0 … 100</td><td>Aire entre las piezas. Suficiente para que un pie de elefante no fusione dos de ellas por el borde.</td></tr><tr><td>Placas de impresión <code>plates</code></td><td></td><td>1</td><td>1 … 12</td><td>Lo que no cabe en una placa pasa a la siguiente.</td></tr><tr><td>Separar por filamento <code>by_material</code></td><td></td><td>desactivado</td><td></td><td>Pone piezas de filamentos distintos en placas distintas. Dos filamentos en una placa cuestan, por cada capa compartida, un cambio con su purga.</td></tr></tbody></table>
 <h4>Quitar objeto (<code>delete_object</code>)</h4>
 <p>Saca un objeto de la escena. El paso queda en el historial, así que un deshacer lo devuelve.</p>
@@ -594,7 +594,7 @@
 <h3 id="ref-repair" class="chapter">Reparación</h3>
 <h4>Reparar (<code>repair</code>)</h4>
 <p>Cierra agujeros, elimina triángulos degenerados y alinea las caras.</p>
-<p>Objetos: 1 → 1 · reversible · determinista · Se aplica a: Arista abierta</p>
+<p>Objetos: 1 → 1 · reversible · determinista · Atajo <code>Ctrl+Shift+R</code> · Se aplica a: Arista abierta</p>
 <table><thead><tr><th>Parámetros</th><th>Valor por defecto</th><th>Significado</th></tr></thead><tbody><tr><td>Cerrar zonas abiertas <code>fill_holes</code></td><td>en</td><td>Cierra agujeros pequeños. Eso no puede sustituir una pared que falta.</td></tr><tr><td>Soldando vértices <code>weld</code></td><td>en</td><td>Une los puntos que están prácticamente uno sobre otro. El motivo más frecuente de que una malla parezca compuesta de varias piezas.</td></tr><tr><td>Eliminar triángulos degenerados <code>degenerate</code></td><td>en</td><td>Triángulos sin superficie. Estorban en cualquier cálculo posterior y no aportan nada.</td></tr><tr><td>Unificando normales <code>normals</code></td><td>en</td><td>Determina dónde está el exterior. Sin esto, las caras se ven oscuras o desaparecen.</td></tr><tr><td>Eliminar fragmentos sueltos <code>small_components</code></td><td>desactivado</td><td>Desactivado por defecto: solo se borra lo que se pide borrar expresamente.</td></tr><tr><td>Resolver autointersecciones <code>self_intersections</code></td><td>desactivado</td><td>Recalcula caras que se atraviesan entre sí. Ayuda con mallas generadas y cuesta precisión — por eso desactivado hasta que haga falta.</td></tr></tbody></table>
 <h3 id="ref-transform" class="chapter">Transformación</h3>
 <h4>Alinear a la característica (<code>align_to_feature</code>)</h4>
@@ -623,10 +623,10 @@
 <table><thead><tr><th>Parámetros</th><th>Valor por defecto</th><th>Rango</th><th>Significado</th></tr></thead><tbody><tr><td>Buscar a fondo <code>thorough</code></td><td>en</td><td></td><td>Pasa cientos de posiciones por el análisis de capas. Desactivado significa: heurística rápida sobre las caras.</td></tr><tr><td>Candidatos <code>candidates</code></td><td>200</td><td>8 … 2000</td><td>Cuántas orientaciones se calculan. Más encuentra mejoras más finas y tarda proporcionalmente más. Se aplica si Buscar a fondo está marcado.</td></tr></tbody></table>
 <h4>Posar sobre la cama (<code>place_on_bed</code>)</h4>
 <p>Apoya la cara inferior del objeto en Z = 0.</p>
-<p>Objetos: 1 → 1 · reversible · determinista</p>
+<p>Objetos: 1 → 1 · reversible · determinista · Atajo <code>Ctrl+Shift+B</code></p>
 <h4>Reflejar (<code>mirror_object</code>)</h4>
 <p>Refleja un objeto respecto a un eje. Para la contraparte de una pieza — soporte izquierdo y derecho a partir de la misma construcción.</p>
-<p>Objetos: 1 → 1 · reversible · determinista</p>
+<p>Objetos: 1 → 1 · reversible · determinista · Atajo <code>Ctrl+M</code></p>
 <table><thead><tr><th>Parámetros</th><th>Valor por defecto</th><th>Rango</th><th>Significado</th></tr></thead><tbody><tr><td>Eje <code>axis</code></td><td>x</td><td>x, y, z</td><td>El eje respecto al cual se refleja — la otra mano de la misma pieza.</td></tr><tr><td>Punto de referencia <code>about</code></td><td>centre</td><td>centre, origin, bed</td><td>Dónde queda el plano de simetría: centro de gravedad, origen o superficie de apoyo.</td></tr></tbody></table>
 <h4>Trasladar (<code>translate_object</code>)</h4>
 <p>Traslada un objeto los milímetros indicados.</p>
@@ -670,13 +670,13 @@
 <table><thead><tr><th>Parámetros</th><th>Unidad</th><th>Valor por defecto</th><th>Rango</th><th>Significado</th></tr></thead><tbody><tr><td>Transición <code>radius</code></td><td>mm</td><td>3</td><td>0 … 50</td><td>Cuánto se rellena la garganta entre ambos cuerpos. Cero da la unión corriente. Salva un hueco a partir de unas tres veces su anchura.</td></tr><tr><td>Paso de la rejilla <code>grid</code></td><td>mm</td><td>1</td><td>0,05 … 10</td><td>Con qué finura se calcula. Menor significa más exacto y bastante más lento: las aristas por debajo de este paso se pierden.</td></tr></tbody></table>
 <h4>Intersección (<code>intersect_objects</code>)</h4>
 <p>Conserva solo lo que ambos objetos tienen en común.</p>
-<p>Objetos: 2 → 1 · reversible · con semilla</p>
+<p>Objetos: 2 → 1 · reversible · con semilla · Atajo <code>Ctrl+Shift+X</code></p>
 <h4>Sustraer (<code>subtract_objects</code>)</h4>
 <p>Resta el segundo objeto del primero.</p>
-<p>Objetos: 2 → 1 · reversible · con semilla</p>
+<p>Objetos: 2 → 1 · reversible · con semilla · Atajo <code>Ctrl+Shift+A</code></p>
 <h4>Unir (<code>union_objects</code>)</h4>
 <p>Funde dos objetos en uno.</p>
-<p>Objetos: 2 → 1 · reversible · con semilla</p>
+<p>Objetos: 2 → 1 · reversible · con semilla · Atajo <code>Ctrl+Shift+V</code></p>
 <h3 id="ref-sketch" class="chapter">Boceto</h3>
 <h4>Barrer a lo largo de un arco (<code>sketch_sweep</code>)</h4>
 <p>Barre una sección a lo largo de un arco: arranca en vertical y se inclina hacia el lado con el radio del arco — un codo de tubo en un solo paso.</p>
@@ -848,7 +848,7 @@
 <h4>Vaciar (<code>hollow_object</code>)</h4>
 <p>Vacía un objeto y le pone ventilaciones. Ahorra material y tiempo; el espesor de pared se mantiene dentro de lo que permite la retícula.</p>
 <p><strong>Cuándo no:</strong> No sin ventilación si el slicer va a generar soportes: la cavidad se llena de material que ya nadie puede sacar. Y no en piezas que soportan cargas — una carcasa fina rompe distinto que un cuerpo relleno.</p>
-<p>Objetos: 1 → 1 · reversible · determinista</p>
+<p>Objetos: 1 → 1 · reversible · determinista · Atajo <code>Ctrl+H</code></p>
 <table><thead><tr><th>Parámetros</th><th>Unidad</th><th>Valor por defecto</th><th>Rango</th><th>Significado</th></tr></thead><tbody><tr><td>Espesor de pared <code>wall</code></td><td>mm</td><td>2</td><td>0,4 … 50</td><td>Lo que queda. Dos anchos de extrusión son el mínimo.</td></tr><tr><td>Abrir por arriba <code>open_top</code></td><td></td><td>desactivado</td><td></td><td>Quita el techo de encima de la cavidad. El cuerpo hueco se convierte en una caja, y <em>Crear tapa</em> encuentra la abertura que necesita.</td></tr><tr><td>Ventilaciones <code>vents</code></td><td></td><td>1</td><td>0 … 6</td><td>Cero significa cavidad cerrada — en la impresión FDM eso empuja el techo hacia arriba. Una caja abierta no necesita ninguna.</td></tr><tr><td>Diámetro de ventilación <code>vent_diameter</code></td><td>mm</td><td>4</td><td>1 … 20</td><td>Anchura de las aberturas. Lo bastante grandes para que salga el material no utilizado.</td></tr></tbody></table>
 <h3 id="ref-import" class="chapter">Importación</h3>
 <h4>Cargar modelo (<code>load</code>)</h4>

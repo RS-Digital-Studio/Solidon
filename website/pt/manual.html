@@ -574,7 +574,7 @@
 <h3 id="ref-scene" class="chapter">Cena</h3>
 <h4>Dispor na mesa (<code>arrange_bed</code>)</h4>
 <p>Dispõe todos os objetos lado a lado na placa de impressão.</p>
-<p>Objetos: 0 → -1 · reversível · determinista</p>
+<p>Objetos: 0 → -1 · reversível · determinista · Atalho <code>Ctrl+Shift+O</code></p>
 <table><thead><tr><th>Parâmetros</th><th>Unidade</th><th>Predefinição</th><th>Intervalo</th><th>Significado</th></tr></thead><tbody><tr><td>Distância <code>spacing</code></td><td>mm</td><td>5</td><td>0 … 100</td><td>Ar entre as peças. O suficiente para que um pé de elefante não funda duas delas pela borda.</td></tr><tr><td>Placas de impressão <code>plates</code></td><td></td><td>1</td><td>1 … 12</td><td>O que não couber numa placa passa para a seguinte.</td></tr><tr><td>Separar por filamento <code>by_material</code></td><td></td><td>desligado</td><td></td><td>Coloca peças de filamentos diferentes em placas diferentes. Dois filamentos numa placa custam, por cada camada partilhada, uma troca e uma purga.</td></tr></tbody></table>
 <h4>Duplicar objeto (<code>duplicate_object</code>)</h4>
 <p>Cria mais exemplares do objeto. Todos ficam separados, e a quantidade está na pilha como um número.</p>
@@ -594,7 +594,7 @@
 <h3 id="ref-repair" class="chapter">Reparação</h3>
 <h4>Reparar (<code>repair</code>)</h4>
 <p>Fecha buracos, remove triângulos degenerados e alinha as faces.</p>
-<p>Objetos: 1 → 1 · reversível · determinista · Aplica-se a: Aresta aberta</p>
+<p>Objetos: 1 → 1 · reversível · determinista · Atalho <code>Ctrl+Shift+R</code> · Aplica-se a: Aresta aberta</p>
 <table><thead><tr><th>Parâmetros</th><th>Predefinição</th><th>Significado</th></tr></thead><tbody><tr><td>Fechar os pontos abertos <code>fill_holes</code></td><td>ligado</td><td>Fecha buracos pequenos. Não substitui uma parede em falta.</td></tr><tr><td>A soldar os pontos <code>weld</code></td><td>ligado</td><td>Junta pontos que estão praticamente sobrepostos. A razão mais frequente para uma malha parecer ser feita de várias peças.</td></tr><tr><td>Remover os triângulos degenerados <code>degenerate</code></td><td>ligado</td><td>Triângulos sem área. Atrapalham qualquer cálculo posterior e não trazem nada.</td></tr><tr><td>Unificação das normais <code>normals</code></td><td>ligado</td><td>Determina onde é o lado de fora. Sem isso, as faces aparecem escuras ou desaparecem.</td></tr><tr><td>Eliminar fragmentos soltos <code>small_components</code></td><td>desligado</td><td>Desligado por predefinição: só é eliminado aquilo que se mandar eliminar expressamente.</td></tr><tr><td>Resolver as autointerseções <code>self_intersections</code></td><td>desligado</td><td>Recalcula as faces que se atravessam mutuamente. Ajuda em malhas geradas e custa precisão — por isso desligado até fazer falta.</td></tr></tbody></table>
 <h3 id="ref-transform" class="chapter">Transformação</h3>
 <h4>Alinhar à característica (<code>align_to_feature</code>)</h4>
@@ -619,7 +619,7 @@
 <table><thead><tr><th>Parâmetros</th><th>Unidade</th><th>Predefinição</th><th>Intervalo</th><th>Significado</th></tr></thead><tbody><tr><td>Aresta mais longa <code>largest</code></td><td>mm</td><td>100</td><td>0,1 … 1000</td><td>A aresta mais comprida cresce até esta cota; as outras seguem na proporção.</td></tr><tr><td>Referência <code>about</code></td><td></td><td>centre</td><td>centre, origin, bed</td><td>Que ponto fica parado durante a escala.</td></tr></tbody></table>
 <h4>Espelhar (<code>mirror_object</code>)</h4>
 <p>Espelha um objeto em torno de um eixo. Para a contrapeça de uma peça — suporte esquerdo e direito a partir da mesma construção.</p>
-<p>Objetos: 1 → 1 · reversível · determinista</p>
+<p>Objetos: 1 → 1 · reversível · determinista · Atalho <code>Ctrl+M</code></p>
 <table><thead><tr><th>Parâmetros</th><th>Predefinição</th><th>Intervalo</th><th>Significado</th></tr></thead><tbody><tr><td>Eixo <code>axis</code></td><td>x</td><td>x, y, z</td><td>O eixo em que se espelha — a outra mão da mesma peça.</td></tr><tr><td>Ponto de referência <code>about</code></td><td>centre</td><td>centre, origin, bed</td><td>Onde fica o plano de espelho: centro de massa, origem ou área de apoio.</td></tr></tbody></table>
 <h4>Orientar para impressão (<code>orient_for_print</code>)</h4>
 <p>Procura a posição com a menor necessidade de suportes.</p>
@@ -627,7 +627,7 @@
 <table><thead><tr><th>Parâmetros</th><th>Predefinição</th><th>Intervalo</th><th>Significado</th></tr></thead><tbody><tr><td>Procurar a fundo <code>thorough</code></td><td>ligado</td><td></td><td>Percorre centenas de posições com a análise de camadas. Desligado significa: heurística rápida sobre as faces.</td></tr><tr><td>Candidatos <code>candidates</code></td><td>200</td><td>8 … 2000</td><td>Quantas posições são calculadas. Mais encontra melhorias mais finas e demora proporcionalmente mais. Aplica-se quando Procurar a fundo está marcado.</td></tr></tbody></table>
 <h4>Pousar na mesa (<code>place_on_bed</code>)</h4>
 <p>Pousa o objeto com a face inferior em Z = 0.</p>
-<p>Objetos: 1 → 1 · reversível · determinista</p>
+<p>Objetos: 1 → 1 · reversível · determinista · Atalho <code>Ctrl+Shift+B</code></p>
 <h4>Rodar (<code>rotate_object</code>)</h4>
 <p>Roda um objeto em torno de um eixo.</p>
 <p>Objetos: 1 → 1 · reversível · determinista · Atalho <code>Ctrl+R</code></p>
@@ -670,13 +670,13 @@
 <table><thead><tr><th>Parâmetros</th><th>Unidade</th><th>Predefinição</th><th>Intervalo</th><th>Significado</th></tr></thead><tbody><tr><td>Transição <code>radius</code></td><td>mm</td><td>3</td><td>0 … 50</td><td>Quanto a garganta entre os dois corpos se enche. Zero dá a união comum. Vence uma folga a partir de cerca de três vezes a sua largura.</td></tr><tr><td>Passo da grelha <code>grid</code></td><td>mm</td><td>1</td><td>0,05 … 10</td><td>Com que finura se calcula. Menor significa mais exato e bem mais lento — as arestas abaixo deste passo perdem-se.</td></tr></tbody></table>
 <h4>Interseção (<code>intersect_objects</code>)</h4>
 <p>Mantém apenas o que os dois objetos têm em comum.</p>
-<p>Objetos: 2 → 1 · reversível · com semente</p>
+<p>Objetos: 2 → 1 · reversível · com semente · Atalho <code>Ctrl+Shift+X</code></p>
 <h4>Subtrair (<code>subtract_objects</code>)</h4>
 <p>Subtrai o segundo objeto ao primeiro.</p>
-<p>Objetos: 2 → 1 · reversível · com semente</p>
+<p>Objetos: 2 → 1 · reversível · com semente · Atalho <code>Ctrl+Shift+A</code></p>
 <h4>Unir (<code>union_objects</code>)</h4>
 <p>Funde dois objetos num só.</p>
-<p>Objetos: 2 → 1 · reversível · com semente</p>
+<p>Objetos: 2 → 1 · reversível · com semente · Atalho <code>Ctrl+Shift+V</code></p>
 <h3 id="ref-sketch" class="chapter">Esboço</h3>
 <h4>Conduzir ao longo de um arco (<code>sketch_sweep</code>)</h4>
 <p>Conduz uma secção transversal ao longo de um arco: a começar na vertical, inclinando-se para o lado com o raio do arco — um cotovelo de tubo num só passo.</p>
@@ -838,7 +838,7 @@
 <h4>Esvaziar (<code>hollow_object</code>)</h4>
 <p>Esvazia um objeto e coloca respiros. Poupa material e tempo; a espessura de parede mantém-se dentro do que a grelha permite.</p>
 <p><strong>Quando não:</strong> Não sem ventilação quando o slicer vai criar suportes: a cavidade enche-se de material que depois ninguém tira de lá. E não em peças que recebem forças — uma casca fina parte de forma diferente de um corpo cheio.</p>
-<p>Objetos: 1 → 1 · reversível · determinista</p>
+<p>Objetos: 1 → 1 · reversível · determinista · Atalho <code>Ctrl+H</code></p>
 <table><thead><tr><th>Parâmetros</th><th>Unidade</th><th>Predefinição</th><th>Intervalo</th><th>Significado</th></tr></thead><tbody><tr><td>Espessura de parede <code>wall</code></td><td>mm</td><td>2</td><td>0,4 … 50</td><td>O que fica. Duas larguras de extrusão são o mínimo.</td></tr><tr><td>Abrir em cima <code>open_top</code></td><td></td><td>desligado</td><td></td><td>Retira o teto por cima da cavidade. O corpo oco torna-se uma caixa, e <em>Criar tampa</em> encontra a abertura de que precisa.</td></tr><tr><td>Respiros <code>vents</code></td><td></td><td>1</td><td>0 … 6</td><td>Zero significa cavidade fechada — na impressão FDM, ela empurra o teto para cima. Uma caixa aberta dispensa isso.</td></tr><tr><td>Diâmetro dos respiros <code>vent_diameter</code></td><td>mm</td><td>4</td><td>1 … 20</td><td>Largura das aberturas. Suficientemente grande para o material não usado sair.</td></tr></tbody></table>
 <h4>Separar (<code>split_pinned</code>)</h4>
 <p>Separa um objeto num plano, com pinos na face de corte se quiser. A folga vem do perfil do material; zero pinos significa: apenas cortar.</p>

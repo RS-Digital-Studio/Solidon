@@ -574,7 +574,7 @@
 <h3 id="ref-scene" class="chapter">Szene</h3>
 <h4>Auf dem Bett anordnen (<code>arrange_bed</code>)</h4>
 <p>Legt alle Objekte nebeneinander auf das Druckbett.</p>
-<p>Objekte: 0 → -1 · umkehrbar · deterministisch</p>
+<p>Objekte: 0 → -1 · umkehrbar · deterministisch · Kürzel <code>Ctrl+Shift+O</code></p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Abstand <code>spacing</code></td><td>mm</td><td>5</td><td>0 … 100</td><td>Luft zwischen den Teilen. Genug, dass ein Elefantenfuß zwei Teile nicht am Rand zusammenwachsen lässt.</td></tr><tr><td>Druckplatten <code>plates</code></td><td></td><td>1</td><td>1 … 12</td><td>Passt nicht alles auf eine Platte, wandert der Rest auf die nächste.</td></tr><tr><td>Nach Filament trennen <code>by_material</code></td><td></td><td>aus</td><td></td><td>Legt Teile aus verschiedenen Filamenten auf verschiedene Platten. Zwei Filamente auf einer Platte kosten je gemeinsamer Schicht einen Wechsel samt Spülgang.</td></tr></tbody></table>
 <h4>Kollisionen prüfen (<code>check_collisions</code>)</h4>
 <p>Meldet Überschneidungen und was über den Bauraum hinaussteht.</p>
@@ -594,7 +594,7 @@
 <h3 id="ref-repair" class="chapter">Reparatur</h3>
 <h4>Reparieren (<code>repair</code>)</h4>
 <p>Schließt Löcher, entfernt entartete Dreiecke und richtet die Flächen aus.</p>
-<p>Objekte: 1 → 1 · umkehrbar · deterministisch · Gilt für: Offene Kante</p>
+<p>Objekte: 1 → 1 · umkehrbar · deterministisch · Kürzel <code>Ctrl+Shift+R</code> · Gilt für: Offene Kante</p>
 <table><thead><tr><th>Parameter</th><th>Vorgabe</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Offene Stellen schließen <code>fill_holes</code></td><td>an</td><td>Schließt kleine Löcher. Fehlende Wände kann das nicht ersetzen.</td></tr><tr><td>Punkte verschweißen <code>weld</code></td><td>an</td><td>Führt Punkte zusammen, die praktisch aufeinanderliegen. Der häufigste Grund dafür, dass ein Netz aus mehreren Teilen zu bestehen scheint.</td></tr><tr><td>Entartete Dreiecke entfernen <code>degenerate</code></td><td>an</td><td>Dreiecke ohne Fläche. Sie stören jede spätere Rechnung und tragen nichts.</td></tr><tr><td>Normalen vereinheitlichen <code>normals</code></td><td>an</td><td>Richtet aus, wo außen ist. Ohne das erscheinen Flächen dunkel oder verschwinden.</td></tr><tr><td>Kleinstteile löschen <code>small_components</code></td><td>aus</td><td>Standardmäßig aus: gelöscht wird nur, was ausdrücklich gelöscht werden soll.</td></tr><tr><td>Selbstdurchdringungen auflösen <code>self_intersections</code></td><td>aus</td><td>Rechnet Flächen neu, die sich gegenseitig durchdringen. Hilft bei erzeugten Netzen und kostet Genauigkeit — deshalb aus, bis es gebraucht wird.</td></tr></tbody></table>
 <h3 id="ref-transform" class="chapter">Transformation</h3>
 <h4>An Merkmal ausrichten (<code>align_to_feature</code>)</h4>
@@ -603,7 +603,7 @@
 <table><thead><tr><th>Parameter</th><th>Vorgabe</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Merkmal <code>feature</code></td><td></td><td>Bohrung oder Fläche am bewegten Objekt, zum Beispiel hole_1.</td></tr><tr><td>Ziel <code>target</code></td><td></td><td>Merkmal, auf das ausgerichtet wird, als obj_2:hole_1.</td></tr><tr><td>Umgekehrt herum <code>flip</code></td><td>aus</td><td>Dreht das Ergebnis um 180 Grad, wenn die andere Seite gemeint war.</td></tr></tbody></table>
 <h4>Auf das Bett setzen (<code>place_on_bed</code>)</h4>
 <p>Setzt das Objekt mit seiner Unterseite auf Z = 0.</p>
-<p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>
+<p>Objekte: 1 → 1 · umkehrbar · deterministisch · Kürzel <code>Ctrl+Shift+B</code></p>
 <h4>Auf Maß bringen (<code>fit_to_size</code>)</h4>
 <p>Skaliert ein Objekt so, dass seine längste Kante das angegebene Maß hat. Für alles, dessen Größe man kennt, aber dessen Faktor man erst ausrechnen müsste.</p>
 <p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>
@@ -626,7 +626,7 @@
 <table><thead><tr><th>Parameter</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Faktor <code>factor</code></td><td>1</td><td>0,001 … 1000</td><td>Gleichmäßige Skalierung. Achsweise Werte stehen hinten. Wenn das Zielmaß bekannt ist, ist „Auf Maß bringen“ der kürzere Weg.</td></tr><tr><td>Faktor X <code>fx</code></td><td>0</td><td>0 …</td><td>Nur diese Achse. Null heißt: der gleichmäßige Faktor oben gilt.</td></tr><tr><td>Faktor Y <code>fy</code></td><td>0</td><td>0 …</td><td>Null heißt: der gleichmäßige Faktor oben gilt.</td></tr><tr><td>Faktor Z <code>fz</code></td><td>0</td><td>0 …</td><td>Null heißt: der gleichmäßige Faktor oben gilt. Achsweise Skalierung verzerrt Bohrungen — sie werden oval.</td></tr><tr><td>Bezugspunkt <code>about</code></td><td>centre</td><td>centre, origin, bed</td><td>Der Punkt, der stehen bleibt: Schwerpunkt, Nullpunkt oder Aufstandsfläche.</td></tr></tbody></table>
 <h4>Spiegeln (<code>mirror_object</code>)</h4>
 <p>Spiegelt ein Objekt an einer Achse. Für das Gegenstück eines Teils — linke und rechte Halterung aus derselben Konstruktion.</p>
-<p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>
+<p>Objekte: 1 → 1 · umkehrbar · deterministisch · Kürzel <code>Ctrl+M</code></p>
 <table><thead><tr><th>Parameter</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Achse <code>axis</code></td><td>x</td><td>x, y, z</td><td>Die Achse, an der gespiegelt wird — die andere Hand desselben Teils.</td></tr><tr><td>Bezugspunkt <code>about</code></td><td>centre</td><td>centre, origin, bed</td><td>Wo die Spiegelebene liegt: Schwerpunkt, Nullpunkt oder Aufstandsfläche.</td></tr></tbody></table>
 <h4>Verschieben (<code>translate_object</code>)</h4>
 <p>Verschiebt ein Objekt um die angegebenen Millimeter.</p>
@@ -665,13 +665,13 @@
 <h3 id="ref-boolean" class="chapter">Verbinden und Abziehen</h3>
 <h4>Abziehen (<code>subtract_objects</code>)</h4>
 <p>Zieht das zweite Objekt vom ersten ab.</p>
-<p>Objekte: 2 → 1 · umkehrbar · mit Startwert</p>
+<p>Objekte: 2 → 1 · umkehrbar · mit Startwert · Kürzel <code>Ctrl+Shift+A</code></p>
 <h4>Schnittmenge (<code>intersect_objects</code>)</h4>
 <p>Behält nur, was beide Objekte gemeinsam haben.</p>
-<p>Objekte: 2 → 1 · umkehrbar · mit Startwert</p>
+<p>Objekte: 2 → 1 · umkehrbar · mit Startwert · Kürzel <code>Ctrl+Shift+X</code></p>
 <h4>Vereinigen (<code>union_objects</code>)</h4>
 <p>Verschmilzt zwei Objekte zu einem.</p>
-<p>Objekte: 2 → 1 · umkehrbar · mit Startwert</p>
+<p>Objekte: 2 → 1 · umkehrbar · mit Startwert · Kürzel <code>Ctrl+Shift+V</code></p>
 <h4>Weich verschmelzen (<code>blend_union</code>)</h4>
 <p>Vereinigt zwei Körper mit einem fließenden Übergang statt einer scharfen Kehle. Für Griffe, Verstrebungen und alles, was gedruckt nicht an der Innenecke reißen soll.</p>
 <p><strong>Wann nicht:</strong> Nicht an einem Teil, dessen Maße zählen: Das Ergebnis entsteht auf einem Raster, und scharfe Kanten der Ausgangskörper werden dabei weicher. Wo eine Passung sitzt, gehört die gewöhnliche Vereinigung hin.</p>
@@ -831,7 +831,7 @@
 <h4>Aushöhlen (<code>hollow_object</code>)</h4>
 <p>Höhlt ein Objekt aus und setzt Entlüftungen. Spart Material und Zeit; die Wandstärke stimmt im Rahmen des Rasters.</p>
 <p><strong>Wann nicht:</strong> Nicht ohne Entlüftung, wenn im Slicer Stützen entstehen: Der Hohlraum füllt sich sonst mit Material, das niemand mehr herausbekommt. Und nicht bei Teilen, die Kräfte aufnehmen — eine dünne Hülle bricht anders als ein gefüllter Körper.</p>
-<p>Objekte: 1 → 1 · umkehrbar · deterministisch</p>
+<p>Objekte: 1 → 1 · umkehrbar · deterministisch · Kürzel <code>Ctrl+H</code></p>
 <table><thead><tr><th>Parameter</th><th>Einheit</th><th>Vorgabe</th><th>Bereich</th><th>Bedeutung</th></tr></thead><tbody><tr><td>Wandstärke <code>wall</code></td><td>mm</td><td>2</td><td>0,4 … 50</td><td>Was stehen bleibt. Zwei Extrusionsbreiten sind das Minimum.</td></tr><tr><td>Oben öffnen <code>open_top</code></td><td></td><td>aus</td><td></td><td>Nimmt die Decke über dem Hohlraum weg. Aus dem hohlen Körper wird eine Dose, und <em>Deckel erzeugen</em> findet die Öffnung, die es braucht.</td></tr><tr><td>Entlüftungen <code>vents</code></td><td></td><td>1</td><td>0 … 6</td><td>Null heißt geschlossener Hohlraum — beim FDM-Druck drückt der die Decke hoch. Eine offene Dose braucht keine.</td></tr><tr><td>Entlüftungsdurchmesser <code>vent_diameter</code></td><td>mm</td><td>4</td><td>1 … 20</td><td>Weite der Öffnungen. Groß genug, dass nicht verbrauchtes Material herauskommt.</td></tr></tbody></table>
 <h4>Elefantenfuß ausgleichen (<code>compensate_first_layer</code>)</h4>
 <p>Zieht die ersten Schichten um den Betrag ein, um den sie beim Drucken breitlaufen. Der Wert kommt aus dem Materialprofil.</p>

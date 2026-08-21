@@ -574,7 +574,7 @@
 <h3 id="ref-scene" class="chapter">Scène</h3>
 <h4>Disposer sur le plateau (<code>arrange_bed</code>)</h4>
 <p>Dispose tous les objets côte à côte sur le plateau d&#x27;impression.</p>
-<p>Objets: 0 → -1 · réversible · déterministe</p>
+<p>Objets: 0 → -1 · réversible · déterministe · Raccourci <code>Ctrl+Shift+O</code></p>
 <table><thead><tr><th>Paramètres</th><th>Unité</th><th>Valeur par défaut</th><th>Plage</th><th>Signification</th></tr></thead><tbody><tr><td>Distance <code>spacing</code></td><td>mm</td><td>5</td><td>0 … 100</td><td>De l&#x27;air entre les pièces. Assez pour qu&#x27;un pied d&#x27;éléphant ne fasse pas fusionner deux pièces au bord.</td></tr><tr><td>Plateaux d&#x27;impression <code>plates</code></td><td></td><td>1</td><td>1 … 12</td><td>Ce qui ne tient pas sur un plateau passe sur le suivant.</td></tr><tr><td>Séparer par filament <code>by_material</code></td><td></td><td>désactivé</td><td></td><td>Répartit les pièces de filaments différents sur des plateaux différents. Deux filaments sur un même plateau coûtent, pour chaque couche partagée, un changement avec sa purge.</td></tr></tbody></table>
 <h4>Dupliquer l&#x27;objet (<code>duplicate_object</code>)</h4>
 <p>Crée d&#x27;autres exemplaires de l&#x27;objet. Tous restent séparés, et la quantité figure comme chiffre dans la pile.</p>
@@ -594,7 +594,7 @@
 <h3 id="ref-repair" class="chapter">Réparation</h3>
 <h4>Réparer (<code>repair</code>)</h4>
 <p>Ferme les trous, supprime les triangles dégénérés et aligne les faces.</p>
-<p>Objets: 1 → 1 · réversible · déterministe · S&#x27;applique à: Arête ouverte</p>
+<p>Objets: 1 → 1 · réversible · déterministe · Raccourci <code>Ctrl+Shift+R</code> · S&#x27;applique à: Arête ouverte</p>
 <table><thead><tr><th>Paramètres</th><th>Valeur par défaut</th><th>Signification</th></tr></thead><tbody><tr><td>Fermer les endroits ouverts <code>fill_holes</code></td><td>activé</td><td>Ferme les petits trous. Cela ne peut pas remplacer une paroi manquante.</td></tr><tr><td>Soudage des sommets <code>weld</code></td><td>activé</td><td>Réunit les points qui coïncident pratiquement. La raison la plus fréquente pour laquelle un maillage semble se composer de plusieurs pièces.</td></tr><tr><td>Supprimer les triangles dégénérés <code>degenerate</code></td><td>activé</td><td>Des triangles sans aire. Ils perturbent chaque calcul ultérieur et n&#x27;apportent rien.</td></tr><tr><td>Unification des normales <code>normals</code></td><td>activé</td><td>Détermine de quel côté est l&#x27;extérieur. Sans cela, des faces apparaissent sombres ou disparaissent.</td></tr><tr><td>Supprimer les fragments parasites <code>small_components</code></td><td>désactivé</td><td>Désactivé par défaut : n&#x27;est supprimé que ce qui doit expressément l&#x27;être.</td></tr><tr><td>Résoudre les auto-intersections <code>self_intersections</code></td><td>désactivé</td><td>Recalcule les faces qui se traversent mutuellement. Cela aide pour les maillages générés et coûte en précision — donc désactivé jusqu&#x27;à ce que ce soit nécessaire.</td></tr></tbody></table>
 <h3 id="ref-transform" class="chapter">Transformation</h3>
 <h4>Aligner sur une caractéristique (<code>align_to_feature</code>)</h4>
@@ -611,7 +611,7 @@
 <table><thead><tr><th>Paramètres</th><th>Unité</th><th>Valeur par défaut</th><th>Signification</th></tr></thead><tbody><tr><td>Décalage X <code>dx</code></td><td>mm</td><td>0</td><td>De combien on déplace, pas jusqu&#x27;où. Le positif va vers la droite.</td></tr><tr><td>Décalage Y <code>dy</code></td><td>mm</td><td>0</td><td>Le positif va vers l&#x27;arrière.</td></tr><tr><td>Décalage Z <code>dz</code></td><td>mm</td><td>0</td><td>Le positif va vers le haut. Pour déposer une pièce, il y a <em>Poser sur le plateau</em>.</td></tr></tbody></table>
 <h4>Mettre en miroir (<code>mirror_object</code>)</h4>
 <p>Met un objet en miroir par rapport à un axe. Pour le pendant d&#x27;une pièce — support gauche et support droit issus de la même construction.</p>
-<p>Objets: 1 → 1 · réversible · déterministe</p>
+<p>Objets: 1 → 1 · réversible · déterministe · Raccourci <code>Ctrl+M</code></p>
 <table><thead><tr><th>Paramètres</th><th>Valeur par défaut</th><th>Plage</th><th>Signification</th></tr></thead><tbody><tr><td>Axe <code>axis</code></td><td>x</td><td>x, y, z</td><td>L&#x27;axe du miroir — l&#x27;autre main de la même pièce.</td></tr><tr><td>Point de référence <code>about</code></td><td>centre</td><td>centre, origin, bed</td><td>Où se trouve le plan de symétrie : centre de gravité, origine ou surface d&#x27;appui.</td></tr></tbody></table>
 <h4>Mettre à l&#x27;échelle (<code>scale_object</code>)</h4>
 <p>Met un objet à l&#x27;échelle uniformément ou par axe.</p>
@@ -631,7 +631,7 @@
 <table><thead><tr><th>Paramètres</th><th>Unité</th><th>Valeur par défaut</th><th>Plage</th><th>Signification</th></tr></thead><tbody><tr><td>Axe <code>axis</code></td><td></td><td>z</td><td>x, y, z</td><td>L&#x27;axe autour duquel on tourne. Z fait pivoter sur le plateau, X et Y font basculer.</td></tr><tr><td>Angle <code>angle</code></td><td>°</td><td>90</td><td>-360 … 360</td><td>Angle de rotation dans le sens antihoraire, vu depuis la pointe de l&#x27;axe.</td></tr><tr><td>Point de rotation <code>about</code></td><td></td><td>centre</td><td>centre, origin, bed</td><td>Centre de gravité de l&#x27;objet, origine du monde ou surface d&#x27;appui.</td></tr></tbody></table>
 <h4>Poser sur le plateau (<code>place_on_bed</code>)</h4>
 <p>Pose la face inférieure de l&#x27;objet sur Z = 0.</p>
-<p>Objets: 1 → 1 · réversible · déterministe</p>
+<p>Objets: 1 → 1 · réversible · déterministe · Raccourci <code>Ctrl+Shift+B</code></p>
 <h3 id="ref-primitive" class="chapter">Formes de base</h3>
 <h4>Ajouter un cylindre (<code>create_cylinder</code>)</h4>
 <p>Ajoute un cylindre debout sur Z = 0.</p>
@@ -670,13 +670,13 @@
 <table><thead><tr><th>Paramètres</th><th>Unité</th><th>Valeur par défaut</th><th>Plage</th><th>Signification</th></tr></thead><tbody><tr><td>Transition <code>radius</code></td><td>mm</td><td>3</td><td>0 … 50</td><td>La largeur sur laquelle la gorge entre les deux corps se comble. Zéro donne l’union ordinaire. Il franchit un écart à partir d’environ trois fois sa largeur.</td></tr><tr><td>Pas de la grille <code>grid</code></td><td>mm</td><td>1</td><td>0,05 … 10</td><td>La finesse du calcul. Plus petit veut dire plus exact et nettement plus lent — les arêtes en dessous de ce pas sont perdues.</td></tr></tbody></table>
 <h4>Intersection (<code>intersect_objects</code>)</h4>
 <p>Ne garde que ce que les deux objets ont en commun.</p>
-<p>Objets: 2 → 1 · réversible · avec une graine</p>
+<p>Objets: 2 → 1 · réversible · avec une graine · Raccourci <code>Ctrl+Shift+X</code></p>
 <h4>Réunir (<code>union_objects</code>)</h4>
 <p>Fusionne deux objets en un seul.</p>
-<p>Objets: 2 → 1 · réversible · avec une graine</p>
+<p>Objets: 2 → 1 · réversible · avec une graine · Raccourci <code>Ctrl+Shift+V</code></p>
 <h4>Soustraire (<code>subtract_objects</code>)</h4>
 <p>Soustrait le deuxième objet du premier.</p>
-<p>Objets: 2 → 1 · réversible · avec une graine</p>
+<p>Objets: 2 → 1 · réversible · avec une graine · Raccourci <code>Ctrl+Shift+A</code></p>
 <h3 id="ref-sketch" class="chapter">Esquisse</h3>
 <h4>Balayer le long d&#x27;un arc (<code>sketch_sweep</code>)</h4>
 <p>Balaie une section le long d&#x27;un arc : départ vertical, basculement latéral selon le rayon de l&#x27;arc — un coude de tube en une étape.</p>
@@ -848,7 +848,7 @@
 <h4>Évidement (<code>hollow_object</code>)</h4>
 <p>Évide un objet et y pose des évents. Économise de la matière et du temps ; l&#x27;épaisseur de paroi est juste dans les limites de la trame.</p>
 <p><strong>Quand ne pas le faire:</strong> Pas sans évent si le slicer va créer des supports : la cavité se remplit sinon de matériau que plus personne ne ressort. Et pas pour des pièces qui encaissent des efforts — une coque mince casse autrement qu&#x27;un corps plein.</p>
-<p>Objets: 1 → 1 · réversible · déterministe</p>
+<p>Objets: 1 → 1 · réversible · déterministe · Raccourci <code>Ctrl+H</code></p>
 <table><thead><tr><th>Paramètres</th><th>Unité</th><th>Valeur par défaut</th><th>Plage</th><th>Signification</th></tr></thead><tbody><tr><td>Épaisseur de paroi <code>wall</code></td><td>mm</td><td>2</td><td>0,4 … 50</td><td>Ce qui reste. Deux largeurs d&#x27;extrusion sont le minimum.</td></tr><tr><td>Ouvrir le haut <code>open_top</code></td><td></td><td>désactivé</td><td></td><td>Enlève le plafond au-dessus de la cavité. Le corps creux devient une boîte, et <em>Créer un couvercle</em> trouve l&#x27;ouverture qu&#x27;il lui faut.</td></tr><tr><td>Évents <code>vents</code></td><td></td><td>1</td><td>0 … 6</td><td>Zéro signifie cavité fermée — en impression FDM, elle pousse le plafond vers le haut. Une boîte ouverte n&#x27;en a pas besoin.</td></tr><tr><td>Diamètre des évents <code>vent_diameter</code></td><td>mm</td><td>4</td><td>1 … 20</td><td>Largeur des ouvertures. Assez grande pour que le matériau non utilisé ressorte.</td></tr></tbody></table>
 <h3 id="ref-import" class="chapter">Import</h3>
 <h4>Charger le modèle (<code>load</code>)</h4>

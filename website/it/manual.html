@@ -574,7 +574,7 @@
 <h3 id="ref-scene" class="chapter">Scena</h3>
 <h4>Disponi sul piatto (<code>arrange_bed</code>)</h4>
 <p>Dispone tutti gli oggetti uno accanto all&#x27;altro sul piatto di stampa.</p>
-<p>Oggetti: 0 → -1 · reversibile · deterministico</p>
+<p>Oggetti: 0 → -1 · reversibile · deterministico · Scorciatoia <code>Ctrl+Shift+O</code></p>
 <table><thead><tr><th>Parametri</th><th>Unità</th><th>Valore predefinito</th><th>Intervallo</th><th>Significato</th></tr></thead><tbody><tr><td>Distanza <code>spacing</code></td><td>mm</td><td>5</td><td>0 … 100</td><td>Aria tra i pezzi. Abbastanza perché un piede d&#x27;elefante non saldi due pezzi lungo il bordo.</td></tr><tr><td>Piatti di stampa <code>plates</code></td><td></td><td>1</td><td>1 … 12</td><td>Ciò che non entra su un piatto passa al successivo.</td></tr><tr><td>Separa per filamento <code>by_material</code></td><td></td><td>spento</td><td></td><td>Mette i pezzi di filamenti diversi su piatti diversi. Due filamenti su un piatto costano un cambio con spurgo per ogni strato condiviso.</td></tr></tbody></table>
 <h4>Duplica oggetto (<code>duplicate_object</code>)</h4>
 <p>Crea altri esemplari dell&#x27;oggetto. Restano tutti separati, e la quantità sta nella pila come numero.</p>
@@ -594,7 +594,7 @@
 <h3 id="ref-repair" class="chapter">Riparazione</h3>
 <h4>Ripara (<code>repair</code>)</h4>
 <p>Chiude i fori, rimuove i triangoli degeneri e orienta le facce.</p>
-<p>Oggetti: 1 → 1 · reversibile · deterministico · Vale per: Spigolo aperto</p>
+<p>Oggetti: 1 → 1 · reversibile · deterministico · Scorciatoia <code>Ctrl+Shift+R</code> · Vale per: Spigolo aperto</p>
 <table><thead><tr><th>Parametri</th><th>Valore predefinito</th><th>Significato</th></tr></thead><tbody><tr><td>Chiudi i punti aperti <code>fill_holes</code></td><td>acceso</td><td>Chiude i fori piccoli. Non può sostituire una parete mancante.</td></tr><tr><td>Saldatura dei vertici <code>weld</code></td><td>acceso</td><td>Unisce i punti che praticamente coincidono. Il motivo più frequente per cui una mesh sembra fatta di più parti.</td></tr><tr><td>Rimuovi i triangoli degeneri <code>degenerate</code></td><td>acceso</td><td>Triangoli senza area. Disturbano ogni calcolo successivo e non portano nulla.</td></tr><tr><td>Unificazione delle normali <code>normals</code></td><td>acceso</td><td>Stabilisce da che parte è l&#x27;esterno. Senza, le facce appaiono scure o spariscono.</td></tr><tr><td>Elimina i frammenti minuscoli <code>small_components</code></td><td>spento</td><td>Spento per impostazione predefinita: si elimina solo ciò che va eliminato espressamente.</td></tr><tr><td>Risolvi le autointersezioni <code>self_intersections</code></td><td>spento</td><td>Ricalcola le facce che si compenetrano a vicenda. Aiuta con le mesh generate e costa precisione — quindi spento finché non serve.</td></tr></tbody></table>
 <h3 id="ref-transform" class="chapter">Trasformazione</h3>
 <h4>Allinea alla caratteristica (<code>align_to_feature</code>)</h4>
@@ -603,7 +603,7 @@
 <table><thead><tr><th>Parametri</th><th>Valore predefinito</th><th>Significato</th></tr></thead><tbody><tr><td>Caratteristica <code>feature</code></td><td></td><td>Foro o faccia sull&#x27;oggetto spostato, ad esempio hole_1.</td></tr><tr><td>Destinazione <code>target</code></td><td></td><td>Caratteristica su cui allineare, scritta come obj_2:hole_1.</td></tr><tr><td>Al contrario <code>flip</code></td><td>spento</td><td>Gira il risultato di 180 gradi, se si intendeva l&#x27;altro lato.</td></tr></tbody></table>
 <h4>Appoggia sul piatto (<code>place_on_bed</code>)</h4>
 <p>Posa l&#x27;oggetto con il suo lato inferiore su Z = 0.</p>
-<p>Oggetti: 1 → 1 · reversibile · deterministico</p>
+<p>Oggetti: 1 → 1 · reversibile · deterministico · Scorciatoia <code>Ctrl+Shift+B</code></p>
 <h4>Copie in fila o in cerchio (<code>pattern</code>)</h4>
 <p>Dispone copie in fila o su un cerchio — uno schema di fori, una corona di torrette per viti, una fila di clip. Un passo con dentro un numero invece di nove passi identici nella pila.</p>
 <p>Oggetti: 1 → -1 · reversibile · deterministico</p>
@@ -626,7 +626,7 @@
 <table><thead><tr><th>Parametri</th><th>Valore predefinito</th><th>Intervallo</th><th>Significato</th></tr></thead><tbody><tr><td>Fattore <code>factor</code></td><td>1</td><td>0,001 … 1000</td><td>Scalatura uniforme. I valori per singolo asse stanno sul retro. Se la quota di destinazione è nota, «Porta a misura» è la strada più breve.</td></tr><tr><td>Fattore X <code>fx</code></td><td>0</td><td>0 …</td><td>Solo questo asse. Zero significa: vale il fattore uniforme qui sopra.</td></tr><tr><td>Fattore Y <code>fy</code></td><td>0</td><td>0 …</td><td>Zero significa: vale il fattore uniforme qui sopra.</td></tr><tr><td>Fattore Z <code>fz</code></td><td>0</td><td>0 …</td><td>Zero significa: vale il fattore uniforme qui sopra. Scalare per asse deforma i fori — diventano ovali.</td></tr><tr><td>Punto di riferimento <code>about</code></td><td>centre</td><td>centre, origin, bed</td><td>Il punto che resta fermo: baricentro, origine o superficie d&#x27;appoggio.</td></tr></tbody></table>
 <h4>Specchia (<code>mirror_object</code>)</h4>
 <p>Specchia un oggetto rispetto a un asse. Per il pezzo simmetrico — supporto sinistro e destro dalla stessa costruzione.</p>
-<p>Oggetti: 1 → 1 · reversibile · deterministico</p>
+<p>Oggetti: 1 → 1 · reversibile · deterministico · Scorciatoia <code>Ctrl+M</code></p>
 <table><thead><tr><th>Parametri</th><th>Valore predefinito</th><th>Intervallo</th><th>Significato</th></tr></thead><tbody><tr><td>Asse <code>axis</code></td><td>x</td><td>x, y, z</td><td>L&#x27;asse rispetto a cui si specchia — l&#x27;altra mano dello stesso pezzo.</td></tr><tr><td>Punto di riferimento <code>about</code></td><td>centre</td><td>centre, origin, bed</td><td>Dove giace il piano di specchiatura: baricentro, origine o superficie d&#x27;appoggio.</td></tr></tbody></table>
 <h4>Sposta (<code>translate_object</code>)</h4>
 <p>Sposta un oggetto dei millimetri indicati.</p>
@@ -670,13 +670,13 @@
 <table><thead><tr><th>Parametri</th><th>Unità</th><th>Valore predefinito</th><th>Intervallo</th><th>Significato</th></tr></thead><tbody><tr><td>Transizione <code>radius</code></td><td>mm</td><td>3</td><td>0 … 50</td><td>Quanto si riempie la gola fra i due corpi. Zero dà l’unione ordinaria. Supera una fessura a partire da circa tre volte la sua larghezza.</td></tr><tr><td>Passo della griglia <code>grid</code></td><td>mm</td><td>1</td><td>0,05 … 10</td><td>Quanto finemente si calcola. Più piccolo significa più esatto e molto più lento: gli spigoli sotto questo passo vanno persi.</td></tr></tbody></table>
 <h4>Intersezione (<code>intersect_objects</code>)</h4>
 <p>Mantiene solo ciò che i due oggetti hanno in comune.</p>
-<p>Oggetti: 2 → 1 · reversibile · con seme</p>
+<p>Oggetti: 2 → 1 · reversibile · con seme · Scorciatoia <code>Ctrl+Shift+X</code></p>
 <h4>Sottrai (<code>subtract_objects</code>)</h4>
 <p>Sottrae il secondo oggetto dal primo.</p>
-<p>Oggetti: 2 → 1 · reversibile · con seme</p>
+<p>Oggetti: 2 → 1 · reversibile · con seme · Scorciatoia <code>Ctrl+Shift+A</code></p>
 <h4>Unisci (<code>union_objects</code>)</h4>
 <p>Fonde due oggetti in uno.</p>
-<p>Oggetti: 2 → 1 · reversibile · con seme</p>
+<p>Oggetti: 2 → 1 · reversibile · con seme · Scorciatoia <code>Ctrl+Shift+V</code></p>
 <h3 id="ref-sketch" class="chapter">Schizzo</h3>
 <h4>Estrudi forma di base (<code>sketch_extrude</code>)</h4>
 <p>Tira su una forma di base perpendicolarmente fino a un corpo. Il contorno viene da uno schizzo risolto ed entra nel kernel come curva esatta — un cerchio è davvero rotondo.</p>
@@ -848,7 +848,7 @@
 <h4>Svuota (<code>hollow_object</code>)</h4>
 <p>Svuota un oggetto e vi mette gli sfiati. Risparmia materiale e tempo; lo spessore di parete è corretto nei limiti della griglia.</p>
 <p><strong>Quando no:</strong> Non senza sfiato se nello slicer nascono supporti: la cavità altrimenti si riempie di materiale che nessuno riesce più a togliere. E non su pezzi che portano carichi — un guscio sottile si rompe diversamente da un corpo pieno.</p>
-<p>Oggetti: 1 → 1 · reversibile · deterministico</p>
+<p>Oggetti: 1 → 1 · reversibile · deterministico · Scorciatoia <code>Ctrl+H</code></p>
 <table><thead><tr><th>Parametri</th><th>Unità</th><th>Valore predefinito</th><th>Intervallo</th><th>Significato</th></tr></thead><tbody><tr><td>Spessore di parete <code>wall</code></td><td>mm</td><td>2</td><td>0,4 … 50</td><td>Cosa resta in piedi. Due larghezze di estrusione sono il minimo.</td></tr><tr><td>Apri in alto <code>open_top</code></td><td></td><td>spento</td><td></td><td>Toglie il soffitto sopra la cavità. Il corpo cavo diventa una scatola aperta, e <em>Crea coperchio</em> trova l&#x27;apertura che gli serve.</td></tr><tr><td>Sfiati <code>vents</code></td><td></td><td>1</td><td>0 … 6</td><td>Zero significa cavità chiusa — nella stampa FDM spinge in su il soffitto. Una scatola aperta non ne ha bisogno.</td></tr><tr><td>Diametro dello sfiato <code>vent_diameter</code></td><td>mm</td><td>4</td><td>1 … 20</td><td>Larghezza delle aperture. Grande abbastanza perché il materiale non usato esca.</td></tr></tbody></table>
 <h3 id="ref-import" class="chapter">Importa</h3>
 <h4>Carica modello (<code>load</code>)</h4>

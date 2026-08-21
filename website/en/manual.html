@@ -574,7 +574,7 @@
 <h3 id="ref-scene" class="chapter">Scene</h3>
 <h4>Arrange on the bed (<code>arrange_bed</code>)</h4>
 <p>Lays all objects out side by side on the build plate.</p>
-<p>Objects: 0 → -1 · reversible · deterministic</p>
+<p>Objects: 0 → -1 · reversible · deterministic · Shortcut <code>Ctrl+Shift+O</code></p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Distance <code>spacing</code></td><td>mm</td><td>5</td><td>0 … 100</td><td>Air between the parts. Enough that an elephant foot does not fuse two of them at the edge.</td></tr><tr><td>Build plates <code>plates</code></td><td></td><td>1</td><td>1 … 12</td><td>What does not fit on one plate goes on the next.</td></tr><tr><td>Separate by filament <code>by_material</code></td><td></td><td>off</td><td></td><td>Puts parts of different filaments on different plates. Two filaments on one plate cost a change and a purge for every shared layer.</td></tr></tbody></table>
 <h4>Check collisions (<code>check_collisions</code>)</h4>
 <p>Reports overlaps and anything sticking out of the build volume.</p>
@@ -594,7 +594,7 @@
 <h3 id="ref-repair" class="chapter">Repair</h3>
 <h4>Repair (<code>repair</code>)</h4>
 <p>Closes holes, removes degenerate triangles and lines the faces up.</p>
-<p>Objects: 1 → 1 · reversible · deterministic · Applies to: Open edge</p>
+<p>Objects: 1 → 1 · reversible · deterministic · Shortcut <code>Ctrl+Shift+R</code> · Applies to: Open edge</p>
 <table><thead><tr><th>Parameters</th><th>Default</th><th>Meaning</th></tr></thead><tbody><tr><td>Close open places <code>fill_holes</code></td><td>on</td><td>Closes small holes. It cannot replace a missing wall.</td></tr><tr><td>Welding vertices <code>weld</code></td><td>on</td><td>Merges points that practically coincide. The most common reason a mesh appears to consist of several parts.</td></tr><tr><td>Remove degenerate triangles <code>degenerate</code></td><td>on</td><td>Triangles with no area. They disturb every later computation and carry nothing.</td></tr><tr><td>Unifying normals <code>normals</code></td><td>on</td><td>Settles which side is outside. Without it faces appear dark or vanish.</td></tr><tr><td>Delete stray fragments <code>small_components</code></td><td>off</td><td>Off by default: only what is explicitly asked for gets deleted.</td></tr><tr><td>Resolve self-intersections <code>self_intersections</code></td><td>off</td><td>Recomputes faces that pass through each other. It helps with generated meshes and costs accuracy — hence off until it is needed.</td></tr></tbody></table>
 <h3 id="ref-transform" class="chapter">Transformation</h3>
 <h4>Align to feature (<code>align_to_feature</code>)</h4>
@@ -611,7 +611,7 @@
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Longest edge <code>largest</code></td><td>mm</td><td>100</td><td>0.1 … 1000</td><td>The longest edge grows to this size; the others follow proportionally.</td></tr><tr><td>Reference <code>about</code></td><td></td><td>centre</td><td>centre, origin, bed</td><td>Which point stays put while scaling.</td></tr></tbody></table>
 <h4>Mirror (<code>mirror_object</code>)</h4>
 <p>Mirrors an object about an axis. For the counterpart of a part — left and right bracket from the same construction.</p>
-<p>Objects: 1 → 1 · reversible · deterministic</p>
+<p>Objects: 1 → 1 · reversible · deterministic · Shortcut <code>Ctrl+M</code></p>
 <table><thead><tr><th>Parameters</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Axis <code>axis</code></td><td>x</td><td>x, y, z</td><td>The axis to mirror about — the other hand of the same part.</td></tr><tr><td>Reference point <code>about</code></td><td>centre</td><td>centre, origin, bed</td><td>Where the mirror plane lies: centre of mass, origin or footprint.</td></tr></tbody></table>
 <h4>Move (<code>translate_object</code>)</h4>
 <p>Moves an object by the given millimetres.</p>
@@ -623,7 +623,7 @@
 <table><thead><tr><th>Parameters</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Search thoroughly <code>thorough</code></td><td>on</td><td></td><td>Runs hundreds of positions through the layer analysis. Off means a quick heuristic over the faces.</td></tr><tr><td>Candidates <code>candidates</code></td><td>200</td><td>8 … 2000</td><td>How many orientations get computed. More finds finer improvements and takes correspondingly longer. Applies when Search thoroughly is ticked.</td></tr></tbody></table>
 <h4>Place on the bed (<code>place_on_bed</code>)</h4>
 <p>Puts the underside of the object on Z = 0.</p>
-<p>Objects: 1 → 1 · reversible · deterministic</p>
+<p>Objects: 1 → 1 · reversible · deterministic · Shortcut <code>Ctrl+Shift+B</code></p>
 <h4>Rotate (<code>rotate_object</code>)</h4>
 <p>Rotates an object around an axis.</p>
 <p>Objects: 1 → 1 · reversible · deterministic · Shortcut <code>Ctrl+R</code></p>
@@ -670,13 +670,13 @@
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Transition <code>radius</code></td><td>mm</td><td>3</td><td>0 … 50</td><td>How wide the throat between the two bodies fills in. Zero gives the ordinary union. It bridges a gap from about three times its width.</td></tr><tr><td>Grid spacing <code>grid</code></td><td>mm</td><td>1</td><td>0.05 … 10</td><td>How finely it is computed. Smaller means more accurate and markedly slower — edges below this spacing are lost.</td></tr></tbody></table>
 <h4>Intersection (<code>intersect_objects</code>)</h4>
 <p>Keeps only what both objects have in common.</p>
-<p>Objects: 2 → 1 · reversible · with a seed</p>
+<p>Objects: 2 → 1 · reversible · with a seed · Shortcut <code>Ctrl+Shift+X</code></p>
 <h4>Subtract (<code>subtract_objects</code>)</h4>
 <p>Subtracts the second object from the first.</p>
-<p>Objects: 2 → 1 · reversible · with a seed</p>
+<p>Objects: 2 → 1 · reversible · with a seed · Shortcut <code>Ctrl+Shift+A</code></p>
 <h4>Unite (<code>union_objects</code>)</h4>
 <p>Merges two objects into one.</p>
-<p>Objects: 2 → 1 · reversible · with a seed</p>
+<p>Objects: 2 → 1 · reversible · with a seed · Shortcut <code>Ctrl+Shift+V</code></p>
 <h3 id="ref-sketch" class="chapter">Sketch</h3>
 <h4>Cut pocket (<code>sketch_pocket</code>)</h4>
 <p>Cuts a base shape into a B-rep body as a pocket — straight down from the top edge, through the body on request. Clicking a face fills in the position beforehand.</p>
@@ -830,7 +830,7 @@
 <h4>Hollow out (<code>hollow_object</code>)</h4>
 <p>Hollows an object out and puts vents in. Saves material and time; the wall thickness holds within the raster.</p>
 <p><strong>When not to:</strong> Not without a vent if the slicer will add supports: the cavity fills with material nobody can get out again. And not on parts that carry loads — a thin shell breaks differently from a solid body.</p>
-<p>Objects: 1 → 1 · reversible · deterministic</p>
+<p>Objects: 1 → 1 · reversible · deterministic · Shortcut <code>Ctrl+H</code></p>
 <table><thead><tr><th>Parameters</th><th>Unit</th><th>Default</th><th>Range</th><th>Meaning</th></tr></thead><tbody><tr><td>Wall thickness <code>wall</code></td><td>mm</td><td>2</td><td>0.4 … 50</td><td>What stays. Two extrusion widths are the minimum.</td></tr><tr><td>Open the top <code>open_top</code></td><td></td><td>off</td><td></td><td>Removes the ceiling above the cavity. The hollow body becomes a tin, and <em>Create lid</em> finds the opening it needs.</td></tr><tr><td>Vents <code>vents</code></td><td></td><td>1</td><td>0 … 6</td><td>Zero means a closed cavity — in FDM printing that pushes the ceiling up. An open tin needs none.</td></tr><tr><td>Vent diameter <code>vent_diameter</code></td><td>mm</td><td>4</td><td>1 … 20</td><td>Width of the openings. Wide enough for unused material to come out.</td></tr></tbody></table>
 <h4>Set material (<code>set_material</code>)</h4>
 <p>Gives this body a material of its own. Tolerances, shrinkage and the elephant foot are then computed with it instead of the project&#x27;s.</p>
