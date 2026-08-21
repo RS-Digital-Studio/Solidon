@@ -16,7 +16,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.errors import AppError
+from app.core.errors import AppError, InternalError
 from app.core.export.writer import plan_export, write_plan
 from app.core.log import get_logger
 from app.core.scene import build_variants
@@ -40,13 +40,13 @@ from app.core.scene.project import ProjectSources
 from app.core.scene.variants import MAX_VARIANTS
 from app.i18n import tr
 from app.ui.dialogs import show_error
-from app.ui.leash import WAIT_TIMEOUT_MS
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker
 from app.ui.session import Session
 
 _log = get_logger(__name__)
 
 
-class _VariantWorker(QThread):
+class _VariantWorker(Worker):
     """Die Varianten rechnen, abseits des Oberflächen-Threads (§2.8).
 
     Gerechnet wurde in der Ereignisschleife: bis zu zwölf vollständige
@@ -70,7 +70,7 @@ class _VariantWorker(QThread):
         self._cancel = cancel
         self._arguments = arguments
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             made = build_variants(**self._arguments, cancelled=self._cancel)
         except AppError as error:
@@ -194,6 +194,7 @@ class VariantsDialog(QDialog):
         )
         worker.done.connect(self._finished)
         worker.failed.connect(self._broke)
+        worker.crashed.connect(lambda detail: self._broke(InternalError(detail=detail)))
         # Der Arbeiter hängt an dieser Referenz und an keinem Qt-Elternteil:
         # fällt sie weg, während er läuft, zerstört der Speicherbereiniger das
         # C++-Objekt unter ihm. Losgelassen wird er in ``_release``.

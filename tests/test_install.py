@@ -23,6 +23,44 @@ def by_id(identifier: str) -> install.Requirement:
     return next(entry for entry in install.REQUIREMENTS if entry.id == identifier)
 
 
+class FakeProcess:
+    """Ein Installer, der aus einem Skript antwortet statt aus dem Netz.
+
+    Gebraucht wird die Form, die ``install._stream`` erwartet: ein
+    Kontextmanager mit ``stdout`` zum Zeilenlesen und ``wait``. Gestartet wird
+    seit dem streamenden Lauf über ``Popen`` — die Tests patchten ``run``, und
+    damit prüfte „nichts startet von selbst" nichts mehr.
+    """
+
+    def __init__(self, lines: tuple[str, ...] = (), code: int = 0) -> None:
+        self.stdout = iter(lines)
+        self._code = code
+
+    def __enter__(self) -> FakeProcess:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def wait(self) -> int:
+        return self._code
+
+    def kill(self) -> None:
+        return None
+
+
+def watch_popen(monkeypatch: pytest.MonkeyPatch, **kwargs: object) -> list[object]:
+    """Merkt jeden Start und antwortet mit der Attrappe."""
+    started: list[object] = []
+
+    def fake(command: object, **_options: object) -> FakeProcess:
+        started.append(command)
+        return FakeProcess(**kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(install.subprocess, "Popen", fake)
+    return started
+
+
 # --- Was wo ist -------------------------------------------------------------------
 
 
@@ -238,8 +276,7 @@ def test_installing_the_impossible_does_not_run_anything(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(install, "manager", lambda: None)
-    ran: list[object] = []
-    monkeypatch.setattr(install.subprocess, "run", lambda *a, **k: ran.append(a))
+    ran = watch_popen(monkeypatch)
 
     result = install.install(by_id("openscad"))
 
@@ -249,8 +286,7 @@ def test_installing_the_impossible_does_not_run_anything(
 
 
 def test_what_is_already_there_is_not_installed_again(monkeypatch: pytest.MonkeyPatch) -> None:
-    ran: list[object] = []
-    monkeypatch.setattr(install.subprocess, "run", lambda *a, **k: ran.append(a))
+    ran = watch_popen(monkeypatch)
 
     result = install.install(by_id("keyring"))
 
@@ -362,8 +398,7 @@ def test_a_row_that_cannot_install_explains_itself(qt_app: QApplication) -> None
 
 def test_nothing_starts_by_itself(qt_app: QApplication, monkeypatch: pytest.MonkeyPatch) -> None:
     """Der ganze Sinn von §36: eine Anwendung installiert nichts ungefragt."""
-    ran: list[object] = []
-    monkeypatch.setattr(install.subprocess, "run", lambda *a, **k: ran.append(a))
+    ran = watch_popen(monkeypatch)
 
     settled(InstallDialog(), qt_app)
 
@@ -438,16 +473,13 @@ def test_a_failed_install_says_what_went_wrong(monkeypatch: pytest.MonkeyPatch) 
     Der Rückgabewert der Paketverwaltung gehört zu den Einzelheiten, nicht in
     den Satz — dort steht er weiterhin, für den, der ihn weitergeben will.
     """
-    import subprocess
-
-    class Fertig:
-        returncode = 1
-        stdout = "ERROR: Could not find a version that satisfies the requirement"
-        stderr = ""
-
     monkeypatch.setattr(install, "present", lambda _requirement: False)
     monkeypatch.setattr(install, "installable", lambda _requirement: True)
-    monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: Fertig())
+    watch_popen(
+        monkeypatch,
+        lines=("ERROR: Could not find a version that satisfies the requirement\n",),
+        code=1,
+    )
 
     result = install.install(by_id("vhacd"))
 
@@ -460,14 +492,13 @@ def test_a_failed_install_says_what_went_wrong(monkeypatch: pytest.MonkeyPatch) 
 
 def test_a_package_manager_that_will_not_start_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
     """Auch der Ausfall vor dem ersten Befehl trägt einen Satz."""
-    import subprocess
 
     def kaputt(*args: object, **kwargs: object) -> None:
         raise OSError("nicht gefunden")
 
     monkeypatch.setattr(install, "present", lambda _requirement: False)
     monkeypatch.setattr(install, "installable", lambda _requirement: True)
-    monkeypatch.setattr(subprocess, "run", kaputt)
+    monkeypatch.setattr(install.subprocess, "Popen", kaputt)
 
     result = install.install(by_id("vhacd"))
 
@@ -523,3 +554,163 @@ def test_every_follow_up_has_somebody_who_does_it() -> None:
     for entry in install.REQUIREMENTS:
         if entry.follow_up:
             assert f'"{entry.follow_up}"' in source, entry.id
+
+
+def test_an_unexpected_error_does_not_leave_the_list_waiting(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Arbeiter, der wirft, sendet sein Ergebnissignal nie.
+
+    Ohne einen Weg heraus blieben die Zeilen auf „?" stehen und der Balken
+    lief weiter — für immer. Der Kunde sitzt vor einer Liste, die nichts
+    behauptet und nichts tut.
+    """
+
+    def refuse() -> tuple[install.Status, ...]:
+        raise OSError(13, "Zugriff verweigert")
+
+    monkeypatch.setattr(install, "statuses", refuse)
+
+    dialog = settled(InstallDialog(), qt_app)
+
+    assert dialog.progress.isHidden(), "der Balken behauptet keinen Vorgang mehr"
+    assert "schiefgegangen" in dialog.state.text()
+    assert not dialog.details_button.isHidden(), "und die Zeile steht hinter „Details“"
+
+
+def test_an_unexpected_error_during_an_install_frees_the_buttons(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Dasselbe während einer Installation: die Knöpfe waren gesperrt.
+
+    ``_busy(True)`` sperrt jede Zeile, und ohne ein Ergebnissignal blieb es
+    dabei — die Liste war für den Rest der Sitzung unbenutzbar.
+    """
+    monkeypatch.setattr(install, "present", lambda _entry: False)
+    monkeypatch.setattr(install, "installable", lambda _entry: True)
+
+    def refuse(requirement: object, progress: object = None) -> object:
+        raise RuntimeError("winget ist verschwunden")
+
+    monkeypatch.setattr(install, "install", refuse)
+    dialog = settled(InstallDialog(), qt_app)
+    row = dialog.rows[0]
+
+    row.action.click()
+    for _ in range(200):
+        qt_app.processEvents()
+        if dialog._worker is None:
+            break
+        dialog._worker.wait(20)
+    qt_app.processEvents()
+
+    assert "schiefgegangen" in dialog.state.text()
+    assert dialog.progress.isHidden()
+    assert not dialog._queue, "und die Reihe ist geleert, nicht halb abgearbeitet"
+
+
+def test_the_installer_reports_while_it_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**Vorher kam die Rückmeldung erst am Ende.**
+
+    ``subprocess.run`` sammelt die Ausgabe und gibt sie zurück, wenn der
+    Prozess fertig ist — die Fortschrittszeilen wurden also erst durchgereicht,
+    wenn niemand sie mehr brauchte. Bei OrcaSlicer sind das mehrere Minuten, in
+    denen ein unbestimmter Balken lief und sonst nichts geschah.
+    """
+    monkeypatch.setattr(install, "present", lambda _requirement: False)
+    monkeypatch.setattr(install, "installable", lambda _requirement: True)
+    seen: list[str] = []
+
+    def watched(command: object, **_options: object) -> FakeProcess:
+        # Der Zeitpunkt ist die ganze Aussage: Was der Prozess sagt, ist beim
+        # Aufrufer, bevor er fertig ist.
+        return FakeProcess(lines=("30 %\r", "60 %\r", "fertig\n"))
+
+    monkeypatch.setattr(install.subprocess, "Popen", watched)
+
+    install.install(by_id("vhacd"), seen.append)
+
+    # Die erste Zeile ist der Befehl selbst, danach kommt, was der Prozess sagt.
+    assert seen[0].startswith(install._command(by_id("vhacd"))[0])
+    assert seen[1:] == ["30 %", "60 %", "fertig"], "jede Zeile, in ihrer Reihenfolge"
+
+
+def test_a_progress_bar_without_line_breaks_still_arrives(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """winget zeichnet mit Wagenrücklauf und ohne Zeilenumbruch.
+
+    Das ist der Grund, aus dem im Textmodus gelesen wird: Er übersetzt ``\r``
+    in ein Zeilenende, also kommt jede Aktualisierung als eigene Zeile an.
+    Ohne das käme bis zum Schluss keine — und genau dort war der Kunde vorher.
+    """
+    monkeypatch.setattr(install, "present", lambda _requirement: False)
+    monkeypatch.setattr(install, "installable", lambda _requirement: True)
+    seen: list[str] = []
+    # So sieht es aus, wenn Pythons Textmodus die Wagenrückläufe schon in
+    # Zeilenenden übersetzt hat — das tut er, und darauf baut ``_stream``.
+    monkeypatch.setattr(
+        install.subprocess,
+        "Popen",
+        lambda command, **options: FakeProcess(lines=("  \r", "10 %\r", "100 %\r")),
+    )
+
+    install.install(by_id("vhacd"), seen.append)
+
+    assert "10 %" in seen and "100 %" in seen
+    assert "" not in seen, "leere Zeilen sind kein Fortschritt"
+
+
+def test_only_the_last_lines_travel_on(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Eine Paketverwaltung schreibt hunderte Zeilen; weitergeben will man die
+    letzten.
+    """
+    monkeypatch.setattr(install, "present", lambda _requirement: False)
+    monkeypatch.setattr(install, "installable", lambda _requirement: True)
+    monkeypatch.setattr(
+        install.subprocess,
+        "Popen",
+        lambda command, **options: FakeProcess(lines=tuple(f"Zeile {n}\n" for n in range(200))),
+    )
+
+    result = install.install(by_id("vhacd"))
+
+    lines = result.output.splitlines()
+    assert len(lines) <= 40
+    assert lines[-1] == "Zeile 199", "und zwar die letzten"
+
+
+def test_the_dialog_shows_that_something_is_happening(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein unbestimmter Balken unterscheidet „lädt" nicht von „hängt".
+
+    Eine Installation dauert Minuten. Die rohe Ausgabe gehört hinter „Details"
+    — was davor steht, ist die Zeit, und die sagt genau das, was jemand wissen
+    will. Dasselbe Muster wie beim Erzeugen eines Modells (``mesh.py``).
+    """
+    monkeypatch.setattr(install, "present", lambda _entry: False)
+    monkeypatch.setattr(install, "installable", lambda _entry: True)
+    dialog = settled(InstallDialog(), qt_app)
+
+    monkeypatch.setattr(
+        install,
+        "install",
+        lambda requirement, progress=None: install.InstallResult(
+            requirement=requirement, installed=True
+        ),
+    )
+    dialog.rows[0].action.click()
+    qt_app.processEvents()
+
+    assert "(0 s)" in dialog.state.text(), "die Zeit steht von Anfang an da"
+    assert dialog._tick.isActive(), "und sie wird nachgezogen"
+
+    for _ in range(200):
+        qt_app.processEvents()
+        if dialog._worker is None:
+            break
+        dialog._worker.wait(20)
+    qt_app.processEvents()
+
+    assert not dialog._tick.isActive(), "danach nicht mehr"

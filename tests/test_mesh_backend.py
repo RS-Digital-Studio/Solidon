@@ -564,3 +564,74 @@ def test_the_node_comes_from_the_workflow_and_not_from_a_list() -> None:
     assert node.startswith(mesh_module.OWN_NODE_PREFIX)
     graph = json.loads((WORKFLOW_DIR / "image_to_mesh.json").read_text(encoding="utf-8"))
     assert any(entry.get("class_type") == node for entry in graph.values())
+
+
+def test_a_step_can_be_cancelled_while_it_runs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """**Abbrechen wirkte beim längsten Schritt nicht.**
+
+    ``subprocess.run`` blockiert bis zum Ende, und die Abbruchprüfung lag
+    *zwischen* den Schritten — einer davon lädt 7,5 GB. Wer abbrach, wartete
+    eine halbe Stunde auf einen Download, den er nicht mehr wollte.
+    """
+    from app.core.backends import comfy_setup
+
+    getoetet: list[bool] = []
+
+    class Endlos:
+        """Ein Prozess, der weiterschreibt, bis ihn jemand beendet."""
+
+        def __init__(self) -> None:
+            self.stdout = iter(f"lade {n} %\n" for n in range(10_000))
+
+        def __enter__(self) -> object:
+            return self
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+        def kill(self) -> None:
+            getoetet.append(True)
+
+        def wait(self) -> int:
+            return 0
+
+    monkeypatch.setattr(comfy_setup.subprocess, "Popen", lambda *a, **k: Endlos())
+    gesehen: list[str] = []
+
+    with pytest.raises(comfy_setup.Cancelled):
+        comfy_setup._run(
+            ["git", "clone"],
+            "TripoSG holen",
+            lambda step: gesehen.append(str(step)),
+            cancelled=lambda: True,
+        )
+
+    assert getoetet == [True], "der Kindprozess wird beendet, nicht abgewartet"
+
+
+def test_a_cancelled_setup_says_that_a_new_run_continues(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Und der Satz dazu ist keine Höflichkeit: Es stimmt.
+
+    ``huggingface_hub`` lässt teilweise geladene Dateien liegen und setzt beim
+    nächsten Lauf fort; die Knoten sind idempotent kopiert.
+    """
+    from app.core.backends import comfy_setup
+
+    comfyui = tmp_path / "ComfyUI"
+    (comfyui / "custom_nodes").mkdir(parents=True)
+    monkeypatch.setattr(comfy_setup, "find_python", lambda _folder: Path("python"))
+
+    def bricht_ab(*_args: object, **_kwargs: object) -> None:
+        raise comfy_setup.Cancelled("Gewichte laden")
+
+    monkeypatch.setattr(comfy_setup, "fetch_triposg", bricht_ab)
+
+    result = comfy_setup.setup(comfyui, cancelled=lambda: False)
+
+    assert not result.done
+    assert "setzt fort" in str(result.reason)
+    assert (result.nodes / "nodes.py").is_file(), "der getane Schritt bleibt getan"

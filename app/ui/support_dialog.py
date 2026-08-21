@@ -22,7 +22,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QBuffer, QIODevice, Qt, QThread, QUrl, Signal
+from PySide6.QtCore import QBuffer, QIODevice, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -48,7 +48,7 @@ from app.core.log import get_logger, log_path
 from app.core.paths import ensure_dir, user_data_dir
 from app.core.support import KIND_BUG, KIND_CRASH, KIND_IDEA, KIND_QUESTION, Receipt, Ticket
 from app.i18n import tr
-from app.ui.leash import WorkerLeash
+from app.ui.leash import Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.style import make_primary
 
@@ -117,12 +117,18 @@ def log_tail() -> bytes:
     return "\n".join(lines).encode("utf-8")
 
 
-class _SendWorker(QThread):
+class _SendWorker(Worker):
     """Der Versand, abseits des Oberflächen-Threads.
 
     Ein Hochladen von ein paar Megabyte über eine schlechte Leitung dauert
     Sekunden bis zum Zeitlimit; im Hauptthread stünde das Fenster so lange
     (§2.8).
+
+    Dieser Arbeiter fing schon vor der Basisklasse alles und machte daraus ein
+    ``SendFailed`` — von dreiundzwanzig war er der einzige. Das bleibt, weil es
+    besser ist: Ein Versand, der scheitert, ist ein Fehler mit Vorschlägen und
+    nicht bloß eine Zeile für „Details". ``crashed`` ist danach eine Sicherung,
+    die nie greifen sollte.
     """
 
     done = Signal(object)
@@ -134,7 +140,7 @@ class _SendWorker(QThread):
         self._url = url
         self._sender = sender
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             receipt = support.send(self._ticket, self._url, self._sender)
         except AppError as problem:
@@ -401,6 +407,11 @@ class SupportDialog(QDialog):
         worker = _SendWorker(ticket, self._url, self._sender)
         worker.done.connect(self._sent)
         worker.failed.connect(self._not_sent)
+        # Der Arbeiter fängt selbst breit und macht ein ``SendFailed`` daraus;
+        # diese Zeile ist die Sicherung dahinter und sollte nie greifen.
+        worker.crashed.connect(
+            lambda detail: self._not_sent(support.SendFailed(values={"reason": detail[:200]}))
+        )
         worker.finished.connect(self._thread_done)
         self._worker = worker
         worker.start()

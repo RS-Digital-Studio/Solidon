@@ -15,9 +15,10 @@ was schon da ist, bleibt, und ein neuer Lauf setzt fort.
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QDialog,
@@ -35,13 +36,18 @@ from PySide6.QtWidgets import (
 from app.core.backends import comfy_setup
 from app.core.log import get_logger
 from app.i18n import tr
-from app.ui.leash import WorkerLeash
+from app.ui.leash import Worker, WorkerLeash
 from app.ui.style import set_level
 
 _log = get_logger(__name__)
 
+#: Wie oft die Laufzeit des laufenden Schritts nachgezogen wird. Einer davon
+#: lädt 7,5 GB — ohne die Zeit daneben ist ein unbestimmter Balken von einem
+#: Hänger nicht zu unterscheiden.
+TICK_MS = 1000
 
-class _Worker(QThread):
+
+class _Worker(Worker):
     """Die Einrichtung: git, pip, und ein Download von 7,5 GB."""
 
     done = Signal(object)
@@ -57,7 +63,7 @@ class _Worker(QThread):
     def cancel(self) -> None:
         self._stop = True
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             result = comfy_setup.setup(
                 self._comfyui or None,
@@ -80,6 +86,12 @@ class ComfySetupDialog(QDialog):
         self.setMinimumWidth(560)
         self._worker: _Worker | None = None
         self._leash = WorkerLeash(self)
+        self._step = ""
+        """Der Schritt, der gerade läuft — für die Zeile mit der Laufzeit."""
+        self._started_at = 0.0
+        self._tick = QTimer(self)
+        self._tick.setInterval(TICK_MS)
+        self._tick.timeout.connect(self._show_elapsed)
 
         intro = QLabel(
             tr(
@@ -172,13 +184,20 @@ class ComfySetupDialog(QDialog):
         self.progress.setVisible(True)
         self.start_button.setText(tr("Abbrechen"))
         self.choose.setEnabled(False)
-        self.state.setText(tr("Wird eingerichtet …"))
+        self._step = str(tr("Wird eingerichtet …"))
+        self._started_at = time.monotonic()
+        self._show_elapsed()
+        self._tick.start()
         set_level(self.state, "info")
 
         worker = _Worker(self.folder.text().strip(), self.weights.isChecked())
         worker.step.connect(self._note_step)
         worker.done.connect(self._finished)
         worker.failed.connect(self._refused)
+        # **Und das Unerwartete.** Ohne diese Zeile stand der Dialog nach einem
+        # ``PermissionError`` — ComfyUI unter ``Program Files`` — für immer auf
+        # „Wird eingerichtet …", mit laufendem Balken.
+        worker.crashed.connect(self._crashed)
         worker.finished.connect(lambda done=worker: self._worker_done(done))
         self._worker = worker
         self._leash.start(worker)
@@ -189,8 +208,19 @@ class ComfySetupDialog(QDialog):
         return worker.wait(milliseconds) if worker is not None else True
 
     def _note_step(self, step: str) -> None:
-        """Welcher Schritt gerade läuft. Vier bis fünf, und einer dauert lange."""
-        self.state.setText(step)
+        """Welcher Schritt gerade läuft. Vier bis fünf, und einer dauert lange.
+
+        Die Zeit beginnt je Schritt neu: „Gewichte laden — rund 7,5 GB (240 s)"
+        sagt mehr als eine Gesamtzeit, denn nur dieser eine Schritt dauert.
+        """
+        self._step = step
+        self._started_at = time.monotonic()
+        self._show_elapsed()
+
+    def _show_elapsed(self) -> None:
+        """Der Schritt und wie lange er schon läuft."""
+        seconds = time.monotonic() - self._started_at
+        self.state.setText(f"{self._step} ({seconds:.0f} s)")
 
     def _finished(self, result: object) -> None:
         assert isinstance(result, comfy_setup.Result)
@@ -212,7 +242,17 @@ class ComfySetupDialog(QDialog):
         self.state.setText(reason)
         set_level(self.state, "warning")
 
+    def _crashed(self, detail: str) -> None:
+        """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand."""
+        self._idle()
+        _log.warning("comfy setup crashed: %s", detail)
+        self.state.setText(
+            f"{tr('Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.')} {detail}"
+        )
+        set_level(self.state, "warning")
+
     def _idle(self) -> None:
+        self._tick.stop()
         self.progress.setVisible(False)
         self.start_button.setText(tr("Einrichten"))
         self.choose.setEnabled(True)

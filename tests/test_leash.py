@@ -17,7 +17,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtCore import QObject, QThread
 from PySide6.QtWidgets import QApplication
 
-from app.ui.leash import WorkerLeash
+from app.ui.leash import Worker, WorkerLeash
 
 
 class _Schlaefer(QThread):
@@ -146,3 +146,117 @@ def test_a_worker_survives_the_death_of_its_leash(qt_app: QApplication) -> None:
             break
         arbeiter.msleep(10)
     assert arbeiter not in leash_module.alive(), "und lässt ihn danach los"
+
+
+# --- ein Arbeiter, der auch mit dem Unerwarteten zurückkommt ---------------------
+
+
+class _Zerbricht(Worker):
+    """Ein Arbeiter, der wirft — wie es jeder kann, den niemand daran hindert."""
+
+    def work(self) -> None:
+        raise PermissionError(13, "Zugriff verweigert", "custom_nodes")
+
+
+def test_an_unexpected_error_comes_back_as_a_signal(qt_app: QApplication) -> None:
+    """**Der Fund, aus dem diese Basisklasse entstanden ist.**
+
+    Ein ``run``, das eine Ausnahme durchlässt, sendet sein Ergebnissignal nie —
+    und wer darauf wartet, wartet für immer. Nachgestellt am
+    Einrichtungsdialog für ComfyUI: Liegt die Installation unter ``Program
+    Files``, wirft das Kopieren der Knoten einen ``PermissionError``, und im
+    Fenster stand „Wird eingerichtet …" mit laufendem Balken, bis jemand das
+    Programm beendet.
+    """
+    seen: list[str] = []
+    arbeiter = _Zerbricht()
+    arbeiter.crashed.connect(seen.append)
+
+    arbeiter.start()
+    arbeiter.wait(2000)
+    qt_app.processEvents()
+
+    assert len(seen) == 1, "genau eine Meldung"
+    assert "PermissionError" in seen[0], "die Art steht darin"
+    assert "custom_nodes" in seen[0], "und was gemeint war"
+
+
+def test_the_worker_ends_even_when_it_throws(qt_app: QApplication) -> None:
+    """Und der Thread endet regulär — die Leine bekommt ihr ``finished``."""
+    import app.ui.leash as leash_module
+
+    arbeiter = _Zerbricht()
+    WorkerLeash(QObject()).start(arbeiter)
+    arbeiter.wait(2000)
+    for _ in range(100):
+        qt_app.processEvents()
+        if arbeiter not in leash_module.alive():
+            break
+        arbeiter.msleep(10)
+
+    assert not arbeiter.isRunning()
+    assert arbeiter not in leash_module.alive(), "auch ein zerbrochener wird losgelassen"
+
+
+def test_a_worker_without_work_says_so(qt_app: QApplication) -> None:
+    """Wer erbt und ``work`` vergisst, erfährt es als Meldung statt als Stille."""
+    seen: list[str] = []
+    arbeiter = Worker()
+    arbeiter.crashed.connect(seen.append)
+
+    arbeiter.start()
+    arbeiter.wait(2000)
+    qt_app.processEvents()
+
+    assert seen and "NotImplementedError" in seen[0]
+
+
+def test_every_worker_in_the_surface_uses_the_base_class() -> None:
+    """Von dreiundzwanzig Arbeitern fing genau einer eine unerwartete Ausnahme.
+
+    Die anderen zweiundzwanzig konnten ihr Fenster in einen Wartezustand ohne
+    Ausgang bringen: die Ladeanzeige der Auswertung, der gesperrte
+    Export-Menüeintrag, „Der Profilbestand wird durchgesehen …". Geprüft wird
+    die Regel und nicht die Zahl — wer einen neuen anlegt, erbt.
+    """
+    import ast
+    from pathlib import Path
+
+    strays: list[str] = []
+    for path in sorted((Path(__file__).resolve().parent.parent / "app" / "ui").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            bases = {getattr(base, "id", getattr(base, "attr", "")) for base in node.bases}
+            if "QThread" in bases and path.name != "leash.py":
+                strays.append(f"{path.name}:{node.name}")
+
+    assert not strays, "erbt von QThread statt von leash.Worker: " + ", ".join(strays)
+
+
+def test_every_worker_has_somebody_listening_for_its_crash() -> None:
+    """Ein Signal, das niemand hört, ist keine Antwort.
+
+    Die Basisklasse allein verschiebt den Fund nur: Sie fängt die Ausnahme und
+    protokolliert sie, aber der Wartezustand löst sich erst, wenn jemand
+    ``crashed`` verbindet. Geprüft wird je Datei, dass es dort geschieht, wo
+    Arbeiter gebaut werden.
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent / "app" / "ui"
+    missing: list[str] = []
+    for path in sorted(root.glob("*.py")):
+        text = path.read_text(encoding="utf-8")
+        tree = ast.parse(text)
+        builds_worker = any(
+            isinstance(node, ast.ClassDef)
+            and any(getattr(base, "id", "") == "Worker" for base in node.bases)
+            for node in ast.walk(tree)
+        )
+        if builds_worker and "crashed.connect" not in text:
+            missing.append(path.name)
+
+    assert not missing, "baut Arbeiter, hört aber nicht auf crashed: " + ", ".join(missing)

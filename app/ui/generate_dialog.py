@@ -17,7 +17,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Final
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -39,7 +39,7 @@ from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import CANCEL, AppError
 from app.core.log import get_logger
 from app.i18n import tr
-from app.ui.leash import WorkerLeash
+from app.ui.leash import Worker, WorkerLeash
 from app.ui.panels import collapsible
 
 _log = get_logger(__name__)
@@ -68,7 +68,7 @@ MAX_SEED = 2**31 - 1
 WAIT_MILLISECONDS = 50
 
 
-class _Worker(QThread):
+class _Worker(Worker):
     """Eine Erzeugung, abseits des Oberflächen-Threads.
 
     Ein Diffusionsmodell braucht Minuten; das in der Ereignisschleife zu tun
@@ -87,7 +87,7 @@ class _Worker(QThread):
         self._image = image
         self._seed = seed
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             if self._image is not None:
                 result = self._backend.image_to_mesh(
@@ -391,6 +391,12 @@ class GenerateDialog(QDialog):
         worker = _Worker(self.backend, self.prompt.text().strip(), self._image, self.seed.value())
         worker.done.connect(self._on_done)
         worker.failed.connect(self._on_failed)
+        # **Und das Unerwartete.** Der Arbeiter fing ``AppError``; alles andere
+        # — ein Netz, das trimesh nicht liest, eine Antwort in unbekannter
+        # Form — riss den Thread ab, und der Dialog blieb mit laufendem Balken
+        # auf „wird erzeugt" stehen. Bei einem Vorgang, der Minuten dauert, ist
+        # das von einem Hänger nicht zu unterscheiden.
+        worker.crashed.connect(self._crashed)
         worker.step.connect(self._on_step)
         worker.finished.connect(self._on_thread_done)
         self._worker = worker
@@ -451,6 +457,13 @@ class GenerateDialog(QDialog):
         if 0 <= row < len(self.tries):
             return self.tries[row]
         return self.result_mesh
+
+    def _crashed(self, detail: str) -> None:
+        """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand."""
+        _log.warning("generation crashed: %s", detail)
+        self._on_failed(
+            f"{tr('Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.')} {detail}"
+        )
 
     def _on_failed(self, problem: object) -> None:
         """Was nicht ging, warum, und was jetzt hilft — alle drei (§2.7).

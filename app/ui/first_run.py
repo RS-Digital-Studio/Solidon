@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import QThread, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -51,7 +51,7 @@ from app.i18n import language_name, tr
 from app.i18n.catalog import available_languages
 from app.ui.icons import icon
 from app.ui.labels import by_title, deadline_date
-from app.ui.leash import WorkerLeash
+from app.ui.leash import Worker, WorkerLeash
 from app.ui.settings import UiSettings
 from app.ui.style import NORMAL, TIGHT, set_level
 
@@ -82,7 +82,7 @@ class Findings:
     printer: str
 
 
-class _Survey(QThread):
+class _Survey(Worker):
     """Die Erhebung: Programme suchen, Slicer-Profil lesen, Ollama fragen.
 
     Kein Abbrechen — es gibt nichts zu bereuen, sie schreibt nichts. Wer den
@@ -91,7 +91,7 @@ class _Survey(QThread):
 
     done = Signal(object)
 
-    def run(self) -> None:
+    def work(self) -> None:
         self.done.emit(
             Findings(
                 tools=tools.survey(),
@@ -273,6 +273,7 @@ class FirstRunDialog(QDialog):
             return
         survey = _Survey()
         survey.done.connect(self._show)
+        survey.crashed.connect(self._crashed)
         survey.finished.connect(self._survey_done)
         self._survey = survey
         # Über die Leine gestartet: Sie hält ihn ab diesem Moment, nicht erst
@@ -299,6 +300,26 @@ class FirstRunDialog(QDialog):
         if found.printer and self.printer.currentData() == self._suggested_printer:
             _select(self.printer, found.printer)
             self._suggested_printer = found.printer
+
+    def _crashed(self, detail: str) -> None:
+        """Womit niemand gerechnet hat — und keine Zeile bleibt auf „wird
+        nachgesehen" stehen.
+
+        Der erste Blick auf Solidon ist nicht der Ort für einen Dialog, der
+        stillsteht. Was hier fehlschlägt, kostet nichts: Die Liste der
+        Programme ist ein Blick, keine Bedingung — der Weg zum ersten Modell
+        führt daran vorbei.
+        """
+        _log.warning("first run survey crashed: %s", detail)
+        self._fill_tools(())
+        self.install_button.setEnabled(True)
+        self.install_button.setText(tr("Fehlendes installieren …"))
+        self.chat_state.setText(
+            tr(
+                "Beim Nachsehen ist etwas schiefgegangen. Der Chat und die "
+                "zusätzlichen Programme lassen sich trotzdem einrichten."
+            )
+        )
 
     def _survey_done(self) -> None:
         survey = self._survey

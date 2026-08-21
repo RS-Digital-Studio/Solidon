@@ -20,7 +20,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QPoint, Qt, QThread, QTimer, Signal
+from PySide6.QtCore import QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
@@ -176,7 +176,7 @@ from app.ui.labels import (
     spoiled_the_exact_body,
 )
 from app.ui.labels import set_display_unit as set_length_unit
-from app.ui.leash import WorkerLeash
+from app.ui.leash import Worker, WorkerLeash
 from app.ui.loading import LoadingVeil, remaining_time
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
@@ -312,7 +312,7 @@ def gcode_filter() -> str:
     return _filter_for(tr("G-Code"), GCODE_SUFFIXES)
 
 
-class _MapWorker(QThread):
+class _MapWorker(Worker):
     """Eine Analysekarte, abseits des Oberflächen-Threads (§18.9).
 
     Sekunden an einem großen Körper — lang genug, dass ein Fenster, das sie in
@@ -337,7 +337,7 @@ class _MapWorker(QThread):
     def cancel(self) -> None:
         self.cancelled.cancel()
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             self.done.emit(
                 maps.build(
@@ -358,7 +358,7 @@ class _MapWorker(QThread):
             return
 
 
-class _UpdateWorker(QThread):
+class _UpdateWorker(Worker):
     """Die Update-Anfrage, abseits des Oberflächen-Threads (§37.2).
 
     Sie lief beim Start im Hauptthread — ihr Docstring versprach „niemand
@@ -368,11 +368,11 @@ class _UpdateWorker(QThread):
 
     done = Signal(object)
 
-    def run(self) -> None:
+    def work(self) -> None:
         self.done.emit(updates.check())
 
 
-class _OllamaSizeWorker(QThread):
+class _OllamaSizeWorker(Worker):
     """Die Modellgrößen-Frage an Ollama (§27), abseits des Oberflächen-Threads.
 
     Sie läuft nur, wenn der Chat über das lokale Modell aufwacht. Das Ergebnis
@@ -386,11 +386,11 @@ class _OllamaSizeWorker(QThread):
         super().__init__()
         self._model = model
 
-    def run(self) -> None:
+    def work(self) -> None:
         self.done.emit(llm.ollama_size_warning(self._model))
 
 
-class _DownloadWorker(QThread):
+class _DownloadWorker(Worker):
     """Eine Modelldatei aus dem Netz holen, abseits des Oberflächen-Threads
     (§2.8).
 
@@ -408,7 +408,7 @@ class _DownloadWorker(QThread):
         super().__init__()
         self._url = url
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             self.done.emit(fetch_model(self._url, progress=self._report))
         except AppError as error:
@@ -437,7 +437,7 @@ class _WriteFailure:
     elsewhere: Callable[[], None]
 
 
-class _ExportWorker(QThread):
+class _ExportWorker(Worker):
     """Der Export, abseits des Oberflächen-Threads (§2.8, §29).
 
     Er rechnete und schrieb komplett in der Ereignisschleife: die Prüfung vor
@@ -486,7 +486,7 @@ class _ExportWorker(QThread):
         self._ui_settings = ui_settings
         self._material = material
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             if self._format == "3mf":
                 written, findings = self._assembly()
@@ -535,7 +535,7 @@ class _ExportWorker(QThread):
         return write_plan(plan, self._target.parent, self._format), list(plan.findings)
 
 
-class _SliceWorker(QThread):
+class _SliceWorker(Worker):
     """Eine Schichtanalyse, abseits des Oberflächen-Threads (§2.8, §22).
 
     Dieselbe Begründung wie bei der Analysekarte, nur später bemerkt: an einem
@@ -550,7 +550,7 @@ class _SliceWorker(QThread):
         self._entry = entry
         self._layer_height = layer_height
 
-    def run(self) -> None:
+    def work(self) -> None:
         self.done.emit(slice_body(as_mesh_data(self._entry.mesh), self._layer_height))
 
 
@@ -2652,6 +2652,7 @@ class MainWindow(QMainWindow):
         worker.step.connect(self._on_download_progress)
         worker.done.connect(self._downloaded)
         worker.failed.connect(self._download_failed)
+        worker.crashed.connect(lambda detail: self._download_failed(InternalError(detail=detail)))
         worker.finished.connect(lambda done=worker: self._download_worker_done(done))
         self.status_message.setText(tr("Modell herunterladen …"))
         self.progress.setRange(0, 100)
@@ -3224,6 +3225,11 @@ class MainWindow(QMainWindow):
         self._export_worker = worker
         worker.done.connect(self._export_done)
         worker.failed.connect(self._export_failed)
+        # **Und das Unerwartete.** Der Menüeintrag ist gesperrt, solange
+        # geschrieben wird; eine Ausnahme, die den Thread abriss, ließ ihn für
+        # den Rest der Sitzung gesperrt — der Kunde konnte nicht mehr
+        # exportieren und erfuhr nicht, warum.
+        worker.crashed.connect(lambda detail: self._export_failed(InternalError(detail=detail)))
         worker.finished.connect(lambda done=worker: self._export_worker_done(done))
         self.status_message.setText(tr("Exportiert wird … {name}").format(name=target.name))
         self.progress.setRange(0, 0)

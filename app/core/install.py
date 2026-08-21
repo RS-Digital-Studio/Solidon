@@ -41,6 +41,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Final, Literal
@@ -488,13 +489,7 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
     progress(" ".join(command))
     try:
         # Der Befehl entsteht aus den Konstanten oben und aus sonst nichts.
-        finished = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            timeout=TIMEOUT_SECONDS,
-            check=False,
-        )
+        code, output = _stream(command, progress)
     except (OSError, subprocess.SubprocessError) as problem:
         return InstallResult(
             requirement=requirement,
@@ -503,11 +498,8 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
             reason=_("Die Paketverwaltung ließ sich nicht starten."),
         )
 
-    output = (finished.stdout or "") + (finished.stderr or "")
-    if finished.returncode:
-        output = output + chr(10) + f"exit {finished.returncode}"
-    for line in output.splitlines()[-20:]:
-        progress(line)
+    if code:
+        output = output + chr(10) + f"exit {code}"
 
     # Die Suche merkt sich, was sie nicht gefunden hat. Nach einer Installation
     # ist diese Antwort veraltet — sonst bliebe das gerade Installierte bis zum
@@ -517,8 +509,8 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
     discover.forget_cache()
     discover.refresh_path()
 
-    done = finished.returncode == 0 and present(requirement)
-    if finished.returncode == 0 and not done:
+    done = code == 0 and present(requirement)
+    if code == 0 and not done:
         # Der Rest der Fälle: eine Anwendung, die ihren Ordner nirgends anmeldet
         # und außerhalb der bekannten Stellen liegt. Dann hilft der Ort von
         # Hand — und der Knopf dafür steht in derselben Zeile.
@@ -548,7 +540,7 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
                 "unter „Details“; die Seite des Herstellers führt die Datei zum "
                 "Selbstinstallieren."
             )
-            if finished.returncode
+            if code
             else _(
                 "Der Befehl lief durch, das Programm ist danach trotzdem nicht zu "
                 "finden. Ein Neustart von Solidon hilft oft; sonst steht die Datei "
@@ -556,6 +548,51 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
             )
         ),
     )
+
+
+def _stream(command: list[str], progress: ProgressFn) -> tuple[int, str]:
+    """Den Installer laufen lassen und **währenddessen** melden, was er sagt.
+
+        **Vorher kam die Rückmeldung erst am Ende.** ``subprocess.run`` sammelt die
+        Ausgabe und gibt sie zurück, wenn der Prozess fertig ist — die
+        Fortschrittszeilen wurden also erst dann durchgereicht, wenn niemand sie
+        mehr brauchte. Bei OrcaSlicer sind das mehrere Minuten, in denen ein
+        unbestimmter Balken lief und sonst nichts geschah.
+
+        Gelesen wird zeilenweise im Textmodus, und das ist hier der Trick: winget
+        zeichnet seinen Fortschrittsbalken mit Wagenrücklauf und ohne
+        Zeilenumbruch. Der Textmodus übersetzt ``
+    `` in ein Zeilenende, also
+        kommt jede Aktualisierung als eigene Zeile an — sonst käme bis zum Schluss
+        keine.
+
+        ``stderr`` läuft in denselben Strom: Zwei getrennt zu lesen hieße, auf
+        einem zu blocken, während der andere vollläuft.
+    """
+    lines: list[str] = []
+    deadline = time.monotonic() + TIMEOUT_SECONDS
+    with subprocess.Popen(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        stdin=subprocess.DEVNULL,
+        text=True,
+        errors="replace",
+        bufsize=1,
+    ) as process:
+        assert process.stdout is not None
+        for raw in process.stdout:
+            line = raw.strip()
+            if line:
+                lines.append(line)
+                progress(line)
+            if time.monotonic() > deadline:
+                process.kill()
+                raise subprocess.TimeoutExpired(command, TIMEOUT_SECONDS)
+        code = process.wait()
+    # Nur das Ende: Eine Paketverwaltung schreibt hunderte Fortschrittszeilen,
+    # und was jemand weitergeben will, sind die letzten.
+    return code, chr(10).join(lines[-40:])
 
 
 def _command(requirement: Requirement) -> list[str]:

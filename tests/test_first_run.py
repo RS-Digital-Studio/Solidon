@@ -672,3 +672,25 @@ def test_the_first_run_says_the_language_waits_for_a_restart(qt_app: QApplicatio
     back = dialog.language.findData(settings.language)
     dialog.language.setCurrentIndex(back)
     assert dialog.language_note.isHidden(), "zurückgestellt bleibt der Hinweis nicht stehen"
+
+
+def test_an_unexpected_error_does_not_leave_the_first_run_waiting(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der erste Blick auf Solidon ist nicht der Ort für einen stillstehenden Dialog.
+
+    Was hier fehlschlägt, kostet nichts: Die Liste der Programme ist ein Blick,
+    keine Bedingung — der Weg zum ersten Modell führt daran vorbei.
+    """
+
+    def refuse() -> tuple[tools.ToolState, ...]:
+        raise OSError(13, "Zugriff verweigert")
+
+    monkeypatch.setattr(tools, "survey", refuse)
+
+    dialog = settled(FirstRunDialog(UiSettings()), qt_app)
+
+    assert dialog.install_button.isEnabled(), "der Weg zur Liste bleibt offen"
+    assert "nachgesehen" not in dialog.chat_state.text(), "keine Zeile bleibt auf „wird“ stehen"
+    assert "schiefgegangen" in dialog.chat_state.text()
+    assert dialog.open_button.text().startswith("Modell"), "und der Weg hinaus steht da"

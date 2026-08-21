@@ -51,7 +51,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core import discover, tools
-from app.core.errors import AppError, OperationCancelled
+from app.core.errors import AppError, InternalError, OperationCancelled
 from app.core.export import handover, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.export.writer import arrangement_holds, write_assembly
@@ -74,7 +74,7 @@ from app.core.units import DEGREE_UNIT
 from app.i18n import tr
 from app.ui.dialogs import show_error
 from app.ui.labels import by_title, colour_name
-from app.ui.leash import WorkerLeash
+from app.ui.leash import Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -772,7 +772,7 @@ class PlateRun:
     welche gemeint ist."""
 
 
-class _SliceWorker(QThread):
+class _SliceWorker(Worker):
     """Die Slicer-Läufe abseits der Ereignisschleife (§2.8).
 
     Ein Teil mit vielen Schichten beschäftigt den Slicer Minuten. Im
@@ -813,7 +813,7 @@ class _SliceWorker(QThread):
         """Bricht den laufenden und alle weiteren Läufe ab."""
         self.cancelled.cancel()
 
-    def run(self) -> None:
+    def work(self) -> None:
         results: list[handover.SliceOutcome] = []
         for index, entry in enumerate(self._runs, start=1):
             if self.cancelled.is_cancelled:
@@ -844,7 +844,7 @@ class _SliceWorker(QThread):
         self.done.emit(results)
 
 
-class _ProfileWorker(QThread):
+class _ProfileWorker(Worker):
     """Den Profilbestand des Slicers durchsehen, ohne den Dialog aufzuhalten.
 
     Ein ausgelieferter Bestand hat einige tausend Dateien; sie zu lesen dauert
@@ -860,7 +860,7 @@ class _ProfileWorker(QThread):
         self._executable = executable
         self._flavour = flavour
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             self.done.emit(
                 slicer_profiles.find_profiles(
@@ -1169,9 +1169,30 @@ class PrintSettingsDialog(QDialog):
 
         worker = _ProfileWorker(found, flavour)
         worker.done.connect(self._profiles_found)
+        # Der Profilbestand ist eine Zugabe: Was hier schiefgeht, darf den
+        # Dialog nicht aufhalten — aber der Satz „Der Profilbestand wird
+        # durchgesehen …" muss verschwinden, sonst steht er dort für immer.
+        worker.crashed.connect(self._profiles_failed)
         worker.finished.connect(self._profile_search_finished)
         self._profile_worker = worker
         worker.start()
+
+    def _profiles_failed(self, detail: str) -> None:
+        """Der Profilbestand ließ sich nicht durchsehen.
+
+        Eine Zugabe, die den Dialog nicht aufhält — aber der Satz „Der
+        Profilbestand wird durchgesehen …" muss verschwinden, sonst steht er
+        dort für immer und behauptet einen Vorgang, den es nicht mehr gibt.
+        """
+        _log.warning("profile search crashed: %s", detail)
+        self.profile_note.setText(
+            tr(
+                "Der Profilbestand ließ sich nicht durchsehen. Die Profile lassen sich "
+                "unten von Hand wählen."
+            )
+        )
+        if self.slicer_toggle is not None:
+            self.slicer_toggle.setChecked(True)
 
     def _profiles_found(self, found: list[slicer_profiles.SlicerProfile]) -> None:
         self._profiles = found
@@ -1905,6 +1926,7 @@ class PrintSettingsDialog(QDialog):
         worker = _SliceWorker(runs, self.settings, self.session.profile, setup)
         worker.done.connect(self._sliced)
         worker.failed.connect(self._slice_failed)
+        worker.crashed.connect(lambda detail: self._slice_failed(InternalError(detail=detail)))
         worker.finished.connect(self._slice_finished)
         worker.step.connect(self._slicing_plate)
         self._worker = worker

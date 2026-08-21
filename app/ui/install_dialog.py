@@ -25,9 +25,10 @@ Frage eine Socket-Probe. Erhoben wird jetzt einmal je Zeile
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QThread, QUrl, Signal
+from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QGuiApplication
 from PySide6.QtWidgets import (
     QDialog,
@@ -46,7 +47,7 @@ from PySide6.QtWidgets import (
 from app.core import install, tools
 from app.core.log import get_logger
 from app.i18n import tr
-from app.ui.leash import WorkerLeash
+from app.ui.leash import Worker, WorkerLeash
 from app.ui.style import TIGHT
 
 _log = get_logger(__name__)
@@ -60,8 +61,16 @@ ABSENT = "-"
 #: sondern eine Vermutung mit Knopf daneben.
 PENDING = "?"
 
+#: Wie oft die Laufzeit einer Installation nachgezogen wird.
+#:
+#: **Das Lebenszeichen, das fehlte.** Eine Installation dauert Minuten, und der
+#: Balken davor ist unbestimmt — nichts an ihm unterscheidet „lädt" von
+#: „hängt". Die rohe Ausgabe gehört weiterhin hinter „Details"; was hier steht,
+#: ist die Zeit, und die sagt genau das, was jemand wissen will.
+TICK_MS = 1000
 
-class _Survey(QThread):
+
+class _Survey(Worker):
     """Die Erhebung: Registry, Installationsordner, Ports.
 
     Sekunden, nicht Millisekunden, und deshalb nicht im Oberflächen-Thread
@@ -71,11 +80,11 @@ class _Survey(QThread):
 
     done = Signal(object)
 
-    def run(self) -> None:
+    def work(self) -> None:
         self.done.emit(install.statuses())
 
 
-class _Worker(QThread):
+class _Worker(Worker):
     """Eine Installation, abseits des Oberflächen-Threads — ein Download
     braucht Minuten.
     """
@@ -87,7 +96,7 @@ class _Worker(QThread):
         super().__init__()
         self._requirement = requirement
 
-    def run(self) -> None:
+    def work(self) -> None:
         self.done.emit(install.install(self._requirement, self.line.emit))
 
 
@@ -254,6 +263,17 @@ class InstallDialog(QDialog):
         self._survey: _Survey | None = None
         self._queue: list[install.Requirement] = []
         """Was „Alles Fehlende installieren" noch vor sich hat."""
+        self._running_title = ""
+        """Was gerade installiert wird — für die Zeile mit der Laufzeit."""
+        self._started_at = 0.0
+        self._tick = QTimer(self)
+        self._tick.setInterval(TICK_MS)
+        self._tick.timeout.connect(self._show_elapsed)
+        self._broke = False
+        """Ein Arbeiter ist zerbrochen. Dann wird **nicht** neu erhoben: Die
+        Erhebung überschriebe die Meldung eine Sekunde später mit ihrer
+        Zusammenfassung, und der Kunde hätte den Satz gesehen und nicht
+        gelesen."""
         self._leash = WorkerLeash(self)
         """Hält den ausgelaufenen Arbeiter, bis Qt mit ihm durch ist — das
         Warum steht in :mod:`app.ui.leash`."""
@@ -332,8 +352,10 @@ class InstallDialog(QDialog):
         """
         if self._survey is not None and self._survey.isRunning():
             return
+        self._broke = False
         survey = _Survey()
         survey.done.connect(self._surveyed)
+        survey.crashed.connect(self._crashed)
         survey.finished.connect(self._survey_done)
         self._survey = survey
         self.progress.setVisible(True)
@@ -373,6 +395,23 @@ class InstallDialog(QDialog):
             return tr("Alles Zusätzliche ist vorhanden.")
         names = ", ".join(str(status.requirement.title) for status in absent)
         return f"{tr('Nicht gefunden')}: {names}"
+
+    def _crashed(self, detail: str) -> None:
+        """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand.
+
+        Ohne das blieben die Zeilen auf „?" stehen und der Balken lief weiter:
+        Ein ``run``, das eine Ausnahme durchlässt, sendet sein Ergebnissignal
+        nie.
+        """
+        self._tick.stop()
+        self._busy(False)
+        self.progress.setVisible(False)
+        self._queue.clear()
+        self._broke = True
+        _log.warning("install dialog worker crashed: %s", detail)
+        self.state.setText(tr("Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat."))
+        self._details = f"{self._details}\n{detail}" if self._details else detail
+        self.details_button.setVisible(True)
 
     def _survey_done(self) -> None:
         survey = self._survey
@@ -424,16 +463,27 @@ class InstallDialog(QDialog):
         if self._busy_installing():
             return
         self._busy(True)
-        self.state.setText(f"{tr('Wird installiert')}: {requirement.title}")
+        self._running_title = str(requirement.title)
+        self._started_at = time.monotonic()
+        self._show_elapsed()
+        self._tick.start()
         self._details = ""
         self.details_button.setVisible(False)
 
         worker = _Worker(requirement)
         worker.done.connect(self._finished)
         worker.line.connect(self._note_line)
+        worker.crashed.connect(self._crashed)
         worker.finished.connect(self._thread_done)
         self._worker = worker
         self._leash.start(worker)
+
+    def _show_elapsed(self) -> None:
+        """„Wird installiert: OrcaSlicer (45 s)" — dasselbe Muster wie beim
+        Erzeugen eines Modells (``mesh.py``).
+        """
+        seconds = time.monotonic() - self._started_at
+        self.state.setText(f"{tr('Wird installiert')}: {self._running_title} ({seconds:.0f} s)")
 
     def _busy_installing(self) -> bool:
         return self._worker is not None and self._worker.isRunning()
@@ -452,6 +502,7 @@ class InstallDialog(QDialog):
 
     def _finished(self, result: object) -> None:
         assert isinstance(result, install.InstallResult)
+        self._tick.stop()
         self._busy(False)
         if result.installed:
             self.state.setText(f"{result.requirement.title}: {tr('fertig')}")
@@ -479,7 +530,7 @@ class InstallDialog(QDialog):
         # fehlenden Programmen wurden so drei installiert, ohne ein Wort dazu.
         if self._queue:
             self._next_in_queue()
-        else:
+        elif not self._broke:
             self.refresh()
 
     def _busy(self, running: bool) -> None:

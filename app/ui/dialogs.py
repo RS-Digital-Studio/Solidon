@@ -11,7 +11,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
-from PySide6.QtCore import Qt, QThread, QUrl, Signal
+from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QComboBox,
@@ -41,7 +41,7 @@ from app.core.log import get_logger
 from app.core.scene import expressions
 from app.i18n import format_decimal, tr
 from app.ui.labels import deadline_date, value_line
-from app.ui.leash import WorkerLeash
+from app.ui.leash import Worker, WorkerLeash
 from app.ui.style import set_level
 
 _log = get_logger(__name__)
@@ -303,7 +303,7 @@ class ParameterDialog(QDialog):
         )
 
 
-class _ToolProbeWorker(QThread):
+class _ToolProbeWorker(Worker):
     """Die Werkzeugprobe, abseits des Oberflächen-Threads.
 
     Sie macht einen echten Zug gegen das Modell und lädt es dabei — Sekunden
@@ -316,7 +316,7 @@ class _ToolProbeWorker(QThread):
         super().__init__()
         self._model = model
 
-    def run(self) -> None:
+    def work(self) -> None:
         self.done.emit(llm.ollama_tool_check(self._model))
 
 
@@ -335,12 +335,12 @@ class ChatState:
     installed: tuple[str, ...]
 
 
-class _Look(QThread):
+class _Look(Worker):
     """Nachsehen: Schlüsselbund, Dienst, installierte Modelle."""
 
     done = Signal(object)
 
-    def run(self) -> None:
+    def work(self) -> None:
         tool = tools.by_id("ollama")
         self.done.emit(
             ChatState(
@@ -351,7 +351,7 @@ class _Look(QThread):
         )
 
 
-class _StartWorker(QThread):
+class _StartWorker(Worker):
     """Ollama starten und warten, bis sein Port antwortet."""
 
     done = Signal(bool)
@@ -360,11 +360,11 @@ class _StartWorker(QThread):
         super().__init__()
         self._tool = tool
 
-    def run(self) -> None:
+    def work(self) -> None:
         self.done.emit(tools.start(self._tool))
 
 
-class _PullWorker(QThread):
+class _PullWorker(Worker):
     """Ein Modell holen — fünf bis neun Gigabyte.
 
     Mit Abbrechen, und das ist keine Höflichkeit: Ollama behält, was schon
@@ -383,7 +383,7 @@ class _PullWorker(QThread):
     def cancel(self) -> None:
         self._stop = True
 
-    def run(self) -> None:
+    def work(self) -> None:
         self.done.emit(
             llm.pull_model(
                 self._model,
@@ -506,6 +506,7 @@ class KeyDialog(QDialog):
             return
         worker = _Look()
         worker.done.connect(self._show_state)
+        worker.crashed.connect(self._crashed)
         worker.finished.connect(lambda done=worker: self._worker_finished(done))
         self._look = worker
         self._leash.start(worker)
@@ -651,6 +652,7 @@ class KeyDialog(QDialog):
         set_level(self.service_state, "info")
         worker = _StartWorker(tool)
         worker.done.connect(self._started)
+        worker.crashed.connect(self._crashed)
         worker.finished.connect(lambda done=worker: self._worker_finished(done))
         self._starter = worker
         self._leash.start(worker)
@@ -729,6 +731,7 @@ class KeyDialog(QDialog):
         worker = _PullWorker(model)
         worker.step.connect(self._pull_step)
         worker.done.connect(self._pull_done)
+        worker.crashed.connect(self._crashed)
         worker.finished.connect(lambda done=worker: self._worker_finished(done))
         self._pull = worker
         self._leash.start(worker)
@@ -763,6 +766,24 @@ class KeyDialog(QDialog):
         self.probe_result.setText(str(problem))
         set_level(self.probe_result, "warning")
 
+    def _crashed(self, detail: str) -> None:
+        """Womit niemand gerechnet hat — und der Weg aus dem Wartezustand.
+
+        Vier Arbeiter enden hier, und alle vier hinterlassen sonst einen
+        Dialog, der stillsteht: „Wird nachgesehen …", „Ollama wird gestartet
+        …", ein laufender Balken über einem Download. Ein ``run``, das eine
+        Ausnahme durchlässt, sendet sein Ergebnissignal nie.
+        """
+        _log.warning("chat setup worker crashed: %s", detail)
+        self.pull_progress.setVisible(False)
+        self.pull_button.setText(tr("Modell holen"))
+        self.service_button.setEnabled(True)
+        self.probe_button.setEnabled(True)
+        self.probe_result.setText(
+            f"{tr('Dabei ist etwas schiefgegangen, womit hier niemand gerechnet hat.')} {detail}"
+        )
+        set_level(self.probe_result, "warning")
+
     def _worker_finished(self, worker: object) -> None:
         """Wer einen Arbeiter startet, hält ihn fest — siehe :mod:`app.ui.leash`."""
         if self._starter is worker:
@@ -781,6 +802,7 @@ class KeyDialog(QDialog):
 
         worker = _ToolProbeWorker(model)
         worker.done.connect(self._probe_done)
+        worker.crashed.connect(self._crashed)
         worker.finished.connect(lambda done=worker: self._probe_finished(done))
         self._probe = worker
         self._leash.start(worker)

@@ -499,3 +499,58 @@ def test_an_unknown_answer_does_not_lock_the_button(
     assert dialog.buttons.button(QDialogButtonBox.StandardButton.Ok).isEnabled()
     assert "Versuchen lässt es sich" in dialog.state.text()
     assert dialog.setup.isHidden(), "es gibt nichts einzurichten, was wir kennen"
+
+
+def test_an_unexpected_error_does_not_leave_the_generator_waiting(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Lauf dauert Minuten — ein stillstehender Balken ist davon nicht zu
+    unterscheiden.
+
+    Der Arbeiter fing ``AppError``; alles andere — ein Netz, das trimesh nicht
+    liest, eine Antwort in unbekannter Form — riss den Thread ab.
+    """
+
+    class Bricht:
+        id = "comfyui"
+        available = True
+
+        def text_to_mesh(self, prompt: str, *, seed: int = 0, progress: object = None) -> object:
+            raise KeyError("outputs")
+
+    dialog = GenerateDialog(backend=Bricht())
+    dialog.prompt.setText("ein Halter")
+    dialog._start()
+    for _ in range(200):
+        qt_app.processEvents()
+        if dialog._worker is None:
+            break
+        dialog._worker.wait(20)
+    qt_app.processEvents()
+
+    assert "schiefgegangen" in dialog.state.text()
+    assert dialog.progress.isHidden(), "kein Balken über einem Lauf, den es nicht gibt"
+
+
+def test_the_setup_dialog_says_how_long_a_step_has_been_running(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Einer der Schritte lädt 7,5 GB.
+
+    Die Zeit beginnt je Schritt neu: „Gewichte laden — rund 7,5 GB (240 s)"
+    sagt mehr als eine Gesamtzeit, denn nur dieser eine Schritt dauert.
+    """
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: Path("C:/ComfyUI"))
+    monkeypatch.setattr(comfy_setup, "weights_present", lambda folder: False)
+    dialog = ComfySetupDialog()
+
+    dialog._note_step("Gewichte laden — rund 7,5 GB, das dauert")
+
+    assert "Gewichte laden" in dialog.state.text()
+    assert "(0 s)" in dialog.state.text(), "und wie lange er schon läuft"
+
+    dialog._idle()
+    assert not dialog._tick.isActive(), "danach zählt nichts mehr"

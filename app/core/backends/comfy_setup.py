@@ -26,6 +26,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -71,6 +72,15 @@ CancelledFn = Callable[[], bool]
 
 def _silent(step: TranslatableText | str) -> None:
     del step
+
+
+class Cancelled(RuntimeError):
+    """Der Nutzer hat abgebrochen — kein Fehler, und nie als einer gezeigt.
+
+    Dieselbe Rolle wie ``errors.OperationCancelled`` im Kern: Sie unterbricht
+    einen Schritt, der Minuten läuft, und wird oben in die Auskunft
+    umgewandelt, dass ein neuer Lauf fortsetzt.
+    """
 
 
 class SetupFailed(RuntimeError):
@@ -160,18 +170,55 @@ def find_python(comfyui: Path) -> Path:
     return Path(sys.executable)
 
 
-def _run(command: list[str], what: TranslatableText | str, progress: ProgressFn) -> None:
+def _run(
+    command: list[str],
+    what: TranslatableText | str,
+    progress: ProgressFn,
+    cancelled: CancelledFn | None = None,
+) -> None:
+    """Einen Schritt laufen lassen — abbrechbar, mitten drin.
+
+    **``subprocess.run`` machte „Abbrechen" beim längsten Schritt wirkungslos.**
+    Es blockiert bis zum Ende des Prozesses; die Abbruchprüfung lag *zwischen*
+    den Schritten, und einer davon lädt 7,5 GB. Wer abbrach, wartete eine halbe
+    Stunde auf einen Download, den er nicht mehr wollte — und der Satz daneben
+    („der laufende Schritt läuft aus") war wahr und keine Hilfe.
+
+    Gelesen wird zeilenweise, und zwischen den Zeilen wird gefragt. Ein Abbruch
+    beendet den Kindprozess: ``huggingface_hub`` lässt teilweise geladene
+    Dateien liegen und setzt beim nächsten Lauf fort, also kostet er nichts als
+    die Zeit, die schon vergangen ist.
+    """
     progress(what)
     _log.info("comfy setup: %s", command[0])
+    lines: list[str] = []
+    deadline = time.monotonic() + STEP_TIMEOUT_SECONDS
     try:
-        finished = subprocess.run(
-            command, capture_output=True, text=True, timeout=STEP_TIMEOUT_SECONDS, check=False
-        )
+        with subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            text=True,
+            errors="replace",
+            bufsize=1,
+        ) as process:
+            assert process.stdout is not None
+            for raw in process.stdout:
+                line = raw.strip()
+                if line:
+                    lines.append(line)
+                if cancelled is not None and cancelled():
+                    process.kill()
+                    raise Cancelled(str(what))
+                if time.monotonic() > deadline:
+                    process.kill()
+                    raise SetupFailed(f"{what}: " + str(_("Der Schritt hat zu lange gebraucht.")))
+            code = process.wait()
     except (OSError, subprocess.SubprocessError) as problem:
         raise SetupFailed(f"{what}: {problem}") from problem
-    if finished.returncode:
-        tail = (finished.stderr or finished.stdout or "").strip().splitlines()[-6:]
-        raise SetupFailed(f"{what}\n" + "\n".join(tail))
+    if code:
+        raise SetupFailed(str(what) + chr(10) + chr(10).join(lines[-6:]))
 
 
 def copy_nodes(comfyui: Path, progress: ProgressFn = _silent) -> Path:
@@ -187,7 +234,9 @@ def copy_nodes(comfyui: Path, progress: ProgressFn = _silent) -> Path:
     return target
 
 
-def fetch_triposg(target: Path, progress: ProgressFn = _silent) -> None:
+def fetch_triposg(
+    target: Path, progress: ProgressFn = _silent, cancelled: CancelledFn | None = None
+) -> None:
     """Den TripoSG-Quelltext neben die Knoten holen."""
     if (target / "triposg").is_dir():
         return
@@ -206,6 +255,7 @@ def fetch_triposg(target: Path, progress: ProgressFn = _silent) -> None:
         ["git", "clone", "--depth", "1", TRIPOSG_REPO, str(scratch)],
         _("TripoSG holen"),
         progress,
+        cancelled,
     )
     shutil.move(str(scratch / "triposg"), str(target / "triposg"))
     for extra in ("LICENSE", "NOTICE"):
@@ -260,7 +310,9 @@ def patch_sources(target: Path, progress: ProgressFn = _silent) -> None:
         vae.write_text(text, encoding="utf-8")
 
 
-def install_packages(python: Path, progress: ProgressFn = _silent) -> None:
+def install_packages(
+    python: Path, progress: ProgressFn = _silent, cancelled: CancelledFn | None = None
+) -> None:
     """Die fehlenden Pakete nachziehen, ohne die Installation umzubauen.
 
     ``--no-deps`` ist hier kein Geiz, sondern Notwehr: Die Anforderungsliste
@@ -271,6 +323,7 @@ def install_packages(python: Path, progress: ProgressFn = _silent) -> None:
         [str(python), "-s", "-m", "pip", "install", "--no-deps", *PACKAGES],
         _("Pakete für TripoSG nachziehen"),
         progress,
+        cancelled,
     )
 
 
@@ -279,7 +332,12 @@ def weights_present(comfyui: Path) -> bool:
     return (comfyui / "models" / "triposg" / "TripoSG" / "model_index.json").is_file()
 
 
-def fetch_weights(comfyui: Path, python: Path, progress: ProgressFn = _silent) -> None:
+def fetch_weights(
+    comfyui: Path,
+    python: Path,
+    progress: ProgressFn = _silent,
+    cancelled: CancelledFn | None = None,
+) -> None:
     """Die Gewichte holen — rund 7,5 GB, und nur wenn sie fehlen."""
     if weights_present(comfyui):
         return
@@ -294,6 +352,7 @@ def fetch_weights(comfyui: Path, python: Path, progress: ProgressFn = _silent) -
         ],
         _("Gewichte laden — rund 7,5 GB, das dauert"),
         progress,
+        cancelled,
     )
 
 
@@ -306,27 +365,35 @@ def setup(
 ) -> Result:
     """Alle Schritte, in dieser Reihenfolge. Wirft :class:`SetupFailed`.
 
-    Abgebrochen wird zwischen den Schritten, nicht in einem: Ein halb
-    kopierter Knotenordner oder ein halb entpacktes Modell wäre schlimmer als
-    ein Vorgang, der eine Minute länger läuft.
+    Abgebrochen wird **auch mitten in einem Schritt** — der Download der
+    Gewichte dauert eine halbe Stunde, und ein Abbrechen, das erst danach
+    wirkt, ist keines. Was dabei halb geladen ist, bleibt liegen:
+    ``huggingface_hub`` setzt beim nächsten Lauf fort, und die Knoten sind
+    idempotent kopiert.
     """
     found = find_comfyui(comfyui)
     python = find_python(found)
     progress(_("ComfyUI gefunden"))
 
     target = copy_nodes(found, progress)
-    if cancelled is not None and cancelled():
+    try:
+        if cancelled is not None and cancelled():
+            return _stopped(found, target)
+        fetch_triposg(target, progress, cancelled)
+        if cancelled is not None and cancelled():
+            return _stopped(found, target)
+        patch_sources(target, progress)
+        install_packages(python, progress, cancelled)
+        if not weights:
+            return Result(comfyui=found, nodes=target, weights=weights_present(found))
+        if cancelled is not None and cancelled():
+            return _stopped(found, target)
+        fetch_weights(found, python, progress, cancelled)
+    except Cancelled:
+        # **Der Abbruch mitten im Schritt**, nicht nur zwischen zweien: Der
+        # Download der Gewichte dauert eine halbe Stunde, und ein Abbrechen,
+        # das erst danach wirkt, ist keines.
         return _stopped(found, target)
-    fetch_triposg(target, progress)
-    if cancelled is not None and cancelled():
-        return _stopped(found, target)
-    patch_sources(target, progress)
-    install_packages(python, progress)
-    if not weights:
-        return Result(comfyui=found, nodes=target, weights=weights_present(found))
-    if cancelled is not None and cancelled():
-        return _stopped(found, target)
-    fetch_weights(found, python, progress)
     _log.info("comfy setup finished in %s", found)
     return Result(comfyui=found, nodes=target, weights=True)
 

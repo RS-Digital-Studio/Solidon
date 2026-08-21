@@ -19,7 +19,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, QThread, Signal
+from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, Signal
 
 from app.core.agent import apply as agent_apply
 from app.core.agent.proposal import Proposal
@@ -75,7 +75,7 @@ from app.core.types import (
 )
 from app.core.units import is_close
 from app.i18n import TranslatableText, _, tr
-from app.ui.leash import WorkerLeash
+from app.ui.leash import Worker, WorkerLeash
 
 _log = get_logger(__name__)
 
@@ -99,7 +99,7 @@ class AskRequest:
         self.answered.set()
 
 
-class _EvaluationWorker(QThread):
+class _EvaluationWorker(Worker):
     """Ein Auswertungslauf. Besitzt nichts, meldet alles."""
 
     finishedWith = Signal(object)
@@ -110,7 +110,7 @@ class _EvaluationWorker(QThread):
         super().__init__()
         self._session = session
 
-    def run(self) -> None:
+    def work(self) -> None:
         session = self._session
         try:
             # §32: was diese Datei außer Geometrie mitbringt, wird am Dokument
@@ -168,7 +168,7 @@ class ProposalPreview:
         return bool(self.proposal.drafts)
 
 
-class _AgentWorker(QThread):
+class _AgentWorker(Worker):
     """Ein Zug des Agenten, abseits des GUI-Threads (§26.5)."""
 
     finishedWith = Signal(object)
@@ -179,7 +179,7 @@ class _AgentWorker(QThread):
         self._session = session
         self._request = request
 
-    def run(self) -> None:
+    def work(self) -> None:
         session = self._session
         try:
             preview = session.run_proposal(self._request)
@@ -191,7 +191,7 @@ class _AgentWorker(QThread):
             self.finishedWith.emit(preview)
 
 
-class _PreviewWorker(QThread):
+class _PreviewWorker(Worker):
     """Eine Dialog-Vorschau, abseits des GUI-Threads (§18.7, §2.8).
 
     Dieselbe Begründung wie beim Agentenvorschlag: die Differenz sind zwei
@@ -211,7 +211,7 @@ class _PreviewWorker(QThread):
         self._compute = compute
         self.cancel = cancel
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             _scene, difference = self._compute()
         except (AppError, OperationCancelled):
@@ -223,7 +223,7 @@ class _PreviewWorker(QThread):
             self.done.emit(self._generation, difference)
 
 
-class _SplitWorker(QThread):
+class _SplitWorker(Worker):
     """Die Trennebenensuche, abseits des GUI-Threads (§2.8, §22.3).
 
     Sie schneidet jede Kandidatenebene durch das ganze Netz — Sekunden bis
@@ -245,7 +245,7 @@ class _SplitWorker(QThread):
         #: laufen, und wer sie abbricht, will nicht auf sie warten.
         self.cancel = CancelSignal()
 
-    def run(self) -> None:
+    def work(self) -> None:
         try:
             plan = plan_split(self._mesh, self._object_id, self._profile, cancelled=self.cancel)
         except OperationCancelled:
@@ -894,6 +894,10 @@ class Session(QObject):
         self.cancel_previews()
         worker = _PreviewWorker(self, generation, compute, cancel)
         worker.done.connect(lambda stamp, difference: self._preview_done(stamp, difference, then))
+        # Die Vorschau hat keinen Fehlerpfad — sie ist eine Zugabe (§18.7). Was
+        # hier schiefgeht, gehört ins Protokoll und sonst nirgendwohin: ein
+        # Fehlerdialog über einer Vorschau wäre lauter als die Sache.
+        worker.crashed.connect(lambda detail: _log.warning("preview crashed: %s", detail))
         worker.finished.connect(lambda done=worker: self._preview_finished(done))
         self._previews.append(worker)
         worker.start()
@@ -950,6 +954,7 @@ class Session(QObject):
         worker = _SplitWorker(as_mesh_data(entry.mesh), object_id, self.profile)
         worker.done.connect(lambda plan: self._split_planned(plan, object_id, then))
         worker.failedWith.connect(self._split_failed)
+        worker.crashed.connect(lambda detail: self._split_failed(InternalError(detail=detail)))
         worker.cancelled.connect(self._split_cancelled)
         worker.finished.connect(self._on_split_done)
         self._split = worker
@@ -1033,6 +1038,14 @@ class Session(QObject):
         # neuen Projekts und den des Imports.
         worker.finishedWith.connect(partial(self._on_finished, finished=worker))
         worker.failedWith.connect(partial(self._on_failed, finished=worker))
+        # **Und das Unerwartete.** Ohne diese Zeile blieb die Ladeanzeige des
+        # Fensters für immer stehen: Ein ``run``, das eine Ausnahme durchlässt,
+        # sendet weder ``finishedWith`` noch ``failedWith``, und ``busyChanged``
+        # kam nie zurück. Aus dem Unerwarteten wird ein ``InternalError`` — §33.1
+        # ordnet ihm den Fehlerbericht zu, und genau der gehört hierher.
+        worker.crashed.connect(
+            lambda detail, done=worker: self._on_failed(InternalError(detail=detail), finished=done)
+        )
         worker.cancelled.connect(partial(self._on_cancelled, finished=worker))
         worker.finished.connect(partial(self._on_thread_done, worker))
         self._worker = worker
@@ -1129,6 +1142,7 @@ class Session(QObject):
         worker = _AgentWorker(self, request)
         worker.finishedWith.connect(self._on_proposal)
         worker.failedWith.connect(self._on_failed)
+        worker.crashed.connect(lambda detail: self._on_failed(InternalError(detail=detail)))
         worker.finished.connect(self._on_agent_done)
         self._agent = worker
         worker.start()

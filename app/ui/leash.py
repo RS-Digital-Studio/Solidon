@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Final
 
-from PySide6.QtCore import QObject, QTimer
+from PySide6.QtCore import QObject, QThread, QTimer, Signal
 
 from app.core.log import get_logger
 
@@ -66,6 +66,48 @@ def _keeper_object() -> QObject:
 def alive() -> tuple[Any, ...]:
     """Was insgesamt noch gehalten wird. Für Tests und die Fehlersuche."""
     return tuple(_alive)
+
+
+class Worker(QThread):
+    """Ein Arbeiter, der auch mit dem Unerwarteten zurückkommt.
+
+    **Ein ``run``, das eine Ausnahme durchlässt, sendet sein Ergebnissignal
+    nie** — und wer darauf wartet, wartet für immer. Nachgestellt am
+    Einrichtungsdialog für ComfyUI: Liegt die Installation unter ``Program
+    Files``, wirft das Kopieren der Knoten einen ``PermissionError``. Die
+    Ausnahme landet auf stderr, wo sie kein Kunde sieht; im Fenster steht
+    „Wird eingerichtet …", der Balken läuft, der Knopf sagt „Abbrechen" — und
+    dabei bleibt es, bis jemand das Programm beendet.
+
+    Von dreiundzwanzig Arbeitern in der Oberfläche fing genau **einer** eine
+    unerwartete Ausnahme, und das war der Versand der Rückmeldung. Die anderen
+    zweiundzwanzig konnten ihr Fenster in einen Wartezustand ohne Ausgang
+    bringen.
+
+    Erwartete Fehler gehören weiter in ``work``: Sie sind ein Ergebnis und
+    werden als eines zurückgegeben (``InstallResult.reason``,
+    ``pull_model`` → Satz, ``SetupFailed`` → eigenes Signal). Was hier ankommt,
+    ist das, womit niemand gerechnet hat, und dafür gibt es genau eine
+    Antwort: sagen, dass es passiert ist, den Wartezustand auflösen, und die
+    Zeile ins Protokoll (§33.2).
+
+    Wer erbt, schreibt :meth:`work` statt ``run`` und verbindet ``crashed`` —
+    ``tests/test_leash.py`` hält beides fest.
+    """
+
+    crashed = Signal(str)
+    """Was schiefging, als Text — Ausnahmeart und Meldung, für „Details"."""
+
+    def run(self) -> None:
+        try:
+            self.work()
+        except Exception as problem:  # genau der Sinn dieser Klasse
+            _log.exception("worker %s did not come back", type(self).__name__)
+            self.crashed.emit(f"{type(problem).__name__}: {problem}")
+
+    def work(self) -> None:
+        """Was der Arbeiter tut. Unterklassen setzen das."""
+        raise NotImplementedError
 
 
 class WorkerLeash:

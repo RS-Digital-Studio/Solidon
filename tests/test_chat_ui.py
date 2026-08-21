@@ -934,3 +934,60 @@ def test_the_suggestions_are_there_without_asking_anybody(
 
     offered = {dialog.model_field.itemData(index) for index in range(dialog.model_field.count())}
     assert {name for name, _size, _what in llm.OLLAMA_SUGGESTIONS} <= offered
+
+
+def test_an_unexpected_error_does_not_leave_the_chat_dialog_waiting(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Vier Arbeiter, und jeder konnte den Dialog stillstellen.
+
+    „Wird nachgesehen …", „Ollama wird gestartet …", ein laufender Balken über
+    einem Download von neun Gigabyte — ohne ein Ergebnissignal blieb es dabei.
+    """
+    from app.core.backends import keys, llm
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+
+    def refuse(*_args: object, **_kwargs: object) -> tuple[str, ...]:
+        raise OSError(13, "kein Weg dorthin")
+
+    monkeypatch.setattr(llm, "installed_models", refuse)
+
+    dialog = KeyDialog()
+    dialog.wait_for_look()
+    qt_app.processEvents()
+
+    assert "schiefgegangen" in dialog.probe_result.text()
+    assert dialog.pull_progress.isHidden(), "kein Balken über einem Vorgang, den es nicht gibt"
+    assert dialog.probe_button.isEnabled(), "und die Knöpfe sind frei"
+
+
+def test_a_broken_pull_frees_the_button(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Download von neun Gigabyte, der abreißt, ließ „Abbrechen" stehen."""
+    from app.core.backends import keys, llm
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+    dialog.wait_for_look()
+    qt_app.processEvents()
+
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("die Leitung ist weg")
+
+    monkeypatch.setattr(llm, "pull_model", refuse)
+    dialog.pull_button.setEnabled(True)
+    dialog.pull_button.click()
+    for _ in range(200):
+        qt_app.processEvents()
+        if dialog._pull is None:
+            break
+        dialog._pull.wait(20)
+    qt_app.processEvents()
+
+    assert dialog.pull_button.text() == "Modell holen", "der Knopf ist wieder der, der es holt"
+    assert dialog.pull_progress.isHidden()
+    assert "schiefgegangen" in dialog.probe_result.text()
