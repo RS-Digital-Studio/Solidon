@@ -505,19 +505,30 @@ def _object_info(known: bool, node: str = "TripoSGImageToMesh") -> bytes:
     return json.dumps({node: {"input": {}}} if known else {}).encode("utf-8")
 
 
-def _answers_for(known: set[str]):
+def _answers_for(known: set[str], *, with_models: bool = True):
     """Ein ComfyUI, das genau diese Knoten kennt und die übrigen nicht.
 
     Ein Transport, der auf **jede** Frage denselben Knoten zurückgibt, kann die
     Prüfung nicht abbilden, seit sie den ganzen Ablauf durchgeht — er machte
     aus fünf unbeantworteten Fragen fünf beantwortete.
+
+    ``with_models`` bedient zusätzlich die Modellfragen: Seit die Bereitschaft
+    auch prüft, ob die Rollen des Ablaufs zu füllen sind, ist ein Server ohne
+    Modelle nicht bereit — und das ist richtig, macht aber einen Fake-Server
+    ohne Modelle zum Sonderfall statt zum Normalfall.
     """
 
     def answer(url: str, data: object, headers: object) -> bytes:
         asked = url.rsplit("/", 1)[-1]
+        if with_models and asked in OFFERED_NODES:
+            return described(asked)
         return _object_info(asked in known, asked)
 
     return answer
+
+
+#: Die Knoten, für die :data:`OFFERED` eine Auswahlliste führt.
+OFFERED_NODES = {key.split(".")[0] for key in OFFERED}
 
 
 def test_a_comfy_that_knows_every_node_of_the_workflow_is_ready(
@@ -554,7 +565,10 @@ def test_our_own_nodes_alone_are_not_readiness(monkeypatch: pytest.MonkeyPatch) 
     fremde = set(nodes) - eigene
     assert eigene and fremde, "der Ablauf spricht eigene und fremde Knoten an"
 
-    backend = ComfyBackend(transport=_answers_for(eigene))
+    # ``with_models=False``: Dieser Test prüft die Knotenfrage. Ein Server, der
+    # die Modelle mitbeantwortet, würde damit auch die Knoten bejahen, für die
+    # er eine Auswahlliste führt.
+    backend = ComfyBackend(transport=_answers_for(eigene, with_models=False))
     monkeypatch.setattr(mesh_module, "reachable", lambda url, seconds=0.25: True)
 
     assert backend.readiness() is mesh_module.Readiness.NO_NODES
@@ -1226,3 +1240,62 @@ def test_a_type_name_is_not_a_choice_list() -> None:
         ).encode("utf-8")
 
     assert ComfyBackend(transport=antwortet)._offered("KSampler", "steps") == []
+
+
+def test_the_text_way_is_checked_against_its_own_workflow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**Der Textweg wurde am Bildweg gemessen.**
+
+    Er spricht andere Knoten an und braucht ein Modell mehr: TripoSG kennt
+    keinen Texteingang, Text wird erst zu einem Bild, und dafür steht ein
+    SDXL-Modell im Ablauf. Geprüft wurde immer ``image_to_mesh`` — wer kein
+    Bildmodell hatte, las „Bereit" und erfuhr es beim Abschicken.
+    """
+    from app.core.backends import mesh as mesh_module
+
+    bild = set(ComfyBackend()._graph_nodes("image_to_mesh"))
+    text = set(ComfyBackend()._graph_nodes("text_to_mesh"))
+    assert text - bild, "der Textweg spricht Knoten an, die der Bildweg nicht braucht"
+
+    # Ein ComfyUI, das nur den Bildweg kennt. ``with_models=False``, weil
+    # dieser Test die Knotenfrage prüft: Ein Server, der die Modelle
+    # mitbeantwortet, bejaht damit auch die Knoten, für die er eine
+    # Auswahlliste führt.
+    backend = ComfyBackend(transport=_answers_for(bild, with_models=False))
+    monkeypatch.setattr(mesh_module, "reachable", lambda url, seconds=0.25: True)
+
+    # Ohne Modelle ist der Bildweg nicht „bereit", aber er hat alle Knoten —
+    # und genau das trennt die beiden Lagen.
+    assert backend.missing_nodes("image_to_mesh") == ()
+    assert backend.readiness("text_to_mesh") is mesh_module.Readiness.NO_NODES
+    assert set(backend.missing_nodes("text_to_mesh")) == text - bild
+
+
+def test_a_missing_model_is_its_own_state_and_not_a_missing_node(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**Ein fehlendes Modell ist keine fehlende Knotensammlung.**
+
+    Beides führte zu „Erzeugen" und dann zu einem Fehler, aber die Handlungen
+    sind verschieden: Knoten legt Solidon selbst hinein, ein SDXL-Modell ist
+    ComfyUIs eigene Sache. Vier Lagen statt drei, und jede zieht einen anderen
+    Satz nach sich.
+    """
+    from app.core.backends import mesh as mesh_module
+
+    nodes = set(ComfyBackend()._graph_nodes("text_to_mesh"))
+    # Alle Knoten da, aber keine Auswahllisten — also kein Modell.
+    backend = ComfyBackend(transport=_answers_for(nodes, with_models=False))
+    monkeypatch.setattr(mesh_module, "reachable", lambda url, seconds=0.25: True)
+
+    assert backend.readiness("text_to_mesh") is mesh_module.Readiness.NO_MODEL
+    assert "image" in backend.missing_models("text_to_mesh")
+
+
+def test_a_ready_comfy_says_nothing_about_missing_models() -> None:
+    """Wo alles da ist, fehlt nichts — auch keine Rolle."""
+    nodes = set(ComfyBackend()._graph_nodes("image_to_mesh"))
+    backend = ComfyBackend(transport=_answers_for(nodes))
+
+    assert backend.missing_models("image_to_mesh") == ()

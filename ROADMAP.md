@@ -46,14 +46,10 @@ bekommt einen roten Lauf.
 | Benannte Merkmale überstehen keine Boolesche Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung darüber, wann ein benanntes Merkmal wirklich fort ist — vierzehn Ops geben `features={}` zurück, und `_with_features` liest die generierten nur aus der Ausgabe |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
-| „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
 | Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | die Entscheidung des Bauplans, welche Operation auf ein fertiges Gewinde gehört; bis dahin steht `thread` als benannte Ausnahme im Konsistenztest |
 | Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
-| Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
-| Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
-| Der Textweg prüft seine Voraussetzungen nicht | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile ausgraut, solange kein SDXL-Modell unter `models/checkpoints` liegt |
 
 ---
 
@@ -8985,19 +8981,22 @@ Kategorie.
 
 ### Zwei Funde, die eine Entscheidung brauchen
 
-- [ ] **„Eingabe korrigieren" ist ein Satz und kein Knopf.** `CORRECT_INPUT`
-      ist mit 26 Verwendungen die häufigste Handlung des Kerns und trägt
-      `primary=True` — einen Handler hat sie nicht. Bei `UserError` und
-      `FileWriteError` bleibt damit nur Abbrechen, und `FileWriteError` trifft
-      das Ende jedes Weges, den Export. **Das ist kein Regelverstoß:**
-      `tests/test_ui.py` (`test_an_error_without_a_handler_still_offers_a_way_out`)
-      definiert die Regel ausdrücklich als „entweder eine Handlung mit Wirkung
-      **oder** ein Rat zum Lesen", und die Begründung daneben ist gut — ein
-      Knopf, der nichts tut, ist schlimmer als keiner. Es steht hier, weil
-      §2.1 „keine Sackgassen" verspricht und der häufigste Bedienfehler eine
-      ist. Was ein Handler tun müsste, ist die offene Frage: Bei einem
-      Parameterfehler den Dialog mit den Werten erneut öffnen; bei „andere
-      Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog.
+- [x] **„Eingabe korrigieren" ist längst ein Knopf, und der Punkt war
+      veraltet.** `error_handlers()` führt `"correct_input"` auf
+      `_correct_after_error`, und das ruft `edit_operation` mit der Kennung des
+      Schritts und dem Feld, das nicht ging: derselbe erzeugte Dialog auf den
+      Werten aus der Datei, und beim Übernehmen wird der Schritt ersetzt statt
+      ein zweiter angelegt (§15.4).
+
+      Auch der zweite Fall, den der Punkt nannte, ist gebaut: Ein
+      `FileWriteError` beim Export führt über `_after_write_failure` zum zweiten
+      Anlauf — dieselbe Datei oder ein anderer Ort. Das ist die häufigste
+      Ursache überhaupt, eine Datei, die im Slicer offen liegt, und sie
+      verlangt keinen zweiten Gang durch Format, Ordner und Namen.
+
+      Nachgeprüft beim Durchgang durch die offenen Punkte: Der Punkt beschrieb
+      einen Zustand, den zwei frühere Durchgänge behoben hatten, ohne ihn hier
+      abzuhaken.
 - [ ] **Ein angeklicktes Gewinde bietet nichts an.** `thread` entsteht
       wirklich — der Gewinde-Baustein gibt es zurück
       (`knowledge/parts/build.py`) —, und `REGISTRY.for_feature("thread")` ist
@@ -9279,12 +9278,19 @@ bekommt ein 220er Bett — und dann meldet jedes 231 mm tiefe Teil zu Recht
       16 / 23), also ist die naheliegende Verbesserung keine. „Bewusst
       einfach" steht im Docstring und hat seinen Grund; ob sieben Platten für
       52 Teile in Ordnung sind, entscheidet der Bauplan und nicht das Gefühl.
-- [ ] **Der Plattenwähler wohnt im Explodieren.** Er erscheint erst ab zwei
-      Körpern **und** zwei Platten, und er steht in der Explodier-Leiste — wer
-      eine einzelne Platte ansehen will, sucht ihn unter einem Werkzeug, das
-      Teile auseinanderzieht. Jetzt, wo alle Betten nebeneinander stehen, ist
-      das weniger dringend; ein eigener Ort in der Kopfzeile bleibt die
-      naheliegende Antwort.
+- [x] **Der Plattenwähler wohnt jetzt in der Kopfzeile.** Er stand in der
+      Leiste, die Teile auseinanderzieht, und hing an deren Sichtbarkeit — die
+      beginnt bei zwei Körpern. Ein einzelner Körper auf Platte 2 von 3, wie er
+      nach einem Auto-Split entsteht, ließ den Wähler also verschwinden. Jetzt
+      hängt er nur noch an der Zahl der Platten, und das ist die Frage, die er
+      beantwortet.
+
+      Die Kopfzeile war der richtige Ort und kein Ausweichen: Sie sagt, was
+      offen ist und worauf gedruckt wird, und auf welche Platte man sieht, ist
+      dieselbe Art Auskunft. `ExplodeBar` heißt jetzt, was sie ist — eine
+      Explosionsansicht —, und `ALL_PLATES` bleibt von dort erreichbar, weil
+      Viewport und Fenster den Wert kennen und zwei Werte für dieselbe Sache
+      eine Fehlerquelle wären.
 - [ ] **Dieselbe Frage kommt bei jeder Auswertung wieder, und das wird
       schnell viel.** Gezählt über die ganze Kette: die Ente **8** Rückfragen
       bei **1** verschiedenen, der Propellersatz **32** bei **5**,
@@ -10467,23 +10473,37 @@ sie sind der Abstand zwischen „das geht" und „das lohnt".
 
 ### Was auffiel und eine Entscheidung braucht
 
-- [ ] **Der lokale Weg ist auf Intel- und AMD-Grafik nicht praktikabel, und
-      wir nennen keinen Ausweg.** Ollama unterstützt CUDA und Metal; auf allem
-      anderen rechnet es auf dem Prozessor. Für Intel gibt es IPEX-LLM, für
-      AMD ROCm-Fassungen, für beides OpenVINO — jedes davon ist eine eigene
-      Installation mit eigenen Fallen, und keines wird von Ollama selbst
-      angeboten. Wartet auf eine Entscheidung, ob Solidon einen zweiten
-      lokalen Weg **nennt** (nicht einrichtet) oder ob die Auskunft „hier lohnt
-      es nicht, nimm einen Schlüssel" die ganze Antwort bleibt.
+- [x] **Der zweite lokale Weg wird genannt, nicht eingerichtet.** Ollama
+      unterstützt CUDA und Metal; auf allem anderen rechnet es auf dem
+      Prozessor. Für Intel gibt es IPEX-LLM, für AMD ROCm, für beides
+      OpenVINO — jedes eine eigene Installation mit eigenen Fallen, und keines
+      von Ollama selbst angeboten.
 
-- [ ] **Der Textweg prüft seine Voraussetzungen nicht.** `readiness()` liest
-      `image_to_mesh.json`, und das ist mit Absicht so: Der Bildweg ist der
-      Kernweg, der Textweg braucht zusätzlich ein SDXL-Modell unter
-      `models/checkpoints`. Wer keines hat, erfährt es beim Abschicken. Wartet
-      auf eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit
-      für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile
-      ausgraut, solange kein Bildmodell da ist.
+      Entschieden: **nennen, ja — einrichten, nein.** Und zwar im Handbuch und
+      nicht in der Statuszeile: Drei Fremdprojekte gehören nicht in einen
+      Dialogsatz, und der Satz der Werkzeugprobe muss kurz bleiben, um gelesen
+      zu werden. Er nennt weiter den Schlüssel, das Handbuch nennt beide Wege
+      samt dem Satz, der dazugehört — wer sich darauf einlässt, bekommt seine
+      Karte genutzt; wer nicht, nimmt einen Schlüssel. Beides ist vertretbar.
+- [x] **Der Textweg prüft jetzt seinen eigenen Ablauf.** `readiness()` las
+      `image_to_mesh.json`, auch wenn der Textweg lief — und der spricht andere
+      Knoten an und braucht ein Modell mehr: TripoSG kennt keinen Texteingang,
+      Text wird erst zu einem Bild, und dafür steht ein SDXL-Modell im Ablauf.
+      Wer keines hatte, las „Bereit" und erfuhr es beim Abschicken.
 
+      `readiness(workflow)` und `missing_nodes(workflow)` fragen jetzt nach dem
+      Ablauf, den der Aufrufer meint, und `missing_models(workflow)` prüft
+      dazu, ob die Rollen des Ablaufs auf diesem Rechner zu füllen sind — mit
+      denselben Aufrufen, die die Auflösung ohnehin macht. Dazu eine vierte
+      Lage `NO_MODEL`: Ein fehlendes Modell ist keine fehlende Knotensammlung,
+      denn die Knoten legt Solidon selbst hinein, ein SDXL-Modell ist ComfyUIs
+      eigene Sache.
+
+      Der Erzeugungsdialog fragt für den Weg, den er wirklich fahren würde —
+      mit gewähltem Bild den Bildweg, ohne den Textweg —, und fragt neu, wenn
+      ein Bild dazukommt: Mit Bild braucht es kein SDXL-Modell, und wer eines
+      wählt, soll nicht weiter lesen, dass etwas fehlt, was er gerade umgangen
+      hat. Der vierte Satz nennt genau das als Ausweg.
 ## Der Kundendurchgang durch die vier Wege (21.08.2026)
 
 Nach dem Bildweg die anderen drei, und zwar mit denselben Aufrufen, die die

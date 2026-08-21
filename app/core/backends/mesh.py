@@ -306,6 +306,7 @@ class Readiness(StrEnum):
     READY = "ready"
     ABSENT = "absent"
     NO_NODES = "no_nodes"
+    NO_MODEL = "no_model"
     UNKNOWN = "unknown"
 
 
@@ -381,7 +382,7 @@ class ComfyBackend:
     def available(self) -> bool:
         return reachable(self.url)
 
-    def readiness(self) -> Readiness:
+    def readiness(self, workflow: str = "image_to_mesh") -> Readiness:
         """Läuft es — und kennt es die Knoten, die der Ablauf anspricht?
 
         **Zwei Fragen, und bis hierhin wurde nur die erste gestellt.** Der
@@ -405,18 +406,64 @@ class ComfyBackend:
         """
         if not reachable(self.url):
             return Readiness.ABSENT
-        wanted = self._graph_nodes()
+        wanted = self._graph_nodes(workflow)
         if not wanted:
             return Readiness.READY
         try:
-            missing = self.missing_nodes()
+            missing = self.missing_nodes(workflow)
         except (OSError, ValueError):
             # Antwortet der Port und nicht diese Frage, ist es kein ComfyUI,
             # das wir kennen — behauptet wird dann nichts.
             return Readiness.UNKNOWN
-        return Readiness.NO_NODES if missing else Readiness.READY
+        if missing:
+            return Readiness.NO_NODES
+        try:
+            if self.missing_models(workflow):
+                return Readiness.NO_MODEL
+        except (AppError, OSError, ValueError):
+            return Readiness.UNKNOWN
+        return Readiness.READY
 
-    def missing_nodes(self) -> tuple[str, ...]:
+    def missing_models(self, workflow: str = "image_to_mesh") -> tuple[str, ...]:
+        """Welche Modellrollen dieses ComfyUI **nicht** ausfüllen kann.
+
+        **Der Textweg erfuhr es beim Abschicken.** Er braucht zusätzlich ein
+        SDXL-Modell — TripoSG kennt keinen Texteingang, Text wird erst zu einem
+        Bild. Wer keines installiert hatte, tippte seinen Satz, drückte
+        *Erzeugen* und bekam „ComfyUI hat für diese Aufgabe kein Modell
+        anzubieten". Die Auskunft war die ganze Zeit einen Aufruf entfernt, und
+        zwar denselben, den die Auflösung ohnehin macht.
+
+        Gefragt wird je Rolle und nicht je Datei: Was die Rolle ausfüllt,
+        entscheidet der Rechner, auf dem es läuft (:data:`MODEL_ROLES`).
+        """
+        graph = self._read_graph(workflow)
+        if graph is None:
+            return ()
+        offered: dict[str, list[str]] = {}
+        missing: list[str] = []
+        for node in graph.values():
+            if not isinstance(node, dict):
+                continue
+            inputs = node.get("inputs")
+            if not isinstance(inputs, dict):
+                continue
+            kind = str(node.get("class_type", ""))
+            for field_name, value in inputs.items():
+                if not isinstance(value, str):
+                    continue
+                found = _MODEL_PLACEHOLDER.match(value)
+                if found is None:
+                    continue
+                role = found.group(1)
+                key = f"{kind}.{field_name}"
+                if key not in offered:
+                    offered[key] = self._offered(kind, field_name)
+                if not offered[key] and role not in missing:
+                    missing.append(role)
+        return tuple(missing)
+
+    def missing_nodes(self, workflow: str = "image_to_mesh") -> tuple[str, ...]:
         """Welche Knoten des Ablaufs dieses ComfyUI **nicht** kennt.
 
         Die Namen, nicht bloß ihre Anzahl: „ein Knoten fehlt" schickt niemanden
@@ -426,22 +473,33 @@ class ComfyBackend:
         berichtenswert.
         """
         missing: list[str] = []
-        for kind in self._graph_nodes():
+        for kind in self._graph_nodes(workflow):
             answer = self.transport(f"{self.url}/object_info/{urllib.parse.quote(kind)}", None, {})
             described = json.loads(answer.decode("utf-8"))
             if kind not in described:
                 missing.append(kind)
         return tuple(missing)
 
-    def _graph_nodes(self) -> tuple[str, ...]:
+    def _read_graph(self, workflow: str) -> dict[str, Any] | None:
+        """Der Ablauf als Daten, oder ``None`` wenn er nicht zu lesen ist."""
+        try:
+            loaded = json.loads((self.workflows / f"{workflow}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+        return loaded if isinstance(loaded, dict) else None
+
+    def _graph_nodes(self, workflow: str = "image_to_mesh") -> tuple[str, ...]:
         """Die Knotenarten, die der Ablauf anspricht — aus ihm gelesen.
 
         Nicht eingetragen: Ein ausgetauschter Graph bringt seine eigenen Knoten
         mit, und eine feste Liste wäre am Tag danach falsch.
+
+        **Welcher Ablauf, sagt der Aufrufer.** Der Textweg spricht andere Knoten
+        an als der Bildweg und braucht ein Modell mehr; geprüft wurde bis
+        hierhin immer der Bildweg, auch wenn der Textweg lief.
         """
-        try:
-            graph = json.loads((self.workflows / "image_to_mesh.json").read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+        graph = self._read_graph(workflow)
+        if graph is None:
             return ()
         found: list[str] = []
         for node in graph.values():

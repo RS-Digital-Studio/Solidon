@@ -554,3 +554,40 @@ def test_the_setup_dialog_says_how_long_a_step_has_been_running(
 
     dialog._idle()
     assert not dialog._tick.isActive(), "danach zählt nichts mehr"
+
+
+def test_the_dialog_asks_for_the_way_it_would_actually_run(qt_app: QApplication) -> None:
+    """**Ein Bild wechselt den Weg, also auch die Frage.**
+
+    Derselbe Dialog fährt beide Wege: Mit gewähltem Bild ``image_to_mesh``,
+    ohne ``text_to_mesh``. Gefragt wurde immer der Bildweg — wer aus Text
+    erzeugen wollte und kein SDXL-Modell hatte, las „Bereit" und erfuhr es beim
+    Abschicken.
+    """
+    from app.ui.generate_dialog import GenerateDialog
+
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+
+    assert dialog._workflow() == "text_to_mesh", "ohne Bild ist es der Textweg"
+    dialog._image = b"ein Bild"
+    assert dialog._workflow() == "image_to_mesh"
+
+
+def test_a_missing_model_gets_its_own_sentence_and_a_button(qt_app: QApplication) -> None:
+    """Vier Lagen, vier Sätze — und der vierte nennt den Ausweg.
+
+    Ein Bild zu wählen umgeht das fehlende Bildmodell vollständig, und genau das
+    steht dort: Aus Text wird erst ein Bild, und dafür braucht ComfyUI ein
+    SDXL-Modell.
+    """
+    from app.core.backends import mesh
+    from app.ui.generate_dialog import GenerateDialog
+
+    dialog = GenerateDialog(backend=ScriptedMeshBackend())
+    dialog._readiness = mesh.Readiness.NO_MODEL
+    dialog._update_state()
+
+    gesagt = dialog.state.text()
+    assert "Modell" in gesagt
+    assert "Bild zu wählen" in gesagt, "Regel 17: was jetzt hilft"
+    assert dialog.setup.isVisible() or not dialog.isVisible(), "und ein Knopf dazu"

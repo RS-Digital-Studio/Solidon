@@ -107,17 +107,28 @@ class _Worker(Worker):
         self.step.emit(fraction, text)
 
 
-def _look(backend: MeshBackend) -> mesh.Readiness:
+def _look(backend: MeshBackend, workflow: str = "image_to_mesh") -> mesh.Readiness:
     """Wie weit dieser Generator ist — auch wenn er die Frage nicht kennt.
 
     ``readiness`` gehört zu ComfyUI; die Schnittstelle aus §27 kennt nur zwei
     Aufrufe und ``available``. Ein anderes Backend — der Testdoppel, ein
     späterer gehosteter Dienst — bekommt deshalb die Antwort, die es geben
     kann, und keine erfundene.
+
+    **Gefragt wird für den Weg, der wirklich läuft.** Der Textweg spricht
+    andere Knoten an und braucht ein Modell mehr: Text wird erst zu einem Bild,
+    und dafür steht ein SDXL-Modell im Ablauf. Geprüft wurde bis hierhin immer
+    der Bildweg, auch wenn der Textweg lief — wer kein Bildmodell hatte, las
+    „Bereit" und erfuhr es beim Abschicken.
     """
     ask = getattr(backend, "readiness", None)
     if callable(ask):
-        found = ask()
+        try:
+            found = ask(workflow)
+        except TypeError:
+            # Ein Backend, das die Frage kennt, aber nicht nach dem Ablauf —
+            # dann gilt seine Antwort für alles, was es kann.
+            found = ask()
         assert isinstance(found, mesh.Readiness)
         return found
     return mesh.Readiness.READY if backend.available else mesh.Readiness.ABSENT
@@ -141,7 +152,13 @@ class GenerateDialog(QDialog):
     def __init__(self, backend: MeshBackend | None = None, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.backend: MeshBackend = backend or ComfyBackend()
-        self._readiness = _look(self.backend)
+        # **Vor der Bereitschaftsfrage**, denn die hängt daran: Mit Bild fährt
+        # dieser Dialog den Bildweg, ohne den Textweg, und die beiden brauchen
+        # nicht dasselbe. Ohne diese Zeile hier oben lief ``_workflow`` in ein
+        # noch nicht gesetztes Feld — und ein Konstruktor, der auf halbem Weg
+        # abbricht, hinterlässt ein Fenster ohne Arbeiterfeld.
+        self._image: bytes | None = None
+        self._readiness = _look(self.backend, self._workflow())
         """Ob ein Generator läuft — **einmal** gefragt und gemerkt.
 
         ``ComfyBackend.available`` öffnet einen Socket mit einem Zeitlimit von
@@ -153,7 +170,6 @@ class GenerateDialog(QDialog):
         bei den zusätzlichen Programmen (:meth:`recheck`).
         """
         self.result_mesh: GeneratedMesh | None = None
-        self._image: bytes | None = None
         self._busy = False
         """Ob gerade ein Wurf läuft — siehe :meth:`_running`."""
         self._worker: _Worker | None = None
@@ -268,8 +284,17 @@ class GenerateDialog(QDialog):
 
     @property
     def readiness(self) -> mesh.Readiness:
-        """Wie weit der Generator vorbereitet ist — drei Lagen, drei Sätze."""
+        """Wie weit der Generator vorbereitet ist — vier Lagen, vier Sätze."""
         return self._readiness
+
+    def _workflow(self) -> str:
+        """Welchen Ablauf dieser Dialog gerade fahren würde.
+
+        Ein Bild ist gewählt oder es ist keines: Genau daran entscheidet
+        :meth:`_run`, welchen der beiden Aufrufe es nimmt, und genau daran muss
+        die Bereitschaftsfrage hängen.
+        """
+        return "image_to_mesh" if self._image is not None else "text_to_mesh"
 
     def recheck(self) -> None:
         """Noch einmal nachsehen, wie weit der Generator ist.
@@ -278,7 +303,7 @@ class GenerateDialog(QDialog):
         Einrichtung: Wer ComfyUI gerade gestartet hat, soll nicht den Dialog
         schließen und neu öffnen müssen, um es zu erfahren.
         """
-        self._readiness = _look(self.backend)
+        self._readiness = _look(self.backend, self._workflow())
         self._update_state()
 
     def _ask_for_setup(self) -> None:
@@ -311,6 +336,16 @@ class GenerateDialog(QDialog):
                 )
             )
             self.setup.setText(tr("Knoten und Modell einrichten …"))
+        elif self._readiness is mesh.Readiness.NO_MODEL:
+            self.state.setText(
+                tr(
+                    "ComfyUI läuft und kennt die Knoten, aber für diesen Weg fehlt "
+                    "ein Modell. Ein Bild zu wählen umgeht es — aus Text wird erst "
+                    "ein Bild, und dafür braucht ComfyUI ein SDXL-Modell unter "
+                    "„models/checkpoints“."
+                )
+            )
+            self.setup.setText(tr("Zusätzliche Programme …"))
         elif self._readiness is mesh.Readiness.UNKNOWN:
             self.state.setText(
                 tr(
@@ -324,7 +359,10 @@ class GenerateDialog(QDialog):
         # Regel 17: Der Satz sagte, was fehlt, und bot nichts an. Derselbe Weg
         # wie im Chat, wo „Chat einrichten …" neben dem Hinweis steht.
         # Sichtbar nur, solange etwas zu beheben ist.
-        self.setup.setVisible(self._readiness in (mesh.Readiness.ABSENT, mesh.Readiness.NO_NODES))
+        self.setup.setVisible(
+            self._readiness
+            in (mesh.Readiness.ABSENT, mesh.Readiness.NO_NODES, mesh.Readiness.NO_MODEL)
+        )
         # ``_busy`` gehört hierher und nicht nur in ``_running``: Diese Methode
         # hängt am Textfeld, und das bleibt während des Laufs bedienbar. Wer
         # weitertippte, machte *Erzeugen* wieder klickbar und startete einen
@@ -351,7 +389,10 @@ class GenerateDialog(QDialog):
         """
         self._image = path.read_bytes()
         self.picture_label.setText(path.name)
-        self._update_state()
+        # **Der Weg hat gewechselt, also gilt die alte Antwort nicht mehr.** Mit
+        # Bild braucht es kein SDXL-Modell; ohne schon. Wer eines wählt, soll
+        # nicht weiter lesen, dass etwas fehlt, was er gerade umgangen hat.
+        self.recheck()
 
     # --- running ----------------------------------------------------------------
 

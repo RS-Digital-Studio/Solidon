@@ -1,12 +1,16 @@
-"""Explosionsansicht und Plattenwähler (Bauplan §18.8, §25).
+"""Explosionsansicht (Bauplan §18.8, §25).
 
-Zwei Bedienelemente auf einer Leiste, und beide erscheinen nur, wenn es für sie
-etwas zu tun gibt: der Schieber ab zwei Körpern, der Plattenwähler ab zwei
-Platten. Ein Element, das immer sichtbar ist und meistens nichts tut, bringt
-Leuten bei, es zu ignorieren.
+Der Schieber erscheint ab zwei Körpern, denn darunter gibt es nichts
+auseinanderzuziehen. Ein Element, das immer sichtbar ist und meistens nichts
+tut, bringt Leuten bei, es zu ignorieren.
 
-Beide ändern das Bild und sonst nichts — Stapel, Export und Prüfbericht sehen
-jedes Teil dort, wo es ist, auf der Platte, auf die es gehört.
+**Der Plattenwähler stand hier und steht jetzt in der Kopfzeile.** Er gehörte
+nie hierher: Wer eine einzelne Platte ansehen wollte, suchte ihn unter einem
+Werkzeug, das Teile auseinanderzieht — und fand ihn nur, wenn dort auch der
+Schieber etwas zu tun hatte. Siehe :class:`app.ui.header.HeaderBar`.
+
+Der Schieber ändert das Bild und sonst nichts — Stapel, Export und Prüfbericht
+sehen jedes Teil dort, wo es ist, auf der Platte, auf die es gehört.
 """
 
 from __future__ import annotations
@@ -15,25 +19,24 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSlider, QWidget
 
 from app.i18n import tr
+from app.ui.header import ALL_PLATES as _HEADER_ALL_PLATES
 from app.ui.section_bar import SETTLE_MS
 from app.ui.style import NORMAL, TIGHT
-from app.ui.tool_strip import BarComboBox
 
 #: Der Schieber zählt in Zehnteln, 20 heißt also „doppelter Abstand zur
 #: Mitte".
 MAX_STEPS = 20
 
-#: Wie der Wähler „kein Filter" nennt.
-ALL_PLATES = -1
+#: Wo der Wähler jetzt wohnt. Der Name bleibt hier erreichbar, weil Viewport
+#: und Fenster ihn kennen und ein zweiter Wert für dieselbe Sache eine
+#: Fehlerquelle wäre.
+ALL_PLATES = _HEADER_ALL_PLATES
 
 
 class ExplodeBar(QWidget):
-    """Zieht die Teile einer Teilung auseinander und wählt eine Druckplatte
-    zum Ansehen.
-    """
+    """Zieht die Teile einer Teilung auseinander."""
 
     factorChanged = Signal(float)
-    plateChanged = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -51,33 +54,18 @@ class ExplodeBar(QWidget):
         self.reset = QPushButton(tr("Zusammen"), self)
         self.reset.clicked.connect(lambda: self.slider.setValue(0))
 
-        self.plate_label = QLabel(tr("Druckplatte"), self)
-        self.plates = BarComboBox(self)
-        self.plates.setAccessibleName(tr("Druckplatte"))
-        self.plates.setToolTip(tr("Zeigt nur die Objekte einer Platte."))
-        self.plates.currentIndexChanged.connect(self._on_plate)
-
         layout = QHBoxLayout(self)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)
         layout.addWidget(QLabel(tr("Explosionsansicht"), self))
         layout.addWidget(self.slider, stretch=1)
         layout.addWidget(self.reset)
-        layout.addWidget(self.plate_label)
-        layout.addWidget(self.plates)
-        self._show_plates(0)
         self.setVisible(False)
 
     @property
     def factor(self) -> float:
         return self.slider.value() / 10.0
 
-    @property
-    def plate(self) -> int:
-        """Die Platte, die gezeigt wird, oder ``ALL_PLATES``."""
-        value = self.plates.currentData()
-        return ALL_PLATES if value is None else int(value)
-
-    def show_for(self, objects: int, plates: int = 1) -> bool:
+    def show_for(self, objects: int) -> bool:
         """Bereitet die Leiste vor und sagt, ob sie überhaupt etwas zu bieten
         hat.
 
@@ -91,26 +79,7 @@ class ExplodeBar(QWidget):
         wanted = objects > 1
         if not wanted and self.slider.value():
             self.slider.setValue(0)
-        self._show_plates(plates)
         return wanted
-
-    def _show_plates(self, plates: int) -> None:
-        """Baut den Wähler neu und behält die Platte, die betrachtet wurde."""
-        previous = self.plate
-        self.plates.blockSignals(True)
-        self.plates.clear()
-        self.plates.addItem(tr("Alle"), ALL_PLATES)
-        for index in range(plates):
-            self.plates.addItem(f"{tr('Platte')} {index + 1}", index)
-        if previous != ALL_PLATES and previous < plates:
-            self.plates.setCurrentIndex(previous + 1)
-        self.plates.blockSignals(False)
-
-        many = plates > 1
-        self.plates.setVisible(many)
-        self.plate_label.setVisible(many)
-        if not many and previous != ALL_PLATES:
-            self.plateChanged.emit(ALL_PLATES)
 
     def _on_moved(self, value: int) -> None:
         """Entprellt wie der Schnitt: jede Stufe baut die ganze Ansicht neu."""
@@ -119,7 +88,3 @@ class ExplodeBar(QWidget):
 
     def _settled(self) -> None:
         self.factorChanged.emit(self.factor)
-
-    def _on_plate(self, index: int) -> None:
-        del index
-        self.plateChanged.emit(self.plate)

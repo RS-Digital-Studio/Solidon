@@ -938,7 +938,6 @@ class MainWindow(QMainWindow):
         self.layer_bar.layerChanged.connect(self._on_layer_changed)
         self.explode_bar = ExplodeBar(self)
         self.explode_bar.factorChanged.connect(self.viewport.set_explosion)
-        self.explode_bar.plateChanged.connect(self.viewport.set_plate)
         self.paint_bar = PaintBar(self)
         self.paint_bar.paintingToggled.connect(self.viewport.set_painting)
         self.viewport.paintRequested.connect(self._on_paint)
@@ -1941,6 +1940,7 @@ class MainWindow(QMainWindow):
         # Angaben, die jede Toleranz im Stapel bestimmen (§12) und für die man
         # bisher einen Dialog öffnen musste.
         self.header = HeaderBar(toolbar)
+        self.header.plateChanged.connect(self.viewport.set_plate)
         toolbar.addWidget(self.header)
 
     def _menu(self, title: str) -> QMenu:
@@ -5622,10 +5622,11 @@ class MainWindow(QMainWindow):
         self._seen_objects = bool(result.scene.objects)
         self.object_tree.show_scene(result, self.session.project.document)
         plates = {entry.plate for entry in result.scene.objects.values()}
-        self.tools.set_available(
-            "explode",
-            self.explode_bar.show_for(len(result.scene.objects), max(plates, default=0) + 1),
-        )
+        # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der
+        # Explodier-Leiste: Wer eine einzelne Platte ansehen wollte, suchte ihn
+        # unter einem Werkzeug, das Teile auseinanderzieht.
+        self.header.show_plates(max(plates, default=0) + 1)
+        self.tools.set_available("explode", self.explode_bar.show_for(len(result.scene.objects)))
         self.report.show_result(result, self.session.project.document)
         # Ein Strich legt einen Slot an: Nach der Auswertung soll die
         # Pinselleiste ihn kennen, sonst steht dort weiter „neu".

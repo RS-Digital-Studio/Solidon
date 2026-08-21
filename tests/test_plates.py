@@ -18,7 +18,7 @@ from app.core.geom.prepare import MAX_PLATES, arrange_on_bed, check_build_volume
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, Profile, Scene, SceneObject
-from app.ui.explode_bar import ALL_PLATES, ExplodeBar
+from app.ui.header import ALL_PLATES, HeaderBar
 
 
 def slab(size: float = 120.0) -> MeshData:
@@ -224,30 +224,29 @@ def test_the_export_check_knows_which_plate_complains(profile: Profile) -> None:
 
 
 def test_the_selector_appears_from_two_plates_on(qt_app: QApplication) -> None:
-    """``isVisibleTo`` und nicht ``isVisible``: die Leiste selbst zeigt sich
-    nicht mehr — das tut die Werkzeugzeile, wenn jemand ihren Knopf drückt.
-    Gefragt ist hier, ob der Wähler *innerhalb* der Leiste dazugehört.
+    """``isVisibleTo`` und nicht ``isVisible``: Die Kopfzeile steht immer, aber
+    der Wähler darin nur, wenn es etwas zu wählen gibt.
     """
-    bar = ExplodeBar()
+    bar = HeaderBar()
 
-    bar.show_for(3, plates=1)
+    bar.show_plates(1)
     assert not bar.plates.isVisibleTo(bar)
 
-    bar.show_for(3, plates=3)
+    bar.show_plates(3)
     assert bar.plates.isVisibleTo(bar)
     assert bar.plates.count() == 4, "all plus three"
 
 
 def test_the_selector_starts_on_everything(qt_app: QApplication) -> None:
-    bar = ExplodeBar()
-    bar.show_for(3, plates=3)
+    bar = HeaderBar()
+    bar.show_plates(3)
 
     assert bar.plate == ALL_PLATES
 
 
 def test_choosing_a_plate_reports_it(qt_app: QApplication) -> None:
-    bar = ExplodeBar()
-    bar.show_for(3, plates=3)
+    bar = HeaderBar()
+    bar.show_plates(3)
     seen: list[int] = []
     bar.plateChanged.connect(seen.append)
 
@@ -255,6 +254,25 @@ def test_choosing_a_plate_reports_it(qt_app: QApplication) -> None:
 
     assert seen == [1], "the second plate counts as 1"
     assert bar.plate == 1
+
+
+def test_the_selector_lives_in_the_header_and_not_in_the_explosion(
+    qt_app: QApplication,
+) -> None:
+    """**Er wohnte im Explodieren, und dort gehörte er nie hin.**
+
+    Der Wähler stand in der Leiste, die Teile auseinanderzieht, und erschien nur,
+    wenn dort auch der Schieber etwas zu tun hatte — bei genau einer Platte war
+    er also unsichtbar, bei einem einzelnen Körper die ganze Leiste. Wer eine
+    Platte ansehen wollte, suchte ihn unter einem Werkzeug für etwas anderes.
+    """
+    from app.ui.explode_bar import ExplodeBar
+
+    strip = ExplodeBar()
+
+    assert not hasattr(strip, "plates"), "der Wähler ist fort"
+    assert not hasattr(strip, "plateChanged"), "und sein Signal auch"
+    assert hasattr(HeaderBar(), "plates"), "und steht in der Kopfzeile"
 
 
 def test_the_viewport_shows_one_plate_without_touching_the_scene(qt_app: QApplication) -> None:
@@ -367,3 +385,18 @@ def test_a_single_plate_draws_exactly_what_it_always_did(
     entry = result.scene.objects["obj_1"]
     assert list(viewport._plate_offset(entry)) == [0.0, 0.0, 0.0]
     assert viewport._from_view((5.0, 6.0, 7.0)) == (5.0, 6.0, 7.0)
+
+
+def test_a_single_body_on_two_plates_still_gets_the_selector(qt_app: QApplication) -> None:
+    """**Der Mangel, um den es ging.** In der Explodier-Leiste hing der Wähler
+    an ihrer Sichtbarkeit, und die begann bei zwei Körpern: Ein einzelner Körper
+    auf Platte 2 von 3 — nach einem Auto-Split, der Deckel und Rumpf verteilt,
+    oder bei einer Auswahl — ließ ihn verschwinden. In der Kopfzeile hängt er nur
+    noch an der Zahl der Platten, und das ist die Frage, die er beantwortet.
+    """
+    bar = HeaderBar()
+
+    bar.show_plates(3)
+
+    assert bar.plates.isVisibleTo(bar), "drei Platten, ein Wähler"
+    assert bar.plates.count() == 4

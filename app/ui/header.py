@@ -16,15 +16,17 @@ dort nichts, und die Maße erscheinen erst, wenn es etwas zu messen gibt.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 from app.branding import PROJECT_SUFFIX
 from app.core.scene import EvaluationResult
 from app.core.types import Profile
 from app.core.units import LengthUnit
+from app.i18n import tr
 from app.ui.labels import length
 from app.ui.style import NORMAL, ROOMY, set_level
+from app.ui.tool_strip import BarComboBox
 
 
 def project_name(title: str) -> str:
@@ -59,8 +61,23 @@ def bounds_text(result: EvaluationResult | None, unit: LengthUnit) -> str:
     return f"{measures} {unit}"
 
 
+#: Wie der Wähler „kein Filter" nennt. Derselbe Wert wie in
+#: ``explode_bar``, wo der Wähler herkommt — der Viewport kennt ihn.
+ALL_PLATES = -1
+
+
 class HeaderBar(QWidget):
-    """Projekt links, Zustand rechts — eine Zeile, die immer steht."""
+    """Projekt links, Zustand rechts — eine Zeile, die immer steht.
+
+    **Der Plattenwähler wohnte im Explodieren.** Er stand in der Leiste, die
+    Teile auseinanderzieht, und erschien nur, wenn dort auch der Schieber etwas
+    zu tun hatte: Wer eine einzelne Platte ansehen wollte, suchte ihn unter
+    einem Werkzeug für etwas anderes. Hier gehört er hin — die Zeile sagt, was
+    offen ist und worauf gedruckt wird, und auf welche Platte man sieht, ist
+    dieselbe Art Auskunft.
+    """
+
+    plateChanged = Signal(int)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -70,6 +87,13 @@ class HeaderBar(QWidget):
         set_level(self.title, "section")
         self.bounds = QLabel("", self)
         set_level(self.bounds, "caption")
+
+        self.plate_label = QLabel(tr("Druckplatte"), self)
+        set_level(self.plate_label, "caption")
+        self.plates = BarComboBox(self)
+        self.plates.setAccessibleName(tr("Druckplatte"))
+        self.plates.setToolTip(tr("Zeigt nur die Objekte einer Platte."))
+        self.plates.currentIndexChanged.connect(self._on_plate)
 
         self.printer = QLabel("", self)
         set_level(self.printer, "caption")
@@ -82,10 +106,45 @@ class HeaderBar(QWidget):
         row.addWidget(self.title)
         row.addWidget(self.bounds)
         row.addStretch(1)
+        row.addWidget(self.plate_label)
+        row.addWidget(self.plates)
         row.addWidget(self.printer)
         row.addWidget(self.material)
 
+        self.show_plates(0)
         self.setSizePolicy(self.sizePolicy().horizontalPolicy(), self.sizePolicy().Policy.Fixed)
+
+    @property
+    def plate(self) -> int:
+        """Die Platte, die gezeigt wird, oder :data:`ALL_PLATES`."""
+        value = self.plates.currentData()
+        return ALL_PLATES if value is None else int(value)
+
+    def show_plates(self, plates: int) -> None:
+        """Baut den Wähler neu und behält die Platte, die betrachtet wurde.
+
+        Sichtbar ab zwei Platten: Ein Element, das immer dasteht und meistens
+        nichts tut, bringt Leuten bei, es zu ignorieren.
+        """
+        previous = self.plate
+        self.plates.blockSignals(True)
+        self.plates.clear()
+        self.plates.addItem(tr("Alle"), ALL_PLATES)
+        for index in range(plates):
+            self.plates.addItem(f"{tr('Platte')} {index + 1}", index)
+        if previous != ALL_PLATES and previous < plates:
+            self.plates.setCurrentIndex(previous + 1)
+        self.plates.blockSignals(False)
+
+        many = plates > 1
+        self.plates.setVisible(many)
+        self.plate_label.setVisible(many)
+        if not many and previous != ALL_PLATES:
+            self.plateChanged.emit(ALL_PLATES)
+
+    def _on_plate(self, index: int) -> None:
+        del index
+        self.plateChanged.emit(self.plate)
 
     def show_project(self, name: str, result: EvaluationResult | None, unit: LengthUnit) -> None:
         """Name und Außenmaß des offenen Projekts.

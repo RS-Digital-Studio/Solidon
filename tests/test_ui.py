@@ -778,8 +778,8 @@ def test_a_bar_never_shows_itself_past_its_switch(window: MainWindow) -> None:
     qt_app = QApplication.instance()
     assert qt_app is not None
 
-    assert window.explode_bar.show_for(3, 1) is True, "drei Körper sind etwas zum Auseinanderziehen"
-    assert window.explode_bar.show_for(1, 1) is False
+    assert window.explode_bar.show_for(3) is True, "drei Körper sind etwas zum Auseinanderziehen"
+    assert window.explode_bar.show_for(1) is False
     for _ in range(10):
         qt_app.processEvents()
 
