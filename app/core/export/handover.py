@@ -30,7 +30,14 @@ from pathlib import Path
 from typing import Final
 
 from app.core import activation
-from app.core.errors import INSTALL_MISSING, Action, ExternalToolError, OperationCancelled
+from app.core.errors import (
+    ARRANGE_ON_BED,
+    INSTALL_MISSING,
+    SCALE_TO_FIT,
+    Action,
+    ExternalToolError,
+    OperationCancelled,
+)
 from app.core.export import slicer_keys, slicer_profiles
 from app.core.export.slicer_keys import SlicerFlavour
 from app.core.knowledge.print_settings import read_path, with_path
@@ -1414,14 +1421,27 @@ def slice_model(
         )
         produced = _find_gcode(target)
         if produced is None:
+            # Beide Ströme: die Orca-Familie protokolliert auf stdout und
+            # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
+            # ohne Text zu melden — und das ist schlimmer als keiner.
+            output = _tail(completed.stdout, completed.stderr)
+            if _says_outside_the_volume(output):
+                raise ExternalToolError(
+                    tool=setup.name,
+                    exit_code=completed.returncode,
+                    detail=_("Der Slicer sagt, die Teile liegen außerhalb seines Bauraums."),
+                    values={"output": output},
+                    suggestions=(
+                        ARRANGE_ON_BED,
+                        SCALE_TO_FIT,
+                        Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
+                    ),
+                )
             raise ExternalToolError(
                 tool=setup.name,
                 exit_code=completed.returncode,
                 detail=_("Der Slicer hat keine Druckdatei geschrieben."),
-                # Beide Ströme: die Orca-Familie protokolliert auf stdout und
-                # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
-                # ohne Text zu melden — und das ist schlimmer als keiner.
-                values={"output": _tail(completed.stdout, completed.stderr)},
+                values={"output": output},
                 suggestions=(
                     Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
                     Action(id="check_profile", label=_("Maschinenprofil prüfen.")),
@@ -1575,6 +1595,31 @@ def _same(actual: str, wanted: str) -> str | bool:
         return abs(float(left) - float(right)) < 1e-6
     except ValueError:
         return False
+
+
+#: Was ein Slicer sagt, wenn von der Platte nichts in seinem Bauraum liegt.
+#:
+#: **Gemessen, nicht geraten.** PrusaSlicer 2.9.6 schreibt genau diesen Satz,
+#: wenn eine Platte in Bettkoordinaten ankommt — so kommt sie aus einer fremden
+#: 3MF, denn dort rechnet der Slicer von der Ecke und Solidon um die Mitte.
+#: Bisher wurde daraus „Der Slicer hat keine Druckdatei geschrieben": ein Satz
+#: über das Ende und nicht über die Ursache, und dazu drei Handlungen, von denen
+#: keine hilft (Regel 17).
+#:
+#: Die anderen zwei Familien stehen aus einem Grund nicht hier. Die
+#: Orca-Familie verschluckt die Ursache: ihr CLI meldet nur
+#: „Slic3r::CLI::run found error, exit", und denselben Satz auch bei einem
+#: fehlenden Maschinenprofil — er taugt nicht zur Unterscheidung. CuraEngine
+#: prüft den Bauraum überhaupt nicht: es schreibt eine Datei, die daneben
+#: druckt, und dagegen steht ``arrange.out_of_build_volume`` im Prüfbericht,
+#: nicht dieser Satz hier.
+OUTSIDE_THE_VOLUME: Final[tuple[str, ...]] = ("outside of the print volume",)
+
+
+def _says_outside_the_volume(output: str) -> bool:
+    """Sagt die Ausgabe des Slicers, dass nichts im Bauraum liegt?"""
+    lowered = output.lower()
+    return any(phrase in lowered for phrase in OUTSIDE_THE_VOLUME)
 
 
 def _tail(*streams: bytes, limit: int = 800) -> str:

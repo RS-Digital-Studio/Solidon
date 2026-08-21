@@ -1224,6 +1224,69 @@ def test_a_slicer_that_moved_away_points_at_the_extra_programs(tmp_path: Path) -
     assert any(action.id == "install" for action in raised.value.suggestions)
 
 
+class _Finished:
+    """Ein Slicerlauf, der zurückkam, ohne etwas zu schreiben."""
+
+    def __init__(self, output: bytes) -> None:
+        self.returncode = 0
+        self.stdout = output
+        self.stderr = b""
+
+
+def _slicer_saying(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, output: bytes
+) -> tuple[Path, handover.SlicerSetup]:
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "prusa-slicer.exe"
+    executable.write_bytes(b"")
+    monkeypatch.setattr(handover, "_run_slicer", lambda *args, **kwargs: _Finished(output))
+    return model, handover.SlicerSetup(executable=executable, flavour="prusa")
+
+
+def test_a_plate_outside_the_volume_offers_arranging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 17: Der Satz nennt die Ursache, und eine Handlung behebt sie.
+
+    Gemessen an PrusaSlicer 2.9.6: Eine Platte in Bettkoordinaten — so kommt
+    sie aus einer fremden 3MF — endet mit Rückgabewert 0 und dem Satz „All
+    objects are outside of the print volume." Daraus wurde bisher „Der Slicer
+    hat keine Druckdatei geschrieben", dazu drei Handlungen, von denen keine
+    hilft. Was hilft, ist ein Klick auf *Auf dem Bett anordnen*.
+    """
+    profile = profiles.make_profile()
+    model, setup = _slicer_saying(
+        monkeypatch, tmp_path, b"All objects are outside of the print volume.\n"
+    )
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    assert "Bauraum" in str(raised.value), str(raised.value)
+    assert any(action.id == "arrange_on_bed" for action in raised.value.suggestions)
+    assert raised.value.values["output"], "die Ausgabe des Slicers bleibt lesbar"
+
+
+def test_any_other_silence_keeps_the_old_answer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Gegenprobe. Die Orca-Familie verschluckt die Ursache — ihr CLI
+    meldet nur „Slic3r::CLI::run found error, exit", und denselben Satz auch bei
+    einem fehlenden Maschinenprofil. Daraus etwas über den Bauraum zu schließen
+    wäre geraten.
+    """
+    profile = profiles.make_profile()
+    model, setup = _slicer_saying(monkeypatch, tmp_path, b"Slic3r::CLI::run found error, exit\n")
+
+    with pytest.raises(ExternalToolError) as raised:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    assert "Bauraum" not in str(raised.value), str(raised.value)
+    assert not any(action.id == "arrange_on_bed" for action in raised.value.suggestions)
+    assert any(action.id == "check_profile" for action in raised.value.suggestions)
+
+
 def test_the_newest_gcode_in_the_folder_wins(tmp_path: Path) -> None:
     """Orca hängt Plattennummern an; ein zweiter Lauf darf nicht die Zahlen des
     ersten melden."""

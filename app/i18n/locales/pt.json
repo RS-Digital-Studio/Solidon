@@ -485,6 +485,7 @@
   "Der Slicer ließ sich nicht starten.": "O fatiador não pôde ser iniciado.",
   "Der Slicer rechnet — Platte {nummer} von {anzahl} …": "O slicer está a calcular — placa {nummer} de {anzahl} …",
   "Der Slicer rechnet …": "O slicer está a calcular …",
+  "Der Slicer sagt, die Teile liegen außerhalb seines Bauraums.": "O slicer diz que as peças estão fora do seu volume de impressão.",
   "Der Startbildschirm: zuletzt geöffnete Projekte, die Beispielprojekte und ein großes Feld, auf das man eine Datei ziehen kann.": "O ecrã inicial: os projetos abertos recentemente, os projetos de exemplo e uma área grande para onde se pode arrastar um ficheiro.",
   "Der Stift selbst oder die Bohrung dazu.": "O próprio pino ou o furo para ele.",
   "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen Lizenzschlüssel (Hilfe → Solidon freischalten …).": "O período de teste terminou — para isso o Solidon precisa de uma chave de licença (Ajuda → Desbloquear o Solidon …).",
