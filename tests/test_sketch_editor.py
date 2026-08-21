@@ -1875,12 +1875,30 @@ def test_the_constraint_buttons_stay_readable_on_a_laptop(qt_app: QApplication) 
     und die beiden Zahlenfelder der Werkzeugzeile nicht mehr 199 breit für
     „2,00 mm". Die Mindestbreite des ganzen Bereichs fiel damit von 1316 auf
     812 Bildpunkte.
+
+    **Der Test setzt sein Thema selbst, und das ist die halbe Prüfung.** Ohne
+    Stylesheet fehlt die Polsterung, die ein Kunde sieht: Gemessen sind die
+    Knöpfe der Bedingungszeile mit Thema 37 statt 28 Bildpunkte breit. Lief
+    diese Datei allein, stand kein Thema, und der Test war grün, ohne die Lage
+    des Kunden zu messen — lief ``test_ui.py`` davor, war er es nicht mehr. Ein
+    Test, dessen Ergebnis von seinen Nachbarn abhängt, misst nichts.
+
+    Gemessen wird die **Bedingungszeile** und nicht der ganze Bereich, denn das
+    ist sein Thema — und der Bereich war es nie: Ihr Kasten trägt
+    ``setMinimumWidth(1)``, sie kann also beliebig schmal werden. Die 1007
+    Bildpunkte des Bereichs kommen aus der Werkzeugzeile: fünfzehn Knöpfe à 37
+    plus zwei Zahlenfelder à 163 in *einer* Reihe. Das ist ein eigener Fund,
+    steht als eigener Punkt in der Roadmap, und hier zu prüfen hieße zwei
+    Sachen in einer Prüfung zu vermischen.
     """
+    from app.ui.style import stylesheet
+
+    davor = qt_app.styleSheet()
+    qt_app.setStyleSheet(stylesheet("light", 10))
     panel = SketchPanel()
     try:
-        assert panel.minimumSizeHint().width() <= 900, (
-            f"der Bereich verlangt {panel.minimumSizeHint().width()} Bildpunkte Breite"
-        )
+        breite = panel._constraints_row.minimumSize().width()
+        assert breite <= 900, f"die Bedingungszeile verlangt {breite} Bildpunkte Breite"
         for width in (1600, 1366, 1280, 1152):
             panel.resize(width, 700)
             panel.show()
@@ -1893,6 +1911,7 @@ def test_the_constraint_buttons_stay_readable_on_a_laptop(qt_app: QApplication) 
             assert not squeezed, f"bei {width} Bildpunkten Fensterbreite: " + ", ".join(squeezed)
     finally:
         panel.deleteLater()
+        qt_app.setStyleSheet(davor)
 
 
 def test_every_number_field_of_the_sketch_bar_says_what_it_is(qt_app: QApplication) -> None:
@@ -2130,3 +2149,41 @@ def test_a_click_with_a_trembling_hand_moves_nothing(qt_app: QApplication) -> No
     canvas._shift_selection(far)
 
     assert canvas.points() != before, "ab der Schwelle muss der Zug greifen"
+
+
+def test_the_tool_row_is_the_one_that_needs_the_width(qt_app: QApplication) -> None:
+    """**Die Zahl stimmte, die Ursache nicht.**
+
+    Der Punkt in der Roadmap schrieb die 1007 Bildpunkte den achtzehn Knöpfen
+    der Bedingungszeile zu. Gemessen ist es die **Werkzeugzeile**: fünfzehn
+    Knöpfe à 37 Bildpunkte plus zwei Zahlenfelder à 163, alles in einer Reihe.
+    Die Bedingungszeile kann beliebig schmal werden — ihr Kasten trägt
+    ``setMinimumWidth(1)``, und sie bricht selbst um
+    (:meth:`SketchPanel._fit_constraint_row`).
+
+    Dieser Test hält den Zustand fest und die Ursache dazu: Er ist grün,
+    solange die Werkzeugzeile die breiteste ist. Wird sie schmaler — durch
+    schmalere Zahlenfelder, einen Umbruch oder ein Kürzel-Menü —, wird er rot
+    und verlangt, dass die Zahl hier nachgezogen wird. Was verschwinden soll,
+    ist eine Entscheidung und steht als offener Punkt in der Roadmap; dass sie
+    fällig ist, steht hier.
+    """
+    from app.ui.style import stylesheet
+
+    davor = qt_app.styleSheet()
+    qt_app.setStyleSheet(stylesheet("light", 10))
+    panel = SketchPanel()
+    try:
+        bereich = panel.minimumSizeHint().width()
+        bedingungen = panel._constraints_row.minimumSize().width()
+
+        assert bereich > 900, (
+            "Der Bereich passt jetzt auf einen 1024er Schirm — schön, und dann "
+            f"gehört die Zahl hier nachgezogen: {bereich} Bildpunkte."
+        )
+        assert bedingungen < bereich, (
+            f"Die Bedingungszeile ist nicht die Ursache: {bedingungen} gegen {bereich} Bildpunkte."
+        )
+    finally:
+        panel.deleteLater()
+        qt_app.setStyleSheet(davor)

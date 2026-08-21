@@ -8434,18 +8434,29 @@ Datei da, Alt-Text da, `width`/`height` gleich den Pixeln.
       das hatte niemand gesehen. Die Gruppe heißt jetzt „Visserie"
       beziehungsweise „Parafusos e roscas"; ein Wächter über den Wortstamm
       hält alle sechs Sprachen auseinander.
-- [ ] **Die Werkzeugzeile der Skizze verlangt mit Stylesheet 1007 Bildpunkte.**
-      `test_the_constraint_buttons_stay_readable_on_a_laptop` fordert 900 und
-      ist trotzdem grün — weil er allein läuft, und dann steht kein Thema. Läuft
-      `test_ui.py` im selben Prozess davor, sind die achtzehn Knöpfe der Zeile
-      37 statt 28 Punkte breit, und die Summe reicht über einen 1024er Schirm
-      hinaus. Der Fund ist älter als der Bildlauf vom 20.08. und hat nichts mit
-      ihm zu tun; sichtbar wurde er, weil die Suite an diesem Tag zweimal am
-      Stück lief statt je Datei. Zu entscheiden ist, **was** aus der Zeile
-      verschwindet — die zweite Zahl, die Grundformen oder ein Kürzel-Menü —,
-      und der Test sollte danach sein Thema selbst setzen, sonst misst er
-      weiterhin etwas, das niemand sieht.
+- [ ] **Die Werkzeugzeile der Skizze verlangt mit Stylesheet 1007 Bildpunkte,
+      und die Ursache war eine andere als gedacht.** Hier stand, es seien die
+      achtzehn Knöpfe der Bedingungszeile. Nachgemessen mit Thema ist es die
+      **Werkzeugzeile**: fünfzehn Knöpfe à 37 Bildpunkte plus zwei Zahlenfelder
+      à 163, alles in einer Reihe. Die Bedingungszeile kann beliebig schmal
+      werden — ihr Kasten trägt `setMinimumWidth(1)` und sie bricht selbst um
+      (`_fit_constraint_row`); mit Thema braucht sie 790 und nicht 1007.
 
+      **Der Test setzt sein Thema jetzt selbst**, und das war der machbare Teil.
+      `test_the_constraint_buttons_stay_readable_on_a_laptop` war grün, weil
+      allein kein Stylesheet stand — lief `test_ui.py` davor, war er es nicht
+      mehr. Ein Test, dessen Ergebnis von seinen Nachbarn abhängt, misst nichts.
+      Er prüft seither die Bedingungszeile mit Thema, also sein eigenes Thema,
+      und `test_the_tool_row_is_the_one_that_needs_the_width` hält den Zustand
+      des Bereichs samt Ursache fest: Er wird rot, sobald die Werkzeugzeile
+      schmaler wird, und verlangt dann, dass die Zahl nachgezogen wird.
+
+      Offen bleibt die Entscheidung, **was** aus der Werkzeugzeile verschwindet.
+      Jetzt mit Zahlen: Die zwei Zahlenfelder sind 326 der 1007 Bildpunkte, also
+      ein Drittel — schmalere Felder allein bringen die Zeile unter 900. Die
+      Alternativen bleiben ein Umbruch wie bei den Bedingungen oder ein
+      Kürzel-Menü. Die Felder gehören zu `NumberSpin`/`LengthSpin`, an denen
+      gerade gearbeitet wird; deshalb hier und nicht selbst geändert.
 ---
 
 ## Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde)
