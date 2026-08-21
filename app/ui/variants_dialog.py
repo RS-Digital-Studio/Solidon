@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QLabel,
@@ -39,7 +40,6 @@ from app.core.scene.project import ProjectSources
 from app.core.scene.variants import MAX_VARIANTS
 from app.i18n import tr
 from app.ui.dialogs import show_error
-from app.ui.labels import NumberSpin
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker
 from app.ui.session import Session
 
@@ -95,10 +95,10 @@ class VariantsDialog(QDialog):
         for name, entry in sorted(document.parameters.items()):
             self.parameter.addItem(f"{entry.title or name} ({name})", name)
 
-        self.first = NumberSpin(self)
+        self.first = QDoubleSpinBox(self)
         self.first.setRange(-1000.0, 1000.0)
         self.first.setDecimals(3)
-        self.step = NumberSpin(self)
+        self.step = QDoubleSpinBox(self)
         self.step.setRange(-100.0, 100.0)
         self.step.setDecimals(3)
         self.step.setValue(0.05)

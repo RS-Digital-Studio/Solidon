@@ -55,7 +55,7 @@ from app.core.units import (
 from app.i18n import tr
 from app.ui import cursors
 from app.ui.icons import icon
-from app.ui.labels import display_unit, feature_label, localised
+from app.ui.labels import display_unit, feature_label
 from app.ui.palette import (
     DIFF_PALETTES,
     LAYER_WIDTHS,
@@ -1152,7 +1152,7 @@ class DragValueBar(QFrame):
         self.label.setText(label)
         self.unit.setText(unit)
         if not self.typing:
-            self.value.setText(localised(f"{amount:.{decimals}f}"))
+            self.value.setText(f"{amount:.{decimals}f}".replace(".", ","))
         if not self.isVisible():
             self.show()
         self.adjustSize()

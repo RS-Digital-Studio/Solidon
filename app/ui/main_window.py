@@ -173,7 +173,6 @@ from app.ui.labels import (
     feature_label,
     kind_requirement,
     length,
-    localised,
     spoiled_the_exact_body,
 )
 from app.ui.labels import set_display_unit as set_length_unit
@@ -3335,8 +3334,7 @@ class MainWindow(QMainWindow):
             show_error(error, self)
             return
         self.announce(
-            f"{tr('Kalibriert')}: {calibrated.id} · {tr('Spiel')} "
-            + localised(f"{calibrated.clearance:.2f} mm")
+            f"{tr('Kalibriert')}: {calibrated.id} · {tr('Spiel')} {calibrated.clearance:.2f} mm"
         )
         # Toleranzen sind Verweise (§12), die Szene muss also neu gebaut werden.
         self.session.evaluate_async()

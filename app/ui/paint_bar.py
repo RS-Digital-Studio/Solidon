@@ -17,6 +17,7 @@ from PySide6.QtCore import QSize, Signal
 from PySide6.QtGui import QColor, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
+    QDoubleSpinBox,
     QHBoxLayout,
     QLabel,
     QSpinBox,
@@ -26,7 +27,7 @@ from PySide6.QtWidgets import (
 from app.core.geom.paint import EDGE_ANGLE, MAX_SLOTS
 from app.core.types import MaterialSlot
 from app.i18n import tr
-from app.ui.labels import LengthSpin, NumberSpin
+from app.ui.labels import LengthSpin
 from app.ui.style import NORMAL, TIGHT
 from app.ui.theme import slot_colour
 
@@ -81,7 +82,7 @@ class PaintBar(QWidget):
         self.radius.set_range_mm(0.1, 500.0)
         self.radius.set_value_mm(10.0)
 
-        self.edge = NumberSpin(self)
+        self.edge = QDoubleSpinBox(self)
         self.edge.setRange(1.0, 180.0)
         self.edge.setValue(EDGE_ANGLE)
         self.edge.setSuffix(f" {DEGREE}")

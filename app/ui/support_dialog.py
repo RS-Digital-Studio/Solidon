@@ -48,7 +48,6 @@ from app.core.log import get_logger, log_path
 from app.core.paths import ensure_dir, user_data_dir
 from app.core.support import KIND_BUG, KIND_CRASH, KIND_IDEA, KIND_QUESTION, Receipt, Ticket
 from app.i18n import tr
-from app.ui.labels import localised
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.style import make_primary
@@ -374,9 +373,7 @@ class SupportDialog(QDialog):
         size = ticket.total_bytes
         if size:
             lines.append("")
-            lines.append(
-                f"{tr('Größe der Sendung')}: " + localised(f"{size / (1024 * 1024):.1f} MB")
-            )
+            lines.append(f"{tr('Größe der Sendung')}: {size / (1024 * 1024):.1f} MB")
         self.preview.setPlainText("\n".join(lines))
         self._update_send()
 

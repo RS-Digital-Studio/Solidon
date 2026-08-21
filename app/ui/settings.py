@@ -31,8 +31,7 @@ class UiSettings:
     diff_palette: str = "blue_orange"
     """Farben der Differenzansicht (§19.1). Rot/Grün gibt es, es ist nicht die Vorgabe."""
     display_unit: str = "mm"
-    """Die Anzeigeeinheit (§19.3). Der Kern bleibt in beiden Fällen bei
-    Millimetern."""
+    """Shown unit (§19.3). The core stays on millimetres either way."""
     language: str = SOURCE_LANGUAGE
     right_panel_visible: bool = True
     printer: str = ""

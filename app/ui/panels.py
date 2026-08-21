@@ -57,14 +57,12 @@ from app.i18n import sort_key, tr
 from app.ui.dialogs import handlers_of
 from app.ui.icons import icon
 from app.ui.labels import (
-    NumberSpin,
     compact_length,
     feature_measure,
     feature_name,
     group_title,
     kind_requirement,
     length,
-    localised,
     localised_value,
     spoiled_the_exact_body,
     value_line,
@@ -1050,11 +1048,11 @@ class ParameterPanel(QWidget):
             if parameter.expression:
                 # Abgeleitete Werte werden gezeigt, nicht bearbeitet — der Ausdruck
                 # besitzt sie.
-                label = QLabel(f"{localised(f'{parameter.value:.2f}')} {parameter.unit}", self)
+                label = QLabel(f"{parameter.value:.2f} {parameter.unit}", self)
                 label.setToolTip(parameter.expression)
                 self._form.addRow(f"{parameter.title or name}", label)
                 continue
-            editor = NumberSpin(self)
+            editor = QDoubleSpinBox(self)
             editor.setDecimals(2)
             editor.setSuffix(f" {parameter.unit}")
             editor.setMinimum(parameter.minimum if parameter.minimum is not None else -100_000.0)

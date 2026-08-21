@@ -12,8 +12,9 @@ Generator installiert hat, tauscht die Datei aus, statt Python zu flicken.
 
 Woran die mitgelieferten Graphen hängen, steht deshalb hier und nicht im Code:
 an der Knotensammlung ``ComfyUI-TripoSG-Solidon`` samt dem Modell ``TripoSG``
-unter ``models/triposg``, an ``ComfyUI-RMBG`` fürs Freistellen, und
-``text_to_mesh`` zusätzlich an einem SDXL-Modell. Letzteres ist kein Umweg,
+unter ``models/triposg``, an einem BiRefNet-Gewicht unter
+``models/background_removal`` fürs Freistellen, und ``text_to_mesh``
+zusätzlich an einem SDXL-Modell. Letzteres ist kein Umweg,
 sondern die Sache selbst: TripoSG kennt keinen Texteingang, Text wird erst zu
 einem Bild und das Bild zum Körper. Fehlt eines davon, sagt ComfyUI beim
 Abschicken, welcher Knoten fehlt — die Meldung reicht bis zum Nutzer durch.
@@ -36,8 +37,16 @@ installiert ComfyUI und seine Modelle selbst, und was er einsetzt, entscheidet
 er. Der mitgelieferte Graph nennt deshalb Rollen (``{model:shape}``) und keine
 Datei: wer ein anderes Modell mit derselben Rolle installiert, benutzt es ohne
 eine Zeile Code zu ändern. Weitere frei lizenzierte Kerne für dieselbe Aufgabe
-sind Step1X-3D (Apache-2.0) und TRELLIS (MIT); fürs Freistellen ist INSPYRENET
-(MIT) voreingestellt, nachdem dort RMBG-2.0 (CC BY-NC) stand.
+sind Step1X-3D (Apache-2.0) und TRELLIS (MIT).
+
+**Freigestellt wird mit ComfyUIs eigenen Knoten**, und dahinter steht eine
+Lizenzsache: Der Ablauf sprach ``RMBG`` aus ``ComfyUI-RMBG`` an, und das ist
+GPL-3.0 — Regel 15 lässt keine GPL-Abhängigkeit zu. Aufgefallen ist es, als
+der Weg zum ersten Mal wirklich gefahren wurde. ComfyUI kann es seit 0.33
+selbst (``LoadBackgroundRemovalModel`` und ``RemoveBackground``), die Gewichte
+sind BiRefNet unter MIT, und damit fällt neben der Lizenzfrage auch ein
+Installationsschritt weg. Ein älteres ComfyUI kennt die Knoten nicht — dann
+nennt :meth:`ComfyBackend.missing_nodes` sie mit Namen.
 
 Die Zahlen im Graphen sind gemessen, nicht geraten: ``octree_depth`` steht auf
 8, weil 9 bei vierfacher Dreieckszahl und doppelter Laufzeit keinen sichtbaren
@@ -82,6 +91,12 @@ TIMEOUT_SECONDS = 600.0
 
 #: Wie oft der Auftrag gefragt wird, ob er fertig ist.
 POLL_SECONDS = 1.0
+
+#: Die harte Grenze, hinter der auch ein Auftrag aufgegeben wird, der laut
+#: Warteschlange noch läuft. Sie fängt den Fall, dass ComfyUI seine Schlange
+#: falsch beantwortet — nicht den langsamen Rechner, dafür ist
+#: :data:`TIMEOUT_SECONDS` da.
+STUCK_SECONDS = 3600.0
 
 #: Wie lange die Prüfung „läuft ComfyUI" dauern darf. Derselbe Grund wie beim
 #: Modell-Test: sie passiert, während ein Fenster gebaut wird.
@@ -135,6 +150,10 @@ MODEL_ROLES: Final[dict[str, ModelRole]] = {
         avoid=("vae", "scribble"),
     ),
     "shape_vae": ModelRole(prefer=("hunyuan3d-vae", "hunyuan3d", "vae"), avoid=("dit",)),
+    # Freistellen. ``lucida`` steht vorn, weil es die feinere Kante zieht und
+    # doppelt so groß ist — wer beides hat, will das bessere; wer nur
+    # ``birefnet`` hat, bekommt es. Beide sind BiRefNet-Gewichte unter MIT.
+    "background": ModelRole(prefer=("lucida", "birefnet")),
 }
 
 
@@ -296,6 +315,46 @@ class Readiness(StrEnum):
 OWN_NODE_PREFIX: Final = "TripoSG"
 
 
+def _failed(entry: dict[str, Any]) -> None:
+    """Wirft, wenn ComfyUI diesen Auftrag mit einem Fehler beendet hat.
+
+    **Zehn Minuten auf einen toten Auftrag gewartet.** Geprüft wurde nur, ob
+    Ausgaben da sind — ein Auftrag, den ComfyUI nach Sekunden mit
+    ``execution_error`` beendet hatte, sah genauso aus wie einer, der noch
+    rechnet. Am Ende stand „Die Erzeugung hat ihr Zeitlimit erreicht", und der
+    Grund hatte die ganze Zeit im Verlauf gestanden: „Torch not compiled with
+    CUDA enabled", gemeldet vom Knoten mit Namen. Gemessen an einer Maschine
+    mit Intel-Arc-Grafik, wo genau das der Fall ist.
+
+    Der Satz von ComfyUI reist mit, und zwar unübersetzt: Was dort steht, ist
+    genauer als jede Umschreibung, und wer damit zum Support geht, bringt die
+    Zeile mit, die dort weiterhilft. Der Knotenname steht davor — er sagt, in
+    welchem Schritt es gerissen ist.
+    """
+    status = entry.get("status")
+    if not isinstance(status, dict) or status.get("status_str") != "error":
+        return
+    node, reason = "", ""
+    for message in status.get("messages") or ():
+        if not (isinstance(message, list) and len(message) == 2):
+            continue
+        kind, fields = message
+        if kind != "execution_error" or not isinstance(fields, dict):
+            continue
+        node = str(fields.get("node_type") or fields.get("node_id") or "")
+        reason = str(fields.get("exception_message") or "").strip()
+    raise GenerationFailed(
+        title=_("Der Generator hat den Auftrag abgebrochen."),
+        detail=_(
+            "ComfyUI hat die Erzeugung mit einem Fehler beendet. Was es dazu "
+            "sagt, steht daneben — meist fehlt dem Rechner etwas, das der "
+            "Ablauf verlangt."
+        ),
+        values={"node": node, "reason": reason or "-"},
+        suggestions=(CANCEL,),
+    )
+
+
 @dataclass(slots=True)
 class ComfyBackend:
     """ComfyUI auf diesem Rechner, über seine HTTP-API (§27).
@@ -332,42 +391,64 @@ class ComfyBackend:
         lesen, dass die Knotensammlung fehlt. Die Auskunft war die ganze Zeit
         einen HTTP-Aufruf entfernt.
 
-        Gefragt wird nach dem Knoten, den der mitgelieferte Ablauf wirklich
-        benutzt, und nicht nach einem Namen aus einer zweiten Liste: Wer den
-        Ablauf austauscht (§27), tauscht damit auch, was geprüft wird.
+        Gefragt wird nach den Knoten, die der mitgelieferte Ablauf wirklich
+        benutzt, und nicht nach Namen aus einer zweiten Liste: Wer den Ablauf
+        austauscht (§27), tauscht damit auch, was geprüft wird.
+
+        **Und nach allen, nicht nach einem.** Gefragt wurde bis hierhin nur der
+        Knoten aus unserer eigenen Sammlung — der lag nach der Einrichtung
+        vor, also stand „Bereit" da, und abgeschickt scheiterte der Auftrag
+        trotzdem an einem *anderen* Knoten, den derselbe Ablauf anspricht.
+        Gemessen an einem frischen ComfyUI: unsere vier Knoten geladen, der
+        fünfte fehlte, und die Anwendung behauptete Bereitschaft. Wer prüft,
+        prüft den ganzen Ablauf.
         """
         if not reachable(self.url):
             return Readiness.ABSENT
-        wanted = self._own_node()
-        if wanted is None:
+        wanted = self._graph_nodes()
+        if not wanted:
             return Readiness.READY
         try:
-            answer = self.transport(
-                f"{self.url}/object_info/{urllib.parse.quote(wanted)}", None, {}
-            )
-            described = json.loads(answer.decode("utf-8"))
+            missing = self.missing_nodes()
         except (OSError, ValueError):
             # Antwortet der Port und nicht diese Frage, ist es kein ComfyUI,
             # das wir kennen — behauptet wird dann nichts.
             return Readiness.UNKNOWN
-        return Readiness.READY if wanted in described else Readiness.NO_NODES
+        return Readiness.NO_NODES if missing else Readiness.READY
 
-    def _own_node(self) -> str | None:
-        """Der Knoten aus unserer Sammlung, den der Ablauf anspricht.
+    def missing_nodes(self) -> tuple[str, ...]:
+        """Welche Knoten des Ablaufs dieses ComfyUI **nicht** kennt.
 
-        Aus dem Ablauf gelesen und nicht eingetragen: Ein ausgetauschter Graph
-        bringt seine eigenen Knoten mit, und eine feste Liste wäre am Tag
-        danach falsch.
+        Die Namen, nicht bloß ihre Anzahl: „ein Knoten fehlt" schickt niemanden
+        weiter, „RMBG fehlt" nennt die Sammlung, die zu installieren ist
+        (Regel 17). Eingebaute Knoten stehen mit in der Frage und kosten
+        nichts — sie sind da, und wären sie es nicht, wäre das genauso
+        berichtenswert.
+        """
+        missing: list[str] = []
+        for kind in self._graph_nodes():
+            answer = self.transport(f"{self.url}/object_info/{urllib.parse.quote(kind)}", None, {})
+            described = json.loads(answer.decode("utf-8"))
+            if kind not in described:
+                missing.append(kind)
+        return tuple(missing)
+
+    def _graph_nodes(self) -> tuple[str, ...]:
+        """Die Knotenarten, die der Ablauf anspricht — aus ihm gelesen.
+
+        Nicht eingetragen: Ein ausgetauschter Graph bringt seine eigenen Knoten
+        mit, und eine feste Liste wäre am Tag danach falsch.
         """
         try:
             graph = json.loads((self.workflows / "image_to_mesh.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
-            return None
+            return ()
+        found: list[str] = []
         for node in graph.values():
             kind = str(node.get("class_type", "")) if isinstance(node, dict) else ""
-            if kind.startswith(OWN_NODE_PREFIX):
-                return kind
-        return None
+            if kind and kind not in found:
+                found.append(kind)
+        return tuple(found)
 
     def text_to_mesh(
         self, prompt: str, *, seed: int = 0, progress: ProgressFn = _silent
@@ -505,10 +586,25 @@ class ComfyBackend:
         inputs = described.get(class_type, {}).get("input", {})
         for group in ("required", "optional"):
             entry = (inputs.get(group) or {}).get(field)
-            # Eine Auswahlliste steht als erstes Element der Beschreibung —
-            # ein Typname wie "INT" steht an derselben Stelle und ist keine.
-            if isinstance(entry, list) and entry and isinstance(entry[0], list):
+            if not isinstance(entry, list) or not entry:
+                continue
+            # **Zwei Formen, und beide kommen aus demselben Server.** Klassisch
+            # steht die Auswahlliste als erstes Element (``[["TripoSG"], {…}]``)
+            # — ein Typname wie ``"INT"`` steht an derselben Stelle und ist
+            # keine. Die neuen eingebauten Knoten schreiben statt der Liste
+            # ``"COMBO"`` und legen die Namen in die Beschreibung daneben
+            # (``["COMBO", {"options": […]}]``).
+            #
+            # Gemessen an einem ComfyUI 0.33: ``TripoSGLoader`` klassisch,
+            # ``LoadBackgroundRemovalModel`` neu. Wer nur die alte Form liest,
+            # hält jede neue Auswahl für leer und meldet „es fehlt die
+            # Modelldatei", obwohl sie daliegt — genau das ist passiert.
+            if isinstance(entry[0], list):
                 return [str(name) for name in entry[0]]
+            if entry[0] == "COMBO" and len(entry) > 1 and isinstance(entry[1], dict):
+                offered = entry[1].get("options")
+                if isinstance(offered, list):
+                    return [str(name) for name in offered]
         return []
 
     def _upload(self, image: bytes) -> str:
@@ -570,18 +666,58 @@ class ComfyBackend:
         Wartet der Auftrag noch hinter anderen, steht das dort statt der Zeit —
         wer eine Warteschlange vor sich hat, wartet auf etwas anderes als auf
         seine eigene Rechnung.
+
+        **Das Zeitlimit gilt dem Hängen, nicht der Langsamkeit.** Es stand auf
+        zehn Minuten, gemessen an einer RTX 4080, auf der ein Körper dreizehn
+        Sekunden braucht. Auf einer Intel-Arc-Grafik dauerte derselbe Lauf
+        länger als das Limit: Solidon gab auf, ComfyUI rechnete weiter, und der
+        Kunde hatte zehn Minuten gewartet und nichts. Solange der Auftrag in
+        ComfyUIs Warteschlange **läuft**, ist er nicht hängengeblieben — dann
+        wird weiter gewartet. Erst wenn er dort verschwindet, ohne ein Ergebnis
+        zu hinterlassen, greift die Zeit; und :data:`STUCK_SECONDS` deckelt auch
+        das, damit ein ComfyUI, das seine Schlange falsch beantwortet, nicht
+        endlos wartet.
         """
         started = time.monotonic()
-        deadline = started + self.timeout_seconds
-        while time.monotonic() < deadline:
+        while True:
             answer = self.transport(f"{self.url}/history/{job}", None, {})
             history = json.loads(answer.decode("utf-8"))
             entry = history.get(job)
             if entry and entry.get("outputs"):
                 return dict(entry["outputs"])
-            progress(0.5, self._waiting_text(job, time.monotonic() - started))
+            if isinstance(entry, dict):
+                _failed(entry)
+            waited = time.monotonic() - started
+            if waited > self.timeout_seconds and not self._still_working(job):
+                raise GenerationFailed(detail=_("Die Erzeugung hat ihr Zeitlimit erreicht."))
+            if waited > STUCK_SECONDS:
+                raise GenerationFailed(
+                    detail=_(
+                        "Der Generator rechnet seit einer Stunde an diesem Auftrag. "
+                        "Abgebrochen wird er hier, in ComfyUI läuft er "
+                        "gegebenenfalls weiter."
+                    )
+                )
+            progress(0.5, self._waiting_text(job, waited))
             time.sleep(self.poll_seconds)
-        raise GenerationFailed(detail=_("Die Erzeugung hat ihr Zeitlimit erreicht."))
+
+    def _still_working(self, job: str) -> bool:
+        """Steht dieser Auftrag in ComfyUIs Warteschlange — laufend oder wartend?
+
+        Ein Fehlschlag heißt hier **False**: Lässt sich die Schlange nicht
+        abfragen, ist das kein Beweis für Leben, und das Zeitlimit soll dann
+        greifen dürfen.
+        """
+        try:
+            answer = self.transport(f"{self.url}/queue", None, {})
+            queue = json.loads(answer.decode("utf-8"))
+        except (AppError, OSError, ValueError):
+            return False
+        for group in ("queue_running", "queue_pending"):
+            for entry in queue.get(group) or ():
+                if isinstance(entry, list) and job in [str(field) for field in entry]:
+                    return True
+        return False
 
     def _waiting_text(self, job: str, seconds: float) -> str:
         ahead = self._ahead_in_queue(job)

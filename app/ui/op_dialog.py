@@ -46,7 +46,7 @@ from app.core.scene import expressions
 from app.core.types import ParamSpec
 from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
-from app.ui.labels import NumberSpin, choice_label, display_unit
+from app.ui.labels import choice_label, display_unit
 from app.ui.style import TIGHT, make_primary, set_level
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
@@ -147,7 +147,7 @@ class ValueField(QWidget):
         dieses Feld verschöbe ein Dialog, den man in Zoll nur *ansieht*, jedes
         Maß um den Rundungsfehler seiner Anzeige."""
 
-        self.spin = NumberSpin(self)
+        self.spin = QDoubleSpinBox(self)
         self.spin.setDecimals(_decimals_for(entry, self._shown))
         self.spin.setMinimum(
             self._as_shown(entry.minimum) if entry.minimum is not None else -1_000_000.0
@@ -395,22 +395,6 @@ def _same_choice(entered: Any, wanted: str | bool) -> bool:
     if isinstance(wanted, bool):
         return isinstance(entered, bool) and entered is wanted
     return isinstance(entered, str) and entered == wanted
-
-
-def _explain(editor: QWidget, caption: QWidget | None, sentence: str) -> None:
-    """Ein Satz an das Feld, an seine Beschriftung und an den Bildschirmleser.
-
-    Drei Wege für eine Auskunft: Der Tooltip erscheint, wo die Maus steht, der
-    ``statusTip`` in der Statuszeile ohne Wartezeit, und
-    ``accessibleDescription`` liest ein Vorleser vor (Regel 18 — nicht nur eine
-    Kodierung). Die Beschriftung darf fehlen: Ein Sammelwert steht ohne sie.
-    """
-    editor.setToolTip(sentence)
-    editor.setStatusTip(sentence)
-    editor.setAccessibleDescription(sentence)
-    if caption is not None:
-        caption.setToolTip(sentence)
-        caption.setStatusTip(sentence)
 
 
 def _why_inactive(field: str, wanted: str | bool) -> str:
@@ -718,13 +702,7 @@ class OperationDialog(QDialog):
             target.addRow(label, editor)
             self._rows[entry.name] = target
             if entry.doc:
-                # **Der Satz gehört an beide Hälften der Zeile.** Er stand nur
-                # am Eingabefeld — und wer eine Zeile nicht versteht, zeigt auf
-                # das unverständliche Wort, nicht auf den Kasten daneben. Bei
-                # 457 Parametern in 86 Operationen war das die Erklärung, die
-                # es gab und die niemand fand. ``labelForField`` holt das Label,
-                # das ``addRow`` aus der Zeichenkette gebaut hat.
-                _explain(editor, target.labelForField(editor), str(entry.doc))
+                editor.setToolTip(str(entry.doc))
 
         layout = QVBoxLayout(self)
         self._caveat: QLabel | None = None
@@ -887,13 +865,8 @@ class OperationDialog(QDialog):
                 label = self._rows[name].labelForField(editor)
                 if label is not None:
                     label.setEnabled(active)
-                # Beide Hälften sagen dasselbe — bei einer ausgegrauten Zeile
-                # ist der Grund die Auskunft, die zählt, und ausgerechnet dort
-                # zeigt man eher auf die Beschriftung als in das gesperrte Feld.
-                _explain(
-                    editor,
-                    label,
-                    docs[name] if active else _why_inactive(titles[controller], wanted[0]),
+                editor.setToolTip(
+                    docs[name] if active else _why_inactive(titles[controller], wanted[0])
                 )
 
         self.valuesChanged.connect(follow)

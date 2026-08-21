@@ -39,7 +39,6 @@ from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import CANCEL, AppError
 from app.core.log import get_logger
 from app.i18n import tr
-from app.ui.labels import localised
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.panels import collapsible
 
@@ -431,8 +430,7 @@ class GenerateDialog(QDialog):
             closed = tr("geschlossen") if mesh.is_watertight else tr("offen")
             item = QListWidgetItem(
                 f"{index}. {mesh.triangle_count} {tr('Dreiecke')} · "
-                + localised(f"{mesh.volume / 1000.0:.1f} cm³")
-                + f" · {closed}"
+                f"{mesh.volume / 1000.0:.1f} cm³ · {closed}"
             )
             self.attempts.addItem(item)
         self.attempts.setCurrentRow(len(self.tries) - 1)

@@ -60,7 +60,7 @@ from app.core.types import (
 from app.core.units import EPS_DISPLAY
 from app.i18n import tr
 from app.ui import cursors, icons
-from app.ui.labels import LengthSpin, length, localised
+from app.ui.labels import LengthSpin, length
 from app.ui.palette import ROLES, text_colour
 
 #: Was eine widersprüchliche Bedingung in der Liste anschreibt.
@@ -1823,7 +1823,7 @@ class SketchCanvas(QWidget):
         while x <= right:
             if abs(x) > EPS_DISPLAY:
                 screen = self._to_screen(x, 0.0)
-                text = localised(f"{x:.{digits}f}")
+                text = f"{x:.{digits}f}"
                 # Nur, wenn die Zahl ganz hinpasst: eine abgeschnittene „1"
                 # am rechten Rand ist keine Angabe, sondern ein Fehler. Am
                 # linken Rand ebenso — dort stand „00" von einer -200.
@@ -1836,7 +1836,7 @@ class SketchCanvas(QWidget):
             if abs(y) > EPS_DISPLAY:
                 screen = self._to_screen(0.0, y)
                 if metrics.height() <= screen.y() - 2.0 <= self.height():
-                    painter.drawText(QPointF(4.0, screen.y() - 2.0), localised(f"{y:.{digits}f}"))
+                    painter.drawText(QPointF(4.0, screen.y() - 2.0), f"{y:.{digits}f}")
             y += labelled
 
     def _paint_axes(self, painter: QPainter) -> None:

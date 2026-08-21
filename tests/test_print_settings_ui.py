@@ -891,11 +891,8 @@ def test_every_plate_keeps_its_own_print_file(dialog: PrintSettingsDialog, tmp_p
 
     assert dialog._gcode == [entry.gcode_path for entry in outcomes]
     # Zwanzig Minuten und zwanzig Gramm, nicht zehn: gedruckt wird zweimal.
-    # Das Komma ist keine Schreibweise dieses Tests, sondern die der
-    # Anzeigesprache — die Zeile geht durch ``localised``, und ``conftest``
-    # steht auf Deutsch.
     assert "20 min" in dialog.state.text()
-    assert "20,0 g" in dialog.state.text()
+    assert "20.0 g" in dialog.state.text()
     assert "2" in dialog.state.text()
 
 

@@ -8,10 +8,10 @@ direkte Manipulation: der Gizmo, und wie weit er einrastet.
 from __future__ import annotations
 
 from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QCheckBox, QHBoxLayout, QLabel, QWidget
+from PySide6.QtWidgets import QCheckBox, QDoubleSpinBox, QHBoxLayout, QLabel, QWidget
 
 from app.i18n import tr
-from app.ui.labels import LengthSpin, NumberSpin
+from app.ui.labels import LengthSpin
 from app.ui.style import NORMAL, TIGHT
 
 #: Sinnvolle Vorgaben: ein Millimeter Weg, fünfzehn Grad Drehung.
@@ -39,7 +39,7 @@ class TransformBar(QWidget):
         self.grid.set_value_mm(DEFAULT_GRID_STEP)
         self.grid.valueChanged.connect(self._emit_snapping)
 
-        self.angle = NumberSpin(self)
+        self.angle = QDoubleSpinBox(self)
         self.angle.setDecimals(1)
         self.angle.setRange(0.0, 90.0)
         self.angle.setValue(DEFAULT_ANGLE_STEP)

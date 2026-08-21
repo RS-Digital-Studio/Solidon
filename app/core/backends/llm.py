@@ -827,6 +827,111 @@ def ollama_tool_check(
     return reply.wants_tools
 
 
+#: Wie viele Token je Sekunde eine Grafikkarte beim Einlesen mindestens
+#: schafft. Der Wert trennt nicht scharf zwischen Karten, sondern zwischen
+#: *Karte* und *Prozessor*: Gemessen liegt eine 16-GB-Karte bei einigen
+#: hundert bis über tausend, und ein Prozessor bei 8 bis 30. Alles unter dieser
+#: Marke ist Prozessorbetrieb, gleich welche Karte im Rechner steckt.
+GPU_PROMPT_TOKENS_PER_SECOND: Final = 100.0
+
+#: Wie groß der Systemprompt dieser Anwendung ist — der kompakte Werkzeugsatz,
+#: den der Ollama-Pfad fährt. Gemessen, nicht geschätzt (siehe
+#: :data:`OLLAMA_CONTEXT_TOKENS`).
+PROMPT_TOKENS: Final = 19249
+
+
+@dataclass(frozen=True, slots=True)
+class Speed:
+    """Was dieser Rechner mit diesem Modell wirklich leistet.
+
+    ``None`` bei :attr:`tokens_per_second` heißt „nicht gemessen" und wird
+    nirgends als Aussage verwendet — ein Server, der schweigt, meldet sich
+    schon über :attr:`OllamaBackend.available` ab.
+    """
+
+    tokens_per_second: float | None = None
+
+    @property
+    def on_gpu(self) -> bool | None:
+        """Rechnet es auf einer Grafikkarte? ``None`` heißt: nicht gemessen."""
+        if self.tokens_per_second is None:
+            return None
+        return self.tokens_per_second >= GPU_PROMPT_TOKENS_PER_SECOND
+
+    @property
+    def prompt_minutes(self) -> float | None:
+        """Wie lange dieser Rechner braucht, bis die erste Antwort *beginnt*."""
+        if not self.tokens_per_second:
+            return None
+        return PROMPT_TOKENS / self.tokens_per_second / 60.0
+
+
+def ollama_speed(model: str, url: str | None = None, transport: Transport = post_json) -> Speed:
+    """Messen, was der Rechner kann — statt zu erwarten, was Modelle können.
+
+    **Die Erwartung nebenan gilt für einen Rechner mit Grafikkarte.** Ohne eine
+    ist es keine andere Geschwindigkeit, sondern eine andere Größenordnung:
+    Gemessen auf einer Maschine mit Intel-Arc-Grafik, die Ollama nicht
+    anspricht, 8,4 Token je Sekunde beim Einlesen — für den Systemprompt dieser
+    Anwendung achtunddreißig Minuten, **bevor** das erste Wort der Antwort
+    beginnt. Der Kunde sieht ein Fenster, das nichts tut, und hält es für einen
+    Fehler; es ist eine Eigenschaft seiner Maschine, und die kann ihm niemand
+    sagen außer uns.
+
+    Ollama nennt die Zahlen in jeder Antwort mit, also kostet die Messung genau
+    einen kurzen Zug und keine Zeitnahme von außen. Gerechnet wird mit dem
+    Einlesetempo und nicht mit dem Schreibtempo: Der Prompt ist das, was hier
+    groß ist — die Antwort sind ein paar Dutzend Token, der Prompt sind
+    neunzehntausend.
+    """
+    backend = OllamaBackend(model=model, transport=transport)
+    if url is not None:
+        backend.url = url
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": PROBE_REQUEST}],
+        "stream": False,
+        "options": {"num_ctx": OLLAMA_CONTEXT_TOKENS, "num_predict": 8},
+    }
+    try:
+        answer = transport(backend.url, {"Content-Type": "application/json"}, payload)
+    except (AppError, OSError, ValueError):
+        return Speed()
+    count = answer.get("prompt_eval_count")
+    duration = answer.get("prompt_eval_duration")
+    if not isinstance(count, int) or not isinstance(duration, int | float) or duration <= 0:
+        return Speed()
+    return Speed(tokens_per_second=count / (float(duration) / 1e9))
+
+
+def speed_warning(speed: Speed) -> TranslatableText | None:
+    """Der Satz zur Messung — oder keiner, wenn es nichts zu sagen gibt.
+
+    Gesagt wird nur, was der Kunde nicht selbst sehen kann, und mit der Zahl
+    dabei: „langsam" ist keine Auskunft, „einundvierzig Minuten, bis die
+    Antwort beginnt" ist eine. Und der Vorschlag gehört dazu (Regel 17) — auf
+    einem Rechner ohne nutzbare Karte hilft kein kleineres Modell über die
+    Runden, sondern ein Schlüssel.
+
+    Die zwei Platzhalter ``rate`` und ``minutes`` bleiben stehen; eingesetzt
+    werden sie von der Oberfläche aus :meth:`Speed.tokens_per_second` und
+    :meth:`Speed.prompt_minutes`. Dasselbe Muster wie bei ``AppError.values``
+    (§33.1): Der Kern kennt den Satz und die Zahlen, das Zusammensetzen gehört
+    dorthin, wo auch die Sprache feststeht.
+    """
+    if speed.on_gpu is not False or speed.prompt_minutes is None:
+        return None
+    return _(
+        "Dieses Modell rechnet auf dem Prozessor, nicht auf der Grafikkarte — "
+        "gemessene {rate} Token je Sekunde beim Einlesen. Der Auftrag dieser "
+        "Anwendung ist rund 19 000 Token lang, es dauert hier also etwa "
+        "{minutes} Minuten, bis eine Antwort überhaupt beginnt. Ein kleineres "
+        "Modell ändert daran wenig; für zügige Antworten braucht es einen "
+        "Schlüssel für ein gehostetes Modell — alles außer dem Chat bleibt "
+        "ohne beides benutzbar."
+    )
+
+
 # --- choosing one -----------------------------------------------------------------
 
 
