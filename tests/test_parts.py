@@ -39,10 +39,34 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
 
     Kein Durchlauf über alles — die Ecken sind, wo ein Baustein bricht: der
     kleinste und der größte Wert jeder Zahl, jede Wahl jedes Enums, beide
-    Zustände jedes Schalters.
+    Zustände jedes Schalters. **Jeder davon kommt mindestens einmal vor**, und
+    genau darum geht es hier.
+
+    **Was das Produkt mit einer Obergrenze anrichtet.** Hier stand ein
+    kartesisches Produkt, nach jedem Parameter auf die ersten
+    vierundzwanzig Einträge gekürzt. Vom vierten Parameter an gewinnt dieser
+    Schnitt: Die ersten vierundzwanzig von zweiundsiebzig tragen alle den
+    ersten Wert der früheren Parameter, und mit jedem weiteren verengt es sich.
+    Gezählt am 21.08.2026 hatten **siebzehn von achtzehn** Bausteinen Ecken,
+    die nie gefahren wurden — bei nut_trap, screw_hole,
+    printed_thread und keyhole alle Normgrößen außer einer. Die
+    Mutternfalle ist der meistbenutzte Baustein der Bibliothek, und geprüft
+    war eine Größe von sechs.
+
+    Nachgemessen wurde auch, was das gekostet hat: Die neunundfünfzig
+    fehlenden Kombinationen einmal von Hand gefahren, keine davon fehlerhaft.
+    Der Fund war eine Lücke in der Prüfung, kein Schaden am Modell — und ein
+    Baustein, der morgen geändert wird, hätte sie gefunden.
+
+    Statt des Produkts deshalb: so viele Kombinationen wie die längste
+    Werteliste, jede Liste zyklisch durchgezählt. Damit kommt jeder Wert jedes
+    Parameters vor, und der Lauf wird **kürzer** statt länger. Was diese Form
+    nicht prüft, ist das Zusammenspiel zweier Extreme; dafür wäre das Produkt
+    nötig, und das ist bei zwölf Parametern kein Test mehr, sondern ein
+    Nachmittag.
     """
     entries = spec.params.spec()
-    combinations: list[dict[str, Any]] = [{}]
+    lists: dict[str, list[Any]] = {}
     for entry in entries:
         values: list[Any] = []
         if entry.kind == "enum":
@@ -52,13 +76,15 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
         elif entry.kind in ("float", "int"):
             values = [entry.minimum, entry.maximum, entry.default]
             values = [value for value in values if value is not None]
-        if not values:
-            continue
-        combinations = [{**base, entry.name: value} for base in combinations for value in values]
-        # Endlich halten: die Ecken jedes Parameters, nicht jedes Produkt.
-        if len(combinations) > 24:
-            combinations = combinations[:24]
-    return combinations
+        if values:
+            lists[entry.name] = values
+    if not lists:
+        return [{}]
+    longest = max(len(values) for values in lists.values())
+    return [
+        {name: values[index % len(values)] for name, values in lists.items()}
+        for index in range(longest)
+    ]
 
 
 # --- die Bibliothek ---------------------------------------------------------------
