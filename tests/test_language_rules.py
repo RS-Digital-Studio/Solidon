@@ -8,6 +8,7 @@ Zeichenketten tragen die deutschen Oberflächentexte und sollen deutsch sein.
 from __future__ import annotations
 
 import ast
+import itertools
 from pathlib import Path
 
 import pytest
@@ -205,3 +206,144 @@ def test_the_check_leaves_english_words_alone() -> None:
     assert not offences_in("wanders")
     assert not offences_in("lochs")
     assert not offences_in("ends")
+
+
+#: Wörter, an denen eine Sprache zu erkennen ist, ohne den Satz zu verstehen.
+#:
+#: Funktionswörter und keine Fachbegriffe: „solid", „dots" oder „Encoding"
+#: stehen in beiden Sprachen gleich da, „the" und „der" nicht.
+GERMAN_MARKERS = frozenset(
+    (
+        "der",
+        "die",
+        "das",
+        "und",
+        "nicht",
+        "ein",
+        "eine",
+        "ist",
+        "dem",
+        "den",
+        "mit",
+        "von",
+        "auf",
+        "für",
+        "wird",
+        "was",
+        "wer",
+        "sich",
+        "nur",
+        "nach",
+        "aus",
+        "als",
+        "auch",
+        "dann",
+        "über",
+        "kein",
+        "keine",
+        "sie",
+        "es",
+        "im",
+        "zu",
+        "bei",
+        "noch",
+        "wie",
+        "damit",
+        "ohne",
+        "steht",
+        "bleibt",
+    )
+)
+ENGLISH_MARKERS = frozenset(
+    (
+        "the",
+        "and",
+        "for",
+        "that",
+        "this",
+        "with",
+        "from",
+        "which",
+        "when",
+        "what",
+        "are",
+        "not",
+        "but",
+        "only",
+        "any",
+        "can",
+        "cannot",
+        "its",
+        "their",
+        "them",
+        "would",
+        "also",
+        "shown",
+        "print",
+        "stays",
+        "either",
+    )
+)
+
+
+def field_docstrings(tree: ast.AST) -> list[tuple[int, str]]:
+    """Die Docstrings, die hinter einem Feld stehen — mit Zeile.
+
+    ``ast.get_docstring`` sieht sie nicht: Es kennt Modul, Klasse und Funktion,
+    und ein Feld-Docstring ist syntaktisch nur ein Ausdruck, der auf eine
+    Zuweisung folgt. Genau deshalb braucht es diese Funktion.
+    """
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        body = getattr(node, "body", None)
+        if not isinstance(body, list):
+            continue
+        for before, after in itertools.pairwise(body):
+            if not isinstance(before, ast.AnnAssign | ast.Assign):
+                continue
+            if not isinstance(after, ast.Expr):
+                continue
+            value = after.value
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                found.append((after.lineno, value.value))
+    return found
+
+
+def reads_as_english(text: str) -> bool:
+    """Ob dieser Text eher englisch als deutsch ist.
+
+    Gezählt, nicht geparst: zwei Sätze Funktionswörter, und die Mehrheit
+    entscheidet. Zwei Treffer sind die Untergrenze, damit ein deutscher Satz
+    mit einem zitierten ``for`` nicht umkippt. Gemessen am Bestand hat diese
+    Schwelle 454 von 457 Feld-Docstrings richtig durchgelassen und die drei
+    englischen gefunden.
+    """
+    words = {word.strip(".,;:()`*\"'").lower() for word in text.split()}
+    english = len(words & ENGLISH_MARKERS)
+    return english >= 2 and english > len(words & GERMAN_MARKERS)
+
+
+@pytest.mark.parametrize("path", source_files(), ids=lambda path: path.name)
+def test_field_docstrings_are_german(path: Path) -> None:
+    """Auch der Satz hinter einem Feld ist Doku, und Doku ist deutsch.
+
+    **Warum das eine eigene Prüfung braucht.** Die Sprachregelung trennt
+    Bezeichner (englisch) von Docstrings (deutsch), und geprüft wurden bisher
+    nur die Bezeichner. Für die Docstrings stand in `CLAUDE.md`, der Bestand
+    sei „vollständig nachgezogen" — und für Modul, Klasse und Funktion stimmt
+    das auch, nachgezählt am 21.08.2026: null englische unter allen.
+
+    Drei sind trotzdem übrig geblieben, alle in derselben Nische: der Satz
+    hinter einem Dataclass-Feld. ``ast.get_docstring`` sieht ihn nicht, also
+    sah ihn keine Prüfung — zwei in ``palette.py`` (``pattern``, ``symbol``)
+    und einer in ``settings.py`` (``display_unit``). Gefunden beim Durchgang
+    durch den Viewport, beim Nachlesen, ob die Differenzansicht eine zweite
+    Kodierung neben der Farbe führt (§19.1 — sie führt drei).
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    offenders = [
+        f"{path.name}:{line} {text.splitlines()[0][:60]}"
+        for line, text in field_docstrings(tree)
+        if len(text) >= 25 and reads_as_english(text)
+    ]
+    assert not offenders, "englische Feld-Docstrings:" + chr(10) + chr(10).join(offenders)
