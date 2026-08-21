@@ -74,21 +74,16 @@
     }
   },
   "7": {
-    "class_type": "RMBG",
+    "class_type": "RemoveBackground",
     "inputs": {
+      "bg_removal_model": [
+        "12",
+        0
+      ],
       "image": [
         "6",
         0
-      ],
-      "model": "INSPYRENET",
-      "sensitivity": 1.0,
-      "process_res": 1024,
-      "mask_blur": 0,
-      "mask_offset": 0,
-      "invert_output": false,
-      "refine_foreground": true,
-      "background": "Color",
-      "background_color": "#FFFFFF"
+      ]
     }
   },
   "8": {
@@ -106,12 +101,12 @@
         0
       ],
       "image": [
-        "7",
+        "6",
         0
       ],
       "mask": [
         "7",
-        1
+        0
       ],
       "steps": 50,
       "guidance_scale": 7.0,
@@ -141,6 +136,12 @@
       ],
       "filename_prefix": "solidon/text",
       "file_format": "glb"
+    }
+  },
+  "12": {
+    "class_type": "LoadBackgroundRemovalModel",
+    "inputs": {
+      "bg_removal_name": "{model:background}"
     }
   }
 }

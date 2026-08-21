@@ -308,16 +308,22 @@ class _ToolProbeWorker(Worker):
 
     Sie macht einen echten Zug gegen das Modell und lädt es dabei — Sekunden
     bis Minuten. Genau deshalb steht sie hier und nicht im Dialog selbst.
+
+    Gemessen wird beides in einem Gang: **ob** das Modell Werkzeuge aufruft
+    und **wie schnell** dieser Rechner es tut. Die zweite Frage kostet fast
+    nichts, weil das Modell nach der ersten schon geladen ist — und sie ist die
+    wichtigere von beiden, wenn keine Grafikkarte mitspielt.
     """
 
-    done = Signal(object)
+    done = Signal(object, object)
 
     def __init__(self, model: str) -> None:
         super().__init__()
         self._model = model
 
     def work(self) -> None:
-        self.done.emit(llm.ollama_tool_check(self._model))
+        usable = llm.ollama_tool_check(self._model)
+        self.done.emit(usable, llm.ollama_speed(self._model))
 
 
 @dataclass(frozen=True, slots=True)
@@ -807,12 +813,22 @@ class KeyDialog(QDialog):
         self._probe = worker
         self._leash.start(worker)
 
-    def _probe_done(self, usable: object) -> None:
+    def _probe_done(self, usable: object, speed: object) -> None:
         self.probe_button.setEnabled(True)
         if usable is None:
             self.probe_result.setText(
                 tr("Ollama hat nicht geantwortet. Läuft es? „ollama serve“ startet es.")
             )
+            set_level(self.probe_result, "warning")
+            return
+        # **Die Geschwindigkeit schlägt die Werkzeugfrage.** „Das Modell ruft
+        # Werkzeuge auf" ist wahr und nutzlos, wenn eine Antwort einundvierzig
+        # Minuten braucht — gemessen auf einer Maschine mit Intel-Arc-Grafik,
+        # die Ollama nicht anspricht. Der Kunde soll das erfahren, bevor er es
+        # als Fehler der Anwendung erlebt.
+        slow = self._speed_text(speed)
+        if slow:
+            self.probe_result.setText(slow)
             set_level(self.probe_result, "warning")
             return
         if usable:
@@ -826,6 +842,24 @@ class KeyDialog(QDialog):
             )
         )
         set_level(self.probe_result, "warning")
+
+    @staticmethod
+    def _speed_text(speed: object) -> str:
+        """Der gemessene Satz samt Zahlen — oder leer, wenn nichts zu sagen ist.
+
+        Die Zahlen setzt die Oberfläche ein und nicht der Kern: Dort steht der
+        Satz mit seinen Platzhaltern, hier stehen Sprache und Rundung (§33.1,
+        dasselbe Muster wie ``AppError.values``).
+        """
+        if not isinstance(speed, llm.Speed):
+            return ""
+        warning = llm.speed_warning(speed)
+        if warning is None or speed.prompt_minutes is None:
+            return ""
+        return str(warning).format(
+            rate=round(speed.tokens_per_second or 0.0, 1),
+            minutes=round(speed.prompt_minutes),
+        )
 
     def _probe_finished(self, worker: object) -> None:
         # Wer einen Arbeiter startet, hält ihn fest, bis er wirklich fertig

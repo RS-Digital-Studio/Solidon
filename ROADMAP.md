@@ -52,6 +52,8 @@ bekommt einen roten Lauf.
 | Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
+| Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
+| Der Textweg prüft seine Voraussetzungen nicht | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile ausgraut, solange kein SDXL-Modell unter `models/checkpoints` liegt |
 
 ---
 
@@ -10255,3 +10257,205 @@ zurückgenommenen Schritt dreifach — Wort, Durchstreichung, Farbe (Regel 18).
 
 ### Was auffiel und eine Entscheidung braucht
 
+## Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026)
+
+Zwei Durchgänge hatten die Zusatzsoftware am Code geprüft, und beide waren
+gründlich. Dieser hier hat sie **benutzt**: ein ComfyUI auf dieser Maschine
+eingerichtet, die Gewichte geladen, ein Bild hineingelegt und gewartet, bis ein
+Körper herauskam. Dreizehn Funde, und die Hälfte davon hätte kein Durchlesen
+ergeben: ein Regelverstoß in einer Datendatei, eine Windows-Grenze, die
+Geschwindigkeit des Rechners, auf dem es läuft — und zwei Fehler, die erst
+entstanden, als der erste Fix da war.
+
+Die Ausgangslage war die des Kunden, und zwar unfreiwillig: ComfyUI installiert
+über den offiziellen Installer von comfy.org, Gewichte keine, Grafik eine
+Intel-Arc-140V, und ein `qwen3:14b` bei Ollama.
+
+### Der Weg, den ein Kunde am ehesten geht, war der einzige unbekannte
+
+- [x] **ComfyUI Desktop wurde nicht gefunden.** Die Desktop-Anwendung ist das
+      erste Angebot auf comfy.org, und sie legt ihr ComfyUI sechs Ebenen tief
+      unter `AppData\Local\Comfy-Desktop\ComfyUI-Installs\ComfyUI\ComfyUI` ab.
+      Keine der fünf geratenen Stellen trifft das; der Dialog sagte „an den
+      üblichen Stellen nicht gefunden", und die Antwort lag daneben: Die
+      Anwendung schreibt ihren Installationsordner in
+      `%APPDATA%\Comfy Desktop\installations.json`, samt einem selbst
+      gewählten. `_from_desktop` liest sie, tolerant — die Datei gehört jemand
+      anderem, ihr Aufbau ist nirgends zugesagt, und eine Anwendung, die daran
+      scheitert, wäre schlechter als eine, die weiter rät. Der Ort je Plattform
+      steht in `_config_home(platform)`, mit der Plattform als **Parameter**:
+      Sonst ist die Zuordnung nur dort prüfbar, wo sie gerade gilt, und mypy
+      hält die anderen Zweige für unerreichbar.
+
+- [x] **Die Paketliste nannte drei Pakete, und es fehlten sechs.** `trimesh`,
+      `diffusers`, `scikit-image`, `lazy_loader`, `omegaconf` und die Laufzeit
+      von `antlr4` — gemessen war die Liste an einer Installation, in der andere
+      Knoten das übrige längst mitgebracht hatten. Gefunden wurden sie einzeln,
+      indem der Knoten geladen wurde, bis er lud. Die Fassung an `antlr4` ist
+      keine Übervorsicht: `omegaconf` liest damit einen vorkompilierten
+      Automaten, und die 4.13 serialisiert ihn anders („Could not deserialize
+      ATN with version 3"). Alle Lizenzen geprüft — BSD, Apache-2.0, MIT.
+
+- [x] **„Fertig" war eine Behauptung.** Die Einrichtung kopierte, klonte,
+      flickte und installierte, und ob am Ende etwas lief, erfuhr der Kunde
+      erst beim Erzeugen: dann stand in ComfyUIs Protokoll „No module named
+      'trimesh'" und im Dialog, der Knoten sei unbekannt. `nodes_load` sieht
+      jetzt nach — im Python **von ComfyUI**, denn nur dort steht, was ComfyUI
+      hat. Der Schritt kostet zwei Sekunden und steht **vor** den Gewichten:
+      Ein fehlendes Paket nach zwei Sekunden zu melden ist mehr wert als nach
+      einer halben Stunde Download.
+
+### Ein Zeichen über der Grenze
+
+- [x] **MAX_PATH ist 260, und der Pfad war 261.** `huggingface_hub` legt seine
+      halbfertigen Dateien unter dem Ziel ab, und ihre Namen sind 163 Zeichen
+      lang — Prüfsumme, Etag, Endung. Mit dem 98 Zeichen tiefen Ziel von
+      ComfyUI Desktop macht das 261, und der Kunde bekam mitten im 7,5-GB-
+      Download einen `FileNotFoundError` mit einem Pfad, den kein Mensch liest.
+      `LongPathsEnabled` in der Registrierung ist eine Systemeinstellung und
+      gehört keiner Anwendung; das Präfix `\\?\` half gemessen nicht. Geladen
+      wird jetzt in einen kurzen Ordner und danach verschoben — auf demselben
+      Laufwerk ein Umbenennen.
+
+- [x] **Und der erste Fix löschte den Fortschritt.** Der kurze Ordner hieß
+      `mkdtemp`, also jedes Mal anders, und ein `finally` räumte ihn auf. Damit
+      war die Zusage im Docstring — „setzt beim nächsten Lauf fort" — eine
+      Lüge. Gemessen an drei Abbrüchen hintereinander (`WinError 10054`, dann
+      2 GB weit, dann `WinError 10038`); bei 7,5 GB über eine wackelige Leitung
+      ist das der Normalfall und nicht das Pech. Fester Name, aufgeräumt wird
+      nur Erfolg. Der Beweis kam beim vierten Anlauf: **59 Sekunden**, weil
+      6,5 GB schon dalagen.
+
+- [x] **Die Wiederholung stand im Kindprozess und konnte dort nichts
+      bewirken.** `huggingface_hub` hält einen globalen HTTP-Client; sobald ein
+      Fehler ihn schließt, antwortet jeder weitere Versuch im selben Prozess
+      mit „Cannot send a request, as the client has been closed" — der zweite
+      Anlauf scheiterte schneller als der erste und aus einem anderen Grund.
+      `_run_repeatedly` startet jetzt je Anlauf einen **neuen** Prozess. Beim
+      Freistell-Modell nachgewiesen: erster Anlauf nach 2 s tot, zweiter lud
+      die 444,5 MB durch.
+
+### Bereit war es nicht, und die Lizenz stand in der ersten Zeile
+
+- [x] **`readiness()` fragte einen Knoten, wo der Ablauf sechs braucht.** Sie
+      prüfte den Knoten aus unserer eigenen Sammlung — der lag nach der
+      Einrichtung vor, also stand „Bereit" da, und abgeschickt scheiterte der
+      Auftrag an einem *anderen* Knoten desselben Ablaufs. `missing_nodes()`
+      nennt jetzt die Namen, denn „ein Knoten fehlt" schickt niemanden weiter
+      (Regel 17).
+
+- [x] **Der fehlende Knoten war GPL, und damit ein Verstoß gegen Regel 15.**
+      Beide mitgelieferten Abläufe sprachen `RMBG` aus `ComfyUI-RMBG` an —
+      GPL-3.0, nachgelesen in seiner Lizenzdatei. Solidon verlangte damit vom
+      Kunden, eine GPL-Sammlung zu installieren, damit Weg 3 läuft. Der Verstoß
+      hing an einer **Datendatei**, und deshalb hatte ihn keine Lizenzprüfung
+      gesehen.
+
+      ComfyUI kann es seit 0.33 selbst: `LoadBackgroundRemovalModel` und
+      `RemoveBackground`, beide eingebaut, Gewichte BiRefNet unter MIT
+      (`Comfy-Org/BiRefNet`, 444,5 MB). Damit fällt neben der Lizenzfrage ein
+      Installationsschritt weg — es fehlt nur noch eine Datei. Der Ablauf wurde
+      dabei sogar besser: TripoSG bekommt das Originalbild plus Maske statt
+      eines weiß gefüllten Bildes. Ein älteres ComfyUI kennt die Knoten nicht,
+      und dann nennt `missing_nodes()` sie mit Namen — das ist der richtige Weg
+      dafür und keine zweite Fassung des Ablaufs.
+
+- [x] **ComfyUI beschreibt Auswahllisten in zwei Formen, und wir lasen eine.**
+      Klassisch steht die Liste als erstes Element (`[["TripoSG"], {…}]`); die
+      neuen eingebauten Knoten schreiben `["COMBO", {"options": […]}]`. Beide
+      kommen aus demselben Server — `TripoSGLoader` klassisch,
+      `LoadBackgroundRemovalModel` neu. Wer nur die alte Form liest, hält jede
+      neue Auswahl für leer und meldet „es fehlt die Modelldatei", obwohl sie
+      daliegt. Genau das ist passiert, und jeder künftige eingebaute Knoten
+      wird die neue Form haben.
+
+### Das Zeitlimit galt der Grafikkarte, auf der es gemessen wurde
+
+- [x] **Zehn Minuten waren an einer RTX 4080 gemessen, auf der ein Körper
+      dreizehn Sekunden braucht.** Auf einer Intel-Arc-Grafik dauerte derselbe
+      Lauf länger als das Limit: Solidon gab auf, ComfyUI rechnete weiter, und
+      der Kunde hatte zehn Minuten gewartet und nichts. Das Limit gilt jetzt
+      dem **Hängen** und nicht der Langsamkeit — solange der Auftrag in
+      ComfyUIs Warteschlange steht, wird gewartet; `STUCK_SECONDS` deckelt auch
+      das, damit ein ComfyUI, das seine Schlange falsch beantwortet, nicht
+      endlos wartet.
+
+- [x] **Der lokale Agent auf einem Rechner ohne nutzbare Karte: gemessen 41
+      Minuten, bis eine Antwort beginnt.** Ollama spricht die Intel-Arc nicht
+      an und rechnet auf dem Prozessor — `size_vram: 0.0`, 7,8 Token je Sekunde
+      beim Einlesen. Der Systemprompt dieser Anwendung ist rund 19 000 Token
+      lang. Die Anwendung sagte dazu nichts; sie sagte „Das Modell ruft
+      Werkzeuge auf. Es ist brauchbar." Das ist wahr und nutzlos.
+
+      Die Werkzeugprobe misst jetzt mit — ein Zug, der ohnehin läuft, und die
+      Zahlen stehen in Ollamas Antwort. Sie nennt das Tempo, die Folge daraus
+      und den einzigen Vorschlag, der hier trägt: einen Schlüssel für ein
+      gehostetes Modell. Ein kleineres Modell rettet das nicht, und das steht
+      ausdrücklich dabei. Die Geschwindigkeit **schlägt** die Werkzeugfrage:
+      Wo eine Antwort einundvierzig Minuten braucht, ist es unerheblich, ob das
+      Modell Werkzeuge aufruft.
+
+### Der Auftrag war tot, und Solidon wartete zehn Minuten auf ihn
+
+- [x] **ComfyUI beendet einen Auftrag mit `status_str: "error"`, und niemand las
+      das.** Geprüft wurde nur, ob Ausgaben da sind — ein Auftrag, der nach
+      Sekunden mit `execution_error` gescheitert war, sah genauso aus wie einer,
+      der noch rechnet. Am Ende stand „Die Erzeugung hat ihr Zeitlimit
+      erreicht", und der Grund hatte die ganze Zeit im Verlauf gestanden:
+      „Torch not compiled with CUDA enabled", gemeldet vom Knoten mit Namen.
+
+      Der Satz von ComfyUI reist jetzt mit, und zwar unübersetzt: Was dort
+      steht, ist genauer als jede Umschreibung, und wer damit zum Support geht,
+      bringt die Zeile mit, die weiterhilft. Der Knotenname steht davor — er
+      sagt, in welchem Schritt es gerissen ist. Dieselbe Sache brauchte danach
+      118 Sekunden statt 600, und die Auskunft war brauchbar.
+
+- [x] **Und dieser Grund war der zwölfte Fund.** Der TripoSG-Quelltext setzt an
+      sechs Stellen eine NVIDIA-Karte voraus, obwohl er keine bräuchte:
+      `device='cuda'` hart eingetragen, viermal `torch.cuda.empty_cache()`,
+      einmal `autocast(device_type="cuda")`. Unser eigener Knoten fragt ComfyUI
+      nach dem Gerät (`get_torch_device`) und ist damit richtig; der geholte
+      Quelltext fragt nicht. `patch_sources` flickte schon zwei Stellen in
+      denselben Dateien — jetzt sind es diese drei Muster dazu.
+
+      **Der erste Flicken hat die Datei zerbrochen, und das gehört
+      aufgeschrieben.** Er hängte „# von Solidon" an die Zeile mit
+      `torch.zeros`, und die ging weiter: `dtype` und `requires_grad` standen
+      dahinter und waren wegkommentiert, die Klammer blieb offen. ComfyUI
+      meldete „'(' was never closed", und die ganze Knotensammlung fiel aus.
+      Gefangen hat es `nodes_load` — der Beleg dafür, dass dieser Schritt
+      hingehört. Ein Test hält die Regel fest: Ein Kommentar am Zeilenende ist
+      nur dort erlaubt, wo die Zeile auch endet.
+
+### Und dann lief er
+
+Ein Rendering von `clean_figure.stl` als Bild hinein, über unser eigenes
+Backend an ein ComfyUI mit den eingerichteten Knoten. Heraus kam nach **119
+Sekunden** ein `.glb` von 2,26 MB: **wasserdicht, eine Komponente** — genau
+das, was der Modul-Docstring seit dem Wechsel auf TripoSG behauptet, und zum
+ersten Mal nachgewiesen. Die Maße sind normalisiert (etwa 0,4 × 1,9 × 1,1), wie
+TripoSG sie liefert; das Skalieren gehört auf den Stapel und nicht ins Backend
+(§2.2, Weg 3).
+
+Die Zahl ist die eines Rechners ohne CUDA-Karte. Der Docstring nennt daneben
+weiter dreizehn Sekunden auf einer RTX 4080 — beide Zahlen gehören dahin, denn
+sie sind der Abstand zwischen „das geht" und „das lohnt".
+
+### Was auffiel und eine Entscheidung braucht
+
+- [ ] **Der lokale Weg ist auf Intel- und AMD-Grafik nicht praktikabel, und
+      wir nennen keinen Ausweg.** Ollama unterstützt CUDA und Metal; auf allem
+      anderen rechnet es auf dem Prozessor. Für Intel gibt es IPEX-LLM, für
+      AMD ROCm-Fassungen, für beides OpenVINO — jedes davon ist eine eigene
+      Installation mit eigenen Fallen, und keines wird von Ollama selbst
+      angeboten. Wartet auf eine Entscheidung, ob Solidon einen zweiten
+      lokalen Weg **nennt** (nicht einrichtet) oder ob die Auskunft „hier lohnt
+      es nicht, nimm einen Schlüssel" die ganze Antwort bleibt.
+
+- [ ] **Der Textweg prüft seine Voraussetzungen nicht.** `readiness()` liest
+      `image_to_mesh.json`, und das ist mit Absicht so: Der Bildweg ist der
+      Kernweg, der Textweg braucht zusätzlich ein SDXL-Modell unter
+      `models/checkpoints`. Wer keines hat, erfährt es beim Abschicken. Wartet
+      auf eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit
+      für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile
+      ausgraut, solange kein Bildmodell da ist.
