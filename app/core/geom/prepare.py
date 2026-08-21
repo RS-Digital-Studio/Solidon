@@ -619,16 +619,25 @@ def _verdict_for(
     Druckplatte. Wer den Satz wörtlich nimmt, sucht das Skalieren, obwohl ein
     Aufsetzen genügt — ein Achtelmillimeter Text, der jemanden auf die falsche
     Fährte schickt.
+
+    **Die Kennung unterscheidet jetzt mit.** Sie tat es nicht, und damit ging
+    der Unterschied genau dort verloren, wo er gebraucht wird: Der Prüfbericht
+    hängt seine anklickbaren Handlungen an ``Finding.code`` (§2.7), also bot er
+    dem Teil unter der Platte *Modell teilen* und *Auf den Bauraum
+    verkleinern* an — die beiden Antworten, vor denen der Absatz hier warnt.
+    Was hilft, ist ein Klick auf *Auf das Bett setzen*; und dass ein Klick
+    genügt, ist der Grund, aus dem dieser Fall überhaupt nur ein Hinweis ist
+    (:func:`_severity_for`).
     """
     only_below = all(
         allowed.minimum[axis] - bounds.minimum[axis] > bounds.maximum[axis] - allowed.maximum[axis]
         for axis in outside
     )
     if not only_below:
-        return _("Ein Objekt steht über den Bauraum hinaus.")
+        return "arrange.out_of_build_volume", _("Ein Objekt steht über den Bauraum hinaus.")
     if tuple(outside) == (2,):
-        return _("Ein Objekt steckt unter der Druckplatte.")
-    return _("Ein Objekt liegt außerhalb der Druckplatte.")
+        return "arrange.below_bed", _("Ein Objekt steckt unter der Druckplatte.")
+    return "arrange.off_the_plate", _("Ein Objekt liegt außerhalb der Druckplatte.")
 
 
 #: Welche Felder eines Befunds Indizes in die geprüfte Liste sind. ``object``
