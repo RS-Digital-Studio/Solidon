@@ -401,6 +401,47 @@ Vorschlagsliste nach. Der Rückruf zeigt dabei auf ein **Feld des Fensters**
 nach `exec` weggeräumt, und ein Rückruf in ein zerstörtes C++-Objekt ist der
 Absturz ohne Zeile.
 
+### Ein Arbeiter erbt von `leash.Worker` und schreibt `work`
+
+**Niemals direkt von `QThread`.** Ein `run`, das eine Ausnahme durchlässt,
+sendet sein Ergebnissignal nie — und wer darauf wartet, wartet für immer.
+Nachgestellt am Einrichtungsdialog für ComfyUI: Liegt die Installation unter
+`Program Files`, wirft das Kopieren der Knoten einen `PermissionError`. Die
+Ausnahme landet auf stderr, wo sie kein Kunde sieht; im Fenster steht „Wird
+eingerichtet …", der Balken läuft, der Knopf sagt „Abbrechen" — und dabei
+bleibt es, bis jemand das Programm beendet.
+
+Von dreiundzwanzig Arbeitern fing genau **einer** eine unerwartete Ausnahme:
+der Versand der Rückmeldung. Die anderen zweiundzwanzig konnten dasselbe
+anrichten — die Ladeanzeige der Auswertung, der für den Rest der Sitzung
+gesperrte Export-Menüeintrag, „Der Profilbestand wird durchgesehen …" als
+Dauerzustand.
+
+```python
+class _Survey(Worker):
+    done = Signal(object)
+
+    def work(self) -> None:        # nicht run
+        self.done.emit(install.statuses())
+```
+
+Zwei Pflichten hängen daran, und `tests/test_leash.py` prüft beide:
+
+* **Erwartete Fehler bleiben in `work`** und kommen als *Ergebnis* zurück —
+  `InstallResult.reason`, ein Satz von `pull_model`, ein eigenes Signal für
+  `SetupFailed`. Was bei `crashed` ankommt, ist ausdrücklich das, womit niemand
+  gerechnet hat.
+* **`crashed` wird verbunden**, sonst ist der Fund nur verschoben. Wo ein
+  Fehlerpfad existiert, geht das Unerwartete denselben Weg als `InternalError`
+  — §33.1 ordnet ihm den Fehlerbericht zu, und genau der gehört dorthin. Wo
+  keiner existiert, löst der Slot mindestens den Wartezustand: Balken weg,
+  Knöpfe frei, ein Satz, der sagt, dass etwas schiefging.
+
+**Und nach einem Absturz wird nicht neu erhoben.** Der Installationsdialog tat
+das und überschrieb seine eigene Meldung eine Sekunde später mit der
+Zusammenfassung der Erhebung — der Kunde hatte den Satz gesehen und nicht
+gelesen.
+
 ### Wer einen Arbeiter startet, hält ihn fest
 
 Ein `QThread` bekommt hier keinen Qt-Elternteil; ihn hält allein die

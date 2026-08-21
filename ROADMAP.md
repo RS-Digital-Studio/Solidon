@@ -52,6 +52,7 @@ bekommt einen roten Lauf.
 | Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
+| Der Profil-Test ist unter Last wettlaufanfällig | Der dritte Durchgang: was hinter dem Wartezustand lag (21.08.2026) | eine Entscheidung, wo der Test seinen Zustand festhält — an den Widgets oder an einem gestoppten Arbeiter; einmal rot in einem Lauf über 66 Dateien, sonst grün, auch am Stand davor |
 
 ---
 
@@ -9887,3 +9888,87 @@ Bleibt als Beobachtung: Die 0,2-Sekunden-Grenze ist **nicht** widerlegt und
 nicht bestätigt — keine der vier gemessenen Rechnungen war kürzer als 200 ms.
 `LoadingVeil` hält sie mit `DELAY_MS = 200` ein und begründet es dort wörtlich
 mit §2.8; für Balken und Knopf fehlt der Beweis in beide Richtungen.
+
+## Der dritte Durchgang: was hinter dem Wartezustand lag (21.08.2026)
+
+Zwei Durchgänge hatten die Zusatzsoftware von „fehlt" bis „läuft" gebracht. Der
+dritte fragte, was passiert, wenn dabei etwas schiefgeht — und der Fund reicht
+weit über das Thema hinaus.
+
+### Zweiundzwanzig Arbeiter konnten ihr Fenster stillstellen
+
+- [x] **Ein `run`, das eine Ausnahme durchlässt, sendet sein Ergebnissignal
+      nie.** Nachgestellt am Einrichtungsdialog für ComfyUI: Liegt die
+      Installation unter `Program Files`, wirft das Kopieren der Knoten einen
+      `PermissionError`. Der Dialog fing `SetupFailed` und sonst nichts — die
+      Ausnahme landete auf stderr, wo sie kein Kunde sieht, und im Fenster
+      stand „Wird eingerichtet …", der Balken lief, der Knopf sagte
+      „Abbrechen". Dabei blieb es, bis jemand das Programm beendet.
+
+      Gezählt: Von **dreiundzwanzig** Arbeitern in der Oberfläche fing genau
+      **einer** eine unerwartete Ausnahme — der Versand der Rückmeldung. Die
+      anderen zweiundzwanzig konnten dasselbe anrichten: die Ladeanzeige der
+      Auswertung, die für immer stehen bleibt; der Export-Menüeintrag, der für
+      den Rest der Sitzung gesperrt ist; „Der Profilbestand wird durchgesehen
+      …" als Dauerzustand.
+
+      `leash.Worker` fängt, protokolliert und meldet über `crashed`. Erwartete
+      Fehler bleiben in `work` und kommen als Ergebnis zurück; was bei
+      `crashed` ankommt, ist ausdrücklich das Unerwartete. Wo ein Fehlerpfad
+      existiert, geht es denselben Weg als `InternalError` — §33.1 ordnet ihm
+      den Fehlerbericht zu.
+
+      **Zwei Tests halten es**, und der zweite ist der wichtigere: dass kein
+      Arbeiter mehr direkt von `QThread` erbt, und dass jede Datei, die einen
+      baut, auf `crashed` hört. Die Basisklasse allein hätte den Fund nur
+      verschoben.
+- [x] Dabei kam heraus, dass der Installationsdialog nach einem Absturz **neu
+      erhob** — und seine eigene Meldung eine Sekunde später mit der
+      Zusammenfassung überschrieb. Der Kunde hatte den Satz gesehen und nicht
+      gelesen.
+
+### Der Installer meldete erst am Ende, was er tut
+
+- [x] **`subprocess.run` sammelt die Ausgabe und gibt sie am Ende zurück.** Die
+      Fortschrittszeilen wurden also erst durchgereicht, wenn niemand sie mehr
+      brauchte: Bei OrcaSlicer sind das mehrere Minuten, in denen ein
+      unbestimmter Balken lief und sonst nichts geschah.
+
+      Gelesen wird jetzt zeilenweise, und der **Textmodus ist der Trick**:
+      winget zeichnet seinen Balken mit Wagenrücklauf und ohne Zeilenumbruch,
+      und erst die Übersetzung von `\r` in ein Zeilenende macht daraus Zeilen,
+      die ankommen. Ohne sie käme bis zum Schluss keine.
+- [x] **Was der Kunde davon sieht, ist die Zeit** — nicht die rohe Ausgabe, die
+      weiter hinter „Details" gehört: „Wird installiert: OrcaSlicer (45 s)".
+      Dasselbe im Einrichtungsdialog, wo die Zeit **je Schritt** neu beginnt,
+      denn nur einer von fünf lädt 7,5 GB. Dasselbe Muster wie beim Erzeugen
+      eines Modells (`mesh.py`).
+
+### Und „Abbrechen" wirkte bei genau diesem Schritt nicht
+
+- [x] Die Abbruchprüfung lag **zwischen** den Schritten, und `subprocess.run`
+      blockiert bis zum Ende: Wer während des Downloads der Gewichte abbrach,
+      wartete eine halbe Stunde auf etwas, das er nicht mehr wollte. Der Satz
+      daneben — „der laufende Schritt läuft aus" — war wahr und keine Hilfe.
+      Gefragt wird jetzt zwischen den Zeilen, und ein Abbruch beendet den
+      Kindprozess. Was halb geladen ist, bleibt liegen: `huggingface_hub` setzt
+      beim nächsten Lauf fort, die Knoten sind idempotent kopiert.
+
+### Was beim Messen aufgefallen ist, und keine Regression war
+
+- [x] **Die dreizehn roten Leistungstests waren ein Artefakt der Bestwerte.**
+      `tests/.performance.json` liegt **je Arbeitsbaum** und wird bei jedem Lauf
+      auf das Minimum gesenkt. Ein frischer Worktree hat keine Werte und ist
+      deshalb grün; der gewachsene Hauptbaum vergleicht gegen Bestzeiten aus
+      Läufen ohne Last. Gegengeprüft: dieselbe Bestwert-Datei in einen Worktree
+      auf dem Stand *vor* dieser Arbeit kopiert und gemessen — **identisch
+      dreizehn rot**. Wer die Datei zum Vergleich benutzt, kopiert sie mit.
+- [ ] **`test_the_chosen_profiles_are_kept_without_a_slicer_run` ist unter Last
+      wettlaufanfällig.** Einmal rot in einem Lauf über 66 Dateien, grün allein,
+      grün in seiner Datei, grün nach allen Leistungstests, grün am Stand davor.
+      Der Test setzt die drei Profilauswahlen von Hand und ruft `reject()`;
+      läuft dazwischen etwas aus der Ereignisschlange, das die Auswahl leert
+      oder neu füllt, merkt `_remember_slicer_choice` nichts — es prüft
+      `currentData()`, und leer heißt dort „nicht merken". Wartet auf eine
+      Entscheidung, wo der Test seinen Zustand festhält — an den Widgets oder an
+      einem gestoppten Arbeiter.
