@@ -89,9 +89,9 @@ def write(path: Path, pattern: re.Pattern[str], version: str) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    stelle = parser.add_mutually_exclusive_group()
-    stelle.add_argument("--minor", action="store_true", help="mittlere Stelle statt der letzten")
-    stelle.add_argument("--major", action="store_true", help="vordere Stelle — eine Entscheidung")
+    place = parser.add_mutually_exclusive_group()
+    place.add_argument("--minor", action="store_true", help="mittlere Stelle statt der letzten")
+    place.add_argument("--major", action="store_true", help="vordere Stelle — eine Entscheidung")
     parser.add_argument(
         "--zeigen", action="store_true", help="nur sagen, was herauskäme, und nichts schreiben"
     )

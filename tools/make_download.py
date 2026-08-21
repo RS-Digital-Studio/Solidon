@@ -338,7 +338,7 @@ def links(packages: list[Package], language: str) -> str:
             continue
 
         count = CHOICE_LABEL[language].format(count=len(mine))
-        auswahl = "".join(
+        choices = "".join(
             download_link(package, variant_of(package.name, language).strip(" ()"), "btn")
             for package in mine
         )
@@ -349,7 +349,7 @@ def links(packages: list[Package], language: str) -> str:
             f' aria-label="{system}">'
             f"\n              <h3>{system}</h3>"
             f'\n              <p class="hinweis">{CHOICE_NOTE[language]}</p>'
-            f"{auswahl}"
+            f"{choices}"
             '\n              <form method="dialog">'
             f'<button class="btn ghost" value="zu">{CLOSE_LABEL[language]}</button></form>'
             "\n            </dialog>"
