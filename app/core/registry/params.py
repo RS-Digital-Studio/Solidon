@@ -47,12 +47,16 @@ def param(
     placement: ParamPlacement = "front",
     doc: TranslatableText | str | None = None,
     depends_on: tuple[str, tuple[str | bool, ...]] | None = None,
+    subtractive_on: tuple[str | bool, ...] | None = None,
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
     an einer Stelle.
 
     ``depends_on`` nennt das Feld, das diesen Parameter wirksam macht, und die
     Werte, bei denen es das tut — siehe :attr:`app.core.types.ParamSpec.depends_on`.
+
+    ``subtractive_on`` nennt die Werte, bei denen ein Baustein abträgt statt
+    aufzusetzen — siehe :attr:`app.core.types.ParamSpec.subtractive_on`.
     """
     metadata = {
         _METADATA_KEY: {
@@ -65,6 +69,7 @@ def param(
             "placement": placement,
             "doc": doc,
             "depends_on": depends_on,
+            "subtractive_on": subtractive_on,
         }
     }
     if default is MISSING:
@@ -120,6 +125,7 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
                 placement=metadata["placement"],
                 doc=metadata["doc"],
                 depends_on=metadata["depends_on"],
+                subtractive_on=metadata["subtractive_on"],
             )
         )
     data_class.__param_spec__ = tuple(specs)  # type: ignore[attr-defined]

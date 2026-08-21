@@ -1428,6 +1428,7 @@
   "Keine Karte": "No map",
   "Keine Objekte.": "No objects.",
   "Keine Profile gefunden — ohne sie lehnt dieser Slicer den Auftrag ab. Öffnen Sie den Slicer einmal und legen Sie einen Drucker an; danach steht sein Profil hier.": "No profiles found — without them this slicer refuses the job. Open the slicer once and add a printer; its profile then appears here.",
+  "Keine geprüfte Lage steht auf genug Fläche — dieses Teil braucht einen Brim.": "No tested pose stands on enough ground — this part needs a brim.",
   "Keine weiteren Angaben.": "Nothing further recorded.",
   "Keine Änderung": "No change",
   "Keine — die Grundform der Operation gilt.": "None — the operation's basic shape applies.",

@@ -377,6 +377,35 @@ class Profile:
         """
         return self.printer.extrusion_width**2 * self.printer.layer_height
 
+    @property
+    def smallest_first_layer(self) -> float:
+        """Die kleinste Aufstandsfläche, auf der ein Teil stehen kann — zehn
+        Extrusionsbahnen im Quadrat, bei einer 0,4er Düse also 4,2 auf 4,2 mm.
+
+        Gebraucht von der Orientierungssuche (§22.2). Gemessen an einer
+        Verbinderstange von 157 mm: die Suche stellte sie diagonal auf
+        **0,1 mm²** erste Schicht, weil diese Lage 0,6 mm³ Stützmaterial
+        braucht statt 11,1 — ihre Flanken stehen 47° zur Waagerechten und
+        tragen sich selbst. Der Vergleich war richtig, nur fehlte ihm die
+        Bedingung, dass eine Lage stehen muss, bevor sie sparen darf.
+
+        **Warum zehn und nicht vier.** Vier Bahnen wären das Wenigste, was ein
+        Slicer als geschlossene Insel legt — als Grenze für „kann stehen" ist
+        das zu tief: Im Kandidatenfeld derselben Stange kam die diagonale Lage
+        damit auf 4,5 mm² und gewann weiter. Dasselbe Feld zeigt aber eine
+        breite Lücke: die achtzehn Lagen, die auf einer Fläche liegen, tragen
+        76 bis 2765 mm², die auf einer Kante stehenden 0,06 bis 4,5. Zehn
+        Bahnen liegen mit 17,6 mm² dazwischen, mit Abstand nach beiden Seiten.
+        Eine gewählte Zahl also, aber eine mit Messung dahinter — und keine, die
+        auf ein Zehntel ankommt.
+
+        Aus dem Profil und nicht als Zahl im Code (Regel 7): an einer 0,8er
+        Düse ist dieselbe Fläche eine andere. Ein Teil, dessen **jede** Lage
+        darunter bleibt, wird davon nicht abgelehnt — dann tragen alle
+        Kandidaten dieselbe Antwort, und es bleibt beim alten Vergleich.
+        """
+        return (10.0 * self.printer.extrusion_width) ** 2
+
 
 # --- Druckeinstellungen (§29) --------------------------------------------------
 #
@@ -803,6 +832,27 @@ class ParamSpec:
 
     Die Werte sind Auswahlwerte oder Wahrheitswerte — ein Haken ist ein
     Umschalter wie ein Aufklappmenü, nur mit zwei Ständen."""
+    subtractive_on: tuple[str | bool, ...] | None = None
+    """Die Werte dieses Parameters, bei denen der Baustein **abträgt** statt
+    aufzusetzen (§24).
+
+    ``("bore",)`` am Parameter *Art* heißt: Auf „bore" wird das Werkzeug
+    abgezogen, sonst vereinigt. Gebraucht, weil ``PartSpec.subtractive`` eine
+    Eigenschaft des **Bausteins** ist und für zwei von ihnen an der falschen
+    Stelle sitzt: *Passstift und Passbohrung* und *Schnappverbinder* sind je
+    ein Paar, und welche Hälfte gemeint ist, entscheidet ein Parameter.
+
+    Gemessen an einem Klotz von 30 auf 30 auf 20, bevor das hier stand: Die
+    Passbohrung rechnete ihr Spiel dazu (``diameter + play``), gab ein
+    ``bore``-Merkmal zurück — und setzte **+411,7 mm³** auf, also einen etwas
+    dickeren Zapfen als der Zapfen. Beim Schnappverbinder war die „Tasche mit
+    der Rastkante" +108,5 mm³.
+
+    **Am Parameter und nicht in einer Tabelle**, aus demselben Grund wie
+    :attr:`depends_on`: Dieselbe Auskunft brauchen die Operation (welche
+    Boolesche Op), der Registereintrag (ob ein Flächenklick den Baustein
+    anbietet) und die Vorschau (welche Farbe) — und sie steht dort, wo die
+    Wahl getroffen wird."""
 
 
 @runtime_checkable

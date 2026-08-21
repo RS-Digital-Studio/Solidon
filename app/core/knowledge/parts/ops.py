@@ -195,6 +195,38 @@ def _default_registry() -> Registry:
     return REGISTRY
 
 
+def cuts_by_parameter(params: type[BaseParams]) -> tuple[str, tuple[str | bool, ...]] | None:
+    """Der Parameter, der über die Richtung entscheidet, und seine Werte —
+    oder ``None``, wenn der Baustein eine feste Richtung hat.
+
+    Gelesen aus ``ParamSpec.subtractive_on``, also von dort, wo die Wahl
+    getroffen wird. Drei Stellen brauchen die Auskunft, und ohne diese Funktion
+    hätte jede ihre eigene Version: die Operation (welche Boolesche Op), der
+    Registereintrag (ob ein Flächenklick den Baustein anbietet) und die
+    Vorschau (welche Farbe).
+    """
+    for entry in params.spec():
+        if entry.subtractive_on is not None:
+            return entry.name, tuple(entry.subtractive_on)
+    return None
+
+
+def cuts(spec: PartSpec, values: BaseParams | None) -> bool:
+    """Trägt dieser Baustein mit diesen Werten ab?
+
+    Ohne Werte — beim Anlegen der Operation, wo noch niemand etwas gewählt hat
+    — zählt ein Baustein mit Richtungsparameter als abtragend: er **kann** es
+    sein, und ``applies_to`` ist eine Reihenfolge und keine Sperre.
+    """
+    declared = cuts_by_parameter(spec.params)
+    if declared is None:
+        return spec.subtractive
+    name, wanted = declared
+    if values is None:
+        return True
+    return getattr(values, name, None) in wanted
+
+
 def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry | None) -> None:
     title = _title_for(spec)
 
@@ -205,7 +237,7 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         params=params,
         consumes=1,
         produces=1,
-        applies_to=["face"] if spec.subtractive else [],
+        applies_to=["face"] if cuts(spec, None) else [],
         touches_features=True,
         doc=spec.doc or title,
         registry=registry,
@@ -233,10 +265,11 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     # manifold sie verschmolz; die Frage ist für alle dieselbe und steht darum
     # hier und nicht in jedem einzelnen. Ein subtraktiver braucht es nicht: sein
     # Werkzeug reicht ohnehin über die Fläche hinaus.
-    sink = 0.0 if spec.subtractive else BOOLEAN_OVERLAP
+    subtractive = cuts(spec, ctx.params)
+    sink = 0.0 if subtractive else BOOLEAN_OVERLAP
     placed = _place(as_mesh_data(produced.mesh), ctx.params, anchor, sink)
     body = as_mesh_data(source.mesh)
-    kind: BooleanKind = "difference" if spec.subtractive else "union"
+    kind: BooleanKind = "difference" if subtractive else "union"
     outcome = boolean(kind, [body, placed], quality=ctx.quality)
 
     features = dict(source.features)

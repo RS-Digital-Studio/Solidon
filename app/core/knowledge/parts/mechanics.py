@@ -290,6 +290,7 @@ class DowelParams(BaseParams):
         title=_("Art"),
         default="pin",
         choices=("pin", "bore"),
+        subtractive_on=("bore",),
         doc=_("Der Stift selbst oder die Bohrung dazu."),
     )
     shape: str = param(
@@ -328,12 +329,26 @@ class DowelParams(BaseParams):
     title=_("Passstift und Passbohrung"),
     group="mechanics",
     params=DowelParams,
+    version="2",
     features=["pin", "bore"],
     doc=_(
         "Stift oder Bohrung als Paar. Das Spiel kommt aus dem Materialprofil, damit "
         "eine spätere Kalibrierung auch alte Projekte erreicht."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[
+        FIRST_RELEASE,
+        PartChange(
+            version="2",
+            date="2026-08-21",
+            reason="Die Passbohrung trug nichts ab, sondern setzte auf (§24.1).",
+            effect=(
+                "Auf „Bohrung“ wird das Werkzeug jetzt abgezogen statt vereinigt, und "
+                "es liegt unter seiner Mündung statt über ihr. Wer die Bohrung bisher "
+                "benutzt hat, bekam einen Zapfen von "
+                "Umkreis + Spiel; an dieser Stelle steht jetzt ein Loch."
+            ),
+        ),
+    ],
 )
 def dowel(raw: BaseParams) -> PartResult:
     params = cast(DowelParams, raw)
@@ -344,25 +359,37 @@ def dowel(raw: BaseParams) -> PartResult:
     # Grenze selbst ein.
     chamfer = min(params.chamfer, diameter / 2.0 - 0.2)
 
-    body = _profile(params.shape, diameter, params.length)
-    if chamfer > 0.0:
-        lead = shapes.cone(diameter, diameter - 2.0 * chamfer, chamfer)
-        if is_pin:
+    if is_pin:
+        # Der Stift sitzt **auf** der Fläche: Ursprung ist der Fuß, er wächst
+        # nach oben, und die Fase bricht seine Oberkante.
+        body = _profile(params.shape, diameter, params.length)
+        if chamfer > 0.0:
             body = subtract(
                 body,
                 shapes.moved(_ring(diameter, chamfer), (0.0, 0.0, params.length - chamfer)),
             )
-        else:
-            body = union(body, shapes.moved(lead, (0.0, 0.0, -chamfer)))
-
-    if is_pin:
         return result(
             body,
             pin("pin_1", diameter, (0.0, 0.0, params.length / 2.0), length=params.length),
         )
+
+    # **Die Bohrung liegt unter ihrer Mündung (§24.1)** — wie die Magnettasche,
+    # und aus demselben Grund: Der Ursprung eines Bausteins landet auf der
+    # angeklickten Fläche, und über der Fläche ist Luft. Sie wuchs nach oben,
+    # also nach draußen; abgetragen wurde damit nichts als die Fase, die
+    # zufällig unter dem Ursprung lag. Gemessen an einem Klotz von 30 auf 30
+    # auf 20: minus 28,6 mm³, wo ein Loch von 9 mm Tiefe hätte stehen sollen.
+    body = shapes.moved(_profile(params.shape, diameter, params.length), (0.0, 0.0, -params.length))
+    if chamfer > 0.0:
+        # Eine Senkung an der Mündung, nach oben weiter werdend — das ist, was
+        # eine Fase an einem Loch tut. Vorher verengte sie sich zur Mündung
+        # hin, was aus einer Einführung eine Sperre gemacht hätte, wenn sie je
+        # im Material gelegen hätte.
+        lead = shapes.cone(diameter, diameter + 2.0 * chamfer, chamfer)
+        body = union(body, shapes.moved(lead, (0.0, 0.0, -chamfer)))
     return result(
         body,
-        bore("bore_1", diameter, (0.0, 0.0, params.length / 2.0), depth=params.length),
+        bore("bore_1", diameter, (0.0, 0.0, -params.length / 2.0), depth=params.length),
     )
 
 
@@ -441,6 +468,7 @@ class SnapConnectorParams(BaseParams):
         title=_("Art"),
         default="pin",
         choices=("pin", "bore"),
+        subtractive_on=("bore",),
         doc=_("Der Federarm selbst oder die Tasche mit der Rastkante dazu."),
     )
     play: float = param(
@@ -459,6 +487,7 @@ class SnapConnectorParams(BaseParams):
     title=_("Schnappverbinder für eine Naht"),
     group="mechanics",
     params=SnapConnectorParams,
+    version="3",
     features=["arm", "catch"],
     doc=_(
         "Federarm und Tasche als Paar — die Hälften rasten ein, statt geklebt zu "
@@ -470,7 +499,18 @@ class SnapConnectorParams(BaseParams):
             version="2",
             date="2026-08-14",
             reason="Der Schnapper als Verbinder in der Trennfuge (§25, Trennen).",
-        )
+        ),
+        PartChange(
+            version="3",
+            date="2026-08-21",
+            reason="Die Rasttasche trug nichts ab, sondern setzte auf (§24.1).",
+            effect=(
+                "Auf „Tasche“ wird der Schlitz jetzt abgezogen statt vereinigt, und er "
+                "liegt unter seiner Mündung statt über ihr. Der Docstring sagte es seit "
+                "je — „was hier fehlt, bleibt im Bauteil stehen“ —, die Operation tat es "
+                "nicht."
+            ),
+        ),
     ],
 )
 def snap_connector(raw: BaseParams) -> PartResult:
@@ -559,10 +599,18 @@ def snap_connector(raw: BaseParams) -> PartResult:
     slot = shapes.box(width + params.play, across, depth)
     lip = shapes.box(width + params.play + 2.0 * shapes.OVERLAP, hook, catch)
     lip = shapes.moved(lip, (0.0, across / 2.0 - hook / 2.0, 0.0))
-    body = subtract(slot, lip)
+    # Auch diese Tasche liegt unter ihrer Mündung (§24.1) — dieselbe Rechnung
+    # wie bei der Passbohrung, und derselbe Fund: nach oben gebaut lag sie
+    # vollständig über der Fläche und trug nichts ab.
+    body = shapes.moved(subtract(slot, lip), (0.0, 0.0, -depth))
     return result(
         body,
-        face("catch_1", width * hook, (0.0, across / 2.0 - hook / 2.0, catch), (0.0, 0.0, 1.0)),
+        face(
+            "catch_1",
+            width * hook,
+            (0.0, across / 2.0 - hook / 2.0, catch - depth),
+            (0.0, 0.0, 1.0),
+        ),
     )
 
 

@@ -226,6 +226,7 @@ def _orientation(
             as_mesh_data(entry.mesh),
             count=ORIENTATION_CANDIDATES,
             seed=ORIENTATION_SEED,
+            profile=profile,
             cancelled=cancelled,
         )
         best = found.best

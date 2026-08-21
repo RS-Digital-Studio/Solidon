@@ -296,6 +296,90 @@ def test_a_subtractive_part_removes_material(profile: Profile) -> None:
     assert after.mesh.volume < before.mesh.volume, "a pressed-in insert needs a hole"
 
 
+def _plate_and(name: str, params: dict[str, Any], profile: Profile) -> tuple[Any, Any]:
+    """Die Platte vorher und nachher, mit einem Baustein dazwischen."""
+    project = project_with_plate()
+    sources = ProjectSources(project)
+    before = evaluate(project.document, profile, sources=sources).scene.objects["obj_1"]
+    History(project.document).apply(
+        name, [OperationDraft(op=name, inputs=("obj_1",), params=params)]
+    )
+    result = evaluate(project.document, profile, sources=sources)
+    assert result.complete, [f.message for f in result.scene.report.findings]
+    return before, result.scene.objects["obj_1"]
+
+
+@pytest.mark.parametrize(
+    ("name", "params"),
+    [
+        ("insert_dowel", {"diameter": 8.0, "length": 6.0, "shape": "hex"}),
+        ("insert_snap_connector", {}),
+    ],
+)
+def test_a_bore_removes_material_and_a_pin_adds_it(
+    name: str, params: dict[str, Any], profile: Profile
+) -> None:
+    """Beide Bausteine sind ein **Paar**, und welche Hälfte gemeint ist,
+    entscheidet der Parameter *Art* — nicht der Baustein.
+
+    Gefunden beim Nachbau einer Sechskantverbindung: die Passbohrung rechnete
+    ihr Spiel dazu, gab ein ``bore``-Merkmal zurück und setzte **+411,7 mm³**
+    auf, also einen etwas dickeren Zapfen als der Zapfen. Beim
+    Schnappverbinder war die „Tasche mit der Rastkante" +108,5 mm³, obwohl ihr
+    Docstring seit je sagt: „was hier fehlt, bleibt im Bauteil stehen".
+    """
+    top = {"x": 0.0, "y": 0.0, "z": 8.0}
+
+    before, gebohrt = _plate_and(name, {**params, **top, "kind": "bore"}, profile)
+    _, gestiftet = _plate_and(name, {**params, **top, "kind": "pin"}, profile)
+
+    assert gebohrt.mesh.volume < before.mesh.volume, "eine Bohrung nimmt weg"
+    assert gestiftet.mesh.volume > before.mesh.volume, "ein Stift setzt auf"
+    assert gebohrt.mesh.is_watertight and gestiftet.mesh.is_watertight
+    assert gebohrt.mesh.component_count == 1, "die Bohrung zerlegt den Körper nicht"
+
+
+def test_the_direction_is_declared_at_the_parameter() -> None:
+    """§24: die Angabe steht dort, wo die Wahl getroffen wird — wie
+    ``depends_on``.
+
+    Drei Stellen lesen sie, und ohne eine Quelle hätte jede ihre eigene
+    Version: die Operation (welche Boolesche Op), der Registereintrag (ob ein
+    Flächenklick den Baustein anbietet) und die Vorschau (welche Farbe).
+    """
+    for name in ("dowel", "snap_connector"):
+        spec = PARTS.get(name)
+        assert part_ops.cuts_by_parameter(spec.params) == ("kind", ("bore",)), name
+        assert part_ops.cuts(spec, spec.params(kind="bore")) is True, name
+        assert part_ops.cuts(spec, spec.params(kind="pin")) is False, name
+        # Ohne Werte gilt „kann abtragen": ``applies_to`` ist eine Reihenfolge
+        # und keine Sperre, und beide Hälften werden auf eine Fläche gesetzt.
+        assert part_ops.cuts(spec, None) is True, name
+        assert "face" in REGISTRY.get(part_ops.op_name(name)).applies_to, name
+
+
+def test_a_part_without_the_declaration_keeps_its_own_direction() -> None:
+    """Die Gegenprobe — sonst hätte der neue Weg den alten überschrieben."""
+    for name, subtractive in (("magnet_pocket", True), ("rib", False), ("heatset_m4", True)):
+        spec = PARTS.get(name)
+        assert part_ops.cuts_by_parameter(spec.params) is None, name
+        assert part_ops.cuts(spec, spec.params()) is subtractive, name
+
+
+def test_a_changed_bore_is_announced_to_old_projects() -> None:
+    """§24.4: ein Baustein, dessen Maße sich ändern, wird beim Öffnen gemeldet.
+
+    Hier ändert sich mehr als ein Maß — aus einem Buckel wird ein Loch. Wer die
+    Bohrung bisher benutzt hat, muss das erfahren.
+    """
+    for name, seit in (("dowel", "2"), ("snap_connector", "3")):
+        spec = PARTS.get(name)
+        assert spec.version == seit, name
+        letzte = spec.changes[-1]
+        assert letzte.version == seit and letzte.effect, name
+        assert changed_since({name: "1"}) == (name,) or name in changed_since({name: "1"})
+
+
 def test_an_additive_part_adds_material(profile: Profile) -> None:
     project = project_with_plate()
     sources = ProjectSources(project)

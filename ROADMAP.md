@@ -9455,3 +9455,75 @@ kein Nachbau, sondern ein zweiter Entwurf.
       Untergrenze der ersten Schicht herkommt, ist die Entscheidung — aus dem
       Profil wie `smallest_printable_volume`, oder als Verhältnis zur
       Ausgangslage, die `search` als `baseline` ohnehin schon kennt.
+
+## Die Richtung steht am Parameter, die Untergrenze im Profil (21.08.2026)
+
+Die zwei Funde des vorigen Eintrags, entschieden und behoben.
+
+### Behoben, jeder mit Test und Gegenprobe
+
+- [x] **Die Passbohrung trägt jetzt ab.** `subtractive` ist eine Eigenschaft des
+      Bausteins, und für zwei von ihnen sitzt sie an der falschen Stelle:
+      *Passstift und Passbohrung* und *Schnappverbinder* sind je ein Paar, und
+      welche Hälfte gemeint ist, entscheidet ein Parameter. Die Angabe steht
+      deshalb jetzt **am Parameter** — `ParamSpec.subtractive_on`, deklariert wie
+      `depends_on`, also dort, wo die Wahl getroffen wird. Drei Stellen lesen
+      sie über `parts/ops.cuts()`: die Operation (welche Boolesche Op), der
+      Registereintrag (ob ein Flächenklick den Baustein anbietet) und die
+      Vorschau. Ohne Werte gilt „kann abtragen" — `applies_to` ist eine
+      Reihenfolge und keine Sperre, und beide Hälften werden auf eine Fläche
+      gesetzt.
+
+      Dazu kam ein zweiter Teil desselben Fehlers: **beide Werkzeuge wuchsen
+      nach oben**, also aus dem Körper heraus. Die Magnettasche sagt es seit je
+      im Docstring — „Der Ursprung ist die Mündung, die Tasche liegt darunter
+      (§24.1)" —, und diese zwei taten es nicht. Nur die Fase, die zufällig
+      unter dem Ursprung lag, schnitt überhaupt etwas. Gemessen an einem Klotz
+      von 30 auf 30 auf 20:
+
+      | Baustein | Art | vorher | nachher |
+      |---|---|---|---|
+      | `insert_dowel` | `bore` | +411,7 mm³ | **−422,8 mm³** |
+      | `insert_dowel` | `pin` | +386,6 mm³ | +386,6 mm³ |
+      | `insert_snap_connector` | `bore` | +108,5 mm³ | **−108,6 mm³** |
+      | `insert_snap_connector` | `pin` | +43,1 mm³ | +43,1 mm³ |
+      | `insert_magnet_pocket` | — | −159,9 mm³ | −159,9 mm³ |
+
+      Die 422,8 mm³ sind das Sechskantloch (Schlüsselweite 7,055 auf 9 tief,
+      388 mm³) plus die Senkung an der Mündung — die verengte sich vorher zur
+      Mündung hin, was aus einer Einführung eine Sperre gemacht hätte, wenn sie
+      je im Material gelegen hätte. Beide Bausteine bekommen eine neue Version
+      mit Änderungsverlauf (§24.4): aus einem Buckel wird ein Loch, und wer die
+      Bohrung benutzt hat, muss das beim Öffnen erfahren.
+- [x] **Das Ausrichten fragt jetzt, ob eine Lage stehen kann.**
+      `Profile.smallest_first_layer` ist zehn Extrusionsbahnen im Quadrat — bei
+      einer 0,4er Düse 4,2 auf 4,2 mm, also 17,6 mm². `better()` vergleicht
+      diese Frage **vor** dem Stützvolumen: Wer stehen kann, gewinnt gegen jeden,
+      der es nicht kann, und erst danach wird gerechnet. Gemessen an der
+      nachgebauten Verbinderstange, gleiche Suche, gleicher Startwert:
+
+      | | Stützvolumen | erste Schicht | Höhe |
+      |---|---|---|---|
+      | vorher | 4,4 mm³ | **1,6 mm²** | 111 mm |
+      | nachher | 24,1 mm³ | **1327,9 mm²** | 19 mm |
+
+      **Warum zehn Bahnen und nicht vier.** Vier wären das Wenigste, was ein
+      Slicer als geschlossene Insel legt — als Grenze zu tief: die diagonale
+      Lage kam damit auf 4,5 mm² und gewann weiter. Dasselbe Kandidatenfeld
+      zeigt aber eine breite Lücke: die Lagen, die auf einer Fläche liegen,
+      tragen 76 bis 2765 mm², die auf einer Kante stehenden 0,06 bis 4,5. Zehn
+      Bahnen liegen mit Abstand dazwischen. Eine gewählte Zahl, aber eine mit
+      Messung dahinter — und keine, die auf ein Zehntel ankommt. Aus dem Profil
+      und nicht als Zahl im Code (Regel 7).
+
+      **Die Grenze ordnet, sie lehnt nicht ab.** Ein Körper, dessen jede Lage
+      darunter bleibt — eine Kugel —, bekommt trotzdem eine Antwort: dann tragen
+      alle Kandidaten dieselbe, und es bleibt beim alten Vergleich. Gesagt wird
+      es aber: `orient.no_footing`, „dieses Teil braucht einen Brim".
+
+Der Testkörper für den zweiten Fund brauchte zwei Anläufe, und beide Fehlschläge
+gehören zur Sache: Ein glatter Quader von 22 auf 12 auf 140 hat in jeder Lage
+eine ebene Fläche unten, die von selbst gewinnt. Erst mit den Fasen **und** den
+zwei Sechskantzapfen an den Enden entsteht der Fall — die Zapfen kosten in der
+liegenden Lage Stützmaterial, in der diagonalen keines. Wer den Körper
+vereinfacht, prüft etwas anderes, als er behauptet.

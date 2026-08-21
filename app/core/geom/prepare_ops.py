@@ -1004,6 +1004,7 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
             mesh,
             count=params.candidates,
             seed=ctx.seed,
+            profile=ctx.profile,
             progress=ctx.progress,
             cancelled=ctx.cancelled,
         )

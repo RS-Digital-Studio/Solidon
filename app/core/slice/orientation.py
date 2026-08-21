@@ -26,7 +26,7 @@ from app.core.geom.orient import candidates as face_candidates
 from app.core.geom.transform import apply, place_on_bed
 from app.core.log import get_logger
 from app.core.slice.analysis import slice_body
-from app.core.types import CancelToken, Finding, ProgressFn, Vec3
+from app.core.types import CancelToken, Finding, Profile, ProgressFn, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -57,13 +57,37 @@ class Candidate:
     height: float
 
 
-def better(candidate: Candidate, current: Candidate) -> bool:
+def stands(candidate: Candidate, floor: float) -> bool:
+    """Kann diese Lage überhaupt stehen? (§22.2)
+
+    ``floor`` ist die kleinste Aufstandsfläche, die der Drucker halten kann —
+    :attr:`app.core.types.Profile.smallest_first_layer`. Null heißt: nicht
+    gefragt, dann steht jede Lage.
+    """
+    return candidate.first_layer_area >= floor
+
+
+def better(candidate: Candidate, current: Candidate, floor: float = 0.0) -> bool:
     """Weniger Stützen gewinnt; erst bei Gleichstand entscheidet die
     Grundfläche (§22.2).
 
     Mit Absicht lexikografisch statt als gewichtete Summe: eine große
     Aufstandsfläche darf sich nie an echtem Stützmaterial vorbeikaufen.
+
+    **Und umgekehrt genauso.** Der Satz darüber nennt eine Richtung, und die
+    andere fehlte: Ein paar Kubikmillimeter Stützmaterial dürfen keine Lage
+    kaufen, die nicht stehen kann. Gemessen an einer Verbinderstange von
+    157 mm — die Suche wählte eine diagonale Lage mit 0,6 mm³ Stütze und
+    **0,1 mm²** erster Schicht gegen die liegende mit 11,1 mm³ und 1424 mm².
+    Der Vergleich war richtig, die Zahl auch; nur ist 0,1 mm² kein Stand,
+    sondern eine Ecke. Wer stehen kann, gewinnt gegen jeden, der es nicht kann
+    — und **erst danach** wird gerechnet.
+
+    Steht keine Lage (eine Kugel steht auf keiner), fällt das erste Kriterium
+    für alle gleich aus und es bleibt beim alten Vergleich.
     """
+    if stands(candidate, floor) != stands(current, floor):
+        return stands(candidate, floor)
     reference = max(candidate.support_volume, current.support_volume, EPS_GEOM)
     if abs(candidate.support_volume - current.support_volume) > reference * SUPPORT_TIE:
         return candidate.support_volume < current.support_volume
@@ -148,11 +172,17 @@ def search(
     count: int = DEFAULT_CANDIDATES,
     seed: int | None = None,
     layer_height: float = SEARCH_LAYER_HEIGHT,
+    profile: Profile | None = None,
     progress: ProgressFn | None = None,
     cancelled: CancelToken | None = None,
 ) -> SearchResult:
     """Probiert viele Orientierungen und behält die, die am wenigsten Stützen
-    braucht."""
+    braucht — unter denen, die stehen können.
+
+    Ohne ``profile`` wird nach dem Stand nicht gefragt: ein Aufrufer, der
+    keinen Drucker kennt, soll keinen erfinden (Regel 7).
+    """
+    floor = profile.smallest_first_layer if profile is not None else 0.0
     baseline = judge(mesh, (0.0, 0.0, -1.0), layer_height)
     best = baseline
     tried = 1
@@ -169,7 +199,7 @@ def search(
 
         candidate = judge(mesh, direction, layer_height)
         tried += 1
-        if better(candidate, best):
+        if better(candidate, best, floor):
             best = candidate
 
     turned = place_on_bed(apply(mesh, _rotation_to_down(best.direction)))
@@ -186,6 +216,24 @@ def search(
             source="internal",
         )
     ]
+    if floor > 0.0 and not stands(best, floor):
+        # Keine geprüfte Lage trägt. Eine Kugel ist der ehrliche Fall dafür,
+        # und das Teil braucht dann eine Haftschicht — das zu sagen ist besser,
+        # als stillschweigend eine Ecke zu wählen (§2.7).
+        findings.append(
+            Finding(
+                code="orient.no_footing",
+                severity="warning",
+                message=_(
+                    "Keine geprüfte Lage steht auf genug Fläche — dieses Teil braucht einen Brim."
+                ),
+                values={
+                    "first_layer_mm2": round(best.first_layer_area, 3),
+                    "needed_mm2": round(floor, 3),
+                },
+                source="internal",
+            )
+        )
     _log.info(
         "orientation search: %d candidates, support %.1f mm3 (was %.1f)",
         tried,
