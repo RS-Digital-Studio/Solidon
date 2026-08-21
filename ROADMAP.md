@@ -10076,6 +10076,81 @@ weit über das Thema hinaus.
       `_profiles_found` auf Index 0 zurück, und der wäre zufällig der eigene
       Eintrag.
 
+## Zwölf ein halb wurden hundertfünfundzwanzig (21.08.2026, vierter Durchgang)
+
+Diesmal die Zahlen selbst — hinein und hinaus —, die Beschriftungen der
+Operationsdialoge, und ein Reihe Winkel, die nichts ergaben und deshalb hier
+mit ihrem Messwert stehen: Was gesund ist, soll man beim nächsten Durchgang
+nicht zweimal messen.
+
+### Behoben, jeder mit Test und Gegenprobe
+
+- [x] **„12.5" ergab 125 Millimeter.** Ohne Fehler, ohne Rückfrage, ein Teil
+      zehnmal zu groß. Qt liest den Punkt in einer deutschen Anzeigesprache als
+      Tausendertrennung, und neun Zahlenfelder der Oberfläche waren gewöhnliche
+      `QDoubleSpinBox`. Im englischen Fenster dasselbe mit dem Komma. Wer ein
+      Maß aus einem Datenblatt, einer Fundstelle im Netz oder der eigenen
+      Gewohnheit eintippt, trägt das Trennzeichen von dort — und die Anwendung
+      sagte dazu nichts. Jetzt gibt es `NumberSpin`: beide Zeichen heißen
+      Komma, getauscht wird längentreu, also springt die Einfügemarke nicht.
+      Verloren geht die Tausendertrennung bei der Eingabe („1.000" ist eins,
+      nicht tausend) — die kleinere Not, weil angezeigt ohnehin nie eine wird.
+      `DragValueBar.typed_value` im Viewport entschied das seit je genauso; die
+      Regel stand nur an einer Stelle und nicht an den anderen neun. Ein
+      Regeltest über `app/ui` hält die Klasse geschlossen.
+- [x] **Dieselbe Zahl in zwei Schreibweisen, in jeder Sprache.** Die
+      Gegenrichtung: `localised` gibt es, seit im Objektbaum Maße mit Punkt
+      neben einem Feld mit Komma standen — neun weitere Stellen gingen daran
+      vorbei. Die Parameterleiste schrieb im deutschen Fenster „12.50 mm"
+      direkt neben ein Eingabefeld mit „12,50", der Chat „+1.25 cm³", die
+      Kalibrierung „Spiel 0.25 mm", die Sendungsgröße „2.5 MB". Zwei Stellen
+      setzten umgekehrt das Komma fest ein (`.replace(".", ",")`) und trafen
+      damit in fünf von sechs Sprachen zufällig richtig — im englischen Fenster
+      standen „8,4 g" und ein Maßband mit „12,50". Der Regeltest prüft jede
+      Datei unter `app/ui` per AST: eine Kommazahl in einem Anzeigetext geht
+      durch `localised`. Ausgenommen sind zwei Stellen, die keine Anzeige sind
+      — `measured_expression` und `place_measured` füllen das Maßfeld des
+      Skizzeneditors mit einem *Ausdruck* der Parametergrammatik (§13), und
+      `expressions.evaluate("30,25")` lehnt ab. Das war der Beinahe-Fehler
+      dieses Durchgangs: Erst nach dem Lokalisieren fiel der Satz im Docstring
+      auf, der genau das erklärt.
+- [x] **457 Parameter erklärten sich nur halb.** Jeder trägt seinen
+      `doc`-Satz, und der stand allein am Eingabefeld — wer eine Zeile nicht
+      versteht, zeigt auf das unverständliche Wort. Gemessen an vier Dialogen:
+      47 Zeilen, 47 Sätze am Feld, null an der Beschriftung. Dieselbe Lücke wie
+      in den Druckeinstellungen, eine Ebene höher und mit zehnmal so vielen
+      Feldern. `_explain` setzt jetzt Tooltip, `statusTip` und
+      `accessibleDescription`; die Beschriftung holt
+      `QFormLayout.labelForField`. Bei einer **gesperrten** Zeile tragen beide
+      Hälften den Grund statt des Satzes: In ein ausgegrautes Feld zeigt
+      niemand.
+- [x] **Zwei Tests hingen an der Sprache der Maschine.**
+      `test_the_summary_names_what_would_change` und
+      `test_every_plate_keeps_its_own_print_file` erwarteten „+2.00 cm³" und
+      „20.0 g". Auf einem deutschen Windows steht dort jetzt ein Komma, in
+      einer englischen CI ein Punkt — grün wären sie nur an einem der beiden
+      Orte gewesen. Die Sprache ist jetzt festgenagelt, und der Chat-Test prüft
+      beide Schreibweisen.
+- [x] **Eine Begründung, die nicht stimmte.** Der Docstring von `_label` in den
+      Druckeinstellungen behauptete, an ein von `addRow` gebautes Label käme
+      niemand mehr heran. `QFormLayout.labelForField` gibt es heraus — der
+      Operationsdialog macht es genau so. Die Wahl für ein eigenes Widget
+      bleibt, die Begründung ist jetzt die richtige.
+
+### Gemessen und gesund — nicht nachgesehen werden muss
+
+- **Ausgegraute Menüeinträge:** 72, und alle 72 nennen ihren Grund im Tooltip.
+- **Symbolknöpfe ohne Text:** 7, alle mit Namen für Tastatur und Vorleser.
+- **Hauptknöpfe:** sagen, was sie tun („Bohrung setzen", nicht „OK").
+- **Fokus beim Öffnen:** liegt im ersten Feld — Zahl, Auswahl oder Textfeld.
+- **Abgeschnittene Beschriftungen ohne Tooltip:** keine.
+- **Kleiner Bildschirm:** der größte Dialog braucht 970×555, passt also auf
+  1366×768.
+- **Zugriffstasten (`&`) je Menü:** keine Dublette in sechs Sprachen. Dass 160
+  Einträge keine führen, ist kein Fund: §19.2 nennt die Befehlspalette als
+  Universalzugang, und die hält ihr Versprechen aus §2.6 („alles aus dem
+  Register").
+
 ## Zwei Tabellen für dieselbe Sache (21.08.2026)
 
 Diesmal die Blickwinkel, die die beiden Durchgänge davor nicht hatten: die

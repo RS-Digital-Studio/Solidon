@@ -40,7 +40,7 @@ from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.core.scene import expressions
 from app.i18n import format_decimal, tr
-from app.ui.labels import deadline_date, value_line
+from app.ui.labels import NumberSpin, deadline_date, value_line
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.style import set_level
 
@@ -137,7 +137,7 @@ class CalibrationDialog(QDialog):
             ("elephant_foot", tr("Elefantenfuß")),
             ("shrinkage", tr("Schwindung")),
         ):
-            editor = QDoubleSpinBox(self)
+            editor = NumberSpin(self)
             # Die Schwindung ist ein Anteil, kein Maß: „0,004" trug deshalb
             # als Einziges keine Einheit und sagte niemandem etwas. Als
             # Prozentwert liest sie sich — 0,4 % ist eine Zahl, die man aus
@@ -220,7 +220,7 @@ class ParameterDialog(QDialog):
 
         self.name_field = QLineEdit(self)
         self.name_field.setPlaceholderText(tr("zum Beispiel breite"))
-        self.value_field = QDoubleSpinBox(self)
+        self.value_field = NumberSpin(self)
         self.value_field.setDecimals(3)
         self.value_field.setRange(-100_000.0, 100_000.0)
         self.unit_field = QLineEdit("mm", self)

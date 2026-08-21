@@ -467,6 +467,8 @@ def test_the_probe_says_what_a_useless_model_means(
 
 
 def test_the_summary_names_what_would_change(qt_app: QApplication) -> None:
+    from PySide6.QtCore import QLocale
+
     from app.core.agent.proposal import Proposal
     from app.core.geom.difference import Difference, SceneDifference
 
@@ -477,11 +479,25 @@ def test_the_summary_names_what_would_change(qt_app: QApplication) -> None:
     proposal = Proposal(request="x")
     proposal.drafts.append(object())  # type: ignore[arg-type]
 
-    text = describe(ProposalPreview(proposal=proposal, difference=difference))
+    # **Die Sprache festgenagelt, nicht geerbt.** Die Zahl geht durch
+    # ``localised`` und trägt damit das Trennzeichen der Anzeigesprache. Ohne
+    # diese Zeile prüfte der Test die Spracheinstellung der Maschine: auf einem
+    # deutschen Windows stand hier ein Komma, in der CI ein Punkt, und grün war
+    # er nur an einem der beiden Orte.
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale("de"))
+        text = describe(ProposalPreview(proposal=proposal, difference=difference))
 
-    assert "Operation" in text
-    assert "+2.00 cm³" in text
-    assert "-0.50 cm³" in text
+        assert "Operation" in text
+        assert "+2,00 cm³" in text
+        assert "-0,50 cm³" in text
+
+        QLocale.setDefault(QLocale("en"))
+        english = describe(ProposalPreview(proposal=proposal, difference=difference))
+        assert "+2.00 cm³" in english
+    finally:
+        QLocale.setDefault(before)
 
 
 def test_the_proposal_shows_its_costs_and_questions(qt_app: QApplication) -> None:

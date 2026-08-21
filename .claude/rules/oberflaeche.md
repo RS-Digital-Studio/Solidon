@@ -40,8 +40,16 @@ und die Felder daneben heißen „Skirt-Runden", „Brim-Breite",
 „Raft-Schichten" — ein Wert, der anders heißt als sein Feld, ist eine Fährte
 ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
-**Jedes Feld sagt, was es tut — und zwar alle.** Die sechsundfünfzig Felder
-der Druckeinstellungen tragen je einen `note`-Satz: nicht den Titel noch
+**Jedes Feld sagt, was es tut — und zwar alle.** Das gilt an zwei Orten: Die
+sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz, die
+457 Parameter der 86 Operationen ihren `doc`-Satz aus dem Register. Beide Male
+hängt er an **beiden** Hälften der Zeile; im Operationsdialog holt
+`QFormLayout.labelForField` die Beschriftung, die `addRow` aus der Zeichenkette
+gebaut hat (`_explain` in `op_dialog.py`). Ist eine Zeile gesperrt, tragen beide
+Hälften den *Grund* statt des Satzes — in ein ausgegrautes Feld zeigt niemand,
+man zeigt auf das Wort davor.
+
+Die sechsundfünfzig Felder der Druckeinstellungen tragen je einen `note`-Satz: nicht den Titel noch
 einmal, sondern was passiert, wenn man den Wert bewegt („Rechnet die Außenwand
 auf ihr Sollmaß statt auf die Bahnmitte. Für Passungen richtig, sonst
 unnötig."). Der Satz gehört an **beide** Hälften der Zeile — `_editor` setzt
@@ -60,6 +68,33 @@ Wörter, wo ein Wort nichts zeigt: die Texturmuster tragen ihre Kachel aus
 Namen. Ein Fehler endet nie mit „fehlgeschlagen": erst was nicht ging, dann
 warum, dann was jetzt möglich ist, als anklickbare Handlungen (§2.7). Kein
 Stapelabzug im Nutzerdialog.
+
+## Zahlen
+
+**Eine Zahl, eine Schreibweise — in beiden Richtungen.**
+
+*Hinaus:* Der Kern rechnet und schreibt mit Punkt, das ist richtig; dort ist
+eine Zahl ein Wert. Wer sie **anzeigt**, schickt sie durch `localised`
+(`app/ui/labels.py`). Neun Stellen taten das nicht, und keine war auf eine
+Sprache beschränkt: Die Parameterleiste schrieb im deutschen Fenster
+„12.50 mm" neben ein Eingabefeld mit „12,50", der Chat „+1.25 cm³", die
+Kalibrierung „Spiel 0.25 mm". Zwei setzten umgekehrt das Komma fest ein und
+zeigten im englischen Fenster „8,4 g". `test_no_number_reaches_the_user_past_
+the_localisation` prüft jede Datei unter `app/ui`; wer eine Kommazahl in einen
+Anzeigetext schreibt, kommt daran nicht vorbei.
+
+`localised` tauscht **jeden** Punkt. Um eine Zahl darf es liegen, um einen
+Pfad, eine Adresse oder eine Fassungsnummer nie — dafür gibt es
+`localised_value`, das prüft, ob überhaupt eine Zahl dasteht.
+
+*Herein:* Ein Zahlenfeld ist eine `NumberSpin` (oder eine `LengthSpin`
+darauf), **kein nacktes `QDoubleSpinBox`**. Qt liest den Punkt in einer
+deutschen Anzeigesprache als Tausendertrennung: Wer „12.5" tippte, bekam 125 —
+ohne Fehler, ohne Rückfrage, ein Teil zehnmal zu groß. `NumberSpin` liest
+beide Trennzeichen als Komma; verloren geht die Tausendertrennung bei der
+Eingabe, und das ist die kleinere Not, weil nie eine angezeigt wird. Als
+Typprüfung bleibt `QDoubleSpinBox` richtig — `isinstance` fragt „ist das ein
+Dezimalfeld", nicht „ist das unsere Unterklasse".
 
 ## Rückmeldung und Fehlerbericht
 

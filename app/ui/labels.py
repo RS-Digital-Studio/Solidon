@@ -91,7 +91,49 @@ def display_unit() -> LengthUnit:
     return _DISPLAY_UNIT
 
 
-class LengthSpin(QDoubleSpinBox):
+class NumberSpin(QDoubleSpinBox):
+    """Ein Zahlenfeld, dem beide Trennzeichen dasselbe bedeuten.
+
+    **Wer im deutschen Fenster „12.5" tippte, bekam 125.** Ohne Fehler, ohne
+    Rückfrage: Qt liest den Punkt in einer deutschen Anzeigesprache als
+    Tausendertrennung, und aus zwölf ein halb wurden hundertfünfundzwanzig
+    Millimeter. Im englischen Fenster genau umgekehrt — „12,5" wurde 125. Ein
+    Maß, das aus einem Datenblatt, einer Fundstelle im Netz oder der Gewohnheit
+    des Nutzers kommt, trägt das Trennzeichen von dort und nicht das der
+    Oberfläche.
+
+    Beide Zeichen heißen hier Komma. Was dabei verloren geht, ist die
+    Tausendertrennung bei der *Eingabe*: „1.000" sind ab jetzt eins, nicht
+    tausend. Das ist die kleinere Not — angezeigt wird ohnehin nie mit
+    Tausendertrennung (``setGroupSeparatorShown`` steht auf falsch), also gibt
+    es keine Schreibweise, die das Feld vormacht und dann nicht liest.
+    ``DragValueBar.typed_value`` im Viewport entscheidet seit je genauso.
+
+    Getauscht wird zeichenweise und damit **längentreu**: Die Einfügemarke
+    bleibt dort stehen, wo sie war, und niemand tippt in ein springendes Feld.
+
+    **Zwei Überschreibungen, zwei Wege.** ``validate`` deckt alles ab, was
+    durch das Eingabefeld geht — Tippen, Einfügen, ``setText`` —, und weil es
+    den getauschten Text zurückgibt, steht danach die Schreibweise der
+    Sprache da. ``valueFromText`` deckt den Aufruf ohne diesen Weg ab; Qt
+    ruft es selbst, und wer die Klasse benutzt, darf sich auf beide
+    verlassen.
+    """
+
+    def _as_shown(self, text: str) -> str:
+        """Dasselbe Maß mit dem Trennzeichen der Anzeigesprache."""
+        separator = QLocale().decimalPoint()
+        other = "." if separator == "," else ","
+        return text.replace(other, separator)
+
+    def validate(self, text: str, pos: int) -> object:
+        return super().validate(self._as_shown(text), pos)
+
+    def valueFromText(self, text: str) -> float:  # noqa: N802 - Qt-Name
+        return super().valueFromText(self._as_shown(text))
+
+
+class LengthSpin(NumberSpin):
     """Ein Zahlenfeld für eine Länge — außen die Anzeigeeinheit, innen Millimeter.
 
     Die dreizehn Längenfelder der Leisten waren gewöhnliche ``QDoubleSpinBox``

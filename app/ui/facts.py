@@ -23,6 +23,7 @@ from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 from app.core.slice.estimate import Estimate
 from app.i18n import tr
+from app.ui.labels import localised
 from app.ui.style import NORMAL, set_level
 
 
@@ -46,7 +47,7 @@ def mass(grams: float) -> str:
     kürzere liest sich im Vorbeigehen.
     """
     if grams < 10.0:
-        return tr("{grams} g").format(grams=f"{grams:.1f}".replace(".", ","))
+        return tr("{grams} g").format(grams=localised(f"{grams:.1f}"))
     return tr("{grams} g").format(grams=f"{grams:.0f}")
 
 

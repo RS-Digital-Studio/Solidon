@@ -14,6 +14,7 @@ Palettenwörterbuch gescheitert, das neben der Menüleiste stand.
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 import pytest
@@ -536,3 +537,278 @@ def test_a_length_field_announces_millimetres(qt_app: object) -> None:
 
     assert raw == [pytest.approx(1.0)], "das rohe Signal trägt weiter die Anzeige"
     assert millimetres == [pytest.approx(25.4)], "das andere trägt, was der Kern braucht"
+
+
+# --- Dieselbe Zahl, eine Schreibweise -----------------------------------------------
+
+#: Ein Zahlenformat mit Nachkommastelle. ``.0f`` bleibt draußen: ohne Stelle
+#: hinter dem Trennzeichen steht dort keines, das falsch sein könnte. ``.{``
+#: fängt die berechneten Formate (``f"{x:.{digits}f}"``) mit — wie viele Stellen
+#: es werden, weiß der Test nicht, also gilt der ungünstige Fall.
+DECIMAL_FORMAT = re.compile(r"\.\{|\.[1-9]\d*f")
+
+#: Die Funktionen, die aus einer Zahl Anzeigetext machen.
+LOCALISERS = frozenset({"localised", "localised_value"})
+
+#: Zahlen, die niemand *liest*: Sie gehen als Ausdruck in die
+#: Parametergrammatik (§13), und die kennt allein den Punkt —
+#: ``expressions.evaluate("30,25")`` lehnt mit „Nach dem Ausdruck steht noch
+#: etwas" ab. Beide Stellen füllen dasselbe Maßfeld des Skizzeneditors vor.
+GRAMMAR_NOT_LABEL = frozenset({"measured_expression", "place_measured"})
+
+
+class _Numbers(ast.NodeVisitor):
+    """Sammelt Kommazahlen, die **nicht** durch ``localised`` gehen."""
+
+    def __init__(self) -> None:
+        self.inside = 0
+        self.functions: list[str] = []
+        self.loose: list[tuple[int, str]] = []
+
+    def visit_Call(self, node: ast.Call) -> None:
+        name = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", "")
+        localising = name in LOCALISERS
+        self.inside += int(localising)
+        self.generic_visit(node)
+        self.inside -= int(localising)
+
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        self.functions.append(node.name)
+        self.generic_visit(node)
+        self.functions.pop()
+
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        self.functions.append(node.name)
+        self.generic_visit(node)
+        self.functions.pop()
+
+    def visit_JoinedStr(self, node: ast.JoinedStr) -> None:
+        for part in node.values:
+            if not isinstance(part, ast.FormattedValue) or part.format_spec is None:
+                continue
+            spec = ast.unparse(part.format_spec)
+            if not DECIMAL_FORMAT.search(spec):
+                continue
+            if self.inside:
+                continue
+            if self.functions and self.functions[-1] in GRAMMAR_NOT_LABEL:
+                continue
+            self.loose.append((node.lineno, spec))
+        self.generic_visit(node)
+
+
+@pytest.mark.parametrize(
+    "path",
+    sorted((Path(__file__).resolve().parents[1] / "app" / "ui").rglob("*.py")),
+    ids=lambda path: path.name,
+)
+def test_no_number_reaches_the_user_past_the_localisation(path: Path) -> None:
+    """Zwei Schreibweisen derselben Zahl in einem Blick (§19.3).
+
+    ``localised`` gibt es, seit die Maße im Objektbaum mit Punkt neben einem
+    Eingabefeld mit Komma standen. Neun weitere Stellen gingen daran vorbei,
+    und keine davon war auf eine Sprache beschränkt: Die Parameterleiste
+    schrieb im deutschen Fenster „12.50 mm" direkt neben ein Feld mit „12,50",
+    der Chat „+1.25 cm³", die Kalibrierung „Spiel 0.25 mm". Zwei Stellen
+    setzten umgekehrt das Komma fest ein — Masse und Maßband zeigten im
+    englischen Fenster „8,4 g" und „12,50", wo alles andere einen Punkt trug.
+
+    Geprüft wird das Format und nicht das Ergebnis: Wer eine Kommazahl in einen
+    Anzeigetext schreibt, schickt sie durch ``localised``. Was in einen
+    Ausdruck geht, ist keine Anzeige und steht in ``GRAMMAR_NOT_LABEL``.
+    """
+    visitor = _Numbers()
+    visitor.visit(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
+
+    offenders = [f"{path.name}:{line} {spec}" for line, spec in visitor.loose]
+    assert not offenders, "Kommazahl ohne localised():\n" + "\n".join(offenders)
+
+
+def test_the_separator_check_would_catch_a_violation() -> None:
+    """Ein Wächter für die Prüfung darüber: ein grüner Lauf soll etwas heißen."""
+
+    def loose(source: str) -> list[tuple[int, str]]:
+        visitor = _Numbers()
+        visitor.visit(ast.parse(source))
+        return visitor.loose
+
+    assert loose('label.setText(f"{value:.2f} mm")'), "eine nackte Kommazahl ist ein Fund"
+    assert not loose('label.setText(localised(f"{value:.2f} mm"))'), "durch localised: kein Fund"
+    assert not loose('label.setText(f"{value:.0f} mm")'), "ohne Nachkommastelle kein Trennzeichen"
+    assert loose('label.setText(f"{value:.{digits}f}")'), "berechnete Stellen gelten als Fund"
+    assert not loose("def measured_expression():\n    return f'{value:.2f}'"), (
+        "ein Ausdruck der Parametergrammatik ist keine Anzeige"
+    )
+    assert loose("def other():\n    return f'{value:.2f}'"), (
+        "und die Ausnahme gilt nur für die zwei benannten Stellen"
+    )
+
+
+def test_a_mass_follows_the_language(qt_app: object) -> None:
+    """„8,4 g" im englischen Fenster — das Komma stand hier fest im Code.
+
+    Zu sehen war es nicht, solange man deutsch prüfte: ``.replace(".", ",")``
+    trifft in fünf von sechs Sprachen zufällig das Richtige.
+    """
+    from PySide6.QtCore import QLocale
+
+    from app.ui import facts
+
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale("en"))
+        assert facts.mass(8.4) == "8.4 g"
+        QLocale.setDefault(QLocale("de"))
+        assert facts.mass(8.4) == "8,4 g"
+        assert facts.mass(18.4) == "18 g", "über zehn Gramm gibt es keine Stelle zu tauschen"
+    finally:
+        QLocale.setDefault(before)
+
+
+def test_the_drag_bar_follows_the_language(qt_app: object) -> None:
+    """Dasselbe am Maßband, das beim Ziehen mitläuft — und dort tippt jemand hinein.
+
+    Das Feld liest Punkt *und* Komma (``typed_value``), es zeigte aber immer ein
+    Komma. Wer englisch arbeitet, sah eine Schreibweise, die er selbst nie
+    eintippt.
+    """
+    from PySide6.QtCore import QLocale
+    from PySide6.QtWidgets import QWidget
+
+    from app.ui.viewport import DragValueBar
+
+    before = QLocale()
+    parent = QWidget()
+    try:
+        bar = DragValueBar(parent)
+        QLocale.setDefault(QLocale("en"))
+        bar.follow("Höhe", 12.5, "mm", 2)
+        assert bar.value.text() == "12.50"
+        QLocale.setDefault(QLocale("de"))
+        bar.follow("Höhe", 12.5, "mm", 2)
+        assert bar.value.text() == "12,50"
+    finally:
+        QLocale.setDefault(before)
+        parent.deleteLater()
+
+
+def test_the_chat_line_follows_the_language(qt_app: object) -> None:
+    """Und im Chat, wo die Zahl mitten in einem Satz steht."""
+    from types import SimpleNamespace
+
+    from PySide6.QtCore import QLocale
+
+    from app.core.agent.proposal import Proposal
+    from app.core.geom.difference import Difference, SceneDifference
+    from app.ui.chat import describe
+
+    # Vorschlag und Differenz sind die echten Klassen — eine Attrappe mit den
+    # drei Feldern, die ``describe`` heute liest, wäre beim vierten still
+    # falsch. Nur die Vorschau selbst ist eine Hülle: Sie hat keinen Typ, und
+    # ``describe`` fragt sie mit ``getattr``.
+    preview = SimpleNamespace(
+        proposal=Proposal(request="ein Loch"),
+        difference=SceneDifference(entries={"obj_1": Difference("obj_1", added_volume=1250.0)}),
+    )
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale("de"))
+        assert "+1,25 cm³" in describe(preview)
+        QLocale.setDefault(QLocale("en"))
+        assert "+1.25 cm³" in describe(preview)
+    finally:
+        QLocale.setDefault(before)
+
+
+# --- Und dieselbe Zahl eingetippt -------------------------------------------------
+
+
+@pytest.mark.parametrize("language", ["de", "en", "fr"])
+@pytest.mark.parametrize("typed", ["12.5", "12,5"])
+def test_a_number_field_takes_either_separator(qt_app: object, language: str, typed: str) -> None:
+    """**„12.5" im deutschen Fenster ergab 125.** Ohne Fehler, ohne Rückfrage.
+
+    Qt liest den Punkt in einer deutschen Anzeigesprache als Tausendertrennung.
+    Wer ein Maß aus einem Datenblatt, einer Fundstelle im Netz oder der eigenen
+    Gewohnheit eintippt, bekam ein Teil, das zehnmal zu groß ist — und nichts
+    sagte es ihm. Im englischen Fenster genauso, nur mit dem Komma.
+
+    Geprüft wird über Tastendrücke und nicht über ``setValue``: Der Fehler
+    saß im Weg vom Text zum Wert, und den nimmt ``setValue`` nicht.
+    """
+    from PySide6.QtCore import QLocale
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import NumberSpin
+
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale(language))
+        field = NumberSpin()
+        field.setDecimals(2)
+        field.setRange(0.0, 1000.0)
+        field.setValue(0.0)
+        field.show()
+
+        field.lineEdit().selectAll()
+        QTest.keyClicks(field.lineEdit(), typed)
+        field.interpretText()
+
+        assert field.value() == pytest.approx(12.5), (
+            f"{typed!r} in {language} wurde {field.value()}"
+        )
+        # Beide Überschreibungen zählen: ``validate`` fängt das Tippen, das
+        # Einfügen und ``setText`` — ``valueFromText`` den direkten Aufruf, den
+        # Qt selbst tut, wenn der Text nicht durch die Prüfung ging.
+        assert field.valueFromText(typed) == pytest.approx(12.5)
+    finally:
+        QLocale.setDefault(before)
+
+
+def test_a_length_field_takes_either_separator(qt_app: object) -> None:
+    """Dasselbe am Längenfeld, wo eine Zehnerpotenz Millimeter bedeutet."""
+    from PySide6.QtCore import QLocale
+    from PySide6.QtTest import QTest
+
+    from app.ui.labels import LengthSpin, set_display_unit
+
+    before = QLocale()
+    try:
+        set_display_unit("mm")
+        for language, typed in (("de", "12.5"), ("en", "12,5"), ("de", "12,5")):
+            QLocale.setDefault(QLocale(language))
+            field = LengthSpin()
+            field.set_range_mm(0.0, 1000.0)
+            field.show()
+
+            field.lineEdit().selectAll()
+            QTest.keyClicks(field.lineEdit(), typed)
+            field.interpretText()
+
+            assert field.value_mm() == pytest.approx(12.5), f"{typed!r} in {language}"
+    finally:
+        QLocale.setDefault(before)
+
+
+@pytest.mark.parametrize(
+    "path",
+    sorted((Path(__file__).resolve().parents[1] / "app" / "ui").rglob("*.py")),
+    ids=lambda path: path.name,
+)
+def test_no_surface_builds_a_bare_decimal_field(path: Path) -> None:
+    """Neun Felder waren gewöhnliche ``QDoubleSpinBox`` — und jedes las falsch.
+
+    Die Klasse bleibt als Typprüfung richtig (``isinstance(editor,
+    QDoubleSpinBox)`` fragt „ist das ein Dezimalfeld"), gebaut wird aber
+    ``NumberSpin``: Sonst kommt das nächste Feld wieder mit Qts Lesart, und die
+    Suche danach fängt von vorn an.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    bare = [
+        f"{path.name}:{node.lineno}"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "QDoubleSpinBox"
+    ]
+    assert not bare, "nacktes QDoubleSpinBox gebaut:\n" + "\n".join(bare)

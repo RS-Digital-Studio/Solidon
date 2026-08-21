@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 from app.core.agent.context import is_discarded
 from app.core.types import ChatEntry, Document
 from app.i18n import TranslatableText, _, tr
+from app.ui.labels import localised
 from app.ui.style import NORMAL, set_level
 
 #: Wie ein Beitrag markiert wird, damit die Rollen ohne Farbe
@@ -492,8 +493,10 @@ def describe(preview: Any) -> str:
     difference = getattr(preview, "difference", None)
     if difference is not None and difference.changed:
         parts.append(
-            f"+{difference.added_volume / 1000.0:.2f} cm³ / "
-            f"-{difference.removed_volume / 1000.0:.2f} cm³"
+            localised(
+                f"+{difference.added_volume / 1000.0:.2f} cm³ / "
+                f"-{difference.removed_volume / 1000.0:.2f} cm³"
+            )
         )
     return " · ".join(parts) or tr("Keine Änderung")
 
