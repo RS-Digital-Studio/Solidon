@@ -610,6 +610,114 @@ def parse_parameter_count(text: str) -> float | None:
         return None
 
 
+#: Modelle, die sich hier bewährt haben — Name, Größe des Downloads, und was
+#: die Messung ergeben hat. Die Namen stehen als Konstanten hier und kommen
+#: nie aus einer Antwort: an ihnen hängt ein Download.
+#:
+#: **Warum diese Liste überhaupt existiert.** Wer Ollama über den Knopf in der
+#: Liste der zusätzlichen Programme installiert hatte, stand danach vor einem
+#: Chat, der weiterhin nicht ging — Ollama bringt kein Modell mit, und der
+#: einzige Hinweis darauf war ein Satz mit „ollama pull" darin. Ein Modellname
+#: allein hilft dabei nicht: Zwischen 5 und 9 GB Download liegt eine
+#: Entscheidung, und ob es Werkzeuge aufruft, ist die eigentliche Frage.
+OLLAMA_SUGGESTIONS: Final = (
+    ("qwen3:14b", 9.3, _("Bewährt: vier von fünf Werkzeugaufrufen. Braucht 16 GB Grafikspeicher.")),
+    ("qwen3:8b", 5.2, _("Kleiner und schneller, trifft seltener. Für kurze Anweisungen.")),
+    (
+        "llama3.1:8b",
+        4.9,
+        _("Zwei von fünf Werkzeugaufrufen — nur, wenn die anderen nicht laufen."),
+    ),
+)
+
+#: Ein Download von mehreren Gigabyte. Die Grenze ist großzügig, weil eine
+#: langsame Leitung sonst mitten im Modell aufgibt.
+PULL_TIMEOUT_SECONDS = 7200.0
+
+PullProgress = Callable[[str, float], None]
+"""``schritt, anteil -> None``. Der Anteil ist 0…1, oder -1 für „unbekannt"."""
+
+
+def installed_models(url: str | None = None, fetch: Fetch = _get_json) -> tuple[str, ...]:
+    """Welche Modelle bei Ollama liegen. Leer, wenn es nicht antwortet.
+
+    Für die Auswahl im Einrichtungsdialog: Ein Feld, in das man den Namen
+    tippt, setzt voraus, dass man ihn kennt.
+    """
+    address = (url or _configured_ollama_url()).replace("/api/chat", "/api/tags")
+    try:
+        answer = fetch(address)
+    except (OSError, ValueError):
+        return ()
+    return tuple(
+        str(entry.get("name", "")) for entry in answer.get("models", ()) if entry.get("name")
+    )
+
+
+def pull_model(
+    model: str,
+    url: str | None = None,
+    progress: PullProgress | None = None,
+    cancelled: Callable[[], bool] | None = None,
+) -> TranslatableText | None:
+    """Ein Modell holen. ``None`` heißt: es liegt jetzt da.
+
+    Ollama antwortet auf ``/api/pull`` mit einer Zeile JSON je Zustand, und
+    beim Herunterladen tragen die Zeilen ``total`` und ``completed`` — daraus
+    entsteht ein echter Prozentwert und nicht der unbestimmte Balken, mit dem
+    ein Vorgang von neun Gigabyte aussieht wie ein Hänger.
+
+    **Der Modellname wird nicht geprüft, sondern eingesetzt.** Er kommt aus
+    :data:`OLLAMA_SUGGESTIONS` oder von dem, der ihn tippt — nie aus einer
+    Modellantwort. Was Ollama daraus macht, ist seine Sache; ein unbekannter
+    Name kommt als Fehlermeldung zurück und nicht als Download.
+    """
+    address = (url or _configured_ollama_url()).replace("/api/chat", "/api/pull")
+    body = json.dumps({"model": model, "stream": True}).encode("utf-8")
+    request = urllib.request.Request(
+        address, data=body, headers={"Content-Type": "application/json"}
+    )
+    _log.info("pulling ollama model %s", model)
+    try:
+        with urllib.request.urlopen(request, timeout=PULL_TIMEOUT_SECONDS) as answer:
+            for raw in answer:
+                if cancelled is not None and cancelled():
+                    # Ollama räumt einen abgebrochenen Zug selbst auf und
+                    # behält, was schon geladen ist — ein zweiter Versuch
+                    # setzt fort, statt neu anzufangen.
+                    _log.info("pull of %s cancelled", model)
+                    return _("Abgebrochen. Ein neuer Versuch setzt fort, wo dieser aufgehört hat.")
+                line = raw.decode("utf-8", errors="replace").strip()
+                if not line:
+                    continue
+                try:
+                    entry = dict(json.loads(line))
+                except ValueError:
+                    continue
+                if entry.get("error"):
+                    return _("Ollama hat den Namen nicht angenommen.")
+                if progress is not None:
+                    progress(str(entry.get("status", "")), _share(entry))
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")[:200]
+        _log.warning("pull of %s refused: %s", model, detail)
+        return _("Ollama hat den Namen nicht angenommen.")
+    except (OSError, urllib.error.URLError):
+        return _("Ollama hat nicht geantwortet — läuft es noch?")
+    return None
+
+
+def _share(entry: dict[str, Any]) -> float:
+    """Der Anteil aus einer Fortschrittszeile, oder -1, wenn sie keinen trägt."""
+    total = entry.get("total")
+    done = entry.get("completed")
+    if not isinstance(total, int | float) or not total:
+        return -1.0
+    if not isinstance(done, int | float):
+        return -1.0
+    return max(0.0, min(1.0, float(done) / float(total)))
+
+
 def ollama_size_warning(
     model: str, url: str | None = None, fetch: Fetch = _get_json
 ) -> TranslatableText | None:

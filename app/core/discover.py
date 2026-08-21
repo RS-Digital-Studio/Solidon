@@ -129,6 +129,53 @@ def forget_cache() -> None:
     _cache.clear()
 
 
+def refresh_path() -> bool:
+    """Den PATH dieses Prozesses aus der Registry nachlesen (nur Windows).
+
+    **Das ist der Grund, warum „nach einem Neustart" dastand.** Ein
+    Installationsprogramm schreibt seinen Ordner in die Umgebung des
+    *Systems*; der laufende Prozess hat seine Kopie beim Start bekommen und
+    sieht die Änderung nie. Die Liste meldete deshalb „Installiert — nach
+    einem Neustart von Solidon ist es zu sehen", und wer eben noch einen Knopf
+    gedrückt hatte, sollte die Anwendung schließen.
+
+    Nachgelesen werden beide Hälften, wie Windows sie selbst zusammensetzt:
+    die des Rechners und die des Benutzers. Was schon im PATH steht, bleibt
+    vorn — eine ``.venv``, die den Interpreter stellt, darf nicht hinter eine
+    Systeminstallation rutschen.
+
+    Gibt zurück, ob sich etwas geändert hat.
+    """
+    if sys.platform != "win32":
+        return False
+    import winreg
+
+    places = (
+        (
+            winreg.HKEY_LOCAL_MACHINE,
+            r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+        ),
+        (winreg.HKEY_CURRENT_USER, "Environment"),
+    )
+    parts: list[str] = []
+    for root, key_path in places:
+        try:
+            with winreg.OpenKey(root, key_path) as key:
+                value = winreg.QueryValueEx(key, "Path")[0]
+        except OSError:
+            continue
+        parts.extend(os.path.expandvars(str(value)).split(os.pathsep))
+
+    before = os.environ.get("PATH", "")
+    known = before.split(os.pathsep)
+    added = [entry for entry in parts if entry and entry not in known]
+    if not added:
+        return False
+    os.environ["PATH"] = os.pathsep.join([*known, *added])
+    _log.info("PATH picked up %d new folders without a restart", len(added))
+    return True
+
+
 def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
     """Wo dieses Programm liegt, oder ``None``. Reihenfolge siehe Modulkopf."""
     chosen = remembered(tool_id)

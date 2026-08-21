@@ -90,6 +90,9 @@ app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
               print_settings.py löst Stufe + Material + Drucker auf
   agent/      LLM-Schicht: Sitzung, Vorschlag als eine Transaktion, Prüfungen
   backends/   LLM, OpenSCAD, Mesh-Erzeuger — alles extern, alles abschaltbar
+              comfy_setup.py richtet ein fremdes ComfyUI für Weg 3 ein,
+              data/comfyui/ sind die Knoten dazu (TripoSG, MIT): beides im
+              Kern, weil tools/ im gebauten Paket nicht mitreist
   export/     STL/3MF/STEP, Plattenbelegung, Übergabe an den Slicer
               (handover.py ruft ihn, slicer_keys.py übersetzt die Namen)
   activation/ Freischaltung: Testlauf, Schlüssel, Demo-Frist (store.py)
@@ -104,9 +107,6 @@ app/images/   Bildschirmfotos fürs Handbuch, je Sprache ein Ordner
 app/cli/      Kommandozeile auf core
 tests/        eine Datei je Testart, data/ ist der Referenzkorpus
 tools/        Hilfsprogramme, nicht Teil der Anwendung
-  comfyui/    die ComfyUI-Knoten für Weg 3 (TripoSG, MIT) — sie leben hier
-              und nicht in ComfyUI, damit sie mitversioniert sind;
-              tools/setup_comfyui.py legt sie hinüber
 website/      öffentliche Seiten; handbuch.html und en/manual.html erzeugt
               tools/make_manual.py, die Rechtstexte tools/make_legal.py,
               robots/sitemap/llms tools/make_seo.py — der Rest von Hand

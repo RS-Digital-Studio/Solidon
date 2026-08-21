@@ -419,8 +419,11 @@ def test_the_key_dialog_offers_the_local_model_too(
     monkeypatch.setattr(keys, "_keyring", lambda: None)
     dialog = KeyDialog()
 
-    assert dialog.model_field.text() == llm.configured_ollama_model()
-    assert dialog.probe_button.isEnabled()
+    assert dialog._chosen_model() == llm.configured_ollama_model()
+    # Die Empfehlungen stehen zur Auswahl: Wer den Namen tippen soll, muss ihn
+    # kennen, und ein Textfeld setzte genau das voraus.
+    offered = {dialog.model_field.itemData(index) for index in range(dialog.model_field.count())}
+    assert {name for name, _size, _what in llm.OLLAMA_SUGGESTIONS} <= offered
 
 
 def test_the_key_dialog_remembers_the_model_without_a_key(
@@ -434,7 +437,7 @@ def test_the_key_dialog_remembers_the_model_without_a_key(
 
     monkeypatch.setattr(keys, "_keyring", lambda: None)
     dialog = KeyDialog()
-    dialog.model_field.setText("qwen3:14b")
+    dialog.model_field.setEditText("qwen3:14b")
     dialog._save()
 
     assert llm.configured_ollama_model() == "qwen3:14b"
@@ -625,3 +628,155 @@ def test_the_starters_step_aside_once_the_talk_begins(qt_app: QApplication) -> N
     panel.show_document(document)
 
     assert not panel.starters.isVisibleTo(panel)
+
+
+def test_the_key_dialog_walks_the_three_steps_to_a_local_model(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Installieren war ein Knopf, die zwei Schritte danach waren zwei Sätze.
+
+    Ollama bringt kein Modell mit und läuft nach der Installation nicht
+    zwangsläufig. Die Auskunft dazu lautete „«ollama serve» startet es" und
+    „«ollama pull» mit dem Modellnamen holt es" — an jemanden gerichtet, der in
+    einem Fenster sitzt. Geprüft wird, dass jeder der drei Zustände seinen
+    eigenen Satz und den Knopf dazu hat.
+    """
+    from app.core import tools
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    ollama = tools.by_id("ollama")
+    assert ollama is not None
+
+    seen: dict[str, tuple[str, str, bool]] = {}
+    for name, state in (
+        ("running", tools.ToolState(tool=ollama, path=None, running=True)),
+        ("installed", tools.ToolState(tool=ollama, path=Path("ollama.exe"), running=False)),
+        ("absent", tools.ToolState(tool=ollama, path=None, running=False)),
+    ):
+        monkeypatch.setattr(tools, "state_of", lambda _tool, found=state: found)
+        dialog = KeyDialog()
+        seen[name] = (
+            dialog.service_state.text(),
+            dialog.service_button.text(),
+            dialog.pull_button.isEnabled(),
+        )
+
+    assert "läuft" in seen["running"][0]
+    assert seen["running"][2], "läuft es, kann ein Modell geholt werden"
+
+    assert "läuft aber nicht" in seen["installed"][0]
+    assert "starten" in seen["installed"][1], "der Knopf tut, was der Satz nennt"
+    assert not seen["installed"][2], "ohne laufenden Dienst gibt es nichts zu holen"
+
+    assert "nicht installiert" in seen["absent"][0]
+    assert "Programme" in seen["absent"][1], "von hier führt der Weg in die Liste"
+
+
+def test_the_pull_shows_a_share_and_a_way_out(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Neun Gigabyte brauchen einen Prozentwert und einen Ausgang (§2.8).
+
+    Gefahren wird der ganze Weg — Knopf, Arbeiter, Signal über die
+    Thread-Grenze —, nicht der Slot allein: Ob ``step`` überhaupt verbunden
+    ist, ist genau die Hälfte dessen, was hier zu prüfen ist.
+    """
+    from app.core.backends import keys, llm
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+
+    class Tags:
+        """Die Modell-Liste, die derselbe Dialog beim Aufbau abfragt."""
+
+        def read(self) -> bytes:
+            return b'{"models": []}'
+
+    class Server:
+        """Ollama, so weit der Dialog es anspricht: Liste und Download.
+
+        Beides über denselben ``urlopen``, also unterscheidet der Server nach
+        Adresse — sonst bekäme die Modell-Liste den Zeilenstrom des Downloads.
+        """
+
+        lines = (
+            b'{"status":"pulling manifest"}\n',
+            b'{"status":"pulling 1a2b","total":1000,"completed":420}\n',
+            b'{"status":"success"}\n',
+        )
+
+        def __init__(self) -> None:
+            self.asking_for_tags = False
+
+        def __call__(self, request: object, timeout: float = 0.0) -> object:
+            self.asking_for_tags = "/api/tags" in str(getattr(request, "full_url", ""))
+            return self
+
+        def __enter__(self) -> object:
+            return Tags() if self.asking_for_tags else iter(self.lines)
+
+        def __exit__(self, *_args: object) -> None:
+            return None
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", Server())
+    dialog = KeyDialog()
+    dialog.pull_button.setEnabled(True)
+
+    dialog.pull_button.click()
+    assert dialog.pull_button.text() == "Abbrechen", "ein langer Vorgang hat einen Ausgang"
+    for _ in range(200):
+        qt_app.processEvents()
+        if dialog._pull is None:
+            break
+        dialog._pull.wait(20)
+    qt_app.processEvents()
+
+    assert dialog.pull_progress.isHidden(), "danach ist der Balken weg"
+    assert dialog.pull_button.text() == "Modell holen", "der Knopf ist wieder der, der es holt"
+    assert "liegt jetzt hier" in dialog.probe_result.text()
+
+
+def test_a_pull_step_without_numbers_claims_no_percentage(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„pulling manifest" trägt keine Größe — dann steht der Balken unbestimmt.
+
+    Eine erfundene Prozentzahl wäre schlimmer als keine: Sie behauptet einen
+    Fortschritt, den niemand gemessen hat.
+    """
+    from app.core.backends import keys
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+
+    dialog._pull_step("pulling manifest", -1.0)
+    assert dialog.pull_progress.maximum() == 0, "ohne Zahl ein unbestimmter Balken"
+    assert "%" not in dialog.probe_result.text()
+
+    dialog._pull_step("pulling 1a2b", 0.42)
+    assert dialog.pull_progress.value() == 42
+    assert "42" in dialog.probe_result.text(), "die Zahl steht neben dem Balken, nicht darin"
+
+
+def test_a_suggested_entry_hands_over_the_name_and_not_its_line(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Eintrag trägt Größe und Bewertung — als Modellname wäre das falsch.
+
+    „qwen3:14b — 9,3 GB, Bewährt: …" ist ein Name, den Ollama nicht kennt: der
+    Download endete mit „Ollama hat den Namen nicht angenommen".
+    """
+    from app.core.backends import keys, llm
+    from app.ui.dialogs import KeyDialog
+
+    monkeypatch.setattr(keys, "_keyring", lambda: None)
+    dialog = KeyDialog()
+    index = dialog.model_field.findData(llm.DEFAULT_OLLAMA_MODEL)
+    assert index >= 0
+    dialog.model_field.setCurrentIndex(index)
+
+    assert dialog._chosen_model() == llm.DEFAULT_OLLAMA_MODEL
+    assert " — " in dialog.model_field.currentText(), "die Zeile erklärt, der Name nicht"

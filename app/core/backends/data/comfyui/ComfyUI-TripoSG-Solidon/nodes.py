@@ -245,7 +245,7 @@ class TripoSGImageToMesh:
         prepared = _framed(_as_pil(image, mask), crop_margin, background=255)
         device = mm.get_torch_device()
 
-        def rechnen(schritte: int) -> tuple[np.ndarray, np.ndarray]:
+        def sample(step_count: int) -> tuple[np.ndarray, np.ndarray]:
             # Der Zufallsgeber wird jedes Mal neu gesetzt: Er führt einen
             # Zustand, und ein zweiter Lauf auf demselben Objekt wäre sonst
             # ein anderer — genau das, was ein gespeicherter Startwert
@@ -253,7 +253,7 @@ class TripoSGImageToMesh:
             generator = torch.Generator(device=device).manual_seed(int(seed))
             output = pipeline(
                 image=prepared,
-                num_inference_steps=schritte,
+                num_inference_steps=step_count,
                 guidance_scale=float(guidance_scale),
                 generator=generator,
                 # Der hierarchische Pfad braucht kein diso. Beide Tiefen ziehen
@@ -267,7 +267,7 @@ class TripoSGImageToMesh:
                 np.asarray(output.samples[0][1], dtype=np.int64),
             )
 
-        vertices, faces = rechnen(int(steps))
+        vertices, faces = sample(int(steps))
         _refuse_empty(vertices, faces, seed=int(seed), steps=int(steps))
 
         mesh = trimesh.Trimesh(vertices=vertices, faces=faces, process=False)

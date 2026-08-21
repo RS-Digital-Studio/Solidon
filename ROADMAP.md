@@ -51,6 +51,10 @@ bekommt einen roten Lauf.
 | Die Handlungen am Befund findet nur, wer rechtsklickt | Die Bedienung an der Uhr gemessen (21.08.2026) | eine Layoutentscheidung im rechten Bereich — eine Knopfzeile unter der Befundliste, die die Handlungen des gewählten Befunds zeigt |
 | Sechs von 86 Operationen führen ein Kürzel | Die Bedienung an der Uhr gemessen (21.08.2026) | eine Entscheidung des Bauplans: §19.2 sagt „kann", und die Palette lehrt nebenbei nur, was auch dasteht |
 | `label_text` füllt die Vorderseite bis an die Grenze | Die Bedienung an der Uhr gemessen (21.08.2026) | eine fachliche Entscheidung, welche der acht Werte nach hinten gehören — §2.4 spricht von zwei bis drei |
+| Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
+| Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
+| Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
+| Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 
 ---
 

@@ -379,3 +379,108 @@ def test_the_scripted_backend_answers_what_it_was_given() -> None:
 
     with pytest.raises(GenerationFailed):
         generator.text_to_mesh("etwas anderes")
+
+
+# --- ComfyUI einrichten (§27, §36) ------------------------------------------------
+
+
+def test_the_nodes_travel_with_the_application() -> None:
+    """Sie lagen unter ``tools/`` — und dorthin kommt ein Kunde nicht.
+
+    Die Anwendung wies auf „«python tools/setup_comfyui.py»" hin; im gebauten
+    Paket gibt es weder das Skript noch die Knoten daneben, denn ``tools/``
+    reist nicht mit. Jetzt liegen sie bei den Workflows, die sie ansprechen —
+    und der Eintrag der Spec für ``app/core/backends/data`` deckt beide.
+    """
+    from app.core.backends import comfy_setup
+
+    assert comfy_setup.NODE_SOURCE.is_dir(), "die Knoten fehlen in dieser Installation"
+    for name in ("nodes.py", "__init__.py"):
+        assert (comfy_setup.NODE_SOURCE / name).is_file(), name
+    # Neben den Workflows, nicht irgendwo: Was der Ablauf anspricht und was ihn
+    # ausführt, gehört in denselben Datenordner.
+    from app.core.backends import mesh as mesh_module
+
+    assert comfy_setup.NODE_SOURCE.is_relative_to(mesh_module.WORKFLOW_DIR)
+
+
+def test_no_text_the_user_reads_points_at_a_script_the_customer_lacks() -> None:
+    """Kein Oberflächentext nennt mehr ``tools/setup_comfyui.py``.
+
+    Zwei taten es: die Zeile der Liste der zusätzlichen Programme und der
+    Fehler, der meldet, dass die Knotensammlung fehlt. Beide sprachen zu
+    jemandem, der diese Datei nicht hat — sie reist im Paket nicht mit.
+
+    Geprüft werden die Texte, die durch ``_()`` oder ``tr()`` gehen, und nicht
+    der Quelltext: Die Kommentare, die diesen Fund erklären, nennen das Skript
+    weiterhin, und das sollen sie.
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent / "app"
+    for path in root.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Name):
+                continue
+            if node.func.id not in ("_", "tr"):
+                continue
+            for argument in node.args:
+                if isinstance(argument, ast.Constant) and isinstance(argument.value, str):
+                    assert "setup_comfyui" not in argument.value, path.name
+
+
+def test_setting_up_copies_the_nodes_and_says_each_step(tmp_path: Path) -> None:
+    """Vier Schritte, und jeder meldet sich — „das dauert" ist keine Auskunft."""
+    from app.core.backends import comfy_setup
+
+    comfyui = tmp_path / "ComfyUI"
+    (comfyui / "custom_nodes").mkdir(parents=True)
+    seen: list[str] = []
+
+    target = comfy_setup.copy_nodes(comfyui, progress=lambda step: seen.append(str(step)))
+
+    assert (target / "nodes.py").is_file()
+    assert target.name == comfy_setup.NODE_NAME
+    assert seen, "der Schritt meldet sich"
+
+
+def test_a_folder_without_custom_nodes_is_not_comfyui(tmp_path: Path) -> None:
+    """Und der Satz sagt, woran man es erkennt — nicht bloß „nicht gefunden"."""
+    from app.core.backends import comfy_setup
+
+    with pytest.raises(comfy_setup.SetupFailed) as raised:
+        comfy_setup.find_comfyui(tmp_path)
+
+    assert "custom_nodes" in str(raised.value)
+
+
+def test_the_folder_above_comfyui_is_accepted_too(tmp_path: Path) -> None:
+    """Ein Nutzer zeigt genauso oft auf den Ordner darüber wie auf den richtigen."""
+    from app.core.backends import comfy_setup
+
+    (tmp_path / "ComfyUI" / "custom_nodes").mkdir(parents=True)
+
+    assert comfy_setup.find_comfyui(tmp_path) == tmp_path / "ComfyUI"
+
+
+def test_a_cancelled_setup_keeps_what_it_has(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein halb kopierter Knotenordner wäre schlimmer als ein langer Lauf.
+
+    Abgebrochen wird zwischen den Schritten, und der Satz dazu sagt, dass ein
+    neuer Lauf fortsetzt — sonst fängt jemand von vorn an.
+    """
+    from app.core.backends import comfy_setup
+
+    comfyui = tmp_path / "ComfyUI"
+    (comfyui / "custom_nodes").mkdir(parents=True)
+    monkeypatch.setattr(comfy_setup, "find_python", lambda _folder: Path("python"))
+
+    result = comfy_setup.setup(comfyui, cancelled=lambda: True)
+
+    assert not result.done
+    assert "setzt fort" in str(result.reason)
+    assert (result.nodes / "nodes.py").is_file(), "der getane Schritt bleibt getan"

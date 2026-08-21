@@ -19,6 +19,9 @@ zu kommen.
 
 from __future__ import annotations
 
+import subprocess
+import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Literal
@@ -46,6 +49,14 @@ class ExternalTool:
     url: str = ""
     """Vorgabeadresse eines Dienstes. Bei einem reinen Programm leer."""
     optional: bool = True
+    start_arguments: tuple[str, ...] = ()
+    """Womit sich dieser Dienst starten lässt, oder nichts.
+
+    Nur wo es einen Befehl gibt, den ein Mensch genauso eingeben würde:
+    ``ollama serve``. ComfyUI bleibt leer — es wird aus seinem eigenen Ordner
+    mit seinem eigenen Python gestartet, und eine Anwendung, die das errät,
+    startet irgendwann das Falsche.
+    """
 
     def path(self) -> Path | None:
         """Die ausführbare Datei, wenn es eine gibt und sie gefunden wird."""
@@ -119,6 +130,7 @@ TOOLS: Final[tuple[ExternalTool, ...]] = (
         kind="service",
         executables=("ollama",),
         url=llm.OLLAMA_URL,
+        start_arguments=("serve",),
     ),
     ExternalTool(
         id="comfyui",
@@ -194,3 +206,62 @@ def set_location(tool_id: str, location: str) -> None:
     Eine leere Angabe nimmt die Festlegung zurück und sucht wieder selbst.
     """
     discover.remember(tool_id, location)
+
+
+#: Wie lange auf einen gestarteten Dienst gewartet wird, bevor gesagt wird,
+#: dass er nicht antwortet. Ollama lädt beim Start seine Modellliste; eine
+#: Sekunde ist zu wenig, eine Minute wäre ein Hänger.
+START_TIMEOUT_SECONDS: Final = 20.0
+
+
+def start(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECONDS) -> bool:
+    """Einen Dienst starten, der installiert ist und nicht läuft.
+
+    **Warum das hier steht und nicht in einem Satz.** „Ollama antwortet nicht.
+    Läuft es? «ollama serve» startet es." war die vollständige Auskunft — an
+    einen Menschen, der gerade in einem Fenster sitzt und keine Konsole offen
+    hat. Der Befehl ist derselbe, den er eintippen würde; ihn an einen Knopf
+    zu hängen, nimmt ihm einen Umweg und keine Entscheidung ab.
+
+    Der Prozess wird **losgelassen**: Er gehört nicht Solidon, er überlebt es
+    und wird von Solidon nie beendet. Was hier zurückkommt, ist die Antwort
+    auf die einzige Frage, die zählt — antwortet der Port jetzt?
+    """
+    if tool.kind != "service" or not tool.start_arguments:
+        return False
+    program = tool.path()
+    if program is None:
+        return False
+
+    # Losgelöst und ohne Fenster: ein Konsolenfenster, das über der Anwendung
+    # aufgeht, ist für den Nutzer ein Fehler und für uns nichts. Die beiden
+    # Windows-Merker über ``getattr`` — sie gibt es dort nur, und eine
+    # Typprüfung, die unter Linux läuft, kennt sie nicht.
+    windows = sys.platform == "win32"
+    no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    detached = getattr(subprocess, "DETACHED_PROCESS", 0)
+    try:
+        subprocess.Popen(
+            [str(program), *tool.start_arguments],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=(no_window | detached) if windows else 0,
+            start_new_session=not windows,
+        )
+    except OSError as problem:
+        _log.warning("could not start %s: %s", tool.id, problem)
+        return False
+
+    _log.info("started %s, waiting for its port", tool.id)
+    deadline = time.monotonic() + wait_seconds
+    while time.monotonic() < deadline:
+        if tool.running():
+            return True
+        time.sleep(_POLL_SECONDS)
+    return tool.running()
+
+
+#: Wie oft nachgesehen wird, ob der Port antwortet. Die Probe selbst kostet
+#: schon ein Viertel Sekunde (:data:`discover.PROBE_SECONDS`).
+_POLL_SECONDS: Final = 0.25

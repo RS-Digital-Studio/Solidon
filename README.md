@@ -215,21 +215,32 @@ Geometrie stammt.
 ### Einrichten
 
 ComfyUI allein erzeugt noch nichts — es braucht die Knoten und das Modell dazu.
-Beides legt ein Werkzeug hin, nachdem ComfyUI installiert ist:
+Beides legt **Solidon selbst** hin: *Hilfe → Zusätzliche Programme*, in der
+Zeile von ComfyUI der Knopf *Knoten und Modell einrichten …*.
+
+Der Dialog findet ComfyUI an den üblichen Stellen (sonst den Ordner angeben —
+gesucht wird der, in dem `custom_nodes` und `main.py` liegen), legt die Knoten
+hinein, holt den TripoSG-Quelltext, richtet zwei Stellen darin, zieht drei
+Pakete nach und lädt die Gewichte — rund 7,5 GB, abwählbar. Abbrechen geht
+zwischen den Schritten; was schon da ist, bleibt. Danach ComfyUI **einmal neu
+starten**: Es liest seine Knoten beim Start.
+
+Für den Weg über **Text** kommt ein SDXL-Modell unter `models/checkpoints`
+dazu; für den Weg über ein **Bild** wird keines gebraucht.
+
+Dasselbe von der Kommandozeile, für den Entwicklungsbaum:
 
 ```
 python tools/setup_comfyui.py
 ```
 
-Es findet ComfyUI an den üblichen Stellen (sonst `--comfyui <pfad>`), legt die
-Knoten aus `tools/comfyui/` hinein, holt den TripoSG-Quelltext, richtet zwei
-Stellen darin, zieht drei Pakete nach und lädt die Gewichte — rund 7,5 GB, mit
-`--skip-weights` abwählbar. Danach ComfyUI neu starten. Für den Weg über **Text**
-kommt ein SDXL-Modell unter `models/checkpoints` dazu; für den Weg über ein
-**Bild** wird keines gebraucht.
+Die Arbeit steckt in `app/core/backends/comfy_setup.py`, die Knoten in
+`app/core/backends/data/comfyui/` — beides reist im Paket mit. Vorher lag es
+unter `tools/`, und die Anwendung nannte einen Befehl, den ein Kunde nicht
+ausführen kann.
 
-Fehlt die Knotensammlung, sagt Solidon das beim Erzeugen und nennt den Befehl —
-es schickt niemanden Gewichte suchen, dem die Knoten fehlen.
+Fehlt die Knotensammlung, sagt Solidon das beim Erzeugen und führt zu diesem
+Dialog — es schickt niemanden Gewichte suchen, dem die Knoten fehlen.
 
 ### Welches Modell, und warum dieses
 

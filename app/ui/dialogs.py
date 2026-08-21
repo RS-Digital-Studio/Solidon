@@ -13,6 +13,7 @@ from typing import Any
 from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -23,6 +24,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QMessageBox,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QTextBrowser,
     QVBoxLayout,
@@ -30,13 +32,13 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME, APP_VERSION, COPYRIGHT, SUPPORT_ADDRESS, WEBSITE_URL
-from app.core import activation
+from app.core import activation, tools
 from app.core.backends import keys, llm
 from app.core.errors import CANCEL, REPORT_ERROR, SHOW_DETAILS, Action, AppError
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.core.scene import expressions
-from app.i18n import tr
+from app.i18n import format_decimal, tr
 from app.ui.labels import deadline_date, value_line
 from app.ui.leash import WorkerLeash
 from app.ui.style import set_level
@@ -317,6 +319,48 @@ class _ToolProbeWorker(QThread):
         self.done.emit(llm.ollama_tool_check(self._model))
 
 
+class _StartWorker(QThread):
+    """Ollama starten und warten, bis sein Port antwortet."""
+
+    done = Signal(bool)
+
+    def __init__(self, tool: tools.ExternalTool) -> None:
+        super().__init__()
+        self._tool = tool
+
+    def run(self) -> None:
+        self.done.emit(tools.start(self._tool))
+
+
+class _PullWorker(QThread):
+    """Ein Modell holen — fünf bis neun Gigabyte.
+
+    Mit Abbrechen, und das ist keine Höflichkeit: Ollama behält, was schon
+    geladen ist, ein zweiter Versuch setzt fort. Ein Vorgang dieser Länge ohne
+    Ausgang wäre die Sackgasse, die §2.8 verbietet.
+    """
+
+    done = Signal(object)
+    step = Signal(str, float)
+
+    def __init__(self, model: str) -> None:
+        super().__init__()
+        self._model = model
+        self._stop = False
+
+    def cancel(self) -> None:
+        self._stop = True
+
+    def run(self) -> None:
+        self.done.emit(
+            llm.pull_model(
+                self._model,
+                progress=lambda status, share: self.step.emit(status, share),
+                cancelled=lambda: self._stop,
+            )
+        )
+
+
 class KeyDialog(QDialog):
     """Wo der Nutzer den Chat einrichtet (Bauplan §27).
 
@@ -347,6 +391,8 @@ class KeyDialog(QDialog):
         self.setWindowTitle(tr("Chat einrichten"))
         self.setMinimumWidth(460)
         self._probe: _ToolProbeWorker | None = None
+        self._starter: _StartWorker | None = None
+        self._pull: _PullWorker | None = None
         self._leash = WorkerLeash(self)
         """Hält den ausgelaufenen Prüf-Arbeiter, bis Qt mit ihm durch ist —
         das Warum steht in :mod:`app.ui.leash`."""
@@ -404,7 +450,16 @@ class KeyDialog(QDialog):
         return tr("Der Chat läuft darüber.")
 
     def _local_model_section(self) -> QWidget:
-        """Der zweite Weg: ein Modell auf diesem Rechner, statt eines Schlüssels."""
+        """Der zweite Weg: ein Modell auf diesem Rechner, statt eines Schlüssels.
+
+        **Drei Schritte, und zwei davon fehlten hier.** Ollama installieren
+        konnte man aus der Liste der zusätzlichen Programme; danach stand der
+        Chat weiterhin still, denn Ollama muss laufen und braucht ein Modell.
+        Beides stand nur in Sätzen — „«ollama serve» startet es" und „«ollama
+        pull» mit dem Modellnamen holt es" —, gerichtet an jemanden, der in
+        einem Fenster sitzt. Jetzt steht an jedem der drei Schritte der Knopf,
+        der ihn tut.
+        """
         section = QWidget(self)
         note = QLabel(
             tr(
@@ -416,28 +471,215 @@ class KeyDialog(QDialog):
         )
         note.setWordWrap(True)
 
-        self.model_field = QLineEdit(llm.configured_ollama_model(), section)
-        self.model_field.setPlaceholderText(llm.DEFAULT_OLLAMA_MODEL)
+        #: Läuft Ollama, ist es nur installiert, oder fehlt es? Ein Satz und
+        #: der Knopf, der zu diesem Satz gehört.
+        self.service_state = QLabel(section)
+        self.service_state.setWordWrap(True)
+        self.service_button = QPushButton(tr("Ollama starten"), section)
+        self.service_button.clicked.connect(self._start_ollama)
 
+        # Ein Aufklappfeld statt eines Textfelds: Wer den Namen tippen soll,
+        # muss ihn kennen. Editierbar bleibt es — ein Modell, das wir nicht
+        # empfehlen, ist keines, das wir verbieten.
+        self.model_field = QComboBox(section)
+        self.model_field.setEditable(True)
+        self._fill_models()
+
+        self.pull_button = QPushButton(tr("Modell holen"), section)
+        self.pull_button.clicked.connect(self._pull_model)
         self.probe_button = QPushButton(tr("Werkzeuge prüfen"), section)
         self.probe_button.clicked.connect(self._probe_tools)
+
+        self.pull_progress = QProgressBar(section)
+        self.pull_progress.setVisible(False)
+        self.pull_progress.setTextVisible(False)
 
         self.probe_result = QLabel("", section)
         self.probe_result.setWordWrap(True)
 
+        service_row = QHBoxLayout()
+        service_row.addWidget(self.service_state, stretch=1)
+        service_row.addWidget(self.service_button)
+
         row = QHBoxLayout()
-        row.addWidget(self.model_field)
+        row.addWidget(self.model_field, stretch=1)
+        row.addWidget(self.pull_button)
         row.addWidget(self.probe_button)
 
         inner = QVBoxLayout(section)
         inner.setContentsMargins(0, 12, 0, 0)
         inner.addWidget(note)
+        inner.addLayout(service_row)
         inner.addLayout(row)
+        inner.addWidget(self.pull_progress)
         inner.addWidget(self.probe_result)
+        self._show_service()
         return section
 
+    # --- der Dienst -------------------------------------------------------------
+
+    def _ollama(self) -> tools.ExternalTool | None:
+        return tools.by_id("ollama")
+
+    def _show_service(self) -> None:
+        """Der Zustand von Ollama als Satz, und der passende Knopf daneben."""
+        tool = self._ollama()
+        state = tools.state_of(tool) if tool is not None else None
+        if state is None:
+            self.service_state.setText("")
+            self.service_button.setVisible(False)
+            return
+        if state.running:
+            self.service_state.setText(tr("Ollama läuft."))
+            set_level(self.service_state, "ok")
+            self.service_button.setVisible(False)
+        elif state.installed:
+            self.service_state.setText(tr("Ollama ist installiert, läuft aber nicht."))
+            set_level(self.service_state, "warning")
+            self.service_button.setText(tr("Ollama starten"))
+            self.service_button.setVisible(True)
+        else:
+            self.service_state.setText(
+                tr("Ollama ist nicht installiert — ohne es geht der Weg über einen Schlüssel.")
+            )
+            set_level(self.service_state, "info")
+            self.service_button.setText(tr("Zusätzliche Programme …"))
+            self.service_button.setVisible(True)
+        self.pull_button.setEnabled(state.running)
+        self.probe_button.setEnabled(state.running)
+
+    def _start_ollama(self) -> None:
+        """Starten, oder — wenn es fehlt — dorthin, wo es herkommt."""
+        tool = self._ollama()
+        if tool is None:
+            return
+        if not tools.state_of(tool).installed:
+            from app.ui.install_dialog import InstallDialog
+
+            InstallDialog(self).exec()
+            self._show_service()
+            self._fill_models()
+            return
+        self.service_button.setEnabled(False)
+        self.service_state.setText(tr("Ollama wird gestartet …"))
+        set_level(self.service_state, "info")
+        worker = _StartWorker(tool)
+        worker.done.connect(self._started)
+        worker.finished.connect(lambda done=worker: self._worker_finished(done))
+        self._starter = worker
+        worker.start()
+
+    def _started(self, running: bool) -> None:
+        self.service_button.setEnabled(True)
+        self._show_service()
+        if running:
+            self._fill_models()
+            return
+        self.service_state.setText(
+            tr("Ollama ließ sich nicht starten. Von Hand geht es mit „ollama serve“.")
+        )
+        set_level(self.service_state, "warning")
+
+    # --- das Modell -------------------------------------------------------------
+
+    def _fill_models(self) -> None:
+        """Was installiert ist, und was sich bewährt hat.
+
+        Die installierten stehen oben und ohne Zusatz — sie sind einen Klick
+        entfernt. Die empfohlenen darunter mit Größe und dem Satz, der sagt,
+        was sie leisten: Zwischen 5 und 9 Gigabyte liegt eine Entscheidung.
+        """
+        chosen = self.model_field.currentText().strip() or llm.configured_ollama_model()
+        self.model_field.clear()
+        here = llm.installed_models()
+        for name in here:
+            self.model_field.addItem(name, name)
+        for name, gigabytes, what in llm.OLLAMA_SUGGESTIONS:
+            if name in here:
+                continue
+            # „GB" ist keine Beschriftung, sondern die Einheit selbst — und
+            # die Zahl bekommt ihr Komma aus der aktiven Sprache (§13).
+            size = f"{format_decimal(gigabytes, 1)} GB"
+            self.model_field.addItem(f"{name} — {size}, {what}", name)
+        if not self.model_field.count():
+            self.model_field.addItem(llm.DEFAULT_OLLAMA_MODEL, llm.DEFAULT_OLLAMA_MODEL)
+        self._select_model(chosen)
+
+    def _select_model(self, wanted: str) -> None:
+        index = self.model_field.findData(wanted)
+        if index >= 0:
+            self.model_field.setCurrentIndex(index)
+        else:
+            self.model_field.setEditText(wanted)
+
+    def _chosen_model(self) -> str:
+        """Der Modellname — nicht die Zeile, in der er steht.
+
+        Ein Eintrag trägt Größe und Bewertung hinter dem Namen; als Modellname
+        weitergegeben wäre das ein Name, den Ollama nicht kennt.
+        """
+        data = self.model_field.currentData()
+        if isinstance(data, str) and data == self.model_field.currentText().split(" — ")[0]:
+            return data
+        typed = self.model_field.currentText().strip()
+        if isinstance(data, str) and typed.startswith(f"{data} — "):
+            return data
+        return typed.split(" — ")[0] or llm.DEFAULT_OLLAMA_MODEL
+
+    def _pull_model(self) -> None:
+        """Neun Gigabyte, mit Balken und Abbrechen statt eines Terminals."""
+        if self._pull is not None and self._pull.isRunning():
+            self._pull.cancel()
+            return
+        model = self._chosen_model()
+        self.pull_progress.setRange(0, 0)
+        self.pull_progress.setVisible(True)
+        self.pull_button.setText(tr("Abbrechen"))
+        self.probe_button.setEnabled(False)
+        self.probe_result.setText(f"{tr('Wird geholt')}: {model}")
+        set_level(self.probe_result, "info")
+
+        worker = _PullWorker(model)
+        worker.step.connect(self._pull_step)
+        worker.done.connect(self._pull_done)
+        worker.finished.connect(lambda done=worker: self._worker_finished(done))
+        self._pull = worker
+        worker.start()
+
+    def _pull_step(self, status: str, share: float) -> None:
+        """Ollamas Zustandszeile, und der Anteil, wenn es einen gibt."""
+        if share < 0.0:
+            self.pull_progress.setRange(0, 0)
+        else:
+            self.pull_progress.setRange(0, 100)
+            self.pull_progress.setValue(int(share * 100))
+        percent = f" — {int(share * 100)} %" if share >= 0.0 else ""
+        self.probe_result.setText(f"{status}{percent}")
+
+    def _pull_done(self, problem: object) -> None:
+        self.pull_progress.setVisible(False)
+        self.pull_button.setText(tr("Modell holen"))
+        self._show_service()
+        self._fill_models()
+        if problem is None:
+            self.probe_result.setText(
+                tr("Das Modell liegt jetzt hier. Die Probe sagt, ob es taugt.")
+            )
+            set_level(self.probe_result, "ok")
+            return
+        self.probe_result.setText(str(problem))
+        set_level(self.probe_result, "warning")
+
+    def _worker_finished(self, worker: object) -> None:
+        """Wer einen Arbeiter startet, hält ihn fest — siehe :mod:`app.ui.leash`."""
+        if self._starter is worker:
+            self._starter = None
+        if self._pull is worker:
+            self._pull = None
+        self._leash.hold_until_done(worker)
+
     def _probe_tools(self) -> None:
-        model = self.model_field.text().strip() or llm.DEFAULT_OLLAMA_MODEL
+        model = self._chosen_model()
         self.probe_button.setEnabled(False)
         self.probe_result.setText(tr("Das Modell wird geladen und gefragt — das dauert."))
         set_level(self.probe_result, "info")
@@ -477,7 +719,10 @@ class KeyDialog(QDialog):
         self._leash.hold_until_done(worker)
 
     def _save(self) -> None:
-        llm.remember_ollama_model(self.model_field.text())
+        # Der Name, nicht die Zeile: Ein Eintrag der Empfehlungsliste trägt
+        # Größe und Bewertung hinter dem Namen, und die gehören nicht in die
+        # Einstellung.
+        llm.remember_ollama_model(self._chosen_model())
         key = self.field.text().strip()
         if not key:
             # Kein Schlüssel heißt nicht „nichts zu tun": der Modellname

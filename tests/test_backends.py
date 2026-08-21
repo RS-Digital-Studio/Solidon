@@ -576,3 +576,127 @@ def test_a_model_alias_and_its_snapshot_are_judged_alike() -> None:
     assert takes_temperature("claude-sonnet-4-5")
     assert takes_temperature("claude-sonnet-4-5-20250929")
     assert not takes_temperature("claude-opus-5")
+
+
+# --- Ein Modell holen, ohne Terminal (§27) ----------------------------------------
+
+
+def test_the_installed_models_come_from_the_server() -> None:
+    """Die Auswahl im Einrichtungsdialog braucht sie — ein Textfeld setzte
+    voraus, dass man den Namen kennt.
+    """
+    found = llm.installed_models(fetch=lambda url: _tags(("qwen3:14b", "14.8B")))
+
+    assert found == ("qwen3:14b",)
+
+
+def test_a_silent_server_offers_no_models_and_no_error() -> None:
+    def fail(url: str) -> dict[str, Any]:
+        raise OSError("no route to host")
+
+    assert llm.installed_models(fetch=fail) == ()
+
+
+def test_every_suggested_model_says_its_size_and_what_it_does() -> None:
+    """Zwischen fünf und neun Gigabyte liegt eine Entscheidung.
+
+    Ein Modellname allein hilft nicht: Der Download ist groß, und ob das
+    Modell Werkzeuge aufruft, ist die eigentliche Frage. Beides steht am
+    Eintrag, nicht in einer Fußnote.
+    """
+    assert llm.OLLAMA_SUGGESTIONS, "ohne Vorschlag ist die Liste ein leeres Feld"
+    for name, gigabytes, what in llm.OLLAMA_SUGGESTIONS:
+        assert ":" in name, f"{name}: ein Ollama-Name trägt seinen Tag"
+        assert 0.5 < gigabytes < 100.0, name
+        assert str(what), name
+    names = [name for name, _size, _what in llm.OLLAMA_SUGGESTIONS]
+    assert llm.DEFAULT_OLLAMA_MODEL in names, "das eingestellte Modell steht zur Auswahl"
+
+
+class _PullServer:
+    """Ollamas Antwort auf ``/api/pull``: eine Zeile JSON je Zustand."""
+
+    def __init__(self, lines: list[bytes]) -> None:
+        self.lines = lines
+        self.asked = ""
+
+    def __call__(self, request: Any, timeout: float = 0.0) -> Any:
+        import json as json_module
+
+        self.asked = request.full_url
+        self.payload = json_module.loads(request.data.decode("utf-8"))
+        return self
+
+    def __enter__(self) -> Any:
+        return iter(self.lines)
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+
+def test_pulling_a_model_reports_a_real_share(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Neun Gigabyte an einem unbestimmten Balken sehen aus wie ein Hänger.
+
+    Ollama trägt in seinen Fortschrittszeilen ``total`` und ``completed`` —
+    daraus wird ein Prozentwert, und der ist der Unterschied zwischen einem
+    Vorgang und einem Verdacht.
+    """
+    server = _PullServer(
+        [
+            b'{"status":"pulling manifest"}\n',
+            b'{"status":"pulling 1a2b","total":1000,"completed":250}\n',
+            b'{"status":"pulling 1a2b","total":1000,"completed":1000}\n',
+            b'{"status":"success"}\n',
+        ]
+    )
+    monkeypatch.setattr(llm.urllib.request, "urlopen", server)
+    seen: list[tuple[str, float]] = []
+
+    problem = llm.pull_model("qwen3:14b", progress=lambda step, share: seen.append((step, share)))
+
+    assert problem is None
+    assert server.asked.endswith("/api/pull")
+    assert server.payload["model"] == "qwen3:14b", "der Name geht so hinaus, wie er hereinkam"
+    assert seen[0] == ("pulling manifest", -1.0), "ohne Zahlen wird keine behauptet"
+    assert seen[1][1] == pytest.approx(0.25)
+    assert seen[2][1] == pytest.approx(1.0)
+
+
+def test_a_pull_can_be_stopped_and_says_it_continues(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Vorgang dieser Länge ohne Ausgang wäre die Sackgasse aus §2.8.
+
+    Und der Satz dazu ist keine Höflichkeit: Ollama behält, was schon geladen
+    ist. Wer das nicht weiß, fängt von vorn an.
+    """
+    server = _PullServer([b'{"status":"pulling","total":10,"completed":1}\n'] * 5)
+    monkeypatch.setattr(llm.urllib.request, "urlopen", server)
+
+    problem = llm.pull_model("qwen3:14b", cancelled=lambda: True)
+
+    assert problem is not None
+    assert "setzt fort" in str(problem)
+
+
+def test_a_pull_that_ollama_refuses_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Name, den Ollama nicht kennt, kommt als Fehlerzeile zurück — nicht
+    als Download, der nie endet.
+    """
+    server = _PullServer([b'{"error":"pull model manifest: file does not exist"}\n'])
+    monkeypatch.setattr(llm.urllib.request, "urlopen", server)
+
+    problem = llm.pull_model("gibtesnicht:1b")
+
+    assert problem is not None
+    assert "nicht angenommen" in str(problem)
+
+
+def test_a_pull_without_a_server_blames_the_server(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail(request: Any, timeout: float = 0.0) -> Any:
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", fail)
+
+    problem = llm.pull_model("qwen3:14b")
+
+    assert problem is not None
+    assert "läuft es noch" in str(problem)

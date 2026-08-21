@@ -102,6 +102,95 @@ def test_a_tool_can_be_pointed_at_by_hand(tmp_path: Path) -> None:
     assert slicer.path() is None
 
 
+# --- einen Dienst starten (§27, §38) -------------------------------------------------
+
+
+def test_only_a_service_with_a_command_can_be_started() -> None:
+    """Geraten wird nicht.
+
+    Ollama startet mit ``ollama serve`` — derselbe Befehl, den ein Mensch
+    eintippen würde. ComfyUI hat keinen: Es läuft aus seinem eigenen Ordner mit
+    seinem eigenen Python, und eine Anwendung, die das errät, startet
+    irgendwann das Falsche.
+    """
+    startable = {tool.id for tool in tools.TOOLS if tool.start_arguments}
+
+    assert startable == {"ollama"}
+    ollama = tools.by_id("ollama")
+    assert ollama is not None and ollama.start_arguments == ("serve",)
+    for tool in tools.TOOLS:
+        if tool.start_arguments:
+            assert tool.kind == "service", tool.id
+
+
+def test_starting_something_that_is_not_installed_does_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ohne Datei gibt es nichts zu starten — und keinen Unterprozess."""
+    started: list[object] = []
+    monkeypatch.setattr(tools.subprocess, "Popen", lambda *a, **k: started.append(a))
+    monkeypatch.setattr(tools.discover, "find_program", lambda *_a: None)
+
+    ollama = tools.by_id("ollama")
+    assert ollama is not None
+
+    assert not tools.start(ollama)
+    assert started == []
+
+
+def test_starting_a_service_uses_its_own_command_and_lets_go(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """„«ollama serve» startet es" war die vollständige Auskunft an jemanden,
+    der in einem Fenster sitzt und keine Konsole offen hat.
+
+    Der Prozess gehört nicht Solidon: losgelassen, ohne Fenster, und niemals
+    von Solidon beendet.
+    """
+    program = tmp_path / "ollama.exe"
+    program.write_text("")
+    tools.set_location("ollama", str(program))
+    calls: list[tuple[object, dict[str, object]]] = []
+
+    def fake_popen(command: object, **options: object) -> object:
+        calls.append((command, options))
+        return object()
+
+    monkeypatch.setattr(tools.subprocess, "Popen", fake_popen)
+    ollama = tools.by_id("ollama")
+    assert ollama is not None
+    monkeypatch.setattr(type(ollama), "running", lambda _self: True)
+
+    try:
+        assert tools.start(ollama), "der Port antwortet, also gilt es als gestartet"
+    finally:
+        tools.set_location("ollama", "")
+
+    command, options = calls[0]
+    assert command == [str(program), "serve"]
+    assert options["stdout"] == tools.subprocess.DEVNULL, "kein Konsolenfenster über der Anwendung"
+
+
+def test_a_service_that_does_not_come_up_says_no(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Gestartet ist nicht dasselbe wie erreichbar — zurück kommt die Antwort
+    auf die Frage, die zählt.
+    """
+    program = tmp_path / "ollama.exe"
+    program.write_text("")
+    tools.set_location("ollama", str(program))
+    monkeypatch.setattr(tools.subprocess, "Popen", lambda *a, **k: object())
+    ollama = tools.by_id("ollama")
+    assert ollama is not None
+    monkeypatch.setattr(type(ollama), "running", lambda _self: False)
+
+    try:
+        assert not tools.start(ollama, wait_seconds=0.0)
+    finally:
+        tools.set_location("ollama", "")
+
+
 # --- der Erstlauf (§38) ---------------------------------------------------------------
 
 

@@ -270,21 +270,21 @@ def test_a_failure_says_why_and_what_helps(qt_app: QApplication) -> None:
     gehören in die Zeile, denn modal geht hier nichts.
     """
     from app.core.backends.mesh import GenerationFailed
-    from app.core.errors import CANCEL, OPEN_SETTINGS
+    from app.core.errors import CANCEL, INSTALL_MISSING
 
     dialog = GenerateDialog(backend=ScriptedMeshBackend(fallback=b"solid x\n"))
     dialog._on_failed(
         GenerationFailed(
             title="Die Mesh-Erzeugung konnte nicht starten.",
             detail="ComfyUI antwortet nicht.",
-            suggestions=(OPEN_SETTINGS, CANCEL),
+            suggestions=(INSTALL_MISSING, CANCEL),
         )
     )
 
     text = dialog.state.text()
     assert "konnte nicht starten" in text, "was nicht ging"
     assert "antwortet nicht" in text, "warum"
-    assert str(OPEN_SETTINGS.label) in text, "was jetzt hilft"
+    assert str(INSTALL_MISSING.label) in text, "was jetzt hilft"
     assert str(CANCEL.label) not in text, "der Ausgang ist kein Rat"
 
 
@@ -342,3 +342,73 @@ def test_the_way_out_stays_open_while_it_runs(
 
     dialog._running(False)
     assert ok(dialog).isEnabled(), "danach geht es weiter"
+
+
+# --- ComfyUI einrichten, aus der Anwendung (§27, §36) -----------------------------
+
+
+def test_the_setup_dialog_prefills_what_it_finds(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Eine leere Zeile wäre eine Frage an jemanden, der die Antwort selten
+    auswendig weiß.
+    """
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    comfyui = tmp_path / "ComfyUI"
+    (comfyui / "custom_nodes").mkdir(parents=True)
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: comfyui)
+
+    dialog = ComfySetupDialog()
+
+    assert dialog.folder.text() == str(comfyui)
+    assert dialog.weights.isChecked(), "die Gewichte fehlen, also werden sie geholt"
+
+
+def test_the_setup_dialog_says_where_to_point_it(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne Fund kein leeres Feld ohne Erklärung (Regel 17)."""
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    def nothing(given: object = None) -> object:
+        raise comfy_setup.SetupFailed("nicht gefunden")
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", nothing)
+
+    dialog = ComfySetupDialog()
+
+    assert not dialog.folder.text()
+    assert "custom_nodes" in dialog.state.text(), "woran man den Ordner erkennt"
+
+
+def test_a_setup_that_cannot_start_says_why_and_offers_the_run_again(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Fehlschlag endet nicht mit „fehlgeschlagen", und der Knopf ist
+    danach wieder der, der einrichtet.
+    """
+    from app.core.backends import comfy_setup
+    from app.ui.comfy_dialog import ComfySetupDialog
+
+    monkeypatch.setattr(comfy_setup, "find_comfyui", lambda given=None: Path("nirgendwo"))
+
+    def refuse(*_args: object, **_kwargs: object) -> object:
+        raise comfy_setup.SetupFailed("Dort liegt kein ComfyUI — erwartet wird custom_nodes.")
+
+    monkeypatch.setattr(comfy_setup, "setup", refuse)
+    dialog = ComfySetupDialog()
+
+    dialog.start_button.click()
+    for _ in range(100):
+        qt_app.processEvents()
+        if dialog._worker is None:
+            break
+        dialog._worker.wait(20)
+    qt_app.processEvents()
+
+    assert "custom_nodes" in dialog.state.text()
+    assert dialog.start_button.text() == "Einrichten", "der Weg zurück ist derselbe Knopf"
+    assert dialog.progress.isHidden()
