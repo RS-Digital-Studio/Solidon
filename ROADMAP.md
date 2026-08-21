@@ -9850,3 +9850,40 @@ gemessen, offscreen:
 - [x] Der Einrichtungsdialog sagte **nicht, woran man den Ordner erkennt**.
       „Nicht gefunden — der Ordner gehört hier hinein" schickt jemanden suchen,
       ohne zu sagen, wonach.
+
+## Der Abbrechen-Knopf vor der Zwei-Sekunden-Schwelle — geprüft und geschlossen (21.08.2026)
+
+Gemessen am laufenden Fenster, nicht am Quelltext: Balken und Abbrechen-Knopf
+erscheinen bei jeder Auswertung sofort, nicht gestaffelt.
+
+| Operation | Rechnung | Balken ab | Abbrechen ab |
+|---|---|---|---|
+| Grundkörper | 409 ms | 216 ms | 216 ms |
+| Bohrung | 856 ms | 493 ms | 493 ms |
+| Verschieben | 417 ms | 67 ms | 67 ms |
+| Drehen | 467 ms | 112 ms | 112 ms |
+
+§2.8 staffelt: „Bis 2 s: Mauszeiger und Statusleiste. Darüber: Fortschritt in
+der Statusleiste mit **Abbrechen**." Wörtlich gelesen erscheint der Knopf
+viermal zu früh. **Trotzdem wird hier nichts geändert**, und die Begründung
+gehört aufgeschrieben, damit die Messung nicht in einem Jahr als Fund
+wiederkehrt:
+
+- **Der Knopf hängt an fünf Stellen**, und sie meinen nicht dasselbe.
+  `_on_busy` ist die kurze Auswertung; die beiden Stellen um 4446 und 4474
+  gehören Chat und Trennebenensuche, und die laufen immer über zwei Sekunden.
+  Dort muss der Knopf sofort dastehen. Eine Staffel bräuchte also drei
+  verschiedene Regeln in einer Anzeige.
+- **Der Nutzen ist die Ruhe, der Preis die Abbrechbarkeit.** Ein Lauf von 1,9 s
+  wäre nach der Regel nicht abbrechbar. Dass man in 1,9 s kaum trifft, ist ein
+  Argument dafür — aber keines, das die drei Regeln aufwiegt.
+- **Das eigentliche Flackern ist schon behoben.** „Der Balken verschwand,
+  während die Anwendung noch vier Sekunden rechnete" (b110744) hat den Fall
+  erledigt, der wehtat: Beim Ziehen an einem Schieber bleibt die Anzeige
+  stehen, statt bei jedem Zwischenschritt an- und auszugehen. Was bleibt, ist
+  ein einzelnes Aufblitzen bei einer einzelnen kurzen Operation.
+
+Bleibt als Beobachtung: Die 0,2-Sekunden-Grenze ist **nicht** widerlegt und
+nicht bestätigt — keine der vier gemessenen Rechnungen war kürzer als 200 ms.
+`LoadingVeil` hält sie mit `DELAY_MS = 200` ein und begründet es dort wörtlich
+mit §2.8; für Balken und Knopf fehlt der Beweis in beide Richtungen.
