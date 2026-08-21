@@ -16,7 +16,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
-from app.core.errors import ValidationError
+from app.core.errors import CANCEL, CHECK_UPDATES, ValidationError
 from app.core.log import get_logger
 from app.core.scene.gathered import carry_over
 from app.i18n import _
@@ -157,12 +157,22 @@ def migrate(
         return data
     if version > target:
         raise ValidationError(
+            # Der Titel der Oberklasse hieße „Die Eingabe war so nicht
+            # verwendbar" — hier ist keine Eingabe im Spiel, sondern eine Datei
+            # aus der Zukunft. Die Oberfläche zeichnet den Titel groß.
+            title=_("Diese Projektdatei ist neuer als das Programm."),
             field="format_version",
             detail=_(
                 "Diese Datei stammt aus einer neueren Fassung des Programms. Ein Update öffnet sie."
             ),
             constraint="too_new",
             values={"file_version": version, "supported": target},
+            # **Der Satz nannte den Weg, und niemand ging ihn.** „Ein Update
+            # öffnet sie" stand da, während die Anwendung eine Update-Prüfung im
+            # Hilfe-Menü führt — angeboten wurde stattdessen *Eingabe
+            # korrigieren*, und an einer Datei aus der Zukunft gibt es keine
+            # Eingabe zu korrigieren (§2.7).
+            suggestions=(CHECK_UPDATES, CANCEL),
         )
 
     by_source = {step.from_version: step for step in steps}

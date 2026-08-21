@@ -532,6 +532,20 @@ genau der einen Methode, die benutzt wird.
   `tests/test_value_labels.py` prüft die **Familie**: Befunde mit demselben
   Namen hinter dem Punkt melden dasselbe Problem, und trägt einer eine
   Handlung, müssen es alle.
+- **Und sie stehen sichtbar da, nicht im Rechtsklick.** Unter der Befundliste
+  liegt eine Knopfzeile mit den Handlungen des gewählten Befunds (leer, solange
+  es keine gibt). Gefragt wird über `actions_for(finding)` — dieselbe Quelle,
+  aus der auch das Kontextmenü liest; zwei Zugänge, eine Wahrheit. Ein
+  Kontextmenü auf einer Listenzeile ist kein Angebot, das jemand sucht, und
+  §2.7 verspricht anklickbare Handlungen.
+- **Ein Fehler aus einer Operation ist ein Befund, kein Dialog.** Der Kern
+  macht daraus `op.<operation>.<Ausnahme>` und hält die Kette an — deshalb ist
+  der Prüfbericht und nicht der Fehlerdialog der Ort, an dem die häufigsten
+  Bedienfehler landen. Ihre Handlung ist *Eingabe korrigieren*:
+  `edit_operation(op_id, field)` öffnet den Schritt mit dem Cursor in dem Feld,
+  das der Kern genannt hat, und ersetzt ihn beim Übernehmen (§15.4). Eine
+  Handlung, die eine Schrittkennung braucht, steht in `dialogs.NEEDS_OP` und
+  wird ohne sie nicht angeboten.
 - Differenzansicht in Blau/Orange als Vorgabe, nicht Rot/Grün.
 - Analysekarten mit wahrnehmungsgleicher Palette (Viridis-Art), kein
   Regenbogen — der erzeugt Kanten, wo keine sind.

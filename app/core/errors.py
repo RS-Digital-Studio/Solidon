@@ -53,6 +53,8 @@ OPEN_SETTINGS = Action("open_settings", _("Einstellungen öffnen"), primary=True
 #: Der Knopf trägt jetzt den Namen des Menüeintrags, unter dem er landet.
 INSTALL_MISSING = Action("install", _("Zusätzliche Programme …"), primary=True)
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
+CHECK_UPDATES = Action("check_updates", _("Nach einer neuen Fassung sehen"), primary=True)
+SAVE_ELSEWHERE = Action("save_elsewhere", _("Anderen Ort wählen"))
 ENTER_LICENCE_KEY = Action("enter_licence_key", _("Lizenzschlüssel eintragen"), primary=True)
 BUY_LICENCE = Action("buy_licence", _("Solidon kaufen"))
 
@@ -308,6 +310,23 @@ class BooleanFailedError(GeometryError):
         seed: int | None = None,
         **kwargs: Any,
     ) -> None:
+        # **„Auf allen Stufen" war beim Arbeiten im Fenster nie wahr.** Dort
+        # läuft die kurze Kette (``DRAFT_CHAIN``: direkt, verschweißt), die
+        # vollen vier Stufen laufen beim Export (§17.2). Der Titel behauptete
+        # trotzdem, es sei alles versucht — und daneben stand als einziger Rat
+        # *Voxelstufe erzwingen*, also genau die Stufe, die noch offen war.
+        # Zwei Sätze, die sich widersprechen, und keiner davon anklickbar.
+        #
+        # Jetzt sagt der Titel, was gilt: War die Voxelstufe dran, ist sie
+        # ausgereizt und der Rat fällt weg. War sie es nicht, sagt der Titel es
+        # und der Rat bleibt — mit einem Handler dahinter, der einmal mit der
+        # vollen Kette rechnet.
+        if attempted and "voxel" not in attempted:
+            kwargs.setdefault("title", _("Die boolesche Operation ist im Entwurf gescheitert."))
+        elif "voxel" in attempted and kwargs.get("suggestions") is None:
+            kwargs["suggestions"] = tuple(
+                action for action in self.default_suggestions if action is not USE_VOXEL_STAGE
+            )
         super().__init__(
             detail=detail, **_with_values(kwargs, attempted=list(attempted), seed=seed)
         )
@@ -381,7 +400,18 @@ class FileWriteError(AppError):
     """
 
     default_title: ClassVar[TranslatableText] = _("Die Datei ließ sich nicht schreiben.")
-    default_suggestions: ClassVar[tuple[Action, ...]] = (CORRECT_INPUT, RETRY, CANCEL)
+    #: **Zwei Wege, und beide sind der Fall, der wirklich vorkommt.** Die Datei
+    #: liegt im Slicer offen oder das Laufwerk ist voll: dann hilft es, sie
+    #: freizugeben und *erneut* zu schreiben — oder einen *anderen Ort* zu
+    #: nehmen. „Eingabe korrigieren" stand hier vorn und meinte nichts: An einem
+    #: Schreibfehler gibt es keine Eingabe (er trägt keine ``op_id``, und
+    #: ``dialogs.NEEDS_OP`` blendet ihn deshalb aus).
+    default_suggestions: ClassVar[tuple[Action, ...]] = (
+        RETRY,
+        SAVE_ELSEWHERE,
+        CORRECT_INPUT,
+        CANCEL,
+    )
 
     def __init__(
         self,

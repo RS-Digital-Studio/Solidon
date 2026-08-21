@@ -321,6 +321,8 @@ class Session(QObject):
         self.quality: Quality = "draft"
         """Entwurf, solange gearbeitet wird; Export und Abschlussbericht schalten
     auf fein (§31)."""
+        self._quality_once: Quality | None = None
+        """Die Qualität für **einen** Lauf — siehe :meth:`recompute_fully`."""
         self.last_result: EvaluationResult | None = None
         self.pending_orphan_check = False
         """Gesetzt, wenn eine Datei geöffnet wurde: §21.3 prüft ihre Verweise
@@ -1040,16 +1042,33 @@ class Session(QObject):
         """Ein Durchlauf mit allem, was der Kern braucht. Keine Signale, kein
         Zustand.
         """
+        # Ein einmalig angeforderter Lauf gilt für diesen und keinen weiteren:
+        # Wer die volle Kette braucht, braucht sie an einer Stelle, und alles
+        # danach soll wieder so schnell sein wie vorher (§31).
+        once, self._quality_once = self._quality_once, None
         return evaluate(
             self.project.document,
             self.profile,
-            quality=quality or self.quality,
+            quality=quality or once or self.quality,
             progress=self.report_progress,
             ask=self.ask_from_worker,
             cancelled=self.cancel_signal,
             cache=self.cache,
             sources=ProjectSources(self.project, base_dir=self.base_dir),
         )
+
+    def recompute_fully(self) -> None:
+        """Einmal mit der vollen Rückfallkette rechnen (§17.2).
+
+        Im Fenster läuft die kurze Kette — direkt und verschweißt —, weil sie
+        beim Arbeiten schnell sein muss; die Stufen *Störung* und *Voxel* laufen
+        erst beim Export (§31). Scheitert eine Boolesche Operation, ist der
+        nächste sinnvolle Schritt genau der: dieselbe Kette einmal zu Ende
+        gehen. Bis hierher war das ein Ratschlag ohne Knopf — *Voxelstufe
+        erzwingen* stand im Fehlerdialog, und nichts führte ihn aus.
+        """
+        self._quality_once = "fine"
+        self.evaluate_async()
 
     def evaluate_now(self) -> EvaluationResult:
         """Synchroner Durchlauf, für Kommandozeile, Tests und Export (§38)."""

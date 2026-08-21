@@ -9,7 +9,7 @@ Regel 2).
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping, Sequence
-from typing import Any, cast
+from typing import Any, Final, cast
 
 from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QColor, QFont, QIcon, QImage, QPainter, QPixmap
@@ -38,6 +38,8 @@ from app.core import drawing
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
     ARRANGE_ON_BED,
+    CHOOSE_PRINTER,
+    CORRECT_INPUT,
     PLACE_ON_BED,
     REPAIR_AND_RETRY,
     SCALE_TO_FIT,
@@ -68,7 +70,7 @@ from app.ui.labels import (
 )
 from app.ui.overlay import LEFT_WIDTH
 from app.ui.palette import SEVERITY_ENCODING, Role, text_colour
-from app.ui.style import NORMAL, TIGHT, set_level
+from app.ui.style import NORMAL, TIGHT, make_primary, set_level
 
 _log = get_logger(__name__)
 
@@ -114,7 +116,10 @@ def _by_severity(findings: Iterable[Finding]) -> list[Finding]:
 #: Textsuche über Meldungen. Was hier fehlt, bekommt kein Menü — lieber keins
 #: als eines, das nichts tut.
 FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
-    "arrange.out_of_build_volume": (SPLIT_MODEL, SCALE_TO_FIT),
+    # Drei Antworten auf „passt nicht": kleiner machen, teilen — oder einen
+    # anderen Drucker nehmen. Die dritte fehlte, solange ihr Handler fehlte,
+    # und sie ist für den Kunden mit zwei Maschinen die naheliegendste.
+    "arrange.out_of_build_volume": (SPLIT_MODEL, SCALE_TO_FIT, CHOOSE_PRINTER),
     # **Zu groß und nur verrutscht sind zwei Fälle.** Beide meldete der Kern
     # unter derselben Kennung, also bekam auch das Teil, das bloß zur Hälfte
     # unter der Platte steckt, *Modell teilen* und *Auf den Bauraum
@@ -139,6 +144,38 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # ``_object_of`` muss hier nicht auf die Auswahl raten.
     "agent.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
 }
+
+#: Kennungen der Befunde, die aus einer Ausnahme einer Operation entstanden
+#: sind (``evaluate._finding_from``): ``op.<operation>.<Ausnahmeklasse>``.
+_FROM_AN_OPERATION: Final = "op."
+
+
+def actions_for(finding: Finding) -> tuple[Action, ...]:
+    """Was gegen diesen Befund hilft — aus der Tabelle oder aus seiner Herkunft.
+
+    **Der häufigste Befund mit einer offensichtlichen Antwort hatte keine.**
+    Eine Operation, deren Werte nicht gehen, wirft keinen Fehlerdialog: Der
+    Kern macht daraus einen Befund und hält die Kette an (§15.3). Im Bericht
+    stand dann „Der Wert liegt über dem zulässigen Höchstwert" — und der Weg
+    zurück zu diesem Wert war, ihn im Verlauf selbst zu finden und
+    doppelzuklicken. Das ist entdeckbar, aber es ist nicht der kurze Weg, den
+    §2.7 verlangt: was jetzt möglich ist, als anklickbare Handlung.
+
+    Diese Befunde tragen ihre Schrittkennung immer (`_finding_from` setzt sie),
+    also gibt es genau einen Schritt zu öffnen, und ``edit_operation`` tut
+    danach das Richtige: derselbe Dialog, dieselben Werte, und beim Übernehmen
+    wird der Schritt **ersetzt** statt ein zweiter angelegt.
+
+    Als Muster und nicht als Tabellenzeile, weil die Kennung den Namen der
+    Operation und der Ausnahme enthält — das sind 86 mal n Zeilen, die alle
+    dasselbe sagen würden.
+    """
+    known = FINDING_ACTIONS.get(finding.code)
+    if known:
+        return known
+    if finding.code.startswith(_FROM_AN_OPERATION) and finding.op_id is not None:
+        return (CORRECT_INPUT,)
+    return ()
 
 
 def as_error(finding: Finding) -> AppError:
@@ -1296,10 +1333,68 @@ class ReportPanel(QWidget):
         self._nothing.setContentsMargins(NORMAL, NORMAL, NORMAL, NORMAL)
         self._nothing.setVisible(False)
 
+        # **Was gegen den gewählten Befund hilft, steht darunter.** Gebaut waren
+        # die Handlungen längst, nur hingen sie an einem Rechtsklick auf eine
+        # Listenzeile — und §2.7 verspricht „anklickbare Handlungen", nicht
+        # welche zum Suchen. Der Fehlerdialog hat dafür seit je Knöpfe; der
+        # Bericht, in dem die häufigeren Fälle landen, hatte keine. Leer bleibt
+        # die Zeile unsichtbar, wie die Filterzeile über der leeren Liste.
+        self._offers = QWidget(self)
+        self._offers.setVisible(False)
+        self._offer_row = QHBoxLayout(self._offers)
+        self._offer_row.setContentsMargins(0, TIGHT, 0, 0)
+        self._offer_row.setSpacing(TIGHT)
+        self._offer_row.addStretch(1)
+        self.list.itemSelectionChanged.connect(self._show_offers)
+
         layout.addWidget(self.facts)
         layout.addLayout(filter_row)
         layout.addWidget(self._nothing)
         layout.addWidget(self.list)
+        layout.addWidget(self._offers)
+
+    def _show_offers(self) -> None:
+        """Die Handlungen zum gewählten Befund als Knöpfe (§2.7).
+
+        Dieselbe Quelle wie das Kontextmenü — :func:`actions_for` und die
+        Handler des Fensters. Zwei Zugänge zu einer Wahrheit: der Rechtsklick
+        ist der schnelle, diese Zeile der, den man findet.
+
+        Neu gebaut statt versteckt: Welche Knöpfe hier stehen, hängt am
+        gewählten Befund, und ein Vorrat aus wiederverwendeten Knöpfen müsste
+        seine Beschriftung, seinen Handler und seine Sichtbarkeit einzeln
+        nachziehen — drei Gelegenheiten für einen Knopf, der das Falsche tut.
+        """
+        row = self._offer_row
+        while row.count() > 1:
+            item = row.takeAt(row.count() - 1)
+            widget = item.widget() if item is not None else None
+            if widget is not None:
+                widget.setParent(None)
+                widget.deleteLater()
+
+        items = self.list.selectedItems()
+        finding: Finding | None = (
+            items[0].data(Qt.ItemDataRole.UserRole) if len(items) == 1 else None
+        )
+        handlers = handlers_of(self)
+        offered = (
+            [action for action in actions_for(finding) if action.id in handlers]
+            if finding is not None
+            else []
+        )
+        for action in offered:
+            button = QPushButton(str(action.label), self._offers)
+            button.setToolTip(str(finding.message) if finding is not None else "")
+            if action.primary:
+                make_primary(button)
+            button.clicked.connect(
+                lambda _checked=False, chosen=action, entry=finding: handlers[chosen.id](
+                    as_error(entry)
+                )
+            )
+            row.addWidget(button)
+        self._offers.setVisible(bool(offered))
 
     def _show_controls(self) -> None:
         """Filterzeile und Liste nur, wenn es etwas zu filtern gibt.
@@ -1615,7 +1710,7 @@ class ReportPanel(QWidget):
         if item is None:
             return
         finding: Finding = item.data(Qt.ItemDataRole.UserRole)
-        offers = FINDING_ACTIONS.get(finding.code, ())
+        offers = actions_for(finding)
         handlers = handlers_of(self)
         offered = [action for action in offers if action.id in handlers]
         if not offered:

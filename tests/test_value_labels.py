@@ -193,11 +193,21 @@ def test_the_report_offers_what_helps(qt_app: object) -> None:
     ``OutOfBuildVolume``, einer Ausnahme, die niemand wirft. Bauraum ist ein
     Bericht und keine Sperre (§29), und damit war der einzige Weg zu ihnen
     zugemauert.
+
+    **Und dann waren es zwei von drei.** Teilen und Verkleinern kamen mit dem
+    Kontextmenü des Berichts; „anderes Druckerprofil" blieb liegen, weil ihr
+    Handler fehlte. Für den Kunden mit zwei Maschinen ist sie die
+    naheliegendste der drei — der Drucker eines offenen Projekts wird in den
+    Druckeinstellungen gewechselt, und genau dorthin führt sie jetzt.
     """
-    from app.core.errors import SCALE_TO_FIT, SPLIT_MODEL
+    from app.core.errors import CHOOSE_PRINTER, SCALE_TO_FIT, SPLIT_MODEL
     from app.ui.panels import FINDING_ACTIONS
 
-    assert FINDING_ACTIONS["arrange.out_of_build_volume"] == (SPLIT_MODEL, SCALE_TO_FIT)
+    assert FINDING_ACTIONS["arrange.out_of_build_volume"] == (
+        SPLIT_MODEL,
+        SCALE_TO_FIT,
+        CHOOSE_PRINTER,
+    )
 
 
 def test_a_body_below_the_bed_gets_the_click_that_helps() -> None:

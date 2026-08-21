@@ -8,7 +8,7 @@ nie in den Dialog.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any
+from typing import Any, Final
 
 from PySide6.QtCore import Qt, QThread, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
@@ -980,6 +980,15 @@ def show_expired_demo(state: activation.Activation) -> None:
         open_website()
 
 
+#: Handlungen, die ohne die Kennung ihres Schrittes nichts tun können.
+#:
+#: *Eingabe korrigieren* öffnet den Schritt wieder, dessen Werte nicht gingen
+#: (``MainWindow.edit_operation``). Ein Fehler ohne ``op_id`` — beim Lesen einer
+#: Datei, beim Schreiben eines Exports — hat keinen solchen Schritt, und ein
+#: Knopf, der nichts tut, ist schlimmer als keiner.
+NEEDS_OP: Final = frozenset({"correct_input"})
+
+
 def handlers_of(widget: QWidget | None) -> Mapping[str, Callable[[AppError], None]]:
     """Die Fehlerhandlungen des Fensters, in dem dieser Dialog steckt.
 
@@ -1010,8 +1019,17 @@ def offered_actions(
     ein Knopf noch ein Rat zum Lesen —, tritt der Fehlerbericht ein: sonst
     stünde am Ende ein Fenster mit „Abbrechen", und das ist „fehlgeschlagen"
     mit mehr Worten (Regel 17).
+
+    **Und wofür der Fehler mitbringt, was der Handler braucht.** *Eingabe
+    korrigieren* öffnet den Schritt, dessen Werte nicht gingen — ohne
+    ``op_id`` gibt es keinen, den es öffnen könnte, und der Knopf wäre wieder
+    einer von denen, die nichts tun.
     """
-    offered = [action for action in error.suggestions if action.id in handlers]
+    offered = [
+        action
+        for action in error.suggestions
+        if action.id in handlers and not (action.id in NEEDS_OP and error.op_id is None)
+    ]
     if offered:
         return offered
     if unhandled_advice(error, handlers):

@@ -48,7 +48,6 @@ bekommt einen roten Lauf.
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
 | Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | die Entscheidung des Bauplans, welche Operation auf ein fertiges Gewinde gehört; bis dahin steht `thread` als benannte Ausnahme im Konsistenztest |
-| Die Handlungen am Befund findet nur, wer rechtsklickt | Die Bedienung an der Uhr gemessen (21.08.2026) | eine Layoutentscheidung im rechten Bereich — eine Knopfzeile unter der Befundliste, die die Handlungen des gewählten Befunds zeigt |
 | Sechs von 86 Operationen führen ein Kürzel | Die Bedienung an der Uhr gemessen (21.08.2026) | eine Entscheidung des Bauplans: §19.2 sagt „kann", und die Palette lehrt nebenbei nur, was auch dasteht |
 | `label_text` füllt die Vorderseite bis an die Grenze | Die Bedienung an der Uhr gemessen (21.08.2026) | eine fachliche Entscheidung, welche der acht Werte nach hinten gehören — §2.4 spricht von zwei bis drei |
 | Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
@@ -9084,15 +9083,65 @@ statt Ja/Nein.
       fachliche Frage (welche Operation auf ein fertiges Gewinde gehört) bleibt
       offen und steht als benannte Ausnahme im Test.
 
+### Der zweite Durchgang, tiefer: die Wege zurück (21.08.2026)
+
+Gemessen wurde diesmal nicht, was die Anwendung anbietet, sondern **was ein
+Kunde tut, wenn etwas schiefgeht**. Jede Ausnahme des Kerns wurde durch den
+Fehlerdialog geschickt, jede Handlung gegen ihren Handler gehalten. Das Ergebnis
+war eindeutig: Die häufigsten Vorschläge waren die ohne Wirkung.
+
+- [x] **Die Handlungen am Befund fand nur, wer rechtsklickte** — der offene
+      Punkt von oben, und mit dem Fund darunter wurde er dringend. `_on_menu`
+      baute sie vollständig und richtig, nur hing der ganze Zugang an einem
+      Rechtsklick auf eine Listenzeile. Unter der Liste steht jetzt eine
+      Knopfzeile mit den Handlungen des gewählten Befunds; sie bleibt
+      unsichtbar, solange es keine gibt, und beide Wege lesen aus derselben
+      Quelle (`actions_for`).
+- [x] **Der häufigste Fehler des Programms hatte keinen Weg zurück.** Eine
+      Operation, deren Werte nicht gehen, wirft **keinen** Fehlerdialog — der
+      Kern macht daraus einen Befund und hält die Kette an (§15.3). Im
+      Prüfbericht stand dann „Der Wert liegt über dem zulässigen Höchstwert",
+      und der Weg zu diesem Wert war, den Schritt im Verlauf zu suchen und
+      doppelzuklicken. *Eingabe korrigieren* stand daneben — als Satz, denn es
+      war mit fünf Ausnahmen die häufigste Handlung des Kerns und die einzige
+      ohne Handler. Jetzt öffnet sie den Schritt (`edit_operation`), und zwar
+      **mit dem Cursor in dem Feld, das der Kern nennt**: Der Befund trägt
+      `field`, der Dialog hat `focus_field`, und ein Wert hinter „Weitere
+      Einstellungen" klappt dabei auf. Beim Übernehmen wird der Schritt
+      ersetzt, kein zweiter angelegt (§15.4) — damit ist auch §2.1 („jeder Wert
+      nachträglich änderbar") an der Stelle eingelöst, an der es zählt.
+- [x] **Ein gescheiterter Export ließ sich nur von vorn wiederholen.** Die
+      häufigste Ursache ist eine Datei, die im Slicer offen liegt; wer sie dort
+      schloss, musste Format, Ordner und Namen erneut wählen. `FileWriteError`
+      schlägt *Erneut versuchen* vor, und wie bei *Eingabe korrigieren* fehlte
+      der Handler. Angeboten wird er nur, solange es etwas zu wiederholen gibt.
+- [x] **Ein gescheitertes *Speichern* bot gar nichts an** — und das ist der
+      datenkritischste Schreibfehler von allen: Wessen Projekt sich nicht
+      speichern lässt, hat seine Arbeit noch nicht in Sicherheit. Zwei Fälle
+      kommen wirklich vor, und beide haben eine Antwort: Die Datei liegt in
+      einem anderen Programm offen (dann hilft derselbe Weg noch einmal), oder
+      das Laufwerk ist voll (dann hilft ein anderer Ort). `FileWriteError`
+      führt jetzt `RETRY` und das neue `SAVE_ELSEWHERE` vorn, *Eingabe
+      korrigieren* dahinter — an einem Schreibfehler gibt es keine Eingabe, und
+      `NEEDS_OP` blendet es dort ohnehin aus. Export und Speichern teilen
+      dieselbe Antwort (`_WriteFailure`): Beide scheitern am selben
+      Betriebssystem.
+- [x] **„Ein Update öffnet sie" — und niemand bot eines an.** Eine Projektdatei
+      aus einer neueren Fassung wird abgelehnt, und der Satz dazu nannte den Weg
+      seit je. Angeboten wurde *Eingabe korrigieren*, und an einer Datei aus der
+      Zukunft gibt es keine Eingabe zu korrigieren. Die Migration schlägt jetzt
+      `CHECK_UPDATES` vor, verdrahtet auf denselben Weg wie *Hilfe → Nach einer
+      neuen Fassung sehen*. Dazu ein eigener Titel: „Die Eingabe war so nicht
+      verwendbar" stand über einer Datei, an der niemand etwas eingegeben hat.
+- [x] **Die dritte Bauraum-Handlung fehlte noch.** Teilen und Verkleinern kamen
+      mit dem Kontextmenü des Berichts; *Anderes Druckerprofil wählen* blieb
+      liegen, weil ihr Weg fehlte — der Drucker eines **offenen** Projekts wird
+      in den Druckeinstellungen gewechselt, nicht in den
+      Anwendungseinstellungen, wo nur die Vorgabe für neue Projekte steht. Für
+      den Kunden mit zwei Maschinen ist sie die naheliegendste der drei.
+
 ### Was auffiel und eine Entscheidung braucht
 
-- [ ] **Die Handlungen am Befund findet nur, wer rechtsklickt.** `_on_menu`
-      baut sie vollständig und richtig, und §2.7 verspricht „anklickbare
-      Handlungen" — ein Kontextmenü auf einer Listenzeile ist keines, das
-      jemand sucht. Der Fehlerdialog hat dafür Knöpfe. Die naheliegende Antwort
-      wäre eine Knopfzeile unter der Liste, die die Handlungen des gewählten
-      Befunds zeigt (leer, solange es keine gibt) — das ist eine Layoutfrage im
-      rechten Bereich und keine, die man nebenbei entscheidet.
 - [ ] **Sechs von 86 Operationen führen ein Kürzel.** §19.2 sagt „kann", die
       Palette zeigt sie daneben, „so lernt man sie nebenbei" — bei sechs ist
       nebenbei wenig zu lernen. Ob das ein Mangel ist, entscheidet der Bauplan.
@@ -9531,101 +9580,3 @@ eine ebene Fläche unten, die von selbst gewinnt. Erst mit den Fasen **und** den
 zwei Sechskantzapfen an den Enden entsteht der Fall — die Zapfen kosten in der
 liegenden Lage Stützmaterial, in der diagonalen keines. Wer den Körper
 vereinfacht, prüft etwas anderes, als er behauptet.
-
-## Die zweite Hälfte des Kundenwegs (21.08.2026)
-
-Die beiden Durchgänge davor hörten bei der exportierten Datei auf. Für einen
-Kunden fängt dort an, was zählt: Trägt sich das Teil? Was schlägt die Anwendung
-an Einstellungen vor? Was kostet der Druck, und stimmt die Schätzung? Dieser
-Durchgang geht bis zum G-Code — über den echten `PrintSettingsDialog` und seinen
-Knopf *Slicen*, nicht am Fenster vorbei.
-
-**Drei Slicer statt einem.** Solidon behandelt drei Familien verschieden, und
-geprüft war eine: Auf dieser Maschine lag nur der ElegooSlicer. Dazugekommen
-sind **PrusaSlicer 2.9.6** und **CuraEngine 5.13.0** (winget, Hersteller-
-manifeste). Alle drei werden erkannt und laufen; die Zahlen einer Platte mit
-fünf Verbinderstangen:
-
-| | Filament | Druckzeit | Schichten |
-|---|---|---|---|
-| Solidons Schätzung | 89,7 g | 6,28 h | — |
-| PrusaSlicer 2.9.6 | 77,5 g | 7,13 h | 60 |
-| ElegooSlicer 1.5.3.4 (Orca) | 76,4 g | 3,92 h | 60 |
-| CuraEngine 5.13.0 | 70,0 g | 4,54 h | 60 |
-
-Die Schätzung liegt 16 bis 28 Prozent über den Messungen, und die drei Slicer
-sind sich untereinander beim **Faktor 1,8** in der Zeit uneins. Beides steht mit
-ausgewiesener Herkunft im Prüfbericht (`info:gcode.material`,
-`info:gcode.print_time`, Regel 14) — die Abweichung wird gemeldet, nicht
-verrechnet. Curas Kopfzeile schreibt Platzhalter (`;TIME:6666`,
-`;Filament used: 0m`, Hüllquader auf INT_MAX); `grams()` fängt das ab und
-rechnet aus der geförderten Länge, das Fenster zeigt 70,0 g. Der Fall stand
-schon im Docstring.
-
-### Behoben, jeder mit Test und Gegenprobe
-
-- [x] **Eine geratene Form setzte eine Einstellung.** Der Vorschlag *Wände*
-      rechnet aus dem dicksten Verbinder, wie viele Wände sich in seiner Mitte
-      treffen. `_connector_diameters` nahm dafür **jedes** Merkmal der Art
-      `pin` — auch die, die die Merkmalserkennung am eingelesenen Modell geraten
-      hatte. Der Docstring sagte seit je „wo er steht, ist das **erzeugte**
-      Merkmal"; der Filter sagte es nicht. Gemessen: am Sockel ein Vorschlag von
-      **376 Wänden**, an der Ente **185 784**, am Propellersatz 84 — und
-      *Vorschläge übernehmen* schrieb sie ins Projekt. Die Schätzung des Sockels
-      fiel nach dem Fix von 291 g auf 163,5 g, weil die 376 Wände nicht mehr
-      mitgerechnet werden.
-- [x] **Ein Merkmal, das nicht in seinen Körper passt, ist keines.** Die
-      Zapfenerkennung passt Zylinder in nach außen gewölbte Flächen — und ein
-      sanft gebogener Arm *ist* örtlich ein Zylinder mit großem Radius, mit
-      kleinem Rückstand. Am Sockel von 160 auf 231 auf 14 mm kamen so zehn
-      Zapfen heraus, der dickste mit **Ø 631,6 mm**. Über sieben Modelle waren es
-      21 von 112 Zapfen und 19 von 165 Bohrungen, die breiter waren als ihr
-      eigener Körper. `_fits_in_the_body` misst jetzt **quer zur eigenen Achse**
-      und nicht an der dünnsten Kante — die erste Regel hätte 92 von 165
-      Bohrungen verworfen, die meisten davon zu Recht vorhanden: ein Loch Ø 7,1
-      durch eine 6,4 mm dünne Scheibe ist normal, dort liegt die dünne Richtung
-      in der Achse. Kein Grenzwert, ein Widerspruch. Die echten Sechskantzapfen
-      Ø 8,1468 der Querstangen bleiben unverändert erhalten.
-
-### Was der Durchgang bestätigt hat
-
-Die Schichtanalyse liefert je Körper Schichtzahl, Stützvolumen, Überhang
-(gesamt und schlimmste Schicht), dünnste Struktur, Inselhöhen und weiteste
-Brücke — bei 52 Körpern in Sekunden. Die Vorschlagsliste ist wirklich
-teilspezifisch: Der Sockel bekommt die vier Passungsregeln, **weil das
-verstiftete Teilen eine Passung angelegt hat**; die ausgehöhlte Ente bekommt
-Baumstützen und eine längere Mindestschichtzeit; die Querstange den Verbinder-
-vorschlag mit 3 → 5 Wänden. `warning:slice.long_bridge` und
-`warning:arrange.adhesion_too_close` kamen dort, wo sie hingehören.
-
-### Zwei Fehler im Prüflauf, die wie Fehler der Anwendung aussahen
-
-Beide festgehalten, weil sie beim nächsten Mal wieder so aussehen werden.
-**Erstens** brach der Lauf die Slicer ab, indem er zu früh weiterging: Der
-Zustandstext wechselt sofort auf „Der Slicer rechnet …", und wer darauf wartet,
-ist nach einem Wimpernschlag fertig. Im Bericht stand PrusaSlicer
-„Abgebrochen." und Orca „Der Slicer rechnet …", und allein der letzte lief
-durch. Das verlässliche Zeichen ist der Arbeiter (`_worker`).
-**Zweitens** setzte der Lauf den Slicerpfad im offenen Dialog um — kein
-Kundenweg, der wird im Konstruktor einmal gesucht. Die Profilauswahl der
-Orca-Familie blieb dabei stehen, und CuraEngine bekam `-j <Orca-Profil>` und
-starb in 0,1 Sekunden. Daraus wurde „Der Slicer hat keine Druckdatei
-geschrieben" — ein Satz über das Ende, nicht über die Ursache.
-
-### Was auffiel und eine Entscheidung braucht
-
-- [ ] **Der Slicer sagt, was er nicht konnte, und der Nutzer erfährt es nicht.**
-      Eine Platte in Bettkoordinaten (so kommt sie aus einer fremden 3MF) an
-      PrusaSlicer gegeben endet in `exit_code=0` und der Ausgabe „All objects
-      are outside of the print volume." Solidon fängt sie auf und legt sie unter
-      `values["output"]` ab, die Meldung lautet aber „Der Slicer hat keine
-      Druckdatei geschrieben." Was hilft, ist ein Klick auf *Auf dem Bett
-      anordnen* — und das steht nirgends. Regel 17 verlangt den
-      Handlungsvorschlag; wo er hingehört (erkannte Slicer-Ausgaben auf
-      Handlungen abbilden, wie `FINDING_ACTIONS` es für Befunde tut), ist eine
-      Entscheidung.
-- [ ] **Die Profilauswahl bleibt beim Slicerwechsel stehen.** `_start_profile_
-      search` steigt für Prusa und Cura früh aus und lässt die Auswahlfelder,
-      wie sie waren; `_slice` liest sie unbesehen. Heute unerreichbar, weil der
-      Pfad je Dialog feststeht — sobald es eine Slicerwahl im Dialog gibt, ist
-      es ein Fehler.

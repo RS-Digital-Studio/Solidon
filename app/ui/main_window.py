@@ -13,9 +13,10 @@ from __future__ import annotations
 
 import time
 import traceback
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager, suppress
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Any, Final
 
@@ -417,6 +418,25 @@ class _DownloadWorker(QThread):
         self.step.emit(share, text)
 
 
+@dataclass(frozen=True, slots=True)
+class _WriteFailure:
+    """Was nach einem gescheiterten Schreiben möglich ist (§2.7).
+
+    Zwei Wege, und beide braucht der Fall, der wirklich vorkommt: Die Datei
+    liegt in einem anderen Programm offen — dann hilft ein zweiter Anlauf auf
+    dieselbe Datei, sobald sie frei ist. Oder das Laufwerk ist voll, das Recht
+    fehlt, der Pfad ist weg — dann hilft ein anderer Ort.
+
+    Als Bündel und nicht als zwei Felder je Schreibweg: Export und Speichern
+    scheitern am selben Betriebssystem, und der Kunde bekommt in beiden Fällen
+    dieselben zwei Antworten. Was sie *tun*, weiß nur die Stelle, an der es
+    schiefging — deshalb stehen hier Aufrufe und keine Pfade.
+    """
+
+    again: Callable[[], None]
+    elsewhere: Callable[[], None]
+
+
 class _ExportWorker(QThread):
     """Der Export, abseits des Oberflächen-Threads (§2.8, §29).
 
@@ -694,6 +714,16 @@ class MainWindow(QMainWindow):
         """Ein Modell, das gerade aus dem Netz kommt (§16.3) — dieselbe
         Halteleine, derselbe Grund."""
         self._export_worker: Any = None
+        self._export_attempt: tuple[Path, ExportFormat] | None = None
+        """Wohin der laufende Export schreibt — für einen zweiten Anlauf."""
+        self._write_failure: _WriteFailure | None = None
+        """Was nach einem gescheiterten Schreiben möglich ist — oder ``None``.
+
+        Solange hier etwas steht, bietet :meth:`error_handlers` *Erneut
+        versuchen* und *Anderen Ort wählen* an. Ein Bündel und nicht zwei
+        Felder je Schreibweg: Export und Speichern scheitern am selben
+        Betriebssystem, und der Kunde bekommt in beiden Fällen dieselben zwei
+        Antworten."""
         """Der laufende Export (§2.8, §29). Solange er steht, ist der
         Menüeintrag gesperrt — zwei Läufe auf denselben Ordner wären ein
         Wettlauf um dieselben Dateinamen."""
@@ -2538,8 +2568,19 @@ class MainWindow(QMainWindow):
                 saved = self.session.save_project(path)
         except AppError as error:
             self.status_message.setText(self._announcement)
+            # **Der datenkritischste Schreibfehler von allen.** Wessen Projekt
+            # sich nicht speichern lässt, hat seine Arbeit noch nicht in
+            # Sicherheit — und bekam einen Dialog, der nur „Details anzeigen"
+            # anbot. Die Datei liegt in einem Programm offen oder das Laufwerk
+            # ist voll: dann hilft ein zweiter Anlauf auf dieselbe Datei, oder
+            # ein anderer Ort. Beides steht jetzt als Knopf da.
+            self._write_failure = _WriteFailure(
+                again=partial(self._save_to, path),
+                elsewhere=self.action_save_as,
+            )
             show_error(error, self)
             return
+        self._write_failure = None
         self.settings.remember(saved)
         save_settings(self.settings)
         self.announce(tr("Gespeichert"))
@@ -3109,6 +3150,34 @@ class MainWindow(QMainWindow):
             return
         target = Path(name)
         export_format: ExportFormat = _format_of(target, chosen_filter)
+        self._start_export(target, export_format)
+
+    def _start_export(self, target: Path, export_format: ExportFormat) -> None:
+        """Schreiben, wohin schon entschieden ist — ohne Dateidialog.
+
+        Getrennt von :meth:`action_export`, weil ein zweiter Anlauf denselben
+        Ort meint: Die häufigste Ursache für einen gescheiterten Export ist
+        eine Datei, die im Slicer offen liegt, und wer sie dort schließt, will
+        nicht Format, Ordner und Namen ein zweites Mal wählen (§2.7).
+
+        Eingesammelt werden die Körper hier neu und nicht mitgeschleppt: Zwischen
+        zwei Anläufen kann eine Auswertung gelaufen sein, und ein Körper aus der
+        alten Szene wäre ein Netz, das im Dokument nicht mehr steht.
+        """
+        result = self.session.last_result
+        if result is None or not result.scene.objects:
+            return
+        chosen = self.object_tree.selected_objects()
+        objects = [
+            entry
+            for object_id, entry in result.scene.objects.items()
+            if not chosen or object_id in chosen
+        ]
+        # Ein neuer Anlauf beginnt ohne die Vorgeschichte des alten: Was hier
+        # stehen bleibt, wäre beim nächsten Fehler ein Wiederholknopf auf ein
+        # Ziel, das niemand mehr gemeint hat.
+        self._export_attempt = (target, export_format)
+        self._write_failure = None
 
         worker = _ExportWorker(
             objects,
@@ -3143,6 +3212,9 @@ class MainWindow(QMainWindow):
 
     def _export_done(self, written: list[Path], findings: list[Finding]) -> None:
         """Was geschrieben wurde, und was dabei aufgefallen ist (§29)."""
+        # Geschrieben heißt: es gibt nichts zu wiederholen.
+        self._export_attempt = None
+        self._write_failure = None
         if findings:
             self.report.add_findings(list(findings))
             self._focus_report()
@@ -3155,8 +3227,30 @@ class MainWindow(QMainWindow):
         )
 
     def _export_failed(self, error: AppError) -> None:
-        """Der Fehlerdialog gehört in den Hauptthread, nicht in den Arbeiter."""
+        """Der Fehlerdialog gehört in den Hauptthread, nicht in den Arbeiter.
+
+        **Und er bekommt seinen Wiederholknopf.** ``FileWriteError`` schlägt
+        *Erneut versuchen* vor, und für keine der beiden Ausnahmen, die das tun,
+        gab es einen Handler — angezeigt wurde der Rat als Satz. Dabei ist das
+        hier der Fall, in dem er fast immer stimmt: Die Datei liegt im Slicer
+        offen, der Kunde schließt sie dort, und dann fehlt nur ein Klick. Was
+        wiederholt werden soll, weiß allein diese Stelle; deshalb steht das Ziel
+        hier und nicht in der Handlung.
+        """
+        attempt = self._export_attempt
+        if attempt is not None:
+            self._write_failure = _WriteFailure(
+                again=partial(self._start_export, attempt[0], attempt[1]),
+                elsewhere=self.action_export,
+            )
         show_error(error, self)
+
+    def _after_write_failure(self, way: str) -> None:
+        """Den zweiten Anlauf gehen — dieselbe Datei oder ein anderer Ort (§2.7)."""
+        failure = self._write_failure
+        if failure is None:
+            return
+        (failure.again if way == "again" else failure.elsewhere)()
 
     def _export_worker_done(self, worker: Any) -> None:
         if self._export_worker is worker:
@@ -5106,7 +5200,7 @@ class MainWindow(QMainWindow):
             return tr("Der Wert ist schon so eingestellt.")
         return f"{tr('Parameter gesetzt')}: {name} = {number}"
 
-    def edit_operation(self, op_id: int) -> None:
+    def edit_operation(self, op_id: int, field: str = "") -> None:
         """Eine Operation des Stapels wieder öffnen und ihr andere Zahlen
         geben (§15.4).
 
@@ -5114,6 +5208,11 @@ class MainWindow(QMainWindow):
         dem hier war der einzige Weg zu einer Bohrung zwei Millimeter weiter
         links, zurückzunehmen und neu zu bohren — und das ist ein Schritt zum
         Zurücknehmen, eine Position nicht.
+
+        ``field`` setzt den Cursor gleich in das Feld, um das es geht. Wer über
+        *Eingabe korrigieren* aus dem Prüfbericht kommt, hat dort einen Satz
+        über **einen** Wert gelesen; der Kern nennt ihn im Befund, und ohne
+        diesen Sprung müsste der Kunde ihn unter acht Zeilen wiederfinden.
         """
         try:
             entry = self.session.history.operation(op_id)
@@ -5186,6 +5285,10 @@ class MainWindow(QMainWindow):
             self.session.change_kernel(op_id, picked.name, values)
 
         self._open_operation_dialog(dialog, apply_change)
+        if field:
+            # Nach dem Öffnen: ein Fokus in einem Fenster, das noch nicht
+            # gezeigt wurde, ist keiner.
+            dialog.focus_field(field)
 
     def _parameter_values(self) -> dict[str, float]:
         """Die aufgelösten Projektparameter — der Skizzeneditor rechnet
@@ -5701,6 +5804,39 @@ class MainWindow(QMainWindow):
             "scale_to_fit": self._scale_after_error,
             "place_on_bed": self._place_on_bed_after_error,
             "arrange_on_bed": self._arrange_after_error,
+            "correct_input": self._correct_after_error,
+            # **Die dritte Bauraum-Handlung.** Teilen und Verkleinern wurden
+            # nachgezogen, als der Prüfbericht seine Handlungen bekam; „anderes
+            # Druckerprofil" blieb liegen, weil ihr Weg fehlte — der Drucker
+            # eines offenen Projekts wird in den Druckeinstellungen gewechselt
+            # (``_scene_profile_changed``) und nicht in den Anwendungs-
+            # einstellungen, wo nur die Vorgabe für neue Projekte steht. Wer
+            # einen größeren Drucker hat, ist damit einen Klick entfernt statt
+            # gezwungen, sein Teil zu verkleinern.
+            "choose_printer": lambda _error: self.action_print_settings(),
+            # Eine Projektdatei aus einer neueren Fassung sagt „Ein Update
+            # öffnet sie" — und der Weg dorthin steht im Hilfe-Menü.
+            "check_updates": lambda _error: self.action_check_updates(),
+            # **Der Rat, der die ganze Zeit ins Leere zeigte.** Im Fenster läuft
+            # die kurze Rückfallkette (§31); *Voxelstufe erzwingen* ist deshalb
+            # der richtige nächste Schritt und war doch nur ein Satz. Angeboten
+            # wird er nur, wenn die Voxelstufe noch nicht dran war — das
+            # entscheidet ``BooleanFailedError`` an seinen versuchten Stufen.
+            "use_voxel_stage": lambda _error: self.session.recompute_fully(),
+            # **Nur wo es etwas zu wiederholen gibt.** Nach einem gescheiterten
+            # Schreiben sind das die zwei Antworten, die wirklich helfen: die
+            # Datei freigeben und *erneut* schreiben, oder einen *anderen Ort*
+            # nehmen. Außerhalb dieses Falls wüsste niemand, *was* wiederholt
+            # werden soll — derselbe Grundsatz wie oben: Was hier nicht steht,
+            # wird nicht angeboten.
+            **(
+                {
+                    "retry": lambda _error: self._after_write_failure("again"),
+                    "save_elsewhere": lambda _error: self._after_write_failure("elsewhere"),
+                }
+                if self._write_failure is not None
+                else {}
+            ),
             # **Der Draht, der fehlte.** ``install`` vergaben ``ScadUnavailable``
             # und seit dieser Sitzung ``BRepUnavailable`` und jeder
             # ``ExternalToolError`` — ohne Handler wurde daraus ein grauer Satz
@@ -5772,6 +5908,32 @@ class MainWindow(QMainWindow):
         if object_id is not None:
             self.action_auto_split(object_id)
 
+    def _correct_after_error(self, error: AppError) -> None:
+        """Den Schritt wieder öffnen, dessen Werte nicht gingen (§2.7, §2.1).
+
+        **Der häufigste Fehler des Programms hatte keinen Weg zurück.** Eine
+        Operation, deren Werte nicht gehen, wirft keinen Fehlerdialog: Der Kern
+        macht daraus einen Befund und hält die Kette an. Im Prüfbericht stand
+        dann „Der Wert liegt über dem zulässigen Höchstwert" — und der Weg zu
+        diesem Wert war, den Schritt im Verlauf zu suchen und doppelzuklicken.
+        *Eingabe korrigieren* stand daneben, aber nur als Satz: die häufigste
+        Handlung des Kerns, und die einzige ohne Handler.
+
+        ``edit_operation`` ist genau das Richtige dafür: derselbe erzeugte
+        Dialog auf den Werten aus der Datei, und beim Übernehmen wird der
+        Schritt **ersetzt** statt ein zweiter angelegt (§15.4). Damit ist auch
+        das Versprechen aus §2.1 eingelöst, dass jeder Wert nachträglich
+        änderbar ist — an der Stelle, an der es zählt.
+        """
+        if error.op_id is None:
+            # ``offered_actions`` filtert das (``NEEDS_OP``), und das Menü am
+            # Befund bietet die Handlung nur mit Kennung an. Bleibt als
+            # Zusicherung für jeden anderen Aufrufer.
+            return
+        # Der Kern nennt das Feld, das nicht ging (``ValidationError.field``),
+        # und der Befund trägt es weiter. Damit steht der Cursor gleich dort.
+        self.edit_operation(error.op_id, str(error.values.get("field", "")))
+
     def _place_on_bed_after_error(self, error: AppError) -> None:
         """Ein Klick gegen den häufigsten Befund von Weg 1 (§17.1, §2.7).
 
@@ -5801,7 +5963,6 @@ class MainWindow(QMainWindow):
         """
         spec = REGISTRY.get("arrange_bed")
         self.session.apply(spec.title, [OperationDraft(op=spec.name, params={})])
-
 
     def _scale_after_error(self, error: AppError) -> None:
         """Auf den Bauraum verkleinern — mit dem Faktor, der wirklich passt.

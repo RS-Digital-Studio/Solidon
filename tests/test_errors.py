@@ -124,6 +124,29 @@ def test_boolean_failure_keeps_stages_and_seed() -> None:
     assert error.as_dict()["values"]["seed"] == 20260727
 
 
+def test_the_boolean_failure_says_which_stages_really_ran() -> None:
+    """„Auf allen Stufen" war beim Arbeiten im Fenster nie wahr (§17.2, §31).
+
+    Dort läuft die kurze Kette — direkt und verschweißt —, die vollen vier
+    Stufen laufen beim Export. Der Titel behauptete trotzdem, es sei alles
+    versucht, und daneben stand als einziger Rat *Voxelstufe erzwingen*: also
+    genau die Stufe, die noch offen war. Zwei Sätze, die sich widersprechen.
+
+    Jetzt sagt der Titel, was gilt — und wo die Voxelstufe wirklich dran war,
+    fällt der Rat weg, statt eine Wiederholung anzubieten.
+    """
+    entwurf = BooleanFailedError(attempted=("direct", "welded"))
+    assert "Entwurf" in str(entwurf.title)
+    assert errors.USE_VOXEL_STAGE in entwurf.suggestions, "hier ist die Stufe noch offen"
+
+    voll = BooleanFailedError(attempted=("direct", "welded", "jittered", "voxel"))
+    assert "allen Stufen" in str(voll.title)
+    assert errors.USE_VOXEL_STAGE not in voll.suggestions, (
+        "die Voxelstufe war dran — sie zu erzwingen wäre eine Wiederholung"
+    )
+    assert voll.suggestions, "without a suggestion the error ends in a dead end"
+
+
 def test_cancelling_is_not_an_error() -> None:
     assert not issubclass(errors.OperationCancelled, AppError)
 

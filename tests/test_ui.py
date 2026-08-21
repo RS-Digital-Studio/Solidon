@@ -1427,9 +1427,22 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
     aus, welcher gedrückt wurde — jeder schloss ein Fenster und tat sonst
     nichts. Was hier zählt: für jede Handlung, die ein Fehler vorschlägt,
     gibt es entweder einen Handler oder einen benannten Grund.
+
+    **Die Liste der Ausnahmen ist auf drei geschrumpft**, und jede trägt ihren
+    Grund: ``cancel`` ist das Schließen und kein Vorschlag; ``choose`` fragt der
+    Kern über ``ctx.ask``, bevor er wirft; ``use_voxel_stage`` ist eine Stufe
+    der Rückfallkette und kein Parameter, den ein Dialog setzen könnte (§17.2).
+    ``correct_input`` und ``choose_printer`` standen hier, bis ihr Weg gebaut
+    war — der erste öffnet den Schritt, der zweite führt in die
+    Druckeinstellungen. ``retry`` und ``save_elsewhere`` sind verdrahtet, stehen
+    aber weiter hier: Sie gelten einem **bestimmten** gescheiterten Schreiben
+    und erscheinen nur, solange es eines gibt.
     """
     known = window.error_handlers()
-    postponed = {"use_voxel_stage", "choose", "choose_printer", "cancel", "correct_input", "retry"}
+    # ``retry`` und ``save_elsewhere`` hängen an einem gescheiterten Schreiben
+    # und stehen darum nicht immer in ``known`` — angeboten werden sie genau
+    # dann, wenn sie wirken können (``_WriteFailure``).
+    postponed = {"use_voxel_stage", "choose", "cancel", "retry", "save_elsewhere"}
 
     for name, value in vars(errors).items():
         if not isinstance(value, errors.Action):
@@ -1437,6 +1450,190 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
         assert value.id in known or value.id in postponed, (
             f"{name} wird angeboten, aber nichts führt sie aus"
         )
+
+
+def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -> None:
+    """§2.7 verspricht anklickbare Handlungen, nicht welche zum Suchen.
+
+    Gebaut waren sie längst — nur hingen sie an einem Rechtsklick auf eine
+    Listenzeile, und den probiert dort niemand aus. Der Fehlerdialog hat für
+    dieselbe Sache seit je Knöpfe; der Prüfbericht, in dem die häufigeren
+    Fälle landen (ein Modell unter der Platte, ein Schritt mit einem
+    unmöglichen Wert), hatte keine.
+
+    Und die Zeile bleibt leer, wo nichts zu tun ist: „Doppelte Punkte wurden
+    verschweißt" braucht keinen Knopf.
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    report = window.report
+    report.show_result(window.session.last_result, window.session.project.document)
+
+    def offered() -> list[str]:
+        # ``isHidden`` und nicht ``isVisible``: offscreen wird das Fenster nie
+        # gezeigt, und dann meldet jedes Kind sich als unsichtbar — dieselbe
+        # Unterscheidung, die der Test des Vorschaubandes trifft.
+        QApplication.processEvents()
+        row = report._offers
+        return [b.text() for b in row.findChildren(QPushButton)] if not row.isHidden() else []
+
+    assert offered() == [], "ohne gewählten Befund steht dort nichts"
+
+    def choose(code: str) -> None:
+        for row in range(report.list.count()):
+            finding = report.list.item(row).data(Qt.ItemDataRole.UserRole)
+            if finding.code == code:
+                report.list.setCurrentRow(row)
+                return
+        raise AssertionError(f"kein Befund {code!r} im Bericht")
+
+    choose("arrange.below_bed")
+    assert offered() == [str(errors.PLACE_ON_BED.label)]
+
+    choose("ingest.welded")
+    assert offered() == [], "ein Hinweis ohne Handlung bekommt keinen Knopf"
+
+
+def test_a_stopped_step_is_one_click_from_its_own_dialog(window: MainWindow) -> None:
+    """Der häufigste Fehler des Programms hatte keinen Weg zurück (§2.7, §2.1).
+
+    Eine Operation, deren Werte nicht gehen, wirft **keinen** Fehlerdialog: Der
+    Kern macht daraus einen Befund und hält die Kette an (§15.3). Im Bericht
+    stand dann „Der Wert liegt über dem zulässigen Höchstwert", und der Weg zu
+    diesem Wert war, den Schritt im Verlauf zu suchen und doppelzuklicken.
+    *Eingabe korrigieren* stand daneben — als Satz, denn es war die häufigste
+    Handlung des Kerns und die einzige ohne Handler.
+
+    Geprüft wird die ganze Kette: dass der Befund aus der Operation kommt, dass
+    er seine Schrittkennung trägt, dass die Handlung angeboten wird, und dass
+    sie den Schritt öffnet, der wirklich gescheitert ist.
+    """
+    from app.ui.panels import actions_for, as_error
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    object_id = next(iter(window.session.last_result.scene.objects))
+
+    window.session.apply(
+        "Bohrung setzen",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(object_id,),
+                params={"diameter": 5000.0, "x": 0.0, "y": 0.0, "z": 4.0, "axis": "z"},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+
+    result = window.session.last_result
+    assert not result.complete, "ein unmöglicher Wert hält die Kette an"
+    stopped = [f for f in result.scene.report.findings if f.code.startswith("op.")]
+    assert stopped, "der Fehler der Operation steht als Befund im Bericht"
+    finding = stopped[0]
+    assert finding.op_id == result.stopped_at, "und er nennt den Schritt, der hängt"
+
+    offers = actions_for(finding)
+    handlers = window.error_handlers()
+    assert [action.id for action in offers] == ["correct_input"]
+    assert offers[0].id in handlers, "angeboten, aber nichts führt es aus"
+
+    opened: list[int] = []
+    # Mit ``field``: der Handler gibt das Feld mit, in das der Cursor gehört.
+    window.edit_operation = lambda op_id, field="": opened.append(op_id)  # type: ignore[method-assign]
+    handlers["correct_input"](as_error(finding))
+
+    assert opened == [result.stopped_at], "geöffnet wird der Schritt, der gescheitert ist"
+
+
+def test_correcting_puts_the_cursor_in_the_field_that_failed(window: MainWindow) -> None:
+    """Der Befund spricht über **einen** Wert — der Dialog soll ihn zeigen.
+
+    ``ValidationError`` nennt das Feld, und der Befund trägt es weiter. Ohne
+    den Sprung dorthin geht ein Dialog mit acht Zeilen auf, und der Kunde
+    sucht, welche gemeint war. Geprüft wird an der ganzen Kette: Bericht,
+    Knopf, Dialog, Fokus.
+    """
+    from PySide6.QtWidgets import QDoubleSpinBox
+
+    from app.ui.panels import as_error
+
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    object_id = next(iter(window.session.last_result.scene.objects))
+    window.session.apply(
+        "Bohrung setzen",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=(object_id,),
+                params={"diameter": 5000.0, "x": 0.0, "y": 0.0, "z": 4.0, "axis": "z"},
+            )
+        ],
+    )
+    window.session.wait_for_idle()
+
+    finding = next(
+        f for f in window.session.last_result.scene.report.findings if f.code.startswith("op.")
+    )
+    assert finding.values.get("field") == "diameter", "der Kern nennt das Feld nicht mehr"
+
+    window.error_handlers()["correct_input"](as_error(finding))
+    QApplication.processEvents()
+
+    dialog = window._op_dialog
+    assert dialog is not None, "der Dialog ging nicht auf"
+    try:
+        editor = dialog._editors["diameter"]
+        inner = editor.findChild(QDoubleSpinBox)
+        assert inner is not None
+        assert inner.hasFocus(), "der Cursor steht nicht im Feld, um das es geht"
+    finally:
+        dialog.reject()
+
+
+def test_a_boolean_that_failed_in_draft_can_go_the_full_chain(window: MainWindow) -> None:
+    """Der Rat zeigte ins Leere, und zwar an der häufigsten Stelle (§17.2, §31).
+
+    Im Fenster läuft die kurze Rückfallkette; *Voxelstufe erzwingen* ist damit
+    der richtige nächste Schritt — und war ein Satz ohne Knopf. Jetzt rechnet
+    er einmal mit der vollen Kette, und danach ist die Sitzung wieder so
+    schnell wie vorher.
+    """
+    from app.ui.dialogs import offered_actions
+
+    handlers = window.error_handlers()
+    entwurf = errors.BooleanFailedError(attempted=("direct", "welded"))
+    assert "use_voxel_stage" in {a.id for a in offered_actions(entwurf, handlers)}
+
+    handlers["use_voxel_stage"](entwurf)
+    assert window.session._quality_once == "fine", "der Lauf bleibt im Entwurf"
+    window.session.wait_for_idle()
+    assert window.session._quality_once is None, "und der nächste ist wieder Entwurf"
+
+
+def test_correcting_is_not_offered_where_there_is_no_step(window: MainWindow) -> None:
+    """Ein Knopf, der nichts tun kann, wird nicht gezeigt.
+
+    *Eingabe korrigieren* öffnet einen Schritt. Ein Fehler beim Lesen oder
+    Schreiben einer Datei hat keinen — dort bliebe der Knopf stumm, und das ist
+    der Grund, aus dem das Projekt Vorschläge ohne Handler gar nicht erst
+    anbietet.
+    """
+    from app.ui.dialogs import offered_actions
+
+    handlers = window.error_handlers()
+    assert "correct_input" in handlers
+
+    without = errors.ValidationError(field="diameter", detail="zu groß", constraint="maximum")
+    assert "correct_input" not in {a.id for a in offered_actions(without, handlers)}
+
+    with_step = errors.ValidationError(
+        field="diameter", detail="zu groß", constraint="maximum", op_id=2
+    )
+    assert "correct_input" in {a.id for a in offered_actions(with_step, handlers)}
 
 
 def test_the_finding_below_the_bed_is_one_click_from_being_fixed(window: MainWindow) -> None:
@@ -2313,6 +2510,148 @@ def test_a_failed_export_reports_in_the_main_thread(
     assert shown, "der Fehler des Arbeiters kam nirgends an"
     assert shown[0].suggestions, "und er trägt keinen Handlungsvorschlag"
     assert window.export_action.isEnabled(), "nach dem Fehlschlag darf man es wieder versuchen"
+
+
+def test_a_failed_save_offers_both_ways_out(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der datenkritischste Schreibfehler von allen (§2.7, Regel 17).
+
+    Wessen Projekt sich nicht speichern lässt, hat seine Arbeit noch nicht in
+    Sicherheit — und bekam einen Dialog mit *Details anzeigen*. Die zwei Fälle,
+    die wirklich vorkommen, haben beide eine Antwort: Die Datei liegt in einem
+    anderen Programm offen (dann hilft derselbe Weg noch einmal), oder das
+    Laufwerk ist voll (dann hilft ein anderer Ort).
+    """
+    from app.ui import main_window as module
+    from app.ui.dialogs import offered_actions
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    target = tmp_path / "belegt.p3d"
+    attempts: list[Path] = []
+    real_save = type(window.session).save_project
+
+    def busy(session: Any, path: Path) -> Path:
+        attempts.append(path)
+        if len(attempts) == 1:
+            raise errors.FileWriteError(target=str(path), detail="Die Datei ist in Benutzung.")
+        return real_save(session, path)
+
+    monkeypatch.setattr(type(window.session), "save_project", busy)
+    monkeypatch.setattr(module, "show_error", lambda error, *args, **kwargs: None)
+
+    window._save_to(target)
+
+    handlers = window.error_handlers()
+    failure = errors.FileWriteError(target=str(target), detail="Die Datei ist in Benutzung.")
+    offered = [action.id for action in offered_actions(failure, handlers)]
+    assert offered[:2] == ["retry", "save_elsewhere"], offered
+    assert "correct_input" not in offered, "an einem Schreibfehler gibt es keine Eingabe"
+
+    # Das andere Programm gibt die Datei frei, der Kunde drückt den Knopf.
+    handlers["retry"](failure)
+
+    assert attempts == [target, target], "der zweite Anlauf ging woandershin"
+    assert target.is_file(), "gespeichert wurde nicht"
+    assert "retry" not in window.error_handlers(), "nach dem Erfolg bleibt nichts offen"
+
+
+def test_a_failed_save_can_choose_another_place(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der zweite Weg: ein anderer Ort, über den Dialog, den es dafür gibt."""
+    from app.ui import main_window as module
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    def refuse(session: Any, path: Path) -> Path:
+        raise errors.FileWriteError(target=str(path), detail="Kein Platz.")
+
+    monkeypatch.setattr(type(window.session), "save_project", refuse)
+    monkeypatch.setattr(module, "show_error", lambda error, *args, **kwargs: None)
+    window._save_to(tmp_path / "voll.p3d")
+
+    # Gefragt wird der **Dateidialog** und nicht die Methode: ``_WriteFailure``
+    # bindet ``action_save_as`` beim Anlegen, und ein später ersetztes Attribut
+    # sähe der Knopf nie — er hätte den echten Dialog geöffnet und den Test
+    # offscreen zum Hängen gebracht.
+    from PySide6.QtWidgets import QFileDialog
+
+    asked: list[str] = []
+
+    def dialog(*args: Any, **kwargs: Any) -> tuple[str, str]:
+        asked.append("gefragt")
+        return "", ""
+
+    monkeypatch.setattr(QFileDialog, "getSaveFileName", staticmethod(dialog))
+    window.error_handlers()["save_elsewhere"](errors.FileWriteError(target="x", detail="y"))
+
+    assert asked == ["gefragt"], "the other-place button does not reach the save dialog"
+
+
+def test_a_failed_export_can_be_repeated_without_choosing_the_file_again(
+    window: MainWindow, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die häufigste Ursache ist eine Datei, die im Slicer offen liegt (§2.7).
+
+    ``FileWriteError`` schlägt *Erneut versuchen* vor, und für keine der beiden
+    Ausnahmen, die das tun, gab es einen Handler — der Rat stand als Satz im
+    Dialog. Wer die Datei im Slicer schloss, musste Format, Ordner und Namen
+    ein zweites Mal wählen.
+
+    Geprüft wird beides: dass der Knopf erscheint, sobald es etwas zu
+    wiederholen gibt, dass er an denselben Ort schreibt — und dass er
+    **verschwindet**, wenn nichts offen ist. Ein Knopf, der nichts tut, ist
+    schlimmer als keiner.
+    """
+    from PySide6.QtWidgets import QFileDialog
+
+    from app.ui import main_window as module
+    from app.ui.dialogs import offered_actions
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+
+    target = tmp_path / "belegt.stl"
+    assert "retry" not in window.error_handlers(), "ohne Fehlschlag gibt es nichts zu wiederholen"
+
+    real_write = module.write_plan
+    attempts: list[int] = []
+
+    def busy_file(*args: Any, **kwargs: Any) -> Any:
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise errors.FileWriteError(target=str(target), detail="Die Datei ist in Benutzung.")
+        return real_write(*args, **kwargs)
+
+    monkeypatch.setattr(module, "write_plan", busy_file)
+    monkeypatch.setattr(module, "show_error", lambda error, *args, **kwargs: None)
+    monkeypatch.setattr(
+        QFileDialog,
+        "getSaveFileName",
+        staticmethod(lambda *args, **kwargs: (str(target), "STL (*.stl)")),
+    )
+
+    window.action_export()
+    wait_for_export(window)
+
+    handlers = window.error_handlers()
+    assert "retry" in handlers, "nach dem Fehlschlag fehlt der Wiederholknopf"
+    failed = errors.FileWriteError(target=str(target), detail="Die Datei ist in Benutzung.")
+    assert "retry" in {action.id for action in offered_actions(failed, handlers)}
+
+    # Der Slicer gibt die Datei frei, der Kunde drückt den Knopf.
+    handlers["retry"](failed)
+    wait_for_export(window)
+
+    assert target.is_file(), "der zweite Anlauf hat nicht geschrieben"
+    assert len(attempts) == 2, "und er hat keinen dritten gebraucht"
+    assert "retry" not in window.error_handlers(), (
+        "nach dem geschriebenen Export gibt es nichts mehr zu wiederholen"
+    )
 
 
 def test_the_print_settings_open_before_the_layer_analysis(

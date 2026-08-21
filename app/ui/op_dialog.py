@@ -998,6 +998,36 @@ class OperationDialog(QDialog):
             taken = True
         return taken
 
+    def focus_field(self, name: str) -> bool:
+        """Den Cursor in ein bestimmtes Feld setzen — und es aufklappen, wenn es
+        hinten liegt.
+
+        Für den Weg zurück aus einem Befund: Ein Schritt, dessen Wert nicht
+        ging, wird über *Eingabe korrigieren* wieder geöffnet, und der Kern
+        nennt dabei das Feld. Ohne diesen Sprung sieht der Kunde einen Dialog
+        mit acht Zeilen und muss selbst suchen, welche gemeint war — die
+        Auskunft war da und wurde nicht benutzt.
+
+        Ein Feld hinter „Weitere Einstellungen" wird mitgeöffnet: Fokus in
+        etwas Zugeklapptem ist kein Fokus, sondern ein Cursor, den niemand
+        findet (§2.4).
+        """
+        editor = self._editors.get(name)
+        if editor is None:
+            return False
+        entry = next((item for item in self.spec.params.spec() if item.name == name), None)
+        klappe = getattr(self, "advanced", None)
+        if entry is not None and entry.placement != "front" and klappe is not None:
+            klappe.setChecked(True)
+        editor.setFocus(Qt.FocusReason.OtherFocusReason)
+        # Ein ``ValueField`` ist ein Verbund; der Cursor gehört in sein Drehfeld,
+        # und der Wert darin wird ausgewählt, damit Tippen ihn ersetzt.
+        inner = editor.findChild(QDoubleSpinBox)
+        if inner is not None:
+            inner.setFocus(Qt.FocusReason.OtherFocusReason)
+            inner.selectAll()
+        return True
+
     def take_point(self, point: tuple[float, float, float]) -> bool:
         """Trägt einen angeklickten Punkt in die Positionsfelder ein.
 
