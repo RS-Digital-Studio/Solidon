@@ -1391,8 +1391,17 @@ Druckteil von der ersten Linie bis zum Export im selben Programm.
 
 - **Eine Skizze ist ein Datenmodell im Kern** (Verträge in §9): Ebene aus
   einer Hauptebene oder einer angeklickten planaren Fläche, Elemente (Linie,
-  Bogen, Kreis, Punkt), Bedingungen (Maß, Koinzidenz, horizontal, vertikal,
-  parallel, senkrecht, tangential, symmetrisch, fest). Kein Qt darunter.
+  Bogen, Kreis, Punkt, Spline), Bedingungen (Maß, Koinzidenz, horizontal,
+  vertikal, parallel, senkrecht, tangential, symmetrisch, fest, Referenz).
+  Kein Qt darunter.
+
+  **Spline und Referenz kamen später dazu** und standen bis zum 21.08.2026
+  nur in der Roadmap. Ein Spline trägt eine Kurve, die sich nicht aus Bögen
+  bauen lässt; eine Referenzbedingung ist ein Maß, das anzeigt statt
+  festzulegen — sie ändert die Freiheitsgrade nicht und kann deshalb nie in
+  einen Konflikt geraten. Nachgetragen bei der Durchsicht der Skizzen, weil
+  eine Liste, die zwei Einträge zurückhängt, beim nächsten Abgleich als
+  Widerspruch gelesen wird.
 - **Die Skizze lebt als Parameterwert der Operation, die sie verbraucht**
   (`sketch_extrude`, `sketch_pocket`, `sketch_revolve`, `sketch_sweep`).
   Bearbeiten heißt `change_params` auf dem Schritt im Verlauf — dieselbe
