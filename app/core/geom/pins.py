@@ -410,9 +410,24 @@ def add_pins(
         )
         pin_offset = -plan.length / 2.0
 
+    # **Die Bohrung wächst unter ihren Ursprung, der Stift darüber.**
+    # Beide Bausteine sind Paare, und seit „Eine Passbohrung, die aufsetzte"
+    # liegt die abtragende Hälfte unter dem Ursprung — wie die Magnettasche es
+    # seit je tut (§24.1). ``_along_normal`` erwartet einen Körper, der auf +Z
+    # steht: die Bohrung landete damit in der *ersten* Hälfte, wo sie nichts
+    # zu tun hatte, und die zweite bekam kein Loch. Stifte ohne Gegenloch, und
+    # der Prüfbericht sagte nichts, weil geometrisch alles glatt blieb.
+    #
+    # Versetzt wird um die **gemessene** Tiefe des Körpers, nicht um die
+    # übergebene Länge: Der Schnappverbinder rechnet sich seine Entlastung
+    # selbst dazu (5,4 angefordert, 5,8 geliefert), und eine Zahl aus dem
+    # Aufruf wäre für ihn falsch. Wächst ein Baustein später wieder nach oben,
+    # ist die Tiefe null und dieser Versatz verschwindet von selbst.
+    bore_offset = -float(bore_body.raw.bounds[0][2])
+
     for index, position in enumerate(plan.positions, start=1):
         placed_pin = _along_normal(pin_body, plan.normal, position, pin_offset)
-        placed_bore = _along_normal(bore_body, plan.normal, position, 0.0)
+        placed_bore = _along_normal(bore_body, plan.normal, position, bore_offset)
 
         pair.first = boolean("union", [pair.first, placed_pin]).mesh
         pair.second = boolean("difference", [pair.second, placed_bore]).mesh
