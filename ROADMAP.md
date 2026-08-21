@@ -48,12 +48,11 @@ bekommt einen roten Lauf.
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
 | Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | die Entscheidung des Bauplans, welche Operation auf ein fertiges Gewinde gehört; bis dahin steht `thread` als benannte Ausnahme im Konsistenztest |
-| Kein Feld der Druckeinstellungen erklärt sich | Zwei Tabellen für dieselbe Sache (21.08.2026) | eine Entscheidung über den Umfang — fünfzehn Sätze für die Felder mit Fachbegriff oder alle sechsundfünfzig, was 336 Texte in sechs Sprachen sind |
+| Der Profil-Test ist unter Last wettlaufanfällig | Der dritte Durchgang: was hinter dem Wartezustand lag (21.08.2026) | eine Entscheidung, wo der Test seinen Zustand festhält — an den Widgets oder an einem gestoppten Arbeiter; einmal rot in einem Lauf über 66 Dateien, sonst grün, auch am Stand davor |
 | Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
 | Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
-| Der Profil-Test ist unter Last wettlaufanfällig | Der dritte Durchgang: was hinter dem Wartezustand lag (21.08.2026) | eine Entscheidung, wo der Test seinen Zustand festhält — an den Widgets oder an einem gestoppten Arbeiter; einmal rot in einem Lauf über 66 Dateien, sonst grün, auch am Stand davor |
 
 ---
 
@@ -10106,6 +10105,31 @@ zurückgenommenen Schritt dreifach — Wort, Durchstreichung, Farbe (Regel 18).
       sind eine eigene Liste und liefen daran vorbei. Genau dort saßen die
       sechzehn. Geprüft werden jetzt beide Quellen gegen dieselbe Tabelle, und
       sechs verwaiste Katalogeinträge sind mit dem Pflegewerkzeug gefallen.
+- [x] **Kein Feld der Druckeinstellungen erklärte sich.** Sechsundfünfzig
+      Felder, keines mit Tooltip — während jeder der 136 Menüeinträge einen
+      Satz trägt und jeder Operationsparameter seinen `doc`-Satz. Die Frage
+      war nicht *ob*, sondern *wie weit*, und ein Dialog, in dem fünfzehn von
+      sechsundfünfzig Feldern einen Tooltip haben, lehrt niemanden, dass es
+      Tooltips gibt (Konsistenz vor Vollständigkeit). Also alle
+      sechsundfünfzig. Der Satz wiederholt nicht den Titel, sondern sagt, was
+      passiert, wenn man den Wert bewegt: „Rechnet die Außenwand auf ihr
+      Sollmaß statt auf die Bahnmitte. Für Passungen richtig, sonst unnötig."
+      Er hängt an **beiden** Hälften der Zeile — am Eingabefeld und an der
+      Beschriftung, denn wer eine Zeile nicht versteht, zeigt auf das
+      unverständliche Wort und nicht auf den Kasten daneben — und dazu als
+      `statusTip` und `accessibleDescription`. 336 Texte: 56 deutsche Quellen
+      und 280 Katalogeinträge. Das Vokabular kommt aus den Feldtiteln, die es
+      schon gab (Bahn → line / cordón / ligne / cordone / linha); Slicer,
+      Brim, Skirt und Raft bleiben überall stehen, wie die Feldnamen daneben.
+      Der Farbknopf ist der eine Sonderfall: Sein Tooltip nennt zuerst den
+      Hexwert, den sonst nichts zeigt, und hängt den Satz dahinter.
+- [x] **Ein Test lief nur, wenn vorher ein anderer gelaufen war.**
+      `test_the_colour_button_says_which_colour_it_is` baute ein Widget ohne
+      `QApplication`. Allein aufgerufen bringt das den ganzen Lauf mit
+      0xC0000409 um — kein Wort Ausgabe, nur ein Rückgabewert; in der vollen
+      Datei hatte ein früherer Test die Anwendung schon gebaut, und welcher
+      der beiden Fälle eintritt, entscheidet `pytest-randomly`. Gefunden beim
+      Gegenprobieren des Tooltip-Tests, der dasselbe Muster geerbt hatte.
 - [x] **Zwei Körper gewählt, ein Loch — und kein Wort dazu, in welchem.** Eine
       Operation nimmt so viele Körper, wie sie deklariert, und zwar in
       Klickreihenfolge (`inputs_for`). Bei zwei gewählten Würfeln und *Bohrung
@@ -10119,12 +10143,3 @@ zurückgenommenen Schritt dreifach — Wort, Durchstreichung, Farbe (Regel 18).
 
 ### Was auffiel und eine Entscheidung braucht
 
-- [ ] **Kein Feld der Druckeinstellungen erklärt sich.** Sechsundfünfzig
-      Felder, keines mit Tooltip — während jeder der 136 Menüeinträge einen
-      Satz trägt und jeder Operationsparameter seinen `doc`-Satz. Bei
-      „Schichthöhe" und „Fülldichte" braucht es keinen; bei „Außenwand auf
-      Sollmaß", „Oberfläche bügeln", „Wände nicht überfahren" und „Abstreifen"
-      schon. Die Entscheidung ist nicht *ob*, sondern *wie weit*: Ein Dialog,
-      in dem fünfzehn von sechsundfünfzig Feldern einen Tooltip haben, lehrt
-      niemanden, dass es Tooltips gibt (Konsistenz vor Vollständigkeit) — alle
-      sechsundfünfzig sind 336 Texte in sechs Sprachen.

@@ -40,6 +40,20 @@ und die Felder daneben heißen „Skirt-Runden", „Brim-Breite",
 „Raft-Schichten" — ein Wert, der anders heißt als sein Feld, ist eine Fährte
 ins Nichts. Dasselbe gilt für Algorithmennamen (`gyroid`, `arachne`).
 
+**Jedes Feld sagt, was es tut — und zwar alle.** Die sechsundfünfzig Felder
+der Druckeinstellungen tragen je einen `note`-Satz: nicht den Titel noch
+einmal, sondern was passiert, wenn man den Wert bewegt („Rechnet die Außenwand
+auf ihr Sollmaß statt auf die Bahnmitte. Für Passungen richtig, sonst
+unnötig."). Der Satz gehört an **beide** Hälften der Zeile — `_editor` setzt
+ihn am Eingabefeld, `_label` an der Beschriftung, denn wer eine Zeile nicht
+versteht, zeigt auf das unverständliche Wort und nicht auf den Kasten daneben.
+Dazu `statusTip` und `accessibleDescription`: die Statuszeile zeigt ihn ohne
+Wartezeit, der Bildschirmleser liest ihn vor (Regel 18 — nicht nur eine
+Kodierung). Ein Widget, das seinen Tooltip selbst führt, behält ihn: Der
+Farbknopf nennt darin den Hexwert, den sonst nichts zeigt, und hängt den Satz
+dahinter. Fünfzehn erklärte Felder von sechsundfünfzig wären schlimmer als
+keines — dann lernt niemand, dass es hier Sätze gibt.
+
 Bilder statt
 Wörter, wo ein Wort nichts zeigt: die Texturmuster tragen ihre Kachel aus
 `figures.texture_tile`, erkannt an den Werten des Feldes und nicht an seinem
@@ -745,6 +759,14 @@ Wer den Zustand in einem Test setzt, bekommt ihn zurückgesetzt
 Oberflächentests laufen offscreen (`QT_QPA_PLATFORM=offscreen`, von
 `tests/conftest.py` gesetzt). Eine neue Ansicht ohne Test in `tests/test_ui.py`
 oder einer der spezielleren Dateien ist unfertig.
+
+**Ein Widget braucht die `QApplication` in der Signatur, nicht im Glück.** Wer
+ein Widget ohne sie baut, bringt den ganzen Lauf mit 0xC0000409 um — ohne ein
+Wort Ausgabe, nur mit einem Rückgabewert. In der vollen Datei fällt das nicht
+auf, weil ein früherer Test die Anwendung schon gebaut hat; ob das passiert,
+entscheidet `pytest-randomly`. Also nimmt jeder Test, der ein Widget anfasst,
+`qt_app` oder eine Fixture, die darauf aufbaut — auch der, der scheinbar nur
+eine Zeichenkette prüft.
 
 ## Die Ansicht
 

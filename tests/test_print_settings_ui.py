@@ -19,7 +19,9 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDoubleSpinBox,
+    QFormLayout,
     QGroupBox,
+    QLabel,
     QSpinBox,
 )
 
@@ -194,12 +196,16 @@ def test_changing_the_quality_reloads_every_field(dialog: PrintSettingsDialog) -
     assert editor.value() == pytest.approx(dialog.settings.layers.layer_height)
 
 
-def test_the_colour_button_says_which_colour_it_is() -> None:
+def test_the_colour_button_says_which_colour_it_is(qt_app: QApplication) -> None:
     """Regel 18: die Farbe allein trägt die Bedeutung nicht.
 
     Getragen hat sie bisher der Hexwert — richtig als zweite Kodierung und
     trotzdem schwach: „#4A90D9" beschreibt für niemanden eine Spule im Regal.
     Der Name tut beides, und die Zahl steht im Tooltip, wo sie hingehört.
+
+    Die `QApplication` steht nicht aus Gewohnheit in der Signatur: Ein Widget
+    ohne sie bringt den ganzen Lauf zum Absturz, und `pytest-randomly`
+    entscheidet, ob vorher ein anderer Test eine gebaut hat.
     """
     button = _ColourButton("#3FAE6B")
     assert button.text() == "Grün"
@@ -425,6 +431,108 @@ def test_a_hint_that_points_into_a_folded_section_opens_it(
     assert dialog.slicer_toggle is not None
     assert dialog.slicer_toggle.isChecked()
     assert dialog.slicer_inner.isVisibleTo(dialog.slicer_box)
+
+
+def test_every_field_says_what_it_does(dialog: PrintSettingsDialog) -> None:
+    """Sechsundfünfzig Felder, und keines erklärte sich.
+
+    „Naht", „Bahnerzeuger", „Genaue Außenwand", „Flussverhältnis" — wer diese
+    Wörter kennt, braucht den Dialog nicht, und wer sie nicht kennt, findet
+    hier nichts, was ihn hineinlässt. Der Satz steht am Feld und ist keine
+    Wiederholung des Titels: Er sagt, was passiert, wenn man den Wert bewegt.
+    """
+    stumm = [field.path for field in FIELDS if not field.note]
+    assert not stumm, f"ohne Erklärung: {stumm}"
+
+    schlecht = []
+    for field in FIELDS:
+        satz = str(field.note)
+        if not satz.endswith((".", "!", "?")):
+            schlecht.append(f"{field.path}: kein Satz — {satz!r}")
+        if satz.strip().lower() == str(field.title).strip().lower():
+            schlecht.append(f"{field.path}: nur der Titel wiederholt")
+        if len(satz) > 220:
+            schlecht.append(f"{field.path}: {len(satz)} Zeichen sind kein Tooltip mehr")
+    assert not schlecht, "\n".join(schlecht)
+
+
+def test_the_explanation_arrives_at_the_field_and_at_its_label(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Am Feld, an der Beschriftung und in der Statuszeile.
+
+    Wer eine Zeile nicht versteht, zeigt auf ihre Beschriftung — dort steht das
+    unverständliche Wort. Ein Tooltip nur am Eingabefeld findet, wer schon
+    weiß, wohin er greifen muss. Und ``accessibleDescription`` ist derselbe
+    Satz für den, der den Bildschirm nicht liest.
+    """
+    fehlt = []
+    for field in FIELDS:
+        editor = dialog._editors[field.path]
+        satz = str(field.note)
+        if satz not in editor.toolTip():
+            fehlt.append(f"{field.path}: Tooltip {editor.toolTip()!r}")
+        # Der Farbknopf nennt zuerst den Hexwert und hängt den Satz an: der
+        # Wert ist am Knopf nirgends sonst zu lesen, auf ihm steht der Name.
+        # Der Satz darf ihn nicht verdrängen — beides oder keins.
+        if isinstance(editor, _ColourButton) and "#" not in editor.toolTip():
+            fehlt.append(f"{field.path}: der Farbwert ist aus dem Tooltip gefallen")
+        if editor.statusTip() != satz:
+            fehlt.append(f"{field.path}: statusTip {editor.statusTip()!r}")
+        if editor.accessibleDescription() != satz:
+            fehlt.append(f"{field.path}: accessibleDescription fehlt")
+    assert not fehlt, "\n".join(fehlt)
+
+    beschriftungen = 0
+    stumm = []
+    for form in dialog.findChildren(QFormLayout):
+        for row in range(form.rowCount()):
+            item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+            widget = item.widget() if item is not None else None
+            if not isinstance(widget, QLabel):
+                continue
+            titel = widget.text().split(" [")[0]
+            if titel not in {str(f.title) for f in FIELDS}:
+                continue  # Drucker, Grundprofil, Filament — keine Einstellung
+            beschriftungen += 1
+            if not widget.toolTip():
+                stumm.append(titel)
+    assert not stumm, f"Beschriftung ohne Erklärung: {stumm}"
+    assert beschriftungen >= 8, f"nur {beschriftungen} Beschriftungen gefunden"
+
+
+def test_a_freshly_built_colour_row_carries_both(dialog: PrintSettingsDialog) -> None:
+    """Am gebauten Dialog rettet ``_load_into_editors`` den Tooltip.
+
+    Es ruft ``set_value`` und damit ``_refresh``, und der schreibt den Tooltip
+    neu — der Hexwert wäre auch da, wenn ``_editor`` ihn vorher überschrieben
+    hätte. Geprüft wird deshalb die Zeile, wie ``_editor`` sie verlässt: Dort
+    liegt der Wächter, und dort fällt der Wert weg, wenn ihn jemand entfernt.
+    """
+    field = next(f for f in FIELDS if f.path == "filament.colour")
+
+    editor = dialog._editor(field)
+
+    assert isinstance(editor, _ColourButton)
+    assert "#" in editor.toolTip(), "der Farbwert steht nirgends sonst"
+    assert str(field.note) in editor.toolTip()
+
+
+def test_the_colour_button_keeps_its_value_and_its_sentence(qt_app: QApplication) -> None:
+    """Der eine Knopf, der seinen Tooltip selbst schreibt.
+
+    Er trägt den Namen der Farbe und im Tooltip ihren Hexwert — den steht
+    sonst nirgends. Nach jedem Klick baut ``_refresh`` den Tooltip neu; ein von
+    außen gesetzter Satz wäre danach weg.
+    """
+    button = _ColourButton("#4a90d9", None, note="Die Farbe für die Vorschau.")
+
+    assert "#4A90D9" in button.toolTip()
+    assert "Die Farbe für die Vorschau." in button.toolTip()
+
+    button.set_value("#101010")
+    assert "#101010".upper() in button.toolTip()
+    assert "Die Farbe für die Vorschau." in button.toolTip()
 
 
 # --- ohne Slicer --------------------------------------------------------------------

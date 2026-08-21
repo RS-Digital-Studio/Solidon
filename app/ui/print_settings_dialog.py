@@ -105,6 +105,20 @@ class Field:
     """Anzeige geteilt durch Modellwert. Der Kern rechnet Anteile in 0…1, die
     Werkstatt spricht in Prozent — ein Feld mit ``[%]`` und einer 0,15 darin
     ist schlicht falsch beschriftet (§19.3)."""
+    note: str = ""
+    """Was der Wert tut, und woran man ihn ändert — als Tooltip am Feld.
+
+    **Der größte Dialog der Anwendung war der einzige ohne ein erklärendes
+    Wort.** Jeder der 136 Menüeinträge trägt einen Satz, jeder Parameter einer
+    Operation seinen ``doc``-Satz; hier standen sechsundfünfzig Felder, und wer
+    „Außenwand auf Sollmaß" oder „Wände nicht überfahren" las, blieb allein
+    damit. Bei „Schichthöhe" hätte man es übersehen können — bei den
+    dreiundzwanzig Feldern, deren Name eine Technik nennt statt einer Sache,
+    nicht.
+
+    Alle sechsundfünfzig tragen einen: Ein Dialog, in dem die Hälfte der Felder
+    einen Tooltip hat, lehrt niemanden, dass es Tooltips gibt (Konsistenz vor
+    Vollständigkeit). ``tests/test_print_settings_ui.py`` hält das fest."""
 
 
 #: Operationen, die eine Passung **herstellen**, ohne sie einzutragen.
@@ -180,6 +194,10 @@ FIELDS: tuple[Field, ...] = (
         step=0.02,
         decimals=3,
         front=True,
+        note=tr(
+            "Wie dick jede Schicht ist. Weniger heißt feiner und länger: 0,2 mm ist der Alltag, "
+            "0,12 mm für Sichtteile, 0,28 mm für Klötze."
+        ),
     ),
     Field(
         "layers.first_layer_height",
@@ -190,6 +208,10 @@ FIELDS: tuple[Field, ...] = (
         maximum=1.2,
         step=0.02,
         decimals=3,
+        note=tr(
+            "Die erste Schicht darf dicker sein — sie füllt Unebenheiten der Platte aus und hält "
+            "damit besser."
+        ),
     ),
     Field(
         "layers.line_width",
@@ -200,6 +222,10 @@ FIELDS: tuple[Field, ...] = (
         maximum=2.0,
         step=0.02,
         decimals=3,
+        note=tr(
+            "Wie breit eine Bahn gelegt wird. Etwas mehr als der Düsendurchmesser ist normal: "
+            "mehr trägt besser, weniger zeichnet feiner."
+        ),
     ),
     Field(
         "layers.first_layer_line_width",
@@ -210,18 +236,65 @@ FIELDS: tuple[Field, ...] = (
         maximum=2.0,
         step=0.02,
         decimals=3,
+        note=tr(
+            "Breiter als die übrigen Bahnen — mehr Material auf der Platte heißt mehr Haftung."
+        ),
     ),
     # --- Wände ---
-    Field("shell.wall_count", tr("Wände"), "shell", kind="int", minimum=1, maximum=20, front=True),
-    Field("shell.top_layers", tr("Deckschichten"), "shell", kind="int", minimum=0, maximum=50),
-    Field("shell.bottom_layers", tr("Bodenschichten"), "shell", kind="int", minimum=0, maximum=50),
-    Field("shell.outer_wall_first", tr("Außenwand zuerst"), "shell", kind="bool"),
+    Field(
+        "shell.wall_count",
+        tr("Wände"),
+        "shell",
+        kind="int",
+        minimum=1,
+        maximum=20,
+        front=True,
+        note=tr(
+            "Wie viele Bahnen die Außenhaut dick ist. Zwei halten die Form, drei oder vier tragen "
+            "Last."
+        ),
+    ),
+    Field(
+        "shell.top_layers",
+        tr("Deckschichten"),
+        "shell",
+        kind="int",
+        minimum=0,
+        maximum=50,
+        note=tr(
+            "Volle Schichten oben, damit die Füllung nicht durchscheint. Unter drei bleiben "
+            "Löcher über den Zellen."
+        ),
+    ),
+    Field(
+        "shell.bottom_layers",
+        tr("Bodenschichten"),
+        "shell",
+        kind="int",
+        minimum=0,
+        maximum=50,
+        note=tr("Volle Schichten auf der Platte. Sie bestimmen, wie glatt die Unterseite wird."),
+    ),
+    Field(
+        "shell.outer_wall_first",
+        tr("Außenwand zuerst"),
+        "shell",
+        kind="bool",
+        note=tr(
+            "Legt die Außenbahn vor der Innenbahn. Das trifft Maße genauer und stützt Überhänge "
+            "schlechter."
+        ),
+    ),
     Field(
         "shell.seam_position",
         tr("Naht"),
         "shell",
         kind="enum",
         choices=("aligned", "nearest", "random", "rear"),
+        note=tr(
+            "Wo die Naht jeder Schicht sitzt — die Stelle, an der eine Bahn beginnt und endet. "
+            "Ausgerichtet ergibt eine sichtbare Linie, zufällig verteilt sie sich."
+        ),
     ),
     Field(
         "shell.wall_generator",
@@ -229,9 +302,32 @@ FIELDS: tuple[Field, ...] = (
         "shell",
         kind="enum",
         choices=("classic", "arachne"),
+        note=tr(
+            "Wie die Bahnen einer Wand verteilt werden. Arachne trifft schmale Stege, die auf "
+            "keine ganze Bahnbreite passen; klassisch rechnet mit gleicher Breite und füllt den "
+            "Rest."
+        ),
     ),
-    Field("shell.precise_outer_wall", tr("Außenwand auf Sollmaß"), "shell", kind="bool"),
-    Field("shell.ironing", tr("Oberfläche bügeln"), "shell", kind="bool"),
+    Field(
+        "shell.precise_outer_wall",
+        tr("Außenwand auf Sollmaß"),
+        "shell",
+        kind="bool",
+        note=tr(
+            "Rechnet die Außenwand auf ihr Sollmaß statt auf die Bahnmitte. Für Passungen "
+            "richtig, sonst unnötig."
+        ),
+    ),
+    Field(
+        "shell.ironing",
+        tr("Oberfläche bügeln"),
+        "shell",
+        kind="bool",
+        note=tr(
+            "Fährt die Oberseite ein zweites Mal ab und glättet sie mit wenig Material. Kostet "
+            "Zeit und lohnt bei Sichtflächen."
+        ),
+    ),
     # --- Füllung ---
     Field(
         "infill.density",
@@ -244,6 +340,10 @@ FIELDS: tuple[Field, ...] = (
         decimals=0,
         factor=100.0,
         front=True,
+        note=tr(
+            "Wie viel Material im Inneren steht. 15 % ist Alltag, 40 % für Belastung, 0 % ergibt "
+            "einen hohlen Körper."
+        ),
     ),
     Field(
         "infill.pattern",
@@ -252,6 +352,10 @@ FIELDS: tuple[Field, ...] = (
         kind="enum",
         choices=("grid", "gyroid", "honeycomb", "cubic", "lines", "triangles"),
         front=True,
+        note=tr(
+            "Wie die Füllung gelegt wird. Gyroid trägt in alle Richtungen gleich, Gitter ist "
+            "schneller, Wabe liegt dazwischen."
+        ),
     ),
     Field(
         "infill.angle",
@@ -262,6 +366,10 @@ FIELDS: tuple[Field, ...] = (
         maximum=180.0,
         step=5.0,
         decimals=1,
+        note=tr(
+            "Um wie viel die Füllung gedreht liegt. Zu ändern, wenn ihre Richtung mit der "
+            "Belastung zusammenfällt."
+        ),
     ),
     # --- Temperaturen ---
     Field(
@@ -273,6 +381,10 @@ FIELDS: tuple[Field, ...] = (
         minimum=0,
         maximum=400,
         front=True,
+        note=tr(
+            "Wie heiß die Düse ist. Zu kalt heißt schwache Schichtbindung, zu heiß bringt Fäden "
+            "und weiche Überhänge."
+        ),
     ),
     Field(
         "temperature.nozzle_first_layer",
@@ -282,6 +394,7 @@ FIELDS: tuple[Field, ...] = (
         unit="°C",
         minimum=0,
         maximum=400,
+        note=tr("Meist etwas heißer als der Rest: Die erste Schicht soll auf der Platte kleben."),
     ),
     Field(
         "temperature.bed",
@@ -292,6 +405,10 @@ FIELDS: tuple[Field, ...] = (
         minimum=0,
         maximum=150,
         front=True,
+        note=tr(
+            "Wie warm die Platte ist. Sie hält das Teil unten fest und verhindert, dass es sich "
+            "an den Ecken hochzieht."
+        ),
     ),
     Field(
         "temperature.bed_first_layer",
@@ -301,6 +418,7 @@ FIELDS: tuple[Field, ...] = (
         unit="°C",
         minimum=0,
         maximum=150,
+        note=tr("Für die erste Schicht darf die Platte wärmer sein als danach."),
     ),
     Field(
         "temperature.chamber",
@@ -310,6 +428,10 @@ FIELDS: tuple[Field, ...] = (
         unit="°C",
         minimum=0,
         maximum=90,
+        note=tr(
+            "Temperatur im geschlossenen Bauraum — nur bei Druckern, die einen haben. ABS und ASA "
+            "brauchen sie, PLA nicht."
+        ),
     ),
     # --- Kühlung ---
     Field(
@@ -322,6 +444,10 @@ FIELDS: tuple[Field, ...] = (
         step=5.0,
         decimals=0,
         factor=100.0,
+        note=tr(
+            "Wie stark der Lüfter läuft. Viel Kühlung gibt scharfe Kanten und schwächere "
+            "Schichten; bei ABS deshalb wenig."
+        ),
     ),
     Field(
         "cooling.bridge_fan_speed",
@@ -333,6 +459,10 @@ FIELDS: tuple[Field, ...] = (
         step=5.0,
         decimals=0,
         factor=100.0,
+        note=tr(
+            "Über einer Brücke darf mehr gekühlt werden: Die Bahn hängt frei und soll schnell "
+            "fest sein."
+        ),
     ),
     Field(
         "cooling.disable_first_layers",
@@ -341,6 +471,10 @@ FIELDS: tuple[Field, ...] = (
         kind="int",
         minimum=0,
         maximum=20,
+        note=tr(
+            "So viele Schichten bleiben ungekühlt. Der Lüfter würde die erste Schicht von der "
+            "Platte lösen."
+        ),
     ),
     Field(
         "cooling.minimum_layer_time",
@@ -351,6 +485,10 @@ FIELDS: tuple[Field, ...] = (
         maximum=120.0,
         step=1.0,
         decimals=0,
+        note=tr(
+            "Wie lange eine Schicht mindestens dauert. Bei kleinen Querschnitten bremst der "
+            "Drucker, damit die vorige Schicht fest wird."
+        ),
     ),
     # --- Geschwindigkeit ---
     Field(
@@ -362,6 +500,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=1000.0,
         step=5.0,
         decimals=1,
+        note=tr("Tempo der sichtbaren Außenbahn. Langsamer heißt glatter und maßgenauer."),
     ),
     Field(
         "speed.inner_wall",
@@ -372,6 +511,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=1000.0,
         step=5.0,
         decimals=1,
+        note=tr("Tempo der inneren Bahnen. Sie sieht niemand — hier darf es schneller sein."),
     ),
     Field(
         "speed.infill",
@@ -382,6 +522,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=1000.0,
         step=5.0,
         decimals=1,
+        note=tr("Tempo der Füllung. Nach oben begrenzt sie ohnehin der höchste Volumenstrom."),
     ),
     Field(
         "speed.top_surface",
@@ -392,6 +533,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=1000.0,
         step=5.0,
         decimals=1,
+        note=tr("Tempo der Deckschichten. Langsam macht die Oberseite gleichmäßig."),
     ),
     Field(
         "speed.first_layer",
@@ -402,6 +544,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=1000.0,
         step=5.0,
         decimals=1,
+        note=tr("Tempo der ersten Schicht. Langsam heißt haften."),
     ),
     Field(
         "speed.travel",
@@ -412,6 +555,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=1000.0,
         step=10.0,
         decimals=0,
+        note=tr("Tempo ohne Material. Schnell spart Zeit und schüttelt den Drucker mehr."),
     ),
     Field(
         "speed.bridge",
@@ -422,6 +566,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=200.0,
         step=5.0,
         decimals=1,
+        note=tr("Tempo über einer Brücke. Zu langsam hängt durch, zu schnell reißt."),
     ),
     Field(
         "speed.acceleration",
@@ -432,6 +577,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=30000.0,
         step=500.0,
         decimals=0,
+        note=tr("Wie hart der Drucker beschleunigt. Weniger heißt sauberere Ecken und mehr Zeit."),
     ),
     Field(
         "speed.outer_wall_acceleration",
@@ -442,6 +588,10 @@ FIELDS: tuple[Field, ...] = (
         maximum=30000.0,
         step=500.0,
         decimals=0,
+        note=tr(
+            "Beschleunigung nur für die Außenbahn. Hier lohnt es, weniger zu nehmen als überall "
+            "sonst."
+        ),
     ),
     # --- Stützen ---
     Field(
@@ -451,6 +601,10 @@ FIELDS: tuple[Field, ...] = (
         kind="enum",
         choices=("none", "grid", "tree"),
         front=True,
+        note=tr(
+            "Ob und wie gestützt wird. Baum braucht weniger Material und lässt sich leichter "
+            "abnehmen, Gitter trägt schwere Überhänge sicherer."
+        ),
     ),
     Field(
         "support.placement",
@@ -458,6 +612,10 @@ FIELDS: tuple[Field, ...] = (
         "support",
         kind="enum",
         choices=("everywhere", "build_plate"),
+        note=tr(
+            "Wo Stützen ansetzen dürfen. Nur von der Platte lässt das Modell selbst unberührt; "
+            "überall stützt auch mitten darauf und hinterlässt Spuren."
+        ),
     ),
     Field(
         "support.threshold_angle",
@@ -468,6 +626,10 @@ FIELDS: tuple[Field, ...] = (
         maximum=90.0,
         step=5.0,
         decimals=1,
+        note=tr(
+            "Ab welcher Neigung gestützt wird, gemessen zur Senkrechten. Was steiler steht, trägt "
+            "sich selbst — wie steil, sagt der Überhangfächer."
+        ),
     ),
     Field(
         "support.z_gap",
@@ -478,6 +640,10 @@ FIELDS: tuple[Field, ...] = (
         maximum=2.0,
         step=0.05,
         decimals=2,
+        note=tr(
+            "Luft zwischen Stütze und Teil nach oben. Mehr heißt leichter abnehmen und rauere "
+            "Fläche darüber."
+        ),
     ),
     Field(
         "support.xy_gap",
@@ -488,6 +654,9 @@ FIELDS: tuple[Field, ...] = (
         maximum=5.0,
         step=0.1,
         decimals=2,
+        note=tr(
+            "Luft zwischen Stütze und Teil zur Seite. Zu wenig verschweißt beides miteinander."
+        ),
     ),
     Field(
         "support.density",
@@ -499,6 +668,7 @@ FIELDS: tuple[Field, ...] = (
         step=5.0,
         decimals=0,
         factor=100.0,
+        note=tr("Wie dicht die Stütze steht. Dichter trägt mehr und ist schwerer abzunehmen."),
     ),
     Field(
         "support.interface_layers",
@@ -507,6 +677,9 @@ FIELDS: tuple[Field, ...] = (
         kind="int",
         minimum=0,
         maximum=10,
+        note=tr(
+            "Dichte Schichten zwischen Stütze und Teil. Sie machen die gestützte Fläche glatter."
+        ),
     ),
     # --- Haftung, Rückzug, Filament ---
     Field(
@@ -515,8 +688,21 @@ FIELDS: tuple[Field, ...] = (
         "other",
         kind="enum",
         choices=("none", "skirt", "brim", "raft"),
+        note=tr(
+            "Was zusätzlich auf die Platte kommt, damit das Teil hält. Brim legt einen Rand an, "
+            "Raft eine ganze Unterlage; Skirt berührt das Teil nicht und hält nur die Düse im "
+            "Fluss."
+        ),
     ),
-    Field("adhesion.skirt_loops", tr("Skirt-Runden"), "other", kind="int", minimum=0, maximum=20),
+    Field(
+        "adhesion.skirt_loops",
+        tr("Skirt-Runden"),
+        "other",
+        kind="int",
+        minimum=0,
+        maximum=20,
+        note=tr("Wie viele Runden neben dem Teil gelegt werden, ohne es zu berühren."),
+    ),
     Field(
         "adhesion.skirt_distance",
         tr("Skirt-Abstand"),
@@ -526,6 +712,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=50.0,
         step=0.5,
         decimals=1,
+        note=tr("Wie weit diese Runden vom Teil entfernt liegen."),
     ),
     Field(
         "adhesion.brim_width",
@@ -536,8 +723,20 @@ FIELDS: tuple[Field, ...] = (
         maximum=50.0,
         step=0.5,
         decimals=1,
+        note=tr(
+            "Wie breit der angelegte Rand ist. Mehr hält besser und muss hinterher abgeschnitten "
+            "werden."
+        ),
     ),
-    Field("adhesion.raft_layers", tr("Raft-Schichten"), "other", kind="int", minimum=0, maximum=20),
+    Field(
+        "adhesion.raft_layers",
+        tr("Raft-Schichten"),
+        "other",
+        kind="int",
+        minimum=0,
+        maximum=20,
+        note=tr("Wie viele Schichten die Unterlage hat, auf der das Teil steht."),
+    ),
     Field(
         "retraction.length",
         tr("Rückzug"),
@@ -547,6 +746,10 @@ FIELDS: tuple[Field, ...] = (
         maximum=10.0,
         step=0.1,
         decimals=2,
+        note=tr(
+            "Wie weit das Filament zurückgezogen wird, bevor die Düse leer fährt. Das Mittel "
+            "gegen Fäden."
+        ),
     ),
     Field(
         "retraction.speed",
@@ -557,6 +760,10 @@ FIELDS: tuple[Field, ...] = (
         maximum=200.0,
         step=5.0,
         decimals=0,
+        note=tr(
+            "Wie schnell zurückgezogen wird. Zu schnell mahlt das Antriebsrad ins Filament, zu "
+            "langsam zieht Fäden."
+        ),
     ),
     Field(
         "retraction.z_hop",
@@ -567,10 +774,38 @@ FIELDS: tuple[Field, ...] = (
         maximum=5.0,
         step=0.05,
         decimals=2,
+        note=tr(
+            "Wie weit die Düse anhebt, bevor sie leer fährt. Sie stößt dann nicht an schon "
+            "Gedrucktes."
+        ),
     ),
-    Field("retraction.wipe", tr("Abstreifen"), "other", kind="bool"),
-    Field("retraction.avoid_crossing_walls", tr("Wände nicht überfahren"), "other", kind="bool"),
-    Field("filament.colour", tr("Farbe"), "other", kind="colour", front=True),
+    Field(
+        "retraction.wipe",
+        tr("Abstreifen"),
+        "other",
+        kind="bool",
+        note=tr("Wischt die Düse am Teil ab, bevor sie wegfährt. Weniger Nasen, etwas mehr Zeit."),
+    ),
+    Field(
+        "retraction.avoid_crossing_walls",
+        tr("Wände nicht überfahren"),
+        "other",
+        kind="bool",
+        note=tr(
+            "Führt Leerfahrten um Wände herum statt darüber. Weniger Narben auf der Oberfläche, "
+            "längere Wege."
+        ),
+    ),
+    Field(
+        "filament.colour",
+        tr("Farbe"),
+        "other",
+        kind="colour",
+        front=True,
+        note=tr(
+            "Die Farbe für Vorschau und Übergabe an den Slicer. Am Druck selbst ändert sie nichts."
+        ),
+    ),
     Field(
         "filament.diameter",
         tr("Filamentdurchmesser"),
@@ -580,6 +815,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=4.0,
         step=0.05,
         decimals=2,
+        note=tr("Der Durchmesser des Filaments, wie die Rolle ihn angibt — 1,75 mm oder 2,85 mm."),
     ),
     Field(
         "filament.density",
@@ -590,6 +826,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=3.0,
         step=0.01,
         decimals=2,
+        note=tr("Dichte des Materials. Daraus rechnet die Schätzung das Gewicht."),
     ),
     Field(
         "filament.flow_ratio",
@@ -599,6 +836,10 @@ FIELDS: tuple[Field, ...] = (
         maximum=1.5,
         step=0.01,
         decimals=3,
+        note=tr(
+            "Feinkorrektur der Materialmenge. Über 1 legt mehr, darunter weniger — geändert wird "
+            "das nach einem gemessenen Prüfwürfel."
+        ),
     ),
     Field(
         "filament.max_flow",
@@ -609,6 +850,10 @@ FIELDS: tuple[Field, ...] = (
         maximum=60.0,
         step=0.5,
         decimals=1,
+        note=tr(
+            "Wie viel Material die Düse je Sekunde schafft. Diese Grenze bremst jedes Tempo, das "
+            "mehr verlangt."
+        ),
     ),
     Field(
         "filament.cost_per_kg",
@@ -618,6 +863,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=1000.0,
         step=1.0,
         decimals=2,
+        note=tr("Was ein Kilogramm kostet. Nur für die Kostenschätzung."),
     ),
 )
 
@@ -707,9 +953,14 @@ class _ColourButton(QPushButton):
 
     changed = Signal(str)
 
-    def __init__(self, value: str, parent: QWidget | None = None) -> None:
+    def __init__(self, value: str, parent: QWidget | None = None, note: str = "") -> None:
         super().__init__(parent)
         self._value = value
+        self._note = note
+        """Was das Feld tut — der Knopf schreibt es hinter den Farbwert.
+
+        Er baut seinen Tooltip in :meth:`_refresh` selbst neu, sobald sich die
+        Farbe ändert; ein von außen gesetzter Satz wäre beim ersten Klick weg."""
         self._refresh()
         self.clicked.connect(self._choose)
 
@@ -727,7 +978,8 @@ class _ColourButton(QPushButton):
         # Spule im Regal. Was Qt nicht benennen kann, behält seine Zahl — dann
         # ist sie das Genaueste, was zu haben ist.
         self.setText(colour_name(self._value))
-        self.setToolTip(self._value.upper())
+        exact = self._value.upper()
+        self.setToolTip(f"{exact} — {self._note}" if self._note else exact)
         self.setStyleSheet(f"background-color: {self._value}; color: {readable};")
 
     def _choose(self) -> None:
@@ -1564,8 +1816,19 @@ class PrintSettingsDialog(QDialog):
             self.state.setText("")
             self._start_profile_search()
 
-    def _label(self, field: Field) -> str:
-        return f"{field.title} [{field.unit}]" if field.unit else field.title
+    def _label(self, field: Field) -> QLabel:
+        """Die Beschriftung der Zeile — mit demselben Satz wie das Feld daneben.
+
+        Als Widget und nicht als Zeichenkette: ``addRow`` baut aus einem String
+        selbst ein Label, und an das kommt niemand mehr heran. Wer eine Zeile
+        liest, zeigt auf ihre Beschriftung und nicht auf das Eingabefeld — ein
+        Tooltip, der nur am Feld hängt, findet nur, wer schon dort steht.
+        """
+        label = QLabel(f"{field.title} [{field.unit}]" if field.unit else field.title, self)
+        if field.note:
+            label.setToolTip(field.note)
+            label.setStatusTip(field.note)
+        return label
 
     def _editor(self, field: Field) -> QWidget:
         """Ein Feld je Einstellung — und keines breiter, als sein Wert ist.
@@ -1599,7 +1862,7 @@ class PrintSettingsDialog(QDialog):
             combo.currentIndexChanged.connect(self._editor_changed)
             editor = combo
         elif field.kind == "colour":
-            button = _ColourButton("#000000", self)
+            button = _ColourButton("#000000", self, note=field.note)
             button.changed.connect(self._editor_changed)
             editor = button
         else:
@@ -1616,6 +1879,18 @@ class PrintSettingsDialog(QDialog):
             # Auswahlwert wäre schlechter als ein zu weiter Kasten.
             editor.setMaximumWidth(max(limit, editor.sizeHint().width()))
         self._editors[field.path] = editor
+        # **Der Satz gehört an beide Hälften der Zeile.** Ein Tooltip nur am
+        # Eingabefeld findet, wer schon dort steht; wer die Zeile liest, zeigt
+        # auf ihre Beschriftung. Der ``statusTip`` kommt dazu, weil ein
+        # Bildschirmleser ihn vorliest und die Statuszeile ihn zeigt, ohne dass
+        # jemand warten muss (Regel 18: nicht nur eine Kodierung).
+        if field.note:
+            # Wer schon einen genaueren Tooltip hat, behält ihn: Der Farbknopf
+            # nennt darin den Wert und hängt den Satz selbst hinten an.
+            if not editor.toolTip():
+                editor.setToolTip(field.note)
+            editor.setStatusTip(field.note)
+            editor.setAccessibleDescription(field.note)
         self._fields[field.path] = field
         return editor
 
