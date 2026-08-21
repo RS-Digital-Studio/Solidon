@@ -675,6 +675,7 @@
   "Die Skizze auf die andere Fläche legen": "Poser l'esquisse sur la face opposée",
   "Die Skizze enthält nichts, was einen Umriss ergeben könnte.": "L'esquisse ne contient rien qui puisse donner un contour.",
   "Die Skizze hat nicht den erwarteten Aufbau.": "L'esquisse n'a pas la structure attendue.",
+  "Die Skizze umschließt keine Fläche.": "L’esquisse n’enferme aucune surface.",
   "Die Standfläche ist klein — ein Brim verhindert, dass das Teil abreißt.": "La surface d'appui est petite — un brim empêche la pièce de se décoller.",
   "Die Statuszeile ist die eigentliche Auskunft: was noch frei ist, wandert beim nächsten Zug.": "La barre d'état est la véritable réponse : ce qui est encore libre se déplacera au prochain glissement.",
   "Die Stege sind mindestens halb so dick wie ihre Zelle — daraus wird ein Vollkörper mit mehr Dreiecken statt einer Füllung.": "Les nervures sont au moins aussi épaisses que la moitié de leur cellule — cela donne un corps plein avec plus de triangles au lieu d'un remplissage.",

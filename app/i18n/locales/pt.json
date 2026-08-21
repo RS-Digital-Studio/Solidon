@@ -675,6 +675,7 @@
   "Die Skizze auf die andere Fläche legen": "Pôr o esboço na face oposta",
   "Die Skizze enthält nichts, was einen Umriss ergeben könnte.": "O esboço não contém nada que pudesse dar um contorno.",
   "Die Skizze hat nicht den erwarteten Aufbau.": "O esboço não tem a estrutura esperada.",
+  "Die Skizze umschließt keine Fläche.": "O esboço não delimita nenhuma superfície.",
   "Die Standfläche ist klein — ein Brim verhindert, dass das Teil abreißt.": "A área de apoio é pequena — um brim impede que a peça se solte.",
   "Die Statuszeile ist die eigentliche Auskunft: was noch frei ist, wandert beim nächsten Zug.": "A linha de estado é a verdadeira informação: o que ainda está livre desloca-se no próximo arrasto.",
   "Die Stege sind mindestens halb so dick wie ihre Zelle — daraus wird ein Vollkörper mit mehr Dreiecken statt einer Füllung.": "Os frisos são pelo menos metade tão espessos como a sua célula — daí sai um corpo maciço com mais triângulos em vez de um preenchimento.",

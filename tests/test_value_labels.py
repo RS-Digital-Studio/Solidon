@@ -21,7 +21,13 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from app.ui.labels import _VALUE_NAMES, _VALUE_UNITS, value_label, value_line
+from app.ui.labels import (
+    _VALUE_NAMES,
+    _VALUE_UNITS,
+    value_label,
+    value_line,
+    value_text,
+)
 
 CORE = Path(__file__).resolve().parents[1] / "app" / "core"
 
@@ -111,7 +117,7 @@ def keys_in_source() -> dict[str, str]:
 
 
 def stem(key: str) -> str:
-    for suffix, _unit in _VALUE_UNITS:
+    for suffix, *_ in _VALUE_UNITS:
         if key.endswith(suffix):
             return key[: -len(suffix)]
     return key
@@ -142,28 +148,40 @@ def test_the_dictionary_carries_nothing_dead() -> None:
     assert not dead, f"Beschriftung ohne Schlüssel: {dead}"
 
 
-def test_the_unit_comes_from_the_suffix_not_from_the_dictionary() -> None:
+def test_the_unit_comes_from_the_suffix_not_from_the_dictionary(qt_app: object) -> None:
     """``size`` und ``size_mm`` teilen sich einen Eintrag.
 
     Sonst stünde jede Größe zweimal im Wörterbuch, einmal mit und einmal ohne
     Einheit — und ein neuer Schlüssel mit bekanntem Stamm wäre trotzdem
     unübersetzt.
+
+    Die Einheit **steht dabei am Wert**, nicht in der Beschriftung: „Übermaß
+    (mm)" konnte nicht umschalten, und bei einem Volumen wäre sie sogar falsch
+    gewesen — der Wert wechselt zwischen mm³ und cm³, je nach Größe.
     """
     assert value_label("size") == "Größe"
-    assert value_label("size_mm") == "Größe (mm)"
-    assert value_label("volume_mm3") == "Volumen (mm³)"
-    assert value_label("share_percent") == "Anteil (%)"
+    assert value_label("size_mm") == "Größe"
+    assert value_label("volume_mm3") == "Volumen"
+    assert value_label("share_percent") == "Anteil"
+
+    assert value_text("size_mm", 12.4).endswith("mm")
+    assert value_text("volume_mm3", 16387.064).endswith("cm³")
+    assert value_text("share_percent", 15.0) == "15 %"
 
 
-def test_the_longest_suffix_wins() -> None:
+def test_the_longest_suffix_wins(qt_app: object) -> None:
     """``_mm`` steht am Ende von ``_mm3``.
 
     Wird der Reihe nach von kurz nach lang geprüft, schluckt ``_mm`` das
-    ``_mm3``, und aus einem Volumen wird „Volumen3 (mm)". Die Reihenfolge in
-    ``_VALUE_UNITS`` ist deshalb keine Geschmacksfrage.
+    ``_mm3``: Die Beschriftung hieße „Volumen3", und der Wert käme als Länge
+    heraus. Die Reihenfolge in ``_VALUE_UNITS`` ist deshalb keine
+    Geschmacksfrage.
     """
-    assert "mm³" in value_label("volume_mm3")
-    assert "mm²" not in value_label("volume_mm3")
+    assert value_label("volume_mm3") == "Volumen", "nicht „Volumen3"
+
+    gezeigt = value_text("volume_mm3", 16387.064)
+    assert "cm³" in gezeigt, gezeigt
+    assert "mm²" not in gezeigt
 
 
 def test_an_unknown_key_survives_instead_of_vanishing() -> None:
@@ -183,7 +201,7 @@ def test_a_line_reads_like_a_line() -> None:
     Sprache ein Komma will, steht ein Komma.
     """
     assert value_line("open_edges", 6) == "Offene Kanten: 6"
-    assert value_line("oversize_mm", 12.4).startswith("Übermaß (mm): 12")
+    assert value_line("oversize_mm", 12.4) == "Übermaß: 12,40 mm"
 
 
 def test_the_report_offers_what_helps(qt_app: object) -> None:
@@ -842,3 +860,58 @@ def test_an_area_reaches_the_user_in_his_unit(qt_app: object) -> None:
     finally:
         set_display_unit("mm")
         QLocale.setDefault(before)
+
+
+def test_a_finding_value_follows_the_display_unit(qt_app: object) -> None:
+    """„Übermaß (mm): 12,4" stand auch dann da, wenn die Oberfläche auf Zoll
+    stand.
+
+    Die Einheit kam aus dem Suffix des Schlüssels und war Teil der
+    *Beschriftung* — dort konnte sie nicht umschalten. Damit gab es zwei
+    Antworten auf dieselbe Frage: Der Objektbaum zeigte Zoll, der Befund
+    daneben Millimeter. Dreißig Schlüssel tragen so ein Suffix, und alle sind
+    Längen, Flächen oder Volumen.
+
+    Geprüft werden alle vier Sorten und dazu die Grenze: Ein Pfad ist keine
+    Zahl und behält seine Punkte.
+    """
+    from PySide6.QtCore import QLocale
+
+    from app.ui.labels import set_display_unit, value_line
+
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale("de"))
+
+        set_display_unit("mm")
+        assert value_line("oversize_mm", 12.4) == "Übermaß: 12,40 mm"
+        assert value_line("first_layer_mm2", 4334.0) == "Erste Schicht: 4334 mm²"
+        assert value_line("removed_mm3", 16387.064) == "Entfernt: 16,4 cm³"
+        assert value_line("removed_cm3", 16.387064) == "Entfernt: 16,4 cm³"
+
+        set_display_unit("in")
+        assert value_line("oversize_mm", 12.4) == "Übermaß: 0,4882 in"
+        assert value_line("first_layer_mm2", 4334.0) == "Erste Schicht: 6,72 in²"
+        assert value_line("removed_mm3", 16387.064) == "Entfernt: 1,00 in³"
+
+        # Ohne Einheit im Schlüssel bleibt alles, wie es war.
+        assert value_line("open_edges", 6) == "Offene Kanten: 6"
+        assert value_line("path", "sources/1_cube.stl") == "Pfad: sources/1_cube.stl"
+        assert value_line("share_percent", 15.0) == "Anteil: 15 %"
+    finally:
+        set_display_unit("mm")
+        QLocale.setDefault(before)
+
+
+def test_a_value_that_is_no_number_keeps_the_unit_of_its_key(qt_app: object) -> None:
+    """Und wenn dort keine Zahl steht, gibt es nichts umzurechnen.
+
+    Dann bleibt die Einheit des Schlüssels stehen: Sie ist die einzige
+    Auskunft, die es über die Größenordnung noch gibt. Der Fall kommt aus
+    einem zusammengebauten ``values=dict(...)``, das der Test nicht statisch
+    sieht — und eine leere Zeile wäre schlechter als eine ungenaue.
+    """
+    from app.ui.labels import value_text
+
+    assert value_text("size_mm", "unbekannt") == "unbekannt mm"
+    assert value_text("volume_mm3", None) == "None mm³"

@@ -675,6 +675,7 @@
   "Die Skizze auf die andere Fläche legen": "Colocar el boceto en la cara opuesta",
   "Die Skizze enthält nichts, was einen Umriss ergeben könnte.": "El boceto no contiene nada que pueda dar un contorno.",
   "Die Skizze hat nicht den erwarteten Aufbau.": "El boceto no tiene la estructura esperada.",
+  "Die Skizze umschließt keine Fläche.": "El boceto no encierra ninguna superficie.",
   "Die Standfläche ist klein — ein Brim verhindert, dass das Teil abreißt.": "La superficie de apoyo es pequeña — un brim evita que la pieza se desprenda.",
   "Die Statuszeile ist die eigentliche Auskunft: was noch frei ist, wandert beim nächsten Zug.": "La línea de estado es la verdadera información: lo que aún queda libre se moverá en el siguiente arrastre.",
   "Die Stege sind mindestens halb so dick wie ihre Zelle — daraus wird ein Vollkörper mit mehr Dreiecken statt einer Füllung.": "Los nervios son al menos la mitad de gruesos que su celda — de ahí sale un cuerpo macizo con más triángulos en vez de un relleno.",

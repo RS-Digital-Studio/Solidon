@@ -675,6 +675,7 @@
   "Die Skizze auf die andere Fläche legen": "Put the sketch on the opposite face",
   "Die Skizze enthält nichts, was einen Umriss ergeben könnte.": "The sketch contains nothing that could make an outline.",
   "Die Skizze hat nicht den erwarteten Aufbau.": "The sketch does not have the expected structure.",
+  "Die Skizze umschließt keine Fläche.": "The sketch encloses no area.",
   "Die Standfläche ist klein — ein Brim verhindert, dass das Teil abreißt.": "The footprint is small — a brim keeps the part from tearing loose.",
   "Die Statuszeile ist die eigentliche Auskunft: was noch frei ist, wandert beim nächsten Zug.": "The status line is the real answer: whatever is still free will move on the next drag.",
   "Die Stege sind mindestens halb so dick wie ihre Zelle — daraus wird ein Vollkörper mit mehr Dreiecken statt einer Füllung.": "The struts are at least half as thick as their cell — that makes a solid body with more triangles, not a lattice.",

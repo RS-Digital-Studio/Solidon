@@ -9,7 +9,7 @@ Leitprinzip 5).
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from PySide6.QtCore import QLocale, Signal
@@ -23,6 +23,7 @@ from app.core.registry import MENU_GROUPS as MENU_GROUPS
 from app.core.registry import group_title as group_title
 from app.core.types import Feature, FeatureId
 from app.core.units import (
+    DEGREE_UNIT,
     LengthUnit,
     decimals_for,
     format_area,
@@ -495,7 +496,8 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
 #:
 #: Die Einheit wird **nicht** eingetragen, sondern aus dem Suffix gelesen
 #: (:data:`_VALUE_UNITS`): ``size_mm`` und ``size`` teilen sich einen Eintrag,
-#: und ein neuer Schlüssel mit bekanntem Stamm ist damit schon übersetzt.
+#: und ein neuer Schlüssel mit bekanntem Stamm ist damit schon übersetzt. Sie
+#: erscheint am Wert und nicht hier — siehe :func:`value_text`.
 #:
 #: Vollständig gehalten wird die Liste nicht von Hand — von Hand heißt driften.
 #: ``tests/test_value_labels.py`` liest jeden ``values=``-Schlüssel aus
@@ -563,6 +565,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "file_version": _("Dateifassung"),
     "first_kind": _("Erste Art"),
     "fit": _("Passung"),
+    "format": _("Format"),
     "excess": _("Überstand"),
     "footprint": _("Standfläche"),
     "formats": _("Formate"),
@@ -678,32 +681,67 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "z": _("Z"),
 }
 
-#: Welches Suffix welche Einheit meint.
+
+def plain_number(value: float) -> str:
+    """Eine Zahl ohne Einheit, so kurz wie sie ehrlich ist.
+
+    ``:g`` lässt die abschließenden Nullen weg: 15 bleibt 15 und wird nicht zu
+    „15,00". Bei einem Anteil und einem Winkel ist das die ganze Auskunft.
+    """
+    return localised(f"{value:g}")
+
+
+#: Welches Suffix welche Einheit meint, und wie ein Wert damit dasteht.
 #:
 #: Nach Länge sortiert geprüft, sonst schluckt _mm das _mm3.
-_VALUE_UNITS: tuple[tuple[str, str], ...] = (
-    ("_mm3", "mm³"),
-    ("_mm2", "mm²"),
-    ("_cm3", "cm³"),
-    ("_percent", "%"),
-    ("_deg", "°"),
-    ("_mm", "mm"),
+#:
+#: **Die Einheit steht am Wert und nicht in der Beschriftung.** „Übermaß (mm):
+#: 12,4" war eine zweite Antwort auf die Frage aus §19.3: Wer auf Zoll stellt,
+#: liest Längen in Zoll und Volumen in Kubikzoll — und daneben stand ein Befund
+#: in Millimetern, mit der Einheit als Teil seiner Beschriftung, wo sie nicht
+#: umschalten konnte. Jetzt schreiben `length`, `area` und `volume` den Wert,
+#: dieselben Funktionen, die der Objektbaum benutzt; die Beschriftung ist nur
+#: noch der Name. Dass ein Volumen dabei die Einheit wechseln kann (mm³, cm³,
+#: in³), ist derselbe Grund in der Umkehrung: Eine Beschriftung, die „(mm³)"
+#: behauptet, während im Wert „16,4 cm³" steht, wäre falsch.
+_VALUE_UNITS: tuple[tuple[str, str, Callable[[float], str]], ...] = (
+    ("_mm3", "mm³", volume),
+    ("_mm2", "mm²", area),
+    ("_cm3", "cm³", lambda value: volume(value * 1000.0)),
+    ("_percent", "%", lambda value: f"{plain_number(value)} %"),
+    ("_deg", DEGREE_UNIT, lambda value: f"{plain_number(value)}{DEGREE_UNIT}"),
+    ("_mm", "mm", length),
 )
 
 
 def value_label(key: str) -> str:
-    """Die Beschriftung zu einem Wert-Schlüssel — mit Einheit, wenn er eine trägt.
+    """Die Beschriftung zu einem Wert-Schlüssel — ohne Einheit, die steht am Wert.
 
     Unbekanntes kommt durch, wie es ist: Ein Schlüssel aus einem Zweig, den der
     Test nicht statisch sieht (``values=dict(...)``), soll den Tooltip nicht
     leeren. Der Test hält die Liste vollständig, diese Zeile hält sie harmlos.
     """
-    for suffix, unit in _VALUE_UNITS:
+    for suffix, _unit, _show in _VALUE_UNITS:
         if key.endswith(suffix):
             name = _VALUE_NAMES.get(key[: -len(suffix)])
-            return f"{name} ({unit})" if name is not None else key
+            return str(name) if name is not None else key
     name = _VALUE_NAMES.get(key)
     return str(name) if name is not None else key
+
+
+def value_text(key: str, value: object) -> str:
+    """Der Wert mit seiner Einheit, in der Einheit der Anzeige (§19.3)."""
+    for suffix, unit, show in _VALUE_UNITS:
+        if not key.endswith(suffix):
+            continue
+        try:
+            number = float(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            # Keine Zahl, also keine Umrechnung. Die Einheit des Schlüssels
+            # bleibt stehen: Sie ist dann die einzige Auskunft, die es gibt.
+            return f"{localised_value(value)} {unit}"
+        return show(number)
+    return localised_value(value)
 
 
 #: Was als Zahl durchgeht: Vorzeichen, Ziffern, höchstens ein Punkt, dahinter
@@ -737,10 +775,10 @@ def localised_value(value: object) -> str:
 def value_line(key: str, value: object) -> str:
     """Eine Zeile „Beschriftung: Wert" für Tooltip und Einzelheiten.
 
-    Die Zahl bekommt ihr Komma (§13), der Rest bleibt, wie er ist — siehe
-    :func:`localised_value`.
+    Die Zahl bekommt ihr Komma (§13) und ihre Einheit, der Rest bleibt, wie er
+    ist — siehe :func:`value_text` und :func:`localised_value`.
     """
-    return f"{value_label(key)}: {localised_value(value)}"
+    return f"{value_label(key)}: {value_text(key, value)}"
 
 
 def spoiled_the_exact_body(result: Any) -> str:

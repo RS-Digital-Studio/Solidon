@@ -10155,17 +10155,41 @@ nicht zweimal messen.
 
 ### Was auffiel und eine Entscheidung braucht
 
-- [ ] **Befundwerte folgen der Anzeigeeinheit nicht.** `value_line` schreibt
-      „Übermaß (mm): 12,4" auch dann, wenn die Oberfläche auf Zoll steht: Die
-      Einheit kommt aus dem Suffix des Schlüssels (`_mm`, `_mm2`, `_mm3` in
-      `_VALUE_UNITS`), nicht aus der Einstellung. Falsch ist das nicht — der
-      Wert nennt seine Einheit selbst —, aber es ist eine zweite Antwort auf
-      dieselbe Frage. Die Entscheidung gehört in den Bauplan: Zeigt ein Befund
-      die Einheit des Nutzers oder die des Werts? Beim Umstellen wären es vier
-      Suffixe und jeder Schlüssel, der sie trägt; geraten wird das nicht
-      (Regel 21). Aufgefallen ist dabei noch, dass `area_mm2` in
-      `_VALUE_NAMES` fehlt und deshalb roh als „area_mm2" dasteht — das ist
-      keine Entscheidung, sondern ein Eintrag, und er gehört zur Antwort.
+- [x] **Befundwerte folgten der Anzeigeeinheit nicht.** `value_line` schrieb
+      „Übermaß (mm): 12,4" auch dann, wenn die Oberfläche auf Zoll stand: Die
+      Einheit kam aus dem Suffix des Schlüssels und stand in der
+      **Beschriftung** — dort kann sie nicht umschalten. Damit gab es zwei
+      Antworten auf dieselbe Frage: Der Objektbaum zeigte Zoll, der Befund
+      daneben Millimeter.
+
+      Entschieden ist es jetzt, und die Entscheidung folgt aus §19.3 statt aus
+      einer Abwägung: Wer eine Anzeigeeinheit einstellt, liest sie überall.
+      Die Einheit steht am Wert, geschrieben von `length`, `area` und `volume`
+      — denselben Funktionen, die der Objektbaum benutzt. Bei einem Volumen
+      war die Beschriftung sogar falsch: Der Wert wechselt zwischen mm³ und
+      cm³, je nach Größe, und „(mm³)" darüber behauptete etwas anderes.
+      Dreißig Schlüssel tragen ein Suffix, und alle dreißig sind Längen,
+      Flächen oder Volumen — geprüft, nicht angenommen. Steht dort keine Zahl,
+      bleibt die Einheit des Schlüssels stehen; sie ist dann die einzige
+      Auskunft, die es gibt.
+
+      **Und eine Berichtigung:** Der Satz „`area_mm2` fehlt in `_VALUE_NAMES`"
+      war falsch. Diesen Schlüssel hat keine Operation — er stammt aus meiner
+      eigenen Messung. `test_every_value_key_has_a_label` sammelt die
+      Schlüssel aus `app/core` und war zu diesem Punkt immer grün.
+- [x] **Zwei Löcher im eingecheckten Stand, nicht in halbfertiger Arbeit.**
+      „Die Skizze umschließt keine Fläche." stand in HEAD ohne Übersetzung —
+      fünf Katalogeinträge. Und `format` fehlte in `_VALUE_NAMES`, weshalb ein
+      Export-Befund den rohen Schlüssel zeigte („format: step") statt einer
+      Beschriftung; `test_every_value_key_has_a_label` war deswegen am
+      eingecheckten Stand rot.
+
+      Beim Nachziehen fiel eine Falle auf, die eine eigene Zeile verdient: Ich
+      hatte sechs fehlende Sätze gemessen und alle sechs übersetzt — fünf davon
+      hatte die parallele Sitzung in der Zwischenzeit selbst übersetzt, und mein
+      Eintrag hätte ihre Fassung überschrieben. Gegen HEAD neu gemessen war es
+      genau einer. In einem geteilten Arbeitsbaum ist eine Messung von vor
+      zwanzig Minuten keine Grundlage für einen Commit.
 
 ### Gemessen und gesund — nicht nachgesehen werden muss
 

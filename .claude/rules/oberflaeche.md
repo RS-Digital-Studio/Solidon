@@ -87,6 +87,12 @@ Anzeigetext schreibt, kommt daran nicht vorbei.
 Pfad, eine Adresse oder eine Fassungsnummer nie — dafür gibt es
 `localised_value`, das prüft, ob überhaupt eine Zahl dasteht.
 
+**Die Einheit gehört in den Wert, nicht in den Satz** — und nicht in die
+Beschriftung. Ein Befundwert trägt sie über `value_text`
+(`_VALUE_UNITS` in `app/ui/labels.py`), nicht über `value_label`: „Übermaß
+(mm): 12,4" konnte nicht umschalten, und bei einem Volumen war es falsch, weil
+der Wert selbst zwischen mm³ und cm³ wechselt.
+
 **Die Einheit gehört in den Wert, nicht in den Satz.** Länge, Volumen *und
 Fläche* folgen der Umschaltung aus §19.3 — `labels.length`, `labels.volume`,
 `labels.area`. Wer sie selbst anschreibt, baut eine Zeile, die in Zoll nicht
