@@ -98,3 +98,35 @@ PyInstaller-Spec nach (`tests/test_licence_build.py` hält beide zusammen).
 Keine absoluten Pfade in Projektdateien. Nutzerverzeichnisse kommen aus
 `app.core.paths` — die Suite biegt sie um, damit ein Testlauf nichts im Profil
 des Entwicklers hinterlässt (§38).
+
+## Externe Programme: installieren heißt nicht finden
+
+Wer einen Installationsweg dazunimmt, nimmt zwei Aufgaben dazu. Die zweite ist
+die, die vergessen wird: **Solidon muss finden, was es gerade installiert
+hat.** Sonst läuft der Knopf durch, und die Zeile daneben sagt weiter „nicht
+gefunden" — die schlechteste aller Antworten, weil sie den Nutzer an seiner
+eigenen Handlung zweifeln lässt.
+
+Zweimal danebengegangen, beide Fälle stehen in `app/core/discover.py`:
+
+* **Flatpak** legt seine Startprogramme unter der Anwendungskennung ab
+  (`org.openscad.OpenSCAD`) und setzt den PATH ausdrücklich **nicht**. Weder
+  `shutil.which` noch ein Durchgang durch `/opt` findet das. Verglichen wird
+  deshalb über `plain_name` — klein, ohne Trenner —, damit „orca-slicer",
+  „OrcaSlicer" und das letzte Stück der Kennung derselbe Name sind.
+* **Homebrew-Casks** legen das Binary in `<Name>.app/Contents/MacOS/<Name>`.
+  Was in `parts_for()` fehlt, wird nicht gefunden.
+
+Und die dritte Aufgabe kommt bei Sandboxen dazu: **Ein Flatpak hat sein
+eigenes `/tmp`.** Ein Arbeitsordner aus `tempfile` ist für es unsichtbar; der
+Aufruf kommt an, und das Programm findet die Datei nicht. `workspace_for` legt
+ihn für eingesperrte Programme in den Nutzer-Cache, weil die Pakete
+`--filesystem=home` freigeben — **nachgelesen im Flathub-Manifest**, nicht
+angenommen. Wer ein weiteres Programm dazunimmt, sieht dort nach, welche
+Verzeichnisse es überhaupt lesen darf.
+
+Und wo ein Programm **mehr als Installation** braucht, ist das eine Eigenschaft
+der Sache und kein Sonderfall der Oberfläche: `Requirement.follow_up` benennt
+den zweiten Schritt, und die Prüfung „läuft es" ist dann nicht dieselbe wie
+„kann es das" — `ComfyBackend.readiness` unterscheidet vier Lagen, wo vorher
+ein Wahrheitswert stand.

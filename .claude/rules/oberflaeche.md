@@ -437,6 +437,62 @@ def _worker_done(self, worker: Any) -> None:
 `_retire`. `wait_for_workers` wartet am Ende auf alle — auch auf die in
 `_retired`, sonst überlebt einer sein Fenster und nimmt den Prozess mit.
 
+**Gestartet wird über `WorkerLeash.start`, nicht über `worker.start()`.** Das
+ist die wichtigere Hälfte derselben Regel, und sie fehlte: Gehalten wurde erst,
+wenn ein Arbeiter *fertig* war — solange er lief, hing er allein am Feld seines
+Dialogs. Ein Dialog, der vorher freigegeben wird (ein Fenster räumt ihn weg,
+ein Test lässt ihn fallen), nimmt damit die letzte Referenz auf einen
+**laufenden** `QThread` mit, und genau dagegen gibt es dieses Modul.
+
+Sichtbar wurde es, als die Erstinbetriebnahme ihre Erhebung in einen Arbeiter
+bekam: `tests/test_first_run.py` brach reproduzierbar an der Stelle ab, an der
+ein Dialog aus einem vorigen Test einging. Betroffen war auch die
+Werkzeugprobe des Chat-Dialogs, die es seit je gibt.
+
+```python
+worker.done.connect(self._show)
+worker.finished.connect(lambda done=worker: self._worker_done(done))
+self._worker = worker
+self._leash.start(worker)   # hält ab diesem Moment, nicht ab dem Ende
+```
+
+Zwei Dinge hängen daran, und beide sind nötig: Die Menge der gehaltenen
+Arbeiter ist **modulweit** (`leash._alive`) und nicht an der Leine — mit dem
+Dialog stirbt sonst die Liste. Und der Zeitgeber, der nachsieht, ob ein Thread
+ausgelaufen ist, hängt an einem Objekt, das die Widgets überlebt
+(`leash._keeper`); an das Widget gebunden feuert er nach dessen Tod nie, und
+der Arbeiter bliebe für immer gehalten.
+
+Das Feld am Dialog bleibt — es ist danach nur noch die Antwort auf „läuft
+gerade einer", nicht mehr die einzige Referenz.
+
+### Ein Dialog, der beim Öffnen nachsieht, öffnet erst danach
+
+Dreimal derselbe Fund an drei Stellen, jedes Mal gemessen: Die Liste der
+zusätzlichen Programme brauchte 2,97 Sekunden bis auf den Bildschirm, die
+Erstinbetriebnahme 1,88, der Chat-Dialog 2,98. Der Grund war jedes Mal
+dasselbe — im Konstruktor stand, was ein Programm sucht, eine Profildatei
+liest oder einen Port fragt.
+
+Das gehört in einen Arbeiter (§38), und der Dialog zeigt sofort seine Fragen.
+Drei Dinge machen den Unterschied zwischen „geht auf" und „geht auf und lügt":
+
+* **Kein Zustand ohne Erhebung.** Wo die Antwort fehlt, steht „Wird
+  nachgesehen …" — nicht „fehlt", und kein Knopf, der auf eine Vermutung
+  wirkt.
+* **Eine Erhebung, nicht drei.** Die Liste fragte je Zeile dreimal dasselbe,
+  bei den Diensten mit je einer Socket-Probe. Ein `Status`-Typ, der in einem
+  Durchgang entsteht, ist billiger als drei Aufrufe, die sich gegenseitig nicht
+  kennen.
+* **Ein nachgereichter Vorschlag überschreibt keine Wahl.** Der Drucker aus
+  dem Slicer-Profil kommt Sekunden später — wer in der Zwischenzeit selbst
+  gewählt hat, behält seine Wahl (§2.4).
+
+Und eine Methode, auf die Erhebung zu warten (`wait_for_survey`,
+`wait_for_look`), gehört dazu: Ein Test, der sie nicht abwartet, prüft den
+leeren Zustand, und ein Dialog, der mit laufender Suche zugeht, verwaist einen
+Thread.
+
 **Und er meldet auch nichts mehr.** Die Regel darüber galt als Sache der
 Stabilität; sie ist genauso eine der Anzeige. Ein Nachzügler, der
 `busyChanged(False)` sendet, räumt Balken, Abbrechen und Ladeanzeige eines
