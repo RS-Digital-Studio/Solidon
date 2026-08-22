@@ -1232,3 +1232,39 @@ def test_an_unmarked_parameter_stays_literal() -> None:
 
     entry = next(iter(result.scene.objects.values()))
     assert str(entry.name) == "Kugel", "ohne Vermerk wird nichts übersetzt"
+
+
+def test_a_translatable_text_equals_its_message_id() -> None:
+    """Der Docstring von ``TranslatableText`` versprach das, bevor es stimmte.
+
+    Der erzeugte ``__eq__`` eines Dataclass vergleicht nur mit dem eigenen Typ,
+    also war ``_("Quader") == "Quader"`` falsch — und der Hash verschieden dazu.
+    Aufgefallen ist es, als Objektnamen übersetzbar wurden und ein Test
+    ``entry.name == "Quader"`` fragte; im Bestand stehen neunundvierzig solcher
+    Vergleiche.
+
+    Verglichen wird die **Message-ID**, nicht die Übersetzung: Die wechselt mit
+    der Sprache, und ein Vergleich, der davon abhinge, wäre in jeder zweiten
+    Sprache falsch.
+    """
+    from app.i18n import TranslatableText, get_language, set_language
+    from app.i18n.catalog import install_language
+
+    text = TranslatableText("Quader")
+
+    assert text == "Quader", "gleich seiner Message-ID"
+    assert hash(text) == hash("Quader"), "und im selben Eimer"
+    assert {text: 1}.get("Quader") == 1, "damit ein Nachschlagen mit beidem geht"
+    assert text == TranslatableText("Quader")
+    assert text != TranslatableText("Quader", "Menü"), "ein Kontext gehört zur Identität"
+
+    # Und die Richtung, auf die es ankommt: Die Übersetzung ändert nichts.
+    install_language("en")
+    before = get_language()
+    try:
+        set_language("en")
+        assert str(text) == "Box", "angezeigt wird übersetzt"
+        assert text == "Quader", "verglichen wird die Message-ID"
+        assert text != "Box", "und nicht die Übersetzung"
+    finally:
+        set_language(before)

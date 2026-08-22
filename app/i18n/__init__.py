@@ -45,17 +45,49 @@ _catalogs: dict[str, dict[str, str]] = {}
 _language: str = SOURCE_LANGUAGE
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class TranslatableText:
     """Ein Text, der seinen Übersetzungsschlüssel selbst trägt.
 
-    Vergleich und Hashing laufen über die Message-ID — die
-    Registerkonsistenz-Prüfungen können diese Texte so wie Zeichenketten
-    behandeln, ohne sie aufzulösen.
+    **Vergleich und Hashing laufen über die Message-ID, auch gegen eine
+    schlichte Zeichenkette.** Dieser Satz stand hier schon, bevor er stimmte:
+    Der erzeugte ``__eq__`` eines Dataclass vergleicht nur mit dem eigenen Typ,
+    also war ``_("Quader") == "Quader"`` falsch — und ``hash`` verschieden dazu.
+    Aufgefallen ist es am 22.08.2026, als Objektnamen übersetzbar wurden und
+    ein Test ``entry.name == "Quader"`` fragte; im Bestand stehen
+    neunundvierzig solcher Vergleiche.
+
+    Jetzt löst der Code die Zusage ein: Ein ``TranslatableText`` ist gleich
+    einer Zeichenkette, wenn seine **Message-ID** ihr gleicht — nicht seine
+    Übersetzung. Das ist die richtige Richtung, denn die Message-ID ist der
+    stabile Teil; die Übersetzung wechselt mit der Sprache, und ein Vergleich,
+    der davon abhinge, wäre in jeder zweiten Sprache falsch. Wer die angezeigte
+    Fassung vergleichen will, schreibt ``str(...)`` davor und sagt damit, dass
+    er es so meint.
+
+    Ein Kontext gehört zur Identität: Zwei Texte mit derselben ID und
+    verschiedenem Kontext sind zwei Texte. Gegen eine Zeichenkette gilt
+    dagegen die ID allein — ein ``str`` hat keinen Kontext, und ihn zu
+    verlangen hieße, den Vergleich unmöglich zu machen.
     """
 
     msgid: str
     context: str | None = None
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, TranslatableText):
+            return (self.msgid, self.context) == (other.msgid, other.context)
+        if isinstance(other, str):
+            return self.msgid == other
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        # **Derselbe Hash wie die Message-ID**, damit ein Text und seine ID in
+        # derselben Menge landen und ein Nachschlagen mit beidem funktioniert.
+        # Der Kontext bleibt draußen: Zwei Texte mit gleicher ID und
+        # verschiedenem Kontext sind ungleich, kollidieren aber im Eimer — das
+        # ist erlaubt und billiger als ein Hash, der die Zusage bricht.
+        return hash(self.msgid)
 
     def translate(self, language: str | None = None) -> str:
         """Löst gegen den aktiven Katalog auf; Rückfall ist die Message-ID."""
