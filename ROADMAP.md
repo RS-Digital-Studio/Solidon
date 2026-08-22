@@ -90,11 +90,10 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte — **entschieden** | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | einen Überlaufknopf: die acht häufigsten Zwangsbedingungen bleiben Knöpfe, der Rest wandert darunter. Achtzehn in einer Zeile sind auf einem 1366er Laptop nicht bedienbar, und `test_interface_limits.py` erlaubt acht Werkzeuge — die Hausgrenze stand schon. Welche acht: an Fusion ablesen. Dazu der Test, der sein Thema selbst setzt |
 | Ein Höhenbudget für den Startbildschirm — **entschieden, in Arbeit** | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird. Am 22.08. neu gemessen, und die Aktenlage des Punkts stimmt nicht mehr: 340 px fehlen auf 1600x900 statt 156, die Ablagefläche gibt es als Widget nicht mehr, und es sind **zwei** Kachelbereiche — `more_area` (242 px) ist der größte Einzelposten |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
-| „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
+| „Eingabe korrigieren" ist ein Satz und kein Knopf — **halb erledigt** | Der Bedienweg von außen nachgefahren (21.08.2026) | einen Handler für den **Parameterfehler**: den Dialog mit den Werten erneut öffnen. Der zweite Fall („andere Anzahl an Objekten“) hat seit dem 23.08. einen — `CHANGE_SELECTION` führt in den Auswahlmodus |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
-| Erzeugen und Ändern sind reine Verteilermenüs — **entschieden** | Aus der Analyse für Neulinge und Kunden | die Zeilenbudget-Regel: Passen die Zeilen aller Kategorien einer Gruppe ins Zwölf-Zeilen-Budget, stehen sie flach mit Trennstrichen; sonst bleiben die Untermenüs. `MENU_GROUPS` schaut heute auf die Zahl der **Kategorien** — die Hausgrenze ist aber eine **Zeilen**grenze. *Erzeugen* wird damit flach (der Quader kostet zwei Klicks statt drei), *Ändern* bleibt tief. Kein Tausch: Die Neun-Menü-Grenze bleibt unberührt |
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
@@ -1613,8 +1612,9 @@ das über sich selbst. Von zwölf solchen Punkten waren beim Nachprüfen am
 22.08.2026 sieben längst behoben und einer entschieden; diese zwei sind es
 nicht.
 
-- [ ] **Erzeugen und Ändern sind reine Verteilermenüs — nachgemessen am
-      23.08.2026, und die Entscheidung vom 22.08. hält nur zur Hälfte.**
+- [x] **Erzeugen und Ändern sind reine Verteilermenüs — gemessen und
+      umgesetzt am 23.08.2026 (`a6d59fc`, `bfff72b`), und die Entscheidung vom
+      22.08. hielt nur zur Hälfte.**
 
           Objekt        scene                              5 Zeilen  ->  flach
           Erzeugen      primitive 5, import 3,
@@ -1629,10 +1629,21 @@ nicht.
       stützte sich auf „Grundformen hat vier Zeilen" — die Zahl **einer**
       Kategorie — und hat damit Kategorien gezählt, wo sie Zeilen zählen wollte.
 
-      Was bleibt, ist kleiner und echt: *Vorbereiten* passt mit zehn Zeilen
-      hinein. Neun Operationen sparen einen Klick, darunter Ausrichten fürs
-      Drucken und Teilen — Schritte am Ende fast jeder Kette. Ob das den Umbau
-      wert ist, entscheidet, wer `app/ui/main_window.py:1577` hält.
+      Was blieb, ist kleiner und echt und ist gebaut: *Vorbereiten* steht
+      flach — zehn Zeilen, keine Untermenüs. Neun Operationen sparen einen
+      Klick, darunter Ausrichten fürs Drucken und Teilen.
+
+      **Den Ausschlag gab nicht der Klick, sondern dass zwei Maße dieselbe
+      Sache maßen** (3d-druck-b8): Der Aufbau entschied nach Kategorienzahl,
+      die Grenze misst in Zeilen. Eine Gruppe bekam eine Zwischenebene, weil
+      sie zwei Kategorien hat — nicht, weil sie zu lang ist. `group_is_flat`
+      beantwortet die Frage jetzt an **einer** Stelle statt an dreien.
+
+      Zwei Aussagen stecken darin, und die zweite ging beim ersten Anlauf
+      unter: Eine Gruppe mit einer einzigen besetzten Kategorie ist immer
+      flach, gleich wie lang sie ist — ihre Zwischenebene hieße genauso wie
+      das Menü darüber („Bausteine → Bausteine → Deckel erzeugen"). Gefunden
+      an b8s Wächter, nachdem sie beim Ersetzen verlorengegangen war.
 
       Ursprünglich stand hier: `registry.py:79` legt
       vier Kategorien unter *Erzeugen* und sieben unter *Ändern*, jede als
@@ -4086,6 +4097,13 @@ Kategorie.
       ist. Was ein Handler tun müsste, ist die offene Frage: Bei einem
       Parameterfehler den Dialog mit den Werten erneut öffnen; bei „andere
       Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog.
+
+      **Die zweite Hälfte steht seit dem 23.08.2026** (3d-druck-b8):
+      `CHANGE_SELECTION` („Andere Objekte wählen") hängt an
+      `evaluate.missing_input` und `evaluate.too_few_inputs` und führt in den
+      Auswahlmodus. **Offen ist damit nur noch der Parameterfehler** — dort
+      steht `CORRECT_INPUT` weiter ohne Handler, und §2.1 verspricht „keine
+      Sackgassen" ausgerechnet für den häufigsten Bedienfehler.
 - [x] **Ein angeklicktes Gewinde bietet nichts an — gebaut von 3d-druck-b8
       am 23.08.2026 (`64769bc`).** „Diesen Schritt ändern" steht im
       Kontextmenü am Merkmal, ganz oben; der Klick öffnet den Dialog der
