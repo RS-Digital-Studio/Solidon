@@ -113,6 +113,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
 | Der Testkorpus hat keinen verrundeten Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Datei mit Kehle. Ein Regressionsnetz, das die Alltagsformen ausspart, meldet Erfolg über dem, was es nicht enthält (§34) |
 | In `parts/` ist der Nichtanschluss ein Rückfall | Das Fundament der Wahrnehmung (22.08.2026) | einen Aufrufer für `travelling_parts()` oder die Feststellung, dass es sie nicht braucht — und die Testart „Anschluss" aus §35, denn derselbe Fehler ist in derselben Datei schon einmal gefunden und behoben worden |
+| Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Ein Test steht still, ohne zu rechnen — **Stelle gefunden** | Das Fundament der Wahrnehmung (22.08.2026) | den Grund, aus dem Qt beim Vererben eines Stylesheets eine Sperre hält. Der Stillstand sitzt in `start_screen.py:155` (`setStyleSheet` an der Ablagefläche), beim Aufbau des Hauptfensters in der Test-Fixture; nativ ein Deadlock auf `QBasicMutex` in `QObject::connectImpl`. Dreimal gemessen, zwei Dateien — es hängt an der Fixture, nicht am Test |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
@@ -4739,13 +4740,19 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
             pin_1  Ø 28,92   (r = 14,46)
           Krümmungskarte: 3,0 mm      <- die richtige Antwort steht daneben
 
-      **Der Fleck ist richtig isoliert, die Einpassung ist falsch.** 52 der 108
-      Dreiecke bleiben als gekrümmt übrig, und das sind fast genau die
-      Verrundung (96 Segmente, Viertelkreis, doppelt trianguliert = 48).
-      `fit_cylinder` bestimmt die Achse aus dem Moment der Normalen — und bei
-      einem **90-Grad-Ausschnitt** liegen die Normalen auf einem Bogen statt auf
-      einem Kreis. Es gibt keinen klaren Nullraum, die Achse wandert, der Radius
-      wird fast fünfmal zu groß.
+      **Die erste Diagnose war `fit_cylinder`, und sie war falsch.** Sie lautete:
+      Bei einem 90-Grad-Ausschnitt liegen die Normalen auf einem Bogen statt auf
+      einem Kreis, es gibt keinen klaren Nullraum, die Achse wandert. Plausibel,
+      und beim Nachbauen widerlegt.
+
+      **Die Ursache liegt eine Stufe früher, in der Facettenklassifikation.**
+      Zwei **ebene** Facetten von 1110 und 510 mm² — auf einem Körper mit
+      1200 mm² größter Fläche — galten als „gekrümmt", weil sie die Rundung
+      berühren. Sie hängten sich dem Verrundungsfleck an, und die Kåsa-Einpassung
+      gewichtet quadratisch: vier Punkte in bis zu 25 mm Abstand ziehen einen
+      Kreis von r=3 auf r=14,46. **Die Einpassung war nie das Problem — sie bekam
+      den falschen Fleck.** Das ist eine andere Sache als ein kaputter Löser, und
+      wer es verwechselt, sucht an der falschen Stelle.
 
       **Das ist ein Fehlbefund, kein fehlender Befund — und darin liegt der
       Unterschied zur Kehlensäule.** Dort fand die Erkennung *nichts*: schlecht,
@@ -4856,6 +4863,33 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       gegen `detect()`, `travelling_parts()`, `check.stamp()` und der
       Rückfall selbst.
 
+- [ ] **Parallelität und Schloss sind keine Alternativen — sie bedingen
+      einander.** Gemessen am 22.08.2026 von 3d-druck-b8: dieselbe Sammelgruppe
+      zweimal mit `-n 8` gefahren, einmal **11 failed**, einmal **0 failed**.
+      Der Unterschied war kein Code, sondern ein fremder Torlauf, der mitlief.
+
+      **Das kehrt die naheliegende Sparidee um.** Der Gedanke war, das Schloss
+      auf die Leistungstests zu schrumpfen, weil funktionale Tests ja nur
+      langsamer würden. Sie werden nicht langsamer, sie werden **rot** — und
+      zwar der *fremde* Lauf, nicht der eigene: Acht Prozesse lasten die
+      Maschine so aus, dass daneben nichts mehr sauber misst. Wer die
+      Parallelität ausbaut, braucht das Schloss **strenger**, nicht lockerer.
+
+      Dieselbe Sache hatte am selben Tag schon einmal acht Minuten Stillstand
+      und einen Exit 139 gekostet, und sie stand danach als Regel in
+      `.claude/rules/tests.md`: Fremdlast macht funktionale Qt-Tests rot, nicht
+      langsam. Ein geschrumpftes Schloss wäre dieser Fehler als
+      Dauereinrichtung.
+
+      **Die Zahlen zur Toränderung, soweit sie stehen:** Maschine i9-13900K,
+      24 Kerne; Auslastung während eines Torlaufs mit drei wartenden Sitzungen
+      **16 %**. Sammelgruppe seriell 175 s, mit `-n 8` 66 s (Faktor 2,6), mit
+      `-n auto` (32) scheitert der Verteiler. Reine Testzeit des Tors rund
+      9 Minuten, tatsächliche Dauer rund 30 — **der Rest ist der Deadlock.**
+      Daraus folgt die Reihenfolge: erst der Deadlock, dann die Parallelität.
+      Was 109 Sekunden spart, ist zweitrangig neben dem, was 10 bis 27 Minuten
+      kostet.
+
 - [ ] **Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum.**
       `tools/gate_lock.py` schützt vor Fremd*last* — gegen Fremd*stände* hilft
       es nicht: Jeder Lauf liest die ungestageten Dateien aller Sitzungen, egal
@@ -4955,10 +4989,46 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Der Rekursionsschutz an `start_screen.py:155` ist **nicht** die Ursache —
       sein Docstring beschreibt schon die halbe Sache („`setStyleSheet` löst
       selbst ein `PaletteChange` aus, und das führte zurück hierher"). Er
-      verhindert die Rekursion; er verhindert nicht, dass Qt beim Vererben des
-      Stils unter gehaltener Sperre verbindet. **Was fehlt, ist nicht die
-      Stelle, sondern der Grund, aus dem die Sperre gehalten wird.** Gefunden
-      von 3d-druck-b8.
+      verhindert die Rekursion; er verhindert nicht, dass Qt unter gehaltener
+      Sperre verbindet. Gefunden von 3d-druck-b8.
+
+      **Vierte Aufnahme, und sie nennt den Halter der Sperre.** Derselbe Hänger
+      trat kurz darauf in einem anderen Torlauf auf (7,03 CPU-Sekunden, 425 MB,
+      0,02 s über zehn Sekunden). Zwei Threads, beide wartend:
+
+          Thread "MainThread" (idle)
+              QMetaObject::connect -> QBasicMutex::lockInternal -> WaitOnAddress
+              PySide::qobjectConnect
+              __init__ (app/ui/split_bar.py:131)
+              __init__ (app/ui/main_window.py:837)
+              window   (tests/test_ui.py:51)
+
+          Thread 37240 (idle)
+              QObject::~QObject -> QObjectPrivate::deleteChildren
+              QThread::start
+
+      **Der Hauptthread will ein Signal verbinden; ein zweiter Thread zerstört
+      gerade Qt-Objekte samt Kindern. Die Sperre hält die Objektzerstörung.**
+
+      Zwei Dinge werden damit klarer:
+
+      * **`setStyleSheet` ist nicht die Ursache.** Die vierte Aufnahme sitzt in
+        `split_bar.py:131` — ein schlichtes `QObject::connect`, kein Stylesheet,
+        keine Ereigniszustellung. Die dritte ging über
+        `setStyleSheet → inheritStyle → notify → QLabel::event → connectImpl`;
+        beide enden am selben Punkt. **Gemeinsam ist nur das Verbinden**, und
+        die Stylesheet-Stelle war eine von vielen, die verbinden.
+      * **Die Fixture-Aussage wird stärker.** Beide Stacks laufen über
+        `main_window.py:837` → `tests/test_ui.py:51`, nur über verschiedene
+        Widgets darunter. Es hängt am Aufbau des Hauptfensters, nicht an einem
+        Widget.
+
+      *Als Spur und ausdrücklich nicht als Befund:* Der zweite Thread tut das,
+      was der Ring-Umbau vom selben Tag erst möglich gemacht hat — Qt-Objekte
+      **wirklich** zerstören, wo vorher nichts freigegeben wurde. Ob das den
+      Deadlock auslöst, sagt der Stack nicht; der Hänger trat auch vorher auf,
+      und `QThread::start` deutet eher auf einen Arbeiter als auf einen
+      Viewport.
 
       **Und dabei eine Messfalle, die zwei Sitzungen betraf und hier steht,
       weil sie fast ein ganzes Tor gekostet hätte.** 3d-druck-64 meldete den
