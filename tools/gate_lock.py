@@ -217,7 +217,21 @@ def run(who: str, wait: float, command: list[str]) -> int:
     foreign = _acquire(path, who, wait)
     if foreign is not None:
         print(f"Das Tor läuft schon: {_describe(foreign)}")
-        print("Warte, bis es durch ist, oder starte mit --wait SEKUNDEN.")
+        if wait <= 0:
+            print("Warte, bis es durch ist, oder starte mit --wait SEKUNDEN.")
+        else:
+            # **Der Vorschlag muss zur Lage passen (Regel 17).** Hier stand
+            # bisher derselbe Satz wie oben — auch nach einer abgelaufenen
+            # Wartezeit, und damit „starte mit --wait" an jemanden, der genau
+            # das getan hatte. Am 22.08.2026 hat das eine Sitzung zu dem
+            # Schluss gebracht, ``--wait`` greife nicht; sie hat 3000 Sekunden
+            # gewartet und die Meldung als Beweis gelesen.
+            print(
+                f"Nach {wait:.0f} Sekunden Wartezeit ist es immer noch belegt. "
+                "Bevor du länger wartest: Sieh nach, ob der Halter überhaupt "
+                "noch rechnet — ein Prozess, der steht, hält das Schloss "
+                "genauso wie einer, der arbeitet."
+            )
         return BUSY_EXIT
 
     mine = _read(path) or {}
