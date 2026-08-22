@@ -1,0 +1,69 @@
+---
+name: leistungstests-fremdlast
+description: Rote §31-Leistungstests und Suite-Abstürze am Lauf-Ende erst gegen die Fremdlast prüfen — Spiel, Suite selbst oder eine zweite Claude-Sitzung; fallen alle Marken gleichmäßig um 1,4–1,7, ist es die Maschine.
+metadata: 
+  node_type: memory
+  type: project
+  originSessionId: 4c47107c-d31c-406e-b4b0-401bb3afd6bb
+  modified: 2026-08-20T16:40:00.000Z
+---
+
+Auf Roberts Maschine (i9-13900K) läuft während der Sitzungen öfter ein Spiel
+(beobachtet: Palworld, ~35–40 % CPU-Grundlast). Die absoluten §31-Budgets in
+`tests/test_performance.py` (z. B. `orient_200` < 20 s, dort sonst ~16 s)
+reißen dann, ohne dass der Code langsamer wurde — auch mit hoher
+Prozesspriorität, vermutlich Takt-/Speicherbandbreiten-Konkurrenz.
+
+**Why:** Die Budgets meinen eine unbelastete Referenzmaschine; die CI läuft
+absichtlich `-m "not performance"`. Ein roter Lauf unter Spielelast ist keine
+Regression.
+
+**Dasselbe gilt für den Abriss am Lauf-Ende.** `pytest tests/ -q` endet unter
+Spielelast mit „Windows fatal exception: access violation" **nachdem** alle
+Tests bestanden sind — das Aufräumen der VTK-Objekte hängt an der
+Grafikkarte, und die gehört gerade dem Spiel. Erkennbar daran, dass derselbe
+Stand mit `-v` durchläuft und der Abriss auch nach `git stash` bleibt.
+
+**Die Fremdlast kommt oft aus der Suite selbst, nicht von einem Spiel.** Am
+14.08.2026 lief `sketch_solve_200` im vollen Lauf auf 162 ms und einzeln auf
+114/113/114 — achtunddreißig Prozent, verursacht allein von `test_slice.py`
+unmittelbar davor. Wer nur nach einem Spiel sucht, findet nichts und hält den
+Wert dann für echt. Die entscheidende Gegenprobe ist deshalb nicht
+`Get-Process`, sondern **die eine Marke allein fahren**:
+`-m performance -k "<name>" -s`.
+
+**How to apply:** Bei rotem Leistungstest oder Abriss am Ende zuerst
+`Get-Process` / `LoadPercentage` prüfen und ob der gemessene Pfad überhaupt ein
+Diff hat. Drei Gegenproben, die schnell entscheiden: die Marke allein statt im
+Verbund, derselbe Lauf mit `-v`, und derselbe Lauf nach `git stash`. Bleibt es,
+gehört es nicht der eigenen Änderung. Die maschinenunabhängige
+Regressionsschwelle (25 %) ist das belastbare Signal — seit dem 14.08.2026
+misst sie gegen den **schnellsten** bekannten Lauf statt gegen den letzten, so
+dass ein verrauschter Lauf die Marke nicht mehr anhebt und eine echte
+Verschlechterung nicht mehr darin verschwindet. Endgültige Messung trotzdem
+auf unbelasteter Maschine — notfalls per Monitor auf das Spielende warten.
+
+**Die schnellste Unterscheidung ist die Gleichmäßigkeit.** Am 20.08.2026
+fielen elf von neunzehn Marken auf einmal — und zwar alle um Faktor 1,4 bis
+1,7: `ingest_dense` 1,43, `detect_medium` 1,56, `slice_medium` 1,59,
+`sketch_solve_200` 1,73. Einlesen, Erkennen, Schneiden und der Löser haben
+keinen gemeinsamen Codepfad; eine Änderung kann sie nicht gleichmäßig treffen,
+eine langsamere Maschine schon. Der I/O-lastige `read_dense` blieb dabei
+unverändert (430 gegen 425 ms) — nur die rechnenden Marken litten. Wer diese
+Signatur sieht, braucht gar nicht erst zu suchen.
+
+Verursacher war eine **zweite Claude-Sitzung im selben Arbeitsbaum**, die
+Bilder rendert (Python-Prozess mit ~2,9 GB). `LoadPercentage` zeigte dabei
+8–20 % und `CurrentClockSpeed` den Nennwert — beides sagt hier nichts: Der
+i9-13900K hat P- und E-Kerne, und wenn die P-Kerne belegt sind, landet der
+Messprozess auf einem E-Kern. Genau das ergibt 1,4 bis 1,7.
+
+**Bei paralleler Sitzung ist `git stash` als Gegenprobe verboten** — er nimmt
+die fremde Arbeit mit weg. Übrig bleiben die beiden anderen: die Marke allein
+fahren (drei Läufe, nicht einer) und prüfen, ob der gemessene Pfad überhaupt
+einen Diff hat.
+
+Nicht jeder solche Abriss ist Fremdlast: eine Referenzschleife zwischen Python
+und VTK erzeugt dasselbe Bild und ist echt. Die Unterscheidung liefert
+derselbe `git stash` — siehe [[vtk-qt-referenzen-halten-zu-lange]] und
+[[parallele-sitzungen-solidon3d]].

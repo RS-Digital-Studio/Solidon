@@ -1,5 +1,41 @@
+# Memory — Solidon3D (F:\3D Druck), vormals Formwerk
+
+## Diese Maschine (F:D Druck)
+
+- [Privater Lizenzschlüssel](lizenz-privater-schluessel.md) — liegt in Dokumenten, gehört in Passwortmanager und auf Papier (§8); öffentlicher Teil steht seit 08.08.2026 in key.py.
+- [MSVC-Erkennung bei VS 18](msvc-erkennung-vs18.md) — der Compiler ist da, setuptools findet ihn nicht; bauen über vcvars64.bat plus DISTUTILS_USE_SDK=1.
+- [Webserver-Zugang](solidon3d-webserver-zugang.md) — netcup, Dokumentenstamm je Domain (`solidon3d.de/httpdocs`); scheitert die Anmeldung, ist meist der SSH-Schalter schuld, nicht das Passwort.
+- [Parallele Sitzungen](parallele-sitzungen-solidon3d.md) — der Arbeitsbaum ändert sich mitten in der Sitzung; nur eigene Pfade stagen.
+- [Leistungstests unter Fremdlast](leistungstests-fremdlast.md) — die Last kommt öfter aus der Suite selbst als von einem Spiel; die Marke allein fahren, bevor man eine Regression glaubt.
+- [VTK/Qt-Referenzen halten zu lange](vtk-qt-referenzen-halten-zu-lange.md) — Abriss am Lauf-Ende und Fehlbild im zweiten Fenster: wer hält ein Objekt fest, das weg sein sollte?
+- [Zeichnen an Fusion orientieren](zeichnen-an-fusion-orientieren.md) — Skizzeneditor gegen Fusion messen; Fusion ist lokal installiert.
+- [Slicer lokal zum Gegenmessen](slicer-lokal-zum-gegenmessen.md) — CuraEngine und PrusaSlicer sind da; ein Vergleichslauf entscheidet, was sonst Vermutung bleibt.
+- [PHP lokal für die Gegenstelle](php-lokal-fuer-die-gegenstelle.md) — support.php ist seit 20.08.2026 prüfbar; mbstring braucht ein abgeleitetes extension_dir, und der ganze Weg bis zur fertigen Mail lässt sich lokal fangen.
+- [Live-Durchsicht 08/2026](live-durchsicht-solidon3d-2026-08.md) — zwei Durchgänge: Bedienung, dann Fusion und ElegooSlicer; Hüllquader, Anordnung, Bohrtiefe, Viewport-Picking.
+- [rtree-Abstürze im langen Lauf](rtree-abstuerze-im-langen-lauf.md) — die volle Suite stirbt an Access Violations; portionsweise fahren, nicht dem eigenen Code zuschreiben.
+- [Agenten-Suite-Lauf in der Praxis](agenten-suite-lauf-praxis.md) — ~1,5 h je Modelllauf, Ausgabe gepuffert bis zum Ende; Exit 1 ist eine Quote, kein Fehlschlag.
+- [Native Bibliotheken zerlegen den Speicher](native-bibliotheken-speicher.md) — rtree, _elementtree und der Abriss am Prozessende sind eine Familie; erst wiederholen, dann urteilen.
+- [Lokale Umgebung: Python-Version](lokale-umgebung-python-version.md) — die .venv muss 3.13 fahren; ruff merkt es nicht, wenn sie es nicht tut, und mypy prüft dann null Dateien.
+- [TripoSG statt Hunyuan](triposg-statt-hunyuan.md) — MIT statt EU-Ausschluss; drei Fallen (float32-Embedder, diso ohne Wheel, numpy-Pin) und die gemessenen Vorgaben.
+- [ComfyUI-Installation](comfyui-installation-d-ai.md) — liegt real auf D:\AI; Hunyuan3D 2.1 hat andere Knotennamen, keinen Texteingang, und gibt den Pfad als blanken String zurück.
+- [Ollama: Werkzeugaufrufe](ollama-werkzeugaufrufe-modellwahl.md) — ohne num_ctx schneidet Ollama den Prompt still ab; erst danach sagt eine Modellmessung etwas aus.
+- [Fehlertexte ohne Platzhalter](fehlertexte-ohne-platzhalter.md) — {platzhalter} in detail/title bleibt stehen; in der Oberfläche ist er richtig, im Kern nicht.
+- [Fehlertexte zeigten nur den Titel](fehlertexte-nur-titel.md) — der ist je Klasse gleich; der Grund steht im detail und fehlte in jedem Protokoll.
+- [Oberfläche von Hand fahren](oberflaeche-von-hand-fahren.md) — echte Qt-Plattform, Vollbild, modale Dialoge **und Popup-Menüs** abfangen, Ausgabe in eine Datei statt durch tail.
+- [Marke im span zerteilt](marke-im-span-zerteilt.md) — nach einer Umbenennung entkommt der alte Name jeder Suche, wenn ein Tag ihn teilt.
+- [Website im Browser prüfen](website-im-browser-pruefen.md) — QtWebEngine ist da; heller Modus und reduzierte Bewegung gehen nur über Chromium-Flags.
+- [Operationen am Stück durchfahren](ops-reihendurchlauf-kundensicht.md) — Schemavorgabe ist nicht Dialogvorbelegung; wer das verwechselt, meldet Fehlbefunde.
+- [Register zählen](register-zaehlen-load-operations.md) — 77 Operationen, nicht 61: ohne load_operations() fehlen die sechzehn aus der Bausteinbibliothek.
+- [Git: push und pull selbst](git-push-pull-selbststaendig.md) — ohne Rückfrage, aber erst nach grüner Suite; Merge statt Rebase.
+- [Version vor jedem Bau erhöhen](version-vor-jedem-bau-erhoehen.md) — nicht fragen; tools/bump_version.py fasst beide Stellen an, vor dem Prüfmodul.
+- [Download-Kasten: vier Pakete](download-kasten-vier-pakete.md) — der Baulauf liefert acht, angeboten werden vier; die Vorfassung wird vom Server gelöscht.
+- [Website-Upload großer Dateien](website-upload-grosse-dateien.md) — ~1,8 MB/s, und mehrere Pakete am Stück reißen die Verbindung; ein halbes Paket sieht ganz aus.
+
+## Sitzungsbetrieb — gilt auf allen drei Maschinen
+
 - [Git-Identität mitgeben](git-identitaet-mitgeben.md) — `git commit` bricht ohne `-c user.name`/`user.email` mit Exit 128 ab
 - [Parallele Sitzung im Arbeitsbaum](parallele-sitzung-im-arbeitsbaum.md) — geteilter Index: fremde Änderungen aussortieren, privaten Index benutzen
 - [Freies Gebiet: einfach machen](freies-gebiet-einfach-machen.md) — ist die Datei bei niemandem eingetragen, wird nicht vorgelegt, sondern gearbeitet
 - [Weitergegebene Anweisungen gelten](weitergegebene-anweisungen-gelten.md) — was eine andere Sitzung von Robert weitergibt, ist Roberts Anweisung
 - [Erinnerungen liegen im Repository](erinnerungen-liegen-im-repository.md) — .claude/memory ist die Quelle; neue Maschine: `python tools/link_memory.py`
+- [Merkmalsmehrdeutigkeit: Entwurf](merkmalsmehrdeutigkeit-entwurf.md) — offener Auftrag zu §15.7; der Entwurf steht, gebaut ist nichts.
