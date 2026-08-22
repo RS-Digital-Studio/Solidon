@@ -641,10 +641,16 @@ def test_a_rounded_edge_keeps_its_own_radius() -> None:
     14,46. Der Löser war in Ordnung — er bekam den falschen Fleck.
     """
     found = detect(plate("block_with_rounded_edge.stl"))
-    round_faces = [entry for entry in found.values() if entry.kind in {"pin", "hole"}]
+    fillets = [entry for entry in found.values() if entry.kind == "fillet"]
 
-    assert len(round_faces) == 1, f"one rounded edge: {sorted(found)}"
-    assert round_faces[0].params["diameter"] == pytest.approx(6.0, abs=0.05)
+    assert len(fillets) == 1, f"one rounded edge: {sorted(found)}"
+    # **R 3, nicht Ø 6.** Eine Verrundung wird mit ihrem Radius bestellt,
+    # gezeichnet und gemessen; der Durchmesser steht daneben, weil die
+    # Zuordnung die Größe aus diesem Schlüssel liest (§21.2).
+    assert fillets[0].params["radius"] == pytest.approx(3.0, abs=0.05)
+    assert not [entry for entry in found.values() if entry.kind == "pin"], (
+        "a rounded edge is not a pin — nothing pairs with it (§14)"
+    )
     # Und die zwei großen Ebenen daneben sind wieder Flächen.
     assert sum(1 for entry in found.values() if entry.kind == "face") == 6
 
@@ -767,6 +773,22 @@ def test_a_bore_beside_a_boss_still_goes_through() -> None:
     ]
 
     assert bores[0].params["through"] is True
+
+
+def test_a_full_cylinder_is_never_taken_for_a_fillet() -> None:
+    """Die Gegenprobe, und sie ist über den ganzen Korpus gemessen.
+
+    Getrennt wird an der Überdeckung um die Achse: Bohrungen und Zapfen
+    überdecken 345 bis 356 Grad, eine verrundete Quaderkante 90. Dazwischen
+    liegt nichts — die Schwelle bei 300 muss nicht kalibriert werden, sie sitzt
+    in einem Loch.
+    """
+    for name in ("plate_holes.stl", "clean_figure.stl", "plate_chamfer_and_taper.stl"):
+        found = detect(plate(name))
+
+        assert not [entry for entry in found.values() if entry.kind == "fillet"], (
+            f"{name}: a whole cylinder is not a fillet"
+        )
 
 
 def test_a_thread_is_not_a_stack_of_eight_pins() -> None:

@@ -287,6 +287,15 @@ ROUND_TOLERANCE = 0.02
 SINK_AXIS_LIMIT = 2.0
 
 
+#: Ab welcher Überdeckung um die Achse ein Zylinderfleck ein **ganzer**
+#: Zylinder ist — darunter ist er ein Ausschnitt und damit eine Verrundung.
+#:
+#: Gemessen über den Korpus: Bohrungen und Zapfen überdecken 345 bis 354 Grad,
+#: eine verrundete Quaderkante 90. Dreihundert Grad liegen mit weitem Abstand
+#: dazwischen; die Facettierung kostet die vollen Zylinder je nach Segmentzahl
+#: sechs bis fünfzehn Grad, und mehr als das darf die Schwelle nicht fordern.
+FULL_TURN_SPAN = 300.0
+
 #: Ab wie vielen koaxialen Zylindern gleichen Durchmessers ein Stapel als
 #: Gewinde gilt und nicht als Zapfen.
 #:
@@ -342,7 +351,7 @@ CURVATURE_JUMP = 0.5
 #: trägt seinen Namen von dort. Wer es wie eine Bohrung prüfte, verlöre es bei
 #: jeder Operation, weil kein Partner zu finden ist.
 DETECTABLE_KINDS: frozenset[str] = frozenset(
-    {"hole", "pin", "face", "edge_loop", "cone", "sphere", "torus"}
+    {"hole", "pin", "face", "edge_loop", "cone", "sphere", "torus", "fillet"}
 )
 
 
@@ -369,6 +378,7 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     for feature in [
         *detect_holes(mesh, fitted.cylinders, fitted.cones),
         *detect_pins(mesh, fitted.cylinders),
+        *detect_fillets(mesh, fitted.fillets),
         *detect_cones(mesh, fitted.cones),
         *detect_spheres(mesh, fitted.spheres),
         *detect_tori(mesh, fitted.tori),
@@ -394,6 +404,10 @@ Spheres = list[tuple["SphereFit", list[int]]]
 Tori = list[tuple["TorusFit", list[int]]]
 
 
+#: Zylinderausschnitte, die keine ganzen Zylinder sind — Verrundungen.
+Fillets = list[tuple["CylinderFit", list[int]]]
+
+
 class Fitted(NamedTuple):
     """Was eine Fleckensuche an Grundformen hergibt.
 
@@ -406,6 +420,7 @@ class Fitted(NamedTuple):
     cones: Cones
     spheres: Spheres
     tori: Tori
+    fillets: Fillets
 
 
 def _cylinders(mesh: MeshData) -> Cylinders:
@@ -424,7 +439,7 @@ def _fitted(mesh: MeshData) -> Fitted:
     """
     body = mesh.raw
     if not len(body.faces):
-        return Fitted([], [], [], [])
+        return Fitted([], [], [], [], [])
 
     # Eine Bohrungswand besteht aus vielen schmalen ebenen Segmenten — „gehört zu
     # einer Facette" ist also nicht die Trennlinie, „gehört zu einer *großen*
@@ -432,7 +447,7 @@ def _fitted(mesh: MeshData) -> Fitted:
     planar = _large_facet_faces(body)
     curved = [index for index in range(len(body.faces)) if index not in planar]
     if not curved:
-        return Fitted([], [], [], [])
+        return Fitted([], [], [], [], [])
 
     found: Cylinders = []
     cones: Cones = []
@@ -508,6 +523,7 @@ def _fitted(mesh: MeshData) -> Fitted:
 
     found = _merged_cylinders(body, mesh, found)
     found = _without_thread_turns(body, found)
+    found, fillets = _split_off_fillets(body, found)
 
     # Nach Position sortiert, damit die Nummerierung für denselben Körper
     # reproduzierbar ist. **Alle drei Achsen**, nicht nur X und Y: Zwei
@@ -543,7 +559,15 @@ def _fitted(mesh: MeshData) -> Fitted:
                 round(entry[0].centre[2], 3),
             )
         )
-    return Fitted(found, cones, spheres, tori)
+    for entry_list in (fillets,):
+        entry_list.sort(
+            key=lambda entry: (
+                round(entry[0].centre[0], 3),
+                round(entry[0].centre[1], 3),
+                round(entry[0].centre[2], 3),
+            )
+        )
+    return Fitted(found, cones, spheres, tori, fillets)
 
 
 def detect_holes(
@@ -683,6 +707,34 @@ def _merged_cylinders(body: trimesh.Trimesh, mesh: MeshData, found: Cylinders) -
     return merged
 
 
+def _split_off_fillets(body: trimesh.Trimesh, found: Cylinders) -> tuple[Cylinders, Fillets]:
+    """Zylinder von Zylinder**ausschnitten** trennen — Zapfen von Verrundungen.
+
+    **Eine verrundete Kante ist heute ein Zapfen**, und der Kunde liest an dem,
+    was er als „Verrundung R 3" kennt, ein „Zapfen Ø 6". §14 nennt einen
+    Zapfen das, womit man eine Bohrung paart; mit einer Kantenverrundung paart
+    niemand etwas, und ``applies_to`` bot ihm trotzdem Passungs-Operationen an.
+
+    Getrennt wird an der **Überdeckung um die Achse**, und die Zahlen lassen
+    keinen Zweifel: Über den ganzen Korpus überdecken Bohrungen und Zapfen 345
+    bis 356 Grad, eine verrundete Quaderkante 90. Das ist keine Schwelle, die
+    kalibriert werden muss, sondern ein Loch, durch das nichts fällt.
+
+    **Nur die gerade Kante.** An einer runden ist die Verrundung ein
+    Torusstück, und ``tube_radius`` ist dort bereits ihr Radius — aber ein
+    Kehlstück ist von einem vollen Ring über diese Zahl nicht zu trennen, und
+    eine Schwelle, die sich nicht messen lässt, gehört nicht gebaut.
+    """
+    whole: Cylinders = []
+    fillets: Fillets = []
+    for fit, patch in found:
+        if angular_span(body, fit, patch) < FULL_TURN_SPAN:
+            fillets.append((fit, patch))
+        else:
+            whole.append((fit, patch))
+    return whole, fillets
+
+
 def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
     """Gewindegänge sind keine Zapfen, und sie treten in Rudeln auf.
 
@@ -791,6 +843,29 @@ def _same_cylinder(
     return not (other_low > high + EPS_GEOM or other_high < low - EPS_GEOM)
 
 
+def angular_span(body: trimesh.Trimesh, fit: CylinderFit, patch: list[int]) -> float:
+    """Wie viel Grad um die Achse ein Fleck wirklich überdeckt.
+
+    **Die Zahl, die eine Verrundung von einem Zapfen trennt.** Ein Zapfen ist
+    ein voller Zylinder, eine Kantenverrundung ein Viertel davon — gemessen
+    über den Korpus 345 bis 354 Grad gegen 90.
+
+    Gerechnet wird über die **größte Lücke** zwischen zwei benachbarten
+    Winkeln: Was übrig bleibt, ist die Überdeckung. Der Mittelwert oder die
+    Spanne von kleinstem zu größtem Winkel taugten nicht — beide sind bei einem
+    Fleck, der die Nahtstelle bei ±180 Grad überschreitet, bedeutungslos.
+    """
+    axis = np.asarray(fit.axis, dtype=float)
+    centre = np.asarray(fit.centre, dtype=float)
+    basis_u, basis_v = _plane_basis(axis)
+    points = np.asarray(body.vertices[np.unique(body.faces[patch])], dtype=float) - centre
+    angles = np.sort(np.arctan2(points @ basis_v, points @ basis_u))
+    if len(angles) < 3:
+        return 0.0
+    gaps = np.diff(np.concatenate([angles, [angles[0] + 2.0 * math.pi]]))
+    return float(math.degrees(2.0 * math.pi - gaps.max()))
+
+
 def _fits_in_the_body_by_size(mesh: MeshData, radius: float) -> bool:
     """Dieselbe Frage wie :func:`_fits_in_the_body`, aber ohne Achse.
 
@@ -857,6 +932,41 @@ def detect_tori(mesh: MeshData, tori: Tori | None = None) -> list[Feature]:
                 "axis": fit.axis,
                 "centre": fit.centre,
                 "recess": fit.recess,
+                "residual": round(fit.residual, 4),
+            },
+            face_indices=tuple(patch),
+        )
+        for number, (fit, patch) in enumerate(found, start=1)
+    ]
+
+
+def detect_fillets(mesh: MeshData, fillets: Fillets | None = None) -> list[Feature]:
+    """Verrundete Kanten (§21.1) — Zylinder**ausschnitte**, keine Zapfen.
+
+    ``radius`` statt ``diameter``, und das ist Absicht: Eine Verrundung wird
+    mit ihrem Radius bestellt, gezeichnet und gemessen — „R 3", nie „Ø 6". Der
+    Durchmesser steht trotzdem daneben, weil die Zuordnung die Größe eines
+    Merkmals aus genau diesem Schlüssel liest (§21.2); wer ihn wegließe,
+    machte zwei verschieden große Verrundungen für sie ununterscheidbar.
+
+    ``recess`` trennt die innen liegende Kehle von der außen liegenden Rundung
+    — dieselbe Unterscheidung wie bei Kegel, Kugel und Torus, aus demselben
+    Grund: hinein oder heraus.
+    """
+    found = _fitted(mesh).fillets if fillets is None else fillets
+    body = mesh.raw
+    return [
+        Feature(
+            id=f"fillet_{number}",
+            kind="fillet",
+            provenance="detected",
+            params={
+                "radius": round(fit.radius, 4),
+                "diameter": round(fit.radius * 2.0, 4),
+                "axis": fit.axis,
+                "centre": fit.centre,
+                "length": round(_patch_extent(body, patch, fit.axis), 4),
+                "recess": fit.inward,
                 "residual": round(fit.residual, 4),
             },
             face_indices=tuple(patch),

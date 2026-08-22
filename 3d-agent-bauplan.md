@@ -1178,7 +1178,8 @@ Bohrungen (Zylinderflächen clustern → Durchmesser, Achse, Tiefe, Durchgang od
 Sackloch), Zapfen (dieselbe Suche, andersherum gelesen), **Kegel** (Senkung,
 Fase an einer Bohrung, Verjüngung → Öffnungswinkel, Achse, Mitte, Durchmesser),
 **Kugeln** (Pfanne oder Kuppel → Mittelpunkt, Durchmesser), **Tori** (Kehle
-oder Wulst → Achse, Mitte, Ring- und Röhrendurchmesser), ebene Flächen
+oder Wulst → Achse, Mitte, Ring- und Röhrendurchmesser), **Verrundungen** an
+geraden Kanten (→ Radius, Achse, Länge), ebene Flächen
 (koplanare Cluster → Normale, Fläche, Schwerpunkt, Randkontur), Randschleifen
 (offene Kanten = Defekte), Symmetrieebenen, Dünnstellen,
 Zusammenhangskomponenten.
@@ -1203,6 +1204,20 @@ Kegel mit 31 Grad. **Die Form kommt aus dem Winkel, die Güte aus dem
 Rückstand**, und ein Zylinder bleibt einer, solange er unter fünf Grad steht:
 Ein `hole_1`, das plötzlich `cone_1` hieße, wäre für jede Bohrungs-Operation
 unsichtbar.
+
+**Ein Zylinder**ausschnitt** ist keine Bohrung und kein Zapfen, sondern eine
+Verrundung.** Getrennt wird an der Überdeckung um die Achse: Bohrungen und
+Zapfen überdecken 345 bis 356 Grad, eine verrundete Quaderkante 90 — dazwischen
+liegt über den ganzen Korpus nichts. Ohne diese Trennung las der Kunde „Zapfen
+Ø 6" an dem, was er als „Verrundung R 3" kennt, und `applies_to` bot ihm
+Passungs-Operationen an; §14 nennt einen Zapfen aber das, womit man eine
+Bohrung paart, und mit einer Kantenverrundung paart niemand etwas.
+
+**Nur die gerade Kante.** An einer runden ist die Verrundung ein Torusstück,
+und ihr Radius steht dort bereits als Röhrenradius — aber ein Kehlstück ist von
+einem vollen Ring über die Überdeckung nicht zu trennen, und eine Schwelle, die
+sich nicht messen lässt, gehört nicht gebaut. Der Fall bleibt offen und ist als
+solcher benannt.
 
 **Die Reihenfolge der Prüfungen ist Teil der Aussage.** Kugel und Torus kamen
 am 22.08.2026 dazu, und sie werden erst gefragt, wenn Zylinder und Kegel
