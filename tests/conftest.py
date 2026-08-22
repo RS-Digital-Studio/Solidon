@@ -173,6 +173,20 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     # ``render_window_interactor.initialize``. Beides gemessen, in Fenstern
     # nacheinander, nicht erlitten in einem zwanzigminütigen Lauf.
     #
+    # **Hier stand ein ``gc.collect()``, und es ist am 23.08.2026 gefallen.**
+    # Der Gedanke war richtig: Wann Python die losgelassenen Fenster einsammelt,
+    # entscheidet sonst der Zufall, und der trifft auch die Zeit, in der Qt
+    # denselben Widgets Ereignisse zustellt. Gemessen hat es trotzdem nichts
+    # gebracht — zehn Läufe je Seite in einem eigenen Arbeitsbaum, unter dem
+    # Schloss auf ruhiger Maschine: **1/10 Abstürze ohne, 1/10 mit**, beide mit
+    # derselben Zugriffsverletzung.
+    #
+    # Der Grund steht in zwei Stapeln von zwei Sitzungen desselben Abends: Der
+    # abstürzende Faden steht in ``QObject::~QObject`` unter ``QThread::start``.
+    # **Ein Aufräumen im Hauptthread nach dem Test fängt nicht, was ein
+    # Arbeiter-Thread während des Tests zerstört.** Wer die Zeile wieder
+    # einbauen will, misst vorher zehn Läufe je Seite; sie sieht überzeugend aus
+    # und ist es nicht.
     # Was bleibt, ist die eigentliche Ursache: nicht die Lebenszeit, sondern
     # die Verbindung. ``release`` kappt sie oben.
     application.processEvents()
