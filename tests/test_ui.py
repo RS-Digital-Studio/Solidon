@@ -26,6 +26,7 @@ from PySide6.QtWidgets import QApplication, QComboBox, QDialog, QToolBar
 from app.core import errors
 from app.core.geom.measure import Measurement
 from app.core.registry import REGISTRY
+from app.core.registry.registry import TWIN_TOGGLES
 from app.core.scene import OperationDraft
 from app.core.scene.project import load
 from app.core.types import Parameter
@@ -1171,6 +1172,87 @@ def test_removing_an_object_and_taking_it_back(window: MainWindow) -> None:
     window.session.undo()
     window.session.wait_for_idle()
     assert set(window.session.evaluate_now().scene.objects) == {"obj_1", "obj_2"}
+
+
+def _exact_toggle(window: MainWindow) -> Any:
+    """Der Haken „Exakter Körper (B-Rep)" im offenen Dialog."""
+    from PySide6.QtWidgets import QCheckBox
+
+    dialog = window._op_dialog
+    assert dialog is not None
+    haken = [box for box in dialog.findChildren(QCheckBox) if "xakt" in box.text()]
+    assert haken, [box.text() for box in dialog.findChildren(QCheckBox)]
+    return haken[0]
+
+
+def test_the_exact_toggle_is_locked_where_its_twin_cannot_work(window: MainWindow) -> None:
+    """Regel 19: nicht anbieten und nach dem ausgefüllten Dialog ablehnen.
+
+    Die Menüleiste graut eine Operation des exakten Kerns an einem Netz aus
+    und schreibt den Grund in den Tooltip. Seit die Zwillinge zusammengelegt
+    sind, hat ``drill_brep_hole`` gar keinen eigenen Menüeintrag mehr — der
+    Haken **ist** der Weg zu ihr, und dort wurde nicht gefragt.
+
+    Gemessen an einer eingelesenen STL, bevor das hier stand: Haken wählbar,
+    Dialog geht durch, Auswertung hält bei op 2 an, und die Absage steht im
+    Prüfbericht. Der Satz dort ist gut — er ist nur die zweite Hürde.
+
+    Beim Quader konnte es nicht auffallen: ``create_brep_box`` verbraucht
+    nichts, es gibt keinen Eingangskörper, der der falsche sein könnte.
+    """
+    _with_two_objects(window)
+    window.object_tree.select_object("obj_1")
+    assert window.session.last_result.scene.objects["obj_1"].kind == "mesh"
+
+    window.run_operation(REGISTRY.get("drill_hole"))
+    toggle = _exact_toggle(window)
+
+    assert not toggle.isEnabled(), "an einem Netz führt der Haken ins Leere"
+    assert toggle.toolTip(), "und er sagt, warum"
+    assert toggle.toolTip() != str(TWIN_TOGGLES["drill_brep_hole"][1]), (
+        "der Grund steht dort, nicht der Werbetext für den exakten Kern"
+    )
+    assert toggle.statusTip() == toggle.toolTip(), "die Statuszeile sagt dasselbe"
+
+    dialog = window._op_dialog
+    assert dialog is not None
+    dialog.reject()
+
+
+def test_the_exact_toggle_is_free_on_an_exact_body(window: MainWindow) -> None:
+    """Und die andere Hälfte der Regel: auf einem exakten Körper ist er frei.
+
+    Ohne diese Hälfte wäre ein Haken, der immer gesperrt ist, genauso grün.
+    """
+    from app.core.brep import available
+
+    if not available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+
+    window.run_operation(REGISTRY.get("create_brep_box"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    dialog.accept()
+    window.session.wait_for_idle()
+
+    exact_id = next(
+        object_id
+        for object_id, entry in window.session.last_result.scene.objects.items()
+        if entry.kind == "brep"
+    )
+    window.object_tree.select_object(exact_id)
+
+    window.run_operation(REGISTRY.get("drill_hole"))
+    toggle = _exact_toggle(window)
+
+    assert toggle.isEnabled(), "hier kann der exakte Zweig arbeiten"
+    assert toggle.toolTip() == str(TWIN_TOGGLES["drill_brep_hole"][1]), (
+        "und der Tooltip erklärt wieder, was der Haken tut"
+    )
+
+    dialog = window._op_dialog
+    assert dialog is not None
+    dialog.reject()
 
 
 def test_an_operation_dialog_does_not_lock_the_window(window: MainWindow) -> None:

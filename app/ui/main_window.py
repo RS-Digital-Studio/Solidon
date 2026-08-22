@@ -2322,6 +2322,43 @@ class MainWindow(QMainWindow):
         # auch, und zwei Stellen mit derselben Auskunft driften.
         return kind_requirement(spec, kinds, spoiled_the_exact_body(self.session.last_result))
 
+    def _lock_twin_toggle(self, toggle: QCheckBox, hidden: str, objects: int, chosen: int) -> None:
+        """Den Umschalter sperren, wo sein Zwilling auf dieser Auswahl nicht
+        kann — mit dem Grund statt des Werbetexts.
+
+        **Dieselbe Sackgasse, die die Menüleiste zwei Ebenen weiter vermeidet,
+        stand am Haken wieder offen.** Eine Operation des exakten Kerns trägt
+        ``requires_kind="brep"``; das Menü graut sie an einem Netz aus und
+        schreibt den Grund in den Tooltip, statt sie anzubieten und nach dem
+        ausgefüllten Dialog abzulehnen (Regel 19). Seit die Zwillinge
+        zusammengelegt sind, ist der Haken der Weg zu ihr — sie hat gar keinen
+        eigenen Menüeintrag mehr —, und dort wurde nicht gefragt. Gemessen an
+        einer eingelesenen STL: Haken wählbar, Dialog geht durch, Auswertung
+        hält an, und die Absage steht im Prüfbericht.
+
+        Der gute Satz im Kern bleibt, er ist die **zweite** Hürde: „Der
+        gewählte Körper ist ein Netz. Exakte Körper kommen aus einer
+        STEP-Datei oder aus den Grundformen, deren Name mit Exakt beginnt."
+        Was fehlte, war die erste.
+
+        **Beim Quader konnte es nicht auffallen.** ``create_brep_box`` und
+        ``create_brep_cylinder`` verbrauchen nichts (``consumes=0``) — es gibt
+        keinen Eingangskörper, der der falsche sein könnte. Die exakte Bohrung
+        ist der erste Zwilling mit einem Eingang, und damit der erste Fall, in
+        dem der Haken eine Bedingung hat.
+
+        Gefragt wird über ``_reason_locked``, also über dieselbe Kette wie
+        Menüleiste und Kontextmenü — eine dritte Formulierung derselben
+        Auskunft wäre eine dritte Gelegenheit, auseinanderzulaufen.
+        """
+        kinds = self._kinds_of_selection(self.session.last_result)
+        reason = self._reason_locked(REGISTRY.get(hidden), kinds, objects, chosen)
+        if reason is None:
+            return
+        toggle.setEnabled(False)
+        toggle.setToolTip(reason)
+        toggle.setStatusTip(reason)
+
     @staticmethod
     def _button_tip(label: str, source: QAction | None, own_hint: str) -> str:
         """Was am unbeschrifteten Knopf steht: Name, Kürzel, Zweck.
@@ -5097,6 +5134,7 @@ class MainWindow(QMainWindow):
                 label, hint = TWIN_TOGGLES[hidden_twin]
                 exact = QCheckBox(str(label), self)
                 exact.setToolTip(str(hint))
+                self._lock_twin_toggle(exact, hidden_twin, len(objects), len(chosen))
 
             def chosen_spec() -> OperationSpec:
                 if exact is not None and exact.isChecked() and hidden_twin is not None:
