@@ -98,6 +98,16 @@ das *neben* dem Testlauf stand.
   auch für `suite-getrennt.sh`: Es zählt „Läufe mit Fehler: N" und gibt sie als
   Exit zurück. Wer die Zeile liest statt `$?`, misst wieder einen Filter.
 
+* **Ein Hintergrundlauf meldet den Status seiner Hülle, nicht den des Programms
+  darin.** Am 22.08.2026 dreimal an einem Abend, in drei Sitzungen: Die
+  Abschlussmeldung sagte „completed (exit code 0)" — einmal über einem Lauf,
+  der mit **139** abgebrochen war, einmal über `geteilt Exit=5`, einmal über
+  `geteilt Exit=3`. Das ist die Pipe-Falle in neuer Gestalt und die
+  gefährlichere von beiden: Eine Pipe baut man selbst und weiß davon, ein
+  Hintergrundlauf sieht aus wie ein Lauf. Also auch hier: Der Lauf schreibt
+  seinen eigenen Exit-Code in eine Datei (`…; echo "Exit=$?" > …`), und gelesen
+  wird der, nicht die Meldung.
+
 Und die Umkehrung, die dabei aufgefallen ist: Ein Lauf, der **grün meldet und
 rot endet**, ist kein roter Test. Drei Fensterdateien enden nach „N passed" mit
 `0xC0000409` beziehungsweise einer Zugriffsverletzung — ein Riss beim Abbau. Der
@@ -139,6 +149,42 @@ Blending 1,33 s, Skizzenlöser 0,21 s).
   sonst rechnet, hilft.
 
 Das ist der einzige Teil des Tors, dessen Rot nicht „nicht fertig" bedeutet.
+
+## Fremdlast macht auch funktionale Tests rot, nicht nur Messungen langsam
+
+Der Abschnitt oben handelt von Zeiten, und deshalb liest man ihn als Regel für
+Leistungstests. Am 22.08.2026 hat sich gezeigt, dass er zu eng gefasst ist: Eine
+Sitzung fuhr `test_ui.py` **ohne Schloss** mitten in einem fremden Tor und bekam
+**Exit 139** mit Zugriffsverletzung, zwei Fehlschlägen und acht Minuten
+Stillstand bei elf von 255 Tests. Sie hielt es für eine Folge ihrer eigenen
+Änderung an Objektlebensdauern — plausibel, und falsch. Dieselben zwölf Tests
+einzeln: **0,87 s, grün.** Im selben Zeitraum lief `test_ui.py` in einem anderen
+Prozess unter dem Schloss vollständig durch (255 passed).
+
+Bei einer Messung äußert sich Last als *langsamer*, und dagegen hilft die Regel
+„zweimal fahren". Bei einem funktionalen Test äußert sie sich als **rot** — und
+dann sucht man den Fehler im eigenen Code, wo keiner ist. Die Reihenfolge kehrt
+sich damit um:
+
+* **Unter dem Schloss fahren, bevor überhaupt geurteilt wird**
+  (`tools/gate_lock.py run --who <name> --wait 1800 -- …`), nicht erst, wenn ein
+  Ergebnis merkwürdig aussieht. Das Schloss kostet Wartezeit; ein falsch
+  zugeordneter Absturz kostet eine halbe Stunde Suche im richtigen Code.
+* **Der billigste Gegenbeweis ist der einzelne Test.** Läuft er allein in einer
+  Sekunde durch, war es die Maschine.
+* **Steht er oder rechnet er?** Der Prozessbaum sagt, welche Datei offen ist
+  (`Get-CimInstance Win32_Process`), und `Get-Process -Id N | Select CPU` zweimal
+  im Abstand von acht Sekunden trennt „hängt" von „dauert". Am selben Tag stand
+  ein Lauf zwölf Minuten bei **0,00 CPU-Sekunden** und 508 MB — ohne diese Zahl
+  wäre es eine Vermutung geblieben, und die Datei lief einzeln in 10,77 s durch.
+
+**Und die Grenze des Schlosses, weil sie nicht offensichtlich ist:** Es
+serialisiert die *Rechenzeit*, nicht den *Arbeitsbaum*. Wer im geteilten Baum
+misst, liest die ungestageten Dateien aller Sitzungen mit. Gefährlich ist dabei
+nicht der falsche Fehler — der fällt auf —, sondern der **falsche Erfolg**: Ein
+fremder Zwischenstand kann einen Lauf auch grün machen, und dann hält jemand
+seine Arbeit für abgesichert. Ein eigener Arbeitsbaum ist die einzige
+vollständige Antwort (`claude --worktree <name>`).
 
 ## Die Gegenprobe
 
