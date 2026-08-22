@@ -75,7 +75,7 @@ oder er hält ihn nicht fest.
 | Acht Gebiete der Oberflächendurchsicht sind nie gelaufen | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | einen Lauf. Das Material reist seit dem 22.08.2026 mit, aber die Workflow-Skripte darin gelten nicht mehr (Robert, 22.08.) — womit gefahren wird, entscheidet die Sitzung, die es tut |
 | Die Regressionsschwelle schlägt an, ohne dass etwas langsamer wurde | Leistung (§31) — Stand nach der Durchsicht | den Bestwert je Aufrufkontext. Bauplan §31 hat am 22.08. so entschieden, weil der andere Weg — Vergleich aussetzen, sobald andere Testdateien im Lauf sind — im geteilten Tor fast immer aussetzte und damit nichts mehr prüfte |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
-| Die Antwort auf eine Rückfrage steht nirgends | Das Fundament der Wahrnehmung (22.08.2026) | die Umsetzung von Bauplan §15.7 — der Weg ist derselbe, den die Rückfallstufen schon gehen (`EvaluationResult.solvers` → `History.record_solvers`), er fehlt für Antworten. Bis dahin ist ein Plattencache über einer Operation mit unbeantworteter Rückfrage nicht sicher |
+| Die Antwort der Zuordnung steht nirgends | Das Fundament der Wahrnehmung (22.08.2026) | die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Ein geänderter eigener Baustein wird beim Öffnen nicht gemeldet | Das Fundament der Wahrnehmung (22.08.2026) | eine zweite Quelle für `changed_since_library` — sie liest gepflegte Änderungsverläufe, und ein eigener Baustein hat keinen (§24.4, §24.5). Gefunden von solidon-17 beim Anschließen des Plattencaches |
 | Eine gesenkte Bohrung gilt als Sackloch | Das Fundament der Wahrnehmung (22.08.2026) | das Zusammenlesen von Bohrung und Senkung — `_is_through` vergleicht die Tiefe des Zylinders mit der Dicke des Körpers, und die Senkung nimmt die oberen 2,4 von 8 mm. Jetzt, wo der Kegel ein Merkmal ist, ist es entscheidbar |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
@@ -4341,23 +4341,33 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
   Parameter — der Operations-Hash sieht nichts, und auf der Platte überlebt das
   Ergebnis (siehe unten).
 
-- [ ] **Die Antwort auf eine Rückfrage steht nirgends.** Bauplan §15.7 hat am
-      22.08.2026 entschieden, wohin sie gehört: in die Parameter der fragenden
-      Operation, weil §15.1 keine zweite Möglichkeit offenlässt. Umgesetzt ist
-      sie nicht, und **der Plattencache hat es sichtbar gemacht**:
-      `test_ui.py::test_an_ambiguous_unit_reaches_the_surface_as_a_question`
-      fällt, sobald ein Ergebnis von der Platte kommt — die Einheitenrückfrage
-      wird dann nicht mehr gestellt. Im Speichercache fiel es nicht auf, der
-      lebt eine Sitzung; auf der Platte heißt es: Der Nutzer bekommt beim
-      zweiten Öffnen stillschweigend eine Annahme statt einer Frage.
+- [ ] **Die Antwort der Zuordnung steht nirgends.** Bauplan §15.7 hat am
+      22.08.2026 entschieden, wohin eine Antwort gehört, und die **erste
+      Hälfte ist gebaut** (`311134a`): Was eine Operation selbst erfragt — die
+      Einheit in `load` — gibt sie zurück, der Verlauf schreibt es in ihre
+      Parameter, die zweite Auswertung fragt nicht mehr.
 
-      Der Weg ist vorgezeichnet und muss nicht erfunden werden: Die
-      Rückfallstufen gehen ihn schon. `EvaluationResult.solvers` sammelt sie,
-      und der Docstring dort sagt, was zu tun ist — „Der Aufrufer schreibt sie
-      zurück in den Stapel, damit dieselbe Datei gleich nachrechnet". Für
-      Antworten fehlt genau das: ein Feld daneben, ein `record_answers` neben
-      `record_solvers`, und für die Frage nach einem mehrdeutigen Merkmal
-      (§21.3, „die Op wird umgeschrieben") dasselbe.
+      **Offen ist die zweite Hälfte, und sie ist die teurere.** Welches neu
+      erkannte Merkmal einen alten Namen erbt (§21.3), ist keine Eingabe der
+      Operation — es passt in keinen Parameter, und die Schemaprüfung würde
+      einen erfundenen Schlüssel abweisen. Es braucht ein Feld an der
+      Operation neben `solver` und `seed` und damit eine Formatänderung.
+      Entwurf, Begründung, die drei Einwände dagegen und die eine noch offene
+      Frage (Abdruck absolut oder normiert) liegen in
+      `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` — wer dort aufnimmt,
+      fängt beim Bauen an und nicht beim Denken.
+
+      **Die Abnahme ist eine Zahl:** Über die ganze Kette stellte eine
+      Bauplatte mit 52 Teilen **99 modale Fenster für 7 Entscheidungen** —
+      sechzehnmal „Welches Merkmal entspricht `pin_1`?", sechzehnmal `pin_2`.
+      99 muss 7 werden, und beim zweiten Auswerten 0.
+
+      Dazu eine Prüfung, die nichts über Innereien wissen muss: Der Wächter aus
+      `342a32c` hält ein Ergebnis, für das gefragt wurde, aus dem Plattencache
+      heraus, und er wickelt **beide** Fragesteller ein — die Operation und die
+      Zuordnung. Greift er für die Zuordnung nie mehr, ist keine Antwort mehr
+      unaufgeschrieben. Das ist der Beweis, dass §15.7 vollständig ist, und er
+      ist besser als „die Antwort steht im Stapel".
 - [ ] **Ein geänderter eigener Baustein wird beim Öffnen nicht gemeldet.**
       §24.4 verspricht einen Hinweis, welche *benutzten* Bausteine sich seither
       geändert haben. `changed_since_library` löst das über die gepflegten

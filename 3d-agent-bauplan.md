@@ -861,9 +861,17 @@ Vergleich ist ein Abnahmekriterium von P0.
 und die Operation gilt damit als geändert.** Zwei Stellen sagen das bereits für
 ihren Einzelfall: Die Einheitenrückfrage ist ein Parameter der Op `load`
 (§17.1), und bei mehrdeutiger Feature-Zuordnung „wird die Op umgeschrieben"
-(§21.3). §15.7 ist dieselbe Regel ohne Einzelfall — und sie hat drei Folgen,
-die man wollen muss: Die Antwort reist mit der Projektdatei, sie ist im Verlauf
-sichtbar, und ein Undo nimmt sie mit zurück.
+(§21.3). §15.7 ist dieselbe Regel ohne Einzelfall — und sie hat zwei Folgen,
+die man wollen muss: Die Antwort reist mit der Projektdatei, und die Operation
+gilt danach als geändert, gehört also gespeichert.
+
+**Eine dritte stand hier und war falsch:** dass ein Undo die Antwort mitnimmt.
+Sie bekommt **keine eigene Transaktion**, denn sie ist keine neue Handlung,
+sondern der Abschluss der einen, die gefragt hat. Als Transaktion nähme ein Undo
+sie zurück, die Frage käme wieder, und der Verlauf füllte sich mit Einträgen,
+die keine Handlung beschreiben. Das ist derselbe Weg, den `change_params` seit
+je nimmt: Eine Bohrung zwei Millimeter weiter links ist dieselbe Operation mit
+einer anderen Zahl und kein Schritt zum Zurücknehmen.
 
 Der Preis dafür, dass es nicht dastand, ist gemessen: Eine Bauplatte mit 52
 Teilen stellte über die ganze Kette **99 modale Fenster für 7 Entscheidungen**
@@ -871,14 +879,45 @@ Teilen stellte über die ganze Kette **99 modale Fenster für 7 Entscheidungen**
 Anhalten und fragen ist richtig; dieselbe Frage bei jeder Auswertung erneut zu
 stellen, ist keine Vorsicht, sondern ein fehlender Speicherort.
 
-**Der Weg dorthin ist schon gebaut, für etwas anderes.** Die Auswertung ist eine
+**Der Weg dorthin war schon gebaut, für etwas anderes.** Die Auswertung ist eine
 reine Funktion und darf das Dokument nicht ändern — sie kann die Antwort also
 nicht selbst hineinschreiben. Genau dieselbe Lage haben die Rückfallstufen
-(§17.2), und sie ist gelöst: Das Ergebnis der Auswertung führt sie mit, und
-**der Aufrufer schreibt sie in den Stapel zurück, damit dieselbe Datei gleich
-nachrechnet**. Antworten gehen denselben Weg — ein Feld daneben, ein Rückschreiben
-daneben. Zwei Sorten sind zu tragen: was eine Operation selbst erfragt hat (die
-Einheit in `load`, §17.1) und was die Zuordnung entschieden hat (§21.3).
+(§17.2), und sie ist gelöst: Das Ergebnis der Auswertung führt sie mit, und der
+Aufrufer schreibt sie in den Stapel zurück. Antworten gehen denselben Weg — ein
+Feld daneben, ein Rückschreiben daneben —, **mit einem Unterschied, der die
+Sache ausmacht: Eine Rückfallstufe ist ein Vermerk, den die Auswertung nie
+zurückliest. Eine Antwort ist eine Anweisung.** Wird sie nicht geschrieben,
+stellt der nächste Lauf dieselbe Frage.
+
+**Zwei Sorten sind zu tragen, und nur die erste ist gebaut.**
+
+*Was eine Operation selbst erfragt hat* — die Einheit in `load` (§17.1) — steht
+seit dem 22.08.2026 im Stapel. Die fragende Operation gibt sie zurück, denn nur
+sie weiß, welchen ihrer Parameter die Antwort betrifft; die Auswertung sieht
+allein, **dass** gefragt wurde. Das kostet einmal je Frage eine Neuberechnung
+des Zweiges darunter, weil sich der Operations-Hash ändert — und danach nie
+wieder.
+
+*Was die Zuordnung entschieden hat* (§21.3) ist offen, und es geht nicht
+denselben Weg: Welches neu erkannte Merkmal einen alten Namen erbt, ist **keine
+Eingabe der Operation**, also gibt es dafür keinen Parameter, und die
+Schemaprüfung würde einen erfundenen Schlüssel abweisen. Es braucht ein eigenes
+Feld an der Operation, neben `solver` und `seed` — und `seed` ist dabei der
+Präzedenzfall mit dem besseren Argument: **ein Wert auf Operationsebene, der
+eine nicht selbst reproduzierbare Prozedur reproduzierbar macht.** Genau das tut
+eine festgehaltene Antwort. Damit ist es eine Formatänderung (§16.2), und die
+Fünf-Schritte-Checkliste gilt.
+
+Dabei gibt es zwei Fallen, die schon gefunden sind. **Ein Bezeichner ist kein
+brauchbarer Speicherwert**: Nummeriert die Erkennung im nächsten Lauf anders,
+zeigt die gespeicherte Antwort auf ein anderes Merkmal — aus „fragt zu oft"
+würde „nimmt stillschweigend das falsche", und das ist die schlechtere Hälfte
+des Tauschs. Festgehalten wird deshalb, **welches** Merkmal gewählt wurde, an
+seiner Lage, seiner Achse und seinem Maß. **Und das braucht ein Netz:** Trifft
+der festgehaltene Abdruck keinen Kandidaten mit Abstand vor dem zweiten, wird
+wieder gefragt. Ohne diesen Abstand hat man dieselbe Mehrdeutigkeit ein zweites
+Mal, nur ohne sie zu bemerken — sie war ja gerade deshalb mehrdeutig, weil zwei
+Kandidaten sich fast gleichen.
 
 **Und es ist keine Bequemlichkeit mehr, seit es einen Plattencache gibt** (§38).
 Solange die Antwort nur in der Sitzung lebte, war sie beim nächsten Start eben
@@ -894,9 +933,14 @@ dessen Auswertung `ctx.ask` gerufen hat, geht nicht über die Sitzung hinaus.**
 Im Speicher bleibt es — dort wird innerhalb einer Sitzung nicht zweimal gefragt
 —, auf die Platte nicht. Das gilt für beide Fragesteller: die Operation selbst
 (die Einheit in `load`) und die Zuordnung bei einem mehrdeutigen Merkmal
-(§21.3). Steht §15.7 einmal im Code, hält jede fragende Operation ihre Antwort
-im Stapel fest, und der Wächter greift nie mehr — außer bei der nächsten
-Operation, die zu fragen anfängt, ohne es aufzuschreiben.
+(§21.3), und für den zweiten greift er heute noch.
+
+**Dass er nicht mehr greift, ist die Prüfung für den Rest von §15.7** — und sie
+ist besser als eine, die in die Innereien sieht: Nicht „die Antwort steht im
+Stapel", sondern „keine Operation gibt mehr zurück, dass ihr Ergebnis in der
+Sitzung bleiben muss". Wird das nie mehr wahr, ist keine Antwort mehr
+unaufgeschrieben. Danach bleibt der Wächter stehen, für die nächste Operation,
+die zu fragen anfängt, ohne es aufzuschreiben.
 
 ---
 
