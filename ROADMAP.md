@@ -91,7 +91,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein Höhenbudget für den Startbildschirm — **entschieden, in Arbeit** | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird. Am 22.08. neu gemessen, und die Aktenlage des Punkts stimmt nicht mehr: 340 px fehlen auf 1600x900 statt 156, die Ablagefläche gibt es als Widget nicht mehr, und es sind **zwei** Kachelbereiche — `more_area` (242 px) ist der größte Einzelposten |
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
-| Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
 | Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | den Eintrag „diesen Schritt ändern“ am erzeugten Merkmal — Bauplan §21.2 hat es am 22.08. über die Provenienz entschieden und nicht über `applies_to`, gilt damit für jede Merkmalsart. Bis dahin bleibt `thread` benannte Ausnahme im Konsistenztest |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
@@ -100,7 +99,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Erzeugen und Ändern sind reine Verteilermenüs — **entschieden** | Aus der Analyse für Neulinge und Kunden | die Zeilenbudget-Regel: Passen die Zeilen aller Kategorien einer Gruppe ins Zwölf-Zeilen-Budget, stehen sie flach mit Trennstrichen; sonst bleiben die Untermenüs. `MENU_GROUPS` schaut heute auf die Zahl der **Kategorien** — die Hausgrenze ist aber eine **Zeilen**grenze. *Erzeugen* wird damit flach (der Quader kostet zwei Klicks statt drei), *Ändern* bleibt tief. Kein Tausch: Die Neun-Menü-Grenze bleibt unberührt |
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
-| Die Antwort der Zuordnung steht nirgends | Das Fundament der Wahrnehmung (22.08.2026) | die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
+| Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Ein geänderter eigener Baustein wird beim Öffnen nicht gemeldet | Das Fundament der Wahrnehmung (22.08.2026) | eine zweite Quelle für `changed_since_library` — sie liest gepflegte Änderungsverläufe, und ein eigener Baustein hat keinen (§24.4, §24.5). Gefunden von solidon-17 beim Anschließen des Plattencaches |
 | Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
 | Die Zuordnung kennt Kugel und Torus nicht | Das Fundament der Wahrnehmung (22.08.2026) | zwei Arten mehr in der Kostenmatrix von §21.2, dazu Namen in der Oberfläche. Eine Art, die erkannt aber nicht zugeordnet wird, ist ein halber Zustand — dieselbe Konsistenzfrage wie bei den Übersetzungskatalogen, und beim Schneiden des Auftrags zunächst übersehen |
@@ -119,7 +118,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
 | `test_mesh_backend` misst die Umgebung statt sein Thema — **entschieden** | Das Fundament der Wahrnehmung (22.08.2026) | die dritte Zusicherung fällt. Sie prüft die Länge des Temp-Ordners **dieser Maschine** und sagt nichts über den Kunden; die zwei davor prüfen den Programmtext und bleiben. Ein Test, der bei umgebogenem `TEMP` rot wird, kostet jede Sitzung Zeit und schützt niemanden |
 | Kein Viewport wird jemals freigegeben | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über die Reichweite — die eine Zeile in `viewport.py` ist behoben, aber `.connect(lambda … self …)` steht an 59 Stellen in `app/ui/`, und jede davon ist ein Ring, sobald der Sender ein Kind von `self` ist. Könnte die gemeinsame Wurzel der vier Absturzpunkte sein: gemessen 7 MB je Fenster, und die Suite baut siebenhundert |
-| Zwei Fensterdateien enden mit Exit 127, und einzeln auch | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — die Roadmap nennt als Signatur des bekannten Absturzes „dieselbe Datei einzeln gefahren ist grün“, und diese zwei sind es nicht. Nachgewiesen im eigenen Arbeitsbaum auf HEAD, vollständig grün und dann 127 |
+| Fensterdateien enden mit Exit 127 — **drei, und wechselnde** | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — die Roadmap nennt als Signatur des bekannten Absturzes „dieselbe Datei einzeln gefahren ist grün“, und diese zwei sind es nicht. Nachgewiesen im eigenen Arbeitsbaum auf HEAD, vollständig grün und dann 127 |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
 
 ---
@@ -3756,8 +3755,37 @@ Kein Verstoß.
 
 ### Was liegen bleibt, und warum
 
-- [ ] **Die Objektnamen der Beispielprojekte bleiben deutsch — und der teure
-      Teil ist ein anderer als hier stand.** Nachgesehen am 21.08.: Die
+- [x] **Die Objektnamen der Beispielprojekte bleiben deutsch — erledigt am
+      23.08.2026 in zwei Commits** (`67b0386` Format 9 → 10 samt
+      `Operation.translatable`, `94c0ef7` die dreizehn Namen und fünf Kataloge).
+      Ein französischer Kunde liest jetzt „Tolérance" und „Épaisseur de paroi"
+      im Objektbaum statt „Toleranz" und „Wandstärke".
+
+      **Der Entwurf von unten hat gehalten, und zwar an der entscheidenden
+      Stelle:** Der Vermerk sitzt an der Operation, nicht am Wert. Damit steht
+      in der Datei und im Op-Hash die Message-ID, aufgelöst wird erst beim
+      Lauf — dieselbe Projektdatei hat in jeder Sprache dieselbe Prüfsumme, und
+      ein Cache-Treffer überlebt einen Sprachwechsel.
+
+      **Eine Falle kam beim Bauen dazu, die hier nicht stand.** Die
+      Auflösung darf nicht *in* die Parameter geschrieben werden, die in den
+      Hash gehen: Erst wurde `resolved` verändert und dann gehasht, und damit
+      hing der Schlüssel doch wieder an der Sprache. Es braucht zwei Fassungen
+      — `resolved` für den Hash, `for_run` für den Lauf. Der Fehler ist leicht
+      zu machen und schwer zu sehen, weil er nur beim Sprachwechsel auffällt.
+
+      **Und eine Entscheidung, die weiterreicht als der Punkt:** Übersetzt wird
+      gegen eine *Liste* im Quelltext, nicht gegen „jeder Name, der in einem
+      Beispiel steht". Ein Beispiel ist eine Datei wie jede andere, und ein
+      Name darin könnte auch von einem Nutzer stammen — dann ist er wörtlich
+      gemeint (§4.1). Wer einen Namen ergänzt, trägt ihn in die Liste **und**
+      in die fünf Kataloge; das Zweite fängt `test_translations.py`, das Erste
+      fängt niemand, und darum steht der Satz im Quelltext daneben.
+
+      Der ursprüngliche Text des Punkts, weil seine Analyse richtig war:
+
+- [x] **(Analyse vom 21.08., unverändert)** Die Befürchtung war ein
+      `TranslatableText` in `params`, der bis in `operation_hash` reicht. Nachgesehen am 21.08.: Die
       Befürchtung war ein `TranslatableText` in `params`, der bis in
       `operation_hash` reicht. Die trifft nicht zu, weil er dort nicht
       hingehört. `title_translatable` macht es richtig vor: In der Datei steht
@@ -4515,7 +4543,67 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
   Parameter — der Operations-Hash sieht nichts, und auf der Platte überlebt das
   Ergebnis (siehe unten).
 
-- [ ] **Die Antwort der Zuordnung steht nirgends.** Bauplan §15.7 hat am
+- [ ] **Die Antwort der Zuordnung steht nirgends — die Mechanik steht, die
+      Abnahme fehlt.** Gebaut am 23.08.2026 (`67b0386`): `Operation.matches`
+      trägt die Antwort, `serialise` schreibt und liest sie, `_with_features`
+      fragt erst den Stapel und dann den Nutzer. Zwei Einheitstests decken es
+      (`test_the_question_of_the_matcher_is_asked_once_and_then_never_again`
+      und der Weg über die neu geöffnete Datei).
+
+      **Die Abnahmezahl ließ sich nicht messen, und der Grund ist der
+      eigentliche Fund.** Gemessen wurde über `evaluate` — dort entstehen die
+      Fenster, nicht in `match`:
+
+          eingelesene Zwillingsplatte + compensate_first_layer + 5 Schritte
+              erster Lauf   0 Fenster        zweiter Lauf   0 Fenster
+          erzeugte Bohrungen (drill_hole) + 5 Schritte
+              erster Lauf   0 Fenster        zweiter Lauf   0 Fenster
+
+      Bei den **erzeugten** Bohrungen ist das richtig und erklärt sich: Seit
+      `created_by` weiß ein Merkmal, welcher Schritt es hervorgebracht hat —
+      da muss nichts geraten werden. Bei der **eingelesenen** Platte
+      (`created_by=None`, 19 erkannte Merkmale) ist es zunächst auch richtig,
+      weil eine kleine Verschiebung jede Bohrung ihre eigene wiederfinden
+      lässt.
+
+      **Die dritte Zahl ist die aufschlussreiche, und 3d-druck-3a hat sie
+      gemessen statt vermutet.**
+      `test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping` ist
+      rot, und der Grund liegt im Testkörper: Der hohle Quader dort hat
+      **überhaupt keine Bohrung**. Was die Erkennung als zwei meldete, sind
+      seine verrundeten Innenkanten — zwei Flecken mit r = 1,99, gleiche Achse,
+      gleicher Durchmesser, für `feature_vector` ununterscheidbar bis auf die
+      Position. Genau daran hing die geprüfte Mehrdeutigkeit.
+
+          ohne die Krümmungszusammenfassung   2 "Bohrungen"   complete = False
+          mit  der Krümmungszusammenfassung   4 "Bohrungen"   complete = True
+
+      Die vier waren immer da; der Abbruch bei der Mehrdeutigkeit verdeckte die
+      anderen zwei. `match` selbst ist intakt — 26 grüne Tests, darunter der
+      Zwillingsfall.
+
+      **Damit ist der Satz über den Punkt hinaus brauchbar: Der Test prüft eine
+      Zusicherung des Fehlerpfads über einen Zufall.** Die Zusicherung ist gut
+      und gilt weiter — eine `AmbiguityError` muss ein Befund werden statt einer
+      Ausnahme, sonst bekommt jeder ohne Frage-Dialog (Kommandozeile,
+      Fernsteuerung, Agent) eine Ausnahme und einen leeren Prüfbericht.
+      Gebraucht wird dafür *irgendeine* Mehrdeutigkeit; benutzt werden zwei
+      **Fehlbefunde** an einem Körper ohne Bohrungen. Jede Verbesserung der
+      Erkennung kippt so einen Test, und zwar zu Recht.
+
+      **Der naheliegende Ersatz funktioniert nicht — auch das ist gemessen.**
+      Zwei echte gleichwertige Bohrungen (`plate_holes_twin.stl`) stellen über
+      den Stapel keine Frage: Zwillinge, die beide von Anfang an dastehen,
+      bleiben jeder bei sich. Zwei gespiegelte `drill_hole` ebenso wenig, weil
+      erzeugte Merkmale seit `created_by` ihre Herkunft kennen. Mehrdeutigkeit
+      entsteht erst, wenn ein **altes** Merkmal auf **zwei neue** gleich gut
+      passt — die Merkmalszahl muss sich ändern, so wie in
+      `test_two_identical_bores_close_together_are_ambiguous` (eine Bohrung
+      wird zu zweien).
+
+      Der ursprüngliche Text, weil seine Begründung weiter gilt:
+
+- [ ] **(Ursprünglich, 22.08.2026)** Bauplan §15.7 hat am
       22.08.2026 entschieden, wohin eine Antwort gehört, und die **erste
       Hälfte ist gebaut** (`311134a`): Was eine Operation selbst erfragt — die
       Einheit in `load` — gibt sie zurück, der Verlauf schreibt es in ihre
@@ -5349,7 +5437,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       `zaehlt_als_fehler()` gibt für 5 dasselbe zurück wie für 0, mit der
       Begründung darüber im Skript. Gefunden von 3d-druck-3a, am Skript
       bestätigt von 3d-druck-33, nachgeprüft von 3d-druck-64.
-- [ ] **Zwei Fensterdateien enden mit Exit 127, und einzeln auch.**
+- [ ] **Fensterdateien enden mit Exit 127 — inzwischen drei, und wechselnde.**
       `tests/test_chat_ui.py` (40 passed) und `tests/test_first_run.py`
       (45 passed) laufen vollständig grün durch und beenden sich dann mit 127.
       Nachgewiesen von solidon-17 im eigenen Arbeitsbaum auf HEAD — also weder
@@ -5358,6 +5446,16 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       „Dieselbe Datei einzeln gefahren ist grün." Diese zwei sind einzeln nicht
       grün, sie reproduzieren jedes Mal. Entweder hat sich die wandernde dritte
       Stelle festgesetzt, oder es ist eine dritte Ursache.
+
+      **Am 22.08.2026 kam `tests/test_pose_session.py` als dritte dazu, und das
+      ändert die Aussage dieses Punktes.** Er hieß „diese zwei bestimmten
+      Dateien"; mit einer dritten heißt er **„es trifft wechselnde"** — und
+      damit ist die Vermutung „eine festgesetzte Stelle" schwächer geworden.
+      Zwei Dateien können eine Eigenheit teilen; drei, die nichts miteinander
+      zu tun haben, deuten auf etwas, das allen gemeinsam ist. Wer den Punkt
+      angeht, sucht nicht mehr nach dem Besonderen an `test_chat_ui.py`,
+      sondern nach dem, was jede Fensterdatei am Ende tut. Gefunden von
+      3d-druck-3a in einem Torlauf.
 
       **Und eine Warnung an den nächsten, der es nachfährt:** Ich hatte beide
       einzeln gefahren und „grün, Exit 0" gemeldet — der Exit-Code kam aus einer

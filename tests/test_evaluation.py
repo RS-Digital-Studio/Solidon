@@ -499,7 +499,7 @@ def test_an_empty_document_evaluates_to_an_empty_scene(
 
 
 def test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping(
-    profile: Profile,
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Die Merkmalszuordnung fragt — und wenn niemand da ist, muss sie anhalten
     wie jeder andere Fehler auch.
@@ -509,9 +509,52 @@ def test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping(
     hat — die Kommandozeile, die Fernsteuerung, der Agent —, bekam eine
     Ausnahme und einen leeren Prüfbericht, statt zu erfahren, welche zwei
     Bohrungen gemeint sein könnten.
+
+    **Die Mehrdeutigkeit wird erzwungen und nicht erhofft, und das ist der
+    Kern dieses Tests.** Bis zum 23.08.2026 stand hier ein hohler Quader, bei
+    dem sie sich von selbst ergab — bis 3d-druck-3a nachmaß, woran das lag:
+    Der Körper hat **überhaupt keine Bohrung**. Was die Erkennung als zwei
+    meldete, waren seine verrundeten Innenkanten, zwei Flecken mit r = 1,99,
+    gleiche Achse, gleicher Durchmesser. Der Test hing damit an zwei
+    Fehlbefunden, und jede Verbesserung der Erkennung kippte ihn — zu Recht.
+
+    **Ein besserer Körper wäre die falsche Antwort gewesen.** Er verschiebt
+    den Zufall nur: Zwei echte Zwillingsbohrungen stellen über den Stapel
+    gemessen gar keine Frage, weil beide von Anfang an dastehen und jede ihre
+    eigene wiederfindet; erzeugte Bohrungen erst recht nicht, weil sie seit
+    ``created_by`` ihre Herkunft kennen. Mehrdeutigkeit entsteht nur, wenn ein
+    *altes* Merkmal auf *zwei neue* gleich gut passt — und das über Geometrie
+    herbeizuführen, hieße wieder auf einen Zufall zu bauen.
+
+    Zugesichert ist hier ohnehin etwas anderes: **was ``evaluate`` mit einer
+    Mehrdeutigkeit macht**, nicht welcher Körper eine hat. Ersetzt ist deshalb
+    nur der Auslöser. Der Weg dahinter läuft echt — der fehlende Frager, die
+    ``AmbiguityError``, der Fangbereich, der Befund im Prüfbericht.
     """
+    from importlib import import_module
+
     from app.core.bootstrap import load_operations
+    from app.core.perceive.matching import MatchResult
     from app.core.scene.project import ProjectSources, new_project
+
+    def always_ambiguous(
+        old: dict[str, object],
+        new: dict[str, object],
+        centre: object,
+        diagonal: float,
+        old_centre: object = None,
+    ) -> MatchResult:
+        """Meldet das erste alte Merkmal als zwischen zweien unentscheidbar."""
+        if not old or len(new) < 2:
+            return MatchResult()
+        return MatchResult(ambiguous={next(iter(old)): tuple(new)[:2]})
+
+    # ``import_module`` mit vollem Pfad und nicht ``from app.core.scene import
+    # evaluate``: Das Paket re-exportiert die *Funktion* ``evaluate`` und
+    # verdeckt damit sein eigenes gleichnamiges Untermodul. Beide kurzen Formen
+    # landen auf der Funktion, und ``monkeypatch`` meldet dann, sie habe kein
+    # Attribut ``match``.
+    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "match", always_ambiguous)
 
     load_operations()
     project = new_project("centauri-carbon-2", "petg")
