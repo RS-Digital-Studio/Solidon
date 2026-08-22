@@ -624,6 +624,44 @@ def test_a_fillet_no_longer_swallows_the_post_it_sits_on() -> None:
     assert tori[0].params["tube_diameter"] == pytest.approx(6.0, abs=0.05)
 
 
+def test_a_rounded_edge_keeps_its_own_radius() -> None:
+    """Der Fehlbefund, der schlimmer war als ein fehlender Befund.
+
+    An einem Quader mit **einer** verrundeten Kante R 3 meldete die Erkennung
+    einen Zapfen mit Ø 28,92 — fast so breit wie das Teil. Nicht „nichts
+    gefunden", sondern etwas Falsches gefunden: §14 nennt einen Zapfen das,
+    womit man eine Bohrung paart, und die Operationen aus ``applies_to`` boten
+    sich daran an.
+
+    Die Ursache saß **über** der Einpassung, nicht in ihr. Zwei ebene Facetten
+    von 1110 und 510 mm² galten als gekrümmt, weil sie die Rundung berühren,
+    und hängten sich ihrem Fleck an; die Kreiseinpassung gewichtet quadratisch,
+    und vier Punkte in bis zu 25 mm Abstand ziehen einen Kreis von R 3 auf
+    14,46. Der Löser war in Ordnung — er bekam den falschen Fleck.
+    """
+    found = detect(plate("block_with_rounded_edge.stl"))
+    round_faces = [entry for entry in found.values() if entry.kind in {"pin", "hole"}]
+
+    assert len(round_faces) == 1, f"one rounded edge: {sorted(found)}"
+    assert round_faces[0].params["diameter"] == pytest.approx(6.0, abs=0.05)
+    # Und die zwei großen Ebenen daneben sind wieder Flächen.
+    assert sum(1 for entry in found.values() if entry.kind == "face") == 6
+
+
+def test_a_ring_is_not_a_heap_of_flat_faces() -> None:
+    """Der Wächter gegen die Reparatur von oben.
+
+    Die zweite Schwelle misst an der **Gesamtoberfläche** und nicht an der
+    größten Facette — denn ein Torus besteht nur aus Mantelstreifen, seine
+    größte Facette ist selbst einer, und jede läge damit bei fast hundert
+    Prozent. Gegen die größte gemessen zerfiel ``torus_ring.stl`` in 288 ebene
+    Flächen.
+    """
+    found = detect(plate("torus_ring.stl"))
+
+    assert [entry.kind for entry in found.values()] == ["torus"], sorted(found)
+
+
 def test_nothing_that_was_recognised_gets_split_again() -> None:
     """Die Nachtrennung greift **nur**, wo keine Form gefunden wurde.
 

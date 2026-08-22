@@ -180,6 +180,36 @@ def post_with_fillet() -> None:
     write(trimesh.boolean.union([plate, post, fillet]), "post_with_fillet.stl")
 
 
+def block_with_rounded_edge() -> None:
+    """Ein Quader mit **einer** verrundeten Kante — der Fall, an dem die
+    Erkennung einen Zapfen meldete, den es nicht gibt.
+
+    Quader 40 x 30 x 20, die Kante bei x = 20 / z = 10 mit R 3 ausgerundet.
+    Herauskam bis zum 22.08.2026 ein ``pin`` mit Ø 28,92 — fast so breit wie
+    das Teil, und §14 sagt, ein Zapfen sei das, womit man eine Bohrung paart.
+    Mit diesem paart niemand etwas, und die Operationen aus ``applies_to``
+    boten sich trotzdem daran an.
+
+    Die Ursache saß eine Stufe über der Einpassung: Zwei **ebene** Facetten von
+    1110 und 510 mm² galten als gekrümmt, weil sie die Rundung berühren, und
+    hängten sich ihrem Fleck an. Die Kreiseinpassung gewichtet quadratisch —
+    vier Punkte in bis zu 25 mm Abstand ziehen einen Kreis von R 3 auf 14,46.
+
+    Gebaut wird die Rundung wie in echt: Nur das Material **zwischen** Kante
+    und Rundung kommt weg, nicht die ganze Ecke. Zweimal falsch gebaut, bevor
+    das Volumen stimmte — 23942 mm³ gegen den Sollwert aus 40·30·20 minus
+    (9 − 9π/4)·30.
+    """
+    block = trimesh.creation.box(extents=(40.0, 30.0, 20.0))
+    corner = trimesh.creation.box(extents=(3.0, 30.0, 3.0))
+    corner.apply_translation((18.5, 0.0, 8.5))
+    rod = trimesh.creation.cylinder(radius=3.0, height=32.0, sections=96)
+    rod.apply_transform(trimesh.transformations.rotation_matrix(math.pi / 2.0, (1.0, 0.0, 0.0)))
+    rod.apply_translation((17.0, 0.0, 7.0))
+    waste = trimesh.boolean.difference([corner, rod])
+    write(trimesh.boolean.difference([block, waste]), "block_with_rounded_edge.stl")
+
+
 def degenerate() -> None:
     """Ein Würfel plus ein Null-Flächen-Dreieck, eine Nadel und eine doppelte
     Fläche.
@@ -494,6 +524,7 @@ if __name__ == "__main__":
     sphere_socket()
     torus_ring()
     post_with_fillet()
+    block_with_rounded_edge()
     degenerate()
     broken_open()
     two_components()

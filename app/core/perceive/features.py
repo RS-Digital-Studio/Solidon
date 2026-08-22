@@ -42,6 +42,26 @@ MIN_PATCH_FACES = 6
 #: Flächen unter diesem Anteil der größten werden nicht eigens gemeldet.
 MIN_FACE_SHARE = 0.02
 
+#: Ab welchem Anteil an der größten Fläche ein ebener Fleck **auch dann** eine
+#: Fläche ist, wenn er eine Rundung berührt.
+#:
+#: Der Ausschluss über die Berührung ist gegen **Mantelstreifen** gebaut: Ein
+#: Streifen einer Zylinderwand ist koplanar und groß genug für die kleine
+#: Schwelle, aber keine eigene Fläche. Er traf jedoch auch das Gegenteil. An
+#: einem Quader mit **einer** verrundeten Kante galten zwei ebene Facetten von
+#: 1110 und 510 mm² als gekrümmt — auf einem Körper, dessen größte Fläche 1200
+#: mm² misst —, weil sie an die Rundung stoßen. Sie hängten sich dem
+#: Verrundungsfleck an, und die Kreiseinpassung darüber gab **14,46 statt 3**:
+#: Kåsa gewichtet quadratisch, und vier Punkte in bis zu 25 mm Abstand ziehen
+#: den Kreis auf. Aus einer Verrundung R 3 wurde so ein Zapfen Ø 28,9, den es
+#: nicht gibt.
+#:
+#: Der Abstand zwischen beiden Fällen ist groß: An der **Gesamtoberfläche**
+#: gemessen sind die zwei Facetten 21 und 10 Prozent, ein Mantelstreifen
+#: desselben Körpers 0,11 Prozent und einer des Torus 0,09. Fünf Prozent
+#: liegen mit Faktor fünfzig Abstand dazwischen.
+BROAD_FACE_SHARE = 0.05
+
 #: …und unter dieser absoluten Größe erst recht nicht, egal wie groß der Rest ist.
 #:
 #: Der relative Anteil allein hilft nur bei einem konstruierten Teil, wo eine
@@ -393,6 +413,7 @@ def _fitted(mesh: MeshData) -> Fitted:
             return True
         return False
 
+    jumps: np.ndarray | None = None
     for patch in _connected_patches(body, curved):
         if len(patch) < MIN_PATCH_FACES or classify(patch):
             continue
@@ -401,7 +422,12 @@ def _fitted(mesh: MeshData) -> Fitted:
         # Kehle einer Säule liegen in einem Fleck, auf den keine Form passt.
         # Nachgetrennt wird deshalb erst hier: Wo etwas erkannt wurde, bleibt
         # es, wie es ist (siehe :func:`_split_by_curvature`).
-        pieces = _split_by_curvature(body, patch)
+        if jumps is None:
+            # **Träge, und das ist der Punkt.** Die Rechnung geht über alle
+            # Nachbarpaare des Körpers; ein Netz, an dem jede Form auf Anhieb
+            # passt, soll sie gar nicht erst bezahlen.
+            jumps = _curvature_jumps(body)
+        pieces = _split_by_curvature(body, patch, jumps)
         if len(pieces) > 1:
             for piece in pieces:
                 classify(piece)
@@ -707,10 +733,17 @@ def _large_facet_faces(body: trimesh.Trimesh) -> set[int]:
     # zweite Weg bleibt davon unberührt: ein Fleck aus vielen koplanaren
     # Dreiecken ist eine Fläche, auch wenn er auf einer Rundung sitzt.
     curved = _curved_faces(body)
+    # **Gemessen an der Gesamtoberfläche, nicht an der größten Facette.** Der
+    # naheliegende Maßstab ist der falsche, und der Körper, der es zeigt, ist
+    # der Torus: Er besteht **nur** aus Mantelstreifen, seine größte Facette
+    # ist selbst einer, und jede liegt damit bei fast hundert Prozent. Gegen
+    # die größte gemessen zerfiel ``torus_ring.stl`` in 288 ebene Flächen.
+    broad = float(body.area) * BROAD_FACE_SHARE
     return {
         int(index)
         for facet, area in zip(facets, areas, strict=True)
         if len(facet) >= MIN_FLAT_FACES
+        or area >= broad
         or (area >= limit and not any(int(index) in curved for index in facet))
         for index in facet
     }
@@ -1213,7 +1246,44 @@ def _face_radii(body: trimesh.Trimesh, pairs: np.ndarray, radii: np.ndarray) -> 
     return found
 
 
-def _split_by_curvature(body: trimesh.Trimesh, patch: list[int]) -> list[list[int]]:
+def _curvature_jumps(body: trimesh.Trimesh) -> np.ndarray:
+    """Der Sprung des Krümmungsradius über jede Nachbarschaft, als Anteil.
+
+    **Einmal je Körper, nicht einmal je Fleck.** Sie ist hier eine eigene
+    Funktion, weil sie über *alle* Nachbarpaare rechnet: Aus
+    :func:`_split_by_curvature` heraus aufgerufen lief sie für jeden Fleck neu,
+    der keine Form ergeben hatte, und das ist bei einem großen Körper einmal zu
+    oft. Gemessen an einem Netz aus 150 000 Dreiecken riss der Speicher
+    (``MemoryError`` beim Anlegen eines Feldes über 225 000 Nachbarschaften) —
+    an einer Stelle, an der die Zahl selbst für alle Flecken dieselbe ist.
+    """
+    pairs = np.asarray(body.face_adjacency)
+    if not len(pairs):
+        return np.zeros(0, dtype=float)
+
+    radii = _face_radii(body, pairs, pair_radii(body))
+    first, second = radii[pairs[:, 0]], radii[pairs[:, 1]]
+    # Nur wo **beide** Seiten einen Radius haben, gibt es einen Sprung. Zwei
+    # ebene Nachbarn tragen ``inf``, und deren Differenz wäre ``nan`` — kein
+    # Sprung, sondern keine Aussage. Die Rechnung darf die ``inf`` dabei gar
+    # nicht erst sehen: ``where`` schützt die Division, nicht die Differenz
+    # davor, und ``inf - inf`` meldet sich als Warnung, die hier ein Fehler ist.
+    measured = np.isfinite(first) & np.isfinite(second)
+    near = np.where(measured, first, 0.0)
+    far = np.where(measured, second, 0.0)
+    jump = np.zeros(len(pairs), dtype=float)
+    np.divide(
+        np.abs(near - far),
+        np.maximum(np.maximum(near, far), EPS_GEOM),
+        out=jump,
+        where=measured,
+    )
+    return jump
+
+
+def _split_by_curvature(
+    body: trimesh.Trimesh, patch: list[int], jump: np.ndarray
+) -> list[list[int]]:
     """Denselben Fleck noch einmal teilen, jetzt am **Sprung der Krümmung**.
 
     **Die zweite Runde, und nur für Flecken, auf die keine Form gepasst hat.**
@@ -1241,24 +1311,6 @@ def _split_by_curvature(body: trimesh.Trimesh, patch: list[int]) -> list[list[in
     pairs = np.asarray(body.face_adjacency)
     if not len(pairs):
         return [patch]
-
-    radii = _face_radii(body, pairs, pair_radii(body))
-    first, second = radii[pairs[:, 0]], radii[pairs[:, 1]]
-    # Nur wo **beide** Seiten einen Radius haben, gibt es einen Sprung. Zwei
-    # ebene Nachbarn tragen ``inf``, und deren Differenz wäre ``nan`` — kein
-    # Sprung, sondern keine Aussage. Die Rechnung darf die ``inf`` dabei gar
-    # nicht erst sehen: ``where`` schützt die Division, nicht die Differenz
-    # davor, und ``inf - inf`` meldet sich als Warnung, die hier ein Fehler ist.
-    measured = np.isfinite(first) & np.isfinite(second)
-    near = np.where(measured, first, 0.0)
-    far = np.where(measured, second, 0.0)
-    jump = np.zeros(len(pairs), dtype=float)
-    np.divide(
-        np.abs(near - far),
-        np.maximum(np.maximum(near, far), EPS_GEOM),
-        out=jump,
-        where=measured,
-    )
 
     wanted = set(patch)
     angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
