@@ -303,17 +303,13 @@ _ERLAUBTE_BEGRUESSUNG: Final[dict[str, dict[str, str]]] = {
         # — sie ist Teil dessen, was es vorführt.
         "repair.components_removed": "zeigt, was Weg 3 mit erzeugten Netzen tut",
     },
-    "gehaeuse-mit-bausteinen": {
-        # **Offen, und die Zeile fällt mit dem Fehler.** Eine Textprägung
-        # frisst die benannten Merkmale der Bausteine: bei „Dose mit Deckel"
-        # gemessen vier verlorene bei drei gemeldeten, ``heatset_m4_bore_1``
-        # verschwindet lautlos. Das bricht die Zusicherung aus ``b76df19``
-        # („fällt heraus, wenn es wirklich weg ist — **mit Befund**, nicht
-        # lautlos"). Gefunden von 3d-druck-64 beim Durchgehen der Beispiele.
-        "perceive.generated_lost": "offener Fehler, kein hinnehmbarer Zustand",
-    },
     "dose-mit-deckel": {
-        "perceive.generated_lost": "derselbe offene Fehler wie oben",
+        # **Berechtigt.** Verloren geht ``face_top``, und das Aushöhlen nimmt
+        # die Deckfläche erwartbar mit: Der Befund sagt etwas Wahres über das,
+        # was das Beispiel vorführt. Zu Beginn der Nacht standen hier noch vier
+        # verlorene Merkmale bei drei gemeldeten — der Rest ist seit ``94650dc``
+        # behoben, übrig ist der Fall, der nie einer war.
+        "perceive.generated_lost": "das Aushöhlen nimmt die Deckfläche mit",
     },
 }
 

@@ -154,6 +154,21 @@ def match(
         dtype=float,
     )
     threshold = MATCH_THRESHOLD
+    # **Was ohnehin abgelehnt würde, kostet so viel wie eine falsche Art.**
+    # Die ungarische Methode minimiert die *Gesamtsumme* und kennt die Schwelle
+    # nicht — sie opfert deshalb ein annehmbares Paar, wenn zwei unannehmbare
+    # zusammen billiger sind. Gemessen an einer Platte mit Schraubenlöchern und
+    # einer Mutternfalle:
+    #
+    #     nut_trap_pocket_1 -> hole_2   3,281   verwaist
+    #     nut_trap_bore_1   -> hole_1   3,742   verwaist   (bester wäre hole_2 mit 0,757)
+    #
+    # Die Summe 7,02 ist kleiner als jede Lösung, die ``hole_2`` an die Bohrung
+    # gibt — und **beide** fallen über die Schwelle. Mit dem 0,757er Paar wäre
+    # eines gerettet worden statt keines. Angehoben sieht die Optimierung, dass
+    # ein Paar über der Schwelle so wertlos ist wie gar keines, und nimmt
+    # lieber das eine, das zählt.
+    matrix = np.where(matrix > threshold, KIND_PENALTY, matrix)
 
     rows, columns = linear_sum_assignment(matrix)
     result = MatchResult()

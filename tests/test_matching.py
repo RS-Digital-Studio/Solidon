@@ -105,6 +105,38 @@ def test_two_rings_of_different_size_are_not_the_same_feature() -> None:
     )
 
 
+def test_a_good_pair_is_not_sacrificed_to_a_cheaper_total() -> None:
+    """Die ungarische Methode minimiert die **Summe** und kennt die Schwelle
+    nicht — sie opfert deshalb ein annehmbares Paar, wenn zwei unannehmbare
+    zusammen billiger sind.
+
+    Gemessen an einer Platte mit Schraubenlöchern und einer Mutternfalle:
+
+    ==================  ========  =======  =========
+    altes Merkmal       gewählt   Kosten   Ergebnis
+    ==================  ========  =======  =========
+    ``nut_trap_pocket``  hole_2     3,281   verwaist
+    ``nut_trap_bore``    hole_1     3,742   verwaist
+    ==================  ========  =======  =========
+
+    Die Summe 7,02 ist kleiner als jede Lösung, die ``hole_2`` an die Bohrung
+    gibt — deren bestes Paar kostet 0,757 und läge damit **unter** der
+    Schwelle. Beide fielen heraus, wo eines hätte bleiben können.
+
+    Hier nachgestellt mit zwei alten Merkmalen und einem neuen, das nur zu
+    einem von beiden passt: Wer die Summe minimiert, gibt es dem falschen.
+    """
+    mesh = body("plate_holes.stl")
+    holes = holes_of(mesh)
+    names = sorted(holes)
+    near, far = holes[names[0]], holes[names[1]]
+
+    result = match({"a": near, "b": far}, {"new": near}, mesh.bounds.centre, mesh.bounds.diagonal)
+
+    assert result.mapping == {"a": "new"}, "the pair that fits must win, not the cheaper sum"
+    assert result.orphaned == ("b",)
+
+
 def test_identifiers_survive_an_operation_that_changes_nothing() -> None:
     mesh = body("plate_holes.stl")
     old = holes_of(mesh)
