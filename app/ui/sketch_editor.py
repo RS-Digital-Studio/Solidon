@@ -16,7 +16,7 @@ sondern eine Zahl in der Statuszeile (§30.1).
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
@@ -61,6 +61,7 @@ from app.core.units import EPS_DISPLAY
 from app.i18n import tr
 from app.ui import cursors, icons
 from app.ui.labels import LengthSpin, length, localised
+from app.ui.leash import weak_slot
 from app.ui.palette import ROLES, text_colour
 
 #: Was eine widersprüchliche Bedingung in der Liste anschreibt.
@@ -2349,7 +2350,7 @@ class SketchPanel(QWidget):
             button.setToolTip(f"{label}  ({key})" if key else label)
             button.setCheckable(True)
             button.setAutoRaise(True)
-            button.toggled.connect(lambda active, chosen=name: self._tool_chosen(chosen, active))
+            button.toggled.connect(weak_slot(self, SketchPanel._tool_chosen, name, forward=True))
             self._tool_buttons[name] = button
             tools.addWidget(button)
         self._tool_buttons["select"].setChecked(True)
@@ -2379,9 +2380,7 @@ class SketchPanel(QWidget):
             ),
         ):
             action = shapes_menu.addAction(label)
-            action.triggered.connect(
-                lambda _checked=False, make=factory: self.canvas.insert_shape(make())
-            )
+            action.triggered.connect(weak_slot(self, SketchPanel._insert_made, factory))
         shapes_button.setMenu(shapes_menu)
         tools.addWidget(shapes_button)
 
@@ -2419,9 +2418,7 @@ class SketchPanel(QWidget):
         self.plane_choice.setCurrentIndex(
             max(0, self.plane_choice.findData(self.canvas.sketch.plane))
         )
-        self.plane_choice.currentIndexChanged.connect(
-            lambda _index: self.canvas.set_plane(str(self.plane_choice.currentData()))
-        )
+        self.plane_choice.currentIndexChanged.connect(self._plane_picked)
         # Eigene Zeile: in der Werkzeugzeile bekam der Satz daneben so wenig
         # Breite, dass er auf sieben Zeilen umbrach und die ganze Leiste hoch
         # machte. Er gehört unter die Wahl, auf die er sich bezieht.
@@ -2436,7 +2433,7 @@ class SketchPanel(QWidget):
         note_font = self.layer_note.font()
         note_font.setItalic(True)
         self.layer_note.setFont(note_font)
-        self.canvas.sketchChanged.connect(lambda: self.layer_note.setText(self.canvas.layer_note()))
+        self.canvas.sketchChanged.connect(self._show_layer_note)
         plane_row.addWidget(self.layer_note, stretch=1)
 
         # Der Rasterfang, an derselben Zeile wie die Ebene: beides entscheidet
@@ -2456,7 +2453,7 @@ class SketchPanel(QWidget):
         self.snap_step.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.snap_step.setAccessibleName(tr("Raster"))
         self.snap_toggle.toggled.connect(self._snapping_changed)
-        self.snap_step.valueChanged.connect(lambda _value: self._snapping_changed())
+        self.snap_step.valueChanged.connect(self._snapping_changed)
         self._snapping_changed()
         plane_row.addWidget(self.snap_toggle)
         plane_row.addWidget(self.snap_step)
@@ -2482,9 +2479,7 @@ class SketchPanel(QWidget):
         offset_button.setIcon(icons.icon("sketch_offset", offset_button))
         offset_button.setToolTip(f"{tr('Versetzen')}  ({ACTION_KEYS['offset']})")
         offset_button.setAutoRaise(True)
-        offset_button.clicked.connect(
-            lambda: self.canvas.offset_selected(self.offset_distance.value_mm())
-        )
+        offset_button.clicked.connect(self._offset_selected)
 
         mirror_button = QToolButton(self)
         mirror_button.setIcon(icons.icon("sketch_mirror", mirror_button))
@@ -2493,9 +2488,7 @@ class SketchPanel(QWidget):
         mirror_menu = QMenu(mirror_button)
         for label, axis in ((tr("An der X-Achse"), "x"), (tr("An der Y-Achse"), "y")):
             entry = mirror_menu.addAction(label)
-            entry.triggered.connect(
-                lambda _checked=False, chosen=axis: self.canvas.mirror_selected(chosen)
-            )
+            entry.triggered.connect(weak_slot(self, SketchPanel._mirror_selected, axis))
         mirror_button.setMenu(mirror_menu)
 
         construction_button = QToolButton(self)
@@ -2529,9 +2522,7 @@ class SketchPanel(QWidget):
         )
         self.measure_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.measure_field.setAccessibleName(tr("Abstand"))
-        self.measure_field.editingFinished.connect(
-            lambda: self.canvas.place_measured(self.measure_field.value_mm())
-        )
+        self.measure_field.editingFinished.connect(self._place_measured)
         self.canvas.measuringChanged.connect(self._show_pending_measure)
 
         tools.addWidget(offset_button)
@@ -2591,9 +2582,7 @@ class SketchPanel(QWidget):
             constraint_button.setToolTip(
                 tr("{name} — dazu {what} auswählen.").format(name=label, what=_needs_phrase(kind))
             )
-            constraint_button.clicked.connect(
-                lambda _checked=False, chosen=kind: self.request_constraint(chosen)
-            )
+            constraint_button.clicked.connect(weak_slot(self, SketchPanel.request_constraint, kind))
             self._constraint_buttons[kind] = constraint_button
             constraints_row.addWidget(
                 constraint_button, position // CONSTRAINTS_PER_ROW, position % CONSTRAINTS_PER_ROW
@@ -2614,7 +2603,7 @@ class SketchPanel(QWidget):
         # nur, wer die flache Nummerierung im Kopf hat.
         self.constraint_list.setMouseTracking(True)
         self.constraint_list.itemEntered.connect(self._point_at)
-        self.constraint_list.currentItemChanged.connect(lambda item, _old: self._point_at(item))
+        self.constraint_list.currentItemChanged.connect(self._point_at)
 
         self.status = QLabel(opening or self.canvas.status_text(), self)
         self.status.setWordWrap(True)
@@ -2765,21 +2754,19 @@ class SketchPanel(QWidget):
                 continue
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-            shortcut.activated.connect(lambda chosen=name: self.choose_tool(chosen))
+            shortcut.activated.connect(weak_slot(self, SketchPanel.choose_tool, name))
 
         rectangle = QShortcut(QKeySequence(ACTION_KEYS["rectangle"]), self)
         rectangle.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        rectangle.activated.connect(lambda: self.canvas.insert_shape(shapes.rectangle(40.0, 20.0)))
+        rectangle.activated.connect(self._insert_rectangle)
 
         measure = QShortcut(QKeySequence(ACTION_KEYS["distance"]), self)
         measure.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        measure.activated.connect(lambda: self.request_constraint("distance"))
+        measure.activated.connect(self._request_distance)
 
         offsetting = QShortcut(QKeySequence(ACTION_KEYS["offset"]), self)
         offsetting.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-        offsetting.activated.connect(
-            lambda: self.canvas.offset_selected(self.offset_distance.value_mm())
-        )
+        offsetting.activated.connect(self._offset_selected)
 
         # Rückgängig gehört an das Panel und nicht an einen Rahmen darum: den
         # Rahmen gibt es nur auf einem der beiden Wege. Im Skizzenmodus des
@@ -2801,7 +2788,7 @@ class SketchPanel(QWidget):
         for plane, key in PLANE_KEYS.items():
             view = QShortcut(QKeySequence(key), self)
             view.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-            view.activated.connect(lambda chosen=plane: self.choose_plane(chosen))
+            view.activated.connect(weak_slot(self, SketchPanel.choose_plane, plane))
 
     def choose_plane(self, plane: str) -> None:
         """Die Zeichenebene wechseln — über die Wahl, nicht an ihr vorbei.
@@ -2843,6 +2830,54 @@ class SketchPanel(QWidget):
             if other != name and button.isChecked():
                 button.setChecked(False)
         self.canvas.set_tool(name)
+
+    def _insert_made(self, make: Callable[[], Sketch]) -> None:
+        """Eine Form aus dem Formenmenü einfügen.
+
+        Der Ring lief hier über **drei** Ebenen — Panel → Knopf → Menü →
+        Aktion → Rückruf → Panel —, und deshalb hat ihn die statische Suche
+        nicht gesehen: Sie prüfte, ob der Sender ein Kind von ``self`` ist, und
+        ``action`` ist das Kind eines Menüs, das einem Knopf gehört.
+        """
+        self.canvas.insert_shape(make())
+
+    def _mirror_selected(self, axis: str) -> None:
+        """Das Gewählte an einer Achse spiegeln — derselbe Weg über ein Menü."""
+        self.canvas.mirror_selected(axis)
+
+    def _plane_picked(self) -> None:
+        """Die Zeichenebene, die im Auswahlfeld steht.
+
+        Als Methode und nicht als Lambda am eigenen Auswahlfeld: Qt hält eine
+        gebundene Methode schwach, ein Lambda hielte dieses Feld an seinem
+        eigenen Kind fest (`.claude/rules/oberflaeche.md`).
+        """
+        self.canvas.set_plane(str(self.plane_choice.currentData()))
+
+    def _show_layer_note(self) -> None:
+        """Der Satz über der Zeichenfläche, wenn sich die Skizze geändert hat."""
+        self.layer_note.setText(self.canvas.layer_note())
+
+    def _offset_selected(self) -> None:
+        """Das Gewählte um den eingestellten Abstand versetzen.
+
+        Zwei Auslöser, ein Weg: der Knopf in der Werkzeugzeile und das Kürzel.
+        Vorher stand derselbe Ausdruck zweimal als Lambda da.
+        """
+        self.canvas.offset_selected(self.offset_distance.value_mm())
+
+    def _place_measured(self) -> None:
+        """Das eingetippte Maß an die Bedingung legen, die darauf wartet."""
+        self.canvas.place_measured(self.measure_field.value_mm())
+
+    def _insert_rectangle(self) -> None:
+        """Das Rechteck des Kürzels — vierzig auf zwanzig, wie die Zeichenfläche
+        es als Vorgabe kennt."""
+        self.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+
+    def _request_distance(self) -> None:
+        """Das Kürzel für die häufigste Bedingung: ein Maß zwischen zwei Punkten."""
+        self.request_constraint("distance")
 
     def _snapping_changed(self) -> None:
         """Haken und Weite an die Zeichenfläche geben.
