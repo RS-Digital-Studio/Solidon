@@ -216,6 +216,7 @@ Dialoge.
 | Zuordnung | ID-Stabilität, Mehrdeutigkeit |
 | Fehler | jede Ausnahme mit Handlungsvorschlag |
 | Barrierefreiheit | keine Bedeutung allein über Farbe |
+| Oberflächengrenzen | höchstens neun Menüs, zwölf Zeilen je Menü, acht Werkzeuge, acht Felder vorn |
 | Leistung | Zielwerte Bauplan §31, Regressionsschwelle 25 % |
 | Lizenzen | Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die vier Wege aus Bauplan §2.2 Ende zu Ende |

@@ -261,6 +261,47 @@ def testlauf() -> None:
     _commit_ansagen(befehl)
 
 
+#: Wie frisch ``HEAD`` sein muss, damit der Commit als eben gelaufen gilt.
+#: Großzügig gegen eine langsame Maschine, kurz genug, dass der Commit von
+#: vorhin nicht mitzählt.
+COMMIT_FRISCH_SEKUNDEN = 60
+
+
+def _gerade_committet() -> bool:
+    """Hat der Befehl wirklich einen Commit hinterlassen?
+
+    Der Hook erkennt einen Commit am Befehlstext, und das reicht nicht: Am
+    22.08.2026 scheiterte ein ``git commit`` an der fehlenden Git-Identität,
+    und der Hinweis erschien trotzdem. Ein Hinweis, der bei Fehlschlägen
+    anschlägt, wird nach dem dritten Mal überlesen — und dann fehlt er in dem
+    Augenblick, für den er gebaut ist.
+
+    Gefragt wird deshalb **Git und nicht die Werkzeugantwort**: Ein
+    gescheiterter Commit lässt ``HEAD`` stehen, wo es war. Das ist eine
+    Tatsache über die Welt und hängt an keinem Feldnamen, den eine spätere
+    Fassung umbenennen könnte.
+
+    Die Grenze der Auskunft: Committet eine **andere** Sitzung im selben
+    Arbeitsbaum in derselben Minute, sieht dieser Hook ihren Commit für seinen
+    an. Der Hinweis ist dann überflüssig, nicht falsch — die anderen zu
+    unterrichten schadet auch dann nicht.
+    """
+    try:
+        lauf = subprocess.run(
+            ["git", "log", "-1", "--format=%ct"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            cwd=WURZEL,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    try:
+        return time.time() - float(lauf.stdout.strip()) < COMMIT_FRISCH_SEKUNDEN
+    except ValueError:
+        return False
+
+
 def _commit_ansagen(befehl: str) -> None:
     """Nach einem Commit daran erinnern, es den anderen Sitzungen zu sagen.
 
@@ -278,6 +319,8 @@ def _commit_ansagen(befehl: str) -> None:
     daran und nicht an jeder Änderung.
     """
     if not re.search(r"\bgit\b[^|;&]*\bcommit\b", befehl):
+        return
+    if not _gerade_committet():
         return
     andere = nachbarsitzungen()
     if not andere:
