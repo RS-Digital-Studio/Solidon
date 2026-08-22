@@ -64,7 +64,6 @@ oder er hält ihn nicht fest.
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
-| Der Textweg prüft seine Voraussetzungen nicht | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile ausgraut, solange kein SDXL-Modell unter `models/checkpoints` liegt |
 | Erzeugen und Ändern sind reine Verteilermenüs | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, wie tief ein Menü sein darf — flach ziehen sprengt die Neun-Menü-Grenze, ist also ein Tausch und keine Verbesserung |
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
@@ -2291,6 +2290,17 @@ Windows, der Plattform der Demo, läuft er.
       Windows aus ist er nicht zu beheben:** Der Absturz tritt dort nicht auf,
       und was man nicht auslösen kann, kann man nicht als behoben nachweisen.
 
+      **Ein fünfter Weg ist seit dem 22.08.2026 dazugekommen, und er war
+      vorher nicht denkbar:** Der Absturz sitzt „in der ersten Widget-Anweisung
+      des Szenenaufbaus", und zwar beim **zweiten** — zwei Fernaufrufe, zwei
+      Auswertungen, zwei Szenenaufbauten. Seit demselben Tag ist gemessen, dass
+      **kein Viewport jemals freigegeben wird** (siehe „Kein Viewport wird
+      jemals freigegeben"): Beim zweiten Aufbau steht der erste noch samt
+      seinem VTK-Zustand. Das ist keine Diagnose — es ist ein Verdacht mit
+      einem Mechanismus dahinter, und der ist mehr, als dieser Punkt bisher
+      hatte. Wer ihn angeht, fährt ihn zuerst **nach** dem Ring-Umbau erneut,
+      bevor er einen sechsten Weg sucht.
+
 - [x] **Die Zusage dahinter ist jetzt trotzdem überall geprüft** (20.08.2026).
       Das war die eigentliche Lücke: Der übersprungene Test prüft §26.5 auf dem
       realistischen Weg — zwei Fernaufrufe, zwei Auswertungen, zwei
@@ -4219,13 +4229,27 @@ sie sind der Abstand zwischen „das geht" und „das lohnt".
       lokalen Weg **nennt** (nicht einrichtet) oder ob die Auskunft „hier lohnt
       es nicht, nimm einen Schlüssel" die ganze Antwort bleibt.
 
-- [ ] **Der Textweg prüft seine Voraussetzungen nicht.** `readiness()` liest
-      `image_to_mesh.json`, und das ist mit Absicht so: Der Bildweg ist der
+- [x] **Der Textweg prüfte seine Voraussetzungen nicht.** `readiness()` las
+      `image_to_mesh.json`, und das war mit Absicht so: Der Bildweg ist der
       Kernweg, der Textweg braucht zusätzlich ein SDXL-Modell unter
-      `models/checkpoints`. Wer keines hat, erfährt es beim Abschicken. Wartet
-      auf eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit
-      für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile
-      ausgraut, solange kein Bildmodell da ist.
+      `models/checkpoints`. Wer keines hatte, erfuhr es beim Abschicken.
+
+      **Gebaut, und zwar besser als die Frage lautete.** Der Punkt fragte, ob
+      die Bereitschaft *zwei Stufen* bekommt — bereit für Bilder, bereit für
+      Text. Stattdessen hängt sie jetzt am **gewählten Ablauf**:
+      `readiness(workflow)` nimmt den Ablauf entgegen, und
+      `GenerateDialog._workflow()` liefert ihn aus der Lage des Dialogs —
+      `"image_to_mesh" if self._image is not None else "text_to_mesh"`. Der
+      Docstring sagt, warum das die richtige Stelle ist: „Genau daran
+      entscheidet `_run`, welchen der beiden Aufrufe es nimmt, und genau daran
+      muss die Bereitschaftsfrage hängen."
+
+      Geprüft wird dabei beides — die Knoten des Ablaufs (`missing_nodes`) und
+      seine Modelle (`missing_models` → `Readiness.NO_MODEL`). Wer ohne Bild
+      tippt, erfährt also vor dem Abschicken, dass das SDXL-Modell fehlt.
+      Nachgeprüft am 22.08.2026 von 3d-druck-64 an `backends/mesh.py:395` und
+      `ui/generate_dialog.py:161` und `:315`. **Neunter Registerpunkt, der beim
+      Nachsehen schon gebaut war.**
 
 ## Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026)
 
