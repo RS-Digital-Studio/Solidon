@@ -4863,6 +4863,33 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       gegen `detect()`, `travelling_parts()`, `check.stamp()` und der
       Rückfall selbst.
 
+- [x] **Der Ring-Umbau hob die Absturzquote von 1/10 auf 6/10 — gemessen von
+      dem, der ihn gebaut hat.** 3d-druck-b8 hat ihren eigenen Umbau gegen einen
+      Arbeitsbaum auf dem Stand davor gefahren und den Preis beziffert, statt
+      ihn zu vermuten:
+
+          test_pose_session      vor Ringen 1/10   mit Ringen 6/10   mit Schutz 1/10
+          test_sculpt_session    vor Ringen 1/10   mit Ringen 2/10   mit Schutz 0/10
+          Fehlläufe im Tor            —                 6/28              3/28
+
+      Der Fehler ist `0xC0000374` — **Heap Corruption in `wait_for_idle`, mitten
+      in `processEvents`.** Die Mechanik ist eine andere als zuerst vermutet:
+      Nicht ein fremder Thread zerstört, sondern **der Speicherbereiniger räumt
+      im Hauptthread ab, während Qt denselben Widgets Ereignisse zustellt.** Bis
+      zum 22.08.2026 konnte das nicht passieren, weil nie ein Fenster
+      freigegeben wurde.
+
+      **Behoben mit `undisturbed()`, ohne den Umbau zurückzunehmen** — der Ring
+      bleibt weg, die Freigabe bleibt, nur räumt sie nicht mehr in eine laufende
+      Ereigniszustellung hinein.
+
+      *Was diesen Punkt lehrreich macht, ist nicht der Fehler, sondern die
+      Messung:* Der Umbau war fertig, gemessen (20 von 20 Fenstern freigegeben)
+      und committet. Ihn danach **gegen sich selbst** zu prüfen — alter Stand im
+      eigenen Arbeitsbaum, zehn Läufe je Seite — hätte niemand verlangt. Ohne
+      diese Messung wäre aus „7 MB je Fenster gespart" ein Absturz in sechs von
+      zehn Läufen geworden, und niemand hätte die beiden Dinge verbunden.
+
 - [ ] **Parallelität und Schloss sind keine Alternativen — sie bedingen
       einander.** Gemessen am 22.08.2026 von 3d-druck-b8: dieselbe Sammelgruppe
       zweimal mit `-n 8` gefahren, einmal **11 failed**, einmal **0 failed**.
@@ -4881,14 +4908,29 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       langsam. Ein geschrumpftes Schloss wäre dieser Fehler als
       Dauereinrichtung.
 
-      **Die Zahlen zur Toränderung, soweit sie stehen:** Maschine i9-13900K,
-      24 Kerne; Auslastung während eines Torlaufs mit drei wartenden Sitzungen
-      **16 %**. Sammelgruppe seriell 175 s, mit `-n 8` 66 s (Faktor 2,6), mit
-      `-n auto` (32) scheitert der Verteiler. Reine Testzeit des Tors rund
-      9 Minuten, tatsächliche Dauer rund 30 — **der Rest ist der Deadlock.**
-      Daraus folgt die Reihenfolge: erst der Deadlock, dann die Parallelität.
-      Was 109 Sekunden spart, ist zweitrangig neben dem, was 10 bis 27 Minuten
-      kostet.
+      **Die Zahlen zur Toränderung, gemessen statt geschätzt.** Maschine
+      i9-13900K, 24 Kerne; Auslastung während eines Torlaufs mit drei wartenden
+      Sitzungen **16 %**. Sammelgruppe seriell 175 s, mit `-n 8` 66 s (Faktor
+      2,6), mit `-n auto` (32) scheitert der Verteiler.
+
+      **Und dann der Lauf auf leerer Maschine, der die eigentliche Frage
+      beantwortet:**
+
+          Tor insgesamt              5 min 09 s
+            Suite (mit -n 8)           259 s
+            Leistungstests              49 s
+            ruff, format, mypy           1 s
+
+      **Fünf Minuten gegen dreißig beobachtete.** Die Lücke schließt sich
+      vollständig — und sie kam **nicht** aus der Testzeit, sondern aus
+      Wartezeit, Fremdlast und Hängern. Gemessen wurde die Gesamtdauer von
+      außen (Startzeit bis Endzeit) statt als Summe der Protokollzeilen; genau
+      dort hatte die Lücke bisher gesteckt, weil eine Summe von Zeilen jede
+      Pause dazwischen verschweigt.
+
+      Daraus folgt die Reihenfolge, und sie ist damit belegt statt vermutet:
+      **erst der Deadlock, dann die Parallelität.** Was 109 Sekunden spart, ist
+      zweitrangig neben dem, was 10 bis 27 Minuten kostet.
 
 - [ ] **Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum.**
       `tools/gate_lock.py` schützt vor Fremd*last* — gegen Fremd*stände* hilft
@@ -4914,8 +4956,16 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       will: *Was unterscheidet meinen Arbeitsbaum vom letzten Commit?*
       Gefunden von 3d-druck-33.
 
-      **Und dieselbe Ursache in ihrer teuren Form.** Weil vier Sitzungen mit
-      privaten Indizes committen, zieht niemand den **gemeinsamen** Index nach.
+      **Und dieselbe Ursache in ihrer teuren Form — sie wiederholt sich.** Weil
+      vier Sitzungen mit privaten Indizes committen, zieht niemand den
+      **gemeinsamen** Index nach. Das ist keine einmalige Aufräumarbeit,
+      sondern eine Eigenschaft des Verfahrens: Am 22.08.2026 stand er zweimal
+      innerhalb weniger Stunden veraltet da, beim zweiten Mal nach nur drei
+      Commits (23 Dateien, 1631 Löschungen). **Wer mit privatem Index
+      committet, hinterlässt einen veralteten gemeinsamen** — und der nächste,
+      der ohne `-o` committet, pusht ihn. Beim zweiten Aufräumen wurde der
+      Index vorher kopiert (`.git/index-tot-<zeit>`), nach der Regel, die beim
+      ersten Mal gefehlt hatte.
       Am 22.08.2026 stand dort ein Schnappschuss von vor den Commits des
       Abends: `git diff --cached HEAD` meldete 27 Dateien, 87 Einfügungen und
       **1684 Löschungen** — darunter drei ganze Testdateien mit 343, 310 und
