@@ -571,3 +571,133 @@ def test_the_disk_level_holds_only_what_was_offered_to_it(tmp_path: Path) -> Non
 
     cache.put("b" * 32, result(100, "obj_2"), to_disk=True)
     assert disk.get("b" * 32) is not None, "and what was offered is there"
+
+
+def test_a_second_evaluation_comes_off_the_disk(tmp_path: Path, profile: Profile) -> None:
+    """Zweimal auswerten, dazwischen den Speicher wegwerfen — §31, unter 1 s.
+
+    Das ist der Weg, den die Anwendung beim Öffnen eines Projekts geht: ein
+    frisches Fenster, ein leerer Speichercache, dieselbe Platte. Vorher wurde
+    dabei der ganze Operationsstapel neu gerechnet.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/cube_clean.stl", sha256=""
+    )
+    project.sources["src_1"] = (meshes / "cube_clean.stl").read_bytes()
+    History(project.document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+
+    disk = DiskCache(codec=MeshCodec(), directory=tmp_path)
+    sources = ProjectSources(project)
+    evaluate(project.document, profile, sources=sources, cache=ResultCache(disk=disk))
+
+    second = ResultCache(disk=disk)
+    result = evaluate(project.document, profile, sources=sources, cache=second)
+
+    assert second.statistics.disk_hits == 1, "the reopened project came off the disk"
+    assert second.statistics.misses == 0, "nothing was recomputed"
+    assert len(result.scene.objects) == 1
+
+
+def test_a_question_comes_back_when_the_project_is_reopened(
+    tmp_path: Path, profile: Profile
+) -> None:
+    """Was aus einer Antwort entstand, gehört nicht auf die Platte (§15.7).
+
+    `bracket_inch.stl` ist zwischen Zoll und Zentimeter mehrdeutig, die
+    Eingangsstufe fragt also (§11.1). Die Antwort steht heute nirgends im
+    Dokument — nicht in den Parametern der fragenden Operation —, also ist das
+    Ergebnis **keine reine Funktion des Dokuments**, und genau das darf der
+    Cache nicht über eine Sitzung hinaus behalten.
+
+    Gemessen am 22.08.2026, bevor es diesen Test gab: erste Auswertung fragte
+    einmal, zweite über die Platte fragte **nicht**. Der Nutzer hätte ein
+    Projekt geöffnet und stillschweigend eine Annahme bekommen, wo eine Frage
+    stand — und ob überhaupt gefragt wird, hätte das Dateisystem entschieden,
+    denn eine Cache-Datei darf jederzeit gelöscht werden (§38). Regel 21 sagt
+    „nie stillschweigend raten".
+
+    **Dieser Test und ``test_a_second_evaluation_comes_off_the_disk`` halten
+    sich gegenseitig ehrlich.** Der andere verlangt einen Treffer auf der
+    Platte, dieser verlangt sein Ausbleiben — beide können nicht grün sein,
+    wenn die Ebene gar nicht benutzt wird. Damit ist die Gegenfrage beantwortet,
+    die man jedem Test stellen sollte: Was müsste kaputt sein, damit er rot
+    wird? Bei einem Paar, das sich ausschließt, gibt es darauf keine bequeme
+    Antwort. Wer einen von beiden ändert, muss den anderen ansehen.
+
+    Der Test bleibt stehen, wenn §15.7 umgesetzt ist. Dann steht die Antwort in
+    den Parametern, der Schlüssel kennt sie, und **deshalb** wird wieder
+    gefragt, sobald sie fehlt — dieselbe Aussage, ein anderer Weg dorthin.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.geom.mesh import MeshCodec
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/bracket_inch.stl", sha256=""
+    )
+    project.sources["src_1"] = (meshes / "bracket_inch.stl").read_bytes()
+    History(project.document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "auto"})]
+    )
+
+    asked: list[str] = []
+
+    def ask(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return choices[0]
+
+    disk = DiskCache(codec=MeshCodec(), directory=tmp_path)
+    sources = ProjectSources(project)
+    evaluate(project.document, profile, sources=sources, cache=ResultCache(disk=disk), ask=ask)
+    assert len(asked) == 1, "the ambiguity reaches whoever can answer it"
+
+    # Ein neues Fenster: leerer Speicher, dieselbe Platte.
+    evaluate(project.document, profile, sources=sources, cache=ResultCache(disk=disk), ask=ask)
+    assert len(asked) == 2, "and it reaches them again, because the answer is nowhere"
+
+
+def test_every_caller_says_whether_the_result_may_go_to_disk() -> None:
+    """Die Entscheidung muss dastehen, nicht aus einer Vorgabe folgen.
+
+    Die Vorgabe von ``to_disk`` ist ``False``, damit ein Vergessen nur langsam
+    macht und nicht falsch. Das schützt gegen das Vergessen — nicht gegen ein
+    falsches ``True``, und dagegen kann kein Test schützen: „hängt von etwas ab,
+    das nicht im Dokument steht" ist an einer Aufrufstelle nicht ablesbar.
+
+    Was dieser Test leistet, ist weniger und trotzdem etwas: Er verlangt, dass
+    jede Stelle die Entscheidung **hinschreibt**. Damit steht sie in jedem Diff,
+    den jemand liest, statt in einer Vorgabe, an die niemand denkt. Aus einer
+    Bitte wird eine Aussage, über die man streiten kann.
+
+    Der eigentliche Ort für die andere Hälfte ist nicht der Cache: Eine
+    Operation, die die Uhr liest oder eine Datei außerhalb des Projekts,
+    verstößt gegen §11 und Regel 9, ganz unabhängig von jeder Cache-Ebene.
+    """
+    root = Path(__file__).parent.parent / "app"
+    offenders = []
+    for path in sorted(root.rglob("*.py")):
+        if path.name == "cache.py":
+            continue  # dort wohnt die Klasse, und `DiskCache.put` kennt kein Wort
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if ".put(" in line and "to_disk=" not in line:
+                offenders.append(f"{path.relative_to(root)}:{number}")
+    assert not offenders, (
+        "these put a result into the cache without saying whether it may be kept: "
+        + ", ".join(offenders)
+    )
