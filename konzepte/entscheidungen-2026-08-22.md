@@ -279,6 +279,52 @@ Soll er?
 
 ---
 
+## 10. Heißt die Exportdatei `Halterung.stl` oder `Bracket.stl`? (3d-druck-64)
+
+**Die eine Entscheidung, die den ganzen Punkt „Objektnamen der Beispiele bleiben
+deutsch" blockiert.** Der Punkt ist gut analysiert und machbar; seine
+Reihenfolge lautet: erst diese Entscheidung, dann `SceneObject.name`, dann das
+Format. Ohne sie fängt niemand an.
+
+**Die Stelle ist genau eine:** `app/core/export/writer.py:179`,
+`object=safe_name(entry.name)` im Namensschema `{project}_{object}_{index}von{count}`.
+Wird der Objektname übersetzbar, wandert der Dateiname mit der Anzeigesprache —
+derselbe Klick erzeugt bei einem deutschen Nutzer `Gehaeuse_Deckel_1von3.stl` und
+bei einem englischen `Housing_Lid_1von3.stl`.
+
+**Drei Wege:**
+
+**(a) Der Dateiname folgt der Anzeigesprache.** Was der Nutzer sieht, bekommt er
+auch als Datei. Dagegen spricht der Punkt mit seinem eigenen Argument: „Ein
+Dateiname, der mit der Anzeigesprache wandert, ist dieselbe Sorte Fehler wie ein
+Cache-Schlüssel, der es tut." Ein Skript, das die Ausgabe weiterverarbeitet,
+bricht, sobald jemand die Sprache umstellt.
+
+**(b) Der Dateiname nimmt immer die Quellsprache** — also die Message-ID
+beziehungsweise den deutschen Text. Stabil und reproduzierbar, aber ein
+englischer Nutzer bekommt `Halterung.stl` für ein Objekt, das im Baum
+„Bracket" heißt. Das ist erklärbar und sieht trotzdem nach einem Fehler aus.
+
+**(c) Der Dateiname nimmt immer Englisch.** Stabil, international lesbar, und
+für den deutschen Nutzer genauso überraschend wie (b) für den englischen — nur
+in die andere Richtung.
+
+**Was ich vorschlagen würde: (b), und den Dateinamen im Exportdialog zeigen.**
+Die Stabilität ist das Argument, das der Punkt selbst stark macht; die
+Überraschung lässt sich beheben, indem der Nutzer den Namen vor dem Schreiben
+sieht und ändern kann. Eine sichtbare Vorgabe, die stabil ist, schlägt eine
+unsichtbare, die wandert. **Aber das ist eine Produktentscheidung und keine
+technische** — deshalb steht sie hier und nicht im Code.
+
+**Der Rest des Punktes danach**, zur Einordnung des Aufwands: `SceneObject.name`
+wird `TranslatableText | str`, und rund 65 Stellen in Oberfläche, Export und
+Agentenschicht lesen einen Objektnamen direkt. Dazu Format 9 → 10 mit Migration
+(`carry_over` genügt, alte Namen bleiben wörtlich), die vierzehn gesetzten Namen
+in `make_examples.py`, siebzig Katalogeinträge und neu erzeugte Beispiele. Als
+eigener Durchgang, nicht neben anderen Punkten.
+
+---
+
 ## Was hier bewusst nicht steht
 
 Punkte, die auf etwas warten, das keine Entscheidung ist: CI-Dienst und
