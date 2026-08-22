@@ -17,7 +17,9 @@ Ein kaputter eigener Baustein darf die Anwendung nicht am Starten hindern.
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
+import inspect
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -33,6 +35,10 @@ _log = get_logger(__name__)
 #: Präfix der Modulnamen, unter denen eigene Bausteine importiert werden —
 #: damit sie mit nichts kollidieren können, was die Anwendung mitbringt.
 MODULE_PREFIX = "solidon_user_parts"
+
+#: Unter welchem Präfix der Abdruck eines eigenen Bausteins im Dokument steht
+#: (in ``libs``, §24.4). Ein Schlüssel je benutztem eigenen Baustein.
+FINGERPRINT_KEY = "own_part:"
 
 
 @dataclass(slots=True)
@@ -97,6 +103,44 @@ def _mark_as_own(name: str, registry: PartRegistry | None) -> None:
     also festgehalten werden.
     """
     (registry or PARTS).mark_source(name, "user")
+
+
+def fingerprint(name: str, registry: PartRegistry | None = None) -> str:
+    """Ein Abdruck der Datei, aus der ein eigener Baustein stammt — oder nichts.
+
+    **Wozu.** Die Bibliotheksversion deckt alles ab, was mit einer Auslieferung
+    kommt; ein eigener Baustein hat keine. Ändert der Nutzer darin ein Maß,
+    bleiben Name, Parameter und ``version`` gleich, ``changed_since_library``
+    liest gepflegte Änderungsverläufe — und die pflegt beim Ausprobieren
+    niemand. Das Projekt rechnet beim nächsten Öffnen anders, ohne dass es
+    jemand sagt, und das bricht Leitprinzip 4.
+
+    **Warum der Inhalt und nicht die Zeit.** Eine Datei zu kopieren ändert ihre
+    Änderungszeit und nicht ihren Inhalt; ein Abdruck über die Zeit meldete
+    dann eine Änderung, die keine ist. ``paths._own_parts_stamp()`` nimmt für
+    den Plattencache trotzdem die Zeit, und richtig so: Dort geht es um
+    „irgendetwas hat sich bewegt", hier um „welcher Baustein war es".
+
+    Ein mitgelieferter Baustein hat keinen Abdruck — er ist über
+    ``parts_version`` gedeckt. Was sich nicht lesen lässt, ergibt ebenfalls
+    nichts: Ein fehlender Abdruck heißt „keine Aussage möglich" und erzeugt
+    nie einen Befund.
+    """
+    source = registry or PARTS
+    if not source.has(name):
+        return ""
+    spec = source.get(name)
+    if not spec.own:
+        return ""
+    module = inspect.getmodule(spec.fn)
+    path = getattr(module, "__file__", None)
+    if not path:
+        return ""
+    try:
+        data = Path(path).read_bytes()
+    except OSError:
+        return ""
+    return hashlib.sha256(data).hexdigest()[:12]
 
 
 def travelling_parts(used: dict[str, str], registry: PartRegistry | None = None) -> tuple[str, ...]:

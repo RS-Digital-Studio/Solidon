@@ -11,7 +11,7 @@ from app.core.knowledge.parts import check as part_check
 from app.core.knowledge.parts.registry import LIBRARY_VERSION, PartRegistry, used_parts
 from app.core.scene import History, OperationDraft
 from app.core.scene.project import load, new_project, save
-from app.core.types import Document, Source
+from app.core.types import Document, Operation, Source
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -256,3 +256,112 @@ def test_load_user_parts_reports_a_broken_file(
 
     assert [entry.code for entry in findings] == ["parts.user_failed"]
     assert bootstrap.load_user_parts() == findings, "der zweite Aufruf lädt nicht erneut"
+
+
+def _own_part_registry(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> PartRegistry:
+    """Lädt ``OWN_PART`` aus einem Nutzerverzeichnis und gibt sein Register."""
+    (tmp_path / "eigenbau.py").write_text(OWN_PART, encoding="utf-8")
+    registry = PartRegistry()
+
+    import app.core.knowledge.parts.registry as registry_module
+
+    monkeypatch.setattr(registry_module, "PARTS", registry)
+    user.load(tmp_path, registry)
+    return registry
+
+
+def _document_using(part: str) -> Document:
+    """Ein Dokument, das genau einen Baustein benutzt."""
+    return Document(
+        format_version=1,
+        app_version="test",
+        parts_version=LIBRARY_VERSION,
+        ops=[Operation(id="op_1", op=f"insert_{part}")],
+    )
+
+
+def test_a_changed_own_part_is_reported_when_the_project_opens(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§24.4 gilt auch für Bausteine, die kein Update begleitet (§24.5).
+
+    ``changed_since_library`` vergleicht gepflegte Änderungsverläufe — und die
+    pflegt beim Ausprobieren niemand. Wer am Maß seiner eigenen Magnettasche
+    schraubt, ändert weder Name noch Parameter noch ``version``; das Projekt
+    rechnet beim nächsten Öffnen anders, und gemeldet wurde es nicht. Das
+    bricht Leitprinzip 4 an der einzigen Stelle, an der die Bibliothek keine
+    Version führt.
+
+    Die zweite Quelle ist ein Abdruck der Datei, geschrieben beim Speichern.
+    Geprüft wird hier die ganze Kette: Der Stempel legt ihn an, eine geänderte
+    Datei wird gemeldet, eine unveränderte nicht — und ein Projekt ohne
+    Abdruck schweigt, statt zu raten.
+    """
+    registry = _own_part_registry(tmp_path, monkeypatch)
+    document = _document_using("eigenbau")
+
+    part_check.stamp(document, registry)
+    abdruck = document.libs.get(f"{user.FINGERPRINT_KEY}eigenbau")
+    assert abdruck, "der Stempel hält den eigenen Baustein fest"
+
+    assert not [
+        finding
+        for finding in part_check.check(document, registry)
+        if finding.code == "parts.own_changed"
+    ], "unverändert ist kein Befund"
+
+    (tmp_path / "eigenbau.py").write_text(
+        OWN_PART.replace("cylinder(raw.diameter, 10.0)", "cylinder(raw.diameter, 12.0)"),
+        encoding="utf-8",
+    )
+    findings = [
+        finding
+        for finding in part_check.check(document, registry)
+        if finding.code == "parts.own_changed"
+    ]
+
+    assert findings, "eine geänderte eigene Datei wird beim Öffnen gemeldet"
+    assert findings[0].values["parts"] == "eigenbau"
+    assert findings[0].severity == "info", "ein Hinweis mit einer Wahl, kein Abbruch (§24.4)"
+
+
+def test_a_project_without_a_fingerprint_says_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Gegenprobe zur Prüfung darüber, und sie ist die wichtigere Hälfte.
+
+    Jedes Projekt, das vor dieser Änderung gespeichert wurde, hat keinen
+    Abdruck. Meldete die Prüfung dort „geändert", wäre sie bei **jedem** alten
+    Projekt mit eigenem Baustein rot — ein Falschbefund, der schlimmer ist als
+    die Lücke, die er schließen soll. Fehlender Abdruck heißt „keine Aussage
+    möglich", nicht „hat sich geändert".
+    """
+    registry = _own_part_registry(tmp_path, monkeypatch)
+    document = _document_using("eigenbau")
+
+    (tmp_path / "eigenbau.py").write_text(
+        OWN_PART.replace("cylinder(raw.diameter, 10.0)", "cylinder(raw.diameter, 12.0)"),
+        encoding="utf-8",
+    )
+
+    assert not [
+        finding
+        for finding in part_check.check(document, registry)
+        if finding.code == "parts.own_changed"
+    ], "ohne Abdruck wird nicht geraten"
+
+
+def test_the_stamp_forgets_a_part_the_project_no_longer_uses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein Abdruck, den niemand mehr liest, wird mit jedem Speichern älter und
+    sieht irgendwann wie eine Aussage aus.
+    """
+    registry = _own_part_registry(tmp_path, monkeypatch)
+    document = _document_using("eigenbau")
+    part_check.stamp(document, registry)
+
+    document.ops = []
+    part_check.stamp(document, registry)
+
+    assert not [key for key in document.libs if key.startswith(user.FINGERPRINT_KEY)]

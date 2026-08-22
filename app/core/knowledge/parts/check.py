@@ -13,6 +13,8 @@ zweite hält die Auswertung an (§15.2).
 
 from __future__ import annotations
 
+from collections.abc import Iterable
+
 from app.core.knowledge.parts.registry import (
     LIBRARY_VERSION,
     PARTS,
@@ -20,6 +22,7 @@ from app.core.knowledge.parts.registry import (
     changed_since_library,
     used_parts,
 )
+from app.core.knowledge.parts.user import FINGERPRINT_KEY, fingerprint
 from app.core.log import get_logger
 from app.core.types import Document, Finding
 from app.i18n import _
@@ -46,6 +49,17 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
             )
         )
 
+    own_changed = changed_own_parts(document, used, source)
+    if own_changed:
+        findings.append(
+            Finding(
+                code="parts.own_changed",
+                severity="info",
+                message=_("Seit dem Speichern haben sich eigene Bausteine geändert."),
+                values={"parts": ", ".join(own_changed)},
+            )
+        )
+
     changed = changed_since_library(document.parts_version, used, source)
     if changed:
         findings.append(
@@ -65,8 +79,49 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
     return findings
 
 
-def stamp(document: Document) -> None:
-    """Hält die Bibliotheksversion im Projekt fest — passiert beim
-    Speichern (§16.2).
+def changed_own_parts(
+    document: Document, used: Iterable[str], registry: PartRegistry | None = None
+) -> tuple[str, ...]:
+    """Eigene Bausteine, deren Datei sich geändert hat, seit dieses Projekt
+    gespeichert wurde (§24.4, §24.5).
+
+    Die zweite Quelle neben ``changed_since_library``: Die liest gepflegte
+    Änderungsverläufe, und ein eigener Baustein hat keinen — wer an seinem
+    Magnettaschen-Maß schraubt, schreibt keinen Eintrag mit Datum dazu.
+
+    **Ein fehlender Abdruck ist kein Befund.** Projekte von vor dieser
+    Änderung haben keinen, und eine Datei, die sich nicht lesen lässt, auch
+    nicht. Beides heißt „keine Aussage möglich" und schweigt — ein
+    Falschbefund bei jedem alten Projekt wäre schlimmer als die Lücke, die er
+    schließen soll.
+    """
+    source = registry or PARTS
+    changed: list[str] = []
+    for name in sorted(set(used)):
+        before = document.libs.get(f"{FINGERPRINT_KEY}{name}")
+        now = fingerprint(name, source)
+        if before and now and before != now:
+            changed.append(name)
+    return tuple(changed)
+
+
+def stamp(document: Document, registry: PartRegistry | None = None) -> None:
+    """Hält fest, womit gerechnet wurde — passiert beim Speichern (§16.2).
+
+    Die Bibliotheksversion deckt die mitgelieferten Bausteine ab. Für die
+    eigenen kommt je benutztem Baustein ein Abdruck seiner Datei dazu (§24.5),
+    denn ihre Version bewegt sich nicht, wenn der Nutzer sie ändert.
+
+    Abdrücke von Bausteinen, die dieses Projekt nicht mehr benutzt, fallen
+    dabei weg: Ein Schlüssel, den niemand mehr liest, wird sonst mit jedem
+    Speichern älter und sieht irgendwann wie eine Aussage aus.
     """
     document.parts_version = LIBRARY_VERSION
+    used = set(used_parts(document.ops))
+    for key in [key for key in document.libs if key.startswith(FINGERPRINT_KEY)]:
+        if key[len(FINGERPRINT_KEY) :] not in used:
+            del document.libs[key]
+    for name in sorted(used):
+        mark = fingerprint(name, registry)
+        if mark:
+            document.libs[f"{FINGERPRINT_KEY}{name}"] = mark
