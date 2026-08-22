@@ -1037,8 +1037,14 @@ def feature_measure(feature: Feature) -> str:
         return f"Ø{length(float(params.get('diameter', 0.0)))}"
     # Zwei Zahlen ohne Wort, wie beim Kegel: Ringdurchmesser, dann Rohrstärke.
     # Ein Wort dazwischen wäre eine zweite Stelle, an der eine Sprache fehlt.
+    #
+    # **``diameter`` und nicht ``ring_diameter``.** Der Schlüssel ist ein
+    # Vertrag und keine Beschriftung: Die Zuordnung liest die Größe eines
+    # Merkmals artenunabhängig aus ``params["diameter"]``. Unter einem eigenen
+    # Namen war die Komponente null — zwei Tori mit Ringdurchmesser 40 und 60
+    # kosteten gegeneinander 0,0 und waren damit ununterscheidbar (§21.2).
     if feature.kind == "torus":
-        ring = length(float(params.get("ring_diameter", 0.0)))
+        ring = length(float(params.get("diameter", 0.0)))
         return f"Ø{ring} / Ø{length(float(params.get('tube_diameter', 0.0)))}"
     if feature.kind == "edge_loop":
         return f"{params.get('open_edges', 0)} {tr('offene Kanten')}"
