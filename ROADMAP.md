@@ -83,6 +83,8 @@ oder er hält ihn nicht fest.
 | Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
 | „Keine Tests gesammelt“ zählt als Fehllauf | Das Fundament der Wahrnehmung (22.08.2026) | eine Zeile in `suite-getrennt.sh` — Exit 5 heißt „nichts gesammelt“ und ist keine Aussage über den Code. Es trifft jede Datei, die über eine Ansicht **schreibt** statt eine zu bauen, denn die Fenstergruppe wird im Text gesucht |
 | Zwei Fensterdateien enden mit Exit 127, und einzeln auch | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — die Roadmap nennt als Signatur des bekannten Absturzes „dieselbe Datei einzeln gefahren ist grün“, und diese zwei sind es nicht. Nachgewiesen im eigenen Arbeitsbaum auf HEAD, vollständig grün und dann 127 |
+| Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
+| Nichts hindert eine Op daran, die Uhr zu lesen | Das Fundament der Wahrnehmung (22.08.2026) | eine Prüfung in `tests/test_registry_consistency.py` — Zufall ist gedeckt (`operation_hash` nimmt `operation.seed`, Regel 9 verlangt ihn), Uhrzeit, Umgebungsvariable und Datei außerhalb des Projekts sind es nicht. Gefunden von solidon-17 und solidon-43 beim Plattencache |
 
 ---
 
@@ -4428,6 +4430,39 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Pipeline (`pytest … | tail -8; echo $?`) und war der von `tail`. Die
       Zahl der bestandenen Tests war echt, der Exit-Code nicht. Wer diesen Punkt
       prüft, schreibt die Ausgabe in eine Datei und liest sie danach.
+
+- [ ] **Ein Absturz vor der Schlusszeile ist eine dritte Signatur.**
+      `tests/test_ui.py` riss am 22.08.2026 in einem von vier Läufen bei
+      **95 Prozent** mit Exit 139 ab — Zugriffsverletzung in `conftest.py:178`,
+      also in `application.processEvents()` beim Aufräumen einer
+      Fensterprüfung. Dreimal danach wiederholt: 255 grün, Exit 0, jedes Mal.
+      Gemessen von solidon-17.
+
+      **Warum das nicht der bekannte Absturz ist:** Dessen Kennzeichen in
+      dieser Datei lautet „N passed, dann Absturz" — die Schlusszeile steht
+      da, und wer sie liest, hält den Lauf für vollständig. Dieser hier stirbt
+      **vor** ihr. Ein Lauf ohne Zusammenfassung sieht nach „abgebrochen" aus
+      und nicht nach „abgestürzt", und die beiden verlangen Verschiedenes: Der
+      eine wird wiederholt, der andere untersucht. Damit stehen drei
+      Signaturen nebeneinander — 127 nach vollständigem Lauf (zwei Dateien,
+      reproduzierbar), `0xC0000409` nach der Schlusszeile (bekannt), und 139
+      mitten darin (nichtdeterministisch, einer von vier).
+
+- [ ] **Nichts hindert eine Operation daran, die Uhr zu lesen.** §15.1 verlangt,
+      dass die Auswertung eine reine Funktion aus Stack, Quellen, Parametern,
+      Profilen und Startwerten ist. Für den **Zufall** ist das durchgesetzt:
+      `operation_hash` nimmt `operation.seed`, Regel 9 verlangt einen
+      gespeicherten Startwert, und der Determinismustest prüft es. Für alles
+      andere, was von außen kommt, ist es eine Absichtserklärung — eine
+      künftige Op, die `datetime.now()`, eine Umgebungsvariable oder eine Datei
+      außerhalb des Projekts liest, wäre keine reine Funktion, und **kein Test
+      würde es merken**.
+
+      Aufgefallen ist es beim Plattencache, aber es gehört nicht dorthin: Eine
+      Op, die die Uhr liest, verstößt gegen Regel 9, unabhängig von jeder
+      Cache-Ebene. Der Ort ist deshalb `tests/test_registry_consistency.py`,
+      wo schon steht, dass eine nicht-deterministische Op einen Startwert
+      führen muss. Gefunden von solidon-17 und solidon-43.
 
 
 ## Der Changelog schickte den Kunden ins Handbuch, und dort war nichts (22.08.2026)
