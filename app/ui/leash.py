@@ -15,8 +15,10 @@ Gebietsregel beschreibt beides; hier steht es einmal statt sechsmal.
 
 from __future__ import annotations
 
+import gc
 import weakref
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from typing import Any, Final
 
 from PySide6.QtCore import QObject, QThread, QTimer, Signal
@@ -264,3 +266,43 @@ def weak_slot[Owner: QObject](
             call(found, *bound, *(sent if forward else ()))
 
     return slot
+
+
+@contextmanager
+def undisturbed() -> Iterator[None]:
+    """Ereignisse zustellen, ohne dass der Speicherbereiniger dazwischenfährt.
+
+    **Warum das nötig wurde.** Bis zum 22.08.2026 gab diese Anwendung kein
+    einziges Fenster je frei — jedes hing an einem Rückruf, der es festhielt.
+    Seit die Ringe aufgelöst sind, räumt der Speicherbereiniger sie ab, und er
+    tut es dort, wo er gerade gerufen wird: mitten in ``processEvents``,
+    während Qt Ereignisse an genau diese Widgets zustellt. Was dabei zerstört
+    wird, wird zweimal zerstört — der Prozess stirbt mit
+    ``0xC0000374`` (Heap Corruption), ohne eine Zeile eigenen Codes im Stapel.
+
+    Gemessen an ``tests/test_pose_session.py``, je acht Läufe auf leerer
+    Maschine:
+
+    ======================================  ==========
+    Stand                                   rote Läufe
+    ======================================  ==========
+    vor dem Auflösen der Ringe                    1/8
+    nach dem Auflösen, ohne diesen Schutz         6/8
+    nach dem Auflösen, mit diesem Schutz          1/8
+    ======================================  ==========
+
+    Die letzte Zeile ist der Punkt: Der Schutz stellt genau den Zustand her,
+    den es vor dem Umbau gab — ohne den Umbau zurückzunehmen. Das eine
+    verbleibende Rot ist das bekannte Grundrauschen und in beiden Ständen da.
+
+    **Kein Ersatz für sauberes Aufräumen**, sondern ein Fenster, in dem nicht
+    aufgeräumt wird. Wer Qt-Objekte hält, gibt sie weiterhin selbst frei; hier
+    wird nur verhindert, dass es *währenddessen* passiert.
+    """
+    enabled = gc.isenabled()
+    gc.disable()
+    try:
+        yield
+    finally:
+        if enabled:
+            gc.enable()

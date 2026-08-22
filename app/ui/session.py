@@ -77,7 +77,7 @@ from app.core.types import (
 )
 from app.core.units import is_close
 from app.i18n import TranslatableText, _, tr
-from app.ui.leash import Worker, WorkerLeash
+from app.ui.leash import Worker, WorkerLeash, undisturbed
 
 _log = get_logger(__name__)
 
@@ -1435,4 +1435,9 @@ class Session(QObject):
             worker.wait(50)
             application = QCoreApplication.instance()
             if application is not None:
-                application.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
+                # Ohne `undisturbed` räumt der Speicherbereiniger hier Fenster
+                # ab, während Qt ihnen gerade Ereignisse zustellt — sechs von
+                # acht Läufen starben daran mit Heap Corruption. Die Messung
+                # steht am Kontextmanager.
+                with undisturbed():
+                    application.processEvents(QEventLoop.ProcessEventsFlag.ExcludeUserInputEvents)
