@@ -21,6 +21,8 @@ from app.core.perceive.features import (
     detect_faces,
     detect_holes,
     detect_pins,
+    detect_spheres,
+    detect_tori,
     fit_cylinder,
 )
 
@@ -515,6 +517,71 @@ def test_the_countersink_is_a_feature_of_its_own() -> None:
     assert cones[0].params["diameter"] == pytest.approx(10.0, abs=0.05)
     # Und die Mitte liegt auf der Deckfläche, nicht an der Spitze im Nichts.
     assert cones[0].params["centre"][2] == pytest.approx(4.0, abs=0.05)
+
+
+# --- Kugel und Torus (§21.1, Ausbaustufe §41) -------------------------------------
+
+
+def test_a_socket_is_recognised_as_a_sphere() -> None:
+    """Die Kugel als **Pfanne** — der Fall, den §41 zuerst nennt.
+
+    Eine freistehende Kugel kommt in einem Druckteil kaum vor, eine Pfanne für
+    ein Kugelgelenk oder einen Magneten dauernd. Vor dem 22.08.2026 kam an
+    ``sphere_socket.stl`` nichts heraus als die sechs Flächen des Blocks: keine
+    Falschmeldung, aber auch kein Merkmal, auf das der Agent hätte zeigen
+    können (Leitprinzip 5).
+    """
+    spheres = detect_spheres(plate("sphere_socket.stl"))
+
+    assert len(spheres) == 1, f"one socket: {[sphere.id for sphere in spheres]}"
+    # R = 8 im Entwurf; eine Icosphere ist einbeschrieben, die Facetten liegen
+    # also ein Stück innen. Gemessen 7,97.
+    assert spheres[0].params["diameter"] == pytest.approx(15.94, abs=0.1)
+    # Der Mittelpunkt liegt auf der Oberfläche des Blocks, nicht in der Mitte
+    # der Kappe — dort, wo eine Kugel läge, die man hineinsetzt.
+    assert spheres[0].params["centre"][2] == pytest.approx(7.5, abs=0.05)
+    assert spheres[0].params["recess"] is True
+
+
+def test_a_ring_is_recognised_as_a_torus() -> None:
+    """Die zweite Form, und die teurere: Mit ihr kommt später der Radius einer
+    Verrundung, weil eine Verrundung um eine runde Kante ein Torusstück ist.
+    """
+    tori = detect_tori(plate("torus_ring.stl"))
+
+    assert len(tori) == 1, f"one ring: {[torus.id for torus in tori]}"
+    # ``diameter`` ist der Ring — derselbe Schlüssel wie bei jeder anderen Art,
+    # weil die Zuordnung die Größe eines Merkmals genau dort liest (§21.2).
+    assert tori[0].params["diameter"] == pytest.approx(40.0, abs=0.2)
+    assert tori[0].params["tube_diameter"] == pytest.approx(10.0, abs=0.2)
+    assert abs(tori[0].params["axis"][2]) == pytest.approx(1.0, abs=0.01)
+
+
+def test_a_countersink_is_not_a_sphere() -> None:
+    """Die Gegenprobe, und sie ist der Grund für die strengere Schwelle.
+
+    Eine 90°-Senkung passt erstaunlich gut auf eine Kugel: gemessen ein
+    Rückstand von 0,054, also **unter** der Schwelle, die für Zylinder und
+    Kegel gilt. Die echte Kalotte liefert 0,0003 — zwei Größenordnungen
+    darunter. Genau davor warnt §41: Ein Anpassungsverfahren, das Grundformen
+    sucht, findet auch welche, die niemand gemeint hat, und die Reihenfolge der
+    Prüfungen entscheidet, welchen Namen ein Fleck bekommt.
+    """
+    found = detect(plate("plate_countersunk.stl"))
+    kinds = sorted({feature.kind for feature in found.values()})
+
+    assert "sphere" not in kinds, f"the sink became a sphere: {kinds}"
+    assert "torus" not in kinds, f"the sink became a torus: {kinds}"
+    # Und was dort steht, steht weiter dort.
+    assert "cone" in kinds and "hole" in kinds, kinds
+
+
+def test_a_bore_is_never_read_as_a_torus() -> None:
+    """Ein Zylinder ist ein Torus mit unendlichem Ringradius, die Einpassung
+    findet an jeder Bohrung also einen. Sie darf ihn nur nicht behalten.
+    """
+    assert not detect_tori(plate("plate_holes.stl"))
+    assert not detect_spheres(plate("plate_holes.stl"))
 
 
 def test_a_plain_bore_is_never_read_as_a_cone() -> None:

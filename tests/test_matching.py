@@ -40,6 +40,71 @@ def one_hole_plate() -> MeshData:
     return MeshData.of(trimesh.boolean.difference([plate, drill]))
 
 
+def socket_plate(thickness: float = 15.0) -> MeshData:
+    """Ein Block mit eingefräster Kalotte — dieselbe Pfanne wie im Korpus, nur
+    mit wählbarer Dicke, damit sich der Körper ändern lässt, ohne dass das
+    Merkmal verschwindet.
+    """
+    block = trimesh.creation.box(extents=(40.0, 40.0, thickness))
+    ball = trimesh.creation.icosphere(subdivisions=3, radius=8.0)
+    ball.apply_translation((0.0, 0.0, thickness / 2.0))
+    return MeshData.of(trimesh.boolean.difference([block, ball]))
+
+
+def test_the_matching_needs_no_entry_for_a_new_kind_of_feature() -> None:
+    """Kugel und Torus kamen am 22.08.2026 dazu, und die Kostenmatrix hat
+    dafür keine Zeile bekommen — sie braucht keine.
+
+    ``feature_vector`` liest ``centre``, ``axis`` und ``diameter`` **für jede
+    Art gleich**; der Kommentar dort sagt es: „Unterschieden am Parameter,
+    nicht an einer Artenliste." Eine neue Art muss also nichts anmelden, sie
+    muss den Vertrag erfüllen. Dieser Test hält fest, dass sie es tut — sonst
+    ist es eine einmalige Messung und kein Zustand.
+    """
+    from app.core.perceive.features import detect_spheres
+
+    mesh = socket_plate()
+    old = {sphere.id: sphere for sphere in detect_spheres(mesh)}
+    new = {sphere.id: sphere for sphere in detect_spheres(socket_plate(18.0))}
+
+    result = match(old, new, mesh.bounds.centre, mesh.bounds.diagonal)
+
+    assert result.settled, f"the socket lost its name: {result}"
+    assert result.mapping == {"sphere_1": "sphere_1"}
+
+
+def test_two_rings_of_different_size_are_not_the_same_feature() -> None:
+    """Der Fall, an dem die Zuordnung für Tori beinahe blind gewesen wäre.
+
+    Die Torus-Parameter hießen zuerst ``ring_diameter`` und ``tube_diameter``
+    — beides aussagekräftiger als ein nacktes ``diameter``, und beides falsch:
+    ``feature_vector`` liest die Größe eines Merkmals aus genau diesem einen
+    Schlüssel. Unter einem eigenen Namen war die Komponente null, und zwei
+    Ringe mit Ø 40 und Ø 60 kosteten gegeneinander **0,0** — für die Zuordnung
+    dasselbe Merkmal. Zwei Dichtnuten übereinander hätten den Nutzer bei jeder
+    Auswertung dasselbe gefragt, mit der Antwort in den Daten (§21.3).
+
+    Kein Test war damals rot. Dieser hier ist es, wenn jemand den Schlüssel
+    zurückbenennt.
+    """
+    from app.core.perceive.features import detect_tori
+    from app.core.perceive.matching import cost
+
+    def ring(major: float) -> Feature:
+        mesh = MeshData.of(
+            trimesh.creation.torus(
+                major_radius=major, minor_radius=5.0, major_sections=48, minor_sections=24
+            )
+        )
+        return detect_tori(mesh)[0]
+
+    wide, narrow = ring(30.0), ring(20.0)
+
+    assert cost(wide, narrow, (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), 100.0) > 1.0, (
+        "two rings of different size must not cost nothing against each other"
+    )
+
+
 def test_identifiers_survive_an_operation_that_changes_nothing() -> None:
     mesh = body("plate_holes.stl")
     old = holes_of(mesh)

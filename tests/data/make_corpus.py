@@ -111,6 +111,42 @@ def plate_countersunk_blind() -> None:
     write(trimesh.boolean.difference([plate, drill, sink]), "plate_countersunk_blind.stl")
 
 
+def sphere_socket() -> None:
+    """Ein Block mit einer eingefrästen Kalotte — die Kugel als **Pfanne**.
+
+    Der Fall, den §41 zuerst nennt, und er ist der realistische: Eine
+    freistehende Kugel kommt in einem Druckteil kaum vor, eine Pfanne für ein
+    Kugelgelenk oder einen Magneten dauernd. Gemessen wird an ihr, dass die
+    Einpassung den Radius trifft und den Mittelpunkt **dort** findet, wo er
+    liegt — auf der Oberfläche des Blocks und nicht in der Mitte der Kappe.
+
+    Vor dem Bau der Kugelerkennung kam hier nichts heraus außer den sechs
+    Flächen des Blocks: keine Falschmeldung, aber auch kein Merkmal, auf das
+    der Agent hätte zeigen können.
+    """
+    block = trimesh.creation.box(extents=(40.0, 40.0, 15.0))
+    ball = trimesh.creation.icosphere(subdivisions=3, radius=8.0)
+    ball.apply_translation((0.0, 0.0, 7.5))
+    write(trimesh.boolean.difference([block, ball]), "sphere_socket.stl")
+
+
+def torus_ring() -> None:
+    """Ein Torus, freistehend — Ringradius 20, Röhrenradius 5.
+
+    Die zweite Form aus §41, und die teurere: Mit ihr kommt der Radius einer
+    Verrundung, weil eine Verrundung um eine runde Kante ein Torusstück ist.
+    Der Ring steht hier ganz da, damit die beiden Radien eindeutig messbar
+    sind; ob ein **Stück** davon auch erkannt wird, ist eine andere Frage und
+    gehört zu dem Punkt, der den Verrundungsradius bringt.
+    """
+    write(
+        trimesh.creation.torus(
+            major_radius=20.0, minor_radius=5.0, major_sections=48, minor_sections=24
+        ),
+        "torus_ring.stl",
+    )
+
+
 def degenerate() -> None:
     """Ein Würfel plus ein Null-Flächen-Dreieck, eine Nadel und eine doppelte
     Fläche.
@@ -422,6 +458,8 @@ if __name__ == "__main__":
     plate_holes_twin()
     plate_countersunk()
     plate_countersunk_blind()
+    sphere_socket()
+    torus_ring()
     degenerate()
     broken_open()
     two_components()

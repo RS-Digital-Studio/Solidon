@@ -50,7 +50,7 @@ Millimetres = float
 
 # --- Aufzählungen --------------------------------------------------------------
 
-FeatureKind = Literal["hole", "face", "edge_loop", "pin", "cone", "thread"]
+FeatureKind = Literal["hole", "face", "edge_loop", "pin", "cone", "sphere", "torus", "thread"]
 Provenance = Literal["detected", "generated"]
 ObjectKind = Literal["mesh", "brep"]
 Quality = Literal["draft", "fine"]
@@ -970,6 +970,33 @@ class Operation:
     params: Mapping[str, Any] = field(default_factory=dict)
     solver: SolverInfo | None = None
     seed: int | None = None
+    matches: Mapping[FeatureId, Mapping[str, Any]] = field(default_factory=dict)
+    """Antworten auf mehrdeutige Merkmalszuordnungen (§15.7, §21.3).
+
+    **Warum das nicht in ``params`` steht.** ``validate`` wiese einen
+    Schlüssel ab, den das Schema der Operation nicht kennt, und richtig so: Das
+    hier ist keine Eingabe der Operation, sondern eine festgehaltene Antwort auf
+    eine Rückfrage, die *bei* ihr entstand. Der Präzedenzfall steht eine Zeile
+    höher — ``seed`` ist ebenfalls ein Wert auf Operationsebene, der eine nicht
+    von selbst reproduzierbare Prozedur reproduzierbar macht. Eine
+    festgehaltene Antwort tut für eine Rückfrage dasselbe.
+
+    **Gespeichert wird ein geometrischer Fingerabdruck, kein Bezeichner.**
+    ``alt → neu`` wäre fragil: Die Erkennung nummeriert beim nächsten Lauf
+    womöglich anders, und dann zeigte die gespeicherte Antwort auf ein fremdes
+    Merkmal — aus „fragt zu oft" würde „nimmt stillschweigend das falsche", und
+    das ist der schlechtere Fehler (Regel 21). Der Abdruck ist lesbares JSON
+    (``kind``, ``centre``, ``axis``, ``diameter``) und wird mit derselben
+    Rivalenlogik aufgelöst, die die Frage überhaupt erst gestellt hat: Gewinnt
+    der Beste nicht mit Abstand, wird wieder gefragt.
+
+    **Und es gehört nicht in den Op-Hash.** Die Zuordnung passiert *nach* dem
+    Cache — ``_with_features`` läuft in beiden Zweigen, auch nach einem
+    Treffer. Eine Antwort ändert also kein gecachtes Ergebnis, und nach dem
+    Antworten rechnet nichts neu; anders als bei der Einheitenrückfrage, die
+    ein Parameter ist. Wer das später „zur Sicherheit" in den Hash einträgt,
+    macht jede beantwortete Frage zu einer vollständigen Neuberechnung.
+    """
 
 
 @dataclass(frozen=True, slots=True)

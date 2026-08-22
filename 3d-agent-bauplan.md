@@ -505,7 +505,7 @@ Die Signaturen, an denen sich alle Module ausrichten. Sie stehen in
 @dataclass(frozen=True)
 class Feature:
     id: str  # "hole_3" oder "op4.pin_1"
-    kind: Literal["hole", "face", "edge_loop", "pin", "cone", "thread"]  # cone: §21.1
+    kind: Literal["hole", "face", "edge_loop", "pin", "cone", "sphere", "torus", "thread"]
     provenance: Literal["detected", "generated"]
     params: dict  # Durchmesser, Achse, Tiefe, Fläche …
     face_indices: tuple[int, ...]
@@ -1176,8 +1176,10 @@ aber im Datenmodell von Anfang an vorgesehen.
 Bohrungen (Zylinderflächen clustern → Durchmesser, Achse, Tiefe, Durchgang oder
 Sackloch), Zapfen (dieselbe Suche, andersherum gelesen), **Kegel** (Senkung,
 Fase an einer Bohrung, Verjüngung → Öffnungswinkel, Achse, Mitte, Durchmesser),
-ebene Flächen (koplanare Cluster → Normale, Fläche, Schwerpunkt, Randkontur),
-Randschleifen (offene Kanten = Defekte), Symmetrieebenen, Dünnstellen,
+**Kugeln** (Pfanne oder Kuppel → Mittelpunkt, Durchmesser), **Tori** (Kehle
+oder Wulst → Achse, Mitte, Ring- und Röhrendurchmesser), ebene Flächen
+(koplanare Cluster → Normale, Fläche, Schwerpunkt, Randkontur), Randschleifen
+(offene Kanten = Defekte), Symmetrieebenen, Dünnstellen,
 Zusammenhangskomponenten.
 
 **Ein Fleck endet an einer Kante, nicht am Zusammenhang.** Das klingt nach einer
@@ -1201,10 +1203,19 @@ Rückstand**, und ein Zylinder bleibt einer, solange er unter fünf Grad steht:
 Ein `hole_1`, das plötzlich `cone_1` hieße, wäre für jede Bohrungs-Operation
 unsichtbar.
 
-**Was weiter nicht erkannt wird**, ist die Kugel und der Torus — und mit dem
-Torus fehlt der Radius einer Verrundung. Der Weg steht als Ausbaustufe in §41,
-weil er eine eigene Abnahme braucht: Ein Anpassungsverfahren, das Grundformen
-sucht, findet auch welche, die niemand gemeint hat.
+**Die Reihenfolge der Prüfungen ist Teil der Aussage.** Kugel und Torus kamen
+am 22.08.2026 dazu, und sie werden erst gefragt, wenn Zylinder und Kegel
+abgelehnt haben — nicht daneben. Der Fall, der das erzwingt: Eine 90°-Senkung
+passt auf eine **Kugel** mit einem Rückstand von 0,054 und damit unter der
+Schwelle, die für Zylinder und Kegel gilt; eine echte Kalotte liefert 0,0003.
+Deshalb steht dort eine eigene, strengere Schwelle (`ROUND_TOLERANCE`, 0,02),
+und deshalb kommt die Frage zuletzt. Ein `hole_1`, das plötzlich `sphere_1`
+hieße, wäre für jede Bohrungs-Operation unsichtbar.
+
+**Was weiter nicht erkannt wird**, ist ein Torus**stück**: Die Einpassung liest
+Ring- und Röhrenradius aus den Rändern des Flecks und setzt damit einen ganzen
+Ring voraus. Damit hat eine Verrundung weiterhin keinen Radius — der Weg dahin
+ist die Krümmungskarte aus §18.4 und steht als eigener Punkt.
 
 ### 21.2 Das ID-Problem
 **Erzeugte Features — Provenienz.** Was eine Operation selbst erzeugt, bekommt
@@ -2652,16 +2663,19 @@ hineinwandern**, sonst misst man nur das eigene Gedächtnis. Strikt lokal.
 
 **Stapelverarbeitung** über den Kommandozeilen-Einstieg.
 
-**Kugel und Torus in der Erkennung.** Der Kegel ist seit dem 22.08.2026 drin
-(§21.1) und hat den Weg gezeigt: Eine Grundform lässt sich aus den Normalen
-bestimmen, linear und ohne Zufall. Was fehlt, ist die Kugel (Pfanne, Kalotte)
-und der Torus — und mit dem Torus **der Radius einer Verrundung**, also die
-Karte „Krümmung" aus §18.4 mit echten Zahlen statt einer Einfärbung. Der Preis
-ist beim Kegel schon sichtbar geworden und wächst mit jeder weiteren Form: Es
-findet auch Formen, die niemand gemeint hat, und die Reihenfolge der Prüfungen
-entscheidet, welchen Namen ein Fleck bekommt. Deshalb eigene Abnahme, eigene
-Testkörper und dieselbe Auflage wie überall: Was unter der Schwelle bleibt,
-wird als Cluster gemeldet und nicht geraten (Regel 21).
+**Der Radius einer Verrundung.** Kugel und Torus sind seit dem 22.08.2026 in
+der Erkennung (§21.1) — beide über denselben Weg, den der Kegel gezeigt hat:
+Die Grundform kommt aus den Normalen, linear und ohne Zufall. Der
+vorhergesagte Preis ist dabei eingetreten und wurde bezahlt: Eine Senkung
+passt gut genug auf eine Kugel, um sie zu verlieren, und die Antwort waren
+eine strengere Schwelle und eine feste Reihenfolge der Prüfungen.
+
+Was bleibt, ist das Torus**stück**. Die Einpassung liest beide Radien aus den
+Rändern eines Flecks und braucht dafür einen ganzen Ring; eine Verrundung ist
+aber ein Ausschnitt. Damit fehlt weiter **der Radius einer Verrundung**, also
+die Karte „Krümmung" aus §18.4 mit echten Zahlen statt einer Einfärbung. Eigene
+Abnahme, eigene Testkörper, dieselbe Auflage wie überall: Was unter der
+Schwelle bleibt, wird als Cluster gemeldet und nicht geraten (Regel 21).
 
 **Modell-Vergleich.** Zwei Versionen überlagern, Unterschiede zeigen.
 
@@ -2693,12 +2707,13 @@ mit einer Projektdatei.
 - Die Zielwerte in §31 gelten mit dem übersetzten Schichtkern; ohne ihn ist die
   Schichtanalyse an der Decke des Interpreters, und das ist an drei Verfahren
   gemessen und nicht geschätzt
-- Aus einem Netz erkennt die Wahrnehmung Zylinder, Kegel und Ebenen, keine
-  Kugeln und Tori (§21.1, `DETECTABLE_KINDS`) — und ohne den Torus hat eine
-  Verrundung keinen Radius. Der Kegel kam am 22.08.2026 dazu; seither ist eine
-  Senkung nicht mehr nur ein zweites Merkmal neben der Bohrung, sondern geht in
-  sie ein: Ob ein gesenktes Loch durchgeht, rechnet `_is_through` aus beiden
-  zusammen (`test_a_countersunk_bore_is_still_a_through_hole`)
+- Aus einem Netz erkennt die Wahrnehmung Zylinder, Kegel, Kugeln, Tori und
+  Ebenen (§21.1, `DETECTABLE_KINDS`), aber **kein Torusstück** — und damit hat
+  eine Verrundung weiter keinen Radius. Kegel, Kugel und Torus kamen am
+  22.08.2026 dazu; seither ist eine Senkung nicht mehr nur ein zweites Merkmal
+  neben der Bohrung, sondern geht in sie ein: Ob ein gesenktes Loch durchgeht,
+  rechnet `_is_through` aus beiden zusammen
+  (`test_a_countersunk_bore_is_still_a_through_hole`)
 
 ---
 

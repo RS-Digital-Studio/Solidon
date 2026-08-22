@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import NamedTuple
 
 import numpy as np
 import trimesh
@@ -145,6 +146,48 @@ class ConeFit:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class SphereFit:
+    """Eine eingepasste Kugel: Mittelpunkt und Radius."""
+
+    centre: Vec3
+    radius: float
+    residual: float
+    """Mittlere Abweichung vom eingepassten Radius, bezogen auf den Radius."""
+    recess: bool
+    """Wahr bei einer Pfanne — die Kugel ist ausgehöhlt, nicht aufgesetzt."""
+
+    @property
+    def good(self) -> bool:
+        return self.residual <= ROUND_TOLERANCE and self.radius > EPS_GEOM
+
+
+@dataclass(frozen=True, slots=True)
+class TorusFit:
+    """Ein eingepasster Torus: Achse, Mittelpunkt, Ring- und Röhrenradius."""
+
+    axis: Vec3
+    centre: Vec3
+    """Die Mitte des Rings, auf der Achse."""
+    ring_radius: float
+    """Vom Mittelpunkt zur Mittellinie der Röhre."""
+    tube_radius: float
+    """Der Radius der Röhre selbst — an einer Verrundung ihr Radius."""
+    residual: float
+    recess: bool
+    """Wahr bei einer Kehle — die Röhre ist ausgehöhlt, nicht aufgesetzt."""
+
+    @property
+    def good(self) -> bool:
+        return (
+            self.residual <= ROUND_TOLERANCE
+            and self.tube_radius > EPS_GEOM
+            # Ein Torus, dessen Ring nicht weiter ist als seine Röhre, hat kein
+            # Loch in der Mitte — das ist keine Form, die jemand meint.
+            and self.ring_radius > self.tube_radius
+        )
+
+
 #: Wie schräg ein Fleck mindestens stehen muss, um als Kegel zu zählen.
 #:
 #: Darunter ist er ein Zylinder — und zwar auch dann, wenn die Einpassung einen
@@ -160,6 +203,20 @@ CONE_MAX_ANGLE = 85.0
 #: Wie gut ein Fleck zum eingepassten Kegel passen muss. Dieselbe Schwelle wie
 #: beim Zylinder, weil es dieselbe Frage ist.
 CONE_TOLERANCE = 0.08
+
+#: Wie gut ein Fleck zur eingepassten Kugel oder zum Torus passen muss —
+#: **strenger als bei Zylinder und Kegel, und das ist gemessen.**
+#:
+#: Eine 90°-Senkung passt erstaunlich gut auf eine Kugel: Rückstand 0,054, also
+#: unter der Schwelle von 0,08, die für Zylinder und Kegel gilt. Die echte
+#: Kalotte aus ``sphere_socket.stl`` liefert 0,0003 — zwei Größenordnungen
+#: darunter. Zwischen beiden liegt 0,02 mit Sicherheit nach beiden Seiten.
+#:
+#: Genau davor warnt §41: Ein Verfahren, das Grundformen sucht, findet auch
+#: welche, die niemand gemeint hat. Die Schwelle ist die eine Hälfte der
+#: Antwort, die Reihenfolge in :func:`_fitted` die andere — Kugel und Torus
+#: werden erst gefragt, wenn Zylinder und Kegel abgelehnt haben.
+ROUND_TOLERANCE = 0.02
 
 #: Wie stark die Achse einer Senkung von der ihrer Bohrung abweichen darf, in
 #: Grad. Beide entstehen in derselben Aufspannung — was hier streut, ist die
@@ -185,7 +242,9 @@ SINK_FIT_LIMIT = 0.25
 #: sieht. Ein Gewinde sieht sie nicht — es entsteht in einem Baustein und
 #: trägt seinen Namen von dort. Wer es wie eine Bohrung prüfte, verlöre es bei
 #: jeder Operation, weil kein Partner zu finden ist.
-DETECTABLE_KINDS: frozenset[str] = frozenset({"hole", "pin", "face", "edge_loop", "cone"})
+DETECTABLE_KINDS: frozenset[str] = frozenset(
+    {"hole", "pin", "face", "edge_loop", "cone", "sphere", "torus"}
+)
 
 
 def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
@@ -206,12 +265,14 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     # kalt 210 ms braucht — ``trimesh`` legt Nachbarschaften und Facetten am
     # Körper ab, der zweite Durchgang fand sie also schon vor. Wer hier die
     # kalte Zahl verdoppelt, verspricht das Doppelte des Erreichbaren.
-    cylinders, cones = _fitted(mesh)
+    fitted = _fitted(mesh)
     found: dict[FeatureId, Feature] = {}
     for feature in [
-        *detect_holes(mesh, cylinders, cones),
-        *detect_pins(mesh, cylinders),
-        *detect_cones(mesh, cones),
+        *detect_holes(mesh, fitted.cylinders, fitted.cones),
+        *detect_pins(mesh, fitted.cylinders),
+        *detect_cones(mesh, fitted.cones),
+        *detect_spheres(mesh, fitted.spheres),
+        *detect_tori(mesh, fitted.tori),
         *detect_faces(mesh),
         *detect_edge_loops(mesh),
     ]:
@@ -229,13 +290,31 @@ Cylinders = list[tuple["CylinderFit", list[int]]]
 #: Dasselbe für die Kegel.
 Cones = list[tuple["ConeFit", list[int]]]
 
+#: Und für die beiden runden Formen aus der Ausbaustufe (§41).
+Spheres = list[tuple["SphereFit", list[int]]]
+Tori = list[tuple["TorusFit", list[int]]]
+
+
+class Fitted(NamedTuple):
+    """Was eine Fleckensuche an Grundformen hergibt.
+
+    Ein benanntes Tupel und keine vier Rückgabewerte: Die Liste wächst mit
+    jeder Form, die §41 noch vorsieht, und ``fitted.spheres`` liest sich auch
+    dann noch, wenn es sechs sind.
+    """
+
+    cylinders: Cylinders
+    cones: Cones
+    spheres: Spheres
+    tori: Tori
+
 
 def _cylinders(mesh: MeshData) -> Cylinders:
-    """Nur die Zylinder, für jeden, der die Kegel nicht braucht."""
-    return _fitted(mesh)[0]
+    """Nur die Zylinder, für jeden, der die übrigen Formen nicht braucht."""
+    return _fitted(mesh).cylinders
 
 
-def _fitted(mesh: MeshData) -> tuple[Cylinders, Cones]:
+def _fitted(mesh: MeshData) -> Fitted:
     """Jeder gekrümmte Fleck des Körpers, einmal eingepasst.
 
     Bohrungen und Stifte sind dieselbe Suche, zweimal gelesen, und die Suche
@@ -246,7 +325,7 @@ def _fitted(mesh: MeshData) -> tuple[Cylinders, Cones]:
     """
     body = mesh.raw
     if not len(body.faces):
-        return [], []
+        return Fitted([], [], [], [])
 
     # Eine Bohrungswand besteht aus vielen schmalen ebenen Segmenten — „gehört zu
     # einer Facette" ist also nicht die Trennlinie, „gehört zu einer *großen*
@@ -254,10 +333,12 @@ def _fitted(mesh: MeshData) -> tuple[Cylinders, Cones]:
     planar = _large_facet_faces(body)
     curved = [index for index in range(len(body.faces)) if index not in planar]
     if not curved:
-        return [], []
+        return Fitted([], [], [], [])
 
     found: Cylinders = []
     cones: Cones = []
+    spheres: Spheres = []
+    tori: Tori = []
     for patch in _connected_patches(body, curved):
         if len(patch) < MIN_PATCH_FACES:
             continue
@@ -278,10 +359,30 @@ def _fitted(mesh: MeshData) -> tuple[Cylinders, Cones]:
         if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
             if cone.good and _fits_in_the_body(mesh, cone):
                 cones.append((cone, patch))
+                continue
+            # Ein Kegelwinkel schließt den Zylinder aus — das sagen die
+            # Normalen, und daran ändert ein schlechter Rückstand nichts. Die
+            # runden Formen sind damit aber nicht ausgeschlossen: Eine Kalotte
+            # hat einen Kegelwinkel, ohne ein Kegel zu sein.
+        else:
+            fit = fit_cylinder(body, patch)
+            if fit is not None and fit.good and _fits_in_the_body(mesh, fit):
+                found.append((fit, patch))
+                continue
+
+        # **Erst hier, und das ist die halbe Antwort auf §41.** Kugel und Torus
+        # werden gefragt, nachdem Zylinder und Kegel abgelehnt haben — nicht
+        # daneben. Eine Senkung passt auf eine Kugel besser, als man denkt
+        # (Rückstand 0,054), und ein `hole_1`, das plötzlich `sphere_1` hieße,
+        # wäre für jede Bohrungs-Operation unsichtbar. Die andere Hälfte der
+        # Antwort ist ``ROUND_TOLERANCE``.
+        ball = fit_sphere(body, patch)
+        if ball is not None and ball.good and _fits_in_the_body_by_size(mesh, ball.radius):
+            spheres.append((ball, patch))
             continue
-        fit = fit_cylinder(body, patch)
-        if fit is not None and fit.good and _fits_in_the_body(mesh, fit):
-            found.append((fit, patch))
+        ring = fit_torus(body, patch)
+        if ring is not None and ring.good and _fits_in_the_body_by_size(mesh, ring.ring_radius):
+            tori.append((ring, patch))
 
     # Nach Position sortiert, damit die Nummerierung für denselben Körper
     # reproduzierbar ist. **Alle drei Achsen**, nicht nur X und Y: Zwei
@@ -308,7 +409,16 @@ def _fitted(mesh: MeshData) -> tuple[Cylinders, Cones]:
             round(entry[0].centre[2], 3),
         )
     )
-    return found, cones
+    # Kugeln und Tori nach demselben Schlüssel und aus demselben Grund (§21.2).
+    for round_shapes in (spheres, tori):
+        round_shapes.sort(
+            key=lambda entry: (
+                round(entry[0].centre[0], 3),
+                round(entry[0].centre[1], 3),
+                round(entry[0].centre[2], 3),
+            )
+        )
+    return Fitted(found, cones, spheres, tori)
 
 
 def detect_holes(
@@ -331,9 +441,9 @@ def detect_holes(
     """
     body = mesh.raw
     if cylinders is None or cones is None:
-        fitted_cylinders, fitted_cones = _fitted(mesh)
-        cylinders = fitted_cylinders if cylinders is None else cylinders
-        cones = fitted_cones if cones is None else cones
+        fitted = _fitted(mesh)
+        cylinders = fitted.cylinders if cylinders is None else cylinders
+        cones = fitted.cones if cones is None else cones
     found = [
         entry
         for entry in cylinders
@@ -392,6 +502,80 @@ def _fits_in_the_body(mesh: MeshData, fit: CylinderFit | ConeFit) -> bool:
     along = int(np.argmax(axis))
     across = max(size[index] for index in range(3) if index != along)
     return fit.radius * 2.0 <= across + EPS_GEOM
+
+
+def _fits_in_the_body_by_size(mesh: MeshData, radius: float) -> bool:
+    """Dieselbe Frage wie :func:`_fits_in_the_body`, aber ohne Achse.
+
+    Eine Kugel hat keine, und beim Torus wäre die falsche Richtung gemessen.
+    Verglichen wird deshalb gegen die **größte** Ausdehnung des Körpers und
+    nicht gegen die quer zur Achse — eine Pfanne Ø 16 in einem Block, der nur
+    15 mm dick ist, ist völlig normal, weil nur die halbe Kugel darin steckt.
+    Die Schranke fängt damit weniger als die des Zylinders; sie fängt das, was
+    sie fangen soll: eine Einpassung, die größer ist als das ganze Teil.
+    """
+    return radius * 2.0 <= float(max(mesh.bounds.size)) + EPS_GEOM
+
+
+def detect_spheres(mesh: MeshData, spheres: Spheres | None = None) -> list[Feature]:
+    """Kugelige Flecken (§21.1, Ausbaustufe §41).
+
+    ``recess`` trennt die Pfanne von der Kuppel — dieselbe Unterscheidung, die
+    der Kegel zwischen Senkung und aufgesetztem Kegel trifft, und aus demselben
+    Grund: In eine Pfanne setzt man etwas hinein, auf eine Kuppel nicht.
+    """
+    found = _fitted(mesh).spheres if spheres is None else spheres
+    return [
+        Feature(
+            id=f"sphere_{number}",
+            kind="sphere",
+            provenance="detected",
+            params={
+                "diameter": round(fit.radius * 2.0, 4),
+                "centre": fit.centre,
+                "recess": fit.recess,
+                "residual": round(fit.residual, 4),
+            },
+            face_indices=tuple(patch),
+        )
+        for number, (fit, patch) in enumerate(found, start=1)
+    ]
+
+
+def detect_tori(mesh: MeshData, tori: Tori | None = None) -> list[Feature]:
+    """Torusförmige Flecken (§21.1, Ausbaustufe §41).
+
+    Zwei Durchmesser, und der zweite ist der interessante: ``diameter`` ist der
+    Ring, ``tube_diameter`` die Röhre — an einer Verrundung um eine runde Kante
+    ist die Röhre ihr Maß. Ein Torus**stück** wird
+    hier noch nicht erkannt — die Einpassung liest Ring- und Röhrenradius aus
+    den Extremen des Flecks, und das setzt einen ganzen Ring voraus. Was fehlt,
+    steht als eigener Punkt in der Roadmap.
+    """
+    found = _fitted(mesh).tori if tori is None else tori
+    return [
+        Feature(
+            id=f"torus_{number}",
+            kind="torus",
+            provenance="detected",
+            params={
+                # **``diameter`` und nicht ``ring_diameter``**, obwohl der
+                # Name unschärfer ist: Die Zuordnung liest die Größe eines
+                # Merkmals aus genau diesem Schlüssel (``feature_vector``),
+                # und zwar für jede Art gleich. Unter einem eigenen Namen war
+                # sie null — zwei Tori mit Ringdurchmesser 40 und 60 kosteten
+                # gegeneinander 0,0 und waren damit dasselbe Merkmal (§21.2).
+                "diameter": round(fit.ring_radius * 2.0, 4),
+                "tube_diameter": round(fit.tube_radius * 2.0, 4),
+                "axis": fit.axis,
+                "centre": fit.centre,
+                "recess": fit.recess,
+                "residual": round(fit.residual, 4),
+            },
+            face_indices=tuple(patch),
+        )
+        for number, (fit, patch) in enumerate(found, start=1)
+    ]
 
 
 def detect_pins(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feature]:
@@ -624,6 +808,118 @@ def fit_cone(body: trimesh.Trimesh, patch: list[int]) -> ConeFit | None:
         # die Mulde.
         recess=offset > 0.0,
     )
+
+
+def fit_sphere(body: trimesh.Trimesh, patch: list[int]) -> SphereFit | None:
+    """Kleinste-Quadrate-Kugel durch einen Fleck von Dreiecken — linear.
+
+    **Ein Schritt, und es ist derselbe wie beim Kegel, nur mit einer Zahl mehr
+    rechts.** Die Tangentialebene eines Kegels geht durch die Spitze, also gilt
+    ``n · p = n · apex``. Bei der Kugel ist der Abstand vom Mittelpunkt nicht
+    null, sondern der Radius: ``n · p = n · c + R``. Das ist ein
+    überbestimmtes lineares System mit vier Unbekannten, und es ist derselbe
+    Ansatz — kein Zufall, keine Iteration, kein Startwert (§11.3).
+
+    Dieser Unterschied ist keine Feinheit. Mit der Kegelgleichung an einer
+    Kalotte eingepasst kam ein Mittelpunkt 12 mm neben dem richtigen heraus und
+    ein Radius von 10,2 statt 8, bei einem Rückstand von 0,24 — plausibel
+    genug, um nicht aufzufallen, und falsch. Mit der richtigen Gleichung liegt
+    der Mittelpunkt auf drei Nachkommastellen und der Rückstand bei 0,0003.
+
+    Das **Vorzeichen** des Radius ist die Auskunft, die den Rest trägt: Zeigen
+    die Normalen nach außen, kommt +R heraus, bei einer Pfanne -R. Das trennt
+    die Kalotte von der Kuppel, ohne dass jemand nachmisst.
+    """
+    normals = np.asarray(body.face_normals[patch], dtype=float)
+    centres = np.asarray(body.triangles_center[patch], dtype=float)
+
+    system = np.column_stack([normals, np.ones(len(normals))])
+    solution, *_ = np.linalg.lstsq(system, np.einsum("ij,ij->i", normals, centres), rcond=None)
+    centre, signed = solution[:3], float(solution[3])
+    radius = abs(signed)
+    if radius <= EPS_GEOM:
+        return None
+
+    distance = np.linalg.norm(centres - centre, axis=1)
+    residual = float(np.mean(np.abs(distance - radius)) / radius)
+    return SphereFit(
+        centre=(float(centre[0]), float(centre[1]), float(centre[2])),
+        radius=radius,
+        residual=residual,
+        recess=signed < 0.0,
+    )
+
+
+def fit_torus(body: trimesh.Trimesh, patch: list[int]) -> TorusFit | None:
+    """Torus durch einen Fleck — Achse aus den Normalen, Radien aus den Rändern.
+
+    **Die Achse** kommt aus derselben Quelle wie beim Zylinder und beim Kegel,
+    nur wird eine andere Frage an sie gestellt. Über einen ganzen Ring
+    verteilen sich die Normalen rotationssymmetrisch: Entlang der Achse trägt
+    das Moment ``N/2``, quer dazu ``N/4`` je Richtung. Die Achse ist also die
+    Richtung, deren **beide anderen** Eigenwerte gleich sind — gemessen am
+    Ring aus dem Korpus 1150,8 gegen zweimal 576,6, ein Verhältnis von genau
+    zwei.
+
+    **Die Radien** kommen aus den Rändern des Flecks: Der Abstand zur Achse
+    schwankt zwischen ``R - r`` und ``R + r``, deren Mitte ist der Ringradius
+    und deren halbe Spanne der Röhrenradius. Das setzt einen **ganzen** Ring
+    voraus, und darin liegt die Grenze dieser Einpassung — ein Torusstück, wie
+    es eine Verrundung ist, misst sie noch nicht.
+
+    **Der Rückstand** prüft genau diese Annahme und macht sie damit ehrlich:
+    Er vergleicht den Abstand zur Mittellinie des Rings mit dem Röhrenradius.
+    Wo der Fleck kein ganzer Ring ist, wird er groß, und die Form wird
+    abgelehnt statt geraten (Regel 21). Gemessen: 0,005 am Ring, 0,41 an einer
+    Senkung, 0,43 an einer Kalotte.
+    """
+    normals = np.asarray(body.face_normals[patch], dtype=float)
+    centres = np.asarray(body.triangles_center[patch], dtype=float)
+
+    values, vectors = np.linalg.eigh(normals.T @ normals)
+    spreads = [
+        abs(values[1] - values[2]),
+        abs(values[0] - values[2]),
+        abs(values[0] - values[1]),
+    ]
+    axis = vectors[:, int(np.argmin(spreads))]
+
+    centre = centres.mean(axis=0)
+    relative = centres - centre
+    along = relative @ axis
+    radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
+
+    ring_radius = float(radial.max() + radial.min()) / 2.0
+    tube_radius = float(radial.max() - radial.min()) / 2.0
+    if tube_radius <= EPS_GEOM or ring_radius <= tube_radius:
+        return None
+
+    tube = np.sqrt((radial - ring_radius) ** 2 + along**2)
+    residual = float(np.mean(np.abs(tube - tube_radius)) / tube_radius)
+    # Zeigen die Normalen zur Mittellinie der Röhre hin, ist der Torus
+    # ausgehöhlt — eine Kehle und kein Wulst. Dieselbe Frage wie ``inward``
+    # beim Zylinder, nur um einen Ring herum gestellt.
+    mid = _tube_centres(centre, axis, centres, ring_radius)
+    towards = np.einsum("ij,ij->i", normals, centres - mid)
+    return TorusFit(
+        axis=(float(axis[0]), float(axis[1]), float(axis[2])),
+        centre=(float(centre[0]), float(centre[1]), float(centre[2])),
+        ring_radius=ring_radius,
+        tube_radius=tube_radius,
+        residual=residual,
+        recess=bool(np.mean(towards) < 0.0),
+    )
+
+
+def _tube_centres(
+    centre: np.ndarray, axis: np.ndarray, points: np.ndarray, ring_radius: float
+) -> np.ndarray:
+    """Zu jedem Punkt der nächste Punkt auf der Mittellinie des Rings."""
+    relative = points - centre
+    across = relative - np.outer(relative @ axis, axis)
+    length = np.linalg.norm(across, axis=1)
+    length = np.where(length > EPS_GEOM, length, 1.0)
+    return np.asarray(centre + across / length[:, None] * ring_radius, dtype=float)
 
 
 def _centred_moment(normals: np.ndarray) -> np.ndarray:
