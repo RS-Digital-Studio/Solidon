@@ -38,6 +38,7 @@ from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import object_hash, operation_hash
 from app.core.sketch.serialize import sketch_parameter_references
 from app.core.types import (
+    AskFn,
     BaseParams,
     BoundingBox,
     CancelToken,
@@ -136,7 +137,7 @@ def evaluate(
     names: dict[ObjectId, str] = {}
     findings: list[Finding] = []
     completed: list[OpId] = []
-    pending: list[tuple[str, CachedResult]] = []
+    pending: list[tuple[str, CachedResult, bool]] = []
     solvers: dict[OpId, SolverInfo] = {}
     stopped_at: OpId | None = None
 
@@ -183,6 +184,7 @@ def evaluate(
             stopped_at = operation.id
             break
         cached = cache.get(key) if cache is not None else None
+        watched = _WatchedAsk(ask)
 
         if cached is not None:
             # Unverändert weiterreichen: der Umbau hier warf ohne Not den
@@ -204,7 +206,7 @@ def evaluate(
                 quality=quality,
                 seed=operation.seed,
                 progress=progress,
-                ask=ask,
+                ask=watched,
                 cancelled=token,
                 sources=sources,
             )
@@ -294,7 +296,10 @@ def evaluate(
                     placed,
                     previous_features.get(object_id, {}),
                     operation,
-                    ask,
+                    # Auch hier der Wächter: Die Zuordnung fragt bei einem
+                    # mehrdeutigen Merkmal (§21.3), und diese Antwort steht
+                    # genauso wenig im Dokument wie die einer Operation.
+                    watched,
                     findings,
                     result.transform,
                     previous_bounds.get(object_id),
@@ -342,14 +347,15 @@ def evaluate(
             solvers[operation.id] = result.solver
         completed.append(operation.id)
         if cached is None:
-            pending.append((key, result))
+            pending.append((key, result, not watched.used))
 
     progress(1.0, "")
 
-    # Nur ein vollständiger Durchlauf darf den Cache schreiben (§15.6).
+    # Nur ein vollständiger Durchlauf darf den Cache schreiben (§15.6) — und
+    # nur ein Ergebnis ohne Rückfrage darf über die Sitzung hinaus (§15.7).
     if cache is not None and stopped_at is None:
-        for key, result in pending:
-            cache.put(key, result)
+        for key, result, to_disk in pending:
+            cache.put(key, result, to_disk=to_disk)
 
     scene = Scene(
         objects=objects,
@@ -728,6 +734,38 @@ def nested_references() -> dict[str, Callable[[str], frozenset[str]]]:
         "sketch": sketch_parameter_references,
         "armature": pose_parameter_references,
     }
+
+
+class _WatchedAsk:
+    """Reicht eine Rückfrage weiter und merkt sich, dass es eine gab.
+
+    **Wozu:** Der Cache speichert nur, was eine reine Funktion des Dokuments
+    ist (§15.1). Hat eine Operation unterwegs gefragt, ist ihr Ergebnis keine —
+    die Antwort steht nirgends im Dokument, solange §15.7 nicht umgesetzt ist.
+    Auf der Platte würde daraus stillschweigend eine Annahme: Der Nutzer bekommt
+    beim zweiten Öffnen kein Fenster mehr, und ob er eines bekommt, hängt daran,
+    ob eine Cache-Datei überlebt hat. Regel 21 sagt „nie stillschweigend raten";
+    hier rät die Anwendung manchmal und fragt manchmal, und der Unterschied liegt
+    im Dateisystem.
+
+    Im Speicher bleibt alles wie vorher — dort lebt das Ergebnis eine Sitzung,
+    und innerhalb einer Sitzung wird nicht zweimal gefragt.
+
+    **Diese Klasse verschwindet nicht, wenn §15.7 steht.** Dann hält jede
+    fragende Operation ihre Antwort im Stapel fest, ``used`` bleibt überall
+    falsch, und der Wächter tut nichts mehr — außer für die nächste Operation,
+    die zu fragen anfängt, ohne es aufzuschreiben.
+    """
+
+    __slots__ = ("_ask", "used")
+
+    def __init__(self, ask: AskFn) -> None:
+        self._ask = ask
+        self.used = False
+
+    def __call__(self, question: str, choices: list[str]) -> str:
+        self.used = True
+        return self._ask(question, choices)
 
 
 def _with_nested_context(

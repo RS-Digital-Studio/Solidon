@@ -831,3 +831,71 @@ def test_two_projects_whose_first_source_has_the_same_name_do_not_share_a_result
     second = loaded("plate_holes.stl")
 
     assert first != second, f"das zweite Projekt bekam das Ergebnis des ersten: {first} == {second}"
+
+
+def test_a_result_that_came_from_a_question_stays_out_of_the_long_lived_cache() -> None:
+    """§15.7, bis sie umgesetzt ist: Der Cache speichert nur, was eine reine
+    Funktion des Dokuments ist (§15.1).
+
+    Hat eine Operation unterwegs gefragt, steht die Antwort nirgends im
+    Dokument — auf der Platte würde daraus stillschweigend eine Annahme, und ob
+    der Nutzer gefragt wird, hinge daran, ob eine Cache-Datei überlebt hat.
+    Regel 21 sagt „nie stillschweigend raten"; das wäre manchmal raten und
+    manchmal fragen, entschieden vom Dateisystem.
+
+    Geprüft am **Wort**, nicht an einer Platte: Ob das Ergebnis am Ende in einer
+    Datei landet, entscheidet die Cache-Ebene; ob die Auswertung es freigibt,
+    entscheidet diese Zeile — und nur die ist hier zu Hause.
+    """
+    from pathlib import Path
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.cache import CachedResult
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    class Recorder:
+        """Nimmt entgegen und merkt sich, was freigegeben wurde."""
+
+        def __init__(self) -> None:
+            self.written: list[bool] = []
+
+        def get(self, key: str) -> CachedResult | None:
+            return None
+
+        def put(self, key: str, result: CachedResult, *, to_disk: bool = False) -> None:
+            self.written.append(to_disk)
+
+    load_operations()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    profile = make_profile("centauri-carbon-2", "petg")
+
+    def run(filename: str) -> list[bool]:
+        project = new_project("centauri-carbon-2", "petg")
+        project.document.sources["src_1"] = Source(
+            id="src_1", kind="import", path=f"sources/{filename}", sha256=""
+        )
+        project.sources["src_1"] = (meshes / filename).read_bytes()
+        History(project.document).apply(
+            "Import", [OperationDraft(op="load", params={"source": "src_1", "unit": "auto"})]
+        )
+        recorder = Recorder()
+        evaluate(
+            project.document,
+            profile,
+            sources=ProjectSources(project),
+            cache=recorder,  # type: ignore[arg-type]
+            ask=lambda question, choices: choices[0],
+        )
+        return recorder.written
+
+    # `cube_clean.stl` ist eindeutig Millimeter — keine Rückfrage, also darf es
+    # über die Sitzung hinaus.
+    assert run("cube_clean.stl") == [True]
+    # `bracket_inch.stl` ist zwischen Zoll und Zentimeter mehrdeutig und fragt.
+    assert run("bracket_inch.stl") == [False], (
+        "ein Ergebnis, für das gefragt wurde, darf nicht über die Sitzung hinaus"
+    )
