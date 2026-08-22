@@ -403,7 +403,13 @@ def _explain(editor: QWidget, caption: QWidget | None, sentence: str) -> None:
     Drei Wege für eine Auskunft: Der Tooltip erscheint, wo die Maus steht, der
     ``statusTip`` in der Statuszeile ohne Wartezeit, und
     ``accessibleDescription`` liest ein Vorleser vor (Regel 18 — nicht nur eine
-    Kodierung). Die Beschriftung darf fehlen: Ein Sammelwert steht ohne sie.
+    Kodierung).
+
+    ``caption`` darf ``None`` sein, weil ``QFormLayout.labelForField`` das
+    zurückgibt, sobald eine Zeile über beide Spalten geht (``addRow`` mit einem
+    Argument). Nachgemessen ist der Fall hier keiner: Alle 457 Zeilen des
+    Registers haben eine Beschriftung. Der Zweig steht für die erste Zeile, die
+    keine hat, und nicht für eine, die es schon gibt.
     """
     editor.setToolTip(sentence)
     editor.setStatusTip(sentence)
