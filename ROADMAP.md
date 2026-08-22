@@ -57,7 +57,6 @@ oder er hält ihn nicht fest.
 | Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | eine Entscheidung, was aus der Zeile verschwindet — und einen Test, der sein Thema selbst setzt |
 | Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird. Am 22.08. neu gemessen, und die Aktenlage des Punkts stimmt nicht mehr: 340 px fehlen auf 1600x900 statt 156, die Ablagefläche gibt es als Widget nicht mehr, und es sind **zwei** Kachelbereiche — `more_area` (242 px) ist der größte Einzelposten |
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
-| Benannte Merkmale überstehen keine Boolesche Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung darüber, wann ein benanntes Merkmal wirklich fort ist — vierzehn Ops geben `features={}` zurück, und `_with_features` liest die generierten nur aus der Ausgabe |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
@@ -72,6 +71,8 @@ oder er hält ihn nicht fest.
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
 | Die Antwort der Zuordnung steht nirgends | Das Fundament der Wahrnehmung (22.08.2026) | die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Ein geänderter eigener Baustein wird beim Öffnen nicht gemeldet | Das Fundament der Wahrnehmung (22.08.2026) | eine zweite Quelle für `changed_since_library` — sie liest gepflegte Änderungsverläufe, und ein eigener Baustein hat keinen (§24.4, §24.5). Gefunden von solidon-17 beim Anschließen des Plattencaches |
+| Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
+| Die Zuordnung kennt Kugel und Torus nicht | Das Fundament der Wahrnehmung (22.08.2026) | zwei Arten mehr in der Kostenmatrix von §21.2, dazu Namen in der Oberfläche. Eine Art, die erkannt aber nicht zugeordnet wird, ist ein halber Zustand — dieselbe Konsistenzfrage wie bei den Übersetzungskatalogen, und beim Schneiden des Auftrags zunächst übersehen |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
 | Kein Viewport wird jemals freigegeben | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über die Reichweite — die eine Zeile in `viewport.py` ist behoben, aber `.connect(lambda … self …)` steht an 59 Stellen in `app/ui/`, und jede davon ist ein Ring, sobald der Sender ein Kind von `self` ist. Könnte die gemeinsame Wurzel der vier Absturzpunkte sein: gemessen 7 MB je Fenster, und die Suite baut siebenhundert |
@@ -3460,8 +3461,8 @@ siehe unten.
       stünden danach vor derselben Frage. §25 legt für die Bohrungen keinen
       Kern fest; §30.1 tut es nur für die Skizzen-Ops.
 
-- [ ] **Benannte Merkmale überstehen keine Boolesche Operation — und damit
-      zerbricht die Passung.** Gemessen am eigenen Vorzeigebeispiel: „Dose mit
+- [x] **Benannte Merkmale überstanden keine Boolesche Operation — und damit
+      zerbrach die Passung.** Gemessen am eigenen Vorzeigebeispiel: „Dose mit
       Deckel" öffnen, `label_text` auf die Dose anwenden, und der Prüfbericht
       meldet `fit.missing_feature` als **Fehler**. Der Deckel-Ablauf benennt
       `lid_cavity` und `lid_collar` (§14, sie tragen `provenance="generated"`);
@@ -3479,6 +3480,27 @@ siehe unten.
       Eingabe. `_outside()` filtert bereits nach Hüllquader und wäre der
       Ansatz. Der Satz im Bericht nennt seitdem wenigstens den Grund und
       einen Weg — zurücknehmen und vor der Passung ausführen.
+
+      **Gebaut in `b76df19`, und die geforderte Entscheidung ist darin
+      ausgeführt.** `_with_features` nimmt erzeugte Merkmale seither aus
+      `previous` mit, statt sie aus der Ausgabe zu lesen; die Stellen mit
+      `features={}` gibt es weiter — fünfzehn, zwölf unter `geom/` und je eine
+      in `brep/ops.py`, `scene/ops.py`, `sketch/ops.py` —, nur sind sie
+      folgenlos geworden. Die Frage „wann ist ein benanntes Merkmal wirklich
+      fort" steht als Dreiteilung im Code: Ist die Art **erkennbar**
+      (`DETECTABLE_KINDS`), wird das Merkmal wie ein erkanntes zugeordnet und
+      fällt heraus, wenn es wirklich weg ist — **mit Befund**, nicht lautlos.
+      Ist sie es nicht (Gewinde), reist es ungeprüft mit, weil es geprüft nie
+      einen Partner fände. Gibt eine Operation `features={}` zurück, wird das
+      Merkmal mitgenommen. Für jeden der drei Fälle steht ein Test.
+
+      **Nachgewiesen am 22.08.2026 an einer echten Booleschen Differenz** —
+      die drei Tests fahren `thicken`, also genau nicht den Fall aus der
+      Überschrift. Platte mit erzeugtem `op3.bore_1`, dann
+      `trimesh.boolean.difference` mit einer zweiten Bohrung: Das erzeugte
+      Merkmal überlebt mit seiner Provenienz, die neu entstandene Bohrung wird
+      als erkanntes Merkmal daneben geführt, keine Befunde. Gemessen von
+      3d-druck-3a.
 
 ---
 
@@ -4450,6 +4472,23 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       führt `"cone"`, und §42 nennt den Kegel nicht mehr unter dem, was fehlt.
       Gebaut von 3d-druck-3a.
 
+- [ ] **Ein Verrundungsradius ist nicht abzulesen.** Die Krümmungskarte aus
+      §18.4 färbt, was rund ist, und sagt nicht, *wie* rund — der Radius einer
+      Verrundung steht nirgends. Er steht im Torusstück, das sie erzeugt, und
+      dafür muss der Torus ein Merkmal sein. Damit ist dieser Punkt der
+      eigentliche Gewinn der Kugel-und-Torus-Erkennung (§41) und nicht ihr
+      Nebenprodukt: Wer eine heruntergeladene Verrundung nachbauen oder
+      angleichen will, braucht die Zahl und nicht die Farbe.
+- [ ] **Die Zuordnung kennt Kugel und Torus nicht.** Die Kostenmatrix aus §21.2
+      führt die Merkmalsarten einzeln; zwei neue Arten, die erkannt werden,
+      aber in der Zuordnung fehlen, sind ein halber Zustand — sie tauchen im
+      Baum auf und finden über eine Auswertung hinweg kein Gegenstück. Dazu
+      gehören ihre Namen in der Oberfläche, in allen fünf Katalogen.
+
+      Beim Schneiden des Auftrags für Kugel und Torus zunächst abgeschnitten
+      (3d-druck-64), und das war die falsche Grenze: Dieselbe Konsistenzfrage
+      wie bei den Übersetzungen, die bewusst dazugenommen wurden. Acht Arten,
+      die überall gleich auftauchen, schlagen zehn, die auseinanderdriften.
 - [ ] **Kugel und Torus fehlen der Erkennung.** Vier Arten waren es, fünf sind
       es: `hole`, `pin`, `face`, `edge_loop`, `cone`. Was fehlt, ist die Kugel
       (Pfanne, Kalotte) und der Torus — und mit dem Torus fehlt der **Radius
