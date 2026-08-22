@@ -436,13 +436,28 @@ def test_a_test_process_is_found_by_its_command_not_its_ancestry() -> None:
     Elternprozess endet. Beim nächsten Mal wäre der Lauf gesund gewesen, die
     Warnung trotzdem gekommen, und jemand hätte ihn abgebrochen.
 
-    Dieser Test ist sein eigener Zeuge: Er läuft selbst unter ``pytest``, also
-    muss die Suche am Kommando ihn finden.
+    Dieser Test ist sein eigener Zeuge: Er läuft unter ``pytest``, also muss
+    der Wächter ihn sehen.
+
+    **Gesehen heißt: er selbst oder ein Vorfahre.** Unter ``pytest-xdist``
+    läuft dieser Test in einem Worker, und dessen Kommandozeile ist ein
+    nacktes ``python -c`` — weder ``pytest`` noch ``execnet`` stehen darin.
+    Die erste Fassung fragte nur ``os.getpid() in _test_processes()`` und fiel
+    deshalb unter ``-n 2``, gefunden von 3d-druck-b8 beim Parallelisieren der
+    Suite. Der **Wächter** war nie falsch: Er nimmt zu jedem am Kommando
+    gefundenen Prozess dessen Unterbaum, und über den kommt der Worker herein.
+    Falsch war der Test, der eine Hälfte des Verfahrens prüfte und sie für das
+    Ganze hielt — genau deshalb stehen beide Wege im Werkzeug: Der Baum wird
+    über die Kette gelesen, und wo die Kette reißt, über das Kommando.
     """
     import os
 
-    assert os.getpid() in gate_lock._test_processes(), (
-        "der laufende pytest findet sich nicht selbst — die Suche am Kommando greift nicht"
+    watched: set[int] = set()
+    for pid in gate_lock._test_processes():
+        watched |= gate_lock._descendants(pid)
+
+    assert os.getpid() in watched, (
+        "der laufende pytest findet sich nicht selbst — weder über das Kommando noch über die Kette"
     )
 
 
