@@ -107,7 +107,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
-| **Ein mitgeliefertes Beispiel fragt beim Öffnen viermal nach Kegeln** | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, ob ein Kegel überhaupt eigenständig zugeordnet gehört — zwei gespiegelte Senkungen sind für `feature_vector` gleich weit entfernt, und die Rivalenlogik hält an. Kundenweg §2.2, `test_examples.py` rot |
 | Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
 | Der Testkorpus hat keinen verrundeten Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Datei mit Kehle. Ein Regressionsnetz, das die Alltagsformen ausspart, meldet Erfolg über dem, was es nicht enthält (§34) |
@@ -4684,40 +4683,50 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Verwandt mit der Testart „Anschluss" (§35): Auch dort ist jeder Test für
       sich grün.
 
-- [ ] **Ein mitgeliefertes Beispiel fragt beim Öffnen viermal nach Kegeln.**
+- [x] **Ein mitgeliefertes Beispiel fragte beim Öffnen viermal nach Kegeln.**
       Gemessen am 22.08.2026 an `aushoehlen-und-teilen.p3d` mit einem
-      protokollierenden ``ask``:
+      protokollierenden ``ask``: vier modale Fenster, „Welches Merkmal
+      entspricht cone_1?" gegen `cone_2`, und die vierte Frage wiederholte die
+      erste. Ohne ``ask`` warf `_refuse_to_guess`, und
+      `test_an_example_opens_and_computes[aushoehlen-und-teilen]` war rot.
 
-          Welches Merkmal entspricht cone_1?  -> [cone_1, cone_2, Verwerfen]
-          Welches Merkmal entspricht cone_3?  -> [cone_2, cone_1, Verwerfen]
-          Welches Merkmal entspricht cone_1?  -> [cone_1, cone_2, Verwerfen]
-          Welches Merkmal entspricht cone_3?  -> [cone_2, cone_1, Verwerfen]
-
-      Ohne ``ask`` wirft `_refuse_to_guess`, und
-      `test_an_example_opens_and_computes[aushoehlen-und-teilen]` ist rot.
-
-      **Warum das schwerer wiegt als ein roter Test.** Ein Kunde öffnet ein
+      **Warum das schwerer wog als ein roter Test.** Ein Kunde öffnet ein
       **mitgeliefertes Beispiel** — den freundlichsten Weg, den die Anwendung
-      hat (§2.2) — und bekommt vier modale Fenster, die ihn nach `cone_1` gegen
+      hat (§2.2) — und bekommt vier Fenster, die ihn nach `cone_1` gegen
       `cone_2` fragen. Er weiß nicht, was ein `cone_1` ist, es gibt keinen
       richtigen Antwortknopf, und die vierte Frage wiederholt die erste.
-      Anhalten und Fragen ist Regel 21 und richtig; **diese** Frage ist es
+      Anhalten und Fragen ist Regel 21 und richtig; **diese** Frage war es
       nicht.
 
-      **Die Sache dahinter:** Zwei Kegel sind ununterscheidbar und werden
-      trotzdem einzeln zugeordnet. Bei einem ausgehöhlten und geteilten Körper
-      sind die Senkungen symmetrisch — `feature_vector` sieht Lage, Achse und
-      Durchmesser, und die sind bei zwei gespiegelten Kegeln gleich weit
-      entfernt. Die Rivalenlogik hält an, nach ihrer eigenen Regel zu Recht.
+      **Behoben am selben Tag — und die Ursache war eine andere als die erste
+      Diagnose.** 3d-druck-64 hatte auf zwei gespiegelte Senkungen getippt, die
+      für `feature_vector` gleich weit entfernt liegen. Das trifft zu und war
+      trotzdem nicht der Grund. 3d-druck-3a hat gemessen statt angenommen:
+      `CURVATURE_JUMP` testweise so gesetzt, dass nie nachgetrennt wird — also
+      den Zustand vor ihrer eigenen Änderung —, und dasselbe Beispiel gefahren.
 
-      Naheliegend ist, dass ein Kegel **kein eigenständig zuzuordnendes
-      Merkmal** ist, sondern zu seiner Bohrung gehört und mit ihr wandert —
-      dasselbe Verhältnis, das `_sinks_into` seit dem 22.08. für die Erkennung
-      herstellt. Zu messen, bevor man es glaubt.
+          ohne Krümmungstrennung -> complete: True    obj_2: cone 2
+          mit  Krümmungstrennung -> complete: False   obj_2: cone 3
 
-      *Nebenbei belegt der Fall, wofür §15.7 gebaut wurde und wofür nicht:
-      Beim zweiten Öffnen stünde die Antwort im Stapel und es käme keine Frage
-      mehr. Beim ersten schon — und das erste ist das, was ein Kunde erlebt.*
+      **Die neue Trennung hatte einen Kegel in zwei zerlegt.** Erst dadurch
+      wurden `cone_1` und `cone_2` zu Rivalen. Der Grund ist eine Eigenschaft
+      des Kegels, die Torus und Zylinder nicht haben: **Er hat keine feste
+      Krümmung.** Sein Querradius wächst zur Grundfläche hin stetig, und über
+      eine lange Senkung summiert sich das zu einem Sprung, der wie eine
+      Flächengrenze aussieht.
+
+      Behoben mit demselben Prinzip, das an diesem Tag schon zweimal getragen
+      hat: **additiv am Ende.** Nachgetrennt wird nur noch, wenn auf den Fleck
+      keine einzige Form gepasst hat — wo etwas erkannt wurde, bleibt es. Damit
+      kann der Fall **strukturell** nicht wiederkommen, nicht bloß in diesem
+      Beispiel. Über den ganzen Korpus: null Änderung an achtzehn Körpern.
+
+      *Zwei Lehren, die bleiben:* Die erste Diagnose war plausibel, naheliegend
+      und falsch — widerlegt hat sie eine Messung, die den **eigenen** letzten
+      Eingriff versuchsweise zurücknimmt. Und der Fall zeigt die Grenze von
+      §15.7: Beim zweiten Öffnen stünde die Antwort im Stapel und es käme keine
+      Frage mehr. Beim ersten schon — und das erste ist das, was ein Kunde
+      erlebt.
 
 - [ ] **Die Krümmungskarte misst das Netz und nicht den Körper.**
       `curvature_map` (`app/core/perceive/maps.py`) ist gebaut, registriert und
