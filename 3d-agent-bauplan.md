@@ -505,7 +505,7 @@ Die Signaturen, an denen sich alle Module ausrichten. Sie stehen in
 @dataclass(frozen=True)
 class Feature:
     id: str  # "hole_3" oder "op4.pin_1"
-    kind: Literal["hole", "face", "edge_loop", "pin", "thread"]
+    kind: Literal["hole", "face", "edge_loop", "pin", "cone", "thread"]  # cone: §21.1
     provenance: Literal["detected", "generated"]
     params: dict  # Durchmesser, Achse, Tiefe, Fläche …
     face_indices: tuple[int, ...]
@@ -2693,9 +2693,12 @@ mit einer Projektdatei.
 - Die Zielwerte in §31 gelten mit dem übersetzten Schichtkern; ohne ihn ist die
   Schichtanalyse an der Decke des Interpreters, und das ist an drei Verfahren
   gemessen und nicht geschätzt
-- Aus einem Netz erkennt die Wahrnehmung Zylinder und Ebenen, keine Kegel,
-  Kugeln und Tori (§21.1) — eine Senkung bleibt bis dahin zwei Merkmale
-  nebeneinander
+- Aus einem Netz erkennt die Wahrnehmung Zylinder, Kegel und Ebenen, keine
+  Kugeln und Tori (§21.1, `DETECTABLE_KINDS`) — und ohne den Torus hat eine
+  Verrundung keinen Radius. Der Kegel kam am 22.08.2026 dazu; seither ist eine
+  Senkung nicht mehr nur ein zweites Merkmal neben der Bohrung, sondern geht in
+  sie ein: Ob ein gesenktes Loch durchgeht, rechnet `_is_through` aus beiden
+  zusammen (`test_a_countersunk_bore_is_still_a_through_hole`)
 
 ---
 
