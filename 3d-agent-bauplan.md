@@ -1746,7 +1746,7 @@ Gemessen auf dem Referenzkorpus (§34), als Teil der Suite protokolliert.
 | Boolesche Op, 200 000 Dreiecke | unter 2 s | 1,14 s — im Ziel |
 | Feature-Erkennung, 200 000 Dreiecke | unter 1 s | 0,80 s — im Ziel |
 | Analysekarte Wandstärke | unter 3 s, im Hintergrund | 4,25 s — **darüber** |
-| Projekt öffnen aus Plattencache | unter 1 s | 0,21 s beim zweiten Öffnen, 5,06 s beim ersten |
+| Projekt öffnen aus Plattencache | unter 1 s | 0,56–0,67 s beim zweiten Öffnen, 4,87 s beim ersten |
 | Parameteränderung → sichtbares Ergebnis | unter 2 s, nur betroffene Zweige | 8 ms — im Ziel, und die Zusage hält |
 | Schichtanalyse, 200 000 Dreiecke, 0,2 mm | unter 300 ms | 1,22 s auf 328 000 — **darüber** |
 | Skizzen-Solver, 200 Bedingungen | unter 100 ms | 118 ms — knapp darüber |
@@ -1765,7 +1765,11 @@ im Tor grundsätzlich nicht messbar, und der Rest hält.
 Drei Zeilen haben sich dabei geändert, und zwei davon nicht durch schnelleren
 Code. *Anwendungsstart* ist zweigeteilt (siehe unten), *Projekt öffnen* hat
 überhaupt erst einen Weg bekommen — der Plattencache war gebaut und nicht
-angeschlossen (§38) —, und *Anzeigeaufbau* ist neu: Die Zeile darüber ist eine
+angeschlossen (§38); gemessen ist die Zeile jetzt **durch die Anwendung**, also
+zweimal `Session()`, importieren, speichern, öffnen, und nicht über einen
+handgesetzten Cache-Eintrag. In den 560 ms steckt das Lesen eines
+65-MB-Containers mit; die Auswertung selbst ist der kleinere Teil.
+*Anzeigeaufbau* ist neu: Die Zeile darüber ist eine
 Bildrate und im Tor nicht messbar, aber die eine teure Rechnung zwischen
 „Körper geladen" und „navigierbar" ist es sehr wohl, und sie ist der Grund,
 warum eine Million Dreiecke überhaupt flüssig gehen — gezeichnet werden 200 000.
@@ -2021,6 +2025,14 @@ irgendetwas anfasste, und grün, obwohl er nichts prüfte. Und `clear()` leerte
 den *Speicher* statt den Cache, während sein einziger Aufrufer sich auf den
 Namen verließ. Jedes Mal stand neben der Sache etwas, das ihr ähnlich sieht,
 und die Prüfung griff danach.
+
+**Und es trifft nicht nur Prüfungen, sondern auch Messungen.** Eine vierte
+Fassung desselben Fehlers, am selben Tag: Um zu zählen, wie oft eine Prüfsumme
+gerechnet wird, wurde die Funktion in dem Modul eingewickelt, in dem sie steht —
+der Aufrufer hatte sie aber mit `from … import` geholt und hielt damit seine
+eigene Referenz. Der Zähler blieb bei null, und die Auskunft wäre „passiert nie"
+gewesen, obwohl es passierte. Wer messen will, wickelt dort ein, wo die Frage
+sitzt, nicht dort, wo die Funktion wohnt.
 
 Die Gegenfrage, die es findet, ist immer dieselbe: **Was müsste kaputt sein,
 damit dieser Test rot wird — und ist das dasselbe wie das, wovor er schützen
@@ -2308,14 +2320,22 @@ und ohne Schlüssel geht sie nirgendwohin.
   Dieselbe Schranke braucht den Zustand der eigenen Bausteine (§24.4), denn ein
   geändertes Maß darin bewegt den Hash ebenfalls nicht.
 
-  **Der Schlüssel muss decken, wovon das Ergebnis abhängt — und das ist mehr,
-  als es aussieht.** Ein Quellparameter trägt einen Bezeichner, `src_1`, und
+  **Der Schlüssel muss decken, wovon das Ergebnis abhängt — vollständig und
+  trotzdem umsonst.** Ein Quellparameter trägt einen Bezeichner, `src_1`, und
   jedes Projekt nennt seine erste Quelle so; zwei völlig verschiedene Dateien
   hatten damit denselben Schlüssel, und ein Projekt bekam die Geometrie eines
   anderen. Also steht dort die Inhaltsprüfsumme. Dasselbe gilt für den Stand der
   eigenen Bausteine (§24.4) und für die Fassung der Anwendung: Wo eine Größe das
   Ergebnis ändert, ohne im Schlüssel zu stehen, ist ein Cache kein
   Zwischenspeicher, sondern eine Verwechslung.
+
+  Dass die Inhaltsprüfsumme nichts kostet, liegt an einer zweiten Zusage: Jede
+  Quelle kennt ihren Inhalt **von ihrer Entstehung an**, nicht erst vom
+  Speichern. Gemessen in der laufenden Anwendung: zwei Nachfragen nach der
+  Kennung, beide auf dem schnellen Weg, null gerechnet. Gerechnet wird nur bei
+  einer verknüpften Quelle ohne Prüfsumme — die gibt es in der Anwendung heute
+  nicht, und sie muss jedes Mal neu gelesen werden, weil eine Datei draußen sich
+  zwischen zwei Auswertungen geändert haben kann.
 
   **Und daraus folgt eine Regel, die über den Cache hinausgeht:** Eine
   Cache-Ebene, die länger lebt als eine Sitzung, ist keine Erweiterung, sondern
