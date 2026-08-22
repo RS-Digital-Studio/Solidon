@@ -82,6 +82,13 @@ das *neben* dem Testlauf stand.
   Ein Lauf mit `-q 2>&1 | tail -25` gab anderthalb Stunden lang **kein einziges
   Zeichen** aus und stand dabei längst. In eine Datei schreiben und die lesen;
   wer den Fortschritt sehen will, nimmt `python -u`.
+  **Das gilt für das Tor-Skript genauso, und dort kostet es mehr.**
+  `suite-getrennt.sh | tail -30` berichtete am 22.08.2026 „Exit 0" über einer
+  Zeile `Läufe mit Fehler: 4` — zweimal hintereinander wurde ein roter Lauf für
+  grün gehalten. `set -o pipefail` oder `${PIPESTATUS[0]}` retten den
+  **Rückgabewert**; die **Namen** rettet nur die Ausgabe in eine Datei. Und die
+  braucht man: „vier" sagt nicht „welche vier", und ohne die Namen fiel nicht
+  auf, dass eine der Dateien **vor** der Schlusszeile stirbt und nicht danach.
 
 * **Die Schlusszeilen erscheinen erst am Schluss.** `grep -cE "^(FAILED|ERROR)"`
   über ein laufendes Protokoll liefert immer null, auch wenn zwei Tests längst
