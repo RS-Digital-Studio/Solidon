@@ -70,6 +70,34 @@ Deutsche Docstrings sind in `tests/` üblich und in Ordnung; die Sprachprüfung
 gilt den Bezeichnern in `app/`. Ein Test beschreibt, **was** er sicherstellt und
 **warum** — der Name allein reicht dafür selten.
 
+## Den Lauf messen, nicht einen Filter darüber
+
+Drei Fehlalarme an zwei Tagen, alle aus derselben Wurzel: Gemessen wurde etwas,
+das *neben* dem Testlauf stand.
+
+* **Kein `| tail`, kein `| head`, keine Pipe um `pytest`.** Der Rückgabewert der
+  Pipe ist der des **letzten** Glieds, nicht der von pytest — ein Absturz mit
+  139 sah zweimal wie ein grüner Lauf aus. Und pytest puffert hinter einer Pipe:
+  Ein Lauf mit `-q 2>&1 | tail -25` gab anderthalb Stunden lang **kein einziges
+  Zeichen** aus und stand dabei längst. In eine Datei schreiben und die lesen;
+  wer den Fortschritt sehen will, nimmt `python -u`.
+
+* **Die Schlusszeilen erscheinen erst am Schluss.** `grep -cE "^(FAILED|ERROR)"`
+  über ein laufendes Protokoll liefert immer null, auch wenn zwei Tests längst
+  rot sind — die `FAILED`-Zeilen schreibt pytest in der Zusammenfassung. Gezählt
+  wird über die **Fortschrittszeichen** (`.` `s` `F` `E` `x`), und ihre Position
+  im Strom nennt zusammen mit `pytest --collect-only -q` den Namen des Tests.
+
+* **Die Zusicherung ist der Exit-Code, die Zählzeile ist eine Anzeige.** Das gilt
+  auch für `suite-getrennt.sh`: Es zählt „Läufe mit Fehler: N" und gibt sie als
+  Exit zurück. Wer die Zeile liest statt `$?`, misst wieder einen Filter.
+
+Und die Umkehrung, die dabei aufgefallen ist: Ein Lauf, der **grün meldet und
+rot endet**, ist kein roter Test. Drei Fensterdateien enden nach „N passed" mit
+`0xC0000409` beziehungsweise einer Zugriffsverletzung — ein Riss beim Abbau. Der
+Unterschied steht in `ROADMAP.md`; wer ihn nicht kennt, sucht den Fehler in
+einem Test, der nie fehlgeschlagen ist.
+
 ## Die Gegenprobe
 
 Ein neuer Test, der einen Fund festnagelt, wird **einmal ohne den Fix gefahren**.

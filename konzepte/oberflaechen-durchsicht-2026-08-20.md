@@ -147,28 +147,36 @@ Von den 19 Gebieten der Durchsicht liegen elf als Rohfunde vor. Nie gelaufen:
 `druckdialog` · `chat` · `skizze` · `viewport` · `webseite` ·
 `barrierefreiheit` · `wartezeit` · `handbuch`
 
-Die Workflow-Skripte liegen in
-`.claude/.state/oberflaechen-durchsicht-2026-08-19/workflow-skripte/` und sind
-ohne Prüfstufe gebaut; die Gebietsliste `AREAS` auf die acht kürzen und
-starten. Der fertige Auftragstext für eine zweite Sitzung steht in
-`AUFTRAG-ZWEITE-SITZUNG.md` daneben.
+Wie sie gefahren werden, steht hier bewusst nicht mehr.
 
-> **Nachgetragen am 22.08.2026.** Dieser Punkt stand in keinem Register und
-> steht jetzt in `ROADMAP.md` unter „Die Oberflächendurchsicht, zweiter Teil".
+> **Berichtigt am 22.08.2026, zweimal am selben Tag.** Dieser Absatz nannte zwei
+> Workflow-Skripte unter
+> `.claude/.state/oberflaechen-durchsicht-2026-08-19/workflow-skripte/` samt
+> einem fertigen Auftragstext daneben, und beides als *den* Weg, wie es
+> weitergeht.
 >
-> Dabei fiel auf, was den Punkt teurer machte, als er aussah: **Das Material,
-> das dieser Absatz nennt, war nicht eingecheckt.** `.gitignore` schloss
-> `.claude/.state/` aus; von dort waren 31 Dateien bewusst per `git add -f`
-> aufgenommen (`716d1bb`), aber weder `AUFTRAG-ZWEITE-SITZUNG.md` noch die
-> Workflow-Skripte. In einem frischen Klon beschrieb dieser Absatz damit einen
-> nächsten Arbeitsschritt, dessen sämtliches Material fehlte.
+> **Robert hat entschieden, dass die Workflow-Skripte wegfallen.** Damit ist auch
+> der Auftragstext hinfällig, jedenfalls in seinem Kern: Er bestand aus der
+> Workflow-Freigabe und der Anweisung, die Gebietsliste `AREAS` zu kürzen.
 >
-> **Erledigt am 22.08.2026:** Der ganze Ordner ist eingecheckt, 139 Dateien.
-> Ausgenommen bleiben allein die zwei Laufzeitmarken des Stop-Hooks. Anlass war
-> nicht dieser Punkt, sondern eine allgemeinere Vorgabe — an diesem Projekt wird
-> auf drei Maschinen gearbeitet, und was nur auf einer liegt, ist auf den
-> anderen zweien nicht fortsetzbar. Der nächste Schritt braucht damit nur noch
-> einen Lauf und kein Suchen mehr.
+> **Sie liegen trotzdem im Repository, und das ist kein Widerspruch.** Beim
+> Aufnehmen des Sitzungszustands (`a92b0bc`, „Der Sitzungszustand reist mit")
+> ist der ganze Ordner mitgekommen — dort ging es darum, dass drei Maschinen
+> denselben Stand sehen, nicht darum, welches Werkzeug noch gilt. Vorhanden ist
+> also beides; *empfohlen* ist keines mehr.
+>
+> **Was offen bleibt, ist die Arbeit, nicht das Werkzeug.** Die acht Gebiete sind
+> nie gelaufen, und der Punkt steht weiter in `ROADMAP.md` unter „Die
+> Oberflächendurchsicht, zweiter Teil". Wie sie gefahren werden, entscheidet die
+> Sitzung, die sie fährt.
+>
+> Zwei Fallen aus dem Auftragstext waren mehr wert als er selbst und stehen
+> jetzt dauerhaft in `.claude/rules/tests.md` („Den Lauf messen, nicht einen
+> Filter darüber"): keine Pipe um `pytest` — der Rückgabewert ist der des
+> letzten Glieds, und ein Absturz mit 139 sah zweimal wie ein grüner Lauf aus —,
+> und die Schlusszeilen eines Laufs erscheinen erst am Schluss. Beide haben am
+> 22.08. noch einmal zugeschlagen. Die übrigen zwei (`load_operations()` vor
+> `build_application()`, `QScreen.grabWindow` statt `QWidget.grab`) stehen in §6.
 
 ## 6. Wie man mit den 233 Rohfunden arbeitet
 
