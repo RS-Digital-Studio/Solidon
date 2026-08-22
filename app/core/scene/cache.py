@@ -230,6 +230,7 @@ def _feature_to_data(feature: Feature) -> dict[str, Any]:
         "provenance": feature.provenance,
         "params": dict(feature.params),
         "face_indices": list(feature.face_indices),
+        "created_by": feature.created_by,
     }
 
 
@@ -240,6 +241,14 @@ def _feature_from_data(data: dict[str, Any]) -> Feature:
         provenance=data["provenance"],
         params=data["params"],
         face_indices=tuple(data["face_indices"]),
+        # **Mit ``get`` und nicht über den Index.** Der Cache ist hashbasiert
+        # und wegwerfbar — nur weggeworfen wird er nicht, wenn ein Feld
+        # dazukommt: Der Hash steht über dem Operationsstapel, nicht über der
+        # Gestalt dieser Datei. Ein Eintrag von gestern kennt ``created_by``
+        # nicht, und ein ``KeyError`` beim Lesen des Caches wäre ein Fehler
+        # ohne Handlungsvorschlag an einer Stelle, an der es nichts zu
+        # entscheiden gibt.
+        created_by=data.get("created_by"),
     )
 
 

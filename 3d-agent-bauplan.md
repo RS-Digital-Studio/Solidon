@@ -504,11 +504,12 @@ Die Signaturen, an denen sich alle Module ausrichten. Sie stehen in
 # ---- Geometrie und Objekte -------------------------------------------
 @dataclass(frozen=True)
 class Feature:
-    id: str  # "hole_3" oder "op4.pin_1"
+    id: str  # "hole_3" — ein Präfix je Operation wird nicht vergeben, s. §21.2
     kind: Literal["hole", "face", "edge_loop", "pin", "cone", "sphere", "torus", "thread"]
     provenance: Literal["detected", "generated"]
     params: dict  # Durchmesser, Achse, Tiefe, Fläche …
     face_indices: tuple[int, ...]
+    created_by: OpId | None  # welcher Schritt es erzeugte, None bei erkannten
 
 
 @dataclass
@@ -1212,15 +1213,40 @@ Deshalb steht dort eine eigene, strengere Schwelle (`ROUND_TOLERANCE`, 0,02),
 und deshalb kommt die Frage zuletzt. Ein `hole_1`, das plötzlich `sphere_1`
 hieße, wäre für jede Bohrungs-Operation unsichtbar.
 
-**Was weiter nicht erkannt wird**, ist ein Torus**stück**: Die Einpassung liest
-Ring- und Röhrenradius aus den Rändern des Flecks und setzt damit einen ganzen
-Ring voraus. Damit hat eine Verrundung weiterhin keinen Radius — der Weg dahin
-ist die Krümmungskarte aus §18.4 und steht als eigener Punkt.
+**Ein Torusstück misst die Einpassung seit dem 22.08.2026**, und zwar bis
+herunter zu etwa einem Achtelring: Achse aus den Normalen, Achsenpunkt aus
+einem zweiten linearen System, beide Radien aus dem **Meridiankreis** — der
+Meridianschnitt eines Torus ist ein Kreis, und eine Kreiseinpassung braucht
+keinen ganzen Kreis. Darunter meldet es der Rückstand, und die Form wird
+abgelehnt statt geraten.
+
+**Isoliert wird das Stück trotzdem nicht**, und daran hängt der
+Verrundungsradius weiter. Eine Verrundung schließt **tangential** an — das ist
+ihr Zweck —, und die Fleckenbildung trennt an Knicken. Gemessen an einer Säule
+mit verrundetem Fuß: Mantel und Kehle sind **ein** Fleck, und heraus kommt
+weder ein Zylinder noch ein Torus. Der Weg dahin ist eine Trennung nach
+**Krümmung** statt nach Kanten; die Karte aus §18.4 misst dafür bislang Grad
+statt Millimeter. Beides steht als eigener Punkt.
 
 ### 21.2 Das ID-Problem
-**Erzeugte Features — Provenienz.** Was eine Operation selbst erzeugt, bekommt
-eine abgeleitete ID: `op4.pin_1`. Keine Erkennung, keine Mehrdeutigkeit. Mit
+**Erzeugte Features — Provenienz.** Was eine Operation selbst erzeugt, trägt
+den Schritt, der es erzeugte, in einem eigenen Feld: `created_by`. Keine
+Erkennung, keine Mehrdeutigkeit. Mit
 der Bausteinbibliothek (§24) wächst dieser Anteil deutlich.
+
+**Nicht über die ID.** Bis zum 22.08.2026 stand hier eine abgeleitete Kennung
+(`op4.pin_1`) — sie wurde im Produktivcode nie vergeben und nie gelesen, sie
+stand allein in Tests, die sie von Hand hinschrieben. Entschieden wurde
+dagegen, und der Grund ist dieser Abschnitt selbst: Die ID ist der Schlüssel,
+an dem spätere Operationen hängen, und sie trägt schon eine Bedeutung. Ihr eine
+zweite aufzuladen machte jede Änderung am Erzeuger zu einer Umbenennung — und
+verlangt wird hier gerade Stabilität. Ein eigenes Feld sagt eine Sache, bleibt
+leer, wo niemand es füllt, und lässt alte Projektdateien unberührt.
+
+**Gesetzt wird es einmal, beim Entstehen.** Wer ein Merkmal durchreicht, hat es
+nicht erzeugt. Das ist der Unterschied zu `SceneObject.created_by`, das bei
+jeder Operation neu gesetzt wird, die das Objekt ausgibt, und deshalb auf die
+zuletzt beteiligte zeigt statt auf die erzeugende.
 
 **Ein erzeugtes Merkmal bietet immer mindestens eine Handlung an: den Schritt
 zu ändern, der es erzeugt hat.** Das ist der Ausweg aus einer Sackgasse, die

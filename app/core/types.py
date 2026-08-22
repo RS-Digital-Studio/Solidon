@@ -211,6 +211,24 @@ class Feature:
     params: Mapping[str, Any]
     """Durchmesser, Achse, Tiefe, Fläche … in Millimetern."""
     face_indices: tuple[int, ...] = ()
+    created_by: OpId | None = None
+    """Welcher Schritt dieses Merkmal erzeugt hat — ``None`` bei erkannten.
+
+    **Die Antwort auf die eine Handlung, die §21.2 jedem erzeugten Merkmal
+    zusagt:** den Schritt zu ändern, der es erzeugt hat. Ohne dieses Feld gab
+    es sie nirgends. ``provenance`` sagt nur *dass* ein Merkmal erzeugt wurde;
+    das ID-Präfix ``op4.pin_1``, das §21.2 als Beispiel führt, wird im
+    Produktivcode nirgends vergeben und nirgends gelesen — es steht allein in
+    Tests, die es von Hand hinschreiben. Und :attr:`SceneObject.created_by`
+    beantwortet eine andere Frage: Es wird bei **jeder** Operation neu gesetzt,
+    die das Objekt ausgibt, und zeigt damit auf die zuletzt beteiligte statt
+    auf die erzeugende.
+
+    Gesetzt wird es **einmal**, wenn das Merkmal entsteht, und danach nie
+    wieder — sonst hätte es denselben Fehler wie das Feld am Objekt. Ein
+    erkanntes Merkmal behält ``None``, und der Eintrag „diesen Schritt ändern"
+    entfällt dort ersatzlos: Es hat keinen Erzeuger, und ein Menüeintrag, der
+    ins Leere führt, ist schlechter als keiner (§21.2)."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -228,7 +246,7 @@ class SceneObject:
     """Ein Körper in der Szene."""
 
     id: ObjectId
-    name: str
+    name: TranslatableText | str
     mesh: Mesh
     kind: ObjectKind = "mesh"
     features: dict[FeatureId, Feature] = field(default_factory=dict)

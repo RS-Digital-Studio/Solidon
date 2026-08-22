@@ -463,6 +463,67 @@ def test_a_generated_feature_survives_an_operation_that_returns_none() -> None:
     assert features["op3.bore_1"].provenance == "generated"
 
 
+def test_a_generated_feature_learns_which_step_made_it() -> None:
+    """§21.2 sagt jedem erzeugten Merkmal eine Handlung zu — „den Schritt
+    ändern, der es erzeugt hat". Die Antwort darauf gab es bis zum 22.08.2026
+    nirgends.
+
+    ``provenance`` sagt nur *dass* ein Merkmal erzeugt wurde. Das ID-Präfix
+    ``op4.pin_1``, das §21.2 als Beispiel führt, wird im Produktivcode nirgends
+    vergeben und nirgends gelesen — es steht allein in Tests, die es von Hand
+    hinschreiben, dieser hier eingeschlossen. Und ``SceneObject.created_by``
+    beantwortet eine andere Frage.
+    """
+    mesh = one_hole_plate()
+    bore = next(iter(holes_of(mesh).values()))
+    entry = _made_by(mesh, {"bore_1": _generated(bore, "bore_1")})
+
+    assert entry.features["bore_1"].created_by == 4, "the step that made it"
+
+
+def test_passing_a_feature_along_is_not_making_it() -> None:
+    """Und die Nummer bleibt stehen, wenn eine spätere Operation dasselbe
+    Merkmal erneut ausgibt.
+
+    Das ist der Fehler, den ``SceneObject.created_by`` macht: Es wird bei jeder
+    Operation gesetzt, die das Objekt ausgibt, und zeigt deshalb auf die
+    zuletzt beteiligte statt auf die erzeugende. Wer ein Merkmal durchreicht,
+    hat es nicht erzeugt.
+    """
+    import dataclasses
+
+    mesh = one_hole_plate()
+    bore = next(iter(holes_of(mesh).values()))
+    older = dataclasses.replace(_generated(bore, "bore_1"), created_by=2)
+    entry = _made_by(mesh, {"bore_1": older})
+
+    assert entry.features["bore_1"].created_by == 2, "step 4 only passed it on"
+
+
+def test_a_detected_feature_has_no_maker() -> None:
+    """Ein erkanntes Merkmal behält ``None``, und der Menüeintrag entfällt dort
+    ersatzlos — er führte ins Leere, und das ist schlechter als keiner (§21.2).
+    """
+    assert all(hole.created_by is None for hole in holes_of(one_hole_plate()).values())
+
+
+def _made_by(mesh: MeshData, declared: dict[str, Feature]) -> object:
+    """``_with_features`` an einer Operation, die diese Merkmale **ausgibt**.
+
+    Der Unterschied zu :func:`_carried`: Dort stehen sie in ``previous``, hier
+    im Objekt, das die Operation produziert hat.
+    """
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Operation, SceneObject
+
+    def never(question: str, choices: list[str]) -> str:
+        raise AssertionError(f"nothing here is ambiguous: {question}")
+
+    entry = SceneObject(id="obj_1", name="Teil", mesh=mesh, features=declared)
+    operation = Operation(id=4, op="thicken", inputs=("obj_1",), outputs=("obj_1",), params={})
+    return _with_features(entry, {}, operation, never, [])
+
+
 def test_a_generated_feature_that_is_really_gone_is_reported() -> None:
     """Der Gegenfall, und er ist der wichtigere: Wird das Merkmal weggerechnet,
     darf es verschwinden — aber nicht lautlos (§21.2, Regel 17).
