@@ -111,6 +111,7 @@ def group_title(category: str) -> str:
 MENU_TWINS: Final[dict[str, str]] = {
     "create_brep_box": "create_box",
     "create_brep_cylinder": "create_cylinder",
+    "drill_brep_hole": "drill_hole",
     # *An Ebene teilen* ist *Teilen* mit ``pins = 0``. Zwei Menüzeilen, die
     # sich in einer Zahl unterscheiden und beide „teilen" heißen — der
     # Umschalter dafür stand schon im Dialog, es war das Feld *Passstifte*.
@@ -151,6 +152,7 @@ _EXACT_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
 TWIN_TOGGLES: Final[dict[str, tuple[TranslatableText, TranslatableText]]] = {
     "create_brep_box": _EXACT_TOGGLE,
     "create_brep_cylinder": _EXACT_TOGGLE,
+    "drill_brep_hole": _EXACT_TOGGLE,
 }
 
 
@@ -164,6 +166,7 @@ FEATURE_TITLES: Final[dict[str, TranslatableText]] = {
     "pin": _("Zapfen"),
     "cone": _("Kegel"),
     "thread": _("Gewinde"),
+    "fillet": _("Verrundung"),
 }
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")

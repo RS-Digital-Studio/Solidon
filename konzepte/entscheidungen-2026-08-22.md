@@ -58,6 +58,52 @@ hervorgehoben, Escape beendet folgenlos. *Rückfallbedingung:* Lässt sich die
 Hervorhebung nicht von normalem Auswählen unterscheiden, gilt die einfache
 Variante. Ein Modus, der aussieht wie kein Modus, ist schlechter als keiner.
 
+**`drill_hole` bekommt einen exakten Zwilling — und das Kriterium dafür steht
+mit ihm.** Wer einen exakten Quader anlegte und eine Bohrung setzte, hatte
+danach ein Netz; damit fielen Fase, Verrundung, Formschräge, Fläche versetzen,
+exaktes Aushöhlen, Tasche schneiden und der STEP-Export aus. Der Haken „Exakter
+Körper" war eine Sackgasse nach **einem** Schritt, und der Ausweg lautete: jeden
+Schritt darüber zurücknehmen, die exakte Operation setzen, den Rest neu bauen.
+
+Eine Bohrung ist die häufigste Operation, die es gibt. Sie ist im B-Rep-Kern
+zugleich die einfachste — ein Zylinderschnitt, gemessen auf neun Stellen genau
+gegen die geschlossene Formel, wo ein Netz um ein knappes Promille danebenläge.
+§25 legt für die Bohrungen keinen Kern fest, es ist also keine Bauplanänderung,
+sondern eine Lücke, die er offenlässt.
+
+**Das Kriterium ist die eigentliche Entscheidung**, denn der Punkt in der
+Roadmap nennt richtig, dass „senken" und „verschließen" danach vor derselben
+Frage stehen. Es lautet **nicht** „geht es im exakten Kern" — dann müsste der
+ganze Katalog zweimal gebaut werden, und jede der beiden Fassungen wäre die
+halb gepflegte. Es lautet:
+
+> Ein Zwilling entsteht dort, wo der Zweig ohne ihn **endet** — nicht dort, wo
+> er möglich wäre.
+
+Nach diesem Maß ist die Bohrung der erste und vorerst einzige Fall: Sie steht
+am Anfang fast jeder Kette. *Senken* und *verschließen* setzen eine Bohrung
+voraus und stehen damit nie am Anfang; wer sie exakt braucht, hat den Zweig
+bereits, und die Frage stellt sich erst, wenn jemand sie tatsächlich vermisst.
+Ein Zwilling, den niemand vermisst, ist zwei Schemata, zwei Tests und zwei
+Stellen zum Nachbessern.
+
+**Ein Schema für beide, nicht zwei gleichlautende.** ``drill_brep_hole``
+benutzt ``DrillParams`` — dasselbe Objekt, nicht eine Kopie. Daran hängt
+``change_kernel``: Es reicht die Parameter eines gesetzten Schritts an den
+anderen Kern weiter, und wortgleiche Schemata laufen beim nächsten Nachbessern
+auseinander. Dasselbe kann das nicht. Der Test dazu prüft ``is``, nicht
+Gleichheit.
+
+**Und ein Fund am Rande, der mehr wert ist als er aussieht.** Die Operation
+hieß zuerst „Exakt bohren", und `test_theme_and_palette` fiel darüber: Wer
+„bohren" in die Befehlssuche tippt, bekam den exakten Zwilling **vor** der
+gewöhnlichen Bohrung, weil sein Titel das Wort wörtlich trägt und der andere
+nur über den Wortstamm gefunden wird. Der Reihenfolgefehler war die Folge, der
+eigentliche Fehler war ein Stilbruch: Die anderen Zwillinge heißen „Exakt**en**
+Quader anlegen" — erst die Sache, dann das Beiwort. Sie heißt jetzt „Exakte
+Bohrung setzen". *Ein Test über die Bedienoberfläche hat damit eine
+Benennungsregel durchgesetzt, die nirgends aufgeschrieben ist.*
+
 ### Werkzeuge und Verfahren
 
 **`test_mesh_backend`: die dritte Zusicherung fällt.** Sie prüft die Länge des

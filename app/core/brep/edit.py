@@ -243,6 +243,69 @@ def boolean(kind: Literal["union", "difference", "intersection"], parts: list[So
     return parts[0].replacing(shape)
 
 
+def bore(
+    solid: Solid,
+    *,
+    position: Vec3,
+    axis: Literal["x", "y", "z"],
+    diameter: float,
+    depth: float = 0.0,
+    anchor: Literal["mouth", "centre"] = "mouth",
+) -> Solid:
+    """Schneidet eine zylindrische Bohrung. Tiefe null bohrt ganz durch.
+
+    Die Semantik ist wörtlich die von :func:`app.core.geom.prepare.drill` —
+    dieselben Parameter bedeuten dasselbe, sonst wäre das Umschalten zwischen
+    den Kernen (``MENU_TWINS``) kein Umschalten, sondern eine andere Bohrung.
+    ``mouth`` ist, was jemand meint, der eine Fläche anklickt: dort fängt die
+    Bohrung an und geht ins Material. Für eine durchgehende macht es keinen
+    Unterschied.
+
+    **Der Zylinder entsteht gleich an seiner Stelle**, über ``gp_Ax2``, statt
+    stehend und dann gedreht. Eine Drehung um eine Achse, die nicht durch den
+    Ursprung geht, ist zwei Bewegungen und eine Gelegenheit, sich um ein
+    Vorzeichen zu irren; die Achse mitzugeben ist eine Zeile.
+
+    **Die Toleranz gehört nicht hierher.** ``diameter`` ist das Maß, das
+    geschnitten wird — was das Material frisst, rechnet
+    :func:`app.core.geom.prepare.bore_diameter` einmal für beide Kerne aus.
+    Zweimal gerechnet wäre sie zweimal drauf.
+    """
+    require()
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeCylinder
+    from OCP.gp import gp_Ax2, gp_Dir, gp_Pnt
+
+    index = {"x": 0, "y": 1, "z": 2}[axis]
+    box = solid.bounds
+    through = depth <= EPS_GEOM
+    if through:
+        # Lang genug, um von jeder Position aus in beide Richtungen
+        # hinauszureichen — dieselbe Überlegung wie auf der Mesh-Seite, nur
+        # ohne den Überlappungszuschlag: Zwei B-Rep-Volumen sind sich einig,
+        # was innen ist, und eine bündige Fläche ist hier kein Sonderfall.
+        span = box.size[index]
+        length = span * 2.0 + abs(position[index] - box.centre[index]) * 2.0
+        start = box.centre[index] - length / 2.0
+    else:
+        length = depth
+        if anchor == "mouth":
+            # Ins Material hinein, und das ist die Richtung, in der der Körper
+            # liegt: Wer die Oberseite anklickt, bohrt nach unten.
+            into = -1.0 if position[index] > box.centre[index] else 1.0
+            start = position[index] if into > 0 else position[index] - length
+        else:
+            start = position[index] - length / 2.0
+
+    origin = [position[0], position[1], position[2]]
+    origin[index] = start
+    direction = [0.0, 0.0, 0.0]
+    direction[index] = 1.0
+
+    frame = gp_Ax2(gp_Pnt(*origin), gp_Dir(*direction))
+    cutter = Solid(BRepPrimAPI_MakeCylinder(frame, diameter / 2.0, length).Shape())
+    return boolean("difference", [solid, cutter])
+
+
 def moved(solid: Solid, offset: Vec3) -> Solid:
     """Verschiebt einen Körper. Starre Bewegungen bleiben auf einem B-Rep exakt."""
     require()

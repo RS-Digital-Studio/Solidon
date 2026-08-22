@@ -15,15 +15,17 @@ from __future__ import annotations
 
 import dataclasses
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 from app.core.brep import edit, profiles, step
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
 from app.core.errors import InternalError, NeedsSolidError, ValidationError
+from app.core.geom.prepare import bore_diameter
+from app.core.geom.prepare_ops import DrillParams
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
-from app.core.units import DEGREE_UNIT
+from app.core.units import DEGREE_UNIT, EPS_GEOM, format_length
 from app.i18n import _
 
 _CHOICES = edit.EDGE_CHOICES
@@ -392,6 +394,66 @@ def thread_exact(ctx: OpContext) -> OpResult:
     return OpResult(outputs=[_object(params.name or str(_("Gewindebolzen")), solid)])
 
 
+@register_op(
+    name="drill_brep_hole",
+    requires_kind="brep",
+    title=_("Exakte Bohrung setzen"),
+    category="holes",
+    params=DrillParams,
+    consumes=1,
+    produces=1,
+    applies_to=["face"],
+    touches_features=True,
+    doc=_(
+        "Bohrt ein rundes Loch in einen exakten Körper — er bleibt exakt, und "
+        "Fase, Verrundung und der STEP-Export bleiben danach möglich."
+    ),
+)
+def drill_brep_hole(ctx: OpContext) -> OpResult:
+    """Die Bohrung des exakten Kerns.
+
+    **Warum es sie gibt.** Ein exakter Quader und eine Bohrung darin waren
+    bisher nicht zusammen zu haben: Die erste Bohrung machte aus dem B-Rep ein
+    Netz, und damit fielen Fase, Verrundung, Formschräge, Fläche versetzen,
+    exaktes Aushöhlen, Tasche schneiden und der STEP-Export aus. Der Ausweg
+    war, jeden Schritt ab dort zurückzunehmen. Eine Bohrung ist die häufigste
+    Operation überhaupt — ohne sie endete der exakte Zweig nach einem Schritt.
+
+    **Das Schema ist wörtlich das der Mesh-Bohrung**, und zwar dasselbe Objekt
+    und keine Kopie. Nur so trägt ``change_kernel`` einen Schritt von einem
+    Kern in den anderen, ohne dass sich die Bohrung ändert (§15.4): Wortgleiche
+    Schemata laufen beim nächsten Nachbessern auseinander, dasselbe nicht.
+
+    **Anders als der Zwilling ist sie deterministisch.** ``drill_hole`` trägt
+    ``deterministic=False``, weil die Rückfallkette aus §17.2 einen Startwert
+    braucht. Hier gibt es keine Kette — zwei B-Rep-Volumen sind sich einig, was
+    innen ist, und wo der Schnitt scheitert, ist die Antwort ein Fehler statt
+    eines gröberen Versuchs.
+    """
+    params = cast(DrillParams, ctx.params)
+    source, body = _brep_input(ctx)
+    cut = bore_diameter(params.diameter, ctx.profile, params.compensate)
+    solid = edit.bore(
+        body,
+        position=(params.x, params.y, params.z),
+        axis=cast(Literal["x", "y", "z"], params.axis),
+        diameter=cut,
+        depth=params.depth,
+        anchor=cast(Literal["mouth", "centre"], params.anchor),
+    )
+    findings: list[Finding] = []
+    if params.compensate and abs(cut - params.diameter) > EPS_GEOM:
+        findings.append(
+            Finding(
+                code="bore.compensated",
+                severity="info",
+                message=_("Die Bohrung wurde um die Materialtoleranz vergrößert."),
+                values={"nominal": format_length(params.diameter), "cut": format_length(cut)},
+            )
+        )
+    return OpResult(outputs=[_replaced(source, solid)], findings=findings)
+
+
 @op_params
 class ToMeshParams(BaseParams):
     deflection: float = param(
@@ -478,6 +540,7 @@ __all__ = [
     "create_brep_box",
     "create_brep_cylinder",
     "draft_faces",
+    "drill_brep_hole",
     "fillet_edges",
     "load_step",
     "shell_exact",

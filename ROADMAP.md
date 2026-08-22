@@ -89,7 +89,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte — **entschieden** | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | einen Überlaufknopf: die acht häufigsten Zwangsbedingungen bleiben Knöpfe, der Rest wandert darunter. Achtzehn in einer Zeile sind auf einem 1366er Laptop nicht bedienbar, und `test_interface_limits.py` erlaubt acht Werkzeuge — die Hausgrenze stand schon. Welche acht: an Fusion ablesen. Dazu der Test, der sein Thema selbst setzt |
 | Ein Höhenbudget für den Startbildschirm — **entschieden, in Arbeit** | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird. Am 22.08. neu gemessen, und die Aktenlage des Punkts stimmt nicht mehr: 340 px fehlen auf 1600x900 statt 156, die Ablagefläche gibt es als Widget nicht mehr, und es sind **zwei** Kachelbereiche — `more_area` (242 px) ist der größte Einzelposten |
-| Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
@@ -3535,8 +3534,58 @@ siehe unten.
 
 ### Offen
 
-- [ ] **Der exakte Zweig überlebt keine Mesh-Operation.** Wer einen exakten
-      Quader anlegt und eine Bohrung setzt, hat danach ein Netz — die
+- [x] **Der exakte Zweig überlebt keine Mesh-Operation — die Bohrung ist
+      gebaut, und das Kriterium für den Rest steht (23.08.2026).**
+      `drill_brep_hole` schneidet im exakten Kern, und der Zweig hält:
+
+          exakter Quader -> Bohrung -> Verrundung -> STEP-Export
+          Art danach     brep       Volumen 23365,8       35348 Bytes
+
+      Die Kennzahlen gehen gegen die geschlossene Formel und nicht gegen einen
+      Vorlauf: Ein Zylinderschnitt hat eine, und der exakte Kern trifft sie auf
+      neun Stellen (`rel=1e-9`) — durchgehend, als Sackloch und quer durch den
+      Körper. Ein Netz läge um ein knappes Promille daneben, weil die Bohrung
+      dort ein Vieleck mit `BORE_SECTIONS` Seiten ist.
+
+      **Die Bohrung war die richtige erste Wahl, und das Kriterium sagt auch,
+      wo Schluss ist.** Der Punkt nannte richtig, dass „senken" und
+      „verschließen" danach vor derselben Frage stehen. Die Antwort ist **nicht**
+      „was im exakten Kern geht" — dann müsste der ganze Katalog zweimal gebaut
+      werden, und beide Fassungen wären die halb gepflegten. Sie lautet:
+
+      > Ein Zwilling entsteht dort, wo der Zweig ohne ihn **endet** — nicht
+      > dort, wo er möglich wäre.
+
+      Danach ist die Bohrung der erste und vorerst einzige Fall: Sie steht am
+      Anfang fast jeder Kette. *Senken* und *verschließen* setzen eine Bohrung
+      voraus, stehen also nie am Anfang; wer sie exakt braucht, hat den Zweig
+      schon. Die Frage stellt sich wieder, wenn jemand sie tatsächlich vermisst.
+
+      **Ein Schema für beide, nicht zwei gleichlautende.** `drill_brep_hole`
+      benutzt `DrillParams` — dasselbe Objekt. Daran hängt `change_kernel`: Es
+      reicht die Parameter eines gesetzten Schritts an den anderen Kern weiter,
+      und wortgleiche Schemata laufen beim nächsten Nachbessern auseinander.
+      Der Test dazu prüft `is`, nicht Gleichheit.
+
+      **Und ein Fund über die Bedienung, den kein Mensch gemeldet hat.** Die
+      Operation hieß zuerst „Exakt bohren", und `test_theme_and_palette` fiel
+      darüber: Wer „bohren" sucht, bekam den exakten Zwilling **vor** der
+      gewöhnlichen Bohrung, weil sein Titel das Wort wörtlich trägt und der
+      andere nur über den Wortstamm gefunden wird. Der Reihenfolgefehler war
+      die Folge; der eigentliche Fehler war ein Stilbruch — die anderen
+      Zwillinge heißen „Exakt**en** Quader anlegen", erst die Sache, dann das
+      Beiwort. Sie heißt jetzt „Exakte Bohrung setzen". *Ein Test über die
+      Oberfläche hat damit eine Benennungsregel durchgesetzt, die nirgends
+      aufgeschrieben ist.*
+
+      **Was dabei nebenbei auffiel und behoben ist:** Die Website nannte an
+      zwölf Stellen in sechs Sprachen „86 Operationen". Eine neue Operation
+      macht daraus 87 — auf einer Kundenseite, im FAQ und im Zahlenkasten. Der
+      Test `test_website.py` fängt es, und das ist der Grund, aus dem er
+      existiert.
+
+      Ursprünglich stand hier: Wer einen exakten Quader anlegt und eine
+      Bohrung setzt, hat danach ein Netz — die
       Auswertung sagt es (`evaluate.exact_became_mesh`), und der Hinweis am
       gesperrten Werkzeug nennt seit `a342e81` den Schritt beim Namen. Aber der
       Ausweg bleibt mühsam: die Schritte ab dort zurücknehmen, die exakte

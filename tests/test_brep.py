@@ -511,3 +511,126 @@ def test_losing_the_exact_body_is_said_where_it_happens(profile: Profile) -> Non
     assert said, "der Verlust der Exaktheit gehört in den Bericht"
     assert said[0].severity == "info", "es ist ein erlaubter Weg, keine Warnung"
     assert said[0].values["op"] == "hollow_object", "und er nennt, wer ihn gegangen ist"
+
+
+def test_the_exact_bore_takes_exactly_what_the_formula_says() -> None:
+    """Die Kennzahl gegen den analytischen Körper, nicht gegen einen Vorlauf.
+
+    Ein Zylinderschnitt hat eine geschlossene Formel, und der exakte Kern muss
+    sie treffen — nicht ungefähr, sondern bis auf die Rechengenauigkeit. Genau
+    das ist der Grund, aus dem es ihn gibt: Auf einem Netz wäre die Bohrung ein
+    Vieleck mit ``BORE_SECTIONS`` Seiten und das Volumen um ein knappes Promille
+    daneben.
+    """
+    from app.core.brep import edit as brep_edit
+
+    solid = brep_edit.box(40.0, 30.0, 20.0)
+    drilled = brep_edit.bore(solid, position=(0.0, 0.0, 20.0), axis="z", diameter=6.0)
+
+    assert drilled.volume == pytest.approx(24000.0 - math.pi * 9.0 * 20.0, rel=1e-9)
+    assert drilled.is_closed
+
+
+def test_a_blind_bore_stops_at_its_depth() -> None:
+    """Tiefe null bohrt durch, jede andere hört auf — dieselbe Zusicherung wie
+    auf der Mesh-Seite, weil dieselben Parameter dasselbe bedeuten müssen.
+    """
+    from app.core.brep import edit as brep_edit
+
+    solid = brep_edit.box(40.0, 30.0, 20.0)
+    blind = brep_edit.bore(solid, position=(0.0, 0.0, 20.0), axis="z", diameter=6.0, depth=8.0)
+
+    assert blind.volume == pytest.approx(24000.0 - math.pi * 9.0 * 8.0, rel=1e-9)
+    assert blind.is_closed, "ein Sackloch lässt den Boden stehen"
+
+
+def test_a_bore_across_the_body_follows_its_axis() -> None:
+    """Quer durch, entlang X — die Achse geht in den Zylinder und nicht in eine
+    nachträgliche Drehung.
+    """
+    from app.core.brep import edit as brep_edit
+
+    solid = brep_edit.box(40.0, 30.0, 20.0)
+    across = brep_edit.bore(solid, position=(-20.0, 0.0, 10.0), axis="x", diameter=6.0)
+
+    assert across.volume == pytest.approx(24000.0 - math.pi * 9.0 * 40.0, rel=1e-9)
+
+
+def test_the_exact_branch_survives_a_bore(profile: Profile) -> None:
+    """**Der Punkt, um den es geht.** Wer einen exakten Quader anlegt und eine
+    Bohrung setzt, hatte danach ein Netz — und damit fielen Fase, Verrundung,
+    Formschräge, Fläche versetzen, exaktes Aushöhlen, Tasche schneiden und der
+    STEP-Export aus. Der exakte Zweig endete nach einem Schritt.
+
+    Geprüft wird deshalb nicht die Bohrung, sondern was **nach** ihr noch geht:
+    eine Verrundung, die einen exakten Körper braucht.
+    """
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Exakter Quader",
+        [OperationDraft(op="create_brep_box", params={"width": 40, "depth": 30, "height": 20})],
+    )
+    history.apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_brep_hole",
+                inputs=("obj_1",),
+                params={"diameter": 6.0, "z": 20.0, "compensate": False},
+            )
+        ],
+    )
+    history.apply(
+        "Verrundung",
+        [OperationDraft(op="fillet_edges", inputs=("obj_1",), params={"radius": 2.0})],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.stopped_at is None, "die Kette läuft durch"
+    assert [entry.kind for entry in result.scene.objects.values()] == ["brep"]
+    assert not [
+        f for f in result.scene.report.findings if f.code == "evaluate.exact_became_mesh"
+    ], "eine exakte Bohrung verliert die Exaktheit nicht"
+
+
+def test_the_exact_bore_and_its_twin_read_the_same_parameters() -> None:
+    """Beide Kerne teilen **ein** Schema, keine zwei gleichlautenden.
+
+    Daran hängt ``change_kernel``: Es reicht die Parameter des einen Schritts
+    an den anderen weiter, und wortgleiche Schemata laufen beim nächsten
+    Nachbessern auseinander. Dasselbe Objekt kann das nicht.
+    """
+    from app.core.registry import MENU_TWINS, REGISTRY
+
+    assert MENU_TWINS["drill_brep_hole"] == "drill_hole"
+    exact = REGISTRY.get("drill_brep_hole")
+    mesh = REGISTRY.get("drill_hole")
+    assert exact.params is mesh.params, "ein Schema, nicht zwei gleichlautende"
+    assert exact.deterministic, "ohne Rückfallkette braucht es keinen Startwert"
+
+
+def test_switching_a_bore_between_the_kernels_keeps_its_values(profile: Profile) -> None:
+    """Ein gesetzter Schritt lässt sich nachträglich umstellen — mit denselben
+    Werten, sonst wäre es eine andere Bohrung.
+    """
+    project = new_project("centauri-carbon-2", "pla")
+    history = History(project.document)
+    history.apply(
+        "Exakter Quader",
+        [OperationDraft(op="create_brep_box", params={"width": 40, "depth": 30, "height": 20})],
+    )
+    values = {"diameter": 6.0, "x": 0.0, "y": 0.0, "z": 20.0, "compensate": False}
+    history.apply(
+        "Bohrung im Netz",
+        [OperationDraft(op="drill_hole", inputs=("obj_1",), params=dict(values))],
+    )
+    bore_step = project.document.ops[-1]
+
+    history.change_kernel(bore_step.id, "drill_brep_hole", dict(values))
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert [entry.kind for entry in result.scene.objects.values()] == ["brep"]
+    body = next(iter(result.scene.objects.values()))
+    assert body.mesh.volume == pytest.approx(24000.0 - math.pi * 9.0 * 20.0, rel=1e-9)
