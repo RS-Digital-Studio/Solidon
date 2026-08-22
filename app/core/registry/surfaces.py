@@ -45,15 +45,64 @@ def menu_tree(registry: Registry | None = None) -> tuple[MenuSection, ...]:
     )
 
 
+#: Wie viele Zeilen ein Menü zeigen darf, bevor es eine Liste zum Absuchen
+#: wird. Dieselbe Zahl hält ``tests/test_interface_limits.py`` ein zweites Mal
+#: — **absichtlich als eigene Kopie und nicht als Import**: Ein Wächter, der
+#: seine Grenze von dem holt, den er bewacht, ist an dem Tag blind, an dem
+#: jemand die Grenze erhöht.
+MAX_MENU_ROWS: Final = 12
+
+
+def group_is_flat(category: str, registry: Registry | None = None) -> bool:
+    """Ob die Menügruppe dieser Kategorie ohne Zwischenebene auskommt (§2.6).
+
+    **Zwei Maße maßen dieselbe Sache, und sie waren sich uneinig.** Der Aufbau
+    zog eine Zwischenebene ein, sobald eine Gruppe *mehr als eine Kategorie*
+    hatte; die Hausgrenze zählt aber *Zeilen* (zwölf je Menü). Damit bekam
+    „Vorbereiten" ein Untermenü, weil es zwei Kategorien hat — nicht, weil es
+    zu lang wäre. Gerechnet wird deshalb hier, statt an zwei Stellen gewusst.
+
+    Gezählt werden die sichtbaren Einträge aller besetzten Kategorien der
+    Gruppe. Zusammengelegte Zwillinge (``MENU_TWINS``) haben keinen eigenen
+    Eintrag und zählen nicht mit. Trennstriche zählen ebenfalls nicht: Sie
+    sind der Ersatz für die Namen der Untermenüs, die wegfallen, und wer sie
+    mitzählte, bestrafte das Flachziehen für seine eigene Wirkung.
+
+    **Eine Gruppe mit einer einzigen besetzten Kategorie ist immer flach**,
+    gleich wie lang sie ist — ihre Zwischenebene hieße genauso wie das Menü
+    darüber („Bausteine → Bausteine → Deckel erzeugen"). Das ist keine
+    Ausnahme von der Zeilenregel, sondern eine zweite Frage, die dieselbe
+    Antwort braucht: Eine Kategorie-Ebene ist dort nie das, was die Länge
+    lösen würde. Die Bausteine lösen ihre zwanzig Zeilen über die
+    Bausteingruppen, und die zählt diese Funktion zu Recht nicht.
+
+    Die Bedingung steht hier und nicht in den Aufrufern, weil sonst jeder
+    weitere sie neu lernen müsste — genau der Grund, aus dem die Funktion in
+    den Kern gehört.
+    """
+    source = registry or REGISTRY
+    in_group = next(
+        (categories for _title, categories in MENU_GROUPS if category in categories),
+        (),
+    )
+    populated = {spec.category for spec in source.all()}
+    if len([name for name in in_group if name in populated]) <= 1:
+        return True
+    entries = sum(
+        1 for spec in source.all() if spec.category in in_group and spec.name not in MENU_TWINS
+    )
+    return entries <= MAX_MENU_ROWS
+
+
 def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
     """Der vollständige Menüweg eines Eintrags — mit denselben Ebenen, die
     die Menüleiste einzieht (§2.6).
 
     Drei Staffelungen, alle aus Kern-Daten: die Gruppe aus ``MENU_GROUPS``,
-    ein Kategorie-Untermenü, wenn die Gruppe mehr als eine besetzte Kategorie
-    hat, und die Bausteingruppe aus dem Katalog. Die Werkzeugbeschreibungen
-    des Agenten nannten nur Gruppe und Titel — der Chat schickte den Nutzer
-    nach „Ändern → Bohrung setzen", während der Eintrag unter
+    ein Kategorie-Untermenü, wenn die Zeilen der Gruppe nicht ins Budget
+    passen (:func:`group_is_flat`), und die Bausteingruppe aus dem Katalog.
+    Die Werkzeugbeschreibungen des Agenten nannten nur Gruppe und Titel — der
+    Chat schickte den Nutzer nach „Ändern → Bohrung setzen", während der Eintrag unter
     „Ändern → Bohrungen → Bohrung setzen" steht; das traf 72 von 77 Ops.
     Ein Test hält Leiste und Pfad aneinander fest.
     """
@@ -74,12 +123,7 @@ def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:
         return f"{where} ({_('im selben Dialog')})"
     steps = [group_title(spec.category)]
 
-    populated = {entry.category for entry in source.all()}
-    in_group = next(
-        (categories for _title, categories in MENU_GROUPS if spec.category in categories),
-        (),
-    )
-    if sum(1 for category in in_group if category in populated) > 1:
+    if not group_is_flat(spec.category, source):
         steps.append(str(CATEGORIES.get(spec.category, spec.category)))
 
     # Die Bausteingruppe ist dieselbe, nach welcher der Katalog seine Kacheln

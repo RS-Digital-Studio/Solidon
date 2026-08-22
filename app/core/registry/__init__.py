@@ -23,6 +23,7 @@ from app.core.registry.registry import (
     register_op,
 )
 from app.core.registry.surfaces import (
+    MAX_MENU_ROWS,
     CliArgument,
     CliCommand,
     PaletteEntry,
@@ -30,6 +31,7 @@ from app.core.registry.surfaces import (
     cli_commands,
     context_menu,
     documentation,
+    group_is_flat,
     menu_path,
     menu_tree,
     palette_entries,
@@ -40,6 +42,7 @@ __all__ = [
     "CATEGORIES",
     "FEATURE_KINDS",
     "GATHERED_KINDS",
+    "MAX_MENU_ROWS",
     "MENU_GROUPS",
     "MENU_TWINS",
     "REGISTRY",
@@ -55,6 +58,7 @@ __all__ = [
     "cli_commands",
     "context_menu",
     "documentation",
+    "group_is_flat",
     "group_title",
     "json_schema",
     "menu_path",
