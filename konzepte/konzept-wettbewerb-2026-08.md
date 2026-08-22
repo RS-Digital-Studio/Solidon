@@ -552,6 +552,20 @@ Vier Fragen, die dieses Dokument nicht beantworten kann. **Alle vier sind am
    > und verwies als Pressematerial auf einen Ordner im Repository. Das ist
    > bereinigt, und `tests/test_press_release.py` hält es — Fachbegriffe und
    > Projektpfade unterhalb der Trennlinie sind jetzt ein roter Lauf.
+   >
+   > **Überholt am 22.08.2026:** Robert hat das Presse-Material verworfen
+   > („brauchen wir alles gar nicht mehr"). Mitteilung, Anschreiben, Verteiler
+   > und die fünfzehn verschickten Mails sind entfernt (`9ad1678`), und mit
+   > ihnen `tests/test_press_release.py` — ein Test, dessen Prüfobjekt weg ist,
+   > wird gelöscht und nicht aufgehoben. Die Entscheidung „alle drei Wege"
+   > bleibt als Überlegung lesbar; von den drei ist der Weg über die Fachpresse
+   > damit zu.
+   >
+   > Anlass war nicht die Sache selbst, sondern ein Fund: Der Verteiler trug
+   > siebzehn fremde E-Mail-Adressen, und das Repository stand bis zu diesem Tag
+   > öffentlich. Vierzehn davon waren Redaktionspostfächer, drei
+   > personenbezogen. Was gebaut wird, ist Roberts Risiko; fremde Adressen sind
+   > es nicht.
 
 ---
 
