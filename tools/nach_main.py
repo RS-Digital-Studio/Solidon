@@ -50,12 +50,12 @@ TOR = [
 ]
 
 
-def git(*args: str, pruefen: bool = True) -> subprocess.CompletedProcess[str]:
+def git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     """Ein Git-Aufruf, dessen Ausgabe lesbar bleibt."""
     fertig = subprocess.run(
         ["git", *args], capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
-    if pruefen and fertig.returncode != 0:
+    if check and fertig.returncode != 0:
         print(f"  git {' '.join(args)} scheiterte:")
         print("  " + (fertig.stderr or fertig.stdout).strip().replace("\n", "\n  "))
     return fertig
@@ -77,7 +77,7 @@ def tor_laeuft_durch(wer: str) -> bool:
     Der Exit-Code kommt von den Läufen selbst und nicht von einer Zählzeile:
     Wer die Zusammenfassung liest statt ``returncode``, misst einen Filter.
     """
-    schritte: list[tuple[str, list[str]]] = [
+    steps: list[tuple[str, list[str]]] = [
         ("Suite", TOR),
         ("Leistung", [sys.executable, "-m", "pytest", "-q", "-m", "performance"]),
         ("ruff", [sys.executable, "-m", "ruff", "check", "."]),
@@ -89,7 +89,7 @@ def tor_laeuft_durch(wer: str) -> bool:
     # jede Fensterdatei meldete dann Exit 127, was wie der bekannte Absturz
     # beim Abbau aussieht und keiner ist.
     umgebung = {**os.environ, "SUITE_PYTHON": sys.executable}
-    for name, befehl in schritte:
+    for name, befehl in steps:
         print(f"  {name} …", end="", flush=True)
         fertig = subprocess.run(
             [
@@ -112,14 +112,14 @@ def tor_laeuft_durch(wer: str) -> bool:
         if fertig.returncode != 0:
             print(f" rot (Exit {fertig.returncode})")
             schluss = (fertig.stdout or "").strip().splitlines()[-12:]
-            for zeile in schluss:
-                print(f"    {zeile}")
+            for line in schluss:
+                print(f"    {line}")
             return False
         print(" grün")
     return True
 
 
-def liefere(wer: str, nur_pruefen: bool) -> int:
+def liefere(wer: str, check_only: bool) -> int:
     """Der ganze Weg, mit Halt bei jedem Grund zum Halten."""
     eigener = zweig()
     if eigener == HAUPT:
@@ -133,8 +133,8 @@ def liefere(wer: str, nur_pruefen: bool) -> int:
 
     print(f"Branch: {eigener}")
     print(f"1. {HAUPT} holen und einweben")
-    git("fetch", "origin", HAUPT, pruefen=False)
-    verschmolzen = git("merge", f"origin/{HAUPT}", "--no-edit", pruefen=False)
+    git("fetch", "origin", HAUPT, check=False)
+    verschmolzen = git("merge", f"origin/{HAUPT}", "--no-edit", check=False)
     if verschmolzen.returncode != 0:
         print("  Der Zusammenschluss hat Konflikte. Die löst kein Skript:")
         print("  `git status` zeigt die Dateien, danach `git merge --continue`.")
@@ -146,8 +146,8 @@ def liefere(wer: str, nur_pruefen: bool) -> int:
         print(f"\nRot — nichts geht nach {HAUPT}. Der Branch {eigener} behält deine Arbeit.")
         return 1
 
-    if nur_pruefen:
-        print(f"\nGrün. (--nur-pruefen: nichts nach {HAUPT} geschoben.)")
+    if check_only:
+        print(f"\nGrün. (--nur-check: nichts nach {HAUPT} geschoben.)")
         return 0
 
     print(f"3. nach {HAUPT}")
@@ -156,7 +156,7 @@ def liefere(wer: str, nur_pruefen: bool) -> int:
     if git("switch", HAUPT).returncode != 0:
         return 4
     git("merge", "--ff-only", eigener)
-    geschoben = git("push", "origin", HAUPT, pruefen=False)
+    geschoben = git("push", "origin", HAUPT, check=False)
     git("switch", eigener)
     if geschoben.returncode != 0:
         print(f"  {HAUPT} ist weitergewandert. Noch einmal von vorn — dann passt es.")
@@ -169,15 +169,15 @@ def main() -> int:
     zerleger = argparse.ArgumentParser(description=__doc__)
     zerleger.add_argument("--who", default="unbenannt", help="Name der Sitzung fürs Schloss")
     zerleger.add_argument(
-        "--nur-pruefen",
+        "--nur-check",
         action="store_true",
         help="Das Tor fahren, aber nichts nach main schieben",
     )
-    gewaehlt = zerleger.parse_args()
+    chosen = zerleger.parse_args()
     if not Path(".git").exists() and not Path(".git").is_file():
         print("Kein Git-Arbeitsbaum hier.")
         return 2
-    return liefere(gewaehlt.who, gewaehlt.nur_pruefen)
+    return liefere(chosen.who, chosen.check_only)
 
 
 if __name__ == "__main__":
