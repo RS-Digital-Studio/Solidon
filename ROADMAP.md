@@ -4426,6 +4426,26 @@ gehalten hätten.
       auch, was offen blieb: „`_on_agent_done` und der Split-Arbeiter lassen
       ihre Referenz genauso los; dort hämmert nur niemand." `test_chat_ui.py`
       hämmert dort.
+      **Berichtigt am selben Tag: „drei Dateien" war zu genau.** `solidon-b0`
+      hat den geteilten Lauf am Abend wiederholt und jeden Fehlschlag einzeln
+      nachgemessen:
+
+      | Datei | im Sammellauf | einzeln nachgefahren |
+      |---|---|---|
+      | `test_chat_ui.py` | 40 passed, Exit 127 | dasselbe — reproduzierbar |
+      | `test_first_run.py` | 45 passed, Exit 127 | dasselbe — reproduzierbar |
+      | `test_sculpt_session.py` | Segfault 139 | **viermal Exit 0**, 31 passed |
+      | `test_ui.py` | **Exit 0** | Exit 0 |
+
+      Damit stimmt die Zahl, aber nicht die Namensliste: **Zwei sind
+      reproduzierbar, die dritte wandert.** `test_ui.py` — oben namentlich
+      genannt — lief an diesem Abend sauber, und an seiner Stelle riss
+      `test_sculpt_session.py`. Die Menge bleibt bei drei, die Stelle nicht.
+
+      Der Fehler war meiner und ist der Sorte nach derselbe, den wir heute
+      dreimal gefangen haben: Aus **einem** Lauf eine feste Liste zu machen.
+      Wer die drei Namen liest und morgen `test_slots.py` reißen sieht, hält es
+      für einen neuen Fehler — dabei ist es der alte an einer anderen Stelle.
 
 - [x] **Falsch gezählt, und zwar dreimal.** Zwischenstände wurden mit
       `grep -cE "^(FAILED|ERROR)"` gemessen. Das trifft nur die
