@@ -48,9 +48,33 @@ for file in $windowed; do ignores="$ignores --ignore=$file"; done
 # nur Leistungstests, sammelt `-m "not performance"` nichts. Am 22.08.2026
 # landete `tests/test_performance.py` wegen zweier Docstrings hier und zählte
 # als Fehllauf.
+#
+# **Und ein Abriss beim Abbau ist kein roter Test.** Drei Fensterdateien melden
+# „N passed" und sterben danach beim Aufräumen — mit 127 oder mit einer
+# Zugriffsverletzung. `CLAUDE.md` kennt den Fall und sagt ausdrücklich: Wer ihn
+# nicht kennt, sucht den Fehler in einem Test, der nie fehlgeschlagen ist.
+# Dieses Skript kannte ihn nicht, zählte ihn als Fehllauf — und damit war das
+# Tor dauerhaft rot, ganz gleich wie sauber der Code war.
+#
+# Erkannt wird er an dem, was er ist: eine vollständige Zusammenfassung ohne
+# ein einziges `failed` oder `error`. Wer sie hat, hat alle Tests bestanden;
+# was danach passiert, ist ein Abriss und keine Aussage über den Code.
+# **Verschwiegen wird nichts** — die Zeile „--> Exit 127" steht weiter da, sie
+# zählt nur nicht mehr als Fehlschlag.
+#
+# Ohne Protokoll bleibt es bei der alten, strengen Bewertung: Ein Aufrufer, der
+# die Ausgabe nicht mitschreibt, bekommt keinen Freibrief.
 zaehlt_als_fehler() {
-  [ "$1" -eq 0 ] && return 1
-  [ "$1" -eq 5 ] && return 1
+  status=$1
+  protokoll=${2:-}
+  [ "$status" -eq 0 ] && return 1
+  [ "$status" -eq 5 ] && return 1
+  if [ -n "$protokoll" ] && [ -f "$protokoll" ]; then
+    if grep -qE "^[0-9]+ passed" "$protokoll" &&
+       ! grep -qE "[0-9]+ (failed|error)" "$protokoll"; then
+      return 1
+    fi
+  fi
   return 0
 }
 
@@ -73,21 +97,24 @@ schlecht=""
 #: Prozess schon die Trennung.
 KERNE=${SUITE_KERNE:-8}
 
+protokoll=$(mktemp)
+trap 'rm -f "$protokoll"' EXIT
+
 echo "=== der Rest in einem Zug (-n $KERNE) ==="
-PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" $ignores -n "$KERNE"
-status=$?
+PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" $ignores -n "$KERNE"   2>&1 | tee "$protokoll"
+status=${PIPESTATUS[0]}
 echo "--> Exit $status"
-if zaehlt_als_fehler $status; then
+if zaehlt_als_fehler "$status" "$protokoll"; then
   fails=$((fails + 1))
   schlecht="$schlecht rest-in-einem-zug(Exit:$status)"
 fi
 
 for file in $windowed; do
   echo "=== $file ==="
-  PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" "$file"
-  status=$?
+  PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" "$file"     2>&1 | tee "$protokoll"
+  status=${PIPESTATUS[0]}
   echo "--> Exit $status"
-  if zaehlt_als_fehler $status; then
+  if zaehlt_als_fehler "$status" "$protokoll"; then
     fails=$((fails + 1))
     schlecht="$schlecht $file(Exit:$status)"
   fi
