@@ -3894,6 +3894,44 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
     einer:       repair.components_removed
     Fehler:      keine
 
+- [x] **Die Figur in „Weg 4" stand 0,29 mm unter der Druckplatte — behoben
+      am 23.08.2026 (`abce5f3`).** Das weiche Verschmelzen mit Radius 4 rundet
+      auch nach unten ab. Der Prüfbericht sagte es als **Hinweis**, und das ist
+      dort richtig: `_severity_for` wiegt die Lage leichter als die Größe, weil
+      ein Klick sie behebt — beim Schreiben kippt dieselbe Rechnung zur
+      Warnung, denn dann ist der Klick nicht passiert. Der Weg endet jetzt mit
+      `place_on_bed`; §2.2 nennt „stellen" ohnehin als seinen Teil.
+
+      **Zwei Tests fielen dabei um, und beide waren die eigentliche Beute.**
+      `test_the_way_ends_in_a_printable_file` prüfte `st_size > 0` — „druckfertig"
+      hieß damit „die Datei ist nicht leer", und eine Datei entsteht auch für
+      ein Teil unter der Platte (CuraEngine schreibt sie sogar).
+      `test_the_strokes_survive_the_file` griff auf `ops[-1]` zu und brach,
+      sobald der Weg einen Schritt länger wurde, obwohl an den Zügen nichts
+      anders war: **Ein Bezug auf „den letzten" ist eine Aussage über die Länge
+      der Kette**, und die war dort nie das Thema. Er sucht den Schritt jetzt
+      über seinen Namen — dieselbe Lehre wie bei den Katalogeinträgen.
+
+- [x] **Zweimal gespeichert waren zwei verschiedene Dateien — behoben am
+      23.08.2026 (`efd79ae`).** Jeder Lauf von `tools/make_examples.py`
+      erzeugte neun geänderte Beispieldateien, obwohl sich an keinem Beispiel
+      etwas geändert hatte. Der Inhalt war Zeichen für Zeichen gleich; die
+      Bytes waren es nicht.
+
+      **Es sind die ZIP-Zeitstempel.** Ein Container schreibt je Eintrag ein
+      Änderungsdatum aus der Uhr. Für einen Kunden folgenlos — er sieht das
+      Datum der Datei, nicht das der Einträge darin. Für alles, was Dateien
+      *vergleicht*, ist es Rauschen: neun Zeilen Verlauf ohne Inhalt bei jedem
+      Erzeugungslauf, und in einem Baum mit vier Sitzungen neun Dateien, die
+      aussehen, als hätte jemand daran gearbeitet.
+
+      **Der Test dazu stand schon da und hieß, was er nicht prüfte:**
+      `test_a_second_round_trip_writes_the_same_bytes` verglich die *Einträge*
+      im Container, und die waren immer gleich. Er kann jetzt einlösen, was er
+      heißt. Daneben steht ein zweiter, der die **Ursache** prüft statt der
+      Wirkung — der erste würde auch grün, wenn zwei Läufe zufällig in dieselbe
+      Sekunde fielen, und an einer schnellen Maschine tun sie das fast immer.
+
 - [ ] **Eine Textprägung frisst alle benannten Merkmale — und meldet nicht
       alle.** Gemessen an „Dose mit Deckel", dem eigenen Vorzeigebeispiel,
       Schritt für Schritt:
