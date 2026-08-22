@@ -242,11 +242,17 @@ def test_no_example_shows_a_corpus_filename_as_an_object_name(
     )
 
     for entry in result.scene.objects.values():
-        assert "_" not in entry.name, f"{entry.name} liest sich wie ein Dateiname"
-        assert not entry.name.lower().endswith((".stl", ".3mf", ".obj", ".step", ".stp")), (
-            f"{entry.name} traegt eine Dateiendung"
+        # **Geprüft wird die angezeigte Fassung**, deshalb ``str``. Seit
+        # Format 10 kann ein Objektname ein ``TranslatableText`` sein (§4.1),
+        # und der ist keine Zeichenkette: ``"_" in name`` wirft. Gemeint ist
+        # hier ohnehin, was der Nutzer liest — ein Dateiname sieht in jeder
+        # Sprache wie einer aus.
+        name = str(entry.name)
+        assert "_" not in name, f"{name} liest sich wie ein Dateiname"
+        assert not name.lower().endswith((".stl", ".3mf", ".obj", ".step", ".stp")), (
+            f"{name} traegt eine Dateiendung"
         )
-        assert entry.name.strip() == entry.name and entry.name, "ein Name ohne Text ist keiner"
+        assert name.strip() == name and name, "ein Name ohne Text ist keiner"
 
 
 def test_no_example_greets_with_a_contradiction(profile: Profile) -> None:

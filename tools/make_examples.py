@@ -10,6 +10,7 @@ ab, sobald sich zum ersten Mal eine Operation ändert.
 
 from __future__ import annotations
 
+import dataclasses
 import sys
 from pathlib import Path
 
@@ -24,7 +25,7 @@ from app.core.lid_flow import apply_lid
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, new_project, save
 from app.core.types import Parameter, Source, SourceKind
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 CORPUS = Path(__file__).resolve().parent.parent / "tests" / "data" / "meshes"
 
@@ -573,6 +574,69 @@ def box_with_lid() -> Project:
     return project
 
 
+#: Die Objektnamen, die in den mitgelieferten Beispielen gesetzt werden.
+#:
+#: **Warum eine Liste und nicht „jeder gesetzte Name".** Ein Beispiel ist eine
+#: Datei wie jede andere, und ein Name darin könnte auch von einem Nutzer
+#: stammen — dann wäre er wörtlich gemeint (§4.1). Diese dreizehn kommen aus
+#: dem Code hier daneben; sie sind Message-IDs, weil sie es sind, und nicht,
+#: weil sie an einer bestimmten Stelle stehen.
+#:
+#: Wer einen Namen hinzufügt, trägt ihn hier ein **und** in die fünf Kataloge.
+#: `tests/test_translations.py` fängt das Zweite; das Erste fängt niemand, und
+#: darum steht es hier als Satz.
+EXAMPLE_NAMES: frozenset[TranslatableText] = frozenset(
+    {
+        _("Dose"),
+        _("Figur"),
+        _("Gehäuseboden"),
+        _("Halter"),
+        _("Halterung"),
+        _("Klotz"),
+        _("Kopf"),
+        _("Lettern"),
+        _("Schild"),
+        _("Toleranz"),
+        _("Wandstärke"),
+        _("Weiß"),
+        _("Überhang"),
+    }
+)
+"""Die dreizehn Namen als Übersetzungsmarker, nicht als Zeichenketten.
+
+**Damit findet der Einsammler sie.** ``app/i18n/extract.py`` sucht nach
+``_()``-Aufrufen und liest diese Datei ausdrücklich mit (``EXTRA_SOURCES``);
+stünden hier schlichte Zeichenketten, wären die Katalogeinträge daneben
+„no longer used" und der Sprachtest rot — in beide Richtungen, denn er prüft
+auch, ob ein Eintrag noch gebraucht wird.
+
+**Und die Mengenprüfung funktioniert trotzdem mit einer Zeichenkette**, weil
+``TranslatableText`` seit dem 22.08.2026 über seine Message-ID vergleicht und
+hasht. ``"Dose" in EXAMPLE_NAMES`` ist wahr, obwohl in der Menge kein ``str``
+liegt. Ohne diese Eigenschaft bräuchte es hier zwei Listen, die auseinander
+laufen können."""
+
+
+def mark_translatable(project: Project) -> None:
+    """Vermerkt an jeder Operation, welche Parameter Message-IDs tragen (§4.1).
+
+    **Gesetzt wird nach dem Bauen und nicht beim Bauen**, und das hat einen
+    Grund, der über die Bequemlichkeit hinausgeht: Die Beispiele werden über
+    ``OperationDraft`` gebaut, und der Draft ist die Beschreibung einer
+    *Handlung* — er weiß nicht, ob ein Name aus dem Code oder aus einer
+    Tastatur kommt. Das weiß nur diese Datei, weil sie die Namen selbst
+    hinschreibt.
+
+    Damit bleibt die Zusage aus §4.1 an der einen Stelle, an der sie gilt: Ein
+    Name aus einem mitgelieferten Beispiel ist übersetzbar, jeder andere ist
+    wörtlich — auch wenn er zufällig gleich lautet.
+    """
+    for index, operation in enumerate(project.document.ops):
+        name = operation.params.get("name")
+        if isinstance(name, str) and name in EXAMPLE_NAMES:
+            project.document.ops[index] = dataclasses.replace(operation, translatable=("name",))
+
+
 def main() -> int:
     load_operations()
     profile = profiles.make_profile("centauri-carbon-2", "petg")
@@ -594,6 +658,7 @@ def main() -> int:
     }
     for example in EXAMPLES:
         project = builders[example.id]()
+        mark_translatable(project)
         result = evaluate(project.document, profile, sources=ProjectSources(project))
         if not result.complete:
             print(f"-- {example.id}: Kette hält an")
