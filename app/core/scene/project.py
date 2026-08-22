@@ -207,8 +207,38 @@ def _next_gathered(document: Document) -> int:
     return max(used, default=0) + 1
 
 
+#: Der Zeitstempel, den jeder Eintrag im Container trägt.
+#:
+#: **Warum ein fester und nicht die Uhr.** Ein ZIP schreibt je Eintrag ein
+#: Änderungsdatum, und damit unterscheiden sich zwei Speicherungen desselben
+#: Projekts in ihren Bytes, obwohl ihr Inhalt Zeichen für Zeichen gleich ist.
+#: Für einen Kunden ist das folgenlos — er sieht das Datum der Datei, nicht das
+#: der Einträge darin. Für alles, was Dateien *vergleicht*, ist es Rauschen:
+#: Jeder Lauf von ``tools/make_examples.py`` erzeugte neun geänderte Dateien,
+#: auch wenn sich an keinem Beispiel etwas geändert hatte, und wer sie
+#: mitcommittete, schrieb neun Zeilen Verlauf ohne Inhalt.
+#:
+#: Der Wert ist der früheste, den das ZIP-Format kennt (1980-01-01). Er ist
+#: nicht als Datum gemeint, sondern als *kein* Datum — wer ihn liest, soll
+#: sehen, dass hier keine Uhr gelaufen ist.
+CONTAINER_TIMESTAMP: Final = (1980, 1, 1, 0, 0, 0)
+
+
+def _write(container: zipfile.ZipFile, name: str, payload: str | bytes) -> None:
+    """Ein Eintrag mit festem Zeitstempel statt der Uhr."""
+    info = zipfile.ZipInfo(name, date_time=CONTAINER_TIMESTAMP)
+    info.compress_type = zipfile.ZIP_DEFLATED
+    container.writestr(info, payload)
+
+
 def save(project: Project, path: Path) -> Path:
-    """Schreibt den Container, atomar. Gibt den geschriebenen Pfad zurück."""
+    """Schreibt den Container, atomar. Gibt den geschriebenen Pfad zurück.
+
+    **Zweimal speichern ergibt zweimal dieselbe Datei** — siehe
+    :data:`CONTAINER_TIMESTAMP`. Das ist dieselbe Zusage, die §15.1 der
+    Auswertung macht, eine Ebene tiefer: Gleiche Eingaben, gleiches Ergebnis,
+    Byte für Byte.
+    """
     document = project.document
     document.format_version = FORMAT_VERSION
     document.app_version = APP_VERSION
@@ -246,17 +276,19 @@ def save(project: Project, path: Path) -> Path:
     ensure_dir(path.parent)
     temporary = path.with_name(path.name + ".part")
     with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED) as container:
-        container.writestr(PROJECT_ENTRY, json.dumps(data, indent=2, ensure_ascii=False))
+        _write(container, PROJECT_ENTRY, json.dumps(data, indent=2, ensure_ascii=False))
         for source_id, payload in gathered_payloads.items():
-            container.writestr(gathered_path(source_id), payload)
+            _write(container, gathered_path(source_id), payload)
         for source_id, source in document.sources.items():
             if source.embedded:
-                container.writestr(source.path, project.sources[source_id])
-        container.writestr(
-            REPORT_ENTRY, json.dumps(report_to_data(project.report), indent=2, ensure_ascii=False)
+                _write(container, source.path, project.sources[source_id])
+        _write(
+            container,
+            REPORT_ENTRY,
+            json.dumps(report_to_data(project.report), indent=2, ensure_ascii=False),
         )
         if project.thumbnail is not None:
-            container.writestr(THUMBNAIL_ENTRY, project.thumbnail)
+            _write(container, THUMBNAIL_ENTRY, project.thumbnail)
     # Derselbe atomare Wechsel wie ``os.replace`` — ``Path.replace`` ruft ihn
     # auf. Eine halb geschriebene Projektdatei darf es nie geben.
     temporary.replace(path)

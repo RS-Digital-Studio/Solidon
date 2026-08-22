@@ -15,6 +15,7 @@ from app.core.paths import user_data_dir
 from app.core.scene import History, OperationDraft
 from app.core.scene.migrations import FORMAT_VERSION, Step, migrate
 from app.core.scene.project import (
+    CONTAINER_TIMESTAMP,
     PROJECT_ENTRY,
     Project,
     ProjectSources,
@@ -161,7 +162,16 @@ def test_saving_and_loading_keeps_the_stack(filled: Project, tmp_path: Path) -> 
 
 
 def test_a_second_round_trip_writes_the_same_bytes(filled: Project, tmp_path: Path) -> None:
-    """Bitgleich beim Speichern und Laden — das P0-Abnahmekriterium."""
+    """Bitgleich beim Speichern und Laden — das P0-Abnahmekriterium.
+
+    **Der Name versprach mehr, als der Test prüfte.** Er verglich die
+    *Einträge* im Container, und die waren immer gleich; die **Datei** war es
+    nicht, denn ein ZIP schreibt je Eintrag ein Änderungsdatum aus der Uhr.
+    Aufgefallen ist es nicht hier, sondern an ``tools/make_examples.py``: Jeder
+    Lauf erzeugte neun geänderte Beispieldateien, obwohl sich an keinem
+    Beispiel etwas geändert hatte. Seit ``CONTAINER_TIMESTAMP`` steht dort ein
+    fester Wert, und der Test kann einlösen, was er heißt.
+    """
     first = save(filled, tmp_path / "a.p3d")
     reopened = load(first)
     second = save(reopened, tmp_path / "b.p3d")
@@ -169,6 +179,24 @@ def test_a_second_round_trip_writes_the_same_bytes(filled: Project, tmp_path: Pa
     assert project_data(first) == project_data(second)
     with zipfile.ZipFile(first) as one, zipfile.ZipFile(second) as two:
         assert one.read(PROJECT_ENTRY) == two.read(PROJECT_ENTRY)
+    assert first.read_bytes() == second.read_bytes(), (
+        "zweimal gespeichert muss zweimal dieselbe Datei ergeben, nicht nur denselben Inhalt"
+    )
+
+
+def test_the_container_carries_no_clock(filled: Project, tmp_path: Path) -> None:
+    """Kein Eintrag im Container trägt eine Uhrzeit.
+
+    Geprüft wird die Ursache und nicht nur ihre Wirkung: Der Test darüber
+    würde auch grün, wenn zwei Läufe zufällig in dieselbe Sekunde fielen —
+    und an einer schnellen Maschine tun sie das fast immer.
+    """
+    written = save(filled, tmp_path / "a.p3d")
+
+    with zipfile.ZipFile(written) as container:
+        stamps = {info.date_time for info in container.infolist()}
+
+    assert stamps == {CONTAINER_TIMESTAMP}, f"aus der Uhr statt fest: {sorted(stamps)}"
 
 
 def test_expressions_and_tolerance_references_survive(filled: Project, tmp_path: Path) -> None:
