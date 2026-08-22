@@ -769,6 +769,49 @@ def test_a_bore_beside_a_boss_still_goes_through() -> None:
     assert bores[0].params["through"] is True
 
 
+def test_a_thread_is_not_a_stack_of_eight_pins() -> None:
+    """Ein M6-Gewinde meldete acht Zapfen, die es nicht gibt.
+
+    Jede Windung ist für sich ein Zylinderstück — koaxial zu den anderen,
+    gleich dick, einen Millimeter darüber, also genau die Steigung. §14 nennt
+    einen Zapfen das, womit man eine Bohrung paart; mit einem Gewindegang
+    paart niemand etwas. Und für die Zuordnung sind acht koaxiale gleich große
+    Merkmale acht gleich gute Kandidaten.
+
+    Das Gewinde selbst bleibt: Es entsteht in einem Baustein und trägt seinen
+    Namen von dort (§21.1 — „Ein Gewinde sieht sie nicht"). Verworfen wird
+    allein, was die Erkennung daneben stellt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge import profiles
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Gewinde",
+        [
+            OperationDraft(op="create_box", params={"width": 30.0, "depth": 30.0, "height": 10.0}),
+            OperationDraft(
+                op="insert_printed_thread",
+                inputs=("obj_1",),
+                params={"size": "M6", "length": 12.0, "internal": False, "z": 5.0},
+            ),
+        ],
+    )
+    result = evaluate(
+        project.document,
+        profiles.make_profile("centauri-carbon-2", "petg"),
+        sources=ProjectSources(project),
+    )
+    entry = next(iter(result.scene.objects.values()))
+    kinds = [feature.kind for feature in entry.features.values()]
+
+    assert "pin" not in kinds, f"a thread turn is not a pin: {sorted(entry.features)}"
+    assert kinds.count("thread") == 1, "and the thread itself stays"
+
+
 def test_a_countersink_is_not_a_sphere() -> None:
     """Die Gegenprobe, und sie ist der Grund für die strengere Schwelle.
 

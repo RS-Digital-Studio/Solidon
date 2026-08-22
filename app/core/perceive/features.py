@@ -287,6 +287,14 @@ ROUND_TOLERANCE = 0.02
 SINK_AXIS_LIMIT = 2.0
 
 
+#: Ab wie vielen koaxialen Zylindern gleichen Durchmessers ein Stapel als
+#: Gewinde gilt und nicht als Zapfen.
+#:
+#: Gemessen über den Korpus: Es gibt genau einen Fall mit **zwei** solchen
+#: Zylindern — die gespiegelten Gliedmaßen der Figur — und keinen mit dreien.
+#: Ein M6-Gewinde bringt acht mit, eine je Windung.
+THREAD_TURNS = 3
+
 #: Wie weit eine Senkung von ihrer Bohrung abliegen darf, quer zur Achse wie
 #: längs, jeweils als Anteil des Bohrungsradius.
 #:
@@ -499,6 +507,7 @@ def _fitted(mesh: MeshData) -> Fitted:
                 classify(piece)
 
     found = _merged_cylinders(body, mesh, found)
+    found = _without_thread_turns(body, found)
 
     # Nach Position sortiert, damit die Nummerierung für denselben Körper
     # reproduzierbar ist. **Alle drei Achsen**, nicht nur X und Y: Zwei
@@ -672,6 +681,81 @@ def _merged_cylinders(body: trimesh.Trimesh, mesh: MeshData, found: Cylinders) -
         else:
             merged.append((fit, patch))
     return merged
+
+
+def _without_thread_turns(body: trimesh.Trimesh, found: Cylinders) -> Cylinders:
+    """Gewindegänge sind keine Zapfen, und sie treten in Rudeln auf.
+
+    **Ein M6-Gewinde meldete acht.** Jede Windung ist für sich ein
+    Zylinderstück, koaxial zu den anderen, gleich dick und einen Millimeter
+    darüber — die Steigung. Erkannt wurden sie als acht Zapfen, die es nicht
+    gibt: §14 nennt einen Zapfen das, womit man eine Bohrung paart, und mit
+    einem Gewindegang paart niemand etwas. Schlimmer als die Anzeige ist die
+    Zuordnung, für die acht koaxiale gleich große Merkmale acht gleich gute
+    Kandidaten sind.
+
+    **Das Gewinde selbst geht dabei nicht verloren.** Es entsteht in einem
+    Baustein und trägt seinen Namen von dort (§21.1: „Ein Gewinde sieht sie
+    nicht"); als erzeugtes Merkmal steht es unabhängig von dieser Erkennung in
+    der Szene. Verworfen wird nur, was die Erkennung fälschlich **daneben**
+    stellt.
+
+    Drei sind die Grenze, und sie ist gemessen: Über den ganzen Korpus gibt es
+    genau einen Fall mit **zwei** koaxialen Zylindern gleichen Durchmessers —
+    die gespiegelten Gliedmaßen der Figur —, und keinen mit dreien. Ein
+    Gewinde bringt acht mit.
+    """
+    if len(found) < THREAD_TURNS:
+        return found
+
+    keep: Cylinders = []
+    used: set[int] = set()
+    for index, (fit, patch) in enumerate(found):
+        if index in used:
+            continue
+        axis = np.asarray(fit.axis, dtype=float)
+        centre = np.asarray(fit.centre, dtype=float)
+        stack = [index]
+        for other_index, (other, _other_patch) in enumerate(found):
+            if other_index == index or other_index in used:
+                continue
+            if abs(float(axis @ np.asarray(other.axis, dtype=float))) < math.cos(
+                math.radians(SINK_AXIS_LIMIT)
+            ):
+                continue
+            if abs(other.radius - fit.radius) > fit.radius * CYLINDER_TOLERANCE:
+                continue
+            offset = np.asarray(other.centre, dtype=float) - centre
+            across = offset - float(offset @ axis) * axis
+            if float(np.linalg.norm(across)) > fit.radius * SINK_FIT_LIMIT:
+                continue
+            stack.append(other_index)
+        if len(stack) >= THREAD_TURNS:
+            used.update(stack)
+            # **Und was zwischen den Windungen liegt, gehört dazu.** Der Kern
+            # und der Auslauf eines Gewindes sind koaxial, aber dicker als ein
+            # Gang; über den Durchmesser fallen sie nicht in den Stapel. Am
+            # M6-Gewinde blieb sonst einer von acht übrig — ein Phantom weniger
+            # als vorher und immer noch eins.
+            low = min(_axial_span(body, found[entry][1], fit.axis)[0] for entry in stack)
+            high = max(_axial_span(body, found[entry][1], fit.axis)[1] for entry in stack)
+            for other_index, (other, other_patch) in enumerate(found):
+                if other_index in used:
+                    continue
+                if abs(float(axis @ np.asarray(other.axis, dtype=float))) < math.cos(
+                    math.radians(SINK_AXIS_LIMIT)
+                ):
+                    continue
+                offset = np.asarray(other.centre, dtype=float) - centre
+                across = offset - float(offset @ axis) * axis
+                if float(np.linalg.norm(across)) > fit.radius * SINK_FIT_LIMIT:
+                    continue
+                other_low, other_high = _axial_span(body, other_patch, fit.axis)
+                if other_low >= low - EPS_GEOM and other_high <= high + EPS_GEOM:
+                    used.add(other_index)
+            continue
+        keep.append((fit, patch))
+    return [entry for index, entry in enumerate(found) if index not in used and entry in keep]
 
 
 def _same_cylinder(
