@@ -35,6 +35,17 @@ _log = get_logger(__name__)
 #: der Radius darf um diesen Anteil streuen, bevor die Einpassung abgelehnt wird.
 CYLINDER_TOLERANCE = 0.08
 
+#: Und wie weit die Punkte **absolut** vom eingepassten Kreis abweichen dürfen,
+#: gemessen in Facettenbreiten des Netzes.
+#:
+#: Der Rückstand oben ist relativ zum Radius und kann einen aufgeblähten Kreis
+#: deshalb nicht sehen — siehe :attr:`CylinderFit.spread`. Der Wert ist
+#: gemessen: Über den Korpus liegen alle vierzehn richtigen Einpassungen bei
+#: höchstens 0,0015, ein falsch eingepasster Viertelbogen bei 0,11. Zwei
+#: Prozent liegen mit Faktor dreizehn über dem einen und Faktor fünf unter dem
+#: anderen.
+CYLINDER_SPREAD = 0.02
+
 #: Ein Fleck braucht mindestens so viele Dreiecke, um überhaupt beurteilt zu
 #: werden.
 MIN_PATCH_FACES = 6
@@ -127,10 +138,37 @@ class CylinderFit:
     """Mittlere Abweichung vom eingepassten Radius, bezogen auf den Radius."""
     inward: bool
     """Wahr, wenn die Normalen zur Achse zeigen — das ist eine Bohrung, kein Zapfen."""
+    spread: float = 0.0
+    """Streuung um den eingepassten Kreis, in **Facettenbreiten** des Netzes.
+
+    **Der Rückstand allein kann einen falschen Zylinder nicht sehen**, und der
+    Grund ist keine Nachlässigkeit, sondern seine Bauart: Er misst gegen den
+    **eingepassten** Kreis, nicht gegen die Wirklichkeit. Ein Bogen von neunzig
+    Grad passt auf unendlich viele Kreise fast gleich gut; die Einpassung
+    wählt einen, und die Punkte liegen dann tatsächlich fast exakt darauf.
+
+    Dazu kommt, dass der Rückstand **relativ** zum Radius normiert — und damit
+    genau das belohnt, was er fangen soll. Gemessen an einem Viertelbogen eines
+    Zylinders mit r = 3: Die Einpassung fand **r = 89,79**, dreißigmal zu groß,
+    und meldete einen Rückstand von **0,0023** bei einer Schwelle von 0,08.
+    Dieselbe absolute Streuung von 0,20 mm ist bei r = 3 ein Viertel des
+    Radius und bei r = 90 ein Promille. Ein Fit, der den Radius aufbläht,
+    verbessert seinen eigenen Rückstand.
+
+    Dieses Feld misst deshalb **absolut** — und normiert auf die Facettenbreite
+    statt auf den Radius, denn die ist die Auflösung des Netzes: Eine
+    Abweichung unter einer Facettenbreite ist nicht messbar, darüber ist sie
+    wirklich. Über den Korpus liegen alle vierzehn richtigen Einpassungen bei
+    höchstens 0,0015, der falsche Viertelbogen bei 0,11 — Faktor
+    dreiundsiebzig."""
 
     @property
     def good(self) -> bool:
-        return self.residual <= CYLINDER_TOLERANCE and self.radius > EPS_GEOM
+        return (
+            self.residual <= CYLINDER_TOLERANCE
+            and self.radius > EPS_GEOM
+            and self.spread <= CYLINDER_SPREAD
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -771,6 +809,10 @@ def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
 
     distances = np.linalg.norm(flat - centre_2d, axis=1)
     residual = float(np.mean(np.abs(distances - radius)) / radius)
+    # Dieselbe Abweichung noch einmal, aber **absolut** und auf die
+    # Facettenbreite bezogen: Was der Rückstand nicht sehen kann, sieht sie.
+    width = float(np.sqrt(np.mean(body.area_faces[patch]) * 2.0))
+    spread = float(np.mean(np.abs(distances - radius)) / width) if width > EPS_GEOM else 0.0
 
     origin = centres.mean(axis=0)
     along = float(origin @ axis)
@@ -786,6 +828,7 @@ def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
         radius=float(radius),
         residual=residual,
         inward=inward,
+        spread=spread,
     )
 
 

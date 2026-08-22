@@ -16,6 +16,7 @@ import trimesh
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.perceive.features import (
+    CYLINDER_TOLERANCE,
     component_count,
     detect,
     detect_cones,
@@ -646,6 +647,34 @@ def test_a_rounded_edge_keeps_its_own_radius() -> None:
     assert round_faces[0].params["diameter"] == pytest.approx(6.0, abs=0.05)
     # Und die zwei großen Ebenen daneben sind wieder Flächen.
     assert sum(1 for entry in found.values() if entry.kind == "face") == 6
+
+
+def test_the_residual_cannot_see_a_blown_up_circle() -> None:
+    """Der Rückstand ist die letzte Schranke, und allein sieht er nichts.
+
+    Er misst gegen den **eingepassten** Kreis, nicht gegen die Wirklichkeit —
+    ein Bogen von neunzig Grad passt auf unendlich viele Kreise fast gleich
+    gut. Und er normiert **relativ** zum Radius, belohnt also genau das, was er
+    fangen soll: Dieselbe absolute Streuung ist bei r = 3 ein Viertel des
+    Radius und bei r = 90 ein Promille.
+
+    Gemessen an einem Viertelbogen eines Zylinders r = 3: Die Einpassung findet
+    **r = 89,79** und meldet einen Rückstand von 0,0023 bei einer Schwelle von
+    0,08. Der ``spread`` misst absolut und in Facettenbreiten — er meldet 0,11
+    bei einer Schwelle von 0,02, und die Form wird abgelehnt.
+    """
+    import trimesh
+
+    cylinder = trimesh.creation.cylinder(radius=3.0, height=30.0, sections=96)
+    angle = np.arctan2(cylinder.triangles_center[:, 1], cylinder.triangles_center[:, 0])
+    quarter = [int(index) for index in np.where((angle > 0.0) & (angle < math.pi / 2.0))[0]]
+
+    fit = fit_cylinder(cylinder, quarter)
+
+    assert fit is not None
+    assert fit.radius > 50.0, "the fit really is that far off"
+    assert fit.residual < CYLINDER_TOLERANCE, "and the residual really does not notice"
+    assert not fit.good, "but the spread does"
 
 
 def test_a_ring_is_not_a_heap_of_flat_faces() -> None:
