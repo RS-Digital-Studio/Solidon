@@ -128,6 +128,167 @@ def _alive(pid: int) -> bool:
     return True
 
 
+#: Wie lange gemessen wird, um „steht" von „rechnet" zu trennen. Kürzer wird
+#: es ungenau — eine Rechnung, die gerade auf die Platte schreibt, sieht sonst
+#: aus wie ein Stillstand.
+IDLE_SAMPLE_SECONDS = 2.0
+
+#: Ab wann ein stehender Halter überhaupt erwähnt wird. Ein Testlauf, der
+#: gerade ein Fenster aufbaut, steht sekundenweise — das ist normal und keine
+#: Meldung wert.
+IDLE_REPORT_SECONDS = 120.0
+
+
+def _descendants(root: int) -> set[int]:
+    """Der ganze Prozessbaum unter ``root``, einschließlich ``root`` selbst.
+
+    **Über die Kette und nicht über direkte Kinder.** Am 22.08.2026 hat eine
+    Sitzung einen laufenden Testlauf für tot erklärt, weil unter der bash kein
+    Kind stand — der ``pytest`` hing eine Ebene tiefer, an einem
+    Zwischenprozess, der inzwischen beendet war. Wer nur die erste Ebene
+    zählt, misst etwas, das neben der Sache steht.
+    """
+    eltern: dict[int, int] = {}
+    if sys.platform == "win32":
+        import ctypes
+        import ctypes.wintypes as wt
+
+        class _Entry(ctypes.Structure):
+            _fields_ = [
+                ("dwSize", wt.DWORD),
+                ("cntUsage", wt.DWORD),
+                ("th32ProcessID", wt.DWORD),
+                ("th32DefaultHeapID", ctypes.POINTER(ctypes.c_ulong)),
+                ("th32ModuleID", wt.DWORD),
+                ("cntThreads", wt.DWORD),
+                ("th32ParentProcessID", wt.DWORD),
+                ("pcPriClassBase", ctypes.c_long),
+                ("dwFlags", wt.DWORD),
+                ("szExeFile", ctypes.c_char * 260),
+            ]
+
+        kernel = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        snapshot = kernel.CreateToolhelp32Snapshot(0x2, 0)  # TH32CS_SNAPPROCESS
+        if snapshot in (0, -1):
+            return {root}
+        try:
+            entry = _Entry()
+            entry.dwSize = ctypes.sizeof(_Entry)
+            weiter = kernel.Process32First(snapshot, ctypes.byref(entry))
+            while weiter:
+                eltern[int(entry.th32ProcessID)] = int(entry.th32ParentProcessID)
+                weiter = kernel.Process32Next(snapshot, ctypes.byref(entry))
+        finally:
+            kernel.CloseHandle(snapshot)
+    else:
+        for eintrag in Path("/proc").glob("[0-9]*"):
+            try:
+                felder = (eintrag / "stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
+                eltern[int(eintrag.name)] = int(felder[1])
+            except (OSError, ValueError, IndexError):
+                continue
+
+    baum = {root}
+    # Mehrfach durchlaufen: Die Liste steht in beliebiger Reihenfolge, ein Kind
+    # kann vor seinem Elternteil kommen.
+    for _ in range(len(eltern) + 1):
+        gewachsen = {kind for kind, vater in eltern.items() if vater in baum}
+        if gewachsen <= baum:
+            break
+        baum |= gewachsen
+    return baum
+
+
+def _cpu_seconds(pid: int) -> float | None:
+    """Verbrauchte Rechenzeit eines Prozesses, oder nichts.
+
+    ``None`` heißt „keine Aussage möglich" — der Prozess ist weg, gehört
+    jemand anderem, oder das System gibt die Auskunft nicht. Es heißt nie
+    „rechnet nicht".
+    """
+    if sys.platform == "win32":
+        import ctypes
+        import ctypes.wintypes as wt
+
+        kernel = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel.OpenProcess(0x1000, False, pid)  # QUERY_LIMITED_INFORMATION
+        if not handle:
+            return None
+        try:
+            erzeugt, beendet, kern, nutzer = (wt.FILETIME() for _ in range(4))
+            ok = kernel.GetProcessTimes(
+                handle,
+                ctypes.byref(erzeugt),
+                ctypes.byref(beendet),
+                ctypes.byref(kern),
+                ctypes.byref(nutzer),
+            )
+            if not ok:
+                return None
+
+            # FILETIME zählt in 100-Nanosekunden-Schritten.
+            def _als_sekunden(wert: wt.FILETIME) -> float:
+                return ((int(wert.dwHighDateTime) << 32) + int(wert.dwLowDateTime)) / 1e7
+
+            return _als_sekunden(kern) + _als_sekunden(nutzer)
+        finally:
+            kernel.CloseHandle(handle)
+    try:
+        felder = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
+        ticks = float(felder[11]) + float(felder[12])
+        return ticks / os.sysconf("SC_CLK_TCK")
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _tree_cpu(root: int) -> float | None:
+    """Rechenzeit des ganzen Baums. ``None``, wenn kein einziger Prozess Auskunft gibt."""
+    werte = [wert for pid in _descendants(root) if (wert := _cpu_seconds(pid)) is not None]
+    return sum(werte) if werte else None
+
+
+def standing_still(pid: int, sample: float = IDLE_SAMPLE_SECONDS) -> bool | None:
+    """Ob der Baum unter ``pid`` gerade **nicht** rechnet.
+
+    Gemessen wird über ein Intervall und nicht als Gesamtwert: Die Gesamtzeit
+    eines wartenden Wrappers ist immer klein, egal was sein Kind tut — auch
+    dieser Fehler ist am 22.08.2026 einmal gemacht worden. ``None`` heißt
+    „nicht messbar" und wird nie als „steht" gelesen.
+    """
+    vorher = _tree_cpu(pid)
+    if vorher is None:
+        return None
+    time.sleep(sample)
+    nachher = _tree_cpu(pid)
+    if nachher is None:
+        return None
+    # Eine Zehntelsekunde Toleranz: Ein Prozess, der nur seine eigene Uhr
+    # liest, ist kein rechnender Testlauf.
+    return (nachher - vorher) < 0.1
+
+
+def _idle_note(entry: dict[str, object]) -> str:
+    """Ein Satz über den Halter, wenn er steht — sonst nichts.
+
+    Er tötet nichts und schlägt es auch nicht vor. Am 22.08.2026 standen zwei
+    Läufe still, zwölf und siebenundzwanzig Minuten, und blockierten dabei
+    alle anderen Sitzungen; wer wartet, soll das erfahren, statt es selbst zu
+    messen.
+    """
+    pid = int(entry.get("pid") or 0)
+    age = time.time() - float(entry.get("seit") or 0.0)
+    if pid <= 0 or age < IDLE_REPORT_SECONDS:
+        return ""
+    if standing_still(pid) is not True:
+        return ""
+    return (
+        f"Achtung: Der Halter rechnet gerade nicht — in {IDLE_SAMPLE_SECONDS:.0f} Sekunden "
+        "hat sein ganzer Prozessbaum keine Rechenzeit verbraucht. Das kann ein Wartezustand "
+        "sein (eine Eingabe, ein Dialog) oder ein Stillstand. Sieh in sein Protokoll, bevor "
+        "du weiter wartest."
+    )
+
+
 def _read(path: Path) -> dict[str, object] | None:
     try:
         return dict(json.loads(path.read_text(encoding="utf-8")))
@@ -232,6 +393,9 @@ def run(who: str, wait: float, command: list[str]) -> int:
                 "noch rechnet — ein Prozess, der steht, hält das Schloss "
                 "genauso wie einer, der arbeitet."
             )
+        note = _idle_note(foreign)
+        if note:
+            print(note)
         return BUSY_EXIT
 
     mine = _read(path) or {}
@@ -266,6 +430,9 @@ def status() -> int:
         print(f"Ein verwaistes Schloss liegt da ({reason}): {_describe(present)}")
         return 0
     print(f"Das Tor läuft: {_describe(present)}")
+    note = _idle_note(present)
+    if note:
+        print(note)
     return 1
 
 

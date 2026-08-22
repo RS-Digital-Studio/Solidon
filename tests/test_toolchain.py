@@ -30,6 +30,7 @@ from typing import Any, Final
 import pytest
 
 import tools.check_env as check_env
+import tools.gate_lock as gate_lock
 from tools.check_env import (
     mismatches,
     normal,
@@ -350,3 +351,76 @@ def test_raising_the_version_moves_both_places_and_nothing_else() -> None:
 
     project = bump_version.PROJECT.read_text(encoding="utf-8")
     assert bump_version.PROJECT_LINE.search(project) is not None
+
+
+# --- Das Schloss über dem Tor (tools/gate_lock.py) ------------------------------------
+
+
+def test_the_process_tree_is_read_along_the_chain_not_the_first_level() -> None:
+    """Ein Enkel gehört zum Baum, auch wenn sein Vater dazwischen fehlt.
+
+    **Der Fall, der diese Prüfung veranlasst hat.** Am 22.08.2026 hat eine
+    Sitzung einen laufenden Testlauf für tot erklärt: „Die bash hat kein Kind
+    mehr, kein pytest, nichts." Der ``pytest`` lief sehr wohl — eine Ebene
+    tiefer, unter einem Zwischenprozess. Wer nur die erste Ebene zählt, misst
+    die Prozesskette nicht. Hätte man dem Schluss geglaubt, wäre ein Torlauf
+    mit 3453 bestandenen Tests verworfen worden.
+    """
+    import os
+    import subprocess
+    import time
+
+    # Ein Kind, das selbst ein Kind startet und wartet: Der Enkel hängt zwei
+    # Ebenen unter uns.
+    innen = "import time; time.sleep(6)"
+    aussen = f"import subprocess, sys; subprocess.run([sys.executable, '-c', {innen!r}])"
+    kind = subprocess.Popen([sys.executable, "-c", aussen])
+    try:
+        time.sleep(1.5)
+        baum = gate_lock._descendants(os.getpid())
+        assert kind.pid in baum, "das eigene Kind fehlt im Baum"
+        assert len(baum) >= 3, (
+            f"der Enkel fehlt — gefunden wurden nur {len(baum)} Prozesse, "
+            "die Kette wird also nicht verfolgt"
+        )
+    finally:
+        kind.kill()
+        kind.wait(timeout=5)
+
+
+def test_standing_still_tells_a_sleeper_from_a_worker() -> None:
+    """Ob etwas rechnet, sagt die Rechenzeit über ein **Intervall**.
+
+    Die Gesamtzeit eines wartenden Wrappers ist immer klein, egal was sein Kind
+    tut — auch dieser Fehler ist am 22.08.2026 einmal gemacht worden. Geprüft
+    wird deshalb in beide Richtungen: Ein Schläfer muss als stehend erkannt
+    werden **und** ein Rechner nicht. Eine Prüfung, die nur die eine Hälfte
+    kann, meldet entweder immer Stillstand oder nie.
+    """
+    import subprocess
+    import time
+
+    schlaefer = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(20)"])
+    rechner = subprocess.Popen([sys.executable, "-c", "x = 0\nwhile True:\n    x += 1"])
+    try:
+        time.sleep(0.5)
+        assert gate_lock.standing_still(schlaefer.pid, sample=1.0) is True, (
+            "ein Schläfer rechnet nicht"
+        )
+        assert gate_lock.standing_still(rechner.pid, sample=1.0) is False, "ein Rechner rechnet"
+    finally:
+        for prozess in (schlaefer, rechner):
+            prozess.kill()
+            prozess.wait(timeout=5)
+
+
+def test_an_unknown_process_says_nothing_instead_of_standing_still() -> None:
+    """„Nicht messbar" ist nicht „steht".
+
+    Eine Prozessnummer, die niemand trägt, darf keinen Stillstand melden —
+    sonst hinge an jeder verwaisten Nummer eine Warnung, und die Auskunft wäre
+    wertlos. ``None`` heißt keine Aussage, und nur das.
+    """
+
+    assert gate_lock._cpu_seconds(0) is None
+    assert gate_lock.standing_still(2**30) is None
