@@ -276,6 +276,15 @@ def body_html(markdown: str) -> str:
 
 
 def page(title: str, body: str, siblings: str) -> str:
+    """Der Rumpf einer Rechtsseite.
+
+    Der Sprung an den Inhalt steht hier und nicht von Hand in der erzeugten
+    Datei. Dort stand er: „Neunundzwanzig Seiten, und auf keiner kam die
+    Tastatur an der Kopfzeile vorbei" zählte die drei Rechtstexte zu den von
+    Hand gepflegten und trug ihn im Quelltext nach — nur werden sie erzeugt.
+    Der nächste Lauf nahm ihn wieder heraus, und ``tests/test_website.py``
+    wurde rot, ohne dass sich eine Zeile Inhalt geändert hatte (WCAG 2.4.1).
+    """
     return (
         f'<!DOCTYPE html>\n<html lang="de">\n<head>\n'
         f'<meta charset="utf-8">\n'
@@ -285,10 +294,11 @@ def page(title: str, body: str, siblings: str) -> str:
         f'<link rel="icon" href="/icon.svg" type="image/svg+xml">\n'
         f'<link rel="stylesheet" href="style.css">\n'
         f"</head>\n<body>\n\n"
+        f'<a class="skip" href="#content">Zum Inhalt springen</a>\n\n'
         f'<header class="site">\n  <div class="wrap">\n'
         f'    <a class="brand" href="/">Solidon<span>3D</span></a>\n'
         f"  </div>\n</header>\n\n"
-        f'<main class="legal">\n  <div class="wrap">\n{body}\n  </div>\n</main>\n\n'
+        f'<main id="content" class="legal">\n  <div class="wrap">\n{body}\n  </div>\n</main>\n\n'
         f'<footer class="site">\n  <div class="wrap">\n'
         f"    © 2026 {APP_VENDOR} ·\n"
         f'    <a href="/">Startseite</a>{siblings}\n'
