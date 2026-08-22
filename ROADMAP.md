@@ -74,6 +74,7 @@ oder er hält ihn nicht fest.
 | Die Zuordnung kennt Kugel und Torus nicht | Das Fundament der Wahrnehmung (22.08.2026) | zwei Arten mehr in der Kostenmatrix von §21.2, dazu Namen in der Oberfläche. Eine Art, die erkannt aber nicht zugeordnet wird, ist ein halber Zustand — dieselbe Konsistenzfrage wie bei den Übersetzungskatalogen, und beim Schneiden des Auftrags zunächst übersehen |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
+| Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
 | Der Testkorpus hat keinen verrundeten Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Datei mit Kehle. Ein Regressionsnetz, das die Alltagsformen ausspart, meldet Erfolg über dem, was es nicht enthält (§34) |
@@ -4599,6 +4600,32 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       schickt den Kunden nicht mehr mit seinem achten Punkt ins Handbuch, wo
       nichts stand.
 
+- [ ] **Ein Test, der nur seine eigene Konsistenz misst, sieht keinen
+      systematischen Versatz.** Zweimal an einem Tag gefunden, beide Male
+      hätte die naheliegende Prüfung geschwiegen:
+
+      * **Die Krümmungskarte** rechnete durchweg **genau zwei Drittel** des
+        wahren Radius (3,33 statt 5), weil sie ab dem Dreiecksschwerpunkt maß
+        statt ab der Mitte der ebenen Fläche. Der Fehler war bei **jeder**
+        Netzfeinheit gleich groß — ein Test, der zwei Vernetzungen
+        gegeneinander hält, wäre grün geblieben. Gefunden wurde er, weil gegen
+        den **Sollwert** geprüft wurde (Zylinder r=5) und nicht gegen die
+        eigene Wiederholbarkeit.
+      * **`ring_diameter`** machte die Größenkomponente des Merkmalsvektors zu
+        null, weil `feature_vector` den Schlüssel `diameter` liest. Zwei Tori
+        verschiedener Größe kosteten gegeneinander 0,0 — für die Zuordnung
+        dasselbe Merkmal. 41 Merkmalstests, die Registerkonsistenz und die
+        Zuordnungstests blieben grün, weil sie Bohrungen prüfen, und die
+        heißen richtig.
+
+      **Was daraus folgt, ist keine neue Testart, sondern eine Frage an jede
+      vorhandene:** Prüft sie gegen einen Wert, der von außen kommt — ein
+      Sollmaß, eine andere Rechnung, eine analytische Formel —, oder nur
+      dagegen, dass zweimal dasselbe herauskommt? Determinismus ist billig zu
+      prüfen und fängt genau die Fehler nicht, die immer gleich falsch sind.
+      Verwandt mit der Testart „Anschluss" (§35): Auch dort ist jeder Test für
+      sich grün.
+
 - [ ] **Die Krümmungskarte misst das Netz und nicht den Körper.**
       `curvature_map` (`app/core/perceive/maps.py`) ist gebaut, registriert und
       hat Titel, Einheit und Legende — sie misst aber `face_adjacency_angles`
@@ -4694,6 +4721,17 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       will: *Was unterscheidet meinen Arbeitsbaum vom letzten Commit?*
       Gefunden von 3d-druck-33.
 
+      **Und dieselbe Ursache in ihrer teuren Form.** Weil vier Sitzungen mit
+      privaten Indizes committen, zieht niemand den **gemeinsamen** Index nach.
+      Am 22.08.2026 stand dort ein Schnappschuss von vor den Commits des
+      Abends: `git diff --cached HEAD` meldete 27 Dateien, 87 Einfügungen und
+      **1684 Löschungen** — darunter drei ganze Testdateien mit 343, 310 und
+      159 Zeilen und zwei Korpusdateien. Ein einziges `git commit -a` hätte
+      daraus einen Commit gemacht, und der post-commit-Hook hätte ihn sofort
+      gepusht. Aufgeräumt mit `git reset` (ohne `--hard`, Arbeitsbaum
+      unangetastet); gefunden von 3d-druck-b8, und zwar weil eine Datei nach
+      ihrem eigenen Commit noch als `MM` im Status stand.
+
 - [ ] **Ein Test steht zwölf Minuten still, ohne zu rechnen.** Gemessen am
       22.08.2026 von 3d-druck-33: `tests/test_interface_limits.py` blieb bei
       Test 23 von 30 (`test_the_tool_strip_comes_back_with_a_body`) stehen —
@@ -4757,7 +4795,59 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       mit eigenem `QTimer`, stark verbunden zehn Überlebende, schwach verbunden
       keiner.
 
-      **Offen ist die Reichweite.** `grep -rn "\.connect(lambda" app/ui/*.py |
+      **Entschieden am 22.08.2026 (Robert): alle umbauen.** Die Trennung, die
+      3d-druck-b8 statisch gemessen hat, trägt die Entscheidung — **33
+      dauerhafte Ringe** (der Sender lebt so lang wie `self`) gegen **26
+      kurzlebige** (Arbeiter, Dialoge, Animationen; der Sender geht, und mit
+      ihm der Ring). Die 26 bleiben, wie sie sind: Sie sind genau das Muster,
+      das die Gebietsregel vorschreibt. Elf der 33 liegen in
+      `sketch_editor.py`, weitere in `main_window.py` (5), `dialogs.py` (3),
+      `analysis_bar.py` (2), `install_dialog.py` (2).
+
+      **Die Abnahme ist ein Freigabetest je Widget-Klasse, nicht die Zahl der
+      umgebauten Stellen.** Wer „33 Stellen umgebaut" als Abnahme liest, hat
+      nichts abgenommen: 33 richtig umgebaute Stellen plus eine neue falsche
+      ergeben denselben Zustand wie vorher. Der Test fragt *wird ein
+      losgelassener Editor freigegeben?* — er prüft das Ergebnis und wird rot,
+      sobald jemand eine zwölfte Stelle einbaut.
+      `tests/test_widget_lifetime.py` ist diese Abnahme, parametrisiert über
+      die Klassen; jede neue Widget-Klasse ist eine Zeile.
+
+      **Und die Zahl 33 ist eine Untergrenze, keine Bilanz — belegt beim ersten
+      Umbau.** In `sketch_editor.py` wurden 13 Stellen umgestellt, alles grün —
+      und der Freigabetest blieb rot: zehn von zehn Editoren überlebten weiter.
+      `gc.get_referrers` nannte zwei weitere Halter, beide von der Bauart
+
+          shapes_menu = QMenu(shapes_button)      # Knopf gehört self
+          action = shapes_menu.addAction(label)   # Aktion gehört dem Menü
+          action.triggered.connect(lambda …: self.…)
+
+      Die Kette läuft über **drei** Ebenen — Panel → Knopf → Menü → Aktion →
+      Rückruf → Panel —, und die statische Suche prüfte nur eine. `QMenu` mit
+      `addAction` ist ein verbreitetes Muster; in `main_window.py` dürfte es
+      mehr davon geben als im Skizzeneditor. **Genau deshalb ist die Liste
+      nicht die Abnahme:** 33 abgehakte Stellen hätten hier einen Editor
+      hinterlassen, der weiter nicht freigegeben wird.
+
+      **Der nützlichste Fund des Umbaus ist aber ein anderer: `weakref` ist
+      fast nie nötig.** Gemessen, bevor 33 Stellen mit Blöcken zugestellt
+      wurden:
+
+      | Verbindung | überleben |
+      |---|---|
+      | `connect(self.tue)` | 0 von 10 — frei |
+      | `connect(lambda: self.tue())` | 10 von 10 — Ring |
+      | `connect(partial(self.tue, 1))` | 10 von 10 — Ring |
+      | `connect(lambda x=1: self.tue(x))` | 10 von 10 — Ring |
+
+      **Qt hält eine gebundene Methode von sich aus schwach.** Den Ring baut
+      allein das Lambda — und `functools.partial` sieht aus wie seine saubere
+      Fassung und hält den Besitzer genauso fest. Der Umbau ist damit in den
+      meisten Fällen `connect(self.methode)` und **kürzer** als vorher, nicht
+      länger. Nur wo ein Wert aus einer Schleife gebraucht wird, bleibt eine
+      schwache Bindung nötig (`app/ui/leash.py`, `weak_slot()`).
+
+      **Die Reichweite, gemessen.** `grep -rn "\.connect(lambda" app/ui/*.py |
       grep "self\."` findet **59 Stellen**. Nicht jede bildet einen Ring — er
       entsteht nur, wenn das sendende Objekt selbst von `self` gehalten wird,
       bei einem Kind-Widget oder Kind-Timer also im Normalfall. Betroffen sind
