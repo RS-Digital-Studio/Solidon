@@ -9,6 +9,7 @@ vor einem neuen Nutzer.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Final
 
 import pytest
 
@@ -285,3 +286,103 @@ def test_no_example_greets_with_a_contradiction(profile: Profile) -> None:
             finding.code for finding in result.scene.report.findings if finding.code in verboten
         }
         assert not found, f"{entry.id}: {sorted(found)}"
+
+
+#: Warnungen, mit denen ein Beispiel den Kunden begrüßen **darf** — je Beispiel
+#: ein Befundcode mit dem Grund, warum er dasteht.
+#:
+#: Die Liste ist eine Ausnahmeliste und keine Obergrenze, und der Unterschied
+#: entscheidet: „höchstens elf Warnungen" wäre in einer Woche grün mit zwölf,
+#: weil jemand die Zahl anpasst. Hier trägt jede Ausnahme ihren eigenen Satz,
+#: und eine **neue** Warnung ist sofort rot.
+_ERLAUBTE_BEGRUESSUNG: Final[dict[str, dict[str, str]]] = {
+    "weg3-generiert-aufbereiten": {
+        # Wahr und am Platz: Der erzeugte Körper bringt Kleinstteile mit, das
+        # Beispiel räumt sie weg, und der Befund sagt genau das. Eine Warnung,
+        # die etwas Wahres über den gezeigten Weg sagt, gehört in ein Beispiel
+        # — sie ist Teil dessen, was es vorführt.
+        "repair.components_removed": "zeigt, was Weg 3 mit erzeugten Netzen tut",
+    },
+    "gehaeuse-mit-bausteinen": {
+        # **Offen, und die Zeile fällt mit dem Fehler.** Eine Textprägung
+        # frisst die benannten Merkmale der Bausteine: bei „Dose mit Deckel"
+        # gemessen vier verlorene bei drei gemeldeten, ``heatset_m4_bore_1``
+        # verschwindet lautlos. Das bricht die Zusicherung aus ``b76df19``
+        # („fällt heraus, wenn es wirklich weg ist — **mit Befund**, nicht
+        # lautlos"). Gefunden von 3d-druck-64 beim Durchgehen der Beispiele.
+        "perceive.generated_lost": "offener Fehler, kein hinnehmbarer Zustand",
+    },
+    "dose-mit-deckel": {
+        "perceive.generated_lost": "derselbe offene Fehler wie oben",
+    },
+}
+
+
+def test_no_example_greets_the_customer_with_a_warning(profile: Profile) -> None:
+    """Was ein Beispiel beim Öffnen sagt, ist das Erste, was ein Kunde von
+    Solidon liest — und es sagt mehr über die Anwendung als jede Zeile im
+    Handbuch.
+
+    **Die Lücke, die es gab.** ``test_an_example_opens_and_computes`` fragt, ob
+    ein Beispiel öffnet und rechnet; das ist die Frage des Entwicklers. Die
+    Frage des Kunden ist „was steht da, wenn ich es aufmache", und die hat
+    niemand gestellt: Am 23.08.2026 begrüßten **fünf von neun** Beispielen mit
+    zusammen **elf** Warnungen, und keine davon war je an einer Prüfung
+    vorbeigekommen — sie waren an gar keiner angekommen. Der Nachbar darüber
+    (``…greets_with_a_contradiction``) prüft drei benannte Codes; alles andere
+    ging durch.
+
+    **Warum Ausnahmeliste und nicht Verbotsliste.** Eine Verbotsliste kennt nur,
+    woran jemand gedacht hat. Zehn der elf Warnungen trugen einen Code, den sie
+    nicht enthielt. Umgekehrt gilt: Was hier nicht steht, ist rot — auch ein
+    Code, den es heute noch nicht gibt.
+
+    **Und warum sie in beide Richtungen prüft.** Eine Ausnahme, deren Warnung
+    verschwunden ist, wird gemeldet: Sonst bleibt die Zeile stehen, wenn der
+    Fehler längst behoben ist, und deckt beim nächsten Mal etwas zu, das
+    niemand geprüft hat. Wer eine Warnung löst, streicht seine Zeile — der Test
+    sagt ihm, dass er darf.
+    """
+    offen: list[str] = []
+    unnoetig: list[str] = []
+    for entry in examples.EXAMPLES:
+        project = load(examples.directory() / entry.filename)
+        result = evaluate(
+            project.document,
+            profiles.make_profile(
+                project.document.printer or "centauri-carbon-2",
+                project.document.material or "petg",
+            ),
+            sources=ProjectSources(project),
+        )
+        erlaubt = _ERLAUBTE_BEGRUESSUNG.get(entry.id, {})
+        gesehen = {
+            finding.code
+            for finding in result.scene.report.findings
+            if finding.severity in ("warning", "error")
+        }
+        offen.extend(f"{entry.id}: {code}" for code in sorted(gesehen - set(erlaubt)))
+        unnoetig.extend(f"{entry.id}: {code}" for code in sorted(set(erlaubt) - gesehen))
+
+    assert not offen, (
+        "Beispiele begrüßen den Kunden mit Warnungen, die niemand eingetragen hat:\n"
+        + "\n".join(offen)
+    )
+    assert not unnoetig, (
+        "Diese Ausnahmen treffen nicht mehr zu — die Warnung ist weg, die Zeile "
+        "darf gestrichen werden:\n" + "\n".join(unnoetig)
+    )
+
+    # **Und die dritte Richtung, die beim ersten Bauen fehlte.** Eine Ausnahme
+    # für ein Beispiel, das es nicht gibt, wird nie betrachtet:
+    # ``get(entry.id)`` findet sie nicht, und sie schweigt für immer.
+    # Aufgefallen ist es in der Gegenprobe — dort stand versehentlich
+    # ``kalibrieren`` statt ``drucker-kalibrieren``, und der Test blieb grün,
+    # obwohl er hätte melden müssen. Ein Eintrag, den niemand liest, ist
+    # schlimmer als keiner: Er sieht aus wie eine geprüfte Entscheidung.
+    bekannt = {entry.id for entry in examples.EXAMPLES}
+    erfunden = sorted(set(_ERLAUBTE_BEGRUESSUNG) - bekannt)
+    assert not erfunden, (
+        "Ausnahmen für Beispiele, die es nicht gibt — sie werden nie gelesen: "
+        + ", ".join(erfunden)
+    )
