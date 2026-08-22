@@ -36,8 +36,23 @@ fails=0
 # Die Namen der Fehlläufe, durch Leerzeichen getrennt — Testpfade haben keine.
 schlecht=""
 
-echo "=== der Rest in einem Zug ==="
-PYTHONIOENCODING=utf-8 $PY -m pytest -q -m "not performance" $ignores
+#: Wie viele Prozesse die Sammelgruppe teilen.
+#:
+#: **Eine feste Zahl und nicht `auto`.** Auf dieser Maschine wären es 32, und
+#: xdist stirbt dabei im Verteiler (`INTERNALERROR: KeyError <WorkerController
+#: gw13>`, keine Tests gelaufen). Wichtiger als der Absturz ist der Grundsatz:
+#: `auto` heißt auf jeder Maschine etwas anderes, und ein Tor mit einer stillen
+#: Variablen misst nicht überall dasselbe — dieselbe Überlegung wie bei den
+#: maschinenabhängigen Bestwerten, die deshalb nicht im Repository liegen.
+#:
+#: Gemessen am 22.08.2026 (i9-13900K, 24 Kerne): seriell 175 s, mit acht
+#: Prozessen 66 s. Die Gruppe darf das, weil kein Qt darin steckt — die
+#: Fenstergruppe unten bekommt es ausdrücklich **nicht**, dort ist jeder
+#: Prozess schon die Trennung.
+KERNE=${SUITE_KERNE:-8}
+
+echo "=== der Rest in einem Zug (-n $KERNE) ==="
+PYTHONIOENCODING=utf-8 $PY -m pytest -q -m "not performance" $ignores -n "$KERNE"
 status=$?
 echo "--> Exit $status"
 if zaehlt_als_fehler $status; then
