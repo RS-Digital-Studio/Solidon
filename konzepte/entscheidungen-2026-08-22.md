@@ -76,6 +76,44 @@ liest sich §15.4) oder einen **neuen anlegen**? Ohne Antwort wird ersetzt.
 
 ---
 
+## 3b. Woher weiß ein Merkmal, welcher Schritt es erzeugt hat? (3d-druck-3a)
+
+**Eine fehlende Voraussetzung, gefunden bevor eine Zeile geschrieben war.** §21.2
+verlangt: „Ein erzeugtes Merkmal bietet immer mindestens eine Handlung an — den
+Schritt zu ändern, der es erzeugt hat." Um das anzubieten, muss man wissen,
+*welcher* Schritt das war. **Diese Information ist nirgends gespeichert.** Drei
+Wege geprüft, alle drei tot:
+
+- `Feature.provenance` sagt `"generated"` — also *dass* es erzeugt wurde, nicht
+  *von wem*. Mehr trägt das Feld laut §9 nicht.
+- Das ID-Präfix `op4.pin_1`, das §21.2 selbst als Beispiel nennt, wird im
+  Produktivcode **nirgends vergeben und nirgends gelesen**. Es kommt nur in
+  Tests vor, die es von Hand hinschreiben — die belegen die Schreibweise, nicht
+  die Vergabe.
+- `SceneObject.created_by` ist der falsche Ausweg: `evaluate.py:309` setzt es bei
+  **jeder** Operation, die das Objekt ausgibt. Für ein Gewinde, das in Schritt 3
+  geschnitten wurde und in Schritt 7 eine Verrundung bekam, steht dort 7.
+
+**Damit ist Punkt 3 keine Menüfrage, sondern erst eine Formatfrage. Zwei Wege:**
+
+**(a) Das Präfix wirklich vergeben**, wie §21.2 es beschreibt: jedes erzeugte
+Merkmal heißt `op<N>.<name>`. Dafür: Der Bauplan sagt es bereits so, kein neues
+Feld. Dagegen: Die ID ist der Schlüssel, an dem Ops hängen — sie zu ändern heißt,
+jede bestehende Projektdatei umzuschreiben, und die Zuordnung vergleicht Namen.
+Migrationsschritt 9 → 10.
+
+**(b) Ein Feld an `Feature`**, etwa `created_by: OpId | None`. Dafür: Die IDs
+bleiben; die Antwort steht, wo die Frage gestellt wird; alte Dateien lesen `None`
+und verlieren nichts. Dagegen: §9 ändert sich, und `Feature` ist die Struktur, an
+der sich laut §9 alle Module ausrichten.
+
+**Vorschlag der Sitzung: (b).** Die ID ist ein Schlüssel und trägt schon eine
+Bedeutung (Art und Nummer); ihr eine zweite aufzuladen macht jede Änderung am
+Erzeuger zu einer Umbenennung — und §21.2 verlangt an derselben Stelle Stabilität
+der IDs.
+
+---
+
 ## 4. Erzeugen und Ändern sind reine Verteilermenüs (3d-druck-b8)
 
 **Vorschlag: die Regel, die es entscheidet, steht schon im Code — sie schaut nur
@@ -115,21 +153,39 @@ acht die häufigsten sind, sollte an Fusion abgelesen werden statt geraten.
 
 ## 6. Ein Höhenbudget für den Startbildschirm (3d-druck-b8)
 
-Gemessen: Kachelhöhe 122 (davon 96 Vorschaubild), Ablagefläche 140, „Zuletzt
-geöffnet" mit Leerzeile. Auf 1600×900 fehlen 156 Pixel.
+**Nachgemessen, und die Aktenlage des Punkts stimmt nicht mehr.** Am gebauten
+Fenster, Startbildschirm mit sechs zuletzt geöffneten Projekten:
 
-**Vorschlag, in dieser Reihenfolge:**
-1. **Ablagefläche (140).** Größter Einzelposten und der einzige mit einer
-   Alternative auf derselben Fläche — Ziehen und Ablegen funktioniert über dem
-   ganzen Fenster, nicht nur über dem gestrichelten Rechteck. Eine flache Zeile
-   hält die Entdeckbarkeit und gibt rund 100 Pixel her.
-2. **Die Leerzeile bei „Zuletzt geöffnet"** — kostet nichts an Bedeutung.
-3. **Kachelhöhe zuletzt.** 96 der 122 Pixel sind das Vorschaubild, und das ist
-   der Grund, aus dem die Kacheln erkennbar sind. Wer hier kürzt, kürzt die
-   einzige Stelle, an der der Startbildschirm etwas zeigt statt beschreibt.
+| Auflösung | Rollweg mit 6 zuletzt | ohne „Zuletzt geöffnet" |
+|---|---|---|
+| 1920 × 1080 | 160 px | 56 px |
+| 1600 × 900 | **340 px** | 236 px |
+| 1366 × 768 | 472 px | 368 px |
 
-1 und 2 liegen zusammen **knapp** unter den fehlenden 156 — deshalb wird vor der
-Umsetzung auf 1600×900 nachgemessen, statt zu schätzen.
+Der Registerpunkt nannte 16 px auf 1920 und 156 px auf 1600 — beide Zahlen sind
+heute mehr als doppelt so hoch. Die drei Spalten sind dabei aktiv und in Ordnung
+(gemessen 1360 vorhanden, 1260 gebraucht), der Unterschied kommt woanders her.
+
+**Drei Abweichungen von dem, was im Punkt steht:** Es gibt **zwei** Kachelbereiche
+(`examples_area` 232 px, `more_area` 242 px), nicht einen. Die Ablagefläche gibt
+es als Widget **nicht mehr** — wer nach ihr schneidet, schneidet nichts. Und die
+Kachel misst 112 px, nicht 122.
+
+**Vorschlag, mit Zahlen statt Gefühl:**
+1. **`more_area` — „Was kann das noch?"** (242 px). Der größte Posten und der
+   einzige, der auf dem Startbildschirm **nichts startet**: Er zeigt, was die
+   Anwendung kann, während „Wo fange ich an?" den Weg ins Dokument öffnet. Als
+   aufklappbarer Abschnitt, zugeklappt als Vorgabe, wäre das der ganze Betrag —
+   und für den wiederkehrenden Kunden ist es der Bereich, den er am längsten
+   nicht mehr braucht.
+2. **„Zuletzt geöffnet" auf vier statt sechs Zeilen** (~35 px je Zeile). Nicht
+   streichen: Für den wiederkehrenden Nutzer ist das der häufigste Klick.
+3. **Die Kachelhöhe zuletzt** — 112 px sind schon knapp, und das Vorschaubild ist
+   der Grund, aus dem eine Kachel erkennbar ist.
+
+Punkt 1 allein bringt 242 der 340 fehlenden Pixel auf 1600 × 900. Für 1366 × 768
+genügt **kein einzelner** Schnitt — das ist die ehrliche Antwort auf die Frage des
+Punkts.
 
 ---
 

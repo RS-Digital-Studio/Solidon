@@ -54,9 +54,8 @@ oder er hält ihn nicht fest.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| Die Changelog-Korrektur steht nur im Arbeitsbaum | Der Changelog schickte den Kunden ins Handbuch, und dort war nichts (22.08.2026) | den Upload von `website/version.json` — bis dahin liest jedes Update-Fenster den alten achten Punkt |
 | Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | eine Entscheidung, was aus der Zeile verschwindet — und einen Test, der sein Thema selbst setzt |
-| Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird — Kachelhöhe, Ablagefläche oder die Liste der zuletzt geöffneten Projekte; Umschichten ist ausgereizt |
+| Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird. Am 22.08. neu gemessen, und die Aktenlage des Punkts stimmt nicht mehr: 340 px fehlen auf 1600x900 statt 156, die Ablagefläche gibt es als Widget nicht mehr, und es sind **zwei** Kachelbereiche — `more_area` (242 px) ist der größte Einzelposten |
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 | Benannte Merkmale überstehen keine Boolesche Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung darüber, wann ein benanntes Merkmal wirklich fort ist — vierzehn Ops geben `features={}` zurück, und `_with_features` liest die generierten nur aus der Ausgabe |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
@@ -4494,6 +4493,29 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       als der Cache: Wie viele fertig gebaute Sachen liegen sonst noch da,
       ohne Aufrufer?
 
+- [x] **Acht Kundenseiten standen veraltet auf dem Server, und der Abgleich
+      konnte sie nicht sehen.** Aufgefallen am 22.08.2026 beim Hochladen von
+      `version.json`: Auf solidon3d.de stand noch „Demo-Fassung", wo das
+      Repository seit `7d4c111` „Demo-Version" sagt — in AGB, EULA und
+      Widerrufsbelehrung, also in den Texten, die im Zweifel vor Gericht
+      gelten, dazu Startseite, Datenschutz, Handbuch, `site.js` und
+      `style.css`.
+
+      **Der Grund, aus dem es niemand bemerkte, ist der eigentliche Fund:**
+      `upload_website.py --fehlend` verglich **Dateigrößen**, und „Fassung" und
+      „Version" sind beide sieben Zeichen lang. Ein Abgleich, der Längen prüft,
+      sieht eine Umbenennung nie — und eine Umbenennung ist genau das, was über
+      eine ganze Website hinweg passiert. Behoben (`236009b`): Textdateien
+      werden am Inhalt verglichen, und zwar **über HTTPS statt über FTP**, weil
+      die ausgelieferte Adresse die Wahrheit ist, auf die es ankommt.
+      Binärdateien und `.php` entscheidet weiter die Größe; PHP wird
+      ausgeführt statt ausgeliefert, ein Abruf gäbe nie den Quelltext zurück.
+
+      Alles hochgeladen und gegengeprüft: 348 Dateien oben, keine weicht ab.
+      Damit ist auch die Changelog-Korrektur draußen — das Update-Fenster
+      schickt den Kunden nicht mehr mit seinem achten Punkt ins Handbuch, wo
+      nichts stand.
+
 - [ ] **Kein Viewport wird jemals freigegeben, und kein Fenster auch.** Gemessen
       am 22.08.2026 von 3d-druck-b8: zwanzig losgelassene Viewports und fünf
       losgelassene `MainWindow` überleben `del` und `gc.collect()` vollzählig.
@@ -4805,7 +4827,18 @@ gehalten hätten.
       wurde er unabhängig, bevor er umgesetzt wurde — eine fremde Sitzung ist
       für Roberts Anweisungsdatei keine Grundlage, auch bei richtigem Befund.
 
-- [ ] **Die Korrektur ist lokal.** `website/version.json` liegt richtig im
+- [x] **Die Korrektur war lokal.** `website/version.json` lag richtig im
       Arbeitsbaum; was der Kunde abfragt, ist die Datei auf dem Server. Bis
-      `tools/upload_website.py` läuft, liest jedes Update-Fenster weiter den
+      `tools/upload_website.py` lief, las jedes Update-Fenster weiter den
       alten achten Punkt.
+
+      **Hochgeladen am 22.08.2026 und gegengeprüft:** Die Datei unter
+      `https://solidon3d.de/version.json` ist mit der lokalen identisch, und
+      der achte Punkt nennt jetzt das Hilfemenü statt des Handbuchs. Die drei
+      Pakete, die sie ankündigt, liegen mit passender Größe auf dem Server.
+
+      **Und dabei kam heraus, dass es nicht bei dieser einen Datei geblieben
+      war:** Acht weitere standen veraltet oben, darunter AGB, EULA und
+      Widerrufsbelehrung. Der Abgleich konnte sie nicht sehen — er verglich
+      Dateigrößen, und „Fassung" ist so lang wie „Version". Der eigene Punkt
+      dazu steht unter „Das Fundament der Wahrnehmung".
