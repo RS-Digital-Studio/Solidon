@@ -25,4 +25,4 @@ dans `website/version.json`.
 - Lors d'une découpe avec goupilles, les trous correspondants se placent dans la bonne moitié.
 - Millimètres et pouces valent maintenant partout où figure un nombre — y compris dans les barres d'outils et lors de la peinture.
 - La progression reste affichée jusqu'à la fin réelle du calcul, et la fenêtre demeure utilisable pendant ce temps.
-- Le manuel a reçu un aperçu de tous les raccourcis clavier.
+- Tous les raccourcis clavier figurent désormais dans un aperçu unique : dans le menu Aide, sous « Raccourcis clavier », ou en appuyant sur la touche point d’interrogation.

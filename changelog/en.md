@@ -24,4 +24,4 @@ it into `website/version.json`.
 - When splitting with pins, the matching holes now sit in the correct half.
 - Millimetres and inches now apply wherever a number appears — including the tool bars and painting.
 - Progress stays until the computation is really done, and the window remains usable throughout.
-- The manual has gained an overview of every keyboard shortcut.
+- Every keyboard shortcut is now in one overview: in the Help menu under "Keyboard shortcuts", or by pressing the question mark key.

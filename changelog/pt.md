@@ -24,4 +24,4 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Ao dividir com pinos, os furos correspondentes ficam na metade certa.
 - Milímetros e polegadas valem agora onde quer que apareça um número — também nas barras de ferramentas e ao pintar.
 - O progresso mantém-se até o cálculo estar mesmo terminado, e a janela continua utilizável entretanto.
-- O manual passou a ter um resumo de todos os atalhos de teclado.
+- Todos os atalhos de teclado estão agora numa única vista: no menu Ajuda, em «Atalhos de teclado», ou premindo a tecla de ponto de interrogação.

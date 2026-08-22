@@ -24,4 +24,4 @@ scrive in `website/version.json`.
 - Dividendo con le spine, i fori corrispondenti finiscono nella metà giusta.
 - Millimetri e pollici valgono ora dovunque compaia un numero, anche nelle barre degli strumenti e nella pittura.
 - L'avanzamento resta finché il calcolo è davvero finito, e la finestra rimane utilizzabile nel frattempo.
-- Il manuale ha ricevuto un prospetto di tutte le scorciatoie da tastiera.
+- Tutte le scorciatoie da tastiera sono ora in un unico prospetto: nel menu Aiuto, sotto «Scorciatoie da tastiera», oppure premendo il tasto punto interrogativo.

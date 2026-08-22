@@ -24,4 +24,4 @@ schreibt ihn in `website/version.json`.
 - Beim Trennen mit Verstiftung sitzen die Gegenlöcher in der richtigen Hälfte.
 - Millimeter und Zoll gelten jetzt überall, wo eine Zahl steht — auch in den Werkzeugleisten und beim Bemalen.
 - Der Fortschritt bleibt stehen, bis wirklich fertig gerechnet ist, und das Fenster bleibt dabei bedienbar.
-- Das Handbuch hat eine Übersicht aller Tastenkürzel bekommen.
+- Alle Tastenkürzel stehen jetzt in einer Übersicht: im Hilfemenü unter „Tastenkürzel", oder mit einem Druck auf die Fragezeichentaste.

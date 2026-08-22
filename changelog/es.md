@@ -25,4 +25,4 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Al dividir con pasadores, los agujeros correspondientes quedan en la mitad correcta.
 - Milímetros y pulgadas valen ahora allí donde hay un número, también en las barras de herramientas y al pintar.
 - El progreso se mantiene hasta que el cálculo termina de verdad, y la ventana sigue siendo utilizable mientras tanto.
-- El manual incluye ahora un resumen de todos los atajos de teclado.
+- Todos los atajos de teclado están ahora en un único resumen: en el menú Ayuda, bajo «Atajos de teclado», o pulsando la tecla de interrogación.

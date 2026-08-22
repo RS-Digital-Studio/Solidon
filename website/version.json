@@ -31,7 +31,7 @@
       "Beim Trennen mit Verstiftung sitzen die Gegenlöcher in der richtigen Hälfte.",
       "Millimeter und Zoll gelten jetzt überall, wo eine Zahl steht — auch in den Werkzeugleisten und beim Bemalen.",
       "Der Fortschritt bleibt stehen, bis wirklich fertig gerechnet ist, und das Fenster bleibt dabei bedienbar.",
-      "Das Handbuch hat eine Übersicht aller Tastenkürzel bekommen."
+      "Alle Tastenkürzel stehen jetzt in einer Übersicht: im Hilfemenü unter „Tastenkürzel\", oder mit einem Druck auf die Fragezeichentaste."
     ],
     "en": [
       "Typed decimal numbers are read correctly everywhere. \"12.5\" stays twelve and a half — before, it could turn into 125, with no question and no warning.",
@@ -41,7 +41,7 @@
       "When splitting with pins, the matching holes now sit in the correct half.",
       "Millimetres and inches now apply wherever a number appears — including the tool bars and painting.",
       "Progress stays until the computation is really done, and the window remains usable throughout.",
-      "The manual has gained an overview of every keyboard shortcut."
+      "Every keyboard shortcut is now in one overview: in the Help menu under \"Keyboard shortcuts\", or by pressing the question mark key."
     ],
     "es": [
       "Los números decimales escritos se leen bien en todas partes. «12,5» sigue siendo doce y medio; antes podía convertirse en 125, sin preguntar y sin avisar.",
@@ -51,7 +51,7 @@
       "Al dividir con pasadores, los agujeros correspondientes quedan en la mitad correcta.",
       "Milímetros y pulgadas valen ahora allí donde hay un número, también en las barras de herramientas y al pintar.",
       "El progreso se mantiene hasta que el cálculo termina de verdad, y la ventana sigue siendo utilizable mientras tanto.",
-      "El manual incluye ahora un resumen de todos los atajos de teclado."
+      "Todos los atajos de teclado están ahora en un único resumen: en el menú Ayuda, bajo «Atajos de teclado», o pulsando la tecla de interrogación."
     ],
     "fr": [
       "Les nombres décimaux saisis sont lus correctement partout. « 12,5 » reste douze et demi ; auparavant, cela pouvait devenir 125, sans question ni avertissement.",
@@ -61,7 +61,7 @@
       "Lors d'une découpe avec goupilles, les trous correspondants se placent dans la bonne moitié.",
       "Millimètres et pouces valent maintenant partout où figure un nombre — y compris dans les barres d'outils et lors de la peinture.",
       "La progression reste affichée jusqu'à la fin réelle du calcul, et la fenêtre demeure utilisable pendant ce temps.",
-      "Le manuel a reçu un aperçu de tous les raccourcis clavier."
+      "Tous les raccourcis clavier figurent désormais dans un aperçu unique : dans le menu Aide, sous « Raccourcis clavier », ou en appuyant sur la touche point d’interrogation."
     ],
     "it": [
       "I numeri decimali digitati vengono letti bene ovunque. «12,5» resta dodici e mezzo; prima poteva diventare 125, senza chiedere e senza avvisare.",
@@ -71,7 +71,7 @@
       "Dividendo con le spine, i fori corrispondenti finiscono nella metà giusta.",
       "Millimetri e pollici valgono ora dovunque compaia un numero, anche nelle barre degli strumenti e nella pittura.",
       "L'avanzamento resta finché il calcolo è davvero finito, e la finestra rimane utilizzabile nel frattempo.",
-      "Il manuale ha ricevuto un prospetto di tutte le scorciatoie da tastiera."
+      "Tutte le scorciatoie da tastiera sono ora in un unico prospetto: nel menu Aiuto, sotto «Scorciatoie da tastiera», oppure premendo il tasto punto interrogativo."
     ],
     "pt": [
       "Os números decimais escritos são lidos corretamente em todo o lado. «12,5» continua a ser doze e meio; antes podia tornar-se 125, sem perguntar e sem avisar.",
@@ -81,7 +81,7 @@
       "Ao dividir com pinos, os furos correspondentes ficam na metade certa.",
       "Milímetros e polegadas valem agora onde quer que apareça um número — também nas barras de ferramentas e ao pintar.",
       "O progresso mantém-se até o cálculo estar mesmo terminado, e a janela continua utilizável entretanto.",
-      "O manual passou a ter um resumo de todos os atalhos de teclado."
+      "Todos os atalhos de teclado estão agora numa única vista: no menu Ajuda, em «Atalhos de teclado», ou premindo a tecla de ponto de interrogação."
     ]
   }
 }
