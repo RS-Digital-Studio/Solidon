@@ -4306,6 +4306,11 @@ gehalten hätten.
       geltenden Fassung" ist eine stehende Formel. Die fünf `.eml` unter
       `marketing/versand/` bleiben ebenfalls: Sie sind der Beleg dessen, was
       an die Redaktionen ging, kein Text, den man nachbessert.
+      **Nachtrag vom selben Tag:** Robert hat entschieden, dass das
+      Presse-Material ganz wegfällt. Die fünf `.eml` sind damit gelöscht, und
+      die Begründung oben ist gegenstandslos — sie war richtig, solange die
+      Dateien blieben. Sie stehen weiter in der Historie; die Sichtbarkeit des
+      Repositorys ist inzwischen privat.
 
 ### Das Tor läuft am Stück nicht mehr durch, und das stand nirgends
 
