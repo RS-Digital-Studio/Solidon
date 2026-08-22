@@ -50,8 +50,7 @@ bekommt einen roten Lauf.
 | Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
-| Der Absturz beim Aufräumen kommt auch auf der ruhigen Maschine | Der Kundendurchgang auf der ruhigen Maschine (21.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht — dreimal heute an drei Stellen, jede allein grün, und die Last ist als Erklärung erledigt |
-| Der Schnapper kam nicht durch die Oberfläche | Der Kundendurchgang auf der ruhigen Maschine (21.08.2026) | ein Modell mit einer Naht über 5,4 mm; die Sechskantstange gibt sie nicht her, und der Rückfall auf Rundstifte ist richtig |
+| Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht; der Stapel zeigt einen neuen QThread im finished-Slot des Vorgängers, und die Falle dafür steht in `tools/qt_trace.py` |
 
 ---
 
@@ -10782,7 +10781,7 @@ acht Schritte an 52 Körpern in 87 Sekunden, an einem Vierteilesatz in 16.
 
 ### Was offen bleibt
 
-- [ ] **Der Absturz beim Aufräumen kommt auch auf der ruhigen Maschine.**
+- [x] **Der Absturz beim Aufräumen kommt auch auf der ruhigen Maschine.**
       Dreimal heute, an drei verschiedenen Stellen: zweimal in einem vollen
       Suitenlauf (`test_pose_session.py`, `test_ui.py`) und einmal in der
       Druckbarkeitsetappe des 52-teiligen Modells, jeweils **nach** der
@@ -10793,7 +10792,7 @@ acht Schritte an 52 Körpern in 87 Sekunden, an einem Vierteilesatz in 16.
       „Ein Umgebungsartefakt, das keines war" genannt wurde: ein Lauf unter
       einem Werkzeug, das doppelte Freigaben sieht. Ohne das ist jeder Eingriff
       geraten, und Raten ist hier teurer als Warten.
-- [ ] **Der Schnapper kam nicht durch die Oberfläche.** Der 220er-Plan teilt
+- [x] **Der Schnapper kam nicht durch die Oberfläche.** Der 220er-Plan teilt
       seit heute mit Schnappverbindern, damit die korrigierte Fassung 4 des
       Bausteins durch den Kundenweg läuft. Gemeldet wurde
       `info:split.snap_too_small`: Die Naht der Sechskantstange gibt die
@@ -10802,3 +10801,86 @@ acht Schritte an 52 Körpern in 87 Sekunden, an einem Vierteilesatz in 16.
       die neue Taschengeometrie nur im Test steht und nicht im Durchgang. Was
       fehlt, ist ein Modell mit einer breiten Naht; die 234er Basis des
       Bausatzes wäre eines.
+
+## Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026)
+
+Die zwei offenen Punkte des Durchgangs davor, beide angegangen. Einer ist
+behoben, der andere ist von „passiert manchmal irgendwo" zu einer Zeilennummer
+geworden.
+
+### Behoben: der Schnappverbinder war unerreichbar
+
+- [x] **Ein Werkzeug, das nie greift, ist schlimmer als keines.** Die Armlänge
+      des Schnappers hing an der Länge des **Passstifts** — `1,5 mal Ø`, und
+      der Durchmesser ist 12 Prozent der Nahtbreite (`PIN_RELATIVE`). Ein Arm
+      braucht acht Millimeter, sonst federt er nicht (`SNAP_MIN_REACH`, und
+      der Baustein rechnet daraus seine 0,8 mm Armstärke). Über diese Kette
+      hätte eine Naht von **44 mm** hergehalten müssen. Gemessen an massiven
+      Quadern:
+
+      | Naht | Ø | Arm | Ergebnis |
+      |---|---|---|---|
+      | 23 auf 23 mm | 3,0 | 4,5 mm | runde Stifte, `split.snap_too_small` |
+      | 40 auf 40 mm | 4,8 | 7,2 mm | runde Stifte, `split.snap_too_small` |
+      | Sechskantstange 12 auf 22 | 3,0 | 4,5 mm | runde Stifte |
+
+      Das ist die falsche Kopplung. Ein Passstift ist so tief eingebunden, wie
+      er dick ist — eine Frage der Scherfestigkeit. Ein Federarm braucht
+      Federweg, und den gibt das Material **hinter** der Naht, nicht das
+      Stiftmaß. Der Durchmesser bleibt, wie er ist: Er begrenzt die Armstärke
+      über den Umkreis, und bei Ø 3 kommen 0,88 mm heraus — mehr als die zwei
+      Außenwände, die `SNAP_MIN_ARM` verlangt. Was fehlte, war allein die
+      Länge.
+
+      Alle drei Nähte tragen jetzt einen Schnapper mit 8 mm Arm; zurück auf
+      runde Stifte geht es, wenn hinter der Naht keine acht Millimeter stehen
+      (ein Quader von 12 mm Höhe, mittig geteilt, hat sechs). Der Befund nennt
+      jetzt die **Tiefe** — vorher nannte er den Stiftdurchmesser und damit die
+      Größe, die mit der Sache nichts zu tun hat.
+
+      Durch den Kundenweg gefahren: Die massive Säule des 52-teiligen Bausatzes
+      (23 auf 71 auf 23) kommt als Paar „A · Stifte" und „B · Löcher" heraus,
+      beide geschlossen, ohne Befund, exportiert und zurückgelesen. Die Basis
+      daneben bleibt bei runden Stiften und meldet `split.face_too_small` —
+      richtig, denn sie ist ein Rahmen, und ihre Schnittfläche sind dünne
+      Stege.
+
+### Der Absturz: eine Zeilennummer statt einer Vermutung
+
+Gefangen mit `tools/qt_trace.py` — einer pytest-Erweiterung, die Qts Meldungen
+und die Kennung jedes Tests sofort in eine Datei schreibt. Beides ging vorher
+verloren: Eine Zugriffsverletzung reißt den Prozess ab, ohne seine Puffer zu
+leeren.
+
+Im ersten Lauf über die zweite Hälfte der Suite schnappte sie zu, und
+`faulthandler` gab den Stapel dazu:
+
+```
+app/ui/session.py:110   _EvaluationWorker.__init__   (super().__init__() — ein QThread entsteht)
+app/ui/session.py:1029  evaluate_async
+app/ui/session.py:1363  _on_thread_done              (der finished-Slot des Vorgängers)
+app/ui/session.py:1394  wait_for_idle
+tests/test_ui.py:448    test_the_panels_follow_the_evaluation
+```
+
+Damit steht die Stelle: **Der Nachfolge-Arbeiter entsteht im
+``finished``-Slot seines Vorgängers**, über den `_rerun_pending`-Zweig. Die
+Gebietsregel sagt über dieselbe Stelle „``finished`` heißt ‚``run`` ist
+zurück', nicht ‚das Objekt darf weg'" — einen neuen `QThread` in genau diesem
+Moment zu bauen ist derselbe Griff, einen Schritt weiter.
+
+Keine Qt-Meldung davor: Es ist eine Zugriffsverletzung und kein `qFatal`, also
+**nicht** „QThread: Destroyed while thread is still running". Eine
+Zugriffsverletzung in einer nackten `QThread`-Konstruktion deutet auf einen
+Schaden, der vorher entstanden ist und hier bloß auffällt.
+
+- [ ] **Was fehlt, ist der Beweis, nicht die Vermutung.** Nicht reproduzierbar:
+      derselbe Dateisatz in derselben Reihenfolge lief beim zweiten Mal
+      durch, und zwölf Läufe der Einzeletappe mit Instrumentierung blieben
+      sauber. Damit wäre jede Änderung an der Auswertung geraten — und die
+      naheliegende (den Neustart um einen Durchlauf der Ereignisschlange
+      verschieben) greift in `wait_for_idle` ein, das genau darauf baut, dass
+      `_worker` beim Verlassen des Slots wieder besetzt ist. Ein Hänger dort
+      wäre schlimmer als ein seltener Absturz. Der Weg bleibt ein Lauf unter
+      einem Werkzeug, das doppelte Freigaben sieht; die Falle steht jetzt
+      dafür bereit.

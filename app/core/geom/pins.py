@@ -204,22 +204,37 @@ def plan_pins(
     # teilen sich einen Körper, und der längste gemeinsame Nenner ist der
     # kleinste. Länger als vorgesehen wird er nie: ein Stift, der die halbe
     # Wand durchmisst, schwächt sie mehr, als er hilft.
-    reach = min(diameter * PIN_DEPTH_FACTOR, min(usable for _point, usable in seated))
+    room = min(usable for _point, usable in seated)
+    reach = min(diameter * PIN_DEPTH_FACTOR, room)
     points = tuple(point for point, _usable in seated)
-    length = reach * 2.0
+    findings = []
 
-    if shape == SNAP and length / 2.0 < SNAP_MIN_REACH:
-        # Ein Federarm braucht eine Mindestlänge, sonst federt er nicht,
-        # sondern bricht — und die Länge, die hier zu vergeben ist, hängt am
-        # Durchmesser. Statt einen zu kurzen Arm zu bauen, der beim ersten
-        # Zusammenstecken abreißt, kommt der Verbinder rund heraus, und der
-        # Befund sagt warum. Das ist die Stelle, an der Regel 21 gilt: lieber
-        # etwas anderes tun und es sagen, als stillschweigend etwas Untaugliches
-        # liefern.
-        shape = "round"
-        findings = [_too_thin_for_snap(diameter)]
-    else:
-        findings = []
+    if shape == SNAP:
+        # **Ein Federarm ist kein Passstift, und seine Länge folgt nicht dem
+        # Durchmesser.** Ein Stift ist so tief eingebunden, wie er dick ist
+        # (``PIN_DEPTH_FACTOR``) — das ist eine Frage der Scherfestigkeit. Ein
+        # Arm braucht Federweg, und der ist ein absolutes Maß:
+        # ``SNAP_MIN_REACH``. Gegeben wird er vom Körper hinter der Naht, nicht
+        # vom Stiftmaß.
+        #
+        # Beides zu verkoppeln machte den Schnapper unerreichbar. Gemessen an
+        # massiven Quadern: Eine Naht von 23 mm gibt Ø 3 und damit 4,5 mm Arm,
+        # eine von 40 mm Ø 4,8 und 7,2 mm — beide unter acht, beide fielen auf
+        # runde Stifte zurück. Nötig wäre eine Naht von 44 mm gewesen, und die
+        # hat kein Teil, das jemand teilt. Ein Werkzeug, das nie greift, ist
+        # schlimmer als keines: Es steht in der Auswahl und tut etwas anderes.
+        #
+        # Der Durchmesser bleibt, wie er ist. Er begrenzt die Armstärke über
+        # den Umkreis, und bei Ø 3 kommen 0,88 mm heraus — mehr als die zwei
+        # Außenwände, die ``SNAP_MIN_ARM`` verlangt. Was fehlte, war allein die
+        # Länge.
+        if room + EPS_GEOM < SNAP_MIN_REACH:
+            shape = "round"
+            findings = [_too_shallow_for_snap(room)]
+        else:
+            reach = min(max(reach, SNAP_MIN_REACH), room)
+
+    length = reach * 2.0
 
     return PinPlan(
         positions=points,
@@ -492,16 +507,23 @@ def _no_face() -> Finding:
     )
 
 
-def _too_thin_for_snap(diameter: float) -> Finding:
-    """Die Naht gibt keinen Federarm her — es wurde rund verstiftet."""
+def _too_shallow_for_snap(depth: float) -> Finding:
+    """Hinter der Naht steht zu wenig Material für einen Federarm.
+
+    Gemessen wird die **Tiefe** und nicht die Breite der Naht: Ein Arm wächst
+    aus der Nahtfläche in den Körper hinein, und was er braucht, ist Federweg.
+    Der Satz sagte vorher „die Naht ist zu schmal" und meinte damit den
+    Stiftdurchmesser — er nannte also die Größe, die mit der Sache nichts zu
+    tun hat.
+    """
     return Finding(
         code="split.snap_too_small",
         severity="info",
         message=_(
-            "Für einen Schnappverbinder ist die Naht zu schmal — er wäre zu kurz zum "
-            "Federn. Es sind runde Stifte geworden; zum Zusammenstecken hilft Kleber."
+            "Hinter der Naht steht zu wenig Material für einen Federarm — er wäre zu kurz "
+            "zum Federn. Es sind runde Stifte geworden; zum Zusammenstecken hilft Kleber."
         ),
-        values={"diameter_mm": round(diameter, 2), "needed_mm": round(SNAP_MIN_REACH, 2)},
+        values={"depth_mm": round(depth, 2), "needed_mm": round(SNAP_MIN_REACH, 2)},
     )
 
 

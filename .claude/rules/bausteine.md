@@ -40,6 +40,23 @@ Und die Prüfung dazu misst die **Richtung**, nicht nur die Berührung: Zwei
 Volumen, die sich treffen, treffen sich am falschen Ende genauso. Was der Test
 sagen muss, ist, an welchem Ende die Sperrfläche sitzt.
 
+## Ein Maß, das aus einem fremden Maß folgt, ist ein Fehler in Wartestellung
+
+Der Schnappverbinder hat es vorgemacht: Seine Armlänge kam aus der
+Einbindetiefe eines **Passstifts** (`1,5 mal Ø`), und der Durchmesser ist
+12 Prozent der Nahtbreite. Beide Regeln sind für sich richtig — ein Stift ist
+so tief eingebunden, wie er dick ist, das ist Scherfestigkeit —, und
+zusammengekettet ergaben sie eine Bedingung, die niemand aufgeschrieben hätte:
+Ein Federarm hätte eine Naht von 44 mm gebraucht. Gemessen fiel jede
+gewöhnliche Naht auf runde Stifte zurück, dokumentiert und freundlich, und das
+Werkzeug griff nie.
+
+Wer ein Maß aus einem anderen ableitet, prüft deshalb, ob es **dieselbe Frage**
+beantwortet. Federweg ist nicht Scherfestigkeit; die Zahl kommt vom Körper, in
+dem der Arm sitzt, nicht vom Stift daneben. Und wer eine Rückfallregel baut,
+misst einmal nach, wann sie greift: Eine, die immer greift, ist keine
+Rückfallregel, sondern die Regel.
+
 ## Test über den ganzen Bereich
 
 Jeder Baustein wird über seinen Parameterbereich durchgerechnet: wasserdicht,

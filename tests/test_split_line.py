@@ -504,41 +504,50 @@ def test_the_snap_connector_catches_and_still_goes_in(profile: Profile) -> None:
     assert _shared(bent, lip) < smallest, "der ausgewichene Arm verkeilt sich beim Einführen"
 
 
-def test_a_seam_too_narrow_for_a_spring_arm_says_so_and_stays_round() -> None:
+def test_a_body_too_shallow_for_a_spring_arm_says_so_and_stays_round() -> None:
     """Regel 21 an einer Stelle, an der Raten teuer wäre.
 
-    Ein Federarm braucht zehnmal seine Dicke an Länge, und die Länge hängt am
-    Durchmesser, den die Naht hergibt. Unter 5,4 mm käme ein Arm heraus, der
-    dünner ist als zwei Außenwände — er bräche beim ersten Zusammenstecken.
+    Ein Federarm braucht acht Millimeter Länge, sonst federt er nicht, sondern
+    bricht (``SNAP_MIN_REACH``, und der Baustein rechnet daraus seine 0,8 mm
+    Armstärke). Was diese Länge hergibt, ist das Material **hinter** der Naht.
+    Ein Quader von 12 mm Höhe, mittig geteilt, hat sechs — dann wird rund
+    verstiftet **und gesagt, warum**.
 
-    Statt ihn trotzdem zu bauen, wird rund verstiftet **und gesagt, warum**.
-    Stillschweigend etwas anderes zu liefern wäre der schlechtere von beiden
-    Fehlern.
+    Gemessen wird die Tiefe und nicht die Breite: Der Befund nannte vorher den
+    Stiftdurchmesser und damit die Größe, die mit der Sache nichts zu tun hat.
     """
-    slim = MeshData.of(trimesh.creation.box(extents=(40.0, 12.0, 20.0)))
+    flach = MeshData.of(trimesh.creation.box(extents=(40.0, 40.0, 12.0)))
     plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=0.0)
 
-    plan = pins.plan_pins(slim, plane, shape="snap")
+    plan = pins.plan_pins(flach, plane, shape="snap")
 
     assert plan.count, "die Naht trägt Stifte, nur eben keinen Schnapper"
-    assert plan.length / 2.0 < pins.SNAP_MIN_REACH, "diese Naht sollte zu schmal sein"
-    assert plan.shape == "round", "zu schmal für einen Arm — dann rund"
+    assert plan.shape == "round", "zu flach für einen Arm — dann rund"
     assert [finding.code for finding in plan.findings] == ["split.snap_too_small"]
+    assert plan.findings[0].values["depth_mm"] < pins.SNAP_MIN_REACH
 
 
-def test_a_wide_enough_seam_keeps_the_snap() -> None:
-    """Die Gegenprobe: wo der Arm lang genug wird, bleibt es beim Schnapper.
+def test_a_deep_enough_body_keeps_the_snap() -> None:
+    """Die Gegenprobe, und der eigentliche Fund dieses Durchgangs.
 
-    Ohne sie prüfte der Test darüber nur, dass irgendetwas rund herauskommt —
-    auch dann, wenn der Schnapper nie ankäme.
+    Der Schnapper hing an der Länge des **Passstifts** — ``1,5 mal Ø``, und der
+    Durchmesser ist 12 Prozent der Nahtbreite. Damit hätte eine Naht von 44 mm
+    hergehalten müssen; gemessen an massiven Quadern fiel eine Naht von 23 mm
+    (Ø 3, Arm 4,5 mm) genauso zurück wie eine von 40 mm (Ø 4,8, Arm 7,2 mm).
+    Ein Werkzeug, das nie greift, ist schlimmer als keines.
+
+    Beide Nähte tragen jetzt einen Schnapper, weil hinter ihnen genug Material
+    steht — und der Arm wird acht Millimeter lang, gleich wie dick der Stift
+    daneben geworden wäre.
     """
-    plane = SectionPlane(normal=(0.0, 0.0, 1.0), position=0.0)
+    plane = SectionPlane(normal=(0.0, 1.0, 0.0), position=0.0)
 
-    plan = pins.plan_pins(block(), plane, shape="snap")
+    for maße in ((23.0, 71.0, 23.0), (40.0, 80.0, 40.0)):
+        plan = pins.plan_pins(MeshData.of(trimesh.creation.box(extents=maße)), plane, shape="snap")
 
-    assert plan.length / 2.0 >= pins.SNAP_MIN_REACH
-    assert plan.shape == "snap"
-    assert plan.findings == ()
+        assert plan.shape == "snap", maße
+        assert plan.findings == (), maße
+        assert plan.length / 2.0 == pytest.approx(pins.SNAP_MIN_REACH), maße
 
 
 def test_the_snap_stays_inside_its_circle_over_the_whole_range() -> None:
