@@ -596,14 +596,49 @@ def test_the_check_is_off_until_it_is_switched_on() -> None:
     assert UiSettings().check_for_updates is False
 
 
-def test_nothing_is_downloaded() -> None:
-    """Ein Hinweis mit einem Link — nie ein automatisches Update."""
+def test_nothing_runs_without_a_click() -> None:
+    """§37.2: Die Grenze liegt beim Auslöser, nicht beim Vorgang.
+
+    Der Test hieß „nichts wird geladen" und suchte ``subprocess`` im **ganzen**
+    Modul. Damit verbot er die Funktion statt des selbsttätigen Ablaufs, und er
+    wurde rot, als ``start_installer`` dazukam — ohne dass etwas kaputt war.
+    §37.2 erlaubt Laden und Starten ausdrücklich: „Wer will, lädt das Paket aus
+    der Anwendung heraus … Die Grenze liegt wie beim Fehlerbericht nicht beim
+    Vorgang, sondern beim Auslöser."
+
+    Geprüft wird darum die Kette, an der es wirklich hängt. Beim Start läuft von
+    allein nur ``check``: Der fragt eine Datei ab und sonst nichts. ``download``
+    hängt schon an einem Klick und **startet trotzdem nichts** — es holt und
+    prüft, und wer es ruft, hat danach eine Datei und immer noch die Wahl. Und
+    ``subprocess`` steht an genau einer Stelle: der, hinter der ein zweiter
+    Klick liegt.
+    """
     import inspect
 
-    source = inspect.getsource(updates)
+    check = inspect.getsource(updates.check)
+    download = inspect.getsource(updates.download)
 
-    assert "urlretrieve" not in source
-    assert "subprocess" not in source
+    assert "urlretrieve" not in check
+    assert "subprocess" not in check
+    assert "start_installer" not in check
+    assert "download(" not in check
+
+    assert "subprocess" not in download
+    assert "start_installer" not in download
+
+    # Selbsttragend statt aufgezählt: Kommt eine zweite Funktion dazu, die ein
+    # fremdes Programm startet, fällt sie hier auf, ohne dass jemand den Test
+    # nachzieht.
+    elsewhere = sorted(
+        name
+        for name, member in vars(updates).items()
+        if inspect.isfunction(member)
+        and getattr(member, "__module__", "") == updates.__name__
+        and name != "start_installer"
+        and "subprocess" in inspect.getsource(member)
+    )
+
+    assert not elsewhere, f"startet ein Programm, ohne dass ein Klick davor liegt: {elsewhere}"
 
 
 def test_the_report_says_where_it_went_and_stays_open(
