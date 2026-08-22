@@ -398,6 +398,31 @@ def test_a_face_is_named_by_where_it_looks() -> None:
     assert feature_name("face_9", face("face_9", (0.6, 0.0, 0.8))) == tr("Schrägfläche")
 
 
+def test_a_sphere_and_a_torus_say_which_way_they_point() -> None:
+    """``recess`` trennt bei Kugel und Torus dasselbe wie beim Kegel zwischen
+    Senkung und Verjüngung: hinein oder heraus.
+
+    Eine ausgehöhlte Kugel ist eine Pfanne (Kugelgelenk, Magnettasche), eine
+    aufgesetzte eine Kuppel; beim Torus heißen die beiden Formen Kehle und
+    Wulst. Vor ``15d3d16`` stand dort die rohe Kennung — ``sphere_1`` im Baum,
+    und der Nächste hält einen englischen Schlüssel für Absicht.
+
+    Entworfen von 3d-druck-b8 zusammen mit den Beschriftungen; die Mutation
+    (``recess`` bei der Kugel vertauscht) meldet beide Kugelzeilen und lässt
+    die Torus-Zeilen grün, der Test trennt die vier Aussagen also wirklich.
+    """
+    from app.core.types import Feature
+    from app.ui.labels import feature_name
+
+    def round_one(kind: str, recess: bool) -> Feature:
+        return Feature(id=f"{kind}_1", kind=kind, params={"recess": recess}, provenance="test")
+
+    assert feature_name("sphere_1", round_one("sphere", True)) == tr("Pfanne")
+    assert feature_name("sphere_1", round_one("sphere", False)) == tr("Kuppel")
+    assert feature_name("torus_1", round_one("torus", True)) == tr("Kehle")
+    assert feature_name("torus_1", round_one("torus", False)) == tr("Wulst")
+
+
 def test_a_feature_offers_the_operations_that_apply_to_it(window: MainWindow) -> None:
     """§10, §18.5: das Kontextmenü kommt aus ``applies_to``, nicht aus einer
     Liste.

@@ -223,20 +223,47 @@ def test_every_detected_feature_kind_offers_an_operation() -> None:
 
     Geprüft werden nur Arten, die auch **entstehen**: ``FEATURE_KINDS`` kommt
     aus dem Typ und führt Vorrat, der noch keinen Erzeuger hat. Ein Merkmal,
-    das niemand anklicken kann, braucht kein Menü.
+    das niemand anklicken kann, braucht kein Menü. Woher die Menge stammt,
+    steht unten — sie wird abgeleitet und nicht gepflegt, und der Grund dafür
+    ist ein Fall von heute.
     """
+    from app.core.perceive.features import DETECTABLE_KINDS
     from app.core.registry import REGISTRY
 
-    #: Erzeugt, aber ohne Operation — mit dem Grund, warum das offen ist.
-    #: Beim Lösen hier streichen, nicht die Prüfung aufweichen.
+    #: Erzeugt, aber ohne Operation — je Art mit dem Grund, warum das offen
+    #: ist. Beim Lösen hier streichen, nicht die Prüfung aufweichen.
     known_gaps = {
         # Der Gewinde-Baustein gibt dieses Merkmal zurück
         # (knowledge/parts/build.py). Welche Operation fachlich auf ein
         # fertiges Gewinde gehört, entscheidet der Bauplan und nicht diese
         # Prüfung — offener Punkt in der ROADMAP.
         "thread",
+        # Kugel und Torus sind aus einem anderen Grund offen als ``thread``:
+        # Dort ist ``applies_to`` der falsche Weg (§21.2 entscheidet es über
+        # die Provenienz), hier gibt es die Handlung noch gar nicht. §41 führt
+        # beide als Ausbaustufe, und der Umfang war ausdrücklich auf die
+        # Wahrnehmung geschnitten. Eine Operation zu erfinden, damit diese
+        # Prüfung grün wird, hieße die Reihenfolge umzudrehen.
+        "sphere",
+        "torus",
     }
-    produced = {"hole", "face", "edge_loop", "pin", "cone", "thread"}
+    #: Abgeleitet und nicht aufgezählt — der Unterschied hat am 22.08.2026
+    #: genau eine Runde gehalten.
+    #:
+    #: Hier stand eine Liste von Hand, und als ``sphere`` und ``torus``
+    #: dazukamen, passierte das Schlimmste, was einer Prüfung passieren kann:
+    #: **nichts.** Kein roter Lauf, keine Meldung — die zwei neuen Arten
+    #: standen einfach nicht darin und wurden nie gefragt, ob ein Klick auf
+    #: sie irgendwohin führt. Gefunden hat es keine Prüfung, sondern eine
+    #: Absprache zwischen zwei Sitzungen, die zufällig gleichzeitig liefen.
+    #: Wer in vier Wochen eine Merkmalsart ergänzt, hat diese Absprache nicht.
+    #:
+    #: ``DETECTABLE_KINDS`` ist die Menge, die ``detect()`` wirklich erzeugt —
+    #: nicht ``FEATURE_KINDS``, denn der Typ führt auch Vorrat ohne Erzeuger,
+    #: und ein Merkmal, das niemand anklicken kann, braucht kein Menü.
+    #: ``thread`` kommt nicht aus der Erkennung, sondern aus dem
+    #: Gewinde-Baustein, und wird deshalb einzeln dazugelegt.
+    produced = set(DETECTABLE_KINDS) | {"thread"}
 
     empty = {kind for kind in produced if not REGISTRY.for_feature(kind)}
     assert empty <= known_gaps, (
