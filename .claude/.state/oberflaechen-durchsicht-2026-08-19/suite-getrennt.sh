@@ -12,7 +12,37 @@
 # VTK-Fenster, ohne ``MainWindow`` zu erwähnen, und liefen deshalb im großen
 # Stapel mit.
 set -u
-cd "$(dirname "$0")/../../.." || exit 1
+
+# **Das Skript fährt eine Kopie seiner selbst, und zwar aus einem gemessenen
+# Grund.**
+#
+# Bash liest ein Skript nicht auf einmal ein, sondern **zeilenweise nach** und
+# merkt sich dabei die Byte-Position. Wird die Datei während des Laufs länger
+# oder kürzer, liest der laufende Prozess an der alten Position in der neuen
+# Datei weiter — und landet mitten in einem Wort.
+#
+# Am 23.08.2026 um 00:45:48 hat das einen Torlauf zerrissen, der seit 00:41
+# lief: Eine andere Sitzung fügte oben einen Kommentar ein, und der Prozess
+# starb mit „syntax error near unexpected token" in einer Zeile, die es so nie
+# gegeben hat. `bash -n` sagte danach „Syntax ok" — der Fehler steckte nicht in
+# der Datei, sondern zwischen zwei Fassungen davon.
+#
+# Das ist dieselbe Familie wie der ImportError aus einem fremden Zwischenstand,
+# nur eine Stufe heimtückischer: Dort war der **Prüfling** halbfertig, hier das
+# **Prüfwerkzeug**. Der Prüfling war in Ordnung, und die Meldung zeigte auf eine
+# Zeile, die niemand geschrieben hatte.
+#
+# Die Kopie macht einen laufenden Lauf gegen jede Änderung immun — auch gegen
+# die eigene. Sie kostet drei Zeilen und erzieht niemanden zu etwas.
+if [ -z "${SUITE_WURZEL:-}" ]; then
+  SUITE_WURZEL=$(cd "$(dirname "$0")/../../.." && pwd) || exit 1
+  SUITE_KOPIE=$(mktemp) || exit 1
+  cp "$0" "$SUITE_KOPIE" || exit 1
+  export SUITE_WURZEL SUITE_KOPIE
+  exec bash "$SUITE_KOPIE" "$@"
+fi
+trap 'rm -f "$SUITE_KOPIE"' EXIT
+cd "$SUITE_WURZEL" || exit 1
 
 # **Der Interpreter, auch wenn er nicht hier liegt.** Ein eigener Arbeitsbaum
 # (`claude --worktree`) hat keine `.venv` — sie ist per `.gitignore` draußen und
