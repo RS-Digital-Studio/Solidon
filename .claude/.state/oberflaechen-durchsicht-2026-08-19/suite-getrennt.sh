@@ -37,6 +37,34 @@ if [ ! -x "$PY" ]; then
   echo "Kein Interpreter gefunden. Setze SUITE_PYTHON auf den vollen Pfad." >&2
   exit 2
 fi
+# **Zuerst die Frage, ob der Baum überhaupt importierbar ist.**
+#
+# Am 23.08.2026 meldete ein Torlauf 27 Fehlschläge über zwölf Testdateien, alle
+# mit derselben Zeile: `cannot import name 'pair_radii'`. Der Aufrufer stand
+# seit 20:36 im Baum, die Funktion kam um 00:02 dazu — der Lauf fiel in die
+# Lücke dazwischen. Niemand hatte etwas falsch gemacht: Erst den Aufrufer
+# schreiben und dann die Funktion ist beim Arbeiten normal, und wann ein
+# anderer sein Tor startet, weiß niemand.
+#
+# Was diese fünf Sekunden fangen, ist deshalb kein Fehler, sondern eine
+# **falsche Fehlerursache**: Statt 27 roter Tests, die jeder erst einmal auf
+# die eigene Änderung bezieht, steht hier ein Satz. Die Grenze gehört dazu —
+# geprüft wird der Kern, den alle Testdateien gemeinsam importieren; ein
+# halbfertiger Zustand in `app/ui/` oder in einer einzelnen Testdatei rutscht
+# weiter durch. Das ist trotzdem der Großteil: Genau weil alle zwölf Dateien
+# denselben Kern importieren, hat er alle zwölf umgeworfen.
+#
+# Vorgeschlagen von 3d-druck-64 nach dem Fall.
+import_meldung=$(mktemp)
+if ! "$PY" -c "import app.core.bootstrap as b; b.load_operations()" 2>"$import_meldung"; then
+  echo "Der Baum ist gerade nicht importierbar — mit hoher Wahrscheinlichkeit"
+  echo "ist das nicht deine Änderung. Sieh auf den Zeitstempel der genannten"
+  echo "Datei, bevor du im eigenen Diff suchst:"
+  sed 's/^/    /' "$import_meldung"
+  rm -f "$import_meldung"
+  exit 4
+fi
+rm -f "$import_meldung"
 windowed=$(grep -lE "MainWindow|Viewport|pyvista" tests/test_*.py | tr '\n' ' ')
 ignores=""
 for file in $windowed; do ignores="$ignores --ignore=$file"; done

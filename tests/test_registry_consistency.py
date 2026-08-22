@@ -234,9 +234,14 @@ def test_every_detected_feature_kind_offers_an_operation() -> None:
     #: ist. Beim Lösen hier streichen, nicht die Prüfung aufweichen.
     known_gaps = {
         # Der Gewinde-Baustein gibt dieses Merkmal zurück
-        # (knowledge/parts/build.py). Welche Operation fachlich auf ein
-        # fertiges Gewinde gehört, entscheidet der Bauplan und nicht diese
-        # Prüfung — offener Punkt in der ROADMAP.
+        # (knowledge/parts/build.py), und über ``applies_to`` bleibt es leer —
+        # aber nicht mehr, weil die Frage offen wäre. §21.2 hat sie am
+        # 22.08.2026 anders beantwortet, als sie gestellt war: Ein erzeugtes
+        # Merkmal bietet **seinen Erzeugerschritt** an („Diesen Schritt
+        # ändern", über ``Feature.created_by`` und ``ObjectTree``), nicht eine
+        # Operation je Merkmalsart. Der Klick führt also irgendwohin; er nimmt
+        # nur den anderen der beiden Wege, und diese Prüfung kennt bisher den
+        # einen.
         "thread",
         # Kugel und Torus sind aus einem anderen Grund offen als ``thread``:
         # Dort ist ``applies_to`` der falsche Weg (§21.2 entscheidet es über
