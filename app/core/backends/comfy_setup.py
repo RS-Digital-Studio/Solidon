@@ -84,8 +84,13 @@ BACKGROUND_MEGABYTES: Final = 445
 #: ``antlr4-python3-runtime`` trägt eine Fassung, und die ist kein
 #: Übervorsicht: ``omegaconf`` liest damit einen vorkompilierten Automaten,
 #: und die 4.13 serialisiert ihn anders — „Could not deserialize ATN with
-#: version 3 (expected 4)" ist der Satz, den es sonst sagt. Alle Lizenzen sind
-#: geprüft: BSD, Apache-2.0 oder MIT, kein GPL (Regel 15).
+#: version 3 (expected 4)" ist der Satz, den es sonst sagt.
+#:
+#: **Die Lizenzen stehen in der Freigabeliste**, nicht in diesem Kommentar:
+#: ``knowledge/data/licences.toml`` führt jedes dieser Pakete samt Lizenz, und
+#: ``tests/test_licences.py`` hält die beiden Listen zusammen. Hier stand
+#: einmal „alle Lizenzen sind geprüft" — genau so eine Behauptung war der
+#: GPL-Knoten ``RMBG``: wahr gemeint, von keinem Test gehalten (Regel 22).
 PACKAGES: Final = (
     "jaxtyping",
     "typeguard",

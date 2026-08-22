@@ -331,6 +331,16 @@ def _failed(entry: dict[str, Any]) -> None:
     genauer als jede Umschreibung, und wer damit zum Support geht, bringt die
     Zeile mit, die dort weiterhilft. Der Knotenname steht davor — er sagt, in
     welchem Schritt es gerissen ist.
+
+    **Angeboten wird nur Abbrechen, und das ist hier die Entscheidung und kein
+    Versäumnis.** Regel 17 verlangt entweder eine Handlung mit Wirkung oder
+    einen Rat zum Lesen; der Rat steht im ``detail``. Eine Handlung gäbe es
+    nur für einen Teil der Fälle: „No module named …" führt zur Einrichtung,
+    „Torch not compiled with CUDA enabled" nirgendwohin, und Speichermangel
+    wieder woandershin. Ein Knopf, der bei einem Drittel der Gründe passt, ist
+    schlechter als keiner — er behauptet einen Weg, den es nicht gibt. Wer
+    diese Stelle einmal aufteilt (etwa nach Mustern im Grund), soll den Knopf
+    genau dort anbieten, wo er trägt.
     """
     status = entry.get("status")
     if not isinstance(status, dict) or status.get("status_str") != "error":
@@ -471,6 +481,13 @@ class ComfyBackend:
         (Regel 17). Eingebaute Knoten stehen mit in der Frage und kosten
         nichts — sie sind da, und wären sie es nicht, wäre das genauso
         berichtenswert.
+
+        **Eine Frage je Knoten und nicht eine für alle**, und das ist gemessen:
+        ``/object_info`` ohne Knotennamen liefert auf einem ComfyUI mit 856
+        Knoten 1,6 MB und braucht dafür 346 ms; die vierzehn Einzelfragen des
+        Textwegs kosten zusammen 88 ms. Die naheliegende Sparsamkeit wäre hier
+        viermal langsamer. Wer die Zahl der Fragen erhöht, misst sie nach — der
+        Aufruf steht in einem Fenster, das gerade aufgeht.
         """
         missing: list[str] = []
         for kind in self._graph_nodes(workflow):

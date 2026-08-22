@@ -77,3 +77,58 @@ def test_the_notice_file_names_every_runtime_package() -> None:
 @pytest.mark.parametrize("package", ["pymeshlab", "PyQt5", "PyQt6"])
 def test_the_plan_names_these_as_forbidden(package: str) -> None:
     assert package in licences.load_policy().banned_packages
+
+
+def test_every_package_solidon_installs_elsewhere_is_on_record() -> None:
+    """**Was Solidon in eine fremde Umgebung installiert, gehört in die Akten.**
+
+    Die Einrichtung von Weg 3 zieht Pakete in ComfyUIs eigenes Python nach.
+    Sie sind keine Abhängigkeit dieser Anwendung — nichts davon wird hier
+    importiert, und :func:`licences.check` sieht sie nicht —, aber Solidon legt
+    sie auf den Rechner eines Kunden.
+
+    Der Kommentar an ``comfy_setup.PACKAGES`` behauptete, alle Lizenzen seien
+    geprüft, und genau so eine Behauptung war der GPL-Knoten ``RMBG``: wahr
+    gemeint, von keinem Test gehalten, und im Ablauf stand er trotzdem. Diese
+    Prüfung ist der Unterschied zwischen einer Behauptung und einer Aktenlage.
+
+    Geprüft wird die Vollständigkeit und nicht die Lizenz selbst: Welche Lizenz
+    ein fremdes Paket führt, kann diese Suite nicht nachsehen — es ist hier
+    nicht installiert. Dass jedes davon **benannt** ist, kann sie.
+    """
+    from app.core.backends import comfy_setup
+
+    text = licences._DATA_FILE.read_text(encoding="utf-8")
+    for entry in comfy_setup.PACKAGES:
+        name = entry.split("==")[0]
+        assert name in text, (
+            f"{name} is in comfy_setup.PACKAGES but not in {licences._DATA_FILE.name} "
+            "- rule 22 wants the record first"
+        )
+
+
+def test_the_shipped_workflows_name_no_gpl_node() -> None:
+    """**Regel 15 hing an einer Datendatei, und keine Prüfung sah dorthin.**
+
+    Beide mitgelieferten ComfyUI-Abläufe sprachen ``RMBG`` an — den Knoten aus
+    ``ComfyUI-RMBG``, GPL-3.0. Damit verlangte Solidon vom Kunden eine
+    GPL-Installation, damit Weg 3 läuft, und ``licences.check()`` konnte es
+    nicht sehen: Es liest die eigene Laufzeit, und ein ComfyUI-Knoten steht
+    dort nicht.
+
+    Geprüft werden deshalb die Namen in den Ablaufdateien. Die Liste ist bewusst
+    kurz und nennt, was bekannt ist — sie ersetzt keine Lizenzrecherche für
+    einen neuen Knoten, aber sie fängt die Rückkehr eines bekannten.
+    """
+    import json
+
+    from app.core.backends import mesh
+
+    #: Knotensammlungen, deren Lizenz Regel 15 ausschließt.
+    refused = {"RMBG": "ComfyUI-RMBG is GPL-3.0"}
+
+    for name in ("image_to_mesh", "text_to_mesh"):
+        graph = json.loads((mesh.WORKFLOW_DIR / f"{name}.json").read_text(encoding="utf-8"))
+        kinds = {str(entry.get("class_type")) for entry in graph.values()}
+        for kind, why in refused.items():
+            assert kind not in kinds, f"{name}.json uses {kind} - {why}"

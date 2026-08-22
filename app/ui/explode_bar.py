@@ -19,18 +19,12 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSlider, QWidget
 
 from app.i18n import tr
-from app.ui.header import ALL_PLATES as _HEADER_ALL_PLATES
 from app.ui.section_bar import SETTLE_MS
 from app.ui.style import NORMAL, TIGHT
 
 #: Der Schieber zählt in Zehnteln, 20 heißt also „doppelter Abstand zur
 #: Mitte".
 MAX_STEPS = 20
-
-#: Wo der Wähler jetzt wohnt. Der Name bleibt hier erreichbar, weil Viewport
-#: und Fenster ihn kennen und ein zweiter Wert für dieselbe Sache eine
-#: Fehlerquelle wäre.
-ALL_PLATES = _HEADER_ALL_PLATES
 
 
 class ExplodeBar(QWidget):

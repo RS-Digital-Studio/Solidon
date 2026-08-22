@@ -20,13 +20,36 @@
 #   PrusaSlicer       AGPL-3.0  extern aufgerufen (§29), nie mitgeliefert
 #   OrcaSlicer        AGPL-3.0  dito
 #   CuraEngine        AGPL-3.0  dito
+#   Ollama            MIT       extern, eigener Prozess — der lokale Chat (§27)
 #   ComfyUI           GPL-3.0   extern, eigener Prozess — Weg 3 (§27)
-#   TripoSG           MIT       Gewichte und Modell, in ComfyUI geladen
+#   TripoSG           MIT       Quelltext und Gewichte, in ComfyUI geladen
+#   BiRefNet          MIT       Freistell-Gewichte (Comfy-Org/BiRefNet)
 #
 # TripoSG ist der Grund, warum Weg 3 überhaupt geht: Die naheliegende
 # Alternative war lizenzrechtlich in Europa nicht nutzbar. Die Knoten unter
-# ``tools/comfyui/`` sind eigener Code und liegen im Repository, damit sie
-# mitversioniert sind; die Gewichte lädt ``tools/setup_comfyui.py``.
+# ``app/core/backends/data/comfyui/`` sind eigener Code und liegen im
+# Repository, damit sie mitversioniert sind und ins Paket kommen; Quelltext,
+# Gewichte und Pakete holt ``app/core/backends/comfy_setup.py``.
+#
+# **Und was Solidon in eine fremde Umgebung installiert, steht auch hier.** Die
+# Einrichtung von Weg 3 zieht Pakete in ComfyUIs eigenes Python nach
+# (``comfy_setup.PACKAGES``). Sie sind keine Abhängigkeit dieser Anwendung —
+# nichts davon wird hier importiert, und die Prüfung unten sieht sie nicht —,
+# aber Solidon legt sie auf den Rechner eines Kunden, und damit gehören sie in
+# die Aktenlage. ``tests/test_licences.py`` hält die Liste gegen diese Datei:
+#
+#   jaxtyping                 MIT         Typprüfung im TripoSG-Quelltext
+#   typeguard                 MIT         dito
+#   fast-simplification       MIT         Dezimieren, statt pymeshlab (GPL)
+#   trimesh                   MIT         Netze im Knoten
+#   diffusers                 Apache-2.0  die Pipeline von TripoSG
+#   scikit-image              BSD-3       Marching Cubes im Rückfallpfad
+#   lazy_loader               BSD-3       Abhängigkeit von scikit-image
+#   omegaconf                 BSD-3       Konfiguration im TripoSG-Quelltext
+#   antlr4-python3-runtime    BSD-3       Abhängigkeit von omegaconf, Fassung 4.9.3
+#
+# Der Grund für die Fassung steht in ``comfy_setup.PACKAGES``: Die 4.13
+# serialisiert den Automaten anders, den ``omegaconf`` liest.
 
 [policy]
 # Lizenzkennungen, die in Ordnung sind. Verglichen wird ohne Rücksicht auf

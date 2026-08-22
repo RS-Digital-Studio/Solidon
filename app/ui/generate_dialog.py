@@ -166,8 +166,17 @@ class GenerateDialog(QDialog):
         hängt an ``textChanged``: Gemessen kostete jeder Tastendruck **510 ms**
         im Qt-Hauptthread — „Halter" zu tippen hieß drei Sekunden stehendes
         Fenster (§2.8). Neu gefragt wird, wenn es einen Anlass gibt, und der
-        ist nicht der nächste Buchstabe: beim Aufgehen und nach einem Besuch
-        bei den zusätzlichen Programmen (:meth:`recheck`).
+        ist nicht der nächste Buchstabe: beim Aufgehen, nach einem Besuch bei
+        den zusätzlichen Programmen (:meth:`recheck`) und beim Wählen eines
+        Bildes — das wechselt den Ablauf, und die beiden brauchen nicht
+        dasselbe.
+
+        Die Frage kostet mehr als früher, und das ist gemessen: Sie prüft
+        seither jeden Knoten des Ablaufs und dazu die Modelle, also bis zu
+        vierzehn Anfragen statt einer — zusammen **88 ms** gegen ein ComfyUI auf
+        dieser Maschine. Einmal beim Aufgehen ist das vertretbar; wer die Zahl
+        der Anfragen weiter erhöht oder sie an ein Ereignis hängt, das öfter
+        kommt, misst nach und schiebt sie in einen Arbeiter (§38).
         """
         self.result_mesh: GeneratedMesh | None = None
         self._busy = False
