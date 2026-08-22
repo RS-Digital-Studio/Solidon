@@ -112,7 +112,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Testkorpus hat keinen verrundeten Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Datei mit Kehle. Ein Regressionsnetz, das die Alltagsformen ausspart, meldet Erfolg über dem, was es nicht enthält (§34) |
 | In `parts/` ist der Nichtanschluss ein Rückfall | Das Fundament der Wahrnehmung (22.08.2026) | einen Aufrufer für `travelling_parts()` oder die Feststellung, dass es sie nicht braucht — und die Testart „Anschluss" aus §35, denn derselbe Fehler ist in derselben Datei schon einmal gefunden und behoben worden |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
-| Ein Test steht zwölf Minuten still, ohne zu rechnen | Das Fundament der Wahrnehmung (22.08.2026) | einen Python-Stapel aus dem stehenden Prozess, also `py-spy` — das steht nicht in `constraints.txt`, und ein Werkzeug ungefragt in die Umgebung zu holen entscheidet Robert. Vierte Absturzsignatur, und die einzige, die steht statt abzustürzen |
+| Ein Test steht still, ohne zu rechnen — **Stelle gefunden** | Das Fundament der Wahrnehmung (22.08.2026) | den Grund, aus dem Qt beim Vererben eines Stylesheets eine Sperre hält. Der Stillstand sitzt in `start_screen.py:155` (`setStyleSheet` an der Ablagefläche), beim Aufbau des Hauptfensters in der Test-Fixture; nativ ein Deadlock auf `QBasicMutex` in `QObject::connectImpl`. Dreimal gemessen, zwei Dateien — es hängt an der Fixture, nicht am Test |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
 | `test_mesh_backend` misst die Umgebung statt sein Thema — **entschieden** | Das Fundament der Wahrnehmung (22.08.2026) | die dritte Zusicherung fällt. Sie prüft die Länge des Temp-Ordners **dieser Maschine** und sagt nichts über den Kunden; die zwei davor prüfen den Programmtext und bleiben. Ein Test, der bei umgebogenem `TEMP` rot wird, kostet jede Sitzung Zeit und schützt niemanden |
 | Kein Viewport wird jemals freigegeben | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über die Reichweite — die eine Zeile in `viewport.py` ist behoben, aber `.connect(lambda … self …)` steht an 59 Stellen in `app/ui/`, und jede davon ist ein Ring, sobald der Sender ein Kind von `self` ist. Könnte die gemeinsame Wurzel der vier Absturzpunkte sein: gemessen 7 MB je Fenster, und die Suite baut siebenhundert |
@@ -4842,10 +4842,66 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       bei einer anderen Sitzung in 9,6 s durch, und einzeln nachgefahren: 30
       passed in 10,77 s, Exit 0.
 
-      **Zum zweiten Mal am selben Tag:** `test_ui.py` stand 27 Minuten,
-      0,00 CPU-Sekunden über zehn Sekunden gemessen, 423 MB. Zwei Dateien, eine
-      Signatur, beide Male nach vollständigem Start. Damit ist die Sache nicht
-      mehr sporadisch beobachtet, sondern **zweimal gemessen**.
+      **Dreimal am selben Tag, zweimal dieselbe Datei:**
+
+      | Datei | stand | CPU über Intervall | RAM |
+      |---|---|---|---|
+      | `test_interface_limits.py` | 12 min | 0,00 s | 508 MB |
+      | `test_ui.py` | 27 min | 0,00 s | 423 MB |
+      | `test_ui.py` | 13 min | 0,00 s über 8 s | 419 MB |
+
+      Alle drei nach vollständigem Start, alle drei mehrere hundert Megabyte,
+      alle drei ohne jede Rechenzeit. Das ist nicht mehr sporadisch beobachtet,
+      sondern dreimal gemessen — und `test_ui.py` ist zweimal dabei.
+
+      **Der Wächter in `gate_lock.py` meldet den Zustand seit `f44a44f`**, ohne
+      etwas zu beenden: Ist der Halter älter als zwei Minuten und verbraucht
+      sein Prozessbaum in zwei Sekunden keine Rechenzeit, sagt das Schloss es
+      dem, der wartet.
+
+      **Und am 22.08.2026 hat der Hänger eine Zeilennummer bekommen.** Das
+      Werkzeug, nach dem dieser Punkt tagelang fragte, ist `py-spy dump --pid N
+      --native` — es hängt sich an einen **laufenden** Prozess, braucht keine
+      Vorbereitung im Code und liefert Python- und C-Stack zusammen. Installiert
+      wurde es in die **Nutzer**-Umgebung und nicht in die `.venv`:
+      `constraints.txt` und die Lizenzprüfung bleiben unberührt, und damit ist
+      es keine neue Abhängigkeit im Sinne von Regel 22.
+
+      Der Python-Stack, zweimal im Abstand von Sekunden abgefragt, beide Male
+      identisch:
+
+          _paint          app/ui/start_screen.py:155   <- self.setStyleSheet(...)
+          __init__        app/ui/start_screen.py:139   <- die Ablagefläche
+          __init__        app/ui/start_screen.py:440
+          _build_central  app/ui/main_window.py:1289
+          __init__        app/ui/main_window.py:837
+          window          tests/test_ui.py:51          <- die Fixture
+
+      Der native Stack nennt die Art des Stillstands:
+
+          QWidget::setStyleSheet -> setStyle_helper -> inheritStyle
+            -> notifyInternal2 -> QApplication::notify -> QLabel::event
+              -> QObject::connectImpl -> QBasicMutex::lockInternal
+                -> WaitOnAddress
+
+      **Es ist ein Sperren-Deadlock beim Herstellen einer Signalverbindung, kein
+      Rechenlauf und keine Rekursion.** `setStyleSheet` verschickt selbst ein
+      Ereignis, Qt vererbt den Stil an die Kinder, stellt dabei zu — und
+      verbindet ein Signal, während eine Sperre gehalten wird.
+
+      **Damit erklären sich alle drei Beobachtungen auf einmal:** Es hängt an
+      der **Fixture, die ein `MainWindow` baut**, nicht an einem bestimmten
+      Test. Deshalb war die Testnummer jedes Mal eine andere (59 im dritten
+      Fall), deshalb sind zwei verschiedene Dateien betroffen, und deshalb
+      läuft dieselbe Datei einzeln durch.
+
+      Der Rekursionsschutz an `start_screen.py:155` ist **nicht** die Ursache —
+      sein Docstring beschreibt schon die halbe Sache („`setStyleSheet` löst
+      selbst ein `PaletteChange` aus, und das führte zurück hierher"). Er
+      verhindert die Rekursion; er verhindert nicht, dass Qt beim Vererben des
+      Stils unter gehaltener Sperre verbindet. **Was fehlt, ist nicht die
+      Stelle, sondern der Grund, aus dem die Sperre gehalten wird.** Gefunden
+      von 3d-druck-b8.
 
       **Und dabei eine Messfalle, die zwei Sitzungen betraf und hier steht,
       weil sie fast ein ganzes Tor gekostet hätte.** 3d-druck-64 meldete den
