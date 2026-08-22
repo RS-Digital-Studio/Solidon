@@ -22,7 +22,7 @@ from app.core.knowledge.parts.registry import (
     changed_since_library,
     used_parts,
 )
-from app.core.knowledge.parts.user import FINGERPRINT_KEY, fingerprint
+from app.core.knowledge.parts.user import FINGERPRINT_KEY, fingerprint, travelling_parts
 from app.core.log import get_logger
 from app.core.types import Document, Finding
 from app.i18n import _
@@ -77,6 +77,41 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
     if findings:
         _log.info("part check: %d findings", len(findings))
     return findings
+
+
+def check_outgoing(document: Document, registry: PartRegistry | None = None) -> list[Finding]:
+    """Was gesagt werden muss, bevor ein Projekt **zu jemand anderem** geht
+    (§24.5, Regel 13).
+
+    **Nicht beim Speichern.** Wer an einem Projekt mit eigenem Baustein
+    arbeitet, speichert es zwanzigmal am Abend; eine Meldung, die dabei
+    jedes Mal erscheint, wird beim einundzwanzigsten Mal weggeklickt wie die
+    zwanzig davor — auch dann, wenn sie zählt. Sie hätte dort auch nichts
+    anzubieten (§2.7): Der Nutzer soll seinen eigenen Baustein benutzen, er
+    tut nichts falsch.
+
+    **Sondern beim Weggeben.** Ein eigener Baustein reist nie in einer
+    Projektdatei mit — sonst führte eine hereinkommende Datei Code aus (§32).
+    Der Empfänger bekommt also ein Projekt, das bei ihm **anhält** (§15.2),
+    und erfährt den Grund auf einem Rechner, an den niemand mehr herankommt.
+    Diese Auskunft gehört auf die Seite des Absenders, solange er noch etwas
+    tun kann.
+    """
+    travelling = travelling_parts(dict.fromkeys(used_parts(document.ops), ""), registry)
+    if not travelling:
+        return []
+    return [
+        Finding(
+            code="parts.travelling",
+            severity="warning",
+            message=_(
+                "Dieses Projekt benutzt eigene Bausteine. Sie reisen nicht mit — "
+                "bei einem anderen Empfänger hält die Auswertung an. Legen Sie die "
+                "Dateien aus Ihrem Bausteinordner bei, wenn er damit rechnen soll."
+            ),
+            values={"parts": ", ".join(travelling)},
+        )
+    ]
 
 
 def changed_own_parts(

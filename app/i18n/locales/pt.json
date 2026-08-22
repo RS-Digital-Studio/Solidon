@@ -883,6 +883,7 @@
   "Dieses Paket wird von Hand installiert — die Seite steht daneben.": "Este pacote instala-se à mão — a página está ao lado.",
   "Dieses Profil gibt es nicht.": "Este perfil não existe.",
   "Dieses Projekt benutzt Bausteine, die es hier nicht gibt.": "Este projeto usa blocos que aqui não existem.",
+  "Dieses Projekt benutzt eigene Bausteine. Sie reisen nicht mit — bei einem anderen Empfänger hält die Auswertung an. Legen Sie die Dateien aus Ihrem Bausteinordner bei, wenn er damit rechnen soll.": "Este projeto utiliza blocos próprios. Não viajam com ele — noutro destinatário o cálculo para. Junte os ficheiros da sua pasta de blocos se ele tiver de o calcular.",
   "Dieses Projekt bringt ein gespeichertes Gespräch mit. Es wird dem Assistenten als Vorgeschichte gezeigt und kann Anweisungen enthalten, die nicht von Ihnen stammen.": "Este projeto traz consigo uma conversa guardada. É mostrada ao assistente como antecedente e pode conter instruções que não vêm de si.",
   "Dieses Projekt enthält Quelltext, der beim Berechnen ein externes Programm ausführt.": "Este projeto contém código-fonte que, ao ser calculado, executa um programa externo.",
   "Dieses Projekt hat keine Parameter — ohne einen gibt es nichts zu variieren.": "Este projeto não tem parâmetros — sem um deles não há nada que variar.",

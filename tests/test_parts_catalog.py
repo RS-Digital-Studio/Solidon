@@ -413,3 +413,38 @@ def test_saving_a_project_really_records_the_own_parts(
     codes = [finding.code for finding in part_check.check(wieder.document, registry)]
 
     assert "parts.own_changed" in codes
+
+
+def test_a_project_with_an_own_part_warns_before_it_leaves_the_machine(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regel 13: der eigene Baustein reist nicht mit — und der Absender erfährt
+    es, solange er noch etwas tun kann (§24.5).
+
+    Ohne diese Auskunft bekommt der Empfänger ein Projekt, das bei ihm anhält
+    (§15.2), und der Grund liegt auf einem Rechner, an den dann niemand mehr
+    herankommt. Die Warnung gehört deshalb an die Stellen, an denen die Datei
+    **weggeht** — nicht an jedes Speichern, wo sie zwanzigmal am Abend
+    erschiene und beim einundzwanzigsten Mal weggeklickt würde.
+    """
+    registry = _own_part_registry(tmp_path, monkeypatch)
+    document = _document_using("eigenbau")
+
+    findings = part_check.check_outgoing(document, registry)
+
+    assert [finding.code for finding in findings] == ["parts.travelling"]
+    assert findings[0].values["parts"] == "eigenbau"
+    assert findings[0].severity == "warning"
+    assert "Bausteinordner" in str(findings[0].message), "die Meldung nennt eine Handlung (§2.7)"
+
+
+def test_a_project_without_own_parts_says_nothing_on_the_way_out() -> None:
+    """Die Gegenprobe: Ein mitgelieferter Baustein reist mit der Anwendung, und
+    darüber ist nichts zu sagen.
+
+    Ohne sie wäre die Prüfung auch dann grün, wenn sie **jedes** Projekt
+    warnte — und eine Warnung, die immer kommt, ist keine.
+    """
+    document = _document_using("magnet_pocket")
+
+    assert part_check.check_outgoing(document) == []

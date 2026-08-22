@@ -883,6 +883,7 @@
   "Dieses Paket wird von Hand installiert — die Seite steht daneben.": "This package is installed by hand — the page is next to it.",
   "Dieses Profil gibt es nicht.": "There is no such profile.",
   "Dieses Projekt benutzt Bausteine, die es hier nicht gibt.": "This project uses parts that do not exist here.",
+  "Dieses Projekt benutzt eigene Bausteine. Sie reisen nicht mit — bei einem anderen Empfänger hält die Auswertung an. Legen Sie die Dateien aus Ihrem Bausteinordner bei, wenn er damit rechnen soll.": "This project uses parts of your own. They do not travel with it — the evaluation stops for anyone else. Attach the files from your parts folder if they are meant to compute it.",
   "Dieses Projekt bringt ein gespeichertes Gespräch mit. Es wird dem Assistenten als Vorgeschichte gezeigt und kann Anweisungen enthalten, die nicht von Ihnen stammen.": "This project carries a saved conversation. It is shown to the assistant as prior context and may contain instructions that did not come from you.",
   "Dieses Projekt enthält Quelltext, der beim Berechnen ein externes Programm ausführt.": "This project contains source code that runs an external program when computed.",
   "Dieses Projekt hat keine Parameter — ohne einen gibt es nichts zu variieren.": "This project has no parameters — without one there is nothing to vary.",
