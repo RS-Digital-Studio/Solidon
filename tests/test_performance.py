@@ -15,6 +15,7 @@ um eine Größenordnung schlagen sie trotzdem an.
 from __future__ import annotations
 
 import gc
+import hashlib
 import json
 import time
 from collections.abc import Callable
@@ -44,6 +45,106 @@ BASELINE = Path(__file__).parent / ".performance.json"
 #: Wie viel langsamer als der letzte Lauf auf dieser Maschine als Fehler gilt (§31).
 REGRESSION_LIMIT = 1.25
 
+#: Wie oft eine Überschreitung hintereinander auftreten muss, bis sie ein
+#: Fehler ist (§31).
+#:
+#: Eine einzelne Überschreitung sagt nichts. Gemessen am 22.08.2026 auf dieser
+#: Maschine, zwei aufeinanderfolgende saubere Läufe unter dem Schloss, dieselbe
+#: Software: `blend_union` 1335 → 1745 ms (+31 %), `remesh_uniform` +21 %,
+#: `subdivide_surface` +17 %, `boolean_medium` +14 %, `orient_200` +12 %. Die
+#: Streuung der Maschine reicht damit über die Schwelle hinaus, und eine
+#: Schwelle unter der Streuung ist kein Wächter, sondern ein Würfel.
+#:
+#: Die drei möglichen Antworten waren: die Schwelle hochsetzen — dann fängt sie
+#: nichts mehr; die Meldung zum Hinweis machen — dann sieht sie niemand; oder
+#: zweimal verlangen. Die dritte steht nicht nur besser da, sie steht schon im
+#: Bauplan: §31 sagt „Wer eine Verschlechterung meldet, misst vorher ein
+#: zweites Mal auf einer ruhigen Maschine." Das ist genau diese Regel, nur
+#: bisher von Hand ausgeführt. Ein Ausschlag ist Last, zwei sind eine Richtung
+#: — und der zweite Lauf kostet nichts, weil er ohnehin kommt.
+REGRESSION_STRIKES = 2
+
+
+#: Unter welchem Schlüssel die Marken aus der Zeit vor der Trennung nach
+#: Aufrufkontext stehen.
+#:
+#: Sie bleiben in der Datei, weil die dritte Spalte von §31 aus ihr gefüllt
+#: wird — verglichen wird gegen sie nicht mehr. Zu welchem Kontext sie gehören,
+#: weiß niemand, und genau das war der Fehler.
+UNKNOWN_CONTEXT = "unknown"
+
+#: Der Aufrufkontext dieses Prozesses. ``_invocation`` setzt ihn, sobald der
+#: erste Leistungstest anläuft.
+_context: str | None = None
+
+
+def _invocation_key(session: pytest.Session) -> str:
+    """Welche Testdateien in diesem Prozess laufen — der Aufrufkontext aus §31.
+
+    Verglichen wird gegen den besten Wert **je Kontext**, und der Kontext ist
+    die Gesellschaft. Dieselbe Rechnung braucht allein 114 ms und hinter
+    ``test_slice.py`` 162, weil der Sammler den Haufen des Vorgängers während
+    der Messung einholt (der Absatz in ``measure`` rechnet es vor). Ein
+    Bestwert über alle Läufe hinweg ist damit der Wert des saubersten Laufs,
+    und jeder andere Lauf misst dagegen zu langsam — das ist die Ursache hinter
+    „Die Regressionsschwelle schlägt an, ohne dass etwas langsamer wurde".
+
+    Gezählt wird die **Menge** der Dateien, nicht ihre Reihenfolge und nicht,
+    wie viele Messungen daraus ausgewählt sind. Für die Reihenfolge braucht es
+    nichts: Ohne ordnungsmischendes Plugin läuft eine Datei von oben nach
+    unten. Für die Auswahl war die Vermutung naheliegend und ist gemessen
+    widerlegt — ``app_start`` liegt bei einer ausgewählten Messung auf 2516 ms
+    und bei dreiundzwanzig auf 2571, ``slice_knurl`` bei zwei auf 5442 und bei
+    dreiundzwanzig auf 5327. Das ist Rauschen und kein Kontext. Ein Schlüssel,
+    der die Auswahl mitnimmt, hätte jede neue Messung in dieser Datei alle
+    Marken des vollen Laufs verworfen — für eine Unterscheidung, die es nicht
+    gibt.
+    """
+    files = sorted({item.nodeid.split("::")[0] for item in session.items})
+    strangers = [name for name in files if not name.endswith("test_performance.py")]
+    if not strangers:
+        return "alone"
+    stamp = hashlib.sha256("|".join(files).encode("utf-8")).hexdigest()[:6]
+    return f"with {len(strangers)} more ({stamp})"
+
+
+@pytest.fixture(autouse=True)
+def _invocation(request: pytest.FixtureRequest) -> None:
+    """Hält den Aufrufkontext fest, bevor die erste Messung läuft."""
+    global _context
+    if _context is None:
+        _context = _invocation_key(request.session)
+
+
+def _read_marks() -> dict[str, dict[str, dict[str, Any]]]:
+    """Die Marken dieser Maschine, nach Aufrufkontext geordnet.
+
+    Je Kontext ein Bestwert und ein Zähler: ``{"best": Sekunden, "strikes": n}``.
+    Zwei ältere Fassungen der Datei werden mitgelesen — eine flache Zahl je
+    Name stammt aus der Zeit vor der Trennung nach Kontext und wandert unter
+    ``UNKNOWN_CONTEXT``, eine Zahl je Kontext aus der Zeit vor dem Zähler.
+    Beides bleibt lesbar für die dritte Spalte von §31; verglichen wird gegen
+    ``UNKNOWN_CONTEXT`` nie wieder, denn zu welchem Kontext er gehört, weiß
+    niemand.
+    """
+    if not BASELINE.is_file():
+        return {}
+    raw = json.loads(BASELINE.read_text(encoding="utf-8"))
+    marks: dict[str, dict[str, dict[str, Any]]] = {}
+    for name, value in raw.items():
+        if not isinstance(value, dict):
+            marks[name] = {UNKNOWN_CONTEXT: {"best": float(value), "strikes": 0}}
+            continue
+        marks[name] = {
+            context: (
+                {"best": float(entry["best"]), "strikes": int(entry.get("strikes", 0))}
+                if isinstance(entry, dict)
+                else {"best": float(entry), "strikes": 0}
+            )
+            for context, entry in value.items()
+        }
+    return marks
+
 
 def dense_mesh() -> MeshData:
     """Der Millionen-Dreieck-Körper. Beim ersten Gebrauch gebaut; er ist zu
@@ -60,9 +161,12 @@ def dense_mesh() -> MeshData:
 
 def measure(name: str, work: Callable[[], Any]) -> float:
     """Einmal laufen lassen, die Sekunden festhalten, mit dem **besten** Lauf
-    auf dieser Maschine vergleichen.
+    desselben Aufrufkontexts auf dieser Maschine vergleichen.
 
-    Gemerkt wird der schnellste bekannte Wert, nicht der letzte. Das ist kein
+    Gemerkt wird der schnellste bekannte Wert, nicht der letzte, und er wird
+    je Aufrufkontext gemerkt (§31, ``_invocation_key``) — sonst gilt der Wert
+    des saubersten Laufs für alle, und jeder Lauf in Gesellschaft misst
+    dagegen zu langsam. Das ist kein
     Schönrechnen, sondern die einzige Zahl, die etwas über den *Code* sagt:
     Eine Messung ist nach oben beliebig verrauschbar — eine Datei mit
     Leistungstests unmittelbar davor genügt schon — und nach unten nicht. Wer
@@ -104,21 +208,36 @@ def measure(name: str, work: Callable[[], Any]) -> float:
     work()
     taken = time.perf_counter() - started
 
-    history: dict[str, float] = {}
-    if BASELINE.is_file():
-        history = json.loads(BASELINE.read_text(encoding="utf-8"))
-    previous = history.get(name)
-    history[name] = taken if previous is None else min(previous, taken)
-    BASELINE.write_text(json.dumps(history, indent=2, sort_keys=True), encoding="utf-8")
+    context = _context or "alone"
+    marks = _read_marks()
+    per_context = marks.setdefault(name, {})
+    entry = per_context.get(context)
+    previous: float | None = entry["best"] if entry is not None else None
+    strikes = entry["strikes"] if entry is not None else 0
+
+    over = previous is not None and previous > 0.02 and taken > previous * REGRESSION_LIMIT
+    strikes = strikes + 1 if over else 0
+    per_context[context] = {
+        "best": taken if previous is None else min(previous, taken),
+        "strikes": strikes,
+    }
+    BASELINE.write_text(json.dumps(marks, indent=2, sort_keys=True), encoding="utf-8")
 
     print(
-        f"\n{name}: {taken * 1000:.0f} ms"
-        + (f" (bester Lauf bisher {previous * 1000:.0f} ms)" if previous else "")
-    )
-    if previous is not None and previous > 0.02:
-        assert taken <= previous * REGRESSION_LIMIT, (
-            f"{name} is {taken / previous:.2f} times slower than the best run on this machine"
+        f"\n{name} [{context}]: {taken * 1000:.0f} ms"
+        + (f" (bester Lauf dieses Kontexts bisher {previous * 1000:.0f} ms)" if previous else "")
+        + (
+            f" — {strikes}. Überschreitung"
+            + (", beim nächsten Lauf rot" if strikes < REGRESSION_STRIKES else "")
+            if over
+            else ""
         )
+    )
+    assert strikes < REGRESSION_STRIKES, (
+        f"{name} is slower than the best run in this context ({context}) on this machine, "
+        f"{REGRESSION_STRIKES} runs in a row — this time {taken * 1000:.0f} ms "
+        f"against {(previous or 0.0) * 1000:.0f} ms"
+    )
     return taken
 
 
@@ -551,3 +670,229 @@ def test_blending_two_bodies_stays_under_three_seconds() -> None:
         lambda: blend_bodies(MeshData.of(first), MeshData.of(second), 6.0, 1.0),
     )
     assert taken < 3.0
+
+
+# --- Die vier Zeilen aus §31, die nie eine Messmarke hatten ------------------
+#
+# §31 nennt elf Ziele. Sieben hatten eine Marke in `.performance.json`, vier
+# nicht — und es sind die vier, die der Nutzer spürt: die Boolesche Operation,
+# die Parameteränderung, der Anwendungsstart und die Navigation bei einer
+# Million Dreiecken. Eine Zeile ohne Marke ist eine Absicht, die aussieht wie
+# ein Zustand; sie stehen deshalb hier zusammen und nicht bei ihren Nachbarn.
+#
+# Die Navigation in der Ansicht ist die interessante, und sie bekommt **keine**
+# Marke unter ihrem eigenen Namen: „flüssig" ist eine Bildrate, ohne GL kein Bild,
+# und die Python-Kosten einer Kamerabewegung wären für immer grün — ein
+# Messwert, der die Abwesenheit der Sache misst und nicht die Sache. Gemessen
+# wird stattdessen der Schritt, der eine Million Dreiecke überhaupt navigierbar
+# macht: die Dezimierung für die Anzeige.
+
+
+def test_a_boolean_operation_on_two_hundred_thousand_triangles() -> None:
+    """§31: unter 2 s — die Zeile hatte keine Marke.
+
+    ``blend_union`` mit 1,18 s stand in der dritten Spalte daneben und hat sie
+    nie belegt: Das ist ``blend`` auf einem Raster, eine andere Rechnung mit
+    anderen Kosten. Hier läuft die nackte Boolesche über die Rückfallkette, an
+    der Größe, für die §31 seine Ziele angibt.
+
+    Zwei Kugeln mit Radius 40, deren Mitten 30 mm auseinander liegen — sie
+    durchdringen sich wirklich. Zwei Körper, die sich nur berühren, wären die
+    bequeme Messung: Die erste Stufe der Kette hätte fast nichts zu tun.
+    """
+    from app.core.geom.boolean import BooleanOutcome, boolean
+
+    first = medium_mesh()
+    moved = medium_mesh().raw.copy()
+    moved.apply_translation((30.0, 0.0, 0.0))
+    second = MeshData.of(moved)
+
+    outcome: list[BooleanOutcome] = []
+
+    def cut_them() -> None:
+        outcome.append(boolean("difference", [first, second]))
+
+    taken = measure("boolean_medium", cut_them)
+
+    assert outcome[0].mesh.triangle_count > 0, (
+        "an empty result means a failed chain, and measuring a failure says nothing"
+    )
+    assert taken < 20.0, "the target is two seconds; twenty catches an order of magnitude"
+
+
+#: Auf wie viele Dreiecke die Anzeige eine Million herunterrechnet.
+#:
+#: Die Zahl ist die Prüfgröße aus §31 — dieselbe, für die dort die Boolesche
+#: Operation und die Feature-Erkennung ihre Ziele nennen. Die Ansicht führt sie
+#: als ``DISPLAY_DECIMATION_TARGET`` ein zweites Mal; von dort wird sie hier
+#: **nicht** geholt, denn der Import zöge Qt in einen Lauf, der ohne Fenster
+#: auskommt, und die Datei stünde danach in der Fenstergruppe der geteilten
+#: Suite. Dass die Zahl an zwei Stellen steht, ist ein Fund und kein Entwurf:
+#: Die Schwelle beschreibt Arbeit, die der Kern tut.
+DISPLAY_TRIANGLES = 200_000
+
+
+def test_building_the_display_version_of_a_million_triangles() -> None:
+    """Was hinter der Zeile „…-Navigation, flüssig bei 1 Mio. Dreiecken" messbar ist.
+
+    Die Ansicht heißt hier absichtlich nicht mit ihrem Klassennamen, und §31s
+    Zeile steht deshalb verkürzt da: ``suite-getrennt.sh`` sucht die
+    Fensterdateien **im Text**, und ein einziges Vorkommen in einem Docstring
+    sortiert diese Datei zu ihnen — in einen eigenen Prozess, der dann nichts
+    zu sammeln hat. Das Skript zählt das seit dem 22.08.2026 nicht mehr als
+    Fehllauf (es tat es einen Tag lang, wegen genau dieser zwei Wörter), aber
+    ein Prozess für nichts bleibt ein Prozess für nichts.
+
+    Die Ansicht zeichnet nie eine Million: Ab 500 000 Dreiecken (§31) baut er
+    eine vereinfachte Fassung und zeigt die. *Deshalb* ist eine Million
+    navigierbar — und diese eine Rechnung steht zwischen „Körper geladen" und
+    „navigierbar". Wird sie langsamer, wartet der Nutzer, bevor er überhaupt
+    ziehen kann; das ist spürbar, und es ist regressionsfähig.
+
+    Was hier **nicht** gemessen wird, ist die Bildrate beim Ziehen. Die braucht
+    Bilder auf echter Grafik, und die hat das Tor nicht — das Register führt
+    dazu „VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr".
+    Diese Marke tritt nicht an ihre Stelle, sie steht daneben.
+    """
+    from app.core.geom.mesh_ops import decimate
+
+    mesh = dense_mesh()
+    taken = measure("display_decimate_1m", lambda: decimate(mesh, DISPLAY_TRIANGLES))
+    assert taken < 30.0, "no target in §31 yet; this bound only catches a runaway"
+
+
+def test_a_parameter_change_reaches_the_screen_in_time(profile: Profile) -> None:
+    """§31: Parameteränderung → sichtbares Ergebnis unter 2 s, nur betroffene Zweige.
+
+    Der Aufbau ist die Zusage selbst: ein teurer Zweig, der den Parameter nicht
+    kennt (eine Million Dreiecke, geladen und geschweißt — allein über drei
+    Sekunden), und ein zweiter, der an ihm hängt (ein Quader, dessen Breite ein
+    Ausdruck ist, und eine Bohrung darin). Gemessen wird die **zweite**
+    Auswertung, nachdem der Parameter sich geändert hat.
+
+    Damit prüft die Zahl beide Hälften der Zeile auf einmal: Bleibt sie unter
+    zwei Sekunden, ist der teure Zweig aus dem Cache gekommen. Landet sie in
+    der Größenordnung der ersten Auswertung, ist „nur betroffene Zweige" nicht
+    eingelöst — und das wäre ein Fund und keine Marke.
+    """
+    from app.core.types import Parameter
+
+    project = new_project("centauri-carbon-2", "petg")
+    dense_mesh()  # legt die Datei an, falls sie fehlt
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/dense_1m.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "dense_1m.stl").read_bytes()
+    project.document.parameters["breite"] = Parameter(name="breite", value=40.0, unit="mm")
+
+    history = History(project.document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})])
+    history.apply(
+        _("Quader"),
+        [
+            OperationDraft(
+                op="create_box", params={"width": "=@breite", "depth": 30.0, "height": 10.0}
+            )
+        ],
+    )
+
+    cache = ResultCache()
+    sources = ProjectSources(project)
+    first = evaluate(project.document, profile, sources=sources, cache=cache)
+    box_id = next(
+        object_id
+        for object_id, body in first.scene.objects.items()
+        if body.mesh.triangle_count < 1000
+    )
+    history.apply(
+        _("Bohren"), [OperationDraft(op="drill_hole", inputs=(box_id,), params={"diameter": 6.0})]
+    )
+    evaluate(project.document, profile, sources=sources, cache=cache)
+
+    project.document.parameters["breite"] = Parameter(name="breite", value=52.0, unit="mm")
+    before = cache.statistics.hits
+    taken = measure(
+        "param_change",
+        lambda: evaluate(project.document, profile, sources=sources, cache=cache),
+    )
+
+    assert cache.statistics.hits > before, "the untouched branch has to come from the cache"
+    assert taken < 20.0, "the target is two seconds; twenty catches an order of magnitude"
+
+
+#: Der Treiber für den Startversuch. Er tut, was ``main()`` bis zum bedienbaren
+#: Fenster tut, und hört dort auf.
+STARTUP_DRIVER = '''"""Startet Solidon bis zum bedienbaren Fenster und hoert dann auf."""
+
+import os
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from app.core.bootstrap import load_operations
+from app.ui.app import build_application
+
+load_operations()
+application, window = build_application([])
+window.show()
+'''
+
+
+def test_the_application_is_usable_quickly(tmp_path: Path) -> None:
+    """§31: Anwendungsstart bis bedienbar unter 3 s — die Zeile hatte keine Marke.
+
+    Gemessen wird ein **eigener Prozess**, und das ist die Entscheidung, die
+    diese Marke trägt. Zwei Gründe. Erstens gehört der Prozessstart dazu: Der
+    Import von ``main_window`` allein zieht trimesh und networkx nach und kostet
+    gemessen 2,2 der 2,4 Sekunden, die ``import app.ui.app`` brauchte — im
+    laufenden Testprozess ist das längst geschehen, und die Marke wäre eine
+    Zehntelsekunde und eine Lüge. Zweitens entsteht im Messprozess selbst kein
+    Fenster; die Datei bleibt damit aus der Fenstergruppe der geteilten Suite
+    heraus.
+
+    Bis wohin gemessen wird: Register geladen, Anwendung und Fenster gebaut,
+    Fenster gezeigt — das ist „bedienbar". Nicht dabei ist, was ``main()``
+    davor tut (Ladebildschirm, Freischaltung, eine Datei von der Befehlszeile).
+    Der Ladebildschirm gehört bewusst nicht dazu: Er verdeckt die Wartezeit, er
+    verkürzt sie nicht.
+
+    Diese Zahl hat eine kalte und eine warme Fassung, und der Unterschied ist
+    kein Rauschen: Die ersten zwei Messungen am 22.08.2026 lasen 13 764 und
+    12 936 ms, jede weitere an diesem Tag 2500 bis 3000 — fünffach, und dann
+    nie wieder. Der Betriebssystem-Cache holt die Dateien der Anwendung beim
+    ersten Mal von der Platte und behält sie danach.
+
+    Die Marke behält den kleinsten Wert und ist damit die **warme** Zahl. Sie
+    ist die richtige für den Vergleich — eine Suite, die mehrmals am Tag läuft,
+    startet nie kalt — und sie ist nicht die, die der Nutzer nach dem
+    Hochfahren erlebt. Wer die kalte wissen will, muss sie einzeln messen und
+    dazwischen den Cache leeren; in dieser Suite steht sie nicht.
+
+    Die Nutzerverzeichnisse sind über Umgebungsvariablen umgebogen (§38), und
+    die erbt der Unterprozess — er schreibt nichts in Roberts Profil.
+    """
+    import subprocess
+    import sys
+
+    driver = tmp_path / "until_usable.py"
+    driver.write_text(STARTUP_DRIVER, encoding="utf-8")
+
+    root = Path(__file__).parent.parent
+    finished: list[subprocess.CompletedProcess[str]] = []
+
+    def start() -> None:
+        finished.append(
+            subprocess.run(
+                [sys.executable, str(driver)],
+                cwd=root,
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        )
+
+    taken = measure("app_start", start)
+
+    assert finished[0].returncode == 0, (
+        f"the application did not come up: {finished[0].stderr[-2000:]}"
+    )
+    assert taken < 30.0, "the target is three seconds; thirty catches an order of magnitude"
