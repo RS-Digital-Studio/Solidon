@@ -855,16 +855,31 @@ def test_the_weights_are_downloaded_through_a_short_folder() -> None:
     ``FileNotFoundError`` mit einem Pfad, den kein Mensch liest.
 
     Geprüft wird der Programmtext und nicht ein Lauf: Der Lauf lädt 7,5 GB.
+
+    **Eine dritte Zusicherung stand hier und ist am 22.08.2026 gefallen.** Sie
+    rechnete ``len(tempfile.gettempdir()) + len("/solidon-triposg") + 163 <
+    260`` — also die Pfadlänge **dieser** Maschine. Das ist keine Aussage über
+    den Code und keine über den Kunden: Wer ``TEMP`` umbiegt, macht sie rot,
+    ohne dass sich an der Anwendung etwas geändert hätte, und genau das ist an
+    jenem Tag zweimal passiert, als eine Sitzung ihre Protokolle in einen
+    eigenen Ordner schrieb. Ein Test, der die Umgebung seines Läufers misst
+    statt sein Thema, kostet jede Sitzung Zeit und schützt niemanden.
+
+    **Was sie prüfen wollte, ist trotzdem richtig und gehört woanders hin:**
+    Windows bricht bei 260 Zeichen ab, und ein Kunde mit einem tiefen
+    ``TEMP``-Pfad bekäme mitten im 7,5-GB-Ladevorgang einen
+    ``FileNotFoundError``. Das ist eine Aussage über den **Kunden** und muss
+    deshalb im Programm stehen, nicht im Test: ``comfy_setup`` gehört dazu
+    gebracht, die Länge vor dem Laden zu prüfen und mit einem
+    Handlungsvorschlag anzuhalten (§2.7, §33.1) — „Ihr Zwischenordner ist zu
+    tief; setzen Sie TEMP auf einen kürzeren Pfad." Ein Test darauf prüft dann
+    das Verhalten und nicht den Rechner, auf dem er läuft.
     """
     from app.core.backends import comfy_setup
 
     programm = comfy_setup._FETCH_WEIGHTS
     assert "tempfile.gettempdir" in programm, "geladen wird in einen kurzen Ordner"
     assert "shutil.move" in programm, "und danach an seinen Platz gebracht"
-    # Der Ordner ist kurz genug, wenn er die gemessenen 163 Zeichen verträgt.
-    import tempfile
-
-    assert len(tempfile.gettempdir()) + len("/solidon-triposg") + 163 < 260
 
 
 def test_a_broken_download_is_resumed_and_not_thrown_away() -> None:
