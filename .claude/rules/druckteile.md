@@ -5,11 +5,23 @@ paths:
 
 # Regeln für den Ordner „3D Drucker"
 
-Dieser Ordner ist **nicht Teil des Programm-Repositories** (in `.gitignore`) —
-hier liegen die echten Druckprojekte. `3D Drucker/CLAUDE.md` ist die Referenz
-für Drucker, Filamentbestand, Zubehör und laufende Projekte; sie wird
-mitgeladen, sobald hier gearbeitet wird. Was dort steht, wird hier nicht
-wiederholt.
+Hier liegen die echten Druckprojekte — **kein Programmcode, aber seit dem
+22.08.2026 im Repository.** Bis dahin schloss `.gitignore` den Ordner aus, mit
+der Begründung, er gehöre nicht zum Programm; fachlich stimmt das, praktisch
+hieß es, dass die Projekte nur auf einer von drei Maschinen lagen. Auf dem
+Laptop fehlte der Ordner vollständig.
+
+`3D Drucker/CLAUDE.md` ist die Referenz für Drucker, Filamentbestand, Zubehör
+und laufende Projekte; sie wird mitgeladen, sobald hier gearbeitet wird. Was
+dort steht, wird hier nicht wiederholt.
+
+**Was hier nicht abgelegt wird:** erzeugte STL- und G-Code-Dateien, die ein
+Skript wiederherstellt. Das parametrische Skript ist die Quelle, die Datei
+daraus ist das Ergebnis — dieselbe Regel wie beim Referenzkorpus, und sie zählt
+hier doppelt, weil Netze schnell hundert Megabyte wiegen und aus der Historie
+nicht mehr herausgehen. Ein Netz gehört dazu, wenn es **nicht** reproduzierbar
+ist: ein eingescanntes Bauteil, ein heruntergeladenes Fremdmodell, ein von Hand
+nachgebessertes Ergebnis.
 
 ## Immer an die eigene Werkstatt denken
 

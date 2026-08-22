@@ -161,7 +161,8 @@ website/      öffentliche Seiten; handbuch.html und en/manual.html erzeugt
               dl/ die Pakete, von tools/make_download.py angelegt
 changelog/    was im Update-Fenster steht, je Sprache eine Datei — Auswahl
               in Kundensprache, keine Liste der Änderungen
-3D Drucker/   physische Druckprojekte, eigene CLAUDE.md, nicht im Repository
+3D Drucker/   physische Druckprojekte, eigene CLAUDE.md — kein Programmcode,
+              aber im Repository: es wird auf drei Maschinen gearbeitet
 ```
 
 Gebietsregeln liegen in `.claude/rules/` und laden sich selbst, sobald ich
@@ -195,6 +196,11 @@ raten: das steht in `AGENTS.md` und gilt unverändert. Dazu kommt hier:
   `/liefern` führt das aus — Tor laufen lassen, in Einheiten aufteilen,
   deutsche Meldungen. Der Skill ruft sich nicht selbst auf
   (`disable-model-invocation`), er wird angesagt.
+- **Jeder Commit geht sofort hinaus.** `.githooks/post-commit` pusht ihn, weil
+  auf drei Maschinen gearbeitet wird und ein liegengebliebener Commit auf den
+  anderen zweien nicht existiert. Der Hook holt und rebasiert **nicht** — ist
+  die Gegenstelle weiter, scheitert er und sagt, was zu tun ist.
+  `SOLIDON_KEIN_PUSH=1` schaltet ihn für einen Lauf ab.
 - **Bei zwei Sitzungen im selben Arbeitsbaum**: vorher sagen, welche Dateien
   man anfasst, und mit privatem Index committen (`GIT_INDEX_FILE`,
   `git commit -o -- <pfade>`). Sonst nimmt der eigene Commit fremde Arbeit

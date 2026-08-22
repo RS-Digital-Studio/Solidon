@@ -1,5 +1,13 @@
-# --- Bestehende Modellsammlung, gehoert nicht zum Programm-Repository -------
-/3D Drucker/
+# Die Druckprojekte unter „3D Drucker/" standen hier bis zum 22.08.2026 mit der
+# Begründung, sie gehörten nicht zum Programm-Repository. Das stimmt fachlich und
+# war praktisch falsch: Es wird auf drei Maschinen gearbeitet, und ein Projekt,
+# das nur auf einer liegt, ist auf den anderen zweien nicht vorhanden — auf
+# diesem Laptop fehlte der Ordner vollständig. Sie reisen jetzt mit.
+#
+# Bevor dort das erste Mal committet wird, lohnt ein Blick auf die Größe:
+# STL-Dateien werden schnell hunderte Megabyte, und was einmal in der Historie
+# liegt, geht nicht mehr heraus. Was sich aus einem Skript neu erzeugen lässt,
+# gehört nicht dazu — dieselbe Regel wie beim Referenzkorpus.
 
 # --- Python ------------------------------------------------------------------
 __pycache__/

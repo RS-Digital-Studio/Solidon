@@ -103,7 +103,14 @@ Auf der Kommandozeile gibt `solidon3d docs --manual` denselben Text aus.
 ```
 python -m venv .venv
 .venv/Scripts/python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui]"
+git config core.hooksPath .githooks
 ```
+
+Die dritte Zeile ist einmal je Arbeitsplatz nötig und schaltet die Git-Hooks des
+Projekts ein — derzeit einen: Er pusht jeden Commit sofort. Ohne die Zeile
+passiert nichts weiter, als dass Commits liegen bleiben, bis jemand von Hand
+pusht. `core.hooksPath` ist eine lokale Einstellung; Git holt sie sich nicht aus
+dem Repository, deshalb steht sie hier und nicht in einer Datei.
 
 | Befehl | Zweck |
 |---|---|
