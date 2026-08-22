@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import dataclasses
 import logging
+import re
 from pathlib import Path
 from typing import Any, cast
 
@@ -6089,3 +6090,99 @@ def test_the_face_jump_names_the_area_in_the_chosen_unit(window: MainWindow) -> 
         assert any("in²" in label for _f, label, _n in faces)
     finally:
         set_display_unit("mm")
+
+
+#: Eine Kommazahl mit Punkt — aber kein Pfad, keine Fassungsnummer, keine Endung.
+#:
+#: Die Wächter links und rechts sind der Unterschied: „sources/1_cube.stl" und
+#: „0.1.2" sind keine Zahlen, und eine Prüfung, die sie mitzählt, wird
+#: abgeschaltet statt gelesen.
+_DECIMAL_POINT = re.compile(r"(?<![\w./\\-])\d+\.\d+(?![\w./\\-])")
+
+
+def _visible_texts(root: object, mark: str) -> list[tuple[str, str]]:
+    """Jeden Text, den dieser Baum zeigt — Beschriftung, Knopf, Liste, Tooltip."""
+    from PySide6.QtWidgets import QAbstractButton, QGroupBox, QLabel, QListWidget, QTreeWidget
+
+    found: list[tuple[str, str]] = []
+    for widget in [*root.findChildren(QLabel), *root.findChildren(QAbstractButton)]:
+        text = widget.text() if hasattr(widget, "text") else ""
+        if text:
+            found.append((f"{mark}/{type(widget).__name__}", text))
+        if widget.toolTip():
+            found.append((f"{mark}/tooltip", widget.toolTip()))
+    for box in root.findChildren(QGroupBox):
+        if box.title():
+            found.append((f"{mark}/QGroupBox", box.title()))
+    for listing in root.findChildren(QListWidget):
+        for index in range(listing.count()):
+            found.append((f"{mark}/QListWidgetItem", listing.item(index).text()))
+    for tree in root.findChildren(QTreeWidget):
+        for index in range(tree.topLevelItemCount()):
+            entry = tree.topLevelItem(index)
+            for column in range(tree.columnCount()):
+                if entry.text(column):
+                    found.append((f"{mark}/QTreeWidgetItem", entry.text(column)))
+    return found
+
+
+def test_no_visible_text_writes_a_decimal_point(window: MainWindow) -> None:
+    """Die Gegenprobe zur Regelprüfung — von der anderen Seite.
+
+    `test_no_number_reaches_the_user_past_the_localisation` liest den Quelltext
+    und sieht f-Strings mit Formatangabe. Sie sieht **nicht**, was über
+    `"%.2f" %`, über `.format()`, über `str(round(…))` oder über ein nacktes
+    `f"{wert}"` auf einer Fließkommazahl hereinkäme. Heute gibt es davon keine
+    Stelle; morgen schreibt jemand die erste, und die Regel schweigt.
+
+    Diese Prüfung schaut deshalb auf das Ergebnis: Sie baut die zahlenreichen
+    Flächen auf — Fenster mit geladenem Modell, Druckeinstellungen, fünf
+    Operationsdialoge — und liest jeden Text, den sie zeigen, samt Tooltips.
+    Im deutschen Fenster darf dort keine Zahl mit Punkt stehen. Gemessen sind
+    das über vierhundert Texte.
+    """
+    from PySide6.QtCore import QLocale
+
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+
+    before = QLocale()
+    try:
+        QLocale.setDefault(QLocale("de"))
+        window.open_path(MESHES / "plate_holes.stl")
+        window.session.wait_for_idle()
+        QApplication.processEvents()
+
+        texts = _visible_texts(window, "Fenster")
+
+        settings = PrintSettingsDialog(window.session, window.settings, window)
+        settings.show()
+        QApplication.processEvents()
+        texts += _visible_texts(settings, "Druckeinstellungen")
+        settings.reject()
+
+        for name in ("drill_hole", "apply_texture", "insert_nut_trap", "label_text", "hollow"):
+            if not REGISTRY.has(name):
+                continue
+            dialog = OperationDialog(REGISTRY.get(name), {}, window)
+            dialog.show()
+            QApplication.processEvents()
+            texts += _visible_texts(dialog, name)
+            dialog.reject()
+
+        assert len(texts) > 300, f"nur {len(texts)} Texte — die Flächen sind nicht aufgebaut"
+        offenders = [
+            f"{where}: {text[:90]!r}" for where, text in texts if _DECIMAL_POINT.search(text)
+        ]
+        assert not offenders, "Zahl mit Punkt im deutschen Fenster:\n" + "\n".join(offenders[:15])
+    finally:
+        QLocale.setDefault(before)
+
+
+def test_the_decimal_point_check_would_catch_a_violation() -> None:
+    """Ein Wächter für die Prüfung darüber: ein grüner Lauf soll etwas heißen."""
+    assert _DECIMAL_POINT.search("Übermaß: 12.40 mm")
+    assert _DECIMAL_POINT.search("+1.25 cm³")
+    assert not _DECIMAL_POINT.search("Übermaß: 12,40 mm")
+    assert not _DECIMAL_POINT.search("Pfad: sources/1_cube.stl"), "ein Pfad ist keine Zahl"
+    assert not _DECIMAL_POINT.search("Fassung 0.1.2"), "eine Fassungsnummer auch nicht"
+    assert not _DECIMAL_POINT.search("https://example.com/x.stl")

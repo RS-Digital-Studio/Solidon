@@ -83,6 +83,15 @@ zeigten im englischen Fenster „8,4 g". `test_no_number_reaches_the_user_past_
 the_localisation` prüft jede Datei unter `app/ui`; wer eine Kommazahl in einen
 Anzeigetext schreibt, kommt daran nicht vorbei.
 
+**Zwei Prüfungen von zwei Seiten.** Die Regelprüfung liest den Quelltext und
+sieht f-Strings mit Formatangabe — nicht `"%.2f" %`, nicht `.format()`, nicht
+ein nacktes `f"{wert}"` auf einer Fließkommazahl.
+`test_no_visible_text_writes_a_decimal_point` schaut deshalb auf das Ergebnis:
+Fenster mit Modell, Druckeinstellungen und fünf Operationsdialoge aufgebaut,
+jeden sichtbaren Text und jeden Tooltip gelesen, und im deutschen Fenster darf
+dort keine Zahl mit Punkt stehen. Über vierhundert Texte, und die Wächter der
+Suche lassen Pfade, Adressen und Fassungsnummern durch.
+
 `localised` tauscht **jeden** Punkt. Um eine Zahl darf es liegen, um einen
 Pfad, eine Adresse oder eine Fassungsnummer nie — dafür gibt es
 `localised_value`, das prüft, ob überhaupt eine Zahl dasteht.
