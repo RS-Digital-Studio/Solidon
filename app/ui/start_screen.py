@@ -65,6 +65,14 @@ from app.ui.theme import THEMES
 #: zusammen.
 COLUMN_WIDTH = 900
 
+#: Wie viele Zeilen von „Zuletzt geöffnet" ohne Rollen sichtbar sind.
+#:
+#: Vier, und die Zahl kommt aus einer Messung: Der Startbildschirm brauchte mit
+#: sechs Projekten 198 Pixel Rollweg auf 1920x1080 und 378 auf 1600x900. Leer
+#: waren es 26 beziehungsweise 206 — die Liste allein kostete 172 Pixel und
+#: fraß damit genau den Gewinn auf, den ein früherer Umbau gebracht hatte.
+RECENT_ROWS = 4
+
 #: Kacheln je Zeile. Zwei bei 900 Pixel heißt gut 430 pro Kachel: das
 #: Vorschaubild links, daneben Titel und Satz.
 TILE_COLUMNS = 2
@@ -401,6 +409,17 @@ class StartScreen(QWidget):
         # ein Versuchsprojekt hielt sich länger als das Interesse daran.
         self.recent_list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.recent_list.customContextMenuRequested.connect(self._on_recent_menu)
+        # **Vier Zeilen hoch, nicht vier Einträge lang.** Der Startbildschirm
+        # passte gemessen auf keinen Schirm ohne Rollen, sobald die Liste sich
+        # füllte: leer blieben 26 Pixel Rollweg auf 1920x1080, mit sechs
+        # Projekten waren es 198 — genau der Wert, den ein früherer Umbau
+        # beseitigt hatte. Die Liste fraß den Gewinn auf, sobald jemand die
+        # Anwendung ein paarmal benutzt hatte.
+        #
+        # Wie hoch sie höchstens wird, entscheidet :meth:`show_recent` — dort
+        # steht die Zeilenhöhe fest. Eine leere Liste hat keine, und
+        # ``sizeHintForRow`` gibt dort einen Vorgabewert zurück, der um mehr
+        # als das Doppelte danebenliegt (77 statt 30).
 
         self.recent_empty = QLabel(tr("Noch nichts geöffnet."), self)
         set_level(self.recent_empty, "caption")
@@ -565,8 +584,13 @@ class StartScreen(QWidget):
             item.setData(Qt.ItemDataRole.UserRole, str(path))
             item.setToolTip(str(path))
             self.recent_list.addItem(item)
-
-        rows = max(len(paths), 1)
+        # **Höchstens vier Zeilen hoch.** Die Liste wuchs bisher mit jedem
+        # Eintrag mit, und damit wuchs der Startbildschirm: leer 26 Pixel
+        # Rollweg auf 1920x1080, mit sechs Projekten 198 — genau der Wert, den
+        # ein früherer Umbau beseitigt hatte. Gedeckelt wird die Höhe und nicht
+        # die Zahl der Einträge: Wer zehn Projekte hat, behält sie und rollt in
+        # der Liste; was darunter liegt, ist über *Öffnen* genauso erreichbar.
+        rows = min(max(len(paths), 1), RECENT_ROWS)
         height = self.recent_list.sizeHintForRow(0) if paths else 22
         self.recent_list.setMaximumHeight(rows * max(height, 18) + NORMAL)
 
