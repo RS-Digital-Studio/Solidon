@@ -1495,6 +1495,7 @@
   "Kantenlänge": "Longitud de arista",
   "Kantenwinkel": "Ángulo de arista",
   "Karte wählen — der Körper färbt sich nach Zahlen, die Legende nennt den Bereich. Ein Klick auf eine Warnung im Prüfbericht fährt hin.": "Elegir un mapa — el cuerpo se colorea según los números, la leyenda indica el rango. Un clic en una advertencia del informe de comprobación lleva hasta allí.",
+  "Kegel": "Cono",
   "Kein Baustein passt zu „{begriff}“.": "Ninguna pieza coincide con «{begriff}».",
   "Kein Befehl passt zu „{begriff}“. Gesucht wird in Titel, Name und Beschreibung.": "Ningún comando coincide con «{begriff}». Se busca en título, nombre y descripción.",
   "Kein Befund dieser Stufe: „{stufe}“.": "Ningún hallazgo de este nivel: «{stufe}».",

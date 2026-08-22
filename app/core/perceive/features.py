@@ -107,6 +107,60 @@ class CylinderFit:
         return self.residual <= CYLINDER_TOLERANCE and self.radius > EPS_GEOM
 
 
+@dataclass(frozen=True, slots=True)
+class ConeFit:
+    """Ein eingepasster Kegel: Spitze, Achse, halber Öffnungswinkel."""
+
+    axis: Vec3
+    """Zeigt von der Spitze in den Fleck hinein."""
+    apex: Vec3
+    centre: Vec3
+    """Die Mitte des weitesten Kreises — dort, wo der Kegel die Oberfläche
+    trifft.
+
+    **Der Ort des Merkmals, und er ist keine Zierde.** Die Zuordnung liest
+    ``params["centre"]`` und nimmt (0, 0, 0), wenn es fehlt (§21.2). Ohne
+    diesen Punkt lagen zwei Senkungen an verschiedenen Stellen für sie am
+    selben Ort, waren gleich groß und gleich ausgerichtet — und damit
+    mehrdeutig. Gemessen am Beispielprojekt *weg2*: zwei Schraubenlöcher, und
+    die Auswertung hielt an und fragte, welche Senkung welche ist.
+
+    Die Spitze wäre der falsche Punkt dafür: Sie liegt außerhalb des Körpers,
+    wandert mit jedem Winkel und ist bei einem flachen Kegel weit weg."""
+    half_angle: float
+    """In Grad, zwischen Achse und Mantellinie."""
+    radius: float
+    """Der Radius an der weitesten Stelle des Flecks."""
+    residual: float
+    """Mittlere Abweichung vom eingepassten Kegel, bezogen auf den Radius."""
+    recess: bool
+    """Wahr bei einer Senkung — der Kegel ist ausgehöhlt, nicht aufgesetzt."""
+
+    @property
+    def good(self) -> bool:
+        return (
+            self.residual <= CONE_TOLERANCE
+            and self.radius > EPS_GEOM
+            and CONE_MIN_ANGLE <= self.half_angle <= CONE_MAX_ANGLE
+        )
+
+
+#: Wie schräg ein Fleck mindestens stehen muss, um als Kegel zu zählen.
+#:
+#: Darunter ist er ein Zylinder — und zwar auch dann, wenn die Einpassung einen
+#: winzigen Öffnungswinkel findet: Ein gebohrtes Loch ist nie ganz gerade, und
+#: aus einer Messabweichung einen Kegel mit einer Spitze in 150 000 km
+#: Entfernung zu machen, ist keine Erkennung.
+CONE_MIN_ANGLE = 5.0
+
+#: Und ab wann er wieder keiner ist: bei 85 Grad Halbwinkel liegt der Fleck
+#: fast in einer Ebene, und Ebenen erkennt :func:`detect_faces`.
+CONE_MAX_ANGLE = 85.0
+
+#: Wie gut ein Fleck zum eingepassten Kegel passen muss. Dieselbe Schwelle wie
+#: beim Zylinder, weil es dieselbe Frage ist.
+CONE_TOLERANCE = 0.08
+
 #: Die Merkmalsarten, die diese Datei aus einem Netz lesen kann.
 #:
 #: Gebraucht wird die Liste außerhalb, und zwar für eine Unterscheidung, die
@@ -115,7 +169,7 @@ class CylinderFit:
 #: sieht. Ein Gewinde sieht sie nicht — es entsteht in einem Baustein und
 #: trägt seinen Namen von dort. Wer es wie eine Bohrung prüfte, verlöre es bei
 #: jeder Operation, weil kein Partner zu finden ist.
-DETECTABLE_KINDS: frozenset[str] = frozenset({"hole", "pin", "face", "edge_loop"})
+DETECTABLE_KINDS: frozenset[str] = frozenset({"hole", "pin", "face", "edge_loop", "cone"})
 
 
 def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
@@ -124,10 +178,24 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     Bohrungen und Stifte teilen ihre Suche (siehe :func:`_cylinders`) — beide
     zu erfragen kostet also, was früher eines kostete.
     """
+    # **Einmal suchen, zweimal lesen** — hier, und nicht in den beiden
+    # Aufrufern. Der Docstring von :func:`_cylinders` beschreibt genau das seit
+    # es ihn gibt; die Verdrahtung tat es nicht: ``detect_holes`` und
+    # ``detect_pins`` riefen jede für sich, und damit lief die teure Hälfte
+    # zweimal je Erkennung.
+    #
+    # Gemessen an einer Platte mit 81 Bohrungen und 83 280 Dreiecken, beide
+    # Wege warm und je der beste von vier Läufen: **464 ms gegen 367 ms, also
+    # einundzwanzig Prozent.** Nicht die Hälfte, obwohl ein einzelner Durchgang
+    # kalt 210 ms braucht — ``trimesh`` legt Nachbarschaften und Facetten am
+    # Körper ab, der zweite Durchgang fand sie also schon vor. Wer hier die
+    # kalte Zahl verdoppelt, verspricht das Doppelte des Erreichbaren.
+    cylinders, cones = _fitted(mesh)
     found: dict[FeatureId, Feature] = {}
     for feature in [
-        *detect_holes(mesh),
-        *detect_pins(mesh),
+        *detect_holes(mesh, cylinders),
+        *detect_pins(mesh, cylinders),
+        *detect_cones(mesh, cones),
         *detect_faces(mesh),
         *detect_edge_loops(mesh),
     ]:
@@ -139,8 +207,20 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
 # --- Bohrungen -------------------------------------------------------------------
 
 
-def _cylinders(mesh: MeshData) -> list[tuple[CylinderFit, list[int]]]:
-    """Jeder zylindrische Fleck des Körpers, einmal eingepasst.
+#: Eine eingepasste Zylinderfläche mit den Dreiecken, auf denen sie sitzt.
+Cylinders = list[tuple["CylinderFit", list[int]]]
+
+#: Dasselbe für die Kegel.
+Cones = list[tuple["ConeFit", list[int]]]
+
+
+def _cylinders(mesh: MeshData) -> Cylinders:
+    """Nur die Zylinder, für jeden, der die Kegel nicht braucht."""
+    return _fitted(mesh)[0]
+
+
+def _fitted(mesh: MeshData) -> tuple[Cylinders, Cones]:
+    """Jeder gekrümmte Fleck des Körpers, einmal eingepasst.
 
     Bohrungen und Stifte sind dieselbe Suche, zweimal gelesen, und die Suche
     ist die teure Hälfte: an einem Körper mit einer Million Dreiecken kosten
@@ -150,7 +230,7 @@ def _cylinders(mesh: MeshData) -> list[tuple[CylinderFit, list[int]]]:
     """
     body = mesh.raw
     if not len(body.faces):
-        return []
+        return [], []
 
     # Eine Bohrungswand besteht aus vielen schmalen ebenen Segmenten — „gehört zu
     # einer Facette" ist also nicht die Trennlinie, „gehört zu einer *großen*
@@ -158,11 +238,30 @@ def _cylinders(mesh: MeshData) -> list[tuple[CylinderFit, list[int]]]:
     planar = _large_facet_faces(body)
     curved = [index for index in range(len(body.faces)) if index not in planar]
     if not curved:
-        return []
+        return [], []
 
-    found: list[tuple[CylinderFit, list[int]]] = []
+    found: Cylinders = []
+    cones: Cones = []
     for patch in _connected_patches(body, curved):
         if len(patch) < MIN_PATCH_FACES:
+            continue
+        # **Die Normalen entscheiden, welche Form es ist — nicht der
+        # Rückstand.** Der naheliegende Weg wäre, zuerst einen Zylinder
+        # einzupassen und den Kegel als Auffang zu nehmen. Er ist falsch, und
+        # der Fall, der es zeigt, ist ein aufgesetzter Kegel: Jede seiner
+        # Facetten ist **ein** Dreieck von der Grundfläche zur Spitze, deren
+        # Schwerpunkt liegt auf einem Drittel der Höhe — und damit liegen alle
+        # Schwerpunkte auf **einem Kreis**. Die Zylindereinpassung rechnet über
+        # die Schwerpunkte und findet einen tadellosen Zylinder, Rückstand
+        # 0,0000, an einem Kegel mit 31 Grad. Ein Rückstand kann das nicht
+        # sehen; die Normalen können es: Beim Zylinder stehen sie senkrecht auf
+        # der Achse, beim Kegel um ``sin`` des Halbwinkels daneben.
+        #
+        # Also: Die Form kommt aus dem Winkel, die Güte aus dem Rückstand.
+        cone = fit_cone(body, patch)
+        if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
+            if cone.good and _fits_in_the_body(mesh, cone):
+                cones.append((cone, patch))
             continue
         fit = fit_cylinder(body, patch)
         if fit is not None and fit.good and _fits_in_the_body(mesh, fit):
@@ -183,15 +282,30 @@ def _cylinders(mesh: MeshData) -> list[tuple[CylinderFit, list[int]]]:
             round(entry[0].centre[2], 3),
         )
     )
-    return found
+    # Kegel nach ihrer Spitze, aus demselben Grund: Die Nummer eines Merkmals
+    # ist eine Provenienz-ID, und die darf nicht an der Reihenfolge der Flecken
+    # hängen (§21.2).
+    cones.sort(
+        key=lambda entry: (
+            round(entry[0].centre[0], 3),
+            round(entry[0].centre[1], 3),
+            round(entry[0].centre[2], 3),
+        )
+    )
+    return found, cones
 
 
-def detect_holes(mesh: MeshData) -> list[Feature]:
-    """Zylindrische Flecken, deren Normalen nach innen zeigen (§21.1)."""
+def detect_holes(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feature]:
+    """Zylindrische Flecken, deren Normalen nach innen zeigen (§21.1).
+
+    ``cylinders`` ist die schon gefundene Einpassung. Wer sie mitgibt, spart den
+    teuren Teil; wer sie auslässt, bekommt ihn — die Funktion bleibt allein
+    aufrufbar, weil sie es überall ist, wo nur die Bohrungen gebraucht werden.
+    """
     body = mesh.raw
     found = [
         entry
-        for entry in _cylinders(mesh)
+        for entry in (_cylinders(mesh) if cylinders is None else cylinders)
         if entry[0].inward and entry[0].radius * 2.0 >= MIN_HOLE_DIAMETER
     ]
     return [
@@ -213,7 +327,7 @@ def detect_holes(mesh: MeshData) -> list[Feature]:
     ]
 
 
-def _fits_in_the_body(mesh: MeshData, fit: CylinderFit) -> bool:
+def _fits_in_the_body(mesh: MeshData, fit: CylinderFit | ConeFit) -> bool:
     """Passt dieser Zylinder überhaupt in den Körper, der ihn tragen soll?
 
     Kein Grenzwert, ein Widerspruch: Eine Bohrung oder ein Zapfen von Ø 631 mm
@@ -249,7 +363,7 @@ def _fits_in_the_body(mesh: MeshData, fit: CylinderFit) -> bool:
     return fit.radius * 2.0 <= across + EPS_GEOM
 
 
-def detect_pins(mesh: MeshData) -> list[Feature]:
+def detect_pins(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feature]:
     """Zylindrische Flecken, deren Normalen nach außen zeigen (§21.1).
 
     Dieselbe Einpassung wie bei einer Bohrung, andersherum gelesen. Sie lohnt
@@ -258,7 +372,11 @@ def detect_pins(mesh: MeshData) -> list[Feature]:
     selbst macht — dieser hier ist für das Teil, das von woanders kam.
     """
     body = mesh.raw
-    found = [entry for entry in _cylinders(mesh) if not entry[0].inward]
+    found = [
+        entry
+        for entry in (_cylinders(mesh) if cylinders is None else cylinders)
+        if not entry[0].inward
+    ]
     return [
         Feature(
             id=f"pin_{number}",
@@ -269,6 +387,42 @@ def detect_pins(mesh: MeshData) -> list[Feature]:
                 "axis": fit.axis,
                 "centre": fit.centre,
                 "depth": round(_patch_extent(body, patch, fit.axis), 4),
+                "residual": round(fit.residual, 4),
+            },
+            face_indices=tuple(patch),
+        )
+        for number, (fit, patch) in enumerate(found, start=1)
+    ]
+
+
+def detect_cones(mesh: MeshData, cones: Cones | None = None) -> list[Feature]:
+    """Kegelige Flecken (§21.1): Senkungen, Fasen an Bohrungen, Verjüngungen.
+
+    Warum es die Art überhaupt braucht: Ohne sie ist eine Senkung eine Bohrung
+    plus ein namenloser Haufen Dreiecke — der Agent kann nicht auf sie zeigen,
+    und Leitprinzip 5 lässt ihm keinen zweiten Weg, weil er Koordinaten nicht
+    erzeugt. Der Winkel steht als **Öffnungswinkel** in den Parametern und
+    nicht als Halbwinkel: Eine Senkung heißt „90 Grad", und das ist der ganze
+    Kegel.
+    """
+    found = _fitted(mesh)[1] if cones is None else cones
+    return [
+        Feature(
+            id=f"cone_{number}",
+            kind="cone",
+            provenance="detected",
+            params={
+                "diameter": round(fit.radius * 2.0, 4),
+                "angle": round(fit.half_angle * 2.0, 3),
+                "axis": fit.axis,
+                # Die Spitze steht **nicht** in den Parametern, obwohl die
+                # Einpassung sie kennt: ``moved_features`` nimmt „centre",
+                # „position", „axis" und „normal" mit, sonst nichts (§21.2).
+                # Ein Punkt, der eine Drehung nicht mitmacht, ist nach der
+                # ersten Transformation eine falsche Zahl im Steckbrief — und
+                # aus Mitte, Achse und Winkel ist die Spitze ohnehin zu rechnen.
+                "centre": fit.centre,
+                "recess": fit.recess,
                 "residual": round(fit.residual, 4),
             },
             face_indices=tuple(patch),
@@ -363,6 +517,92 @@ def fit_cylinder(body: trimesh.Trimesh, patch: list[int]) -> CylinderFit | None:
         residual=residual,
         inward=inward,
     )
+
+
+def fit_cone(body: trimesh.Trimesh, patch: list[int]) -> ConeFit | None:
+    """Kleinste-Quadrate-Kegel durch einen Fleck von Dreiecken.
+
+    Drei Schritte, alle drei linear — kein Zufall, keine Iteration, kein
+    Startwert (§11.3):
+
+    **Die Achse** kommt aus den Normalen. Bei einem Zylinder liegen sie auf
+    einem Großkreis der Einheitskugel, bei einem Kegel auf einem **Kleinkreis**;
+    die Ebene dieses Kreises hat die Kegelachse als Normale. Also derselbe
+    Eigenvektor wie beim Zylinder, nur an den **zentrierten** Normalen — und
+    genau der Versatz, den das Zentrieren herausnimmt, ist die Auskunft: Er
+    ist ``sin`` des halben Öffnungswinkels. Null heißt Zylinder.
+
+    **Die Spitze** liegt auf jeder Tangentialebene des Kegels — das ist die
+    Eigenschaft, die ihn vom Zylinder trennt und sie ist exakt. Aus ``n · p``
+    je Dreieck wird damit ein überbestimmtes lineares Gleichungssystem, dessen
+    Lösung die Spitze ist. Beim Zylinder ist dasselbe System entartet, und die
+    Lösung wandert ins Unendliche — auch das eine brauchbare Auskunft.
+
+    **Der Rückstand** vergleicht den gemessenen Abstand zur Achse mit dem, den
+    der Kegel an dieser Höhe verlangt. Gemessen an einer 90°-Senkung aus dem
+    Korpus: Halbwinkel 44,94 Grad bei echten 45, Spitze auf vier Stellen
+    getroffen, Rückstand 0,0003.
+    """
+    normals = np.asarray(body.face_normals[patch], dtype=float)
+    centres = np.asarray(body.triangles_center[patch], dtype=float)
+
+    _values, vectors = np.linalg.eigh(_centred_moment(normals))
+    axis = vectors[:, 0]
+    axis = axis / float(np.linalg.norm(axis))
+
+    apex, *_ = np.linalg.lstsq(normals, np.einsum("ij,ij->i", normals, centres), rcond=None)
+    towards = centres - apex
+    # Die Achse zeigt von der Spitze in den Fleck. Ohne diese Festlegung wäre
+    # das Vorzeichen des Versatzes bedeutungslos, und mit ihm die Unterscheidung
+    # zwischen einer Senkung und einem aufgesetzten Kegel.
+    if float(np.mean(towards @ axis)) < 0.0:
+        axis = -axis
+    offset = float(np.mean(normals @ axis))
+    sine = min(1.0, abs(offset))
+    half_angle = math.degrees(math.asin(sine))
+    if sine <= EPS_GEOM:
+        return None
+
+    along = towards @ axis
+    radial = np.linalg.norm(towards - np.outer(along, axis), axis=1)
+    mean_radius = float(np.mean(radial))
+    if mean_radius <= EPS_GEOM:
+        return None
+    expected = along * math.tan(math.radians(half_angle))
+    residual = float(np.mean(np.abs(radial - expected)) / mean_radius)
+
+    # Der weiteste Punkt kommt aus den **Ecken** und nicht aus den
+    # Dreiecksmitten: Die Mitte einer Facette liegt ein Stück unterhalb ihrer
+    # oberen Kante, und der Durchmesser einer Senkung ist der, den man messen
+    # kann — nicht der, den die Facettenmitten hergeben.
+    corners = np.asarray(body.vertices[np.unique(body.faces[patch])], dtype=float)
+    reach = (corners - apex) @ axis
+    widest = float(reach.max())
+    outer = np.linalg.norm(corners - apex - np.outer(reach, axis), axis=1)
+
+    return ConeFit(
+        axis=(float(axis[0]), float(axis[1]), float(axis[2])),
+        apex=(float(apex[0]), float(apex[1]), float(apex[2])),
+        centre=tuple(float(value) for value in apex + axis * widest),  # type: ignore[arg-type]
+        half_angle=half_angle,
+        radius=float(outer.max()),
+        residual=residual,
+        # Der äußere Normalenvektor einer **Senkung** zeigt in die Mulde und
+        # damit in Achsenrichtung; bei einem aufgesetzten Kegel weg von ihr.
+        # Hergeleitet: n · a = -sin(Halbwinkel) für den massiven Kegel, +sin für
+        # die Mulde.
+        recess=offset > 0.0,
+    )
+
+
+def _centred_moment(normals: np.ndarray) -> np.ndarray:
+    """Das zweite Moment der Normalen **um ihren Mittelwert**.
+
+    Der Unterschied zu :func:`fit_cylinder` ist genau dieses Zentrieren, und er
+    ist der ganze Unterschied zwischen den beiden Formen.
+    """
+    centred = normals - normals.mean(axis=0)
+    return centred.T @ centred
 
 
 def _plane_basis(axis: np.ndarray) -> tuple[np.ndarray, np.ndarray]:

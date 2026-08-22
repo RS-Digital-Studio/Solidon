@@ -16,6 +16,7 @@ from app.core.ingest.loader import normalise
 from app.core.perceive.features import (
     component_count,
     detect,
+    detect_cones,
     detect_edge_loops,
     detect_faces,
     detect_holes,
@@ -416,3 +417,105 @@ def test_a_countersink_does_not_swallow_its_own_bore() -> None:
 def test_the_same_plate_without_the_sink_was_never_the_problem() -> None:
     """Die Gegenprobe, damit der Test oben nicht auf ein anderes Maß hereinfällt."""
     assert len(detect_holes(plate("plate_holes.stl"))) == 4
+
+
+def test_the_expensive_search_runs_once_per_detection(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Docstring von ``_cylinders`` verspricht es seit es ihn gibt, die
+    Verdrahtung hielt es nicht: ``detect_holes`` und ``detect_pins`` riefen
+    jede für sich.
+
+    Gezählt statt gemessen — eine Zeitmessung wäre auf einer belegten Maschine
+    kein Wächter (§31).
+    """
+    from app.core.perceive import features
+
+    calls = 0
+    original = features._fitted
+
+    def counted(mesh: MeshData) -> object:
+        nonlocal calls
+        calls += 1
+        return original(mesh)
+
+    monkeypatch.setattr(features, "_fitted", counted)
+    features.detect(plate())
+
+    assert calls == 1, f"the search ran {calls} times for one detection"
+
+
+# --- Kegel (§21.1) ---------------------------------------------------------------
+
+
+def test_the_countersink_is_a_feature_of_its_own() -> None:
+    """Eine Senkung war bis zum 22.08.2026 ein namenloser Haufen Dreiecke.
+
+    Damit konnte der Agent nicht auf sie zeigen, und Leitprinzip 5 lässt ihm
+    keinen zweiten Weg — Koordinaten erzeugt er nicht.
+    """
+    cones = detect_cones(plate("plate_countersunk.stl"))
+
+    assert len(cones) == 1, f"one sink: {[cone.id for cone in cones]}"
+    # Der **Öffnungswinkel**, nicht der Halbwinkel: Eine Senkung heißt „90 Grad".
+    assert cones[0].params["angle"] == pytest.approx(90.0, abs=0.5)
+    assert cones[0].params["recess"] is True
+    # Ø 10 auf die Stelle: der Durchmesser kommt aus den **Ecken** des Flecks
+    # und nicht aus den Dreiecksmitten, die ein Stück darunter liegen.
+    assert cones[0].params["diameter"] == pytest.approx(10.0, abs=0.05)
+    # Und die Mitte liegt auf der Deckfläche, nicht an der Spitze im Nichts.
+    assert cones[0].params["centre"][2] == pytest.approx(4.0, abs=0.05)
+
+
+def test_a_plain_bore_is_never_read_as_a_cone() -> None:
+    """Ein Zylinder ist ein Kegel mit Öffnungswinkel null, also findet die
+    Einpassung an jeder Bohrung auch einen.
+
+    Stünde eine Bohrung als Kegel in der Szene, wäre sie für jede
+    Bohrungs-Operation unsichtbar — deshalb entscheidet der Winkel und nicht
+    die Reihenfolge.
+    """
+    assert detect_cones(plate()) == []
+    assert len(detect_holes(plate())) == 4
+
+
+def test_a_cone_that_sticks_out_is_not_a_recess() -> None:
+    """Dieselbe Form, andere Seite — und die Unterscheidung entscheidet, was
+    man damit tun kann.
+    """
+    base = trimesh.creation.box(extents=(40.0, 40.0, 6.0))
+    boss = trimesh.creation.cone(radius=6.0, height=10.0, sections=64)
+    boss.apply_translation((0.0, 0.0, 3.0))
+    mesh = MeshData.of(trimesh.boolean.union([base, boss]))
+
+    cones = detect_cones(mesh)
+
+    assert len(cones) == 1
+    assert cones[0].params["recess"] is False
+    assert cones[0].params["angle"] == pytest.approx(61.9, abs=1.5)
+
+
+def test_the_normals_decide_the_shape_and_not_the_residual() -> None:
+    """Der Fall, an dem die naheliegende Reihenfolge scheitert.
+
+    Jede Facette eines aufgesetzten Kegels ist **ein** Dreieck von der
+    Grundfläche zur Spitze; ihr Schwerpunkt liegt auf einem Drittel der Höhe,
+    und damit liegen alle Schwerpunkte auf einem Kreis. Die
+    Zylindereinpassung rechnet über die Schwerpunkte und findet einen
+    tadellosen Zylinder — Rückstand 0,0000 — an einem Kegel mit 31 Grad.
+    """
+    from app.core.perceive.features import fit_cone, fit_cylinder
+
+    base = trimesh.creation.box(extents=(40.0, 40.0, 6.0))
+    boss = trimesh.creation.cone(radius=6.0, height=10.0, sections=64)
+    boss.apply_translation((0.0, 0.0, 3.0))
+    body = MeshData.of(trimesh.boolean.union([base, boss])).raw
+    from app.core.perceive.features import _connected_patches, _large_facet_faces
+
+    planar = _large_facet_faces(body)
+    curved = [index for index in range(len(body.faces)) if index not in planar]
+    patch = max(_connected_patches(body, curved), key=len)
+
+    cylinder = fit_cylinder(body, patch)
+    cone = fit_cone(body, patch)
+
+    assert cylinder is not None and cylinder.good, "this is the trap: the cylinder looks perfect"
+    assert cone is not None and cone.half_angle == pytest.approx(30.9, abs=1.0)

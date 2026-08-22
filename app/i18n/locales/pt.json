@@ -1495,6 +1495,7 @@
   "Kantenlänge": "Comprimento de aresta",
   "Kantenwinkel": "Ângulo de aresta",
   "Karte wählen — der Körper färbt sich nach Zahlen, die Legende nennt den Bereich. Ein Klick auf eine Warnung im Prüfbericht fährt hin.": "Escolher um mapa — o corpo colore-se segundo os números, a legenda indica o intervalo. Um clique num aviso do relatório de verificação leva até lá.",
+  "Kegel": "Cone",
   "Kein Baustein passt zu „{begriff}“.": "Nenhuma peça corresponde a “{begriff}”.",
   "Kein Befehl passt zu „{begriff}“. Gesucht wird in Titel, Name und Beschreibung.": "Nenhum comando corresponde a “{begriff}”. A busca considera título, nome e descrição.",
   "Kein Befund dieser Stufe: „{stufe}“.": "Nenhuma constatação deste nível: “{stufe}”.",

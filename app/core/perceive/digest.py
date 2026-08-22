@@ -218,6 +218,18 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
             f"{feature_id}  {tr('planar')} {float(params.get('area', 0.0)):.0f} mm², "
             f"{tr('Normale')} {normal}{at}"
         )
+    if feature.kind == "cone":
+        # Der Öffnungswinkel steht vorn, weil er die Sache benennt: „90 Grad"
+        # ist eine Senkung für eine Senkkopfschraube, „118 Grad" der Boden
+        # einer gebohrten Sackbohrung. Und ob er eine Mulde ist oder ein
+        # aufgesetzter Kegel, entscheidet, was man mit ihm tun kann.
+        shape = tr("Senkung") if params.get("recess") else tr("Verjüngung")
+        axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
+        return (
+            f"{feature_id}  {shape} {float(params.get('angle', 0.0)):.0f}°, "
+            f"Ø {format_length(float(params.get('diameter', 0.0)))}, "
+            f"{tr('Achse')} {axis}{at}"
+        )
     if feature.kind == "edge_loop":
         return f"{feature_id}  {params.get('open_edges', 0)} {tr('offene Kanten')}"
     return f"{feature_id}  {feature.kind}{at}"

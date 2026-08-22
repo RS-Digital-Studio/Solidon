@@ -329,7 +329,11 @@ class CountersinkParams(BaseParams):
     params=CountersinkParams,
     consumes=1,
     produces=1,
-    applies_to=["hole"],
+    # Auch auf eine **vorhandene** Senkung: Ein angeklickter Kegel bietet damit
+    # „Senken" an, und das heißt dort „anders senken" — tiefer, weiter, anderer
+    # Winkel. Ohne diesen Eintrag wäre der Kegel ein Merkmal, das man sehen und
+    # anklicken kann und an dem das Kontextmenü leer bleibt (§2.6).
+    applies_to=["hole", "cone"],
     doc=_("Senkt die Mündung einer Bohrung an, damit ein Schraubenkopf bündig sitzt."),
 )
 def countersink_hole(ctx: OpContext) -> OpResult:

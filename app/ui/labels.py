@@ -1003,6 +1003,8 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
         return tr("Schrägfläche")
     if feature.kind == "hole":
         return f"{tr('Bohrung')} {feature_id.rsplit('_', 1)[-1]}"
+    if feature.kind == "cone":
+        return tr("Senkung") if feature.params.get("recess") else tr("Verjüngung")
     if feature.kind == "edge_loop":
         return tr("Offene Kante")
     return feature_id
@@ -1020,6 +1022,9 @@ def feature_measure(feature: Feature) -> str:
         return f"Ø{length(float(params.get('diameter', 0.0)))}"
     if feature.kind == "face":
         return area(float(params.get("area", 0.0)))
+    if feature.kind == "cone":
+        angle = float(params.get("angle", 0.0))
+        return f"{angle:.0f}° Ø{length(float(params.get('diameter', 0.0)))}"
     if feature.kind == "edge_loop":
         return f"{params.get('open_edges', 0)} {tr('offene Kanten')}"
     return ""

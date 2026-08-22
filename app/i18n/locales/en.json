@@ -1495,6 +1495,7 @@
   "Kantenlänge": "Edge length",
   "Kantenwinkel": "Edge angle",
   "Karte wählen — der Körper färbt sich nach Zahlen, die Legende nennt den Bereich. Ein Klick auf eine Warnung im Prüfbericht fährt hin.": "Pick a map — the body is coloured by numbers and the legend gives the range. Clicking a warning in the report flies there.",
+  "Kegel": "Cone",
   "Kein Baustein passt zu „{begriff}“.": "No part matches “{begriff}”.",
   "Kein Befehl passt zu „{begriff}“. Gesucht wird in Titel, Name und Beschreibung.": "No command matches “{begriff}”. Title, name and description are searched.",
   "Kein Befund dieser Stufe: „{stufe}“.": "No finding of this level: “{stufe}”.",

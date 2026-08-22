@@ -50,7 +50,7 @@ Millimetres = float
 
 # --- Aufzählungen --------------------------------------------------------------
 
-FeatureKind = Literal["hole", "face", "edge_loop", "pin", "thread"]
+FeatureKind = Literal["hole", "face", "edge_loop", "pin", "cone", "thread"]
 Provenance = Literal["detected", "generated"]
 ObjectKind = Literal["mesh", "brep"]
 Quality = Literal["draft", "fine"]

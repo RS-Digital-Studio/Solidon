@@ -233,7 +233,7 @@ def test_every_detected_feature_kind_offers_an_operation() -> None:
         # Prüfung — offener Punkt in der ROADMAP.
         "thread",
     }
-    produced = {"hole", "face", "edge_loop", "pin", "thread"}
+    produced = {"hole", "face", "edge_loop", "pin", "cone", "thread"}
 
     empty = {kind for kind in produced if not REGISTRY.for_feature(kind)}
     assert empty <= known_gaps, (

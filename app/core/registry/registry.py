@@ -162,6 +162,7 @@ FEATURE_TITLES: Final[dict[str, TranslatableText]] = {
     "face": _("Fläche"),
     "edge_loop": _("Offene Kante"),
     "pin": _("Zapfen"),
+    "cone": _("Kegel"),
     "thread": _("Gewinde"),
 }
 
