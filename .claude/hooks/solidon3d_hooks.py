@@ -170,9 +170,16 @@ def _nachbarhinweis() -> str:
     if not andere:
         return ""
     return (
-        " Gerade sind außerdem aktiv: "
+        " ES ARBEITEN SCHON ANDERE SITZUNGEN HIER: "
         + ", ".join(andere)
-        + " — Gebiete absprechen, bevor du schreibst."
+        + ". Bevor du die erste Datei anfasst, tu drei Dinge: (1) "
+        "`python tools/session_board.py list` — dort steht, wer welches Gebiet hält. "
+        "(2) Schreib jeder von ihnen über SendMessage, wofür du gekommen bist, und "
+        "einige dich auf ein Gebiet, das ihres nicht berührt; wer zuerst da war, "
+        "behält seines. (3) Trag deins ein: "
+        '`python tools/session_board.py claim --area "…" --files "…"`. '
+        "Das kostet zwei Minuten und erspart den Fall vom 22.08.2026, in dem sich "
+        "zwei Nachrichten kreuzten und beide Sitzungen dieselbe Datei ändern wollten."
     )
 
 
@@ -280,7 +287,9 @@ def _commit_ansagen(befehl: str) -> None:
         "Es arbeiten weitere Sitzungen an diesem Projekt: "
         + ", ".join(andere)
         + ". Ein Commit ändert den gemeinsamen Stand — sag ihnen kurz, was gelandet ist "
-        "und was das für ihre Dateien heißt. Wer die Liste genau will, fragt `/list-agents`; "
+        "und was das für ihre Dateien heißt. Welches Gebiet wer hält, steht in "
+        "`python tools/session_board.py list`; die verbindliche Liste der Sitzungen gibt "
+        "`/list-agents`, denn "
         "dieser Hinweis liest internen Zustand und kann jemanden übersehen.",
     )
 
