@@ -74,6 +74,7 @@ oder er hält ihn nicht fest.
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
 | Acht Gebiete der Oberflächendurchsicht sind nie gelaufen | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | einen Lauf, und die Entscheidung über das ungetrackte Material dazu unter `.claude/.state/` |
 | Die Regressionsschwelle schlägt an, ohne dass etwas langsamer wurde | Leistung (§31) — Stand nach der Durchsicht | eine Entscheidung zwischen zwei Wegen, die beide das Verhalten des Tors ändern — Vergleich aussetzen, sobald andere Testdateien im Lauf sind, oder Bestwert je Aufrufkontext |
+| Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung, welche der dreißig eine Attrappe verdienen — eine je Methode ist Arbeit, und ein Test, der die Wache nicht überschreitet, deckt die Lücke zu, statt sie offenzulassen |
 
 ---
 
@@ -4154,6 +4155,81 @@ Schaden, der vorher entstanden ist und hier bloß auffällt.
       Das ist gut für die Suche: Was zu prüfen ist, liegt **vor**
       `_EvaluationWorker.__init__` und nicht in den Aufrufern. Der Fix von
       damals bleibt richtig, er war nur nicht der ganze Fund.
+
+## Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026)
+
+Aus der Messung zu „erstnutzer 4.1" entstanden, und der Anlass ist kleiner als
+der Befund. Die Frage war, ob die Druckplatte nach einem Themenwechsel hell
+wird. Die Antwort ist: **Das kann kein Test sagen, weil die Methode, die die
+Platte zeichnet, in der Suite kein einziges Mal läuft.**
+
+### Was schon bekannt war, und was neu ist
+
+`.claude/rules/oberflaeche.md` kennt die Sache an drei Stellen und benennt sie
+scharf: „Offscreen gibt es keinen Plotter, und jeder Setzpfad steigt vorher
+aus", und „ein Test, der sich dort überspringt, prüft nie etwas." Das Mittel
+dagegen steht auch dort — eine Attrappe mit genau der einen benutzten Methode,
+wie in `tests/test_cursors.py`; `tests/test_analysis_ui.py` setzt an neun
+Stellen einen Plotter ein.
+
+**Neu ist allein die Größe.** Die stand nirgends, und sie ist der Grund, warum
+aus einer bekannten Einschränkung eine offene Frage wird.
+
+### Gemessen
+
+`_available()` gibt auf der Offscreen-Plattform ausdrücklich `False` zurück —
+„VTK braucht einen echten OpenGL-Kontext; auf der Offscreen-Qt-Plattform
+scheiterte es nicht höflich, sondern nähme den Prozess mit." Damit ist
+`self.plotter` in der ganzen Suite `None`, außer wo ein Test eine Attrappe
+einsetzt.
+
+```
+Viewport                             134 Methoden, 2747 Zeilen
+davon hinter `plotter is None`        40 Methoden, 1108 Zeilen   (40 %)
+```
+
+Gefahren über **23 Fensterdateien mit 1597 Tests** (die drei, die beim Abbau
+abstürzen, fehlen — sonst schreibt das Protokoll nicht):
+
+```
+kommen nie hinter die Wache           30 Methoden,  497 Zeilen
+kommen dahinter (über eine Attrappe)  10 Methoden
+```
+
+**Alle vierzig werden aufgerufen. Bei dreißig läuft der Rumpf nie.** Die
+größten:
+
+| Zeilen | Methode |
+|---|---|
+| 79 | `_draw_one_bed` — die Druckplatte |
+| 53 | `_redraw_features` |
+| 41 | `_redraw_feature_patch` |
+| 31 | `_add_orientation_widget` |
+| 31 | `_redraw_measurements` |
+| 29 | `_redraw_layer` |
+| 25 | `_draw_feature_edges` |
+| 20 | `_draw_brush` |
+
+Gemessen ohne neue Abhängigkeit: `coverage` ist nicht installiert, und es dafür
+einzubauen wäre ein Eintrag in der Lizenzliste für eine einmalige Frage. Ein
+Zeilenschreiber über `sys.settrace`, der nur `app/ui/viewport.py` mitschreibt,
+tut dasselbe in dreißig Zeilen.
+
+### Warum das 4.1 entscheidet, ohne es zu beantworten
+
+`_draw_one_bed` ist der größte nie ausgeführte Rumpf. Ein Test, der den
+Themenwechsel prüft, erreicht die vier Zuweisungen in `set_theme` und kehrt
+danach um; was die Ansicht *zeichnet*, sieht er nicht. Deshalb blieb 4.1 auch
+nach einer Messung am echten Bildschirm offen — und deshalb ist ein Test dafür
+schlimmer als keiner: Er wäre grün und würde die Lücke zudecken.
+
+- [ ] **Welche der dreißig verdienen eine Attrappe?** Nicht alle: Eine Attrappe
+      je Methode ist Arbeit, und für manche wäre sie eine Nachbildung von VTK.
+      Der Vorschlag wäre, bei den vier größten anzufangen, die etwas *zeigen*,
+      was der Nutzer beschreibt — Platte, Merkmale, Maße, Schichtansicht — und
+      die restlichen ausdrücklich als „nicht geprüft" zu führen, statt sie
+      stillschweigend mitlaufen zu lassen. Das ist eine Entscheidung und keine
+      Aufgabe; die Zahl steht jetzt dabei.
 
 ## Der Changelog schickte den Kunden ins Handbuch, und dort war nichts (22.08.2026)
 
