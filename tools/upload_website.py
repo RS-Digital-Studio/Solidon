@@ -28,6 +28,8 @@ import json
 import ssl
 import subprocess
 import sys
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -175,6 +177,74 @@ def remote_name(path: Path) -> str:
     return path.resolve().relative_to(LOCAL_ROOT).as_posix()
 
 
+#: Dateien, deren Inhalt sich ändern kann, ohne dass die Länge es verrät.
+#: Alles andere wird über die Größe verglichen — ein neu gerendertes Bild oder
+#: ein neu gebautes Paket ist praktisch nie auf das Byte genau so groß wie sein
+#: Vorgänger, und die Pakete sind dreihundert Megabyte schwer.
+#:
+#: **``.php`` steht bewusst nicht hier.** Der Server führt es aus, statt es
+#: auszuliefern; ein Abruf gibt die Ausgabe zurück und nie den Quelltext, und
+#: der Vergleich meldete deshalb bei jedem Lauf eine Abweichung, die keine ist.
+#: Beim ersten Lauf dieser Prüfung war ``api/support.php`` genau dieser
+#: Fehlbefund. Für PHP entscheidet die Größe.
+_COMPARED_BY_CONTENT = frozenset(
+    {".html", ".css", ".js", ".json", ".txt", ".xml", ".svg", ".webmanifest"}
+)
+
+
+def public_url(root: str, target: str) -> str:
+    """Die Adresse, unter der eine Datei ausgeliefert wird.
+
+    Der Dokumentenstamm heißt ``<domain>/httpdocs``; was dahinter liegt, ist
+    der Pfad unter der Domain.
+    """
+    domain = root.strip("/").split("/")[0]
+    return f"https://{domain}/{target}"
+
+
+def differs(root: str, path: Path, remote_size: int | None) -> bool:
+    """Weicht das, was der Kunde bekommt, von dem hier ab?
+
+    **Die Größe allein genügt nicht, und das ist teuer.** Am 22.08.2026 stand
+    auf der Website noch „Demo-Fassung", wo das Repository seit einem Commit
+    „Demo-Version" sagte — in den AGB, der EULA und der Widerrufsbelehrung,
+    also in den Texten, die im Zweifel vor Gericht gelten. Acht Dateien waren
+    betroffen, und keine fiel auf: „Fassung" und „Version" sind beide sieben
+    Zeichen lang. Ein Abgleich, der Längen vergleicht, sieht eine Umbenennung
+    nie.
+
+    Deshalb wird für Textdateien der Inhalt verglichen — und zwar **über
+    HTTPS, nicht über FTP**. Das hat zwei Gründe, und der zweite ist der
+    bessere: Erstens reißt die FTP-Datenverbindung nach der rekursiven
+    Verzeichnisabfrage ab (gemessen, ``ConnectionResetError`` beim ersten
+    ``RETR``). Zweitens ist die ausgelieferte Adresse die Wahrheit, auf die es
+    ankommt — zwischen dem FTP-Verzeichnis und dem, was beim Kunden ankommt,
+    stehen ``.htaccess``, Umschreibungen und alles andere, was der Server tut.
+    Wer das FTP-Verzeichnis prüft, prüft die Ablage; wer die Adresse abruft,
+    prüft die Auslieferung.
+
+    Verglichen wird roh und nicht normalisiert: Liegt dort dieselbe Datei mit
+    anderen Zeilenenden, ist sie eine andere Datei, und der nächste Upload
+    bringt beide Seiten in denselben Zustand. Was nicht öffentlich abrufbar ist
+    — ``.htaccess`` antwortet mit 403 —, entscheidet die Größe wie zuvor.
+    """
+    if remote_size is None:
+        return True
+    if remote_size != path.stat().st_size:
+        return True
+    if path.suffix.lower() not in _COMPARED_BY_CONTENT:
+        return False
+    request = urllib.request.Request(public_url(root, remote_name(path)))
+    try:
+        with urllib.request.urlopen(request, timeout=30) as answer:
+            served = answer.read()
+    except (urllib.error.URLError, TimeoutError):
+        # Nicht öffentlich oder nicht erreichbar: Die Größe hat schon
+        # gestimmt, mehr lässt sich von hier aus nicht sagen.
+        return False
+    return bool(served != path.read_bytes())
+
+
 def is_address(host: str) -> bool:
     """Ob der Zugang eine IP nennt statt eines Namens.
 
@@ -266,7 +336,8 @@ def main() -> int:
         "--fehlend",
         dest="missing",
         action="store_true",
-        help="den Serverstand listen und alles laden, was fehlt oder anders groß ist",
+        help="den Serverstand listen und alles laden, was fehlt oder abweicht "
+        "(Textdateien werden am Inhalt verglichen, nicht an der Länge)",
     )
     parser.add_argument(
         "--vorlage",
@@ -317,9 +388,7 @@ def main() -> int:
         if arguments.missing:
             remote = remote_index(session, "/" + root)
             files = [
-                path
-                for path in local_files()
-                if remote.get(remote_name(path)) != path.stat().st_size
+                path for path in local_files() if differs(root, path, remote.get(remote_name(path)))
             ]
             print(f"{len(remote)} Dateien oben, {len(files)} davon fehlen oder weichen ab")
             if not files:
