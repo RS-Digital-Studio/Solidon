@@ -317,6 +317,34 @@ seinen Umschalter als **Wert** im Dialog des Partners. *An Ebene teilen* ist
 Wegbeschreibung zu etwas, das es nicht gibt. Solange das fest verdrahtet war,
 taugte die ganze Zusammenlegung für nichts als die zwei Rechenkerne.
 
+**Ein Umschalter, dessen Zwilling eine Bedingung hat, fragt sie — vorher.**
+Das Menü graut eine Operation des exakten Kerns (`requires_kind="brep"`) an
+einem Netz aus und schreibt den Grund in den Tooltip. Seit die Zwillinge
+zusammengelegt sind, hat `drill_brep_hole` gar keinen eigenen Menüeintrag mehr:
+Der **Haken ist der Weg zu ihr**, und dort wurde nicht gefragt. Gemessen an
+einer eingelesenen STL — Haken wählbar, Dialog geht durch, Auswertung hält bei
+op 2 an, Absage im Prüfbericht. Der Satz des Kerns ist gut und bleibt; er ist
+die *zweite* Hürde, und die erste fehlte.
+
+`_lock_twin_toggle` fragt dafür `_reason_locked`, also dieselbe Kette wie
+Menüleiste und Kontextmenü — eine dritte Formulierung derselben Auskunft wäre
+eine dritte Gelegenheit, auseinanderzulaufen.
+
+**Bei den ersten beiden Zwillingen konnte das nicht auffallen:**
+`create_brep_box` und `create_brep_cylinder` verbrauchen nichts (`consumes=0`),
+es gibt keinen Eingangskörper, der der falsche sein könnte. Wer einen Zwilling
+mit Eingang dazunimmt, nimmt diese Frage mit.
+
+**Und der Zwilling heißt wie sein Partner, mit einem Wort davor.** „Quader
+anlegen" → „Exakten Quader anlegen", „Bohrung setzen" → „Exakte Bohrung
+setzen": das Substantiv bleibt stehen, „exakt" tritt flektiert davor. Nicht neu
+formuliert — „Exakt bohren" war der erste Entwurf und ließ `test_theme_and_
+palette` fallen, weil die Befehlspalette nach Titel sortiert und der Eintrag
+bei der Suche nach „bohren" *vor* „Bohrung setzen" landete. Der
+Reihenfolgefehler war die Folge; die Ursache war die abweichende Benennung.
+Dahinter steht der Kunde: Er sucht das **Substantiv** („Bohrung"), und wer den
+Zwilling umformuliert, nimmt ihm eine der beiden Antworten aus der Liste.
+
 **Ein Umschalter zwischen Varianten schaltet den ganzen Dialog um**, nicht nur
 die Rechnung: `OperationDialog.switch_variant` blendet aus, was die gewählte
 Variante nicht kennt, und tauscht die Beschreibung. Die Werte beim Anwenden zu
