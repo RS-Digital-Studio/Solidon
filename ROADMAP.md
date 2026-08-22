@@ -74,6 +74,8 @@ oder er hält ihn nicht fest.
 | Die Zuordnung kennt Kugel und Torus nicht | Das Fundament der Wahrnehmung (22.08.2026) | zwei Arten mehr in der Kostenmatrix von §21.2, dazu Namen in der Oberfläche. Eine Art, die erkannt aber nicht zugeordnet wird, ist ein halber Zustand — dieselbe Konsistenzfrage wie bei den Übersetzungskatalogen, und beim Schneiden des Auftrags zunächst übersehen |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
+| An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
+| Der Testkorpus hat keinen verrundeten Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Datei mit Kehle. Ein Regressionsnetz, das die Alltagsformen ausspart, meldet Erfolg über dem, was es nicht enthält (§34) |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Ein Test steht zwölf Minuten still, ohne zu rechnen | Das Fundament der Wahrnehmung (22.08.2026) | einen Python-Stapel aus dem stehenden Prozess, also `py-spy` — das steht nicht in `constraints.txt`, und ein Werkzeug ungefragt in die Umgebung zu holen entscheidet Robert. Vierte Absturzsignatur, und die einzige, die steht statt abzustürzen |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
@@ -4594,6 +4596,33 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Damit ist auch die Changelog-Korrektur draußen — das Update-Fenster
       schickt den Kunden nicht mehr mit seinem achten Punkt ins Handbuch, wo
       nichts stand.
+
+- [ ] **An einer Säule mit verrundetem Fuß erkennt die Wahrnehmung keinen
+      Zylinder.** Gemessen am 22.08.2026 an einem echten Kehlkörper (Säule Ø12
+      auf Platte, Kehle R=3, wasserdicht, 2704 Dreiecke): sieben Flächen und
+      **kein einziger Zylinder**. Säule und Kehle sind ein einziger Fleck mit
+      2305 Dreiecken.
+
+      **Der Grund ist keine Schwäche der Segmentierung, sondern die Sache
+      selbst.** `_connected_patches` trennt über `CURVATURE_LIMIT`, also an
+      Knicken — und eine Verrundung schließt **tangential** an, das ist ihr
+      Zweck. Die gesenkte Bohrung war der leichte Fall (45-Grad-Knick); dies ist
+      der harte. Was fehlt, ist eine Trennung **nach Krümmung** statt nach
+      Knick, und die ist der Schlüssel für alles tangential Angeschlossene —
+      nicht nur für Verrundungen.
+
+      Die Folgen gehen über die Anzeige hinaus: Der Agent kann auf die
+      Mantelfläche nicht zeigen (Leitprinzip 5), keine Bohrungs- oder
+      Passungs-Operation findet sie, der Steckbrief nennt sie nicht. Eine Säule
+      mit verrundetem Fuß ist ein Alltagsteil. Gefunden von 3d-druck-3a bei der
+      Vorarbeit zum Verrundungsradius.
+
+- [ ] **Der Testkorpus hat keinen verrundeten Körper.** Deshalb fiel der Punkt
+      darüber bis zum 22.08.2026 niemandem auf — nicht weil die Erkennung
+      besser war, sondern weil nie jemand mit einer Kehle danach gefragt hat.
+      §34 nennt den Korpus das Regressionsnetz der Wahrnehmung; ein Netz, das
+      genau die Alltagsformen ausspart, meldet Erfolg über dem, was es nicht
+      enthält.
 
 - [ ] **Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum.**
       `tools/gate_lock.py` schützt vor Fremd*last* — gegen Fremd*stände* hilft
