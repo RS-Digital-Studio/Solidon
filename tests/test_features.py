@@ -389,3 +389,30 @@ def test_components_are_counted() -> None:
     two = normalise(read_mesh((MESHES / "two_components.stl").read_bytes(), ".stl"), "mm").mesh
     assert component_count(two) == 2
     assert component_count(cube()) == 1
+
+
+# --- gesenkte Bohrung (§21.1) ---------------------------------------------------
+
+
+def test_a_countersink_does_not_swallow_its_own_bore() -> None:
+    """Gefunden am 22.08.2026, und es war schlimmer als „die Senkung fehlt".
+
+    Kegelwand und Bohrungswand hängen zusammen, die Fleckenbildung trennte sie
+    nicht, und die Zylindereinpassung über Wand-plus-Kegel kam als nichts
+    heraus. Ein gesenktes Loch — die häufigste Bohrung in einem Druckteil —
+    stand damit überhaupt nicht in der Szene, und der Agent konnte auf nichts
+    zeigen (Leitprinzip 5).
+    """
+    bores = detect_holes(plate("plate_countersunk.stl"))
+
+    assert len(bores) == 1, f"one bore under the sink: {[bore.id for bore in bores]}"
+    assert bores[0].params["diameter"] == pytest.approx(5.2, abs=0.15)
+    # Die Tiefe ist die des **Zylinders**, nicht die der Platte: 8 mm minus die
+    # 2,4 mm, die der Kegel wegnimmt. Ob das Loch damit als durchgehend zählt,
+    # entscheidet die Senkung — und die ist noch kein Merkmal (§41).
+    assert bores[0].params["depth"] == pytest.approx(5.6, abs=0.15)
+
+
+def test_the_same_plate_without_the_sink_was_never_the_problem() -> None:
+    """Die Gegenprobe, damit der Test oben nicht auf ein anderes Maß hereinfällt."""
+    assert len(detect_holes(plate("plate_holes.stl"))) == 4

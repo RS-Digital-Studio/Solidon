@@ -43,6 +43,7 @@ python tests/data/make_corpus.py
 | `meshes/plate_cm.stl` | Platte 8 × 5 × 0,5 **Zentimeter** | Einheit **mehrdeutig** (cm/in) → Rückfrage; mit `cm` → 80 × 50 × 5 mm | `test_ingest.py` |
 | `meshes/plate_holes.stl` | Platte 80 × 50 × 8 mm mit vier Bohrungen Ø 5,2 mm | Schnitt bleibt geschlossen trotz Löchern; ab P3 Feature-Erkennung | `test_section.py` |
 | `meshes/plate_holes_twin.stl` | Platte mit zwei gleichen Bohrungen 8 mm auseinander | ab P3: wird als **mehrdeutig** gemeldet statt geraten (§21.2) | noch offen |
+| `meshes/plate_countersunk.stl` | Platte 60 × 40 × 8 mm, eine Bohrung Ø 5,2 mm mit 90°-Senkung auf Ø 10 mm | die Bohrung wird erkannt, obwohl der Kegel an ihrer Wand hängt (Ø 5,19, Tiefe 5,6 mm — die des Zylinders, nicht der Platte); vor dem 22.08.2026 kam **nichts** heraus, weil Kegel- und Bohrungswand ein Fleck waren | `test_features.py` |
 | `meshes/degenerate.stl` | Würfel plus Nullflächen-Dreieck, Nadel und Dublette | 15 Dreiecke roh, nach der Eingangsstufe weniger; Befund `ingest.degenerate_removed` | `test_ingest.py` |
 | `meshes/broken_open.stl` | Würfel ohne drei Dreiecke | nicht wasserdicht, Befund `ingest.not_watertight` (Warnung) | `test_ingest.py` |
 | `meshes/two_components.stl` | Würfel plus winziges Bruchstück daneben | zwei Komponenten, Befunde `ingest.multiple_components` und `ingest.small_components`; **nichts wird gelöscht** | `test_ingest.py` |

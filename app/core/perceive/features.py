@@ -417,11 +417,32 @@ def _bore_depth(mesh: MeshData, fit: CylinderFit) -> float:
 
 
 def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int]]:
-    """Gruppiert die gegebenen Dreiecke in zusammenhängende Flecken."""
+    """Gruppiert die gegebenen Dreiecke in zusammenhängende Flecken.
+
+    **Ein Fleck endet an einer Kante.** Zusammenhängend allein war die falsche
+    Trennlinie, und der Fall, der es zeigt, ist die häufigste Bohrung in einem
+    Druckteil: Bei einer gesenkten Bohrung hängen Kegelwand und Bohrungswand
+    aneinander. Ohne Trennung wurden sie **ein** Fleck, die Zylindereinpassung
+    darüber kam als nichts heraus — und damit war nicht nur die Senkung
+    unerkannt, sondern die Bohrung selbst. Gemessen an
+    ``plate_countersunk.stl``: null Bohrungen statt einer, und kein Befund
+    darüber.
+
+    Getrennt wird an derselben Schwelle, die :func:`_curved_faces` schon
+    benutzt (``CURVATURE_LIMIT``, 30 Grad) — dort steht der Satz, der sie
+    begründet: „ein deutlicher Knick ist eine Kante, und alles dazwischen ist
+    die Stufe einer Rundung". Der Übergang Bohrung → 90°-Senkung ist ein Knick
+    von 45 Grad; die Facetten eines gebohrten Zylinders liegen bei vier Grad.
+    Ein Zylinder mit weniger als zwölf Segmenten zerfällt dabei — der hat aber
+    Facetten, die groß genug für eigene Flächen sind, und wird ohnehin nicht
+    als Zylinder gelesen.
+    """
     wanted = set(faces)
-    adjacency = [
-        pair for pair in np.asarray(body.face_adjacency) if pair[0] in wanted and pair[1] in wanted
-    ]
+    pairs = np.asarray(body.face_adjacency)
+    if len(pairs):
+        angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+        pairs = pairs[angles < CURVATURE_LIMIT]
+    adjacency = [pair for pair in pairs if pair[0] in wanted and pair[1] in wanted]
     if not adjacency:
         return [[index] for index in faces]
     groups = trimesh.graph.connected_components(

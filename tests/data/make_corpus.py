@@ -10,6 +10,7 @@ in ``README.md`` notieren.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import numpy as np
@@ -67,6 +68,27 @@ def plate_holes_twin() -> None:
         drill.apply_translation((x, 0.0, 0.0))
         drills.append(drill)
     write(trimesh.boolean.difference([plate, *drills]), "plate_holes_twin.stl")
+
+
+def plate_countersunk() -> None:
+    """Eine Platte mit **einer gesenkten** Bohrung — der Fall, an dem die
+    Merkmalserkennung am 22.08.2026 nicht nur die Senkung, sondern die Bohrung
+    selbst verlor.
+
+    Maße einer M5-Senkkopfschraube: Durchgang Ø 5,2 mm, Senkung 90° auf
+    Ø 10 mm. Der Kegel und die Bohrungswand hängen zusammen, und die
+    Fleckenbildung trennte sie nicht — die Zylindereinpassung über
+    Wand-plus-Kegel kam als nichts heraus, und damit stand ein gesenktes Loch
+    für den Agenten überhaupt nicht in der Szene.
+    """
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 8.0))
+    drill = trimesh.creation.cylinder(radius=2.6, height=40.0, sections=48)
+    # 45 Grad Halbwinkel: der radiale Zuwachs ist gleich dem axialen, also
+    # steht der Kegel mit Radius 5 dort, wo er die Deckfläche trifft.
+    sink = trimesh.creation.cone(radius=5.0, height=5.0, sections=48)
+    sink.apply_transform(trimesh.transformations.rotation_matrix(math.pi, (1.0, 0.0, 0.0)))
+    sink.apply_translation((0.0, 0.0, 4.0))
+    write(trimesh.boolean.difference([plate, drill, sink]), "plate_countersunk.stl")
 
 
 def degenerate() -> None:
@@ -378,6 +400,7 @@ if __name__ == "__main__":
     plate_cm()
     plate_holes()
     plate_holes_twin()
+    plate_countersunk()
     degenerate()
     broken_open()
     two_components()
