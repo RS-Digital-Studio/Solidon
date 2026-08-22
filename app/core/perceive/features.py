@@ -107,6 +107,17 @@ class CylinderFit:
         return self.residual <= CYLINDER_TOLERANCE and self.radius > EPS_GEOM
 
 
+#: Die Merkmalsarten, die diese Datei aus einem Netz lesen kann.
+#:
+#: Gebraucht wird die Liste außerhalb, und zwar für eine Unterscheidung, die
+#: sonst niemand treffen kann: Ein **erzeugtes** Merkmal (§21.2) lässt sich nur
+#: dann gegen die Geometrie prüfen, wenn die Erkennung seine Art überhaupt
+#: sieht. Ein Gewinde sieht sie nicht — es entsteht in einem Baustein und
+#: trägt seinen Namen von dort. Wer es wie eine Bohrung prüfte, verlöre es bei
+#: jeder Operation, weil kein Partner zu finden ist.
+DETECTABLE_KINDS: frozenset[str] = frozenset({"hole", "pin", "face", "edge_loop"})
+
+
 def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     """Alles, was dieses Modul erkennen kann, mit stabilen Namen.
 

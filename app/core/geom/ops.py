@@ -314,9 +314,16 @@ def mirror_object(ctx: OpContext) -> OpResult:
     der Test misst danach das Volumen, denn „das macht schon irgendwer" ist
     kein Versprechen.
 
-    Die Merkmale fallen weg: eine Bohrung namens ``hole_1`` am rechten Teil
-    ist nicht dieselbe Bohrung am linken, und die Neuerkennung benennt sie neu
-    (§21.2).
+    ``features={}`` in der Ausgabe heißt **nicht**, dass die Merkmale wegfallen
+    — hier stand das bis zum 22.08.2026, und es war nachweislich falsch. Die
+    *erkannten* Merkmale kommen aus dem Stand davor und finden sich über die
+    gemeldete Matrix wieder (§21.2); nachgemessen an einer Platte: sechs Flächen
+    vorher, dieselben sechs Namen nachher. Was das leere Feld tatsächlich
+    kostete, waren die *erzeugten* Merkmale, und das war eine Lücke und kein
+    Vorsatz — sie werden jetzt mitgenommen. Richtig ist das auch: Der Stift, den
+    Op 3 gesetzt hat, ist nach der Spiegelung derselbe Stift, und eine Passung
+    darauf bleibt gültig. Das Feld bleibt leer, weil diese Operation keine
+    Merkmale erzeugt; wer hier etwas hineinschreibt, meldet neue.
     """
     params = cast(MirrorParams, ctx.params)
     source = ctx.inputs[0]

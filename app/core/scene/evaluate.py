@@ -28,7 +28,7 @@ from typing import Any, Final
 from app.core.errors import AmbiguityError, AppError, InternalError, OperationCancelled
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.perceive.features import detect
+from app.core.perceive.features import DETECTABLE_KINDS, detect
 from app.core.perceive.matching import apply_mapping, match, moved_features, question_for
 from app.core.registry import REGISTRY, OperationSpec, Registry, validate
 from app.core.scene import expressions
@@ -513,28 +513,56 @@ def _with_features(
     # sie wurden beim Bauen benannt (§24.1), und eine Neuerkennung benennte
     # eine Bohrung um, die schon einen Namen hat. Sie reisen mit dem Körper
     # wie alles andere.
-    generated = {
+    declared = {
         name: feature
         for name, feature in entry.features.items()
         if feature.provenance == "generated"
     }
-    if generated and transform is not None:
-        generated = moved_features(generated, transform)
+    if declared and transform is not None:
+        declared = moved_features(declared, transform)
 
     detected = detect(mesh)
-    if not previous:
-        return dataclasses.replace(entry, features={**detected, **generated})
 
     # Ein gedrehter Körper sieht für einen Positionsvergleich aus wie ein
     # anderer Körper. Die Operation weiß, was sie gedreht hat — also werden die
     # alten Merkmale erst mitgenommen und dann verglichen (§21.2).
     if transform is not None:
         previous = moved_features(previous, transform)
+
+    # **Ein erzeugtes Merkmal, das die Operation nicht selbst wieder ausgibt,
+    # wird mitgenommen — nicht vergessen.** Hier stand bis zum 22.08.2026, dass
+    # die erzeugten Merkmale allein aus der *Ausgabe* kommen. Elf Stellen unter
+    # ``app/core/geom/`` geben aber ``features={}`` zurück, ohne damit etwas zu
+    # meinen: Sie füllen das Feld nur nicht. Für die erkannten Merkmale ist das
+    # folgenlos, die kommen aus ``previous``; die erzeugten fielen dabei
+    # lautlos aus der Szene, und mit ihnen die Provenienz-IDs, die §21.2
+    # „keine Erkennung, keine Mehrdeutigkeit" nennt. Nachgestellt: ein Körper
+    # mit ``op3.pin_1`` und eine Operation, die das Feld leer lässt, kam mit
+    # null erzeugten Merkmalen und **null Befunden** heraus.
+    carried = {
+        name: feature
+        for name, feature in previous.items()
+        if getattr(feature, "provenance", "detected") == "generated" and name not in declared
+    }
+    # Mitnehmen heißt nicht glauben. Wo die Erkennung die Art des Merkmals
+    # sieht, wird es wie ein erkanntes zugeordnet und fällt heraus, wenn es
+    # wirklich weg ist — sonst wäre aus dem lautlosen Verlust ein lautloses
+    # Gespenst geworden, und das ist schlimmer: §21.3 hält die Auswertung an,
+    # sobald eine späte Op auf eine ID zeigt, die nichts mehr bezeichnet.
+    checked = {name: f for name, f in carried.items() if f.kind in DETECTABLE_KINDS}
+    # Und was sie nicht sieht, reist ungeprüft mit. Ein Gewinde ist der Fall:
+    # es entsteht in einem Baustein, ``detect`` kennt die Art nicht, und geprüft
+    # verlöre es jede Operation.
+    unchecked = {name: f for name, f in carried.items() if name not in checked}
+
     previous = {
         name: feature
         for name, feature in previous.items()
         if getattr(feature, "provenance", "detected") != "generated"
     }
+    previous = {**previous, **checked}
+    if not previous:
+        return dataclasses.replace(entry, features={**detected, **unchecked, **declared})
 
     centre = mesh.bounds.centre
     # In welchem Bezugspunkt die alten Merkmale gelesen werden, hängt daran, was
@@ -600,6 +628,32 @@ def _with_features(
         # formende Op verliert irgendein erkanntes Merkmal. Als Warnung
         # gezählt, schickt das den Prüfbericht bei gelungener Arbeit nach vorn,
         # bis niemand mehr hinsieht.
+        # Ein **erzeugtes** Merkmal ist die Ausnahme von dieser Zurückhaltung,
+        # und es bekommt deshalb seinen eigenen Befund. Es trägt einen Namen,
+        # den eine Operation vergeben hat, eine Passung kann darauf zeigen
+        # (§14), und der Agent verweist darauf statt auf Koordinaten
+        # (Leitprinzip 5). Dass es fort ist, ist eine Warnung — anders als bei
+        # einer Deckfläche, die das Aushöhlen erwartbar mitnimmt.
+        #
+        # Zwei Aufrufe statt eines Fragezeichens, und das hat einen Grund:
+        # ``tests/test_orphans.py`` liest diesen Quelltext und verlangt, dass
+        # ``perceive.orphaned`` wörtlich mit ``info`` gemeldet wird. Ein Ternär
+        # an der Stelle sieht kürzer aus und nimmt dem Test seine Aussage.
+        if getattr(old_feature, "provenance", "detected") == "generated":
+            findings.append(
+                Finding(
+                    code="perceive.generated_lost",
+                    severity="warning",
+                    message=_(
+                        "Ein benanntes Merkmal ist nach dieser Operation nicht mehr auffindbar."
+                    ),
+                    object_id=entry.id,
+                    op_id=operation.id,
+                    values={"feature": old_id},
+                )
+            )
+            continue
+
         findings.append(
             Finding(
                 code="perceive.mended" if defect else "perceive.orphaned",
@@ -615,7 +669,18 @@ def _with_features(
             )
         )
 
-    return dataclasses.replace(entry, features={**apply_mapping(detected, matched), **generated})
+    mapped = apply_mapping(detected, matched)
+    # Ein Bezeichner, der von einem erzeugten Merkmal kommt, bleibt erzeugt.
+    # ``apply_mapping`` trägt den *Namen* weiter, die Provenienz steckt aber im
+    # Merkmal, das gerade erkannt wurde — und das ist per Definition
+    # „detected". Ohne diese Zeile wäre ``op3.pin_1`` nach der ersten
+    # Operation ein erkannter Stift mit einem erzeugten Namen, und die nächste
+    # Erkennung dürfte ihn umbenennen.
+    for name in checked:
+        found = mapped.get(name)
+        if found is not None and found.provenance != "generated":
+            mapped[name] = dataclasses.replace(found, provenance="generated")
+    return dataclasses.replace(entry, features={**mapped, **unchecked, **declared})
 
 
 #: Welcher Sammelparameter seine Ausdrücke in einem eigenen Text versteckt.

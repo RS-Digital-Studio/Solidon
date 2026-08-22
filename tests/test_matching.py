@@ -352,3 +352,116 @@ def test_a_transform_operation_reports_what_it_did() -> None:
 
     assert result.transform is not None
     assert result.transform[0][3] == 5.0
+
+
+# --- erzeugte Merkmale (§21.2, Provenienz) --------------------------------------
+
+
+def _generated(feature: Feature, name: str) -> Feature:
+    """Dasselbe Merkmal, aber als eines, das eine Operation benannt hat."""
+    import dataclasses
+
+    return dataclasses.replace(feature, id=name, provenance="generated")
+
+
+def _carried(mesh: MeshData, previous: dict[str, Feature]) -> tuple[dict[str, Feature], list]:
+    """``_with_features`` an einer Operation, die ``features={}`` zurückgibt.
+
+    Elf Stellen unter ``app/core/geom/`` tun das, und keine von ihnen meint
+    damit „die erzeugten Merkmale sind fort" — sie füllen das Feld nur nicht.
+    """
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Operation, SceneObject
+
+    def never(question: str, choices: list[str]) -> str:
+        raise AssertionError(f"nothing here is ambiguous: {question}")
+
+    entry = SceneObject(id="obj_1", name="Teil", mesh=mesh, features={})
+    findings: list = []
+    operation = Operation(id=4, op="thicken", inputs=("obj_1",), outputs=("obj_1",), params={})
+    result = _with_features(entry, previous, operation, never, findings)
+    return result.features, findings
+
+
+def test_a_generated_feature_survives_an_operation_that_returns_none() -> None:
+    """§21.2: „Keine Erkennung, keine Mehrdeutigkeit" — dann darf ein erzeugtes
+    Merkmal auch nicht daran verschwinden, dass eine Operation sein Feld leer
+    lässt.
+    """
+    mesh = one_hole_plate()
+    bore = next(iter(holes_of(mesh).values()))
+    previous = {"op3.bore_1": _generated(bore, "op3.bore_1")}
+
+    features, _findings = _carried(mesh, previous)
+
+    assert "op3.bore_1" in features, "the operation changed nothing; the name must hold"
+    assert features["op3.bore_1"].provenance == "generated"
+
+
+def test_a_generated_feature_that_is_really_gone_is_reported() -> None:
+    """Der Gegenfall, und er ist der wichtigere: Wird das Merkmal weggerechnet,
+    darf es verschwinden — aber nicht lautlos (§21.2, Regel 17).
+    """
+    plate = one_hole_plate()
+    bore = next(iter(holes_of(plate).values()))
+    previous = {"op3.bore_1": _generated(bore, "op3.bore_1")}
+    plugged = MeshData.of(trimesh.creation.box(extents=(60.0, 30.0, 8.0)))
+
+    features, findings = _carried(plugged, previous)
+
+    assert "op3.bore_1" not in features, "the bore is filled; keeping the name would be a phantom"
+    assert [entry for entry in findings if entry.values.get("feature") == "op3.bore_1"], (
+        "a named feature that vanishes is a finding, not a silence"
+    )
+
+
+def test_a_thread_travels_unchecked_because_detection_cannot_see_it() -> None:
+    """Nicht jede Art ist prüfbar, und die unprüfbaren dürfen nicht daran
+    sterben.
+
+    Ein Gewinde entsteht in einem Baustein (§24.1); ``detect`` kennt die Art
+    nicht. Gegen die Geometrie geprüft fände es niemals einen Partner und wäre
+    nach der ersten Operation fort.
+    """
+    import dataclasses
+
+    mesh = one_hole_plate()
+    bore = next(iter(holes_of(mesh).values()))
+    thread = dataclasses.replace(bore, id="op7.thread_1", kind="thread", provenance="generated")
+
+    features, findings = _carried(mesh, {"op7.thread_1": thread})
+
+    assert "op7.thread_1" in features, "an unseeable kind is carried, not judged"
+    assert features["op7.thread_1"].kind == "thread"
+    assert not [entry for entry in findings if entry.code == "perceive.generated_lost"]
+
+
+def test_mirroring_keeps_the_pin_that_an_operation_made() -> None:
+    """Die Spiegelung meldet ihre Matrix, also ist der Stift danach derselbe
+    Stift — eine Passung darauf bleibt gültig (§14).
+    """
+    import dataclasses
+
+    from app.core.geom.ops import as_transform
+    from app.core.geom.transform import scaling
+    from app.core.perceive.features import detect_pins
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Operation, SceneObject
+
+    plate = trimesh.creation.box(extents=(40.0, 20.0, 6.0))
+    stud = trimesh.creation.cylinder(radius=2.0, height=10.0, sections=48)
+    stud.apply_translation((12.0, 0.0, 5.0))
+    body_with_pin = MeshData.of(trimesh.boolean.union([plate, stud]))
+    pins = detect_pins(body_with_pin)
+    assert pins, "the fixture must actually have a pin"
+    previous = {"op3.pin_1": dataclasses.replace(pins[0], id="op3.pin_1", provenance="generated")}
+
+    matrix = scaling((-1.0, 1.0, 1.0), (0.0, 0.0, 0.0))
+    entry = SceneObject(id="obj_1", name="Teil", mesh=apply(body_with_pin, matrix), features={})
+    operation = Operation(
+        id=2, op="mirror_object", inputs=("obj_1",), outputs=("obj_1",), params={}
+    )
+    result = _with_features(entry, previous, operation, lambda q, c: c[0], [], as_transform(matrix))
+
+    assert "op3.pin_1" in result.features
+    assert result.features["op3.pin_1"].provenance == "generated"
