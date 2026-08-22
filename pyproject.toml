@@ -143,7 +143,20 @@ target-version = "py313"
 # Sie mitzuformatieren wäre schlimmer als sie auszunehmen: Ein Messskript, das
 # umgeschrieben wurde, belegt seine Zahl nicht mehr. mypy trifft es nicht, das
 # läuft ohnehin nur über `files = ["app"]`.
-extend-exclude = [".claude/.state/"]
+#
+# Und die Druckprojekte werden es auch nicht.
+#
+# „3D Drucker/" enthält Roberts physische Druckprojekte — parametrische Skripte
+# für Teile, die auf dem Elegoo laufen, kein Programmcode. Sie liegen seit dem
+# 22.08.2026 bewusst **im** Repository (`.gitignore` trägt die Begründung: Es
+# wird auf drei Maschinen gearbeitet, und ein Projekt, das nur auf einer liegt,
+# ist auf den anderen zweien nicht vorhanden). Versioniert werden sie deshalb
+# weiter — geprüft werden sie nicht: Ruff fand darin 367 Verstöße und wollte 17
+# Dateien umformatieren, und damit war das Tor rot, ohne dass an der Anwendung
+# irgendetwas anders war. Es ist dieselbe Falle wie die drei in `CLAUDE.md`,
+# nur eine neue Gestalt: nicht die Pipeline und nicht die Schlusszeile, sondern
+# ein fremder Ordner im Prüfpfad.
+extend-exclude = [".claude/.state/", "3D Drucker/"]
 
 [tool.ruff.lint]
 # Die sechs hinteren kamen am 14.08.2026 dazu, nachgemessen mit 13 Befunden im
