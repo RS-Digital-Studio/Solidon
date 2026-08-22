@@ -26,6 +26,7 @@ from app.core.geom.sculpt import strokes_to_text
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import Project, ProjectSources, load, new_project, save
 from app.core.types import Profile, Stroke
+from app.core.units import EPS_GEOM
 
 #: Wie lange der ganze Weg höchstens dauern darf. Kein Budget aus §31 — das
 #: gilt einzelnen Operationen —, sondern die Schwelle, ab der die Kette als
@@ -39,7 +40,7 @@ def figure_project() -> Project:
     """Die vier Schritte des Beispielprojekts, plus drei Pinselzüge.
 
     Derselbe Aufbau wie ``weg4-figur-formen.p3d`` — nur dass dieses Projekt
-    auch den letzten Schritt geht, den das Beispiel dem Nutzer überlässt.
+    auch die Pinselzüge legt, die das Beispiel dem Nutzer überlässt.
     """
     project = new_project("centauri-carbon-2", "petg")
     history = History(project.document)
@@ -114,6 +115,13 @@ def figure_project() -> Project:
                 },
             )
         ],
+    )
+    # Der letzte Schritt des Weges (§2.2 nennt ihn „stellen"): Das weiche
+    # Verschmelzen rundet nach unten ab und zieht die Unterkante unter Z = 0.
+    # Ohne ihn endet der Weg in etwas, das der Slicer erst zurechtrücken muss.
+    history.apply(
+        "Auf die Platte stellen",
+        [OperationDraft(op="place_on_bed", inputs=("obj_3",), params={})],
     )
     return project
 
@@ -197,21 +205,46 @@ def test_the_strokes_survive_the_file(profile: Profile, tmp_path: Path) -> None:
     ganze Bauart hängt.
     """
     project = figure_project()
-    original = str(project.document.ops[-1].params["strokes"])
+    # **Über den Namen und nicht über die Position.** Hier stand ``ops[-1]``,
+    # und der Test brach in dem Moment, in dem der Weg einen Schritt länger
+    # wurde — obwohl an den Zügen nichts anders war. Ein Bezug auf „den
+    # letzten" ist eine Aussage über die Länge der Kette, und die ist hier
+    # nicht das Thema.
+    original_step = next(op for op in project.document.ops if op.op == "sculpt_strokes")
+    original = str(original_step.params["strokes"])
 
     reopened = load(save(project, tmp_path / "figur.p3d"))
 
-    assert str(reopened.document.ops[-1].params["strokes"]) == original
-    assert reopened.document.ops[-1].params["symmetry"] == "x"
+    reopened_step = next(op for op in reopened.document.ops if op.op == "sculpt_strokes")
+    assert str(reopened_step.params["strokes"]) == original
+    assert reopened_step.params["symmetry"] == "x"
 
 
 # --- und hinaus -----------------------------------------------------------------
 
 
 def test_the_way_ends_in_a_printable_file(profile: Profile, tmp_path: Path) -> None:
-    """§16.3: bis zum druckfertigen 3MF, ohne ein zweites Programm."""
+    """§16.3: bis zum druckfertigen 3MF, ohne ein zweites Programm.
+
+    **„Druckfertig" hieß hier lange „die Datei ist nicht leer".** Gemessen am
+    23.08.2026 endete das mitgelieferte Beispiel `weg4-figur-formen` **0,29 mm
+    unter der Druckplatte** — das weiche Verschmelzen mit Radius 4 rundet auch
+    nach unten ab. Der Prüfbericht sagte es als Hinweis; beim Schreiben wäre
+    daraus eine Warnung geworden (`_severity_for`: „ein Klick behebt es" gilt
+    nur, solange noch geklickt werden kann). Dieser Test hätte davon nichts
+    gemerkt, denn eine Datei entsteht auch für ein Teil, das unter der Platte
+    steckt — CuraEngine schreibt sie sogar.
+
+    Geprüft wird deshalb beides: dass die Datei da ist **und** dass das, was
+    drinsteht, auf der Platte steht.
+    """
     project = figure_project()
     result = evaluated(project, profile)
+
+    for entry in result.scene.objects.values():
+        assert entry.mesh.bounds.minimum[2] >= -EPS_GEOM, (
+            f"{entry.name} steckt unter der Druckplatte — der Weg endet nicht druckfertig"
+        )
 
     plan = plan_export(
         list(result.scene.objects.values()),
