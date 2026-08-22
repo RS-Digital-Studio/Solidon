@@ -935,6 +935,27 @@ Auskunft der Datei, und sie lag 163 Zeilen tief ohne Kästchen.
       ändert das Verhalten des Tors, gehört also angesagt und nicht nebenbei
       gemacht.
 
+      **Am 22.08.2026 zweimal gemessen, und das ist der Beleg, den der Abschnitt
+      oben nicht hatte** — dieselbe Software, dieselbe Maschine, derselbe Tag,
+      zwei Läufe von zwei Sitzungen:
+
+      | | Fremdlast | Ergebnis |
+      |---|---|---|
+      | Lauf A | 48 % CPU (zwei `test_ui.py`-Läufe davor, ein Spurlauf daneben) | **5 failed**, 14 passed |
+      | Lauf B | 16 % CPU, sonst nichts | **19 passed**, Exit 0 |
+
+      Alle fünf in Lauf A waren die Schwelle, kein absoluter Zielwert:
+      `ingest_dense` 1,27× (3917 ms gegen Bestwert 3082), `detect_medium` 1,25×
+      (942 gegen 752), `sketch_solve_200` 1,33×, dazu Orientierungssuche,
+      Subdivision und Blending. In Lauf B liegt die Orientierungssuche bei
+      17,5 s, Subdivision bei 2,5 s, Blending bei 1,3 s — alle unter ihrer
+      Schranke.
+
+      Der Abschnitt oben stützte sich auf zwei von fünf Läufen **einer**
+      Sitzung. Jetzt steht daneben: Ein roter Leistungslauf sagt zuerst etwas
+      über die Maschine und erst danach über den Code. Wer eine Regression
+      meldet, misst vorher ein zweites Mal auf einer ruhigen Maschine.
+
 ## P11 — Gehosteter Backend
 - [–] **Bewusst nicht gebaut.** §27 knüpft diese Phase an nachweisbare
   Nachfrage; die gibt es nicht. Ein Dienst ohne Nutzer wäre Arbeit auf Vorrat,
