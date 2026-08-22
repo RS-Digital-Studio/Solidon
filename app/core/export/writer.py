@@ -42,7 +42,7 @@ from app.core.types import (
     kind_of,
 )
 from app.core.units import EPS_GEOM, format_length
-from app.i18n import _
+from app.i18n import _, source_text
 
 if TYPE_CHECKING:
     # Nur für die Signatur: zur Laufzeit zieht ``handover`` die
@@ -176,7 +176,14 @@ def plan_export(
             filename=safe_name(
                 pattern.format(
                     project=safe_name(project_name, "projekt"),
-                    object=safe_name(entry.name),
+                    # **Quellsprache, nicht Anzeigesprache** (§16.2, entschieden
+                    # am 22.08.2026). Ein Dateiname, der mit der eingestellten
+                    # Sprache wandert, macht aus demselben Klick verschiedene
+                    # Dateien — dieselbe Sorte Fehler wie ein Cache-Schlüssel,
+                    # der es tut. Der Exportdialog zeigt den Namen zum Ändern;
+                    # eine sichtbare Vorgabe, die stabil ist, schlägt eine
+                    # unsichtbare, die wandert.
+                    object=safe_name(source_text(entry.name)),
                     index=index,
                     count=count,
                     plate=entry.plate + 1,
@@ -185,7 +192,9 @@ def plan_export(
             + suffix,
             mesh=as_mesh_data(entry.mesh),
             slots=tuple(entry.material_slots),
-            name=entry.name,
+            # Steht als Objektname **in** der 3MF-Datei, ist also Dateiinhalt
+            # und keine Anzeige — dieselbe Regel wie beim Dateinamen darüber.
+            name=source_text(entry.name),
             body=entry.mesh,
             plate=entry.plate,
         )
@@ -616,7 +625,7 @@ def write_assembly(
     parts = [
         threemf.AssemblyPart(
             mesh=as_mesh_data(entry.mesh),
-            name=entry.name,
+            name=source_text(entry.name),
             slots=tuple(entry.material_slots),
             settings=_part_settings(as_mesh_data(entry.mesh), settings, flavour),
             # Die Platte reist mit. Ohne Einschränkung auf eine gehen alle in

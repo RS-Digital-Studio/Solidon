@@ -365,7 +365,10 @@ def evaluate(
             hashes[object_id] = object_hash(key, index)
             # Wächst nur, wird nie geleert: Genau darin liegt der Wert (siehe
             # ``EvaluationResult.object_names``).
-            names[object_id] = objects[object_id].name
+            # Wörtlich festgehalten, nicht als Verweis: Der Name, den ein
+            # Körper trug, ist die Antwort auf „welcher denn" — und er soll
+            # die Sprache tragen, in der der Befund entstand.
+            names[object_id] = str(objects[object_id].name)
 
         if stopped_at is not None:
             break
@@ -591,8 +594,22 @@ def _with_features(
     # sie wurden beim Bauen benannt (§24.1), und eine Neuerkennung benennte
     # eine Bohrung um, die schon einen Namen hat. Sie reisen mit dem Körper
     # wie alles andere.
+    # **Wer ein Merkmal durchreicht, hat es nicht erzeugt** — darum nur, wo
+    # noch nichts steht. ``entry`` ist das Objekt, das *diese* Operation
+    # ausgegeben hat; was darin erzeugt ist und noch keinen Erzeuger trägt, ist
+    # hier entstanden. Gibt eine spätere Operation dasselbe Merkmal erneut aus,
+    # bleibt die Nummer stehen.
+    #
+    # Genau daran scheitert ``SceneObject.created_by`` als Antwort auf dieselbe
+    # Frage: Es wird weiter oben bei **jeder** Operation gesetzt, die das
+    # Objekt ausgibt, und zeigt deshalb auf die zuletzt beteiligte statt auf
+    # die erzeugende (§21.2).
     declared = {
-        name: feature
+        name: (
+            feature
+            if feature.created_by is not None
+            else dataclasses.replace(feature, created_by=operation.id)
+        )
         for name, feature in entry.features.items()
         if feature.provenance == "generated"
     }

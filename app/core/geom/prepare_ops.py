@@ -40,7 +40,7 @@ from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
 from app.core.types import BaseParams, Finding, OpContext, OpResult
 from app.core.units import DEGREE_UNIT, EPS_GEOM
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _AXES = tuple(AXIS_NORMALS)
 
@@ -119,7 +119,7 @@ def _own_notes() -> frozenset[str]:
     return frozenset(notes)
 
 
-def half_names(base: str, *, pinned: bool) -> tuple[str, str]:
+def half_names(base: TranslatableText | str, *, pinned: bool) -> tuple[str, str]:
     """Wie die beiden Stücke heißen.
 
     „A" und „B" allein beantworten die Frage nicht, die man beim Zusammenbauen
@@ -132,8 +132,12 @@ def half_names(base: str, *, pinned: bool) -> tuple[str, str]:
     geworden ist. Ein fremder Namensteil hinter demselben Zeichen bleibt, wo
     er ist (:func:`_own_notes`).
     """
-    stem = base
-    head, mark, tail = base.rpartition(_HALF_MARK)
+    # Ab hier wörtlich: Wie die Hälften heißen, entsteht beim Trennen, und was
+    # dabei entsteht, gehört dem Nutzer — dieselbe Regel wie beim Namen einer
+    # Kopie (:func:`app.core.scene.ops._copy_name`). Genommen wird die Fassung,
+    # die er beim Trennen gesehen hat.
+    stem = str(base)
+    head, mark, tail = stem.rpartition(_HALF_MARK)
     if mark and tail in _own_notes():
         stem = head
     if not pinned:
@@ -584,7 +588,7 @@ def set_material(ctx: OpContext) -> OpResult:
                 code="prepare.material",
                 severity="info",
                 message=_("Dieser Körper wird in einem eigenen Material gerechnet."),
-                values={"object": source.name, "material": chosen or "-"},
+                values={"object": str(source.name), "material": chosen or "-"},
             )
         ]
         if chosen

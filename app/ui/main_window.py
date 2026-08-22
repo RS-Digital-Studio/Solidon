@@ -184,7 +184,7 @@ from app.ui.labels import (
 )
 from app.ui.labels import area as area_label
 from app.ui.labels import set_display_unit as set_length_unit
-from app.ui.leash import Worker, WorkerLeash
+from app.ui.leash import Worker, WorkerLeash, weak_slot
 from app.ui.loading import LoadingVeil, remaining_time
 from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
@@ -855,10 +855,16 @@ class MainWindow(QMainWindow):
             (QKeySequence.StandardKey.ZoomIn, 1.25),
             (QKeySequence.StandardKey.ZoomOut, 0.8),
         ):
-            QShortcut(sequence, self, lambda factor=step: self.viewport.zoom(factor))
-        QShortcut(QKeySequence("Ctrl+Tab"), self, lambda: self.object_tree.step_selection(True))
+            QShortcut(sequence, self, weak_slot(self, lambda view, f: view.viewport.zoom(f), step))
         QShortcut(
-            QKeySequence("Ctrl+Shift+Tab"), self, lambda: self.object_tree.step_selection(False)
+            QKeySequence("Ctrl+Tab"),
+            self,
+            weak_slot(self, lambda view: view.object_tree.step_selection(True)),
+        )
+        QShortcut(
+            QKeySequence("Ctrl+Shift+Tab"),
+            self,
+            weak_slot(self, lambda view: view.object_tree.step_selection(False)),
         )
 
         # §19.2: die acht Werkzeuge der unteren Leiste bekommen ihr Kürzel, und
@@ -882,7 +888,11 @@ class MainWindow(QMainWindow):
         # und in der Kürzelübersicht; geraten werden muss es nicht.
         for index, key in enumerate(self.tools.tools(), start=1):
             self.tools.set_shortcut(key, f"Alt+{index}")
-            QShortcut(QKeySequence(f"Alt+{index}"), self, lambda name=key: self.tools.toggle(name))
+            QShortcut(
+                QKeySequence(f"Alt+{index}"),
+                self,
+                weak_slot(self, lambda view, name: view.tools.toggle(name), key),
+            )
 
         self._autosave = QTimer(self)
         self._autosave.setInterval(AUTOSAVE_INTERVAL_MS)
@@ -970,14 +980,14 @@ class MainWindow(QMainWindow):
             "section",
             tr("Schnitt"),
             self.section_bar,
-            lambda: self.section_bar.axis.setCurrentIndex(0),
+            weak_slot(self, lambda view: view.section_bar.axis.setCurrentIndex(0)),
             symbol="section",
             # Beim Öffnen waagerecht schneiden: „Kein Schnitt" mit gesperrtem
             # Regler war der Zustand, in dem der Hinweis daneben zum Ziehen
             # aufforderte. Z, weil eine Schicht so liegt, wie der Drucker sie
             # legt — und weil es die Wandstärke zeigt, von der der Hinweis
             # spricht.
-            start=lambda: self.section_bar.axis.setCurrentIndex(3),
+            start=weak_slot(self, lambda view: view.section_bar.axis.setCurrentIndex(3)),
             hint=tr(
                 "Ziehen Sie den Regler durch das Teil, oder tippen Sie eine Höhe. "
                 "Die Schnittfläche wird geschlossen gezeigt — so ist die Wandstärke "
@@ -988,12 +998,12 @@ class MainWindow(QMainWindow):
             "measure",
             tr("Messen"),
             self.measure_bar,
-            lambda: self.measure_bar.mode.setCurrentIndex(0),
+            weak_slot(self, lambda view: view.measure_bar.mode.setCurrentIndex(0)),
             symbol="measure",
             # „Zwei Punkte im Bild anklicken" — dafür muss gemessen werden.
             # Abstand ist die häufigere der beiden Arten und die, die der
             # Hinweis zuerst nennt.
-            start=lambda: self.measure_bar.mode.setCurrentIndex(1),
+            start=weak_slot(self, lambda view: view.measure_bar.mode.setCurrentIndex(1)),
             hint=tr(
                 "Zwei Punkte im Bild anklicken. Der Fang rastet auf Ecken und Kanten; "
                 "für die Wandstärke genügt ein Klick auf die Fläche."
@@ -1003,11 +1013,11 @@ class MainWindow(QMainWindow):
             "transform",
             tr("Bewegen"),
             self.transform_bar,
-            lambda: self.transform_bar.gizmo.setChecked(False),
+            weak_slot(self, lambda view: view.transform_bar.gizmo.setChecked(False)),
             symbol="move",
             # „Am Griff im Bild ziehen" — und der Griff war aus. Wer ihn nicht
             # will, klickt den Haken weg; wer das Werkzeug öffnet, will bewegen.
-            start=lambda: self.transform_bar.gizmo.setChecked(True),
+            start=weak_slot(self, lambda view: view.transform_bar.gizmo.setChecked(True)),
             hint=tr(
                 "Am Griff im Bild ziehen, oder Werte eintippen. Jeder Zug wird ein "
                 "Schritt im Verlauf und ist einzeln zurücknehmbar."
@@ -1017,7 +1027,7 @@ class MainWindow(QMainWindow):
             "analysis",
             tr("Analyse"),
             self.analysis_bar,
-            lambda: self.analysis_bar.selector.setCurrentIndex(0),
+            weak_slot(self, lambda view: view.analysis_bar.selector.setCurrentIndex(0)),
             symbol="analysis",
             hint=tr(
                 "Karte wählen — der Körper färbt sich nach Zahlen, die Legende nennt "
@@ -1028,7 +1038,7 @@ class MainWindow(QMainWindow):
             "layers",
             tr("Schichten"),
             self.layer_bar,
-            lambda: self.layer_bar.set_active(False),
+            weak_slot(self, lambda view: view.layer_bar.set_active(False)),
             symbol="layers",
             hint=tr(
                 "Durch die Höhe fahren und den Querschnitt ansehen. Inseln sind "
@@ -1039,7 +1049,7 @@ class MainWindow(QMainWindow):
             "explode",
             tr("Explosion"),
             self.explode_bar,
-            lambda: self.explode_bar.slider.setValue(0),
+            weak_slot(self, lambda view: view.explode_bar.slider.setValue(0)),
             symbol="explode",
             hint=tr(
                 "Regler schiebt die Teile auseinander. Nur die Ansicht — was "
@@ -1056,7 +1066,11 @@ class MainWindow(QMainWindow):
             "split",
             tr("Trennen"),
             self.split_bar,
-            self._end_split,
+            # Auch eine gebundene Methode hält hier stark: Der Umschalter legt
+            # sie in ein ``Tool`` und das in ein Wörterbuch — ein gewöhnlicher
+            # Python-Container, kein Qt-Signal. Was Qt schwach hält, hält eine
+            # Liste fest.
+            weak_slot(self, lambda view: view._end_split()),
             symbol="split",
             hint=tr(
                 "Zwei Punkte auf dem Teil anklicken — dazwischen wird getrennt, "
@@ -1070,7 +1084,7 @@ class MainWindow(QMainWindow):
             "paint",
             tr("Bemalen"),
             self.paint_bar,
-            lambda: self.paint_bar.active.setChecked(False),
+            weak_slot(self, lambda view: view.paint_bar.active.setChecked(False)),
             symbol="paint",
             hint=tr(
                 "Slot wählen, dann auf die Fläche klicken. Das ändert das Modell, "
@@ -1155,9 +1169,9 @@ class MainWindow(QMainWindow):
 
         done = QPushButton(tr("Fertig"), self.sketch_bar)
         make_primary(done)
-        done.clicked.connect(lambda: self.finish_sketch(keep=True))
+        done.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=True)))
         discard = QPushButton(tr("Verwerfen"), self.sketch_bar)
-        discard.clicked.connect(lambda: self.finish_sketch(keep=False))
+        discard.clicked.connect(weak_slot(self, lambda view: view.finish_sketch(keep=False)))
         sketch_row.addWidget(done)
         sketch_row.addWidget(discard)
         self.sketch_bar.setVisible(False)
@@ -1227,16 +1241,24 @@ class MainWindow(QMainWindow):
         # Ohne diese Verbindung blieb die Zone auf der Höhe der Knopfreihe,
         # und die Leiste des Werkzeugs lag über den Umschaltern: bei allen
         # sieben, von Schnitt bis Bemalen.
-        self.tools.toolChanged.connect(lambda _key: self.overlay.reflow())
+        self.tools.toolChanged.connect(weak_slot(self, lambda view: view.overlay.reflow()))
         # Wer *Schichten* öffnet, will Schichten sehen. Der Schalter dafür war
         # ein zweites Auswahlfeld in der Leiste selbst — ein Umschalter hinter
         # dem Umschalter, der die Leiste öffnet. Geschlossen wird über den
         # ``reset`` des Werkzeugs.
-        self.tools.toolChanged.connect(lambda key: self.layer_bar.set_active(key == "layers"))
+        self.tools.toolChanged.connect(
+            weak_slot(
+                self, lambda view, key: view.layer_bar.set_active(key == "layers"), forward=True
+            )
+        )
         # Dasselbe für das Trennen: Der Umschalter macht aus Klicks Punkte der
         # Trennlinie. An der Leiste vorbei gäbe es zwei Stellen, die denselben
         # Zustand steuern — und die gewinnen abwechselnd.
-        self.tools.toolChanged.connect(lambda key: self.viewport.set_splitting(key == "split"))
+        self.tools.toolChanged.connect(
+            weak_slot(
+                self, lambda view, key: view.viewport.set_splitting(key == "split"), forward=True
+            )
+        )
         # Dasselbe für Befunde, die nach der Auswertung nachkommen: die Liste
         # meldet ihr Wachstum, weil ein QListWidget es nicht von selbst tut.
         self.report.contentGrew.connect(self.overlay.reflow)
@@ -1272,7 +1294,9 @@ class MainWindow(QMainWindow):
         self.start_screen.urlDropped.connect(self.download_model)
         self.start_screen.forgetRequested.connect(self._forget_recent)
         # Mit Kapitel: Der Knopf nennt es, also schlägt er es auf.
-        self.start_screen.manualRequested.connect(lambda: self.action_manual(manual.FIRST_MINUTES))
+        self.start_screen.manualRequested.connect(
+            weak_slot(self, lambda view: view.action_manual(manual.FIRST_MINUTES))
+        )
 
         self.stack = QStackedWidget(self)
         self.stack.addWidget(self.start_screen)
@@ -1673,7 +1697,7 @@ class MainWindow(QMainWindow):
                     display_menu,
                     label,
                     shortcut,
-                    lambda checked=False, key=mode: self.viewport.set_display_mode(key),
+                    weak_slot(self, lambda view, key: view.viewport.set_display_mode(key), mode),
                     hint,
                 )
             )
@@ -1695,7 +1719,7 @@ class MainWindow(QMainWindow):
                     display_menu,
                     label,
                     None,
-                    lambda checked=False, key=shading: self.viewport.set_shading(key),
+                    weak_slot(self, lambda view, key: view.viewport.set_shading(key), shading),
                     hint,
                 )
             )
@@ -1719,7 +1743,9 @@ class MainWindow(QMainWindow):
                     display_menu,
                     label,
                     shortcut,
-                    lambda checked=False, key=projection: self.viewport.set_projection(key),
+                    weak_slot(
+                        self, lambda view, key: view.viewport.set_projection(key), projection
+                    ),
                     hint,
                 )
             )
@@ -1739,7 +1765,7 @@ class MainWindow(QMainWindow):
                 camera_menu,
                 label,
                 shortcut,
-                lambda checked=False, key=name: self.viewport.view_from(key),
+                weak_slot(self, lambda view, key: view.viewport.view_from(key), name),
                 standpoint,
             )
         view_menu.addSeparator()
@@ -1756,7 +1782,7 @@ class MainWindow(QMainWindow):
                 view_menu,
                 label,
                 None,
-                lambda checked=False, key=theme: self.action_theme(key),
+                weak_slot(self, lambda view, key: view.action_theme(key), theme),
                 hint,
             )
             action.setCheckable(True)
@@ -1788,7 +1814,7 @@ class MainWindow(QMainWindow):
                 navigation_menu,
                 label,
                 None,
-                lambda checked=False, key=scheme: self.action_navigation(key),
+                weak_slot(self, lambda view, key: view.action_navigation(key), scheme),
                 hint,
             )
             action.setCheckable(True)
@@ -2013,7 +2039,9 @@ class MainWindow(QMainWindow):
         action.setStatusTip(str(spec.doc))
         warning = caveat_line(spec)
         action.setToolTip(f"{spec.doc}\n\n{warning}" if warning else str(spec.doc))
-        action.triggered.connect(lambda _checked=False, entry=spec: self.launch_operation(entry))
+        action.triggered.connect(
+            weak_slot(self, lambda view, entry: view.launch_operation(entry), spec)
+        )
         menu.addAction(action)
         return action
 
@@ -5505,7 +5533,7 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         if result is None:
             return {}
-        return {object_id: entry.name for object_id, entry in result.scene.objects.items()}
+        return {object_id: str(entry.name) for object_id, entry in result.scene.objects.items()}
 
     def _source_names(self) -> dict[str, str]:
         """Kennung auf Dateiname, für die Quellenwähler (§16.3)."""

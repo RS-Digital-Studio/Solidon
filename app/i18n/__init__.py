@@ -103,6 +103,32 @@ def install_catalog(language: str, catalog: dict[str, str]) -> None:
 _FOLDED = str.maketrans({"ä": "a", "ö": "o", "ü": "u", "Ä": "a", "Ö": "o", "Ü": "u", "ß": "ss"})
 
 
+def source_text(text: object) -> str:
+    """Der Text in der **Quellsprache** — nicht in der angezeigten.
+
+    Für alles, was **nicht mit der Anzeigesprache wandern darf**: Dateinamen,
+    Schlüssel, Vergleichswerte. Ein :class:`TranslatableText` gibt hier seine
+    Message-ID zurück (den deutschen Quelltext, §4.1), alles andere sich
+    selbst.
+
+    **Warum es diese Funktion gibt.** Als Objektnamen übersetzbar wurden,
+    stand die Frage im Raum, ob eine Exportdatei ``Halterung.stl`` oder
+    ``Bracket.stl`` heißt — je nach eingestellter Sprache. Beides zu haben ist
+    die schlechteste Antwort: Derselbe Klick erzeugte dann verschiedene
+    Dateien, und ein Skript, das die Ausgabe weiterverarbeitet, bricht, sobald
+    jemand die Sprache umstellt. Das ist dieselbe Sorte Fehler wie ein
+    Cache-Schlüssel, der von der Anzeigesprache abhängt.
+
+    Entschieden am 22.08.2026: **Der Dateiname nimmt die Quellsprache**, und
+    der Exportdialog zeigt ihn zum Ändern. Eine sichtbare Vorgabe, die stabil
+    ist, schlägt eine unsichtbare, die wandert.
+
+    Das Gegenstück ist ``str(text)``, und es ist der Normalfall: Überall, wo
+    ein Mensch den Namen **liest**, gehört die übersetzte Fassung hin.
+    """
+    return text.msgid if isinstance(text, TranslatableText) else str(text)
+
+
 def sort_key(text: object) -> str:
     """Ein Schlüssel, nach dem sich Texte so ordnen, wie jemand sie liest.
 

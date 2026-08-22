@@ -564,7 +564,7 @@ class ObjectTree(QWidget):
             # Formatierung sie vorsieht — nicht weil jemand sie gemessen hätte.
             # Krumme Maße behalten ihre Stellen.
             measures = " × ".join(compact_length(value, self._unit) for value in size)
-            item = QTreeWidgetItem([entry.name, f"{measures} {self._unit}"])
+            item = QTreeWidgetItem([str(entry.name), f"{measures} {self._unit}"])
             item.setData(0, Qt.ItemDataRole.UserRole, object_id)
             state = tr("geschlossen") if entry.mesh.is_watertight else tr("offen")
             # §30: welche Sorte Körper das ist, gehört in den Baum, denn sie
@@ -1490,7 +1490,7 @@ class ReportPanel(QWidget):
         self._names = (
             {
                 **{str(key): name for key, name in result.object_names.items()},
-                **{str(key): entry.name for key, entry in result.scene.objects.items()},
+                **{str(key): str(entry.name) for key, entry in result.scene.objects.items()},
             }
             if result
             else {}

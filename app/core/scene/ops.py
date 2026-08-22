@@ -18,7 +18,7 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.registry import VARIABLE, op_params, param, register_op
 from app.core.types import BaseParams, OpContext, OpResult, SceneObject
 from app.core.units import DEGREE_UNIT, EPS_GEOM
-from app.i18n import _, tr
+from app.i18n import TranslatableText, _, tr
 
 
 @op_params
@@ -133,12 +133,19 @@ def duplicate_object(ctx: OpContext) -> OpResult:
     return OpResult(outputs=outputs)
 
 
-def _copy_name(original: str, chosen: str, index: int, count: int) -> str:
+def _copy_name(original: TranslatableText | str, chosen: str, index: int, count: int) -> str:
     """Namen, die auseinanderbleiben, ohne ein Rätsel zu werden.
 
     Eine Kopie heißt „Teil (Kopie)", wie eh und je. Mehrere werden nummeriert,
     denn zehn Objekte namens „Teil (Kopie)" sind eine Liste aus einem Ding,
     zehnmal.
+
+    **Der Name der Kopie ist wörtlich, auch wenn der des Originals übersetzbar
+    war.** Kopieren ist eine Handlung des Nutzers, und was dabei entsteht,
+    gehört ihm — dieselbe Regel wie bei einem Transaktionstitel, den er selbst
+    getippt hat (``title_translatable``, §4.1). Genommen wird die Fassung, die
+    er beim Kopieren **gesehen** hat; sie wandert danach nicht mehr mit der
+    Sprache, und das ist richtig so: Sonst hieße seine Kopie morgen anders.
     """
     base = chosen or f"{original} ({tr('Kopie')})"
     return base if count <= 2 else f"{base} {index - 1}"
