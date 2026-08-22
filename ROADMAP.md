@@ -4842,6 +4842,29 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       bei einer anderen Sitzung in 9,6 s durch, und einzeln nachgefahren: 30
       passed in 10,77 s, Exit 0.
 
+      **Zum zweiten Mal am selben Tag:** `test_ui.py` stand 27 Minuten,
+      0,00 CPU-Sekunden über zehn Sekunden gemessen, 423 MB. Zwei Dateien, eine
+      Signatur, beide Male nach vollständigem Start. Damit ist die Sache nicht
+      mehr sporadisch beobachtet, sondern **zweimal gemessen**.
+
+      **Und dabei eine Messfalle, die zwei Sitzungen betraf und hier steht,
+      weil sie fast ein ganzes Tor gekostet hätte.** 3d-druck-64 meldete den
+      Halter als tot: `gate_lock.py` 0,125 CPU-Sekunden, darunter eine `bash`
+      mit 0,016 und **kein Kindprozess**. Der Schluss („der Lauf hängt") stimmte
+      zufällig, die Messung war falsch — es lief sehr wohl ein `pytest`, nur
+      nicht als direktes Kind der geprüften `bash`: **Auf Windows hängt ein
+      Enkel nach dem Ende eines Zwischenprozesses in einer anderen Elternkette.**
+      Hätte 3d-druck-33 der Meldung geglaubt und den ganzen Lauf verworfen,
+      wären 3453 bestandene Tests mit weggegangen und mit ihnen die Zuordnung,
+      dass 24 Fehlschläge aus einer einzigen Zeile kommen.
+
+      Zwei Regeln daraus, beide in `.claude/rules/tests.md`: **Der Prozessbaum
+      wird über die Kette gelesen, nicht über direkte Kinder.** Und: **Ob etwas
+      rechnet, sagt nur die CPU-Zeit über ein Intervall** — die Gesamtzeit eines
+      wartenden Wrappers ist immer klein und sagt nichts über sein Kind. Der
+      Unterschied zwischen „der Lauf ist tot" und „ein Prozess darin steht" ist
+      ein ganzes Tor.
+
       **Das ist eine vierte Signatur neben den drei bekannten** — und die
       einzige, die *steht* statt abzustürzen. Die anderen drei enden mit
       `0xC0000409`, mit Exit 127 oder mit einer Zugriffsverletzung; diese endet
