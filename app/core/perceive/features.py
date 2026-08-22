@@ -851,50 +851,93 @@ def fit_sphere(body: trimesh.Trimesh, patch: list[int]) -> SphereFit | None:
 
 
 def fit_torus(body: trimesh.Trimesh, patch: list[int]) -> TorusFit | None:
-    """Torus durch einen Fleck — Achse aus den Normalen, Radien aus den Rändern.
+    """Torus durch einen Fleck — Achse aus den Normalen, Radien aus dem
+    Meridiankreis. Drei Schritte, alle drei linear (§11.3).
 
-    **Die Achse** kommt aus derselben Quelle wie beim Zylinder und beim Kegel,
-    nur wird eine andere Frage an sie gestellt. Über einen ganzen Ring
-    verteilen sich die Normalen rotationssymmetrisch: Entlang der Achse trägt
-    das Moment ``N/2``, quer dazu ``N/4`` je Richtung. Die Achse ist also die
-    Richtung, deren **beide anderen** Eigenwerte gleich sind — gemessen am
-    Ring aus dem Korpus 1150,8 gegen zweimal 576,6, ein Verhältnis von genau
-    zwei.
+    **Die Achse** nutzt eine Eigenschaft jeder Rotationsfläche: Ihre Normale
+    schneidet die Achse, ``n``, ``a`` und ``p - c`` sind also koplanar. Als
+    Gleichung ``dot(a, cross(p, n)) = dot(cross(a, c), n)`` — homogen und **linear in
+    ``a`` und ``cross(a, c)`` zusammen**, also sechs Unbekannte und eine
+    Singulärwertzerlegung. Die Punkte werden davor zentriert und auf
+    Einheitsgröße gebracht: ``cross(p, n)`` liegt sonst in der Größenordnung des
+    Körpers und ``n`` bei eins, und der größere Block bestimmt die Lösung
+    allein. Ohne diese Skalierung kam an einem Viertelring eine Achse von
+    (0,70 | -0,70 | -0,13) heraus statt (0 | 0 | 1).
 
-    **Die Radien** kommen aus den Rändern des Flecks: Der Abstand zur Achse
-    schwankt zwischen ``R - r`` und ``R + r``, deren Mitte ist der Ringradius
-    und deren halbe Spanne der Röhrenradius. Das setzt einen **ganzen** Ring
-    voraus, und darin liegt die Grenze dieser Einpassung — ein Torusstück, wie
-    es eine Verrundung ist, misst sie noch nicht.
+    **Der Achsenpunkt** kommt danach aus einem zweiten, kleineren System:
+    ``dot(c, cross(n, a)) = dot(n, cross(a, p))``, drei Unbekannte bei bekannter Achse. Ihn aus
+    dem ``cross(a, c)`` des ersten Schritts zurückzurechnen ist der naheliegende Weg
+    und der falsche — am vollen Ring stimmt er (das Zentrum ist der Ursprung),
+    an einem Viertelring landete er 25 mm neben der Achse.
 
-    **Der Rückstand** prüft genau diese Annahme und macht sie damit ehrlich:
-    Er vergleicht den Abstand zur Mittellinie des Rings mit dem Röhrenradius.
-    Wo der Fleck kein ganzer Ring ist, wird er groß, und die Form wird
-    abgelehnt statt geraten (Regel 21). Gemessen: 0,005 am Ring, 0,41 an einer
-    Senkung, 0,43 an einer Kalotte.
+    **Die Radien** aus dem **Meridiankreis**: Der Meridianschnitt eines Torus
+    *ist* ein Kreis, sein Mittelpunkt liegt beim Ringradius und sein Radius ist
+    der Röhrenradius. Dafür gibt es :func:`_fit_circle` schon, und eine
+    Kreiseinpassung braucht keinen ganzen Kreis — genau darin liegt der
+    Gewinn gegenüber dem früheren Weg, der Ring- und Röhrenradius aus den
+    **Rändern** des Flecks las und damit einen ganzen Ring voraussetzte.
+
+    Gemessen an einem Torus mit R 20 und r 5, in Segmenten:
+
+    ========  =======  ======
+    Fleck     R        r
+    ========  =======  ======
+    voll      19,99    4,99
+    90 Grad   19,99    4,99
+    45 Grad   19,71    4,98
+    22 Grad    5,65    4,37
+    ========  =======  ======
+
+    Zwei Dinge stehen darin, auf die sich später jemand verlassen will.
+    **Unter etwa 45 Grad bricht die Einpassung** — der Rückstand meldet es,
+    und dann wird die Form abgelehnt statt geraten (Regel 21). Und **der
+    Röhrenradius bleibt stabil, während der Ringradius zuerst wegbricht**:
+    Bei 22 Grad ist R um das Vierfache daneben und r um zwölf Prozent. Für
+    eine Verrundung ist der Röhrenradius das Gesuchte, für einen Ring der
+    Ringradius — die schwierigere Zahl ist also die, die seltener gebraucht
+    wird.
+
+    Der frühere Weg über die Ränder traf den vollen Ring mit 19,96 und 4,93;
+    dieser trifft ihn mit 19,99 und 4,99.
     """
     normals = np.asarray(body.face_normals[patch], dtype=float)
     centres = np.asarray(body.triangles_center[patch], dtype=float)
+    if len(normals) < MIN_PATCH_FACES:
+        return None
 
-    values, vectors = np.linalg.eigh(normals.T @ normals)
-    spreads = [
-        abs(values[1] - values[2]),
-        abs(values[0] - values[2]),
-        abs(values[0] - values[1]),
-    ]
-    axis = vectors[:, int(np.argmin(spreads))]
+    middle = centres.mean(axis=0)
+    scale = float(np.abs(centres - middle).max())
+    if scale <= EPS_GEOM:
+        return None
+    scaled = (centres - middle) / scale
 
-    centre = centres.mean(axis=0)
-    relative = centres - centre
+    system = np.column_stack([np.cross(scaled, normals), -normals])
+    *_, right = np.linalg.svd(system, full_matrices=False)
+    axis = right[-1][:3]
+    length = float(np.linalg.norm(axis))
+    if length <= EPS_GEOM:
+        return None
+    axis = axis / length
+
+    on_axis, *_ = np.linalg.lstsq(
+        np.cross(normals, axis),
+        np.einsum("ij,ij->i", normals, np.cross(axis, centres)),
+        rcond=None,
+    )
+
+    relative = centres - on_axis
     along = relative @ axis
     radial = np.linalg.norm(relative - np.outer(along, axis), axis=1)
-
-    ring_radius = float(radial.max() + radial.min()) / 2.0
-    tube_radius = float(radial.max() - radial.min()) / 2.0
+    meridian, tube_radius = _fit_circle(np.column_stack([radial, along]))
+    ring_radius = float(meridian[0])
     if tube_radius <= EPS_GEOM or ring_radius <= tube_radius:
         return None
 
-    tube = np.sqrt((radial - ring_radius) ** 2 + along**2)
+    # Der Meridiankreis sagt auch, wo die Mitte auf der Achse liegt — der
+    # Achsenpunkt aus dem zweiten System ist irgendeiner, dieser ist der.
+    centre = on_axis + float(meridian[1]) * axis
+
+    tube = np.sqrt((radial - ring_radius) ** 2 + (along - float(meridian[1])) ** 2)
     residual = float(np.mean(np.abs(tube - tube_radius)) / tube_radius)
     # Zeigen die Normalen zur Mittellinie der Röhre hin, ist der Torus
     # ausgehöhlt — eine Kehle und kein Wulst. Dieselbe Frage wie ``inward``
@@ -905,7 +948,7 @@ def fit_torus(body: trimesh.Trimesh, patch: list[int]) -> TorusFit | None:
         axis=(float(axis[0]), float(axis[1]), float(axis[2])),
         centre=(float(centre[0]), float(centre[1]), float(centre[2])),
         ring_radius=ring_radius,
-        tube_radius=tube_radius,
+        tube_radius=float(tube_radius),
         residual=residual,
         recess=bool(np.mean(towards) < 0.0),
     )

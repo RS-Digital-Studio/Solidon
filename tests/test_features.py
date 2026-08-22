@@ -6,8 +6,10 @@ die die Erkennung erzeugt, lässt sich also prüfen statt bewundern.
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
+import numpy as np
 import pytest
 import trimesh
 
@@ -24,6 +26,7 @@ from app.core.perceive.features import (
     detect_spheres,
     detect_tori,
     fit_cylinder,
+    fit_torus,
 )
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -555,6 +558,50 @@ def test_a_ring_is_recognised_as_a_torus() -> None:
     assert tori[0].params["diameter"] == pytest.approx(40.0, abs=0.2)
     assert tori[0].params["tube_diameter"] == pytest.approx(10.0, abs=0.2)
     assert abs(tori[0].params["axis"][2]) == pytest.approx(1.0, abs=0.01)
+
+
+def test_a_piece_of_a_ring_is_enough_for_the_two_radii() -> None:
+    """Ein Torus**stück** reicht der Einpassung, ein ganzer Ring ist nicht nötig.
+
+    Das ist der Unterschied zum früheren Weg, der Ring- und Röhrenradius aus
+    den **Rändern** des Flecks las: Ränder hat ein Ausschnitt auch, nur sagen
+    sie dort nichts. Der Meridianschnitt eines Torus ist ein Kreis, und eine
+    Kreiseinpassung braucht keinen ganzen Kreis.
+
+    Die Zahl, auf die es ankommt, ist der **Röhren**radius — an einer
+    Verrundung ist er ihr Radius.
+    """
+    ring = trimesh.creation.torus(
+        major_radius=20.0, minor_radius=5.0, major_sections=96, minor_sections=48
+    )
+    angle = np.arctan2(ring.triangles_center[:, 1], ring.triangles_center[:, 0])
+    quarter = [int(index) for index in np.where((angle > 0.0) & (angle < math.pi / 2.0))[0]]
+
+    fit = fit_torus(ring, quarter)
+
+    assert fit is not None and fit.good, "a quarter of a ring is still a ring"
+    assert fit.ring_radius == pytest.approx(20.0, abs=0.1)
+    assert fit.tube_radius == pytest.approx(5.0, abs=0.1)
+
+
+def test_too_small_a_piece_is_refused_instead_of_guessed() -> None:
+    """Und darunter wird abgelehnt, nicht geraten (Regel 21, §41).
+
+    Bei einem Zweiundzwanzig-Grad-Ausschnitt liegt der Ringradius um das
+    Vierfache daneben — die Einpassung findet dann eine Form, die niemand
+    gemeint hat. Auffallen muss das dem **Rückstand**, nicht einem Menschen:
+    Er steigt auf 0,078 und damit über ``ROUND_TOLERANCE``, und ``good`` wird
+    falsch. Ein Elftel-Ring kommt gar nicht mehr durch die Schutzbedingung.
+    """
+    ring = trimesh.creation.torus(
+        major_radius=20.0, minor_radius=5.0, major_sections=96, minor_sections=48
+    )
+    angle = np.arctan2(ring.triangles_center[:, 1], ring.triangles_center[:, 0])
+    sliver = [int(index) for index in np.where((angle > 0.0) & (angle < math.pi / 8.0))[0]]
+
+    fit = fit_torus(ring, sliver)
+
+    assert fit is None or not fit.good, "a sliver must not pass as a ring"
 
 
 def test_a_countersink_is_not_a_sphere() -> None:
