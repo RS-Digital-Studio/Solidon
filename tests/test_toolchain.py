@@ -477,3 +477,36 @@ def test_a_named_process_is_measured_with_its_children() -> None:
         for prozess in (rechner, schlaefer):
             prozess.kill()
             prozess.wait(timeout=5)
+
+
+def test_a_finished_process_is_not_alive_while_its_handle_is_still_open() -> None:
+    """Ein Handle auf einen Prozess heißt nicht, dass er läuft.
+
+    **Der Fall, der es gezeigt hat.** Am 22.08.2026 stand das Schloss
+    neunzehn Minuten auf einem Halter, dessen Testlauf längst beendet war;
+    vier Sitzungen kamen nicht ins Tor, und ``_stale()`` übernahm es nicht,
+    weil ``_alive()`` „lebt" sagte. Windows gibt den Prozesseintrag erst frei,
+    wenn das letzte Handle darauf geschlossen ist — und jedes
+    ``subprocess.Popen`` hält seines offen. ``OpenProcess`` liefert deshalb
+    auch für einen beendeten Prozess ein Handle.
+
+    Geprüft wird in beide Richtungen: Der beendete darf nicht als lebend
+    gelten, der laufende muss es. Eine Prüfung, die nur die eine Hälfte kann,
+    gibt entweder jedes Schloss sofort frei oder nie.
+    """
+    import subprocess
+    import time
+
+    # ``wait()`` beendet den Prozess, das Popen-Objekt hält sein Handle weiter.
+    beendet = subprocess.Popen([sys.executable, "-c", "raise SystemExit(1)"])
+    beendet.wait(timeout=10)
+    laeuft = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(15)"])
+    try:
+        time.sleep(0.3)
+        assert gate_lock._alive(beendet.pid) is False, (
+            "ein beendeter Prozess gilt als lebend — das Schloss bliebe auf ihm stehen"
+        )
+        assert gate_lock._alive(laeuft.pid) is True, "ein laufender Prozess gilt als tot"
+    finally:
+        laeuft.kill()
+        laeuft.wait(timeout=5)

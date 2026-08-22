@@ -113,8 +113,24 @@ def _alive(pid: int) -> bool:
         kernel = ctypes.windll.kernel32  # type: ignore[attr-defined]
         handle = kernel.OpenProcess(query_limited_information, False, pid)
         if handle:
+            # **Ein Handle heißt nicht „läuft".** Windows gibt den
+            # Prozesseintrag erst frei, wenn das letzte Handle darauf
+            # geschlossen ist — und solange der Starter eines Prozesses seines
+            # offen hält (jedes ``subprocess.Popen`` tut das), liefert
+            # ``OpenProcess`` auch für einen längst beendeten Prozess eines.
+            # Am 22.08.2026 stand das Schloss deshalb neunzehn Minuten auf
+            # einem toten Halter, und vier Sitzungen kamen nicht ins Tor.
+            #
+            # Die Unschärfe, die bleibt: Ein Prozess, der wirklich mit 259
+            # endet, ist von einem laufenden nicht zu unterscheiden. Das ist
+            # selten und der billigere Fehler — er geht in die Richtung „gilt
+            # als lebend", und ein Schloss, das im Zweifel hält, sperrt
+            # jemanden aus, statt zwei Läufe gleichzeitig zuzulassen.
+            still_active = 259
+            code = ctypes.c_ulong()
+            ok = kernel.GetExitCodeProcess(handle, ctypes.byref(code))
             kernel.CloseHandle(handle)
-            return True
+            return not ok or int(code.value) == still_active
         # 5 heißt „Zugriff verweigert" — den Prozess *gibt* es dann, er gehört
         # nur jemand anderem. 87 heißt „ungültiger Parameter", und das ist die
         # Antwort für eine Nummer, die niemand mehr trägt.
