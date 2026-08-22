@@ -107,6 +107,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
+| **Eine verrundete Quaderkante wird als Zapfen gemeldet** | Das Fundament der Wahrnehmung (22.08.2026) | einen zweistufigen Umbau von `fit_cylinder` — bei einem 90-Grad-Ausschnitt liegen die Normalen auf einem Bogen statt auf einem Kreis, die Achse wandert, der Radius wird fünfmal zu groß. **Fehlbefund statt fehlendem Befund**, und `applies_to` bietet daran Zapfen-Operationen an. Gehört an den Anfang einer Sitzung, nicht ans Ende |
+| Der Rückstand sieht einen falschen Zylinder nicht | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, warum derselbe Wächter beim Torus greift und beim Zylinder nicht — 0,0313 Rückstand bei einem Radius, der um das Fünffache danebenliegt |
 | Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
 | Der Testkorpus hat keinen verrundeten Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Datei mit Kehle. Ein Regressionsnetz, das die Alltagsformen ausspart, meldet Erfolg über dem, was es nicht enthält (§34) |
@@ -4727,6 +4729,61 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       §15.7: Beim zweiten Öffnen stünde die Antwort im Stapel und es käme keine
       Frage mehr. Beim ersten schon — und das erste ist das, was ein Kunde
       erlebt.
+
+- [ ] **Eine verrundete Quaderkante wird als „Zapfen Ø 28,9" gemeldet.**
+      Gemessen am 22.08.2026 an einem verifizierten Testkörper — Quader
+      40 × 30 × 20, eine Kante mit R 3 ausgerundet, Volumen exakt 23942 gegen
+      Sollwert 23942:
+
+          Erkennung: {'face': 4, 'pin': 1}
+            pin_1  Ø 28,92   (r = 14,46)
+          Krümmungskarte: 3,0 mm      <- die richtige Antwort steht daneben
+
+      **Der Fleck ist richtig isoliert, die Einpassung ist falsch.** 52 der 108
+      Dreiecke bleiben als gekrümmt übrig, und das sind fast genau die
+      Verrundung (96 Segmente, Viertelkreis, doppelt trianguliert = 48).
+      `fit_cylinder` bestimmt die Achse aus dem Moment der Normalen — und bei
+      einem **90-Grad-Ausschnitt** liegen die Normalen auf einem Bogen statt auf
+      einem Kreis. Es gibt keinen klaren Nullraum, die Achse wandert, der Radius
+      wird fast fünfmal zu groß.
+
+      **Das ist ein Fehlbefund, kein fehlender Befund — und darin liegt der
+      Unterschied zur Kehlensäule.** Dort fand die Erkennung *nichts*: schlecht,
+      aber ehrlich. Hier findet sie etwas Falsches, `applies_to` bietet daran
+      Zapfen-Operationen an, und §14 sagt, ein Zapfen sei das, was man mit einer
+      Bohrung paart. Mit diesem paart niemand etwas. Für einen Kunden ist das
+      die schlechtere Sorte Fehler: Ein Werkzeug, das schweigt, lässt ihn selbst
+      nachsehen; eines, das etwas Falsches behauptet, führt ihn weg.
+
+      **Zwei Schranken greifen nicht.** `_fits_in_the_body` lässt Ø 28,9 durch —
+      das passt quer in einen 40er Körper, und die Schranke war gegen Ø 631
+      gebaut, nicht gegen das Fünffache. Und die Regel „nachtrennen nur, wo
+      keine Form gepasst hat" (vom selben Tag) greift ebenfalls nicht: Hier hat
+      eine gepasst, nur die falsche. Das ist die Kehrseite jener Regel und war
+      der Preis dafür, dass die Senkung im Beispielprojekt nicht zerfällt.
+
+      **Die Reichweite ist vermutlich größer als der Anlass:** Jede
+      angeschnittene Bohrung, jede halbe Nut, jeder Zylinder am Rand eines
+      Teils geht denselben Weg. Der Umbau ist bekannt und zweistufig wie beim
+      Torus — Achse über das lineare Rotationsflächen-System, Radius über
+      `_fit_circle`, beides liegt fertig in `features.py`. **Er gehört an den
+      Anfang einer Sitzung mit vollem Tor dahinter**, denn `fit_cylinder` ist
+      die Einpassung, an der jede Bohrung und jeder Zapfen hängt. Gefunden von
+      3d-druck-3a beim Verrundungsradius.
+
+- [ ] **Der Rückstand sieht einen falschen Zylinder nicht.** Beim Fall darüber
+      lag der Rückstand der Einpassung bei **0,0313** — weit unter
+      `CYLINDER_TOLERANCE` (0,08) — während der Radius um das **Fünffache**
+      danebenlag. Ein Wächter, der eine Einpassung nur an ihrem Rückstand misst,
+      hält also eine Form für gut, die um 400 Prozent falsch ist.
+
+      **Beim Torus funktioniert derselbe Wächter**, und das ist der interessante
+      Teil: Dort lehnt der Rückstand einen Zweiundzwanzig-Grad-Span ab
+      (`good=False`, 0,078 über der Schwelle). Warum er beim Zylinder blind ist
+      und beim Torus nicht, gehört **gemessen und nicht angenommen** — die
+      naheliegende Vermutung ist, dass ein zu großer Zylinder durch einen
+      schmalen Bogen fast genauso gut hindurchgeht wie der richtige, während ein
+      Torus zwei Radien hat und schon einer davon die Abweichung sichtbar macht.
 
 - [ ] **Die Krümmungskarte misst das Netz und nicht den Körper.**
       `curvature_map` (`app/core/perceive/maps.py`) ist gebaut, registriert und
