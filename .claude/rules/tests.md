@@ -187,6 +187,48 @@ seine Arbeit für abgesichert. Ein eigener Arbeitsbaum ist die einzige
 vollständige Antwort (`claude --worktree <name>`).
 
 
+**Und die Beschleunigung des Tors macht das Schloss wichtiger, nicht
+überflüssiger.** Am 22.08.2026 lag der Vorschlag auf dem Tisch, es auf die
+Leistungstests zu schrumpfen — 49 Sekunden brauchen Ruhe, dreißig Minuten
+nicht. Die Messung hat ihn widerlegt, und zwar aus der Gegenrichtung: Mit
+`-n 8` lastet die Sammelgruppe die Maschine so aus, dass der **fremde** Lauf
+kippt. Zwei Läufe derselben Gruppe ohne Schloss gaben **11 failed** und
+**0 failed**; die elf lagen in `test_blend.py`, `test_examples.py` und
+`test_real_models.py`, und dieselbe Datei allein mit `-n 8` lief grün durch.
+Ursache war nicht die Parallelität und keine Reihenfolgeabhängigkeit, sondern
+**Speicher**: Acht Prozesse, die je eine speicherhungrige Geometrie rechnen,
+sind etwas anderes als einer. Parallelität macht Speicherhunger sichtbar — als
+Korrektheitsfehler.
+
+Vorher belegte ein serieller Torlauf einen Kern und störte niemanden. Also:
+**Je paralleler das Tor, desto strenger das Schloss.**
+
+Der Gewinn kommt trotzdem, nur an anderer Stelle: nicht dadurch, dass das
+Schloss fällt, sondern dadurch, dass das, was es umschließt, kleiner wird. Auf
+leerer Maschine gemessen, alles seriell gegen alles parallel:
+
+| | seriell | mit `-n 8` |
+|---|---|---|
+| Sammelgruppe | 193 s | **57 s** (zweimal, gleiche Menge) |
+| Tor insgesamt | ~30 min | **5 min 9 s** |
+
+Die dreißig Minuten waren nie Testzeit. Sie waren Wartezeit, Fremdlast und der
+Deadlock beim Fensterabbau. Vier Sitzungen × 30 Minuten sind zwei Stunden
+Warten; vier × 5 sind zwanzig Minuten — **das** ist die Zahl, die zählt, nicht
+die Laufzeit eines einzelnen Laufs.
+
+**Eine feste Zahl statt `-n auto`.** Auf 32 logischen Kernen startet xdist 32
+Worker und stirbt beim Verteilen (`INTERNALERROR KeyError <WorkerController
+gw13>`, keine Tests gesammelt). Wichtiger als der Absturz ist aber der Grund
+dahinter: Auf einer anderen Maschine ist `auto` etwas anderes, und ein Tor,
+das je nach Kernzahl anders misst, hat eine stille Variable. Dieselbe
+Begründung wie bei `.performance.json`.
+
+**Zweimal fahren und die Mengen vergleichen, nicht die Zahlen.** Ein Test, der
+von einem Vorgänger abhängt, wird bei paralleler Ausführung nicht rot — er wird
+*manchmal* rot. Zwei gleiche Läufe sind kein Beweis, zwei ungleiche sind sofort
+einer. Beim ersten Einsatz dieses Verfahrens fielen die elf oben auf.
+
 ## Wenn ein Lauf steht: py-spy
 
 Ein Testlauf, der bei 0,00 CPU-Sekunden über ein Intervall steht, sagt nicht,
@@ -225,6 +267,54 @@ Get-CimInstance Win32_Process -Filter "Name like '%python%'" |
 Dasselbe tut `tools/gate_lock.py` in `_test_processes()`, und aus demselben
 Grund. Wer nur die direkten Kinder des Schlosshalters zählt, findet den
 stehenden Lauf nicht — an einem Abend zweimal passiert.
+## Wer mit privatem Index committet, zieht den Haupt-Index nach
+
+Im geteilten Arbeitsbaum committet jede Sitzung über `GIT_INDEX_FILE` und
+`git commit -o -- <pfade>`, damit sie keine fremde Arbeit mitnimmt. Der
+gemeinsame Index bleibt dabei stehen — **und niemand merkt es, weil niemand ihn
+benutzt.** Am 22.08.2026 trug er einen Stand von vor den Commits des Abends:
+27 Dateien, 87 Einfügungen, **1684 Löschungen**. Ein einziges `git commit` ohne
+`-o` hätte daraus einen Commit gemacht, der die Arbeit von vier Sitzungen
+löscht, und der `post-commit`-Hook hätte ihn sofort gepusht. Zweimal an einem
+Abend aufgetreten.
+
+Er altert auch nach jedem Aufräumen wieder, solange alle privat committen. Also
+gehört das Nachziehen zum Commit und nicht zur Fehlersuche:
+
+```
+git reset            # ohne --hard: nur der Index, keine Datei
+```
+
+Und die Auskunft daneben: **`git diff` vergleicht gegen den Index, nicht gegen
+HEAD.** In einem geteilten Baum stehen darin die Zwischenstände der anderen —
+ein Katalog-Diff zeigte fünf fremde Zeilen, die längst committet waren, und für
+eine Datei, die der veraltete Index gar nicht kannte, meldete `git diff HEAD`
+sogar eine Löschung, obwohl die Datei unverändert dalag. Die Frage, die man
+stellen will, ist `git diff HEAD`; die Frage, die `git diff` beantwortet, ist
+eine andere.
+
+## Was habe ich gerade gemessen?
+
+Am 22.08.2026 haben vier Sitzungen an einem Abend **sieben** Messfehler
+gemacht, und alle sieben hatten dieselbe Form:
+
+| Werkzeug | maß | gemeint war |
+|---|---|---|
+| Pipe um `pytest` | den Rückgabewert von `tail` | den von pytest |
+| Hintergrundlauf | den Status der Hülle | den des Programms darin |
+| Prozessbaum | die direkten Kinder | die ganze Kette |
+| `_alive()` | ob `OpenProcess` ein Handle gibt | ob der Prozess läuft |
+| der Wächter | irgendeinen `pytest` | den Lauf **dieses** Halters |
+| sein Selbsttest | `os.getpid()` | ob der Lauf sichtbar ist |
+| `git diff` | den Index | HEAD |
+
+Keiner war Nachlässigkeit. Jeder maß etwas, das echt, greifbar und benachbart
+war — **man misst, was leicht zu greifen ist, und nicht, was gemeint war.** Das
+ist die Normalform des Messfehlers, nicht die Ausnahme.
+
+Die Gegenfrage ist dieselbe, die Bauplan §35 an einen Test stellt, nur an ein
+Werkzeug gerichtet, und sie kostet zehn Sekunden: **Was habe ich gerade
+gemessen, und ist das dasselbe wie das, was ich wissen wollte?**
 
 ## Die Gegenprobe
 
