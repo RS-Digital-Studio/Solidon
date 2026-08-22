@@ -560,21 +560,43 @@ button = QToolButton(self)
 button.clicked.connect(lambda: self.apply())  # auch ein Ring
 ```
 
-Richtig ist dieselbe schwache Referenz, die der Interaktionsstil längst
-benutzt (`viewport._weak_callbacks`):
+**Das Mittel ist fast immer die gebundene Methode, nicht `weakref`.** Qt hält
+eine gebundene Methode von sich aus schwach; den Ring baut allein das Lambda.
+Gemessen am selben Aufbau, je zehn Objekte losgelassen:
+
+| Form | überleben |
+|---|---|
+| `connect(self.rebuild)` | **0 von 10** |
+| `connect(lambda: self.rebuild())` | 10 von 10 |
+| `connect(partial(self.rebuild, 1))` | 10 von 10 |
+| `connect(lambda x=1: self.rebuild(x))` | 10 von 10 |
+| `connect(lambda *_a, s=self: s.rebuild())` | 10 von 10 |
+
+Bemerkenswert daran ist die dritte Zeile: `functools.partial` hilft **nicht**,
+obwohl es wie die saubere Fassung eines Lambdas aussieht — es hält die
+gebundene Methode und damit `self`. Dasselbe gilt für das Vorgabeargument, das
+im Arbeiter-Abschnitt unten steht; dort ist es richtig, weil der Sender geht.
+
+Also, in dieser Reihenfolge:
 
 ```python
-weak = weakref.ref(self)
+self.timer.timeout.connect(self.rebuild)            # erste Wahl
 
+def _rebuild_layer(self) -> None:                   # zweite Wahl: feste Werte
+    self.show_scene(self._result)                   # in eine Methode statt
+self.timer.timeout.connect(self._rebuild_layer)     # in ein Lambda
 
-def rebuild() -> None:
-    found = weak()
-    if found is not None:
-        found.rebuild()
-
-
-self.timer.timeout.connect(rebuild)
+button.toggled.connect(weak_slot(self, Editor._tool_chosen, name))
 ```
+
+`weak_slot` (`app/ui/leash.py`) bleibt für den einen Fall, den die ersten zwei
+nicht abdecken: ein Wert aus einer **Schleife**, der an den Rückruf gebunden
+werden muss. Es hält den Besitzer schwach und reicht den Schleifenwert vor den
+Signalargumenten durch.
+
+Von Hand geschriebene `weakref.ref`-Blöcke braucht es nur noch, wo mehrere
+Rückrufe zusammen entstehen — `viewport._weak_callbacks` ist der Fall, fünf
+Stück für einen Interaktionsstil.
 
 **Der Interactor ist ein Fall davon, nicht der Fall.** Diese Regel nannte lange
 allein ihn — Stil → Viewport → Plotter → Interactor → Stil —, und deshalb hat

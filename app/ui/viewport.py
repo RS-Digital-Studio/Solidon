@@ -1425,24 +1425,14 @@ class Viewport(QWidget):
         stehen bleibt, und bis dahin bleibt die letzte Darstellung stehen."""
         self._layer_rebuild.setSingleShot(True)
         self._layer_rebuild.setInterval(LAYER_REBUILD_DELAY_MS)
-        # Schwach, wie die Rückrufe an den Interaktionsstil (`_weak_callbacks`)
-        # und aus demselben Grund: Der Zeitgeber ist ein Kind dieser Ansicht,
-        # und ein Lambda darin hielte sie stark — Viewport → QTimer → Rückruf →
-        # Viewport. Diese Schleife läuft über die C++-Grenze, und Pythons
-        # Speicherbereiniger sieht die Kante vom Zeitgeber zum Rückruf nicht;
-        # er kann sie also nicht brechen. Gemessen: Mit dem Lambda überlebten
-        # **zwanzig von zwanzig** losgelassenen Viewports ihr `del` samt
-        # `gc.collect()`, mit dieser Fassung keiner. Ein Fenster ließ dabei
-        # rund 7 MB stehen — bei den über siebenhundert, die die Suite
-        # nacheinander aufbaut, ist das die Größenordnung, bei der sie abreißt.
-        weak = weakref.ref(self)
-
-        def rebuild_layer() -> None:
-            found = weak()
-            if found is not None:
-                found.show_scene(found._result)
-
-        self._layer_rebuild.timeout.connect(rebuild_layer)
+        # Eine Methode und **kein Lambda**: Der Zeitgeber ist ein Kind dieser
+        # Ansicht, und ein Lambda darin hielte sie stark — Viewport → QTimer →
+        # Rückruf → Viewport. Diese Schleife läuft über die C++-Grenze, Pythons
+        # Speicherbereiniger sieht die mittlere Kante nicht und kann sie nicht
+        # brechen. Eine gebundene Methode hält Qt von sich aus schwach.
+        # Gemessen: Mit dem Lambda überlebten **zwanzig von zwanzig**
+        # losgelassenen Viewports ihr `del` samt `gc.collect()`, so keiner.
+        self._layer_rebuild.timeout.connect(self._rebuild_layer)
         self._difference: Any | None = None
         self._difference_actors: list[Any] = []
         self._difference_held = False
@@ -1854,6 +1844,15 @@ class Viewport(QWidget):
         Über den vollen Neuaufbau und nicht über gemerkte Punkte: Was gezeigt
         wurde, war eine Vorschau, und der Dokumentzustand ist die einzige
         Wahrheit darüber, was danach zu sehen ist.
+        """
+        self.show_scene(self._result)
+
+    def _rebuild_layer(self) -> None:
+        """Der aufgeschobene Schnitt, wenn der Schichtschieber zur Ruhe kommt.
+
+        Eine eigene Methode und kein Lambda am Zeitgeber: Qt hält eine
+        gebundene Methode schwach, ein Lambda hielte die Ansicht am eigenen
+        Kind fest (siehe ``__init__`` und `.claude/rules/oberflaeche.md`).
         """
         self.show_scene(self._result)
 

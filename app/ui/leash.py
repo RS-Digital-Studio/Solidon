@@ -15,6 +15,8 @@ Gebietsregel beschreibt beides; hier steht es einmal statt sechsmal.
 
 from __future__ import annotations
 
+import weakref
+from collections.abc import Callable
 from typing import Any, Final
 
 from PySide6.QtCore import QObject, QThread, QTimer, Signal
@@ -225,3 +227,40 @@ class WorkerLeash:
                     type(worker).__name__,
                     timeout_ms,
                 )
+
+
+def weak_slot[Owner: QObject](
+    owner: Owner, call: Callable[..., None], *bound: Any, forward: bool = False
+) -> Callable[..., None]:
+    """Ein Signalempfänger, der seinen Besitzer **nicht** am Leben hält.
+
+    **Für den einen Fall, den die zwei einfacheren nicht abdecken.** Qt hält
+    eine gebundene Methode von sich aus schwach, ein Lambda dagegen stark — wer
+    ``connect(self.tue)`` schreibt, hat nichts zu bedenken, und wer feste Werte
+    braucht, schreibt eine Methode dafür. Übrig bleibt der Wert aus einer
+    **Schleife**: Zehn Knöpfe, die je ein anderes Werkzeug wählen, brauchen den
+    Namen am Rückruf, und ein Lambda mit Vorgabeargument schließt genau den
+    Ring, gegen den dieses Modul da ist.
+
+    Gemessen: ``partial(self.tue, 1)`` hilft **nicht**, obwohl es wie die
+    saubere Fassung eines Lambdas aussieht — es hält die gebundene Methode und
+    damit den Besitzer. Von zehn losgelassenen Objekten überlebten alle zehn.
+
+    ``call`` ist die **ungebundene** Funktion (``Editor._tool_chosen``), damit
+    hier keine gebundene Methode entsteht; sie bekommt den Besitzer als erstes
+    Argument und danach die gebundenen Werte.
+
+    **Was das Signal schickt, wird verworfen** — ``clicked`` sendet ein
+    ``checked``, das die wenigsten Empfänger wollen, und ein durchgereichtes
+    Argument zu viel ist ein ``TypeError`` erst zur Laufzeit und erst beim
+    Klicken. Wer es braucht, sagt ``forward=True``; dann kommt es hinter den
+    gebundenen Werten an.
+    """
+    ref = weakref.ref(owner)
+
+    def slot(*sent: Any) -> None:
+        found = ref()
+        if found is not None:
+            call(found, *bound, *(sent if forward else ()))
+
+    return slot
