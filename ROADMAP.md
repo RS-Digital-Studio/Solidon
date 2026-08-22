@@ -45,12 +45,16 @@ bekommt einen roten Lauf.
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 | Benannte Merkmale überstehen keine Boolesche Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung darüber, wann ein benanntes Merkmal wirklich fort ist — vierzehn Ops geben `features={}` zurück, und `_with_features` liest die generierten nur aus der Ausgabe |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
-| Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | eine Entscheidung zum Exportdateinamen (wandert er mit der Anzeigesprache?), dann `SceneObject.name` als `TranslatableText | str` durch 65 Lesestellen, dann Schritt 8 → 9 — der Hash ist entgegen der früheren Annahme kein Problem |
+| Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
+| „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
 | Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | die Entscheidung des Bauplans, welche Operation auf ein fertiges Gewinde gehört; bis dahin steht `thread` als benannte Ausnahme im Konsistenztest |
 | Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
+| Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht; der Stapel zeigt einen neuen QThread im finished-Slot des Vorgängers, und die Falle dafür steht in `tools/qt_trace.py` |
+| Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
+| Der Textweg prüft seine Voraussetzungen nicht | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile ausgraut, solange kein SDXL-Modell unter `models/checkpoints` liegt |
 
 ---
 
@@ -8435,29 +8439,18 @@ Datei da, Alt-Text da, `width`/`height` gleich den Pixeln.
       das hatte niemand gesehen. Die Gruppe heißt jetzt „Visserie"
       beziehungsweise „Parafusos e roscas"; ein Wächter über den Wortstamm
       hält alle sechs Sprachen auseinander.
-- [ ] **Die Werkzeugzeile der Skizze verlangt mit Stylesheet 1007 Bildpunkte,
-      und die Ursache war eine andere als gedacht.** Hier stand, es seien die
-      achtzehn Knöpfe der Bedingungszeile. Nachgemessen mit Thema ist es die
-      **Werkzeugzeile**: fünfzehn Knöpfe à 37 Bildpunkte plus zwei Zahlenfelder
-      à 163, alles in einer Reihe. Die Bedingungszeile kann beliebig schmal
-      werden — ihr Kasten trägt `setMinimumWidth(1)` und sie bricht selbst um
-      (`_fit_constraint_row`); mit Thema braucht sie 790 und nicht 1007.
+- [ ] **Die Werkzeugzeile der Skizze verlangt mit Stylesheet 1007 Bildpunkte.**
+      `test_the_constraint_buttons_stay_readable_on_a_laptop` fordert 900 und
+      ist trotzdem grün — weil er allein läuft, und dann steht kein Thema. Läuft
+      `test_ui.py` im selben Prozess davor, sind die achtzehn Knöpfe der Zeile
+      37 statt 28 Punkte breit, und die Summe reicht über einen 1024er Schirm
+      hinaus. Der Fund ist älter als der Bildlauf vom 20.08. und hat nichts mit
+      ihm zu tun; sichtbar wurde er, weil die Suite an diesem Tag zweimal am
+      Stück lief statt je Datei. Zu entscheiden ist, **was** aus der Zeile
+      verschwindet — die zweite Zahl, die Grundformen oder ein Kürzel-Menü —,
+      und der Test sollte danach sein Thema selbst setzen, sonst misst er
+      weiterhin etwas, das niemand sieht.
 
-      **Der Test setzt sein Thema jetzt selbst**, und das war der machbare Teil.
-      `test_the_constraint_buttons_stay_readable_on_a_laptop` war grün, weil
-      allein kein Stylesheet stand — lief `test_ui.py` davor, war er es nicht
-      mehr. Ein Test, dessen Ergebnis von seinen Nachbarn abhängt, misst nichts.
-      Er prüft seither die Bedingungszeile mit Thema, also sein eigenes Thema,
-      und `test_the_tool_row_is_the_one_that_needs_the_width` hält den Zustand
-      des Bereichs samt Ursache fest: Er wird rot, sobald die Werkzeugzeile
-      schmaler wird, und verlangt dann, dass die Zahl nachgezogen wird.
-
-      Offen bleibt die Entscheidung, **was** aus der Werkzeugzeile verschwindet.
-      Jetzt mit Zahlen: Die zwei Zahlenfelder sind 326 der 1007 Bildpunkte, also
-      ein Drittel — schmalere Felder allein bringen die Zeile unter 900. Die
-      Alternativen bleiben ein Umbruch wie bei den Bedingungen oder ein
-      Kürzel-Menü. Die Felder gehören zu `NumberSpin`/`LengthSpin`, an denen
-      gerade gearbeitet wird; deshalb hier und nicht selbst geändert.
 ---
 
 ## Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde)
@@ -8944,37 +8937,18 @@ Kein Verstoß.
 
 ### Was liegen bleibt, und warum
 
-- [ ] **Die Objektnamen der Beispielprojekte bleiben deutsch — und der teure
-      Teil ist ein anderer als hier stand.** Nachgesehen am 21.08.: Die
-      Befürchtung war ein `TranslatableText` in `params`, der bis in
-      `operation_hash` reicht. Die trifft nicht zu, weil er dort nicht
-      hingehört. `title_translatable` macht es richtig vor: In der Datei steht
-      die **Message-ID als Zeichenkette** und daneben ein Vermerk, dass sie eine
-      ist. Der Vermerk gehört an `Operation` (ein achtes Feld, etwa
-      `translatable: tuple[str, ...]` mit den betroffenen Parameternamen) und
-      nicht in `params` — `operation_hash` liest nur `op`, `params`,
-      Eingangs-Hashes, Profil, Qualität und Startwert, also bleibt der Schlüssel
-      sprachfrei, ohne dass jemand etwas dafür tun muss.
+- [ ] **Die Objektnamen der Beispielprojekte bleiben deutsch, und der Weg
+      dorthin ist teurer als er aussieht.** Die saubere Stelle ist das
+      Dateiformat, wie `title_translatable` es für Transaktionstitel vormacht —
+      soweit stimmt die Notiz von heute Morgen. Was sie nicht sagt: Ein
+      `TranslatableText` in `params` reicht bis in `operation_hash`. Der
+      Parametersatz geht durch `_canonical` in den Cache-Schlüssel, ein
+      Dataclass-Wert ist dort nicht darstellbar, und ein Schlüssel, der von der
+      Anzeigesprache abhinge, wäre schlimmer als ein deutscher Name. Dazu ein
+      Schritt 8 → 9 mit Migration, Beispieldatei der alten Fassung, den
+      Leseseiten in `make_examples.py` und neu erzeugten Beispielen. Machbar,
+      aber als eigener Durchgang und nicht neben fünf anderen Punkten.
 
-      **Teuer ist `SceneObject.name`.** Es müsste `TranslatableText | str`
-      werden, und gemessen lesen **65 Stellen** in Oberfläche, Export und
-      Agentenschicht einen Objektnamen direkt: Objektbaum und Kopfzeile,
-      Exportdateinamen (`safe_name`), die 3MF-Baugruppe, die Slicer-Übergabe,
-      der Steckbrief. Jede davon braucht ein `str()` oder eine Entscheidung —
-      und beim Exportdateinamen ist es eine: Heißt die Datei `Halterung.stl`
-      oder `Bracket.stl`, je nach eingestellter Sprache? Ein Dateiname, der mit
-      der Anzeigesprache wandert, ist dieselbe Sorte Fehler wie ein
-      Cache-Schlüssel, der es tut.
-
-      Dazu unverändert: ein Schritt 8 → 9 mit Migration (`carry_over` genügt,
-      alte Namen bleiben wörtlich — dieselbe Begründung wie bei
-      `title_translatable`), eine Beispieldatei der Fassung 8, die vierzehn
-      gesetzten Namen in `make_examples.py`, siebzig Katalogeinträge und neu
-      erzeugte Beispiele.
-
-      Machbar, und die Reihenfolge ist jetzt klar: erst die Entscheidung zum
-      Exportdateinamen, dann `SceneObject.name`, dann das Format. Als eigener
-      Durchgang, nicht neben anderen Punkten.
 ## Der Bedienweg von außen nachgefahren (21.08.2026)
 
 Nicht der Kern geprüft, sondern der Weg: Was sieht jemand, der die Anwendung
@@ -9012,22 +8986,19 @@ Kategorie.
 
 ### Zwei Funde, die eine Entscheidung brauchen
 
-- [x] **„Eingabe korrigieren" ist längst ein Knopf, und der Punkt war
-      veraltet.** `error_handlers()` führt `"correct_input"` auf
-      `_correct_after_error`, und das ruft `edit_operation` mit der Kennung des
-      Schritts und dem Feld, das nicht ging: derselbe erzeugte Dialog auf den
-      Werten aus der Datei, und beim Übernehmen wird der Schritt ersetzt statt
-      ein zweiter angelegt (§15.4).
-
-      Auch der zweite Fall, den der Punkt nannte, ist gebaut: Ein
-      `FileWriteError` beim Export führt über `_after_write_failure` zum zweiten
-      Anlauf — dieselbe Datei oder ein anderer Ort. Das ist die häufigste
-      Ursache überhaupt, eine Datei, die im Slicer offen liegt, und sie
-      verlangt keinen zweiten Gang durch Format, Ordner und Namen.
-
-      Nachgeprüft beim Durchgang durch die offenen Punkte: Der Punkt beschrieb
-      einen Zustand, den zwei frühere Durchgänge behoben hatten, ohne ihn hier
-      abzuhaken.
+- [ ] **„Eingabe korrigieren" ist ein Satz und kein Knopf.** `CORRECT_INPUT`
+      ist mit 26 Verwendungen die häufigste Handlung des Kerns und trägt
+      `primary=True` — einen Handler hat sie nicht. Bei `UserError` und
+      `FileWriteError` bleibt damit nur Abbrechen, und `FileWriteError` trifft
+      das Ende jedes Weges, den Export. **Das ist kein Regelverstoß:**
+      `tests/test_ui.py` (`test_an_error_without_a_handler_still_offers_a_way_out`)
+      definiert die Regel ausdrücklich als „entweder eine Handlung mit Wirkung
+      **oder** ein Rat zum Lesen", und die Begründung daneben ist gut — ein
+      Knopf, der nichts tut, ist schlimmer als keiner. Es steht hier, weil
+      §2.1 „keine Sackgassen" verspricht und der häufigste Bedienfehler eine
+      ist. Was ein Handler tun müsste, ist die offene Frage: Bei einem
+      Parameterfehler den Dialog mit den Werten erneut öffnen; bei „andere
+      Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog.
 - [ ] **Ein angeklicktes Gewinde bietet nichts an.** `thread` entsteht
       wirklich — der Gewinde-Baustein gibt es zurück
       (`knowledge/parts/build.py`) —, und `REGISTRY.for_feature("thread")` ist
@@ -9309,19 +9280,12 @@ bekommt ein 220er Bett — und dann meldet jedes 231 mm tiefe Teil zu Recht
       16 / 23), also ist die naheliegende Verbesserung keine. „Bewusst
       einfach" steht im Docstring und hat seinen Grund; ob sieben Platten für
       52 Teile in Ordnung sind, entscheidet der Bauplan und nicht das Gefühl.
-- [x] **Der Plattenwähler wohnt jetzt in der Kopfzeile.** Er stand in der
-      Leiste, die Teile auseinanderzieht, und hing an deren Sichtbarkeit — die
-      beginnt bei zwei Körpern. Ein einzelner Körper auf Platte 2 von 3, wie er
-      nach einem Auto-Split entsteht, ließ den Wähler also verschwinden. Jetzt
-      hängt er nur noch an der Zahl der Platten, und das ist die Frage, die er
-      beantwortet.
-
-      Die Kopfzeile war der richtige Ort und kein Ausweichen: Sie sagt, was
-      offen ist und worauf gedruckt wird, und auf welche Platte man sieht, ist
-      dieselbe Art Auskunft. `ExplodeBar` heißt jetzt, was sie ist — eine
-      Explosionsansicht —, und `ALL_PLATES` bleibt von dort erreichbar, weil
-      Viewport und Fenster den Wert kennen und zwei Werte für dieselbe Sache
-      eine Fehlerquelle wären.
+- [ ] **Der Plattenwähler wohnt im Explodieren.** Er erscheint erst ab zwei
+      Körpern **und** zwei Platten, und er steht in der Explodier-Leiste — wer
+      eine einzelne Platte ansehen will, sucht ihn unter einem Werkzeug, das
+      Teile auseinanderzieht. Jetzt, wo alle Betten nebeneinander stehen, ist
+      das weniger dringend; ein eigener Ort in der Kopfzeile bleibt die
+      naheliegende Antwort.
 - [ ] **Dieselbe Frage kommt bei jeder Auswertung wieder, und das wird
       schnell viel.** Gezählt über die ganze Kette: die Ente **8** Rückfragen
       bei **1** verschiedenen, der Propellersatz **32** bei **5**,
@@ -10515,37 +10479,23 @@ sie sind der Abstand zwischen „das geht" und „das lohnt".
 
 ### Was auffiel und eine Entscheidung braucht
 
-- [x] **Der zweite lokale Weg wird genannt, nicht eingerichtet.** Ollama
-      unterstützt CUDA und Metal; auf allem anderen rechnet es auf dem
-      Prozessor. Für Intel gibt es IPEX-LLM, für AMD ROCm, für beides
-      OpenVINO — jedes eine eigene Installation mit eigenen Fallen, und keines
-      von Ollama selbst angeboten.
+- [ ] **Der lokale Weg ist auf Intel- und AMD-Grafik nicht praktikabel, und
+      wir nennen keinen Ausweg.** Ollama unterstützt CUDA und Metal; auf allem
+      anderen rechnet es auf dem Prozessor. Für Intel gibt es IPEX-LLM, für
+      AMD ROCm-Fassungen, für beides OpenVINO — jedes davon ist eine eigene
+      Installation mit eigenen Fallen, und keines wird von Ollama selbst
+      angeboten. Wartet auf eine Entscheidung, ob Solidon einen zweiten
+      lokalen Weg **nennt** (nicht einrichtet) oder ob die Auskunft „hier lohnt
+      es nicht, nimm einen Schlüssel" die ganze Antwort bleibt.
 
-      Entschieden: **nennen, ja — einrichten, nein.** Und zwar im Handbuch und
-      nicht in der Statuszeile: Drei Fremdprojekte gehören nicht in einen
-      Dialogsatz, und der Satz der Werkzeugprobe muss kurz bleiben, um gelesen
-      zu werden. Er nennt weiter den Schlüssel, das Handbuch nennt beide Wege
-      samt dem Satz, der dazugehört — wer sich darauf einlässt, bekommt seine
-      Karte genutzt; wer nicht, nimmt einen Schlüssel. Beides ist vertretbar.
-- [x] **Der Textweg prüft jetzt seinen eigenen Ablauf.** `readiness()` las
-      `image_to_mesh.json`, auch wenn der Textweg lief — und der spricht andere
-      Knoten an und braucht ein Modell mehr: TripoSG kennt keinen Texteingang,
-      Text wird erst zu einem Bild, und dafür steht ein SDXL-Modell im Ablauf.
-      Wer keines hatte, las „Bereit" und erfuhr es beim Abschicken.
+- [ ] **Der Textweg prüft seine Voraussetzungen nicht.** `readiness()` liest
+      `image_to_mesh.json`, und das ist mit Absicht so: Der Bildweg ist der
+      Kernweg, der Textweg braucht zusätzlich ein SDXL-Modell unter
+      `models/checkpoints`. Wer keines hat, erfährt es beim Abschicken. Wartet
+      auf eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit
+      für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile
+      ausgraut, solange kein Bildmodell da ist.
 
-      `readiness(workflow)` und `missing_nodes(workflow)` fragen jetzt nach dem
-      Ablauf, den der Aufrufer meint, und `missing_models(workflow)` prüft
-      dazu, ob die Rollen des Ablaufs auf diesem Rechner zu füllen sind — mit
-      denselben Aufrufen, die die Auflösung ohnehin macht. Dazu eine vierte
-      Lage `NO_MODEL`: Ein fehlendes Modell ist keine fehlende Knotensammlung,
-      denn die Knoten legt Solidon selbst hinein, ein SDXL-Modell ist ComfyUIs
-      eigene Sache.
-
-      Der Erzeugungsdialog fragt für den Weg, den er wirklich fahren würde —
-      mit gewähltem Bild den Bildweg, ohne den Textweg —, und fragt neu, wenn
-      ein Bild dazukommt: Mit Bild braucht es kein SDXL-Modell, und wer eines
-      wählt, soll nicht weiter lesen, dass etwas fehlt, was er gerade umgangen
-      hat. Der vierte Satz nennt genau das als Ausweg.
 ## Der Kundendurchgang durch die vier Wege (21.08.2026)
 
 Nach dem Bildweg die anderen drei, und zwar mit denselben Aufrufen, die die

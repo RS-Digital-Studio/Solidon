@@ -1024,7 +1024,7 @@ def test_a_model_on_the_processor_says_so_before_it_is_blamed(
     Die Zahlen setzt die Oberfläche ein, nicht der Kern: Dort steht der Satz
     mit seinen Platzhaltern (§33.1, dasselbe Muster wie ``AppError.values``).
     """
-    from app.core.backends import keys, llm
+    from app.core.backends import keys
     from app.ui.dialogs import KeyDialog
 
     monkeypatch.setattr(keys, "_keyring", lambda: None)
@@ -1047,7 +1047,7 @@ def test_a_model_on_a_graphics_card_gets_the_plain_answer(
     Gesagt wird nur, was der Kunde nicht selbst sehen kann. Ein Modell auf
     einer Karte bekommt die Antwort auf die Frage, die er gestellt hat.
     """
-    from app.core.backends import keys, llm
+    from app.core.backends import keys
     from app.ui.dialogs import KeyDialog
 
     monkeypatch.setattr(keys, "_keyring", lambda: None)
@@ -1060,7 +1060,6 @@ def test_a_model_on_a_graphics_card_gets_the_plain_answer(
 
 def test_a_speed_that_was_not_measured_claims_nothing(qt_app: QApplication) -> None:
     """Ein Server, der schweigt, meldet sich schon über ``available`` ab."""
-    from app.core.backends import llm
     from app.ui.dialogs import KeyDialog
 
     dialog = KeyDialog()
