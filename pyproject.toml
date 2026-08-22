@@ -131,6 +131,19 @@ markers = [
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+# Der Sitzungszustand wird nicht geprüft.
+#
+# Seit „Der Sitzungszustand reist mit" (`a92b0bc`) liegen die Messskripte
+# vergangener Durchsichten im Repository, damit drei Maschinen denselben Stand
+# sehen. Es sind Wegwerfwerkzeuge — sie haben ihre Zahl geliefert und werden
+# nicht mehr angefasst. Ruff fand darin 41 Verstöße und wollte 15 Dateien
+# umformatieren; das Tor wäre damit rot gewesen, ohne dass sich an der
+# Anwendung etwas geändert hat.
+#
+# Sie mitzuformatieren wäre schlimmer als sie auszunehmen: Ein Messskript, das
+# umgeschrieben wurde, belegt seine Zahl nicht mehr. mypy trifft es nicht, das
+# läuft ohnehin nur über `files = ["app"]`.
+extend-exclude = [".claude/.state/"]
 
 [tool.ruff.lint]
 # Die sechs hinteren kamen am 14.08.2026 dazu, nachgemessen mit 13 Befunden im
