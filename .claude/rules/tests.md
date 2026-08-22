@@ -24,6 +24,7 @@ Regelwerks.
 | `test_performance.py` | Budget §31, Regressionsschwelle 25 % |
 | `test_way_one/two/three/four.py` | die vier Hauptwege Ende zu Ende |
 | `test_agent_suite.py` | was die Agentenschicht ohne Modell garantiert |
+| `test_interface_limits.py` | Oberflächengrenzen §35: höchstens neun Menüs, zwölf Zeilen je Menü, acht Umschalter, acht Felder auf der Vorderseite |
 
 Eine neue Testart bekommt eine eigene Datei; ein neues Fehlerbild wird eine
 Testdatei, kein Sonderfall im Code.
