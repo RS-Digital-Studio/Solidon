@@ -23,7 +23,7 @@ nirgends sonst; die Verkaufsversion 1.0 trägt dort `None` und zählt
 stattdessen die vierzehn Testtage. Zwei Tests halten das zusammen: einer
 schlägt an, wenn der Stichtag verstrichen ist, der andere verbietet einer
 1.x-Version überhaupt einen. Das Konzept dahinter steht in
-`.claude/konzept-demo-2026-10.md`.
+`konzepte/konzept-demo-2026-10.md`.
 
 ## Was Solidon nicht ist
 
@@ -95,6 +95,8 @@ Auf der Kommandozeile gibt `solidon3d docs --manual` denselben Text aus.
 | [3d-agent-bauplan.md](3d-agent-bauplan.md) | die Spezifikation — sagt **was** |
 | [AGENTS.md](AGENTS.md) | Repository-Regeln — sagen **wie** |
 | [ROADMAP.md](ROADMAP.md) | Arbeitsliste je Phase — sagt **was als Nächstes** |
+| [ROADMAP-ARCHIV.md](ROADMAP-ARCHIV.md) | die abgeschlossenen Abschnitte, datiert — sagt **was schon versucht wurde** |
+| [konzepte/](konzepte/README.md) | Konzepte und Durchsichten — sagen **warum**, mit den Messwerten daneben |
 
 ## Entwickeln
 

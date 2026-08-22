@@ -1242,7 +1242,7 @@ mehrdeutige Anfragen und misst, ob gefragt statt geraten wird.
 
 Diese Liste ist abschließend — was hier nicht steht, gibt es nicht. Die vier
 Werkzeuge ab `read_digest` kamen mit der Agent-Vertiefung dazu
-(`konzept-agent-vertiefung.md`); sie öffnen keinen zweiten Weg ins Dokument:
+(`konzepte/konzept-agent-vertiefung.md`); sie öffnen keinen zweiten Weg ins Dokument:
 die lesenden rechnen auf der Arbeitskopie, die schreibenden reisen als Teil
 der einen Transaktion des Vorschlags (§26.5, Regel 16).
 
@@ -1625,7 +1625,7 @@ bleibt.
 
 **Entschieden: „Solidon3D".** Der volle Name steht auf Fenstertitel, Website,
 Installer und Lizenzschlüssel; im Fließtext und in Docstrings heißt es kurz
-„Solidon". Die Begründung führt `.claude/namensentscheidung-solidon.md`.
+„Solidon". Die Begründung führt `konzepte/namensentscheidung-solidon.md`.
 
 Hier stand bis zum 08.08.2026 zusätzlich „kein ‚3D' im Namen". Das Kriterium
 war gegen einen beschreibenden Namen gerichtet und hat sich gegen zwei Dinge

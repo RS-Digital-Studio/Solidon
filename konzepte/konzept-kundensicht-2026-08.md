@@ -10,8 +10,11 @@ falsch war, steht die Korrektur dabei.
 > sind behoben, jeder mit Test
 > und am laufenden Fenster nachgemessen; die Zahlen dazu stehen im
 > [Nachtrag](#nachtrag--was-daraus-wurde-08082026-derselbe-tag) am Ende dieser
-> Datei. Offen bleibt allein 2.7, und zwar als Entscheidung: welche
-> Operationen ein Tastenkürzel verdienen, ist eine Design-Frage.
+> Datei. 2.7 stand hier bis zum 22.08.2026 als offene Design-Frage — welche
+> Operationen ein Tastenkürzel verdienen. **Sie ist entschieden:** vierzehn von
+> 86 Operationen tragen heute eines (`Ctrl+B` Bohrung, `Ctrl+H` Aushöhlen,
+> `Ctrl+D` Duplizieren, `Del`, `F2` und weitere), dazu `Alt+1` bis `Alt+8` für
+> die acht Werkzeuge. **Damit ist kein Punkt dieses Dokuments mehr offen.**
 >
 > | Befund | Stand |
 > |---|---|
@@ -24,7 +27,7 @@ falsch war, steht die Korrektur dabei.
 > | 2.4 Vorzeigebeispiel mit zwei Warnungen | behoben — `22ce4c6` |
 > | 2.5 STEP im Exportdialog | behoben |
 > | 2.6 Erstes Öffnen dauert acht Sekunden | behoben — 8,0 → 1,55 s |
-> | 2.7 Sechs von 77 mit Tastenkürzel | **offen, als Entscheidung** |
+> | 2.7 Sechs von 77 mit Tastenkürzel | entschieden — vierzehn von 86 Operationen tragen ein Kürzel, dazu `Alt+1`–`Alt+8` für die Werkzeuge (geprüft 22.08.2026) |
 >
 > Nachgereicht am selben Tag: die Karte wuchs weiterhin nicht, wenn Befunde
 > **nach** der Auswertung dazukamen — im Handbuchbild acht im Kopf gezählt,

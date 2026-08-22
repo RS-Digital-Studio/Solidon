@@ -1,6 +1,6 @@
 # Konzept: Öffentliche Demo bis 30.10.2026
 
-Stand 12.08.2026, nachrecherchiert am 19.08.2026. Baut auf `.claude/konzept-veroeffentlichung-1.0.md` auf und
+Stand 12.08.2026, nachrecherchiert am 19.08.2026. Baut auf `konzept-veroeffentlichung-1.0.md` auf und
 ändert dessen §7-Entscheidung „keine Beta-Version" — mit Begründung, siehe §2 A.
 Dieses Dokument ist die fachliche SSOT der Demo-Phase; alles, was den späteren
 Verkauf betrifft, bleibt im Veröffentlichungskonzept.

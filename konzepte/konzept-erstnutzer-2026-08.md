@@ -10,11 +10,21 @@ die sie widerlegt hat.
 Die Frage war nicht „ist es fertig", sondern: **Wer das hier zum ersten Mal
 öffnet — sieht der, was er sehen muss?**
 
-> **Stand 14.08.2026, nachrecherchiert am 19.08.2026.** Abgearbeitet, jeder
-> Fund mit Test und am laufenden Fenster nachgemessen. Am 19.08. gegen den
-> Kopfcommit `b0415d6` nachgeprüft: ein weiterer Befund ist zugegangen (5.6),
-> drei standen von Anfang an in keiner Zeile dieser Tabelle (4.4, 5.7, 5.9)
-> und sind bis heute offen. Offen bleiben damit sechs.
+> **Stand 14.08.2026, nachrecherchiert am 19.08.2026, gegen den Code geprüft am
+> 22.08.2026.** Abgearbeitet, jeder Fund mit Test und am laufenden Fenster
+> nachgemessen.
+>
+> Die Prüfung am 22.08. hat die Tabelle unten zur Hälfte umgeschrieben, und das
+> ist die Lehre dieses Dokuments: **Von den sechs Punkten, die es am 19.08. noch
+> als offen führte, waren vier längst behoben** — 2.1, 2.5, 3.4 und die drei, die
+> „von Anfang an in keiner Zeile dieser Tabelle" standen (4.4, 5.7; 4.3 ebenso).
+> Niemand hatte sie nachgezogen, weil sie in keinem Register standen und kein
+> Test sie zählte.
+>
+> **Wirklich offen sind zwei**, 3.1 und 5.9, und die stehen seit dem 22.08. im
+> Register von `ROADMAP.md`. Einer ist unentschieden (4.1) und dort bewusst
+> nicht eingetragen: Ein Punkt, von dem niemand weiß, ob er existiert, ist eine
+> Messung und keine Arbeit.
 >
 > | Befund | Stand |
 > |---|---|
@@ -33,12 +43,15 @@ Die Frage war nicht „ist es fertig", sondern: **Wer das hier zum ersten Mal
 > | 5.5 Tabulator · Objektbaum ohne Anfang | behoben — `799fce5`, `9aa7df9` |
 > | 5.6 Kürzel für die Werkzeuge | behoben — `Alt+1` bis `Alt+8` (ROADMAP.md:5592) |
 > | 5.8 Elf englische Docstrings in `app/` | behoben — `799fce5`, in `app/` jetzt null; in `tests/` stehen zwölf, die die Zählung nie erfasst hatte |
-> | **2.1 Karten nutzen die Fensterhöhe nicht** | **offen** |
-> | **2.5 Import landet im vorhandenen Körper** | **offen, als Entscheidung** |
-> | **3.1 Verteilermenüs · 3.4 Kontextmenü** | **offen, als Entscheidung** |
-> | **4.4 „plate_holes" im ersten Beispielprojekt** | **offen — stand nie in dieser Tabelle** |
-> | **5.7 Zwei Klappen, zwei Verhalten** | **offen — stand nie in dieser Tabelle; der abgeschnittene Vorschlag ist behoben** |
-> | **5.9 Zwei modale Fehlerfenster** | **offen — stand nie in dieser Tabelle** |
+> | 2.1 Karten nutzen die Fensterhöhe nicht | behoben — `ba1e455`; `_share_room` teilt die Zonenhöhe zu, festgehalten von `test_a_card_uses_the_room_a_tall_window_offers` |
+> | 2.5 Import landet im vorhandenen Körper | behoben als **Vorschlag**, nicht als Automatik — `panels.py:134` hängt *Auf das Bett setzen* an den Befund `arrange.below_bed`. §17.1 setzt bewusst nicht von selbst |
+> | 3.4 Kontextmenü | behoben — `panels.py:878`: am Merkmal die passenden Operationen flach, am ganzen Körper nach Kategorie gruppiert |
+> | 4.3 Fokus sieht aus wie Mausüberfahrt | behoben — `style.py:309`: Hover färbt die Fläche, Fokus setzt den Rahmen |
+> | 4.4 „plate_holes" im ersten Beispielprojekt | behoben — `make_examples.py:51` setzt `name="Halterung"` |
+> | 5.7 Zwei Klappen, zwei Verhalten | behoben — beide über `collapsible(…, open_now=False)`; der abgeschnittene Vorschlag durch `setWordWrap(True)` |
+> | **3.1 Erzeugen und Ändern sind reine Verteilermenüs** | **offen, als Entscheidung** — seit 22.08.2026 im Register von `ROADMAP.md` |
+> | **5.9 Zwei modale Fehlerfenster** | **offen** — `main_window.py:6376`, seit 22.08.2026 im Register |
+> | 4.1 Thema nach dem Zeichnen | **Verdacht verkleinert, nicht entschieden** — siehe den Kasten unter 4.1 selbst |
 >
 > Nicht behoben und bewusst so: **3.2** (alphabetische Sortierung der
 > Grundformen) — sie ist eine begründete Entscheidung, die
@@ -376,6 +389,49 @@ Projekt öffnen → Zeichnen ein → Zeichnen aus → helles Thema. Der Himmel w
 hell (RGB 244,246,248), die Druckplatte bleibt dunkel (37,42,49). Beim Start
 mit hellem Thema oder beim Wechseln ohne Zeichnen davor stimmt sie (167,172,175).
 Belege: `61-hell-nach-zeichnen.png` gegen `50-hell-von-anfang-an.png`.
+
+> **Nachgemessen am 22.08.2026 — der Verdacht ist kleiner geworden, der Punkt
+> bleibt offen.** Am echten Bildschirm mit lebendem Plotter und geöffnetem
+> Beispielprojekt, in genau dieser Reihenfolge:
+>
+> | | `bed` | `bed_surface` |
+> |---|---|---|
+> | Start (dunkel) | `#5a6472` | `#2a303a` |
+> | nach Zeichnen aus | `#5a6472` | `#2a303a` |
+> | nach Thema hell | `#9aa3ae` | `#bcc4ce` |
+> | Soll hell | `#9aa3ae` | `#bcc4ce` |
+>
+> **Die Farbkette folgt dem Thema** (`viewport_colours` → `_bed_colour` /
+> `_bed_surface`), auch über Zeichnen ein und aus. Offen bleibt allein, ob die
+> *gezeichnete* Ansicht nachzieht — und das ist mit einem Skript **nicht**
+> entschieden worden: Ein Zähler über die Bildpunkte des Bildschirmfotos gab
+> zuerst eine überzeugende Bestätigung des alten Befunds (258 023 Punkte nahe
+> 37,42,49). Die Kontrolle hat sie kassiert: Drei Läufe — mit Zeichnen, ohne
+> Zeichnen, und *hell von Anfang an* — lieferten **byteweise identische**
+> Zahlen. Ein Lauf, der nie dunkel war, kann den dunklen Befund nicht
+> reproduzieren; also misst der Weg über `plotter.screenshot()` das Thema
+> nicht. Es braucht ein Auge am Bildschirm, nicht noch ein Skript.
+>
+> **Ein Test dazu wird bewusst nicht gebaut, und dafür gibt es jetzt eine
+> Zahl statt einer Vermutung.** `Viewport.set_theme` steigt bei
+> `if self.plotter is None: return` aus, und `_available()` gibt auf der
+> Offscreen-Plattform absichtlich `False` zurück — VTK nähme dort den Prozess
+> mit. Gemessen über 23 Fensterdateien mit 1597 Tests, mitgeschrieben Zeile für
+> Zeile: Von den 40 Methoden des Viewports hinter dieser Wache werden **alle
+> vierzig aufgerufen, aber bei dreißig läuft der Rumpf nie** — 497 Zeilen, die
+> in keinem Test ausgeführt werden.
+>
+> Der größte davon ist ausgerechnet **`_draw_one_bed`, 79 Zeilen: die
+> Druckplatte.** Damit ist entschieden, warum 4.1 nicht mit einem Test zu
+> klären ist — die Methode, die die Platte zeichnet, läuft in der Suite kein
+> einziges Mal. Ein headless-Test prüfte die vier Zuweisungen und nie den
+> Zeichenpfad: Er sähe aus wie Abdeckung und wäre keine.
+>
+> Dass es diese Lücke gibt, steht in `.claude/rules/oberflaeche.md` an drei
+> Stellen („Offscreen gibt es keinen Plotter, und jeder Setzpfad steigt vorher
+> aus"), samt dem Mittel dagegen — einer Attrappe mit der einen benutzten
+> Methode, wie in `tests/test_cursors.py`. Neu ist nicht das Phänomen, sondern
+> **seine Größe**.
 
 **4.2 Der Port der Fernsteuerung ist immer bedienbar**, auch wenn der Haken
 „Fernsteuerung über MCP zulassen" fehlt — `settings_dialog.py:129` koppelt das

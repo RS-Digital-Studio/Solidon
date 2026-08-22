@@ -347,6 +347,12 @@ Kernaussage dieses Dokuments, und sie hat sich umgedreht: Die eine Grenze,
 Versehen". Der Satz ist seit fünf Tagen falsch und steht an einer Stelle, die
 jede Sitzung liest.
 
+> **Erledigt, geprüft am 22.08.2026.** Der Satz steht nicht mehr in `CLAUDE.md`
+> — trimesh kommt dort nur noch in der Karte vor („`geom/` Ops gegen
+> manifold3d/trimesh"). `pyproject.toml:26` fordert `trimesh>=5.0`,
+> `constraints.txt:89` nagelt `5.0.0`. Wann der Satz fiel, sagt dieses Dokument
+> nicht; dass er weg ist, ist nachgezählt.
+
 **Was der Index heute neuer anbietet** — die Tabelle in §0 war am Abend des
 14.08. leer und hat wieder drei Zeilen:
 

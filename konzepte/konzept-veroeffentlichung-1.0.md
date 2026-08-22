@@ -3,7 +3,7 @@
 > **Dieses Dokument hat einen Nachfolger, und es wusste es bis zum 19.08.2026
 > nicht.** Am 12.08.2026 ist aus dem Vierzehn-Tage-Testlauf mit Verkauf eine
 > **kostenlose öffentliche Demo bis zum 30.10.2026** geworden —
-> `.claude/konzept-demo-2026-10.md`, `ROADMAP.md:4465`. Der Kern trägt die
+> `konzept-demo-2026-10.md`, `ROADMAP.md:4465`. Der Kern trägt die
 > Änderung längst: `app/core/activation/store.py:50` führt
 > `DEMO_UNTIL = date(2026, 10, 30)`.
 >

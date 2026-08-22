@@ -153,6 +153,17 @@ ohne Prüfstufe gebaut; die Gebietsliste `AREAS` auf die acht kürzen und
 starten. Der fertige Auftragstext für eine zweite Sitzung steht in
 `AUFTRAG-ZWEITE-SITZUNG.md` daneben.
 
+> **Nachgetragen am 22.08.2026.** Dieser Punkt stand in keinem Register und
+> steht jetzt in `ROADMAP.md` unter „Die Oberflächendurchsicht, zweiter Teil".
+>
+> Dabei fiel auf, was den Punkt teurer macht als er aussieht: **Das Material,
+> das dieser Absatz nennt, ist nicht eingecheckt.** `.gitignore` schließt
+> `.claude/.state/` aus; von dort sind 31 Dateien bewusst per `git add -f`
+> aufgenommen (`716d1bb`), aber weder `AUFTRAG-ZWEITE-SITZUNG.md` noch die
+> Workflow-Skripte. In einem frischen Klon beschreibt dieser Absatz damit einen
+> nächsten Arbeitsschritt, dessen sämtliches Material fehlt. Die Entscheidung,
+> was davon ins Repository gehört, liegt vor — ausgeführt ist sie nicht.
+
 ## 6. Wie man mit den 233 Rohfunden arbeitet
 
 Zwei Messfallen haben in dieser Durchsicht je einen Fehlalarm erzeugt, und

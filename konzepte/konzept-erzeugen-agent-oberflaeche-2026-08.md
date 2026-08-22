@@ -410,8 +410,11 @@ Werkzeug ist. Zwei Sätze, kein neues Kapitel.
 > | 5. M1 und H1 | erledigt, beide weiter als vorgeschlagen (`:4688`) |
 > | 6. Linke Spalte | erledigt (`f48a7e3`) |
 >
-> **Offen ist einer, und er steht in keiner Liste:** B1 — die Frage, ob ein
+> **Offen war einer, und er stand in keiner Liste:** B1 — die Frage, ob ein
 > gehosteter Erzeugungsdienst als zweiter Weg neben ComfyUI treten soll.
+> **Am 20.08.2026 entschieden: nein**, und zwar nicht „später", sondern gar
+> nicht (siehe den Vermerk bei B1 in Teil 2). Damit ist kein Punkt dieses
+> Papiers mehr offen.
 
 Nach Wirkung, nicht nach Aufwand:
 
@@ -465,8 +468,15 @@ Werkzeuge in der Zeile → acht (sechs waren es nie) · 35 Handbuchseiten → 40
 19.578 Wörter → rund 24.900 · „88 Werkzeuge, die nirgends stehen" → 94, die
 auf einer eigenen erzeugten Handbuchseite stehen.
 
-**Offen ist genau einer:** B1, der gehostete Erzeugungsdienst als zweiter Weg.
-Er steht in keiner Arbeitsliste — weder hier noch in der ROADMAP.
+**Offen war genau einer:** B1, der gehostete Erzeugungsdienst als zweiter Weg.
+Er stand in keiner Arbeitsliste — weder hier noch in der ROADMAP.
+
+> **Berichtigt am 22.08.2026.** Dieser Satz und der gleichlautende in Teil 9
+> haben drei Tage lang „offen" behauptet, nachdem B1 am **20.08.2026 mit
+> „nein" entschieden** worden war. Der Vermerk stand beim Fund selbst; die zwei
+> Zusammenfassungen darüber und darunter sind stehen geblieben. Genau der Fall,
+> für den es eine Registerpflicht gibt: Ein Punkt, der an drei Stellen steht,
+> wird an einer geändert.
 
 **Nicht prüfbar und deshalb offen gelassen:** die ComfyUI-Messung (der Dienst
 läuft auf dieser Maschine nicht) und der Ollama-Lauf (die Gegenstelle

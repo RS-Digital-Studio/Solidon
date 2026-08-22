@@ -329,7 +329,7 @@ def test_reevaluating_from_the_cache_is_quick(profile: Profile) -> None:
 # --- Organische Modellierung (P16.2) ----------------------------------------
 #
 # Die Messungen, die über den Entwurf aus
-# `konzept-organische-modellierung-2026-08.md` entscheiden. Sie prüfen die
+# `konzepte/konzept-organische-modellierung-2026-08.md` entscheiden. Sie prüfen die
 # **Verfahren**, nicht die Operationen — die gibt es noch nicht, und genau
 # darum stehen sie hier: P16.2 darf das Vorhaben stoppen, bevor P16.5 beginnt.
 # Sobald `sculpt_strokes` existiert, wird hier auf die Op umgestellt; die

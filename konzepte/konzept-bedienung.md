@@ -1076,7 +1076,7 @@ Dokuments ist der Grund für einen davon gewesen.
 sind 520 Commits und 4251 gesammelte Tests geworden, und der Schlusssatz
 „offen bleibt der nächste Lauf" hat sich mehrfach erfüllt — es hat seither
 vier weitere Bedienläufe gegeben (`konzept-kundensicht`, `konzept-erstnutzer`,
-`konzept-durchsicht-2026-08-14`, `.claude/durchsicht-2026-08-16`).
+`konzept-durchsicht-2026-08-14`, `durchsicht-2026-08-16`).
 
 **Was trägt, ist der Abschnitt „Teilweise"** mit seinen vier Punkten — alle
 vier sind unverändert offen, siehe den Vermerk dort.
