@@ -24,7 +24,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 9
+FORMAT_VERSION: Final = 10
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +152,25 @@ def _add_feature_matches(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _add_translatable_params(data: dict[str, Any]) -> dict[str, Any]:
+    """9 → 10: Operationen vermerken, welche Parameter Message-IDs tragen (§4.1).
+
+    Bis Version 9 war ein Objektname in der Datei immer wörtlich gemeint. Ab
+    Version 10 kann eine Operation vermerken, dass einer ihrer Parameter eine
+    **Message-ID** ist — dann zeigt die Anwendung ihn in der eingestellten
+    Sprache, und die mitgelieferten Beispiele heißen für einen englischen Kunden
+    „Housing" statt „Gehäuse".
+
+    **Umzurechnen gibt es nichts, und das ist die eigentliche Aussage.** Eine
+    alte Datei hat keinen Vermerk, und keinen zu haben heißt „wörtlich" — genau
+    das, was für jede bestehende Datei richtig ist. Wer 2026 ein Objekt
+    „Halterung" genannt hat, meinte das Wort und keine Message-ID; es
+    nachträglich zu einer zu erklären, hieße seinen Namen zu übersetzen. Das ist
+    dieselbe Entscheidung wie bei ``title_translatable`` in Schritt 5 → 6.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -162,6 +181,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=6, to_version=7, apply=_keep_bores_centred),
     Step(from_version=7, to_version=8, apply=carry_over),
     Step(from_version=8, to_version=9, apply=_add_feature_matches),
+    Step(from_version=9, to_version=10, apply=_add_translatable_params),
 )
 
 

@@ -1121,3 +1121,114 @@ def test_the_matcher_answer_lands_in_the_stack_beside_seed() -> None:
     # Zweimal dasselbe schreiben ändert nichts — sonst gälte das Dokument nach
     # jeder Auswertung als geändert, ohne dass jemand etwas entschieden hat.
     assert history.record_matches({1: {"pin_1": abdruck}}) is False
+
+
+# --- Übersetzbare Parameter (§4.1, Format 10) -----------------------------------
+
+
+def test_a_marked_parameter_follows_the_language_and_the_hash_does_not() -> None:
+    """Der Kern von ``Operation.translatable``, und beide Hälften in einem Lauf.
+
+    **Die eine Hälfte ist der Gewinn:** Ein Objektname aus einem mitgelieferten
+    Beispiel heißt für einen englischen Kunden „Sphere" und nicht „Kugel".
+
+    **Die andere ist die Bedingung, unter der er zu haben ist:** Der Op-Hash
+    darf sich dabei nicht ändern. Ein Cache-Schlüssel, der von der
+    Anzeigesprache abhängt, wäre derselbe Fehler wie ein Exportdateiname, der
+    mit ihr wandert — und genau diese Befürchtung hat den Punkt seit dem
+    20.08.2026 aufgehalten. Sie trifft nicht zu, weil in ``resolved`` die
+    Message-ID stehen bleibt und nur die Fassung für den Lauf aufgelöst wird.
+    """
+    import dataclasses
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+
+    load_operations()
+    for language in ("en", "es"):
+        install_language(language)
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 20.0, "depth": 20.0, "height": 20.0, "name": "Kugel"},
+            )
+        ],
+    )
+    # Der Vermerk: „name" trägt hier eine Message-ID, keinen getippten Text.
+    project.document.ops[0] = dataclasses.replace(project.document.ops[0], translatable=("name",))
+
+    before = get_language()
+    names: dict[str, str] = {}
+    hashes: dict[str, str] = {}
+    try:
+        for language in ("de", "en", "es"):
+            set_language(language)
+            result = evaluate(
+                project.document,
+                make_profile("centauri-carbon-2", "petg"),
+                sources=ProjectSources(project),
+            )
+            entry = next(iter(result.scene.objects.values()))
+            names[language] = str(entry.name)
+            hashes[language] = next(iter(result.object_hashes.values()))
+    finally:
+        set_language(before)
+
+    assert names["de"] == "Kugel"
+    assert names["en"] == "Sphere", f"der Name folgt der Sprache: {names}"
+    assert names["es"] == "Esfera", f"und zwar in jeder: {names}"
+    assert len(set(hashes.values())) == 1, f"der Hash folgt ihr nicht: {hashes}"
+
+
+def test_an_unmarked_parameter_stays_literal() -> None:
+    """Ohne Vermerk bleibt ein Name wörtlich — der Normalfall.
+
+    Was ein Nutzer selbst getippt hat, gehört ihm und wird nie übersetzt, auch
+    wenn es zufällig wie eine Message-ID aussieht. Dieselbe Regel wie bei einem
+    selbst getippten Transaktionstitel (``title_translatable``, §4.1).
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.i18n import get_language, set_language
+    from app.i18n.catalog import install_language
+
+    load_operations()
+    install_language("en")
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [
+            OperationDraft(
+                op="create_box",
+                params={"width": 20.0, "depth": 20.0, "height": 20.0, "name": "Kugel"},
+            )
+        ],
+    )
+    assert project.document.ops[0].translatable == (), "kein Vermerk ist die Vorgabe"
+
+    before = get_language()
+    try:
+        set_language("en")
+        result = evaluate(
+            project.document,
+            make_profile("centauri-carbon-2", "petg"),
+            sources=ProjectSources(project),
+        )
+    finally:
+        set_language(before)
+
+    entry = next(iter(result.scene.objects.values()))
+    assert str(entry.name) == "Kugel", "ohne Vermerk wird nichts übersetzt"

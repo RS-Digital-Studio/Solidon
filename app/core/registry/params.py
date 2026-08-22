@@ -180,14 +180,23 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
             )
         return number
 
-    if not isinstance(value, str):
+    # **Ein übersetzbarer Text ist ein Text** (§4.1). Ein `TranslatableText`
+    # kommt dort an, wo die Operation den Parameter als Message-ID vermerkt hat
+    # (`Operation.translatable`) — er trägt seinen Übersetzungsschlüssel selbst
+    # und löst sich bei der Anzeige auf. Ihn hier abzulehnen hieße, dass ein
+    # mitgeliefertes Beispiel seinen Objektnamen nicht in der Sprache des Kunden
+    # zeigen darf; die Prüfung darunter gilt für ihn wie für jede Zeichenkette,
+    # weil `TranslatableText` sich über seine Message-ID vergleicht.
+    if isinstance(value, TranslatableText):
+        value = value if spec.kind != "enum" else str(value)
+    if not isinstance(value, TranslatableText | str):
         raise ValidationError(
             field=spec.name,
             detail=_("Hier wird ein Text erwartet."),
             value=value,
             constraint="type",
         )
-    if spec.kind == "enum" and value not in spec.choices:
+    if spec.kind == "enum" and str(value) not in spec.choices:
         raise ValidationError(
             field=spec.name,
             detail=_("Dieser Wert steht nicht zur Auswahl."),

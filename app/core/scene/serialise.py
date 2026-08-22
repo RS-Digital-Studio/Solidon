@@ -349,6 +349,10 @@ def operation_to_data(operation: Operation) -> dict[str, Any]:
     # und stellen nie eine Frage.
     if operation.matches:
         data["matches"] = {name: dict(entry) for name, entry in operation.matches.items()}
+    # Nur schreiben, wo etwas steht: Der Normalfall ist ein Name, den jemand
+    # selbst getippt hat, und der ist wörtlich gemeint.
+    if operation.translatable:
+        data["translatable"] = list(operation.translatable)
     return data
 
 
@@ -362,6 +366,7 @@ def operation_from_data(data: dict[str, Any]) -> Operation:
         solver=solver_from_data(data.get("solver")),
         seed=data.get("seed"),
         matches={name: dict(entry) for name, entry in data.get("matches", {}).items()},
+        translatable=tuple(data.get("translatable", ())),
     )
 
 

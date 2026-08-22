@@ -186,7 +186,22 @@ def evaluate(
 
         try:
             resolved = expressions.resolve_params(operation.params, values)
-            params = validate(spec.params, resolved)
+            # **Zwei Fassungen derselben Parameter, und der Unterschied ist der
+            # ganze Punkt.** ``resolved`` behält die Message-ID als schlichte
+            # Zeichenkette und geht so in den Op-Hash (§4.1) — dieselbe Datei
+            # hat damit in jeder Sprache dieselbe Prüfsumme, und ein
+            # Cache-Schlüssel hängt nie an der Anzeigesprache. ``for_run``
+            # trägt den aufgelösten Text und geht in die Operation, damit der
+            # Objektname im Baum in der Sprache des Nutzers steht.
+            #
+            # Aufgelöst wird nur, was ``operation.translatable`` nennt: Bei
+            # einem Namen, den der Nutzer selbst getippt hat, steht dort
+            # nichts, und er bleibt wörtlich.
+            for_run = dict(resolved)
+            for key in operation.translatable:
+                if for_run.get(key):
+                    for_run[key] = TranslatableText(str(for_run[key]))
+            params = validate(spec.params, for_run)
         except AppError as error:
             findings.append(_finding_from(error, operation))
             stopped_at = operation.id

@@ -988,6 +988,24 @@ class Operation:
     params: Mapping[str, Any] = field(default_factory=dict)
     solver: SolverInfo | None = None
     seed: int | None = None
+    translatable: tuple[str, ...] = ()
+    """Welche Parameter dieser Operation **Message-IDs** tragen statt Text (§4.1).
+
+    **Warum ein Vermerk und kein anderer Typ im Parameter.** In der Projektdatei
+    steht die Message-ID als schlichte Zeichenkette — genau wie bei einem
+    Transaktionstitel, wo ``title_translatable`` dasselbe tut. Damit bleibt
+    ``operation_hash`` sprachfrei, ohne dass jemand etwas dafür tun muss: Er
+    liest ``op``, ``params``, Eingangs-Hashes, Profil, Qualität und Startwert,
+    und in ``params`` steht die ID, nicht die Übersetzung. Ein Cache-Schlüssel,
+    der von der Anzeigesprache abhinge, wäre derselbe Fehler wie ein
+    Dateiname, der es tut.
+
+    **Und warum leer der Normalfall ist.** Ein Name, den ein Nutzer selbst
+    getippt hat, ist wörtlich gemeint und wird nie übersetzt. Der Vermerk steht
+    nur dort, wo der Text aus dem Code oder aus einem mitgelieferten Beispiel
+    kommt — dieselbe Unterscheidung, die ``title_translatable`` seit Format 6
+    trifft.
+    """
     matches: Mapping[FeatureId, Mapping[str, Any]] = field(default_factory=dict)
     """Antworten auf mehrdeutige Merkmalszuordnungen (§15.7, §21.3).
 
