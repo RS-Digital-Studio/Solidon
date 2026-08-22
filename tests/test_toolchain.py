@@ -424,3 +424,56 @@ def test_an_unknown_process_says_nothing_instead_of_standing_still() -> None:
 
     assert gate_lock._cpu_seconds(0) is None
     assert gate_lock.standing_still(2**30) is None
+
+
+def test_a_test_process_is_found_by_its_command_not_its_ancestry() -> None:
+    """Der Wächter findet einen Testlauf auch dann, wenn die Kette zu ihm reißt.
+
+    **Der Fall.** Am 22.08.2026 meldete der Wächter an einem belegten Tor
+    „rechnet nicht" — richtig, aber aus dem falschen Grund: Sein Baum bestand
+    aus **einem** Prozess, dem Halter selbst. Der ``pytest`` lief unter einer
+    ganz anderen Kette, weil Windows die Elternnummer nicht umsetzt, wenn der
+    Elternprozess endet. Beim nächsten Mal wäre der Lauf gesund gewesen, die
+    Warnung trotzdem gekommen, und jemand hätte ihn abgebrochen.
+
+    Dieser Test ist sein eigener Zeuge: Er läuft selbst unter ``pytest``, also
+    muss die Suche am Kommando ihn finden.
+    """
+    import os
+
+    assert os.getpid() in gate_lock._test_processes(), (
+        "der laufende pytest findet sich nicht selbst — die Suche am Kommando greift nicht"
+    )
+
+
+def test_a_named_process_is_measured_with_its_children() -> None:
+    """Wer über das Kommando gefunden wird, wird mit seinem Unterbaum gemessen.
+
+    ``subprocess.Popen`` startet auf Windows einen Wrapper, der den echten
+    Python-Prozess erst erzeugt: Der Wrapper verbraucht 0,016 Sekunden und
+    steht danach still, während sein Kind rechnet. Wer nur die gefundene
+    Nummer misst, hält **jeden** solchen Lauf für stehend — und das ist der
+    Fehlalarm, der einen gesunden Lauf kostet.
+
+    Geprüft wird in beide Richtungen: ein rechnender Prozess darf nicht als
+    stehend gelten, ein schlafender muss es.
+    """
+    import subprocess
+    import time
+
+    rechner = subprocess.Popen([sys.executable, "-c", "x = 0\nwhile True:\n    x += 1"])
+    schlaefer = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(25)"])
+    try:
+        time.sleep(1.0)
+        # Als ``extra`` übergeben und mit einer Wurzel gemessen, die selbst
+        # nichts tut — nur der Unterbaum des Genannten kann den Ausschlag geben.
+        assert gate_lock.standing_still(4, sample=1.0, extra=frozenset({rechner.pid})) is False, (
+            "ein rechnender Testprozess wird als stehend gemeldet"
+        )
+        assert gate_lock.standing_still(4, sample=1.0, extra=frozenset({schlaefer.pid})) is True, (
+            "ein schlafender Testprozess wird als rechnend gemeldet"
+        )
+    finally:
+        for prozess in (rechner, schlaefer):
+            prozess.kill()
+            prozess.wait(timeout=5)

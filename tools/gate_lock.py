@@ -199,6 +199,62 @@ def _descendants(root: int) -> set[int]:
     return baum
 
 
+def _test_processes() -> set[int]:
+    """Laufende Testprozesse, gefunden am **Kommando** statt an der Abstammung.
+
+    **Warum die Kette allein nicht reicht, und der Fall, der es gezeigt hat.**
+    Am 22.08.2026 hielt eine Sitzung das Schloss, und der Wächter meldete
+    „rechnet nicht" — richtig, aber aus dem falschen Grund: Sein Baum bestand
+    aus **einem** Prozess, dem Halter selbst. Der ``pytest`` lief unter einer
+    ganz anderen Kette, weil Windows die Elternnummer eines Prozesses nicht
+    umsetzt, wenn der Elternprozess endet; die Kette bricht dort ab, und alles
+    darunter ist über die Abstammung nicht mehr erreichbar.
+
+    Zufällig stimmte die Meldung damals. Strukturell hieße es: Ein gesunder,
+    rechnender Lauf bekäme dieselbe Warnung, und jemand bräche ihn ab — 3453
+    bestandene Tests für einen Fehlalarm. Deshalb sucht der Wächter zusätzlich
+    am Kommando: Ein Prozess, der ``pytest`` fährt, gehört zum Lauf, ganz
+    gleich, wer gerade sein Elternteil ist.
+
+    Findet die Abfrage nichts oder scheitert sie, ist das keine Aussage — der
+    Aufrufer behandelt eine leere Menge wie eine fehlende Auskunft.
+    """
+    treffer: set[int] = set()
+    if sys.platform == "win32":
+        # Über CIM, weil ``Toolhelp32`` nur den Dateinamen liefert und nicht
+        # die Kommandozeile. Der Aufruf kostet eine halbe Sekunde und läuft
+        # nur bei ``status`` und an einem belegten Tor, nie in der Warteschleife.
+        abfrage = (
+            "Get-CimInstance Win32_Process -Filter \"Name like '%python%'\" | "
+            "Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"
+        )
+        try:
+            roh = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", abfrage],
+                capture_output=True,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            daten = json.loads(roh.stdout or "[]")
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return treffer
+        if isinstance(daten, dict):
+            daten = [daten]
+        for eintrag in daten:
+            if "pytest" in str(eintrag.get("CommandLine") or ""):
+                treffer.add(int(eintrag.get("ProcessId") or 0))
+        return {pid for pid in treffer if pid > 0}
+    for eintrag in Path("/proc").glob("[0-9]*"):
+        try:
+            zeile = (eintrag / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+        except OSError:
+            continue
+        if "pytest" in zeile:
+            treffer.add(int(eintrag.name))
+    return treffer
+
+
 def _cpu_seconds(pid: int) -> float | None:
     """Verbrauchte Rechenzeit eines Prozesses, oder nichts.
 
@@ -241,13 +297,15 @@ def _cpu_seconds(pid: int) -> float | None:
         return None
 
 
-def _tree_cpu(root: int) -> float | None:
-    """Rechenzeit des ganzen Baums. ``None``, wenn kein einziger Prozess Auskunft gibt."""
-    werte = [wert for pid in _descendants(root) if (wert := _cpu_seconds(pid)) is not None]
+def _sum_cpu(pids: set[int]) -> float | None:
+    """Rechenzeit einer Prozessmenge. ``None``, wenn keiner Auskunft gibt."""
+    werte = [wert for pid in pids if (wert := _cpu_seconds(pid)) is not None]
     return sum(werte) if werte else None
 
 
-def standing_still(pid: int, sample: float = IDLE_SAMPLE_SECONDS) -> bool | None:
+def standing_still(
+    pid: int, sample: float = IDLE_SAMPLE_SECONDS, extra: frozenset[int] = frozenset()
+) -> bool | None:
     """Ob der Baum unter ``pid`` gerade **nicht** rechnet.
 
     Gemessen wird über ein Intervall und nicht als Gesamtwert: Die Gesamtzeit
@@ -255,11 +313,20 @@ def standing_still(pid: int, sample: float = IDLE_SAMPLE_SECONDS) -> bool | None
     dieser Fehler ist am 22.08.2026 einmal gemacht worden. ``None`` heißt
     „nicht messbar" und wird nie als „steht" gelesen.
     """
-    vorher = _tree_cpu(pid)
+    # **Jeder gefundene Prozess bringt seinen Unterbaum mit.** Ein
+    # ``subprocess.Popen`` startet auf Windows einen Wrapper, der den echten
+    # Python-Prozess erst erzeugt: Der Wrapper verbraucht 0,016 Sekunden und
+    # steht danach still, während sein Kind rechnet. Wer nur die gefundene
+    # Nummer misst, hält jeden solchen Lauf für stehend — gemessen am
+    # 22.08.2026, als diese Zeile noch ``| set(extra)`` hieß.
+    beobachtet = _descendants(pid)
+    for zusatz in extra:
+        beobachtet |= _descendants(zusatz)
+    vorher = _sum_cpu(beobachtet)
     if vorher is None:
         return None
     time.sleep(sample)
-    nachher = _tree_cpu(pid)
+    nachher = _sum_cpu(beobachtet)
     if nachher is None:
         return None
     # Eine Zehntelsekunde Toleranz: Ein Prozess, der nur seine eigene Uhr
@@ -279,7 +346,7 @@ def _idle_note(entry: dict[str, object]) -> str:
     age = time.time() - float(entry.get("seit") or 0.0)
     if pid <= 0 or age < IDLE_REPORT_SECONDS:
         return ""
-    if standing_still(pid) is not True:
+    if standing_still(pid, extra=frozenset(_test_processes())) is not True:
         return ""
     return (
         f"Achtung: Der Halter rechnet gerade nicht — in {IDLE_SAMPLE_SECONDS:.0f} Sekunden "
