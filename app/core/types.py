@@ -213,6 +213,28 @@ class Feature:
     params: Mapping[str, Any]
     """Durchmesser, Achse, Tiefe, Fläche … in Millimetern."""
     face_indices: tuple[int, ...] = ()
+    recognised: bool = True
+    """Ob die Erkennung dieses Merkmal an seiner Stelle **auch** findet.
+
+    **Warum das nicht dasselbe ist wie eine erkennbare Art.** Ein Baustein
+    benennt seine Bohrungen beim Bauen (§24.1); die Erkennung sieht sie nie —
+    an einer Einpressbuchse in einem Gehäuseboden findet sie null von drei.
+    Beim nächsten Schritt wurden sie trotzdem an ihr gemessen, weil ``hole``
+    in ``DETECTABLE_KINDS`` steht, fanden keinen Partner und verwaisten. Ein
+    Gewinde aus demselben Baustein reiste dagegen ungeprüft mit, weil
+    ``thread`` dort nicht steht.
+
+    Die Unterscheidung hing damit daran, ob zufällig eine *andere* Art denselben
+    Namen trägt, und nicht an der Sache. Dieses Feld beantwortet die Frage, die
+    gemeint war: nicht „ist die Art erkennbar", sondern „wurde **dieses**
+    Merkmal je erkannt".
+
+    **Die Vorgabe ist ``True``, und zwar mit Absicht:** Ein erkanntes Merkmal
+    ist per Definition erkannt, und alles, was ohne Angabe entsteht, soll sich
+    verhalten wie bisher. Abgewichen wird nur dort, wo es besser bekannt ist —
+    beim Einhängen eines erzeugten Merkmals, das die frische Erkennung an
+    seiner Stelle nicht wiederfindet.
+    """
     created_by: OpId | None = None
     """Welcher Schritt dieses Merkmal erzeugt hat — ``None`` bei erkannten.
 

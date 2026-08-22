@@ -633,6 +633,25 @@ def _with_features(
 
     detected = detect(mesh)
 
+    # **Was die Erkennung hier nicht sieht, wird später nicht an ihr gemessen.**
+    # Ein Baustein benennt seine Bohrungen beim Bauen; ``detect`` findet sie
+    # nicht — an der Dose mit Deckel eine von vier. Ohne diesen Vermerk wanderten
+    # die drei anderen beim nächsten Schritt in ``checked`` (weil ``hole`` eine
+    # erkennbare Art ist), fanden keinen Partner und verwaisten. Nicht weil sie
+    # weg waren, sondern weil sie nie da gewesen waren — gemessen von
+    # 3d-druck-3a am 23.08.2026.
+    #
+    # Gefragt wird über dieselbe Zuordnung, die auch sonst zuordnet: Wer keinen
+    # Partner findet, ist ``orphaned``. Mehrdeutig zählt als gefunden — zwei
+    # Kandidaten sind ein Kandidat zu viel, nicht keiner.
+    if declared:
+        seen = match(declared, detected, mesh.bounds.centre, mesh.bounds.diagonal)
+        blind = set(seen.orphaned)
+        declared = {
+            name: (feature if name not in blind else dataclasses.replace(feature, recognised=False))
+            for name, feature in declared.items()
+        }
+
     # Ein gedrehter Körper sieht für einen Positionsvergleich aus wie ein
     # anderer Körper. Die Operation weiß, was sie gedreht hat — also werden die
     # alten Merkmale erst mitgenommen und dann verglichen (§21.2).
@@ -659,7 +678,14 @@ def _with_features(
     # wirklich weg ist — sonst wäre aus dem lautlosen Verlust ein lautloses
     # Gespenst geworden, und das ist schlimmer: §21.3 hält die Auswertung an,
     # sobald eine späte Op auf eine ID zeigt, die nichts mehr bezeichnet.
-    checked = {name: f for name, f in carried.items() if f.kind in DETECTABLE_KINDS}
+    # ``recognised`` und nicht nur die Art: Ein Baustein bringt Bohrungen mit,
+    # die ``detect`` an ihrer Stelle nicht findet (§24.1). Sie an der Erkennung
+    # zu messen hieße, sie bei jedem Folgeschritt verwaisen zu lassen — und die
+    # Unterscheidung „Gewinde reist mit, Bohrung nicht" hinge daran, ob zufällig
+    # eine andere Art denselben Namen trägt.
+    checked = {
+        name: f for name, f in carried.items() if f.kind in DETECTABLE_KINDS and f.recognised
+    }
     # Und was sie nicht sieht, reist ungeprüft mit. Ein Gewinde ist der Fall:
     # es entsteht in einem Baustein, ``detect`` kennt die Art nicht, und geprüft
     # verlöre es jede Operation.
