@@ -313,6 +313,51 @@ def _cpu_seconds(pid: int) -> float | None:
         return None
 
 
+def _started_at(pid: int) -> float | None:
+    """Wann ein Prozess erzeugt wurde, als Unix-Zeit — oder nichts.
+
+    Gebraucht, um fremde Testläufe auszuschließen: Wer schon lief, bevor das
+    Schloss genommen wurde, gehört nicht zu seinem Halter. Ohne diese Grenze
+    zählt der Wächter jeden ``pytest`` auf der Maschine mit und schweigt,
+    solange irgendjemand rechnet — gemessen am 22.08.2026, als vier Sitzungen
+    gleichzeitig arbeiteten und er acht fremde Prozesse für den Lauf hielt,
+    den er beurteilen sollte.
+    """
+    if sys.platform == "win32":
+        import ctypes
+        import ctypes.wintypes as wt
+
+        kernel = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel.OpenProcess(0x1000, False, pid)
+        if not handle:
+            return None
+        try:
+            created, exited, kernel_time, user_time = (wt.FILETIME() for _ in range(4))
+            ok = kernel.GetProcessTimes(
+                handle,
+                ctypes.byref(created),
+                ctypes.byref(exited),
+                ctypes.byref(kernel_time),
+                ctypes.byref(user_time),
+            )
+            if not ok:
+                return None
+            #: FILETIME zählt 100-Nanosekunden-Schritte seit 1601, Unix-Zeit
+            #: Sekunden seit 1970. Dazwischen liegen 11644473600 Sekunden.
+            hundert_ns = (int(created.dwHighDateTime) << 32) + int(created.dwLowDateTime)
+            return hundert_ns / 1e7 - 11644473600.0
+        finally:
+            kernel.CloseHandle(handle)
+    try:
+        # Feld 22 ist die Startzeit in Ticks seit dem Systemstart.
+        fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
+        ticks = float(fields[19]) / os.sysconf("SC_CLK_TCK")
+        uptime = float(Path("/proc/uptime").read_text(encoding="utf-8").split()[0])
+        return time.time() - (uptime - ticks)
+    except (OSError, ValueError, IndexError):
+        return None
+
+
 def _sum_cpu(pids: set[int]) -> float | None:
     """Rechenzeit einer Prozessmenge. ``None``, wenn keiner Auskunft gibt."""
     values = [value for pid in pids if (value := _cpu_seconds(pid)) is not None]
@@ -362,7 +407,18 @@ def _idle_note(entry: dict[str, object]) -> str:
     age = time.time() - float(entry.get("seit") or 0.0)
     if pid <= 0 or age < IDLE_REPORT_SECONDS:
         return ""
-    if standing_still(pid, extra=frozenset(_test_processes())) is not True:
+    # **Nur, was nach dem Schloss begann.** Ein fremder Testlauf, der schon
+    # vorher lief, gehört nicht zu diesem Halter — zählte er mit, schwiege der
+    # Wächter, solange irgendjemand auf der Maschine rechnet. Wo die Startzeit
+    # nicht zu ermitteln ist, wird der Prozess mitgenommen: „nicht messbar"
+    # darf nie zu einer Warnung führen, die es sonst nicht gäbe.
+    began = float(entry.get("seit") or 0.0)
+    mine = frozenset(
+        candidate
+        for candidate in _test_processes()
+        if (started := _started_at(candidate)) is None or started >= began - 5.0
+    )
+    if standing_still(pid, extra=mine) is not True:
         return ""
     return (
         f"Achtung: Der Halter rechnet gerade nicht — in {IDLE_SAMPLE_SECONDS:.0f} Sekunden "
