@@ -12,6 +12,34 @@ den Absatz und nicht die Datei darunter.
 
 ---
 
+## Nachtrag vom 23.08.2026: drei von diesen Entscheidungen haben die Messung nicht überstanden
+
+Und alle drei aus demselben Grund. Sie stützten sich auf eine Zahl aus der
+Roadmap, die etwas anderes zählte, als sie zu zählen schien:
+
+| Entscheidung | die Zahl, auf die sie sich stützte | was sie wirklich war |
+|---|---|---|
+| *Erzeugen* wird flach | „Grundformen hat vier Zeilen" | die Zeilen **einer** Kategorie; die Gruppe hat achtzehn |
+| Überlaufknopf für die Skizzenzeile | „achtzehn Knöpfe" | 15 Knöpfe **und 3 Felder**; die Felder kosten das Doppelte |
+| „die Hausgrenze steht schon" | `MAX_TOOLS = 8` | gilt der Werkzeugzeile unter dem Viewport, nicht dem Editor |
+
+**Das Muster ist nicht Nachlässigkeit, sondern eine Eigenschaft von
+Zusammenfassungen.** Eine Roadmap-Zeile ist geschrieben worden, um einen
+Befund festzuhalten — nicht, um später als Rechengrundlage zu dienen. Wer sie
+als solche benutzt, übernimmt eine Zahl mitsamt einer Bedeutung, die nie
+geprüft wurde: „vier Zeilen" war richtig, „achtzehn Knöpfe" war richtig, und
+beide Male stimmte der Bezug nicht.
+
+**Die Regel, die daraus folgt, kostet Minuten und hat dreimal Stunden
+gespart:** Eine Entscheidung, die auf einer Zahl steht, misst diese Zahl
+zuerst nach — an dem, worüber sie eine Aussage macht. Nicht die Roadmap fragen,
+sondern das gebaute Fenster, das Register, den Körper.
+
+Der Beleg dafür, dass es funktioniert: Alle drei Rücknahmen kamen **vor** dem
+Bauen, keine danach. Und zwei davon fand nicht der, der entschieden hatte.
+
+---
+
 ## Von Robert selbst entschieden
 
 | Frage | Entscheidung | Stand |
@@ -35,11 +63,28 @@ den häufigsten Klick. An den Kacheln wird nicht gerührt: 96 von 112 Pixeln
 sind das Vorschaubild, und das ist die einzige Stelle, an der der
 Startbildschirm etwas **zeigt** statt beschreibt.
 
-**Die Werkzeugzeile der Skizze bekommt einen Überlaufknopf.** Achtzehn Knöpfe
-in einer Zeile sind auf einem 1366er Laptop nicht bedienbar, und die
-Hausgrenze steht schon: `test_interface_limits.py` erlaubt acht Werkzeuge. Die
-acht häufigsten bleiben, der Rest wandert darunter — welche acht, wird an
-Fusion abgelesen und nicht geraten.
+**Die Werkzeugzeile der Skizze bekommt einen Überlaufknopf — zurückgenommen
+am 23.08.2026.** Der Befund bleibt (1007 Bildpunkte Mindestbreite, auf einem
+1366er Laptop nicht bedienbar); die Begründung trägt nicht, und die Lösung
+greift am falschen Ende an. Nachgemessen am gebauten Editor mit Thema
+(3d-druck-b8):
+
+    Mindestbreite der Zeile        1007   (der Registerwert stimmt exakt)
+    Posten darin                     18   15 Knöpfe + 3 Felder
+    12 einfache Knöpfe à 37          444   45 %
+    „Grundform" (Aufklappmenü)       153   15 %
+    zwei Zahlenfelder à 163          326   33 %
+
+**Vier Knöpfe unter einen Überlaufknopf zu legen spart 148 Bildpunkte** — die
+zwei Zahlenfelder allein kosten mehr als das Doppelte. Und der Satz „die
+Hausgrenze steht schon" ist falsch: `MAX_TOOLS = 8` gilt `window.tool_strip`,
+der Werkzeugzeile **unter dem Viewport**. Für den Skizzeneditor gibt es diese
+Grenze nicht; sie müsste erst gesetzt werden.
+
+Der wirksamste Kandidat ist damit ein anderer als der entschiedene: das
+Raster-Feld, eine Dauereinstellung, die man einmal setzt und die 163 Punkte in
+einer Werkzeugzeile belegt. Die Rechnung dazu legt 3d-druck-b8 vor — an Fusion
+abgelesen, nicht geraten.
 
 **Die Menütiefe entscheidet ein Zeilenbudget, nicht die Zahl der Kategorien.**
 `MENU_GROUPS` schaut heute auf die Kategorien; die Hausgrenze ist aber eine
