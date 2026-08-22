@@ -768,6 +768,12 @@ class MainWindow(QMainWindow):
         """Der Agentenzug, der auf eine Entscheidung wartet (§26.5)."""
         self._manual: ManualWindow | None = None
         """Das Handbuchfenster, einmal gebaut und danach wiederverwendet."""
+        self._crash_dialog: SupportDialog | None = None
+        """Der offene Fehlerbericht, solange einer offen ist (§2.7).
+
+        Ein zweiter Programmfehler wird an ihn angehängt, statt ein zweites
+        modales Fenster darüber zu stellen — siehe :meth:`report_error`.
+        """
         self._settings_dialog: PrintSettingsDialog | None = None
         """Der offene Druckeinstellungen-Dialog, solange er offen ist (§29).
         Die nachgereichte Schichtanalyse findet über ihn ihren Weg — nach
@@ -5955,6 +5961,9 @@ class MainWindow(QMainWindow):
             "place_on_bed": self._place_on_bed_after_error,
             "arrange_on_bed": self._arrange_after_error,
             "correct_input": self._correct_after_error,
+            # Die andere Hälfte davon: Wo nicht ein Wert, sondern die
+            # Auswahl nicht geht, hilft kein Dialog (§15.4).
+            "change_selection": self._change_selection_after_error,
             # **Die dritte Bauraum-Handlung.** Teilen und Verkleinern wurden
             # nachgezogen, als der Prüfbericht seine Handlungen bekam; „anderes
             # Druckerprofil" blieb liegen, weil ihr Weg fehlte — der Drucker
@@ -6061,6 +6070,33 @@ class MainWindow(QMainWindow):
         object_id = self._object_of(error)
         if object_id is not None:
             self.action_auto_split(object_id)
+
+    def _change_selection_after_error(self, error: AppError) -> None:
+        """Einem Schritt andere Objekte geben — im Objektbaum, nicht im Dialog.
+
+        **Der zweite Fall von „Eingabe korrigieren", und er ist kein Wert.**
+        Wo ein *Parameter* nicht geht, öffnet ``edit_operation`` den Schritt mit
+        dem Cursor im genannten Feld. Wo die *Auswahl* nicht geht, gibt es
+        nichts aufzuklappen: ``field="in"`` ist keine Zeile im Formular, und ein
+        Dialog darauf zeigte auf ein Feld, das es nicht gibt.
+
+        Also der Weg, den der Nutzer ohnehin kennt — im Objektbaum markieren.
+        Steht dort schon eine Auswahl, wird sie genommen; steht keine, sagt die
+        Statuszeile, was fehlt, statt einen Dialog aufzumachen (Regel 19: die
+        Handlung ist rücknehmbar, sie braucht keine Rückfrage).
+
+        Der Schritt wird **ersetzt** und nicht verdoppelt (§15.4) — dieselbe
+        Zusicherung wie beim Ändern eines Parameters.
+        """
+        if error.op_id is None:
+            return
+        chosen = self.object_tree.selected_objects()
+        if not chosen:
+            self.announce(
+                tr("Markieren Sie die Objekte im Objektbaum und wählen Sie die Handlung erneut.")
+            )
+            return
+        self.session.change_inputs(error.op_id, list(chosen))
 
     def _correct_after_error(self, error: AppError) -> None:
         """Den Schritt wieder öffnen, dessen Werte nicht gingen (§2.7, §2.1).
@@ -6449,13 +6485,29 @@ class MainWindow(QMainWindow):
         Das Bildschirmfoto entsteht **vor** dem Dialog: eine Sekunde später
         zeigte es den Fehlerdialog statt dessen, was darunter schiefging.
         """
-        dialog = self._support_dialog(
-            KIND_CRASH,
-            detail="\n".join(
-                filter(None, (summary, str(error), "".join(traceback.format_exception(error))))
-            ),
+        text = "\n".join(
+            filter(None, (summary, str(error), "".join(traceback.format_exception(error))))
         )
-        dialog.exec()
+        # **Zwei Fehler, ein Bericht.** Zwei modale Fenster übereinander heißen
+        # zweimal wegklicken, und der zweite Fehler ist oft der eigentliche —
+        # der erste ist die Folge, die zuerst auffällt. Der offene Bericht nimmt
+        # ihn auf und tritt nach vorn.
+        #
+        # Das Bildschirmfoto bleibt dabei das des ersten Fehlers, und das ist
+        # keine Sparsamkeit: Es entsteht **vor** dem Dialog, damit es zeigt, was
+        # darunter schiefging. Beim zweiten steht der Bericht schon offen — ein
+        # neues Foto zeigte ihn selbst.
+        if self._crash_dialog is not None:
+            self._crash_dialog.add_crash(text)
+            self._crash_dialog.raise_()
+            self._crash_dialog.activateWindow()
+            return
+        dialog = self._support_dialog(KIND_CRASH, detail=text)
+        self._crash_dialog = dialog
+        try:
+            dialog.exec()
+        finally:
+            self._crash_dialog = None
         self._remember_contact(dialog)
 
     def _support_dialog(self, kind: str, detail: str = "") -> SupportDialog:

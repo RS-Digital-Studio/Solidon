@@ -644,6 +644,23 @@ class Session(QObject):
         self.projectChanged.emit()
         self.evaluate_async()
 
+    def change_inputs(self, op_id: int, inputs: list[str]) -> None:
+        """Andere Objekte für einen Schritt, der schon im Stapel steht (§15.4).
+
+        Derselbe Weg wie :meth:`change_params`, nur für die andere Hälfte einer
+        Operation: Was sie *tut*, steht in den Parametern; woran sie es tut, in
+        den Eingängen. Für das eine öffnet der Dialog, für das andere gibt es
+        nichts aufzuklappen — man wählt im Objektbaum.
+        """
+        try:
+            self.history.change_inputs(op_id, inputs)
+        except AppError as error:
+            self.failed.emit(error)
+            return
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+
     def change_kernel(self, op_id: int, op_name: str, params: dict[str, Any]) -> None:
         """Denselben Schritt im anderen Rechenkern (§15.4, ``MENU_TWINS``).
 

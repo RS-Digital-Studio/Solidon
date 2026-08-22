@@ -37,6 +37,14 @@ RETRY = Action("retry", _("Erneut versuchen"), primary=True)
 SHOW_DETAILS = Action("show_details", _("Details anzeigen"))
 CORRECT_INPUT = Action("correct_input", _("Eingabe korrigieren"), primary=True)
 CHOOSE = Action("choose", _("Auswählen"), primary=True)
+#: Andere Objekte für einen Schritt wählen — im Objektbaum, nicht im Dialog.
+#:
+#: **Der zweite Fall von „Eingabe korrigieren", und er braucht eine eigene
+#: Handlung.** Wo ein Parameter nicht geht, öffnet der Dialog des Schritts;
+#: wo die *Auswahl* nicht geht, gibt es nichts aufzuklappen — ``field="in"``
+#: ist keine Zeile im Formular. Ein Knopf, der den Dialog öffnete, zeigte auf
+#: ein Feld, das es nicht gibt.
+CHANGE_SELECTION = Action("change_selection", _("Andere Objekte wählen"), primary=True)
 REPAIR_AND_RETRY = Action("repair_and_retry", _("Reparieren und erneut versuchen"), primary=True)
 SHOW_LOCATIONS = Action("show_locations", _("Stellen zeigen"))
 USE_VOXEL_STAGE = Action("use_voxel_stage", _("Voxelstufe erzwingen"))

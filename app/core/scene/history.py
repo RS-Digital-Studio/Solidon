@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 from app.core import activation
-from app.core.errors import CANCEL, CHOOSE, ValidationError
+from app.core.errors import CANCEL, CHANGE_SELECTION, ValidationError
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, VARIABLE, Registry
 from app.core.scene import expressions
@@ -282,7 +282,11 @@ class History:
                 detail=_("Die Operation verweist auf ein Objekt, das es nicht gibt."),
                 constraint="unknown_object",
                 values={"op": draft.op, "missing": missing},
-                suggestions=(CHOOSE, CANCEL),
+                # `choose` ist bewusst nicht verdrahtet — der Kern fragt dafür
+                # über `ctx.ask`, bevor er wirft. Hier wirft er vorher, also
+                # blieb der Vorschlag ein Satz. Die Auswahl ändert man im
+                # Objektbaum, und dafür gibt es jetzt einen Knopf.
+                suggestions=(CHANGE_SELECTION, CANCEL),
             )
         if spec.consumes and len(draft.inputs) != spec.consumes:
             raise ValidationError(
@@ -290,6 +294,10 @@ class History:
                 detail=_("Die Operation erwartet eine andere Anzahl an Objekten."),
                 constraint="consumes",
                 values={"op": draft.op, "expected": spec.consumes, "given": len(draft.inputs)},
+                # Ohne eigene Vorschläge erbt die Ausnahme `(CORRECT_INPUT,
+                # CANCEL)` — und *Eingabe korrigieren* öffnete einen Dialog auf
+                # `field="in"`, also auf eine Zeile, die es nicht gibt.
+                suggestions=(CHANGE_SELECTION, CANCEL),
             )
         # §11.3: eine randomisierte Prozedur führt einen gespeicherten
         # Startwert. Wo der Aufrufer keinen mitbringt, wird hier einer gezogen —
@@ -454,6 +462,56 @@ class History:
         changed = dataclasses.replace(entry, params=dict(merged), outputs=tuple(outputs))
         self.document.ops[self.document.ops.index(entry)] = changed
         _log.info("changed parameters of op %s (%s)", op_id, entry.op)
+        return changed
+
+    def change_inputs(self, op_id: OpId, inputs: Sequence[ObjectId]) -> Operation:
+        """Gibt einem Schritt andere Objekte, auf denen er arbeitet (§15.4).
+
+        **Der zweite Fall von „Eingabe korrigieren", und er ist kein Wert.**
+        Eine Operation, deren *Parameter* nicht gehen, öffnet ihren Dialog; eine,
+        die auf den falschen oder auf gar keinen Körper zeigt, hat nichts
+        aufzuklappen — ``field="in"`` ist keine Zeile im Formular. Was hilft,
+        ist eine andere Auswahl, und die trifft man im Objektbaum und nicht in
+        einem Dialog.
+
+        Ersetzt wird der Schritt, statt einen zweiten anzulegen: dieselbe
+        Zusicherung wie bei :meth:`change_params` und
+        :meth:`change_kernel` — jeder Wert bleibt nachträglich änderbar, und der
+        Verlauf wächst dabei nicht.
+
+        Geprüft wird beides, was schiefgehen kann: dass die Objekte überhaupt da
+        sind, und dass es so viele sind, wie die Operation nimmt. Beide Fälle
+        werfen dieselbe Ausnahme wie beim Anlegen, damit die Oberfläche sie
+        nicht zweimal verstehen muss.
+        """
+        entry = self.operation(op_id)
+        spec = self._registry.get(entry.op)
+        # Die Objekte am Ende des Stapels: genau das, was der Nutzer im
+        # Objektbaum vor sich hat, wenn er die Auswahl ändert.
+        known = self._known_objects()
+        missing = [name for name in inputs if name not in known]
+        if missing:
+            raise ValidationError(
+                title=_("Der gewählte Körper ist nicht mehr da."),
+                field="in",
+                detail=_("Die Operation verweist auf ein Objekt, das es nicht gibt."),
+                constraint="unknown_object",
+                values={"op": entry.op, "missing": missing},
+                suggestions=(CHANGE_SELECTION, CANCEL),
+            )
+        if spec.consumes and len(inputs) != spec.consumes:
+            raise ValidationError(
+                field="in",
+                detail=_("Die Operation erwartet eine andere Anzahl an Objekten."),
+                constraint="consumes",
+                values={"op": entry.op, "expected": spec.consumes, "given": len(inputs)},
+                suggestions=(CHANGE_SELECTION, CANCEL),
+            )
+
+        self._forget_undone()
+        changed = dataclasses.replace(entry, inputs=tuple(inputs))
+        self.document.ops[self.document.ops.index(entry)] = changed
+        _log.info("changed inputs of op %s (%s) to %s", op_id, entry.op, list(inputs))
         return changed
 
     def change_kernel(self, op_id: OpId, op_name: str, params: Mapping[str, Any]) -> Operation:

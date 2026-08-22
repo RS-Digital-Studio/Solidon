@@ -38,6 +38,7 @@ from app.core import drawing
 from app.core.drawing import Theme as DrawingTheme
 from app.core.errors import (
     ARRANGE_ON_BED,
+    CHANGE_SELECTION,
     CHOOSE_PRINTER,
     CORRECT_INPUT,
     PLACE_ON_BED,
@@ -156,6 +157,14 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Vereinfachen einer Ente — geschlossen hinein, offen heraus, und im
     # Bericht stand nur, dass sich die Fläche kaum verschoben hat.
     "mesh.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+    # **Drei Befunde über die Auswahl, und keiner hatte ein Menü.** Sie
+    # tragen alle ihre Schrittkennung, und was hilft, ist dasselbe: andere
+    # Objekte wählen. *Eingabe korrigieren* wäre hier nicht nur
+    # unverdrahtet, sondern falsch — `field="in"` ist keine Zeile im
+    # Formular, und der Dialog öffnete sich auf ein Feld, das es nicht gibt.
+    "evaluate.missing_input": (CHANGE_SELECTION,),
+    "evaluate.too_few_inputs": (CHANGE_SELECTION,),
+    "evaluate.object_count": (CHANGE_SELECTION,),
 }
 
 #: Kennungen der Befunde, die aus einer Ausnahme einer Operation entstanden
