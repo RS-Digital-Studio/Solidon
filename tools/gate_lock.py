@@ -164,7 +164,7 @@ def _descendants(root: int) -> set[int]:
     Zwischenprozess, der inzwischen beendet war. Wer nur die erste Ebene
     zählt, misst etwas, das neben der Sache steht.
     """
-    eltern: dict[int, int] = {}
+    parents: dict[int, int] = {}
     if sys.platform == "win32":
         import ctypes
         import ctypes.wintypes as wt
@@ -192,27 +192,27 @@ def _descendants(root: int) -> set[int]:
             entry.dwSize = ctypes.sizeof(_Entry)
             weiter = kernel.Process32First(snapshot, ctypes.byref(entry))
             while weiter:
-                eltern[int(entry.th32ProcessID)] = int(entry.th32ParentProcessID)
+                parents[int(entry.th32ProcessID)] = int(entry.th32ParentProcessID)
                 weiter = kernel.Process32Next(snapshot, ctypes.byref(entry))
         finally:
             kernel.CloseHandle(snapshot)
     else:
         for eintrag in Path("/proc").glob("[0-9]*"):
             try:
-                felder = (eintrag / "stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
-                eltern[int(eintrag.name)] = int(felder[1])
+                fields = (eintrag / "stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
+                parents[int(eintrag.name)] = int(fields[1])
             except (OSError, ValueError, IndexError):
                 continue
 
-    baum = {root}
+    tree = {root}
     # Mehrfach durchlaufen: Die Liste steht in beliebiger Reihenfolge, ein Kind
     # kann vor seinem Elternteil kommen.
-    for _ in range(len(eltern) + 1):
-        gewachsen = {kind for kind, vater in eltern.items() if vater in baum}
-        if gewachsen <= baum:
+    for _ in range(len(parents) + 1):
+        grown = {kind for kind, vater in parents.items() if vater in tree}
+        if grown <= tree:
             break
-        baum |= gewachsen
-    return baum
+        tree |= grown
+    return tree
 
 
 def _test_processes() -> set[int]:
@@ -235,40 +235,40 @@ def _test_processes() -> set[int]:
     Findet die Abfrage nichts oder scheitert sie, ist das keine Aussage — der
     Aufrufer behandelt eine leere Menge wie eine fehlende Auskunft.
     """
-    treffer: set[int] = set()
+    found: set[int] = set()
     if sys.platform == "win32":
         # Über CIM, weil ``Toolhelp32`` nur den Dateinamen liefert und nicht
         # die Kommandozeile. Der Aufruf kostet eine halbe Sekunde und läuft
         # nur bei ``status`` und an einem belegten Tor, nie in der Warteschleife.
-        abfrage = (
+        query = (
             "Get-CimInstance Win32_Process -Filter \"Name like '%python%'\" | "
             "Select-Object ProcessId,CommandLine | ConvertTo-Json -Compress"
         )
         try:
-            roh = subprocess.run(
-                ["powershell", "-NoProfile", "-Command", abfrage],
+            raw = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", query],
                 capture_output=True,
                 text=True,
                 timeout=20,
                 check=False,
             )
-            daten = json.loads(roh.stdout or "[]")
+            data = json.loads(raw.stdout or "[]")
         except (OSError, ValueError, subprocess.SubprocessError):
-            return treffer
-        if isinstance(daten, dict):
-            daten = [daten]
-        for eintrag in daten:
+            return found
+        if isinstance(data, dict):
+            data = [data]
+        for eintrag in data:
             if "pytest" in str(eintrag.get("CommandLine") or ""):
-                treffer.add(int(eintrag.get("ProcessId") or 0))
-        return {pid for pid in treffer if pid > 0}
+                found.add(int(eintrag.get("ProcessId") or 0))
+        return {pid for pid in found if pid > 0}
     for eintrag in Path("/proc").glob("[0-9]*"):
         try:
-            zeile = (eintrag / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            line = (eintrag / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
         except OSError:
             continue
-        if "pytest" in zeile:
-            treffer.add(int(eintrag.name))
-    return treffer
+        if "pytest" in line:
+            found.add(int(eintrag.name))
+    return found
 
 
 def _cpu_seconds(pid: int) -> float | None:
@@ -287,27 +287,27 @@ def _cpu_seconds(pid: int) -> float | None:
         if not handle:
             return None
         try:
-            erzeugt, beendet, kern, nutzer = (wt.FILETIME() for _ in range(4))
+            created, exited, kernel_time, user_time = (wt.FILETIME() for _ in range(4))
             ok = kernel.GetProcessTimes(
                 handle,
-                ctypes.byref(erzeugt),
-                ctypes.byref(beendet),
-                ctypes.byref(kern),
-                ctypes.byref(nutzer),
+                ctypes.byref(created),
+                ctypes.byref(exited),
+                ctypes.byref(kernel_time),
+                ctypes.byref(user_time),
             )
             if not ok:
                 return None
 
             # FILETIME zählt in 100-Nanosekunden-Schritten.
-            def _als_sekunden(wert: wt.FILETIME) -> float:
-                return ((int(wert.dwHighDateTime) << 32) + int(wert.dwLowDateTime)) / 1e7
+            def _as_seconds(value: wt.FILETIME) -> float:
+                return ((int(value.dwHighDateTime) << 32) + int(value.dwLowDateTime)) / 1e7
 
-            return _als_sekunden(kern) + _als_sekunden(nutzer)
+            return _as_seconds(kernel_time) + _as_seconds(user_time)
         finally:
             kernel.CloseHandle(handle)
     try:
-        felder = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
-        ticks = float(felder[11]) + float(felder[12])
+        fields = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
+        ticks = float(fields[11]) + float(fields[12])
         return ticks / os.sysconf("SC_CLK_TCK")
     except (OSError, ValueError, IndexError):
         return None
@@ -315,8 +315,8 @@ def _cpu_seconds(pid: int) -> float | None:
 
 def _sum_cpu(pids: set[int]) -> float | None:
     """Rechenzeit einer Prozessmenge. ``None``, wenn keiner Auskunft gibt."""
-    werte = [wert for pid in pids if (wert := _cpu_seconds(pid)) is not None]
-    return sum(werte) if werte else None
+    values = [value for pid in pids if (value := _cpu_seconds(pid)) is not None]
+    return sum(values) if values else None
 
 
 def standing_still(
@@ -335,19 +335,19 @@ def standing_still(
     # steht danach still, während sein Kind rechnet. Wer nur die gefundene
     # Nummer misst, hält jeden solchen Lauf für stehend — gemessen am
     # 22.08.2026, als diese Zeile noch ``| set(extra)`` hieß.
-    beobachtet = _descendants(pid)
-    for zusatz in extra:
-        beobachtet |= _descendants(zusatz)
-    vorher = _sum_cpu(beobachtet)
-    if vorher is None:
+    watched = _descendants(pid)
+    for extra_pid in extra:
+        watched |= _descendants(extra_pid)
+    before = _sum_cpu(watched)
+    if before is None:
         return None
     time.sleep(sample)
-    nachher = _sum_cpu(beobachtet)
-    if nachher is None:
+    after = _sum_cpu(watched)
+    if after is None:
         return None
     # Eine Zehntelsekunde Toleranz: Ein Prozess, der nur seine eigene Uhr
     # liest, ist kein rechnender Testlauf.
-    return (nachher - vorher) < 0.1
+    return (after - before) < 0.1
 
 
 def _idle_note(entry: dict[str, object]) -> str:
