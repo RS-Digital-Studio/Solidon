@@ -103,7 +103,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Der Rückstand sieht einen falschen Zylinder nicht | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, warum derselbe Wächter beim Torus greift und beim Zylinder nicht — 0,0313 Rückstand bei einem Radius, der um das Fünffache danebenliegt |
-| Bausteinmerkmale verwaisen beim ersten Folgeschritt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Unterscheidung in `_with_features`: `checked` fragt, ob die **Art** erkennbar ist, und müsste fragen, ob **dieses** Merkmal je erkannt wurde. Bausteinbohrungen sieht die Erkennung nie — sie verwaisen deshalb beim ersten Folgeschritt, und drei von vier werden gemeldet. Ursache gemessen von 3d-druck-3a |
 | Kein Test prüft, womit ein Beispiel den Kunden begrüßt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Prüfung über die Befunde beim Öffnen, mit einer Liste der erwarteten statt einer Schwelle von null — `SETTLED_BY` gibt es schon, die Prüfung nicht |
 | Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
@@ -3943,8 +3942,9 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       Wirkung — der erste würde auch grün, wenn zwei Läufe zufällig in dieselbe
       Sekunde fielen, und an einer schnellen Maschine tun sie das fast immer.
 
-- [ ] **Bausteinmerkmale verwaisen beim ersten Folgeschritt, weil die
-      Erkennung sie nie gesehen hat.** Gemessen an „Dose mit Deckel", dem
+- [x] **Bausteinmerkmale verwaisen beim ersten Folgeschritt, weil die
+      Erkennung sie nie gesehen hat — behoben am 23.08.2026 in zwei Schritten
+      (`d28f145`, `94650dc`).** Gemessen an „Dose mit Deckel", dem
       eigenen Vorzeigebeispiel — fünf von neun Beispielen begrüßen deshalb mit
       einer Warnung.
 
@@ -4006,12 +4006,42 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       reisen mit. Beim nächsten Schritt konkurrieren sie um dasselbe neue
       Merkmal, und das benannte verliert.
 
-      Damit ist die Frage nicht „warum fehlt der Befund", sondern **„warum
-      trägt eine Bohrung zwei Namen"**. Ein Befund an dieser Stelle wäre sogar
-      falsch: Das Merkmal ist nicht fort, es steht als `hole_1` daneben. Zu
-      entscheiden ist, ob die Erkennung ein Merkmal überspringen soll, das an
-      derselben Stelle schon einen Namen hat — oder ob das Benannte beim
-      Zuordnen Vorrang bekommt.
+      Damit war die Frage nicht „warum fehlt der Befund", sondern **„warum
+      trägt eine Bohrung zwei Namen"** — ein Befund wäre an dieser Stelle sogar
+      falsch gewesen: Das Merkmal ist nicht fort, es steht als `hole_1` daneben.
+
+      **Entschieden und gebaut am 23.08.2026 (`94650dc`):** Die Erkennung
+      überspringt ein Merkmal, das an derselben Stelle schon einen Namen trägt.
+      Gemessen über drei Beispiele trug in zweien jedes zweite bis dritte
+      benannte Merkmal einen solchen Zwilling (4 von 13, 3 von 4) — nach dem
+      Fix keines mehr.
+
+      **Gefiltert wird gegen `declared` und ausdrücklich nicht gegen
+      `carried`, und dieser Unterschied ist der Kern:** Dieselbe Zuordnung,
+      dasselbe Ergebnis, zwei Bedeutungen —
+
+          aus declared   zusätzlich in der Szene   -> ein Zwilling, filtern
+          aus carried    derselbe, neu erkannt     -> sein Nachfolger, filtern wäre falsch
+
+      Ein Filter gegen `carried` hätte die Partner entfernt, an denen die
+      benannten Merkmale hängen: dasselbe Symptom mit umgekehrtem Vorzeichen.
+      3d-druck-3a hat ihren eigenen Vorschlag daraufhin zurückgenommen und den
+      Satz dazu geliefert: *„Ich habe `match(previous, detected)` als
+      Zwillingssuche gelesen, wo es eine Nachfolgersuche ist."*
+
+      **Nur eindeutige Paare** — `ambiguous` bleibt draußen, denn bei einem
+      Gleichstand weiß niemand, welches erkannte Merkmal das benannte meint,
+      und dann sind zwei Namen besser als ein falsch gelöschter.
+
+      **Die Bilanz über die neun Beispiele:**
+
+          zu Beginn        elf Warnungen, fünf von neun Beispielen
+          nach recognised  sechs,         vier von neun
+          nach diesem Fix  drei,          drei von neun
+
+      Zwei der drei haben recht (die Deckfläche beim Aushöhlen, das Kleinstteil
+      in Weg 3, das die Reparatur vorführt). Übrig bleibt `nut_trap_bore_1` im
+      Gehäuseboden.
 
       Warum es mehr ist als eine Warnung zu viel: Passungen suchen ihr
       Gegenstück über benannte Merkmale (§14). Ein Beispiel, das eine
