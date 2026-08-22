@@ -5334,6 +5334,42 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       mit vollem Pfad aus dem Hauptbaum gerufen werden (gemessen am 22.08., die
       Suite läuft so).
 
+      **In der Nacht zum 23.08.2026 ist der Punkt entscheidungsreif geworden:
+      drei Fälle in einer Nacht, jeder mit einer anderen Gestalt.**
+
+      1. **Im Prüfling.** 27 rote Tests über zwölf Dateien, alle mit derselben
+         Zeile — `ImportError: cannot import name 'pair_radii'`. `maps.py` trug
+         den Import seit 20:36, `features.py` bekam die Funktion um 00:02:47.
+         Ein Torlauf fiel genau in die Lücke. (Ursache war ein Aufräum-Skript,
+         das beim Entfernen zweier verwaister Konstanten fünf Funktionen
+         mitgelöscht hatte.)
+      2. **Im Prüfwerkzeug.** Ein Lauf starb an einem Syntaxfehler in
+         `suite-getrennt.sh:123` — an einer Zeile, die dort in Ordnung stand
+         (`bash -n` sagte „ok"). **Bash liest ein Skript zeilenweise nach und
+         merkt sich die Byte-Position;** wird die Datei während des Laufs
+         geändert, liest der laufende Prozess an der alten Position in der
+         neuen Datei weiter. Behoben in `a5788cc`: Das Skript kopiert sich
+         beim Start in den Temp-Ordner und fährt die Kopie.
+      3. **In der Prüfkonfiguration.** `mypy <einzeldatei>` meldete vierzehn
+         Fehler, `mypy` ohne Argument — der Aufruf des Tors — null über 214
+         Dateien.
+
+      **Und eine Blockade, die keine der drei Gestalten hat und trotzdem
+      dazugehört:** 3d-druck-33 hielt vierzig Zeilen an `.claude/rules/tests.md`
+      zurück, um beim Merge von `b8/nach-main` keinen Konflikt zu erzeugen —
+      und genau das verhinderte den Merge, weil Git eine offen geänderte Datei
+      nicht überschreibt. **Zwei richtige Gründe, die sich gegenseitig
+      aufhoben.** Aufgelöst, indem sie zuerst committete (`a6e786a`): Der
+      Konflikt gehört in den Merge, wo beide Texte nebeneinander stehen, nicht
+      in das Warten davor.
+
+      **Der Weg dorthin steht bereits als Werkzeug** — `tools/nach_main.py` von
+      3d-druck-b8 (auf `b8/nach-main`): eigener Branch je Sitzung, `origin/main`
+      einweben, Tor unter dem Schloss, und **nur bei grün** nach `main`
+      vorspulen. Nie mit `--force`, nie auf `main` committen, nie einen roten
+      Lauf durchwinken, nie eine Konfliktauflösung erfinden. Der Satz oben über
+      den falschen Erfolg stammt aus seinem Docstring.
+
       **Dieselbe Ursache beim Lesen statt beim Laufen:** `git diff` vergleicht
       gegen den **Index**, und im geteilten Baum liegen dort die Zwischenstände
       der anderen Sitzungen — ein Katalog-Diff zeigte fünf fremde Zeilen, die
