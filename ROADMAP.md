@@ -74,8 +74,10 @@ oder er hält ihn nicht fest.
 | Die Zuordnung kennt Kugel und Torus nicht | Das Fundament der Wahrnehmung (22.08.2026) | zwei Arten mehr in der Kostenmatrix von §21.2, dazu Namen in der Oberfläche. Eine Art, die erkannt aber nicht zugeordnet wird, ist ein halber Zustand — dieselbe Konsistenzfrage wie bei den Übersetzungskatalogen, und beim Schneiden des Auftrags zunächst übersehen |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
+| Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
 | Der Testkorpus hat keinen verrundeten Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Datei mit Kehle. Ein Regressionsnetz, das die Alltagsformen ausspart, meldet Erfolg über dem, was es nicht enthält (§34) |
+| In `parts/` ist der Nichtanschluss ein Rückfall | Das Fundament der Wahrnehmung (22.08.2026) | einen Aufrufer für `travelling_parts()` oder die Feststellung, dass es sie nicht braucht — und die Testart „Anschluss" aus §35, denn derselbe Fehler ist in derselben Datei schon einmal gefunden und behoben worden |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Ein Test steht zwölf Minuten still, ohne zu rechnen | Das Fundament der Wahrnehmung (22.08.2026) | einen Python-Stapel aus dem stehenden Prozess, also `py-spy` — das steht nicht in `constraints.txt`, und ein Werkzeug ungefragt in die Umgebung zu holen entscheidet Robert. Vierte Absturzsignatur, und die einzige, die steht statt abzustürzen |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
@@ -4597,6 +4599,31 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       schickt den Kunden nicht mehr mit seinem achten Punkt ins Handbuch, wo
       nichts stand.
 
+- [ ] **Die Krümmungskarte misst das Netz und nicht den Körper.**
+      `curvature_map` (`app/core/perceive/maps.py`) ist gebaut, registriert und
+      hat Titel, Einheit und Legende — sie misst aber `face_adjacency_angles`
+      in **Grad**. Ihr eigener Docstring nennt die Folge: „Kanten stechen
+      hervor, **Verrundungen bleiben glatt**." Damit ist eine Verrundung per
+      Konstruktion unsichtbar, denn ein kleiner Winkel je Facette ist ihr
+      Zweck — und schlimmer: Je feiner sie vernetzt ist, desto glatter sieht
+      sie aus, obwohl der Radius derselbe bleibt. **Eine Karte, deren Aussage
+      von der Vernetzungsdichte abhängt, misst das Netz.**
+
+      Der Fix ist eine Division: Winkel geteilt durch Kantenlänge ist die
+      Krümmung, ihr Kehrwert der Radius. Gemessen an einem Kehlkörper trennt
+      das sauber — 0,33 → 3,03 mm (Kehle, echt 3,0), 0,16 → 6,25 mm (Säule,
+      echt 6,0), 0,11 → 9,09 mm (Ringradius, echt 9,0), 0,00 für die ebenen
+      Anteile; drei Gruppen zu je 192 Kanten und eine zu 1546. Bauart,
+      Registrierung und Anbindung der Karte bleiben.
+
+      **Entschieden (22.08.2026): Krümmung als Wert, Radius in Legende und
+      Beschriftung.** Der Radius ist das, wonach gefragt wird, taugt aber nicht
+      als Skala — eine Ebene hat Radius unendlich. Die Krümmung hat die Ebene
+      bei 0 und die scharfe Kante am oberen Ende; dass der Nutzer trotzdem
+      Millimeter liest, ist die Trennung zwischen dem, was gerechnet wird, und
+      dem, was dasteht (§18.4: „Immer mit Legende und Zahlenbereich").
+      Gefunden von 3d-druck-3a.
+
 - [ ] **An einer Säule mit verrundetem Fuß erkennt die Wahrnehmung keinen
       Zylinder.** Gemessen am 22.08.2026 an einem echten Kehlkörper (Säule Ø12
       auf Platte, Kehle R=3, wasserdicht, 2704 Dreiecke): sieben Flächen und
@@ -4624,6 +4651,25 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       genau die Alltagsformen ausspart, meldet Erfolg über dem, was es nicht
       enthält.
 
+- [ ] **In `parts/` ist der Nichtanschluss ein Rückfall, kein Einzelfall.**
+      `tests/test_parts_catalog.py` schließt mit einem Test, dessen Docstring
+      lautet: „§24.5 stand nur auf dem Papier: `parts/user.py::load()` hatte
+      keinen Aufrufer im Produkt — eigene Bausteine wurden nie geladen." Der
+      Fehler wurde also **schon einmal gefunden und behoben**. In derselben
+      Datei liegen jetzt `travelling_parts()` und `check.stamp()` mit demselben
+      Fehler; bei `stamp()` ist er am 22.08.2026 geschlossen worden
+      (`9b12166`), `travelling_parts()` steht weiter ohne Aufrufer und ohne
+      Test da — und behauptet in ihrem Docstring im **Indikativ**, sie werde
+      beim Speichern und beim Öffnen benutzt.
+
+      **Das ist das Argument für die Testart „Anschluss" (§35), und es ist
+      stärker als jeder Einzelfall:** Nicht „so etwas passiert", sondern „so
+      etwas passiert **wieder**, an derselben Stelle, nachdem es dort schon
+      einmal auffiel". Ein Mensch, der zweimal hinsieht, hat es nicht gefangen.
+      Gezählt sind es damit an einem Tag fünf: Plattencache, `detect_holes()`
+      gegen `detect()`, `travelling_parts()`, `check.stamp()` und der
+      Rückfall selbst.
+
 - [ ] **Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum.**
       `tools/gate_lock.py` schützt vor Fremd*last* — gegen Fremd*stände* hilft
       es nicht: Jeder Lauf liest die ungestageten Dateien aller Sitzungen, egal
@@ -4640,6 +4686,13 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       mit dem bekannten Preis — dort gibt es kein `.venv`, der Interpreter muss
       mit vollem Pfad aus dem Hauptbaum gerufen werden (gemessen am 22.08., die
       Suite läuft so).
+
+      **Dieselbe Ursache beim Lesen statt beim Laufen:** `git diff` vergleicht
+      gegen den **Index**, und im geteilten Baum liegen dort die Zwischenstände
+      der anderen Sitzungen — ein Katalog-Diff zeigte fünf fremde Zeilen, die
+      längst committet waren. `git diff HEAD` ist die Frage, die man stellen
+      will: *Was unterscheidet meinen Arbeitsbaum vom letzten Commit?*
+      Gefunden von 3d-druck-33.
 
 - [ ] **Ein Test steht zwölf Minuten still, ohne zu rechnen.** Gemessen am
       22.08.2026 von 3d-druck-33: `tests/test_interface_limits.py` blieb bei
