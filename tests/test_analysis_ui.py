@@ -511,6 +511,139 @@ def test_a_feature_without_operations_of_its_own_offers_the_body(window: MainWin
     menu.deleteLater()
 
 
+def _insert_a_thread(window: MainWindow) -> str:
+    """Ein Gewinde einsetzen und die Kennung seines Merkmals zurückgeben.
+
+    Die Fixture liest ein Modell ein, und dessen Merkmale sind **erkannt**.
+    Ein erzeugtes entsteht, wo ein Baustein eines verspricht (§24.1) — beim
+    Gewinde also, und das ist genau der Fall, an dem das leere Kontextmenü
+    aufgefallen ist.
+
+    Nicht am Bohren: ``drill_hole`` rechnet Geometrie und deklariert kein
+    Merkmal. Was es hinterlässt, findet die Erkennung wieder, und ein
+    erkanntes Merkmal trägt keinen Erzeuger.
+    """
+    from app.core.registry import REGISTRY
+
+    select_plate(window)
+    window.run_operation(REGISTRY.get("insert_printed_thread"))
+    dialog = window._op_dialog
+    assert dialog is not None
+    dialog.accept()
+    window.session.wait_for_idle()
+
+    result = window.session.last_result
+    assert result is not None
+    made = [
+        (object_id, feature_id)
+        for object_id, entry in result.scene.objects.items()
+        for feature_id, feature in entry.features.items()
+        if feature.created_by is not None
+    ]
+    assert made, "der Baustein hat ein benanntes Merkmal hinterlassen"
+    object_id, feature_id = made[0]
+    window.object_tree.select_feature(object_id, feature_id)
+    return feature_id
+
+
+def test_a_created_feature_offers_the_step_that_made_it(window: MainWindow) -> None:
+    """§21.2: Ein erzeugtes Merkmal bietet immer den Schritt an, der es erzeugt
+    hat.
+
+    Der einzige Weg vom *Ergebnis* zurück zum *Schritt*. Ohne ihn sucht der
+    Kunde im Verlauf, welcher der Einträge die Bohrung war, die er gerade
+    ansieht — mit ihm zeigt er auf das Ding, das er sieht.
+
+    Die Frage lautete lange, welche Operation fachlich auf ein fertiges
+    Gewinde gehört, und ``for_feature`` gab darauf nichts zurück. Über
+    ``applies_to`` wäre die Antwort eine neue Operation je Merkmalsart
+    gewesen; über die Provenienz gilt sie für alle.
+    """
+    _insert_a_thread(window)
+    menu = window.object_tree.context_menu()
+
+    assert menu is not None
+    rows = [action.text() for action in menu.actions() if not action.isSeparator()]
+    assert tr("Diesen Schritt ändern") in rows, rows
+    menu.deleteLater()
+
+
+def test_the_offered_step_is_the_one_that_made_the_feature(window: MainWindow) -> None:
+    """Und zwar der richtige: die Kennung kommt aus ``created_by``, nicht aus
+    dem Ende des Stapels.
+
+    ``SceneObject.created_by`` wird bei **jeder** Operation neu gesetzt, die
+    das Objekt ausgibt — sie zeigt auf die zuletzt beteiligte. Am Merkmal
+    steht der Erzeuger.
+    """
+    feature_id = _insert_a_thread(window)
+    result = window.session.last_result
+    assert result is not None
+    entry = result.scene.objects[window.object_tree.selected()]
+    expected = entry.features[feature_id].created_by
+
+    asked: list[int] = []
+    window.object_tree.stepRequested.connect(asked.append)
+    menu = window.object_tree.context_menu()
+    assert menu is not None
+    for action in menu.actions():
+        if action.text() == tr("Diesen Schritt ändern"):
+            action.trigger()
+
+    assert asked == [expected], (asked, expected)
+    menu.deleteLater()
+
+
+def test_the_menu_entry_opens_that_step(window: MainWindow) -> None:
+    """Und der Klick landet im Dialog des Schritts, nicht in einem neuen.
+
+    Die halbe Zusage wäre ein Menüeintrag, der ein Signal sendet, das niemand
+    hört. Geprüft wird deshalb bis ans Ende: Der Dialog steht offen, er zeigt
+    die Operation, die das Merkmal erzeugt hat, und er **ersetzt** ihren
+    Schritt beim Übernehmen, statt einen zweiten anzulegen (§15.4).
+    """
+    _insert_a_thread(window)
+    before = len(window.session.project.document.transactions)
+    menu = window.object_tree.context_menu()
+    assert menu is not None
+    for action in menu.actions():
+        if action.text() == tr("Diesen Schritt ändern"):
+            action.trigger()
+    menu.deleteLater()
+
+    dialog = window._op_dialog
+    assert dialog is not None, "der Schritt steht offen"
+    assert dialog.spec.name == "insert_printed_thread", dialog.spec.name
+
+    dialog.accept()
+    window.session.wait_for_idle()
+    assert len(window.session.project.document.transactions) == before, (
+        "derselbe Schritt, ersetzt — kein zweiter im Stapel"
+    )
+
+
+def test_a_detected_feature_has_no_step_to_offer(window: MainWindow) -> None:
+    """Ein **erkanntes** Merkmal hat keinen Erzeuger, und der Eintrag entfällt
+    dort ersatzlos.
+
+    Ein Menüeintrag, der ins Leere führt, ist schlechter als keiner (§21.2).
+    Die Bohrungen dieser Platte kommen aus einer STL — sie hat niemand
+    gesetzt.
+    """
+    window.object_tree.select_feature("obj_1", "hole_2")
+    result = window.session.last_result
+    assert result is not None
+    feature = result.scene.objects["obj_1"].features["hole_2"]
+    assert feature.created_by is None, "eingelesen, nicht erzeugt"
+
+    menu = window.object_tree.context_menu()
+
+    assert menu is not None
+    rows = [action.text() for action in menu.actions()]
+    assert tr("Diesen Schritt ändern") not in rows, rows
+    menu.deleteLater()
+
+
 def test_a_body_menu_stays_short_enough_to_read(window: MainWindow) -> None:
     """Siebenundfünfzig Zeilen sind kein Menü, sondern ein Register.
 

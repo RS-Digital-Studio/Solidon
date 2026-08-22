@@ -398,6 +398,32 @@ bekommt:
 | Weg 4 — organisch formen | obere Werkzeugleiste (*Formen*, *Skelett* — beide brauchen einen gewählten Körper und sagen das, bevor man klickt), Menü *Ändern* |
 | keiner der vier | Untermenü und Befehlspalette, sonst nichts |
 
+**Ein erzeugtes Merkmal bietet immer den Schritt an, der es erzeugt hat**
+(§21.2). Der Eintrag *Diesen Schritt ändern* steht im Kontextmenü am Merkmal,
+ganz oben und vor der Sichtbarkeit — er gilt dem Merkmal, die Sichtbarkeit
+gilt dem Körper. Er ist der einzige Weg vom *Ergebnis* zurück zum *Schritt*:
+sonst sucht der Kunde unter vierzehn Zeilen des Verlaufs die eine, die das
+Ding erzeugt hat, das er gerade ansieht.
+
+Die Frage lautete lange, welche Operation fachlich auf ein fertiges Gewinde
+gehört, und `for_feature("thread")` gab darauf nichts zurück. Über
+`applies_to` wäre die Antwort eine neue Operation je Merkmalsart gewesen;
+über die Provenienz (`Feature.created_by`) ist sie **ein** Eintrag, der für
+alle gilt und jede neue Merkmalsart von selbst mitnimmt. Ein **erkanntes**
+Merkmal trägt `None` und bekommt ihn nicht — er führte dort ins Leere, und
+das ist schlechter als keiner.
+
+Damit bleibt `thread` in den `known_gaps` von
+`tests/test_registry_consistency.py`, und das ist kein Rückstand: Die Prüfung
+dort fragt `for_feature`, also `applies_to`, und über diesen Weg ist die Art
+weiterhin leer. Wer die Ausnahme streicht, weil „das Gewinde jetzt etwas
+anbietet", macht den Test rot.
+
+Erzeugte Merkmale kommen aus **Bausteinen** (`knowledge/parts/build.py`) und
+aus dem Verstiften, nicht aus jeder Operation: `drill_hole` rechnet Geometrie
+und deklariert nichts, seine Bohrung findet die Erkennung wieder. Wer den
+Eintrag testet, nimmt deshalb einen Baustein und nicht das Bohren.
+
 **Was zur Auswahl passt, steht vorn.** `applies_to` sortiert nicht nur das
 Kontextmenü, sondern auch die Befehlspalette
 (`palette_entries(for_feature=...)`). Es ist eine Reihenfolge, keine Auswahl —

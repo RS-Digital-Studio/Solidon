@@ -52,7 +52,7 @@ from app.core.errors import (
 from app.core.log import get_logger
 from app.core.registry import REGISTRY
 from app.core.scene import EvaluationResult
-from app.core.types import Document, Finding, ObjectId
+from app.core.types import Document, Feature, Finding, ObjectId
 from app.core.units import LengthUnit
 from app.i18n import sort_key, tr
 from app.ui.dialogs import handlers_of
@@ -380,6 +380,9 @@ class ObjectTree(QWidget):
     """Ein- oder ausblenden (§18.8) — trägt die Kennungen und den Wunsch."""
     isolateRequested = Signal(object)
     """Nur diese zeigen — trägt die Kennungen. Ein zweiter Aufruf hebt es auf."""
+    stepRequested = Signal(int)
+    """Den Schritt öffnen, der das gewählte Merkmal erzeugt hat (§21.2) —
+    trägt seine Kennung."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -876,13 +879,22 @@ class ObjectTree(QWidget):
         andere ausblenden — an genau dem Ort, den §18.5 „die wichtigste
         Einzelfunktion" nennt.
         """
+        feature = self._chosen_feature()
+        return feature.kind if feature is not None else None
+
+    def _chosen_feature(self) -> Feature | None:
+        """Das gewählte Merkmal selbst, oder nichts.
+
+        Zwei Fragen hängen daran, und beide brauchen dasselbe Objekt: was es
+        anbietet (``kind``) und aus welchem Schritt es stammt
+        (``created_by``).
+        """
         feature_id = self.selected_feature()
         object_id = self.selected()
         if feature_id is None or object_id is None or self._result is None:
             return None
         entry = self._result.scene.objects.get(object_id)
-        feature = entry.features.get(feature_id) if entry is not None else None
-        return feature.kind if feature is not None else None
+        return entry.features.get(feature_id) if entry is not None else None
 
     def context_menu(self) -> QMenu | None:
         """Das Menü zur aktuellen Auswahl, oder nichts.
@@ -897,6 +909,7 @@ class ObjectTree(QWidget):
             return None
 
         menu = QMenu(self)
+        self._add_source_step(menu)
         self._add_visibility(menu, chosen)
 
         kind = self._feature_kind()
@@ -972,6 +985,36 @@ class ObjectTree(QWidget):
         menu = self.context_menu()
         if menu is not None:
             menu.exec(self.tree.viewport().mapToGlobal(position))
+
+    def _add_source_step(self, menu: QMenu) -> None:
+        """„Diesen Schritt ändern" — der Weg vom Ergebnis zurück zum Schritt
+        (§21.2).
+
+        **Ein erzeugtes Merkmal bietet immer den Schritt an, der es erzeugt
+        hat.** Die Frage lautete lange, welche Operation fachlich auf ein
+        fertiges Gewinde gehört, und ``for_feature`` gab darauf nichts zurück
+        — ``thread`` stand deshalb als benannte Ausnahme im Konsistenztest.
+        Über ``applies_to`` wäre die Antwort eine neue Operation je
+        Merkmalsart gewesen; über die Provenienz ist sie ein Eintrag, der für
+        alle gilt und jede neue Merkmalsart von selbst mitnimmt.
+
+        Er steht **vor** der Sichtbarkeit, weil er dem Merkmal gilt und die
+        Sichtbarkeit dem Körper: Wer mit rechts auf eine Bohrung zeigt, meint
+        die Bohrung (§18.5). Und er ist der einzige Weg vom *Ergebnis* zurück
+        zum *Schritt* — ohne ihn sucht der Kunde unter vierzehn Zeilen des
+        Verlaufs die eine, die das Ding erzeugt hat, das er gerade ansieht.
+
+        Ein **erkanntes** Merkmal hat keinen Erzeuger und bekommt den Eintrag
+        nicht: Er führte dort ins Leere, und das ist schlechter als keiner.
+        """
+        feature = self._chosen_feature()
+        if feature is None or feature.created_by is None:
+            return
+        step = feature.created_by
+        change = menu.addAction(tr("Diesen Schritt ändern"))
+        change.setStatusTip(tr("Öffnet den Schritt, der dieses Merkmal erzeugt hat."))
+        change.triggered.connect(lambda _checked=False: self.stepRequested.emit(step))
+        menu.addSeparator()
 
     def _add_visibility(self, menu: QMenu, chosen: tuple[ObjectId, ...]) -> None:
         """Ein- und ausblenden und isolieren (§18.8).

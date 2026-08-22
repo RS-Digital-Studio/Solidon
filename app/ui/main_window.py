@@ -1320,6 +1320,7 @@ class MainWindow(QMainWindow):
         # einen leeren Schritt im Verlauf. Der Rechtsklick auf den Körper ist
         # der Weg, den §2.6 „den kürzesten Weg vom Sehen zum Tun" nennt.
         self.object_tree.operationRequested.connect(self.launch_operation)
+        self.object_tree.stepRequested.connect(self.edit_operation)
         self.object_tree.visibilityRequested.connect(self._on_visibility)
         self.object_tree.isolateRequested.connect(self._on_isolate)
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
