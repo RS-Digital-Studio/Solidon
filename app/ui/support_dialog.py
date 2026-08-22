@@ -333,16 +333,48 @@ class SupportDialog(QDialog):
         if self.with_session.isChecked():
             data = self._session_container()
             if data:
-                found.append(
-                    support.Attachment(
-                        "sitzung.p3d", data, tr("Modell, Operationsstapel und Chat-Verlauf")
-                    )
-                )
+                found.append(support.Attachment("sitzung.p3d", data, self._session_note()))
         if self.with_log.isChecked():
             data = log_tail()
             if data:
                 found.append(support.Attachment("protokoll.txt", data, tr("Die letzten Zeilen")))
         return found
+
+    def _session_note(self) -> str:
+        """Was am Sitzungsanhang steht — und die eine Warnung, die dazugehört.
+
+        **Hier und nicht beim Speichern (§24.5, Regel 13).** Ein eigener
+        Baustein reist nie in einer Projektdatei mit; wer an so einem Projekt
+        arbeitet, speichert es zwanzigmal am Abend, und eine Meldung dabei wird
+        beim einundzwanzigsten Mal weggeklickt wie die zwanzig davor. Der
+        Schaden entsteht erst, wenn die Datei **zu jemand anderem** geht — und
+        von hier geht sie zum Support.
+
+        Ohne den Satz bekommt er ein Projekt, das er nicht rechnen kann, und
+        merkt es beim Öffnen: mit einer Ursache auf einem Rechner, an den dann
+        niemand mehr herankommt.
+
+        Der Hinweis steht an der Beschreibung des Anhangs, weil er genau ihm
+        gilt — ``Ticket.as_text`` trägt sie in die Sendung, die Vorschau zeigt
+        sie, und der abgelegte Ordner nimmt denselben Text. Ein Ort, alle drei
+        Wege hinaus.
+        """
+        note = tr("Modell, Operationsstapel und Chat-Verlauf")
+        if self._session is None:
+            return note
+        try:
+            from app.core.knowledge.parts import check as part_check
+
+            findings = part_check.check_outgoing(self._session.project.document)
+        except (AppError, OSError) as problem:
+            # Dieselbe Haltung wie beim Anhang selbst: Was sich nicht sagen
+            # lässt, nimmt der Rückmeldung nicht den Sinn.
+            _log.warning("outgoing check failed: %s", problem)
+            return note
+        parts = ", ".join(
+            str(finding.values.get("parts", "")) for finding in findings if finding.values
+        )
+        return f"{note} — {tr('Braucht eigene Bausteine')}: {parts}" if parts else note
 
     def _session_container(self) -> bytes:
         """Die Sitzung, einmal gespeichert und dann behalten.
