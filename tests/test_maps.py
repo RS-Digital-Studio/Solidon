@@ -190,9 +190,76 @@ def test_a_clean_body_has_a_clean_map() -> None:
 
 
 def test_the_curvature_map_shows_the_edges() -> None:
+    """Ein Würfel hat nur Kanten und ebene Flächen — beide haben keinen Radius.
+
+    Bis zum 22.08.2026 stand hier ``high == 90``, der Winkel einer Würfelkante
+    in Grad. Die Karte misst jetzt den Radius, und die richtige Antwort für
+    eine scharfe Kante ist **null** und nicht neunzig.
+    """
     analysis = maps.curvature_map(cube())
 
-    assert analysis.high == pytest.approx(90.0, abs=1.0), "a cube edge is a right angle"
+    assert analysis.unit == "mm"
+    assert analysis.high == pytest.approx(0.0, abs=0.01), "a cube edge is sharp"
+
+
+def test_the_curvature_map_measures_the_fillet_and_not_the_mesh() -> None:
+    """Die Frage aus §18.4 ist *wie* rund, nicht *dass* — und die alte Karte
+    konnte sie nicht beantworten.
+
+    Sie mass den schärfsten Winkel zu einem Nachbarn, und der wird kleiner, je
+    feiner eine Verrundung vernetzt ist, obwohl ihr Radius derselbe bleibt.
+    Gemessen wird hier deshalb an **zwei** Vernetzungen desselben Zylinders:
+    Der Radius muss beide Male derselbe sein, der Winkel wäre es nicht.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    def radius_of(sections: int) -> float:
+        body = trimesh.creation.cylinder(radius=5.0, height=20.0, sections=sections)
+        analysis = maps.curvature_map(MeshData.of(body))
+        known = [value for value in analysis.values if value == value]
+        return sum(known) / len(known)
+
+    coarse, fine = radius_of(32), radius_of(128)
+
+    assert coarse == pytest.approx(5.0, rel=0.02), coarse
+    assert fine == pytest.approx(5.0, rel=0.02), fine
+    assert coarse == pytest.approx(fine, rel=0.02), "the mesh must not change the answer"
+
+
+def test_the_curvature_map_finds_a_fillet_beside_its_cylinder() -> None:
+    """Der Fall, für den die Karte gebaut wurde (§18.4, §41).
+
+    Eine Säule Ø 12 auf einer Platte, der Fuß mit R 3 verrundet. Beide Flächen
+    hängen **tangential** aneinander — die Merkmalserkennung liest sie deshalb
+    als einen Fleck und findet dort weder Zylinder noch Torus. Die Karte trennt
+    sie, weil sie nicht nach Knicken fragt, sondern nach Radien.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    plate = trimesh.creation.box(extents=(60.0, 60.0, 6.0))
+    plate.apply_translation((0.0, 0.0, -3.0))
+    post = trimesh.creation.cylinder(radius=6.0, height=30.0, sections=96)
+    post.apply_translation((0.0, 0.0, 15.0))
+    outer = trimesh.creation.cylinder(radius=9.0, height=3.0, sections=96)
+    outer.apply_translation((0.0, 0.0, 1.5))
+    inner = trimesh.creation.cylinder(radius=6.0, height=6.0, sections=96)
+    inner.apply_translation((0.0, 0.0, 1.5))
+    ring = trimesh.boolean.difference([outer, inner])
+    torus = trimesh.creation.torus(
+        major_radius=9.0, minor_radius=3.0, major_sections=96, minor_sections=48
+    )
+    torus.apply_translation((0.0, 0.0, 3.0))
+    fillet = trimesh.boolean.difference([ring, torus])
+
+    analysis = maps.curvature_map(MeshData.of(trimesh.boolean.union([plate, post, fillet])))
+    found = {round(value, 1) for value in analysis.values if value == value}
+
+    assert 3.0 in found, f"the fillet radius is 3 mm: {sorted(found)[:6]}"
+    assert 6.0 in found, f"the post radius is 6 mm: {sorted(found)[:6]}"
 
 
 # --- Features und Passungen -----------------------------------------------------

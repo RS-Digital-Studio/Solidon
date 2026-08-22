@@ -42,7 +42,7 @@ from app.core.types import (
     SliceResult,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -445,27 +445,135 @@ def defect_map(mesh: MeshData) -> AnalysisMap:
 # --- Krümmung -------------------------------------------------------------------
 
 
+#: Ab welchem Winkel zwischen zwei Dreiecken keine Rundung mehr gemessen wird,
+#: sondern eine Kante dasteht — dieselbe Schwelle, an der die Fleckenbildung
+#: trennt (``CURVATURE_LIMIT`` in :mod:`app.core.perceive.features`).
+EDGE_ANGLE = 30.0
+
+#: Und darunter: Ein Winkel, der so klein ist, ist keine Krümmung, sondern
+#: Rechenrauschen einer ebenen Fläche. Aus 0,001 Grad auf 3 mm Kantenlänge
+#: würde ein Radius von 170 Metern.
+FLAT_ANGLE = 0.5
+
+
 def curvature_map(mesh: MeshData) -> AnalysisMap:
-    """Der schärfste Winkel zu einem Nachbarn — Kanten stechen hervor,
-    Verrundungen bleiben glatt.
+    """Der Radius, mit dem ein Dreieck gekrümmt ist — in Millimetern.
+
+    **Vorher stand hier der schärfste Winkel zu einem Nachbarn, und das misst
+    das Netz statt den Körper.** Der Docstring sagte es selbst: „Kanten stechen
+    hervor, Verrundungen bleiben glatt." Genau das ist der Zweck einer
+    Verrundung — je feiner sie vernetzt ist, desto kleiner der Winkel je
+    Facette, obwohl der Radius derselbe bleibt. Eine Karte, deren Aussage an
+    der Vernetzungsdichte hängt, beantwortet die Frage nicht, die §18.4 an sie
+    stellt: *wie* rund, nicht *dass*.
+
+    Der Radius steht dagegen im Verhältnis von Winkel und Kantenlänge, und das
+    ist von der Feinheit unabhängig. Gemessen an einer Säule mit verrundetem
+    Fuß: die Kehle mit 3,0 bis 3,9 mm bei einem Sollradius von 3, der Mantel
+    bei 6, der Ringradius bei 9.
+
+    **Drei Fälle, und zwei davon haben keinen Radius.** Eine ebene Fläche ist
+    nicht unendlich rund, sie ist gar nicht rund — sie bekommt ``nan``, das in
+    dieser Karte „kann ich nicht sagen" heißt. Für sie einen Wert auszurechnen
+    ergäbe 2,6 Millionen Millimeter und eine Farbskala, auf der alles andere
+    zusammenfällt. Eine **Kante** bekommt null: Sie ist scharf, und die Formel
+    gäbe dort 0,2 mm — eine Zahl, die nach einer sehr feinen Verrundung
+    aussieht und keine ist.
     """
     body = mesh.raw
-    values = np.zeros(len(body.faces), dtype=float)
+    values = np.full(len(body.faces), np.nan, dtype=float)
     pairs = np.asarray(body.face_adjacency)
-    if len(pairs):
-        angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
-        for (first, second), angle in zip(pairs, angles, strict=True):
-            values[int(first)] = max(values[int(first)], float(angle))
-            values[int(second)] = max(values[int(second)], float(angle))
+    if not len(pairs):
+        return _curvature_result(values, set())
 
+    # ``face_adjacency_angles`` steht bereits in Radiant — wer hier umrechnet,
+    # rechnet zweimal um und bekommt an einem Zylinder Ø 10 einen Radius von
+    # 36 mm heraus.
+    angles = np.asarray(body.face_adjacency_angles, dtype=float)
+    # **Die Bogenlänge liegt quer zur gemeinsamen Kante**, und beide
+    # naheliegenden Strecken sind die falschen. Die Kante selbst ist an einer
+    # Zylinderwand die senkrechte, ihre Länge also die Höhe des Zylinders — das
+    # gab 35,8 mm bei 32 Segmenten und 9,0 bei 128, bei einem wahren Radius von
+    # 5. Der bloße Abstand der Facettenmitten trägt dieselbe Höhe anteilig mit
+    # und wurde dadurch sogar **größer**, je feiner das Netz war: 34 gegen 136.
+    #
+    # Gemessen wird deshalb der Anteil des Mittenabstands **senkrecht zur
+    # gemeinsamen Kante**. Er schrumpft mit jeder Verfeinerung genauso wie der
+    # Winkel, und ihr Verhältnis bleibt stehen — das ist der ganze Grund,
+    # weshalb diese Karte den Körper misst und nicht das Netz.
+    middles = _facet_middles(body)
+    edges = np.asarray(body.face_adjacency_edges)
+    along = body.vertices[edges[:, 1]] - body.vertices[edges[:, 0]]
+    along = along / np.maximum(np.linalg.norm(along, axis=1), EPS_GEOM)[:, None]
+    span = middles[pairs[:, 1]] - middles[pairs[:, 0]]
+    lengths = np.linalg.norm(span - np.einsum("ij,ij->i", span, along)[:, None] * along, axis=1)
+
+    sharp: set[int] = set()
+    for (first, second), angle, length in zip(pairs, angles, lengths, strict=True):
+        degrees = math.degrees(angle)
+        if degrees >= EDGE_ANGLE:
+            # **Eine Kante geht nicht in den Wert ein, sie wird markiert.** Sie
+            # sagt nichts darüber, wie die Fläche gekrümmt ist, auf der das
+            # Dreieck liegt — sie sagt, dass daneben eine andere anfängt. Der
+            # kleinste Radius über *alle* Nachbarn zu nehmen, wie es die alte
+            # Karte mit dem schärfsten Winkel tat, macht daraus einen Wert, der
+            # jede Rundung überschreibt: An einem Zylinder grenzt **jedes**
+            # Manteldreieck an den Deckel, und die ganze Wand käme als scharfe
+            # Kante heraus.
+            sharp.update((int(first), int(second)))
+            continue
+        if degrees < FLAT_ANGLE:
+            continue
+        radius = float(length / angle)
+        for index in (int(first), int(second)):
+            # Unter den **glatten** Nachbarn gewinnt der kleinste: Wo eine
+            # Fläche in zwei Richtungen verschieden gekrümmt ist, ist die
+            # engere die, nach der gefragt wird.
+            current = values[index]
+            values[index] = radius if math.isnan(current) else min(current, radius)
+
+    return _curvature_result(values, sharp)
+
+
+def _facet_middles(body: trimesh.Trimesh) -> np.ndarray:
+    """Zu jedem Dreieck die Mitte der **ebenen Fläche**, auf der es liegt.
+
+    **Nicht sein eigener Schwerpunkt**, und der Unterschied ist keine Feinheit:
+    An einer Zylinderwand sind die zwei Dreiecke eines Mantelrechtecks
+    koplanar. Der Winkel sitzt allein an der Rechteckgrenze, der Weg dorthin
+    wird aber vom Dreiecksschwerpunkt aus gemessen — und der liegt bei einem
+    Drittel. Gemessen kamen so an einem Zylinder Ø 10 durchweg 3,33 mm heraus
+    statt 5, also genau zwei Drittel, und zwar bei jeder Netzfeinheit gleich
+    falsch. Über die Flächenmitte sind es 4,97.
+
+    Wo ein Dreieck allein steht — auf einer Kugel etwa —, ist die Flächenmitte
+    sein Schwerpunkt, und es ändert sich nichts.
+    """
+    middles = np.asarray(body.triangles_center, dtype=float).copy()
+    areas = np.asarray(body.area_faces, dtype=float)
+    for facet in body.facets:
+        members = np.asarray(facet)
+        weight = areas[members].sum()
+        if weight <= EPS_GEOM:
+            continue
+        middles[members] = (middles[members] * areas[members][:, None]).sum(axis=0) / weight
+    return middles
+
+
+def _curvature_result(values: np.ndarray, sharp: set[int]) -> AnalysisMap:
+    known = values[~np.isnan(values)]
     return AnalysisMap(
         kind="curvature",
         title=TITLES["curvature"],
         values=tuple(float(value) for value in values),
-        unit=DEGREE_UNIT,
-        low=0.0,
-        high=float(values.max()) if len(values) else 0.0,
-        note=_("Zum Gegenprüfen, was die Merkmalserkennung als Kante sieht."),
+        unit="mm",
+        low=float(known.min()) if len(known) else 0.0,
+        high=float(known.max()) if len(known) else 0.0,
+        highlighted=tuple(sorted(sharp)),
+        note=_(
+            "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind "
+            "scharfe Kanten; ebene Flächen haben keinen Radius."
+        ),
     )
 
 
