@@ -103,7 +103,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Der Rückstand sieht einen falschen Zylinder nicht | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, warum derselbe Wächter beim Torus greift und beim Zylinder nicht — 0,0313 Rückstand bei einem Radius, der um das Fünffache danebenliegt |
-| Eine Mutternfalle bekommt einen zweiten Namen | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | zuerst eine Klärung, keinen Fix: Die Zählung von Doppelungen benutzt dieselbe `match`-Schwelle wie der Filter — was der Filter nicht sieht, zählt die Messung nicht. `detect` sieht die Mutternfalle sofort, die Zuordnung bildet das Paar nicht |
 | Kein Test prüft, womit ein Beispiel den Kunden begrüßt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Prüfung über die Befunde beim Öffnen, mit einer Liste der erwarteten statt einer Schwelle von null — `SETTLED_BY` gibt es schon, die Prüfung nicht |
 | Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
@@ -4049,8 +4048,43 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       Gegenstück über benannte Merkmale (§14). Ein Beispiel, das eine
       Einpressbuchse setzt und danach ihren Namen verliert, hat die Passung
       verloren.
-- [ ] **Eine Mutternfalle bekommt weiterhin einen zweiten Namen — und die
-      Messmethode dafür hat einen Zirkel.** Gefunden von 3d-druck-3a außerhalb
+- [x] **Eine Mutternfalle bekam einen zweiten Namen, weil `match` ein gutes
+      Paar für eine billigere Summe opferte — behoben am 23.08.2026
+      (`6d6cf7b`, 3d-druck-3a).** `linear_sum_assignment` minimiert die
+      **Gesamtsumme** und kannte die Annahmeschwelle nicht:
+
+          nut_trap_pocket_1 -> hole_2   3,281   verwaist
+          nut_trap_bore_1   -> hole_1   3,742   verwaist
+                                                bester wäre hole_2 mit 0,757
+
+      Die Summe 7,02 ist kleiner als jede Lösung, die `hole_2` an die Bohrung
+      gibt. **`hole_2` war frei, das Paar war eindeutig, es hatte keine
+      Rivalen** — und beide verwaisten trotzdem. Was ohnehin abgelehnt würde,
+      kostet vor der Optimierung jetzt so viel wie eine falsche Art; damit
+      sieht sie, dass ein Paar über der Schwelle so wertlos ist wie gar keines.
+
+      **Damit fiel auch die Erklärung, die hier stand:** Das Merkmal war von
+      Anfang an sichtbar, `detect` fand es sofort, und `recognised=False` kam
+      nicht daher, dass es unsichtbar *war* — sondern daher, dass `match` es
+      nicht zuordnen **wollte**. Der naheliegende Fix („`recognised`
+      zurücknehmen können") wäre ins Leere gelaufen und wurde deshalb nicht
+      gebaut.
+
+      **Der Zirkel war real und hat die Sache trotzdem aufgeklärt.** Die
+      Doppelung wurde nur deshalb überhaupt gesehen, weil die Messung `cost()`
+      benutzte — **eine Ebene unter `match()`**. Wer mit derselben Zuordnung
+      misst, die auch filtert, sieht nichts; wer eine Ebene tiefer misst,
+      sieht die rohen Kosten und damit das Paar, das die Optimierung
+      weggeworfen hat.
+
+      **Die Bilanz der Nacht über die neun Beispiele:**
+
+          zu Beginn   elf Warnungen, fünf von neun Beispielen
+          am Ende     zwei — und beide sagen etwas Wahres über das,
+                      was sie vorführen
+
+- [x] **(erledigt, ursprünglicher Text)** Eine Mutternfalle bekommt weiterhin
+      einen zweiten Namen — und die Messmethode dafür hat einen Zirkel. Gefunden von 3d-druck-3a außerhalb
       der neun Beispiele (Platte, zwei Schraubenlöcher, Mutternfalle,
       Einpressbuchse), nachgemessen Schritt für Schritt am 23.08.2026:
 
