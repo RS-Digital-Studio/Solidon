@@ -37,6 +37,39 @@ besagt, dass ein roter Leistungstest nicht „nicht fertig" heißt. Kein Registe
 sah sie, kein Test zählte sie. Wer einen Fund festhält, gibt ihm ein Kästchen
 oder er hält ihn nicht fest.
 
+**Die Reihenfolge ist seit dem 22.08.2026 die Kundenwirkung, nicht die
+Registerreihenfolge.** Robert hat den Auftrag so gefasst: „alles abarbeiten,
+dass die App ein Meisterwerk wird und Kunden sehr zufrieden sind mit einfacher
+Bedienung." Daraus folgt eine Rangfolge, die in dieser Tabelle nicht steht und
+trotzdem gilt:
+
+1. **Was ein Kunde als Fehler erlebt** — Abstürze zuerst. Ein Absturz ist das
+   genaue Gegenteil von „sehr zufrieden", und fünf offene Punkte warten auf
+   denselben Nachweis.
+2. **Was ihn im Weg steht** — Fehlermeldungen ohne anklickbare Handlung,
+   Bedienwege mit einem Klick zu viel, ein Startbildschirm, der rollt.
+3. **Was seine Arbeit besser macht** — Erkennung, Karten mit Zahlen statt
+   Farben, Vorschläge, die stimmen.
+4. **Was ihn schützt, ohne dass er es sieht** — Testarten, Tor, Werkzeuge.
+   Zuletzt, aber nicht weglassbar: Vier von fünf Nichtanschluss-Fällen eines
+   einzigen Tages waren Versprechen, die das Produkt gab und nicht hielt.
+
+Punkte, die eine **Entscheidung** brauchen, tragen sie in der dritten Spalte,
+sobald sie gefallen ist — mit dem Namen dessen, der sie getroffen hat. Was die
+Bedienung betrifft, entscheidet die Sitzung unter Roberts Vollmacht („mach
+alles, damit es immer perfekt für Kunden ist"); was Produktrichtung, Geld oder
+Verfahren betrifft, geht an ihn.
+
+**Und was den Bauplan oder `AGENTS.md` ändert, geht immer an ihn — auch unter
+Vollmacht.** Am 22.08.2026 hat 3d-druck-64 eine Bauplanänderung (§35, die
+Testart „Anschluss") unter dieser Vollmacht entschieden und auf Widerspruch von
+3d-druck-33 zurückgenommen. Deren Begründung war ein Satz, den dieselbe Sitzung
+zwei Stunden zuvor selbst geschrieben hatte: *Wenn zwei Sitzungen sich
+gegenseitig zurufen, was in die Regeln gehört, ändern wir die Regeln, nach denen
+wir gerade beurteilt werden.* Eine Vollmacht für das Produkt ist keine für die
+Hausordnung, und eine Vollmacht, die man **weitergereicht** bekommt, ist genau
+der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
+
 | Punkt | steht unter | wartet auf |
 |---|---|---|
 | Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | einen CI-Baulauf, der `_chain` für Windows, macOS und Linux baut — dass es mitreist, ist seit dem 22.08. entschieden (Bauplan §31). Danach bleibt `_plane_segments` mit 893 ms die größte Position, nicht mehr GEOS |
@@ -54,8 +87,8 @@ oder er hält ihn nicht fest.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | eine Entscheidung, was aus der Zeile verschwindet — und einen Test, der sein Thema selbst setzt |
-| Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird. Am 22.08. neu gemessen, und die Aktenlage des Punkts stimmt nicht mehr: 340 px fehlen auf 1600x900 statt 156, die Ablagefläche gibt es als Widget nicht mehr, und es sind **zwei** Kachelbereiche — `more_area` (242 px) ist der größte Einzelposten |
+| Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte — **entschieden** | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | einen Überlaufknopf: die acht häufigsten Zwangsbedingungen bleiben Knöpfe, der Rest wandert darunter. Achtzehn in einer Zeile sind auf einem 1366er Laptop nicht bedienbar, und `test_interface_limits.py` erlaubt acht Werkzeuge — die Hausgrenze stand schon. Welche acht: an Fusion ablesen. Dazu der Test, der sein Thema selbst setzt |
+| Ein Höhenbudget für den Startbildschirm — **entschieden, in Arbeit** | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird. Am 22.08. neu gemessen, und die Aktenlage des Punkts stimmt nicht mehr: 340 px fehlen auf 1600x900 statt 156, die Ablagefläche gibt es als Widget nicht mehr, und es sind **zwei** Kachelbereiche — `more_area` (242 px) ist der größte Einzelposten |
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
@@ -64,7 +97,7 @@ oder er hält ihn nicht fest.
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
-| Erzeugen und Ändern sind reine Verteilermenüs | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, wie tief ein Menü sein darf — flach ziehen sprengt die Neun-Menü-Grenze, ist also ein Tausch und keine Verbesserung |
+| Erzeugen und Ändern sind reine Verteilermenüs — **entschieden** | Aus der Analyse für Neulinge und Kunden | die Zeilenbudget-Regel: Passen die Zeilen aller Kategorien einer Gruppe ins Zwölf-Zeilen-Budget, stehen sie flach mit Trennstrichen; sonst bleiben die Untermenüs. `MENU_GROUPS` schaut heute auf die Zahl der **Kategorien** — die Hausgrenze ist aber eine **Zeilen**grenze. *Erzeugen* wird damit flach (der Quader kostet zwei Klicks statt drei), *Ändern* bleibt tief. Kein Tausch: Die Neun-Menü-Grenze bleibt unberührt |
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
 | Die Antwort der Zuordnung steht nirgends | Das Fundament der Wahrnehmung (22.08.2026) | die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
@@ -81,7 +114,7 @@ oder er hält ihn nicht fest.
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Ein Test steht zwölf Minuten still, ohne zu rechnen | Das Fundament der Wahrnehmung (22.08.2026) | einen Python-Stapel aus dem stehenden Prozess, also `py-spy` — das steht nicht in `constraints.txt`, und ein Werkzeug ungefragt in die Umgebung zu holen entscheidet Robert. Vierte Absturzsignatur, und die einzige, die steht statt abzustürzen |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
-| `test_mesh_backend` misst die Umgebung statt sein Thema | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, was die Zusicherung eigentlich prüfen soll — die Länge des Temp-Ordners dieser Maschine sagt nichts über den Kunden, und ein umgebogenes `TEMP` macht den Test rot, ohne dass am Produkt etwas fehlt |
+| `test_mesh_backend` misst die Umgebung statt sein Thema — **entschieden** | Das Fundament der Wahrnehmung (22.08.2026) | die dritte Zusicherung fällt. Sie prüft die Länge des Temp-Ordners **dieser Maschine** und sagt nichts über den Kunden; die zwei davor prüfen den Programmtext und bleiben. Ein Test, der bei umgebogenem `TEMP` rot wird, kostet jede Sitzung Zeit und schützt niemanden |
 | Kein Viewport wird jemals freigegeben | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über die Reichweite — die eine Zeile in `viewport.py` ist behoben, aber `.connect(lambda … self …)` steht an 59 Stellen in `app/ui/`, und jede davon ist ein Ring, sobald der Sender ein Kind von `self` ist. Könnte die gemeinsame Wurzel der vier Absturzpunkte sein: gemessen 7 MB je Fenster, und die Suite baut siebenhundert |
 | Zwei Fensterdateien enden mit Exit 127, und einzeln auch | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — die Roadmap nennt als Signatur des bekannten Absturzes „dieselbe Datei einzeln gefahren ist grün“, und diese zwei sind es nicht. Nachgewiesen im eigenen Arbeitsbaum auf HEAD, vollständig grün und dann 127 |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
