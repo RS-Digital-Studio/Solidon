@@ -103,7 +103,21 @@ def test_a_package_is_installed_into_this_interpreter() -> None:
     assert command[-1] == "vhacdx"
 
 
-def test_a_program_goes_through_the_system_package_manager() -> None:
+def test_a_program_goes_through_the_system_package_manager(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Plattform wird gesetzt, nicht vorausgesetzt.
+
+    Ohne die beiden Zeilen prüfte dieser Test, was auf dem Rechner zufällig
+    liegt. Auf dem Linux-Runner der CI liegt kein Flatpak, also gab es dort
+    überhaupt keine Verwaltung, und ``_command`` warf ``ValueError`` statt zu
+    antworten — ein roter Lauf ohne einen Befund, und seit dem 21.08.2026
+    stand der Paketier-Job deshalb still. Der Rest der Datei setzt die
+    Plattform seit jeher; der Modulkopf sagt auch, warum.
+    """
+    monkeypatch.setattr(install.sys, "platform", "win32")
+    monkeypatch.setattr(install.shutil, "which", lambda name: name)
+
     command = install._command(by_id("openscad"))
 
     assert "winget" in command[0]
