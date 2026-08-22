@@ -61,7 +61,7 @@ WEIGHTS_REPO: Final = "VAST-AI/TripoSG"
 #: weg, sondern auch ein Installationsschritt: Es fehlt nur noch die
 #: Gewichtsdatei. Ein älteres ComfyUI kennt die Knoten nicht, und dann sagt
 #: :meth:`ComfyBackend.missing_nodes` ihre Namen — das ist der richtige Weg
-#: dafür und keine zweite Fassung des Ablaufs.
+#: dafür und keine zweite Version des Ablaufs.
 BACKGROUND_REPO: Final = "Comfy-Org/BiRefNet"
 BACKGROUND_FILE: Final = "background_removal/birefnet.safetensors"
 
@@ -81,7 +81,7 @@ BACKGROUND_MEGABYTES: Final = 445
 #: wurden sie einzeln, indem der Knoten geladen wurde, bis er lud; genau das
 #: prüft :func:`nodes_load` seither am Ende jeder Einrichtung.
 #:
-#: ``antlr4-python3-runtime`` trägt eine Fassung, und die ist kein
+#: ``antlr4-python3-runtime`` trägt eine Version, und die ist kein
 #: Übervorsicht: ``omegaconf`` liest damit einen vorkompilierten Automaten,
 #: und die 4.13 serialisiert ihn anders — „Could not deserialize ATN with
 #: version 3 (expected 4)" ist der Satz, den es sonst sagt.
@@ -105,7 +105,7 @@ PACKAGES: Final = (
 
 #: Wo ComfyUI erfahrungsgemäß liegt, wenn niemand etwas anderes sagt.
 #:
-#: Die tragbare Fassung entpackt der Nutzer selbst, also steht sie dort, wohin
+#: Die tragbare Version entpackt der Nutzer selbst, also steht sie dort, wohin
 #: er sie gelegt hat — geraten wird an den drei Stellen, an denen sie
 #: erfahrungsgemäß landet. **ComfyUI Desktop** dagegen wählt selbst, und die
 #: Wahl steht in seiner eigenen Aufstellung: :func:`_from_desktop` liest sie
@@ -246,7 +246,7 @@ def find_comfyui(given: str | Path | None = None) -> Path:
             )
         )
 
-    # Die Desktop-Fassung steht vorn, weil sie nicht geraten ist: Sie hat es
+    # Die Desktop-Version steht vorn, weil sie nicht geraten ist: Sie hat es
     # selbst aufgeschrieben. Und dieselbe Verschachtelung wie beim Nutzer —
     # ``installPath`` nennt den Ordner darüber.
     for listed in _from_desktop():

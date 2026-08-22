@@ -4,10 +4,10 @@ Anlass ist eine Frage in vier Teilen: *Wie stehen Oberfläche, Funktionen,
 Handbuch und Schnittstelle gegen die beiden führenden KI-3D-Generatoren?
 Können wir mithalten?*
 
-**Fünfte Fassung.** Die Befunde sind abgearbeitet; was daraus wurde, steht in
+**Fünfte Version.** Die Befunde sind abgearbeitet; was daraus wurde, steht in
 Teil 10.
 
-**Vierte Fassung.** Der erste Durchgang blieb an vier Stellen bei Vermutungen;
+**Vierte Version.** Der erste Durchgang blieb an vier Stellen bei Vermutungen;
 der zweite maß sie nach. Der dritte entstand aus der Frage, ob die Webseiten
 und Funktionen wirklich vollständig angesehen worden seien — sie waren es
 nicht, und eine Aussage war schlicht falsch. Der vierte kam aus einer
@@ -277,7 +277,7 @@ neun nummerierte Schritte, Bebilderung, Tipps, vier Fragen mit Antwort.
 | „Geteilte Teile werden derzeit ohne Farbinformation exportiert, sie können also nicht direkt in den Mehrfarbdruck." | Teilen und Mehrfarbe schließen sich bei ihnen aus. Genau die Kombination, für die die Funktion beworben wird. |
 | „Sie brauchen präzise Schnittführung oder eigene Verbindungen — die sind in Blender oder Meshmixer besser aufgehoben." | **Verbindungen sind ausdrücklich kein Teil des Werkzeugs.** Sie verweisen dafür auf fremde Programme. |
 
-Genau dort steht unsere Fassung: `split_pinned` „teilt ein Objekt an einer
+Genau dort steht unsere Version: `split_pinned` „teilt ein Objekt an einer
 Ebene und setzt Passstifte in die Schnittfläche. Das Spiel kommt aus dem
 Materialprofil." Und es funktioniert an jedem Objekt in der Szene, gleich
 woher es kam.
@@ -668,7 +668,7 @@ selbst waren ohne Konto **nicht einsehbar**; ob dort Zahlenwerte stehen, ist
 nicht geprüft.
 
 Das ist inhaltlich genau der Stoff, der unserem Handbuch fehlt. Der Befund aus
-der ersten Fassung — „wir haben die Werte und sie nicht" — war zu bequem. Er
+der ersten Version — „wir haben die Werte und sie nicht" — war zu bequem. Er
 lautet richtig:
 
 > **Ihr Fertigungswissen ist Lesestoff neben dem Werkzeug. Unseres ist im
@@ -794,7 +794,7 @@ auch die, die Meshy erzeugt hat.*
 
 ## Teil 8 — Was die späteren Durchgänge korrigiert haben
 
-Vier Aussagen der ersten Fassung waren falsch oder zu grob. Sie stehen hier,
+Vier Aussagen der ersten Version waren falsch oder zu grob. Sie stehen hier,
 weil eine Konzeptvorlage, die ihre eigenen Irrtümer verschweigt, beim nächsten
 Lesen nicht mehr zu prüfen ist.
 
@@ -817,7 +817,7 @@ Zählung hatte andere Tabellen mitgezählt.
 
 ### Der dritte Durchgang, nach der Frage „hast du wirklich alles angesehen?"
 
-Die Antwort war nein. Die zweite Fassung hatte von der Meshy-Webapp-Doku nur
+Die Antwort war nein. Die zweite Version hatte von der Meshy-Webapp-Doku nur
 die Navigationsliste gesehen, keine einzige Seite; zwei geratene Pfade gaben
 404, danach blieb es bei `llms-full.txt`. Was daraus folgte, war falsch:
 
@@ -965,7 +965,7 @@ keine Proportionsvorgabe, beantwortet aber die Frage, die ein Drucker stellt.
 
 ### B13 — Nicht-planarer Schnitt · **offen, weil noch nicht gebaut** · groß
 
-*Dieser Befund steht in diesem Dokument zweimal: hier die geprüfte Fassung, und
+*Dieser Befund steht in diesem Dokument zweimal: hier die geprüfte Version, und
 unten die ursprüngliche samt Nachtrag vom 13.08.2026, der die halbe Begründung
 zurücknimmt. Der Status hier ist der geltende.* **Beantwortet ist die Frage
 nach dem Weg, gebaut ist nichts** — nachgesehen am 14.08.2026: `autosplit.py`
@@ -1006,9 +1006,9 @@ Rund 90 Pixel über dem Beschreibungssatz. Entweder gehört dort eine Vorschau
 hin, oder der Dialog ist zu hoch. Eine Messung am laufenden Fenster
 entscheidet das in fünf Minuten.
 
-### B13 — Nicht-planarer Schnitt · **offen** · groß · *ursprüngliche Fassung*
+### B13 — Nicht-planarer Schnitt · **offen** · groß · *ursprüngliche Version*
 
-*Die geprüfte Fassung dieses Befundes steht weiter oben; hier bleibt der
+*Die geprüfte Version dieses Befundes steht weiter oben; hier bleibt der
 Wortlaut von damals stehen, weil der Nachtrag am Ende sich darauf bezieht.*
 
 Der einzige Punkt im ganzen Vergleich, an dem eine ihrer Funktionen etwas kann,
@@ -1090,7 +1090,7 @@ Ein Durchgang gilt als erledigt, wenn:
 
 ---
 
-*Stand 12.08.2026, vierte Fassung. Der eigene Stand ist aus dem laufenden Code
+*Stand 12.08.2026, vierte Version. Der eigene Stand ist aus dem laufenden Code
 gemessen — alle 77 Operationen, alle 16 Bausteine, alle Wissenstabellen, die
 Farbkette eigens durchgefahren, Themenfarben auf Kontrast und Sättigung
 nachgerechnet, alle sechs Bildschirmfotos angesehen. Der

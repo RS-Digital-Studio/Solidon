@@ -1,0 +1,27 @@
+# Novità
+
+Questo file è ciò che compare nella finestra di aggiornamento, e nient'altro.
+**Non** è un elenco delle modifiche: di 97 commit fra 0.1.1 e 0.1.2 restano
+otto righe, e sceglierle è il lavoro. Un punto va qui se qualcuno se ne accorge
+usando il programma.
+
+Quindi: niente messaggi di commit, niente nomi di moduli, niente numeri di
+paragrafo. «La barra spariva mentre l'applicazione calcolava ancora per quattro
+secondi» è un buon commit e una cattiva voce; «L'avanzamento resta finché il
+calcolo è davvero finito» dice la stessa cosa a chi sta davanti allo schermo.
+
+Un file per lingua in questa cartella, come per i cataloghi, e tutti portano
+gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
+`tools/make_download.py` ne prende la sezione della versione corrente e la
+scrive in `website/version.json`.
+
+## 0.1.2
+
+- I numeri decimali digitati vengono letti bene ovunque. «12,5» resta dodici e mezzo; prima poteva diventare 125, senza chiedere e senza avvisare.
+- Ciascuno dei cinquantasei campi delle impostazioni di stampa dice ora che cosa fa quando lo si muove.
+- Tempo di stampa e materiale sono stimati con più precisione, soprattutto per i pezzi svuotati.
+- La consegna allo slicer cade sul piatto. Con CuraEngine i pezzi finivano di fianco.
+- Dividendo con le spine, i fori corrispondenti finiscono nella metà giusta.
+- Millimetri e pollici valgono ora dovunque compaia un numero, anche nelle barre degli strumenti e nella pittura.
+- L'avanzamento resta finché il calcolo è davvero finito, e la finestra rimane utilizzabile nel frattempo.
+- Il manuale ha ricevuto un prospetto di tutte le scorciatoie da tastiera.

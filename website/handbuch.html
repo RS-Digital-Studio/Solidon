@@ -429,7 +429,7 @@
 <h3>ComfyUI — für das Erzeugen aus Text oder Bild</h3>
 <p><strong>Auch hier ist installiert erst die Hälfte.</strong> ComfyUI braucht die Knoten, die der Ablauf anspricht, und das Modell, das sie laden. Beides legt Solidon selbst hinein: in der Liste der zusätzlichen Programme steht in der Zeile von ComfyUI <em>Knoten und Modell einrichten …</em>.</p>
 <p><strong>Der kurze Weg führt über den Erzeugungsdialog selbst.</strong> <em>Datei → Modell erzeugen</em> sagt, wie weit der Generator ist, und unterscheidet drei Lagen: es läuft keiner, es läuft einer ohne die Knoten, oder alles ist bereit. In der Mitte steht der Knopf zur Einrichtung direkt daneben — man muss nicht erst erzeugen lassen, um zu erfahren, dass etwas fehlt.</p>
-<p>Der Dialog findet ComfyUI selbst. Die <strong>Desktop-Fassung</strong> von comfy.org muss er dabei nicht raten — sie trägt ein, wohin sie installiert hat, auch bei einem selbst gewählten Ordner. Die tragbare Fassung entpacken Sie selbst; steht sie an einer ungewöhnlichen Stelle, gehört der Ordner angegeben — gesucht wird der, in dem <code>custom_nodes</code> und <code>main.py</code> liegen.</p>
+<p>Der Dialog findet ComfyUI selbst. Die <strong>Desktop-Version</strong> von comfy.org muss er dabei nicht raten — sie trägt ein, wohin sie installiert hat, auch bei einem selbst gewählten Ordner. Die tragbare Version entpacken Sie selbst; steht sie an einer ungewöhnlichen Stelle, gehört der Ordner angegeben — gesucht wird der, in dem <code>custom_nodes</code> und <code>main.py</code> liegen.</p>
 <p>Dann laufen fünf Schritte: Knoten hinlegen, den TripoSG-Quelltext holen, zwei Stellen darin richten, die fehlenden Pakete nachziehen — und <strong>nachsehen, ob ComfyUI die Knoten laden kann</strong>. Der letzte kostet zwei Sekunden und ist der, der zählt: Ohne ihn meldete die Einrichtung „fertig“, und der Fehler kam erst beim Erzeugen. Auf Wunsch danach das Modell, rund 7,5 GB — bricht die Verbindung ab, setzt ein neuer Lauf dort fort, wo er stand.</p>
 <p><strong>Danach ComfyUI einmal neu starten.</strong> Es liest seine Knoten beim Start; ohne den Neustart bleibt <em>Modell erzeugen</em> ausgegraut, obwohl alles an seinem Platz liegt.</p>
 <p>Für den Weg über <strong>Text</strong> kommt ein SDXL-Modell unter <code>models/checkpoints</code> dazu — das ist ComfyUIs eigene Sache. Für den Weg über ein <strong>Bild</strong> wird keines gebraucht.</p>
@@ -452,7 +452,7 @@
 <p>Was hereinkommt, ist eine Transaktion wie jede andere. Ein Strg+Z im Fenster nimmt sie zurück, der Verlauf zeigt sie, und am Eintrag steht, dass sie von außen kam.</p>
 <p>Zwei Dinge gehen nicht durch die Leitung, und das ist Absicht: OpenSCAD-Quelltext und alles, was wie ein Dateipfad aussieht. Beides würde bedeuten, dass ein fremdes Programm bestimmt, was auf diesem Rechner ausgeführt oder gelesen wird.</p>
 <p>In der Gegenstelle wird sie als Server mit der Adresse <code>http://127.0.0.1:8787/mcp</code> eingetragen.</p>
-<p><strong>Welche Werkzeuge es gibt, steht in diesem Handbuch.</strong> Jede Operation der folgenden Kapitel ist eines — mit denselben Parametern, denselben Grenzen und denselben Vorgaben, die auch der Dialog zeigt. Eine eigene Schnittstellenliste gibt es deshalb nicht: sie wäre eine zweite Fassung derselben Auskunft und sagte nach dem zweiten Monat etwas anderes.</p>
+<p><strong>Welche Werkzeuge es gibt, steht in diesem Handbuch.</strong> Jede Operation der folgenden Kapitel ist eines — mit denselben Parametern, denselben Grenzen und denselben Vorgaben, die auch der Dialog zeigt. Eine eigene Schnittstellenliste gibt es deshalb nicht: sie wäre eine zweite Version derselben Auskunft und sagte nach dem zweiten Monat etwas anderes.</p>
 <h3 id="trouble">Wenn etwas nicht geht</h3>
 <p><em>Die häufigsten Fälle am Anfang, mit dem, was dahintersteckt.</em></p>
 <p>Die Fälle, die am Anfang am häufigsten sind — was dahintersteckt und was hilft.</p>
@@ -498,7 +498,7 @@
 <p><strong>Materialslot</strong> — die Zuordnung einer Fläche zu einem Material oder einer Farbe beim Mehrfarbendruck.</p>
 <h3 id="ref-rules" class="chapter">Wonach Solidon urteilt</h3>
 <p>Diese Regeln liegen dem Agenten bei jeder Anfrage vor. Sie sind der Grund, warum er ein Schraubenloch aus der Tabelle nimmt statt es zu schätzen — und warum er nachfragt, statt zu raten.</p>
-<p>Fassung: 2</p>
+<p>Version: 2</p>
 <h4>Mindestwandstärke</h4>
 <p>Keine Wand dünner als zwei Extrusionsbreiten. Der Wert steht im Druckerprofil und wird nie als Zahl in die Op geschrieben.</p>
 <h4>Fasen statt Überhängen</h4>

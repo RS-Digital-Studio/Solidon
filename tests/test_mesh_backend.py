@@ -30,7 +30,7 @@ def stl(name: str = "cube_clean.stl") -> bytes:
 #: Was ein Rechner mit dieser Ausstattung zur Auswahl stellt, samt der Fallen:
 #: unter den Checkpoints liegt neben den Bildmodellen auch ein Formkern aus
 #: einer früheren Installation, und neben dem gemeinten TripoSG steht die
-#: Kritzel-Fassung, die für ein Lichtbild das falsche Modell wäre. Beide
+#: Kritzel-Version, die für ein Lichtbild das falsche Modell wäre. Beide
 #: stehen mit Absicht vor der richtigen Antwort.
 OFFERED: dict[str, list[str]] = {
     "CheckpointLoaderSimple.ckpt_name": [
@@ -295,7 +295,7 @@ def test_the_models_come_from_the_machine_it_runs_on() -> None:
         if node["class_type"] in ("CheckpointLoaderSimple", "TripoSGLoader")
     }
     assert chosen["TripoSGLoader"]["model"] == "TripoSG", (
-        "nicht die Kritzel-Fassung, die davor in der Liste steht"
+        "nicht die Kritzel-Version, die davor in der Liste steht"
     )
     assert chosen["CheckpointLoaderSimple"]["ckpt_name"] == "Juggernaut-X-v10.safetensors", (
         "nicht der Formkern, der unter denselben Checkpoints liegt"
@@ -774,7 +774,7 @@ def test_the_package_list_carries_what_a_fresh_comfyui_lacks() -> None:
     ``trimesh``, ``diffusers``, ``scikit-image``, ``lazy_loader``, ``omegaconf``
     und die Laufzeit von ``antlr4`` — und die Einrichtung meldete „fertig".
 
-    Die Fassung an ``antlr4`` ist keine Übervorsicht: ``omegaconf`` liest damit
+    Die Version an ``antlr4`` ist keine Übervorsicht: ``omegaconf`` liest damit
     einen vorkompilierten Automaten, und die 4.13 serialisiert ihn anders.
     """
     from app.core.backends import comfy_setup
@@ -782,7 +782,7 @@ def test_the_package_list_carries_what_a_fresh_comfyui_lacks() -> None:
     for name in ("trimesh", "diffusers", "scikit-image", "lazy_loader", "omegaconf"):
         assert name in comfy_setup.PACKAGES, name
     antlr = [p for p in comfy_setup.PACKAGES if p.startswith("antlr4")]
-    assert antlr == ["antlr4-python3-runtime==4.9.3"], "die Fassung gehört dazu"
+    assert antlr == ["antlr4-python3-runtime==4.9.3"], "die Version gehört dazu"
 
 
 def test_setting_up_looks_whether_the_nodes_load(

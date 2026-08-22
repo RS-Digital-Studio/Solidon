@@ -54,7 +54,7 @@ ebenso: 2010,619298 mm³ auf beiden Seiten, Bohrung erkannt, Durchmesser und
 Achse richtig. Der zweite Kern aus §30 hält, was er verspricht.
 
 **Die Slicer-Übergabe kommt vollständig an.** Ein echter Lauf gegen
-ElegooSlicer 1.5.3.4 — eine Fassung neuer als die, gegen die die Tabelle
+ElegooSlicer 1.5.3.4 — eine Version neuer als die, gegen die die Tabelle
 gebaut wurde — meldet **null** übergangene Einstellungen. Die Profilzuordnung
 trifft ohne Zutun: `Elegoo Centauri Carbon 2 0.4 nozzle`, `0.20mm Standard
 @Elegoo CC2 0.4 nozzle`, `Elegoo PETG @ECC2`, aus 9849 gelesenen Profilen in
@@ -615,8 +615,8 @@ einem echten Lauf gegen den installierten ElegooSlicer; der Hinweis, dass
 `slice/estimate.py` Arbeit braucht, ist davon unberührt und weiterhin offen.
 
 **Zur Außenwelt:** Die beiden Programme, gegen die hier gemessen wurde, tragen
-in diesem Dokument ihre Fassungsnummern — **Autodesk Fusion 2704.1.36** und
+in diesem Dokument ihre Versionsnummern — **Autodesk Fusion 2704.1.36** und
 **ElegooSlicer 1.5.3.4**. Sie bleiben stehen, wie sie stehen: Eine Messung
-gegen eine bestimmte Fassung wird nicht dadurch besser, dass man die Nummer
-später überschreibt. Wer neu misst, misst gegen die dann installierte Fassung
+gegen eine bestimmte Version wird nicht dadurch besser, dass man die Nummer
+später überschreibt. Wer neu misst, misst gegen die dann installierte Version
 und schreibt sie dazu.

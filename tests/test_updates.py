@@ -8,9 +8,15 @@ nie ein Fehlerdialog, nie ein Start, der daran hängt.
 
 from __future__ import annotations
 
+import hashlib
+import urllib.error
+from collections.abc import Callable
 from typing import Any
 
+import pytest
+
 from app.core import updates
+from app.core.errors import ExternalToolError, OperationCancelled
 
 
 def answering(payload: dict[str, Any]) -> updates.Transport:
@@ -66,8 +72,325 @@ def test_the_fields_cannot_flood_the_status_bar() -> None:
 
 
 def test_an_older_version_is_not_announced() -> None:
-    """Kein Downgrade-Hinweis, wenn die eigene Fassung weiter ist."""
+    """Kein Downgrade-Hinweis, wenn die eigene Version weiter ist."""
     release = updates.check(fetch=answering({"version": "0.0.0"}))
 
     assert release is not None
     assert not release.newer_than()
+
+
+# --- Die Pakete in der Versionsdatei --------------------------------------------
+
+
+def with_package(**changes: Any) -> dict[str, Any]:
+    """Eine Antwort mit genau einem Paket, an dem sich etwas ändern lässt."""
+    entry: dict[str, Any] = {
+        "file": "Solidon3D-Setup-9.9.9.exe",
+        "url": "https://solidon3d.de/dl/Solidon3D-Setup-9.9.9.exe",
+        "size": 4,
+        "sha256": "a" * 64,
+    }
+    entry.update(changes)
+    return {"version": "99.0.0", "packages": {updates.PLATFORM_WINDOWS: entry}}
+
+
+def test_a_package_is_read_with_all_four_fields() -> None:
+    release = updates.check(fetch=answering(with_package()))
+
+    assert release is not None
+    package = release.package(updates.PLATFORM_WINDOWS)
+    assert package is not None
+    assert package.file == "Solidon3D-Setup-9.9.9.exe"
+    assert package.size == 4
+    assert package.sha256 == "a" * 64
+
+
+def test_a_package_from_another_host_is_dropped() -> None:
+    """Die Prüfsumme steht in derselben Datei wie die Adresse.
+
+    Sie schützt darum nicht gegen einen Server, der beide fälscht — was
+    schützt, ist die Auflage, dass das Paket von demselben Rechnernamen kommt
+    wie die Versionsdatei. Ein Zertifikat für *diesen* Namen ist die Hürde,
+    und wer sie nimmt, braucht keine gefälschte Prüfsumme mehr.
+    """
+    fremd = with_package(url="https://example.org/dl/Solidon3D-Setup-9.9.9.exe")
+
+    release = updates.check(fetch=answering(fremd))
+
+    assert release is not None
+    assert release.packages == {}
+
+
+def test_a_package_over_plain_http_is_dropped() -> None:
+    release = updates.check(fetch=answering(with_package(url="http://solidon3d.de/dl/x.exe")))
+
+    assert release is not None
+    assert release.packages == {}
+
+
+def test_a_package_without_a_usable_checksum_is_dropped() -> None:
+    """Ohne Prüfsumme gäbe es nichts zu prüfen, und genau das schließt §37.2
+    aus."""
+    for kaputt in ("", "abc", "z" * 64, 12345):
+        release = updates.check(fetch=answering(with_package(sha256=kaputt)))
+
+        assert release is not None
+        assert release.packages == {}, kaputt
+
+
+def test_a_size_that_is_no_size_becomes_zero() -> None:
+    for kaputt in ("viel", -5, 0, True, None, 10**13):
+        release = updates.check(fetch=answering(with_package(size=kaputt)))
+
+        assert release is not None
+        package = release.package(updates.PLATFORM_WINDOWS)
+        assert package is not None and package.size == 0, kaputt
+
+
+def test_packages_that_are_not_a_mapping_are_no_packages() -> None:
+    for kaputt in ("alles", [1, 2], 7):
+        release = updates.check(fetch=answering({"version": "99.0", "packages": kaputt}))
+
+        assert release is not None
+        assert release.packages == {}, kaputt
+
+
+def test_the_platform_decides_which_package_is_meant(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Auf einem Mac unterscheidet der Befehlssatz, sonst das System.
+
+    Ein für arm64 gebautes Programm startet auf einem Intel-Mac nicht — hier
+    ist die Architektur keine Feinheit, sondern der Unterschied zwischen
+    „läuft" und „lässt sich nicht öffnen".
+    """
+    monkeypatch.setattr(updates.sys, "platform", "win32")
+    assert updates.platform_key() == updates.PLATFORM_WINDOWS
+
+    monkeypatch.setattr(updates.sys, "platform", "linux")
+    assert updates.platform_key() == updates.PLATFORM_LINUX
+
+    monkeypatch.setattr(updates.sys, "platform", "darwin")
+    monkeypatch.setattr(updates.platform, "machine", lambda: "arm64")
+    assert updates.platform_key() == updates.PLATFORM_MACOS_ARM
+
+    monkeypatch.setattr(updates.platform, "machine", lambda: "x86_64")
+    assert updates.platform_key() == updates.PLATFORM_MACOS_INTEL
+
+
+def test_linux_gets_the_hint_and_no_package_to_start(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Flatpak und AppImage lassen sich nicht von innen ersetzen (§37.2)."""
+    monkeypatch.setattr(updates, "packaged", lambda: True)
+    payload = {
+        "version": "99.0.0",
+        "packages": {
+            updates.PLATFORM_LINUX: {
+                "file": "Solidon3D-9.9.9-x86_64.flatpak",
+                "url": "https://solidon3d.de/dl/Solidon3D-9.9.9-x86_64.flatpak",
+                "size": 4,
+                "sha256": "a" * 64,
+            }
+        },
+    }
+
+    release = updates.check(fetch=answering(payload))
+
+    assert release is not None
+    assert release.package(updates.PLATFORM_LINUX) is not None, "der Hinweis kennt es"
+    assert release.startable(updates.PLATFORM_LINUX) is None, "gestartet wird es nicht"
+
+
+def test_running_from_source_offers_no_package(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Wer aus den Quellen fährt, hat nichts, was ein Installer ersetzen
+    könnte."""
+    monkeypatch.setattr(updates, "packaged", lambda: False)
+
+    release = updates.check(fetch=answering(with_package()))
+
+    assert release is not None
+    assert release.package(updates.PLATFORM_WINDOWS) is not None
+    assert release.startable(updates.PLATFORM_WINDOWS) is None
+
+
+# --- Das Holen ------------------------------------------------------------------
+
+
+class FakeAnswer:
+    """Eine Antwort, die aus einem Puffer liest statt aus dem Netz."""
+
+    def __init__(self, payload: bytes) -> None:
+        self._rest = payload
+
+    def __enter__(self) -> FakeAnswer:
+        return self
+
+    def __exit__(self, *_args: object) -> None:
+        return None
+
+    def read(self, size: int = -1) -> bytes:
+        if size is None or size < 0:
+            size = len(self._rest)
+        chunk, self._rest = self._rest[:size], self._rest[size:]
+        return chunk
+
+
+def serving(payload: bytes) -> Callable[..., FakeAnswer]:
+    def opener(_request: object, **_options: object) -> FakeAnswer:
+        return FakeAnswer(payload)
+
+    return opener
+
+
+def package_for(payload: bytes, **changes: Any) -> updates.Package:
+    values: dict[str, Any] = {
+        "file": "Solidon3D-Setup-9.9.9.exe",
+        "url": "https://solidon3d.de/dl/Solidon3D-Setup-9.9.9.exe",
+        "size": len(payload),
+        "sha256": hashlib.sha256(payload).hexdigest(),
+    }
+    values.update(changes)
+    return updates.Package(**values)
+
+
+def test_a_downloaded_package_is_kept_when_the_checksum_matches() -> None:
+    payload = b"ein Installationspaket" * 100
+
+    file = updates.download(package_for(payload), opener=serving(payload))
+
+    assert file.is_file()
+    assert file.read_bytes() == payload
+
+
+def test_the_progress_counts_up_to_the_whole() -> None:
+    payload = b"x" * (updates.CHUNK_BYTES * 2 + 17)
+    gesehen: list[float] = []
+
+    updates.download(
+        package_for(payload),
+        progress=lambda share, _text: gesehen.append(share),
+        opener=serving(payload),
+    )
+
+    assert gesehen, "ohne Fortschritt sieht niemand, dass etwas geschieht"
+    assert gesehen == sorted(gesehen)
+    assert gesehen[-1] == pytest.approx(1.0)
+
+
+def test_a_wrong_checksum_leaves_nothing_behind() -> None:
+    """Der Fall, für den die Prüfung da ist — und der Beweis, dass danach
+    nichts liegen bleibt, das jemand doppelklicken könnte."""
+    payload = b"nicht das, was versprochen war"
+    package = package_for(payload, sha256="b" * 64)
+
+    with pytest.raises(ExternalToolError) as fehler:
+        updates.download(package, opener=serving(payload))
+
+    assert fehler.value.suggestions, "jede Ausnahme trägt einen Handlungsvorschlag"
+    assert not list(updates.target_dir().glob("*")), "die halbe Wahrheit bleibt nicht liegen"
+
+
+def test_a_package_that_is_shorter_than_announced_is_refused() -> None:
+    payload = b"abgebrochen"
+    package = package_for(payload, size=len(payload) + 500)
+
+    with pytest.raises(ExternalToolError):
+        updates.download(package, opener=serving(payload))
+
+    assert not list(updates.target_dir().glob("*"))
+
+
+def test_a_package_that_is_longer_than_announced_stops_reading() -> None:
+    payload = b"y" * 5000
+    package = package_for(payload, size=100)
+
+    with pytest.raises(ExternalToolError):
+        updates.download(package, opener=serving(payload))
+
+    assert not list(updates.target_dir().glob("*"))
+
+
+def test_cancelling_removes_the_half_file() -> None:
+    payload = b"z" * (updates.CHUNK_BYTES * 3)
+
+    class Sofort:
+        @property
+        def is_cancelled(self) -> bool:
+            return True
+
+        def raise_if_cancelled(self) -> None:
+            raise OperationCancelled
+
+    with pytest.raises(OperationCancelled):
+        updates.download(package_for(payload), cancelled=Sofort(), opener=serving(payload))
+
+    assert not list(updates.target_dir().glob("*"))
+
+
+def test_the_file_name_cannot_leave_the_cache() -> None:
+    """Der Name kommt von einem Server.
+
+    „../../Autostart/etwas.exe" ist ein gültiger JSON-String; ungeprüft an
+    einen Pfad gehängt schreibt er genau dorthin.
+    """
+    payload = b"harmlos"
+    boese = package_for(payload, file="../../" + "hoch/" * 5 + "boese.exe")
+
+    file = updates.download(boese, opener=serving(payload))
+
+    assert file.parent == updates.target_dir()
+    assert file.name == "boese.exe"
+
+
+def test_an_empty_name_still_becomes_a_file() -> None:
+    payload = b"namenlos"
+
+    file = updates.download(package_for(payload, file="///"), opener=serving(payload))
+
+    assert file.parent == updates.target_dir()
+    assert file.name == "solidon-update"
+
+
+def test_the_cache_holds_one_package_at_a_time() -> None:
+    """Ein Paket wiegt so viel wie die Anwendung. Zwei sind eines zu viel."""
+    erst = b"das alte Paket"
+    dann = b"das neue Paket, deutlich anders"
+
+    alt = updates.download(package_for(erst, file="alt.exe"), opener=serving(erst))
+    neu = updates.download(package_for(dann, file="neu.exe"), opener=serving(dann))
+
+    assert not alt.exists()
+    assert neu.is_file()
+    assert [p.name for p in updates.target_dir().glob("*")] == ["neu.exe"]
+
+
+def test_a_server_that_says_no_is_an_error_with_a_way_out() -> None:
+    def refusing(_request: object, **_options: object) -> FakeAnswer:
+        raise urllib.error.HTTPError("https://solidon3d.de/dl/x", 404, "weg", {}, None)  # type: ignore[arg-type]
+
+    with pytest.raises(ExternalToolError) as fehler:
+        updates.download(package_for(b"egal"), opener=refusing)
+
+    assert any(action.id == "open_download_page" for action in fehler.value.suggestions)
+
+
+def test_starting_a_package_that_is_gone_says_so() -> None:
+    fehlt = updates.target_dir() / "nie-dagewesen.exe"
+
+    with pytest.raises(ExternalToolError) as fehler:
+        updates.start_installer(fehlt)
+
+    assert fehler.value.suggestions
+
+
+def test_starting_hands_the_package_to_the_system(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Gestartet und nicht abgewartet: Der Installer überlebt Solidon."""
+    payload = b"ein Paket"
+    file = updates.download(package_for(payload), opener=serving(payload))
+    gestartet: list[list[str]] = []
+
+    def note(command: list[str], **_options: object) -> None:
+        gestartet.append(command)
+
+    monkeypatch.setattr(updates.subprocess, "Popen", note)
+
+    updates.start_installer(file)
+
+    assert gestartet and str(file) in gestartet[0]

@@ -38,7 +38,7 @@ from app.core.errors import AppError
 from app.core.registry import Registry
 from app.i18n import _
 
-#: Die Fassung des Protokolls, auf die sich beide Seiten einigen.
+#: Die Version des Protokolls, auf die sich beide Seiten einigen.
 PROTOCOL_VERSION: Final = "2024-11-05"
 
 #: Woran gebunden wird. Keine Einstellung — wer von außen erreichbar sein will,

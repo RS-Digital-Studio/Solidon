@@ -52,9 +52,9 @@ PROJECT_SUFFIX: Final = ".p3d"
 #: Anwendungsversion, gespiegelt in jede Projektdatei als ``app_version``.
 #:
 #: **0.1 ist die erste öffentliche Demo** (Demo-Konzept §2 D), nicht die
-#: Verkaufsfassung. Die Null vorn ist keine Bescheidenheit, sondern Mechanik:
+#: Verkaufsversion. Die Null vorn ist keine Bescheidenheit, sondern Mechanik:
 #: `key.current_major()` liest die Hauptversion, und ein Kaufschlüssel für 1.x
-#: greift damit in einer Demo nicht — wer kauft, lädt die Verkaufsfassung, die
+#: greift damit in einer Demo nicht — wer kauft, lädt die Verkaufsversion, die
 #: keinen Stichtag trägt. Zugleich zeigt der Update-Hinweis jeder laufenden
 #: Demo auf die 1.0, sobald `version.json` sie nennt.
 #:

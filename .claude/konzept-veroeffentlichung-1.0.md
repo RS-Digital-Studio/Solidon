@@ -190,7 +190,7 @@ Datenpfad, nicht an der Oberfläche. Das ist die Voraussetzung für §2 I.
 | Speichern, Undo, Redo | Modell erzeugen (Weg 3) |
 | Handbuch, Über-Dialog, Fehlerbericht | |
 
-**Warum Speichern, Undo und Redo frei bleiben:** Eine Testfassung, die
+**Warum Speichern, Undo und Redo frei bleiben:** Eine Testversion, die
 gespeicherte Arbeit einschließt, erzeugt einen verärgerten Nicht-Käufer statt
 eines späteren. Wer nichts mehr ändern kann, kann auch nichts kaputt speichern —
 die Freigabe kostet nichts und nimmt dem Ablauf die Härte an der einen Stelle,
@@ -330,7 +330,7 @@ kostet nichts und ist ehrlicher als eine Warnung ohne Erklärung.
 > Organisation voraus; für einen Einzelentwickler ist der Certum-Weg der
 > naheliegende, und er kostet weniger als die hier genannten 250–400 €.
 > Bleibt es beim unsignierten Ausliefern, gilt zusätzlich: **die Reputation
-> baut sich für jede neue Fassung bei null neu auf** — sie wandert nicht von
+> baut sich für jede neue Version bei null neu auf** — sie wandert nicht von
 > der Vorversion mit.
 
 **Der Signierschritt in `build.yml` muss so oder so angefasst werden**: heute
@@ -340,7 +340,7 @@ kostet nichts und ist ehrlicher als eine Warnung ohne Erklärung.
 
 AppImage und Flatpak kommen nach 1.0. Grund: das tar.gz ist gebaut und
 funktioniert, die beiden anderen sind je ein eigenes Format mit eigener
-Fehlersuche — und die Zielgruppe der ersten Fassung ist Windows.
+Fehlersuche — und die Zielgruppe der ersten Version ist Windows.
 
 **Stand 20.08.2026: die Entscheidung bleibt, ihre erste Hälfte ist erledigt.**
 `tools/make_linux_packages.py` schreibt Menüeintrag, Flatpak-Manifest und
@@ -350,7 +350,7 @@ das, was die Begründung nennt: **der Bau und seine Fehlersuche.** Kein Paket is
 je entstanden, weil das Linux und zwei externe Programme braucht.
 
 Ein Format, dessen Rezept steht und dessen Bau nie gelaufen ist, gehört nicht in
-eine erste Fassung. Der Aufwand für 1.0 ist damit nicht kleiner geworden — nur
+eine erste Version. Der Aufwand für 1.0 ist damit nicht kleiner geworden — nur
 die Vorarbeit ist getan, und sie liegt nicht mehr auf dem Weg dorthin.
 
 ### G — Version wird 1.0.0
@@ -368,8 +368,8 @@ ein Release-Anhang daraus wäre nicht öffentlich abrufbar. Die CI hebt das Pake
 sieben Tage als Artefakt auf (`build.yml:179`); von dort geht es von Hand auf
 den Webspace.
 
-**Bei rund 255 MB je Fassung ist der Platz auf dem Webspace zu prüfen**, bevor
-die zweite Fassung dazukommt.
+**Bei rund 255 MB je Version ist der Platz auf dem Webspace zu prüfen**, bevor
+die zweite Version dazukommt.
 
 **Berichtigt am 06.08.2026: die Domain existierte nicht.** Der Plan nannte hier
 `solidon3d.rsdigital.de` — eine Adresse, die nie jemandem gehört hat. Es gibt
@@ -499,7 +499,7 @@ beide Artefakte (Setup-Datei und tar.gz) heruntergeladen und geöffnet.
 > - **GPSR** gilt seit dem 13.12.2024. Artikel 9 verlangt eine Typen-,
 >   Chargen- oder Seriennummer am Produkt sowie Name und Postanschrift des
 >   Herstellers — bei Software ist die Anwendbarkeit strittig, die
->   Fassungsnummer und das Impressum decken die Angaben ohnehin ab.
+>   Versionsnummer und das Impressum decken die Angaben ohnehin ab.
 
 **Verifikation:** keine `[PLATZHALTER]` mehr in `website/` · Testmail an die
 Adresse kommt an · der Installer zeigt den EULA-Text, nicht die
@@ -746,7 +746,7 @@ anlaufen.
 | MoR lehnt ab oder braucht Wochen | V5 blockiert V7 | Verkauf zunächst auf Anfrage per Rechnung, Schlüssel von Hand — die Website nennt die Adresse schon |
 | Ein Schlüssel wird öffentlich geteilt | Umsatzverlust | Sperrliste in der nächsten Punktversion; bewusste Folge von §2 C, kein Fehler |
 | Reines Python für Ed25519 hat einen Fehler | Falsche Annahme oder Ablehnung | Testvektoren aus RFC 8032 in `tests/test_licence.py`; sonst auf `cryptography` umstellen (Weg 2) |
-| Webspace zu klein für 255 MB je Fassung | Download fällt aus | nur die jeweils aktuelle Fassung halten; Objektspeicher prüfen |
+| Webspace zu klein für 255 MB je Version | Download fällt aus | nur die jeweils aktuelle Version halten; Objektspeicher prüfen |
 | Erster Käufer findet einen Absturz | Ruf beim ersten Eindruck | V6 auf einem fremden Rechner ist genau dagegen; Fehlerbericht ist gebaut |
 
 ---
@@ -766,7 +766,7 @@ anlaufen.
 
 **Entschieden am 06.08.2026, nach einer erwogenen und verworfenen Beta-Stufe:**
 
-* **Keine Beta-Fassung. 1.0 ist die erste öffentliche Fassung.** Erwogen war
+* **Keine Beta-Version. 1.0 ist die erste öffentliche Version.** Erwogen war
   eine 0.9 mit Schlüsseln auf Hauptversion 0 — der Riegel dafür wäre gratis
   gewesen, weil `key.parse` die Hauptversion ohnehin prüft und ein 0er-Schlüssel
   in 1.0.0 von selbst abgelehnt worden wäre. Verworfen aus zwei Gründen. Erstens:
@@ -786,19 +786,19 @@ anlaufen.
 **Noch offen:**
 
 1. **Zahlungsanbieter** (§2 D): Paddle, Lemon Squeezy — oder Verkauf auf Anfrage
-   für die erste Fassung? *Blockiert V5 und den Kaufknopf in V7.*
+   für die erste Version? *Blockiert V5 und den Kaufknopf in V7.*
 2. **Signierung** (§2 E): Azure Trusted Signing, OV-Zertifikat auf Token — oder
    1.0 unsigniert mit Prüfsumme und Erklärung? *Blockiert V6.* **Dringlicher als
    zunächst angenommen:** SmartScreen-Reputation baut sich über Zeit und
    Downloadzahl auf. Wer erst zum Verkaufsstart signiert, fängt bei null an,
    genau wenn Geld fließt — und die Vorsichtigen, deren Urteil am meisten wert
    ist, brechen an „Unbekannter Herausgeber" ab. Bei rund 10 $/Monat für Azure
-   Trusted Signing ist das die günstigste Fassung dieser Entscheidung.
+   Trusted Signing ist das die günstigste Version dieser Entscheidung.
 
 3. **Webspace** (§2 H, neu am 06.08.2026): Google Workspace liefert nichts aus,
    und einen Hoster für `rs-digital.org` gibt es bisher nicht nachweislich.
    Gebraucht wird gewöhnlicher Webspace mit SFTP, HTTPS für die Domain und
-   Platz für rund 255 MB je Fassung. Die 255 MB schließen die üblichen
+   Platz für rund 255 MB je Version. Die 255 MB schließen die üblichen
    Statik-Dienste aus — Cloudflare Pages deckelt bei 25 MB je Datei, Netlify
    ähnlich. Klassischer Webspace kann es; sonst Seite und Setup-Datei trennen
    und letztere in einen Objektspeicher legen. *Blockiert V7.*
@@ -814,9 +814,9 @@ Das einzige Geheimnis des ganzen Verfahrens. Geht er verloren, kann niemand mehr
 Schlüssel ausstellen; wird er bekannt, ist H1 wertlos und es braucht eine neue
 Hauptversion mit neuem öffentlichen Schlüssel.
 
-* **Nie im Repository.** Kein Ausnahmefall, keine verschlüsselte Fassung „nur
+* **Nie im Repository.** Kein Ausnahmefall, keine verschlüsselte Version „nur
   zum Bauen".
-* **Ablage:** Passwortmanager plus eine ausgedruckte Papierfassung an einem
+* **Ablage:** Passwortmanager plus eine ausgedruckte Papierversion an einem
   zweiten Ort. Ein einzelnes Speichermedium ist zu wenig.
 * **Er wird nur zum Erzeugen von Schlüsselvorräten gebraucht** — nie beim Bauen,
   nie in der CI. `tools/make_licence_keys.py` liest ihn aus einer Datei, deren

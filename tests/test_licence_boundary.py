@@ -5,7 +5,7 @@ Dokumentänderung (``History.apply``), jeder Export (``write_plan``,
 ``write_assembly``), die Slicer-Übergabe (``slice_model``) und der Chat
 (``AgentSession.propose``). Hier steht beides fest — dass sie mit abgelaufenem
 Testlauf ablehnen, und dass alles Lesende weiterläuft. Die zweite Hälfte ist
-die eigentliche Zusicherung: eine Testfassung, die gespeicherte Arbeit
+die eigentliche Zusicherung: eine Testversion, die gespeicherte Arbeit
 einschließt, erzeugt einen verärgerten Nicht-Käufer statt eines späteren.
 
 Messen und Bemaßen liegen in der Ansicht, nicht im Dokument (§2 C) — es gibt

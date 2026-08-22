@@ -182,7 +182,7 @@ Dialoge.
 2. Bei GPL: nicht verwenden — Alternative oder externer Aufruf
 3. Hinweis im Über-Dialog, wenn die Lizenz das verlangt
 4. Lizenzprüfung muss grün bleiben
-5. Untergrenze in `pyproject.toml`, **feste Fassung in `constraints.txt`** —
+5. Untergrenze in `pyproject.toml`, **feste Version in `constraints.txt`** —
    sonst installiert der nächste Klon etwas anderes als die CI. Prüfen mit
    `python tools/check_env.py`
 

@@ -61,7 +61,7 @@ def test_the_notice_file_names_every_runtime_package() -> None:
     war elf Pakete hinterher, weil niemand sie mit dem Baum verglichen hat.
 
     Geprüft wird nur der **Name**. Die Lizenzangabe eines Pakets ändert
-    zwischen zwei Fassungen schon mal ihre Schreibweise („BSD License" gegen
+    zwischen zwei Versionen schon mal ihre Schreibweise („BSD License" gegen
     „BSD-3-Clause"), und daran soll kein Lauf scheitern — ein fehlendes Paket
     ist der Fehler, den es zu fangen gilt.
     """

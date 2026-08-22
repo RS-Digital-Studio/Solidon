@@ -1057,7 +1057,7 @@ def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Fin
 
 
 def unknown_keys(settings: PrintSettings, profile: Profile, setup: SlicerSetup) -> list[Finding]:
-    """Schlüssel, die diese Cura-Fassung nicht kennt (§29, §28.2).
+    """Schlüssel, die diese Cura-Version nicht kennt (§29, §28.2).
 
     Was :func:`verify` für PrusaSlicer und die Orca-Familie leistet, kann es
     für Cura nicht: ``CuraEngine`` schreibt seine Einstellungen nicht in die
@@ -1067,7 +1067,7 @@ def unknown_keys(settings: PrintSettings, profile: Profile, setup: SlicerSetup) 
 
     Die Auskunft, die es stattdessen gibt, liegt neben dem Programm:
     ``fdmprinter.def.json`` nennt jeden gültigen Schlüssel der **installierten
-    Fassung**. Damit prüft sich auch eine Cura, die beim Bauen der Tabelle
+    Version**. Damit prüft sich auch eine Cura, die beim Bauen der Tabelle
     niemand vorliegen hatte — dieselbe Absicht wie bei der Gegenprobe, nur
     aus der einzigen Quelle, die dieser Slicer hergibt.
 
@@ -1094,7 +1094,7 @@ def unknown_keys(settings: PrintSettings, profile: Profile, setup: SlicerSetup) 
             code="slicer.unknown_key",
             severity="warning",
             message=_(
-                "Diese Fassung des Slicers kennt einige Einstellungen nicht — "
+                "Diese Version des Slicers kennt einige Einstellungen nicht — "
                 "sie werden ohne Meldung übergangen."
             ),
             values={"count": len(strange), "settings": ", ".join(strange[:10])},
@@ -1563,7 +1563,7 @@ def slice_model(
         beyond = off_the_bed(payload, profile, setup.flavour)
         # Die Gegenprobe: hat der Slicer übernommen, was ihm geschrieben wurde?
         # Das ist die einzige Auskunft, die von ihm selbst kommt statt aus einer
-        # Dokumentation, die für die installierte Fassung gelten mag oder nicht.
+        # Dokumentation, die für die installierte Version gelten mag oder nicht.
         ignored = verify(payload, as_mapping(settings, setup.flavour))
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
@@ -1629,7 +1629,7 @@ def verify(text: str, written: Mapping[str, str]) -> list[Finding]:
     Die Slicer schreiben ihre wirksame Konfiguration als Kommentare in die
     Druckdatei. Das ist die einzige Auskunft darüber, ob eine Zuordnung
     stimmt — und sie kommt von dem Programm selbst, nicht aus einer
-    Dokumentation, die für die installierte Fassung womöglich nicht gilt.
+    Dokumentation, die für die installierte Version womöglich nicht gilt.
 
     Damit prüft sich jeder Slicer selbst, auch einer, den beim Bauen der
     Tabelle niemand vorliegen hatte. Gemeldet wird nur, was **nachweislich**

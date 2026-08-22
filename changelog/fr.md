@@ -1,0 +1,28 @@
+# Nouveautés
+
+Ce fichier est ce qu'affiche la fenêtre de mise à jour, et rien d'autre. Ce
+n'est **pas** une liste des modifications : sur 97 commits entre 0.1.1 et
+0.1.2, il reste huit lignes, et les choisir est le travail. Un point a sa
+place ici si quelqu'un le remarque en utilisant le programme.
+
+Donc : pas de messages de commit, pas de noms de modules, pas de numéros de
+paragraphe. « La barre disparaissait alors que l'application calculait encore
+pendant quatre secondes » est un bon commit et une mauvaise entrée ; « La
+progression reste affichée jusqu'à la fin réelle du calcul » dit la même chose
+à celui qui est devant l'écran.
+
+Un fichier par langue dans ce dossier, comme pour les catalogues, et tous
+portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
+`tools/make_download.py` en tire la section de la version courante et l'écrit
+dans `website/version.json`.
+
+## 0.1.2
+
+- Les nombres décimaux saisis sont lus correctement partout. « 12,5 » reste douze et demi ; auparavant, cela pouvait devenir 125, sans question ni avertissement.
+- Chacun des cinquante-six champs des réglages d'impression indique désormais ce qu'il fait quand on le modifie.
+- Le temps d'impression et la quantité de matière sont estimés plus finement, surtout pour les pièces évidées.
+- Le transfert vers le trancheur atteint le plateau. Avec CuraEngine, les pièces se retrouvaient à côté.
+- Lors d'une découpe avec goupilles, les trous correspondants se placent dans la bonne moitié.
+- Millimètres et pouces valent maintenant partout où figure un nombre — y compris dans les barres d'outils et lors de la peinture.
+- La progression reste affichée jusqu'à la fin réelle du calcul, et la fenêtre demeure utilisable pendant ce temps.
+- Le manuel a reçu un aperçu de tous les raccourcis clavier.

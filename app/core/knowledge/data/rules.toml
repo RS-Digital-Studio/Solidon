@@ -13,7 +13,7 @@
 #
 # ``title_<sprache>`` und ``text_<sprache>`` (en, es, fr, it, pt) sind fürs
 # Handbuch da, nicht für den Agenten: der liest weiter die deutschen
-# Fassungen, damit es nicht zwei Wahrheiten gibt, an denen eine Messung
+# Versionen, damit es nicht zwei Wahrheiten gibt, an denen eine Messung
 # hängen könnte. Eine Übersetzung ändert keine Regel, deshalb bleibt die
 # Version, wo sie ist.
 
@@ -356,7 +356,7 @@ applies_to = ["approach"]
 [[changes]]
 version = "1"
 date = "2026-07-28"
-reason = "Erste Fassung, übernommen aus dem Bauplan §39."
+reason = "Erste Version, übernommen aus dem Bauplan §39."
 suite_before = ""
 suite_after = ""
 

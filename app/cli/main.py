@@ -170,7 +170,7 @@ def command_ops(args: argparse.Namespace) -> int:
 def command_docs(args: argparse.Namespace) -> int:
     """Die Referenz, mit ``--manual`` das ganze Handbuch.
 
-    Derselbe Text, den das Fenster zeigt: eine zweite Fassung wäre eine, die
+    Derselbe Text, den das Fenster zeigt: eine zweite Version wäre eine, die
     irgendwann etwas anderes sagt.
     """
     print(manual.as_markdown() if getattr(args, "manual", False) else documentation(), end="")
@@ -554,7 +554,7 @@ def _demo_is_over() -> bool:
         ),
         file=sys.stderr,
     )
-    print(tr("Die aktuelle Fassung gibt es auf {url}.").format(url=WEBSITE_URL), file=sys.stderr)
+    print(tr("Die aktuelle Version gibt es auf {url}.").format(url=WEBSITE_URL), file=sys.stderr)
     print(
         tr(
             "Ihre Projektdateien bleiben lesbar — eine Projektdatei ist ein "

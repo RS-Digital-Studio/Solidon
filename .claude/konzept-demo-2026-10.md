@@ -1,17 +1,17 @@
 # Konzept: Öffentliche Demo bis 30.10.2026
 
 Stand 12.08.2026, nachrecherchiert am 19.08.2026. Baut auf `.claude/konzept-veroeffentlichung-1.0.md` auf und
-ändert dessen §7-Entscheidung „keine Beta-Fassung" — mit Begründung, siehe §2 A.
+ändert dessen §7-Entscheidung „keine Beta-Version" — mit Begründung, siehe §2 A.
 Dieses Dokument ist die fachliche SSOT der Demo-Phase; alles, was den späteren
 Verkauf betrifft, bleibt im Veröffentlichungskonzept.
 
-Der Auftrag in einem Satz: **eine kostenlose, vollständige Fassung
+Der Auftrag in einem Satz: **eine kostenlose, vollständige Version
 veröffentlichen, die am 30.10.2026 endet — danach fällt die Entscheidung
 zwischen einer zweiten Demo und dem Verkauf von 1.0.**
 
 **Vorgaben vom 12.08.2026 (Robert), im Text eingearbeitet:** Start am
 **20.08.2026**. Kein Schlüssel, keine Eingabe — herunterladen, installieren,
-es läuft. Download über die Website. Nach neuen Fassungen wird **von Hand**
+es läuft. Download über die Website. Nach neuen Versionen wird **von Hand**
 gesucht; automatisch beim Start bleibt eine Option. `support@solidon3d.de`
 gibt es bereits.
 
@@ -48,7 +48,7 @@ nicht gibt.
 2. **Es ist nie ein Paket auf einem fremden Rechner gelaufen.** V6 Punkt 3 aus
    dem Veröffentlichungskonzept ist offen. Der Satz dort gilt unverändert:
    dieser Punkt findet erfahrungsgemäß mehr als alle Tests zusammen.
-3. **Es gibt keinen Weg, von Hand nach einer neuen Fassung zu sehen.**
+3. **Es gibt keinen Weg, von Hand nach einer neuen Version zu sehen.**
    `updates.check()` läuft heute nur beim Start und nur, wenn
    `settings.check_for_updates` an ist (Vorgabe: aus) — und meldet sich nur,
    wenn etwas Neueres da ist (`main_window.py:4202` und `:4222`). Ein
@@ -173,7 +173,7 @@ ersetzt die Resttageberechnung, nicht die Zustände — `Activation.days_left`
 rechnet dann `(30.10. − heute).days`, und alles darüber (`unlocked`,
 `in_trial`, `expired`, die vier `require`-Stellen, die ausgegraute Oberfläche)
 bleibt unverändert. Ein Ablaufdatum im Schlüsselformat wäre die Alternative;
-sie kostet eine Formatfassung, ein Erzeugungswerkzeug, eine Verteilung per
+sie kostet eine Formatversion, ein Erzeugungswerkzeug, eine Verteilung per
 Mail und dem Nutzer eine Hürde vor dem ersten Blick — für nichts, was die Demo
 braucht.
 
@@ -192,7 +192,7 @@ gilt das **nicht**: Nach dem 30.10.2026 lässt sie sich nicht mehr starten.
 
 **Begründung:** Eine befristete Demo ist ein Angebot auf Zeit, kein
 beschnittenes Produkt. Ein Betrachtermodus, der unbegrenzt weiterläuft, ist
-eine zweite kostenlose Fassung, die niemand gepflegt hat — mit einem Stand,
+eine zweite kostenlose Version, die niemand gepflegt hat — mit einem Stand,
 der beim Erscheinen der 1.0 veraltet ist, und mit einem Fehlerbild, für das
 später niemand mehr einen Bau nachschiebt.
 
@@ -212,7 +212,7 @@ ab, und sie sind nicht optional:
 
 **Wo die Sperre greift:** Der Kern kennt den Zustand (`Activation.over`), die
 Oberfläche und die Kommandozeile beenden sich beim Start mit der Meldung. Die
-vier `require`-Stellen sperren ohnehin — sie bleiben, weil die Verkaufsfassung
+vier `require`-Stellen sperren ohnehin — sie bleiben, weil die Verkaufsversion
 sie braucht.
 
 ### C — Der Stichtag steht in `activation/store.py`, nicht in `branding.py`
@@ -229,7 +229,7 @@ fachlich dorthin, wo die Frist heute schon gezählt wird.
 nur sperren, nie öffnen. Keine Umgebungsvariable, kein Schalter, keine
 Freigabedatei; die Suite setzt den Zustand weiter über die Fixture.
 
-### D — Version 0.1.0, damit 1.0.0 die Verkaufsfassung bleibt
+### D — Version 0.1.0, damit 1.0.0 die Verkaufsversion bleibt
 
 `APP_VERSION` geht auf `0.1.0`, nicht auf `1.0.0`. Drei Folgen, alle
 erwünscht:
@@ -256,17 +256,17 @@ eine Entscheidung und kein Nebenprodukt des Bauens. Für die Mechanik oben
 Die Zahl steht an zwei Orten — `app/branding.py` und `pyproject.toml` — und
 bis zum 14.08.2026 hielt die beiden nichts zusammen außer Aufmerksamkeit. Wer
 eine drehte und die andere vergaß, lieferte ein Paket, dessen Metadaten eine
-andere Fassung nennen als der Über-Dialog.
+andere Version nennen als der Über-Dialog.
 `test_the_version_is_the_same_in_both_places_that_carry_it` hält sie jetzt
 zusammen. Die erzeugten Seiten ziehen ohnehin von selbst nach:
 `tools/make_manual.py` liest `APP_VERSION` fürs Deckblatt, `tools/make_legal.py`
-holt die Fassung aus `EULA.md`, und `website/version.json` wird von Hand
-gesetzt, weil es die *angebotene* Fassung nennt und nicht die gebaute.
+holt die Version aus `EULA.md`, und `website/version.json` wird von Hand
+gesetzt, weil es die *angebotene* Version nennt und nicht die gebaute.
 
 ### E — Vollständig heißt vollständig
 
 Keine Wasserzeichen, keine Exportsperre, keine gesperrte Operation, kein
-gedrosseltes Netz. Die Demo ist die Verkaufsfassung mit einem Enddatum. Alles
+gedrosseltes Netz. Die Demo ist die Verkaufsversion mit einem Enddatum. Alles
 andere wäre eine zweite Auslieferungsvariante mit eigener Fehlersuche — und es
 widerspräche dem Satz, der seit dem ersten Tag auf der Seite steht.
 
@@ -292,15 +292,15 @@ Mit dem harten Stopp aus §2 B2 ist diese Zeile keine Höflichkeit mehr, sondern
 die Zusage, dass niemand überrascht wird. Sie ist der Grund, warum es beim
 Ablauf keinen Vorwurf gibt: es stand jeden Tag da.
 
-### G — Nach neuen Fassungen wird von Hand gesucht; automatisch ist eine Option
+### G — Nach neuen Versionen wird von Hand gesucht; automatisch ist eine Option
 
 `settings.check_for_updates` steht auf `False` und bleibt es. Die Ersteinrichtung
 bekommt **keine** zusätzliche Frage — sie wäre genau die Hürde, die „installieren
 und es läuft" nicht haben soll.
 
-Stattdessen: ein Menüeintrag **„Nach einer neuen Fassung sehen"** unter Hilfe,
+Stattdessen: ein Menüeintrag **„Nach einer neuen Version sehen"** unter Hilfe,
 der jederzeit fragt und in **allen drei** Fällen antwortet — es gibt eine neuere
-Fassung (mit Nummer und Adresse), es gibt keine, oder die Seite war nicht
+Version (mit Nummer und Adresse), es gibt keine, oder die Seite war nicht
 erreichbar. Heute schweigt die Prüfung in den letzten beiden Fällen
 (`main_window.py:4222`); beim automatischen Lauf beim Start ist das richtig, bei
 einem Klick wäre es ein toter Knopf.
@@ -338,15 +338,15 @@ Commit.
 
 1. `store.py`: `DEMO_UNTIL: Final = date(2026, 10, 30)` und `days_left()`, das
    je nach Stichtag die Demo- oder die Testlaufrestzeit liefert.
-   `trial_days_left()` bleibt unangetastet, damit die Verkaufsfassung ohne
+   `trial_days_left()` bleibt unangetastet, damit die Verkaufsversion ohne
    Rückbau daraus entsteht (`DEMO_UNTIL = None` schaltet auf die Frist zurück)
 2. `activation.__init__._determine()` nimmt `days_left()`, wo heute
    `trial_days_left()` steht
 3. **`Activation.over`** — wahr, wenn ein Stichtag gesetzt und verstrichen ist
    (§2 B2). Der einzige neue Zustand; `expired` bleibt, was es war, weil die
-   Verkaufsfassung es unverändert braucht
-4. Ein Test koppelt beides an die Fassung: **eine 1.x-Fassung darf keinen
-   Stichtag tragen.** Sonst liefert ein unachtsamer Bau die Verkaufsfassung mit
+   Verkaufsversion es unverändert braucht
+4. Ein Test koppelt beides an die Version: **eine 1.x-Version darf keinen
+   Stichtag tragen.** Sonst liefert ein unachtsamer Bau die Verkaufsversion mit
    Ablaufdatum aus — der teuerste Fehler, den dieses Paket zulässt
 
 **Abnahme:** `tests/test_activation.py` — vor dem Stichtag offen, **am**
@@ -365,18 +365,18 @@ bleibt zunächst auf dem Demo-Stand — es wird erst zum Schluss angefasst (§4)
 Projektdatei trägt `app_version: 0.1.0`.
 
 > **Hier stand `0.9.0`, und das war seit dem 14.08.2026 überholt.** Robert hat
-> die Fassung auf **0.1.0** heruntergesetzt (`ROADMAP.md:4526`); sie steht
+> die Version auf **0.1.0** heruntergesetzt (`ROADMAP.md:4526`); sie steht
 > heute an sieben Stellen so — `app/branding.py:68`, `pyproject.toml:7`,
 > `website/version.json`, `README.md:13`, `EULA.md:13` und `:60`.
 > `test_the_version_is_the_same_in_both_places_that_carry_it`
 > (`tests/test_toolchain.py:108`) hält die beiden Handstellen zusammen.
 >
 > **Der Widerspruch zog sich durch das ganze Dokument:** §9 Punkt 1 führte die
-> Fassungsnummer noch als offene Entscheidung („Bis zum Widerspruch wird
+> Versionsnummer noch als offene Entscheidung („Bis zum Widerspruch wird
 > `0.9.0` gebaut"), und D6, §5 und §6 rechnen mit `0.9.1`, `0.9.2` und
 > `0.9.5`. Nach der Zählregel aus §2 D heißt der nächste Bau **`0.1.1`**, die
 > zweite Demo entsprechend `0.1.5`. Die Ziffern stehen unten, wie sie standen —
-> gemeint ist jeweils die nächste Punktfassung.
+> gemeint ist jeweils die nächste Punktversion.
 
 ### D2 — Die Texte in der Anwendung (S–M)
 
@@ -389,7 +389,7 @@ Projektdatei trägt `app_version: 0.1.0`.
    beim Start, sobald `state().over` gilt. Das Fenster nennt das Ablaufdatum,
    die Adresse der Website, den Ordner mit den eigenen Projekten und den Satz,
    dass eine `.p3d` eine ZIP-Datei mit JSON darin ist und lesbar bleibt
-6. Menüeintrag „Nach einer neuen Fassung sehen" (§2 G) mit Antwort in allen
+6. Menüeintrag „Nach einer neuen Version sehen" (§2 G) mit Antwort in allen
    drei Fällen; die Prüfung selbst bleibt, wie sie ist
 7. Alles über `tr()`, deutsch und englisch
 
@@ -444,7 +444,7 @@ Verweise stehen.
 
 Eingetragen werden sie von **`tools/make_download.py`**: Es kopiert die Pakete
 nach `website/dl/`, rechnet Größe und SHA-256 und schreibt beides in alle
-**sechs** Sprachfassungen (das Konzept sprach von zweien — inzwischen sind es
+**sechs** Sprachversionen (das Konzept sprach von zweien — inzwischen sind es
 sechs). Ohne Argumente räumt es den Kasten wieder leer, falls ein Paket
 zurückgezogen werden muss.
 
@@ -456,7 +456,7 @@ und der zur Prüfsumme erscheinen zusammen mit den Dateien. Was noch fehlt, ist
 allein das, was ohne die fertigen Pakete nicht geht — sie selbst.
 
 Zwei Tests halten die Verdrahtung: `test_the_download_box_can_switch_from_
-waiting_to_loading` je Sprachfassung, und `test_the_two_dates_for_the_same_
+waiting_to_loading` je Sprachversion, und `test_the_two_dates_for_the_same_
 moment_agree`, weil der Termin zweimal auf der Seite steht — am Zähler und an
 der Umschaltung.
 
@@ -467,7 +467,7 @@ Das Postfach steht. Was fehlt, ist der Weg aus der Anwendung dorthin.
 1. Testmail von außen an `support@solidon3d.de`, SPF und DMARC gegenprüfen
 2. Auftragsverarbeitungsvertrag bei netcup abschließen
 3. In der Anwendung ein Menüeintrag **„Rückmeldung senden"**: öffnet eine Mail
-   mit Fassung, Betriebssystem und dem Hinweis, dass das Protokoll angehängt
+   mit Version, Betriebssystem und dem Hinweis, dass das Protokoll angehängt
    werden kann — verschickt selbst nichts, wie der Fehlerbericht auch
 
 **Abnahme:** Testmail kommt an und wird nicht als Spam einsortiert · der
@@ -513,7 +513,7 @@ Unbekannten. Es zieht deshalb vor D4.
    `tools/make_installer.py`) und von Hand hochladen. Für eine Demo genügt
    das; die CI ist der Weg, nicht das Ziel
 5. Beide Artefakte holen, auf den Webspace legen, Platz prüfen (rund 255 MB je
-   Fassung, 75 GB vorhanden)
+   Version, 75 GB vorhanden)
 6. Prüfsummen notieren und auf die Seite schreiben
 
 **Abnahme:** beide Dateien laden von `solidon3d.de` herunter und öffnen sich ·
@@ -540,7 +540,7 @@ Paketierung hat OCP und V-HACD dabei (sie hat sie zuletzt nicht gesehen,
 
 ### D9 — Doku nachziehen (S)
 
-`README.md` (Fassung, Demo-Abschnitt, Stichtag), `ROADMAP.md` (P8
+`README.md` (Version, Demo-Abschnitt, Stichtag), `ROADMAP.md` (P8
 fortschreiben), `.claude/rules/kern.md` um den Stichtag ergänzen, dieses
 Konzept mit Fortschrittstabelle.
 
@@ -562,7 +562,7 @@ Wartezeit: Azure, Paddle, Rechtsprüfung ─┘  (blockieren den Start nicht)
 | Tag | Arbeit | Nebenher |
 |---|---|---|
 | 12.08. | D0 Stichtag ✓, Paketierung repariert ✓, **D7 Punkt 1–2: pushen und den Lauf ansehen** | Azure-Nachweise, Paddle-Konto und Rechtsprüfung anstoßen; Testmail an das Postfach |
-| 13.–14.08. | D1 Fassung, D2 Texte; was der CI-Lauf gezeigt hat | AV-Vertrag netcup |
+| 13.–14.08. | D1 Version, D2 Texte; was der CI-Lauf gezeigt hat | AV-Vertrag netcup |
 | 15.–16.08. | D3 Rechtstexte, D5 Rückmeldeweg | — |
 | 17.–18.08. | D4 Website, D6 Punkt 1 (unsigniert erklären), D7 Rest | — |
 | 19.08. | **D8 fremder Rechner**, D9 Doku | — |
@@ -633,7 +633,7 @@ gibt es an diesem Tag nicht.
 5. Die Signierfrage ist beantwortet — signiert oder erklärt
 
 **Sonst eine zweite Demo**, als 0.9.5 mit Stichtag **31.12.2026**. Sie kostet
-nur D0 (Datum), D1 (Fassung), D4 (zwei Sätze auf der Seite) und D7 — ein
+nur D0 (Datum), D1 (Version), D4 (zwei Sätze auf der Seite) und D7 — ein
 halber Tag, weil die Mechanik dann steht. Das ist der eigentliche Grund, warum
 der Stichtag eine Konstante an einer Stelle ist.
 
@@ -652,10 +652,10 @@ nicht Reife, sondern Sichtbarkeit, und die entsteht nicht durch Warten.
 | Der fremde Rechner findet etwas Großes (D8) | Start verschiebt sich um Tage | Start schieben, Stichtag halten, Laufzeit kürzen |
 | Acht Tage sind zu wenig für D0–D9 | halbfertige Texte oder ungeprüftes Paket | in dieser Reihenfolge streichen: D6 Punkt 1 (dann nur Prüfsumme), D9, D5 Punkt 3 — **nie D8** |
 | Die Demo bleibt unbemerkt | keine Funde, keine Reputation, Entscheidung ohne Daten | §6 Schlusssatz: dann erscheint 1.0; Sichtbarkeit ist eine eigene Aufgabe, keine Entwicklungsaufgabe |
-| Jemand patcht den Stichtag | eine kostenlose Fassung läuft weiter | keine Wirkung — es gibt nichts zu bezahlen; die Schwelle für 1.0 ist die Signatur, und die hält |
+| Jemand patcht den Stichtag | eine kostenlose Version läuft weiter | keine Wirkung — es gibt nichts zu bezahlen; die Schwelle für 1.0 ist die Signatur, und die hält |
 | Demo-Nutzer erwarten am 30.10. einen Freischaltweg | Enttäuschung genau bei den Interessiertesten | §2 D: der Freischaltdialog nennt den Weg zu 1.0, statt eine Fehlermeldung zu zeigen |
 | **Am 31.10. steht kein Nachfolger bereit** (§2 B2) | Nutzer kommen an ihre eigenen Projekte nicht mehr heran — der teuerste Fehler dieses Plans | Entscheidung am 10.10. (§6), notfalls 0.9.5 mit neuem Stichtag; sie kostet einen halben Tag |
-| 255 MB je Fassung mal mehrere Punktversionen | Webspace läuft voll | nur die aktuelle Fassung halten |
+| 255 MB je Version mal mehrere Punktversionen | Webspace läuft voll | nur die aktuelle Version halten |
 
 ---
 
@@ -674,7 +674,7 @@ Damit es niemand nachträglich hineinliest:
 * **Kein Demo-Schlüssel und keine Verlängerung per Eingabe** — eine zweite
   Runde ist ein neuer Bau (§6)
 * **Kein Betrachtermodus nach dem 30.10.** (§2 B2). Der bleibt der
-  Verkaufsfassung, wo er hingehört: dort ist er die Freundlichkeit gegenüber
+  Verkaufsversion, wo er hingehört: dort ist er die Freundlichkeit gegenüber
   jemandem, der vierzehn Tage getestet und noch nicht gekauft hat
 * **Keine weiteren Sprachen als Startbedingung.** ES/FR/IT/PT sind Arbeit
   während der Laufzeit, kein Blocker (§5)
@@ -698,7 +698,7 @@ vier — die ersten beiden neu aus dem zweiten Durchgang:
    `Solidon`. GitHub legt eine Weiterleitung an; das lokale Remote wird
    nachgezogen.
 
-1. **Fassungsnummer**: `0.9.0` nach §2 D — oder doch `1.0.0-demo`? Gegen die
+1. **Versionsnummer**: `0.9.0` nach §2 D — oder doch `1.0.0-demo`? Gegen die
    zweite Variante spricht, dass `current_major()` dann eine Eins liest und ein
    Kaufschlüssel in einer abgelaufenen Demo griffe, deren Stichtag ihn nichts
    angeht. Bis zum Widerspruch wird `0.9.0` gebaut; es sind zwei Zeilen.
@@ -717,11 +717,11 @@ vier — die ersten beiden neu aus dem zweiten Durchgang:
 | D2 Texte in der Anwendung | **fertig** — Statuszeile dauerhaft, Über-Dialog, Freischaltdialog, Ersteinrichtung, dazu die Abschiedsmeldung nach dem Stichtag (§2 B2) | 1c50fab |
 | D3 Rechtstexte | **fertig** — EULA §4a; AGB und Widerruf sagen, dass sie erst ab dem Verkaufsstart gelten | 57d1d7b |
 | D4 Website | **fertig** — beide Startseiten führen die Demo, zwei neue Fragen beantworten das Ende | 9a88bfa |
-| D5 Postfach und Rückmeldeweg | **fertig** — zwei Menüeinträge: nach einer neuen Fassung sehen (mit Antwort in allen drei Fällen) und Rückmeldung schreiben | 1c50fab |
+| D5 Postfach und Rückmeldeweg | **fertig** — zwei Menüeinträge: nach einer neuen Version sehen (mit Antwort in allen drei Fällen) und Rückmeldung schreiben | 1c50fab |
 | D6 Signierung | **halb** — der tote PFX-Schritt ist stillgelegt und protokolliert statt stumm übersprungen (`build.yml`, „Ohne Signatur bauen"). Die Abnahme fehlt: die Download-Seite erklärt die SmartScreen-Warnung noch nicht und nennt keine Prüfsumme | |
 | D7 CI-Bau und Auslieferung | offen | |
 | D8 Fremder Rechner | offen | |
-| D9 Doku | **halb** — `README.md` trägt Fassung, Demo-Abschnitt und Stichtag, die `ROADMAP.md` den Demo-Abschnitt, und diese Tabelle ist der letzte Punkt. Offen: `.claude/rules/kern.md` nennt den Stichtag nicht | |
+| D9 Doku | **halb** — `README.md` trägt Version, Demo-Abschnitt und Stichtag, die `ROADMAP.md` den Demo-Abschnitt, und diese Tabelle ist der letzte Punkt. Offen: `.claude/rules/kern.md` nennt den Stichtag nicht | |
 
 **Die Tabelle stand bis zum 14.08.2026 auf zehnmal „offen"**, während sechs
 Pakete gebaut waren — nachgezählt am Code, nicht an der Erinnerung. Wer den
@@ -729,9 +729,9 @@ Stand aus dem Konzept statt aus der ROADMAP las, hielt die Demo für
 unangefangen. Das ist der Grund, warum D9 diese Tabelle ausdrücklich als
 eigenen Punkt führt.
 
-**Zur Fassung: die Zahl war zweimal eine andere.** Dieses Konzept schrieb
+**Zur Version: die Zahl war zweimal eine andere.** Dieses Konzept schrieb
 `0.9.0` vor, gebaut wurde am 12.08. `0.7.0`, und am 14.08.2026 steht sie auf
-**`0.1.0`** — die Fassung, mit der die Demo hinausgeht. Für die drei Folgen
+**`0.1.0`** — die Version, mit der die Demo hinausgeht. Für die drei Folgen
 oben ändert das nichts, weil alle drei an der Null vorn hängen und nicht an den
 Stellen dahinter. Was sich ändert, ist die Zählung dahinter: sie beginnt jetzt
 am Anfang statt in der Nähe der 1.0, und der nächste ausgelieferte Bau ist
@@ -757,7 +757,7 @@ Fünfzehn Aussagen über den eigenen Stand geprüft: **sieben stimmen, sieben si
 Demo-Phase — von den achtzig Tagen bis zum Stichtag sind noch zweiundsiebzig.
 
 **Der Widerspruch, der sich durch das ganze Dokument zieht:** D1 schreibt
-Fassung `0.9.0` vor, §9 führt sie als offene Entscheidung — entschieden ist seit
+Version `0.9.0` vor, §9 führt sie als offene Entscheidung — entschieden ist seit
 dem 14.08.2026 **`0.1.0`**, und sie steht an sieben Stellen so im Code. Die
 Folgeziffern (`0.9.1`, `0.9.2`, `0.9.5`) meinen nach der eigenen Zählregel
 `0.1.1` und `0.1.5`.
@@ -786,9 +786,9 @@ Signierung:
   signiertes, frisch gebautes Setup löst zunächst die Warnung aus. Der Nutzen
   der Signatur ist der geprüfte Herausgebername, nicht das Ausbleiben der
   Warnung.
-- **Ohne Signatur baut sich die Reputation für jede neue Fassung bei null neu
+- **Ohne Signatur baut sich die Reputation für jede neue Version bei null neu
   auf.** Bei einer Demo, die in Punktversionen nachgeschoben wird, heißt das:
-  jede Fassung warnt von vorn.
+  jede Version warnt von vorn.
 
 **Zwei Fristen von außen, die im Zeitplan fehlen:** Die **CRA-Meldepflichten
 greifen ab dem 11.09.2026**, also mitten in der Demo-Phase; die Ausnahme für

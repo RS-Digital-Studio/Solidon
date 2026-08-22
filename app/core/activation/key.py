@@ -34,8 +34,8 @@ from app.i18n import TranslatableText, _
 #: hineingerutschte Zeichenkette anderer Herkunft sofort auffällt.
 PREFIX: Final = "SOLIDON3D"
 
-#: Fassung des Schlüsselformats. Steht im Text **und** signiert in der
-#: Nutzlast: nur der Text wäre umdeutbar, sobald es eine Fassung 2 gibt.
+#: Version des Schlüsselformats. Steht im Text **und** signiert in der
+#: Nutzlast: nur der Text wäre umdeutbar, sobald es eine Version 2 gibt.
 FORMAT_VERSION: Final = 1
 
 #: Ab wann Kaufdaten gezählt werden. Zwei Bytes reichen damit für 179 Jahre.
@@ -173,7 +173,7 @@ def _decode_payload(payload: bytes) -> Licence:
     if payload[0] != FORMAT_VERSION:
         raise LicenceKeyError(
             detail=_(
-                "Der Schlüssel ist in einem Format geschrieben, das diese Fassung nicht kennt."
+                "Der Schlüssel ist in einem Format geschrieben, das diese Version nicht kennt."
             )
         )
     order_end = 5 + payload[4]
@@ -208,7 +208,7 @@ def parse(text: str, public_key: bytes | None = None, major: int | None = None) 
     ``public_key`` und ``major`` sind ``None`` und nicht mit dem Modulwert
     vorbelegt: ein Vorgabewert wird beim Import gebunden, und dann wäre der
     Schlüssel eingefroren, mit dem geprüft wird. Genau daran ist die erste
-    Fassung dieser Funktion in der Suite aufgefallen.
+    Version dieser Funktion in der Suite aufgefallen.
     """
     raw = _decode(_normalise(text))
     if len(raw) <= ed25519.SIGNATURE_BYTES:

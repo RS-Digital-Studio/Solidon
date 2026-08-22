@@ -63,7 +63,7 @@ Startbildschirms — sie werden erzeugt, nicht von Hand gepflegt.
 `.github/workflows/build.yml` prüft auf Windows, Linux und macOS, paketiert auf
 Windows und Linux, und signiert nur, wenn das Zertifikat als Secret vorliegt.
 Der Signaturschritt überspringt sich selbst, damit ein Fork eine unsignierte
-Fassung bekommt statt eines Fehlschlags. Beim Ändern des Workflows: die
+Version bekommt statt eines Fehlschlags. Beim Ändern des Workflows: die
 Reihenfolge bleibt Suite → Paket.
 
 ## Phasenabschluss

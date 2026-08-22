@@ -102,7 +102,7 @@ class OwnParams(BaseParams):
     subtractive=True,
     features=["bore"],
     doc="Ein selbst geschriebener Baustein.",
-    changes=[PartChange(version="1", date="2026-07-28", reason="Erste Fassung.")],
+    changes=[PartChange(version="1", date="2026-07-28", reason="Erste Version.")],
 )
 def eigenbau(raw: BaseParams) -> PartResult:
     body = cylinder(raw.diameter, 10.0)

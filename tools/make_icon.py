@@ -59,7 +59,7 @@ ICNS_BLOCKS = (
     ("ic10", 1024),
 )
 
-#: Bis hierher kommt die vereinfachte Fassung zum Zug. Dieselbe Grenze wie in
+#: Bis hierher kommt die vereinfachte Version zum Zug. Dieselbe Grenze wie in
 #: ``app.ui.icons`` — was die exe zeigt und was das Fenster zeigt, ist dasselbe
 #: Symbol, und zwei Grenzen wären zwei Symbole.
 SMALL_LIMIT = 32
@@ -81,7 +81,7 @@ def render(source: bytes, size: int) -> QImage:
 def source_for(size: int, large: bytes, small: bytes) -> bytes:
     """Welche der beiden Quellen eine Größe bekommt.
 
-    Bis 32 Pixel die vereinfachte: die ausgearbeitete Fassung trägt
+    Bis 32 Pixel die vereinfachte: die ausgearbeitete Version trägt
     Schichtlinien, die dort 0,3 Pixel breit wären und als grauer Schleier
     ankommen. Der Grund steht ausführlich in ``solidon3d-small.svg``.
     """

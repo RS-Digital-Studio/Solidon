@@ -7,13 +7,13 @@ viele Beispielprojekte beiliegen. Sie sind aus den Quellen abgelesen und
 werden falsch, sobald eine Operation dazukommt — eine falsche Zahl auf einer
 Verkaufsseite ist kein Schönheitsfehler.
 
-Geprüft wird außerdem, dass beide Sprachfassungen dieselben Zahlen führen und
+Geprüft wird außerdem, dass beide Sprachversionen dieselben Zahlen führen und
 dass jede eingebundene Datei existiert.
 
 Dieselbe Zahl steht ein zweites Mal im Fließtext — auf der Funktionsseite und
 in den häufigen Fragen. Die Leiste allein zu prüfen reichte nicht: sie stand
 längst auf 85, während der Satz daneben 83 behauptete und die englische
-Fassung 84. Was im Text steht, wird darum über **alle** Seiten geprüft, auch
+Version 84. Was im Text steht, wird darum über **alle** Seiten geprüft, auch
 über die, die diese Datei sonst nicht kennt.
 """
 
@@ -131,7 +131,7 @@ def test_no_page_names_a_different_number_of_operations_in_its_text() -> None:
     """Jede Nennung der Registergröße im Fließtext, auf jeder Seite.
 
     Nicht `ALL_PAGES`, sondern was tatsächlich unter `website/` liegt: die
-    Sprachfassungen kommen einzeln dazu, und eine Zahl, die auf der
+    Sprachversionen kommen einzeln dazu, und eine Zahl, die auf der
     portugiesischen Seite veraltet, ist genauso falsch wie auf der deutschen.
     Fehlt eine Sprache noch, prüft der Lauf sie eben nicht — er wird nicht rot,
     weil jemand sie noch nicht eingecheckt hat.
@@ -255,7 +255,7 @@ def test_every_jump_mark_the_navigation_offers_has_a_target(page: str) -> None:
     """Ein Sprung ins Leere merkt niemand beim Schreiben.
 
     Die Kopfzeile springt zu ``#funktionen`` und ``#preis``, das Angebot in
-    der Auszeichnung für Suchmaschinen ebenfalls. Beide Sprachfassungen
+    der Auszeichnung für Suchmaschinen ebenfalls. Beide Sprachversionen
     benennen ihre Abschnitte verschieden — genau deshalb wird hier geprüft
     und nicht verglichen.
     """
@@ -302,7 +302,7 @@ def test_every_page_lets_the_keyboard_skip_the_header() -> None:
     2.4.1).
 
     Geprüft wird über **alle** Seiten unter ``website/``, nicht über
-    ``ALL_PAGES``: Die Rechtstexte und die fünf Sprachfassungen stehen dort
+    ``ALL_PAGES``: Die Rechtstexte und die fünf Sprachversionen stehen dort
     nicht, und ausgerechnet sie werden von Hand angelegt. Die Beschriftung
     kommt aus derselben Tabelle, aus der die erzeugten Handbuchseiten sie
     nehmen — zwei Listen wären eine zu viel.
@@ -502,10 +502,10 @@ def _start_pages() -> list[Path]:
 
 
 def test_every_start_page_counts_down_to_the_same_moment() -> None:
-    """Sechs Sprachfassungen, ein Termin.
+    """Sechs Sprachversionen, ein Termin.
 
     Der Zielzeitpunkt steht im Markup, nicht im Skript — sonst stünde er an
-    einer Stelle, die keine Sprachfassung liest. Der Preis dafür ist, dass er
+    einer Stelle, die keine Sprachversion liest. Der Preis dafür ist, dass er
     sechsmal dasteht, und der Fehler, der dann passiert, ist immer derselbe:
     fünf werden geändert und eine nicht.
 
@@ -694,7 +694,7 @@ def test_the_download_box_can_switch_from_waiting_to_loading(page: str) -> None:
 
     Geprüft wird die Verdrahtung, nicht die Uhrzeit: Steht der Termin am
     Dokument, gibt es einen Kasten für die Dateien, verschwindet die Warteliste
-    und erscheint an ihrer Stelle etwas? Eine Sprachfassung, in der eines davon
+    und erscheint an ihrer Stelle etwas? Eine Sprachversion, in der eines davon
     fehlt, sieht fehlerfrei aus und bleibt am Abend stehen.
 
     Ob wirklich Dateien eingetragen sind, prüft dieser Test **nicht** — sie
@@ -753,7 +753,7 @@ def test_the_moment_of_release_stands_exactly_once(page: str) -> None:
 
 
 def test_all_six_languages_release_at_the_same_moment() -> None:
-    """Eine Sprachfassung, die eine Stunde früher umschaltet, ist ein Fehler.
+    """Eine Sprachversion, die eine Stunde früher umschaltet, ist ein Fehler.
 
     Sechs Dateien tragen denselben Termin. Beim Verschieben wird erfahrungsgemäß
     eine vergessen, und auffallen würde das erst an dem Abend, an dem es zählt.

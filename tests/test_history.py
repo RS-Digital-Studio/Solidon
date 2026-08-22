@@ -42,7 +42,7 @@ def registry() -> Registry:
         params=SeedParams,
         consumes=1,
         produces=1,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def rename(ctx: OpContext) -> OpResult:
@@ -55,7 +55,7 @@ def registry() -> Registry:
         params=SeedParams,
         consumes=0,
         produces=1,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def make(ctx: OpContext) -> OpResult:
@@ -68,7 +68,7 @@ def registry() -> Registry:
         params=SeedParams,
         consumes=1,
         produces=2,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def split(ctx: OpContext) -> OpResult:
@@ -82,7 +82,7 @@ def registry() -> Registry:
         consumes=1,
         produces=1,
         deterministic=False,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def scatter(ctx: OpContext) -> OpResult:

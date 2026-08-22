@@ -42,7 +42,7 @@ from PIL import Image
 
 # Der eingebettete TripoSG-Quelltext liegt neben dieser Datei. Er kommt in den
 # Suchpfad, statt ihn zu installieren: so bleibt er an das Verzeichnis
-# gebunden und kollidiert nicht mit einer zweiten Fassung im Environment.
+# gebunden und kollidiert nicht mit einer zweiten Version im Environment.
 _HERE = Path(__file__).parent
 if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))

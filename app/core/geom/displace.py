@@ -66,7 +66,7 @@ def sample_image(payload: bytes) -> np.ndarray:
     try:
         raw = iio.imread(io.BytesIO(payload), mode="L")
     except PROGRAMMING_ERRORS:
-        # ``mode="L"`` ist ein Argument, das eine künftige Fassung anders nennen
+        # ``mode="L"`` ist ein Argument, das eine künftige Version anders nennen
         # kann. Ein TypeError daraus heißt nicht, dass das Bild kaputt ist.
         raise
     except Exception as stumble:  # imageio wirft je Format etwas anderes

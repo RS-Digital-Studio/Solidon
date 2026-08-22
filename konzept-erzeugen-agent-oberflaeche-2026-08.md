@@ -150,7 +150,7 @@ Aus einer eigenen Recherche zu den Modellen, die hinter dem Erzeugen stehen.
 
 ### 3.1 Hunyuan3D ist in der EU nicht lizenziert
 
-Die Lizenz beider Fassungen trägt als Kopfzeile: *„THIS LICENSE AGREEMENT DOES
+Die Lizenz beider Versionen trägt als Kopfzeile: *„THIS LICENSE AGREEMENT DOES
 NOT APPLY IN THE EUROPEAN UNION, UNITED KINGDOM AND SOUTH KOREA"*, und
 `Territory` ist ausdrücklich als „worldwide territory, **excluding** the
 territory of the European Union …" definiert. Das ist keine Nutzerzahl-Grenze,

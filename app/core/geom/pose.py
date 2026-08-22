@@ -373,9 +373,9 @@ def pose_from_text(text: str, values: Mapping[str, float] | None = None) -> list
     im JSON, und dass dort jetzt auch ein Ausdruck stehen darf, ist ein
     größerer Wertebereich und kein neues Feld. Alte Dateien tragen nur Zahlen
     und lesen unverändert. Rückwärts gilt es nicht — eine Datei mit ``=@x``
-    im Winkel scheitert in einer älteren Fassung an ``float()`` —, und das ist
+    im Winkel scheitert in einer älteren Version an ``float()`` —, und das ist
     derselbe Fall wie bei jeder Datei, die eine neuere Operation benutzt. Eine
-    Erhöhung würde stattdessen **jede** neue Datei für die alte Fassung
+    Erhöhung würde stattdessen **jede** neue Datei für die alte Version
     sperren, auch die ohne einen einzigen Ausdruck; das wäre der teurere
     Irrtum. Die Kette in ``migrations.py`` erhöht für Schemaänderungen, nicht
     für Fähigkeiten.

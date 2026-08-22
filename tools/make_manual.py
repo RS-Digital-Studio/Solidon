@@ -262,7 +262,7 @@ def write_figures(target: Path, language: str) -> tuple[dict[str, str], dict[str
 
     Zurück kommen zwei Zuordnungen: die gewöhnlichen Quellen und die für ein
     dunkles Farbschema. Gezeichnet wird beides, weil ``core.drawing`` beide
-    Paletten kennt — die dunkle Fassung blieb bis dahin ungenutzt, und im
+    Paletten kennt — die dunkle Version blieb bis dahin ungenutzt, und im
     Dunkelmodus standen zwanzig weiße Kästen in einer dunklen Seite.
     """
     target.mkdir(parents=True, exist_ok=True)
@@ -588,7 +588,7 @@ def anchored(html: str) -> str:
 
     **Derselbe Wortlaut kommt zweimal vor.** Das Kapitel *Die Werkzeuge der
     Fernsteuerung* gliedert seine Werkzeuge nach denselben fünfzehn Kategorien,
-    die weiter unten die Referenzkapitel sind. Die alte Fassung nahm den ersten
+    die weiter unten die Referenzkapitel sind. Die alte Version nahm den ersten
     Treffer im ganzen Text: Alle fünfzehn Referenzanker saßen auf einem
     Unterabschnitt der Fernsteuerung, und das Verzeichnis sprang ab Kapitel 26
     mitten in Kapitel 24. Gesucht wird deshalb nur vorwärts — die Kapitel stehen

@@ -56,7 +56,7 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
     **Zum sporadischen Absturz** (``Windows fatal exception: access
     violation``, ohne Zeile, an wechselnder Stelle): der galt hier lange als
     unabhängig von jeder Aufräumung — nachgemessen an je vier Läufen mit
-    Aufräumung, mit Löschen und ganz ohne, riss er in jeder Fassung.
+    Aufräumung, mit Löschen und ganz ohne, riss er in jeder Version.
 
     Eine Ursache ist inzwischen gefunden und behoben: der Interaktionsstil des
     Viewports hielt eine gebundene Methode und damit den Viewport, der den

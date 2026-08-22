@@ -109,7 +109,7 @@ class NumberSpin(QDoubleSpinBox):
     „1.000,50" und „1,000.50" alle richtig, in jeder Sprache — und es braucht
     dafür nicht zu erraten, was gemeint war.
 
-    Die erste Fassung tauschte einfach jeden Punkt gegen ein Komma, und das war
+    Die erste Version tauschte einfach jeden Punkt gegen ein Komma, und das war
     ein neuer Fehler derselben Sorte: „1.000,50" wurde damit im deutschen
     Fenster zu 1,00. Sichtbar war es, aber um den Faktor tausend falsch. Was
     zweideutig **bleibt**, ist „1.000" ohne Nachkomma — nach dieser Regel eins.
@@ -587,7 +587,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "allowed": _("Erlaubt"),
     "amount": _("Betrag"),
     "annotation": _("Anmerkung"),
-    "app_major": _("Programmfassung"),
+    "app_major": _("Programmversion"),
     "axes": _("Achsen"),
     "axis": _("Achse"),
     "b": _("Zweites"),
@@ -623,12 +623,13 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "entries": _("Einträge"),
     "estimated": _("Geschätzt"),
     "expected": _("Erwartet"),
+    "got": _("Bekommen"),
     "expected_prefix": _("Erwarteter Anfang"),
     "faces": _("Flächen"),
     "feature": _("Merkmal"),
     "field": _("Feld"),
     "file": _("Datei"),
-    "file_version": _("Dateifassung"),
+    "file_version": _("Dateiversion"),
     "first_kind": _("Erste Art"),
     "fit": _("Passung"),
     "format": _("Format"),
@@ -642,7 +643,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "grid": _("Raster"),
     "groups": _("Gruppen"),
     "height": _("Höhe"),
-    "key_major": _("Schlüsselfassung"),
+    "key_major": _("Schlüsselversion"),
     "kind": _("Art"),
     "known": _("Bekannt"),
     "known_faces": _("Bekannte Flächen"),
@@ -652,7 +653,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "limit": _("Grenze"),
     "materials": _("Materialien"),
     "lost": _("Verloren"),
-    "major": _("Hauptfassung"),
+    "major": _("Hauptversion"),
     "material": _("Material"),
     "maximum": _("Höchstwert"),
     "measured": _("Gemessen"),
@@ -692,6 +693,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "profile": _("Profil"),
     "radius": _("Radius"),
     "reachable": _("Erreichbar"),
+    "read": _("Gelesen"),
     "reason": _("Grund"),
     "reference": _("Bezug"),
     "refused": _("Abgelehnt"),
@@ -814,7 +816,7 @@ def value_text(key: str, value: object) -> str:
 #: höchstens eine Einheit ohne Ziffern und ohne Punkt.
 #:
 #: Die Einheit darf nicht selbst Ziffern oder Punkte enthalten, sonst passte
-#: „1.2.3" als Zahl mit der Einheit „.3" — und eine Fassungsnummer wäre in der
+#: „1.2.3" als Zahl mit der Einheit „.3" — und eine Versionsnummer wäre in der
 #: Anzeige zerschnitten.
 _NUMBER = re.compile(r"^[+-]?\d+(\.\d+)?(\s*[^\d.\s]+)?$")
 

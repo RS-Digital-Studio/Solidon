@@ -291,11 +291,11 @@ def test_own_profiles_are_read_and_marked(slicer: Path, bestand: Path) -> None:
     """
     _write(
         bestand / "Elegoo" / "process" / "ECC2" / "eigenes.json",
-        {"name": "Meine Fassung", "from": "User", "inherits": "0.20mm Standard @CC2"},
+        {"name": "Meine Version", "from": "User", "inherits": "0.20mm Standard @CC2"},
     )
     found = sp.find_profiles(slicer, "orca")
 
-    own = [entry for entry in found if entry.name == "Meine Fassung"]
+    own = [entry for entry in found if entry.name == "Meine Version"]
     assert own, "ein eigenes Profil ohne type muss trotzdem erscheinen"
     assert own[0].from_user
     assert "(" in own[0].title("eigenes"), "und es muss als eigenes erkennbar sein"

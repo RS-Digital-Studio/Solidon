@@ -197,7 +197,7 @@ def test_the_drawn_figures_are_the_ones_the_code_draws(language: str) -> None:
         install_catalog(language, read_catalog(language))
     set_language(language)
     # Der Vorrat wird geleert, wie es der Erzeuger tut: Abbildungen werden
-    # gemerkt, und ohne das kaeme sechsmal die deutsche Fassung zurueck.
+    # gemerkt, und ohne das kaeme sechsmal die deutsche Version zurueck.
     figures.forget()
     try:
         stale: list[str] = []
@@ -388,7 +388,7 @@ def test_dash_bullets_become_a_list_too() -> None:
 
 
 def test_a_drawn_figure_offers_its_dark_version() -> None:
-    """Wo eine dunkle Fassung existiert, steht sie als zweite Quelle daneben.
+    """Wo eine dunkle Version existiert, steht sie als zweite Quelle daneben.
 
     Die Zeichnungen konnten beide Themen von Anfang an — ``figures.svg`` nimmt
     das Thema entgegen. Benutzt wurde nur ``light``, und weil die Seite dem
@@ -450,7 +450,7 @@ def test_no_page_prints_its_own_markup(language: str) -> None:
     Parameterschema, und dort ist es ein Malzeichen. In Code darf es ohnehin
     stehen, deshalb fällt ``<code>`` vorher heraus.
 
-    Beide Sprachen, und die zweite ist der Grund: die englische Fassung ist
+    Beide Sprachen, und die zweite ist der Grund: die englische Version ist
     ein Eintrag im Katalog. Wer dort einen Absatz von Hand nachzieht, hat
     keinen Umsetzer, der ihn korrigiert, und keine Seite, die er danach
     ansieht.

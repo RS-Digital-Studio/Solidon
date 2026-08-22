@@ -276,7 +276,7 @@ if [ -e "$TARGET" ] && [ ! -d "$TARGET" ]; then
   exit 1
 fi
 if [ -e "$TARGET/$NAME" ]; then
-  say "Eine vorhandene Fassung an dieser Stelle wird ersetzt." \
+  say "Eine vorhandene Version an dieser Stelle wird ersetzt." \
       "An existing version in this place is being replaced."
   # Gelöscht wird das Verzeichnis der Anwendung — dass es eines ist, stellt
   # der Fall oben sicher. Ohne ihn machte ein --prefix /usr/local aus dem
@@ -388,7 +388,7 @@ def flatpak_manifest() -> str:
     **Gebaut wird nicht aus den Quellen, sondern um den Bau herum.** Das ist für
     Flatpak der ungewöhnlichere Weg und hier der richtige: Die Anwendung bringt
     ihr Python und ihre Bibliotheken schon mit (dieselbe Spec wie Windows und
-    macOS), und ein zweiter Bauweg wäre eine zweite Fassung, die auseinanderläuft
+    macOS), und ein zweiter Bauweg wäre eine zweite Version, die auseinanderläuft
     — genau das, was die eine Spec verhindert.
 
     Die Berechtigungen sind so knapp wie möglich, und jede hat einen Grund:

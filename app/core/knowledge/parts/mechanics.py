@@ -516,7 +516,7 @@ class SnapConnectorParams(BaseParams):
             date="2026-08-21",
             reason="Die Rastkante lag am tiefen Ende der Tasche statt an der Mündung.",
             effect=(
-                "Fassung 3 schob die ganze Tasche um ihre Tiefe nach unten — und nahm "
+                "Version 3 schob die ganze Tasche um ihre Tiefe nach unten — und nahm "
                 "die Kerbe für die Rastkante mit ans andere Ende. Der Haken fand dort "
                 "nichts, was ihn hält: Der Verbinder ging zusammen und wieder "
                 "auseinander. Gebaut wird jetzt von der Mündung nach unten, Schlitz und "

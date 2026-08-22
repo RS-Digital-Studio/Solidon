@@ -103,7 +103,7 @@ class Activation:
 
     @property
     def in_demo(self) -> bool:
-        """Ob diese Fassung eine befristete Demo ist — ob sie noch läuft, sagt
+        """Ob diese Version eine befristete Demo ist — ob sie noch läuft, sagt
         :attr:`days_left`."""
         return self.deadline is not None
 
@@ -116,11 +116,11 @@ class Activation:
         nichts mehr ändern kann, soll wenigstens an seine Arbeit kommen. Eine
         abgelaufene Demo dagegen startet nicht mehr: sie ist ein Angebot auf
         Zeit, kein beschnittenes Programm, und ein unbegrenzt weiterlaufender
-        Betrachter wäre eine zweite kostenlose Fassung, die niemand pflegt.
+        Betrachter wäre eine zweite kostenlose Version, die niemand pflegt.
 
         Wer das auswertet, schuldet dem Nutzer die Erklärung dazu: was
         abgelaufen ist, wo es weitergeht, und wo seine Projekte liegen (sie
-        bleiben, wo sie sind, und öffnen sich mit der nächsten Fassung).
+        bleiben, wo sie sind, und öffnen sich mit der nächsten Version).
         """
         return self.deadline is not None and self.licence is None and self.days_left <= 0
 

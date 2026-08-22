@@ -108,13 +108,13 @@ def test_ruff_targets_the_version_that_is_demanded() -> None:
 
 
 def test_the_version_is_the_same_in_both_places_that_carry_it() -> None:
-    """Die Fassung steht in ``branding.py`` und in ``pyproject.toml``.
+    """Die Version steht in ``branding.py`` und in ``pyproject.toml``.
 
     Sie ist dieselbe Zahl mit zwei Lesern: der Über-Dialog, jede Projektdatei
     (``app_version``), das 3MF, der Fehlerbericht und der Update-Vergleich lesen
     ``APP_VERSION``; die Paketmetadaten und alles, was ``pip`` daraus macht,
     lesen ``pyproject.toml``. Laufen sie auseinander, nennt ein Paket eine
-    andere Fassung als das Fenster darin — und niemand merkt es, denn keines von
+    andere Version als das Fenster darin — und niemand merkt es, denn keines von
     beiden ist kaputt.
 
     Der Anlass steht in der ROADMAP unter der Demo: die Zahl wurde am 14.08.2026
@@ -128,15 +128,15 @@ def test_the_version_is_the_same_in_both_places_that_carry_it() -> None:
 
     assert packaged == APP_VERSION, (
         f"pyproject.toml nennt {packaged}, app/branding.py nennt {APP_VERSION}. "
-        "Beide tragen dieselbe Fassung — eine von ihnen wurde vergessen."
+        "Beide tragen dieselbe Version — eine von ihnen wurde vergessen."
     )
 
 
 # --- der festgeschriebene Versionssatz -------------------------------------------
 #
-# `constraints.txt` hält fest, *in welcher* Fassung ein Paket installiert wird.
+# `constraints.txt` hält fest, *in welcher* Version ein Paket installiert wird.
 # Sie half nur nichts, solange niemand nachsah: Wer das `-c` beim Installieren
-# vergisst, bekommt andere Fassungen als die, gegen die die Suite grün ist.
+# vergisst, bekommt andere Versionen als die, gegen die die Suite grün ist.
 # `tools/check_env.py` sieht nach, der Sitzungsstart-Hook ruft es auf. Was hier
 # geprüft wird, ist das Werkzeug — nicht die Umgebung dieses Laufs: Der
 # wöchentliche Frühwarnlauf der CI installiert **absichtlich** ohne
@@ -144,15 +144,15 @@ def test_the_version_is_the_same_in_both_places_that_carry_it() -> None:
 
 
 def test_the_pinned_set_is_read_completely() -> None:
-    """Jede Zeile `name==fassung` landet im Satz, normalisiert nach PEP 503."""
+    """Jede Zeile `name==version` landet im Satz, normalisiert nach PEP 503."""
     satz = pinned()
 
     assert len(satz) > 50, f"nur {len(satz)} Einträge — liest `constraints.txt` noch?"
     assert "pyside6" in satz, "PySide6 fehlt im Satz, obwohl die Oberfläche darauf steht"
     # `svg.path` steht mit Punkt in der Datei und muss trotzdem gefunden werden
     assert satz["svg-path"][0] == "svg.path"
-    for name, fassung in satz.values():
-        assert not fassung.startswith(("<", ">", "=")), f"{name} ist keine feste Fassung: {fassung}"
+    for name, version in satz.values():
+        assert not version.startswith(("<", ">", "=")), f"{name} ist keine feste Version: {version}"
 
 
 def test_names_compare_the_way_the_index_compares_them() -> None:
@@ -161,7 +161,7 @@ def test_names_compare_the_way_the_index_compares_them() -> None:
 
 
 def test_a_deviating_version_is_found() -> None:
-    """Der Fall vom 06.08.2026: der Klon zog eine andere Fassung, die Suite fiel um."""
+    """Der Fall vom 06.08.2026: der Klon zog eine andere Version, die Suite fiel um."""
     satz = {"numpy": ("numpy", "2.4.0"), "trimesh": ("trimesh", "4.12.2")}
 
     assert mismatches(satz, {"numpy": "2.5.0", "trimesh": "4.12.2"}) == ["numpy 2.5.0 statt 2.4.0"]
@@ -187,7 +187,7 @@ def test_the_rebuild_command_pins_the_versions() -> None:
 # --- aktuell bleiben, ohne die Grenzen zu reißen ---------------------------------
 #
 # Festgenagelt ist nicht dasselbe wie gepflegt. Der wöchentliche CI-Lauf meldet
-# eine Fassung, die *bricht*; dass es überhaupt eine neuere *gäbe*, sagt er
+# eine Version, die *bricht*; dass es überhaupt eine neuere *gäbe*, sagt er
 # niemandem. `--outdated` beantwortet das — und muss dabei die Grenzen kennen,
 # die absichtlich gesetzt sind.
 
@@ -324,13 +324,13 @@ def test_developer_notes_stay_off_the_public_server() -> None:
 
 
 def test_raising_the_version_moves_both_places_and_nothing_else() -> None:
-    """``tools/bump_version.py`` bewegt die Fassung dort, wo sie steht.
+    """``tools/bump_version.py`` bewegt die Version dort, wo sie steht.
 
     Der Test darüber hält die beiden Orte zusammen; dieser hält das Werkzeug
     daran, das sie bewegt. Beide Regeln stecken darin, und beide sind schon
     einmal von Hand verletzt worden: Eine erhöhte Stelle setzt die dahinter auf
     null, und in ``pyproject.toml`` wird **die erste** ``version =``-Zeile
-    getroffen — weiter unten stehen die Fassungen der Abhängigkeiten, und ein
+    getroffen — weiter unten stehen die Versionen der Abhängigkeiten, und ein
     Ersetzen über die ganze Datei nähme sie mit.
 
     Geschrieben wird hier nichts: Geprüft wird die Rechnung und die Zusage,

@@ -32,7 +32,7 @@ bekommt einen roten Lauf.
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
-| Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Fassung, die den helikalen Gang dort am Kern schließt |
+| Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | eine andere **Bauart** — alle sieben Griffe an `MakePipeShell` sind gemessen und widerlegt (20.08.), und ein Rotationskörper schraubt nicht |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
@@ -110,7 +110,7 @@ bekommt einen roten Lauf.
 - [x] Statusleiste mit Maßen, Auswahl, Fortschritt, Abbrechen
 - [x] Startbildschirm mit Ablagefeld und zuletzt geöffneten Projekten (§2.3)
 - [x] Ziehen und Ablegen auf Fenster, Viewport, Objektbaum
-- [x] Übersetzungsgerüst, deutsche und englische Fassung
+- [x] Übersetzungsgerüst, deutsche und englische Version
 
 ### CLI
 - [x] Befehle aus dem Register, `ask` als Abfrage, `progress` als Zeile
@@ -543,7 +543,7 @@ bekommt einen roten Lauf.
       * **Flatpak** — der Weg in die Software-Verwaltung, mit Aktualisierung und
         Sandbox. Gebaut wird **um den fertigen PyInstaller-Ordner herum** und
         nicht aus den Quellen: Die Anwendung bringt ihr Python schon mit, und
-        ein zweiter Bauweg wäre eine zweite Fassung, die auseinanderläuft.
+        ein zweiter Bauweg wäre eine zweite Version, die auseinanderläuft.
       * **AppStream-Metainfo** — ohne sie ist das Flatpak in GNOME Software ein
         Eintrag ohne Text, und ein namenloses Programm installiert niemand. Die
         beiden Lizenzfelder sind auseinandergehalten: `metadata_license` gilt für
@@ -592,7 +592,7 @@ bekommt einen roten Lauf.
       HTTPS. Die DNS-Propagation ist durch — beide A-Records auf 188.68.47.33,
       Zone bei netcup. **Seit dem 16.08.2026 sechssprachig**: Startseite,
       Funktionen, KI-Modelle und Handbuch (Seite und PDF) auch auf es, fr,
-      it und pt, Sprachwechsler als Aufklappmenü, Regelsammlung mit Fassungen
+      it und pt, Sprachwechsler als Aufklappmenü, Regelsammlung mit Versionen
       je Handbuchsprache, Bildschirmfotos neu mit der aktuellen
       Werkzeugleiste. Hochgeladen am 18.08.2026 (297 Dateien), Stichproben
       über alle sechs Sprachen samt Bildern per HTTPS geprüft — alle 200,
@@ -645,6 +645,25 @@ bekommt einen roten Lauf.
       Rechtstexte nur noch bis zur fachlichen Prüfung
 - [x] Update-Hinweis beim Start — fragt eine Versionsdatei, lädt nichts, und ist
       aus, bis ihn jemand einschaltet
+- [x] **Update in der Anwendung** (22.08.2026, Bauplan §37.2 dafür geändert).
+      Der Hinweis war eine Zeile in der Statusleiste: Version und Adresse, die
+      Adresse als Text und nicht anklickbar, und die nächste Meldung schrieb
+      sie weg. Wer nicht im selben Moment hinsah, erfuhr nie davon — und wer
+      hinsah, hatte danach eine Adresse zum Abtippen.
+
+      Jetzt: ein Fenster, das sagt, was neu ist (`changelog/<sprache>.md`,
+      acht Punkte in Kundensprache statt 97 Commit-Titeln), einen Knopf zum
+      Holen mit Fortschritt und Abbrechen, und einen zweiten zum Starten —
+      nachdem die SHA-256 gestimmt hat. Die Prüfsummen schreibt
+      `tools/make_download.py` in `version.json`; von Hand gepflegt wären sie
+      die zweite Stelle, und die zweite Stelle driftet.
+
+      Die Grenze aus §37.2 liegt weiter beim **Auslöser** und nicht beim
+      Vorgang: Es lädt nichts von allein, ersetzt nichts im Hintergrund,
+      startet nichts ohne Klick. Das Paket kommt nur von demselben
+      Rechnernamen wie die Versionsdatei; stimmt die Prüfsumme nicht, wird es
+      gelöscht. Unter Linux bleibt es beim Hinweis — Flatpak und AppImage
+      ersetzen sich nicht von innen.
 
 ## P9 — Säule B und Farbe
 - [x] `MeshBackend`, ComfyUI lokal
@@ -962,7 +981,7 @@ und MPL zu —, die Auslieferung schon:
 
 Das Muster taugt als Regel: Bei einer nativen Abhängigkeit entscheidet nicht
 die Lizenz und nicht der Funktionsumfang, sondern ob es Räder für Windows,
-macOS und Linux in der Python-Fassung dieses Projekts gibt. Alles andere ist
+macOS und Linux in der Python-Version dieses Projekts gibt. Alles andere ist
 eine Bauumgebung, die jemand pflegen muss.
 
 ## P11 — Gehosteter Backend
@@ -2319,7 +2338,7 @@ ohne neue Regelverstöße), `PySide6` 6.7→6.11, `lxml` 5→6, `svg.path` 6→7
   `requires-python`, `ruff target-version`, `mypy python_version`, beide
   CI-Jobs, `CLAUDE.md` und der Sitzungsstart-Hook. Das löst den Stub-Konflikt
   an der Wurzel, statt numpy zu deckeln — eine Obergrenze hätte das Projekt
-  auf einer alten Fassung festgehalten.
+  auf einer alten Version festgehalten.
 * **Die Fremdwarnung eng ausgeklammert**, auf `vtkmodules.*` und `skimage.*`
   begrenzt und mit Entfernungsbedingung kommentiert. Der eigene Kern kommt
   ohne die Zuweisung aus, geprüft — es wird also nichts Eigenes verdeckt.
@@ -2327,9 +2346,9 @@ ohne neue Regelverstöße), `PySide6` 6.7→6.11, `lxml` 5→6, `svg.path` 6→7
   und Paketierung bauen dagegen, ebenso der Erstaufbau in `README.md` und
   `CLAUDE.md`. Ohne ihn installiert jeder Klon etwas anderes, und genau das
   ist hier passiert.
-* **Ein wöchentlicher CI-Job „Neueste Fassungen"** löst bewusst ohne
+* **Ein wöchentlicher CI-Job „Neueste Versionen"** löst bewusst ohne
   Constraints auf und protokolliert, was er installiert. Wird er rot, während
-  die Suite grün bleibt, liegt es an einer neuen Fassung — die Frühwarnung, die
+  die Suite grün bleibt, liegt es an einer neuen Version — die Frühwarnung, die
   hier gefehlt hat. Nur Ubuntu, nur montags: private Minuten sind gezählt.
 * Nebenprodukt der Zielversion: `ruff` verlangte mit `py313` drei
   Umschreibungen auf PEP-695-Generics (`op_params`, `validate`, `_by_title`).
@@ -2413,7 +2432,7 @@ Sekunden statt 0,4, der Körper zwei Zehntel zu groß. Wer eine langsame Boolesc
 Operation sieht, misst zuerst das Volumen ihrer Eingänge.
 
 **Der eigene Test findet den eigenen Irrtum.** Die Zahl der Operationen war um
-sechzehn falsch, weil ohne geladenes Register gemessen; die erste Fassung der
+sechzehn falsch, weil ohne geladenes Register gemessen; die erste Version der
 Grenzprüfung zählte Registerkategorien statt Menüs und hätte damit die Lösung
 für das Problem gehalten.
 
@@ -2428,7 +2447,7 @@ steht in `.claude/konzept-live-durchsicht-2026-08.md`.
 **Drei Dinge tragen besser, als das Repository sie darstellt.** Der STEP-Weg ist
 in beide Richtungen bitgenau — Volumen und Fläche stimmen auf fünfzehn Stellen
 mit Fusion überein, die Bohrung im zurückgeladenen Fusion-Körper wird erkannt.
-Die Slicer-Übergabe meldet gegen 1.5.3.4 — eine Fassung neuer als die, gegen die
+Die Slicer-Übergabe meldet gegen 1.5.3.4 — eine Version neuer als die, gegen die
 die Tabelle gebaut wurde — **null** übergangene Einstellungen; die Profilzuordnung
 trifft ohne Zutun aus 9849 gelesenen Profilen. Und der ganze Weg läuft aus dem
 Fenster heraus: Strg+P, Slicen, 0,8 Sekunden, Druckdatei.
@@ -2638,7 +2657,7 @@ darunter.
       die Kommandozeile und das Fenster. **`ruff` blieb grün** — es bringt einen
       eigenen Parser mit `target-version` mit und sieht den Interpreter nie an.
       3.13.14 installiert, Umgebung gegen `constraints.txt` neu aufgebaut; dabei
-      kamen auch `pypdf` und die sechs Fassungen nach, die von der Datei
+      kamen auch `pypdf` und die sechs Versionen nach, die von der Datei
       abwichen.
 - [x] **Das Tor konnte still durchfallen.** `mypy` meldete „1 error ... errors
       prevented further checking" und prüfte dabei **null** Projektdateien —
@@ -3529,7 +3548,7 @@ Zahlen; die wichtigsten:
   Einpressbuchse im Dose-Beispiel sitzt auf dem Boden statt über dem Hohlraum
   — von acht Beispielen warnt nur noch das, dessen Zweck das Warnen ist.
 
-**Eine Regression dabei, gemeldet und behoben:** Die erste Fassung der
+**Eine Regression dabei, gemeldet und behoben:** Die erste Version der
 Raumzuteilung las die Höhen, die sie gerade selbst gesetzt hatte, und die
 linke Spalte lief bei jeder Aktion auf und ab — neunhundertfünf
 Geometriewechsel für ein Aufklappen. Gerechnet wird jetzt nur mit dem
@@ -3565,7 +3584,7 @@ Konzeptpapiere und die Roadmap — gegen den Code, nicht gegen die Erinnerung.
   Referenz formatierte mit `:g`, neben einer Anwendung, die „2,40 mm" zeigt.
   `format_decimal` entscheidet das jetzt nach der Sprache.
 - **Zwanzig Zeichnungen hatten weißen Grund** in einer Seite, die dem
-  Systemthema folgt. Die dunkle Fassung gab es die ganze Zeit —
+  Systemthema folgt. Die dunkle Version gab es die ganze Zeit —
   `make_manual` rief nur `svg(key, "light")`.
 - **Der Bauplan verbot den eigenen Namen.** §37.1 führte „kein ‚3D' im
   Namen" als Kriterium, und die Anwendung heißt Solidon3D. Das Kriterium ist
@@ -4247,7 +4266,7 @@ dem Programm widersprachen:
 - **Drei Absätze druckten ihre eigenen Sternchen.** `**fett mit *kursiv*
   darin**` setzt `markup._STRONG` nicht um (das Muster lässt kein Sternchen im
   Inneren zu), und der Umsetzer schweigt dazu. `test_no_page_prints_its_own_markup`
-  prüft es jetzt in **beiden** Sprachen — die englische Fassung ist ein
+  prüft es jetzt in **beiden** Sprachen — die englische Version ist ein
   Katalogeintrag, den kein Umsetzer korrigiert.
 
 Neu: Kapitel „Zeichnen" vor den drei Wegen, mit drei Abbildungen — dem
@@ -4665,8 +4684,8 @@ den Webserver und die Paketierung. Fünf Funde:
       Start; `Activation.deadline` und `.over` sagen der Oberfläche, woran sie
       ist. Der Testlaufmarker verliert damit seine Bedeutung. Zwei Tests halten
       dagegen: einer weckt, wenn der ausgelieferte Stichtag verstrichen ist,
-      der andere verbietet einer 1.x-Fassung überhaupt einen Stichtag.
-- [x] **Fassung 0.1.0** (am 14.08.2026 von 0.7.0 heruntergesetzt, entschieden
+      der andere verbietet einer 1.x-Version überhaupt einen Stichtag.
+- [x] **Version 0.1.0** (am 14.08.2026 von 0.7.0 heruntergesetzt, entschieden
       von Robert). Die Null vorn ist Mechanik: `key.current_major()` liest sie,
       also greift ein 1.x-Kaufschlüssel in der Demo nicht — und der
       Update-Hinweis zeigt später auf die 1.0. Die 7 dahinter war nie
@@ -4683,7 +4702,7 @@ den Webserver und die Paketierung. Fünf Funde:
 - [x] **Der Schluss.** Nach dem Stichtag startet weder Fenster noch
       Kommandozeile; die Meldung nennt das Datum, die Website und den Verbleib
       der eigenen Dateien.
-- [x] **Zwei Menüeinträge**: nach einer neuen Fassung sehen (mit Antwort in
+- [x] **Zwei Menüeinträge**: nach einer neuen Version sehen (mit Antwort in
       allen drei Fällen) und Rückmeldung schreiben.
 - [x] **Rechtstexte.** EULA §4a für die Demo; AGB und Widerruf sagen, dass sie
       ab dem Verkaufsstart gelten.
@@ -4723,7 +4742,7 @@ den Webserver und die Paketierung. Fünf Funde:
 
       **Es war nicht ein Fehler, sondern vier**, und keiner davon lag im Code,
       den die Suite prüfte: ein Gewindetest, dessen `xfail` nur Linux nannte,
-      während macOS dieselbe OCCT-Fassung hat; `--forked` auf macOS, wo
+      während macOS dieselbe OCCT-Version hat; `--forked` auf macOS, wo
       `fork()` ohne `exec()` mit CoreFoundation nicht zulässig ist (80 von 110
       Tests in zehn Sekunden tot); ein Register am Kopf dieser Datei, das zwei
       Punkte nicht mitzählte — der einzige rote Test im Hauptblock; und
@@ -4765,7 +4784,7 @@ den Webserver und die Paketierung. Fünf Funde:
 
       Eine Ursache steht hier bewusst **nicht**: Sie wäre geraten. Der Absturz
       tritt auf Linux auf, diese Maschine ist Windows, und der lokale Lauf
-      läuft zudem unter einer anderen Interpreter-Fassung (siehe den
+      läuft zudem unter einer anderen Interpreter-Version (siehe den
       Rändel-Test weiter unten). Wer ihn angeht, hat die Kette oben und die
       vier gemessenen Irrwege in jenem Abschnitt.
 
@@ -4787,7 +4806,7 @@ den Webserver und die Paketierung. Fünf Funde:
       Stapelüberlauf steht dann in `main_window.py:790 _build_central`, aus
       `test_sketch_editor.py:826`, bei achtzig Prozent. Anderer Test, andere
       Zeile, gleiches Bild. Ein Absturz, der wandert, hängt an keinem Test und
-      an keiner Interpreter-Fassung.
+      an keiner Interpreter-Version.
 
       **Was er stattdessen ist, steht seit dem 13.08. im Kopf von
       `build.yml`:** die Zahl der VTK-Fenster, die ein Prozess nacheinander
@@ -4990,7 +5009,7 @@ zur Hand hat, prüft sie zuerst — und dann trotzdem die andere.
       im Kern.
 
       Damit ist auch die Zuordnung zum „Maschinen-Cluster" hinfällig, und die
-      beiden anderen Kandidaten (Interpreter-Fassung, Hardware) sind für dieses
+      beiden anderen Kandidaten (Interpreter-Version, Hardware) sind für dieses
       Fehlerbild nicht mehr nötig. Der Kern bleibt unverändert — an
       `_polygon_from` war nichts zu reparieren, was das Nachmessen an Shapely
       2.1.2 unten schon zeigte.
@@ -5014,15 +5033,15 @@ zur Hand hat, prüft sie zuerst — und dann trotzdem die andere.
 
       Der Kern brauchte also keine Änderung, und bekam keine.
 
-- [x] **Entwickelt wurde unter einer Fassung, die nie ausgeliefert wird**
+- [x] **Entwickelt wurde unter einer Version, die nie ausgeliefert wird**
       (gefunden und behoben am 14.08.2026). Nebenbefund der Suche oben, und mit
       ihr nicht verwandt: Diese Maschine hatte ihre `.venv` unter **Python
       3.14.2**, während `pyproject.toml` mypy auf 3.13 stellt und alle drei
-      CI-Aufträge `python-version: "3.13"` fahren. Die Paketfassungen waren
+      CI-Aufträge `python-version: "3.13"` fahren. Die Paketversionen waren
       identisch mit `constraints.txt` — aber es waren andere Binaries:
       `shapely/lib` lag als `cp314-win_amd64.pyd`, in der CI als `cp313`. Damit
       lief der ganze Unterbau aus C-Erweiterungen (shapely/GEOS, numpy, scipy,
-      trimesh, rtree, manifold3d, VTK, OCCT) lokal in einer Fassung, die weder
+      trimesh, rtree, manifold3d, VTK, OCCT) lokal in einer Version, die weder
       geprüft noch paketiert wird — und jeder grüne Lauf hier sagte etwas über
       eine Umgebung, die kein Kunde bekommt.
 
@@ -5032,8 +5051,8 @@ zur Hand hat, prüft sie zuerst — und dann trotzdem die andere.
       `pypdf`).
 
       **`constraints.txt` allein reicht dafür nicht**, und das ist die Lehre:
-      Es pinnt die Fassungen, nicht den Interpreter. Wer eine Umgebung nach der
-      Anleitung in `CLAUDE.md` aufbaut, bekommt die gepinnten Fassungen für
+      Es pinnt die Versionen, nicht den Interpreter. Wer eine Umgebung nach der
+      Anleitung in `CLAUDE.md` aufbaut, bekommt die gepinnten Versionen für
       *sein* Python — und wenn das ein anderes ist als in der CI, andere
       Binaries bei identischen Nummern.
 
@@ -5041,7 +5060,7 @@ zur Hand hat, prüft sie zuerst — und dann trotzdem die andere.
 
 `thread_exact` mit **M6 und einem Millimeter Steigung** — das gewöhnlichste
 Gewinde überhaupt — kommt unter Windows als geschlossener Bolzen heraus und
-auf den Linux-Runnern als offener. Dieselbe Rechnung, andere OCCT-Fassung.
+auf den Linux-Runnern als offener. Dieselbe Rechnung, andere OCCT-Version.
 
 Vier Anläufe, alle gemessen, keiner erfolgreich:
 
@@ -5062,7 +5081,7 @@ Vier Anläufe, alle gemessen, keiner erfolgreich:
       Verdacht liegt nicht mehr bei der Vereinigung, sondern beim Gang selbst
       (`MakePipeShell`). Bis dahin trägt
       `tests/test_sketch_ops.py::test_a_sound_thread_still_goes_through` ein
-      `xfail` für Linux, nicht `strict`: sobald eine Fassung es dort kann,
+      `xfail` für Linux, nicht `strict`: sobald eine Version es dort kann,
       wird der Lauf grün und die Marke fällt auf. Für die Demo ist die Wirkung
       begrenzt — sie erscheint für Windows, und dort geht es.
 
@@ -5494,7 +5513,7 @@ es prüft keine Selbstdurchdringung (also läuft die Prüfung danach).
       nicht nach Sicherheit, sondern sagt, was danach nicht mehr geht und was
       man dafür bekommt. Die einzige Nachfrage im ganzen Programm. **Dabei mitnehmen:
       ein `title_translatable` für Parameter.** Für Transaktionstitel gibt es
-      das Feld seit Fassung 6, für Parameter nicht — ihr Titel kommt aus dem
+      das Feld seit Version 6, für Parameter nicht — ihr Titel kommt aus dem
       Code, verliert beim Speichern aber die Herkunft und steht danach als
       nackter deutscher Text in der Datei. Wer ein Beispielprojekt auf
       Spanisch öffnet, liest deshalb „Breite" statt „Ancho".
@@ -5657,7 +5676,7 @@ lesen:
       Handbuchtitel *Die vier Wege* übernommen, damit die Oberfläche nicht
       zwei Wörter für dieselbe Sache führt. Der Kommentar in `examples.py`
       war dreifach falsch (vier statt fünf darunter, drei statt vier Wege).
-- [x] **Die Fassung stand an zwei Orten und kein Test hielt sie zusammen.**
+- [x] **Die Version stand an zwei Orten und kein Test hielt sie zusammen.**
       `test_the_version_is_the_same_in_both_places_that_carry_it` tut es jetzt.
       Aufgefallen beim Heruntersetzen auf 0.1.0 — bis dahin hing die
       Übereinstimmung an Aufmerksamkeit.
@@ -6417,7 +6436,7 @@ mit Stelle, Beleg und Fix-Skizze stehen in
 
 Vorab die Baseline: Umgebung auf `constraints.txt` gebracht (trimesh
 4.12 → 5.0.0; der Major-Sprung ist nachweislich folgenlos, in beiden
-Kern-Gebieten gegen die installierte Fassung aufgelöst), Suite portionsweise
+Kern-Gebieten gegen die installierte Version aufgelöst), Suite portionsweise
 **4009 Tests grün**, ruff/format/mypy grün. Der Lauf am Stück stirbt weiter
 am nativen rtree-Abriss — Umgebung, nicht Code.
 
@@ -6660,7 +6679,7 @@ Live-Abnahme bekommen**, wie sie P15 und die August-Durchsicht hatten.
       **`format_version` bleibt bei 8**, und auch das ist eine Entscheidung.
       Das Schema ändert sich nicht — ein größerer Wertebereich in einem Feld
       ist kein neues Feld. Rückwärts gilt es nicht, aber eine Erhöhung würde
-      **jede** neue Datei für die alte Fassung sperren, auch die ohne einen
+      **jede** neue Datei für die alte Version sperren, auch die ohne einen
       einzigen Ausdruck. Die Kette in `migrations.py` erhöht für
       Schemaänderungen, nicht für Fähigkeiten.
 
@@ -7064,7 +7083,7 @@ belegt und mit Absicht liegen geblieben.
 > einem eigenen Modul, aus dem Fenster und Dialoge erben. Und die Legende der
 > Differenzansicht war dort unabhängig gefunden und behoben worden: zweimal
 > derselbe Befund aus zwei Richtungen, was für ihn spricht. Geblieben ist die
-> Fassung mit Farbfeld und gerechneter Schrift, weil sie neben der Zuordnung
+> Version mit Farbfeld und gerechneter Schrift, weil sie neben der Zuordnung
 > auch den Kontrast löst — als bloße Schriftfarbe kam die Legende in Graustufen
 > auf 1,16 gegen ihr Band.
 
@@ -7163,7 +7182,7 @@ bis siebzehn Tagen so bewegt, dass Entscheidungen daran hängen:
       01.06. in **Millimetern** — das ist die Richtung, aus der ein Generator
       in unser Feld kommt: über echte Maße an fertigen Produkten, nicht über
       bessere Netze.
-- [x] **SindriCAD ist davongelaufen.** Von Fassung 0.1.81 auf **0.1.171**, von
+- [x] **SindriCAD ist davongelaufen.** Von Version 0.1.81 auf **0.1.171**, von
       20 auf **141 Sterne**, 69 Commits in der letzten Woche — sämtlich vom
       Eigentümer. Architektur jetzt belegt: Python-Sidecar mit build123d auf
       OpenCASCADE, Oberfläche TypeScript/Three.js in einer Tauri-Hülle,
@@ -7177,7 +7196,7 @@ bis siebzehn Tagen so bewegt, dass Entscheidungen daran hängen:
       **CRA-Meldepflichten greifen ab dem 11.09.2026**, also mitten in der
       Demo-Phase; die Ausnahme für freie Software gilt nur bei
       unentgeltlicher Bereitstellung.
-- [x] **Der Fassungssatz hat wieder eine Arbeitsliste.** PySide6 und
+- [x] **Der Versionssatz hat wieder eine Arbeitsliste.** PySide6 und
       shiboken6 6.11.2 (18.08.), und **vtk 9.7.0 ist da, aber nicht ziehbar**:
       pyvista 0.48.4 verlangt in seinen Metadaten `vtk<9.7.0`. Hier entsteht
       die nächste Obergrenze, und sie liegt nicht in unserer Hand. Python
@@ -7216,7 +7235,7 @@ Konzeptdateien und deshalb hier und nicht dort:
       Sperrliste: Ein unbekanntes Modell fällt in „nicht senden", und das ist
       immer zulässig — ohne Angabe nimmt die Gegenseite ihren Vorgabewert. Eine
       vergessene Sperrzeile wäre dagegen ein harter Fehler. Verglichen wird
-      über den Namensanfang, weil dieselbe Fassung unter dem Alias und unter
+      über den Namensanfang, weil dieselbe Version unter dem Alias und unter
       ihrem Schnappschuss erreichbar ist. Zwei Tests in
       `tests/test_backends.py`.
 - [x] **Die Vorgabe steht auf `claude-sonnet-5`** (entschieden von Robert am
@@ -7680,7 +7699,7 @@ mit den Bedienverträgen nichts zu tun hat und alles mit demselben Muster:
       hieße die Maschine prüfen und nicht die Anwendung.
 
       Zwei Fallen steckten im Test selbst. Ohne `figures.forget()` kommt sechsmal
-      die deutsche Fassung zurück — die Abbildungen werden gemerkt, und der
+      die deutsche Version zurück — die Abbildungen werden gemerkt, und der
       Erzeuger leert den Vorrat bei jedem Sprachwechsel. Und die Zeilenenden
       bleiben außen vor: `write_text` setzt unter Windows CRLF und unter Linux
       LF, was keine Aussage über das Bild ist.
@@ -8096,7 +8115,7 @@ die Gegenprobe danach genau diesen einen Wert meldete.
 
 **Die Lücke in der Gegenprobe ist zu.** Für Cura gibt es keine Konfiguration
 im G-Code, aber eine Definition neben dem Programm: `unknown_keys()` liest
-`fdmprinter.def.json` der **installierten** Fassung und meldet, was sie nicht
+`fdmprinter.def.json` der **installierten** Version und meldet, was sie nicht
 kennt. Dieselbe Absicht wie `verify()`, aus der einzigen Quelle, die dieser
 Slicer hergibt.
 
@@ -8331,7 +8350,7 @@ Seite, die Datei auf der anderen, und jede Seite war für sich grün.
 - [x] **`tools/make_download.py` trug deutsche Bezeichner** — und das war **kein
       Fund des Merges**, sondern ein roter Lauf, der schon oben stand: Der
       Sprachtest sieht `tools/` seit dem 16.08. (`8a15cbc`), auf beiden Seiten,
-      und die Fassung von `origin/main` bringt neun Treffer. Umbenannt wurde der
+      und die Version von `origin/main` bringt neun Treffer. Umbenannt wurde der
       ganze Satz und nicht die neun erkannten Stämme, sonst bliebe eine halb
       übersetzte Datei stehen. Über die **Token** umbenannt, damit Kommentare
       und Meldungen deutsch bleiben; `block` hieß an zwei Stellen zwei Dinge —
@@ -8968,7 +8987,7 @@ Kein Verstoß.
 
       Dazu unverändert: ein Schritt 8 → 9 mit Migration (`carry_over` genügt,
       alte Namen bleiben wörtlich — dieselbe Begründung wie bei
-      `title_translatable`), eine Beispieldatei der Fassung 8, die vierzehn
+      `title_translatable`), eine Beispieldatei der Version 8, die vierzehn
       gesetzten Namen in `make_examples.py`, siebzig Katalogeinträge und neu
       erzeugte Beispiele.
 
@@ -9160,11 +9179,11 @@ war eindeutig: Die häufigsten Vorschläge waren die ohne Wirkung.
       dieselbe Antwort (`_WriteFailure`): Beide scheitern am selben
       Betriebssystem.
 - [x] **„Ein Update öffnet sie" — und niemand bot eines an.** Eine Projektdatei
-      aus einer neueren Fassung wird abgelehnt, und der Satz dazu nannte den Weg
+      aus einer neueren Version wird abgelehnt, und der Satz dazu nannte den Weg
       seit je. Angeboten wurde *Eingabe korrigieren*, und an einer Datei aus der
       Zukunft gibt es keine Eingabe zu korrigieren. Die Migration schlägt jetzt
       `CHECK_UPDATES` vor, verdrahtet auf denselben Weg wie *Hilfe → Nach einer
-      neuen Fassung sehen*. Dazu ein eigener Titel: „Die Eingabe war so nicht
+      neuen Version sehen*. Dazu ein eigener Titel: „Die Eingabe war so nicht
       verwendbar" stand über einer Datei, an der niemand etwas eingegeben hat.
 - [x] **Die dritte Bauraum-Handlung fehlte noch.** Teilen und Verkleinern kamen
       mit dem Kontextmenü des Berichts; *Anderes Druckerprofil wählen* blieb
@@ -10235,7 +10254,7 @@ nicht zweimal messen.
       Beim Nachziehen fiel eine Falle auf, die eine eigene Zeile verdient: Ich
       hatte sechs fehlende Sätze gemessen und alle sechs übersetzt — fünf davon
       hatte die parallele Sitzung in der Zwischenzeit selbst übersetzt, und mein
-      Eintrag hätte ihre Fassung überschrieben. Gegen HEAD neu gemessen war es
+      Eintrag hätte ihre Version überschrieben. Gegen HEAD neu gemessen war es
       genau einer. In einem geteilten Arbeitsbaum ist eine Messung von vor
       zwanzig Minuten keine Grundlage für einen Commit.
 
@@ -10363,7 +10382,7 @@ Intel-Arc-140V, und ein `qwen3:14b` bei Ollama.
       `diffusers`, `scikit-image`, `lazy_loader`, `omegaconf` und die Laufzeit
       von `antlr4` — gemessen war die Liste an einer Installation, in der andere
       Knoten das übrige längst mitgebracht hatten. Gefunden wurden sie einzeln,
-      indem der Knoten geladen wurde, bis er lud. Die Fassung an `antlr4` ist
+      indem der Knoten geladen wurde, bis er lud. Die Version an `antlr4` ist
       keine Übervorsicht: `omegaconf` liest damit einen vorkompilierten
       Automaten, und die 4.13 serialisiert ihn anders („Could not deserialize
       ATN with version 3"). Alle Lizenzen geprüft — BSD, Apache-2.0, MIT.
@@ -10430,7 +10449,7 @@ Intel-Arc-140V, und ein `qwen3:14b` bei Ollama.
       dabei sogar besser: TripoSG bekommt das Originalbild plus Maske statt
       eines weiß gefüllten Bildes. Ein älteres ComfyUI kennt die Knoten nicht,
       und dann nennt `missing_nodes()` sie mit Namen — das ist der richtige Weg
-      dafür und keine zweite Fassung des Ablaufs.
+      dafür und keine zweite Version des Ablaufs.
 
 - [x] **ComfyUI beschreibt Auswahllisten in zwei Formen, und wir lasen eine.**
       Klassisch steht die Liste als erstes Element (`[["TripoSG"], {…}]`); die
@@ -10793,7 +10812,7 @@ acht Schritte an 52 Körpern in 87 Sekunden, an einem Vierteilesatz in 16.
       einem Werkzeug, das doppelte Freigaben sieht. Ohne das ist jeder Eingriff
       geraten, und Raten ist hier teurer als Warten.
 - [x] **Der Schnapper kam nicht durch die Oberfläche.** Der 220er-Plan teilt
-      seit heute mit Schnappverbindern, damit die korrigierte Fassung 4 des
+      seit heute mit Schnappverbindern, damit die korrigierte Version 4 des
       Bausteins durch den Kundenweg läuft. Gemeldet wurde
       `info:split.snap_too_small`: Die Naht der Sechskantstange gibt die
       5,4 mm nicht her, die ein Federarm braucht, und Solidon fällt

@@ -29,7 +29,7 @@ import torch
 import torchaudio
 from chatterbox.mtl_tts import ChatterboxMultilingualTTS
 
-#: Wie stark betont wird. Aus fünf gegeneinander gehörten Fassungen gewählt:
+#: Wie stark betont wird. Aus fünf gegeneinander gehörten Versionen gewählt:
 #: die Vorgabe 0,5 klingt gleichförmig, 0,85 überzeichnet.
 EXAGGERATION = 0.7
 

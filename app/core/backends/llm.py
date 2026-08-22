@@ -217,7 +217,7 @@ ANTHROPIC_VERSION = "2023-06-01"
 def takes_temperature(model: str) -> bool:
     """Nimmt dieses Modell den ``temperature``-Parameter noch an?
 
-    Verglichen wird über den Namensanfang, weil dieselbe Fassung sowohl unter
+    Verglichen wird über den Namensanfang, weil dieselbe Version sowohl unter
     dem Alias (``claude-sonnet-4-5``) als auch unter ihrem Schnappschuss
     (``claude-sonnet-4-5-20250929``) angesprochen werden kann.
     """

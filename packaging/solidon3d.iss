@@ -23,7 +23,7 @@ AppUpdatesURL={#AppUrl}
 DefaultDirName={autopf}\{#AppName}
 ; **Die Verzeichnisseite wird immer gezeigt.** Die Vorgabe (``auto``) versteckt
 ; sie, sobald der Installer eine frühere Installation in der Registrierung
-; findet — dann entscheidet er über den Ort, ohne zu fragen. Wer eine Fassung
+; findet — dann entscheidet er über den Ort, ohne zu fragen. Wer eine Version
 ; auf eine andere Platte legen will, weil die Systemplatte voll ist, käme dort
 ; nicht mehr heran. Vorbelegt bleibt der alte Pfad; es ist eine Seite mehr, und
 ; sie hat einen Knopf „Weiter".
@@ -51,7 +51,7 @@ PrivilegesRequiredOverridesAllowed=dialog
 SetupIconFile={#SetupIconFile}
 ; Was die Dateieigenschaften der Setup-Datei zeigen. Bei einem unsignierten
 ; Paket ist das die einzige Stelle, an der vor dem Ausführen Hersteller und
-; Fassung stehen — SmartScreen zeigt sie im Aufklappen des Hinweises.
+; Version stehen — SmartScreen zeigt sie im Aufklappen des Hinweises.
 VersionInfoVersion={#AppVersion}
 VersionInfoCompany={#AppVendor}
 VersionInfoProductName={#AppName}
@@ -84,7 +84,7 @@ portuguese.ProjectFileType=Projeto {#AppName}
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 ; Die Dateizuordnung steht **angehakt** da, anders als das Desktop-Symbol: Wer
 ; ein Programm für Projektdateien installiert, will sie damit öffnen. Abwählbar
-; bleibt sie trotzdem — auf einem Rechner mit zwei Fassungen nebeneinander ist
+; bleibt sie trotzdem — auf einem Rechner mit zwei Versionen nebeneinander ist
 ; genau das die Frage, die zählt.
 Name: "associate"; Description: "{cm:AssocFileExtension,{#AppName},{#ProjectSuffix}}"
 

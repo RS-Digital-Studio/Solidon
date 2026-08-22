@@ -90,14 +90,14 @@ def test_the_manual_can_read_the_rules_in_every_language() -> None:
         if language == "de":
             continue
         missing = [rule.id for rule in collection.rules if language not in rule.translations]
-        assert not missing, f"ohne Fassung für {language}: {missing}"
+        assert not missing, f"ohne Version für {language}: {missing}"
         for rule in collection.rules:
             title, text = rule.translations[language]
             assert rule.reading(language) == (title, " ".join(text.split()))
 
 
 def test_the_agent_keeps_reading_german_whatever_the_language() -> None:
-    """Zwei Fassungen einer Regel wären zwei Wahrheiten, und die Suite-Quote
+    """Zwei Versionen einer Regel wären zwei Wahrheiten, und die Suite-Quote
     hinge davon ab, welche gerade gilt. Die Übersetzung ist fürs Handbuch da.
     """
     collection = rules.load()

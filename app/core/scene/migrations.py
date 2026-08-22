@@ -103,7 +103,7 @@ def _keep_transaction_titles_literal(data: dict[str, Any]) -> dict[str, Any]:
     zufällig einem Katalogeintrag gleicht, würde plötzlich übersetzt. Alte
     Titel bleiben also wörtlich; strukturell ändert dieser Schritt nichts.
 
-    Die Versionserhöhung selbst ist der Schutz: eine ältere Fassung des
+    Die Versionserhöhung selbst ist der Schutz: eine ältere Version des
     Programms kennt die Markierung nicht und würde sie beim Speichern
     stillschweigend verwerfen — sie lehnt eine Version-6-Datei stattdessen
     freundlich ab.
@@ -163,7 +163,7 @@ def migrate(
             title=_("Diese Projektdatei ist neuer als das Programm."),
             field="format_version",
             detail=_(
-                "Diese Datei stammt aus einer neueren Fassung des Programms. Ein Update öffnet sie."
+                "Diese Datei stammt aus einer neueren Version des Programms. Ein Update öffnet sie."
             ),
             constraint="too_new",
             values={"file_version": version, "supported": target},

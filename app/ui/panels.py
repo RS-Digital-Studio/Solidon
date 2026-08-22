@@ -257,7 +257,7 @@ def _op_title(name: str) -> str:
     nur kommt der eine Text aus der Transaktion und der andere aus dem Code.
 
     Eine Operation, die das Register nicht kennt, behält ihren Namen — eine
-    Projektdatei aus einer neueren Fassung ist kein Grund, eine Zeile leer zu
+    Projektdatei aus einer neueren Version ist kein Grund, eine Zeile leer zu
     lassen.
     """
     try:

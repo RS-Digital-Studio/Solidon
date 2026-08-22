@@ -510,7 +510,7 @@ Zehntel Millimeter. Für fast alle stand das Ergebnis vorher fest. Der
 Vorfilter ist keine Näherung: über vier Beispielprojekte und dreiunddreißig
 Aufrufe stimmt jedes Dreieck mit der alten Rechnung überein.
 
-**Eine Regression, gemeldet und behoben.** Die erste Fassung der Raumzuteilung
+**Eine Regression, gemeldet und behoben.** Die erste Version der Raumzuteilung
 las die Höhen, die sie gerade selbst gesetzt hatte. Die linke Spalte lief
 daraufhin bei jeder Aktion auf und ab — neunhundertfünf Geometriewechsel für
 ein einziges Aufklappen. Gerechnet wird jetzt nur mit dem verfügbaren Raum und

@@ -83,7 +83,7 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M3 16.5 12 21l9-4.5" opacity="0.5" />'
     ),
     # Auseinandergezogen: zwei Hälften, die voneinander wegwandern. Die erste
-    # Fassung verband sie mit gestrichelten Linien — die verschwanden bei
+    # Version verband sie mit gestrichelten Linien — die verschwanden bei
     # Symbolgröße, und übrig blieben zwei Quadrate ohne Aussage.
     "explode": (
         '<rect x="3" y="3" width="8" height="8" rx="1" />'
@@ -491,11 +491,11 @@ APPLICATION_ICON_SIZES: Final = (16, 24, 32, 48, 64, 128, 256)
 #: und der Ladebildschirm, der sie schichtweise zeichnet.
 ICON_SOURCE: Final = Path(__file__).resolve().parent.parent / "images" / "icon" / "solidon3d.svg"
 
-#: Die vereinfachte Fassung für kleine Größen. Warum es sie gibt, steht in der
+#: Die vereinfachte Version für kleine Größen. Warum es sie gibt, steht in der
 #: Datei selbst — kurz: was bei 128 Pixeln Struktur ist, ist bei 16 Schleier.
 ICON_SOURCE_SMALL: Final = ICON_SOURCE.with_name("solidon3d-small.svg")
 
-#: Bis zu welcher Kantenlänge die vereinfachte Fassung genommen wird.
+#: Bis zu welcher Kantenlänge die vereinfachte Version genommen wird.
 #: 32 ist die Grenze, ab der die Schichtlinien wieder als Linien ankommen —
 #: nachgesehen, nicht geschätzt.
 SMALL_ICON_LIMIT: Final = 32
@@ -586,11 +586,11 @@ def paint_printed_mark(
 def application_icon() -> QIcon:
     """Das Anwendungssymbol, zur Laufzeit aus seinen SVG-Quellen gerastert.
 
-    **Zwei Quellen, nicht eine.** Bis 32 Pixel kommt die vereinfachte Fassung
+    **Zwei Quellen, nicht eine.** Bis 32 Pixel kommt die vereinfachte Version
     zum Zug (``solidon3d-small.svg``), darüber die ausgearbeitete. Der Grund
     steht im kleinen SVG: Bei sechzehn Pixeln — Titelleiste, Taskleiste,
     Alt-Tab, und dieselbe Größe in jedem Dialog — sind die Schichtlinien der
-    großen Fassung 0,3 Pixel breit und ergeben einen grauen Schleier, aus dem
+    großen Version 0,3 Pixel breit und ergeben einen grauen Schleier, aus dem
     kein Körper mehr zu lesen ist.
 
     Das gilt für **alle** Fenster: Gesetzt wird das Symbol einmal auf der

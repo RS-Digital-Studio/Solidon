@@ -251,9 +251,9 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
         kind="program",
         winget="OpenSCAD.OpenSCAD",
         # **Nicht ``openscad``, und das ist kein Tippfehler.** Homebrew hat das
-        # Cask der stabilen Fassung als „deprecated: fails_gatekeeper_check"
+        # Cask der stabilen Version als „deprecated: fails_gatekeeper_check"
         # geführt und zum 01.09.2026 abgeschaltet; ``openscad@snapshot`` ist die
-        # gepflegte Fassung und trägt dieselbe Anwendung. Eine Kennung mit
+        # gepflegte Version und trägt dieselbe Anwendung. Eine Kennung mit
         # Ablaufdatum einzubauen hieße, in zehn Tagen einen Fehlschlag
         # auszuliefern.
         brew=("--cask", "openscad@snapshot"),

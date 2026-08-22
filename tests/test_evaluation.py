@@ -59,7 +59,7 @@ def registry() -> Registry:
         params=MakeParams,
         consumes=0,
         produces=1,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def make(ctx: OpContext) -> OpResult:
@@ -77,7 +77,7 @@ def registry() -> Registry:
         params=ResizeParams,
         consumes=1,
         produces=1,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def resize(ctx: OpContext) -> OpResult:
@@ -92,7 +92,7 @@ def registry() -> Registry:
         params=EmptyParams,
         consumes=1,
         produces=2,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def split(ctx: OpContext) -> OpResult:
@@ -112,7 +112,7 @@ def registry() -> Registry:
         params=EmptyParams,
         consumes=1,
         produces=1,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def unstable(ctx: OpContext) -> OpResult:
@@ -126,7 +126,7 @@ def registry() -> Registry:
         params=EmptyParams,
         consumes=1,
         produces=1,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def failing(ctx: OpContext) -> OpResult:
@@ -139,7 +139,7 @@ def registry() -> Registry:
         params=EmptyParams,
         consumes=1,
         produces=1,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def failing_with_detail(ctx: OpContext) -> OpResult:
@@ -155,7 +155,7 @@ def registry() -> Registry:
         params=EmptyParams,
         consumes=1,
         produces=1,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def cancelling(ctx: OpContext) -> OpResult:
@@ -169,7 +169,7 @@ def registry() -> Registry:
         params=EmptyParams,
         consumes=1,
         produces=1,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def raising(ctx: OpContext) -> OpResult:
@@ -578,7 +578,7 @@ def test_a_finding_of_two_bodies_stays_silent_about_which(
         params=EmptyParams,
         consumes=0,
         produces=2,
-        doc=_("Testfassung."),
+        doc=_("Testversion."),
         registry=own,
     )
     def two(ctx: OpContext) -> OpResult:

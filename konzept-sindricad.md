@@ -52,11 +52,11 @@ genau die dort genannte Option. Solidon hat diesen Kern seit P12, aber als
 > (Quelle: README des Projekts, geholt am 19.08.2026.)
 >
 > **In siebzehn Tagen ist daraus etwas anderes geworden.** Am 4. August stand
-> hier Fassung 0.1.81 mit 20 Sternen und 6 Forks. Am 19.08.2026:
+> hier Version 0.1.81 mit 20 Sternen und 6 Forks. Am 19.08.2026:
 >
 > | | 04.08.2026 | 19.08.2026 |
 > |---|---|---|
-> | Fassung | 0.1.81 | **0.1.171** |
+> | Version | 0.1.81 | **0.1.171** |
 > | Sterne | 20 | **141** |
 > | Forks | 6 | 13 |
 > | Größe | 13,4 MB | 17,3 MB |
@@ -518,7 +518,7 @@ auf P16. Der wichtigste Einzelfund: **B4 ist erledigt**, GLB geht seit dem
 der Absatz darunter „der Absturz ist selten, nicht weg". Die Überschrift ist
 berichtigt.
 
-**Außen: SindriCAD ist in siebzehn Tagen davongelaufen.** Fassung 0.1.81 →
+**Außen: SindriCAD ist in siebzehn Tagen davongelaufen.** Version 0.1.81 →
 **0.1.171**, 20 Sterne → **141**, 6 Forks → 13. In den letzten drei Wochen 51,
 49, 80 und 69 Commits — und kein einziger davon von jemand anderem als dem
 Eigentümer. Das Bild eines Einzelprojekts hat sich damit nicht geändert, sein
@@ -543,6 +543,6 @@ mehr.
 19 %, der Monat ohne Entwicklung) — Patreon liefert die Stände nicht aus, und
 der Entwickler datiert den Stillstand nur mit „once this year". Ebenso: die
 Downloadzahlen der Beta (die GitHub-Zähler taugen nicht, weil das Rolling-Tag
-sie bei jedem Build zurücksetzt), ein Datum für die stabile Fassung (All3DP
+sie bei jedem Build zurücksetzt), ein Datum für die stabile Version (All3DP
 schreibt ausdrücklich, es gebe keines), und das Echo auf Reddit und Hacker
 News. Wer diese Zahlen zitiert, zitiert den 4. August.

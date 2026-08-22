@@ -50,7 +50,7 @@ def test_the_source_of_every_legal_text_is_there(source_name: str) -> None:
 @pytest.mark.parametrize(("source_name", "page_name"), sorted(DOCUMENTS.items()))
 def test_the_generated_page_matches_its_source(source_name: str, page_name: str) -> None:
     """Wer die Quelle ändert und das Werkzeug nicht laufen lässt, hat zwei
-    Fassungen eines Rechtstexts — und die falsche steht im Netz."""
+    Versionen eines Rechtstexts — und die falsche steht im Netz."""
     from make_legal import body_html
 
     page = WEBSITE / page_name

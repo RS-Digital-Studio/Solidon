@@ -146,7 +146,7 @@ class Ticket:
 
     @property
     def subject(self) -> str:
-        """Was im Posteingang steht: Art, Fassung, erste Zeile."""
+        """Was im Posteingang steht: Art, Version, erste Zeile."""
         first = self.message.strip().splitlines()[0] if self.message.strip() else ""
         head = f"{APP_NAME} {APP_VERSION} — {self.kind_name}"
         return f"{head}: {first[:80]}" if first else head

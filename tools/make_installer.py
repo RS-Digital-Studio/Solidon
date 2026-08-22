@@ -133,7 +133,7 @@ def _licence_file() -> Path:
 
     Bis hierher stand dort ``LICENSE`` — eine Urheberrechtsnotiz („alle Rechte
     vorbehalten"), die nicht sagt, was der Käufer erwirbt. Der Vertrag steht in
-    ``EULA.md``; ``tools/make_legal.py`` legt die Textfassung daneben, weil
+    ``EULA.md``; ``tools/make_legal.py`` legt die Textversion daneben, weil
     Inno Setup die Datei roh anzeigt und Markdown-Zeichen dort als Zeichen
     stünden.
     """

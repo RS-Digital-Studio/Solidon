@@ -240,7 +240,7 @@ beieinander.
 
 ## Teil 4 — Die offenen Punkte, und was aus ihnen wurde
 
-Alle fünf sind abgearbeitet; die ausführliche Fassung steht in der Roadmap.
+Alle fünf sind abgearbeitet; die ausführliche Version steht in der Roadmap.
 
 **4.1 Drei Menüeinträge für einen Schnitt** — behoben. `MENU_TWINS` hing an
 einer festen Beschriftung („Exakter Körper (B-Rep)") und taugte damit für
@@ -273,7 +273,7 @@ Zeile darunter („Port der Fernsteuerung") und das Handbuchkapitel tragen
 denselben Namen, und ein neues Wort hier hätte einen Namensbruch behoben und
 den nächsten angelegt. Geändert ist, was fehlte: „über MCP" nannte das
 Protokoll, nicht den Handelnden. Jetzt steht dort *Fernsteuerung durch andere
-Programme zulassen (MCP)*. Die ausführliche Fassung — „Solidon von anderen
+Programme zulassen (MCP)*. Die ausführliche Version — „Solidon von anderen
 Programmen auf diesem Rechner fernsteuern lassen" — sagte nicht mehr und zog
 den Dialog auf Französisch von 566 auf 768 Bildpunkte; gemessen, dann
 verworfen.

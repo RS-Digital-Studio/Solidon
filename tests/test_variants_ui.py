@@ -6,7 +6,7 @@ Oberfläche, die bedienbar bleibt. Gerechnet wurde vorher in der
 Ereignisschleife: das Fenster stand, bis der letzte Lauf durch war, und ein
 Zeichen dafür, dass überhaupt etwas läuft, gab es nicht.
 
-**Geprüft wird über die echten Wege**, nicht an ihnen vorbei. Die erste Fassung
+**Geprüft wird über die echten Wege**, nicht an ihnen vorbei. Die erste Version
 dieser Datei rief ``_stop_or_close`` von Hand und baute den Arbeiter selbst —
 damit blieb sie grün, als die Verbindung des Knopfes und das ``start()`` des
 Dialogs versuchsweise zurückgedreht wurden. Ein Test, der den Weg nicht geht,
@@ -113,7 +113,7 @@ def test_cancelling_stops_the_run_instead_of_closing_the_dialog(
     weiter. Läuft nichts, schließt er weiterhin.
 
     Gedrückt wird der Knopf und nicht die Methode gerufen — die Verbindung ist
-    Teil der Aussage. Genau daran ist die erste Fassung dieses Tests
+    Teil der Aussage. Genau daran ist die erste Version dieses Tests
     vorbeigelaufen.
     """
     from app.ui import variants_dialog as module

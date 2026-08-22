@@ -39,10 +39,10 @@ class FigureSource(NamedTuple):
     """Was aus einem Bildverweis wird.
 
     ``dark`` ist die Quelle für ein dunkles Farbschema und darf leer bleiben.
-    Gezeichnete Abbildungen entstehen in beiden Fassungen — eine Zeichnung mit
+    Gezeichnete Abbildungen entstehen in beiden Versionen — eine Zeichnung mit
     weißem Grund stand sonst als greller Block in einer dunklen Seite, während
     der Text um sie herum dem System folgte. Bildschirmfotos haben keine zweite
-    Fassung: sie zeigen die Anwendung, wie sie eingestellt ist.
+    Version: sie zeigen die Anwendung, wie sie eingestellt ist.
     """
 
     source: str
@@ -52,7 +52,7 @@ class FigureSource(NamedTuple):
 
 
 #: Was aus einem Bildverweis wird: die Quelle, der Alt-Text, die Unterschrift —
-#: als Tupel oder als :class:`FigureSource`, das zusätzlich die dunkle Fassung
+#: als Tupel oder als :class:`FigureSource`, das zusätzlich die dunkle Version
 #: kennt.
 FigureResolver = Callable[[str], FigureSource | tuple[str, str, str] | None]
 

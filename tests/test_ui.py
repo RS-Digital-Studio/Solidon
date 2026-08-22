@@ -1371,7 +1371,7 @@ def test_the_history_shows_titles_not_registry_names(qt_app: QApplication) -> No
 
     assert _op_title("drill_hole") == str(REGISTRY.get("drill_hole").title)
     assert "_" not in _op_title("drill_hole"), "kein Registername"
-    # Eine Projektdatei aus einer neueren Fassung ist kein Grund für eine
+    # Eine Projektdatei aus einer neueren Version ist kein Grund für eine
     # leere Zeile.
     assert _op_title("gibt_es_nicht") == "gibt_es_nicht"
 
@@ -2151,7 +2151,7 @@ def test_a_wordless_button_says_what_it_does_and_which_key(qt_app: QApplication)
     Er ist die einzige Erklärstelle, seit die Beschriftung fort ist — also
     steht dort, was der Menüeintrag derselben Handlung sagt, samt Kürzel. Der
     Satz wird nicht abgeschrieben, sondern von der Menü-Action geholt; zwei
-    Fassungen desselben Satzes driften auseinander.
+    Versionen desselben Satzes driften auseinander.
     """
     window = MainWindow(Session(), UiSettings())
 
@@ -4843,16 +4843,16 @@ def test_fading_leaves_no_effect_behind(qt_app: object) -> None:
 
 
 def test_the_application_icon_uses_the_small_source_where_it_matters(qt_app: object) -> None:
-    """Bis 32 Pixel kommt die vereinfachte Fassung, darüber die ausgearbeitete.
+    """Bis 32 Pixel kommt die vereinfachte Version, darüber die ausgearbeitete.
 
     Das ist die Größe von Titelleiste, Taskleiste, Alt-Tab — und dieselbe in
     jedem Dialog, weil das Symbol einmal auf der ``QApplication`` steht und
-    jedes Fenster es erbt. Die ausgearbeitete Fassung trägt dort Schichtlinien
+    jedes Fenster es erbt. Die ausgearbeitete Version trägt dort Schichtlinien
     von 0,3 Pixeln Breite und kommt als grauer Schleier an.
 
-    Die beiden Fassungen sind **dieselbe Form** — gleiche Punkte, gleiche
+    Die beiden Versionen sind **dieselbe Form** — gleiche Punkte, gleiche
     Farben. Der einzige Unterschied sind die Schichtlinien, und genau darauf
-    prüft dieser Test: Wer die kleine Fassung neu gestaltet statt sie zu
+    prüft dieser Test: Wer die kleine Version neu gestaltet statt sie zu
     vereinfachen, bekommt zwei Symbole für ein Produkt.
     """
     from PySide6.QtCore import QSize
@@ -4872,13 +4872,13 @@ def test_the_application_icon_uses_the_small_source_where_it_matters(qt_app: obj
 
     # Die Schichtlinien sind das Einzige, was fehlen darf — sie stehen als
     # <path> da, alles andere als <polygon> oder <ellipse>.
-    assert "<path" in large, "die große Fassung hat ihre Schichtlinien verloren"
-    assert "<path" not in small, "die kleine Fassung trägt Linien, die bei 16 px zu Schleier werden"
+    assert "<path" in large, "die große Version hat ihre Schichtlinien verloren"
+    assert "<path" not in small, "die kleine Version trägt Linien, die bei 16 px zu Schleier werden"
 
     # Dieselben Flächen, dieselben Farben: Was hier auseinanderläuft, sieht der
     # Nutzer als zwei verschiedene Symbole.
     for shape in ('points="64,18 104,41 64,64 24,41"', 'fill="#e08b4e"', 'fill="#7c3a10"'):
-        assert shape in large and shape in small, f"{shape} steht nicht in beiden Fassungen"
+        assert shape in large and shape in small, f"{shape} steht nicht in beiden Versionen"
 
 
 def test_no_window_overrides_the_application_icon() -> None:
@@ -6092,7 +6092,7 @@ def test_the_face_jump_names_the_area_in_the_chosen_unit(window: MainWindow) -> 
         set_display_unit("mm")
 
 
-#: Eine Kommazahl mit Punkt — aber kein Pfad, keine Fassungsnummer, keine Endung.
+#: Eine Kommazahl mit Punkt — aber kein Pfad, keine Versionsnummer, keine Endung.
 #:
 #: Die Wächter links und rechts sind der Unterschied: „sources/1_cube.stl" und
 #: „0.1.2" sind keine Zahlen, und eine Prüfung, die sie mitzählt, wird
@@ -6184,5 +6184,5 @@ def test_the_decimal_point_check_would_catch_a_violation() -> None:
     assert _DECIMAL_POINT.search("+1.25 cm³")
     assert not _DECIMAL_POINT.search("Übermaß: 12,40 mm")
     assert not _DECIMAL_POINT.search("Pfad: sources/1_cube.stl"), "ein Pfad ist keine Zahl"
-    assert not _DECIMAL_POINT.search("Fassung 0.1.2"), "eine Fassungsnummer auch nicht"
+    assert not _DECIMAL_POINT.search("Version 0.1.2"), "eine Versionsnummer auch nicht"
     assert not _DECIMAL_POINT.search("https://example.com/x.stl")

@@ -390,7 +390,7 @@ def threaded_rod(major: float, pitch: float, length: float) -> Solid:
     # ist bei M6 knapp vier Prozent des Kernradius, und wo die Rechnung anders
     # rundet, taucht der Fuß stellenweise auf; dann gibt es nichts zu
     # vereinigen. Auf dieser Maschine kam dasselbe Maß durch — dieselbe
-    # OCCT-Fassung, anders übersetzt.
+    # OCCT-Version, anders übersetzt.
     #
     # **Der Sockel und nicht ein tieferer Fuß.** Den Fuß einfach nach innen zu
     # schieben, ändert die Flanke: Sie läuft dann über eine längere Strecke zur
@@ -490,7 +490,7 @@ def _finely_meshed(rod: Solid, fineness: float) -> Solid:
 #: Wie grob die späteren Vereinigungen eines Gewindes sein dürfen, als Anteil
 #: der Steigung, von fein nach grob. Bei M6 sind das 0,1 bis 10 Mikrometer —
 #: alles feiner als jeder Drucker und jede Passung, und in dieser Spanne liegt
-#: die Naht, die OCCT je nach Fassung findet oder nicht.
+#: die Naht, die OCCT je nach Version findet oder nicht.
 #:
 #: Mehrere Werte, weil beides schiefgeht: zu fein lässt die Naht offen, zu grob
 #: bringt die Boolesche Operation ganz zum Aufgeben.
@@ -515,7 +515,7 @@ def _joined_rod(core: Solid, ridge: Solid, major: float, pitch: float) -> Solid:
 
     Dass es die Stufen braucht, hat der Linux-Runner gezeigt: **M6 mit einem
     Millimeter Steigung**, das gewöhnlichste Gewinde überhaupt, kam dort offen
-    heraus und hier geschlossen. Dieselbe Rechnung, andere OCCT-Fassung.
+    heraus und hier geschlossen. Dieselbe Rechnung, andere OCCT-Version.
 
     Dass eine zweite Stufe die **Eingaben** der ersten wiederverwendet, ist
     dabei der Punkt, an dem der erste Versuch abstürzte: OCCT ändert seine
@@ -584,7 +584,7 @@ def _checked_rod(solid: Solid, major: float, pitch: float) -> Solid:
     das man jemandem in die Hand gibt.
 
     **Vor der Absage steht eine Rettungsstufe** (§17.2 dem Geist nach): OCCT
-    näht die helikale Fläche je nach Fassung unterschiedlich sauber an den
+    näht die helikale Fläche je nach Version unterschiedlich sauber an den
     Kern. M6 mit einem Millimeter Steigung — das gewöhnlichste Gewinde, das es
     gibt — kam hier geschlossen heraus und auf dem Linux-Runner offen. Was
     rechnerisch zusammengehört, schließt ``ShapeFix``; es verschiebt keine

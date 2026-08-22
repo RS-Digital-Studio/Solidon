@@ -608,7 +608,7 @@ Felder auf der Vorderseite (`label_text`), die Grenze liegt bei acht.
 toter Sprungmarken-Verweis auf sieben Seiten; Impressum, AGB, EULA, Widerruf
 und Datenschutz vollständig gegliedert; kleinste Fließtextgröße 12,8 px.
 
-**Die Preise stehen in beiden Sprachfassungen.** Der erste Verdacht — auf
+**Die Preise stehen in beiden Sprachversionen.** Der erste Verdacht — auf
 Englisch fehle der Preis — kam von der Schreibweise: die deutsche Seite
 schreibt „49 €", die englische „€49". Inhaltlich identisch, 0/49/79 hier wie
 dort.

@@ -1,4 +1,4 @@
-# Konzept: die Fassungen aktualisieren
+# Konzept: die Versionen aktualisieren
 
 Stand 14.08.2026, nachrecherchiert am 19.08.2026. Anlass: Der festgeschriebene Satz in `constraints.txt` ist
 gepflegt genug, dass nichts bricht — aber niemand hat je nachgesehen, was es
@@ -22,14 +22,14 @@ Es gilt zusammen mit `AGENTS.md` (Checkliste „neue Abhängigkeit"), `CLAUDE.md
 Jede Aussage hier ist gemessen oder im Code belegt, nicht erinnert.
 
 **Der Satz und seine Grenzen.** `constraints.txt` führt 91 Zeilen, davon rund
-72 feste Fassungen. In `pyproject.toml` steht **genau eine Obergrenze** —
+72 feste Versionen. In `pyproject.toml` steht **genau eine Obergrenze** —
 `trimesh>=4.4,<5` (Zeile 23). Alle übrigen 22 Abhängigkeiten haben offene
 Untergrenzen; keine davon verbietet eine Aktualisierung.
 
 > **Die Obergrenze gibt es nicht mehr, und die Datei ist gewachsen.**
 > `pyproject.toml:26` verlangt heute `trimesh>=5.0` — P6 ist durch, gemacht
 > am Abend des 14.08. `constraints.txt` führt 93 Zeilen mit 73 festen
-> Fassungen (Stand 19.08.2026). **Damit steht in `pyproject.toml` heute keine
+> Versionen (Stand 19.08.2026). **Damit steht in `pyproject.toml` heute keine
 > einzige Obergrenze mehr.**
 >
 > *Ein Nebenbefund außerhalb dieses Dokuments:* `CLAUDE.md:95` nennt
@@ -46,9 +46,9 @@ Untergrenzen; keine davon verbietet eine Aktualisierung.
 | ruff | 0.16.1 | 0.16.3 | **kann neue Befunde bringen** |
 | setuptools | 83.0.0 | 84.0.0 | Hauptsprung, trägt den Bau |
 | pytest-forked | 1.6.0 | 1.7.5 | trägt die Suite selbst |
-| ast_serialize | 0.6.0 | 0.8.0 | Fassung unter 1: alles darf sich ändern |
-| librt | 0.13.0 | 0.15.0 | Fassung unter 1: dasselbe |
-| fast_simplification | 0.1.13 | 0.2.0 | **Fassung unter 1, und sie dezimiert Netze** |
+| ast_serialize | 0.6.0 | 0.8.0 | Version unter 1: alles darf sich ändern |
+| librt | 0.13.0 | 0.15.0 | Version unter 1: dasselbe |
+| fast_simplification | 0.1.13 | 0.2.0 | **Version unter 1, und sie dezimiert Netze** |
 | trimesh | 4.12.2 | 5.0.0 | **durch `<5` ausgeschlossen** |
 
 > **Diese Tabelle war am Abend desselben Tages abgearbeitet** — der Commit
@@ -62,9 +62,9 @@ Untergrenzen; keine davon verbietet eine Aktualisierung.
 > |---|---|---|---|
 > | PySide6 / shiboken6 | 6.11.1 | **6.11.2** (18.08.2026) | Qt 6.11.2 mit rund 400 Fehlerbehebungen; abi3-Räder für 3.10 bis 3.14 |
 > | vtk | 9.6.2 | **9.7.0** (15.08.2026) | **gesperrt durch pyvista** — dessen Metadaten verlangen `vtk<9.7.0` |
-> | pillow | 12.3.0 | 12.3.0 | unverändert; die festgeschriebene Fassung schließt CVE-2026-55798 bereits ein |
+> | pillow | 12.3.0 | 12.3.0 | unverändert; die festgeschriebene Version schließt CVE-2026-55798 bereits ein |
 >
-> Der VTK-Fall ist der interessante: Die neue Fassung ist da, aber pyvista
+> Der VTK-Fall ist der interessante: Die neue Version ist da, aber pyvista
 > 0.48.4 schließt sie in seinen Metadaten aus. Wer sie trotzdem zieht, bricht
 > die Auflösung — hier entsteht die nächste Obergrenze, und zwar nicht in
 > unserer Hand. VTK 9.7 verlangt außerdem mindestens Python 3.10 und bildet
@@ -72,7 +72,7 @@ Untergrenzen; keine davon verbietet eine Aktualisierung.
 >
 > Alles andere ist auf Stand: numpy 2.5.2, scipy 1.18.0, trimesh 5.0.0,
 > manifold3d 3.5.2, shapely 2.1.2, scikit-image 0.26.0, matplotlib 3.11.1,
-> networkx 3.6.1, pyvistaqt 0.12.0 — jeweils die neueste Fassung.
+> networkx 3.6.1, pyvistaqt 0.12.0 — jeweils die neueste Version.
 
 **Warum trimesh gesperrt ist.** Beim ersten echten CI-Lauf zog ein frisches
 Environment trimesh 5.0.0. Der Sprung riss mypy — die neuen Annotationen geben
@@ -88,7 +88,7 @@ drei zusätzliche rote Tests unter Windows.
 > einen Zustand, den derselbe Tag beendet hat: `pyproject.toml:26` verlangt
 > `trimesh>=5.0`, installiert ist 5.0.0. Er bleibt als Begründung stehen,
 > warum die Sperre einmal richtig war — nicht als Beschreibung von heute.
-> trimesh 5.0.0 (01.08.2026) ist weiterhin die neueste Fassung; eine 6er-Reihe
+> trimesh 5.0.0 (01.08.2026) ist weiterhin die neueste Version; eine 6er-Reihe
 > gibt es nicht (nachgesehen am 19.08.2026).
 
 **Wie groß die trimesh-Migration wirklich ist.** 37 Dateien unter `app/` mit
@@ -106,7 +106,7 @@ Voxelstufe ihre Rundung ausweist — die Migration hat also einen Wächter.
 **Python.** `requires-python = ">=3.13"`. Die CI fährt an allen drei Stellen
 `3.13` (Zeilen 55, 159, 390 in `build.yml`), die Arbeitsumgebung fährt 3.14.2.
 Das ist erlaubt und gewollt, aber es heißt: **Was hier grün ist, ist unter der
-Fassung grün, die niemand ausliefert.**
+Version grün, die niemand ausliefert.**
 
 > **Der Satz gilt weiter, und P5 bekommt eine Frist von außen** (recherchiert
 > am 19.08.2026). Die Arbeitsumgebung fährt inzwischen 3.14.7 (05.08.2026),
@@ -118,8 +118,8 @@ Fassung grün, die niemand ausliefert.**
 > und P5 bleibt eine Entscheidung zwischen 3.13 und 3.14, nicht zwischen 3.13
 > und dem Neuesten.
 
-**Was schon läuft.** Der wöchentliche CI-Job „Neueste Fassungen" (montags 5 Uhr,
-ohne `constraints.txt`) meldet eine Fassung, die etwas bricht. Der
+**Was schon läuft.** Der wöchentliche CI-Job „Neueste Versionen" (montags 5 Uhr,
+ohne `constraints.txt`) meldet eine Version, die etwas bricht. Der
 Sitzungsstart-Hook meldet Abweichungen der lokalen Umgebung und erinnert nach
 90 Tagen an die Pflege.
 
@@ -127,7 +127,7 @@ Sitzungsstart-Hook meldet Abweichungen der lokalen Umgebung und erinnert nach
 
 ## §1 Ziel und Nicht-Ziele
 
-**Ziel:** Der festgeschriebene Satz enthält die neuesten Fassungen, die
+**Ziel:** Der festgeschriebene Satz enthält die neuesten Versionen, die
 nachweislich verträglich sind — nachgewiesen durch einen grünen Volllauf, nicht
 durch Zuversicht.
 
@@ -135,13 +135,13 @@ durch Zuversicht.
 
 - **Keine Aktualisierung ohne grüne Referenz.** Solange die Suite aus einem
   anderen Grund rot ist, wird nichts angehoben: Sonst ist nicht zu trennen, was
-  die neue Fassung gebrochen hat und was vorher schon kaputt war.
+  die neue Version gebrochen hat und was vorher schon kaputt war.
 - **Kein Anheben der Untergrenzen in `pyproject.toml`.** Sie sind bewusst
   offen. Fest wird in `constraints.txt`, nicht im Paketvertrag.
 - **Kein Python-Sprung in der CI** als Teil dieses Vorhabens. Er ist ein
   eigenes Paket mit eigenem Risiko (§3, P5).
 - **Keine externen Programme.** OpenSCAD, Slicer und Ollama werden nach §36
-  aufgerufen, nie mitgeliefert; ihre Fassung ist Sache des Rechners.
+  aufgerufen, nie mitgeliefert; ihre Version ist Sache des Rechners.
 
 ---
 
@@ -152,7 +152,7 @@ Zug anzuheben und dann einen roten Lauf zu sehen, heißt: neun Verdächtige, kei
 Beweis. Die Reihenfolge ist deshalb nach Risiko gestaffelt, und jede Stufe
 endet mit einem grünen Lauf und einem eigenen Commit.
 
-**B — Die Fassungen unter 1.0 sind eigene Pakete.** `ast_serialize`, `librt`
+**B — Die Versionen unter 1.0 sind eigene Pakete.** `ast_serialize`, `librt`
 und `fast_simplification` dürfen nach Semantic Versioning in einem
 Minor-Sprung alles ändern. `fast_simplification` dezimiert Netze — ein
 verändertes Ergebnis fällt in den Geometrietests auf, aber nur, wenn es
@@ -178,9 +178,9 @@ wird `constraints.txt` mit `tools/check_env.py --freeze` neu geschrieben. Von
 Hand einzelne Zeilen zu ändern, führt zu einem Satz, den niemand reproduzieren
 kann.
 
-**G — Bei Rot gilt die alte Fassung.** Nicht „schnell reparieren": Die
+**G — Bei Rot gilt die alte Version.** Nicht „schnell reparieren": Die
 Aktualisierung wird zurückgenommen, der Befund wird notiert, und daraus wird
-ein eigenes Paket. Eine Fassung, die Arbeit kostet, ist keine Pflege mehr.
+ein eigenes Paket. Eine Version, die Arbeit kostet, ist keine Pflege mehr.
 
 ---
 
@@ -233,7 +233,7 @@ Die Arbeitsumgebung fährt 3.14, die CI 3.13. Solange das so ist, prüft die CI
 etwas anderes, als hier entwickelt wird. Zwei Schritte:
 
 1. 3.14 **zusätzlich** in die Matrix (`build.yml`, Job `suite`) — beide
-   Fassungen grün heißt: der Code trägt beide.
+   Versionen grün heißt: der Code trägt beide.
 2. Erst dann entscheiden, ob 3.13 der ausgelieferte Stand bleibt.
 
 Nicht-Ziel: `requires-python` anheben. Das schlösse Nutzer aus, ohne Gewinn.
@@ -282,7 +282,7 @@ ausgelieferte.
 
 | Paket | Status | Commit | Gemessen |
 |---|---|---|---|
-| P0 Referenz | **teilweise** | — | Absturz besteht, aber fassungsunabhängig (s. u.) |
+| P0 Referenz | **teilweise** | — | Absturz besteht, aber versionsunabhängig (s. u.) |
 | P1 Fehlerbehebungen | **erledigt** | `d526a53` | numpy 2.5.2, platformdirs 4.11.3, charset-normalizer 3.5.0 |
 | P2 Werkzeuge | **erledigt** | `d526a53` | pytest-forked 1.7.5, setuptools 84.0.0 |
 | P3 ruff | **erledigt** | `d526a53` | 0.16.3, keine neuen Befunde, kein Formatdiff |
@@ -293,13 +293,13 @@ ausgelieferte.
 **Abweichung vom Konzept, ausdrücklich als solche.** §2 A verlangte die
 Staffelung nach Risiko, ein Paket je Commit. Auf Ansage wurde stattdessen in
 einem Zug aktualisiert und in einem Commit abgelegt. Das ist vertretbar, weil
-jede Fassung einzeln gemessen wurde, bevor sie einzog — aber es heißt auch:
+jede Version einzeln gemessen wurde, bevor sie einzog — aber es heißt auch:
 Wäre etwas rot geworden, hätte es neun Verdächtige gegeben. Für die nächste
 Runde gilt §2 A wieder.
 
 **P0 im Klartext.** Ein Volllauf bricht weiterhin nativ ab
 (`access violation`), sobald genug Qt-Tests zusammen laufen. Das ist gemessen
-**unabhängig von den Fassungen**: derselbe Abbruch unter trimesh 4.12.2 wie
+**unabhängig von den Versionen**: derselbe Abbruch unter trimesh 4.12.2 wie
 unter 5.0.0. Deshalb blockierte er die Aktualisierung nicht. Verifiziert wurde
 stattdessen in Blöcken — rund 3 900 Tests grün, kein Fehler, der nicht
 zugeordnet wäre. Der Abbruch selbst bleibt offen und gehört nicht hierher.

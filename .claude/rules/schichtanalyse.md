@@ -259,7 +259,7 @@ die zu kurz ist, ohne dass jemand es sehen kann.
 `handover.verify` liest die Konfigurationskommentare der erzeugten Druckdatei
 und meldet, was der Slicer anders übernommen hat, als Solidon es schrieb.
 Das ist die einzige Auskunft, die vom Programm selbst kommt statt aus einer
-Beschreibung, die für die installierte Fassung gelten mag oder nicht — und
+Beschreibung, die für die installierte Version gelten mag oder nicht — und
 damit prüft sich auch ein Slicer, den beim Bauen der Tabelle niemand vorliegen
 hatte.
 

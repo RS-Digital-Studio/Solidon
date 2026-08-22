@@ -12,7 +12,7 @@ Anlass: vier Quellen (SindriCAD, Meshy 3D Agent, der Software-Ticker von
 3Druck.com, die CAD-Übersicht) und der Auftrag, sie in **Logik, Steuerung,
 Aussehen, Optik und Funktionen** nicht einzuholen, sondern zu übertreffen.
 
-**Zweite Fassung.** Die erste stützte sich auf die Produktseite von SindriCAD.
+**Zweite Version.** Die erste stützte sich auf die Produktseite von SindriCAD.
 Deren Quelltext ist öffentlich (`github.com/MakerViking/sindricad`), und was
 dort steht, ist erheblich mehr als die Werbung nennt. Die Bewertung ist
 entsprechend korrigiert — an mehreren Stellen zu unseren Ungunsten.
@@ -997,7 +997,7 @@ Skizzenebene (`feature:face_3`) morgen auf eine andere Wand. Ein Test hält es
 jetzt fest (`tests/test_brep.py`).
 
 **D21 (Selbstaktualisierung) gibt es.** `_check_for_updates` fragt beim Start
-nach, wenn die Einstellung an ist, und meldet eine neue Fassung als Hinweis mit
+nach, wenn die Einstellung an ist, und meldet eine neue Version als Hinweis mit
 Link — nichts wird geladen, nichts ersetzt, so wie §37.2 es verlangt.
 
 **D22 (Druckerverbindung) bleibt offen** und gehört dorthin, wo der Bauplan sie
@@ -1096,10 +1096,10 @@ Nicht-Aufgabe geführt (D22) und bleibt es.
 
 **Zur Außenwelt** — die drei Programme, gegen die dieses Konzept sich misst:
 
-- **SindriCAD** ist seit dem 4. August von Fassung 0.1.81 auf 0.1.171 gelaufen
+- **SindriCAD** ist seit dem 4. August von Version 0.1.81 auf 0.1.171 gelaufen
   und von 20 auf 141 Sterne. Sein Skizzenlöser ist PlaneGCS, seine Geometrie
   ein Python-Sidecar mit build123d auf OpenCASCADE.
-- **FreeCAD** steht auf 1.1.3 und stellt auf kalendarische Fassungen um; die
+- **FreeCAD** steht auf 1.1.3 und stellt auf kalendarische Versionen um; die
   MCP-Anbindung, die dieses Konzept als Signal liest, hat inzwischen
   Gesellschaft bekommen: **Autodesk hat zwei eigene MCP-Server veröffentlicht**,
   einen davon lokal für Fusion.

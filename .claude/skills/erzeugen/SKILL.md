@@ -4,7 +4,7 @@ description: >
   Erzeugt und liefert aus, was nicht Code ist: Bildschirmfotos, Handbuch,
   Website-Bilder, SEO-Dateien, Symbol, Installationsdatei, Linux-Pakete,
   Download-Kasten, ComfyUI-Einrichtung, Website-Upload — dazu Erstaufbau der
-  Umgebung und Fassungspflege über check_env. Benutzen, sobald eines dieser
+  Umgebung und Versionspflege über check_env. Benutzen, sobald eines dieser
   Werkzeuge laufen soll, und bevor ein Paket gebaut wird.
 argument-hint: "[was erzeugt werden soll]"
 allowed-tools: Bash, Read, Edit, Grep, Glob
@@ -28,14 +28,14 @@ Reihenfolge und Fallen stehen unter der Liste — sie sind kein Beiwerk.
 .venv\Scripts\python.exe tools/build_slice_core.py              # Konturverkettung übersetzen (optional, 1,34× auf die Schichtanalyse)
 .venv\Scripts\python.exe tools/check_support.py                 # kommt eine Rückmeldung wirklich an? schickt eine echte Sendung
 .venv\Scripts\python.exe tools/upload_website.py --seit <commit> # Website hochladen (FTPS); Zugang in .webserver.json, nicht im Repository
-python tools/check_env.py                                       # stimmen die Fassungen? läuft auch ohne .venv
+python tools/check_env.py                                       # stimmen die Versionen? läuft auch ohne .venv
 python tools/check_env.py --install                             # sie stimmen machen (braucht Netz)
 python tools/check_env.py --outdated                            # was wäre neuer, und was verbietet eine Grenze
 python tools/check_env.py --freeze                              # constraints.txt neu schreiben — erst nach grüner Suite
 ```
 
 
-**Vor dem Bau steigt die Fassung — ohne Rückfrage.**
+**Vor dem Bau steigt die Version — ohne Rückfrage.**
 
 ```
 .venv\Scripts\python.exe tools/bump_version.py            # 0.1.1 → 0.1.2
@@ -94,17 +94,17 @@ Seiten müssen danach den echten Dateien entsprechen.
 
 Erstaufbau: `python -m venv .venv` und
 `.venv\Scripts\python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"`.
-Das `-c` ist kein Beiwerk: ohne es zieht ein frischer Klon andere Fassungen als
+Das `-c` ist kein Beiwerk: ohne es zieht ein frischer Klon andere Versionen als
 die CI, und die Suite wird rot, ohne dass eine Zeile Code sich geändert hat.
 Beides zusammen macht auch `python tools/check_env.py --install`.
 
 Arbeiten mehrere am selben Repository, genügt der gute Vorsatz nicht: Der
-Sitzungsstart-Hook gleicht die installierten Fassungen gegen `constraints.txt`
+Sitzungsstart-Hook gleicht die installierten Versionen gegen `constraints.txt`
 ab und sagt, wenn etwas abweicht — samt Befehl. Er läuft dafür auch ohne
 `.venv`, sonst könnte er im frischen Klon nicht melden, dass sie fehlt.
 
 **Festgenagelt ist nicht gepflegt.** Der wöchentliche CI-Lauf „Neueste
-Fassungen" (montags, ohne `constraints.txt`) meldet, wenn eine neue Fassung
+Versionen" (montags, ohne `constraints.txt`) meldet, wenn eine neue Version
 etwas *bricht* — dass es überhaupt eine neuere *gäbe*, sagt er niemandem.
 Dafür ist `--outdated` da; es trennt, was gehen würde, von dem, was eine
 Grenze in `pyproject.toml` ausschließt — **dort steht seit dem 14.08.2026 keine

@@ -1,5 +1,87 @@
 {
   "version": "0.1.2",
   "url": "https://solidon3d.de/",
-  "notes": "Zweiter Bau der Demo: viele Verbesserungen an Oberfläche, Schichtanalyse und Slicer-Übergabe. Weiterhin vollständig und ohne Schlüssel, bis zum 30.10.2026."
+  "notes": "Zweiter Bau der Demo: viele Verbesserungen an Oberfläche, Schichtanalyse und Slicer-Übergabe. Weiterhin vollständig und ohne Schlüssel, bis zum 30.10.2026.",
+  "packages": {
+    "windows": {
+      "file": "Solidon3D-Setup-0.1.2.exe",
+      "url": "https://solidon3d.de/api/count.php?f=Solidon3D-Setup-0.1.2.exe",
+      "size": 179452109,
+      "sha256": "873def420c7c0096aa5a39b40b02efcb6e0d5010fd2d67436a6430d10e16e77c"
+    },
+    "macos-arm64": {
+      "file": "Solidon3D-0.1.2-macos-arm64.pkg",
+      "url": "https://solidon3d.de/api/count.php?f=Solidon3D-0.1.2-macos-arm64.pkg",
+      "size": 279518356,
+      "sha256": "987771cbef370193bfdffa8b616f491ce27583cbdbc102301526f0d365e1babe"
+    },
+    "macos-x86_64": {
+      "file": "Solidon3D-0.1.2-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/api/count.php?f=Solidon3D-0.1.2-macos-x86_64.pkg",
+      "size": 313083825,
+      "sha256": "c0a37af9f0e44831aec6726fa9e73e3c0ca2a737b11dd30e3be6aef6f72e6bfd"
+    }
+  },
+  "changes": {
+    "de": [
+      "Getippte Kommazahlen werden überall richtig gelesen. „12,5\" blieb zwölfeinhalb — vorher konnte daraus 125 werden, ohne Rückfrage und ohne Hinweis.",
+      "Jedes der sechsundfünfzig Felder in den Druckeinstellungen sagt jetzt, was es bewirkt, wenn man es bewegt.",
+      "Druckzeit und Materialbedarf werden genauer geschätzt, vor allem bei ausgehöhlten Teilen.",
+      "Die Übergabe an den Slicer trifft die Platte. Bei CuraEngine lagen Teile daneben.",
+      "Beim Trennen mit Verstiftung sitzen die Gegenlöcher in der richtigen Hälfte.",
+      "Millimeter und Zoll gelten jetzt überall, wo eine Zahl steht — auch in den Werkzeugleisten und beim Bemalen.",
+      "Der Fortschritt bleibt stehen, bis wirklich fertig gerechnet ist, und das Fenster bleibt dabei bedienbar.",
+      "Das Handbuch hat eine Übersicht aller Tastenkürzel bekommen."
+    ],
+    "en": [
+      "Typed decimal numbers are read correctly everywhere. \"12.5\" stays twelve and a half — before, it could turn into 125, with no question and no warning.",
+      "Every one of the fifty-six fields in the print settings now says what it does when you move it.",
+      "Print time and material use are estimated more accurately, above all for hollowed parts.",
+      "The handover to the slicer lands on the plate. With CuraEngine, parts ended up beside it.",
+      "When splitting with pins, the matching holes now sit in the correct half.",
+      "Millimetres and inches now apply wherever a number appears — including the tool bars and painting.",
+      "Progress stays until the computation is really done, and the window remains usable throughout.",
+      "The manual has gained an overview of every keyboard shortcut."
+    ],
+    "es": [
+      "Los números decimales escritos se leen bien en todas partes. «12,5» sigue siendo doce y medio; antes podía convertirse en 125, sin preguntar y sin avisar.",
+      "Cada uno de los cincuenta y seis campos de los ajustes de impresión dice ahora qué hace cuando se mueve.",
+      "El tiempo de impresión y el material se estiman con más precisión, sobre todo en piezas ahuecadas.",
+      "La entrega al slicer cae sobre la placa. Con CuraEngine las piezas quedaban al lado.",
+      "Al dividir con pasadores, los agujeros correspondientes quedan en la mitad correcta.",
+      "Milímetros y pulgadas valen ahora allí donde hay un número, también en las barras de herramientas y al pintar.",
+      "El progreso se mantiene hasta que el cálculo termina de verdad, y la ventana sigue siendo utilizable mientras tanto.",
+      "El manual incluye ahora un resumen de todos los atajos de teclado."
+    ],
+    "fr": [
+      "Les nombres décimaux saisis sont lus correctement partout. « 12,5 » reste douze et demi ; auparavant, cela pouvait devenir 125, sans question ni avertissement.",
+      "Chacun des cinquante-six champs des réglages d'impression indique désormais ce qu'il fait quand on le modifie.",
+      "Le temps d'impression et la quantité de matière sont estimés plus finement, surtout pour les pièces évidées.",
+      "Le transfert vers le trancheur atteint le plateau. Avec CuraEngine, les pièces se retrouvaient à côté.",
+      "Lors d'une découpe avec goupilles, les trous correspondants se placent dans la bonne moitié.",
+      "Millimètres et pouces valent maintenant partout où figure un nombre — y compris dans les barres d'outils et lors de la peinture.",
+      "La progression reste affichée jusqu'à la fin réelle du calcul, et la fenêtre demeure utilisable pendant ce temps.",
+      "Le manuel a reçu un aperçu de tous les raccourcis clavier."
+    ],
+    "it": [
+      "I numeri decimali digitati vengono letti bene ovunque. «12,5» resta dodici e mezzo; prima poteva diventare 125, senza chiedere e senza avvisare.",
+      "Ciascuno dei cinquantasei campi delle impostazioni di stampa dice ora che cosa fa quando lo si muove.",
+      "Tempo di stampa e materiale sono stimati con più precisione, soprattutto per i pezzi svuotati.",
+      "La consegna allo slicer cade sul piatto. Con CuraEngine i pezzi finivano di fianco.",
+      "Dividendo con le spine, i fori corrispondenti finiscono nella metà giusta.",
+      "Millimetri e pollici valgono ora dovunque compaia un numero, anche nelle barre degli strumenti e nella pittura.",
+      "L'avanzamento resta finché il calcolo è davvero finito, e la finestra rimane utilizzabile nel frattempo.",
+      "Il manuale ha ricevuto un prospetto di tutte le scorciatoie da tastiera."
+    ],
+    "pt": [
+      "Os números decimais escritos são lidos corretamente em todo o lado. «12,5» continua a ser doze e meio; antes podia tornar-se 125, sem perguntar e sem avisar.",
+      "Cada um dos cinquenta e seis campos das definições de impressão diz agora o que faz quando se mexe nele.",
+      "O tempo de impressão e o material são estimados com mais rigor, sobretudo em peças ocas.",
+      "A entrega ao slicer acerta na placa. Com o CuraEngine as peças ficavam ao lado.",
+      "Ao dividir com pinos, os furos correspondentes ficam na metade certa.",
+      "Milímetros e polegadas valem agora onde quer que apareça um número — também nas barras de ferramentas e ao pintar.",
+      "O progresso mantém-se até o cálculo estar mesmo terminado, e a janela continua utilizável entretanto.",
+      "O manual passou a ter um resumo de todos os atalhos de teclado."
+    ]
+  }
 }

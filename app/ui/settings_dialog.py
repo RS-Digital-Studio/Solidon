@@ -99,7 +99,7 @@ class SettingsDialog(QDialog):
             tr("Welche Tasten die Operationen führen. Wirkt beim nächsten Start.")
         )
 
-        self.updates = QCheckBox(tr("Beim Start nach einer neuen Fassung sehen"), self)
+        self.updates = QCheckBox(tr("Beim Start nach einer neuen Version sehen"), self)
         self.updates.setChecked(settings.check_for_updates)
         self.updates.setToolTip(
             tr("Ein Hinweis mit einem Link. Es wird nichts geladen und nichts ersetzt.")
@@ -135,7 +135,7 @@ class SettingsDialog(QDialog):
         # Zeile darunter heißt „Port der Fernsteuerung", das Handbuch hat ein
         # Kapitel *Fernsteuerung*. Wer hier ein anderes Wort setzt, behebt
         # einen Namensbruch und legt einen zweiten an. Die ausführliche
-        # Fassung („Solidon von anderen Programmen auf diesem Rechner
+        # Version („Solidon von anderen Programmen auf diesem Rechner
         # fernsteuern lassen") sagte nicht mehr und zog den Dialog auf
         # Französisch von 566 auf 768 Bildpunkte — gemessen, dann verworfen.
         self.remote = QCheckBox(tr("Fernsteuerung durch andere Programme zulassen (MCP)"), self)

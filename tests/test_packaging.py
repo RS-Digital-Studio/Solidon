@@ -111,7 +111,7 @@ def test_the_spec_names_the_application_from_branding() -> None:
     verschlafen.
 
     Gesucht wird der Import, nicht seine Schreibweise: Seit das Bundle auch
-    Kennung, Fassung und Urheberrecht braucht, holt dieselbe Zeile mehrere
+    Kennung, Version und Urheberrecht braucht, holt dieselbe Zeile mehrere
     Namen. Eine wörtliche Prüfung wäre hier rot geworden, ohne dass am Namen
     etwas falsch gewesen wäre.
     """
@@ -533,7 +533,7 @@ def test_the_licence_the_installer_shows_is_the_agreement_and_not_the_notice() -
 
     ``LICENSE`` ist eine Urheberrechtsnotiz und sagt dem Käufer nicht, was er
     erwirbt. Der Vertrag steht in ``EULA.md``; ``tools/make_legal.py`` legt die
-    Textfassung daneben, weil Inno Setup und der macOS-Installer die Datei roh
+    Textversion daneben, weil Inno Setup und der macOS-Installer die Datei roh
     anzeigen.
     """
     from tools import make_installer
@@ -625,7 +625,7 @@ def test_the_macos_description_is_the_one_the_tool_writes() -> None:
     """Auch hier: eine erzeugte, eingecheckte Datei veraltet still.
 
     Sie trägt die Versionsnummer — läuft sie gegen ``app/branding.py``,
-    installiert das Paket eine Fassung unter dem Namen einer anderen.
+    installiert das Paket eine Version unter dem Namen einer anderen.
     """
     from tools import make_macos_package as tool
 

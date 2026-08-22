@@ -39,7 +39,7 @@ class Rule:
     """Titel und Text je Handbuchsprache, aus ``title_<sprache>``/``text_<sprache>``.
 
     **Nicht für den Agenten.** Der liest weiter die deutschen Felder, in jeder
-    Sprache — zwei Fassungen einer Regel wären zwei Wahrheiten, und die
+    Sprache — zwei Versionen einer Regel wären zwei Wahrheiten, und die
     Suite-Quote hinge davon ab, welche gerade galt. Fehlt eine Übersetzung,
     steht das deutsche Original da; ein Handbuch mit einer Lücke wäre
     schlechter als eines mit einem fremdsprachigen Absatz.

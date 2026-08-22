@@ -56,7 +56,7 @@ Ablauf nutzt es nicht.
 >
 > Der Befund selbst bleibt richtig — die vier Befehle wurden vierzehnmal von
 > Hand getippt —, aber seine Ursache ist eine andere: **nicht der Skill konnte
-> es nicht, sondern niemand hat seine Fassung gelesen.** Damit ändert sich
+> es nicht, sondern niemand hat seine Version gelesen.** Damit ändert sich
 > auch die Regel. Sie muss nicht lauten „jeder Skill braucht eine schmale
 > Form" (heute tragen sieben von acht ein `argument-hint`, und alle sieben
 > benutzen es auch im Ablauf), sondern: **Ein Skill mit schmaler Form nützt
@@ -572,7 +572,7 @@ den Hintergrund, sondern aufgeteilt.
 **Was schon beim Schreiben falsch war:** A1 — `/pruefen` konnte die schmale
 Form einen Tag vor diesem Dokument. Der Befund („vierzehnmal von Hand getippt")
 stimmt, seine Ursache nicht: nicht der Skill konnte es nicht, sondern seine
-Fassung war ungelesen. Die Regel ändert sich dadurch. Und die Zahl der
+Version war ungelesen. Die Regel ändert sich dadurch. Und die Zahl der
 Subagenten war nie fünfzehn, sondern vierzehn.
 
 **Ein Widerspruch, den dieses Dokument mit dem Überblick teilt:** `CLAUDE.md`

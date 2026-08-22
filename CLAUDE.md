@@ -65,7 +65,7 @@ zusammen. Weiteres:
 
 Was **nicht Code** erzeugt — Bildschirmfotos, Handbuch, Website-Bilder,
 SEO-Dateien, Symbol, Installationsdatei, Linux-Pakete, Download-Kasten,
-ComfyUI, Website-Upload — dazu Erstaufbau und Fassungspflege über
+ComfyUI, Website-Upload — dazu Erstaufbau und Versionspflege über
 `check_env.py`: `/erzeugen`. Dort stehen auch die Reihenfolge, der eigene
 Arbeitsbaum fürs Paketieren und die Falle mit den fehlenden Schriften.
 
@@ -96,6 +96,8 @@ app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
   export/     STL/3MF/STEP, Plattenbelegung, Übergabe an den Slicer
               (handover.py ruft ihn, slicer_keys.py übersetzt die Namen)
   activation/ Freischaltung: Testlauf, Schlüssel, Demo-Frist (store.py)
+  updates.py  Update: fragen, holen, prüfen — gestartet wird nur auf Klick,
+              die Punkte dazu stehen in changelog/<sprache>.md
   report.py   Fehlerbericht als Ordner — schreibt, sendet nie
   support.py  der einzige Weg hinaus: Rückmeldung an den Support, an einem Knopf
   manual.py   Handbuch: geschriebene Seiten, Referenz aus dem Register erzeugt
@@ -114,6 +116,8 @@ website/      öffentliche Seiten; handbuch.html und en/manual.html erzeugt
               httpdocs/api/ hochgeladen werden, sonst scheitert das Senden
               bilder/ Schaustücke von Hand, beleg-*.png von tools/make_web_images.py
               dl/ die Pakete, von tools/make_download.py angelegt
+changelog/    was im Update-Fenster steht, je Sprache eine Datei — Auswahl
+              in Kundensprache, keine Liste der Änderungen
 3D Drucker/   physische Druckprojekte, eigene CLAUDE.md, nicht im Repository
 ```
 

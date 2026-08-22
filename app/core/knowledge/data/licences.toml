@@ -46,9 +46,9 @@
 #   scikit-image              BSD-3       Marching Cubes im Rückfallpfad
 #   lazy_loader               BSD-3       Abhängigkeit von scikit-image
 #   omegaconf                 BSD-3       Konfiguration im TripoSG-Quelltext
-#   antlr4-python3-runtime    BSD-3       Abhängigkeit von omegaconf, Fassung 4.9.3
+#   antlr4-python3-runtime    BSD-3       Abhängigkeit von omegaconf, Version 4.9.3
 #
-# Der Grund für die Fassung steht in ``comfy_setup.PACKAGES``: Die 4.13
+# Der Grund für die Version steht in ``comfy_setup.PACKAGES``: Die 4.13
 # serialisiert den Automaten anders, den ``omegaconf`` liest.
 
 [policy]
@@ -100,7 +100,7 @@ fast-simplification = { licence = "MIT", note = "Quadrik-Dezimierung für erzeug
 # Apache-2.0; OpenCASCADE selbst unter LGPL-2.1 mit der OCCT-Linking-Ausnahme
 # und wird dynamisch gebunden, genau wie PySide6 (§36).
 cadquery-ocp-novtk = { licence = "Apache-2.0", note = "OCP-Anbindung; OpenCASCADE darunter steht unter LGPL-2.1 mit Linking-Ausnahme" }
-cadquery-ocp-proxy = { licence = "Apache-2.0", note = "wählt die OCP-Fassung, die zum installierten VTK passt" }
+cadquery-ocp-proxy = { licence = "Apache-2.0", note = "wählt die OCP-Version, die zum installierten VTK passt" }
 lazy_loader = { licence = "BSD-3-Clause", note = "kommt mit scikit-image" }
 imageio = { licence = "BSD-2-Clause", note = "kommt mit scikit-image" }
 tifffile = { licence = "BSD-3-Clause", note = "kommt mit scikit-image" }

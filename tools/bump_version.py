@@ -1,4 +1,4 @@
-"""Erhöht die Fassung an beiden Stellen, die sie tragen (Bauplan §37.1).
+"""Erhöht die Version an beiden Stellen, die sie tragen (Bauplan §37.1).
 
     python tools/bump_version.py           # 0.1.1 → 0.1.2, der Normalfall
     python tools/bump_version.py --minor   # 0.1.1 → 0.2.0
@@ -16,13 +16,13 @@ Schalter und nicht in der Vorgabe.
 Die Zahl steht an **zwei** Orten: ``APP_VERSION`` liest der Über-Dialog, jede
 Projektdatei, das 3MF, der Fehlerbericht und der Update-Vergleich;
 ``pyproject.toml`` lesen die Paketmetadaten und alles, was pip daraus macht.
-Laufen sie auseinander, nennt ein Paket eine andere Fassung als das Fenster
+Laufen sie auseinander, nennt ein Paket eine andere Version als das Fenster
 darin, und keines von beiden ist kaputt — niemand merkt es.
 ``tests/test_toolchain.py`` hält sie zusammen, dieses Werkzeug bewegt sie
 gemeinsam.
 
 **Was hier nicht passiert:** ``website/version.json`` bleibt unberührt. Sie
-sagt, welche Fassung *veröffentlicht* ist, und das ist erst wahr, wenn die
+sagt, welche Version *veröffentlicht* ist, und das ist erst wahr, wenn die
 Pakete oben liegen — sie wird zuletzt hochgeladen, nicht zuerst geschrieben.
 """
 
@@ -34,7 +34,7 @@ import sys
 from pathlib import Path
 
 # Dieselbe Zeile wie in tools/make_download.py, aus demselben Grund: Die
-# Windows-Konsole steht auf cp1252, und ein Pfeil zwischen zwei Fassungen
+# Windows-Konsole steht auf cp1252, und ein Pfeil zwischen zwei Versionen
 # beendet das Werkzeug sonst mit einem UnicodeEncodeError.
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -44,16 +44,16 @@ ROOT = Path(__file__).resolve().parent.parent
 BRANDING = ROOT / "app" / "branding.py"
 PROJECT = ROOT / "pyproject.toml"
 
-#: Die Zeile in ``branding.py``, die die Fassung trägt.
+#: Die Zeile in ``branding.py``, die die Version trägt.
 BRANDING_LINE = re.compile(r'^(APP_VERSION: Final = ")(\d+\.\d+\.\d+)(")$', re.MULTILINE)
 
 #: Und die in ``pyproject.toml`` — die **erste** ``version =``-Zeile. Weiter
-#: unten stehen Fassungsangaben von Abhängigkeiten, und die gehen uns nichts an.
+#: unten stehen Versionsangaben von Abhängigkeiten, und die gehen uns nichts an.
 PROJECT_LINE = re.compile(r'^(version = ")(\d+\.\d+\.\d+)(")$', re.MULTILINE)
 
 
 def current() -> str:
-    """Die Fassung, wie sie jetzt dasteht — aus ``branding.py``."""
+    """Die Version, wie sie jetzt dasteht — aus ``branding.py``."""
     found = BRANDING_LINE.search(BRANDING.read_text(encoding="utf-8"))
     if found is None:
         raise SystemExit(
@@ -64,7 +64,7 @@ def current() -> str:
 
 
 def raised(version: str, step: str) -> str:
-    """Die nächste Fassung. Eine erhöhte Stelle setzt die dahinter auf null."""
+    """Die nächste Version. Eine erhöhte Stelle setzt die dahinter auf null."""
     major, minor, patch = (int(part) for part in version.split("."))
     if step == "major":
         return f"{major + 1}.0.0"
@@ -74,16 +74,16 @@ def raised(version: str, step: str) -> str:
 
 
 def write(path: Path, pattern: re.Pattern[str], version: str) -> None:
-    """Setzt die Fassung in einer Datei — genau einmal.
+    """Setzt die Version in einer Datei — genau einmal.
 
     ``count=1`` ist keine Vorsicht, sondern die Regel: In ``pyproject.toml``
-    stehen weiter unten die Fassungen der Abhängigkeiten, und ein Ersetzen
+    stehen weiter unten die Versionen der Abhängigkeiten, und ein Ersetzen
     über die ganze Datei träfe sie mit.
     """
     text = path.read_text(encoding="utf-8")
     updated, hits = pattern.subn(rf"\g<1>{version}\g<3>", text, count=1)
     if hits != 1:
-        raise SystemExit(f"{path.name}: die Fassungszeile ist nicht (mehr) zu finden.")
+        raise SystemExit(f"{path.name}: die Versionszeile ist nicht (mehr) zu finden.")
     path.write_text(updated, encoding="utf-8")
 
 
@@ -107,7 +107,7 @@ def main() -> int:
 
     write(BRANDING, BRANDING_LINE, wird)
     write(PROJECT, PROJECT_LINE, wird)
-    print(f"Fassung: {was} → {wird}")
+    print(f"Version: {was} → {wird}")
     print("  app/branding.py")
     print("  pyproject.toml")
     print(

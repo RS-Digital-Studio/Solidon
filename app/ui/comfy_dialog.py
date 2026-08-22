@@ -160,7 +160,7 @@ class ComfySetupDialog(QDialog):
                 tr(
                     "ComfyUI ist an den üblichen Stellen nicht gefunden worden. "
                     "Gesucht wird der Ordner, in dem „custom_nodes“ und „main.py“ "
-                    "liegen — bei der tragbaren Fassung steckt er in "
+                    "liegen — bei der tragbaren Version steckt er in "
                     "„ComfyUI_windows_portable“."
                 )
             )

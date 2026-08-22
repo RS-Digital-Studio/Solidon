@@ -56,7 +56,7 @@ class UiSettings:
     trüge die 3MF eines Prusa-Projekts das Profil des Elegoo, mit dem zuletzt
     gearbeitet wurde — richtig gerechnet, falsch adressiert, und der Slicer
     lehnt den Prozess als unverträglich ab. Leer heißt „von früher", dann wird
-    nicht verglichen: eine Einstellung aus einer älteren Fassung ist keine
+    nicht verglichen: eine Einstellung aus einer älteren Version ist keine
     falsche."""
     slicer_filament_per_material: dict[str, str] = field(default_factory=dict)
     """Welche Spule zuletzt für welches Material gewählt wurde (§29).

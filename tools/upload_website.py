@@ -125,7 +125,7 @@ def wanted(path: Path) -> bool:
     Zwei Ausnahmen, beide mit Grund:
 
     ``dl/`` trägt die Installationspakete. Sie stehen nicht im Repository
-    (``.gitignore``) und wiegen je Fassung hundert Megabyte; hochgeladen
+    (``.gitignore``) und wiegen je Version hundert Megabyte; hochgeladen
     werden sie einmal und nicht bei jedem Abgleich.
 
     ``.md`` ist Entwicklerdoku. ``website/README.md`` erklärt, wie die Seiten

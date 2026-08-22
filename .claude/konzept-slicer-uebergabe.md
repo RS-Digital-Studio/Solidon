@@ -482,7 +482,7 @@ Zwei Zeilen sind überholt:
   56, **CuraEngine null von 47**. Es schreibt seine Einstellungen dort nicht.
   Der Mechanismus, der die Zuordnung selbst prüft, war genau dort blind, wo
   die meisten Fehler saßen. Für Cura leistet das jetzt `unknown_keys()` gegen
-  `fdmprinter.def.json` der installierten Fassung.
+  `fdmprinter.def.json` der installierten Version.
 
 ### Die Grenze in §6 braucht einen Satz mehr
 

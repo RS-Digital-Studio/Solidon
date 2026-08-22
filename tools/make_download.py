@@ -1,8 +1,8 @@
-"""Trägt die Pakete in den Download-Kasten aller Sprachfassungen ein.
+"""Trägt die Pakete in den Download-Kasten aller Sprachversionen ein.
 
 Am Tag der Veröffentlichung liegen zwei bis drei Dateien bereit, und für jede
 gehören drei Angaben auf die Seite: wofür sie ist, wie groß sie ist und was
-ihre Prüfsumme ist. Mal sechs Sprachfassungen sind das achtzehn Stellen, an
+ihre Prüfsumme ist. Mal sechs Sprachversionen sind das achtzehn Stellen, an
 denen sich eine Ziffer verlaufen kann — und eine falsche Prüfsumme ist
 schlimmer als keine, weil sie genau die Kontrolle scheitern lässt, für die sie
 da ist.
@@ -26,12 +26,17 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import quote
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.branding import APP_VERSION
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -397,6 +402,160 @@ def write_pages(packages: list[Package]) -> None:
         print(f"  {page}")
 
 
+#: Die Versionsdatei. Sie sagt der laufenden Anwendung, dass es etwas Neueres
+#: gibt — und seit §37.2 auch, wo es liegt und woran man es erkennt.
+VERSION_FILE = WEBSITE / "version.json"
+
+#: Welcher Paketschlüssel in der Versionsdatei zu welcher Datei gehört.
+#:
+#: **Nur was sich starten lässt, steht dort.** Ein ``.zip`` entpackt sich, ein
+#: AppImage ersetzt sich nicht selbst, ein Flatpak will ``flatpak update`` —
+#: sie alle stehen im Download-Kasten, aber ein Eintrag in der Versionsdatei
+#: heißt für die Anwendung „das kannst du holen und starten". Ein Paket dort,
+#: das beim Doppelklick nichts tut, wäre schlimmer als keines.
+#:
+#: Die Architektur steht nur bei macOS im Schlüssel: Ein für arm64 gebautes
+#: Programm startet auf einem Intel-Mac nicht.
+VERSION_KEYS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("windows", ".exe", ()),
+    ("macos-arm64", ".pkg", ("arm64",)),
+    ("macos-x86_64", ".pkg", ("x86_64", "x64", "intel")),
+)
+
+
+def version_key(package: Package) -> str:
+    """Unter welchem Schlüssel das Paket in der Versionsdatei steht, wenn
+    überhaupt."""
+    name = package.name.lower()
+    for key, suffix, marks in VERSION_KEYS:
+        if not name.endswith(suffix):
+            continue
+        if not marks or any(mark in name for mark in marks):
+            return key
+    return ""
+
+
+#: Wo die kundenlesbaren Punkte je Sprache stehen. Je Sprache eine Datei, wie
+#: bei den Katalogen — und keine davon ist eine Liste der Änderungen: Was hier
+#: steht, ist die Auswahl, die jemand getroffen hat.
+CHANGELOG = Path(__file__).resolve().parent.parent / "changelog"
+
+#: Die Zeile, die einen Versionsabschnitt eröffnet: ``## 0.1.2``.
+SECTION = re.compile(r"^##\s+(\S+)\s*$")
+
+#: Eine Zeile der Liste darunter.
+BULLET = re.compile(r"^[-*]\s+(.*\S)\s*$")
+
+
+def changelog_for(version: str, language: str) -> list[str]:
+    """Die Punkte einer Version in einer Sprache, oder eine leere Liste.
+
+    Gelesen wird der Abschnitt ``## <version>`` bis zur nächsten Überschrift.
+    Der Kopf der Datei erklärt, was hineingehört, und wird dabei übergangen —
+    er steht dort für den, der schreibt, nicht für den, der aktualisiert.
+    """
+    file = CHANGELOG / f"{language}.md"
+    if not file.is_file():
+        return []
+    found: list[str] = []
+    inside = False
+    for line in file.read_text(encoding="utf-8").splitlines():
+        heading = SECTION.match(line)
+        if heading:
+            inside = heading.group(1) == version
+            continue
+        if line.startswith("#"):
+            inside = False
+            continue
+        if not inside:
+            continue
+        bullet = BULLET.match(line)
+        if bullet:
+            found.append(bullet.group(1))
+    return found
+
+
+def changes_for(version: str) -> dict[str, list[str]]:
+    """Die Punkte in jeder Sprache, die eine Datei hat.
+
+    Eine Sprache ohne Abschnitt fehlt hier, statt leer dazustehen: Die
+    Anwendung fällt dann auf Deutsch zurück, und ein deutscher Satz ist besser
+    als eine Überschrift ohne Inhalt darunter.
+    """
+    found: dict[str, list[str]] = {}
+    for file in sorted(CHANGELOG.glob("*.md")):
+        points = changelog_for(version, file.stem)
+        if points:
+            found[file.stem] = points
+    return found
+
+
+def write_version(packages: list[Package]) -> None:
+    """Trägt Version und Pakete in ``website/version.json`` ein.
+
+    Von Hand gepflegt wäre das eine Prüfsumme an einer zweiten Stelle, und die
+    zweite Stelle ist immer die, die driftet. Gerechnet sind sie hier ohnehin
+    schon — für den Kasten.
+
+    ``url`` und ``notes`` bleiben unberührt: Die eine ist die Adresse der
+    Seite, die andere ein Satz, den ein Mensch schreibt. Ohne Pakete — also
+    beim Zurückziehen — verschwindet nur die Paketliste. Die Anwendung fällt
+    dann auf den Hinweis zurück und zeigt auf die Download-Seite, statt etwas
+    anzubieten, das nicht mehr liegt.
+    """
+    if not VERSION_FILE.is_file():
+        raise SystemExit(
+            f"{VERSION_FILE.name} gibt es nicht. Sie trägt die Adresse der Seite und "
+            "den Hinweistext; angelegt wird sie von Hand, nicht hier."
+        )
+    data = json.loads(VERSION_FILE.read_text(encoding="utf-8"))
+    site = str(data.get("url") or "").rstrip("/")
+    if not site.startswith("https://"):
+        raise SystemExit(
+            f"In {VERSION_FILE.name} steht keine https-Adresse unter 'url'. "
+            "Die Anwendung holt ein Paket nur von demselben Rechnernamen (§37.2)."
+        )
+
+    entries: dict[str, dict[str, object]] = {}
+    for package in packages:
+        key = version_key(package)
+        if not key:
+            continue
+        entries[key] = {
+            "file": package.name,
+            "url": f"{site}{COUNTER}{quote(package.name)}",
+            "size": package.bytes_,
+            "sha256": package.hash_,
+        }
+
+    data["version"] = APP_VERSION
+    changes = changes_for(APP_VERSION)
+    if changes:
+        data["changes"] = changes
+    else:
+        data.pop("changes", None)
+    if entries:
+        data["packages"] = entries
+    else:
+        data.pop("packages", None)
+    VERSION_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+    if entries:
+        print(f"  version.json: {APP_VERSION}, {len(entries)} startbare(s) Paket(e)")
+        if changes:
+            count = len(next(iter(changes.values())))
+            print(f"    {count} Punkt(e) in {len(changes)} Sprache(n)")
+        else:
+            print(
+                f"    kein Abschnitt ## {APP_VERSION} in changelog/ — "
+                "das Fenster zeigt dann nur den Hinweistext"
+            )
+        for key in entries:
+            print(f"    {key}")
+    else:
+        print(f"  version.json: {APP_VERSION}, ohne Pakete — die Anwendung zeigt auf die Seite")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("packages", nargs="*", type=Path, help="die fertigen Installationsdateien")
@@ -405,6 +564,7 @@ def main() -> int:
     if not args.packages:
         print("Kein Paket angegeben — der Kasten wird geleert.")
         write_pages([])
+        write_version([])
         print("\nDie Seite bittet wieder um Nachricht.")
         return 0
 
@@ -412,9 +572,11 @@ def main() -> int:
     packages = read_packages(args.packages)
     print("\nSeiten:")
     write_pages(packages)
+    print("\nVersionsdatei:")
+    write_version(packages)
     print(
         f"\nFertig. {len(packages)} Paket(e) unter website/dl/, eingetragen in "
-        f"{len(PAGES)} Sprachfassungen.\nZum Termin schaltet die Seite von "
+        f"{len(PAGES)} Sprachversionen.\nZum Termin schaltet die Seite von "
         "selbst um; ist er schon vorbei, gilt es ab dem nächsten Aufruf."
     )
     return 0

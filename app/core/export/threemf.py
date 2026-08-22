@@ -662,7 +662,7 @@ def _numbers_from(vertices: ET.Element, triangles: ET.Element) -> tuple[np.ndarr
     Gemessen und eingegrenzt: es liegt weder am XML-Leser (``lxml`` verhält
     sich gleich) noch an der Art der Umwandlung, sondern am geladenen
     ``rtree`` — ohne es fällt die Rate von sechs auf eins von dreißig, mit
-    seiner Fassung 1.4 stirbt der Prozess ganz.
+    seiner Version 1.4 stirbt der Prozess ganz.
 
     Ein zweiter Anlauf trägt fast immer. Er ist kein Verschlucken: was zweimal
     scheitert, fliegt weiter, und der Aufrufer verwirft den Körper dann mit
@@ -788,7 +788,7 @@ def _write_geometry(
     """Ecken und Dreiecke eines Körpers, mit ihrer Materialzuordnung.
 
     Eine Stelle für beide Wege: eine Baugruppe schreibt dieselben Dreiecke wie
-    ein einzelner Körper, nur mehrfach. Zwei Fassungen davon wären zwei Orte,
+    ein einzelner Körper, nur mehrfach. Zwei Versionen davon wären zwei Orte,
     an denen sich eine Materialzuordnung verlieren kann.
     """
     geometry = ET.SubElement(parent, "mesh")

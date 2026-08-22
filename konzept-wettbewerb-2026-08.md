@@ -29,7 +29,7 @@ kommt aus Recherche vom 11.08.2026; Preise sind Anhaltspunkte, keine Zusagen.
 >   selbst. Die KI-gesteuerte CAD-Bedienung, die dieses Dokument als Signal
 >   liest, kommt damit vom Marktführer.
 > - **FreeCAD** steht auf 1.1.3 (25.07.2026) und **wechselt auf kalendarische
->   Fassungen**: drei Ausgaben im Jahr, die erste ist 26.3, deren Zweig am
+>   Versionen**: drei Ausgaben im Jahr, die erste ist 26.3, deren Zweig am
 >   30.09.2026 aufmacht.
 > - **SindriCAD** ist von 0.1.81 auf 0.1.171 gelaufen, von 20 auf 141 Sterne;
 >   die Lizenz ist genauer als hier notiert: **AGPL-3.0-only mit
@@ -595,7 +595,7 @@ sowie die Testfallzahlen 104 und 460 (heute 112 und 90).
   geworden, nicht zum Merkmal" — bekommt damit seinen stärksten Beleg: Er
   kommt jetzt vom Marktführer selbst.
 - **FreeCAD** steht auf 1.1.3 (25.07.2026) und stellt auf kalendarische
-  Fassungen um — drei Ausgaben im Jahr, die erste ist 26.3 ab dem 30.09.2026.
+  Versionen um — drei Ausgaben im Jahr, die erste ist 26.3 ab dem 30.09.2026.
 - **SindriCAD** ist in siebzehn Tagen von 0.1.81 auf 0.1.171 gelaufen und von
   20 auf 141 Sterne. Die Lizenz ist AGPL-3.0-**only**, mit einem
   Beitragendenvertrag, der dem Betreuer kommerzielle Bedingungen offenhält.

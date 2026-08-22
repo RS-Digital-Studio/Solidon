@@ -90,10 +90,10 @@ ein nacktes `f"{wert}"` auf einer Fließkommazahl.
 Fenster mit Modell, Druckeinstellungen und fünf Operationsdialoge aufgebaut,
 jeden sichtbaren Text und jeden Tooltip gelesen, und im deutschen Fenster darf
 dort keine Zahl mit Punkt stehen. Über vierhundert Texte, und die Wächter der
-Suche lassen Pfade, Adressen und Fassungsnummern durch.
+Suche lassen Pfade, Adressen und Versionsnummern durch.
 
 `localised` tauscht **jeden** Punkt. Um eine Zahl darf es liegen, um einen
-Pfad, eine Adresse oder eine Fassungsnummer nie — dafür gibt es
+Pfad, eine Adresse oder eine Versionsnummer nie — dafür gibt es
 `localised_value`, das prüft, ob überhaupt eine Zahl dasteht.
 
 **Die Einheit gehört in den Wert, nicht in den Satz** — und nicht in die

@@ -116,7 +116,7 @@ class TourPanel(QWidget):
         self._row_hosts: list[QWidget] = []
         """Ein Trägerwidget je Schrittzeile. Aufgeräumt wird über genau ein
         ``deleteLater`` auf dem Träger — Marker und Text sterben als seine
-        Kinder mit. Die erste Fassung nahm die Zeilen-Layouts mit ``takeAt``
+        Kinder mit. Die erste Version nahm die Zeilen-Layouts mit ``takeAt``
         aus dem Panel-Layout und rief zusätzlich ``deleteLater``: nach
         ``takeAt`` gehört das Layout aber dem Python-Wrapper, der es beim
         Verlassen der Schleife sofort zerstört — das nachlaufende Ereignis

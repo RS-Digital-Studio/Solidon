@@ -419,9 +419,9 @@ def test_a_sale_build_is_never_over(own_config: Path) -> None:
 
 
 def test_a_sale_version_carries_no_deadline(shipped_demo_until: object) -> None:
-    """Eine 1.x-Fassung darf keinen Stichtag tragen.
+    """Eine 1.x-Version darf keinen Stichtag tragen.
 
-    Der teuerste Fehler, den dieses Paket zulässt: die Verkaufsfassung mit
+    Der teuerste Fehler, den dieses Paket zulässt: die Verkaufsversion mit
     einem Ablaufdatum ausliefern. Sie ließe sich nach dem Tag nicht mehr
     starten — bei jedem, der bezahlt hat.
     """
@@ -429,7 +429,7 @@ def test_a_sale_version_carries_no_deadline(shipped_demo_until: object) -> None:
 
     if int(APP_VERSION.split(".")[0]) >= 1:
         assert shipped_demo_until is None, (
-            f"{APP_VERSION} ist eine Verkaufsfassung und trägt trotzdem einen "
+            f"{APP_VERSION} ist eine Verkaufsversion und trägt trotzdem einen "
             f"Stichtag ({shipped_demo_until}) — er gehört in store.DEMO_UNTIL auf None"
         )
 
@@ -438,8 +438,8 @@ def test_the_shipped_deadline_has_not_passed(shipped_demo_until: object) -> None
     """Der Wecker: läuft die ausgelieferte Demo noch?
 
     Wird dieser Test rot, ist nichts kaputt — es ist der 31.10.2026 oder
-    später. Dann trägt die nächste Fassung entweder einen neuen Stichtag
-    (zweite Demo) oder keinen mehr (Verkaufsfassung, §6 des Demo-Konzepts).
+    später. Dann trägt die nächste Version entweder einen neuen Stichtag
+    (zweite Demo) oder keinen mehr (Verkaufsversion, §6 des Demo-Konzepts).
     Ein Bau in diesem Zustand ließe sich beim Nutzer nicht starten.
     """
     if shipped_demo_until is None:

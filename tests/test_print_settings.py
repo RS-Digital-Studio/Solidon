@@ -785,7 +785,7 @@ def test_the_check_stays_quiet_when_everything_arrived() -> None:
 
 def test_the_check_finds_what_the_slicer_ignored() -> None:
     """Das ist die Auskunft, die vom Slicer selbst kommt statt aus einer
-    Dokumentation, die für die installierte Fassung gelten mag oder nicht.
+    Dokumentation, die für die installierte Version gelten mag oder nicht.
 
     Damit prüft sich auch ein Slicer selbst, den beim Bauen der Tabelle
     niemand vorliegen hatte — und genau daran hing, dass PrusaSlicer und
@@ -1059,7 +1059,7 @@ def _cura_definitions() -> dict[str, dict[str, object]] | None:
     Sie liegt neben jeder ``CuraEngine`` und nennt jeden gültigen Schlüssel,
     seine Einheit und seinen Vorgabewert. Das ist die einzige Auskunft
     darüber, ob eine Zuordnung trifft — und sie kommt vom Programm selbst,
-    nicht aus einer Dokumentation, die für die installierte Fassung gelten mag
+    nicht aus einer Dokumentation, die für die installierte Version gelten mag
     oder nicht. Bei Prusa und Orca leistet das die Gegenprobe im G-Code; bei
     Cura kann sie es nicht, weil dort keine Einstellung in der Druckdatei
     steht.
@@ -1161,7 +1161,7 @@ def test_a_key_cura_does_not_know_becomes_a_finding(tmp_path: Path) -> None:
 
     ``CuraEngine`` schreibt seine Einstellungen nicht in die Druckdatei —
     ``verify`` findet dort null von den geschriebenen Schlüsseln wieder. Ein
-    Name, den diese Fassung nicht kennt, wird stillschweigend verworfen; die
+    Name, den diese Version nicht kennt, wird stillschweigend verworfen; die
     Definition daneben ist die einzige Stelle, an der es auffallen kann.
     """
     profile = profiles.make_profile()

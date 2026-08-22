@@ -302,7 +302,7 @@ def test_a_path_keeps_its_dots_and_a_number_gets_its_comma(qt_app: object) -> No
     und ``Endung: ,step`` — ein Pfad, den niemand benutzen kann, und eine
     Adresse, die falsch ist.
 
-    Eine Fassungsnummer prüft die Grenze mit: „1.2.3" ist keine Zahl mit der
+    Eine Versionsnummer prüft die Grenze mit: „1.2.3" ist keine Zahl mit der
     Einheit „.3", und genau daran scheitert die naive Prüfung „enthält Ziffern
     und einen Punkt".
     """

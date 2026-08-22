@@ -308,7 +308,7 @@ def find_profiles(
             if profile is None:
                 continue
             # Eigene schlagen mitgelieferte gleichen Namens — sie sind die
-            # Fassung, die der Nutzer im Slicer selbst sieht.
+            # Version, die der Nutzer im Slicer selbst sieht.
             key = f"{profile.kind}:{profile.name}"
             if key in seen and not profile.from_user:
                 continue

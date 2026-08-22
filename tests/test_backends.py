@@ -569,7 +569,7 @@ def test_temperature_reaches_only_a_model_that_still_takes_it(
 
 
 def test_a_model_alias_and_its_snapshot_are_judged_alike() -> None:
-    """Dieselbe Fassung ist unter zwei Namen erreichbar — dem Alias und dem
+    """Dieselbe Version ist unter zwei Namen erreichbar — dem Alias und dem
     Schnappschuss mit Datum. Wer nur den Alias prüft, schickt an den
     Schnappschuss keinen Parameter und an den Alias einen.
     """

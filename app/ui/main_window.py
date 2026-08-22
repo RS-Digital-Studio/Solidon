@@ -78,7 +78,13 @@ from app.core.agent.tools import (
     UNDO_TRANSACTION,
 )
 from app.core.backends import llm
-from app.core.errors import AppError, InternalError, OperationCancelled, UserError
+from app.core.errors import (
+    AppError,
+    ExternalToolError,
+    InternalError,
+    OperationCancelled,
+    UserError,
+)
 from app.core.export.handover import SliceOutcome
 from app.core.export.writer import (
     ExportFormat,
@@ -214,6 +220,7 @@ from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
 from app.ui.tour import TourPanel
 from app.ui.transform_bar import TransformBar
+from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
 from app.ui.viewport import Viewport
 
@@ -816,7 +823,7 @@ class MainWindow(QMainWindow):
         """Die Testlauf-Zeile der Statusleiste — gemerkt, damit das
         Freischalten genau sie wegräumt und keine fremde Meldung."""
         self._asked_for_update = False
-        """Ob jemand von Hand nach einer neuen Fassung gefragt hat. Die
+        """Ob jemand von Hand nach einer neuen Version gefragt hat. Die
         Abfrage beim Start schweigt, wenn es nichts Neues gibt; auf einen Klick
         hin wäre dasselbe Schweigen ein toter Knopf."""
         self._showing_scene = False
@@ -1836,7 +1843,7 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         self._add_action(
             help_menu,
-            tr("Nach einer neuen Fassung sehen"),
+            tr("Nach einer neuen Version sehen"),
             None,
             self.action_check_updates,
             tr("Fragt einmal bei solidon3d.de nach. Es wird nichts geladen und nichts ersetzt."),
@@ -5888,9 +5895,13 @@ class MainWindow(QMainWindow):
             # einen größeren Drucker hat, ist damit einen Klick entfernt statt
             # gezwungen, sein Teil zu verkleinern.
             "choose_printer": lambda _error: self.action_print_settings(),
-            # Eine Projektdatei aus einer neueren Fassung sagt „Ein Update
+            # Eine Projektdatei aus einer neueren Version sagt „Ein Update
             # öffnet sie" — und der Weg dorthin steht im Hilfe-Menü.
             "check_updates": lambda _error: self.action_check_updates(),
+            # Und wenn das Paket nicht kommt oder sich nicht starten lässt,
+            # bleibt der Weg, den es vor dem Update in der Anwendung als
+            # einzigen gab (§37.2).
+            "open_download_page": lambda _error: open_website(),
             # **Der Rat, der die ganze Zeit ins Leere zeigte.** Im Fenster läuft
             # die kurze Rückfallkette (§31); *Voxelstufe erzwingen* ist deshalb
             # der richtige nächste Schritt und war doch nur ein Satz. Angeboten
@@ -6271,8 +6282,9 @@ class MainWindow(QMainWindow):
 
     def _update_answered(self, release: Any) -> None:
         if release is not None and release.newer_than():
-            self.announce(f"{tr('Neue Fassung verfügbar')}: {release.version} — {release.url}")
             self._asked_for_update = False
+            self.announce(tr("Neue Version verfügbar: {version}").format(version=release.version))
+            self._show_update(release)
             return
         # Beim Start schweigt die Abfrage, wenn es nichts Neues gibt — niemand
         # will beim Öffnen lesen, dass alles beim Alten ist. Auf einen Klick
@@ -6284,18 +6296,65 @@ class MainWindow(QMainWindow):
                 self.announce(tr("Die Seite war nicht erreichbar — später noch einmal versuchen."))
             else:
                 self.announce(
-                    tr("Sie haben die aktuelle Fassung ({version}).").format(version=APP_VERSION)
+                    tr("Sie haben die aktuelle Version ({version}).").format(version=APP_VERSION)
                 )
 
+    def _show_update(self, release: Any) -> None:
+        """Den Fund zeigen — sichtbar, und nicht in einer Zeile, die die
+        nächste Meldung überschreibt (§37.2).
+
+        Nicht modal: Der Hinweis kommt beim Start, und ein Fenster, das dort
+        alles anhält, ist eines, das man wegklickt, ohne es gelesen zu haben.
+        Es steht davor, es lässt sich beiseiteschieben, und *Später* heißt
+        wirklich später.
+        """
+        dialog = UpdateDialog(release, self)
+        dialog.installRequested.connect(self._install_update)
+        # Festhalten: Ein nicht modaler Dialog ohne Referenz ist einer, den der
+        # Aufräumer einsammelt, sobald diese Methode zurückkehrt.
+        self._update_dialog = dialog
+        dialog.show()
+        dialog.raise_()
+        dialog.activateWindow()
+
+    def _install_update(self, file: object) -> None:
+        """Beenden, dann starten — in dieser Reihenfolge.
+
+        Unter Windows hält die laufende Anwendung ihre eigenen Dateien fest;
+        ein Installer, der sie ersetzen will, findet sie gesperrt. Und
+        wichtiger: ``close`` ist der Weg, auf dem die Frage nach dem
+        ungespeicherten Dokument gestellt wird. Wer dort abbricht, hat auch das
+        Update abgebrochen — das Paket liegt noch, der Dialog steht noch.
+        """
+        package = Path(str(file))
+        if not package.is_file():
+            show_error(
+                ExternalToolError(
+                    tool="update",
+                    detail=tr("Das Paket liegt nicht mehr da, wo es geladen wurde."),
+                    values={"path": str(package)},
+                ),
+                self,
+            )
+            return
+        if not self.close():
+            return
+        try:
+            updates.start_installer(package)
+        except AppError:
+            # Das Fenster ist zu diesem Zeitpunkt zu; bleibt das Protokoll und
+            # der Weg über die Download-Seite beim nächsten Start (§33.2).
+            _log.exception("could not start the installer")
+
     def action_check_updates(self) -> None:
-        """Von Hand nach einer neuen Fassung sehen (Demo-Konzept §2 G).
+        """Von Hand nach einer neuen Version sehen (Demo-Konzept §2 G).
 
         Die Abfrage beim Start bleibt eine Einstellung und ist aus; ohne diesen
         Weg gäbe es für alle anderen gar keinen. Für eine Demo mit Enddatum ist
         das der Unterschied zwischen „endet am 30.10." und „ist einfach weg".
         """
         self._asked_for_update = True
-        self.announce(tr("Es wird nach einer neuen Fassung gesehen …"))
+        self.announce(tr("Es wird nach einer neuen Version gesehen …"))
         self._check_for_updates()
 
     def action_feedback(self, kind: str = KIND_IDEA) -> None:

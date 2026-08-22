@@ -876,7 +876,7 @@ Transaktion), Kennzeichnung Mesh oder B-Rep. Bei Split-Ergebnissen eine
 **Explosionsansicht**.
 
 ### 18.9 Darstellungsleistung
-Für die Anzeige dezimierte Fassung ab der Schwelle aus §31; das Original bleibt
+Für die Anzeige dezimierte Version ab der Schwelle aus §31; das Original bleibt
 für die Berechnung unangetastet. Analysekarten verzögert im Hintergrund mit
 Fortschritt. Die Dezimierung darf nie in den Geometriekern zurückfließen.
 
@@ -1647,8 +1647,23 @@ G-Code-Slicer" liest sich besser als die Langfassung.
 - **Signierung.** Windows zuerst, Linux als AppImage oder Flatpak, macOS
   später (Beglaubigung nötig).
 - **Automatische Bauläufe** über eine CI für alle Zielplattformen.
-- **Update-Hinweis statt Auto-Update**: Versionsdatei abfragen, auf die
-  Download-Seite verweisen.
+- **Update in der Anwendung, aber nur auf Knopfdruck.** Die Versionsdatei
+  nennt neben der Version je Plattform Paketname, Adresse, Größe und
+  SHA-256. Ist eine neuere da, sagt es ein sichtbarer Hinweis — keine Zeile,
+  die die nächste Meldung überschreibt. Wer will, lädt das Paket aus der
+  Anwendung heraus: mit Fortschritt, abbrechbar, und Solidon rechnet die
+  Prüfsumme nach, bevor irgendetwas startet.
+
+  Die Grenze liegt wie beim Fehlerbericht **nicht beim Vorgang, sondern beim
+  Auslöser**: Es lädt nichts von allein, es ersetzt sich nichts im
+  Hintergrund, und es startet nichts ohne einen Klick. Stimmt die Prüfsumme
+  nicht, wird die Datei gelöscht und nichts ausgeführt. Das Paket kommt nur
+  von demselben Rechnernamen wie die Versionsdatei; eine Adresse, die
+  woandershin zeigt, wird nicht geladen.
+
+  **Nicht überall geht es.** Flatpak und AppImage lassen sich nicht von innen
+  ersetzen — dort bleibt es beim Hinweis und dem Weg zur Download-Seite. Auch
+  wer aus den Quellen fährt, bekommt kein Paket angeboten.
 - **Übersetzbarkeit von Anfang an**; eine Prüfung schlägt bei unübersetzten
   Texten an.
 - **Fehlerberichte und Rückmeldungen.** Keine Telemetrie. Ein Dialog stellt
@@ -1862,7 +1877,7 @@ hineinwandern**, sonst misst man nur das eigene Gedächtnis. Strikt lokal.
 
 **Stapelverarbeitung** über den Kommandozeilen-Einstieg.
 
-**Modell-Vergleich.** Zwei Fassungen überlagern, Unterschiede zeigen.
+**Modell-Vergleich.** Zwei Versionen überlagern, Unterschiede zeigen.
 
 **Druckerhistorie.** Was wurde wann mit welchen Einstellungen gedruckt, mit
 Ergebnisnotiz. Speist die Regelsammlung.

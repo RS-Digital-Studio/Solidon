@@ -303,7 +303,7 @@ def with_path(settings: PrintSettings, path: str, value: Any) -> PrintSettings:
     """Einen Wert über seinen Punktpfad setzen — als neue Einstellung.
 
     ``PrintSettings`` ist unveränderlich, damit ein Vorschlag angesehen werden
-    kann, bevor er gilt. Das hier baut die geänderte Fassung, es ändert nichts.
+    kann, bevor er gilt. Das hier baut die geänderte Version, es ändert nichts.
     """
     group, _dot, name = path.partition(".")
     read_path(settings, path)

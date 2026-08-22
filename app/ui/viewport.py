@@ -1445,7 +1445,7 @@ class Viewport(QWidget):
         """§18.8: was der Nutzer ausgeblendet hat. Ansicht, nicht Szene — die
         Körper werden weiter gerechnet, geprüft und exportiert."""
         self._display_cache: dict[tuple[ObjectId, int], Any] = {}
-        """§18.9: die dezimierte Fassung des zuletzt gezeigten Körpers. Sie
+        """§18.9: die dezimierte Version des zuletzt gezeigten Körpers. Sie
         fließt nie in den Kern zurück."""
 
         self.banner = PreviewBanner(self)
@@ -2303,7 +2303,7 @@ class Viewport(QWidget):
         return np.asarray(self._map.values, dtype=float)
 
     def _for_display(self, object_id: ObjectId, mesh: Any) -> Any:
-        """Eine für die Anzeige dezimierte Fassung ab der Schwelle aus §31.
+        """Eine für die Anzeige dezimierte Version ab der Schwelle aus §31.
 
         §18.9 verlangt sie, und es gab sie nicht: der Viewport zeichnete immer
         das volle Netz, und jeder Zug am Schnittschieber schnitt durch eine

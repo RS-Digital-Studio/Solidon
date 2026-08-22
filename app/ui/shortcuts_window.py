@@ -267,17 +267,17 @@ class ShortcutsWindow(QDialog):
             left = 0
             for row in range(heading.childCount()):
                 # Unterhalb von ``childCount`` gibt es jedes Kind. Ob die Stubs
-                # das auch sagen, wechselt: Die Fassung aus `constraints.txt`
+                # das auch sagen, wechselt: Die Version aus `constraints.txt`
                 # gibt ``QTreeWidgetItem`` zurück, die neueste
                 # ``QTreeWidgetItem | None`` — der wöchentliche Lauf gegen die
-                # neuesten Fassungen meldete hier zwei ``union-attr``. Ein
+                # neuesten Versionen meldete hier zwei ``union-attr``. Ein
                 # ``if child is None`` gilt der einen als unerreichbar
                 # (``warn_unreachable``), ein ``type: ignore`` der anderen als
                 # unbenutzt. Das ``or continue`` ist wahr für beide: eine
                 # Prüfung auf den falschen Wert, die keinen toten Zweig
                 # aufmacht.
                 child = heading.child(row) or None
-                if child is None:  # pragma: no cover - hängt an der Stub-Fassung
+                if child is None:  # pragma: no cover - hängt an der Stub-Version
                     continue
                 haystack = f"{child.text(0)} {child.text(1)}".casefold()
                 hidden = bool(query) and query not in haystack

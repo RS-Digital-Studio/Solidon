@@ -49,7 +49,7 @@ DISTRIBUTION_FILE = PACKAGING / "macos-distribution.xml"
 INSTALL_LOCATION = "/Applications"
 
 #: Der Lizenzvertrag, den der Installer auf seiner zweiten Seite zeigt.
-#: Dieselbe Textfassung wie beim Windows-Installer — ``tools/make_legal.py``
+#: Dieselbe Textversion wie beim Windows-Installer — ``tools/make_legal.py``
 #: legt sie aus ``EULA.md`` an.
 LICENCE_FILE = PACKAGING / "eula.txt"
 
@@ -92,7 +92,7 @@ def distribution(architecture: str) -> str:
         ' hostArchitectures="' + architecture + '" />\n'
         '    <domains enable_anywhere="true" enable_currentUserHome="true"'
         ' enable_localSystem="true" />\n'
-        # Das Volume muss die Systemfassung tragen, die auch die Plist nennt
+        # Das Volume muss die Systemversion tragen, die auch die Plist nennt
         # (LSMinimumSystemVersion in packaging/solidon3d.spec).
         "    <volume-check>\n"
         '        <allowed-os-versions><os-version min="12.0" /></allowed-os-versions>\n'

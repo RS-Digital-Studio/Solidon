@@ -1,9 +1,9 @@
 """Prüft, ob die Umgebung dem festgeschriebenen Stand entspricht — und stellt ihn her.
 
 Warum es das Werkzeug gibt: `constraints.txt` schreibt fest, *in welcher*
-Fassung ein Paket installiert wird. Nur half das nichts, solange niemand
+Version ein Paket installiert wird. Nur half das nichts, solange niemand
 nachsah. Wer `pip install -e ".[dev,geom,ui,agent,brep]"` ohne das `-c` tippt,
-bekommt andere Fassungen als die, gegen die die Suite grün ist — am 06.08.2026
+bekommt andere Versionen als die, gegen die die Suite grün ist — am 06.08.2026
 zog ein frischer Klon numpy 2.5, und sechzehn Tests fielen um, ohne dass eine
 Zeile Code sich geändert hatte. Bei mehreren Leuten am selben Repository ist
 das kein Einzelfall, sondern der Normalfall.
@@ -41,8 +41,8 @@ PYPROJECT: Final = ROOT / "pyproject.toml"
 #: Die Gruppen, die ein Arbeitsplatz braucht — dieselben wie in CLAUDE.md.
 EXTRAS: Final = "dev,geom,ui,agent,brep"
 
-#: Ab wann die Fassungspflege fällig ist. Der wöchentliche CI-Lauf „Neueste
-#: Fassungen" meldet gebrochene Fassungen; er sagt aber niemandem, dass es
+#: Ab wann die Versionspflege fällig ist. Der wöchentliche CI-Lauf „Neueste
+#: Versionen" meldet gebrochene Versionen; er sagt aber niemandem, dass es
 #: etwas Neues *gäbe*. Nach einem Vierteljahr ohne Nachziehen ist der Satz
 #: alt genug, dass ein Sprung wehtut — deshalb die Erinnerung.
 DAYS_UNTIL_MAINTENANCE: Final = 90
@@ -69,7 +69,7 @@ def venv_python() -> Path | None:
 
 
 def pinned() -> dict[str, tuple[str, str]]:
-    """`constraints.txt` als Zuordnung normalisierter Name → (Name, Fassung)."""
+    """`constraints.txt` als Zuordnung normalisierter Name → (Name, Version)."""
     result: dict[str, tuple[str, str]] = {}
     for line in CONSTRAINTS.read_text(encoding="utf-8").splitlines():
         match = _LINE.match(line.strip())
@@ -150,10 +150,10 @@ def setup_command(with_venv: bool) -> str:
 
 
 def version_tuple(version: str) -> tuple[int, ...]:
-    """Eine Fassung als Zahlenfolge, so weit sie sich lesen lässt.
+    """Eine Version als Zahlenfolge, so weit sie sich lesen lässt.
 
     Absichtlich kein vollständiger PEP-440-Vergleich: Gebraucht wird nur die
-    Frage, ob eine angebotene Fassung unter einer Obergrenze bleibt, und die
+    Frage, ob eine angebotene Version unter einer Obergrenze bleibt, und die
     Obergrenzen dieses Projekts sind schlichte Zahlen (`<5`).
     """
     parts: list[int] = []
@@ -175,7 +175,7 @@ def version_tuple(version: str) -> tuple[int, ...]:
 
 
 def upper_bounds() -> dict[str, str]:
-    """Pakete aus `pyproject.toml`, die eine Fassung ausdrücklich ausschließen.
+    """Pakete aus `pyproject.toml`, die eine Version ausdrücklich ausschließen.
 
     `trimesh>=4.4,<5` ist keine Nachlässigkeit, sondern eine Entscheidung: Der
     Major-Sprung wird als eigene Migration gemacht, weil der erste frische
@@ -296,10 +296,10 @@ def freeze(python: Path) -> int:
 
 
 def mismatches(pinned_set: dict[str, tuple[str, str]], present: dict[str, str]) -> list[str]:
-    """Pakete, die in einer anderen Fassung liegen als festgeschrieben.
+    """Pakete, die in einer anderen Version liegen als festgeschrieben.
 
     Ein Paket, das **fehlt**, steht hier absichtlich nicht: `constraints.txt`
-    sagt, *in welcher* Fassung installiert wird, nicht *dass* installiert wird.
+    sagt, *in welcher* Version installiert wird, nicht *dass* installiert wird.
     Der Windows-Eintrag hat auf Linux nichts zu suchen, und ein nicht
     installiertes Extra ist eine Entscheidung, kein Fehler.
     """
@@ -339,7 +339,7 @@ def check() -> tuple[list[str], list[str]]:
     pinned_set = pinned()
     present = installed(python)
     if present is None:
-        findings.append("Die installierten Fassungen ließen sich nicht auslesen.")
+        findings.append("Die installierten Versionen ließen sich nicht auslesen.")
         suggestions.append(setup_command(with_venv=True))
         return findings, suggestions
 
@@ -426,7 +426,7 @@ def show_newer(python: Path) -> int:
             f'-e ".[{EXTRAS}]"\n'
             "     (ohne `eager` lässt pip alles stehen, was die Untergrenzen\n"
             "     schon erfüllt — und das sind sie fast alle)\n"
-            "  2. Die Suite fahren — rot heißt: die Fassung bleibt, wo sie war\n"
+            "  2. Die Suite fahren — rot heißt: die Version bleibt, wo sie war\n"
             "  3. python tools/check_env.py --freeze\n"
             "  4. `constraints.txt` committen, mit dem Grund im Text"
         )

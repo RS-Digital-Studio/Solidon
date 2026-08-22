@@ -23,7 +23,7 @@ from app.core.support import Attachment, Ticket
 
 
 def test_a_ticket_carries_the_versions() -> None:
-    """Ohne Fassung und Plattform beginnt jede Antwort mit drei Rückfragen."""
+    """Ohne Version und Plattform beginnt jede Antwort mit drei Rückfragen."""
     text = Ticket(message="Der Deckel sitzt schief.").as_text()
 
     assert "Der Deckel sitzt schief." in text

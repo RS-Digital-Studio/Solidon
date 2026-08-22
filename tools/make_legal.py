@@ -1,10 +1,10 @@
-"""Aus den Rechtstexten die Seiten der Website machen — und die Fassung für den
+"""Aus den Rechtstexten die Seiten der Website machen — und die Version für den
 Installer.
 
 Quelle sind ``EULA.md``, ``AGB.md`` und ``WIDERRUF.md`` im Wurzelverzeichnis.
 Sie stehen dort, weil sie zum Repository gehören wie die Lizenz: lesbar, ohne
-Werkzeug, in der Fassung, die gilt. Was hier entsteht, wird nie von Hand
-geändert — eine zweite Fassung eines Rechtstexts ist schlimmer als keine.
+Werkzeug, in der Version, die gilt. Was hier entsteht, wird nie von Hand
+geändert — eine zweite Version eines Rechtstexts ist schlimmer als keine.
 
 **Warum nicht** ``app.core.markup``. Der Übersetzer dort deckt genau die
 Teilmenge ab, die das Handbuch erzeugt: keine Verweise, keine gezählten

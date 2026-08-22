@@ -53,7 +53,10 @@ OPEN_SETTINGS = Action("open_settings", _("Einstellungen öffnen"), primary=True
 #: Der Knopf trägt jetzt den Namen des Menüeintrags, unter dem er landet.
 INSTALL_MISSING = Action("install", _("Zusätzliche Programme …"), primary=True)
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
-CHECK_UPDATES = Action("check_updates", _("Nach einer neuen Fassung sehen"), primary=True)
+CHECK_UPDATES = Action("check_updates", _("Nach einer neuen Version sehen"), primary=True)
+#: Der Ausweg, wenn das Paket nicht kommt oder sich nicht starten lässt: der
+#: Weg, den es vor dem Update in der Anwendung als einzigen gab (§37.2).
+OPEN_DOWNLOAD_PAGE = Action("open_download_page", _("Download-Seite öffnen"), primary=True)
 SAVE_ELSEWHERE = Action("save_elsewhere", _("Anderen Ort wählen"))
 ENTER_LICENCE_KEY = Action("enter_licence_key", _("Lizenzschlüssel eintragen"), primary=True)
 BUY_LICENCE = Action("buy_licence", _("Solidon kaufen"))
@@ -436,7 +439,7 @@ class LicenceRequired(AppError):
 
     **Was liest, wirft das nie.** Öffnen, Ansehen, Messen, Prüfbericht,
     Schichtanalyse, Speichern und Undo laufen nach Ablauf weiter — eine
-    Testfassung, die gespeicherte Arbeit einschließt, erzeugt einen
+    Testversion, die gespeicherte Arbeit einschließt, erzeugt einen
     verärgerten Nicht-Käufer statt eines späteren.
     """
 

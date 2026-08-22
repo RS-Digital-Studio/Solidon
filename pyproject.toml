@@ -228,7 +228,14 @@ ignore_missing_imports = true
 # Plattformzweige sind auf jeder Plattform außer einer unerreichbar — genau
 # dafür sind sie da. Bei OpenSCAD ist es die Speichergrenze aus §32: RLIMIT_AS
 # auf POSIX, ein Job-Objekt auf Windows.
-module = ["app.core.paths", "app.core.discover", "app.core.backends.openscad"]
+module = [
+  "app.core.paths",
+  "app.core.discover",
+  "app.core.backends.openscad",
+  # Und beim Update: welches Paket dieser Rechner braucht, entscheidet
+  # dieselbe Abfrage (§37.2).
+  "app.core.updates",
+]
 warn_unreachable = false
 
 [[tool.mypy.overrides]]

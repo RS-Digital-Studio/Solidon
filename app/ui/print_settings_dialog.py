@@ -910,7 +910,7 @@ def remembered_setup(
     Maschinenprofil gehört zu genau einem Drucker, und das des letzten Projekts
     an das nächste weiterzureichen wäre schlimmer als gar keines — die Datei
     sähe vollständig aus und zeigte auf die falsche Maschine. Ohne Vermerk
-    (Einstellungen aus einer älteren Fassung) wird nicht verglichen.
+    (Einstellungen aus einer älteren Version) wird nicht verglichen.
 
     ``None``, solange kein Druckerprofil gemerkt ist: Die Suche nach dem
     Programm geht über PATH, Registry und die üblichen Orte und kostet eine

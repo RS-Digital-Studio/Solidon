@@ -418,18 +418,18 @@ def test_a_thread_keeps_the_diameter_it_was_asked_for() -> None:
 @pytest.mark.xfail(
     sys.platform.startswith(("linux", "darwin")),
     reason=(
-        "Auf der OCCT-Fassung der Linux- und macOS-Runner schließt der helikale "
+        "Auf der OCCT-Version der Linux- und macOS-Runner schließt der helikale "
         "Gang nicht am Kern — auch nicht mit ShapeFix und nicht über drei "
         "Fuzzy-Toleranzen hinweg (gemessen am 13.08.2026, siehe ROADMAP). Unter "
         "Windows, der Plattform der Demo, kommt M6 geschlossen heraus. Nicht "
-        "`strict`: sobald eine Fassung es dort kann, ist der Lauf grün und diese "
+        "`strict`: sobald eine Version es dort kann, ist der Lauf grün und diese "
         "Marke fällt.\n\n"
         "macOS kam am 20.08.2026 dazu, und zwar nicht als neuer Befund: Bis zur "
         "Reparatur des Testschritts brach der Lauf dort an `xvfb-run` ab, das es "
         "auf macOS nicht gibt — die Tests wurden nie erreicht. Der erste Lauf, "
         "der sie erreichte, meldete dieselbe Zeile mit denselben Maßen (M6, "
         "1,0 mm) wie Linux, zweimal hintereinander. Dieselbe Rechnung, dieselbe "
-        "fremde OCCT-Fassung."
+        "fremde OCCT-Version."
     ),
     strict=False,
 )

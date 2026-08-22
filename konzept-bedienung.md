@@ -611,7 +611,7 @@ ausblenden kann.
 
 ### 5.2 Eine Handlung, deren Rückmeldung man übersieht
 
-**Korrektur zur ersten Fassung dieses Abschnitts.** Dort stand, *Bearbeiten →
+**Korrektur zur ersten Version dieses Abschnitts.** Dort stand, *Bearbeiten →
 Automatisch teilen* auf einem passenden Teil sage „nichts". Das war falsch:
 Solidon schreibt „Dieses Objekt passt bereits auf das Bett." in die
 Statusleiste. Im Lauf ist mir das entgangen, weil ich nach einer Menüaktion
@@ -638,7 +638,7 @@ Getestet war die Zusage bis dahin nicht; jetzt hält
   durchdringende Körper, einer außerhalb des Bauraums — die STL wird
   geschrieben.
 
-  **Korrektur zur ersten Fassung.** Dort stand „kommentarlos" und der
+  **Korrektur zur ersten Version.** Dort stand „kommentarlos" und der
   Vorschlag, mit „Trotzdem exportieren / Erst in Ordnung bringen" zu fragen.
   Beides ist falsch. Kommentarlos war es nicht: die Exportprüfung lief und
   meldete den Bauraum, ich hatte den Befund für den älteren aus der

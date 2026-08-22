@@ -44,7 +44,7 @@ Kacheln erkennbar sind.
 
 ### Zwei Punkte, die hier standen und noch am selben Tag erledigt wurden
 
-Sie stehen hier nur, damit niemand sie in einer alten Fassung dieser Datei für
+Sie stehen hier nur, damit niemand sie in einer alten Version dieser Datei für
 offen hält:
 
 * **Nackte Tasten** — entschieden je Taste, so wie der Punkt es verlangte: Pos1,

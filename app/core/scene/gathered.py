@@ -148,7 +148,7 @@ def carry_over(data: dict[str, Any]) -> dict[str, Any]:
                 raise ValidationError(
                     field=f"ops.{operation.get('id', '?')}.{name}",
                     detail=_(
-                        "Diese ältere Datei enthält einen Wert, der in der neuen Fassung "
+                        "Diese ältere Datei enthält einen Wert, der in der neuen Version "
                         "wie ein Verweis auf ausgelagerte Daten aussieht."
                     ),
                     constraint="ambiguous_reference",

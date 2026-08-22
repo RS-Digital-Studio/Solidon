@@ -5,7 +5,7 @@ kann einen Baustein ohne Solidon mitnehmen. Was es nicht ist, ist eine zweite
 Umsetzung — die Geometrie kommt aus derselben Funktion, die die Anwendung
 benutzt, und wird als ``polyhedron`` geschrieben.
 
-Darüber klar zu sein zählt. Eine handgeschriebene SCAD-Fassung jedes Bausteins
+Darüber klar zu sein zählt. Eine handgeschriebene SCAD-Version jedes Bausteins
 wäre eine zweite Quelle der Wahrheit, die abdriftet, und den ersten Unterschied
 zwischen beiden fände ein Nutzer, in einem Druck. Also werden die Parameter als
 lesbare Variablen in die Datei geschrieben, und der Körper darunter ist genau

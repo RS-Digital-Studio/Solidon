@@ -962,10 +962,10 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Knoten, oder alles ist bereit. In der Mitte steht der Knopf zur "
             "Einrichtung direkt daneben — man muss nicht erst erzeugen lassen, "
             "um zu erfahren, dass etwas fehlt.\n\n"
-            "Der Dialog findet ComfyUI selbst. Die **Desktop-Fassung** von "
+            "Der Dialog findet ComfyUI selbst. Die **Desktop-Version** von "
             "comfy.org muss er dabei nicht raten — sie trägt ein, wohin sie "
             "installiert hat, auch bei einem selbst gewählten Ordner. Die "
-            "tragbare Fassung entpacken Sie selbst; steht sie an einer "
+            "tragbare Version entpacken Sie selbst; steht sie an einer "
             "ungewöhnlichen Stelle, gehört der Ordner angegeben — gesucht wird "
             "der, in dem `custom_nodes` und `main.py` liegen.\n\n"
             "Dann laufen fünf Schritte: Knoten hinlegen, den TripoSG-Quelltext "
@@ -1057,7 +1057,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Operation der folgenden Kapitel ist eines — mit denselben "
             "Parametern, denselben Grenzen und denselben Vorgaben, die auch "
             "der Dialog zeigt. Eine eigene Schnittstellenliste gibt es "
-            "deshalb nicht: sie wäre eine zweite Fassung derselben Auskunft "
+            "deshalb nicht: sie wäre eine zweite Version derselben Auskunft "
             "und sagte nach dem zweiten Monat etwas anderes."
         ),
     ),
@@ -1219,7 +1219,7 @@ def rules_text() -> str:
             )
         ),
         "",
-        f"{_('Fassung')}: {collection.version}",
+        f"{_('Version')}: {collection.version}",
         "",
     ]
     for rule in collection.rules:
@@ -1639,7 +1639,7 @@ def as_html(
 
     ``dark_source`` beantwortet dieselbe Frage für ein dunkles Farbschema. Wer
     für einen Schlüssel nichts liefert, bekommt dort ein gewöhnliches Bild —
-    ein Bildschirmfoto hat keine zweite Fassung, eine Zeichnung schon.
+    ein Bildschirmfoto hat keine zweite Version, eine Zeichnung schon.
     """
     from app.core import figures
     from app.core.markup import FigureSource, to_html

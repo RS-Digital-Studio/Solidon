@@ -136,7 +136,7 @@ ihn. Zwei Wege führen hin, und sie decken verschiedene Slicer ab:
   anderen.
 - **CuraEngine schreibt dort nichts** — null von 47. Für es liegt die Auskunft
   daneben: `fdmprinter.def.json` nennt jeden gültigen Schlüssel der
-  installierten Fassung. `unknown_keys()` liest sie zur Laufzeit, der Test
+  installierten Version. `unknown_keys()` liest sie zur Laufzeit, der Test
   `test_every_cura_key_exists_in_the_definition` beim Bauen.
 
 In dieser Lücke saß `outer_inset_first`: ein Name aus Cura 4, in Cura 5

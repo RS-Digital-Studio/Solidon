@@ -1103,12 +1103,12 @@ def expired_demo_text(state: activation.Activation) -> str:
             app=APP_NAME, date=deadline_date(state)
         )
         + "\n\n"
-        + tr("Die aktuelle Fassung gibt es auf {url}.").format(url=WEBSITE_URL)
+        + tr("Die aktuelle Version gibt es auf {url}.").format(url=WEBSITE_URL)
         + "\n\n"
         + tr(
             "Ihre Projekte sind davon nicht betroffen. Sie liegen, wo Sie sie "
             "gespeichert haben, und eine Projektdatei ist ein ZIP-Archiv mit JSON "
-            "darin — lesbar auch ohne dieses Programm, und die nächste Fassung "
+            "darin — lesbar auch ohne dieses Programm, und die nächste Version "
             "öffnet sie unverändert."
         )
     )

@@ -4,7 +4,7 @@ Drei Dateien und ein Auszeichnungsblock, alle aus dem Bestand abgeleitet und
 keiner von Hand gepflegt:
 
 * ``website/robots.txt`` — verweist auf die Sitemap, sonst nichts Verbotenes.
-* ``website/sitemap.xml`` — jede Seite einmal, mit ihren Sprachfassungen
+* ``website/sitemap.xml`` — jede Seite einmal, mit ihren Sprachversionen
   daneben (``xhtml:link``). Die Zuordnung kommt aus den ``hreflang``-Angaben
   der Seiten selbst; eine zweite Liste hier würde beim nächsten Zusatz
   auseinanderlaufen.
@@ -98,7 +98,7 @@ def listed_pages() -> list[Path]:
 
 
 def language_groups() -> dict[str, list[tuple[str, str]]]:
-    """Ordnet jeder Seite ihre Sprachfassungen zu.
+    """Ordnet jeder Seite ihre Sprachversionen zu.
 
     Die Quelle sind die ``hreflang``-Angaben in den Seiten. Wo keine stehen,
     bleibt die Liste leer.

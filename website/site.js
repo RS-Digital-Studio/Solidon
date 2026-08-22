@@ -57,7 +57,7 @@
 
 /* Der Zähler bis zur Demo im Download-Kasten der Startseite.
  *
- * Der Zielzeitpunkt steht im Markup, nicht hier: sechs Sprachfassungen
+ * Der Zielzeitpunkt steht im Markup, nicht hier: sechs Sprachversionen
  * tragen ihn, und eine Zahl in einem gemeinsamen Skript wäre die siebte
  * Stelle, an der er sich ändern müsste. Der Rahmensatz kommt aus demselben
  * Grund von dort (`data-template`) — er ist übersetzt.
@@ -154,7 +154,7 @@
  * zu geben, wenn da längst etwas zu laden war. Wer fünf Minuten nach dem
  * Termin kam, fand keinen Download.
  *
- * Termin und Datei stehen am `<body>`, nicht hier: sechs Sprachfassungen
+ * Termin und Datei stehen am `<body>`, nicht hier: sechs Sprachversionen
  * tragen beides, und eine Adresse in einem gemeinsamen Skript wäre die
  * siebte Stelle, an der sie sich ändern müsste.
  *

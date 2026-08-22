@@ -35,7 +35,7 @@ _log = get_logger(__name__)
 #: Wie lange der Testlauf dauert. Steht so auf der Website.
 TRIAL_DAYS: Final = 14
 
-#: Letzter Tag der öffentlichen Demo — oder ``None`` in der Verkaufsfassung,
+#: Letzter Tag der öffentlichen Demo — oder ``None`` in der Verkaufsversion,
 #: die stattdessen den Testlauf zählt.
 #:
 #: Ein Stichtag statt einer Frist ab dem ersten Start: die Demo endet für alle
@@ -144,7 +144,7 @@ def _write_trial(first_run: date, last_seen: date) -> None:
 def days_left(today: date | None = None) -> int:
     """Wie viele Tage die schreibende Seite noch offensteht. Null heißt zu.
 
-    Die eine Stelle, an der sich Demo und Verkaufsfassung unterscheiden: mit
+    Die eine Stelle, an der sich Demo und Verkaufsversion unterscheiden: mit
     einem Stichtag zählt der Kalender, ohne ihn die Frist ab dem ersten Start.
     Alles darüber — die vier Grenzstellen, die ausgegraute Oberfläche, der
     Freischaltdialog — sieht in beiden Fällen dieselbe Zahl.

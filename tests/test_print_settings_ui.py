@@ -752,7 +752,7 @@ def test_a_profile_of_another_printer_is_not_reused(monkeypatch: pytest.MonkeyPa
 def test_an_old_settings_file_still_carries_its_profile(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ohne Vermerk wird nicht verglichen.
 
-    Eine Einstellung aus einer älteren Fassung kennt den Drucker nicht, für
+    Eine Einstellung aus einer älteren Version kennt den Drucker nicht, für
     den sie gewählt wurde. Sie deshalb zu verwerfen wäre eine Verschlechterung
     für jeden, der schon eingerichtet hat.
     """
@@ -1198,7 +1198,7 @@ def test_processes_of_other_printers_stay_out(dialog: PrintSettingsDialog) -> No
 
 def test_an_own_profile_is_marked_in_words(dialog: PrintSettingsDialog) -> None:
     machine = _profile("Meiner 0.4 nozzle", "machine", printer_model="Meiner", nozzle=0.4)
-    dialog._profiles_found([machine, _profile("Meine Fassung", "process", from_user=True)])
+    dialog._profiles_found([machine, _profile("Meine Version", "process", from_user=True)])
 
     assert "(" in dialog.process_choice.itemText(0)
 

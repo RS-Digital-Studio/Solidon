@@ -63,7 +63,7 @@ in Bauplan §4.2, dann in den Code — nicht umgekehrt.
 
 ## Übersetzen
 
-Die deutsche Fassung ist die Vorlage, die englische die Übersetzung — nicht
+Die deutsche Version ist die Vorlage, die englische die Übersetzung — nicht
 andersherum. Der Ton ist knapp und sachlich, in ganzen Sätzen, ohne Ausrufe:
 so wie der Rest der Anwendung spricht. Ein Text, der eine Handlung anbietet,
 beginnt mit dem Verb.

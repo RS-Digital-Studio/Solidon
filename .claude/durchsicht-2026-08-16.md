@@ -9,7 +9,7 @@ wurde geändert — das hier ist der Befund, nicht der Fix.
 **Baseline vor der Durchsicht:** Umgebung auf `constraints.txt` gebracht
 (darunter trimesh 4.12 → 5.0.0 — der Major-Sprung ist in beiden Kern-Gebieten
 nachweislich folgenlos, alle benutzten API-Pfade gegen die installierte
-Fassung aufgelöst). Suite portionsweise in acht Blöcken: **4009 Tests grün**,
+Version aufgelöst). Suite portionsweise in acht Blöcken: **4009 Tests grün**,
 ruff, `ruff format --check` und mypy grün. Der Lauf am Stück stirbt weiterhin
 am bekannten nativen rtree-Abriss — das ist Umgebung, nicht Code.
 
@@ -271,7 +271,7 @@ kein Durchlauf am laufenden Programm, wie ihn P15 hatte. Vier Teile:
   ran into its time limit"), ein zerrissener Modul-Docstring ebenda
   (`mesh.py:16-33`), „aufgeloest" in `slice/advise.py:652`, und
   `tools/check_env.py` voller deutscher Bezeichner (`WURZEL`,
-  `verlangte_fassung`, …) — `test_language_rules.py` prüft `tools/` nicht.
+  `verlangte_version`, …) — `test_language_rules.py` prüft `tools/` nicht.
 - `registry/params.py:234` doppelter Kommentarblock ·
   `slicer_keys.py:375` Kommentar an der falschen Zuweisung ·
   `estimate.py:15` behauptet ein Feld `source`, das es nicht führt ·
