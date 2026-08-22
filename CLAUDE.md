@@ -83,17 +83,36 @@ durchläuft.
 
 Erst beides zusammen mit ruff, `ruff format --check` und mypy ist das Tor.
 
-Zwei Fallen dabei, beide am 22.08.2026 einmal zugeschnappt:
+Drei Fallen dabei, alle drei am 22.08.2026 einmal zugeschnappt:
 
-- **Auf den Exit-Code sehen, nicht auf eine Schlusszeile.** Wer `FAILED` grept,
-  liest die Zusammenfassung, und die schreibt pytest erst am Ende — im laufenden
-  Fortschritt bleiben zwei `F` unsichtbar. Gezählt wird über die
-  Fortschrittszeichen oder über `$?`.
+- **Auf den Exit-Code sehen, nicht auf eine Schlusszeile — und den Exit-Code
+  nicht durch eine Pipeline lesen.** Wer `FAILED` grept, liest die
+  Zusammenfassung, und die schreibt pytest erst am Ende; im laufenden
+  Fortschritt bleiben zwei `F` unsichtbar. Eine Pipeline dagegen meldet den
+  Status ihres letzten Glieds, und `tail` gelingt immer:
+  `suite-getrennt.sh … | tail -30` berichtete „Exit 0" über einem
+  `Läufe mit Fehler: 4`. Wer beides zusammen falsch macht, liest eine gültige
+  Zahl und glaubt ihr — wer nur eine der beiden Fallen kennt, verlässt sich
+  ausgerechnet auf die andere. Sicher ist: **Ausgabe in eine Datei, danach
+  lesen.** Das gibt den Code **und** die Namen. `set -o pipefail` oder
+  `${PIPESTATUS[0]}` retten nur den Code — gemessen, sie wirken, aber sie sagen
+  nicht, *welche* vier Läufe es waren.
 - **Ein Abriss beim Abbau ist kein roter Test.** `suite-getrennt.sh` gab an
   jenem Tag Exit 3, obwohl jeder Test grün war: drei Fensterdateien melden
   „passed" und stürzen danach beim Aufräumen (`0xC0000409`). Der Fall steht in
   `ROADMAP.md` unter „Der Changelog schickte den Kunden ins Handbuch, und dort
-  war nichts"; wer ihn nicht kennt, hält einen grünen Stand für rot.
+  war nichts"; wer ihn nicht kennt, hält einen grünen Stand für rot. Zwei
+  Fensterdateien enden inzwischen mit **127** statt mit dem bekannten Code, und
+  zwar einzeln gefahren auch — das ist ein eigener offener Punkt und nicht
+  derselbe Absturz.
+- **„Keine Tests gesammelt" ist kein Fehllauf.** Das Skript sucht seine
+  Fensterdateien im *Text* (`grep -lE "MainWindow|Viewport|pyvista"`), damit eine
+  neue keinen Eintrag braucht. Es erwischt damit auch eine Datei, die über eine
+  Ansicht **schreibt**, statt eine zu bauen: `tests/test_performance.py` landete
+  wegen zweier Docstrings in der Fenstergruppe, lief dort mit
+  `-m "not performance"`, sammelte nichts und endete mit **Exit 5**. Das Skript
+  wertet das nicht mehr als Fehllauf — wer einen eigenen Lauf baut, sollte es
+  auch nicht.
 
 Weiteres:
 

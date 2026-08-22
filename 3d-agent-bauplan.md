@@ -885,8 +885,18 @@ Solange die Antwort nur in der Sitzung lebte, war sie beim nächsten Start eben
 wieder fällig — ärgerlich, aber ehrlich. Kommt das Ergebnis von der Platte, wird
 die Frage **nicht mehr gestellt**: Der Nutzer bekommt stillschweigend eine
 Annahme statt einer Rückfrage, und Regel 21 ist verletzt, ohne dass irgendwo ein
-Befund entsteht. Ein Ergebnis, dessen Auswertung `ctx.ask` gerufen hat, gehört
-deshalb erst dann auf die Platte, wenn die Antwort im Stapel steht.
+Befund entsteht. Schlimmer noch, es wäre **nicht einmal verlässlich falsch** —
+ob gefragt wird, hinge daran, ob eine Cache-Datei überlebt hat, und die darf
+jederzeit gelöscht werden.
+
+Deshalb gilt bis zur Umsetzung, und danach als Wächter weiter: **Ein Ergebnis,
+dessen Auswertung `ctx.ask` gerufen hat, geht nicht über die Sitzung hinaus.**
+Im Speicher bleibt es — dort wird innerhalb einer Sitzung nicht zweimal gefragt
+—, auf die Platte nicht. Das gilt für beide Fragesteller: die Operation selbst
+(die Einheit in `load`) und die Zuordnung bei einem mehrdeutigen Merkmal
+(§21.3). Steht §15.7 einmal im Code, hält jede fragende Operation ihre Antwort
+im Stapel fest, und der Wächter greift nie mehr — außer bei der nächsten
+Operation, die zu fragen anfängt, ohne es aufzuschreiben.
 
 ---
 
@@ -2002,16 +2012,19 @@ berühren, prüft niemand von außen. Eine Zusage aus diesem Bauplan, die nur vo
 einer Stelle im Programm eingelöst wird, braucht einen Test an **dieser**
 Stelle: nicht „der Cache kann es", sondern „die Anwendung tut es".
 
-**Und eine Prüfung, deren Bezugspunkt wandert, misst den Baum und nicht die
-Sache.** Am 22.08.2026 dreimal aufgetreten, jedes Mal in anderer Gestalt: ein
-Test, der die Änderungszeit einer Datei *relativ* zu einer anderen setzte,
-während gefragt war das Maximum über ein ganzes Verzeichnis — rot, sobald
-irgendwer irgendetwas anfasste; ein `clear()`, das nur den Speicher leerte,
-während sein einziger Aufrufer sich auf den Namen verließ; ein Wächter, der den
-Aufruf suchte und nicht die Funktion. Alle drei sahen wie Sicherheit aus und
-prüften etwas anderes als sie behaupteten. Die Gegenfrage, die es findet, ist
-immer dieselbe: **Was müsste kaputt sein, damit dieser Test rot wird — und ist
-das dasselbe wie das, wovor er schützen soll?**
+**Und eine Prüfung, die etwas Ähnliches prüft statt der Sache selbst, ist grün
+aus dem falschen Grund.** Am 22.08.2026 dreimal aufgetreten, jedes Mal in
+anderer Gestalt: Ein Wächter suchte den *Aufruf* statt der Funktion. Ein Test
+setzte eine Änderungszeit *relativ* zu einer Datei, während gefragt war das
+Maximum über ein ganzes Verzeichnis — er wurde rot, sobald irgendwer
+irgendetwas anfasste, und grün, obwohl er nichts prüfte. Und `clear()` leerte
+den *Speicher* statt den Cache, während sein einziger Aufrufer sich auf den
+Namen verließ. Jedes Mal stand neben der Sache etwas, das ihr ähnlich sieht,
+und die Prüfung griff danach.
+
+Die Gegenfrage, die es findet, ist immer dieselbe: **Was müsste kaputt sein,
+damit dieser Test rot wird — und ist das dasselbe wie das, wovor er schützen
+soll?**
 
 ---
 

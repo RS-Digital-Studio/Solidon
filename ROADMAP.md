@@ -81,6 +81,8 @@ oder er hält ihn nicht fest.
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | `load_operations()` braucht über eine Sekunde | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, wo die Zeit hingeht — 1,1 bis 1,2 s von 12,9 s kaltem Anwendungsstart, gemessen von solidon-17. Das Register führt es, weil es sonst in einer Aufschlüsselung stehen bleibt, die niemand wieder liest |
 | Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
+| „Keine Tests gesammelt“ zählt als Fehllauf | Das Fundament der Wahrnehmung (22.08.2026) | eine Zeile in `suite-getrennt.sh` — Exit 5 heißt „nichts gesammelt“ und ist keine Aussage über den Code. Es trifft jede Datei, die über eine Ansicht **schreibt** statt eine zu bauen, denn die Fenstergruppe wird im Text gesucht |
+| Zwei Fensterdateien enden mit Exit 127, und einzeln auch | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — die Roadmap nennt als Signatur des bekannten Absturzes „dieselbe Datei einzeln gefahren ist grün“, und diese zwei sind es nicht. Nachgewiesen im eigenen Arbeitsbaum auf HEAD, vollständig grün und dann 127 |
 
 ---
 
@@ -4398,6 +4400,35 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Beobachtung von solidon-17, und die Frage, die sie aufwirft, ist größer
       als der Cache: Wie viele fertig gebaute Sachen liegen sonst noch da,
       ohne Aufrufer?
+
+- [ ] **„Keine Tests gesammelt" zählt als Fehllauf.** `suite-getrennt.sh` sucht
+      seine Fensterdateien **im Text** (`grep -lE "MainWindow|Viewport|pyvista"`)
+      — das ist Absicht und gut, eine neue Fensterdatei braucht damit keinen
+      Eintrag. Es trifft aber auch eine Datei, die über eine Ansicht
+      *schreibt*, statt eine zu bauen: `tests/test_performance.py` wanderte in
+      die Fenstergruppe, weil in zwei Docstrings ein Klassenname stand. Dort
+      läuft sie mit `-m "not performance"`, sammelt nichts, weil jeder Test
+      darin diese Marke trägt, und pytest endet mit **Exit 5**. Das Skript
+      zählt alles ungleich null als Fehllauf. Umformuliert ist der Umweg; die
+      Behebung ist eine Zeile im Skript, denn „nichts gesammelt" ist keine
+      Aussage über den Code. Gefunden von solidon-17, `.claude/**` ist seit dem
+      Ende von c1 frei.
+- [ ] **Zwei Fensterdateien enden mit Exit 127, und einzeln auch.**
+      `tests/test_chat_ui.py` (40 passed) und `tests/test_first_run.py`
+      (45 passed) laufen vollständig grün durch und beenden sich dann mit 127.
+      Nachgewiesen von solidon-17 im eigenen Arbeitsbaum auf HEAD — also weder
+      ihre noch meine Arbeit. **Das ist eine andere Signatur als der bekannte
+      Absturz beim Aufräumen**, dessen Kennzeichen in dieser Datei lautet:
+      „Dieselbe Datei einzeln gefahren ist grün." Diese zwei sind einzeln nicht
+      grün, sie reproduzieren jedes Mal. Entweder hat sich die wandernde dritte
+      Stelle festgesetzt, oder es ist eine dritte Ursache.
+
+      **Und eine Warnung an den nächsten, der es nachfährt:** Ich hatte beide
+      einzeln gefahren und „grün, Exit 0" gemeldet — der Exit-Code kam aus einer
+      Pipeline (`pytest … | tail -8; echo $?`) und war der von `tail`. Die
+      Zahl der bestandenen Tests war echt, der Exit-Code nicht. Wer diesen Punkt
+      prüft, schreibt die Ausgabe in eine Datei und liest sie danach.
+
 
 ## Der Changelog schickte den Kunden ins Handbuch, und dort war nichts (22.08.2026)
 
