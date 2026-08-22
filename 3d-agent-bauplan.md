@@ -1852,9 +1852,11 @@ offenzulassen. Die Antwort darauf ist nicht die nächste Attrappe. Sie ist,
 **die prüfbare Aussage aus dem Unprüfbaren herauszulösen**: Was in einer Methode
 entschieden wird, die anschließend zeichnet, ist eine Aussage über die Szene und
 braucht kein Fenster, sobald es allein steht. Erst was danach übrig bleibt —
-ein echter Picker, ein echter Puffer — verdient eine Attrappe. Deckungszahlen
-über Code hinter einer Wache sind entsprechend zu lesen: Sie zählen Zeilen, die
-im Tor nie liefen.
+ein echter Picker, ein echter Puffer — verdient eine Attrappe.
+
+Und eine Zahl bestandener Tests sagt nichts über die Tiefe: Ein Test, der eine
+Methode ruft und an ihrer Wache umkehrt, zählt wie jeder andere. Wer wissen
+will, was wirklich lief, misst Zeilen und nicht Läufe.
 
 ---
 
