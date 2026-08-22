@@ -251,6 +251,25 @@ def test_every_detected_feature_kind_offers_an_operation() -> None:
         # Prüfung grün wird, hieße die Reihenfolge umzudrehen.
         "sphere",
         "torus",
+        # Verrundung: Der Klick führt über **keinen** der beiden Wege irgendwohin,
+        # und beide Gründe gehören hier hin — sonst hält der Nächste den ersten
+        # für gelöst, so wie ich es getan habe.
+        #
+        # Über ``applies_to``: ``fillet_edges`` („Verrunden") wirkt auf **Kanten**.
+        # Eine Verrundung ist keine Kante, sondern ihr Ergebnis; wer sie anklickt,
+        # will den Radius ändern und nicht die Rundung runden. Und an eingelesener
+        # Geometrie gibt es die Operation ohnehin nicht (B-Rep-Kern, §30) — ein
+        # Menüeintrag, der bei jedem Netz anhält, ist schlechter als keiner.
+        #
+        # Über die Provenienz (§21.2, „Diesen Schritt ändern") ebenfalls nicht:
+        # ``_with_features`` setzt ``created_by`` nur bei
+        # ``provenance == "generated"``, und eine selbst gesetzte Verrundung ist
+        # ``detected``. Der Fall „Solidon hat sie erzeugt" fällt damit genauso aus
+        # wie der eingelesene, nur aus einem anderen Grund.
+        #
+        # Registerpunkt: 4b925ee. Gefunden von 3d-druck-3a, die Provenienz-Hälfte
+        # berichtigt von 3d-druck-64.
+        "fillet",
     }
     #: Abgeleitet und nicht aufgezählt — der Unterschied hat am 22.08.2026
     #: genau eine Runde gehalten.
