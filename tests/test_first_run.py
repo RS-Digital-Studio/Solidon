@@ -729,3 +729,63 @@ def test_an_unexpected_error_does_not_leave_the_first_run_waiting(
     assert "nachgesehen" not in dialog.chat_state.text(), "keine Zeile bleibt auf „wird“ stehen"
     assert "schiefgegangen" in dialog.chat_state.text()
     assert dialog.open_button.text().startswith("Modell"), "und der Weg hinaus steht da"
+
+
+def test_the_session_attachment_names_the_parts_that_stay_behind(
+    monkeypatch: pytest.MonkeyPatch, qt_app: QApplication
+) -> None:
+    """Der Support erfährt **vor** dem Öffnen, dass er das Projekt nicht rechnen
+    kann (§24.5, Regel 13).
+
+    Ein eigener Baustein reist nie in einer Projektdatei mit — sonst führte eine
+    hereinkommende Datei Code aus (§32). Ohne diesen Satz bekommt der Support
+    ein Projekt, das bei ihm anhält, und die Ursache steht auf einem Rechner, an
+    den niemand mehr herankommt.
+
+    Geprüft wird die **Verdrahtung**, nicht die Erkennung: Was
+    ``check_outgoing`` selbst findet, steht in ``tests/test_parts_catalog.py``.
+    Hier zählt, dass der Dialog sie ruft und ihr Ergebnis in die Beschreibung
+    des Anhangs trägt — die Beschreibung, die ``Ticket.as_text()`` in Vorschau,
+    Sendung und abgelegten Ordner mitnimmt. Ein Ort, drei Wege hinaus.
+
+    Entworfen von 3d-druck-b8 zusammen mit dem Anschluss.
+    """
+    from app.core.knowledge.parts import check as part_check
+    from app.core.types import Finding
+
+    monkeypatch.setattr(
+        part_check,
+        "check_outgoing",
+        lambda document, registry=None: [
+            Finding(
+                code="parts.travelling",
+                severity="warning",
+                message="Dieses Projekt benutzt eigene Bausteine.",
+                values={"parts": "eigenbau, magnettasche"},
+            )
+        ],
+    )
+    dialog = SupportDialog(message="Der Deckel sitzt schief.", session=Session())
+
+    assert "eigenbau, magnettasche" in dialog._session_note(), (
+        "der Support erfährt nicht, was ihm fehlt"
+    )
+
+
+def test_an_ordinary_project_gets_no_empty_addition(
+    monkeypatch: pytest.MonkeyPatch, qt_app: QApplication
+) -> None:
+    """Die Gegenrichtung, und sie ist die wichtigere von beiden.
+
+    Die allermeisten Projekte benutzen keinen eigenen Baustein. Stünde hinter
+    ihrer Anhangsbeschreibung ein leerer Zusatz, fiele das niemandem auf — und
+    ein Hinweis, der immer erscheint, ist keiner mehr. Geprüft wird deshalb auf
+    **Gleichheit** und nicht auf „enthält".
+    """
+    from app.core.knowledge.parts import check as part_check
+    from app.i18n import tr
+
+    monkeypatch.setattr(part_check, "check_outgoing", lambda document, registry=None: [])
+    dialog = SupportDialog(message="Der Deckel sitzt schief.", session=Session())
+
+    assert dialog._session_note() == tr("Modell, Operationsstapel und Chat-Verlauf")
