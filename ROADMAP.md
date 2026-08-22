@@ -1611,7 +1611,28 @@ das über sich selbst. Von zwölf solchen Punkten waren beim Nachprüfen am
 22.08.2026 sieben längst behoben und einer entschieden; diese zwei sind es
 nicht.
 
-- [ ] **Erzeugen und Ändern sind reine Verteilermenüs.** `registry.py:79` legt
+- [ ] **Erzeugen und Ändern sind reine Verteilermenüs — nachgemessen am
+      23.08.2026, und die Entscheidung vom 22.08. hält nur zur Hälfte.**
+
+          Objekt        scene                              5 Zeilen  ->  flach
+          Erzeugen      primitive 5, import 3,
+                        sketch 5, label 2                 18        ->  bleibt tief
+          Ändern        sieben Kategorien                 40        ->  bleibt tief
+          Bausteine     parts                             20        ->  eigene Ebene
+          Vorbereiten   prepare 6, colour 3               10        ->  flach möglich
+
+      Die Entscheidung sagte, *Erzeugen* werde flach und der Quader koste zwei
+      Klicks statt drei. Mit 18 Zeilen gegen die Zwölfergrenze wird er das
+      nicht. **Der Fehler darin ist genau der, den sie beheben wollte:** Sie
+      stützte sich auf „Grundformen hat vier Zeilen" — die Zahl **einer**
+      Kategorie — und hat damit Kategorien gezählt, wo sie Zeilen zählen wollte.
+
+      Was bleibt, ist kleiner und echt: *Vorbereiten* passt mit zehn Zeilen
+      hinein. Neun Operationen sparen einen Klick, darunter Ausrichten fürs
+      Drucken und Teilen — Schritte am Ende fast jeder Kette. Ob das den Umbau
+      wert ist, entscheidet, wer `app/ui/main_window.py:1577` hält.
+
+      Ursprünglich stand hier: `registry.py:79` legt
       vier Kategorien unter *Erzeugen* und sieben unter *Ändern*, jede als
       eigenes Untermenü. Wer einen Quader will, klickt dreimal, und
       „Grundformen" hat vier Zeilen, wo die Grenze bei zwölf liegt. Wartet auf

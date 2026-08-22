@@ -44,9 +44,39 @@ Fusion abgelesen und nicht geraten.
 **Die Menütiefe entscheidet ein Zeilenbudget, nicht die Zahl der Kategorien.**
 `MENU_GROUPS` schaut heute auf die Kategorien; die Hausgrenze ist aber eine
 Zeilengrenze (zwölf je Menü). Passen die Zeilen aller Kategorien einer Gruppe
-hinein, stehen sie flach mit Trennstrichen. *Erzeugen* wird damit flach — der
-Quader kostet zwei Klicks statt drei —, *Ändern* bleibt tief. Die
-Neun-Menü-Grenze bleibt unberührt, es ist also kein Tausch.
+hinein, stehen sie flach mit Trennstrichen. Die Neun-Menü-Grenze bleibt
+unberührt, es ist also kein Tausch.
+
+**Nachgemessen am 23.08.2026 — und der zweite Satz der Entscheidung fällt.**
+Hier stand: *„Erzeugen wird damit flach — der Quader kostet zwei Klicks statt
+drei."* Das trägt nicht:
+
+    Objekt        scene                                     5 Zeilen  ->  flach
+    Erzeugen      primitive 5, import 3, sketch 5, label 2  18        ->  bleibt tief
+    Ändern        boolean 4, transform 9, shaping 5,
+                  holes 3, surface 3, mesh 9, repair 1      40        ->  bleibt tief
+    Bausteine     parts                                     20        ->  eigene Ebene
+    Vorbereiten   prepare 6, colour 3                       10        ->  flach möglich
+
+(Zeilen einschließlich der Trennstriche zwischen den Kategorien, ohne die
+zusammengelegten Zwillinge aus `MENU_TWINS`.)
+
+**Der Fehler in der ursprünglichen Entscheidung ist genau der, den sie beheben
+wollte.** Sie stützte sich auf den Satz aus der Roadmap, „Grundformen hat vier
+Zeilen" — und das ist die Zahl **einer** Kategorie, nicht der Gruppe. *Erzeugen*
+hat vier Kategorien mit zusammen 15 Einträgen. Die Entscheidung hat also
+Kategorien gezählt, wo sie Zeilen zählen wollte.
+
+**Was bleibt, ist ein kleinerer, aber echter Gewinn:** *Vorbereiten* passt mit
+zehn Zeilen ins Budget. Neun Operationen sparen damit einen Klick — darunter
+das Ausrichten fürs Drucken und das Teilen, also Schritte am Ende fast jeder
+Kette.
+
+**Nicht gebaut, sondern gemessen und weitergegeben.** Der Menübau steht in
+`app/ui/main_window.py:1577` und gehört 3d-druck-b8; eine Regel im Kern, die
+niemand ruft, wäre der Nichtanschluss, den wir an einem Tag dreimal gefunden
+haben. Ob ein Klick bei neun Operationen den Umbau wert ist, entscheidet, wer
+die Oberfläche hält — mit diesen Zahlen statt mit einer Vermutung.
 
 **„Andere Objekte wählen" nimmt die vorhandene Auswahl sofort — und wartet
 sichtbar, wenn keine da ist.** Der Grund ist die Erwartung, nicht der Klick:
