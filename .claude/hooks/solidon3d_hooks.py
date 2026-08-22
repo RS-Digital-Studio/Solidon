@@ -50,6 +50,49 @@ VERWIRFT = re.compile(
 )
 
 
+def nachbarsitzungen() -> list[str]:
+    """Die anderen Claude-Sitzungen, die gerade an diesem Projekt arbeiten.
+
+    Gelesen aus ``~/.claude/sessions/*.json``, wo jede Sitzung sich einträgt.
+    **Erkannt wird eine lebende Sitzung an ihrem Postfach**, nicht an ihrer
+    Prozessnummer: Am 22.08.2026 lieferte die Nummer allein fünf Fehltreffer —
+    beendete Sitzungen, deren Nummer inzwischen jemand anders trug. Das
+    Postfach ist eine benannte Pipe und existiert nur, solange sie jemand hält;
+    die Prüfung darauf stimmte auf Anhieb mit ``ListAgents`` überein.
+
+    Der Eintrag ist interner Zustand von Claude Code und nirgends zugesagt —
+    ältere Fassungen tragen gar kein Postfach ein. Deshalb ist ein leeres
+    Ergebnis hier nie eine Aussage, sondern nur „nichts gefunden": Wer wissen
+    will, wer wirklich da ist, fragt ``/list-agents``.
+    """
+    eigen = str(os.environ.get("CLAUDE_PID") or "")
+    register = Path.home() / ".claude" / "sessions"
+    gefunden: list[str] = []
+    try:
+        dateien = list(register.glob("*.json"))
+    except OSError:
+        return []
+    for datei in dateien:
+        try:
+            eintrag = json.loads(datei.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if not isinstance(eintrag, dict) or datei.stem == eigen:
+            continue
+        postfach = eintrag.get("messagingSocketPath")
+        if not isinstance(postfach, str) or not postfach:
+            continue
+        try:
+            if Path(str(eintrag.get("cwd") or "")).resolve() != WURZEL:
+                continue
+            if not Path(postfach).exists():
+                continue
+        except OSError:
+            continue
+        gefunden.append(str(eintrag.get("name") or datei.stem))
+    return sorted(gefunden)
+
+
 def eingabe() -> dict:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")  # Umlaute überleben auch cp1252
@@ -116,6 +159,23 @@ def umgebungshinweis() -> str:
     )
 
 
+def _nachbarhinweis() -> str:
+    """Wer sonst gerade an diesem Projekt sitzt — falls jemand da ist.
+
+    Beim Start zu wissen, dass man nicht allein ist, erspart die Runde, in der
+    man es beim ersten Zusammenstoß erfährt. Ist niemand da, steht hier auch
+    nichts: Ein Hinweis, der immer erscheint, wird nicht mehr gelesen.
+    """
+    andere = nachbarsitzungen()
+    if not andere:
+        return ""
+    return (
+        " Gerade sind außerdem aktiv: "
+        + ", ".join(andere)
+        + " — Gebiete absprechen, bevor du schreibst."
+    )
+
+
 def sitzungsstart() -> None:
     eingabe()
     melden(
@@ -129,7 +189,9 @@ def sitzungsstart() -> None:
         "Die 22 harten Regeln stehen in AGENTS.md, das Sollverhalten im Bauplan. "
         "Hier arbeiten oft zwei bis vier Sitzungen gleichzeitig: `/list-agents` "
         "zeigt sie, `claude --worktree <name>` gibt jeder ihren eigenen Baum, und "
-        "/pruefen nimmt ein Schloss, damit Messungen sich nicht verfälschen." + umgebungshinweis(),
+        "/pruefen nimmt ein Schloss, damit Messungen sich nicht verfälschen."
+        + _nachbarhinweis()
+        + umgebungshinweis(),
     )
 
 
@@ -183,13 +245,44 @@ def nach_aenderung() -> None:
 def testlauf() -> None:
     daten = eingabe()
     befehl = (daten.get("tool_input") or {}).get("command") or ""
-    if "pytest" not in befehl:
+    if "pytest" in befehl:
+        try:
+            MARKE.parent.mkdir(parents=True, exist_ok=True)
+            MARKE.write_text(str(time.time()), encoding="utf-8")
+        except OSError:
+            pass
+    _commit_ansagen(befehl)
+
+
+def _commit_ansagen(befehl: str) -> None:
+    """Nach einem Commit daran erinnern, es den anderen Sitzungen zu sagen.
+
+    **Der Hinweis geht an die eigene Sitzung, nicht an die anderen**, und das
+    ist keine Sparsamkeit, sondern eine Grenze: Ein Hook hat den Schlüssel
+    seiner eigenen Sitzung (``CLAUDE_CODE_MESSAGING_TOKEN``), und ein fremdes
+    Postfach verlangt unter Windows genau dessen Schlüssel. Von hier aus lässt
+    sich also niemand anderes erreichen — das Senden bleibt eine Entscheidung
+    des Modells, und das ist die richtige Stelle dafür.
+
+    Was der Hook beiträgt, ist der **Auslöser**. Am 22.08.2026 hat eine
+    Nachbarsitzung dreimal nachgefragt, ob der Commit endlich liege; ein Satz
+    im richtigen Augenblick hätte alle drei erspart. Ein Commit ist der eine
+    Vorgang, der den gemeinsamen Stand ändert — deshalb hängt der Hinweis
+    daran und nicht an jeder Änderung.
+    """
+    if not re.search(r"\bgit\b[^|;&]*\bcommit\b", befehl):
         return
-    try:
-        MARKE.parent.mkdir(parents=True, exist_ok=True)
-        MARKE.write_text(str(time.time()), encoding="utf-8")
-    except OSError:
-        pass
+    andere = nachbarsitzungen()
+    if not andere:
+        return
+    melden(
+        "PostToolUse",
+        "Es arbeiten weitere Sitzungen an diesem Projekt: "
+        + ", ".join(andere)
+        + ". Ein Commit ändert den gemeinsamen Stand — sag ihnen kurz, was gelandet ist "
+        "und was das für ihre Dateien heißt. Wer die Liste genau will, fragt `/list-agents`; "
+        "dieser Hinweis liest internen Zustand und kann jemanden übersehen.",
+    )
 
 
 def abschluss() -> None:
