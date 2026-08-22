@@ -161,6 +161,22 @@ CONE_MAX_ANGLE = 85.0
 #: beim Zylinder, weil es dieselbe Frage ist.
 CONE_TOLERANCE = 0.08
 
+#: Wie stark die Achse einer Senkung von der ihrer Bohrung abweichen darf, in
+#: Grad. Beide entstehen in derselben Aufspannung — was hier streut, ist die
+#: Einpassung und nicht die Fertigung.
+SINK_AXIS_LIMIT = 2.0
+
+#: Wie weit eine Senkung von ihrer Bohrung abliegen darf, quer zur Achse wie
+#: längs, jeweils als Anteil des Bohrungsradius.
+#:
+#: Der Maßstab ist die Bohrung, denn die Senkung gehört zu ihr oder zu nichts.
+#: Längs ist der Wert die Antwort auf den Fall, den die Sortierung in
+#: :func:`_fitted` schon einmal nennt: zwei koaxiale Bohrungen durch zwei
+#: Wände, jede mit eigener Senkung. Ohne diese Grenze zählte die Senkung der
+#: zweiten Wand zur Bohrung der ersten, und ein Sackloch in der ersten Wand
+#: wäre plötzlich durchgehend.
+SINK_FIT_LIMIT = 0.25
+
 #: Die Merkmalsarten, die diese Datei aus einem Netz lesen kann.
 #:
 #: Gebraucht wird die Liste außerhalb, und zwar für eine Unterscheidung, die
@@ -193,7 +209,7 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     cylinders, cones = _fitted(mesh)
     found: dict[FeatureId, Feature] = {}
     for feature in [
-        *detect_holes(mesh, cylinders),
+        *detect_holes(mesh, cylinders, cones),
         *detect_pins(mesh, cylinders),
         *detect_cones(mesh, cones),
         *detect_faces(mesh),
@@ -295,17 +311,32 @@ def _fitted(mesh: MeshData) -> tuple[Cylinders, Cones]:
     return found, cones
 
 
-def detect_holes(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Feature]:
+def detect_holes(
+    mesh: MeshData,
+    cylinders: Cylinders | None = None,
+    cones: Cones | None = None,
+) -> list[Feature]:
     """Zylindrische Flecken, deren Normalen nach innen zeigen (§21.1).
 
     ``cylinders`` ist die schon gefundene Einpassung. Wer sie mitgibt, spart den
     teuren Teil; wer sie auslässt, bekommt ihn — die Funktion bleibt allein
     aufrufbar, weil sie es überall ist, wo nur die Bohrungen gebraucht werden.
+
+    **Die Kegel gehören dazu, auch wenn hier keine Kegel herauskommen.** Ob
+    eine Bohrung durchgeht, entscheidet ihre Senkung mit (:func:`_is_through`),
+    und was fehlt, wird nachgeschlagen statt weggelassen: Eine Bohrung, die
+    allein gelesen ein Sackloch ist und in einer vollen Erkennung
+    durchgehend, wäre der teuerste Fehler von allen — jeder Test innerhalb
+    eines der beiden Wege bliebe grün.
     """
     body = mesh.raw
+    if cylinders is None or cones is None:
+        fitted_cylinders, fitted_cones = _fitted(mesh)
+        cylinders = fitted_cylinders if cylinders is None else cylinders
+        cones = fitted_cones if cones is None else cones
     found = [
         entry
-        for entry in (_cylinders(mesh) if cylinders is None else cylinders)
+        for entry in cylinders
         if entry[0].inward and entry[0].radius * 2.0 >= MIN_HOLE_DIAMETER
     ]
     return [
@@ -318,7 +349,7 @@ def detect_holes(mesh: MeshData, cylinders: Cylinders | None = None) -> list[Fea
                 "axis": fit.axis,
                 "centre": fit.centre,
                 "depth": round(_patch_extent(body, patch, fit.axis), 4),
-                "through": _is_through(mesh, fit),
+                "through": _is_through(mesh, fit, cones),
                 "residual": round(fit.residual, 4),
             },
             face_indices=tuple(patch),
@@ -624,26 +655,85 @@ def _fit_circle(points: np.ndarray) -> tuple[np.ndarray, float]:
     return centre, radius
 
 
+def _axial_span(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> tuple[float, float]:
+    """Von wo bis wo ein Fleck entlang einer Achse reicht."""
+    points = np.asarray(body.vertices[np.unique(body.faces[patch])], dtype=float)
+    along = points @ np.asarray(axis, dtype=float)
+    return float(along.min()), float(along.max())
+
+
 def _patch_extent(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> float:
     """Wie weit der Fleck entlang seiner eigenen Achse reicht — die Tiefe der
     Bohrung.
     """
-    points = np.asarray(body.vertices[np.unique(body.faces[patch])], dtype=float)
-    along = points @ np.asarray(axis, dtype=float)
-    return float(along.max() - along.min())
+    low, high = _axial_span(body, patch, axis)
+    return high - low
 
 
-def _is_through(mesh: MeshData, fit: CylinderFit) -> bool:
+def _is_through(mesh: MeshData, fit: CylinderFit, cones: Cones | None = None) -> bool:
     """Eine Bohrung ist durchgehend, wenn sie so tief ist, wie der Körper
-    entlang ihrer Achse dick ist.
+    entlang ihrer Achse dick ist — **die Senkung mitgerechnet**.
+
+    Ohne sie war die häufigste Bohrung eines Druckteils ein Sackloch: An einem
+    gesenkten M5-Durchgangsloch in 8 mm gehören die oberen 2,4 mm zum Kegel und
+    nicht zum Zylinder, gemessen wurden aber nur 5,6 mm Zylinderwand gegen 8 mm
+    Plattendicke. Das blieb nicht bei der Anzeige — eine Passung sucht ihr
+    Gegenstück über die Merkmalsart (§14), und in ein Sackloch geht keine
+    durchgesteckte Schraube.
+
+    Gerechnet wird über die **Vereinigung** der Abschnitte auf der Achse, nicht
+    über die Summe der Tiefen: Wo Bohrung und Senkung sich überlappen, zählt
+    das Stück einmal.
     """
     axis = np.asarray(fit.axis, dtype=float)
     corners = np.asarray(mesh.raw.vertices, dtype=float) @ axis
     thickness = float(corners.max() - corners.min())
-    return thickness > 0 and _bore_depth(mesh, fit) >= thickness - EPS_GEOM * 10
+    if thickness <= 0:
+        return False
+    span = _bore_span(mesh, fit)
+    if span is None:
+        return False
+    low, high = span
+    for cone, patch in cones or []:
+        if not _sinks_into(fit, cone):
+            continue
+        sink_low, sink_high = _axial_span(mesh.raw, patch, fit.axis)
+        # Koaxial allein genügt nicht: Der Kegel muss an die Bohrung stoßen.
+        # Sonst gehört er zu der Bohrung in der nächsten Wand.
+        if max(sink_low - high, low - sink_high) > fit.radius * SINK_FIT_LIMIT:
+            continue
+        low, high = min(low, sink_low), max(high, sink_high)
+    return high - low >= thickness - EPS_GEOM * 10
 
 
-def _bore_depth(mesh: MeshData, fit: CylinderFit) -> float:
+def _sinks_into(fit: CylinderFit, cone: ConeFit) -> bool:
+    """Gehört dieser Kegel zu dieser Bohrung — ist er also ihre Senkung?
+
+    Drei Bedingungen, und jede schließt einen wirklichen Fall aus: Ein
+    aufgesetzter Kegel ist keine Senkung, ein Kegel neben der Achse gehört zu
+    einer anderen Bohrung, und ein Kegel, der schmaler ist als die Bohrung,
+    kann sie nicht erweitern.
+    """
+    if not cone.recess or cone.radius < fit.radius:
+        return False
+    axis = np.asarray(fit.axis, dtype=float)
+    # Der **Betrag**: Die Kegelachse zeigt von der Spitze in den Fleck, die
+    # Bohrachse aus ihrer eigenen Einpassung — an derselben gesenkten Bohrung
+    # stehen sie damit gegeneinander, gemessen (0, 0, -1) gegen (0, 0, 1).
+    aligned = abs(float(axis @ np.asarray(cone.axis, dtype=float)))
+    if aligned < math.cos(math.radians(SINK_AXIS_LIMIT)):
+        return False
+    offset = np.asarray(cone.centre, dtype=float) - np.asarray(fit.centre, dtype=float)
+    across = offset - float(offset @ axis) * axis
+    return float(np.linalg.norm(across)) <= fit.radius * SINK_FIT_LIMIT
+
+
+def _bore_span(mesh: MeshData, fit: CylinderFit) -> tuple[float, float] | None:
+    """Von wo bis wo die **Zylinderwand** der Bohrung auf ihrer Achse reicht.
+
+    ``None``, wenn kein Punkt des Körpers auf der eingepassten Wand liegt — die
+    Einpassung beschreibt dann nichts, was da ist.
+    """
     axis = np.asarray(fit.axis, dtype=float)
     centre = np.asarray(fit.centre, dtype=float)
     points = np.asarray(mesh.raw.vertices, dtype=float)
@@ -651,9 +741,9 @@ def _bore_depth(mesh: MeshData, fit: CylinderFit) -> float:
     radial = radial - np.outer(radial @ axis, axis)
     on_wall = np.abs(np.linalg.norm(radial, axis=1) - fit.radius) < fit.radius * 0.1
     if not on_wall.any():
-        return 0.0
+        return None
     along = points[on_wall] @ axis
-    return float(along.max() - along.min())
+    return float(along.min()), float(along.max())
 
 
 def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int]]:

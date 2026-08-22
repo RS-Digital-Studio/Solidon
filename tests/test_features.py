@@ -409,9 +409,61 @@ def test_a_countersink_does_not_swallow_its_own_bore() -> None:
     assert len(bores) == 1, f"one bore under the sink: {[bore.id for bore in bores]}"
     assert bores[0].params["diameter"] == pytest.approx(5.2, abs=0.15)
     # Die Tiefe ist die des **Zylinders**, nicht die der Platte: 8 mm minus die
-    # 2,4 mm, die der Kegel wegnimmt. Ob das Loch damit als durchgehend zählt,
-    # entscheidet die Senkung — und die ist noch kein Merkmal (§41).
+    # 2,4 mm, die der Kegel wegnimmt. Das bleibt auch so — was die Senkung
+    # dazutut, steht in ``through`` und nicht in ``depth``.
     assert bores[0].params["depth"] == pytest.approx(5.6, abs=0.15)
+
+
+def test_a_countersunk_bore_is_still_a_through_hole() -> None:
+    """Die zweite Hälfte desselben Fundes, und sie stand bis heute offen.
+
+    ``through`` mass die Höhe der **Zylinderwand** gegen die Dicke des
+    Körpers. Bei einer Senkung gehört das obere Stück des Lochs aber zum
+    Kegel, nicht zum Zylinder — 5,6 gegen 8 mm, und damit galt die häufigste
+    Bohrung eines Druckteils als Sackloch. Das ist keine Frage der Anzeige:
+    Eine Passung sucht sich ihr Gegenstück über die Merkmalsarten (§14), und
+    in ein Sackloch geht keine durchgesteckte Schraube.
+
+    Entscheidbar ist es, seit der Kegel selbst ein Merkmal ist (§21.1) —
+    vorher gab es nichts, was die fehlenden 2,4 mm hätte erklären können.
+    """
+    bores = detect_holes(plate("plate_countersunk.stl"))
+
+    assert bores[0].params["through"] is True
+
+
+def test_a_sink_does_not_turn_a_blind_bore_into_a_through_one() -> None:
+    """Die Gegenprobe, und sie ist der Grund für die zweite Korpusdatei.
+
+    ``plate_countersunk_blind.stl`` trägt dieselbe Senkung über einem Loch,
+    das vor der Unterseite endet: 3,6 mm Zylinder plus 2,4 mm Kegel sind 6 von
+    8 mm. Wer die Senkung bloß als „geht durch" verbucht, statt ihre Tiefe zu
+    addieren, bekommt diesen Test rot.
+    """
+    bores = detect_holes(plate("plate_countersunk_blind.stl"))
+
+    assert len(bores) == 1, f"one bore under the sink: {[bore.id for bore in bores]}"
+    assert bores[0].params["depth"] == pytest.approx(3.6, abs=0.15)
+    assert bores[0].params["through"] is False
+
+
+def test_the_bore_reads_the_same_alone_as_in_a_whole_detection() -> None:
+    """Dieselbe Frage, zwei Wege — und beide müssen dasselbe sagen.
+
+    ``detect`` gibt die einmal gesuchten Einpassungen weiter, ``detect_holes``
+    allein sucht sie selbst. Genau an dieser Naht entstand der Fehler schon
+    einmal (siehe ``test_the_expensive_search_runs_once_per_detection``), und
+    er ist von der teuren Sorte: Jeder Test **innerhalb** eines der beiden Wege
+    bleibt grün, während die Anwendung etwas anderes sieht als die
+    Kommandozeile.
+    """
+    mesh = plate("plate_countersunk.stl")
+
+    alone = detect_holes(mesh)[0]
+    together = detect(mesh)[alone.id]
+
+    assert alone.params["through"] == together.params["through"]
+    assert alone.params["depth"] == pytest.approx(together.params["depth"])
 
 
 def test_the_same_plate_without_the_sink_was_never_the_problem() -> None:

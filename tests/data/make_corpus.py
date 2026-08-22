@@ -91,6 +91,26 @@ def plate_countersunk() -> None:
     write(trimesh.boolean.difference([plate, drill, sink]), "plate_countersunk.stl")
 
 
+def plate_countersunk_blind() -> None:
+    """Dieselbe Platte, aber die Bohrung endet **vor** der Unterseite — die
+    Gegenprobe zu :func:`plate_countersunk`.
+
+    Sie steht hier, weil ohne sie jede Reparatur grün wäre, die schlicht „an
+    der Bohrung hängt eine Senkung, also geht sie durch" sagt. Beide Löcher
+    haben dieselbe Senkung, dieselbe Wandhöhe darunter fehlt: 3,6 mm Zylinder
+    plus 2,4 mm Kegel sind 6 von 8 mm, und was fehlt, ist der Boden.
+    """
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 8.0))
+    # Höhe 12 statt durchgehend: Der Boden liegt bei z = -2, oben ragt der
+    # Bohrer aus der Platte heraus, damit die Differenz dort sauber schneidet.
+    drill = trimesh.creation.cylinder(radius=2.6, height=12.0, sections=48)
+    drill.apply_translation((0.0, 0.0, 4.0))
+    sink = trimesh.creation.cone(radius=5.0, height=5.0, sections=48)
+    sink.apply_transform(trimesh.transformations.rotation_matrix(math.pi, (1.0, 0.0, 0.0)))
+    sink.apply_translation((0.0, 0.0, 4.0))
+    write(trimesh.boolean.difference([plate, drill, sink]), "plate_countersunk_blind.stl")
+
+
 def degenerate() -> None:
     """Ein Würfel plus ein Null-Flächen-Dreieck, eine Nadel und eine doppelte
     Fläche.
@@ -401,6 +421,7 @@ if __name__ == "__main__":
     plate_holes()
     plate_holes_twin()
     plate_countersunk()
+    plate_countersunk_blind()
     degenerate()
     broken_open()
     two_components()
