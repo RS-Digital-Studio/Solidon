@@ -276,7 +276,7 @@ def _document_using(part: str) -> Document:
         format_version=1,
         app_version="test",
         parts_version=LIBRARY_VERSION,
-        ops=[Operation(id="op_1", op=f"insert_{part}")],
+        ops=[Operation(id=1, op=f"insert_{part}")],
     )
 
 
@@ -365,3 +365,51 @@ def test_the_stamp_forgets_a_part_the_project_no_longer_uses(
     part_check.stamp(document, registry)
 
     assert not [key for key in document.libs if key.startswith(user.FINGERPRINT_KEY)]
+
+
+def test_saving_a_project_really_records_the_own_parts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Nicht „der Kern kann es", sondern „die Anwendung tut es" (§35).
+
+    **Warum dieser Test neben den dreien darüber steht.** Die prüfen
+    ``stamp()`` und ``check()`` direkt und wären auch dann grün, wenn niemand
+    sie riefe. Genau so lag der Plattencache aus §38 monatelang da:
+    vollständig gebaut, vollständig geprüft, in der Anwendung nie benutzt —
+    und in dieser Datei ist derselbe Fehler schon zweimal aufgetreten
+    (``user.load()`` hatte keinen Aufrufer, ``travelling_parts()`` hat bis
+    heute keinen). Der Riss sitzt nicht in einem Modul, sondern **zwischen**
+    zweien, und dorthin sieht keine der Testarten aus §35.
+
+    Gefahren wird deshalb der echte Weg: ``project.save()`` — dieselbe
+    Funktion, die die Oberfläche ruft. Was danach in der Datei steht,
+    entscheidet.
+
+    Gepatcht ist nur das Register, und zwar dort, wo die Frage sitzt: in den
+    Modulen, die ``PARTS`` bereits importiert haben. Ein Patch auf
+    ``registry.PARTS`` ginge daran vorbei, weil ``from … import PARTS`` eine
+    eigene Referenz hält — der Fall, den §35 unter „wer messen will, wickelt
+    dort ein, wo die Frage sitzt" beschreibt.
+    """
+    registry = _own_part_registry(tmp_path, monkeypatch)
+    monkeypatch.setattr(part_check, "PARTS", registry)
+    monkeypatch.setattr(user, "PARTS", registry)
+
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.ops = [Operation(id=1, op="insert_eigenbau")]
+
+    save(project, tmp_path / "projekt.p3d")
+    wieder = load(tmp_path / "projekt.p3d")
+
+    abdruck = wieder.document.libs.get(f"{user.FINGERPRINT_KEY}eigenbau")
+    assert abdruck, "die gespeicherte Datei hält den Stand des eigenen Bausteins"
+    assert abdruck == user.fingerprint("eigenbau", registry)
+
+    # Und die Kette bis zum Befund: geänderte Datei, geöffnetes Projekt.
+    (tmp_path / "eigenbau.py").write_text(
+        OWN_PART.replace("cylinder(raw.diameter, 10.0)", "cylinder(raw.diameter, 12.0)"),
+        encoding="utf-8",
+    )
+    codes = [finding.code for finding in part_check.check(wieder.document, registry)]
+
+    assert "parts.own_changed" in codes
