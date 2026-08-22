@@ -1,0 +1,489 @@
+{
+  "summary": "Holt das eine Themenfeld nach, das beim Anhalten verlorenging: organische Modellierung, Sculpting, Posing",
+  "agentCount": 1,
+  "logs": [],
+  "result": {
+    "cluster": "Organische Modellierung, Sculpting und Skelett-Posing — Stand 19. August 2026",
+    "facts": [
+      {
+        "entity": "Blender",
+        "statement": "Blender 5.2 LTS ist die aktuelle Fassung, veröffentlicht am 14. Juli 2026, mit zwei Jahren LTS-Pflege. Lizenz: GPL-2.0-or-later (Binärpakete GPLv3 or later wegen eingebundener Apache-Bibliotheken).",
+        "as_of": "2026-08-19",
+        "confidence": "mehrere_quellen",
+        "sources": [
+          "https://www.blender.org/download/releases/5-2/",
+          "https://en.wikipedia.org/wiki/Blender_(software)"
+        ],
+        "note": "blender.org antwortet dem Abrufwerkzeug mit 403; die Seite war nur per curl mit Browser-Kennung lesbar. GPL heißt für Solidon: nur externer Aufruf, kein Einbinden (Regel 15)."
+      },
+      {
+        "entity": "Blender Sculpt-Mode 5.2",
+        "statement": "Neu in 5.2: „Add Primitive\" setzt Würfel, Kegel, Zylinder, UV- und Ico-Kugeln direkt im Sculpt-Mode ein; der neue „Scene Project\"-Pinsel legt Flächen auf benachbarte Geometrie; der Voxel-Remesher interpoliert jetzt Vertex- und Corner-Attribute statt den Wert des nächstgelegenen Punkts zu übernehmen; die Rückfrage vor dem Einschalten von Dyntopo entfällt.",
+        "as_of": "2026-07-14",
+        "confidence": "belegt",
+        "sources": [
+          "https://www.blender.org/download/releases/5-2/"
+        ],
+        "note": "Wörtlich: „The voxel remesher now interpolates vertex and corner attributes, instead of taking the value of the nearest point in the original mesh.\" — genau der Fehler, den ein selbstgebauter VDB-Remesh beim ersten Anlauf ebenfalls macht."
+      },
+      {
+        "entity": "Blender 3D Print Toolbox",
+        "statement": "Fassung 1.4.1 vom 5. August 2026, Lizenz „GNU General Public License v3.0 or later\", 595.081 Downloads. Funktionsumfang laut Eintrag: Volumen und Oberfläche berechnen, fehlerhafte Geometrie prüfen und mit „Make Manifold\" reparieren, „Hollow\"-Werkzeug für gleichmäßige Wandstärke bei komplexen Formen, Ausrichten, Skalieren, Export nach STL/PLY/OBJ.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://extensions.blender.org/add-ons/print3d-toolbox/"
+        ],
+        "note": "Der Eintrag nennt KEINE Wandstärkenprüfung mehr — die im Netz kursierenden Beschreibungen einer „wall thickness analysis\" decken sich nicht mit der offiziellen Beschreibung. GPL: nicht kopierbar, nur als Vorbild lesbar."
+      },
+      {
+        "entity": "ZBrush (Maxon)",
+        "statement": "Aktuelle Fassung ist ZBrush 2026.2, erschienen am 15. April 2026; neu sind native Unterstützung für Qualcomm Snapdragon (ARM/Windows), direkte Übergabe an Substance 3D Painter, ein Intensitätsregler für Polypaint und Tastenkürzel-Austausch zwischen Desktop und iPad.",
+        "as_of": "2026-04-15",
+        "confidence": "unsicher",
+        "sources": [
+          "https://www.cgchannel.com/2026/04/maxon-releases-zbrush-2026-2-and-zbrush-for-ipad-2026-2/"
+        ],
+        "note": "Nur Fachpresse. maxon.net liefert Preise und Fassungsnummern per JavaScript nach und war nicht auslesbar."
+      },
+      {
+        "entity": "ZBrush Preis",
+        "statement": "ZBrush-Abonnement kostet 49 USD im Monat oder 399 USD im Jahr und schließt ZBrush für iPad ein; der autorisierte Händler Novedge führt „ZBrush – 1-Year Subscription\" mit 399 USD. ZBrush für iPad allein: Grundfassung kostenlos, voller Umfang 9,99 USD im Monat oder 89,99 USD im Jahr.",
+        "as_of": "2026-08-19",
+        "confidence": "mehrere_quellen",
+        "sources": [
+          "https://www.cgchannel.com/2026/04/maxon-releases-zbrush-2026-2-and-zbrush-for-ipad-2026-2/",
+          "https://novedge.com/products/buy-zbrush-subscription"
+        ],
+        "note": "Wörtlich CG Channel: „ZBrush subscriptions cost $49/month or $399/year, and include ZBrush for iPad.\""
+      },
+      {
+        "entity": "ZBrush Lizenzmodell",
+        "statement": "Maxon selbst schreibt: „Perpetual licenses for ZBrush were discontinued in December 2023.\" ZBrush ist nur noch als ZBrush-Abonnement oder als Teil von Maxon One zu haben, beides monatlich oder jährlich, beides inklusive ZBrush für iPad.",
+        "as_of": "2026-03-02",
+        "confidence": "belegt",
+        "sources": [
+          "https://support.maxon.net/hc/en-us/articles/4716058124444-How-do-I-subscribe-to-ZBrush"
+        ],
+        "note": "Der Artikel trägt das Änderungsdatum 2. März 2026."
+      },
+      {
+        "entity": "Nomad Sculpt (Desktop)",
+        "statement": "Die Desktop-Fassung steht auf nomadsculpt.com als 2.9.27 für Windows und macOS bereit (plus Web ohne offiziellen Rückhalt), kostenlos zum Ausprobieren. Kauf: einmalig etwa 35 USD, ein Lizenzschlüssel für zwei Geräte; Offline-Kulanz 15 Tage. Steam ist angekündigt („Working on it.\").",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://nomadsculpt.com/"
+        ],
+        "note": "Es gibt außerdem eine Erweiterung „Nomad Blender Link\" über ein eigenes Blender-Repository (https://nomadsculpt.com/blender/index.json)."
+      },
+      {
+        "entity": "Nomad Sculpt (iOS)",
+        "statement": "Im App Store kostet Nomad Sculpt 19,99 USD; der „Quad Remesher\" ist ein In-App-Kauf für 15,99 USD („Remesh your object automatically with a quad dominant mesh\"). Die dort angezeigte Fassung ist 2.8 vom 23.12.2025.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://apps.apple.com/us/app/nomad-sculpt/id1519508653"
+        ],
+        "note": "Die App-Store-Angabe 2.8 widerspricht der Desktop-Fassung 2.9.27; welche mobile Fassung heute aktuell ist, ließ sich nicht klären."
+      },
+      {
+        "entity": "Plasticity",
+        "statement": "Plasticity 2026.1 erschien am 17. April 2026. Lizenzen sind unbefristet und geräteseitig gebunden: Indie 175 USD, Studio 299 USD, jeweils mit 12 Monaten freien Aktualisierungen. Plattformen: Windows 10+, Ubuntu 22.04+, macOS 12.0+.",
+        "as_of": "2026-04-17",
+        "confidence": "unsicher",
+        "sources": [
+          "https://www.cgchannel.com/2026/04/plasticity-2026-1-is-out/"
+        ],
+        "note": "plasticity.xyz antwortet mit 403. Plasticity ist NURBS-/CAD-nah („CAD for artists\"), kein Sculpting-Programm — Studio bringt mit „PolySplines\" die Rückrichtung: Polygonnetz zu editierbarer NURBS-Fläche mit G2-Stetigkeit."
+      },
+      {
+        "entity": "3DCoat",
+        "statement": "3DCoat 2026 (Fassung 2026.11 am 23. Juli 2026 als produktionsreif erklärt) kostet als persönliche Dauerlizenz 379 Euro, im Abonnement 20,80 Euro monatlich oder 169,85 Euro jährlich; 3DCoatTextura 2026 kostet 159 Euro (vorher 119 Euro). Kern der Fassung ist ein GPU-beschleunigtes, knotenbasiertes Textursystem.",
+        "as_of": "2026-08-19",
+        "confidence": "mehrere_quellen",
+        "sources": [
+          "https://3dcoat.com/buy/",
+          "https://www.cgchannel.com/2026/07/pilgway-releases-3dcoat-2026-and-3dcoattextura-2026/"
+        ],
+        "note": "Dauerlizenz mit 12 Monaten freien Aktualisierungen, danach 45 Euro (ab Monat 13) bzw. 90 Euro (ab Monat 25). Für den Druck einschlägig: volumetrische Texturen erzeugen laut CG Channel Voxel-Gitter im Modellinneren als Stützstruktur, dazu ein „Splitter\"-Werkzeug zum Zerlegen."
+      },
+      {
+        "entity": "3DCoatPrint",
+        "statement": "Pilgway gibt eine kostenlose Fassung „3DCoatPrint\" heraus: Voxel-Modellierung und Rendering vollständig, Beschränkung nur beim Export — die Modelle werden auf höchstens 40.000 Dreiecke reduziert und das Netz wird eigens für den 3D-Druck geglättet.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://3dcoat.com/buy/"
+        ]
+      },
+      {
+        "entity": "Womp",
+        "statement": "Womp ist Browser-Modellierung mit „Goop\"-Geometrie plus angeschlossenem Druckdienst. Preise: Starter kostenlos, Pro 9,99 USD im Monat (jährlich 119,88 USD), Team 19,99 USD je Platz im Monat (jährlich 239,88 USD), Enterprise ab 119,99 USD je Platz. Pro enthält ausdrücklich „Hollow printing for lighter, cheaper prints\", „Optimised 3D meshes + clean topology\" und 10 Prozent Nachlass auf Druckaufträge.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://womp.com/pricing/"
+        ],
+        "note": "AI-Guthaben: 300 pro Tag (Starter), 12.000 pro Monat (Pro); als Modelle genannt sind GPT Image 1, Nano Banana 2, Hunyuan 3.0."
+      },
+      {
+        "entity": "OpenVDB",
+        "statement": "OpenVDB 13.0.0 erschien am 4. November 2025. Die Lizenzdatei im Projekt ist wörtlich die „Apache License / Version 2.0, January 2004\" — für ein kommerzielles Produkt ohne GPL uneingeschränkt brauchbar.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://raw.githubusercontent.com/AcademySoftwareFoundation/openvdb/master/LICENSE",
+          "https://github.com/AcademySoftwareFoundation/openvdb"
+        ]
+      },
+      {
+        "entity": "OpenVDB Python",
+        "statement": "Python-Anbindungen liegen im Quellbaum (openvdb/openvdb/python, pyOpenVDBModule.cc u. a.), müssen aber selbst übersetzt werden. Auf PyPI gibt es kein Paket „openvdb\"; „pyopenvdb\" auf PyPI ist Fassung 0.1.4 vom 12. März 2020 von Dritten (docker_pyopenvdb), Lizenzangabe „MPL version 2.0\".",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://pypi.org/project/pyopenvdb/",
+          "https://github.com/AcademySoftwareFoundation/openvdb"
+        ],
+        "note": "Für Solidon heißt das: VDB-Remesh in Python bedeutet eine eigene C++-Übersetzung, nicht ein pip install."
+      },
+      {
+        "entity": "libigl",
+        "statement": "Das Projekt schreibt selbst: „libigl is primarily MPL2 licensed\" und ergänzt „Some files contain third-party code under other licenses.\" Im Repository liegen zwei Lizenzdateien nebeneinander: LICENSE.MPL2 (Mozilla Public License Version 2.0) und LICENSE.GPL (GNU GPL Version 3). Das PyPI-Paket libigl 2.6.2 vom 5. März 2026 trägt den Klassifikator „Mozilla Public License 2.0 (MPL 2.0)\".",
+        "as_of": "2026-08-19",
+        "confidence": "mehrere_quellen",
+        "sources": [
+          "https://libigl.github.io/",
+          "https://github.com/libigl/libigl",
+          "https://pypi.org/project/libigl/"
+        ],
+        "note": "GitHubs Lizenzerkennung meldet für das Repository „GPL-3.0\", weil sie LICENSE.GPL findet. Wer libigl benutzt, muss pro verwendeter Datei prüfen — die Pauschalaussage trägt nicht."
+      },
+      {
+        "entity": "PyMeshLab",
+        "statement": "PyMeshLab steht unter GNU General Public License v3.0; das PyPI-Paket 2025.7.post1 vom 30. Januar 2026 trägt die Lizenzangabe „GPL3\".",
+        "as_of": "2026-08-19",
+        "confidence": "mehrere_quellen",
+        "sources": [
+          "https://github.com/cnr-isti-vclab/PyMeshLab",
+          "https://pypi.org/project/pymeshlab/"
+        ],
+        "note": "Damit für Solidon nach Regel 15 ausgeschlossen — die Regel nennt pymeshlab bereits namentlich, der Befund bestätigt sie 2026 unverändert."
+      },
+      {
+        "entity": "Instant Meshes",
+        "statement": "Die Lizenzdatei ist ein BSD-3-Clause-Text (Copyright 2015 Wenzel Jakob, Daniele Panozzo, Marco Tarini, Olga Sorkine-Hornung) mit dem Zusatz „You are under no obligation whatsoever to provide any bug fixes, patches, or upgrades\". Kommerziell ohne GPL benutzbar. Letzter Commit: 3. Januar 2022.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://raw.githubusercontent.com/wjakob/instant-meshes/master/LICENSE.txt",
+          "https://github.com/wjakob/instant-meshes"
+        ],
+        "note": "Die Abhängigkeiten unter ext/ wurden nicht einzeln geprüft."
+      },
+      {
+        "entity": "QuadriFlow",
+        "statement": "Die Lizenzdatei ist derselbe BSD-3-Clause-Text (Copyright 2018 Jingwei Huang, Yichao Zhou, Matthias Niessner, Jonathan Shewchuk, Leonidas Guibas). Kommerziell ohne GPL benutzbar. Letzter Commit: 7. Dezember 2019.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://raw.githubusercontent.com/hjwdzh/QuadriFlow/master/LICENSE.txt",
+          "https://github.com/hjwdzh/QuadriFlow"
+        ],
+        "note": "Der Ordner 3rd/ mit den mitgelieferten Fremdbibliotheken wurde nicht auf Lizenzen geprüft."
+      },
+      {
+        "entity": "geogram",
+        "statement": "geogram 1.10.0 (27. Mai 2026) steht unter „BSD 3-Clause License, Copyright (c) 2000-2022 Inria\". Kommerziell ohne GPL benutzbar; die Entwicklung ist aktiv (Commits am 19. August 2026).",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://raw.githubusercontent.com/BrunoLevy/geogram/main/LICENSE",
+          "https://github.com/BrunoLevy/geogram"
+        ]
+      },
+      {
+        "entity": "CGAL",
+        "statement": "CGAL 6.2 erschien am 11. Juni 2026. Die Lizenzdatei sagt wörtlich: „The CGAL software consists of several parts, each of which is licensed under an open source license. It is also possible to obtain commercial licenses from GeometryFactory (www.geometryfactory.com) for all or parts of CGAL.\" und weiter: „This is either the GNU General Public License or the GNU Lesser General Public License … either version 3 of the License or (at your option) any later version.\"",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://raw.githubusercontent.com/CGAL/cgal/master/Installation/LICENSE",
+          "https://github.com/CGAL/cgal/releases"
+        ],
+        "note": "Es gibt keine pauschale LGPL-Antwort: die Lizenz steht in jeder einzelnen Datei."
+      },
+      {
+        "entity": "CGAL — die für Sculpting einschlägigen Pakete",
+        "statement": "Die drei Kopfdateien, die Solidon interessieren würden, tragen alle dieselbe SPDX-Zeile „GPL-3.0-or-later OR LicenseRef-Commercial\": PMP_Remeshing/…/Polygon_mesh_processing/remesh.h (isotropes Remeshing), Surface_mesh_deformation/…/Surface_mesh_deformation.h (ARAP-Verformung, also Posing) und Surface_mesh_skeletonization/…/extract_mean_curvature_flow_skeleton.h (Skelettextraktion).",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://raw.githubusercontent.com/CGAL/cgal/master/PMP_Remeshing/include/CGAL/Polygon_mesh_processing/remesh.h",
+          "https://raw.githubusercontent.com/CGAL/cgal/master/Surface_mesh_deformation/include/CGAL/Surface_mesh_deformation.h",
+          "https://raw.githubusercontent.com/CGAL/cgal/master/Surface_mesh_skeletonization/include/CGAL/extract_mean_curvature_flow_skeleton.h"
+        ],
+        "note": "Ohne gekaufte Lizenz von GeometryFactory ist genau der Teil von CGAL, den man für Remesh, Posing und Skelett bräuchte, für Solidon gesperrt."
+      },
+      {
+        "entity": "OpenSubdiv",
+        "statement": "Die aktuelle Marke ist v3_7_0. Die Lizenzdatei ist NICHT schlicht Apache 2.0, sondern die „TOMORROW OPEN SOURCE TECHNOLOGY LICENSE 1.0\" mit vorangestelltem Hinweis: „The Tomorrow Open Source Technology License 1.0 differs from the original Apache License 2.0 in the following manner. Section 6 (\"Trademarks\") is different.\"",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://raw.githubusercontent.com/PixarAnimationStudios/OpenSubdiv/release/LICENSE.txt",
+          "https://github.com/PixarAnimationStudios/OpenSubdiv/tags"
+        ],
+        "note": "Permissiv, kein Copyleft — aber der Eintrag in Solidons Lizenzliste darf nicht „Apache-2.0\" heißen."
+      },
+      {
+        "entity": "trimesh",
+        "statement": "trimesh 5.0.0 wurde am 1. August 2026 auf PyPI veröffentlicht, Lizenz MIT.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://pypi.org/project/trimesh/"
+        ],
+        "note": "Betrifft Solidon unmittelbar: die Grenze `trimesh<5` in pyproject.toml ist ab jetzt eine datierte, nicht mehr bloß angekündigte Migration."
+      },
+      {
+        "entity": "manifold3d",
+        "statement": "manifold3d 3.5.2 erschien am 27. Juni 2026 (GitHub-Marke v3.5.2 am selben Tag), Lizenz Apache 2.0.",
+        "as_of": "2026-08-19",
+        "confidence": "mehrere_quellen",
+        "sources": [
+          "https://pypi.org/project/manifold3d/",
+          "https://github.com/elalish/manifold/releases"
+        ]
+      },
+      {
+        "entity": "pyacvd",
+        "statement": "pyacvd 0.4.0 vom 8. Mai 2026, Lizenz MIT, Zweck laut Paket: „Uniformly remeshes surface meshes\". Damit gibt es einen permissiven, gepflegten Weg zu gleichmäßigem Remesh in Python — clusterbasiert (ACVD), nicht VDM/Voxel.",
+        "as_of": "2026-08-19",
+        "confidence": "mehrere_quellen",
+        "sources": [
+          "https://pypi.org/project/pyacvd/",
+          "https://github.com/pyvista/pyacvd"
+        ]
+      },
+      {
+        "entity": "Permissive Python-Bausteine für Sculpting",
+        "statement": "fast-simplification 0.2.0 vom 12. August 2026, MIT (Hülle um Fast-Quadric-Mesh-Simplification, ebenfalls MIT) für Dezimierung; potpourri3d 1.4.0 und robust-laplacian 1.1.0, beide vom 25. März 2026, beide MIT, für robuste Laplace-Matrizen, Geodäten und Vektor-Wärmefluss — die Grundlage für Pinsel-Abklingfunktionen entlang der Oberfläche und für Glättung.",
+        "as_of": "2026-08-19",
+        "confidence": "mehrere_quellen",
+        "sources": [
+          "https://pypi.org/project/fast-simplification/",
+          "https://github.com/pyvista/fast-simplification",
+          "https://pypi.org/project/potpourri3d/",
+          "https://github.com/nmwsharp/potpourri3d"
+        ]
+      },
+      {
+        "entity": "skeletor (Python)",
+        "statement": "skeletor 1.7.1 vom 27. Juli 2026 — „Python 3 library to extract skeletons from 3D meshes\" — steht unter „GNU General Public License v3 or later\". Für Solidon nach Regel 15 ausgeschlossen.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://pypi.org/project/skeletor/"
+        ]
+      },
+      {
+        "entity": "Mixamo (Adobe)",
+        "statement": "Adobe beschreibt Mixamo weiterhin als kostenlos: „Mixamo online animation services are currently in a limited duration technology preview, and during that preview they are available for free, with no licensing or royalty fees, for unlimited commercial or non commercial use.\" Auto-Rigger und Animationsbibliothek gelten ausdrücklich nur für zweibeinige, menschenähnliche Figuren („bipedal humanoids only\").",
+        "as_of": "2026-08-19",
+        "confidence": "unsicher",
+        "sources": [
+          "https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html",
+          "https://helpx.adobe.com/creative-cloud/help/mixamo-rigging-animation.html"
+        ],
+        "note": "Die Adobe-Seiten waren nur über Suchauszüge greifbar — der direkte Abruf lief in eine Zeitüberschreitung. Der Betriebszustand im August 2026 ist damit nicht aus erster Hand belegt."
+      },
+      {
+        "entity": "UniRig",
+        "statement": "UniRig (SIGGRAPH 2025, Tsinghua/Tripo, VAST-AI-Research) steht unter MIT License, „Copyright (c) 2025 VAST-AI-Research and contributors\". Es sagt eine topologisch gültige Skeletthierarchie und Skinning-Gewichte je Vertex voraus; für die Erzeugung nennt die Anleitung „CUDA-enabled GPU with at least 8GB VRAM\". Die vollständigen Modellgewichte stehen im README noch unter „Planned Future Releases\".",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://raw.githubusercontent.com/VAST-AI-Research/UniRig/main/LICENSE",
+          "https://github.com/VAST-AI-Research/UniRig",
+          "https://arxiv.org/abs/2504.12451"
+        ]
+      },
+      {
+        "entity": "SkinTokens (Nachfolger von UniRig)",
+        "statement": "SkinTokens ist der erklärte Nachfolger von UniRig. Aufsatz „Skin Tokens: A Learned Compact Representation for Unified Autoregressive Rigging\" (arXiv 2602.04805, eingereicht 4. Februar 2026, Zhang, Pu, Guo, Cao, Hu). Repository seit 8. Februar 2026, Lizenz MIT; die Gewichte auf Hugging Face tragen ebenfalls „license:mit\", zuletzt geändert am 20. April 2026. Berichtet werden „98%-133% percents improvement in skinning accuracy\" und 17–22 Prozent bessere Knochenvorhersage.",
+        "as_of": "2026-08-19",
+        "confidence": "mehrere_quellen",
+        "sources": [
+          "https://github.com/VAST-AI-Research/SkinTokens",
+          "https://arxiv.org/abs/2602.04805",
+          "https://huggingface.co/VAST-AI/SkinTokens"
+        ],
+        "note": "Skelett und Skinning entstehen in einer einzigen autoregressiven Folge (TokenRig, Qwen3-0.6B-Architektur, GRPO-verfeinert)."
+      },
+      {
+        "entity": "RigNet",
+        "statement": "RigNet steht unter GNU General Public License v3.0; der letzte Commit stammt vom 4. November 2024. Für Solidon nach Regel 15 ausgeschlossen — und ohnehin überholt.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://github.com/zhan-xu/RigNet"
+        ]
+      },
+      {
+        "entity": "Anything World",
+        "statement": "Vier Stufen: Individual kostenlos (1 Platz), Micro 50 USD im Monat (5 Plätze), Pro 250 USD im Monat (10 Plätze), Enterprise nach Absprache — alle mit „Unlimited 3D models\" und „Unlimited animation\". Die REST-Schnittstelle teilt sich in eine Bibliotheks-API und eine Verarbeitungs-API, die eigene Netze automatisch riggt und animiert.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://everythinguniver.se/pricing",
+          "https://anything-world.gitbook.io/anything-world/api/rest-api-references"
+        ],
+        "note": "anything.world leitet dauerhaft (301) auf everythinguniver.se um."
+      },
+      {
+        "entity": "KI-Sculpting — Rodin Gen-2 Edit (Hyper3D/Deemos)",
+        "statement": "Rodin Gen-2 Edit ist das einzige gefundene ausgelieferte Werkzeug, das eine bestehende Form per Textanweisung geometrisch ändert statt neu zu erzeugen: „3D Inpainting\" erlaubt gezielte Änderungen in einem ausgewählten Bereich des Modells über einen maskierten Diffusionsvorgang. Beispiel im Text: Bereich eines erzeugten Stuhls markieren, „add a floral pattern to the carvings\" eingeben, „within seconds, the model was updated\".",
+        "as_of": "2026-02-09",
+        "confidence": "unsicher",
+        "sources": [
+          "https://hyper3d.ai/blog/rodin-gen-2"
+        ],
+        "note": "Herstellereigener Blogbeitrag vom 9. Februar 2026, ohne Erscheinungsdatum und ohne Preis. Keine unabhängige Bestätigung gefunden."
+      },
+      {
+        "entity": "KI-Sculpting — Forschungsstand 2026",
+        "statement": "Das gezielte Ändern bestehender Formen ist 2026 überwiegend Forschung. Prox-E (arXiv 2604.23774, 26. April 2026) zerlegt eine Form erst in Primitive, lässt ein Vision-Sprach-Modell diese Abstraktion bearbeiten und führt damit ein 3D-Generativmodell — „enabling fine-grained, localized modifications while preserving unchanged regions\". EditVerse3D (arXiv 2607.07187, ECCV 2026) arbeitet nicht per Text, sondern mit „a coarse 3D bounding box indicating the target region, and a reference 2D image describing the desired modification\". Rigel3D (arXiv 2605.13129, 13. Mai 2026) erzeugt Geometrie, Skeletttopologie, Gelenke und Skinning-Gewichte gemeinsam statt nachträglich zu riggen.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://arxiv.org/abs/2604.23774",
+          "https://arxiv.org/abs/2607.07187",
+          "https://arxiv.org/abs/2605.13129"
+        ]
+      },
+      {
+        "entity": "KI-Sculpting — Displacement aus Text",
+        "statement": "Text2VDM („Text to Vector Displacement Maps for Expressive and Interactive 3D Sculpting\", arXiv 2502.20045, eingereicht 27. Februar 2025, überarbeitet 7. August 2025) erzeugt Sculpting-Pinsel als Vektor-Displacement-Maps aus einer Textbeschreibung, über die Verformung eines dichten ebenen Netzes mit Score Distillation Sampling. Auf der arXiv-Seite ist kein Quelltext verlinkt.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://arxiv.org/abs/2502.20045"
+        ],
+        "note": "Für Solidons Displacement-Op der interessanteste Ansatz: er erzeugt einen Parameterwert (die VDM), nicht eine fertige Geometrieänderung — das passt zu Regel 2."
+      },
+      {
+        "entity": "Meshy",
+        "statement": "Meshy-6 erschien am 18. Januar 2026 und wirbt mit „smoother, more anatomically correct geometry for characters and organic models\", einem Low-Poly-Modus, mehrfarbigem 3D-Druck und „Auto-rig and animate any 3D character in seconds\". Ein geometrisches Bearbeiten bereits vorhandener Modelle ist auf der Ankündigungsseite nicht genannt; das ausgelieferte Bearbeitungswerkzeug „Texture Edit\" ändert nur Texturen.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://www.meshy.ai/blog/meshy-6-launch",
+          "https://help.meshy.ai/en/articles/11936711-how-to-use-texture-edit"
+        ]
+      },
+      {
+        "entity": "3D-Druck — Wandstärke und Entleerungslöcher (Formlabs, SLA)",
+        "statement": "Formlabs nennt als Auslegungsgrenzen (Clear Resin, 100 µm, Form 2): getragene Wand mindestens 0,4 mm, ungetragene Wand mindestens 0,4 mm, größter ungestützter Überhang 3,0 mm, kleinster ungestützter Überhangwinkel 19° zur Waagerechten, größte waagerechte Stützspanne 21 mm (bei 5 mm breit, 3 mm dick), senkrechter Draht 0,4 mm bei 7 mm Höhe bzw. 1,5 mm bei 30 mm Höhe, kleinster Durchmesser eines Entleerungslochs 3,5 mm.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://support.formlabs.com/s/article/Design-Specs"
+        ],
+        "note": "Wörtlich zum Loch: „Without drain holes of at least 3.5 mm in diameter, the part may trap resin or air and lead to a cupping blowout failure.\" Das sind Herstellerwerte für ein Verfahren, keine allgemeinen Regeln."
+      },
+      {
+        "entity": "3D-Druck — Hohlkörper (Formlabs PreForm)",
+        "statement": "PreForm hat ein eingebautes Aushöhlen mit einstellbarer Wandstärke. Die Regel dazu lautet wörtlich: „Model regions thinner than twice the selected Wall Thickness will not be hollowed.\" Und: „When hollowing a model, add drainage holes to prevent suction cups (SLA) and to prevent material from becoming trapped inside the part (SLA and SLS).\"",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://formlabs.com/support/Hollowing-models-in-PreForm/"
+        ],
+        "note": "Die Zwei-mal-Wandstärke-Schwelle ist genau die Stelle, an der ein Aushöhlen bei organischen Formen (dünne Finger, Ohren, Hörner) still nichts tut — für Solidon ein Befund, den eine Op melden müsste."
+      },
+      {
+        "entity": "3D-Druck — organische Stützstrukturen (PrusaSlicer)",
+        "statement": "PrusaSlicer nennt sein Baumstützverfahren „Organic supports\" und beschreibt es als „our significantly improved implementation of tree supports\"; eingeführt in PrusaSlicer 2.4. Einstellbar sind Maximum Branch Angle, Preferred Branch Angle, Branch Diameter, Branch Diameter Angle, Tip Diameter, Branch Distance und Branch Density.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://help.prusa3d.com/article/organic-supports_480131"
+        ],
+        "note": "Wörtlich: „Organic supports are easily removable, do not scar the surface, and are fast and cheap to print.\""
+      },
+      {
+        "entity": "Slicer-Fassungen (Stand heute)",
+        "statement": "PrusaSlicer 2.9.6 vom 25. Juni 2026, OrcaSlicer 2.4.2 vom 7. Juli 2026, UltiMaker Cura 5.13.0 vom 28. Mai 2026.",
+        "as_of": "2026-08-19",
+        "confidence": "belegt",
+        "sources": [
+          "https://github.com/prusa3d/PrusaSlicer/releases",
+          "https://github.com/SoftFever/OrcaSlicer/releases",
+          "https://github.com/Ultimaker/Cura/releases"
+        ],
+        "note": "Relevant für Solidons Slicer-Übergabe (handover.py, slicer_keys.py)."
+      }
+    ],
+    "not_verifiable": [
+      "Maxons eigene Preisseiten (https://www.maxon.net/en/buy und https://www.maxon.net/en/zbrush-plan-options) laden ihre Preise per JavaScript nach; aus Maxon-Quelle war kein einziger ZBrush-Preis zu lesen. Die 49 USD/Monat und 399 USD/Jahr stammen aus CG Channel und dem autorisierten Händler Novedge, nicht vom Hersteller.",
+      "Der Betriebszustand von Mixamo im August 2026 ist nicht aus erster Hand belegt. https://helpx.adobe.com/creative-cloud/faq/mixamo-faq.html lief mehrfach in eine Zeitüberschreitung, https://www.mixamo.com/ liefert nur „Loading Mixamo\". Ob Adobe den Dienst noch betreibt, weiterentwickelt oder eingestellt hat, ist damit offen.",
+      "Welche mobile Fassung von Nomad Sculpt heute aktuell ist, blieb offen: der App Store zeigte 2.8 vom 23.12.2025, die Herstellerseite bietet Desktop 2.9.27 an. Ein Datum für die aktuelle iOS-Fassung wurde nicht gefunden.",
+      "Für Rodin Gen-2 / Gen-2 Edit wurde weder ein Erscheinungsdatum noch ein Preis gefunden; die einzige Quelle ist ein herstellereigener Blogbeitrag. Ob „3D Inpainting\" wirklich Geometrie und nicht nur Oberfläche ändert, ist damit nicht unabhängig bestätigt.",
+      "Der Zustand von Adobe Substance 3D Modeler (eingestellt oder weiter gepflegt?) ließ sich nicht aus einer Adobe-Quelle klären. Es gibt widersprechende Aussagen aus Foren und Fachpresse; die letzte gefundene Fassungsangabe (1.22) stammt aus dem April 2025.",
+      "Ob die Academy Software Foundation offizielle OpenVDB-Räder für PyPI herausgibt, wurde nicht geklärt. Ein Paket namens „openvdb\" existiert auf PyPI nicht; „pyopenvdb\" ist von Dritten und seit März 2020 unverändert.",
+      "Die Lizenzen der mitgelieferten Fremdbibliotheken in Instant Meshes (ext/) und QuadriFlow (3rd/) wurden nicht einzeln geprüft. Die BSD-Aussage gilt nur für den jeweils eigenen Quelltext.",
+      "Welche libigl-Dateien konkret unter GPL statt MPL2 stehen, sagt das Projekt selbst nicht: „Some files contain third-party code under other licenses. We're currently in the processes of identifying these and marking appropriately.\" Eine Liste gibt es nicht.",
+      "Ob das Blender 3D Print Toolbox in Fassung 1.4.1 noch eine Wandstärkenprüfung enthält, ist offen: der offizielle Eintrag auf extensions.blender.org nennt sie nicht, mehrere Sekundärseiten behaupten sie. Das Handbuch wurde nicht geprüft.",
+      "Für 3DCoat 2026 wurde kein Erscheinungsdatum aus Herstellerquelle bestätigt — nur die Angabe von CG Channel, 2026.11 sei am 23. Juli 2026 produktionsreif erklärt worden. Ebenso stammt die Aussage über Voxel-Gitter als Druckstützen nur von dort.",
+      "Es wurde kein ausgeliefertes Werkzeug gefunden, das eine organische Form per Text ändert UND die Änderung als nachvollziehbaren, wiederholbaren Parametersatz herausgibt — also in einer Form, die in einen Operationsstapel passt. Alle gefundenen Verfahren geben ein neues Netz zurück.",
+      "Zu Wandstärkenempfehlungen für organische Formen im FDM-Druck (im Unterschied zu SLA) wurde keine Primärquelle mit Zahlen gefunden. Die kursierenden 1–2 mm bzw. 2–4 mm stammen aus Blogbeiträgen, nicht aus einer Hersteller- oder Normquelle.",
+      "Ob Anything Worlds kostenlose Stufe kommerzielle Nutzung erlaubt und welche Guthabengrenzen für das Riggen gelten, geht aus der Preisseite nicht hervor.",
+      "Ein Preis oder Erscheinungsdatum für die Steam-Fassung von Nomad Sculpt war nicht zu ermitteln; der Hersteller schreibt zu „When steam?\" nur „Working on it.\"",
+      "Zu Autodesk Meshmixer und Netfabb wurde keine Aussage aus einer Autodesk-Quelle gefunden; alle Fundstellen zum Zustand 2026 sind Drittseiten."
+    ],
+    "surprises": [
+      "trimesh 5.0.0 ist seit dem 1. August 2026 draußen. Solidons Grenze `trimesh<5` in pyproject.toml ist damit keine vorsorgliche Klammer mehr, sondern eine datierte, offene Migration — und `check_env.py --outdated` wird sie ab sofort anzeigen.",
+      "Die Skelett-Ecke ist in Python lizenzrechtlich zugemauert: skeletor (die naheliegende Bibliothek, 1.7.1 vom 27. Juli 2026) ist GPL-3.0-or-later, und CGALs mean-curvature-flow-Skelettierung trägt ebenfalls GPL-3.0-or-later. Für automatische Skelettierung gibt es derzeit keine gepflegte permissive Python-Bibliothek — Solidon müsste sie selbst bauen oder extern aufrufen.",
+      "Genau die drei CGAL-Pakete, die Solidon bräuchte — isotropes Remeshing, ARAP-Verformung (Posing) und Skelettierung — tragen alle „GPL-3.0-or-later OR LicenseRef-Commercial\". CGAL ist nicht pauschal LGPL; der Ausweg ist eine gekaufte Lizenz von GeometryFactory, kein anderer Paketname.",
+      "libigl sieht auf GitHub wie GPL-3.0 aus (die Erkennung findet LICENSE.GPL), das Projekt selbst sagt „primarily MPL2\", und das PyPI-Rad 2.6.2 ist als MPL-2.0 klassifiziert. Wer die Lizenzprüfung nur gegen GitHub-Metadaten fährt, bekommt hier einen falschen Alarm — oder ein falsches Entwarnen.",
+      "OpenSubdiv ist nicht Apache-2.0, sondern die „Tomorrow Open Source Technology License 1.0\" — Apache 2.0 mit geändertem Abschnitt 6 (Marken). Permissiv, aber der Eintrag in der Lizenzliste muss den echten Namen tragen.",
+      "Die beiden Standardwerkzeuge für Quad-Remesh unter BSD sind praktisch eingefroren: Instant Meshes seit dem 3. Januar 2022, QuadriFlow seit dem 7. Dezember 2019. Wer sie benutzt, übernimmt sie.",
+      "ZBrush hat seit Dezember 2023 keine Dauerlizenz mehr — Maxon sagt das selbst. Das Zugpferd der Branche ist reine Miete; Plasticity (175/299 USD unbefristet) und 3DCoat (379 Euro unbefristet) sind die Gegenbewegung.",
+      "Blenders eigenes Druckwerkzeug, das 3D Print Toolbox, steht unter GPL-3.0-or-later. Selbst die Referenzumsetzung von „Aushöhlen plus Netzprüfung\" ist für Solidon nur lesbar, nicht übernehmbar — und laut offiziellem Eintrag enthält sie gar keine Wandstärkenprüfung mehr.",
+      "3DCoat baut mit volumetrischen Texturen bereits Voxel-Gitter im Modellinneren als Druckstützen und gibt mit 3DCoatPrint eine kostenlose Voxel-Fassung heraus (Export auf 40.000 Dreiecke gedeckelt). Der Teil von Solidons Plan, der Sculpting und Druckvorbereitung verbindet, existiert dort schon.",
+      "Die KI-Seite 2026 kann erzeugen und riggen, aber kaum ändern. Automatisches Riggen ist gelöst und permissiv verfügbar (UniRig und SkinTokens, beide MIT, Gewichte MIT); das gezielte Ändern einer vorhandenen organischen Form ist bis auf Rodin Gen-2 Edit weiterhin Forschung — und EditVerse3D arbeitet nicht einmal mit Text, sondern mit Kasten plus Referenzbild."
+    ]
+  },
+  "workflowProgress": [
+    {
+      "type": "workflow_phase",
+      "index": 1,
+      "title": "Recherche"
+    },
+    {
+      "type": "workflow_agent",
+      "index": 1,
+      "label": "recherche:organische-modellierung",
+      "phaseIndex": 1,
+      "phaseTitle": "Recherche",
+      "agentId": "a9f785a24b2e6979f",
+      "model": "claude-opus-5",
+      "state": "done",
+      "startedAt": 1787167570139,
+      "queuedAt": 1787167570121,
+      "attempt": 1,
+      "lastToolName": "StructuredOutput",
+      "lastToolSummary": "Organische Modellierung, Sculpting und Skelett-Posing — Sta…",
+      "promptPreview": "Du recherchierst für das Projekt Solidon online den heutigen Stand eines Themenfelds. Heute ist der 19. August 2026.\n\n**Werkzeuge:** Lade zuerst die Suchwerkzeuge mit einem einzigen Aufruf:\nToolSearch mit query \"select:WebSearch,WebFetch\"\nNutze WebSearch zum Finden und WebFetch, um die Seite wirklich zu lesen — eine Suchergebnis-Zusammenfassung allein ist kein Beleg für eine Zahl.\n\nThemenfeld: **o…",
+      "lastProgressAt": 1787169122196,
+      "tokens": 159741,
+      "toolCalls": 113,
+      "durationMs": 1552056,
+      "resultPreview": "{\"cluster\":\"Organische Modellierung, Sculpting und Skelett-Posing — Stand 19. August 2026\",\"facts\":[{\"entity\":\"Blender\",\"statement\":\"Blender 5.2 LTS ist die aktuelle Fassung, veröffentlicht am 14. Juli 2026, mit zwei Jahren LTS-Pflege. Lizenz: GPL-2.0-or-later (Binärpakete GPLv3 or later wegen eingebundener Apache-Bibliotheken).\",\"as_of\":\"2026-08-19\",\"confidence\":\"mehrere_quellen\",\"sources\":[\"http…"
+    }
+  ],
+  "totalTokens": 159741,
+  "totalToolCalls": 113
+}

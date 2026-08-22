@@ -57,8 +57,11 @@ gilt, unten, was nur noch erklärt.
   an diesem Projekt bedienbar sein soll. Sie stehen bei den Regeln, nicht bei
   den Konzepten.
 * **Die Rohfunde und Sitzungszustände** der Durchsichten liegen unter
-  `.claude/.state/`. Was aus einer Durchsicht bleiben soll, steht in einem
-  Dokument hier oder in `ROADMAP.md`.
+  `.claude/.state/` — seit dem 22.08.2026 eingecheckt, damit eine angefangene
+  Durchsicht auf jeder der drei Maschinen fortsetzbar ist. Dort stehen die
+  einzelnen Funde, die Messskripte, die Aufnahmen und die Auftragstexte für
+  Folgesitzungen. Was daraus **bleiben** soll, steht trotzdem hier oder in
+  `ROADMAP.md`: Der Zustandsordner ist die Werkbank, nicht das Ergebnis.
 * **Die Geschichte der Arbeitsliste** steht in `ROADMAP-ARCHIV.md` — dieselbe
   Gattung, aber chronologisch statt thematisch, und mit den Funden statt der
   Begründungen.

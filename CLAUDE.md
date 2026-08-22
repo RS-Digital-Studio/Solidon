@@ -76,10 +76,10 @@ bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh
 ```
 
 Das Skript sucht die Fensterdateien selbst (`grep -lE "MainWindow|Viewport|pyvista"`),
-eine neue braucht also keinen Eintrag. **Sein Ort ist noch nicht entschieden:**
-Es liegt heute unter `.claude/.state/`, das `.gitignore` ausschließt — ein
-frischer Klon hat damit den einzigen Weg nicht, auf dem das Tor durchläuft.
-Der naheliegende Ort ist `tools/`; die Entscheidung steht aus.
+eine neue braucht also keinen Eintrag. Es liegt unter `.claude/.state/` und ist
+seit dem 22.08.2026 eingecheckt — vorher schloss `.gitignore` den ganzen Ordner
+aus, und ein frischer Klon hatte damit den einzigen Weg nicht, auf dem das Tor
+durchläuft.
 
 Erst beides zusammen mit ruff, `ruff format --check` und mypy ist das Tor.
 

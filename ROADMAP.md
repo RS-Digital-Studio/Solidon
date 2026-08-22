@@ -72,7 +72,7 @@ oder er hält ihn nicht fest.
 | Der Textweg prüft seine Voraussetzungen nicht | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile ausgraut, solange kein SDXL-Modell unter `models/checkpoints` liegt |
 | Erzeugen und Ändern sind reine Verteilermenüs | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, wie tief ein Menü sein darf — flach ziehen sprengt die Neun-Menü-Grenze, ist also ein Tausch und keine Verbesserung |
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
-| Acht Gebiete der Oberflächendurchsicht sind nie gelaufen | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | einen Lauf, und die Entscheidung über das ungetrackte Material dazu unter `.claude/.state/` |
+| Acht Gebiete der Oberflächendurchsicht sind nie gelaufen | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | einen Lauf — das Material dazu ist seit dem 22.08.2026 eingecheckt, die Gebietsliste `AREAS` auf die acht kürzen und starten |
 | Die Regressionsschwelle schlägt an, ohne dass etwas langsamer wurde | Leistung (§31) — Stand nach der Durchsicht | eine Entscheidung zwischen zwei Wegen, die beide das Verhalten des Tors ändern — Vergleich aussetzen, sobald andere Testdateien im Lauf sind, oder Bestwert je Aufrufkontext |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung, welche der dreißig eine Attrappe verdienen — eine je Methode ist Arbeit, und ein Test, der die Wache nicht überschreitet, deckt die Lücke zu, statt sie offenzulassen |
 
@@ -3259,9 +3259,15 @@ Messgrenze des großen Stapels.
       `webseite`, `barrierefreiheit`, `wartezeit`, `handbuch` — darunter vier,
       die eigene harte Regeln haben (Regel 18 und 20, Bauplan §2.8). Steht in
       `konzepte/oberflaechen-durchsicht-2026-08-20.md` §5 und stand in keinem
-      Register. Wartet auf zwei Dinge: einen Lauf, und die Entscheidung über das
-      Material dazu — Auftragstext und Workflow-Skripte liegen ungetrackt unter
-      `.claude/.state/`, in einem frischen Klon fehlt beides.
+      Register. Wartet nur noch auf **einen Lauf**: Der Auftragstext
+      (`AUFTRAG-ZWEITE-SITZUNG.md`) und die Workflow-Skripte liegen unter
+      `.claude/.state/oberflaechen-durchsicht-2026-08-19/` und sind seit dem
+      22.08.2026 eingecheckt. Die Gebietsliste `AREAS` in den Skripten auf die
+      acht kürzen und starten.
+
+      *Bis dahin war das der teurere Teil des Punktes: Der Ordner war über
+      `.gitignore` ausgeschlossen, und in einem frischen Klon fehlte sämtliches
+      Material für den nächsten Schritt.*
 
 ## Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026)
 
@@ -4313,6 +4319,11 @@ gehalten hätten.
       `.claude/.state/`. In `CLAUDE.md` steht weiter `pytest -q` mit dem Satz
       „Diese vier sind zusammen das Tor", ohne ein Wort davon. Ein frischer
       Klon hat den einzigen Weg nicht, auf dem die Suite durchkommt.
+
+      *Beides erledigt am 22.08.2026: `CLAUDE.md` beschreibt den geteilten Lauf
+      samt `-m performance` und den zwei Fallen (Exit-Code statt Schlusszeile,
+      Abriss beim Abbau ist kein roter Test), und `.claude/.state/` ist
+      eingecheckt — das Skript reist jetzt mit.*
 
       Geteilt gefahren ist der Stand grün: Sammellauf Exit 0, 23 von 26
       Fensterdateien Exit 0, Leistungstests 19 passed. **Jeder Test ist grün.**

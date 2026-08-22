@@ -65,9 +65,18 @@ htmlcov/
 /.webserver.json
 
 # --- Claude Code -------------------------------------------------------------
-# Die Konfiguration unter .claude/ gehört ins Repository, ihr Laufzeitzustand
-# nicht: die Marke, wann die Suite zuletzt lief, ist Sache dieser Maschine.
-/.claude/.state/
+# Die Konfiguration unter .claude/ gehört ins Repository — und seit dem
+# 22.08.2026 auch der Sitzungszustand darunter. Grund: An diesem Projekt wird
+# auf drei Maschinen gearbeitet (zwei Rechner, ein Laptop), und eine Durchsicht,
+# deren Rohfunde, Messskripte und Auftragstexte nur auf einer davon liegen, ist
+# auf den anderen zweien nicht fortsetzbar. Der Ordner wog 21 MB; das ist der
+# Preis dafür, dass ein Klon vollständig ist.
+#
+# Ausgenommen bleibt, was wirklich dieser Maschine gehört: die zwei Marken, die
+# der Stop-Hook bei jedem Lauf neu schreibt. Getrackt wären sie nach jedem
+# Testlauf eine Änderung im Baum — und zwar auf jeder Maschine eine andere.
+/.claude/.state/letzter-testlauf
+/.claude/.state/letzte-erinnerung
 /.claude/settings.local.json
 
 # Die Installationspakete für die Website. Sie entstehen im Bau, werden von

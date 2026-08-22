@@ -1,0 +1,59 @@
+Der Titel sagte Bereich, gemeint war eine STEP-Datei
+
+Sieben Funde aus derselben Durchsicht, diesmal an den Texten, den Befunden und
+den Wegen, die etwas herausgeben.
+
+**„Ein Wert liegt außerhalb des zulässigen Bereichs." stand über allem.** Auch
+über „Diese Datei ist keine STEP-Datei." und über einem fehlenden
+Parameternamen hinter dem @. Von rund 170 Stellen, die eine `ValidationError`
+werfen, betreffen **acht** eine Zahlenspanne — die übrigen sind leer, unlesbar,
+falscher Typ, fehlend, kein Umriss, unbekanntes Objekt. Die Oberfläche zeichnet
+den Titel groß und das Detail klein: Wer hinsieht, liest zuerst einen Satz, der
+nicht stimmt, und sucht dann bei den Zahlen.
+
+Drei Klassen sind aus genau diesem Missverhältnis entstanden —
+`NeedsSolidError`, `SketchConflictError`, `UnitUnknownError` —, jede mit
+demselben Vermerk im Docstring, und `AppError` beschreibt den Fall in einem
+Kommentar als bekannt und harmlos („die Oberfläche liest beide Felder einzeln
+und merkt davon nichts"). Sie merkt es doch. Der Titel folgt jetzt der
+Beschränkung; wo keine Spanne verletzt wurde, gilt der Satz der Oberklasse. Die
+drei Klassen bleiben, sie tragen eigene Vorschläge.
+
+**„Abbrechen" stand als Ratschlag im Text jedes Fehlerdialogs**, direkt über
+dem Abbrechen-Knopf. Jede Ausnahme führt es unter ihren Vorschlägen, für keine
+gibt es einen Handler — also schrieb `unhandled_advice` es hin. Der Grundsatz
+dazu stand längst daneben, bei den Knöpfen: „das Schließen ist kein Vorschlag,
+es steht ohnehin da". Der Textpfad hatte ihn nicht übernommen.
+
+**„Zwei Objekte überschneiden sich — 0 · 1".** `check_collisions` kennt nur die
+Reihenfolge seiner Liste und schreibt sie in den Befund; `named_for` trägt die
+Namen nach. Die Zwillings-Op tat das seit je, `arrange_bed` nicht. Und die
+Indizes waren nicht einmal die der Szene: geprüft wird je Platte, die Liste ist
+also gefiltert — die „1" der zweiten Platte ist nicht das zweite Objekt.
+
+**Der Export der Kommandozeile schrieb aus einer angehaltenen Kette und meldete
+Erfolg.** Hält die Kette bei der dritten von sieben Operationen an, enthält die
+Szene den Stand davor; `command_export` schrieb ihn, meldete „Geschrieben: …"
+und gab 0 zurück. Belegt an einer Schnittebene, die den Würfel nicht trifft:
+`projekt_cube_clean.stl` entstand. Eine halbe Datei mit ganzem Namen ist
+schlimmer als keine, denn sie wird gedruckt. Zwei andere Befehle prüften
+`result.complete` längst — nur der, der etwas herausgibt, sah nicht hin.
+
+**„2 × Teile"** — ein Malzeichen vor einem Plural. Die Zeile darüber zählt
+Befunde und behält ihr Malzeichen, dort steht der Singular dahinter.
+
+**Qts Sprachkataloge reisten nicht mit.** Die Standardknöpfe beschriftet Qt aus
+`qtbase_<sprache>.qm`, nicht aus unserem Katalog. In der Entwicklungsumgebung
+liegen sie neben PySide6 und alle sechs laden — im Paket hing es daran, ob
+PyInstallers Hook sie einsammelt. Tut er es nicht, steht im gebauten Programm auf
+jedem zweiten Dialog „Cancel", und zwar **nur** dort: in der Entwicklung ist der
+Fehler unsichtbar. Jetzt ausdrücklich in `datas`, die Sprachen aus dem
+Katalogverzeichnis statt aus einer Liste, Deutsch dazu (es ist die Quellsprache
+und hat dort keine eigene Datei), und mit Varianten gesucht — Portugiesisch
+liefert Qt nur als `pt_BR`, ein stures `qtbase_pt.qm` hätte nichts eingepackt.
+
+**Das Handbuchbild des Operationsdialogs zeigte zweihundert Punkte Totraum, den
+es nicht gibt.** Das Figurenskript zwang jedem Dialog 520 × 460 auf; echt sind
+143 bis 427 Punkte Höhe, je Operation. Das Bild zeigte einen unfertigen Dialog.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>

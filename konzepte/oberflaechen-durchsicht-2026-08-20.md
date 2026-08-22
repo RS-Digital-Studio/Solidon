@@ -156,13 +156,19 @@ starten. Der fertige Auftragstext für eine zweite Sitzung steht in
 > **Nachgetragen am 22.08.2026.** Dieser Punkt stand in keinem Register und
 > steht jetzt in `ROADMAP.md` unter „Die Oberflächendurchsicht, zweiter Teil".
 >
-> Dabei fiel auf, was den Punkt teurer macht als er aussieht: **Das Material,
-> das dieser Absatz nennt, ist nicht eingecheckt.** `.gitignore` schließt
-> `.claude/.state/` aus; von dort sind 31 Dateien bewusst per `git add -f`
+> Dabei fiel auf, was den Punkt teurer machte, als er aussah: **Das Material,
+> das dieser Absatz nennt, war nicht eingecheckt.** `.gitignore` schloss
+> `.claude/.state/` aus; von dort waren 31 Dateien bewusst per `git add -f`
 > aufgenommen (`716d1bb`), aber weder `AUFTRAG-ZWEITE-SITZUNG.md` noch die
-> Workflow-Skripte. In einem frischen Klon beschreibt dieser Absatz damit einen
-> nächsten Arbeitsschritt, dessen sämtliches Material fehlt. Die Entscheidung,
-> was davon ins Repository gehört, liegt vor — ausgeführt ist sie nicht.
+> Workflow-Skripte. In einem frischen Klon beschrieb dieser Absatz damit einen
+> nächsten Arbeitsschritt, dessen sämtliches Material fehlte.
+>
+> **Erledigt am 22.08.2026:** Der ganze Ordner ist eingecheckt, 139 Dateien.
+> Ausgenommen bleiben allein die zwei Laufzeitmarken des Stop-Hooks. Anlass war
+> nicht dieser Punkt, sondern eine allgemeinere Vorgabe — an diesem Projekt wird
+> auf drei Maschinen gearbeitet, und was nur auf einer liegt, ist auf den
+> anderen zweien nicht fortsetzbar. Der nächste Schritt braucht damit nur noch
+> einen Lauf und kein Suchen mehr.
 
 ## 6. Wie man mit den 233 Rohfunden arbeitet
 
