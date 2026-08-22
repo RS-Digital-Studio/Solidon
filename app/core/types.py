@@ -915,6 +915,22 @@ class OpResult:
     outputs: list[SceneObject]
     solver: SolverInfo | None = None
     findings: list[Finding] = field(default_factory=list)
+    answered: dict[str, Any] = field(default_factory=dict)
+    """Parameter, die diese Operation über eine **Rückfrage** entschieden hat
+    (§15.7).
+
+    Nur die fragende Operation kann das Feld füllen: Sie weiß, welchen ihrer
+    Parameter die Antwort betrifft — die Auswertung sieht nur, *dass* gefragt
+    wurde. Der Aufrufer schreibt die Werte danach in den Stapel zurück, wie er
+    es mit den Rückfallstufen tut (§17.2).
+
+    Warum das nötig ist: §15.1 macht die Auswertung zu einer reinen Funktion aus
+    Stack, Quellen, Parametern, Profilen und Startwerten. Eine Antwort, die nur
+    in der Sitzung lebt, wäre ein sechster Eingang — zweimal ausgewertet käme
+    zweimal etwas anderes heraus. Gemessen kostete das eine Bauplatte mit 52
+    Teilen 99 modale Fenster für 7 Entscheidungen, und mit einem Cache, der
+    länger lebt als eine Sitzung, wird daraus stillschweigend eine Annahme."""
+
     transform: Transform | None = None
     """Die starre Bewegung, die diese Operation ausgeführt hat — wenn sie
     eine war.

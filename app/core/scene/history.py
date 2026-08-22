@@ -332,6 +332,42 @@ class History:
             if solver is not None and entry.solver != solver:
                 self.document.ops[index] = dataclasses.replace(entry, solver=solver)
 
+    def record_answers(self, answers: Mapping[OpId, Mapping[str, Any]]) -> bool:
+        """Schreibt die Antworten auf Rückfragen in den Stapel (§15.7).
+
+        **Der Unterschied zu** :meth:`record_solvers` **ist die Richtung.** Eine
+        Rückfallstufe ist ein Vermerk, den die Auswertung nie zurückliest; eine
+        Antwort ist eine Anweisung. Wird sie nicht geschrieben, stellt die
+        nächste Auswertung dieselbe Frage — gemessen 99 modale Fenster für 7
+        Entscheidungen —, und sobald ein Cache länger lebt als die Sitzung,
+        stellt sie sie irgendwann *nicht* mehr und rät stillschweigend
+        (Regel 21).
+
+        **Keine eigene Transaktion, und das ist eine Entscheidung.** Eine
+        Antwort ist keine neue Handlung, sondern der Abschluss der einen, die
+        gefragt hat. Als Transaktion nähme ein Undo sie zurück, die Frage käme
+        wieder, und der Verlauf füllte sich mit Einträgen, die keine Handlung
+        beschreiben. Das Dokument gilt danach als geändert — es gehört
+        gespeichert —, aber es entsteht kein Schritt zum Zurücknehmen.
+
+        Der Rückgabewert sagt, ob sich etwas geändert hat: Danach ist der
+        Operations-Hash der fragenden Operation ein anderer, und der Zweig
+        darunter rechnet einmal neu. Einmal je Frage, und danach nie wieder.
+        """
+        if not answers:
+            return False
+        changed = False
+        for index, entry in enumerate(self.document.ops):
+            given = answers.get(entry.id)
+            if not given:
+                continue
+            merged = {**entry.params, **given}
+            if merged == entry.params:
+                continue
+            self.document.ops[index] = dataclasses.replace(entry, params=merged)
+            changed = True
+        return changed
+
     def change_params(self, op_id: OpId, params: Mapping[str, Any]) -> Operation:
         """Gibt einer Operation des Stapels andere Parameter (§15.4, §11).
 

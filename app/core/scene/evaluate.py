@@ -95,6 +95,15 @@ class EvaluationResult:
     """Welche Rückfallstufe welche Operation getragen hat (§17.2). Der
     Aufrufer schreibt sie zurück in den Stapel, damit dieselbe Datei gleich
     nachrechnet."""
+    answers: Mapping[OpId, Mapping[str, Any]] = field(default_factory=dict)
+    """Was eine Operation über eine **Rückfrage** entschieden hat (§15.7).
+
+    Denselben Weg wie ``solvers`` — und doch etwas anderes: Eine Rückfallstufe
+    ist ein Vermerk, den die Auswertung nie zurückliest. Eine Antwort ist eine
+    **Anweisung**: Steht sie nicht im Stapel, wird dieselbe Frage bei jeder
+    Auswertung erneut gestellt, und mit einem Cache, der länger lebt als eine
+    Sitzung, irgendwann gar nicht mehr. Der Aufrufer muss sie also schreiben,
+    nicht nur können."""
 
     @property
     def complete(self) -> bool:
@@ -139,6 +148,7 @@ def evaluate(
     completed: list[OpId] = []
     pending: list[tuple[str, CachedResult, bool]] = []
     solvers: dict[OpId, SolverInfo] = {}
+    answers: dict[OpId, Mapping[str, Any]] = {}
     stopped_at: OpId | None = None
 
     for position, operation in enumerate(operations):
@@ -233,6 +243,14 @@ def evaluate(
                 findings.append(_finding_from(wrapped, operation))
                 stopped_at = operation.id
                 break
+            # §15.7: Die Antwort **hier** abholen und nicht weiter unten. Was
+            # die Operation zurückgegeben hat, wird gleich in ein
+            # ``CachedResult`` umgewandelt — und das kennt das Feld nicht, weil
+            # ein Ergebnis von der Platte niemanden gefragt hat. Wer es unten
+            # liest, liest an einem Objekt, das nur so heißt wie das, das er
+            # meint.
+            if produced.answered:
+                answers[operation.id] = dict(produced.answered)
             result = CachedResult(
                 objects=tuple(produced.outputs),
                 findings=tuple(produced.findings),
@@ -389,6 +407,7 @@ def evaluate(
         object_hashes=hashes,
         object_names=names,
         solvers=solvers,
+        answers=answers,
     )
 
 

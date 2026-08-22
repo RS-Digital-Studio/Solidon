@@ -899,3 +899,65 @@ def test_a_result_that_came_from_a_question_stays_out_of_the_long_lived_cache() 
     assert run("bracket_inch.stl") == [False], (
         "ein Ergebnis, für das gefragt wurde, darf nicht über die Sitzung hinaus"
     )
+
+
+def test_the_answer_to_a_question_lands_in_the_stack() -> None:
+    """§15.7: Die Antwort gehört in die Parameter der fragenden Operation.
+
+    Vorher stand sie nirgends — und weil §15.1 die Auswertung zu einer reinen
+    Funktion aus Stack, Quellen, Parametern, Profilen und Startwerten macht,
+    hieß das: Dieselbe Frage bei jeder Auswertung. Gemessen kostete eine
+    Bauplatte mit 52 Teilen 99 modale Fenster für 7 Entscheidungen.
+
+    Geprüft wird in zwei Schritten, weil die Sache zwei Hälften hat: Die
+    Auswertung **meldet** die Antwort, der Verlauf **schreibt** sie. Eine der
+    beiden allein wäre die halbe Reparatur, und die sieht aus wie die ganze.
+    """
+    from pathlib import Path
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene import History, OperationDraft
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/bracket_inch.stl", sha256=""
+    )
+    project.sources["src_1"] = (meshes / "bracket_inch.stl").read_bytes()
+    history = History(project.document)
+    history.apply("Import", [OperationDraft(op="load", params={"source": "src_1", "unit": "auto"})])
+
+    asked: list[str] = []
+
+    def ask(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return "in"
+
+    first = evaluate(
+        project.document,
+        make_profile("centauri-carbon-2", "petg"),
+        sources=ProjectSources(project),
+        ask=ask,
+    )
+
+    assert len(asked) == 1, "the unit of an inch file is ambiguous; it must be asked"
+    assert first.answers == {1: {"unit": "in"}}, f"the answer must be reported: {first.answers}"
+
+    assert history.record_answers(first.answers) is True
+    assert project.document.ops[0].params["unit"] == "in"
+
+    # Und die Gegenprobe, die den Sinn der Sache ausmacht: kein zweites Fenster.
+    second = evaluate(
+        project.document,
+        make_profile("centauri-carbon-2", "petg"),
+        sources=ProjectSources(project),
+        ask=ask,
+    )
+
+    assert len(asked) == 1, f"the question came back although the answer is in the stack: {asked}"
+    assert not second.answers, "nothing was decided this time, so nothing is reported"

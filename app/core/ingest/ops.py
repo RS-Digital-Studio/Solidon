@@ -136,6 +136,11 @@ def load(ctx: OpContext) -> OpResult:
     # die Heuristik, und seine Kantenmaße sind das, was die Rückfrage zeigt.
     biggest = max((part.mesh.bounds for part in parts), key=lambda bounds: bounds.diagonal)
     unit = _unit_for(ctx, params, biggest)
+    # §15.7: Wurde die Einheit erfragt, wird sie aufgeschrieben. Ohne das käme
+    # die Frage bei jeder Auswertung wieder — und mit einem Cache, der länger
+    # lebt als die Sitzung, käme sie irgendwann *nicht* wieder, und der Nutzer
+    # bekäme eine Annahme, ohne sie zu sehen (Regel 21).
+    answered = {"unit": str(unit)} if params.unit == "auto" else {}
 
     outputs: list[SceneObject] = []
     findings: list[Finding] = []
@@ -169,7 +174,7 @@ def load(ctx: OpContext) -> OpResult:
                 values={"parts": len(parts), "file": stem},
             )
         )
-    return OpResult(outputs=outputs, findings=findings)
+    return OpResult(outputs=outputs, findings=findings, answered=answered)
 
 
 def _named(findings: Sequence[Finding], name: str) -> list[Finding]:

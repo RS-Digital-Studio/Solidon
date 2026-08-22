@@ -1302,6 +1302,23 @@ class Session(QObject):
         # §17.2: die Rückfallstufe behalten, die jede Operation getragen hat —
         # damit die Datei morgen gleich nachrechnet.
         self.history.record_solvers(result.solvers)
+        # §15.7: Was eine Operation über eine Rückfrage entschieden hat, gehört
+        # in den Stapel — sonst wird dieselbe Frage bei jeder Auswertung erneut
+        # gestellt (gemessen 99 Fenster für 7 Entscheidungen), und sobald ein
+        # Ergebnis von der Platte kommt, irgendwann gar nicht mehr.
+        #
+        # **Ohne `_dirty` wäre es die halbe Arbeit.** Die Antwort stünde im
+        # Stapel, der Titel zeigte kein `*`, und `closeEvent` sichert nur ein
+        # geändertes Dokument — beim Schließen wäre sie weg und die Frage beim
+        # nächsten Öffnen wieder da. Derselbe Weg wie bei `change_params`.
+        #
+        # Und **kein** neuer Lauf: Die Antwort ist in diesem Ergebnis schon
+        # angewandt. Ein `evaluate_async()` hier wäre eine Auswertung, die nur
+        # bestätigt, was gerade herauskam — beim ersten Öffnen eines Modells mit
+        # unklarer Einheit also das doppelte Warten.
+        if self.history.record_answers(result.answers):
+            self._dirty = True
+            self.projectChanged.emit()
         self.sceneChanged.emit(result)
 
     def _on_failed(self, error: Any, finished: _EvaluationWorker | None = None) -> None:
