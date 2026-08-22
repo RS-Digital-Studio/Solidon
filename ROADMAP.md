@@ -63,9 +63,6 @@ oder er hält ihn nicht fest.
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
 | Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | den Eintrag „diesen Schritt ändern“ am erzeugten Merkmal — Bauplan §21.2 hat es am 22.08. über die Provenienz entschieden und nicht über `applies_to`, gilt damit für jede Merkmalsart. Bis dahin bleibt `thread` benannte Ausnahme im Konsistenztest |
-| Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | das Packen ohne Zeilen — hinterste, dann linkeste freie Stelle. Bauplan §29 hat am 22.08. entschieden: sieben Platten für 52 Teile sind zu viel, und die Ursache sind die Zeilen und nicht die Sortierung. Abnahme ist weniger Platten für dieselben 52 Teile, sonst bleibt es beim Alten |
-| Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
-| Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | das Schreiben der Antwort in die Parameter der fragenden Operation — Bauplan §15.7 hat es am 22.08. entschieden, weil §15.1 keine zweite Möglichkeit offenlässt; gemessen 99 Fenster für 7 Entscheidungen |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
@@ -73,18 +70,14 @@ oder er hält ihn nicht fest.
 | Erzeugen und Ändern sind reine Verteilermenüs | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, wie tief ein Menü sein darf — flach ziehen sprengt die Neun-Menü-Grenze, ist also ein Tausch und keine Verbesserung |
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
 | Acht Gebiete der Oberflächendurchsicht sind nie gelaufen | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | einen Lauf. Das Material reist seit dem 22.08.2026 mit, aber die Workflow-Skripte darin gelten nicht mehr (Robert, 22.08.) — womit gefahren wird, entscheidet die Sitzung, die es tut |
-| Die Regressionsschwelle schlägt an, ohne dass etwas langsamer wurde | Leistung (§31) — Stand nach der Durchsicht | den Bestwert je Aufrufkontext. Bauplan §31 hat am 22.08. so entschieden, weil der andere Weg — Vergleich aussetzen, sobald andere Testdateien im Lauf sind — im geteilten Tor fast immer aussetzte und damit nichts mehr prüfte |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
 | Die Antwort der Zuordnung steht nirgends | Das Fundament der Wahrnehmung (22.08.2026) | die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Ein geänderter eigener Baustein wird beim Öffnen nicht gemeldet | Das Fundament der Wahrnehmung (22.08.2026) | eine zweite Quelle für `changed_since_library` — sie liest gepflegte Änderungsverläufe, und ein eigener Baustein hat keinen (§24.4, §24.5). Gefunden von solidon-17 beim Anschließen des Plattencaches |
-| Eine gesenkte Bohrung gilt als Sackloch | Das Fundament der Wahrnehmung (22.08.2026) | das Zusammenlesen von Bohrung und Senkung — `_is_through` vergleicht die Tiefe des Zylinders mit der Dicke des Körpers, und die Senkung nimmt die oberen 2,4 von 8 mm. Jetzt, wo der Kegel ein Merkmal ist, ist es entscheidbar |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
-| `load_operations()` braucht über eine Sekunde | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, wo die Zeit hingeht — 1,1 bis 1,2 s von 12,9 s kaltem Anwendungsstart, gemessen von solidon-17. Das Register führt es, weil es sonst in einer Aufschlüsselung stehen bleibt, die niemand wieder liest |
 | Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
-| „Keine Tests gesammelt“ zählt als Fehllauf | Das Fundament der Wahrnehmung (22.08.2026) | eine Zeile in `suite-getrennt.sh` — Exit 5 heißt „nichts gesammelt“ und ist keine Aussage über den Code. Es trifft jede Datei, die über eine Ansicht **schreibt** statt eine zu bauen, denn die Fenstergruppe wird im Text gesucht |
+| Kein Viewport wird jemals freigegeben | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über die Reichweite — die eine Zeile in `viewport.py` ist behoben, aber `.connect(lambda … self …)` steht an 59 Stellen in `app/ui/`, und jede davon ist ein Ring, sobald der Sender ein Kind von `self` ist. Könnte die gemeinsame Wurzel der vier Absturzpunkte sein: gemessen 7 MB je Fenster, und die Suite baut siebenhundert |
 | Zwei Fensterdateien enden mit Exit 127, und einzeln auch | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — die Roadmap nennt als Signatur des bekannten Absturzes „dieselbe Datei einzeln gefahren ist grün“, und diese zwei sind es nicht. Nachgewiesen im eigenen Arbeitsbaum auf HEAD, vollständig grün und dann 127 |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
-| Nichts hindert eine Op daran, die Uhr zu lesen | Das Fundament der Wahrnehmung (22.08.2026) | eine Prüfung in `tests/test_registry_consistency.py` — Zufall ist gedeckt (`operation_hash` nimmt `operation.seed`, Regel 9 verlangt ihn), Uhrzeit, Umgebungsvariable und Datei außerhalb des Projekts sind es nicht. Gefunden von solidon-17 und solidon-43 beim Plattencache |
 
 ---
 
@@ -937,7 +930,7 @@ Alles oben stand als Prosa da, und niemand führte es. Ein roter Leistungstest
 heißt nach diesem Abschnitt **nicht** „nicht fertig" — das ist die teuerste
 Auskunft der Datei, und sie lag 163 Zeilen tief ohne Kästchen.
 
-- [ ] **Die Regressionsschwelle schlägt an, ohne dass etwas langsamer wurde.**
+- [x] **Die Regressionsschwelle schlug an, ohne dass etwas langsamer wurde.**
       Zwei von fünf Läufen rot, je an einem anderen Test, immer an der
       25-%-Schwelle und nie an einem absoluten Zielwert — die Aufrufreihenfolge
       allein macht achtunddreißig Prozent (`sketch_solve_200`: 114 ms allein,
@@ -981,6 +974,20 @@ Auskunft der Datei, und sie lag 163 Zeilen tief ohne Kästchen.
       allein nicht „nicht fertig" heißt — als einziger roter Test in diesem
       Projekt. Damit steht es an der Stelle, an der jemand danach sucht, und
       nicht 163 Zeilen tief in einer Arbeitsliste.
+
+      **Gebaut in `3190971`, und zwar so, wie §31 es entschieden hat.**
+      `tests/test_performance.py` führt die Marken je Aufrufkontext:
+      `_invocation_key()` bildet ihn aus der **Menge** der Testdateien im
+      Prozess (`alone` oder `with N more (<hash>)`), `_read_marks()` hält je
+      Kontext `{"best", "strikes"}` und liest zwei ältere Formate mit, und
+      `measure()` vergleicht gegen den Bestwert *dieses* Kontexts. Die
+      kontextlosen Altmarken stehen unter `UNKNOWN_CONTEXT` und werden nicht
+      mehr verglichen. Dazu kam etwas, das der Punkt nicht einmal forderte:
+      `REGRESSION_STRIKES = 2` — ein Ausschlag ist Last, zwei in Folge sind eine
+      Richtung, also die Handregel aus §31 als Code. Der Fall, der den Punkt
+      aufmachte (`sketch_solve_200`: 114 ms allein, 162 ms hinter
+      `test_slice.py`), fällt damit nicht mehr in denselben Vergleich. Gebaut
+      von 3d-druck-33.
 
 ## P11 — Gehosteter Backend
 - [–] **Bewusst nicht gebaut.** §27 knüpft diese Phase an nachweisbare
@@ -3854,7 +3861,7 @@ bekommt ein 220er Bett — und dann meldet jedes 231 mm tiefe Teil zu Recht
 
 ### Was auffiel und eine Entscheidung braucht
 
-- [ ] **Das Regal-Packen verteilt sehr ungleich.** 52 Körper auf acht erlaubte
+- [x] **Das Regal-Packen verteilte sehr ungleich.** 52 Körper auf acht erlaubte
       Platten ergeben 3 / 1 / 10 / 3 / 2 / 5 / 28 — die letzte trägt mehr als
       die Hälfte, weil eine Zeile, die einmal überläuft, nie wieder von rechts
       gefüllt wird. Nach Tiefe sortiert wird es nicht besser (1 / 2 / 3 / 7 /
@@ -3874,13 +3881,40 @@ bekommt ein 220er Bett — und dann meldet jedes 231 mm tiefe Teil zu Recht
       Vorhersagbarkeit, um die es dem Docstring ging. Abnahme ist eine Messung
       und keine Meinung: weniger Platten für dieselben 52 Teile, sonst bleibt
       es beim Zeilenpacken.
-- [ ] **Der Plattenwähler wohnt im Explodieren.** Er erscheint erst ab zwei
-      Körpern **und** zwei Platten, und er steht in der Explodier-Leiste — wer
-      eine einzelne Platte ansehen will, sucht ihn unter einem Werkzeug, das
-      Teile auseinanderzieht. Jetzt, wo alle Betten nebeneinander stehen, ist
-      das weniger dringend; ein eigener Ort in der Kopfzeile bleibt die
-      naheliegende Antwort.
-- [ ] **Dieselbe Frage kommt bei jeder Auswertung wieder, und das wird
+
+      **Gebaut am 22.08.2026, und die Messung hält.** `arrange_on_bed` legt
+      jeden Körper an die hinterste, dann linkeste freie Stelle; die Kandidaten
+      sind die leere Ecke und je belegtem Rechteck zwei, rechts daneben und
+      davor. Für dieselben 52 gemischten Teile auf einem 256er Bett: **fünf
+      Platten zeilenweise, drei ohne Zeilen** (22/16/14), 8,5 ms, zweimal
+      gerechnet identisch. Die Abnahme steht als Test
+      (`test_fifty_two_parts_need_fewer_plates_than_rows_did`) und nicht als
+      Notiz — sie ist die Bedingung, unter der die Regel bleiben darf, also
+      muss sie mitlaufen. Zwei weitere Tests halten die Regel selbst fest:
+      dass gleich tiefe Teile nebeneinander in derselben Tiefe landen, und
+      dass neben einem 200 mm tiefen Teil nichts dahinter wandert, solange der
+      Streifen daneben frei ist. **Wo hinten ist, war die einzige offene
+      Frage:** `app.ui.viewport.VIEWS` blickt für „Vorne" aus `-y`, also ist
+      `+y` hinten — das alte Zeilenpacken füllte von vorn.
+- [x] **Der Plattenwähler wohnte im Explodieren.** Er erschien erst ab zwei
+      Körpern **und** zwei Platten, und er stand in der Explodier-Leiste — wer
+      eine einzelne Platte ansehen wollte, suchte ihn unter einem Werkzeug, das
+      Teile auseinanderzieht.
+
+      **War beim Eintragen schon behoben**, am 21.08.2026 mit `4790527`, und
+      stand trotzdem noch zweimal in dieser Datei — einmal als Punkt, einmal im
+      Register. Der Wähler sitzt in `HeaderBar.show_plates`
+      (`app/ui/header.py`), `explode_bar.py` verweist von der anderen Seite
+      darauf, und `main_window.py` verdrahtet `plateChanged` auf
+      `viewport.set_plate`. Auch die Zusatzbedingung ist fort: sichtbar macht
+      ihn `many = plates > 1`, also die Plattenzahl allein — ein einzelner
+      Körper auf Platte 2 von 3 nach einem Auto-Split ließ ihn sonst
+      verschwinden. Nachgewiesen von 3d-druck-b8 am 22.08.2026 gegen den Code,
+      nachgeprüft von 3d-druck-64. **Der Fund an dieser Stelle ist der Punkt
+      selbst:** Die Übersicht am Kopf nennt sich „die Abkürzung, nicht die
+      Quelle" — wer daraus Arbeit zieht, ohne den Punkt an seinem Ort gegen den
+      Code zu halten, baut ein zweites Mal, was schon steht.
+- [x] **Dieselbe Frage kam bei jeder Auswertung wieder, und das wurde
       schnell viel.** Gezählt über die ganze Kette: die Ente **8** Rückfragen
       bei **1** verschiedenen, der Propellersatz **32** bei **5**,
       ALL+PLATES **99** bei **7** — sechzehnmal „Welches Merkmal entspricht
@@ -3903,6 +3937,20 @@ bekommt ein 220er Bett — und dann meldet jedes 231 mm tiefe Teil zu Recht
       „die Op wird umgeschrieben" bei mehrdeutiger Zuordnung, §21.3); es fehlte
       der Satz ohne Einzelfall. Zu tun bleibt, dass `ctx.ask` die Antwort
       zurückschreibt statt sie zu vergessen.
+
+      **Gebaut am 22.08.2026 mit `311134a`**, und zwar auf dem Weg, den die
+      Rückfallstufen schon gingen: `OpResult.answered` →
+      `EvaluationResult.answers` → `History.record_answers`. Der Unterschied
+      steht in beiden Docstrings, weil er die Sache ausmacht — eine
+      Rückfallstufe ist ein Vermerk, den die Auswertung nie zurückliest, eine
+      Antwort ist eine Anweisung. Nachgeprüft von 3d-druck-64 an
+      `types.py:918`, `evaluate.py:253` und `history.py:335`.
+
+      **Das gilt für die Fragen, die eine Operation selbst stellt.** Was die
+      **Zuordnung** entscheidet — die 99 Fenster für 7 Merkmale aus §21.3 —
+      passt in keinen Parameter und braucht ein eigenes Feld an der Operation
+      samt Formatänderung. Diese Hälfte steht weiter offen, unter „Die Antwort
+      der Zuordnung steht nirgends".
 - [ ] **Verrundung und Fase auf einem Netz sagen sauber ab** — `NeedsSolidError`
       mit dem richtigen Satz. Kein Fehler; nur ist damit für ein
       heruntergeladenes Modell die halbe Kategorie *Formgebung* zu. Steht so im
@@ -4378,7 +4426,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Cache. Gefunden von solidon-17, deren Cache-Schranke denselben Fall über
       Name, Änderungszeit und Größe der Dateien löst — dieselbe Auskunft, die
       auch die Warnung bräuchte.
-- [ ] **Eine gesenkte Bohrung gilt als Sackloch.** `_is_through` vergleicht die
+- [x] **Eine gesenkte Bohrung galt als Sackloch.** `_is_through` verglich die
       Tiefe der Zylinderwand mit der Dicke des Körpers entlang der Achse. Bei
       `plate_countersunk.stl` sind das 5,6 gegen 8 mm, weil die Senkung die
       oberen 2,4 mm übernimmt — die Auskunft ist über den Zylinder richtig und
@@ -4387,6 +4435,22 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Eine Bohrung ist durchgehend, wenn Bohrung **und** koaxialer Kegel
       zusammen die Dicke überspannen. Der Test hält den heutigen Stand
       ausdrücklich als Zylindertiefe fest und behauptet nichts über „durch".
+      **Behoben am 22.08.2026 (`770f1b1`).** `_is_through` mass die Höhe der
+      Zylinderwand gegen die Dicke des Körpers; bei einer Senkung gehört das
+      obere Stück des Lochs zum Kegel, an einem gesenkten M5-Durchgangsloch in
+      8 mm also 5,6 gegen 8. Nicht nur Anzeige: Eine Passung sucht ihr
+      Gegenstück über die Merkmalsart (§14). Gerechnet wird jetzt über die
+      **Vereinigung** der Achsabschnitte von Bohrung und zugehöriger Senkung —
+      Überlappung zählt einmal. `_sinks_into` entscheidet die Zugehörigkeit über
+      `recess`, Achsparallelität auf den Betrag, Kegelradius und Konzentrizität,
+      dazu eine Anschlussprüfung gegen den Fall zweier koaxialer Bohrungen durch
+      zwei Wände. Die neue Korpusdatei `plate_countersunk_blind.stl` (gesenkte
+      **Sack**bohrung, 3,6 + 2,4 von 8 mm) hält fest, dass eine Senkung allein
+      noch kein Durchgang ist — ohne sie wäre jede falsche Lösung grün gewesen.
+      Bauplan §9 und §42 am selben Tag nachgezogen (`0c90a3a`): `Feature.kind`
+      führt `"cone"`, und §42 nennt den Kegel nicht mehr unter dem, was fehlt.
+      Gebaut von 3d-druck-3a.
+
 - [ ] **Kugel und Torus fehlen der Erkennung.** Vier Arten waren es, fünf sind
       es: `hole`, `pin`, `face`, `edge_loop`, `cone`. Was fehlt, ist die Kugel
       (Pfanne, Kalotte) und der Torus — und mit dem Torus fehlt der **Radius
@@ -4394,7 +4458,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Preis daneben: Ein Anpassungsverfahren, das Grundformen sucht, findet
       auch welche, die niemand gemeint hat, also braucht es eine eigene
       Abnahme und eigene Testkörper.
-- [ ] **`load_operations()` braucht über eine Sekunde.** Aus der Aufschlüsselung
+- [x] **`load_operations()` brauchte über eine Sekunde — es war nicht das
       des kalten Anwendungsstarts (solidon-17): Interpreterstart 1,9 s,
       `load_operations()` 1,1–1,2 s, `build_application()` 0,9 s,
       `window.show()` 7 ms — zusammen 12,9 s beim ersten Start am Tag gegen
@@ -4402,6 +4466,23 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       das zu ändern ist, ist offen; dass es die zweitgrößte Position eines
       Starts ist, den §31 auf drei Sekunden bindet, steht hier, damit es nicht
       in einer Nachricht bleibt.
+
+      **Gemessen am 22.08.2026, und die Antwort liegt außerhalb des
+      Registers.** Je Modul gestoppt, `app.core.scene.ops` kostet **722 der
+      790 ms** — die anderen achtzehn zusammen 67. Eine Ebene tiefer löst es
+      sich vollständig auf: `import trimesh` **582 ms**, `numpy` 65 ms. Das
+      Register selbst ist billig; `load_operations()` ist nur der Erste, der
+      trimesh anfasst und deshalb die Rechnung bekommt. Die 86 Einträge kosten
+      nichts Messbares — `parts.ops.register_all()` steht bei 11,8 ms.
+
+      **Damit ist der Punkt beantwortet und die Folgefrage eine andere:** Nicht
+      „wie wird das Registerfüllen schneller", sondern „muss trimesh im
+      kritischen Pfad des Starts liegen". Heute schon: `app/ui/app.py:234` ruft
+      `load_operations()` vor `build_application()`, also lädt trimesh, während
+      der Startbildschirm „Operationen werden geladen …" zeigt und Qt noch
+      nicht hochgefahren ist. Beides parallel zu fahren wäre eine Änderung an
+      der Startreihenfolge und damit eine Entscheidung — sie steht in der
+      Vorlage an Robert, nicht hier. Gemessen von 3d-druck-64.
 - [ ] **Keine Testart deckt „zwischen zwei Modulen“.** Der Plattencache war
       vollständig gebaut (`DiskCache`, `MeshCodec`), vollständig geprüft
       (`tests/test_cache.py`) — und in der Anwendung nicht angeschlossen:
@@ -4413,7 +4494,46 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       als der Cache: Wie viele fertig gebaute Sachen liegen sonst noch da,
       ohne Aufrufer?
 
-- [ ] **„Keine Tests gesammelt" zählt als Fehllauf.** `suite-getrennt.sh` sucht
+- [ ] **Kein Viewport wird jemals freigegeben, und kein Fenster auch.** Gemessen
+      am 22.08.2026 von 3d-druck-b8: zwanzig losgelassene Viewports und fünf
+      losgelassene `MainWindow` überleben `del` und `gc.collect()` vollzählig.
+      Die Ursache ist eine Zeile — `app/ui/viewport.py:1428` verband den
+      Neuaufbau der Schichtansicht mit einem Lambda, das `self` stark einfängt,
+      und `_layer_rebuild` ist ein `QTimer(self)`. Damit steht der Ring
+      **Viewport → QTimer → Rückruf → Viewport**; er läuft über die C++-Grenze,
+      und Pythons Speicherbereiniger sieht die mittlere Kante nicht.
+
+      **Diese eine Zeile ist behoben** (weakref, mit dem Messwert im
+      Kommentar): mit dem Lambda leben von zwanzig noch zwanzig, mit weakref
+      keiner. Gegengeprobt am reinen Muster ohne Solidon-Code — zehn `QObject`
+      mit eigenem `QTimer`, stark verbunden zehn Überlebende, schwach verbunden
+      keiner.
+
+      **Offen ist die Reichweite.** `grep -rn "\.connect(lambda" app/ui/*.py |
+      grep "self\."` findet **59 Stellen**. Nicht jede bildet einen Ring — er
+      entsteht nur, wenn das sendende Objekt selbst von `self` gehalten wird,
+      bei einem Kind-Widget oder Kind-Timer also im Normalfall. Betroffen sind
+      unter anderem `main_window.py`, `panels.py`, `sketch_editor.py`,
+      `print_settings_dialog.py`. Das ist eine Änderung mit Reichweite über vier
+      Gebiete und wird entschieden, nicht nebenbei gemacht.
+
+      **Warum der Punkt schwerer wiegt als die vier Absturzpunkte:** Er könnte
+      ihre gemeinsame Wurzel sein. Gemessen kostet ein nicht freigegebenes
+      Fenster rund 7 MB (linear über fünf Fenster, offscreen und damit **ohne**
+      VTK-Plotter); die Suite baut über siebenhundert Fenster nacheinander auf,
+      und `CLAUDE.md` schreibt, sie reiße „bei über 3 GB" ab. Das ist ein
+      Größenordnungsargument und **kein Beweis** — bewiesen ist, dass nichts
+      freigegeben wird, was die Ursache ist und was der Fix bewirkt. Den Beweis
+      führt ein Suite-Lauf mit Speicherkurve vor und nach dem Fix, unter dem
+      Schloss.
+
+      Und die Stelle, an der die Gebietsregel danebengriff: Sie warnt vor
+      genau diesem Muster, nennt als Beispiel aber den Interactor — deshalb hat
+      dort niemand nach einem Zeitgeber gesucht. Gefunden wurde es nicht durch
+      Suchen, sondern weil ein Test zu `set_navigation` behauptete, die
+      Rückrufe hielten die Ansicht nicht fest, und rot wurde: Die Rückrufe
+      waren unschuldig, `gc.get_referrers` nannte den wahren Halter.
+- [x] **„Keine Tests gesammelt" zählte als Fehllauf.** `suite-getrennt.sh` sucht
       seine Fensterdateien **im Text** (`grep -lE "MainWindow|Viewport|pyvista"`)
       — das ist Absicht und gut, eine neue Fensterdatei braucht damit keinen
       Eintrag. Es trifft aber auch eine Datei, die über eine Ansicht
@@ -4425,6 +4545,11 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Behebung ist eine Zeile im Skript, denn „nichts gesammelt" ist keine
       Aussage über den Code. Gefunden von solidon-17, `.claude/**` ist seit dem
       Ende von c1 frei.
+
+      **Behoben**, und zwar genau als die eine Zeile, die der Punkt vorsah:
+      `zaehlt_als_fehler()` gibt für 5 dasselbe zurück wie für 0, mit der
+      Begründung darüber im Skript. Gefunden von 3d-druck-3a, am Skript
+      bestätigt von 3d-druck-33, nachgeprüft von 3d-druck-64.
 - [ ] **Zwei Fensterdateien enden mit Exit 127, und einzeln auch.**
       `tests/test_chat_ui.py` (40 passed) und `tests/test_first_run.py`
       (45 passed) laufen vollständig grün durch und beenden sich dann mit 127.
@@ -4458,7 +4583,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       reproduzierbar), `0xC0000409` nach der Schlusszeile (bekannt), und 139
       mitten darin (nichtdeterministisch, einer von vier).
 
-- [ ] **Nichts hindert eine Operation daran, die Uhr zu lesen.** §15.1 verlangt,
+- [x] **Nichts hindert eine Operation daran, die Uhr zu lesen.** §15.1 verlangt,
       dass die Auswertung eine reine Funktion aus Stack, Quellen, Parametern,
       Profilen und Startwerten ist. Für den **Zufall** ist das durchgesetzt:
       `operation_hash` nimmt `operation.seed`, Regel 9 verlangt einen
@@ -4473,6 +4598,42 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Cache-Ebene. Der Ort ist deshalb `tests/test_registry_consistency.py`,
       wo schon steht, dass eine nicht-deterministische Op einen Startwert
       führen muss. Gefunden von solidon-17 und solidon-43.
+
+      **Gebaut — und die Reichweite ist gemessen, nicht gewählt.**
+      `test_no_operation_reads_the_clock_the_environment_or_the_machine`
+      verfolgt den Aufrufgraph von jeder Operation und jedem Baustein aus und
+      meldet jede Stelle, die Uhr, Umgebung, Arbeits- oder Nutzerverzeichnis,
+      Rechnernamen oder den angemeldeten Nutzer liest. Drei Schnitte standen
+      zur Wahl, alle drei gefahren: nur die 24 Module, die Operationen halten
+      (0 Treffer, sieht aber keine Hilfsfunktion zwei Ebenen tiefer); der ganze
+      Graph durch `app.` (574 Funktionen, **15 Treffer — und alle fünfzehn
+      berechtigt**: `perf_counter` in `backends/openscad` misst die Laufzeit
+      eines Unterprozesses, `os.environ` und `Path.home` in `discover` und
+      `paths` suchen das fremde Werkzeug und den Nutzerordner); der Graph durch
+      die **rechnenden** Module (503 Funktionen, 0 Treffer). Genommen ist der
+      dritte, weil nur er ohne Ausnahmeliste auskommt — eine Prüfung mit
+      fünfzehn Ausnahmen prüft nichts mehr. Der Satz dazu: Wo gerechnet wird,
+      gibt es keinen Grund, die Uhr zu lesen; wo ein fremdes Werkzeug gesucht
+      und gestartet wird, gibt es ihn.
+
+      **Die Gegenprobe hat sich zweimal gelohnt, und beide Male hätte kein
+      Nachdenken es gefunden.** `test_the_purity_check_would_notice` schickt
+      vier Funktionen durch die Prüfung, die die Uhr lesen, und eine, die es
+      nicht tut. Fassung 1 fand **keine** der vier: Sie sah nur in den
+      Namensraum des Moduls, und ein `import datetime` innerhalb der Funktion
+      legt dort nichts ab — die im Bestand übliche Form. Fassung 2 fand drei:
+      `Path.home()` entkam, weil `pathlib.Path` seit Python 3.13 als aus
+      `pathlib._local` stammend gemeldet wird. Der Bestand war in allen drei
+      Fassungen grün; ohne die Gegenprobe wäre er es aus dem falschen Grund
+      geblieben. Sie bleibt deshalb stehen und prüft nicht den Code der
+      Anwendung, sondern das Werkzeug darüber.
+
+      Aufgelöst wird über den Namensraum und die `import`-Anweisungen, nicht
+      über den geschriebenen Namen: `from time import monotonic as tick` fällt
+      damit genauso auf wie `time.monotonic()`. `random` und `uuid4` stehen
+      bewusst nicht in der Liste — Regel 9 und der Determinismustest decken den
+      Zufall, und eine zweite Stelle, die dasselbe prüft, driftet von der
+      ersten weg.
 
 
 ## Der Changelog schickte den Kunden ins Handbuch, und dort war nichts (22.08.2026)
