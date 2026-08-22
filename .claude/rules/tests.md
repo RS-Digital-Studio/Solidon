@@ -22,7 +22,7 @@ Regelwerks.
 | `test_support.py` | die Rückmeldung geht raus — und nur am Knopf (§37.2) |
 | `test_licences.py` | Abhängigkeiten gegen die Freigabeliste |
 | `test_performance.py` | Budget §31, Regressionsschwelle 25 % |
-| `test_way_one/two/three.py` | die drei Hauptwege Ende zu Ende |
+| `test_way_one/two/three/four.py` | die vier Hauptwege Ende zu Ende |
 | `test_agent_suite.py` | was die Agentenschicht ohne Modell garantiert |
 
 Eine neue Testart bekommt eine eigene Datei; ein neues Fehlerbild wird eine

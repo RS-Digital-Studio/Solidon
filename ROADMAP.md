@@ -40,6 +40,8 @@ bekommt einen roten Lauf.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
+| Ein Satz in `CLAUDE.md` verweist auf eine Spalte, die es nicht gibt | Der Changelog schickte den Kunden ins Handbuch, und dort war nichts (22.08.2026) | eine Entscheidung Roberts — die Schlusstabelle von `bedienkonzept-funktionen.md` führt den Stand in einer zweiten Tabelle, nicht in einer Spalte |
+| Die Changelog-Korrektur steht nur im Arbeitsbaum | Der Changelog schickte den Kunden ins Handbuch, und dort war nichts (22.08.2026) | den Upload von `website/version.json` — bis dahin liest jedes Update-Fenster den alten achten Punkt |
 | Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | eine Entscheidung, was aus der Zeile verschwindet — und einen Test, der sein Thema selbst setzt |
 | Ein Höhenbudget für den Startbildschirm | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird — Kachelhöhe, Ablagefläche oder die Liste der zuletzt geöffneten Projekte; Umschichten ist ausgereizt |
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
@@ -52,7 +54,7 @@ bekommt einen roten Lauf.
 | Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
 | Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
-| Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht; der Stapel zeigt einen neuen QThread im finished-Slot des Vorgängers, und die Falle dafür steht in `tools/qt_trace.py` |
+| Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
 | Der Textweg prüft seine Voraussetzungen nicht | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile ausgraut, solange kein SDXL-Modell unter `models/checkpoints` liegt |
 
@@ -8980,7 +8982,7 @@ Kein Verstoß.
 
       Dazu unverändert: ein Schritt 8 → 9 mit Migration (`carry_over` genügt,
       alte Namen bleiben wörtlich — dieselbe Begründung wie bei
-      `title_translatable`), eine Beispieldatei der Fassung 8, die vierzehn
+      `title_translatable`), eine Beispieldatei der Version 8, die vierzehn
       gesetzten Namen in `make_examples.py`, siebzig Katalogeinträge und neu
       erzeugte Beispiele.
 
@@ -10520,7 +10522,7 @@ sie sind der Abstand zwischen „das geht" und „das lohnt".
 - [ ] **Der lokale Weg ist auf Intel- und AMD-Grafik nicht praktikabel, und
       wir nennen keinen Ausweg.** Ollama unterstützt CUDA und Metal; auf allem
       anderen rechnet es auf dem Prozessor. Für Intel gibt es IPEX-LLM, für
-      AMD ROCm-Fassungen, für beides OpenVINO — jedes davon ist eine eigene
+      AMD ROCm-Versionen, für beides OpenVINO — jedes davon ist eine eigene
       Installation mit eigenen Fallen, und keines wird von Ollama selbst
       angeboten. Wartet auf eine Entscheidung, ob Solidon einen zweiten
       lokalen Weg **nennt** (nicht einrichtet) oder ob die Auskunft „hier lohnt
@@ -10872,3 +10874,163 @@ Schaden, der vorher entstanden ist und hier bloß auffällt.
       wäre schlimmer als ein seltener Absturz. Der Weg bleibt ein Lauf unter
       einem Werkzeug, das doppelte Freigaben sieht; die Falle steht jetzt
       dafür bereit.
+
+      **Nachtrag vom selben Abend: der zweite Stapel, und er widerlegt die
+      Verengung.** Der geteilte Lauf fing ihn in `tests/test_ui.py` — dieselbe
+      Absturzstelle, ein anderer Weg dorthin:
+
+      ```
+      app/ui/session.py:110    _EvaluationWorker.__init__   (wie beim ersten Mal)
+      app/ui/session.py:1029   evaluate_async               (wie beim ersten Mal)
+      app/ui/session.py:472    _reset_for                   <- neu
+      app/ui/session.py:414    start_new                    <- neu
+      app/ui/main_window.py:2549  open_path                 <- neu
+      tests/test_ui.py:3176    test_the_wired_dialog_previews_into_the_viewport
+      ```
+
+      Kein `finished`-Slot, kein `wait_for_idle`, kein Ablösen eines laufenden
+      Arbeiters — ein schlichtes Öffnen einer Datei. Damit ist die Erklärung
+      von oben („der Nachfolge-Arbeiter entsteht im `finished`-Slot seines
+      Vorgängers") **nicht** die Ursache, sondern war ein zweiter Ort, an dem
+      derselbe Schaden auffiel. Der Satz daneben stimmt dafür umso mehr: „Eine
+      Zugriffsverletzung in einer nackten `QThread`-Konstruktion deutet auf
+      einen Schaden, der vorher entstanden ist und hier bloß auffällt."
+
+      Das ist gut für die Suche: Was zu prüfen ist, liegt **vor**
+      `_EvaluationWorker.__init__` und nicht in den Aufrufern. Der Fix von
+      damals bleibt richtig, er war nur nicht der ganze Fund.
+
+## Der Changelog schickte den Kunden ins Handbuch, und dort war nichts (22.08.2026)
+
+Das Update-Fenster war fertig gebaut — Punkte in sechs Sprachen, Prüfsumme,
+Abbruch, alles. Nur stand in einem der acht Punkte etwas, das es nicht gibt.
+Dazu kam die Umstellung von „Fassung" auf „Version", und beim Durchgang durch
+alle Gebiete fielen drei weitere Sachen auf, von denen zwei die Suite rot
+gehalten hätten.
+
+### Behoben: der achte Punkt versprach eine Handbuchseite
+
+- [x] **„Das Handbuch hat eine Übersicht aller Tastenkürzel bekommen" — hat es
+      nicht.** Die Übersicht ist ein Dialog *in der Anwendung*: Hilfe →
+      „Tastenkürzel …", Taste `?`, `app/ui/shortcuts_window.py`, erzeugt aus
+      dem Register. Im Handbuch stehen Kürzel nur einzeln bei jeder Operation
+      („· Kürzel X" im Referenzteil); eine Übersicht gibt es dort nicht, und
+      `website/handbuch.html` kennt weder `Strg+Tab` noch `Alt+1` bis `Alt+8`.
+
+      Der Punkt hätte den Kunden an eine Stelle geschickt, an der er nichts
+      findet — und zwar in allen sechs Sprachen gleichzeitig. Neu formuliert,
+      ohne Pfeil: `→` bricht in jeder Umgebung, die nicht UTF-8 spricht, und
+      ein Kundentext wird auch vorgelesen. `website/version.json` nachgezogen,
+      ohne die Paketliste anzufassen — `make_download.py` ohne Paketdateien
+      **leert den Kasten**, und die Pakete liegen nicht im Repository.
+
+      Die anderen sieben Punkte stimmen. Gegengeprüft wurde der mit der
+      konkreten Zahl: `FIELDS` in `app/ui/print_settings_dialog.py` hat genau
+      sechsundfünfzig Einträge, und `tests/test_print_settings_ui.py` hält das
+      fest.
+
+### Behoben: jede Neuerzeugung der Rechtstexte nahm den Sprunglink heraus
+
+- [x] **`tools/make_legal.py` kannte ihn nicht** (WCAG 2.4.1). „Neunundzwanzig
+      Seiten, und auf keiner kam die Tastatur an der Kopfzeile vorbei"
+      (`91494ca`) zählte EULA, AGB und Widerruf zu den *von Hand gepflegten*
+      Seiten und trug `<a class="skip">` dort im Quelltext nach — nur werden
+      die drei erzeugt. Der nächste Lauf des Erzeugers nahm ihn wieder heraus,
+      zusammen mit dem `id="content"`, auf das er zeigt.
+
+      Genau das passierte hier: `make_legal.py` lief wegen der Wortumstellung,
+      und `tests/test_website.py::test_every_page_lets_the_keyboard_skip_the_header`
+      wurde rot — mit drei Zeilen, an denen sich am Inhalt nichts geändert
+      hatte. Der Erzeuger schreibt ihn jetzt selbst; zweiter Lauf erzeugt
+      dieselbe Datei.
+
+### Behoben: zwei Paketbeschreibungen standen noch auf 0.1.1
+
+- [x] **Aus dem geholten Stand mitgekommen, nicht von hier.**
+      `packaging/macos-distribution.xml` und die drei Linux-Beschreibungen
+      trugen `0.1.1`, während `app/branding.py` auf `0.1.2` steht — zwei rote
+      Tests in `tests/test_packaging.py`, die genau dafür gebaut sind („eine
+      erzeugte, eingecheckte Datei veraltet still"). Neu erzeugt mit
+      `--files`, wie die Meldung des Tests es sagt. Dabei fiel auf, dass
+      `packaging/install.sh` denselben Drift hatte, nur ungeprüft: Der Satz im
+      Werkzeug sagte längst „Version", die erzeugte Datei noch „Fassung".
+
+### „Fassung" heißt jetzt „Version"
+
+- [x] **93 Stellen gefunden, 79 umgestellt, vierzehn stehen mit Grund.**
+      „Kurzfassung", „Zusammenfassung",
+      „Langfassung" und „Einfassung" sind eigene Wörter und bleiben; umgestellt
+      wurde, was einen Ausgabestand meint — auch „Programmfassung",
+      „Paketfassung" und „Sprachfassung".
+
+      Drei Ausnahmen mit Grund: Der Kopf der drei Rechtstexte („Stand: 8.
+      August 2026 · Fassung 1.0") meint die Fassung *des Dokuments*, nicht des
+      Programms, und „Diese Bedingungen gelten in der bei Vertragsschluss
+      geltenden Fassung" ist eine stehende Formel. Die fünf `.eml` unter
+      `marketing/versand/` bleiben ebenfalls: Sie sind der Beleg dessen, was
+      an die Redaktionen ging, kein Text, den man nachbessert.
+
+### Das Tor läuft am Stück nicht mehr durch, und das stand nirgends
+
+- [x] **`pytest -q` hängt.** Zweimal angesetzt, zweimal bei 83 % stehen
+      geblieben — 2,9 GB, kaum noch CPU, kein Fortschritt. Der Hänger sitzt in
+      `tests/test_style.py`, hinter über siebenhundert VTK-Fenstern in einem
+      Prozess.
+
+      Die CI löst das seit dem 12.08.2026 mit je einem Prozess pro Fensterdatei,
+      und es gibt ein Skript dafür — `suite-getrennt.sh`, ungetrackt, unter
+      `.claude/.state/`. In `CLAUDE.md` steht weiter `pytest -q` mit dem Satz
+      „Diese vier sind zusammen das Tor", ohne ein Wort davon. Ein frischer
+      Klon hat den einzigen Weg nicht, auf dem die Suite durchkommt.
+
+      Geteilt gefahren ist der Stand grün: Sammellauf Exit 0, 23 von 26
+      Fensterdateien Exit 0, Leistungstests 19 passed. **Jeder Test ist grün.**
+
+- [x] **Drei Fensterdateien stürzen beim Abbau ab, nachdem sie grün gemeldet
+      haben.** `test_chat_ui.py` (40 passed) und `test_first_run.py` (45 passed)
+      enden mit `0xC0000409`, `test_ui.py` mit einer Zugriffsverletzung. Das
+      Skript zählt sie als „Läufe mit Fehler: 3" und gibt Exit 3 — ein Tor, das
+      rot meldet, obwohl kein Test rot ist.
+
+      Gegengeprüft, dass es nicht an dieser Arbeit liegt: `test_first_run.py`
+      stürzt mit dem Stand aus `HEAD` genauso ab (dort zusätzlich mit dem
+      Fehlschlag, der hier behoben ist), und `test_chat_ui.py` ist gar nicht
+      angefasst worden. Einzelne Tests derselben Datei laufen sauber durch;
+      beide Hälften stürzen. Es ist der Abbau, nicht ein Test.
+
+      `0xC0000409` ist dasselbe Bild, das „Die neuen Tests fanden einen alten
+      Absturz" als „Exit 127, kein Faulthandler-Dump" beschreibt. Dort steht
+      auch, was offen blieb: „`_on_agent_done` und der Split-Arbeiter lassen
+      ihre Referenz genauso los; dort hämmert nur niemand." `test_chat_ui.py`
+      hämmert dort.
+
+- [x] **Falsch gezählt, und zwar dreimal.** Zwischenstände wurden mit
+      `grep -cE "^(FAILED|ERROR)"` gemessen. Das trifft nur die
+      Zusammenfassungszeilen, und die schreibt pytest erst am **Ende** — ein
+      laufender Lauf meldet damit immer null. Zwei Fehlschläge standen die
+      ganze Zeit als `F` im Fortschritt. Gezählt wird ab jetzt über die
+      Fortschrittszeichen, und die Zusicherung ist der Exit-Code, nicht eine
+      Zeile im Text.
+
+### Nachgezogen
+
+- [x] `.claude/rules/tests.md` nannte `test_way_one/two/three.py` und „die drei
+      Hauptwege". Es sind vier — `test_way_four.py` gibt es seit `cb8d2f9`,
+      und `AGENTS.md` sagt es richtig („die vier Wege aus Bauplan §2.2").
+
+### Was offen bleibt
+
+- [ ] **`CLAUDE.md` verweist auf eine Spalte, die es nicht gibt.** Dort steht,
+      die Schlusstabellen *beider* Bedienkonzept-Dateien trügen seit dem
+      19.08.2026 eine Spalte mit dem Stand. Für `bedienkonzept-ueberblick.md`
+      stimmt das; die Schlusstabelle von `bedienkonzept-funktionen.md` hat
+      weiter nur `# | Regel | Wo umzusetzen | Aufwand`, und der Stand steht in
+      einer *zweiten* Tabelle darunter. Das Dokument vermerkt den Irrtum selbst
+      („Die Tabelle nennt den Ort, nicht den Stand — und `CLAUDE.md` verweist
+      auf sie, als nenne sie den Stand"). Ein Satz in `CLAUDE.md`, aber es ist
+      Roberts Datei.
+
+- [ ] **Die Korrektur ist lokal.** `website/version.json` liegt richtig im
+      Arbeitsbaum; was der Kunde abfragt, ist die Datei auf dem Server. Bis
+      `tools/upload_website.py` läuft, liest jedes Update-Fenster weiter den
+      alten achten Punkt.
