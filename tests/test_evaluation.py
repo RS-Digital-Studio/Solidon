@@ -787,3 +787,47 @@ def test_the_names_of_consumed_bodies_survive_a_cache_hit() -> None:
     assert second.object_names.get("obj_1") == "Dose", (
         f"der verbrauchte Körper hat seinen Namen verloren: {dict(second.object_names)}"
     )
+
+
+def test_two_projects_whose_first_source_has_the_same_name_do_not_share_a_result() -> None:
+    """Der Schlüssel muss die **Quelle** kennen und nicht ihren Bezeichner.
+
+    Gefunden am 22.08.2026 von solidon-17 beim Anschließen des Plattencaches:
+    ``LoadParams.source`` ist eine ID, und **jedes** Projekt nennt seine erste
+    Quelle ``src_1``. Der Operations-Hash nimmt die Parameter, also war der
+    Schlüssel für zwei völlig verschiedene Dateien derselbe. Gedeckt hat es der
+    Speichercache, weil er beim Öffnen geleert wird und eine Sitzung lang lebt —
+    eine Ebene, die länger lebt, ist deshalb keine Erweiterung, sondern ein
+    Prüfstand für die Schlüssel.
+    """
+    from pathlib import Path
+
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene import History, OperationDraft, ResultCache
+    from app.core.scene.evaluate import evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    profile = make_profile("centauri-carbon-2", "petg")
+    cache = ResultCache()
+
+    def loaded(filename: str) -> tuple[object, object]:
+        project = new_project("centauri-carbon-2", "petg")
+        project.document.sources["src_1"] = Source(
+            id="src_1", kind="import", path=f"sources/{filename}", sha256=""
+        )
+        project.sources["src_1"] = (meshes / filename).read_bytes()
+        History(project.document).apply(
+            "Import", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+        )
+        result = evaluate(project.document, profile, sources=ProjectSources(project), cache=cache)
+        body = next(iter(result.scene.objects.values()))
+        return body.name, body.mesh.triangle_count
+
+    first = loaded("cube_clean.stl")
+    second = loaded("plate_holes.stl")
+
+    assert first != second, f"das zweite Projekt bekam das Ergebnis des ersten: {first} == {second}"

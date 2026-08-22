@@ -869,6 +869,16 @@ class SourceAccess(Protocol):
 
     def describe(self, source_id: SourceId) -> Source: ...
 
+    def identity(self, source_id: SourceId) -> str:
+        """Was diese Quelle **inhaltlich** ist — für den Cache-Schlüssel (§15).
+
+        Nicht der Bezeichner: Der ist ``src_1``, und zwar in jedem Projekt. Ein
+        Schlüssel, der ihn nimmt, hält zwei völlig verschiedene Dateien für
+        dieselbe — gefunden am 22.08.2026, als eine Cache-Ebene dazukam, die
+        länger lebt als eine Sitzung, und ein Projekt die Geometrie eines
+        anderen bekam.
+        """
+
 
 @dataclass(slots=True)
 class OpContext:

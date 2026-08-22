@@ -165,13 +165,23 @@ def evaluate(
         previous_features = {entry.id: dict(entry.features) for entry in inputs}
         # Dazu der Hüllquader, in dem sie gemessen wurden — siehe _with_features.
         previous_bounds = {entry.id: entry.mesh.bounds for entry in inputs}
-        key = operation_hash(
-            operation,
-            _with_nested_context(spec.params, resolved, values),
-            [hashes[entry] for entry in operation.inputs],
-            profile,
-            quality,
-        )
+        try:
+            # Der Schlüssel liest die Quelle, und eine Quelle, die es nicht
+            # gibt, ist ein Bedienfehler und kein Programmfehler: Die Kette
+            # hält an und meldet ihn (§15.3), sie fliegt nicht auf. Vor dem
+            # 22.08.2026 stand hier kein Fang, weil der Schlüssel nichts
+            # nachschlug, was fehlen konnte.
+            key = operation_hash(
+                operation,
+                _with_nested_context(spec.params, resolved, values, sources),
+                [hashes[entry] for entry in operation.inputs],
+                profile,
+                quality,
+            )
+        except AppError as error:
+            findings.append(_finding_from(error, operation))
+            stopped_at = operation.id
+            break
         cached = cache.get(key) if cache is not None else None
 
         if cached is not None:
@@ -724,18 +734,33 @@ def _with_nested_context(
     params_class: type[BaseParams],
     resolved: Mapping[str, Any],
     values: Mapping[ParameterName, float],
+    sources: SourceAccess | None = None,
 ) -> Mapping[str, Any]:
     """Der Parametersatz für den Cache-Schlüssel, ergänzt um das, was ein
-    Sammelparameter von außen liest.
+    Parameter von außen liest.
 
     Maßausdrücke einer gezeichneten Skizze (§30.1) und Gelenkwinkel einer
     Stellung (§13) stehen im JSON-Text der Op und sind für ``resolve_params``
     unsichtbar. Der Schlüssel deckt aber alles, wovon das Ergebnis abhängt
     (§15) — also gehören die Werte der gelesenen Projektparameter hinein,
     sonst überlebt ein Ergebnis die Änderung des Parameters, aus dem es
-    gerechnet wurde."""
+    gerechnet wurde.
+
+    **Dasselbe gilt für die Quelle, und dort war der Schlüssel blind.** Ein
+    Quellparameter trägt einen Bezeichner — ``src_1`` —, und jedes Projekt nennt
+    seine erste Quelle so. Zwei völlig verschiedene Dateien hatten damit
+    denselben Schlüssel. Gedeckt hat es der Speichercache, der beim Öffnen
+    geleert wird und eine Sitzung lang lebt; sichtbar wurde es, als eine Ebene
+    dazukam, die länger lebt, und ein Projekt die Geometrie eines anderen
+    bekam. Also steht hier die Inhaltsprüfsumme, nicht der Name (§15,
+    Leitprinzip 4)."""
     context: dict[str, Any] = {}
     for spec in params_class.spec():
+        if spec.kind == "source" and sources is not None:
+            source_id = resolved.get(spec.name)
+            if isinstance(source_id, str) and source_id:
+                context[f"#{spec.name}"] = sources.identity(source_id)
+            continue
         collect = nested_references().get(spec.kind)
         if collect is None:
             continue

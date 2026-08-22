@@ -77,6 +77,33 @@ class ProjectSources:
 
     project: Project
     base_dir: Path | None = None
+    _identities: dict[SourceId, str] = field(default_factory=dict)
+    """Gemerkte Inhaltsprüfsummen für Quellen, die noch keine haben."""
+
+    def identity(self, source_id: SourceId) -> str:
+        """Die Inhaltsprüfsumme dieser Quelle (§15, Cache-Schlüssel).
+
+        **Warum nicht einfach ``source.sha256``:** Das Feld wird beim Speichern
+        gefüllt, nicht beim Import. Ein Projekt, das noch nie gespeichert wurde,
+        trägt dort einen leeren Text — und genau dort wäre der Schlüssel wieder
+        blind. Also wird sie gerechnet, wo sie fehlt, und gemerkt: Ein
+        eingebetteter Inhalt ändert sich innerhalb einer Sitzung nicht.
+
+        Eine **verknüpfte** Quelle ohne Prüfsumme wird jedes Mal gelesen, und
+        das ist Absicht: Sie liegt als Datei draußen und kann sich zwischen zwei
+        Auswertungen geändert haben. Ein gemerkter Wert wäre dann die falsche
+        Antwort auf die einzige Frage, die diese Funktion hat.
+        """
+        source = self.describe(source_id)
+        if source.sha256:
+            return source.sha256
+        if not source.embedded:
+            return checksum(self.read(source_id))
+        known = self._identities.get(source_id)
+        if known is None:
+            known = checksum(self.read(source_id))
+            self._identities[source_id] = known
+        return known
 
     def describe(self, source_id: SourceId) -> Source:
         source = self.project.document.sources.get(source_id)
