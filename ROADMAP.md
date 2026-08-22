@@ -100,17 +100,13 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
-| Ein geänderter eigener Baustein wird beim Öffnen nicht gemeldet | Das Fundament der Wahrnehmung (22.08.2026) | eine zweite Quelle für `changed_since_library` — sie liest gepflegte Änderungsverläufe, und ein eigener Baustein hat keinen (§24.4, §24.5). Gefunden von solidon-17 beim Anschließen des Plattencaches |
 | Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
 | Die Zuordnung kennt Kugel und Torus nicht | Das Fundament der Wahrnehmung (22.08.2026) | zwei Arten mehr in der Kostenmatrix von §21.2, dazu Namen in der Oberfläche. Eine Art, die erkannt aber nicht zugeordnet wird, ist ein halber Zustand — dieselbe Konsistenzfrage wie bei den Übersetzungskatalogen, und beim Schneiden des Auftrags zunächst übersehen |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
-| Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Der Rückstand sieht einen falschen Zylinder nicht | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, warum derselbe Wächter beim Torus greift und beim Zylinder nicht — 0,0313 Rückstand bei einem Radius, der um das Fünffache danebenliegt |
 | Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
-| Der Testkorpus hat keinen verrundeten Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Datei mit Kehle. Ein Regressionsnetz, das die Alltagsformen ausspart, meldet Erfolg über dem, was es nicht enthält (§34) |
-| In `parts/` ist der Nichtanschluss ein Rückfall | Das Fundament der Wahrnehmung (22.08.2026) | einen Aufrufer für `travelling_parts()` oder die Feststellung, dass es sie nicht braucht — und die Testart „Anschluss" aus §35, denn derselbe Fehler ist in derselben Datei schon einmal gefunden und behoben worden |
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Ein Test steht still, ohne zu rechnen — **Stelle gefunden** | Das Fundament der Wahrnehmung (22.08.2026) | den Grund, aus dem Qt beim Vererben eines Stylesheets eine Sperre hält. Der Stillstand sitzt in `start_screen.py:155` (`setStyleSheet` an der Ablagefläche), beim Aufbau des Hauptfensters in der Test-Fixture; nativ ein Deadlock auf `QBasicMutex` in `QObject::connectImpl`. Dreimal gemessen, zwei Dateien — es hängt an der Fixture, nicht am Test |
@@ -3784,7 +3780,7 @@ Kein Verstoß.
 
       Der ursprüngliche Text des Punkts, weil seine Analyse richtig war:
 
-- [x] **(Analyse vom 21.08., unverändert)** Die Befürchtung war ein
+      **(Analyse vom 21.08., unverändert)** Die Befürchtung war ein
       `TranslatableText` in `params`, der bis in `operation_hash` reicht. Nachgesehen am 21.08.: Die
       Befürchtung war ein `TranslatableText` in `params`, der bis in
       `operation_hash` reicht. Die trifft nicht zu, weil er dort nicht
@@ -4603,7 +4599,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
 
       Der ursprüngliche Text, weil seine Begründung weiter gilt:
 
-- [ ] **(Ursprünglich, 22.08.2026)** Bauplan §15.7 hat am
+      **(Ursprünglich, 22.08.2026)** Bauplan §15.7 hat am
       22.08.2026 entschieden, wohin eine Antwort gehört, und die **erste
       Hälfte ist gebaut** (`311134a`): Was eine Operation selbst erfragt — die
       Einheit in `load` — gibt sie zurück, der Verlauf schreibt es in ihre
@@ -4630,8 +4626,25 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Zuordnung. Greift er für die Zuordnung nie mehr, ist keine Antwort mehr
       unaufgeschrieben. Das ist der Beweis, dass §15.7 vollständig ist, und er
       ist besser als „die Antwort steht im Stapel".
-- [ ] **Ein geänderter eigener Baustein wird beim Öffnen nicht gemeldet.**
-      §24.4 verspricht einen Hinweis, welche *benutzten* Bausteine sich seither
+- [x] **Ein geänderter eigener Baustein wird beim Öffnen nicht gemeldet —
+      erledigt, geprüft am 23.08.2026.** `changed_own_parts` in
+      `parts/check.py` vergleicht je benutztem Baustein einen Abdruck seiner
+      Datei; `stamp()` schreibt ihn beim Speichern und räumt dabei die Abdrücke
+      von Bausteinen weg, die das Projekt nicht mehr benutzt. Der Befund
+      `parts.own_changed` hängt in `check()` und kommt über
+      `app/ui/session.py:133` beim Öffnen an. Fünf Zusicherungen in
+      `test_parts_catalog.py` decken ihn ab.
+
+      **Zwei Entscheidungen darin sind es wert, hier zu stehen.** Erstens
+      schweigt ein *fehlender* Abdruck: Projekte von vor dieser Änderung haben
+      keinen, und eine Datei, die sich nicht lesen lässt, auch nicht — beides
+      heißt „keine Aussage möglich". Ein Falschbefund bei jedem alten Projekt
+      wäre schlimmer als die Lücke, die er schließt. Zweitens fallen Abdrücke
+      unbenutzter Bausteine beim Speichern weg, weil ein Schlüssel, den niemand
+      mehr liest, sonst mit jedem Speichern älter wird und irgendwann wie eine
+      Aussage aussieht.
+
+      Ursprünglich stand hier: §24.4 verspricht einen Hinweis, welche *benutzten* Bausteine sich seither
       geändert haben. `changed_since_library` löst das über die gepflegten
       Änderungsverläufe eines Bausteins — richtig für alles, was mit einer
       Auslieferung kommt. Ein eigener Baustein aus `<Nutzerdaten>/parts/*.py`
@@ -4714,7 +4727,21 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       nicht hochgefahren ist. Beides parallel zu fahren wäre eine Änderung an
       der Startreihenfolge und damit eine Entscheidung — sie steht in der
       Vorlage an Robert, nicht hier. Gemessen von 3d-druck-64.
-- [ ] **Keine Testart deckt „zwischen zwei Modulen“.** Der Plattencache war
+- [x] **Keine Testart deckt „zwischen zwei Modulen“ — entschieden und
+      eingetragen (`452c4b5`), geprüft am 23.08.2026.** Die Testart
+      **Anschluss** steht in `AGENTS.md` (Zeile 223) und Bauplan §35: *jede
+      Zusage, die nur an einer Stelle eingelöst wird, wird an dieser Stelle
+      geprüft — nicht „der Cache kann es", sondern „die Anwendung tut es".*
+      Bis zum 23.08. fünfmal angewandt.
+
+      **Bemerkenswert ist, wie die Entscheidung fiel.** 3d-druck-64 hatte sie
+      unter Vollmacht getroffen und auf Widerspruch zurückgenommen; 3d-druck-33
+      hat stattdessen Robert direkt gefragt und ein „ja, mach rein" bekommen.
+      Eine Änderung an `AGENTS.md` legt fest, *wie hier gearbeitet wird*, und
+      steht damit über der Arbeit, nicht darin. Das hat eine Nacht gekostet und
+      keine Substanz.
+
+      Ursprünglich stand hier: Der Plattencache war
       vollständig gebaut (`DiskCache`, `MeshCodec`), vollständig geprüft
       (`tests/test_cache.py`) — und in der Anwendung nicht angeschlossen:
       `app/ui/session.py` baute `ResultCache()` ohne Plattenebene, `disk=`
@@ -4949,15 +4976,35 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       mit verrundetem Fuß ist ein Alltagsteil. Gefunden von 3d-druck-3a bei der
       Vorarbeit zum Verrundungsradius.
 
-- [ ] **Der Testkorpus hat keinen verrundeten Körper.** Deshalb fiel der Punkt
-      darüber bis zum 22.08.2026 niemandem auf — nicht weil die Erkennung
+- [x] **Der Testkorpus hat keinen verrundeten Körper — behoben, geprüft am
+      23.08.2026.** Er hat jetzt drei: `block_with_rounded_edge.stl` (Quader
+      mit ausgerundeter Kante, von `test_features.py` gelesen),
+      `post_with_fillet.stl` (Säule mit Kehle) und
+      `plate_chamfer_and_taper.stl` (Fase und Verjüngung). Angelegt von
+      3d-druck-3a beim Verrundungsradius.
+
+      **Ein Rest bleibt und ist eine Zeile wert:** `post_with_fillet.stl` liegt
+      im Korpus, aber kein Test liest ihn. Eine Korpusdatei ohne Leser ist
+      derselbe Nichtanschluss wie eine Funktion ohne Aufrufer — sie sieht wie
+      Abdeckung aus und ist keine. Gehört zu 3d-druck-3a, gemeldet am 23.08.
+
+      Ursprünglich stand hier: Deshalb fiel der Punkt darüber bis zum
+      22.08.2026 niemandem auf — nicht weil die Erkennung
       besser war, sondern weil nie jemand mit einer Kehle danach gefragt hat.
       §34 nennt den Korpus das Regressionsnetz der Wahrnehmung; ein Netz, das
       genau die Alltagsformen ausspart, meldet Erfolg über dem, was es nicht
       enthält.
 
-- [ ] **In `parts/` ist der Nichtanschluss ein Rückfall, kein Einzelfall.**
-      `tests/test_parts_catalog.py` schließt mit einem Test, dessen Docstring
+- [x] **In `parts/` ist der Nichtanschluss ein Rückfall — angeschlossen,
+      geprüft am 23.08.2026.** `travelling_parts()` hat jetzt einen Aufrufer
+      (`parts/check.py:100`, Befund `parts.travelling`) und einen Test
+      (`test_parts_catalog.py:435`). Die Testart „Anschluss" steht seit dem
+      22.08. in `AGENTS.md` und Bauplan §35 — der Rückfall hat also nicht nur
+      eine Behebung bekommen, sondern die Prüfung, die ihn beim nächsten Mal
+      fängt.
+
+      Der Befund selbst bleibt lesenswert, weil er das Argument für diese
+      Testart trägt: `tests/test_parts_catalog.py` schließt mit einem Test, dessen Docstring
       lautet: „§24.5 stand nur auf dem Papier: `parts/user.py::load()` hatte
       keinen Aufrufer im Produkt — eigene Bausteine wurden nie geladen." Der
       Fehler wurde also **schon einmal gefunden und behoben**. In derselben
