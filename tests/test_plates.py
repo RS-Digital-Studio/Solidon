@@ -151,6 +151,83 @@ def test_crowding_still_asks_for_another_plate(profile: Profile) -> None:
     assert "arrange.needs_more_plates" in {finding.code for finding in result.findings}
 
 
+#: Zweiundfünfzig Teile in gemischten Größen, deterministisch aus einer festen
+#: Folge — kein Zufall, also auch kein Startwert (Regel 9). Die Mischung bildet
+#: nach, was der Durchgang durch neun heruntergeladene Modelle am 21.08.2026
+#: fand: viele kleine Teile, ein paar große dazwischen.
+MIXED_EDGES = (18.0, 25.0, 40.0, 12.0, 95.0, 30.0, 22.0, 60.0, 15.0, 110.0, 35.0, 28.0, 50.0)
+
+
+def mixed_batch(count: int = 52) -> list[MeshData]:
+    """Ein Satz gemischter Teile — die Vorlage für die Messung aus §29."""
+    parts = []
+    for index in range(count):
+        width = MIXED_EDGES[index % len(MIXED_EDGES)]
+        depth = MIXED_EDGES[(index * 7 + 3) % len(MIXED_EDGES)]
+        body = trimesh.creation.box(extents=(width, depth, 10.0))
+        body.apply_translation((0.0, 0.0, 5.0))
+        parts.append(MeshData.of(body))
+    return parts
+
+
+def test_fifty_two_parts_need_fewer_plates_than_rows_did(profile: Profile) -> None:
+    """Die Abnahme aus Bauplan §29 ist eine Messung und keine Meinung.
+
+    Zeilenweise gepackt brauchte dieser Satz **fünf** Platten (12/13/13/13/1):
+    Über jedem flachen Teil blieb ein Streifen von der Tiefe des tiefsten Teils
+    derselben Zeile ungenutzt. Ohne Zeilen — jeder Körper an die hinterste,
+    dann linkeste freie Stelle — sind es drei (22/16/14). Wird es das nicht
+    mehr, ist die Regel ihren Preis nicht wert und die Zeilen kommen zurück.
+    """
+    result = arrange_on_bed(mixed_batch(), profile, spacing=5.0, plates=8)
+
+    assert result.plate_count < 5, f"rows needed 5, this needs {result.plate_count}"
+    assert len(result.meshes) == 52, "nothing is quietly dropped"
+    for plate in range(result.plate_count):
+        on_plate = [
+            mesh for mesh, entry in zip(result.meshes, result.plates, strict=True) if entry == plate
+        ]
+        assert not check_collisions(on_plate), f"plate {plate}"
+        assert not check_build_volume(on_plate, profile), f"plate {plate}"
+
+
+def test_the_place_is_the_rearmost_then_leftmost_one(profile: Profile) -> None:
+    """Die Regel in einem Satz: hinterste freie Stelle, dann linkeste.
+
+    Drei gleiche Teile nebeneinander, dann ein viertes: Es gehört neben das
+    dritte und nicht hinter das erste, solange in derselben Tiefe noch Platz
+    ist. Zeilenweise wäre das dasselbe — der Unterschied zeigt sich erst, wenn
+    ein tiefes Teil dazwischenliegt, und dafür steht der Test darunter.
+    """
+    result = arrange_on_bed(many(4, size=50.0), profile, spacing=5.0, plates=1)
+
+    corners = [(mesh.bounds.minimum[0], mesh.bounds.minimum[1]) for mesh in result.meshes]
+    assert len({round(y, 6) for _x, y in corners}) == 1, "all four sit in the same depth"
+    assert corners == sorted(corners), "and left to right in the order they came"
+
+
+def test_a_deep_part_does_not_waste_the_strip_beside_it(profile: Profile) -> None:
+    """Der Streifen, um den es geht: neben einem tiefen Teil bleibt Platz.
+
+    Ein Teil von 180 x 200 mm, dann fünf flache von 40 x 40. Zeilenweise passen
+    zwei davon neben das tiefe, und das dritte reißt die Zeile: Es beginnt erst
+    **hinter** dem tiefen Teil, obwohl über den beiden flachen noch 160 mm frei
+    sind. Genau dieser Streifen ist der Grund, aus dem 52 Teile sieben Platten
+    brauchten. Ohne Zeilen wandert nichts dahinter.
+    """
+    deep = trimesh.creation.box(extents=(180.0, 200.0, 10.0))
+    deep.apply_translation((0.0, 0.0, 5.0))
+    parts = [MeshData.of(deep), *many(5, size=40.0)]
+
+    result = arrange_on_bed(parts, profile, spacing=5.0, plates=1)
+
+    assert not check_collisions(result.meshes)
+    behind = result.meshes[0].bounds.maximum[1]
+    assert all(mesh.bounds.maximum[1] <= behind + 1e-6 for mesh in result.meshes[1:]), (
+        "the flat ones fill the strip beside the deep part instead of starting behind it"
+    )
+
+
 # --- Als Operation ---------------------------------------------------------------
 
 

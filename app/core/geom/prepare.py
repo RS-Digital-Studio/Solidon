@@ -401,14 +401,100 @@ class Arrangement:
         return max(self.plates, default=0) + 1 if self.plates else 0
 
 
+#: Wie nah zwei Rechtecke sich kommen dürfen, bevor Rundung die Antwort
+#: entscheidet. Die Kandidatenpunkte entstehen aus derselben Rechnung, die sie
+#: prüft — ohne diese Schwelle verwirft ein letztes Bit den Platz, den es
+#: gerade selbst ausgerechnet hat.
+_TOUCH = 1e-9
+
+
+@dataclass(frozen=True, slots=True)
+class _Slot:
+    """Ein belegtes Rechteck in der Aufsicht.
+
+    ``back`` ist die **hintere** Kante, also das größere y: Die Vorderansicht
+    des Viewports blickt aus ``-y`` (``app.ui.viewport.VIEWS``), und §29 packt
+    von hinten nach vorne.
+    """
+
+    left: float
+    back: float
+    width: float
+    depth: float
+
+    @property
+    def right(self) -> float:
+        return self.left + self.width
+
+    @property
+    def front(self) -> float:
+        return self.back - self.depth
+
+
+def _apart(one: _Slot, other: _Slot, spacing: float) -> bool:
+    """Halten diese beiden den Abstand — in irgendeiner Richtung?
+
+    Es genügt eine: Zwei Teile nebeneinander brauchen den Abstand zwischen
+    ihren Seiten, nicht zusätzlich zwischen ihren Tiefen.
+    """
+    return (
+        one.right + spacing <= other.left + _TOUCH
+        or other.right + spacing <= one.left + _TOUCH
+        or other.back + spacing <= one.front + _TOUCH
+        or one.back + spacing <= other.front + _TOUCH
+    )
+
+
+def _candidates(
+    taken: list[_Slot], first: tuple[float, float], spacing: float
+) -> list[tuple[float, float]]:
+    """Die Stellen, an denen ein Körper anliegen kann, hinterste zuerst.
+
+    Kandidaten sind die leere Ecke und je belegtem Rechteck zwei: rechts
+    daneben bei gleicher Hinterkante, und davor bei gleicher linker Kante. Mehr
+    braucht es nicht — eine dicht gepackte Lage liegt an einem Nachbarn oder am
+    Rand an, und diese Liste hält jede solche Ecke.
+    """
+    points = {first}
+    for slot in taken:
+        points.add((slot.right + spacing, slot.back))
+        points.add((slot.left, slot.front - spacing))
+    return sorted(points, key=lambda point: (-point[1], point[0]))
+
+
+def _beyond_the_edge(
+    taken: list[_Slot], size: Vec3, first: tuple[float, float], spacing: float
+) -> _Slot:
+    """Wohin mit einem Körper, für den weder Platz noch Platte übrig ist.
+
+    Überlappungsfrei bleibt es trotzdem: gesucht wird dieselbe hinterste, dann
+    linkeste Stelle, nur ohne die Randbedingung. Was hinausragt, meldet
+    :func:`check_build_volume` — mit der Zahl, um die es hinausragt.
+    """
+    for corner_x, corner_y in _candidates(taken, first, spacing):
+        spot = _Slot(corner_x, corner_y, size[0], size[1])
+        if all(_apart(spot, other, spacing) for other in taken):
+            return spot
+    return _Slot(first[0], first[1], size[0], size[1])
+
+
 def arrange_on_bed(
     meshes: list[MeshData], profile: Profile, spacing: float = 5.0, plates: int = 1
 ) -> Arrangement:
-    """Legt die Körper in einer Reihe auf die Platte, dann in Zeilen
-    umbrechend (§25).
+    """Legt jeden Körper an die hinterste, dann linkeste freie Stelle (§29).
 
-    Bewusst einfach: ein Regal-Packen, das jeder vorhersagen kann, schlägt ein
-    kluges, das Teile aus Gründen verschiebt, die niemand sieht.
+    Bewusst vorhersagbar: Die Regel steht in einem Satz, sie braucht keinen
+    Startwert und kein Gewicht, und wer die Reihenfolge der Körper kennt, kann
+    das Ergebnis nachvollziehen. Zweimal dasselbe gerechnet kommt zweimal
+    dasselbe heraus (§15.1).
+
+    **Warum nicht in Zeilen.** Bis zum 22.08.2026 lief es zeilenweise, und das
+    verschenkte über jedem flachen Teil einen Streifen von der Tiefe des
+    tiefsten Teils derselben Zeile — 52 Teile brauchten sieben Platten. Eine
+    andere Sortierung verschiebt diesen Streifen nur; gemessen wurde es, und
+    nach Tiefe sortiert wurde es nicht besser. Der Fehler saß in der Struktur
+    und nicht in der Reihenfolge (Bauplan §29). Gemessen an 52 gemischten
+    Teilen auf einem 256er Bett: fünf Platten zeilenweise, **drei** ohne Zeilen.
 
     ``spacing`` ist der Abstand zwischen zwei Körpern, **nicht** zwischen ihren
     Plattenhaftungen. Ein Brim von 5 mm steht auf beiden Seiten über, also
@@ -424,45 +510,62 @@ def arrange_on_bed(
     nimmt den Rest, und der Bericht sagt, dass sie übervoll ist — denn ein
     Teil, das still aus einer Anordnung fällt, ist ein Teil, das nie gedruckt
     wird.
+
+    Der Aufwand wächst mit dem Quadrat der Teilezahl; für die Größenordnung, um
+    die es geht — Dutzende Körper auf einer Platte — bleibt das weit unter dem
+    Budget für eine Anordnung (§31).
     """
     width, depth, _height = profile.printer.build_volume
     arranged: list[MeshData] = []
     assigned: list[int] = []
     findings: list[Finding] = []
 
+    left_edge = -width / 2.0 + spacing
+    back_edge = depth / 2.0 - spacing
+    right_edge = width / 2.0 - spacing
+    front_edge = -depth / 2.0 + spacing
+    corner = (left_edge, back_edge)
+
     plate = 0
-    cursor_x = -width / 2.0 + spacing
-    cursor_y = -depth / 2.0 + spacing
-    row_depth = 0.0
-    on_this_plate = 0
+    taken: list[_Slot] = []
+
+    def place(size: Vec3) -> _Slot | None:
+        """Die hinterste, dann linkeste Stelle, an die dieser Körper passt."""
+        for corner_x, corner_y in _candidates(taken, corner, spacing):
+            spot = _Slot(corner_x, corner_y, size[0], size[1])
+            fits = (
+                spot.left >= left_edge - _TOUCH
+                and spot.right <= right_edge + _TOUCH
+                and spot.back <= back_edge + _TOUCH
+                and spot.front >= front_edge - _TOUCH
+            )
+            if fits and all(_apart(spot, other, spacing) for other in taken):
+                return spot
+        return None
 
     for mesh in meshes:
         size = mesh.bounds.size
-        if cursor_x + size[0] > width / 2.0 - spacing:
-            cursor_x = -width / 2.0 + spacing
-            cursor_y += row_depth + spacing
-            row_depth = 0.0
+        spot = place(size)
         # **Nur weiterblättern, wenn auf dieser Platte schon etwas liegt.**
         #
-        # Ein Körper, der tiefer ist als das Bett, reißt die Zeilengrenze auch
-        # auf einer leeren Platte — und wanderte dann auf die nächste, die
-        # genauso wenig hilft. Gemessen an zwei Sockeln von 231 mm Tiefe auf
-        # einem 220er Bett und zwei Platten: beide landeten auf Platte 2,
-        # aufeinandergestapelt und über den Rand hinaus, während Platte 1 leer
-        # blieb. Bei drei Platten blieb sie es auch. Wo nichts liegt, ist die
-        # nächste Platte kein besserer Ort — der Befund aus
-        # :func:`check_build_volume` sagt stattdessen, was wirklich hilft:
-        # teilen, verkleinern, anderes Profil.
-        if cursor_y + size[1] > depth / 2.0 - spacing and on_this_plate > 0 and plate + 1 < plates:
+        # Ein Körper, der tiefer ist als das Bett, passt auch auf eine leere
+        # Platte nicht — und wanderte dann auf die nächste, die genauso wenig
+        # hilft. Gemessen an zwei Sockeln von 231 mm Tiefe auf einem 220er Bett
+        # und zwei Platten: beide landeten auf Platte 2, aufeinandergestapelt
+        # und über den Rand hinaus, während Platte 1 leer blieb. Bei drei
+        # Platten blieb sie es auch. Wo nichts liegt, ist die nächste Platte
+        # kein besserer Ort — der Befund aus :func:`check_build_volume` sagt
+        # stattdessen, was wirklich hilft: teilen, verkleinern, anderes Profil.
+        if spot is None and taken and plate + 1 < plates:
             plate += 1
-            cursor_x = -width / 2.0 + spacing
-            cursor_y = -depth / 2.0 + spacing
-            row_depth = 0.0
-            on_this_plate = 0
+            taken = []
+            spot = place(size)
+        if spot is None:
+            spot = _beyond_the_edge(taken, size, corner, spacing)
 
         target = (
-            cursor_x + size[0] / 2.0,
-            cursor_y + size[1] / 2.0,
+            spot.left + size[0] / 2.0,
+            spot.back - size[1] / 2.0,
             mesh.bounds.size[2] / 2.0,
         )
         offset = tuple(target[index] - mesh.bounds.centre[index] for index in range(3))
@@ -470,10 +573,7 @@ def arrange_on_bed(
         body.apply_transform(translation((offset[0], offset[1], offset[2])))
         arranged.append(mesh.replacing(body))
         assigned.append(plate)
-
-        cursor_x += size[0] + spacing
-        row_depth = max(row_depth, size[1])
-        on_this_plate += 1
+        taken.append(spot)
 
     findings.extend(check_build_volume(arranged, profile, assigned))
     if plate + 1 >= plates and _overfull(arranged, assigned, profile, spacing):
