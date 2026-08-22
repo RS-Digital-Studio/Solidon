@@ -42,7 +42,7 @@ from app.core.scene import (
     History,
     NeverCancelled,
     OperationDraft,
-    ResultCache,
+    disk_backed_cache,
     expressions,
     foreign,
     orphans,
@@ -52,6 +52,7 @@ from app.core.scene.history import change_for
 from app.core.scene.project import (
     Project,
     ProjectSources,
+    checksum,
     clear_autosave,
     embedded_source_path,
     load,
@@ -70,6 +71,7 @@ from app.core.types import (
     Quality,
     Report,
     Source,
+    SourceKind,
     SourceOrigin,
     Transaction,
 )
@@ -308,7 +310,7 @@ class Session(QObject):
         super().__init__(parent)
         self.project: Project = new_project(profiles.DEFAULT_PRINTER, profiles.DEFAULT_MATERIAL)
         self.history = History(self.project.document)
-        self.cache = ResultCache()
+        self.cache = disk_backed_cache()
         self.cancel_signal = CancelSignal()
         self._cancel_by_user = False
         """Ob der laufende Abbruch von einem Menschen kommt — siehe
@@ -682,17 +684,51 @@ class Session(QObject):
         if entry is None:
             return False
 
-        document = self.project.document
-        source_id = f"src_{len(document.sources) + 1}"
-        document.sources[source_id] = Source(
-            id=source_id,
-            kind="generated",
-            path=embedded_source_path(f"{source_id}.stl"),
-            sha256="",
-        )
-        self.project.sources[source_id] = as_mesh_data(entry.mesh).to_stl()
+        source_id = self._embed_source("generated", None, as_mesh_data(entry.mesh).to_stl())
         self.change_params(op_id, {"baked": source_id})
         return True
+
+    def _embed_source(
+        self,
+        kind: SourceKind,
+        filename: str | None,
+        payload: bytes,
+        origin: SourceOrigin | None = None,
+    ) -> str:
+        """Nimmt einen Inhalt ins Projekt auf und gibt seine Kennung zurück.
+
+        **Jede Quelle kennt ihren Inhalt von Anfang an**, und das ist der Grund,
+        warum es diese Methode gibt. Vorher stand der Vorgang dreimal
+        nebeneinander — gebackene Züge, Import, Bild — und alle drei schrieben
+        ``sha256=""``. Gefüllt wurde die Prüfsumme erst beim **Speichern**
+        (`project.py`, §16.1), und bis dahin wusste ein Projekt nicht, was in
+        seinen Quellen steht.
+
+        Das war lange folgenlos und ist es seit dem 22.08.2026 nicht mehr: Der
+        Cache-Schlüssel fragt die Quelle, was sie inhaltlich ist
+        (``SourceAccess.identity``), weil ihr Bezeichner in jedem Projekt
+        ``src_1`` heißt. Eine leere Prüfsumme heißt dort „rechne es aus", und
+        ausgerechnet wird sie dann bei jeder Auswertung neu. Hier kostet sie
+        einmal das, was der Inhalt ohnehin schon im Speicher ist.
+
+        Drei Kopien einer Zeile werden nicht dreimal richtig — dies ist die
+        Stelle, an der die Zusage steht, und die einzige.
+        """
+        document = self.project.document
+        source_id = f"src_{len(document.sources) + 1}"
+        # ``None`` heißt „nenn sie nach ihrer Kennung". Die Aufrufstelle darf
+        # diese Regel nicht nachrechnen — sie stand dort einmal, und eine
+        # Kennung, die an zwei Stellen gebildet wird, geht irgendwann
+        # auseinander.
+        document.sources[source_id] = Source(
+            id=source_id,
+            kind=kind,
+            path=embedded_source_path(filename or f"{source_id}.stl"),
+            sha256=checksum(payload),
+            origin=origin,
+        )
+        self.project.sources[source_id] = payload
+        return source_id
 
     def set_print_settings(self, settings: PrintSettings) -> None:
         """Womit dieses Projekt gedruckt wird (§29).
@@ -732,16 +768,7 @@ class Session(QObject):
         also weder die Einheitenfrage noch die Mesh-Eingangsstufe (§30, §11.1).
         """
         path = Path(name)
-        document = self.project.document
-        source_id = f"src_{len(document.sources) + 1}"
-        document.sources[source_id] = Source(
-            id=source_id,
-            kind="import",
-            path=embedded_source_path(path.name),
-            sha256="",
-            origin=origin,
-        )
-        self.project.sources[source_id] = payload
+        source_id = self._embed_source("import", path.name, payload, origin)
 
         # Welche Operation eine Datei einliest, entscheidet der Kern
         # (``ingest.plan``) — dieselbe Stelle, die die Kommandozeile fragt. Sie
@@ -759,15 +786,7 @@ class Session(QObject):
         führte kein Bildformat in die Quellen — das Feld „Bild" bot STLs an,
         und der Befund schlug eine Handlung vor, die es nicht gab.
         """
-        document = self.project.document
-        source_id = f"src_{len(document.sources) + 1}"
-        document.sources[source_id] = Source(
-            id=source_id,
-            kind="image",
-            path=embedded_source_path(path.name),
-            sha256="",
-        )
-        self.project.sources[source_id] = path.read_bytes()
+        source_id = self._embed_source("image", path.name, path.read_bytes())
         self._dirty = True
         self.projectChanged.emit()
         return source_id

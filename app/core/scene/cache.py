@@ -20,12 +20,13 @@ import json
 import shutil
 import threading
 from collections import OrderedDict
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Final, Protocol
 
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_cache_dir
+from app.core.paths import ensure_dir, results_cache_dir
 from app.core.scene.serialise import (
     finding_from_data,
     finding_to_data,
@@ -138,10 +139,39 @@ class ResultCache:
             self.statistics.misses += 1
         return None
 
-    def put(self, key: str, result: CachedResult) -> None:
+    def put(self, key: str, result: CachedResult, *, to_disk: bool = False) -> None:
+        """Legt ein Ergebnis ab — im Speicher immer, auf der Platte auf Verlangen.
+
+        **Die Vorgabe ist ``False``, und das ist die wichtigste Entscheidung an
+        dieser Signatur.** Wer ablegt, muss sagen, dass dieses Ergebnis dauerhaft
+        gelten darf. Die Asymmetrie entscheidet: Wer bei ``True`` als Vorgabe das
+        ``to_disk=False`` vergisst, bekommt **falsche** Ergebnisse, still und über
+        Sitzungen hinweg. Wer hier das ``to_disk=True`` vergisst, bekommt eine
+        **langsamere** Anwendung, und das sieht man an einer Zahl. Dieselbe Regel
+        wie beim mitgeführten Ordnerstand: Der Fehler darf in die harmlose
+        Richtung gehen und in keine andere.
+
+        Der Fall, für den es das Wort gibt: **Ein Ergebnis, das keine reine
+        Funktion des Dokuments ist.** Der Cache trägt seinen Schlüssel aus Op, Parametern,
+        Eingängen, Profil, Qualität und Startwert; was aus einer Antwort auf
+        ``ctx.ask`` entstanden ist, hängt an etwas, das dort nicht steht. Im
+        Speicher ist das richtig und gewollt — dieselbe Sitzung fragt nicht
+        zweimal. Auf der Platte wäre es falsch: Der Nutzer öffnet ein Projekt
+        wieder und bekommt stillschweigend eine Annahme, wo eine Frage stand,
+        und ob überhaupt gefragt wird, entschiede das Dateisystem — eine
+        Cache-Datei darf jederzeit gelöscht werden (§38), die Antwort wäre
+        also manchmal da und manchmal nicht. Regel 21 sagt „nie stillschweigend
+        raten".
+
+        Wer das setzt, ist der Auswerter: Er sieht, ob eine Operation gefragt
+        hat. Sobald §15.7 umgesetzt ist — die Antwort steht in den Parametern
+        der fragenden Operation —, ist keine Operation mehr davon betroffen und
+        das Schlüsselwort tut nichts mehr. Es bleibt trotzdem stehen: für die
+        nächste Operation, die fragt, ohne festzuhalten.
+        """
         with self._lock:
             self._store(key, result)
-        if self._disk is not None:
+        if self._disk is not None and to_disk:
             self._disk.put(key, result)
 
     def _store(self, key: str, result: CachedResult) -> None:
@@ -156,6 +186,26 @@ class ResultCache:
             self.statistics.evictions += 1
 
     def clear(self) -> None:
+        """Leert die **Speicher**ebene. Die Platte bleibt, und das ist der Sinn.
+
+        Der Name hat gelogen, solange es nur eine Ebene gab: Es gab nichts
+        anderes zu leeren. Der einzige Aufrufer ist ``Session._reset_for``, also
+        der Projektwechsel, und dort ist genau das richtig — was auf der Platte
+        liegt, ist die Arbeit, für die es die Ebene gibt (§31: „Projekt öffnen
+        aus Plattencache, unter 1 s"). Sie beim Wechsel mitzuleeren machte das
+        Wiederöffnen für immer unmöglich.
+
+        Dass es beim Wechsel überhaupt nichts zu leeren gibt, hängt am
+        Schlüssel: Er kennt den Inhalt der Quelle
+        (``SourceAccess.identity``), also gehört jeder Eintrag genau dem
+        Projekt, aus dem er kam. Vor dem 22.08.2026 war das nicht so, und dieses
+        ``clear`` war die einzige Stelle, die verhinderte, dass ein Projekt die
+        Geometrie eines anderen bekam.
+
+        Wer die Platte wirklich leeren will, ruft ``DiskCache.clear``. Dass die
+        Platte ein ``clear`` hier übersteht, hält
+        ``test_the_memory_level_fills_itself_from_disk`` fest.
+        """
         with self._lock:
             self._entries.clear()
             self._cost = 0
@@ -212,13 +262,71 @@ def _slot_from_data(data: dict[str, Any]) -> MaterialSlot:
     )
 
 
+def drop_other_versions(directory: Path) -> None:
+    """Räumt die Ergebnis-Ordner früherer Fassungen weg.
+
+    Der Ordner trägt die Fassung im Pfad (:func:`results_cache_dir`), weil ein
+    Eintrag sonst ein Update überlebt und ein Netz liefert, das alter Code
+    gerechnet hat. Der Preis dafür ist ein toter Ordner je Fassung, und der ist
+    nicht klein: Er darf bis an das Budget wachsen, also bis zwei Gigabyte.
+    Das eigene Budget räumt ihn nie weg — es zählt nur den eigenen Ordner.
+
+    Deshalb hier, einmal beim Anlegen. Gelöscht wird ausschließlich neben dem
+    eigenen Ordner, und dort stehen nur Fassungen: ``sandbox``, ``updates`` und
+    ``style`` liegen eine Ebene höher und werden nicht gesehen — genau dafür
+    hat die Ablage zwei Ebenen.
+
+    Weggeräumt wird dabei auch der Ordner desselben Programms mit einem anderen
+    Stand der eigenen Bausteine — für den Aufräumer ist das derselbe Fall, und
+    das ist richtig: Der alte Stand ist so tot wie eine alte Fassung.
+
+    Läuft daneben noch eine ältere Fassung, verliert die ihren Cache und rechnet
+    neu. Das ist zumutbar: Ein Ergebnis-Cache ist per Zusage jederzeit löschbar
+    (§38), und zwei Fassungen gleichzeitig laufen zu lassen ist der Ausnahmefall.
+    Gefährlich ist es nicht — wer gerade daraus liest, findet einen Eintrag nicht
+    mehr, verwirft ihn und rechnet neu.
+    """
+    parent = directory.parent
+    if not parent.is_dir():
+        return
+    for other in parent.iterdir():
+        if other == directory or not other.is_dir():
+            continue
+        shutil.rmtree(other, ignore_errors=True)
+        _log.info("dropped result cache of an older version: %s", other.name)
+
+
+def _folder_bytes(folder: Path) -> int:
+    """Was ein einzelner Eintrag belegt.
+
+    Rekursiv, obwohl ein Eintrag heute flach ist: Dieselbe Zahl entsteht in
+    :meth:`DiskCache.size_bytes` über den ganzen Ordner, und zwei Definitionen
+    für dieselbe Zahl driften. Der mitgeführte Stand ruht darauf, dass Summe
+    und Einzelteil dasselbe meinen.
+
+    Was unter der Hand verschwindet, zählt als nichts — siehe
+    :meth:`DiskCache.trim`.
+    """
+    if not folder.is_dir():
+        return 0
+    total = 0
+    for path in folder.rglob("*"):
+        with suppress(OSError):
+            if path.is_file():
+                total += path.stat().st_size
+    return total
+
+
 @dataclass(slots=True)
 class DiskCache:
     """Ergebnisse auf der Platte, benannt nach dem Operations-Hash (§38)."""
 
     codec: MeshCodec
-    directory: Path = field(default_factory=user_cache_dir)
+    directory: Path = field(default_factory=results_cache_dir)
     budget_bytes: int = DEFAULT_DISK_BUDGET_BYTES
+    _known_bytes: int | None = field(default=None, init=False, repr=False, compare=False)
+    """Was der Ordner nach eigener Rechnung belegt, oder ``None`` vor dem
+    ersten Zählen. Siehe :meth:`_account_for`."""
 
     def _folder(self, key: str) -> Path:
         return self.directory / key[:2] / key
@@ -310,25 +418,126 @@ class DiskCache:
             _log.warning("could not write cache entry %s: %s", key, problem)
             shutil.rmtree(folder, ignore_errors=True)
             return
-        self.trim()
+        self._account_for(folder)
+
+    def _account_for(self, folder: Path) -> None:
+        """Rechnet den frisch geschriebenen Eintrag auf und räumt, wenn nötig.
+
+        Hier stand ``self.trim()``, und das war die teuerste Zeile des Caches:
+        ``trim`` fragt zuerst, wie groß der Ordner ist, und diese Frage geht
+        über jede Datei darin. Gemessen an einem Cache mit 2000 Einträgen
+        kostet der Gang **254 ms** — bei 500 noch 62, bei 100 noch 20. Er lief
+        nach *jedem* geschriebenen Op-Ergebnis; eine Auswertung mit einem
+        Dutzend neuer Schritte hätte also drei Sekunden mit dem Zählen von
+        Dateien verbracht, um einen Cache zu füllen, der Zeit sparen soll.
+
+        Jetzt wird mitgezählt: Was geschrieben wurde, kommt auf einen Stand
+        oben drauf, und über den Ordner geht es erst, wenn dieser Stand das
+        Budget reißt. Einmal je Prozess muss es sein — beim ersten Schreiben
+        ist der Stand unbekannt, weil frühere Läufe im Ordner liegen.
+
+        Der Stand darf zu hoch liegen und nie zu niedrig: Ein Eintrag, der
+        unter demselben Schlüssel ein zweites Mal geschrieben wird, zählt
+        zweimal, und ein beschädigter, den ``get`` wegwirft, zählt weiter mit.
+        Beides führt zu einem ``trim``, das einmal zu früh kommt — und das
+        zählt neu und stellt den Stand richtig. Der umgekehrte Fehler wäre
+        ein Cache, der über sein Budget wächst, ohne es zu merken.
+        """
+        if self._known_bytes is None:
+            self.trim()
+            return
+        self._known_bytes += _folder_bytes(folder)
+        if self._known_bytes > self.budget_bytes:
+            self.trim()
 
     def size_bytes(self) -> int:
+        """Was der Cache belegt — ein Gang über jede Datei darin."""
         if not self.directory.is_dir():
             return 0
-        return sum(path.stat().st_size for path in self.directory.rglob("*") if path.is_file())
+        total = 0
+        for path in self.directory.rglob("*"):
+            with suppress(OSError):
+                if path.is_file():
+                    total += path.stat().st_size
+        return total
 
     def trim(self) -> None:
-        """Wirft die am längsten unbenutzten Einträge, bis das Budget stimmt."""
-        if self.size_bytes() <= self.budget_bytes:
+        """Wirft die am längsten unbenutzten Einträge, bis das Budget stimmt.
+
+        Ein Gang über den Ordner, nicht einer je gelöschtem Eintrag: Die Größe
+        jedes Eintrags steht schon fest, wenn die Reihenfolge feststeht, und
+        abziehen ist billiger als noch einmal zählen. Vorher lief ``size_bytes``
+        in der Löschschleife — bei einem Cache, der weit über das Budget
+        gewachsen ist, war das der Gang über alle Dateien mal der Zahl der
+        gelöschten Ordner.
+
+        **Ein Eintrag, der zwischen Auflisten und Ansehen verschwindet, wird
+        übersprungen und wirft nicht.** Diesen Ordner teilen mehrere Prozesse:
+        zwei Fenster, die Oberfläche neben der Kommandozeile, und beim Wechsel
+        der Fassung ein Aufräumer. Ein `stat` auf etwas, das ein anderer gerade
+        gelöscht hat, wäre sonst ein Fehler, der aus ``put`` heraus die ganze
+        Auswertung mitnimmt — nachdem sie alles gerechnet hat, und nur weil das
+        Aufräumen nicht klappte. Ein Cache darf keinen Lauf kosten, den er
+        beschleunigen soll.
+        """
+        entries: list[tuple[float, Path, int]] = []
+        for folder in self.directory.glob("*/*"):
+            with suppress(OSError):
+                if folder.is_dir():
+                    entries.append((folder.stat().st_mtime, folder, _folder_bytes(folder)))
+        total = sum(size for _, _, size in entries)
+        self._known_bytes = total
+        if total <= self.budget_bytes:
             return
-        folders = sorted(
-            (path for path in self.directory.glob("*/*") if path.is_dir()),
-            key=lambda path: path.stat().st_mtime,
-        )
-        for folder in folders:
+        for _, folder, size in sorted(entries, key=lambda entry: entry[0]):
             shutil.rmtree(folder, ignore_errors=True)
-            if self.size_bytes() <= self.budget_bytes:
+            total -= size
+            self._known_bytes = total
+            if total <= self.budget_bytes:
                 return
 
     def clear(self) -> None:
         shutil.rmtree(self.directory, ignore_errors=True)
+        self._known_bytes = 0
+
+
+def disk_backed_cache() -> ResultCache:
+    """Der Cache, den die Anwendung benutzt: Speicher über Platte (§38).
+
+    Hier stand nichts, und das war der Fehler. `DiskCache` war gebaut,
+    `MeshCodec` war gebaut, `ResultCache` nahm die Ebene als Argument, und
+    `tests/test_cache.py` bewies jedes Stück für sich — aber die zwei Stellen,
+    an denen die Anwendung wirklich einen Cache baute, übergaben sie nicht:
+    ``app/ui/session.py`` schrieb ``ResultCache()``, und die Kommandozeile
+    übergab überhaupt keinen. Jedes Öffnen eines Projekts rechnete den ganzen
+    Operationsstapel neu; bei einem Körper mit 1,3 Millionen Dreiecken sind das
+    gemessen 5063 ms gegen 209 ms mit Platte. §38 verspricht die Ebene, §31
+    setzt ihr ein Ziel — verbunden war sie nicht.
+
+    Deshalb steht der Bauer jetzt hier und nicht bei den Aufrufern: Eine
+    Anwendung mit zwei Einstiegen braucht **eine** Antwort auf die Frage, wie
+    ihr Cache aussieht, sonst driften die zwei.
+
+    Der Codec kommt aus einem Import in dieser Funktion und nicht aus dem
+    Modulkopf. Das ist die Zeile, die der Kopf dieser Datei beschreibt: Ein Netz
+    zu serialisieren braucht die Geometrieschicht, und wer nur den Cache
+    importiert, soll sie nicht mitziehen — `DiskCache` bleibt mit einem falschen
+    Netz prüfbar. Genau diese Trennung hat den Anschluss vergessbar gemacht;
+    eine Vorgabe hätte sie aufgehoben, ein Bauer nimmt ihr die Falle.
+
+    **Ohne Platte statt mit Fehler.** Lässt sich der Ordner nicht anlegen — ein
+    volles Laufwerk, ein Profil ohne Schreibrecht —, kommt der Cache ohne sie
+    zurück. Eine Beschleunigung ist keine Voraussetzung, und ein Fehler beim
+    Start wegen eines Ordners, den der Nutzer nie sehen wollte, wäre schlimmer
+    als ein Projekt, das langsamer öffnet.
+    """
+    from app.core.geom.mesh import MeshCodec
+
+    try:
+        disk = DiskCache(codec=MeshCodec())
+        ensure_dir(disk.directory)
+        drop_other_versions(disk.directory)
+    except OSError as problem:
+        _log.warning("no disk cache, working from memory only: %s", problem)
+        return ResultCache()
+    return ResultCache(disk=disk)

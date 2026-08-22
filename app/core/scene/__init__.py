@@ -1,6 +1,13 @@
 """Szene, Parameter, Passungen, Op-DAG, Auswertung, Projektdatei, Migrationen (§12-§16)."""
 
-from app.core.scene.cache import CachedResult, DiskCache, MeshCodec, ResultCache
+from app.core.scene.cache import (
+    CachedResult,
+    DiskCache,
+    MeshCodec,
+    ResultCache,
+    disk_backed_cache,
+    drop_other_versions,
+)
 from app.core.scene.cancel import CancelSignal, NeverCancelled
 from app.core.scene.evaluate import EvaluationResult, evaluate
 from app.core.scene.history import History, OperationDraft
@@ -24,6 +31,8 @@ __all__ = [
     "ResultCache",
     "VariantSet",
     "build_variants",
+    "disk_backed_cache",
+    "drop_other_versions",
     "evaluate",
     "new_project",
     "values_for",

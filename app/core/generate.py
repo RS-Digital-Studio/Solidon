@@ -28,7 +28,7 @@ from app.core.backends.mesh import GeneratedMesh, MeshBackend
 from app.core.log import get_logger
 from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
 from app.core.scene.history import History, OperationDraft
-from app.core.scene.project import Project, embedded_source_path
+from app.core.scene.project import Project, checksum, embedded_source_path
 from app.core.types import ObjectId, Origin, ProgressFn, Source, SourceId, SourceOrigin
 from app.i18n import _
 
@@ -141,7 +141,9 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
         id=source_id,
         kind="generated",
         path=embedded_source_path(f"{short}{result.suffix}"),
-        sha256="",
+        # Jede Quelle kennt ihren Inhalt von Anfang an — siehe
+        # ``Session._embed_source``. Der Cache-Schlüssel fragt danach (§15).
+        sha256=checksum(result.payload),
         origin=SourceOrigin(
             title=short,
             author=result.backend,

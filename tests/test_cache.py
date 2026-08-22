@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
+
+import pytest
 
 from app.core.scene.cache import CachedResult, DiskCache, ResultCache
 from app.core.scene.hashing import digest, object_hash, operation_hash, profile_key
@@ -111,7 +115,7 @@ def test_the_disk_level_survives_a_new_process(tmp_path: Path) -> None:
 def test_the_memory_level_fills_itself_from_disk(tmp_path: Path) -> None:
     disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
     cache = ResultCache(disk=disk)
-    cache.put("key", result())
+    cache.put("key", result(), to_disk=True)
     cache.clear()
 
     assert cache.get("key") is not None
@@ -249,3 +253,321 @@ def test_the_cache_survives_several_threads_writing_at_once() -> None:
         "ist unter Nebenläufigkeit auseinandergelaufen."
     )
     assert cache.cost <= cache._budget or len(cache) == 1
+
+
+# --- Die Plattenebene, angeschlossen ---------------------------------------------
+#
+# Sie war gebaut, getestet und in der Anwendung nicht verbunden: `DiskCache`
+# stand, `MeshCodec` stand, `ResultCache` nahm sie als Argument — und
+# `app/ui/session.py`, die einzige Stelle, an der die Anwendung einen Cache
+# baut, übergab sie nicht. Jedes Öffnen eines Projekts rechnete den ganzen
+# Stapel neu, obwohl §38 die Ebene verspricht und §31 ihr ein Ziel setzt.
+#
+# Die Tests hier prüfen die drei Dinge, die beim Anschließen entschieden werden
+# mussten: dass der Weg trägt, dass der Cache nicht in fremden Ordnern räumt,
+# und dass ein Eintrag ein Update nicht überlebt.
+
+
+def test_the_factory_gives_a_cache_with_a_disk_level() -> None:
+    """Der Bauer, den die Anwendung benutzt — mit Platte."""
+    from app.core.scene import disk_backed_cache
+
+    cache = disk_backed_cache()
+    assert cache._disk is not None, "a cache without a disk level recomputes on every open"
+
+
+def test_nothing_in_the_application_builds_a_cache_without_the_disk_level() -> None:
+    """Der Test, der gefehlt hat — und er liest den Text, mit Absicht.
+
+    Jeder Test hier drüber prüfte die Plattenebene für sich, und sie war in
+    Ordnung. Niemand prüfte, ob die Anwendung sie benutzt: `app/ui/session.py`
+    schrieb ``ResultCache()``, die Kommandozeile übergab gar keinen Cache, und
+    kein Testfeld aus §35 deckt das ab — der Fehler saß nicht in einem Modul,
+    sondern zwischen zwei.
+
+    Deshalb strukturell und nicht funktional: Ein Test, der eine Sitzung baut
+    und ihren Cache ansieht, prüft die eine Stelle, die er kennt. Dieser hier
+    findet auch die dritte, die morgen dazukommt.
+    """
+    root = Path(__file__).parent.parent / "app"
+    offenders = []
+    for path in sorted(root.rglob("*.py")):
+        if path.name == "cache.py":
+            continue  # dort wohnt die Klasse und der Bauer mit seinem Rückfall
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "ResultCache(" in line and "disk=" not in line:
+                offenders.append(f"{path.relative_to(root)}:{number}")
+    assert not offenders, (
+        "these build a result cache without a disk level, use disk_backed_cache(): "
+        + ", ".join(offenders)
+    )
+
+
+def test_the_cache_folder_carries_the_application_version() -> None:
+    """Ein Eintrag darf ein Update nicht überleben.
+
+    Der Schlüssel ist der Operations-Hash, und der kennt Parameter, Profil und
+    Qualität — nicht die *Umsetzung*. Eine behobene Boolesche Rückfallstufe
+    hätte sonst ein altes Netz aus dem Cache bekommen.
+    """
+    from app.branding import APP_VERSION
+    from app.core.paths import results_cache_dir, user_cache_dir
+
+    folder = results_cache_dir()
+    assert folder.name.startswith(APP_VERSION)
+    assert folder.parent.parent == user_cache_dir(), "below the cache root, not beside it"
+
+
+def test_the_cache_does_not_tidy_up_in_its_neighbours_folders(tmp_path: Path) -> None:
+    """`trim` und `clear` dürfen nur den eigenen Ordner anfassen.
+
+    Vorher stand `DiskCache.directory` per Vorgabe auf der Cache-**Wurzel**, und
+    dort wohnen die OpenSCAD-Sandbox, die heruntergeladenen Update-Pakete und
+    der Stil-Cache. Ein `trim` hätte fremde Ordner gelöscht, um sein Budget zu
+    halten, und `clear` hätte die Wurzel mitgenommen — samt einem Update-Paket,
+    das gerade geprüft werden sollte.
+    """
+    from app.core.paths import ensure_dir
+
+    root = tmp_path / "cache"
+    stranger = ensure_dir(root / "updates" / "0.1.3")
+    (stranger / "solidon-setup.exe").write_bytes(b"x" * 4096)
+    own = ensure_dir(root / "results" / "0.1.2")
+
+    disk = DiskCache(codec=FakeCodec(), directory=own, budget_bytes=1)
+    disk.put("a" * 32, result(100, "obj_1"))
+    disk.put("b" * 32, result(100, "obj_2"))
+    disk.clear()
+
+    assert (stranger / "solidon-setup.exe").is_file(), "the update package survived"
+
+
+def test_an_older_version_folder_is_dropped(tmp_path: Path) -> None:
+    """Der Preis der Versionsschranke, eingesammelt.
+
+    Ohne diesen Schritt bliebe je Fassung ein toter Ordner liegen, der bis an
+    das Budget gewachsen sein darf — das eigene Budget räumt ihn nie weg, es
+    zählt nur den eigenen Ordner.
+    """
+    from app.core.paths import ensure_dir
+    from app.core.scene import drop_other_versions
+
+    results = tmp_path / "results"
+    old = ensure_dir(results / "0.1.1")
+    (old / "leftover").write_bytes(b"x")
+    current = ensure_dir(results / "0.1.2")
+
+    drop_other_versions(current)
+
+    assert not old.exists(), "the folder of the previous version is gone"
+    assert current.is_dir(), "the current one stays"
+    assert results.is_dir(), "and nothing above it is touched"
+
+
+def test_a_generated_feature_keeps_its_name_and_origin_through_the_disk(tmp_path: Path) -> None:
+    """Ein erzeugtes Merkmal, einmal über die Platte — §21.2.
+
+    Der Test darüber schickt ein **erkanntes** Merkmal und prüft die Maße; die
+    Provenienz prüft er nicht. Sie ist aber der Teil, an dem §21.2 hängt: Ein
+    erzeugtes Merkmal trägt den Namen der Operation, die es gemacht hat, und
+    genau dieser Name ist es, worauf ein späterer Schritt sich beruft. Käme er
+    als „detected" zurück, wäre die Kette still zerrissen.
+    """
+    from app.core.types import Feature
+
+    entry = SceneObject(
+        id="obj_1",
+        name="Halterung",
+        mesh=FakeMesh(),  # type: ignore[arg-type]
+        features={
+            "op3.pin_1": Feature(
+                id="op3.pin_1",
+                kind="pin",
+                provenance="generated",
+                params={"diameter": 3.0},
+                face_indices=(4, 5),
+            )
+        },
+    )
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put("key", CachedResult(objects=(entry,)))
+
+    restored = disk.get("key")
+    assert restored is not None
+    feature = restored.objects[0].features["op3.pin_1"]
+    assert feature.id == "op3.pin_1"
+    assert feature.provenance == "generated", "a generated feature must not come back as detected"
+    assert feature.kind == "pin"
+
+
+def test_the_budget_is_checked_without_walking_the_folder_every_time(tmp_path: Path) -> None:
+    """Was geschrieben wurde, wird mitgezählt statt nachgezählt.
+
+    `put` rief am Ende `trim`, und `trim` fragte zuerst über jede Datei im
+    Ordner, wie groß er ist — gemessen 254 ms bei 2000 Einträgen, je
+    geschriebenem Op-Ergebnis. Jetzt geht der Gang einmal je Prozess und danach
+    erst wieder, wenn das Budget reißt.
+    """
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path, budget_bytes=10_000_000)
+    assert disk._known_bytes is None, "nothing counted before the first write"
+
+    disk.put("a" * 32, result(100, "obj_1"))
+    after_first = disk._known_bytes
+    assert after_first is not None, "the first write counts the folder once"
+
+    disk.put("b" * 32, result(100, "obj_2"))
+    assert disk._known_bytes is not None
+    assert disk._known_bytes > after_first, "the second write was added, not recounted"
+    assert disk._known_bytes == disk.size_bytes(), "and the running total is right"
+
+
+def test_an_own_part_that_changed_gets_a_folder_of_its_own(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein eigener Baustein ist eine Operation, die kein Update begleitet.
+
+    Ändert der Nutzer ein Maß in seinem eigenen Baustein (§24.5), bleiben
+    Op-Name und Parameter gleich, und der Operations-Hash sieht nichts. Im
+    Speicher war das gleichgültig; auf der Platte hieße es, dass die eigene
+    Änderung beim nächsten Öffnen verschwiegen wird — und gemeldet wird sie
+    nicht, denn ``changed_since_library`` liest gepflegte Änderungsverläufe,
+    und die pflegt beim Ausprobieren niemand.
+    """
+    from app.branding import APP_VERSION
+    from app.core import paths
+
+    parts = tmp_path / "parts"
+    parts.mkdir()
+    monkeypatch.setattr(paths, "user_parts_dir", lambda: parts)
+
+    without = paths.results_cache_dir()
+
+    own = parts / "magnet_pocket.py"
+    own.write_text("# ein eigener Baustein", encoding="utf-8")
+    with_part = paths.results_cache_dir()
+
+    own.write_text("# dasselbe Maß, ein anderer Wert", encoding="utf-8")
+    os.utime(own, (1_000_000, 1_000_000))
+    after_change = paths.results_cache_dir()
+
+    assert without != with_part, "an own part has to show in the folder"
+    assert with_part != after_change, "and changing it has to change the folder again"
+    assert after_change.name.startswith(APP_VERSION), "the version still leads"
+
+
+def test_two_readers_and_writers_share_one_folder(tmp_path: Path) -> None:
+    """Den Ordner teilen mehrere Prozesse, und zwar seit dem Anschluss.
+
+    Vorher gab es genau einen möglichen Schreiber, weil es keinen gab. Jetzt
+    schreiben die Oberfläche und die Kommandozeile in denselben Ordner, zwei
+    Fenster erst recht — und wenn einer davon aufräumt, darf der andere nicht
+    darüber fallen. Was er verliert, ist ein Eintrag; was er tut, ist neu
+    rechnen.
+    """
+    surface = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    terminal = DiskCache(codec=FakeCodec(), directory=tmp_path)
+
+    surface.put("a" * 32, result(100, "obj_1"))
+    terminal.put("b" * 32, result(100, "obj_2"))
+
+    assert surface.get("b" * 32) is not None, "each one reads what the other wrote"
+    assert terminal.get("a" * 32) is not None
+
+    # Ein dritter mit einem Budget, das nichts zulässt: er räumt alles weg.
+    DiskCache(codec=FakeCodec(), directory=tmp_path, budget_bytes=1).trim()
+
+    assert surface.get("a" * 32) is None, "gone is gone, and that is not an error"
+    terminal.put("c" * 32, result(100, "obj_3"))
+    assert terminal.get("c" * 32) is not None, "and writing goes on afterwards"
+
+
+def test_a_changed_core_file_gets_a_folder_of_its_own() -> None:
+    """Die Fassung im Pfad hält für den Kunden, nicht für den Arbeitsbaum.
+
+    Zwischen zwei Starts wird hier eine Boolesche Rückfallstufe geändert und
+    ``APP_VERSION`` bleibt „0.1.2". Ohne diese Schranke läge danach das Netz
+    des alten Codes im Cache, und die Berichtigung wäre stillschweigend
+    ausgehebelt — auf der einzigen Maschine, auf der Solidon heute läuft.
+    """
+    from app.core import paths
+
+    before = paths.results_cache_dir()
+
+    touched = Path(paths.__file__)
+    state = touched.stat()
+    # Absolut in die Zukunft und nicht relativ zu dieser Datei: Gefragt ist das
+    # **Maximum** über den Kern, und eine andere Datei kann längst jünger sein
+    # — wer gerade `cache.py` geschrieben hat, machte diesen Test sonst rot,
+    # ohne dass etwas kaputt war.
+    os.utime(touched, ns=(state.st_atime_ns, time.time_ns() + 10_000_000_000))
+    try:
+        after = paths.results_cache_dir()
+    finally:
+        os.utime(touched, ns=(state.st_atime_ns, state.st_mtime_ns))
+
+    assert before != after, "a touched core file has to show in the folder"
+    assert paths.results_cache_dir() == before, "and putting the time back puts it back"
+
+
+def test_a_built_package_needs_no_source_stamp(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein gebautes Paket hat keine Quelldateien, die sich ändern könnten.
+
+    Dort ist die Fassung die ganze Wahrheit, und ein Gang über einen Ordner,
+    den es nicht gibt, wäre nur Arbeit ohne Aussage.
+    """
+    import sys
+
+    from app.branding import APP_VERSION
+    from app.core import paths
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    assert paths.results_cache_dir().name == APP_VERSION
+
+
+def test_nobody_writes_into_the_shared_cache_root() -> None:
+    """Die Wurzel des Cache-Ordners gehört niemandem allein.
+
+    Dort wohnen die OpenSCAD-Sandbox, die Update-Pakete, der Stil-Cache und die
+    Ergebnisse — und jeder von ihnen räumt in seinem eigenen Unterordner auf.
+    Der Ergebnis-Cache tat es einmal in der Wurzel, mit ``rmtree``; das ist
+    behoben, aber die Regel dahinter stand nur in einem Docstring. Hier steht
+    sie als Test: Wer ``user_cache_dir()`` benutzt, hängt einen Unterordner an.
+    """
+    root = Path(__file__).parent.parent / "app"
+    offenders = []
+    for path in sorted(root.rglob("*.py")):
+        if path.name == "paths.py":
+            continue  # dort wird die Wurzel definiert
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            bare = line.lstrip()
+            if "user_cache_dir" not in line or bare.startswith(("#", "from ", "import ")):
+                continue
+            # Auf den Namen muss ``() /`` folgen. Ohne Klammern ist es die
+            # Funktion selbst — genau so stand der Fehler in `DiskCache`:
+            # ``field(default_factory=user_cache_dir)``. Ein Wächter, der nur
+            # den Aufruf sucht, hätte ihn nicht gesehen.
+            if not line.split("user_cache_dir", 1)[1].lstrip().startswith("() /"):
+                offenders.append(f"{path.relative_to(root)}:{number}")
+    assert not offenders, (
+        "these take the shared cache root itself instead of a folder below it: "
+        + ", ".join(offenders)
+    )
+
+
+def test_the_disk_level_holds_only_what_was_offered_to_it(tmp_path: Path) -> None:
+    """Ablegen auf der Platte ist ein Verlangen, kein Nebeneffekt.
+
+    Die Vorgabe steht auf ``False``, weil die Fehlerrichtungen verschieden
+    schwer sind: Ein vergessenes ``to_disk=False`` gäbe über Sitzungen hinweg
+    falsche Ergebnisse, ein vergessenes ``to_disk=True`` nur eine langsamere
+    Anwendung. Dieser Test hält die Richtung fest.
+    """
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    cache = ResultCache(disk=disk)
+
+    cache.put("a" * 32, result(100, "obj_1"))
+    assert disk.get("a" * 32) is None, "nothing lands on the disk unasked"
+    assert cache.get("a" * 32) is not None, "but the memory level has it"
+
+    cache.put("b" * 32, result(100, "obj_2"), to_disk=True)
+    assert disk.get("b" * 32) is not None, "and what was offered is there"

@@ -37,7 +37,7 @@ from app.core.ingest.plan import import_plan
 from app.core.knowledge import profiles
 from app.core.log import configure
 from app.core.registry import REGISTRY, cli_commands, documentation
-from app.core.scene import History, OperationDraft, evaluate
+from app.core.scene import History, OperationDraft, ResultCache, disk_backed_cache, evaluate
 from app.core.scene.project import (
     Project,
     ProjectSources,
@@ -133,6 +133,29 @@ def profile_of(project: Project) -> Any:
     )
 
 
+_cache: ResultCache | None = None
+
+
+def evaluation_cache() -> ResultCache:
+    """Der Cache dieses Aufrufs, einmal gebaut.
+
+    Die Kommandozeile übergab bis hierher **keinen** Cache, und das war die
+    Stelle, an der es am meisten kostete: Jeder Aufruf ist ein eigener Prozess,
+    also gibt es keinen Speicher, der über ihn hinaus hilft. Wer dieselbe Datei
+    prüft, exportiert und noch einmal exportiert, rechnete den Stapel dreimal.
+    Mit der Plattenebene rechnet ihn der erste Aufruf und die folgenden lesen
+    ihn — genau der Fall, für den §38 die Ebene vorsieht.
+
+    Einmal je Prozess, weil ein Befehl mehrfach auswerten kann (``export``
+    zweimal): Zwei Bauer hießen zwei Ordnerprüfungen und zwei Speicherebenen,
+    die einander nichts nützen.
+    """
+    global _cache
+    if _cache is None:
+        _cache = disk_backed_cache()
+    return _cache
+
+
 def run_evaluation(project: Project, path: Path, quiet: bool = False) -> Any:
     return evaluate(
         project.document,
@@ -140,6 +163,7 @@ def run_evaluation(project: Project, path: Path, quiet: bool = False) -> Any:
         progress=(lambda fraction, text: None) if quiet else TerminalProgress(),
         ask=terminal_ask,
         sources=ProjectSources(project, base_dir=path.parent),
+        cache=evaluation_cache(),
     )
 
 
