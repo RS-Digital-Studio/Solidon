@@ -23,6 +23,11 @@ cd "$(dirname "$0")/../../.." || exit 1
 # Gesucht wird in dieser Reihenfolge: was der Aufrufer nennt (`SUITE_PYTHON`,
 # das setzt `tools/nach_main.py`), dann die eigene `.venv`, dann die des
 # Hauptbaums über das gemeinsame Git-Verzeichnis.
+# **In Anführungszeichen, überall.** Der Projektordner heißt "3D Druck" —
+# mit Leerzeichen. Relativ (`.venv/…`) fiel das nie auf; sobald der Pfad
+# absolut wird, zerlegt die Shell ihn an der Lücke und meldet
+# "F:/3D: No such file or directory" — als Exit 127, das aussieht wie der
+# bekannte Absturz beim Abbau.
 PY=${SUITE_PYTHON:-.venv/Scripts/python.exe}
 if [ ! -x "$PY" ]; then
   haupt=$(git rev-parse --git-common-dir 2>/dev/null)
@@ -69,7 +74,7 @@ schlecht=""
 KERNE=${SUITE_KERNE:-8}
 
 echo "=== der Rest in einem Zug (-n $KERNE) ==="
-PYTHONIOENCODING=utf-8 $PY -m pytest -q -m "not performance" $ignores -n "$KERNE"
+PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" $ignores -n "$KERNE"
 status=$?
 echo "--> Exit $status"
 if zaehlt_als_fehler $status; then
@@ -79,7 +84,7 @@ fi
 
 for file in $windowed; do
   echo "=== $file ==="
-  PYTHONIOENCODING=utf-8 $PY -m pytest -q -m "not performance" "$file"
+  PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" "$file"
   status=$?
   echo "--> Exit $status"
   if zaehlt_als_fehler $status; then
