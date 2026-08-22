@@ -24,7 +24,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 8
+FORMAT_VERSION: Final = 9
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +134,24 @@ def _keep_bores_centred(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _add_feature_matches(data: dict[str, Any]) -> dict[str, Any]:
+    """8 → 9: Operationen bekommen ein Feld für Zuordnungsantworten (§15.7).
+
+    Bis Version 8 galt die Antwort auf „Welches Merkmal entspricht ``pin_1``?"
+    für einen Lauf und war danach vergessen — gemessen 99 modale Fenster für 7
+    verschiedene Entscheidungen in einem einzigen Durchgang. Ab Version 9 steht
+    sie als geometrischer Abdruck in ``matches``.
+
+    **Umzurechnen gibt es nichts, und das ist Absicht.** Eine alte Datei hat
+    keine gespeicherten Antworten, und keine zu haben ist der gültige Zustand:
+    Beim ersten Auswerten wird gefragt wie bisher, danach nie wieder. Ein
+    fehlendes Feld heißt „noch nicht gefragt" und nie „keine Antwort nötig" —
+    deshalb wird hier nichts gesetzt, statt ein leeres Feld einzutragen, das
+    sonst wie eine Aussage aussähe.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -143,6 +161,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=5, to_version=6, apply=_keep_transaction_titles_literal),
     Step(from_version=6, to_version=7, apply=_keep_bores_centred),
     Step(from_version=7, to_version=8, apply=carry_over),
+    Step(from_version=8, to_version=9, apply=_add_feature_matches),
 )
 
 

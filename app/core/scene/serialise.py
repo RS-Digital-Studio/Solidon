@@ -344,6 +344,11 @@ def operation_to_data(operation: Operation) -> dict[str, Any]:
         data["solver"] = solver_to_data(operation.solver)
     if operation.seed is not None:
         data["seed"] = operation.seed
+    # Nur schreiben, wenn etwas drinsteht: Ein leeres Feld in jeder Operation
+    # bläht die Datei und sagt nichts. Die meisten Zuordnungen sind eindeutig
+    # und stellen nie eine Frage.
+    if operation.matches:
+        data["matches"] = {name: dict(entry) for name, entry in operation.matches.items()}
     return data
 
 
@@ -356,6 +361,7 @@ def operation_from_data(data: dict[str, Any]) -> Operation:
         params=dict(data.get("params", {})),
         solver=solver_from_data(data.get("solver")),
         seed=data.get("seed"),
+        matches={name: dict(entry) for name, entry in data.get("matches", {}).items()},
     )
 
 

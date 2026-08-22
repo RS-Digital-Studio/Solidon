@@ -21,7 +21,9 @@ Drei Ausgänge, und nur einer davon ist still:
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
+from typing import Any
 
 import numpy as np
 from scipy.optimize import linear_sum_assignment
@@ -257,6 +259,96 @@ def question_for(old_id: FeatureId, candidates: tuple[FeatureId, ...]) -> tuple[
         tr("Welches Merkmal entspricht {name}?").replace("{name}", old_id),
         [*candidates, tr("Verwerfen")],
     )
+
+
+def fingerprint(feature: Feature, centre: Vec3, diagonal: float) -> dict[str, Any]:
+    """Der Abdruck, unter dem eine Zuordnungsantwort festgehalten wird (§15.7).
+
+    **Gespeichert wird, woran man das Merkmal wiedererkennt — nicht sein
+    Name.** Ein ``alt → neu`` wäre fragil: Die Erkennung nummeriert beim
+    nächsten Lauf womöglich anders, und dann zeigte die Antwort auf ein fremdes
+    Merkmal. Aus „fragt zu oft" würde „nimmt stillschweigend das falsche", und
+    das ist der schlechtere Fehler (Regel 21).
+
+    **Relativ zum Körper, nicht absolut.** Es ist derselbe Bezugsrahmen, in dem
+    :func:`cost` rechnet, und genau das ist der Punkt: Verschiebt eine spätere
+    Operation das ganze Objekt, wandert der Abdruck mit und bleibt gültig. Ein
+    absoluter Punkt verlöre seine Gültigkeit beim ersten *Auf dem Bett
+    anordnen*. Der Preis ist bekannt und tragbar: Baut eine Operation Material
+    an und verschiebt damit Mitte und Diagonale, altert der Abdruck — dann
+    gewinnt kein Kandidat mit Abstand, und es wird wieder gefragt. Das ist der
+    gutartige Ausgang.
+
+    Lesbares JSON, weil es in der Projektdatei steht und dort jemand
+    hineinsehen können soll.
+    """
+    vector = feature_vector(feature, centre, diagonal)
+    return {
+        "kind": feature.kind,
+        "relative": [round(float(value), 6) for value in vector[:3]],
+        "axis": [round(float(value), 6) for value in vector[3:6]],
+        "diameter": round(float(vector[6]), 6),
+        "directional": "axis" not in feature.params,
+    }
+
+
+def resolve(
+    saved: Mapping[str, Any],
+    candidates: tuple[FeatureId, ...],
+    detected: Mapping[FeatureId, Feature],
+    centre: Vec3,
+    diagonal: float,
+) -> FeatureId | None:
+    """Welcher Kandidat der gespeicherten Antwort entspricht — oder ``None``.
+
+    ``None`` heißt „frag wieder", und das ist die wichtige Hälfte dieser
+    Funktion. **Der Rückfall braucht einen Abstand, nicht „am nächsten".** Die
+    Kandidaten waren mehrdeutig, *weil* sie sich gleichen; wer hier „der
+    nächstliegende gewinnt" nimmt, entscheidet über einen Abstand, der kleiner
+    ist als der zwischen den Kandidaten — und rät damit genau dort, wo §21.3
+    das Fragen verlangt.
+
+    Genommen wird deshalb dieselbe Rivalenlogik wie in :func:`match`: Der Beste
+    muss unter der Annahmeschwelle liegen **und** die anderen müssen deutlich
+    schlechter sein. Sonst ``None``.
+    """
+    kind = saved.get("kind")
+    reference = np.concatenate(
+        [
+            np.asarray(saved.get("relative", (0.0, 0.0, 0.0)), dtype=float),
+            np.asarray(saved.get("axis", (0.0, 0.0, 0.0)), dtype=float),
+            [float(saved.get("diameter", 0.0))],
+        ]
+    )
+    directional = bool(saved.get("directional", False))
+
+    costs: list[tuple[float, FeatureId]] = []
+    for identifier in candidates:
+        feature = detected.get(identifier)
+        if feature is None or feature.kind != kind:
+            continue
+        vector = feature_vector(feature, centre, diagonal)
+        position = float(np.linalg.norm(reference[:3] - vector[:3])) / POSITION_TOLERANCE
+        delta = float(np.linalg.norm(reference[3:6] - vector[3:6]))
+        if not directional:
+            # Dieselbe Regel wie in `cost`: was eine ``axis`` hat, ist eine
+            # Linie und keine Richtung — +v und -v sind dasselbe Merkmal.
+            delta = min(delta, float(np.linalg.norm(reference[3:6] + vector[3:6])))
+        axis = delta / AXIS_TOLERANCE
+        scale = max(abs(float(reference[6])), abs(float(vector[6])), EPS_GEOM)
+        diameter = abs(float(reference[6]) - float(vector[6])) / scale / DIAMETER_TOLERANCE
+        costs.append((float(position + axis + diameter), identifier))
+
+    if not costs:
+        return None
+    costs.sort()
+    best, winner = costs[0]
+    if best > MATCH_THRESHOLD:
+        return None
+    limit = best * (1.0 + AMBIGUITY_MARGIN) + AMBIGUITY_FLOOR
+    if any(value <= limit for value, identifier in costs[1:]):
+        return None
+    return winner
 
 
 def moved_features(

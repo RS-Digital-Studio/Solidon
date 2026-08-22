@@ -1316,7 +1316,15 @@ class Session(QObject):
         # angewandt. Ein `evaluate_async()` hier wäre eine Auswertung, die nur
         # bestätigt, was gerade herauskam — beim ersten Öffnen eines Modells mit
         # unklarer Einheit also das doppelte Warten.
-        if self.history.record_answers(result.answers):
+        # Dasselbe für die Antworten der **Zuordnung** (§21.3), und aus
+        # demselben Grund — nur an einer anderen Stelle im Stapel: Was die
+        # Zuordnung entscheidet, ist keine Eingabe der Operation und steht
+        # darum in `matches` statt in `params`. Zwei Aufrufe statt eines
+        # gemeinsamen, weil die beiden Felder verschiedene Fragen beantworten
+        # und der eine ohne den anderen richtig bleibt.
+        answered = self.history.record_answers(result.answers)
+        matched = self.history.record_matches(result.matches)
+        if answered or matched:
             self._dirty = True
             self.projectChanged.emit()
         self.sceneChanged.emit(result)

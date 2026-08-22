@@ -29,7 +29,14 @@ from app.core.errors import AmbiguityError, AppError, InternalError, OperationCa
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.perceive.features import DETECTABLE_KINDS, detect
-from app.core.perceive.matching import apply_mapping, match, moved_features, question_for
+from app.core.perceive.matching import (
+    apply_mapping,
+    fingerprint,
+    match,
+    moved_features,
+    question_for,
+    resolve,
+)
 from app.core.registry import REGISTRY, OperationSpec, Registry, validate
 from app.core.scene import expressions
 from app.core.scene.cache import CachedResult, ResultCache
@@ -95,6 +102,20 @@ class EvaluationResult:
     """Welche Rückfallstufe welche Operation getragen hat (§17.2). Der
     Aufrufer schreibt sie zurück in den Stapel, damit dieselbe Datei gleich
     nachrechnet."""
+    matches: Mapping[OpId, Mapping[str, Any]] = field(default_factory=dict)
+    """Antworten auf mehrdeutige Merkmalszuordnungen (§15.7, §21.3).
+
+    **Der Unterschied zu ``solvers`` ist die Richtung**, und er ist derselbe
+    wie zwischen ``solvers`` und ``answers``: Eine Rückfallstufe ist ein
+    Vermerk, den die Auswertung nie zurückliest. Eine Antwort ist eine
+    Anweisung — steht sie nicht im Stapel, stellt die nächste Auswertung
+    dieselbe Frage. Gemessen: 99 modale Fenster für 7 Entscheidungen.
+
+    **Und der Unterschied zu ``answers`` ist der Fragesteller.** Was eine
+    *Operation* erfragt, passt in ihre Parameter (die Einheitenrückfrage von
+    ``load`` ist der Fall). Was die *Zuordnung* entscheidet, passt in keinen
+    Parameter — es ist keine Eingabe der Operation, und ``validate`` wiese den
+    Schlüssel ab. Es steht deshalb in ``Operation.matches``."""
     answers: Mapping[OpId, Mapping[str, Any]] = field(default_factory=dict)
     """Was eine Operation über eine **Rückfrage** entschieden hat (§15.7).
 
@@ -149,6 +170,7 @@ def evaluate(
     pending: list[tuple[str, CachedResult, bool]] = []
     solvers: dict[OpId, SolverInfo] = {}
     answers: dict[OpId, Mapping[str, Any]] = {}
+    matches: dict[OpId, dict[str, Any]] = {}
     stopped_at: OpId | None = None
 
     for position, operation in enumerate(operations):
@@ -309,6 +331,7 @@ def evaluate(
                 created_by=operation.id,
                 kind=geworden,
             )
+            recorded: dict[str, dict[str, Any]] = {}
             try:
                 objects[object_id] = _with_features(
                     placed,
@@ -321,6 +344,7 @@ def evaluate(
                     findings,
                     result.transform,
                     previous_bounds.get(object_id),
+                    recorded,
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -332,6 +356,12 @@ def evaluate(
                 findings.append(_finding_from(error, operation))
                 stopped_at = operation.id
                 break
+            else:
+                # Eine Operation kann mehrere Objekte ausgeben, und jedes kann
+                # eine eigene Frage aufwerfen. Gesammelt wird deshalb über alle
+                # Ausgaben derselben Operation hinweg.
+                if recorded:
+                    matches.setdefault(operation.id, {}).update(recorded)
             hashes[object_id] = object_hash(key, index)
             # Wächst nur, wird nie geleert: Genau darin liegt der Wert (siehe
             # ``EvaluationResult.object_names``).
@@ -408,6 +438,7 @@ def evaluate(
         object_names=names,
         solvers=solvers,
         answers=answers,
+        matches=matches,
     )
 
 
@@ -519,6 +550,7 @@ def _with_features(
     findings: list[Finding],
     transform: Transform | None = None,
     previous_bounds: BoundingBox | None = None,
+    recorded: dict[str, dict[str, Any]] | None = None,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -527,6 +559,17 @@ def _with_features(
     Schritt fünf ein anderes Loch als in Schritt vier. Wo die Zuordnung
     mehrdeutig ist, entscheidet der Nutzer (§21.3) — das eine, was hier nie
     passiert, ist Raten.
+
+    **Und die Antwort wird festgehalten (§15.7).** Vorher galt sie für diesen
+    Lauf und war danach vergessen: Gemessen kostete ein Durchgang durch neun
+    heruntergeladene Modelle **99 modale Fenster für 7 verschiedene
+    Entscheidungen**, weil jede Auswertung dieselben Fragen neu stellte.
+    ``operation.matches`` trägt sie jetzt mit; ``recorded`` nimmt neue
+    Antworten auf und reicht sie nach oben, wo sie in den Stapel geschrieben
+    werden. Ohne dieses Festhalten wäre die Auswertung außerdem nicht die reine
+    Funktion, die §15.1 verlangt — eine Antwort, die nur in der Sitzung lebt,
+    wäre ein sechster Eingang neben Stack, Quellen, Parametern, Profilen und
+    Startwerten.
     """
     mesh = entry.mesh
     if not isinstance(mesh, MeshData):
@@ -621,11 +664,32 @@ def _with_features(
     old_centre = previous_bounds.centre if moved and previous_bounds is not None else centre
     matched = match(previous, detected, centre, mesh.bounds.diagonal, old_centre=old_centre)
 
+    saved = operation.matches
     for old_id, candidates in matched.ambiguous.items():
+        # **Erst die festgehaltene Antwort, dann erst fragen.** ``resolve``
+        # gibt ``None`` zurück, wenn der Beste nicht mit Abstand gewinnt — die
+        # Kandidaten waren ja mehrdeutig, *weil* sie sich gleichen, und „der
+        # nächstliegende" entschiede über einen Abstand, der kleiner ist als
+        # der zwischen ihnen. Dann wird wieder gefragt, und das ist richtig so
+        # (Regel 21).
+        remembered = saved.get(old_id)
+        if remembered is not None:
+            answer = resolve(remembered, candidates, detected, centre, mesh.bounds.diagonal)
+            if answer is not None:
+                matched.mapping[old_id] = answer
+                continue
+
         question, choices = question_for(old_id, candidates)
         chosen = ask(question, choices)
         if chosen in candidates:
             matched.mapping[old_id] = chosen
+            # Festhalten, woran dieses Merkmal wiederzuerkennen ist — nicht,
+            # wie es gerade heißt. Beim nächsten Lauf nummeriert die Erkennung
+            # womöglich anders.
+            if recorded is not None:
+                picked = detected.get(chosen)
+                if picked is not None:
+                    recorded[old_id] = fingerprint(picked, centre, mesh.bounds.diagonal)
         else:
             findings.append(
                 Finding(

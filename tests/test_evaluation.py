@@ -961,3 +961,163 @@ def test_the_answer_to_a_question_lands_in_the_stack() -> None:
 
     assert len(asked) == 1, f"the question came back although the answer is in the stack: {asked}"
     assert not second.answers, "nothing was decided this time, so nothing is reported"
+
+
+# --- Die Antwort der Zuordnung (§15.7, §21.3) -----------------------------------
+
+
+def _plate_with_two_close_holes() -> tuple[object, dict[str, object]]:
+    """Eine Platte mit zwei Bohrungen, die dicht genug beieinander liegen, um
+    eine Zuordnung mehrdeutig zu machen.
+
+    Sechs Millimeter Abstand auf einer Diagonale von rund neunzig: Ein altes
+    Merkmal in der Mitte hat zu beiden **dieselben** Kosten, und genau das ist
+    der Fall, den §21.3 nicht raten lässt.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.perceive.features import detect
+
+    plate = trimesh.creation.box(extents=(80.0, 40.0, 8.0))
+    for x in (-3.0, 3.0):
+        bore = trimesh.creation.cylinder(radius=1.0, height=20.0)
+        bore.apply_translation((x, 0.0, 0.0))
+        plate = trimesh.boolean.difference([plate, bore])
+    mesh = MeshData.of(plate)
+    holes = {name: f for name, f in detect(mesh).items() if f.kind == "hole"}
+    return mesh, holes
+
+
+def test_the_fingerprint_survives_a_renumbering() -> None:
+    """Der Kern des Entwurfs: gespeichert wird ein Abdruck, kein Bezeichner.
+
+    ``alt → neu`` wäre fragil — die Erkennung nummeriert beim nächsten Lauf
+    womöglich anders, und dann zeigte die Antwort auf ein fremdes Merkmal. Aus
+    „fragt zu oft" würde „nimmt stillschweigend das falsche", und das ist der
+    schlechtere Fehler (Regel 21).
+    """
+    from app.core.perceive.matching import fingerprint, resolve
+
+    mesh, holes = _plate_with_two_close_holes()
+    centre, diagonal = mesh.bounds.centre, mesh.bounds.diagonal
+    first, second = sorted(holes)
+
+    saved = fingerprint(holes[first], centre, diagonal)
+
+    # Dieselbe Geometrie, andere Namen — der Abdruck findet sie wieder.
+    renamed = {"hole_7": holes[first], "hole_9": holes[second]}
+    assert resolve(saved, ("hole_7", "hole_9"), renamed, centre, diagonal) == "hole_7"
+
+
+def test_two_indistinguishable_candidates_are_asked_again() -> None:
+    """Die wichtigere Hälfte von ``resolve``: ``None`` heißt „frag wieder".
+
+    Der Rückfall braucht einen **Abstand**, nicht „am nächsten". Die Kandidaten
+    waren mehrdeutig, *weil* sie sich gleichen; wer hier den nächstliegenden
+    nimmt, entscheidet über einen Abstand, der kleiner ist als der zwischen
+    ihnen — und rät genau dort, wo §21.3 das Fragen verlangt.
+    """
+    from app.core.perceive.matching import fingerprint, resolve
+
+    mesh, holes = _plate_with_two_close_holes()
+    centre, diagonal = mesh.bounds.centre, mesh.bounds.diagonal
+    first, _second = sorted(holes)
+
+    saved = fingerprint(holes[first], centre, diagonal)
+    # Zweimal dasselbe Merkmal unter verschiedenen Namen: kein Abstand.
+    twins = {"a": holes[first], "b": holes[first]}
+
+    assert resolve(saved, ("a", "b"), twins, centre, diagonal) is None
+
+
+def test_a_saved_answer_is_not_used_for_another_kind() -> None:
+    """Eine Fläche ist keine Bohrung, auch wenn sie am selben Ort sitzt."""
+    from app.core.perceive.matching import fingerprint, resolve
+    from app.core.types import Feature
+
+    mesh, holes = _plate_with_two_close_holes()
+    centre, diagonal = mesh.bounds.centre, mesh.bounds.diagonal
+    first = min(holes)
+    saved = fingerprint(holes[first], centre, diagonal)
+
+    face = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params=dict(holes[first].params),
+    )
+
+    assert resolve(saved, ("face_1",), {"face_1": face}, centre, diagonal) is None
+
+
+def test_the_question_of_the_matcher_is_asked_once_and_then_never_again() -> None:
+    """Die Abnahme aus §15.7: 99 Fenster für 7 Entscheidungen werden 7 und dann 0.
+
+    Geprüft wird an der Stelle, an der die Frage entsteht — ``_with_features``
+    —, und in beiden Hälften: Es wird **einmal** gefragt, die Antwort wird
+    **gemeldet**, und mit ihr im Stapel kommt die Frage nicht wieder.
+    """
+    from app.core.scene.evaluate import _with_features
+    from app.core.types import Feature, Operation, SceneObject
+
+    mesh, _holes = _plate_with_two_close_holes()
+    entry = SceneObject(id="obj_1", name="Platte", mesh=mesh)
+    previous = {
+        "pin_1": Feature(
+            id="pin_1",
+            kind="hole",
+            provenance="generated",
+            params={"centre": (0.0, 0.0, 4.0), "axis": (0.0, 0.0, 1.0), "diameter": 2.0},
+        )
+    }
+
+    asked: list[str] = []
+
+    def ask(question: str, choices: list[str]) -> str:
+        asked.append(question)
+        return choices[0]
+
+    operation = Operation(id=1, op="thicken")
+    recorded: dict[str, dict[str, object]] = {}
+    _with_features(entry, dict(previous), operation, ask, [], recorded=recorded)
+
+    assert len(asked) == 1, "two candidates at the same cost must be asked about"
+    assert "pin_1" in recorded, f"the answer must be reported: {recorded}"
+    assert recorded["pin_1"]["kind"] == "hole"
+
+    # Und die Gegenprobe, die den Sinn der Sache ausmacht: kein zweites Fenster.
+    answered = dataclasses.replace(operation, matches=recorded)
+    again: dict[str, dict[str, object]] = {}
+    _with_features(entry, dict(previous), answered, ask, [], recorded=again)
+
+    assert len(asked) == 1, f"the question came back although the answer is in the stack: {asked}"
+    assert not again, "nothing was decided this time, so nothing is reported"
+
+
+def test_the_matcher_answer_lands_in_the_stack_beside_seed() -> None:
+    """Geschrieben wird in ``matches`` und **nicht** in ``params``.
+
+    Das Schema der Operation kennt den Schlüssel nicht, und ``validate`` wiese
+    ihn zu Recht ab — es ist keine Eingabe der Operation, sondern die Antwort
+    auf eine Frage, die *bei* ihr entstand. Der Präzedenzfall ist ``seed``.
+    """
+    from app.core.scene.project import new_project
+
+    project = new_project("centauri-carbon-2", "petg")
+    history = History(project.document)
+    history.apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 20.0})],
+    )
+
+    abdruck = {"kind": "hole", "relative": [0.1, 0.0, 0.0], "axis": [0.0, 0.0, 1.0]}
+    assert history.record_matches({1: {"pin_1": abdruck}}) is True
+
+    entry = project.document.ops[0]
+    assert entry.matches["pin_1"] == abdruck
+    assert "pin_1" not in entry.params, "an answer of the matcher is not an input"
+
+    # Zweimal dasselbe schreiben ändert nichts — sonst gälte das Dokument nach
+    # jeder Auswertung als geändert, ohne dass jemand etwas entschieden hat.
+    assert history.record_matches({1: {"pin_1": abdruck}}) is False

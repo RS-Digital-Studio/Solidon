@@ -368,6 +368,44 @@ class History:
             changed = True
         return changed
 
+    def record_matches(self, matches: Mapping[OpId, Mapping[str, Any]]) -> bool:
+        """Schreibt die Antworten der **Zuordnung** in den Stapel (§15.7, §21.3).
+
+        **Der Unterschied zu** :meth:`record_answers` **ist der Fragesteller,
+        nicht die Richtung.** Was eine Operation erfragt, ist eine Eingabe und
+        gehört in ihre Parameter — die Einheitenrückfrage von ``load`` ist der
+        Fall (§17.1). Was die Zuordnung entscheidet, ist keine Eingabe: Das
+        Schema der Operation kennt den Schlüssel nicht, und ``validate`` wiese
+        ihn zu Recht ab. Es steht deshalb in einem eigenen Feld neben ``seed``.
+
+        **Kein neuer Hash, und das ist der wichtige Unterschied.** Eine Antwort
+        in den Parametern ändert den Operations-Hash, und der Zweig darunter
+        rechnet einmal neu — richtig so, denn die Einheit ändert das Ergebnis.
+        Eine Zuordnungsantwort ändert es nicht: ``_with_features`` läuft
+        *nach* dem Cache, in beiden Zweigen, auch nach einem Treffer. Wer
+        ``matches`` „zur Sicherheit" in den Hash einträgt, macht aus jeder
+        beantworteten Frage eine vollständige Neuberechnung des Zweigs.
+
+        Wie bei :meth:`record_answers` entsteht **keine Transaktion**: Eine
+        Antwort ist keine neue Handlung, sondern der Abschluss der einen, die
+        gefragt hat. Das Dokument gilt danach als geändert und gehört
+        gespeichert — sonst stünde die Antwort im Stapel, der Titel zeigte kein
+        ``*``, und beim Schließen wäre sie weg.
+        """
+        if not matches:
+            return False
+        changed = False
+        for index, entry in enumerate(self.document.ops):
+            given = matches.get(entry.id)
+            if not given:
+                continue
+            merged = {**entry.matches, **given}
+            if merged == dict(entry.matches):
+                continue
+            self.document.ops[index] = dataclasses.replace(entry, matches=merged)
+            changed = True
+        return changed
+
     def change_params(self, op_id: OpId, params: Mapping[str, Any]) -> Operation:
         """Gibt einer Operation des Stapels andere Parameter (§15.4, §11).
 
