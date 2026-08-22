@@ -186,6 +186,46 @@ fremder Zwischenstand kann einen Lauf auch grün machen, und dann hält jemand
 seine Arbeit für abgesichert. Ein eigener Arbeitsbaum ist die einzige
 vollständige Antwort (`claude --worktree <name>`).
 
+
+## Wenn ein Lauf steht: py-spy
+
+Ein Testlauf, der bei 0,00 CPU-Sekunden über ein Intervall steht, sagt nicht,
+**wo** er steht. Der Exit-Code kommt nie, das Protokoll endet mitten in einer
+Datei, und `faulthandler` hilft nur dem Faden, der stürzt — hier stürzt keiner,
+hier wartet einer.
+
+`py-spy` hängt sich an einen **laufenden** Prozess und liest seinen Stapel,
+ohne ihn anzufassen:
+
+```
+py-spy dump --pid 60560 --native
+```
+
+`--native` ist der Teil, der zählt: Ohne ihn endet der Stapel an der
+Python-Grenze, und genau dahinter liegt die Frage — in Qt, in VTK, im Warten
+auf ein Ereignis, das nicht kommt.
+
+**Es liegt in der Nutzer-Umgebung und nicht in der `.venv`**
+(`%APPDATA%\Python\Python313\Scripts\py-spy.exe`), und das ist kein Zufall:
+Ein Werkzeug, das man an einen fremden Prozess hängt, ist so wenig Bestandteil
+des Produkts wie `git` oder ein Debugger. In `constraints.txt` hätte es die
+Lizenzprüfung und den nächsten Klon berührt, ohne dass die Anwendung es je
+importiert. Entschieden am 22.08.2026.
+
+**Die Prozessnummer findet man nicht über die Elternkette.** Auf Windows setzt
+niemand die Elternnummer um, wenn der Elternprozess endet — der `pytest` unter
+einem Schloss hängt dann sichtbar an einer ganz anderen Kette oder an keiner.
+Gesucht wird deshalb am Kommando:
+
+```
+Get-CimInstance Win32_Process -Filter "Name like '%python%'" |
+  Select-Object ProcessId, CommandLine
+```
+
+Dasselbe tut `tools/gate_lock.py` in `_test_processes()`, und aus demselben
+Grund. Wer nur die direkten Kinder des Schlosshalters zählt, findet den
+stehenden Lauf nicht — an einem Abend zweimal passiert.
+
 ## Die Gegenprobe
 
 Ein neuer Test, der einen Fund festnagelt, wird **einmal ohne den Fix gefahren**.
