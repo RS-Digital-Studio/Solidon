@@ -1,5 +1,5 @@
 #!/bin/sh
-# Installiert Solidon3D 0.1.1 — erzeugt von tools/make_linux_packages.py.
+# Installiert Solidon3D 0.1.2 — erzeugt von tools/make_linux_packages.py.
 # Von Hand geänderte Zeilen verliert der nächste Lauf.
 #
 #   ./install.sh                          fragt nach Lizenz und Ort
@@ -9,7 +9,7 @@ set -eu
 
 NAME="Solidon3D"
 SHORT="solidon3d"
-VERSION="0.1.1"
+VERSION="0.1.2"
 IDENTIFIER="de.rsdigital.solidon3d"
 WEBSITE="https://solidon3d.de/"
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
@@ -179,7 +179,7 @@ if [ -e "$TARGET" ] && [ ! -d "$TARGET" ]; then
   exit 1
 fi
 if [ -e "$TARGET/$NAME" ]; then
-  say "Eine vorhandene Fassung an dieser Stelle wird ersetzt." \
+  say "Eine vorhandene Version an dieser Stelle wird ersetzt." \
       "An existing version in this place is being replaced."
   # Gelöscht wird das Verzeichnis der Anwendung — dass es eines ist, stellt
   # der Fall oben sicher. Ohne ihn machte ein --prefix /usr/local aus dem
