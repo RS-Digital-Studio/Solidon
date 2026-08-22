@@ -3973,10 +3973,34 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       obwohl beide aus demselben Baustein kommen und beide für die Erkennung
       unsichtbar sind.
 
-      **Und die Zusicherung aus `b76df19` hält daneben ebenfalls nicht:** Vier
-      Merkmale gingen, drei wurden gemeldet. `heatset_m4_bore_1` verschwindet
-      lautlos, obwohl dort steht „fällt heraus, wenn es wirklich weg ist —
-      **mit Befund**, nicht lautlos".
+      **Behoben am 23.08.2026 (`d28f145`):** `Feature.recognised` hält fest, ob
+      die Erkennung dieses Merkmal an seiner Stelle wiederfindet — gesetzt beim
+      Einhängen über dieselbe Zuordnung, die auch sonst zuordnet. Die neun
+      Beispiele gingen damit von **elf Warnungen auf sechs**, von fünf
+      betroffenen auf vier.
+
+      **Der zweite Teil bleibt offen, und die Messung danach hat ihn
+      verschoben.** `heatset_m4_bore_1` verschwindet weiter lautlos — das
+      einzige der vier, das die Erkennung *sieht*. Nachgemessen liegt es nicht
+      am Melden:
+
+          previous vor dem Schritt   14 Merkmale, darunter
+                                     hole_1              (erkannt)
+                                     heatset_m4_bore_1   (vom Baustein benannt)
+          zugeordnet auf das neue hole_1:  hole_1
+          heatset_m4_bore_1:               verwaist
+
+      **Beide beschreiben dasselbe Loch.** Der Baustein benennt es beim Bauen,
+      die Erkennung findet es und gibt ihm einen zweiten Namen — und beide
+      reisen mit. Beim nächsten Schritt konkurrieren sie um dasselbe neue
+      Merkmal, und das benannte verliert.
+
+      Damit ist die Frage nicht „warum fehlt der Befund", sondern **„warum
+      trägt eine Bohrung zwei Namen"**. Ein Befund an dieser Stelle wäre sogar
+      falsch: Das Merkmal ist nicht fort, es steht als `hole_1` daneben. Zu
+      entscheiden ist, ob die Erkennung ein Merkmal überspringen soll, das an
+      derselben Stelle schon einen Namen hat — oder ob das Benannte beim
+      Zuordnen Vorrang bekommt.
 
       Warum es mehr ist als eine Warnung zu viel: Passungen suchen ihr
       Gegenstück über benannte Merkmale (§14). Ein Beispiel, das eine
