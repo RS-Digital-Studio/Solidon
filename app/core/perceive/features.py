@@ -286,6 +286,7 @@ ROUND_TOLERANCE = 0.02
 #: Einpassung und nicht die Fertigung.
 SINK_AXIS_LIMIT = 2.0
 
+
 #: Wie weit eine Senkung von ihrer Bohrung abliegen darf, quer zur Achse wie
 #: längs, jeweils als Anteil des Bohrungsradius.
 #:
@@ -296,6 +297,33 @@ SINK_AXIS_LIMIT = 2.0
 #: zweiten Wand zur Bohrung der ersten, und ein Sackloch in der ersten Wand
 #: wäre plötzlich durchgehend.
 SINK_FIT_LIMIT = 0.25
+
+#: Wie weit zwei benachbarte Dreiecke im Krümmungsradius auseinanderliegen
+#: dürfen, ohne dass ein Fleck dort endet — als Anteil des größeren Radius.
+#:
+#: Der Fall, für den es die Grenze gibt, ist eine **Verrundung**: Sie schließt
+#: tangential an, hat also keinen Knick, an dem :func:`_connected_patches`
+#: trennen könnte. An einer Säule Ø 12 mit R 3 am Fuß lagen Mantel und Kehle
+#: deshalb in **einem** Fleck, und darauf passte weder ein Zylinder noch ein
+#: Torus — die Säule hatte keine Mantelfläche, auf die der Agent hätte zeigen
+#: können.
+#:
+#: **Der Wert ist gemessen und nicht gewählt.** Über den Korpus verteilen sich
+#: die Sprünge in zwei Gruppen mit einer breiten Lücke dazwischen:
+#:
+#: ==================  ======  ======
+#: Körper              p90     größter
+#: ==================  ======  ======
+#: ``torus_ring``      0,002   0,002
+#: ``plate_holes``     0,000   0,000
+#: ``clean_figure``    0,120   0,312
+#: Säule mit Kehle     0,802   0,997
+#: ==================  ======  ======
+#:
+#: Zwischen 0,31 und 0,80 liegt nichts. Ein Viertel hätte an
+#: ``generated_figure.stl`` drei Kugeln in neun zerlegt; die Hälfte trennt,
+#: was getrennt gehört, und lässt beisammen, was eine Fläche ist.
+CURVATURE_JUMP = 0.5
 
 #: Die Merkmalsarten, die diese Datei aus einem Netz lesen kann.
 #:
@@ -470,6 +498,8 @@ def _fitted(mesh: MeshData) -> Fitted:
             for piece in pieces:
                 classify(piece)
 
+    found = _merged_cylinders(body, mesh, found)
+
     # Nach Position sortiert, damit die Nummerierung für denselben Körper
     # reproduzierbar ist. **Alle drei Achsen**, nicht nur X und Y: Zwei
     # koaxiale Bohrungen — eine Durchführung durch zwei Wände, die häufigste
@@ -588,6 +618,93 @@ def _fits_in_the_body(mesh: MeshData, fit: CylinderFit | ConeFit) -> bool:
     along = int(np.argmax(axis))
     across = max(size[index] for index in range(3) if index != along)
     return fit.radius * 2.0 <= across + EPS_GEOM
+
+
+def _merged_cylinders(body: trimesh.Trimesh, mesh: MeshData, found: Cylinders) -> Cylinders:
+    """Zylinderflecken, die **dieselbe Fläche** beschreiben, zu einem machen.
+
+    **Der Fall ist die gefaste Bohrung, und sie ist der Standardfall.** Jede
+    Schraubenbohrung eines Druckteils bekommt eine Fase; die Vereinigung von
+    Bohrer und Fasenkegel legt zusätzliche Punkte auf die Bohrungswand, und die
+    Boolesche Operation trianguliert sie darunter mit Knicken von siebzig bis
+    neunzig Grad. Die Fleckenbildung trennt dort zu Recht — nur zerfällt die
+    Wand damit in vier Stücke, und heraus kamen **vier Bohrungen für ein
+    Loch**, zwei davon mit ``through=True`` und zwei mit ``through=False``.
+
+    Für den Nutzer ist das schlimmer als eine fehlende Bohrung: Vier Merkmale
+    an derselben Stelle sind für die Zuordnung vier gleich gute Kandidaten,
+    also hält die Auswertung an und fragt — bei **jeder** Auswertung, und mit
+    einer Frage, auf die es keine richtige Antwort gibt (§21.3).
+
+    Zusammengefasst wird nur, was ohnehin dasselbe ist: gleicher Radius,
+    kollineare Achse, gleiche Richtung der Normalen — und **überlappende**
+    Abschnitte auf der Achse. Das Letzte trennt den Fall von seinem Gegenteil,
+    den die Sortierung unten schon einmal nennt: zwei koaxiale Bohrungen durch
+    zwei Wände sind zwei Bohrungen und bleiben es, denn zwischen ihnen liegt
+    eine Lücke.
+    """
+    if len(found) < 2:
+        return found
+
+    merged: Cylinders = []
+    for fit, patch in found:
+        for index, (other, gathered) in enumerate(merged):
+            if not _same_cylinder(body, (fit, patch), (other, gathered)):
+                continue
+            together = gathered + patch
+            again = fit_cylinder(body, together)
+            # **Die Vereinigung muss sich selbst rechtfertigen.** Dass zwei
+            # Flecken zueinander passen, heißt nicht, dass ihre Summe eine
+            # Fläche ist: An einem hohlen Quader stehen die verrundeten
+            # Innenkanten oben und unten koaxial und gleich groß, und
+            # zusammengefasst kam ein Zylinder heraus, den es nicht gibt —
+            # samt zwei weiteren Fehlbefunden daneben. Der neue Fit darf
+            # deshalb **nicht schlechter streuen** als der schlechtere der
+            # beiden, aus denen er entsteht.
+            if (
+                again is not None
+                and again.good
+                and _fits_in_the_body(mesh, again)
+                and again.spread <= max(fit.spread, other.spread) + EPS_GEOM
+            ):
+                merged[index] = (again, together)
+                break
+        else:
+            merged.append((fit, patch))
+    return merged
+
+
+def _same_cylinder(
+    body: trimesh.Trimesh,
+    one: tuple[CylinderFit, list[int]],
+    two: tuple[CylinderFit, list[int]],
+) -> bool:
+    """Beschreiben diese zwei Flecken dieselbe Zylinderfläche?"""
+    first, first_patch = one
+    second, second_patch = two
+    if first.inward is not second.inward:
+        return False
+    scale = max(first.radius, second.radius)
+    if abs(first.radius - second.radius) > scale * CYLINDER_TOLERANCE:
+        return False
+
+    axis = np.asarray(first.axis, dtype=float)
+    if abs(float(axis @ np.asarray(second.axis, dtype=float))) < math.cos(
+        math.radians(SINK_AXIS_LIMIT)
+    ):
+        return False
+    # Kollinear und nicht bloß parallel: zwei Bohrungen nebeneinander haben
+    # dieselbe Achsrichtung und sind trotzdem zwei.
+    offset = np.asarray(second.centre, dtype=float) - np.asarray(first.centre, dtype=float)
+    across = offset - float(offset @ axis) * axis
+    if float(np.linalg.norm(across)) > scale * SINK_FIT_LIMIT:
+        return False
+
+    # Und sie müssen sich auf der Achse **überlappen**. Sonst sind es zwei
+    # Bohrungen durch zwei Wände, und die bleiben zwei.
+    low, high = _axial_span(body, first_patch, first.axis)
+    other_low, other_high = _axial_span(body, second_patch, first.axis)
+    return not (other_low > high + EPS_GEOM or other_high < low - EPS_GEOM)
 
 
 def _fits_in_the_body_by_size(mesh: MeshData, radius: float) -> bool:
@@ -1108,107 +1225,53 @@ def _patch_extent(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> float:
 
 
 def _is_through(mesh: MeshData, fit: CylinderFit, cones: Cones | None = None) -> bool:
-    """Eine Bohrung ist durchgehend, wenn sie so tief ist, wie der Körper
-    entlang ihrer Achse dick ist — **die Senkung mitgerechnet**.
+    """Eine Bohrung ist durchgehend, wenn man durch sie hindurchsieht.
 
-    Ohne sie war die häufigste Bohrung eines Druckteils ein Sackloch: An einem
-    gesenkten M5-Durchgangsloch in 8 mm gehören die oberen 2,4 mm zum Kegel und
-    nicht zum Zylinder, gemessen wurden aber nur 5,6 mm Zylinderwand gegen 8 mm
-    Plattendicke. Das blieb nicht bei der Anzeige — eine Passung sucht ihr
-    Gegenstück über die Merkmalsart (§14), und in ein Sackloch geht keine
-    durchgesteckte Schraube.
+    **Wörtlich gemeint, und es ist die ganze Prüfung:** Liegt irgendein Dreieck
+    des Körpers über der Bohrachse, ist da Material — ein Boden, ein Steg, eine
+    Rückwand —, und das Loch endet. Liegt keines dort, geht es durch. Gemessen
+    am Korpus: null Dreiecke über der Achse bei jeder durchgehenden Bohrung,
+    dreiundzwanzig bei der gesenkten Sackbohrung.
 
-    Gerechnet wird über die **Vereinigung** der Abschnitte auf der Achse, nicht
-    über die Summe der Tiefen: Wo Bohrung und Senkung sich überlappen, zählt
-    das Stück einmal.
+    **Vorher stand hier eine Rechnung, und sie war an drei Stellen angreifbar.**
+    Sie verglich die Höhe der Zylinderwand mit der Dicke des Körpers und
+    brauchte dafür: die Senkung dazugerechnet, weil deren Stück nicht zur Wand
+    gehört (sonst galt jedes gesenkte Loch als Sackloch); eine Toleranz, weil
+    ein reales Netz die Dicke nie auf den Mikrometer trifft (an einer gefasten
+    Bohrung fehlten elf Tausendstel); und die Dicke **an der Bohrung** statt
+    über den Körper, weil ein 15 mm hoher Zapfen daneben aus einer 10 mm
+    dicken Platte sonst eine 25 mm dicke machte. Jede dieser drei Stellen war
+    ein eigener Fehler, und jeder wurde einzeln gefunden.
+
+    Diese Prüfung braucht keine davon. Eine Senkung ist ihr gleichgültig, ein
+    Zapfen nebenan ebenso, und eine Toleranz gibt es nicht: Ein Dreieck liegt
+    über der Achse oder nicht.
+
+    Gerechnet wird über einen Punkt-in-Dreieck-Test in der Projektion senkrecht
+    zur Achse — baryzentrische Vorzeichen, kein Strahlwurf und damit kein
+    Raumindex (die Suite stirbt an ``rtree``, wenn man ihn oft genug fragt).
     """
-    axis = np.asarray(fit.axis, dtype=float)
-    corners = np.asarray(mesh.raw.vertices, dtype=float) @ axis
-    thickness = float(corners.max() - corners.min())
-    if thickness <= 0:
-        return False
-    span = _bore_span(mesh, fit)
-    if span is None:
-        return False
-    low, high = span
-    for cone, patch in cones or []:
-        if not _sinks_into(fit, cone):
-            continue
-        sink_low, sink_high = _axial_span(mesh.raw, patch, fit.axis)
-        # Koaxial allein genügt nicht: Der Kegel muss an die Bohrung stoßen.
-        # Sonst gehört er zu der Bohrung in der nächsten Wand.
-        if max(sink_low - high, low - sink_high) > fit.radius * SINK_FIT_LIMIT:
-            continue
-        low, high = min(low, sink_low), max(high, sink_high)
-    return high - low >= thickness - EPS_GEOM * 10
-
-
-def _sinks_into(fit: CylinderFit, cone: ConeFit) -> bool:
-    """Gehört dieser Kegel zu dieser Bohrung — ist er also ihre Senkung?
-
-    Drei Bedingungen, und jede schließt einen wirklichen Fall aus: Ein
-    aufgesetzter Kegel ist keine Senkung, ein Kegel neben der Achse gehört zu
-    einer anderen Bohrung, und ein Kegel, der schmaler ist als die Bohrung,
-    kann sie nicht erweitern.
-    """
-    if not cone.recess or cone.radius < fit.radius:
-        return False
-    axis = np.asarray(fit.axis, dtype=float)
-    # Der **Betrag**: Die Kegelachse zeigt von der Spitze in den Fleck, die
-    # Bohrachse aus ihrer eigenen Einpassung — an derselben gesenkten Bohrung
-    # stehen sie damit gegeneinander, gemessen (0, 0, -1) gegen (0, 0, 1).
-    aligned = abs(float(axis @ np.asarray(cone.axis, dtype=float)))
-    if aligned < math.cos(math.radians(SINK_AXIS_LIMIT)):
-        return False
-    offset = np.asarray(cone.centre, dtype=float) - np.asarray(fit.centre, dtype=float)
-    across = offset - float(offset @ axis) * axis
-    return float(np.linalg.norm(across)) <= fit.radius * SINK_FIT_LIMIT
-
-
-def _bore_span(mesh: MeshData, fit: CylinderFit) -> tuple[float, float] | None:
-    """Von wo bis wo die **Zylinderwand** der Bohrung auf ihrer Achse reicht.
-
-    ``None``, wenn kein Punkt des Körpers auf der eingepassten Wand liegt — die
-    Einpassung beschreibt dann nichts, was da ist.
-    """
+    del cones  # Die Senkung geht in diese Frage nicht mehr ein.
     axis = np.asarray(fit.axis, dtype=float)
     centre = np.asarray(fit.centre, dtype=float)
-    points = np.asarray(mesh.raw.vertices, dtype=float)
-    radial = points - centre
-    radial = radial - np.outer(radial @ axis, axis)
-    on_wall = np.abs(np.linalg.norm(radial, axis=1) - fit.radius) < fit.radius * 0.1
-    if not on_wall.any():
-        return None
-    along = points[on_wall] @ axis
-    return float(along.min()), float(along.max())
+    basis_u, basis_v = _plane_basis(axis)
+    corners = np.asarray(mesh.raw.triangles, dtype=float) - centre
+    flat = np.stack([corners @ basis_u, corners @ basis_v], axis=-1)
 
+    first, second, third = flat[:, 0], flat[:, 1], flat[:, 2]
 
-#: Wie weit zwei benachbarte Dreiecke im Krümmungsradius auseinanderliegen
-#: dürfen, ohne dass ein Fleck dort endet — als Anteil des größeren Radius.
-#:
-#: Der Fall, für den es die Grenze gibt, ist eine **Verrundung**: Sie schließt
-#: tangential an, hat also keinen Knick, an dem :func:`_connected_patches`
-#: trennen könnte. An einer Säule Ø 12 mit R 3 am Fuß lagen Mantel und Kehle
-#: deshalb in **einem** Fleck, und darauf passte weder ein Zylinder noch ein
-#: Torus — die Säule hatte keine Mantelfläche, auf die der Agent hätte zeigen
-#: können.
-#:
-#: **Der Wert ist gemessen und nicht gewählt.** Über den Korpus verteilen sich
-#: die Sprünge in zwei Gruppen mit einer breiten Lücke dazwischen:
-#:
-#: ==================  ======  ======
-#: Körper              p90     größter
-#: ==================  ======  ======
-#: ``torus_ring``      0,002   0,002
-#: ``plate_holes``     0,000   0,000
-#: ``clean_figure``    0,120   0,312
-#: Säule mit Kehle     0,802   0,997
-#: ==================  ======  ======
-#:
-#: Zwischen 0,31 und 0,80 liegt nichts. Ein Viertel hätte an
-#: ``generated_figure.stl`` drei Kugeln in neun zerlegt; die Hälfte trennt,
-#: was getrennt gehört, und lässt beisammen, was eine Fläche ist.
-CURVATURE_JUMP = 0.5
+    def turn(edge: np.ndarray, towards: np.ndarray) -> np.ndarray:
+        """Das Kreuzprodukt zweier ebener Vektoren — von Hand, weil ``np.cross``
+        seit NumPy 2 nur noch dreidimensional rechnet."""
+        return np.asarray(edge[:, 0] * towards[:, 1] - edge[:, 1] * towards[:, 0], dtype=float)
+
+    side_a = turn(second - first, -first)
+    side_b = turn(third - second, -second)
+    side_c = turn(first - third, -third)
+    covers = ((side_a >= 0.0) & (side_b >= 0.0) & (side_c >= 0.0)) | (
+        (side_a <= 0.0) & (side_b <= 0.0) & (side_c <= 0.0)
+    )
+    return not bool(covers.any())
 
 
 def facet_middles(body: trimesh.Trimesh) -> np.ndarray:

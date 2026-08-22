@@ -210,6 +210,42 @@ def block_with_rounded_edge() -> None:
     write(trimesh.boolean.difference([block, waste]), "block_with_rounded_edge.stl")
 
 
+def plate_chamfer_and_taper() -> None:
+    """Die zwei Kegelarten, die dem Korpus fehlten: **Fase** und
+    **Verjüngung**.
+
+    §21.1 nennt für den Kegel drei Fälle — Senkung, Fase an einer Bohrung,
+    Verjüngung. Im Korpus stand bis zum 22.08.2026 nur die Senkung, und zwar in
+    zwei Dateien. Jeder grüne Lauf sagte damit nichts über die anderen beiden.
+
+    Links eine Bohrung Ø 6 mit einer Fase auf Ø 9, rechts ein konischer Zapfen
+    — die eine ausgehöhlt (``recess``), der andere aufgesetzt.
+
+    **Die Fase ist der Grund, aus dem diese Datei entstanden ist.** Sie ist der
+    Standardfall jeder Schraubenbohrung, und sie legte einen Fehler frei, den
+    achtzehn scharfkantige Korpuskörper nie zeigen konnten: Die Vereinigung von
+    Bohrer und Fasenkegel setzt Punkte auf die Bohrungswand, die Boolesche
+    Operation trianguliert sie mit Knicken von siebzig bis neunzig Grad, und
+    die Wand zerfiel in **vier** Flecken. Heraus kamen vier Bohrungen für ein
+    Loch, zwei davon mit ``through=True`` und zwei mit ``through=False``.
+    """
+    plate = trimesh.creation.box(extents=(50.0, 30.0, 10.0))
+    drill = trimesh.creation.cylinder(radius=3.0, height=30.0, sections=64)
+    drill.apply_translation((-12.0, 0.0, 0.0))
+    chamfer = trimesh.creation.cone(radius=4.5, height=1.5, sections=64)
+    chamfer.apply_transform(trimesh.transformations.rotation_matrix(math.pi, (1.0, 0.0, 0.0)))
+    chamfer.apply_translation((-12.0, 0.0, 5.0))
+    # **Das Werkzeug wird vorher vereinigt.** Drei Körper auf einmal abzuziehen
+    # gibt eine schlechtere Naht — gemessen, und es kostete zwei Anläufe.
+    tool = trimesh.boolean.union([drill, chamfer])
+    taper = trimesh.creation.cone(radius=5.0, height=15.0, sections=64)
+    taper.apply_translation((12.0, 0.0, 5.0))
+    write(
+        trimesh.boolean.union([trimesh.boolean.difference([plate, tool]), taper]),
+        "plate_chamfer_and_taper.stl",
+    )
+
+
 def degenerate() -> None:
     """Ein Würfel plus ein Null-Flächen-Dreieck, eine Nadel und eine doppelte
     Fläche.
@@ -525,6 +561,7 @@ if __name__ == "__main__":
     torus_ring()
     post_with_fillet()
     block_with_rounded_edge()
+    plate_chamfer_and_taper()
     degenerate()
     broken_open()
     two_components()

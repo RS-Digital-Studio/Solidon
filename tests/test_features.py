@@ -711,6 +711,64 @@ def test_nothing_that_was_recognised_gets_split_again() -> None:
     assert len(cones) == 1, f"one sink, not two: {[cone.id for cone in cones]}"
 
 
+def test_a_chamfered_bore_is_one_bore_and_not_four() -> None:
+    """Der Standardfall jeder Schraubenbohrung, und er lieferte vier Merkmale.
+
+    Die Vereinigung von Bohrer und Fasenkegel setzt Punkte auf die
+    Bohrungswand; die Boolesche Operation trianguliert sie darunter mit
+    Knicken von siebzig bis neunzig Grad, und die Fleckenbildung trennt dort zu
+    Recht. Heraus kamen **vier** Bohrungen für ein Loch — zwei mit
+    ``through=True``, zwei mit ``through=False``.
+
+    Für den Nutzer ist das schlimmer als eine fehlende Bohrung: Vier Merkmale
+    an derselben Stelle sind für die Zuordnung vier gleich gute Kandidaten,
+    also hält die Auswertung an und fragt bei **jeder** Auswertung — mit einer
+    Frage, auf die es keine richtige Antwort gibt (§21.3).
+    """
+    found = detect(plate("plate_chamfer_and_taper.stl"))
+    bores = [entry for entry in found.values() if entry.kind == "hole"]
+
+    assert len(bores) == 1, f"one bore, not four: {sorted(found)}"
+    assert bores[0].params["diameter"] == pytest.approx(6.0, abs=0.05)
+    assert bores[0].params["through"] is True
+
+
+def test_the_corpus_carries_all_three_kinds_of_cone() -> None:
+    """§21.1 nennt drei: Senkung, Fase, Verjüngung. Der Korpus trug nur die
+    Senkung, und zwar bis zum 22.08.2026 in zwei Dateien.
+
+    Jeder grüne Lauf sagte damit nichts über die anderen beiden. Hier stehen
+    Fase und Verjüngung nebeneinander — die eine ausgehöhlt, die andere
+    aufgesetzt.
+    """
+    cones = detect_cones(plate("plate_chamfer_and_taper.stl"))
+    by_shape = {entry.params["recess"]: entry for entry in cones}
+
+    assert len(cones) == 2, f"a chamfer and a taper: {[cone.id for cone in cones]}"
+    assert by_shape[True].params["diameter"] == pytest.approx(9.0, abs=0.1)
+    assert by_shape[False].params["diameter"] == pytest.approx(10.0, abs=0.1)
+
+
+def test_a_bore_beside_a_boss_still_goes_through() -> None:
+    """Die Dicke des Körpers ist nicht die Dicke an der Bohrung.
+
+    Die alte Prüfung mass die Spanne **aller** Punkte entlang der Achse: An
+    einer 10 mm dicken Platte mit einem 15 mm hohen Zapfen daneben kam eine
+    Dicke von 25 mm heraus, und die durchgehende Bohrung galt als Sackloch.
+    Eine Platte mit einem Dom und einer Bohrung daneben ist ein Alltagsteil.
+
+    Die Prüfung fragt heute nicht mehr nach Dicken, sondern danach, ob ein
+    Dreieck über der Achse liegt — dem Zapfen daneben ist das gleichgültig.
+    """
+    bores = [
+        entry
+        for entry in detect(plate("plate_chamfer_and_taper.stl")).values()
+        if entry.kind == "hole"
+    ]
+
+    assert bores[0].params["through"] is True
+
+
 def test_a_countersink_is_not_a_sphere() -> None:
     """Die Gegenprobe, und sie ist der Grund für die strengere Schwelle.
 
