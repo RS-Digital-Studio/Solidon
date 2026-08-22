@@ -220,6 +220,7 @@ Dialoge.
 | Leistung | Zielwerte Bauplan §31, Regressionsschwelle 25 % |
 | Lizenzen | Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die vier Wege aus Bauplan §2.2 Ende zu Ende |
+| Anschluss | was nur an einer Stelle eingelöst wird, wird an dieser Stelle geprüft — nicht „der Cache kann es", sondern „die Anwendung tut es" |
 | Agenten-Suite | 39 Referenzanfragen |
 
 ---

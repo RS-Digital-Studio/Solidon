@@ -2065,6 +2065,7 @@ aus der Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 | Leistung | Zielwerte §31, Regressionsschwelle 25 % |
 | Lizenzen | installierte Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die vier Wege aus §2.2 laufen als Ende-zu-Ende-Test |
+| Anschluss | jede Zusage, die nur an **einer** Stelle eingelöst wird, wird an dieser Stelle geprüft — nicht „der Cache kann es", sondern „die Anwendung tut es" |
 | Agenten-Suite | 39 Referenzanfragen — 21 zu Säule C (sechs seit der Agent-Vertiefung: nachsehen statt raten, Druckziel, Menüort), 18 zu Säule A |
 
 Die Agenten-Suite misst zusätzlich: Wird ein vorhandener Baustein statt eigener
@@ -2096,6 +2097,46 @@ grundsätzlich könnte — sie fahren die Kette von außen, und was sie nicht
 berühren, prüft niemand von außen. Eine Zusage aus diesem Bauplan, die nur von
 einer Stelle im Programm eingelöst wird, braucht einen Test an **dieser**
 Stelle: nicht „der Cache kann es", sondern „die Anwendung tut es".
+
+**Diese Zeile hat drei Bauarten, und keine davon ist ein Griff in den
+Quelltext** — eine Suche nach dem Namen eines Arguments findet den Anschluss
+auch dann, wenn er in einem toten Zweig steht.
+
+* **Am echten Einstieg messen.** Der Test fährt den Weg, den die Anwendung
+  fährt, und liest das Ergebnis dort ab, wo die Frage sitzt — nicht dort, wo
+  die Funktion wohnt. Beim Plattencache heißt das: ein Projekt zweimal öffnen
+  und feststellen, dass beim zweiten Mal nicht neu gerechnet wird.
+* **Zwei Wege, eine Antwort.** Wo zwei Einstiege dieselbe Fähigkeit anbieten,
+  prüft der Test sie **gegeneinander** und nicht gegen einen erwarteten Wert:
+  dieselbe Eingabe, dieselbe Aussage. Gegen einen erwarteten Wert wäre er in
+  beiden Wegen einzeln grün und übersähe genau den Fall, dass nur einer
+  versorgt wurde (`detect()` gegen `detect_holes()`).
+* **Ein einziger Aufrufer trägt den Test.** Hat eine Fähigkeit nur eine Stelle,
+  an der sie eingelöst wird, gehört der Test an diese Stelle und nicht in das
+  Modul, das die Fähigkeit anbietet.
+
+Der Preis ist bekannt und wird bezahlt: Solche Tests fahren echte Wege und
+sind teurer als die Modultests darunter. Die Gegenfrage am Ende dieses
+Abschnitts entscheidet, wann sich das lohnt.
+
+**Warum es eine Tabellenzeile ist und kein Absatz.** Alles oben stand hier
+schon als Prosa, und es hat nichts verhindert: Ein Absatz wird gelesen und
+genickt, eine Tabellenzeile wird abgehakt — aus dieser Tabelle zieht
+`AGENTS.md` seine Testarten, und an ihr entlang prüft eine Sitzung, ob sie
+fertig ist. Am 22.08.2026 traten an einem Tag **fünf** Fälle auf: der
+Plattencache, `detect_holes()`, `parts/user.py::travelling_parts()` und
+`parts/check.py::stamp()` — beide ohne jeden Aufrufer, die erste sogar mit
+einem Docstring, der im Indikativ das Gegenteil behauptet. Der fünfte ist der
+teuerste: `parts/user.py::load()` hatte denselben Fehler **schon einmal**,
+gefunden und behoben. Ein Muster, das sich an einem Tag viermal wiederholt und
+einmal an dieselbe Stelle zurückkehrt, ist keine Anekdote.
+
+**Und ein Beispiel, das die Zeile nicht fordert, sondern vorführt:**
+`tests/test_packaging.py` prüft kein Modul, sondern ob zwei getrennt gepflegte
+Dinge noch zueinander passen — das gebaute Lizenzmanifest und die Grenzdateien
+der Anwendung. Am 20.08.2026 fiel dieselbe Sache erst im Protokoll einer
+Testinstallation auf; am 22.08. fing sie das Tor, Stunden nachdem zwei
+Grenzdateien committet worden waren.
 
 **Und eine Prüfung, die etwas Ähnliches prüft statt der Sache selbst, ist grün
 aus dem falschen Grund.** Am 22.08.2026 dreimal aufgetreten, jedes Mal in
