@@ -209,8 +209,11 @@ class SupportDialog(QDialog):
                 "Die Nachricht geht an {address}; gesendet wird nur, was unten steht."
             )
         )
-        headline = QLabel(opening.replace("{address}", SUPPORT_ADDRESS), self)
-        headline.setWordWrap(True)
+        self._opening = opening
+        self._crashes = 1
+        """Wie viele Programmfehler dieser Bericht trägt (§2.7)."""
+        self.headline = QLabel(opening.replace("{address}", SUPPORT_ADDRESS), self)
+        self.headline.setWordWrap(True)
 
         self.kind = QComboBox(self)
         for entry in KINDS:
@@ -296,7 +299,7 @@ class SupportDialog(QDialog):
         self.by_mail.clicked.connect(self._open_mail)
 
         layout = QVBoxLayout(self)
-        layout.addWidget(headline)
+        layout.addWidget(self.headline)
         layout.addLayout(form)
         layout.addWidget(self.with_shot)
         layout.addWidget(self.with_session)
@@ -398,6 +401,33 @@ class SupportDialog(QDialog):
             self.state.setText(tr("Die Sitzung ließ sich nicht anhängen — der Rest geht trotzdem."))
             self._session_data = b""
         return self._session_data
+
+    def add_crash(self, detail: str) -> None:
+        """Ein zweiter Programmfehler, während dieser Bericht schon offen steht.
+
+        **Nicht ein zweites Fenster.** Zwei modale Dialoge übereinander heißen
+        zweimal wegklicken, und der zweite Fehler ist oft der eigentliche — der
+        erste ist die Folge, die zuerst auffällt. Unterdrücken verlöre ihn,
+        bloßes Zählen ließe ihn unerreichbar: Eine Ausnahme ohne Weg zu ihrem
+        Inhalt trägt keinen Handlungsvorschlag mehr (Regel 17).
+
+        Ein Bericht ist ohnehin ein Sammelbehälter — Bildschirmfoto, Sitzung,
+        Rückadresse. Zwei Berichte für einen Absturzmoment sind zwei halbe, und
+        der Kunde schickt einen davon.
+
+        **Das Bildschirmfoto bleibt das des ersten Fehlers**, und das ist keine
+        Sparsamkeit: Es entsteht vor dem Dialog, damit es zeigt, was darunter
+        schiefging. Beim zweiten Fehler steht der Bericht schon offen — ein
+        neues Foto zeigte ihn selbst.
+        """
+        self._crashes += 1
+        trenner = f"--- {tr('Fehler')} {self._crashes} ---"
+        self.detail = "\n\n".join((self.detail, trenner, detail))
+        gezaehlt = f"{tr('Seitdem sind weitere Fehler aufgetreten')}: {self._crashes}"
+        self.headline.setText(
+            self._opening.replace("{address}", SUPPORT_ADDRESS) + "\n\n" + gezaehlt
+        )
+        self._refresh()
 
     def _refresh(self) -> None:
         """Vorschau und Größen nachziehen — nach jedem Kästchen."""
