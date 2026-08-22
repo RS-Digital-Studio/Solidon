@@ -104,6 +104,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Der Rückstand sieht einen falschen Zylinder nicht | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, warum derselbe Wächter beim Torus greift und beim Zylinder nicht — 0,0313 Rückstand bei einem Radius, der um das Fünffache danebenliegt |
+| Eine Textprägung frisst alle benannten Merkmale | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Zuordnung, die einen geänderten Hüllquader übersteht — nach `label_text` ist keines der vier Bausteinmerkmale mehr benannt, und nur drei werden gemeldet. Passungen hängen daran (§14), und fünf von neun Beispielen begrüßen deshalb mit Warnungen |
+| Kein Test prüft, womit ein Beispiel den Kunden begrüßt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Prüfung über die Befunde beim Öffnen, mit einer Liste der erwarteten statt einer Schwelle von null — `SETTLED_BY` gibt es schon, die Prüfung nicht |
 | Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
@@ -3881,6 +3883,81 @@ Kein Verstoß.
       Machbar, und die Reihenfolge ist jetzt klar: erst die Entscheidung zum
       Exportdateinamen, dann `SceneObject.name`, dann das Format. Als eigener
       Durchgang, nicht neben anderen Punkten.
+## Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026)
+
+Nicht „laufen sie" — das prüft `test_examples.py` seit langem. Sondern: Was
+steht daneben, wenn jemand das erste Mal ein mitgeliefertes Beispiel öffnet.
+Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
+
+    fünf von neun begrüßen mit Warnungen, zusammen elf
+    zehn davon:  perceive.generated_lost
+    einer:       repair.components_removed
+    Fehler:      keine
+
+- [ ] **Eine Textprägung frisst alle benannten Merkmale — und meldet nicht
+      alle.** Gemessen an „Dose mit Deckel", dem eigenen Vorzeigebeispiel,
+      Schritt für Schritt:
+
+          nach insert_heatset_m4   17 Merkmale, davon 4 benannt
+                                   cable_gland_bore_1    hole
+                                   cable_gland_relief_1  face
+                                   heatset_m4_bore_1     hole
+                                   heatset_m4_chamfer_1  hole
+          nach label_text          15 Merkmale, davon 0 benannt
+          gemeldet als verloren     3
+
+      **`heatset_m4_bore_1` verschwindet lautlos.** Das ist genau die
+      Zusicherung, die `b76df19` gegeben hat — *„fällt heraus, wenn es wirklich
+      weg ist, **mit Befund**, nicht lautlos"* —, und sie hält an dieser Stelle
+      nicht.
+
+      **Die Warnung selbst hat vermutlich unrecht.** Eine Prägung legt Text auf
+      eine Fläche; sie fasst die Einpressbuchse daneben nicht an. Dass danach
+      *keine* der vier Bohrungen und Flächen mehr benannt ist, deutet nicht auf
+      verlorene Geometrie, sondern auf eine gescheiterte **Zuordnung**: Der
+      Körper ändert seinen Hüllquader und seinen Schwerpunkt, und die
+      Merkmalsvektoren sind relativ dazu (§21.2). Zwei neue `sphere`-Merkmale
+      tauchen im selben Schritt auf — das sind die runden Stellen der
+      Buchstaben, und sie zeigen, wie stark sich das Netz ändert.
+
+      **Warum das mehr ist als eine Warnung zu viel:** Passungen suchen ihr
+      Gegenstück über benannte Merkmale (§14). Ein Beispiel, das eine
+      Einpressbuchse setzt und danach ihren Namen verliert, hat die Passung
+      verloren — und der Kunde sieht als Erstes, dass das Vorzeigebeispiel
+      warnt. `label_text` ist dabei nicht der Sonderfall, sondern der Fall, an
+      dem es auffällt: Jede Operation, die den Körper als Ganzes verändert,
+      geht denselben Weg.
+
+- [ ] **Kein Test prüft, womit ein Beispiel den Kunden begrüßt.**
+      `test_examples.py` prüft, dass jedes öffnet und rechnet, und
+      `test_no_example_greets_with_a_contradiction` fängt Widersprüche. Elf
+      Warnungen in den Vorzeigebeispielen sind an keiner Prüfung
+      vorbeigekommen — sie sind an gar keiner angekommen.
+
+      Der Mechanismus dafür steht schon: `SETTLED_BY` streicht Warnungen, die
+      spätere Schritte beheben (`b5bd8d3`, „Zwei Beispiele begrüßten mit
+      Warnungen, und beide hatten recht"). Was fehlt, ist die Prüfung, die
+      neue auffallen lässt.
+
+      **3d-druck-33 baut sie, und die Bauart ist die Entscheidung, nicht das
+      Ob.** *Nicht* als Obergrenze: „höchstens elf Warnungen" wäre in einer
+      Woche grün mit zwölf, weil jemand die Zahl anpasst — und grün, obwohl
+      der Kunde elf Warnungen sieht. Eine Prüfung, die den heutigen Stand als
+      Ziel festschreibt, ist eine Attrappe mit Zahl. Sondern als
+      **Ausnahmeliste je Beispiel und Befundcode**, mit Grund und
+      Registerpunkt daneben — dieselbe Bauart wie `known_gaps`. Eine *neue*
+      Warnung ist damit sofort rot, und jede Ausnahme trägt ihren eigenen
+      Satz, warum sie noch dasteht.
+
+      **Mit einer Einschränkung, die den Unterschied zwischen den beiden
+      Punkten hier festhält:** `perceive.generated_lost` kommt **nicht** in
+      die Ausnahmeliste. Das ist kein hinnehmbarer Zustand, sondern ein
+      gebrochenes Versprechen — eine Ausnahme dafür würde genau die
+      Zusicherung stillstellen, um die es geht. Die Prüfung bekommt deshalb
+      zwei getrennte Listen: hinnehmbare Begrüßungswarnungen mit Grund, und
+      eine **leere** für alles, was eine Zusicherung bricht. Die zweite darf
+      nie wachsen.
+
 ## Der Bedienweg von außen nachgefahren (21.08.2026)
 
 Nicht der Kern geprüft, sondern der Weg: Was sieht jemand, der die Anwendung
