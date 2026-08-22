@@ -39,7 +39,7 @@ oder er hält ihn nicht fest.
 
 | Punkt | steht unter | wartet auf |
 |---|---|---|
-| Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | die Entscheidung, ob `_chain` mit ausgeliefert wird; der kompilierte Kern steht und bringt 1,34× — oben liegt der Polygonaufbau in GEOS (446 von 1256 ms, profiliert am 20.08.), und der ist von Python aus nicht zu beschleunigen |
+| Leistungsziele §31 der Schichtanalyse | P3 — Wahrnehmung und Schichtanalyse | einen CI-Baulauf, der `_chain` für Windows, macOS und Linux baut — dass es mitreist, ist seit dem 22.08. entschieden (Bauplan §31). Danach bleibt `_plane_segments` mit 893 ms die größte Position, nicht mehr GEOS |
 | CI-Bauläufe und Signierung | P8 — Erste Veröffentlichung | einen CI-Dienst, der die Läufe fährt; die Signierung ein Zertifikat. AppImage und Flatpak stehen seit dem 20.08. |
 | Doku, Website, Lizenzhinweise | P8 — Erste Veröffentlichung | Postfach `support@`, DMARC und den AVV im CCP |
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
@@ -62,10 +62,10 @@ oder er hält ihn nicht fest.
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Objektnamen der Beispiele bleiben deutsch | Der Durchgang durch die offenen Punkte, und ein Review über ihn (20.08.2026) | einen Schritt 8 → 9 im Dateiformat samt Migration — ein `TranslatableText` in `params` reicht bis in `operation_hash`, und ein Cache-Schlüssel darf nicht von der Anzeigesprache abhängen |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
-| Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | die Entscheidung des Bauplans, welche Operation auf ein fertiges Gewinde gehört; bis dahin steht `thread` als benannte Ausnahme im Konsistenztest |
-| Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | eine Entscheidung des Bauplans, ob sieben Platten für 52 Teile in Ordnung sind — nach Tiefe sortiert wird es nicht besser, die naheliegende Verbesserung ist also keine |
+| Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | den Eintrag „diesen Schritt ändern“ am erzeugten Merkmal — Bauplan §21.2 hat es am 22.08. über die Provenienz entschieden und nicht über `applies_to`, gilt damit für jede Merkmalsart. Bis dahin bleibt `thread` benannte Ausnahme im Konsistenztest |
+| Das Regal-Packen verteilt sehr ungleich | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | das Packen ohne Zeilen — hinterste, dann linkeste freie Stelle. Bauplan §29 hat am 22.08. entschieden: sieben Platten für 52 Teile sind zu viel, und die Ursache sind die Zeilen und nicht die Sortierung. Abnahme ist weniger Platten für dieselben 52 Teile, sonst bleibt es beim Alten |
 | Der Plattenwähler wohnt im Explodieren | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | einen eigenen Ort in der Kopfzeile; seit die Betten nebeneinander stehen, ist es weniger dringend |
-| Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | die Entscheidung des Bauplans, wo die Antwort hingehört — in die Operation (dann reist sie mit der Datei, §11.3), ins Dokument oder nur in die Sitzung; gemessen 99 Fenster für 7 Entscheidungen |
+| Dieselbe Rückfrage kommt bei jeder Auswertung wieder | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | das Schreiben der Antwort in die Parameter der fragenden Operation — Bauplan §15.7 hat es am 22.08. entschieden, weil §15.1 keine zweite Möglichkeit offenlässt; gemessen 99 Fenster für 7 Entscheidungen |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
@@ -73,8 +73,8 @@ oder er hält ihn nicht fest.
 | Erzeugen und Ändern sind reine Verteilermenüs | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, wie tief ein Menü sein darf — flach ziehen sprengt die Neun-Menü-Grenze, ist also ein Tausch und keine Verbesserung |
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
 | Acht Gebiete der Oberflächendurchsicht sind nie gelaufen | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | einen Lauf. Das Material reist seit dem 22.08.2026 mit, aber die Workflow-Skripte darin gelten nicht mehr (Robert, 22.08.) — womit gefahren wird, entscheidet die Sitzung, die es tut |
-| Die Regressionsschwelle schlägt an, ohne dass etwas langsamer wurde | Leistung (§31) — Stand nach der Durchsicht | eine Entscheidung zwischen zwei Wegen, die beide das Verhalten des Tors ändern — Vergleich aussetzen, sobald andere Testdateien im Lauf sind, oder Bestwert je Aufrufkontext |
-| Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung, welche der dreißig eine Attrappe verdienen — eine je Methode ist Arbeit, und ein Test, der die Wache nicht überschreitet, deckt die Lücke zu, statt sie offenzulassen |
+| Die Regressionsschwelle schlägt an, ohne dass etwas langsamer wurde | Leistung (§31) — Stand nach der Durchsicht | den Bestwert je Aufrufkontext. Bauplan §31 hat am 22.08. so entschieden, weil der andere Weg — Vergleich aussetzen, sobald andere Testdateien im Lauf sind — im geteilten Tor fast immer aussetzte und damit nichts mehr prüfte |
+| Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
 
 ---
 
@@ -237,7 +237,12 @@ oder er hält ihn nicht fest.
       dreihundert Millisekunden nennt. Die Zahlen und die vier Änderungen, die
       dorthin führten, stehen unter „Leistung (§31) — Stand nach der
       Durchsicht". Was übrig ist, ist der Polygonaufbau in GEOS und braucht
-      einen kompilierten Kern, keine weitere Python-Idee
+      einen kompilierten Kern, keine weitere Python-Idee — **dass dieser Kern
+      mit ausgeliefert wird, ist seit dem 22.08.2026 entschieden** (Bauplan
+      §31), und damit gelten die Zielwerte dort ausdrücklich *mit* ihm. Offen
+      ist nicht mehr die Entscheidung, sondern der CI-Baulauf für drei
+      Plattformen; danach ist `_plane_segments` mit 893 ms die größte Position
+      und nicht mehr GEOS
 
       **Nachgemessen am 14.08.2026**, und eine der Zahlen oben ist überholt:
       die Wandstärkenkarte steht nicht mehr bei 3,08 s, sondern bei **4,30 s**
@@ -956,6 +961,16 @@ Auskunft der Datei, und sie lag 163 Zeilen tief ohne Kästchen.
       Sitzung. Jetzt steht daneben: Ein roter Leistungslauf sagt zuerst etwas
       über die Maschine und erst danach über den Code. Wer eine Regression
       meldet, misst vorher ein zweites Mal auf einer ruhigen Maschine.
+
+      **Entschieden am 22.08.2026 (Bauplan §31): Bestwert je Aufrufkontext.**
+      Der andere Weg — den Vergleich aussetzen, sobald andere Testdateien im
+      Lauf sind — schaltet ihn fast immer ab: Das Tor läuft geteilt, ein Prozess
+      je Fensterdatei und alles übrige in einem Zug, also sind „andere
+      Testdateien im Lauf" der Normalfall. Ein Vergleich, der dann aussetzt,
+      prüft nichts mehr. §31 hält außerdem fest, dass ein roter Leistungstest
+      allein nicht „nicht fertig" heißt — als einziger roter Test in diesem
+      Projekt. Damit steht es an der Stelle, an der jemand danach sucht, und
+      nicht 163 Zeilen tief in einer Arbeitsliste.
 
 ## P11 — Gehosteter Backend
 - [–] **Bewusst nicht gebaut.** §27 knüpft diese Phase an nachweisbare
@@ -3701,6 +3716,15 @@ Kategorie.
       Merkmal als benannte Ausnahme im neuen Test, damit es beim Lösen
       auffällt statt zu verschwinden.
 
+      **Entschieden am 22.08.2026, und anders als die Frage lautete.** Bauplan
+      §21.2 antwortet nicht, welche Operation auf ein Gewinde gehört, sondern
+      dass ein **erzeugtes Merkmal immer den Schritt anbietet, der es erzeugt
+      hat**. Über `applies_to` wäre das eine neue Operation je Merkmalsart
+      gewesen — über die Provenienz ist es ein Eintrag, der für alle gilt und
+      neue Merkmalsarten von selbst mitnimmt. Bei einem erkannten Merkmal
+      entfällt er, weil es keinen Erzeuger hat. Zu tun bleibt der Eintrag im
+      Kontextmenü und das Herausnehmen der Ausnahme aus dem Konsistenztest.
+
 ### Was dabei über das Messen zu lernen war
 
 `pytest -q` am Stück ist für diese Suite der falsche Weg, und das steht im
@@ -3827,6 +3851,19 @@ bekommt ein 220er Bett — und dann meldet jedes 231 mm tiefe Teil zu Recht
       16 / 23), also ist die naheliegende Verbesserung keine. „Bewusst
       einfach" steht im Docstring und hat seinen Grund; ob sieben Platten für
       52 Teile in Ordnung sind, entscheidet der Bauplan und nicht das Gefühl.
+
+      **Entschieden am 22.08.2026 (Bauplan §29): sie sind es nicht, und die
+      Ursache sind die Zeilen.** Zeilenweise zu packen verschenkt über jedem
+      kurzen Teil einen Streifen von der Tiefe des tiefsten Teils derselben
+      Zeile; eine andere Sortierung verschiebt diesen Streifen nur — deshalb
+      war die Messung „nach Tiefe sortiert wird es nicht besser" kein Zeichen,
+      dass hier nichts zu holen ist, sondern der Beleg, dass die Sortierung
+      nicht die Stelle war. Genommen wird eine Regel ohne Zeilen: jeder Körper
+      an die hinterste, dann linkeste freie Stelle, an die er passt. Sie ist in
+      einem Satz erklärbar und ohne Startwert, also bleibt die
+      Vorhersagbarkeit, um die es dem Docstring ging. Abnahme ist eine Messung
+      und keine Meinung: weniger Platten für dieselben 52 Teile, sonst bleibt
+      es beim Zeilenpacken.
 - [ ] **Der Plattenwähler wohnt im Explodieren.** Er erscheint erst ab zwei
       Körpern **und** zwei Platten, und er steht in der Explodier-Leiste — wer
       eine einzelne Platte ansehen will, sucht ihn unter einem Werkzeug, das
@@ -3844,6 +3881,18 @@ bekommt ein 220er Bett — und dann meldet jedes 231 mm tiefe Teil zu Recht
       Operation (dann reist sie mit der Datei und die Auswertung bleibt
       reproduzierbar, §11.3), ins Dokument oder nur in die Sitzung. Das
       entscheidet der Bauplan.
+
+      **Entschieden am 22.08.2026: in die Operation** — Bauplan §15.7. Die
+      Entscheidung war leichter als die Frage klang, weil §15.1 keine zweite
+      Möglichkeit offenlässt: Die Auswertung ist eine reine Funktion aus Stack,
+      Quellen, Parametern, Profilen und Startwerten. Eine Antwort, die nur in
+      der Sitzung lebt, wäre ein sechster Eingang — zweimal ausgewertet käme
+      zweimal etwas anderes heraus, und genau dieser Vergleich ist ein
+      Abnahmekriterium von P0. Zwei Stellen sagten es längst für ihren
+      Einzelfall (die Einheitenrückfrage als Parameter von `load`, §17.1, und
+      „die Op wird umgeschrieben" bei mehrdeutiger Zuordnung, §21.3); es fehlte
+      der Satz ohne Einzelfall. Zu tun bleibt, dass `ctx.ask` die Antwort
+      zurückschreibt statt sie zu vergessen.
 - [ ] **Verrundung und Fase auf einem Netz sagen sauber ab** — `NeedsSolidError`
       mit dem richtigen Satz. Kein Fehler; nur ist damit für ein
       heruntergeladenes Modell die halbe Kategorie *Formgebung* zu. Steht so im
@@ -4236,6 +4285,33 @@ schlimmer als keiner: Er wäre grün und würde die Lücke zudecken.
       die restlichen ausdrücklich als „nicht geprüft" zu führen, statt sie
       stillschweigend mitlaufen zu lassen. Das ist eine Entscheidung und keine
       Aufgabe; die Zahl steht jetzt dabei.
+
+      **Nachtrag vom selben Tag: die Frage war falsch herum gestellt.**
+      `solidon-b0` hat beim Umbau der Viewport-Auswahl gezeigt, dass ein Teil
+      der dreißig nicht dort steht, weil das Entscheiden VTK bräuchte, sondern
+      weil **Entscheiden und Zeichnen in derselben Methode wohnen**.
+      Herausgezogen sind jetzt `_click_target`, `_feature_at`,
+      `selection_depth` und `_select_at` — reine Aussagen über die Szene, ohne
+      Plotter-Wache. Sechzehn von achtzehn Tests wurden in der Gegenprobe gegen
+      HEAD rot; ohne diese Zahl wäre es eine schöne Idee geblieben.
+
+      Damit lautet die Reihenfolge: **erst herausziehen, dann erst eine
+      Attrappe.** Eine Attrappe prüft, dass der Aufruf ankommt; eine
+      herausgezogene Entscheidung prüft, dass sie stimmt. Das Zweite ist mehr
+      wert und altert besser.
+
+      Eine Attrappe bleibt nötig, wo die Methode wirklich VTK braucht.
+      `_look_under_pointer` (21 Z) ist so erreicht worden
+      (`tests/test_selection.py::test_the_resting_pointer_reaches_the_decision`,
+      Attrappe für `renderer` und `interactor`, Monkeypatch auf `_world_under`).
+      `_world_at` und `_face_handle` sind es ausdrücklich **nicht** — sie
+      brauchen einen echten Picker. Diese zwei Negativbefunde sind der
+      nützlichste Teil: Sie sagen, wo die Grenze der Methode liegt.
+
+      Der Bauplan hat die Reihenfolge übernommen (§35): Ein Test hinter einer
+      Wache, die nie fällt, ist grün und prüft nichts — die Antwort darauf ist
+      nicht die nächste Attrappe, sondern die prüfbare Aussage aus dem
+      Unprüfbaren herauszulösen.
 
 ## Der Changelog schickte den Kunden ins Handbuch, und dort war nichts (22.08.2026)
 
