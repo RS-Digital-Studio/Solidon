@@ -75,6 +75,12 @@ oder er hält ihn nicht fest.
 | Acht Gebiete der Oberflächendurchsicht sind nie gelaufen | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | einen Lauf. Das Material reist seit dem 22.08.2026 mit, aber die Workflow-Skripte darin gelten nicht mehr (Robert, 22.08.) — womit gefahren wird, entscheidet die Sitzung, die es tut |
 | Die Regressionsschwelle schlägt an, ohne dass etwas langsamer wurde | Leistung (§31) — Stand nach der Durchsicht | den Bestwert je Aufrufkontext. Bauplan §31 hat am 22.08. so entschieden, weil der andere Weg — Vergleich aussetzen, sobald andere Testdateien im Lauf sind — im geteilten Tor fast immer aussetzte und damit nichts mehr prüfte |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
+| Die Antwort auf eine Rückfrage steht nirgends | Das Fundament der Wahrnehmung (22.08.2026) | die Umsetzung von Bauplan §15.7 — der Weg ist derselbe, den die Rückfallstufen schon gehen (`EvaluationResult.solvers` → `History.record_solvers`), er fehlt für Antworten. Bis dahin ist ein Plattencache über einer Operation mit unbeantworteter Rückfrage nicht sicher |
+| Ein geänderter eigener Baustein wird beim Öffnen nicht gemeldet | Das Fundament der Wahrnehmung (22.08.2026) | eine zweite Quelle für `changed_since_library` — sie liest gepflegte Änderungsverläufe, und ein eigener Baustein hat keinen (§24.4, §24.5). Gefunden von solidon-17 beim Anschließen des Plattencaches |
+| Eine gesenkte Bohrung gilt als Sackloch | Das Fundament der Wahrnehmung (22.08.2026) | das Zusammenlesen von Bohrung und Senkung — `_is_through` vergleicht die Tiefe des Zylinders mit der Dicke des Körpers, und die Senkung nimmt die oberen 2,4 von 8 mm. Jetzt, wo der Kegel ein Merkmal ist, ist es entscheidbar |
+| Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
+| `load_operations()` braucht über eine Sekunde | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, wo die Zeit hingeht — 1,1 bis 1,2 s von 12,9 s kaltem Anwendungsstart, gemessen von solidon-17. Das Register führt es, weil es sonst in einer Aufschlüsselung stehen bleibt, die niemand wieder liest |
+| Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
 
 ---
 
@@ -4312,6 +4318,86 @@ schlimmer als keiner: Er wäre grün und würde die Lücke zudecken.
       Wache, die nie fällt, ist grün und prüft nichts — die Antwort darauf ist
       nicht die nächste Attrappe, sondern die prüfbare Aussage aus dem
       Unprüfbaren herauszulösen.
+
+## Das Fundament der Wahrnehmung (22.08.2026)
+
+Roberts Auftrag war „alles Grundlegende zur App kontrollieren, optimieren,
+recherchieren, ausarbeiten". Vier Sitzungen haben daran gearbeitet; was hier
+steht, ist der Rest, der offen blieb, und der Grund, warum er es ist. Was
+behoben wurde, steht in den Commits und im Bauplan — und die Funde hatten
+untereinander eine Form: **Die Kette hängt am Namen, nicht am Inhalt.**
+
+Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
+
+* Ein erzeugtes Merkmal verlor seinen Namen an eine Operation, die ihr Feld
+  leer ließ — lautlos, ohne Befund (behoben, `b76df19`).
+* Eine gesenkte Bohrung verlor die **ganze** Bohrung, weil Kegelwand und
+  Bohrungswand ein Fleck waren (behoben, `db4a820`).
+* Ein eigener Baustein, dessen Maß der Nutzer ändert, behält Name und
+  Parameter — der Operations-Hash sieht nichts, und auf der Platte überlebt das
+  Ergebnis (siehe unten).
+
+- [ ] **Die Antwort auf eine Rückfrage steht nirgends.** Bauplan §15.7 hat am
+      22.08.2026 entschieden, wohin sie gehört: in die Parameter der fragenden
+      Operation, weil §15.1 keine zweite Möglichkeit offenlässt. Umgesetzt ist
+      sie nicht, und **der Plattencache hat es sichtbar gemacht**:
+      `test_ui.py::test_an_ambiguous_unit_reaches_the_surface_as_a_question`
+      fällt, sobald ein Ergebnis von der Platte kommt — die Einheitenrückfrage
+      wird dann nicht mehr gestellt. Im Speichercache fiel es nicht auf, der
+      lebt eine Sitzung; auf der Platte heißt es: Der Nutzer bekommt beim
+      zweiten Öffnen stillschweigend eine Annahme statt einer Frage.
+
+      Der Weg ist vorgezeichnet und muss nicht erfunden werden: Die
+      Rückfallstufen gehen ihn schon. `EvaluationResult.solvers` sammelt sie,
+      und der Docstring dort sagt, was zu tun ist — „Der Aufrufer schreibt sie
+      zurück in den Stapel, damit dieselbe Datei gleich nachrechnet". Für
+      Antworten fehlt genau das: ein Feld daneben, ein `record_answers` neben
+      `record_solvers`, und für die Frage nach einem mehrdeutigen Merkmal
+      (§21.3, „die Op wird umgeschrieben") dasselbe.
+- [ ] **Ein geänderter eigener Baustein wird beim Öffnen nicht gemeldet.**
+      §24.4 verspricht einen Hinweis, welche *benutzten* Bausteine sich seither
+      geändert haben. `changed_since_library` löst das über die gepflegten
+      Änderungsverläufe eines Bausteins — richtig für alles, was mit einer
+      Auslieferung kommt. Ein eigener Baustein aus `<Nutzerdaten>/parts/*.py`
+      (§24.5) hat keinen Änderungsverlauf: Der Nutzer ändert ein Maß und
+      speichert. Damit gibt es für ihn keine Warnung, unabhängig von jedem
+      Cache. Gefunden von solidon-17, deren Cache-Schranke denselben Fall über
+      Name, Änderungszeit und Größe der Dateien löst — dieselbe Auskunft, die
+      auch die Warnung bräuchte.
+- [ ] **Eine gesenkte Bohrung gilt als Sackloch.** `_is_through` vergleicht die
+      Tiefe der Zylinderwand mit der Dicke des Körpers entlang der Achse. Bei
+      `plate_countersunk.stl` sind das 5,6 gegen 8 mm, weil die Senkung die
+      oberen 2,4 mm übernimmt — die Auskunft ist über den Zylinder richtig und
+      über das Teil falsch, und eine Schraube geht durch. Solange der Kegel
+      kein Merkmal war, ließ es sich nicht entscheiden; seit dem 22.08. schon:
+      Eine Bohrung ist durchgehend, wenn Bohrung **und** koaxialer Kegel
+      zusammen die Dicke überspannen. Der Test hält den heutigen Stand
+      ausdrücklich als Zylindertiefe fest und behauptet nichts über „durch".
+- [ ] **Kugel und Torus fehlen der Erkennung.** Vier Arten waren es, fünf sind
+      es: `hole`, `pin`, `face`, `edge_loop`, `cone`. Was fehlt, ist die Kugel
+      (Pfanne, Kalotte) und der Torus — und mit dem Torus fehlt der **Radius
+      einer Verrundung**. Der Weg steht als Ausbaustufe in Bauplan §41, mit dem
+      Preis daneben: Ein Anpassungsverfahren, das Grundformen sucht, findet
+      auch welche, die niemand gemeint hat, also braucht es eine eigene
+      Abnahme und eigene Testkörper.
+- [ ] **`load_operations()` braucht über eine Sekunde.** Aus der Aufschlüsselung
+      des kalten Anwendungsstarts (solidon-17): Interpreterstart 1,9 s,
+      `load_operations()` 1,1–1,2 s, `build_application()` 0,9 s,
+      `window.show()` 7 ms — zusammen 12,9 s beim ersten Start am Tag gegen
+      2,9 s warm. Eine Sekunde davon füllt das Register mit 86 Einträgen. Ob
+      das zu ändern ist, ist offen; dass es die zweitgrößte Position eines
+      Starts ist, den §31 auf drei Sekunden bindet, steht hier, damit es nicht
+      in einer Nachricht bleibt.
+- [ ] **Keine Testart deckt „zwischen zwei Modulen“.** Der Plattencache war
+      vollständig gebaut (`DiskCache`, `MeshCodec`), vollständig geprüft
+      (`tests/test_cache.py`) — und in der Anwendung nicht angeschlossen:
+      `app/ui/session.py` baute `ResultCache()` ohne Plattenebene, `disk=`
+      kam in ganz `app/` nicht vor. Jedes Öffnen rechnete den ganzen Stapel
+      neu, und kein Test schlug an, weil jeder von ihnen sein Modul prüfte.
+      §35 führt neunzehn Testarten; keine heißt „ist es angeschlossen".
+      Beobachtung von solidon-17, und die Frage, die sie aufwirft, ist größer
+      als der Cache: Wie viele fertig gebaute Sachen liegen sonst noch da,
+      ohne Aufrufer?
 
 ## Der Changelog schickte den Kunden ins Handbuch, und dort war nichts (22.08.2026)
 

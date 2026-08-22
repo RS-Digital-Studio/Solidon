@@ -105,6 +105,34 @@ abgenommen; im Bauplan endete die Liste bei P13.
 der Launch führt die Skizzen als Kernargument. Die Veröffentlichungsreste aus
 P8 (Zertifikat, Vertrieb, Website, Betatest) laufen parallel weiter.
 
+### Nachtrag vom selben Tag: das Fundament, nachgesehen
+
+Auf die Durchsicht folgte die Frage, ob das Grundlegende der Anwendung
+tatsächlich in Ordnung ist. Es war es nicht, und die Funde hatten untereinander
+eine Form: **Die Kette hängt am Namen, nicht am Inhalt.** Ein erzeugtes Merkmal
+verlor seinen Namen an eine Operation, die ihr Feld leer ließ — lautlos, ohne
+Befund. Eine gesenkte Bohrung verlor die **ganze** Bohrung, weil Kegelwand und
+Bohrungswand ein Fleck waren. Ein eigener Baustein, dessen Maß der Nutzer
+ändert, behält Name und Parameter, und der Hash sieht nichts. Dreimal derselbe
+Bau, drei verschiedene Ecken.
+
+Geändert haben sich daraufhin **§21.1** (der Kegel ist eine Merkmalsart; ein
+Fleck endet an einer Kante; die Normalen entscheiden die Form, der Rückstand
+die Güte), **§15.7** (der Weg, den eine Antwort nimmt — derselbe, den die
+Rückfallstufen gehen), **§24.4** (für einen eigenen Baustein trägt die
+Änderungsmeldung nicht), **§31** (elf Zeilen mit gemessenen Werten, zwei neue
+Regeln über Zielwerte und Streuung, der Anwendungsstart in kalt und warm),
+**§35** (keine Testart fragt, ob etwas angeschlossen ist), **§38** (der
+Ergebnis-Cache in seinem eigenen, versionierten Ordner) und **§41** (Kugel und
+Torus statt „Grundformen"). §18.5 hat die Auswahltiefe bekommen.
+
+Der teuerste Einzelfund gehört nicht in eine dieser Zeilen: Der Plattencache
+aus §38 war vollständig gebaut, vollständig geprüft und **in der Anwendung
+nicht angeschlossen** — jedes Öffnen rechnete den ganzen Stapel neu, und kein
+Test schlug an, weil jeder von ihnen sein Modul prüfte. Angeschlossen öffnet
+dasselbe Projekt beim zweiten Mal in 209 statt 5063 Millisekunden. Was daraus
+folgt, steht in §35 und ist unbequemer als die Zahl.
+
 ## 1. Leitprinzipien
 
 Neun Sätze, an denen jede Entscheidung gemessen wird.
@@ -843,6 +871,23 @@ Teilen stellte über die ganze Kette **99 modale Fenster für 7 Entscheidungen**
 Anhalten und fragen ist richtig; dieselbe Frage bei jeder Auswertung erneut zu
 stellen, ist keine Vorsicht, sondern ein fehlender Speicherort.
 
+**Der Weg dorthin ist schon gebaut, für etwas anderes.** Die Auswertung ist eine
+reine Funktion und darf das Dokument nicht ändern — sie kann die Antwort also
+nicht selbst hineinschreiben. Genau dieselbe Lage haben die Rückfallstufen
+(§17.2), und sie ist gelöst: Das Ergebnis der Auswertung führt sie mit, und
+**der Aufrufer schreibt sie in den Stapel zurück, damit dieselbe Datei gleich
+nachrechnet**. Antworten gehen denselben Weg — ein Feld daneben, ein Rückschreiben
+daneben. Zwei Sorten sind zu tragen: was eine Operation selbst erfragt hat (die
+Einheit in `load`, §17.1) und was die Zuordnung entschieden hat (§21.3).
+
+**Und es ist keine Bequemlichkeit mehr, seit es einen Plattencache gibt** (§38).
+Solange die Antwort nur in der Sitzung lebte, war sie beim nächsten Start eben
+wieder fällig — ärgerlich, aber ehrlich. Kommt das Ergebnis von der Platte, wird
+die Frage **nicht mehr gestellt**: Der Nutzer bekommt stillschweigend eine
+Annahme statt einer Rückfrage, und Regel 21 ist verletzt, ohne dass irgendwo ein
+Befund entsteht. Ein Ergebnis, dessen Auswertung `ctx.ask` gerufen hat, gehört
+deshalb erst dann auf die Platte, wenn die Antwort im Stapel steht.
+
 ---
 
 ## 16. Projektdatei
@@ -968,6 +1013,26 @@ als Kontextmenü mit den passenden Ops (§10, `applies_to`).
 Diese Brücke zwischen Maus und Sprache ist die wichtigste Einzelfunktion der
 Anwendung: Der Nutzer muss keine Feature-Namen kennen, er zeigt hin.
 
+#### Die Auswahl hat eine Tiefe, und die Maustasten teilen sie sich
+
+**Der Linksklick wandert:** Der erste wählt den Körper, der nächste das Merkmal
+darunter. Innerhalb eines Körpers bleibt man drin — die nächste Bohrung kostet
+einen Klick, nicht zwei; ein anderer Körper fängt von vorn an. Escape geht eine
+Stufe zurück.
+
+**Der Rechtsklick geht nicht gestuft**, und das folgt aus der Zusage darüber:
+Wenn das Kontextmenü am Merkmal der Ort für Weg 1 ist — indem man auf die
+Stelle zeigt, die stört —, dann darf es nicht an einer Vorbedingung hängen, die
+niemand kennt. Er trifft immer das Genaueste unter dem Zeiger.
+
+**Solange ein Operationsdialog nach einem Merkmal fragt, gibt es keine Stufen.**
+Ein Klick ist dann eine Antwort und keine Navigation.
+
+Wie das im Einzelnen geschieht — welche Methode was entscheidet, mit welcher
+Reichweite ein Klick ein Merkmal trifft, welche Zahlen dabei gemessen wurden —
+steht in der Gebietsregel zur Oberfläche. Hier stehen die drei Zusagen; dort
+steht der Weg.
+
 ### 18.6 Druckbett und Bauraum
 Bett als Gitter im realen Maß, Bauraum als transparente Box, Objekte außerhalb
 markiert, Kollisionen markiert, Schwerpunkt und Aufstandsfläche einblendbar.
@@ -1055,17 +1120,37 @@ aber im Datenmodell von Anfang an vorgesehen.
 
 ### 21.1 Was erkannt wird
 Bohrungen (Zylinderflächen clustern → Durchmesser, Achse, Tiefe, Durchgang oder
-Sackloch), ebene Flächen (koplanare Cluster → Normale, Fläche, Schwerpunkt,
-Randkontur), Randschleifen (offene Kanten = Defekte), Symmetrieebenen,
-Dünnstellen, Zusammenhangskomponenten.
+Sackloch), Zapfen (dieselbe Suche, andersherum gelesen), **Kegel** (Senkung,
+Fase an einer Bohrung, Verjüngung → Öffnungswinkel, Achse, Mitte, Durchmesser),
+ebene Flächen (koplanare Cluster → Normale, Fläche, Schwerpunkt, Randkontur),
+Randschleifen (offene Kanten = Defekte), Symmetrieebenen, Dünnstellen,
+Zusammenhangskomponenten.
 
-**Was nicht erkannt wird, und was das kostet.** Zylinder und Ebenen deckt das
-Clustern ab; Kegel, Kugel und Torus nicht — also ist eine Senkung keine
-Senkung, sondern eine Sammlung von Dreiecken neben einer Bohrung, und der
-Agent kann sich auf sie nicht beziehen (Leitprinzip 5). Das ist eine bewusste
-Grenze und keine Lücke: Der Weg dorthin steht als Ausbaustufe in §41, weil er
-eine eigene Abnahme braucht — ein Anpassungsverfahren, das Grundformen sucht,
-findet auch welche, die niemand gemeint hat.
+**Ein Fleck endet an einer Kante, nicht am Zusammenhang.** Das klingt nach einer
+Feinheit und war der Grund, weshalb eine **gesenkte Bohrung überhaupt nicht in
+der Szene stand** — nicht die Senkung fehlte, die ganze Bohrung. Kegelwand und
+Bohrungswand hängen aneinander; als ein Fleck gelesen passt darauf kein
+Zylinder, und heraus kam nichts. Getrennt wird an derselben Schwelle, die eine
+Rundung von einer Kante trennt (30 Grad): Der Übergang Bohrung → 90°-Senkung ist
+ein Knick von 45 Grad, die Facetten eines gebohrten Zylinders liegen bei vier.
+
+**Welche Form ein Fleck ist, entscheiden die Normalen — nicht der Rückstand
+einer Einpassung.** Bei einem Zylinder stehen sie senkrecht auf der Achse, bei
+einem Kegel um `sin` des halben Öffnungswinkels daneben; das ist eine
+Eigenschaft und kein Gütemaß. Der Rückstand kann es nicht entscheiden, und der
+Fall, der das zeigt, ist ein aufgesetzter Kegel: Jede Facette ist **ein** Dreieck
+von der Grundfläche zur Spitze, ihr Schwerpunkt liegt auf einem Drittel der
+Höhe — also liegen alle Schwerpunkte auf einem Kreis, und die
+Zylindereinpassung findet einen tadellosen Zylinder mit Rückstand null an einem
+Kegel mit 31 Grad. **Die Form kommt aus dem Winkel, die Güte aus dem
+Rückstand**, und ein Zylinder bleibt einer, solange er unter fünf Grad steht:
+Ein `hole_1`, das plötzlich `cone_1` hieße, wäre für jede Bohrungs-Operation
+unsichtbar.
+
+**Was weiter nicht erkannt wird**, ist die Kugel und der Torus — und mit dem
+Torus fehlt der Radius einer Verrundung. Der Weg steht als Ausbaustufe in §41,
+weil er eine eigene Abnahme braucht: Ein Anpassungsverfahren, das Grundformen
+sucht, findet auch welche, die niemand gemeint hat.
 
 ### 21.2 Das ID-Problem
 **Erzeugte Features — Provenienz.** Was eine Operation selbst erzeugt, bekommt
@@ -1251,7 +1336,15 @@ Projekte still anders, und Leitprinzip 4 ist verletzt.
 - **Änderungsverlauf je Baustein**: was, wann, warum, mit Auswirkung auf die
   Maße
 - **Beim Öffnen**: Hinweis, welche *benutzten* Bausteine sich seither geändert
-  haben, mit der Wahl zwischen „neu rechnen" und „alten Stand beibehalten"
+  haben, mit der Wahl zwischen „neu rechnen" und „alten Stand beibehalten".
+  **Für einen eigenen Baustein (§24.5) trägt dieser Weg nicht**, und das ist
+  eine offene Stelle und keine Ausnahme: Die Prüfung liest die gepflegten
+  Änderungsverläufe, und wer an seinem eigenen Baustein ein Maß ändert und
+  speichert, pflegt keinen. Was sie stattdessen lesen müsste, ist der Zustand
+  der Dateien selbst — Name, Änderungszeit, Größe unter
+  `<Nutzerdaten>/parts/`. Genau diese Auskunft braucht auch der Plattencache
+  (§38), um für einen geänderten eigenen Baustein nicht das alte Ergebnis
+  zurückzugeben; sie wird also ohnehin gebildet
 - Der alte Stand bleibt aufrufbar, solange die Bibliothek ihn führt; wird er
   entfernt, verhält sich das wie eine Migration (§16.2)
 
@@ -1637,24 +1730,53 @@ Gemessen auf dem Referenzkorpus (§34), als Teil der Suite protokolliert.
 
 | Vorgang | Zielwert | gemessen |
 |---|---|---|
-| Viewport-Navigation | flüssig bei 1 Mio. Dreiecken | keine Messmarke |
+| Viewport-Navigation | flüssig bei 1 Mio. Dreiecken | **im Tor nicht messbar** — braucht Bilder auf echter GL |
+| Anzeigeaufbau, 1 Mio. → 200 000 Dreiecke | unter 4 s | 2,51 s — im Ziel |
 | Anzeige-Dezimierung greift ab | 500 000 Dreiecken | Schwelle, keine Zeit |
-| Boolesche Op, 200 000 Dreiecke | unter 2 s | keine Messmarke; `blend_union` 1,18 s |
-| Feature-Erkennung, 200 000 Dreiecke | unter 1 s | 0,75 s — im Ziel |
-| Analysekarte Wandstärke | unter 3 s, im Hintergrund | 4,13 s — **darüber** |
-| Projekt öffnen aus Plattencache | unter 1 s | keine Messmarke; Auswertung aus dem Cache 0,4 ms |
-| Parameteränderung → sichtbares Ergebnis | unter 2 s, nur betroffene Zweige | keine Messmarke |
-| Schichtanalyse, 200 000 Dreiecke, 0,2 mm | unter 300 ms | 1,11 s auf 328 000 — **darüber** |
-| Skizzen-Solver, 200 Bedingungen | unter 100 ms | 108 ms — knapp darüber |
-| Orientierungssuche, 200 Kandidaten | unter 20 s, abbrechbar | 16,3 s — im Ziel |
-| Anwendungsstart bis bedienbar | unter 3 s | keine Messmarke |
+| Boolesche Op, 200 000 Dreiecke | unter 2 s | 1,14 s — im Ziel |
+| Feature-Erkennung, 200 000 Dreiecke | unter 1 s | 0,80 s — im Ziel |
+| Analysekarte Wandstärke | unter 3 s, im Hintergrund | 4,25 s — **darüber** |
+| Projekt öffnen aus Plattencache | unter 1 s | 0,21 s beim zweiten Öffnen, 5,06 s beim ersten |
+| Parameteränderung → sichtbares Ergebnis | unter 2 s, nur betroffene Zweige | 8 ms — im Ziel, und die Zusage hält |
+| Schichtanalyse, 200 000 Dreiecke, 0,2 mm | unter 300 ms | 1,22 s auf 328 000 — **darüber** |
+| Skizzen-Solver, 200 Bedingungen | unter 100 ms | 118 ms — knapp darüber |
+| Orientierungssuche, 200 Kandidaten | unter 20 s, abbrechbar | 17,9 s — im Ziel, zweimal aber über 20 s |
+| Anwendungsstart bis bedienbar, **kalt** | unter 3 s | 12,9 s — **verfehlt**, von Hand gemessen |
+| Anwendungsstart bis bedienbar, **warm** | unter 3 s | 2,88 s — im Ziel |
 
 Die dritte Spalte führt die Bestwerte aus `tests/.performance.json`, Stand
-22.08.2026, auf Roberts Maschine. Sie steht hier, weil eine Tabelle aus reinen
+22.08.2026, auf Roberts Maschine und unter dem Schloss gemessen (die Datei
+selbst reist nicht mit — sie steht in `.gitignore`, also ist diese Spalte der
+einzige nachprüfbare Ort). Sie steht hier, weil eine Tabelle aus reinen
 Zielwerten nach zwei Jahren nicht mehr verrät, ob sie Absichten oder Zustände
-beschreibt. Was sie zeigt, ist beides: drei Zeilen liegen darüber, vier haben
-gar keine Messmarke — und die eine Zeile, an der die Größenordnung fehlt, ist
-die Schichtanalyse.
+beschreibt. Was sie zeigt, ist beides: **vier Zeilen liegen darüber**, eine ist
+im Tor grundsätzlich nicht messbar, und der Rest hält.
+
+Drei Zeilen haben sich dabei geändert, und zwei davon nicht durch schnelleren
+Code. *Anwendungsstart* ist zweigeteilt (siehe unten), *Projekt öffnen* hat
+überhaupt erst einen Weg bekommen — der Plattencache war gebaut und nicht
+angeschlossen (§38) —, und *Anzeigeaufbau* ist neu: Die Zeile darüber ist eine
+Bildrate und im Tor nicht messbar, aber die eine teure Rechnung zwischen
+„Körper geladen" und „navigierbar" ist es sehr wohl, und sie ist der Grund,
+warum eine Million Dreiecke überhaupt flüssig gehen — gezeichnet werden 200 000.
+
+**Ein Zielwert steht mindestens die gemessene Streuung über dem Bestwert.**
+Sonst misst er die Maschine. Der Anzeigeaufbau ist das Beispiel: 2,51 s
+gemessen, Streuung dieser Maschine zwischen zwei Läufen 10 bis 31 Prozent —
+ein Ziel von 3 s wäre unter Fremdlast rot geworden, ohne dass etwas langsamer
+wurde. Also 4 s. Wird die Dezimierung eines Tages 3,5 s brauchen, fängt die
+Zahl es noch; 2,5 auf 3,5 ist keine Streuung mehr.
+
+**Und welche von zwei Zahlen gilt, entscheidet, wer sie liest — der Kunde die
+kalte, der Wächter die warme.** Der Anwendungsstart braucht beim ersten Mal am
+Tag 12,9 s und danach 2,9; der Unterschied ist der Dateicache des
+Betriebssystems. Die Suite kann nur den warmen messen, sie läuft mehrmals
+täglich. Gemeint ist in §31 der **kalte** — dieser Plan schreibt über den
+Kunden und nicht über die Suite —, also ist die Zeile heute verfehlt, und die
+warme steht als das daneben, was das Tor bewachen kann. Aufgeschlüsselt:
+Interpreterstart 1,9 s, Register füllen 1,1–1,2 s, Anwendung bauen 0,9 s,
+Fenster zeigen 7 ms. Dieselbe Unterscheidung gilt für das Öffnen eines
+Projekts: 5,06 s beim ersten Mal, 0,21 beim zweiten.
 
 **Und die dritte Spalte ist nicht das, was das Tor prüft.** Die Zusicherungen
 in `tests/test_performance.py` liegen bewusst eine Größenordnung über den
@@ -1685,9 +1807,18 @@ genauere Weg**: Er rundet gleich; was er gewinnt, ist eine Ringschließung, die
 nicht davon abhängt, dass zwei gerundete Enden zusammenfinden.
 
 **Regressionsprüfung**: Messwerte je Lauf festhalten; Verschlechterung um mehr
-als ein Viertel gilt als Fehler, nicht als Rauschen. Verglichen wird gegen den
-**besten** bisher gemessenen Wert **je Aufrufkontext** — nicht gegen einen
-einzigen Bestwert für alle Läufe. Das ist die Entscheidung zwischen den zwei
+als ein Viertel gilt als Fehler, nicht als Rauschen — **aber erst, wenn sie
+zweimal hintereinander auftritt.** Ein einzelner Ausschlag ist Last, zwei sind
+eine Richtung, und das kostet keinen zusätzlichen Lauf, weil der nächste ohnehin
+kommt. Der Grund ist gemessen und unbequem: Zwei aufeinanderfolgende saubere
+Läufe derselben Software auf derselben Maschine unter demselben Schloss lagen
+zwischen 10 und 31 Prozent auseinander — die Streuung ist größer als die
+Schwelle, und eine Schwelle unter der Streuung ist kein Wächter, sondern ein
+Würfel. Die Regel automatisiert damit nur, was zwei Absätze weiter unten schon
+steht: vorher ein zweites Mal messen.
+
+Verglichen wird gegen den **besten** bisher gemessenen Wert **je Aufrufkontext**
+— nicht gegen einen einzigen Bestwert für alle Läufe. Das ist die Entscheidung zwischen den zwei
 möglichen Reparaturen, und sie fällt so, weil die andere den Vergleich fast
 immer ausschaltete: Das Tor läuft geteilt, ein Prozess je Fensterdatei und
 alles übrige in einem Zug, also sind „andere Testdateien im Lauf" der
@@ -1857,6 +1988,30 @@ ein echter Picker, ein echter Puffer — verdient eine Attrappe.
 Und eine Zahl bestandener Tests sagt nichts über die Tiefe: Ein Test, der eine
 Methode ruft und an ihrer Wache umkehrt, zählt wie jeder andere. Wer wissen
 will, was wirklich lief, misst Zeilen und nicht Läufe.
+
+**Keine dieser Testarten fragt, ob etwas angeschlossen ist** — und der Fall, der
+das gezeigt hat, kostete jedes Öffnen eines Projekts mehrere Sekunden. Der
+Plattencache aus §38 war vollständig gebaut, vollständig geprüft und in der
+Anwendung nie benutzt: Die Sitzung baute ihren Zwischenspeicher ohne die
+Plattenebene, und der Name dieses Arguments kam in der ganzen Anwendung nicht
+vor. Jeder Test darunter war grün, weil jeder sein Modul prüfte. **Der Fehler
+saß nicht in einem Modul, sondern zwischen zwei**, und dort sieht die Tabelle
+oben nicht hin. Die Hauptwege aus §2.2 sind die einzige Zeile, die es
+grundsätzlich könnte — sie fahren die Kette von außen, und was sie nicht
+berühren, prüft niemand von außen. Eine Zusage aus diesem Bauplan, die nur von
+einer Stelle im Programm eingelöst wird, braucht einen Test an **dieser**
+Stelle: nicht „der Cache kann es", sondern „die Anwendung tut es".
+
+**Und eine Prüfung, deren Bezugspunkt wandert, misst den Baum und nicht die
+Sache.** Am 22.08.2026 dreimal aufgetreten, jedes Mal in anderer Gestalt: ein
+Test, der die Änderungszeit einer Datei *relativ* zu einer anderen setzte,
+während gefragt war das Maximum über ein ganzes Verzeichnis — rot, sobald
+irgendwer irgendetwas anfasste; ein `clear()`, das nur den Speicher leerte,
+während sein einziger Aufrufer sich auf den Namen verließ; ein Wächter, der den
+Aufruf suchte und nicht die Funktion. Alle drei sahen wie Sicherheit aus und
+prüften etwas anderes als sie behaupteten. Die Gegenfrage, die es findet, ist
+immer dieselbe: **Was müsste kaputt sein, damit dieser Test rot wird — und ist
+das dasselbe wie das, wovor er schützen soll?**
 
 ---
 
@@ -2123,7 +2278,48 @@ und ohne Schlüssel geht sie nirgendwohin.
 - **Absturzwiederherstellung.** Der Autosave-Container liegt neben dem Projekt
   und wird beim nächsten Start angeboten.
 - **Speicher und Cache.** Obergrenze im RAM, darunter ein Plattencache über den
-  Op-Hash.
+  Op-Hash. Er liegt in **seinem eigenen Ordner**, und zwar aus zwei Gründen, die
+  beide beim Anschließen scharf wurden. Der erste ist die Nachbarschaft: Im
+  Cache-Verzeichnis wohnen auch der Arbeitsordner für OpenSCAD (§32), geladene
+  Aktualisierungspakete (§37.2) und die Oberflächenvorlagen. Ein Aufräumen, das
+  sein Budget über den ganzen Ordner rechnet, zählt fremde Daten mit und löscht
+  fremde Dateien — darunter ein Paket, dessen Prüfsumme gerade geprüft werden
+  soll. Der zweite ist die **Versionsschranke**: Der Op-Hash trägt Operation,
+  Parameter, Eingänge, Profil, Qualität und Startwert — er ändert sich **nicht**,
+  wenn die Umsetzung einer Operation sich ändert. Im Speicher ist das gleichgültig,
+  der Cache lebt eine Sitzung; auf der Platte überlebt ein Eintrag die
+  Installation der nächsten Fassung und liefert ein Netz, das alter Code gerechnet
+  hat — eine behobene Rückfallstufe wäre damit stillschweigend ausgehebelt.
+  Deshalb steht die Fassung im **Ordnerpfad** und nicht im Schlüssel: Ein Update
+  fängt kalt an, und die Ordner der Vorfassungen werden dabei weggeräumt.
+  Dieselbe Schranke braucht den Zustand der eigenen Bausteine (§24.4), denn ein
+  geändertes Maß darin bewegt den Hash ebenfalls nicht.
+
+  **Der Schlüssel muss decken, wovon das Ergebnis abhängt — und das ist mehr,
+  als es aussieht.** Ein Quellparameter trägt einen Bezeichner, `src_1`, und
+  jedes Projekt nennt seine erste Quelle so; zwei völlig verschiedene Dateien
+  hatten damit denselben Schlüssel, und ein Projekt bekam die Geometrie eines
+  anderen. Also steht dort die Inhaltsprüfsumme. Dasselbe gilt für den Stand der
+  eigenen Bausteine (§24.4) und für die Fassung der Anwendung: Wo eine Größe das
+  Ergebnis ändert, ohne im Schlüssel zu stehen, ist ein Cache kein
+  Zwischenspeicher, sondern eine Verwechslung.
+
+  **Und daraus folgt eine Regel, die über den Cache hinausgeht:** Eine
+  Cache-Ebene, die länger lebt als eine Sitzung, ist keine Erweiterung, sondern
+  ein **Prüfstand für die Schlüssel**. Der Speichercache wird beim Öffnen eines
+  Projekts geleert und lebt eine Sitzung — er verzeiht jeden zu kurzen Schlüssel,
+  und drei Fehler dieser Art lagen unter ihm, ohne dass ein Test anschlug. Wer
+  eine Ebene mit längerem Leben anhängt, prüft damit nicht den Cache, sondern
+  jede Annahme darüber, wovon ein Ergebnis abhängt.
+
+  Gemessen ist der Gewinn und die Reihenfolge, in der man ihn liest: Ein Projekt
+  mit einem 1,3-Mio.-Dreieck-Körper öffnet beim ersten Mal in 5063 ms und beim
+  zweiten in **209**. Ein Cache bleibt dabei eine Beschleunigung und keine
+  Voraussetzung — lässt sich der Ordner nicht anlegen, arbeitet die Sitzung mit
+  dem Speicher allein weiter, ohne Dialog. Und er speichert nur, was eine
+  **reine Funktion des Dokuments** ist (§15.1): Solange eine Antwort auf
+  `ctx.ask` nicht im Stapel steht (§15.7), ist das Ergebnis keine, und es gehört
+  nicht auf die Platte.
 - **Zugangsdaten** im System-Schlüsselbund.
 - **Profile**: Bauraum, Düse, Schichthöhe, Materialtoleranzen — nie fest im
   Code. **Ein Startsatz gängiger Druckerprofile wird mitgeliefert**, damit
@@ -2379,18 +2575,16 @@ hineinwandern**, sonst misst man nur das eigene Gedächtnis. Strikt lokal.
 
 **Stapelverarbeitung** über den Kommandozeilen-Einstieg.
 
-**Grundformen über eine Anpassung nach RANSAC.** Kegel, Kugel und Torus
-zusätzlich zu Zylinder und Ebene (§21.1): Eine Senkung wäre dann eine Senkung
-und nicht eine Sammlung von Dreiecken, eine Kugelpfanne hätte einen Radius, und
-der Agent könnte sich auf beides beziehen, statt Koordinaten zu meiden und
-nichts zu finden. Das Verfahren ist seit knapp zwanzig Jahren Stand der Technik
-— Grundformen auf die Cluster anpassen, Achse über eine Singulärwertzerlegung,
-Annahme nur bei genügend Stützstellen innerhalb der Toleranz — und der Preis
-ist bekannt: Es findet auch Formen, die niemand gemeint hat, und hängt an
-seinen Schwellen. Deshalb dieselbe Auflage wie überall: Was unter der Schwelle
-bleibt, wird als Cluster gemeldet und nicht geraten (Regel 21). Eigene
-Abnahme, eigene Testkörper — sonst ist es keine Erkennung, sondern eine
-Vermutung mit Namen.
+**Kugel und Torus in der Erkennung.** Der Kegel ist seit dem 22.08.2026 drin
+(§21.1) und hat den Weg gezeigt: Eine Grundform lässt sich aus den Normalen
+bestimmen, linear und ohne Zufall. Was fehlt, ist die Kugel (Pfanne, Kalotte)
+und der Torus — und mit dem Torus **der Radius einer Verrundung**, also die
+Karte „Krümmung" aus §18.4 mit echten Zahlen statt einer Einfärbung. Der Preis
+ist beim Kegel schon sichtbar geworden und wächst mit jeder weiteren Form: Es
+findet auch Formen, die niemand gemeint hat, und die Reihenfolge der Prüfungen
+entscheidet, welchen Namen ein Fleck bekommt. Deshalb eigene Abnahme, eigene
+Testkörper und dieselbe Auflage wie überall: Was unter der Schwelle bleibt,
+wird als Cluster gemeldet und nicht geraten (Regel 21).
 
 **Modell-Vergleich.** Zwei Versionen überlagern, Unterschiede zeigen.
 
