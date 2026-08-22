@@ -37,12 +37,20 @@ IN_REPO = Path(__file__).resolve().parent.parent / ".claude" / "memory"
 def harness_dir(project: Path) -> Path:
     """Wohin Claude Code die Erinnerungen dieses Projekts legt.
 
-    Das Kürzel entsteht aus dem absoluten Pfad, indem Trenner und Doppelpunkt
-    zu Bindestrichen werden — ``C:\\Users\\rober\\Documents\\Solidon`` wird zu
-    ``C--Users-rober-Documents-Solidon``. Abgelesen und nicht erraten: Der
-    Ordner existiert auf jeder Maschine, auf der schon einmal eine Sitzung lief.
+    Das Kürzel entsteht aus dem absoluten Pfad, indem Trenner, Doppelpunkt
+    **und Leerzeichen** zu Bindestrichen werden — ``C:\\Users\\rober\\Documents\\Solidon``
+    wird zu ``C--Users-rober-Documents-Solidon``, ``F:\\3D Druck`` zu ``F--3D-Druck``.
+    Abgelesen und nicht erraten: Der Ordner existiert auf jeder Maschine, auf der
+    schon einmal eine Sitzung lief.
+
+    Das Leerzeichen fehlte hier zuerst, und der Fehler war der unangenehme: Das
+    Werkzeug rechnete ``F--3D Druck`` aus, fand dort nichts, legte den Ordner an,
+    verknüpfte ihn und meldete „Eingerichtet". Übernommen wurde nichts — die
+    achtundzwanzig Dateien lagen nebenan. Darum hält ``main`` jetzt an, wenn der
+    berechnete Ort nicht existiert, statt einen leeren zweiten anzulegen.
     """
     slug = str(project).replace(":", "-").replace("\\", "-").replace("/", "-")
+    slug = slug.replace(" ", "-")
     return Path.home() / ".claude" / "projects" / slug / "memory"
 
 
@@ -88,6 +96,18 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.pruefen:
         print("Noch nicht verknüpft — `python tools/link_memory.py` richtet es ein.")
+        return 1
+
+    if not target.exists():
+        # Nicht anlegen, sondern anhalten: Ein Ort, den es nicht gibt, heißt
+        # entweder „hier lief noch nie eine Sitzung" oder „das Kürzel stimmt
+        # nicht". Im zweiten Fall stünde die Verknüpfung neben den Erinnerungen
+        # statt über ihnen, und niemand merkte es.
+        print("Diesen Ort gibt es nicht — das Kürzel passt vermutlich nicht.")
+        vorhanden = sorted(q.name for q in target.parent.parent.iterdir() if q.is_dir())
+        if vorhanden:
+            print("Unter ~/.claude/projects liegen: " + ", ".join(vorhanden))
+        print("Den richtigen Ordner ablesen und harness_dir danach richten.")
         return 1
 
     IN_REPO.mkdir(parents=True, exist_ok=True)
