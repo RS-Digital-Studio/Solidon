@@ -126,8 +126,10 @@ def sitzungsstart() -> None:
         "Doku, Commits und Gespräch auf Deutsch mit echten Umlauten. "
         "Der Kern (app/core) bleibt ohne Qt. "
         "Nach jedem Schritt läuft die Suite — /pruefen. Vor dem Commit /regelcheck. "
-        "Die 22 harten Regeln stehen in AGENTS.md, das Sollverhalten im Bauplan."
-        + umgebungshinweis(),
+        "Die 22 harten Regeln stehen in AGENTS.md, das Sollverhalten im Bauplan. "
+        "Hier arbeiten oft zwei bis vier Sitzungen gleichzeitig: `/list-agents` "
+        "zeigt sie, `claude --worktree <name>` gibt jeder ihren eigenen Baum, und "
+        "/pruefen nimmt ein Schloss, damit Messungen sich nicht verfälschen." + umgebungshinweis(),
     )
 
 
