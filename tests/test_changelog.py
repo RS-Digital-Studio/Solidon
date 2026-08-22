@@ -3,7 +3,7 @@
 Er ist die einzige Stelle, an der die Anwendung erzählt, was sich geändert
 hat — und die einzige, die dabei nicht aus dem Code kommt, sondern von Hand
 geschrieben wird. Also prüft diese Datei, was ein Mensch beim Schreiben
-vergisst: eine Sprache, einen Punkt, die Fassung von gestern.
+vergisst: eine Sprache, einen Punkt, die Version von gestern.
 
 Und den Ton. „Nur Wichtiges, verständlich" lässt sich nicht messen; was sich
 messen lässt, ist das Gegenteil davon — ein Modulname, eine Paragraphennummer,

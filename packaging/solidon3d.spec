@@ -211,7 +211,7 @@ if sys.platform == "darwin":
             # Auflösung und das Fenster sieht unscharf aus — eine Ursache,
             # die niemand in einer Plist sucht.
             "NSHighResolutionCapable": True,
-            # Die älteste Fassung, auf der die mitgelieferten Qt-Räder laufen.
+            # Die älteste Version, auf der die mitgelieferten Qt-Räder laufen.
             "LSMinimumSystemVersion": "12.0",
             # Die eigene Projektdatei, damit ein Doppelklick im Finder hier
             # ankommt. Zwei Einträge, und beide werden gebraucht: die

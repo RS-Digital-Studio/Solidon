@@ -148,7 +148,7 @@ hinterlegt und kein lokales Modell betreibt, verliert nur den Chat — die
 Ein CAD-Ersatz will Solidon3D nicht sein. Es gibt Skizzen mit
 Zwangsbedingungen und einen exakten Kern für Verrundungen, Fasen und
 STEP-Export, aber keine Feature-Historie wie in Fusion oder SolidWorks
-und keine Baugruppenverwaltung. Auch die macOS-Fassung ist noch nicht bei
+und keine Baugruppenverwaltung. Auch die macOS-Version ist noch nicht bei
 Apple signiert — sie startet beim ersten Mal nur über den Umweg im
 Kontextmenü. Und die Demo ist bewusst hart befristet: Sie ist vollständig,
 ohne Wasserzeichen und ohne Exportsperre, lässt sich aber ab dem

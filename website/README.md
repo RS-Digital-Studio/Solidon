@@ -51,7 +51,7 @@ aus dem Bestand abgeleitet. Es läuft **nach** `make_manual.py` und
 `make_legal.py`, denn es liest deren Ergebnis:
 
 * **`sitemap.xml`** führt die 24 indexierbaren Seiten mit ihren
-  Sprachfassungen. Die Zuordnung kommt aus den `hreflang`-Angaben der Seiten
+  Sprachversionen. Die Zuordnung kommt aus den `hreflang`-Angaben der Seiten
   selbst — eine zweite Liste liefe beim nächsten Zusatz auseinander. Die fünf
   Rechtstexte fehlen dort mit Absicht: sie tragen `noindex`, und eine Sitemap,
   die sie trotzdem anbietet, sagt das Gegenteil dessen, was auf der Seite
@@ -99,7 +99,7 @@ Aufmacher stehen die Anzahl der Operationen, der Bausteine, der Normteilmaße,
 der Druckerprofile und der Beispielprojekte. Sie sind abgelesen und werden
 falsch, sobald eine Operation dazukommt. `tests/test_website.py` rechnet sie
 gegen `REGISTRY`, `PARTS`, `standards.toml`, `printers.toml` und
-`app/examples/` nach und verlangt, dass beide Sprachfassungen dieselben Zahlen
+`app/examples/` nach und verlangt, dass beide Sprachversionen dieselben Zahlen
 führen. Wird der Test rot, ist nicht der Test veraltet, sondern die Seite.
 
 ## Die Ausgangslage

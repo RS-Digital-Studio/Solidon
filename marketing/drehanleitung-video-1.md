@@ -66,8 +66,8 @@ nötig.
 Aus diesen Einstellungen und dem Bildschirmteil (Konstruktion in Solidon, der
 Moment mit dem geänderten Spiel) baue ich:
 
-* eine hochkante Fassung für TikTok, 25 bis 35 Sekunden
-* eine quere Fassung für YouTube aus demselben Material
+* eine hochkante Version für TikTok, 25 bis 35 Sekunden
+* eine quere Version für YouTube aus demselben Material
 * beide auf Deutsch und Englisch, mit Untertiteln
 
 Der Aufbau steht: Problem (Einstellung 1–3) — Lösung (Bildschirm + 4) — Beweis

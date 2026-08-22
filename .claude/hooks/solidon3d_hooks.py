@@ -6,7 +6,7 @@ Ein Skript, fünf Aufgaben — welche, sagt das erste Argument:
                      globale Konfiguration beschreibt ein Avalonia-Projekt;
                      dieses hier ist Python. Prüft dabei, ob die Umgebung dem
                      festgeschriebenen Stand entspricht — mehrere Leute am
-                     selben Repository heißt sonst mehrere Fassungssätze.
+                     selben Repository heißt sonst mehrere Versionssätze.
     nach-aenderung   PostToolUse (Write|Edit): formatiert die geänderte
                      Python-Datei und meldet Lint-Befunde sowie Verstöße gegen
                      die harten Regeln, die sich rein syntaktisch erkennen
@@ -88,7 +88,7 @@ def umgebungshinweis() -> str:
     """Meldet, wenn die Umgebung nicht dem festgeschriebenen Stand entspricht.
 
     Der Grund steht in `constraints.txt`: Wer das `-c` beim Installieren
-    vergisst, bekommt andere Fassungen als die, gegen die die Suite grün ist.
+    vergisst, bekommt andere Versionen als die, gegen die die Suite grün ist.
     Am 06.08.2026 zog ein frischer Klon numpy 2.5, und sechzehn Tests fielen
     um, ohne dass eine Zeile Code sich geändert hatte. Arbeiten mehrere am
     selben Repository, ist das kein Einzelfall.

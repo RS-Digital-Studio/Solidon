@@ -418,7 +418,7 @@ $today_downloads = $per_day[$today]['d'] ?? 0;
 /**
  * Was im Download-Ordner liegt, mit Größe — Dateiname als Schlüssel.
  *
- * Die zweite Hälfte der Antwort auf „welche Fassungen sind draußen": Der
+ * Die zweite Hälfte der Antwort auf „welche Versionen sind draußen": Der
  * Zähler kennt nur, was schon einmal geladen wurde. Ein Paket, das seit einer
  * Stunde online ist und noch keinen Abruf hat, stünde sonst nirgends — und
  * genau danach sieht man nach einer Veröffentlichung als Erstes.
@@ -535,7 +535,7 @@ und geht keinen Besucher etwas an.)</p>
 $files = tally($rows, 'value', 'd');
 $present = available_files();
 // Erst die gezählten in ihrer Reihenfolge, dann was sonst im Ordner liegt.
-// `+` behält die linken Schlüssel, ergänzt also nur die Fassungen ohne Abruf.
+// `+` behält die linken Schlüssel, ergänzt also nur die Versionen ohne Abruf.
 $listed = $files + array_map(static fn (int $size): int => 0, $present);
 ?>
 <?php if (!$listed): ?>

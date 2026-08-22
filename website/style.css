@@ -1918,7 +1918,7 @@ p.footnote {
   .weg img { filter: drop-shadow(0 6px 16px rgb(0 0 0 / 0.5)); }
 }
 
-/* Die gedrängte Fassung der Galerie: auf der Startseite steht sie als Beleg
+/* Die gedrängte Version der Galerie: auf der Startseite steht sie als Beleg
    neben dem Text, nicht als eigenes Kapitel. Kleinere Kacheln, knappere
    Beschriftung, und vier davon passen auf eine Reihe. */
 .schau.tight {

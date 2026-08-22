@@ -1,6 +1,6 @@
 # Anschreiben international — Demo-Start Solidon3D
 
-Englische Fassung der Mail, die am 20.08.2026 an 3Druck.com ging. Für
+Englische Version der Mail, die am 20.08.2026 an 3Druck.com ging. Für
 All3DP, Fabbaloo, 3D Printing Industry, 3DPrint.com, VoxelMatters,
 Hackaday und die englischsprachigen Kanäle.
 

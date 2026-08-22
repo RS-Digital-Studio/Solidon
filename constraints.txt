@@ -1,22 +1,22 @@
 # Der Versionssatz, gegen den die Suite grün ist.
 #
 # Warum es die Datei gibt: die Abhängigkeiten in `pyproject.toml` haben offene
-# Untergrenzen, damit neue Fassungen von selbst einziehen. Ohne einen festen
+# Untergrenzen, damit neue Versionen von selbst einziehen. Ohne einen festen
 # Satz installiert jeder frische Klon etwas anderes als die Maschine, auf der
 # es zuletzt grün war — genau das ist am 2026-08-06 passiert: ein Klon zog
 # numpy 2.5, und sechzehn Tests fielen um, ohne dass eine Zeile Code sich
 # geändert hatte.
 #
-# Constraints, nicht Requirements: die Datei sagt, *in welcher* Fassung ein
+# Constraints, nicht Requirements: die Datei sagt, *in welcher* Version ein
 # Paket installiert wird, nicht *dass* es installiert wird. Der
 # Windows-Eintrag (pywin32-ctypes) greift auf Linux deshalb einfach nicht.
 #
-# Erzeugt unter Windows mit Python 3.14; die Fassungen selbst hängen nicht an
+# Erzeugt unter Windows mit Python 3.14; die Versionen selbst hängen nicht an
 # der Interpreterversion, die CI fährt sie unter 3.13.
 #
 # Erneuern: Umgebung neu aufbauen, Suite grün fahren, dann
 #   .venv\Scripts\python.exe -m pip freeze --exclude-editable
-# Wann es lohnt, sagt der wöchentliche Lauf „Neueste Fassungen" in der CI.
+# Wann es lohnt, sagt der wöchentliche Lauf „Neueste Versionen" in der CI.
 
 ast_serialize==0.8.0
 attrs==26.1.0

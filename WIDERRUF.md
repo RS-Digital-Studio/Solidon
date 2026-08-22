@@ -6,7 +6,7 @@ Diese Belehrung gilt für **Verbraucher** — also für alle, die den Vertrag zu
 Zwecken schließen, die überwiegend weder ihrer gewerblichen noch ihrer
 selbständigen beruflichen Tätigkeit zugerechnet werden können.
 
-**Für die Demo-Fassung gibt es nichts zu widerrufen.** Sie ist unentgeltlich
+**Für die Demo-Version gibt es nichts zu widerrufen.** Sie ist unentgeltlich
 und wird nicht bestellt; ein entgeltlicher Vertrag, auf den sich ein Widerruf
 beziehen könnte, kommt dabei nicht zustande. Diese Belehrung gilt ab dem
 Verkaufsstart.

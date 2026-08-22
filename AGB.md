@@ -5,7 +5,7 @@ Stand: 8. August 2026 · Fassung 1.0
 Diese Bedingungen gelten für alle Bestellungen von Solidon3D-Lizenzen über
 <https://solidon3d.de>.
 
-**Solange nur die Demo-Fassung angeboten wird, greifen sie nicht.** Die Demo
+**Solange nur die Demo-Version angeboten wird, greifen sie nicht.** Die Demo
 ist unentgeltlich; es gibt keine Bestellung, keinen Kaufpreis und keinen
 Zahlungsdienstleister. Was für sie gilt, steht im Endnutzer-Lizenzvertrag
 unter <https://solidon3d.de/eula.html>, Abschnitt 4a. Diese Bedingungen stehen

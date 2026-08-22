@@ -27,7 +27,7 @@ geom = [
   # Nicht ``>=2.5``, wie es hier bis zum 14.08.2026 stand: ``mesh_ops`` baut den
   # Körper über ``Mesh64`` (erst 3.0 — die einfache ``Mesh`` nimmt ``float32``
   # und verstieße gegen Regel 6) und räumt mit ``Manifold.simplify`` auf, das
-  # es erst ab 3.1 gibt. Unter der alten Angabe war eine Fassung erlaubt, in
+  # es erst ab 3.1 gibt. Unter der alten Angabe war eine Version erlaubt, in
   # der ``remesh_uniform`` mit einem AttributeError abbricht — geprüft hat das
   # nie jemand, weil ``constraints.txt`` längst 3.5 festschreibt.
   "manifold3d>=3.1",
@@ -118,8 +118,8 @@ filterwarnings = [
   # scikit-image 0.26 benutzen es noch, beides Fremdcode. Der eigene Kern kommt
   # ohne diese Zuweisung aus, deshalb eng auf die zwei Module begrenzt statt
   # numpy nach oben zu deckeln — eine Obergrenze hielte das ganze Projekt auf
-  # einer alten Fassung fest. Fällt weg, sobald beide nachgezogen haben; der
-  # wöchentliche Lauf gegen die neuesten Fassungen meldet es.
+  # einer alten Version fest. Fällt weg, sobald beide nachgezogen haben; der
+  # wöchentliche Lauf gegen die neuesten Versionen meldet es.
   'ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:vtkmodules\..*',
   'ignore:Setting the shape on a NumPy array has been deprecated:DeprecationWarning:skimage\..*',
 ]

@@ -9,7 +9,7 @@ build/
 dist/
 .venv/
 venv/
-# Nebenumgebungen: eine Fassung ausprobieren, ohne die Umgebung umzubauen, in
+# Nebenumgebungen: eine Version ausprobieren, ohne die Umgebung umzubauen, in
 # der gerade jemand arbeitet (`.venv-py314`, `.venv-trimesh5`, …).
 /.venv-*/
 
@@ -28,7 +28,7 @@ venv/
 # Die Konturverkettung der Schichtanalyse (app/core/slice/_chain.pyx) wird mit
 # tools/build_slice_core.py gebaut. Die Quelle gehört ins Repository, das
 # Ergebnis gehört der Maschine, auf der es entstand — eine .so aus einem Klon
-# passt weder zur Python-Fassung noch zur Plattform des nächsten.
+# passt weder zur Python-Version noch zur Plattform des nächsten.
 /app/core/slice/_chain.c
 /app/core/slice/_chain.*.so
 /app/core/slice/_chain.*.pyd
@@ -72,7 +72,7 @@ htmlcov/
 
 # Die Installationspakete für die Website. Sie entstehen im Bau, werden von
 # tools/make_download.py hierher kopiert und von dort hochgeladen — im
-# Repository haben ein paar hundert Megabyte je Fassung nichts verloren. Die
+# Repository haben ein paar hundert Megabyte je Version nichts verloren. Die
 # Verweise darauf stehen in den Seiten und sind versioniert, die Dateien nicht.
 website/dl/
 

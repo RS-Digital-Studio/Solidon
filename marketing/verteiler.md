@@ -23,7 +23,7 @@ nur noch die drei Kontaktformulare; die füllt niemand automatisch aus.
   auf CRLF, `.gitattributes` hält sie dort. Wer eine dieser Mails noch einmal
   anfasst, prüft sie vorher mit einem Mail-Parser und nicht mit dem Auge.
 * **Internationale Post verlinkt `https://solidon3d.de/en/`**, nicht die
-  deutsche Startseite. Die englische Fassung steht.
+  deutsche Startseite. Die englische Version steht.
 * **Die Demo läuft am 30.10.2026 ab.** Wer im September oder Oktober
   schreibt, verlinkt auf etwas mit kurzer Restlaufzeit. Vor der zweiten
   Welle verlängern oder ein Nachfolgeangebot nennen.

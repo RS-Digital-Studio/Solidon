@@ -6,7 +6,7 @@
 # `constraints.txt`, damit ein Lauf heute dasselbe installiert wie einer in
 # drei Monaten.
 #
-# Der dritte steht daneben und läuft wöchentlich: er lässt die Fassungen frei
+# Der dritte steht daneben und läuft wöchentlich: er lässt die Versionen frei
 # auflösen und meldet, wenn eine neue etwas bricht. Ohne ihn erfährt man davon
 # erst beim nächsten frischen Klon — und dann mitten in einer anderen Arbeit.
 #
@@ -35,7 +35,7 @@ on:
     tags: ["v*"]
   pull_request:
   schedule:
-    # Montags früh: ein Lauf die Woche findet eine gebrochene Fassung, bevor
+    # Montags früh: ein Lauf die Woche findet eine gebrochene Version, bevor
     # sie jemandem im Weg steht.
     - cron: "0 5 * * 1"
   workflow_dispatch:
@@ -271,8 +271,8 @@ jobs:
         #
         # Und sie hat ein Ablaufdatum: Apple hat x86_64 aufgegeben, GitHub
         # trägt Intel bis zur Ausmusterung des 26er-Images. Fällt es weg,
-        # fällt die Intel-Fassung — dann sagt die Website das, statt eine
-        # Fassung anzubieten, die niemand mehr baut.
+        # fällt die Intel-Version — dann sagt die Website das, statt eine
+        # Version anzubieten, die niemand mehr baut.
         os: [windows-latest, ubuntu-latest, macos-26-intel, macos-latest]
     env:
       # Absichtlich auf Job-Ebene: ein Schritt kann den `secrets`-Kontext nicht
@@ -572,10 +572,10 @@ jobs:
           retention-days: 7
 
   latest:
-    name: Neueste Fassungen
+    name: Neueste Versionen
     # Die Frühwarnung: ohne `constraints.txt`, also alles frisch aufgelöst.
     # Wird dieser Job rot, während `suite` grün bleibt, liegt es an einer neuen
-    # Fassung und nicht am Code — und im Protokoll steht, an welcher.
+    # Version und nicht am Code — und im Protokoll steht, an welcher.
     #
     # Nur Ubuntu und nur wöchentlich: private Minuten sind gezählt, und für
     # diese Frage genügt eine Plattform. Er hängt an keinem anderen Job und
@@ -597,7 +597,7 @@ jobs:
       - name: Abhängigkeiten ohne Constraints
         run: python -m pip install -e ".[dev,geom,ui,agent,brep]"
 
-      - name: Installierte Fassungen
+      - name: Installierte Versionen
         # Gehört ins Protokoll: nach einem roten Lauf sieht man hier, was sich
         # gegenüber `constraints.txt` bewegt hat.
         run: python -m pip freeze --exclude-editable
@@ -618,7 +618,7 @@ jobs:
         # der Absturz zum Vorschein.
         #
         # Ein Wächter, der immer schreit, warnt vor nichts mehr: Dieser Job
-        # existiert, um zu melden, wenn eine neue Paketfassung etwas bricht.
+        # existiert, um zu melden, wenn eine neue Paketversion etwas bricht.
         # Steht er dauerhaft auf rot, sieht niemand mehr hin, und die Meldung
         # geht unter — er prüft deshalb, was er hier prüfen kann.
         run: |

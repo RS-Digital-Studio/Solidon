@@ -2,18 +2,18 @@
   <!-- Das Anwendungssymbol für kleine Größen: 16 bis 32 Pixel, also
        Titelleiste, Taskleiste, Alt-Tab und die Titelleiste jedes Dialogs.
 
-       Es ist **dieselbe Form** wie die große Fassung — gleiche Punkte, gleiche
+       Es ist **dieselbe Form** wie die große Version — gleiche Punkte, gleiche
        Farben, gleiche Bohrung. Der einzige Unterschied: die Schichtlinien an
        der linken Flanke fehlen.
 
-       Warum genau die: Sie sind in der großen Fassung 2,5 Einheiten breit, bei
+       Warum genau die: Sie sind in der großen Version 2,5 Einheiten breit, bei
        einer Viewbox von 128 also rund ein Fünfzigstel der Kantenlänge. Auf
        sechzehn Pixel gerastert sind das 0,3 Pixel — zu wenig für eine Linie,
        genug für einen grauen Schleier über der halben Fläche. Die Flanke
        verliert dadurch ihren Ton, und der Körper ist nicht mehr als Körper zu
        lesen.
 
-       Alles andere bleibt, wie es ist. Eine zweite Fassung ist kein Anlass für
+       Alles andere bleibt, wie es ist. Eine zweite Version ist kein Anlass für
        einen zweiten Entwurf: Wer das Symbol in der Taskleiste sieht und dann
        im Über-Dialog, soll nicht zwei Bilder vergleichen.
 

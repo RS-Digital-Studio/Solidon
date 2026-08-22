@@ -159,7 +159,7 @@ $reference = 'S-' . gmdate('Ymd') . '-' . bin2hex(random_bytes(3));
 
 $body = "Vorgang: {$reference}\n"
     . 'Art: ' . $kind . "\n"
-    . 'Fassung: ' . ($version !== '' ? $version : '-') . "\n"
+    . 'Version: ' . ($version !== '' ? $version : '-') . "\n"
     . 'Rückadresse: ' . ($reply_to !== '' ? $reply_to : 'keine') . "\n"
     . 'Eingang: ' . gmdate('c') . "\n"
     . str_repeat('-', 60) . "\n\n"

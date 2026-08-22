@@ -3,7 +3,7 @@
 Zur Veröffentlichung ab **20.08.2026**. Ansprache: Fachpresse 3D-Druck
 (3Druck.com, All3DP, Fabbaloo, Tom's Hardware, drucktipps3d), dazu die
 Foren-Threads, in denen gerade über CAD für 3D-Druck gesprochen wird. Kurze
-Fassung zuerst — wer mehr will, findet darunter Faktenblock und Bilder.
+Version zuerst — wer mehr will, findet darunter Faktenblock und Bilder.
 
 **Regieanweisung, nicht zum Mitschicken.** Der Text unterhalb der
 Trennlinie geht hinaus, dieser Block nicht. Zwei Dinge davor:
@@ -120,7 +120,7 @@ mit einem ungewöhnlichen Anspruch an Nachprüfbarkeit: 22 Regeln, die sich
 das Projekt selbst gegeben hat, sind keine Absichtserklärung, sondern
 automatische Prüfungen — sie laufen bei jeder Änderung mit und schlagen
 fehl, wenn eine Regel verletzt wird. Dazu gehören das Verbot, dass die KI
-Geometrie berechnet, ebenso wie die Zusicherung, dass keine Sprachfassung
+Geometrie berechnet, ebenso wie die Zusicherung, dass keine Sprachversion
 unvollständig ausgeliefert werden kann.
 
 **Pressekontakt:** support@solidon3d.de
