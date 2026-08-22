@@ -98,13 +98,13 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
-| Eine erkannte Verrundung lässt sich nicht ändern | Das Fundament der Wahrnehmung (23.08.2026) | die Operation *Verrundungsradius ändern*, die es nicht gibt — `fillet_edges` wirkt auf Kanten und würde die Rundung runden. Der zweite Weg („Diesen Schritt ändern“) fällt auch aus: `created_by` gibt es nur bei `provenance="generated"`, also an Bausteinen und beim Verstiften. Dahinter steht die größere Frage, ob eine Operation ihre sichtbaren Ergebnisse deklarieren soll |
+| Eine erkannte Verrundung lässt sich nicht ändern | Das Fundament der Wahrnehmung (22.08.2026) | die Operation *Verrundungsradius ändern*, die es nicht gibt — `fillet_edges` wirkt auf Kanten und würde die Rundung runden. Der zweite Weg („Diesen Schritt ändern“) fällt auch aus: `created_by` gibt es nur bei `provenance="generated"`, also an Bausteinen und beim Verstiften. Dahinter steht die größere Frage, ob eine Operation ihre sichtbaren Ergebnisse deklarieren soll |
 | Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
 | Die Zuordnung kennt Kugel und Torus nicht | Das Fundament der Wahrnehmung (22.08.2026) | zwei Arten mehr in der Kostenmatrix von §21.2, dazu Namen in der Oberfläche. Eine Art, die erkannt aber nicht zugeordnet wird, ist ein halber Zustand — dieselbe Konsistenzfrage wie bei den Übersetzungskatalogen, und beim Schneiden des Auftrags zunächst übersehen |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Der Rückstand sieht einen falschen Zylinder nicht | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, warum derselbe Wächter beim Torus greift und beim Zylinder nicht — 0,0313 Rückstand bei einem Radius, der um das Fünffache danebenliegt |
-| Eine Textprägung frisst alle benannten Merkmale | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Zuordnung, die einen geänderten Hüllquader übersteht — nach `label_text` ist keines der vier Bausteinmerkmale mehr benannt, und nur drei werden gemeldet. Passungen hängen daran (§14), und fünf von neun Beispielen begrüßen deshalb mit Warnungen |
+| Bausteinmerkmale verwaisen beim ersten Folgeschritt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Unterscheidung in `_with_features`: `checked` fragt, ob die **Art** erkennbar ist, und müsste fragen, ob **dieses** Merkmal je erkannt wurde. Bausteinbohrungen sieht die Erkennung nie — sie verwaisen deshalb beim ersten Folgeschritt, und drei von vier werden gemeldet. Ursache gemessen von 3d-druck-3a |
 | Kein Test prüft, womit ein Beispiel den Kunden begrüßt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Prüfung über die Befunde beim Öffnen, mit einer Liste der erwarteten statt einer Schwelle von null — `SETTLED_BY` gibt es schon, die Prüfung nicht |
 | Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
@@ -3932,40 +3932,56 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       Wirkung — der erste würde auch grün, wenn zwei Läufe zufällig in dieselbe
       Sekunde fielen, und an einer schnellen Maschine tun sie das fast immer.
 
-- [ ] **Eine Textprägung frisst alle benannten Merkmale — und meldet nicht
-      alle.** Gemessen an „Dose mit Deckel", dem eigenen Vorzeigebeispiel,
-      Schritt für Schritt:
+- [ ] **Bausteinmerkmale verwaisen beim ersten Folgeschritt, weil die
+      Erkennung sie nie gesehen hat.** Gemessen an „Dose mit Deckel", dem
+      eigenen Vorzeigebeispiel — fünf von neun Beispielen begrüßen deshalb mit
+      einer Warnung.
 
-          nach insert_heatset_m4   17 Merkmale, davon 4 benannt
-                                   cable_gland_bore_1    hole
-                                   cable_gland_relief_1  face
-                                   heatset_m4_bore_1     hole
-                                   heatset_m4_chamfer_1  hole
-          nach label_text          15 Merkmale, davon 0 benannt
-          gemeldet als verloren     3
+      **Der Punkt hieß zuerst „Eine Textprägung frisst alle benannten
+      Merkmale", und das war das Symptom.** Die Ursache hat 3d-druck-3a
+      gemessen, und sie widerlegt beide Vermutungen, die davor standen — weder
+      wandernde Bezugsgrößen noch die Prägung selbst:
 
-      **`heatset_m4_bore_1` verschwindet lautlos.** Das ist genau die
-      Zusicherung, die `b76df19` gegeben hat — *„fällt heraus, wenn es wirklich
-      weg ist, **mit Befund**, nicht lautlos"* —, und sie hält an dieser Stelle
-      nicht.
+          Schritt 4 (insert_heatset_m4)  Objekt 17 Merkmale, davon 4 Bohrungen
+                                         frisch erkannt 13, davon 1 Bohrung
+          Schritt 5 (label_text)         Objekt 15, frisch 15 — identisch
 
-      **Die Warnung selbst hat vermutlich unrecht.** Eine Prägung legt Text auf
-      eine Fläche; sie fasst die Einpressbuchse daneben nicht an. Dass danach
-      *keine* der vier Bohrungen und Flächen mehr benannt ist, deutet nicht auf
-      verlorene Geometrie, sondern auf eine gescheiterte **Zuordnung**: Der
-      Körper ändert seinen Hüllquader und seinen Schwerpunkt, und die
-      Merkmalsvektoren sind relativ dazu (§21.2). Zwei neue `sphere`-Merkmale
-      tauchen im selben Schritt auf — das sind die runden Stellen der
-      Buchstaben, und sie zeigen, wie stark sich das Netz ändert.
+      **Schon nach Schritt 4 sieht die Erkennung nur eine der vier Bohrungen.**
+      Die drei anderen sind Bausteinbohrungen; sie stehen im Objekt, weil
+      `declared` sie direkt aus der Ausgabe der Operation nimmt. Beim nächsten
+      Schritt wandern sie nach `carried`, und dort greift die Dreiteilung aus
+      `b76df19`: Was eine erkennbare **Art** hat, wird zugeordnet und fällt
+      heraus, wenn es keinen Partner findet. Ein `hole` ist erkennbar — also
+      verwaisen sie. **Nicht weil sie weg sind, sondern weil die Erkennung sie
+      nie gesehen hat.**
 
-      **Warum das mehr ist als eine Warnung zu viel:** Passungen suchen ihr
+      `label_text` ist damit unschuldig; es ist bloß der erste Schritt nach dem
+      Baustein, und **jede** Folgeoperation hätte dasselbe getan. Gegengeprobt
+      wurde auch die Erkennung selbst: Zusammenfassung, Gewindestapel,
+      Verrundungstrennung und Krümmungssegmentierung einzeln abgeschaltet — der
+      Verlust bleibt in jeder Kombination. Die Bezugsgrößen wandern um 0,025 mm
+      bei 105 mm Diagonale, also 0,02 Prozent; das erklärt nichts.
+
+      **Der Fix gehört nach `_with_features` und ist eine Zeile Bedeutung:**
+
+          checked = {name: f for name, f in carried.items() if f.kind in DETECTABLE_KINDS}
+
+      Gefragt wird „ist die **Art** erkennbar", gemeint ist „wurde **dieses**
+      Merkmal je erkannt". Der Unterschied ist heute willkürlich: Ein Gewinde
+      reist ungeprüft mit, weil `thread` nicht in `DETECTABLE_KINDS` steht;
+      eine Einpressbuchsen-Bohrung reist nicht mit, weil `hole` drinsteht —
+      obwohl beide aus demselben Baustein kommen und beide für die Erkennung
+      unsichtbar sind.
+
+      **Und die Zusicherung aus `b76df19` hält daneben ebenfalls nicht:** Vier
+      Merkmale gingen, drei wurden gemeldet. `heatset_m4_bore_1` verschwindet
+      lautlos, obwohl dort steht „fällt heraus, wenn es wirklich weg ist —
+      **mit Befund**, nicht lautlos".
+
+      Warum es mehr ist als eine Warnung zu viel: Passungen suchen ihr
       Gegenstück über benannte Merkmale (§14). Ein Beispiel, das eine
       Einpressbuchse setzt und danach ihren Namen verliert, hat die Passung
-      verloren — und der Kunde sieht als Erstes, dass das Vorzeigebeispiel
-      warnt. `label_text` ist dabei nicht der Sonderfall, sondern der Fall, an
-      dem es auffällt: Jede Operation, die den Körper als Ganzes verändert,
-      geht denselben Weg.
-
+      verloren.
 - [ ] **Kein Test prüft, womit ein Beispiel den Kunden begrüßt.**
       `test_examples.py` prüft, dass jedes öffnet und rechnet, und
       `test_no_example_greets_with_a_contradiction` fängt Widersprüche. Elf
@@ -5400,6 +5416,28 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       aufhoben.** Aufgelöst, indem sie zuerst committete (`a6e786a`): Der
       Konflikt gehört in den Merge, wo beide Texte nebeneinander stehen, nicht
       in das Warten davor.
+
+      **Und der erste Merge nach diesem Verfahren hat die Regel gleich
+      mitgeliefert** (`04a9571`, 3d-druck-b8): Er ging **nicht** im geteilten
+      Baum. Git verlangt bei einem Konflikt einen sauberen Arbeitsbaum — nicht
+      nur saubere beteiligte Dateien —, und der Branch trug alte `main`-Stände
+      mit; damit zählten **73 fremde Dateien** als beteiligt an einem Merge,
+      der zwei betraf. Gelöst in einem eigenen Arbeitsbaum, danach der
+      *Inhalt* der zwei Dateien herübergebracht statt der Merge-Kante.
+
+      > Ein langlebiger Branch im geteilten Arbeitsbaum wird mit jedem Tag
+      > schwerer zu mergen, weil er `main`-Stände ansammelt. Was ihn
+      > mergefähig hält, ist nicht Pflege, sondern Kürze.
+
+      Das kehrt die naheliegende Antwort um: Man denkt an häufigeres Einweben,
+      und **jedes Einweben macht es schlimmer**, weil es die Zahl der
+      beteiligten Dateien erhöht.
+
+      Dazu ein Fall, der ohne den Index-Abschnitt eine Stunde gekostet hätte:
+      Das Vorspulen scheiterte an einer Datei, deren Inhalt stimmte —
+      `git diff HEAD` leer, aber der geteilte Index trug die Fassung von vor
+      dem letzten Commit. **Git sperrte wegen einer Änderung, die es nicht
+      mehr gab.**
 
       **Der Weg dorthin steht bereits als Werkzeug** — `tools/nach_main.py` von
       3d-druck-b8 (auf `b8/nach-main`): eigener Branch je Sitzung, `origin/main`
