@@ -18,10 +18,18 @@ Die Unterlagen in ihrer Rangfolge:
 |---|---|
 | `3d-agent-bauplan.md` | **Was** gebaut wird — die Spezifikation, §-Nummern sind verbindlich |
 | `AGENTS.md` | **Wie** gearbeitet wird — 22 harte Regeln, jede mit Test |
-| `ROADMAP.md` | **Was als Nächstes** — Arbeitsliste, unten die Funde der Durchsichten |
+| `ROADMAP.md` | **Was als Nächstes** — Arbeitsliste, oben das Register der offenen Punkte |
+| `ROADMAP-ARCHIV.md` | **Was schon versucht wurde** — die abgeschlossenen Abschnitte, datiert |
+| `konzepte/README.md` | **Warum** — Index der neunzehn Konzepte und Durchsichten, mit dem Stand je Dokument |
 | `README.md` | Was der Nutzer sieht |
 
 Bei Widerspruch gilt der Bauplan. Eine Aussage ohne §-Beleg ist eine Vermutung.
+
+**Offene Arbeit steht im Register von `ROADMAP.md` und nirgends sonst.** Die
+Konzepte tragen Statustabellen, und die altern: von zwölf Punkten, die sie am
+22.08.2026 als offen führten, waren sieben längst behoben. Wer „offen" in einem
+Konzept liest, prüft es am Code, bevor er es glaubt — und trägt es ins Register
+nach, wenn es stimmt.
 
 ## Sprache — die wichtigste Falle
 
@@ -52,7 +60,42 @@ Alles läuft über die virtuelle Umgebung, nie über das System-Python:
 ```
 
 Diese vier sind zusammen das Tor: rot heißt nicht fertig. `/pruefen` fasst sie
-zusammen. Weiteres:
+zusammen.
+
+**`pytest -q` am Stück kommt seit dem 16.08.2026 nicht mehr durch.** Rund 22
+Minuten, dann ein nativer Abriss bei über 3 GB, ohne Ergebniszeile — die Suite
+baut in einem Prozess über siebenhundert VTK-Fenster nacheinander auf, und
+irgendwann reißt eine Grenze. Gefahren wird sie deshalb wie in der CI: **ein
+Prozess je Fensterdatei**, alles übrige in einem Zug. Dazu kommen die
+Leistungstests, die der geteilte Lauf mit `-m "not performance"` ausdrücklich
+auslässt:
+
+```
+bash .claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh
+.venv\Scripts\python.exe -m pytest -q -m performance   # was dabei fehlt (§31)
+```
+
+Das Skript sucht die Fensterdateien selbst (`grep -lE "MainWindow|Viewport|pyvista"`),
+eine neue braucht also keinen Eintrag. **Sein Ort ist noch nicht entschieden:**
+Es liegt heute unter `.claude/.state/`, das `.gitignore` ausschließt — ein
+frischer Klon hat damit den einzigen Weg nicht, auf dem das Tor durchläuft.
+Der naheliegende Ort ist `tools/`; die Entscheidung steht aus.
+
+Erst beides zusammen mit ruff, `ruff format --check` und mypy ist das Tor.
+
+Zwei Fallen dabei, beide am 22.08.2026 einmal zugeschnappt:
+
+- **Auf den Exit-Code sehen, nicht auf eine Schlusszeile.** Wer `FAILED` grept,
+  liest die Zusammenfassung, und die schreibt pytest erst am Ende — im laufenden
+  Fortschritt bleiben zwei `F` unsichtbar. Gezählt wird über die
+  Fortschrittszeichen oder über `$?`.
+- **Ein Abriss beim Abbau ist kein roter Test.** `suite-getrennt.sh` gab an
+  jenem Tag Exit 3, obwohl jeder Test grün war: drei Fensterdateien melden
+  „passed" und stürzen danach beim Aufräumen (`0xC0000409`). Der Fall steht in
+  `ROADMAP.md` unter „Der Changelog schickte den Kunden ins Handbuch, und dort
+  war nichts"; wer ihn nicht kennt, hält einen grünen Stand für rot.
+
+Weiteres:
 
 ```
 .venv\Scripts\python.exe -m pytest tests/test_parts.py -q      # eine Datei
@@ -135,9 +178,13 @@ Wie die Sitzung selbst bedienbar sein soll, steht in
 `.claude/bedienkonzept-ueberblick.md` (die Sitzung als Ganzes) und
 `.claude/bedienkonzept-funktionen.md` (sechzehn Funktionen einzeln). **Entwurf,
 und zwar vollständig:** Umgesetzt ist von den sechs Konzepten und sechzehn
-Regeln bis heute keines. Die Schlusstabellen beider Dateien nannten lange nur
-den *Ort* und den *Aufwand* — seit dem 19.08.2026 tragen sie eine Spalte mit dem
-Stand, und die ist der Blick, den es hier braucht.
+Regeln bis heute keines.
+
+Den **Stand** nennt im Überblick eine vierte Spalte der Schlusstabelle (§10);
+bei den Funktionen eine **eigene Tabelle darunter** — deren Schlusstabelle
+selbst nennt nur Ort und Aufwand. Beide Dateien vermerken den Unterschied
+inzwischen selbst; wer den Stand sucht, sucht die Tabelle mit der Spalte
+„Stand" und nicht die letzte der Datei.
 
 ## Arbeitsweise hier
 
@@ -145,5 +192,12 @@ Kleine Schritte, Test zuerst bei Geometrie, kein Revert, nie stillschweigend
 raten: das steht in `AGENTS.md` und gilt unverändert. Dazu kommt hier:
 
 - **Selbstständig committen**, in logischen Einheiten, mit `Co-Authored-By`.
+  `/liefern` führt das aus — Tor laufen lassen, in Einheiten aufteilen,
+  deutsche Meldungen. Der Skill ruft sich nicht selbst auf
+  (`disable-model-invocation`), er wird angesagt.
+- **Bei zwei Sitzungen im selben Arbeitsbaum**: vorher sagen, welche Dateien
+  man anfasst, und mit privatem Index committen (`GIT_INDEX_FILE`,
+  `git commit -o -- <pfade>`). Sonst nimmt der eigene Commit fremde Arbeit
+  mit — dreimal passiert am 19./20.08.2026.
 - **Nach Pattern-Änderungen**: die betroffene Regel in `.claude/rules/`
   nachziehen, `ROADMAP.md` fortschreiben, Bauplan nur mit Ansage ändern.
