@@ -545,6 +545,72 @@ das und überschrieb seine eigene Meldung eine Sekunde später mit der
 Zusammenfassung der Erhebung — der Kunde hatte den Satz gesehen und nicht
 gelesen.
 
+### Ein Rückruf an ein eigenes Kind hält schwach
+
+**Die allgemeine Form, und sie ist häufiger als ihre bekannten Fälle:** Ein
+Rückruf, der `self` stark fängt, an einem Sender, der ein **Kind von `self`**
+ist, schließt einen Ring — `self` → Sender → Rückruf → `self`. Er läuft über
+die C++-Grenze, und Pythons Speicherbereiniger sieht die mittlere Kante nicht;
+er kann den Ring also nicht brechen. Das Objekt lebt bis zum Prozessende.
+
+```python
+self.timer.timeout.connect(lambda: self.rebuild())  # Ring
+self.button.clicked.connect(lambda: self.apply())  # Ring
+button = QToolButton(self)
+button.clicked.connect(lambda: self.apply())  # auch ein Ring
+```
+
+Richtig ist dieselbe schwache Referenz, die der Interaktionsstil längst
+benutzt (`viewport._weak_callbacks`):
+
+```python
+weak = weakref.ref(self)
+
+
+def rebuild() -> None:
+    found = weak()
+    if found is not None:
+        found.rebuild()
+
+
+self.timer.timeout.connect(rebuild)
+```
+
+**Der Interactor ist ein Fall davon, nicht der Fall.** Diese Regel nannte lange
+allein ihn — Stil → Viewport → Plotter → Interactor → Stil —, und deshalb hat
+niemand nach einem Zeitgeber gesucht. Gefunden wurde einer in
+`viewport.py:1428`: ein Lambda am eigenen `QTimer` der Schichtvorschau.
+Gemessen, am 22.08.2026:
+
+| | Viewports, die ihr `del` + `gc.collect()` überleben |
+|---|---|
+| mit dem Lambda | **20 von 20** |
+| mit `weakref` | 0 von 20 |
+
+Dieselbe Probe am reinen Qt-Muster ohne Solidon-Code, zwei `QObject` mit
+eigenem `QTimer`: stark 10 von 10 überlebt, schwach 0 von 10. Ein Fenster ließ
+dabei rund 7 MB stehen — und die Suite baut über siebenhundert nacheinander auf.
+
+**Kurzlebige Sender sind ausgenommen.** Ein Arbeiter, ein Dialog, eine
+Animation bauen denselben Ring, und er löst sich auf, sobald der Sender geht;
+dort ist das Vorgabeargument aus dem Abschnitt unten richtig und ausreichend.
+Der Unterschied ist nicht die Form, sondern die Lebensdauer: Wer so lange lebt
+wie `self`, hält `self` ewig.
+
+**Gefunden wird so etwas nicht durch Suchen, sondern durch einen Test, der
+eine Annahme festnagelt.** Der Fund kam aus einem Test, der etwas *anderes*
+behauptete — dass die Rückrufe an den Interaktionsstil die Ansicht nicht
+festhalten. Sie taten es nicht; er wurde trotzdem rot, und
+`gc.get_referrers(view)` nannte den wahren Halter. Wer einen Verdacht hat,
+nimmt denselben Griff:
+
+```python
+for holder in gc.get_referrers(widget):
+    if type(holder).__name__ == "cell":  # eine Closure hält es
+        for user in gc.get_referrers(holder):
+            ...  # __qualname__ und __code__ nennen die Zeile
+```
+
 ### Wer einen Arbeiter startet, hält ihn fest
 
 Ein `QThread` bekommt hier keinen Qt-Elternteil; ihn hält allein die
@@ -698,9 +764,12 @@ Drei Fallen an dieser Kette, alle drei schon zugeschnappt:
   `_note_pointer` sucht das Hover-Picking am gespiegelten Ort, was in der
   Bildmitte oft genug stimmt, um lange nicht aufzufallen.
 * **Der Rückruf aus dem Interaktionsstil geht über `weakref`**, wie
-  `on_context` und `on_pick` daneben. Eine starke Referenz baut die Schleife
-  Stil → Viewport → Plotter → Interactor → Stil, und die ist der Absturz ohne
-  Zeile am Ende eines Laufs.
+  `on_context` und `on_pick` daneben (alle fünf in `_weak_callbacks`). Eine
+  starke Referenz baut die Schleife Stil → Viewport → Plotter → Interactor →
+  Stil, und die ist der Absturz ohne Zeile am Ende eines Laufs. Das ist **ein**
+  Fall der allgemeinen Regel und nicht der einzige — sie steht oben unter „Ein
+  Rückruf an ein eigenes Kind hält schwach", samt der Messung, die zeigt, dass
+  ein Zeitgeber dasselbe anrichtet.
 
 **Gesucht wird erst, wenn die Maus steht** (`HOVER_DELAY_MS`, einmaliger
 Timer). Bei jeder Bewegung zu picken hieße, den Tiefenpuffer hunderte Male in

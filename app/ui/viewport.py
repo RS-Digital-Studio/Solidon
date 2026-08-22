@@ -13,8 +13,8 @@ from __future__ import annotations
 import math
 import os
 import weakref
-from collections.abc import Sequence
-from typing import Any, Final, Literal, cast
+from collections.abc import Callable, Sequence
+from typing import Any, Final, Literal, NamedTuple, cast
 
 from PySide6.QtCore import QEvent, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
@@ -1425,7 +1425,24 @@ class Viewport(QWidget):
         stehen bleibt, und bis dahin bleibt die letzte Darstellung stehen."""
         self._layer_rebuild.setSingleShot(True)
         self._layer_rebuild.setInterval(LAYER_REBUILD_DELAY_MS)
-        self._layer_rebuild.timeout.connect(lambda: self.show_scene(self._result))
+        # Schwach, wie die Rückrufe an den Interaktionsstil (`_weak_callbacks`)
+        # und aus demselben Grund: Der Zeitgeber ist ein Kind dieser Ansicht,
+        # und ein Lambda darin hielte sie stark — Viewport → QTimer → Rückruf →
+        # Viewport. Diese Schleife läuft über die C++-Grenze, und Pythons
+        # Speicherbereiniger sieht die Kante vom Zeitgeber zum Rückruf nicht;
+        # er kann sie also nicht brechen. Gemessen: Mit dem Lambda überlebten
+        # **zwanzig von zwanzig** losgelassenen Viewports ihr `del` samt
+        # `gc.collect()`, mit dieser Fassung keiner. Ein Fenster ließ dabei
+        # rund 7 MB stehen — bei den über siebenhundert, die die Suite
+        # nacheinander aufbaut, ist das die Größenordnung, bei der sie abreißt.
+        weak = weakref.ref(self)
+
+        def rebuild_layer() -> None:
+            found = weak()
+            if found is not None:
+                found.show_scene(found._result)
+
+        self._layer_rebuild.timeout.connect(rebuild_layer)
         self._difference: Any | None = None
         self._difference_actors: list[Any] = []
         self._difference_held = False
@@ -4296,46 +4313,15 @@ class Viewport(QWidget):
         self._scheme = scheme
         if self.plotter is None:
             return
-        # Schwach gehalten, mit Absicht: VTK hält den Stil, der Stil hielte
-        # sonst den Viewport, und der hält den Plotter, der den Interactor hält.
-        # Diese Schleife überlebt jedes Schließen — der Speicherbereiniger räumt
-        # sie später ab, und dann steht ein C++-Objekt hinter einer Python-
-        # Referenz, die es nicht mehr gibt. Das ist der Absturz ohne Zeile, den
-        # die Suite als Access Violation am Ende eines Laufs zeigt.
-        weak = weakref.ref(self)
-
-        def on_context(x: int, y: int) -> None:
-            view = weak()
-            if view is not None:
-                view._on_right_click(x, y)
-
-        def on_pick(x: int, y: int) -> None:
-            view = weak()
-            if view is not None:
-                view._on_left_click(x, y)
-
-        def on_cursor(role: str | None) -> None:
-            view = weak()
-            if view is not None:
-                view.set_drag_cursor(role)
-
-        def on_paint(x: int, y: int, fresh: bool) -> None:
-            view = weak()
-            if view is not None:
-                view._on_paint_drag(x, y, fresh)
-
-        def is_sculpting() -> bool:
-            view = weak()
-            return view is not None and view._sculpting
-
+        calls = _weak_callbacks(self)
         style = _InteractorStyle(
             self.plotter,
             scheme,
-            on_context,
-            on_pick,
-            on_cursor,
-            on_paint=on_paint,
-            is_sculpting=is_sculpting,
+            calls.on_context,
+            calls.on_pick,
+            calls.on_cursor,
+            on_paint=calls.on_paint,
+            is_sculpting=calls.is_sculpting,
         )
         self.plotter.interactor.SetInteractorStyle(style)
         # Ein neuer Stil bringt seine eigenen Beobachter mit; was beim Wechsel
@@ -4509,6 +4495,61 @@ def _world_under(renderer: Any, x: int, y: int) -> tuple[float, float, float] | 
     if abs(point[3]) < EPS_GEOM:
         return None
     return (point[0] / point[3], point[1] / point[3], point[2] / point[3])
+
+
+class _ViewCallbacks(NamedTuple):
+    """Die fünf Rückrufe, die der Interaktionsstil von der Ansicht bekommt."""
+
+    on_context: Callable[[int, int], None]
+    on_pick: Callable[[int, int], None]
+    on_cursor: Callable[[str | None], None]
+    on_paint: Callable[[int, int, bool], None]
+    is_sculpting: Callable[[], bool]
+
+
+def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
+    """Rückrufe an die Ansicht, die sie **nicht** am Leben halten.
+
+    Schwach gehalten, mit Absicht: VTK hält den Stil, der Stil hielte sonst den
+    Viewport, und der hält den Plotter, der den Interactor hält. Diese Schleife
+    überlebt jedes Schließen — der Speicherbereiniger räumt sie später ab, und
+    dann steht ein C++-Objekt hinter einer Python-Referenz, die es nicht mehr
+    gibt. Das ist der Absturz ohne Zeile, den die Suite als Access Violation am
+    Ende eines Laufs zeigt.
+
+    **Als eigene Funktion, damit die Aussage prüfbar ist.** Sie stand in
+    ``set_navigation`` hinter dem Plotter-Zweig und lief damit offscreen nie:
+    Die einzige Vorkehrung gegen den bekanntesten Absturz des Projekts war die
+    einzige, die kein Test erreichte. Hier braucht sie kein VTK — der Stil
+    schon, die Rückrufe an ihn nicht (§35).
+    """
+    weak = weakref.ref(view)
+
+    def on_context(x: int, y: int) -> None:
+        found = weak()
+        if found is not None:
+            found._on_right_click(x, y)
+
+    def on_pick(x: int, y: int) -> None:
+        found = weak()
+        if found is not None:
+            found._on_left_click(x, y)
+
+    def on_cursor(role: str | None) -> None:
+        found = weak()
+        if found is not None:
+            found.set_drag_cursor(role)
+
+    def on_paint(x: int, y: int, fresh: bool) -> None:
+        found = weak()
+        if found is not None:
+            found._on_paint_drag(x, y, fresh)
+
+    def is_sculpting() -> bool:
+        found = weak()
+        return found is not None and found._sculpting
+
+    return _ViewCallbacks(on_context, on_pick, on_cursor, on_paint, is_sculpting)
 
 
 def _InteractorStyle(  # noqa: N802
