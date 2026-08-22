@@ -72,6 +72,40 @@ def alive() -> tuple[Any, ...]:
     return tuple(_alive)
 
 
+def wait_for_all(timeout_ms: int = 2000) -> tuple[Any, ...]:
+    """Auf jeden gehaltenen Arbeiter warten — auch auf die ohne Fenster.
+
+    **Wer über die Fenster geht, findet nicht alle.** ``MainWindow`` hat
+    ``wait_for_workers``, und die Aufräum-Fixture der Suite ruft es über
+    ``application.topLevelWidgets()``. Ein Arbeiter, der an einem **Dialog**
+    hängt — die Erhebung der Erstinbetriebnahme, die Werkzeugprobe des Chats —,
+    steht in keinem dieser Fenster: Der Dialog ist längst weggeräumt, sein
+    Thread läuft, und die Fixture geht weiter zu ``processEvents()``.
+
+    Dort treffen sich dann zwei, die nicht zusammenkommen dürfen. Gefunden am
+    23.08.2026 in einem Stapelabzug von ``py-spy``:
+
+        Arbeiter:    install.py:341  __import__(requirement.module)
+                     first_run.py:98 work
+        Hauptthread: conftest.py:192 application.processEvents()
+
+    ``__import__`` nimmt den Import-Lock; was ``processEvents`` an Python-Code
+    auslöst und seinerseits importiert, wartet darauf. Das ist kein Absturz,
+    sondern ein **Warten** — die Läufe stehen bei 0,00 CPU, sie stürzen nicht.
+    Und es erklärt, warum ein ``gc.collect()`` an derselben Stelle nichts
+    ausrichtete: Einsammeln hilft nicht gegen Warten.
+
+    Die Antwort ist ``_alive``, und zwar genau deshalb, weil es **modulweit**
+    ist: Es kennt jeden Arbeiter, den irgendeine Leine gestartet hat, gleich
+    ob sein Besitzer noch existiert. Zurück kommt, wer nach der Frist immer
+    noch läuft — für einen Test, der das melden statt verschweigen soll.
+    """
+    for worker in tuple(_alive):
+        if worker is not None and worker.isRunning():
+            worker.wait(timeout_ms)
+    return tuple(worker for worker in _alive if worker is not None and worker.isRunning())
+
+
 class Worker(QThread):
     """Ein Arbeiter, der auch mit dem Unerwarteten zurückkommt.
 

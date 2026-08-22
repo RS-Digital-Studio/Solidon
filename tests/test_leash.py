@@ -120,6 +120,55 @@ def test_a_started_worker_is_let_go_after_it_stopped(qt_app: QApplication) -> No
     assert arbeiter not in leash_module.alive()
 
 
+def test_waiting_for_all_catches_a_worker_without_a_window(qt_app: QApplication) -> None:
+    """Der Fall, den ein Rundgang über die Fenster nicht findet.
+
+    ``MainWindow.wait_for_workers`` erreicht die Arbeiter seines Fensters; die
+    Aufräum-Fixture der Suite ruft es über ``application.topLevelWidgets()``.
+    Ein Arbeiter an einem **Dialog** steht in keinem dieser Fenster — und genau
+    so einer stand am 23.08.2026 in einem ``py-spy``-Abzug, während der
+    Hauptthread in ``processEvents()`` auf den Import-Lock wartete, den der
+    Arbeiter hielt.
+
+    Hier hat der Besitzer nicht einmal mehr eine Referenz: Die Leine ist weg,
+    und trotzdem muss der Thread erreichbar sein. Das kann nur ``_alive``,
+    weil es modulweit ist.
+    """
+    import app.ui.leash as leash_module
+
+    leine = WorkerLeash(QObject())
+    arbeiter = _Schlaefer()
+    leine.start(arbeiter)
+    del leine
+
+    assert arbeiter in leash_module.alive(), "gehalten, obwohl seine Leine weg ist"
+
+    steht_noch = leash_module.wait_for_all(2000)
+
+    assert not arbeiter.isRunning(), "nach dem Warten läuft er nicht mehr"
+    assert arbeiter not in steht_noch, steht_noch
+
+
+def test_waiting_for_all_reports_who_did_not_stop(qt_app: QApplication) -> None:
+    """Und wer die Frist reißt, wird genannt statt verschwiegen.
+
+    Eine Aufräumhilfe, die stumm weitergeht, verschiebt das Problem an die
+    Stelle, an der niemand mehr weiß, woher es kommt — dieselbe Begründung,
+    aus der ``crashed`` verbunden wird und nicht ins Leere läuft.
+    """
+    import app.ui.leash as leash_module
+
+    leine = WorkerLeash(QObject())
+    arbeiter = _Schlaefer()
+    leine.start(arbeiter)
+
+    steht_noch = leash_module.wait_for_all(1)
+
+    if arbeiter.isRunning():
+        assert arbeiter in steht_noch, "wer nach der Frist läuft, steht im Ergebnis"
+    arbeiter.wait(2000)
+
+
 def test_a_worker_survives_the_death_of_its_leash(qt_app: QApplication) -> None:
     """Der eigentliche Fall: Der Halter geht, der Thread läuft weiter.
 
