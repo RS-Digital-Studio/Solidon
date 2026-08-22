@@ -103,6 +103,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Der Rückstand sieht einen falschen Zylinder nicht | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, warum derselbe Wächter beim Torus greift und beim Zylinder nicht — 0,0313 Rückstand bei einem Radius, der um das Fünffache danebenliegt |
+| Eine Mutternfalle bekommt einen zweiten Namen | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | zuerst eine Klärung, keinen Fix: Die Zählung von Doppelungen benutzt dieselbe `match`-Schwelle wie der Filter — was der Filter nicht sieht, zählt die Messung nicht. `detect` sieht die Mutternfalle sofort, die Zuordnung bildet das Paar nicht |
 | Kein Test prüft, womit ein Beispiel den Kunden begrüßt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Prüfung über die Befunde beim Öffnen, mit einer Liste der erwarteten statt einer Schwelle von null — `SETTLED_BY` gibt es schon, die Prüfung nicht |
 | Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
@@ -4047,6 +4048,45 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       Gegenstück über benannte Merkmale (§14). Ein Beispiel, das eine
       Einpressbuchse setzt und danach ihren Namen verliert, hat die Passung
       verloren.
+- [ ] **Eine Mutternfalle bekommt weiterhin einen zweiten Namen — und die
+      Messmethode dafür hat einen Zirkel.** Gefunden von 3d-druck-3a außerhalb
+      der neun Beispiele (Platte, zwei Schraubenlöcher, Mutternfalle,
+      Einpressbuchse), nachgemessen Schritt für Schritt am 23.08.2026:
+
+          nach insert_nut_trap   5 benannt, 8 erkannt
+              nut_trap_bore_1     recognised=False
+              nut_trap_pocket_1   recognised=False
+              erkannt: hole_1, hole_3      <- hole_3 ist neu, und es ist die
+                                              Mutternfalle
+
+      **`detect` sieht sie sofort.** Die Vermutung, sie werde erst später
+      sichtbar, stimmt nicht. Was fehlschlägt, ist die **Zuordnung**:
+      `match(declared, detected)` bildet das Paar nicht, also bleibt
+      `recognised=False`, also greift der Filter aus `94650dc` nicht. Plausibel
+      ist der Grund geometrisch — eine Mutternfalle ist Sechskanttasche **plus**
+      Bohrung, und was `detect` als *ein* Loch sieht, entspricht keinem der
+      beiden benannten Teile gut genug.
+
+      **Der Zirkel ist der eigentliche Fund, und er betrifft jede weitere
+      Messung an dieser Stelle:** Doppelungen werden mit `match(benannt,
+      erkannt)` gezählt — und der Filter benutzt dieselbe Funktion mit
+      derselben Schwelle.
+
+      > Eine Doppelung, die der Filter nicht sieht, sieht die Messung auch
+      > nicht.
+
+      In einem Lauf, in dem `nut_trap_bore_1` und `hole_3` sichtbar dasselbe
+      Loch beschreiben, meldet die Zählung „keine Doppelung" — nicht weil keine
+      da wäre, sondern weil `match` das Paar nicht bildet. Das erklärt auch,
+      warum eine Messung über alle Schritte aller neun Beispiele **null** ergab
+      und daneben trotzdem ein Fall gefunden wurde.
+
+      **Was zuerst zu klären ist**, bevor irgendetwas gebaut wird: Die 0,757,
+      mit denen 3d-druck-3a das Paar am Endzustand belegt hat, kommen aus einer
+      anderen Rechnung als die, die intern entscheidet — sonst hätte der Filter
+      gegriffen. Sind beide `cost`, liegt der Unterschied im Bezugssystem
+      (Zentrum, Diagonale, `old_centre`).
+
 - [ ] **Kein Test prüft, womit ein Beispiel den Kunden begrüßt.**
       `test_examples.py` prüft, dass jedes öffnet und rechnet, und
       `test_no_example_greets_with_a_contradiction` fängt Widersprüche. Elf
