@@ -24,7 +24,7 @@ from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import SEGMENTS, box, cylinder
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult, SceneObject
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _ANCHORS = ("centre", "corner")
 
@@ -93,7 +93,7 @@ def create_box(ctx: OpContext) -> OpResult:
     mesh = box(params.width, params.depth, params.height)
     if params.anchor == "corner":
         mesh = apply(mesh, translation((params.width / 2.0, params.depth / 2.0, 0.0)))
-    return OpResult(outputs=[_object(params.name or "Quader", mesh, params.height)])
+    return OpResult(outputs=[_object(params.name or _("Quader"), mesh, params.height)])
 
 
 @op_params
@@ -142,7 +142,7 @@ class CylinderParams(BaseParams):
 def create_cylinder(ctx: OpContext) -> OpResult:
     params = cast(CylinderParams, ctx.params)
     mesh = cylinder(params.diameter, params.height, segments=params.segments)
-    return OpResult(outputs=[_object(params.name or "Zylinder", mesh, params.height)])
+    return OpResult(outputs=[_object(params.name or _("Zylinder"), mesh, params.height)])
 
 
 @op_params
@@ -189,7 +189,7 @@ def create_sphere(ctx: OpContext) -> OpResult:
     )
     body.apply_translation([0.0, 0.0, params.diameter / 2.0])
     mesh = MeshData.of(body)
-    return OpResult(outputs=[_object(params.name or "Kugel", mesh, params.diameter)])
+    return OpResult(outputs=[_object(params.name or _("Kugel"), mesh, params.diameter)])
 
 
 @op_params
@@ -242,6 +242,9 @@ def create_from_scad(ctx: OpContext) -> OpResult:
     # ein Ø-12-Zylinder kam als 252 lose Dreiecke in der Szene an. Bemerkt hat
     # das erst die nächste boolesche Operation, die ihn retten musste.
     mesh, removed = merge_vertices(read_mesh(result.stl, ".stl"))
+    # **Kein `_()` hier: „OpenSCAD" ist ein Eigenname.** Er heißt in jeder
+    # Sprache so, und ein Katalogeintrag, der ihn auf sich selbst abbildet,
+    # ist eine Zeile, die fünfmal gepflegt werden muss und nie etwas tut.
     entry = _object(params.name or "OpenSCAD", mesh, float(mesh.bounds.size[2]))
     findings = list(result.findings)
     if removed:
@@ -256,9 +259,21 @@ def create_from_scad(ctx: OpContext) -> OpResult:
     return OpResult(outputs=[entry], findings=findings)
 
 
-def _object(name: str, mesh: MeshData, height: float) -> SceneObject:
+def _object(name: TranslatableText | str, mesh: MeshData, height: float) -> SceneObject:
     """Ein frischer Körper mit dem einen Merkmal, das er ehrlich versprechen
     kann: seiner Oberseite.
+
+    **Der Name darf übersetzbar sein, und der Rückfall ist es.** Wer eine
+    Grundform ohne eigenen Namen anlegt, bekam bis zum 22.08.2026 „Quader",
+    „Zylinder" oder „Kugel" — auch auf Englisch, Spanisch und in drei weiteren
+    Sprachen. Das waren feste Zeichenketten mitten im Kern, und sie standen
+    danach im Objektbaum, in der Kopfzeile und im Steckbrief.
+
+    Ein :class:`TranslatableText` löst sich bei jeder Anzeige neu auf; da die
+    Szene ohnehin aus dem Stapel gerechnet wird (§15.1) und Objektnamen nicht
+    in der Projektdatei stehen, wandert er mit der Sprachumstellung mit — genau
+    wie es soll. Was **nicht** mitwandern darf, ist der Exportdateiname, und
+    dafür gibt es :func:`app.i18n.source_text`.
     """
     size = mesh.bounds.size
     features: dict[str, Feature] = dict(
