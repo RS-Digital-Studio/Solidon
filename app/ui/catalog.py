@@ -150,7 +150,7 @@ class PartCatalog(QDialog):
         # Waagerecht wird nie gerollt: das Raster bricht um, und eine Leiste
         # darunter hieße, dass es das nicht tut.
         self.list.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.list.currentItemChanged.connect(lambda *_: self._show_detail())
+        self.list.currentItemChanged.connect(self._show_detail)
 
         # Die Detailspalte erklärt die gewählte Kachel in zwei Sätzen. Eine
         # Kachel trägt so viel, wie auf eine Kachel passt; alles Weitere stand

@@ -577,22 +577,40 @@ obwohl es wie die saubere Fassung eines Lambdas aussieht — es hält die
 gebundene Methode und damit `self`. Dasselbe gilt für das Vorgabeargument, das
 im Arbeiter-Abschnitt unten steht; dort ist es richtig, weil der Sender geht.
 
-Also, in dieser Reihenfolge:
+Also, in dieser Reihenfolge. **Erste Wahl, die gebundene Methode:**
 
 ```python
-self.timer.timeout.connect(self.rebuild)            # erste Wahl
+self.timer.timeout.connect(self.rebuild)
+```
 
-def _rebuild_layer(self) -> None:                   # zweite Wahl: feste Werte
-    self.show_scene(self._result)                   # in eine Methode statt
-self.timer.timeout.connect(self._rebuild_layer)     # in ein Lambda
+**Zweite Wahl, wo feste Werte im Spiel sind** — sie gehören in eine Methode und
+nicht in ein Lambda:
 
+```python
+def _rebuild_layer(self) -> None:
+    self.show_scene(self._result)
+```
+
+**Dritte Wahl, für Werte aus einer Schleife:**
+
+```python
 button.toggled.connect(weak_slot(self, Editor._tool_chosen, name))
 ```
 
-`weak_slot` (`app/ui/leash.py`) bleibt für den einen Fall, den die ersten zwei
-nicht abdecken: ein Wert aus einer **Schleife**, der an den Rückruf gebunden
-werden muss. Es hält den Besitzer schwach und reicht den Schleifenwert vor den
-Signalargumenten durch.
+`weak_slot` (`app/ui/leash.py`) bleibt für zwei Fälle, die die ersten beiden
+nicht abdecken. Der eine ist ein Wert aus einer **Schleife**, der an den
+Rückruf gebunden werden muss; es hält den Besitzer schwach und reicht den
+Schleifenwert vor den Signalargumenten durch.
+
+**Der andere ist ein Rückruf, der nicht an einem Signal landet.** „Die
+gebundene Methode ist frei" gilt für Qt-Verbindungen — Qt hält sie schwach.
+Ein gewöhnlicher Python-Container tut das nicht: `ToolStrip.add(…, self._end_split)`
+legte die Methode in ein `Tool` und das in ein Wörterbuch, und damit hielt sie
+das Fenster genauso fest wie ein Lambda. Der Unterschied ist nicht die Form des
+Rückrufs, sondern **wer ihn aufbewahrt**.
+
+Das war der letzte Halter des Hauptfensters, und er ist gefunden worden,
+nachdem alle 27 Lambdas darin schon umgebaut waren.
 
 Von Hand geschriebene `weakref.ref`-Blöcke braucht es nur noch, wo mehrere
 Rückrufe zusammen entstehen — `viewport._weak_callbacks` ist der Fall, fünf
@@ -610,8 +628,19 @@ Gemessen, am 22.08.2026:
 | mit `weakref` | 0 von 20 |
 
 Dieselbe Probe am reinen Qt-Muster ohne Solidon-Code, zwei `QObject` mit
-eigenem `QTimer`: stark 10 von 10 überlebt, schwach 0 von 10. Ein Fenster ließ
-dabei rund 7 MB stehen — und die Suite baut über siebenhundert nacheinander auf.
+eigenem `QTimer`: stark 10 von 10 überlebt, schwach 0 von 10.
+
+**Was es kostet, am Hauptfenster gemessen** — fünf bauen, schließen, loslassen,
+den Arbeitssatz des Prozesses ablesen:
+
+| | Zuwachs je Fenster | überleben |
+|---|---|---|
+| vorher | +21, +28, +35, +42, +50 MB — linear | 5 von 5 |
+| nachher | +17, +17, +18, +17, +18 MB — flach | 0 von 5 |
+
+Die Kurve **sättigt**: Das erste Fenster kostet einmalig rund 17 MB für Qt und
+VTK, jedes weitere kostet nichts mehr. Vorher wuchs sie ungebremst, und die
+Suite baut über siebenhundert Fenster nacheinander auf.
 
 **Kurzlebige Sender sind ausgenommen.** Ein Arbeiter, ein Dialog, eine
 Animation bauen denselben Ring, und er löst sich auf, sobald der Sender geht;

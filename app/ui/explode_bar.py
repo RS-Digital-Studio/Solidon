@@ -19,6 +19,7 @@ from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QPushButton, QSlider, QWidget
 
 from app.i18n import tr
+from app.ui.leash import weak_slot
 from app.ui.section_bar import SETTLE_MS
 from app.ui.style import NORMAL, TIGHT
 
@@ -46,7 +47,7 @@ class ExplodeBar(QWidget):
         self.slider.valueChanged.connect(self._on_moved)
 
         self.reset = QPushButton(tr("Zusammen"), self)
-        self.reset.clicked.connect(lambda: self.slider.setValue(0))
+        self.reset.clicked.connect(weak_slot(self, lambda bar: bar.slider.setValue(0)))
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(NORMAL, TIGHT, NORMAL, TIGHT)

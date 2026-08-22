@@ -35,6 +35,16 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QWidget
 
+#: Wer hier **nicht** steht, und warum.
+#:
+#: ``InstallDialog`` und ``KeyDialog`` starten beim Aufbau einen Arbeiter, und
+#: ``leash._alive`` hält ihn, solange er läuft — gemessen: ein Arbeiter in der
+#: Menge, Dialog gehalten. Das ist die Halteleine bei der Arbeit und kein Ring;
+#: ein Test darauf prüfte die Ereignisschleife, nicht die Rückrufe.
+#: ``PartCatalog`` hängt an einem ``QTimer.singleShot``, der ohne echte
+#: Ereignisschleife nicht feuert. Alle drei gehören hier hinein, sobald es
+#: einen verlässlichen Weg gibt, ihre laufende Arbeit abzuwarten.
+
 #: Wie viele je Klasse gebaut und losgelassen werden.
 #:
 #: Zehn und nicht eines: Ein einzelnes Widget kann aus Gründen überleben, die
@@ -51,10 +61,36 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
     nicht in den Kopf der Datei, sonst braucht diese Datei Qt schon beim
     Einsammeln der Tests.
     """
+    from app.ui.analysis_bar import AnalysisBar, LayerBar
+    from app.ui.command_palette import CommandPalette
+    from app.ui.explode_bar import ExplodeBar
+    from app.ui.main_window import MainWindow
+    from app.ui.panels import HistoryPanel, ObjectTree, ParameterPanel, ReportPanel
+    from app.ui.section_bar import MeasureBar, SectionBar
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
     from app.ui.sketch_editor import SketchPanel
+    from app.ui.tool_strip import ToolStrip
     from app.ui.viewport import Viewport
 
-    return [("Viewport", Viewport), ("SketchPanel", SketchPanel)]
+    return [
+        ("Viewport", Viewport),
+        ("SketchPanel", SketchPanel),
+        # Das Fenster wiegt am schwersten: Die Suite baut über siebenhundert
+        # davon nacheinander auf, und jedes ließ rund 7 MB stehen.
+        ("MainWindow", lambda: MainWindow(Session(), UiSettings())),
+        ("AnalysisBar", AnalysisBar),
+        ("LayerBar", LayerBar),
+        ("SectionBar", SectionBar),
+        ("MeasureBar", MeasureBar),
+        ("ExplodeBar", ExplodeBar),
+        ("ToolStrip", ToolStrip),
+        ("CommandPalette", CommandPalette),
+        ("ObjectTree", ObjectTree),
+        ("ParameterPanel", ParameterPanel),
+        ("HistoryPanel", HistoryPanel),
+        ("ReportPanel", ReportPanel),
+    ]
 
 
 @pytest.mark.parametrize("name,build", _builders())

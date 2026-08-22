@@ -184,7 +184,7 @@ class CommandPalette(QDialog):
         self.search.returnPressed.connect(self.accept)
 
         self.list = QListWidget(self)
-        self.list.itemActivated.connect(lambda _item: self.accept())
+        self.list.itemActivated.connect(self.accept)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.search)

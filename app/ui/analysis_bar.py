@@ -30,6 +30,7 @@ from app.core.perceive.maps import AnalysisMap, MapKind
 from app.core.types import SliceResult
 from app.i18n import tr
 from app.ui.labels import area, length
+from app.ui.leash import weak_slot
 from app.ui.palette import LAYER_WIDTHS, ROLES, VIRIDIS, Role, map_colour, readable_on
 from app.ui.panels import origin_label
 from app.ui.style import NORMAL, TIGHT
@@ -195,7 +196,7 @@ class AnalysisBar(QWidget):
         ):
             self.selector.addItem(label, userData=kind)
         self.selector.currentIndexChanged.connect(
-            lambda _index: self.mapChanged.emit(self.selector.currentData())
+            weak_slot(self, lambda bar: bar.mapChanged.emit(bar.selector.currentData()))
         )
 
         self.overlay = QCheckBox(tr("Merkmale zeigen"), self)
@@ -263,7 +264,7 @@ class LayerBar(QWidget):
         self.slider.setAccessibleName(tr("Schicht"))
         self.slider.setMinimum(0)
         self.slider.setMaximum(0)
-        self.slider.valueChanged.connect(lambda _value: self._emit())
+        self.slider.valueChanged.connect(self._emit)
 
         self.readout = QLabel("", self)
         self.readout.setMinimumWidth(220)
