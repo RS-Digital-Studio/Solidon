@@ -92,7 +92,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der exakte Zweig überlebt keine Mesh-Operation | Die Bedienung von Beispielen bis Skizze (20.08.2026, dritte Runde) | eine Entscheidung, ob `drill_hole` einen exakten Zwilling bekommt — der Hinweis nennt den Schritt inzwischen beim Namen, der Ausweg bleibt zurücknehmen und neu setzen |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf | Der Bedienweg von außen nachgefahren (21.08.2026) | eine Entscheidung, was ein Handler tun soll — bei einem Parameterfehler den Dialog erneut öffnen, bei „andere Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog |
-| Ein angeklicktes Gewinde bietet nichts an | Der Bedienweg von außen nachgefahren (21.08.2026) | den Eintrag „diesen Schritt ändern“ am erzeugten Merkmal — Bauplan §21.2 hat es am 22.08. über die Provenienz entschieden und nicht über `applies_to`, gilt damit für jede Merkmalsart. Bis dahin bleibt `thread` benannte Ausnahme im Konsistenztest |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
@@ -100,6 +99,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
+| Eine erkannte Verrundung lässt sich nicht ändern | Das Fundament der Wahrnehmung (23.08.2026) | die Operation *Verrundungsradius ändern*, die es nicht gibt — `fillet_edges` wirkt auf Kanten und würde die Rundung runden. Der zweite Weg („Diesen Schritt ändern“) fällt auch aus: `created_by` gibt es nur bei `provenance="generated"`, also an Bausteinen und beim Verstiften. Dahinter steht die größere Frage, ob eine Operation ihre sichtbaren Ergebnisse deklarieren soll |
 | Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
 | Die Zuordnung kennt Kugel und Torus nicht | Das Fundament der Wahrnehmung (22.08.2026) | zwei Arten mehr in der Kostenmatrix von §21.2, dazu Namen in der Oberfläche. Eine Art, die erkannt aber nicht zugeordnet wird, ist ein halber Zustand — dieselbe Konsistenzfrage wie bei den Übersetzungskatalogen, und beim Schneiden des Auftrags zunächst übersehen |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
@@ -3861,7 +3861,29 @@ Kategorie.
       ist. Was ein Handler tun müsste, ist die offene Frage: Bei einem
       Parameterfehler den Dialog mit den Werten erneut öffnen; bei „andere
       Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog.
-- [ ] **Ein angeklicktes Gewinde bietet nichts an.** `thread` entsteht
+- [x] **Ein angeklicktes Gewinde bietet nichts an — gebaut von 3d-druck-b8
+      am 23.08.2026 (`64769bc`).** „Diesen Schritt ändern" steht im
+      Kontextmenü am Merkmal, ganz oben; der Klick öffnet den Dialog der
+      erzeugenden Operation und **ersetzt** ihren Schritt beim Übernehmen,
+      statt einen zweiten anzulegen (§15.4). Vier Tests.
+
+      **Eine Messung dabei erklärt, warum der Punkt so lange offenstand.**
+      Der erste Testaufbau bohrte ein Loch und fand nichts anzuklicken:
+      `created_by` wird nur für `provenance="generated"` gesetzt, und das gibt
+      es an genau zwei Stellen — `knowledge/parts/build.py` und
+      `geom/pins.py`. `drill_hole` deklariert nichts; was es hinterlässt,
+      findet die Erkennung wieder, und ein erkanntes Merkmal ist `detected`.
+      **Das Gewinde war damit nicht ein Beispiel neben anderen, sondern der
+      erste Fall, an dem es überhaupt auffallen konnte.**
+
+      **Die Ausnahme im Konsistenztest bleibt trotzdem stehen**, und das ist
+      kein Rest, sondern die Entscheidung: `known_gaps` fragt `applies_to`,
+      und über den Weg bleibt `thread` leer — der Klick nimmt den anderen der
+      beiden Wege. Wer die Ausnahme streicht, weil das Gewinde jetzt etwas
+      anbietet, macht den Test rot. Ihr Kommentar gehört in dieselbe
+      Begründungsgruppe wie sphere und torus; an 33 gemeldet.
+
+      Ursprünglich stand hier: `thread` entsteht
       wirklich — der Gewinde-Baustein gibt es zurück
       (`knowledge/parts/build.py`) —, und `REGISTRY.for_feature("thread")` ist
       leer. Welche Operation fachlich auf ein fertiges Gewinde gehört,
@@ -4555,12 +4577,20 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
           erzeugte Bohrungen (drill_hole) + 5 Schritte
               erster Lauf   0 Fenster        zweiter Lauf   0 Fenster
 
-      Bei den **erzeugten** Bohrungen ist das richtig und erklärt sich: Seit
-      `created_by` weiß ein Merkmal, welcher Schritt es hervorgebracht hat —
-      da muss nichts geraten werden. Bei der **eingelesenen** Platte
-      (`created_by=None`, 19 erkannte Merkmale) ist es zunächst auch richtig,
-      weil eine kleine Verschiebung jede Bohrung ihre eigene wiederfinden
-      lässt.
+      **Beide Male ist null die richtige Antwort, und beide Male aus demselben
+      Grund:** Die Bohrungen stehen von Anfang an alle da, und jede findet bei
+      der nächsten Auswertung ihre eigene wieder. Eine kleine Verschiebung
+      ändert daran nichts.
+
+      *Hier stand zuerst eine zweite Erklärung für die gebohrten — sie kennten
+      seit `created_by` ihre Herkunft. Das ist falsch, nachgewiesen von
+      3d-druck-b8:* `created_by` wird nur für `provenance="generated"` gesetzt,
+      und das gibt es an genau zwei Stellen (`knowledge/parts/build.py` und
+      `geom/pins.py`). `drill_hole` deklariert nichts — was es hinterlässt,
+      findet die Erkennung wieder, und ein erkanntes Merkmal ist `detected`.
+      Die falsche Erklärung war dabei nicht nur falsch, sondern **überflüssig**:
+      Sie erfand einen Sonderfall für etwas, das die allgemeine Regel schon
+      abdeckt.
 
       **Die dritte Zahl ist die aufschlussreiche, und 3d-druck-3a hat sie
       gemessen statt vermutet.**
@@ -4677,6 +4707,41 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Bauplan §9 und §42 am selben Tag nachgezogen (`0c90a3a`): `Feature.kind`
       führt `"cone"`, und §42 nennt den Kegel nicht mehr unter dem, was fehlt.
       Gebaut von 3d-druck-3a.
+
+- [ ] **Eine erkannte Verrundung lässt sich nicht ändern.** Sobald `fillet`
+      eine eigene Merkmalsart ist (3d-druck-3a, 23.08.2026), hat sie ein
+      Kontextmenü — und darin steht nichts, was ein Kunde will.
+
+      **`fillet_edges` ist nicht die Antwort, obwohl es die naheliegende
+      wäre.** Die Operation verrundet **Kanten**, und eine Verrundung ist
+      keine Kante, sondern ihr Ergebnis: Wer eine bestehende Rundung anklickt
+      und „Verrunden" wählt, verrundet die Rundung. Was er will, ist **den
+      Radius ändern**, und diese Operation gibt es nicht. Sie zu erfinden,
+      damit eine Prüfung grün wird, wäre die Reihenfolge verkehrt — dasselbe
+      Argument, mit dem `sphere` und `torus` in `known_gaps` liegen, statt
+      eine angedichtete Operation zu bekommen. Der Eintrag dort muss das
+      deshalb **sagen**: nicht „keine Operation vorhanden", sondern „die
+      passende wäre *Verrundungsradius ändern*; *Verrunden* wirkt auf Kanten
+      und ist nicht dasselbe". Sonst liest der Nächste, es fehle nichts.
+
+      **Der zweite Weg fällt ebenfalls aus, und das ist der weniger
+      offensichtliche Teil.** Seit `64769bc` bietet ein Merkmal „Diesen
+      Schritt ändern" an — aber nur, wenn es einen Erzeuger hat, und
+      `created_by` wird ausschließlich für `provenance="generated"` gesetzt.
+      Das gibt es an zwei Stellen: Bausteine und Verstiften. **Auch eine
+      selbst gesetzte Verrundung ist damit `detected`** und trägt keinen
+      Schritt. Der Punkt betrifft also nicht nur eingelesene Modelle, wie es
+      zuerst aussieht, sondern jede Verrundung.
+
+      **Zu entscheiden ist damit eine Frage, die größer ist als dieser
+      Punkt:** Soll eine Operation, die ein Merkmal *sichtbar* hervorbringt,
+      es auch **deklarieren** — oder bleibt die Provenienz den beiden
+      heutigen Erzeugern vorbehalten? Für „deklarieren" spricht, dass der
+      Rückweg vom Ergebnis zum Schritt dann überall funktioniert und nicht
+      nur an Bausteinen. Dagegen spricht, dass jede der fünfzehn Operationen
+      mit `features={}` dann eine Entscheidung braucht, welche ihrer
+      Ergebnisse sie beansprucht — und eine falsche Beanspruchung ist
+      schlimmer als keine, weil der Klick dann in den falschen Dialog führt.
 
 - [ ] **Ein Verrundungsradius ist nicht abzulesen.** Die Krümmungskarte aus
       §18.4 färbt, was rund ist, und sagt nicht, *wie* rund — der Radius einer

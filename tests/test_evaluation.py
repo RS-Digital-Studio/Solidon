@@ -519,12 +519,13 @@ def test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping(
     Fehlbefunden, und jede Verbesserung der Erkennung kippte ihn — zu Recht.
 
     **Ein besserer Körper wäre die falsche Antwort gewesen.** Er verschiebt
-    den Zufall nur: Zwei echte Zwillingsbohrungen stellen über den Stapel
-    gemessen gar keine Frage, weil beide von Anfang an dastehen und jede ihre
-    eigene wiederfindet; erzeugte Bohrungen erst recht nicht, weil sie seit
-    ``created_by`` ihre Herkunft kennen. Mehrdeutigkeit entsteht nur, wenn ein
-    *altes* Merkmal auf *zwei neue* gleich gut passt — und das über Geometrie
-    herbeizuführen, hieße wieder auf einen Zufall zu bauen.
+    den Zufall nur: Weder zwei eingelesene Zwillingsbohrungen noch zwei
+    gebohrte stellen über den Stapel gemessen eine einzige Frage, und beide
+    Male aus demselben Grund — sie stehen von Anfang an beide da, und jede
+    findet ihre eigene wieder, egal wie gleich sie aussehen. Mehrdeutigkeit
+    entsteht nur, wenn ein *altes* Merkmal auf *zwei neue* gleich gut passt;
+    die Merkmalszahl muss sich ändern, nicht die Ähnlichkeit. Das über
+    Geometrie herbeizuführen hieße wieder, auf einen Zufall zu bauen.
 
     Zugesichert ist hier ohnehin etwas anderes: **was ``evaluate`` mit einer
     Mehrdeutigkeit macht**, nicht welcher Körper eine hat. Ersetzt ist deshalb
