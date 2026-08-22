@@ -1,4 +1,4 @@
-# Solidon — Bauplan v10
+# Solidon — Bauplan v11
 
 Desktop-Anwendung zum **Konstruieren, Generieren und Bearbeiten** druckbarer
 3D-Modelle. Non-destruktiver Operationsstack über einer Szene mit mehreren
@@ -38,23 +38,68 @@ Agentenschicht · §27 Backends
 
 **Qualität** — §31 Leistungsbudget · §32 Sicherheit · §33 Fehler und
 Protokollierung · §34 Referenzdaten · §35 Testbarkeit · §36 Lizenzen · §37
-Veröffentlichung · §38 Desktop-Spezifika · §39 Regelsammlung
+Veröffentlichung und Auflagen · §38 Desktop-Spezifika · §39 Regelsammlung
 
 **Umsetzung** — §40 Phasen · §41 Ausbaustufen · §42 Grenzen · §43 Nächster
 Schritt
 
 ---
 
-## 0. Änderungen gegenüber v9
+## 0. Änderungen gegenüber v10
 
-**Skizzen mit Zwangsbedingungen (§30.1, P13)** — aus dem Nebensatz in §30 wird
-eine eigene Phase. Der Anlass ist eine Produktentscheidung: so wenig
-Fremdprogramme wie möglich, und das fremde CAD **vor** dem Import ist der
-größte verbliebene Grund, ein zweites Programm zu öffnen. Dazu kommen die
-Formgebungs-Operationen auf dem B-Rep-Kern (Formschräge, exakte Schale, Sweep,
-Loft, exaktes Gewinde), ein Leistungsziel für den Solver (§31) und die
-Verträge in §9. Der Slicer bleibt außen (§22.5), OpenSCAD bleibt Rückfallebene
-— an der Nicht-bauen-Liste ändert sich nichts.
+Eine Durchsicht, keine Erweiterung: Es kommt keine Säule dazu und nichts von
+der Nicht-bauen-Liste zurück. Was dazukommt, sind Stellen, an denen der Plan
+hinter dem Code zurückhing, fünf Entscheidungen, auf die das Register von
+`ROADMAP.md` ausdrücklich gewartet hat, und ein Kapitel, das gefehlt hat.
+
+**Neu: §37.3 Regulatorische Auflagen** — der teuerste Fund. Die Verordnung
+über Cyberresilienz gilt für jedes kommerziell in Verkehr gebrachte Erzeugnis
+mit digitalen Elementen, und Solidon ist eines. Ab dem **11.09.2026** — drei
+Wochen nach dieser Durchsicht — sind aktiv ausgenutzte Schwachstellen binnen
+24 Stunden zu melden; ab dem 11.12.2027 kommen CE-Zeichen,
+Konformitätserklärung, Stückliste und Schwachstellenverfahren dazu. Es stand
+in keiner Unterlage. Umgekehrt gilt das Barrierefreiheitsstärkungsgesetz für
+Solidon **nicht** — bei beiden ist die naheliegende Vermutung die falsche, und
+§37.3 begründet beides.
+
+**Fünf Entscheidungen, die das Register vom Bauplan verlangt hat.** §15.7 sagt,
+wohin die Antwort auf eine Rückfrage gehört: in die Parameter der fragenden
+Operation, weil §15.1 keine zweite Möglichkeit offenlässt — 99 modale Fenster
+für 7 Entscheidungen waren die Rechnung dafür, dass es niemand hingeschrieben
+hat. §31 sagt, dass der übersetzte Schichtkern mitgeliefert wird, was ein roter
+Leistungstest bedeutet und welche der beiden Reparaturen die
+Regressionsschwelle bekommt. §21.2 sagt, was ein angeklicktes Gewinde anbietet
+— und beantwortet damit nicht die Frage nach dem Gewinde, sondern die nach
+jedem erzeugten Merkmal. §29 sagt, dass 52 Teile auf sieben Platten zu viel
+sind und woran es liegt: nicht an der Sortierung, an den Zeilen. §36
+beantwortet das „prüfen", das dort bei CoACD stand, mit der Messung, die es
+längst gibt.
+
+Vier davon fielen leichter als erwartet, und aus demselben Grund: **Die Antwort
+stand schon im Bauplan, nur nicht an der Stelle, an der jemand sie sucht.**
+§15.1 lässt für eine Rückfrageantwort nichts anderes zu; die Provenienz aus
+§21.2 trägt das Kontextmenü, seit es sie gibt; das geteilte Tor macht die eine
+der beiden Regressionsreparaturen unbrauchbar; die Messung zu CoACD lag seit
+acht Tagen vor. Eine Entscheidung, die aus zwei vorhandenen Sätzen folgt, ist
+keine Entscheidung — sie ist eine Lücke im Register.
+
+**Zwei Verfahren, für die die Recherche etwas Besseres gefunden hat.** Die
+Orientierungssuche zieht ihre Kandidaten aus den Flächen der konvexen Hülle
+statt aus Zufallsrichtungen (§28.2) — weniger Kandidaten, bessere Ergebnisse,
+und eine der vier gewürfelten Stellen aus §11.3 fällt dabei weg. Die
+Aktualisierung bekommt eine Unterschrift statt einer Prüfsumme, die auf
+demselben Server liegt wie das Paket, das sie sichern soll (§37.2).
+
+**Zwei Stellen, an denen der Code strenger war als der Plan.** Die
+Fernsteuerung prüft die Herkunft jeder Anfrage, nicht nur die Bindung an
+`127.0.0.1` (§26.6, fünfte Auflage); der Kontext des Agenten steht in einer
+Reihenfolge, die das Zwischenspeichern beim Modell überhaupt erst greifen
+lässt (§26.1). Beides war gebaut und nirgends gefordert. Ein Test, der
+schärfer ist als der Bauplan, sieht wie Sicherheit aus, bis jemand den Bauplan
+für die Wahrheit nimmt und die Prüfung entfernt.
+
+**Und §40 kennt jetzt die Phasen, die es gibt.** P14 bis P16 sind gebaut und
+abgenommen; im Bauplan endete die Liste bei P13.
 
 **Die erste Veröffentlichung wartet auf P13** (Entscheidung vom 31.07.2026):
 der Launch führt die Skizzen als Kernargument. Die Veröffentlichungsreste aus
@@ -263,7 +308,7 @@ Kriterium; Eindeutigkeit und maschinelle Abnahme sind es.
 | Bezeichner im Code, Dateinamen, Modulnamen | Englisch |
 | Docstrings und Kommentare | **Deutsch** |
 | Schlüssel in Projektdatei und Schemata | Englisch |
-| Oberflächentexte | Deutsch und Englisch über `tr()` |
+| Oberflächentexte | deutsche Quelle, je Sprache ein Katalog über `tr()` |
 | Doku für Nutzer, dieser Bauplan | Deutsch |
 | Commit-Nachrichten | **Deutsch** |
 
@@ -277,6 +322,15 @@ Prosa verläuft, sondern zwischen **Maschine und Mensch**: Bezeichner liest der
 Interpreter, Kommentare liest nur Robert. `app/`, `tests/` und `tools/` sind
 vollständig nachgezogen; die Prüfung bleibt auf Bezeichner beschränkt, weil nur
 die eindeutig entscheidbar ist.
+
+**Aus „Deutsch und Englisch" sind sechs Sprachen geworden**, und die Zeile in
+der Tabelle nennt deshalb keine mehr: Deutsch ist die Quelle im Code, unter
+`app/i18n/locales/` liegt je Sprache eine Datei — derzeit `en`, `es`, `fr`,
+`it` und `pt`. Eine weitere Sprache ist eine Datei und sonst nichts;
+Sprachauswahl, Einsammler, Handbuch, Abbildungen und Prüfung lesen das
+Verzeichnis über `available_languages()`, nicht eine Liste im Code. Wer hier
+zwei Sprachen fest hinschreibt, hat die siebte schon vergessen — und die
+Prüfung prüft jede gefundene Datei, nicht die englische.
 
 ### 4.2 Begriffe
 
@@ -369,28 +423,44 @@ Säule A hat zwei Ausgabeformen in verbindlicher Reihenfolge:
 
 ## 8. Paketstruktur und Kernabgrenzung
 
+Der Bauplan legt die **Grenzen** fest, nicht das Inhaltsverzeichnis: welche
+Schicht welche benutzen darf, und wo etwas hingehört, das neu ist. Die
+gepflegte Karte mit jedem Modul steht in `CLAUDE.md`. Zwei Karten wären zwei
+Quellen, und die zweite ist immer die veraltete (Leitprinzip 3) — diese hier
+war es: Sie kannte `sketch/` und `brep/` nicht, obwohl §30.1 beide verlangt,
+und legte `tests/` unter `app/`, wo es nie lag.
+
 ```
 app/
-  core/
-    registry/    # Operationsregister, Schemata, Erzeugung der Oberflächen
-    scene/       # Szene, Parameter, Passungen, Op-DAG, Auswertung,
-                 # Projektdatei, Migrationen
-    geom/        # Operationen, Geometriekerne, Rückfallketten
-    slice/       # Schichtanalyse (§22)
-    ingest/      # Eingangs-Normalisierung
-    perceive/    # Feature-Erkennung, Analysekarten, Steckbrief
-    knowledge/   # Bausteine, Normteile, Profile, Regelsammlung
-    agent/       # LLM-Anbindung, Werkzeuge, Kontextverwaltung
-    backends/    # LLM- und Mesh-Backends hinter einer Schnittstelle
-    export/      # Schreiben, Slicer-Übergabe, Namensschema
-    errors.py    # Ausnahmehierarchie (§33)
-    types.py     # Kernverträge (§9)
-  ui/            # PySide6 — darf core benutzen, nie umgekehrt
-  cli/           # Kommandozeilen-Einstieg auf core
-  i18n/
-  tests/
-    data/        # Referenzkorpus (§34)
+  core/            kein Qt, keine Dialoge — nach außen nur über OpContext
+    registry/      Operationsregister, Schemata, Erzeugung der Oberflächen
+    scene/         Szene, Parameter, Passungen, Op-DAG, Auswertung,
+                   Projektdatei, Migrationen
+    geom/          Operationen, Geometriekerne, Rückfallketten
+    sketch/        Skizzen mit Zwangsbedingungen (§30.1) — Solver, Profile
+    brep/          zweiter Konstruktionskern (§30), optional
+    slice/         Schichtanalyse (§22)
+    ingest/        Eingangs-Normalisierung (§17.1)
+    perceive/      Feature-Erkennung, Analysekarten, Steckbrief
+    knowledge/     Bausteine, Normteile, Profile, Regelsammlung
+    agent/         LLM-Anbindung, Werkzeuge, Kontextverwaltung
+    backends/      LLM- und Mesh-Backends hinter einer Schnittstelle
+    export/        Schreiben, Slicer-Übergabe, Namensschema
+    activation/    Freischaltung, Schlüssel, Demo-Frist
+    errors.py      Ausnahmehierarchie (§33)
+    types.py       Kernverträge (§9)
+  ui/              PySide6 — darf core benutzen, nie umgekehrt
+  cli/             Kommandozeilen-Einstieg auf core
+  i18n/            deutsche Quelle plus je Sprache ein Katalog (§4.1)
+tests/
+  data/            Referenzkorpus (§34)
 ```
+
+**Was weder Geometrie noch Oberfläche ist, liegt trotzdem im Kern**, wenn es
+ohne Fenster laufen muss: Handbuch, Abbildungskatalog, Zeichnungen,
+Fehlerbericht, Rückmeldung, Aktualisierung. Der Grund ist derselbe wie bei
+allem anderen dort — ohne Qt aufrufbar heißt prüfbar, und ein Handbuch, das
+nur entsteht, wenn ein Fenster offen ist, entsteht in keinem Testlauf.
 
 **Die Regel:** `core` importiert niemals aus `ui`. Ein Test importiert `core`
 ohne installiertes Qt; bricht er, ist die Trennung verletzt.
@@ -592,12 +662,27 @@ Merkregel: **absolut für Fertigung, relativ für Vergleiche.** Gerundet wird nu
 in der Anzeige. Fließkommazahlen werden nie mit `==` verglichen.
 
 ### 11.3 Determinismus
-Vier Stellen sind randomisiert: Jitter-Rückfallstufe (§17.2),
-Farbquantisierung (§20), Abtastung der Orientierungssuche (§28.2) und die
-konvexe Zerlegung beim Auto Split. Jede bekommt einen **Startwert, der in der
-Op gespeichert wird**, ist im Register als `deterministic=False` gekennzeichnet
-und liefert bei gleichem Startwert dasselbe Ergebnis. Ohne diese Regel ist
-Leitprinzip 4 nicht haltbar und ein Fehlerbericht reproduziert nichts.
+**Drei Stellen sind randomisiert**: Jitter-Rückfallstufe (§17.2),
+Farbquantisierung (§20) und die konvexe Zerlegung beim Auto Split. Jede bekommt
+einen **Startwert, der in der Op gespeichert wird**, ist im Register als
+`deterministic=False` gekennzeichnet und liefert bei gleichem Startwert
+dasselbe Ergebnis. Ohne diese Regel ist Leitprinzip 4 nicht haltbar und ein
+Fehlerbericht reproduziert nichts.
+
+Es waren vier. Die **Abtastung der Orientierungssuche** ist mit §28.2
+herausgefallen: Wer seine Kandidaten aus den Flächen der konvexen Hülle nimmt,
+würfelt nicht mehr. Eine gewürfelte Stelle, die eine bessere Kandidatenwahl
+erledigt, ist der angenehmste Weg, eine loszuwerden — sie verschwindet, statt
+abgesichert zu werden.
+
+**Nebenläufigkeit ist keine vierte Stelle, aber sie kann eine werden.** Die
+Schichtanalyse misst auf so vielen Threads, wie die Maschine hat (§31). Das
+bleibt reproduzierbar, solange jeder Thread eine Schicht für sich rechnet und
+die Summen in feststehender Reihenfolge gebildet werden. Eine Reduktion, die in
+der Reihenfolge der Fertigstellung addiert, ist es nicht — Fließkommaaddition
+ist nicht assoziativ, und der Unterschied steht dann in der letzten Stelle
+eines Volumens, das ein Bericht ausweist. Wer eine Rechnung parallelisiert,
+prüft sie mit demselben Test, der zweimalige Auswertung vergleicht (§15.1).
 
 ---
 
@@ -734,6 +819,29 @@ Eine laufende Berechnung ist jederzeit abbrechbar; der Stack bleibt auf dem
 letzten vollständig gerechneten Stand — **keine halb angewandten Ops**. **Ein
 Rechenlauf je Dokument**; weitere Anforderungen ersetzen die wartende
 (Entprellung). Der Cache wird erst nach vollständigem Durchlauf geschrieben.
+
+### 15.7 Antworten auf Rückfragen sind Parameterwerte
+Regel 21 verlangt anzuhalten und zu fragen, statt zu raten — über `ctx.ask`
+(§9). Damit steht die Frage, wohin die **Antwort** gehört, und §15.1 lässt nur
+eine Möglichkeit offen: Die Auswertung ist eine reine Funktion aus Stack,
+Quellen, Parametern, Profilen und Startwerten. Eine Antwort, die nur in der
+Sitzung lebt, wäre ein sechster Eingang, den niemand aufgeschrieben hat —
+zweimal ausgewertet käme zweimal etwas anderes heraus, und genau dieser
+Vergleich ist ein Abnahmekriterium von P0.
+
+**Also wird die Antwort in die Parameter der fragenden Operation geschrieben,
+und die Operation gilt damit als geändert.** Zwei Stellen sagen das bereits für
+ihren Einzelfall: Die Einheitenrückfrage ist ein Parameter der Op `load`
+(§17.1), und bei mehrdeutiger Feature-Zuordnung „wird die Op umgeschrieben"
+(§21.3). §15.7 ist dieselbe Regel ohne Einzelfall — und sie hat drei Folgen,
+die man wollen muss: Die Antwort reist mit der Projektdatei, sie ist im Verlauf
+sichtbar, und ein Undo nimmt sie mit zurück.
+
+Der Preis dafür, dass es nicht dastand, ist gemessen: Eine Bauplatte mit 52
+Teilen stellte über die ganze Kette **99 modale Fenster für 7 Entscheidungen**
+— sechzehnmal dieselbe Frage nach `pin_1`, weil die Antwort nirgends blieb.
+Anhalten und fragen ist richtig; dieselbe Frage bei jeder Auswertung erneut zu
+stellen, ist keine Vorsicht, sondern ein fehlender Speicherort.
 
 ---
 
@@ -951,10 +1059,29 @@ Sackloch), ebene Flächen (koplanare Cluster → Normale, Fläche, Schwerpunkt,
 Randkontur), Randschleifen (offene Kanten = Defekte), Symmetrieebenen,
 Dünnstellen, Zusammenhangskomponenten.
 
+**Was nicht erkannt wird, und was das kostet.** Zylinder und Ebenen deckt das
+Clustern ab; Kegel, Kugel und Torus nicht — also ist eine Senkung keine
+Senkung, sondern eine Sammlung von Dreiecken neben einer Bohrung, und der
+Agent kann sich auf sie nicht beziehen (Leitprinzip 5). Das ist eine bewusste
+Grenze und keine Lücke: Der Weg dorthin steht als Ausbaustufe in §41, weil er
+eine eigene Abnahme braucht — ein Anpassungsverfahren, das Grundformen sucht,
+findet auch welche, die niemand gemeint hat.
+
 ### 21.2 Das ID-Problem
 **Erzeugte Features — Provenienz.** Was eine Operation selbst erzeugt, bekommt
 eine abgeleitete ID: `op4.pin_1`. Keine Erkennung, keine Mehrdeutigkeit. Mit
 der Bausteinbibliothek (§24) wächst dieser Anteil deutlich.
+
+**Ein erzeugtes Merkmal bietet immer mindestens eine Handlung an: den Schritt
+zu ändern, der es erzeugt hat.** Das ist der Ausweg aus einer Sackgasse, die
+sonst an jeder Merkmalsart einzeln entsteht — ein fertiges Gewinde ist der
+Fall, an dem sie aufgefallen ist: Auf ein Gewinde passt keine der Operationen
+aus §25, also bot das Kontextmenü nichts an, obwohl das Gewinde einen Erzeuger
+mit Parametern hat. Über `applies_to` (§10) wäre das nur mit einer neuen
+Operation je Merkmalsart zu beheben. Über die Provenienz ist es ein Eintrag,
+der für alle gilt und für neue Merkmalsarten von selbst mitkommt. Bei einem
+erkannten Merkmal entfällt er — es hat keinen Erzeuger, und ein Eintrag, der
+ins Leere führt, ist schlechter als keiner.
 
 **Importierte Features — Zuordnung.** Nach jeder Op läuft die Erkennung neu.
 Alt und neu werden über einen Merkmalsvektor (Typ, Durchmesser,
@@ -1214,6 +1341,28 @@ beliebigen Mesh-Kanten bleiben hart.** Mit dem B-Rep-Kern (§30) fällt sie.
 - **gültige Chatbeiträge** (§26.3), nicht der rohe Verlauf
 - **Regelsammlung** in der aktuellen Version (§39)
 
+**Die Reihenfolge ist Teil des Vertrags, nicht Geschmackssache.** Ein Modell
+kann den Anfang einer Anfrage zwischenspeichern, aber nur solange dieser Anfang
+**Byte für Byte derselbe** ist. Deshalb stehen Werkzeugschemata, Systemprompt
+und Regelsammlung vorn — sie ändern sich zwischen zwei Zügen nicht — und
+Steckbrief, Prüfbericht, Verlauf und Chat dahinter, weil sie sich in jedem Zug
+ändern. Ein Steckbrief im Systemprompt macht das Zwischenspeichern wirkungslos,
+und zwar lautlos: Es kommt keine Fehlermeldung, es kommt eine Rechnung. Die
+Werkzeugschemata allein sind über hundert Kilobyte.
+
+Zwei Auflagen folgen daraus, und beide gelten ohnehin schon aus einem zweiten
+Grund:
+
+- **Die Werkzeugliste hat eine feststehende Reihenfolge** — die des Registers.
+  Eine Liste, die in wechselnder Ordnung aus einem Wörterbuch fällt, wäre auch
+  ohne Kosten ein Determinismusproblem (Leitprinzip 4).
+- **Kein Zeitstempel, keine laufende Nummer, kein Zufallsschlüssel im
+  vorderen Teil.** Sie sehen harmlos aus und setzen jeden Zug auf null.
+
+Nachgeprüft wird es an der Rückmeldung des Backends, nicht am Code: Bleibt der
+Anteil zwischengespeicherter Eingabetoken über mehrere Züge bei null, hat
+jemand vorn etwas hineingeschrieben, das wandert.
+
 ### 26.2 Werkzeuge
 Alle Ops aus dem Register, dazu:
 
@@ -1279,7 +1428,7 @@ die Menüs — über JSON-RPC nach dem Model-Context-Protocol. Die Werkzeuge kom
 aus derselben Liste wie die des Chats; es gibt keine zweite und keinen zweiten
 Weg ins Dokument.
 
-Vier Auflagen, jede mit Test:
+Fünf Auflagen, jede mit Test:
 
 1. **Standardmäßig aus**, Schalter in den Einstellungen.
 2. **Nur `127.0.0.1`** — geprüft an der Bindung *und* an jeder Anfrage.
@@ -1287,6 +1436,19 @@ Vier Auflagen, jede mit Test:
    Rechnung. Der Pfad wird am Wert erkannt, nicht am Parameternamen.
 4. **Jeder Aufruf eine Transaktion** mit Herkunftsvermerk (§26.4), rücknehmbar
    wie jede andere.
+5. **Die Herkunft jeder Anfrage wird geprüft, nicht nur die Bindung.** Eine
+   Bindung an `127.0.0.1` hält keinen Browser ab: Ein Skript auf einer fremden
+   Seite lässt den Namen seiner eigenen Adresse auf `127.0.0.1` umschwenken und
+   spricht danach aus dem Browser des Nutzers mit dem lokalen Server — von
+   innen, mit dessen Rechten, und mit jedem Werkzeug, das die Liste hergibt.
+   Das Protokoll verlangt deshalb, den `Origin`-Kopf gegen eine Liste zu prüfen
+   und eine fremde Herkunft mit 403 abzuweisen; eine Anfrage **ohne** `Origin`
+   kommt aus keinem Browser und geht durch. Auflage 2 allein war das nicht.
+
+Auflage 5 stand bis zu dieser Fassung nicht hier, obwohl die Umsetzung sie seit
+P15 erfüllt. Das ist die unangenehmere Richtung des Auseinanderlaufens: Ein
+Bauplan, der lockerer ist als der Code, sieht nach nichts aus — bis jemand ihn
+für die Wahrheit nimmt und die Prüfung als überflüssig entfernt.
 
 ---
 
@@ -1326,6 +1488,22 @@ Handvoll. Der externe Lauf dient nur noch der **Bestätigung der Siegerlösung**
 und der Kostenschätzung. Das kehrt das Verhältnis um: früher war der Slicer der
 Flaschenhals der Suche, jetzt ist er die Endabnahme.
 
+**Woher die Kandidaten kommen, entscheidet mehr als ihre Zahl.** Hier stand
+„hunderte Rotationen", und die Umsetzung füllte sie mit gleichmäßig über die
+Kugel gestreuten Zufallsrichtungen auf. Das ist die teurere Hälfte einer
+schlechteren Suche: Ein Körper liegt nur auf einer Fläche seiner **konvexen
+Hülle** — jede andere Richtung beschreibt eine Lage, in der er umkippt, und
+wird trotzdem durchgerechnet. Die Kandidaten sind deshalb die Flächennormalen
+der konvexen Hülle, nach Fläche geordnet, dazu die sechs Achsrichtungen und die
+Normalen der großen ebenen Flächen des Körpers selbst.
+
+Das ist dreimal besser und einmal billiger: Es sind weniger Kandidaten, jeder
+einzelne ist eine mögliche Lage, keine gute Lage fällt durch das Raster — und
+es ist **deterministisch**, womit eine der gewürfelten Stellen aus §11.3
+entfällt. Bei einem organisch gewachsenen Körper ist es der Unterschied
+zwischen Suchen und Raten: Er hat keine große ebene Fläche, an der die alte
+Liste ihn erkennen könnte; seine Hülle hat sie.
+
 Weicht die Gegenprobe deutlich von der internen Schätzung ab, ist das ein
 Befund im Prüfbericht — und ein Hinweis, dass die Schichtanalyse nachgebessert
 werden muss.
@@ -1349,6 +1527,27 @@ Projektparametern ist das ein Aufruf, keine Sonderfunktion.
 ## 29. Export und Slicer-Übergabe
 
 **Umfang**: einzelnes Objekt, aktuelle Auswahl oder ganze Szene.
+
+**Plattenbelegung.** Die Anordnung legt die Körper in Zeilen, und das war eine
+Entscheidung für Vorhersagbarkeit: Ein Packen, das jeder nachvollziehen kann,
+schlägt ein kluges, das Teile aus Gründen verschiebt, die niemand sieht. Der
+Preis ist gemessen — **52 Teile auf sieben Platten**, und das ist zu viel. Die
+Entscheidung lautet deshalb: **Die Vorhersagbarkeit bleibt, die Zeilen gehen.**
+
+Der Fehler steckt nicht in der Reihenfolge, sondern in der Struktur. Zeilenweise
+zu packen heißt, hinter jedem flachen Teil einen Streifen zu verschenken, der
+so tief ist wie das tiefste Teil derselben Zeile; eine andere Sortierung verschiebt
+diesen Streifen nur — nach Tiefe sortiert wurde es nachweislich nicht besser.
+Was ihn beseitigt, ist eine Regel ohne Zeilen: **jeder Körper an die hinterste,
+dann linkeste freie Stelle, an die er passt.** Das ist in einem Satz erklärbar,
+deterministisch und ohne Startwert — es bleibt damit alles, wofür die Zeilen da
+waren.
+
+Die Abnahme ist eine Messung und keine Meinung: **weniger Platten für dieselben
+52 Teile.** Wird es nicht weniger, bleibt es beim Zeilenpacken — dieselbe Regel
+wie bei einer Änderung an der Regelsammlung (§39). Was aus der Anordnung fällt,
+weil zu wenige Platten da sind, bleibt ein Befund und wird nie stillschweigend
+weggelassen.
 
 **Formate**: STL binär, **3MF mit Objektnamen, Anordnung und Farbgruppen**,
 OBJ, STEP (bei B-Rep-Objekten).
@@ -1436,19 +1635,36 @@ Druckteil von der ersten Linie bis zum Export im selben Programm.
 
 Gemessen auf dem Referenzkorpus (§34), als Teil der Suite protokolliert.
 
-| Vorgang | Zielwert |
-|---|---|
-| Viewport-Navigation | flüssig bei 1 Mio. Dreiecken |
-| Anzeige-Dezimierung greift ab | 500 000 Dreiecken |
-| Boolesche Op, 200 000 Dreiecke | unter 2 s |
-| Feature-Erkennung, 200 000 Dreiecke | unter 1 s |
-| Analysekarte Wandstärke | unter 3 s, im Hintergrund |
-| Projekt öffnen aus Plattencache | unter 1 s |
-| Parameteränderung → sichtbares Ergebnis | unter 2 s, nur betroffene Zweige |
-| Schichtanalyse, 200 000 Dreiecke, 0,2 mm | unter 300 ms |
-| Skizzen-Solver, 200 Bedingungen | unter 100 ms |
-| Orientierungssuche, 200 Kandidaten | unter 20 s, abbrechbar |
-| Anwendungsstart bis bedienbar | unter 3 s |
+| Vorgang | Zielwert | gemessen |
+|---|---|---|
+| Viewport-Navigation | flüssig bei 1 Mio. Dreiecken | keine Messmarke |
+| Anzeige-Dezimierung greift ab | 500 000 Dreiecken | Schwelle, keine Zeit |
+| Boolesche Op, 200 000 Dreiecke | unter 2 s | keine Messmarke; `blend_union` 1,18 s |
+| Feature-Erkennung, 200 000 Dreiecke | unter 1 s | 0,75 s — im Ziel |
+| Analysekarte Wandstärke | unter 3 s, im Hintergrund | 4,13 s — **darüber** |
+| Projekt öffnen aus Plattencache | unter 1 s | keine Messmarke; Auswertung aus dem Cache 0,4 ms |
+| Parameteränderung → sichtbares Ergebnis | unter 2 s, nur betroffene Zweige | keine Messmarke |
+| Schichtanalyse, 200 000 Dreiecke, 0,2 mm | unter 300 ms | 1,11 s auf 328 000 — **darüber** |
+| Skizzen-Solver, 200 Bedingungen | unter 100 ms | 108 ms — knapp darüber |
+| Orientierungssuche, 200 Kandidaten | unter 20 s, abbrechbar | 16,3 s — im Ziel |
+| Anwendungsstart bis bedienbar | unter 3 s | keine Messmarke |
+
+Die dritte Spalte führt die Bestwerte aus `tests/.performance.json`, Stand
+22.08.2026, auf Roberts Maschine. Sie steht hier, weil eine Tabelle aus reinen
+Zielwerten nach zwei Jahren nicht mehr verrät, ob sie Absichten oder Zustände
+beschreibt. Was sie zeigt, ist beides: drei Zeilen liegen darüber, vier haben
+gar keine Messmarke — und die eine Zeile, an der die Größenordnung fehlt, ist
+die Schichtanalyse.
+
+**Und die dritte Spalte ist nicht das, was das Tor prüft.** Die Zusicherungen
+in `tests/test_performance.py` liegen bewusst eine Größenordnung über den
+Zielwerten — die Schichtanalyse hält gegen 2,5 s, wo hier 300 ms stehen, der
+Skizzen-Solver gegen 1 s statt 100 ms, die Erkennung gegen 10 s statt 1 s. Die
+Kommentare dort sagen es selbst: „das Ziel ist ein Zehntel; eine Sekunde fängt
+die Größenordnung". Das ist vertretbar, weil eine Zusicherung, die auf einer
+fremden Maschine reißt, niemandem etwas über den Code sagt — aber es heißt:
+**Ein grüner Leistungslauf belegt nicht, dass diese Tabelle eingehalten wird.**
+Wer das wissen will, liest die Messwerte, nicht die Farbe.
 
 **Zwei Qualitätsstufen**, im `OpContext` durchgereicht: **Entwurf** beim
 Iterieren und in der Vorschau (gröbere Auflösung, Rückfallkette endet nach
@@ -1456,8 +1672,39 @@ Stufe 2, genäherte Analysekarten), **Fein** beim Export und im finalen
 Prüfbericht. Der Agent arbeitet in Entwurfsqualität und schaltet erst beim
 Abschluss um.
 
+**Die Zielwerte gelten mit dem übersetzten Schichtkern.** Ohne ihn ist die
+Schichtanalyse an der Decke des Interpreters, und das ist nicht vermutet,
+sondern an drei Verfahren gemessen: Die Ringe selbst zu verketten statt sie
+GEOS zu überlassen kostete in Python 1215 ms, vektorisiert 540 ms, GEOS selbst
+1078 ms — dieselbe Größenordnung, obwohl GEOS mehr tut. Übersetzt sind es
+11 ms. `slice/_chain` ist deshalb **Teil des ausgelieferten Pakets** und wird
+in der CI für alle drei Zielplattformen gebaut. Fehlt es, nimmt die Analyse den
+Weg über GEOS und ist so schnell wie vorher — ein Klon ohne Übersetzer wird
+nicht langsamer, nur nicht schneller. Und er ist ausdrücklich **nicht der
+genauere Weg**: Er rundet gleich; was er gewinnt, ist eine Ringschließung, die
+nicht davon abhängt, dass zwei gerundete Enden zusammenfinden.
+
 **Regressionsprüfung**: Messwerte je Lauf festhalten; Verschlechterung um mehr
-als ein Viertel gilt als Fehler, nicht als Rauschen.
+als ein Viertel gilt als Fehler, nicht als Rauschen. Verglichen wird gegen den
+**besten** bisher gemessenen Wert **je Aufrufkontext** — nicht gegen einen
+einzigen Bestwert für alle Läufe. Das ist die Entscheidung zwischen den zwei
+möglichen Reparaturen, und sie fällt so, weil die andere den Vergleich fast
+immer ausschaltete: Das Tor läuft geteilt, ein Prozess je Fensterdatei und
+alles übrige in einem Zug, also sind „andere Testdateien im Lauf" der
+Normalfall und nicht die Ausnahme. Ein Vergleich, der dann aussetzt, prüft
+nichts mehr.
+
+**Was ein roter Leistungstest bedeutet.** Zwei Schranken je Messung, und sie
+sagen Verschiedenes: Der **absolute Zielwert** aus der Tabelle heißt „zu
+langsam". Die **Regressionsschwelle** heißt „langsamer geworden" — vielleicht.
+Am 22.08.2026 liefen auf derselben Maschine, am selben Tag, mit derselben
+Software zwei Läufe: einer unter 48 % Fremdlast mit fünf roten Messungen, einer
+unter 16 % mit neunzehn grünen. Alle fünf waren die Schwelle, keine ein
+Zielwert; allein die Aufrufreihenfolge macht achtunddreißig Prozent. **Ein
+roter Leistungslauf sagt zuerst etwas über die Maschine und erst danach über
+den Code.** Wer eine Verschlechterung meldet, misst vorher ein zweites Mal auf
+einer ruhigen Maschine. Ein roter Leistungstest allein heißt deshalb nicht
+„nicht fertig" — als einziger roter Test in diesem Projekt.
 
 ---
 
@@ -1477,8 +1724,13 @@ zwischen Leuten. Eine fremde Datei darf nichts ausführen.
 - **Warnhinweis beim Öffnen** einer fremden Datei mit Quelltext oder externen
   Verweisen
 - **Prüfsummen** aller Quellen beim Laden verifizieren
-- **Grenzen beim Import**: Dreieckszahl und Dateigröße gedeckelt, mit klarer
-  Meldung statt Speicherüberlauf
+- **Grenzen beim Öffnen**: Dreieckszahl, Dateigröße **und die entpackte
+  Größe** gedeckelt, mit klarer Meldung statt Speicherüberlauf. Die entpackte
+  ist die, die man vergisst: Beim Import eines 3MF wurden aus 2,6 MB gepackt
+  1,08 GB gelesen, und geprüft war nur die gepackte. Für die Projektdatei gilt
+  dasselbe Maß — sie ist ebenfalls ein ZIP, und sie reist ausdrücklich zwischen
+  Leuten (§16.2). Eine Grenze, die nur an einem von zwei Eingängen steht, ist
+  die Lehre, die nur halb gezogen wurde
 - **Eigene Bausteine (§24.5) reisen nie mit.** Ein Projekt verweist auf sie
   nur namentlich; fehlt der Baustein, hält die Auswertung an. Ausführbarer
   Code kommt ausschließlich aus der Installation und dem Nutzerverzeichnis,
@@ -1529,27 +1781,37 @@ Ausnahmen. Keine Geometriedaten ins Protokoll, nur Kennzahlen.
 Ohne festen Datensatz sind die Abnahmekriterien nicht prüfbar. Der Korpus liegt
 unter `tests/data/` und ist Teil des Repositorys.
 
+Netze liegen unter `tests/data/meshes/`, Projektdateien unter
+`tests/data/projects/`; erzeugt werden sie von `make_corpus.py`, das
+mitversioniert ist.
+
 | Datei | Zweck |
 |---|---|
 | `cube_clean.stl` | Grundfall: wasserdicht, 12 Dreiecke |
 | `plate_holes.stl` | vier Bohrungen bekannter Größe — Feature-Erkennung, Messen |
 | `plate_holes_twin.stl` | zwei identische Bohrungen dicht beieinander — Mehrdeutigkeit |
 | `bracket_inch.stl` | in Zoll gespeichert — Einheitenerkennung |
+| `plate_cm.stl` | in Zentimetern, Einheit mehrdeutig — die Rückfrage statt der Annahme |
 | `broken_open.stl` | drei offene Stellen — Reparatur, Rückfallkette |
 | `broken_selfint.stl` | Selbstdurchdringung — Rückfallstufen 3 und 4 |
 | `degenerate.stl` | Nadeln und Nullflächen — Eingangsstufe |
+| `two_components.stl` | Würfel plus winziges Bruchstück — Kleinstteile werden gemeldet, nicht gelöscht |
 | `oversized.stl` | größer als jeder Bauraum — Auto Split |
 | `island_tower.stl` | Bereich ohne Verbindung nach unten — Inselerkennung (§22) |
+| `clean_figure.stl` | organische Form, wasserdicht — Weg 4, Formen und Skelett |
+| `generated_figure.stl` | organische Form, wie sie aus Säule B kommt — Reparaturkette |
 | `dense_1m.stl` | ~1 Mio. Dreiecke — Leistungsmessung |
 | `colored.3mf` | Materialgruppen — Attributerhalt |
 | `assembly_fit.p3d` | zwei Teile mit Passung — Passungsprüfung |
-| `legacy_v1.p3d` … | je eine Datei pro Altformat — Migrationen |
+| `example_v1.p3d` … | je eine Datei pro Altformat — Migrationen |
 
 **Regeln für den Korpus:** ausschließlich selbst erzeugte Geometrie oder
 eindeutig frei lizenzierte Modelle — der Korpus wird mit veröffentlicht.
 Jede Datei hat eine Zeile in `tests/data/README.md`: was sie enthält, welche
-Kennzahlen erwartet werden, welcher Test sie benutzt. Neue Fehlerbilder aus der
-Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
+Kennzahlen erwartet werden, welcher Test sie benutzt. **Diese Tabelle nennt,
+wofür der Korpus da ist; die vollständige und gepflegte Liste ist jene
+README** — aus demselben Grund wie bei der Paketkarte in §8. Neue Fehlerbilder
+aus der Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 
 ---
 
@@ -1573,6 +1835,7 @@ Praxis werden als Datei aufgenommen, nicht als Sonderfall im Code.
 | Zuordnung | ID-Stabilität, Mehrdeutigkeitserkennung |
 | Fehler | jede Ausnahme trägt mindestens einen Handlungsvorschlag |
 | Barrierefreiheit | keine Bedeutung allein über Farbe |
+| Oberflächengrenzen | höchstens neun Menüs, zwölf Zeilen je Menü, acht Umschalter, acht Felder auf der Vorderseite, ein Menüeintrag je Operation |
 | Leistung | Zielwerte §31, Regressionsschwelle 25 % |
 | Lizenzen | installierte Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die vier Wege aus §2.2 laufen als Ende-zu-Ende-Test |
@@ -1582,6 +1845,17 @@ Die Agenten-Suite misst zusätzlich: Wird ein vorhandener Baustein statt eigener
 Geometrie benutzt? Werden Hauptabmessungen zu Parametern? Wird bei
 Mehrdeutigkeit gefragt?
 
+**Ein Test hinter einer Wache, die nie fällt, ist grün und prüft nichts.**
+Dieselbe Zeile taucht in jeder Oberflächenprüfung wieder auf: Wo kein Bildpuffer
+ist, überspringt der Test sich selbst — und deckt damit die Lücke zu, statt sie
+offenzulassen. Die Antwort darauf ist nicht die nächste Attrappe. Sie ist,
+**die prüfbare Aussage aus dem Unprüfbaren herauszulösen**: Was in einer Methode
+entschieden wird, die anschließend zeichnet, ist eine Aussage über die Szene und
+braucht kein Fenster, sobald es allein steht. Erst was danach übrig bleibt —
+ein echter Picker, ein echter Puffer — verdient eine Attrappe. Deckungszahlen
+über Code hinter einer Wache sind entsprechend zu lesen: Sie zählen Zeilen, die
+im Tor nie liefen.
+
 ---
 
 ## 36. Abhängigkeiten und Lizenzen
@@ -1590,17 +1864,51 @@ Mehrdeutigkeit gefragt?
 |---|---|---|
 | trimesh | MIT | unkritisch |
 | manifold3d | Apache-2.0 | unkritisch, Kern der Bausteine |
-| numpy, scipy | BSD | unkritisch |
+| numpy, scipy | BSD | unkritisch; scipy trägt Skizzen-Solver und Zuordnung |
+| shapely | BSD-3, bündelt GEOS (LGPL) | Polygonarbeit hinter Schnitt und Schichtanalyse |
+| networkx, rtree | BSD-3 / MIT | Konturhierarchie des gedeckelten Schnitts |
+| scikit-image | BSD-3 | Marching Cubes der Voxelstufe (§17.2) |
+| lxml | BSD-3 | 3MF schreiben (§29) |
+| vhacdx (V-HACD) | BSD-3 | konvexe Zerlegung fürs Auto Split |
+| fast-simplification | MIT | dezimieren — der Ersatz für pymeshlab |
+| svg.path | MIT | Zeichnungsimport; DXF liest trimesh selbst |
 | PyVista / VTK | MIT / BSD | unkritisch |
 | PySide6 | LGPL | geschlossene Weitergabe möglich, wenn dynamisch gebunden. **PyQt wäre GPL — nicht verwenden.** |
-| **pymeshlab** | **GPL** | **nicht verwenden** |
-| open3d | MIT | Ersatz für Reparatur und Remeshing |
-| OpenSCAD | GPL | nur extern installiert aufrufen, nicht mitliefern |
-| Slicer (Orca/Prusa) | GPL/AGPL | ebenso extern |
+| keyring | MIT | der Schlüssel des Nutzers im System-Schlüsselbund (§27) |
+| cadquery-ocp (OpenCascade) | Anbindung Apache-2.0, Kern LGPL-2.1 mit Linking-Ausnahme | wie PySide6 dynamisch gebunden |
 | build123d / CadQuery | Apache-2.0 | unkritisch |
-| OpenCascade | LGPL mit Ausnahme | brauchbar |
-| CoACD | prüfen | vor Einsatz klären |
+| **pymeshlab** | **GPL** | **nicht verwenden** |
+| open3d | MIT | **nicht verwendet** — Reparatur und Remeshing laufen über trimesh und manifold3d |
+| CoACD | MIT | **geprüft und verworfen**, siehe unten |
+| OpenSCAD | GPL | nur extern installiert aufrufen, nicht mitliefern |
+| Slicer (Orca/Prusa/Cura) | GPL/AGPL | ebenso extern |
+| ComfyUI | GPL | extern, eigener Prozess — Weg 3 |
+| Ollama | MIT | extern, eigener Prozess — der lokale Chat |
 | Generative Modelle | uneinheitlich, teils regional eingeschränkt | einzeln prüfen |
+
+**Die vollständige Aktenlage ist `app/core/knowledge/data/licences.toml`**, und
+zwar aus einem Grund, den diese Tabelle nicht leisten kann: Dort steht auch,
+was Solidon nur *aufruft* und was es in eine fremde Umgebung *installiert*. Ein
+extern gestarteter Slicer taucht in keiner Prüfung der eigenen Laufzeit auf und
+wäre sonst die einzige Abhängigkeit ohne Akte. Diese Tabelle nennt die
+Entscheidungen, die Datei die Belege.
+
+**Bei einer nativen Bibliothek entscheidet nicht die Lizenz.** Drei wurden am
+14.08.2026 geprüft und alle drei an derselben Frage abgewiesen, ohne dass die
+Lizenz je das Thema war: `pyclipr` (Clipper2, Boost) hat kein Linux-Rad,
+`libigl` (MPL-2.0) liefert nicht für Windows und nur bis cp312, und CoACD wäre
+gegangen. Die Regel daraus, und sie gehört in die Checkliste „neue
+Abhängigkeit": Eine neue native Abhängigkeit braucht **Räder für Windows, macOS
+und Linux in der Python-Version dieses Projekts.** Alles andere ist eine
+Bauumgebung, die jemand pflegen muss — dann ersetzt die Bibliothek keine
+Arbeit, sie verschiebt sie.
+
+Damit ist auch das „prüfen" beantwortet, das hier bei CoACD stand: Auto Split
+liest aus der Zerlegung eine einzige Zahl, die Stelle der Einschnürung, und
+dort trifft V-HACD näher (Abweichung 7,2 gegen 9,2 an der Hantel). Genau
+eingestellt ist CoACD zwei- bis fünfzigmal langsamer, grob eingestellt liefert
+es ein Stück und damit gar keinen Hinweis. Es gibt keine Einstellung, in der es
+gleichzeitig schnell und aussagekräftig ist.
 
 **Eigene Lizenz vor der ersten Veröffentlichung festlegen** — rückwirkend
 ändern geht nur mit Zustimmung aller Beitragenden. Vier Wege: GPL, Apache/MIT,
@@ -1614,7 +1922,7 @@ Abhängigkeiten gegen die Freigabeliste.
 
 ---
 
-## 37. Veröffentlichung
+## 37. Veröffentlichung und Auflagen
 
 ### 37.1 Name
 Wird für Paketnamen, Domain, Dateiendung, Übersetzungen und Signierung
@@ -1645,7 +1953,14 @@ G-Code-Slicer" liest sich besser als die Langfassung.
 
 ### 37.2 Auslieferung
 - **Signierung.** Windows zuerst, Linux als AppImage oder Flatpak, macOS
-  später (Beglaubigung nötig).
+  später (Beglaubigung nötig). Der bequeme Weg ist versperrt: Microsofts
+  eigener Signierdienst nimmt nur Kunden in den USA und Kanada. Für eine
+  deutsche Firma bleibt ein Zertifikat einer Zertifizierungsstelle mit
+  Schlüssel in Hardware oder in einem Cloud-HSM — seit 2023 stellt niemand
+  mehr einen Schlüssel als Datei aus, und ab dem 01.03.2026 läuft ein
+  Zertifikat nur noch rund fünfzehn Monate. Das ist bei der CI mitzudenken:
+  Der Bauläufer bekommt keinen Schlüssel, er bekommt einen Aufruf an einen
+  Signierdienst.
 - **Automatische Bauläufe** über eine CI für alle Zielplattformen.
 - **Update in der Anwendung, aber nur auf Knopfdruck.** Die Versionsdatei
   nennt neben der Version je Plattform Paketname, Adresse, Größe und
@@ -1660,6 +1975,36 @@ G-Code-Slicer" liest sich besser als die Langfassung.
   nicht, wird die Datei gelöscht und nichts ausgeführt. Das Paket kommt nur
   von demselben Rechnernamen wie die Versionsdatei; eine Adresse, die
   woandershin zeigt, wird nicht geladen.
+
+  **Gegen wen das reicht, und gegen wen nicht.** Gegen einen Angreifer im Netz
+  reicht es: Das Paket kommt nur von demselben Rechnernamen wie die
+  Versionsdatei, über HTTPS, und wer dort etwas austauschen will, braucht ein
+  Zertifikat für diesen Namen. Es reicht **nicht** gegen einen Angreifer, der
+  den Server selbst hat. Der tauscht Paket und Prüfsumme gemeinsam — sie stehen
+  in derselben Datei —, und in der Installation widerspricht nichts. Das ist
+  eine engere Lücke als „die Prüfsumme trägt nicht", und deshalb die
+  begründbarere: Sie ist mit einer Prüfsumme prinzipiell nicht zu schließen,
+  egal wie sorgfältig man sie nachrechnet.
+
+  **Deshalb wird die Versionsdatei unterschrieben, mit einem Schlüssel, der
+  nicht auf dem Server liegt.** Solidon prüft die Unterschrift mit dem
+  öffentlichen Teil aus der Installation, bevor es dem Inhalt glaubt; erst
+  danach zählt der Rest — dieselbe Adresse, richtige Prüfsumme, Klick. Anhang I
+  der Verordnung aus §37.3 verlangt ohnehin, dass Aktualisierungen sicher
+  verteilt werden; dies ist die Stelle, an der das konkret wird.
+
+  Zwei Auflagen gehören dazu, weil sie die Umsetzung prägen und sonst als
+  Detail durchfallen. **Eine Versionsdatei ohne gültige Unterschrift ist
+  Schweigen, kein Fehler** — dieselbe Behandlung wie eine ausgefallene
+  Verbindung: kein Hinweis, kein Dialog. Ein Fehlerfenster beim Start wegen
+  einer Datei, die der Nutzer nie sehen wollte, ist schlimmer als ein
+  Aktualisierungshinweis, der einmal ausbleibt. Und **ein Schlüsselwechsel muss
+  vorgesehen sein, bevor er nötig wird**: Eine ältere Installation kennt den
+  neuen Schlüssel nicht und hört danach auf, Aktualisierungen zu sehen — also
+  trägt die Installation mehr als einen zulässigen Schlüssel, und ein neuer
+  wird eingeführt, solange der alte noch unterschreibt. Ein Schlüssel, der erst
+  im Schadensfall gewechselt wird, ist einer, der nicht gewechselt werden
+  kann.
 
   **Nicht überall geht es.** Flatpak und AppImage lassen sich nicht von innen
   ersetzen — dort bleibt es beim Hinweis und dem Weg zur Download-Seite. Auch
@@ -1680,6 +2025,89 @@ G-Code-Slicer" liest sich besser als die Langfassung.
 - **Erwartungsmanagement.** Klar hinschreiben, was die Anwendung nicht ist —
   kein CAD-Ersatz, keine Passungen aus generierten Meshes.
 - **Ein einziger Supportkanal.**
+
+### 37.3 Regulatorische Auflagen
+
+Dieser Abschnitt hat gefehlt. Zwei europäische Rechtsakte betreffen eine
+kommerziell verkaufte Desktop-Anwendung, und bei beiden ist die naheliegende
+Vermutung die falsche: Der erwartete greift nicht, der unerwartete greift — mit
+einer Frist drei Wochen nach dieser Durchsicht.
+
+*Kein Rechtsrat, und der Bauplan wird keiner. Was hier steht, ist die
+Aufgabenliste, die aus der Recherche folgt; bestätigen muss sie jemand mit
+Zulassung, bevor ein Paket in den Verkehr geht.*
+
+**Die Verordnung über Cyberresilienz (CRA, (EU) 2024/2847) greift.** Sie gilt
+für „Produkte mit digitalen Elementen", die in der Union in Verkehr gebracht
+werden, und Solidon ist eines: verkaufte Software mit Netzzugang für
+Aktualisierung, Support und LLM. Die Ausnahme für freie und quelloffene
+Software ohne Monetarisierung greift nicht — Solidon ist proprietär und kostet
+Geld. Zwei Fristen:
+
+| ab | was |
+|---|---|
+| **11.09.2026** | aktiv ausgenutzte Schwachstellen und schwere Zwischenfälle binnen 24 Stunden an ENISA und das nationale CSIRT melden |
+| **11.12.2027** | die übrigen Pflichten: Anforderungen des Anhangs I, CE-Zeichen, EU-Konformitätserklärung, technische Dokumentation, maschinenlesbare Stückliste, Schwachstellenverfahren, Sicherheitsaktualisierungen über die erwartete Lebensdauer (mindestens fünf Jahre) |
+
+Solidon fällt in die **Grundkategorie**, nicht in die Anhänge III oder IV, wo
+eine benannte Stelle prüfen müsste. Die Konformitätsbewertung ist damit eine
+**eigene**: Solidon erklärt sie selbst und trägt die Akten. Das ist die
+günstige Variante — und trotzdem Arbeit.
+
+Was dafür schon steht, ist mehr, als es aussieht, es ist nur nirgends als
+Konformität aufgeschrieben: `constraints.txt` ist ein festgeschriebener
+Versionssatz und damit die halbe Stückliste, `licences.toml` und
+`THIRD-PARTY-NOTICES.md` sind die Aktenlage der Abhängigkeiten samt dem, was
+extern läuft (§36), die Lizenzprüfung läuft im Tor, der Fehlerbericht sendet
+nur auf Klick und zeigt vorher, was mitgeht (§37.2), das Protokoll bleibt
+lokal (§33.2), es gibt genau einen Supportkanal, Parameterausdrücke laufen ohne
+`eval`, fremde Dateien führen keinen Code aus (§32).
+
+Was fehlt, und jedes für sich ist klein:
+
+1. **Eine maschinenlesbare Stückliste** (CycloneDX oder SPDX), aus der
+   Umgebung erzeugt, mitgeliefert und mitversioniert. Aus `constraints.txt` ist
+   das ein Werkzeuglauf, kein Vorhaben — der Erzeuger für Python steht unter
+   Apache-2.0 und ist damit nach §36 zulässig.
+2. **Ein Schwachstellenverfahren mit Adresse**: wohin ein Finder meldet, wie
+   lange die Antwort dauert, wie eine Behebung ausgeliefert wird. Der
+   Supportkanal ist da, die Zusage fehlt.
+3. **Eine erklärte Unterstützungsdauer**, sichtbar für den Käufer — nicht
+   „solange es Spaß macht". Sie bindet: Was erklärt ist, muss bedient werden.
+4. **Ein Weg, eine Meldung binnen 24 Stunden abzusetzen.** Das ist keine
+   Software, sondern eine Handreichung: wer meldet, an wen, mit welchen
+   Angaben. Ohne sie ist die Frist nicht einzuhalten, und sie gilt auch für ein
+   Erzeugnis, das seit Jahren draußen ist.
+5. **CE-Zeichen und Konformitätserklärung** zum Zeitpunkt des
+   Inverkehrbringens, mit der technischen Dokumentation dahinter; für Klein-
+   und Kleinstunternehmen in vereinfachter Form.
+
+**Das Barrierefreiheitsstärkungsgesetz (BFSG) greift nicht** — und das ist die
+Vermutung, die man prüfen muss, statt ihr zu folgen. Es gilt seit dem
+28.06.2025, aber für eine aufgezählte Menge von *Produkten* (Hardware mit
+Betriebssystem, Selbstbedienungsterminals, Lesegeräte, Telekommunikations- und
+Mediengeräte) und eine aufgezählte Menge von *Dienstleistungen* (Telefonie,
+Mediendienste, Personenverkehr, Bankdienste, E-Books, **elektronischer
+Geschäftsverkehr**). Eine Anwendung, die man herunterlädt, ist keines der
+genannten Produkte. Der Verkauf über die eigene Seite ist elektronischer
+Geschäftsverkehr und damit eine genannte Dienstleistung — für die aber die
+**Kleinstunternehmensausnahme** gilt: unter zehn Beschäftigte und höchstens
+zwei Millionen Euro Umsatz oder Bilanzsumme. Beide Wege enden bei „nicht
+anwendbar", der zweite allerdings nur, solange die Schwelle hält.
+
+**Damit ist §19 eine Produktentscheidung und keine Pflicht** — und gilt
+unverändert weiter. Das ist der bessere Grund: Blau/Orange statt Rot/Grün, die
+zweite Kodierung neben jeder Farbe und die wahrnehmungsgleichen Paletten sind
+gebaut, weil sie die Anwendung besser machen, nicht weil jemand sie verlangt.
+Wer sie später kürzt, kürzt kein Zugeständnis an eine Behörde, sondern
+Qualität.
+
+**Der Chat ist als Chat erkennbar, und damit ist die Offenlegungspflicht der
+KI-Verordnung für Systeme, die mit Menschen interagieren, erfüllt.** Solidon
+ist Anwender eines Modells, nicht Anbieter eines; die Pflichten für Modelle mit
+allgemeinem Verwendungszweck treffen den, der das Modell anbietet. Was Solidon
+darüber hinaus tut, steht in §27 und §5: Wo eine Eingabe hingeht, ist gesagt,
+und ohne Schlüssel geht sie nirgendwohin.
 
 ---
 
@@ -1734,6 +2162,14 @@ Aktueller Stand:
 
 Die Arbeitsliste je Phase steht in `ROADMAP.md`. Hier stehen Umfang,
 Zielmodule und Abnahme.
+
+**Diese Liste ist nicht die Arbeitsliste, und sie ist auch nicht der Stand.**
+Sie nennt, was eine Phase umfasst und woran sie als fertig gilt; was offen ist,
+steht im Register von `ROADMAP.md` und nirgends sonst. Bis zu dieser Fassung
+endete sie bei P13, während P14 bis P16 gebaut und abgenommen waren — ein Plan,
+der ein Drittel der geleisteten Arbeit nicht kennt, wird beim nächsten Abgleich
+als Widerspruch gelesen, und dann sucht jemand einen halben Tag nach einem
+Fehler, der keiner ist.
 
 ### P0 — Skelett
 *Module:* `core/types`, `core/errors`, `core/units`, `core/registry`,
@@ -1797,8 +2233,10 @@ schemagültig, bevor gerechnet wird.
 ### P5 — Bausteinbibliothek
 *Module:* `core/knowledge/parts`, `core/knowledge/standards`, `ui/catalog`
 
-*Fertig, wenn:* dreizehn Bausteine über ihren Parameterbereich wasserdicht und
-wandstärkenkonform · Features als Provenienz-IDs im Steckbrief · Vorschaubilder
+*Fertig, wenn:* **jeder** Baustein der Bibliothek über seinen Parameterbereich
+wasserdicht und wandstärkenkonform — die Erstbestückung aus §24.1 sind
+dreizehn, es sind inzwischen mehr, und eine Zahl in einem Abnahmekriterium
+altert schneller als die Bibliothek · Features als Provenienz-IDs im Steckbrief · Vorschaubilder
 automatisch gerendert · `to_scad()` erzeugt gültigen Quelltext · kein Kernpfad
 benötigt OpenSCAD · `parts_version` in der Projektdatei, geänderter Baustein
 wird beim Öffnen namentlich gemeldet · eigene Bausteine aus dem Nutzerordner
@@ -1819,7 +2257,8 @@ geänderte Profilwerte schlagen auf bestehende Projekte durch, ohne sie zu
 
 ### P8 — Erste Veröffentlichung
 *Fertig, wenn:* Name entschieden · Installationsdateien aus der CI für alle
-Zielplattformen · alle Texte übersetzt · die drei Beispielprojekte öffnen und
+Zielplattformen · alle Texte übersetzt · die Beispielprojekte der Hauptwege
+(§2.2) öffnen und
 rechnen fehlerfrei · Erstinbetriebnahme führt bis zum ersten Import ·
 Lizenzhinweise vollständig.
 
@@ -1862,6 +2301,67 @@ Die erste Veröffentlichung wartet auf diese Phase (Entscheidung vom
 31.07.2026): der Launch führt die Skizzen als Kernargument. Die
 Veröffentlichungsreste aus P8 laufen parallel.
 
+### P14 — Die Oberfläche einlösen
+*Module:* `ui` durchgehend, `scene/history`, `agent/apply`
+
+Achtundzwanzig Funde aus der Durchsicht der gesamten Bedienung, mit fünf
+Ursachen — wer die fünf behebt, behebt die achtundzwanzig. Die schwerste:
+**Das Dokument kannte nur Operationen.** Parameter, Passungen, Drucker und
+Material standen außerhalb von Transaktion und Undo, und damit war Regel 16
+für alles verletzt, was keine Op ist. Ein Wert in der Parameterleiste ging
+direkt ins Dokument: kein Undo, kein Stern im Titel, beim Schließen weg.
+
+*Fertig, wenn:* jede Änderung am Dokument geht durch eine Transaktion, auch
+wenn sie keine Operation enthält · ein Strg+Z nach einem angenommenen Vorschlag
+nimmt dessen Parameter und Passungen mit zurück · jede ungespeicherte Änderung
+steht im Titel · die Tests nehmen den Weg, den ein Mensch nimmt, und nicht den
+kurzen daneben — ein Test, der die Rücknahme direkt aufruft statt über die
+Oberfläche, deckt genau diesen Fund zu.
+
+### P15 — Konstruieren und zeigen
+*Module:* `ui/sketch`, `ui/viewport`, `geom/texture_ops`, `geom/lattice`,
+`geom/pattern_ops`, `ui/remote_server`, `agent/remote`
+
+Zweiundzwanzig Lücken gegen das Wettbewerbsfeld, vier davon begründet
+abgelehnt. Solidon lag bei Druckintelligenz und Dokumentlogik vorn, bei
+Konstruktionswerkzeugen, Bediensprache und Darstellung zurück.
+
+**Die Grenzen kamen zuerst, nicht zuletzt**: höchstens neun Menüs, zwölf Zeilen
+je Menü, acht Umschalter, acht Felder auf der Vorderseite eines Dialogs, genau
+ein Menüeintrag je Operation. Vor dem Wachstum eingezogen ist das ein Riegel;
+danach eingezogen wäre es eine Bestandsaufnahme. Der erste Lauf fand sofort ein
+Menü mit 23 Zeilen.
+
+*Fertig, wenn:* die Obergrenzen sind Tests und grün · der Skizzenmodus arbeitet
+ohne Dialog auf einer angeklickten Fläche · Texturen sind echte Geometrie, flach
+und umlaufend · die Fernsteuerung nach §26.6 läuft mit allen fünf Auflagen · was
+begründet nicht gebaut wurde, steht mit seinem Grund im Konzept und nicht als
+Lücke da.
+
+### P16 — Organische Modellierung
+*Module:* `geom/sculpt`, `geom/pose`, `geom/blend`, `ui/sculpt`
+
+Weg 4 aus §2.2. Der Kundenkreis ist erweitert (Entscheidung vom 13.08.2026):
+Figuren gehören dazu, Posing wird mitgenommen.
+
+**Regel 2 war nie das Hindernis.** Sie verbietet Geometrieänderungen außerhalb
+einer Op und verlangt nirgends, dass jede Nutzergeste ein eigener Schritt wird
+— diese Gleichsetzung stand nur in der Auslegung, und der Skizzeneditor aus P13
+hatte sie längst gebrochen. Regel 2 und §2.2 sagen das seither ausdrücklich.
+
+**Die Messung hat den Entwurf entschieden, nicht umgekehrt.** Ein Pinselstrich
+je Durchgang kostet bei 100 Strichen auf 16 000 Vertices schon 747 ms und wächst
+mit dem Produkt aus Strichzahl und Vertexzahl; alle Striche in einem Durchgang
+über einen KD-Baum schaffen 5 000 Striche auf 65 538 Vertices in 586 ms. Faktor
+sechzig, und er entscheidet zwischen „geht nicht" und „geht". Der Preis steht
+als Entscheidung im Konzept: Striche werden dadurch kommutativ, und Werkzeuge,
+bei denen das nicht trägt, laufen in Etappen.
+
+*Fertig, wenn:* ein Editor sammelt beliebig viele Gesten in einen Parameterwert,
+und das Ergebnis entsteht erst bei der Auswertung · fünftausend Striche bleiben
+im Leistungsziel · **Weg 4 aus §2.2 läuft als Ende-zu-Ende-Test** · das
+Beispielprojekt liegt bei und das Handbuch hat sein Kapitel.
+
 ---
 
 ## 41. Ausbaustufen
@@ -1876,6 +2376,19 @@ und bei ähnlichen Anfragen mitgeben. **Die Anfragen der Testsuite dürfen nie
 hineinwandern**, sonst misst man nur das eigene Gedächtnis. Strikt lokal.
 
 **Stapelverarbeitung** über den Kommandozeilen-Einstieg.
+
+**Grundformen über eine Anpassung nach RANSAC.** Kegel, Kugel und Torus
+zusätzlich zu Zylinder und Ebene (§21.1): Eine Senkung wäre dann eine Senkung
+und nicht eine Sammlung von Dreiecken, eine Kugelpfanne hätte einen Radius, und
+der Agent könnte sich auf beides beziehen, statt Koordinaten zu meiden und
+nichts zu finden. Das Verfahren ist seit knapp zwanzig Jahren Stand der Technik
+— Grundformen auf die Cluster anpassen, Achse über eine Singulärwertzerlegung,
+Annahme nur bei genügend Stützstellen innerhalb der Toleranz — und der Preis
+ist bekannt: Es findet auch Formen, die niemand gemeint hat, und hängt an
+seinen Schwellen. Deshalb dieselbe Auflage wie überall: Was unter der Schwelle
+bleibt, wird als Cluster gemeldet und nicht geraten (Regel 21). Eigene
+Abnahme, eigene Testkörper — sonst ist es keine Erkennung, sondern eine
+Vermutung mit Namen.
 
 **Modell-Vergleich.** Zwei Versionen überlagern, Unterschiede zeigen.
 
@@ -1904,23 +2417,38 @@ mit einer Projektdatei.
 - Verrundungen auf Mesh-Kanten bleiben ein Kompromiss bis zum B-Rep-Kern
 - Baugruppen mit echten Funktionstoleranzen bleiben Handarbeit; der Agent
   liefert den Entwurf, nicht das Endergebnis
+- Die Zielwerte in §31 gelten mit dem übersetzten Schichtkern; ohne ihn ist die
+  Schichtanalyse an der Decke des Interpreters, und das ist an drei Verfahren
+  gemessen und nicht geschätzt
+- Aus einem Netz erkennt die Wahrnehmung Zylinder und Ebenen, keine Kegel,
+  Kugeln und Tori (§21.1) — eine Senkung bleibt bis dahin zwei Merkmale
+  nebeneinander
 
 ---
 
 ## 43. Nächster Schritt
 
-**P0, in dieser Reihenfolge:**
+Hier stand bis zu dieser Fassung die Aufbauliste von P0, elf Punkte, beginnend
+mit „Paketstruktur mit Importtest". P0 bis P16 sind gebaut und abgenommen; das
+war die letzte Stelle, an der der Bauplan zwei Jahre zu früh stand.
 
-1. Paketstruktur mit Importtest
-2. `core/types.py` — die Verträge aus §9, bevor irgendetwas sie benutzt
-3. `core/errors.py` — die Hierarchie aus §33.1
-4. Zahlen- und Toleranzkonventionen (§11) — `core/units.py`
-5. Operationsregister mit einer Beispiel-Op
-6. Szene, Parameter, Op-DAG, Auswertung, Transaktionen
-7. Projektcontainer mit Version und Migrationsgerüst
-8. Eingangsstufe
-9. Testkorpus anlegen (§34)
-10. Oberfläche: Grundfenster nach §2.5, Viewport, Objektbaum, Parameterleiste
-11. Kommandozeilen-Einstieg
+**Der nächste Schritt ist keine Phase, sondern ein Datum.** Am 11.09.2026
+beginnt die Meldepflicht aus §37.3 — die einzige offene Sache mit einer Frist,
+die nicht dieses Projekt setzt. Davor gehören erledigt: die maschinenlesbare
+Stückliste, die Meldeanschrift samt Verfahren, die erklärte
+Unterstützungsdauer. Das sind Tage, nicht Wochen — aber sie fangen nicht von
+selbst an.
 
-Regeln in `AGENTS.md`, Arbeitsliste in `ROADMAP.md`.
+**Danach in dieser Reihenfolge:**
+
+1. Die Reste von P8, die die erste Veröffentlichung tragen: Zertifikat
+   (§37.2), CI-Bauläufe, Postfach und DMARC
+2. Die Entscheidungen dieser Fassung in Code überführen — §15.7 (die Antwort
+   gehört in die Parameter), §31 (Bestwert je Aufrufkontext, übersetzter Kern
+   im Paket), §28.2 (Kandidaten aus der konvexen Hülle), §37.2 (Unterschrift
+   über die Versionsdatei)
+3. Was im Register von `ROADMAP.md` darüber hinaus steht, von oben nach unten
+
+Regeln in `AGENTS.md`, Arbeitsliste in `ROADMAP.md`. **Offene Arbeit steht dort
+und nirgends sonst** — auch nicht hier: Was in diesem Abschnitt steht, ist eine
+Reihenfolge, kein Bestand.
