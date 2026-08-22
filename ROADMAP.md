@@ -67,7 +67,6 @@ oder er hält ihn nicht fest.
 | Der Textweg prüft seine Voraussetzungen nicht | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob die Bereitschaft zwei Stufen bekommt — bereit für Bilder, bereit für Text — oder ob der Erzeugungsdialog die Textzeile ausgraut, solange kein SDXL-Modell unter `models/checkpoints` liegt |
 | Erzeugen und Ändern sind reine Verteilermenüs | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, wie tief ein Menü sein darf — flach ziehen sprengt die Neun-Menü-Grenze, ist also ein Tausch und keine Verbesserung |
 | Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
-| Acht Gebiete der Oberflächendurchsicht sind nie gelaufen | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | einen Lauf. Das Material reist seit dem 22.08.2026 mit, aber die Workflow-Skripte darin gelten nicht mehr (Robert, 22.08.) — womit gefahren wird, entscheidet die Sitzung, die es tut |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
 | Die Antwort der Zuordnung steht nirgends | Das Fundament der Wahrnehmung (22.08.2026) | die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Ein geänderter eigener Baustein wird beim Öffnen nicht gemeldet | Das Fundament der Wahrnehmung (22.08.2026) | eine zweite Quelle für `changed_since_library` — sie liest gepflegte Änderungsverläufe, und ein eigener Baustein hat keinen (§24.4, §24.5). Gefunden von solidon-17 beim Anschließen des Plattencaches |
@@ -3286,7 +3285,7 @@ Messgrenze des großen Stapels.
       anderen sieben Werkzeugkarten unverändert bei 81 bis 112.
 
 
-- [ ] **Acht der 19 Gebiete der Durchsicht sind nie gelaufen.** Elf liegen als
+- [x] **Acht der 19 Gebiete der Durchsicht waren nie gelaufen.** Elf lagen als
       Rohfunde vor; offen sind `druckdialog`, `chat`, `skizze`, `viewport`,
       `webseite`, `barrierefreiheit`, `wartezeit`, `handbuch` — darunter vier,
       die eigene harte Regeln haben (Regel 18 und 20, Bauplan §2.8). Steht in
@@ -3300,6 +3299,43 @@ Messgrenze des großen Stapels.
       *Bis dahin war das der teurere Teil des Punktes: Der Ordner war über
       `.gitignore` ausgeschlossen, und in einem frischen Klon fehlte sämtliches
       Material für den nächsten Schritt.*
+
+      **Der Lauf hat am 20.08.2026 stattgefunden — der Punkt hat ihn nur nie
+      erfahren.** `FORTSETZUNG-SITZUNG-2.md` im selben Ordner führt alle acht
+      Gebiete als fertig und nennt je Gebiet den Commit; alle sechzehn stehen in
+      der Historie, nachgeprüft am 22.08.2026 von 3d-druck-64:
+
+      | Gebiet | Commit |
+      |---|---|
+      | `handbuch` | `6eadb68`, `d003dd2` — 19 von 40 Verzeichniseinträgen, vier Kapitel ohne Titel |
+      | `webseite` | `91494ca` — Sprung an den Inhalt auf 29 Seiten |
+      | `druckdialog` | `6320040`, `52ea835`, `232984c` — Feldbreiten, „Keine Profile gefunden", Warten auf die Profilsuche |
+      | `chat` | `4f16ba5` — 510 ms je Tastendruck |
+      | `wartezeit` | `b85364d` — Startimporte 2 393 → 275 ms |
+      | `skizze` | `e5c8992` — Bedingungsknöpfe, Ebenenfeld, Zahlenfelder |
+      | `viewport` | `7686c61` — Kontaktschatten sichtbar |
+      | `barrierefreiheit` | `7f7405b` — gedrückter Hauptknopf 4,466 → 4,502 |
+
+      Auch der Abschnitt „Gemeldet, nicht entschieden" des Berichts ist leer
+      gearbeitet: Alle drei Funde sind im zweiten Durchgang behoben. Was der
+      Bericht **noch** offen führt, steht längst einzeln im Register (die
+      Fenster-Abstürze, das Höhenbudget).
+
+      **Zwei Messfallen aus diesem Lauf sind wertvoller als der Punkt selbst**
+      und wären mit ihm begraben worden:
+
+      * **Offscreen hat Qt keine Schriftfamilie.** Eine Messung am Objektbaum
+        sagte, die Maßspalte sei überall gekürzt (168 Punkte Bedarf, 102 Platz)
+        — mit der echten Plattform sind es 83 von 89, also alles da. Fast wäre
+        dafür ein Spaltenmodell umgebaut worden. Die Falle geht in beide
+        Richtungen: Beim Trennen-Fund stimmte die Messung, und offscreen käme
+        das Gegenteil heraus. **Wer Textbreiten oder -höhen misst, misst mit
+        echter Plattform oder gar nicht.**
+      * **Ein Filter je Fenster ist ein Filter zu viel.** Ein
+        Ereignisfilter, in `MainWindow.__init__` an die *Anwendung* gehängt,
+        gibt es je Fenster einmal. `test_ui.py` blieb zweimal bei 97 Prozent
+        stehen und wurde nach je zehn Minuten abgebrochen; mit einem einzigen
+        Filter: 223 Tests in 3:16.
 
 ## Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026)
 
