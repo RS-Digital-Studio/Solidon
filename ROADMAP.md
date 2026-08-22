@@ -114,6 +114,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
 | `test_mesh_backend` misst die Umgebung statt sein Thema — **entschieden** | Das Fundament der Wahrnehmung (22.08.2026) | die dritte Zusicherung fällt. Sie prüft die Länge des Temp-Ordners **dieser Maschine** und sagt nichts über den Kunden; die zwei davor prüfen den Programmtext und bleiben. Ein Test, der bei umgebogenem `TEMP` rot wird, kostet jede Sitzung Zeit und schützt niemanden |
 | Kein Viewport wird jemals freigegeben | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über die Reichweite — die eine Zeile in `viewport.py` ist behoben, aber `.connect(lambda … self …)` steht an 59 Stellen in `app/ui/`, und jede davon ist ein Ring, sobald der Sender ein Kind von `self` ist. Könnte die gemeinsame Wurzel der vier Absturzpunkte sein: gemessen 7 MB je Fenster, und die Suite baut siebenhundert |
+| `test_ui.py` reißt zehn von zehn | Das Fundament der Wahrnehmung (22.08.2026) | den Fix an `leash.wait_for_all`, gemessen von 3d-druck-b8 — und die Lehre daneben: dieselbe Zahl (5/5) wurde neben einem Torlauf als Fremdlast gedeutet und unter Schloss auf leerer Maschine widerlegt |
 | Fensterdateien enden mit Exit 127 — **drei, und wechselnde** | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — die Roadmap nennt als Signatur des bekannten Absturzes „dieselbe Datei einzeln gefahren ist grün“, und diese zwei sind es nicht. Nachgewiesen im eigenen Arbeitsbaum auf HEAD, vollständig grün und dann 127 |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
 
@@ -5920,6 +5921,39 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       `zaehlt_als_fehler()` gibt für 5 dasselbe zurück wie für 0, mit der
       Begründung darüber im Skript. Gefunden von 3d-druck-3a, am Skript
       bestätigt von 3d-druck-33, nachgeprüft von 3d-druck-64.
+- [ ] **`test_ui.py` reißt zehn von zehn Läufen — und die Fremdlast war nie
+      die Erklärung.** Gemessen am 23.08.2026 von 3d-druck-b8, unter Schloss,
+      mit 42 GB freiem Speicher und zwei Python-Prozessen.
+
+      **Die Ursache ist eingekreist:** `leash.wait_for_all` (`f1ea325`),
+      gerufen aus der Aufräum-Fixture (`ff98633`). Vor diesen beiden lief die
+      Datei dreimal mit 257 passed durch; danach reißt sie mit einer
+      Zugriffsverletzung an `conftest.py:218` — `processEvents()` direkt hinter
+      dem Aufruf. Vorher liefen Arbeiter nach dem Testende weiter und ihr
+      `finished` kam nie zur Zustellung; jetzt macht die Fixture sie fertig,
+      das Signal landet als `QueuedConnection` in der Schlange, und
+      `processEvents()` stellt es an Empfänger zu, die es nicht mehr gibt.
+
+      **Der methodische Teil wiegt schwerer als der Fehler.** Dieselbe Zahl
+      wurde zweimal gemessen und zweimal verschieden gedeutet:
+
+          neben einem fremden Torlauf   5/5 gerissen   -> „Fremdlast"
+          unter Schloss, leere Maschine 5/5 gerissen   -> die Deutung fällt
+
+      > Beide Male dieselbe Zahl und zwei verschiedene Deutungen; erst die
+      > zweite Messung hat die erste widerlegt.
+
+      **Die Fremdlast war nie die Erklärung — sie war die bequemere.** Und sie
+      ist eine, die sich nicht von selbst widerlegt: Wer einen Abriss auf
+      Fremdlast schiebt und danach nicht mehr misst, behält recht, solange er
+      nicht nachsieht. Dasselbe gilt für die Abbau-Abstürze, die in dieser
+      Nacht mehrfach als „die bekannten" abgehakt wurden, darunter von
+      3d-druck-64.
+
+      **Für den Exit-127-Punkt darunter ändert das nichts** — 127 ist ein
+      anderer Code als die Zugriffsverletzung hier, und beide Signaturen
+      bleiben getrennt zu führen.
+
 - [ ] **Fensterdateien enden mit Exit 127 — inzwischen drei, und wechselnde.**
       `tests/test_chat_ui.py` (40 passed) und `tests/test_first_run.py`
       (45 passed) laufen vollständig grün durch und beenden sich dann mit 127.
