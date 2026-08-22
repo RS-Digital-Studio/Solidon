@@ -107,7 +107,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
-| **Eine verrundete Quaderkante wird als Zapfen gemeldet** | Das Fundament der Wahrnehmung (22.08.2026) | einen zweistufigen Umbau von `fit_cylinder` — bei einem 90-Grad-Ausschnitt liegen die Normalen auf einem Bogen statt auf einem Kreis, die Achse wandert, der Radius wird fünfmal zu groß. **Fehlbefund statt fehlendem Befund**, und `applies_to` bietet daran Zapfen-Operationen an. Gehört an den Anfang einer Sitzung, nicht ans Ende |
 | Der Rückstand sieht einen falschen Zylinder nicht | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, warum derselbe Wächter beim Torus greift und beim Zylinder nicht — 0,0313 Rückstand bei einem Radius, der um das Fünffache danebenliegt |
 | Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
@@ -116,6 +115,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Ein Test steht still, ohne zu rechnen — **Stelle gefunden** | Das Fundament der Wahrnehmung (22.08.2026) | den Grund, aus dem Qt beim Vererben eines Stylesheets eine Sperre hält. Der Stillstand sitzt in `start_screen.py:155` (`setStyleSheet` an der Ablagefläche), beim Aufbau des Hauptfensters in der Test-Fixture; nativ ein Deadlock auf `QBasicMutex` in `QObject::connectImpl`. Dreimal gemessen, zwei Dateien — es hängt an der Fixture, nicht am Test |
+| Der Ordnername „3D Druck" mit Leerzeichen bricht Werkzeuge | Das Fundament der Wahrnehmung (22.08.2026) | eine Durchsicht der Werkzeuge, die Pfade zusammensetzen. Zweimal an einem Tag an unabhängigen Stellen: das Kürzel der Erinnerungen und der Interpreterpfad im Tor-Skript. Die Annahme dahinter ist dieselbe — ein Pfad ohne Leerzeichen |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
 | `test_mesh_backend` misst die Umgebung statt sein Thema — **entschieden** | Das Fundament der Wahrnehmung (22.08.2026) | die dritte Zusicherung fällt. Sie prüft die Länge des Temp-Ordners **dieser Maschine** und sagt nichts über den Kunden; die zwei davor prüfen den Programmtext und bleiben. Ein Test, der bei umgebogenem `TEMP` rot wird, kostet jede Sitzung Zeit und schützt niemanden |
 | Kein Viewport wird jemals freigegeben | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über die Reichweite — die eine Zeile in `viewport.py` ist behoben, aber `.connect(lambda … self …)` steht an 59 Stellen in `app/ui/`, und jede davon ist ein Ring, sobald der Sender ein Kind von `self` ist. Könnte die gemeinsame Wurzel der vier Absturzpunkte sein: gemessen 7 MB je Fenster, und die Suite baut siebenhundert |
@@ -4731,7 +4731,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Frage mehr. Beim ersten schon — und das erste ist das, was ein Kunde
       erlebt.
 
-- [ ] **Eine verrundete Quaderkante wird als „Zapfen Ø 28,9" gemeldet.**
+- [x] **Eine verrundete Quaderkante wurde als „Zapfen Ø 28,9" gemeldet.**
       Gemessen am 22.08.2026 an einem verifizierten Testkörper — Quader
       40 × 30 × 20, eine Kante mit R 3 ausgerundet, Volumen exakt 23942 gegen
       Sollwert 23942:
@@ -4777,6 +4777,30 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Anfang einer Sitzung mit vollem Tor dahinter**, denn `fit_cylinder` ist
       die Einpassung, an der jede Bohrung und jeder Zapfen hängt. Gefunden von
       3d-druck-3a beim Verrundungsradius.
+
+      **Behoben am 22.08.2026 (`e3b01b7`):**
+
+          verrundete Quaderkante:   Ø 28,924  ->  Ø 5,997
+          Flächen daneben:          4         ->  6
+          Korpus, 13 Zylinder:      0 geändert (vier Stellen, gesicherte Grundlinie)
+          neuer Körper:             block_with_rounded_edge.stl (23942 mm³)
+
+      Behoben eine Stufe über dem Löser, in `_large_facet_faces`, über eine
+      zweite Schwelle am Anteil der **Gesamtoberfläche** (21 % und 10 % für die
+      zwei ebenen Facetten gegen 0,09 % für einen Mantelstreifen).
+
+      **Ein Irrweg gehört dazu, weil er die Falle beschreibt:** Die erste
+      Schwelle maß am Anteil der **größten Facette**. Ein Torus besteht nur aus
+      Mantelstreifen — seine größte Facette ist selbst einer —, also lag jede
+      bei fast hundert Prozent, und `torus_ring.stl` zerfiel in 288 ebene
+      Flächen. Der Kommentar in der Funktion warnt wörtlich davor.
+
+      **Und ein zweiter Fund, den erst das volle Tor zeigte:** Die Nachtrennung
+      rechnete die Krümmung über **alle** Nachbarpaare des Körpers, und zwar je
+      Fleck ohne Form. An `dense_1m.stl` (1,3 Mio. Dreiecke) sind das 11,3 s und
+      **395 MB Spitze** — mal acht parallele Prozesse über drei Gigabyte. Das
+      waren die elf Fehlschläge, die zuvor der Fremdlast zugeschrieben worden
+      waren.
 
 - [ ] **Der Rückstand sieht einen falschen Zylinder nicht.** Beim Fall darüber
       lag der Rückstand der Einpassung bei **0,0313** — weit unter
@@ -4895,12 +4919,26 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       zweimal mit `-n 8` gefahren, einmal **11 failed**, einmal **0 failed**.
       Der Unterschied war kein Code, sondern ein fremder Torlauf, der mitlief.
 
-      **Das kehrt die naheliegende Sparidee um.** Der Gedanke war, das Schloss
-      auf die Leistungstests zu schrumpfen, weil funktionale Tests ja nur
-      langsamer würden. Sie werden nicht langsamer, sie werden **rot** — und
-      zwar der *fremde* Lauf, nicht der eigene: Acht Prozesse lasten die
-      Maschine so aus, dass daneben nichts mehr sauber misst. Wer die
-      Parallelität ausbaut, braucht das Schloss **strenger**, nicht lockerer.
+      **Die erste Zuordnung war Fremdlast, und sie war falsch.** Sie lautete:
+      Acht Prozesse lasten die Maschine so aus, dass der fremde Lauf kippt.
+      3d-druck-b8 hat sie selbst zurückgenommen, nachdem 3d-druck-3a die
+      wirkliche Ursache gemessen hatte: **Die Nachtrennung rechnete die
+      Krümmung über alle Nachbarpaare des Körpers, und zwar je Fleck, der keine
+      Form ergeben hatte.** An `dense_1m.stl` (1,3 Mio. Dreiecke) sind das
+      **11,3 s und 395 MB Spitze** — mal acht parallele Prozesse über drei
+      Gigabyte. Die elf Fehlschläge kamen aus dem Speicher, nicht aus der
+      Rechenlast.
+
+      **Die Folgerung bleibt trotzdem stehen, nur mit besserem Grund:** Wer die
+      Parallelität ausbaut, braucht das Schloss **strenger** — nicht weil
+      Prozesse sich die Rechenzeit nehmen, sondern weil jeder von ihnen
+      denselben Speicher achtmal belegt. Ein Test, der allein 395 MB braucht,
+      ist parallel etwas ganz anderes als seriell, und das sieht man ihm
+      seriell nicht an.
+
+      Die ältere Beobachtung dazu bleibt gültig und unabhängig: Fremdlast macht
+      funktionale Qt-Tests rot, nicht langsam (gemessen, acht Minuten
+      Stillstand und ein Exit 139).
 
       Dieselbe Sache hatte am selben Tag schon einmal acht Minuten Stillstand
       und einen Exit 139 gekostet, und sie stand danach als Regel in
@@ -5127,9 +5165,19 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
         verwaistes Schloss blockierte **19 Minuten lang alle vier Sitzungen**,
         weil `_stale()` es nicht als verwaist erkannte. Behoben in `952c669`.
 
-      **Der Befund dahinter ist größer als das Werkzeug**, und er stammt von
-      3d-druck-33: *Was nur eine Sitzung benutzt, ist nicht geprüft, sondern nur
-      nicht widerlegt.* Alle drei Fehler saßen seit dem ersten Tag darin und
+      **Die neue Testart ist inzwischen fünfmal angewandt**, und vier davon
+      standen schon, bevor sie in der Tabelle stand — Plattencache (zweimal),
+      `detect()` gegen `detect_holes()`, `stamp()`, `check_outgoing()` und
+      `user.load()`. Die Deutung dazu stammt von 3d-druck-33 und ist besser als
+      der Punkt: **Die Zeile beschreibt, was gute Leute ohnehin tun, und macht
+      es für die zählbar, die es nicht wissen.** Der stärkste der fünf ist
+      dabei der, der *keine* Stelle prüft, sondern den Quelltext liest und
+      jedes `ResultCache(` ohne `disk=` meldet — „findet auch die dritte, die
+      morgen dazukommt".
+
+      **Der Befund dahinter ist größer als das Werkzeug**, und er stammt
+      ebenfalls von 3d-druck-33: *Was nur eine Sitzung benutzt, ist nicht
+      geprüft, sondern nur nicht widerlegt.* Alle drei Fehler saßen seit dem ersten Tag darin und
       waren bei serieller Benutzung unsichtbar. Das ist dieselbe Aussage wie
       die Testart „Anschluss" in §35, nur für Werkzeuge statt für Zusagen.
 
@@ -5143,6 +5191,23 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       behauptete, der Halter lebe. Zwei Prüfungen im selben Werkzeug, die sich
       widersprachen — und die richtige war die neue. Wer nur eine davon gelesen
       hätte, hätte die falsche geglaubt.*
+
+- [ ] **Der Ordnername „3D Druck" mit Leerzeichen bricht Werkzeuge.** Zweimal
+      am 22.08.2026, an unabhängigen Stellen:
+
+      * `tools/link_memory.py` bildete aus `F:D Druck` das Kürzel
+        `F--3D Druck`, während Claude Code seine Erinnerungen unter
+        `F--3D-Druck` ablegt — das Werkzeug legte einen leeren Ordner an,
+        verknüpfte ihn und meldete „Eingerichtet", ohne etwas zu übernehmen.
+      * Das Tor-Skript zerlegte sich, sobald der Interpreterpfad absolut wurde
+        (`ad2448c`).
+
+      **Beide Male ging es nicht um einen fehlenden Anführungsstrich, sondern um
+      eine Annahme**: dass ein Pfad keine Leerzeichen enthält. Sie steckt in
+      jedem Werkzeug, das Pfade zusammensetzt oder zerlegt, und sie fällt nur
+      dort auf, wo jemand sie ausprobiert. Wer ein Werkzeug schreibt, das einen
+      Pfad anfasst, prüft es gegen **diesen** Arbeitsbaum — er ist der Ernstfall
+      und liegt vor der Tür.
 
 - [ ] **Der Stop-Hook meldet Zeitstempel, nicht Urheber.** Bei vier Sitzungen
       in einem Arbeitsbaum schlägt er regelmäßig für fremde Arbeit an: „Seit

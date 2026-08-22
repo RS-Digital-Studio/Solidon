@@ -1,336 +1,132 @@
-# Entscheidungen, die anstehen — 22.08.2026
+# Entscheidungen vom 22./23.08.2026 — was entschieden wurde und von wem
 
-Vier Sitzungen haben das Register durchgearbeitet. Was gebaut werden konnte, ist
-gebaut; was hier steht, wartet auf eine Entscheidung, die keine Sitzung selbst
-treffen darf. Jede Frage nennt den Vorschlag der Sitzung, die sie ausgearbeitet
-hat, und was daran hängt.
+Diese Datei begann als Liste von Fragen an Robert. Sie ist jetzt das Protokoll
+der Antworten: Fünf hat er selbst getroffen, bevor er schlafen ging, die
+übrigen 3d-druck-64 unter seiner Vollmacht — erst „mach alles, damit es immer
+perfekt für Kunden ist", dann erweitert auf „Bedienung, Produktrichtung und
+Bauplanänderungen, alles kannst du entscheiden".
 
-Reihenfolge: das Billige und Klare zuerst, das Teure zuletzt.
-
----
-
-## 1. Trimesh im kritischen Pfad des Starts (3d-druck-64)
-
-**Der Befund.** `load_operations()` brauchte über eine Sekunde, und der
-Registerpunkt verlangte eine Messung. Sie liegt vor: `app.core.scene.ops` kostet
-**722 der 790 ms**, die anderen achtzehn Module zusammen 67. Eine Ebene tiefer
-löst es sich vollständig auf — `import trimesh` **582 ms**, `numpy` 65 ms. Das
-Registerfüllen selbst ist billig; die 86 Einträge kosten 11,8 ms.
-`load_operations()` ist nur der Erste, der trimesh anfasst.
-
-**Die Frage.** `app/ui/app.py:234` ruft `load_operations()` **vor**
-`build_application()`. Trimesh lädt also, während der Startbildschirm
-„Operationen werden geladen …" zeigt und Qt noch nicht hochgefahren ist — eine
-halbe Sekunde, in der nichts anderes passiert. Soll die Startreihenfolge so
-umgebaut werden, dass beides nebeneinander läuft?
-
-**Wofür es spricht:** §31 bindet den Start auf drei Sekunden, gemessen sind 12,9
-kalt. Eine halbe Sekunde ist der billigste Posten auf der Liste.
-**Wogegen:** Es ist eine Änderung an der Startreihenfolge, und die Menüs brauchen
-das Register, bevor das Fenster steht. Ein Vorladethread ist kein Einzeiler.
-
-**Vorschlag:** Nicht jetzt. Die Messung ist der Wert des Punkts, und sie sagt,
-dass die Stelle woanders liegt als vermutet. Der Umbau gehört in eine eigene
-Runde, wenn der Start als Ganzes drankommt — nicht als Anhängsel.
+**Wozu sie so dasteht:** Jede Entscheidung trägt ihren Grund, damit sie sich
+umdrehen lässt, ohne den Code zu lesen. Wer eine für falsch hält, braucht nur
+den Absatz und nicht die Datei darunter.
 
 ---
 
-## 2. Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster (3d-druck-b8)
+## Von Robert selbst entschieden
 
-**Vorschlag: anhängen, mit Zähler im Kopf.** Nicht unterdrücken, nicht bloß zählen.
-
-- *Unterdrücken* fällt aus: Der zweite Fehler ist oft der eigentliche, der erste
-  nur die Folge, die zuerst auffällt.
-- *Nur zählen* („2 weitere Fehler") verstößt gegen Regel 17 — eine Ausnahme ohne
-  Weg zu ihrem Inhalt trägt keinen Handlungsvorschlag mehr.
-- *Anhängen* passt zur Natur des Dialogs: Ein Fehlerbericht ist ohnehin ein
-  Sammelbehälter. Zwei Berichte für einen Absturzmoment sind zwei halbe
-  Berichte, und der Nutzer schickt einen davon.
-
-**Die Falle, die beim naiven Anhängen zuschnappt:** Das Bildschirmfoto entsteht
-**vor** dem Dialog, sonst zeigt es den Dialog statt dessen, was darunter
-schiefging. Beim zweiten Fehler steht der erste Dialog schon — sein Foto zeigte
-genau das. Also: Foto des ersten Fehlers behalten, für den zweiten keines.
+| Frage | Entscheidung | Stand |
+|---|---|---|
+| Woher weiß ein Merkmal, welcher Schritt es erzeugt hat? | **Ein Feld an `Feature`** (`created_by`), nicht das ID-Präfix aus §21.2 — die ID ist ein Schlüssel und trägt schon eine Bedeutung | gebaut (3d-druck-3a) |
+| Heißt die Exportdatei `Halterung.stl` oder `Bracket.stl`? | **Quellsprache, Name im Dialog sichtbar** — eine sichtbare Vorgabe, die stabil ist, schlägt eine unsichtbare, die wandert | gebaut (`c9833cc`) |
+| Die 33 Referenzringe in `app/ui/` | **Alle umbauen** | gebaut; Abnahme ist der Freigabetest je Klasse, nicht die Liste |
+| Zweites Fehlerfenster und „Andere Objekte wählen" | **Beides bauen** | gebaut (3d-druck-b8) |
+| §35 eine Testart „Anschluss" geben | **„ja, mach rein"** — auf direkte Frage von 3d-druck-33 | gebaut (`452c4b5`), fünfmal angewandt |
 
 ---
 
-## 3. „Eingabe korrigieren" ist ein Satz und kein Knopf (3d-druck-b8)
+## Unter Vollmacht entschieden (3d-druck-64)
 
-Der Parameterfall ist gebaut. Offen ist der **Auswahlfall**, und dort ist
-`CORRECT_INPUT` nicht nur unverdrahtet, sondern falsch: `field="in"` ist keine
-Parameterzeile, `edit_operation` öffnete einen Dialog auf ein Feld, das es nicht
-gibt.
+### Bedienung
 
-**Vorschlag: eine neue Handlung `CHANGE_SELECTION` — „Andere Objekte wählen".**
-Kein Dialog: Der Handler markiert den Schritt im Verlauf, wählt seine bisherigen
-Eingangsobjekte im Objektbaum aus und wartet auf die neue Auswahl.
+**„Zuletzt geöffnet" wird auf vier Zeilen gekürzt, die Kacheln bleiben.**
+Gemessen kostet die Liste 172 px und frisst genau den Gewinn von `571422e`
+auf, sobald jemand die Anwendung ein paarmal benutzt hat. Vier Zeilen decken
+den häufigsten Klick. An den Kacheln wird nicht gerührt: 96 von 112 Pixeln
+sind das Vorschaubild, und das ist die einzige Stelle, an der der
+Startbildschirm etwas **zeigt** statt beschreibt.
 
-Vier Verdrahtungen: `panels.py` (`FINDING_ACTIONS` für `evaluate.missing_input`,
-`evaluate.too_few_inputs`, `evaluate.object_count`), `main_window.py`
-(`error_handlers`), `core/errors.py` (die neue `Action`), `scene/history.py:288`
-(`consumes` bekommt eigene `suggestions`; `:279` stellt von `CHOOSE` um, denn
-`choose` ist bewusst nicht verdrahtet und bleibt sonst ein Satz).
-
-**Die offene Frage:** Soll die geänderte Auswahl den Schritt **ersetzen** (so
-liest sich §15.4) oder einen **neuen anlegen**? Ohne Antwort wird ersetzt.
-
----
-
-## 3b. Woher weiß ein Merkmal, welcher Schritt es erzeugt hat? (3d-druck-3a)
-
-**Eine fehlende Voraussetzung, gefunden bevor eine Zeile geschrieben war.** §21.2
-verlangt: „Ein erzeugtes Merkmal bietet immer mindestens eine Handlung an — den
-Schritt zu ändern, der es erzeugt hat." Um das anzubieten, muss man wissen,
-*welcher* Schritt das war. **Diese Information ist nirgends gespeichert.** Drei
-Wege geprüft, alle drei tot:
-
-- `Feature.provenance` sagt `"generated"` — also *dass* es erzeugt wurde, nicht
-  *von wem*. Mehr trägt das Feld laut §9 nicht.
-- Das ID-Präfix `op4.pin_1`, das §21.2 selbst als Beispiel nennt, wird im
-  Produktivcode **nirgends vergeben und nirgends gelesen**. Es kommt nur in
-  Tests vor, die es von Hand hinschreiben — die belegen die Schreibweise, nicht
-  die Vergabe.
-- `SceneObject.created_by` ist der falsche Ausweg: `evaluate.py:309` setzt es bei
-  **jeder** Operation, die das Objekt ausgibt. Für ein Gewinde, das in Schritt 3
-  geschnitten wurde und in Schritt 7 eine Verrundung bekam, steht dort 7.
-
-**Damit ist Punkt 3 keine Menüfrage, sondern erst eine Formatfrage. Zwei Wege:**
-
-**(a) Das Präfix wirklich vergeben**, wie §21.2 es beschreibt: jedes erzeugte
-Merkmal heißt `op<N>.<name>`. Dafür: Der Bauplan sagt es bereits so, kein neues
-Feld. Dagegen: Die ID ist der Schlüssel, an dem Ops hängen — sie zu ändern heißt,
-jede bestehende Projektdatei umzuschreiben, und die Zuordnung vergleicht Namen.
-Migrationsschritt 9 → 10.
-
-**(b) Ein Feld an `Feature`**, etwa `created_by: OpId | None`. Dafür: Die IDs
-bleiben; die Antwort steht, wo die Frage gestellt wird; alte Dateien lesen `None`
-und verlieren nichts. Dagegen: §9 ändert sich, und `Feature` ist die Struktur, an
-der sich laut §9 alle Module ausrichten.
-
-**Vorschlag der Sitzung: (b).** Die ID ist ein Schlüssel und trägt schon eine
-Bedeutung (Art und Nummer); ihr eine zweite aufzuladen macht jede Änderung am
-Erzeuger zu einer Umbenennung — und §21.2 verlangt an derselben Stelle Stabilität
-der IDs.
-
----
-
-## 4. Erzeugen und Ändern sind reine Verteilermenüs (3d-druck-b8)
-
-**Vorschlag: die Regel, die es entscheidet, steht schon im Code — sie schaut nur
-auf die falsche Zahl.** `MENU_GROUPS` (`registry.py:80`) sagt im Docstring: „Eine
-Gruppe mit einer einzigen Kategorie steht flach, sonst bekommt jede Kategorie ihr
-Untermenü." Sie schaut auf die Zahl der **Kategorien**. Die Hausgrenze ist aber
-eine **Zeilengrenze** — zwölf je Menü (`test_interface_limits.py`).
-
-Also: Passen die Zeilen aller Kategorien einer Gruppe zusammen ins
-Zwölf-Zeilen-Budget, stehen sie flach mit Trennstrichen; passen sie nicht,
-bleiben die Untermenüs. *Erzeugen* hat vier Kategorien und würde flach — der
-Quader kostet danach zwei Klicks statt drei. *Ändern* hat sieben und bleibt tief.
-
-**Warum das kein Tausch ist:** Die Neun-Menü-Grenze bleibt unberührt. Es fällt
-nur Tiefe *innerhalb* eines Menüs weg, wo das Budget es hergibt, und es
-entscheidet eine Regel je Menü statt des Geschmacks je Fall.
-
----
-
-## 5. Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte (3d-druck-b8)
-
-Der Punkt ist zwei Sachen, und nur eine ist eine Entscheidung.
-
-**(a) Kein Entscheidungsbedarf — der Test ist kaputt.**
-`test_the_constraint_buttons_stay_readable_on_a_laptop` ist grün, wenn er allein
-läuft, und misst dann etwas, das niemand sieht: Läuft `test_ui.py` davor im
-selben Prozess, sind die achtzehn Knöpfe 37 statt 28 Punkte breit. Er misst die
-Reihenfolge des Laufs. Wird ohne Rückfrage repariert.
-
-**(b) Was aus der Zeile verschwindet — Vorschlag: ein Überlaufknopf.** Achtzehn
-Knöpfe in einer Zeile sind auch ohne das Stylesheet-Problem zu viel, und die
+**Die Werkzeugzeile der Skizze bekommt einen Überlaufknopf.** Achtzehn Knöpfe
+in einer Zeile sind auf einem 1366er Laptop nicht bedienbar, und die
 Hausgrenze steht schon: `test_interface_limits.py` erlaubt acht Werkzeuge. Die
-acht häufigsten bleiben Knöpfe, der Rest wandert unter einen Überlauf. Welche
-acht die häufigsten sind, sollte an Fusion abgelesen werden statt geraten.
+acht häufigsten bleiben, der Rest wandert darunter — welche acht, wird an
+Fusion abgelesen und nicht geraten.
+
+**Die Menütiefe entscheidet ein Zeilenbudget, nicht die Zahl der Kategorien.**
+`MENU_GROUPS` schaut heute auf die Kategorien; die Hausgrenze ist aber eine
+Zeilengrenze (zwölf je Menü). Passen die Zeilen aller Kategorien einer Gruppe
+hinein, stehen sie flach mit Trennstrichen. *Erzeugen* wird damit flach — der
+Quader kostet zwei Klicks statt drei —, *Ändern* bleibt tief. Die
+Neun-Menü-Grenze bleibt unberührt, es ist also kein Tausch.
+
+**„Andere Objekte wählen" nimmt die vorhandene Auswahl sofort — und wartet
+sichtbar, wenn keine da ist.** Der Grund ist die Erwartung, nicht der Klick:
+Wer die Handlung anklickt, erwartet, dass er *jetzt* wählen kann. Ein Modus,
+der das tut, ist erwartungskonform; einer, der eine Statuszeile zeigt und
+einen zweiten Klick auf dieselbe Handlung verlangt, ist es nicht. Regel 19
+verbietet **unsichtbare** Zustände, nicht angezeigte — der Befund bleibt
+hervorgehoben, Escape beendet folgenlos. *Rückfallbedingung:* Lässt sich die
+Hervorhebung nicht von normalem Auswählen unterscheiden, gilt die einfache
+Variante. Ein Modus, der aussieht wie kein Modus, ist schlechter als keiner.
+
+### Werkzeuge und Verfahren
+
+**`test_mesh_backend`: die dritte Zusicherung fällt.** Sie prüft die Länge des
+Temp-Ordners **dieser Maschine** und sagt nichts über den Kunden; die zwei
+davor prüfen den Programmtext und bleiben. Ein Test, der bei umgebogenem
+`TEMP` rot wird, kostet jede Sitzung Zeit und schützt niemanden.
+
+**`py-spy` ja — aber nicht in `constraints.txt`.** Installation in die
+**Nutzer**-Umgebung. Ein Werkzeug, das man an einen *laufenden* Prozess hängt,
+ist kein Bestandteil des Produkts; es gehört zu `git` und dem Debugger, nicht
+zu den Abhängigkeiten. Die Lizenzprüfung bleibt unberührt, und der nächste
+Klon installiert weiterhin genau das, was die CI hat. **Was hineingehört, ist
+der Satz, wie man es ruft** — `py-spy dump --pid N --native`, samt dem Hinweis,
+dass die Elternkette auf Windows reißen kann. Es hat den Hänger aufgeklärt, der
+drei Torläufe gefressen hatte.
+
+**Eigene Arbeitsbäume ja — aber nicht in dieser Nacht.** Die Machbarkeit ist
+belegt (der Code kommt aus dem Worktree, der Interpreter aus der `.venv` des
+Hauptbaums). Das stärkste Argument dafür ist kein Zeitargument: *Ein privater
+Index schützt vor fremden Dateien, nicht vor einem fremden HEAD* — ein
+Regel-Commit ist auf einem fremden Branch gelandet, ohne dass jemand etwas
+falsch gemacht hätte. Der Preis sind eigene Branches und vier Merges statt
+vier Commits auf `main`. **Ein Umstieg auf Branches, während vier Sitzungen
+arbeiten und der Auftrag lautet „am Ende ist alles in `main`", ist genau der
+Moment, in dem etwas nicht dort landet.** Vorbereiten ja, umstellen am Morgen.
+
+**Trimesh bleibt vorerst im kritischen Pfad des Starts.** Gemessen: 722 der
+790 ms von `load_operations()` sind `app.core.scene.ops`, davon 582 der Import
+von trimesh — das Registerfüllen selbst kostet 11,8 ms. Der Umbau wäre eine
+Änderung an der Startreihenfolge (die Menüs brauchen das Register, bevor das
+Fenster steht), und eine halbe Sekunde von 12,9 s kaltem Start ist nicht die
+Stelle, an der ein Kunde etwas merkt. **Der Startpfad gehört als Ganzes
+angesehen, nicht an einem Posten optimiert** — dann mit einer Messung von
+außen, wie sie beim Tor die Lücke zwischen 9 und 30 Minuten aufgedeckt hat.
 
 ---
 
-## 6. Der Startbildschirm — und was die Messung daran gedreht hat (3d-druck-b8)
+## Was ausdrücklich **nicht** unter der Vollmacht entschieden wurde
 
-**Erst offscreen gemessen, dann mit echter Qt-Plattform nachgemessen.** Der
-erste Durchgang war unbrauchbar: Offscreen hat Qt keine Schriftfamilie, und
-Layouthöhen sind Textmetriken. Die Nachmessung zeigt, wie systematisch der
-Fehler ist — und findet dabei etwas anderes als erwartet.
+**Die vierte Falle in `CLAUDE.md`** — der Text liegt fertig vor (3d-druck-33):
+*Ein roter Lauf, dessen Datei nicht in `git status` steht, hat seine Ursache
+außerhalb deiner Änderung; erst `git status` und der Zeitstempel des
+Artefakts, dann der Code.* Er ist gut, er hat heute mehrere Sitzungen Zeit
+gekostet, und er wartet trotzdem auf Robert.
 
-| | offscreen | echt |
-|---|---|---|
-| Spaltenbreite | 1360 | 1093 |
-| `more_area` | 242 | 256 |
-| `examples_area` | 232 | 232 |
-| Rollweg 1920×1080 | 160 | **198** |
-| Rollweg 1600×900 | 340 | **378** |
+**Der Grund ist eine Haltung, die zweimal an einem Tag getragen hat.**
+3d-druck-64 hatte §35 unter der Vollmacht entschieden und auf Widerspruch
+zurückgenommen; 3d-druck-33 hat stattdessen Robert direkt gefragt und in einem
+Satz ein „ja, mach rein" bekommen. Ihre Begründung, warum sie es auch unter
+der erweiterten Vollmacht so hält:
 
-Die reinen Kachelrechnungen stimmen überein; falsch wird es dort, wo Schrift im
-Spiel ist.
+> Eine Vollmacht, die ich über dich zitiert bekomme, während er schläft, ist
+> kein Ersatz für seine Antwort — nicht aus Misstrauen, sondern weil genau das
+> die Konstruktion ist, die wir beide für falsch gehalten haben.
 
-**Der eigentliche Fund steckt aber in einer Zeile, die zuerst wie Beiwerk aussah
-— jede Größe zweimal gemessen, mit leerer und mit gefüllter Liste „Zuletzt
-geöffnet":**
-
-| | leer | 6 Einträge |
-|---|---|---|
-| Rollweg 1920×1080 | **26** | 198 |
-| Rollweg 1600×900 | 206 | 378 |
-
-**Die 26 px bei leerer Liste sind praktisch die 16 px, die der Registerpunkt nach
-`571422e` meldet.** Der Fix von damals wirkt also unverändert — die Messung lief
-nur auf einem **frischen** Zustand. Der Punkt beschreibt damit einen
-Startbildschirm, den nur sieht, wer die Anwendung zum ersten Mal öffnet.
-
-Im echten Gebrauch stehen dort sechs Projekte, und dann sind es 198 px auf einem
-1920er Schirm — **genau der Wert, den der Fix beseitigt hatte.** Die Liste kostet
-172 px, und sie wächst mit der Benutzung.
-
-**Damit lautet der Punkt anders, als er dasteht.** Nicht „der Startbildschirm
-braucht ein Höhenbudget", sondern: **„Die Liste der zuletzt geöffneten Projekte
-frisst den Gewinn von `571422e` auf, sobald jemand die Anwendung ein paarmal
-benutzt hat."** Das ist entscheidbar, ohne an Kacheln zu rühren — sechs Zeilen
-auf vier gekürzt bringen rund 57 px, und der wiederkehrende Kunde verliert
-nichts, was er nicht über *Öffnen* erreicht.
-
-**Die Reihenfolge für den Fall, dass mehr nötig ist:**
-1. **`more_area` — „Was kann das noch?"** (256 px). Der größte Posten und der
-   einzige, der auf dem Startbildschirm nichts startet. Der Abstand zu
-   `examples_area` ist mit 24 px allerdings klein: Wer die zwei gegeneinander
-   abwägt, entscheidet nach Zweck und nicht nach Höhe.
-2. **„Zuletzt geöffnet" kürzen** — siehe oben, und nach der Messung eher Platz 1.
-3. **Die Kachelhöhe zuletzt** — 112 px sind knapp, und das Vorschaubild ist der
-   Grund, aus dem eine Kachel erkennbar ist.
-
-**Eine Beobachtung ohne Befund, ausdrücklich als solche:** Mit echter Plattform
-ist die Spaltenbreite 1093 statt 1360, und drei Kacheln darin sind je rund
-355 px breit — unter `TILE_MIN_WIDTH` (420). Das *sieht* nach einem Fehler aus,
-aber `TILE_MIN_WIDTH` wird dort als Schwelle für die **Fensterbreite** benutzt
-und nicht als Mindestmaß der Kachel. Ob das Absicht ist, sagt der Code nicht.
+Das gilt weiter für `CLAUDE.md`, den Bauplan und `AGENTS.md`: Sie legen fest,
+**wie hier gearbeitet wird**, und stehen damit über der Arbeit, nicht darin.
+Eine Nacht kostet das, und keine Substanz.
 
 ---
 
-## 7. §35 braucht eine Testart „Anschluss" (3d-druck-33)
+## Was weiter Robert gehört
 
-**Der Befund ist schärfer als der Punkt.** §35 *beschreibt* den Fall bereits
-ausführlich — was fehlt, ist die **Zeile in der Tabelle**. Und die Tabelle ist
-es, aus der `AGENTS.md` seine Testarten zieht und an der entlang eine Sitzung
-prüft, ob sie fertig ist. Ein Absatz darunter wird gelesen und genickt; eine
-Tabellenzeile wird abgehakt. Dasselbe Muster wie die vier Prosa-Punkte ohne
-Kästchen in der Roadmap: **Was kein Kästchen hat, zählt niemand.**
+Nichts davon ist eine Entscheidung, die eine Sitzung treffen könnte — es fehlt
+jeweils etwas, das man nicht beschließen kann:
 
-**Vorschlag für die Tabelle** (zwischen „Hauptwege" und „Agenten-Suite"):
-
-| Anschluss | jede Zusage, die nur an einer Stelle eingelöst wird, wird an **dieser** Stelle geprüft — nicht „der Cache kann es", sondern „die Anwendung tut es" |
-
-Dazu drei Bauarten im Text: am echten Einstieg messen; wo zwei Wege dieselbe
-Fähigkeit anbieten, sie **gegeneinander** prüfen statt gegen einen erwarteten
-Wert; und bei einem einzigen Aufrufer den Test an die Aufrufstelle legen.
-
-**Zwei unabhängige Belege am selben Tag:** der Plattencache (vollständig gebaut,
-vollständig geprüft, nie angeschlossen — `disk=` kam in ganz `app/` nicht vor)
-und `detect()` gegen `detect_holes()` in der Wahrnehmung, wo ein einseitig
-versorgter Fix die Anwendung etwas anderes hätte sagen lassen als die
-Kommandozeile, bei grünen Tests in beiden Wegen.
-
-**Was ausdrücklich nicht vorgeschlagen wird:** keine neue Dateikonvention, kein
-Abdeckungsmaß, keine Pflicht für jede Bauplanzusage. Die Zeile bindet nur, was
-**nur an einer Stelle** eingelöst wird.
-
----
-
-## 8. Eine vierte Falle in CLAUDE.md (3d-druck-33)
-
-Kein Entwurf für Code, sondern für die Datei, die festlegt, wie hier gearbeitet
-wird — deshalb hier und nicht unter uns abgemacht.
-
-**Der Anlass.** Heute endete `tests/test_packaging.py` bei allen vier Sitzungen
-gleichzeitig mit Exit 1. Beide gemeldeten Dateien waren unverändert; das
-Lizenzmanifest war ein lokales Bauartefakt von 07:49, die zwei Commits kamen um
-11:39 und 18:08. Der Test tat genau, wozu er da ist. Wer die Vorgeschichte nicht
-kennt, sucht ihn eine halbe Stunde im eigenen Diff.
-
-**Vorschlag: als vierter Spiegelstrich unter „Befehle", neben die drei
-bestehenden Fallen** — dort, weil diese Falle beim *Fahren* des Tores zuschnappt
-und nicht beim Schreiben von Tests. Der Satz, der trägt, ist die Reihenfolge:
-**erst `git status` und der Zeitstempel des Artefakts, dann der Code.** Dieselbe
-Familie wie `3D Drucker/` im Prüfpfad — beide Male sagt ein rotes Ergebnis nichts
-über den geänderten Code.
-
-Und die Grenze dazu, weil sie leicht zu übertreten ist: **Das ist kein Grund, den
-Lauf wegzuzählen.** `suite-getrennt.sh` darf Exit 5 entscheiden, weil „nichts
-gesammelt" strukturell keine Aussage über Code ist. Ein veraltetes Artefakt
-dagegen ist ein echter Fehlschlag eines Tests, der genau das prüft, was er soll —
-hätte das Skript ihn weggezählt, wäre eine Lizenzprüfung stillgelegt, damit die
-Schlusszahl schöner aussieht. Behoben wird die Ursache, nicht die Meldung.
-
----
-
-## 9. Der Upload, der einen Kunden ins Leere schickt (3d-druck-64)
-
-Kein Entwurf, sondern eine Freigabe: Die Changelog-Korrektur liegt nur im
-Arbeitsbaum. Bis `website/version.json` hochgeladen ist, liest **jedes**
-Update-Fenster beim Kunden den alten achten Punkt und schickt ihn ins Handbuch,
-wo nichts steht.
-
-Der Upload geht nach außen und wird deshalb nicht ohne Zustimmung gefahren.
-Soll er?
-
----
-
-## 10. Heißt die Exportdatei `Halterung.stl` oder `Bracket.stl`? (3d-druck-64)
-
-**Die eine Entscheidung, die den ganzen Punkt „Objektnamen der Beispiele bleiben
-deutsch" blockiert.** Der Punkt ist gut analysiert und machbar; seine
-Reihenfolge lautet: erst diese Entscheidung, dann `SceneObject.name`, dann das
-Format. Ohne sie fängt niemand an.
-
-**Die Stelle ist genau eine:** `app/core/export/writer.py:179`,
-`object=safe_name(entry.name)` im Namensschema `{project}_{object}_{index}von{count}`.
-Wird der Objektname übersetzbar, wandert der Dateiname mit der Anzeigesprache —
-derselbe Klick erzeugt bei einem deutschen Nutzer `Gehaeuse_Deckel_1von3.stl` und
-bei einem englischen `Housing_Lid_1von3.stl`.
-
-**Drei Wege:**
-
-**(a) Der Dateiname folgt der Anzeigesprache.** Was der Nutzer sieht, bekommt er
-auch als Datei. Dagegen spricht der Punkt mit seinem eigenen Argument: „Ein
-Dateiname, der mit der Anzeigesprache wandert, ist dieselbe Sorte Fehler wie ein
-Cache-Schlüssel, der es tut." Ein Skript, das die Ausgabe weiterverarbeitet,
-bricht, sobald jemand die Sprache umstellt.
-
-**(b) Der Dateiname nimmt immer die Quellsprache** — also die Message-ID
-beziehungsweise den deutschen Text. Stabil und reproduzierbar, aber ein
-englischer Nutzer bekommt `Halterung.stl` für ein Objekt, das im Baum
-„Bracket" heißt. Das ist erklärbar und sieht trotzdem nach einem Fehler aus.
-
-**(c) Der Dateiname nimmt immer Englisch.** Stabil, international lesbar, und
-für den deutschen Nutzer genauso überraschend wie (b) für den englischen — nur
-in die andere Richtung.
-
-**Was ich vorschlagen würde: (b), und den Dateinamen im Exportdialog zeigen.**
-Die Stabilität ist das Argument, das der Punkt selbst stark macht; die
-Überraschung lässt sich beheben, indem der Nutzer den Namen vor dem Schreiben
-sieht und ändern kann. Eine sichtbare Vorgabe, die stabil ist, schlägt eine
-unsichtbare, die wandert. **Aber das ist eine Produktentscheidung und keine
-technische** — deshalb steht sie hier und nicht im Code.
-
-**Der Rest des Punktes danach**, zur Einordnung des Aufwands: `SceneObject.name`
-wird `TranslatableText | str`, und rund 65 Stellen in Oberfläche, Export und
-Agentenschicht lesen einen Objektnamen direkt. Dazu Format 9 → 10 mit Migration
-(`carry_over` genügt, alte Namen bleiben wörtlich), die vierzehn gesetzten Namen
-in `make_examples.py`, siebzig Katalogeinträge und neu erzeugte Beispiele. Als
-eigener Durchgang, nicht neben anderen Punkten.
-
----
-
-## Was hier bewusst nicht steht
-
-Punkte, die auf etwas warten, das keine Entscheidung ist: CI-Dienst und
-Signaturzertifikat, Apple-Notarisierung, DMARC-Eintrag, das Postfach `support@`,
-ein fremder Rechner zum Installieren, zwei Messschieberwerte an einer 2020er und
-einer 3030er Schiene, zwei Agenten-Suite-Läufe gegen Sonnet 5 (kosten Geld), und
-die Abstürze, die einen Lauf unter einem Werkzeug brauchen, das doppelte
-Freigaben sieht. Sie stehen im Register und bleiben dort, bis das Fehlende da
-ist.
+- **CI-Dienst und Signaturzertifikat**, Apple-Notarisierung, DMARC-Eintrag,
+  das Postfach `support@` — Zugänge und Verträge.
+- **Zwei Agenten-Suite-Läufe gegen Sonnet 5** und **P16.10** — beide kosten
+  Geld über Roberts Schlüssel.
+- **Zwei Messschieberwerte** an einer 2020er und einer 3030er Aluschiene.
+- **Ein fremder Rechner** zum Installieren.
