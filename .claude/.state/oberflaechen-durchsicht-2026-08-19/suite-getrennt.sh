@@ -14,7 +14,24 @@
 set -u
 cd "$(dirname "$0")/../../.." || exit 1
 
-PY=.venv/Scripts/python.exe
+# **Der Interpreter, auch wenn er nicht hier liegt.** Ein eigener Arbeitsbaum
+# (`claude --worktree`) hat keine `.venv` — sie ist per `.gitignore` draußen und
+# gehört dem Hauptbaum. Fest verdrahtet gab dieses Skript dort **jede**
+# Fensterdatei mit Exit 127 zurück („Befehl nicht gefunden"), und das sieht aus
+# wie der bekannte Absturz beim Abbau, ist aber keiner.
+#
+# Gesucht wird in dieser Reihenfolge: was der Aufrufer nennt (`SUITE_PYTHON`,
+# das setzt `tools/nach_main.py`), dann die eigene `.venv`, dann die des
+# Hauptbaums über das gemeinsame Git-Verzeichnis.
+PY=${SUITE_PYTHON:-.venv/Scripts/python.exe}
+if [ ! -x "$PY" ]; then
+  haupt=$(git rev-parse --git-common-dir 2>/dev/null)
+  PY="${haupt%/.git}/.venv/Scripts/python.exe"
+fi
+if [ ! -x "$PY" ]; then
+  echo "Kein Interpreter gefunden. Setze SUITE_PYTHON auf den vollen Pfad." >&2
+  exit 2
+fi
 windowed=$(grep -lE "MainWindow|Viewport|pyvista" tests/test_*.py | tr '\n' ' ')
 ignores=""
 for file in $windowed; do ignores="$ignores --ignore=$file"; done
