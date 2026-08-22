@@ -87,7 +87,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte — **entschieden** | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | einen Überlaufknopf: die acht häufigsten Zwangsbedingungen bleiben Knöpfe, der Rest wandert darunter. Achtzehn in einer Zeile sind auf einem 1366er Laptop nicht bedienbar, und `test_interface_limits.py` erlaubt acht Werkzeuge — die Hausgrenze stand schon. Welche acht: an Fusion ablesen. Dazu der Test, der sein Thema selbst setzt |
+| Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte — **neu entschieden** | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | zwei Schritte statt des zurückgenommenen Überlaufknopfs: `measure_field` nur zeigen, wenn es bedienbar ist (−163 auf 844, eine Zeile), und danach das Maß am Zeiger statt in der Leiste. Dazu eine Grenze, die es für diese Zeile noch nicht gibt — 900 wie bei der Bedingungszeile. Die Rechnung steht in `konzepte/entscheidungen-2026-08-22.md` |
 | Ein Höhenbudget für den Startbildschirm — **entschieden, in Arbeit** | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird. Am 22.08. neu gemessen, und die Aktenlage des Punkts stimmt nicht mehr: 340 px fehlen auf 1600x900 statt 156, die Ablagefläche gibt es als Widget nicht mehr, und es sind **zwei** Kachelbereiche — `more_area` (242 px) ist der größte Einzelposten |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf — **halb erledigt** | Der Bedienweg von außen nachgefahren (21.08.2026) | einen Handler für den **Parameterfehler**: den Dialog mit den Werten erneut öffnen. Der zweite Fall („andere Anzahl an Objekten“) hat seit dem 23.08. einen — `CHANGE_SELECTION` führt in den Auswahlmodus |
@@ -5949,6 +5949,24 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       nicht nachsieht. Dasselbe gilt für die Abbau-Abstürze, die in dieser
       Nacht mehrfach als „die bekannten" abgehakt wurden, darunter von
       3d-druck-64.
+
+      **Der erste Fix wirkte nicht, und das ist eine Messung:** `shiboken6.isValid`
+      plus `disconnect` vor dem `wait` ergab wieder 5/5. Damit ist „Signale an
+      tote Empfänger" als **alleinige** Erklärung ausgeschlossen.
+
+      **Der Stack dieses Laufs zeigt, was die vorigen nicht hatten:**
+
+          Current thread: Garbage-collecting
+                          tests\conftest.py, line 218
+
+      Der Absturz passiert während eines gc-Laufs, den `processEvents()`
+      auslöst — **dieselbe Familie wie der Fall vom 22.08.**, gegen den
+      `leash.undisturbed()` steht (gc aus, solange `processEvents` läuft;
+      damals von 6/10 auf 0/10). Das erklärt auch, warum es erst seit
+      `ff98633` reißt: `wait_for_all` macht die Arbeiter innerhalb der Fixture
+      fertig, damit liegt an dieser Stelle mehr totes Material herum, und der
+      gc findet mehr zum Abräumen. **Die Zeile hat den Absturz nicht erfunden,
+      sie hat ihm Material gegeben.**
 
       **Für den Exit-127-Punkt darunter ändert das nichts** — 127 ist ein
       anderer Code als die Zugriffsverletzung hier, und beide Signaturen

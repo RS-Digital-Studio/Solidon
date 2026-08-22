@@ -81,10 +81,49 @@ Hausgrenze steht schon" ist falsch: `MAX_TOOLS = 8` gilt `window.tool_strip`,
 der Werkzeugzeile **unter dem Viewport**. Für den Skizzeneditor gibt es diese
 Grenze nicht; sie müsste erst gesetzt werden.
 
-Der wirksamste Kandidat ist damit ein anderer als der entschiedene: das
-Raster-Feld, eine Dauereinstellung, die man einmal setzt und die 163 Punkte in
-einer Werkzeugzeile belegt. Die Rechnung dazu legt 3d-druck-b8 vor — an Fusion
-abgelesen, nicht geraten.
+**Neu entschieden am 23.08.2026, auf der zweiten Rechnung.** Die erste nannte
+das Raster-Feld als besten Kandidaten; auch das war falsch — `snap_step` und
+`snap_toggle` hängen an der *Ebenen*-Zeile, nicht an der Werkzeugzeile
+(3d-druck-b8, Selbstkorrektur). Der Bestand der Zeile ist:
+
+    12 Knöpfe à 37                         444
+    „Grundform" (Aufklappmenü)             153
+    offset_distance   („2,00 mm")          163   Wert für den Versetzen-Knopf
+    measure_field     („0,00 mm")          163   Maß beim Zeichnen
+    ------------------------------------------
+    Summe der Posten                       997   (+ Abstände = 1007)
+
+**Der Kandidat ist `measure_field`, und zwar aus einem besseren Grund als
+seiner Breite:** Es steht dauerhaft mit `setEnabled(False)` da und wird erst
+bedienbar, „wenn ein Element angefangen ist" — sein eigener Kommentar sagt es.
+Ein Feld, das die meiste Zeit grau ist und trotzdem ein Sechstel der Zeile
+belegt, ist derselbe Fall wie ein Umschalter, der etwas verspricht, was er
+nicht hält.
+
+**Entschieden wird beides, nacheinander:**
+
+1. **Sofort: nur zeigen, wenn bedienbar.** −163 Punkte auf 844, eine Zeile
+   Code. Der Einwand aus der eigenen Regel — „wer eine Zeile vermisst, sucht
+   sie" — trägt hier nicht: *Niemand vermisst ein Feld, das er nie benutzen
+   konnte.*
+2. **Danach: das Maß erscheint am Zeiger**, während gezeichnet wird, statt in
+   der Leiste. Das ist die Bedienung, die „an Fusion ablesen" eigentlich
+   meint, und sie löst das Platzproblem nebenbei. Eigener Registerpunkt,
+   eigener Umbau.
+
+**Der erste Schritt ersetzt den zweiten nicht** — er macht ihn nur weniger
+dringend. Und er ist billig genug, dass er sich lohnt, selbst wenn der zweite
+ihn später ganz entfernt.
+
+**`offset_distance` bleibt stehen.** *Versetzen* ist ein Sofort-Knopf und kein
+Modus: Der Wert muss **vor** dem Klick einstellbar sein, sonst lässt er sich
+nicht setzen.
+
+**Und die Grenze wird gesetzt, statt sie zu behaupten.** `MAX_TOOLS = 8` gilt
+`window.tool_strip`, nicht dem Skizzeneditor — für dessen Werkzeugzeile gibt
+es keine. Sie bekommt **900 Bildpunkte**, dieselbe Zahl wie die Bedingungszeile
+desselben Bereichs; zwei Zeilen nebeneinander nach verschiedenen Maßstäben zu
+messen wäre die schlechtere Antwort als eine Zahl, die man begründen kann.
 
 **Die Menütiefe entscheidet ein Zeilenbudget, nicht die Zahl der Kategorien.**
 `MENU_GROUPS` schaut heute auf die Kategorien; die Hausgrenze ist aber eine
