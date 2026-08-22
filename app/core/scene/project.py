@@ -32,7 +32,7 @@ from typing import Any, Final
 from app.branding import APP_VERSION, PROJECT_SUFFIX
 from app.core import examples
 from app.core.errors import ValidationError
-from app.core.knowledge.parts.registry import LIBRARY_VERSION
+from app.core.knowledge.parts import check as part_check
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_data_dir
 from app.core.scene.gathered import externalise, gathered_path, inline, references
@@ -213,8 +213,11 @@ def save(project: Project, path: Path) -> Path:
     document.format_version = FORMAT_VERSION
     document.app_version = APP_VERSION
     # §24.4: der Stand der Bausteinbibliothek gehört zu der Art, wie das
-    # gerechnet wurde.
-    document.parts_version = LIBRARY_VERSION
+    # gerechnet wurde. Für die **eigenen** Bausteine reicht die Version nicht —
+    # sie bewegt sich nicht, wenn der Nutzer seine Datei ändert (§24.5). Darum
+    # nicht mehr die Zeile von Hand, sondern der Weg, der zusätzlich je
+    # benutztem eigenen Baustein einen Abdruck seiner Datei mitschreibt.
+    part_check.stamp(document)
 
     for source_id, source in list(document.sources.items()):
         _check_relative(source.path, f"sources.{source_id}.path")
