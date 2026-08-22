@@ -151,41 +151,63 @@ acht die häufigsten sind, sollte an Fusion abgelesen werden statt geraten.
 
 ---
 
-## 6. Ein Höhenbudget für den Startbildschirm (3d-druck-b8)
+## 6. Der Startbildschirm — und was die Messung daran gedreht hat (3d-druck-b8)
 
-**Nachgemessen, und die Aktenlage des Punkts stimmt nicht mehr.** Am gebauten
-Fenster, Startbildschirm mit sechs zuletzt geöffneten Projekten:
+**Erst offscreen gemessen, dann mit echter Qt-Plattform nachgemessen.** Der
+erste Durchgang war unbrauchbar: Offscreen hat Qt keine Schriftfamilie, und
+Layouthöhen sind Textmetriken. Die Nachmessung zeigt, wie systematisch der
+Fehler ist — und findet dabei etwas anderes als erwartet.
 
-| Auflösung | Rollweg mit 6 zuletzt | ohne „Zuletzt geöffnet" |
+| | offscreen | echt |
 |---|---|---|
-| 1920 × 1080 | 160 px | 56 px |
-| 1600 × 900 | **340 px** | 236 px |
-| 1366 × 768 | 472 px | 368 px |
+| Spaltenbreite | 1360 | 1093 |
+| `more_area` | 242 | 256 |
+| `examples_area` | 232 | 232 |
+| Rollweg 1920×1080 | 160 | **198** |
+| Rollweg 1600×900 | 340 | **378** |
 
-Der Registerpunkt nannte 16 px auf 1920 und 156 px auf 1600 — beide Zahlen sind
-heute mehr als doppelt so hoch. Die drei Spalten sind dabei aktiv und in Ordnung
-(gemessen 1360 vorhanden, 1260 gebraucht), der Unterschied kommt woanders her.
+Die reinen Kachelrechnungen stimmen überein; falsch wird es dort, wo Schrift im
+Spiel ist.
 
-**Drei Abweichungen von dem, was im Punkt steht:** Es gibt **zwei** Kachelbereiche
-(`examples_area` 232 px, `more_area` 242 px), nicht einen. Die Ablagefläche gibt
-es als Widget **nicht mehr** — wer nach ihr schneidet, schneidet nichts. Und die
-Kachel misst 112 px, nicht 122.
+**Der eigentliche Fund steckt aber in einer Zeile, die zuerst wie Beiwerk aussah
+— jede Größe zweimal gemessen, mit leerer und mit gefüllter Liste „Zuletzt
+geöffnet":**
 
-**Vorschlag, mit Zahlen statt Gefühl:**
-1. **`more_area` — „Was kann das noch?"** (242 px). Der größte Posten und der
-   einzige, der auf dem Startbildschirm **nichts startet**: Er zeigt, was die
-   Anwendung kann, während „Wo fange ich an?" den Weg ins Dokument öffnet. Als
-   aufklappbarer Abschnitt, zugeklappt als Vorgabe, wäre das der ganze Betrag —
-   und für den wiederkehrenden Kunden ist es der Bereich, den er am längsten
-   nicht mehr braucht.
-2. **„Zuletzt geöffnet" auf vier statt sechs Zeilen** (~35 px je Zeile). Nicht
-   streichen: Für den wiederkehrenden Nutzer ist das der häufigste Klick.
-3. **Die Kachelhöhe zuletzt** — 112 px sind schon knapp, und das Vorschaubild ist
-   der Grund, aus dem eine Kachel erkennbar ist.
+| | leer | 6 Einträge |
+|---|---|---|
+| Rollweg 1920×1080 | **26** | 198 |
+| Rollweg 1600×900 | 206 | 378 |
 
-Punkt 1 allein bringt 242 der 340 fehlenden Pixel auf 1600 × 900. Für 1366 × 768
-genügt **kein einzelner** Schnitt — das ist die ehrliche Antwort auf die Frage des
-Punkts.
+**Die 26 px bei leerer Liste sind praktisch die 16 px, die der Registerpunkt nach
+`571422e` meldet.** Der Fix von damals wirkt also unverändert — die Messung lief
+nur auf einem **frischen** Zustand. Der Punkt beschreibt damit einen
+Startbildschirm, den nur sieht, wer die Anwendung zum ersten Mal öffnet.
+
+Im echten Gebrauch stehen dort sechs Projekte, und dann sind es 198 px auf einem
+1920er Schirm — **genau der Wert, den der Fix beseitigt hatte.** Die Liste kostet
+172 px, und sie wächst mit der Benutzung.
+
+**Damit lautet der Punkt anders, als er dasteht.** Nicht „der Startbildschirm
+braucht ein Höhenbudget", sondern: **„Die Liste der zuletzt geöffneten Projekte
+frisst den Gewinn von `571422e` auf, sobald jemand die Anwendung ein paarmal
+benutzt hat."** Das ist entscheidbar, ohne an Kacheln zu rühren — sechs Zeilen
+auf vier gekürzt bringen rund 57 px, und der wiederkehrende Kunde verliert
+nichts, was er nicht über *Öffnen* erreicht.
+
+**Die Reihenfolge für den Fall, dass mehr nötig ist:**
+1. **`more_area` — „Was kann das noch?"** (256 px). Der größte Posten und der
+   einzige, der auf dem Startbildschirm nichts startet. Der Abstand zu
+   `examples_area` ist mit 24 px allerdings klein: Wer die zwei gegeneinander
+   abwägt, entscheidet nach Zweck und nicht nach Höhe.
+2. **„Zuletzt geöffnet" kürzen** — siehe oben, und nach der Messung eher Platz 1.
+3. **Die Kachelhöhe zuletzt** — 112 px sind knapp, und das Vorschaubild ist der
+   Grund, aus dem eine Kachel erkennbar ist.
+
+**Eine Beobachtung ohne Befund, ausdrücklich als solche:** Mit echter Plattform
+ist die Spaltenbreite 1093 statt 1360, und drei Kacheln darin sind je rund
+355 px breit — unter `TILE_MIN_WIDTH` (420). Das *sieht* nach einem Fehler aus,
+aber `TILE_MIN_WIDTH` wird dort als Schwelle für die **Fensterbreite** benutzt
+und nicht als Mindestmaß der Kachel. Ob das Absicht ist, sagt der Code nicht.
 
 ---
 

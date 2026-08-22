@@ -74,6 +74,10 @@ oder er hält ihn nicht fest.
 | Die Zuordnung kennt Kugel und Torus nicht | Das Fundament der Wahrnehmung (22.08.2026) | zwei Arten mehr in der Kostenmatrix von §21.2, dazu Namen in der Oberfläche. Eine Art, die erkannt aber nicht zugeordnet wird, ist ein halber Zustand — dieselbe Konsistenzfrage wie bei den Übersetzungskatalogen, und beim Schneiden des Auftrags zunächst übersehen |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Keine Testart deckt „zwischen zwei Modulen“ | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob §35 eine Zeile dafür bekommt. Der Plattencache war vollständig gebaut, vollständig geprüft und in der Anwendung nicht angeschlossen; jeder Test darunter war grün. Der Fehler saß nicht in einem Modul, sondern zwischen zwei |
+| Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
+| Ein Test steht zwölf Minuten still, ohne zu rechnen | Das Fundament der Wahrnehmung (22.08.2026) | einen Python-Stapel aus dem stehenden Prozess, also `py-spy` — das steht nicht in `constraints.txt`, und ein Werkzeug ungefragt in die Umgebung zu holen entscheidet Robert. Vierte Absturzsignatur, und die einzige, die steht statt abzustürzen |
+| Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
+| `test_mesh_backend` misst die Umgebung statt sein Thema | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, was die Zusicherung eigentlich prüfen soll — die Länge des Temp-Ordners dieser Maschine sagt nichts über den Kunden, und ein umgebogenes `TEMP` macht den Test rot, ohne dass am Produkt etwas fehlt |
 | Kein Viewport wird jemals freigegeben | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über die Reichweite — die eine Zeile in `viewport.py` ist behoben, aber `.connect(lambda … self …)` steht an 59 Stellen in `app/ui/`, und jede davon ist ein Ring, sobald der Sender ein Kind von `self` ist. Könnte die gemeinsame Wurzel der vier Absturzpunkte sein: gemessen 7 MB je Fenster, und die Suite baut siebenhundert |
 | Zwei Fensterdateien enden mit Exit 127, und einzeln auch | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — die Roadmap nennt als Signatur des bekannten Absturzes „dieselbe Datei einzeln gefahren ist grün“, und diese zwei sind es nicht. Nachgewiesen im eigenen Arbeitsbaum auf HEAD, vollständig grün und dann 127 |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
@@ -4590,6 +4594,71 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Damit ist auch die Changelog-Korrektur draußen — das Update-Fenster
       schickt den Kunden nicht mehr mit seinem achten Punkt ins Handbuch, wo
       nichts stand.
+
+- [ ] **Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum.**
+      `tools/gate_lock.py` schützt vor Fremd*last* — gegen Fremd*stände* hilft
+      es nicht: Jeder Lauf liest die ungestageten Dateien aller Sitzungen, egal
+      wie halb fertig sie gerade sind. Am 22.08.2026 meldete ein Tor-Lauf einen
+      roten Test mit einem Bild, das keinen Sinn ergab: Der Aufruf übergab
+      `create_box`, der Draft im Fehlertext hieß `thicken`. Es war dieselbe
+      Datei in zwei Fassungen — eine Sitzung schrieb sie gerade um, während die
+      andere sie prüfte.
+
+      **Gefährlich ist nicht der falsche Fehler, sondern der falsche Erfolg.**
+      Ein fremder Zwischenstand kann einen Lauf auch grün machen, und dann hält
+      eine Sitzung ihre eigene Arbeit für abgesichert, die es nicht ist.
+      Naheliegende Antwort sind eigene Arbeitsbäume unter `.claude/worktrees/`
+      mit dem bekannten Preis — dort gibt es kein `.venv`, der Interpreter muss
+      mit vollem Pfad aus dem Hauptbaum gerufen werden (gemessen am 22.08., die
+      Suite läuft so).
+
+- [ ] **Ein Test steht zwölf Minuten still, ohne zu rechnen.** Gemessen am
+      22.08.2026 von 3d-druck-33: `tests/test_interface_limits.py` blieb bei
+      Test 23 von 30 (`test_the_tool_strip_comes_back_with_a_body`) stehen —
+      **0,00 CPU-Sekunden in acht Sekunden Messung** bei 508 MB
+      Arbeitsspeicher. Der Prozess rechnete nicht, er stand. Dieselbe Datei lief
+      bei einer anderen Sitzung in 9,6 s durch, und einzeln nachgefahren: 30
+      passed in 10,77 s, Exit 0.
+
+      **Das ist eine vierte Signatur neben den drei bekannten** — und die
+      einzige, die *steht* statt abzustürzen. Die anderen drei enden mit
+      `0xC0000409`, mit Exit 127 oder mit einer Zugriffsverletzung; diese endet
+      gar nicht. Zum Nachsehen fehlt ein Python-Stapel aus einem laufenden
+      Prozess, also `py-spy` — das steht nicht in `constraints.txt`, und ein
+      Werkzeug ungefragt in die Umgebung zu holen ist eine Abweichung, die
+      Robert entscheidet und keine Sitzung.
+
+- [ ] **Der Stop-Hook meldet Zeitstempel, nicht Urheber.** Bei vier Sitzungen
+      in einem Arbeitsbaum schlägt er regelmäßig für fremde Arbeit an: „Seit
+      der letzten Änderung an X lief die Suite nicht" — und X gehört jemand
+      anderem. Der Hinweis sagt das selbst („stammt die Änderung aus einer
+      parallel laufenden Sitzung, gehört sie nicht dir"), aber die Auflösung
+      kostet jedes Mal einen Blick ins Sitzungsbrett.
+
+      **Wer den Umweg nicht geht, prüft fremden Code oder hält seine eigene
+      Arbeit für ungeprüft.** Gefunden am 22.08.2026 von 3d-druck-b8, und zwar
+      auf dem produktiven Weg: Der Hook meldete eine Änderung an
+      `app/ui/session.py`, sie ging ins Brett — und fand dort einen Eintrag von
+      3d-druck-64, der eine Absprache behauptete, die nicht stattgefunden hatte.
+      Der Umweg hat also etwas gefunden, das sonst niemand gesehen hätte; er ist
+      trotzdem einer.
+
+- [ ] **`test_mesh_backend` misst die Umgebung statt sein Thema.**
+      `test_the_weights_are_downloaded_through_a_short_folder` prüft, ob
+      `tempfile.gettempdir()` kurz genug für den Download ist. Das ist die
+      Länge des Temp-Ordners **der Maschine, auf der die Suite läuft** — nicht
+      die des Kunden, um den es geht. Wer die Suite mit einem umgebogenen
+      `TEMP` fährt, bekommt einen roten Test, der nichts über das Produkt sagt;
+      am 22.08.2026 passierte genau das, weil die Prüf-Anleitung ihre
+      Protokolle nach `$TEMP` schreibt und eine Sitzung ihn auf ihren
+      Arbeitsordner setzte (100 statt 40 Zeichen).
+
+      Die zwei Aussagen davor — geladen wird in einen kurzen Ordner, danach
+      verschoben — prüfen den Programmtext und sind richtig. Die dritte prüft
+      die Maschine. **Dritter Fall desselben Musters an einem Tag:** ein
+      Prüfmittel, das etwas anderes misst, als man annimmt (der
+      Werkzeugzeilen-Test misst die Reihenfolge des Laufs, `--fehlend` maß
+      Dateilängen statt Inhalt).
 
 - [ ] **Kein Viewport wird jemals freigegeben, und kein Fenster auch.** Gemessen
       am 22.08.2026 von 3d-druck-b8: zwanzig losgelassene Viewports und fünf
