@@ -1,16 +1,20 @@
-"""Das Register am Kopf der ROADMAP gegen die Punkte darunter.
+"""Das Register am Kopf der ROADMAP gegen die Punkte darunter — und das Archiv.
 
-`ROADMAP.md` ist zweierlei zugleich: die Arbeitsliste und die Geschichte dieses
-Projekts. Das Zweite überwiegt inzwischen deutlich — der weitaus größte Teil der
-Datei enthält keinen einzigen offenen Punkt, und die, die es gibt, stehen über
-die ganze Länge verstreut. Wer wissen will, was offen ist, hat sie deshalb bis
-heute gesucht statt nachgeschlagen.
+`ROADMAP.md` war bis zum 22.08.2026 zweierlei zugleich: die Arbeitsliste und die
+Geschichte dieses Projekts, und das Zweite überwog weit — von 112 Abschnitten
+enthielten 78 keinen einzigen offenen Punkt. Seither ist die Geschichte nach
+`ROADMAP-ARCHIV.md` getrennt, und die Arbeitsliste behält den Kopf, das
+Register, die Phasen und jeden Abschnitt mit einem offenen Punkt.
 
-Das Register oben ist die Abkürzung. Es ist aber nur so viel wert, wie man ihm
-glaubt: Ein von Hand gepflegtes Verzeichnis driftet vom Bestand ab, und ab dem
-ersten Fehler liest es niemand mehr. Diese Datei hält beides zusammen — nicht
-über die Gesamtzahl, sondern je Abschnitt, denn eine Summe stimmt auch dann noch,
-wenn ein Punkt zugeht und anderswo einer aufgeht.
+Damit prüft diese Datei zwei Dinge statt einem:
+
+* **Das Register gegen die Punkte darunter** — nicht über die Gesamtzahl,
+  sondern je Abschnitt, denn eine Summe stimmt auch dann noch, wenn ein Punkt
+  zugeht und anderswo einer aufgeht. Ein von Hand gepflegtes Verzeichnis driftet
+  vom Bestand ab, und ab dem ersten Fehler liest es niemand mehr.
+* **Das Archiv gegen seine eigene Zusage** — dort steht kein offener Punkt.
+  Sonst wäre der Schnitt eine zweite Liste, in der niemand sucht, und das
+  Register könnte sie nicht führen, weil es diese Datei nicht liest.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from pathlib import Path
 import pytest
 
 ROADMAP = Path(__file__).resolve().parents[1] / "ROADMAP.md"
+ARCHIVE = Path(__file__).resolve().parents[1] / "ROADMAP-ARCHIV.md"
 
 #: Die Überschrift, unter der das Register steht.
 REGISTER = "## Was offen ist"
@@ -36,6 +41,10 @@ _DIVIDER = re.compile(r"^\|[\s:|-]+\|$")
 
 def _lines() -> list[str]:
     return ROADMAP.read_text(encoding="utf-8").splitlines()
+
+
+def _archive_lines() -> list[str]:
+    return ARCHIVE.read_text(encoding="utf-8").splitlines()
 
 
 def _split() -> tuple[list[str], list[str]]:
@@ -128,4 +137,63 @@ def test_the_register_keeps_its_three_columns(column: str) -> None:
     assert column in header, (
         f"Die Spalte „{column}“ fehlt im Register. Der Test liest die zweite "
         "Spalte als Abschnitt — eine andere Reihenfolge macht ihn blind."
+    )
+
+
+def test_the_archive_holds_nothing_that_is_still_open() -> None:
+    """Im Archiv steht kein offener Punkt — sonst ist es ein zweites Register.
+
+    Der Schnitt zwischen Arbeitsliste und Archiv trägt nur, solange er an einer
+    prüfbaren Eigenschaft hängt. Wandert ein Punkt ins Archiv, weil sein
+    Abschnitt sonst abgeschlossen war, sucht ihn dort niemand — und das Register
+    in ``ROADMAP.md`` kann ihn nicht führen, denn es liest diese Datei nicht.
+
+    Der Test greift auf ``_OPEN`` und damit auf ``[ ]`` **und** ``[~]``, auch
+    eingerückt: Ein halbfertiger Punkt im Archiv ist derselbe Fehler wie ein
+    offener.
+    """
+    open_points = [line.strip() for line in _archive_lines() if _OPEN.match(line)]
+
+    assert not open_points, (
+        f"{ARCHIVE.name} führt {len(open_points)} offene Punkte. Sie gehören "
+        f"nach {ROADMAP.name}, mit einer Zeile im Register:\n"
+        + "\n".join(f"  {point[:100]}" for point in open_points[:5])
+    )
+
+
+def _anchor(heading: str) -> str:
+    """Die Sprungmarke, die ein Markdown-Betrachter aus einer Überschrift baut.
+
+    Kleinschreibung, Satzzeichen fallen weg, Leerzeichen werden Bindestriche —
+    und zwar **je Leerzeichen einer**. Der erste Entwurf des Verzeichnisses hat
+    Trennerfolgen zu einem Bindestrich eingedampft und Punkte zu Bindestrichen
+    gemacht; 59 von 78 Marken zeigten damit ins Leere. Ein Verzeichnis, dessen
+    Einträge nicht springen, ist schlechter als keines: Es sieht benutzbar aus.
+    """
+    stripped = re.sub(r"[^\w\s-]", "", heading.lower(), flags=re.UNICODE)
+    return stripped.strip().replace(" ", "-")
+
+
+def test_the_archive_keeps_a_directory_of_what_it_holds() -> None:
+    """Ohne Verzeichnis ist das Archiv ein Textblock von siebentausend Zeilen.
+
+    Gesucht wird darin über den Text — aber wer wissen will, *ob* zu einem Thema
+    schon einmal jemand dagewesen ist, liest Überschriften und keine Volltexte.
+    Jeder ``##``-Abschnitt muss deshalb im Verzeichnis am Kopf auftauchen, und
+    seine Marke muss auch treffen.
+    """
+    lines = _archive_lines()
+    headings = [line[3:].strip() for line in lines if line.startswith("## ")]
+    directory = "\n".join(line for line in lines if line.startswith("| "))
+
+    missing = [name for name in headings if f"[{name}]" not in directory]
+    assert not missing, (
+        f"{ARCHIVE.name} führt {len(missing)} Abschnitte, die im Verzeichnis am "
+        f"Kopf fehlen: {missing[:5]}"
+    )
+
+    astray = [name for name in headings if f"[{name}](#{_anchor(name)})" not in directory]
+    assert not astray, (
+        f"{len(astray)} Einträge im Verzeichnis springen ins Leere — ihre Marke "
+        f"passt nicht zur Überschrift: {astray[:5]}"
     )

@@ -21,13 +21,28 @@ Das Register nennt aber nur *dass* etwas offen ist. **Die Begründung steht am
 Punkt selbst**, und dorthin gehst du, bevor du ihn vorschlägst — dort steht auch,
 was schon versucht wurde.
 
-Der Rest der Datei ist die Geschichte des Projekts: Abschnitte, die nach echten
-Durchsichten entstanden sind, mit Funden, zurückgenommenen Behauptungen und
-gemessenen Irrwegen. Der weitaus größte Teil enthält keinen offenen Punkt — und
-ist trotzdem das Teuerste, was die Datei hat. Wer an einer Stelle arbeitet, an
-der schon jemand war, spart dort Tage. Die Phasen P0 bis P16 stehen **zwischen**
-diesen Abschnitten verstreut, nicht gesammelt oben — such sie, statt sie an
-einer Position zu erwarten.
+`ROADMAP.md` enthält seit dem 22.08.2026 nur noch die Arbeitsliste: den Kopf mit
+dem Register, die Phasen P0 bis P16 und jeden Abschnitt, der einen offenen Punkt
+trägt. Die Phasen stehen **zwischen** den übrigen Abschnitten verstreut, nicht
+gesammelt oben — such sie, statt sie an einer Position zu erwarten.
+
+**Die Geschichte steht in `ROADMAP-ARCHIV.md`**: 78 abgeschlossene Abschnitte
+aus echten Durchsichten, mit Funden, zurückgenommenen Behauptungen und
+gemessenen Irrwegen, dazu ein datiertes Verzeichnis am Kopf. Kein offener Punkt
+steht dort, und das prüft ein Test. Es ist trotzdem das Teuerste, was das
+Projekt hat: Wer an einer Stelle arbeitet, an der schon jemand war, spart dort
+Tage. **Sieh dort nach, bevor du etwas vorschlägst** — ein „das haben wir
+gemessen und es trug nicht" steht nur da.
+
+Zwei Fallen dabei:
+
+- **Wo im Archiv „offen" steht, ist es nicht mehr offen.** Einige Abschnitte
+  führen Prosalisten unter Überschriften wie „Bewusst offen"; die haben nie ein
+  Register gesehen. Der einzige Ort, dem du für den Rückstand glauben darfst,
+  ist das Register.
+- **Ein offener Punkt ohne Kästchen zählt nicht.** Am 22.08.2026 lagen vier
+  Punkte als Prosa in kästchenlosen Abschnitten, einer davon 163 Zeilen tief.
+  Wer einen Fund festhält, gibt ihm ein `- [ ]`.
 
 Dazu `git log --oneline -15`: was zuletzt passiert ist, sagt oft mehr über den
 Stand als eine Liste, in der ein Haken fehlt.
@@ -50,6 +65,13 @@ abschließt, schlägt einen, der eine neue anfängt.
 Wird ein Punkt erledigt, gehört er in der Roadmap nachgezogen — und ein neuer
 Fund gehört dort ergänzt, mit dem, was er gekostet hat. **Beides an zwei
 Stellen**: am Punkt selbst und im Register oben. Vergisst du die zweite, wird
-`tests/test_roadmap.py` rot und sagt dir, welcher Abschnitt nicht mehr passt. Die Roadmap ist die
-Stelle, an der die Geschichte dieses Projekts steht; `CLAUDE.md` und
-`AGENTS.md` sind es ausdrücklich nicht.
+`tests/test_roadmap.py` rot und sagt dir, welcher Abschnitt nicht mehr passt.
+
+Neues wird in `ROADMAP.md` geschrieben, nie ins Archiv. Ist ein Abschnitt
+vollständig abgehakt, darf er hinüberwandern — dann mit einer Zeile im
+Verzeichnis am Archivkopf, sonst wird der Test rot.
+
+`ROADMAP.md` und `ROADMAP-ARCHIV.md` sind zusammen die Stelle, an der die
+Geschichte dieses Projekts steht; `CLAUDE.md` und `AGENTS.md` sind es
+ausdrücklich nicht. Das **Warum** einer Entscheidung steht in `konzepte/` —
+dort ist der Index, der sagt, welchem Dokument man noch glauben darf.
