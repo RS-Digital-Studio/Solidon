@@ -98,6 +98,42 @@ rot endet**, ist kein roter Test. Drei Fensterdateien enden nach „N passed" mi
 Unterschied steht in `ROADMAP.md`; wer ihn nicht kennt, sucht den Fehler in
 einem Test, der nie fehlgeschlagen ist.
 
+## Ein roter Leistungstest ist erst dann eine Regression, wenn er es zweimal ist
+
+`tests/.performance.json` hält die Bestwerte, gegen die die 25-%-Schwelle
+misst. Die Datei ist **absichtlich** ignoriert (`.gitignore`), und der Grund
+steht bisher nur dort: Die Werte sind maschinenabhängig (Bauplan §31). An
+diesem Projekt arbeiten drei Maschinen; die Bestwerte des schnellsten Rechners
+würden den Laptop dauerhaft rot färben, ohne dass eine Zeile langsamer
+geworden wäre.
+
+Am 22.08.2026 ist das belegt worden, weil zwei Sitzungen gleichzeitig am selben
+Projekt rechneten:
+
+| Lauf | Fremdlast | Ergebnis |
+|---|---|---|
+| A | 48 % | 5 failed, 14 passed |
+| B | 16 % | **19 passed, Exit 0** |
+
+Dieselbe Software, derselbe Tag, dieselbe Maschine. Alle fünf roten waren die
+Regressionsschwelle, kein absoluter Zielwert aus §31, und im ruhigen Lauf lagen
+alle Einzelzeiten darunter (Orientierungssuche 17,47 s, Subdivision 2,46 s,
+Blending 1,33 s, Skizzenlöser 0,21 s).
+
+**Daraus folgt für jeden roten Leistungstest:**
+
+* **Denselben Stand ein zweites Mal fahren**, bevor eine Regression gemeldet
+  wird — nicht den Vorgängerstand. Schwankt die *Menge* der roten Tests, ist es
+  Last und kein Code. Das kostet eine Minute statt eines Arbeitsbaums.
+* **Auch die Reihenfolge zählt.** `sketch_solve_200` misst 114 ms allein und
+  162 ms hinter `test_slice.py` — 38 % Unterschied bei einer Schwelle von 25.
+* **Die Fremdlast ist meistens die eigene Arbeit.** Ein zweiter Testlauf, eine
+  parallele Sitzung, ein offenes Fenster. „Auf einer ruhigen Maschine messen"
+  hilft niemandem, weil eine Maschine immer ruhig aussieht; nachsehen, was
+  sonst rechnet, hilft.
+
+Das ist der einzige Teil des Tors, dessen Rot nicht „nicht fertig" bedeutet.
+
 ## Die Gegenprobe
 
 Ein neuer Test, der einen Fund festnagelt, wird **einmal ohne den Fix gefahren**.
