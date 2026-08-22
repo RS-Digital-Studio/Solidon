@@ -4929,6 +4929,44 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Werkzeug ungefragt in die Umgebung zu holen ist eine Abweichung, die
       Robert entscheidet und keine Sitzung.
 
+- [x] **Drei Fehler in `gate_lock.py` an einem Abend — und keiner davon war
+      vorher zu sehen.** Am 22.08.2026 benutzten vier Sitzungen dasselbe
+      Prüfschloss zum ersten Mal gleichzeitig. Was dabei herauskam:
+
+      * **Der Rat bei Exit 75 empfahl, was man gerade getan hatte.** „Starte mit
+        `--wait SEKUNDEN`" stand auch für den, der mit `--wait 3000` gestartet
+        war — und führte prompt zur falschen Diagnose, das Werkzeug ignoriere
+        den Schalter. Nach Regel 17 ist ein Rat, der die eigene Handlung
+        wiederholt, kein Handlungsvorschlag. Behoben in `64425d3`.
+      * **Der Wächter las den Prozessbaum über die Elternkette.** Auf Windows
+        hängt ein Enkel nach dem Ende eines Zwischenprozesses in einer anderen
+        Kette — der `pytest` war über die Kette **nicht** zu finden, über sein
+        Kommando schon. Behoben in `3562e4d`; die Gegenprobe dazu fand einen
+        weiteren Fehler derselben Bauart (`subprocess.Popen` startet einen
+        Wrapper, dessen Kind die Arbeit tut).
+      * **`_alive()` hielt beendete Prozesse für lebend.** `OpenProcess`
+        liefert auch für einen toten Prozess ein Handle, solange irgendwo eines
+        offen ist; erst `GetExitCodeProcess` sagt die Wahrheit. Folge: Ein
+        verwaistes Schloss blockierte **19 Minuten lang alle vier Sitzungen**,
+        weil `_stale()` es nicht als verwaist erkannte. Behoben in `952c669`.
+
+      **Der Befund dahinter ist größer als das Werkzeug**, und er stammt von
+      3d-druck-33: *Was nur eine Sitzung benutzt, ist nicht geprüft, sondern nur
+      nicht widerlegt.* Alle drei Fehler saßen seit dem ersten Tag darin und
+      waren bei serieller Benutzung unsichtbar. Das ist dieselbe Aussage wie
+      die Testart „Anschluss" in §35, nur für Werkzeuge statt für Zusagen.
+
+      **Und ein Verfahren für den nächsten verwaisten Zustand:** Die Sperrdatei
+      wird **kopiert** statt gelöscht (`.lock-tot-<zeit>`), damit hinterher noch
+      untersuchbar ist, was dort stand. Beim ersten Mal blieb der Beleg nur
+      erhalten, weil vorher gemessen worden war.
+
+      *Bemerkenswert am dritten Fall: Der neue Wächter meldete den Zustand
+      **richtig** („rechnet gerade nicht"), während `_alive()` daneben
+      behauptete, der Halter lebe. Zwei Prüfungen im selben Werkzeug, die sich
+      widersprachen — und die richtige war die neue. Wer nur eine davon gelesen
+      hätte, hätte die falsche geglaubt.*
+
 - [ ] **Der Stop-Hook meldet Zeitstempel, nicht Urheber.** Bei vier Sitzungen
       in einem Arbeitsbaum schlägt er regelmäßig für fremde Arbeit an: „Seit
       der letzten Änderung an X lief die Suite nicht" — und X gehört jemand
