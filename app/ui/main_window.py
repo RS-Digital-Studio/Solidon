@@ -120,6 +120,7 @@ from app.core.registry import (
     OperationSpec,
     PaletteEntry,
     caveat_line,
+    group_is_flat,
     menu_tree,
     palette_entries,
 )
@@ -1581,11 +1582,20 @@ class MainWindow(QMainWindow):
             group = self._menu(str(title))
             groups[str(title)] = group
             self._workspace_menus.append(group)
-            for section in present:
+            flat = group_is_flat(present[0].category)
+            for index, section in enumerate(present):
                 # Eine Gruppe aus einer Kategorie braucht kein Untermenü — es
-                # hieße genauso wie das Menü darüber.
+                # hieße genauso wie das Menü darüber. Und eine Gruppe, die
+                # ganz hineinpasst, braucht auch keines: dann ist die
+                # Zwischenebene ein Klick für nichts (siehe
+                # ``_fits_without_submenus``).
                 target = group
-                if len(present) > 1:
+                if flat and index:
+                    # Der Trennstrich hält die Kategorien auseinander, wo der
+                    # Name des Untermenüs sie nicht mehr benennt. Er zählt in
+                    # der Zeilengrenze nicht mit — genau dafür ist er da.
+                    group.addSeparator()
+                if not flat and len(present) > 1:
                     # Mit dem Fenster als Elternteil erzeugt, nicht über
                     # ``addMenu(titel)``: sonst hält nichts auf der Python-Seite
                     # das Untermenü, und sein C++-Objekt wird eingesammelt,

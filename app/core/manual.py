@@ -750,7 +750,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "zum Ansehen auseinander — er verschiebt nur die Anzeige. Was der "
             "Stapel sagt und was exportiert wird, bleibt, wo es ist.\n\n"
             "Wer die Ebene lieber eintippt als zeigt, nimmt *Vorbereiten → "
-            "Teilen und Anpassen → Teilen* und trägt Achse und Position ein. "
+            "Teilen* und trägt Achse und Position ein. "
             "Dieselbe Operation, nur ohne die Suche davor; null Stifte heißt "
             "dort: nur schneiden.\n\n"
             "**Wie die Hälften heißen, sagt, welche welche ist.** Nach dem "
