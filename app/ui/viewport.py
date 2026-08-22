@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import ENVIRONMENT_PREFIX
 from app.core.geom.measure import Measurement, MeasurementList, distance, snap, wall_thickness
+from app.core.geom.mesh import distance_to_triangles
 from app.core.geom.mesh_ops import decimate
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import (
@@ -438,6 +439,25 @@ def is_click(start: tuple[int, int] | None, end: tuple[int, int]) -> bool:
 #: einem Gehäuse verschwindet und einen Zapfen vollständig verdeckt.
 FACE_HANDLE_SHARE = 0.06
 FACE_HANDLE_MINIMUM = 2.0
+
+#: Wie weit ein Klick von der **eigenen Fläche** eines Merkmals abliegen darf
+#: und noch als Treffer gilt — als Anteil der Objektdiagonale, mit einer
+#: Untergrenze in Millimetern.
+#:
+#: Ohne diese Grenze gab es keine: :meth:`Viewport._feature_at` nahm das
+#: Merkmal mit dem **nächsten Mittelpunkt** und traf damit immer eines. An der
+#: Platte aus dem Korpus wählte ein Klick auf die Deckfläche sieben Millimeter
+#: neben einer Bohrung die Bohrung, und ein Klick in der Nähe der Stirnseite
+#: die Stirnfläche — der Mittelpunkt einer 80 mm langen Deckfläche liegt weiter
+#: weg als der einer kleinen Fläche daneben. Genau das war „die Auswahl nimmt
+#: immer die Bohrung statt des Modells".
+#:
+#: Der Anteil ist großzügiger als :data:`app.core.units.EPS_MATCH_RELATIVE`,
+#: und dafür gibt es einen Grund: gepickt wird im **dezimierten** Anzeigenetz
+#: (§18.9), und dessen Oberfläche liegt nicht genau auf der der Szene.
+FEATURE_REACH_SHARE = 0.01
+FEATURE_REACH_MINIMUM = 0.5
+
 
 #: Layer analysis (§18.10): contour, island, unsupported region.
 LAYER_COLOUR = ROLES["layer"]
@@ -1370,6 +1390,26 @@ class Viewport(QWidget):
         self._feature_overlay = False
         self._feature_actors: list[Any] = []
         self._selected_feature: FeatureId | None = None
+        self._direct_picking = False
+        """Ob ein Klick ohne Zwischenstufe das tiefste Ziel meint.
+
+        Aus, solange betrachtet wird — dann ist ein Klick eine Navigation und
+        durchläuft die Stufen (:meth:`_click_target`). An, solange ein
+        Operationsdialog nach einem Merkmal fragt: dann ist ein Klick eine
+        **Antwort**, und wer zweimal zeigen muss, um zu antworten, hält den
+        ersten Klick für verschluckt.
+        """
+        self._feature_geometry: dict[ObjectId, list[tuple[FeatureId, Any, Any, Any]]] = {}
+        """Je Körper die Dreiecke jedes Merkmals mit ihrem Hüllquader —
+        vorbereitet, weil die Trefferfrage bei jeder Ruhepause des Zeigers neu
+        gestellt wird (90 ms, :data:`HOVER_DELAY_MS`).
+
+        Der Quader ist die billige Vorprüfung: Ein Modell mit fünfhundert
+        Merkmalen hat fünfhundert Dreiecksmengen, und der genaue Abstand ist
+        nur für die eine oder zwei nötig, deren Quader den Zeiger überhaupt
+        erreicht. Geleert wird beim Szenenwechsel — die Dreiecke gehören einer
+        Auswertung, nicht dem Viewport.
+        """
         self._feature_patch: Any | None = None
         """Die Dreiecke des gewählten Merkmals, in der Auswahlfarbe über dem
         Körper. Ohne sie hieß „Bohrung gewählt", dass der ganze Körper
@@ -1807,6 +1847,10 @@ class Viewport(QWidget):
         # noch einmal.
         self._layer_rebuild.stop()
         self._result = result
+        # Die vorbereiteten Merkmalsdreiecke gehören der vorigen Auswertung.
+        # Eine Op, die eine Bohrung verschiebt, ändert ihre Dreiecke, und ein
+        # Klick träfe danach, wo sie war.
+        self._feature_geometry.clear()
         # Eine Platte mehr heißt ein Bett mehr. Die Kulisse gehört
         # ``show_build_volume``, und die kennt die Szene nicht — hier ist die
         # Stelle, an der die Zahl bekannt wird. Nur bei Änderung, sonst baute
@@ -2878,7 +2922,15 @@ class Viewport(QWidget):
             # Merkmalen bliebe hier nur teuer.
             self._draw_brush()
             return
-        found = point is not None and self._feature_at(point) is not None
+        # Dieselbe Frage, die der Klick stellt, und mit derselben Rechnung: Ein
+        # Zeiger, der die Merkmalsform über einer Bohrung zeigt, während der
+        # Klick den Körper wählt, verspricht etwas, das nicht eintritt. So wird
+        # die gestufte Tiefe zugleich sichtbar, ohne dass irgendwo ein Satz
+        # darüber stehen muss.
+        # ``_from_view`` aus demselben Grund wie beim Klick (§25): Der Zeiger
+        # muss dieselbe Stelle befragen, die der Klick trifft, sonst zeigt er
+        # auf Platte 2 die Form für einen Körper, der dort nicht liegt.
+        found = point is not None and self._would_pick_feature(self._from_view(point))
         if found != self._hover_feature:
             self._hover_feature = found
             self._update_cursor()
@@ -2940,14 +2992,15 @@ class Viewport(QWidget):
             self.paintRequested.emit(picked)
             return
         if self._measure_mode == "off":
-            # Nicht am Messen: erst das Merkmal darunter (§18.5), sonst der
-            # Körper. Ein Klick daneben hebt die Auswahl auf — sonst gäbe es
-            # keinen Weg, sie ohne den Baum wieder loszuwerden.
-            if self._feature_at(picked) is not None:
-                self._select_at(picked)
-                return
-            self.objectPicked.emit(self._object_at(picked) or "")
-            self.pointPicked.emit(picked)
+            # Nicht am Messen: die Auswahl, gestuft (:meth:`_click_target`).
+            # Ein Klick daneben hebt sie auf — sonst gäbe es keinen Weg, sie
+            # ohne den Baum wieder loszuwerden.
+            if not self._select_at(picked):
+                # Die Stelle selbst geht nur hinaus, wenn der Klick kein
+                # Merkmal getroffen hat: Ein offener Dialog, der nach einer
+                # Position fragt, trägt sie ein. Wer ein Merkmal anklickt,
+                # meint das Merkmal und bekommt ``featurePicked``.
+                self.pointPicked.emit(picked)
             return
 
         mesh = self._nearest_mesh(picked)
@@ -3308,31 +3361,210 @@ class Viewport(QWidget):
         )
 
     def _feature_at(self, point: Vec3) -> FeatureId | None:
-        """Das Merkmal nächst einem Klick — zeigen schlägt einen Namen
+        """Das Merkmal **unter** einem Klick — zeigen schlägt einen Namen
         tippen (§18.5).
 
-        Gesucht wird im Körper **unter** dem Zeiger, nicht im gerade
-        ausgewählten. Andersherum wäre es ein Ring: den Körper wählt man aus,
-        indem man ihn anklickt, und der Klick fände sein Merkmal erst, wenn er
-        schon ausgewählt wäre. Ohne Treffer bleibt der gewählte Körper die
-        Quelle — dann ist der Klick daneben gegangen, und die Merkmale, die man
-        vor Augen hat, sind seine.
+        Gesucht wird im Körper unter dem Zeiger, nicht im gerade ausgewählten.
+        Andersherum wäre es ein Ring: den Körper wählt man aus, indem man ihn
+        anklickt, und der Klick fände sein Merkmal erst, wenn er schon
+        ausgewählt wäre. Ohne Treffer bleibt der gewählte Körper die Quelle —
+        dann ist der Klick daneben gegangen, und die Merkmale, die man vor
+        Augen hat, sind seine.
+
+        **„Unter" heißt auf seiner Fläche**, und das ist der Unterschied zu
+        vorher. Bis hierher gewann das Merkmal mit dem nächsten *Mittelpunkt*,
+        ohne jede Grenze — es gab also immer einen Gewinner, sobald der Körper
+        ein Merkmal hatte. Ein Klick mitten auf die Platte wählte die Bohrung
+        in der Ecke, und ein Klick auf die Deckfläche die Stirnfläche, deren
+        Mittelpunkt näher lag. Gemessen wird jetzt der Abstand zu den
+        **Dreiecken** des Merkmals (:data:`FEATURE_REACH_SHARE`): Ein Klick auf
+        die Bohrungswand landet auf ihren Dreiecken und trifft, ein Klick
+        daneben landet auf denen der Deckfläche und trifft die.
+
+        Ein Merkmal ohne eigene Dreiecke — eine offene Kantenschleife hat
+        keine — bleibt über seinen Mittelpunkt erreichbar, sonst wäre es nicht
+        anklickbar. Auch dort gilt die Reichweite.
+        """
+        found = self._feature_hit(point)
+        return found[0] if found is not None else None
+
+    def _feature_hit(self, point: Vec3) -> tuple[FeatureId, float] | None:
+        """Merkmal und Abstand — die Rechnung hinter :meth:`_feature_at`.
+
+        Getrennt, weil der Zeiger dieselbe Frage stellt wie der Klick und die
+        beiden nie auseinanderlaufen dürfen (:meth:`_would_pick_feature`).
         """
         import numpy as np
 
         target = np.asarray(point, dtype=float)
-        features = self._features_of(self._object_at(point)) or self._features_of_selection()
+        # Der Körper unter dem Zeiger, sonst der gewählte — und die Reichweite
+        # gehört dem, dessen Merkmale gesucht werden, nicht dem anderen.
+        source = self._object_at(point)
+        prepared = self._prepared_features(source)
+        if not prepared:
+            source = self._selected
+            prepared = self._prepared_features(source)
+        if not prepared:
+            return None
+        reach = self._feature_reach(source)
         best: FeatureId | None = None
         best_offset = float("inf")
-        for feature_id, feature in features.items():
-            centre = feature.params.get("centre")
-            if centre is None:
+        for feature_id, triangles, low, high in prepared:
+            # Der Hüllquader zuerst: Er kostet sechs Vergleiche, der genaue
+            # Abstand eine Rechnung über jedes Dreieck des Merkmals.
+            if np.any(target < low - reach) or np.any(target > high + reach):
                 continue
-            offset = float(np.linalg.norm(np.asarray(centre, dtype=float) - target))
+            offset = distance_to_triangles(triangles, target)
             if offset < best_offset:
                 best_offset = offset
                 best = feature_id
-        return best
+        if best is None or best_offset > reach:
+            return None
+        return best, best_offset
+
+    def _feature_reach(self, object_id: ObjectId | None) -> float:
+        """Wie weit ein Klick neben einem Merkmal noch dessen Merkmal meint.
+
+        Mitwachsend wie der Flächengriff: eine halbe Millimeter-Grenze ist an
+        einem 300-mm-Gehäuse zu streng für ein dezimiertes Anzeigenetz und an
+        einem 8-mm-Zapfen zu großzügig.
+        """
+        entry = self._result.scene.objects.get(object_id) if self._result and object_id else None
+        if entry is None:
+            return FEATURE_REACH_MINIMUM
+        size = entry.mesh.bounds.size
+        diagonal = math.sqrt(float(sum(value * value for value in size)))
+        return max(FEATURE_REACH_MINIMUM, diagonal * FEATURE_REACH_SHARE)
+
+    def _prepared_features(
+        self, object_id: ObjectId | None
+    ) -> list[tuple[FeatureId, Any, Any, Any]]:
+        """Die Dreiecke der Merkmale eines Körpers, je Auswertung einmal
+        gerechnet (:attr:`_feature_geometry`).
+
+        Gezählt wird im Netz der **Szene** und nicht im dezimierten
+        Anzeigenetz — dieselbe Trennung wie bei :meth:`highlighted_faces`
+        (§18.9).
+        """
+        if object_id is None or self._result is None:
+            return []
+        cached = self._feature_geometry.get(object_id)
+        if cached is not None:
+            return cached
+        entry = self._result.scene.objects.get(object_id)
+        raw = getattr(entry.mesh, "raw", None) if entry is not None else None
+        if entry is None:
+            return []
+
+        import numpy as np
+
+        vertices = np.asarray(raw.vertices, dtype=float) if raw is not None else None
+        faces = np.asarray(raw.faces) if raw is not None else None
+        prepared: list[tuple[FeatureId, Any, Any, Any]] = []
+        for feature_id, feature in entry.features.items():
+            indices = [
+                index
+                for index in feature.face_indices
+                if faces is not None and 0 <= index < len(faces)
+            ]
+            if indices and vertices is not None and faces is not None:
+                triangles = vertices[faces[indices]]
+            else:
+                # Ohne eigene Dreiecke bleibt der Mittelpunkt — als
+                # entartetes Dreieck, damit dieselbe Rechnung ihn erreicht.
+                centre = feature.params.get("centre")
+                if centre is None:
+                    continue
+                point = np.asarray(centre, dtype=float)
+                triangles = np.repeat(point.reshape(1, 1, 3), 3, axis=1)
+            flat = triangles.reshape(-1, 3)
+            prepared.append((feature_id, triangles, flat.min(axis=0), flat.max(axis=0)))
+        self._feature_geometry[object_id] = prepared
+        return prepared
+
+    def set_direct_picking(self, active: bool) -> None:
+        """Schaltet die Auswahltiefe ab, solange ein Dialog nach einem Merkmal
+        fragt (§18.5).
+
+        Ein Klick ist dann eine **Antwort** und keine Navigation: Wer *Bohrung
+        vergrößern* offen hat und auf die Bohrung zeigt, meint sie und nicht
+        ihren Körper. Zweimal zeigen zu müssen, um zu antworten, sähe aus wie
+        ein verschluckter Klick — genau der Eindruck, aus dem §18.5 mit dem
+        Anklicken herausführen soll.
+        """
+        self._direct_picking = active
+
+    def _click_target(
+        self, point: Vec3, *, direct: bool = False
+    ) -> tuple[ObjectId | None, FeatureId | None]:
+        """Was ein Klick an dieser Stelle auswählen würde — Körper und, wenn
+        die Auswahl schon dort steht, das Merkmal darunter (§18.5).
+
+        **Die gestufte Tiefe.** Der erste Klick auf einen Körper meint den
+        Körper, der nächste das Merkmal unter dem Zeiger. Bis hierher gewann
+        sofort das Merkmal, und ein Körper mit erkannten Bohrungen war per Klick
+        überhaupt nicht auswählbar: Wer die Platte verschieben wollte, bekam
+        eine Bohrung und musste in den Objektbaum ausweichen.
+
+        Das ist das Modell von Figma, Illustrator und Sketch — erst die Gruppe,
+        dann das Element darin —, und es ist auch das von Fusion 360, wo *Select
+        Other* eine zweite Geste braucht, um in die Tiefe zu gehen. Zwei
+        Eigenschaften davon sind übernommen und beide sind Absicht:
+
+        * **Die Tiefe hängt am Körper, nicht am Pixel.** Wer in einem Körper
+          angekommen ist, wählt mit dem nächsten Klick direkt die nächste
+          Bohrung — er muss nicht erst wieder heraus. Blender setzt beim
+          Weiterschalten zurück, sobald die Maus sich bewegt; für Bohrungen an
+          einem Teil wäre das eine Stufe zu viel.
+        * **Ein anderer Körper fängt von vorn an.** Sonst führte der Weg von
+          einer Bohrung zum Nachbarteil über das Merkmal des Nachbarteils, das
+          niemand gemeint hat.
+
+        Gelesen wird die Stufe aus der Auswahl selbst und nicht aus einem
+        eigenen Zustand: „im Körper drin" heißt genau „ein Merkmal dieses
+        Körpers ist gewählt". Ein zweiter Zustand daneben wäre eine zweite
+        Wahrheit, und die Auswahl kommt auch aus dem Objektbaum.
+
+        **Zwei Ausnahmen gehen ohne Stufen ans tiefste Ziel**, und beide sind
+        keine Navigation: ``direct`` für den Rechtsklick (siehe
+        :meth:`_on_right_click`) und :meth:`set_direct_picking` für einen
+        Dialog, der nach einem Merkmal fragt.
+        """
+        object_id = self._object_at(point)
+        if object_id is None:
+            return None, None
+        if direct or self._direct_picking:
+            return object_id, self._feature_at(point)
+        if object_id != self._selected:
+            # Erste Stufe: ein anderer Körper wird als Ganzes gewählt.
+            return object_id, None
+        # Derselbe Körper, also eine Stufe tiefer. Steht dort kein Merkmal,
+        # bleibt es beim Körper — und ein gewähltes Merkmal fällt weg, denn
+        # der Klick ging auf die nackte Fläche.
+        return object_id, self._feature_at(point)
+
+    def selection_depth(self) -> int:
+        """Wie tief die Auswahl steht: 0 nichts, 1 ein Körper, 2 ein Merkmal.
+
+        Als eigene Auskunft, damit der Weg heraus (:meth:`step_selection_out`)
+        und der Weg hinein (:meth:`_click_target`) dieselbe Stufenzählung
+        benutzen und nicht zwei.
+        """
+        if self._selected is None:
+            return 0
+        return 2 if self._selected_feature is not None else 1
+
+    def _would_pick_feature(self, point: Vec3) -> bool:
+        """Ob der **nächste** Klick hier ein Merkmal wählen würde.
+
+        Der Zeiger stellt genau diese Frage (:meth:`_look_under_pointer`), und
+        er muss sie mit derselben Rechnung stellen wie der Klick: Ein Zeiger,
+        der die Bohrungsform zeigt, wo ein Klick den Körper wählt, verspricht
+        etwas, das nicht eintritt. So wird die Stufe auch sichtbar — über einer
+        Bohrung am noch nicht gewählten Teil steht der Auswahlzeiger, nach dem
+        ersten Klick der Merkmalszeiger.
+        """
+        return self._click_target(point)[1] is not None
 
     def _features_of(self, object_id: ObjectId | None) -> dict[FeatureId, Feature]:
         """Die Merkmale eines Körpers, oder nichts."""
@@ -4111,34 +4343,60 @@ class Viewport(QWidget):
         self._enable_picking()
 
     def _on_right_click(self, x: int, y: int) -> None:
-        """Ein Rechtsklick wählt aus wie ein Linksklick und fragt nach dem Menü.
+        """Ein Rechtsklick wählt aus und fragt nach dem Menü — und **ohne
+        Stufen**, anders als der Linksklick.
 
         §18.5 nennt das Kontextmenü am Merkmal den Ort für Weg 1: ein fremdes
         Modell wird angepasst, indem man auf die Stelle zeigt, die stört. Bis
         hierher zeigte ein Rechtsklick auf einen Körper gar nichts — das Menü
         gab es nur im Objektbaum, wo die Merkmale `hole_3` heißen.
+
+        **Die Aufteilung zwischen den Tasten.** Links wandert durch die Tiefe:
+        erst das Teil, dann das Merkmal darin. Rechts fragt, was hier liegt,
+        und meint immer das Genaueste — sonst wäre die Zusage aus §18.5 an eine
+        Vorbedingung geknüpft, die niemand kennt: Man müsste die Bohrung erst
+        linksklicken, um ihr Menü zu bekommen. Dieselbe Trennung hat Fusion
+        360, wo der Rechtsklick auf das zeigt, was unter dem Zeiger liegt.
+
+        Die Stufe geht dabei nicht verloren: Ein Rechtsklick, der eine Bohrung
+        wählt, setzt die Auswahl auf sie — der nächste Linksklick daneben führt
+        also von dort weiter und nicht von vorn.
         """
         point = self._world_at(x, y)
         if point is None:
             self.objectPicked.emit("")
             return
-        self._select_at(point)
+        # Zurück in die Szene, wie beim Linksklick (:meth:`_on_picked`, §25).
+        # Hier fehlte es: Auf Platte 2 fragte der Rechtsklick eine Bettbreite
+        # daneben nach dem Körper, fand dort meistens keinen und hob die
+        # Auswahl auf, statt das Menü zu ihr zu zeigen.
+        self._select_at(self._from_view(point), direct=True)
         self.contextMenuAt.emit(x, y)
 
-    def _select_at(self, point: Vec3) -> None:
-        """Was ein Klick auswählt: erst das Merkmal, dann der Körper darunter.
+    def _select_at(self, point: Vec3, *, direct: bool = False) -> bool:
+        """Was ein Klick auswählt: der Körper, und eine Stufe tiefer sein
+        Merkmal (§18.5). Gibt zurück, ob ein Merkmal dabei war.
 
-        Beides, und in dieser Reihenfolge. Ein Merkmal gehört einem Objekt, und
-        der Baum kann es nur unter dessen Zeile zeigen — ohne die Auswahl des
-        Körpers tat ein Klick auf eine Bohrung nichts, weil noch nichts
-        ausgewählt war. Linksklick und Rechtsklick nehmen denselben Weg; das
-        Menü fragt danach nur noch, was zur Auswahl passt (§18.5).
+        Welche Stufe ansteht, entscheidet :meth:`_click_target`. Was hier
+        steht, ist die Reihenfolge des Sendens, und die ist keine
+        Geschmacksfrage: **der Körper zuerst, das Merkmal danach.** Ein Merkmal
+        gehört einem Objekt, und der Baum kann es nur unter dessen Zeile
+        zeigen — ohne die Auswahl des Körpers tat ein Klick auf eine Bohrung
+        nichts, weil noch nichts ausgewählt war. Der Weg zurück durch den Baum
+        setzt das gewählte Merkmal dabei zurück, und deshalb kommt es
+        anschließend.
+
+        Linksklick und Rechtsklick nehmen denselben Weg, nur nicht dieselbe
+        Stufe: ``direct`` überspringt sie (:meth:`_on_right_click`). Das Menü
+        fragt danach nur noch, was zur Auswahl passt (§18.5).
         """
-        feature_id = self._feature_at(point)
-        self.objectPicked.emit(self._object_at(point) or "")
-        if feature_id is not None:
-            self.select_feature(feature_id)
-            self.featurePicked.emit(feature_id)
+        object_id, feature_id = self._click_target(point, direct=direct)
+        self.objectPicked.emit(object_id or "")
+        if feature_id is None:
+            return False
+        self.select_feature(feature_id)
+        self.featurePicked.emit(feature_id)
+        return True
 
     def _world_at(self, x: int, y: int) -> Vec3 | None:
         """Der Punkt auf dem Körper unter einer Bildschirmposition.

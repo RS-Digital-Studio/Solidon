@@ -84,6 +84,28 @@ def select_plate(window: MainWindow) -> None:
     item.setSelected(True)
 
 
+def on_the_bore_wall(window: MainWindow, feature_id: str) -> tuple[float, float, float]:
+    """Eine Stelle auf der Wand dieser Bohrung — also eine, die ein Klick
+    wirklich trifft.
+
+    Drei Tests dieser Datei zeigten bis zum 22.08.2026 auf den **Mittelpunkt**
+    einer Bohrung. Der liegt auf ihrer Achse, mitten im Leeren, und dort ist
+    keine Oberfläche: Ein ``vtkCellPicker`` kann diesen Punkt nicht
+    zurückgeben. Grün waren sie, weil ``_feature_at`` damals das Merkmal mit
+    dem nächsten Mittelpunkt nahm — sie prüften also gegen die Rechenweise und
+    nicht gegen einen Klick. Seit die Reichweite an den Dreiecken des Merkmals
+    hängt (§18.5), zeigen sie dorthin, wo gezeigt wird.
+
+    Die eigentliche Auswahltiefe steht in ``tests/test_selection.py``; hier
+    bleiben die drei Aussagen, um die es diesen Tests ging.
+    """
+    entry = window.session.last_result.scene.objects["obj_1"]
+    feature = entry.features[feature_id]
+    centre = feature.params["centre"]
+    radius = float(feature.params["diameter"]) * 0.5
+    return (float(centre[0]) + radius, float(centre[1]), 2.0)
+
+
 def wait_for_map(window: MainWindow) -> None:
     """§18.9: Karten werden im Hintergrund gebaut, der Test wartet also wie
     das Fenster.
@@ -582,14 +604,16 @@ def test_a_hidden_body_lights_up_nothing(window: MainWindow) -> None:
 def test_a_click_in_the_view_finds_the_feature_under_it(window: MainWindow) -> None:
     """§40 für P3: ein Klick muss die richtige Merkmal-ID liefern, keinen
     Beinahe-Treffer.
+
+    Gezeigt wird auf die Bohrungswand (:func:`on_the_bore_wall`) und nicht
+    daneben auf die Achse — dort ist keine Oberfläche, und ein Beinahe-Treffer
+    war genau das, was der alte Mittelpunktsabstand lieferte.
     """
     select_plate(window)
     window.viewport.show_scene(window.session.last_result)
     window.viewport.select("obj_1")
-    entry = window.session.last_result.scene.objects["obj_1"]
-    centre = entry.features["hole_3"].params["centre"]
 
-    picked = window.viewport._feature_at((centre[0] + 0.4, centre[1] - 0.3, centre[2]))
+    picked = window.viewport._feature_at(on_the_bore_wall(window, "hole_3"))
     assert picked == "hole_3"
 
 
@@ -1633,10 +1657,8 @@ def test_clicking_needs_no_overlay_switch(window: MainWindow) -> None:
     """
     window.viewport.show_scene(window.session.last_result)
     window.viewport.set_feature_overlay(False)
-    entry = window.session.last_result.scene.objects["obj_1"]
-    centre = entry.features["hole_3"].params["centre"]
 
-    assert window.viewport._feature_at(centre) == "hole_3"
+    assert window.viewport._feature_at(on_the_bore_wall(window, "hole_3")) == "hole_3"
 
 
 def test_the_label_names_the_feature_and_its_size(window: MainWindow) -> None:
@@ -2428,18 +2450,25 @@ def test_a_click_on_a_feature_selects_its_body_too(window: MainWindow) -> None:
     Leere: ``_on_feature_picked`` fragt den Baum nach dem ausgewählten Objekt,
     und ausgewählt war noch keines. Im Fenster sah es aus, als käme der Klick
     nicht an — in Wahrheit war er angekommen und hatte niemanden.
+
+    **Zwei Klicks statt einem**, seit die Auswahltiefe gestuft ist (§18.5): Der
+    erste meint das Teil, der zweite die Bohrung darin. Die Aussage dieses
+    Tests ist davon unberührt — sie betrifft die *Reihenfolge* im Klick, der
+    ein Merkmal wählt, und die ist dieselbe geblieben.
     """
+    entry = window.session.last_result.scene.objects["obj_1"]
+    hole = next((name for name, feature in entry.features.items() if feature.kind == "hole"), None)
+    assert hole is not None, "die Platte aus dem Korpus hat Bohrungen"
+    wall = on_the_bore_wall(window, hole)
+
+    window.viewport._select_at(wall)  # erste Stufe: der Körper
+
     picked: list[str] = []
     features: list[str] = []
     window.viewport.objectPicked.connect(picked.append)
     window.viewport.featurePicked.connect(features.append)
 
-    entry = window.session.last_result.scene.objects["obj_1"]
-    hole = next((name for name, feature in entry.features.items() if feature.kind == "hole"), None)
-    assert hole is not None, "die Platte aus dem Korpus hat Bohrungen"
-    centre = entry.features[hole].params["centre"]
-
-    window.viewport._select_at((float(centre[0]), float(centre[1]), float(centre[2])))
+    window.viewport._select_at(wall)  # zweite Stufe: das Merkmal darin
 
     assert picked == ["obj_1"], "der Körper zuerst — er trägt die Zeile im Baum"
     assert features == [hole], "und danach das Merkmal, das darunter erscheint"

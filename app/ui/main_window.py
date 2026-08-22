@@ -3684,7 +3684,40 @@ class MainWindow(QMainWindow):
             # Taste des Programms.
             self.finish_sculpt()
             return
-        self.tools.close_tool()
+        if self.tools.active() is not None:
+            self.tools.close_tool()
+            return
+        # Zuletzt der Weg aus der Auswahl heraus. Nur wenn kein Werkzeug offen
+        # war: Wer eines geöffnet hat, meint mit Escape das Werkzeug.
+        self._step_selection_out()
+
+    def _step_selection_out(self) -> bool:
+        """Escape geht eine Stufe zurück: Merkmal → Körper → nichts (§18.5).
+
+        Der Gegenweg zur gestuften Auswahl im Viewport
+        (:meth:`Viewport._click_target`). Ohne ihn ist die Tiefe eine
+        Einbahnstraße: Wer eine Bohrung gewählt hat, kam nur wieder zum ganzen
+        Teil, indem er neben das Modell klickte und von vorn anfing — und wer
+        gar nichts mehr gewählt haben wollte, musste es zweimal tun.
+
+        Dieselbe Aufteilung haben Figma und Illustrator (Escape verlässt die
+        Gruppe, in die man hineingeklickt hat) und Onshape (Escape und
+        Leertaste räumen die Auswahl). Der Unterschied zu Onshape ist die
+        Stufe: Dort räumt Escape alles in einem Zug, hier eine Ebene, weil hier
+        eine Ebene dazwischenliegt.
+
+        Gestellt wird die Frage dem Viewport, gestellt wird die Auswahl im
+        Objektbaum — er ist ihr Eigentümer, und beide Ansichten zeigen eine
+        Auswahl (§18.5). Gibt zurück, ob etwas zurückgenommen wurde.
+        """
+        depth = self.viewport.selection_depth()
+        if depth == 0:
+            return False
+        # Auf Stufe 2 bleibt der Körper und das Merkmal fällt weg; auf Stufe 1
+        # fällt der Körper weg. ``select_object`` räumt den Baum und setzt neu,
+        # und dabei geht ``featureSelected(None)`` mit hinaus.
+        self.object_tree.select_object(self.object_tree.selected() if depth > 1 else None)
+        return True
 
     def sketching(self) -> bool:
         """Ob gerade gezeichnet wird statt betrachtet."""
@@ -5400,6 +5433,9 @@ class MainWindow(QMainWindow):
 
         def finished(code: int) -> None:
             self._op_dialog = None
+            # Zurück zur gestuften Auswahl: Ohne Dialog ist ein Klick wieder
+            # eine Navigation und keine Antwort (§18.5).
+            self.viewport.set_direct_picking(False)
             self._clear_preview()
             if code == QDialog.DialogCode.Accepted:
                 on_accept()
@@ -5407,6 +5443,11 @@ class MainWindow(QMainWindow):
         dialog.finished.connect(finished)
         dialog.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
         self._op_dialog = dialog
+        # Solange er offen ist, meint ein Klick das tiefste Ziel: Wer *Bohrung
+        # vergrößern* offen hat und auf die Bohrung zeigt, antwortet auf eine
+        # Frage und wählt nicht aus. Zwei Klicks für eine Antwort sähen aus wie
+        # ein verschluckter erster.
+        self.viewport.set_direct_picking(True)
         dialog.show()
 
     def _wire_preview(

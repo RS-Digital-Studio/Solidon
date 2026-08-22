@@ -47,7 +47,12 @@ from app.ui.tool_strip import strip_title
 #: Das ist der Unterschied zu vorher — vorher fehlten dreizehn, und nichts sagte
 #: es.
 WINDOW_KEYS: Final[tuple[tuple[str, TranslatableText], ...]] = (
-    ("Esc", _("Werkzeug schließen")),
+    # Escape hat eine Rangfolge und nicht eine Aufgabe (``MainWindow._escape``):
+    # Skizze, Skelett, Formen, offenes Werkzeug — und wenn keines davon ansteht,
+    # eine Stufe aus der Auswahl heraus (§18.5). Der Titel nennt beide Enden;
+    # „Werkzeug schließen" allein verschwieg den Weg zurück aus einer gewählten
+    # Bohrung, und den findet sonst niemand.
+    ("Esc", _("Werkzeug schließen, sonst Auswahl eine Stufe zurück")),
     ("Ctrl+Tab", _("Nächstes Objekt wählen")),
     ("Ctrl+Shift+Tab", _("Voriges Objekt wählen")),
     ("Ctrl++", _("Näher heranzoomen")),

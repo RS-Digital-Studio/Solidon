@@ -209,6 +209,34 @@ def _asked(body: trimesh.Trimesh, points: np.ndarray) -> tuple[np.ndarray, np.nd
     )
 
 
+def distance_to_triangles(triangles: np.ndarray, point: np.ndarray) -> float:
+    """Der kürzeste Abstand von einem Punkt zu einer gegebenen Menge Dreiecke.
+
+    Die Frage hinter „welches Merkmal liegt unter diesem Klick?" (§18.5): Die
+    Dreiecke sind die eines erkannten Merkmals, der Punkt ist die Stelle, auf
+    die gezeigt wurde. Gerechnet wird gegen den nächsten **Ort auf dem
+    Dreieck** und nicht gegen den nächsten Eckpunkt — der Unterschied ist kein
+    Feinschliff: Die Deckfläche der Platte aus dem Korpus besteht aus zwei
+    großen Dreiecken, und ein Klick in ihre Mitte liegt vierzig Millimeter von
+    jedem ihrer Eckpunkte entfernt.
+
+    **Ohne den Näherungsindex**, anders als :func:`on_surface`: Hier steht die
+    Dreiecksmenge schon fest, es ist also nichts zu suchen, sondern nur zu
+    rechnen — reine Arithmetik über ein Array. Damit bleibt der Weg an
+    ``rtree`` vorbei, und was dort oben über Zugriffsverletzungen steht, gilt
+    hier nicht.
+
+    Eine leere Menge hat keinen Abstand und bekommt unendlich — der Aufrufer
+    vergleicht gegen eine Reichweite, und „unendlich" fällt dort heraus, ohne
+    dass er einen Sonderfall braucht.
+    """
+    if not len(triangles):
+        return float("inf")
+    query = np.repeat(np.asarray(point, dtype=float).reshape(1, 3), len(triangles), axis=0)
+    nearest = trimesh.triangles.closest_point(np.asarray(triangles, dtype=float), query)
+    return float(np.linalg.norm(np.asarray(nearest, dtype=float) - query, axis=1).min())
+
+
 def read_mesh(payload: bytes, suffix: str) -> MeshData:
     """Parst eine Datei, die schon im Speicher liegt. Noch keine
     Aufbereitung — die ist §17.1."""

@@ -849,6 +849,82 @@ eine Zeichenkette prüft.
 
 ## Die Ansicht
 
+### Die Auswahl hat eine Tiefe, und der Klick wandert durch sie
+
+Drei Stufen: nichts, ein Körper, ein Merkmal (`Viewport.selection_depth`).
+**Links wandert, rechts fragt** — und diese Aufteilung ist der Kern:
+
+* **Der Linksklick geht eine Stufe.** Der erste wählt den Körper, der nächste
+  das Merkmal unter dem Zeiger. Das Modell von Figma und Illustrator: erst die
+  Gruppe, dann das Element darin. Vorher gewann sofort das Merkmal, und ein
+  Körper mit erkannten Bohrungen war per Klick **überhaupt nicht auswählbar** —
+  wer die Platte verschieben wollte, musste in den Objektbaum ausweichen.
+* **Der Rechtsklick meint immer das Genaueste** (`_select_at(..., direct=True)`).
+  Das folgt aus §18.5: Dort ist das Kontextmenü *am Merkmal* der Ort für Weg 1,
+  „indem man auf die Stelle zeigt, die stört". Gestuft wäre diese Zusage an eine
+  Vorbedingung geknüpft, die niemand kennt.
+* **Ein offener Operationsdialog schaltet die Stufen ab**
+  (`set_direct_picking`). Dann ist ein Klick eine *Antwort* und keine
+  Navigation, und zwei Klicks für eine Antwort sehen aus wie ein verschluckter
+  erster.
+* **Escape geht zurück**, eine Stufe je Druck, hinter dem offenen Werkzeug in
+  der Rangfolge von `MainWindow._escape`. Ohne ihn ist die Tiefe eine
+  Einbahnstraße.
+
+Zwei Dinge daran sind leicht falsch zu machen:
+
+**Die Stufe wird aus der Auswahl gelesen, nicht nebenher geführt.** „Im Körper
+drin" heißt genau „ein Merkmal dieses Körpers ist gewählt". Ein eigenes Feld
+daneben wäre eine zweite Wahrheit — die Auswahl kommt auch aus dem Objektbaum,
+und der weiß von keinem Feld im Viewport. Dazu kommt: `objectPicked` läuft
+synchron durch den Baum zurück und setzt `_selected`, also muss die Stufe
+**vor** dem Senden gelesen werden.
+
+**Der Zeiger stellt dieselbe Frage mit derselben Rechnung**
+(`_would_pick_feature` → `_click_target`). Das ist die schon bekannte Regel bei
+`_resting_role`, einen Schritt weiter: Ein Zeiger, der die Merkmalsform über
+einer Bohrung zeigt, während der Klick den Körper wählt, verspricht etwas, das
+nicht eintritt. So wird die Stufe zugleich sichtbar, ohne dass ein Satz darüber
+irgendwo stehen muss.
+
+### Ein Merkmal hat eine Reichweite
+
+`_feature_at` hatte keine, und das war der gemeldete Fehler: Es nahm das
+Merkmal mit dem nächsten **Mittelpunkt**, es gab also immer einen Gewinner,
+sobald der Körper ein Merkmal hatte. An der Korpusplatte wählte ein Klick auf
+die Deckfläche sieben Millimeter neben einer Bohrung die Bohrung (8,1 mm zum
+Bohrungsmittelpunkt gegen 36,1 mm zur Mitte der 80 mm langen Deckfläche), und
+ein Klick nahe der Stirnseite wählte die Stirnfläche.
+
+Gemessen wird gegen die **Dreiecke** des Merkmals
+(`geom.mesh.distance_to_triangles`), gegen den nächsten Ort *auf* dem Dreieck
+und nicht gegen den nächsten Eckpunkt — die Deckfläche der Platte hat zwei
+Dreiecke, ein Klick in ihre Mitte liegt vierzig Millimeter von jedem Eckpunkt
+entfernt. Die Reichweite wächst mit der Diagonale (`FEATURE_REACH_SHARE`),
+weil im dezimierten Anzeigenetz gepickt wird (§18.9).
+
+Drei Folgen davon:
+
+* **Ein Klick trifft die Oberfläche, nie die Achse.** Der Mittelpunkt einer
+  Bohrung liegt im Leeren. Drei Tests zeigten dorthin und prüften damit die
+  Rechenweise statt einen Klick; wer einen neuen schreibt, nimmt die
+  Bohrungswand (`on_the_bore_wall`).
+* **Ein Merkmal ohne eigene Dreiecke bleibt über seinen Mittelpunkt
+  erreichbar** — eine offene Kantenschleife hat keine, und sie ist der Befund,
+  den man am ehesten anklicken will.
+* **Vorbereitet wird je Körper und Auswertung** (`_feature_geometry`), mit dem
+  Hüllquader als billiger Vorprüfung: Die Frage stellt der Zeiger bei jeder
+  Ruhepause neu (90 ms), und der genaue Abstand ist nur für die ein oder zwei
+  Merkmale nötig, deren Quader ihn überhaupt erreicht. Geleert wird in
+  `show_scene` — die Dreiecke gehören einer Auswertung, nicht dem Viewport.
+
+**Und jeder Klickpfad rechnet über `_from_view` in die Szene zurück** (§25).
+Der Rechtsklick tat es nicht und die Zeigersuche auch nicht: Auf Platte 2
+fragten beide eine Bettbreite daneben, fanden dort meist keinen Körper, und der
+Rechtsklick hob die Auswahl auf, statt das Menü zu ihr zu zeigen.
+
+### Was gefärbt wird
+
 **Die Auswahlfarbe gehört dem Genauesten, was gewählt ist.** Ein Klick auf eine
 Bohrung wählt zweierlei aus, den Körper und die Stelle; gefärbt wird die Stelle.
 `highlighted_object()` gibt `None` zurück, solange ein Merkmal gewählt ist, und
