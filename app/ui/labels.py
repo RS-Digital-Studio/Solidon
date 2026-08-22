@@ -1005,6 +1005,14 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
         return f"{tr('Bohrung')} {feature_id.rsplit('_', 1)[-1]}"
     if feature.kind == "cone":
         return tr("Senkung") if feature.params.get("recess") else tr("Verjüngung")
+    # Dieselbe Trennung wie beim Kegel, und deshalb dieselbe Frage: hinein oder
+    # heraus. Eine ausgehöhlte Kugel ist eine Pfanne (Kugelgelenk,
+    # Magnettasche), eine aufgesetzte eine Kuppel; beim Torus heißt das Kehle
+    # und Wulst. Eine Regel, die man einmal lernt, statt drei Einzelfällen.
+    if feature.kind == "sphere":
+        return tr("Pfanne") if feature.params.get("recess") else tr("Kuppel")
+    if feature.kind == "torus":
+        return tr("Kehle") if feature.params.get("recess") else tr("Wulst")
     if feature.kind == "edge_loop":
         return tr("Offene Kante")
     return feature_id
@@ -1025,6 +1033,13 @@ def feature_measure(feature: Feature) -> str:
     if feature.kind == "cone":
         angle = float(params.get("angle", 0.0))
         return f"{angle:.0f}° Ø{length(float(params.get('diameter', 0.0)))}"
+    if feature.kind == "sphere":
+        return f"Ø{length(float(params.get('diameter', 0.0)))}"
+    # Zwei Zahlen ohne Wort, wie beim Kegel: Ringdurchmesser, dann Rohrstärke.
+    # Ein Wort dazwischen wäre eine zweite Stelle, an der eine Sprache fehlt.
+    if feature.kind == "torus":
+        ring = length(float(params.get("ring_diameter", 0.0)))
+        return f"Ø{ring} / Ø{length(float(params.get('tube_diameter', 0.0)))}"
     if feature.kind == "edge_loop":
         return f"{params.get('open_edges', 0)} {tr('offene Kanten')}"
     return ""
