@@ -651,6 +651,34 @@ def _with_features(
             name: (feature if name not in blind else dataclasses.replace(feature, recognised=False))
             for name, feature in declared.items()
         }
+        # **Und was einen benannten Partner hat, kommt nicht zusätzlich in die
+        # Szene.** Der Kommentar weiter oben sagt es seit je voraus — „eine
+        # Neuerkennung benennte eine Bohrung um, die schon einen Namen hat" —,
+        # nur wurden beide eingehängt: die benannte Bohrung des Bausteins und
+        # dieselbe Bohrung noch einmal als ``hole_1``. Gemessen von 3d-druck-3a
+        # trägt in zwei von drei Beispielen jedes zweite bis dritte benannte
+        # Merkmal einen solchen Zwilling.
+        #
+        # Für den Kunden sind das zwei Einträge im Merkmalsbaum für ein Loch,
+        # von denen einer die Provenienz und den Namen trägt, auf den eine
+        # Passung zeigt (§14), und der andere nichts, was der erste nicht
+        # hätte. Beim nächsten Schritt streiten beide um denselben Nachfolger,
+        # und das benannte verliert — so verschwand ``heatset_m4_bore_1``.
+        #
+        # **Nur eindeutige Paare.** ``mapping`` führt, was mit Abstand gewonnen
+        # hat; ``ambiguous`` bleibt ausdrücklich draußen. Bei einem Gleichstand
+        # weiß niemand, welches erkannte Merkmal das benannte meint, und dann
+        # sind zwei Namen besser als ein falsch gelöschter.
+        #
+        # Wird der Baustein-Schritt später entfernt, gibt es kein benanntes
+        # Merkmal mehr; die Erkennung findet die Bohrung dann normal und
+        # benennt sie selbst. Die Unterdrückung gilt nur, solange der Name
+        # existiert.
+        detected = {
+            name: feature
+            for name, feature in detected.items()
+            if name not in set(seen.mapping.values())
+        }
 
     # Ein gedrehter Körper sieht für einen Positionsvergleich aus wie ein
     # anderer Körper. Die Operation weiß, was sie gedreht hat — also werden die
