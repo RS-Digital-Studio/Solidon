@@ -187,9 +187,46 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     # Arbeiter-Thread während des Tests zerstört.** Wer die Zeile wieder
     # einbauen will, misst vorher zehn Läufe je Seite; sie sieht überzeugend aus
     # und ist es nicht.
+    # **Und dann auf die Arbeiter warten, die zu keinem Fenster gehören.**
+    #
+    # Die Schleife oben geht über ``topLevelWidgets()``. Ein Arbeiter, der an
+    # einem **Dialog** hing — die Erhebung der Erstinbetriebnahme, die
+    # Werkzeugprobe des Chats —, steht dort nicht: Der Dialog ist weggeräumt,
+    # sein Thread läuft weiter, und die Fixture ginge direkt zu
+    # ``processEvents()``. Dort treffen sich dann zwei, die nicht
+    # zusammenkommen dürfen — belegt durch einen Stapelabzug vom 23.08.2026:
+    #
+    #     Arbeiter:    install.py:341  __import__(requirement.module)
+    #                  first_run.py:98 work · leash.py:107 run
+    #     Hauptthread: conftest.py     application.processEvents()
+    #
+    # ``__import__`` nimmt den Import-Lock; was ``processEvents()`` an
+    # Python-Code auslöst und seinerseits importiert, wartet darauf. Deshalb
+    # **stehen** diese Läufe, statt zu stürzen — sechsmal in einer Nacht,
+    # zwischen zwölf und siebenundzwanzig Minuten, immer bei 0,00
+    # CPU-Sekunden. Und deshalb hat das ``gc.collect()``, das hier einmal
+    # stand, nichts ausgerichtet: Einsammeln hilft nicht gegen Warten.
+    #
+    # ``leash.wait_for_all`` findet sie über ``leash._alive`` statt über die
+    # Fenster und **sagt, wer die Frist gerissen hat**, statt stumm
+    # weiterzugehen (3d-druck-b8, ``f1ea325``).
+    from app.ui import leash
+
+    zaeh = leash.wait_for_all(2000)
     # Was bleibt, ist die eigentliche Ursache: nicht die Lebenszeit, sondern
     # die Verbindung. ``release`` kappt sie oben.
     application.processEvents()
+    # **Was dieser Satz sieht, und was nicht.** ``wait_for_all`` geht über
+    # ``leash._alive``, und dort steht nur, wer über ``WorkerLeash.start``
+    # gestartet wurde. Am 23.08.2026 waren mindestens fünf Arbeiter mit blankem
+    # ``worker.start()`` daran vorbeigestartet (drei in ``main_window.py``, der
+    # Update-Arbeiter, einer im Erzeugungsdialog). Solange das so ist, prüft
+    # diese Zeile die Arbeiter **an der Leine** und nicht alle — der Wortlaut
+    # sagt es deshalb auch so. Wer die Lücke schließt, darf ihn kürzen.
+    assert not zaeh, (
+        "Arbeiter an der Leine haben den Test überlebt und laufen in den nächsten "
+        "hinein: " + ", ".join(sorted(type(entry).__name__ for entry in zaeh))
+    )
 
 
 @dataclass(frozen=True, slots=True)

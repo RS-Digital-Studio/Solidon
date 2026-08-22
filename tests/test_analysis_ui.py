@@ -40,8 +40,15 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
     Interpreters ist der Thread-Pool der Schichtanalyse längst zu: „cannot
     schedule new futures after interpreter shutdown", quer über eine grüne
     Suite. Gewartet wird auf **alle** Arbeiter des Fensters, nicht nur auf die
-    der Sitzung — das Fenster führt vier eigene, und einer davon, die
-    Update-Prüfung, startet bei jedem Fenster von selbst.
+    der Sitzung — das Fenster führt vier eigene.
+
+    **Einer davon, die Update-Prüfung, startet in der Suite allerdings nie**,
+    und der Satz stand hier zwei Runden lang falsch: Sie hängt an
+    ``UiSettings.check_for_updates``, das in der Vorgabe **aus** ist, und kein
+    Test schaltet es ein. Im Betrieb startet sie bei jedem Fenster von selbst,
+    in der Suite nicht — gemessen am 23.08.2026 von 3d-druck-b8, die wissen
+    musste, ob ihre Frist von zwei Sekunden gegen die vier Sekunden dieses
+    Arbeiters reicht. Sie reicht, weil er gar nicht läuft.
 
     **Gewartet, nicht gelöscht**, und nicht über ``close()``:
 
