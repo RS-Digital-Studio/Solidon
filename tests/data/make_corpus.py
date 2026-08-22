@@ -147,6 +147,39 @@ def torus_ring() -> None:
     )
 
 
+def post_with_fillet() -> None:
+    """Eine Säule mit verrundetem Fuß — das Alltagsteil, an dem die Erkennung
+    bis zum 22.08.2026 **nichts** fand.
+
+    Säule Ø 12 auf einer Platte, der Übergang mit R 3 ausgerundet. Eine
+    Verrundung schließt **tangential** an, das ist ihr Zweck — und die
+    Fleckenbildung trennt an Knicken. Mantel und Kehle lagen deshalb in einem
+    Fleck, auf den weder ein Zylinder noch ein Torus passte: Die Säule hatte
+    keine Mantelfläche, auf die der Agent hätte zeigen können, keine Bohrungs-
+    oder Passungs-Operation fand sie, und der Steckbrief nannte sie nicht.
+    Heraus kamen sieben ebene Flächen und sonst nichts.
+
+    Der Korpus hatte bis dahin keinen einzigen verrundeten Körper, und genau
+    deshalb fiel es niemandem auf.
+    """
+    plate = trimesh.creation.box(extents=(60.0, 60.0, 6.0))
+    plate.apply_translation((0.0, 0.0, -3.0))
+    post = trimesh.creation.cylinder(radius=6.0, height=30.0, sections=96)
+    post.apply_translation((0.0, 0.0, 15.0))
+    # Das Kehlmaterial: der Ring zwischen Säule und R 3, abzüglich des Torus,
+    # dessen Röhre die Rundung schlägt.
+    outer = trimesh.creation.cylinder(radius=9.0, height=3.0, sections=96)
+    outer.apply_translation((0.0, 0.0, 1.5))
+    inner = trimesh.creation.cylinder(radius=6.0, height=6.0, sections=96)
+    inner.apply_translation((0.0, 0.0, 1.5))
+    torus = trimesh.creation.torus(
+        major_radius=9.0, minor_radius=3.0, major_sections=96, minor_sections=48
+    )
+    torus.apply_translation((0.0, 0.0, 3.0))
+    fillet = trimesh.boolean.difference([trimesh.boolean.difference([outer, inner]), torus])
+    write(trimesh.boolean.union([plate, post, fillet]), "post_with_fillet.stl")
+
+
 def degenerate() -> None:
     """Ein Würfel plus ein Null-Flächen-Dreieck, eine Nadel und eine doppelte
     Fläche.
@@ -460,6 +493,7 @@ if __name__ == "__main__":
     plate_countersunk_blind()
     sphere_socket()
     torus_ring()
+    post_with_fillet()
     degenerate()
     broken_open()
     two_components()

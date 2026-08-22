@@ -604,6 +604,46 @@ def test_too_small_a_piece_is_refused_instead_of_guessed() -> None:
     assert fit is None or not fit.good, "a sliver must not pass as a ring"
 
 
+def test_a_fillet_no_longer_swallows_the_post_it_sits_on() -> None:
+    """Das Alltagsteil, an dem die Erkennung bis zum 22.08.2026 nichts fand.
+
+    Eine Säule mit verrundetem Fuß: Die Verrundung schließt **tangential** an —
+    das ist ihr Zweck —, und die Fleckenbildung trennt an Knicken. Mantel und
+    Kehle lagen deshalb in **einem** Fleck, auf den weder ein Zylinder noch ein
+    Torus passte. Sieben ebene Flächen kamen heraus und sonst nichts: keine
+    Mantelfläche, auf die der Agent hätte zeigen können, keine Passung, die sie
+    findet, kein Eintrag im Steckbrief.
+    """
+    found = detect(plate("post_with_fillet.stl"))
+    pins = [entry for entry in found.values() if entry.kind == "pin"]
+    tori = [entry for entry in found.values() if entry.kind == "torus"]
+
+    assert len(pins) == 1, f"the post is a pin: {sorted(found)}"
+    assert pins[0].params["diameter"] == pytest.approx(12.0, abs=0.05)
+    assert len(tori) == 1, f"the fillet is a torus: {sorted(found)}"
+    assert tori[0].params["tube_diameter"] == pytest.approx(6.0, abs=0.05)
+
+
+def test_nothing_that_was_recognised_gets_split_again() -> None:
+    """Die Nachtrennung greift **nur**, wo keine Form gefunden wurde.
+
+    Grundsätzlich nachgetrennt zerfiel im Beispielprojekt *Aushöhlen und
+    Teilen* ein Kegel in zwei — ein Kegel hat keine feste Krümmung, sein
+    Querradius wächst stetig. Zwei gespiegelte Senkungen sehen für die
+    Zuordnung ohnehin gleich aus, also hielt die Auswertung an und fragte
+    viermal, welches Merkmal ``cone_1`` entspricht. In einem **mitgelieferten
+    Beispiel**, dem freundlichsten Weg, den die Anwendung hat.
+
+    Der Wächter dagegen ist die gesenkte Bohrung: ein einziger Kegel, und er
+    muss einer bleiben.
+    """
+    cones = [
+        entry for entry in detect(plate("plate_countersunk.stl")).values() if entry.kind == "cone"
+    ]
+
+    assert len(cones) == 1, f"one sink, not two: {[cone.id for cone in cones]}"
+
+
 def test_a_countersink_is_not_a_sphere() -> None:
     """Die Gegenprobe, und sie ist der Grund für die strengere Schwelle.
 

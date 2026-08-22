@@ -90,6 +90,11 @@ CURVATURE_LIMIT = 30.0
 #: Netz aus einer Booleschen Operation ist nie exakt koplanar.
 EPS_ANGLE = 0.01
 
+#: Und ab wann ein Winkel überhaupt eine Krümmung ist. Darunter ist er
+#: Rechenrauschen einer ebenen Fläche: Aus 0,001 Grad auf 3 mm Kantenlänge
+#: würde ein Radius von 170 Metern.
+FLAT_ANGLE = 0.5
+
 
 @dataclass(frozen=True, slots=True)
 class CylinderFit:
@@ -339,9 +344,11 @@ def _fitted(mesh: MeshData) -> Fitted:
     cones: Cones = []
     spheres: Spheres = []
     tori: Tori = []
-    for patch in _connected_patches(body, curved):
+
+    def classify(patch: list[int]) -> bool:
+        """Die erste Form, die auf diesen Fleck passt — oder keine."""
         if len(patch) < MIN_PATCH_FACES:
-            continue
+            return False
         # **Die Normalen entscheiden, welche Form es ist — nicht der
         # Rückstand.** Der naheliegende Weg wäre, zuerst einen Zylinder
         # einzupassen und den Kegel als Auffang zu nehmen. Er ist falsch, und
@@ -359,7 +366,7 @@ def _fitted(mesh: MeshData) -> Fitted:
         if cone is not None and cone.half_angle >= CONE_MIN_ANGLE:
             if cone.good and _fits_in_the_body(mesh, cone):
                 cones.append((cone, patch))
-                continue
+                return True
             # Ein Kegelwinkel schließt den Zylinder aus — das sagen die
             # Normalen, und daran ändert ein schlechter Rückstand nichts. Die
             # runden Formen sind damit aber nicht ausgeschlossen: Eine Kalotte
@@ -368,7 +375,7 @@ def _fitted(mesh: MeshData) -> Fitted:
             fit = fit_cylinder(body, patch)
             if fit is not None and fit.good and _fits_in_the_body(mesh, fit):
                 found.append((fit, patch))
-                continue
+                return True
 
         # **Erst hier, und das ist die halbe Antwort auf §41.** Kugel und Torus
         # werden gefragt, nachdem Zylinder und Kegel abgelehnt haben — nicht
@@ -379,10 +386,25 @@ def _fitted(mesh: MeshData) -> Fitted:
         ball = fit_sphere(body, patch)
         if ball is not None and ball.good and _fits_in_the_body_by_size(mesh, ball.radius):
             spheres.append((ball, patch))
-            continue
+            return True
         ring = fit_torus(body, patch)
         if ring is not None and ring.good and _fits_in_the_body_by_size(mesh, ring.ring_radius):
             tori.append((ring, patch))
+            return True
+        return False
+
+    for patch in _connected_patches(body, curved):
+        if len(patch) < MIN_PATCH_FACES or classify(patch):
+            continue
+        # **Zweite Runde für das, was nichts ergeben hat.** Eine Verrundung
+        # schließt tangential an, also trennt kein Knick sie ab — Mantel und
+        # Kehle einer Säule liegen in einem Fleck, auf den keine Form passt.
+        # Nachgetrennt wird deshalb erst hier: Wo etwas erkannt wurde, bleibt
+        # es, wie es ist (siehe :func:`_split_by_curvature`).
+        pieces = _split_by_curvature(body, patch)
+        if len(pieces) > 1:
+            for piece in pieces:
+                classify(piece)
 
     # Nach Position sortiert, damit die Nummerierung für denselben Körper
     # reproduzierbar ist. **Alle drei Achsen**, nicht nur X und Y: Zwei
@@ -1083,6 +1105,177 @@ def _bore_span(mesh: MeshData, fit: CylinderFit) -> tuple[float, float] | None:
         return None
     along = points[on_wall] @ axis
     return float(along.min()), float(along.max())
+
+
+#: Wie weit zwei benachbarte Dreiecke im Krümmungsradius auseinanderliegen
+#: dürfen, ohne dass ein Fleck dort endet — als Anteil des größeren Radius.
+#:
+#: Der Fall, für den es die Grenze gibt, ist eine **Verrundung**: Sie schließt
+#: tangential an, hat also keinen Knick, an dem :func:`_connected_patches`
+#: trennen könnte. An einer Säule Ø 12 mit R 3 am Fuß lagen Mantel und Kehle
+#: deshalb in **einem** Fleck, und darauf passte weder ein Zylinder noch ein
+#: Torus — die Säule hatte keine Mantelfläche, auf die der Agent hätte zeigen
+#: können.
+#:
+#: **Der Wert ist gemessen und nicht gewählt.** Über den Korpus verteilen sich
+#: die Sprünge in zwei Gruppen mit einer breiten Lücke dazwischen:
+#:
+#: ==================  ======  ======
+#: Körper              p90     größter
+#: ==================  ======  ======
+#: ``torus_ring``      0,002   0,002
+#: ``plate_holes``     0,000   0,000
+#: ``clean_figure``    0,120   0,312
+#: Säule mit Kehle     0,802   0,997
+#: ==================  ======  ======
+#:
+#: Zwischen 0,31 und 0,80 liegt nichts. Ein Viertel hätte an
+#: ``generated_figure.stl`` drei Kugeln in neun zerlegt; die Hälfte trennt,
+#: was getrennt gehört, und lässt beisammen, was eine Fläche ist.
+CURVATURE_JUMP = 0.5
+
+
+def facet_middles(body: trimesh.Trimesh) -> np.ndarray:
+    """Zu jedem Dreieck die Mitte der **ebenen Fläche**, auf der es liegt.
+
+    **Nicht sein eigener Schwerpunkt**, und der Unterschied ist keine Feinheit:
+    An einer Zylinderwand sind die zwei Dreiecke eines Mantelrechtecks
+    koplanar. Der Winkel sitzt allein an der Rechteckgrenze, der Weg dorthin
+    wird aber vom Dreiecksschwerpunkt aus gemessen — und der liegt bei einem
+    Drittel. Gemessen kamen so an einem Zylinder Ø 10 durchweg 3,33 mm heraus
+    statt 5, also genau zwei Drittel, und zwar bei jeder Netzfeinheit gleich
+    falsch. Über die Flächenmitte sind es 4,97.
+
+    Wo ein Dreieck allein steht — auf einer Kugel etwa —, ist die Flächenmitte
+    sein Schwerpunkt, und es ändert sich nichts.
+    """
+    middles = np.asarray(body.triangles_center, dtype=float).copy()
+    areas = np.asarray(body.area_faces, dtype=float)
+    for facet in body.facets:
+        members = np.asarray(facet)
+        weight = areas[members].sum()
+        if weight <= EPS_GEOM:
+            continue
+        middles[members] = (middles[members] * areas[members][:, None]).sum(axis=0) / weight
+    return middles
+
+
+def pair_radii(body: trimesh.Trimesh) -> np.ndarray:
+    """Der Krümmungsradius über jede Nachbarschaft zweier Dreiecke, in mm.
+
+    Radius ist Bogenlänge durch Winkel. Beide naheliegenden Strecken sind die
+    falschen: Die **gemeinsame Kante** ist an einer Zylinderwand die
+    senkrechte, ihre Länge also die Höhe des Zylinders; der bloße Abstand der
+    Flächenmitten trägt dieselbe Höhe anteilig mit. Gemessen wird deshalb der
+    Anteil des Mittenabstands **senkrecht zur gemeinsamen Kante**.
+
+    ``inf`` steht, wo die Nachbarn zu flach zueinander stehen, um eine Krümmung
+    zu tragen — eine ebene Fläche ist nicht unendlich rund, sie ist gar nicht
+    rund, und ``0,001`` Grad auf 3 mm ergäben einen Radius von 170 Metern.
+    """
+    pairs = np.asarray(body.face_adjacency)
+    if not len(pairs):
+        return np.zeros(0, dtype=float)
+
+    angles = np.asarray(body.face_adjacency_angles, dtype=float)
+    edges = np.asarray(body.face_adjacency_edges)
+    along = body.vertices[edges[:, 1]] - body.vertices[edges[:, 0]]
+    along = along / np.maximum(np.linalg.norm(along, axis=1), EPS_GEOM)[:, None]
+
+    middles = facet_middles(body)
+    span = middles[pairs[:, 1]] - middles[pairs[:, 0]]
+    across = np.linalg.norm(span - np.einsum("ij,ij->i", span, along)[:, None] * along, axis=1)
+    return np.where(np.degrees(angles) >= FLAT_ANGLE, across / np.maximum(angles, EPS_GEOM), np.inf)
+
+
+def _face_radii(body: trimesh.Trimesh, pairs: np.ndarray, radii: np.ndarray) -> np.ndarray:
+    """Je Dreieck der engste Radius unter seinen **sanften** Nachbarn.
+
+    Eine Kante bleibt außen vor: Sie sagt nichts darüber, wie die Fläche
+    gekrümmt ist, auf der das Dreieck liegt.
+
+    **Das Minimum und nicht der Median**, obwohl der Median nach der
+    robusteren Wahl aussieht. Eine Fläche hat zwei Hauptkrümmungen, und ein
+    Median mischt sie: An einem Torus schwankt der Radius längs zwischen
+    ``R - r`` und ``R + r``, quer bleibt er ``r``. Über den Median gemittelt
+    wandert der Wert über den Ring, und ``torus_ring.stl`` zerfiel in einen
+    Torus, einen Zapfen, eine Bohrung und vier Kegel. Das Minimum greift
+    dagegen immer dieselbe Hauptkrümmung — die engste —, und der Ring bleibt
+    einer: gemessen ein Sprung von höchstens 0,002 über das ganze Netz.
+    """
+    found = np.full(len(body.faces), np.inf, dtype=float)
+    degrees = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+    for (first, second), radius, angle in zip(pairs, radii, degrees, strict=True):
+        if angle >= CURVATURE_LIMIT or not np.isfinite(radius):
+            continue
+        for index in (int(first), int(second)):
+            found[index] = min(found[index], float(radius))
+    return found
+
+
+def _split_by_curvature(body: trimesh.Trimesh, patch: list[int]) -> list[list[int]]:
+    """Denselben Fleck noch einmal teilen, jetzt am **Sprung der Krümmung**.
+
+    **Die zweite Runde, und nur für Flecken, auf die keine Form gepasst hat.**
+    Eine Verrundung schließt tangential an — das ist ihr Zweck —, und
+    :func:`_connected_patches` trennt an Knicken. An einer Säule Ø 12 mit R 3
+    am Fuß lagen Mantel und Kehle deshalb in **einem** Fleck, auf den weder
+    ein Zylinder noch ein Torus passte: Die Säule hatte keine Mantelfläche, auf
+    die der Agent hätte zeigen können, und keine Passung fand sie. Nach der
+    Nachtrennung kommen ein Zapfen Ø 12,00 und ein Torus mit Ring Ø 18,0 und
+    Röhre Ø 6,0 heraus.
+
+    **Warum erst als zweite Runde und nicht gleich mit.** Ein Kegel hat keine
+    feste Krümmung: Sein Querradius wächst zur Grundfläche hin stetig, und über
+    eine lange Senkung summiert sich das zu einem Sprung. Grundsätzlich
+    nachgetrennt zerfiel im Beispielprojekt *Aushöhlen und Teilen* ein Kegel in
+    zwei — und weil zwei gespiegelte Senkungen für die Zuordnung ohnehin gleich
+    aussehen, hielt die Auswertung an und fragte den Nutzer viermal, welches
+    Merkmal ``cone_1`` entspricht. In einem **mitgelieferten Beispiel**, dem
+    freundlichsten Weg, den die Anwendung hat.
+
+    So herum kann das nicht passieren: Wo eine Form erkannt wurde, wird nicht
+    nachgetrennt. Es ändert sich also nichts an dem, was heute funktioniert —
+    es kommt nur dort etwas dazu, wo bisher nichts war.
+    """
+    pairs = np.asarray(body.face_adjacency)
+    if not len(pairs):
+        return [patch]
+
+    radii = _face_radii(body, pairs, pair_radii(body))
+    first, second = radii[pairs[:, 0]], radii[pairs[:, 1]]
+    # Nur wo **beide** Seiten einen Radius haben, gibt es einen Sprung. Zwei
+    # ebene Nachbarn tragen ``inf``, und deren Differenz wäre ``nan`` — kein
+    # Sprung, sondern keine Aussage. Die Rechnung darf die ``inf`` dabei gar
+    # nicht erst sehen: ``where`` schützt die Division, nicht die Differenz
+    # davor, und ``inf - inf`` meldet sich als Warnung, die hier ein Fehler ist.
+    measured = np.isfinite(first) & np.isfinite(second)
+    near = np.where(measured, first, 0.0)
+    far = np.where(measured, second, 0.0)
+    jump = np.zeros(len(pairs), dtype=float)
+    np.divide(
+        np.abs(near - far),
+        np.maximum(np.maximum(near, far), EPS_GEOM),
+        out=jump,
+        where=measured,
+    )
+
+    wanted = set(patch)
+    angles = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+    adjacency = [
+        pair
+        for pair, angle, step in zip(pairs, angles, jump, strict=True)
+        if angle < CURVATURE_LIMIT
+        and step <= CURVATURE_JUMP
+        and int(pair[0]) in wanted
+        and int(pair[1]) in wanted
+    ]
+    if not adjacency:
+        return [patch]
+    groups = trimesh.graph.connected_components(
+        np.asarray(adjacency), nodes=np.asarray(patch), engine="scipy"
+    )
+    return [[int(index) for index in group] for group in groups]
 
 
 def _connected_patches(body: trimesh.Trimesh, faces: list[int]) -> list[list[int]]:

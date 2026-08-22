@@ -1220,13 +1220,24 @@ Meridianschnitt eines Torus ist ein Kreis, und eine Kreiseinpassung braucht
 keinen ganzen Kreis. Darunter meldet es der Rückstand, und die Form wird
 abgelehnt statt geraten.
 
-**Isoliert wird das Stück trotzdem nicht**, und daran hängt der
-Verrundungsradius weiter. Eine Verrundung schließt **tangential** an — das ist
-ihr Zweck —, und die Fleckenbildung trennt an Knicken. Gemessen an einer Säule
-mit verrundetem Fuß: Mantel und Kehle sind **ein** Fleck, und heraus kommt
-weder ein Zylinder noch ein Torus. Der Weg dahin ist eine Trennung nach
-**Krümmung** statt nach Kanten; die Karte aus §18.4 misst dafür bislang Grad
-statt Millimeter. Beides steht als eigener Punkt.
+**Ein Fleck endet an einer Kante — oder an einem Sprung der Krümmung.** Das
+Zweite kam am 22.08.2026 dazu, und der Fall, der es erzwingt, ist eine
+Verrundung: Sie schließt **tangential** an, das ist ihr Zweck, und ein Knick
+trennt sie deshalb nicht ab. An einer Säule Ø 12 mit R 3 am Fuß lagen Mantel
+und Kehle in **einem** Fleck, auf den weder ein Zylinder noch ein Torus passte
+— das Alltagsteil hatte keine Mantelfläche, auf die der Agent hätte zeigen
+können. Getrennt wird am Verhältnis der Krümmungsradien; die Schwelle ist
+gemessen und nicht gewählt (über den Korpus liegen alle Sprünge innerhalb
+einer Fläche unter 0,31, der an einer Verrundung bei 0,80).
+
+**Nachgetrennt wird erst, wenn keine Form gepasst hat**, und nie davor. Ein
+Kegel hat keine feste Krümmung — sein Querradius wächst stetig —, und
+grundsätzlich nachgetrennt zerfiel im Beispielprojekt *Aushöhlen und Teilen*
+eine Senkung in zwei Kegel. Weil zwei gespiegelte Senkungen für die Zuordnung
+gleich aussehen, hielt die Auswertung an und fragte den Nutzer viermal, welches
+Merkmal `cone_1` entspricht — in einem mitgelieferten Beispiel. Was erkannt
+wurde, bleibt deshalb, wie es ist; es kommt nur dort etwas dazu, wo bisher
+nichts war.
 
 ### 21.2 Das ID-Problem
 **Erzeugte Features — Provenienz.** Was eine Operation selbst erzeugt, trägt

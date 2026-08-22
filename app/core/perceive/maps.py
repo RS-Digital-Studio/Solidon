@@ -27,6 +27,7 @@ from shapely.geometry import Polygon as ShapelyPolygon
 from app.core.errors import CANCEL, Action, UserError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
+from app.core.perceive.features import pair_radii
 from app.core.slice.analysis import cross_sections, slice_body
 from app.core.types import (
     CancelToken,
@@ -42,7 +43,7 @@ from app.core.types import (
     SliceResult,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT, EPS_GEOM
+from app.core.units import DEGREE_UNIT
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -450,11 +451,6 @@ def defect_map(mesh: MeshData) -> AnalysisMap:
 #: trennt (``CURVATURE_LIMIT`` in :mod:`app.core.perceive.features`).
 EDGE_ANGLE = 30.0
 
-#: Und darunter: Ein Winkel, der so klein ist, ist keine Krümmung, sondern
-#: Rechenrauschen einer ebenen Fläche. Aus 0,001 Grad auf 3 mm Kantenlänge
-#: würde ein Radius von 170 Metern.
-FLAT_ANGLE = 0.5
-
 
 def curvature_map(mesh: MeshData) -> AnalysisMap:
     """Der Radius, mit dem ein Dreieck gekrümmt ist — in Millimetern.
@@ -467,18 +463,16 @@ def curvature_map(mesh: MeshData) -> AnalysisMap:
     der Vernetzungsdichte hängt, beantwortet die Frage nicht, die §18.4 an sie
     stellt: *wie* rund, nicht *dass*.
 
-    Der Radius steht dagegen im Verhältnis von Winkel und Kantenlänge, und das
-    ist von der Feinheit unabhängig. Gemessen an einer Säule mit verrundetem
-    Fuß: die Kehle mit 3,0 bis 3,9 mm bei einem Sollradius von 3, der Mantel
-    bei 6, der Ringradius bei 9.
+    Gerechnet wird über :func:`app.core.perceive.features.pair_radii` — dieselbe
+    Zahl, mit der die Erkennung ihre Flecken trennt. Was die Karte zeigt, ist
+    damit genau das, wonach die Erkennung geht, und die Spalte *Nutzen* in
+    §18.4 („Feature-Erkennung prüfen") stimmt wörtlich.
 
     **Drei Fälle, und zwei davon haben keinen Radius.** Eine ebene Fläche ist
     nicht unendlich rund, sie ist gar nicht rund — sie bekommt ``nan``, das in
-    dieser Karte „kann ich nicht sagen" heißt. Für sie einen Wert auszurechnen
-    ergäbe 2,6 Millionen Millimeter und eine Farbskala, auf der alles andere
-    zusammenfällt. Eine **Kante** bekommt null: Sie ist scharf, und die Formel
-    gäbe dort 0,2 mm — eine Zahl, die nach einer sehr feinen Verrundung
-    aussieht und keine ist.
+    dieser Karte „kann ich nicht sagen" heißt. Eine **Kante** bekommt null und
+    wird hervorgehoben: Die Formel gäbe dort 0,2 mm, eine Zahl, die nach einer
+    sehr feinen Verrundung aussieht und keine ist.
     """
     body = mesh.raw
     values = np.full(len(body.faces), np.nan, dtype=float)
@@ -486,78 +480,31 @@ def curvature_map(mesh: MeshData) -> AnalysisMap:
     if not len(pairs):
         return _curvature_result(values, set())
 
-    # ``face_adjacency_angles`` steht bereits in Radiant — wer hier umrechnet,
-    # rechnet zweimal um und bekommt an einem Zylinder Ø 10 einen Radius von
-    # 36 mm heraus.
-    angles = np.asarray(body.face_adjacency_angles, dtype=float)
-    # **Die Bogenlänge liegt quer zur gemeinsamen Kante**, und beide
-    # naheliegenden Strecken sind die falschen. Die Kante selbst ist an einer
-    # Zylinderwand die senkrechte, ihre Länge also die Höhe des Zylinders — das
-    # gab 35,8 mm bei 32 Segmenten und 9,0 bei 128, bei einem wahren Radius von
-    # 5. Der bloße Abstand der Facettenmitten trägt dieselbe Höhe anteilig mit
-    # und wurde dadurch sogar **größer**, je feiner das Netz war: 34 gegen 136.
-    #
-    # Gemessen wird deshalb der Anteil des Mittenabstands **senkrecht zur
-    # gemeinsamen Kante**. Er schrumpft mit jeder Verfeinerung genauso wie der
-    # Winkel, und ihr Verhältnis bleibt stehen — das ist der ganze Grund,
-    # weshalb diese Karte den Körper misst und nicht das Netz.
-    middles = _facet_middles(body)
-    edges = np.asarray(body.face_adjacency_edges)
-    along = body.vertices[edges[:, 1]] - body.vertices[edges[:, 0]]
-    along = along / np.maximum(np.linalg.norm(along, axis=1), EPS_GEOM)[:, None]
-    span = middles[pairs[:, 1]] - middles[pairs[:, 0]]
-    lengths = np.linalg.norm(span - np.einsum("ij,ij->i", span, along)[:, None] * along, axis=1)
+    degrees = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
+    radii = pair_radii(body)
 
     sharp: set[int] = set()
-    for (first, second), angle, length in zip(pairs, angles, lengths, strict=True):
-        degrees = math.degrees(angle)
-        if degrees >= EDGE_ANGLE:
+    for (first, second), radius, angle in zip(pairs, radii, degrees, strict=True):
+        if angle >= EDGE_ANGLE:
             # **Eine Kante geht nicht in den Wert ein, sie wird markiert.** Sie
             # sagt nichts darüber, wie die Fläche gekrümmt ist, auf der das
             # Dreieck liegt — sie sagt, dass daneben eine andere anfängt. Der
-            # kleinste Radius über *alle* Nachbarn zu nehmen, wie es die alte
-            # Karte mit dem schärfsten Winkel tat, macht daraus einen Wert, der
-            # jede Rundung überschreibt: An einem Zylinder grenzt **jedes**
-            # Manteldreieck an den Deckel, und die ganze Wand käme als scharfe
-            # Kante heraus.
+            # kleinste Radius über *alle* Nachbarn, wie es die alte Karte mit
+            # dem schärfsten Winkel tat, überschreibt jede Rundung: An einem
+            # Zylinder grenzt **jedes** Manteldreieck an den Deckel, und die
+            # ganze Wand käme als scharfe Kante heraus.
             sharp.update((int(first), int(second)))
             continue
-        if degrees < FLAT_ANGLE:
+        if not np.isfinite(radius):
             continue
-        radius = float(length / angle)
         for index in (int(first), int(second)):
             # Unter den **glatten** Nachbarn gewinnt der kleinste: Wo eine
             # Fläche in zwei Richtungen verschieden gekrümmt ist, ist die
             # engere die, nach der gefragt wird.
             current = values[index]
-            values[index] = radius if math.isnan(current) else min(current, radius)
+            values[index] = float(radius) if math.isnan(current) else min(current, float(radius))
 
     return _curvature_result(values, sharp)
-
-
-def _facet_middles(body: trimesh.Trimesh) -> np.ndarray:
-    """Zu jedem Dreieck die Mitte der **ebenen Fläche**, auf der es liegt.
-
-    **Nicht sein eigener Schwerpunkt**, und der Unterschied ist keine Feinheit:
-    An einer Zylinderwand sind die zwei Dreiecke eines Mantelrechtecks
-    koplanar. Der Winkel sitzt allein an der Rechteckgrenze, der Weg dorthin
-    wird aber vom Dreiecksschwerpunkt aus gemessen — und der liegt bei einem
-    Drittel. Gemessen kamen so an einem Zylinder Ø 10 durchweg 3,33 mm heraus
-    statt 5, also genau zwei Drittel, und zwar bei jeder Netzfeinheit gleich
-    falsch. Über die Flächenmitte sind es 4,97.
-
-    Wo ein Dreieck allein steht — auf einer Kugel etwa —, ist die Flächenmitte
-    sein Schwerpunkt, und es ändert sich nichts.
-    """
-    middles = np.asarray(body.triangles_center, dtype=float).copy()
-    areas = np.asarray(body.area_faces, dtype=float)
-    for facet in body.facets:
-        members = np.asarray(facet)
-        weight = areas[members].sum()
-        if weight <= EPS_GEOM:
-            continue
-        middles[members] = (middles[members] * areas[members][:, None]).sum(axis=0) / weight
-    return middles
 
 
 def _curvature_result(values: np.ndarray, sharp: set[int]) -> AnalysisMap:
