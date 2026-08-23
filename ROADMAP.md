@@ -99,7 +99,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
 | Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374 |
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
-| Ein Importzyklus in `app/core/scene` | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Auflösung von `scene/__init__.py` ↔ `scene/history.py`. Latent, solange nur ein Thread importiert — zwei Threads gaben **5 von 5** Fehlschlägen. Kein Startzeit-Thema: die Ersparnis dort wäre 37 ms |
+| Ein Importzyklus in `app/core/scene` | Vier Wege von Hand, während die Suite grün war (23.08.2026) | einen **Umbau**, keinen Import-Fix: Der Rückimport muss weg. Drei Ansätze sind am 23.08. gemessen und widerlegt (direktes Untermodul, verzögerter Import, Reihenfolge im `__init__`). Betroffen sind **zwei** Module (`history.py` und `evaluate.py`); `geom`, `perceive` und `knowledge` sind sauber, weil sie keinen Rückimport haben. Latent, solange nur ein Thread importiert — zwei Threads gaben **5 von 5** Fehlschlägen. Kein Startzeit-Thema: die Ersparnis dort wäre 37 ms |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 
 ---
@@ -4274,6 +4274,42 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
 
 - [ ] **Ein Importzyklus in `app/core/scene` — latent, und jede Parallelität
       stolpert darüber.** Gefunden am 23.08.2026 beim Messen der Startzeit:
+
+      ## Drei Ansätze sind gemessen und widerlegt (23.08.2026)
+
+      **Reproduziert: 5 von 5.** Python erkennt ihn selbst und wirft
+      `_DeadlockError("deadlock detected by _ModuleLock('app.core.scene.history')")`.
+
+      **Es sind zwei Module, nicht eines.** `history.py` **und** `evaluate.py`
+      importieren beide `from app.core.scene import expressions` " + S + " ein Fix an
+      einem allein kann darum nie greifen. (Gemessen über den AST aller Module
+      unter `scene/`; sonst importiert keines zurück.)
+
+      Was **nicht** hilft, damit es niemand ein zweites Mal versucht:
+
+      - **`import app.core.scene.expressions as expressions`** statt des
+        Attributzugriffs " + S + " in beiden Modulen. Der Deadlock bleibt: Er hängt am
+        **Lock** des Pakets, nicht am Attribut eines halbfertigen Moduls.
+      - **Verzögerter Import in der Funktion** statt am Modulkopf. Bleibt
+        ebenso " + S + " Thread B hält den Lock auf `history`, bevor irgendeine
+        Funktion läuft.
+      - **`expressions` in `__init__.py` vorziehen**, vor `evaluate` und
+        `history`. Bleibt ebenso, aus demselben Grund.
+
+      **Die Gegenprobe zeigt, dass es unser Aufbau ist und kein Python-Verhalten:**
+
+          app.core.scene       _DeadlockError
+          app.core.geom        sauber
+          app.core.perceive    sauber
+          app.core.knowledge   sauber
+
+      Die drei sauberen haben **keinen Rückimport** aus ihrem eigenen Paket. Das
+      ist der Unterschied, und damit auch der Weg: **Der Rückimport muss weg**,
+      nicht anders geschrieben " + S + " `expressions` an einen Ort, der nicht unter
+      `scene` liegt, oder die zwei Funktionen dorthin, wo sie gebraucht werden.
+      **Das ist ein Umbau und kein Einzeiler**, und er lohnt sich erst, wenn
+      jemand Parallelität wirklich braucht.
+
 
           app/core/scene/__init__.py:13   from app.core.scene.history import History
           app/core/scene/history.py:30    from app.core.scene import expressions
