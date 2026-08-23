@@ -90,11 +90,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Das Maß erscheint am Zeiger statt in der Leiste — **Schritt zwei** | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | den Umbau, der das Maß beim Zeichnen an den Zeiger legt, wie Fusion es tut. Schritt eins ist gebaut (`bd4fbce`): `measure_field` steht nur noch da, solange gezeichnet wird — 1007 → **881** Bildpunkte, Grenze 900 gesetzt. Er macht Schritt zwei weniger dringend, nicht überflüssig |
 | Ein Höhenbudget für den Startbildschirm — **entschieden, in Arbeit** | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird. Am 22.08. neu gemessen, und die Aktenlage des Punkts stimmt nicht mehr: 340 px fehlen auf 1600x900 statt 156, die Ablagefläche gibt es als Widget nicht mehr, und es sind **zwei** Kachelbereiche — `more_area` (242 px) ist der größte Einzelposten |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
-| „Eingabe korrigieren" ist ein Satz und kein Knopf — **halb erledigt** | Der Bedienweg von außen nachgefahren (21.08.2026) | einen Handler für den **Parameterfehler**: den Dialog mit den Werten erneut öffnen. Der zweite Fall („andere Anzahl an Objekten“) hat seit dem 23.08. einen — `CHANGE_SELECTION` führt in den Auswahlmodus |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
-| Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster | Aus der Analyse für Neulinge und Kunden | eine Entscheidung, was der zweite Fehler tun soll — unterdrücken, anhängen oder zählen |
 | Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Eine erkannte Verrundung lässt sich nicht ändern | Das Fundament der Wahrnehmung (22.08.2026) | die Operation *Verrundungsradius ändern*, die es nicht gibt — `fillet_edges` wirkt auf Kanten und würde die Rundung runden. Der zweite Weg („Diesen Schritt ändern“) fällt auch aus: `created_by` gibt es nur bei `provenance="generated"`, also an Bausteinen und beim Verstiften. Dahinter steht die größere Frage, ob eine Operation ihre sichtbaren Ergebnisse deklarieren soll |
@@ -111,7 +109,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Ordnername „3D Druck" mit Leerzeichen bricht Werkzeuge | Das Fundament der Wahrnehmung (22.08.2026) | eine Durchsicht der Werkzeuge, die Pfade zusammensetzen. Zweimal an einem Tag an unabhängigen Stellen: das Kürzel der Erinnerungen und der Interpreterpfad im Tor-Skript. Die Annahme dahinter ist dieselbe — ein Pfad ohne Leerzeichen |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
 | `test_mesh_backend` misst die Umgebung statt sein Thema — **entschieden** | Das Fundament der Wahrnehmung (22.08.2026) | die dritte Zusicherung fällt. Sie prüft die Länge des Temp-Ordners **dieser Maschine** und sagt nichts über den Kunden; die zwei davor prüfen den Programmtext und bleiben. Ein Test, der bei umgebogenem `TEMP` rot wird, kostet jede Sitzung Zeit und schützt niemanden |
-| Kein Viewport wird jemals freigegeben | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über die Reichweite — die eine Zeile in `viewport.py` ist behoben, aber `.connect(lambda … self …)` steht an 59 Stellen in `app/ui/`, und jede davon ist ein Ring, sobald der Sender ein Kind von `self` ist. Könnte die gemeinsame Wurzel der vier Absturzpunkte sein: gemessen 7 MB je Fenster, und die Suite baut siebenhundert |
+| Kein Viewport wird jemals freigegeben — **wartet auf den Deadlock** | Das Fundament der Wahrnehmung (22.08.2026) | **erst den Deadlock, dann die restlichen 40 Ringe** (entschieden 23.08.). Jede aufgelöste Stelle macht ein Fenster einsammelbar, und ein Fenster, das eingesammelt werden kann, kann im falschen Thread sterben — weiter aufzulösen macht die Suite instabiler, nicht stabiler |
 | `test_ui.py` reißt zehn von zehn | Das Fundament der Wahrnehmung (22.08.2026) | den Fix an `leash.wait_for_all`, gemessen von 3d-druck-b8 — und die Lehre daneben: dieselbe Zahl (5/5) wurde neben einem Torlauf als Fremdlast gedeutet und unter Schloss auf leerer Maschine widerlegt |
 | Fensterdateien enden mit Exit 127 — **drei, und wechselnde** | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — die Roadmap nennt als Signatur des bekannten Absturzes „dieselbe Datei einzeln gefahren ist grün“, und diese zwei sind es nicht. Nachgewiesen im eigenen Arbeitsbaum auf HEAD, vollständig grün und dann 127 |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
@@ -1653,7 +1651,14 @@ nicht.
       und keine Verbesserung. Die Namensdopplung „Vorbereiten →
       Druckvorbereitung" aus demselben Befund ist weg — `prepare` heißt heute
       „Teilen und Anpassen".
-- [ ] **Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster.**
+- [x] **Zwei fehlgeschlagene Operationen stapeln zwei modale Fehlerfenster —
+      behoben am 23.08.2026 (`2904d28`, 3d-druck-b8).** Von den drei
+      Möglichkeiten des Punkts („unterdrücken, anhängen oder zählen") ist es
+      **anhängen mit Zähler im Kopf** geworden: Der zweite Fehler geht in das
+      offene Fenster, statt ein zweites zu stellen. Das Bildschirmfoto bleibt
+      vom ersten — es zeigt den Zustand, in dem es schiefging.
+
+      Ursprünglich:
       `report_error` ruft in `app/ui/main_window.py:6376` unbedingt
       `dialog.exec()`; es gibt keine Sperre und kein Sammeln. Der Text darin ist
       vorbildlich („Das war ein Programmfehler, nicht Ihre Schuld"), zweimal
@@ -4212,7 +4217,9 @@ Kategorie.
 
 ### Zwei Funde, die eine Entscheidung brauchen
 
-- [ ] **„Eingabe korrigieren" ist ein Satz und kein Knopf.** `CORRECT_INPUT`
+- [x] **„Eingabe korrigieren" ist ein Satz und kein Knopf — erledigt, und
+      zwar länger als gedacht (`568e0bd` vom 21.08., `ab6e75c` vom 23.08.).**
+      Ursprünglich: `CORRECT_INPUT`
       ist mit 26 Verwendungen die häufigste Handlung des Kerns und trägt
       `primary=True` — einen Handler hat sie nicht. Bei `UserError` und
       `FileWriteError` bleibt damit nur Abbrechen, und `FileWriteError` trifft
@@ -4226,12 +4233,27 @@ Kategorie.
       Parameterfehler den Dialog mit den Werten erneut öffnen; bei „andere
       Anzahl an Objekten" die Auswahl ändern, und das ist kein Dialog.
 
-      **Die zweite Hälfte steht seit dem 23.08.2026** (3d-druck-b8):
-      `CHANGE_SELECTION` („Andere Objekte wählen") hängt an
-      `evaluate.missing_input` und `evaluate.too_few_inputs` und führt in den
-      Auswahlmodus. **Offen ist damit nur noch der Parameterfehler** — dort
-      steht `CORRECT_INPUT` weiter ohne Handler, und §2.1 verspricht „keine
-      Sackgassen" ausgerechnet für den häufigsten Bedienfehler.
+      **Beide Hälften stehen — und die erste schon seit dem 21.08.2026.**
+      `CHANGE_SELECTION` („Andere Objekte wählen") kam am 23.08. dazu
+      (`ab6e75c`) und hängt an `evaluate.missing_input` und
+      `evaluate.too_few_inputs`. Der Handler für den **Parameterfehler**
+      existierte da längst: `MainWindow._correct_after_error`
+      (`main_window.py:6150`), verdrahtet als `"correct_input"` in
+      `error_handlers()`, ruft `edit_operation(op_id, field)` mit dem Feld aus
+      `ValidationError.field`. Gebaut in `568e0bd`, drei Tests fahren ihn.
+
+      **Hier stand am 23.08. „halb erledigt", und das war ein Suchfehler von
+      3d-druck-64 — er ist eine Ebene tiefer als der bekannte.** Gesucht wurde
+      nach der Konstante `CORRECT_INPUT`; gefunden wurde nur die Stelle in
+      `panels.py`, die sie *anbietet*. Die Verdrahtung läuft aber über den
+      **Wert**: `"correct_input"` als Schlüssel im Handler-Verzeichnis. Eine
+      Suche nach dem Bezeichner findet keine Verdrahtung, die über seinen
+      Inhalt läuft.
+
+      *Merksatz dazu, weil derselbe Fehler in dieser Nacht dreimal in
+      verschiedenen Gestalten auftrat:* **Wer prüft, ob etwas angeschlossen
+      ist, sucht nach dem, was am anderen Ende ankommt — nicht nach dem Namen,
+      unter dem es losgeschickt wurde.**
 - [x] **Ein angeklicktes Gewinde bietet nichts an — gebaut von 3d-druck-b8
       am 23.08.2026 (`64769bc`).** „Diesen Schritt ändern" steht im
       Kontextmenü am Merkmal, ganz oben; der Klick öffnet den Dialog der
@@ -5915,7 +5937,24 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Werkzeugzeilen-Test misst die Reihenfolge des Laufs, `--fehlend` maß
       Dateilängen statt Inhalt).
 
-- [ ] **Kein Viewport wird jemals freigegeben, und kein Fenster auch.** Gemessen
+- [ ] **Kein Viewport wird jemals freigegeben — und die restlichen Ringe
+      warten jetzt auf den Deadlock. Entschieden am 23.08.2026.**
+
+      **Die Reihenfolge steht fest: erst der Deadlock, dann die verbliebenen
+      Ringe. Nicht umgekehrt, und nicht parallel.** Der Grund ist die Kehrseite,
+      die in derselben Nacht sichtbar wurde: *Jede aufgelöste Stelle macht ein
+      Fenster einsammelbar — und ein Fenster, das eingesammelt werden kann,
+      kann im falschen Thread sterben.* Solange der Deadlock offen ist, macht
+      das Auflösen weiterer Ringe die Suite **instabiler**, nicht stabiler. Der
+      Speichergewinn (7 MB je Fenster) ist real und wird mit Hängern bezahlt.
+
+      **Die Zahl im Text unten stimmt nicht mehr:** Statt 59 sind es heute
+      **40** `.connect(lambda … self …)`-Stellen in `app/ui/` — und das ist
+      eine Obergrenze, kein Befund: Ein Ring ist es nur, wenn der Sender ein
+      Kind von `self` ist. Gezählt von 3d-druck-b8, die auch dazusagt, dass
+      ihre Zählung grob ist.
+
+      Der ursprüngliche Befund, weil seine Messung weiter gilt: Gemessen
       am 22.08.2026 von 3d-druck-b8: zwanzig losgelassene Viewports und fünf
       losgelassene `MainWindow` überleben `del` und `gc.collect()` vollzählig.
       Die Ursache ist eine Zeile — `app/ui/viewport.py:1428` verband den
