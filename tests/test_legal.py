@@ -137,3 +137,53 @@ def test_the_sweep_over_the_pages_finds_something_to_read() -> None:
     pages = sorted(WEBSITE.rglob("*.html"))
 
     assert len(pages) >= 10, f"nur {len(pages)} Seiten unter {WEBSITE} — falscher Pfad?"
+
+
+#: Was Anlage 2 zu Art. 246a § 1 Abs. 2 Satz 1 Nr. 1 EGBGB wörtlich vorgibt.
+#:
+#: Der Gesetzgeber schreibt das Muster-Widerrufsformular im Wortlaut vor; ein
+#: Unternehmer darf es sprachlich anpassen, aber nicht entstellen. Die Zeilen
+#: hier sind bewusst **kurz gehalten** — geprüft wird, dass die tragenden
+#: Bestandteile unverfälscht ankommen, nicht die Zeilenumbrüche.
+FORM_LINES: tuple[str, ...] = (
+    "Hiermit widerrufe(n) ich/wir (*) den von mir/uns (*) abgeschlossenen Vertrag",
+    "Bestellt am (*)",
+    "Name des/der Verbraucher(s)",
+    "Unzutreffendes streichen",
+)
+
+
+def test_the_withdrawal_form_survives_the_converter() -> None:
+    r"""Der vorgeschriebene Wortlaut steht unverfälscht auf der Seite.
+
+    **Gefunden von 3d-druck-58 am 23.08.2026:** Der Markdown-Konverter kannte
+    kein ``\*``. Wo die Quelle korrekt ``(\*)`` zweimal je Zeile schreibt, las
+    ``_EMPHASIS`` die beiden als Paar — im Formular stand deshalb
+    ``ich/wir (\<em>) den von mir/uns (\</em>)``, mitten in dem Text, den das
+    Gesetz wörtlich vorgibt.
+
+    **Warum der bestehende Test es nicht fing:**
+    ``test_the_generated_page_matches_its_source`` erzeugt seine Erwartung mit
+    ``body_html`` — also mit genau der Funktion, die den Fehler gemacht hat. Er
+    prüft, ob die Seite **aktuell** ist, nicht ob sie **richtig** ist. Gegen
+    einen Konverter, der verfälscht, ist er blind, weil er dieselbe
+    Verfälschung erwartet.
+
+    Dieser Test hat deshalb einen **Sollwert von außen**: den Gesetzestext.
+    Selbstkonsistenz und Sollwert sehen im Code gleich aus, und der Unterschied
+    entscheidet, ob eine Prüfung etwas wert ist.
+    """
+    page = (WEBSITE / "widerruf.html").read_text(encoding="utf-8")
+    plain = re.sub(r"<[^>]+>", "", page).replace("&nbsp;", " ")
+
+    for line in FORM_LINES:
+        assert line in plain, (
+            f"das Muster-Widerrufsformular ist entstellt — {line!r} steht nicht auf der "
+            "Seite. Anlage 2 zu Art. 246a EGBGB gibt den Wortlaut vor."
+        )
+
+    for leftover in ("<em>", r"\*", r"\<", "&lt;em&gt;"):
+        assert leftover not in plain, (
+            f"{leftover!r} steht im Fließtext des Formulars — der Konverter hat die "
+            "geschützten Sternchen nicht durchgereicht"
+        )
