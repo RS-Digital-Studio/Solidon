@@ -258,7 +258,7 @@ def _adhesion(value: object) -> AdhesionType:
     if text not in get_args(AdhesionType):
         raise ValidationError(
             field="adhesion",
-            detail=_("Diese Art der Plattenhaftung ist nicht bekannt."),
+            detail=_("Diese Art der Druckbetthaftung ist nicht bekannt."),
             values={"requested": text, "known": sorted(get_args(AdhesionType))},
         )
     return text  # type: ignore[return-value]

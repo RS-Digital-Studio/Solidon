@@ -1441,7 +1441,7 @@ class MainWindow(QMainWindow):
             self.action_import_url,
             tr(
                 "Eine Modelldatei über ihre Adresse laden — für den Fall, dass sie "
-                "noch nicht auf der Platte liegt."
+                "noch nicht auf dem Bett liegt."
             ),
         )
         self.generate_action = self._add_action(
@@ -1639,7 +1639,7 @@ class MainWindow(QMainWindow):
             None,
             self.action_auto_split,
             tr(
-                "Ein zu großes Teil zerschneiden, bis jedes Stück auf die Platte passt — "
+                "Ein zu großes Teil zerschneiden, bis jedes Stück auf das Bett passt — "
                 "mit Passstiften in jeder Schnittfläche."
             ),
         )
@@ -2724,7 +2724,7 @@ class MainWindow(QMainWindow):
             show_error(error, self)
 
     def action_import_url(self) -> None:
-        """Weg 1 (§2.2), wenn die Datei noch nicht auf der Platte liegt.
+        """Weg 1 (§2.2), wenn die Datei noch nicht auf dem Bett liegt.
 
         Die Zwischenablage ist vorbelegt, und das ist der ganze Griff: wer von
         einer Modellseite kommt, hat die Adresse gerade kopiert. Steht dort
@@ -5639,7 +5639,7 @@ class MainWindow(QMainWindow):
         }
 
     def _spacing_for(self, spec: OperationSpec) -> dict[str, Any]:
-        """Der Abstand beim Anordnen kennt die Plattenhaftung (§25, §29).
+        """Der Abstand beim Anordnen kennt die Druckbetthaftung (§25, §29).
 
         Die Operation kann das nicht wissen: sie gehört dem Dokument, die
         Haftung ist eine Druckeinstellung, und beides bleibt getrennt. Das

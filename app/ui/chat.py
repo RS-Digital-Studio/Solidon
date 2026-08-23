@@ -34,6 +34,7 @@ from app.core.agent.context import is_discarded
 from app.core.types import ChatEntry, Document
 from app.i18n import TranslatableText, _, tr
 from app.ui.labels import localised
+from app.ui.leash import weak_slot
 from app.ui.style import NORMAL, set_level
 
 #: Wie ein Beitrag markiert wird, damit die Rollen ohne Farbe
@@ -71,7 +72,7 @@ STARTERS: tuple[TranslatableText, ...] = (
     _("Halter, 60 × 40 mm, zwei M4-Löcher"),
     _("Setz eine M3-Mutternfalle in die Unterseite"),
     _("Mach die Wandstärke 3 mm"),
-    _("Teile das Teil, damit es auf die Platte passt"),
+    _("Teile das Teil, damit es auf das Bett passt"),
 )
 
 
@@ -171,9 +172,10 @@ class ChatPanel(QWidget):
             # Linksbündig wie ein Vorschlag, nicht mittig wie ein Knopf: was
             # hier steht, ist ein Satz zum Weiterschreiben.
             button.setStyleSheet("text-align: left;")
-            button.clicked.connect(
-                lambda _checked=False, text=str(starter): self._take_starter(text)
-            )
+            # Der Ring aus der Schleife: Das Lambda hielte ``self``, der Knopf
+            # hielte das Lambda, und ``self`` hält den Knopf. Zehn losgelassene
+            # ``ChatPanel`` überlebten damit alle zehn.
+            button.clicked.connect(weak_slot(self, ChatPanel._take_starter, str(starter)))
             starters_layout.addWidget(button)
 
         self.summary = QLabel("", self)

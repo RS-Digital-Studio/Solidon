@@ -236,9 +236,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=2.0,
         step=0.02,
         decimals=3,
-        note=tr(
-            "Breiter als die übrigen Bahnen — mehr Material auf der Platte heißt mehr Haftung."
-        ),
+        note=tr("Breiter als die übrigen Bahnen — mehr Material auf dem Bett heißt mehr Haftung."),
     ),
     # --- Wände ---
     Field(
@@ -273,7 +271,7 @@ FIELDS: tuple[Field, ...] = (
         kind="int",
         minimum=0,
         maximum=50,
-        note=tr("Volle Schichten auf der Platte. Sie bestimmen, wie glatt die Unterseite wird."),
+        note=tr("Volle Schichten auf dem Bett. Sie bestimmen, wie glatt die Unterseite wird."),
     ),
     Field(
         "shell.outer_wall_first",
@@ -395,7 +393,7 @@ FIELDS: tuple[Field, ...] = (
         unit="°C",
         minimum=0,
         maximum=400,
-        note=tr("Meist etwas heißer als der Rest: Die erste Schicht soll auf der Platte kleben."),
+        note=tr("Meist etwas heißer als der Rest: Die erste Schicht soll auf dem Bett kleben."),
     ),
     Field(
         "temperature.bed",
@@ -407,7 +405,7 @@ FIELDS: tuple[Field, ...] = (
         maximum=150,
         front=True,
         note=tr(
-            "Wie warm die Platte ist. Sie hält das Teil unten fest und verhindert, dass es sich "
+            "Wie warm das Bett ist. Es hält das Teil unten fest und verhindert, dass es sich "
             "an den Ecken hochzieht."
         ),
     ),
@@ -419,7 +417,7 @@ FIELDS: tuple[Field, ...] = (
         unit="°C",
         minimum=0,
         maximum=150,
-        note=tr("Für die erste Schicht darf die Platte wärmer sein als danach."),
+        note=tr("Für die erste Schicht darf das Bett wärmer sein als danach."),
     ),
     Field(
         "temperature.chamber",
@@ -473,8 +471,8 @@ FIELDS: tuple[Field, ...] = (
         minimum=0,
         maximum=20,
         note=tr(
-            "So viele Schichten bleiben ungekühlt. Der Lüfter würde die erste Schicht von der "
-            "Platte lösen."
+            "So viele Schichten bleiben ungekühlt. Der Lüfter würde die erste Schicht vom "
+            "Bett lösen."
         ),
     ),
     Field(
@@ -614,7 +612,7 @@ FIELDS: tuple[Field, ...] = (
         kind="enum",
         choices=("everywhere", "build_plate"),
         note=tr(
-            "Wo Stützen ansetzen dürfen. Nur von der Platte lässt das Modell selbst unberührt; "
+            "Wo Stützen ansetzen dürfen. Nur vom Bett lässt das Modell selbst unberührt; "
             "überall stützt auch mitten darauf und hinterlässt Spuren."
         ),
     ),
@@ -685,12 +683,12 @@ FIELDS: tuple[Field, ...] = (
     # --- Haftung, Rückzug, Filament ---
     Field(
         "adhesion.kind",
-        tr("Plattenhaftung"),
+        tr("Druckbetthaftung"),
         "other",
         kind="enum",
         choices=("none", "skirt", "brim", "raft"),
         note=tr(
-            "Was zusätzlich auf die Platte kommt, damit das Teil hält. Brim legt einen Rand an, "
+            "Was zusätzlich auf das Bett kommt, damit das Teil hält. Brim legt einen Rand an, "
             "Raft eine ganze Unterlage; Skirt berührt das Teil nicht und hält nur die Düse im "
             "Fluss."
         ),

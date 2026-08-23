@@ -518,7 +518,7 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     # Auswahlwerte am Operationsregister; die sechsundfünfzig Felder des
     # Druckdialogs (``print_settings_dialog.FIELDS``) sind eine eigene Liste
     # und liefen an der Prüfung vorbei. Im deutschen Fenster stand deshalb
-    # „Naht: aligned", „Wandbahnen: arachne", „Plattenhaftung: brim" — und im
+    # „Naht: aligned", „Wandbahnen: arachne", „Druckbetthaftung: brim" — und im
     # Füllmuster englische Schlüssel **neben** deutschen Namen: grid, lines,
     # triangles, Wabe, Würfelgitter.
     #
@@ -547,7 +547,7 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "triangles": _("Dreiecke"),
     "tree": _("Baum"),
     "everywhere": _("Überall"),
-    "build_plate": _("Nur von der Platte"),
+    "build_plate": _("Nur vom Bett"),
     "skirt": _("Skirt"),
     "brim": _("Brim"),
     "raft": _("Raft"),

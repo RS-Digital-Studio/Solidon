@@ -207,7 +207,7 @@ def plan_export(
 
 
 def adhesion_margin(settings: PrintSettings) -> float:
-    """Wie weit die Plattenhaftung über den Körper hinausreicht.
+    """Wie weit die Druckbetthaftung über den Körper hinausreicht.
 
     Der Wert entscheidet, wie eng zwei Teile nebeneinander stehen dürfen — und
     er wurde beim Gewürzset zuerst vergessen: die Deckelplatte sah in der
@@ -257,7 +257,7 @@ def check_adhesion_clearance(
                     code="arrange.adhesion_too_close",
                     severity="warning",
                     message=_(
-                        "Zwei Teile stehen so dicht, dass ihre Plattenhaftung ineinanderläuft."
+                        "Zwei Teile stehen so dicht, dass ihre Druckbetthaftung ineinanderläuft."
                     ),
                     values={
                         "a": first,

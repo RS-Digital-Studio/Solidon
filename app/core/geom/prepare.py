@@ -758,8 +758,8 @@ def _verdict_for(
     if not _fits_at_all(bounds, allowed, margin):
         return "arrange.out_of_build_volume", _("Ein Objekt steht über den Bauraum hinaus.")
     if tuple(outside) == (2,) and only_below:
-        return "arrange.below_bed", _("Ein Objekt steckt unter der Druckplatte.")
-    return "arrange.off_the_plate", _("Ein Objekt liegt außerhalb der Druckplatte.")
+        return "arrange.below_bed", _("Ein Objekt steckt unter dem Druckbett.")
+    return "arrange.off_the_plate", _("Ein Objekt liegt außerhalb des Druckbetts.")
 
 
 def _fits_at_all(bounds: BoundingBox, allowed: BoundingBox, margin: float) -> bool:

@@ -409,7 +409,7 @@ def _from_geometry(
                 value="build_plate",
                 was=settings.support.placement,
                 reason=_(
-                    "Alle Überhänge erreichen die Platte. Stützen auf dem Modell "
+                    "Alle Überhänge erreichen das Bett. Stützen auf dem Modell "
                     "hinterlassen Narben, die keine sein müssen."
                 ),
             )
@@ -668,7 +668,7 @@ def _from_connectors(settings: PrintSettings, diameters: Sequence[float]) -> lis
 def for_part(settings: PrintSettings, bounds: BoundingBox, footprint: float) -> list[SettingAdvice]:
     """Was dieses eine Teil anders braucht als die Platte (§29).
 
-    Die Plattenhaftung ist die eine Einstellung, die je Teil zählt statt je
+    Die Druckbetthaftung ist die eine Einstellung, die je Teil zählt statt je
     Auftrag: sie hängt daran, worauf ein Körper steht, und das ist bei jedem
     ein anderer Wert. Beim Gewürzset stehen zwölf Behälter auf Ø 40 und drei
     Streuscheiben auf je drei 1,1-mm-Federarmen — dieselbe Platte, und der

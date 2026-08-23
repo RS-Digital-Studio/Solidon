@@ -664,7 +664,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     Page(
         key="printing",
         summary=_("Vom fertigen Modell zur Übergabe an den Slicer."),
-        title=_("Auf die Platte und hinaus"),
+        title=_("Auf das Bett und hinaus"),
         body=_(
             "**Auf dem Bett anordnen** legt die Objekte nebeneinander und "
             "beginnt eine neue Platte, sobald die aktuelle voll ist. Was auch "
@@ -701,7 +701,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
     Page(
         key="splitting",
         summary=_("Teilen, verstiften und anordnen, wenn der Bauraum nicht reicht."),
-        title=_("Wenn das Teil nicht auf die Platte passt"),
+        title=_("Wenn das Teil nicht auf das Bett passt"),
         body=_(
             "Ein Bauraum ist endlich, und das Teil, das man braucht, ist es "
             "manchmal nicht. Dann wird geteilt — und die Frage ist nicht *ob*, "
@@ -1282,7 +1282,7 @@ def profiles_text() -> str:
     lines.append(
         str(
             _(
-                "Der eingestellte Drucker entscheidet, was auf die Platte passt und ab "
+                "Der eingestellte Drucker entscheidet, was auf das Bett passt und ab "
                 "wann eine Wand zu dünn ist — zwei Extrusionsbahnen sind die Grenze."
             )
         )
