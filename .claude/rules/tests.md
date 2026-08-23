@@ -703,7 +703,7 @@ Zeile gefunden:
 
 ```python
 def release(self, timeout_ms: int = 2000) -> None:
-    self.wait_for_look(timeout_ms)          # der fachliche Standardwert ist 30_000
+    self.wait_for_look(timeout_ms)  # der fachliche Standardwert ist 30_000
 ```
 
 Eine Erhebung, für die eine halbe Minute vorgesehen ist, bekam zwei Sekunden.
@@ -777,3 +777,55 @@ dem die Änderung lag — nicht die, die *jede* Datei prüfen.
 Ein eingegrenzter Prüflauf über `app/ui/` spart Sekunden und lässt eine
 Testdatei durch, die dann einen fremden Torlauf kostet. Beides ist Code, und
 das Tor prüft beides.
+
+## Eine Fremdmeldung ist ein Zeitpunkt, keine Ursache
+
+Vier Meldungen an einem Tag, alle vier von fremden Programmen, alle vier
+irreführend:
+
+| Meldung | behauptet | war |
+|---|---|---|
+| `Exit 127` | „command not found" | Shell-Konvention über vier verschiedenen Windows-Codes |
+| `0xc0000374` | ein bestimmter Fehler | *jede* Heap-Beschädigung, gleich welcher Herkunft |
+| `Background writer channel closed` | ein Schreibkanal | die Platte war voll |
+| `MSVC 14.0 or greater is required` | Compiler fehlt | Compiler da, `vswhere` fand Visual Studio 18 nicht |
+
+> **Eine Fremdmeldung nennt, was das fremde Programm zuletzt *gesehen* hat —
+> nicht, warum. Sie ist ein Zeitpunkt, keine Ursache.**
+
+Wer sie als Diagnose liest, sucht am falschen Ort — dreimal von vier hat nicht
+der Text zur Ursache geführt, sondern eine **Wiederholung**: dreimal derselbe
+Abbruch an derselben Stelle (Platte), zwei Läufe mit verschiedenen Codes hinter
+derselben 127, eine Notiz von vor zwei Wochen (MSVC). Der Text war jedes Mal
+die Sackgasse.
+
+Und die eigene Fehlermeldung ist deshalb anders zu schreiben: Regel 17 verlangt
+einen Handlungsvorschlag, und der Grund dafür steht hier — **wo wir mehr wissen
+als das fremde Programm, gehört das dazu.** „Der Download brach ab" ist eine
+Fremdmeldung; „auf `C:` sind 0 Byte frei, das Paket braucht 7,5 GB" ist eine
+Ursache.
+
+## Ein Prüfwerkzeug ist auch nur Code, und es war viermal der Fehler
+
+An **einem** Tag, und alle vier waren **grün**:
+
+| Werkzeug | Fehler |
+|---|---|
+| der Wächter | meldete beim Fehlalarm und schwieg beim echten Hänger |
+| ein Auswerter | schrieb „RISS VOR DER SUMME" über eine vollständige Zusammenfassung |
+| zwei Tests | prüften eine Attrappe statt der Sache |
+| die Aufräumfixture | hielt selbst fest, was sie loslassen sollte |
+
+Der gemeinsame Nenner ist nicht die Bauart, sondern das Grün: **Ein Werkzeug,
+das nichts meldet, sieht aus wie ein Werkzeug, das nichts findet.**
+
+Zwei Handgriffe dagegen, beide billig:
+
+* **Den Zweig prüfen, den es noch nie gegeben hat.** Der Auswerter hatte drei
+  Urteile und in echten Läufen nur eines davon gezeigt. Ein gefälschtes
+  Protokoll hat die anderen zwei in zwei Minuten geprüft — und der erste
+  Fälschungsversuch ging daneben, was nur auffiel, weil danebengeschrieben
+  stand, ob der Fall überhaupt entstanden ist.
+* **Eine Zahl, die konstant ist, ist ein Zeiger.** „1 von 10 überlebten" — nie
+  null, nie zehn — ist kein Streuungsproblem, sondern genau eine Referenz. Wer
+  bei so einer Zahl die Rate verfeinert, misst am Befund vorbei.
