@@ -804,6 +804,11 @@ def test_the_three_sweeps_over_the_pages_find_something_to_check() -> None:
 # --- Was der Download-Kasten verspricht (§35 „Anschluss") --------------------------------
 
 
+def _als_zahlen(fassung: str) -> tuple[int, ...]:
+    """``"0.1.10"`` als ``(0, 1, 10)`` — damit 10 nach 9 kommt und nicht davor."""
+    return tuple(int(teil) for teil in fassung.split(".") if teil.isdigit())
+
+
 def test_the_version_file_says_what_the_application_is() -> None:
     """``website/version.json`` ist die einzige Stelle, an der der Kunde erfährt,
     dass es etwas Neues gibt — und bis zum 23.08.2026 sah sie kein Test an.
@@ -828,9 +833,25 @@ def test_the_version_file_says_what_the_application_is() -> None:
     from app.branding import APP_VERSION
 
     payload = json.loads((WEBSITE / "version.json").read_text(encoding="utf-8"))
-    assert payload["version"] == APP_VERSION, (
-        f"version.json sagt {payload['version']}, die Anwendung ist {APP_VERSION} — "
-        "wer die Version erhöht, zieht beide nach (tools/bump_version.py)"
+    veroeffentlicht = str(payload["version"])
+
+    # **Die Website darf zurückliegen, aber nie vorauseilen.** Zwischen der
+    # Versionserhöhung und dem Hochladen liegt bei jedem Release eine halbe
+    # Stunde, in der die Anwendung schon 0.1.4 ist und die Seite noch 0.1.3
+    # anbietet — und das ist richtig so: `version.json` sagt, was
+    # **veröffentlicht** ist, und das stimmt erst, wenn die Pakete oben liegen.
+    # Größe und Prüfsumme gibt es vorher gar nicht.
+    #
+    # **Die erste Fassung dieses Tests verlangte Gleichstand und hat damit den
+    # Paketbau blockiert** — ein Kreis: Die Website braucht die Pakete, die
+    # Pakete brauchen eine grüne Suite, die Suite verlangte die Website.
+    # Gefunden von 3d-druck-bd am 23.08.2026, als 0.1.4 daran hängenblieb.
+    #
+    # Was hier bleibt, ist die Richtung: Eine Seite, die eine **neuere** Fassung
+    # nennt als die gebaute, verspricht etwas, das es nicht gibt.
+    assert _als_zahlen(veroeffentlicht) <= _als_zahlen(APP_VERSION), (
+        f"version.json nennt {veroeffentlicht}, gebaut ist erst {APP_VERSION} — "
+        "die Seite verspricht eine Fassung, die es nicht gibt"
     )
     assert payload["packages"], "kein einziges Paket genannt — dann prüft der Rest nichts"
     for key, entry in payload["packages"].items():
@@ -850,10 +871,14 @@ def test_the_version_file_says_what_the_application_is() -> None:
         # der Fassung keine weitere Ziffer und kein Punkt mit Ziffer steht. Der
         # Punkt vor ``exe`` ist ein Trennzeichen und muss durch — die erste
         # Fassung schloss ihn mit aus und machte den Test rot.
-        aktuell = re.compile(rf"{re.escape(APP_VERSION)}(?!\d)(?!\.\d)")
+        # Gegen die **veröffentlichte** Fassung, nicht gegen die gebaute: Die
+        # Datei beschreibt sich selbst, und ihre Einträge müssen zu ihrer
+        # eigenen Versionsnummer passen — das ist die Aussage, die trägt,
+        # solange die Seite noch zurückliegen darf.
+        aktuell = re.compile(rf"{re.escape(veroeffentlicht)}(?!\d)(?!\.\d)")
         for feld in ("url", "file"):
             assert aktuell.search(str(entry.get(feld, ""))), (
-                f"{key}.{feld} ist {entry.get(feld)!r} — das ist nicht Fassung {APP_VERSION}"
+                f"{key}.{feld} ist {entry.get(feld)!r} — das ist nicht Fassung {veroeffentlicht}"
             )
         assert str(entry["url"]).endswith(str(entry["file"])), (
             f"{key}: url endet auf {str(entry['url']).rsplit('=', 1)[-1]!r}, "
@@ -885,17 +910,28 @@ def test_every_download_link_names_the_current_version(page: Path) -> None:
     außen: Eine Stelle, die die Versionsnummer trägt und beim Erhöhen vergessen
     wird.
     """
-    from app.branding import APP_VERSION
+    import json
+
+    # **Gegen ``version.json``, nicht gegen die gebaute Fassung.** Die Seite und
+    # die Versionsdatei gehören zusammen: Sie werden im selben Zug hochgeladen
+    # und beschreiben denselben Stand. Ob dieser Stand der neueste ist, prüft
+    # der Test darüber — hier geht es darum, dass Kasten und Datei **einander**
+    # nicht widersprechen. Ein Kasten, der etwas anderes anbietet als
+    # ``version.json`` verspricht, führt ins Leere, ganz gleich welche Fassung
+    # gerade gebaut ist.
+    veroeffentlicht = str(
+        json.loads((WEBSITE / "version.json").read_text(encoding="utf-8"))["version"]
+    )
 
     html = page.read_text(encoding="utf-8")
     names = set(re.findall(r"/dl/([A-Za-z0-9._-]+)", html))
     names |= set(re.findall(r"count\.php\?f=([A-Za-z0-9._-]+)", html))
     assert names, f"{page.parent.name or 'de'}/index.html nennt kein einziges Paket"
 
-    aktuell = re.compile(rf"{re.escape(APP_VERSION)}(?!\d)(?!\.\d)")
+    aktuell = re.compile(rf"{re.escape(veroeffentlicht)}(?!\d)(?!\.\d)")
     stale = sorted(name for name in names if not aktuell.search(name))
     assert not stale, (
         f"{page.parent.name or 'de'}/index.html bietet noch: {stale}\n"
-        f"Die Anwendung ist {APP_VERSION}, und die alten Pakete werden beim "
+        f"version.json nennt {veroeffentlicht}, und die alten Pakete werden beim "
         "Veröffentlichen vom Server gelöscht — die Verweise gingen ins Leere."
     )
