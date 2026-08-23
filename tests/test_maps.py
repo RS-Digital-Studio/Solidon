@@ -483,3 +483,66 @@ def test_features_without_faces_do_not_fall_over() -> None:
     analysis = maps.build("features", entry)
 
     assert set(analysis.values) == {0.0}
+
+
+def test_a_sphere_takes_its_radius_from_the_recognition() -> None:
+    """Auf einer Kugel liegt jede Nachbarschaft schräg — die Schätzung bricht weg.
+
+    **Gemeldet von 3d-druck-64 am 23.08.2026, gemessen an ``sphere_socket.stl``:**
+    Die Erkennung liest 7,969 mm, die Karte 7,211 — 9,5 % daneben, und zwar bei
+    jeder Netzfeinheit gleich.
+
+    Vier andere Merkmalsarten desselben Korpus lagen unter einem halben
+    Prozent. Der Grund ist keine Diskretisierung, sondern die Vernetzung:
+    Zylinder, Verrundung und Torus haben eine ausgezeichnete
+    Hauptkrümmungsrichtung, und ihre Vernetzung folgt ihr — es gibt
+    Nachbarschaften, die quer liegen und exakt ``r`` liefern. Eine Kugel hat
+    keine solche Richtung, und ``_face_radii`` nimmt unter den Nachbarn das
+    **Minimum**, greift also die schrägste.
+
+    Deshalb konvergiert es auch nicht: An einer Icosphere bleibt der Fehler von
+    Subdivision 2 bis 4 bei -12,8 %, an einer UV-Kugel schrumpft er dagegen von
+    -1,1 auf -0,1 %. Eine Icosphere ist selbstähnlich verzerrt.
+    """
+    body = normalise(read_mesh((MESHES / "sphere_socket.stl").read_bytes(), ".stl"), "mm").mesh
+    features = detect(body)
+    sphere = next((f for f in features.values() if f.kind == "sphere"), None)
+    assert sphere is not None, "ohne erkannte Kugel prüft der Test nichts"
+
+    wanted = float(sphere.params["diameter"]) * 0.5
+    faces = [int(index) for index in (sphere.face_indices or ())]
+    assert faces, "die Kugel trägt keine Dreiecke — dann sagt der Test nichts"
+
+    guessed = maps.curvature_map(body).values
+    measured = maps.curvature_map(body, features).values
+
+    rough = sorted(guessed[index] for index in faces)[len(faces) // 2]
+    exact = sorted(measured[index] for index in faces)[len(faces) // 2]
+
+    assert rough < wanted * 0.95, (
+        f"die Schätzung trifft die Kugel plötzlich ({rough:.3f} gegen {wanted:.3f}) — "
+        "dann misst dieser Test den Fehler nicht mehr, den er festhalten soll"
+    )
+    assert exact == pytest.approx(wanted, rel=1e-6), (
+        f"die Karte nimmt das gemessene Maß nicht: {exact:.3f} statt {wanted:.3f}"
+    )
+
+
+def test_the_curvature_map_says_where_its_numbers_come_from() -> None:
+    """Zwei Herkünfte in einer Karte werden ausgewiesen (§22.5).
+
+    Ein Wert aus der Erkennung und einer aus der Schätzung stehen nebeneinander
+    in derselben Karte, und der Kunde sieht ihnen nichts an. Gesagt wird es
+    deshalb **in Worten** — nicht über einen Farbton, den niemand ohne Legende
+    deutet (Regel 18).
+    """
+    body = normalise(read_mesh((MESHES / "sphere_socket.stl").read_bytes(), ".stl"), "mm").mesh
+
+    plain = str(maps.curvature_map(body).note or "")
+    mixed = str(maps.curvature_map(body, detect(body)).note or "")
+
+    assert "Schätzung" not in plain, "ohne Merkmale gibt es nichts zu unterscheiden"
+    assert "gemessenes Maß" in mixed and "Schätzung" in mixed, (
+        f"die Karte weist ihre zwei Herkünfte nicht aus: {mixed!r}"
+    )
+    assert "{" not in mixed, "ein Platzhalter aus dem Kern erschiene mit geschweiften Klammern"

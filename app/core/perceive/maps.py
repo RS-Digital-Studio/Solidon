@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Final, Literal
 
 import numpy as np
 import trimesh
@@ -188,7 +188,7 @@ def build(
     if kind == "defects":
         return defect_map(mesh)
     if kind == "curvature":
-        return curvature_map(mesh)
+        return curvature_map(mesh, entry.features)
     if kind == "features":
         return feature_map(mesh, entry.features)
     if kind == "fits":
@@ -452,7 +452,7 @@ def defect_map(mesh: MeshData) -> AnalysisMap:
 EDGE_ANGLE = 30.0
 
 
-def curvature_map(mesh: MeshData) -> AnalysisMap:
+def curvature_map(mesh: MeshData, features: dict[FeatureId, Feature] | None = None) -> AnalysisMap:
     """Der Radius, mit dem ein Dreieck gekrümmt ist — in Millimetern.
 
     **Vorher stand hier der schärfste Winkel zu einem Nachbarn, und das misst
@@ -478,7 +478,7 @@ def curvature_map(mesh: MeshData) -> AnalysisMap:
     values = np.full(len(body.faces), np.nan, dtype=float)
     pairs = np.asarray(body.face_adjacency)
     if not len(pairs):
-        return _curvature_result(values, set())
+        return _curvature_result(values, set(), _radii_from_features(values, features))
 
     degrees = np.degrees(np.asarray(body.face_adjacency_angles, dtype=float))
     radii = pair_radii(body)
@@ -504,11 +504,102 @@ def curvature_map(mesh: MeshData) -> AnalysisMap:
             current = values[index]
             values[index] = float(radius) if math.isnan(current) else min(current, float(radius))
 
-    return _curvature_result(values, sharp)
+    exact = _radii_from_features(values, features)
+    return _curvature_result(values, sharp, exact)
 
 
-def _curvature_result(values: np.ndarray, sharp: set[int]) -> AnalysisMap:
+#: Woraus sich der Krümmungsradius eines Merkmals ablesen lässt, und mit
+#: welchem Faktor. **Kein Kegel:** Sein Radius ändert sich über die Höhe, ein
+#: einzelner Wert wäre dort für fast jedes Dreieck der falsche.
+_FEATURE_RADIUS: Final[dict[str, tuple[str, float]]] = {
+    "sphere": ("diameter", 0.5),
+    "hole": ("diameter", 0.5),
+    "pin": ("diameter", 0.5),
+    "fillet": ("radius", 1.0),
+    "torus": ("minor_radius", 1.0),
+}
+
+
+def _radii_from_features(values: np.ndarray, features: dict[FeatureId, Feature] | None) -> set[int]:
+    """Setzt den **gemessenen** Radius ein, wo die Erkennung einen kennt.
+
+    **Die Erkennung hat recht, und das ist kein Zufall.** ``fit_sphere`` und
+    Verwandte rechnen einen Ausgleich über *alle* Punkte des Merkmals; die
+    Karte schätzt aus je einer einzelnen Nachbarschaft zweier Dreiecke. Eine
+    einzelne Nachbarschaft kann schräg zur Hauptkrümmung liegen, eine
+    Ausgleichsfläche nicht.
+
+    **Bei einer Kugel liegt jede schräg**, und genau dort brach die Schätzung
+    weg. Gemessen am 23.08.2026, Karte gegen Erkennung an den Dreiecken des
+    Merkmals:
+
+    ===================== ======== ============ ======= ========
+    Korpus                Art      Erkennung    Karte   Abstand
+    ===================== ======== ============ ======= ========
+    sphere_socket.stl     sphere   7,969        7,211   -9,5 %
+    post_with_fillet.stl  pin      6,000        5,996   -0,1 %
+    post_with_fillet.stl  torus    2,994        2,992   -0,1 %
+    block_with_rounded    fillet   2,999        2,998   -0,0 %
+    torus_ring.stl        torus    4,957        4,937   -0,4 %
+    ===================== ======== ============ ======= ========
+
+    Zylinder, Verrundung und Torus haben eine ausgezeichnete
+    Hauptkrümmungsrichtung, und ihre Vernetzung folgt ihr — es gibt
+    Nachbarschaften, die quer liegen und exakt ``r`` liefern. Eine Kugel hat
+    keine solche Richtung, und eine Icosphere ist obendrein **selbstähnlich
+    verzerrt**: Die Dreiecke an den zwölf Ikosaeder-Ecken sind in jeder
+    Auflösung anders geformt als die in der Flächenmitte. Deshalb verschwindet
+    der Fehler auch bei 64-facher Verfeinerung nicht — er ist keine
+    Diskretisierung, sondern ein Formfaktor der Vernetzung.
+
+    Weder Median noch Perzentil helfen: gemessen liegt der Median am Torus bei
+    +100,8 %, und bei p20 ist die Kugel immer noch -9,9 %.
+
+    Gibt zurück, welche Dreiecke ihren Wert von der Erkennung haben — die Karte
+    weist beide Herkünfte aus (§22.5).
+    """
+    if not features:
+        return set()
+    exact: set[int] = set()
+    for feature in features.values():
+        entry = _FEATURE_RADIUS.get(feature.kind)
+        if entry is None:
+            continue
+        name, factor = entry
+        measured = feature.params.get(name)
+        if measured is None:
+            continue
+        radius = float(measured) * factor
+        if radius <= 0.0:
+            continue
+        for index in feature.face_indices or ():
+            if 0 <= int(index) < len(values):
+                values[int(index)] = radius
+                exact.add(int(index))
+    return exact
+
+
+def _curvature_result(values: np.ndarray, sharp: set[int], exact: set[int]) -> AnalysisMap:
     known = values[~np.isnan(values)]
+    note = _(
+        "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind "
+        "scharfe Kanten; ebene Flächen haben keinen Radius."
+    )
+    if exact:
+        # **Zwei Herkünfte in einer Karte werden ausgewiesen** (§22.5), und zwar
+        # in Worten — nicht über einen Farbton, den niemand ohne Legende deuten
+        # kann (Regel 18).
+        #
+        # **Ohne Platzhalter**, obwohl eine Zahl hier gut stünde: Einen Text aus
+        # dem Kern formatiert niemand nach, und ein ``{count}`` erschiene dem
+        # Kunden mit geschweiften Klammern. ``tests/test_errors.py`` sucht im
+        # ganzen Kern danach.
+        note = _(
+            "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind "
+            "scharfe Kanten; ebene Flächen haben keinen Radius. Wo ein Merkmal "
+            "erkannt wurde, steht sein gemessenes Maß — sonst eine Schätzung aus "
+            "den Nachbarflächen."
+        )
     return AnalysisMap(
         kind="curvature",
         title=TITLES["curvature"],
@@ -517,10 +608,7 @@ def _curvature_result(values: np.ndarray, sharp: set[int]) -> AnalysisMap:
         low=float(known.min()) if len(known) else 0.0,
         high=float(known.max()) if len(known) else 0.0,
         highlighted=tuple(sorted(sharp)),
-        note=_(
-            "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind "
-            "scharfe Kanten; ebene Flächen haben keinen Radius."
-        ),
+        note=note,
     )
 
 
