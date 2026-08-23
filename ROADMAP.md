@@ -4548,6 +4548,17 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       statt als `QMenu | None`, also hält mypy ein `is None` für toten Code.
       `if not menu:` geht durch.
 
+## Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026)
+
+Nicht „laufen sie" — das prüft `test_examples.py` seit langem. Sondern: Was
+steht daneben, wenn jemand das erste Mal ein mitgeliefertes Beispiel öffnet.
+Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
+
+    fünf von neun begrüßen mit Warnungen, zusammen elf
+    zehn davon:  perceive.generated_lost
+    einer:       repair.components_removed
+    Fehler:      keine
+
 - [ ] **Ein Klick auf eine 5,19-mm-Bohrung schlägt M3 vor, und M3 trägt dort
       nichts ab.** Gemessen am 23.08.2026 im laufenden Fenster, `plate_holes.stl`,
       Bohrung `hole_1` gewählt:
@@ -4587,17 +4598,6 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       Gefunden als Gegenprobe zu `at_hole` (3d-druck-3a, `2f66440`): Die sieben
       Einträge kommen alle im Kontextmenü an, sind alle bedienbar und lösen
       alle aus — der Anschluss steht. Nur der Schritt danach fehlt.
-
-## Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026)
-
-Nicht „laufen sie" — das prüft `test_examples.py` seit langem. Sondern: Was
-steht daneben, wenn jemand das erste Mal ein mitgeliefertes Beispiel öffnet.
-Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
-
-    fünf von neun begrüßen mit Warnungen, zusammen elf
-    zehn davon:  perceive.generated_lost
-    einer:       repair.components_removed
-    Fehler:      keine
 
 - [x] **Die Figur in „Weg 4" stand 0,29 mm unter der Druckplatte — behoben
       am 23.08.2026 (`abce5f3`).** Das weiche Verschmelzen mit Radius 4 rundet
