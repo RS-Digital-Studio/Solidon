@@ -617,6 +617,55 @@ Was fehlt:
   prüfen"). Der gehört **vor dem Verkaufsstart weg** — und zwar dadurch, dass
   die Prüfung stattfindet, nicht dadurch, dass der Satz gelöscht wird.
 
+### B8 — Der Entwurfsvermerk hängt am Erzeuger, nicht am Rechtsstatus
+
+**Gefunden von `3d-druck-bd` am 24.08.2026, nachgemessen.**
+
+```
+agb.html          Entwurfsvermerk: ja
+eula.html         Entwurfsvermerk: ja
+widerruf.html     Entwurfsvermerk: ja
+datenschutz.html  Entwurfsvermerk: NEIN
+impressum.html    Entwurfsvermerk: NEIN
+```
+
+Die Ursache ist `DOCUMENTS` in `tools/make_legal.py:38`: Drei Dateien stehen
+darin, und `draft_banner()` setzt den Vermerk bei jeder. Die beiden anderen
+kommen durch einen anderen Kanal auf die Seite und **können ihn gar nicht
+bekommen**, wie vorläufig ihr Inhalt auch sei.
+
+**Die Datenschutzerklärung stand also nicht ohne Vorbehalt da, weil jemand sie
+für fertig hielt, sondern weil sie von Hand gepflegt wird.** Das ist kein
+Versehen an einer Stelle, sondern eine Lücke im Verfahren.
+
+**Beim Impressum ist der fehlende Vermerk richtig** — eine Tatsachenangabe
+braucht keinen, und einer dort würde Zweifel an Pflichtangaben säen, die es
+nicht gibt.
+
+**Bei der Datenschutzerklärung wäre er aber ebenfalls falsch, und hier weiche
+ich von `3d-druck-bd`s Empfehlung ab.** Sie schlug vor, den Vermerk von Hand zu
+setzen. Dagegen spricht die Natur des Textes: Eine Datenschutzerklärung ist
+keine Klausel, sondern eine **Pflichtinformation nach Art. 13 DSGVO**, und
+Art. 12 verlangt sie „in präziser, transparenter, verständlicher und leicht
+zugänglicher Form". Ein Text, der sich selbst als ungeprüften Entwurf
+bezeichnet, untergräbt genau die Eigenschaft, die er haben muss. Bei AGB und
+EULA ist der Vermerk ein sichtbar gemachter interner Vorbehalt; bei einer
+Pflichtinformation entwertet er die Information selbst.
+
+**Gemacht wurde deshalb das, was das eigentliche Problem löst:** Der Abschnitt
+„Der Kauf einer Lizenz" trägt jetzt denselben Vorbehalt wie die AGB — *„Solange
+nur die Demo-Version angeboten wird, findet nichts davon statt."* Damit ist die
+unzutreffende Präsens-Behauptung aus B2 entschärft, **ohne** die Anbieterfrage
+vorwegzunehmen und **ohne** die Pflichtinformation zu entwerten. Der Name
+Paddle bleibt stehen; ob er bleibt, entscheidet §13 Punkt 6.
+
+**Offen bleibt die Verfahrenslücke.** Solange
+`datenschutz.html` von Hand gepflegt wird, gilt für sie keine der
+Automatiken aus `make_legal.py` — weder der Entwurfsvermerk noch der
+Platzhalter-Mechanismus, der ihn beim Eintragen der Anschrift von selbst
+entfernt. Eine `DATENSCHUTZ.md` als Quelle würde das heilen; das ist eine
+Umstellung und keine Aufgabe für heute, aber sie gehört ins Register.
+
 ### B7 — Nebenbefund: veraltete Preise im Konzeptgedächtnis
 
 `konzepte/konzept-veroeffentlichung-1.0.md` nennt an fünf Stellen 49 € und
