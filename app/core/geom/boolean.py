@@ -132,12 +132,12 @@ def boolean(
             # liege an seiner Geometrie.
             raise
         except Exception as problem:  # Kerne scheitern auf kerneigene Arten
-            _log.info("boolean stage %s failed: %s", stage, problem)
+            _log.warning("boolean stage %s failed: %s", stage, problem)
             continue
         if result is None or not _plausible(result, allow_empty):
             if result is not None and result.triangle_count == 0:
                 emptied = True
-            _log.info("boolean stage %s produced nothing usable", stage)
+            _log.warning("boolean stage %s produced nothing usable", stage)
             continue
         return BooleanOutcome(
             # Nichts hat keine Flächen zum Färben, und die Übertragung suchte

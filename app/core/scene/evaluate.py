@@ -444,7 +444,9 @@ def evaluate(
             findings.extend(placement)
             scene = dataclasses.replace(scene, report=Report(tuple(findings)))
     if stopped_at is not None:
-        _log.warning("evaluation stopped at op %s", stopped_at)
+        _log.warning(
+            "evaluation stopped at op %s: %s", stopped_at, _why_it_stopped(findings, stopped_at)
+        )
     settled = _without_settled(findings)
     if len(settled) != len(findings):
         scene = dataclasses.replace(scene, report=Report(tuple(settled)))
@@ -502,6 +504,33 @@ SETTLED_BY: Final[dict[str, frozenset[str]]] = {
     # dritten Schritt. Gestrichen und nicht herabgestuft: Es *ist* nicht mehr zu
     # fein, und ein Hinweis darauf wäre nicht milder, sondern falsch.
 }
+
+
+def _why_it_stopped(findings: Sequence[Finding], stopped_at: int) -> str:
+    """Der Grund zum Abbruch, fürs Protokoll — nicht nur die Nummer.
+
+    **Hier stand nur `evaluation stopped at op 10`.** Im Kundenprotokoll vom
+    23.08.2026 steht diese Zeile **neunzehnmal** über sieben Minuten, und keine
+    davon sagt, was schiefging. Ohne einen Fund an ganz anderer Stelle hätte
+    niemand sagen können, woran es lag — auch wir nicht, mit dem Protokoll in
+    der Hand.
+
+    **Der Grund war die ganze Zeit da:** Alle sieben Stellen, die `stopped_at`
+    setzen, hängen vorher einen Befund an, der ihn trägt. Er landete im
+    Prüfbericht und nicht im Protokoll. Dieselbe Sorte Lücke wie ein
+    Fehlertext, der nur seinen Titel zeigt: Der Titel ist je Klasse gleich, der
+    Grund steht daneben und fehlt in jeder Zeile.
+
+    **Geschrieben wird die Message-ID, nicht die Übersetzung.** Ein Protokoll
+    aus Portugal muss der Support lesen können; `str()` gäbe portugiesisch.
+    """
+    schuldige = [f for f in findings if f.op_id == stopped_at]
+    if not schuldige:
+        return "kein Befund zu dieser Operation"
+    letzter = schuldige[-1]
+    grund = letzter.message
+    text = grund.msgid if isinstance(grund, TranslatableText) else str(grund)
+    return f"{letzter.code}: {text}"
 
 
 def _without_settled(findings: Sequence[Finding]) -> list[Finding]:

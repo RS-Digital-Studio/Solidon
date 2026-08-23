@@ -5,6 +5,7 @@ weiterkann (§15).
 from __future__ import annotations
 
 import dataclasses
+import logging
 
 import pytest
 
@@ -1312,3 +1313,36 @@ def test_a_translatable_text_equals_its_message_id() -> None:
         assert text != "Box", "und nicht die Übersetzung"
     finally:
         set_language(before)
+
+
+def test_a_stopped_evaluation_says_why_in_the_log(caplog: pytest.LogCaptureFixture) -> None:
+    """Die Nummer allein hilft niemandem — auch uns nicht.
+
+    Im Kundenprotokoll vom 23.08.2026 steht ``evaluation stopped at op 10``
+    **neunzehnmal** über sieben Minuten, und keine der Zeilen sagt, was
+    schiefging. Der Grund war die ganze Zeit da: Alle sieben Stellen, die
+    ``stopped_at`` setzen, hängen vorher einen Befund an, der ihn trägt — er
+    landete nur im Prüfbericht und nicht im Protokoll.
+
+    Geprüft wird über eine Operation, die auf ein Objekt zeigt, das es nicht
+    gibt: Die Auswertung hält an (§15.2), und die Protokollzeile muss den Code
+    des Befunds nennen.
+    """
+    from app.core.knowledge.profiles import make_profile
+    from app.core.scene.project import new_project
+    from app.core.types import Operation
+
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    document.ops.append(
+        Operation(id=1, op="repair", inputs=("obj_99",), outputs=("obj_1",), params={})
+    )
+
+    with caplog.at_level(logging.WARNING, logger="app.core.scene.evaluate"):
+        result = evaluate(document, make_profile("centauri-carbon-2", "petg"))
+
+    assert result.stopped_at == 1
+    zeilen = [r.getMessage() for r in caplog.records if "evaluation stopped" in r.getMessage()]
+    assert zeilen, "keine Abbruchzeile im Protokoll"
+    assert zeilen[0] != "evaluation stopped at op 1", "nennt nur die Nummer"
+    assert "." in zeilen[0].split("op 1: ")[-1], f"nennt keinen Befundcode: {zeilen[0]}"
