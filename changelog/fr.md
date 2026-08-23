@@ -16,6 +16,21 @@ portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
 
+## 0.1.4
+
+- Au démarrage, Solidon vérifie s’il existe une version plus récente et la propose. Elle n’est téléchargée et installée qu’après votre confirmation ; cela se désactive dans les réglages.
+- Un modèle de langue local peut désormais calculer dix minutes. Avant, le chat abandonnait au bout de deux et demandait un rapport d’erreur, pour un calcul simplement plus long.
+- Un anneau est reconnu comme une seule caractéristique et non plus comme trois bourrelets superposés.
+- L’entrée « Épaissir la surface » fait maintenant ce qu’elle promet. Auparavant, elle décalait la surface.
+- Le titre de la fenêtre nomme le modèle ouvert, même s’il n’existe pas encore de fichier de projet.
+- Pendant le tracé, la cote se trouve à la pointe de la ligne et non au bord de la fenêtre.
+- Une entrée de menu désactivée dit maintenant pourquoi elle l’est. La raison était là et restait invisible.
+- Lorsque le calcul s’arrête, il indique à quelle étape et pourquoi.
+- Le rapport d’erreur emporte l’état de la scène : objets avec cotes, caractéristiques, paramètres et historique. Une erreur se reproduit ainsi au lieu de se deviner.
+- Plusieurs plantages à la fermeture de fenêtres et de boîtes de dialogue sont corrigés.
+- Le fichier de version est signé, et Solidon vérifie la signature avant de proposer une mise à jour.
+- La surface d’impression s’appelle partout le plateau et sa disposition la plaque, comme la nomment les trancheurs.
+
 ## 0.1.3
 
 - Le noyau exact sait désormais percer : « Percer un trou exact » travaille directement sur le corps exact, sans détour par un maillage.

@@ -15,6 +15,21 @@ dieselben Punkte in derselben Reihenfolge (`tests/test_changelog.py`).
 `tools/make_download.py` holt daraus den Abschnitt der aktuellen Version und
 schreibt ihn in `website/version.json`.
 
+## 0.1.4
+
+- Solidon sieht beim Start nach, ob es eine neuere Fassung gibt, und bietet sie an. Geladen und installiert wird erst auf Ihre Bestätigung; abschalten lässt es sich in den Einstellungen.
+- Ein lokales Sprachmodell darf jetzt zehn Minuten rechnen. Vorher brach der Chat nach zwei Minuten ab und bat um einen Fehlerbericht — für eine Rechnung, die einfach länger dauerte.
+- Ein Ring wird als ein Merkmal erkannt und nicht mehr als drei übereinanderliegende Wülste.
+- Der Eintrag „Fläche aufdicken“ tut jetzt, was er verspricht. Vorher versetzte er die Fläche.
+- Der Fenstertitel nennt das geöffnete Modell, auch wenn es noch keine Projektdatei dazu gibt.
+- Beim Zeichnen steht das Maß an der Spitze der Linie statt am Fensterrand.
+- Ein gesperrter Menüeintrag sagt jetzt, warum er gesperrt ist. Der Grund stand vorher da und war unsichtbar.
+- Hält die Berechnung an, steht dabei, an welchem Schritt und warum.
+- Der Fehlerbericht nimmt den Stand der Szene mit: Objekte mit Maßen, Merkmale, Parameter und den Verlauf. Damit lässt sich ein Fehler nachstellen, statt ihn zu erraten.
+- Mehrere Abstürze beim Schließen von Fenstern und Dialogen sind behoben.
+- Die Versionsdatei ist unterschrieben, und Solidon prüft die Unterschrift, bevor es ein Update anbietet.
+- Die Druckfläche heißt überall Bett und ihre Belegung Platte — so, wie die Slicer es nennen.
+
 ## 0.1.3
 
 - Der exakte Kern kann jetzt bohren: „Exakte Bohrung setzen“ arbeitet direkt am exakten Körper, ohne den Umweg über ein Netz.

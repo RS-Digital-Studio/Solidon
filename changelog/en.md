@@ -15,6 +15,21 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.1.4
+
+- At startup Solidon checks whether a newer version is out and offers it. It is downloaded and installed only on your confirmation; you can switch this off in the settings.
+- A local language model may now compute for ten minutes. Before, the chat gave up after two and asked for an error report — for a calculation that simply took longer.
+- A ring is recognised as one feature instead of three beads stacked on top of each other.
+- The entry “Thicken surface” now does what it promises. Before, it offset the surface.
+- The window title names the model you opened, even when there is no project file for it yet.
+- While drawing, the dimension sits at the tip of the line instead of at the window edge.
+- A disabled menu entry now says why it is disabled. The reason was there before and invisible.
+- When the calculation stops, it says at which step and why.
+- The error report carries the state of the scene: objects with dimensions, features, parameters and the history. That makes a fault reproducible instead of guessed.
+- Several crashes when closing windows and dialogs are fixed.
+- The version file is signed, and Solidon checks the signature before it offers an update.
+- The print surface is called the bed everywhere and its layout the plate — the way the slicers name them.
+
 ## 0.1.3
 
 - The exact kernel can now drill: “Drill an exact hole” works directly on the exact body, without the detour through a mesh.

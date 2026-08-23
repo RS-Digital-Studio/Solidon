@@ -16,6 +16,21 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.1.4
+
+- Al iniciarse, Solidon comprueba si hay una versión más reciente y la ofrece. Se descarga e instala solo con tu confirmación; puedes desactivarlo en los ajustes.
+- Un modelo de lenguaje local puede calcular ahora diez minutos. Antes el chat se rendía a los dos y pedía un informe de error, por un cálculo que simplemente tardaba más.
+- Un anillo se reconoce como una sola característica y ya no como tres rebordes superpuestos.
+- La entrada «Engrosar superficie» hace ahora lo que promete. Antes desplazaba la superficie.
+- El título de la ventana nombra el modelo abierto, aunque todavía no exista un archivo de proyecto.
+- Al dibujar, la medida está en la punta de la línea y no en el borde de la ventana.
+- Una entrada de menú bloqueada dice ahora por qué lo está. El motivo ya estaba ahí y era invisible.
+- Si el cálculo se detiene, se indica en qué paso y por qué.
+- El informe de error lleva el estado de la escena: objetos con medidas, características, parámetros y el historial. Así un fallo se reproduce en vez de adivinarse.
+- Se han corregido varios cierres inesperados al cerrar ventanas y diálogos.
+- El archivo de versión está firmado, y Solidon comprueba la firma antes de ofrecer una actualización.
+- La superficie de impresión se llama cama en todas partes y su distribución placa, como la nombran los slicers.
+
 ## 0.1.3
 
 - El núcleo exacto ya sabe taladrar: «Taladrar un agujero exacto» trabaja directamente sobre el cuerpo exacto, sin el rodeo por una malla.

@@ -15,6 +15,21 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.1.4
+
+- All’avvio Solidon controlla se esiste una versione più recente e la propone. Viene scaricata e installata solo dopo la tua conferma; si può disattivare nelle impostazioni.
+- Un modello linguistico locale può ora calcolare dieci minuti. Prima la chat si arrendeva dopo due e chiedeva una segnalazione, per un calcolo che semplicemente durava di più.
+- Un anello viene riconosciuto come una sola caratteristica e non più come tre cordoli sovrapposti.
+- La voce «Ispessisci superficie» fa ora ciò che promette. Prima spostava la superficie.
+- Il titolo della finestra nomina il modello aperto, anche quando non esiste ancora un file di progetto.
+- Mentre si disegna, la misura sta sulla punta della linea invece che sul bordo della finestra.
+- Una voce di menu bloccata dice ora perché lo è. Il motivo c’era già ed era invisibile.
+- Se il calcolo si ferma, viene indicato a quale passo e perché.
+- La segnalazione porta con sé lo stato della scena: oggetti con misure, caratteristiche, parametri e cronologia. Così un errore si riproduce invece di indovinarlo.
+- Sono stati corretti diversi arresti anomali alla chiusura di finestre e finestre di dialogo.
+- Il file di versione è firmato, e Solidon ne verifica la firma prima di proporre un aggiornamento.
+- La superficie di stampa si chiama ovunque piano e la sua disposizione piatto, come li chiamano gli slicer.
+
 ## 0.1.3
 
 - Il nucleo esatto ora sa forare: «Eseguire un foro esatto» lavora direttamente sul corpo esatto, senza passare da una mesh.
