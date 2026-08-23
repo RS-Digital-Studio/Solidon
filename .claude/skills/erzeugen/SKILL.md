@@ -92,8 +92,8 @@ ein Band aus zwei Gruppen. Die Reihenfolge ist `make_figures` →
 `make_web_images` → `make_manual`; die `<img>`-Maße der von Hand gepflegten
 Seiten müssen danach den echten Dateien entsprechen.
 
-**`make_web_images.py` stirbt an der sechsten Sprache — und nimmt die
-letzte mit.** Am 23.08.2026 beim Lauf für 0.1.3 gemessen: Der Prozess endete
+**Die Bilderläufe sterben an der fünften oder sechsten Sprache — und nehmen
+die übrigen mit.** Am 23.08.2026 beim Lauf für 0.1.3 gemessen: Der Prozess endete
 mit `0xc0000374` (Heap-Korruption), **nachdem** fünf Sprachen fertig waren.
 Die vier portugiesischen Bilder blieben dabei drei Tage alt stehen, und
 **nichts hat das gesagt** — kein Protokolleintrag, keine Fehlermeldung, eine
@@ -112,9 +112,17 @@ Das Mittel ist dasselbe wie bei der Suite: **weniger Fenster je Prozess.**
 Gemessen läuft ein Lauf mit einer einzelnen Sprache sauber durch:
 
 ```
+.venv\Scripts\python.exe tools/make_figures.py    de en es fr
+.venv\Scripts\python.exe tools/make_figures.py    it pt
 .venv\Scripts\python.exe tools/make_web_images.py de en es fr it
 .venv\Scripts\python.exe tools/make_web_images.py pt
 ```
+
+**Beide Werkzeuge trifft es, an verschiedenen Stellen:** `make_figures.py`
+brach am 23.08.2026 nach **vier** Sprachen ab und ließ `it` und `pt` mit den
+Bildern des vorigen Laufs stehen — die zeigten dann noch die alten
+Übersetzungen. `make_web_images.py` brach nach **fünf** ab. Einzeln gefahren
+läuft jede Sprache sauber durch (Exit 0, gemessen).
 
 Das Werkzeug nimmt seine Sprachen aus `sys.argv[1:]`; ohne Argument macht es
 alle sechs. **Nach jedem Lauf die Zeitstempel prüfen** — vier Dateien je
