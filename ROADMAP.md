@@ -106,6 +106,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein ladendes Fenster sieht aus wie ein abgestürztes | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | ein sichtbares Wartezeitverhalten (§2.8) statt schwarzer Fläche. Sechs Sekunden beim Öffnen von Weg 1, in denen Menü- und Statusleiste stehen und **kein einziges Panel** — Robert hat es zweimal für einen Absturz gehalten, das Protokoll sagt beide Male `ended normally`. **Gehört der Oberfläche**; sinkt die Ladezeit, bleibt der Punkt |
 | Der Cache spart die Geometrie, nicht die Erkennung | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | zuerst eine **Messung**, wie viel der sechs Sekunden überhaupt auf `detect()` entfällt. `_with_features()` läuft nach jedem Operationsergebnis, auch nach einem Cache-Treffer, wo das Netz bitgleich ist — fünfzehn Läufe über denselben Körper. Der Umbau ist nicht trivial: Der Plattencache nimmt nur `MeshData`, und die Zuordnung hängt an den vorigen Merkmalen und an `operation.matches` (§15.7) |
 | `decimated 992 to 992` — ein Schritt, der nichts tut | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | eine Erklärung. `decimate()` hat einen frühen Rücksprung für genau diesen Fall, und er greift nicht; es läuft eine echte `simplify_quadric_decimation` von 992 auf 992. Drei Aufrufer kommen infrage |
+| Der Torus-Eintrag der Krümmungskarte greift ins Leere | Die Krümmungskarte lag an Kugeln zehn Prozent daneben (23.08.2026) | zwei Zeilen und einen Test: `_FEATURE_RADIUS` sucht `minor_radius`, das Merkmal trägt `tube_diameter` — der Eintrag läuft ins `continue`. **Aufgefallen ist es niemandem**, weil die Schätzung den Torus ohnehin auf 0,4 % trifft; ein Tabelleneintrag, der nichts bewirkt, sieht dort aus wie einer, der wirkt. Der Test hält die Tabelle gegen die tatsächlichen Parameter der erkannten Merkmale und fängt damit auch den nächsten |
 
 ---
 
@@ -8183,3 +8184,89 @@ das wie abgestürzt aussieht.
       als der Aufrufer erwartet. **Ungeklärt**; die drei Aufrufer sind
       `examples.py` (Vorschau, Ziel 1500), `drawing.py` und die Operation
       selbst.
+
+---
+
+## Die Krümmungskarte lag an Kugeln zehn Prozent daneben (23.08.2026)
+
+Gefunden beim Abarbeiten des Punktes „Ein Test, der nur seine eigene Konsistenz
+misst" — und zwar auf genau dem Weg, den dieser Punkt vorschreibt: **gegen
+einen Sollwert prüfen, nicht gegen die eigene Wiederholbarkeit.**
+
+- [x] **Der Zylinder konvergiert, die Kugel nicht.** Gemessen gegen den Radius
+      selbst, über vier Netzfeinheiten:
+
+          Zylinder r=10,  96 -> 768 Dreiecke:    0,989 -> 1,000   konvergiert
+          Kugel    r=10, 320 -> 20480 Dreiecke:  0,887 -> 0,904   konvergiert nicht
+
+      Bei 64-facher Verfeinerung bleibt der Fehler stehen. **Ein Test, der zwei
+      Vernetzungen gegeneinander hält, wäre grün geblieben** — dasselbe Muster
+      wie beim Zwei-Drittel-Fehler, den dieselbe Karte einmal hatte.
+
+- [x] **Zwei naheliegende Erklärungen sind gemessen und widerlegt**, beide von
+      ihren eigenen Urhebern. Das ist der lehrreichste Teil:
+
+      *„Das Minimum greift den Ausreißer, der Median hilft."* (64) — falsch.
+      Beim Torus trifft der Median die Ringkrümmung statt der Röhre und liegt
+      um das Dreieinhalbfache daneben. 3a hat es mit größerem Abstand
+      bestätigt (+100,8 %) und zusätzlich p5, p10 und p20 durchprobiert: **Es
+      gibt keine Ordnungsstatistik, die alle drei Körper bedient.**
+
+      *„Der Testkörper ist eine UV-Kugel, ihre Pole sind entartet."* (3a) —
+      genau verkehrt herum. Die UV-Kugel ist die, die sich **richtig** verhält
+      (-1,1 % → -0,1 %, konvergiert); die Icosphere ist die, die nicht
+      konvergiert.
+
+- [x] **Die Ursache ist ein Formfaktor der Vernetzung** (3a). Eine Icosphere
+      ist selbstähnlich: Nach jeder Unterteilung sind die Dreiecke an den zwölf
+      Ikosaeder-Ecken anders geformt als in der Flächenmitte, und das Muster
+      wiederholt sich in jeder Auflösung. Über alle Nachbarschaften ist der
+      **Mittelwert** richtig, die Verteilung nur schief — das Minimum greift
+      die schrägste.
+
+      **Warum es Zylinder und Torus nicht trifft:** Beide haben eine
+      ausgezeichnete Hauptkrümmungsrichtung, und ihre Vernetzung folgt ihr —
+      es gibt Nachbarschaften, die quer liegen und exakt `r` liefern. Auf einer
+      Kugel liegt **keine** in einer Hauptkrümmungsebene.
+
+- [x] **Es trifft echte Modelle, und genau eine Merkmalsart.** Die Messung, die
+      darüber entschied, ob es ein Testkörper-Artefakt ist — Karte gegen
+      Erkennung, auf den Dreiecken des Merkmals:
+
+          sphere_socket.stl    sphere   Erkennung 7,969   Karte 7,211   -9,5 %
+          post_with_fillet     pin      Erkennung 6,000   Karte 5,996   -0,1 %
+                               torus    Erkennung 2,994   Karte 2,992   -0,1 %
+          block_with_rounded   fillet   Erkennung 2,999   Karte 2,998   -0,0 %
+          torus_ring           torus    Erkennung 4,957   Karte 4,937   -0,4 %
+
+      Vier von fünf unter einem halben Prozent, eine bei -9,5 %.
+
+- [x] **Behoben in `7e2de9c`** (3a): Die Karte nimmt den **gemessenen** Radius,
+      wo ein Merkmal einen liefert, und schätzt nur dort, wo keines ist. Der
+      Grund steht im Docstring: `fit_sphere` rechnet einen Ausgleich über alle
+      Punkte, die Karte schätzt aus **einer** Nachbarschaft — und eine einzelne
+      kann schräg liegen, eine Ausgleichsfläche nicht.
+
+      Die Herkunft weist die Legende in Worten aus (§22.5, Regel 18): „Wo ein
+      Merkmal erkannt wurde, steht sein gemessenes Maß — sonst eine Schätzung
+      aus den Nachbarflächen." Nachgemessen am selben Messpunkt: -9,5 % → +0,0 %.
+
+      **Der Kegel bleibt bewusst draußen** — sein Radius ändert sich über die
+      Höhe, ein einzelner Wert wäre dort für fast jedes Dreieck der falsche.
+
+- [ ] **Der Torus-Eintrag greift ins Leere, und niemandem fiel es auf.**
+      `_FEATURE_RADIUS` sucht `"minor_radius"`; das Merkmal trägt
+      `tube_diameter`. Gemessen an `torus_ring.stl`: der Schlüssel existiert
+      nicht, der Eintrag läuft ins `continue`.
+
+      **Warum es stumm blieb, ist der eigentliche Punkt:** Die Schätzung trifft
+      den Torus ohnehin auf 0,4 %, weil er eine ausgezeichnete
+      Hauptkrümmungsrichtung hat. **Ein Tabelleneintrag, der nichts bewirkt,
+      sieht dort genauso aus wie einer, der wirkt** — vier Tests bleiben grün,
+      und die Zahl daneben stimmt.
+
+      Zu bauen ist beides: `("tube_diameter", 0.5)`, und ein Test, der
+      `_FEATURE_RADIUS` **gegen die tatsächlichen Parameter** der erkannten
+      Merkmale hält. Der fängt auch den nächsten Eintrag, wenn jemand `cone`
+      doch aufnimmt oder ein Parameter umbenannt wird. `hole` ist am Korpus
+      bisher nicht geprüft — kein Modell mit passenden `face_indices`.
