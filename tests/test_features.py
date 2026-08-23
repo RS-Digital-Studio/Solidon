@@ -254,13 +254,21 @@ def test_a_generated_mesh_does_not_drown_in_faces() -> None:
     """
     features = detect(generated_body())
 
+    # **Erst festhalten, dass überhaupt etwas erkannt wird.** Ohne diese Zeile
+    # wäre der Test auch grün, wenn ``detect`` gar nichts mehr liefert — eine
+    # gefilterte Teilmenge einer leeren Menge ist leer. Gemessen: drei Kugeln
+    # und eine offene Kante.
+    assert features, "die Erkennung liefert auf diesem Netz nichts mehr"
+
     faces = [entry for entry in features.values() if entry.kind == "face"]
     assert not faces, f"{len(faces)} Flächen auf einem organischen Netz"
 
 
 def test_a_scratch_is_not_a_bore() -> None:
     """Eine Düse legt 0,4 mm breite Bahnen — 0,05 mm hat kein Werkzeug gemacht."""
-    holes = detect_holes(generated_body())
+    body = generated_body()
+    assert detect(body), "die Erkennung liefert auf diesem Netz nichts mehr"
+    holes = detect_holes(body)
 
     # **Nicht ``all(... >= 0.5)``.** Auf einem organischen Netz gibt es keine
     # Bohrung, die Liste ist also leer — und ``all`` über eine leere Liste ist
@@ -791,6 +799,13 @@ def test_a_full_cylinder_is_never_taken_for_a_fillet() -> None:
     """
     for name in ("plate_holes.stl", "clean_figure.stl", "plate_chamfer_and_taper.stl"):
         found = detect(plate(name))
+
+        # Ein Verbot über eine gefilterte Menge ist grün, solange die Menge
+        # leer ist. Erst festhalten, dass auf jedem der drei Körper überhaupt
+        # runde Merkmale erkannt werden — sonst prüft die Zeile darunter, dass
+        # nichts nichts ist.
+        round_ones = [entry for entry in found.values() if "diameter" in entry.params]
+        assert round_ones, f"{name}: kein einziges rundes Merkmal erkannt"
 
         assert not [entry for entry in found.values() if entry.kind == "fillet"], (
             f"{name}: a whole cylinder is not a fillet"

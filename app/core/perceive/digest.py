@@ -269,11 +269,16 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
         # **R und nicht Ø.** Eine Verrundung wird über ihren Radius benannt:
         # so sagt es der Kunde, so steht es in Fusion, so heißt sie im Slicer.
         shape = tr("Hohlkehle") if params.get("recess") else tr("Verrundung")
-        axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
-        return (
-            f"{feature_id}  {shape} R{format_length(float(params.get('radius', 0.0)))}, "
-            f"{tr('Achse')} {axis}{at}"
-        )
+        # **Die Achse nur, wenn es eine gibt.** Eine Verrundung an einer Kante
+        # läuft entlang einer Achse; die Ecke, an der drei zusammentreffen, ist
+        # ein Kugelstück und hat keine. Mit einem Vorgabewert stand dort „Achse
+        # +Z" an jeder der acht Ecken eines rundum verrundeten Quaders — eine
+        # Zahl, die der Agent für eine Auskunft hält. Dritter Fund derselben
+        # Bauart an einem Tag, diesmal in frisch geschriebenem Code.
+        direction = params.get("axis")
+        along = f", {tr('Achse')} {_axis_name(direction)}" if direction is not None else ""
+        size = format_length(float(params.get("radius", 0.0)))
+        return f"{feature_id}  {shape} R{size}{along}{at}"
     if feature.kind == "edge_loop":
         return f"{feature_id}  {params.get('open_edges', 0)} {tr('offene Kanten')}"
     # **Der Fallback nennt den englischen Schlüssel.** Er sieht aus wie ein Name

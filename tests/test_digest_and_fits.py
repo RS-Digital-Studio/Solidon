@@ -622,3 +622,33 @@ def test_no_feature_kind_falls_back_to_its_english_key() -> None:
         # dieses Tests zweimal genau so dagestanden.
         vorn = line.split("  ", 1)[1].split(", bei (")[0]
         assert any(character.isdigit() for character in vorn), f"{kind}: keine Kennzahl"
+
+
+def test_a_corner_fillet_claims_no_axis() -> None:
+    """Eine Verrundung an einer Kante läuft entlang einer Achse; die Ecke, an
+    der drei zusammentreffen, ist ein Kugelstück und hat keine.
+
+    Mit ``params.get("axis", (0, 0, 1))`` stand an jeder der acht Ecken eines
+    rundum verrundeten Quaders „Achse +Z" — ein Vorgabewert, den der Agent für
+    eine Auskunft hält. Er hat keine andere Quelle als diesen Satz (§26.1).
+    """
+    from app.core.perceive.digest import _feature_line
+
+    along_an_edge = Feature(
+        id="fillet_1",
+        kind="fillet",
+        provenance="detected",
+        params={"radius": 2.0, "centre": (1.0, 2.0, 3.0), "axis": (0.0, 0.0, 1.0)},
+    )
+    at_a_corner = Feature(
+        id="fillet_2",
+        kind="fillet",
+        provenance="detected",
+        params={"radius": 2.0, "centre": (1.0, 2.0, 3.0)},
+    )
+
+    assert "+Z" in _feature_line("fillet_1", along_an_edge)
+    corner = _feature_line("fillet_2", at_a_corner)
+    assert "Achse" not in corner, corner
+    # Der Radius bleibt — was wegfällt, ist nur die Richtung.
+    assert "R2" in corner
