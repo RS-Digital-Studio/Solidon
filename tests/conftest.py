@@ -193,6 +193,31 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     # Allokation gerade die Schwelle reißt, und findet dort ein Fenster ohne
     # letzte Python-Referenz. Gefunden von 3d-druck-b8.
     #
+    # **Ein zweiter Stapelabzug, unabhängig und mit anderen Widgets** — am
+    # 23.08.2026 an einem eigenen hängenden Torlauf gezogen, ebenfalls mit
+    # ``py-spy dump --native``:
+    #
+    #     MainThread    hält den GIL, wartet auf den Qt-Mutex
+    #                   QScrollArea::QScrollArea → QObject::connect
+    #                   → QBasicMutex::lockInternal
+    #
+    #     Thread 52656  hält den Qt-Mutex, wartet auf den GIL
+    #                   SbkDeallocWrapper → QWidget::~QWidget
+    #                   → QObjectPrivate::deleteChildren → QObject::~QObject
+    #                   → Sbk_GetPyOverride → PyGILState_Ensure
+    #
+    # Zwei Dinge macht er klarer als der erste. **Erstens: Es liegt nicht an
+    # ``QMenuBar``.** Dort war es ein Menü beim Aufbau einer ``QComboBox``,
+    # hier ein beliebiges ``QWidget`` beim Aufbau einer ``QScrollArea`` — die
+    # Paarung ist zufällig, das Muster ist es nicht. Jedes Widget, dessen
+    # letzte Python-Referenz in einem Nebenthread fällt, kann es auslösen.
+    #
+    # **Zweitens: ``SbkDeallocWrapper`` ganz unten benennt den Auslöser.** Das
+    # ist shibokens Deallocator — die *Python*-Hülle wird freigegeben, und das
+    # zieht die C++-Zerstörung nach sich. Nicht Qt räumt hier auf, sondern
+    # Pythons Speicherbereiniger, und er tut es in dem Thread, in dem er
+    # gerade läuft.
+    #
     # Das erklärt vier Beobachtungen, die einzeln keinen Sinn ergaben:
     #
     # * Warum die Läufe **stehen** statt zu stürzen — ein Deadlock rechnet nicht.
