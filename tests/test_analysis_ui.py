@@ -1203,6 +1203,32 @@ def test_a_scene_that_outgrows_the_view_gets_fitted_again() -> None:
     assert not outgrown(huge, None), "und ohne Körper nichts einzupassen"
 
 
+def test_a_body_the_user_dragged_leaves_the_camera_alone() -> None:
+    """Wer selbst schiebt, behält seine Ansicht (§2.9).
+
+    **Robert am 23.08.2026**, nachdem er einen Körper über die Platte gezogen
+    hatte: „nach jedem verschieben springt die kamera und das modell immer
+    komisch … kamera bei aktueller position dann immer lassen."
+
+    Der Grund lag im zweiten Kriterium von :func:`outgrown` — *weggerückt*.
+    Es ist für ein Modell gedacht, das außerhalb des Bildes liegt, und trifft
+    auf jeden geschobenen Körper zu: Beim Loslassen rahmte die Kamera neu.
+
+    **Das Größenkriterium gilt weiter**, und das ist die Grenze der Regel: Ein
+    Körper, der beim Schieben plötzlich zwanzigmal so groß dasteht, ist kein
+    Schieben mehr.
+    """
+    from app.ui.viewport import outgrown
+
+    fitted = (-10.0, 10.0, -10.0, 10.0, 0.0, 20.0)
+    dragged = (100.0, 120.0, 100.0, 120.0, 0.0, 20.0)
+    grown = (-200.0, 200.0, -200.0, 200.0, 0.0, 250.0)
+
+    assert outgrown(fitted, dragged), "ohne die Unterscheidung rahmt jedes Ziehen neu"
+    assert not outgrown(fitted, dragged, moved_only=True), "geschoben heißt: Ansicht bleibt"
+    assert outgrown(fitted, grown, moved_only=True), "gewachsen bleibt gewachsen"
+
+
 def test_the_camera_follows_a_body_that_dwarfs_the_scene(window: MainWindow) -> None:
     """Dieselbe Sache am Fenster: erst eingepasst, dann entwachsen.
 

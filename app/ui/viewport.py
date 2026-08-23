@@ -1357,6 +1357,9 @@ class Viewport(QWidget):
         #: dieselben noch da, hat der Nutzer nur geschoben, und die Kamera
         #: bleibt (:func:`outgrown`, ``moved_only``).
         self._fitted_objects: frozenset[str] = frozenset()
+        #: Ob der letzte Aufbau nur ein Verschieben war. Gesetzt in
+        #: :meth:`_fit_once_for`, gelesen in :meth:`_centre_rotation`.
+        self._moved_only: bool = False
         """Die Maße, auf die eingepasst wurde — der Vergleich für
         :func:`outgrown`. „Innerhalb desselben Zustands" hat eine Grenze: Ein
         Körper, der fünfmal so groß ist wie alles bisher, ist kein Zoom mehr,
@@ -2064,6 +2067,18 @@ class Viewport(QWidget):
         danach immer noch von vorn.
         """
         if self.plotter is None:
+            return
+        if self._moved_only:
+            # **Wer selbst geschoben hat, behält seine Ansicht.** Die Mitte der
+            # Körper wandert mit dem geschobenen Teil, und die Kamera rückte
+            # bisher mit: Das Teil blieb in der Bildmitte stehen und die
+            # Umgebung bewegte sich — genau verkehrt herum. Robert am
+            # 23.08.2026: „die kamera bleibt immer noch nicht an der stelle an
+            # der sie war und richtet sich wieder auf das modell aus."
+            #
+            # Der Preis ist klein und benannt: Bis zum nächsten echten
+            # Szenenwechsel wird um den alten Punkt gedreht. Das merkt, wer
+            # danach dreht; das Nachrücken merkte jeder, der schob.
             return
         renderer = getattr(self.plotter, "renderer", None)
         if renderer is None:
@@ -4373,6 +4388,12 @@ class Viewport(QWidget):
         der Zustand stünde danach trotzdem auf „erledigt". Genau so gemessen:
         ``_fitted_to`` sagte „bed", und die Kamera stand weiter auf (1, -1, 0,8).
         """
+        # **Zuerst das Urteil, dann die Rücksprünge.** ``_centre_rotation``
+        # liest es später im selben Aufbau; stünde es hinter einem ``return``,
+        # trüge es dort den Wert des vorigen Aufbaus.
+        here = frozenset(result.scene.objects) if result is not None else frozenset()
+        self._moved_only = bool(here) and here == self._fitted_objects
+
         if result is not None and result.scene.objects:
             wanted = "objects"
         elif self._bed_extent is not None:
@@ -4391,10 +4412,8 @@ class Viewport(QWidget):
         # dieselben Objekte da wie beim letzten Einpassen, war es ein
         # Verschieben und kein neuer Inhalt — dann zählt nur noch, ob die Szene
         # gewachsen ist. Ohne das rahmte jedes Loslassen neu.
-        here = frozenset(result.scene.objects) if result is not None else frozenset()
-        moved_only = bool(here) and here == self._fitted_objects
         if wanted != self._fitted_to or outgrown(
-            self._fitted_bounds, self._object_bounds(), moved_only=moved_only
+            self._fitted_bounds, self._object_bounds(), moved_only=self._moved_only
         ):
             self.reset_camera()
             self._fitted_to = wanted  # type: ignore[assignment]
