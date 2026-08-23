@@ -527,8 +527,8 @@ def test_the_proposal_shows_its_costs_and_questions(qt_app: QApplication) -> Non
     assert panel.questions_toggle.text() == "Rückfragen (1) …"
     assert not panel.questions_view.isVisibleTo(panel)
     panel.questions_toggle.setChecked(True)
-    assert "Welches Loch?" in panel.questions_view.text()
-    assert "→ hole_1" in panel.questions_view.text()
+    assert "Welches Loch?" in panel.questions_view.toPlainText()
+    assert "→ hole_1" in panel.questions_view.toPlainText()
 
     panel.show_proposal(None)
     assert panel.cost_line.text() == ""
@@ -1066,3 +1066,80 @@ def test_a_speed_that_was_not_measured_claims_nothing(qt_app: QApplication) -> N
     dialog._probe_done(False, llm.Speed())
 
     assert "als Text" in dialog.probe_result.text(), "die Werkzeugfrage bleibt beantwortet"
+
+
+def test_long_questions_stay_readable(qt_app: QApplication) -> None:
+    """Zwei ausführliche Rückfragen brechen nicht mehr mitten im Satz ab.
+
+    **Robert am 23.08.2026:** „ich seh den text von den rückfragen nicht ganz."
+    Der Kasten war ein ``QLabel`` ohne Scrollbereich: Es wuchs mit dem Inhalt,
+    der Platz darunter nicht, und darunter standen sofort die Knöpfe. Bei zwei
+    langen Fragen endete der Text bei „braucht es eine exakte".
+
+    Geprüft wird in der Reihenfolge der Bedienung — **erst anzeigen, dann
+    aufklappen**. Andersherum kennt der Kasten seine Breite noch nicht, und der
+    Zeilenumbruch hängt an ihr; eine Messung davor sagt nichts über das, was
+    der Kunde sieht (gemessen: 38 px statt 94).
+    """
+    from app.core.agent.proposal import Proposal, Question
+    from app.ui.chat import QUESTIONS_HEIGHT, ChatPanel
+
+    lang = (
+        "Das aktuelle Objekt ist ein Netz, nicht ein exakter Körper. Um Bohrungen zu "
+        "setzen, braucht es eine exakte Geometrie oder eine andere Vorgehensweise."
+    )
+    proposal = Proposal(request="x")
+    for _ in range(2):
+        proposal.questions.append(Question(text=lang, answer="ja, bitte überführen"))
+
+    panel = ChatPanel()
+    panel.resize(300, 700)
+    panel.show()
+    qt_app.processEvents()
+    panel.show_proposal(ProposalPreview(proposal=proposal))
+    qt_app.processEvents()
+    panel.questions_toggle.setChecked(True)
+    qt_app.processEvents()
+
+    field = panel.questions_view
+    assert field.height() <= QUESTIONS_HEIGHT, (
+        "der Kasten verdrängt den Verlauf — die Rückschau ist nicht der Hauptteil"
+    )
+    bar = field.verticalScrollBar()
+    bar.setValue(bar.maximum())
+    qt_app.processEvents()
+    assert field.toPlainText().strip().endswith("überführen"), (
+        "die letzte Antwort steht nicht im Kasten — der Text wurde beschnitten"
+    )
+    assert bar.value() == bar.maximum(), "bis ans Ende scrollen geht nicht"
+    panel.deleteLater()
+
+
+def test_a_single_question_does_not_claim_the_full_height(qt_app: QApplication) -> None:
+    """Und eine kurze Rückfrage nimmt sich nicht den ganzen Platz.
+
+    Die Gegenprobe zum Deckel: Ein ``QPlainTextEdit`` bringt eine großzügige
+    ``sizeHint`` mit und nähme sonst auch für zwei Zeilen die volle Höhe — das
+    wäre gegenüber dem Label davor ein Rückschritt gewesen.
+    """
+    from app.core.agent.proposal import Proposal, Question
+    from app.ui.chat import QUESTIONS_HEIGHT, ChatPanel
+
+    proposal = Proposal(request="x")
+    proposal.questions.append(Question(text="Welches Loch?", answer="hole_1"))
+
+    panel = ChatPanel()
+    panel.resize(300, 700)
+    panel.show()
+    qt_app.processEvents()
+    panel.show_proposal(ProposalPreview(proposal=proposal))
+    qt_app.processEvents()
+    panel.questions_toggle.setChecked(True)
+    qt_app.processEvents()
+
+    field = panel.questions_view
+    assert field.height() < QUESTIONS_HEIGHT, (
+        f"eine einzelne kurze Rückfrage nimmt {field.height()} px von {QUESTIONS_HEIGHT}"
+    )
+    assert field.verticalScrollBar().maximum() == 0, "sie passt und braucht keinen Balken"
+    panel.deleteLater()

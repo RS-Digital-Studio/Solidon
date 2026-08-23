@@ -20,6 +20,7 @@ from typing import Any
 from PySide6.QtCore import QEvent, Qt, Signal
 from PySide6.QtGui import QColor, QFont
 from PySide6.QtWidgets import (
+    QFrame,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -52,6 +53,18 @@ DISCARDED_COLOUR = "#7a828c"
 #: Antwort mit Begründung hineinpasst, ohne dass der leere Zustand die halbe
 #: Ansicht verdeckt.
 EMPTY_TURNS_HEIGHT = 190
+
+#: Wie hoch der aufgeklappte Rückfragenkasten höchstens wird.
+#:
+#: Er ist eine Rückschau — was der Agent gefragt und was er zur Antwort bekommen
+#: hat —, und eine Rückschau darf den Verlauf darüber nicht verdrängen. Bis zu
+#: dieser Höhe wächst er mit dem Inhalt, darüber scrollt er. Etwa acht Zeilen:
+#: Zwei ausführliche Rückfragen samt Antworten passen hinein, ohne dass vom
+#: Gespräch nichts mehr übrig bleibt.
+QUESTIONS_HEIGHT = 170
+
+#: Luft unter der letzten Zeile, damit sie nicht am Rand klebt.
+QUESTIONS_PADDING = 6
 
 #: Was im leeren Gespräch als Beispiel dasteht — anklickbar, nicht abschickbar.
 #:
@@ -200,10 +213,28 @@ class ChatPanel(QWidget):
         self.questions_toggle.setCheckable(True)
         self.questions_toggle.setFlat(True)
         self.questions_toggle.setVisible(False)
-        self.questions_view = QLabel("", self)
-        self.questions_view.setWordWrap(True)
+        # **Der Kasten scrollt, statt den Text abzuschneiden.** Als blankes
+        # Label wuchs er mit dem Inhalt, der Platz darunter nicht: Bei zwei
+        # ausführlichen Rückfragen brach der Text mitten im Satz ab, und
+        # darunter standen sofort die Knöpfe (gemeldet am 23.08.2026, „ich seh
+        # den text von den rückfragen nicht ganz").
+        #
+        # **Ein Textfeld und nicht Label plus Scrollbereich**: Gemessen deckelte
+        # die Kombination zwar die Höhe, ließ sich aber nicht scrollen —
+        # ``QScrollArea`` reicht das breitenabhängige ``heightForWidth`` eines
+        # umbrechenden Labels nicht durch, der Balken blieb bei Maximum 0 und
+        # der Text war wieder abgeschnitten. Ein Textfeld rechnet den Umbruch
+        # selbst und ist obendrein markierbar: Wer eine Antwort ändern will,
+        # holt sich die Frage in die Eingabe, statt sie abzutippen.
+        self.questions_view = QPlainTextEdit("", self)
+        self.questions_view.setReadOnly(True)
+        self.questions_view.setFrameShape(QFrame.Shape.NoFrame)
+        self.questions_view.setMaximumHeight(QUESTIONS_HEIGHT)
+        self.questions_view.setLineWrapMode(QPlainTextEdit.LineWrapMode.WidgetWidth)
+        self.questions_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.questions_view.viewport().setAutoFillBackground(False)
         self.questions_view.setVisible(False)
-        self.questions_toggle.toggled.connect(self.questions_view.setVisible)
+        self.questions_toggle.toggled.connect(self._show_questions)
 
         self.accept_button = QPushButton(tr("Übernehmen"), self)
         self.accept_button.clicked.connect(self.accepted)
@@ -355,12 +386,49 @@ class ChatPanel(QWidget):
         self.questions_toggle.setText(f"{tr('Rückfragen')} ({len(questions)}) …")
         self.questions_toggle.setVisible(bool(questions))
         self.questions_view.setVisible(False)
-        self.questions_view.setText(
+        self.questions_view.setPlainText(
             "\n".join(
                 f"? {entry.text}\n→ {entry.answer or tr('ohne Antwort')}" for entry in questions
             )
         )
+        self._fit_questions()
         self.decision.setVisible(True)
+
+    def _show_questions(self, open_it: bool) -> None:
+        """Aufklappen — und die Höhe erst **jetzt** rechnen.
+
+        Beim Setzen des Textes ist der Kasten noch unsichtbar und kennt seine
+        Breite nicht; der Zeilenumbruch hängt aber genau an ihr. Vorher
+        gerechnet fiel die Höhe zu klein aus, und der Text stand wieder hinter
+        einem Scrollbalken statt im Kasten.
+        """
+        self.questions_view.setVisible(open_it)
+        if open_it:
+            self._fit_questions()
+
+    def _fit_questions(self) -> None:
+        """Der Kasten ist so hoch wie sein Inhalt — höchstens aber gedeckelt.
+
+        Ein ``QPlainTextEdit`` bringt eine großzügige ``sizeHint`` mit und
+        nähme sonst auch für eine einzeilige Rückfrage die volle Höhe. Das
+        wäre gegenüber dem Label davor ein Rückschritt: Der Kasten sitzt über
+        dem Gesprächsverlauf, und was er belegt, fehlt dort.
+        """
+        # **Über die Blöcke summiert und nicht über ``documentSize``.** Deren
+        # ``height()`` zählt bei einem ``QPlainTextEdit`` umgebrochene Zeilen,
+        # keine Pixel — und beides einmal verwechselt ergab einen 8 px hohen
+        # Kasten. ``blockBoundingRect`` gibt Pixel, und zwar die tatsächlich
+        # gesetzten.
+        document = self.questions_view.document()
+        layout = document.documentLayout()
+        content = 0.0
+        block = document.firstBlock()
+        while block.isValid():
+            content += layout.blockBoundingRect(block).height()
+            block = block.next()
+        frame = self.questions_view.frameWidth() * 2
+        wanted = int(content) + frame + QUESTIONS_PADDING
+        self.questions_view.setFixedHeight(min(wanted, QUESTIONS_HEIGHT))
 
     # --- input ------------------------------------------------------------------
 
