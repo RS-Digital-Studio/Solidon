@@ -85,6 +85,29 @@ nicht ging. Dass **Strg** das Zweite dazunimmt, steht in der Zeile, sobald
 eines ausgewählt ist (`selection_hint`) — ohne das kommt niemand auf ein Maß
 zwischen zwei Punkten.
 
+**Das Maß beim Zeichnen steht am Zeiger, nicht in der Werkzeugzeile.** Wer
+eine Linie zieht, sieht auf ihre Spitze; eine Zahl am Fensterrand liest dort
+niemand. Fusion legt sie an den Zeiger, und darum ist das Eintippen dort der
+Normalweg — hier war es eine Funktion, die man kennen musste. Die
+Zeichenfläche besitzt `measure_field` und legt es mit `MEASURE_GAP`
+Bildpunkten Abstand neben die Spitze:
+
+* **Nicht darunter** — es finge die Mausbewegungen ab, und die Linie bliebe
+  beim Ziehen stehen.
+* **An Rand und Ecke kippt es** auf die andere Seite des Zeigers. Die untere
+  rechte Ecke ist kein Sonderfall: dorthin zieht man die letzte Linie eines
+  Umrisses.
+* **Die erste Ziffer beginnt die Eingabe**, ohne Klick und ohne Tabulator.
+  Ein Feld, das man erst anklicken muss, verlangt genau die Handbewegung, die
+  das Zeichnen unterbricht — und der Zeiger steht danach woanders, also auch
+  das Maß, das er gerade zeigte. Gesendet wird an `lineEdit()`; ein `event()`
+  auf dem Drehfeld landet in der Pfeiltastenbehandlung.
+
+Nebenbei löst das den breitesten Posten der Werkzeugzeile auf. Ein erster
+Schritt hatte ihn nur ausgeblendet, solange nichts gezeichnet wird — gemessen
+gegen den Stand davor sprang die Zeile beim ersten Klick von 881 auf 1007
+Bildpunkte zurück, also genau dann, wenn man sie am wenigsten braucht.
+
 **Was im Konstruktor gesetzt wird, kommt vor den Verbindungen.** `SketchPanel`
 setzt die Skizze, bevor `sketchChanged` verbunden ist: die Bedingungsliste
 blieb bei einer geöffneten Skizze leer, bis irgendetwas geändert wurde, und

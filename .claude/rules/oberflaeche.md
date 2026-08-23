@@ -772,6 +772,96 @@ for holder in gc.get_referrers(widget):
             ...  # __qualname__ und __code__ nennen die Zeile
 ```
 
+**Eine geschachtelte Funktion ist dasselbe wie ein Lambda.** `OperationDialog`
+hatte `def unfold(open_now, inner=inner)` in seinem Aufbau; die Form sieht
+harmloser aus, die Zelle hält denselben Ring. Wer nach Lambdas grept, findet
+sie nicht — `gc.get_referrers` schon.
+
+**Und eine gebundene Methode hält ihr Objekt genauso.** Zwei Fälle am
+23.08.2026, beide außerhalb jeder Signalverbindung:
+
+* `QTimer.singleShot(0, self, self._render_pending)` in `PartCatalog` —
+  die Kette reiht sich selbst neu ein, und jede eingereihte gebundene Methode
+  hält den Katalog. Zehn losgelassene überlebten alle zehn. Sie hat jetzt ein
+  `release()`, das die Kette anhält.
+* `release = getattr(widget, "release", None)` in einer **Schleife** —
+  nach dem letzten Durchgang steht in der Variablen das letzte Objekt.
+  Betroffen waren `tests/test_widget_lifetime.py` und die Aufräum-Fixture in
+  `tests/conftest.py`. Der Griff dagegen ist die ungebundene Funktion von der
+  Klasse: `getattr(type(widget), "release", None)`, aufgerufen mit dem Widget
+  als erstem Argument.
+
+**Die Zahl selbst war dabei der Hinweis.** Der Test meldete „1 von 10
+überlebten", dreimal reproduzierbar — nie null, nie zehn. Ein Ring hält
+*jedes* Objekt; eine Eins ist ein Zeiger auf genau eine Referenz, und die
+findet man, statt sie für Streuung zu halten.
+
+### Wer eine `WorkerLeash` hält, hat ein `release()`
+
+Wie man einem Fenster sagt, dass Schluss ist, hieß an jeder Klasse anders —
+`release`, `wait_for_workers`, `wait_for_survey`, `wait_for_look`,
+`wait_for_setup`, und an vier Klassen gar nichts. Wer eine Testfixture darauf
+baut, sammelt Namen: Sie kannte zwei von fünf, dann drei, dann vier, und beim
+fünften starb der Prozess beim Abbau an einem Thread, der sein Fenster
+überlebt hatte.
+
+Alle elf tragen jetzt `release()`, und es ruft intern das, was die Klasse
+schon kann. **Die fachlichen Namen bleiben daneben**: `wait_for_survey` gibt
+einen Wahrheitswert zurück und steht im Produktivcode (`FirstRunDialog.reject`),
+`release` räumt auf und gibt nichts zurück. Zwei Sachen, zwei Namen — nur soll
+die eine überall gleich heißen. `tests/test_widget_lifetime.py` liest per
+`ast`, wer eine Leine anlegt, und verlangt von jedem dasselbe Wort; ein
+sechster Name kann nicht mehr unbemerkt entstehen.
+
+**Der Parameter gilt der Leine, nicht der Sache.** `release()` reichte seine
+2000 ms an `wait_for_look` weiter, wo 30 000 stehen — damit bekam eine
+Erhebung, die eine halbe Minute haben darf, zwei Sekunden. Gemessen an
+`test_chat_ui`: 2 von 4 Läufen starben danach beim Abbau, gegen 4 von 4 nach
+der Berichtigung. Die fachliche Methode wird ohne Argument gerufen.
+
+### Loslassen allein räumt nicht auf
+
+Der Weg, den `MainWindow` beim Schließen geht, und der einzige, der in einem
+Test dasselbe misst:
+
+```python
+release(widget)        # von der Klasse geholt, siehe oben
+leash.wait_for_all()
+application.processEvents()   # mehrfach: ein finished reiht selbst wieder ein
+gc.collect()
+```
+
+**Der `processEvents`-Schritt ist der, den man vergisst**, und ohne ihn liest
+man ein Leck, wo keines ist: `leash._alive` hält einen Arbeiter modulweit, der
+hält über sein `finished`-Lambda die Leine und damit den Dialog; abgeräumt
+wird erst, wenn das Signal ankommt.
+
+| | überleben |
+|---|---|
+| nur loslassen | 10 von 10 |
+| `release()` | 10 von 10 |
+| `release()` + Schleife | 0 von 10 |
+
+Dass die mittlere Zeile sich nicht bewegt, ist der Grund, warum drei Klassen
+zwei Monate lang als „hält, aber erklärbar" in einer Ausnahmeliste standen.
+
+### `isVisible()` und `hasFocus()` lügen in einem nie gezeigten Fenster
+
+Beide melden falsch, solange das Fenster nie gezeigt und nie aktiviert wurde —
+also in jedem Offscreen-Lauf. Zweimal am 23.08.2026 zugeschnappt, einmal im
+Code und einmal im Test:
+
+* Eine Bedingung `if self.measure_field.isVisible()` im `keyPressEvent` hätte
+  in der ganzen Suite nie gegriffen. Gefragt wird stattdessen nach der Sache:
+  `if self.pending_measure() > 0.0`.
+* Ein Test `assert field.hasFocus()` prüft, ob die Testumgebung ein aktives
+  Fenster hat. Geprüft wird stattdessen die Wirkung: kommt die Ziffer im Feld
+  an?
+
+`isVisibleTo(eltern)` ist die brauchbare Frage, wenn es wirklich um
+Sichtbarkeit geht — sie beantwortet „würde es erscheinen, wenn das Fenster
+erschiene".
+
 ### Wer einen Arbeiter startet, hält ihn fest
 
 Ein `QThread` bekommt hier keinen Qt-Elternteil; ihn hält allein die
