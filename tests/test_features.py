@@ -213,7 +213,9 @@ def test_an_open_model_reports_its_edges() -> None:
     loops = detect_edge_loops(broken)
 
     assert loops and loops[0].kind == "edge_loop"
-    assert loops[0].params["open_edges"] > 0
+    # Die Datei ist eingecheckt und ändert sich nicht: fünf offene Kanten.
+    # ``> 0`` bliebe grün, wenn die Zählung nur noch eine einzige meldete.
+    assert loops[0].params["open_edges"] == 5
 
 
 def test_a_closed_model_has_no_open_edges() -> None:
@@ -260,7 +262,11 @@ def test_a_scratch_is_not_a_bore() -> None:
     """Eine Düse legt 0,4 mm breite Bahnen — 0,05 mm hat kein Werkzeug gemacht."""
     holes = detect_holes(generated_body())
 
-    assert all(entry.params["diameter"] >= 0.5 for entry in holes)
+    # **Nicht ``all(... >= 0.5)``.** Auf einem organischen Netz gibt es keine
+    # Bohrung, die Liste ist also leer — und ``all`` über eine leere Liste ist
+    # wahr. Die Zusicherung war grün, ohne je etwas zu prüfen, und hätte
+    # einen Kratzer durchgelassen, der als Ø2 gemeldet wird.
+    assert not holes, f"{len(holes)} angebliche Bohrungen auf einem organischen Netz"
 
 
 def test_the_faces_of_a_real_part_survive_the_limit() -> None:
