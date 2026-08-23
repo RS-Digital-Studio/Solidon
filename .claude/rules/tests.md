@@ -688,3 +688,92 @@ Daraus folgen zwei Dinge:
 Die allgemeine Form steht schon weiter oben („Was habe ich gerade gemessen?"),
 hier ist die Antwort besonders unauffällig: Man hat *etwas Echtes* gemessen,
 nur eben nicht das, was der Kunde sieht.
+
+## Wann man aufhört zu zählen und anfängt zu lesen
+
+Die Basisraten oben sagen, **wie viele** Läufe eine Aussage trägt. Sie sagen
+nicht, wann Läufe überhaupt das richtige Werkzeug sind.
+
+**Eine Rate sagt, dass etwas anders ist. Sie sagt nie, was.**
+
+Am 23.08.2026 stand eine Sitzung vor „2 von 4 sauber" — nach der eigenen,
+vorher festgelegten Latte also: keine Entscheidung, mehr Läufe. Statt zehn
+weitere zu fahren, hat sie zwei Minuten in die fremde Fixture gesehen und die
+Zeile gefunden:
+
+```python
+def release(self, timeout_ms: int = 2000) -> None:
+    self.wait_for_look(timeout_ms)          # der fachliche Standardwert ist 30_000
+```
+
+Eine Erhebung, für die eine halbe Minute vorgesehen ist, bekam zwei Sekunden.
+**Das erklärt auch die Zahl:** Der Thread braucht meistens weniger als zwei
+Sekunden, manchmal nicht — daher zwei von vier und nicht null von vier. Zehn
+Läufe hätten dieselbe Zahl schärfer gegeben und keine einzige Zeile genannt.
+
+Die Faustregel dazu:
+
+> **Zeigt der Verdacht auf eine benennbare Stelle, ist Lesen billiger als
+> Zählen. Zeigt er nirgendwohin, hilft nur die Rate.**
+
+## Ein Signal, das jedes Mal kommt, lässt sich halbieren
+
+Der Abbau-Absturz galt als Eigenschaft ganzer Fensterdateien: 86 Sekunden für
+ein Ja/Nein, drei Ausgänge bei drei Läufen, und deshalb hat ihn niemand
+eingegrenzt. Er ist aber **deterministisch** — und damit war die Suche billig:
+
+    1, 5, 10, 20, 30, 40, 50 Tests    sauber
+    58 Tests                           Riss
+    51 Tests                           sauber
+    52 Tests                           Riss        <- die Grenze
+
+Der 52. Test riss **allein**, ohne Vorgeschichte, dreimal von dreimal, in einer
+Drittelsekunde. Dasselbe Verfahren fand in `test_chat_ui.py` zwei weitere.
+
+Drei Dinge, die das Verfahren tragen:
+
+* **Erst prüfen, ob das Signal deterministisch ist.** 24 von 26 Läufen rissen —
+  damit trägt *ein* Lauf je Schritt. Bei einem sporadischen Fehler (etwa dem
+  Hänger, 1 von 3) hätte dieselbe Suche geraten.
+* **Die Vorgeschichte gehört dazu.** Gemessen wird „alles bis N" gegen „alles
+  bis N−1", nicht „der Test allein" — sonst fehlt genau das, was ihn zum
+  Reißen bringt. Dass er hier auch allein riss, war ein Ergebnis und keine
+  Annahme.
+* **Testnamen kommen aus `--collect-only -q`, und die Zeilen tragen ein CR.**
+  Ohne `sed 's/\r$//'` hängt es am Ende jeder Node-ID, pytest findet sie nicht
+  und antwortet mit Exit 4 — sechs Läufe, alle wertlos, in zwanzig Sekunden.
+
+## Ein Muster, das man abfragen muss, ist ein fehlender Vertrag
+
+Die Aufräum-Fixture suchte nach `release` und `wait_for_workers`. Die
+Absturzsuche fand nacheinander `wait_for_survey` und `wait_for_look`; eine
+Zählung ergab **fünf Namen für dieselbe Sache**, verteilt auf neun Klassen, und
+drei weitere Klassen mit Arbeiter und ganz ohne Wartemethode.
+
+Die Fixture fragt seitdem nach dem Muster (`release`, dann alles, was
+`wait_for_` heißt) — das ist die richtige **Notlösung** und war nicht die
+Lösung. Die war ein einheitliches `release()` auf allen elf Klassen, dazu eine
+Prüfung, die per `ast` liest, wer eine `WorkerLeash` anlegt, und von jedem
+dasselbe Wort verlangt. Ein sechster Name kann seitdem nicht mehr entstehen.
+
+**Und der Umbau hat sofort einen Fehler freigelegt**, den fünf Namen verdeckt
+hatten: Eine der Klassen reichte ihre 2000-ms-Frist an eine Methode durch,
+deren fachlicher Standardwert 30 000 ist. Der Fehler war vorher da — er hatte
+nur keine Stelle, an der er auffallen konnte.
+
+## Nach einer Änderung an `app/` oder `tools/`: zwei Läufe von je drei Sekunden
+
+Viermal an einem Tag ist ein deutscher Bezeichner ins Tor gekommen, dreimal in
+Code, der gerade repariert wurde, einmal in eigenem. Die Ursache war jedes Mal
+dieselbe und jedes Mal vernünftig: Gefahren wurden die Tests des *Gebiets*, in
+dem die Änderung lag — nicht die, die *jede* Datei prüfen.
+
+```
+.venv\Scripts\python.exe -m pytest tests/test_language_rules.py -q   # ~3 s, 745 Fälle
+.venv\Scripts\python.exe -m ruff check .                             # ~2 s
+```
+
+**`ruff check .` ohne Pfadangabe**, und das ist der Teil, der zweimal fehlte:
+Ein eingegrenzter Prüflauf über `app/ui/` spart Sekunden und lässt eine
+Testdatei durch, die dann einen fremden Torlauf kostet. Beides ist Code, und
+das Tor prüft beides.
