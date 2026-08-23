@@ -93,7 +93,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
-| Dreißig Rümpfe im Viewport laufen in keinem Test | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | eine Entscheidung je Methode, und die Reihenfolge steht seit dem 22.08. fest: erst prüfen, ob sich die Aussage vor die Wache ziehen lässt, und nur wo das nicht geht, eine Attrappe |
+| Von dreißig Rümpfen sind fünf ungeprüft, zwei offen | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | `_watch_camera`, `_apply_render_quality` und `_apply_ambient_occlusion`. Gemessen am 23.08.: 35 Methoden mit Wache, 5 ohne Test, 3 davon geschlossen — die Zahl ist eine **Untergrenze**, denn „Name kommt vor" heißt nicht „Rumpf wird gefahren" |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Eine erkannte Verrundung lässt sich nicht ändern | Das Fundament der Wahrnehmung (22.08.2026) | die Operation *Verrundungsradius ändern*, die es nicht gibt — `fillet_edges` wirkt auf Kanten und würde die Rundung runden. Der zweite Weg („Diesen Schritt ändern“) fällt auch aus: `created_by` gibt es nur bei `provenance="generated"`, also an Bausteinen und beim Verstiften. Dahinter steht die größere Frage, ob eine Operation ihre sichtbaren Ergebnisse deklarieren soll |
 | Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
@@ -105,6 +105,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
 | Ein gescheiterter Merge ist ein Eingriff, kein Nichts | Das Fundament der Wahrnehmung (22.08.2026) | eine Regel im Verfahren: Wer einen Merge abbricht, prüft danach `git status` **und** `git stash list`. Der Autostash überlebt den Abbruch nicht zuverlässig und trifft im geteilten Baum fremde Arbeit |
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
+| Ein exakter Körper mit Eckverrundungen liefert ein offenes Netz | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — 16 offene Kanten bei 1380 Dreiecken, nur wenn die acht Kugelflächen an den Ecken entstehen. Die parallele Vernetzung ist als Ursache gemessen und widerlegt; §17 verlangt wasserdicht, und der Weg zum Druck führt durch `to_mesh()` |
 | Der Start lädt nacheinander, was nebeneinander laufen könnte | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, wie viel von 369 ms sich wirklich überlappt — und eine Antwort auf die Thread-Sicherheit beim Import. Die einfache Umkehrung scheitert an `_build_menus()`, und die 19 Module sind keine Alternative: alle 19 ziehen trimesh |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
@@ -4945,7 +4946,52 @@ danach um; was die Ansicht *zeichnet*, sieht er nicht. Deshalb blieb 4.1 auch
 nach einer Messung am echten Bildschirm offen — und deshalb ist ein Test dafür
 schlimmer als keiner: Er wäre grün und würde die Lücke zudecken.
 
-- [ ] **Welche der dreißig verdienen eine Attrappe?** Nicht alle: Eine Attrappe
+- [ ] **Von dreißig Rümpfen sind fünf ungeprüft, und zwei davon offen.**
+      Gemessen am 23.08.2026 (3d-druck-b8), indem je Methode gefragt wurde, ob
+      ihr Name **oder einer ihrer Helfer** überhaupt in einer Testdatei
+      vorkommt:
+
+          Methoden mit Offscreen-Wache            35
+          davon weder Name noch Helfer in Tests    5
+          davon am 23.08. geschlossen              3
+
+      **Der Unterschied zu „dreißig" kommt aus der Reihenfolge, die der Punkt
+      selbst vorgibt** — *erst prüfen, ob sich die Aussage vor die Wache ziehen
+      lässt*. Das ist bei den meisten längst geschehen: `rotation_centre` und
+      `gizmo_labels` sind eigene Funktionen mit eigenen Tests, und was hinter
+      der Wache bleibt, ist reines Zeichnen. `_draw_one_bed`, der größte von
+      allen, ist über die Attrappe geprüft.
+
+      **Geschlossen wurden die, bei denen das nicht ging:**
+
+          e6b01b0  _redraw_features        ohne Überlagerung bleibt das
+                                           gewählte Merkmal beschriftet (Regel 18)
+          271caea  _redraw_feature_patch   die Dreiecke des Merkmals, nicht die
+                                           des Körpers, plus Versatz
+          475eb82  _draw_feature_edges     eine Kugel bekommt keine Kanten
+          3fca3ed  _note_pointer           Qt zählt von oben, VTK von unten
+          3fca3ed  set_projection          orthografisch erreicht den Plotter
+
+      **Die Zahl ist eine Untergrenze und nicht die Wahrheit** — „der Name
+      kommt in einer Testdatei vor" heißt nicht „der Rumpf wird gefahren". Ein
+      Test kann `set_navigation` erwähnen und offscreen trotzdem an der Wache
+      abbiegen. Der Vorbehalt gehört zur Zahl.
+
+      **Offen sind `_watch_camera` (20 Zeilen), `_apply_render_quality` (20)
+      und `_apply_ambient_occlusion` (13).**
+
+      **Und ein Fund am Prüfwerkzeug selbst, der die Leitfrage weiterdreht:**
+      Beim Kugel-Test blieb die erste Gegenprobe wirkungslos, und das sah aus,
+      als sei der Test schwach. Nachgemessen war die **Probe** schlecht
+      gewählt — VTK liefert dort auch mit dem geänderten Schalter null Kanten;
+      der Schalter, der wirkt, ist der Winkel.
+
+      > Eine wirkungslose Gegenprobe beweist nichts, weder für den Test noch
+      > gegen ihn.
+
+      Der ursprüngliche Text:
+
+      **Welche eine Attrappe verdienen** — nicht alle: Eine Attrappe
       je Methode ist Arbeit, und für manche wäre sie eine Nachbildung von VTK.
       Der Vorschlag wäre, bei den vier größten anzufangen, die etwas *zeigen*,
       was der Nutzer beschreibt — Platte, Merkmale, Maße, Schichtansicht — und
@@ -5357,6 +5403,30 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Trimesh zu verzögern hieße damit, in neunzehn Modulen die Importe
       umzubauen — in Modulen, deren Arbeitsgrundlage es ist. Das ist kein
       Handgriff, sondern ein Umbau des Kerns.
+
+- [ ] **Ein exakter Körper mit Eckverrundungen liefert ein nicht wasserdichtes
+      Netz.** Gemessen am 23.08.2026 (3d-druck-3a) an `to_mesh()`:
+
+          Quader schlicht          12 Dreiecke   wasserdicht
+          Quader R2 senkrecht     188 Dreiecke   wasserdicht
+          Quader R2 alle Kanten  1380 Dreiecke   NICHT wasserdicht — 16 offene Kanten
+          Zylinder                164 Dreiecke   wasserdicht
+
+      **`trimesh.process(validate=True)` repariert es** — die Dreiecke sind
+      also da, und die Ecken passen nicht zusammen. Der Unterschied zwischen
+      der dritten Zeile und den anderen ist genau einer: Bei `'all'` entstehen
+      die acht **Kugelflächen** an den Ecken, dort wo drei Verrundungen
+      zusammenlaufen.
+
+      **Eine Hypothese ist schon widerlegt:** die parallele Vernetzung
+      (`isInParallel=True` in `tessellate`). Seriell ist das Netz genauso
+      offen. Der Ort ist damit bekannt und die Ursache nicht.
+
+      **Warum es zählt:** §17 verlangt wasserdichte Netze, und der Weg vom
+      exakten Körper zum Druck führt durch `to_mesh()`. Ein Kunde, der einen
+      exakten Quader rundum verrundet und exportiert, bekommt heute ein Netz,
+      das erst eine Reparatur braucht — sie läuft, aber sie sollte nicht nötig
+      sein.
 
 - [ ] **Der Start lädt nacheinander, was nebeneinander laufen könnte.**
       `load_operations()` (769 ms, zieht trimesh) und `build_application()`
