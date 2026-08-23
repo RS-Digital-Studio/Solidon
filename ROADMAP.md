@@ -106,7 +106,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein ladendes Fenster sieht aus wie ein abgestürztes | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | ein sichtbares Wartezeitverhalten (§2.8) statt schwarzer Fläche. Sechs Sekunden beim Öffnen von Weg 1, in denen Menü- und Statusleiste stehen und **kein einziges Panel** — Robert hat es zweimal für einen Absturz gehalten, das Protokoll sagt beide Male `ended normally`. **Gehört der Oberfläche**; sinkt die Ladezeit, bleibt der Punkt |
 | Der Cache spart die Geometrie, nicht die Erkennung | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | zuerst eine **Messung**, wie viel der sechs Sekunden überhaupt auf `detect()` entfällt. `_with_features()` läuft nach jedem Operationsergebnis, auch nach einem Cache-Treffer, wo das Netz bitgleich ist — fünfzehn Läufe über denselben Körper. Der Umbau ist nicht trivial: Der Plattencache nimmt nur `MeshData`, und die Zuordnung hängt an den vorigen Merkmalen und an `operation.matches` (§15.7) |
 | `decimated 992 to 992` — ein Schritt, der nichts tut | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | eine Erklärung. `decimate()` hat einen frühen Rücksprung für genau diesen Fall, und er greift nicht; es läuft eine echte `simplify_quadric_decimation` von 992 auf 992. Drei Aufrufer kommen infrage |
-| Der Torus-Eintrag der Krümmungskarte greift ins Leere | Die Krümmungskarte lag an Kugeln zehn Prozent daneben (23.08.2026) | zwei Zeilen und einen Test: `_FEATURE_RADIUS` sucht `minor_radius`, das Merkmal trägt `tube_diameter` — der Eintrag läuft ins `continue`. **Aufgefallen ist es niemandem**, weil die Schätzung den Torus ohnehin auf 0,4 % trifft; ein Tabelleneintrag, der nichts bewirkt, sieht dort aus wie einer, der wirkt. Der Test hält die Tabelle gegen die tatsächlichen Parameter der erkannten Merkmale und fängt damit auch den nächsten |
 
 ---
 
@@ -8254,7 +8253,7 @@ einen Sollwert prüfen, nicht gegen die eigene Wiederholbarkeit.**
       **Der Kegel bleibt bewusst draußen** — sein Radius ändert sich über die
       Höhe, ein einzelner Wert wäre dort für fast jedes Dreieck der falsche.
 
-- [ ] **Der Torus-Eintrag greift ins Leere, und niemandem fiel es auf.**
+- [x] **Der Torus-Eintrag griff ins Leere, und niemandem fiel es auf.**
       `_FEATURE_RADIUS` sucht `"minor_radius"`; das Merkmal trägt
       `tube_diameter`. Gemessen an `torus_ring.stl`: der Schlüssel existiert
       nicht, der Eintrag läuft ins `continue`.
@@ -8265,8 +8264,25 @@ einen Sollwert prüfen, nicht gegen die eigene Wiederholbarkeit.**
       sieht dort genauso aus wie einer, der wirkt** — vier Tests bleiben grün,
       und die Zahl daneben stimmt.
 
-      Zu bauen ist beides: `("tube_diameter", 0.5)`, und ein Test, der
-      `_FEATURE_RADIUS` **gegen die tatsächlichen Parameter** der erkannten
-      Merkmale hält. Der fängt auch den nächsten Eintrag, wenn jemand `cone`
-      doch aufnimmt oder ein Parameter umbenannt wird. `hole` ist am Korpus
-      bisher nicht geprüft — kein Modell mit passenden `face_indices`.
+      **Behoben in `9afcbbd`** (3a): `("tube_diameter", 0.5)` statt
+      `("minor_radius", 1.0)` — falsch waren der Name **und** der Faktor.
+      Nachgemessen über den ganzen Korpus: alle fünf Einträge greifen,
+      `torus_ring` und `post_with_fillet` auf +0,0 %.
+
+      **Wie der Eintrag entstand, ist der eigentliche Ertrag** (3a hat es
+      selbst aufgeschrieben): Vier der fünf Einträge sind an vierzehn
+      Korpusdateien **gemessen**; in diesen vierzehn war kein Torus, und statt
+      die Messung zu erweitern, wurde der fünfte Name aus dem Kopf ergänzt.
+
+      > **Eine Tabelle, deren Einträge vier gemessen und einer geraten sind,
+      > sieht beim Lesen homogen aus.**
+
+      Das ist dieselbe Tarnung wie beim falschen Kommentar in
+      `finish_body_drag` am selben Tag: Eine Vermutung, die neben belegten
+      Aussagen steht, erbt deren Glaubwürdigkeit.
+
+      Der Test prüft deshalb **die Verbindung und nicht das Ergebnis** — trägt
+      das Merkmal den Parameter, den die Tabelle sucht? Gegengeprobt an zwei
+      erfundenen Schlüsseln, beide rot. Und er zählt, wie viele Einträge er am
+      Korpus überhaupt erreicht hat: unter vier schlägt er fehl, sonst prüfte
+      er bei einem geänderten Korpus wieder seine eigene leere Menge.
