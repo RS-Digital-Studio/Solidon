@@ -22,6 +22,7 @@ kosten Millisekunden und hätten beide gefangen.
 
 from __future__ import annotations
 
+import json
 import sys
 import tomllib
 from pathlib import Path
@@ -560,3 +561,131 @@ def test_a_finished_process_is_not_alive_while_its_handle_is_still_open() -> Non
     finally:
         laeuft.kill()
         laeuft.wait(timeout=5)
+
+
+# --- Aufräumen auf dem Server (tools/upload_website.py) --------------------------------
+
+
+class _AttrappeFTP:
+    """Antwortet wie eine FTP-Sitzung, so weit ``stale_packages`` sie benutzt.
+
+    **Attrappiert werden nur die beiden Datenquellen** — was `version.json` oben
+    sagt und was unter `dl/` liegt. Geprüft wird die Entscheidung darüber, und
+    die steckt im Werkzeug, nicht hier. Der Unterschied ist am 23.08.2026 teuer
+    geworden: Zwei Tests einer anderen Sitzung prüften an jenem Tag eine
+    Attrappe statt der Sache und waren grün, während die Sache falsch war.
+    """
+
+    def __init__(self, version_json: dict[str, Any], dateien: list[str]) -> None:
+        self.version_json = version_json
+        self.dateien = dateien
+        self.geloescht: list[str] = []
+
+    def retrbinary(self, befehl: str, schreiben: Any) -> None:
+        assert befehl.startswith("RETR "), befehl
+        schreiben(json.dumps(self.version_json).encode("utf-8"))
+
+    def mlsd(self, path: str, facts: list[str] | None = None) -> list[tuple[str, dict[str, str]]]:
+        if not path.endswith("/dl"):
+            return []
+        return [(name, {"type": "file", "size": "1"}) for name in self.dateien]
+
+    def delete(self, pfad: str) -> None:
+        self.geloescht.append(pfad)
+
+
+def _version_json(version: str) -> dict[str, Any]:
+    return {
+        "version": version,
+        "packages": {
+            "windows": {
+                "url": f"https://solidon3d.de/api/count.php?f=Solidon3D-Setup-{version}.exe",
+                "file": f"Solidon3D-Setup-{version}.exe",
+                "size": 1,
+                "sha256": "0" * 64,
+            }
+        },
+    }
+
+
+def test_the_cleanup_waits_until_the_server_names_the_new_version() -> None:
+    """Gelöscht wird erst, wenn ``version.json`` **oben** die neue Fassung nennt.
+
+    **Der Fall.** Beim Veröffentlichen von 0.1.3 wurden die alten Pakete
+    gelöscht, bevor die Seiten und ``version.json`` hochgeladen waren. Mehrere
+    Minuten lang zeigte die Startseite in sechs Sprachen auf vier Dateien, die
+    es nicht mehr gab, und die Update-Prüfung bot jedem Kunden eine Fassung an,
+    deren Datei 404 gab.
+
+    **Warum es keine lokale Prüfung fangen konnte:** Lokal war durchgehend alles
+    stimmig — die neue ``version.json`` lag hier, die neuen Pakete lagen hier.
+    Falsch war nur, was *oben* lag, und danach hatte niemand gefragt. Deshalb
+    liest die Bedingung den Server und nicht die Platte.
+    """
+    from app.branding import APP_VERSION
+    from tools.upload_website import stale_packages
+
+    alt = "0.0.1"
+    sitzung = _AttrappeFTP(_version_json(alt), [f"Solidon3D-Setup-{alt}.exe"])
+    veraltet, grund = stale_packages(sitzung, "httpdocs")  # type: ignore[arg-type]
+
+    assert veraltet == [], "es wurde etwas zum Löschen vorgeschlagen, obwohl der Server alt ist"
+    assert alt in grund and APP_VERSION in grund, f"der Grund nennt die Fassungen nicht: {grund}"
+
+
+def test_the_cleanup_spares_what_the_version_file_still_promises() -> None:
+    """Verschont wird, was ``version.json`` nennt — und was die Fassung trägt.
+
+    Beide Namensfelder zählen. ``updates.py`` liest ``url`` **und** ``file``, und
+    wer nur eines auswertet, hält eine Datei für entbehrlich, die das andere
+    noch verspricht. Dazu kommt alles mit der laufenden Fassung im Namen: Das
+    Flatpak steht in ``version.json`` nicht, weil Linux dort mit Absicht fehlt
+    (``updates.py``) — löschen darf man es trotzdem nicht.
+    """
+    from app.branding import APP_VERSION
+    from tools.upload_website import stale_packages
+
+    aktuell = f"Solidon3D-Setup-{APP_VERSION}.exe"
+    flatpak = f"Solidon3D-{APP_VERSION}-x86_64.flatpak"
+    sitzung = _AttrappeFTP(
+        _version_json(APP_VERSION),
+        [aktuell, flatpak, "Solidon3D-Setup-0.0.1.exe", "Solidon3D-0.0.1-x86_64.flatpak"],
+    )
+    veraltet, grund = stale_packages(sitzung, "httpdocs")  # type: ignore[arg-type]
+
+    assert grund == "", f"unerwarteter Einwand: {grund}"
+    assert aktuell not in veraltet, "das Paket der laufenden Fassung soll bleiben"
+    assert flatpak not in veraltet, "das Flatpak steht nicht in version.json und bleibt trotzdem"
+    assert veraltet == ["Solidon3D-0.0.1-x86_64.flatpak", "Solidon3D-Setup-0.0.1.exe"], veraltet
+
+
+def test_the_promise_is_read_from_both_name_fields() -> None:
+    """``url`` **und** ``file`` — und der Test unterscheidet sie ausdrücklich.
+
+    **Warum das einen eigenen Test braucht.** In der echten ``version.json``
+    tragen beide Felder denselben Namen. Ein Test, der sie mit gleichen Werten
+    füttert, bleibt deshalb grün, wenn die Auswertung nur eines von beiden
+    ansieht — die Gegenprobe zu den Tests darüber ist genau daran gescheitert.
+    Und dieselbe Lücke gab es am selben Tag schon einmal, in
+    ``test_website.py``: derselbe Name, zweimal in einer Datei, einmal geprüft.
+
+    ``updates.py`` liest beide (Zeile 22 und 32): das eine, um zu laden, das
+    andere, um die geladene Datei zu benennen. Wer nur eines auswertet, hält
+    eine Datei für entbehrlich, die das andere Feld noch verspricht — und
+    löscht sie.
+    """
+    from tools.upload_website import promised_files
+
+    versprochen = promised_files(
+        {
+            "packages": {
+                "windows": {
+                    "url": "https://solidon3d.de/api/count.php?f=geladen.exe",
+                    "file": "benannt.exe",
+                }
+            }
+        }
+    )
+    assert versprochen == {"geladen.exe", "benannt.exe"}, (
+        f"gefunden: {sorted(versprochen)} — beide Felder zählen, nicht nur eines"
+    )

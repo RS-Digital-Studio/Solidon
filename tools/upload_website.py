@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import ftplib
+import io
 import ipaddress
 import json
 import ssl
@@ -170,6 +171,79 @@ def remote_index(session: ftplib.FTP_TLS, root: str) -> dict[str, int]:
 
     walk(root)
     return found
+
+
+def remote_version(session: ftplib.FTP_TLS, root: str) -> dict[str, Any]:
+    """``version.json`` **vom Server**, nicht die lokale.
+
+    Der Unterschied ist der ganze Zweck: Was oben liegt, ist für jeden Kunden
+    die gültige Fassung — unabhängig davon, was hier für aktuell gehalten wird.
+    """
+    puffer = io.BytesIO()
+    session.retrbinary(f"RETR /{root}/version.json", puffer.write)
+    payload: dict[str, Any] = json.loads(puffer.getvalue().decode("utf-8"))
+    return payload
+
+
+def promised_files(payload: dict[str, Any]) -> set[str]:
+    """Jeder Dateiname, den ``version.json`` nennt — aus **beiden** Feldern.
+
+    ``updates.py`` liest ``url`` und ``file``: das eine, um zu laden, das andere,
+    um zu benennen. Wer nur eines auswertet, hält eine Datei für entbehrlich,
+    die das andere Feld noch verspricht.
+    """
+    names: set[str] = set()
+    for entry in payload.get("packages", {}).values():
+        if not isinstance(entry, dict):
+            continue
+        for feld in ("url", "file"):
+            wert = str(entry.get(feld, ""))
+            if wert:
+                names.add(wert.split("f=")[-1].split("/")[-1])
+    return names
+
+
+def stale_packages(session: ftplib.FTP_TLS, root: str) -> tuple[list[str], str]:
+    """Welche Pakete unter ``dl/`` weg dürfen — und erst, wenn sie es dürfen.
+
+    **Der Fall, der diese Funktion veranlasst hat.** Am 23.08.2026 wurden beim
+    Veröffentlichen von 0.1.3 die alten Pakete gelöscht, **bevor** die Seiten und
+    ``version.json`` oben waren. Mehrere Minuten lang zeigte die Startseite in
+    sechs Sprachen auf vier Dateien, die es nicht mehr gab, und die
+    Update-Prüfung bot jedem Kunden eine Fassung an, deren Datei 404 gab.
+
+    Gemerkt hat es keine der lokalen Prüfungen — lokal war durchgehend alles
+    stimmig. Sichtbar wurde es erst durch einen Abruf **gegen den Server**.
+
+    **Die Reihenfolge ist deshalb keine Gedächtnisaufgabe mehr, sondern eine
+    Bedingung:** Gelöscht wird erst, wenn die ``version.json`` *oben* die neue
+    Fassung nennt. Bis dahin ist die alte die gültige, und ihre Dateien bleiben
+    liegen. Nennt der Server noch die alte Fassung, gibt diese Funktion nichts
+    zurück und sagt warum.
+
+    Verschont wird außerdem alles, was ``version.json`` verspricht, und alles,
+    was die laufende Fassung im Namen trägt — auch Dateien, die dort nicht
+    stehen, etwa das Flatpak (Linux fehlt dort mit Absicht, ``updates.py``).
+    """
+    from app.branding import APP_VERSION
+
+    payload = remote_version(session, root)
+    oben = str(payload.get("version", ""))
+    if oben != APP_VERSION:
+        return [], (
+            f"Der Server nennt noch Fassung {oben}, die Anwendung ist {APP_VERSION}. "
+            "Erst version.json hochladen, dann aufräumen — sonst zeigen Seiten "
+            "und Update-Prüfung auf Dateien, die es nicht mehr gibt."
+        )
+
+    verschont = promised_files(payload)
+    kandidaten: list[str] = []
+    for name, _size in remote_index(session, f"/{root}/dl").items():
+        datei = name.split("/")[-1]
+        if datei in verschont or APP_VERSION in datei:
+            continue
+        kandidaten.append(datei)
+    return sorted(kandidaten), ""
 
 
 def remote_name(path: Path) -> str:
@@ -340,6 +414,19 @@ def main() -> int:
         "(Textdateien werden am Inhalt verglichen, nicht an der Länge)",
     )
     parser.add_argument(
+        "--alte-pakete",
+        dest="prune",
+        action="store_true",
+        help="zeigen, welche Pakete unter dl/ keine Fassung mehr bedienen "
+        "(löscht nichts, dafür braucht es zusätzlich --wirklich)",
+    )
+    parser.add_argument(
+        "--wirklich",
+        dest="confirm",
+        action="store_true",
+        help="zusammen mit --alte-pakete: die gezeigten Dateien wirklich löschen",
+    )
+    parser.add_argument(
         "--vorlage",
         dest="template",
         action="store_true",
@@ -358,8 +445,11 @@ def main() -> int:
         files = []
     else:
         files = [path.resolve() for path in arguments.files]
-    if not files and not arguments.missing:
-        print("Nichts zu tun. Dateien nennen, --geaendert, --seit oder --fehlend benutzen.")
+    if not files and not arguments.missing and not arguments.prune:
+        print(
+            "Nichts zu tun. Dateien nennen, --geaendert, --seit, --fehlend "
+            "oder --alte-pakete benutzen."
+        )
         return 1
 
     for path in files:
@@ -385,6 +475,26 @@ def main() -> int:
             "Speicher des Systems, nicht in eine Ausnahme hier."
         ) from problem
     try:
+        if arguments.prune:
+            veraltet, grund = stale_packages(session, root)
+            if grund:
+                print(grund)
+                return 1
+            if not veraltet:
+                print("Unter dl/ liegt nichts, was keine Fassung mehr bedient.")
+                return 0
+            print(f"{len(veraltet)} Paket(e) bedienen keine Fassung mehr:")
+            for name in veraltet:
+                print(f"  {name}")
+            if not arguments.confirm:
+                print()
+                print("Nichts gelöscht. Mit --wirklich noch einmal aufrufen.")
+                return 0
+            for name in veraltet:
+                session.delete(f"/{root}/dl/{name}")
+                print(f"  gelöscht: {name}")
+            return 0
+
         if arguments.missing:
             remote = remote_index(session, "/" + root)
             files = [
