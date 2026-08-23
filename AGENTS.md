@@ -101,8 +101,27 @@ wird deutsch geschrieben — nachträglich zu übersetzen gibt es nichts mehr.
 Bezeichner, den sie erklären, und der ist englisch; zweisprachige Sätze mitten
 im Testcode lesen sich schlechter, nicht besser. Wer eine neue schreibt, hält
 sich an den Bestand der Datei.
-Bezeichner bleiben englisch, daran ändert das nichts
-(`tests/test_language_rules.py` prüft nur die).
+
+**Und die Bezeichnerregel gilt `app/` und `tools/`, nicht `tests/`.** Der Grund
+ist die **Auslieferung**: `app/` reist zum Kunden, `tools/` baut das Paket —
+dort steht Code, den jemand liest, der das Projekt nicht kennt. `tests/` liest
+nur, wer hier arbeitet, und hier wird deutsch geschrieben.
+`tests/test_language_rules.py` prüft deshalb genau diese beiden Verzeichnisse.
+
+**Ausgenommen heißt nicht egal, sondern: am Bestand der Datei orientieren** —
+dieselbe Regel wie für die Assert-Meldungen darüber. Sonst spricht in einem
+Jahr jede Datei ihre eigene Sprache, und das wäre schlechter als beide
+Einzelentscheidungen. (Gezählt am 23.08.2026: 78 deutsche Bezeichner in 27
+Testdateien, 37 verschiedene Namen. Sie werden nicht umbenannt — eine
+Massenänderung in fremden Dateien kostet mehr, als sie einbringt.)
+
+**Was die Prüfung leistet und was nicht:** `GERMAN_STEMS` ist eine **kuratierte
+Liste**, keine Sprachprüfung. Der automatische Weg ist am 23.08.2026 gemessen
+gescheitert — eine aus den deutschen Kommentaren gewonnene Liste meldete 2758
+angebliche Verstöße, darunter `index`, `material`, `parameter` und `value`.
+Deutsch und Englisch überlappen bei technischen Wörtern zu stark. **Wer ein
+deutsches Wort in einem Bezeichner findet, trägt seinen Stamm dort ein**; der
+Test fängt, was schon einmal jemand falsch gemacht hat.
 
 Begriffszuordnung (verbindlich): Op → `Operation`, Transaktion →
 `Transaction`, Baustein → `Part`, Steckbrief → `digest`, Prüfbericht →

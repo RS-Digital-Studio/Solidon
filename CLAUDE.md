@@ -35,8 +35,13 @@ nach, wenn es stimmt.
 
 Die Sprachregelung steht verbindlich in `AGENTS.md`; hier die Kurzform:
 
-- **Bezeichner, Dateinamen, Modulnamen: Englisch.**
-  `tests/test_language_rules.py` lehnt deutsche Stämme in Bezeichnern ab.
+- **Bezeichner, Dateinamen, Modulnamen: Englisch** — in `app/` und `tools/`.
+  Der Grund ist die Auslieferung: Dort steht Code, den jemand liest, der das
+  Projekt nicht kennt. **In `tests/` gilt der Bestand der Datei**, wie bei den
+  Assert-Meldungen (`AGENTS.md`). `tests/test_language_rules.py` prüft genau
+  diese beiden Verzeichnisse, und seine `GERMAN_STEMS` sind eine **kuratierte
+  Liste**: Wer ein deutsches Wort in einem Bezeichner findet, trägt den Stamm
+  dort ein.
 - **Docstrings und Kommentare: Deutsch** — seit „Doku nachziehen" (b2e6e28),
   der Bestand ist vollständig nachgezogen. Neues wird deutsch geschrieben.
 - **Oberflächentexte: über `tr()`**, deutsche Quelle und je ein Katalog in
