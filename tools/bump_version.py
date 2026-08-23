@@ -1,4 +1,5 @@
-"""Erhöht die Version an beiden Stellen, die sie tragen (Bauplan §37.1).
+"""Erhöht die Version an den zwei Stellen, die sie tragen — und zieht die drei
+abgeleiteten nach (Bauplan §37.1).
 
     python tools/bump_version.py           # 0.1.1 → 0.1.2, der Normalfall
     python tools/bump_version.py --minor   # 0.1.1 → 0.2.0
@@ -21,6 +22,14 @@ darin, und keines von beiden ist kaputt — niemand merkt es.
 ``tests/test_toolchain.py`` hält sie zusammen, dieses Werkzeug bewegt sie
 gemeinsam.
 
+**Und drei weitere Dateien leiten sie ab** — die Paketmanifeste für Linux und
+macOS. Sie werden nicht hier gesetzt, sondern von ihren eigenen Werkzeugen neu
+geschrieben (:data:`DERIVED`), damit die Vorlage an einer Stelle bleibt. Am
+23.08.2026 standen sie nach einer Erhöhung noch auf der alten Nummer, weil
+dieses Werkzeug sie nicht kannte: ein Paket, dessen Anwendung 0.1.3 ist und
+dessen Installationsdatei 0.1.2 sagt. ``tests/test_packaging.py`` hat es
+gefangen.
+
 **Was hier nicht passiert:** ``website/version.json`` bleibt unberührt. Sie
 sagt, welche Version *veröffentlicht* ist, und das ist erst wahr, wenn die
 Pakete oben liegen — sie wird zuletzt hochgeladen, nicht zuerst geschrieben.
@@ -30,6 +39,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -41,8 +51,33 @@ for _stream in (sys.stdout, sys.stderr):
         _stream.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parent.parent
+TOOLS = ROOT / "tools"
 BRANDING = ROOT / "app" / "branding.py"
 PROJECT = ROOT / "pyproject.toml"
+
+#: Was die Version **ableitet**, statt sie zu tragen — je Werkzeug die Dateien,
+#: die es schreibt.
+#:
+#: Diese drei standen am 23.08.2026 noch auf 0.1.2, während `branding.py` schon
+#: 0.1.3 sagte. `tests/test_packaging.py` hat es gefangen, und sein Docstring
+#: nennt den Grund: *eine Versionsnummer im Manifest, die nicht zu
+#: `app/branding.py` passt, ergibt ein Paket, das außen neu aussieht und innen
+#: alt ist.* Der Test schlug **genau** in dem Lauf an, für den er gebaut wurde.
+#:
+#: **Gerufen statt genannt.** Ein Hinweis im Ausgabetext wäre die billigere
+#: Lösung und die schlechtere: Die Notiz zu diesem Werkzeug sagte „beide
+#: Stellen", und es waren drei. Wer die Version an einer Stelle erhöht, soll
+#: nicht danach eine Liste abarbeiten müssen.
+#:
+#: Beide Werkzeuge schreiben mit ``--files`` nur Text und brauchen weder Qt noch
+#: Linux noch einen Mac.
+DERIVED: dict[str, tuple[str, ...]] = {
+    "make_linux_packages.py": (
+        "packaging/de.rsdigital.solidon3d.metainfo.xml",
+        "packaging/install.sh",
+    ),
+    "make_macos_package.py": ("packaging/macos-distribution.xml",),
+}
 
 #: Die Zeile in ``branding.py``, die die Version trägt.
 BRANDING_LINE = re.compile(r'^(APP_VERSION: Final = ")(\d+\.\d+\.\d+)(")$', re.MULTILINE)
@@ -110,6 +145,15 @@ def main() -> int:
     print(f"Version: {was} → {wird}")
     print("  app/branding.py")
     print("  pyproject.toml")
+
+    for werkzeug in DERIVED:
+        subprocess.run(
+            [sys.executable, str(TOOLS / werkzeug), "--files"], check=True, capture_output=True
+        )
+        print(f"  über {werkzeug}:")
+        for datei in DERIVED[werkzeug]:
+            print(f"    {datei}")
+
     print(
         "\nwebsite/version.json bleibt, wie sie ist: Sie sagt, was veröffentlicht\n"
         "ist, und das stimmt erst, wenn die Pakete oben liegen."

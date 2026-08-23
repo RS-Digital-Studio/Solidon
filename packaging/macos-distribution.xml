@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Erzeugt von tools/make_macos_package.py — Werte aus app/branding.py. -->
 <installer-gui-script minSpecVersion="2">
-    <title>Solidon3D 0.1.2</title>
+    <title>Solidon3D 0.1.3</title>
     <organization>de.rsdigital</organization>
     <license file="eula.txt" mime-type="text/plain" />
     <conclusion file="conclusion.txt" mime-type="text/plain" />
@@ -10,11 +10,11 @@
     <volume-check>
         <allowed-os-versions><os-version min="12.0" /></allowed-os-versions>
     </volume-check>
-    <pkg-ref id="de.rsdigital.solidon3d" version="0.1.2">component.pkg</pkg-ref>
+    <pkg-ref id="de.rsdigital.solidon3d" version="0.1.3">component.pkg</pkg-ref>
     <choices-outline>
         <line choice="de.rsdigital.solidon3d" />
     </choices-outline>
-    <choice id="de.rsdigital.solidon3d" title="Solidon3D" visible="true" description="Solidon3D 0.1.2 — RS Digital">
+    <choice id="de.rsdigital.solidon3d" title="Solidon3D" visible="true" description="Solidon3D 0.1.3 — RS Digital">
         <pkg-ref id="de.rsdigital.solidon3d" />
     </choice>
 </installer-gui-script>
