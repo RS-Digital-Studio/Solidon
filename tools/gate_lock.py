@@ -458,7 +458,7 @@ def _idle_note(entry: dict[str, object]) -> str:
         return (
             f"Achtung: Der Prozessbaum des Halters hat in {IDLE_SAMPLE_SECONDS:.0f} Sekunden "
             "keine Rechenzeit verbraucht. Ob sein Lauf steht, lässt sich von hier aus nicht "
-            f"sagen: Es laufen {len(fremde)} weitere Testprozesse, die sich ihm nicht sicher "
+            f"sagen: Es laufen {len(fremde)} more Testprozesse, die sich ihm nicht sicher "
             "zuordnen lassen (auf Windows reißt die Elternkette, wenn ein Zwischenprozess "
             "endet). Von Hand messen — das Verfahren steht in .claude/rules/tests.md unter "
             "Steht er oder rechnet er?"
@@ -475,8 +475,40 @@ def _idle_note(entry: dict[str, object]) -> str:
     )
 
 
-def _quellen_abdruck() -> dict[str, float]:
-    """Zeitstempel aller Quelldateien — die Grundlage für „hat sich etwas bewegt".
+def _head_commit() -> str:
+    """Der Commit, gegen den gerade gemessen wird — leer, wenn es keinen gibt.
+
+    **Vorgeschlagen von 3d-druck-b8 am 23.08.2026, nach zwei verlorenen
+    Stunden.** Sie hatte einen richtigen Befund zurückgezogen, weil sie nach
+    einer fremden Reparatur nachmaß und den neuen Stand für den alten hielt;
+    belegen ließ es sich erst mit ``git show <commit>~1`` gegen
+    ``git show <commit>`` — ein Treffer gegen zwölf.
+
+    Die Zeile im Protokoll erspart das: Wer später zwei Ergebnisse vergleicht,
+    sieht sofort, ob sie denselben Stand meinen. Ohne sie ist eine Zahl aus
+    einem Lauf von gestern eine Zahl ohne Datum.
+    """
+    try:
+        finished = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(Path(__file__).resolve().parent.parent),
+                "rev-parse",
+                "--short",
+                "HEAD",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    return finished.stdout.strip() if finished.returncode == 0 else ""
+
+
+def _source_stamps() -> dict[str, float]:
+    """Zeitstempel aller Quelldateien — die Grundlage für „hat sich etwas moved".
 
     **Zeitstempel und nicht Inhalt**, weil es um Sekundenbruchteile geht: Ein
     Hash über tausend Dateien kostet bei jedem Lauf Zeit, und die Frage lautet
@@ -484,21 +516,21 @@ def _quellen_abdruck() -> dict[str, float]:
     Schreibvorgang, der den Inhalt nicht ändert, zählt hier mit — das ist die
     Seite, auf der man lieber irrt.
     """
-    wurzel = Path(__file__).resolve().parent.parent
-    abdruck: dict[str, float] = {}
-    for ordner in ("app", "tests", "tools"):
-        for datei in (wurzel / ordner).rglob("*.py"):
+    root = Path(__file__).resolve().parent.parent
+    stamps: dict[str, float] = {}
+    for folder in ("app", "tests", "tools"):
+        for entry in (root / folder).rglob("*.py"):
             try:
-                abdruck[str(datei.relative_to(wurzel))] = datei.stat().st_mtime
+                stamps[str(entry.relative_to(root))] = entry.stat().st_mtime
             except OSError:
                 continue
-    return abdruck
+    return stamps
 
 
-def _bewegte_quellen(vorher: dict[str, float]) -> set[str]:
+def _moved_sources(before: dict[str, float]) -> set[str]:
     """Welche Quelldateien sich seit dem Abdruck geändert haben — samt neuer."""
-    nachher = _quellen_abdruck()
-    return {name for name, zeit in nachher.items() if vorher.get(name) != zeit}
+    now = _source_stamps()
+    return {name for name, zeit in now.items() if before.get(name) != zeit}
 
 
 def _read(path: Path) -> dict[str, object] | None:
@@ -610,7 +642,7 @@ def run(who: str, wait: float, command: list[str]) -> int:
             print(note)
         return BUSY_EXIT
 
-    # **Was sich unter dem Lauf bewegt hat.** Das Schloss serialisiert
+    # **Was sich unter dem Lauf moved hat.** Das Schloss serialisiert
     # Rechenzeit — es hindert niemanden daran, in denselben Baum zu schreiben,
     # während hier gemessen wird. Am 23.08.2026 hat das viermal Stunden
     # gekostet, und jedes Mal sah das Ergebnis stimmig aus:
@@ -629,7 +661,8 @@ def run(who: str, wait: float, command: list[str]) -> int:
     #
     # Verhindert wird nichts: Der Lauf läuft, das Ergebnis steht. Nur weiß der
     # Leser danach, wie viel es trägt.
-    vorher = _quellen_abdruck()
+    before = _source_stamps()
+    commit_before = _head_commit()
 
     mine = _read(path) or {}
     held = mine.get("pid") == os.getpid()
@@ -649,14 +682,22 @@ def run(who: str, wait: float, command: list[str]) -> int:
             current = _read(path)
             if current is not None and current.get("pid") == os.getpid():
                 path.unlink(missing_ok=True)
-        bewegt = _bewegte_quellen(vorher)
-        if bewegt:
-            namen = ", ".join(sorted(bewegt)[:4])
-            weitere = f" und {len(bewegt) - 4} weitere" if len(bewegt) > 4 else ""
+        commit_after = _head_commit()
+        moved = _moved_sources(before)
+        if commit_before:
+            shifted = (
+                f" (bei Beginn {commit_before})"
+                if commit_after and commit_after != commit_before
+                else ""
+            )
+            print(f"Gemessen gegen {commit_after or commit_before}{shifted}.", file=sys.stderr)
+        if moved:
+            names = ", ".join(sorted(moved)[:4])
+            more = f" und {len(moved) - 4} more" if len(moved) > 4 else ""
             print(file=sys.stderr)
             print(
-                f"Achtung: Während dieses Laufs haben sich {len(bewegt)} Quelldatei(en) "
-                f"geändert — {namen}{weitere}.",
+                f"Achtung: Während dieses Laufs haben sich {len(moved)} Quelldatei(en) "
+                f"geändert — {names}{more}.",
                 file=sys.stderr,
             )
             print(

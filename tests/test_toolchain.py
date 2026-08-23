@@ -836,17 +836,26 @@ def test_the_lock_notices_when_the_tree_moves_under_a_run(tmp_path: Path) -> Non
 
     Geprüft wird beides, denn eine Warnung, die immer kommt, liest niemand mehr.
     """
-    from tools.gate_lock import _bewegte_quellen, _quellen_abdruck
+    from tools.gate_lock import _head_commit, _moved_sources, _source_stamps
 
-    abdruck = _quellen_abdruck()
-    assert len(abdruck) > 200, f"nur {len(abdruck)} Quelldateien — stimmen die Ordner noch?"
-    assert not _bewegte_quellen(abdruck), "ohne Schreibvorgang darf sich nichts bewegt haben"
+    # **Der Stand gehört zur Messung.** Wer zwei Ergebnisse vergleicht, muss
+    # sehen, ob sie denselben Commit meinen — 3d-druck-b8 hat einen richtigen
+    # Befund zurückgezogen, weil sie nach einer fremden Reparatur nachmaß und
+    # den neuen Stand für den alten hielt. Eine Zahl ohne Stand ist eine Zahl
+    # ohne Datum.
+    stand = _head_commit()
+    assert stand, "kein Commit-Stand — läuft das hier ohne Git?"
+    assert len(stand) >= 7, f"unerwarteter Stand: {stand!r}"
+
+    stamps = _source_stamps()
+    assert len(stamps) > 200, f"nur {len(stamps)} Quelldateien — stimmen die Ordner noch?"
+    assert not _moved_sources(stamps), "ohne Schreibvorgang darf sich nichts bewegt haben"
 
     ziel = Path(__file__)
     vorher = ziel.stat().st_mtime
     try:
         ziel.touch()
-        bewegt = _bewegte_quellen(abdruck)
+        bewegt = _moved_sources(stamps)
         assert str(ziel.relative_to(ziel.parent.parent)) in bewegt, (
             f"die berührte Datei fehlt in {sorted(bewegt)[:4]}"
         )
