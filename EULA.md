@@ -1,6 +1,6 @@
 # Endnutzer-Lizenzvertrag für Solidon3D
 
-Stand: 8. August 2026 · Fassung 1.0
+Stand: 23. August 2026 · Fassung 1.1
 
 Dieser Vertrag regelt, was Sie mit Solidon3D tun dürfen. Er kommt zustande,
 wenn Sie die Software installieren oder benutzen. Vertragspartner ist
