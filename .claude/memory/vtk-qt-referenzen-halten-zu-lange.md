@@ -48,5 +48,20 @@ Gegenprobe für den zweiten Durchgang ist billig: denselben Durchgang als
 ersten fahren; ist er dann sauber, liegt es am Vorgänger. Callbacks
 an VTK-Objekte gehen über `weakref`. Ein Test, der ein Fenster anfordert, muss
 es benutzen — sonst nimmt er keins (`ReportPanel()` allein tut es meist).
-Gegenprobe, ob es überhaupt die eigene Änderung ist: `git stash` und derselbe
-Lauf; bleibt der Abriss, siehe [[leistungstests-fremdlast]].
+Gegenprobe, ob es überhaupt die eigene Änderung ist: ein eigener Arbeitsbaum
+auf HEAD, **nicht** `git stash` — im geteilten Baum nimmt der fremde Arbeit
+mit (siehe [[leistungstests-fremdlast]]).
+
+**Und seit dem 23.08.2026 gilt die Umkehrung genauso, sie ist die Kehrseite
+derselben Sache:** Nicht nur „was wird zu lange gehalten", sondern **„was
+wird im falschen Thread freigegeben"**. Solange Lambda-Ringe die Fenster
+hielten, sammelte sie niemand ein; seit sie aufgelöst sind, tut es der
+Speicherbereiniger — und der läuft in dem Thread, dessen Allokation gerade die
+Schwelle reißt. Ruft er dort `~QMenuBar`, nimmt der Destruktor den Qt-Mutex
+und will den GIL, den der Hauptthread hält, während der auf genau diesen Mutex
+wartet. Das Ergebnis **steht** bei 0,00 CPU, statt zu stürzen.
+
+Beide Stapelabzüge und die drei gescheiterten Anläufe (`gc.collect()`,
+`leash.undisturbed()`, zweimal `deleteLater`) stehen in `tests/conftest.py`,
+die Folge für die Oberfläche in `.claude/rules/oberflaeche.md`. Der Ring-Umbau
+bleibt richtig — er ist nur nicht unbeteiligt.

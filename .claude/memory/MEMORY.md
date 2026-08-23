@@ -6,8 +6,8 @@
 - [MSVC-Erkennung bei VS 18](msvc-erkennung-vs18.md) — der Compiler ist da, setuptools findet ihn nicht; bauen über vcvars64.bat plus DISTUTILS_USE_SDK=1.
 - [Webserver-Zugang](solidon3d-webserver-zugang.md) — netcup, Dokumentenstamm je Domain (`solidon3d.de/httpdocs`); scheitert die Anmeldung, ist meist der SSH-Schalter schuld, nicht das Passwort.
 - [Parallele Sitzungen](parallele-sitzungen-solidon3d.md) — der Arbeitsbaum ändert sich mitten in der Sitzung; nur eigene Pfade stagen.
-- [Leistungstests unter Fremdlast](leistungstests-fremdlast.md) — die Last kommt öfter aus der Suite selbst als von einem Spiel; die Marke allein fahren, bevor man eine Regression glaubt.
-- [VTK/Qt-Referenzen halten zu lange](vtk-qt-referenzen-halten-zu-lange.md) — Abriss am Lauf-Ende und Fehlbild im zweiten Fenster: wer hält ein Objekt fest, das weg sein sollte?
+- [Leistungstests unter Fremdlast](leistungstests-fremdlast.md) — die Marke allein fahren, bevor man eine Regression glaubt; die Gegenprobe braucht einen eigenen Arbeitsbaum, nicht `git stash`.
+- [VTK/Qt-Referenzen halten zu lange](vtk-qt-referenzen-halten-zu-lange.md) — wer hält ein Objekt fest, das weg sein sollte? Und seit 23.08.2026 die Kehrseite: was wird im falschen Thread freigegeben?
 - [Zeichnen an Fusion orientieren](zeichnen-an-fusion-orientieren.md) — Skizzeneditor gegen Fusion messen; Fusion ist lokal installiert.
 - [Slicer lokal zum Gegenmessen](slicer-lokal-zum-gegenmessen.md) — CuraEngine und PrusaSlicer sind da; ein Vergleichslauf entscheidet, was sonst Vermutung bleibt.
 - [PHP lokal für die Gegenstelle](php-lokal-fuer-die-gegenstelle.md) — support.php ist seit 20.08.2026 prüfbar; mbstring braucht ein abgeleitetes extension_dir, und der ganze Weg bis zur fertigen Mail lässt sich lokal fangen.

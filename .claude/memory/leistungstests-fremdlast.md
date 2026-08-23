@@ -64,6 +64,31 @@ fahren (drei Läufe, nicht einer) und prüfen, ob der gemessene Pfad überhaupt
 einen Diff hat.
 
 Nicht jeder solche Abriss ist Fremdlast: eine Referenzschleife zwischen Python
-und VTK erzeugt dasselbe Bild und ist echt. Die Unterscheidung liefert
-derselbe `git stash` — siehe [[vtk-qt-referenzen-halten-zu-lange]] und
-[[parallele-sitzungen-solidon3d]].
+und VTK erzeugt dasselbe Bild und ist echt. Siehe
+[[vtk-qt-referenzen-halten-zu-lange]] und [[parallele-sitzungen-solidon3d]].
+
+**Die Unterscheidung liefert ein eigener Arbeitsbaum, nicht `git stash`** —
+hier stand zwei Absätze über dem Verbot noch der Rat, denselben `git stash` zu
+nehmen. `git worktree add --detach <pfad> HEAD` plus eine Kopie der `.venv`
+gibt einen Stand ohne die eigene Änderung, ohne im geteilten Baum etwas
+anzufassen. Zwei Fallen dabei, beide am 23.08.2026 gemessen: Der Kopie fehlt
+das `__pycache__` des Projekts, und sie kann sich anders verhalten als der
+Hauptbaum — prüfen, ob dort überhaupt etwas Grünes läuft (`test_leash.py` und
+`test_errors.py` gehen ohne Fenster), bevor man ihre Zahlen glaubt.
+
+**Auch ein *gescheiterter* `git merge` frisst Arbeit.** Er legt einen
+Autostash an, bewegt HEAD, schreibt Dateien — und wenn er abbricht, steht
+„Index was not unstashed" in der Meldung, und der Stash bleibt liegen. Am
+23.08.2026 hat das die ungespeicherte Arbeit einer anderen Sitzung
+zurückgesetzt. Nach jedem abgebrochenen Merge: `git status` **und**
+`git stash list`.
+
+**Auf dieser Maschine läuft dauerhaft ComfyUI mit rund einem Gigabyte** — es
+gehört Robert, keine Sitzung startet es, und es steht bei jeder
+Fremdlastbewertung mit in der Prozessliste. Wer ihm 22 CPU-Sekunden zuschreibt
+und sie einer Sitzung anrechnet, misst das Falsche.
+
+**`py-spy` liegt nicht in der `.venv`**, sondern unter
+`~/AppData/Roaming/Python/Python313/Scripts/py-spy.exe`. `dump --pid N
+--native` zeigt Python- **und** C-Stack; bei einem Hänger sagt erst der native
+Teil, worauf gewartet wird.
