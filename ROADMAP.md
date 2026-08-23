@@ -106,7 +106,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Eine Fremdmeldung sagt „Netzwerk“ und meint „Platte voll“ | Vier Wege von Hand, während die Suite grün war (23.08.2026) | einen Satz in `comfy_setup`: Beim Einrichten von Weg 3 brach der 7,5-GB-Download dreimal mit `Background writer channel closed` ab, und `C:` hatte null Byte frei. Die Regel „Fehler des fremden Programms durchreichen“ bleibt richtig — wo wir **mehr** wissen als es, gehört das dazu |
 | Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374 |
 | Ein Importzyklus in `app/core/scene` | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Auflösung von `scene/__init__.py` ↔ `scene/history.py`. Latent, solange nur ein Thread importiert — zwei Threads gaben **5 von 5** Fehlschlägen. Kein Startzeit-Thema: die Ersparnis dort wäre 37 ms |
-| Das signierte Lizenz-Manifest ist nicht eingecheckt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Messung, ob die Signatur reproduzierbar ist. Wenn ja, gehört es eingecheckt; wenn nein, bleibt Ansagen die einzige Abhilfe. Zwei Sitzungen haben es in einer Nacht doppelt gebaut |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 
 ---
@@ -4245,7 +4244,29 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       Fortschrittsmaß, **keine Ursache** (nach 14 Tests waren es achtzig, und
       der Lauf riss trotzdem).
 
-- [ ] **Das signierte Lizenz-Manifest ist nicht eingecheckt, und darum sieht
+- [x] **Das signierte Lizenz-Manifest ist nicht eingecheckt — gemessen am
+      23.08.2026, und es **darf** auch nicht.** Zweimal gebaut, verglichen:
+
+          Dateiprüfsummen   identisch
+          signature         verschieden
+
+      **Die Nicht-Reproduzierbarkeit ist eine Sicherheitseigenschaft, kein
+      Mangel.** Das Schlüsselpaar ist **je Bau frisch**: Der öffentliche Teil
+      wird vor dem Übersetzen in die Kopie von `integrity.py` gesetzt, der
+      private nach dem Signieren verworfen und nie abgelegt. Wer das Manifest
+      neu schreiben will, muss zuerst den öffentlichen Schlüssel im
+      **kompilierten** Modul austauschen.
+
+      **Einchecken würde genau das aufweichen** — und der Diff wäre bei jedem
+      Bau ein anderer, ohne dass sich etwas geändert hätte. Der Vorschlag,
+      der hier stand, war falsch; er ist zurückgezogen.
+
+      **Was von dem Punkt bleibt, ist gelöst:** `test_packaging.py` fängt ein
+      veraltetes Manifest und nennt den Befehl dazu — am 23.08. genau einmal
+      geschehen, nachdem eine Grenzdatei sich geändert hatte. **Der Baum zeigt
+      es nicht, aber das Tor tut es.**
+
+      Ursprünglich: und darum sieht
       niemand, ob es zum Baum passt.** `tools/build_licence_module.py` schreibt
       nach `packaging/build/`; nach dem Lauf zeigt `git status` **nichts**.
 
