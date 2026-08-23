@@ -131,11 +131,17 @@ for file in $windowed; do ignores="$ignores --ignore=$file"; done
 #     tests/test_chat_ui.py     0xC0000409   40 passed   (2 von 2 Läufen)
 #
 # `0xC0000409` ist der Code, den `CLAUDE.md` als bekannten Abbau-Absturz führt.
-# Die Shell meldet ihn als 127, weil sie jeden Wert über 128 auf ihre eigene
-# Skala abbildet und „command not found" daraus macht. **Die Roadmap führte
-# beide als getrennte Signaturen — sie sind eine.** Und der Abriss ist nicht
-# sporadisch: vier von vier Läufen, jedes Mal nach vollständiger
-# Zusammenfassung.
+# Für diese beiden Dateien gilt also: **die 127 und der bekannte Absturz sind
+# dasselbe**, und der Abriss ist nicht sporadisch — vier von vier Läufen, jedes
+# Mal nach vollständiger Zusammenfassung.
+#
+# **Aber die 127 ist keine Signatur, sondern ein Vorhang.** Am selben Tag hat
+# 3d-druck-3a zwei andere Dateien mit 127 gemessen, die **vor** der Schlusszeile
+# rissen — dort stand `0xc0000374`, Heap-Korruption, und der Stapel sagte
+# „Garbage-collecting". Wer aus „Exit 127" auf eine gemeinsame Ursache schließt,
+# schließt zu schnell: Die Shell wirft verschiedene Windows-Codes in denselben
+# Topf. Die Frage ist immer, was **hinter** der 127 steht, und die beantwortet
+# nur ein Lauf ohne Shell dazwischen.
 zaehlt_als_fehler() {
   status=$1
   protokoll=${2:-}
