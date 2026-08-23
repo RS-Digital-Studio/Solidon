@@ -21,6 +21,7 @@ from typing import Any
 
 from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, Signal
 
+from app.core import expressions
 from app.core.agent import apply as agent_apply
 from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
@@ -43,7 +44,6 @@ from app.core.scene import (
     NeverCancelled,
     OperationDraft,
     disk_backed_cache,
-    expressions,
     foreign,
     orphans,
 )
