@@ -4814,6 +4814,9 @@ def _InteractorStyle(  # noqa: N802
             """Dasselbe für links. In drei der vier Schemata dreht die linke
             Taste; ausgewählt wird deshalb, wo niemand gezogen hat, und nicht
             danach, welches Schema gerade gilt."""
+            self._dragging_body = False
+            """Ob die linke Taste gerade den gewählten Körper führt statt die
+            Kamera. Wird beim Drücken entschieden und beim Loslassen beendet."""
 
         def _shift(self) -> bool:
             return bool(self.GetInteractor().GetShiftKey())
@@ -4839,6 +4842,20 @@ def _InteractorStyle(  # noqa: N802
                 if on_paint is not None:
                     on_paint(*self._left_at, True)
                 return
+            grabs = on_body_drag is not None and not self._shift()
+            if grabs and on_body_drag("start", *self._left_at):
+                # **Auf dem gewählten Körper führt Links ihn, nicht die
+                # Kamera** (§18.11). Der Rückruf urteilt selbst und gibt
+                # ``False`` zurück, wenn dort nichts Gewähltes liegt — dann
+                # bleibt die linke Taste, was sie im jeweiligen Schema war.
+                #
+                # **Ein Klick bleibt trotzdem ein Klick.** Ausgewählt wird beim
+                # Loslassen, und ``finish_body_drag`` verwirft alles unterhalb
+                # von ``EPS_DRAG``. Ohne diese Aufteilung zöge ein Klick auf
+                # eine Bohrung des gewählten Körpers künftig den ganzen Körper,
+                # statt die Bohrung zu wählen.
+                self._dragging_body = True
+                return
             if scheme == "slicer":
                 # Links wählt; geschoben wird mit Umschalt und Ziehen.
                 if self._shift():
@@ -4857,6 +4874,13 @@ def _InteractorStyle(  # noqa: N802
                 if on_paint is not None:
                     on_paint(*self._position(), False)
                 return
+            if self._dragging_body:
+                # **Ohne das ``return`` liefe die Kamera mit**: ``OnMouseMove``
+                # unten führt sie weiter, und der Körper wanderte vor einer
+                # Ansicht, die sich zugleich dreht.
+                if on_body_drag is not None:
+                    on_body_drag("move", *self._position())
+                return
             # Der Beobachter verdrängt die eingebaute Verarbeitung — ohne
             # diesen Aufruf stünde die Kamera bei jedem Ziehen still.
             self.OnMouseMove()
@@ -4867,6 +4891,13 @@ def _InteractorStyle(  # noqa: N802
             self.EndRotate()
             self._tell(None)
             started, self._left_at = self._left_at, None
+            dragged, self._dragging_body = self._dragging_body, False
+            if dragged and on_body_drag is not None:
+                # Hier entsteht der Schritt im Verlauf (Regel 2) — und danach
+                # geht es weiter zu ``on_pick``: War es doch nur ein Klick,
+                # hat ``finish_body_drag`` nichts erzeugt, und die Auswahl
+                # gehört trotzdem gesetzt.
+                on_body_drag("end", *self._position())
             if painted:
                 # Die Züge sind schon beim Drücken und Ziehen gesetzt — der
                 # Klickpfad malte denselben Punkt ein zweites Mal.

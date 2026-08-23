@@ -3311,3 +3311,112 @@ def test_a_click_into_a_hole_selects_the_hole(window: MainWindow) -> None:
     assert viewport._feature_at(daneben) != bohrungen[0], (
         "vier Radien daneben ist nicht mehr diese Bohrung"
     )
+
+
+class _FakeInteractor:
+    """Nur so viel Interactor, wie ``_left_down`` und Verwandte lesen."""
+
+    def __init__(self) -> None:
+        self.position = (100, 200)
+        self.shift = 0
+
+    def GetEventPosition(self) -> tuple[int, int]:  # noqa: N802 - VTK gibt den Namen
+        return self.position
+
+    def GetShiftKey(self) -> int:  # noqa: N802 - VTK gibt den Namen
+        return self.shift
+
+
+def _style_with_mouse(starts: bool = True) -> tuple[Any, _FakeInteractor, list[Any]]:
+    """Ein Interaktionsstil, dessen Maus sich von Hand führen lässt.
+
+    Die Kamera-Methoden werden stillgelegt: ohne echten Interactor stürzt VTK
+    in ``EndPan`` ab (gemessen, Segmentation fault). Geprüft wird hier die
+    Verdrahtung, nicht VTKs Kameraführung.
+    """
+    from app.ui.viewport import _InteractorStyle
+
+    seen: list[Any] = []
+    style = _InteractorStyle(
+        None,
+        "slicer",
+        None,
+        lambda x, y: seen.append(("pick", x, y)),
+        on_body_drag=lambda phase, x, y: (seen.append((phase, x, y)), starts)[1],
+    )
+    interactor = _FakeInteractor()
+    style.GetInteractor = lambda: interactor
+    for name in ("EndPan", "EndRotate", "StartPan", "StartRotate", "OnMouseMove"):
+        setattr(style, name, lambda *_: None)
+    return style, interactor, seen
+
+
+def test_the_left_button_reaches_the_body_drag(qt_app: QApplication) -> None:
+    """Die Maus ruft den Zug — und nicht bloß die Methode dahinter.
+
+    **Robert am 23.08.2026:** „wenn ich das modell mit linksklick auswähle kann
+    ich es immer noch nicht verschieben."
+
+    Alles unterhalb war gebaut: ``begin_body_drag``, ``begin_body_drag_at``,
+    ``continue_body_drag``, ``finish_body_drag``, der Rückruf ``on_body_drag``
+    und seine Übergabe an ``_ViewCallbacks``. Nur stand ``on_body_drag`` im
+    175-Zeilen-Rumpf des Interaktionsstils **genau einmal**: als Parameter. Die
+    Kette endete eine Ebene vor der Maus.
+
+    **Warum kein Test das fing**, obwohl es einen gab: Er setzte bei
+    ``begin_body_drag_at`` an, also hinter der Lücke, und begründete es
+    richtig — offscreen rendert VTK nicht, ein Picker über einem nie
+    gezeichneten Bild trifft nichts. Eine zutreffende Begründung, die eine
+    Lücke deckt, ist schwerer zu sehen als eine falsche. Testart **Anschluss**
+    (AGENTS.md): nicht „der Viewport kann ziehen", sondern „die Maus tut es".
+    """
+    style, interactor, seen = _style_with_mouse()
+
+    style._left_down()
+    interactor.position = (160, 250)
+    style._mouse_move()
+    style._left_up()
+
+    assert [entry[0] for entry in seen] == ["start", "move", "end"], (
+        "Drücken, Ziehen und Loslassen erreichen den Rückruf nicht vollständig"
+    )
+    assert seen[0][1:] == (100, 200), "der Zug beginnt, wo gedrückt wurde"
+
+
+def test_a_click_without_dragging_still_selects(qt_app: QApplication) -> None:
+    """Und ein Klick bleibt ein Klick — sonst wäre die Bohrung nicht mehr wählbar.
+
+    Der Zug beginnt schon beim Drücken, weil erst dann feststeht, ob dort der
+    gewählte Körper liegt. Ohne diesen Fall zöge ein Klick auf eine Bohrung
+    **des gewählten Körpers** künftig den ganzen Körper, statt die Bohrung zu
+    wählen — Roberts anderer Auftrag wäre damit rückwärts gegangen.
+
+    Aufgefangen wird das an zwei Stellen: ``finish_body_drag`` verwirft alles
+    unterhalb von ``EPS_DRAG``, und das Loslassen läuft danach weiter zu
+    ``on_pick``.
+    """
+    style, _interactor, seen = _style_with_mouse()
+
+    style._left_down()
+    style._left_up()
+
+    assert ("pick", 100, 200) in seen, "ein Klick ohne Bewegung wählt weiterhin aus"
+    assert [entry[0] for entry in seen] == ["start", "end", "pick"], seen
+
+
+def test_the_camera_keeps_the_button_where_nothing_is_selected(qt_app: QApplication) -> None:
+    """Liegt dort nichts Gewähltes, bleibt die linke Taste, was sie war.
+
+    Der Rückruf urteilt selbst und gibt ``False`` zurück. Ohne diese Trennung
+    wäre das Ziehen ein Modus mit anderem Namen: Wer die Ansicht drehen will,
+    dürfte nicht erst wegklicken müssen.
+    """
+    style, interactor, seen = _style_with_mouse(starts=False)
+
+    style._left_down()
+    interactor.position = (160, 250)
+    style._mouse_move()
+
+    assert [entry[0] for entry in seen] == ["start"], (
+        "nach einem abgelehnten Zug darf kein 'move' mehr kommen — die Kamera führt"
+    )
