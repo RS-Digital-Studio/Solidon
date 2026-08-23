@@ -829,3 +829,32 @@ Zwei Handgriffe dagegen, beide billig:
 * **Eine Zahl, die konstant ist, ist ein Zeiger.** „1 von 10 überlebten" — nie
   null, nie zehn — ist kein Streuungsproblem, sondern genau eine Referenz. Wer
   bei so einer Zahl die Rate verfeinert, misst am Befund vorbei.
+
+### Die Abfrage muss den Befehl noch ändern können
+
+Die Regel „wer das Schloss belegt sieht, schreibt nicht" ist am 23.08.2026
+zweimal erfüllt worden und hat trotzdem nichts verhindert — einmal bei 3a,
+einmal bei mir. Beide Male so:
+
+```bash
+gate_lock.py status && python - <<'PY'   # der Editor hängt schon dran
+```
+
+Die Abfrage stand davor, ihre Antwort stand in derselben Ausgabe wie die
+Änderung. **Erfüllt war eine Bedingung an die Reihenfolge im Text, gemeint war
+eine an die Kausalität:**
+
+> **Die Antwort muss den Schreibbefehl beeinflussen können — und das kann sie
+> nur, wenn er zum Zeitpunkt der Antwort noch nicht formuliert ist.**
+
+Eine Prüfung im selben Aufruf wie die Änderung ist keine Prüfung, sondern eine
+Notiz. Praktisch heißt das: **Ein Aufruf fragt, ein zweiter schreibt** — und
+zwischen beiden liest jemand das Ergebnis. Das kostet einen Tastendruck und ist
+der einzige Unterschied zwischen einer Zusicherung und einer Verzierung.
+
+Dieselbe Form hat 64s Fehler am selben Tag, nur ohne Schloss: Sie maß, ob
+Katalog und Quelltext zusammenpassen, bekam „0 fehlen, 0 tot" — und derselbe
+Test war im selben Baum rot. Die Messung lief **nach** dem Testlauf, und
+dazwischen hatte jemand geschrieben. **In einem Baum, in dem vier Sitzungen
+schreiben, misst man nicht den Baum, sondern einen Zeitpunkt** — und der steht
+nicht im Ergebnis.
