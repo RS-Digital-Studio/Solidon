@@ -60,6 +60,14 @@ _RULE = re.compile(r"^-{3,}$")
 #: bei einer Widerrufsadresse keine Schönheitsfrage.
 BREAK = "\x01"
 
+#: Ein mit Gegenschrägstrich geschütztes Sternchen. Es muss aus dem Text
+#: verschwinden, **bevor** die Auszeichnungsregeln laufen — sonst liest
+#: `_EMPHASIS` zwei geschützte Sternchen einer Zeile als Paar und macht ein
+#: `<em>` daraus. Genau das ist dem Muster-Widerrufsformular passiert, wo
+#: `(\*)` zweimal je Zeile steht: Im fertigen HTML stand dort `(\<em>)`
+#: mitten im gesetzlich vorgegebenen Text.
+STAR = "\x02"
+
 
 def inline(text: str) -> str:
     """Auszeichnung einer Zeile. Code zuerst, damit darin nichts umgedeutet wird."""
@@ -70,11 +78,12 @@ def inline(text: str) -> str:
         return f"\x00{len(kept) - 1}\x00"
 
     result = escape(_CODE.sub(keep_code, text))
+    result = result.replace(r"\*", STAR)
     result = _LINK.sub(r'<a href="\2">\1</a>', result)
     result = _AUTOLINK.sub(_autolink, result)
     result = _STRONG.sub(r"<strong>\1</strong>", result)
     result = _EMPHASIS.sub(r"<em>\1</em>", result)
-    result = result.replace(r"\*", "*").replace(BREAK, "<br>")
+    result = result.replace(STAR, "*").replace(BREAK, "<br>")
     for index, piece in enumerate(kept):
         result = result.replace(f"\x00{index}\x00", piece)
     return result
