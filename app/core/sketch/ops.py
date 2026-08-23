@@ -218,7 +218,13 @@ class SketchExtrudeParams(BaseParams):
         title=_("Länge"), default=40.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
     )
     width: float = param(
-        title=_("Breite"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_WIDTH_DOC
+        title=_("Breite"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_WIDTH_DOC,
+        depends_on=("shape", ("rectangle", "slot")),
     )
     height: float = param(
         title=_("Höhe"),
@@ -235,6 +241,7 @@ class SketchExtrudeParams(BaseParams):
         maximum=64,
         placement="advanced",
         doc=_CORNERS_DOC,
+        depends_on=("shape", ("polygon",)),
     )
     region: int = param(
         title=_("Region"),
@@ -298,7 +305,13 @@ class SketchPocketParams(BaseParams):
         title=_("Länge"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
     )
     width: float = param(
-        title=_("Breite"), default=10.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_WIDTH_DOC
+        title=_("Breite"),
+        default=10.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_WIDTH_DOC,
+        depends_on=("shape", ("rectangle", "slot")),
     )
     depth: float = param(
         title=_("Tiefe"),
@@ -349,6 +362,7 @@ class SketchPocketParams(BaseParams):
         maximum=64,
         placement="advanced",
         doc=_CORNERS_DOC,
+        depends_on=("shape", ("polygon",)),
     )
     sketch: str = param(
         title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
@@ -421,6 +435,11 @@ class SketchRevolveParams(BaseParams):
         minimum=0.1,
         maximum=1000.0,
         doc=_("Höhe des Querschnitts entlang der Achse. Beim Kreis ohne Wirkung."),
+        # Anders als bei den vier Geschwistern: Hier wirkt die Angabe auch beim
+        # Vieleck — der Satz schließt allein den Kreis aus, und ein
+        # ``depends_on``, das mehr sperrt als der Satz sagt, wäre schlechter
+        # als keines.
+        depends_on=("shape", ("rectangle", "slot", "polygon")),
     )
     offset: float = param(
         title=_("Abstand zur Achse"),
@@ -450,6 +469,7 @@ class SketchRevolveParams(BaseParams):
         maximum=64,
         placement="advanced",
         doc=_CORNERS_DOC,
+        depends_on=("shape", ("polygon",)),
     )
     sketch: str = param(
         title=_("Skizze"),
@@ -499,7 +519,13 @@ class SketchSweepParams(BaseParams):
         title=_("Länge"), default=10.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
     )
     width: float = param(
-        title=_("Breite"), default=10.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_WIDTH_DOC
+        title=_("Breite"),
+        default=10.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_WIDTH_DOC,
+        depends_on=("shape", ("rectangle", "slot")),
     )
     bend_radius: float = param(
         title=_("Bogenradius"),
@@ -528,6 +554,7 @@ class SketchSweepParams(BaseParams):
         maximum=64,
         placement="advanced",
         doc=_CORNERS_DOC,
+        depends_on=("shape", ("polygon",)),
     )
     sketch: str = param(
         title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
@@ -565,7 +592,13 @@ class SketchLoftParams(BaseParams):
         title=_("Länge"), default=40.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_LENGTH_DOC
     )
     width: float = param(
-        title=_("Breite"), default=20.0, unit="mm", minimum=0.1, maximum=1000.0, doc=_WIDTH_DOC
+        title=_("Breite"),
+        default=20.0,
+        unit="mm",
+        minimum=0.1,
+        maximum=1000.0,
+        doc=_WIDTH_DOC,
+        depends_on=("shape", ("rectangle", "slot")),
     )
     height: float = param(
         title=_("Höhe"),
@@ -593,6 +626,7 @@ class SketchLoftParams(BaseParams):
         maximum=64,
         placement="advanced",
         doc=_CORNERS_DOC,
+        depends_on=("shape", ("polygon",)),
     )
 
 
