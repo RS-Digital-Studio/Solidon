@@ -1005,8 +1005,12 @@ def test_a_right_click_opens_the_menu_and_a_drag_does_not() -> None:
 
     assert is_click((100, 200), (100, 200)), "stillgehalten ist ein Klick"
     assert is_click((100, 200), (101, 199)), "eine Maus steht beim Drücken selten ganz still"
+    assert is_click((100, 200), (105, 204)), (
+        "fünf Pixel Wandern sind beim Klicken normal — bis zum 23.08.2026 fiel dabei "
+        "die Auswahl aus"
+    )
     assert not is_click((100, 200), (160, 240)), "ein Zug öffnet kein Menü"
-    assert not is_click((100, 200), (100, 210)), "auch senkrecht gezogen ist gezogen"
+    assert not is_click((100, 200), (100, 240)), "auch senkrecht gezogen ist gezogen"
     assert not is_click(None, (100, 200)), "ohne Druck davor gibt es nichts zu beenden"
 
 
@@ -3377,10 +3381,13 @@ def test_the_left_button_reaches_the_body_drag(qt_app: QApplication) -> None:
     style._mouse_move()
     style._left_up()
 
-    assert [entry[0] for entry in seen] == ["start", "move", "end"], (
+    assert [entry[0] for entry in seen] == ["ready", "start", "move", "end"], (
         "Drücken, Ziehen und Loslassen erreichen den Rückruf nicht vollständig"
     )
-    assert seen[0][1:] == (100, 200), "der Zug beginnt, wo gedrückt wurde"
+    assert seen[1][1:] == (100, 200), (
+        "der Zug beginnt nicht dort, wo gedrückt wurde — der Körper spränge um die "
+        "bereits zurückgelegte Strecke"
+    )
 
 
 def test_a_click_without_dragging_still_selects(qt_app: QApplication) -> None:
@@ -3401,7 +3408,9 @@ def test_a_click_without_dragging_still_selects(qt_app: QApplication) -> None:
     style._left_up()
 
     assert ("pick", 100, 200) in seen, "ein Klick ohne Bewegung wählt weiterhin aus"
-    assert [entry[0] for entry in seen] == ["start", "end", "pick"], seen
+    assert [entry[0] for entry in seen] == ["ready", "pick"], (
+        f"ein Klick darf keinen Zug erzeugen, auch keinen verworfenen: {seen}"
+    )
 
 
 def test_the_camera_keeps_the_button_where_nothing_is_selected(qt_app: QApplication) -> None:
@@ -3417,6 +3426,36 @@ def test_the_camera_keeps_the_button_where_nothing_is_selected(qt_app: QApplicat
     interactor.position = (160, 250)
     style._mouse_move()
 
-    assert [entry[0] for entry in seen] == ["start"], (
+    assert [entry[0] for entry in seen] == ["ready"], (
         "nach einem abgelehnten Zug darf kein 'move' mehr kommen — die Kamera führt"
+    )
+
+
+def test_a_wobbly_click_still_selects_instead_of_nudging_the_body(qt_app: QApplication) -> None:
+    """Fünf Pixel Wandern beim Klicken bleiben ein Klick.
+
+    **Robert am 23.08.2026:** „wenn ich ein merkmal auswähle und im viewport
+    dann wieder auf das modell oder einem anderen merkmal klicke wechseln wir
+    auch nicht."
+
+    Zwei Schwellen entschieden dasselbe und waren verschieden: ``EPS_DRAG``
+    misst 0,05 mm — je nach Zoom ein Drittel Pixel — und ``CLICK_SLACK`` maß
+    zwei Pixel. Dazwischen lag ein Klick, der **beides** verfehlte: Er erzeugte
+    einen Verschiebeschritt im Verlauf und wechselte die Auswahl nicht.
+    Gemessen kippte es bei drei Pixeln, und drei Pixel sind beim Klicken
+    normal.
+
+    Jetzt entscheidet eine einzige Schwelle, und der Zug beginnt genau dort,
+    wo der Klick aufhört.
+    """
+    style, interactor, seen = _style_with_mouse()
+
+    style._left_down()
+    interactor.position = (105, 204)
+    style._mouse_move()
+    style._left_up()
+
+    assert ("pick", 105, 204) in seen, "ein leicht wackliger Klick wählt nicht mehr aus"
+    assert "start" not in [entry[0] for entry in seen], (
+        f"aus dem Wackeln wurde ein Zug — der Körper rutscht bei jedem Klick: {seen}"
     )

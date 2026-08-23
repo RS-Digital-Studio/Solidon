@@ -537,3 +537,36 @@ def test_the_reach_grows_with_the_body(window: MainWindow) -> None:
     assert small > 0.5, "die Platte ist groß genug für den Anteil"
     assert viewport._feature_reach(None) == pytest.approx(0.5), "ohne Körper die Untergrenze"
     assert big.id != entry.id, "der Vergleichskörper ist ein anderer"
+
+
+def test_a_second_feature_takes_over_from_the_first(window: MainWindow) -> None:
+    """Von einer Bohrung direkt auf die nächste — ohne Umweg über den Körper.
+
+    **Robert am 23.08.2026:** „wenn ich ein merkmal auswähle und im viewport
+    dann wieder auf das modell oder einem anderen merkmal klicke wechseln wir
+    auch nicht."
+
+    Der Weg dorthin ist gebaut: ``_click_target`` gibt bei demselben Körper
+    ``self._feature_at(point)`` zurück, und ``_select_at`` setzt es. Geprüft
+    war bisher nur der Wechsel **hinein** (Körper → Bohrung, in
+    ``test_the_first_click_takes_the_body_and_the_second_the_hole``) und der
+    Weg **heraus** auf eine Fläche, die selbst ein Merkmal ist. Der Wechsel
+    zwischen zwei gleichrangigen Merkmalen stand nicht darin.
+    """
+    viewport = window.viewport
+    entry = window.session.last_result.scene.objects["obj_1"]
+    holes = [f for f in entry.features.values() if f.kind == "hole"]
+    assert len(holes) >= 2, "ohne zwei Bohrungen prüft der Test nichts"
+
+    def on_wall(feature: Any) -> tuple[float, float, float]:
+        index = next(iter(feature.face_indices or ()))
+        return tuple(float(value) for value in entry.mesh.raw.triangles[index].mean(axis=0))
+
+    window.viewport.select("obj_1")
+    viewport._select_at(on_wall(holes[0]))
+    assert viewport.selected_feature == holes[0].id, "die erste Bohrung wurde nicht gewählt"
+
+    viewport._select_at(on_wall(holes[1]))
+    assert viewport.selected_feature == holes[1].id, (
+        f"von {holes[0].id} kommend bleibt die Auswahl stehen statt auf {holes[1].id} zu wechseln"
+    )

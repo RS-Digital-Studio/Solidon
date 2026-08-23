@@ -424,9 +424,19 @@ MEASURE_COLOUR = ROLES["measure"]
 
 #: Wie weit die Maus zwischen Drücken und Loslassen wandern darf, damit es noch
 #: als Klick zählt. In jedem Schema tut die rechte Taste auch etwas an der
-#: Kamera; ein Zug meint sie, ein Klick meint das, worauf er zeigt. Zwei Pixel,
-#: weil eine Maus beim Drücken selten ganz stillsteht.
-CLICK_SLACK = 2
+#: Kamera; ein Zug meint sie, ein Klick meint das, worauf er zeigt.
+#:
+#: **Zehn Pixel und nicht zwei.** Die alte Begründung — „eine Maus steht beim
+#: Drücken selten ganz still" — war richtig, der Wert dazu zu knapp: Drei Pixel
+#: Wandern beim Klicken sind normal, und bis zum 23.08.2026 fiel damit die
+#: Auswahl aus. Robert gemeldet als „wenn ich ein merkmal auswähle und im
+#: viewport dann wieder auf das modell klicke wechseln wir auch nicht".
+#:
+#: Zehn ist ``QApplication.startDragDistance()`` auf dieser Plattform — der
+#: Wert, ab dem Qt selbst ein Drücken als Ziehen liest, und damit derselbe, den
+#: jedes andere Fenster auf dem Bildschirm benutzt. Als Konstante und nicht
+#: über Qt abgefragt, damit :func:`is_click` eine reine Rechnung bleibt.
+CLICK_SLACK = 10
 
 
 def is_click(start: tuple[int, int] | None, end: tuple[int, int]) -> bool:
@@ -729,6 +739,8 @@ def outgrown(
     fitted: tuple[float, float, float, float, float, float] | None,
     current: tuple[float, float, float, float, float, float] | None,
     factor: float = OUTGROWN_FACTOR,
+    *,
+    moved_only: bool = False,
 ) -> bool:
     """Ob die Szene nicht mehr zu der Ansicht passt, auf die eingepasst wurde.
 
@@ -744,6 +756,19 @@ def outgrown(
     Hüllquader nicht mehr, steht das Modell außerhalb des Bildes. Auch das ist
     keine Feinarbeit, bei der jemand seinen Zoom behalten will.
 
+    **Aber nicht, wenn der Nutzer selbst geschoben hat** (``moved_only``). Wer
+    einen Körper mit der Maus über die Platte zieht, weiß, wohin — und bekam
+    bei jedem Loslassen die Kamera neu gerahmt. Robert am 23.08.2026, nachdem
+    er es einmal gesehen hatte: „nach jedem verschieben springt die kamera und
+    das modell immer komisch … kamera bei aktueller position dann immer
+    lassen." Das Größenkriterium darüber gilt weiter: Ein Körper, der beim
+    Schieben plötzlich zwanzigmal so groß wäre, ist kein Schieben mehr.
+
+    Die Unterscheidung ist nicht „Maus oder nicht", sondern **ob dieselben
+    Objekte dastehen wie beim Einpassen**. Ein neu geladenes Modell, das weit
+    neben der Platte liegt, wird weiterhin eingerahmt — dort hat niemand eine
+    Ansicht gewählt, die er behalten will.
+
     Alles darunter bleibt, wie es war (:meth:`Viewport._fit_once_for`): Eine
     Kamera, die bei jeder Bohrung neu einpasst, macht den Zoom zweimal.
 
@@ -754,6 +779,8 @@ def outgrown(
         return False
     if diagonal_of(current) > factor * diagonal_of(fitted):
         return True
+    if moved_only:
+        return False
     return any(
         current[axis * 2] > fitted[axis * 2 + 1] or current[axis * 2 + 1] < fitted[axis * 2]
         for axis in range(3)
@@ -1326,6 +1353,10 @@ class Viewport(QWidget):
         Bauraum oder auf die Körper. Wechselt der Zustand, wird einmal neu
         eingepasst; innerhalb desselben Zustands bleibt jeder Zoom stehen."""
         self._fitted_bounds: tuple[float, float, float, float, float, float] | None = None
+        #: Welche Objekte dastanden, als zuletzt eingepasst wurde. Stehen
+        #: dieselben noch da, hat der Nutzer nur geschoben, und die Kamera
+        #: bleibt (:func:`outgrown`, ``moved_only``).
+        self._fitted_objects: frozenset[str] = frozenset()
         """Die Maße, auf die eingepasst wurde — der Vergleich für
         :func:`outgrown`. „Innerhalb desselben Zustands" hat eine Grenze: Ein
         Körper, der fünfmal so groß ist wie alles bisher, ist kein Zoom mehr,
@@ -1916,6 +1947,12 @@ class Viewport(QWidget):
         for actor in self._actors.values():
             self.plotter.remove_actor(actor, render=False)
         self._actors.clear()
+        # **Mit den Aktoren geht auch ihr gemerkter Ausgangsort.** Die neuen
+        # kommen aus der Geometrie und tragen keinen Zug mehr; ein
+        # stehengebliebener Eintrag würde beim nächsten Ziehen als Basis
+        # genommen (:meth:`continue_body_drag`, ``setdefault``) und den Körper
+        # doppelt versetzen.
+        self._actor_home.clear()
         for actor in self._edge_actors:
             self.plotter.remove_actor(actor, render=False)
         self._edge_actors.clear()
@@ -4349,9 +4386,19 @@ class Viewport(QWidget):
         # dunkelrote Fläche zu sehen — die Kamera stand in dessen Innerem. Die
         # Blickrichtung bleibt dabei, wo sie war: ``reset_camera`` rahmt neu, es
         # dreht nichts. Wann es genug ist, entscheidet :func:`outgrown`.
-        if wanted != self._fitted_to or outgrown(self._fitted_bounds, self._object_bounds()):
+        #
+        # **Und der Nutzer, der selbst schiebt, behält seine Ansicht.** Stehen
+        # dieselben Objekte da wie beim letzten Einpassen, war es ein
+        # Verschieben und kein neuer Inhalt — dann zählt nur noch, ob die Szene
+        # gewachsen ist. Ohne das rahmte jedes Loslassen neu.
+        here = frozenset(result.scene.objects) if result is not None else frozenset()
+        moved_only = bool(here) and here == self._fitted_objects
+        if wanted != self._fitted_to or outgrown(
+            self._fitted_bounds, self._object_bounds(), moved_only=moved_only
+        ):
             self.reset_camera()
             self._fitted_to = wanted  # type: ignore[assignment]
+            self._fitted_objects = here
 
     def _volume_bounds(self) -> tuple[float, float, float, float, float, float] | None:
         """Der Bauraum als Hüllquader, oder nichts, solange kein Profil gilt.
@@ -4475,6 +4522,20 @@ class Viewport(QWidget):
         object_id, feature_id = self._click_target(point, direct=direct)
         self.objectPicked.emit(object_id or "")
         if feature_id is None:
+            # **Zurück auf den Körper, und zwar hier.** Bis zum 23.08.2026
+            # stand hier nur ein ``return``, und der Docstring verließ sich
+            # darauf, dass der Weg durch den Objektbaum das gewählte Merkmal
+            # zurücksetzt. Das tut er nur, wenn sich die **Baumauswahl**
+            # ändert — bei einem Klick auf die nackte Fläche desselben Körpers
+            # bleibt sie gleich, der Baum sieht nichts und meldet nichts.
+            #
+            # Die Folge war eine Sackgasse: Ein einmal gewähltes Merkmal blieb
+            # gewählt, ``selection_depth()`` stand weiter auf 2, und weder ein
+            # weiterer Klick noch das Ziehen des Körpers kamen noch an. Der
+            # Kommentar in ``_click_target`` sagte die Absicht bereits
+            # („ein gewähltes Merkmal fällt weg"); eingelöst wurde sie nicht.
+            if self._selected_feature is not None:
+                self.select_feature(None)
             return False
         self.select_feature(feature_id)
         self.featurePicked.emit(feature_id)
@@ -4529,6 +4590,20 @@ class Viewport(QWidget):
         point = self._world_at(x, y) if self.plotter is not None else None
         return self.begin_body_drag_at(point)
 
+    def can_drag_body_at(self, point: Vec3 | None) -> bool:
+        """Ob an dieser Stelle der **gewählte** Körper liegt.
+
+        Getrennt von :meth:`begin_body_drag_at`, weil die Frage vor der
+        Entscheidung kommt: Beim Drücken steht noch nicht fest, ob daraus ein
+        Zug wird oder ein Klick — das sagt erst die Bewegung. Gestartet wird
+        deshalb später, geprüft aber sofort, denn nur wenn hier etwas
+        Gewähltes liegt, darf die linke Taste überhaupt für den Körper
+        reserviert werden statt für die Kamera.
+        """
+        if self._selected is None or point is None:
+            return False
+        return self._object_at(self._from_view(point)) == self._selected
+
     def begin_body_drag_at(self, point: Vec3 | None) -> bool:
         """Dasselbe, aber ab dem Weltpunkt — die Stelle, an der geprüft wird.
 
@@ -4538,10 +4613,9 @@ class Viewport(QWidget):
         prüfte damit die Testumgebung; über den Weltpunkt prüft er die
         Bedienung.
         """
-        if self._selected is None or point is None:
+        if not self.can_drag_body_at(point):
             return False
-        if self._object_at(self._from_view(point)) != self._selected:
-            return False
+        assert point is not None
         self._body_drag_from = point
         self._body_drag_offset = (0.0, 0.0)
         self.set_drag_cursor("moving")
@@ -4581,23 +4655,41 @@ class Viewport(QWidget):
     def finish_body_drag(self) -> None:
         """Aus dem Zug wird ein Schritt im Verlauf — oder gar nichts.
 
-        Die Vorschau wird zurückgenommen, **bevor** das Signal geht: Die
-        Auswertung setzt den Körper gleich an seine neue Stelle, und ein Actor,
-        der den Zug noch zusätzlich trägt, stünde danach doppelt versetzt da.
+        **Die Vorschau bleibt stehen, bis das Ergebnis sie ersetzt.** Vorher
+        wurde sie hier zurückgenommen, *bevor* das Signal ging — mit der
+        Begründung, ein Actor, der den Zug noch zusätzlich trägt, stünde danach
+        doppelt versetzt da. Das trifft nicht zu: :meth:`show_scene` räumt alle
+        Aktoren ab (``self._actors.clear()``) und baut sie aus der Geometrie
+        neu; einen Zug kann dabei keiner mitbringen.
+
+        Was stattdessen zutraf, hat Robert am 23.08.2026 gesehen: „nach jedem
+        verschieben springt die kamera und das modell immer komisch." Der
+        Körper sprang beim Loslassen **an den Ausgangsort zurück** und erst
+        eine bis zwei Sekunden später an sein Ziel — solange die Auswertung
+        rechnete, zeigte das Bild das Gegenteil dessen, was der Nutzer gerade
+        getan hatte.
+
+        **Zurückgenommen wird nur, wenn kein Signal geht** — dann kommt auch
+        keine neue Szene, und die Vorschau bliebe für immer stehen.
         """
         offset, self._body_drag_offset = self._body_drag_offset, (0.0, 0.0)
         self._body_drag_from = None
         self.set_drag_cursor(None)
+        if abs(offset[0]) < EPS_DRAG and abs(offset[1]) < EPS_DRAG:
+            # Ein Klick ist kein Zug. Ohne diese Grenze bekäme jede Auswahl
+            # einen Schritt „Direkt bewegt" mit null Millimetern — und weil
+            # dann kein Signal geht, wird hier auch die Vorschau abgeräumt.
+            self._undo_body_preview()
+            return
+        self.transformDragged.emit(TransformSteps(offset=(offset[0], offset[1], 0.0)))
+
+    def _undo_body_preview(self) -> None:
+        """Setzt gezogene Aktoren an ihren Ausgangsort zurück."""
         for object_id, home in self._actor_home.items():
             actor = self._actors.get(object_id)
             if actor is not None:
                 actor.SetPosition(*home)
         self._actor_home.clear()
-        if abs(offset[0]) < EPS_DRAG and abs(offset[1]) < EPS_DRAG:
-            # Ein Klick ist kein Zug. Ohne diese Grenze bekäme jede Auswahl
-            # einen Schritt „Direkt bewegt" mit null Millimetern.
-            return
-        self.transformDragged.emit(TransformSteps(offset=(offset[0], offset[1], 0.0)))
 
     def _plane_point(self, x: int, y: int) -> tuple[float, float] | None:
         """Wo der Zeiger auf der Bettebene steht, in Weltkoordinaten."""
@@ -4757,6 +4849,11 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
         found = weak()
         if found is None:
             return False
+        if phase == "ready":
+            # Nur die Frage, ob hier der gewählte Körper liegt — der Zug
+            # beginnt erst, wenn die Bewegung die Klickschwelle verlässt.
+            point = found._world_at(x, y) if found.plotter is not None else None
+            return found.can_drag_body_at(point)
         if phase == "start":
             return found.begin_body_drag(x, y)
         if phase == "move":
@@ -4814,9 +4911,13 @@ def _InteractorStyle(  # noqa: N802
             """Dasselbe für links. In drei der vier Schemata dreht die linke
             Taste; ausgewählt wird deshalb, wo niemand gezogen hat, und nicht
             danach, welches Schema gerade gilt."""
+            self._ready_to_drag = False
+            """Ob die linke Taste **auf** dem gewählten Körper heruntergegangen
+            ist. Noch keine Entscheidung: Erst die Bewegung sagt, ob daraus ein
+            Zug wird oder ein Klick."""
             self._dragging_body = False
-            """Ob die linke Taste gerade den gewählten Körper führt statt die
-            Kamera. Wird beim Drücken entschieden und beim Loslassen beendet."""
+            """Ob der Zug tatsächlich läuft — also die Klickschwelle
+            überschritten wurde."""
 
         def _shift(self) -> bool:
             return bool(self.GetInteractor().GetShiftKey())
@@ -4843,18 +4944,22 @@ def _InteractorStyle(  # noqa: N802
                     on_paint(*self._left_at, True)
                 return
             grabs = on_body_drag is not None and not self._shift()
-            if grabs and on_body_drag("start", *self._left_at):
+            if grabs and on_body_drag("ready", *self._left_at):
                 # **Auf dem gewählten Körper führt Links ihn, nicht die
                 # Kamera** (§18.11). Der Rückruf urteilt selbst und gibt
                 # ``False`` zurück, wenn dort nichts Gewähltes liegt — dann
                 # bleibt die linke Taste, was sie im jeweiligen Schema war.
                 #
-                # **Ein Klick bleibt trotzdem ein Klick.** Ausgewählt wird beim
-                # Loslassen, und ``finish_body_drag`` verwirft alles unterhalb
-                # von ``EPS_DRAG``. Ohne diese Aufteilung zöge ein Klick auf
-                # eine Bohrung des gewählten Körpers künftig den ganzen Körper,
-                # statt die Bohrung zu wählen.
-                self._dragging_body = True
+                # **Vorgemerkt, nicht gestartet.** Ob dies ein Klick oder ein
+                # Zug wird, entscheidet erst die Bewegung — und zwar an
+                # derselben Schwelle, an der auch :func:`is_click` urteilt.
+                # Zwei verschiedene Schwellen ergaben ein Loch: ``EPS_DRAG``
+                # misst 0,05 mm und entspricht je nach Zoom einem Drittel
+                # Pixel, ``CLICK_SLACK`` misst zwei Pixel. Dazwischen lag ein
+                # Klick, der den Körper um Bruchteile verschob **und** die
+                # Auswahl nicht wechselte (gemessen am 23.08.2026 an drei
+                # Pixeln Wackeln, wie es beim Klicken normal ist).
+                self._ready_to_drag = True
                 return
             if scheme == "slicer":
                 # Links wählt; geschoben wird mit Umschalt und Ziehen.
@@ -4874,12 +4979,24 @@ def _InteractorStyle(  # noqa: N802
                 if on_paint is not None:
                     on_paint(*self._position(), False)
                 return
-            if self._dragging_body:
+            if self._ready_to_drag or self._dragging_body:
+                now = self._position()
+                if not self._dragging_body:
+                    if is_click(self._left_at, now):
+                        # Noch im Klickbereich — hier passiert nichts, damit
+                        # ein Klick keinen Verlaufsschritt hinterlässt.
+                        return
+                    # **Von der Stelle des Drückens aus**, nicht von hier:
+                    # Sonst spränge der Körper um die zurückgelegte Strecke.
+                    if on_body_drag is None or not on_body_drag("start", *(self._left_at or now)):
+                        self._ready_to_drag = False
+                        return
+                    self._dragging_body = True
                 # **Ohne das ``return`` liefe die Kamera mit**: ``OnMouseMove``
                 # unten führt sie weiter, und der Körper wanderte vor einer
                 # Ansicht, die sich zugleich dreht.
                 if on_body_drag is not None:
-                    on_body_drag("move", *self._position())
+                    on_body_drag("move", *now)
                 return
             # Der Beobachter verdrängt die eingebaute Verarbeitung — ohne
             # diesen Aufruf stünde die Kamera bei jedem Ziehen still.
@@ -4892,11 +5009,11 @@ def _InteractorStyle(  # noqa: N802
             self._tell(None)
             started, self._left_at = self._left_at, None
             dragged, self._dragging_body = self._dragging_body, False
+            self._ready_to_drag = False
             if dragged and on_body_drag is not None:
-                # Hier entsteht der Schritt im Verlauf (Regel 2) — und danach
-                # geht es weiter zu ``on_pick``: War es doch nur ein Klick,
-                # hat ``finish_body_drag`` nichts erzeugt, und die Auswahl
-                # gehört trotzdem gesetzt.
+                # Hier entsteht der Schritt im Verlauf (Regel 2). Ein Zug, der
+                # gar nicht erst begonnen hat, kommt hier nicht an — er war ein
+                # Klick, und der wählt gleich darunter aus.
                 on_body_drag("end", *self._position())
             if painted:
                 # Die Züge sind schon beim Drücken und Ziehen gesetzt — der
