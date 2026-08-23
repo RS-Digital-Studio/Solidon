@@ -49,4 +49,4 @@
 - [Ein Messwerkzeug misst sich selbst](messwerkzeug-misst-sich-selbst.md) — was ein Werkzeug meldet, ist eine Eigenschaft des Werkzeugs, bis man es an einem Fall geprüft hat, dessen Ausgang man kennt.
 - [Sollwert aus dem Prüfling](sollwert-aus-dem-pruefling.md) — wer die Erwartung mit der geprüften Funktion erzeugt, prüft Aktualität statt Richtigkeit; und ein Fehler, den eine spätere Stufe halb aufräumt, tarnt sich selbst.
 - [Erinnerungen liegen im Repository](erinnerungen-liegen-im-repository.md) — .claude/memory ist die Quelle; neue Maschine: `python tools/link_memory.py`
-- [Merkmalsmehrdeutigkeit: Entwurf](merkmalsmehrdeutigkeit-entwurf.md) — offener Auftrag zu §15.7; der Entwurf steht, gebaut ist nichts.
+- [Merkmalsmehrdeutigkeit: erledigt](merkmalsmehrdeutigkeit-entwurf.md) — §15.7 ist seit eb77658 gebaut und angeschlossen; die Notiz führte ihn zwei Tage zu lange als offen.

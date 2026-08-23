@@ -1,6 +1,6 @@
 ---
 name: merkmalsmehrdeutigkeit-entwurf
-description: "Offener Auftrag — die Antwort auf eine mehrdeutige Merkmalszuordnung festhalten (§15.7 zweiter Teil); Entwurf steht, gebaut ist nichts"
+description: "ERLEDIGT am 23.08.2026 (eb77658) — die Antwort auf eine mehrdeutige Merkmalszuordnung steht im Stapel (§15.7 zweiter Teil)"
 metadata: 
   node_type: memory
   type: project
@@ -8,9 +8,24 @@ metadata:
   modified: 2026-08-22T16:09:16.172Z
 ---
 
-**Stand am 22.08.2026:** Robert hat den Auftrag erteilt, der Entwurf ist
-entschieden und mit `solidon-55` abgestimmt, **gebaut ist nichts.** Wer das
-aufnimmt, fängt beim Bauen an und nicht beim Denken.
+**ERLEDIGT.** Gebaut am 23.08.2026 als `eb77658` („Neunundneunzig Fenster für
+sieben Entscheidungen, und keine davon blieb"). Nachgemessen am 24.08.2026:
+
+    app/core/scene/history.py:378   def record_matches(...)
+    app/core/scene/history.py:412   ops[index] = replace(entry, matches=merged)
+    app/ui/session.py:1388          matched = self.history.record_matches(result.matches)
+    tests/test_evaluation.py        deckt es ab
+
+Der Anschluss ist geprüft, nicht nur die Existenz — genau die Frage, an der
+heute drei andere Sachen hingen ([[eine-kette-endet-am-letzten-glied]]).
+
+**Der Rest dieses Dokuments ist der Entwurf von damals** und bleibt als Beleg
+stehen, wie entschieden wurde. Er beschreibt keinen offenen Punkt mehr.
+
+**Und die Lehre über den Auftrag hinaus:** Diese Datei führte den Auftrag zwei
+Tage länger als offen, als er es war. `CLAUDE.md` warnt genau davor — „Wer
+‚offen' in einem Konzept liest, prüft es am Code, bevor er es glaubt." Das gilt
+für die eigenen Erinnerungen genauso. **Eine Notiz altert, der Code nicht.**
 
 ## Das Problem
 
