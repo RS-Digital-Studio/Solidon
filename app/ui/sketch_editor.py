@@ -1597,6 +1597,9 @@ class SketchCanvas(QWidget):
         entscheidet die Methode, die auch ein Test ruft.
         """
         menu = QMenu(self)
+        # Sonst bleibt der Grund an der gesperrten Bedingung ungelesen: ``QMenu``
+        # zeigt Hinweise von Haus aus nicht an.
+        menu.setToolTipsVisible(True)
 
         # Was am angeklickten Punkt hängt, steht oben: ein Kontextmenü
         # beantwortet „was kann ich mit *dem hier* tun", und der Punkt unter
@@ -1622,6 +1625,18 @@ class SketchCanvas(QWidget):
             for kind, enabled in offers().items():
                 action = menu.addAction(_constraint_label(kind))
                 action.setEnabled(enabled)
+                # **Grau allein ist keine Auskunft.** Die halbe Liste steht bei
+                # jeder Auswahl gesperrt da, und welche Auswahl fehlt, stand nur
+                # am Knopf in der Leiste und in der Meldung nach dem Kürzel. Der
+                # Halbsatz kommt aus derselben Quelle wie dort — drei
+                # Formulierungen derselben Bedingung wären drei Gelegenheiten,
+                # auseinanderzulaufen.
+                if not enabled:
+                    action.setToolTip(
+                        tr("{name} — dazu {what} auswählen.").format(
+                            name=_constraint_label(kind), what=_needs_phrase(kind)
+                        )
+                    )
                 action.triggered.connect(lambda _checked=False, chosen=kind: request(chosen))
 
         return menu

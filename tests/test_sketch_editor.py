@@ -423,6 +423,41 @@ def test_constraint_offers_follow_the_selection(qt_app: QApplication) -> None:
     assert offers["coincident"] and offers["distance"] and not offers["parallel"]
 
 
+def test_a_greyed_out_constraint_in_the_menu_says_what_it_needs(qt_app: QApplication) -> None:
+    """Im Kontextmenü stand die Bedingung grau da und schwieg.
+
+    Der Satz existiert längst — ``_needs_phrase`` liefert ihn, der Knopf trägt
+    ihn im Hinweis, und wer das Kürzel ohne passende Auswahl drückt, liest ihn
+    in der Statuszeile. Nur das Kontextmenü setzte ``setEnabled(False)`` und
+    sonst nichts: zehn gleich aussehende Zeilen, die halbe Hälfte grau, und
+    keine sagt warum.
+
+    Dazu ``toolTipsVisible``: ``QMenu`` zeigt Hinweise von Haus aus nicht an.
+    Ein Satz an einer Handlung in einem Menü, das keine Hinweise zeigt, ist
+    geschrieben und ungelesen.
+    """
+    dialog = SketchEditorDialog(sketch_to_text(shapes.rectangle(40.0, 20.0)))
+    canvas = dialog.canvas
+    canvas.selection = [("line", (0, 1))]
+
+    menu = canvas.context_menu_at(None)
+    assert menu.toolTipsVisible(), "das Kontextmenü der Skizze zeigt keine Hinweise an"
+
+    locked = [action for action in menu.actions() if not action.isEnabled() and action.text()]
+    assert locked, "ohne eine gesperrte Bedingung prüft dieser Test nichts"
+    for action in locked:
+        assert action.toolTip(), f"{action.text()!r} ist grau und sagt nicht, warum"
+        assert "auswählen" in action.toolTip(), (
+            f"{action.text()!r} nennt nicht die fehlende Auswahl: {action.toolTip()!r}"
+        )
+
+    # Und was geht, trägt keinen Grund — sonst wäre der Hinweis eine Warnung
+    # an jeder Zeile statt einer Auskunft an der gesperrten.
+    open_ones = [action for action in menu.actions() if action.isEnabled() and action.text()]
+    assert open_ones, "alles gesperrt wäre kein Menü"
+    menu.deleteLater()
+
+
 def test_the_expression_dialog_validates_inline(qt_app: QApplication) -> None:
     """Ein Maß außerhalb der Grammatik fällt inline durch — kein Fenster auf
     dem Fenster, kein eval (§13, Regel 10)."""

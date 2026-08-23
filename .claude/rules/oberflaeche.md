@@ -333,6 +333,27 @@ die *zweite* Hürde, und die erste fehlte.
 Menüleiste und Kontextmenü — eine dritte Formulierung derselben Auskunft wäre
 eine dritte Gelegenheit, auseinanderzulaufen.
 
+**Und ein Menü zeigt Hinweise nur, wenn man es ihm sagt.** `QMenu` steht mit
+`toolTipsVisible == False` auf der Welt: Der Satz, den `_add_operation` an die
+gesperrte Handlung schreibt, kommt an — und Qt zeigt ihn nie. Die Menüleiste
+setzt die Eigenschaft an ihren drei Stellen seit je; das Kontextmenü am Körper
+und das der Skizze taten es nicht, und damit war die ganze Kette umsonst.
+**Untermenüs erben sie nicht** — und am ganzen Körper stehen die Operationen
+gerade dort drin, nach Kategorie gruppiert, weil siebenundfünfzig Zeilen kein
+Menü mehr sind.
+
+Der Test daneben prüfte den **Wert** von `toolTip()`, und der war immer
+richtig. Eine Zusage über einen Text ohne die Zusage, dass er erscheint, ist
+die Hälfte einer Prüfung — wer einen Grund an eine Handlung schreibt, prüft
+`toolTipsVisible()` des Menüs mit, in dem sie steht.
+
+**Grau ohne Grund gibt es auch ohne `requires_kind`.** Im Kontextmenü der
+Skizze standen die zehn Bedingungen, die halbe Liste gesperrt, und keine sagte,
+welche Auswahl ihr fehlt — obwohl der Halbsatz seit je existiert
+(`_needs_phrase`) und am Knopf in der Leiste und in der Meldung nach dem Kürzel
+schon steht. Die dritte Stelle bekommt ihn aus derselben Quelle, nicht neu
+formuliert.
+
 **Bei den ersten beiden Zwillingen konnte das nicht auffallen:**
 `create_brep_box` und `create_brep_cylinder` verbrauchen nichts (`consumes=0`),
 es gibt keinen Eingangskörper, der der falsche sein könnte. Wer einen Zwilling

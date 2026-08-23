@@ -909,6 +909,12 @@ class ObjectTree(QWidget):
             return None
 
         menu = QMenu(self)
+        # **Ohne diese Zeile schreibt das Menü seine Gründe ins Leere.** ``QMenu``
+        # zeigt Tooltips von Haus aus nicht an; ``_add_operation`` setzt an jeder
+        # gesperrten Operation den Satz, der sagt, was ihr fehlt, und Qt warf ihn
+        # weg. Die Menüleiste setzt es an ihren drei Stellen seit je — hier stand
+        # die ganze Kette da und war unsichtbar.
+        menu.setToolTipsVisible(True)
         self._add_source_step(menu)
         self._add_visibility(menu, chosen)
 
@@ -958,6 +964,9 @@ class ObjectTree(QWidget):
         # dieselbe Falle wie in der Menüleiste.
         for title in sorted(groups):
             submenu = QMenu(title, menu)
+            # Ein Untermenü erbt die Eigenschaft nicht — und am ganzen Körper
+            # stehen die Operationen des exakten Kerns gerade hier drin.
+            submenu.setToolTipsVisible(True)
             for spec in groups[title]:
                 self._add_operation(submenu, spec, kinds)
             menu.addMenu(submenu)

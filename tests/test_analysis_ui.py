@@ -2974,6 +2974,48 @@ def test_the_context_menu_greys_out_what_this_body_cannot_do(window: MainWindow)
     menu.deleteLater()
 
 
+def test_the_context_menu_actually_shows_the_reason_it_wrote(window: MainWindow) -> None:
+    """Der Satz stand da und war unsichtbar.
+
+    ``QMenu`` zeigt Tooltips von Haus aus **nicht** — ``toolTipsVisible`` ist
+    falsch, bis jemand es setzt. Die Menüleiste tut das an ihren drei Stellen;
+    das Kontextmenü am Körper tat es nicht. Damit war die ganze Kette umsonst:
+    ``kind_requirement`` formuliert den Grund, ``_add_operation`` schreibt ihn
+    an die Handlung, und Qt wirft ihn weg, bevor ihn jemand liest.
+
+    Der bestehende Test daneben prüft den **Wert** von ``toolTip()``. Der war
+    immer richtig — er stand nur an einem Menü, das keine Tooltips anzeigt.
+    Eine Zusage über einen Text, ohne die Zusage, dass er erscheint, ist die
+    Hälfte einer Prüfung.
+
+    Auch für die Untermenüs: Am ganzen Körper sind es siebenundfünfzig
+    Operationen, die stehen dann gruppiert in eigenen ``QMenu`` — und ein
+    Untermenü erbt die Eigenschaft nicht.
+    """
+    select_plate(window)
+    menu = window.object_tree.context_menu()
+    assert menu is not None
+
+    assert menu.toolTipsVisible(), "das Kontextmenü zeigt keine Tooltips an"
+    for entry in menu.actions():
+        submenu = entry.menu()
+        if submenu is not None:
+            assert submenu.toolTipsVisible(), (
+                f"das Untermenü {entry.text()!r} zeigt keine Tooltips an"
+            )
+
+    # Gegenprobe: Ohne einen gesperrten Eintrag mit Grund prüfte der Test eine
+    # Eigenschaft, die niemanden interessiert.
+    locked = [
+        action
+        for entry in menu.actions()
+        for action in (entry.menu().actions() if entry.menu() else [entry])
+        if not action.isEnabled() and "exakten Körper" in action.toolTip()
+    ]
+    assert locked, "kein gesperrter Eintrag mit Grund — dann sagt der Test nichts"
+    menu.deleteLater()
+
+
 def test_a_finding_says_which_step_reported_it(window: MainWindow) -> None:
     """Die Liste sortiert nach Schwere — Sätze aus verschiedenen Schritten
     stehen also untereinander.
