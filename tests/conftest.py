@@ -143,6 +143,26 @@ def _the_display_unit_starts_at_millimetres() -> Iterator[None]:
     labels.set_display_unit("mm")
 
 
+#: Die Warte-Methoden je Widget-Klasse, einmal ermittelt.
+#:
+#: **``dir()`` je Klasse statt je Widget.** Die Fixture unten geht nach *jedem*
+#: Test durch *alle* Top-Level-Widgets, und ``dir()`` auf einer Qt-Klasse
+#: liefert 352 Namen. Bei 159 Widgets sind das 5,8 ms je Test und 1,5 s über
+#: einen Lauf von ``test_ui.py`` — für eine Antwort, die sich je Klasse nie
+#: ändert. Die Widgets verteilen sich auf eine Handvoll Klassen; gemessen am
+#: 23.08.2026 waren es vier.
+_WARTE_METHODEN: dict[type, tuple[str, ...]] = {}
+
+
+def _wartet_auf_arbeiter(klasse: type) -> tuple[str, ...]:
+    """Wie diese Klasse „warte auf deinen Arbeiter" nennt — leer, wenn gar nicht."""
+    bekannt = _WARTE_METHODEN.get(klasse)
+    if bekannt is None:
+        bekannt = tuple(name for name in sorted(dir(klasse)) if name.startswith("wait_for_"))
+        _WARTE_METHODEN[klasse] = bekannt
+    return bekannt
+
+
 @pytest.fixture(autouse=True)
 def _no_worker_outlives_its_window() -> Iterator[None]:
     """Nach jedem Test warten die Fenster auf ihre Arbeiter.
@@ -234,9 +254,7 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
         if callable(release):
             release(widget)
         else:
-            for name in sorted(dir(type(widget))):
-                if not name.startswith("wait_for_"):
-                    continue
+            for name in _wartet_auf_arbeiter(type(widget)):
                 waiter = getattr(type(widget), name, None)
                 if callable(waiter):
                     waiter(widget)
