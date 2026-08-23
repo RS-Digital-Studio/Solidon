@@ -31,6 +31,7 @@ import re
 import shutil
 import sys
 from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
 from urllib.parse import quote
 
@@ -160,6 +161,53 @@ MISSING_NOTE = {
     "it": "I pacchetti per {systems} sono ancora in costruzione. Un avviso appena ci sono:",
     "pt": "Os pacotes para {systems} ainda estão a ser criados. Um aviso assim que existirem:",
 }
+
+#: Welche Fassung dort liegt und seit wann.
+#:
+#: **Von Hand gepflegt wäre das die Zeile, die als Erste driftet.** Sie steht
+#: neben Knöpfen, deren Dateinamen die Nummer schon tragen — und genau deshalb
+#: fällt es niemandem auf, wenn sie eine Fassung hinterherhinkt. Geschrieben
+#: wird sie deshalb hier, aus ``APP_VERSION`` und dem Tag des Laufs.
+#:
+#: Das Datum ist der Tag, an dem die Pakete entstehen, und nicht der des
+#: Hochladens: Zwischen beiden liegt eine Viertelstunde, und wer es später von
+#: Hand nachträgt, trägt es irgendwann nicht mehr nach.
+VERSION_LINE = {
+    "de": "Fassung {version}, erschienen am {date}.",
+    "en": "Version {version}, released on {date}.",
+    "es": "Versión {version}, publicada el {date}.",
+    "fr": "Version {version}, parue le {date}.",
+    "it": "Versione {version}, pubblicata il {date}.",
+    "pt": "Versão {version}, publicada a {date}.",
+}
+
+#: Wie das Datum je Sprache geschrieben wird. Der Kunde liest es in seiner
+#: Schreibweise, nicht in unserer — 23.08.2026 in Deutschland, 23/08/2026 in
+#: Frankreich, „23 August 2026" im Englischen.
+DATE_FORMAT = {
+    "de": "{day}.{month}.{year}",
+    "en": "{day} {month_name} {year}",
+    "es": "{day}/{month}/{year}",
+    "fr": "{day}/{month}/{year}",
+    "it": "{day}/{month}/{year}",
+    "pt": "{day}/{month}/{year}",
+}
+
+#: Nur Englisch schreibt den Monat aus.
+MONTH_NAMES = (
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -360,7 +408,32 @@ def links(packages: list[Package], language: str) -> str:
             f'<button class="btn ghost" value="zu">{CLOSE_LABEL[language]}</button></form>'
             "\n            </dialog>"
         )
-    return "".join(rows) + missing_note(packages, language) + "\n          "
+    return (
+        "".join(rows) + version_line(language) + missing_note(packages, language) + "\n          "
+    )
+
+
+def version_line(language: str, today: date | None = None) -> str:
+    """Welche Fassung im Kasten liegt und seit wann.
+
+    Robert wollte beides sichtbar, und er hat recht: Die Dateinamen tragen die
+    Nummer, aber niemand liest einen Dateinamen, um zu erfahren, ob sich seit
+    dem letzten Besuch etwas getan hat. Ein Datum beantwortet das in einem
+    Blick.
+
+    Das Datum ist der Tag des **Laufs**, nicht des Hochladens — die
+    Viertelstunde dazwischen ist keine, die jemand nachträgt.
+    """
+    stamp = today or date.today()
+    fmt = DATE_FORMAT[language]
+    written = fmt.format(
+        day=stamp.day,
+        month=f"{stamp.month:02d}",
+        year=stamp.year,
+        month_name=MONTH_NAMES[stamp.month - 1],
+    )
+    text = VERSION_LINE[language].format(version=APP_VERSION, date=written)
+    return f'\n            <p class="fassung">{text}</p>'
 
 
 def missing_note(packages: list[Package], language: str) -> str:
