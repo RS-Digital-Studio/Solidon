@@ -75,6 +75,11 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
         path = Path(chosen) if chosen else None
         return path if path is not None and path.is_file() else None
 
+    # Das Original bleibt unter eigenem Namen erreichbar, für die wenigen
+    # Tests, die **genau es** prüfen wollen (`test_discover.py`). Ohne diese
+    # Zeile fragt ein solcher Test die Attrappe darüber und ist grün, ohne
+    # etwas geprüft zu haben — die Attrappe protokolliert zum Beispiel nie.
+    monkeypatch.setattr(discover, "unpatched_find_program", discover.find_program, raising=False)
     monkeypatch.setattr(discover, "find_program", only_what_was_set)
     discover.forget_cache()
 

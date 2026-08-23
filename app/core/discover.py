@@ -229,7 +229,20 @@ def refresh_path() -> bool:
 def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
     """Wo dieses Programm liegt, oder ``None``. Reihenfolge siehe Modulkopf."""
     chosen = remembered(tool_id)
-    if chosen:
+    if chosen and "://" not in chosen:
+        # Die Bedingung schließt eine **Adresse** aus, und das ist keine
+        # Feinheit: :func:`remember` legt beides im selben Speicher ab, und
+        # :func:`service_url` liest die Adresse dort wieder. Eine URL ist keine
+        # Datei, galt damit als verschwunden — und bei jedem Aufruf stand
+        # zweimal „remembered path for comfyui is gone: http://127.0.0.1:8188"
+        # im Protokoll, während der Dienst antwortete.
+        #
+        # **Folgenlos für die Funktion und trotzdem ein Fehler: Die Warnung
+        # log.** Sie hat beim Handlauf am 23.08.2026 zehn Minuten gekostet, weil
+        # sie für die Erklärung eines ganz anderen Befunds gehalten wurde, und
+        # sie trifft den Kunden genauso: Wer die Adresse einträgt — der Text
+        # bietet es ausdrücklich an —, findet danach im Protokoll, sein Eintrag
+        # sei fort. Eine falsche Auskunft ist teurer als keine.
         path = Path(chosen)
         if path.is_file():
             return path

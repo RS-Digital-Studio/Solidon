@@ -14,6 +14,7 @@ Test selbst gebaut hat.
 
 from __future__ import annotations
 
+import logging
 import sys
 from pathlib import Path
 
@@ -119,6 +120,47 @@ def test_a_chosen_path_that_is_gone_does_not_keep_it_found(tmp_path: Path) -> No
     discover.remember("comfyui", str(tmp_path / "weg.exe"))
 
     assert discover.find_program("comfyui", ("nothing-called-this",)) is None
+
+
+def test_a_remembered_address_is_not_reported_as_a_missing_file(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Eine Adresse ist keine Datei — und keine verschwundene.
+
+    ``remember`` legt Pfad **und** Adresse im selben Speicher ab; ``service_url``
+    liest die Adresse dort wieder. ``find_program`` prüfte sie mit ``is_file()``
+    und schrieb bei jedem Aufruf zweimal ``remembered path for comfyui is gone``
+    ins Protokoll, während der Dienst antwortete.
+
+    **Folgenlos für das Ergebnis und trotzdem ein Fehler: Die Warnung log.** Wer
+    die Adresse einträgt — der Text bietet es an —, findet danach im Protokoll,
+    sein Eintrag sei fort.
+    """
+    discover.remember("comfyui", "http://127.0.0.1:8188")
+
+    with caplog.at_level(logging.WARNING, logger="app.core.discover"):
+        found = discover.unpatched_find_program("comfyui", ("nothing-called-this",))
+
+    assert found is None, "eine Adresse ist kein Programmpfad"
+    assert not [r for r in caplog.records if "is gone" in r.getMessage()], (
+        f"gewarnt, obwohl nichts fehlt: {[r.getMessage() for r in caplog.records]}"
+    )
+
+
+def test_a_chosen_path_that_is_gone_still_warns(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Die Gegenrichtung: Ein echter Pfad, den es nicht mehr gibt, warnt weiter.
+
+    Sonst hätte die Ausnahme für Adressen die Warnung ganz abgeräumt, und der
+    Fall, für den sie da ist, wäre still geworden.
+    """
+    discover.remember("comfyui", str(tmp_path / "weg.exe"))
+
+    with caplog.at_level(logging.WARNING, logger="app.core.discover"):
+        discover.unpatched_find_program("comfyui", ("nothing-called-this",))
+
+    assert [r for r in caplog.records if "is gone" in r.getMessage()]
 
 
 def test_an_empty_choice_forgets_it(tmp_path: Path) -> None:
