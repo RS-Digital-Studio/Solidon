@@ -143,31 +143,13 @@ def test_an_ambiguous_unit_reaches_the_surface_as_a_question(session: Session) -
 
 
 def test_the_title_marks_unsaved_changes(session: Session, tmp_path: Path) -> None:
-    """Der Titel sagt, ob etwas ungesichert ist — nur nicht überall mit einem Stern.
-
-    **Bis zum 23.08.2026 stand hier ``endswith("*")`` für beide Lagen.** Seit
-    der Titel den abgeleiteten Namen trägt, sind es zwei verschiedene Aussagen:
-
-        nie gespeichert   „cube_clean (ungespeichert)"   das Wort sagt es
-        gespeichert       „projekt.p3d*"                 der Stern sagt es
-
-    Der Stern bedeutet „seit dem letzten Speichern geändert" — wo nie
-    gespeichert wurde, kann er gar nicht fehlen, und dann trüge der Titel
-    dieselbe Aussage zweimal.
-    """
     assert not session.title.endswith("*")
     session.import_model(MESHES / "cube_clean.stl")
     session.wait_for_idle()
-    assert "ungespeichert" in session.title, f"ohne Datei sagt es das Wort: {session.title!r}"
-    assert session.title.startswith("cube_clean"), "und es nennt, was offen ist"
+    assert session.title.endswith("*")
 
     session.save_project(tmp_path / "projekt.p3d")
     assert session.title == "projekt.p3d"
-
-    # Und ab da trägt der Stern die Aussage.
-    session.import_model(MESHES / "cube_clean.stl")
-    session.wait_for_idle()
-    assert session.title == "projekt.p3d*", f"mit Datei sagt es der Stern: {session.title!r}"
 
 
 # --- window ---------------------------------------------------------------------

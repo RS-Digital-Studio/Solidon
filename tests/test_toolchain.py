@@ -736,18 +736,6 @@ def test_the_environment_report_names_the_command_that_fixes_the_hooks(
     dass etwas fehlt, sondern womit man es einrichtet — sonst sucht der Nächste
     dieselbe Zeile noch einmal.
     """
-    # **Die Umgebung wird mitgestellt, nicht vorausgesetzt.** ``check`` steigt
-    # aus, sobald ``.venv`` fehlt — und in der CI gibt es keine, dort läuft
-    # alles im System-Python. Der Test war damit auf einem Entwicklerrechner
-    # grün und auf dem Bauserver rot, und zwar seit seinem ersten Tag: Er kam
-    # dort nie bis zu der Zeile, die er prüfen will.
-    monkeypatch.setattr(check_env, "venv_python", lambda: Path(sys.executable))
-    monkeypatch.setattr(
-        check_env, "interpreter_version", lambda _python: check_env.required_version()
-    )
-    monkeypatch.setattr(check_env, "installed", lambda _python: {})
-    monkeypatch.setattr(check_env, "pinned", dict)
-    monkeypatch.setattr(check_env, "age_in_days", lambda: None)
     monkeypatch.setattr(check_env, "hooks_are_wired", lambda: False)
     findings, suggestions = check_env.check()
 

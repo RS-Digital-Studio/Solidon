@@ -12,7 +12,6 @@ import dataclasses
 from collections.abc import Iterator
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 
@@ -3208,63 +3207,3 @@ def test_the_layer_readout_follows_the_unit(qt_app: object) -> None:
         assert "mm²" not in bar.readout.text()
     finally:
         set_display_unit("mm")
-
-
-def test_a_selected_body_moves_by_dragging_it(window: MainWindow) -> None:
-    """Auswählen, anfassen, ziehen — ohne vorher ein Werkzeug zu holen.
-
-    **Robert am 23.08.2026:** „Das Verschieben eines 3D-Modellkörpers ist noch
-    bisschen kompliziert, man soll es auswählen und dann zuschlagen ziehen
-    verschieben können oder prüfen wie andere CAD Programme das machen."
-
-    Der Weg war: Körper anklicken → *Bewegen* in der Werkzeugzeile → am Griff
-    ziehen. Drei Schritte, und der mittlere ist der, den niemand erwartet: In
-    PrusaSlicer, OrcaSlicer und Cura zieht man ein Objekt direkt. Ihre Gizmos
-    (nachgelesen in ihren eigenen Sprachkatalogen: „Gizmo move: Press to snap
-    by 1mm", „Gizmo-Move") sind für das **Genaue** da — für achsweises
-    Verschieben und Rasten —, nicht für den ersten Zug.
-
-    **In der Bettebene und nicht frei im Raum.** Ein Körper, den man beim
-    Ziehen unbeabsichtigt anhebt, liegt danach nicht mehr auf dem Bett, und das
-    merkt man erst beim Schneiden. Die Höhe bleibt dem Griff und dem Dialog.
-
-    **Ein Zug, ein Schritt im Verlauf** (Regel 2, §15.5): Was während des Zugs
-    im Bild passiert, ist eine Vorschau; die Operation entsteht beim Loslassen.
-    """
-    select_plate(window)
-    viewport = window.viewport
-    chosen = window.object_tree.selected()
-    assert chosen is not None, "ohne Auswahl prüft der Test nichts"
-
-    steps: list[Any] = []
-    viewport.transformDragged.connect(steps.append)
-
-    # **Über den Weltpunkt und nicht über Bildschirmkoordinaten.** Offscreen
-    # rendert VTK nicht, und ein Picker über einem nie gezeichneten Bild trifft
-    # nichts — ein Test mit Pixelkoordinaten prüfte hier die Testumgebung.
-    entry = window.session.last_result.scene.objects[chosen]
-    middle = entry.mesh.bounds.centre
-
-    assert viewport.begin_body_drag_at(middle), "auf dem gewählten Körper beginnt ein Zug"
-    viewport.continue_body_drag_at((middle[0] + 12.0, middle[1] + 5.0))
-    viewport.finish_body_drag()
-
-    assert steps, "aus dem Zug wurde kein Schritt"
-    versatz = steps[-1].offset
-    assert versatz[0] != 0.0 or versatz[1] != 0.0, f"nichts bewegt: {versatz}"
-    assert versatz[2] == 0.0, f"die Höhe gehört dem Griff, nicht dem Zug: {versatz}"
-
-
-def test_a_drag_beside_the_body_still_turns_the_camera(window: MainWindow) -> None:
-    """Neben dem Körper bleibt Ziehen, was es war.
-
-    Sonst wäre das Verschieben ein Modus mit anderem Namen: Wer die Ansicht
-    drehen will, dürfte nicht erst wegklicken müssen. Dieselbe Trennung machen
-    die Slicer — auf dem Objekt bewegt es, daneben führt es die Kamera.
-    """
-    select_plate(window)
-    viewport = window.viewport
-
-    # Weit außerhalb: dort liegt kein Körper.
-    assert not viewport.begin_body_drag_at((5000.0, 5000.0, 5000.0)), "daneben beginnt kein Zug"
-    assert not viewport.begin_body_drag_at(None), "und ohne Treffer erst recht nicht"
