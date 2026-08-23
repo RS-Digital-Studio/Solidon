@@ -85,6 +85,42 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _the_network_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Suite fragt nicht, ob auf dieser Maschine ein Modell läuft (§38).
+
+    **Der Fall.** Am 23.08.2026 stand in einem Absturzstapel von ``test_ui.py``:
+
+        app/core/backends/llm.py:501    available
+        app/ui/first_run.py:445         _chat_text
+        app/ui/leash.py:173             run              (Arbeitsthread)
+        ... socket.py:853               create_connection
+
+    ``first_available()`` geht die Backends durch und fragt jedes, ob es
+    erreichbar ist; ``OllamaBackend`` prüft das mit einem Socket auf
+    ``localhost:11434``. Auf einem Rechner, auf dem Ollama läuft, antwortet er
+    **ja** — die Oberfläche baut einen Chat auf, ein Arbeitsthread rechnet, und
+    der Test misst etwas anderes als auf dem Bauserver, wo gar keins läuft.
+
+    Dieselbe Begründung wie bei OpenSCAD eine Fixture darüber, nur eine Ebene
+    weiter: Die Isolation deckte Qt, die Nutzerverzeichnisse und die
+    Fremdprogramme ab — **das Netz nicht.**
+
+    **Geleert wird die Liste der Backends, nicht die Erreichbarkeitsprüfung.**
+    Der Unterschied ist wichtig: ``test_backends.py`` prüft ``available`` an
+    einer selbst gebauten Instanz gegen einen garantiert geschlossenen Port
+    (``localhost:1``), und das soll es weiter tun. Wer die Prüfung selbst
+    ersetzte, machte aus diesem Test eine Attrappe, die nichts mehr misst.
+
+    Das Original bleibt unter eigenem Namen erreichbar — für den Fall, dass ein
+    Test genau die Liste braucht.
+    """
+    from app.core.backends import llm
+
+    monkeypatch.setattr(llm, "unpatched_backends", llm.backends, raising=False)
+    monkeypatch.setattr(llm, "backends", tuple)
+
+
+@pytest.fixture(autouse=True)
 def _the_display_unit_starts_at_millimetres() -> Iterator[None]:
     """Die Anzeigeeinheit ist ein Prozesszustand, also gehört sie zurückgesetzt.
 

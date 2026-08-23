@@ -176,12 +176,12 @@ def remote_index(session: ftplib.FTP_TLS, root: str) -> dict[str, int]:
 def remote_version(session: ftplib.FTP_TLS, root: str) -> dict[str, Any]:
     """``version.json`` **vom Server**, nicht die lokale.
 
-    Der Unterschied ist der ganze Zweck: Was oben liegt, ist für jeden Kunden
+    Der Unterschied ist der ganze Zweck: Was published liegt, ist für jeden Kunden
     die gültige Fassung — unabhängig davon, was hier für aktuell gehalten wird.
     """
-    puffer = io.BytesIO()
-    session.retrbinary(f"RETR /{root}/version.json", puffer.write)
-    payload: dict[str, Any] = json.loads(puffer.getvalue().decode("utf-8"))
+    buffer = io.BytesIO()
+    session.retrbinary(f"RETR /{root}/version.json", buffer.write)
+    payload: dict[str, Any] = json.loads(buffer.getvalue().decode("utf-8"))
     return payload
 
 
@@ -196,10 +196,10 @@ def promised_files(payload: dict[str, Any]) -> set[str]:
     for entry in payload.get("packages", {}).values():
         if not isinstance(entry, dict):
             continue
-        for feld in ("url", "file"):
-            wert = str(entry.get(feld, ""))
-            if wert:
-                names.add(wert.split("f=")[-1].split("/")[-1])
+        for field in ("url", "file"):
+            value = str(entry.get(field, ""))
+            if value:
+                names.add(value.split("f=")[-1].split("/")[-1])
     return names
 
 
@@ -208,7 +208,7 @@ def stale_packages(session: ftplib.FTP_TLS, root: str) -> tuple[list[str], str]:
 
     **Der Fall, der diese Funktion veranlasst hat.** Am 23.08.2026 wurden beim
     Veröffentlichen von 0.1.3 die alten Pakete gelöscht, **bevor** die Seiten und
-    ``version.json`` oben waren. Mehrere Minuten lang zeigte die Startseite in
+    ``version.json`` published waren. Mehrere Minuten lang zeigte die Startseite in
     sechs Sprachen auf vier Dateien, die es nicht mehr gab, und die
     Update-Prüfung bot jedem Kunden eine Fassung an, deren Datei 404 gab.
 
@@ -216,7 +216,7 @@ def stale_packages(session: ftplib.FTP_TLS, root: str) -> tuple[list[str], str]:
     stimmig. Sichtbar wurde es erst durch einen Abruf **gegen den Server**.
 
     **Die Reihenfolge ist deshalb keine Gedächtnisaufgabe mehr, sondern eine
-    Bedingung:** Gelöscht wird erst, wenn die ``version.json`` *oben* die neue
+    Bedingung:** Gelöscht wird erst, wenn die ``version.json`` *published* die neue
     Fassung nennt. Bis dahin ist die alte die gültige, und ihre Dateien bleiben
     liegen. Nennt der Server noch die alte Fassung, gibt diese Funktion nichts
     zurück und sagt warum.
@@ -228,22 +228,22 @@ def stale_packages(session: ftplib.FTP_TLS, root: str) -> tuple[list[str], str]:
     from app.branding import APP_VERSION
 
     payload = remote_version(session, root)
-    oben = str(payload.get("version", ""))
-    if oben != APP_VERSION:
+    published = str(payload.get("version", ""))
+    if published != APP_VERSION:
         return [], (
-            f"Der Server nennt noch Fassung {oben}, die Anwendung ist {APP_VERSION}. "
+            f"Der Server nennt noch Fassung {published}, die Anwendung ist {APP_VERSION}. "
             "Erst version.json hochladen, dann aufräumen — sonst zeigen Seiten "
             "und Update-Prüfung auf Dateien, die es nicht mehr gibt."
         )
 
-    verschont = promised_files(payload)
-    kandidaten: list[str] = []
+    spared = promised_files(payload)
+    candidates: list[str] = []
     for name, _size in remote_index(session, f"/{root}/dl").items():
-        datei = name.split("/")[-1]
-        if datei in verschont or APP_VERSION in datei:
+        filename = name.split("/")[-1]
+        if filename in spared or APP_VERSION in filename:
             continue
-        kandidaten.append(datei)
-    return sorted(kandidaten), ""
+        candidates.append(filename)
+    return sorted(candidates), ""
 
 
 def remote_name(path: Path) -> str:
@@ -476,21 +476,21 @@ def main() -> int:
         ) from problem
     try:
         if arguments.prune:
-            veraltet, grund = stale_packages(session, root)
-            if grund:
-                print(grund)
+            stale, reason = stale_packages(session, root)
+            if reason:
+                print(reason)
                 return 1
-            if not veraltet:
+            if not stale:
                 print("Unter dl/ liegt nichts, was keine Fassung mehr bedient.")
                 return 0
-            print(f"{len(veraltet)} Paket(e) bedienen keine Fassung mehr:")
-            for name in veraltet:
+            print(f"{len(stale)} Paket(e) bedienen keine Fassung mehr:")
+            for name in stale:
                 print(f"  {name}")
             if not arguments.confirm:
                 print()
                 print("Nichts gelöscht. Mit --wirklich noch einmal aufrufen.")
                 return 0
-            for name in veraltet:
+            for name in stale:
                 session.delete(f"/{root}/dl/{name}")
                 print(f"  gelöscht: {name}")
             return 0
