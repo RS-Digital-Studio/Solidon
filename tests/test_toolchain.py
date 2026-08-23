@@ -689,3 +689,57 @@ def test_the_promise_is_read_from_both_name_fields() -> None:
     assert versprochen == {"geladen.exe", "benannt.exe"}, (
         f"gefunden: {sorted(versprochen)} — beide Felder zählen, nicht nur eines"
     )
+
+
+# --- Läuft die Automatik überhaupt? (tools/check_env.py) -------------------------------
+
+
+def test_the_hook_check_notices_when_git_never_looks_at_them(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Drei Antworten von ``git config``, drei Urteile.
+
+    **Der Anlass.** ``CLAUDE.md`` sagt zu, dass jeder Commit sofort hinausgeht —
+    ``.githooks/post-commit`` erledigt das. Am 23.08.2026 zeigte sich, dass Git
+    diesen Hook nie angesehen hat: ``core.hooksPath`` war auf keiner Ebene
+    gesetzt, und ohne ihn sucht Git in ``.git/hooks/``, wo nichts liegt.
+
+    **Warum es niemandem auffiel:** Das Ergebnis stimmte trotzdem, weil immer
+    jemand von Hand gepusht hat. Eine Automatik, die in Wahrheit Handarbeit ist,
+    ist gefährlicher als gar keine — man verlässt sich auf sie.
+
+    Geprüft wird deshalb nicht der Hook, sondern **dass er gerufen wird**. Und
+    der dritte Fall ist der, den man vergisst: ein Pfad, der *gesetzt* ist und
+    woandershin zeigt. „Nicht leer" ist nicht dasselbe wie „richtig".
+    """
+
+    class Antwort:
+        def __init__(self, text: str) -> None:
+            self.stdout = text
+            self.returncode = 0
+
+    for gesetzt, erwartet, was in (
+        ("", False, "gar nicht gesetzt"),
+        (".githooks\n", True, "auf .githooks gesetzt"),
+        ("irgendwo/anders\n", False, "auf ein anderes Verzeichnis gesetzt"),
+    ):
+        monkeypatch.setattr(check_env.subprocess, "run", lambda *a, _t=gesetzt, **k: Antwort(_t))
+        assert check_env.hooks_are_wired() is erwartet, was
+
+
+def test_the_environment_report_names_the_command_that_fixes_the_hooks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein Befund ohne Handlungsvorschlag ist eine Klage (§ AGENTS.md, Regel 17).
+
+    Der Bericht von ``check_env`` läuft beim Sitzungsstart. Er soll nicht sagen,
+    dass etwas fehlt, sondern womit man es einrichtet — sonst sucht der Nächste
+    dieselbe Zeile noch einmal.
+    """
+    monkeypatch.setattr(check_env, "hooks_are_wired", lambda: False)
+    findings, suggestions = check_env.check()
+
+    passende = [zeile for zeile in suggestions if "core.hooksPath" in zeile]
+    assert passende, f"kein Vorschlag zu den Hooks: {suggestions}"
+    assert "git config core.hooksPath .githooks" in passende[0], passende[0]
+    assert any("githooks" in zeile for zeile in findings), findings

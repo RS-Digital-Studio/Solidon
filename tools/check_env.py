@@ -310,6 +310,48 @@ def mismatches(pinned_set: dict[str, tuple[str, str]], present: dict[str, str]) 
     ]
 
 
+HOOKS_DIR: Final = ROOT / ".githooks"
+
+
+def hooks_are_wired() -> bool | None:
+    """Ob Git die Hooks dieses Projekts überhaupt ansieht.
+
+    ``None``, wenn die Frage sich nicht stellt — kein Git-Repository, oder
+    ``.githooks/`` gibt es nicht.
+
+    **Warum das eine Prüfung wert ist.** ``CLAUDE.md`` sagt zu: *„Jeder Commit
+    geht sofort hinaus, ``.githooks/post-commit`` pusht ihn"* — begründet damit,
+    dass auf drei Maschinen gearbeitet wird und ein liegengebliebener Commit auf
+    den anderen zweien nicht existiert. Am 23.08.2026 zeigte sich, dass Git
+    diesen Hook nie angesehen hat: ``core.hooksPath`` war auf keiner Ebene
+    gesetzt, und ohne ihn sucht Git in ``.git/hooks/``, wo nichts liegt.
+
+    **Gemerkt hat es niemand, weil das Ergebnis stimmte** — es hat immer jemand
+    von Hand gepusht. Aufgefallen ist es erst, als zwei Commits vor einem
+    CI-Start liegenblieben und die CI beinahe den Stand *vor* zwei
+    Fehlerbehebungen gebaut hätte.
+
+    **Eine Automatik, die in Wahrheit Handarbeit ist, ist gefährlicher als gar
+    keine:** Man verlässt sich auf sie, und sie trägt nicht. Deshalb wird hier
+    nicht der Hook geprüft, sondern **dass er gerufen wird**.
+    """
+    if not (ROOT / ".git").exists() or not HOOKS_DIR.is_dir():
+        return None
+    try:
+        antwort = subprocess.run(
+            ["git", "-C", str(ROOT), "config", "--get", "core.hooksPath"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    gesetzt = antwort.stdout.strip()
+    if not gesetzt:
+        return False
+    return (ROOT / gesetzt).resolve() == HOOKS_DIR.resolve()
+
+
 def check() -> tuple[list[str], list[str]]:
     """Befunde und Handlungsvorschläge — leer heißt: die Umgebung stimmt."""
     findings: list[str] = []
@@ -360,6 +402,14 @@ def check() -> tuple[list[str], list[str]]:
             "größer der Sprung, wenn er doch einmal muss."
         )
         suggestions.append("Was es Neues gibt: python tools/check_env.py --outdated")
+
+    if hooks_are_wired() is False:
+        findings.append(
+            "Git sieht `.githooks/` nicht an: `core.hooksPath` ist nicht gesetzt. "
+            "Der post-commit-Hook, der jeden Commit sofort hinausschickt, läuft "
+            "damit nicht — und das fällt nicht auf, solange jemand von Hand pusht."
+        )
+        suggestions.append("Einmalig einrichten: git config core.hooksPath .githooks")
 
     return findings, suggestions
 
