@@ -196,6 +196,7 @@ class PartCatalog(QDialog):
         self._previews: dict[str, QPixmap] = {}
         self.show_parts()
         self._show_detail()
+        self._rendering = True
         QTimer.singleShot(0, self, self._render_pending)
 
     # --- content ----------------------------------------------------------------
@@ -325,6 +326,12 @@ class PartCatalog(QDialog):
         """
         from PySide6.QtGui import QPainter
 
+        if not self._rendering:
+            # Losgelassen, während die Kette lief. Ohne diese Zeile reiht sich
+            # der Zeitgeber weiter ein, und jede eingereihte gebundene Methode
+            # hält den Katalog am Leben — zehn losgelassene überlebten alle
+            # zehn, und ``gc.get_referrers`` nannte genau sie.
+            return
         missing = next((spec for spec in PARTS.all() if spec.name not in self._previews), None)
         if missing is None:
             return
@@ -340,6 +347,18 @@ class PartCatalog(QDialog):
 
         self._refresh_icon(missing.name)
         QTimer.singleShot(0, self, self._render_pending)
+
+    def release(self) -> None:
+        """Die Vorschau-Kette anhalten.
+
+        Derselbe Name wie an den Fenstern, die Arbeiter halten, und aus
+        demselben Grund: Es gibt zwei Wege, einen Katalog loszuwerden —
+        schließen und wegräumen —, und der zweite kam an der laufenden Kette
+        vorbei. ``QTimer.singleShot(0, self, self._render_pending)`` reiht eine
+        **gebundene** Methode ein, und die hält ihr Objekt; solange die Kette
+        sich selbst neu einreiht, wird der Katalog nie freigegeben.
+        """
+        self._rendering = False
 
     def _refresh_icon(self, name: str) -> None:
         """Hängt ein fertiges Bild an seine Zeile, ohne die Liste neu zu bauen —

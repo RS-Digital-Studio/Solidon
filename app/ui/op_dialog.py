@@ -826,14 +826,15 @@ class OperationDialog(QDialog):
             self.advanced.setArrowType(Qt.ArrowType.RightArrow)
             self.advanced.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
 
-            def unfold(open_now: bool, inner: QWidget = inner) -> None:
-                inner.setVisible(open_now)
-                self.advanced.setArrowType(
-                    Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow
-                )
-                self.adjustSize()
-
-            self.advanced.toggled.connect(unfold)
+            # **Keine geschachtelte Funktion, die ``self`` fängt.** Sie ist
+            # dasselbe wie ein Lambda: ihre Zelle hält den Dialog, der Sender
+            # ist sein eigener Knopf, und der Ring über die C++-Grenze steht.
+            # Gemessen am 23.08.2026: zehn losgelassene ``OperationDialog``
+            # überlebten alle zehn, und ``gc.get_referrers`` nannte genau diese
+            # Zelle.
+            self.advanced.toggled.connect(
+                weak_slot(self, OperationDialog._unfold_advanced, inner, forward=True)
+            )
             layout.addWidget(self.advanced)
             layout.addWidget(inner)
 
@@ -1168,6 +1169,17 @@ class OperationDialog(QDialog):
             return
         corner = anchor.mapToGlobal(area.topRight())
         self.move(corner.x() - width - DIALOG_MARGIN, corner.y() + DIALOG_MARGIN)
+
+    def _unfold_advanced(self, inner: QWidget, open_now: bool) -> None:
+        """„Weitere Einstellungen" auf- und zuklappen.
+
+        Als Methode und nicht als geschachtelte Funktion: Der Abschluss fing
+        ``self``, hing am eigenen Knopf und hielt den Dialog fest. Der Rahmen
+        kommt gebunden mit, der Zustand vom Signal.
+        """
+        inner.setVisible(open_now)
+        self.advanced.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
+        self.adjustSize()
 
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""

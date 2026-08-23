@@ -41,7 +41,7 @@ from app.core.log import get_logger
 from app.core.scene import expressions
 from app.i18n import format_decimal, tr
 from app.ui.labels import NumberSpin, deadline_date, value_line
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
 from app.ui.style import set_level
 
 _log = get_logger(__name__)
@@ -62,7 +62,10 @@ class AskDialog(QDialog):
         self.list = QListWidget(self)
         self.list.addItems(choices)
         self.list.setCurrentRow(0)
-        self.list.itemDoubleClicked.connect(lambda _item: self.accept())
+        # Kein Lambda: Es fängt ``self`` in seiner Zelle, der Sender gehört
+        # ``self``, und damit steht der Ring. Gemessen am 23.08.2026: zehn
+        # losgelassene ``AskDialog`` überlebten alle zehn.
+        self.list.itemDoubleClicked.connect(weak_slot(self, AskDialog.accept))
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -72,7 +75,7 @@ class AskDialog(QDialog):
         # sich aus der Liste danebenzudenken. Derselbe Grundsatz wie im Dialog
         # *Ungesicherte Änderungen*: der Knopf sagt, was er tut.
         self._accept = buttons.button(QDialogButtonBox.StandardButton.Ok)
-        self.list.currentItemChanged.connect(lambda *_: self._name_the_choice())
+        self.list.currentItemChanged.connect(weak_slot(self, AskDialog._name_the_choice))
         self._name_the_choice()
 
         buttons.accepted.connect(self.accept)
@@ -229,7 +232,7 @@ class ParameterDialog(QDialog):
         # Der Ausdruck besitzt den Wert (§13) — dieselbe Regel, nach der die
         # Leiste abgeleitete Werte zeigt statt sie zu öffnen.
         self.expression_field.textChanged.connect(
-            lambda text: self.value_field.setEnabled(not text.strip())
+            weak_slot(self, ParameterDialog._expression_typed, forward=True)
         )
 
         form = QFormLayout()
@@ -280,6 +283,15 @@ class ParameterDialog(QDialog):
             except AppError as error:
                 return str(error.detail or error.title)
         return None
+
+    def _expression_typed(self, text: str) -> None:
+        """Solange ein Ausdruck dasteht, ist das Wertfeld gesperrt.
+
+        Als Methode und nicht als Lambda: Der Abschluss fing ``self``, hing am
+        eigenen Eingabefeld und hielt den Dialog fest — zehn von zehn
+        überlebten ihr Loslassen.
+        """
+        self.value_field.setEnabled(not text.strip())
 
     def _accept(self) -> None:
         problem = self.validation_problem()

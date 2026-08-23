@@ -2135,7 +2135,9 @@ class PointDialog(QDialog):
             box.set_value_mm(value)
             # **Nach** dem Vorbelegen verbunden, sonst zählte das Vorbelegen
             # selbst als Eingabe.
-            box.valueChanged.connect(lambda _value, field=box: self._touched.add(field))
+            # Kein Lambda mit Vorgabeargument: Es hält ``self`` fest, und der
+            # Ring über das Drehfeld ließ zehn von zehn ``PointDialog`` stehen.
+            box.valueChanged.connect(weak_slot(self, PointDialog._note_touched, box))
 
         # Die Achsenbuchstaben der Ebene, wo es welche gibt. Auf einer
         # angeklickten Fläche gibt es keine — sie kann beliebig geneigt sein —,
@@ -2158,6 +2160,15 @@ class PointDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addLayout(form)
         layout.addWidget(buttons)
+
+    def _note_touched(self, box: LengthSpin) -> None:
+        """Merken, dass jemand dieses Feld angefasst hat.
+
+        Als Methode und nicht als Lambda im Aufbau: Ein Lambda mit
+        Vorgabeargument fängt ``self``, hängt am Drehfeld, das ``self`` gehört,
+        und schließt damit den Ring über die C++-Grenze.
+        """
+        self._touched.add(box)
 
     def point(self) -> tuple[float, float]:
         """Die eingetragene Lage — und für jedes unangetastete Feld die alte.
