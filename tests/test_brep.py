@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 import trimesh
+from OCP.BRepPrimAPI import BRepPrimAPI_MakeSphere
 
 from app.core.brep import edit, step
 from app.core.brep.features import features_of
@@ -264,7 +265,10 @@ def test_a_hollow_corner_is_a_throat_and_an_outer_one_is_not() -> None:
     fillets = [
         entry
         for entry in features_of(edit.fillet(profile, 3.0, "all")).values()
-        if entry.kind == "fillet"
+        # **Nur die Kanten.** Die Ecken, an denen drei zusammenlaufen, sind
+        # Kugelstücke und heißen seit derselben Erweiterung auch ``fillet``;
+        # ihre Zahl hängt an der Gestalt und nicht an der Frage dieses Tests.
+        if entry.kind == "fillet" and entry.params["length"] > 0.0
     ]
 
     throats = [entry for entry in fillets if entry.params["recess"]]
@@ -662,3 +666,75 @@ def test_switching_a_bore_between_the_kernels_keeps_its_values(profile: Profile)
     assert [entry.kind for entry in result.scene.objects.values()] == ["brep"]
     body = next(iter(result.scene.objects.values()))
     assert body.mesh.volume == pytest.approx(24000.0 - math.pi * 9.0 * 20.0, rel=1e-9)
+
+
+def test_the_corner_where_three_fillets_meet_is_one_too() -> None:
+    """Verrundet man alle Kanten, bleibt an jeder Ecke ein Kugelstück übrig.
+
+    Es fiel bis dahin durch: ``_describe`` kannte Ebene und Zylinder, und acht
+    von 26 Flächen waren damit nichts — ausgerechnet die, die der Kunde als
+    „abgerundete Ecke" sieht.
+    """
+    rounded = edit.fillet(block(), 2.0, "all")
+
+    found = features_of(rounded)
+
+    fillets = [entry for entry in found.values() if entry.kind == "fillet"]
+    # Zwölf Kanten und acht Ecken: der Quader hat keine Fläche mehr, die durchfällt.
+    assert len(fillets) == 20, f"12 Kanten + 8 Ecken: {sorted(found)}"
+    assert len(found) == len(rounded.faces()), "keine Fläche bleibt unbenannt"
+    corners = [entry for entry in fillets if entry.params["length"] == 0.0]
+    assert len(corners) == 8
+    assert {entry.params["radius"] for entry in corners} == {2.0}
+
+
+def test_a_socket_is_a_sphere_and_not_a_corner() -> None:
+    """Beide sind Kugelausschnitte — die Größe trennt sie nicht.
+
+    Der erste Versuch maß den Anteil an der Vollkugel: Eckverrundung 0,125,
+    volle Kugel 1,000. Das trennt falsch, denn eine Pfanne ist nie mehr als
+    eine Halbkugel, und eine flache Kalotte deckt selbst 0,1 ab. Was sie
+    trennt, ist die Nachbarschaft: An einer Ecke laufen verrundete Kanten
+    zusammen, an einer Pfanne nicht.
+    """
+    ball = Solid(BRepPrimAPI_MakeSphere(6.0).Shape())
+    hollowed = edit.boolean("difference", [block(), edit.moved(ball, (0.0, 0.0, 20.0))])
+
+    found = features_of(hollowed)
+
+    spheres = [entry for entry in found.values() if entry.kind == "sphere"]
+    assert len(spheres) == 1, f"die Mulde ist eine Kugel: {sorted(found)}"
+    assert spheres[0].params["recess"], "eingelassen, keine Kuppel"
+    assert not [entry for entry in found.values() if entry.kind == "fillet"]
+
+
+def test_a_corner_fillet_leaves_no_degenerate_triangles() -> None:
+    """Am Pol einer Kugelfläche entstand ein Dreieck mit zwei gleichen Ecken.
+
+    **Die Fläche war dabei nie kaputt** — Euler-Zahl 2, Volumen unverändert,
+    kein Loch. Aber ``is_watertight`` meldete „nein", weil trimesh die
+    degenerierten Kanten als offen zählt, und das ist die Prüfung, die viele
+    Werkzeuge fahren, unsere eigenen Tests eingeschlossen. In die exportierte
+    STL wanderten die acht Dreiecke mit.
+
+    **Zwei Fehlschlüsse liegen auf dem Weg dorthin, beide gemessen und
+    verworfen:** ``is_watertight`` als Beweis für ein Loch — es ist keiner —,
+    und „die drei Knotennummern sind nicht paarweise verschieden" als
+    Bedingung. OCCT vergibt am Pol *zwei* Nummern für denselben Ort; erst
+    trimesh führt sie beim Einlesen zusammen. Geprüft wird deshalb über die
+    Koordinaten.
+    """
+    import numpy as np
+
+    from app.core.geom.mesh import as_mesh_data
+
+    solid = edit.fillet(edit.box(WIDTH, DEPTH, HEIGHT), 2.0, "all")
+    mesh = as_mesh_data(solid.mesh).raw
+
+    entartet = int(np.sum(mesh.area_faces <= EPS_GEOM))
+    assert entartet == 0, f"{entartet} Dreiecke mit Fläche null"
+    assert mesh.is_watertight, "acht Pole, acht offene Kanten — so sah es aus"
+    assert mesh.euler_number == 2, "die Oberfläche war schon vorher geschlossen"
+    assert solid.volume == pytest.approx(mesh.volume, rel=1e-3), (
+        "das Weglassen darf am Körper nichts ändern"
+    )

@@ -335,10 +335,38 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
         reversed_face = face.Orientation() == TopAbs_REVERSED
         for index in range(1, triangulation.NbTriangles() + 1):
             first, second, third = triangulation.Triangle(index).Get()
+            # **Ein Dreieck mit doppeltem Knoten ist keines.** Am Pol einer
+            # Kugelfläche fällt eine ganze Parameterlinie auf einen Punkt
+            # zusammen — Längen- und Breitengrad treffen sich dort —, und
+            # ``BRepMesh`` erzeugt daraus ein Dreieck, dessen zwei Ecken
+            # derselbe Knoten sind. Es hat die Fläche null, trägt zum Volumen
+            # nichts bei und wandert trotzdem bis in die exportierte STL.
+            #
+            # Gemessen am 23.08.2026 an einem Quader mit Verrundungen an allen
+            # Kanten: acht Eckverrundungen, acht Pole, acht solche Dreiecke.
+            # Die Oberfläche ist dabei geschlossen (Euler-Zahl 2, Volumen
+            # unverändert) — **aber ``is_watertight`` meldet „nein"**, weil
+            # trimesh die acht degenerierten Kanten als offen zählt. Das ist
+            # die Prüfung, die viele Werkzeuge fahren, unsere eigenen Tests
+            # eingeschlossen.
+            #
+            # **Geprüft wird über die Koordinaten und nicht über die
+            # Knotennummern** — gemessen am 23.08.2026, weil die naheliegende
+            # Fassung nicht greift: OCCT vergibt am Pol *zwei* Knotennummern
+            # für denselben Ort, und erst trimesh führt sie beim Einlesen
+            # zusammen. Wer die Nummern vergleicht, sieht drei verschiedene
+            # und lässt das Dreieck durch.
             # Eine umgekehrte Fläche heißt, dass der Umlaufsinn zu drehen ist —
             # sonst kommt der Körper umgestülpt heraus und jedes Volumen ist
             # negativ.
             corners = (third, second, first) if reversed_face else (first, second, third)
+            ecken = (
+                points[corners[0] - 1 + offset],
+                points[corners[1] - 1 + offset],
+                points[corners[2] - 1 + offset],
+            )
+            if ecken[0] == ecken[1] or ecken[1] == ecken[2] or ecken[0] == ecken[2]:
+                continue
             faces.append(
                 (corners[0] - 1 + offset, corners[1] - 1 + offset, corners[2] - 1 + offset)
             )
