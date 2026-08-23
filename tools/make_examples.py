@@ -202,7 +202,7 @@ def way_four() -> Project:
             )
         ],
     )
-    # **Das Beispiel endete 0,29 mm unter der Druckplatte** (gemessen am
+    # **Das Beispiel endete 0,29 mm unter dem Druckbett** (gemessen am
     # 23.08.2026): Das weiche Verschmelzen mit Radius 4 rundet auch nach unten
     # ab und zieht die Unterkante unter Z = 0. Der Prüfbericht sagte es als
     # Hinweis, und beim Export wäre daraus eine Warnung geworden — ein
@@ -210,7 +210,7 @@ def way_four() -> Project:
     # das der Slicer erst zurechtrücken muss. Bauplan §2.2 nennt „stellen"
     # ohnehin als Teil dieses Weges.
     history.apply(
-        _("Auf die Platte stellen"),
+        _("Auf das Bett setzen"),
         [OperationDraft(op="place_on_bed", inputs=("obj_3",), params={})],
     )
     return project
