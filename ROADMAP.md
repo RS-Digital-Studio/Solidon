@@ -87,7 +87,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| Die Werkzeugzeile der Skizze verlangt 1007 Bildpunkte — **neu entschieden** | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | zwei Schritte statt des zurückgenommenen Überlaufknopfs: `measure_field` nur zeigen, wenn es bedienbar ist (−163 auf 844, eine Zeile), und danach das Maß am Zeiger statt in der Leiste. Dazu eine Grenze, die es für diese Zeile noch nicht gibt — 900 wie bei der Bedingungszeile. Die Rechnung steht in `konzepte/entscheidungen-2026-08-22.md` |
+| Das Maß erscheint am Zeiger statt in der Leiste — **Schritt zwei** | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | den Umbau, der das Maß beim Zeichnen an den Zeiger legt, wie Fusion es tut. Schritt eins ist gebaut (`bd4fbce`): `measure_field` steht nur noch da, solange gezeichnet wird — 1007 → **881** Bildpunkte, Grenze 900 gesetzt. Er macht Schritt zwei weniger dringend, nicht überflüssig |
 | Ein Höhenbudget für den Startbildschirm — **entschieden, in Arbeit** | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird. Am 22.08. neu gemessen, und die Aktenlage des Punkts stimmt nicht mehr: 340 px fehlen auf 1600x900 statt 156, die Ablagefläche gibt es als Widget nicht mehr, und es sind **zwei** Kachelbereiche — `more_area` (242 px) ist der größte Einzelposten |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | „Eingabe korrigieren" ist ein Satz und kein Knopf — **halb erledigt** | Der Bedienweg von außen nachgefahren (21.08.2026) | einen Handler für den **Parameterfehler**: den Dialog mit den Werten erneut öffnen. Der zweite Fall („andere Anzahl an Objekten“) hat seit dem 23.08. einen — `CHANGE_SELECTION` führt in den Auswahlmodus |
@@ -3510,6 +3510,30 @@ Datei da, Alt-Text da, `width`/`height` gleich den Pixeln.
       das hatte niemand gesehen. Die Gruppe heißt jetzt „Visserie"
       beziehungsweise „Parafusos e roscas"; ein Wächter über den Wortstamm
       hält alle sechs Sprachen auseinander.
+- [x] **Die Werkzeugzeile der Skizze verlangt mit Stylesheet 1007 Bildpunkte —
+      Schritt eins gebaut am 23.08.2026 (`bd4fbce`): 1007 → 881.**
+      `measure_field` stand dauerhaft grau da und belegte ein Sechstel der
+      Zeile; es erscheint jetzt nur, solange gezeichnet wird. Die Grenze ist
+      **gesetzt** und nicht behauptet — 900 Bildpunkte, dieselbe Zahl wie die
+      Bedingungszeile desselben Bereichs, und sie lebt in
+      `test_sketch_editor.py`, weil sie ein gebautes Fenster **mit Thema**
+      braucht.
+
+      **Ein bestehender Test hat den Umbau selbst eingefordert, und das ist
+      der schönere Teil.** `test_the_tool_row_is_the_one_that_needs_the_width`
+      war grün, *solange* die Zeile zu breit war, und trug seine Anweisung an
+      die Zukunft im Fehlertext: „Der Bereich passt jetzt auf einen 1024er
+      Schirm — schön, und dann gehört die Zahl hier nachgezogen." **Er wurde
+      rot, weil der Punkt behoben war.** Umgebaut zum Wächter des behobenen
+      Zustands, der neu geschriebene Test dafür wieder gestrichen: zwei Tests
+      zum selben Thema wären eine Gelegenheit auseinanderzulaufen.
+
+      Das war die dritte Korrektur an derselben Rechnung, und diesmal ging sie
+      zugunsten der Sache aus: **Der Test wusste mehr über den Punkt als das
+      Register.**
+
+      Der ursprüngliche Befund, weil seine Messung weiter gilt:
+
 - [ ] **Die Werkzeugzeile der Skizze verlangt mit Stylesheet 1007 Bildpunkte.**
       `test_the_constraint_buttons_stay_readable_on_a_laptop` fordert 900 und
       ist trotzdem grün — weil er allein läuft, und dann steht kein Thema. Läuft
