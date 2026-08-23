@@ -242,6 +242,34 @@ def test_a_rounded_corner_is_not_reported_as_a_hole() -> None:
     found = features_of(rounded)
 
     assert not [entry for entry in found.values() if entry.kind == "hole"]
+    # **Und sie ist auch nicht nichts.** Solange der Ausschnitt verworfen wurde,
+    # war die Zusicherung oben grün, weil überhaupt kein Merkmal entstand — sie
+    # hätte nicht gemerkt, dass die vier Kanten spurlos verschwinden.
+    fillets = [entry for entry in found.values() if entry.kind == "fillet"]
+    assert len(fillets) == 4, f"vier senkrechte Kanten: {sorted(found)}"
+    # Kein Einpassen: der Radius steht exakt in der Topologie.
+    assert {entry.params["radius"] for entry in fillets} == {3.0}
+    assert not any(entry.params["recess"] for entry in fillets), "Außenkanten, keine Kehlen"
+
+
+def test_a_hollow_corner_is_a_throat_and_an_outer_one_is_not() -> None:
+    """Beide sind Zylinderausschnitte mit demselben Radius; unterscheiden lässt
+    sie nur, auf welcher Seite das Material liegt.
+
+    Nicht über die Flächenorientierung — die kam an den vier gleichen Kanten
+    eines Quaders zweimal so und zweimal anders heraus.
+    """
+    profile = edit.boolean("union", [edit.box(40.0, 10.0, 10.0), edit.box(10.0, 10.0, 40.0)])
+
+    fillets = [
+        entry
+        for entry in features_of(edit.fillet(profile, 3.0, "all")).values()
+        if entry.kind == "fillet"
+    ]
+
+    throats = [entry for entry in fillets if entry.params["recess"]]
+    assert len(throats) == 2, f"das L hat eine einspringende Ecke: {len(fillets)} Ausschnitte"
+    assert len(fillets) - len(throats) == 26
 
 
 def test_the_planar_faces_come_with_their_area() -> None:
