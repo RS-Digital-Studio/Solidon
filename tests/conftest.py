@@ -196,27 +196,42 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
         # der Segmentierungsfehler.
         if not isValid(widget):
             continue
-        # **Drei Namen, weil es drei gibt.** ``release`` lässt die Arbeiter
-        # auslaufen *und* bestellt die Sitzung ab; ``wait_for_workers`` kann
-        # nur das erste; ``wait_for_survey`` heißt beim Erstlauf-Dialog so.
+        # **Die Namen werden abgeleitet, nicht gepflegt.** Für dieselbe Sache
+        # — „warte, bis dein Arbeiter fertig ist" — gibt es in ``app/ui``
+        # derzeit fünf Namen:
         #
-        # Der dritte kam am 23.08.2026 dazu, und er ist der Grund, warum diese
-        # Schleife überhaupt Namen aufzählt statt einen zu kennen:
+        #     release            MainWindow (wartet **und** bestellt ab)
+        #     wait_for_workers   MainWindow, PrintSettingsDialog, GenerateDialog
+        #     wait_for_survey    FirstRunDialog, InstallDialog
+        #     wait_for_look      KeyDialog
+        #     wait_for_setup     ComfyDialog
+        #
+        # Eine aufgezählte Liste wäre am 23.08.2026 zweimal falsch gewesen: Sie
+        # kannte ``release`` und ``wait_for_workers``, und die Absturzsuche fand
+        # nacheinander ``wait_for_survey`` und ``wait_for_look``. Beim dritten
+        # Mal wäre sie wieder falsch — also fragt die Fixture nach dem Muster.
+        #
+        # **Der Fall, der das ausgelöst hat.**
         # ``test_the_language_picker_shows_names_not_codes`` baut einen
-        # ``FirstRunDialog``, liest dessen Sprachliste und ist fertig. Der
-        # Dialog startet in seinem Konstruktor über ``look()`` einen
-        # Erhebungs-Thread; niemand schließt ihn, also ruft auch niemand
-        # ``wait_for_survey``. Der Thread überlebt den Dialog, und der Prozess
-        # stirbt beim Abbau mit ``0xC0000409``.
+        # ``FirstRunDialog``, liest dessen Sprachliste und ist fertig. Der Dialog
+        # startet im Konstruktor einen Erhebungs-Thread; niemand schließt ihn,
+        # also wartet niemand. Der Test **allein** beendet den Prozess mit
+        # ``0xC0000409`` — dreimal von dreimal, in einer Drittelsekunde. Dasselbe
+        # gilt für die beiden ``KeyDialog``-Tests in ``test_chat_ui.py``.
         #
-        # **Der Test allein genügte dafür** — dreimal von dreimal, in einer
-        # Drittelsekunde. Gefunden wurde er, indem die Datei binär eingegrenzt
-        # wurde: 51 Tests liefen sauber, 52 rissen, und der 52. war dieser.
-        for name in ("release", "wait_for_workers", "wait_for_survey"):
-            waiter = getattr(widget, name, None)
-            if callable(waiter):
-                waiter()
-                break
+        # ``release`` zuerst, weil es mehr tut als warten; danach alles, was
+        # ``wait_for_`` heißt. Ein Name, den es noch nicht gibt, ist damit schon
+        # abgedeckt.
+        release = getattr(widget, "release", None)
+        if callable(release):
+            release()
+        else:
+            for name in sorted(dir(widget)):
+                if not name.startswith("wait_for_"):
+                    continue
+                waiter = getattr(widget, name, None)
+                if callable(waiter):
+                    waiter()
     # Zerstört wird hier **nichts**. Zwei Anläufe haben das versucht —
     # ``deleteLater`` allein änderte nichts (``processEvents`` führt
     # ``DeferredDelete`` nicht aus), und mit ``sendPostedEvents`` dazu
