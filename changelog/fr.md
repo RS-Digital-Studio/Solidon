@@ -18,13 +18,16 @@ dans `website/version.json`.
 
 ## 0.1.4
 
+- Cliquez sur une face et insérez un élément : il se place perpendiculairement à cette face au lieu de pointer vers le haut. Sur une paroi latérale, un trou de vis traversait la paroi.
+- Un élément posé sur un perçage en reprend la cote. Sur un perçage de 5,19 mm, l'insert à emmancher proposait auparavant M3, qui n'y enlève rien.
+- Un clic avec une main un peu tremblante sélectionne de nouveau au lieu de décaler la pièce d'un dixième de millimètre.
 - Une pièce sélectionnée se déplace directement à la souris — saisir et tirer, sans passer par « Déplacer ». La poignée reste pour le précis : par axe et par pas de grille.
 - Depuis le dessous, on voit désormais à travers le plateau. Qui travaille la face inférieure d'une pièce tourne la vue en dessous et voit la pièce au lieu du plateau.
 - Un perçage se sélectionne aussi en cliquant en plein milieu, et non seulement sur sa paroi.
 - La recherche de commandes comprend maintenant les mots courants : « copier », « supprimer », « ouvrir » et « colorer » ne menaient nulle part, alors que les quatre existent.
 - La recherche trouve aussi pour qui ne connaît pas le terme technique. En tapant « renforcer », « encliqueter » ou « visser », on arrive au nervurage, au crochet et au trou de vis.
 - Deux entrées de menu s'appelaient « remailler ». Ce sont maintenant « Affiner les arêtes » et « Uniformiser les triangles » : la première divise les longues arêtes, la seconde égalise leur taille.
-- Les dialogues parlent du « corps exact » au lieu du « corps B-Rep ». Le commutateur employait ce mot depuis toujours ; neuf descriptions employaient le plus lourd.
+- Le programme parle la langue que vous entendez ailleurs : « corps exact » au lieu de « B-Rep », plateau au lieu de surface d’impression, plaque pour la disposition.
 - Au démarrage, Solidon vérifie s’il existe une version plus récente et la propose. Elle n’est téléchargée et installée qu’après votre confirmation ; cela se désactive dans les réglages.
 - Un modèle de langue local peut désormais calculer dix minutes. Avant, le chat abandonnait au bout de deux et demandait un rapport d’erreur, pour un calcul simplement plus long.
 - Un anneau est reconnu comme une seule caractéristique et non plus comme trois bourrelets superposés.
@@ -35,8 +38,6 @@ dans `website/version.json`.
 - Lorsque le calcul s’arrête, il indique à quelle étape et pourquoi.
 - Le rapport d’erreur emporte l’état de la scène : objets avec cotes, caractéristiques, paramètres et historique. Une erreur se reproduit ainsi au lieu de se deviner.
 - Plusieurs plantages à la fermeture de fenêtres et de boîtes de dialogue sont corrigés.
-- Le fichier de version est signé, et Solidon vérifie la signature avant de proposer une mise à jour.
-- La surface d’impression s’appelle partout le plateau et sa disposition la plaque, comme la nomment les trancheurs.
 
 ## 0.1.3
 

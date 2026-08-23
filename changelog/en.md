@@ -17,13 +17,16 @@ it into `website/version.json`.
 
 ## 0.1.4
 
+- Click a face and insert a part, and it now sits perpendicular to that face instead of pointing straight up. On a side wall a screw hole used to run across the wall.
+- A part placed at a hole takes over its size. At a hole of 5.19 mm the press-fit insert used to suggest M3 — which removes nothing there.
+- A click with a slightly unsteady hand selects again instead of nudging the part by a tenth of a millimetre.
 - A selected part can be moved directly with the mouse — grab and drag, without fetching “Move” first. The handle stays for the precise work: per axis, in grid steps and in height.
 - From below you now look through the print bed. If you work on the underside of a part, turn the view beneath it and you see the part instead of the plate.
 - A hole can also be selected by clicking into the middle of it — not only on its wall.
 - The command search now understands everyday words: “copy”, “delete”, “open” and “colour” led nowhere before, although all four exist.
 - The search also finds things for people who do not know the technical term. Type “stiffen”, “snap” or “screw” and you land on the stiffening rib, the snap hook and the screw hole.
 - Two menu entries were both called “remesh”. They are now “Refine edges” and “Even out triangles” — the first splits long edges, the second evens out triangle sizes.
-- The dialogs speak of the “exact body” instead of the “B-rep body”. The toggle had used that word all along; nine descriptions used the heavier one.
+- The program speaks the language you hear elsewhere: “exact body” instead of “B-rep”, bed instead of print surface, plate for the layout.
 - At startup Solidon checks whether a newer version is out and offers it. It is downloaded and installed only on your confirmation; you can switch this off in the settings.
 - A local language model may now compute for ten minutes. Before, the chat gave up after two and asked for an error report — for a calculation that simply took longer.
 - A ring is recognised as one feature instead of three beads stacked on top of each other.
@@ -34,8 +37,6 @@ it into `website/version.json`.
 - When the calculation stops, it says at which step and why.
 - The error report carries the state of the scene: objects with dimensions, features, parameters and the history. That makes a fault reproducible instead of guessed.
 - Several crashes when closing windows and dialogs are fixed.
-- The version file is signed, and Solidon checks the signature before it offers an update.
-- The print surface is called the bed everywhere and its layout the plate — the way the slicers name them.
 
 ## 0.1.3
 

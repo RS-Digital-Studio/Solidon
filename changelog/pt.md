@@ -17,13 +17,16 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ## 0.1.4
 
+- Quem clica numa face e insere um elemento obtém-no perpendicular a essa face em vez de apontado para cima. Numa parede lateral, um furo para parafuso ficava antes atravessado.
+- Um elemento colocado num furo assume a sua medida. Num furo de 5,19 mm, o casquilho de pressão propunha antes M3, que ali não remove nada.
+- Um clique com a mão um pouco trémula volta a selecionar em vez de deslocar a peça um décimo de milímetro.
 - Uma peça selecionada move-se diretamente com o rato — agarrar e arrastar, sem ir primeiro a «Mover». A pega fica para o preciso: por eixos e em passos de grelha.
 - De baixo vê-se agora através da base de impressão. Quem trabalha a face inferior de uma peça roda a vista por baixo e vê a peça em vez da base.
 - Um furo também pode ser selecionado clicando no meio dele, não apenas na sua parede.
 - A pesquisa de comandos entende agora palavras do dia a dia: «copiar», «apagar», «abrir» e «colorir» não levavam a lado nenhum, embora as quatro existam.
 - A pesquisa encontra também para quem não conhece o termo técnico. Ao escrever «reforçar», «encaixar» ou «aparafusar» chega-se à nervura, ao gancho e ao furo para parafuso.
 - Duas entradas de menu chamavam-se ambas «remalhar». Agora são «Refinar arestas» e «Uniformizar triângulos»: a primeira divide arestas longas, a segunda iguala os tamanhos.
-- As caixas de diálogo falam do «corpo exato» em vez do «corpo B-Rep». O comutador já usava essa palavra; nove descrições usavam a mais pesada.
+- O programa fala a língua que ouve noutros lados: «corpo exato» em vez de «B-Rep», cama em vez de superfície de impressão, placa para a disposição.
 - Ao iniciar, o Solidon verifica se existe uma versão mais recente e oferece-a. Só é transferida e instalada com a sua confirmação; pode ser desativado nas definições.
 - Um modelo de linguagem local pode agora calcular dez minutos. Antes, o chat desistia ao fim de dois e pedia um relatório de erro, por um cálculo que simplesmente demorava mais.
 - Um anel é reconhecido como uma única característica e já não como três cordões sobrepostos.
@@ -34,8 +37,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Se o cálculo parar, fica indicado em que passo e porquê.
 - O relatório de erro leva o estado da cena: objetos com medidas, características, parâmetros e o histórico. Assim um erro reproduz-se em vez de se adivinhar.
 - Foram corrigidas várias falhas ao fechar janelas e caixas de diálogo.
-- O ficheiro de versão está assinado, e o Solidon verifica a assinatura antes de oferecer uma atualização.
-- A superfície de impressão chama-se cama em toda a parte e a sua disposição placa, como lhes chamam os slicers.
 
 ## 0.1.3
 

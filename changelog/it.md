@@ -17,13 +17,16 @@ scrive in `website/version.json`.
 
 ## 0.1.4
 
+- Chi fa clic su una faccia e inserisce un elemento lo ottiene perpendicolare a quella faccia invece che verso l'alto. Su una parete laterale un foro per vite stava prima di traverso.
+- Un elemento posato su un foro ne assume la misura. Su un foro da 5,19 mm la boccola a pressione proponeva prima M3, che lì non asporta nulla.
+- Un clic con la mano un po' incerta seleziona di nuovo invece di spostare il pezzo di un decimo di millimetro.
 - Un pezzo selezionato si sposta direttamente con il mouse: afferrare e trascinare, senza prima richiamare «Sposta». La maniglia resta per il preciso: per assi e a passi di griglia.
 - Da sotto si guarda ora attraverso il piano di stampa. Chi lavora la faccia inferiore di un pezzo gira la vista sotto e vede il pezzo invece del piano.
 - Un foro si può selezionare anche facendo clic nel mezzo, non solo sulla sua parete.
 - La ricerca dei comandi capisce ora anche le parole di tutti i giorni: «copiare», «eliminare», «aprire» e «colorare» prima non portavano da nessuna parte, benché tutte e quattro esistano.
 - La ricerca trova anche per chi non conosce il termine tecnico. Digitando «rinforzare», «incastrare» o «avvitare» si arriva alla nervatura, al gancio e al foro per vite.
 - Due voci di menu si chiamavano entrambe «rimagliare». Ora sono «Affina gli spigoli» e «Uniforma i triangoli»: la prima divide gli spigoli lunghi, la seconda ne pareggia le dimensioni.
-- Le finestre di dialogo parlano di «corpo esatto» invece che di «corpo B-Rep». L'interruttore usava già quella parola; nove descrizioni usavano quella più pesante.
+- Il programma parla la lingua che lei sente altrove: «corpo esatto» invece di «B-Rep», piano invece di superficie di stampa, piatto per la disposizione.
 - All’avvio Solidon controlla se esiste una versione più recente e la propone. Viene scaricata e installata solo dopo la tua conferma; si può disattivare nelle impostazioni.
 - Un modello linguistico locale può ora calcolare dieci minuti. Prima la chat si arrendeva dopo due e chiedeva una segnalazione, per un calcolo che semplicemente durava di più.
 - Un anello viene riconosciuto come una sola caratteristica e non più come tre cordoli sovrapposti.
@@ -34,8 +37,6 @@ scrive in `website/version.json`.
 - Se il calcolo si ferma, viene indicato a quale passo e perché.
 - La segnalazione porta con sé lo stato della scena: oggetti con misure, caratteristiche, parametri e cronologia. Così un errore si riproduce invece di indovinarlo.
 - Sono stati corretti diversi arresti anomali alla chiusura di finestre e finestre di dialogo.
-- Il file di versione è firmato, e Solidon ne verifica la firma prima di proporre un aggiornamento.
-- La superficie di stampa si chiama ovunque piano e la sua disposizione piatto, come li chiamano gli slicer.
 
 ## 0.1.3
 

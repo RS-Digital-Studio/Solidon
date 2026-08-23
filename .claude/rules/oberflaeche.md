@@ -285,8 +285,11 @@ für jede Messung an einem Widget, nicht nur für Bildschirmfotos.
 Der Aufruf dafür ist drei Zeilen und braucht kein Fenster auf dem Schirm:
 
 ```python
-app = QApplication([]); apply_style(app, "dark")
-dialog = SupportDialog(kind=KIND_SURVEY); dialog.show(); app.processEvents()
+app = QApplication([])
+apply_style(app, "dark")
+dialog = SupportDialog(kind=KIND_SURVEY)
+dialog.show()
+app.processEvents()
 dialog.grab().save("bogen.png")
 ```
 

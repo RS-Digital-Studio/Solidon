@@ -18,13 +18,16 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ## 0.1.4
 
+- Al hacer clic en una cara e insertar un elemento, este queda perpendicular a esa cara en lugar de apuntar hacia arriba. En una pared lateral, un agujero para tornillo quedaba antes atravesado.
+- Un elemento colocado en un taladro adopta su medida. En un taladro de 5,19 mm, el casquillo a presión proponía antes M3, que allí no quita nada.
+- Un clic con la mano algo temblorosa vuelve a seleccionar en vez de desplazar la pieza una décima de milímetro.
 - Una pieza seleccionada se mueve directamente con el ratón: agarrar y arrastrar, sin recurrir antes a «Mover». El tirador queda para lo preciso: por ejes y a pasos de rejilla.
 - Desde abajo se ve ahora a través de la cama de impresión. Quien trabaja la cara inferior de una pieza gira la vista por debajo y ve la pieza en vez de la placa.
 - Un taladro también se puede seleccionar haciendo clic en su interior, no solo en su pared.
 - La búsqueda de comandos entiende ahora palabras corrientes: «copiar», «borrar», «abrir» y «colorear» antes no llevaban a ninguna parte, aunque las cuatro existen.
 - La búsqueda encuentra también para quien no conoce el término técnico. Al escribir «reforzar», «encajar» o «atornillar» se llega al nervio de refuerzo, al gancho y al agujero de tornillo.
 - Dos entradas de menú se llamaban ambas «remallar». Ahora son «Refinar aristas» y «Uniformar triángulos»: la primera divide aristas largas, la segunda iguala los triángulos.
-- Los diálogos hablan del «cuerpo exacto» en vez del «cuerpo B-Rep». El conmutador ya usaba esa palabra; nueve descripciones usaban la más pesada.
+- El programa habla el idioma que usted oye en otras partes: «cuerpo exacto» en vez de «B-Rep», cama en vez de superficie de impresión, placa para la distribución.
 - Al iniciarse, Solidon comprueba si hay una versión más reciente y la ofrece. Se descarga e instala solo con tu confirmación; puedes desactivarlo en los ajustes.
 - Un modelo de lenguaje local puede calcular ahora diez minutos. Antes el chat se rendía a los dos y pedía un informe de error, por un cálculo que simplemente tardaba más.
 - Un anillo se reconoce como una sola característica y ya no como tres rebordes superpuestos.
@@ -35,8 +38,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Si el cálculo se detiene, se indica en qué paso y por qué.
 - El informe de error lleva el estado de la escena: objetos con medidas, características, parámetros y el historial. Así un fallo se reproduce en vez de adivinarse.
 - Se han corregido varios cierres inesperados al cerrar ventanas y diálogos.
-- El archivo de versión está firmado, y Solidon comprueba la firma antes de ofrecer una actualización.
-- La superficie de impresión se llama cama en todas partes y su distribución placa, como la nombran los slicers.
 
 ## 0.1.3
 
