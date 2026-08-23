@@ -2771,7 +2771,7 @@ class MainWindow(QMainWindow):
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
         self.progress.setVisible(True)
-        worker.start()
+        self._leash.start(worker)
 
     def _on_download_progress(self, share: float, label: str) -> None:
         """Wie weit die Datei ist. Ein Server ohne Längenangabe liefert
@@ -3351,7 +3351,7 @@ class MainWindow(QMainWindow):
         # zweiter Lauf schriebe in dieselben Dateien, und welcher von beiden
         # gewinnt, entschiede die Reihenfolge zweier Threads.
         self._update_actions()
-        worker.start()
+        self._leash.start(worker)
 
     def _export_done(self, written: list[Path], findings: list[Finding]) -> None:
         """Was geschrieben wurde, und was dabei aufgefallen ist (§29)."""
@@ -3476,7 +3476,7 @@ class MainWindow(QMainWindow):
         self._retire(self._ollama_size_worker)
         self._ollama_size_worker = worker
         worker.finished.connect(lambda done=worker: self._ollama_size_worker_done(done))
-        worker.start()
+        self._leash.start(worker)
 
     def _ollama_size_worker_done(self, worker: Any) -> None:
         if self._ollama_size_worker is worker:
@@ -4545,7 +4545,7 @@ class MainWindow(QMainWindow):
         self._retire(self._map_worker)
         self._map_worker = worker
         worker.finished.connect(lambda done=worker: self._map_worker_done(done))
-        worker.start()
+        self._leash.start(worker)
 
     def _cancel_map_worker(self) -> None:
         """Der laufenden Karte sagen, dass niemand mehr auf sie wartet."""
@@ -4651,7 +4651,7 @@ class MainWindow(QMainWindow):
         self._retire(self._slice_worker)
         self._slice_worker = worker
         worker.finished.connect(lambda done=worker: self._slice_worker_done(done))
-        worker.start()
+        self._leash.start(worker)
         return None
 
     def _slice_worker_done(self, worker: Any) -> None:
@@ -6427,7 +6427,7 @@ class MainWindow(QMainWindow):
         # Arbeiter die Suite ohne Traceback abriss (siehe Session).
         worker.finished.connect(self._update_worker_done)
         self._update_worker = worker
-        worker.start()
+        self._leash.start(worker)
 
     def _update_worker_done(self) -> None:
         """Die Abfrage ist ausgelaufen — ihr Arbeiter bleibt bis zur nächsten."""

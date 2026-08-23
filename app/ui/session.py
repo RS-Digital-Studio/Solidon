@@ -936,7 +936,7 @@ class Session(QObject):
         worker.crashed.connect(lambda detail: _log.warning("preview crashed: %s", detail))
         worker.finished.connect(lambda done=worker: self._preview_finished(done))
         self._previews.append(worker)
-        worker.start()
+        self._leash.start(worker)
 
     def _preview_finished(self, worker: _PreviewWorker) -> None:
         if worker in self._previews:
@@ -995,7 +995,7 @@ class Session(QObject):
         worker.finished.connect(self._on_split_done)
         self._split = worker
         self.splitBusyChanged.emit(True)
-        worker.start()
+        self._leash.start(worker)
 
     @property
     def split_running(self) -> bool:
@@ -1085,7 +1085,7 @@ class Session(QObject):
         worker.cancelled.connect(partial(self._on_cancelled, finished=worker))
         worker.finished.connect(partial(self._on_thread_done, worker))
         self._worker = worker
-        worker.start()
+        self._leash.start(worker)
 
     def run_evaluation(self, quality: Quality | None = None) -> EvaluationResult:
         """Ein Durchlauf mit allem, was der Kern braucht. Keine Signale, kein
@@ -1181,7 +1181,7 @@ class Session(QObject):
         worker.crashed.connect(lambda detail: self._on_failed(InternalError(detail=detail)))
         worker.finished.connect(self._on_agent_done)
         self._agent = worker
-        worker.start()
+        self._leash.start(worker)
 
     def run_proposal(self, request: str) -> ProposalPreview:
         """Ein Agentenzug plus seine Vorschau. Läuft im Arbeiter (§26.5)."""

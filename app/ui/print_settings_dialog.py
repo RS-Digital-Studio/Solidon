@@ -1440,7 +1440,7 @@ class PrintSettingsDialog(QDialog):
         worker.crashed.connect(self._profiles_failed)
         worker.finished.connect(self._profile_search_finished)
         self._profile_worker = worker
-        worker.start()
+        self._leash.start(worker)
 
     def _profiles_failed(self, detail: str) -> None:
         """Der Profilbestand ließ sich nicht durchsehen.
@@ -2253,7 +2253,7 @@ class PrintSettingsDialog(QDialog):
         worker.finished.connect(self._slice_finished)
         worker.step.connect(self._slicing_plate)
         self._worker = worker
-        worker.start()
+        self._leash.start(worker)
 
     def _plate_run(
         self,

@@ -451,7 +451,7 @@ class GenerateDialog(QDialog):
         worker.step.connect(self._on_step)
         worker.finished.connect(self._on_thread_done)
         self._worker = worker
-        worker.start()
+        self._leash.start(worker)
 
     def _on_step(self, fraction: float, text: str) -> None:
         self.progress.setValue(int(max(0.0, min(1.0, fraction)) * 100))

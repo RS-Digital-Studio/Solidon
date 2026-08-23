@@ -40,7 +40,7 @@ from app.core.scene.variants import MAX_VARIANTS
 from app.i18n import tr
 from app.ui.dialogs import show_error
 from app.ui.labels import NumberSpin
-from app.ui.leash import WAIT_TIMEOUT_MS, Worker
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.session import Session
 
 _log = get_logger(__name__)
@@ -87,6 +87,7 @@ class VariantsDialog(QDialog):
     def __init__(self, session: Session, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.session = session
+        self._leash = WorkerLeash(self)
         self.setWindowTitle(tr("Varianten erzeugen"))
         self.setMinimumWidth(460)
 
@@ -195,11 +196,14 @@ class VariantsDialog(QDialog):
         worker.done.connect(self._finished)
         worker.failed.connect(self._broke)
         worker.crashed.connect(lambda detail: self._broke(InternalError(detail=detail)))
-        # Der Arbeiter hängt an dieser Referenz und an keinem Qt-Elternteil:
-        # fällt sie weg, während er läuft, zerstört der Speicherbereiniger das
-        # C++-Objekt unter ihm. Losgelassen wird er in ``_release``.
+        # Das Feld ist danach die Antwort auf „läuft gerade einer" und nicht
+        # mehr die einzige Referenz: Gehalten wird über die Leine, ab dem
+        # Start. Fiele das Feld weg, während der Arbeiter läuft — ein Test
+        # lässt den Dialog fallen —, zerstörte der Speicherbereiniger sonst
+        # das C++-Objekt unter einem laufenden Thread. Losgelassen wird er
+        # weiterhin in ``_release``.
         self._worker = worker
-        worker.start()
+        self._leash.start(worker)
 
     def _advance(self, share: float, text: str) -> None:
         """Fortschritt, gemeldet aus dem Arbeits-Thread.
@@ -260,10 +264,16 @@ class VariantsDialog(QDialog):
 
         ``finished`` kommt, während Qt den Thread noch abräumt; ihn dort schon
         freizugeben ist die Zugriffsverletzung ohne Zeile. Gewartet wird
-        deshalb — und weil dieser Dialog modal ist und genau einen Arbeiter
-        führt, genügt das hier. Die Halteleine des Hauptfensters
-        (:class:`~app.ui.leash.WorkerLeash`) braucht es für mehrere
-        gleichzeitig.
+        deshalb hier, und zwar mit Frist (siehe unten).
+
+        **Die Leine ersetzt das nicht, sie kommt dazu.** Hier stand, sie
+        brauche es nur „für mehrere gleichzeitig" — und das war der falsche
+        Maßstab: Sie hält einen Arbeiter ab dem *Start*, während dieses Feld
+        ihn erst hält, wenn jemand es setzt, und ihn verliert, sobald der
+        Dialog weggeräumt wird. Dazu kommt, was erst am 23.08.2026 auffiel:
+        Was an der Leine vorbei startet, steht nicht in ``leash._alive`` und
+        ist damit für ``leash.wait_for_all`` unsichtbar — die Aufräumhilfe der
+        Suite kann einen solchen Arbeiter weder abwarten noch melden.
 
         **Mit Frist.** Hier stand ``wait()`` ohne Grenze, und aus
         :meth:`closeEvent` heraus war das ein Fenster, das beim Schließen

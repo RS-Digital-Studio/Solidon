@@ -479,7 +479,7 @@ class SupportDialog(QDialog):
         )
         worker.finished.connect(self._thread_done)
         self._worker = worker
-        worker.start()
+        self._leash.start(worker)
         self._update_send()
 
     def _sent(self, receipt: object) -> None:

@@ -120,6 +120,46 @@ def test_a_started_worker_is_let_go_after_it_stopped(qt_app: QApplication) -> No
     assert arbeiter not in leash_module.alive()
 
 
+def test_no_worker_is_started_past_the_leash(qt_app: QApplication) -> None:
+    """Was an der Leine vorbei startet, sieht ``wait_for_all`` nicht — und
+    damit verspricht jede Zusicherung darüber mehr, als sie halten kann.
+
+    Sieben Arbeiter starteten mit blankem ``worker.start()``: der Download,
+    der Export, die Analysekarte, die Schichtanalyse, die Ollama-Größe, die
+    Update-Abfrage und der Erzeuger im Generierungsdialog. Alle sieben hingen
+    solange allein am Feld ihres Besitzers — genau die Lage, gegen die
+    ``WorkerLeash.start`` geschrieben wurde —, und keiner von ihnen stand in
+    ``_alive``.
+
+    Aufgefallen ist es nicht an einem Absturz, sondern an einer Frage von
+    3d-druck-33 zu ihrer Aufräum-Fixture: Sie wollte über den Rückgabewert von
+    ``wait_for_all`` melden, wer einen Test überlebt hat. Eine Meldung, die
+    nur die Hälfte sieht, ist schlechter als keine — sie liest sich wie eine
+    Zusage.
+
+    Geprüft wird am Quelltext und nicht am Verhalten, weil das Verhalten es
+    nicht zeigt: Ein Arbeiter an der Leine vorbei läuft völlig normal, bis das
+    Fenster unter ihm weggeräumt wird.
+    """
+    import re
+    from pathlib import Path
+
+    # Vom Testverzeichnis aus, nicht vom Arbeitsverzeichnis: ein Wächter, der
+    # nur beim Aufruf aus dem Projektstamm etwas findet, ist keiner.
+    verstoesse = []
+    for pfad in sorted((Path(__file__).parent.parent / "app" / "ui").glob("*.py")):
+        if pfad.name == "leash.py":
+            continue  # dort steht der eine richtige Aufruf
+        for nummer, zeile in enumerate(pfad.read_text(encoding="utf-8").splitlines(), 1):
+            if re.fullmatch(r"\s*\w*worker\.start\(\)\s*", zeile, re.IGNORECASE):
+                verstoesse.append(f"{pfad.as_posix()}:{nummer}")
+
+    assert not verstoesse, (
+        "diese Arbeiter starten an der Leine vorbei und sind damit für "
+        f"wait_for_all unsichtbar: {verstoesse}"
+    )
+
+
 def test_waiting_for_all_catches_a_worker_without_a_window(qt_app: QApplication) -> None:
     """Der Fall, den ein Rundgang über die Fenster nicht findet.
 
