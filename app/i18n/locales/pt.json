@@ -297,7 +297,7 @@
   "Bohrt ein rundes Loch — auf Wunsch um die Materialtoleranz vergrößert.": "Abre um furo redondo — a pedido, alargado pela tolerância do material.",
   "Bohrung": "Furo",
   "Bohrung für eine Heat-Set-Einpressbuchse mit Einführfase. Der Durchmesser ist bewusst knapp: das Material soll beim Einpressen verdrängt werden.": "Furo para uma bucha de inserção a quente, com chanfro de entrada. O diâmetro é deliberadamente justo: o material deve ser deslocado ao inserir.",
-  "Bohrung oder Fläche am bewegten Objekt, zum Beispiel hole_1.": "Furo ou face no objeto movido, por exemplo hole_1.",
+  "Bohrung oder Fläche am bewegten Objekt. Ein Klick im Fenster trägt sie ein.": "Furo ou face no objeto movido. Um clique na janela preenche-o.",
   "Bohrung setzen": "Abrir furo",
   "Bohrung verschließen": "Fechar furo",
   "Bohrung Ø 4,2 mm": "Furo Ø 4,2 mm",

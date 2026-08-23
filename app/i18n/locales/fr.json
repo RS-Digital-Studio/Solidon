@@ -297,7 +297,7 @@
   "Bohrt ein rundes Loch — auf Wunsch um die Materialtoleranz vergrößert.": "Perce un trou rond — élargi de la tolérance du matériau si demandé.",
   "Bohrung": "Perçage",
   "Bohrung für eine Heat-Set-Einpressbuchse mit Einführfase. Der Durchmesser ist bewusst knapp: das Material soll beim Einpressen verdrängt werden.": "Perçage pour un insert à chaud avec chanfrein d'entrée. Le diamètre est volontairement juste : la matière doit être refoulée à la pose.",
-  "Bohrung oder Fläche am bewegten Objekt, zum Beispiel hole_1.": "Perçage ou face sur l'objet déplacé, par exemple hole_1.",
+  "Bohrung oder Fläche am bewegten Objekt. Ein Klick im Fenster trägt sie ein.": "Perçage ou face sur l'objet déplacé. Un clic dans la fenêtre le renseigne.",
   "Bohrung setzen": "Percer un trou",
   "Bohrung verschließen": "Reboucher un perçage",
   "Bohrung Ø 4,2 mm": "Perçage Ø 4,2 mm",

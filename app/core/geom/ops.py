@@ -560,8 +560,9 @@ def place_object_on_bed(ctx: OpContext) -> OpResult:
 class AlignParams(BaseParams):
     feature: str = param(
         title=_("Merkmal"),
+        kind="feature",
         default="",
-        doc=_("Bohrung oder Fläche am bewegten Objekt, zum Beispiel hole_1."),
+        doc=_("Bohrung oder Fläche am bewegten Objekt. Ein Klick im Fenster trägt sie ein."),
     )
     target: str = param(
         title=_("Ziel"),

@@ -297,7 +297,7 @@
   "Bohrt ein rundes Loch — auf Wunsch um die Materialtoleranz vergrößert.": "Perfora un agujero redondo — si se pide, ampliado con la tolerancia del material.",
   "Bohrung": "Taladro",
   "Bohrung für eine Heat-Set-Einpressbuchse mit Einführfase. Der Durchmesser ist bewusst knapp: das Material soll beim Einpressen verdrängt werden.": "Taladro para un inserto roscado termofijado con chaflán de entrada. El diámetro es deliberadamente justo: el material debe desplazarse al insertarlo.",
-  "Bohrung oder Fläche am bewegten Objekt, zum Beispiel hole_1.": "Taladro o cara del objeto que se mueve, por ejemplo hole_1.",
+  "Bohrung oder Fläche am bewegten Objekt. Ein Klick im Fenster trägt sie ein.": "Taladro o cara del objeto que se mueve. Un clic en la ventana lo introduce.",
   "Bohrung setzen": "Hacer un taladro",
   "Bohrung verschließen": "Cerrar un taladro",
   "Bohrung Ø 4,2 mm": "Taladro Ø 4,2 mm",

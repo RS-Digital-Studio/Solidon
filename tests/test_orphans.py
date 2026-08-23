@@ -235,6 +235,46 @@ def test_dropping_it_clears_the_name_and_keeps_the_step(scene: Scene) -> None:
     assert document.ops[0].params["at_feature"] == "", "only the name is gone"
 
 
+def test_aligning_names_a_feature_too_and_says_so() -> None:
+    """*An Merkmal ausrichten* nennt zwei Merkmale und wurde von keinem
+    Raster erfasst.
+
+    Die Prüfung sucht nach der **Art** (``kind="feature"``), die Vorbelegung
+    in ``placement.py`` nach dem **Namen** (``at_feature``). Einundzwanzig
+    Operationen erfüllen beides, weil ihr Feld so heißt und so deklariert ist.
+    Diese eine nennt ihres ``feature`` und deklarierte nichts — und fiel damit
+    durch beide Raster: keine Rückfrage nach §21.3, keine Auswahlliste im
+    Dialog, keine Vorbelegung aus einem Klick.
+
+    Sichtbar wurde es an der Bedienung — der Kunde sollte ``hole_1`` tippen —,
+    aber der Schaden liegt hier: Wer ein Merkmal umbenennt, bekommt für
+    einundzwanzig Operationen die Frage aus §21.3 und für diese einen Fehler
+    eine Operation später.
+
+    **Das zweite Feld fehlt hier absichtlich.** ``target`` benennt ein Merkmal
+    eines *anderen* Objekts (``obj_2:hole_1``), und ``references`` baut jeden
+    Verweis mit ``operation.inputs[0]`` — für ``target`` käme dabei
+    ``obj_1:"obj_2:hole_1"`` heraus. Es braucht eine eigene Art, nicht diese;
+    ein ``kind="feature"`` daran wäre kein Fortschritt, sondern ein falscher
+    Verweis.
+    """
+    document = Document(format_version=1, app_version="0.0.1")
+    document.ops.append(
+        Operation(
+            id=1,
+            op="align_to_feature",
+            inputs=("obj_1",),
+            outputs=("obj_1",),
+            params={"feature": "hole_1", "target": "obj_2:hole_3"},
+        )
+    )
+
+    found = orphans.references(document)
+
+    assert [entry.where for entry in found] == ["op:1:feature"]
+    assert found[0].ref == FeatureRef("obj_1", "hole_1")
+
+
 def test_an_operation_the_registry_does_not_know_is_skipped() -> None:
     """Eine Datei aus einer neueren Version, oder ein nicht geladenes Plugin."""
     assert orphans.references(document_with_op("hole_1", op="op_from_the_future")) == []

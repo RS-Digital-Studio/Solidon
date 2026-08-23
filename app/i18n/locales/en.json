@@ -297,7 +297,7 @@
   "Bohrt ein rundes Loch — auf Wunsch um die Materialtoleranz vergrößert.": "Drills a round hole, widened by the material tolerance if asked.",
   "Bohrung": "Hole",
   "Bohrung für eine Heat-Set-Einpressbuchse mit Einführfase. Der Durchmesser ist bewusst knapp: das Material soll beim Einpressen verdrängt werden.": "Hole for a heat-set insert with a lead-in chamfer. The diameter is deliberately tight: the material is meant to be displaced while pressing.",
-  "Bohrung oder Fläche am bewegten Objekt, zum Beispiel hole_1.": "Bore or face on the moved object, for example hole_1.",
+  "Bohrung oder Fläche am bewegten Objekt. Ein Klick im Fenster trägt sie ein.": "Bore or face on the moved object. A click in the window enters it.",
   "Bohrung setzen": "Drill a bore",
   "Bohrung verschließen": "Fill a bore",
   "Bohrung Ø 4,2 mm": "Hole Ø 4.2 mm",

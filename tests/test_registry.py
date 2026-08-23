@@ -243,6 +243,19 @@ def test_a_feature_parameter_is_declared_as_one() -> None:
 
     Achtzehn Operationen benennen ein Merkmal, und bevor sie das sagten, lief
     die Verwaisten-Prüfung an jeder einzelnen vorbei.
+
+    **Die Zusicherung lief einmal in beide Richtungen und war dadurch zu
+    scharf.** ``named == declared`` verlangte nicht nur, dass jedes
+    ``at_feature`` sich deklariert — es verbot auch, dass ein Merkmalsfeld
+    anders heißt. Genau daran ist *An Merkmal ausrichten* hängengeblieben: Ihr
+    Feld heißt ``feature``, und um es der Verwaisten-Prüfung sichtbar zu
+    machen, musste dieser Test erst nachgeben. Ein Test, der einen Fehler am
+    Beheben hindert, prüft die Gewohnheit und nicht die Zusage.
+
+    Was die Gegenrichtung geschützt hat, übernimmt jetzt die zweite
+    Zusicherung unten: Ein Merkmalsverweis wird mit dem Eingangsobjekt
+    aufgelöst (``orphans.references`` nimmt ``operation.inputs[0]``), also
+    zeigt er ins Leere, wenn es keines gibt.
     """
     from app.core.bootstrap import load_operations
 
@@ -261,4 +274,11 @@ def test_a_feature_parameter_is_declared_as_one() -> None:
     }
 
     assert named, "otherwise this test proves nothing"
-    assert named == declared, "a parameter that names a feature declares kind='feature'"
+    assert named <= declared, "a parameter that names a feature declares kind='feature'"
+
+    without_input = sorted(
+        spec.name
+        for spec in REGISTRY.all()
+        if spec.consumes < 1 and any(entry.kind == "feature" for entry in spec.params.spec())
+    )
+    assert not without_input, "a feature reference is resolved against the input object"

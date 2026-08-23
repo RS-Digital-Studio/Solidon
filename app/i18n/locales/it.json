@@ -297,7 +297,7 @@
   "Bohrt ein rundes Loch — auf Wunsch um die Materialtoleranz vergrößert.": "Pratica un foro rotondo — su richiesta allargato della tolleranza del materiale.",
   "Bohrung": "Foro",
   "Bohrung für eine Heat-Set-Einpressbuchse mit Einführfase. Der Durchmesser ist bewusst knapp: das Material soll beim Einpressen verdrängt werden.": "Foro per un inserto a caldo con smusso di invito. Il diametro è volutamente stretto: il materiale deve essere spinto via durante l'inserimento.",
-  "Bohrung oder Fläche am bewegten Objekt, zum Beispiel hole_1.": "Foro o faccia sull'oggetto spostato, ad esempio hole_1.",
+  "Bohrung oder Fläche am bewegten Objekt. Ein Klick im Fenster trägt sie ein.": "Foro o faccia sull'oggetto spostato. Un clic nella finestra lo inserisce.",
   "Bohrung setzen": "Pratica un foro",
   "Bohrung verschließen": "Chiudi un foro",
   "Bohrung Ø 4,2 mm": "Foro Ø 4,2 mm",
