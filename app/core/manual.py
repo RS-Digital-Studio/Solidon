@@ -1128,11 +1128,16 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Vorschau zeigt vorher alles, und ein Knopf schickt es an den "
             "Support. Wer nichts aus der Hand geben möchte, legt im selben "
             "Dialog stattdessen einen Ordner auf dem eigenen Rechner ab.\n\n"
-            "**Während der Demo fragt Solidon einmal von selbst.** Nach einer "
-            "halben Stunde Arbeit erscheint ein Streifen mit zwei Fragen — was "
-            "gut läuft und was fehlt. Er führt in denselben Dialog, zeigt "
-            "dieselbe Vorschau und schickt nichts ohne Ihren Klick; "
-            "wegklicken geht auch, und dann kommt er nicht wieder."
+            "**Während der Demo fragt Solidon von selbst.** Nach einer halben "
+            "Stunde Arbeit — gezählt werden nur Minuten, in denen Sie etwas "
+            "getan haben — legt sich eine Karte über die Ansicht und fragt, "
+            "wie es läuft. Sie hält nichts an und wartet, bis Sie hinsehen. "
+            "*Rückmeldung geben* öffnet denselben Dialog wie *Hilfe → "
+            "Rückmeldung senden*, mit drei Feldern darin: wie gut Sie "
+            "zurechtkommen, was gut funktioniert hat, was gefehlt hat. Kein "
+            "Feld ist Pflicht, die Vorschau zeigt vorher alles, und ohne Ihren "
+            "Klick geht nichts hinaus. *Nein danke* gilt dauerhaft; wer die "
+            "Karte einfach stehen lässt, sieht sie höchstens dreimal."
         ),
     ),
     Page(
