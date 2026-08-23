@@ -9,18 +9,39 @@ nie ein Fehlerdialog, nie ein Start, der daran hängt.
 from __future__ import annotations
 
 import hashlib
+import json
 import urllib.error
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
+from unittest import mock
 
 import pytest
 
 from app.core import updates
 from app.core.errors import ExternalToolError, OperationCancelled
+from tests.release_signing import REAL_PUBLIC_KEY, accept_test_signatures, signed
+
+__all__ = ["accept_test_signatures"]  # die Fixture wirkt durch den Import, nicht durch Aufruf
 
 
 def answering(payload: dict[str, Any]) -> updates.Transport:
-    """Ein Transport, der genau diese Antwort gibt."""
+    """Ein Transport, der genau diese Antwort gibt — unterschrieben.
+
+    Die Unterschrift steckt hier und nicht in jedem einzelnen Test: Sie ist
+    keine Eigenschaft dessen, was ein Test prüfen will, sondern die Bedingung
+    dafür, dass ``check`` die Antwort überhaupt ansieht (§37.2). Wer eine
+    unsignierte Antwort braucht, gibt sie über ``raw_answering``.
+    """
+
+    def fetch(_url: str, _headers: dict[str, str], _payload: dict[str, Any]) -> dict[str, Any]:
+        return signed(payload)
+
+    return fetch
+
+
+def raw_answering(payload: dict[str, Any]) -> updates.Transport:
+    """Ein Transport, der genau diese Antwort gibt — so, wie sie dasteht."""
 
     def fetch(_url: str, _headers: dict[str, str], _payload: dict[str, Any]) -> dict[str, Any]:
         return payload
@@ -394,3 +415,79 @@ def test_starting_hands_the_package_to_the_system(monkeypatch: pytest.MonkeyPatc
     updates.start_installer(file)
 
     assert gestartet and str(file) in gestartet[0]
+
+
+# --- die Unterschrift der Versionsdatei (§37.2) ---------------------------------------
+
+
+def test_a_tampered_version_file_is_refused() -> None:
+    """Der Fall, für den die Unterschrift da ist: jemand hat den Server.
+
+    Er tauscht Paket und Prüfsumme gemeinsam aus — beide stehen in derselben
+    Datei, und die Prüfsumme allein widerspricht ihm nicht. Die Unterschrift
+    schon: Sie läuft über den ganzen Inhalt, und erzeugen kann er sie nicht.
+    """
+    echt = signed(
+        {
+            "version": "9.0.0",
+            "url": "https://solidon3d.de/",
+            "packages": {
+                "windows": {
+                    "file": "S.exe",
+                    "url": "https://solidon3d.de/S.exe",
+                    "size": 1,
+                    "sha256": "ab" * 32,
+                }
+            },
+        }
+    )
+    assert updates.check(fetch=raw_answering(echt)) is not None
+
+    getauscht = json.loads(json.dumps(echt))
+    getauscht["packages"]["windows"]["sha256"] = "ff" * 32
+    assert updates.check(fetch=raw_answering(getauscht)) is None
+
+
+def test_a_version_file_without_a_signature_is_refused() -> None:
+    """Weglassen darf nicht helfen — sonst wäre die Prüfung eine Bitte."""
+    ohne = {"version": "9.0.0", "url": "https://solidon3d.de/"}
+
+    assert updates.check(fetch=raw_answering(ohne)) is None
+
+
+def test_only_the_content_is_signed_not_its_layout() -> None:
+    """Andere Einrückung, dieselbe Aussage: Die Unterschrift trägt weiter.
+
+    Sonst hinge sie daran, wie ein Werkzeug JSON schreibt — und das erste
+    Umformatieren nähme allen Kunden den Update-Weg.
+    """
+    echt = signed({"version": "9.0.0", "url": "https://solidon3d.de/"})
+
+    umgebrochen = json.loads(json.dumps(echt, indent=8, sort_keys=True))
+
+    assert updates.check(fetch=raw_answering(umgebrochen)) is not None
+
+
+def test_the_published_version_file_is_signed() -> None:
+    """**Die Datei, die wir wirklich ausliefern, gegen den echten Schlüssel.**
+
+    Testart „Anschluss": Die Tests darüber prüfen mit dem Schlüssel der Suite
+    und belegen damit die Arithmetik, nicht die Auslieferung. Dieser hier
+    fängt den Fall, der wirklich passiert — ``make_download.py`` schreibt
+    ``version.json`` neu, jemand lädt sie hoch, und niemand hat unterschrieben.
+    Der Schaden wäre lautlos: Die Datei liegt richtig da, und trotzdem erfährt
+    keine Installation je von dieser Fassung.
+
+    Kein ``monkeypatch``, keine Fixture — hier zählt der echte
+    ``RELEASE_PUBLIC_KEY``. Die autouse-Fixture wird dafür ausdrücklich
+    zurückgedreht.
+    """
+    file = Path(__file__).resolve().parent.parent / "website" / "version.json"
+    data = json.loads(file.read_text(encoding="utf-8"))
+    assert data, "version.json is empty — nothing was checked"
+
+    with mock.patch.object(updates, "RELEASE_PUBLIC_KEY", REAL_PUBLIC_KEY):
+        assert updates.signature_ok(data), (
+            "website/version.json carries no valid signature — sign it before "
+            "uploading: python tools/sign_version.py --private <file>"
+        )

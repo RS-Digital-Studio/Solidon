@@ -538,7 +538,16 @@ def write_version(packages: list[Package]) -> None:
         data["packages"] = entries
     else:
         data.pop("packages", None)
+    # **Die alte Unterschrift ist mit diesem Schreiben hinfällig** (§37.2): Sie
+    # galt dem alten Inhalt, und der ist gerade ersetzt worden. Stehen lassen
+    # wäre schlimmer als weglassen — eine Datei mit einer Unterschrift, die
+    # nicht trägt, sieht unterschrieben aus.
+    data.pop("signature", None)
     VERSION_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(
+        "  version.json: ohne Unterschrift geschrieben — vor dem Hochladen:\n"
+        "    python tools/sign_version.py --private <datei>"
+    )
 
     if entries:
         print(f"  version.json: {APP_VERSION}, {len(entries)} startbare(s) Paket(e)")

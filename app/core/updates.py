@@ -40,6 +40,7 @@ from typing import Any, Final
 from urllib.parse import urlsplit
 
 from app.branding import APP_VERSION
+from app.core.activation import ed25519
 from app.core.backends.llm import Transport
 from app.core.errors import (
     OPEN_DOWNLOAD_PAGE,
@@ -57,6 +58,26 @@ _log = get_logger(__name__)
 
 #: Wo die Versionsdatei liegt. Eine Adresse, ein JSON-Objekt.
 VERSION_URL: Final = "https://solidon3d.de/version.json"
+
+#: Der öffentliche Schlüssel, gegen den die Versionsdatei geprüft wird (§37.2).
+#:
+#: **Warum ein eigenes Paar und nicht das aus §8.** Der Lizenzschlüssel und die
+#: Versionsdatei haben verschiedene Aufgaben und verschiedene Lebensdauern. Ein
+#: gemeinsames Paar hieße: Wer den einen Teil verliert, verliert beide Zwecke
+#: auf einmal — und der Lizenzschlüssel wird bei jedem Kauf benutzt, die
+#: Versionsdatei bei jedem Bau.
+#:
+#: Der private Teil liegt **nicht im Repository und nicht auf dem Server**. Das
+#: ist der ganze Punkt: Gegen einen Angreifer, der den Webserver hat, hilft die
+#: Prüfsumme nicht — sie steht in derselben Datei wie die Adresse, und er
+#: tauscht beide zusammen aus. Gegen ihn hilft nur eine Unterschrift, die er
+#: dort nicht erzeugen kann.
+RELEASE_PUBLIC_KEY: Final = bytes.fromhex(
+    "603ec2d86e9f1b5232ccec58153b863f00c1f91cbc647a8696ecf6dfd4bbee79"
+)
+
+#: Wie das Feld heißt, in dem die Unterschrift steht.
+SIGNATURE_FIELD: Final = "signature"
 
 #: Wie lange die Prüfung dauern darf. Sie läuft beim Start; niemand wartet
 #: auf sie.
@@ -188,6 +209,39 @@ def _as_tuple(version: str) -> tuple[int, ...]:
     return tuple(parts)
 
 
+def signed_payload(data: Mapping[str, Any]) -> bytes:
+    """Die Bytes, über die die Unterschrift läuft — alles außer ihr selbst.
+
+    Kanonisch, damit Bauwerkzeug und Prüfung dasselbe signieren und prüfen:
+    Schlüssel sortiert, keine Leerzeichen, ASCII. Dieselbe Form wie beim
+    Manifest (``activation.integrity.manifest_payload``) und aus demselben
+    Grund — zwei Umsetzungen wären der Weg zu einer Unterschrift, die nur eine
+    Seite versteht.
+
+    Damit trägt sie **den ganzen Inhalt**: Version, Adresse, Hinweistext, jede
+    Paketangabe und jeden Changelog-Punkt. Wer eine Prüfsumme austauscht,
+    bricht sie; wer nur die Einrückung ändert, nicht.
+    """
+    rest = {key: value for key, value in data.items() if key != SIGNATURE_FIELD}
+    return json.dumps(rest, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def signature_ok(data: Mapping[str, Any]) -> bool:
+    """Ob die Versionsdatei von uns kommt.
+
+    Ein fehlendes Feld ist kein Sonderfall, sondern derselbe Fall wie eine
+    falsche Unterschrift: Sonst genügte es, sie wegzulassen.
+    """
+    raw = data.get(SIGNATURE_FIELD)
+    if not isinstance(raw, str):
+        return False
+    try:
+        signature = bytes.fromhex(raw)
+    except ValueError:
+        return False
+    return ed25519.verify(RELEASE_PUBLIC_KEY, signed_payload(data), signature)
+
+
 def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | None:
     """Fragt einmal. Jedes Problem heißt „keine Antwort", nie ein Fehlerdialog.
 
@@ -199,6 +253,14 @@ def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | N
         payload = (fetch or _get)(url, {}, {})
     except Exception as problem:  # ein Netz scheitert auf viele Arten, keine davon ist unsere
         _log.info("update check did not answer: %s", problem)
+        return None
+
+    if not signature_ok(payload):
+        # Wie ein Server, der nicht antwortet: kein Fenster, kein Fehler, ein
+        # Satz im Protokoll. Eine Versionsdatei, deren Unterschrift nicht
+        # trägt, ist keine Versionsdatei — und wovor wir hier schützen, ist
+        # genau der Fall, in dem sie überzeugend aussieht.
+        _log.warning("version file is not signed by us, ignoring it")
         return None
 
     version = _field(payload.get("version"))

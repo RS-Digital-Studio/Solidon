@@ -23,6 +23,10 @@ from app.ui.session import Session
 from app.ui.settings import UiSettings
 from app.ui.support_dialog import SupportDialog
 
+# ``accept_test_signatures`` wirkt durch den Import: pytest sammelt die Fixture
+# aus dem Modulnamensraum, aufgerufen wird sie nie.
+from tests.release_signing import accept_test_signatures, signed  # noqa: F401
+
 # --- external programs (§38) ---------------------------------------------------------
 
 
@@ -600,7 +604,9 @@ def test_a_newer_version_is_recognised() -> None:
 
 def test_the_check_reads_the_version_file() -> None:
     def answer(url: str, headers: dict[str, str], payload: dict[str, object]) -> dict[str, object]:
-        return {"version": "1.2.3", "url": "https://example.invalid/download"}
+        # Unterschrieben, weil ``check`` seit §37.2 nichts anderes ansieht —
+        # die Fixture oben stellt den Schlüssel dafür.
+        return signed({"version": "1.2.3", "url": "https://example.invalid/download"})
 
     release = updates.check(fetch=answer)
 
@@ -886,3 +892,47 @@ def test_the_update_check_is_on_and_reaches_older_installations(tmp_path: Path) 
         geladen.check_for_updates = False
         settings_module.save_settings(geladen)
         assert settings_module.load_settings().check_for_updates is False
+
+
+def test_the_report_carries_the_digest_of_the_scene(qt_app: QApplication) -> None:
+    """Ohne Maße lässt sich ein Kundenfehler nicht entscheiden.
+
+    **Roberts Auftrag vom 23.08.2026** zum ersten Kundenprotokoll: „wenn du
+    mehr brauchst, passe die Fehlermeldung an." Gebraucht wurde es zweimal am
+    selben Tag — der ``thicken``-Fehler war nur über das Bildschirmfoto zu
+    finden, und ob drei Wülste (34,09 · 34,06 · 34,03 mm) drei Kanten sind oder
+    eine dreimal erkannte, ließ sich gar nicht entscheiden: Die Maße standen
+    nirgends.
+
+    **Der Steckbrief und nicht die Projektdatei.** Er nennt Objekte mit Maßen,
+    Merkmale, Parameter, Passungen und den Verlauf mit seinen Werten — als
+    Text. Die Projektdatei sagte alles, enthält aber die Geometrie und reist
+    deshalb nur auf ausdrücklichen Wunsch mit (§37.2). Der Mittelweg gibt uns
+    die Diagnose und dem Kunden sein Modell.
+    """
+    import sys
+
+    sys.path.insert(0, "tests")
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene
+    from app.ui.support_dialog import KIND_BUG, SupportDialog
+    from conftest import make_object
+
+    session = Session()
+    session.last_result = EvaluationResult(scene=Scene(objects={"o1": make_object(name="Halter")}))
+
+    dialog = SupportDialog(kind=KIND_BUG, session=session)
+    dialog.message.setPlainText("Etwas ging schief.")
+    bericht = dialog.report()
+
+    assert bericht.digest, "der Steckbrief fehlt im Bericht"
+    assert "Halter" in bericht.digest, f"und er kennt die Szene nicht: {bericht.digest[:120]!r}"
+
+    # **Und ohne Sitzung bleibt er leer, statt zu scheitern.** Der
+    # Fehlerbericht ist der Weg, den jemand nimmt, wenn schon etwas kaputt ist;
+    # er darf an einer fehlenden Auskunft nicht selbst scheitern.
+    ohne = SupportDialog(kind=KIND_BUG, session=None)
+    ohne.message.setPlainText("x")
+    assert ohne.report().digest == ""
+    dialog.release()
+    ohne.release()

@@ -396,6 +396,37 @@ def upload(session: ftplib.FTP_TLS, access: dict[str, Any], path: Path) -> None:
     print(f"  {target}  ({path.stat().st_size} Bytes)")
 
 
+def refuse_unsigned_version(files: list[Path]) -> None:
+    """Hält an, bevor eine ``version.json`` ohne gültige Unterschrift hochgeht
+    (§37.2).
+
+    **Warum das hart abbricht und nicht warnt.** Eine Warnung beim Hochladen
+    liest, wer zusieht; hochgeladen wird trotzdem. Und der Schaden ist
+    lautlos: Die Datei liegt richtig da, die Seite zeigt sie an, die Pakete
+    sind erreichbar — nur verwirft jede Installation die Datei still, und
+    niemand erfährt je von dieser Fassung. Das fällt erst auf, wenn jemand
+    fragt, warum sich niemand aktualisiert.
+
+    ``make_download.py`` schreibt die Datei neu und macht dabei jede
+    vorhandene Unterschrift ungültig. Genau zwischen diesen beiden Schritten
+    steht diese Prüfung.
+    """
+    if not any(path.name == "version.json" for path in files):
+        return
+    from app.core.updates import signature_ok
+
+    data = json.loads((LOCAL_ROOT / "version.json").read_text(encoding="utf-8"))
+    if signature_ok(data):
+        return
+    raise SystemExit(
+        "version.json trägt keine gültige Unterschrift und wird deshalb nicht "
+        "hochgeladen.\n"
+        "  Jede Installation prüft sie gegen updates.RELEASE_PUBLIC_KEY und "
+        "verwirft sie ohne — das Update erreicht dann niemanden.\n"
+        "  Zu tun: python tools/sign_version.py --private <datei>"
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Dateien aus website/ hochladen.")
     parser.add_argument("files", nargs="*", type=Path, help="Dateien unter website/")
@@ -469,6 +500,8 @@ def main() -> int:
             raise SystemExit(f"Gibt es nicht: {path}")
         if LOCAL_ROOT not in path.parents:
             raise SystemExit(f"Liegt nicht unter website/: {path}")
+
+    refuse_unsigned_version(files)
 
     access = read_access()
     root = str(access["root"]).strip("/")
