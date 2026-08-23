@@ -2084,7 +2084,7 @@
   "Richtung Z": "Dirección Z",
   "Richtung der linearen Reihe. Ohne Richtung lägen alle Kopien übereinander.": "Dirección de la fila lineal. Sin dirección, todas las copias quedarían una encima de otra.",
   "Richtung, in der die Ebene steht. Die gezeichnete Linie trägt sie ein — von Hand gesetzt ergeben die drei Zahlen zusammen einen Pfeil senkrecht zur Schnittfläche.": "Dirección en la que se orienta el plano. La línea dibujada la introduce; a mano, los tres números forman una flecha perpendicular a la cara de corte.",
-  "Richtung, in die der Baustein zeigt.": "Dirección hacia la que apunta el bloque.",
+  "Richtung, in die der Baustein zeigt — solange kein Merkmal gewählt ist. Eine angeklickte Fläche bestimmt sie selbst.": "Dirección hacia la que apunta el bloque, mientras no haya una característica elegida. Una cara pulsada la fija por sí misma.",
   "Richtung, in die die Schrift zeigt. Aus einer angeklickten Fläche kommt sie von selbst; von Hand ist 0/0/1 nach oben.": "Dirección hacia la que mira el texto. De una cara seleccionada con clic viene sola; a mano, 0/0/1 es hacia arriba.",
   "Richtung, in die gebohrt wird. Z ist senkrecht von oben, X und Y bohren durch eine Seitenwand.": "Dirección en la que se taladra. Z es vertical desde arriba; X e Y taladran a través de una pared lateral.",
   "Rippe": "Nervadura",
