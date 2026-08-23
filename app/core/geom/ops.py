@@ -118,7 +118,10 @@ class RotateParams(BaseParams):
     consumes=1,
     produces=1,
     shortcut="Ctrl+R",
-    doc=_("Dreht ein Objekt um eine Achse."),
+    doc=_(
+        "Dreht ein Objekt um eine Achse. Der Drehpunkt entscheidet, worum: um die "
+        "eigene Mitte, um den Nullpunkt des Projekts oder um die Mitte der Platte."
+    ),
 )
 def rotate_object(ctx: OpContext) -> OpResult:
     params = cast(RotateParams, ctx.params)
@@ -473,7 +476,10 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     # und dort steht das Kürzel neben dem Titel — „so lernt man sie nebenbei".
     # Bei sechs von sechsundachtzig war nebenbei wenig zu lernen.
     shortcut="Ctrl+Shift+V",
-    doc=_("Verschmilzt zwei Objekte zu einem."),
+    doc=_(
+        "Verschmilzt zwei Objekte zu einem. Das zuerst angeklickte bleibt mit "
+        "seinem Namen und Material — das zweite geht darin auf."
+    ),
 )
 def union_objects(ctx: OpContext) -> OpResult:
     return _boolean_op(ctx, "union", ctx.seed)
@@ -514,7 +520,10 @@ def subtract_objects(ctx: OpContext) -> OpResult:
     # „Schnittmenge" beginnt mit S wie das Speichern; X ist das Zeichen für den
     # Schnitt selbst und in jedem Mengendiagramm dasselbe.
     shortcut="Ctrl+Shift+X",
-    doc=_("Behält nur, was beide Objekte gemeinsam haben."),
+    doc=_(
+        "Behält nur, was beide Objekte gemeinsam haben. Das zuerst angeklickte "
+        "bleibt mit seinem Namen und Material."
+    ),
 )
 def intersect_objects(ctx: OpContext) -> OpResult:
     return _boolean_op(ctx, "intersection", ctx.seed)
