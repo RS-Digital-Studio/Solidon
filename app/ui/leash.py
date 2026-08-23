@@ -18,10 +18,11 @@ from __future__ import annotations
 import gc
 import weakref
 from collections.abc import Callable, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from typing import Any, Final
 
 from PySide6.QtCore import QObject, QThread, QTimer, Signal
+from shiboken6 import isValid
 
 from app.core.log import get_logger
 
@@ -100,10 +101,41 @@ def wait_for_all(timeout_ms: int = 2000) -> tuple[Any, ...]:
     ob sein Besitzer noch existiert. Zurück kommt, wer nach der Frist immer
     noch läuft — für einen Test, der das melden statt verschweigen soll.
     """
+    stubborn: list[Any] = []
     for worker in tuple(_alive):
-        if worker is not None and worker.isRunning():
+        if worker is None or not isValid(worker):
+            # Ein Arbeiter, dessen C++-Objekt schon weg ist: ``isRunning``
+            # darauf ist die Zugriffsverletzung ohne Zeile. Die Python-Hülle
+            # überlebt die C++-Seite, wenn ein Qt-Elternteil sie mitnimmt.
+            _alive.discard(worker)
+            continue
+        # **Erst trennen, dann warten**, und die Reihenfolge ist der Punkt.
+        # Wer während der Frist fertig wird, sendet ``finished`` über die
+        # Thread-Grenze — als ``QueuedConnection``, also in die Ereignis-
+        # schlange. Wer danach ``processEvents`` ruft, stellt es zu: an einen
+        # Empfänger, den niemand mehr abgeräumt hat, weil er an keinem Fenster
+        # hing. Nach dem ``wait`` zu trennen hilft nicht, denn Qt entfernt ein
+        # bereits eingereihtes Signal beim ``disconnect`` nicht.
+        # ``QObject.disconnect(x, None, None, None)`` und nicht
+        # ``worker.disconnect()``: Die argumentlose Form gibt es in C++, in
+        # PySide6 nicht — sie wirft ``TypeError``. Die Vier-Argument-Form
+        # wirkt (nachgemessen, sie gibt ``True`` zurück); die Typstubs führen
+        # sie nur mit ``QMetaMethod`` statt ``None``, deshalb der Vermerk.
+        with suppress(RuntimeError):
+            QObject.disconnect(worker, None, None, None)  # type: ignore[call-overload]
+        if worker.isRunning():
             worker.wait(timeout_ms)
-    return tuple(worker for worker in _alive if worker is not None and worker.isRunning())
+        if worker.isRunning():
+            # Wer die Frist reißt, bleibt gehalten: Ihn loszulassen hieße, das
+            # C++-Objekt unter einem laufenden Thread freizugeben.
+            stubborn.append(worker)
+            continue
+        # **Die Leine kann ihn nicht mehr loslassen**, weil das ``disconnect``
+        # oben auch ihre eigene Verbindung zu ``hold_until_done`` gekappt hat.
+        # Wer die Verantwortung nimmt, trägt sie: Sonst stünde er beim nächsten
+        # Aufruf wieder da, und aus der Aufräumhilfe würde ein Leck.
+        _alive.discard(worker)
+    return tuple(stubborn)
 
 
 class Worker(QThread):
