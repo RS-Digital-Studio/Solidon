@@ -101,8 +101,18 @@ class SettingsDialog(QDialog):
 
         self.updates = QCheckBox(tr("Beim Start nach einer neuen Version sehen"), self)
         self.updates.setChecked(settings.check_for_updates)
+        # **Die Zusage stimmt seit ``download()`` und ``start_installer()``
+        # nicht mehr.** Hier stand, es werde nichts geladen und nichts ersetzt;
+        # das war richtig, als der Weg wirklich nur ein Link war. Die Zusage
+        # aus §37.2 ist eine andere und eine genauere: Die Grenze liegt beim
+        # Auslöser, nicht beim Vorgang — geladen wird auf Klick, gestartet nach
+        # dem Schließen. Eine Zusage in die freundliche Richtung ist auch dann
+        # falsch, wenn sie falsch ist.
         self.updates.setToolTip(
-            tr("Ein Hinweis mit einem Link. Es wird nichts geladen und nichts ersetzt.")
+            tr(
+                "Fragt beim Start bei solidon3d.de nach. Geladen und installiert "
+                "wird erst auf Ihre Bestätigung."
+            )
         )
 
         # §26.5: die automatische Übernahme ist die Vorgabe — Regel 19 kennt

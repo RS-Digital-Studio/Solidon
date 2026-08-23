@@ -843,6 +843,7 @@
   "Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe.": "Este corpo não tem nenhuma face superior plana que se pudesse abrir.",
   "Dieser Körper hat keine senkrechten Flächen.": "Este corpo não tem faces verticais.",
   "Dieser Körper hat keinen Hohlraum — eine Füllung hätte keinen Platz. Erst aushöhlen, dann füllen.": "Este corpo não tem cavidade — um preenchimento não teria lugar. Primeiro esvaziar, depois preencher.",
+  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "Este corpo já está fechado — uma segunda pele por cima não seria uma parede, mas uma duplicação. Para engrossar uma única parede use «Deslocar face»; para criar uma cavidade, «Esvaziar».",
   "Dieser Körper kommt aus OpenSCAD, nicht aus der Bausteinbibliothek.": "Este corpo vem do OpenSCAD, não da biblioteca de blocos.",
   "Dieser Körper kommt aus einem Generator. So ein Netz ist eine Oberfläche, keine Konstruktion — deshalb beginnt Weg 3 mit der Reparaturkette.": "Este corpo vem de um gerador. Uma malha dessas é uma superfície, não uma construção — é por isso que o caminho 3 começa pela cadeia de reparação.",
   "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig vernetzen noch unterteilen. Erst reparieren, dann noch einmal.": "Este corpo não encerra volume algum — não pode ser uniformizado nem subdividido. Reparar primeiro e tentar de novo.",
@@ -1001,7 +1002,6 @@
   "Ein Gewinde braucht mindestens zwei Gänge Länge.": "Uma rosca precisa de pelo menos dois passos de comprimento.",
   "Ein Halter aus Parametern und Bausteinen. An den Hauptmaßen drehen, das Modell folgt sofort.": "Um suporte feito de parâmetros e blocos. Mexa nas cotas principais e o modelo segue de imediato.",
   "Ein Hilfsgeometrie-Kennzeichen ist wahr oder falsch.": "Uma marca de geometria auxiliar é verdadeira ou falsa.",
-  "Ein Hinweis mit einem Link. Es wird nichts geladen und nichts ersetzt.": "Um aviso com uma ligação. Não se descarrega nada e não se substitui nada.",
   "Ein Klick statt einer halben Stunde — und das Maß kommt aus der Tabelle.": "Um clique em vez de meia hora — e a medida vem da tabela.",
   "Ein Klotz, der so nicht gedruckt werden müsste: zu viel Material, das keiner sieht. Dieses Projekt teilt ihn und höhlt beide Hälften aus.": "Um bloco maciço que não teria de ser impresso assim: material a mais que ninguém vê. Este projeto divide-o e esvazia as duas metades.",
   "Ein Knochen": "Um osso",
@@ -1268,7 +1268,8 @@
   "Formwerkzeug": "Ferramenta de escultura",
   "Frage": "Pergunta",
   "Frage den Nutzer, wenn die Anfrage mehrdeutig ist. Lieber einmal fragen als einmal falsch raten.": "Pergunta ao utilizador quando o pedido é ambíguo. Antes perguntar uma vez do que adivinhar mal uma vez.",
-  "Fragt einmal bei solidon3d.de nach. Es wird nichts geladen und nichts ersetzt.": "Pergunta uma vez em solidon3d.de. Não se descarrega nada e não se substitui nada.",
+  "Fragt beim Start bei solidon3d.de nach. Geladen und installiert wird erst auf Ihre Bestätigung.": "Consulta solidon3d.de ao iniciar. Nada é descarregado nem instalado sem a sua confirmação.",
+  "Fragt einmal bei solidon3d.de nach. Geladen und installiert wird erst auf Ihre Bestätigung.": "Consulta solidon3d.de uma vez. Nada é descarregado nem instalado sem a sua confirmação.",
   "Freies Zeichnen — Escape verlässt den Modus.": "Desenho livre — Esc sai do modo.",
   "Freigeschaltet für {holder} (Bestellung {order}).": "Desbloqueado para {holder} (pedido {order}).",
   "Fremde Bestandteile": "Componentes de terceiros",
@@ -2261,6 +2262,7 @@
   "Statt der Höhe: bis auf die Höhe dieser Fläche. Leer heißt, die Höhe darüber gilt. Eine angeklickte Fläche trägt sich selbst ein.": "Em vez da altura: até ao nível desta face. Vazio significa que vale a altura acima. Uma face clicada inscreve-se sozinha.",
   "Statt einer Zahl einen Parameterausdruck eintragen.": "Introduzir uma expressão de parâmetro em vez de um número.",
   "Statt eines Schlüssels geht auch ein Modell über Ollama. Ob es Werkzeuge wirklich aufruft, sagt weder seine Größe noch der Anbieter — nur die Probe.": "Em vez de uma chave, também serve um modelo através do Ollama. Se ele chama mesmo as ferramentas não o diz o seu tamanho nem o fornecedor — só a prova.",
+  "Stattdessen Fläche versetzen": "Deslocar a face em vez disso",
   "Stattdessen den Gewinde-Baustein verwenden.": "Utilizar antes o bloco de rosca.",
   "Stattdessen ein gerechnetes Muster nehmen.": "Usar antes um padrão calculado.",
   "Stattdessen einen Baustein verwenden.": "Utilizar antes um bloco.",
@@ -2945,7 +2947,5 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "ignorado — a malha é demasiado grande para esta vez; o mapa de análise na janela consegue.",
   "— keines —": "— nenhum —",
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” mostra o que está disponível.",
-  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» transformou o corpo exato numa malha — as operações do núcleo exato só funcionam antes. Anule os passos a partir daí, aplique esta operação e refaça o resto.",
-  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "Este corpo já está fechado — uma segunda pele por cima não seria uma parede, mas uma duplicação. Para engrossar uma única parede use «Deslocar face»; para criar uma cavidade, «Esvaziar».",
-  "Stattdessen Fläche versetzen": "Deslocar a face em vez disso"
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» transformou o corpo exato numa malha — as operações do núcleo exato só funcionam antes. Anule os passos a partir daí, aplique esta operação e refaça o resto."
 }

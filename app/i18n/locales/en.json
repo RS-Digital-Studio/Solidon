@@ -843,6 +843,7 @@
   "Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe.": "This body has no flat top that could be opened.",
   "Dieser Körper hat keine senkrechten Flächen.": "This body has no vertical faces.",
   "Dieser Körper hat keinen Hohlraum — eine Füllung hätte keinen Platz. Erst aushöhlen, dann füllen.": "This body has no cavity — a lattice would have nowhere to go. Hollow it first, then fill it.",
+  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "This body is already closed — a second skin over it would not be a wall but a duplicate. To make a single wall thicker use “Offset face”; to create a cavity use “Hollow out”.",
   "Dieser Körper kommt aus OpenSCAD, nicht aus der Bausteinbibliothek.": "This body comes from OpenSCAD, not from the part library.",
   "Dieser Körper kommt aus einem Generator. So ein Netz ist eine Oberfläche, keine Konstruktion — deshalb beginnt Weg 3 mit der Reparaturkette.": "This body comes from a generator. Such a mesh is a surface, not a construction — which is why way 3 begins with the repair chain.",
   "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig vernetzen noch unterteilen. Erst reparieren, dann noch einmal.": "This body encloses no volume — it can neither be evened out nor subdivided. Repair it first, then try again.",
@@ -1001,7 +1002,6 @@
   "Ein Gewinde braucht mindestens zwei Gänge Länge.": "A thread needs at least two turns of length.",
   "Ein Halter aus Parametern und Bausteinen. An den Hauptmaßen drehen, das Modell folgt sofort.": "A bracket from parameters and parts. Turn the main dimensions and the model follows immediately.",
   "Ein Hilfsgeometrie-Kennzeichen ist wahr oder falsch.": "A construction flag is either true or false.",
-  "Ein Hinweis mit einem Link. Es wird nichts geladen und nichts ersetzt.": "A notice with a link. Nothing is downloaded and nothing is replaced.",
   "Ein Klick statt einer halben Stunde — und das Maß kommt aus der Tabelle.": "One click instead of half an hour — and the dimension comes from the table.",
   "Ein Klotz, der so nicht gedruckt werden müsste: zu viel Material, das keiner sieht. Dieses Projekt teilt ihn und höhlt beide Hälften aus.": "A block that should not be printed like this: too much material nobody sees. This project splits it and hollows both halves.",
   "Ein Knochen": "One bone",
@@ -1268,7 +1268,8 @@
   "Formwerkzeug": "Sculpting tool",
   "Frage": "Question",
   "Frage den Nutzer, wenn die Anfrage mehrdeutig ist. Lieber einmal fragen als einmal falsch raten.": "Ask the user when the request is ambiguous. Better to ask once than to guess wrong once.",
-  "Fragt einmal bei solidon3d.de nach. Es wird nichts geladen und nichts ersetzt.": "Asks solidon3d.de once. Nothing is downloaded and nothing is replaced.",
+  "Fragt beim Start bei solidon3d.de nach. Geladen und installiert wird erst auf Ihre Bestätigung.": "Asks solidon3d.de at start-up. Nothing is downloaded or installed without your confirmation.",
+  "Fragt einmal bei solidon3d.de nach. Geladen und installiert wird erst auf Ihre Bestätigung.": "Asks solidon3d.de once. Nothing is downloaded or installed without your confirmation.",
   "Freies Zeichnen — Escape verlässt den Modus.": "Free drawing — Escape leaves the mode.",
   "Freigeschaltet für {holder} (Bestellung {order}).": "Unlocked for {holder} (order {order}).",
   "Fremde Bestandteile": "Third party components",
@@ -2261,6 +2262,7 @@
   "Statt der Höhe: bis auf die Höhe dieser Fläche. Leer heißt, die Höhe darüber gilt. Eine angeklickte Fläche trägt sich selbst ein.": "Instead of the height: up to the level of this face. Empty means the height above applies. Clicking a face enters it here.",
   "Statt einer Zahl einen Parameterausdruck eintragen.": "Enter a parameter expression instead of a number.",
   "Statt eines Schlüssels geht auch ein Modell über Ollama. Ob es Werkzeuge wirklich aufruft, sagt weder seine Größe noch der Anbieter — nur die Probe.": "Instead of a key, a model over Ollama works too. Whether it really calls tools is told neither by its size nor by its vendor — only by the probe.",
+  "Stattdessen Fläche versetzen": "Offset the face instead",
   "Stattdessen den Gewinde-Baustein verwenden.": "Use the thread part instead.",
   "Stattdessen ein gerechnetes Muster nehmen.": "Use a computed pattern instead.",
   "Stattdessen einen Baustein verwenden.": "Use a part instead.",
@@ -2945,7 +2947,5 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "skipped — the mesh is too large for this turn, the analysis map in the window can handle it.",
   "— keines —": "— none —",
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” shows what is available.",
-  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "“{step}” turned the exact body into a mesh — exact-kernel operations only work before it. Undo the steps from there, apply this operation, and redo the rest.",
-  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "This body is already closed — a second skin over it would not be a wall but a duplicate. To make a single wall thicker use “Offset face”; to create a cavity use “Hollow out”.",
-  "Stattdessen Fläche versetzen": "Offset the face instead"
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "“{step}” turned the exact body into a mesh — exact-kernel operations only work before it. Undo the steps from there, apply this operation, and redo the rest."
 }

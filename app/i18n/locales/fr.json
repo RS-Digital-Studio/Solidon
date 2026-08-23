@@ -843,6 +843,7 @@
   "Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe.": "Ce corps n'a pas de face supérieure plane que l'on pourrait ouvrir.",
   "Dieser Körper hat keine senkrechten Flächen.": "Ce corps n'a pas de faces verticales.",
   "Dieser Körper hat keinen Hohlraum — eine Füllung hätte keinen Platz. Erst aushöhlen, dann füllen.": "Ce corps n'a pas de cavité — un remplissage n'aurait pas de place. Évider d'abord, remplir ensuite.",
+  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "Ce corps est déjà fermé — une seconde peau par-dessus ne serait pas une paroi mais un doublon. Pour épaissir une seule paroi, utilisez « Décaler la face » ; pour créer une cavité, « Évider ».",
   "Dieser Körper kommt aus OpenSCAD, nicht aus der Bausteinbibliothek.": "Ce corps vient d'OpenSCAD, pas de la bibliothèque de blocs.",
   "Dieser Körper kommt aus einem Generator. So ein Netz ist eine Oberfläche, keine Konstruktion — deshalb beginnt Weg 3 mit der Reparaturkette.": "Ce corps vient d'un générateur. Un tel maillage est une surface, pas une construction — c'est pourquoi le chemin 3 commence par la chaîne de réparation.",
   "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig vernetzen noch unterteilen. Erst reparieren, dann noch einmal.": "Ce corps n'enferme aucun volume — il ne peut être ni uniformisé ni subdivisé. Réparez-le d'abord, puis recommencez.",
@@ -1001,7 +1002,6 @@
   "Ein Gewinde braucht mindestens zwei Gänge Länge.": "Un filetage a besoin d'au moins deux filets de longueur.",
   "Ein Halter aus Parametern und Bausteinen. An den Hauptmaßen drehen, das Modell folgt sofort.": "Un support fait de paramètres et de blocs. Tournez les cotes principales, le modèle suit aussitôt.",
   "Ein Hilfsgeometrie-Kennzeichen ist wahr oder falsch.": "Un indicateur de géométrie de construction est vrai ou faux.",
-  "Ein Hinweis mit einem Link. Es wird nichts geladen und nichts ersetzt.": "Un avis avec un lien. Rien n'est téléchargé et rien n'est remplacé.",
   "Ein Klick statt einer halben Stunde — und das Maß kommt aus der Tabelle.": "Un clic au lieu d'une demi-heure — et la cote vient de la table.",
   "Ein Klotz, der so nicht gedruckt werden müsste: zu viel Material, das keiner sieht. Dieses Projekt teilt ihn und höhlt beide Hälften aus.": "Un bloc massif qui ne devrait pas être imprimé ainsi : trop de matière que personne ne voit. Ce projet le divise et évide les deux moitiés.",
   "Ein Knochen": "Un os",
@@ -1268,7 +1268,8 @@
   "Formwerkzeug": "Outil de sculpture",
   "Frage": "Question",
   "Frage den Nutzer, wenn die Anfrage mehrdeutig ist. Lieber einmal fragen als einmal falsch raten.": "Demandez à l'utilisateur quand la demande est ambiguë. Mieux vaut demander une fois que deviner faux une fois.",
-  "Fragt einmal bei solidon3d.de nach. Es wird nichts geladen und nichts ersetzt.": "Interroge solidon3d.de une fois. Rien n'est téléchargé et rien n'est remplacé.",
+  "Fragt beim Start bei solidon3d.de nach. Geladen und installiert wird erst auf Ihre Bestätigung.": "Interroge solidon3d.de au démarrage. Rien n’est téléchargé ni installé sans votre confirmation.",
+  "Fragt einmal bei solidon3d.de nach. Geladen und installiert wird erst auf Ihre Bestätigung.": "Interroge solidon3d.de une fois. Rien n’est téléchargé ni installé sans votre confirmation.",
   "Freies Zeichnen — Escape verlässt den Modus.": "Dessin libre — Esc quitte le mode.",
   "Freigeschaltet für {holder} (Bestellung {order}).": "Débloqué pour {holder} (commande {order}).",
   "Fremde Bestandteile": "Composants tiers",
@@ -2261,6 +2262,7 @@
   "Statt der Höhe: bis auf die Höhe dieser Fläche. Leer heißt, die Höhe darüber gilt. Eine angeklickte Fläche trägt sich selbst ein.": "Au lieu de la hauteur : jusqu'au niveau de cette face. Vide signifie que la hauteur ci-dessus s'applique. Une face cliquée s'inscrit d'elle-même.",
   "Statt einer Zahl einen Parameterausdruck eintragen.": "Saisir une expression de paramètre au lieu d'un nombre.",
   "Statt eines Schlüssels geht auch ein Modell über Ollama. Ob es Werkzeuge wirklich aufruft, sagt weder seine Größe noch der Anbieter — nur die Probe.": "Au lieu d'une clé, un modèle via Ollama fait aussi l'affaire. Ni sa taille ni son fournisseur ne disent s'il appelle vraiment les outils — seul l'essai le dit.",
+  "Stattdessen Fläche versetzen": "Décaler la face à la place",
   "Stattdessen den Gewinde-Baustein verwenden.": "Utiliser le bloc de filetage à la place.",
   "Stattdessen ein gerechnetes Muster nehmen.": "Prendre plutôt un motif calculé.",
   "Stattdessen einen Baustein verwenden.": "Utiliser un bloc à la place.",
@@ -2945,7 +2947,5 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "ignoré — le maillage est trop grand pour ce tour, la carte d'analyse dans la fenêtre y arrive.",
   "— keines —": "— aucun —",
   "„profiles“ zeigt, was zur Auswahl steht.": "« profiles » montre ce qui est disponible.",
-  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "« {step} » a transformé le corps exact en maillage — les opérations du noyau exact ne fonctionnent qu'avant. Annulez les étapes à partir de là, appliquez cette opération, puis refaites le reste.",
-  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "Ce corps est déjà fermé — une seconde peau par-dessus ne serait pas une paroi mais un doublon. Pour épaissir une seule paroi, utilisez « Décaler la face » ; pour créer une cavité, « Évider ».",
-  "Stattdessen Fläche versetzen": "Décaler la face à la place"
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "« {step} » a transformé le corps exact en maillage — les opérations du noyau exact ne fonctionnent qu'avant. Annulez les étapes à partir de là, appliquez cette opération, puis refaites le reste."
 }

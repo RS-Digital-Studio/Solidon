@@ -843,6 +843,7 @@
   "Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe.": "Questo corpo non ha una faccia superiore piana che si possa aprire.",
   "Dieser Körper hat keine senkrechten Flächen.": "Questo corpo non ha facce verticali.",
   "Dieser Körper hat keinen Hohlraum — eine Füllung hätte keinen Platz. Erst aushöhlen, dann füllen.": "Questo corpo non ha cavità — un riempimento non avrebbe posto. Prima svuota, poi riempi.",
+  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "Questo corpo è già chiuso: una seconda pelle sopra non sarebbe una parete ma un duplicato. Per ispessire una singola parete usa «Sposta faccia»; per creare una cavità, «Svuota».",
   "Dieser Körper kommt aus OpenSCAD, nicht aus der Bausteinbibliothek.": "Questo corpo viene da OpenSCAD, non dalla libreria dei blocchi.",
   "Dieser Körper kommt aus einem Generator. So ein Netz ist eine Oberfläche, keine Konstruktion — deshalb beginnt Weg 3 mit der Reparaturkette.": "Questo corpo viene da un generatore. Una mesh così è una superficie, non una costruzione — per questo la strada 3 comincia con la catena di riparazione.",
   "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig vernetzen noch unterteilen. Erst reparieren, dann noch einmal.": "Questo corpo non racchiude alcun volume — non si può né uniformare né suddividere. Prima ripara, poi riprova.",
@@ -1001,7 +1002,6 @@
   "Ein Gewinde braucht mindestens zwei Gänge Länge.": "Una filettatura ha bisogno di almeno due filetti di lunghezza.",
   "Ein Halter aus Parametern und Bausteinen. An den Hauptmaßen drehen, das Modell folgt sofort.": "Una staffa fatta di parametri e blocchi. Gira le quote principali e il modello segue subito.",
   "Ein Hilfsgeometrie-Kennzeichen ist wahr oder falsch.": "Un contrassegno di geometria di costruzione è vero o falso.",
-  "Ein Hinweis mit einem Link. Es wird nichts geladen und nichts ersetzt.": "Un avviso con un collegamento. Non viene scaricato nulla e non viene sostituito nulla.",
   "Ein Klick statt einer halben Stunde — und das Maß kommt aus der Tabelle.": "Un clic invece di mezz'ora — e la quota viene dalla tabella.",
   "Ein Klotz, der so nicht gedruckt werden müsste: zu viel Material, das keiner sieht. Dieses Projekt teilt ihn und höhlt beide Hälften aus.": "Un blocco che non dovrebbe essere stampato così: troppo materiale che nessuno vede. Questo progetto lo divide e svuota entrambe le metà.",
   "Ein Knochen": "Un osso",
@@ -1268,7 +1268,8 @@
   "Formwerkzeug": "Strumento di scultura",
   "Frage": "Domanda",
   "Frage den Nutzer, wenn die Anfrage mehrdeutig ist. Lieber einmal fragen als einmal falsch raten.": "Chiedi all'utente quando la richiesta è ambigua. Meglio chiedere una volta che indovinare male una volta.",
-  "Fragt einmal bei solidon3d.de nach. Es wird nichts geladen und nichts ersetzt.": "Chiede una volta a solidon3d.de. Non viene scaricato nulla e non viene sostituito nulla.",
+  "Fragt beim Start bei solidon3d.de nach. Geladen und installiert wird erst auf Ihre Bestätigung.": "Chiede a solidon3d.de all’avvio. Nulla viene scaricato o installato senza la sua conferma.",
+  "Fragt einmal bei solidon3d.de nach. Geladen und installiert wird erst auf Ihre Bestätigung.": "Chiede a solidon3d.de una volta. Nulla viene scaricato o installato senza la sua conferma.",
   "Freies Zeichnen — Escape verlässt den Modus.": "Disegno libero — Escape esce dalla modalità.",
   "Freigeschaltet für {holder} (Bestellung {order}).": "Sbloccato per {holder} (ordine {order}).",
   "Fremde Bestandteile": "Componenti di terze parti",
@@ -2261,6 +2262,7 @@
   "Statt der Höhe: bis auf die Höhe dieser Fläche. Leer heißt, die Höhe darüber gilt. Eine angeklickte Fläche trägt sich selbst ein.": "Invece dell'altezza: fino al livello di questa faccia. Vuoto significa che vale l'altezza qui sopra. Una faccia cliccata si inserisce da sé.",
   "Statt einer Zahl einen Parameterausdruck eintragen.": "Inserisci un'espressione parametrica invece di un numero.",
   "Statt eines Schlüssels geht auch ein Modell über Ollama. Ob es Werkzeuge wirklich aufruft, sagt weder seine Größe noch der Anbieter — nur die Probe.": "Invece di una chiave va bene anche un modello via Ollama. Se chiama davvero gli strumenti non lo dicono né la sua dimensione né il fornitore — solo la prova.",
+  "Stattdessen Fläche versetzen": "Sposta invece la faccia",
   "Stattdessen den Gewinde-Baustein verwenden.": "Usa invece il blocco filettatura.",
   "Stattdessen ein gerechnetes Muster nehmen.": "Usare invece un motivo calcolato.",
   "Stattdessen einen Baustein verwenden.": "Usa invece un blocco.",
@@ -2945,7 +2947,5 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "saltato — la mesh è troppo grande per questo turno, la mappa di analisi nella finestra ce la fa.",
   "— keines —": "— nessuno —",
   "„profiles“ zeigt, was zur Auswahl steht.": "«profiles» mostra ciò che è tra le scelte.",
-  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» ha trasformato il corpo esatto in una mesh: le operazioni del kernel esatto funzionano solo prima. Annullare i passi da lì, applicare questa operazione e rifare il resto.",
-  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "Questo corpo è già chiuso: una seconda pelle sopra non sarebbe una parete ma un duplicato. Per ispessire una singola parete usa «Sposta faccia»; per creare una cavità, «Svuota».",
-  "Stattdessen Fläche versetzen": "Sposta invece la faccia"
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» ha trasformato il corpo esatto in una mesh: le operazioni del kernel esatto funzionano solo prima. Annullare i passi da lì, applicare questa operazione e rifare il resto."
 }

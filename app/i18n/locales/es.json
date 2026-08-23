@@ -843,6 +843,7 @@
   "Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe.": "Este cuerpo no tiene una cara superior plana que se pudiera abrir.",
   "Dieser Körper hat keine senkrechten Flächen.": "Este cuerpo no tiene caras verticales.",
   "Dieser Körper hat keinen Hohlraum — eine Füllung hätte keinen Platz. Erst aushöhlen, dann füllen.": "Este cuerpo no tiene cavidad — un relleno no tendría sitio. Primero vaciar, luego rellenar.",
+  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "Este cuerpo ya está cerrado: una segunda piel encima no sería una pared, sino un duplicado. Para engrosar una sola pared use «Desplazar cara»; para crear una cavidad, «Vaciar».",
   "Dieser Körper kommt aus OpenSCAD, nicht aus der Bausteinbibliothek.": "Este cuerpo viene de OpenSCAD, no de la biblioteca de bloques.",
   "Dieser Körper kommt aus einem Generator. So ein Netz ist eine Oberfläche, keine Konstruktion — deshalb beginnt Weg 3 mit der Reparaturkette.": "Este cuerpo viene de un generador. Una malla así es una superficie, no una construcción — por eso el camino 3 empieza con la cadena de reparación.",
   "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig vernetzen noch unterteilen. Erst reparieren, dann noch einmal.": "Este cuerpo no encierra volumen alguno — no se puede uniformar ni subdividir. Repararlo primero y volver a intentarlo.",
@@ -1001,7 +1002,6 @@
   "Ein Gewinde braucht mindestens zwei Gänge Länge.": "Una rosca necesita al menos dos vueltas de longitud.",
   "Ein Halter aus Parametern und Bausteinen. An den Hauptmaßen drehen, das Modell folgt sofort.": "Un soporte hecho de parámetros y bloques. Girar las cotas principales y el modelo sigue al instante.",
   "Ein Hilfsgeometrie-Kennzeichen ist wahr oder falsch.": "Una marca de geometría auxiliar es verdadera o falsa.",
-  "Ein Hinweis mit einem Link. Es wird nichts geladen und nichts ersetzt.": "Un aviso con un enlace. No se descarga nada ni se sustituye nada.",
   "Ein Klick statt einer halben Stunde — und das Maß kommt aus der Tabelle.": "Un clic en lugar de media hora — y la medida sale de la tabla.",
   "Ein Klotz, der so nicht gedruckt werden müsste: zu viel Material, das keiner sieht. Dieses Projekt teilt ihn und höhlt beide Hälften aus.": "Un bloque macizo que no habría que imprimir así: demasiado material que nadie ve. Este proyecto lo divide y vacía ambas mitades.",
   "Ein Knochen": "Un hueso",
@@ -1268,7 +1268,8 @@
   "Formwerkzeug": "Herramienta de modelado",
   "Frage": "Pregunta",
   "Frage den Nutzer, wenn die Anfrage mehrdeutig ist. Lieber einmal fragen als einmal falsch raten.": "Pregunta al usuario cuando la consulta sea ambigua. Mejor preguntar una vez que adivinar mal una vez.",
-  "Fragt einmal bei solidon3d.de nach. Es wird nichts geladen und nichts ersetzt.": "Consulta una vez con solidon3d.de. No se descarga nada ni se sustituye nada.",
+  "Fragt beim Start bei solidon3d.de nach. Geladen und installiert wird erst auf Ihre Bestätigung.": "Consulta solidon3d.de al iniciar. No se descarga ni se instala nada sin su confirmación.",
+  "Fragt einmal bei solidon3d.de nach. Geladen und installiert wird erst auf Ihre Bestätigung.": "Consulta solidon3d.de una vez. No se descarga ni se instala nada sin su confirmación.",
   "Freies Zeichnen — Escape verlässt den Modus.": "Dibujo libre — Esc abandona el modo.",
   "Freigeschaltet für {holder} (Bestellung {order}).": "Desbloqueado para {holder} (pedido {order}).",
   "Fremde Bestandteile": "Componentes de terceros",
@@ -2261,6 +2262,7 @@
   "Statt der Höhe: bis auf die Höhe dieser Fläche. Leer heißt, die Höhe darüber gilt. Eine angeklickte Fläche trägt sich selbst ein.": "En lugar de la altura: hasta el nivel de esta cara. Vacío significa que vale la altura de arriba. Una cara seleccionada con clic se inscribe sola.",
   "Statt einer Zahl einen Parameterausdruck eintragen.": "Introducir una expresión de parámetro en lugar de un número.",
   "Statt eines Schlüssels geht auch ein Modell über Ollama. Ob es Werkzeuge wirklich aufruft, sagt weder seine Größe noch der Anbieter — nur die Probe.": "En lugar de una clave también sirve un modelo a través de Ollama. Si realmente llama a las herramientas no lo dice ni su tamaño ni el proveedor — solo la prueba.",
+  "Stattdessen Fläche versetzen": "Desplazar la cara en su lugar",
   "Stattdessen den Gewinde-Baustein verwenden.": "Usar en su lugar el bloque de rosca.",
   "Stattdessen ein gerechnetes Muster nehmen.": "Usar en su lugar un patrón calculado.",
   "Stattdessen einen Baustein verwenden.": "Usar un bloque en su lugar.",
@@ -2945,7 +2947,5 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "omitido — la malla es demasiado grande para esta vuelta; el mapa de análisis de la ventana sí puede.",
   "— keines —": "— ninguno —",
   "„profiles“ zeigt, was zur Auswahl steht.": "«profiles» muestra lo que hay para elegir.",
-  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» convirtió el cuerpo exacto en una malla: las operaciones del núcleo exacto solo funcionan antes. Deshaga los pasos desde ahí, aplique esta operación y rehaga el resto.",
-  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "Este cuerpo ya está cerrado: una segunda piel encima no sería una pared, sino un duplicado. Para engrosar una sola pared use «Desplazar cara»; para crear una cavidad, «Vaciar».",
-  "Stattdessen Fläche versetzen": "Desplazar la cara en su lugar"
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» convirtió el cuerpo exacto en una malla: las operaciones del núcleo exacto solo funcionan antes. Deshaga los pasos desde ahí, aplique esta operación y rehaga el resto."
 }

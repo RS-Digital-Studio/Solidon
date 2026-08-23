@@ -1889,7 +1889,10 @@ class MainWindow(QMainWindow):
             tr("Nach einer neuen Version sehen"),
             None,
             self.action_check_updates,
-            tr("Fragt einmal bei solidon3d.de nach. Es wird nichts geladen und nichts ersetzt."),
+            tr(
+                "Fragt einmal bei solidon3d.de nach. Geladen und installiert wird "
+                "erst auf Ihre Bestätigung."
+            ),
         )
         help_menu.addSeparator()
         self._add_action(
@@ -6417,8 +6420,14 @@ class MainWindow(QMainWindow):
         self.session.start_new(self.settings.printer, self.settings.material)
 
     def _check_for_updates(self) -> None:
-        """§37.2: ein Hinweis mit einem Link. Nichts wird heruntergeladen, nichts
-        ersetzt.
+        """§37.2: ein sichtbarer Hinweis, wenn es etwas Neueres gibt.
+
+        Hier stand „Nichts wird heruntergeladen, nichts ersetzt" — richtig zu
+        der Zeit, als der Weg wirklich nur ein Link war, und mit ``download()``
+        und ``start_installer()`` still falsch geworden. Die Zusage des
+        Bauplans ist eine andere und eine genauere: **Die Grenze liegt beim
+        Auslöser, nicht beim Vorgang.** Es lädt nichts von allein, ersetzt sich
+        nichts im Hintergrund und startet nichts ohne Klick.
         """
         worker = _UpdateWorker()
         worker.done.connect(self._update_answered)
