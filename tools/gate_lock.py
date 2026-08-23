@@ -249,6 +249,14 @@ def _test_processes() -> set[int]:
                 ["powershell", "-NoProfile", "-Command", query],
                 capture_output=True,
                 text=True,
+                # **Mit Kodierung, sonst stirbt der Lesefaden.** ``text=True``
+                # nimmt auf Windows cp1252, und in einer fremden Kommandozeile
+                # steht irgendwann ein Umlaut oder ein Pfad, den cp1252 nicht
+                # kennt: ``UnicodeDecodeError`` in einem Thread, den niemand
+                # sieht, und die Auskunft kommt halb zurück. Gemessen am
+                # 23.08.2026 an einer Zeile mit 0x81.
+                encoding="utf-8",
+                errors="replace",
                 timeout=20,
                 check=False,
             )
@@ -424,7 +432,11 @@ def _idle_note(entry: dict[str, object]) -> str:
         f"Achtung: Der Halter rechnet gerade nicht — in {IDLE_SAMPLE_SECONDS:.0f} Sekunden "
         "hat sein ganzer Prozessbaum keine Rechenzeit verbraucht. Das kann ein Wartezustand "
         "sein (eine Eingabe, ein Dialog) oder ein Stillstand. Sieh in sein Protokoll, bevor "
-        "du weiter wartest."
+        "du weiter wartest. "
+        "    Und eine Lücke ist normal: Ein Tor, das je Fensterdatei einen eigenen "
+        "Prozess startet, steht zwischen Abbau und Aufbau regelmäßig ein bis zwei "
+        "Sekunden ohne Rechenzeit da. Erst wenn diese Meldung mehrfach hintereinander "
+        "kommt, ist sie ein Befund."
     )
 
 
