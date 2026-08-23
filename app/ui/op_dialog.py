@@ -40,9 +40,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import expressions
 from app.core.errors import AppError
 from app.core.registry import OperationSpec, caveat_line
-from app.core.scene import expressions
 from app.core.types import ParamSpec
 from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr

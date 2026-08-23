@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from functools import cache
 from typing import Any, Final
 
+from app.core import expressions
 from app.core.errors import AmbiguityError, AppError, InternalError, OperationCancelled
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
@@ -38,7 +39,6 @@ from app.core.perceive.matching import (
     resolve,
 )
 from app.core.registry import REGISTRY, OperationSpec, Registry, validate
-from app.core.scene import expressions
 from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.fits import check as check_fits

@@ -18,7 +18,7 @@ import math
 from typing import Any
 
 from app.core.errors import ValidationError
-from app.core.scene.expressions import references
+from app.core.expressions import references
 from app.core.types import (
     Point2,
     Sketch,

@@ -31,10 +31,10 @@ import numpy as np
 import trimesh
 
 from app.core.errors import Action, ValidationError
+from app.core.expressions import evaluate, is_expression, references
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.scene.expressions import evaluate, is_expression, references
 from app.core.types import BaseParams, Bone, Finding, OpContext, OpResult, Pose, Vec3
 from app.i18n import _
 

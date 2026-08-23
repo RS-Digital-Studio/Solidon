@@ -29,7 +29,7 @@ from scipy.optimize import least_squares
 from scipy.sparse import csr_matrix
 
 from app.core.errors import SketchConflictError, ValidationError
-from app.core.scene.expressions import evaluate
+from app.core.expressions import evaluate
 from app.core.types import Point2, Sketch, SketchConstraint, SketchElement, SolvedSketch
 from app.core.units import EPS_GEOM
 from app.i18n import _

@@ -33,12 +33,11 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import APP_NAME, APP_VERSION, COPYRIGHT, SUPPORT_ADDRESS, WEBSITE_URL
-from app.core import activation, tools
+from app.core import activation, expressions, tools
 from app.core.backends import keys, llm
 from app.core.errors import CANCEL, REPORT_ERROR, SHOW_DETAILS, Action, AppError
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
-from app.core.scene import expressions
 from app.i18n import format_decimal, tr
 from app.ui.labels import NumberSpin, deadline_date, value_line
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot

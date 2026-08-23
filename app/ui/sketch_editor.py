@@ -2158,7 +2158,7 @@ class ExpressionDialog(QDialog):
         layout.addWidget(buttons)
 
     def _accept(self) -> None:
-        from app.core.scene import expressions
+        from app.core import expressions
 
         text = self.field.text().strip()
         if not text:

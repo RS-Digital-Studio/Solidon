@@ -392,7 +392,7 @@ def test_every_expression_example_in_the_register_actually_evaluates() -> None:
     """
     import re
 
-    from app.core.scene import expressions
+    from app.core import expressions
     from app.core.types import Parameter
 
     #: Was in einem Dokumentationstext ein Ausdrucksbeispiel ist: ein

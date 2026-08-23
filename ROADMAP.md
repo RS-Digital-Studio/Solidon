@@ -98,7 +98,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
 | Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374 |
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
-| Ein Importzyklus in `app/core/scene` | Vier Wege von Hand, während die Suite grün war (23.08.2026) | einen **Umbau**, keinen Import-Fix: Der Rückimport muss weg. Drei Ansätze sind am 23.08. gemessen und widerlegt (direktes Untermodul, verzögerter Import, Reihenfolge im `__init__`). Betroffen sind **zwei** Module (`history.py` und `evaluate.py`); `geom`, `perceive` und `knowledge` sind sauber, weil sie keinen Rückimport haben. Latent, solange nur ein Thread importiert — zwei Threads gaben **5 von 5** Fehlschlägen. Kein Startzeit-Thema: die Ersparnis dort wäre 37 ms |
+| Zwei Pakete lösen den Deadlock noch nicht auf | Ein Deadlock, der keiner war — und sieben Pakete statt einem (23.08.2026) | einen **Verhaltenswechsel**, keinen Strukturfix — und deshalb je einen eigenen Schritt. `activation`: 223 Zeilen Code an der Lizenzgrenze im `__init__`, die Ladereihenfolge dort ändert man nicht, ohne die Grenze mitzuprüfen. `knowledge.parts`: dort **ist** der Import die Registrierung — die fünf Modulimporte füllen das Bausteinregister, und `bootstrap.load_operations` verlässt sich darauf; verzögert wären sie wirkungslos. Die anderen fünf Pakete sind seit dem 23.08. sauber, `tests/test_core_isolation.py` führt beide Namen mit Begründung |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 
 ---
@@ -4261,7 +4261,7 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
 
       > **Nicht dasselbe wie Signatur B:** B stirbt sofort, C stirbt gar nicht.
 
-      Das ist der Grund, aus dem beide getrennt geführt werden " + S + " ein Lauf, der
+      Das ist der Grund, aus dem beide getrennt geführt werden — ein Lauf, der
       **steht**, sieht im Protokoll aus wie einer, der rechnet, und keine
       Absturzsignatur passt darauf. `py-spy dump --pid N --native` ist das
       Werkzeug dafür; die Falle beim Finden der Prozessnummer steht in
@@ -4271,8 +4271,15 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       fehlt, ist nicht ein weiterer Versuch, sondern eine Messstelle, die eine
       Änderung in wenigen Läufen bewertet statt in zwanzig.
 
-- [ ] **Ein Importzyklus in `app/core/scene` — latent, und jede Parallelität
+- [x] **Ein Importzyklus in `app/core/scene` — latent, und jede Parallelität
       stolpert darüber.** Gefunden am 23.08.2026 beim Messen der Startzeit:
+
+      > **Die Diagnose unten war falsch, und die drei widerlegten Ansätze waren
+      > deshalb folgerichtig wirkungslos.** Es ist kein Zyklus, sondern eine
+      > Lock-Inversion, und es war nicht ein Paket, sondern sieben. Was
+      > wirklich dahintersteckt, steht im Abschnitt „Ein Deadlock, der keiner
+      > war" am Ende dieser Datei. Der Text hier bleibt stehen, weil die
+      > **Messungen** darin stimmen — nur ihre Deutung nicht.
 
       ## Drei Ansätze sind gemessen und widerlegt (23.08.2026)
 
@@ -4280,17 +4287,17 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       `_DeadlockError("deadlock detected by _ModuleLock('app.core.scene.history')")`.
 
       **Es sind zwei Module, nicht eines.** `history.py` **und** `evaluate.py`
-      importieren beide `from app.core.scene import expressions` " + S + " ein Fix an
+      importieren beide `from app.core.scene import expressions` — ein Fix an
       einem allein kann darum nie greifen. (Gemessen über den AST aller Module
       unter `scene/`; sonst importiert keines zurück.)
 
       Was **nicht** hilft, damit es niemand ein zweites Mal versucht:
 
       - **`import app.core.scene.expressions as expressions`** statt des
-        Attributzugriffs " + S + " in beiden Modulen. Der Deadlock bleibt: Er hängt am
+        Attributzugriffs — in beiden Modulen. Der Deadlock bleibt: Er hängt am
         **Lock** des Pakets, nicht am Attribut eines halbfertigen Moduls.
       - **Verzögerter Import in der Funktion** statt am Modulkopf. Bleibt
-        ebenso " + S + " Thread B hält den Lock auf `history`, bevor irgendeine
+        ebenso — Thread B hält den Lock auf `history`, bevor irgendeine
         Funktion läuft.
       - **`expressions` in `__init__.py` vorziehen**, vor `evaluate` und
         `history`. Bleibt ebenso, aus demselben Grund.
@@ -4304,7 +4311,7 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
 
       Die drei sauberen haben **keinen Rückimport** aus ihrem eigenen Paket. Das
       ist der Unterschied, und damit auch der Weg: **Der Rückimport muss weg**,
-      nicht anders geschrieben " + S + " `expressions` an einen Ort, der nicht unter
+      nicht anders geschrieben — `expressions` an einen Ort, der nicht unter
       `scene` liegt, oder die zwei Funktionen dorthin, wo sie gebraucht werden.
       **Das ist ein Umbau und kein Einzeiler**, und er lohnt sich erst, wenn
       jemand Parallelität wirklich braucht.
@@ -4428,6 +4435,20 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       darunter `plate_holes`. Sachlich richtig — es gibt noch keine
       Projektdatei —, aber der Kunde hat gerade etwas geöffnet, das einen Namen
       hat.
+
+      **Roberts Entscheidung am 23.08.2026:** „mach den fenstertitel mit dem
+      abgeleiteten namen“. Gebaut in `8b4f2a5`.
+
+      Der Titel nennt jetzt, **was offen ist, statt was fehlt**: `plate_holes
+      (ungespeichert)` statt `Unbenannt*`. Der Stern bleibt der Datei
+      vorbehalten — er heißt „seit dem Speichern geändert“, und wo nie
+      gespeichert wurde, hat er nichts zu melden; das steht im Klartext daneben.
+
+      **Zwei Eigenschaften, nicht eine**, und das ist der Teil, der beim
+      nächsten Mal Zeit spart: `document_name` gibt den nackten Namen für den
+      Dateidialog („Speichern unter…“ schlägt `plate_holes.p3d` vor), `title`
+      den Satz für die Titelzeile. Wer beides in eine Eigenschaft legt, bekommt
+      irgendwann eine Datei namens `plate_holes (ungespeichert).p3d`.
 
 - [x] **Die deutsche Quelle trennt die Fläche nicht von der Belegung — und das
       ist die Wurzel unter allen Übersetzungsfunden dieses Tages.** Gezählt am
@@ -6325,6 +6346,27 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Verwandt mit der Testart „Anschluss" (§35): Auch dort ist jeder Test für
       sich grün.
 
+      **Der Versuch, die Frage automatisch zu stellen, ist am 23.08.2026
+      gescheitert — und zwar aus einem Grund, der zum Punkt selbst gehört.**
+      Ein Zähler über die Asserts der Geometrietests meldete 398 „mit Sollwert"
+      gegen 76 „nur Selbstvergleich". Beide Zahlen sind wertlos:
+
+      * Der Dateifilter zog `test_analysis_ui.py` herein — Oberflächentests,
+        weil „analysis" im Namen steht. Wieder eine Mustersuche, die misst, was
+        ihr Muster kennt.
+      * **Und der eigentliche Fall ist maschinell gar nicht sichtbar.**
+        `assert volume == pytest.approx(31276.892)` sieht wie ein Sollwert aus.
+        Ob die Zahl analytisch hergeleitet oder aus einem früheren Lauf
+        abgeschrieben wurde, steht nirgends im Code — im zweiten Fall ist sie
+        Selbstkonsistenz in Verkleidung und würde einen systematischen Versatz
+        genauso mittragen wie ein Determinismustest.
+
+      Damit bleibt es bei der Handarbeit, und der Punkt ist danach zu
+      schneiden: **je Kennzahl fragen, woher ihr Sollwert stammt**, angefangen
+      bei denen, die eine Geometrie beschreiben (Krümmung, Durchmesser,
+      Volumen, Achsen). Wo die Herleitung fehlt, gehört sie als Kommentar
+      dazu — das ist die einzige Form, in der die Antwort haltbar ist.
+
 - [x] **Ein mitgeliefertes Beispiel fragte beim Öffnen viermal nach Kegeln.**
       Gemessen am 22.08.2026 an `aushoehlen-und-teilen.p3d` mit einem
       protokollierenden ``ask``: vier modale Fenster, „Welches Merkmal
@@ -7842,3 +7884,92 @@ sollst alles was du tust immer perfekt aus kundensicht machen."
       unter Auslassung der Inline-SVGs, die erfundene Beispielzahlen tragen.
       Eine Zahl auf einer Verkaufsseite ist eine Zusage; wer eine Operation
       entfernt, hat sie zurückzunehmen.
+
+---
+
+## Ein Deadlock, der keiner war — und sieben Pakete statt einem (23.08.2026)
+
+Der Registerpunkt hieß „Ein Importzyklus in `app/core/scene`" und nannte drei
+gemessene, widerlegte Ansätze. Die Messungen stimmten alle. Die **Deutung**
+nicht, und deshalb war jeder der drei Ansätze folgerichtig wirkungslos.
+
+- [x] **Es ist kein Zyklus, sondern eine Lock-Inversion.** Der Punkt nannte den
+      Rückimport `from app.core.scene import expressions` als Ursache. Der ist
+      jetzt weg — `expressions` liegt unter `app/core/`, wo es ohnehin
+      hingehört: `geom` und `sketch` benutzen es auch, und ein Ausdrucksauswerter
+      ist keine Szenensache. **Der Deadlock blieb, fünf von fünf.**
+
+      Was ihn auslöst, sind zwei Wege zu demselben Namen, die ihre Locks in
+      umgekehrter Reihenfolge nehmen:
+
+          from app.core.scene import History          # erst Paket, dann Untermodul
+          from app.core.scene.history import History  # erst Untermodul, dann Paket
+
+      Sequenziell löst Python das auf. Zwei Threads verklemmen sich.
+
+- [x] **Es war nicht ein Paket, sondern sieben.** Die Gegenprobe stand schon in
+      der Roadmap — `geom`, `perceive` und `knowledge` waren sauber — und sie
+      wurde als „kein Rückimport" gelesen. Der wahre Unterschied ist ein
+      anderer: **ihre `__init__` bestehen aus einer Zeile Docstring.** Wer
+      danach sucht, findet:
+
+          scene registry sketch agent brep activation knowledge.parts
+
+      Alle sieben deadlocken, gemessen. Und `brep` zeigte beim ersten Lauf
+      „sauber" — sechs weitere Läufe rissen alle. Einmal messen reicht auch
+      hier nicht.
+
+- [x] **Fünf sind behoben** (`app/core/lazy.py`): Die Namen werden erst beim
+      Zugriff geladen (PEP 562), damit ist `__init__` fertig, bevor das erste
+      Untermodul lädt — die beiden Locks werden nie gleichzeitig gehalten.
+
+      **Ein `__getattr__` auf Modulebene genügt dafür nicht**, und das kostete
+      34 rote Tests: Es läuft nur, wenn das Attribut **fehlt**. Sobald irgendwer
+      `app.core.scene.evaluate` importiert, setzt Python das *Untermodul* als
+      Attribut — und es heißt genauso wie die Funktion darin. Ergebnis:
+      `TypeError: 'module' object is not callable`. Dass das vorher nie auffiel,
+      lag am eifrigen `from …evaluate import evaluate`, das es überschrieb,
+      solange es als Letztes lief. **Also dieselbe Abhängigkeit von der
+      Importreihenfolge, die schon den Deadlock verursacht hat** — nur an einer
+      anderen Stelle sichtbar. Es braucht eine Modulklasse mit
+      `__getattribute__`.
+
+- [x] **Der Test prüft jedes Kernpaket, nicht `scene`.** Er hat mich zweimal
+      korrigiert, und beide Male war die Korrektur mehr wert als der Test:
+
+      **Erstens war er grün an einem Paket, das nachweislich deadlockt.** Der
+      zweite Thread importierte das Paket selbst, um an seine Untermodule zu
+      kommen — damit war es geladen, bevor der Wettlauf begann. Aufgefallen nur
+      durch die Gegenprobe (Ausnahmeliste leeren, muss rot werden). Alles
+      Nachschlagen passiert jetzt vor dem ersten Thread.
+
+      **Zweitens fand er danach ein siebtes Paket**, das mein eigener Handscan
+      übersehen hatte: `knowledge.parts` ist ein Unterpaket, und ich hatte nur
+      die direkten Kernpakete durchgesehen. Ein Test über die erhobene Menge
+      statt über eine getippte Liste — genau der Unterschied, den
+      `.claude/rules/tests.md` beschreibt.
+
+- [ ] **Zwei Pakete lösen den Deadlock noch nicht auf**, und beide aus
+      demselben Grund: Bei ihnen wäre es ein **Verhaltenswechsel** und kein
+      Strukturfix.
+
+      **`app.core.activation`** — sein `__init__` ist keine Liste von
+      Re-Exporten, sondern 223 Zeilen Code an der Lizenzgrenze. `store` und
+      `integrity` stehen dort als Modulnamen, und der Code darunter benutzt sie
+      (`integrity.intact()`, `store.days_left()`). Sie zu verzögern heißt, die
+      Importe in die Funktionen zu ziehen — an einer Stelle, deren
+      Ladereihenfolge Teil der Sicherheitszusage ist (`.claude/rules/kern.md`,
+      „Die Lizenzgrenze"). Das gehört zusammen mit
+      `tests/test_licence_boundary.py` gemacht, nicht nebenbei.
+
+      **`app.core.knowledge.parts`** — dort **ist** der Import die
+      Registrierung. Die fünf Modulimporte (`fasteners`, `mechanics`,
+      `mounting`, `structure`, `testbodies`) füllen das Bausteinregister, und
+      `bootstrap.load_operations` verlässt sich darauf; der Docstring sagt es
+      ausdrücklich zu. Verzögert wären sie wirkungslos — das Register bliebe
+      leer, und `insert_*` verschwände. Der Weg wäre eine Ladefunktion wie
+      `load_operations`, also eine geänderte Zusage nach außen.
+
+      `tests/test_core_isolation.py` führt beide Namen in `KNOWN_OPEN`, jeden
+      mit seiner Begründung. Wer einen behebt, streicht ihn dort — dann prüft
+      der Test ihn mit.

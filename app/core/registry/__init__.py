@@ -1,42 +1,87 @@
 """Das Register der Operationen (Bauplan §10): die eine Deklaration, die jede
 Oberfläche liest."""
 
-from app.core.registry.params import (
-    GATHERED_KINDS,
-    json_schema,
-    op_params,
-    param,
-    validate,
-)
-from app.core.registry.registry import (
-    CATEGORIES,
-    FEATURE_KINDS,
-    MENU_GROUPS,
-    MENU_TWINS,
-    REGISTRY,
-    TWIN_TOGGLES,
-    VARIABLE,
-    MenuSection,
-    OperationSpec,
-    Registry,
-    group_title,
-    register_op,
-)
-from app.core.registry.surfaces import (
-    MAX_MENU_ROWS,
-    CliArgument,
-    CliCommand,
-    PaletteEntry,
-    caveat_line,
-    cli_commands,
-    context_menu,
-    documentation,
-    group_is_flat,
-    menu_path,
-    menu_tree,
-    palette_entries,
-    tool_schemas,
-)
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Final
+
+from app.core.lazy import install
+
+if TYPE_CHECKING:
+    from app.core.registry.params import (
+        GATHERED_KINDS,
+        json_schema,
+        op_params,
+        param,
+        validate,
+    )
+    from app.core.registry.registry import (
+        CATEGORIES,
+        FEATURE_KINDS,
+        MENU_GROUPS,
+        MENU_TWINS,
+        REGISTRY,
+        TWIN_TOGGLES,
+        VARIABLE,
+        MenuSection,
+        OperationSpec,
+        Registry,
+        group_title,
+        register_op,
+    )
+    from app.core.registry.surfaces import (
+        MAX_MENU_ROWS,
+        CliArgument,
+        CliCommand,
+        PaletteEntry,
+        caveat_line,
+        cli_commands,
+        context_menu,
+        documentation,
+        group_is_flat,
+        menu_path,
+        menu_tree,
+        palette_entries,
+        tool_schemas,
+    )
+
+#: Welcher Name in welchem Untermodul steht — geladen wird erst beim
+#: Zugriff, damit zwei Threads sich nicht über die Modul-Locks
+#: verklemmen (:mod:`app.core.lazy`).
+_EXPORTS: Final[dict[str, tuple[str, str]]] = {
+    "GATHERED_KINDS": ("params", "GATHERED_KINDS"),
+    "json_schema": ("params", "json_schema"),
+    "op_params": ("params", "op_params"),
+    "param": ("params", "param"),
+    "validate": ("params", "validate"),
+    "CATEGORIES": ("registry", "CATEGORIES"),
+    "FEATURE_KINDS": ("registry", "FEATURE_KINDS"),
+    "MENU_GROUPS": ("registry", "MENU_GROUPS"),
+    "MENU_TWINS": ("registry", "MENU_TWINS"),
+    "REGISTRY": ("registry", "REGISTRY"),
+    "TWIN_TOGGLES": ("registry", "TWIN_TOGGLES"),
+    "VARIABLE": ("registry", "VARIABLE"),
+    "MenuSection": ("registry", "MenuSection"),
+    "OperationSpec": ("registry", "OperationSpec"),
+    "Registry": ("registry", "Registry"),
+    "group_title": ("registry", "group_title"),
+    "register_op": ("registry", "register_op"),
+    "MAX_MENU_ROWS": ("surfaces", "MAX_MENU_ROWS"),
+    "CliArgument": ("surfaces", "CliArgument"),
+    "CliCommand": ("surfaces", "CliCommand"),
+    "PaletteEntry": ("surfaces", "PaletteEntry"),
+    "caveat_line": ("surfaces", "caveat_line"),
+    "cli_commands": ("surfaces", "cli_commands"),
+    "context_menu": ("surfaces", "context_menu"),
+    "documentation": ("surfaces", "documentation"),
+    "group_is_flat": ("surfaces", "group_is_flat"),
+    "menu_path": ("surfaces", "menu_path"),
+    "menu_tree": ("surfaces", "menu_tree"),
+    "palette_entries": ("surfaces", "palette_entries"),
+    "tool_schemas": ("surfaces", "tool_schemas"),
+}
+
+install(__name__, _EXPORTS)
 
 __all__ = [
     "CATEGORIES",

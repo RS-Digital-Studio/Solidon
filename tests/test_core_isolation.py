@@ -146,3 +146,109 @@ def test_core_sources_never_reference_the_surface() -> None:
                 if any(module == root or module.startswith(f"{root}.") for root in FORBIDDEN_ROOTS):
                     offenders.append(f"{path.name}:{node.lineno} imports {module}")
     assert not offenders, "\n".join(offenders)
+
+
+def test_two_threads_may_import_the_same_package() -> None:
+    """Zwei Threads dürfen gleichzeitig an verschiedenen Stellen einsteigen.
+
+    Am 23.08.2026 durften sie das nicht: ``from app.core.scene import History``
+    und ``from app.core.scene.history import History`` nebeneinander gaben
+    **fünf von fünf Läufen** einen ``_DeadlockError``. Der Grund ist eine
+    Reihenfolge und kein Kreis — der eine Weg nimmt erst den Lock auf das
+    **Paket** und dann den auf das **Untermodul**, der andere umgekehrt.
+
+    **Geprüft wird jedes Kernpaket, dessen ``__init__`` etwas lädt**, und
+    dieser Zuschnitt ist der eigentliche Ertrag: Der Punkt stand in der Roadmap
+    als Einzelfall in ``scene``. Gemessen waren es **sechs** — ``scene``,
+    ``registry``, ``sketch``, ``agent``, ``brep`` und ``activation``. Die drei
+    Pakete mit einer Zeile Docstring als ``__init__`` (``geom``, ``perceive``,
+    ``knowledge``) waren sauber, und das ist der Unterschied. Ein Test nur auf
+    ``scene`` hätte genau den einen Fall festgehalten, den jemand schon behoben
+    hat.
+
+    Fünf davon lösen ihre Namen jetzt erst beim Zugriff auf
+    (:mod:`app.core.lazy`). Im Subprozess, weil die Module beim Start des Tests
+    längst geladen wären und der Fall dann nicht mehr auftritt.
+    """
+    script = textwrap.dedent(
+        """
+        import importlib, pkgutil, sys, threading
+        import app.core
+
+        # Zwei bekannte offene Fälle. Beide stehen in ROADMAP.md; wer einen
+        # behebt, streicht seinen Namen hier -- dann prüft dieser Test ihn mit.
+        #
+        # ``activation``: sein ``__init__`` ist keine Liste von Re-Exporten,
+        # sondern 223 Zeilen Code an der Lizenzgrenze. Dort die Ladereihenfolge
+        # zu ändern, ohne die Grenze mitzuprüfen, wäre der falsche Ort für eine
+        # Strukturänderung.
+        #
+        # ``knowledge.parts``: dort ist der Import die **Registrierung**. Die
+        # fünf Modulimporte im ``__init__`` füllen das Bausteinregister, und
+        # ``bootstrap.load_operations`` verlässt sich darauf. Verzögert wären
+        # sie wirkungslos -- das ist kein Strukturfix mehr, sondern eine
+        # Verhaltensänderung mit eigenem Punkt.
+        KNOWN_OPEN = {"app.core.activation", "app.core.knowledge.parts"}
+
+        # **Alles Nachschlagen passiert hier, vor dem ersten Thread.** Der
+        # erste Anlauf ließ den zweiten Thread das Paket selbst importieren,
+        # um an seine Untermodule zu kommen -- damit war das Paket geladen,
+        # bevor der Wettlauf begann, und der Test war grün an einem Paket, das
+        # nachweislich deadlockt. Gegenprobe gemacht: ohne KNOWN_OPEN muss er
+        # rot werden.
+        packages = []
+        for info in pkgutil.walk_packages(app.core.__path__, "app.core."):
+            if not info.ispkg or info.name in KNOWN_OPEN:
+                continue
+            module = importlib.import_module(info.name)
+            # Nur Pakete, deren __init__ überhaupt etwas lädt -- ein Docstring
+            # allein kann sich nicht verklemmen.
+            names = [n for n in dir(module) if not n.startswith("_")]
+            submodules = [m.name for m in pkgutil.iter_modules(module.__path__)]
+            if names and submodules:
+                packages.append((info.name, names[0], submodules))
+
+        broken = []
+        for name, target, submodules in packages:
+            for stale in [m for m in sys.modules if m.startswith("app.")]:
+                del sys.modules[stale]
+
+            def through_package(name=name, target=target):
+                try:
+                    __import__(name, fromlist=[target])
+                except BaseException as error:
+                    broken.append(f"{name} (package): {type(error).__name__}: {error}")
+
+            def through_submodule(name=name, submodules=submodules):
+                try:
+                    for submodule in submodules:
+                        __import__(f"{name}.{submodule}")
+                except BaseException as error:
+                    broken.append(f"{name} (modules): {type(error).__name__}: {error}")
+
+            first = threading.Thread(target=through_package)
+            second = threading.Thread(target=through_submodule)
+            first.start()
+            second.start()
+            first.join(timeout=60)
+            second.join(timeout=60)
+            if first.is_alive() or second.is_alive():
+                broken.append(f"{name}: still running after 60 s")
+
+        if not packages:
+            broken.append("no packages examined -- this test would pass on anything")
+        for line in broken:
+            print(line)
+        """
+    )
+    finished = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        cwd=Path(app.core.__file__).parents[2],
+        check=False,
+    )
+    assert finished.returncode == 0, finished.stderr
+    assert not finished.stdout.strip(), (
+        "two threads deadlocked while importing the same package:\n" + finished.stdout
+    )

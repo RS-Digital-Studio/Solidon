@@ -13,6 +13,7 @@ from pathlib import Path
 import pytest
 
 from app.core.errors import ValidationError
+from app.core.expressions import check as check_expression
 from app.core.knowledge import licences, profiles
 from app.core.registry import (
     REGISTRY,
@@ -23,7 +24,6 @@ from app.core.registry import (
     tool_schemas,
 )
 from app.core.scene import History, OperationDraft, ResultCache, evaluate
-from app.core.scene.expressions import check as check_expression
 from app.core.scene.project import PROJECT_ENTRY, ProjectSources, load, new_project, save
 from app.core.types import Parameter, Profile, Source
 from app.i18n import _

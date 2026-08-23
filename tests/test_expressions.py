@@ -6,8 +6,8 @@ from __future__ import annotations
 
 import pytest
 
+from app.core import expressions
 from app.core.errors import ValidationError
-from app.core.scene import expressions
 from app.core.types import Parameter
 
 

@@ -53,7 +53,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.branding import APP_NAME, APP_VERSION, PROJECT_SUFFIX
-from app.core import activation, examples, manual, support, updates
+from app.core import activation, examples, manual, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
 from app.core.agent.session import (
@@ -136,7 +136,7 @@ from app.core.scene.project import clear_autosave, find_recovery
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import total as estimate_total
-from app.core.support import KIND_CRASH, KIND_IDEA
+from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
 from app.core.tour import tour_for
 from app.core.types import (
     Bone,
@@ -218,6 +218,7 @@ from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
 from app.ui.style import NORMAL, TIGHT, make_primary
 from app.ui.support_dialog import SupportDialog, window_shot
+from app.ui.survey import SurveyNotice, UsageClock
 from app.ui.theme import apply_theme
 from app.ui.tool_strip import ToolStrip, strip_title
 from app.ui.tour import TourPanel
@@ -232,26 +233,6 @@ AUTOSAVE_INTERVAL_MS = 120_000
 
 #: Wie lange der Rahmen steht, mit dem ein Tourschritt auf seinen Bereich
 #: zeigt. Lang genug, um den Blick dorthin zu ziehen, kurz genug, um nicht als
-#: Nach wie viel Nutzungszeit der Feedbackbogen sich meldet.
-#:
-#: Eine halbe Stunde, und zwar Nutzungszeit und nicht Kalenderzeit: Wer
-#: Solidon öffnet und gleich wieder schließt, hat nichts zu berichten. Wer
-#: eine halbe Stunde konstruiert hat, kennt drei Dinge, die fehlen — und
-#: genau die sollen ankommen, solange sie ihm frisch im Kopf sind.
-SURVEY_AFTER_MS: Final = 30 * 60 * 1000
-
-#: Unter welcher Art der Bogen gesendet wird.
-#:
-#: **Eine eigene Art und nicht *Vorschlag*.** Wer nach dreißig Minuten
-#: antwortet, sagt etwas anderes als jemand, der von sich aus eine Idee
-#: schickt — die eine Rückmeldung ist erbeten, die andere kommt von allein,
-#: und im Postfach müssen sie auseinanderzuhalten sein.
-#:
-#: Sie steht **nicht** in support_dialog.KINDS, aus demselben Grund wie
-#: KIND_CRASH: Niemand soll einen Bogen aus einem Aufklappmenü wählen
-#: können, den es ohne Anlass gar nicht gibt.
-SURVEY_KIND: Final = getattr(support, "KIND_SURVEY", KIND_IDEA)
-
 #: Zustand gelesen zu werden.
 FLASH_MS = 1200
 
@@ -1183,17 +1164,21 @@ class MainWindow(QMainWindow):
         """Das Objekt, an dem gerade geformt wird — leer, wenn keine Sitzung
         läuft."""
         self._sculpt_check = QTimer(self)
-        self._survey_timer = QTimer(self)
-        """Wann der Feedbackbogen sich meldet.
+        self._usage = UsageClock(self)
+        """Die Uhr des Feedbackbogens (§37.2).
 
-        **Über ``weak_slot`` verbunden, nicht über ein Lambda.** Ein Zeitgeber
-        mit einem Abschluss hält sein Fenster fest — genau der Ring, gegen den
-        ``leash.weak_slot`` gebaut wurde, und ein Fenster, das nicht mehr
-        sterben kann, ist der nächste Halter, den jemand in zwei Wochen sucht.
+        Sie zählt **Arbeit und nicht Laufzeit**: Ein Fenster, das über Nacht
+        offen steht, hat die Nacht nicht gearbeitet, und der Bogen erschiene
+        sonst jemandem, der gerade vom Kaffee zurückkommt. Was sie zählt und
+        wann sie fällig wird, entscheidet ``app.core.feedback`` — hier hängt
+        nur, was daraus im Fenster passiert.
         """
-        self._survey_timer.setSingleShot(True)
-        self._survey_timer.setInterval(SURVEY_AFTER_MS)
-        self._survey_timer.timeout.connect(weak_slot(self, MainWindow._offer_survey))
+        self._usage.due.connect(self._offer_survey)
+        self._survey_notice = SurveyNotice(self.viewport)
+        """Die Karte über der Ansicht, mit der gefragt wird. Sie hält nichts
+        an und verschwindet nicht von selbst — sie bleibt, bis jemand einen
+        ihrer beiden Knöpfe drückt."""
+        self._survey_notice.accepted.connect(self._open_survey)
         self._survey_dialog: SupportDialog | None = None
         """Der offene Bogen — festgehalten, weil ein nicht modales Fenster ohne
         Referenz eingesammelt wird, sobald die Methode zurückkehrt."""
@@ -6425,7 +6410,10 @@ class MainWindow(QMainWindow):
         if self.settings.check_for_updates:
             self._check_for_updates()
         self._apply_remote()
-        self._start_survey_clock()
+        # Sie prüft selbst, ob überhaupt noch jemand gefragt wird — erledigt,
+        # abgelehnt, dreimal gezeigt oder verkaufte Fassung, und sie tut
+        # nichts.
+        self._usage.start()
 
     def _apply_remote(self) -> None:
         """Die MCP-Schnittstelle an- oder abschalten (Konzept P15 §7 Etappe 9).
@@ -6571,54 +6559,37 @@ class MainWindow(QMainWindow):
                     tr("Sie haben die aktuelle Version ({version}).").format(version=APP_VERSION)
                 )
 
-    def _start_survey_clock(self) -> None:
-        """Die Uhr für den Feedbackbogen — wenn überhaupt jemand gefragt wird.
-
-        **Nur in der Demo.** Wer bezahlt hat, ist kein Testleser mehr, und
-        ``activation.state().in_demo`` ist die eine Stelle, die darüber
-        entscheidet — kein zweiter Zustand, den jemand nachzuziehen vergisst.
-
-        **Und nur einmal je Installation.** Ein Hinweis, der halbstündlich
-        wiederkommt, wird beim dritten Mal weggeklickt, ohne gelesen zu werden.
-        Wer ihn wegklickt, hat geantwortet, auch wenn die Antwort „nicht jetzt"
-        heißt; der Weg über *Hilfe → Rückmeldung* bleibt offen.
-
-        Ein Aktivierungszustand, der sich nicht lesen lässt, hält den Start
-        nicht an — dann fragt eben niemand. Dieselbe Haltung wie bei einem
-        Backend, das sich abmeldet (§27).
-        """
-        if self.settings.survey_done:
-            return
-        try:
-            in_demo = activation.state().in_demo
-        except AppError:
-            return
-        if in_demo:
-            self._survey_timer.start()
-
     def _offer_survey(self) -> None:
-        """Nach einer halben Stunde Arbeit: der Bogen, nicht modal.
+        """Die halbe Stunde ist zusammen: Die Karte tritt über die Ansicht.
 
-        **Der Unterschied zum Update-Hinweis ist der Zeitpunkt**, und er ändert
-        alles: Der kommt beim Start, dieser mitten in die Arbeit. Ein Fenster,
-        das dort alles anhält, wird weggeklickt, ohne gelesen zu werden — und
-        die Rückmeldung, die es holen sollte, ist damit verloren. Also steht es
-        daneben, lässt sich beiseiteschieben, und Wegklicken ist eine gültige
-        Antwort.
+        **Kein Dialog an dieser Stelle.** Der Update-Hinweis kommt beim Start,
+        dieser mitten in die Arbeit — ein Fenster, das dort alles anhält, wird
+        weggeklickt, ohne gelesen zu werden, und die Rückmeldung, die es holen
+        sollte, ist damit verloren. Die Karte fragt erst, ob überhaupt gefragt
+        werden darf; der Bogen geht nur auf, wenn jemand Ja sagt.
 
-        **Ein Fenster, ein Sendeknopf, ein Aufrufer.** Der Bogen ist der
-        Rückmeldedialog in einer eigenen Betriebsart und kein zweiter Weg
-        hinaus: ``tests/test_support.py`` zählt die Aufrufer von
-        ``support.send`` und lässt genau einen zu. Das ist die Grenze zur
-        Telemetrie, und ein zweiter Weg wäre ihr Ende, wie bequem er auch wäre.
+        **Und nicht mitten in eine Rechnung.** Wer gerade auf ein Ergebnis
+        wartet, hat für eine Frage keinen Kopf. Die Uhr läuft dann weiter und
+        meldet sich in einer Minute wieder — sie hält erst an, wenn die Karte
+        wirklich dasteht. Das ist der Unterschied zwischen „später" und
+        „gar nicht": Ein Bogen, der ausgerechnet in eine lange Rechnung fällt,
+        wäre sonst für die ganze Sitzung verloren.
         """
-        if self.settings.survey_done:
+        if self.session.busy or self._survey_notice.isVisibleTo(self.viewport):
             return
-        # Gefragt wird einmal — und zwar bevor der Dialog steht: Wer ihn
-        # wegklickt, ohne zu antworten, soll ihn auch nicht wiedersehen.
-        self.settings.survey_done = True
-        save_settings(self.settings)
-        dialog = self._support_dialog(SURVEY_KIND)
+        self._usage.stop()
+        self._survey_notice.ask()
+
+    def _open_survey(self) -> None:
+        """*Rückmeldung geben*: der Rückmeldungsdialog als Bogen.
+
+        **Ein Fenster, ein Sendeknopf, ein Aufrufer.** Der Bogen ist eine
+        Betriebsart des vorhandenen Dialogs und kein zweiter Weg hinaus;
+        ``tests/test_support.py`` zählt die Aufrufer von ``support.send`` und
+        lässt genau einen zu. Das ist die Grenze zur Telemetrie, und ein
+        zweiter Weg wäre ihr Ende, wie bequem er auch wäre.
+        """
+        dialog = self._support_dialog(KIND_SURVEY)
         self._survey_dialog = dialog
         dialog.show()
         dialog.raise_()
@@ -7139,6 +7110,7 @@ class MainWindow(QMainWindow):
         # nur die Vorgabe für den ersten Start.
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
         save_settings(self.settings)
+        self._usage.stop()
         event.accept()
 
 

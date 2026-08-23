@@ -23,11 +23,10 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any, Final
 
-from app.core import activation
+from app.core import activation, expressions
 from app.core.errors import CANCEL, CHANGE_SELECTION, ValidationError
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, VARIABLE, Registry
-from app.core.scene import expressions
 from app.core.types import (
     Document,
     DocumentChange,
