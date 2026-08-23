@@ -37,6 +37,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QPainterPath, QRegion
 from PySide6.QtWidgets import QAbstractItemView, QScrollArea, QTreeView, QWidget
+from shiboken6 import isValid
 
 from app.ui.style import ROOMY, SPACE
 from app.ui.theme import THEMES, Theme
@@ -117,6 +118,42 @@ MARGIN = ROOMY
 #: herum, ab der Kopfzeile der Liste fehlte rechts alles, ab „Verlauf" auch
 #: links. Von der Kante, an der die Karte aufhört, blieb ein Haken oben links.
 CARD_PADDING = 1
+
+
+def lebende[T: QWidget](zone: QWidget, typ: type[T]) -> list[T]:
+    """Die Kinder dieser Art, deren C++-Seite noch lebt.
+
+    **Die Python-Hülle überlebt die C++-Seite.** Nimmt ein Qt-Elternteil sein
+    Kind mit, bleibt der Wrapper stehen — und die erste Frage an ihn, sei es
+    ``isVisibleTo`` oder ``sizeHint``, ist dann die Zugriffsverletzung. Kein
+    Absturz mit Zeile, sondern
+
+        RuntimeError: Error calling Python override of QWidget::eventFilter():
+        libshiboken: Internal C++ object (ObjectTree) already deleted.
+
+    Gesehen im Belegslauf vom 23.08.2026 in zwei von vier Durchgängen, jedes
+    Mal im Teardown und jedes Mal **nach** 257 bestandenen Tests: Der
+    ``eventFilter`` dieser Datei läuft, während die Ereignisschleife ein
+    letztes Mal angehalten wird, und geht dabei über Kinder, die der Abbau
+    schon halb weggeräumt hat. Dasselbe passiert dem Kunden beim Schließen des
+    Fensters — dort landet die Ausnahme auf stderr, wo sie niemand liest.
+
+    An **einer** Stelle und nicht an fünf: `findChildren` steht in dieser Datei
+    fünfmal, und eine Wache, die man je Aufrufstelle wiederholt, fehlt beim
+    sechsten Mal. Die Fixture der Suite macht dasselbe für die obersten
+    Fenster (``tests/conftest.py``); für die Kinder machte es niemand.
+
+    **Was diese Funktion allein nicht leistet, und das gehört dazu:** Qt nimmt
+    ein zerstörtes Kind selbst aus der Liste — nachgemessen, sowohl nach
+    ``shiboken6.delete`` als auch nach ``deleteLater`` samt zugestelltem
+    ``DeferredDelete``. Eine tote Hülle bekommt man hier also selten zu sehen.
+    Der Absturz aus dem Belegslauf entsteht **zwischen** dem Sammeln und dem
+    Zugriff: Der Speicherbereiniger läuft in dem Thread, dessen Allokation
+    gerade die Schwelle reißt, und das kann jeder sein. Deshalb steht
+    ``isValid`` zusätzlich dort, wo der Wert wirklich angefasst wird — die
+    Liste allein schließt das Fenster nicht.
+    """
+    return [child for child in zone.findChildren(typ) if isValid(child)]
 
 
 def card_width(base: int, cap: int, window: int) -> int:
@@ -273,7 +310,7 @@ def natural_height(zone: QWidget) -> int:
     ohne ihre Listen bräuchte, plus das, was die Listen wirklich brauchen.
     """
     wanted = zone.sizeHint().height()
-    for view in zone.findChildren(QAbstractItemView):
+    for view in lebende(zone, QAbstractItemView):
         if not view.isVisibleTo(zone):
             continue
         # Eine gesetzte Mindesthöhe ist eine Aussage über den Zweck und nicht
@@ -291,7 +328,7 @@ def natural_height(zone: QWidget) -> int:
         # Verlauf hingen unterhalb der Kartenkante.
         contributed = min(max(view.sizeHint().height(), view.minimumHeight()), view.maximumHeight())
         wanted += needs - contributed
-    for area in zone.findChildren(QScrollArea):
+    for area in lebende(zone, QScrollArea):
         if isinstance(area, QAbstractItemView) or not area.isVisibleTo(zone):
             continue
         inner = area.widget()
@@ -342,13 +379,18 @@ def extra_height(zone: QWidget) -> int:
             continue
         takers = [
             child
-            for child in widget.findChildren(QWidget)
-            if isinstance(child, RoomTaker) and child.isVisibleTo(zone)
+            for child in lebende(widget, QWidget)
+            # ``isValid`` ein zweites Mal, und das ist kein Versehen: Zwischen
+            # dem Sammeln und dieser Zeile kann der Speicherbereiniger
+            # zuschlagen — er läuft in dem Thread, dessen Allokation gerade die
+            # Schwelle reißt, nicht zwangsläufig in diesem. Die Prüfung gehört
+            # deshalb an den Zugriff und nicht nur an die Liste.
+            if isinstance(child, RoomTaker) and isValid(child) and child.isVisibleTo(zone)
         ]
         if not takers:
             total += widget.sizeHint().height()
             continue
-        inside = sum(child.sizeHint().height() for child in takers)
+        inside = sum(child.sizeHint().height() for child in takers if isValid(child))
         total += max(widget.sizeHint().height() - inside, 0)
     return total
 
@@ -435,7 +477,7 @@ class OverlayHost(QWidget):
     def _watch(self, zone: QWidget) -> None:
         """Auf diese Zone und alles darin hören."""
         zone.installEventFilter(self)
-        for child in zone.findChildren(QWidget):
+        for child in lebende(zone, QWidget):
             child.installEventFilter(self)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
@@ -652,7 +694,7 @@ class OverlayHost(QWidget):
         """
         takers: list[RoomTaker] = [
             child
-            for child in zone.findChildren(QWidget)
+            for child in lebende(zone, QWidget)
             if isinstance(child, RoomTaker) and child.isVisibleTo(zone)
         ]
         if not takers:

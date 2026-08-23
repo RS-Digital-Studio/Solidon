@@ -74,6 +74,53 @@ def window(qt_app: QApplication) -> Iterator[MainWindow]:
     qt_app.processEvents()
 
 
+def test_a_half_torn_down_child_is_stepped_over(qt_app: QApplication) -> None:
+    """Die Python-Hülle überlebt die C++-Seite — und die erste Frage an sie
+    ist der Absturz.
+
+    Im Belegslauf vom 23.08.2026 riss `test_ui.py` in zwei von vier
+    Durchgängen genau hier, jedes Mal im Teardown und jedes Mal **nach** 257
+    bestandenen Tests:
+
+        RuntimeError: Error calling Python override of QWidget::eventFilter():
+        libshiboken: Internal C++ object (ObjectTree) already deleted.
+
+    Der `eventFilter` läuft, während die Ereignisschleife ein letztes Mal
+    angehalten wird, und geht über Kinder, die der Abbau schon halb weggeräumt
+    hat. Beim Kunden passiert dasselbe im `closeEvent`; dort landet die
+    Ausnahme auf stderr, wo sie niemand liest.
+
+    Nachgestellt wird der Zustand so, wie Qt ihn erzeugt: Das C++-Objekt wird
+    zerstört (`shiboken6.delete`), die Python-Referenz bleibt. Genau die Lage,
+    in der `findChildren` etwas zurückgibt, das nur noch eine Hülle ist.
+    """
+    from shiboken6 import delete, isValid
+
+    from app.ui.overlay import lebende
+
+    zone = QWidget()
+    lebt = QLabel("bleibt", zone)
+    stirbt = QLabel("geht", zone)
+
+    assert len(lebende(zone, QLabel)) == 2, "vorher sind beide da"
+
+    delete(stirbt)
+    assert not isValid(stirbt), "das C++-Objekt ist weg, die Hülle steht noch"
+
+    uebrig = lebende(zone, QLabel)
+
+    assert len(uebrig) == 1, f"das tote Kind gehört übersprungen: {len(uebrig)}"
+    assert uebrig[0] is lebt
+
+    # **Und der Beleg, warum das Überspringen zählt**: Am toten Kind wirft
+    # schon die erste Frage — genau die, die `_extra_height` und der
+    # `eventFilter` stellen. Ohne den Filter stünde sie in der Schleife.
+    with pytest.raises(RuntimeError):
+        stirbt.isVisibleTo(zone)
+
+    zone.deleteLater()
+
+
 def test_the_view_gets_the_whole_window(window: MainWindow) -> None:
     """Die Ansicht füllt den Träger — das ist der ganze Punkt des Umbaus."""
     host = window.overlay
