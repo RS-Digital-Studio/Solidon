@@ -122,6 +122,20 @@ for file in $windowed; do ignores="$ignores --ignore=$file"; done
 #
 # Ohne Protokoll bleibt es bei der alten, strengen Bewertung: Ein Aufrufer, der
 # die Ausgabe nicht mitschreibt, bekommt keinen Freibrief.
+#
+# **Und die 127 ist gar kein eigener Code.** Am 23.08.2026 gemessen, indem
+# dieselben Dateien nicht über die Shell, sondern direkt aus Python gestartet
+# wurden — dort kommt der Windows-Rückgabewert an, statt der Bash-Konvention:
+#
+#     tests/test_first_run.py   0xC0000409   47 passed   (2 von 2 Läufen)
+#     tests/test_chat_ui.py     0xC0000409   40 passed   (2 von 2 Läufen)
+#
+# `0xC0000409` ist der Code, den `CLAUDE.md` als bekannten Abbau-Absturz führt.
+# Die Shell meldet ihn als 127, weil sie jeden Wert über 128 auf ihre eigene
+# Skala abbildet und „command not found" daraus macht. **Die Roadmap führte
+# beide als getrennte Signaturen — sie sind eine.** Und der Abriss ist nicht
+# sporadisch: vier von vier Läufen, jedes Mal nach vollständiger
+# Zusammenfassung.
 zaehlt_als_fehler() {
   status=$1
   protokoll=${2:-}
