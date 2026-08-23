@@ -355,7 +355,39 @@ def test_raising_the_version_moves_both_places_and_nothing_else() -> None:
 
 # --- Das Schloss über dem Tor (tools/gate_lock.py) ------------------------------------
 
+#: Kann diese Plattform den Prozessbaum lesen, den ``gate_lock`` braucht?
+#:
+#: **Die Bedingung fragt nach der Fähigkeit und nicht nach dem Namen der
+#: Plattform**, denn das ist der Grund: ``_descendants`` liest den Baum unter
+#: Windows über ``CreateToolhelp32Snapshot`` und sonst aus ``/proc``. Ein
+#: POSIX-System **ohne** ``/proc`` — macOS — hat weder das eine noch das andere,
+#: und dort meldet ``standing_still`` folgerichtig ``None``: „ich kann das hier
+#: nicht messen." Das ist richtiges Verhalten des Werkzeugs und kein Fehler.
+#:
+#: **Warum das erst am 23.08.2026 auffiel**, obwohl die vier Prüfungen vom
+#: Vortag stammen: Die macOS-Matrix läuft nur bei Tags und Handstarts, die
+#: täglichen Pushes fahren Ubuntu. Dort gibt es ``/proc``, also war der Zweig
+#: zufällig der richtige. Vier Tests waren auf macOS nie gelaufen — **nicht
+#: grün, sondern ungeprüft**, und das sieht von außen gleich aus.
+#:
+#: **Und warum hier übersprungen und nicht portiert wird:** ``gate_lock``
+#: serialisiert die Rechenzeit mehrerer Sitzungen auf *einer Arbeitsmaschine*.
+#: Auf einem Bauserver gibt es weder mehrere Sitzungen noch ein Schloss — ein
+#: Test, der dort ein nie gerufenes Werkzeug prüft, misst nichts. Ein
+#: ``ps -eo pid=,ppid=``-Zweig wäre trotzdem besser und steht im Register;
+#: gebaut wird er, wenn jemand ihn auf einem Mac fahren kann. Ungeprüfter Code
+#: für eine Plattform, die man nicht hat, ist genau die Sorte, die hier gerade
+#: aufgefallen ist.
+KENNT_DEN_PROZESSBAUM: Final = sys.platform == "win32" or Path("/proc").is_dir()
 
+braucht_prozessbaum = pytest.mark.skipif(
+    not KENNT_DEN_PROZESSBAUM,
+    reason="gate_lock liest den Prozessbaum über /proc oder die Windows-API; "
+    "diese Plattform hat beides nicht",
+)
+
+
+@braucht_prozessbaum
 def test_the_process_tree_is_read_along_the_chain_not_the_first_level() -> None:
     """Ein Enkel gehört zum Baum, auch wenn sein Vater dazwischen fehlt.
 
@@ -388,6 +420,7 @@ def test_the_process_tree_is_read_along_the_chain_not_the_first_level() -> None:
         kind.wait(timeout=5)
 
 
+@braucht_prozessbaum
 def test_standing_still_tells_a_sleeper_from_a_worker() -> None:
     """Ob etwas rechnet, sagt die Rechenzeit über ein **Intervall**.
 
@@ -426,6 +459,7 @@ def test_an_unknown_process_says_nothing_instead_of_standing_still() -> None:
     assert gate_lock.standing_still(2**30) is None
 
 
+@braucht_prozessbaum
 def test_a_test_process_is_found_by_its_command_not_its_ancestry() -> None:
     """Der Wächter findet einen Testlauf auch dann, wenn die Kette zu ihm reißt.
 
@@ -461,6 +495,7 @@ def test_a_test_process_is_found_by_its_command_not_its_ancestry() -> None:
     )
 
 
+@braucht_prozessbaum
 def test_a_named_process_is_measured_with_its_children() -> None:
     """Wer über das Kommando gefunden wird, wird mit seinem Unterbaum gemessen.
 
