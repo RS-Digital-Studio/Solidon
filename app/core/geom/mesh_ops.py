@@ -853,6 +853,13 @@ class ThickenParams(BaseParams):
         default=2.0,
         unit="mm",
         minimum=0.1,
+        # **Nach oben begrenzt, nach unten nicht.** Zehn von zwölf Wandstärken
+        # im Register tragen ein Maximum (`shell_exact` meint dasselbe und
+        # liegt bei 50); `thicken` war die Ausnahme. Unten bleibt es offen,
+        # weil der Prüfbericht dort die bessere Auskunft gibt als eine Grenze —
+        # was zwei Extrusionsbahnen für **dieses** Material heißen, weiß er,
+        # und eine Zahl im Schema wüsste es nicht.
+        maximum=50.0,
         doc=_(
             "Wie dick die Wand wird. Unter zwei Extrusionsbahnen ist sie fragil — "
             "was das für dieses Material heißt, sagt der Prüfbericht."
