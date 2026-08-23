@@ -232,6 +232,49 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
                 waiter = getattr(widget, name, None)
                 if callable(waiter):
                     waiter()
+    # **Die Zählung, mit der sich das Anhäufen messen lässt.**
+    #
+    # Am 23.08.2026 ließ sich der wandernde Absturz in test_ui.py nicht
+    # eingrenzen: sechs Läufe, vier Abstürze, vier verschiedene Stellen — nach
+    # 14, 81, 124 und 202 Tests. Kein einzelner Test. Also wurde gezählt statt
+    # gesucht, und die Zahl ist eindeutig:
+    #
+    #     nach Test   1:      0 Top-Level-Widgets
+    #     nach Test  51:    377
+    #     nach Test 126:   1188
+    #     nach Test 257:   1705
+    #
+    # **Alle 1705 sind isValid** — keine Leichen, sondern lebende Objekte.
+    # Der Speicherbereiniger holt gelegentlich etwas (bei 151 waren es 840, bei
+    # 176 wieder 1393), kommt aber nicht hinterher.
+    #
+    # **Sie erklärt den Absturz nicht.** Nach 14 Tests gab es etwa achtzig
+    # Widgets, und der Lauf riss trotzdem — wäre die Menge die Ursache, dürfte
+    # dort nichts passieren. Plausibel ist, dass sie eine von zwei Bedingungen
+    # ist: Der Speicherbereiniger läuft in dem Thread, dessen Allokation die
+    # Schwelle reißt, und mehr Objekte machen beides wahrscheinlicher, ohne es
+    # zu erzwingen.
+    #
+    # **Wozu sie trotzdem taugt: als Fortschrittsmaß.** 1705 ist
+    # deterministisch, eine Absturzrate ist es nicht. Wer an den
+    # Widget-Lebensdauern arbeitet, sieht das Ergebnis nach *einem* Lauf statt
+    # nach zehn.
+    #
+    #     SOLIDON_ZAEHLE_WIDGETS=pfad.tsv python -m pytest tests/test_ui.py
+    #
+    # Drei Spalten je Test: alle Top-Level-Widgets, davon gültige, und die Zahl
+    # der bekannten QWidget-Unterklassen.
+    if os.environ.get("SOLIDON_ZAEHLE_WIDGETS"):
+        from pathlib import Path
+
+        from PySide6.QtWidgets import QWidget
+
+        oben = application.topLevelWidgets()
+        lebende = [widget for widget in oben if isValid(widget)]
+        ziel = Path(os.environ["SOLIDON_ZAEHLE_WIDGETS"])
+        with ziel.open("a", encoding="utf-8") as datei:
+            print(len(oben), len(lebende), len(QWidget.__subclasses__()), file=datei)
+
     # Zerstört wird hier **nichts**. Zwei Anläufe haben das versucht —
     # ``deleteLater`` allein änderte nichts (``processEvents`` führt
     # ``DeferredDelete`` nicht aus), und mit ``sendPostedEvents`` dazu
