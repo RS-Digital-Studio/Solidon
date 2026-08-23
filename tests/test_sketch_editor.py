@@ -2151,22 +2151,38 @@ def test_a_click_with_a_trembling_hand_moves_nothing(qt_app: QApplication) -> No
     assert canvas.points() != before, "ab der Schwelle muss der Zug greifen"
 
 
-def test_the_tool_row_is_the_one_that_needs_the_width(qt_app: QApplication) -> None:
-    """**Die Zahl stimmte, die Ursache nicht.**
+def test_the_sketch_area_fits_a_laptop_screen(qt_app: QApplication) -> None:
+    """**Die Zahl stimmte, die Ursache nicht — und jetzt stimmt beides.**
 
     Der Punkt in der Roadmap schrieb die 1007 Bildpunkte den achtzehn Knöpfen
-    der Bedingungszeile zu. Gemessen ist es die **Werkzeugzeile**: fünfzehn
-    Knöpfe à 37 Bildpunkte plus zwei Zahlenfelder à 163, alles in einer Reihe.
-    Die Bedingungszeile kann beliebig schmal werden — ihr Kasten trägt
-    ``setMinimumWidth(1)``, und sie bricht selbst um
-    (:meth:`SketchPanel._fit_constraint_row`).
+    der Bedingungszeile zu. Gemessen war es die **Werkzeugzeile**, und
+    „achtzehn Knöpfe" waren fünfzehn Knöpfe und drei Zahlenfelder, von denen
+    zwei in dieser Zeile stehen:
 
-    Dieser Test hält den Zustand fest und die Ursache dazu: Er ist grün,
-    solange die Werkzeugzeile die breiteste ist. Wird sie schmaler — durch
-    schmalere Zahlenfelder, einen Umbruch oder ein Kürzel-Menü —, wird er rot
-    und verlangt, dass die Zahl hier nachgezogen wird. Was verschwinden soll,
-    ist eine Entscheidung und steht als offener Punkt in der Roadmap; dass sie
-    fällig ist, steht hier.
+        12 Knöpfe à 37                   444
+        „Grundform" (Aufklappmenü)       153
+        offset_distance („2,00 mm")      163
+        measure_field („0,00 mm")        163
+        ------------------------------------
+        Summe der Posten                 997   (+ Abstände = 1007)
+
+    Verschwunden ist ``measure_field``, solange nichts gezeichnet wird: der
+    breiteste Posten, der die meiste Zeit grau dasteht. Damit sind es 881 für
+    den ganzen Bereich, und kein Werkzeug ist dafür weggefallen.
+    ``offset_distance`` bleibt — *Versetzen* ist ein Sofort-Knopf und kein
+    Modus, sein Wert muss **vor** dem Klick einstellbar sein.
+
+    Vier Knöpfe unter einen Überlaufknopf zu legen hätte 148 Bildpunkte
+    gespart und vier Werkzeuge versteckt; das eine Feld spart mehr.
+
+    Die Grenze ist dieselbe wie für die Bedingungszeile darüber, und aus
+    demselben Grund: Zwei Zeilen desselben Bereichs nach verschiedenen
+    Maßstäben zu messen wäre schlechter als eine Zahl, die man begründen kann.
+    ``MAX_TOOLS = 8`` aus ``tests/test_interface_limits.py`` gilt hier
+    ausdrücklich **nicht** — die zählt die Umschalter unter dem Viewport.
+
+    Gemessen **mit Thema**: Ohne fehlt die Polsterung, die ein Kunde sieht,
+    und der Nachbartest war daran zwei Runden lang grün, ohne etwas zu messen.
     """
     from app.ui.style import stylesheet
 
@@ -2177,12 +2193,13 @@ def test_the_tool_row_is_the_one_that_needs_the_width(qt_app: QApplication) -> N
         bereich = panel.minimumSizeHint().width()
         bedingungen = panel._constraints_row.minimumSize().width()
 
-        assert bereich > 900, (
-            "Der Bereich passt jetzt auf einen 1024er Schirm — schön, und dann "
-            f"gehört die Zahl hier nachgezogen: {bereich} Bildpunkte."
-        )
-        assert bedingungen < bereich, (
-            f"Die Bedingungszeile ist nicht die Ursache: {bedingungen} gegen {bereich} Bildpunkte."
+        zeile = panel._tools_row.minimumSize().width()
+
+        assert bereich <= 900, f"der Skizzenbereich verlangt {bereich} Bildpunkte Breite"
+        assert zeile <= 900, f"die Werkzeugzeile verlangt {zeile} Bildpunkte Breite"
+        assert bedingungen <= 900, f"die Bedingungszeile verlangt {bedingungen} Bildpunkte"
+        assert not panel.measure_field.isVisible(), (
+            "solange nichts gezeichnet ist, hat das Maßfeld nichts zu zeigen"
         )
     finally:
         panel.deleteLater()

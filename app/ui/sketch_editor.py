@@ -2327,6 +2327,10 @@ class SketchPanel(QWidget):
                 opening = str(error.detail or error.title)
 
         tools = QHBoxLayout()
+        # Als Feld, damit die Breite dieser Zeile prüfbar ist: Sie ist der
+        # Grund, aus dem der Skizzenbereich 1007 Bildpunkte verlangt, und eine
+        # Zahl, die nur im Bild steht, lässt sich nicht rot werden lassen.
+        self._tools_row = tools
         self._tool_buttons: dict[str, QToolButton] = {}
         for name, label in (
             ("select", tr("Auswählen")),
@@ -2517,6 +2521,11 @@ class SketchPanel(QWidget):
         self.measure_field.set_range_mm(0.0, 10_000.0)
         self.measure_field.setKeyboardTracking(False)
         self.measure_field.setEnabled(False)
+        # Und unsichtbar, bis etwas gezeichnet wird: Der Anfangszustand ist
+        # derselbe wie jeder spätere ohne angefangenes Element, und ein Feld,
+        # das beim Öffnen dasteht und beim ersten Klick verschwindet, wäre
+        # unruhiger als eines, das erst kommt (siehe _show_pending_measure).
+        self.measure_field.setVisible(False)
         self.measure_field.setToolTip(
             tr("Länge oder Durchmesser eintippen und mit der Eingabetaste setzen.")
         )
@@ -2982,7 +2991,28 @@ class SketchPanel(QWidget):
         )
 
     def _show_pending_measure(self, value: float) -> None:
-        """Das Feld folgt dem, was gerade gezeichnet wird."""
+        """Das Feld folgt dem, was gerade gezeichnet wird — und es steht nur
+        da, solange es etwas zu messen gibt.
+
+        **Es war der breiteste Posten der Zeile, der die meiste Zeit grau
+        dasteht.** Gemessen am gebauten Editor mit Thema verlangt die
+        Werkzeugzeile 1007 Bildpunkte; davon gehen 163 an dieses Feld — ein
+        Sechstel für etwas, das erst bedienbar wird, wenn ein Element
+        angefangen ist. Ohne es sind es 844, und kein Werkzeug ist dafür
+        verschwunden.
+
+        **Die Hausregel „grau und begründet, nicht unsichtbar" gilt hier
+        nicht**, und der Unterschied ist wichtig: Sie steht für Felder eines
+        Dialogs, die ein Umschalter gerade wirkungslos macht — wer die Zeile
+        vermisst, sucht sie. Dieses Feld hat niemand vermisst, weil niemand es
+        je benutzen konnte, solange nichts gezeichnet war. Es erscheint genau
+        dann, wenn der Blick ohnehin auf der Zeichenfläche liegt.
+
+        Der eigentliche Ort dafür ist der **Zeiger**, wie in Fusion; das ist
+        ein eigener Umbau und steht als eigener Punkt. Bis dahin kostet diese
+        Zeile nichts und macht ihn weniger dringend.
+        """
+        self.measure_field.setVisible(value > 0.0)
         self.measure_field.setEnabled(value > 0.0)
         blocked = self.measure_field.blockSignals(True)
         self.measure_field.set_value_mm(value)
