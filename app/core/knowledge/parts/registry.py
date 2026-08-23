@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from typing import Any, Final
 
 from app.core.errors import InternalError
-from app.core.types import BaseParams, PartFn
+from app.core.types import BaseParams, HoleValues, PartFn
 from app.i18n import TranslatableText, _
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -92,6 +92,23 @@ class PartSpec:
     version: str = "1"
     subtractive: bool = False
     """Wahr für eine Form, die abgezogen wird: Bohrung, Tasche, Mutternfalle."""
+    at_hole_values: HoleValues | None = None
+    """Was eine Bohrung dieses Durchmessers für diesen Baustein vorschlägt.
+
+    **Die Regel ist je Baustein eine andere, und darum steht sie hier statt im
+    Kern.** Eine Einpressbuchse braucht die kleinste Größe, deren Bohrung die
+    vorhandene *aufweitet*; ein Gewinde die größte, deren Kernloch noch
+    *hineinpasst*. Wer beides über eine einheitliche Formel bedient, hat in
+    einem der beiden Fälle unrecht — gemessen am 23.08.2026: An einer
+    Ø 5,19-Bohrung schlug die Einpressbuchse M3 vor, deren Bohrung 4,00 mm
+    misst. Der Schnitt lag vollständig innerhalb der vorhandenen Bohrung und
+    trug nichts ab. Der Kunde klickte, füllte den Dialog aus, bestätigte,
+    bekam einen Schritt im Verlauf und eine unveränderte Geometrie.
+
+    Gibt ein leeres Ergebnis zurück, wo keine Größe passt. **Kein Rateschluss
+    auf die nächstbeste** (Regel 21): Eine 40-mm-Bohrung bekommt keinen
+    M8-Vorschlag, sondern gar keinen, und die Vorgabe bleibt stehen.
+    """
     at_hole: bool = False
     """Wahr für einen Baustein, der in eine **vorhandene** Bohrung gesetzt wird.
 
@@ -249,6 +266,7 @@ def register_part(
     version: str = "1",
     subtractive: bool = False,
     at_hole: bool = False,
+    at_hole_values: HoleValues | None = None,
     features: Iterable[str] = (),
     doc: TranslatableText | str = "",
     caveat: TranslatableText | str = "",
@@ -271,6 +289,7 @@ def register_part(
                 version=version,
                 subtractive=subtractive,
                 at_hole=at_hole,
+                at_hole_values=at_hole_values,
                 features=tuple(features),
                 doc=doc,
                 caveat=caveat,

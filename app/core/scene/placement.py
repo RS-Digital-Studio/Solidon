@@ -64,6 +64,43 @@ DIAMETER_FIELD = "wrap_diameter"
 AXIS_CLARITY = 0.9
 
 
+def _from_the_bore(spec: OperationSpec, feature: Feature, names: set[str]) -> dict[str, Any]:
+    """Was der Baustein aus dem **gemessenen** Durchmesser dieser Bohrung macht.
+
+    Der Docstring von :func:`values_for` sagt, dass die Größe eines Merkmals
+    nicht in die Vorgaben gehört, und für eine Senkung stimmt das vollständig:
+    Sie nimmt den Kopfdurchmesser der Schraube auf, nicht den der Bohrung, auf
+    der sie sitzt. Für einen Baustein, der **in** die Bohrung gesetzt wird,
+    stimmt es nicht — dort *ist* der gemessene Durchmesser die Bezugsgröße,
+    weil er die Bohrung ersetzt statt auf ihr zu sitzen.
+
+    Der Unterschied ist fachlich, und deshalb steht die Rechnung beim Baustein
+    (``PartSpec.at_hole_values``) und nicht hier. Eine Einpressbuchse braucht
+    die kleinste Größe, die die Bohrung *aufweitet*, ein Gewinde die größte,
+    die noch *hineinpasst* — eine gemeinsame Formel wäre in einem der beiden
+    Fälle falsch.
+
+    **Was der Baustein nicht kennt, kommt nicht durch.** Gefiltert wird gegen
+    das Parameterschema der Operation: Ein Vorschlag für einen Parameter, den
+    es hier nicht gibt, wäre ein stiller Fehlschlag beim Öffnen des Dialogs.
+    """
+    if feature.kind != "hole":
+        return {}
+    diameter = feature.params.get("diameter")
+    if diameter is None:
+        return {}
+    # Spät importiert: ``knowledge`` kennt ``scene`` nicht, und andersherum
+    # soll die Abhängigkeit nur dort entstehen, wo sie gebraucht wird.
+    from app.core.knowledge.parts.ops import part_of
+
+    part = part_of(spec.name)
+    if part is None or part.at_hole_values is None:
+        return {}
+    return {
+        name: value for name, value in part.at_hole_values(float(diameter)).items() if name in names
+    }
+
+
 def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
     """Die Parameter, die dieses Merkmal für diese Operation vorschlägt.
 
@@ -74,7 +111,7 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
     """
     names = {entry.name for entry in spec.params.spec()}
     if FEATURE_FIELD in names:
-        return {FEATURE_FIELD: feature.id}
+        return {FEATURE_FIELD: feature.id, **_from_the_bore(spec, feature, names)}
 
     values: dict[str, Any] = {}
     if TARGET_FIELD in names and feature.kind == "face":

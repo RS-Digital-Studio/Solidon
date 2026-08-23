@@ -141,11 +141,30 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
 )
 
 
+#: Der Namensraum der Bausteinoperationen. Als Konstante, weil ihn zwei
+#: Richtungen brauchen: :func:`op_name` setzt ihn, :func:`part_of` nimmt ihn ab.
+_PREFIX = "insert_"
+
+
 def op_name(part: str) -> str:
     """``screw_hole`` wird ``insert_screw_hole`` — ein Namensraum, keine
     Kollisionen.
     """
-    return f"insert_{part}"
+    return f"{_PREFIX}{part}"
+
+
+def part_of(operation: str) -> PartSpec | None:
+    """Der Baustein hinter einem Operationsnamen — die Umkehrung von
+    :func:`op_name`.
+
+    ``None`` für alles, was kein Baustein ist: Der Präfix allein ist kein
+    Beweis, und eine Operation, die zufällig so heißt, darf hier nicht in einen
+    Fehler laufen.
+    """
+    if not operation.startswith(_PREFIX):
+        return None
+    name = operation[len(_PREFIX) :]
+    return PARTS.get(name) if PARTS.has(name) else None
 
 
 def build_params(spec: PartSpec) -> type[BaseParams]:

@@ -112,10 +112,17 @@ def test_the_diameter_is_never_guessed() -> None:
 def test_an_operation_that_names_features_gets_the_name() -> None:
     """Die Bausteinbibliothek setzt sich selbst an ein Merkmal; die Position
     ist ein Versatz.
+
+    **Keine Koordinaten**, und das ist der Punkt dieses Tests: Wer sich an ein
+    Merkmal hängt, bekommt dessen Kennung und rechnet den Rest selbst. Seit dem
+    23.08.2026 kommt eine Größe dazu, wo der Baustein eine aus dem gemessenen
+    Durchmesser herleiten kann — geprüft wird sie in
+    ``test_a_bore_proposes_the_size_that_fits_it``.
     """
     values = values_for(REGISTRY.get("insert_heatset_m4"), hole())
 
-    assert values == {"at_feature": "hole_1"}, "the name is the whole answer"
+    assert values["at_feature"] == "hole_1", "the name is the whole answer"
+    assert not {"x", "y", "z", "axis"} & set(values), "keine Koordinaten neben der Kennung"
 
 
 def test_the_lid_is_placed_at_the_face_it_was_clicked_on() -> None:
@@ -257,3 +264,78 @@ def test_the_body_never_claims_a_feature_was_picked() -> None:
         values = values_for_object(spec, features)
         assert "at_feature" not in values, spec.name
         assert "up_to" not in values, spec.name
+
+
+# --- Größe aus der Bohrung ------------------------------------------------------
+
+
+def test_a_bore_proposes_the_size_that_fits_it() -> None:
+    """Was in eine Bohrung gesetzt wird, richtet sich nach ihrem Durchmesser.
+
+    **Gemeldet von 3d-druck-b8 am 23.08.2026, mit Zahlen:** An einer
+    Ø 5,19-Bohrung schlug die Einpressbuchse **M3** vor. Deren Bohrung misst
+    4,00 mm, liegt also vollständig innerhalb der vorhandenen — der Schnitt
+    trug **nichts** ab. Gemessen: ±0 mm³. Der Kunde klickte, füllte den Dialog
+    aus, bestätigte, bekam einen Schritt im Verlauf und eine unveränderte
+    Geometrie. Ein Fehler, den niemand bei der Anwendung sucht.
+
+    Die Regeln stehen bei den Bausteinen und nicht hier, weil sie **fachlich
+    verschieden** sind: Eine Buchse braucht die kleinste Größe, die die Bohrung
+    *aufweitet*; ein Gewinde die größte, die noch *hineinpasst*. Eine
+    gemeinsame Formel wäre in einem der beiden Fälle falsch.
+    """
+    bore = hole(diameter=5.19)
+
+    insert = values_for(REGISTRY.get("insert_heatset_m4"), bore)
+    assert insert["size"] == "M4", (
+        f"die Einpressbuchse schlägt {insert.get('size')} vor — deren Bohrung ist kleiner "
+        "als die vorhandene und trägt nichts ab"
+    )
+    assert values_for(REGISTRY.get("insert_nut_trap"), bore)["size"] == "M5"
+
+    thread = values_for(REGISTRY.get("insert_printed_thread"), bore)
+    assert thread["size"] == "M6", "M6 hat das Kernloch, das zu 5,19 mm passt"
+    assert thread["internal"] is True, (
+        "wer eine Bohrung anklickt und Gewinde wählt, meint Gänge in der Wand — "
+        "die Schemavorgabe steht auf Außengewinde und setzte einen Bolzen hinein"
+    )
+
+
+def test_a_bore_that_fits_nothing_keeps_the_default() -> None:
+    """Wo keine Größe passt, wird nicht geraten (Regel 21).
+
+    Beide Schranken sind fachlich und keine gegriffene Toleranz: Unter dem
+    Kernlochdurchmesser greift ein Gewinde nicht ins Material, über dem Nennmaß
+    liegt die Bohrungswand außerhalb. Eine Ø 6,5-Bohrung ist für M6 zu weit und
+    für M8 zu eng — sie bekommt **keinen** Vorschlag statt eines falschen.
+
+    Ein geratener Vorschlag sieht im Dialog genauso aus wie ein gemessener.
+    """
+    assert "size" not in values_for(REGISTRY.get("insert_printed_thread"), hole(diameter=6.5))
+
+    huge = hole(diameter=40.0)
+    for name in ("insert_heatset_m4", "insert_nut_trap", "insert_printed_thread"):
+        values = values_for(REGISTRY.get(name), huge)
+        assert "size" not in values, f"{name} rät an einer 40-mm-Bohrung eine Größe"
+        assert values["at_feature"] == "hole_1", "die Zuordnung bleibt davon unberührt"
+
+
+def test_a_part_that_brings_its_own_bore_takes_no_size_from_one() -> None:
+    """Die Gegenprobe — sonst hätte der neue Weg den alten überschrieben.
+
+    Der Docstring von ``values_for`` sagt seit je, dass die Größe eines
+    Merkmals nicht in die Vorgaben gehört: „eine Senkung nimmt den Durchmesser
+    des Schraubenkopfs, nicht den der Bohrung, auf der sie sitzt". Für alles,
+    was **auf** einer Bohrung sitzt oder seine eigene mitbringt, gilt das
+    unverändert.
+    """
+    bore = hole(diameter=5.19)
+    for name in ("insert_screw_hole", "insert_dowel", "insert_cable_gland"):
+        if not REGISTRY.has(name):
+            continue
+        assert "size" not in values_for(REGISTRY.get(name), bore), (
+            f"{name} bringt seine Bohrung mit und darf keine Größe von einer erben"
+        )
+
+    countersink = values_for(REGISTRY.get("countersink_hole"), bore)
+    assert "diameter" not in countersink, "die Senkung nimmt den Kopf, nicht das Loch"

@@ -1455,6 +1455,14 @@ class PartResult:
 
 PartFn = Callable[[BaseParams], PartResult]
 
+HoleValues = Callable[[float], "dict[str, Any]"]
+"""Aus dem gemessenen Durchmesser einer Bohrung die Parameter, die dazu passen.
+
+Leer, wo keine Größe passt — die Vorgabe des Schemas bleibt dann stehen. Nie
+die nächstbeste (Regel 21): Ein Vorschlag, den niemand hergeleitet hat, sieht
+im Dialog genauso aus wie ein gemessener.
+"""
+
 
 class MeshBackend(Protocol):
     """Mesh-Erzeugung, lokal oder gehostet — derselbe Aufruf so oder so (§27).

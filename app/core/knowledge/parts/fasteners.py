@@ -12,7 +12,7 @@ Dokumentation, statt es in einer Zahl zu verstecken.
 
 from __future__ import annotations
 
-from typing import cast
+from typing import Any, cast
 
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData
@@ -156,6 +156,56 @@ class HeatsetParams(BaseParams):
     )
 
 
+def size_for_insert(diameter: float) -> dict[str, Any]:
+    """Die kleinste Buchse, die eine Bohrung dieses Durchmessers **aufweitet**.
+
+    Die Buchse ersetzt die Bohrung, sie sitzt nicht auf ihr. Eine Größe, deren
+    Bohrung kleiner ist als die vorhandene, schneidet vollständig innerhalb und
+    trägt nichts ab — genau das geschah bis zum 23.08.2026 mit der Vorgabe M3
+    (4,00 mm) an einer Ø 5,19-Bohrung.
+    """
+    for size in standards.insert_sizes():
+        if standards.insert(size).hole >= diameter:
+            return {"size": size}
+    return {}
+
+
+def size_for_nut_trap(diameter: float) -> dict[str, Any]:
+    """Die kleinste Mutter, deren Durchgangsloch die Bohrung noch aufnimmt.
+
+    Dasselbe Verhältnis wie bei der Buchse: Das Schraubenloch der Falle tritt
+    an die Stelle der vorhandenen Bohrung. Ein kleineres verschwände darin, und
+    die Mutter säße in einem Loch, das weiter ist als ihr eigenes.
+    """
+    for size in standards.screw_sizes():
+        if standards.screw(size).clearance >= diameter:
+            return {"size": size}
+    return {}
+
+
+def size_for_thread(diameter: float) -> dict[str, Any]:
+    """Das größte Gewinde, das in eine Bohrung dieses Durchmessers geschnitten
+    werden kann — und zwar als **Innengewinde**.
+
+    Zwei Schranken, beide fachlich und keine geratene Toleranz: Unterhalb des
+    Kernlochdurchmessers greift das Werkzeug nicht ins Material, oberhalb des
+    Nennmaßes liegt die Bohrungswand außerhalb des Gewindes. Eine
+    Ø 6,5-Bohrung bekommt deshalb **keinen** Vorschlag statt eines falschen —
+    für M6 ist sie zu weit, für M8 zu eng.
+
+    Und ``internal``: Wer eine Bohrung anklickt und „Gewinde" wählt, meint
+    Gänge in der Wand. Die Schemavorgabe steht auf Außengewinde, und das ist
+    für einen freistehenden Bolzen richtig — in einem Loch setzte sie einen
+    zweiten Bolzen hinein.
+    """
+    fitting = [
+        size
+        for size in standards.screw_sizes()
+        if standards.screw(size).tap <= diameter <= standards.screw(size).nominal
+    ]
+    return {"size": fitting[-1], "internal": True} if fitting else {}
+
+
 @register_part(
     name="heatset_m4",
     title=_("Heat-Set-Einpressbuchse"),
@@ -163,6 +213,7 @@ class HeatsetParams(BaseParams):
     params=HeatsetParams,
     subtractive=True,
     at_hole=True,
+    at_hole_values=size_for_insert,
     features=["bore", "chamfer"],
     doc=_(
         "Bohrung für eine Heat-Set-Einpressbuchse mit Einführfase. Der Durchmesser "
@@ -246,6 +297,7 @@ class NutTrapParams(BaseParams):
     params=NutTrapParams,
     subtractive=True,
     at_hole=True,
+    at_hole_values=size_for_nut_trap,
     features=["pocket", "bore"],
     doc=_(
         "Tasche für eine Sechskantmutter, seitlich eingeschoben oder von unten "
@@ -332,6 +384,7 @@ class ThreadParams(BaseParams):
     params=ThreadParams,
     subtractive=False,
     at_hole=True,
+    at_hole_values=size_for_thread,
     features=["thread"],
     doc=_(
         "Druckbares Gewinde als Wendel mit abgeflachtem Kamm — kein ISO-Profil, "
