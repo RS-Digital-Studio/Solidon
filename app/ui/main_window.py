@@ -50,6 +50,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from shiboken6 import isValid
 
 from app.branding import APP_NAME, APP_VERSION, PROJECT_SUFFIX
 from app.core import activation, examples, manual, support, updates
@@ -2304,6 +2305,61 @@ class MainWindow(QMainWindow):
             self._lock_hint(action, locked)
         for action in (self._toolbar_sculpt, self._toolbar_armature):
             self._pick_hint(action, ready, locked)
+        self._hide_dead_menus()
+
+    def _hide_dead_menus(self) -> None:
+        """Ein Menü, in dem **kein** Eintrag geht, tritt beiseite.
+
+        **Robert am 23.08.2026:** „wenn man kein 3d modell ausgewählt hat
+        bringen menüs wie bohrung anlegen nichts, hier ausblenden" — und auf
+        die Rückfrage: „ausblenden wenn es nicht sinnvoll ist".
+
+        Gemessen auf der leeren Szene, bevor gebaut wurde:
+
+            Objekt         0 von  5 bedienbar
+            Ändern         0 von 34
+            Bausteine      0 von 20
+            Vorbereiten    0 von 10
+
+        **Neunundsechzig gesperrte Zeilen in vier Menüs**, und die Erklärung
+        dazu sieht nur, wer mit der Maus darüberfährt. Mit einem gewählten
+        Körper sind alle vier vollständig nutzbar — das Menü ist also nicht
+        kaputt, es kommt nur zu früh.
+
+        **Die Grenze läuft am Menü, nicht am Eintrag, und das ist der ganze
+        Schnitt.** Ein Menü, in dem jeder Eintrag gesperrt ist, erklärt nichts —
+        es ist Lärm. Ein Menü mit gemischtem Inhalt behält seine grauen Zeilen
+        samt Grund (:meth:`_kind_hint`), denn dort steht die Erklärung **neben
+        einem Eintrag, der geht**, und dieser Vergleich sagt mehr als das
+        Verschwinden.
+
+        Was ausdrücklich bleibt: die Werkzeugzeile unten. Sie nennt den Grund
+        im Klartext („Dafür braucht es einen Körper in der Szene.") und ist die
+        Stelle, an der ein Anfänger zuerst hinsieht — dort wäre Ausblenden der
+        Verlust der einzigen Auskunft.
+        """
+        # **Über die gehaltene Liste, nicht über die Leiste.** Die Leiste gibt
+        # Actions zurück, deren Menü sie selbst besitzt; self._menus ist die
+        # Quelle, die sie am Leben hält (siehe _menu). Der erste Anlauf ging
+        # über menuBar().actions() und fasste dabei ein Menü an, dessen
+        # C++-Seite fort war — derselbe Fehler wie in overlay.py, nur an
+        # einer Stelle, die ich selbst gebaut hatte.
+        for menu in self._menus:
+            handle = menu.menuAction()
+            # **Nicht ``is None``, und das ist kein Stilwunsch.** PySide6 gibt
+            # in seinen Stubs ``QMenu`` statt ``QMenu | None`` zurück, und mypy
+            # hält den Zweig damit für unerreichbar — zur Laufzeit liefert eine
+            # Action ohne Untermenü sehr wohl ``None``. Dieselbe Stub-Falle wie
+            # bei ``NumberSpin.validate``: Die Wahrheit steht im Verhalten, nicht
+            # in der Deklaration.
+            if not isValid(menu) or handle not in self.menuBar().actions():
+                # Nur die obersten: Untermenüs stehen auch in _menus, und
+                # ein Untermenü auszublenden verschöbe die Zeile darüber.
+                continue
+            entries = list(_menu_entries(menu))
+            # Ein Menü ohne Einträge bleibt stehen: Es ist keines, in dem
+            # nichts geht, sondern eines, das noch gefüllt wird.
+            handle.setVisible(not entries or any(entry.isEnabled() for entry in entries))
 
     def _kinds_of_selection(self, result: Any) -> list[str]:
         """Die Bauart jedes gewählten Körpers — Netz oder exakt.
@@ -5544,7 +5600,7 @@ class MainWindow(QMainWindow):
     def _parameter_values(self) -> dict[str, float]:
         """Die aufgelösten Projektparameter — der Skizzeneditor rechnet
         Maßausdrücke damit (§13)."""
-        from app.core.scene import expressions
+        from app.core import expressions
 
         try:
             return dict(expressions.resolve(self.session.project.document.parameters))
@@ -7084,6 +7140,23 @@ class MainWindow(QMainWindow):
         self.settings.window_geometry = bytes(self.saveGeometry().toHex().data()).decode("ascii")
         save_settings(self.settings)
         event.accept()
+
+
+def _menu_entries(menu: Any) -> Iterator[Any]:
+    """Jede anklickbare Zeile eines Menüs, Untermenüs eingeschlossen.
+
+    Getrennt von :func:`_menu_lines`, weil das den **Weg** liefert und dies die
+    **Handlung**: Wer wissen will, ob in einem Menü irgendetwas geht, braucht
+    die Actions selbst und nicht ihre Beschriftungen.
+    """
+    for action in menu.actions():
+        if action.isSeparator():
+            continue
+        sub = action.menu()
+        if sub is not None:
+            yield from _menu_entries(sub)
+            continue
+        yield action
 
 
 def _menu_lines(menu: Any, path: str = "") -> Iterator[tuple[str, Any]]:

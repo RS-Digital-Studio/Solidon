@@ -893,3 +893,85 @@ def test_the_shortcut_list_knows_the_drawing_keys(window: MainWindow) -> None:
     missing = sorted(key for key in drawing.values() if key not in named)
 
     assert not missing, f"die Übersicht kennt diese Zeichentasten nicht: {missing}"
+
+
+def test_a_menu_where_nothing_works_steps_aside(qt_app: QApplication) -> None:
+    """Vier Menüs, in denen auf der leeren Szene kein Eintrag geht.
+
+    **Robert am 23.08.2026:** „wenn man kein 3d modell ausgewählt hat bringen
+    menüs wie bohrung anlegen nichts, hier ausblenden" — und auf die Rückfrage:
+    „ausblenden wenn es nicht sinnvoll ist".
+
+    Gemessen auf der leeren Szene: *Objekt* 0 von 5, *Ändern* 0 von 34,
+    *Bausteine* 0 von 20, *Vorbereiten* 0 von 10. **Neunundsechzig gesperrte
+    Zeilen**, und die Erklärung sieht nur, wer mit der Maus darüberfährt.
+
+    **Die Grenze läuft am Menü, nicht am Eintrag**, und das ist der ganze
+    Schnitt: Ein Menü, in dem *jeder* Eintrag gesperrt ist, erklärt nichts —
+    es ist Lärm. Ein Menü mit gemischtem Inhalt behält seine grauen Zeilen samt
+    Grund, denn dort steht die Erklärung **neben einem Eintrag, der geht**, und
+    dieser Vergleich sagt dem Kunden mehr als das Verschwinden.
+
+    Was nicht verschwindet: die Werkzeugzeile. Sie nennt den Grund im Klartext
+    („Dafür braucht es einen Körper in der Szene.") und ist die Stelle, an der
+    ein Anfänger zuerst hinsieht.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    qt_app.processEvents()
+    # **Weg vom Startbildschirm, sonst misst dieser Test etwas anderes.** Dort
+    # blendet ``_workspace_menus`` ohnehin alles bis auf *Datei* und *Hilfe*
+    # aus — ein zweiter, älterer Schnitt aus demselben Gedanken. Gefragt ist
+    # hier die leere Szene: Der Kunde hat den Startbildschirm hinter sich und
+    # noch nichts gebaut.
+    window._show_start_screen(False)
+    window._update_actions()
+    qt_app.processEvents()
+
+    def zustand() -> dict[str, tuple[int, int, bool]]:
+        gefunden: dict[str, tuple[int, int, bool]] = {}
+        for handle in window.menuBar().actions():
+            menu = handle.menu()
+            if menu is None:
+                continue
+            eintraege = [a for a in menu.actions() if not a.isSeparator() and a.menu() is None]
+            for a in list(menu.actions()):
+                unter = a.menu()
+                if unter is not None:
+                    eintraege += [b for b in unter.actions() if not b.isSeparator()]
+            frei = sum(1 for a in eintraege if a.isEnabled())
+            gefunden[handle.text().replace("&", "")] = (frei, len(eintraege), handle.isVisible())
+        return gefunden
+
+    leer = zustand()
+    ganz_gesperrt = [name for name, (frei, alle, _) in leer.items() if alle and not frei]
+    assert ganz_gesperrt, "ohne ein ganz gesperrtes Menü prüft dieser Test nichts"
+    for name in ganz_gesperrt:
+        assert not leer[name][2], f"„{name}“ ist ganz gesperrt und steht trotzdem da"
+
+    # **Die Gegenprobe, und sie ist die wichtigere Hälfte:** Wer einen Körper
+    # hat, bekommt alles zurück. Ein Menü, das verschwindet und nicht
+    # wiederkommt, wäre schlimmer als eines, das grau dasteht.
+    gemischt = [name for name, (frei, alle, _) in leer.items() if frei and alle]
+    for name in gemischt:
+        assert leer[name][2], f"„{name}“ hat bedienbare Einträge und ist trotzdem fort"
+
+    # Und die zweite Hälfte: Wer einen Körper hat, bekommt alle vier zurück.
+    window.session.import_model(Path("tests/data/meshes/plate_holes.stl"))
+    window.session.wait_for_idle()
+    for _ in range(8):
+        qt_app.processEvents()
+    window.object_tree.select_object(next(iter(window.session.last_result.scene.objects)))
+    window._update_actions()
+    qt_app.processEvents()
+
+    voll = zustand()
+    for name in ganz_gesperrt:
+        frei, _, sichtbar = voll[name]
+        assert frei, f"„{name}“ ist auch mit einem Körper ganz gesperrt — dann ist es kaputt"
+        assert sichtbar, f"„{name}“ kam nicht zurück"
+
+    window.release()
