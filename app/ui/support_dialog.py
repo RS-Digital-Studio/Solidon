@@ -523,15 +523,79 @@ class SupportDialog(QDialog):
 
     # --- Die Wege ohne Netz -----------------------------------------------------
 
+    def report(self) -> reports.ErrorReport:
+        """Der Bericht, wie er abgelegt würde.
+
+        Als eigene Auskunft und nicht nur im ``_write_folder``: Was hinausgeht,
+        gehört an einer Stelle zusammengebaut und prüfbar — sonst prüft ein
+        Test den Ordner auf der Platte statt den Inhalt.
+        """
+        ticket = self.ticket()
+        # **Nicht ``ticket.as_text()``.** Der baut denselben Rahmen wie
+        # ``reports.as_text`` — Betreff, Zeitstempel, Systemblock — und wer ihn
+        # als ``detail`` einsetzt, bekommt alles zweimal: erst den Kopf, dann
+        # den ganzen Ticket-Text mit eigenem Kopf und eigenem Systemblock, dann
+        # den Steckbrief, dann den Systemblock ein zweites Mal. Gesehen, als
+        # der Steckbrief dazukam und der Bericht zum ersten Mal ausgedruckt
+        # dastand.
+        #
+        # Die Teile gehören in die Felder, die sie meinen: Der Fehlertext ist
+        # der ``traceback``, die Nachricht das ``detail``, und den Rahmen baut
+        # ``reports.as_text`` — einmal.
+        lines = [ticket.message.strip()]
+        if ticket.contact:
+            lines.extend(["", f"{tr('Rückantwort an')}: {ticket.contact}"])
+        if ticket.attachments:
+            lines.extend(["", "--- anhänge ---"])
+            lines.extend(
+                f"{entry.name} ({entry.size // 1024} KB)"
+                + (f" — {entry.description}" if entry.description else "")
+                for entry in ticket.attachments
+            )
+        return reports.ErrorReport(
+            summary=ticket.subject,
+            detail="\n".join(lines),
+            traceback=self.detail,
+            digest=self._scene_digest(),
+            include_log=self.with_log.isChecked(),
+        )
+
+    def _scene_digest(self) -> str:
+        """Der Steckbrief der Szene — Maße, Merkmale, Verlauf, als Text.
+
+        **Ohne ihn lässt sich ein Kundenfehler oft nicht entscheiden.** Am
+        23.08.2026 stand im Protokoll des ersten Kunden neunzehnmal derselbe
+        Abbruch, und ob drei erkannte Wülste drei Kanten waren oder eine
+        dreimal erkannte, war gar nicht zu beantworten: Die Maße standen
+        nirgends.
+
+        **Der Steckbrief und nicht die Projektdatei.** Er nennt Objekte mit
+        Maßen, Merkmale, Parameter, Passungen und den Verlauf mit seinen
+        Werten. Die Projektdatei sagte alles, enthält aber die Geometrie und
+        reist deshalb nur auf ausdrücklichen Wunsch mit (§37.2) — der
+        Mittelweg gibt uns die Diagnose und dem Kunden sein Modell.
+
+        Scheitert er, bleibt er leer: Der Fehlerbericht ist der Weg, den jemand
+        nimmt, wenn schon etwas kaputt ist, und er darf an einer fehlenden
+        Auskunft nicht selbst scheitern — dieselbe Haltung wie beim
+        Bausteinabgleich zwei Methoden weiter.
+        """
+        session = self._session
+        result = session.last_result if session is not None else None
+        if session is None or result is None:
+            return ""
+        try:
+            from app.core.perceive.digest import digest
+
+            return digest(result.scene, session.project.document)
+        except (AppError, OSError, ValueError) as problem:
+            _log.warning("digest for the report failed: %s", problem)
+            return ""
+
     def _write_folder(self) -> None:
         """Denselben Inhalt als Ordner ablegen — der Weg von vorher."""
         ticket = self.ticket()
-        report = reports.ErrorReport(
-            summary=ticket.subject,
-            detail=ticket.as_text(),
-            include_log=self.with_log.isChecked(),
-        )
-        self.written = reports.write(report)
+        self.written = reports.write(self.report())
         for entry in ticket.attachments:
             (self.written / entry.name).write_bytes(entry.data)
         self.state.setText(f"{tr('Abgelegt unter')}: {self.written}")
