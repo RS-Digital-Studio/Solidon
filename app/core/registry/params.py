@@ -231,6 +231,16 @@ def validate[P: BaseParams](params_class: type[P], values: Mapping[str, Any]) ->
                 field=spec.name,
                 detail=_("Dieser Parameter fehlt."),
                 constraint="required",
+                # **Der Name gehört dazu, und zwar der aus dem Dialog.** Im
+                # Prüfbericht stand „Dieser Parameter fehlt." und sonst nichts
+                # — gemessen an „Relief auflegen" ohne Bild, wo die Auswertung
+                # genau daran anhält. Welcher gemeint ist, weiß die Ausnahme
+                # (``field``), nur sagte sie es nicht.
+                #
+                # Als Wert und nicht im Satz: Ein ``{platzhalter}`` im
+                # ``detail`` bleibt stehen, wie er dasteht — der Kern
+                # formatiert seine Fehlertexte nicht nach.
+                values={"parameter": str(spec.title)},
             )
         else:
             arguments[spec.name] = spec.default

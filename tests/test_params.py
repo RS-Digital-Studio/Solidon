@@ -86,6 +86,14 @@ def test_unknown_and_missing_parameters_are_reported() -> None:
         validate(SampleParams, {})
     assert missing.value.constraint == "required"
     assert missing.value.field == "target"
+    # **Und der Kunde muss lesen können, welcher.** Im Prüfbericht stand
+    # „Dieser Parameter fehlt." und sonst nichts — gemessen an „Relief
+    # auflegen" ohne Bild, wo die Auswertung genau daran anhält. Der Name
+    # steht in ``values`` und nicht im Satz: Ein ``{platzhalter}`` im
+    # ``detail`` bleibt stehen, wie er dasteht.
+    assert str(missing.value.values.get("parameter")) == str(
+        next(spec.title for spec in SampleParams.spec() if spec.name == "target")
+    ), "the report must name the missing parameter the way the dialog labels it"
 
 
 def test_parameter_sets_are_frozen() -> None:
