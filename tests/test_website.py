@@ -766,3 +766,36 @@ def test_all_six_languages_release_at_the_same_moment() -> None:
         for page in START_PAGES
     }
     assert len(set(termine.values())) == 1, f"verschiedene Termine: {termine}"
+
+
+def test_the_three_sweeps_over_the_pages_find_something_to_check() -> None:
+    """Was die drei Durchgänge zählen, muss es geben — sonst prüfen sie nichts.
+
+    ``test_every_file_the_page_refers_to_exists``,
+    ``test_every_jump_onto_another_page_lands_somewhere`` und
+    ``test_no_answer_denies_a_platform_the_build_ships`` sammeln in einer
+    Schleife und sichern am Ende zu, dass die gesammelte Liste **leer** ist.
+    Eine solche Zusicherung ist auch dann grün, wenn die Schleife gar nicht
+    läuft — wenn das Muster nicht mehr trifft, die Dateien umziehen oder die
+    Seiten leer sind. Sie sagen dann „kein Fehler gefunden" und meinen „nicht
+    gesucht".
+
+    Hier steht die Gegenzahl, und zwar über **alle** Seiten summiert: Einzeln
+    hat nicht jede Seite Sprungmarken oder einen FAQ-Block, in der Summe aber
+    sehr wohl. Die Untergrenzen sind bewusst weit unter dem gemessenen Stand
+    (30 Seiten, 1517 Verweise, 12 mit Sprungmarken, 6 mit FAQ) — sie sollen
+    einen Zusammenbruch fangen, nicht jede Änderung an der Website melden.
+    """
+    pages = sorted(WEBSITE.rglob("*.html"))
+    assert len(pages) >= 10, f"nur {len(pages)} Seiten gefunden"
+
+    links = jumps = questions = 0
+    for page in pages:
+        text = page.read_text(encoding="utf-8")
+        links += len(LINK.findall(text))
+        jumps += len(re.findall(r'href="(/[^"#]*#[^"]+)"', text))
+        questions += len(re.findall(r"<summary>", text))
+
+    assert links >= 100, f"nur {links} Verweise — findet LINK noch etwas?"
+    assert jumps >= 5, f"nur {jumps} Sprungmarken auf andere Seiten"
+    assert questions >= 3, f"nur {questions} FAQ-Blöcke"

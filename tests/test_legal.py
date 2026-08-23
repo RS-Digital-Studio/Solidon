@@ -125,3 +125,15 @@ def test_an_unreviewed_contract_keeps_its_reservation() -> None:
     for _source, target, _label in make_legal.DOCUMENTS:
         html = (WEBSITE / target).read_text(encoding="utf-8")
         assert 'class="draft"' in html, f"{target} trägt keinen Vorbehalt"
+
+
+def test_the_sweep_over_the_pages_finds_something_to_read() -> None:
+    """``test_the_selling_page_links_every_legal_text`` sammelt fehlende
+    Verweise und sichert zu, dass die Liste leer ist.
+
+    Läuft die Schleife nie, ist sie das auch. Der Glob ist die Grundmenge, und
+    ein umbenannter Ordner macht ihn leer, ohne dass jemand etwas merkt.
+    """
+    pages = sorted(WEBSITE.rglob("*.html"))
+
+    assert len(pages) >= 10, f"nur {len(pages)} Seiten unter {WEBSITE} — falscher Pfad?"

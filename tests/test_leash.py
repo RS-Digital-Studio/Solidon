@@ -349,3 +349,21 @@ def test_every_worker_has_somebody_listening_for_its_crash() -> None:
             missing.append(path.name)
 
     assert not missing, "baut Arbeiter, hört aber nicht auf crashed: " + ", ".join(missing)
+
+
+def test_the_sweep_over_the_surface_finds_files_to_read() -> None:
+    """Drei Prüfungen hier lesen ``app/ui/*.py`` und sichern zu, dass sie
+    nichts Verbotenes finden.
+
+    Eine Zusicherung auf „nichts gefunden" ist auch dann grün, wenn nichts
+    gelesen wurde: Zieht der Ordner um oder wird eine Datei zum Paket, liefert
+    der Glob eine leere Liste, und die Schleife läuft nie. Die Prüfung meldet
+    dann „kein Verstoß" und meint „nicht nachgesehen".
+    """
+    from pathlib import Path
+
+    files = sorted((Path(__file__).resolve().parent.parent / "app" / "ui").glob("*.py"))
+
+    # Weit unter dem Stand (52) — das soll einen Zusammenbruch fangen, nicht
+    # jede neue oder gelöschte Datei melden.
+    assert len(files) >= 20, f"nur {len(files)} Dateien unter app/ui — falscher Pfad?"
