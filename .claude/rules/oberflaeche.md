@@ -222,12 +222,22 @@ Fläche im gerenderten Fenster:
 | Was ein Stylesheet trägt | Füllung | |
 |---|---|---|
 | nichts | `#f0a54a` | färbt |
-| die Eltern, typlos | `#202225` | färbt **nicht** |
-| die Großeltern, typlos | `#202225` | färbt **nicht** — es wirkt über Ebenen |
+| die Eltern, typlos `background:` | `#202225` | färbt **nicht** |
+| die Großeltern, typlos `background:` | `#202225` | färbt **nicht** — es wirkt über Ebenen |
+| die Eltern, typlos `border:` | `#f0a54a` | färbt |
+| die Eltern, typlos `color:` | `#f0a54a` | färbt, nur die Schrift wechselt |
 | die Großeltern, `#nurIch { … }` | `#f0a54a` | färbt |
 
-**Die letzte Zeile ist die Abhilfe: Eine Regel mit Kennung trifft nur ihr
-Ziel.** Wer einem Träger ein Stylesheet gibt, schreibt es an dessen
+**Und nur für die Eigenschaften, die sie selbst setzt.** Das ist die Hälfte,
+ohne die man an fünf Stellen sucht, an denen nichts ist: Ein typloses
+`border:` — wie es `_flash` beim Aufblinken eines Bereichs setzt
+(`main_window.py`) — nimmt dem Hauptknopf gar nichts, weil `QPushButton` im
+Anwendungs-Stylesheet eine eigene `border`-Regel trägt und die gewinnt.
+Gefährlich ist allein dieselbe Eigenschaft, die der Knopf braucht, und das ist
+`background`.
+
+**Und die Abhilfe steht in der letzten Zeile: Eine Regel mit Kennung trifft
+nur ihr Ziel.** Wer einem Träger ein Stylesheet gibt, schreibt es an dessen
 `objectName` und nicht typlos. Wo eine breite Regel bleiben muss, bekommt der
 Hauptknopf darin seine Farben ausdrücklich (`#surveyNotice #surveyGive` in
 `app/ui/survey.py`). `make_primary` bleibt in beiden Fällen — es rechnet die
