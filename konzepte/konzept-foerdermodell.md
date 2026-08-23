@@ -482,14 +482,48 @@ Befund dieser Durchsicht, der heute schon ein Risiko darstellt.
   Vertragspartner des Kaufs**."
 
 Beides zusammen kann nicht stimmen. Entweder schließt der Kunde den Kaufvertrag
-mit RS Digital oder mit Paddle. Die Datenschutzerklärung entscheidet sich
-übrigens klar für Paddle („ist damit für die Bestellung und die Zahlung selbst
-Verantwortlicher") — die AGB tun es nicht.
+mit RS Digital oder mit Paddle.
 
-**Fix:** § 2 und § 3 so umschreiben, dass die Rollen getrennt sind: Paddle
-schließt den **Kaufvertrag** (und stellt die Rechnung), RS Digital räumt das
-**Nutzungsrecht** ein (EULA). Das ist die übliche und saubere Konstruktion bei
-einem MoR — sie muss nur dastehen.
+> **Nachgetragen am 23.08.2026, nachdem `3d-druck-bd` den Befund schärfer
+> gelesen hat als ich.** Ich hatte hier zunächst geschrieben, die
+> Datenschutzerklärung „entscheide sich klar für Paddle" und sei damit die
+> Vorlage, an der die AGB auszurichten seien. **Das war zu wohlwollend.** Sie
+> nennt Paddle mit voller Anschrift als Empfänger personenbezogener Daten
+> (`datenschutz.html:62–72`) — für eine Weitergabe, die nicht stattfindet und
+> mangels Vertrag auch nicht stattfinden kann. Ein benannter Empfänger, an den
+> nichts geht, ist nicht klar, sondern unzutreffend.
+>
+> **Und der Unterschied ist am Text messbar.** Die AGB tragen einen
+> ausdrücklichen Vorbehalt — *„Solange nur die Demo-Version angeboten wird,
+> greifen sie nicht."* Die Datenschutzerklärung trägt keinen: Sie schreibt
+> *„Der Kauf läuft nicht über diese Website, sondern über den
+> Zahlungsdienstleister Paddle"* im Präsens, als laufenden Vorgang. Von den
+> beiden Texten ist also **die AGB der ehrlichere**, obwohl sie den
+> Widerspruch enthält.
+
+**Der Fix ist keine Textarbeit, sondern eine Entscheidung.** Denn heute gilt:
+
+```
+Kaufknopf auf solidon3d.de:   keiner
+Paddle auf der Startseite:    kein Treffer
+Verkauf:                      zu bis 30.10.2026 (store.py:50 DEMO_UNTIL)
+Paddle-Konto:                 besteht nicht
+```
+
+Die AGB regeln einen Kaufvertrag, den derzeit niemand schließen kann, über
+einen Anbieter, mit dem noch kein Vertrag besteht. **Den Widerspruch jetzt in
+Richtung Paddle aufzulösen hieße, sich auf einen Anbieter festzulegen, den
+Robert noch nicht gewählt hat** — und bei einer anderen Wahl wären danach zwei
+Texte falsch statt einem.
+
+| | Variante | Heute wahr? | Kosten |
+|---|---|---|---|
+| **1** | **MoR-Konstruktion ausschreiben** — Paddle schließt den Kaufvertrag und stellt die Rechnung, RS Digital räumt das Nutzungsrecht ein (EULA) | nein — verspricht einen Vertrag, den es nicht gibt | richtig, **sobald** Paddle beauftragt ist |
+| **2** | **Keinen Anbieter nennen**, solange keiner beauftragt ist: beide Texte sprechen vom „Zahlungsdienstleister", der vor dem Kauf benannt wird | **ja**, und bleibt bei jeder Anbieterwahl wahr | beim Verkaufsstart muss jemand daran denken — gehört auf eine Verkaufsstart-Checkliste, die noch fehlt |
+
+**Empfehlung: Variante 2.** Sie stimmt heute, nimmt keine Entscheidung vorweg
+und macht aus einem Widerspruch keine zweite Festlegung. `3d-druck-bd` kommt
+unabhängig zum selben Schluss. Die Entscheidung steht in §13.
 
 ### B3 — Darstellungsfehler im Muster-Widerrufsformular
 
@@ -562,7 +596,11 @@ Was fehlt:
 
 ### B6 — Was geprüft wurde und in Ordnung ist
 
-- **`website/datenschutz.html`** ist der beste der fünf Texte. Die Zählung ohne
+- **`website/datenschutz.html`** ist handwerklich der beste der fünf Texte —
+  **mit der Einschränkung aus B2**, die ihn an einer Stelle zum unehrlichsten
+  macht: Er ist der einzige, der einen Vorgang im Präsens beschreibt, den es
+  nicht gibt, und als einziger ohne Vorbehalt. Alles Übrige daran hält: Die
+  Zählung ohne
   Cookie ist sauber begründet (Art. 6 Abs. 1 lit. f DSGVO, § 25 TDDDG korrekt
   verneint), der Auftragsverarbeitungsvertrag mit netcup ist genannt, die
   Drittlandsübermittlung nach UK ist mit dem Angemessenheitsbeschluss nach
@@ -590,6 +628,13 @@ zuletzt in der MoR-Rechnung in Zeile 266.
 **Kein Rechtsfehler**, aber eine Stolperstelle: Wer dort die Gebührenrechnung
 nachliest, rechnet mit dem falschen Betrag.
 
+> **Erledigt am 23.08.2026 durch `3d-druck-bd` (`3ccc72f`).** Die
+> Gebührenrechnung in `:266` ist korrigiert — 3,5 % von 69 € sind 2,42 €, nicht
+> 1,72 €. Die **anderen vier** Stellen mit 49 € bleiben stehen, und das ist
+> richtig: Sie zitieren den Stand vom 06.08. und sind als Bestandsaufnahme
+> korrekt. Ein Dokument, das seinen Stichtag beschreibt, wird nicht dadurch
+> besser, dass man es nachträglich auf heute umschreibt.
+
 ---
 
 ## §11 Was zu tun ist
@@ -600,7 +645,7 @@ Reihenfolge nach Dringlichkeit, nicht nach Aufwand.
 |---|---|---|---|
 | 1 | **ODR-Verweis streichen** (B1) | `AGB.md` § 10 | **sofort**, unabhängig vom Fördermodell |
 | 2 | **Konverter-Escaping reparieren** (B3) | `tools/make_legal.py:76` | vor dem nächsten Website-Upload |
-| 3 | **Vertragspartner-Widerspruch auflösen** (B2) | `AGB.md` §§ 1–4 | vor dem Verkaufsstart |
+| 3 | **Vertragspartner-Widerspruch auflösen** (B2) — **Entscheidung nötig**, Variante 1 oder 2 | `AGB.md` §§ 1–4, `website/datenschutz.html` | vor dem Verkaufsstart |
 | 4 | **Impressum ergänzen** (B5) | `website/impressum.html` | mit der Gewerbeanmeldung |
 | 5 | **EULA-Nummerierung** (B4) | `EULA.md` | bei der nächsten Fassung |
 | 6 | Gewerbe anmelden, Geschäftskonto, USt-IdNr. | Gewerbeamt Bamberg, Bank, BZSt | vor dem ersten Geldeingang |
@@ -645,3 +690,17 @@ Punkte sind Geschäftsentscheidungen und keine fachlichen:
 5. **Ob ein Steuerberater dauerhaft mandatiert wird** oder nur für ein
    Erstgespräch. Bei Einzelunternehmen mit EÜR und Kleinunternehmerregelung
    genügt lange ein jährliches Gespräch.
+6. **Variante 1 oder 2 beim Vertragspartner-Widerspruch** (B2). Empfehlung: 2 —
+   keinen Anbieter nennen, solange keiner beauftragt ist. Diese Frage hat
+   `3d-druck-bd` gleichzeitig vorgelegt; sie ist **einmal** zu beantworten,
+   nicht zweimal.
+
+> **Und ein Punkt, der auf keine dieser Listen passt, aber existiert: eine
+> Verkaufsstart-Checkliste gibt es nicht.** Variante 2 in B2 verschiebt
+> Textarbeit auf den Tag des Verkaufsstarts, und mehrere Punkte aus §11 tun
+> dasselbe — der Entwurfsvermerk auf den drei Rechtstexten, die USt-IdNr. im
+> Impressum, der Name des Zahlungsdienstleisters in zwei Texten. Ohne eine
+> Liste, die an diesem Tag gelesen wird, sind das drei Gelegenheiten, etwas zu
+> vergessen. Sie anzulegen ist eine halbe Stunde und gehört zur Demo-Phase,
+> nicht zum Fördermodell — deshalb steht sie hier als Hinweis und nicht als
+> Aufgabe.
