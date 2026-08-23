@@ -127,7 +127,7 @@ def test_a_part_below_the_bed_is_not_called_too_big(profile: Profile) -> None:
     findings = check_before_export([scene_object(mesh=sunk)], profile, {})
 
     said = str(next(f.message for f in findings if f.code == "arrange.below_bed"))
-    assert "unter der Druckplatte" in said
+    assert "unter dem Druckbett" in said
     assert "hinaus" not in said, "das ist der Satz für zu groß"
     assert "arrange.out_of_build_volume" not in {f.code for f in findings}, (
         "the too-big code belongs to the case that really is too big"
