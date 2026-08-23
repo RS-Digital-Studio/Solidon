@@ -443,6 +443,30 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     # Die Rechnung, die den Ausschlag gab: **ein sicherer Absturz gegen einen
     # seltenen Deadlock.** Der Hänger kam sechsmal in einer Nacht; dieser
     # Absturz traf jeden Lauf jeder Sitzung. Der Hänger bleibt damit offen —
+    # **Nachtrag vom selben Tag: Der Import-Lock hat genau eine Quelle.**
+    # 3d-druck-b8 hat alle dynamischen Importe in ``app/core`` und ``app/ui``
+    # gesucht — ``__import__``, ``import_module``, ``find_spec``. Sieben
+    # Treffer, und von einem ``Worker.work()`` aus erreichbar ist **einer**:
+    #
+    #     app/core/install.py:341   present()   __import__(requirement.module)
+    #     Weg dorthin: _Survey.work() -> install.statuses() -> present()
+    #
+    # Die fünf in ``bootstrap`` laufen beim Start, ``manual.messages_text``
+    # gehört zur Handbucherzeugung; keiner davon steht in einem Arbeiter.
+    #
+    # **Damit ist die Warnung oben ein Zeiger geworden.** Sie sagt nicht mehr
+    # „geh da nicht hin", sondern „dort ist es, und sonst nirgends" — und das
+    # ist der Unterschied zwischen einem Punkt, den niemand anfasst, und einem,
+    # den jemand löst. Ein Kandidat für den Ersatz steht auch schon:
+    # ``importlib.util.find_spec(name)`` beantwortet dieselbe Frage, ohne das
+    # Modul zu laden, und nimmt den Lock nicht. **Es ist aber eine
+    # Verhaltensänderung und keine Umformulierung** — ``find_spec`` sagt
+    # „liegt da", ``__import__`` sagt „lädt", und ein Paket mit kaputter
+    # kompilierter Erweiterung meldet sich damit als vorhanden. Der Kommentar
+    # an jener Stelle weiß das und nennt genau diesen Fall als Grund.
+    #
+    # Entschieden ist nichts; ``app/core/install.py`` gehört nicht hierher.
+    #
     # ``leash.wait_for_all`` steht bereit und ist geprüft, es gehört nur nicht
     # **hierhin**, unmittelbar vor eine Zustellung.
     # Was bleibt, ist die eigentliche Ursache: nicht die Lebenszeit, sondern
