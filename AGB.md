@@ -123,9 +123,6 @@ Gegenansprüche aus demselben Vertragsverhältnis.
 
 ## § 10 Streitbeilegung
 
-Die Europäische Kommission stellt eine Plattform zur
-Online-Streitbeilegung bereit: <https://ec.europa.eu/consumers/odr/>.
-
 Wir sind **nicht bereit und nicht verpflichtet**, an
 Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle
 teilzunehmen.
