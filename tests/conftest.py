@@ -277,11 +277,27 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
 
         from PySide6.QtWidgets import QWidget
 
+        from app.ui import leash
+
         oben = application.topLevelWidgets()
         lebende = [widget for widget in oben if isValid(widget)]
+        # **Die vierte Spalte beantwortet eine andere Frage als die ersten
+        # drei.** Solange ein Arbeiter lebt, hält ihn ``leash._alive``
+        # modulweit, und über sein ``finished``-Lambda hält er seinen Dialog —
+        # das ist kein Leck, sondern der Zweck der Leine (``leash.py:213``).
+        # Wenn die Widgetzahl also zu einem guten Teil aus Fenstern mit
+        # laufendem Arbeiter besteht, lautet die Frage nicht „wer hält sie",
+        # sondern **„warum laufen so viele Arbeiter noch"**. Vorgeschlagen von
+        # 3d-druck-b8 am 23.08.2026.
         ziel = Path(os.environ["SOLIDON_ZAEHLE_WIDGETS"])
         with ziel.open("a", encoding="utf-8") as datei:
-            print(len(oben), len(lebende), len(QWidget.__subclasses__()), file=datei)
+            print(
+                len(oben),
+                len(lebende),
+                len(QWidget.__subclasses__()),
+                len(leash.alive()) if hasattr(leash, "alive") else len(leash._alive),
+                file=datei,
+            )
 
     # Zerstört wird hier **nichts**. Zwei Anläufe haben das versucht —
     # ``deleteLater`` allein änderte nichts (``processEvents`` führt
