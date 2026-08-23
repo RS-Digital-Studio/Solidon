@@ -96,7 +96,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Eine erkannte Verrundung lässt sich nicht ändern | Das Fundament der Wahrnehmung (22.08.2026) | die Operation *Verrundungsradius ändern*, die es nicht gibt — `fillet_edges` wirkt auf Kanten und würde die Rundung runden. Der zweite Weg („Diesen Schritt ändern“) fällt auch aus: `created_by` gibt es nur bei `provenance="generated"`, also an Bausteinen und beim Verstiften. Dahinter steht die größere Frage, ob eine Operation ihre sichtbaren Ergebnisse deklarieren soll |
 | Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
-| 16 Tests sagen nicht, dass ihre Grundmenge nicht leer ist | Das Fundament der Wahrnehmung (22.08.2026) | je eine Zeile: `assert menge, "sonst prüft dieser Test nichts"`. Gezählt am 23.08. — 108 reine Verbotstests, davon 16 über eine gefilterte Menge; **fünf nachgeprüft, alle gedeckt**. Kein Test ist falsch grün, keiner sagt warum nicht. Drei echte Fehler wurden dabei gefunden und behoben |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Kein Test prüft, womit ein Beispiel den Kunden begrüßt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Prüfung über die Befunde beim Öffnen, mit einer Liste der erwarteten statt einer Schwelle von null — `SETTLED_BY` gibt es schon, die Prüfung nicht |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
@@ -106,7 +105,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Start lädt nacheinander, was nebeneinander laufen könnte | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, wie viel von 369 ms sich wirklich überlappt — und eine Antwort auf die Thread-Sicherheit beim Import. Die einfache Umkehrung scheitert an `_build_menus()`, und die 19 Module sind keine Alternative: alle 19 ziehen trimesh |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Kein Viewport wird jemals freigegeben — **wartet auf den Deadlock** | Das Fundament der Wahrnehmung (22.08.2026) | **erst den Deadlock, dann die restlichen 40 Ringe** (entschieden 23.08.). Jede aufgelöste Stelle macht ein Fenster einsammelbar, und ein Fenster, das eingesammelt werden kann, kann im falschen Thread sterben — weiter aufzulösen macht die Suite instabiler, nicht stabiler |
-| `test_ui.py` reißt zehn von zehn | Das Fundament der Wahrnehmung (22.08.2026) | den Fix an `leash.wait_for_all`, gemessen von 3d-druck-b8 — und die Lehre daneben: dieselbe Zahl (5/5) wurde neben einem Torlauf als Fremdlast gedeutet und unter Schloss auf leerer Maschine widerlegt |
+| `test_ui.py` reißt unzuverlässig (1/3 ruhig, 5/5 unter Last) | Das Fundament der Wahrnehmung (22.08.2026) | den Fix an `leash.wait_for_all`, gemessen von 3d-druck-b8 — und die Lehre daneben: dieselbe Zahl (5/5) wurde neben einem Torlauf als Fremdlast gedeutet und unter Schloss auf leerer Maschine widerlegt |
 | Fensterdateien enden mit Exit 127 — **halb aufgeklärt** | Das Fundament der Wahrnehmung (22.08.2026) | nichts mehr für `test_chat_ui` und `test_first_run`: Dahinter steht `0xC0000409`, der bekannte Abbau-Absturz — zwei Punkte, eine Sache. **127 ist eine Shell-Konvention und sagt nichts;** dieselbe 127 trug bei zwei anderen Dateien `0xc0000374`. Was bleibt, ist der Fall *vor* der Schlusszeile |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
 
@@ -5549,9 +5548,55 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       schickt den Kunden nicht mehr mit seinem achten Punkt ins Handbuch, wo
       nichts stand.
 
-- [ ] **16 Tests sagen nicht, dass ihre Grundmenge nicht leer ist.** Durchgesehen am
-      23.08.2026 von 3d-druck-3a, und der Punkt hat damit eine Methode statt
-      einer Anekdote.
+- [x] **16 Tests sagen nicht, dass ihre Grundmenge nicht leer ist — abgearbeitet
+      am 23.08.2026 (`1fd00af`, 3d-druck-33).** 29 Kandidaten, **14 echte
+      Lücken**, 15 keine. Der Unterschied ist die Regel, und sie ist der
+      eigentliche Ertrag des Punktes:
+
+      > Eine Grundmenge braucht die Zusicherung, wenn sie **erhoben** wird —
+      > aus dem Dateisystem, aus einem Ladevorgang, aus einer gebauten
+      > Oberfläche. Steht sie als Konstante im Modul (`REQUIRED_LINKS`,
+      > `FIELDS`, ein Dict-Literal mit drei Einträgen), kann sie nicht
+      > unbemerkt leer werden, und die Zeile wäre Zierat.
+
+      **Der Satz, der hier vorher stand, war die erste von zwei Fassungen und
+      falsch.** „Das Muster für die Behebung ist eine Zeile“ — eingebaut
+      hat sie **elf Tests rot gemacht**: Eine leere `__init__.py` hat legitim
+      keine Bezeichner, die Zusicherung gehört eine Ebene höher. Niemand hatte
+      den Satz ausprobiert, bevor er im Register stand. Überall eine Zeile
+      wäre 15-mal Rauschen gewesen, das beim nächsten Lesen niemand mehr von
+      den 14 echten unterscheidet.
+
+      **Zwei der 14 sind der Fund des Punktes, und beide sind unsichtbar
+      gescheitert statt rot:**
+
+      `source_files()` in `test_language_rules.py` trägt **vier
+      parametrisierte Tests**. Ist die Liste leer, werden sie nicht rot —
+      pytest sammelt null Tests, meldet `no tests ran` und gibt **Exit 5**.
+      Eine Zusicherung *in* den Tests hätte nie gegriffen, weil sie nie
+      gelaufen wäre; sie steht jetzt in der Funktion, die die Parameterliste
+      liefert. Es ist derselbe Exit 5, über den `suite-getrennt.sh` schon
+      einmal gestolpert ist — dort als lauter Fehllauf, hier als stiller
+      Erfolg.
+
+      `test_interface_limits.py`: Jede Grenze dort ist eine **Obergrenze**.
+      Ein leeres Register unterschreitet jede davon — höchstens neun
+      Menüs, zwölf Zeilen, acht Umschalter, alles grün, nichts geprüft. Ohne
+      `load_operations()` hat das Register null statt 87 Operationen, und das
+      ist der Fall, der hier real vorkommt.
+
+      Sechs von sechs mutierbaren Fällen sind gegengeprobt: Grundmenge
+      geleert, Test rot, zurückgestellt. Die übrigen acht sind
+      `assert len(x) > n` direkt über der Erhebung, dort wäre die Probe
+      Tautologie.
+
+      **Und der Zähler, der die 29 fand, hat selbst zwei falsch einsortiert**
+      — von Hand gefunden: `test_theme_and_palette.py` war längst
+      gesichert, `source_files()` galt ihm als Konstante, obwohl es ein Glob
+      ist. *Auch ein Zähler misst, was sein Muster kennt.*
+
+      Ursprünglich: Durchgesehen am 23.08.2026 von 3d-druck-3a, und der Punkt
+      hat damit eine Methode statt einer Anekdote.
 
       **Die ursprüngliche Frage traf daneben.** Sie lautete *„misst der Test
       gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit?"*
@@ -6590,8 +6635,37 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       `zaehlt_als_fehler()` gibt für 5 dasselbe zurück wie für 0, mit der
       Begründung darüber im Skript. Gefunden von 3d-druck-3a, am Skript
       bestätigt von 3d-druck-33, nachgeprüft von 3d-druck-64.
-- [ ] **`test_ui.py` reißt zehn von zehn Läufen — und die Fremdlast war nie
-      die Erklärung.** Gemessen am 23.08.2026 von 3d-druck-b8, unter Schloss,
+- [ ] **`test_ui.py` reißt unzuverlässig — und die Rate hängt an der Last,
+      nicht an der Datei.** Die Überschrift hieß „zehn von zehn“; das ist
+      **zum dritten Mal widerlegt**, jedes Mal in dieselbe Richtung. Drei
+      Läufe allein unter dem Schloss am 23.08.2026 (3d-druck-33), ruhige
+      Maschine:
+
+          Lauf 1   Exit   0   257 passed
+          Lauf 2   Exit   1   257 passed, 1 error   (Teardown, kein Test)
+          Lauf 3   Exit 127   Absturz vor der Zusammenfassung
+
+      **Drei Läufe, drei Ausgänge.** Die Basisratentabelle sagt „ruhig 0/3,
+      unter Fremdlast 5/5“; hier war es 1/3 auf fast ruhiger Maschine.
+
+      **Was daraus für einen Belegslauf folgt, und es ist eine Regel und keine
+      Beobachtung:**
+
+      > Bei `test_ui.py` kann der Beleg **0, 1 oder 139** zeigen, und alle drei
+      > bedeuten dasselbe: Die 257 Tests bestehen. Ein Fehllauf bei genau
+      > dieser Datei stoppt das Release nicht — bei einer **anderen** schon.
+
+      **Zwei verwertbare Stapel sind dabei abgefallen**, beide neu:
+      `app/ui/overlay.py:346`, `eventFilter` auf einem bereits gelöschten
+      C++-Objekt (`ObjectTree already deleted`) — die erste konkrete
+      Codestelle dieser Familie. Und `0xc0000374` in einem Arbeitsthread beim
+      Laden aus dem Plattencache, während der GC läuft. **Ein
+      Heap-Korruptionsstapel zeigt, wo der Prozess war, als der Schaden
+      auffiel — nicht, wer ihn angerichtet hat;** der Plattencache steht
+      darin, und daraus „der Plattencache ist schuld“ zu machen, wäre
+      derselbe Fehler wie die acht Messfehler dieser Nacht.
+
+      Ursprünglich: Gemessen am 23.08.2026 von 3d-druck-b8, unter Schloss,
       mit 42 GB freiem Speicher und zwei Python-Prozessen.
 
       **Die Ursache ist eingekreist:** `leash.wait_for_all` (`f1ea325`),

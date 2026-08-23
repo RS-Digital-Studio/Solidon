@@ -92,6 +92,30 @@ ein Band aus zwei Gruppen. Die Reihenfolge ist `make_figures` →
 `make_web_images` → `make_manual`; die `<img>`-Maße der von Hand gepflegten
 Seiten müssen danach den echten Dateien entsprechen.
 
+**`make_web_images.py` stirbt an der sechsten Sprache — und nimmt die
+letzte mit.** Am 23.08.2026 beim Lauf für 0.1.3 gemessen: Der Prozess endete
+mit `0xc0000374` (Heap-Korruption), **nachdem** fünf Sprachen fertig waren.
+Die vier portugiesischen Bilder blieben dabei drei Tage alt stehen, und
+**nichts hat das gesagt** — kein Protokolleintrag, keine Fehlermeldung, eine
+leere Ausgabedatei. In der Shell kam die Zahl als **127** an, und 127 sagt
+nichts (siehe `ROADMAP.md`).
+
+Das Mittel ist dasselbe wie bei der Suite: **weniger Fenster je Prozess.**
+Gemessen läuft ein Lauf mit einer einzelnen Sprache sauber durch:
+
+```
+.venv\Scripts\python.exe tools/make_web_images.py de en es fr it
+.venv\Scripts\python.exe tools/make_web_images.py pt
+```
+
+Das Werkzeug nimmt seine Sprachen aus `sys.argv[1:]`; ohne Argument macht es
+alle sechs. **Nach jedem Lauf die Zeitstempel prüfen** — vier Dateien je
+Sprache, und eine alte fällt nur auf, wenn man hinsieht:
+
+```
+ls -l --time-style=+%d.%m_%H:%M website/bilder/*.png | sort
+```
+
 Erstaufbau: `python -m venv .venv` und
 `.venv\Scripts\python.exe -m pip install -c constraints.txt -e ".[dev,geom,ui,agent,brep]"`.
 Das `-c` ist kein Beiwerk: ohne es zieht ein frischer Klon andere Versionen als
