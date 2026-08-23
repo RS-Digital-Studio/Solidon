@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 69995218-868b-4121-bed5-89d6c8688900
-  modified: 2026-08-21T17:25:53.058Z
+  modified: 2026-08-23T22:07:41.273Z
 ---
 
 Am 21.08.2026 lief eine zweite Claude-Sitzung parallel im selben Arbeitsbaum
@@ -116,8 +116,8 @@ Arbeitsbaum bleibt unberührt (er trug die fremde Arbeit die ganze Zeit weiter).
 Bei Dateien, an denen beide gearbeitet haben, ihren Stand als Grundlage nehmen
 und die eigene Änderung als `difflib`-Patch darauf anwenden.
 
-**Nach dem Commit mit privatem Index gehört ein `git reset` hinterher — ohne
-Pfade, ohne `--hard`.** Am 22.08.2026 hat ein sauberer Commit über
+**Nach dem Commit mit privatem Index gehört ein `git reset -- <eigene Pfade>`
+hinterher — mit Pfaden, ohne `--hard`.** Am 22.08.2026 hat ein sauberer Commit über
 `GIT_INDEX_FILE` den *geteilten* Index vergiftet zurückgelassen: HEAD wanderte
 drei Commits weiter, der geteilte Index blieb stehen, wo er war, und zeigte
 danach aktiv auf den alten Stand. `git status` meldete `MM`, und
@@ -126,8 +126,10 @@ danach aktiv auf den alten Stand. `git status` meldete `MM`, und
 getan — die ganze Arbeit des Tages entfernt, unter einer fremden
 Commit-Meldung. Der private Index schützt also den eigenen Commit, aber er
 hinterlässt eine Falle für den nächsten. Zwei Zeilen verhindern es:
-`git reset` setzt die Indexeinträge auf HEAD und rührt den Arbeitsbaum nicht
-an; `git diff --cached` muss danach leer sein.
+`git reset -- <pfade>` setzt diese Indexeinträge auf HEAD und rührt den
+Arbeitsbaum nicht an; `git diff --cached` muss danach leer sein. **Warum die
+Pfade nicht weggelassen werden dürfen, steht weiter unten** — ohne sie trifft
+es die Vormerkungen aller anderen Sitzungen mit.
 
 **Erst die Richtung feststellen, dann aufräumen — `git reset` ist nicht immer
 richtig.** Am 23.08.2026 trug der geteilte Index bei elf Website-Dateien
@@ -152,6 +154,29 @@ Commit.** Alle Sitzungen teilen `.git`, die Commits der anderen *sind* der
 eigene HEAD — `git rev-parse HEAD origin/main` liefert zweimal dasselbe, es
 gibt nichts zu holen, und bei schmutzigen Dateien bricht es ohnehin ab. Der Rat
 gilt für getrennte Klone; hier führt er in die Irre.
+
+**Der private Index löst das Problem und erzeugt ein kleineres.** Wer mit
+`GIT_INDEX_FILE` committet, rührt den geteilten Index nicht an — und der zeigt
+danach für die gerade committeten Dateien noch auf den *alten* HEAD-Stand. Wer
+dann ohne Pfade committet, rollt die frische Arbeit zurück. Am 24.08.2026 trug
+der geteilte Index so bei 38 Dateien einen veralteten Stand; ein Commit ohne
+Pfade hätte 1692 Zeilen entfernt, darunter zwei von Roberts Erinnerungen, die
+unversehrt dalagen und als „gelöscht" gemeldet wurden.
+
+**Aufgeräumt wird das mit `git reset -- <eigene Pfade>`, nicht mit `git reset`.**
+Der Unterschied ist in einem Baum mit sechs Sitzungen der ganze Punkt: Ein
+`reset` ohne Pfade setzt den *gesamten* geteilten Index auf HEAD und vernichtet
+damit die Vormerkung jeder Sitzung, die gerade zwischen `add` und `commit`
+steht. Mit Pfaden betrifft es genau die eigenen Dateien, und der Arbeitsbaum
+bleibt in beiden Fällen unberührt.
+
+**Und vorher messen, ob überhaupt etwas zu tun ist:**
+`git diff --cached --stat HEAD` — leer heißt sauber, dann ist jeder Eingriff
+reines Risiko ohne Nutzen. Am 24.08.2026 hatte eine andere Sitzung bereits
+bereinigt; der pauschale Rat „ein `git reset` als letzter Schritt" hätte dort
+nichts genützt und hätte schaden können. Auch ein gut gemeinter Rat wird beim
+Weitergeben fester, nicht lockerer — siehe
+[[messwerkzeug-misst-sich-selbst]].
 
 Robert entscheidet, was mit fremden Änderungen passiert — nicht selbst
 mitcommitten und nicht wegwerfen. Siehe [[git-identitaet-mitgeben]].
