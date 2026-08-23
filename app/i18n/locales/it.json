@@ -367,6 +367,7 @@
   "Das Maß einer Bedingung ist ein Ausdruck als Text.": "La quota di un vincolo è un'espressione in forma di testo.",
   "Das Modell antwortet …": "Il modello sta rispondendo …",
   "Das Modell besteht aus mehreren Teilen.": "Il modello è composto da più pezzi.",
+  "Das Modell hat gerechnet, war aber innerhalb der Wartezeit nicht fertig. Lokale Modelle brauchen je nach Rechner Minuten für einen Schritt — ein kleineres Modell, eine kürzere Anweisung oder ein gehostetes Modell mit eigenem Schlüssel sind schneller.": "Il modello stava ancora calcolando allo scadere dell’attesa. I modelli locali richiedono minuti per ogni passo a seconda del computer — un modello più piccolo, un’istruzione più breve o un modello ospitato con una chiave propria sono più veloci.",
   "Das Modell hat mehr Dreiecke, als diese Anwendung verarbeitet.": "Il modello ha più triangoli di quanti questa applicazione ne gestisca.",
   "Das Modell ist an mehreren Stellen offen.": "Il modello è aperto in più punti.",
   "Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen.": "Il modello non è chiuso. «Riparare» chiude i punti aperti.",
@@ -395,6 +396,7 @@
   "Das Projekt hat Passungen. Eine langsam gefahrene Außenwand hält das Maß, auf das sie gerechnet sind.": "Il progetto ha accoppiamenti. Una parete esterna percorsa lentamente tiene la quota per cui sono calcolati.",
   "Das Projekt unter einem anderen Namen ablegen.": "Salva il progetto con un altro nome.",
   "Das Sprachmodell hat nicht geantwortet.": "Il modello linguistico non ha risposto.",
+  "Das Sprachmodell hat zu lange gebraucht.": "Il modello linguistico ha impiegato troppo tempo.",
   "Das Stück, das Solidon von einem Slicer unterscheidet.\n\nEin gedrucktes Teil ist nie so groß wie gezeichnet. Kunststoff schwindet beim Abkühlen, ein Loch von 5 mm kommt enger heraus, und die unterste Schicht wird breiter gedrückt als alle darüber. Wer zwei Teile ineinanderstecken will, muss das einrechnen — und genau das nimmt Solidon ab.\n\n**Das Spiel steht im Materialprofil, nicht im Modell.** Wer einen Stift in ein Loch stecken will, trägt keine 0,2 ein — er sagt *Passung*, und die Zahl kommt aus dem Profil des Materials, mit dem gedruckt wird.\n\n![](figure:fit)\n\n**Deshalb wirkt eine Kalibrierung rückwärts.** Unter *Bearbeiten → Material kalibrieren* wird der gemessene Wert eingetragen. Er gilt ab dann für jede Passung — auch für die in Projekten, die vorher entstanden sind.\n\n**Gemessen wird gedruckt, nicht geschätzt.** Der *Toleranz-Testkörper* bringt Zapfen und Bohrungen mit gestaffeltem Spiel auf eine Platte: einmal drucken, ausprobieren, Wert steht. Die *Wandstärkenleiter* und der *Überhangfächer* machen dasselbe für die Mindestwandstärke und den Winkel, ab dem dieser Drucker wirklich Stützen braucht — statt der Faustregel 45 Grad.\n\n![](figure:part-fit-ladder)\n\n**Die erste Schicht ist ein Sonderfall.** Sie wird gegen das Bett gedrückt und läuft dabei nach außen aus. Bei einer Passung, die unten am Teil sitzt, ist das der Unterschied zwischen „geht rein“ und „geht nicht rein“.\n\n![](figure:elephant-foot)\n\n**Das Prüfstück** schneidet einen Würfel um eine Stelle heraus, statt sie nachzubauen. Was gedruckt wird, ist die echte Geometrie mit der echten Toleranz: zwei Minuten statt zwei Stunden, und das Ergebnis gilt für das Teil.\n\n**Eine Szene darf mehrere Materialien haben.** Eine TPU-Dichtung in einem PETG-Gehäuse schwindet anders und will mehr Spiel. Mit *Material festlegen* bekommt der einzelne Körper sein eigenes Profil, und Toleranzen, Elefantenfuß und Passungsprüfung rechnen damit.": "Il pezzo che distingue Solidon da uno slicer.\n\nUn pezzo stampato non è mai grande quanto disegnato. La plastica ritira raffreddandosi, un foro da 5 mm esce più stretto, e lo strato più basso viene schiacciato più largo di tutti quelli sopra. Chi vuole infilare due pezzi uno nell'altro deve metterlo in conto — ed è esattamente ciò che Solidon toglie di mano.\n\n**Il gioco sta nel profilo del materiale, non nel modello.** Chi vuole infilare una spina in un foro non inserisce 0,2 — dice *accoppiamento*, e il numero arriva dal profilo del materiale con cui si stampa.\n\n![](figure:fit)\n\n**Per questo una calibrazione agisce all'indietro.** Sotto *Modifica → Calibra materiale* si inserisce il valore misurato. Da quel momento vale per ogni accoppiamento — anche per quelli nei progetti nati prima.\n\n**Si stampa ciò che si misura, non ciò che si stima.** Il *corpo di prova delle tolleranze* mette su un piatto perni e fori con gioco scalato: si stampa una volta, si prova, e il valore è fissato. La *scala degli spessori di parete* e il *ventaglio degli sbalzi* fanno lo stesso per lo spessore minimo di parete e per l'angolo da cui questa stampante ha davvero bisogno di supporti — invece della regola empirica dei 45 gradi.\n\n![](figure:part-fit-ladder)\n\n**Il primo strato è un caso a parte.** Viene premuto contro il piatto e si allarga verso l'esterno. Per un accoppiamento che sta in basso sul pezzo, è la differenza tra «entra» e «non entra».\n\n![](figure:elephant-foot)\n\n**Il provino** ritaglia un cubo attorno a un punto invece di ricostruirlo. Ciò che viene stampato è la geometria vera con la tolleranza vera: due minuti invece di due ore, e il risultato vale per il pezzo.\n\n**Una scena può avere più materiali.** Una guarnizione in TPU dentro un involucro in PETG ritira in modo diverso e vuole più gioco. Con *Assegna materiale* il singolo corpo riceve il proprio profilo, e tolleranze, piede d'elefante e verifica degli accoppiamenti calcolano con quello.",
   "Das Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen.": "Il pezzo è alto e stretto. L'ugello può ribaltarlo in avvicinamento.",
   "Das Teil läuft nach oben spitz zu. Ohne Mindestzeit je Schicht legt die Düse auf noch weiches Material.": "Il pezzo si assottiglia verso l'alto. Senza un tempo minimo per strato l'ugello deposita su materiale ancora morbido.",
@@ -841,7 +843,6 @@
   "Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe.": "Questo corpo non ha una faccia superiore piana che si possa aprire.",
   "Dieser Körper hat keine senkrechten Flächen.": "Questo corpo non ha facce verticali.",
   "Dieser Körper hat keinen Hohlraum — eine Füllung hätte keinen Platz. Erst aushöhlen, dann füllen.": "Questo corpo non ha cavità — un riempimento non avrebbe posto. Prima svuota, poi riempi.",
-  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung.": "Questo corpo è già chiuso — una seconda pelle sopra non sarebbe una parete, ma un raddoppio.",
   "Dieser Körper kommt aus OpenSCAD, nicht aus der Bausteinbibliothek.": "Questo corpo viene da OpenSCAD, non dalla libreria dei blocchi.",
   "Dieser Körper kommt aus einem Generator. So ein Netz ist eine Oberfläche, keine Konstruktion — deshalb beginnt Weg 3 mit der Reparaturkette.": "Questo corpo viene da un generatore. Una mesh così è una superficie, non una costruzione — per questo la strada 3 comincia con la catena di riparazione.",
   "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig vernetzen noch unterteilen. Erst reparieren, dann noch einmal.": "Questo corpo non racchiude alcun volume — non si può né uniformare né suddividere. Prima ripara, poi riprova.",
@@ -1250,7 +1251,6 @@
   "Flussfaktor": "Fattore di flusso",
   "Fläche": "Faccia",
   "Fläche an {object} — {area}, {side}": "Faccia su {object} — {area}, {side}",
-  "Fläche aufdicken": "Ispessisci la superficie",
   "Fläche unterteilen": "Suddividi la superficie",
   "Fläche versetzen": "Scosta la faccia",
   "Flächen": "Facce",
@@ -1901,6 +1901,7 @@
   "Objekte, auf die die Operation angewendet wird, zum Beispiel obj_1.": "Oggetti su cui l'operazione viene applicata, per esempio obj_1.",
   "Objekte, z. B. obj_1": "Oggetti, ad es. obj_1",
   "Offene Befunde": "Rilievi aperti",
+  "Offene Fläche schließen": "Chiudi la superficie aperta",
   "Offene Kante": "Spigolo aperto",
   "Offene Kanten": "Spigoli aperti",
   "Offene Stellen schließen": "Chiudi i punti aperti",
@@ -2944,5 +2945,7 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "saltato — la mesh è troppo grande per questo turno, la mappa di analisi nella finestra ce la fa.",
   "— keines —": "— nessuno —",
   "„profiles“ zeigt, was zur Auswahl steht.": "«profiles» mostra ciò che è tra le scelte.",
-  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» ha trasformato il corpo esatto in una mesh: le operazioni del kernel esatto funzionano solo prima. Annullare i passi da lì, applicare questa operazione e rifare il resto."
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» ha trasformato il corpo esatto in una mesh: le operazioni del kernel esatto funzionano solo prima. Annullare i passi da lì, applicare questa operazione e rifare il resto.",
+  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "Questo corpo è già chiuso: una seconda pelle sopra non sarebbe una parete ma un duplicato. Per ispessire una singola parete usa «Sposta faccia»; per creare una cavità, «Svuota».",
+  "Stattdessen Fläche versetzen": "Sposta invece la faccia"
 }

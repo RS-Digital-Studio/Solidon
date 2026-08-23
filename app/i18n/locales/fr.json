@@ -367,6 +367,7 @@
   "Das Maß einer Bedingung ist ein Ausdruck als Text.": "La cote d'une contrainte est une expression sous forme de texte.",
   "Das Modell antwortet …": "Le modèle répond …",
   "Das Modell besteht aus mehreren Teilen.": "Le modèle se compose de plusieurs pièces.",
+  "Das Modell hat gerechnet, war aber innerhalb der Wartezeit nicht fertig. Lokale Modelle brauchen je nach Rechner Minuten für einen Schritt — ein kleineres Modell, eine kürzere Anweisung oder ein gehostetes Modell mit eigenem Schlüssel sind schneller.": "Le modèle calculait encore à la fin du délai d’attente. Les modèles locaux demandent des minutes par étape selon la machine — un modèle plus petit, une instruction plus courte ou un modèle hébergé avec votre propre clé sont plus rapides.",
   "Das Modell hat mehr Dreiecke, als diese Anwendung verarbeitet.": "Le modèle a plus de triangles que cette application n'en traite.",
   "Das Modell ist an mehreren Stellen offen.": "Le modèle est ouvert à plusieurs endroits.",
   "Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen.": "Le modèle n'est pas fermé. « Réparer » ferme les endroits ouverts.",
@@ -395,6 +396,7 @@
   "Das Projekt hat Passungen. Eine langsam gefahrene Außenwand hält das Maß, auf das sie gerechnet sind.": "Le projet a des ajustements. Une paroi extérieure imprimée lentement tient la cote pour laquelle ils sont calculés.",
   "Das Projekt unter einem anderen Namen ablegen.": "Enregistrer le projet sous un autre nom.",
   "Das Sprachmodell hat nicht geantwortet.": "Le modèle de langage n'a pas répondu.",
+  "Das Sprachmodell hat zu lange gebraucht.": "Le modèle de langage a mis trop de temps.",
   "Das Stück, das Solidon von einem Slicer unterscheidet.\n\nEin gedrucktes Teil ist nie so groß wie gezeichnet. Kunststoff schwindet beim Abkühlen, ein Loch von 5 mm kommt enger heraus, und die unterste Schicht wird breiter gedrückt als alle darüber. Wer zwei Teile ineinanderstecken will, muss das einrechnen — und genau das nimmt Solidon ab.\n\n**Das Spiel steht im Materialprofil, nicht im Modell.** Wer einen Stift in ein Loch stecken will, trägt keine 0,2 ein — er sagt *Passung*, und die Zahl kommt aus dem Profil des Materials, mit dem gedruckt wird.\n\n![](figure:fit)\n\n**Deshalb wirkt eine Kalibrierung rückwärts.** Unter *Bearbeiten → Material kalibrieren* wird der gemessene Wert eingetragen. Er gilt ab dann für jede Passung — auch für die in Projekten, die vorher entstanden sind.\n\n**Gemessen wird gedruckt, nicht geschätzt.** Der *Toleranz-Testkörper* bringt Zapfen und Bohrungen mit gestaffeltem Spiel auf eine Platte: einmal drucken, ausprobieren, Wert steht. Die *Wandstärkenleiter* und der *Überhangfächer* machen dasselbe für die Mindestwandstärke und den Winkel, ab dem dieser Drucker wirklich Stützen braucht — statt der Faustregel 45 Grad.\n\n![](figure:part-fit-ladder)\n\n**Die erste Schicht ist ein Sonderfall.** Sie wird gegen das Bett gedrückt und läuft dabei nach außen aus. Bei einer Passung, die unten am Teil sitzt, ist das der Unterschied zwischen „geht rein“ und „geht nicht rein“.\n\n![](figure:elephant-foot)\n\n**Das Prüfstück** schneidet einen Würfel um eine Stelle heraus, statt sie nachzubauen. Was gedruckt wird, ist die echte Geometrie mit der echten Toleranz: zwei Minuten statt zwei Stunden, und das Ergebnis gilt für das Teil.\n\n**Eine Szene darf mehrere Materialien haben.** Eine TPU-Dichtung in einem PETG-Gehäuse schwindet anders und will mehr Spiel. Mit *Material festlegen* bekommt der einzelne Körper sein eigenes Profil, und Toleranzen, Elefantenfuß und Passungsprüfung rechnen damit.": "La partie qui distingue Solidon d'un slicer.\n\nUne pièce imprimée n'est jamais aussi grande que dessinée. Le plastique se rétracte en refroidissant, un trou de 5 mm ressort plus étroit, et la couche du bas est écrasée plus large que toutes celles au-dessus. Qui veut emboîter deux pièces doit en tenir compte — et c'est exactement ce que Solidon prend en charge.\n\n**Le jeu est dans le profil de matériau, pas dans le modèle.** Pour mettre une goupille dans un trou, on ne saisit pas 0,2 — on dit *ajustement*, et le nombre vient du profil du matériau avec lequel on imprime.\n\n![](figure:fit)\n\n**C'est pourquoi un calibrage agit rétroactivement.** Sous *Édition → Calibrer le matériau*, on saisit la valeur mesurée. Elle vaut dès lors pour chaque ajustement — y compris ceux des projets créés avant.\n\n**On mesure en imprimant, pas en estimant.** Le *corps d'essai de tolérance* met sur un plateau des tenons et des perçages au jeu étagé : imprimer une fois, essayer, la valeur est là. L'*échelle d'épaisseurs de paroi* et l'*éventail de surplombs* font de même pour l'épaisseur de paroi minimale et pour l'angle à partir duquel cette imprimante a vraiment besoin de supports — au lieu de la règle empirique des 45 degrés.\n\n![](figure:part-fit-ladder)\n\n**La première couche est un cas à part.** Elle est pressée contre le plateau et s'étale vers l'extérieur. Pour un ajustement situé au bas de la pièce, c'est la différence entre « ça rentre » et « ça ne rentre pas ».\n\n![](figure:elephant-foot)\n\n**L'éprouvette** découpe un cube autour d'un endroit au lieu de le reconstruire. Ce qui s'imprime est la vraie géométrie avec la vraie tolérance : deux minutes au lieu de deux heures, et le résultat vaut pour la pièce.\n\n**Une scène peut avoir plusieurs matériaux.** Un joint en TPU dans un boîtier en PETG se rétracte autrement et veut plus de jeu. Avec *Définir le matériau*, chaque corps reçoit son propre profil, et tolérances, pied d'éléphant et contrôle d'ajustement calculent avec.",
   "Das Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen.": "La pièce est haute et étroite. La buse peut la renverser en arrivant.",
   "Das Teil läuft nach oben spitz zu. Ohne Mindestzeit je Schicht legt die Düse auf noch weiches Material.": "La pièce s'affine vers le haut. Sans temps minimal par couche, la buse dépose sur du matériau encore mou.",
@@ -841,7 +843,6 @@
   "Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe.": "Ce corps n'a pas de face supérieure plane que l'on pourrait ouvrir.",
   "Dieser Körper hat keine senkrechten Flächen.": "Ce corps n'a pas de faces verticales.",
   "Dieser Körper hat keinen Hohlraum — eine Füllung hätte keinen Platz. Erst aushöhlen, dann füllen.": "Ce corps n'a pas de cavité — un remplissage n'aurait pas de place. Évider d'abord, remplir ensuite.",
-  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung.": "Ce corps est déjà fermé — une seconde peau par-dessus ne serait pas une paroi, mais un doublon.",
   "Dieser Körper kommt aus OpenSCAD, nicht aus der Bausteinbibliothek.": "Ce corps vient d'OpenSCAD, pas de la bibliothèque de blocs.",
   "Dieser Körper kommt aus einem Generator. So ein Netz ist eine Oberfläche, keine Konstruktion — deshalb beginnt Weg 3 mit der Reparaturkette.": "Ce corps vient d'un générateur. Un tel maillage est une surface, pas une construction — c'est pourquoi le chemin 3 commence par la chaîne de réparation.",
   "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig vernetzen noch unterteilen. Erst reparieren, dann noch einmal.": "Ce corps n'enferme aucun volume — il ne peut être ni uniformisé ni subdivisé. Réparez-le d'abord, puis recommencez.",
@@ -1250,7 +1251,6 @@
   "Flussfaktor": "Facteur de débit",
   "Fläche": "Face",
   "Fläche an {object} — {area}, {side}": "Face sur {object} — {area}, {side}",
-  "Fläche aufdicken": "Épaissir la surface",
   "Fläche unterteilen": "Subdiviser la surface",
   "Fläche versetzen": "Décaler la face",
   "Flächen": "Faces",
@@ -1901,6 +1901,7 @@
   "Objekte, auf die die Operation angewendet wird, zum Beispiel obj_1.": "Objets auxquels l'opération s'applique, par exemple obj_1.",
   "Objekte, z. B. obj_1": "Objets, p. ex. obj_1",
   "Offene Befunde": "Constats ouverts",
+  "Offene Fläche schließen": "Fermer la surface ouverte",
   "Offene Kante": "Arête ouverte",
   "Offene Kanten": "Arêtes ouvertes",
   "Offene Stellen schließen": "Fermer les endroits ouverts",
@@ -2944,5 +2945,7 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "ignoré — le maillage est trop grand pour ce tour, la carte d'analyse dans la fenêtre y arrive.",
   "— keines —": "— aucun —",
   "„profiles“ zeigt, was zur Auswahl steht.": "« profiles » montre ce qui est disponible.",
-  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "« {step} » a transformé le corps exact en maillage — les opérations du noyau exact ne fonctionnent qu'avant. Annulez les étapes à partir de là, appliquez cette opération, puis refaites le reste."
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "« {step} » a transformé le corps exact en maillage — les opérations du noyau exact ne fonctionnent qu'avant. Annulez les étapes à partir de là, appliquez cette opération, puis refaites le reste.",
+  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "Ce corps est déjà fermé — une seconde peau par-dessus ne serait pas une paroi mais un doublon. Pour épaissir une seule paroi, utilisez « Décaler la face » ; pour créer une cavité, « Évider ».",
+  "Stattdessen Fläche versetzen": "Décaler la face à la place"
 }

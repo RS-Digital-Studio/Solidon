@@ -367,6 +367,7 @@
   "Das Maß einer Bedingung ist ein Ausdruck als Text.": "The value of a constraint is an expression as text.",
   "Das Modell antwortet …": "The model is answering …",
   "Das Modell besteht aus mehreren Teilen.": "The model consists of several parts.",
+  "Das Modell hat gerechnet, war aber innerhalb der Wartezeit nicht fertig. Lokale Modelle brauchen je nach Rechner Minuten für einen Schritt — ein kleineres Modell, eine kürzere Anweisung oder ein gehostetes Modell mit eigenem Schlüssel sind schneller.": "The model was still working when the wait ran out. Local models need minutes per step depending on the machine — a smaller model, a shorter instruction, or a hosted model with your own key are faster.",
   "Das Modell hat mehr Dreiecke, als diese Anwendung verarbeitet.": "The model has more triangles than this application can handle.",
   "Das Modell ist an mehreren Stellen offen.": "The model is open in several places.",
   "Das Modell ist nicht geschlossen. „Reparieren“ schließt die offenen Stellen.": "The model is not closed. “Repair” closes the open places.",
@@ -395,6 +396,7 @@
   "Das Projekt hat Passungen. Eine langsam gefahrene Außenwand hält das Maß, auf das sie gerechnet sind.": "The project has fits. An outer wall driven slowly holds the dimension they are calculated for.",
   "Das Projekt unter einem anderen Namen ablegen.": "Save the project under a different name.",
   "Das Sprachmodell hat nicht geantwortet.": "The language model did not answer.",
+  "Das Sprachmodell hat zu lange gebraucht.": "The language model took too long.",
   "Das Stück, das Solidon von einem Slicer unterscheidet.\n\nEin gedrucktes Teil ist nie so groß wie gezeichnet. Kunststoff schwindet beim Abkühlen, ein Loch von 5 mm kommt enger heraus, und die unterste Schicht wird breiter gedrückt als alle darüber. Wer zwei Teile ineinanderstecken will, muss das einrechnen — und genau das nimmt Solidon ab.\n\n**Das Spiel steht im Materialprofil, nicht im Modell.** Wer einen Stift in ein Loch stecken will, trägt keine 0,2 ein — er sagt *Passung*, und die Zahl kommt aus dem Profil des Materials, mit dem gedruckt wird.\n\n![](figure:fit)\n\n**Deshalb wirkt eine Kalibrierung rückwärts.** Unter *Bearbeiten → Material kalibrieren* wird der gemessene Wert eingetragen. Er gilt ab dann für jede Passung — auch für die in Projekten, die vorher entstanden sind.\n\n**Gemessen wird gedruckt, nicht geschätzt.** Der *Toleranz-Testkörper* bringt Zapfen und Bohrungen mit gestaffeltem Spiel auf eine Platte: einmal drucken, ausprobieren, Wert steht. Die *Wandstärkenleiter* und der *Überhangfächer* machen dasselbe für die Mindestwandstärke und den Winkel, ab dem dieser Drucker wirklich Stützen braucht — statt der Faustregel 45 Grad.\n\n![](figure:part-fit-ladder)\n\n**Die erste Schicht ist ein Sonderfall.** Sie wird gegen das Bett gedrückt und läuft dabei nach außen aus. Bei einer Passung, die unten am Teil sitzt, ist das der Unterschied zwischen „geht rein“ und „geht nicht rein“.\n\n![](figure:elephant-foot)\n\n**Das Prüfstück** schneidet einen Würfel um eine Stelle heraus, statt sie nachzubauen. Was gedruckt wird, ist die echte Geometrie mit der echten Toleranz: zwei Minuten statt zwei Stunden, und das Ergebnis gilt für das Teil.\n\n**Eine Szene darf mehrere Materialien haben.** Eine TPU-Dichtung in einem PETG-Gehäuse schwindet anders und will mehr Spiel. Mit *Material festlegen* bekommt der einzelne Körper sein eigenes Profil, und Toleranzen, Elefantenfuß und Passungsprüfung rechnen damit.": "The piece that sets Solidon apart from a slicer.\n\nA printed part is never as large as drawn. Plastic shrinks as it cools, a hole of 5 mm comes out narrower, and the bottom layer is squashed wider than all the others. Anyone who wants to push two parts together has to allow for that — and that is exactly what Solidon takes off your hands.\n\n**The clearance is in the material profile, not in the model.** To put a pin into a hole you do not enter 0.2 — you say *fit*, and the number comes from the profile of the material being printed.\n\n![](figure:fit)\n\n**That is why calibrating works backwards.** Under *Edit → Calibrate material* the measured value is entered. From then on it applies to every fit — including those in projects that existed before.\n\n**Measured is printed, not guessed.** The *tolerance ladder* puts pins and holes with stepped clearance on one plate: print once, try, and the value stands. The *wall ladder* and the *overhang fan* do the same for the minimum wall thickness and for the angle at which this printer really needs supports — instead of the rule of thumb of 45 degrees.\n\n![](figure:part-fit-ladder)\n\n**The first layer is a special case.** It is pressed against the bed and spreads outwards as it goes. For a fit that sits at the bottom of the part, that is the difference between “goes in” and “does not go in”.\n\n![](figure:elephant-foot)\n\n**The test piece** cuts a cube out around one spot instead of rebuilding it. What gets printed is the real geometry with the real tolerance: two minutes instead of two hours, and the result holds for the part.\n\n**A scene may have several materials.** A TPU gasket in a PETG housing shrinks differently and wants more clearance. With *set material* the single body gets its own profile, and tolerances, elephant foot and fit checking compute with it.",
   "Das Teil ist hoch und schmal. Die Düse kann es beim Anfahren kippen.": "The part is tall and slim. The nozzle can tip it over on approach.",
   "Das Teil läuft nach oben spitz zu. Ohne Mindestzeit je Schicht legt die Düse auf noch weiches Material.": "The part tapers towards the top. Without a minimum layer time the nozzle lays onto material that is still soft.",
@@ -841,7 +843,6 @@
   "Dieser Körper hat keine ebene Oberseite, die sich öffnen ließe.": "This body has no flat top that could be opened.",
   "Dieser Körper hat keine senkrechten Flächen.": "This body has no vertical faces.",
   "Dieser Körper hat keinen Hohlraum — eine Füllung hätte keinen Platz. Erst aushöhlen, dann füllen.": "This body has no cavity — a lattice would have nowhere to go. Hollow it first, then fill it.",
-  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung.": "This body is already closed — a second skin over it would not be a wall but a duplicate.",
   "Dieser Körper kommt aus OpenSCAD, nicht aus der Bausteinbibliothek.": "This body comes from OpenSCAD, not from the part library.",
   "Dieser Körper kommt aus einem Generator. So ein Netz ist eine Oberfläche, keine Konstruktion — deshalb beginnt Weg 3 mit der Reparaturkette.": "This body comes from a generator. Such a mesh is a surface, not a construction — which is why way 3 begins with the repair chain.",
   "Dieser Körper umschließt kein Volumen — er lässt sich weder gleichmäßig vernetzen noch unterteilen. Erst reparieren, dann noch einmal.": "This body encloses no volume — it can neither be evened out nor subdivided. Repair it first, then try again.",
@@ -1250,7 +1251,6 @@
   "Flussfaktor": "Flow ratio",
   "Fläche": "Face",
   "Fläche an {object} — {area}, {side}": "Face on {object} — {area}, {side}",
-  "Fläche aufdicken": "Thicken surface",
   "Fläche unterteilen": "Subdivide surface",
   "Fläche versetzen": "Offset face",
   "Flächen": "Faces",
@@ -1901,6 +1901,7 @@
   "Objekte, auf die die Operation angewendet wird, zum Beispiel obj_1.": "Objects the operation is applied to, for example obj_1.",
   "Objekte, z. B. obj_1": "Objects, e.g. obj_1",
   "Offene Befunde": "Open findings",
+  "Offene Fläche schließen": "Close open surface",
   "Offene Kante": "Open edge",
   "Offene Kanten": "Open edges",
   "Offene Stellen schließen": "Close open places",
@@ -2944,5 +2945,7 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "skipped — the mesh is too large for this turn, the analysis map in the window can handle it.",
   "— keines —": "— none —",
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” shows what is available.",
-  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "“{step}” turned the exact body into a mesh — exact-kernel operations only work before it. Undo the steps from there, apply this operation, and redo the rest."
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "“{step}” turned the exact body into a mesh — exact-kernel operations only work before it. Undo the steps from there, apply this operation, and redo the rest.",
+  "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an.": "This body is already closed — a second skin over it would not be a wall but a duplicate. To make a single wall thicker use “Offset face”; to create a cavity use “Hollow out”.",
+  "Stattdessen Fläche versetzen": "Offset the face instead"
 }

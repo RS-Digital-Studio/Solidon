@@ -21,7 +21,7 @@ import manifold3d
 import numpy as np
 import trimesh
 
-from app.core.errors import CANCEL, Action, NotManifoldError, ValidationError
+from app.core.errors import CANCEL, CORRECT_INPUT, Action, NotManifoldError, ValidationError
 from app.core.geom.attributes import transfer
 from app.core.geom.mesh import MeshData, as_mesh_data, on_surface
 from app.core.geom.repair import merge_vertices
@@ -862,7 +862,7 @@ class ThickenParams(BaseParams):
 
 @register_op(
     name="thicken",
-    title=_("Fläche aufdicken"),
+    title=_("Offene Fläche schließen"),
     category="mesh",
     params=ThickenParams,
     consumes=1,
@@ -888,15 +888,26 @@ def thicken(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
     if before.raw.is_watertight:
+        # **Der häufigste Griff daneben, und er kam vom Titel.** Bis zum
+        # 23.08.2026 hieß diese Operation „Fläche aufdicken" und stand im
+        # Menü neben „Fläche versetzen". Wer eine Fläche angeklickt hatte und
+        # ihre Wand dicker haben wollte, nahm die erste — und bekam hier einen
+        # Fehler, der nur „Abbrechen" anbot. Der Schritt blieb im Verlauf und
+        # hielt die Auswertung an; in einem Protokoll vom selben Tag neunzehnmal
+        # über sieben Minuten, dreimal hintereinander gelegt.
         raise ValidationError(
             "thickness",
             _(
                 "Dieser Körper ist schon geschlossen — eine zweite Haut darüber wäre "
-                "keine Wand, sondern eine Verdopplung."
+                "keine Wand, sondern eine Verdopplung. Eine einzelne Wand dicker "
+                "macht „Fläche versetzen“; einen Hohlraum legt „Aushöhlen“ an."
             ),
             value=params.thickness,
             constraint="already_solid",
-            suggestions=[CANCEL],
+            suggestions=[
+                dataclasses.replace(CORRECT_INPUT, label=_("Stattdessen Fläche versetzen")),
+                CANCEL,
+            ],
         )
 
     thickened = _thickened(before, params.thickness)
