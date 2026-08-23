@@ -365,7 +365,7 @@ class SketchPocketParams(BaseParams):
     produces=1,
     applies_to=("face",),
     doc=_(
-        "Schneidet eine Grundform als Tasche in einen B-Rep-Körper — von der "
+        "Schneidet eine Grundform als Tasche in einen exakten Körper — von der "
         "Oberkante senkrecht nach unten, auf Wunsch durchgehend. Ein Klick auf "
         "eine Fläche trägt den Ort vorab ein."
     ),

@@ -76,8 +76,8 @@ class BrepBoxParams(BaseParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Legt einen Quader als B-Rep-Körper an — mit echten Kanten, an die "
-        "Fasen und Verrundungen gesetzt werden können."
+        "Legt einen Quader mit echten Kanten an — an sie lassen sich später "
+        "Fasen und Verrundungen setzen."
     ),
 )
 def create_brep_box(ctx: OpContext) -> OpResult:
@@ -120,7 +120,13 @@ class BrepCylinderParams(BaseParams):
     params=BrepCylinderParams,
     consumes=0,
     produces=1,
-    doc=_("Legt einen Zylinder als B-Rep-Körper an, stehend auf Z = 0."),
+    # **Der Vorteil gehört in den Satz, nicht in die Abkürzung.** „B-Rep" sagt
+    # einem Kunden nichts; was er wissen will, ist, was er damit kann. Der
+    # Quader nebenan sagte es, der Zylinder nicht.
+    doc=_(
+        "Legt einen Zylinder mit echten Kanten an, stehend auf Z = 0 — an sie lassen "
+        "sich später Fasen und Verrundungen setzen."
+    ),
 )
 def create_brep_cylinder(ctx: OpContext) -> OpResult:
     params = cast(BrepCylinderParams, ctx.params)
@@ -147,7 +153,7 @@ class LoadStepParams(BaseParams):
     consumes=0,
     produces=1,
     doc=_(
-        "Liest eine STEP-Datei als B-Rep-Körper. STEP trägt seine Einheit selbst — "
+        "Liest eine STEP-Datei als exakten Körper. STEP trägt seine Einheit selbst — "
         "die Einheitenfrage entfällt."
     ),
 )
@@ -215,7 +221,7 @@ class FilletParams(BaseParams):
     consumes=1,
     produces=1,
     doc=_(
-        "Verrundet Kanten eines B-Rep-Körpers — geometrisch exakt, weil die "
+        "Verrundet Kanten eines exakten Körpers — geometrisch genau, weil die "
         "Kante eine Kurve ist und keine Folge von Segmenten."
     ),
 )
@@ -252,7 +258,7 @@ class ChamferParams(BaseParams):
     params=ChamferParams,
     consumes=1,
     produces=1,
-    doc=_("Bricht Kanten eines B-Rep-Körpers unter 45 Grad."),
+    doc=_("Bricht Kanten eines exakten Körpers unter 45 Grad."),
 )
 def chamfer_edges(ctx: OpContext) -> OpResult:
     params = cast(ChamferParams, ctx.params)
@@ -285,7 +291,7 @@ class ShellParams(BaseParams):
     consumes=1,
     produces=1,
     doc=_(
-        "Höhlt einen B-Rep-Körper mit exakter Wandstärke aus und lässt die "
+        "Höhlt einen exakten Körper auf eine genaue Wandstärke aus und lässt die "
         "Oberseite offen — ein Kasten aus einem Quader, in einem Schritt. Für "
         "geschlossenes Aushöhlen mit Entlüftung gibt es die Netz-Operation."
     ),
@@ -321,7 +327,7 @@ class DraftParams(BaseParams):
     consumes=1,
     produces=1,
     doc=_(
-        "Stellt alle senkrechten Flächen eines B-Rep-Körpers um einen Winkel "
+        "Stellt alle senkrechten Flächen eines exakten Körpers um einen Winkel "
         "an — zum Entformen, oder damit ein Stapelbehälter sich stapeln lässt."
     ),
 )
@@ -476,7 +482,7 @@ class ToMeshParams(BaseParams):
     consumes=1,
     produces=1,
     doc=_(
-        "Wandelt einen B-Rep-Körper in ein Dreiecksnetz um. Der Weg zurück "
+        "Wandelt einen exakten Körper in ein Dreiecksnetz um. Der Weg zurück "
         "besteht nicht — die Kanten sind danach fort."
     ),
 )
