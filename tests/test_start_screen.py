@@ -29,6 +29,57 @@ def screen(qt_app: QApplication) -> StartScreen:
     return StartScreen()
 
 
+def test_the_start_screen_fits_a_laptop_without_scrolling(qt_app: QApplication) -> None:
+    """Der erste Eindruck darf nicht rollen.
+
+    1600x900 ist die häufigste Laptop-Auflösung, und dort brauchte der
+    Startbildschirm **1040** Bildpunkte: Er rollte um 140, und die
+    Kachelbereiche reichten bis 917 bei 900 Fensterhöhe. Das ist das Erste,
+    was jemand von Solidon sieht.
+
+    Kleiner geworden ist ``more_area`` — die fünf Beispiele ohne Weg klappen
+    zu, die vier Wege aus §2.2 nicht. Die Naht liegt dort, wo die Sache selbst
+    eine hat: Die vier sind die Struktur des Programms, die fünf sind
+    Vertiefung.
+
+    **Geprüft wird die Grenze und nicht der Posten** — „passt auf 900" statt
+    „``more_area`` ist kleiner als X". Die Zahlen dieses Punktes waren dreimal
+    veraltet; ein Test auf einen Einzelposten altert mit, sobald jemand eine
+    Kachel hinzufügt, und sagt dann nichts mehr über das, was zählt.
+
+    Gemessen **mit Thema**: Ohne fehlt die Polsterung, die ein Kunde sieht.
+    """
+    from PySide6.QtWidgets import QScrollArea
+
+    from app.ui.style import stylesheet
+
+    davor = qt_app.styleSheet()
+    qt_app.setStyleSheet(stylesheet("light", 10))
+    screen = StartScreen()
+    try:
+        screen.show_recent([])
+        screen.resize(1600, 900)
+        screen.show()
+        qt_app.processEvents()
+
+        roll = screen.findChildren(QScrollArea)
+        assert roll, "der Startbildschirm rollt gar nicht mehr — dann prüft das hier nichts"
+        innen = roll[0].widget()
+        assert innen is not None
+        noetig = innen.sizeHint().height()
+
+        assert noetig <= 900, (
+            f"der Startbildschirm verlangt {noetig} Bildpunkte und rollt damit auf einem "
+            "1600x900-Schirm — dem häufigsten Laptop"
+        )
+        assert len(screen.tiles) == len(examples.EXAMPLES), (
+            "zugeklappt heißt nicht weg: alle Beispiele sind weiterhin da"
+        )
+    finally:
+        screen.deleteLater()
+        qt_app.setStyleSheet(davor)
+
+
 def test_the_content_stays_in_one_readable_column(screen: StartScreen) -> None:
     """Vorher über 1900 Pixel verteilt: ein Knopf am linken Rand, sein Verweis
     am rechten, und dazwischen nichts, das die beiden verbindet."""

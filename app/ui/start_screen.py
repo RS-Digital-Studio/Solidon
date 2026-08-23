@@ -56,6 +56,7 @@ from app.core.ingest.fetch import ALLOWED_SUFFIXES, suffix_of
 from app.core.ingest.outline import OUTLINE_SUFFIXES
 from app.i18n import tr
 from app.ui.icons import icon
+from app.ui.panels import collapsible
 from app.ui.style import NORMAL, ROOMY, TIGHT, WIDE, make_primary, set_level
 from app.ui.theme import THEMES
 
@@ -489,8 +490,20 @@ class StartScreen(QWidget):
         inner.addLayout(buttons)
         inner.addWidget(_caption(tr("Wo fange ich an?"), self))
         inner.addWidget(self.examples_area)
-        inner.addWidget(_caption(tr("Was kann das noch?"), self))
-        inner.addWidget(self.more_area)
+        # **Die fünf weiteren Beispiele klappen zu, die vier Wege nicht.**
+        # Auf 1600x900 — der häufigsten Laptop-Auflösung — brauchte der
+        # Startbildschirm 1040 Bildpunkte und rollte damit um 140; die
+        # Kachelbereiche reichten bis 917. ``more_area`` ist mit 264 der größte
+        # Einzelposten, und die Naht liegt dort, wo die Sache selbst eine hat:
+        # Die vier Kacheln darüber sind die vier Wege aus §2.2, also die
+        # Struktur des Programms. Die fünf hier sind Vertiefung — wer den
+        # Startbildschirm zum ersten Mal sieht, soll die vier sehen.
+        #
+        # Die Überschrift **wird** der Umschalter, statt einen zweiten daneben
+        # zu stellen: Der Text bleibt derselbe, und die ganze Zeile ist die
+        # Fläche, die man trifft (Regel 18 über den gedrückten Zustand).
+        self.more_section = collapsible(tr("Was kann das noch?"), self.more_area, open_now=False)
+        inner.addWidget(self.more_section)
         inner.addWidget(_caption(tr("Zuletzt geöffnet"), self))
         inner.addWidget(self.recent_empty)
         inner.addWidget(self.recent_list)
