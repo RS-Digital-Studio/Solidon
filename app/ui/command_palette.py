@@ -121,6 +121,14 @@ def rank(entry: PaletteEntry, query: str) -> int:
     dessen Beschreibung das Wort Bohrung enthält, und „Bohrung setzen" auf
     Platz drei. Wer tippt, meint fast immer den Namen.
 
+    **Ein Synonym wiegt schwerer als ein Wortstamm.** Es ist eine bewusste
+    Zuordnung — jemand hat aufgeschrieben, dass dieses Kundenwort diese
+    Operation meint. Ein Stammtreffer ist dagegen eine Rechnung, und die trifft
+    auch daneben: „oeffnen" fand über den Stamm das *Deckel erzeugen* (dessen
+    Beschreibung „offen" enthält) und stellte es **vor** das *Modell laden*,
+    für das das Wort ausdrücklich eingetragen ist. Wer „öffnen" tippt, will
+    eine Datei öffnen.
+
     Sortiert wird **stabil**, damit die Reihenfolge aus ``applies_to`` innerhalb
     derselben Güte erhalten bleibt: Was zur Auswahl passt, steht weiter vorn
     (Gebietsregel, „Was zur Auswahl passt, steht vorn").
@@ -134,9 +142,11 @@ def rank(entry: PaletteEntry, query: str) -> int:
         return 0
     if all(part in name for part in parts):
         return 1
-    if all(stem_of(part) in title for part in parts if len(part) >= STEM_LENGTH):
+    if all(part in synonyms_for(str(entry.name)) for part in parts):
         return 2
-    return 3
+    if all(stem_of(part) in title for part in parts if len(part) >= STEM_LENGTH):
+        return 3
+    return 4
 
 
 #: Wörter, die ein Kunde tippt, und die Operationen, die er damit meint.
@@ -172,6 +182,21 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     "decimate_mesh": ("vereinfachen", "reduzieren", "leichter machen"),
     "hollow_object": ("aushoehlen", "leer machen"),
     "repair_mesh": ("loecher schliessen", "reparieren", "flicken"),
+    # **Die gewöhnlichsten Wörter fehlten**, und das fiel niemandem auf, weil
+    # niemand sie sucht, der das Register kennt: „kopieren" und „loeschen"
+    # führten ins Leere, obwohl es beides gibt. Gemessen an vierzig Wörtern,
+    # mit denen ein Kunde suchen würde — sechs fanden nichts, und keines davon
+    # war ein Fachbegriff.
+    "duplicate_object": ("kopieren", "klonen", "zweites teil"),
+    "delete_object": ("loeschen", "wegwerfen", "rauswerfen"),
+    "load": ("oeffnen", "importieren", "stl", "datei"),
+    # „Bemalen" ist der Pinsel, „Slot zuweisen" das ganze Teil. Wer *färben*
+    # tippt, meint fast immer das Zweite — der Pinsel heißt woanders anmalen.
+    "assign_slot": ("faerben", "einfaerben", "farbe zuweisen"),
+    "paint_slot": ("anmalen", "pinseln"),
+    # Ein Logo ist ein Bild, und ein Bild wird hier zu einer Höhe. Beide Wörter
+    # stehen im Kopf dessen, der es aufbringen will, und keines im Titel.
+    "displace_image": ("logo", "foto", "bild aufbringen"),
 }
 
 

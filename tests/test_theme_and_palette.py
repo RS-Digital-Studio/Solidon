@@ -553,6 +553,18 @@ CUSTOMER_WORDS: tuple[tuple[str, str], ...] = (
     ("gravieren", "label_text"),
     ("beschriften", "label_text"),
     ("vereinfachen", "decimate_mesh"),
+    # Die zweite Messung, am selben Abend: vierzig Wörter gegen die
+    # Kategorien, die noch niemand durchgesehen hatte. Sechs fanden nichts,
+    # und **kein einziges davon war ein Fachbegriff** — es waren die
+    # gewöhnlichsten Wörter, die es gibt.
+    ("kopieren", "duplicate_object"),
+    ("löschen", "delete_object"),
+    ("öffnen", "load"),
+    ("importieren", "load"),
+    ("färben", "assign_slot"),
+    ("anmalen", "paint_slot"),
+    ("logo", "displace_image"),
+    ("foto", "displace_image"),
 )
 
 
@@ -610,3 +622,47 @@ def test_every_customer_word_points_at_an_operation_that_exists() -> None:
     load_operations()
     fehlend = [ziel for _wort, ziel in CUSTOMER_WORDS if not REGISTRY.has(ziel)]
     assert not fehlend, "diese Operationen gibt es nicht (mehr): " + ", ".join(fehlend)
+
+
+def test_the_word_a_customer_types_lands_on_top() -> None:
+    """Gefunden genügt nicht — es muss an erster Stelle stehen.
+
+    **Der Fund, der diesen Test veranlasst hat.** Die Synonymtabelle wirkte,
+    und trotzdem sah der Kunde das Falsche: „oeffnen" fand *Modell laden*, aber
+    ``rank`` stellte *Deckel erzeugen* davor — dessen Beschreibung enthält
+    „offen", und ein Wortstamm im Titel wog schwerer als ein Synonym. Dasselbe
+    bei „importieren", das auf *Fläche versetzen* zeigte.
+
+    **Ein Synonym ist eine bewusste Zuordnung, ein Stammtreffer eine
+    Rechnung.** Jemand hat aufgeschrieben, dass dieses Kundenwort diese
+    Operation meint; die Rechnung trifft auch daneben. Deshalb rangiert das
+    Synonym seit dieser Messung vor dem Stamm.
+
+    Der Test daneben (``test_the_palette_finds_what_a_customer_types``) prüft,
+    dass das Gemeinte **dabei** ist. Beide zusammen sind die Zusage: Wer sein
+    Wort tippt, sieht es zuerst.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.core.registry.surfaces import palette_entries
+    from app.ui.command_palette import matches, rank
+
+    load_operations()
+    eintraege = palette_entries(REGISTRY)
+    assert eintraege, "no palette entries — nothing would be checked below"
+
+    daneben: list[str] = []
+    for wort, gemeint in CUSTOMER_WORDS:
+        treffer = [e for e in eintraege if matches(e, wort)]
+        if not treffer:
+            treffer = [e for e in eintraege if matches(e, wort, stem=True)]
+        if not treffer:
+            continue  # der Test daneben meldet das, hier zählt die Reihenfolge
+        # ``min`` nimmt bei Gleichstand das erste — dieselbe Zusage wie die
+        # stabile Sortierung der Palette, auf der „Was zur Auswahl passt, steht
+        # vorn" beruht.
+        erste = min(treffer, key=lambda e: rank(e, wort))
+        if erste.name != gemeint:
+            daneben.append(f"{wort} -> {erste.name} statt {gemeint}")
+
+    assert not daneben, "diese Wörter zeigen zuerst auf das Falsche: " + "; ".join(daneben)
