@@ -107,7 +107,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die deutsche Quelle trennt die Fläche nicht von der Belegung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | 36 Stellen „Druckplatte“ → „Druckbett“ — und **jede ändert einen Katalogschlüssel**, alle fünf Sprachen fielen auf einmal auf unübersetzt zurück. Kein Eingriff für den Tag vor einem Release; solange die Quelle nicht trennt, sammelt jede Übersetzungsrunde einen Teil davon wieder ein |
 | Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
 | Eine Fremdmeldung sagt „Netzwerk“ und meint „Platte voll“ | Vier Wege von Hand, während die Suite grün war (23.08.2026) | einen Satz in `comfy_setup`: Beim Einrichten von Weg 3 brach der 7,5-GB-Download dreimal mit `Background writer channel closed` ab, und `C:` hatte null Byte frei. Die Regel „Fehler des fremden Programms durchreichen“ bleibt richtig — wo wir **mehr** wissen als es, gehört das dazu |
-| Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Messung, die läuft: dieselben vier Dateien einmal ohne und einmal direkt nach der Sammelgruppe (`-n 8`). Einzeln laufen alle sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Stimmt die Hypothese, ist es eine **Eigenschaft des Tors** und kein Testfehler |
+| Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374 |
 | Ein Importzyklus in `app/core/scene` | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Auflösung von `scene/__init__.py` ↔ `scene/history.py`. Latent, solange nur ein Thread importiert — zwei Threads gaben **5 von 5** Fehlschlägen. Kein Startzeit-Thema: die Ersparnis dort wäre 37 ms |
 | 22 von 70 Widget-Klassen bleiben ungeprüft | Vier Wege von Hand, während die Suite grün war (23.08.2026) | Bauhelfer je Klasse — ein Umbau, kein Abschluss. Die 22 sind die, die Argumente brauchen, also die mitten im Arbeitsablauf; von den 34 prüfbaren hielten sechs fest |
 | Das signierte Lizenz-Manifest ist nicht eingecheckt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Messung, ob die Signatur reproduzierbar ist. Wenn ja, gehört es eingecheckt; wenn nein, bleibt Ansagen die einzige Abhilfe. Zwei Sitzungen haben es in einer Nacht doppelt gebaut |
@@ -4162,15 +4162,32 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       Fixture-Verzweigung getauscht, **4 von 4 sauber mit der neuen gegen 3 von 4
       mit der alten**.
 
-      **Die Hypothese, die gerade gemessen wird:** `suite-getrennt.sh` fährt vor
-      den Fensterdateien die **Sammelgruppe mit acht Prozessen**. Das ist der
-      einzige Unterschied zum Einzellauf, und in `.claude/rules/tests.md` steht
-      seit dem 22.08., was acht Prozesse anrichten — damals warfen sie **fremde**
-      Tests um. Die Vermutung ist, dass sie einen Zustand hinterlassen, den die
-      Fensterprozesse **danach** erben.
+      **Eine Hypothese ist gemessen und zurückgezogen worden** (3d-druck-33,
+      23.08.2026): dass die **Sammelgruppe mit acht Prozessen**, die
+      `suite-getrennt.sh` vor den Fensterdateien fährt, einen Zustand
+      hinterlässt, den die Fensterprozesse erben.
 
-      **Stimmt sie, ist es kein Fehler in einem Test, sondern eine Eigenschaft
-      des Tors** — und gehört beschrieben, nicht gesucht.
+          ohne Sammelgruppe davor    1 von 4 gerissen
+          nach der Sammelgruppe      2 von 4 gerissen
+
+      **Eins gegen zwei bei je vier Läufen ist keine Aussage** — das liegt nach
+      der Basisratentabelle in derselben Datei vollständig im Rauschen. Die
+      Hypothese ist damit **weder bestätigt noch widerlegt, sondern ungemessen**,
+      und das ist ein Unterschied.
+
+      Dazu kommt: `test_analysis_ui` riss in **beiden** Durchgängen, auch ohne
+      Sammelgruppe — während dieselbe Datei eine Stunde vorher im A/B sauber
+      durchlief (119 passed). Dieselbe Datei, derselbe Arbeitsbaum, zwei
+      Ergebnisse.
+
+      **Was gesagt werden kann, und nur das:** Die Risse sind sporadisch mit
+      einer Rate zwischen 25 und 50 Prozent je Datei, sie treten **vor** der
+      Zusammenfassung auf (anders als der behobene Abbau-Absturz), und der Code
+      war beide Male `0xC0000374` (Heap-Beschädigung).
+
+      **Eine belastbare Aussage kostet zehn Läufe je Seite** — rund vierzig
+      Minuten auf einer Maschine, die drei andere Sitzungen brauchen. Nicht
+      release-kritisch; wer den Punkt aufnimmt, plant die Rechenzeit ein.
 
 - [ ] **Ein Importzyklus in `app/core/scene` — latent, und jede Parallelität
       stolpert darüber.** Gefunden am 23.08.2026 beim Messen der Startzeit:
