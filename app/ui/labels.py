@@ -745,6 +745,10 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "vents": _("Entlüftungen"),
     "vertices": _("Ecken"),
     "volume": _("Volumen"),
+    # Die Einheit steht im Namen, weil ``_minutes`` keines der Suffixe aus
+    # :data:`_VALUE_UNITS` ist — ohne sie läse der Kunde „Gewartet: 10" und
+    # wüsste nicht, ob Sekunden oder Minuten gemeint sind.
+    "waited_minutes": _("Gewartet (Minuten)"),
     "wall": _("Wandstärke"),
     "wanted": _("Gewünscht"),
     "what": _("Was"),

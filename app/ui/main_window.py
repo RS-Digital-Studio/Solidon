@@ -1894,6 +1894,16 @@ class MainWindow(QMainWindow):
                 "erst auf Ihre Bestätigung."
             ),
         )
+        # Daneben und nicht woanders: Wer wissen will, ob es etwas Neues gibt,
+        # will oft auch wissen, was das Letzte gebracht hat. Der Verlauf liegt
+        # im Paket — dieser Eintrag fragt nichts nach draußen.
+        self._add_action(
+            help_menu,
+            tr("Neuerungen …"),
+            None,
+            self.action_changes,
+            tr("Was sich in dieser und den vorigen Fassungen geändert hat."),
+        )
         help_menu.addSeparator()
         self._add_action(
             help_menu,
@@ -6511,6 +6521,18 @@ class MainWindow(QMainWindow):
             # Das Fenster ist zu diesem Zeitpunkt zu; bleibt das Protokoll und
             # der Weg über die Download-Seite beim nächsten Start (§33.2).
             _log.exception("could not start the installer")
+
+    def action_changes(self) -> None:
+        """Der Verlauf aus dem Paket — ohne eine Frage nach draußen.
+
+        Der Import steht hier und nicht oben: Der Dialog wird selten geöffnet,
+        und ein Fenster, das beim Start alles mitlädt, was jemand *einmal*
+        braucht, startet langsamer. Dieselbe Überlegung wie beim
+        Abschiedsdialog der abgelaufenen Demo.
+        """
+        from app.ui.changes_dialog import ChangesDialog
+
+        ChangesDialog(self).exec()
 
     def action_check_updates(self) -> None:
         """Von Hand nach einer neuen Version sehen (Demo-Konzept §2 G).

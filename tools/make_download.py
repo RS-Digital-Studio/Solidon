@@ -37,6 +37,7 @@ from urllib.parse import quote
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.branding import APP_VERSION
+from app.core import changes
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -450,29 +451,24 @@ BULLET = re.compile(r"^[-*]\s+(.*\S)\s*$")
 def changelog_for(version: str, language: str) -> list[str]:
     """Die Punkte einer Version in einer Sprache, oder eine leere Liste.
 
-    Gelesen wird der Abschnitt ``## <version>`` bis zur nächsten Überschrift.
-    Der Kopf der Datei erklärt, was hineingehört, und wird dabei übergangen —
-    er steht dort für den, der schreibt, nicht für den, der aktualisiert.
+    **Gelesen wird im Kern** (``app.core.changes``), seit der Verlauf auch in
+    der Anwendung steht — unter *Hilfe → Neuerungen*. Zwei Umsetzungen wären
+    der Weg zu einem Verlauf, der sich unterscheidet, je nachdem wer ihn liest:
+    Das Bauwerkzeug schriebe eine Auswahl in die Versionsdatei und das Fenster
+    zeigte eine andere.
+
+    Ohne Rückfall auf die Quellsprache, anders als :func:`changes.history`: Was
+    hier entsteht, wird je Sprache in die Versionsdatei geschrieben, und dort
+    ist eine fehlende Sprache eine Auskunft — die Anwendung fällt selbst zurück
+    (``updates.Release.points``). Ein deutscher Satz unter ``"it"`` sähe dagegen
+    aus wie eine Übersetzung, die es nicht gibt.
     """
-    file = CHANGELOG / f"{language}.md"
-    if not file.is_file():
-        return []
-    found: list[str] = []
-    inside = False
-    for line in file.read_text(encoding="utf-8").splitlines():
-        heading = SECTION.match(line)
-        if heading:
-            inside = heading.group(1) == version
-            continue
-        if line.startswith("#"):
-            inside = False
-            continue
-        if not inside:
-            continue
-        bullet = BULLET.match(line)
-        if bullet:
-            found.append(bullet.group(1))
-    return found
+    return list(changes.points_for(version, language) if file_of(language).is_file() else ())
+
+
+def file_of(language: str) -> Path:
+    """Die Changelog-Datei einer Sprache — hier im Repository."""
+    return CHANGELOG / f"{language}.md"
 
 
 def changes_for(version: str) -> dict[str, list[str]]:

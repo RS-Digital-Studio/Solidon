@@ -57,6 +57,11 @@ datas = [
     # `figures.IMAGE_ROOT` zeigt hierher, und `ManualView._image` gibt für eine
     # fehlende Datei stillschweigend nichts zurück.
     (str(ROOT / "app" / "images" / "manual"), "app/images/manual"),
+    # Der Verlauf für *Hilfe → Neuerungen*, je Sprache eine Datei. Neben das
+    # ``app``-Paket, wo ``core.changes.folder()`` zuerst nachsieht: Bis 0.1.3
+    # kannte die Anwendung ihn nur aus der Versionsdatei vom Server — also erst
+    # beim nächsten Update und nie für die eigene Fassung.
+    (str(ROOT / "changelog"), "app/changelog"),
     (str(ROOT / "LICENSE"), "."),
     (str(ROOT / "THIRD-PARTY-NOTICES.md"), "."),
 ]

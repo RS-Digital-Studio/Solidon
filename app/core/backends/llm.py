@@ -228,7 +228,11 @@ class BackendTooSlow(ExternalToolError):
 
     default_title = _("Das Sprachmodell hat zu lange gebraucht.")
 
-    def __init__(self, seconds: float) -> None:
+    def __init__(self, seconds: float = 0.0) -> None:
+        # **Der Vorgabewert ist kein Zierat.** ``tests/test_errors.py`` erzeugt
+        # jede Ausnahmeklasse ohne Argumente, und das ist keine Förmlichkeit:
+        # Eine Ausnahme, die das nicht kann, überlebt die Serialisierung nicht
+        # — und die braucht der Fehlerbericht, um sie überhaupt zu übertragen.
         # **Die Zahl steht in ``values``, nicht im Satz.** Einen Fehlertext aus
         # dem Kern formatiert niemand nach — der Dialog zeigt ``detail``, wie es
         # ist, und hängt die ``values`` als eigene Zeilen darunter. Ein
