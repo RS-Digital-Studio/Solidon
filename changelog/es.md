@@ -18,6 +18,7 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ## 0.1.4
 
+- Durante la demo, Solidon pregunta una vez: tras media hora de trabajo, una tarjeta se posa sobre la vista y pregunta qué tal va. No detiene nada, y sin su clic no sale nada.
 - Al hacer clic en una cara e insertar un elemento, este queda perpendicular a esa cara en lugar de apuntar hacia arriba. En una pared lateral, un agujero para tornillo quedaba antes atravesado.
 - Un elemento colocado en un taladro adopta su medida. En un taladro de 5,19 mm, el casquillo a presión proponía antes M3, que allí no quita nada.
 - Un clic con la mano algo temblorosa vuelve a seleccionar en vez de desplazar la pieza una décima de milímetro.
@@ -35,7 +36,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El título de la ventana nombra el modelo abierto, aunque todavía no exista un archivo de proyecto.
 - Al dibujar, la medida está en la punta de la línea y no en el borde de la ventana.
 - Una entrada de menú bloqueada dice ahora por qué lo está. El motivo ya estaba ahí y era invisible.
-- Si el cálculo se detiene, se indica en qué paso y por qué.
 - El informe de error lleva el estado de la escena: objetos con medidas, características, parámetros y el historial. Así un fallo se reproduce en vez de adivinarse.
 - Se han corregido varios cierres inesperados al cerrar ventanas y diálogos.
 

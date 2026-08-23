@@ -17,6 +17,7 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 ## 0.1.4
 
+- Durante a demonstração, o Solidon pergunta uma vez: ao fim de meia hora de trabalho, um cartão pousa sobre a vista e pergunta como está a correr. Não para nada, e sem o seu clique não sai nada.
 - Quem clica numa face e insere um elemento obtém-no perpendicular a essa face em vez de apontado para cima. Numa parede lateral, um furo para parafuso ficava antes atravessado.
 - Um elemento colocado num furo assume a sua medida. Num furo de 5,19 mm, o casquilho de pressão propunha antes M3, que ali não remove nada.
 - Um clique com a mão um pouco trémula volta a selecionar em vez de deslocar a peça um décimo de milímetro.
@@ -34,7 +35,6 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - O título da janela indica o modelo aberto, mesmo quando ainda não existe um ficheiro de projeto.
 - Ao desenhar, a medida fica na ponta da linha em vez de na margem da janela.
 - Uma entrada de menu bloqueada diz agora porquê. O motivo já lá estava e era invisível.
-- Se o cálculo parar, fica indicado em que passo e porquê.
 - O relatório de erro leva o estado da cena: objetos com medidas, características, parâmetros e o histórico. Assim um erro reproduz-se em vez de se adivinhar.
 - Foram corrigidas várias falhas ao fechar janelas e caixas de diálogo.
 

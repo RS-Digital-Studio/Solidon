@@ -17,6 +17,7 @@ it into `website/version.json`.
 
 ## 0.1.4
 
+- During the demo Solidon asks once: after half an hour of work a card settles over the view and asks how it is going. It holds nothing up, and nothing goes out without your click.
 - Click a face and insert a part, and it now sits perpendicular to that face instead of pointing straight up. On a side wall a screw hole used to run across the wall.
 - A part placed at a hole takes over its size. At a hole of 5.19 mm the press-fit insert used to suggest M3 — which removes nothing there.
 - A click with a slightly unsteady hand selects again instead of nudging the part by a tenth of a millimetre.
@@ -34,7 +35,6 @@ it into `website/version.json`.
 - The window title names the model you opened, even when there is no project file for it yet.
 - While drawing, the dimension sits at the tip of the line instead of at the window edge.
 - A disabled menu entry now says why it is disabled. The reason was there before and invisible.
-- When the calculation stops, it says at which step and why.
 - The error report carries the state of the scene: objects with dimensions, features, parameters and the history. That makes a fault reproducible instead of guessed.
 - Several crashes when closing windows and dialogs are fixed.
 

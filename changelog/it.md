@@ -17,6 +17,7 @@ scrive in `website/version.json`.
 
 ## 0.1.4
 
+- Durante la demo Solidon chiede una volta: dopo mezz’ora di lavoro una scheda si posa sulla vista e chiede come sta andando. Non ferma nulla, e senza il suo clic non esce nulla.
 - Chi fa clic su una faccia e inserisce un elemento lo ottiene perpendicolare a quella faccia invece che verso l'alto. Su una parete laterale un foro per vite stava prima di traverso.
 - Un elemento posato su un foro ne assume la misura. Su un foro da 5,19 mm la boccola a pressione proponeva prima M3, che lì non asporta nulla.
 - Un clic con la mano un po' incerta seleziona di nuovo invece di spostare il pezzo di un decimo di millimetro.
@@ -34,7 +35,6 @@ scrive in `website/version.json`.
 - Il titolo della finestra nomina il modello aperto, anche quando non esiste ancora un file di progetto.
 - Mentre si disegna, la misura sta sulla punta della linea invece che sul bordo della finestra.
 - Una voce di menu bloccata dice ora perché lo è. Il motivo c’era già ed era invisibile.
-- Se il calcolo si ferma, viene indicato a quale passo e perché.
 - La segnalazione porta con sé lo stato della scena: oggetti con misure, caratteristiche, parametri e cronologia. Così un errore si riproduce invece di indovinarlo.
 - Sono stati corretti diversi arresti anomali alla chiusura di finestre e finestre di dialogo.
 

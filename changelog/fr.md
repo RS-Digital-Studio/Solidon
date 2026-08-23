@@ -18,6 +18,7 @@ dans `website/version.json`.
 
 ## 0.1.4
 
+- Pendant la démo, Solidon pose une question : après une demi-heure de travail, une carte se pose sur la vue et demande comment cela se passe. Elle n’arrête rien, et rien ne part sans votre clic.
 - Cliquez sur une face et insérez un élément : il se place perpendiculairement à cette face au lieu de pointer vers le haut. Sur une paroi latérale, un trou de vis traversait la paroi.
 - Un élément posé sur un perçage en reprend la cote. Sur un perçage de 5,19 mm, l'insert à emmancher proposait auparavant M3, qui n'y enlève rien.
 - Un clic avec une main un peu tremblante sélectionne de nouveau au lieu de décaler la pièce d'un dixième de millimètre.
@@ -35,7 +36,6 @@ dans `website/version.json`.
 - Le titre de la fenêtre nomme le modèle ouvert, même s’il n’existe pas encore de fichier de projet.
 - Pendant le tracé, la cote se trouve à la pointe de la ligne et non au bord de la fenêtre.
 - Une entrée de menu désactivée dit maintenant pourquoi elle l’est. La raison était là et restait invisible.
-- Lorsque le calcul s’arrête, il indique à quelle étape et pourquoi.
 - Le rapport d’erreur emporte l’état de la scène : objets avec cotes, caractéristiques, paramètres et historique. Une erreur se reproduit ainsi au lieu de se deviner.
 - Plusieurs plantages à la fermeture de fenêtres et de boîtes de dialogue sont corrigés.
 
