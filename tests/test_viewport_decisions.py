@@ -165,11 +165,16 @@ class _RecordingPlotter:
 
     def __init__(self) -> None:
         self.drawn: list[tuple[str, dict[str, Any]]] = []
+        self.meshes: list[Any] = []
         self.labelled: list[list[str]] = []
         self.removed: list[object] = []
         self.renders = 0
 
-    def add_mesh(self, _mesh: object, **kwargs: Any) -> object:
+    def add_mesh(self, mesh: object, **kwargs: Any) -> object:
+        # Das Netz kommt mit: Bei der Merkmalsfläche ist die **Zahl der
+        # Dreiecke** die Aussage — gefärbt werden die des Merkmals und nicht
+        # die des ganzen Körpers.
+        self.meshes.append(mesh)
         self.drawn.append(("mesh", kwargs))
         return object()
 
@@ -269,6 +274,17 @@ def _scene_with_two_holes() -> Any:
     )
 
 
+def _with_faces(result: Any, feature_id: str, faces: tuple[int, ...]) -> Any:
+    """Demselben Merkmal Dreiecke zuordnen, wie die Erkennung es täte."""
+    import dataclasses
+
+    entry = result.scene.objects["obj_1"]
+    merkmal = dataclasses.replace(entry.features[feature_id], face_indices=faces)
+    features = {**entry.features, feature_id: merkmal}
+    result.scene.objects["obj_1"] = dataclasses.replace(entry, features=features)
+    return result
+
+
 def test_the_chosen_feature_keeps_its_label_without_the_overlay(qt_app: QApplication) -> None:
     """Regel 18: Ohne Beschriftung wäre die Aussage allein die Farbe.
 
@@ -305,6 +321,57 @@ def test_the_chosen_feature_keeps_its_label_without_the_overlay(qt_app: QApplica
     )
     assert "8" in ohne_overlay[0], (
         f"und es ist die des gewählten (Ø 8), nicht die des anderen: {ohne_overlay[0]}"
+    )
+
+
+def test_only_the_triangles_of_the_feature_take_the_selection_colour(
+    qt_app: QApplication,
+) -> None:
+    """§18.5: Ein Klick auf eine Bohrung wählt zweierlei — den Körper und die
+    Stelle. Gefärbt wird die Stelle.
+
+    Vorher nahm der **ganze Körper** die Auswahlfarbe an, und die Bohrung, die
+    gemeint war, unterschied sich von der Wand daneben durch nichts. Der Rumpf,
+    der das behebt, liegt hinter der Offscreen-Wache und lief in keinem Test.
+
+    Geprüft wird die **Zahl der Dreiecke**, denn genau daran hängt die Aussage:
+    zwei zugeordnete gegen zwölf des Quaders. Ein Test, der nur fragt, ob
+    überhaupt eine Fläche gezeichnet wurde, wäre auch vor der Behebung grün
+    gewesen.
+
+    Dazu der Versatz entlang der Flächennormalen: Ohne ihn läge die Fläche
+    exakt auf dem Netz darunter, und welche von beiden man sieht, entschiede
+    der Tiefenpuffer. Die Punkte müssen also **neben** dem Original liegen.
+    """
+    import numpy as np
+
+    from app.ui.viewport import SELECTED_COLOUR, Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_with_faces(_scene_with_two_holes(), "hole_2", (0, 1)))
+    viewport._selected = "obj_1"
+    viewport._selected_feature = "hole_2"
+    plotter = _RecordingPlotter()
+    viewport.plotter = plotter
+
+    viewport._redraw_feature_patch()
+
+    flaeche = [kwargs for kind, kwargs in plotter.drawn if kwargs.get("name") == "feature-patch"]
+    assert flaeche, f"keine Merkmalsfläche gezeichnet — gezeichnet wurde: {plotter.names()}"
+    assert str(flaeche[0].get("color")) == str(SELECTED_COLOUR), (
+        "die Fläche nahm die Auswahlfarbe nicht an"
+    )
+
+    netz = plotter.meshes[-1]
+    assert netz.n_cells == 2, (
+        f"gefärbt sind die zwei Dreiecke des Merkmals, nicht die zwölf des Quaders: {netz.n_cells}"
+    )
+
+    original = np.asarray(viewport._result.scene.objects["obj_1"].mesh.raw.vertices, dtype=float)
+    punkte = np.asarray(netz.points, dtype=float)
+    abstand = np.min(np.linalg.norm(punkte[:, None, :] - original[None, :, :], axis=2), axis=1)
+    assert float(abstand.max()) > 0.0, (
+        "ohne Versatz liegt die Fläche exakt auf dem Netz, und der Tiefenpuffer entscheidet"
     )
 
 
