@@ -39,6 +39,26 @@ def test_a_body_that_shrank_shows_the_removed_volume() -> None:
     assert difference.added_volume < 1.0
 
 
+def test_a_body_that_did_not_change_is_not_a_failed_computation() -> None:
+    """Ein Vergleich, der nichts findet, hat nichts zu melden.
+
+    Aus dem Protokoll des ersten Kunden mit 0.1.3: zwölfmal
+    ``difference could not be computed: Es bleibt kein Körper übrig`` und ein
+    Befund im Prüfbericht daneben — für zwei Zustände, zwischen denen sich
+    schlicht nichts geändert hatte. Die Rechnung war nie gescheitert; sie war
+    leer, und leer ist hier die richtige Antwort.
+
+    Ohne ``allow_empty`` in :func:`_cut` wirft die Boolesche Kette an dieser
+    Stelle, und der Vergleich meldet einen Fehlschlag, den es nicht gab.
+    """
+    difference = compare(cube(20.0), cube(20.0))
+
+    assert not difference.changed
+    assert difference.added_volume < 1.0
+    assert difference.removed_volume < 1.0
+    assert not difference.findings, [str(entry.message) for entry in difference.findings]
+
+
 def test_a_body_that_moved_shows_both_sides() -> None:
     """Bewegen ist hier Entfernen und dort Hinzufügen — und die Ansicht sagt
     das.

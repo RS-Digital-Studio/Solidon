@@ -60,10 +60,20 @@ class MeshData:
 
     @property
     def volume(self) -> float:
+        # **Ein leeres Netz hat Volumen null und wirft nicht.** ``bounds``
+        # darüber fängt den Fall seit je ab, ``volume`` und ``area`` taten es
+        # nicht — dieselbe Klasse, zwei Haltungen. trimesh rechnet dort nicht
+        # null, sondern wirft ``ValueError: Triangles must be (n, 3, 3)!``,
+        # und das kam beim Vergleich zweier gleicher Zustände heraus, sobald
+        # die Boolesche Kette ein leeres Ergebnis durchlassen durfte.
+        if self.triangle_count == 0:
+            return 0.0
         return float(self.raw.volume)
 
     @property
     def area(self) -> float:
+        if self.triangle_count == 0:
+            return 0.0
         return float(self.raw.area)
 
     @property

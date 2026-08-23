@@ -132,10 +132,20 @@ def _cut(
     keep: MeshData, subtract: MeshData, quality: Quality
 ) -> tuple[MeshData, SolverInfo] | None:
     try:
-        outcome = boolean("difference", [keep, subtract], quality=quality)
+        # **``allow_empty``, weil hier nichts übrig zu bleiben braucht.** Ein
+        # Vergleich fragt „was kam dazu, was fiel weg" — und die Antwort ist oft
+        # „nichts". Ohne dieses Wort wirft die Kette dann ``BooleanFailedError``
+        # mit dem Titel „Es bleibt kein Körper übrig", ``_cut`` gibt ``None``
+        # zurück, und der Vergleich meldet, er habe nicht rechnen können. Das
+        # stimmte nie: Er hat gerechnet, und das Ergebnis war leer.
+        #
+        # Im Protokoll des ersten Kunden mit 0.1.3 stand das zwölfmal, mit einem
+        # Befund im Prüfbericht daneben — für zwei Zustände, zwischen denen sich
+        # schlicht nichts geändert hatte.
+        outcome = boolean("difference", [keep, subtract], quality=quality, allow_empty=True)
     except PROGRAMMING_ERRORS:
         raise
     except Exception as problem:  # Kerne scheitern auf kerneigene Arten
-        _log.info("difference could not be computed: %s", problem)
+        _log.warning("difference could not be computed: %s", problem)
         return None
     return outcome.mesh, outcome.solver
