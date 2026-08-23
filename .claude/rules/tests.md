@@ -114,6 +114,28 @@ rot endet**, ist kein roter Test. Drei Fensterdateien enden nach „N passed" mi
 Unterschied steht in `ROADMAP.md`; wer ihn nicht kennt, sucht den Fehler in
 einem Test, der nie fehlgeschlagen ist.
 
+**Und die Kehrseite davon, die genauso teuer ist: Ein `F` unmittelbar vor einem
+bekannten Riss sieht aus wie Teil des Risses.** Am 23.08.2026 stand im Torlauf
+vor dem Release
+
+    === tests/test_ui.py ===
+    ..............F.Windows fatal exception: access violation
+
+und wurde als ein einziges Ereignis gelesen — vierzehn Punkte, ein F, dann der
+bekannte Abriss. Gemeldet wurde „kein einziger echter Testfehler". Das `F` war
+eine Regression aus derselben Sitzung, die den Lauf fuhr; gefunden hat sie eine
+**zweite** Sitzung, die dieselbe Datei unabhängig gefahren hatte.
+
+Der Abschnitt darüber warnt vor der einen Richtung — einen Abriss für einen
+Testfehler zu halten. Diese hier ist die andere: **einen Testfehler für einen
+Abriss zu halten.** Wer nur eine der beiden kennt, macht zuverlässig die andere,
+und diese Richtung ist die gefährlichere — die erste kostet eine Stunde Suche,
+die zweite geht ins Paket.
+
+Praktisch: **Beim Melden eines Laufs gehört die Zahl der `F` dazu, nicht nur die
+Zusammenfassung.** Ein Riss verschluckt die Zusammenfassung, in der die Namen
+stünden; die Fortschrittszeichen davor überleben ihn.
+
 ## Ein roter Leistungstest ist erst dann eine Regression, wenn er es zweimal ist
 
 `tests/.performance.json` hält die Bestwerte, gegen die die 25-%-Schwelle
