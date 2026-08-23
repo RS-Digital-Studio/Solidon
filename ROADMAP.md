@@ -6467,6 +6467,40 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       bleiben getrennt zu führen.
 
 - [ ] **Fensterdateien enden mit Exit 127 — inzwischen drei, und wechselnde.**
+
+      **Belegt am 23.08.2026 über vier Läufe** (3d-druck-33):
+
+          Lauf 1   test_chat_ui (127)   test_first_run (127)
+          Lauf 2   test_chat_ui (127)   test_first_run (127)
+          Lauf 3   test_pose_session (127)
+          Lauf 4   test_ui (127)                        (Abbruch, zählt nicht)
+
+      Zwei sind **konsistent** dabei, die dritte kam ohne erkennbaren Anlass
+      dazu. **Damit scheidet eine Eigenschaft dieser zwei Dateien als Erklärung
+      aus** — der Punkt heißt richtiger *„Fensterdateien, meistens diese
+      zwei"*, und das macht ihn schwerer statt leichter.
+
+      **Er kostet inzwischen keine Zeit mehr, ist aber ungeklärt:**
+      `suite-getrennt.sh` zählt diese Läufe nicht mehr als Fehlschlag — es
+      erkennt sie an einer vollständigen Zusammenfassung ohne `failed`/`error`.
+      Im letzten Tor standen deshalb zwei Fehlläufe, obwohl vier Dateien mit
+      127 endeten.
+
+      **Die nächste Messung ist benannt und beantwortet die Frage in beide
+      Richtungen:** **127 ist eine Bash-Konvention** („command not found") —
+      was der Prozess *selbst* zurückgibt, hat noch niemand gelesen. Startet
+      man `pytest` direkt aus Python statt über die Shell, kommt der echte
+      Windows-Rückgabewert heraus. Der Verdacht ist
+      `STATUS_ENTRYPOINT_NOT_FOUND` (`0xC0000139`) oder
+      `ERROR_PROC_NOT_FOUND` — **beides DLL-Fehler beim Entladen**, was zu
+      einem Abriss beim Abbau mit Qt und VTK passt. Dann hieße der Punkt nicht
+      mehr „irgendein Abriss", sondern „eine Bibliothek wird in falscher
+      Reihenfolge entladen".
+
+      Zeigt die Messung dagegen wirklich 127, liegt es an der **Shell** und
+      nicht am Prozess — auch das ein Ergebnis, und der Punkt gehört dann
+      anders formuliert.
+
       `tests/test_chat_ui.py` (40 passed) und `tests/test_first_run.py`
       (45 passed) laufen vollständig grün durch und beenden sich dann mit 127.
       Nachgewiesen von solidon-17 im eigenen Arbeitsbaum auf HEAD — also weder
