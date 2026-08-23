@@ -456,3 +456,80 @@ Die drei Weisen, auf denen sie danebengingen, sind alle dieselbe:
 Und zweimal hat sie den *Fix* verworfen, nicht den Test: der Einzeiler traf die
 falsche von drei gleichen Codestellen, und ein Testfall löste den Fehler gar
 nicht aus. Beides wäre ohne sie eingecheckt worden.
+
+## Ein Verbotstest über eine leere Menge ist immer grün
+
+Die häufigste Form eines Tests in diesem Projekt ist der Verbotstest: Er filtert
+aus einer Menge die Verstöße heraus und sichert zu, dass keiner übrig bleibt.
+
+```python
+offenders = [f"{p.name}" for p in sorted(UI.glob("*.py")) if "setDefault(True)" in p.read_text()]
+assert not offenders, f"noch von Hand: {offenders}"
+```
+
+**Ist die Grundmenge leer, findet der Filter nichts, und der Test besteht** —
+nicht weil alles in Ordnung ist, sondern weil nichts geprüft wurde. Ein
+umbenannter Ordner, ein nicht geladenes Register, ein Widget ohne Größe: Der
+Test bleibt grün und niemand erfährt, dass er aufgehört hat zu prüfen.
+
+### Wann die Zusicherung nötig ist, und wann sie Zierat ist
+
+Am 23.08.2026 hat ein Registerpunkt vorgeschlagen, überall eine Zeile
+danebenzuschreiben. Angewandt auf 29 Kandidaten waren **14 echte Lücken** und
+15 nicht. Der Schnitt läuft entlang einer Frage:
+
+**Wird die Menge *erhoben* oder steht sie *da*?**
+
+| Herkunft | Beispiel | Zusicherung |
+|---|---|---|
+| Dateisystem | `UI.glob("*.py")`, `rglob` | **ja** — ein umbenannter Ordner ist still |
+| Ladevorgang | `rules.load()`, `manual.pages()`, `REGISTRY.all()` | **ja** — fehlende Daten sind still |
+| Gebaute Oberfläche | `findChildren(...)`, `panel._buttons.values()` | **ja** — ein Aufbaufehler ist still |
+| Rechenergebnis | `result.layers`, `island_layers(result)` | **ja** |
+| Konstante im Modul | `REQUIRED_LINKS`, `FIELDS` | nein — sie leert sich nicht von selbst |
+| Literal im Test | `{"Versatz": …, "Maß": …}` | nein |
+| Vereinigung mit Festwert | `{"de"} \| set(available_languages())` | nein — nie leer |
+
+Fünfzehn überflüssige Zeilen sind nicht harmlos: Beim nächsten Lesen
+unterscheidet sie niemand mehr von den vierzehn, die tragen.
+
+### Bei `parametrize` gehört sie in die Funktion, nicht in den Test
+
+Das ist der Fall, der am meisten kostet, wenn man ihn übersieht:
+
+```python
+@pytest.mark.parametrize("path", source_files(), ids=lambda p: p.name)
+def test_identifiers_are_english(path: Path) -> None: ...
+```
+
+Ist `source_files()` leer, wird **kein Test rot**. pytest sammelt null Tests,
+meldet `no tests ran` und gibt **Exit 5** — derselbe Exit, den `suite-getrennt.sh`
+seit einer Datei ohne passende Marker kennt, nur hier als *stiller Erfolg*. Eine
+Zusicherung im Testkörper fängt das nicht: Sie liefe nie.
+
+Sie gehört in die Funktion, die die Parameterliste liefert.
+
+**Und eine je Parameter ist falsch.** Der erste Anlauf setzte
+`assert list(identifiers_of(tree))` in den Test — **elf Fehlschläge**, weil eine
+leere `__init__.py` legitim keine Bezeichner hat. Was für die Gesamtmenge gilt,
+gilt nicht für jedes Element.
+
+### Obergrenzen sind der gefährlichste Fall
+
+`test_interface_limits.py` prüft lauter Obergrenzen: höchstens neun Menüs, zwölf
+Zeilen je Menü, acht Umschalter. **Ein leeres Register unterschreitet jede
+davon.** Ohne `load_operations()` hat es null statt 86 Operationen, und die
+ganze Datei wird grün, ohne eine einzige Grenze geprüft zu haben.
+
+Wo eine Datei viele Grenzen über derselben Menge prüft, steht die Zusicherung
+einmal als eigener Test — ein roter Test genügt, damit das Tor es merkt, und der
+Grund ist nur an einer Stelle zu pflegen.
+
+### Und die Gegenprobe gilt auch hier
+
+Grundmenge leeren, Test fahren, muss rot sein, zurückstellen. Sechs von sechs
+mutierbaren Fällen haben gegriffen — aber das ist kein Grund, sie zu lassen: Die
+Probe hat an anderer Stelle schon fünf überzeugend aussehende Tests verworfen.
+Wer sie automatisiert, packt die Rückstellung in ein `finally`; ein Abbruch
+zwischen Mutation und Rückstellung lässt sonst eine verfälschte Datei liegen —
+am 23.08.2026 einmal passiert, aufgefallen nur, weil danach ein `grep` lief.
