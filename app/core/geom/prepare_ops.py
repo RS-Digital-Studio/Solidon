@@ -234,25 +234,6 @@ def drill_hole(ctx: OpContext) -> OpResult:
     )
 
 
-@op_params
-class SplitPlaneParams(BaseParams):
-    axis: str = param(
-        title=_("Achse"),
-        default="z",
-        choices=_AXES,
-        doc=_("Senkrecht zu welcher Achse geschnitten wird. Z legt einen waagerechten Schnitt."),
-    )
-    position: float = param(
-        title=_("Position"),
-        default=0.0,
-        unit="mm",
-        doc=_(
-            "Wo die Schnittebene liegt, auf dieser Achse gemessen. Die Zahl bleibt "
-            "änderbar: ein Doppelklick auf den Schritt verschiebt den Schnitt."
-        ),
-    )
-
-
 def _both_halves_or_stop(first: MeshData, second: MeshData, position: float) -> None:
     """Hält an, wenn die Ebene den Körper gar nicht getroffen hat.
 
@@ -269,35 +250,6 @@ def _both_halves_or_stop(first: MeshData, second: MeshData, position: float) -> 
         detail=_("Diese Ebene teilt das Objekt nicht."),
         value=position,
         constraint="no_split",
-    )
-
-
-@register_op(
-    name="split_plane",
-    title=_("An Ebene teilen"),
-    category="prepare",
-    params=SplitPlaneParams,
-    consumes=1,
-    produces=2,
-    doc=_("Teilt ein Objekt an einer Ebene in zwei Hälften mit geschlossenen Schnittflächen."),
-)
-def split_plane(ctx: OpContext) -> OpResult:
-    params = cast(SplitPlaneParams, ctx.params)
-    source = ctx.inputs[0]
-    plane = SectionPlane(normal=AXIS_NORMALS[cast(Axis, params.axis)], position=params.position)
-    first, second, findings = split_at_plane(as_mesh_data(source.mesh), plane)
-    _both_halves_or_stop(first, second, params.position)
-    # Über dieselbe Namensbildung wie das verstiftete Teilen, obwohl hier nie
-    # Stifte entstehen: Wer eine Hälfte „Halter A · Stifte" hier weiterteilt,
-    # bekäme sonst „Halter A · Stifte A" — einen Zusatz, der von der Naht des
-    # *vorigen* Schnitts spricht und an dieser nichts zu suchen hat.
-    first_name, second_name = half_names(source.name, pinned=False)
-    return OpResult(
-        outputs=[
-            dataclasses.replace(source, mesh=first, name=first_name),
-            dataclasses.replace(source, mesh=second, name=second_name, features={}),
-        ],
-        findings=findings,
     )
 
 
@@ -773,10 +725,11 @@ class SplitPinnedParams(BaseParams):
 
 @register_op(
     name="split_pinned",
-    # Nicht mehr „Teilen und verstiften": Seit *An Ebene teilen* als Zwilling
-    # unter diesem Eintrag lebt (MENU_TWINS), ist es die eine Zeile für beides
-    # — mit Stiften und ohne. Ein Titel, der die Stifte verspricht, wäre für
-    # die Hälfte der Fälle falsch; das Feld *Passstifte* sagt, welcher gilt.
+    # Nicht mehr „Teilen und verstiften": Seit *An Ebene teilen* in dieser
+    # Operation aufgegangen ist (Formatversion 11), ist es die eine Zeile für
+    # beides — mit Stiften und ohne. Ein Titel, der die Stifte verspricht,
+    # wäre für die Hälfte der Fälle falsch; das Feld *Passstifte* sagt,
+    # welcher Fall gilt, und seine Null ist der ganze Unterschied.
     title=_("Teilen"),
     category="prepare",
     params=SplitPinnedParams,
@@ -822,7 +775,7 @@ def _cut_and_pin(
     diameter: float,
     play: float,
 ) -> OpResult:
-    """Der gemeinsame Teil von *Teilen und verstiften* und *An Linie trennen*.
+    """Der gemeinsame Teil von *Teilen* und *An Linie trennen*.
 
     Die beiden unterscheiden sich einzig darin, **woher die Ebene kommt** —
     aus einer Achse und einer Zahl oder aus zwei angeklickten Punkten. Alles

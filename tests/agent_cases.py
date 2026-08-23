@@ -83,7 +83,7 @@ CASES: tuple[Case, ...] = (
     Case(
         id="split",
         request="Teile das Teil auf halber Höhe.",
-        expects_ops=("split_plane",),
+        expects_ops=("split_pinned",),
     ),
     Case(
         id="drill",

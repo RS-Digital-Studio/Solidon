@@ -175,7 +175,7 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     "fillet_edges": ("abrunden", "rundung", "radius"),
     "chamfer_edges": ("kante brechen", "abschraegen", "45 grad"),
     "pattern": ("array", "vervielfaeltigen", "wiederholen"),
-    "split_plane": ("zerschneiden", "halbieren", "durchschneiden"),
+    "split_pinned": ("zerschneiden", "halbieren", "durchschneiden"),
     "union_objects": ("zusammenfuegen", "verschmelzen", "verbinden"),
     "subtract_objects": ("ausschneiden", "aussparen", "wegnehmen"),
     "label_text": ("gravieren", "beschriften", "praegen"),

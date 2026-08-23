@@ -120,7 +120,7 @@ def _call(index: int, name: str) -> ToolCall:
         arguments.update({"axis": "z", "angle": 90.0})
     elif name == "scale_object":
         arguments["factor"] = 1.2
-    elif name == "split_plane":
+    elif name == "split_pinned":
         arguments.update({"axis": "z", "position": 0.0})
     elif name == "drill_hole":
         arguments.update({"diameter": 5.0, "x": 0.0, "y": 0.0, "z": 4.0, "axis": "z"})

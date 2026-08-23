@@ -24,7 +24,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 10
+FORMAT_VERSION: Final = 11
 
 
 @dataclass(frozen=True, slots=True)
@@ -171,6 +171,30 @@ def _add_translatable_params(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _fold_split_plane_into_split_pinned(data: dict[str, Any]) -> dict[str, Any]:
+    """10 → 11: *An Ebene teilen* geht in *Teilen* auf (§25).
+
+    Die beiden Operationen rechneten dasselbe. ``split_plane`` war
+    ``split_pinned`` mit ``pins = 0`` — gemessen und nicht vermutet: gleiche
+    Hälften, gleiche Namen, gleiche Merkmale, gleiche Befunde. Zwei Einträge
+    dafür sind aus Kundensicht ein Ratespiel, und im Menü waren sie schon
+    zusammengelegt; erreichbar blieb der Zwilling aber weiter über die
+    Befehlspalette, und dort standen wieder zwei Zeilen, die dasselbe tun.
+
+    **Die Null ist der ganze Schritt, und sie muss ausdrücklich dastehen.**
+    Das Feld *Passstifte* hat als Vorgabe zwei Stifte, nicht null — wer den
+    Parameter wegließe, bekäme aus einem alten Projekt plötzlich ein
+    verstiftetes Teil. Alles andere (Achse, Position) heißt in beiden
+    Operationen gleich und wandert unverändert mit.
+    """
+    for operation in data.get("ops", []):
+        if operation.get("op") != "split_plane":
+            continue
+        operation["op"] = "split_pinned"
+        operation.setdefault("params", {})["pins"] = 0
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -182,6 +206,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=7, to_version=8, apply=carry_over),
     Step(from_version=8, to_version=9, apply=_add_feature_matches),
     Step(from_version=9, to_version=10, apply=_add_translatable_params),
+    Step(from_version=10, to_version=11, apply=_fold_split_plane_into_split_pinned),
 )
 
 

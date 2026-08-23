@@ -199,7 +199,7 @@ def test_export_refuses_a_halted_chain(tmp_path: Path, capsys: pytest.CaptureFix
     project.document.ops.append(
         Operation(
             id=99,
-            op="split_plane",
+            op="split_pinned",
             inputs=("obj_1",),
             params={"axis": "z", "position": 500.0},
         )

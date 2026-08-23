@@ -7716,3 +7716,82 @@ gehalten hätten.
       Widerrufsbelehrung. Der Abgleich konnte sie nicht sehen — er verglich
       Dateigrößen, und „Fassung" ist so lang wie „Version". Der eigene Punkt
       dazu steht unter „Das Fundament der Wahrnehmung".
+
+---
+
+## Zwei Menüzeilen, die dasselbe sagten, und zwei, die dasselbe taten (23.08.2026)
+
+Vier Funde aus derselben Frage — *was liest ein Kunde im Menü, und was
+bekommt er dann?* Drei davon waren Namen, einer war eine Operation zu viel.
+Alle vier gehen auf Roberts Satz zurück: „mach es aus Kundensicht perfekt, du
+sollst alles was du tust immer perfekt aus kundensicht machen."
+
+- [x] **Zwei Einträge hießen beide „vernetzen".** *Neu vernetzen* und
+      *Gleichmäßig vernetzen* standen untereinander. Der Unterschied ist echt
+      und stand nur im doc-Satz: Das eine **teilt** lange Kanten und lässt die
+      Form exakt, das andere teilt **und legt zusammen**, wodurch die Form sich
+      verschiebt. Wer den Satz nicht aufklappt, wählt eine der beiden und
+      hofft. Jetzt heißen sie *Kanten verfeinern* und *Dreiecke angleichen* —
+      der Titel allein trennt sie. `3910583`.
+
+      **Ein umbenannter Titel fasst mehr an, als man denkt: elf Stellen.** Fünf
+      Texte nannten ihn im Fließtext (Reparaturkette, Handbuch,
+      Erzeugungshinweis, Palettentext, Beispielskript), fünf Kataloge in beiden
+      Richtungen — Schlüssel **und** Wert, denn die Übersetzung nennt den
+      Menünamen in der Zielsprache —, dazu das Handbuch in sechs Sprachen.
+
+      **Die letzte Stelle lag außerhalb von `app/`**, und sie hat zwei
+      Nachbesserungen gekostet: `tools/make_examples.py` liest der Einsammler
+      über `EXTRA_SOURCES` mit. Ein Beispielskript, das einen Menünamen nennt,
+      ist auch ein Oberflächentext. Wer nur `app/` durchsucht, hält sich für
+      fertig und ist es nicht.
+
+- [x] **Neun tote Katalogschlüssel aus einer fremden Textdurchsicht.** Der
+      Quelltext sagt seit `62ac566` „exakter Körper" statt „B-Rep-Körper"; die
+      alten Einträge blieben stehen und machten `test_every_text_is_translated`
+      in **allen fünf Sprachen** rot — am `orphaned`-Zweig, nicht am fehlenden.
+      Eine Sitzung, die kurz darauf ein Release bauen wollte, stand vor einem
+      roten Tor und suchte bei sich.
+
+      **Die Lehre ist die Reihenfolge, nicht der Fehler:** Ein Titel ändern
+      heißt Kataloge in **beide** Richtungen nachziehen, und zwar im selben
+      Commit. Der Test prüft beides — deshalb fällt ein halber Nachzug nicht
+      dem Autor auf die Füße, sondern dem Nächsten.
+
+- [x] **`split_plane` war `split_pinned` mit null Stiften.** Zwei Operationen,
+      die dasselbe rechnen — gemessen an `cube_clean.stl` und nicht vermutet:
+      gleiche Hälften (4800 und 3200 mm³), gleiche Namen, gleiche Merkmale,
+      gleiche Befunde. Robert hat entschieden, dass sie zusammengehen; die
+      Migration 10 → 11 setzt `pins = 0`.
+
+      **Sie war schon halb zusammengelegt, und das war das eigentlich
+      Interessante.** Über `MENU_TWINS` verschwand *An Ebene teilen* aus dem
+      Menü — in der **Befehlspalette** stand es weiter, direkt neben *Teilen*.
+      Gemessen: 87 Palettenzeilen, zwei davon dasselbe. Derselbe Fehler eine
+      Ebene tiefer. `MENU_TWINS` versteckt das Menü und sonst nichts; ein
+      Zwilling, der keinen eigenen Umschalter braucht, gehört deshalb nicht in
+      die Tabelle, sondern in eine Migration.
+
+      **Die Null muss ausdrücklich in der Datei stehen.** Das Feld
+      *Passstifte* hat als Vorgabe **zwei**. Wer den Parameter in der Migration
+      wegließe, bekäme aus einem alten Projekt ein verstiftetes Teil — zwei
+      Zapfen und zwei Bohrungen, die dort nie waren. Der Test misst deshalb
+      Volumen und Merkmale, nicht den Operationsnamen: Volumen allein fängt
+      einen Zapfen samt Gegenbohrung nicht, die beiden heben sich fast auf.
+
+- [x] **`brep_to_mesh` zeigte einen Dialog aus einem Satz und einem leeren
+      Aufklapper.** Die Operation hat genau ein Feld — *Feinheit* —, und das
+      stand hinten. Nichts zu entscheiden, und trotzdem OK klicken. Dabei ist
+      es genau das Feld, das später alles bestimmt: Der doc-Satz nennt die
+      Umwandlung selbst unumkehrbar („die Kanten sind danach fort"). Wer mit
+      0,05 mm umwandelt und danach merkt, dass es zu grob war, muss den Schritt
+      zurücknehmen — und dafür muss er wissen, dass es die Einstellung gibt.
+      Gefunden von 3d-druck-b8 beim Vermessen aller 82 Dialogvorderseiten,
+      gebaut hier.
+
+- [x] **Die Website nannte 87 Operationen, das Register führt 86.** Achtzehn
+      Stellen in sechs Sprachen, gefunden vom eigenen Test und nicht von Hand.
+      Ersetzt wurde mit **demselben Ausdruck, den der Test benutzt** — und
+      unter Auslassung der Inline-SVGs, die erfundene Beispielzahlen tragen.
+      Eine Zahl auf einer Verkaufsseite ist eine Zusage; wer eine Operation
+      entfernt, hat sie zurückzunehmen.

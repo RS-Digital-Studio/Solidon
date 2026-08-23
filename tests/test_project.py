@@ -540,6 +540,44 @@ def test_a_bore_from_an_older_file_stays_where_it_was() -> None:
     assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(31276.892, abs=0.01)
 
 
+def test_a_file_that_split_at_a_plane_still_splits_the_same() -> None:
+    """10 → 11: *An Ebene teilen* ist in *Teilen* aufgegangen (§25).
+
+    Die eingecheckte Datei schneidet einen 20er-Würfel bei z = 2 — vier
+    Fünftel unten, ein Fünftel oben. Sie tut es mit ``split_plane``, der
+    Operation, die es nicht mehr gibt.
+
+    **Gemessen werden die Hälften, nicht der Operationsname.** Dass in der
+    Datei jetzt ``split_pinned`` steht, sagt noch nicht, dass dasselbe
+    herauskommt: Das Feld *Passstifte* hat als Vorgabe zwei Stifte, und wer
+    die Null in der Migration vergäße, bekäme aus einem alten Projekt ein
+    verstiftetes Teil — zwei Bohrungen und zwei Zapfen, die dort nie waren.
+    Deshalb steht hier ein Volumen und keine Zeichenkette.
+    """
+    from app.core.knowledge import profiles
+    from app.core.scene import evaluate
+
+    project = load(Path(__file__).parent / "data" / "projects" / "split_v10.p3d")
+
+    assert project.document.format_version == FORMAT_VERSION
+    assert [entry.op for entry in project.document.ops] == ["load", "split_pinned"]
+    assert project.document.ops[-1].params["pins"] == 0
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, "eine migrierte Datei muss durchrechnen, nicht nur öffnen"
+    volumes = sorted(entry.mesh.volume for entry in result.scene.objects.values())
+    assert volumes == [pytest.approx(3200.0, rel=1e-6), pytest.approx(4800.0, rel=1e-6)]
+    for entry in result.scene.objects.values():
+        assert entry.mesh.is_watertight
+    # Keine Stifte heißt: keine Stiftmerkmale. Der Beleg dafür, dass die Null
+    # angekommen ist — Volumen allein fängt einen Zapfen samt Gegenbohrung
+    # nicht, die beiden heben sich fast auf.
+    for entry in result.scene.objects.values():
+        assert not [name for name in entry.features if "pin" in name or "bore" in name]
+
+
 def test_a_file_from_before_the_print_settings_has_none() -> None:
     """3 → 4: keine eigenen Druckeinstellungen heißt nicht „alles auf null",
     sondern „noch nichts entschieden" — es gilt weiter, was sich aus Stufe,

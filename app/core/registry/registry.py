@@ -112,10 +112,6 @@ MENU_TWINS: Final[dict[str, str]] = {
     "create_brep_box": "create_box",
     "create_brep_cylinder": "create_cylinder",
     "drill_brep_hole": "drill_hole",
-    # *An Ebene teilen* ist *Teilen* mit ``pins = 0``. Zwei Menüzeilen, die
-    # sich in einer Zahl unterscheiden und beide „teilen" heißen — der
-    # Umschalter dafür stand schon im Dialog, es war das Feld *Passstifte*.
-    "split_plane": "split_pinned",
 }
 
 #: Der Umschalter der beiden Rechenkerne. Einmal geschrieben und zweimal
@@ -146,9 +142,13 @@ _EXACT_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
 #: drittes Paar hätte einen Haken bekommen, der von einem exakten Körper
 #: spricht, den es nicht gibt.
 #:
-#: Wer hier fehlt, hat keinen eigenen Umschalter. Sein Weg ist ein Wert im
-#: Dialog des Partners — bei ``split_plane`` die Null im Feld *Passstifte* —,
-#: und erreichbar bleibt er über Befehlspalette und Verlauf.
+#: Wer hier fehlt, hat keinen eigenen Umschalter, und dann muss es einen
+#: anderen Weg zu ihm geben: einen Wert im Dialog des Partners, der dasselbe
+#: bewirkt. Gibt es den nicht, gehört das Paar nicht in diese Tabelle,
+#: sondern in eine Migration — so ist es ``split_plane`` ergangen, das
+#: *Teilen* mit null Stiften war und in Formatversion 11 darin aufgegangen
+#: ist. Ein versteckter Zwilling ohne Umschalter wäre sonst eine zweite Zeile
+#: in der Befehlspalette, die dasselbe tut wie die erste.
 TWIN_TOGGLES: Final[dict[str, tuple[TranslatableText, TranslatableText]]] = {
     "create_brep_box": _EXACT_TOGGLE,
     "create_brep_cylinder": _EXACT_TOGGLE,

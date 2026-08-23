@@ -515,7 +515,7 @@ def test_splitting_runs_as_an_operation(document: Document, profile: Profile) ->
     project, history = loaded(document)
     history.apply(
         _("Teilen"),
-        [OperationDraft(op="split_plane", inputs=("obj_1",), params={"axis": "z"})],
+        [OperationDraft(op="split_pinned", inputs=("obj_1",), params={"axis": "z", "pins": 0})],
     )
 
     result = evaluate(document, profile, sources=ProjectSources(project))
@@ -543,7 +543,9 @@ def test_a_plane_beside_the_body_stops_instead_of_making_a_ghost(
         _("Teilen"),
         [
             OperationDraft(
-                op="split_plane", inputs=("obj_1",), params={"axis": "z", "position": 60.0}
+                op="split_pinned",
+                inputs=("obj_1",),
+                params={"axis": "z", "position": 60.0, "pins": 0},
             )
         ],
     )
@@ -725,7 +727,7 @@ def test_arranging_by_material_respects_the_plate_limit(
 def test_the_preparation_operations_are_registered_completely() -> None:
     assert REGISTRY.get("drill_hole").applies_to == ("face",)
     assert REGISTRY.get("drill_hole").requires_seed, "it uses the boolean fallback chain"
-    assert REGISTRY.get("split_plane").produces == 2
+    assert REGISTRY.get("split_pinned").produces == 2
     assert REGISTRY.get("arrange_bed").produces == VARIABLE
     assert REGISTRY.get("check_collisions").produces == VARIABLE
 

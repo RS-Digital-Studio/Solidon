@@ -285,23 +285,32 @@ def test_a_note_from_another_language_is_replaced_too() -> None:
 # --- zusammengelegte Zwillinge ------------------------------------------------------
 
 
-def test_a_twin_without_a_toggle_gets_none() -> None:
-    """`MENU_TWINS` hing an einer festen Beschriftung, und damit an B-Rep.
+def test_splitting_at_a_plane_is_not_a_second_operation() -> None:
+    """*An Ebene teilen* ist keine eigene Operation mehr, und das mit Absicht.
 
-    Der Haken „Exakter Körper (B-Rep)" stand als Zeichenkette in der
-    Oberfläche und „(Umschalter „Exakt")" im Menüweg. Ein drittes Paar hätte
-    beides geerbt — *An Ebene teilen* unter *Teilen* mit einem Haken, der von
-    einem exakten Körper spricht, den es dort nicht gibt. Sein Umschalter ist
-    ein Wert im selben Dialog: die Null im Feld *Passstifte*.
+    Sie war ``split_pinned`` mit ``pins = 0`` — gemessen an cube_clean.stl:
+    dieselben Hälften, dieselben Namen, dieselben Merkmale. Eine Weile lebte
+    sie als versteckter Zwilling unter *Teilen* (``MENU_TWINS``), und das war
+    ein halber Schritt: aus dem Menü war sie fort, in der Befehlspalette stand
+    sie weiter — zwei Zeilen, die dasselbe tun, nur eine Ebene tiefer.
+
+    Ein Zwilling ohne eigenen Umschalter ist deshalb kein Fall für die
+    Tabelle, sondern für eine Migration. ``split_plane`` ist in Formatversion
+    11 in *Teilen* aufgegangen; ihr Weg ist die Null im Feld *Passstifte*.
     """
     from app.core.registry import MENU_TWINS, TWIN_TOGGLES
-    from app.core.registry.surfaces import menu_path
 
-    assert MENU_TWINS["split_plane"] == "split_pinned"
-    assert "split_plane" not in TWIN_TOGGLES, "kein eigener Haken"
-    assert "split_plane" not in menu_path(REGISTRY.get("split_plane"))
-    assert "Exakt" not in menu_path(REGISTRY.get("split_plane"))
-    assert "Exakt" in menu_path(REGISTRY.get("create_brep_box")), "die B-Rep-Paare behalten ihn"
+    names = {spec.name for spec in REGISTRY.all()}
+    assert "split_plane" not in names, "die Operation ist migriert, nicht versteckt"
+    assert "split_plane" not in MENU_TWINS
+    assert "split_plane" not in TWIN_TOGGLES
+
+    # Was von ihr gebraucht wird, kann der Partner: null Stifte heißt schneiden.
+    # Und die Vorgabe ist *nicht* null — deshalb trägt die Migration sie
+    # ausdrücklich ein, statt den Parameter wegzulassen.
+    pins = next(f for f in REGISTRY.get("split_pinned").params.fields() if f.name == "pins")
+    assert pins.metadata["param"]["minimum"] == 0, "ohne die Null geht die Migration nicht"
+    assert pins.default != 0, "wäre sie null, bräuchte die Migration den Parameter nicht"
 
 
 def test_every_toggle_belongs_to_a_twin() -> None:
