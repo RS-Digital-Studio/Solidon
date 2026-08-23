@@ -222,16 +222,24 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
         # ``release`` zuerst, weil es mehr tut als warten; danach alles, was
         # ``wait_for_`` heißt. Ein Name, den es noch nicht gibt, ist damit schon
         # abgedeckt.
-        release = getattr(widget, "release", None)
+        # **Von der Klasse geholt, nicht vom Objekt** — und das ist kein Stil.
+        # ``getattr(objekt, "name")`` erzeugt eine **gebundene** Methode, und
+        # die hält ihr ``__self__``. Die Variable überlebt den Schleifendurchlauf
+        # und hält damit das zuletzt behandelte Fenster bis zum nächsten
+        # Testende fest: **Die Aufräumfixture hielt selbst ein Widget, das sie
+        # loslassen sollte.** Gefunden am 23.08.2026 von 3d-druck-b8, deren
+        # eigener Lebensdauertest dieselben vier Zeilen trug und deshalb
+        # „1 von 10 überlebten" meldete — nie null, nie zehn, immer genau eines.
+        release = getattr(type(widget), "release", None)
         if callable(release):
-            release()
+            release(widget)
         else:
-            for name in sorted(dir(widget)):
+            for name in sorted(dir(type(widget))):
                 if not name.startswith("wait_for_"):
                     continue
-                waiter = getattr(widget, name, None)
+                waiter = getattr(type(widget), name, None)
                 if callable(waiter):
-                    waiter()
+                    waiter(widget)
     # **Die Zählung, mit der sich das Anhäufen messen lässt.**
     #
     # Am 23.08.2026 ließ sich der wandernde Absturz in test_ui.py nicht
