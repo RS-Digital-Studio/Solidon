@@ -42,6 +42,7 @@ from app.core.types import (
     SolverInfo,
     Transform,
 )
+from app.i18n import TranslatableText
 
 _log = get_logger(__name__)
 
@@ -252,6 +253,44 @@ def _feature_from_data(data: dict[str, Any]) -> Feature:
     )
 
 
+def _name_to_data(name: TranslatableText | str) -> str | dict[str, Any]:
+    """Der **stabile** Teil eines Objektnamens, nicht seine Übersetzung.
+
+    Seit Objektnamen aus dem Register kommen, ist ``SceneObject.name`` ein
+    :class:`TranslatableText` und kein ``str`` — und ``json.dumps`` kann den
+    nicht ablegen. Der Eintrag fiel darum still durch den ``except``-Zweig
+    weiter unten, der für nicht ablegbare B-Rep-Körper gedacht ist: Ein
+    einziger übersetzter Name ließ den Cache-Eintrag der **ganzen** Auswertung
+    fallen, also rechnete jedes konstruierte Projekt bei jeder Auswertung neu.
+    Gefunden am 23.08.2026 beim Handlauf von Weg 2, an einer Zeile im
+    Protokoll: ``Object of type TranslatableText is not JSON serializable``.
+
+    **Abgelegt wird die Message-ID, nie ``str(...)``.** Die Übersetzung wechselt
+    mit der Sprache; ein Cache, der sie speicherte, gäbe einen deutschen Namen
+    zurück, sobald jemand die Oberfläche umstellt — ein Fehler, den nur ein
+    warmer Cache zeigt. Dasselbe tut :func:`~app.core.scene.serialise.
+    transaction_to_data` für den Titel einer Transaktion, dort über drei
+    Felder; hier genügt eines, weil der Name allein steht.
+
+    Was ein Nutzer selbst benannt hat, ist ein ``str`` und bleibt einer.
+    """
+    if isinstance(name, TranslatableText):
+        return {"msgid": name.msgid, "context": name.context}
+    return str(name)
+
+
+def _name_from_data(data: str | dict[str, Any]) -> TranslatableText | str:
+    """Gegenstück zu :func:`_name_to_data`.
+
+    Eine schlichte Zeichenkette ist ein selbst vergebener Name — **und ein
+    Eintrag aus einem älteren Cache**, der die Unterscheidung noch nicht
+    kannte. Beide sind wörtlich gemeint und bleiben es.
+    """
+    if isinstance(data, dict):
+        return TranslatableText(data["msgid"], data.get("context"))
+    return data
+
+
 def _slot_to_data(slot: MaterialSlot) -> dict[str, Any]:
     return {
         "index": slot.index,
@@ -350,7 +389,7 @@ class DiskCache:
             objects = tuple(
                 SceneObject(
                     id=entry["id"],
-                    name=entry["name"],
+                    name=_name_from_data(entry["name"]),
                     mesh=self.codec.loads((folder / entry["mesh"]).read_bytes()),
                     kind=entry["kind"],
                     features={
@@ -397,7 +436,7 @@ class DiskCache:
                 entries.append(
                     {
                         "id": entry.id,
-                        "name": entry.name,
+                        "name": _name_to_data(entry.name),
                         "mesh": name,
                         "kind": entry.kind,
                         "features": {

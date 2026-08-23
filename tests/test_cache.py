@@ -12,6 +12,7 @@ import pytest
 from app.core.scene.cache import CachedResult, DiskCache, ResultCache
 from app.core.scene.hashing import digest, object_hash, operation_hash, profile_key
 from app.core.types import Mesh, Operation, Profile, SceneObject
+from app.i18n import TranslatableText
 from tests.conftest import FakeMesh, make_object
 
 
@@ -701,3 +702,69 @@ def test_every_caller_says_whether_the_result_may_go_to_disk() -> None:
         "these put a result into the cache without saying whether it may be kept: "
         + ", ".join(offenders)
     )
+
+
+def test_a_translatable_object_name_does_not_drop_the_whole_entry(tmp_path: Path) -> None:
+    """Ein übersetzbarer Name ließ den Cache-Eintrag der ganzen Auswertung fallen.
+
+    Seit Objektnamen aus dem Register kommen, ist ``SceneObject.name`` ein
+    ``TranslatableText``. ``json.dumps`` kann den nicht ablegen, und der
+    ``TypeError`` landete im ``except``-Zweig, der für nicht ablegbare
+    B-Rep-Körper gedacht ist: Der Ordner wurde weggeräumt, das Protokoll bekam
+    eine Zeile, und für den Kunden rechnete jedes konstruierte Projekt bei
+    jeder Auswertung neu — ohne dass etwas falsch war, nur langsam.
+
+    Dieser Test prüft **beides**: dass der Eintrag entsteht, und dass der Name
+    seine Message-ID behält statt seiner Übersetzung.
+    """
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    named = SceneObject(
+        id="obj_1",
+        name=TranslatableText("Quader"),
+        mesh=FakeMesh(triangles=42),  # type: ignore[arg-type]
+    )
+    disk.put("key", CachedResult(objects=(named,)))
+
+    restored = DiskCache(codec=FakeCodec(), directory=tmp_path).get("key")
+    assert restored is not None, "der Eintrag fiel weg, statt geschrieben zu werden"
+    assert restored.objects[0].name == TranslatableText("Quader")
+
+
+def test_a_cached_name_is_stored_as_its_message_id(tmp_path: Path) -> None:
+    """Nie die Übersetzung — die wechselt mit der Sprache, der Cache nicht.
+
+    Läge der übersetzte Text in der Datei, bekäme der Kunde nach einem
+    Sprachwechsel den alten Namen zurück: ein Fehler, den nur ein **warmer**
+    Cache zeigt und den darum niemand beim Entwickeln sieht.
+    """
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put(
+        "key",
+        CachedResult(
+            objects=(
+                SceneObject(
+                    id="obj_1",
+                    name=TranslatableText("Quader"),
+                    mesh=FakeMesh(triangles=1),  # type: ignore[arg-type]
+                ),
+            )
+        ),
+    )
+
+    written = json.loads(next(tmp_path.rglob("objects.json")).read_text(encoding="utf-8"))
+
+    assert written["objects"][0]["name"] == {"msgid": "Quader", "context": None}
+
+
+def test_a_self_chosen_name_stays_a_plain_string(tmp_path: Path) -> None:
+    """Was ein Nutzer selbst benannt hat, wird nicht übersetzt — und ein
+    Eintrag aus einem älteren Cache, der die Unterscheidung noch nicht kannte,
+    ist ebenfalls eine schlichte Zeichenkette und bleibt lesbar."""
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    disk.put("key", CachedResult(objects=(make_object("obj_1", name="Meine Halterung"),)))
+
+    restored = DiskCache(codec=FakeCodec(), directory=tmp_path).get("key")
+
+    assert restored is not None
+    assert restored.objects[0].name == "Meine Halterung"
+    assert not isinstance(restored.objects[0].name, TranslatableText)
