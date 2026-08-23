@@ -93,7 +93,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
-| Kein Test prüft, womit ein Beispiel den Kunden begrüßt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Prüfung über die Befunde beim Öffnen, mit einer Liste der erwarteten statt einer Schwelle von null — `SETTLED_BY` gibt es schon, die Prüfung nicht |
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
 | Ein gescheiterter Merge ist ein Eingriff, kein Nichts | Das Fundament der Wahrnehmung (22.08.2026) | eine Regel im Verfahren: Wer einen Merge abbricht, prüft danach `git status` **und** `git stash list`. Der Autostash überlebt den Abbruch nicht zuverlässig und trifft im geteilten Baum fremde Arbeit |
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
@@ -101,9 +100,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `test_ui.py` reißt unzuverlässig (1/3 ruhig, 5/5 unter Last) | Das Fundament der Wahrnehmung (22.08.2026) | den Fix an `leash.wait_for_all`, gemessen von 3d-druck-b8 — und die Lehre daneben: dieselbe Zahl (5/5) wurde neben einem Torlauf als Fremdlast gedeutet und unter Schloss auf leerer Maschine widerlegt |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
 | Der Fenstertitel sagt „Unbenannt“, während der Objektbaum den Namen zeigt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert — sachlich richtig (es gibt keine Projektdatei), aber der Kunde hat gerade `plate_holes` geöffnet. Keine Logikfrage |
-| Die deutsche Quelle trennt die Fläche nicht von der Belegung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | 36 Stellen „Druckplatte“ → „Druckbett“ — und **jede ändert einen Katalogschlüssel**, alle fünf Sprachen fielen auf einmal auf unübersetzt zurück. Kein Eingriff für den Tag vor einem Release; solange die Quelle nicht trennt, sammelt jede Übersetzungsrunde einen Teil davon wieder ein |
 | Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
-| Eine Fremdmeldung sagt „Netzwerk“ und meint „Platte voll“ | Vier Wege von Hand, während die Suite grün war (23.08.2026) | einen Satz in `comfy_setup`: Beim Einrichten von Weg 3 brach der 7,5-GB-Download dreimal mit `Background writer channel closed` ab, und `C:` hatte null Byte frei. Die Regel „Fehler des fremden Programms durchreichen“ bleibt richtig — wo wir **mehr** wissen als es, gehört das dazu |
 | Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374 |
 | Ein Importzyklus in `app/core/scene` | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Auflösung von `scene/__init__.py` ↔ `scene/history.py`. Latent, solange nur ein Thread importiert — zwei Threads gaben **5 von 5** Fehlschlägen. Kein Startzeit-Thema: die Ersparnis dort wäre 37 ms |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
@@ -4282,8 +4279,14 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       Manifest eingecheckt: Dann sieht jede Sitzung am Diff, ob es passt. Wenn
       nein, bleibt das Ansagen die einzige Abhilfe. **Gemessen hat das niemand.**
 
-- [ ] **Eine Fremdmeldung sagt „Netzwerk“ und meint „Platte voll“.** Beim
+- [x] **Eine Fremdmeldung sagt „Netzwerk“ und meint „Platte voll“.** Beim
       Einrichten von Weg 3 am 23.08.2026 brach der 7,5-GB-Download dreimal ab:
+
+      **Gebaut am 23.08.2026** (`940234d`): `fetch_weights` prüft den freien Platz
+      **vor** dem Download (`NEEDED_GIGABYTES`, 9 GB für 7,5 GB Gewichte plus Luft)
+      und nennt in der Meldung den freien Platz, den nötigen und den Ort der
+      Gewichte — damit einen Handlungsvorschlag statt einer Diagnose. Zwei Tests,
+      gegengeprobt.
 
           RuntimeError: File reconstruction error: Internal Writer Error:
           Background writer channel closed
@@ -4319,9 +4322,24 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       Projektdatei —, aber der Kunde hat gerade etwas geöffnet, das einen Namen
       hat. **Keine Logikfrage, sondern eine Geschmacksfrage an Robert.**
 
-- [ ] **Die deutsche Quelle trennt die Fläche nicht von der Belegung — und das
+- [x] **Die deutsche Quelle trennt die Fläche nicht von der Belegung — und das
       ist die Wurzel unter allen Übersetzungsfunden dieses Tages.** Gezählt am
       23.08.2026:
+
+      **Gebaut am 23.08.2026** (`01815fd`, `b880151`, 3d-druck-3a; Website und
+      Handbuch `d60b40a`). **21 Schlüssel in 14 Dateien, alle von Hand** — ein
+      Skript ging nicht, weil „Platte“ feminin und „Bett“ neutrum ist und in
+      einem Satz das Pronomen mitwandert (*„Wie warm die Platte ist. **Sie**
+      hält das Teil“* → *„…das Bett ist. **Es** hält das Teil“*).
+
+      **Es waren 21 und nicht 36:** Gezählt worden waren Vorkommen, sortiert
+      werden musste nach Bedeutung. Zwei liefen sogar **gegenläufig** —
+      Belegung, die „Bett“ sagte. Wer nur ersetzt, macht die schlimmer.
+
+      Die Kataloge kostete es nichts: Schlüssel umbenannt, Wert übernommen.
+      **Und eine fünfte Fundstelle war die Festplatte** (*„Liegt die Datei noch
+      nicht auf der Platte“*) — ein drittes Wort für dasselbe Zeichen, beinahe
+      mit umbenannt.
 
           Druckbett     10 x        dieselbe Flaeche, zwei Woerter
           Druckplatte   36 x
@@ -4581,11 +4599,19 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       gegriffen. Sind beide `cost`, liegt der Unterschied im Bezugssystem
       (Zentrum, Diagonale, `old_centre`).
 
-- [ ] **Kein Test prüft, womit ein Beispiel den Kunden begrüßt.**
+- [x] **Kein Test prüft, womit ein Beispiel den Kunden begrüßt.**
       `test_examples.py` prüft, dass jedes öffnet und rechnet, und
       `test_no_example_greets_with_a_contradiction` fängt Widersprüche. Elf
       Warnungen in den Vorzeigebeispielen sind an keiner Prüfung
       vorbeigekommen — sie sind an gar keiner angekommen.
+
+      **Gebaut am 23.08.2026** (`09e7a93`, 3d-druck-33).
+      `test_no_example_greets_the_customer_with_a_warning` prüft in **drei**
+      Richtungen: eine Warnung ohne Eintrag ist rot, ein Eintrag ohne Warnung
+      ist rot (damit eine gelöste Warnung ihre Zeile verliert), und ein Eintrag
+      für ein Beispiel, das es nicht gibt, ebenso. Die Ausnahmeliste trägt 23
+      Zeilen, jede mit eigenem Grund — keine Obergrenze, wie der Punkt es
+      verlangt hatte.
 
       Der Mechanismus dafür steht schon: `SETTLED_BY` streicht Warnungen, die
       spätere Schritte beheben (`b5bd8d3`, „Zwei Beispiele begrüßten mit
