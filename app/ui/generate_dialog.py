@@ -40,7 +40,7 @@ from app.core.errors import CANCEL, AppError
 from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.labels import localised
-from app.ui.leash import Worker, WorkerLeash
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 
 _log = get_logger(__name__)
@@ -557,6 +557,22 @@ class GenerateDialog(QDialog):
         """
         self.wait_for_workers()
         super().reject()
+
+    def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
+        """Alles loslassen, was dieses Fenster außerhalb von Qt hält.
+
+        **Ein Name für den Aufräumbefehl, auf allen Klassen, die Arbeiter
+        halten.** Es waren fünf — ``release``, ``wait_for_workers``,
+        ``wait_for_survey``, ``wait_for_look``, ``wait_for_setup`` —, und wer
+        eine Testfixture darauf baute, sammelte sie nacheinander ein: erst
+        zwei, dann drei, dann vier. Der fünfte fehlte, und der Prozess starb
+        beim Abbau an einem Thread, der sein Fenster überlebt hatte.
+
+        Der fachliche Name daneben bleibt: ``wait_for_workers`` tut hier schon dasselbe;
+        ``release`` ist der
+        Name, unter dem es von außen gefunden wird.
+        """
+        self.wait_for_workers(timeout_ms)
 
     def wait_for_workers(self, timeout_ms: int = WAIT_MILLISECONDS) -> None:
         """Kein Arbeiter überlebt diesen Dialog.

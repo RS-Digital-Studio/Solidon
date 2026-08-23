@@ -37,7 +37,7 @@ from app.core import updates
 from app.core.errors import AppError, OperationCancelled
 from app.core.scene.cancel import CancelSignal
 from app.i18n import tr
-from app.ui.leash import Worker, WorkerLeash
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import make_primary
 
 #: Wie hoch die Liste der Neuerungen höchstens wird, bevor sie rollt.
@@ -288,6 +288,25 @@ class UpdateDialog(QDialog):
         """Auch das Unerwartete löst den Wartezustand auf (siehe
         :mod:`app.ui.leash`)."""
         self._show_problem(tr("Das Laden ist unerwartet abgebrochen: {reason}").format(reason=text))
+
+    def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
+        """Alles loslassen, was dieser Dialog außerhalb von Qt hält.
+
+        **Diese Klasse hatte gar nichts** — eine ``WorkerLeash`` und keinen Weg,
+        ihr zu sagen, dass Schluss ist. Unauffällig war das nur, solange jeder
+        Test sie schließt: Der Weg über ``reject``/``closeEvent`` wartet, der
+        Weg über das Wegräumen nicht. Genau so stand es beim Erstlauf-Dialog,
+        bis ein Test die Sprachliste las und nie schloss — dann stirbt der
+        Prozess beim Abbau, und die Ursache steht drei Dateien weiter.
+
+        Ein laufender Download wird abgebrochen und nicht abgewartet: Er
+        kann Minuten dauern, und ein Fenster, das beim Schließen minutenlang
+        steht, ist schlimmer als ein abgebrochener Download.
+        """
+        worker = self._worker
+        if worker is not None:
+            worker.cancelled.cancel()
+        self._leash.wait_all(timeout_ms)
 
     def _worker_done(self) -> None:
         self._worker = None

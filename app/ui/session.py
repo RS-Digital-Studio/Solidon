@@ -1425,6 +1425,24 @@ class Session(QObject):
             return
         self.busyChanged.emit(False)
 
+    def release(self, timeout_ms: int = 10_000) -> None:
+        """Alles loslassen, was diese Sitzung außerhalb von Qt hält.
+
+        **Kein Widget und trotzdem hier**: Die Sitzung hält eine
+        ``WorkerLeash`` wie die zehn Fenster, und wer eine davon aufräumt,
+        soll nicht wissen müssen, ob er ein Fenster oder eine Sitzung vor
+        sich hat. ``MainWindow.release`` ruft heute ``cancel`` und
+        ``wait_for_idle`` einzeln — beides steht jetzt auch unter dem Namen,
+        unter dem der Rest des Hauses aufräumt.
+
+        Der fachliche Name daneben bleibt: ``wait_for_idle`` beantwortet die
+        Frage „rechnet noch jemand?" und wird an Stellen gebraucht, die nicht
+        aufräumen, sondern abwarten.
+        """
+        self.cancel()
+        self.wait_for_idle(timeout_ms)
+        self._leash.wait_all()
+
     def wait_for_idle(self, timeout_ms: int = 10_000) -> None:
         """Blockiert, bis kein Lauf mehr übrig ist — auch der nicht, den eine
         Entprellung eingereiht hat.

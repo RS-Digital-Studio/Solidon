@@ -36,7 +36,7 @@ from PySide6.QtWidgets import (
 from app.core.backends import comfy_setup
 from app.core.log import get_logger
 from app.i18n import tr
-from app.ui.leash import Worker, WorkerLeash
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import set_level
 
 _log = get_logger(__name__)
@@ -206,6 +206,30 @@ class ComfySetupDialog(QDialog):
         """Auf den Lauf warten. Beim Schließen und in Tests."""
         worker = self._worker
         return worker.wait(milliseconds) if worker is not None else True
+
+    def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
+        """Alles loslassen, was dieses Fenster außerhalb von Qt hält.
+
+        **Ein Name für den Aufräumbefehl, auf allen Klassen, die Arbeiter
+        halten.** Es waren fünf — ``release``, ``wait_for_workers``,
+        ``wait_for_survey``, ``wait_for_look``, ``wait_for_setup`` —, und wer
+        eine Testfixture darauf baute, sammelte sie nacheinander ein: erst
+        zwei, dann drei, dann vier. Der fünfte fehlte, und der Prozess starb
+        beim Abbau an einem Thread, der sein Fenster überlebt hatte.
+
+        Der fachliche Name daneben bleibt: ``wait_for_setup`` gibt zurück, **ob** der Lauf
+        fertig wurde,
+        und wird beim Schließen gefragt. Aufräumen fragt nicht, es wartet.
+
+        **Die Frist der fachlichen Methode bleibt ihre eigene.** Hier stand
+        zuerst ``wait_for_setup(timeout_ms)`` — und damit bekam eine Erhebung, für die
+        30 Sekunden vorgesehen sind, die 2 Sekunden, die für das Einsammeln
+        der Leine gedacht sind. Gemessen an ``test_chat_ui``: zwei von vier
+        Läufen starben danach beim Abbau, gegen null von vier davor. Der
+        Parameter gilt der Leine, nicht der Sache.
+        """
+        self.wait_for_setup()
+        self._leash.wait_all(timeout_ms)
 
     def _note_step(self, step: str) -> None:
         """Welcher Schritt gerade läuft. Vier bis fünf, und einer dauert lange.

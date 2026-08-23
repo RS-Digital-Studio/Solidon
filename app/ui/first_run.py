@@ -51,7 +51,7 @@ from app.i18n import language_name, tr
 from app.i18n.catalog import available_languages
 from app.ui.icons import icon
 from app.ui.labels import by_title, deadline_date
-from app.ui.leash import Worker, WorkerLeash
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.settings import UiSettings
 from app.ui.style import NORMAL, TIGHT, set_level
 
@@ -285,6 +285,32 @@ class FirstRunDialog(QDialog):
         """Auf die Erhebung warten. Beim Schließen und in Tests."""
         survey = self._survey
         return survey.wait(milliseconds) if survey is not None else True
+
+    def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
+        """Alles loslassen, was dieses Fenster außerhalb von Qt hält.
+
+        **Ein Name für den Aufräumbefehl, auf allen Klassen, die Arbeiter
+        halten.** Es waren fünf — ``release``, ``wait_for_workers``,
+        ``wait_for_survey``, ``wait_for_look``, ``wait_for_setup`` —, und wer
+        eine Testfixture darauf baute, sammelte sie nacheinander ein: erst
+        zwei, dann drei, dann vier. Der fünfte fehlte, und der Prozess starb
+        beim Abbau an einem Thread, der sein Fenster überlebt hatte.
+
+        Der fachliche Name daneben bleibt: ``wait_for_survey`` steht in ``accept`` und
+        ``reject`` und gibt
+        zurück, ob die Erhebung durch ist. **An dieser Klasse fiel es auf:** Ein
+        Test las die Sprachliste und schloss nie — der Erhebungsthread
+        überlebte den Dialog, und der Prozess starb mit ``0xC0000409``.
+
+        **Die Frist der fachlichen Methode bleibt ihre eigene.** Hier stand
+        zuerst ``wait_for_survey(timeout_ms)`` — und damit bekam eine Erhebung, für die
+        30 Sekunden vorgesehen sind, die 2 Sekunden, die für das Einsammeln
+        der Leine gedacht sind. Gemessen an ``test_chat_ui``: zwei von vier
+        Läufen starben danach beim Abbau, gegen null von vier davor. Der
+        Parameter gilt der Leine, nicht der Sache.
+        """
+        self.wait_for_survey()
+        self._leash.wait_all(timeout_ms)
 
     def _show(self, found: object) -> None:
         """Die Antworten eintragen."""

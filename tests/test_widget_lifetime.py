@@ -126,3 +126,59 @@ def test_a_released_widget_is_actually_released(
 
     alive = [watch for watch in watchers if watch() is not None]
     assert not alive, f"{len(alive)} von {HOW_MANY} {name} überlebten ihr Loslassen"
+
+
+def test_everything_that_holds_a_leash_can_be_told_to_let_go() -> None:
+    """Wer Arbeiter hält, hat einen ``release()`` — und zwar unter diesem Namen.
+
+    **Fünf Namen für dieselbe Sache, gefunden am 23.08.2026 beim Aufräumen des
+    Abbau-Absturzes:**
+
+        release            MainWindow
+        wait_for_workers   MainWindow, PrintSettingsDialog, GenerateDialog
+        wait_for_survey    FirstRunDialog, InstallDialog
+        wait_for_look      KeyDialog
+        wait_for_setup     ComfySetupDialog
+
+    Drei weitere Klassen hielten eine ``WorkerLeash`` und hatten gar nichts:
+    ``SupportDialog``, ``UpdateDialog``, ``VariantsDialog``. Sie waren nur
+    deshalb unauffällig, weil kein Test sie baute, ohne sie zu schließen —
+    genau wie ``FirstRunDialog``, bis jemand den Sprachwähler prüfen wollte.
+    Dann stirbt der Prozess beim Abbau, und die Ursache steht drei Dateien
+    weiter.
+
+    Wer eine Fixture darauf baut, sammelt Namen: Sie kannte zwei von fünf, dann
+    drei, dann vier. **Diese Prüfung sammelt keine** — sie fragt am Quelltext,
+    wer eine Leine anlegt, und verlangt von jedem dasselbe Wort.
+
+    Die fachlichen Namen bleiben daneben stehen, und das ist kein Zugeständnis:
+    ``wait_for_survey`` gibt einen Wahrheitswert zurück und wird vom
+    Produktivcode gerufen (``FirstRunDialog.reject``), ``release`` räumt auf und
+    gibt nichts zurück. Zwei Sachen, zwei Namen — nur soll die eine überall
+    gleich heißen.
+    """
+    import ast
+    from pathlib import Path
+
+    holders: dict[str, Path] = {}
+    for path in sorted(Path("app/ui").glob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            source = ast.get_source_segment(path.read_text(encoding="utf-8"), node) or ""
+            if "WorkerLeash(" in source:
+                holders[node.name] = path
+
+    assert len(holders) >= 10, f"nur {len(holders)} Leinen-Halter gefunden — sucht das noch richtig?"
+
+    without = []
+    for name, path in sorted(holders.items()):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ClassDef) and node.name == name:
+                methods = {m.name for m in node.body if isinstance(m, ast.FunctionDef)}
+                if "release" not in methods:
+                    without.append(f"{name} ({path.name})")
+
+    assert not without, "hält Arbeiter, kennt aber kein release(): " + ", ".join(without)

@@ -49,7 +49,7 @@ from app.core.paths import ensure_dir, user_data_dir
 from app.core.support import KIND_BUG, KIND_CRASH, KIND_IDEA, KIND_QUESTION, Receipt, Ticket
 from app.i18n import tr
 from app.ui.labels import localised
-from app.ui.leash import Worker, WorkerLeash
+from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.style import make_primary
 
@@ -547,6 +547,24 @@ class SupportDialog(QDialog):
         if self.written is None:
             self._write_folder()
         QDesktopServices.openUrl(QUrl(support.mail_link(self.ticket())))
+
+    def release(self, timeout_ms: int = WAIT_TIMEOUT_MS) -> None:
+        """Alles loslassen, was dieser Dialog außerhalb von Qt hält.
+
+        **Diese Klasse hatte gar nichts** — eine ``WorkerLeash`` und keinen Weg,
+        ihr zu sagen, dass Schluss ist. Unauffällig war das nur, solange jeder
+        Test sie schließt: Der Weg über ``reject``/``closeEvent`` wartet, der
+        Weg über das Wegräumen nicht. Genau so stand es beim Erstlauf-Dialog,
+        bis ein Test die Sprachliste las und nie schloss — dann stirbt der
+        Prozess beim Abbau, und die Ursache steht drei Dateien weiter.
+
+        ``reject`` wartet auf denselben Arbeiter — dort, weil ein Abbruch
+        ihn nicht laufen lassen soll; hier, weil ihn sonst niemand aufhält.
+        """
+        worker = self._worker
+        if worker is not None and worker.isRunning():
+            worker.wait(timeout_ms)
+        self._leash.wait_all(timeout_ms)
 
     def reject(self) -> None:
         """Abbrechen wartet auf den Arbeiter, statt ihn laufen zu lassen."""
