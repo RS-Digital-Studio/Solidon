@@ -89,16 +89,12 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Das Maß erscheint am Zeiger statt in der Leiste — **Schritt zwei** | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | den Umbau, der das Maß beim Zeichnen an den Zeiger legt, wie Fusion es tut. Schritt eins ist gebaut (`bd4fbce`): `measure_field` steht nur noch da, solange gezeichnet wird — 1007 → **881** Bildpunkte, Grenze 900 gesetzt. Er macht Schritt zwei weniger dringend, nicht überflüssig |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
-| Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
+| Verrundung und Fase gehen auf einem Netz nicht — **Konzept liegt vor** | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | **eine Entscheidung von Robert über eine Phase**, nicht über einen Commit: `konzepte/konzept-flaechenrueckgewinnung-2026-08.md`. Flächenrückgewinnung aus dem Netz, fünf Schritte, drei offene Fragen im dritten. Dagegen: **neun von neun** heruntergeladenen Modellen laufen dagegen |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
-| Eine erkannte Verrundung lässt sich nicht ändern | Das Fundament der Wahrnehmung (22.08.2026) | die Operation *Verrundungsradius ändern*, die es nicht gibt — `fillet_edges` wirkt auf Kanten und würde die Rundung runden. Der zweite Weg („Diesen Schritt ändern“) fällt auch aus: `created_by` gibt es nur bei `provenance="generated"`, also an Bausteinen und beim Verstiften. Dahinter steht die größere Frage, ob eine Operation ihre sichtbaren Ergebnisse deklarieren soll |
-| Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
-| Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Kein Test prüft, womit ein Beispiel den Kunden begrüßt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Prüfung über die Befunde beim Öffnen, mit einer Liste der erwarteten statt einer Schwelle von null — `SETTLED_BY` gibt es schon, die Prüfung nicht |
-| An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
 | Ein gescheiterter Merge ist ein Eingriff, kein Nichts | Das Fundament der Wahrnehmung (22.08.2026) | eine Regel im Verfahren: Wer einen Merge abbricht, prüft danach `git status` **und** `git stash list`. Der Autostash überlebt den Abbruch nicht zuverlässig und trifft im geteilten Baum fremde Arbeit |
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
@@ -4797,8 +4793,48 @@ bekommt ein 220er Bett — und dann meldet jedes 231 mm tiefe Teil zu Recht
       passt in keinen Parameter und braucht ein eigenes Feld an der Operation
       samt Formatänderung. Diese Hälfte steht weiter offen, unter „Die Antwort
       der Zuordnung steht nirgends".
-- [ ] **Verrundung und Fase auf einem Netz sagen sauber ab** — `NeedsSolidError`
-      mit dem richtigen Satz. Kein Fehler; nur ist damit für ein
+- [ ] **Verrundung und Fase gehen auf einem Netz nicht — Konzept liegt vor,
+      Entscheidung offen.** `konzepte/konzept-flaechenrueckgewinnung-2026-08.md`
+      (`e5ef72f`, 3d-druck-3a, 23.08.2026), sieben Abschnitte.
+
+      **Die Zahl, die es entscheidet:** Ein Netz hat keine Kanten im
+      B-Rep-Sinn. Über `BRepBuilderAPI_Sewing` gemessen:
+
+          108 Dreiecke  →  108 Flächen, 324 Kanten
+
+      Jede Dreiecksseite wird eine Kante; ein `fillet` darauf verrundete
+      nicht die Modellkante, sondern **jede Facette**. Das ist kein
+      Umsetzungsproblem, das ist die Sache selbst.
+
+      **Was es bräuchte, ist Flächenrückgewinnung** — erkannte Merkmale in
+      analytische Flächen zurückverwandeln, deren Schnittkurven berechnen,
+      vernähen, dann `fillet_edges` wie auf jedem exakten Körper. Fünf
+      Schritte; der dritte trägt drei offene Fragen, und die schwerste ist
+      die, die beim Schreiben des Konzepts erst gefunden wurde: **Was
+      passiert mit den 10,7 %, die kein flächiges Merkmal tragen?** Drei
+      Wege, keiner umsonst — als Freiform annähern (teuer, ungenau), den
+      Körper zurückweisen (ehrlich, aber der Kunde steht wieder ohne Weg
+      da), oder ein Zwitter aus exakten und facettierten Teilen, den der
+      Bauplan nicht kennt.
+
+      **Warum es jetzt überhaupt denkbar ist:** Schritt 1 — die Erkennung —
+      deckt die Korpuskörper seit dem 23.08.2026 zu 89 bis 100 Prozent ab
+      (flächige Merkmale gezählt, `edge_loop` herausgerechnet). Vor jener
+      Nacht hätte er nur Ebenen und Bohrungen geliefert. **Die Vorarbeit
+      für Reverse Engineering ist entstanden, ohne dass jemand sie so
+      genannt hat.**
+
+      **Zu entscheiden ist nicht „bauen wir das?“, sondern „ist das eine
+      Phase wert?“** — gegen den höchsten Kundenwert im Register: **neun von
+      neun** heruntergeladenen Modellen laufen dagegen. Robert vorgelegt am
+      23.08.2026.
+
+      **Der billige Zwischenschritt daraus ist gebaut** (`02914d5`): Der
+      ausgegraute Eintrag sagt jetzt, **warum** er ausgegraut ist. Er nimmt
+      der Entscheidung nichts vorweg.
+
+      Ursprünglich: `NeedsSolidError` mit dem richtigen Satz. Kein Fehler;
+      nur ist damit für ein
       heruntergeladenes Modell die halbe Kategorie *Formgebung* zu. Steht so im
       Bauplan („keine Verrundungen auf Mesh-Kanten vor dem B-Rep-Kern"), und
       dieser Lauf ist der Beleg, wie oft man dagegenläuft: bei jedem der neun
@@ -5456,7 +5492,13 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       führt `"cone"`, und §42 nennt den Kegel nicht mehr unter dem, was fehlt.
       Gebaut von 3d-druck-3a.
 
-- [ ] **Eine erkannte Verrundung lässt sich nicht ändern.** Sobald `fillet`
+- [x] **Eine erkannte Verrundung lässt sich nicht ändern** — auf dem **exakten**
+      Körper gelöst, über `BRepAlgoAPI_Defeaturing`: R3 → entrundet → R5, Volumen
+      23845,5 → 24000,0 (scharfer Quader), und der harte Fall mit 20 Flächen an
+      Dreifach-Ecken geht exakt auf. **Der Mesh-Teil bleibt offen** und ist der
+      Punkt darunter.
+
+      Ursprünglich: Sobald `fillet`
       eine eigene Merkmalsart ist (3d-druck-3a, 23.08.2026), hat sie ein
       Kontextmenü — und darin steht nichts, was ein Kunde will.
 
@@ -5558,7 +5600,9 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Ergebnisse sie beansprucht — und eine falsche Beanspruchung ist
       schlimmer als keine, weil der Klick dann in den falschen Dialog führt.
 
-- [ ] **Ein Verrundungsradius ist nicht abzulesen.** Die Krümmungskarte aus
+- [x] **Ein Verrundungsradius ist nicht abzulesen** — gebaut (`e3b01b7`, `eb1a541`). `block_with_rounded_edge.stl` liefert `[('fillet', 2.999)]`, und die Krümmungskarte gibt 50 Werte in Millimetern (3,00 bis 568,34) statt einer Färbung.
+
+      Ursprünglich: Die Krümmungskarte aus
       §18.4 färbt, was rund ist, und sagt nicht, *wie* rund — der Radius einer
       Verrundung steht nirgends. Er steht im Torusstück, das sie erzeugt, und
       dafür muss der Torus ein Merkmal sein. Damit ist dieser Punkt der
@@ -5587,7 +5631,9 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       (3d-druck-64), und das war die falsche Grenze: Dieselbe Konsistenzfrage
       wie bei den Übersetzungen, die bewusst dazugenommen wurden. Acht Arten,
       die überall gleich auftauchen, schlagen zehn, die auseinanderdriften.
-- [ ] **Kugel und Torus fehlen der Erkennung.** Vier Arten waren es, fünf sind
+- [x] **Kugel und Torus fehlen der Erkennung** — gebaut (`9cedb94`, Torusausschnitte `fda888d`). Nachgemessen: `sphere_socket.stl` → `sphere`, `torus_ring.stl` → `torus`.
+
+      Ursprünglich: Vier Arten waren es, fünf sind
       es: `hole`, `pin`, `face`, `edge_loop`, `cone`. Was fehlt, ist die Kugel
       (Pfanne, Kalotte) und der Torus — und mit dem Torus fehlt der **Radius
       einer Verrundung**. Der Weg steht als Ausbaustufe in Bauplan §41, mit dem
@@ -6109,8 +6155,12 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       dem, was dasteht (§18.4: „Immer mit Legende und Zahlenbereich").
       Gefunden von 3d-druck-3a.
 
-- [ ] **An einer Säule mit verrundetem Fuß erkennt die Wahrnehmung keinen
-      Zylinder.** Gemessen am 22.08.2026 an einem echten Kehlkörper (Säule Ø12
+- [x] **An einer Säule mit verrundetem Fuß erkennt die Wahrnehmung keinen
+      Zylinder** — gebaut (`6efda06`), nachgemessen am 23.08.2026:
+      `{'pin': 1, 'torus': 1, 'face': 7}`, Zapfen Ø12,0 wird erkannt. Die
+      Trennung nach **Krümmung** statt nach Knick steht.
+
+      Ursprünglich: Gemessen am 22.08.2026 an einem echten Kehlkörper (Säule Ø12
       auf Platte, Kehle R=3, wasserdicht, 2704 Dreiecke): sieben Flächen und
       **kein einziger Zylinder**. Säule und Kehle sind ein einziger Fleck mit
       2305 Dreiecken.
