@@ -890,3 +890,33 @@ def test_a_part_can_carry_a_caveat() -> None:
             f"{spec.name}: der caveat kommt am Register nicht an — "
             "_register_one reicht ihn nicht weiter"
         )
+
+
+def test_parts_that_need_a_bore_are_offered_at_one() -> None:
+    """Wer eine Bohrung anklickt, bekommt die drei angeboten, die hineingehören.
+
+    Vor dem 23.08.2026 speiste nur ``subtractive`` das Kontextmenü, und zwar
+    ausschließlich an Flächen: An einer Bohrung standen vier Einträge, das
+    Gewinde stand nirgends. Der Unterschied zwischen „bringt sein Loch mit" und
+    „braucht eines" war nicht ausgedrückt.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+
+    an_bohrung = {spec.name for spec in REGISTRY.for_feature("hole")}
+    for name in ("printed_thread", "nut_trap", "heatset_m4"):
+        spec = PARTS.get(name)
+        assert spec.at_hole, f"{name} gehört in eine Bohrung und sagt es nicht"
+        assert part_ops.op_name(name) in an_bohrung, (
+            f"{name} ist als at_hole markiert, steht aber nicht im Kontextmenü "
+            "einer Bohrung — _applies_to reicht es nicht weiter"
+        )
+
+    for spec in PARTS.all():
+        if spec.at_hole:
+            continue
+        assert part_ops.op_name(spec.name) not in an_bohrung, (
+            f"{spec.name} steht an einer Bohrung, ohne dafür gedacht zu sein: "
+            "wirken ist nicht dasselbe wie sinnvoll sein"
+        )

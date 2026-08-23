@@ -227,6 +227,22 @@ def cuts(spec: PartSpec, values: BaseParams | None) -> bool:
     return getattr(values, name, None) in wanted
 
 
+def _applies_to(spec: PartSpec) -> list[str]:
+    """An welchen Merkmalen der Baustein im Kontextmenü erscheint.
+
+    Zwei Fragen, die nicht dieselbe sind: Trägt er Material ab, dann kann er an
+    einer **Fläche** ansetzen. Setzt er eine Bohrung voraus (``at_hole``), dann
+    gehört er auch an eine **Bohrung** — dort, wo der Kunde ohnehin schon
+    hinzeigt, wenn er ein Gewinde hineinschneiden will.
+    """
+    at: list[str] = []
+    if spec.at_hole:
+        at.append("hole")
+    if cuts(spec, None):
+        at.append("face")
+    return at
+
+
 def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry | None) -> None:
     title = _title_for(spec)
 
@@ -237,7 +253,7 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         params=params,
         consumes=1,
         produces=1,
-        applies_to=["face"] if cuts(spec, None) else [],
+        applies_to=_applies_to(spec),
         touches_features=True,
         doc=spec.doc or title,
         caveat=spec.caveat,

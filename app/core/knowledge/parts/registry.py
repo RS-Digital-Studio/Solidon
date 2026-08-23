@@ -92,6 +92,20 @@ class PartSpec:
     version: str = "1"
     subtractive: bool = False
     """Wahr für eine Form, die abgezogen wird: Bohrung, Tasche, Mutternfalle."""
+    at_hole: bool = False
+    """Wahr für einen Baustein, der in eine **vorhandene** Bohrung gesetzt wird.
+
+    Der Unterschied ist der zwischen „macht ein Loch" und „arbeitet in einem".
+    Ein Schraubenloch, ein Passstift und eine Kabeldurchführung bringen ihre
+    Bohrung mit; sie gehören an eine Fläche. Gewinde, Mutternfalle und
+    Einpressbuchse setzen eine voraus — wer eine Bohrung anklickt, will genau
+    diese drei angeboten bekommen und nicht achtzehn.
+
+    Gesetzt wird das ausdrücklich und nicht geraten: Ob ein Baustein Material
+    abträgt, sagt nichts darüber, ob er in ein Loch gehört. Gemessen am
+    23.08.2026 wirkten auch Passungsleiter, Wandleiter und Überhangfächer an
+    einer Bohrung — sie ergeben dort nur keinen Sinn.
+    """
     features: tuple[str, ...] = ()
     """Provenienz-Merkmale, die der Baustein zu benennen verspricht (§24.1)."""
     doc: TranslatableText | str = ""
@@ -234,6 +248,7 @@ def register_part(
     params: type[BaseParams],
     version: str = "1",
     subtractive: bool = False,
+    at_hole: bool = False,
     features: Iterable[str] = (),
     doc: TranslatableText | str = "",
     caveat: TranslatableText | str = "",
@@ -255,6 +270,7 @@ def register_part(
                 fn=fn,
                 version=version,
                 subtractive=subtractive,
+                at_hole=at_hole,
                 features=tuple(features),
                 doc=doc,
                 caveat=caveat,

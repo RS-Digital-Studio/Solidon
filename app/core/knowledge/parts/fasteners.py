@@ -162,6 +162,7 @@ class HeatsetParams(BaseParams):
     group="inserts",
     params=HeatsetParams,
     subtractive=True,
+    at_hole=True,
     features=["bore", "chamfer"],
     doc=_(
         "Bohrung für eine Heat-Set-Einpressbuchse mit Einführfase. Der Durchmesser "
@@ -244,6 +245,7 @@ class NutTrapParams(BaseParams):
     group="fasteners",
     params=NutTrapParams,
     subtractive=True,
+    at_hole=True,
     features=["pocket", "bore"],
     doc=_(
         "Tasche für eine Sechskantmutter, seitlich eingeschoben oder von unten "
@@ -329,6 +331,7 @@ class ThreadParams(BaseParams):
     group="fasteners",
     params=ThreadParams,
     subtractive=False,
+    at_hole=True,
     features=["thread"],
     doc=_(
         "Druckbares Gewinde als Wendel mit abgeflachtem Kamm — kein ISO-Profil, "
