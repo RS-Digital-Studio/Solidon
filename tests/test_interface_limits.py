@@ -398,6 +398,24 @@ def test_the_note_names_the_key_that_opens_the_palette(window: MainWindow) -> No
 # --- die zweite Kürzelbelegung (Konzept P15 §7 Etappe 8, E7) --------------------
 
 
+def test_the_registry_is_loaded_before_anything_is_counted() -> None:
+    """Ohne ``load_operations()`` hat das Register **null** Operationen.
+
+    Jede Grenze in dieser Datei ist eine Obergrenze — höchstens neun Menüs,
+    zwölf Zeilen je Menü, acht Umschalter. Ein leeres Register unterschreitet
+    jede davon, und die ganze Datei wird grün, ohne eine einzige Grenze geprüft
+    zu haben. Das ist kein erdachter Fall: Wer das Register ohne
+    ``load_operations()`` zählt, sieht 61 statt 86 Operationen, weil die
+    sechzehn aus der Bausteinbibliothek fehlen.
+    """
+    from app.core.registry import REGISTRY
+
+    assert len(REGISTRY.all()) > 50, (
+        f"nur {len(REGISTRY.all())} Operationen im Register — läuft "
+        "load_operations() noch? Sonst prüft diese Datei lauter leere Mengen."
+    )
+
+
 def test_no_scheme_gives_the_same_key_to_two_things(window: MainWindow) -> None:
     """Ein Kürzel, das zwei Dinge auslöst, löst keines aus.
 

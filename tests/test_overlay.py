@@ -626,6 +626,9 @@ def test_the_drawn_card_really_shows_its_border(window: MainWindow) -> None:
     # Ohne die Rundungen oben und unten: dort schneidet die Maske, und eine
     # Ecke ist keine Kante.
     rows = range(ROOMY, picture.height() - ROOMY)
+    # Ein Bild, das kleiner ist als der abgeschnittene Rand, ergibt eine leere
+    # Zeilenmenge — und damit einen Test, der jede Farbe durchgehen ließe.
+    assert len(rows) > 10, f"nur {len(rows)} Bildzeilen bei Höhe {picture.height()}"
     for label, x in (("links", 0), ("rechts", picture.width() - 1)):
         wrong = [
             y

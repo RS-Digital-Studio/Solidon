@@ -1903,6 +1903,10 @@ def test_the_constraint_buttons_stay_readable_on_a_laptop(qt_app: QApplication) 
             panel.resize(width, 700)
             panel.show()
             qt_app.processEvents()
+            assert len(panel._constraint_buttons) > 3, (
+                f"nur {len(panel._constraint_buttons)} Bedingungsknöpfe — "
+                "dann sagt die Breitenprüfung darunter nichts"
+            )
             squeezed = [
                 f"{button.text()!r}: {button.width()} statt {button.sizeHint().width()}"
                 for button in panel._constraint_buttons.values()

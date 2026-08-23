@@ -152,7 +152,12 @@ def test_the_archive_holds_nothing_that_is_still_open() -> None:
     eingerückt: Ein halbfertiger Punkt im Archiv ist derselbe Fehler wie ein
     offener.
     """
-    open_points = [line.strip() for line in _archive_lines() if _OPEN.match(line)]
+    lines = _archive_lines()
+    assert len(lines) > 100, (
+        f"{ARCHIVE.name} liefert nur {len(lines)} Zeilen — dann sagt dieser Test "
+        "nichts darüber aus, ob das Archiv offene Punkte führt."
+    )
+    open_points = [line.strip() for line in lines if _OPEN.match(line)]
 
     assert not open_points, (
         f"{ARCHIVE.name} führt {len(open_points)} offene Punkte. Sie gehören "

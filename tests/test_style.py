@@ -338,6 +338,11 @@ def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: o
     Hauptknöpfe leben in sieben Dateien, und sechs davon brauchen einen
     Dialog, um überhaupt zu entstehen.
     """
+    # Der Glob ist die Grundmenge, und ein umbenannter Ordner macht ihn leer,
+    # ohne dass jemand etwas merkt: Der Test bliebe grün und prüfte nichts.
+    dateien = sorted(UI.glob("*.py"))
+    assert len(dateien) > 20, f"nur {len(dateien)} Dateien unter {UI} — falscher Pfad?"
+
     offenders = [
         path.name
         for path in sorted(UI.glob("*.py"))

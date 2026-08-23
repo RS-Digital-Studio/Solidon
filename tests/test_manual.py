@@ -53,6 +53,24 @@ def _operations() -> None:
 # --- und die erzeugten Seiten bleiben am Stand -----------------------------------
 
 
+def test_the_manual_has_pages_at_all() -> None:
+    """Die Grundmenge, über der drei Verbotstests darunter arbeiten.
+
+    ``…carries_every_chapter``, ``…carries_its_own_heading`` und
+    ``…says_in_one_sentence_what_it_is`` fragen alle dasselbe: *welche* Seite
+    etwas nicht hat. Liefert ``pages()`` gar keine, ist die gesuchte Menge leer
+    und alle drei sind grün — nicht weil das Handbuch stimmt, sondern weil es
+    keins gibt.
+
+    Die Zusicherung steht hier und nicht dreimal daneben: Ein roter Test genügt,
+    damit das Tor es merkt, und der Grund ist nur an einer Stelle zu pflegen.
+    """
+    pages = manual.pages()
+    assert len(pages) > 5, f"das Handbuch hat {len(pages)} Seiten"
+    assert any(page.generated for page in pages), "keine erzeugte Seite"
+    assert any(not page.generated for page in pages), "keine geschriebene Seite"
+
+
 @pytest.mark.parametrize("language", sorted(WEBSITE_PAGES))
 def test_the_website_page_carries_every_chapter(language: str) -> None:
     """Die eingecheckte Seite muss zum Handbuch passen, nicht zu einem alten.

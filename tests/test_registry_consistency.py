@@ -335,6 +335,11 @@ def test_no_operation_calls_its_core_function_with_an_argument_it_refuses() -> N
     # zufällig in der Operation selbst stand. Geprüft wird deshalb jedes Modul,
     # das eine Operation oder einen Baustein hält — mit allem, was darin steht.
     both: list[Any] = [*registered(), *PARTS.all()]
+    # **Sagt selbst, dass die Menge nicht leer ist.** Beides sind
+    # Verbotstests: grün, sobald both leer wäre. Und das ist kein
+    # erfundener Fall — ohne load_operations() hat das Register **null**
+    # Operationen statt 86, und beide Prüfungen liefen still ins Nichts.
+    assert both, "weder Operationen noch Bausteine — sonst prüft dieser Test nichts"
     modules = {module for spec in both if (module := inspect.getmodule(spec.fn)) is not None}
     offenders: list[str] = []
     for module in sorted(modules, key=lambda entry: entry.__name__):
@@ -625,6 +630,11 @@ def test_no_operation_reads_the_clock_the_environment_or_the_machine() -> None:
     from app.core.knowledge.parts.registry import PARTS
 
     both: list[Any] = [*registered(), *PARTS.all()]
+    # **Sagt selbst, dass die Menge nicht leer ist.** Beides sind
+    # Verbotstests: grün, sobald both leer wäre. Und das ist kein
+    # erfundener Fall — ohne load_operations() hat das Register **null**
+    # Operationen statt 86, und beide Prüfungen liefen still ins Nichts.
+    assert both, "weder Operationen noch Bausteine — sonst prüft dieser Test nichts"
     offenders = _reads_from_outside([spec.fn for spec in both], _COMPUTING)
     assert not offenders, (
         "Die Auswertung holt sich etwas von außen — das gehört in einen Parameter, "

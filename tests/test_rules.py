@@ -86,6 +86,10 @@ def test_the_manual_can_read_the_rules_in_every_language() -> None:
     from app.i18n.catalog import available_languages
 
     collection = rules.load()
+    assert collection.rules, (
+        "die Regelsammlung ist leer — dann prüft dieser Test keine einzige "
+        "Übersetzung, sondern nur, dass eine leere Schleife durchläuft"
+    )
     for language in available_languages():
         if language == "de":
             continue

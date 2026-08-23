@@ -130,7 +130,11 @@ def test_every_value_key_has_a_label() -> None:
     hier — und nicht der Nutzer, der drei Wochen später einen Bezeichner im
     Tooltip liest.
     """
-    missing = {key: file for key, file in keys_in_source().items() if stem(key) not in _VALUE_NAMES}
+    found = keys_in_source()
+    # Ohne diese Zeile prüft der Test nichts, sobald die Suche im Quelltext
+    # nichts findet — und sie sucht über ein Muster.
+    assert found, "keine Wertschlüssel im Quelltext gefunden"
+    missing = {key: file for key, file in found.items() if stem(key) not in _VALUE_NAMES}
     assert not missing, "ohne Beschriftung landet der Bezeichner selbst im Tooltip: " + ", ".join(
         f"{key} ({file})" for key, file in sorted(missing.items())
     )

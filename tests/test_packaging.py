@@ -469,6 +469,9 @@ def test_the_flatpak_source_is_the_app_and_not_the_output_folder() -> None:
     quellen = [
         zeile.split("path:", 1)[1].strip() for zeile in manifest.splitlines() if "path:" in zeile
     ]
+    # Ohne diese Zeile bestünde der Test auch dann, wenn das Manifest gar keine
+    # Quelle nennt — ein Flatpak ohne Inhalt hat auch kein falsches Verzeichnis.
+    assert quellen, "das Flatpak-Manifest nennt keine einzige Quelle"
     verzeichnis = [
         (tool.FLATPAK_MANIFEST.parent / pfad).resolve()
         for pfad in quellen

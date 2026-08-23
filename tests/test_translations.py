@@ -60,6 +60,11 @@ def test_every_text_is_translated(language: str) -> None:
     """
     catalog = read_catalog(language)
     ids = message_ids()
+    # **Ohne diese Zeile ist der Test grün, wenn er nichts findet.** Ein
+    # Verbotstest über eine gefilterte Menge prüft nichts, sobald die
+    # Grundmenge leer ist — und message_ids() sammelt über den
+    # Quelltext, also über etwas, das sich verschieben kann.
+    assert ids, "keine Texte gefunden — sonst prüft dieser Test nichts"
 
     missing = sorted(key for key in ids if not catalog.get(key))
     assert not missing, f"{language}: no translation for\n" + "\n".join(missing)

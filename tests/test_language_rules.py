@@ -117,7 +117,24 @@ UMLAUTS = "äöüÄÖÜß"
 
 
 def source_files() -> list[Path]:
-    return sorted({*PACKAGE_DIR.rglob("*.py"), *TOOLS_DIR.glob("*.py")})
+    """Die Dateien, gegen die die Sprachprüfung läuft.
+
+    **Die Zusicherung steht hier und nicht in den Tests.** Vier Tests werden
+    über diese Liste parametrisiert, und eine leere Parameterliste macht sie
+    nicht rot — pytest sammelt dann schlicht **null Tests**, meldet
+    ``no tests ran`` und gibt Exit 5. Ein Lauf, der nichts geprüft hat, sieht
+    damit aus wie einer, der nichts gefunden hat.
+
+    Eine Zusicherung *in* den Tests fängt das nicht: Sie liefe nie. Und eine je
+    Datei wäre falsch — eine leere ``__init__.py`` hat legitim keine Bezeichner,
+    was elf Fehlschläge gab, als es einmal so versucht wurde.
+    """
+    gefunden = sorted({*PACKAGE_DIR.rglob("*.py"), *TOOLS_DIR.glob("*.py")})
+    assert len(gefunden) > 50, (
+        f"nur {len(gefunden)} Quelldateien gefunden — stimmen {PACKAGE_DIR} "
+        f"und {TOOLS_DIR} noch? Die Sprachprüfung hätte sonst nichts zu prüfen."
+    )
+    return gefunden
 
 
 def identifiers_of(tree: ast.AST) -> list[tuple[str, int]]:

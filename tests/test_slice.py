@@ -122,6 +122,9 @@ def test_the_island_tower_is_recognised() -> None:
 
 def test_a_solid_body_has_no_islands_above_the_plate() -> None:
     result = slice_body(on_bed(trimesh.creation.box(extents=(20.0, 20.0, 20.0))), 0.5)
+    # Die Schichten sind die Grundmenge, nicht die Inseln: Schneidet der Körper
+    # gar nicht, hat er auch keine Inseln, und der Verbotstest unten ist grün.
+    assert len(result.layers) > 10, f"nur {len(result.layers)} Schichten aus 20 mm"
     above = [z for z in island_layers(result) if z > 1.0]
 
     assert not above, "nothing starts in mid-air in a cube"
