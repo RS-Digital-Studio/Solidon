@@ -48,7 +48,10 @@ def frame_of(feature: Feature) -> tuple[Vec3, Vec3]:
     else:
         raise AppError(
             _("An diesem Merkmal lässt sich nichts ausrichten."),
-            detail=f"feature kind {feature.kind!r} has no axis",
+            detail=_(
+                "Diese Art von Merkmal trägt keine Achse und keine Fläche — es "
+                "gibt nichts, woran sich etwas ausrichten ließe."
+            ),
             values={"feature": feature.id, "kind": feature.kind},
             suggestions=(
                 Action(id="pick_feature", label=_("Wählen Sie eine Bohrung oder eine Fläche.")),
@@ -57,7 +60,10 @@ def frame_of(feature: Feature) -> tuple[Vec3, Vec3]:
     if direction is None or point is None:
         raise AppError(
             _("An diesem Merkmal lässt sich nichts ausrichten."),
-            detail=f"feature {feature.id!r} carries no frame",
+            detail=_(
+                "Zu diesem Merkmal ist keine Lage gespeichert: Es hat weder eine "
+                "Richtung noch einen Mittelpunkt."
+            ),
             values={"feature": feature.id},
         )
     return _unit(direction), (float(point[0]), float(point[1]), float(point[2]))
@@ -141,7 +147,10 @@ def _unit(vector: object) -> Vec3:
     if length <= EPS_GEOM:
         raise AppError(
             _("An diesem Merkmal lässt sich nichts ausrichten."),
-            detail="direction of length zero",
+            detail=_(
+                "Die Richtung dieses Merkmals hat die Länge null — daraus lässt "
+                "sich keine Achse bilden."
+            ),
         )
     values = values / length
     return (float(values[0]), float(values[1]), float(values[2]))

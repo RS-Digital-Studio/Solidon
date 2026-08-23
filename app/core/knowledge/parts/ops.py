@@ -317,7 +317,10 @@ def _anchor(source: SceneObject, params: Any) -> Vec3:
     if feature is None:
         raise AppError(
             _("Dieses Merkmal gibt es an diesem Objekt nicht."),
-            detail=f"unknown feature {name!r}",
+            detail=_(
+                "Der Name muss eines der Merkmale sein, die dieses Objekt trägt — "
+                "sie stehen unten als bekannte Namen."
+            ),
             values={"feature": name, "known": ", ".join(sorted(source.features))},
             suggestions=(
                 Action(id="pick_feature", label=_("Wählen Sie das Merkmal im Objektbaum aus.")),
