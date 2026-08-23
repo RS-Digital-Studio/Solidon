@@ -19,6 +19,14 @@ Mal sah die Zahl aus wie ein Ergebnis:
 | dieselbe Ausgabedatei für zwei Läufe | vermischt | Zusammenfassung eines abgebrochenen Laufs über dem neuen gelesen |
 | `ls -la … | head -20` | abgeschnitten | 20 Dateien + 3 Kopfzeilen = 23; die letzten drei waren **alle** `Setup-*.exe`, weil `ls` alphabetisch sortiert |
 | `ruff check app/ui/` | zu eng | `tests/` war nicht dabei, und dort lag die zu lange Zeile |
+| Korpuslauf über 14 Dateien | Lücke | enthielt keinen Torus; der fünfte Tabelleneintrag wurde geraten und war falsch |
+| vier `assert x not in text` | wirkungslos | prüften auf dem gestrippten Text, wo die verbotenen Tags längst weg waren |
+
+**Drei Arten, und alle drei sehen aus wie ein Ergebnis: zu weit, zu eng, gar
+nicht.** Am 23.08.2026 an einem Abend alle drei — ein Regex, der jede Zeile traf
+(78 Treffer bei 78 Zeilen), einer, der die gesuchte Stelle knapp verfehlte, und
+vier Verbote, die überhaupt nichts trafen. Die dritte ist die gefährlichste,
+weil nur sie **schweigt**.
 
 **Warum:** Jedes dieser Ergebnisse war *plausibel*. Ein Fehlbefund fühlt sich
 nicht falsch an — er fühlt sich wie eine Messung an. Und weitergegeben wird er
@@ -45,7 +53,30 @@ ihn danach zurückgezogen.
    da. Eine abgeschnittene Ausgabe sieht vollständig aus: `head` sagt nicht,
    dass es abschneidet, anders als ein eingegrenzter Pfad, der wenigstens im
    Kommando steht.
-6. **Eine elegante Erklärung ist die gefährlichste.** Zu demselben Fehlbefund
+6. **Wo die Messung nicht hinreicht, hört die Tabelle nicht auf.** Am
+   23.08.2026 belegte ein Lauf über vierzehn Korpusdateien vier von fünf
+   Einträgen einer Zuordnungstabelle. Der fünfte kam aus dem Kopf, weil kein
+   Torus im Korpus lag — und war doppelt falsch, Name und Faktor. **Vier
+   gemessene und ein geratener Eintrag sehen beim Lesen gleich aus.** Wer eine
+   Messung erweitern müsste, erweitert sie; wer stattdessen ergänzt, markiert
+   die Zeile wenigstens. Gefunden hat es eine andere Sitzung beim Nachmessen,
+   nicht ein Test: Der Eintrag lief ins `continue`, und weil die Schätzung
+   daneben ohnehin auf 0,4 % traf, **sah ein stummer Eintrag aus wie ein
+   wirksamer**. Ein Test gegen die *Verbindung* (trägt das Merkmal den
+   Parameter, den die Tabelle sucht?) fängt das, ein Test gegen das *Ergebnis*
+   nicht.
+7. **Eine Negativprüfung ohne ihr Fehlerbild ist eine Behauptung.** Am
+   23.08.2026 habe ich vier Verbote geschrieben (`<em>`, `\*`, `\<`,
+   `&lt;em&gt;`) und sie auf einem Text geprüft, aus dem die Tags vorher
+   entfernt worden waren. **Alle vier liefen ins Leere.** Meine eigene
+   Gegenprobe hatte es sogar ausgegeben — `Reste: —`, auch am kaputten Text —
+   und ich las es als „keine Reste" statt als „greift nicht". Ein `not in`, das
+   am echten Fehlerbild nicht anschlägt, ist von einem wirksamen nicht zu
+   unterscheiden: **Beide sind grün.** Ein Positivtest schlägt fehl, wenn er
+   nichts findet; ein Negativtest schweigt. Deshalb gehört die Gegenprobe in
+   den Test selbst — Fehlerbild nachstellen, prüfen, dass das eigene Verbot
+   daran anschlägt.
+8. **Eine elegante Erklärung ist die gefährlichste.** Zu demselben Fehlbefund
    bot eine andere Sitzung eine Ursache an, die auf jede Beobachtung passte
    (`website/dl/` ist ignoriert, ein Arbeitsbaum bekommt es nicht) — und sie
    erklärte sogar, warum ausgerechnet *eine* Datei fehlt. Das war Zufall. Wer
