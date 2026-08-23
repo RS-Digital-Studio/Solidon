@@ -62,20 +62,32 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
     Einsammeln der Tests.
     """
     from app.ui.analysis_bar import AnalysisBar, LayerBar
+    from app.ui.chat import ChatPanel
     from app.ui.command_palette import CommandPalette
     from app.ui.explode_bar import ExplodeBar
     from app.ui.main_window import MainWindow
+    from app.ui.op_dialog import SketchUseDialog
     from app.ui.panels import HistoryPanel, ObjectTree, ParameterPanel, ReportPanel
     from app.ui.section_bar import MeasureBar, SectionBar
     from app.ui.session import Session
     from app.ui.settings import UiSettings
     from app.ui.sketch_editor import SketchPanel
     from app.ui.tool_strip import ToolStrip
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import ViewBar, Viewport
 
     return [
         ("Viewport", Viewport),
         ("SketchPanel", SketchPanel),
+        # **Die drei kamen dazu, weil die Frage nach der Vollständigkeit
+        # gestellt wurde.** Der Test war grün und deckte 14 von 70
+        # QWidget-Klassen ab; von den 34 der übrigen, die sich ohne Argumente
+        # bauen lassen, hielten am 23.08.2026 sechs. Drei davon stehen oben im
+        # Kommentar und sind erklärt — diese drei nicht, und bei allen dreien
+        # nannte ``gc.get_referrers`` dieselbe Ursache: die Zelle eines
+        # Abschlusses, ein Lambda aus einer Schleife.
+        ("ViewBar", ViewBar),
+        ("ChatPanel", ChatPanel),
+        ("SketchUseDialog", SketchUseDialog),
         # Das Fenster wiegt am schwersten: Die Suite baut über siebenhundert
         # davon nacheinander auf, und jedes ließ rund 7 MB stehen.
         ("MainWindow", lambda: MainWindow(Session(), UiSettings())),

@@ -47,6 +47,7 @@ from app.core.types import ParamSpec
 from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
 from app.ui.labels import NumberSpin, choice_label, display_unit
+from app.ui.leash import weak_slot
 from app.ui.style import TIGHT, make_primary, set_level
 
 #: Werte unterhalb dieser Größenordnung werden feiner angezeigt. Eine Toleranz
@@ -1295,7 +1296,10 @@ class SketchUseDialog(QDialog):
             item.setData(Qt.ItemDataRole.UserRole, spec.name)
             self._list.addItem(item)
         self._preselect(DEFAULT_SKETCH_USE)
-        self._list.itemDoubleClicked.connect(lambda _item: self.accept())
+        # Ohne gebundenen Wert und trotzdem ein Ring: ``self`` steckt in der
+        # Zelle des Abschlusses. ``weak_slot`` verwirft dabei das ``item``, das
+        # das Signal schickt und ``accept`` nicht will.
+        self._list.itemDoubleClicked.connect(weak_slot(self, SketchUseDialog.accept))
 
         buttons = QDialogButtonBox(self)
         use = buttons.addButton(tr("Weiter"), QDialogButtonBox.ButtonRole.AcceptRole)

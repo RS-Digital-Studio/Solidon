@@ -57,6 +57,7 @@ from app.i18n import tr
 from app.ui import cursors
 from app.ui.icons import icon
 from app.ui.labels import display_unit, feature_label, localised
+from app.ui.leash import weak_slot
 from app.ui.palette import (
     DIFF_PALETTES,
     LAYER_WIDTHS,
@@ -958,7 +959,13 @@ class ViewBar(QFrame):
             button.setAccessibleName(long)
             button.setToolTip(f"{long} ({shortcut})")
             button.setAutoRaise(True)
-            button.clicked.connect(lambda _checked=False, name=key: self._request(name))
+            # **Kein Lambda mit Vorgabeargument.** Es fängt ``self`` in seiner
+            # Zelle, hängt an einem Knopf, der ``self`` gehört, und schließt
+            # damit den Ring, den Pythons Speicherbereiniger über die
+            # C++-Grenze nicht sieht. Gemessen am 23.08.2026: zehn losgelassene
+            # ``ViewBar`` überlebten alle zehn, und ``gc.get_referrers`` nannte
+            # als einzigen Halter die Zelle dieses Abschlusses.
+            button.clicked.connect(weak_slot(self, ViewBar._request, key))
             layout.addWidget(button)
             self._buttons[key] = button
 
