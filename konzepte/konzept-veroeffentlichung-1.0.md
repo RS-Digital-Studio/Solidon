@@ -263,8 +263,9 @@ grenzüberschreitenden B2C-Leistungen verhält. Das ist für einen ersten
 Produktverkauf die falsche Baustelle.
 
 **Preis dieser Wahl:** rund 5 % plus Transaktionsgebühr, gegen etwa 1,5 % bei
-Stripe. Bei 49 € sind das ungefähr 1,70 € Unterschied je Verkauf — bezahlt für
-weggenommene Steuer- und Rechtsarbeit.
+Stripe. Bei 69 € — dem Preis, den die Seite heute nennt — sind das rund
+2,40 € Unterschied je Verkauf, bezahlt für weggenommene Steuer- und
+Rechtsarbeit.
 
 **Wie der Schlüssel entsteht:** Der MoR ruft nach dem Kauf eine Adresse auf
 (Webhook), oder — ohne jeden Server — man erzeugt vorab einen Vorrat Schlüssel
