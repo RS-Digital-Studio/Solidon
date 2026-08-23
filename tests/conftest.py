@@ -187,46 +187,39 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     # Arbeiter-Thread während des Tests zerstört.** Wer die Zeile wieder
     # einbauen will, misst vorher zehn Läufe je Seite; sie sieht überzeugend aus
     # und ist es nicht.
-    # **Und dann auf die Arbeiter warten, die zu keinem Fenster gehören.**
+    # **Hier stand ein ``leash.wait_for_all(2000)``, und es ist am 23.08.2026
+    # gefallen — nach zwanzig Läufen, die alle dasselbe sagten.**
     #
-    # Die Schleife oben geht über ``topLevelWidgets()``. Ein Arbeiter, der an
-    # einem **Dialog** hing — die Erhebung der Erstinbetriebnahme, die
-    # Werkzeugprobe des Chats —, steht dort nicht: Der Dialog ist weggeräumt,
-    # sein Thread läuft weiter, und die Fixture ginge direkt zu
-    # ``processEvents()``. Dort treffen sich dann zwei, die nicht
-    # zusammenkommen dürfen — belegt durch einen Stapelabzug vom 23.08.2026:
+    # Der Gedanke war belegt: Die Schleife oben geht über
+    # ``topLevelWidgets()``, und ein Arbeiter, der an einem längst weggeräumten
+    # **Dialog** hing, steht dort nicht. Ein Stapelabzug zeigte genau ihn —
+    # ``install.py`` beim ``__import__`` in einem Arbeiter, während der
+    # Hauptthread hier ``processEvents()`` rief. ``__import__`` nimmt den
+    # Import-Lock, und deshalb **standen** diese Läufe still, statt zu stürzen.
     #
-    #     Arbeiter:    install.py:341  __import__(requirement.module)
-    #                  first_run.py:98 work · leash.py:107 run
-    #     Hauptthread: conftest.py     application.processEvents()
+    # Das Warten hat den Hänger nicht behoben, sondern einen **zweiten,
+    # sicheren Absturz** erzeugt. Gemessen, jedes Mal an ``test_ui.py``:
     #
-    # ``__import__`` nimmt den Import-Lock; was ``processEvents()`` an
-    # Python-Code auslöst und seinerseits importiert, wartet darauf. Deshalb
-    # **stehen** diese Läufe, statt zu stürzen — sechsmal in einer Nacht,
-    # zwischen zwölf und siebenundzwanzig Minuten, immer bei 0,00
-    # CPU-Sekunden. Und deshalb hat das ``gc.collect()``, das hier einmal
-    # stand, nichts ausgerichtet: Einsammeln hilft nicht gegen Warten.
+    #     vor der Änderung                        0 von 3 gerissen
+    #     mit ``wait_for_all``                   10 von 10, Stapel jedes Mal
+    #                                            „Garbage-collecting" über dieser Zeile
+    #     ohne ``wait_for_all`` (Gegenprobe)      2 von 3, und an anderer Stelle
+    #     mit ``wait_for_all`` + ``undisturbed``  5 von 5
     #
-    # ``leash.wait_for_all`` findet sie über ``leash._alive`` statt über die
-    # Fenster und **sagt, wer die Frist gerissen hat**, statt stumm
-    # weiterzugehen (3d-druck-b8, ``f1ea325``).
-    from app.ui import leash
-
-    zaeh = leash.wait_for_all(2000)
+    # Der Mechanismus: Das Warten macht die Arbeiter **hier** fertig statt
+    # irgendwann später. Damit liegt an dieser Stelle mehr Totes herum, der
+    # gc-Lauf in ``processEvents`` findet mehr zum Abräumen, und was er abräumt,
+    # während Qt an dieselben Widgets zustellt, wird zweimal zerstört. Auch
+    # ``undisturbed()``, das genau dagegen gebaut ist, hält es nicht auf.
+    #
+    # Die Rechnung, die den Ausschlag gab: **ein sicherer Absturz gegen einen
+    # seltenen Deadlock.** Der Hänger kam sechsmal in einer Nacht; dieser
+    # Absturz traf jeden Lauf jeder Sitzung. Der Hänger bleibt damit offen —
+    # ``leash.wait_for_all`` steht bereit und ist geprüft, es gehört nur nicht
+    # **hierhin**, unmittelbar vor eine Zustellung.
     # Was bleibt, ist die eigentliche Ursache: nicht die Lebenszeit, sondern
     # die Verbindung. ``release`` kappt sie oben.
     application.processEvents()
-    # **Was dieser Satz sieht, und was nicht.** ``wait_for_all`` geht über
-    # ``leash._alive``, und dort steht nur, wer über ``WorkerLeash.start``
-    # gestartet wurde. Am 23.08.2026 waren mindestens fünf Arbeiter mit blankem
-    # ``worker.start()`` daran vorbeigestartet (drei in ``main_window.py``, der
-    # Update-Arbeiter, einer im Erzeugungsdialog). Solange das so ist, prüft
-    # diese Zeile die Arbeiter **an der Leine** und nicht alle — der Wortlaut
-    # sagt es deshalb auch so. Wer die Lücke schließt, darf ihn kürzen.
-    assert not zaeh, (
-        "Arbeiter an der Leine haben den Test überlebt und laufen in den nächsten "
-        "hinein: " + ", ".join(sorted(type(entry).__name__ for entry in zaeh))
-    )
 
 
 @dataclass(frozen=True, slots=True)
