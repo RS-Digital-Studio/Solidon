@@ -405,7 +405,15 @@ def test_the_deeper_settings_fold_away_instead_of_greying_out(
     dialog.show()
     QApplication.processEvents()
 
-    checkable = [box.title() for box in dialog.findChildren(QGroupBox) if box.isCheckable()]
+    gruppen = dialog.findChildren(QGroupBox)
+    # **Ohne diese Zeile prüft die nächste nichts.** Findet ``findChildren``
+    # keine Gruppe, ist ``checkable`` leer und die Zusicherung darunter grün —
+    # sie sagt dann nicht „keine ist ankreuzbar", sondern „es gibt keine".
+    # Gemessen sind es zwei („Das Wichtigste", „Was dieses Teil verlangt");
+    # geprüft wird trotzdem nur, **dass** es welche gibt, denn eine Zahl hier
+    # altert mit der nächsten Gruppe (3d-druck-33).
+    assert gruppen, "keine Gruppe im Dialog — dann sagt die Prüfung darunter nichts"
+    checkable = [box.title() for box in gruppen if box.isCheckable()]
     assert not checkable, f"ankreuzbar statt aufklappbar: {checkable}"
 
     for toggle, content in ((dialog.tabs_toggle, dialog.tabs), (dialog.slicer_toggle, None)):
