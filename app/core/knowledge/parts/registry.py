@@ -95,6 +95,21 @@ class PartSpec:
     features: tuple[str, ...] = ()
     """Provenienz-Merkmale, die der Baustein zu benennen verspricht (§24.1)."""
     doc: TranslatableText | str = ""
+    caveat: TranslatableText | str = ""
+    """Wo dieser Baustein die falsche Wahl ist (§25.4).
+
+    **Bis zum 23.08.2026 konnte ein Baustein keinen tragen**, und deshalb hatte
+    keiner der zwanzig einen — nicht aus Nachlässigkeit, sondern weil
+    ``register_part`` das Feld nicht kannte und ``_register_one`` es folglich
+    nicht weiterreichen konnte. Zwölf Operationen außerhalb der Bibliothek
+    hatten längst einen; die Bausteine fielen durch eine Lücke in der
+    Schnittstelle.
+
+    Gerade bei einem Baustein ist die Auskunft viel wert: Er sieht aus wie eine
+    fertige Lösung, und die Frage „wann ist er die falsche?" beantwortet sonst
+    niemand — ein gedrucktes Gewinde etwa hält da nicht, wo eine Metallschraube
+    greifen soll.
+    """
     changes: tuple[PartChange, ...] = ()
     source: str = "shipped"
     """``shipped`` oder ``user`` — der Katalog weist den Unterschied aus (§24.5)."""
@@ -221,6 +236,7 @@ def register_part(
     subtractive: bool = False,
     features: Iterable[str] = (),
     doc: TranslatableText | str = "",
+    caveat: TranslatableText | str = "",
     changes: Sequence[PartChange] = (),
     source: str = "shipped",
     registry: PartRegistry | None = None,
@@ -241,6 +257,7 @@ def register_part(
                 subtractive=subtractive,
                 features=tuple(features),
                 doc=doc,
+                caveat=caveat,
                 changes=tuple(changes),
                 source=source,
             )

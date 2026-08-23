@@ -249,6 +249,11 @@ class HingeParams(BaseParams):
         "Zwei Flügel, verbunden durch eine dünne Stelle. Die Schichten laufen quer "
         "zur Biegung, sonst bricht das Scharnier beim ersten Öffnen."
     ),
+    caveat=_(
+        "Nicht für ein Teil, das aufrecht gedruckt wird: Die dünne Stelle hält nur, "
+        "solange die Schichten quer zur Biegung laufen. Steht das Scharnier "
+        "senkrecht auf der Platte, bricht es beim ersten Öffnen."
+    ),
     changes=[FIRST_RELEASE],
 )
 def living_hinge(raw: BaseParams) -> PartResult:
@@ -495,6 +500,11 @@ class SnapConnectorParams(BaseParams):
         "Federarm und Tasche als Paar — die Hälften rasten ein, statt geklebt zu "
         "werden. Die Armstärke ist ein Zehntel der Länge; kürzer als 8 mm gibt es "
         "ihn nicht, darunter wäre der Arm dünner, als eine Düse ihn tragfähig legt."
+    ),
+    caveat=_(
+        "Nicht für kurze Nähte: Der Arm ist ein Zehntel seiner Länge dick, und unter "
+        "acht Millimetern legt eine Düse ihn nicht mehr tragfähig. Für kleine "
+        "Teile hält eine Rastnase besser."
     ),
     changes=[
         PartChange(

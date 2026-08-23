@@ -167,6 +167,11 @@ class HeatsetParams(BaseParams):
         "Bohrung für eine Heat-Set-Einpressbuchse mit Einführfase. Der Durchmesser "
         "ist bewusst knapp: das Material soll beim Einpressen verdrängt werden."
     ),
+    caveat=_(
+        "Nicht ohne Lötkolben: Die Buchse wird warm eingepresst, und der Durchmesser "
+        "ist dafür knapp gehalten. Kalt hineingedrückt sprengt sie die Wand — dann "
+        "ist ein Schraubenloch die bessere Wahl."
+    ),
     changes=[FIRST_RELEASE],
 )
 def heatset_insert(raw: BaseParams) -> PartResult:
@@ -328,6 +333,11 @@ class ThreadParams(BaseParams):
     doc=_(
         "Druckbares Gewinde als Wendel mit abgeflachtem Kamm — kein ISO-Profil, "
         "weil ein Drucker es ohnehin nicht auflöst."
+    ),
+    caveat=_(
+        "Nicht, wo eine Metallschraube greifen soll: Der Kamm ist abgeflacht, damit "
+        "ein Drucker ihn überhaupt auflöst — ein genormtes Gegenstück fasst darin "
+        "nicht sauber. Für tragende Verschraubungen ist eine Einpressbuchse richtig."
     ),
     changes=[FIRST_RELEASE, PLAY_FROM_PROFILE],
 )

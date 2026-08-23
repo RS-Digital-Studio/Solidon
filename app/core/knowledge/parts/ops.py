@@ -240,6 +240,7 @@ def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry |
         applies_to=["face"] if cuts(spec, None) else [],
         touches_features=True,
         doc=spec.doc or title,
+        caveat=spec.caveat,
         registry=registry,
     )
     def run(ctx: OpContext, _spec: PartSpec = spec) -> OpResult:

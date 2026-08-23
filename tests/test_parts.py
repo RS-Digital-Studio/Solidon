@@ -856,3 +856,37 @@ def test_insert_profile_tongue_grows_a_tongue_on_a_real_body(profile: Profile) -
     assert grown == pytest.approx(expected, abs=0.05), (
         f"die Feder steht {grown:.2f} mm über der Platte, erwartet {expected:.2f}"
     )
+
+
+def test_a_part_can_carry_a_caveat() -> None:
+    """Ein Baustein darf sagen, wann er die falsche Wahl ist (§25.4).
+
+    **Bis zum 23.08.2026 konnte er das nicht**, und deshalb trug keiner der
+    zwanzig einen ``caveat`` — nicht aus Nachlässigkeit, sondern weil
+    ``register_part`` das Feld nicht kannte. Zwölf Operationen außerhalb der
+    Bibliothek hatten längst einen; die Bausteine fielen durch eine Lücke in der
+    Schnittstelle, und die sah man nur, wenn man einen setzen wollte.
+
+    Geprüft wird die ganze Kette, nicht das Feld: ``register_part`` nimmt ihn,
+    ``PartSpec`` hält ihn, und ``_register_one`` reicht ihn an die Operation
+    weiter — dort liest ihn die Oberfläche. Ein Test auf ``PartSpec.caveat``
+    allein wäre grün geblieben, während die Weitergabe fehlt.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    tragen = [spec for spec in PARTS.all() if spec.caveat]
+    assert tragen, "kein Baustein trägt einen caveat — dann prüft dieser Test nichts"
+
+    for spec in tragen:
+        eintrag = next(
+            (op for op in REGISTRY.all() if op.category == "parts" and spec.name in op.name),
+            None,
+        )
+        assert eintrag is not None, f"{spec.name} steht nicht als Operation im Register"
+        assert str(eintrag.caveat) == str(spec.caveat), (
+            f"{spec.name}: der caveat kommt am Register nicht an — "
+            "_register_one reicht ihn nicht weiter"
+        )
