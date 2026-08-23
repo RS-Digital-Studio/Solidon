@@ -95,7 +95,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein gescheiterter Merge ist ein Eingriff, kein Nichts | Das Fundament der Wahrnehmung (22.08.2026) | eine Regel im Verfahren: Wer einen Merge abbricht, prüft danach `git status` **und** `git stash list`. Der Autostash überlebt den Abbruch nicht zuverlässig und trifft im geteilten Baum fremde Arbeit |
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
-| Der Fenstertitel sagt „Unbenannt“, während der Objektbaum den Namen zeigt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert — sachlich richtig (es gibt keine Projektdatei), aber der Kunde hat gerade `plate_holes` geöffnet. Keine Logikfrage |
 | Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
 | Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374 |
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
@@ -4424,11 +4423,11 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       ist die Konstruktionsarbeit an den Druckprojekten weg. Entscheidung von
       Robert, ob ein Remote eingerichtet wird.
 
-- [ ] **Der Fenstertitel sagt „Unbenannt“, während der Objektbaum den Namen
-      zeigt.** Wer eine STL ablegt, sieht oben `Unbenannt* — Solidon3D` und
+- [x] **Der Fenstertitel sagte „Unbenannt“, während der Objektbaum den Namen
+      zeigte.** Wer eine STL ablegte, sah oben `Unbenannt* — Solidon3D` und
       darunter `plate_holes`. Sachlich richtig — es gibt noch keine
       Projektdatei —, aber der Kunde hat gerade etwas geöffnet, das einen Namen
-      hat. **Keine Logikfrage, sondern eine Geschmacksfrage an Robert.**
+      hat.
 
 - [x] **Die deutsche Quelle trennt die Fläche nicht von der Belegung — und das
       ist die Wurzel unter allen Übersetzungsfunden dieses Tages.** Gezählt am
@@ -4478,6 +4477,54 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       sagt für `es` `bandeja` (65) gegen `placa` (18); für `pt` steht es
       **69:69**. Das ist eine Wortwahl und keine Messung — bei unentschiedener
       Quelle bleibt der Bestand stehen.
+
+- [x] **Neunundsechzig graue Zeilen in vier Menüs, und keine davon erklärte
+      sich.** Gezählt auf der leeren Szene, also genau dort, wo ein Kunde nach
+      dem Startbildschirm steht:
+
+      | Menü | bedienbar |
+      |---|---|
+      | *Objekt* | 0 von 5 |
+      | *Ändern* | 0 von 34 |
+      | *Bausteine* | 0 von 20 |
+      | *Vorbereiten* | 0 von 10 |
+
+      **Robert:** „wenn man kein 3d modell ausgewählt hat bringen menüs wie
+      bohrung anlegen nichts, hier ausblenden“, und auf die Rückfrage:
+      „ausblenden wenn es nicht sinnvoll ist“. Gebaut in `905efa0`.
+
+      **Die Grenze läuft am Menü, nicht am Eintrag**, und darin liegt der
+      Unterschied zu `02914d5` weiter unten: Dort lernte der ausgegraute
+      Eintrag, **warum** er ausgegraut ist — das war richtig und bleibt es. Nur
+      trägt es nicht, wenn *jeder* Eintrag grau ist: Der Satz erklärt dann
+      nichts mehr, er wiederholt sich neunundsechzigmal. Ein gemischtes Menü
+      behält seine grauen Zeilen samt Grund, denn dort steht die Erklärung
+      **neben einem Eintrag, der geht**, und dieser Vergleich sagt dem Kunden
+      mehr als das Verschwinden. Die Werkzeugzeile bleibt aus demselben Grund
+      unangetastet — sie nennt den Grund im Klartext, und dort sieht ein
+      Anfänger zuerst hin.
+
+      Damit sind es drei Lagen: Startbildschirm 2 Menüs, leere Szene 5, mit
+      einem gewählten Körper wieder alle 9.
+
+      **Die Hälfte der Antwort gab es schon, und niemand wusste davon.**
+      `_workspace_menus` (`main_window.py:1425`) tut auf dem Startbildschirm
+      dasselbe, seit Monaten, mit derselben Begründung im Docstring —
+      „siebzig Einträge, von denen dort keiner etwas tut, sind keine Auskunft,
+      sondern Kulisse“. Der erste Testlauf schlug deswegen fehl: Er maß den
+      Startbildschirm und fand dort alles schon ausgeblendet. **Wer eine Regel
+      neu erfindet, sollte zuerst suchen, ob sie an einer Nachbarstelle schon
+      steht** — hier waren es zwei Sitzungen, ein halbes Jahr auseinander, mit
+      demselben Gedanken und demselben Bild dafür.
+
+      **Und eine Falle, die 3d-druck-3a vierundfünfzig Fixture-Fehler
+      gekostet hat:** Der erste Anlauf ging über `menuBar().actions()` und fasste
+      dabei ein `QMenu` an, dessen C++-Seite fort war — dieselbe Falle wie in
+      `overlay.py`, nur an einer frisch gebauten Stelle. Die Liste, die die
+      Menüs am Leben hält, heißt `self._menus`; über die läuft es jetzt. Dazu
+      kam eine PySide6-Stub-Falle: `QAction.menu()` ist als `QMenu` deklariert
+      statt als `QMenu | None`, also hält mypy ein `is None` für toten Code.
+      `if not menu:` geht durch.
 
 ## Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026)
 
