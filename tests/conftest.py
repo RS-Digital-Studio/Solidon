@@ -173,6 +173,47 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     # ``render_window_interactor.initialize``. Beides gemessen, in Fenstern
     # nacheinander, nicht erlitten in einem zwanzigminütigen Lauf.
     #
+    # **Woran der Hänger wirklich liegt — aufgeklärt am 23.08.2026 mit
+    # ``py-spy dump --native`` an einem laufenden ``test_ui.py``.** Er steht
+    # hier, weil hier gesucht wird, wenn er das nächste Mal zuschlägt:
+    #
+    #     Hauptthread   hält den GIL, wartet auf den Qt-Mutex
+    #                   QComboBox::setCurrentIndex → QAbstractItemView::setModel
+    #                   → QObject::connectImpl → QBasicMutex::lockInternal
+    #
+    #     Nebenthread   hält den Qt-Mutex, wartet auf den GIL
+    #                   QWidget::~QWidget → QMenuBar::~QMenuBar → QMenu::~QMenu
+    #                   → QObject::~QObject → Sbk_GetPyOverride (shiboken6)
+    #                   → PyGILState_Ensure
+    #
+    # **Ein ``QMenuBar`` wird in einem Nebenthread zerstört.** Sein Destruktor
+    # nimmt den Qt-Mutex und braucht dann den GIL für die shiboken-Hülle; der
+    # Hauptthread hält den GIL und wartet auf genau diesen Mutex. Niemand tut
+    # das absichtlich: Pythons Speicherbereiniger läuft in dem Thread, dessen
+    # Allokation gerade die Schwelle reißt, und findet dort ein Fenster ohne
+    # letzte Python-Referenz. Gefunden von 3d-druck-b8.
+    #
+    # Das erklärt vier Beobachtungen, die einzeln keinen Sinn ergaben:
+    #
+    # * Warum die Läufe **stehen** statt zu stürzen — ein Deadlock rechnet nicht.
+    # * Warum ``gc.collect()`` hier nichts brachte — der Lauf im Hauptthread ist
+    #   der harmlose; gefährlich ist der im Nebenthread, und den löst kein
+    #   ``collect()`` aus, sondern eine Allokation.
+    # * Warum ``undisturbed()`` nicht wirkte — es hält den Sammler an, während
+    #   *diese* Zeile läuft; der Nebenthread alloziert weiter, wann er will.
+    # * Warum es das erst seit dem 22.08.2026 gibt: Solange Lambda-Ringe die
+    #   Fenster hielten, sammelte sie **niemand** ein. Seit sie sterben können,
+    #   können sie im falschen Thread sterben. Der Ring-Umbau war richtig und
+    #   hat den Speicher flach gemacht — und er hat diesen Deadlock erst
+    #   möglich gemacht. Wer ihn für unbeteiligt hält, sucht falsch.
+    #
+    # **Für den nächsten Anlauf, und er hat zwei Baustellen statt einer:**
+    # Zerstörung gehört in den Hauptthread (``deleteLater``), aber die zwei
+    # gescheiterten Anläufe oben zeigen die zweite Klippe — ``processEvents``
+    # führt ``DeferredDelete`` nicht aus, und mit ``sendPostedEvents`` dazu
+    # nimmt ein zerstörtes Fenster den VTK-Zustand mit. Wer nur die erste löst,
+    # trifft die zweite.
+    #
     # **Hier stand ein ``gc.collect()``, und es ist am 23.08.2026 gefallen.**
     # Der Gedanke war richtig: Wann Python die losgelassenen Fenster einsammelt,
     # entscheidet sonst der Zufall, und der trifft auch die Zeit, in der Qt
