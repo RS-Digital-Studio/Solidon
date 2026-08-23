@@ -465,7 +465,23 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     # kompilierter Erweiterung meldet sich damit als vorhanden. Der Kommentar
     # an jener Stelle weiß das und nennt genau diesen Fall als Grund.
     #
-    # Entschieden ist nichts; ``app/core/install.py`` gehört nicht hierher.
+    # **Entschieden am 23.08.2026: ``__import__`` bleibt.** Der Grund sind die
+    # drei Pakete, die dort geprüft werden — ``OCP.BRepPrimAPI``
+    # (OpenCASCADE), ``vhacdx`` und ``keyring``. Die ersten beiden sind
+    # kompilierte Erweiterungen, und bei einer großen C++-Bibliothek mit
+    # DLL-Abhängigkeiten ist „liegt da, lädt aber nicht" kein Randfall, sondern
+    # der wahrscheinlichste Defekt:
+    #
+    #     find_spec    OCP liegt da   -> der Dialog bietet keine Installation an,
+    #                                    der Kunde hat einen Kern, der nicht geht,
+    #                                    und keinen Weg, das zu ändern
+    #     __import__   OCP lädt nicht -> der Dialog bietet sie an, der Kunde
+    #                                    repariert es
+    #
+    # **Der Erstlauf-Dialog fragt nicht „liegen Dateien da", sondern „kann ich
+    # damit arbeiten".** Und der Lock-Effekt ist ein Testproblem, kein
+    # Kundenproblem: Beim Kunden läuft ``statuses()`` genau einmal, und niemand
+    # ruft daneben ``processEvents()`` in einer Schleife über zwanzig Läufe.
     #
     # ``leash.wait_for_all`` steht bereit und ist geprüft, es gehört nur nicht
     # **hierhin**, unmittelbar vor eine Zustellung.
