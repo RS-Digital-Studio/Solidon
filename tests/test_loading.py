@@ -24,6 +24,7 @@ pytest.importorskip("PySide6")
 from PySide6.QtWidgets import QApplication
 
 from app.i18n import tr
+from app.ui import app as app_module
 from app.ui.loading import ESTIMATE_AFTER_S, ESTIMATE_FROM, LoadingVeil
 
 
@@ -152,3 +153,38 @@ def test_the_splash_can_appear_before_the_heavy_half_is_loaded() -> None:
     assert finished.stdout.strip() == "", (
         f"diese Module gehören hinter den Ladebildschirm, nicht davor: {finished.stdout.strip()}"
     )
+
+
+def test_the_log_says_when_the_application_ended() -> None:
+    """Ein Protokoll, das den Start vermerkt und das Ende nicht, macht jeden
+    Absturz unsichtbar.
+
+    **Gefunden im Protokoll des ersten Kunden mit 0.1.3.** Dort steht
+    dreimal ``Solidon3D 0.1.3 started``, zweimal davon binnen einer Minute und
+    jedes Mal gefolgt von ``opened project unsaved.p3d.autosave`` — die
+    Wiederherstellung wird nur angeboten, wenn die Sicherung ein
+    Projekt überlebt hat, und ``clear_autosave`` räumt sie beim ordentlichen
+    Schließen weg. Der Kunde hatte also zweimal kein sauberes Ende.
+
+    **Ob es ein Absturz war, sagt niemand**, und genau das ist der Mangel: Ein
+    abgeschossener Prozess, ein Absturz und ein normales Beenden sehen im
+    Protokoll gleich aus — nämlich wie nichts. Wer ein Kundenprotokoll liest,
+    kann die wichtigste Frage nicht beantworten.
+
+    ``aboutToQuit`` und nicht ``closeEvent``: Das Signal feuert genau dann,
+    wenn die Ereignisschleife ordentlich endet. Bei einem Absturz feuert es
+    nicht, und die fehlende Zeile ist dann die Aussage.
+    """
+    from pathlib import Path
+
+    quelle = Path(app_module.__file__).read_text(encoding="utf-8")
+
+    # **Nach dem Anschluss suchen, nicht nach dem Wort.** Der erste Fassung
+    # dieses Tests genügte ``"aboutToQuit" in quelle``, und sie fand den
+    # Begriff im **Kommentar** darüber — sie hätte auch dann bestanden, wenn
+    # nur die Begründung dastünde und keine Zeile Code.
+    assert "aboutToQuit.connect" in quelle, "das ordentliche Ende gehört ins Protokoll"
+    start = quelle.index("aboutToQuit.connect")
+    umfeld = quelle[start : start + 200]
+    assert "_log.info" in umfeld, "und zwar als Zeile, nicht als stiller Rückruf"
+    assert "ended" in umfeld, "die Zeile sagt, dass es zu Ende ging"

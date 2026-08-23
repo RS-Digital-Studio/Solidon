@@ -275,6 +275,23 @@ def main(argv: list[str] | None = None) -> int:
     # Wirkung.
     application.installEventFilter(FileOpenListener(window, application))
 
+    # **Und die Gegenzeile dazu.** Bis zum 23.08.2026 vermerkte das Protokoll
+    # den Start und über das Ende nichts — damit sehen ein Absturz, ein
+    # abgeschossener Prozess und ein normales Beenden gleich aus, nämlich wie
+    # nichts. Im Protokoll des ersten Kunden mit 0.1.3 steht dreimal „started",
+    # zweimal davon binnen einer Minute und jedes Mal gefolgt von der
+    # Wiederherstellungsfrage; ob dort etwas abgestürzt ist, war nicht zu
+    # beantworten.
+    #
+    # ``aboutToQuit`` und nicht ``closeEvent``: Das Signal feuert genau dann,
+    # wenn die Ereignisschleife ordentlich endet — bei einem Absturz nicht, und
+    # dann ist die **fehlende** Zeile die Aussage. Der ``closeEvent`` eines
+    # Fensters taugt dafür nicht: In der Suite laufen siebenhundert davon, und
+    # ein Fenster ist nicht die Anwendung.
+    application.aboutToQuit.connect(
+        lambda: _log.info("%s %s ended normally", APP_NAME, APP_VERSION)
+    )
+
     _log.info("%s %s started", APP_NAME, APP_VERSION)
     return int(application.exec())
 
