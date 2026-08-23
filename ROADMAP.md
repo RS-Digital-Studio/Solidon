@@ -88,7 +88,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Das Maß erscheint am Zeiger statt in der Leiste — **Schritt zwei** | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | den Umbau, der das Maß beim Zeichnen an den Zeiger legt, wie Fusion es tut. Schritt eins ist gebaut (`bd4fbce`): `measure_field` steht nur noch da, solange gezeichnet wird — 1007 → **881** Bildpunkte, Grenze 900 gesetzt. Er macht Schritt zwei weniger dringend, nicht überflüssig |
-| Ein Höhenbudget für den Startbildschirm — **entschieden, in Arbeit** | Die Oberflächendurchsicht, zweiter Teil (20.08.2026) | eine Entscheidung darüber, **was** kleiner wird. Am 22.08. neu gemessen, und die Aktenlage des Punkts stimmt nicht mehr: 340 px fehlen auf 1600x900 statt 156, die Ablagefläche gibt es als Widget nicht mehr, und es sind **zwei** Kachelbereiche — `more_area` (242 px) ist der größte Einzelposten |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
@@ -3307,7 +3306,30 @@ Messgrenze des großen Stapels.
 
 ### Offen
 
-- [ ] **Der Startbildschirm braucht ein Höhenbudget.** Drei Kachelspalten statt
+- [x] **Der Startbildschirm braucht ein Höhenbudget — gebaut am 23.08.2026
+      (`79941ad`, 3d-druck-b8).**
+
+          vorher   1040 Bildpunkte auf 1600x900, rollt um 140
+          nachher   718,                          182 Reserve
+
+      **Was kleiner wird, entschied die Sache und nicht die Pixelzahl:**
+      `more_area` klappt zu, die vier Wege nicht. Die vier Kacheln in
+      `examples_area` sind die vier Wege aus §2.2 — die Struktur des
+      Programms; die fünf darunter sind Vertiefung. Wer den Startbildschirm
+      zum ersten Mal sieht, soll die vier sehen.
+
+      **Die Überschrift wurde der Umschalter** statt eines zweiten Knopfes
+      daneben — damit bleibt der Text „Was kann das noch?" derselbe, und es
+      gibt **keinen neuen Katalogeintrag**.
+
+      **Der Test hält die gemessene Grenze und nicht den Einzelposten:** „passt
+      auf 900" statt „`more_area` ist kleiner als X". Ein Test auf den Posten
+      altert mit, sobald jemand eine Kachel hinzufügt — und die Zahlen dieses
+      Punktes waren **dreimal** veraltet (340 fehlend gemessen, dann 140; 242
+      für `more_area`, dann 264). Dazu prüft er, dass zugeklappt nicht weg
+      heißt: alle neun Beispiele sind weiterhin da.
+
+      Ursprünglich: Drei Kachelspalten statt
       zwei und schmalere Außenränder haben den Rollweg auf 1920x1080 von 198 auf
       16 Pixel gebracht (`571422e`) — auf 1600x900 bleiben 156. Damit passt er
       nicht überall ohne Rollen, und weiter kommt man nicht durch Umschichten:
@@ -5576,10 +5598,19 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Differenz steht als eigene Erinnerung: ohne `load_operations()` fehlen
       die sechzehn aus der Bausteinbibliothek.)
 
-      **Das Muster für die Behebung ist eine Zeile:** Ein Verbotstest über eine
-      gefilterte Menge braucht eine Zusicherung über die **Grundmenge** daneben
-      — `assert menge, "sonst prüft dieser Test nichts"`. Sie kostet nichts und
-      macht die Deckung sichtbar, statt sie einer Fixture zu überlassen.
+      **„Das Muster für die Behebung ist eine Zeile" — und auch das stimmt
+      nicht.** Hier stand, ein Verbotstest brauche daneben nur
+      `assert menge, "sonst prüft dieser Test nichts"`. Am 23.08.2026 einmal
+      eingebaut, in `test_language_rules.py`: **elf Tests wurden rot.** Eine
+      leere `__init__.py` hat legitim keine Bezeichner, und die Zusicherung
+      gehört dort eine Ebene höher — auf die **Parameterliste** statt auf die
+      Menge im Test. Zurückgenommen, Suite wieder grün.
+
+      **Damit sind die Kandidaten einzeln durchzugehen und nicht zu ersetzen.**
+      Die Zahl ist dabei auch gewachsen: Ein zweiter Zähler findet **35**
+      Kandidaten, davon 29 in einem Gebiet — gegen die 16 von vorhin. Welche
+      der beiden Zählungen die richtige Frage stellt, ist offen; **beide sind
+      Verdachtslisten und keine Fehlerlisten.**
 
       **Drei sind behoben, alle gemessen statt vermutet:**
 
@@ -6070,6 +6101,16 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       vorspulen. Nie mit `--force`, nie auf `main` committen, nie einen roten
       Lauf durchwinken, nie eine Konfliktauflösung erfinden. Der Satz oben über
       den falschen Erfolg stammt aus seinem Docstring.
+
+      **Und die Regel, die daraus für einen Belegslauf folgt** — gelernt am
+      23.08.2026, als eine Sitzung während eines fremden Torlaufs eine Datei
+      schrieb: Sie hatte `gate_lock status` vorher abgefragt, den Lauf gesehen
+      und daraus **„nicht messen" statt „nicht schreiben"** geschlossen.
+
+      > Das Schloss serialisiert die Rechenzeit, nicht den Arbeitsbaum.
+      > **Während ein Lauf als Beleg gefahren wird, schreibt niemand** — ein
+      > Lauf, der einen halben Stand gesehen hat, taugt nicht als Beleg, und
+      > man sieht es ihm nicht an.
 
       **Dieselbe Ursache beim Lesen statt beim Laufen:** `git diff` vergleicht
       gegen den **Index**, und im geteilten Baum liegen dort die Zwischenstände
