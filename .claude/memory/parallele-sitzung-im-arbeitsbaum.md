@@ -129,6 +129,24 @@ hinterlässt eine Falle für den nächsten. Zwei Zeilen verhindern es:
 `git reset` setzt die Indexeinträge auf HEAD und rührt den Arbeitsbaum nicht
 an; `git diff --cached` muss danach leer sein.
 
+**Erst die Richtung feststellen, dann aufräumen — `git reset` ist nicht immer
+richtig.** Am 23.08.2026 trug der geteilte Index bei elf Website-Dateien
+`0.1.3`, während HEAD und Arbeitsbaum auf `0.1.4` standen; ein Commit ohne
+Pfade hätte ein ausgeliefertes Release zurückgeschrieben und die Startseite auf
+gelöschte Pakete zeigen lassen. In dem Baum arbeiteten sieben Sitzungen, und
+eine hatte an denselben Dateien gearbeitet — `git reset` hätte auch ihre
+Vormerkungen weggeworfen, falls sie neue gewesen wären. Die Prüfung, die das
+entscheidet, ist zwei Zeilen lang und läuft je Datei:
+
+    git diff --quiet HEAD -- <datei>          # Arbeitsbaum == HEAD?
+    git diff --cached --quiet HEAD -- <datei> # Index == HEAD?
+
+Ist der **Arbeitsbaum gleich HEAD und nur der Index anders**, ist der Index ein
+Abbild eines älteren Arbeitsbaums — dann kann `git add <datei>` nichts
+zerstören, denn der Inhalt, den es einträgt, ist bereits committet. Weicht der
+**Arbeitsbaum** ab, liegt dort ungesicherte Arbeit, und weder `add` noch
+`reset` sind ohne Rückfrage erlaubt.
+
 **Und: im geteilten Arbeitsbaum gibt es kein `git pull --rebase` vor dem
 Commit.** Alle Sitzungen teilen `.git`, die Commits der anderen *sind* der
 eigene HEAD — `git rev-parse HEAD origin/main` liefert zweimal dasselbe, es
