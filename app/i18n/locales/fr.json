@@ -2084,7 +2084,7 @@
   "Richtung Z": "Direction Z",
   "Richtung der linearen Reihe. Ohne Richtung lägen alle Kopien übereinander.": "Direction de la série linéaire. Sans direction, toutes les copies se superposeraient.",
   "Richtung, in der die Ebene steht. Die gezeichnete Linie trägt sie ein — von Hand gesetzt ergeben die drei Zahlen zusammen einen Pfeil senkrecht zur Schnittfläche.": "Direction dans laquelle le plan est orienté. La ligne tracée la renseigne ; saisis à la main, les trois nombres forment une flèche perpendiculaire à la face de coupe.",
-  "Richtung, in die der Baustein zeigt.": "Direction dans laquelle le bloc pointe.",
+  "Richtung, in die der Baustein zeigt — solange kein Merkmal gewählt ist. Eine angeklickte Fläche bestimmt sie selbst.": "Direction dans laquelle le bloc pointe, tant qu'aucun élément n'est choisi. Une face cliquée la définit d'elle-même.",
   "Richtung, in die die Schrift zeigt. Aus einer angeklickten Fläche kommt sie von selbst; von Hand ist 0/0/1 nach oben.": "Direction dans laquelle le texte est tourné. Une face cliquée la fournit d'elle-même ; à la main, 0/0/1 est vers le haut.",
   "Richtung, in die gebohrt wird. Z ist senkrecht von oben, X und Y bohren durch eine Seitenwand.": "Direction du perçage. Z est vertical depuis le haut, X et Y percent à travers une paroi latérale.",
   "Rippe": "Nervure",

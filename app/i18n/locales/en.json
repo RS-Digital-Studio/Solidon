@@ -2084,7 +2084,7 @@
   "Richtung Z": "Direction Z",
   "Richtung der linearen Reihe. Ohne Richtung lägen alle Kopien übereinander.": "Direction of the linear row. Without one every copy would sit on top of the last.",
   "Richtung, in der die Ebene steht. Die gezeichnete Linie trägt sie ein — von Hand gesetzt ergeben die drei Zahlen zusammen einen Pfeil senkrecht zur Schnittfläche.": "Direction the plane faces. The drawn line fills it in; set by hand, the three numbers form an arrow perpendicular to the cut face.",
-  "Richtung, in die der Baustein zeigt.": "The direction the part points in.",
+  "Richtung, in die der Baustein zeigt — solange kein Merkmal gewählt ist. Eine angeklickte Fläche bestimmt sie selbst.": "The direction the part points in — as long as no feature is chosen. A clicked face sets it itself.",
   "Richtung, in die die Schrift zeigt. Aus einer angeklickten Fläche kommt sie von selbst; von Hand ist 0/0/1 nach oben.": "The direction the text faces. A clicked face supplies it; by hand, 0/0/1 is up.",
   "Richtung, in die gebohrt wird. Z ist senkrecht von oben, X und Y bohren durch eine Seitenwand.": "The direction to drill in. Z goes straight down from above, X and Y through a side wall.",
   "Rippe": "Rib",

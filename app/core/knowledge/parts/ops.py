@@ -105,7 +105,10 @@ _PLACEMENT: tuple[tuple[str, str, Any], ...] = (
             default="z",
             choices=("x", "y", "z"),
             placement="advanced",
-            doc=_("Richtung, in die der Baustein zeigt."),
+            doc=_(
+                "Richtung, in die der Baustein zeigt — solange kein Merkmal "
+                "gewählt ist. Eine angeklickte Fläche bestimmt sie selbst."
+            ),
         ),
     ),
     (
