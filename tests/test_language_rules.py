@@ -27,7 +27,9 @@ TOOLS_DIR = PACKAGE_DIR.parent / "tools"
 GERMAN_WORDS = frozenset(
     {
         "abstand",
+        "anlass",
         "anzahl",
+        "arten",
         "bauteil",
         "baustein",
         "beschreibung",
