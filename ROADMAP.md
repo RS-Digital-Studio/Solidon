@@ -104,6 +104,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
 | Ein gescheiterter Merge ist ein Eingriff, kein Nichts | Das Fundament der Wahrnehmung (22.08.2026) | eine Regel im Verfahren: Wer einen Merge abbricht, prüft danach `git status` **und** `git stash list`. Der Autostash überlebt den Abbruch nicht zuverlässig und trifft im geteilten Baum fremde Arbeit |
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
+| Der Start lädt nacheinander, was nebeneinander laufen könnte | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, wie viel von 369 ms sich wirklich überlappt — und eine Antwort auf die Thread-Sicherheit beim Import. Die einfache Umkehrung scheitert an `_build_menus()`, und die 19 Module sind keine Alternative: alle 19 ziehen trimesh |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Der Ordnername „3D Druck" mit Leerzeichen bricht Werkzeuge | Das Fundament der Wahrnehmung (22.08.2026) | eine Durchsicht der Werkzeuge, die Pfade zusammensetzen. Zweimal an einem Tag an unabhängigen Stellen: das Kürzel der Erinnerungen und der Interpreterpfad im Tor-Skript. Die Annahme dahinter ist dieselbe — ein Pfad ohne Leerzeichen |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
@@ -5257,15 +5258,46 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       darin bräuchte den Import nach innen gezogen — machbar, aber eine
       Durchsicht und kein Handgriff.
 
-      **Der dritte Weg ist eine Stelle statt neunundzwanzig, und er ist die
-      eigentliche Frage:** `app/ui/app.py:234` ruft `load_operations()` **vor**
-      `build_application()`. Liefe es danach, stünde das Fenster 829 ms früher,
-      und die Menüs füllten sich, während der Kunde schon hinsieht. Der
-      Startbildschirm zeigt ohnehin „Operationen werden geladen …" — er
-      beschreibt damit heute einen Zustand, in dem noch kein Fenster da ist.
+      **Ein dritter Weg schien eine Stelle statt neunundzwanzig zu sein und
+      trägt nicht:** `app/ui/app.py:234` ruft `load_operations()` vor
+      `build_application()` — liefe es danach, stünde das Fenster früher. Aber
+      `MainWindow.__init__` ruft `_build_menus()`, und das liest `menu_tree()`
+      (3d-druck-b8, gemessen):
 
-      Das ist ein Eingriff in `app/ui/` und gehört 3d-druck-b8; die Messung
-      steht hier, die Entscheidung nicht. Heute schon: `app/ui/app.py:234` ruft
+          load_operations()   769 ms   (zieht trimesh)
+          menu_tree() danach    0 ms   (87 Einträge)
+
+      **Die Reihenfolge ist eine echte Abhängigkeit.** Ein Fenster mit leeren
+      Menüs, das sich 800 ms später füllt, ist kein Gewinn, sondern ein Tausch:
+      Der Kunde kann in beiden Fällen 800 ms nichts tun — nur sieht er statt
+      eines Startbildschirms, der sagt was passiert, ein Fenster, das lügt.
+
+      **Und ein vierter Weg war ein Fehlbefund, gefangen vom Messenden
+      selbst.** Die 19 Module nacheinander importiert ergab: `app.core.scene.ops`
+      zieht trimesh mit 691 ms, alle anderen zusammen 52 — also *ein* Modul
+      statt einer Durchsicht. Die Messung lief aber in **Reihenfolge**, und was
+      `scene.ops` einmal geladen hat, findet jedes folgende Modul schon vor. Je
+      Modul ein frischer Prozess sagt: **19 von 19 ziehen trimesh, 0 nicht.**
+
+      Trimesh zu verzögern hieße damit, in neunzehn Modulen die Importe
+      umzubauen — in Modulen, deren Arbeitsgrundlage es ist. Das ist kein
+      Handgriff, sondern ein Umbau des Kerns.
+
+- [ ] **Der Start lädt nacheinander, was nebeneinander laufen könnte.**
+      `load_operations()` (769 ms, zieht trimesh) und `build_application()`
+      (369 ms für Qt und VTK) laufen heute hintereinander. Sie könnten
+      überlappen: Ein Arbeiter lädt die Operationen, während der Hauptthread Qt
+      und VTK hochzieht, und die Menüs entstehen, wenn beide fertig sind.
+
+      **Der Gewinn ist höchstens die kleinere der beiden Zeiten — bis zu
+      369 ms**, und wie viel davon wirklich überlappt, hängt daran, wie oft die
+      Importe den GIL bei I/O freigeben. Das ist eine Messung und keine
+      Schätzung.
+
+      **Der Preis ist Thread-Sicherheit beim Import**, und in einer Nacht, in
+      der ein Deadlock zwischen GIL und Qt-Mutex sechs Läufe gekostet hat, ist
+      das kein Nebensatz. Vorgeschlagen von 3d-druck-b8, ausdrücklich nicht für
+      diese Nacht. Heute schon: `app/ui/app.py:234` ruft
       `load_operations()` vor `build_application()`, also lädt trimesh, während
       der Startbildschirm „Operationen werden geladen …" zeigt und Qt noch
       nicht hochgefahren ist. Beides parallel zu fahren wäre eine Änderung an
