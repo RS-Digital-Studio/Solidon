@@ -546,3 +546,48 @@ def test_the_curvature_map_says_where_its_numbers_come_from() -> None:
         f"die Karte weist ihre zwei Herkünfte nicht aus: {mixed!r}"
     )
     assert "{" not in mixed, "ein Platzhalter aus dem Kern erschiene mit geschweiften Klammern"
+
+
+def test_every_radius_entry_finds_its_parameter() -> None:
+    """Jeder Eintrag der Tabelle muss an einem echten Merkmal etwas finden.
+
+    **Gefunden von 3d-druck-64 am 23.08.2026 beim Nachmessen, nicht von einem
+    Test:** ``_FEATURE_RADIUS`` führte den Torus als ``("minor_radius", 1.0)``.
+    Den Schlüssel gibt es nicht — das Merkmal trägt ``tube_diameter``. Der
+    Eintrag lief ins ``continue`` und tat nichts.
+
+    **Warum es keinem auffiel, ist der eigentliche Punkt.** Die Schätzung trifft
+    einen Torus ohnehin auf 0,4 %, weil er eine ausgezeichnete
+    Hauptkrümmungsrichtung hat und seine Vernetzung ihr folgt. Ein Eintrag, der
+    nichts bewirkt, sieht dort aus wie einer, der wirkt: Alle Tests blieben
+    grün, die gemessene Tabelle stimmte für die drei Arten, die gemessen worden
+    waren, und die vierte war stumm.
+
+    Geprüft wird deshalb nicht das Ergebnis, sondern die **Verbindung** — trägt
+    das Merkmal den Parameter, den die Tabelle sucht. Das fängt auch eine
+    Umbenennung in der Erkennung und den nächsten Eintrag, den jemand hinzufügt.
+    """
+    seen: dict[str, set[str]] = {}
+    for path in sorted(MESHES.glob("*.stl")):
+        try:
+            body = normalise(read_mesh(path.read_bytes(), ".stl"), "mm").mesh
+        except Exception:  # ein unlesbarer Korpuskörper ist hier kein Befund
+            continue
+        for feature in detect(body).values():
+            seen.setdefault(feature.kind, set()).update(feature.params)
+
+    checked = 0
+    for kind, (name, factor) in maps._FEATURE_RADIUS.items():
+        if kind not in seen:
+            continue
+        checked += 1
+        assert name in seen[kind], (
+            f"_FEATURE_RADIUS sucht bei {kind!r} den Parameter {name!r}, das Merkmal "
+            f"führt aber {sorted(seen[kind])} — der Eintrag bewirkt nichts"
+        )
+        assert factor > 0.0, f"{kind}: ein Faktor von {factor} ergäbe keinen Radius"
+
+    assert checked >= 4, (
+        f"nur {checked} Einträge am Korpus geprüft — ohne die Merkmale prüft dieser "
+        "Test seine eigene leere Menge"
+    )

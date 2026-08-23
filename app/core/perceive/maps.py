@@ -516,8 +516,20 @@ _FEATURE_RADIUS: Final[dict[str, tuple[str, float]]] = {
     "hole": ("diameter", 0.5),
     "pin": ("diameter", 0.5),
     "fillet": ("radius", 1.0),
-    "torus": ("minor_radius", 1.0),
+    "torus": ("tube_diameter", 0.5),
 }
+"""
+
+Der Torus stand hier bis zum 23.08.2026 als ``("minor_radius", 1.0)`` — **den
+Schlüssel gibt es nicht**, das Merkmal führt ``tube_diameter``. Der Eintrag lief
+ins ``continue`` und tat nichts.
+
+Aufgefallen ist es niemandem, weil die Schätzung den Torus ohnehin auf 0,4 %
+trifft: Er hat eine ausgezeichnete Hauptkrümmungsrichtung, und seine Vernetzung
+folgt ihr. **Ein Eintrag, der nichts bewirkt, sieht dort genauso aus wie einer,
+der wirkt** — gefunden hat es 3d-druck-64 beim Nachmessen, nicht ein Test.
+``tests/test_maps.py`` prüft die Tabelle jetzt gegen die Merkmale des Korpus.
+"""
 
 
 def _radii_from_features(values: np.ndarray, features: dict[FeatureId, Feature] | None) -> set[int]:
