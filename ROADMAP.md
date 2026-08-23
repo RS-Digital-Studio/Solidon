@@ -97,14 +97,13 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Eine erkannte Verrundung lässt sich nicht ändern | Das Fundament der Wahrnehmung (22.08.2026) | die Operation *Verrundungsradius ändern*, die es nicht gibt — `fillet_edges` wirkt auf Kanten und würde die Rundung runden. Der zweite Weg („Diesen Schritt ändern“) fällt auch aus: `created_by` gibt es nur bei `provenance="generated"`, also an Bausteinen und beim Verstiften. Dahinter steht die größere Frage, ob eine Operation ihre sichtbaren Ergebnisse deklarieren soll |
 | Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
-| Die Zuordnung kennt Kugel und Torus nicht | Das Fundament der Wahrnehmung (22.08.2026) | zwei Arten mehr in der Kostenmatrix von §21.2, dazu Namen in der Oberfläche. Eine Art, die erkannt aber nicht zugeordnet wird, ist ein halber Zustand — dieselbe Konsistenzfrage wie bei den Übersetzungskatalogen, und beim Schneiden des Auftrags zunächst übersehen |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
-| Der Rückstand sieht einen falschen Zylinder nicht | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, warum derselbe Wächter beim Torus greift und beim Zylinder nicht — 0,0313 Rückstand bei einem Radius, der um das Fünffache danebenliegt |
 | Kein Test prüft, womit ein Beispiel den Kunden begrüßt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Prüfung über die Befunde beim Öffnen, mit einer Liste der erwarteten statt einer Schwelle von null — `SETTLED_BY` gibt es schon, die Prüfung nicht |
-| Die Krümmungskarte misst das Netz und nicht den Körper | Das Fundament der Wahrnehmung (22.08.2026) | eine Division — Winkel je Kantenlänge statt Winkel. Heute hängt die Aussage der Karte an der Vernetzungsdichte: Je feiner eine Verrundung vernetzt ist, desto glatter sieht sie aus. Entschieden ist Krümmung als Wert, Radius in der Legende |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
+| Ein gescheiterter Merge ist ein Eingriff, kein Nichts | Das Fundament der Wahrnehmung (22.08.2026) | eine Regel im Verfahren: Wer einen Merge abbricht, prüft danach `git status` **und** `git stash list`. Der Autostash überlebt den Abbruch nicht zuverlässig und trifft im geteilten Baum fremde Arbeit |
+| Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Der Ordnername „3D Druck" mit Leerzeichen bricht Werkzeuge | Das Fundament der Wahrnehmung (22.08.2026) | eine Durchsicht der Werkzeuge, die Pfade zusammensetzen. Zweimal an einem Tag an unabhängigen Stellen: das Kürzel der Erinnerungen und der Interpreterpfad im Tor-Skript. Die Annahme dahinter ist dieselbe — ein Pfad ohne Leerzeichen |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
@@ -5143,7 +5142,19 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       eigentliche Gewinn der Kugel-und-Torus-Erkennung (§41) und nicht ihr
       Nebenprodukt: Wer eine heruntergeladene Verrundung nachbauen oder
       angleichen will, braucht die Zahl und nicht die Farbe.
-- [ ] **Die Zuordnung kennt Kugel und Torus nicht.** Die Kostenmatrix aus §21.2
+- [x] **Die Zuordnung kennt Kugel und Torus nicht — geprüft und erledigt am
+      23.08.2026 (`9cedb94`, 3d-druck-3a), und die Kostenmatrix brauchte
+      nichts.** `feature_vector` liest artenunabhängig; was fehlte, war ein
+      **Parametername**. `ring_diameter` machte zwei Ringe mit Ø 40 und Ø 60
+      ununterscheidbar — Kosten 0,0, also derselbe Ring. Heute heißt der
+      Schlüssel `diameter`, und sie kosten 2,22.
+
+      **Der Fall gehört neben `ring_diameter` als Beschriftung**: Eine
+      Zeichenkette, die aussieht wie ein Anzeigename und in Wahrheit ein
+      Vertrag ist. Wer sie umbenennt, ändert die Zuordnung; wer sie liest,
+      sieht ein Etikett.
+
+      Ursprünglich: Die Kostenmatrix aus §21.2
       führt die Merkmalsarten einzeln; zwei neue Arten, die erkannt werden,
       aber in der Zuordnung fehlen, sind ein halber Zustand — sie tauchen im
       Baum auf und finden über eine Auswertung hinweg kein Gegenstück. Dazu
@@ -5375,7 +5386,15 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       waren die elf Fehlschläge, die zuvor der Fremdlast zugeschrieben worden
       waren.
 
-- [ ] **Der Rückstand sieht einen falschen Zylinder nicht.** Beim Fall darüber
+- [x] **Der Rückstand sieht einen falschen Zylinder nicht — behoben am
+      22.08.2026 (`9257c0d`, 3d-druck-3a).** `CylinderFit.spread` misst
+      **absolut in Facettenbreiten** statt relativ; ein Viertelbogen, der als
+      Zylinder mit r = 89,79 statt 3 eingepasst wird, fällt damit durch. Der
+      alte Rückstand belohnte genau das, was er fangen sollte — je größer der
+      falsche Radius, desto flacher der Bogen und desto kleiner der relative
+      Fehler.
+
+      Ursprünglich: Beim Fall darüber
       lag der Rückstand der Einpassung bei **0,0313** — weit unter
       `CYLINDER_TOLERANCE` (0,08) — während der Radius um das **Fünffache**
       danebenlag. Ein Wächter, der eine Einpassung nur an ihrem Rückstand misst,
@@ -5389,7 +5408,16 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       schmalen Bogen fast genauso gut hindurchgeht wie der richtige, während ein
       Torus zwei Radien hat und schon einer davon die Abweichung sichtbar macht.
 
-- [ ] **Die Krümmungskarte misst das Netz und nicht den Körper.**
+- [x] **Die Krümmungskarte misst das Netz und nicht den Körper — behoben am
+      23.08.2026 (`eb1a541`, 3d-druck-3a).** Sie zeigt jetzt **Radien in
+      Millimetern** statt des schärfsten Winkels zu einem Nachbarn. Der
+      Unterschied ist an einer Zahl abzulesen: Derselbe Zylinder ergibt bei 32
+      und bei 128 Segmenten 4,97 und 5,00 mm — vorher hing die Aussage an der
+      Vernetzungsdichte, und genau das ist bei einer Verrundung der Fehler: Je
+      feiner sie vernetzt ist, desto kleiner der Winkel je Facette, obwohl der
+      Radius derselbe bleibt.
+
+      Ursprünglich:
       `curvature_map` (`app/core/perceive/maps.py`) ist gebaut, registriert und
       hat Titel, Einheit und Legende — sie misst aber `face_adjacency_angles`
       in **Grad**. Ihr eigener Docstring nennt die Folge: „Kanten stechen
@@ -5562,6 +5590,53 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Daraus folgt die Reihenfolge, und sie ist damit belegt statt vermutet:
       **erst der Deadlock, dann die Parallelität.** Was 109 Sekunden spart, ist
       zweitrangig neben dem, was 10 bis 27 Minuten kostet.
+
+- [ ] **Ein gescheiterter Merge ist ein Eingriff, kein Nichts.** Gefunden am
+      23.08.2026 im geteilten Arbeitsbaum: Um 01:18 trug der Baum eine
+      **ältere** Fassung zweier Dateien, als committet war — elf Zeilen in
+      `tools/make_examples.py` fehlten, und `app/examples/*.p3d` trugen den
+      ZIP-Stempel von vor ihrer Reparatur. Kein Commit hatte das getan.
+
+      **Der Reflog nannte den Grund** (3d-druck-b8, Selbstanzeige):
+
+          abce5f3  HEAD@{01:18:08}  merge b8/merge-nach-main: updating HEAD
+          error: Your local changes to the following files would be overwritten
+          Index was not unstashed.
+          Merge with strategy ort failed.
+
+      **„Index was not unstashed" ist die Zeile, die zählt.** Git legt vor
+      einem Merge einen Autostash an, wenn der Baum schmutzig ist, bewegt HEAD,
+      schreibt Dateien — und spielt den Stash bei einem Abbruch **nicht**
+      zurück. Ein „Merge failed" heißt also nicht „nichts passiert": Der
+      Versuch hat HEAD bewegt und Arbeitsbaumdateien auf den Stand des
+      Merge-Ziels gesetzt.
+
+      **Die Regel daraus:** *Wer einen Merge abbricht, prüft danach
+      `git status` **und** `git stash list`.* Der Autostash überlebt den
+      Abbruch nicht zuverlässig, und im geteilten Baum trifft er fremde Arbeit.
+
+      **Und es ist das dritte Mal an einem Tag, dass eine wahre Aussage nicht
+      die ganze war** — „der Zeitstempel ist die Ursache", „es ist Fremdlast",
+      „der Merge ist gescheitert". Jede stimmte, keine reichte.
+
+- [ ] **Der Haupt-Index altert, und `git status` lügt für alle anderen mit.**
+      Zum zweiten Mal in einer Nacht: Weil alle vier Sitzungen mit
+      `GIT_INDEX_FILE` committen, zieht niemand den gemeinsamen Index nach. Am
+      23.08. stand er bei **106 Hinzufügungen gegen 1424 Löschungen** gegenüber
+      `HEAD` — ein nacktes `git commit -a` hätte 1424 Zeilen gelöscht.
+
+      **Der Schaden ist nicht der Index selbst, sondern was er anderen
+      erzählt:** `git status` zeigt fremde Dateien als `MM` und lässt eine
+      Sitzung glauben, jemand habe dort ungestagte Arbeit liegen. In dieser
+      Nacht hat das zweimal zu einer Rückfrage geführt, die sich in Luft
+      auflöste — und einmal fast dazu, dass eine Datei nicht angefasst wurde,
+      die frei war.
+
+      Aufgeräumt wird mit `git reset` (ohne Pfade, ohne `--hard`): Der Index
+      geht auf `HEAD`, der Arbeitsbaum bleibt unberührt. **Vorher `.git/index`
+      kopieren** — geprüft, dass nichts nur dort liegt (`--name-status | grep
+      ^A`), dann zurücksetzen. Zu klären bleibt, ob das Verfahren mit privatem
+      Index den Nachzug selbst übernehmen kann.
 
 - [ ] **Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum.**
       `tools/gate_lock.py` schützt vor Fremd*last* — gegen Fremd*stände* hilft
