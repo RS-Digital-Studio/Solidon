@@ -108,7 +108,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
-| Ein Test steht still, ohne zu rechnen — **Stelle gefunden** | Das Fundament der Wahrnehmung (22.08.2026) | den Grund, aus dem Qt beim Vererben eines Stylesheets eine Sperre hält. Der Stillstand sitzt in `start_screen.py:155` (`setStyleSheet` an der Ablagefläche), beim Aufbau des Hauptfensters in der Test-Fixture; nativ ein Deadlock auf `QBasicMutex` in `QObject::connectImpl`. Dreimal gemessen, zwei Dateien — es hängt an der Fixture, nicht am Test |
 | Der Ordnername „3D Druck" mit Leerzeichen bricht Werkzeuge | Das Fundament der Wahrnehmung (22.08.2026) | eine Durchsicht der Werkzeuge, die Pfade zusammensetzen. Zweimal an einem Tag an unabhängigen Stellen: das Kürzel der Erinnerungen und der Interpreterpfad im Tor-Skript. Die Annahme dahinter ist dieselbe — ein Pfad ohne Leerzeichen |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
 | `test_mesh_backend` misst die Umgebung statt sein Thema — **entschieden** | Das Fundament der Wahrnehmung (22.08.2026) | die dritte Zusicherung fällt. Sie prüft die Länge des Temp-Ordners **dieser Maschine** und sagt nichts über den Kunden; die zwei davor prüfen den Programmtext und bleiben. Ein Test, der bei umgebogenem `TEMP` rot wird, kostet jede Sitzung Zeit und schützt niemanden |
@@ -5619,7 +5618,52 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       unangetastet); gefunden von 3d-druck-b8, und zwar weil eine Datei nach
       ihrem eigenen Commit noch als `MM` im Status stand.
 
-- [ ] **Ein Test steht zwölf Minuten still, ohne zu rechnen.** Gemessen am
+- [x] **Ein Test steht zwölf Minuten still, ohne zu rechnen — aufgeklärt am
+      23.08.2026 (`2969086`).** Kein Fix, sondern ein Name für das Problem und
+      zwei Sätze darüber, was **nicht** geht. Gefunden von 3d-druck-b8 mit
+      `py-spy dump --native` an **beiden** Enden:
+
+          Hauptthread   hält den GIL, wartet auf den Qt-Mutex
+                        QComboBox::setCurrentIndex -> setModel -> connectImpl
+          Nebenthread   hält den Qt-Mutex, wartet auf den GIL
+                        QWidget::~QWidget -> QMenuBar::~QMenuBar
+                        -> Sbk_GetPyOverride -> PyGILState_Ensure
+
+      **Ein `QMenuBar` wird in einem Nebenthread zerstört.** Sein Destruktor
+      nimmt den Qt-Mutex und braucht dann den GIL für die shiboken-Hülle; der
+      Hauptthread hält den GIL und wartet auf genau diesen Mutex. Niemand tut
+      das absichtlich — **Pythons Speicherbereiniger läuft in dem Thread,
+      dessen Allokation gerade die Schwelle reißt.**
+
+      **Vier Beobachtungen dieser Nacht, die einzeln keinen Sinn ergaben, sind
+      damit erklärt:** warum die Läufe *stehen* statt zu stürzen (ein Deadlock
+      rechnet nicht); warum `gc.collect()` nichts brachte (der Lauf im
+      Hauptthread ist der harmlose); warum `undisturbed()` nicht wirkte (es
+      hält den Sammler *einer Zeile* an, der Nebenthread alloziert weiter);
+      und warum es das erst seit dem 22.08. gibt.
+
+      **Der letzte Punkt gehört hierher, auch wenn er unbequem ist:** Solange
+      Lambda-Ringe die Fenster hielten, sammelte sie niemand ein. Seit sie
+      sterben können, können sie im **falschen Thread** sterben. Der
+      Ring-Umbau war richtig und hat den Speicher flach gemacht — und er hat
+      diesen Deadlock erst möglich gemacht. Wer ihn für unbeteiligt hält,
+      sucht falsch.
+
+      **Der nächste Versuch hat zwei Baustellen, nicht eine:** Zerstörung
+      gehört in den Hauptthread, aber `processEvents` führt `DeferredDelete`
+      nicht aus — und mit `sendPostedEvents` dazu nimmt ein zerstörtes Fenster
+      den VTK-Zustand mit. Wer nur die erste löst, trifft die zweite. Beides
+      steht ausführlich in `tests/conftest.py`, neben den zwei gescheiterten
+      Anläufen mit `deleteLater`; erst zusammen ergeben sie die Auskunft, die
+      der nächste Versuch braucht.
+
+      **Und die Zahl, die den Wert dieses Eintrags erklärt: drei Fixes gebaut,
+      drei wieder herausgenommen** — `gc.collect()`, `wait_for_all`,
+      `undisturbed()`. Jeder sah überzeugend aus, jeder wurde gemessen
+      widerlegt. Ein Name für das Problem und zwei belegte Sackgassen sind um
+      vier Uhr morgens mehr wert als der vierte Versuch.
+
+      Der ursprüngliche Befund, weil seine Messung weiter gilt: Gemessen am
       22.08.2026 von 3d-druck-33: `tests/test_interface_limits.py` blieb bei
       Test 23 von 30 (`test_the_tool_strip_comes_back_with_a_body`) stehen —
       **0,00 CPU-Sekunden in acht Sekunden Messung** bei 508 MB
