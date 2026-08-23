@@ -77,6 +77,24 @@ GERMAN_WORDS = frozenset(
 
 #: Deutsche Stämme, die eindeutig genug sind, um innerhalb von Bezeichnern
 #: gesucht zu werden.
+#:
+#: **Das ist eine Stichprobe und kein vollständiger Test — und das ist keine
+#: Nachlässigkeit, sondern gemessen.** Am 23.08.2026 sind vier deutsche
+#: Bezeichner in einer einzigen Sitzung durchgerutscht (``schuldige``,
+#: ``letzter``, ``grund``, ``frei``), weil keiner davon auf dieser Liste stand.
+#:
+#: Der naheliegende Ausweg wurde probiert und ist gescheitert: die Liste aus
+#: den **deutschen Kommentaren des Projekts** zu gewinnen. Sie lieferte 1319
+#: Kandidaten und meldete 2758 angebliche Verstöße — darunter ``index``,
+#: ``material``, ``parameter``, ``value``, ``export``, ``message``, ``scene``
+#: und ``profile``. **Deutsch und Englisch überlappen bei technischen Wörtern
+#: zu stark**, um sie ohne echtes Wörterbuch zu trennen, und ein Wörterbuch
+#: wäre eine neue Abhängigkeit für einen Test.
+#:
+#: Also bleibt es bei der kuratierten Liste, und daraus folgt die Pflegeregel:
+#: **Wer ein deutsches Wort in einem Bezeichner findet, trägt seinen Stamm
+#: hier ein.** Der Test fängt, was schon einmal jemand falsch gemacht hat —
+#: mehr verspricht er nicht, und weniger auch nicht.
 GERMAN_STEMS = (
     "aenderung",
     "auswahl",
@@ -85,19 +103,26 @@ GERMAN_STEMS = (
     "druck",
     "einstellung",
     "flaeche",
+    "frei",
     "gemerkt",
     "geschlossen",
     "geschrieben",
     "gespeichert",
+    "grund",
     "groesse",
     "hoehe",
     "laenge",
+    "letzt",
     "loesch",
     "pruef",
+    "schuld",
     "staerke",
+    "stelle",
     "stueck",
     "versetz",
     "waehl",
+    "werkzeug",
+    "zeile",
 )
 
 #: Deutsche Beugungen der Wörter oben. ``wert`` stand in der Liste und

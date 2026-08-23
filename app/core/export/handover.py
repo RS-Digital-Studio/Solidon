@@ -754,11 +754,11 @@ def project_settings(
     # kam aus der Auswahl des Nutzers — die 3MF sagte drei Wände, gedruckt
     # wurden zwei, und der Unterschied waren 127 Gramm.
     document: dict[str, object] = {}
-    grundlagen: tuple[tuple[slicer_profiles.ProfileKind, str], ...] = (
+    foundations: tuple[tuple[slicer_profiles.ProfileKind, str], ...] = (
         ("machine", setup.machine_profile),
         ("process", setup.base_process),
     )
-    for kind, chosen in grundlagen:
+    for kind, chosen in foundations:
         found = profile_file(chosen, setup, kind)
         if found is not None:
             document.update(slicer_profiles.resolve_values(found))
