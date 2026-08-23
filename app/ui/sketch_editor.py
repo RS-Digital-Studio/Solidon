@@ -1380,20 +1380,20 @@ class SketchCanvas(QWidget):
         self.measure_field.adjustSize()
         self.measure_field.setVisible(True)
 
-        spitze = self._to_screen(*self._pointer)
-        breite = self.measure_field.width()
-        hoehe = self.measure_field.height()
-        links = spitze.x() + MEASURE_GAP
-        oben = spitze.y() + MEASURE_GAP
-        if links + breite > self.width():
-            links = spitze.x() - MEASURE_GAP - breite
-        if oben + hoehe > self.height():
-            oben = spitze.y() - MEASURE_GAP - hoehe
+        tip = self._to_screen(*self._pointer)
+        width = self.measure_field.width()
+        height = self.measure_field.height()
+        left = tip.x() + MEASURE_GAP
+        top = tip.y() + MEASURE_GAP
+        if left + width > self.width():
+            left = tip.x() - MEASURE_GAP - width
+        if top + height > self.height():
+            top = tip.y() - MEASURE_GAP - height
         # Und wenn beides nicht passt, weil die Fläche kleiner ist als das
         # Feld: lieber am Rand kleben als halb draußen.
-        links = max(0.0, min(links, float(self.width() - breite)))
-        oben = max(0.0, min(oben, float(self.height() - hoehe)))
-        self.measure_field.move(int(links), int(oben))
+        left = max(0.0, min(left, float(self.width() - width)))
+        top = max(0.0, min(top, float(self.height() - height)))
+        self.measure_field.move(int(left), int(top))
 
     def pending_measure(self) -> float:
         """Wie lang die angefangene Linie gerade wäre — oder wie groß der
