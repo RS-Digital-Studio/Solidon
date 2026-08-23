@@ -57,11 +57,19 @@ MAX_MESSAGE_LENGTH: Final = 20_000
 MAX_ANSWER_BYTES: Final = 64 * 1024
 
 #: Die Arten einer Sendung. Sie stehen im Betreff und sortieren den Posteingang
-#: — mehr tun sie nicht, und deshalb sind es vier und nicht zwölf.
+#: — mehr tun sie nicht, und deshalb sind es fünf und nicht zwölf.
+#:
+#: Zwei davon wählt niemand selbst. :data:`KIND_CRASH` setzt der Fehlerdialog,
+#: :data:`KIND_SURVEY` der Bogen aus :mod:`app.core.feedback`; beide stehen
+#: deshalb nicht in der Auswahlliste des Dialogs. Der Bogen bekam eine eigene
+#: Art, weil er sonst den Stapel der Verbesserungsvorschläge füllte: Er kommt
+#: unaufgefordert und in Serie, und wer beides mischt, kann keines von beidem
+#: mehr durchsehen.
 KIND_IDEA: Final = "idea"
 KIND_BUG: Final = "bug"
 KIND_QUESTION: Final = "question"
 KIND_CRASH: Final = "crash"
+KIND_SURVEY: Final = "survey"
 
 #: Wie eine Art in der Oberfläche heißt. Der Schlüssel reist, der Text wird
 #: gezeigt (Regel 20).
@@ -70,6 +78,7 @@ KIND_NAMES: Final[dict[str, Any]] = {
     KIND_BUG: _("Fehler"),
     KIND_QUESTION: _("Frage"),
     KIND_CRASH: _("Programmfehler"),
+    KIND_SURVEY: _("Fragebogen"),
 }
 
 #: Wenn der Versand nicht ging: den Bericht ablegen und selbst schicken. Beides

@@ -98,14 +98,6 @@ class UiSettings:
     nicht der Prüfung.** Geladen wird auf Klick, gestartet erst nach dem
     Schließen des Fensters. Selbsttätig ist nur die Frage, ob es etwas Neues
     gibt."""
-    survey_done: bool = False
-    """Ob der Feedbackbogen schon einmal angeboten wurde.
-
-    **Einmal je Installation, und Wegklicken zählt als Antwort.** Ein Hinweis,
-    der halbstündlich wiederkommt, wird beim dritten Mal weggeklickt, ohne
-    gelesen zu werden — und dann ist auch die Rückmeldung fort, die er holen
-    sollte. Wer ihn nicht will, hat das gesagt; der Weg über *Hilfe →
-    Rückmeldung* steht weiter offen."""
     update_default_lifted: bool = False
     """Ob die Vorgabe oben schon einmal in eine bestehende Datei getragen wurde.
 

@@ -41,17 +41,26 @@ from PySide6.QtWidgets import (
 )
 
 from app.branding import SUPPORT_ADDRESS
+from app.core import feedback, support
 from app.core import report as reports
-from app.core import support
 from app.core.errors import CANCEL, AppError
 from app.core.log import get_logger, log_path
 from app.core.paths import ensure_dir, user_data_dir
-from app.core.support import KIND_BUG, KIND_CRASH, KIND_IDEA, KIND_QUESTION, Receipt, Ticket
+from app.core.support import (
+    KIND_BUG,
+    KIND_CRASH,
+    KIND_IDEA,
+    KIND_QUESTION,
+    KIND_SURVEY,
+    Receipt,
+    Ticket,
+)
 from app.i18n import tr
 from app.ui.labels import localised
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.style import make_primary
+from app.ui.survey import FIELD_HEIGHT, SurveyForm
 
 _log = get_logger(__name__)
 
@@ -67,8 +76,10 @@ LOG_LINES: Final = reports.LOG_LINES
 #: Wie lange das Schließen auf den Arbeiter wartet, bevor es loslässt.
 WAIT_MILLISECONDS: Final = 50
 
-#: Die Reihenfolge im Auswahlfeld. Der Programmfehler steht nicht dabei — den
-#: setzt der Fehlerdialog, ein Nutzer wählt ihn nicht.
+#: Die Reihenfolge im Auswahlfeld. Programmfehler und Bogen stehen nicht dabei
+#: — den einen setzt der Fehlerdialog, den anderen der Bogen selbst; ein Nutzer
+#: wählt keinen von beiden. Ein Bogen, den jemand aus einem Aufklappmenü wählt,
+#: wäre ein Formular ohne Anlass.
 KINDS: Final = (KIND_IDEA, KIND_BUG, KIND_QUESTION)
 
 #: Arten, die es nur mit ihrem Anlass gibt — nicht in der Auswahl, aber im Feld.
@@ -76,7 +87,7 @@ KINDS: Final = (KIND_IDEA, KIND_BUG, KIND_QUESTION)
 #: Ein Absturzbericht entsteht aus einem Absturz, ein Bogen aus dreißig Minuten
 #: Arbeit. Wer sie aus einem Aufklappmenü wählen könnte, bekäme ein Formular
 #: ohne Anlass; wer sie im gefüllten Feld liest, weiß, warum er hier ist.
-ANLASS_ARTEN: Final = (KIND_CRASH, support.KIND_SURVEY)
+OCCASION_KINDS: Final = (KIND_CRASH, KIND_SURVEY)
 
 
 def window_shot(widget: QWidget | None) -> bytes:
@@ -204,18 +215,23 @@ class SupportDialog(QDialog):
         # §33.1: Ein Programmfehler darf nie wie ein Fehler des Nutzers
         # aussehen. Also steht über einem Absturz ein anderer Satz als über
         # einem Vorschlag — derselbe Dialog, andere Ansage.
-        opening = (
-            tr(
+        if kind == KIND_CRASH:
+            opening = tr(
                 "Das war ein Programmfehler, nicht Ihre Schuld. Was Sie hier schreiben, "
                 "hilft ihn zu finden. Die Meldung geht an {address}; "
                 "gesendet wird nur, was unten steht."
             )
-            if kind == KIND_CRASH
-            else tr(
+        elif kind == KIND_SURVEY:
+            # Der dritte Fall, und er unterscheidet sich vom zweiten in der
+            # Richtung: Dort meldet sich jemand von sich aus, hier ist er
+            # gefragt worden. Der Satz steht im Kern, weil er zur Frage gehört
+            # und nicht zum Fenster.
+            opening = str(feedback.OPENING)
+        else:
+            opening = tr(
                 "Was fehlt, was hakt, was besser sein könnte — schreiben Sie es auf. "
                 "Die Nachricht geht an {address}; gesendet wird nur, was unten steht."
             )
-        )
         self._opening = opening
         self._crashes = 1
         """Wie viele Programmfehler dieser Bericht trägt (§2.7)."""
@@ -225,7 +241,7 @@ class SupportDialog(QDialog):
         self.kind = QComboBox(self)
         for entry in KINDS:
             self.kind.addItem(str(support.KIND_NAMES[entry]), entry)
-        if kind in ANLASS_ARTEN:
+        if kind in OCCASION_KINDS:
             # **Zwei Arten, die man nicht wählt, sondern bekommt.** Der
             # Fehlerbericht kommt aus einem Absturz, der Bogen aus dreißig
             # Minuten Nutzung — beide stehen in der Liste, damit das Feld nicht
@@ -235,12 +251,25 @@ class SupportDialog(QDialog):
         index = self.kind.findData(kind)
         self.kind.setCurrentIndex(max(index, 0))
 
+        self.survey = SurveyForm(self) if kind == KIND_SURVEY else None
+        """Die Fragen des Bogens, oder ``None`` — dann ist dies der gewöhnliche
+        Rückmeldungsdialog (§37.2)."""
+
         self.message = QPlainTextEdit(self)
         self.message.setPlaceholderText(
-            tr("Was haben Sie getan, was ist passiert, was hatten Sie erwartet?")
+            tr("Was in den Feldern darüber keinen Platz hatte.")
+            if self.survey is not None
+            else tr("Was haben Sie getan, was ist passiert, was hatten Sie erwartet?")
         )
         self.message.setPlainText(message)
-        self.message.setMinimumHeight(120)
+        if self.survey is not None:
+            # **Fest und so hoch wie die Felder darüber.** Als dehnbares Feld
+            # nahm es allen Platz, den der Dialog übrig hatte, und war damit
+            # doppelt so groß wie die beiden Fragen — der Nachtrag sah aus wie
+            # die Hauptsache.
+            self.message.setFixedHeight(FIELD_HEIGHT)
+        else:
+            self.message.setMinimumHeight(120)
         # Sonst nimmt das Feld den Tabulator als Zeichen, und wer ohne Maus
         # arbeitet, kommt aus ihm nicht mehr heraus (``tests/test_style.py``).
         self.message.setTabChangesFocus(True)
@@ -249,8 +278,29 @@ class SupportDialog(QDialog):
         self.contact.setPlaceholderText(tr("Nur nötig, wenn Sie eine Antwort möchten"))
 
         form = QFormLayout()
-        form.addRow(tr("Art"), self.kind)
-        form.addRow(tr("Ihre Rückmeldung"), self.message)
+        kind_row = QLabel(tr("Art"), self)
+        form.addRow(kind_row, self.kind)
+        if self.survey is not None:
+            # **Im Bogen steht die Art nicht zur Wahl.** Sie ist Teil des
+            # Anlasses und nicht der Nachricht — und ein Aufklappmenü als
+            # erste Zeile einer Frage lädt dazu ein, etwas einzustellen, statt
+            # zu antworten. Gesetzt bleibt sie trotzdem: ``ticket()`` liest
+            # ``currentData()``, und das tut ein verborgenes Feld auch. Wer
+            # einen Fehler melden will, hat *Hilfe → Rückmeldung senden*.
+            kind_row.setVisible(False)
+            self.kind.setVisible(False)
+            # Über beide Spalten: Der Bogen bringt seine eigenen
+            # Beschriftungen mit, und eine Zeilenbeschriftung davor wäre eine
+            # Überschrift über einer Überschrift.
+            form.addRow(self.survey)
+            # Ohne diese Zeile zeigt die Vorschau etwas anderes als die
+            # Sendung — und „nichts ungesehen" ist eine der vier Zusagen
+            # dieses Dialogs.
+            self.survey.changed.connect(self._refresh)
+        form.addRow(
+            tr("Sonst noch etwas") if self.survey is not None else tr("Ihre Rückmeldung"),
+            self.message,
+        )
         form.addRow(tr("Rückadresse"), self.contact)
 
         self.with_shot = QCheckBox(tr("Bildschirmfoto anhängen"), self)
@@ -329,7 +379,14 @@ class SupportDialog(QDialog):
         """Die Sendung, wie sie gerade dasteht."""
         return Ticket(
             kind=str(self.kind.currentData() or KIND_IDEA),
-            message=self.message.toPlainText(),
+            # Der Bogen setzt seine Antworten zum Nachrichtentext zusammen —
+            # im Kern, damit die Vorschau darunter genau das zeigt, was ankommt.
+            # Das freie Feld hängt sich an, statt den Bogen zu ersetzen.
+            message=(
+                self.survey.text(self.message.toPlainText())
+                if self.survey is not None
+                else self.message.toPlainText()
+            ),
             contact=self.contact.text().strip(),
             detail=self.detail,
             attachments=self._attachments(),
@@ -498,6 +555,12 @@ class SupportDialog(QDialog):
         reference = f" {tr('Vorgang')}: {receipt.reference}" if receipt.reference else ""
         self.state.setText(tr("Angekommen. Danke — das hilft wirklich.") + reference)
         _log.info("support ticket sent, reference=%s", receipt.reference or "-")
+        if self.survey is not None:
+            # Wer geantwortet hat, wird nicht noch einmal gefragt. Erst hier
+            # und nicht beim Öffnen: Ein Bogen, den jemand zumacht, ohne ihn
+            # abzuschicken, ist keine Antwort — die Einladung ist beim Zeigen
+            # gezählt worden, und davon gibt es drei.
+            feedback.mark_answered()
         self.send.setEnabled(False)
         self.accept()
 

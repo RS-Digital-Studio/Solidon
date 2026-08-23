@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import json
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
+from app.core import activation, feedback, tools, updates
 from app.core import report as reports
-from app.core import tools, updates
 from app.core.backends import llm
 
 pytest.importorskip("PySide6")
@@ -938,44 +939,112 @@ def test_the_report_carries_the_digest_of_the_scene(qt_app: QApplication) -> Non
     ohne.release()
 
 
-def test_the_survey_waits_for_real_use_and_asks_once(qt_app: QApplication) -> None:
-    """Der Bogen meldet sich nach dreißig Minuten — und nur in der Demo.
+@pytest.fixture
+def own_feedback_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Der Stand des Bogens gehört diesem Test allein.
+
+    Die Suite biegt die Nutzerverzeichnisse schon in einen Temp-Ordner (§38),
+    aber **alle** Tests teilen ihn — und ``feedback.json`` merkt sich, wie oft
+    schon gefragt wurde. Ohne diese Zeile las der dritte Test, was der erste
+    hinterlassen hatte, und die Reihenfolge entschied über den Ausgang.
+    """
+    monkeypatch.setattr(feedback, "user_config_dir", lambda: tmp_path)
+
+
+def test_the_survey_asks_with_a_card_and_not_with_a_window(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, own_feedback_state: None
+) -> None:
+    """Der Bogen meldet sich nach dreißig Minuten Arbeit — und zwar leise.
 
     **Robert am 23.08.2026:** nach einer halben Stunde Nutzung ein kleiner
     Bogen, was gut ist und was bis zum Release fehlt.
 
     Drei Eigenschaften, und jede hat einen Grund:
 
-    * **Nicht modal.** Der Hinweis kommt mitten in die Arbeit, und ein Fenster,
-      das dort alles anhält, wird weggeklickt, ohne gelesen zu werden.
-      Dieselbe Bauart wie beim Update-Hinweis (``_show_update``).
-    * **Nur in der Demo** (``activation.state().in_demo``). Wer bezahlt hat,
-      ist kein Testleser mehr — und eine Konstante entscheidet darüber, damit
-      es keinen zweiten Zustand gibt, den jemand nachzuziehen vergisst.
-    * **Einmal.** Ein Streifen, der wiederkommt, wird beim dritten Mal
-      ungelesen weggeklickt; der Weg über *Hilfe → Rückmeldung* bleibt offen.
+    * **Kein Fenster, sondern eine Karte über der Ansicht.** Der Hinweis kommt
+      mitten in die Arbeit, und ein Dialog hält sie an — er wird weggeklickt,
+      ohne gelesen zu werden, und die Rückmeldung ist damit verloren.
+    * **Der Bogen geht erst auf Klick auf.** Gefragt wird zuerst, ob überhaupt
+      gefragt werden darf.
+    * **Nur in der Demo** (``activation.state().in_demo``): Wer bezahlt hat,
+      ist kein Testleser mehr.
 
-    Geprüft wird die Bauart am Quelltext und nicht am laufenden Zeitgeber: Eine
-    halbe Stunde zu warten ist kein Test, und die Uhr vorzustellen prüfte den
-    Zeitgeber statt der Entscheidung.
+    Geprüft wird am **gebauten Fenster** und nicht am Quelltext: Die erste
+    Fassung dieses Tests las nach Zeichenketten, und was sie sicherte, war die
+    Schreibweise und nicht das Verhalten.
     """
-    from pathlib import Path
+    from app.core.support import KIND_SURVEY
 
-    from app.ui import main_window as fenster_modul
-
-    quelle = Path(fenster_modul.__file__).read_text(encoding="utf-8")
-
-    assert "SURVEY_AFTER_MS" in quelle, "die Frist steht als benannte Konstante da"
-    assert "in_demo" in quelle, "außerhalb der Demo fragt niemand"
-
-    beginn = quelle.index("def _offer_survey")
-    ende = quelle.index("\n    def ", beginn + 10)
-    abschnitt = quelle[beginn:ende]
-    assert "exec(" not in abschnitt, "der Hinweis hält die Arbeit nicht an"
-    # **Die Verbindung selbst suchen, nicht ihr Umfeld.** Die erste Fassung
-    # prüfte ein Fenster von 3000 Zeichen um _offer_survey — und der
-    # Anschluss steht im Konstruktor, tausend Zeilen weiter oben. Ein Test, der
-    # nach Nachbarschaft sucht, misst die Reihenfolge im Quelltext.
-    assert "self._survey_timer.timeout.connect(weak_slot(" in quelle, (
-        "der Zeitgeber hält sein Fenster fest — dann stirbt keines mehr"
+    monkeypatch.setattr(
+        activation,
+        "_cached",
+        activation.Activation(days_left=68, deadline=date(2026, 10, 30)),
     )
+    window = MainWindow(Session(), UiSettings())
+    try:
+        assert not window._survey_notice.isVisible(), "vor der Zeit steht nichts da"
+
+        window._offer_survey()
+
+        assert window._survey_notice.isVisibleTo(window.viewport), (
+            "die Karte liegt über der Ansicht"
+        )
+        assert window._survey_dialog is None, "der Bogen geht erst auf Klick auf"
+
+        opened: list[SupportDialog] = []
+        monkeypatch.setattr(SupportDialog, "show", lambda self: opened.append(self))
+        window._survey_notice.give.click()
+
+        assert opened, "der Knopf öffnet den Bogen"
+        assert opened[0].ticket().kind == KIND_SURVEY
+        assert opened[0].survey is not None, "und zwar mit den Fragen darin"
+        opened[0].release()
+    finally:
+        window.close()
+
+
+def test_saying_no_to_the_survey_holds(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, own_feedback_state: None
+) -> None:
+    """*Nein danke* ist eine Antwort, und sie gilt dauerhaft."""
+    monkeypatch.setattr(
+        activation,
+        "_cached",
+        activation.Activation(days_left=68, deadline=date(2026, 10, 30)),
+    )
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window._offer_survey()
+        window._survey_notice.no.click()
+
+        assert not window._survey_notice.isVisible()
+        assert feedback.read().declined, "gefragt wird nicht mehr"
+        assert not feedback.due()
+    finally:
+        window.close()
+
+
+def test_nobody_is_asked_while_the_window_is_calculating(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, own_feedback_state: None
+) -> None:
+    """Wer auf ein Ergebnis wartet, hat für eine Frage keinen Kopf.
+
+    Und die Einladung ist damit nicht verbraucht: Die Uhr läuft weiter und
+    meldet sich in einer Minute wieder. Ein Bogen, der ausgerechnet in eine
+    lange Rechnung fällt, wäre sonst für die ganze Sitzung verloren.
+    """
+    monkeypatch.setattr(
+        activation,
+        "_cached",
+        activation.Activation(days_left=68, deadline=date(2026, 10, 30)),
+    )
+    window = MainWindow(Session(), UiSettings())
+    try:
+        monkeypatch.setattr(type(window.session), "busy", property(lambda self: True))
+
+        window._offer_survey()
+
+        assert not window._survey_notice.isVisibleTo(window.viewport), "nicht jetzt"
+        assert feedback.read().invitations == 0, "und die Einladung ist nicht verbraucht"
+    finally:
+        window.close()
