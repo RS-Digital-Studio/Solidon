@@ -182,8 +182,23 @@ def test_the_withdrawal_form_survives_the_converter() -> None:
             "Seite. Anlage 2 zu Art. 246a EGBGB gibt den Wortlaut vor."
         )
 
-    for leftover in ("<em>", r"\*", r"\<", "&lt;em&gt;"):
-        assert leftover not in plain, (
-            f"{leftover!r} steht im Fließtext des Formulars — der Konverter hat die "
-            "geschützten Sternchen nicht durchgereicht"
-        )
+    assert "\\" not in plain, (
+        "im Fließtext des Formulars steht ein Gegenschrägstrich — der Konverter hat "
+        "eine geschützte Zeichenfolge nicht durchgereicht"
+    )
+
+    # **Die Gegenprobe im Test selbst.** Ein Verbot, das am echten Fehlerbild
+    # nicht greift, sieht aus wie eine Absicherung und ist keine — dieselbe
+    # Falle, gegen die dieser Test antritt.
+    #
+    # Die erste Fassung verbot ``<em>``, ``\*``, ``\<`` und ``&lt;em&gt;``.
+    # **Keines der vier greift**, gemessen von 3d-druck-58: Die Tags sind zu
+    # diesem Zeitpunkt längst weggestrippt, und das Sternchen wurde ja gerade
+    # zu einem Tag, steht also nicht mehr da. Übrig bleibt genau der
+    # Gegenschrägstrich oben.
+    broken = plain.replace(
+        "ich/wir (*) den von mir/uns (*)",
+        "ich/wir (" + chr(92) + ") den von mir/uns (" + chr(92) + ")",
+    )
+    assert broken != plain, "das Fehlerbild ließ sich nicht nachstellen"
+    assert "\\" in broken, "die Gegenprobe erzeugt kein Fehlerbild, das das Verbot fängt"
