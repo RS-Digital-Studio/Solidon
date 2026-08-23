@@ -673,13 +673,13 @@ def test_a_restored_finding_speaks_the_language_it_is_read_in() -> None:
         )
         install_catalog("fr", read_catalog("fr"))
         set_language("fr")
-        auf_franzoesisch = str(finding_from_data(written).message)
+        in_french = str(finding_from_data(written).message)
     finally:
         set_language(SOURCE_LANGUAGE)
 
-    assert auf_franzoesisch == str(
+    assert in_french == str(
         TranslatableText("Ausgehöhlt. Die Wandstärke stimmt im Rahmen des Rasters.").translate("fr")
-    ), f"in der Sprache des Schreibers eingefroren: {auf_franzoesisch!r}"
+    ), f"in der Sprache des Schreibers eingefroren: {in_french!r}"
 
 
 def test_a_plain_message_stays_plain() -> None:

@@ -146,13 +146,13 @@ def main() -> int:
     print("  app/branding.py")
     print("  pyproject.toml")
 
-    for werkzeug in DERIVED:
+    for tool_name in DERIVED:
         subprocess.run(
-            [sys.executable, str(TOOLS / werkzeug), "--files"], check=True, capture_output=True
+            [sys.executable, str(TOOLS / tool_name), "--files"], check=True, capture_output=True
         )
-        print(f"  über {werkzeug}:")
-        for datei in DERIVED[werkzeug]:
-            print(f"    {datei}")
+        print(f"  über {tool_name}:")
+        for path in DERIVED[tool_name]:
+            print(f"    {path}")
 
     print(
         "\nwebsite/version.json bleibt, wie sie ist: Sie sagt, was veröffentlicht\n"
