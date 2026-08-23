@@ -98,7 +98,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Eine erkannte Verrundung lässt sich nicht ändern | Das Fundament der Wahrnehmung (22.08.2026) | die Operation *Verrundungsradius ändern*, die es nicht gibt — `fillet_edges` wirkt auf Kanten und würde die Rundung runden. Der zweite Weg („Diesen Schritt ändern“) fällt auch aus: `created_by` gibt es nur bei `provenance="generated"`, also an Bausteinen und beim Verstiften. Dahinter steht die größere Frage, ob eine Operation ihre sichtbaren Ergebnisse deklarieren soll |
 | Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
-| 26 Tests sind grün, wenn ihre Grundmenge leer ist | Das Fundament der Wahrnehmung (22.08.2026) | je eine Zeile: `assert menge, "sonst prüft dieser Test nichts"`. Gezählt am 23.08. — 108 reine Verbotstests, davon 26 über eine gefilterte Menge; drei behoben, vier als gedeckt belegt. Die Leitfrage steht dabei: *Was wäre eine Implementierung, die diesen Test besteht und die Sache trotzdem nicht tut?* |
+| 16 Tests sagen nicht, dass ihre Grundmenge nicht leer ist | Das Fundament der Wahrnehmung (22.08.2026) | je eine Zeile: `assert menge, "sonst prüft dieser Test nichts"`. Gezählt am 23.08. — 108 reine Verbotstests, davon 16 über eine gefilterte Menge; **fünf nachgeprüft, alle gedeckt**. Kein Test ist falsch grün, keiner sagt warum nicht. Drei echte Fehler wurden dabei gefunden und behoben |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Kein Test prüft, womit ein Beispiel den Kunden begrüßt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Prüfung über die Befunde beim Öffnen, mit einer Liste der erwarteten statt einer Schwelle von null — `SETTLED_BY` gibt es schon, die Prüfung nicht |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
@@ -5206,6 +5206,37 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       zwei Wege, eine Grenze; das spricht dafür, dass sie in der Sache liegt
       und nicht in der Methode.
 
+      **Auf dem B-Rep-Kern lässt sie sich ändern — gemessen am 23.08.2026
+      (3d-druck-3a), und der Punkt sagt damit nicht mehr „geht nicht", sondern
+      „so geht es".** OCCT bringt `BRepAlgoAPI_Defeaturing` mit:
+
+          R3 (Ausgang)      4 Verrundungen, Radius 3,0
+          entrundet         0 Verrundungen
+          R5 (neu)          4 Verrundungen, Radius 5,0
+
+          Volumen verrundet    23845,5
+          Volumen entrundet    24000,0
+          scharfer Quader      24000,0     <- auf die Stelle
+
+      **Es ist kein Zurückrechnen und kein Annähern:** Defeaturing nimmt die
+      Fläche heraus und verlängert die Nachbarflächen bis zum Schnitt. Danach
+      ist die Kante wieder da, und `edit.fillet` setzt einen neuen Radius
+      darauf. Auch der harte Fall trägt — an einem Quader mit Verrundungen an
+      **allen** Kanten (20 Flächen, 12 Zylinder und 8 Kugeln) geht es exakt
+      auf: 23701,7 → 24000,0.
+
+      **Möglich wurde das erst in derselben Nacht:** Bis dahin wusste der
+      B-Rep-Kern nicht, welche Fläche eine Verrundung ist — er warf sie über
+      `FULL_TURN` weg. Seit `fillet` dort eine Merkmalsart ist, trägt jede
+      Verrundung ihre `face_indices`, und genau die braucht Defeaturing als
+      Eingabe.
+
+      **Offen bleibt der Mesh-Fall, und der ist der Kundenfall.** Wer ein STL
+      einliest, hat keinen exakten Körper; `fillet_edges` scheitert dort
+      weiterhin mit `NeedsSolidError`. Der Punkt hängt damit unverändert am
+      B-Rep-Kern für eingelesene Geometrie — nur ist jetzt belegt, dass es
+      **dahinter** einen Weg gibt und nicht nur eine Hoffnung.
+
       **Zu entscheiden ist damit eine Frage, die größer ist als dieser
       Punkt:** Soll eine Operation, die ein Merkmal *sichtbar* hervorbringt,
       es auch **deklarieren** — oder bleibt die Provenienz den beiden
@@ -5395,7 +5426,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       schickt den Kunden nicht mehr mit seinem achten Punkt ins Handbuch, wo
       nichts stand.
 
-- [ ] **26 Tests sind grün, wenn ihre Grundmenge leer ist.** Durchgesehen am
+- [ ] **16 Tests sagen nicht, dass ihre Grundmenge nicht leer ist.** Durchgesehen am
       23.08.2026 von 3d-druck-3a, und der Punkt hat damit eine Methode statt
       einer Anekdote.
 
@@ -5412,9 +5443,28 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
 
       **Damit wird es maschinell findbar:**
 
-          Zusicherungen mit Schwelle statt Sollwert     293  (gegen 837 Sollwerte)
           Tests, die ausschließlich Verbote prüfen      108
-          davon über eine gefilterte Menge               26  <- die scharfe Liste
+          davon über eine gefilterte Menge               16  <- die scharfe Liste
+          davon nachgeprüft                               5  <- alle fünf gedeckt
+
+      **Die Zahl stand zuerst bei 26 und ist nachgeprüft 16.** Der Zähler hatte
+      `for x in <name>` gelesen und dabei Schleifenvariablen für Grundmengen
+      gehalten — `range`, `ast`, `re` zählten mit. Nachgeprüft von 3d-druck-3a
+      selbst, ausgelöst durch eine verwandte Falle bei 3d-druck-b8, deren
+      Artikelzähler an einem Teilstring hängenblieb (`le plaque` steckt in
+      `seule plaque`). *Wer mit derselben Sorte Muster gezählt hat, zählt seine
+      eigenen Zahlen nach.*
+
+      **Und der Befund ist kleiner, als er zuerst aussah:** Fünf der sechzehn
+      sind einzeln geprüft, **alle fünf gedeckt** — `generated_body()` liefert 4
+      Merkmale, `cube()` 6, `plate()` 10, `test_every_file_the_page_refers_to_exists`
+      prüft 1517 Verweise über 30 Seiten, und `test_every_operation_has_exactly
+      _one_menu_entry` bekommt sein Register aus einer Fixture.
+
+      **Offen ist damit kein Schaden, sondern eine fehlende Zusicherung.** Kein
+      Test ist heute falsch grün; keiner *sagt*, warum er es nicht ist. Fällt
+      die Fixture weg, prüft `test_every_operation…` 61 Operationen statt 77 und
+      bleibt still.
 
       Ein `assert not [x for x in menge if …]` ist grün, wenn `menge` leer ist.
       Die `test_every_…`-Namen darin sind der Typ, bei dem es wehtut:

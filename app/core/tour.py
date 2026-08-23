@@ -324,17 +324,25 @@ TOURS: Final[tuple[Tour, ...]] = (
         steps=(
             TourStep(
                 shows="history",
-                # **Fünf, nicht vier**, und der Gemeinte ist der letzte. Der
-                # Verlauf dieses Beispiels führt Quader, Kugel, Versetzen,
-                # Verschmelzen und Vernetzen — nachgezählt. „Der dritte" war
-                # das Versetzen, gemeint war das Vernetzen. Eine Anleitung, die
-                # neben einer Liste steht und anders zählt als sie, ist
-                # schlechter als keine. ``tests/test_tour.py`` hält die Zahl.
+                # **Sechs, und der Gemeinte ist nicht mehr der letzte.** Der
+                # Verlauf führt Quader, Kugel, Versetzen, Verschmelzen,
+                # Vernetzen und Auf-das-Bett-Setzen — nachgezählt. Die Zahl
+                # stand zweimal falsch: erst „vier" (gemeint war das
+                # Vernetzen, gezählt das Versetzen), dann „fünf", bis das
+                # Beispiel am 23.08.2026 einen Schritt bekam, damit es nicht
+                # unter der Druckplatte endet.
+                #
+                # **Eine von Hand gepflegte Zahl neben einer erzeugten Datei
+                # veraltet immer — es ist nur eine Frage, wann.** Dass es
+                # auffällt und nicht der Kunde es findet, liegt an
+                # ``tests/test_tour.py``: Er zählt gegen den **echten**
+                # Verlauf und nicht gegen eine zweite gepflegte Zahl.
                 text=_(
-                    "Im Verlauf stehen fünf Schritte: zwei Grundkörper, einer davon "
-                    "versetzt, beide weich verschmolzen, dann gleichmäßig vernetzt. Der "
-                    "letzte ist der, den man auslässt und danach vermisst — ohne ihn hat "
-                    "der Pinsel zu wenige Eckpunkte."
+                    "Im Verlauf stehen sechs Schritte: zwei Grundkörper, einer davon "
+                    "versetzt, beide weich verschmolzen, gleichmäßig vernetzt und zum "
+                    "Schluss auf das Bett gesetzt. Das Vernetzen ist der, den man "
+                    "auslässt und danach vermisst — ohne ihn hat der Pinsel zu wenige "
+                    "Eckpunkte."
                 ),
             ),
             TourStep(
