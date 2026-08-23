@@ -69,6 +69,24 @@ Namen. Ein Fehler endet nie mit „fehlgeschlagen": erst was nicht ging, dann
 warum, dann was jetzt möglich ist, als anklickbare Handlungen (§2.7). Kein
 Stapelabzug im Nutzerdialog.
 
+**Ein Text, der eine Grenze beschreibt, altert mit der Grenze.** „Es wird
+nichts geladen und nichts ersetzt" stand am Kästchen in den Einstellungen, am
+Menüeintrag und im Docstring von `_check_for_updates` — richtig, solange der
+Update-Weg wirklich nur ein Link war, und mit `download()` und
+`start_installer()` still falsch geworden. Für diesen einen Satz waren es drei
+Stellen im Code, zweimal fünf Kataloge, eine Website-Seite und der
+Vertragstext.
+
+Wer eine Fähigkeit hinzufügt, sucht deshalb **vorher** die Sätze, die ihre
+Abwesenheit versprechen. Der Suchbegriff ist die Verneinung dessen, was man
+baut („nichts", „nie", „kein", „ohne") — nicht der Name der neuen Sache, denn
+den kennen die alten Texte ja gerade nicht.
+
+Und beim Tauschen eines Katalogtexts muss der **alte Schlüssel hinaus**:
+`test_every_text_is_translated` prüft beide Richtungen und meldet ihn sonst als
+„no longer used". Zwei gegenläufige Zusicherungen decken einander — genau das
+hat hier zweimal an einem Tag einen halben Umzug gefangen.
+
 ## Zahlen
 
 **Eine Zahl, eine Schreibweise — in beiden Richtungen.**

@@ -31,6 +31,7 @@
 - [Download-Kasten: vier Pakete](download-kasten-vier-pakete.md) — der Baulauf liefert acht, angeboten werden vier; die Vorfassung wird vom Server gelöscht.
 - [Website-Upload großer Dateien](website-upload-grosse-dateien.md) — ~1,8 MB/s, und mehrere Pakete am Stück reißen die Verbindung; ein halbes Paket sieht ganz aus.
 - [Gesetzt heißt nicht gezeigt](text-gesetzt-heisst-nicht-gezeigt.md) — QMenu verschluckt Tooltips; ein Test über den Wert eines Hinweises sagt nichts über seine Sichtbarkeit.
+- [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) — wer eine Fähigkeit hinzufügt, sucht die Sätze, die ihre Abwesenheit versprochen haben; sie stehen selten in derselben Datei.
 
 ## Sitzungsbetrieb — gilt auf allen drei Maschinen
 
