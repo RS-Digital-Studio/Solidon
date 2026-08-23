@@ -694,10 +694,10 @@ def free_gigabytes(where: Path) -> float:
     Gefragt wird der nächste Ordner, den es schon gibt — das Ziel selbst wird
     erst angelegt, und ``disk_usage`` will einen vorhandenen Pfad.
     """
-    stelle = where
-    while not stelle.exists() and stelle != stelle.parent:
-        stelle = stelle.parent
-    return shutil.disk_usage(stelle).free / 1_000_000_000
+    existing = where
+    while not existing.exists() and existing != existing.parent:
+        existing = existing.parent
+    return shutil.disk_usage(existing).free / 1_000_000_000
 
 
 def fetch_weights(
