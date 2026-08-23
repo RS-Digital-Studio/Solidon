@@ -770,3 +770,37 @@ def test_the_cleanup_refuses_when_the_version_file_promises_nothing() -> None:
 
         assert stale == [], f"würde löschen, obwohl version.json nichts nennt: {leer}"
         assert "kein einziges Paket" in reason, reason
+
+
+def test_the_hook_check_reads_what_git_really_answers(tmp_path: Path) -> None:
+    """Die Attrappe darüber prüft drei Fälle — dieser prüft, dass sie stimmen.
+
+    **Warum beides.** Der Test darüber ersetzt ``subprocess.run`` und kommt
+    damit in einer Millisekunde durch alle drei Antworten. Er prüft aber die
+    *Annahme* über ``git config``, nicht ``git config`` selbst — und die Annahme
+    war an einer Stelle falsch: Bei einem nicht gesetzten Wert antwortet Git mit
+    **Exit 1** und leerer Ausgabe, die Attrappe meldete Exit 0. Dass es trotzdem
+    trägt, liegt daran, dass ``hooks_are_wired`` allein die Ausgabe auswertet —
+    aber das war Glück und nicht Absicht.
+
+    Deshalb hier ein echtes Repository in einem Temp-Ordner: zwei Zustände, zwei
+    Aufrufe, und die Verankerung, dass die Attrappe die Wirklichkeit trifft.
+    """
+    import subprocess
+
+    def git(*args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            ["git", "-C", str(tmp_path), *args], capture_output=True, text=True, timeout=20
+        )
+
+    git("init", "-q")
+    (tmp_path / ".githooks").mkdir()
+
+    ohne = git("config", "--get", "core.hooksPath")
+    assert ohne.stdout.strip() == "", "ein nicht gesetzter Wert gibt Text zurück?"
+    assert ohne.returncode != 0, "Git meldet einen nicht gesetzten Wert als Erfolg?"
+
+    git("config", "core.hooksPath", ".githooks")
+    mit = git("config", "--get", "core.hooksPath")
+    assert mit.stdout.strip() == ".githooks", mit.stdout
+    assert mit.returncode == 0, mit.returncode
