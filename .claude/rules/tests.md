@@ -807,6 +807,73 @@ hatten: Eine der Klassen reichte ihre 2000-ms-Frist an eine Methode durch,
 deren fachlicher Standardwert 30 000 ist. Der Fehler war vorher da — er hatte
 nur keine Stelle, an der er auffallen konnte.
 
+## Eine Zusicherung in beide Richtungen kann den Fehler festhalten
+
+`test_registry.py` prüfte, dass jedes Merkmalsfeld sich als solches
+deklariert — und zwar so:
+
+```python
+named    = {… if entry.name == "at_feature"}
+declared = {… if entry.kind == "feature"}
+assert named == declared
+```
+
+Der Zweck war richtig und stand im Docstring: §21.3 sucht Merkmalsverweise
+nach der **Art**, und achtzehn Operationen liefen an der Prüfung vorbei, bevor
+sie sich deklarierten. Getestet wurde davon aber nur die eine Richtung; die
+andere sagt etwas ganz anderes, nämlich **„kein Merkmalsfeld darf anders
+heißen"**.
+
+Genau daran ist die Behebung eines echten Fehlers hängengeblieben. *An Merkmal
+ausrichten* nennt ihr Feld `feature`, war deshalb für §21.3 unsichtbar, und
+`kind="feature"` zu setzen machte diesen Test rot. **Ein Test, der einen Fehler
+am Behobenwerden hindert, prüft die Gewohnheit und nicht die Zusage.**
+
+Die Frage, die das vorher gefunden hätte, ist nicht „ist die Zusicherung
+scharf genug", sondern:
+
+> Was genau darf nicht passieren — und sagt meine Zusicherung das, oder sagt
+> sie mehr?
+
+`a == b` über zwei erhobene Mengen ist fast nie die Zusage. Es sind zwei
+Zusagen in einer Zeile, und meist ist nur eine gewollt.
+
+**Beim Lockern nicht die Deckung wegnehmen.** Die gestrichene Richtung hatte
+eine Aufgabe — sie fing jemanden, der `kind="feature"` an ein Feld setzt, das
+gar kein Merkmal des Eingangsobjekts benennt. An ihre Stelle gehört eine
+Zusicherung über die *Sache*: Ein Merkmalsverweis wird gegen `inputs[0]`
+aufgelöst, also zeigt er ins Leere, wenn die Operation nichts verbraucht. Am
+Bestand gemessen (22 Operationen, keine ohne Eingang), beide Richtungen einmal
+mutiert und rot gesehen.
+
+## Ein Messwerkzeug, das den Absturz nicht überlebt, misst nichts
+
+Die Frage war, an welcher Zeile der Speicherbereiniger feuert, wenn
+`test_ui.py` reißt. Der erste Entwurf hängte sich an `gc.callbacks`, sammelte
+die Treffer in eine Liste und gab sie in `pytest_sessionfinish` aus.
+
+**Er hat null Zeilen geliefert** — der Lauf, um den es geht, stürzt ab, und ein
+abgestürzter Prozess erreicht kein Sitzungsende. Ein Werkzeug, das genau den
+Fall nicht überlebt, für den es gebaut ist, gibt nur dann eine Zahl aus, wenn
+sie niemanden interessiert.
+
+Die zweite Fassung schreibt zeilenweise in eine Datei
+(`open(pfad, "w", buffering=1)`), und damit stand die Antwort nach **einem**
+Lauf von neunzig Sekunden:
+
+    58 Sammelläufe insgesamt, 2 davon mit dem Hauptthread in wait_for_idle
+    #53  Auslöser haupt      Zeile 1522
+    #58  Auslöser ARBEITER   Zeile 1515   ARBEITER-LÄUFT   <- und hier starb er
+
+Der Umweg, der beinahe gegangen worden wäre: **sechzehn Läufe**, acht je Seite,
+abwechselnd mit und ohne einen vermuteten Fix — eine halbe Stunde für eine
+Wahrscheinlichkeitsaussage, wo eine direkte Messung die Ursache nennt. Bei
+einer Rissrate von 80 % (fünf Sitzungen auf der Maschine) hätte die Statistik
+ohnehin nichts getrennt.
+
+**Die Frage davor lohnt sich also:** Will ich wissen, *ob* etwas hilft, oder
+*warum* es passiert? Das zweite ist oft billiger zu messen und immer mehr wert.
+
 ## Nach einer Änderung an `app/` oder `tools/`: zwei Läufe von je drei Sekunden
 
 Viermal an einem Tag ist ein deutscher Bezeichner ins Tor gekommen, dreimal in
