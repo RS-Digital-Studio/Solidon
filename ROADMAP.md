@@ -85,11 +85,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
-| Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Verrundung und Fase gehen auf einem Netz nicht — **Konzept liegt vor** | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | **eine Entscheidung von Robert über eine Phase**, nicht über einen Commit: `konzepte/konzept-flaechenrueckgewinnung-2026-08.md`. Flächenrückgewinnung aus dem Netz, fünf Schritte, drei offene Fragen im dritten. Dagegen: **neun von neun** heruntergeladenen Modellen laufen dagegen |
-| Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
@@ -97,11 +95,10 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein gescheiterter Merge ist ein Eingriff, kein Nichts | Das Fundament der Wahrnehmung (22.08.2026) | eine Regel im Verfahren: Wer einen Merge abbricht, prüft danach `git status` **und** `git stash list`. Der Autostash überlebt den Abbruch nicht zuverlässig und trifft im geteilten Baum fremde Arbeit |
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
-| `test_ui.py` reißt unzuverlässig (1/3 ruhig, 5/5 unter Last) | Das Fundament der Wahrnehmung (22.08.2026) | den Fix an `leash.wait_for_all`, gemessen von 3d-druck-b8 — und die Lehre daneben: dieselbe Zahl (5/5) wurde neben einem Torlauf als Fremdlast gedeutet und unter Schloss auf leerer Maschine widerlegt |
-| Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
 | Der Fenstertitel sagt „Unbenannt“, während der Objektbaum den Namen zeigt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert — sachlich richtig (es gibt keine Projektdatei), aber der Kunde hat gerade `plate_holes` geöffnet. Keine Logikfrage |
 | Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
 | Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374 |
+| Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
 | Ein Importzyklus in `app/core/scene` | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Auflösung von `scene/__init__.py` ↔ `scene/history.py`. Latent, solange nur ein Thread importiert — zwei Threads gaben **5 von 5** Fehlschlägen. Kein Startzeit-Thema: die Ersparnis dort wäre 37 ms |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 
@@ -2845,11 +2842,16 @@ Fehler der Umgebung.**
 
 ### Offen: ein dritter Absturz, und er ist ein anderer
 
-- [ ] **`test_operation_ui.py` bricht weiter ab, etwa einmal in acht Läufen.**
+- [x] **`test_operation_ui.py` bricht weiter ab, etwa einmal in acht Läufen.**
       Mit A und B hat er nichts zu tun: Er tritt auch dann auf, wenn die
       Plattform steht, unter `offscreen` wie unter `xvfb`, und er trat auf dem
       unveränderten Ausgangsstand in derselben Häufigkeit auf (ein Abbruch in
       sechs Läufen dort, einer in acht hier).
+
+      **Aufgegangen in Signatur B** (23.08.2026, sortiert an 24 Stapeln):
+      Die Datei riss am 23.08. zweimal **vor** der Zusammenfassung, mit
+      denselben Codes wie die übrigen. Die Quote „einmal in acht“ ist damit ein
+      Auszug aus der Rate von B und kein eigenes Bild.
 
       **Was gemessen ist.** Die Stelle ist in beiden eingefangenen Fällen
       dieselbe: `panels.py:890`, das `self.list.clear()` in `show_document`,
@@ -2973,6 +2975,16 @@ Fehler der Umgebung.**
       weitermacht, braucht viele Läufe je Messpunkt — bei einer Rate um zwanzig
       Prozent sagt ein einzelner Lauf nichts, und genau daran ist in dieser
       Sitzung schon ein A/B-Schluss gescheitert.
+
+      **Nicht zugeordnet, und das ist Absicht** (23.08.2026). Bei der Sortierung
+      der Absturzfamilie an 24 Stapeln blieb dieser Punkt übrig: Er stammt vom
+      14.08. und nennt **weder Code noch Stelle noch, ob vor oder nach der
+      Zusammenfassung** — und aus jener Zeit liegen keine Protokolle mehr vor.
+
+      **Ihn zu Signatur B zu schlagen wäre geraten**, und dann stünde eine
+      Vermutung als Sortierung da. Er bleibt offen, mit dem Zusatz: **ohne
+      Signatur ist er nicht prüfbar.** Wer ihn wiedersieht, notiert Code und
+      Stelle; dann entscheidet sich in einer Minute, ob es B ist.
 
       **Dreißig Läufe am 20.08.2026, und die zwanzig Prozent fallen.** Kein
       einziger Abbruch in den siebenundzwanzig auswertbaren Läufen. Bei der
@@ -4160,6 +4172,46 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       und sie ist eine andere. Torlauf vom 23.08.2026 auf ruhigem Baum
       (`a48d863`), **5057 Tests bestanden, kein einziger roter**:
 
+      ## Sortiert am 23.08.2026 an **24 Absturzstapeln**
+
+      3d-druck-33 hat die Protokolle eines Tages ausgewertet statt der
+      Erinnerung. Die Codes:
+
+          19x  access violation (0xC0000005)
+          16x  0xc0000374 (Heap)
+           1x  Fatal Python error: Aborted
+
+      Und die Stellen im **eigenen** Code, absteigend:
+
+          11x  app/ui/session.py:1478  wait_for_idle   <- processEvents()
+          10x  app/ui/session.py:1460  wait_for_idle
+           9x  app/ui/session.py:112   _EvaluationWorker.__init__
+           9x  app/ui/session.py:1065  evaluate_async  <- erzeugt den Arbeiter
+           8x  app/ui/leash.py:173     run
+
+      **Das ist keine Streuung, sondern eine Konstellation:** Der Hauptthread
+      steht in `wait_for_idle` und ruft dort `processEvents()`, während ein
+      `_EvaluationWorker` in `run_evaluation` rechnet. Zwei Seiten derselben
+      Zange, in fast jedem Stapel.
+
+      > **Signatur B: `processEvents()` läuft gegen einen rechnenden Arbeiter.**
+      > Codes `0xC0000005`/`0xC0000374`, immer **vor** der Zusammenfassung,
+      > Stelle wandert, Rate 25 bis 50 Prozent je Fensterdatei.
+      > **Belegt an 21 von 24 Stapeln.**
+
+      **Vier Registerpunkte sind hierin aufgegangen** — sie beschrieben
+      dieselbe Sache aus vier Richtungen: *Ein Absturz vor der Schlusszeile*
+      (dieselbe Formulierung), *Der Absturz beim Aufräumen* (`session.py:110`
+      liegt zwei Zeilen neben der Stelle aus neun Stapeln), *`test_ui.py` reißt
+      unzuverlässig* (das ist die **Rate** dazu, keine eigene Ursache) und
+      *Ein dritter Absturz in `test_operation_ui.py`*.
+
+      **Abgegrenzt bleiben zwei:** Signatur A (Abbau-Absturz, `0xC0000409`
+      **nach** vollständiger Zusammenfassung) ist am 23.08. behoben. Signatur C
+      (der Hänger) steht als eigener Punkt — **B stirbt sofort, C stirbt gar
+      nicht.**
+
+
           test_analysis_ui.py     127   keine Summe, ~33 Tests gelaufen
           test_chat_ui.py         139   keine Summe, ~11 Tests
           test_operation_ui.py    139   keine Summe, ~20 Tests
@@ -4199,6 +4251,26 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       **Eine belastbare Aussage kostet zehn Läufe je Seite** — rund vierzig
       Minuten auf einer Maschine, die drei andere Sitzungen brauchen. Nicht
       release-kritisch; wer den Punkt aufnimmt, plant die Rechenzeit ein.
+
+- [ ] **Signatur C: der Hänger — kein Absturz, sondern Stillstand.** Abgegrenzt
+      am 23.08.2026 bei der Sortierung der Absturzfamilie an 24 Stapeln.
+
+      **Der Hauptthread hält den GIL und wartet auf einen Qt-Mutex; ein
+      Nebenthread hält den Mutex und will den GIL.** Beide warten, keiner
+      stürzt. Dreimal belegt mit verschiedenen Widgets (3d-druck-b8), einmal
+      gemessen bei Test 59 mit 250 Sekunden Zeitlimit (3d-druck-33).
+
+      > **Nicht dasselbe wie Signatur B:** B stirbt sofort, C stirbt gar nicht.
+
+      Das ist der Grund, aus dem beide getrennt geführt werden " + S + " ein Lauf, der
+      **steht**, sieht im Protokoll aus wie einer, der rechnet, und keine
+      Absturzsignatur passt darauf. `py-spy dump --pid N --native` ist das
+      Werkzeug dafür; die Falle beim Finden der Prozessnummer steht in
+      `.claude/rules/tests.md`.
+
+      **Drei Behebungsversuche sind gemessen und widerlegt** (22./23.08.). Was
+      fehlt, ist nicht ein weiterer Versuch, sondern eine Messstelle, die eine
+      Änderung in wenigen Läufen bewertet statt in zwanzig.
 
 - [ ] **Ein Importzyklus in `app/core/scene` — latent, und jede Parallelität
       stolpert darüber.** Gefunden am 23.08.2026 beim Messen der Startzeit:
@@ -5295,7 +5367,7 @@ Keine Qt-Meldung davor: Es ist eine Zugriffsverletzung und kein `qFatal`, also
 Zugriffsverletzung in einer nackten `QThread`-Konstruktion deutet auf einen
 Schaden, der vorher entstanden ist und hier bloß auffällt.
 
-- [ ] **Was fehlt, ist der Beweis, nicht die Vermutung.** Nicht reproduzierbar:
+- [x] **Was fehlt, ist der Beweis, nicht die Vermutung.** Nicht reproduzierbar:
       derselbe Dateisatz in derselben Reihenfolge lief beim zweiten Mal
       durch, und zwölf Läufe der Einzeletappe mit Instrumentierung blieben
       sauber. Damit wäre jede Änderung an der Auswertung geraten — und die
@@ -5305,6 +5377,11 @@ Schaden, der vorher entstanden ist und hier bloß auffällt.
       wäre schlimmer als ein seltener Absturz. Der Weg bleibt ein Lauf unter
       einem Werkzeug, das doppelte Freigaben sieht; die Falle steht jetzt
       dafür bereit.
+
+      **Aufgegangen in Signatur B** (23.08.2026, sortiert an 24 Stapeln):
+      Die Stelle `session.py:110` liegt **zwei Zeilen** neben
+      `session.py:112`, die in neun der 24 Stapel steht. Der Beweis, der hier
+      fehlte, ist die Konstellation im Hauptpunkt.
 
       **Nachtrag vom selben Abend: der zweite Stapel, und er widerlegt die
       Verengung.** Der geteilte Lauf fing ihn in `tests/test_ui.py` — dieselbe
@@ -7120,11 +7197,15 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       `zaehlt_als_fehler()` gibt für 5 dasselbe zurück wie für 0, mit der
       Begründung darüber im Skript. Gefunden von 3d-druck-3a, am Skript
       bestätigt von 3d-druck-33, nachgeprüft von 3d-druck-64.
-- [ ] **`test_ui.py` reißt unzuverlässig — und die Rate hängt an der Last,
+- [x] **`test_ui.py` reißt unzuverlässig — und die Rate hängt an der Last,
       nicht an der Datei.** Die Überschrift hieß „zehn von zehn“; das ist
       **zum dritten Mal widerlegt**, jedes Mal in dieselbe Richtung. Drei
       Läufe allein unter dem Schloss am 23.08.2026 (3d-druck-33), ruhige
       Maschine:
+
+      **Aufgegangen in Signatur B** (23.08.2026, sortiert an 24 Stapeln):
+      **Das ist die Rate zu B, keine eigene Ursache.** Die Zahlen bleiben
+      gültig und stehen dort: 25 bis 50 Prozent je Fensterdatei, lastabhängig.
 
           Lauf 1   Exit   0   257 passed
           Lauf 2   Exit   1   257 passed, 1 error   (Teardown, kein Test)
@@ -7301,10 +7382,14 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Zahl der bestandenen Tests war echt, der Exit-Code nicht. Wer diesen Punkt
       prüft, schreibt die Ausgabe in eine Datei und liest sie danach.
 
-- [ ] **Ein Absturz vor der Schlusszeile ist eine dritte Signatur.**
+- [x] **Ein Absturz vor der Schlusszeile ist eine dritte Signatur.**
       `test_selection.py` ist dafür ein **Kandidat** als Messstelle — und
       ausdrücklich keine gesicherte Grundlage. Zwei Messungen vom 23.08.2026
       nebeneinander:
+
+      **Aufgegangen in Signatur B** (23.08.2026, sortiert an 24 Stapeln):
+      Dieselbe Sache wie *Fünf Fensterdateien reißen vor ihrer
+      Zusammenfassung*, nur anders formuliert. Dort steht die Signatur.
 
           3d-druck-3a   im eigenen Torlauf     Riss bei 18 von 20 Punkten,
                                                einzeln grün
