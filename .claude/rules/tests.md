@@ -229,6 +229,40 @@ von einem Vorgänger abhängt, wird bei paralleler Ausführung nicht rot — er 
 *manchmal* rot. Zwei gleiche Läufe sind kein Beweis, zwei ungleiche sind sofort
 einer. Beim ersten Einsatz dieses Verfahrens fielen die elf oben auf.
 
+
+### Wie viele Läufe trägt eine Aussage?
+
+„Zweimal fahren" ist keine Zahl, sondern eine Faustregel — und wie viele Läufe
+eine Aussage wirklich braucht, hängt daran, **wie oft die Sache ohne jede
+Änderung schon schiefgeht**. Diese Basisraten sind am 22./23.08.2026 gemessen
+worden, alle unter dem Schloss:
+
+| Datei / Lage | ohne Änderung | Bemerkung |
+|---|---|---|
+| `test_pose_session.py`, ruhig | **1/10** | die Rate, gegen die ein Fix sich beweisen muss |
+| `test_pose_session.py` nach dem Ring-Umbau | **6/10** | eine Änderung, die die Rate hob |
+| `test_ui.py`, ruhig | **0/3** | |
+| `test_ui.py` unter Fremdlast | **5/5** | *immer* — hier misst kein Lauf mehr etwas |
+
+Daraus folgen drei Dinge, und das dritte kostet am meisten Zeit, wenn man es
+vergisst:
+
+* **Bei 1/10 ist „0 von 10" kein Beleg, sondern kein Widerspruch.** Wer nach
+  zehn grünen Läufen „behoben" meldet, meldet eine Wahrscheinlichkeit von
+  ungefähr einem Drittel als Gewissheit. Sagen, was die Zahl trägt, ist Teil
+  des Ergebnisses.
+* **Bei 5/5 ist gar nichts messbar.** Eine Änderung kann die Rate nicht mehr
+  erhöhen, also entlastet ein „gleich schlecht" sie nicht. Solche Läufe zählen
+  nicht als Messung, auch wenn sie Zahlen liefern.
+* **Die Messlatte gehört vor die Messung.** Am 23.08. lautete sie „0 oder 1 von
+  5 wirkt, 2 oder mehr nicht", festgelegt bevor irgendjemand ein Ergebnis
+  kannte. Es wurden fünf, und die Entscheidung war damit schon getroffen. Wer
+  die Grenze hinterher zieht, findet immer eine, die zum Ergebnis passt.
+
+**Und ein Prozess, den keiner von uns startet, läuft immer mit:** ComfyUI liegt
+mit rund einem Gigabyte und wachsender Rechenzeit im Hintergrund. Wer die Last
+der Maschine beurteilt, sollte ihn kennen, sonst rechnet er ihn jemandem zu.
+
 ## Wenn ein Lauf steht: py-spy
 
 Ein Testlauf, der bei 0,00 CPU-Sekunden über ein Intervall steht, sagt nicht,
