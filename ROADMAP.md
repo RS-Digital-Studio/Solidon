@@ -108,6 +108,10 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `test_ui.py` reißt unzuverlässig (1/3 ruhig, 5/5 unter Last) | Das Fundament der Wahrnehmung (22.08.2026) | den Fix an `leash.wait_for_all`, gemessen von 3d-druck-b8 — und die Lehre daneben: dieselbe Zahl (5/5) wurde neben einem Torlauf als Fremdlast gedeutet und unter Schloss auf leerer Maschine widerlegt |
 | Fensterdateien enden mit Exit 127 — **halb aufgeklärt** | Das Fundament der Wahrnehmung (22.08.2026) | nichts mehr für `test_chat_ui` und `test_first_run`: Dahinter steht `0xC0000409`, der bekannte Abbau-Absturz — zwei Punkte, eine Sache. **127 ist eine Shell-Konvention und sagt nichts;** dieselbe 127 trug bei zwei anderen Dateien `0xc0000374`. Was bleibt, ist der Fall *vor* der Schlusszeile |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
+| `overlay.py` fasst Körper an, die es nicht mehr gibt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | den Fix, den b8 benannt hat: eine Hilfsfunktion `lebende(zone, typ)` und fünf Aufrufstellen darauf umgestellt (`findChildren` an 276, 294, 345, 438, 655, keine mit `isValid`-Wache). **Vor dem Release bewusst nicht gemacht:** Er kostet drei `test_ui.py`-Läufe, und genau diese Datei hat bei drei Läufen drei Ausgänge — seine Wirkung wäre an ihr nicht abzulesen. Der Kunde sieht nichts, die Suite einen ERROR im Teardown |
+| Der Fenstertitel sagt „Unbenannt“, während der Objektbaum den Namen zeigt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert — sachlich richtig (es gibt keine Projektdatei), aber der Kunde hat gerade `plate_holes` geöffnet. Keine Logikfrage |
+| Die deutsche Quelle trennt die Fläche nicht von der Belegung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | 36 Stellen „Druckplatte“ → „Druckbett“ — und **jede ändert einen Katalogschlüssel**, alle fünf Sprachen fielen auf einmal auf unübersetzt zurück. Kein Eingriff für den Tag vor einem Release; solange die Quelle nicht trennt, sammelt jede Übersetzungsrunde einen Teil davon wieder ein |
+| Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
 
 ---
 
@@ -3983,6 +3987,148 @@ der die Messung gemacht hatte — nachträglich, ohne dass jemand nachgefragt
 hätte. Zweimal fand ihn ein anderer. Das Verfahren, das trägt, ist also nicht
 gegenseitige Kontrolle, sondern die Gewohnheit, die eigene Messung noch einmal
 gegen ihre Deutung zu halten, **bevor** man sie weitergibt.
+
+## Vier Wege von Hand, während die Suite grün war (23.08.2026)
+
+Vor dem Release für 0.1.3 hat 3d-druck-b8 die vier Wege aus §2.2 **bedient**
+statt getestet — echte Qt-Plattform, kein Offscreen, als hätte sie Solidon
+gerade heruntergeladen. Parallel dazu meldete die Suite 5268 bestandene Tests.
+
+**Alle vier Wege tragen.** Weg 1 kommt ohne Handbuch bis zur STL, Weg 2 bis
+zum Körper im Verlauf, Weg 4 bis zur Pinselleiste, Weg 3 ist ohne KI ehrlich
+und sagt, was fehlt. Der Abschluss — Druckeinstellungen und Slicer-Übergabe —
+ist sauber.
+
+**Und trotzdem sind drei Fehler herausgekommen, die kein Test gesehen hat.**
+Das ist die eigentliche Aussage des Abschnitts:
+
+    Ergebnis-Cache fiel bei jedem konstruierten Projekt aus   b46b289, behoben
+    Eine Warnung im Protokoll log                             6bf84ff, behoben
+    overlay.py fasst gelöschte Kinder an (fünf Stellen)        offen, unten
+
+**Der Cache ist der teuerste von den dreien, und er stand seit Tagen in jedem
+Protokoll.** Seit Objektnamen aus dem Register kommen, ist `SceneObject.name`
+ein `TranslatableText`; `json.dumps` kann den nicht ablegen, und der
+`TypeError` landete im `except`-Zweig, der für nicht ablegbare B-Rep-Körper
+gedacht ist. Ordner weg, eine Zeile ins Protokoll, fertig:
+
+    could not write cache entry d81bbfa2...: Object of type
+    TranslatableText is not JSON serializable
+
+Es traf nicht ein Objekt, sondern den Eintrag der **ganzen** Auswertung —
+`objects.json` wird für die Szene geschrieben. Für den Kunden hieß das: Jede
+Auswertung jedes konstruierten Projekts rechnet neu. **Nichts war falsch, nur
+langsam, und genau darum sah es niemand.**
+
+Abgelegt wird jetzt die Message-ID, nie `str(...)` — und dieser Unterschied ist
+der Fund im Fund: Die Übersetzung wechselt mit der Sprache, ein Cache tut das
+nicht. Wer `str()` genommen hätte, bekommt nach einem Sprachwechsel den alten
+Namen zurück: **ein Fehler, den nur ein warmer Cache zeigt und den darum beim
+Entwickeln nie jemand sieht.**
+
+**Ein Zwischenfall beim Testschreiben, der größer ist als der Fix, zu dem er
+gehört.** Die ersten beiden Tests zum `discover`-Fix waren grün, **ohne etwas
+zu prüfen**: `conftest.py` ersetzt `find_program` für die ganze Suite durch
+eine Attrappe (§38, die Suite fragt die Maschine nicht), und eine Attrappe
+protokolliert nie. Eine Zusicherung auf eine **ausbleibende** Warnung ist dort
+immer erfüllt. Das Original steht seither als `unpatched_find_program`
+daneben.
+
+> Wer auf das **Ausbleiben** von etwas prüft, prüft am leichtesten nichts.
+> Eine Gegenprobe fängt es in zehn Sekunden: Fix zurücknehmen, Test muss rot
+> werden.
+
+**Die Bilanz des Messenden, und sie gehört zum Bild:** b8 hat an diesem
+Vormittag **vier** eigene Fehlbefunde vor dem Melden abgefangen und einen
+nicht — `sculpt_push` gibt es nicht (die Ops heißen `sculpt_strokes` und
+`pose_armature`); `install.statuses()` meldete einmalig `present=False` und
+dreimal danach `True`; zwei Knöpfe hießen scheinbar gleich, weil ihr Filter
+`if b.text()` erhob, **was existiert, statt was zu sehen ist**; und
+`arrange.below_bed` ist beim Export längst eine Warnung statt eines Hinweises
+(`_severity_for(about_to_write=True)`), was sie aus dem Prüfbericht
+geschlossen und nicht am Export gemessen hatte.
+
+> **Wer viel misst, erzeugt viel Rohmaterial, und ein Teil davon ist Schrott.**
+> Der Wert liegt darin, ihn vor dem Melden auszusortieren — nicht darin,
+> keinen zu erzeugen.
+
+### Offen aus diesem Durchgang
+
+- [ ] **`overlay.py` fasst Körper an, die es nicht mehr gibt — fünf Stellen,
+      nicht eine.** Aus 33s Belegs-Probelauf, nachgemessen von b8:
+
+          app/ui/overlay.py:346
+          if isinstance(child, RoomTaker) and child.isVisibleTo(zone)
+          RuntimeError: Internal C++ object (ObjectTree) already deleted.
+
+      `findChildren` steht an **276, 294, 345, 438 und 655**, und jede Stelle
+      fasst die Kinder sofort an. **Keine hat eine `isValid`-Wache** — die Datei
+      kennt `shiboken6` gar nicht. Die Aufräum-Fixture macht es für die
+      Top-Level-Widgets vorbildlich; für die Kinder macht es niemand.
+
+      **Der Kundenpfad ist derselbe:** `closeEvent` ruft `wait_for_workers`,
+      das läuft über `session.wait_for_idle`, und dort steht `processEvents` —
+      dieselbe Schleife, in der der `eventFilter` auf halb abgebauten Kindern
+      feuert.
+
+      **Der Schaden, ehrlich gerechnet:** Eine Ausnahme in einem `eventFilter`
+      bringt die Anwendung **nicht** um. PySide meldet
+      „Error calling Python override“ auf stderr und macht weiter; der Kunde
+      ohne Terminal sieht nichts. Was bleibt, ist ein ERROR im Teardown, der
+      einen Belegslauf verunsichert.
+
+      **Der nächste Schritt ist benannt:** eine Hilfsfunktion in `overlay.py`
+      (`lebende(zone, typ)`), die `findChildren` filtert, und fünf
+      Aufrufstellen darauf umgestellt — reine Absicherung, bei gültigen
+      Objekten ändert sich nichts. Dazu ein Test, der ein Kind löscht und die
+      Rechnung trotzdem durchlaufen lässt.
+
+      **Vor dem Release ausdrücklich nicht gemacht**, und der Grund ist
+      messbar: Der Fix kostet drei `test_ui.py`-Läufe unter dem Schloss — und
+      genau diese Datei ist die, bei der drei Läufe **drei verschiedene
+      Ausgänge** haben. Ein Fix, dessen Wirkung man an seiner eigenen Datei
+      nicht ablesen kann, ist der schlechteste Kandidat für den Tag vor einem
+      Release.
+
+- [ ] **Der Fenstertitel sagt „Unbenannt“, während der Objektbaum den Namen
+      zeigt.** Wer eine STL ablegt, sieht oben `Unbenannt* — Solidon3D` und
+      darunter `plate_holes`. Sachlich richtig — es gibt noch keine
+      Projektdatei —, aber der Kunde hat gerade etwas geöffnet, das einen Namen
+      hat. **Keine Logikfrage, sondern eine Geschmacksfrage an Robert.**
+
+- [ ] **Die deutsche Quelle trennt die Fläche nicht von der Belegung — und das
+      ist die Wurzel unter allen Übersetzungsfunden dieses Tages.** Gezählt am
+      23.08.2026:
+
+          Druckbett     10 x        dieselbe Flaeche, zwei Woerter
+          Druckplatte   36 x
+
+      Dazu heißt „Platte“ **auch** die Belegung („beginnt eine neue Platte,
+      sobald die aktuelle voll ist“). Ein Wort, zwei Dinge — und eine dritte
+      Bedeutung als **Bauteil** (*Rückplatte*, *Deckelplatte*), die 3d-druck-3a
+      beim Übersetzen gefunden hat und ohne die zehn Bauteilbeschreibungen zu
+      Druckbetten geworden wären.
+
+      **Keine Übersetzung kann das auflösen**, und jede Sprache hat es anders
+      geraten. Gemessen an beiden lokal installierten Slicern:
+
+          Quelle "bed"    fr  plateau 76:1 plaque    it  piano 42
+          Quelle "plate"  fr  plaque  75:28 plateau  it  piatto 59:15
+
+          (ElegooSlicer, Bambu-Abstammung. PrusaSlicer kennt nur ein Wort:
+           es hat keine Mehrplatten-Verwaltung.)
+
+      `fr` und `it` sind am 23.08. bereinigt (`258523a`), `en`, `es` und `pt`
+      danach. **Offen bleibt die deutsche Seite:** „Druckplatte“ →
+      „Druckbett“ wären 36 Stellen, und **jede ändert einen Katalogschlüssel** —
+      alle fünf Sprachen fielen auf einmal auf ungebübersetzt zurück. Solange
+      die Quelle nicht trennt, sammelt jede Übersetzungsrunde einen Teil davon
+      wieder ein.
+
+- [ ] **Die Belegung heißt in `es` und `pt` noch nicht entschieden.** Elegoo
+      sagt für `es` `bandeja` (65) gegen `placa` (18); für `pt` steht es
+      **69:69**. Das ist eine Wortwahl und keine Messung — bei unentschiedener
+      Quelle bleibt der Bestand stehen.
 
 ## Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026)
 
