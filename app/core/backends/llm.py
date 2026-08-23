@@ -35,8 +35,26 @@ _log = get_logger(__name__)
 
 Role = Literal["system", "user", "assistant", "tool"]
 
-#: Wie lange eine einzelne Anfrage dauern darf, bevor sie aufgegeben wird.
+#: Wie lange eine einzelne Anfrage an ein **gehostetes** Modell dauern darf.
+#:
+#: Dort misst die Zahl die Erreichbarkeit: Wer in zwei Minuten nicht antwortet,
+#: antwortet nicht mehr.
 TIMEOUT_SECONDS = 120.0
+
+#: Und wie lange bei einem **lokalen** Modell.
+#:
+#: **Dieselbe Zahl für beide misst zwei verschiedene Dinge.** Bei einem
+#: gehosteten Modell die Erreichbarkeit, bei einem lokalen die Rechenleistung
+#: des Kunden — und die kennen wir nicht. Der erste Kunde mit 0.1.3 riss nach
+#: 122 Sekunden auf einem ``qwen3:8b``, bei einem Limit von 120; Solidon selbst
+#: schreibt im Chat, ein Werkzeugaufruf könne zwei Minuten kosten. Das Limit
+#: lag also genau auf dem Wert, vor dem die eigene Oberfläche warnt.
+#:
+#: Zehn Minuten, und die Begründung ist dieselbe wie bei ComfyUI: **Ein
+#: Zeitlimit gilt dem Hängen, nicht der Langsamkeit.** Auf Intel- und
+#: AMD-Grafik sind 7,8 Token je Sekunde gemessen worden; wer dort rechnet,
+#: soll ein Ergebnis bekommen und keine Absage.
+LOCAL_TIMEOUT_SECONDS = 600.0
 
 #: Wie lange die Prüfung „läuft ein lokales Modell" dauern darf. Sie passiert,
 #: während das Fenster gebaut wird, muss also vorbei sein, bevor es jemand
@@ -131,7 +149,12 @@ Transport = Callable[[str, dict[str, str], dict[str, Any]], dict[str, Any]]
 Agenten ohne Netz prüfbar."""
 
 
-def post_json(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+def post_json(
+    url: str,
+    headers: dict[str, str],
+    payload: dict[str, Any],
+    timeout: float = TIMEOUT_SECONDS,
+) -> dict[str, Any]:
     """Der Vorgabe-Transport: ein POST, JSON hinein, JSON heraus."""
     body = json.dumps(payload).encode("utf-8")
     # Die Adresse kommt aus dem Backend, nie aus etwas, das das Modell gesagt hat.
@@ -139,13 +162,37 @@ def post_json(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dic
         url, data=body, headers={"Content-Type": "application/json", **headers}
     )
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as answer:
+        with urllib.request.urlopen(request, timeout=timeout) as answer:
             return dict(json.loads(answer.read().decode("utf-8")))
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")[:500]
         raise BackendUnavailable(status=error.code, detail=detail) from error
     except urllib.error.URLError as error:
         raise BackendUnavailable(detail=str(error.reason)) from error
+    except TimeoutError as error:
+        # **Und zwar getrennt von ``URLError``, denn urllib wickelt nur die
+        # Hälfte ein.** Beim Verbindungsaufbau wird ein Zeitlimit zu einem
+        # ``URLError``; beim **Lesen der Antwort** kommt der nackte
+        # ``TimeoutError`` durch — ``http/client.py`` reicht ihn von
+        # ``socket.readinto`` unverändert weiter. Genau dort stand er im
+        # Protokoll des ersten Kunden mit 0.1.3, und dort wird das Warten auf
+        # ein rechnendes Modell auch verbracht.
+        #
+        # Ohne diese Zeile wurde daraus ein ``InternalError``: „Im Programm ist
+        # ein unerwarteter Fehler aufgetreten" plus die Bitte um einen
+        # Fehlerbericht — für ein Modell, das schlicht länger rechnet.
+        raise BackendTooSlow(seconds=timeout) from error
+
+
+def post_json_local(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+    """Derselbe Transport, mit der Frist eines lokalen Modells.
+
+    Als eigene Funktion und nicht als Vorgabewert am Backend: Der
+    ``Transport``-Vertrag hat drei Argumente, und daran hängen die Attrappen
+    der Tests. Was sich unterscheidet, ist die Frist — also unterscheidet sich
+    der Transport, nicht seine Signatur.
+    """
+    return post_json(url, headers, payload, timeout=LOCAL_TIMEOUT_SECONDS)
 
 
 class BackendUnavailable(ExternalToolError):
@@ -163,6 +210,39 @@ class BackendUnavailable(ExternalToolError):
         super().__init__(
             detail=detail or None,
             values={"status": str(status)} if status is not None else {},
+        )
+
+
+class BackendTooSlow(ExternalToolError):
+    """Das Modell hat gerechnet und war nicht rechtzeitig fertig.
+
+    **Getrennt von :class:`BackendUnavailable`, weil der Nutzer etwas anderes
+    tun muss.** „Nicht erreichbar" heißt: Ollama starten, Schlüssel prüfen.
+    „Zu langsam" heißt: kleineres Modell, kürzere Anweisung, oder ein
+    gehostetes nehmen — die Sache läuft, sie dauert nur.
+
+    Ein ``ExternalToolError`` und ausdrücklich **kein** Programmfehler: Wer für
+    eine lange Rechnung einen Fehlerbericht schicken soll, sucht den Fehler bei
+    sich und findet keinen.
+    """
+
+    default_title = _("Das Sprachmodell hat zu lange gebraucht.")
+
+    def __init__(self, seconds: float) -> None:
+        # **Die Zahl steht in ``values``, nicht im Satz.** Einen Fehlertext aus
+        # dem Kern formatiert niemand nach — der Dialog zeigt ``detail``, wie es
+        # ist, und hängt die ``values`` als eigene Zeilen darunter. Ein
+        # ``{platzhalter}`` erschiene dem Kunden mit geschweiften Klammern.
+        # In der Oberfläche wäre derselbe Platzhalter richtig; das ist die
+        # Falle, und ``tests/test_errors.py`` sucht im ganzen Kern danach.
+        super().__init__(
+            detail=_(
+                "Das Modell hat gerechnet, war aber innerhalb der Wartezeit nicht "
+                "fertig. Lokale Modelle brauchen je nach Rechner Minuten für einen "
+                "Schritt — ein kleineres Modell, eine kürzere Anweisung oder ein "
+                "gehostetes Modell mit eigenem Schlüssel sind schneller."
+            ),
+            values={"waited_minutes": f"{seconds / 60:.0f}"},
         )
 
 
@@ -470,7 +550,7 @@ class OllamaBackend:
     # Wie bei ComfyUI: die Adresse darf woanders hinzeigen, wenn das Modell auf
     # einem zweiten Rechner läuft (§38).
     url: str = field(default_factory=lambda: _configured_ollama_url())
-    transport: Transport = post_json
+    transport: Transport = post_json_local
 
     @property
     def id(self) -> str:

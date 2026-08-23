@@ -700,3 +700,55 @@ def test_a_pull_without_a_server_blames_the_server(monkeypatch: pytest.MonkeyPat
 
     assert problem is not None
     assert "läuft es noch" in str(problem)
+
+
+def test_a_slow_local_model_is_not_a_program_fault(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Zeitlimit ist ein Fremdprogramm-Fehler, kein Absturz.
+
+    **Gemeldet vom ersten Kunden mit 0.1.3.** Er ließ den Agenten auf einem
+    lokalen ``qwen3:8b`` rechnen, und nach 122 Sekunden stand da:
+
+        Im Programm ist ein unerwarteter Fehler aufgetreten.
+        TimeoutError: timed out
+
+    Das ist die falsche Klasse und der falsche Satz. Ein lokales Modell, das
+    lange rechnet, ist kein Programmfehler — es ist genau das, wovor Solidon
+    im Chat selbst warnt („für einen Werkzeugaufruf zwei Minuten"). Der Kunde
+    bekam die Aufforderung, einen Fehlerbericht zu schicken, statt eines
+    Satzes, der sagt, was zu tun ist.
+
+    Die Ursache ist eine Lücke in ``post_json``: Es fängt ``HTTPError`` und
+    ``URLError``, und beim **Verbindungsaufbau** wickelt urllib ein Zeitlimit
+    auch in ``URLError``. Beim **Lesen der Antwort** nicht — dort kommt der
+    nackte ``TimeoutError`` durch, und genau dort stand er im Protokoll
+    (``http/client.py`` → ``socket.readinto``).
+    """
+
+    def zu_langsam(request: Any, timeout: float = 0.0) -> Any:
+        raise TimeoutError("timed out")
+
+    monkeypatch.setattr(llm.urllib.request, "urlopen", zu_langsam)
+
+    with pytest.raises(llm.BackendTooSlow) as gefangen:
+        llm.post_json("http://127.0.0.1:11434/api/chat", {}, {})
+
+    problem = gefangen.value
+    assert problem.suggestions, "Regel 17: ein Fehler endet nie ohne Handlungsvorschlag"
+    text = f"{problem.title} {problem.detail}"
+    assert "Zeit" in text or "lange" in text, f"der Satz nennt den Grund nicht: {text!r}"
+
+
+def test_a_local_model_gets_more_time_than_a_hosted_one() -> None:
+    """Zwei Minuten sind für ein lokales Modell keine Frist, sondern ein Abbruch.
+
+    Der Kunde riss bei 122 Sekunden — das Limit stand auf 120. Ein gehostetes
+    Modell antwortet in Sekunden, ein lokales rechnet Minuten; dieselbe Zahl
+    für beide misst beim einen die Erreichbarkeit und beim anderen die
+    Rechenleistung des Kunden.
+
+    Das Zeitlimit gilt dem **Hängen**, nicht der Langsamkeit — dieselbe Regel
+    wie bei ComfyUI (``.claude/rules/kern.md``).
+    """
+    assert llm.LOCAL_TIMEOUT_SECONDS > llm.TIMEOUT_SECONDS
+    assert llm.LOCAL_TIMEOUT_SECONDS >= 600.0, "unter zehn Minuten ist kein Hängen, sondern Rechnen"
+    assert llm.OllamaBackend().transport is llm.post_json_local
