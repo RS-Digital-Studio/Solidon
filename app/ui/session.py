@@ -403,9 +403,54 @@ class Session(QObject):
         return self._worker is not None and self._worker.isRunning()
 
     @property
+    def document_name(self) -> str:
+        """Wie das Projekt heißt — ohne Stern, ohne Zusatz, für Dateinamen.
+
+        Getrennt von :attr:`title`, weil beides auseinanderläuft: Der Titel ist
+        für den Menschen und trägt, was das Fenster über sich sagen muss; dies
+        hier landet in Dateidialogen. Ohne die Trennung stünde beim Exportieren
+        „GK-Brause (ungespeichert).stl" — ein Dateiname mit einer Eigenschaft
+        des Fensters darin.
+        """
+        if self.path is not None:
+            return self.path.stem
+        result = self.last_result
+        objects = list(result.scene.objects.values()) if result is not None else []
+        if not objects:
+            return ""
+        # **Der erste und nicht „N Objekte".** Wer eine Baugruppe baut, fängt
+        # mit einem Teil an, und die späteren sind meist Werkzeuge oder
+        # Gegenstücke dazu; der erste Name ist das, woran jemand denkt, wenn er
+        # an dieses Projekt denkt. Eine Zahl im Titel beantwortet keine Frage,
+        # die jemand hat.
+        return str(objects[0].name)
+
+    @property
     def title(self) -> str:
-        name = self.path.name if self.path else tr("Unbenannt")
-        return f"{name}*" if self._dirty else name
+        """Was im Fenstertitel steht.
+
+        **„Unbenannt" nennt, was fehlt, statt was da ist.** Im Bildschirmfoto
+        des ersten Kunden mit 0.1.3 stand oben „Unbenannt*" und darunter im
+        Baum „GK-Brause" mit seinen Maßen — der Titel wusste den Namen und
+        sagte ihn nicht. Entschieden von Robert am 23.08.2026: der abgeleitete
+        Name, wie Fusion es tut. Ein Titel, der dem Baum widerspricht, ist
+        schlechter als einer, der ihn wiederholt.
+
+        **Der Zusatz „(ungespeichert)" ist nicht dasselbe wie der Stern.** Der
+        Stern sagt „seit dem letzten Speichern geändert", der Zusatz sagt „es
+        gibt keine Datei". Ohne ihn sähe „GK-Brause*" aus wie eine geöffnete
+        Projektdatei, und der Kunde suchte sie beim nächsten Start auf der
+        Platte.
+        """
+        if self.path is None:
+            # **Kein Stern ohne Datei.** Er sagt „seit dem letzten Speichern
+            # geändert" — und wo nie gespeichert wurde, kann er gar nicht
+            # fehlen. „GK-Brause (ungespeichert)*" trägt dieselbe Aussage
+            # zweimal, einmal als Wort und einmal als Zeichen.
+            if not self.document_name:
+                return str(tr("Unbenannt"))
+            return str(tr("{name} (ungespeichert)").format(name=self.document_name))
+        return f"{self.path.name}*" if self._dirty else self.path.name
 
     # --- documents --------------------------------------------------------------
 

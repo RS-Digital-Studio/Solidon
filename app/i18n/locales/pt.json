@@ -2892,6 +2892,7 @@
   "{grams} g": "{grams} g",
   "{hours} h {minutes} min": "{hours} h {minutes} min",
   "{minutes} min": "{minutes} min",
+  "{name} (ungespeichert)": "{name} (não guardado)",
   "{name} — dazu {what} auswählen.": "{name} — para isso, selecionar {what}.",
   "{name}: dazu erst {what} auswählen.": "{name}: selecionar primeiro {what}.",
   "{n} Schritte": "{n} passos",

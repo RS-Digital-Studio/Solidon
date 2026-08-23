@@ -3270,7 +3270,10 @@ class MainWindow(QMainWindow):
             if not chosen or object_id in chosen
         ]
 
-        stem = safe_name(Path(self.session.title.rstrip("*")).stem, "projekt")
+        # ``document_name`` und nicht ``title``: Der Titel trägt seit dem
+        # 23.08.2026 den Zusatz für ein ungespeichertes Projekt, und der gehört
+        # ins Fenster und nicht in einen Dateinamen.
+        stem = safe_name(self.session.document_name, "projekt")
         # GLB steht am Ende und nicht bei den Druckformaten: es ist das
         # Format zum Zeigen, nicht zum Drucken — Farben und Name reisen mit,
         # jeder Betrachter öffnet es, kein Slicer will es.

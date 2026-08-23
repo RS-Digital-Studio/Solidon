@@ -2892,6 +2892,7 @@
   "{grams} g": "{grams} g",
   "{hours} h {minutes} min": "{hours} h {minutes} min",
   "{minutes} min": "{minutes} min",
+  "{name} (ungespeichert)": "{name} (unsaved)",
   "{name} — dazu {what} auswählen.": "{name} — select {what} for this.",
   "{name}: dazu erst {what} auswählen.": "{name}: select {what} first.",
   "{n} Schritte": "{n} steps",

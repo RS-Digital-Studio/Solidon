@@ -117,3 +117,64 @@ def test_the_header_is_updated_where_the_state_changes() -> None:
 
     body = source.split("def _on_project(", 1)[1].split("def ", 1)[0]
     assert "_update_header()" in body, "und bei jedem Projektwechsel"
+
+
+def test_the_title_names_what_is_open_instead_of_what_is_missing() -> None:
+    """„Unbenannt", während der Objektbaum den Namen zeigt.
+
+    **So stand es im Bildschirmfoto des ersten Kunden mit 0.1.3**: oben
+    „Unbenannt*", darunter im Baum „GK-Brause" mit seinen Maßen. Der Titel
+    wusste den Namen — er sagte ihn nur nicht, sondern nannte stattdessen, was
+    fehlt.
+
+    Entschieden von Robert am 23.08.2026: der abgeleitete Name, wie Fusion es
+    tut. Ein Titel, der dem Baum widerspricht, ist schlechter als einer, der
+    ihn wiederholt.
+
+    **Der Zusatz „(ungespeichert)" bleibt und ist nicht dasselbe wie der
+    Stern.** Der Stern sagt „seit dem letzten Speichern geändert", der Zusatz
+    sagt „es gibt keine Datei". Ohne ihn sähe „GK-Brause*" aus wie eine
+    geöffnete Projektdatei, und der Kunde suchte sie beim nächsten Start.
+    """
+    session = Session()
+    assert session.title == "Unbenannt", "ohne Objekte gibt es nichts abzuleiten"
+
+    _with_object(session, "GK-Brause")
+    assert session.title.startswith("GK-Brause"), (
+        f"der Baum weiß es, der Titel auch: {session.title}"
+    )
+    assert "ungespeichert" in session.title, "es gibt keine Datei, und das gehört dazu"
+
+
+def test_the_derived_name_does_not_leak_into_the_file_dialog() -> None:
+    """Der Dateivorschlag nimmt den Namen, nicht den Titel.
+
+    ``main_window`` baut den Vorschlag für *Exportieren* aus dem Titel
+    (``safe_name(Path(...).stem)``). Mit dem Zusatz stünde dort
+    „GK-Brause (ungespeichert).stl" — ein Dateiname, der eine Eigenschaft des
+    Fensters trägt.
+
+    Deshalb zwei Auskünfte statt einer: ``title`` ist für den Menschen,
+    ``document_name`` für die Datei.
+    """
+    session = Session()
+    _with_object(session, "GK-Brause")
+
+    assert session.document_name == "GK-Brause"
+    assert "ungespeichert" not in session.document_name
+    assert "*" not in session.document_name
+
+
+def _with_object(session: Session, name: str) -> None:
+    """Der Sitzung ein Auswertungsergebnis mit einem benannten Körper geben.
+
+    Über das Ergebnis und nicht über das Dokument: Der Titel liest, was
+    **dasteht**, und das sind die ausgewerteten Objekte — dieselbe Quelle wie
+    der Objektbaum daneben.
+    """
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import Scene
+    from conftest import make_object
+
+    scene = Scene(objects={"obj_1": make_object(name=name)})
+    session.last_result = EvaluationResult(scene=scene)
