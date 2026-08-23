@@ -90,7 +90,8 @@ class ScrewHoleParams(BaseParams):
     subtractive=True,
     features=["bore", "countersink"],
     doc=_(
-        "Durchgangsloch für eine metrische Schraube, auf Wunsch mit 90-Grad-Senkung "
+        "Durchgangsloch zum Verschrauben mit einer metrischen Schraube, auf Wunsch "
+        "mit 90-Grad-Senkung "
         "und Kopffreiheit. Maße aus der Normteiltabelle."
     ),
     changes=[FIRST_RELEASE],

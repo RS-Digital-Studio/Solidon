@@ -99,8 +99,9 @@ class RibParams(BaseParams):
     params=RibParams,
     features=["rib"],
     doc=_(
-        "Rippe mit schrägem Auslauf. Sie bleibt dünner als die Wand, an der sie "
-        "sitzt — sonst zeichnet sie sich auf der anderen Seite ab."
+        "Rippe mit schrägem Auslauf: Sie verstärkt eine Wand, ohne sie dicker zu "
+        "machen. Sie bleibt dünner als die Wand, an der sie sitzt — sonst "
+        "zeichnet sie sich auf der anderen Seite ab."
     ),
     changes=[FIRST_RELEASE],
 )

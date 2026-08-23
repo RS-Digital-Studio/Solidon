@@ -88,8 +88,8 @@ class SnapFitParams(BaseParams):
     params=SnapFitParams,
     features=["arm", "hook"],
     doc=_(
-        "Federnder Arm mit Haken. Der Arm ist mindestens zehnmal so lang wie dick, "
-        "sonst bricht er, statt zu federn."
+        "Federnder Arm mit Haken zum Einrasten zweier Teile. Der Arm ist "
+        "mindestens zehnmal so lang wie dick, sonst bricht er, statt zu federn."
     ),
     changes=[FIRST_RELEASE],
 )
@@ -167,7 +167,8 @@ class LatchParams(BaseParams):
     params=LatchParams,
     features=["ramp"],
     doc=_(
-        "Nase mit Anlaufschräge nach oben und gerader Haltefläche nach unten — "
+        "Nase zum Einrasten, mit Anlaufschräge nach oben und gerader "
+        "Haltefläche nach unten — "
         "druckt ohne Stütze und hält gegen Zug."
     ),
     changes=[FIRST_RELEASE],
@@ -332,7 +333,8 @@ class DowelParams(BaseParams):
     version="2",
     features=["pin", "bore"],
     doc=_(
-        "Stift oder Bohrung als Paar. Das Spiel kommt aus dem Materialprofil, damit "
+        "Stift oder Bohrung als Paar, zum Zusammenstecken zweier Teile. Das Spiel "
+        "kommt aus dem Materialprofil, damit "
         "eine spätere Kalibrierung auch alte Projekte erreicht."
     ),
     changes=[
