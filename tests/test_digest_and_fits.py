@@ -14,6 +14,7 @@ from app.core.scene import fits as fit_check
 from app.core.types import (
     Document,
     Feature,
+    FeatureKind,
     FeatureRef,
     Finding,
     Fit,
@@ -569,3 +570,55 @@ def test_a_zero_in_the_digest_reads_as_zero() -> None:
     assert _place((-1.11022e-16, 4.14329e-17, 10.0)) == ", bei (0, 0, 10)"
     # Was oberhalb des Rauschens liegt, bleibt unangetastet.
     assert _place((0.5, -15.0, 10.0)) == ", bei (0.5, -15, 10)"
+
+
+def test_no_feature_kind_falls_back_to_its_english_key() -> None:
+    """Was der Agent liest, muss die Sache benennen — nicht den Schlüssel.
+
+    Fünf von neun Arten taten das nicht: ``pin_1  pin, bei (1, 2, 3)`` sagte,
+    dass ein Zapfen existiert, und nichts über seinen Durchmesser; bei einem
+    Gewinde fehlte die Steigung, und die entscheidet, ob eine M6 hineinpasst
+    oder eine M6 fein. Kein Test hat es gemerkt, weil alle fragen, *ob* ein
+    Merkmal erkannt wird, und keiner, *was* dort steht.
+
+    Die Arten kommen aus ``FeatureKind`` selbst, nicht aus einer Liste hier —
+    sonst prüft der Test eine zehnte Art nicht, sobald es sie gibt. ``mypy``
+    hält die Fallback-Zeile in ``_feature_line`` inzwischen für unerreichbar;
+    kommt eine Art dazu, wird sie es wieder, und dann meldet sich der
+    ``type: ignore`` als ungenutzt. Zwei Netze für denselben Fisch.
+    """
+    from typing import get_args
+
+    from app.core.perceive.digest import _feature_line
+
+    # Alles, was irgendeine Art braucht — jede greift sich heraus, was sie kennt.
+    params: dict[str, object] = {
+        "diameter": 6.0,
+        "tube_diameter": 4.0,
+        "radius": 3.0,
+        "area": 100.0,
+        "angle": 90.0,
+        "pitch": 1.0,
+        "depth": 10.0,
+        "open_edges": 5,
+        "centre": (1.0, 2.0, 3.0),
+        "axis": (0.0, 0.0, 1.0),
+        "normal": (0.0, 0.0, 1.0),
+    }
+
+    for kind in get_args(FeatureKind):
+        feature = Feature(id=f"{kind}_1", kind=kind, provenance="detected", params=params)
+        line = _feature_line(f"{kind}_1", feature)
+
+        name = line.split("  ", 1)[1].split(",")[0].strip()
+        assert name != kind, f"{kind}: der Steckbrief nennt den englischen Schlüssel"
+        # Und eine Zahl gehört dazu — ein Wort allein sagt dem Agenten nicht,
+        # womit er es zu tun hat.
+        #
+        # **Zwischen Name und Ort gemessen, nicht über die ganze Zeile.** Zwei
+        # Anläufe waren nötig: „, bei (1, 2, 3)" trägt selbst Ziffern, und die
+        # ID davor ebenso („chamfer_1"). Beide Male war die Zusicherung für
+        # jedes Merkmal grün, auch für das, das nichts sagt — beim Schreiben
+        # dieses Tests zweimal genau so dagestanden.
+        vorn = line.split("  ", 1)[1].split(", bei (")[0]
+        assert any(character.isdigit() for character in vorn), f"{kind}: keine Kennzahl"

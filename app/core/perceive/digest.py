@@ -230,9 +230,65 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
             f"Ø {format_length(float(params.get('diameter', 0.0)))}, "
             f"{tr('Achse')} {axis}{at}"
         )
+    if feature.kind == "pin":
+        # Der Gegenpart zu ``hole``, und genauso aufgebaut: erst die Zahl, die
+        # der Kunde nennt, dann Richtung und Länge. Ohne diesen Zweig las der
+        # Agent „pin_1  pin" und wusste von einem Zapfen nur, dass es ihn gibt.
+        axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
+        return (
+            f"{feature_id}  {tr('Zapfen')} Ø {format_length(float(params.get('diameter', 0.0)))}, "
+            f"{tr('Achse')} {axis}, {tr('Höhe')} "
+            f"{format_length(float(params.get('depth', 0.0)))}{at}"
+        )
+    if feature.kind == "thread":
+        # Steigung dazu, denn sie macht das Gewinde: Ø6 mit 1,0 ist M6, Ø6 mit
+        # 0,75 ist M6 fein, und in das eine passt die Schraube des anderen nicht.
+        shape = tr("Innengewinde") if params.get("internal") else tr("Außengewinde")
+        axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
+        return (
+            f"{feature_id}  {shape} Ø {format_length(float(params.get('diameter', 0.0)))}, "
+            f"{tr('Steigung')} {format_length(float(params.get('pitch', 0.0)))}, "
+            f"{tr('Achse')} {axis}{at}"
+        )
+    if feature.kind == "sphere":
+        # Dieselbe Unterscheidung wie beim Kegel und aus demselben Grund: Eine
+        # eingelassene Kalotte ist eine Pfanne (Kugellager, Magnettasche), eine
+        # aufgesetzte eine Kuppel. Was man mit ihr tun kann, hängt daran.
+        shape = tr("Pfanne") if params.get("recess") else tr("Kuppel")
+        return f"{feature_id}  {shape} Ø {format_length(float(params.get('diameter', 0.0)))}{at}"
+    if feature.kind == "torus":
+        # Zwei Zahlen ohne Wort dazwischen, wie beim Kegel: Ringdurchmesser,
+        # dann Rohrstärke. Ein Wort dazwischen wäre eine weitere Stelle, an der
+        # eine Sprache fehlen kann — die Oberfläche hält es genauso.
+        shape = tr("Kehle") if params.get("recess") else tr("Wulst")
+        return (
+            f"{feature_id}  {shape} Ø {format_length(float(params.get('diameter', 0.0)))} / "
+            f"Ø {format_length(float(params.get('tube_diameter', 0.0)))}{at}"
+        )
+    if feature.kind == "fillet":
+        # **R und nicht Ø.** Eine Verrundung wird über ihren Radius benannt:
+        # so sagt es der Kunde, so steht es in Fusion, so heißt sie im Slicer.
+        shape = tr("Hohlkehle") if params.get("recess") else tr("Verrundung")
+        axis = _axis_name(params.get("axis", (0.0, 0.0, 1.0)))
+        return (
+            f"{feature_id}  {shape} R{format_length(float(params.get('radius', 0.0)))}, "
+            f"{tr('Achse')} {axis}{at}"
+        )
     if feature.kind == "edge_loop":
         return f"{feature_id}  {params.get('open_edges', 0)} {tr('offene Kanten')}"
-    return f"{feature_id}  {feature.kind}{at}"
+    # **Der Fallback nennt den englischen Schlüssel.** Er sieht aus wie ein Name
+    # — genau daran sind pin, thread, sphere, torus und fillet vorbeigelaufen,
+    # ohne dass ein Test etwas sagte.
+    #
+    # ``mypy`` hält diese Zeile inzwischen für unerreichbar, und für alles, was
+    # ``FeatureKind`` zulässt, hat es recht: Die neun Arten sind oben
+    # vollständig behandelt, und `tests/test_digest_and_fits.py` hält das fest.
+    # Stehen bleibt sie trotzdem, weil der Typ nichts garantiert, was aus einer
+    # **Projektdatei** kommt: `_feature_from_data` liest `kind` aus JSON, und
+    # eine Datei aus einer neueren Fassung kann eine Art tragen, die es hier
+    # noch nicht gibt. Dann ist eine englische Zeile besser als ein Absturz
+    # mitten im Steckbrief.
+    return f"{feature_id}  {feature.kind}{at}"  # type: ignore[unreachable]
 
 
 def _place(centre: object) -> str:
