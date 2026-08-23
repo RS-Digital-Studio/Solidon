@@ -208,9 +208,64 @@ Kodierung (Regel 18). `tests/test_style.py` misst gegen die Schrift, mit der
 wirklich gezeichnet wird, und verbietet `setDefault(True)` außerhalb von
 `style.py`.
 
+**Und außerhalb eines Dialogs färbt er nicht.** `make_primary` setzt
+`setDefault(True)`, und `default` ist eine Eigenschaft von **Dialogen**: Qt
+vergibt sie an den Knopf, der auf Eingabe reagiert, und außerhalb eines
+`QDialog` gibt es diesen Knopf nicht. Die Regel `QPushButton:default` im
+Stylesheet greift dort also nicht — und weil sie neben `font-weight` auch
+`background` und `color` trägt, steht der Knopf mit **orangem Rahmen und ohne
+jede Beschriftung** da. Gemessen an der Hinweiskarte des Feedbackbogens
+(`app/ui/survey.py`), einmal als Kind der Karte und einmal freistehend: beide
+Male leer.
+
+Ein Hauptknopf über der Ansicht setzt seine Farben deshalb selbst, im
+Stylesheet seines Trägers und über eine eigene Kennung
+(`#surveyNotice #surveyGive`). `make_primary` bleibt trotzdem — es rechnet die
+Breite gegen die halbfette Schrift, und das gilt hier wie im Dialog.
+
+**Gefunden hat es kein Test, sondern ein Blick auf das Bild.** Die zwei
+Klicktests auf demselben Knopf waren grün: Ein Knopf ohne sichtbare
+Beschriftung nimmt Klicks entgegen wie jeder andere.
+
 **Und er heißt nicht wie sein Werkzeug.** Der Umschalter der Werkzeugzeile
 nennt das Werkzeug, der Knopf darin seine Handlung — „Trennen" oben, „Jetzt
 trennen" unten. `tests/test_interface_limits.py` hält das fest.
+
+## Was nur das Bild zeigt
+
+Vier Fehler am selben Tag, alle vier durch eine grüne Suite gekommen, alle vier
+im gerenderten Fenster sofort zu sehen:
+
+| Fehler | Warum kein Test ihn fand |
+|---|---|
+| Hauptknopf ohne Beschriftung | `click()` funktioniert auf einem leeren Knopf |
+| Skala in vier von sechs Sprachen abgeschnitten | die Werte stimmten, nur die Breite nicht |
+| Nebenfeld doppelt so hoch wie die Hauptfrage | ein Layout hat kein Richtig und Falsch |
+| Aufklappmenü als erste Zeile über einer Frage | es tat genau das, was es sollte |
+
+Die Regel dazu ist keine neue, sondern die aus §35 an ein Widget gerichtet:
+**Was man nicht angesehen hat, ist ungeprüft.** Ein Dialog wird deshalb einmal
+gerendert und angesehen, bevor er als fertig gilt.
+
+**Und angesehen wird unter der echten Plattform.** Unter
+`QT_QPA_PLATFORM=offscreen` hat Qt auf dieser Maschine null Schriftfamilien:
+Jede Beschriftung wird ein leeres Kästchen, und **jede Breitenmessung ist
+damit falsch**. Der erste Blick auf den Bogen sagte „die Skala passt"; unter
+der echten Plattform brauchte sie in Portugiesisch 635 Punkte, wo 598 da
+waren. Dieselbe Falle steht bei den erzeugten Bildern (`/erzeugen`) — sie gilt
+für jede Messung an einem Widget, nicht nur für Bildschirmfotos.
+
+Der Aufruf dafür ist drei Zeilen und braucht kein Fenster auf dem Schirm:
+
+```python
+app = QApplication([]); apply_style(app, "dark")
+dialog = SupportDialog(kind=KIND_SURVEY); dialog.show(); app.processEvents()
+dialog.grab().save("bogen.png")
+```
+
+Für eine Zeile, die nicht umbrechen kann — eine Skala, eine Knopfleiste —
+lohnt daneben die Zahl: `sizeHint().width()` gegen `width()`, **in jeder
+Sprache**. Was gequetscht wird, meldet Qt nicht.
 
 ## Gestufte Tiefe
 
