@@ -299,10 +299,28 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
             # Dialoge.** Wer nur die Summe sieht, räumt an Dialogen auf und
             # bewegt sie kaum; die Masse sind Menüs, die in Qt eigenständige
             # Fenster sind.
-            zaehlung = Counter(type(widget).__name__ for widget in lebende)
+            # **Die Wurzeln sind die Zahl, die etwas bedeutet.** Ein ``QMenu``
+            # ist in Qt ein Popup und steht deshalb in ``topLevelWidgets()``,
+            # obwohl es ein **Kind** ist — es lebt und stirbt mit seiner
+            # Menüleiste. Am 23.08.2026 hat 3d-druck-b8 die 159 Fenster
+            # vollständig aufgelöst, ohne Rest:
+            #
+            #     ein MainWindow bringt  30 QMenu + 8 QFrame mit
+            #     ein KeyDialog bringt    1 QFrame mit
+            #
+            #     3 mal 30                      =  90 QMenu
+            #     3 mal 8 + 21 mal 1           =  45 QFrame
+            #                                      21 KeyDialog + 3 MainWindow
+            #
+            # **159 Fenster sind 24 unabhängige Objekte.** Wer die Summe liest,
+            # ist um Faktor 6,6 daneben: Ein befreiter Dialog senkt sie um 2, ein
+            # befreites Hauptfenster um 39. „159 → 120" sieht nach 39 Objekten
+            # aus und ist eines.
+            wurzeln = [widget for widget in lebende if widget.parent() is None]
+            zaehlung = Counter(type(widget).__name__ for widget in wurzeln)
             print(
                 len(oben),
-                len(lebende),
+                len(wurzeln),
                 len(QWidget.__subclasses__()),
                 len(leash.alive()) if hasattr(leash, "alive") else len(leash._alive),
                 ",".join(f"{name}:{wie_oft}" for name, wie_oft in zaehlung.most_common()),
