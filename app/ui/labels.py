@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable, Mapping, Sequence
-from typing import Any, cast
+from typing import Any
 
 from PySide6.QtCore import QLocale, Signal
 from PySide6.QtGui import QColor, QValidator
@@ -151,7 +151,7 @@ class NumberSpin(QDoubleSpinBox):
         other = "." if separator == "," else ","
         return text.replace(other, "").replace(separator, "")
 
-    def validate(self, text: str, pos: int) -> object:
+    def validate(self, text: str, pos: int) -> Any:
         """Angenommen wird, was in **einer** der beiden Lesarten eine Zahl ist —
         und zurückgegeben wird der getippte Text, unverändert.
 
@@ -166,12 +166,15 @@ class NumberSpin(QDoubleSpinBox):
         Lesarten. Gelesen wird erst beim Übernehmen, in :meth:`valueFromText`.
         """
         for reading in (self._as_shown(text), self._as_grouped(text)):
-            # Qts Stub sagt ``object``; tatsächlich kommt das Tripel aus
-            # Zustand, Text und Position zurück.
-            checked = cast(
-                "tuple[QValidator.State, str, int]",
-                super().validate(reading, min(pos, len(reading))),
-            )
+            # **``Any`` und kein ``cast``, und zwar wegen der Qt-Version.**
+            # Zur Laufzeit kommt hier immer das Tripel aus Zustand, Text und
+            # Position. Der Stub sagt dazu je nach PySide6 etwas anderes: bis
+            # 6.11.1 ``object`` — dann braucht die Verengung einen ``cast`` —,
+            # ab 6.11.2 das Tripel selbst — dann ist derselbe ``cast``
+            # überflüssig und mypy meldet ``redundant-cast``. Dieselbe Datei
+            # kann nicht beides sein; ``Any`` passt zu beiden und behauptet
+            # nichts, was die eine oder andere Version widerlegt.
+            checked: Any = super().validate(reading, min(pos, len(reading)))
             if checked[0] != QValidator.State.Invalid:
                 return checked[0], text, pos
         return QValidator.State.Invalid, text, pos
