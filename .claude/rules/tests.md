@@ -280,6 +280,14 @@ nicht: Eine Datei, die der laufende Test importiert, lässt sich nicht
 wegkopieren. Dafür bleibt nur die Regel. `gate_lock.py status` sagt in einer
 Sekunde, ob jemand fährt.
 
+**Und zwar vor jeder Schreiboperation, nicht vor jeder Arbeitseinheit.** Der
+dritte Fall derselben Nacht entstand nicht aus Nichtwissen: Die Sitzung hatte
+vor dem *vorletzten* Schreiben nachgesehen — das Tor war frei — und danach in
+einem Zug weitergearbeitet. Die Prüfung hatte stattgefunden und galt als
+erledigt, während das Schloss in der Zwischenzeit den Halter wechselte. Wer
+schreibt, sieht **jedes Mal** nach; die Sekunde kostet weniger als ein fremder
+Torlauf.
+
 ### Der fremden Messung glaubt man so wenig wie der eigenen
 
 Eine Zahl, die eine Sitzung weiterreicht, wird auf dem Weg **fester**, nicht
