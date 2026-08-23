@@ -3922,6 +3922,50 @@ Kein Verstoß.
       Machbar, und die Reihenfolge ist jetzt klar: erst die Entscheidung zum
       Exportdateinamen, dann `SceneObject.name`, dann das Format. Als eigener
       Durchgang, nicht neben anderen Punkten.
+## Eine Zahl trägt ihre Bedeutung nicht mit (Nacht zum 23.08.2026)
+
+Vier Sitzungen, zwölf Stunden, und ein Fehler, der in fünf Gestalten auftrat.
+Er steht hier nicht als offener Punkt — es gibt nichts zu bauen —, sondern
+weil er in jeder einzelnen Gestalt richtig aussah.
+
+**Die Fälle, in der Reihenfolge, in der sie aufkamen:**
+
+| was gemessen wurde | die Deutung | was wirklich war |
+|---|---|---|
+| „Grundformen hat vier Zeilen" | *Erzeugen* kann flach werden | die Zahl **einer** Kategorie; die Gruppe hat 18 |
+| „achtzehn Knöpfe" | ein Überlaufknopf spart Platz | 15 Knöpfe **und 3 Felder**; die Felder kosten das Doppelte |
+| `MAX_TOOLS = 8` | „die Hausgrenze steht schon" | sie gilt einer anderen Werkzeugzeile |
+| 681 ms gegen 12,9 s kalt | „merkt kein Kunde" | gegen §31 sind es 23 % statt 5 % |
+| `test_ui` reißt 5/5 neben einem Torlauf | Fremdlast | unter Schloss ebenfalls 5/5 |
+| ZIP-Stempel wandern | das ist die Ursache | es war **eine** von dreien |
+| „Merge failed" | also ist nichts passiert | HEAD bewegt, Dateien geschrieben, Autostash weg |
+| 19 Module nacheinander importiert | eines zieht trimesh | die Messung lief in Reihenfolge; je frischer Lauf: 19 von 19 |
+
+**Keine dieser Zahlen war falsch gerechnet.** Jede stimmte. Was fehlte, war
+jeweils dasselbe: der Bezug, über den sie eine Aussage macht.
+
+**Drei Fragen, die in dieser Nacht jeden der Fälle gefangen hätten** — sie
+kosten Minuten und haben mehrfach Stunden gespart:
+
+1. **Worüber macht diese Zahl eine Aussage?** „Vier Zeilen" — wovon? „Achtzehn
+   Knöpfe" — sind es Knöpfe? 681 ms — von wie viel? Der Fehler sitzt nie in der
+   Zahl, sondern im Nenner.
+2. **Was wäre eine Erklärung, die dasselbe Ergebnis erzeugt und trotzdem falsch
+   ist?** Diese Frage hat den Reihenfolge-Fehler beim Importieren gefangen, und
+   sie fängt jeden Test, dessen Name mehr verspricht als seine Zusicherung
+   (`st_size > 0`, `writes_the_same_bytes`).
+3. **Habe ich mit demselben Werkzeug gemessen, das auch entscheidet?** Wer
+   Doppelungen mit derselben Zuordnung zählt, die sie filtert, sieht keine.
+   Eine Ebene tiefer messen — `cost()` statt `match()` — zeigt, was die
+   Optimierung verworfen hat.
+
+**Und eine Beobachtung über die Beteiligten, die mehr wert ist als die drei
+Fragen:** Von den acht Fällen hat in **sechs** derjenige den Fehler gefunden,
+der die Messung gemacht hatte — nachträglich, ohne dass jemand nachgefragt
+hätte. Zweimal fand ihn ein anderer. Das Verfahren, das trägt, ist also nicht
+gegenseitige Kontrolle, sondern die Gewohnheit, die eigene Messung noch einmal
+gegen ihre Deutung zu halten, **bevor** man sie weitergibt.
+
 ## Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026)
 
 Nicht „laufen sie" — das prüft `test_examples.py` seit langem. Sondern: Was
