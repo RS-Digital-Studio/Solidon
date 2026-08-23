@@ -102,6 +102,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 | Ein Klick auf eine 5,19-mm-Bohrung schlägt M3 vor | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **fachliche** Entscheidung in `placement.py`: Eine Senkung sitzt auf der Bohrung, eine Einpressbuchse ersetzt sie — nur die zweite darf den gemessenen Durchmesser übernehmen. Gemessen: M3 bohrt 4,00 mm in ein 5,19-mm-Loch und trägt nichts ab; die Anwendung kennt den Durchmesser und sagt ihn nicht |
 | Nach einem weiten Verschieben dreht die Kamera um den alten Punkt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | den Bau von 0.1.4 — die kleine Variante steht seit `e550b9b` und erfüllt Roberts Anweisung; die saubere setzt den Fokus beim **Beginn einer Drehung** statt bei jedem Aufbau und ändert damit das Kameraverhalten. Nicht in der Nacht vor einem Paket |
+| Vier Stapel zeigen auf `session.py:1515` | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **Lebensdaueruntersuchung**, keinen `gc`-Schutz: Der Sammler ist an zwei Messungen zu verschiedenen Zeiten als Ursache ausgeschlossen. Und die vier Stapel sind ein Zeuge, viermal gefragt — `wait(50)` blockiert in C, der Rahmen steht dort ohnehin. Der Weg führt über die Aufräum-Fixture und trifft damit **jede** Fensterdatei |
 
 ---
 
@@ -2866,6 +2867,16 @@ Fehler der Umgebung.**
       noch darauf steht. Mit `gc.disable()` fielen 5 von 24 Läufen, ohne ihn
       1 von 8: dieselbe Größenordnung. Das spart dem Nächsten den Versuch.
 
+      > **Nachtrag vom 23.08.2026 — welche Frage diese Messung beantwortet.**
+      > Sie hat heute getan, wofür der letzte Satz dasteht: 3d-druck-33 stand
+      > vor demselben Versuch und hat ihn nach dieser Zeile zurückgezogen.
+      > Dabei kam die Präzisierung heraus, die hier fehlte: `gc.disable()`
+      > hilft **dort, wo ein Vorgang läuft, den der Sammler stören kann** — um
+      > `processEvents` gemessen 6/8 → 1/8 — und **nicht dort, wo der
+      > Hauptthread nur wartet**. Diese Messung betrifft den zweiten Fall und
+      > bleibt gültig; sie widerspricht der jüngeren nicht. Der ganze Vorgang
+      > steht unter „Vier Stapel zeigen auf `session.py:1515`“.
+
       > **Nachtrag vom 18.08.2026: ein zweiter Stapelabzug, und er zeigt
       > woandershin.** Beim Fahren der Suite in eine *Datei* statt durch `tail`
       > blieb erstmals der Kopf des Abzugs erhalten — die früheren Läufe hatten
@@ -4559,6 +4570,61 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
     zehn davon:  perceive.generated_lost
     einer:       repair.components_removed
     Fehler:      keine
+
+- [ ] **Vier Stapel zeigen auf `session.py:1515` — die Stelle ist benannt,
+      die Ursache nicht.** Gesammelt am 23.08.2026 von drei Sitzungen
+      unabhängig: 3d-druck-33 in einem Torlauf, b8 in einem zweiten, 64 nach
+      sechzehn Tests, und b8 ein viertes Mal aus `test_operation_ui.py`.
+
+      **Der vierte ist der aufschlussreichste**, weil er aus einer anderen
+      Datei kommt und den Weg zeigt:
+
+          conftest.py:255       _no_worker_outlives_its_window
+            -> main_window.py:7099   release
+              -> main_window.py:7060   wait_for_workers
+                -> session.py:1515       wait_for_idle
+
+      Das ist die **Aufräum-Fixture**, und sie läuft nach jedem Test in jeder
+      Fensterdatei. `1515` sah nach einer Eigenheit von `test_ui.py` aus, weil
+      die Tests dort `wait_for_idle` auch selbst rufen — 110-mal. Über den Abbau
+      erreicht es **jede** Fensterdatei, ob sie es selbst ruft oder nicht.
+
+      **Und jetzt der Vorbehalt, der die vier Stapel entwertet** (3d-druck-33,
+      nachdem sie ihren eigenen Befund gegen diesen Einwand gelesen hatte):
+      `wait(50)` blockiert in C, der Hauptthread führt dort keinen Bytecode
+      aus, sein Rahmen wandert nicht. **Jeder Abzug, der während dieser
+      fünfzig Millisekunden entsteht, zeigt `1515` — gleich was den Prozess
+      umbringt.** Vier Stapel an einer Stelle, an der der Rahmen die meiste
+      Zeit steht, sind keine vier Zeugen; sie sind ein Zeuge, viermal gefragt.
+
+      **Der Speicherbereiniger ist Begleitumstand, nicht Ursache**, und das
+      sagen zwei Messungen zu verschiedenen Zeiten dasselbe:
+
+      | Stand | ohne Schutz | mit Schutz |
+      |---|---|---|
+      | 14.08., `gc.disable()` prozessweit | 1 von 8 | 5 von 24 |
+      | 23.08., Schutz um `wait(50)` | 3 von 3 gerissen | 2 von 2 gerissen |
+
+      **Warum der Schutz an einer Stelle wirkt und an der anderen nicht**, ist
+      die brauchbare Hälfte des Abends:
+
+      | Wo | Was währenddessen läuft | Schutz wirkt |
+      |---|---|---|
+      | um `processEvents` | Qt stellt Ereignisse an Widgets zu | **ja**, 6/8 → 1/8 |
+      | um `wait(50)`, global | der Hauptthread wartet, sonst nichts | **nein** |
+
+      Der Schutz um `processEvents` wirkt, **weil dort ein Vorgang läuft, den
+      der Sammler stören kann**: Qt hat ein Widget in der Hand, der Sammler
+      räumt es ab. Bei `wait(50)` gibt es diesen Vorgang nicht; ein
+      `gc.disable()` verschiebt dort nur, wann gesammelt wird. Damit steht die
+      Messung vom 14.08. **nicht** gegen die vom 22.08. — sie beantworten
+      verschiedene Fragen, und beide richtig.
+
+      **Was bleibt:** ein Arbeiter, der im Plattencache allokiert
+      (`cache.get` → `numpy.load` → `zipfile`), während das Fenster abgebaut
+      wird. Das ist eine **Lebensdauerfrage, keine Sammlerfrage**, und die
+      Aufräum-Fixture steht mitten darin. Wer hier weitermacht, fängt dort an
+      und nicht beim `gc`.
 
 - [ ] **Nach einem weiten Verschieben dreht die Kamera um den alten Punkt.**
       Robert am 23.08.2026: „nach jedem verschieben springt die kamera und das
