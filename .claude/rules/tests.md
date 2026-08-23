@@ -393,12 +393,36 @@ benutzt.** Am 22.08.2026 trug er einen Stand von vor den Commits des Abends:
 löscht, und der `post-commit`-Hook hätte ihn sofort gepusht. Zweimal an einem
 Abend aufgetreten.
 
-Er altert auch nach jedem Aufräumen wieder, solange alle privat committen. Also
-gehört das Nachziehen zum Commit und nicht zur Fehlersuche:
+**Und er wächst weiter, gemessen an drei Zeitpunkten:**
+
+| Wann | Löschungen im Index |
+|---|---|
+| 22.08.2026 abends | 1684 |
+| 23.08.2026 früh | 1424 |
+| 23.08.2026 abends | **1824** |
+
+Die mittlere Zahl ist die verräterische: Sie war kleiner, weil kurz zuvor
+jemand aufgeräumt hatte. **Aufräumen hält nicht** — solange alle privat
+committen, altert er ab dem nächsten Commit wieder, und zwar in die gefährliche
+Richtung. Also gehört das Nachziehen zum Commit und nicht zur Fehlersuche, als
+letzter Schritt jedes privaten Commits:
 
 ```
 git reset            # ohne --hard: nur der Index, keine Datei
 ```
+
+Es kostet Millisekunden, fasst keine Datei an, und der einzige Verlust ist ein
+Staging — das in diesem Verfahren ohnehin niemand benutzt, weil `git commit -o`
+an ihm vorbeigeht.
+
+**Die zweite Spalte von `git status --short` lügt mit.** Das ist die Form, in
+der einem der veraltete Index zuerst begegnet, und sie führt in die falsche
+Richtung: Wer direkt nach einem privaten Commit `MM` an seinen eigenen Dateien
+sieht, liest „fremde Arbeit liegt darin" — dabei ist die zweite Spalte der
+Vergleich gegen den Index, und der ist alt. Am 23.08.2026 stand `MM` an
+Dateien, die gerade committet worden waren; `git diff HEAD --numstat` zeigte
+**keine einzige geänderte Zeile**. Die Frage, die trägt, ist immer die gegen
+HEAD.
 
 Und die Auskunft daneben: **`git diff` vergleicht gegen den Index, nicht gegen
 HEAD.** In einem geteilten Baum stehen darin die Zwischenstände der anderen —
