@@ -165,6 +165,7 @@ class _RecordingPlotter:
 
     def __init__(self) -> None:
         self.drawn: list[tuple[str, dict[str, Any]]] = []
+        self.labelled: list[list[str]] = []
         self.removed: list[object] = []
         self.renders = 0
 
@@ -172,7 +173,11 @@ class _RecordingPlotter:
         self.drawn.append(("mesh", kwargs))
         return object()
 
-    def add_point_labels(self, _points: object, _labels: object, **kwargs: Any) -> object:
+    def add_point_labels(self, _points: object, labels: object, **kwargs: Any) -> object:
+        # Die Beschriftungen kommen mit: Sie sind bei der Merkmals-Überlagerung
+        # die eigentliche Aussage, und ob sie erscheinen, ist die Frage von
+        # Regel 18 — nicht, ob überhaupt etwas gezeichnet wurde.
+        self.labelled.append([str(text) for text in labels])  # type: ignore[union-attr]
         self.drawn.append(("labels", kwargs))
         return object()
 
@@ -229,6 +234,77 @@ def test_the_bed_is_drawn_in_the_colours_of_the_theme(
     )
     assert plotter.colour_of("build_volume_0") == viewport._bed_colour, (
         "der Eckwinkel des Bauraums nahm die Farbe des Themas nicht an"
+    )
+
+
+def _scene_with_two_holes() -> Any:
+    """Ein Körper mit zwei benannten Bohrungen — die kleinste Szene, an der
+    sich „welches Merkmal wird beschriftet" überhaupt stellen lässt.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene import EvaluationResult
+    from app.core.types import Feature, Scene, SceneObject
+
+    mesh = MeshData(trimesh.creation.box(extents=(40.0, 40.0, 10.0)))
+    features = {
+        "hole_1": Feature(
+            id="hole_1",
+            kind="hole",
+            provenance="detected",
+            params={"diameter": 5.0, "centre": (-10.0, 0.0, 5.0), "axis": (0.0, 0.0, 1.0)},
+        ),
+        "hole_2": Feature(
+            id="hole_2",
+            kind="hole",
+            provenance="detected",
+            params={"diameter": 8.0, "centre": (10.0, 0.0, 5.0), "axis": (0.0, 0.0, 1.0)},
+        ),
+    }
+    return EvaluationResult(
+        scene=Scene(
+            objects={"obj_1": SceneObject(id="obj_1", name="A", mesh=mesh, features=features)}
+        )
+    )
+
+
+def test_the_chosen_feature_keeps_its_label_without_the_overlay(qt_app: QApplication) -> None:
+    """Regel 18: Ohne Beschriftung wäre die Aussage allein die Farbe.
+
+    Die Merkmals-Überlagerung lässt sich abschalten, und dann verschwinden die
+    Beschriftungen — bis auf die des **gewählten** Merkmals. Dessen Fläche
+    leuchtet in der Auswahlfarbe, und eine Aussage allein über Farbe ist genau
+    die, die Regel 18 verbietet.
+
+    Der Kommentar an ``_redraw_features`` sagt das seit je zu; geprüft hat es
+    nichts. Der Rumpf liegt hinter der Offscreen-Wache, und der Nachbartest
+    prüft eine andere Hälfte derselben Sache — dass ein Klick auch ohne
+    Überlagerung trifft (``test_clicking_needs_no_overlay_switch``). Beides ist
+    nötig: Treffen kann man ein Merkmal, das man nicht lesen kann.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.show_scene(_scene_with_two_holes())
+    viewport._selected = "obj_1"
+    viewport._selected_feature = "hole_2"
+    plotter = _RecordingPlotter()
+    viewport.plotter = plotter
+
+    viewport.set_feature_overlay(True)
+    mit_overlay = [text for gruppe in plotter.labelled for text in gruppe]
+    assert len(mit_overlay) == 2, f"mit Überlagerung stehen beide da: {mit_overlay}"
+
+    plotter.labelled.clear()
+    viewport.set_feature_overlay(False)
+    ohne_overlay = [text for gruppe in plotter.labelled for text in gruppe]
+
+    assert len(ohne_overlay) == 1, (
+        f"ohne Überlagerung bleibt genau die des gewählten Merkmals: {ohne_overlay}"
+    )
+    assert "8" in ohne_overlay[0], (
+        f"und es ist die des gewählten (Ø 8), nicht die des anderen: {ohne_overlay[0]}"
     )
 
 
