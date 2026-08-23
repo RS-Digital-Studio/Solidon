@@ -221,6 +221,13 @@ FEATURE_EDGE_WIDTH = 1.5
 #: VTKs Vorgabe ist ein Tausendstel — bei einem Fenster von 1300 Pixeln also
 #: knapp zwei Pixel, und ein Klick auf eine Kante trifft dann wieder nichts.
 #: Fünf Tausendstel sind rund acht Pixel: genug, um eine dünne Wand zu
+#: Ab wann ein Zug am Körper ein Zug ist und kein Klick, in Millimetern.
+#:
+#: Ohne diese Grenze bekäme jede Auswahl einen Schritt im Verlauf mit null
+#: Millimetern Versatz — Einträge, die nichts getan haben, und die dem
+#: Rückgängig seinen Sinn nehmen.
+EPS_DRAG = 0.05
+
 #: erwischen, zu wenig, um die falsche Fläche zu greifen.
 PICK_TOLERANCE = 0.005
 
@@ -1469,6 +1476,18 @@ class Viewport(QWidget):
         self._brush_radius = 0.0
         """Der Pinselradius in Millimetern, solange geformt wird."""
         self._last_drag_stroke: Vec3 | None = None
+        self._body_drag_from: Vec3 | None = None
+        """Wo ein Zug am gewählten Körper begonnen hat, in Ansichtskoordinaten.
+
+        ``None`` heißt: Es wird gerade keiner gezogen — dann bleibt die linke
+        Taste, was das Navigationsschema aus ihr macht."""
+        self._body_drag_offset: tuple[float, float] = (0.0, 0.0)
+        """Wie weit der Zug bisher trägt, in Millimetern auf dem Bett."""
+        self._actor_home: dict[str, tuple[float, float, float]] = {}
+        """Wo die verschobenen Actors standen, bevor die Vorschau sie bewegte.
+
+        Die Vorschau wird zurückgenommen, bevor die Auswertung den Körper an
+        seine neue Stelle setzt — sonst stünde er doppelt versetzt da."""
         """Wo der letzte Zug eines gezogenen Strichs saß — der Mindestabstand
         (halber Pinselradius) rechnet dagegen."""
         self._brush_actor: Any = None
@@ -2515,24 +2534,40 @@ class Viewport(QWidget):
         # Schatten darauf fiel auf nichts und war im Bild schlicht nicht da.
         # Knapp unter null, damit er nicht mit dem Raster um dieselbe Tiefe
         # streitet.
-        self._frame_actors.append(
-            self.plotter.add_mesh(
-                pv.Plane(
-                    center=(shift, 0.0, -BED_SURFACE_DROP),
-                    direction=(0.0, 0.0, 1.0),
-                    i_size=width,
-                    j_size=depth,
-                ),
-                color=self._bed_surface,
-                ambient=0.45,
-                diffuse=0.55,
-                specular=0.0,
-                name=f"bed_surface_{plate}",
-                render=False,
-                reset_camera=False,
-                pickable=False,
-            )
+        surface = self.plotter.add_mesh(
+            pv.Plane(
+                center=(shift, 0.0, -BED_SURFACE_DROP),
+                direction=(0.0, 0.0, 1.0),
+                i_size=width,
+                j_size=depth,
+            ),
+            color=self._bed_surface,
+            ambient=0.45,
+            diffuse=0.55,
+            specular=0.0,
+            name=f"bed_surface_{plate}",
+            render=False,
+            reset_camera=False,
+            pickable=False,
         )
+        # **Von unten schaut man hindurch** (Robert, 23.08.2026): Wer eine
+        # Unterseite bearbeitet, dreht die Ansicht unter das Teil — und sah
+        # dort die Platte statt des Teils.
+        #
+        # ``culling`` und nicht ``opacity``: Die Fläche gibt es, damit ein
+        # Schatten auf etwas fällt, und eine durchscheinende Platte nähme ihm
+        # den Grund. Die Ebene zeigt mit ``direction=(0, 0, 1)`` nach oben;
+        # von unten sieht man ihre **Rückseite**, und die lässt sich wegwerfen,
+        # ohne die Vorderseite anzufassen. Gemessen von 3d-druck-3a an einem
+        # roten Körper über grauer Platte, in Bildpunkten gezählt:
+        #
+        #     ohne culling   von unten:    0 rot   von oben: 4014
+        #     culling back   von unten: 2417 rot   von oben: 4014
+        #
+        # Von oben ändert sich nichts — dieselbe Zahl, also bleiben Fläche und
+        # Schatten, wie sie waren.
+        surface.prop.culling = "back"
+        self._frame_actors.append(surface)
         bed = pv.Plane(
             center=(shift, 0.0, 0.0),
             direction=(0.0, 0.0, 1.0),
@@ -4328,6 +4363,7 @@ class Viewport(QWidget):
             calls.on_cursor,
             on_paint=calls.on_paint,
             is_sculpting=calls.is_sculpting,
+            on_body_drag=calls.on_body_drag,
         )
         self.plotter.interactor.SetInteractorStyle(style)
         # Ein neuer Stil bringt seine eigenen Beobachter mit; was beim Wechsel
@@ -4417,6 +4453,107 @@ class Viewport(QWidget):
             return None
         position = picker.GetPickPosition()
         return (float(position[0]), float(position[1]), float(position[2]))
+
+    # --- den gewählten Körper direkt ziehen (§18.11) ---------------------------
+
+    def begin_body_drag(self, x: int, y: int) -> bool:
+        """Beginnt ein Ziehen, wenn dort der gewählte Körper liegt.
+
+        **Der Weg, den jeder Slicer geht, und den Solidon nicht hatte.** Hier
+        war es: Körper anklicken, *Bewegen* in der Werkzeugzeile holen, am
+        Griff ziehen. Drei Schritte, und der mittlere ist der, den niemand
+        erwartet — in PrusaSlicer, OrcaSlicer und Cura zieht man ein Objekt
+        einfach. Deren Gizmos sind für das **Genaue** da; nachgelesen in ihren
+        eigenen Sprachkatalogen heißen die Einträge „Gizmo move: Press to snap
+        by 1mm" und „Gizmo-Move", also achsweise und rastend.
+
+        Gibt ``False`` zurück, wenn dort nichts Gewähltes liegt — dann bleibt
+        die linke Taste, was sie war. **Ohne diese Trennung wäre das Ziehen ein
+        Modus mit anderem Namen:** Wer die Ansicht drehen will, dürfte nicht
+        erst wegklicken müssen.
+        """
+        point = self._world_at(x, y) if self.plotter is not None else None
+        return self.begin_body_drag_at(point)
+
+    def begin_body_drag_at(self, point: Vec3 | None) -> bool:
+        """Dasselbe, aber ab dem Weltpunkt — die Stelle, an der geprüft wird.
+
+        Getrennt von :meth:`begin_body_drag`, weil das Ablesen und das Urteilen
+        zwei Dinge sind: Offscreen rendert VTK nicht, und ein Picker über einem
+        nie gezeichneten Bild trifft nichts. Ein Test über Bildschirmkoordinaten
+        prüfte damit die Testumgebung; über den Weltpunkt prüft er die
+        Bedienung.
+        """
+        if self._selected is None or point is None:
+            return False
+        if self._object_at(self._from_view(point)) != self._selected:
+            return False
+        self._body_drag_from = point
+        self._body_drag_offset = (0.0, 0.0)
+        self.set_drag_cursor("moving")
+        return True
+
+    def continue_body_drag(self, x: int, y: int) -> None:
+        """Der Körper folgt dem Zeiger — als Vorschau, nicht als Zustand.
+
+        **In der Bettebene und nicht frei im Raum.** Ein Körper, den man beim
+        Ziehen unbeabsichtigt anhebt, liegt danach nicht mehr auf dem Bett, und
+        das merkt man erst beim Schneiden. Die Höhe bleibt dem Griff und dem
+        Dialog — dieselbe Aufteilung wie in den Slicern.
+
+        Verschoben wird der **Actor**, nicht die Geometrie (Regel 2): Was hier
+        zu sehen ist, ist eine Vorschau. Der Schritt im Verlauf entsteht beim
+        Loslassen.
+        """
+        self.continue_body_drag_at(self._plane_point(x, y))
+
+    def continue_body_drag_at(self, now: tuple[float, float] | None) -> None:
+        """Dasselbe ab den Bettkoordinaten — siehe :meth:`begin_body_drag_at`."""
+        if self._body_drag_from is None or self._selected is None:
+            return
+        start = self._plane_point_of(self._body_drag_from)
+        if now is None or start is None:
+            return
+        self._body_drag_offset = (now[0] - start[0], now[1] - start[1])
+        actor = self._actors.get(self._selected)
+        if actor is not None:
+            base = self._actor_home.setdefault(self._selected, tuple(actor.GetPosition()))
+            actor.SetPosition(
+                base[0] + self._body_drag_offset[0], base[1] + self._body_drag_offset[1], base[2]
+            )
+            if self.plotter is not None:
+                self.plotter.render()
+
+    def finish_body_drag(self) -> None:
+        """Aus dem Zug wird ein Schritt im Verlauf — oder gar nichts.
+
+        Die Vorschau wird zurückgenommen, **bevor** das Signal geht: Die
+        Auswertung setzt den Körper gleich an seine neue Stelle, und ein Actor,
+        der den Zug noch zusätzlich trägt, stünde danach doppelt versetzt da.
+        """
+        offset, self._body_drag_offset = self._body_drag_offset, (0.0, 0.0)
+        self._body_drag_from = None
+        self.set_drag_cursor(None)
+        for object_id, home in self._actor_home.items():
+            actor = self._actors.get(object_id)
+            if actor is not None:
+                actor.SetPosition(*home)
+        self._actor_home.clear()
+        if abs(offset[0]) < EPS_DRAG and abs(offset[1]) < EPS_DRAG:
+            # Ein Klick ist kein Zug. Ohne diese Grenze bekäme jede Auswahl
+            # einen Schritt „Direkt bewegt" mit null Millimetern.
+            return
+        self.transformDragged.emit(TransformSteps(offset=(offset[0], offset[1], 0.0)))
+
+    def _plane_point(self, x: int, y: int) -> tuple[float, float] | None:
+        """Wo der Zeiger auf der Bettebene steht, in Weltkoordinaten."""
+        point = self._world_at(x, y)
+        return self._plane_point_of(point) if point is not None else None
+
+    def _plane_point_of(self, point: Vec3) -> tuple[float, float] | None:
+        """Die Bettkoordinaten eines Ansichtspunkts."""
+        world = self._from_view((float(point[0]), float(point[1]), float(point[2])))
+        return (float(world[0]), float(world[1]))
 
     def _on_left_click(self, x: int, y: int) -> None:
         """Ein Linksklick, der keiner Kamerabewegung galt (§18.5).
@@ -4511,6 +4648,7 @@ class _ViewCallbacks(NamedTuple):
     on_cursor: Callable[[str | None], None]
     on_paint: Callable[[int, int, bool], None]
     is_sculpting: Callable[[], bool]
+    on_body_drag: Callable[[str, int, int], bool]
 
 
 def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
@@ -4555,7 +4693,25 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
         found = weak()
         return found is not None and found._sculpting
 
-    return _ViewCallbacks(on_context, on_pick, on_cursor, on_paint, is_sculpting)
+    def on_body_drag(phase: str, x: int, y: int) -> bool:
+        """Beginn, Fortgang und Ende eines Zugs am gewählten Körper.
+
+        Eine Funktion für drei Schritte statt drei Rückrufe: Der Stil hält sie
+        schwach, und drei schwache Verweise auf dieselbe Ansicht sind dreimal
+        dieselbe Prüfung auf ``None``.
+        """
+        found = weak()
+        if found is None:
+            return False
+        if phase == "start":
+            return found.begin_body_drag(x, y)
+        if phase == "move":
+            found.continue_body_drag(x, y)
+            return True
+        found.finish_body_drag()
+        return True
+
+    return _ViewCallbacks(on_context, on_pick, on_cursor, on_paint, is_sculpting, on_body_drag)
 
 
 def _InteractorStyle(  # noqa: N802
@@ -4566,6 +4722,7 @@ def _InteractorStyle(  # noqa: N802
     on_cursor: Any = None,
     on_paint: Any = None,
     is_sculpting: Any = None,
+    on_body_drag: Any = None,
 ) -> Any:
     """Baut einen VTK-Interaktionsstil mit den Tasten des gewählten Schemas.
 
