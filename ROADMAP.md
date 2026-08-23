@@ -108,6 +108,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `decimated 992 to 992` — ein Schritt, der nichts tut | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | eine Erklärung. `decimate()` hat einen frühen Rücksprung für genau diesen Fall, und er greift nicht; es läuft eine echte `simplify_quadric_decimation` von 992 auf 992. Drei Aufrufer kommen infrage |
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
 | Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
+| Der Zahlungsanbieter steht namentlich da, ohne Vertrag | Was erst am Verkaufsstart fällig wird (24.08.2026) | **eine Entscheidung von Robert** (vorgelegt am 23.08.2026): `datenschutz.html` nennt Paddle mit voller Anschrift und führt es als Empfänger personenbezogener Daten samt Drittlandsbegründung — ein Konto gibt es mangels Gewerbeanmeldung nicht. Name stehen lassen (dann stimmt der Text am Starttag) oder bis dahin durch „der Zahlungsdienstleister“ ersetzen (dann stimmt er heute). Der zeitliche Vorbehalt ist seit `5950321` drin, die Namensfrage bleibt |
 
 ---
 
@@ -8304,22 +8305,45 @@ obwohl das Konzept die Bedingungen für 1.0 schon führt: `CLAUDE.md` sagt,
 offene Arbeit steht im Register und nirgends sonst, und der Grund dafür ist
 genau der Fall, der sich beim Nachprüfen dieser vier Punkte wiederholt hat.
 
-**Zwei der vier halten der Prüfung am Code nicht stand**, und das ist der
-eigentliche Ertrag dieser Meldung:
+**Einer der vier hält der Prüfung am Code nicht stand**, und bei einem zweiten
+habe ich das Gegenteil dessen gemessen, was gefragt war (siehe unten):
 
-- **„Zahlungsanbieter in AGB und Datenschutzerklärung eintragen" ist
-  erledigt.** Gemessen: **Paddle** steht fünfmal in `datenschutz.html` und in
-  `agb.html` („Vertragspartner des Kaufs. Für den Kauf gelten damit die
-  Bedingungen von Paddle"). Die AGB unterscheiden dabei sauber zwischen jetzt
-  und später — „es gibt keine Bestellung, keinen Kaufpreis und keinen
-  Zahlungsdienstleister" gilt der Demo.
 - **„Kaufknopf fehlt" ist keine Lücke, sondern Absicht.**
   `konzept-demo-2026-10.md` §H: „Kein Verkauf während der Demo. Das entlastet
   die Rechtsseite erheblich: ohne entgeltlichen Vertrag greift die
   Widerrufsbelehrung nicht." Der Knopf ist Arbeit **zum Start**, nicht ein
   Mangel von heute.
 
-Bleiben zwei, und beide sind echt:
+Bleiben drei, und alle drei sind echt:
+
+- [ ] **Der Zahlungsanbieter steht namentlich da, ohne dass ein Vertrag
+      besteht.** `datenschutz.html` nennt ihn mit voller Anschrift — „Paddle.com
+      Market Limited, 30 Old Bailey, London EC4M 7AU" — und führt ihn als
+      Empfänger personenbezogener Daten samt Drittlandsbegründung nach Art. 45
+      DSGVO. Ein Konto gibt es nicht; ohne Gewerbeanmeldung kann es keines
+      geben.
+
+      **Zwei Antworten sind vertretbar, und es ist keine technische Frage:**
+      Der Name bleibt (dann stimmt der Text am Starttag) oder er wird bis
+      dahin durch „der Zahlungsdienstleister" ersetzt (dann stimmt er heute).
+      **Robert vorgelegt am 23.08.2026** durch `3d-druck-bd`.
+
+      Den zeitlichen Vorbehalt hat `3d-druck-58` inzwischen eingebaut
+      (`5950321`): Die Datenschutzerklärung sagte im Präsens „Der Kauf läuft
+      nicht über diese Website, sondern über … Paddle", jetzt heißt es „läuft
+      **dann** nicht" — derselbe Vorbehalt, den die AGB schon trugen. Die
+      Namensfrage bleibt davon unberührt.
+
+      **Und hier steht, wie ich diesen Punkt fast abgeräumt hätte**, weil der
+      Fehler die vierte Ausprägung derselben Sache an einem Abend ist: Ich habe
+      gemessen, ob Paddle in den Texten steht — fünfmal, ja —, und daraus
+      „erledigt" geschlossen. **Die Messung war richtig und beantwortete die
+      falsche Frage.** Gefragt war nicht „steht der Anbieter drin?", sondern
+      „soll er drinstehen, bevor es ihn gibt?". Das ist wörtlich die Gegenfrage
+      aus `.claude/rules/tests.md`: *Was habe ich gerade gemessen, und ist das
+      dasselbe wie das, was ich wissen wollte?* — diesmal nicht an einem
+      Werkzeug, sondern an einer Meldung.
+
 
 - [ ] **Der Entwurfsvermerk muss von den Rechtstexten herunter**, sobald die
       fachliche Prüfung durch ist. `agb.html`, `eula.html` und
