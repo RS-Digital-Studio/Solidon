@@ -936,3 +936,46 @@ def test_the_report_carries_the_digest_of_the_scene(qt_app: QApplication) -> Non
     assert ohne.report().digest == ""
     dialog.release()
     ohne.release()
+
+
+def test_the_survey_waits_for_real_use_and_asks_once(qt_app: QApplication) -> None:
+    """Der Bogen meldet sich nach dreißig Minuten — und nur in der Demo.
+
+    **Robert am 23.08.2026:** nach einer halben Stunde Nutzung ein kleiner
+    Bogen, was gut ist und was bis zum Release fehlt.
+
+    Drei Eigenschaften, und jede hat einen Grund:
+
+    * **Nicht modal.** Der Hinweis kommt mitten in die Arbeit, und ein Fenster,
+      das dort alles anhält, wird weggeklickt, ohne gelesen zu werden.
+      Dieselbe Bauart wie beim Update-Hinweis (``_show_update``).
+    * **Nur in der Demo** (``activation.state().in_demo``). Wer bezahlt hat,
+      ist kein Testleser mehr — und eine Konstante entscheidet darüber, damit
+      es keinen zweiten Zustand gibt, den jemand nachzuziehen vergisst.
+    * **Einmal.** Ein Streifen, der wiederkommt, wird beim dritten Mal
+      ungelesen weggeklickt; der Weg über *Hilfe → Rückmeldung* bleibt offen.
+
+    Geprüft wird die Bauart am Quelltext und nicht am laufenden Zeitgeber: Eine
+    halbe Stunde zu warten ist kein Test, und die Uhr vorzustellen prüfte den
+    Zeitgeber statt der Entscheidung.
+    """
+    from pathlib import Path
+
+    from app.ui import main_window as fenster_modul
+
+    quelle = Path(fenster_modul.__file__).read_text(encoding="utf-8")
+
+    assert "SURVEY_AFTER_MS" in quelle, "die Frist steht als benannte Konstante da"
+    assert "in_demo" in quelle, "außerhalb der Demo fragt niemand"
+
+    beginn = quelle.index("def _offer_survey")
+    ende = quelle.index("\n    def ", beginn + 10)
+    abschnitt = quelle[beginn:ende]
+    assert "exec(" not in abschnitt, "der Hinweis hält die Arbeit nicht an"
+    # **Die Verbindung selbst suchen, nicht ihr Umfeld.** Die erste Fassung
+    # prüfte ein Fenster von 3000 Zeichen um _offer_survey — und der
+    # Anschluss steht im Konstruktor, tausend Zeilen weiter oben. Ein Test, der
+    # nach Nachbarschaft sucht, misst die Reihenfolge im Quelltext.
+    assert "self._survey_timer.timeout.connect(weak_slot(" in quelle, (
+        "der Zeitgeber hält sein Fenster fest — dann stirbt keines mehr"
+    )

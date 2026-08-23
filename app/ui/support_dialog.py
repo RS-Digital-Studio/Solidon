@@ -71,6 +71,13 @@ WAIT_MILLISECONDS: Final = 50
 #: setzt der Fehlerdialog, ein Nutzer wählt ihn nicht.
 KINDS: Final = (KIND_IDEA, KIND_BUG, KIND_QUESTION)
 
+#: Arten, die es nur mit ihrem Anlass gibt — nicht in der Auswahl, aber im Feld.
+#:
+#: Ein Absturzbericht entsteht aus einem Absturz, ein Bogen aus dreißig Minuten
+#: Arbeit. Wer sie aus einem Aufklappmenü wählen könnte, bekäme ein Formular
+#: ohne Anlass; wer sie im gefüllten Feld liest, weiß, warum er hier ist.
+ANLASS_ARTEN: Final = (KIND_CRASH, support.KIND_SURVEY)
+
 
 def window_shot(widget: QWidget | None) -> bytes:
     """Ein Bildschirmfoto des Fensters als PNG.
@@ -218,11 +225,13 @@ class SupportDialog(QDialog):
         self.kind = QComboBox(self)
         for entry in KINDS:
             self.kind.addItem(str(support.KIND_NAMES[entry]), entry)
-        if kind == KIND_CRASH:
-            # Der Fehlerdialog schickt seinen eigenen Fall mit: er steht in der
-            # Liste, damit das Feld nicht leer aussieht, aber er ist nichts,
-            # was jemand von Hand wählt.
-            self.kind.addItem(str(support.KIND_NAMES[KIND_CRASH]), KIND_CRASH)
+        if kind in ANLASS_ARTEN:
+            # **Zwei Arten, die man nicht wählt, sondern bekommt.** Der
+            # Fehlerbericht kommt aus einem Absturz, der Bogen aus dreißig
+            # Minuten Nutzung — beide stehen in der Liste, damit das Feld nicht
+            # leer aussieht, und in keiner Auswahl, weil sie ohne ihren Anlass
+            # nicht existieren.
+            self.kind.addItem(str(support.KIND_NAMES[kind]), kind)
         index = self.kind.findData(kind)
         self.kind.setCurrentIndex(max(index, 0))
 
