@@ -154,6 +154,25 @@ def test_an_empty_scene_forgets_what_was_selected(qt_app: QApplication) -> None:
 # --- hinter der Wache: mit einer Attrappe ---------------------------------------
 
 
+class _RecordingActor:
+    """Was ``add_mesh`` zurückgibt — so viel davon, wie der Code benutzt.
+
+    Ein ``vtkActor`` trägt seine Darstellung in ``prop``, und Solidon setzt
+    dort das Verwerfen der Rückseite an der Plattenfläche. Die Attrappe
+    schreibt mit, statt zu tun, damit ein Test sie ansehen kann.
+    """
+
+    def __init__(self) -> None:
+        self.prop = _RecordingProperty()
+
+
+class _RecordingProperty:
+    """Die Darstellung eines Actors — nur die Felder, die gesetzt werden."""
+
+    def __init__(self) -> None:
+        self.culling = "none"
+
+
 class _RecordingPlotter:
     """Eine Attrappe mit genau den Methoden, die das Zeichnen der Platte ruft.
 
@@ -169,6 +188,12 @@ class _RecordingPlotter:
         self.labelled: list[list[str]] = []
         self.removed: list[object] = []
         self.renders = 0
+        self.actors: list[_RecordingActor] = []
+        """Die zurückgegebenen Actors, in der Reihenfolge von drawn.
+
+        Damit ein Test nicht nur sehen kann, **was** gezeichnet wurde, sondern
+        auch, was danach am Actor gesetzt wurde — die Plattenfläche etwa wirft
+        ihre Rückseite weg."""
 
     def add_mesh(self, mesh: object, **kwargs: Any) -> object:
         # Das Netz kommt mit: Bei der Merkmalsfläche ist die **Zahl der
@@ -176,7 +201,15 @@ class _RecordingPlotter:
         # die des ganzen Körpers.
         self.meshes.append(mesh)
         self.drawn.append(("mesh", kwargs))
-        return object()
+        # **Ein Actor, kein nacktes ``object()``.** Hier stand eines, und damit
+        # sagte die Attrappe zu, dass mit dem Rückgabewert nichts geschieht.
+        # Das stimmte, bis die Plattenfläche ihre Rückseite wegwerfen musste
+        # (``surface.prop.culling``) — dann fiel der Aufruf über eine Attrappe,
+        # die weniger kann als die Sache, die sie nachstellt. Ein echter Actor
+        # hat ``prop``; wer ihn nachstellt, gibt ihm eines.
+        actor = _RecordingActor()
+        self.actors.append(actor)
+        return actor
 
     def add_point_labels(self, _points: object, labels: Any, **kwargs: Any) -> object:
         # Die Beschriftungen kommen mit: Sie sind bei der Merkmals-Überlagerung
@@ -706,6 +739,47 @@ def test_a_callback_after_the_view_is_gone_stays_quiet(qt_app: QApplication) -> 
     calls.on_pick(10, 20)
     calls.on_cursor("rotate")
     calls.on_paint(10, 20, True)
+
+
+def test_the_bed_surface_can_be_seen_through_from_below(
+    profile: Profile, qt_app: QApplication
+) -> None:
+    """Von unten schaut man durch die Platte hindurch.
+
+    **Robert am 23.08.2026:** „Man kann unten noch nicht durch die Druckfläche
+    schauen, also die Platte. Das müsste auch noch behoben werden, dass man da
+    durchschauen kann, wenn man's von unten bearbeiten will."
+
+    Die Fläche wird gebraucht — ohne sie fiele der Schatten auf nichts —, aber
+    nur von oben. ``culling = "back"`` wirft ihre Rückseite weg: Die Ebene
+    zeigt mit ``direction=(0, 0, 1)`` nach oben, von unten sieht man ihre
+    Rückseite, und die verschwindet, ohne die Vorderseite anzufassen.
+
+    **``opacity`` wäre die falsche Antwort gewesen** — eine durchscheinende
+    Platte nähme dem Schatten seinen Grund, und von oben sähe sie falsch aus.
+
+    Belegt wurde die Wirkung an Bildern aus einem eigenen Arbeitsbaum: Der
+    Stand davor zeigte von unten nur die Platte, danach den Körper. Dieser Test
+    hält fest, dass die Eigenschaft gesetzt **wird** — ein Bild kann er nicht
+    ansehen, und eine Zahl daraus war untauglich (sie zählte die Achsenmarke).
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    plotter = _RecordingPlotter()
+    viewport.plotter = plotter
+    viewport.show_build_volume(profile)
+
+    flaechen = [
+        actor
+        for actor, (_art, kwargs) in zip(plotter.actors, plotter.drawn, strict=False)
+        if str(kwargs.get("name", "")).startswith("bed_surface_")
+    ]
+    assert flaechen, "keine Plattenfläche gezeichnet — dann prüft der Test nichts"
+    for actor in flaechen:
+        assert actor.prop.culling == "back", (
+            f"die Rückseite der Plattenfläche bleibt stehen: {actor.prop.culling}"
+        )
 
 
 def test_each_plate_draws_under_its_own_names(profile: Profile, qt_app: QApplication) -> None:
