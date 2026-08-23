@@ -136,18 +136,21 @@ class PaintParams(BaseParams):
         default=0.0,
         unit="mm",
         doc=_("Wo geklickt wurde. Beim Malen trägt der Klick die drei Werte selbst ein."),
+        placement="advanced",
     )
     y: float = param(
         title=_("Position Y"),
         default=0.0,
         unit="mm",
         doc=_("Zweite Achse des Klickpunkts."),
+        placement="advanced",
     )
     z: float = param(
         title=_("Position Z"),
         default=0.0,
         unit="mm",
         doc=_("Dritte Achse des Klickpunkts."),
+        placement="advanced",
     )
     edge_angle: float = param(
         title=_("Kantenwinkel"),

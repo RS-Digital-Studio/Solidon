@@ -178,9 +178,15 @@ class LabelParams(BaseParams):
         placement="advanced",
         doc=_("DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich aussieht."),
     )
-    x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE)
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_MORE)
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_MORE)
+    x: float = param(
+        title=_("Position X"), default=0.0, unit="mm", doc=_WHERE, placement="advanced"
+    )
+    y: float = param(
+        title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_MORE, placement="advanced"
+    )
+    z: float = param(
+        title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_MORE, placement="advanced"
+    )
     nx: float = param(title=_("Normale X"), default=0.0, placement="advanced", doc=_FACING)
     ny: float = param(title=_("Normale Y"), default=0.0, placement="advanced", doc=_FACING_MORE)
     nz: float = param(title=_("Normale Z"), default=1.0, placement="advanced", doc=_FACING_MORE)
@@ -312,9 +318,15 @@ class LabelBodyParams(BaseParams):
         placement="advanced",
         doc=_FONT,
     )
-    x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE)
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_MORE)
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_MORE)
+    x: float = param(
+        title=_("Position X"), default=0.0, unit="mm", doc=_WHERE, placement="advanced"
+    )
+    y: float = param(
+        title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_MORE, placement="advanced"
+    )
+    z: float = param(
+        title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_MORE, placement="advanced"
+    )
     name: str = param(
         title=_("Name"),
         default="",

@@ -161,10 +161,18 @@ class DrillParams(BaseParams):
             "in den Bausteinen — dort kommen die Maße aus der Normteiltabelle."
         ),
     )
-    x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE_X)
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y)
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z)
-    axis: str = param(title=_("Achse"), default="z", choices=_AXES, doc=_ALONG)
+    x: float = param(
+        title=_("Position X"), default=0.0, unit="mm", doc=_WHERE_X, placement="advanced"
+    )
+    y: float = param(
+        title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y, placement="advanced"
+    )
+    z: float = param(
+        title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z, placement="advanced"
+    )
+    axis: str = param(
+        title=_("Achse"), default="z", choices=_AXES, doc=_ALONG, placement="advanced"
+    )
     depth: float = param(
         title=_("Tiefe"),
         default=0.0,
@@ -320,10 +328,18 @@ class CountersinkParams(BaseParams):
         placement="advanced",
         doc=_("Voller Kopfwinkel — 90 Grad bei metrischen Senkschrauben."),
     )
-    x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE_X)
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y)
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z)
-    axis: str = param(title=_("Achse"), default="z", choices=_AXES, doc=_ALONG)
+    x: float = param(
+        title=_("Position X"), default=0.0, unit="mm", doc=_WHERE_X, placement="advanced"
+    )
+    y: float = param(
+        title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y, placement="advanced"
+    )
+    z: float = param(
+        title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z, placement="advanced"
+    )
+    axis: str = param(
+        title=_("Achse"), default="z", choices=_AXES, doc=_ALONG, placement="advanced"
+    )
 
 
 @register_op(
@@ -368,10 +384,18 @@ class PlugParams(BaseParams):
         maximum=200.0,
         doc=_("Durchmesser der Bohrung, die zugemacht wird — etwas mehr schadet nicht."),
     )
-    x: float = param(title=_("Position X"), default=0.0, unit="mm", doc=_WHERE_X)
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y)
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z)
-    axis: str = param(title=_("Achse"), default="z", choices=_AXES, doc=_ALONG)
+    x: float = param(
+        title=_("Position X"), default=0.0, unit="mm", doc=_WHERE_X, placement="advanced"
+    )
+    y: float = param(
+        title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y, placement="advanced"
+    )
+    z: float = param(
+        title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z, placement="advanced"
+    )
+    axis: str = param(
+        title=_("Achse"), default="z", choices=_AXES, doc=_ALONG, placement="advanced"
+    )
     depth: float = param(
         title=_("Tiefe"),
         default=0.0,
@@ -611,9 +635,14 @@ class TestPieceParams(BaseParams):
         default=0.0,
         unit="mm",
         doc=_("Mitte des Ausschnitts — die Stelle, um die es geht."),
+        placement="advanced",
     )
-    y: float = param(title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y)
-    z: float = param(title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z)
+    y: float = param(
+        title=_("Position Y"), default=0.0, unit="mm", doc=_WHERE_Y, placement="advanced"
+    )
+    z: float = param(
+        title=_("Position Z"), default=0.0, unit="mm", doc=_WHERE_Z, placement="advanced"
+    )
     on_bed: bool = param(
         title=_("Auf das Bett setzen"),
         default=True,
