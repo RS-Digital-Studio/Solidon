@@ -936,3 +936,50 @@ def test_the_normals_decide_the_shape_and_not_the_residual() -> None:
 
     assert cylinder is not None and cylinder.good, "this is the trap: the cylinder looks perfect"
     assert cone is not None and cone.half_angle == pytest.approx(30.9, abs=1.0)
+
+
+def test_one_ring_is_one_feature_and_not_two() -> None:
+    """Ein Ring zerfällt in Flecken, und jeder wurde ein eigenes Merkmal.
+
+    Im Bildschirmfoto eines Kunden standen drei Wülste untereinander: Ø 34,09,
+    Ø 34,06 und Ø 34,03 mm. Drei Kanten oder eine, dreimal erkannt? Am Korpus
+    nachgestellt kam derselbe einzelne Ring in **jeder** geprüften Vernetzung
+    als zwei Merkmale heraus — 33,93 und 33,94 bei 48 Segmenten, 33,73 und
+    33,75 bei 24. Für die Zuordnung sind zwei Merkmale an derselben Stelle zwei
+    gleich gute Kandidaten, also hält die Auswertung an und fragt (§21.3).
+
+    Zylinderflecken werden seit `4ae96ec` zusammengefasst; für Ringe fehlte das
+    Gegenstück.
+    """
+    for sections, tube in ((48, 0.5), (24, 0.5), (96, 1.0)):
+        ring = trimesh.creation.torus(
+            major_radius=17.0, minor_radius=tube, major_sections=sections, minor_sections=12
+        )
+        found = [entry for entry in detect(MeshData(raw=ring)).values() if entry.kind == "torus"]
+
+        assert len(found) == 1, f"{sections} Segmente: {[e.params['diameter'] for e in found]}"
+
+
+def test_two_rings_above_each_other_stay_two() -> None:
+    """Die Gegenprobe, und sie entscheidet über das Kriterium.
+
+    Der **Rest** trennt die beiden Fälle nicht: Zwei Hälften eines Rings
+    zusammengelegt streuen 0,00040 — und zwei verschiedene Ringe, fälschlich
+    zusammengelegt, ebenfalls 0,00040. Was sie trennt, ist der Mittelpunkt.
+    """
+    lower = trimesh.creation.torus(
+        major_radius=17.0, minor_radius=0.5, major_sections=48, minor_sections=12
+    )
+    upper = trimesh.creation.torus(
+        major_radius=17.0, minor_radius=0.5, major_sections=48, minor_sections=12
+    )
+    upper.apply_translation((0.0, 0.0, 8.0))
+
+    found = [
+        entry
+        for entry in detect(MeshData(raw=trimesh.util.concatenate([lower, upper]))).values()
+        if entry.kind == "torus"
+    ]
+
+    assert len(found) == 2
+    assert sorted(round(float(entry.params["centre"][2])) for entry in found) == [0, 8]

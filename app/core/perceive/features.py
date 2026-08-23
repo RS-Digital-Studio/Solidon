@@ -522,6 +522,7 @@ def _fitted(mesh: MeshData) -> Fitted:
                 classify(piece)
 
     found = _merged_cylinders(body, mesh, found)
+    tori = _merged_tori(body, tori)
     found = _without_thread_turns(body, found)
     found, fillets = _split_off_fillets(body, found)
 
@@ -1758,3 +1759,82 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
 def component_count(mesh: MeshData) -> int:
     """Wie viele getrennte Körper das Netz enthält (§21.1)."""
     return len(face_components(mesh.raw))
+
+
+def _same_torus(one: tuple[TorusFit, list[int]], two: tuple[TorusFit, list[int]]) -> bool:
+    """Beschreiben diese zwei Flecken denselben Ring?
+
+    **Ein Torus zerfällt genauso wie ein Zylinder, nur fiel es später auf.**
+    Ein einzelner Ring aus dem Korpus kam in jeder geprüften Vernetzung als
+    *zwei* Merkmale heraus — Ø 33,93 und Ø 33,94 bei 48 Segmenten, Ø 33,73 und
+    Ø 33,75 bei 24. Im Bildschirmfoto eines Kunden standen drei Wülste mit
+    34,09, 34,06 und 34,03 mm untereinander, und niemand konnte sagen, ob das
+    drei Kanten sind oder eine.
+
+    Der Unterschied zum Zylinder liegt im letzten Prüfschritt: Dort trennt der
+    **Abschnitt auf der Achse** zwei Bohrungen durch zwei Wände voneinander.
+    Ein Ring hat keinen solchen Abschnitt — er hat einen Mittelpunkt, und zwei
+    Ringe mit derselben Achse und demselben Mittelpunkt sind derselbe Ring.
+    """
+    first, _ = one
+    second, _ = two
+    if first.recess is not second.recess:
+        return False
+
+    scale = max(first.ring_radius, second.ring_radius)
+    if abs(first.ring_radius - second.ring_radius) > scale * CYLINDER_TOLERANCE:
+        return False
+    tube = max(first.tube_radius, second.tube_radius)
+    if abs(first.tube_radius - second.tube_radius) > tube * CYLINDER_TOLERANCE:
+        return False
+
+    axis = np.asarray(first.axis, dtype=float)
+    if abs(float(axis @ np.asarray(second.axis, dtype=float))) < math.cos(
+        math.radians(SINK_AXIS_LIMIT)
+    ):
+        return False
+
+    # Der Mittelpunkt, in ganzer Länge — nicht nur quer zur Achse. Zwei
+    # gleich große Ringe übereinander auf derselben Achse sind zwei Ringe.
+    offset = np.asarray(second.centre, dtype=float) - np.asarray(first.centre, dtype=float)
+    return float(np.linalg.norm(offset)) <= scale * SINK_FIT_LIMIT
+
+
+def _merged_tori(body: trimesh.Trimesh, found: Tori) -> Tori:
+    """Ringflecken, die denselben Ring beschreiben, zu einem machen.
+
+    Wie :func:`_merged_cylinders`, und aus demselben Grund: Mehrere Merkmale
+    an derselben Stelle sind für die Zuordnung mehrere gleich gute Kandidaten,
+    also hält die Auswertung an und fragt — bei jeder Auswertung, und mit einer
+    Frage, auf die es keine richtige Antwort gibt (§21.3).
+
+    Die Vereinigung muss sich rechtfertigen, aber **anders als beim Zylinder**.
+    Dort darf der gemeinsame Fit nicht schlechter streuen als der schlechtere
+    der beiden; hier wäre das zu streng und träfe zudem nichts. Gemessen an
+    zwei Hälften eines Rings: einzeln 0,00005, zusammen 0,00040 — die
+    Vereinigung streut immer etwas mehr, weil sie mehr Punkte trägt. Und an
+    zwei **verschiedenen** Ringen, fälschlich zusammengelegt: ebenfalls
+    0,00040. Der Rest trennt die beiden Fälle also gar nicht.
+
+    Getrennt werden sie von :func:`_same_torus` über den Mittelpunkt, und zwar
+    sauber: An zwei Ringen 8 mm übereinander sagt es für die vier Flecken
+    zweimal *ja* und viermal *nein*. Der Fit muss deshalb nur noch beweisen,
+    dass er überhaupt ein Ring ist — dass er unter der Gütegrenze bleibt, ab
+    der eine Fläche als rund gilt.
+    """
+    if len(found) < 2:
+        return found
+
+    merged: Tori = []
+    for fit, patch in found:
+        for index, (other, gathered) in enumerate(merged):
+            if not _same_torus((fit, patch), (other, gathered)):
+                continue
+            together = gathered + patch
+            again = fit_torus(body, together)
+            if again is not None and again.residual <= ROUND_TOLERANCE:
+                merged[index] = (again, together)
+                break
+        else:
+            merged.append((fit, patch))
+    return merged
