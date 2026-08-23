@@ -5125,6 +5125,42 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Schritt. Der Punkt betrifft also nicht nur eingelesene Modelle, wie es
       zuerst aussieht, sondern jede Verrundung.
 
+      **Gemessen am 23.08.2026, und der Punkt ist so nicht lösbar** — er baut
+      auf einer Voraussetzung auf, die es nicht gibt (3d-druck-3a):
+
+          create_box + fillet_edges  ->  complete: False
+              op.fillet_edges.NeedsSolidError
+              „Der gewählte Körper ist ein Netz."
+
+      **Verrunden geht auf einem Netz nicht, und der Kundenfall ist der
+      Netzfall** — „eine heruntergeladene Verrundung" heißt STL heißt Netz.
+      Eine Operation *Verrundungsradius ändern* hätte dieselbe Schranke und
+      hielte bei jedem dieser Modelle an. Im anderen Fall braucht es sie
+      nicht: Bei einem exakten Körper, den Solidon selbst gebaut hat, greift
+      „Diesen Schritt ändern" über die Provenienz, und der Radius steht in den
+      Parametern des Erzeugerschritts. **Der Punkt hängt damit am B-Rep-Kern
+      für eingelesene Geometrie** und nicht an einer Operation.
+
+      **Und für den dritten Fall — einen eingelesenen *exakten* Körper — ist
+      die Antwort besser als die Frage.** Auf einem B-Rep-Körper läuft `detect`
+      gar nicht; es gibt eine eigene Erkennung (`brep/features.py`), und die
+      passt nichts ein, sondern **liest aus der Topologie**. Gemessen an einem
+      exakten Quader mit R3 an vier senkrechten Kanten:
+
+          features_of                6 Merkmale, alle 'face'
+          in der Topologie           Zylinderfläche r = 3.000 mm,
+                                     Umdrehung 0.250   (viermal)
+
+      **Der Radius steht exakt da** — kein Einpassen, keine Streuung, keine
+      Schwelle. Verworfen werden die vier von `FULL_TURN = 0.9`, dessen
+      Kommentar die Merkmalsart selbst benennt: *„Darunter ist sie eine
+      Verrundung oder eine gerundete Ecke, kein Loch."*
+
+      Bemerkenswert dabei: Die Netz-Messung (Verrundung 90°, Zapfen 345°) und
+      `FULL_TURN` ziehen **dieselbe** Trennlinie — 0,25 gegen 0,9. Zwei Kerne,
+      zwei Wege, eine Grenze; das spricht dafür, dass sie in der Sache liegt
+      und nicht in der Methode.
+
       **Zu entscheiden ist damit eine Frage, die größer ist als dieser
       Punkt:** Soll eine Operation, die ein Merkmal *sichtbar* hervorbringt,
       es auch **deklarieren** — oder bleibt die Provenienz den beiden
@@ -5190,7 +5226,46 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
 
       **Damit ist der Punkt beantwortet und die Folgefrage eine andere:** Nicht
       „wie wird das Registerfüllen schneller", sondern „muss trimesh im
-      kritischen Pfad des Starts liegen". Heute schon: `app/ui/app.py:234` ruft
+      kritischen Pfad des Starts liegen".
+
+      **Von außen nachgemessen am 23.08.2026** (kleinste von je drei Läufen,
+      unter dem Schloss):
+
+          nackter Interpreter          59 ms
+          + import trimesh            739 ms   ->  trimesh allein   681 ms
+          + load_operations()         888 ms   ->  davon Register   148 ms
+          + PySide6                   146 ms   ->  Qt allein         88 ms
+          + pyvista                   339 ms   ->  VTK allein       281 ms
+
+      **Trimesh ist der größte Einzelposten des Starts** — mehr als Qt und VTK
+      zusammen, und mehr als das Vierfache des Registers. Die Entscheidung vom
+      22.08. („nicht die Stelle, an der ein Kunde etwas merkt") ist damit
+      zurückgenommen: Sie stellte die halbe Sekunde gegen **12,9 s kalten**
+      Start, und der ist zum größten Teil Dateisystem-Cache. Gegen die drei
+      Sekunden aus §31 sind 681 ms fast ein Viertel.
+
+      **Die Machbarkeit ist ebenfalls gemessen, und sie schließt zwei Wege aus
+      und öffnet einen dritten.**
+
+      *Trimesh teilweise laden geht nicht.* Der Import zieht `scipy.spatial`
+      (168 ms) über `trimesh.grouping`, dazu `trimesh.bounds` (251 ms) und
+      `trimesh.creation` (193 ms) — es gibt keinen Einstiegspunkt, der weniger
+      mitbringt.
+
+      *Trimesh in den Op-Modulen verzögern* heißt **29 Dateien** (gezählt:
+      `^import trimesh` oder `^from trimesh` unter `app/core/`). Jede Funktion
+      darin bräuchte den Import nach innen gezogen — machbar, aber eine
+      Durchsicht und kein Handgriff.
+
+      **Der dritte Weg ist eine Stelle statt neunundzwanzig, und er ist die
+      eigentliche Frage:** `app/ui/app.py:234` ruft `load_operations()` **vor**
+      `build_application()`. Liefe es danach, stünde das Fenster 829 ms früher,
+      und die Menüs füllten sich, während der Kunde schon hinsieht. Der
+      Startbildschirm zeigt ohnehin „Operationen werden geladen …" — er
+      beschreibt damit heute einen Zustand, in dem noch kein Fenster da ist.
+
+      Das ist ein Eingriff in `app/ui/` und gehört 3d-druck-b8; die Messung
+      steht hier, die Entscheidung nicht. Heute schon: `app/ui/app.py:234` ruft
       `load_operations()` vor `build_application()`, also lädt trimesh, während
       der Startbildschirm „Operationen werden geladen …" zeigt und Qt noch
       nicht hochgefahren ist. Beides parallel zu fahren wäre eine Änderung an

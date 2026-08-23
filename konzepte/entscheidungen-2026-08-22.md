@@ -244,14 +244,39 @@ vier Commits auf `main`. **Ein Umstieg auf Branches, während vier Sitzungen
 arbeiten und der Auftrag lautet „am Ende ist alles in `main`", ist genau der
 Moment, in dem etwas nicht dort landet.** Vorbereiten ja, umstellen am Morgen.
 
-**Trimesh bleibt vorerst im kritischen Pfad des Starts.** Gemessen: 722 der
-790 ms von `load_operations()` sind `app.core.scene.ops`, davon 582 der Import
-von trimesh — das Registerfüllen selbst kostet 11,8 ms. Der Umbau wäre eine
+**Trimesh bleibt vorerst im kritischen Pfad des Starts** — der Umbau wäre eine
 Änderung an der Startreihenfolge (die Menüs brauchen das Register, bevor das
-Fenster steht), und eine halbe Sekunde von 12,9 s kaltem Start ist nicht die
-Stelle, an der ein Kunde etwas merkt. **Der Startpfad gehört als Ganzes
-angesehen, nicht an einem Posten optimiert** — dann mit einer Messung von
-außen, wie sie beim Tor die Lücke zwischen 9 und 30 Minuten aufgedeckt hat.
+Fenster steht). **Der Startpfad gehört als Ganzes angesehen, nicht an einem
+Posten optimiert**, und zwar mit einer Messung von außen.
+
+**Nachgemessen am 23.08.2026, von außen, kleinste von je drei Läufen — und der
+Satz „nicht die Stelle, an der ein Kunde etwas merkt" fällt:**
+
+    nackter Interpreter          59 ms
+    + import trimesh            739 ms      ->  trimesh allein   681 ms
+    + load_operations()         888 ms      ->  davon Register   148 ms
+    + PySide6                   146 ms      ->  Qt allein         88 ms
+    + pyvista                   339 ms      ->  VTK allein       281 ms
+
+**Trimesh kostet 681 ms und ist damit der größte Einzelposten des Starts** —
+mehr als Qt und VTK zusammen, und mehr als das Vierfache dessen, was das
+Register selbst braucht.
+
+**Der Fehler in der ursprünglichen Begründung war der Bezug, nicht die Zahl.**
+Sie stellte „eine halbe Sekunde" gegen **12,9 s kalten** Start. Der warme liegt
+bei 2,9 s, und §31 bindet den Start auf **drei Sekunden** — gegen dieses Budget
+sind 681 ms fast ein Viertel. Der kalte Start ist zudem zum größten Teil
+Dateisystem-Cache und keine Rechenzeit; wer ihn als Nenner nimmt, teilt durch
+etwas, das niemand beeinflussen kann.
+
+*Das ist dieselbe Bauart wie die anderen drei gekippten Entscheidungen dieser
+Nacht: Die Zahl stimmte, der Bezug nicht.*
+
+**Was jetzt zu entscheiden ist, bleibt trotzdem offen** — und zwar bewusst:
+Ob trimesh verzögert werden **kann**, hängt daran, ob die Op-Module es auf
+Modulebene importieren. Das ist eine Messung und keine Meinung, und sie steht
+noch aus. Erst danach lässt sich sagen, ob der Umbau eine Zeile ist oder eine
+Durchsicht von zwanzig Dateien.
 
 ---
 
