@@ -462,13 +462,20 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
 
 @op_params
 class ToMeshParams(BaseParams):
+    # **Vorn, obwohl es eine Feinheit ist.** Es ist das einzige Feld dieser
+    # Operation, und hinten ergab das einen Dialog aus einem Satz und einem
+    # leeren Aufklapper — nichts zu entscheiden, und trotzdem OK klicken.
+    # Vor allem aber ist die Umwandlung unumkehrbar (siehe doc): Wer mit
+    # 0,05 mm umwandelt und danach merkt, dass es zu grob war, muss den
+    # Schritt zurücknehmen — und dafür muss er wissen, dass es die
+    # Einstellung überhaupt gibt.
     deflection: float = param(
         title=_("Feinheit"),
         default=0.05,
         unit="mm",
         minimum=0.001,
         maximum=1.0,
-        placement="advanced",
+        placement="front",
         doc=_("Wie weit die Dreiecke von der echten Fläche abweichen dürfen."),
     )
 
