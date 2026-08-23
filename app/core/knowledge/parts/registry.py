@@ -286,7 +286,15 @@ def register_part(
                 group=group,
                 params=params,
                 fn=fn,
-                version=version,
+                # **Der Stand kommt aus dem Verlauf, nicht daneben.** Beides
+                # von Hand zu pflegen hieß, achtzehn Bausteine und ihre
+                # Einträge im Gleichschritt zu halten — und beim ersten
+                # gemeinsamen Eintrag lief es auseinander: Der Verlauf sagte
+                # 4, das Feld stand auf 1, und der Test aus §24.4 fing es.
+                # Wer eine Version will, schreibt einen Änderungseintrag; das
+                # ist ohnehin Pflicht, und der Eintrag sagt außerdem, *was*
+                # sich geändert hat.
+                version=changes[-1].version if changes else version,
                 subtractive=subtractive,
                 at_hole=at_hole,
                 at_hole_values=at_hole_values,
@@ -306,8 +314,9 @@ def register_part(
 #: wird erhöht, sobald ein Baustein sich auf eine Art ändert, die Maße
 #: verschiebt. Version 3: das Spiel von Mutternfalle und Gewinde kommt aus
 #: dem Materialprofil statt aus einer festen Vorgabe (``PLAY_FROM_PROFILE``
-#: in ``fasteners.py``).
-LIBRARY_VERSION: Final = "3"
+#: in ``fasteners.py``). Version 4: die angeklickte Fläche bestimmt die
+#: Richtung des Bausteins (``FACE_GIVES_DIRECTION``).
+LIBRARY_VERSION: Final = "4"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt
@@ -319,6 +328,21 @@ MOUTH_AT_ORIGIN: Final = PartChange(
     effect="Der Baustein liegt um seine eigene Tiefe tiefer. Alte Projekte "
     "bekommen ihn an der Stelle, an der er vorher wirkungslos in der Luft "
     "stand — die Position ist zu prüfen.",
+)
+
+
+#: Version 4 hat ebenfalls eine einzige Ursache, und sie betrifft jeden
+#: Baustein, den man an ein Merkmal setzen kann: Die angeklickte Fläche
+#: bestimmt jetzt auch die **Richtung**, nicht nur den Ort.
+FACE_GIVES_DIRECTION: Final = PartChange(
+    version="4",
+    date="2026-08-23",
+    reason="Eine Fläche schaut entlang ihrer Normalen, und darauf steht der "
+    "Baustein — vorher stand er entlang der Vorgabe Z (§25, §18.5).",
+    effect="An einer Deckfläche ändert sich nichts. An einer Seitenwand oder "
+    "einer geneigten Fläche steht der Baustein jetzt senkrecht auf ihr statt "
+    "senkrecht nach oben; wer das alte Verhalten nachbaut, hat unter *Achse* "
+    "eine Richtung gewählt, die nun aus der Fläche kommt.",
 )
 
 

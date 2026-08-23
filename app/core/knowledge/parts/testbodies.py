@@ -29,7 +29,7 @@ import trimesh
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
-from app.core.knowledge.parts.registry import PartChange, register_part
+from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT
@@ -100,7 +100,7 @@ class FitLadderParams(BaseParams):
         "Zapfen und Bohrungen mit gestaffeltem Spiel. Einmal drucken, ausprobieren, "
         "und der Wert steht — er gehört danach ins Materialprofil, nicht ins Modell."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
 )
 def fit_ladder(raw: BaseParams) -> PartResult:
     params = cast(FitLadderParams, raw)
@@ -193,7 +193,7 @@ class WallLadderParams(BaseParams):
         "Wände von einer bis mehreren Extrusionsbreiten. Zeigt, ab wann der Drucker "
         "wirklich noch Material legt — die Grundlage für die Mindestwandstärke."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
 )
 def wall_ladder(raw: BaseParams) -> PartResult:
     params = cast(WallLadderParams, raw)
@@ -267,7 +267,7 @@ class OverhangFanParams(BaseParams):
         "Flächen von steil bis flach. Zeigt, ab welchem Winkel dieser Drucker mit "
         "diesem Material wirklich Stützen braucht — statt der Faustregel 45 Grad."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
 )
 def overhang_fan(raw: BaseParams) -> PartResult:
     params = cast(OverhangFanParams, raw)

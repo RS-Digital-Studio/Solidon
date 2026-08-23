@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 from unittest import mock
 
+import numpy as np
 import pytest
 
 from app.core.geom.boolean import boolean
@@ -401,11 +402,21 @@ def test_a_changed_bore_is_announced_to_old_projects() -> None:
     Der Schnapper steht auf 4, weil Version 3 nur halb stimmte: Sie schob die
     Tasche unter ihre Mündung und nahm die Rastkante mit ans falsche Ende.
     """
-    for name, seit in (("dowel", "2"), ("snap_connector", "4")):
+    for name in ("dowel", "snap_connector"):
         spec = PARTS.get(name)
-        assert spec.version == seit, name
         letzte = spec.changes[-1]
-        assert letzte.version == seit and letzte.effect, name
+        assert spec.version == letzte.version, name
+        assert letzte.effect, name
+
+    # **Und die Zusicherung, die keine feste Zahl braucht.** Vorher standen
+    # hier zwei — „dowel" auf 2, „snap_connector" auf 4 —, und beide waren
+    # der Stand vom Tag des Schreibens. Der erste Eintrag, der alle achtzehn
+    # Bausteine zugleich betraf, machte sie falsch, obwohl an der Sache nichts
+    # falsch war. Was gilt, ist die Übereinstimmung, nicht die Ziffer.
+    for spec in PARTS.all():
+        assert spec.changes, spec.name
+        assert spec.version == spec.changes[-1].version, spec.name
+        assert spec.changes[-1].effect or spec.changes[-1].version == "1", spec.name
         assert changed_since({name: "1"}) == (name,) or name in changed_since({name: "1"})
 
 
@@ -639,6 +650,82 @@ def test_the_part_keeps_the_size_it_promises(profile: Profile) -> None:
 
     top = result.scene.objects["obj_1"].mesh.bounds.maximum[2]
     assert top == pytest.approx(13.0, abs=0.02), "10 mm Quader plus 3 mm Nase"
+
+
+def test_a_part_on_a_side_wall_grows_into_that_wall(profile: Profile) -> None:
+    """Die angeklickte Fläche bestimmt die Richtung, nicht nur den Ort.
+
+    ``_anchor`` las von einem Merkmal ausschließlich ``centre``. Die Richtung
+    kam aus dem Feld *Achse*, und dessen Vorgabe ist Z — also stand jeder
+    Baustein senkrecht, gleich welche Fläche man angeklickt hatte. Für den
+    Kunden war das der häufigste Handgriff überhaupt: Man zeigt auf eine Wand,
+    und was man bekommt, steckt in der Decke.
+
+    **Gemessen wird über zwei Höhen, und das ist keine Umständlichkeit.** Bei
+    3 mm Höhe stimmt die Zahl auch im falschen Zustand: Die Nase ist 6 mm
+    breit, eine senkrecht stehende reicht also 3 mm nach -X — dieselbe Zahl,
+    aus der Breite statt aus der Höhe. Ein Test, der nur diesen einen Wert
+    prüft, ist grün und beweist nichts. Erst wenn der Ausschlag mit der Höhe
+    **mitwächst**, misst er die Richtung.
+    """
+    for height, expected in ((3.0, -23.0), (8.0, -28.0)):
+        project = new_project("centauri-carbon-2", "petg")
+        History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+        History(project.document).apply(
+            "Nase",
+            [
+                OperationDraft(
+                    op="insert_latch",
+                    inputs=("obj_1",),
+                    # face_5 schaut nach -X; der Quader steht dort bei x = -20.
+                    params={"at_feature": "face_5", "height": height},
+                )
+            ],
+        )
+
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+        assert result.complete, [f.message for f in result.scene.report.findings]
+        bounds = result.scene.objects["obj_1"].mesh.bounds
+        assert bounds.minimum[0] == pytest.approx(expected, abs=0.02), f"height {height}"
+        assert bounds.maximum[2] == pytest.approx(10.0, abs=0.02), "und nichts nach oben"
+
+
+def test_a_bore_in_a_side_wall_runs_through_that_wall(profile: Profile) -> None:
+    """Dasselbe an dem Baustein, für den es am meisten zählt.
+
+    Ein Schraubenloch bringt seine Bohrung als benanntes Merkmal mit, und
+    deren Achse ist die Zahl, an der sich „durch die Wand" von „durch den
+    Deckel" unterscheiden lässt. Der Betrag des Skalarprodukts mit der
+    Flächennormalen ist 1, wenn beide dieselbe Gerade meinen — die Richtung
+    entlang dieser Geraden ist Sache der Bohrung, nicht des Tests.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    before = evaluate(project.document, profile, sources=ProjectSources(project))
+    wall = before.scene.objects["obj_1"].features["face_5"]
+    History(project.document).apply(
+        "Loch",
+        [
+            OperationDraft(
+                op="insert_screw_hole", inputs=("obj_1",), params={"at_feature": "face_5"}
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [f.message for f in result.scene.report.findings]
+    normal = np.asarray(wall.params["normal"], dtype=float)
+    bores = [
+        np.asarray(entry.params["axis"], dtype=float)
+        for entry in result.scene.objects["obj_1"].features.values()
+        if entry.kind == "hole" and entry.params.get("axis") is not None
+    ]
+    assert bores, "the part brings a named bore"
+    assert all(abs(float(axis @ normal)) == pytest.approx(1.0, abs=1e-3) for axis in bores), (
+        f"bore axes {bores} against wall normal {normal}"
+    )
 
 
 def test_every_play_field_defaults_to_the_profile() -> None:

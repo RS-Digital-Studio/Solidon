@@ -18,7 +18,7 @@ from typing import Final, cast
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
-from app.core.knowledge.parts.registry import PartChange, register_part
+from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT
@@ -91,7 +91,7 @@ class SnapFitParams(BaseParams):
         "Federnder Arm mit Haken zum Einrasten zweier Teile. Der Arm ist "
         "mindestens zehnmal so lang wie dick, sonst bricht er, statt zu federn."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
 )
 def snap_fit(raw: BaseParams) -> PartResult:
     params = cast(SnapFitParams, raw)
@@ -171,7 +171,7 @@ class LatchParams(BaseParams):
         "Haltefläche nach unten — "
         "druckt ohne Stütze und hält gegen Zug."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
 )
 def latch(raw: BaseParams) -> PartResult:
     params = cast(LatchParams, raw)
@@ -254,7 +254,7 @@ class HingeParams(BaseParams):
         "solange die Schichten quer zur Biegung laufen. Steht das Scharnier "
         "senkrecht auf der Platte, bricht es beim ersten Öffnen."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
 )
 def living_hinge(raw: BaseParams) -> PartResult:
     params = cast(HingeParams, raw)
@@ -355,6 +355,7 @@ class DowelParams(BaseParams):
                 "Umkreis + Spiel; an dieser Stelle steht jetzt ein Loch."
             ),
         ),
+        FACE_GIVES_DIRECTION,
     ],
 )
 def dowel(raw: BaseParams) -> PartResult:
@@ -535,6 +536,7 @@ class SnapConnectorParams(BaseParams):
                 "Kante einzeln gesetzt."
             ),
         ),
+        FACE_GIVES_DIRECTION,
     ],
 )
 def snap_connector(raw: BaseParams) -> PartResult:

@@ -40,7 +40,7 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import DEGREE_UNIT
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -292,7 +292,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     values = _part_values(spec, ctx.params, ctx.profile)
     produced = spec.fn(spec.params(**values))
 
-    anchor = _anchor(source, ctx.params)
+    anchor, direction = _anchor(source, ctx.params)
     # Ein aufgesetzter Baustein sinkt ein Hundertstel ein. Zwei Volumen, die
     # sich nur in einer Fläche berühren, sind das eine, woran eine boolesche
     # Operation zuverlässig scheitert (§39) — die Rastnase steht mit 6 mal 1 mm
@@ -303,13 +303,13 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     # Werkzeug reicht ohnehin über die Fläche hinaus.
     subtractive = cuts(spec, ctx.params)
     sink = 0.0 if subtractive else BOOLEAN_OVERLAP
-    placed = _place(as_mesh_data(produced.mesh), ctx.params, anchor, sink)
+    placed = _place(as_mesh_data(produced.mesh), ctx.params, anchor, sink, direction)
     body = as_mesh_data(source.mesh)
     kind: BooleanKind = "difference" if subtractive else "union"
     outcome = boolean(kind, [body, placed], quality=ctx.quality)
 
     features = dict(source.features)
-    features.update(_placed_features(produced, spec, ctx.params, anchor, sink))
+    features.update(_placed_features(produced, spec, ctx.params, anchor, sink, direction))
 
     # Ein Baustein, der den Körper nicht getroffen hat, sagt das. Hier und
     # nicht in jedem einzelnen: die Frage ist für alle dieselbe, und die
@@ -336,18 +336,31 @@ def _part_values(spec: PartSpec, params: Any, profile: Profile | None) -> dict[s
     return values
 
 
-def _anchor(source: SceneObject, params: Any) -> Vec3:
-    """Wohin der Baustein kommt: an ein benanntes Merkmal, oder an den
-    Ursprung (§25).
+def _anchor(source: SceneObject, params: Any) -> tuple[Vec3, Vec3 | None]:
+    """Wohin der Baustein kommt **und wohin er schaut** — an ein benanntes
+    Merkmal, oder an den Ursprung (§25).
 
     §25 verlangt „einen Baustein an ein erkanntes Merkmal setzen". Der Name
     genügt dafür — es ist derselbe Name, den der Nutzer angeklickt und über den
     der Agent gesprochen hat (§18.5), und ein Merkmal, das nicht da ist, sagt
     das, statt den Baustein irgendwo Plausiblem abzusetzen.
+
+    **Die Richtung stand hier lange nicht, und das war der teuerste Handgriff
+    der ganzen Bibliothek.** Gelesen wurde nur ``centre``; wohin der Baustein
+    zeigt, kam aus dem Feld *Achse*, und dessen Vorgabe ist Z. Wer eine
+    Seitenwand anklickte, bekam ein Schraubenloch, das nach oben bohrt —
+    gemessen an einem Würfel: Loch-Achse [0 0 1] gegen Flächennormale
+    [-1 0 0], Skalarprodukt 0,00, exakt quer. Und es ist der häufigste
+    Handgriff überhaupt: Man zeigt auf eine Wand, und was man bekommt, steckt
+    in der Decke.
+
+    Eine Fläche schaut entlang ihrer Normalen, eine Bohrung entlang ihrer
+    Achse. Eine Kantenschleife hat weder noch; dann bleibt die Richtung
+    ``None``, und es gilt wieder, was unter *Achse* gewählt ist.
     """
     name = str(getattr(params, "at_feature", "") or "")
     if not name:
-        return (0.0, 0.0, 0.0)
+        return (0.0, 0.0, 0.0), None
 
     feature = source.features.get(name)
     if feature is None:
@@ -363,34 +376,49 @@ def _anchor(source: SceneObject, params: Any) -> Vec3:
             ),
         )
     centre = feature.params.get("centre", (0.0, 0.0, 0.0))
-    return (float(centre[0]), float(centre[1]), float(centre[2]))
+    point = (float(centre[0]), float(centre[1]), float(centre[2]))
+    return point, _direction_of(feature)
+
+
+def _direction_of(feature: Feature) -> Vec3 | None:
+    """Wohin ein Merkmal schaut — oder ``None``, wenn es das nicht sagt.
+
+    Dieselbe Frage beantwortet ``geom.align.frame_of`` fürs Ausrichten, und
+    dort ist eine Art ohne Richtung ein Fehler mit Handlungsvorschlag. Hier
+    ist sie keiner: Ein Baustein an einer Kantenschleife hat einen Ort und
+    behält seine gewählte Achse. Die Antworten sind gleich, die Folgen nicht —
+    deshalb steht die Frage zweimal da.
+    """
+    raw = feature.params.get("normal") or feature.params.get("axis")
+    if raw is None:
+        return None
+    values = tuple(float(value) for value in raw)
+    length = sum(value * value for value in values) ** 0.5
+    if length <= EPS_GEOM:
+        return None
+    return (values[0] / length, values[1] / length, values[2] / length)
 
 
 def _place(
-    mesh: MeshData, params: Any, anchor: Vec3 = (0.0, 0.0, 0.0), sink: float = 0.0
+    mesh: MeshData,
+    params: Any,
+    anchor: Vec3 = (0.0, 0.0, 0.0),
+    sink: float = 0.0,
+    direction: Vec3 | None = None,
 ) -> MeshData:
+    """Der Baustein an seinem Platz.
+
+    **Eine Quelle für zwei Antworten.** Diese Funktion und :func:`_matrix`
+    bauten dieselbe Kette aus Einsenken, Drehen und Verschieben zweimal — als
+    Netz und als Matrix, die eine für die Geometrie, die andere für die
+    Merkmale. Zwei Kopien derselben Rechnung laufen auseinander, sobald eine
+    von beiden erweitert wird, und das Einbauen der Flächenrichtung wäre genau
+    so eine Erweiterung gewesen. Jetzt rechnet :func:`_matrix`, und hier wird
+    sie angewendet.
+    """
     from app.core.geom.transform import apply
 
-    axis = getattr(params, "axis", "z")
-    angle = float(getattr(params, "angle", 0.0))
-    body = mesh
-    if sink:
-        # In seinem **eigenen** System, vor jeder Drehung: dort zeigt +Z aus
-        # dem Träger heraus, also geht -Z hinein, gleich an welche Achse er
-        # danach gelegt wird.
-        body = apply(body, translation((0.0, 0.0, -sink)))
-    if axis != "z":
-        # Den Baustein so umlegen, dass sein eigenes +Z entlang der gewählten Achse
-        # zeigt.
-        body = apply(body, rotation("y", 90.0) if axis == "x" else rotation("x", -90.0))
-    if angle:
-        body = apply(body, rotation(axis, angle))  # type: ignore[arg-type]
-    offset = (
-        float(getattr(params, "x", 0.0)) + anchor[0],
-        float(getattr(params, "y", 0.0)) + anchor[1],
-        float(getattr(params, "z", 0.0)) + anchor[2],
-    )
-    return apply(body, translation(offset))
+    return apply(mesh, _matrix(params, anchor, sink, direction))
 
 
 def _placed_features(
@@ -399,6 +427,7 @@ def _placed_features(
     params: Any,
     anchor: Vec3 = (0.0, 0.0, 0.0),
     sink: float = 0.0,
+    direction: Vec3 | None = None,
 ) -> dict[str, Feature]:
     """Die Merkmale des Bausteins, mitbewegt und so benannt, dass sie nicht
     kollidieren können.
@@ -409,7 +438,7 @@ def _placed_features(
     """
     from app.core.perceive.matching import moved_features
 
-    matrix = _matrix(params, anchor, sink)
+    matrix = _matrix(params, anchor, sink, direction)
     moved = moved_features(dict(produced.features), matrix)
     return {
         f"{spec.name}_{name}": dataclasses.replace(feature, id=f"{spec.name}_{name}")
@@ -417,7 +446,24 @@ def _placed_features(
     }
 
 
-def _matrix(params: Any, anchor: Vec3 = (0.0, 0.0, 0.0), sink: float = 0.0) -> Any:
+def _matrix(
+    params: Any,
+    anchor: Vec3 = (0.0, 0.0, 0.0),
+    sink: float = 0.0,
+    direction: Vec3 | None = None,
+) -> Any:
+    """Einsenken, drehen, verschieben — als eine Matrix.
+
+    Die Reihenfolge trägt die Bedeutung von *Drehung*: Mit einer Richtung aus
+    dem Merkmal dreht ``angle`` **zuerst** um die eigene Achse des Bausteins,
+    und die Fläche legt ihn danach um. Damit heißt „um 30 Grad drehen"
+    dasselbe, gleich ob die Fläche oben liegt oder an der Seite — ein Winkel
+    um die Weltachse wäre an einer Wand etwas anderes als auf dem Deckel.
+
+    Das Einsenken bleibt vor allen Drehungen: Es geschieht im eigenen System
+    des Bausteins, wo -Z in den Träger hineingeht, gleich wohin er danach
+    gelegt wird.
+    """
     import numpy as np
 
     from app.core.geom.ops import as_transform
@@ -427,10 +473,19 @@ def _matrix(params: Any, anchor: Vec3 = (0.0, 0.0, 0.0), sink: float = 0.0) -> A
     matrix = np.eye(4)
     if sink:
         matrix = translation((0.0, 0.0, -sink)) @ matrix
-    if axis != "z":
-        matrix = (rotation("y", 90.0) if axis == "x" else rotation("x", -90.0)) @ matrix
-    if angle:
-        matrix = rotation(axis, angle) @ matrix  # type: ignore[arg-type]
+    if direction is not None:
+        from app.core.geom.align import rotation_between
+
+        if angle:
+            matrix = rotation("z", angle) @ matrix
+        matrix = rotation_between((0.0, 0.0, 1.0), direction) @ matrix
+    else:
+        if axis != "z":
+            # Den Baustein so umlegen, dass sein eigenes +Z entlang der
+            # gewählten Achse zeigt.
+            matrix = (rotation("y", 90.0) if axis == "x" else rotation("x", -90.0)) @ matrix
+        if angle:
+            matrix = rotation(axis, angle) @ matrix  # type: ignore[arg-type]
     matrix = (
         translation(
             (

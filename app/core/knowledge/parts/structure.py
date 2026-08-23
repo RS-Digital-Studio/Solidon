@@ -19,7 +19,12 @@ from typing import cast
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, result, union
-from app.core.knowledge.parts.registry import MOUTH_AT_ORIGIN, PartChange, register_part
+from app.core.knowledge.parts.registry import (
+    FACE_GIVES_DIRECTION,
+    MOUTH_AT_ORIGIN,
+    PartChange,
+    register_part,
+)
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
 from app.i18n import _
@@ -103,7 +108,7 @@ class RibParams(BaseParams):
         "machen. Sie bleibt dünner als die Wand, an der sie sitzt — sonst "
         "zeichnet sie sich auf der anderen Seite ab."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
 )
 def rib(raw: BaseParams) -> PartResult:
     params = cast(RibParams, raw)
@@ -178,7 +183,7 @@ class CableGlandParams(BaseParams):
         "Durchführung für ein Rundkabel, mit einer Klemmstelle dahinter. Ohne die "
         "zieht jeder Ruck am Kabel direkt an der Lötstelle."
     ),
-    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN],
+    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION],
 )
 def cable_gland(raw: BaseParams) -> PartResult:
     params = cast(CableGlandParams, raw)
@@ -276,7 +281,7 @@ class ProfileTongueParams(BaseParams):
         "Nutrichtung flach — steht sie senkrecht, ist die Schulter unter dem "
         "Kopf ein Überhang."
     ),
-    changes=[PROFILE_TONGUE_ADDED],
+    changes=[PROFILE_TONGUE_ADDED, FACE_GIVES_DIRECTION],
 )
 def profile_tongue(raw: BaseParams) -> PartResult:
     params = cast(ProfileTongueParams, raw)

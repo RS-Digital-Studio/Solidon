@@ -13,7 +13,12 @@ from typing import cast
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, result, subtract, union
-from app.core.knowledge.parts.registry import MOUTH_AT_ORIGIN, PartChange, register_part
+from app.core.knowledge.parts.registry import (
+    FACE_GIVES_DIRECTION,
+    MOUTH_AT_ORIGIN,
+    PartChange,
+    register_part,
+)
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
 from app.i18n import _
@@ -70,7 +75,7 @@ class MagnetPocketParams(BaseParams):
         "Tasche für einen Rundmagneten, auf Wunsch mit Deckschicht zum Überdrucken "
         "und einer Haltelippe am Rand."
     ),
-    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN],
+    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION],
 )
 def magnet_pocket(raw: BaseParams) -> PartResult:
     params = cast(MagnetPocketParams, raw)
@@ -159,7 +164,7 @@ class WallMountParams(BaseParams):
         "Rückplatte mit Schraubenlöchern und nach vorn stehender Auflage. "
         "Die Löcher sind Durchgangslöcher aus der Normteiltabelle."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
 )
 def wall_mount(raw: BaseParams) -> PartResult:
     params = cast(WallMountParams, raw)
@@ -245,7 +250,7 @@ class KeyholeParams(BaseParams):
         "Schlüssellochförmige Aussparung: der Kopf geht durch das runde Ende, "
         "der Schaft hält im Schlitz."
     ),
-    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN],
+    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION],
 )
 def keyhole(raw: BaseParams) -> PartResult:
     params = cast(KeyholeParams, raw)

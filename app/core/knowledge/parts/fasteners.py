@@ -19,7 +19,7 @@ from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, result, thread, union
-from app.core.knowledge.parts.registry import PartChange, register_part
+from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
 from app.core.registry import op_params, param
 from app.core.types import BaseParams, PartResult
 from app.i18n import _
@@ -94,7 +94,7 @@ class ScrewHoleParams(BaseParams):
         "mit 90-Grad-Senkung "
         "und Kopffreiheit. Maße aus der Normteiltabelle."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
 )
 def screw_hole(raw: BaseParams) -> PartResult:
     params = cast(ScrewHoleParams, raw)
@@ -224,7 +224,7 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
         "ist dafür knapp gehalten. Kalt hineingedrückt sprengt sie die Wand — dann "
         "ist ein Schraubenloch die bessere Wahl."
     ),
-    changes=[FIRST_RELEASE],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
 )
 def heatset_insert(raw: BaseParams) -> PartResult:
     params = cast(HeatsetParams, raw)
@@ -303,7 +303,7 @@ class NutTrapParams(BaseParams):
         "Tasche für eine Sechskantmutter, seitlich eingeschoben oder von unten "
         "eingelegt, auf Wunsch mit durchgehendem Schraubenloch."
     ),
-    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE],
+    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE, FACE_GIVES_DIRECTION],
 )
 def nut_trap(raw: BaseParams) -> PartResult:
     params = cast(NutTrapParams, raw)
@@ -395,7 +395,7 @@ class ThreadParams(BaseParams):
         "ein Drucker ihn überhaupt auflöst — ein genormtes Gegenstück fasst darin "
         "nicht sauber. Für tragende Verschraubungen ist eine Einpressbuchse richtig."
     ),
-    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE],
+    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE, FACE_GIVES_DIRECTION],
 )
 def printed_thread(raw: BaseParams) -> PartResult:
     """Ein Gewinde, und sein Gegenstück so gemessen, dass die zwei wirklich
