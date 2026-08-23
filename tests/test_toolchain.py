@@ -23,6 +23,7 @@ kosten Millisekunden und hätten beide gefangen.
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tomllib
 from pathlib import Path
@@ -816,3 +817,38 @@ def test_the_hook_check_reads_what_git_really_answers(tmp_path: Path) -> None:
     mit = git("config", "--get", "core.hooksPath")
     assert mit.stdout.strip() == ".githooks", mit.stdout
     assert mit.returncode == 0, mit.returncode
+
+
+def test_the_lock_notices_when_the_tree_moves_under_a_run(tmp_path: Path) -> None:
+    """Ein Lauf, unter dem jemand schreibt, misst einen Zeitpunkt und nicht den Baum.
+
+    **Der Anlass, viermal am 23.08.2026.** Das Schloss serialisiert Rechenzeit —
+    es hindert niemanden daran, in denselben Baum zu schreiben, während gemessen
+    wird. Ein Torlauf lief zehn Minuten gegen einen Import, den eine andere
+    Sitzung im selben Moment reparierte: zweimal rot, reproduzierbar, Ursache im
+    Code gelesen und trotzdem falsch. Ein anderer sah eine Datei halb umgebaut
+    und meldete Kennzahlen, die es so nie gab.
+
+    **Verhindert wird nichts** — das kann ein Schloss nicht, ohne allen anderen
+    das Schreiben zu verbieten. Gemeldet wird, und das genügt: Wer hinterher
+    liest „vier Dateien haben sich bewegt", weiß, dass die Zahl darüber eine
+    Momentaufnahme ist.
+
+    Geprüft wird beides, denn eine Warnung, die immer kommt, liest niemand mehr.
+    """
+    from tools.gate_lock import _bewegte_quellen, _quellen_abdruck
+
+    abdruck = _quellen_abdruck()
+    assert len(abdruck) > 200, f"nur {len(abdruck)} Quelldateien — stimmen die Ordner noch?"
+    assert not _bewegte_quellen(abdruck), "ohne Schreibvorgang darf sich nichts bewegt haben"
+
+    ziel = Path(__file__)
+    vorher = ziel.stat().st_mtime
+    try:
+        ziel.touch()
+        bewegt = _bewegte_quellen(abdruck)
+        assert str(ziel.relative_to(ziel.parent.parent)) in bewegt, (
+            f"die berührte Datei fehlt in {sorted(bewegt)[:4]}"
+        )
+    finally:
+        os.utime(ziel, (vorher, vorher))

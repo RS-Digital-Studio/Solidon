@@ -475,6 +475,32 @@ def _idle_note(entry: dict[str, object]) -> str:
     )
 
 
+def _quellen_abdruck() -> dict[str, float]:
+    """Zeitstempel aller Quelldateien — die Grundlage für „hat sich etwas bewegt".
+
+    **Zeitstempel und nicht Inhalt**, weil es um Sekundenbruchteile geht: Ein
+    Hash über tausend Dateien kostet bei jedem Lauf Zeit, und die Frage lautet
+    nicht „ist es dieselbe Datei", sondern „hat jemand geschrieben". Ein
+    Schreibvorgang, der den Inhalt nicht ändert, zählt hier mit — das ist die
+    Seite, auf der man lieber irrt.
+    """
+    wurzel = Path(__file__).resolve().parent.parent
+    abdruck: dict[str, float] = {}
+    for ordner in ("app", "tests", "tools"):
+        for datei in (wurzel / ordner).rglob("*.py"):
+            try:
+                abdruck[str(datei.relative_to(wurzel))] = datei.stat().st_mtime
+            except OSError:
+                continue
+    return abdruck
+
+
+def _bewegte_quellen(vorher: dict[str, float]) -> set[str]:
+    """Welche Quelldateien sich seit dem Abdruck geändert haben — samt neuer."""
+    nachher = _quellen_abdruck()
+    return {name for name, zeit in nachher.items() if vorher.get(name) != zeit}
+
+
 def _read(path: Path) -> dict[str, object] | None:
     try:
         return dict(json.loads(path.read_text(encoding="utf-8")))
@@ -584,6 +610,27 @@ def run(who: str, wait: float, command: list[str]) -> int:
             print(note)
         return BUSY_EXIT
 
+    # **Was sich unter dem Lauf bewegt hat.** Das Schloss serialisiert
+    # Rechenzeit — es hindert niemanden daran, in denselben Baum zu schreiben,
+    # während hier gemessen wird. Am 23.08.2026 hat das viermal Stunden
+    # gekostet, und jedes Mal sah das Ergebnis stimmig aus:
+    #
+    #   * Ein Lauf maß zehn Minuten gegen einen Import, den eine andere Sitzung
+    #     im selben Moment reparierte — zweimal rot, reproduzierbar, Ursache im
+    #     Code gelesen und trotzdem falsch.
+    #   * Ein Torlauf sah eine Datei halb umgebaut und meldete Merkmalszahlen,
+    #     die es so nie gab.
+    #   * Zwei Läufe endeten mit Übersetzungsfehlern für Texte, die zwei Minuten
+    #     später übersetzt waren.
+    #
+    # **In einem Baum, in dem vier Sitzungen schreiben, misst man nicht den
+    # Baum, sondern einen Zeitpunkt** — und der stand bisher nirgends. Diese
+    # Zeilen schreiben ihn hin.
+    #
+    # Verhindert wird nichts: Der Lauf läuft, das Ergebnis steht. Nur weiß der
+    # Leser danach, wie viel es trägt.
+    vorher = _quellen_abdruck()
+
     mine = _read(path) or {}
     held = mine.get("pid") == os.getpid()
     try:
@@ -602,6 +649,21 @@ def run(who: str, wait: float, command: list[str]) -> int:
             current = _read(path)
             if current is not None and current.get("pid") == os.getpid():
                 path.unlink(missing_ok=True)
+        bewegt = _bewegte_quellen(vorher)
+        if bewegt:
+            namen = ", ".join(sorted(bewegt)[:4])
+            weitere = f" und {len(bewegt) - 4} weitere" if len(bewegt) > 4 else ""
+            print(file=sys.stderr)
+            print(
+                f"Achtung: Während dieses Laufs haben sich {len(bewegt)} Quelldatei(en) "
+                f"geändert — {namen}{weitere}.",
+                file=sys.stderr,
+            )
+            print(
+                "Das Ergebnis oben gilt einem Zeitpunkt und nicht diesem Baum. Bevor du "
+                "einem roten Test glaubst, sieh nach, ob er zu einer dieser Dateien gehört.",
+                file=sys.stderr,
+            )
 
 
 def status() -> int:
