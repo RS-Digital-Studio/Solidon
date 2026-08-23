@@ -28,6 +28,7 @@ from app.core.scene.project import (
     save,
     write_autosave,
 )
+from app.core.scene.serialise import finding_from_data, finding_to_data
 from app.core.types import (
     ChatEntry,
     FeatureRef,
@@ -41,7 +42,8 @@ from app.core.types import (
     Source,
     SourceOrigin,
 )
-from app.i18n import TranslatableText, _
+from app.i18n import SOURCE_LANGUAGE, TranslatableText, _, install_catalog, set_language
+from app.i18n.catalog import read_catalog
 
 MESH_PAYLOAD = b"solid test\nendsolid test\n"
 
@@ -600,3 +602,92 @@ def test_an_example_never_gets_an_autosave_beside_it() -> None:
 
     ordinary = Path("irgendwo") / f"projekt{PROJECT_SUFFIX}"
     assert autosave_path(ordinary).parent == ordinary.parent
+
+
+# --- Befunde über die Sprachgrenze ------------------------------------------------
+
+
+def test_a_finding_keeps_its_message_id_instead_of_its_translation() -> None:
+    """Ein Befund aus dem Cache trug die Sprache, in der er entstanden ist.
+
+    Hier stand ``str(finding.message)``, und das löst sofort auf. Gemeldet von
+    Robert am 23.08.2026 an zwei Sätzen, die er in **jeder** Sprache deutsch
+    las: „Ausgehöhlt. Die Wandstärke stimmt im Rahmen des Rasters." und
+    „Deckel erzeugt — das Spiel kommt aus dem Materialprofil."
+
+    **Warum ausgerechnet die zwei:** Aushöhlen und Deckelerzeugen sind teuer,
+    ihre Ergebnisse liegen im Plattencache, und die mitgelieferten Beispiele
+    sind auf Deutsch erzeugt worden.
+    """
+    finding = Finding(
+        code="hollow.done",
+        severity="info",
+        message=TranslatableText("Ausgehöhlt. Die Wandstärke stimmt im Rahmen des Rasters."),
+    )
+
+    # **Abgelegt wird in einer anderen Sprache als der Quellsprache**, und genau
+    # daran hängt dieser Test: Auf Deutsch sind Message-ID und Übersetzung
+    # dieselbe Zeichenkette, also unterscheidet dort kein Vergleich zwischen
+    # „ID abgelegt" und „aufgelöst abgelegt". Die erste Fassung dieses Tests tat
+    # es nicht und blieb in der Gegenprobe grün — sie prüfte nichts.
+    install_catalog("en", read_catalog("en"))
+    set_language("en")
+    try:
+        written = finding_to_data(finding)
+    finally:
+        set_language(SOURCE_LANGUAGE)
+
+    assert written["message"] == "Ausgehöhlt. Die Wandstärke stimmt im Rahmen des Rasters.", (
+        f"abgelegt wird die Message-ID, nicht die Übersetzung: {written['message']!r}"
+    )
+    assert isinstance(finding_from_data(written).message, TranslatableText), (
+        "sonst ist der Satz in der Sprache eingefroren, in der er entstand"
+    )
+
+
+def test_a_restored_finding_speaks_the_language_it_is_read_in() -> None:
+    """Die Anschlussfrage: nicht „die Daten tragen die ID", sondern „der Kunde
+    liest seine Sprache".
+
+    **Geschrieben in einer Sprache, gelesen in einer dritten** — das ist der
+    echte Fall, und nur er ist scharf: Läge die *Übersetzung* in der Datei,
+    stünde beim Lesen die englische da, wo die französische hingehört. Ein Test,
+    der auf Deutsch schreibt und auf Englisch liest, bliebe dagegen grün, weil
+    ohne Katalogtreffer die Message-ID selbst zurückkommt und zufällig richtig
+    aussieht.
+
+    Sichtbar wird der Fehler ohnehin nur bei **warmem** Cache; in der Suite
+    läuft jeder Test kalt, und darum stand er wochenlang da.
+    """
+    install_catalog("en", read_catalog("en"))
+    set_language("en")
+    try:
+        written = finding_to_data(
+            Finding(
+                code="hollow.done",
+                severity="info",
+                message=TranslatableText(
+                    "Ausgehöhlt. Die Wandstärke stimmt im Rahmen des Rasters."
+                ),
+            )
+        )
+        install_catalog("fr", read_catalog("fr"))
+        set_language("fr")
+        auf_franzoesisch = str(finding_from_data(written).message)
+    finally:
+        set_language(SOURCE_LANGUAGE)
+
+    assert auf_franzoesisch == str(
+        TranslatableText("Ausgehöhlt. Die Wandstärke stimmt im Rahmen des Rasters.").translate("fr")
+    ), f"in der Sprache des Schreibers eingefroren: {auf_franzoesisch!r}"
+
+
+def test_a_plain_message_stays_plain() -> None:
+    """Was ein Aufrufer als Zeichenkette übergibt, wird nicht übersetzt — und
+    ein Befund aus einer älteren Datei ohne die Kennzeichnung ebenso wenig."""
+    restored = finding_from_data(
+        finding_to_data(Finding(code="x", severity="info", message="roher Text"))
+    )
+
+    assert restored.message == "roher Text"
+    assert not isinstance(restored.message, TranslatableText)

@@ -137,7 +137,17 @@ def way_three() -> Project:
     """
     project = new_project("centauri-carbon-2", "petg")
     backend = ScriptedMeshBackend(fallback=(CORPUS / "generated_figure.stl").read_bytes())
-    generation = from_text(project, backend, "eine kleine Figur", seed=7)
+    # **Mit `name`, sonst wird der Prompt zum Objektnamen.** `from_text` nimmt
+    # ohne ihn den Prompt (`into_project`, gekürzt auf fünf Wörter), und der ist
+    # deutsch: Ein englischer Kunde las hinter jedem der neun Befunde dieses
+    # Beispiels „eine kleine Figur". Gemeldet von Robert am 23.08.2026 als
+    # „zwei Punkte immer in deutsch".
+    #
+    # „Figur" steht in :data:`EXAMPLE_NAMES`, also macht `mark_translatable`
+    # daraus einen übersetzbaren Namen. Der Prompt selbst bleibt, wie er ist —
+    # er gehört zur Provenienz (`SourceOrigin.prompt`) und beschreibt, was
+    # jemand eingegeben hat, nicht was das Ergebnis heißt.
+    generation = from_text(project, backend, "eine kleine Figur", seed=7, name="Figur")
 
     History(project.document).apply(
         _("Auf das Bett"), [OperationDraft(op="place_on_bed", inputs=(generation.object_id,))]

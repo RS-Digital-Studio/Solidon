@@ -374,11 +374,38 @@ def operation_from_data(data: dict[str, Any]) -> Operation:
 
 
 def finding_to_data(finding: Finding) -> dict[str, Any]:
+    """Ein Befund als Daten — **mit der Message-ID, nicht mit ihrer Übersetzung.**
+
+    Hier stand ``str(finding.message)``, und das löst sofort auf: in der
+    Sprache, die beim **Erzeugen** aktiv war. :func:`finding_from_data` las die
+    Zeichenkette danach als rohen ``str`` zurück, und ab da war sie eingefroren.
+
+    **Gemeldet von Robert am 23.08.2026, an zwei Sätzen aus dem Prüfbericht:**
+    ``Ausgehöhlt. Die Wandstärke stimmt im Rahmen des Rasters.`` und
+    ``Deckel erzeugt — das Spiel kommt aus dem Materialprofil.`` Beide sind in
+    allen fünf Sprachen übersetzt; der Kunde las sie trotzdem deutsch.
+
+    **Warum ausgerechnet diese zwei:** Aushöhlen und Deckelerzeugen sind teuer,
+    ihre Ergebnisse liegen im Plattencache. Die mitgelieferten Beispiele sind
+    auf Deutsch erzeugt worden — also trug der Cache deutschen Text, und jede
+    Sprache bekam ihn.
+
+    Dasselbe Muster wie :func:`transaction_to_data` über dem Titel und
+    ``_name_to_data`` in ``scene/cache.py`` über dem Objektnamen. Diese eine
+    Stelle war durchgerutscht, und der Kommentar an ``_name_to_data`` beschreibt
+    sie wortwörtlich: **ein Fehler, den nur ein warmer Cache zeigt** — in der
+    Suite läuft jeder Test kalt.
+
+    Was ein Aufrufer als schlichte Zeichenkette übergibt, bleibt eine.
+    """
+    message = finding.message
     return _without_none(
         {
             "code": finding.code,
             "severity": finding.severity,
-            "message": str(finding.message),
+            "message": message.msgid if isinstance(message, TranslatableText) else str(message),
+            "message_translatable": True if isinstance(message, TranslatableText) else None,
+            "message_context": message.context if isinstance(message, TranslatableText) else None,
             "object_id": finding.object_id,
             "op_id": finding.op_id,
             "feature_ids": list(finding.feature_ids) or None,
@@ -391,10 +418,13 @@ def finding_to_data(finding: Finding) -> dict[str, Any]:
 
 def finding_from_data(data: dict[str, Any]) -> Finding:
     location = data.get("location")
+    message: TranslatableText | str = data.get("message", "")
+    if data.get("message_translatable"):
+        message = TranslatableText(str(message), data.get("message_context"))
     return Finding(
         code=data["code"],
         severity=data.get("severity", "info"),
-        message=data.get("message", ""),
+        message=message,
         object_id=data.get("object_id"),
         op_id=data.get("op_id"),
         feature_ids=tuple(data.get("feature_ids", ())),
