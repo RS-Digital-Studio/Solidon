@@ -197,10 +197,10 @@ def _descendants(root: int) -> set[int]:
         finally:
             kernel.CloseHandle(snapshot)
     else:
-        for eintrag in Path("/proc").glob("[0-9]*"):
+        for entry in Path("/proc").glob("[0-9]*"):
             try:
-                fields = (eintrag / "stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
-                parents[int(eintrag.name)] = int(fields[1])
+                fields = (entry / "stat").read_text(encoding="utf-8").rsplit(") ", 1)[-1].split()
+                parents[int(entry.name)] = int(fields[1])
             except (OSError, ValueError, IndexError):
                 continue
 
@@ -265,17 +265,26 @@ def _test_processes() -> set[int]:
             return found
         if isinstance(data, dict):
             data = [data]
-        for eintrag in data:
-            if "pytest" in str(eintrag.get("CommandLine") or ""):
-                found.add(int(eintrag.get("ProcessId") or 0))
+        for entry in data:
+            # **``-m pytest`` und nicht ``pytest``, und ohne dieses Werkzeug
+            # selbst.** Die Kommandozeile eines ``gate_lock``-Aufrufs enthält
+            # den ganzen geschützten Befehl — also auch das Wort ``pytest``,
+            # obwohl der Prozess nur wartet. Am 23.08.2026 hat dieselbe Falle
+            # zwölf wartende Hüllen als „hängende Testläufe" erscheinen lassen:
+            # keine Rechenzeit, Protokoll steht, die perfekte Hänger-Signatur —
+            # und vollständig falsch. Gefunden von 3d-druck-64 an ihrer eigenen
+            # Messung.
+            line = str(entry.get("CommandLine") or "")
+            if "-m pytest" in line and "gate_lock" not in line:
+                found.add(int(entry.get("ProcessId") or 0))
         return {pid for pid in found if pid > 0}
-    for eintrag in Path("/proc").glob("[0-9]*"):
+    for entry in Path("/proc").glob("[0-9]*"):
         try:
-            line = (eintrag / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
+            line = (entry / "cmdline").read_bytes().replace(b"\0", b" ").decode(errors="replace")
         except OSError:
             continue
-        if "pytest" in line:
-            found.add(int(eintrag.name))
+        if "-m pytest" in line and "gate_lock" not in line:
+            found.add(int(entry.name))
     return found
 
 
@@ -415,19 +424,45 @@ def _idle_note(entry: dict[str, object]) -> str:
     age = time.time() - float(entry.get("seit") or 0.0)
     if pid <= 0 or age < IDLE_REPORT_SECONDS:
         return ""
-    # **Nur, was nach dem Schloss begann.** Ein fremder Testlauf, der schon
-    # vorher lief, gehört nicht zu diesem Halter — zählte er mit, schwiege der
-    # Wächter, solange irgendjemand auf der Maschine rechnet. Wo die Startzeit
-    # nicht zu ermitteln ist, wird der Prozess mitgenommen: „nicht messbar"
-    # darf nie zu einer Warnung führen, die es sonst nicht gäbe.
+    # **Der Wächter urteilt nicht mehr, er berichtet — und der Grund ist ein
+    # Zielkonflikt, den er nicht auflösen kann.**
+    #
+    # Um den Lauf des Halters zu finden, gibt es zwei Wege, und beide sind
+    # unvollständig. Über die **Abstammung**: Windows setzt die Elternnummer
+    # nicht um, wenn ein Zwischenprozess endet — der ``pytest`` fällt dann aus
+    # dem Baum, und übrig bleiben ``gate_lock`` und ``bash``, deren Ruhe völlig
+    # normal ist. Über das **Kommando**: Das findet jeden ``pytest`` auf der
+    # Maschine, auch die der drei anderen Sitzungen.
+    #
+    # Am 23.08.2026 hat beides zusammen genau das Falsche ergeben: Der Halter
+    # hing (zwanzig Sekunden ohne CPU und ohne ein Byte Protokoll, von
+    # 3d-druck-3a gemessen), und ein **fremder** Lauf rechnete daneben
+    # (44,9 → 62,5 CPU-Sekunden). Der Wächter sah den fremden und schwieg —
+    # beim Fehlalarm meldete er, beim echten Hänger nicht.
+    #
+    # Deshalb sagt er jetzt, was er sieht, statt zu entscheiden: Der Baum des
+    # Halters ruht, und wie viele Testprozesse sich ihm nicht zuordnen lassen.
+    # Die verlässliche Antwort gibt nur eine Handmessung, und die steht in
+    # ``.claude/rules/tests.md``.
+    ruht = standing_still(pid)
+    if ruht is not True:
+        return ""
     began = float(entry.get("seit") or 0.0)
-    mine = frozenset(
+    fremde = [
         candidate
         for candidate in _test_processes()
-        if (started := _started_at(candidate)) is None or started >= began - 5.0
-    )
-    if standing_still(pid, extra=mine) is not True:
-        return ""
+        if candidate not in _descendants(pid)
+        and ((started := _started_at(candidate)) is None or started >= began - 5.0)
+    ]
+    if fremde:
+        return (
+            f"Achtung: Der Prozessbaum des Halters hat in {IDLE_SAMPLE_SECONDS:.0f} Sekunden "
+            "keine Rechenzeit verbraucht. Ob sein Lauf steht, lässt sich von hier aus nicht "
+            f"sagen: Es laufen {len(fremde)} weitere Testprozesse, die sich ihm nicht sicher "
+            "zuordnen lassen (auf Windows reißt die Elternkette, wenn ein Zwischenprozess "
+            "endet). Von Hand messen — das Verfahren steht in .claude/rules/tests.md unter "
+            "Steht er oder rechnet er?"
+        )
     return (
         f"Achtung: Der Halter rechnet gerade nicht — in {IDLE_SAMPLE_SECONDS:.0f} Sekunden "
         "hat sein ganzer Prozessbaum keine Rechenzeit verbraucht. Das kann ein Wartezustand "
