@@ -16,6 +16,7 @@ import pytest
 pytest.importorskip("PySide6")
 pytest.importorskip("scipy")
 
+from PySide6.QtCore import QPointF, Qt
 from PySide6.QtWidgets import QApplication
 
 from app.core.registry import REGISTRY
@@ -1268,18 +1269,24 @@ def test_a_measure_without_a_start_says_what_to_do(qt_app: QApplication) -> None
 
 
 def test_the_measure_field_only_works_while_drawing(qt_app: QApplication) -> None:
-    """Ein Feld ohne Bezug ist eine Einladung zu einem Klick, der nichts
-    tut."""
+    """Ein Feld ohne Bezug ist eine Einladung zu einem Klick, der nichts tut.
+
+    Seit Schritt zwei steht es an der Zeichenfläche statt in der Werkzeugzeile,
+    und „bedienbar" heißt dort „sichtbar": Ein schwebendes Feld, das grau über
+    dem Blatt hinge, wäre ein Fleck ohne Aufgabe — anders als in einer Leiste,
+    wo eine leere Stelle auffiele.
+    """
     panel = SketchPanel()
-    assert not panel.measure_field.isEnabled()
+    field = panel.canvas.measure_field
+    assert not field.isVisibleTo(panel.canvas)
 
     panel.canvas.set_tool("line")
     panel.canvas.place(panel.canvas._to_screen(0.0, 0.0))
     panel.canvas._pointer = (10.0, 0.0)
     panel.canvas.measuringChanged.emit(panel.canvas.pending_measure())
 
-    assert panel.measure_field.isEnabled()
-    assert panel.measure_field.value() == pytest.approx(10.0)
+    assert field.isVisibleTo(panel.canvas)
+    assert field.value_mm() == pytest.approx(10.0)
 
 
 def test_hovering_a_constraint_lights_up_its_geometry(qt_app: QApplication) -> None:
@@ -1959,12 +1966,17 @@ def test_every_number_field_of_the_sketch_bar_says_what_it_is(qt_app: QApplicati
     „2,00 mm", „0,00 mm", „1,00 mm" — dazu ein Hinweis, den nur sieht, wer mit
     der Maus darüber fährt, und ein Vorleser sagte „Drehfeld, 2,00 mm". Der
     Name gehört ans Feld, und er ist der des Werkzeugs, zu dem es gehört.
+
+    Das Maß steht seit Schritt zwei nicht mehr in der Leiste, sondern an der
+    Zeichenfläche — geprüft wird es hier weiter, denn ein schwebendes Feld
+    braucht seinen Namen genauso: Ein Vorleser findet es sogar eher, weil es
+    nur dann da ist, wenn es etwas sagt.
     """
     panel = SketchPanel()
     try:
         felder = {
             "Versatz": panel.offset_distance,
-            "Maß": panel.measure_field,
+            "Maß": panel.canvas.measure_field,
             "Raster": panel.snap_step,
         }
         ohne = [name for name, field in felder.items() if not field.accessibleName()]
@@ -2205,9 +2217,11 @@ def test_the_sketch_area_fits_a_laptop_screen(qt_app: QApplication) -> None:
         ------------------------------------
         Summe der Posten                 997   (+ Abstände = 1007)
 
-    Verschwunden ist ``measure_field``, solange nichts gezeichnet wird: der
-    breiteste Posten, der die meiste Zeit grau dasteht. Damit sind es 881 für
-    den ganzen Bereich, und kein Werkzeug ist dafür weggefallen.
+    Verschwunden ist ``measure_field`` aus dieser Zeile **ganz** — Schritt zwei
+    hat es an die Zeichenfläche gehängt, wo es dem Zeiger folgt. Schritt eins
+    hatte es nur ausgeblendet, solange nichts gezeichnet wird; die 881 galten
+    für den Anfangszustand und sprangen beim ersten Klick zurück auf 1007. Jetzt
+    bleiben sie, und kein Werkzeug ist dafür weggefallen.
     ``offset_distance`` bleibt — *Versetzen* ist ein Sofort-Knopf und kein
     Modus, sein Wert muss **vor** dem Klick einstellbar sein.
 
@@ -2237,9 +2251,95 @@ def test_the_sketch_area_fits_a_laptop_screen(qt_app: QApplication) -> None:
         assert bereich <= 900, f"der Skizzenbereich verlangt {bereich} Bildpunkte Breite"
         assert zeile <= 900, f"die Werkzeugzeile verlangt {zeile} Bildpunkte Breite"
         assert bedingungen <= 900, f"die Bedingungszeile verlangt {bedingungen} Bildpunkte"
-        assert not panel.measure_field.isVisible(), (
+        assert not panel.canvas.measure_field.isVisibleTo(panel.canvas), (
             "solange nichts gezeichnet ist, hat das Maßfeld nichts zu zeigen"
         )
     finally:
         panel.deleteLater()
         qt_app.setStyleSheet(davor)
+
+
+def test_the_measure_follows_the_pointer_instead_of_sitting_in_the_toolbar(
+    qt_app: QApplication,
+) -> None:
+    """Das Maß steht dort, wo der Blick ist — am Zeiger, nicht in der Leiste.
+
+    **Schritt zwei des Registerpunkts.** Schritt eins hat das Feld aus der
+    Werkzeugzeile verschwinden lassen, solange nichts gezeichnet wird (1007 →
+    881 Bildpunkte). Es stand aber weiterhin *in der Leiste*, und das ist beim
+    Zeichnen die falsche Stelle: Wer eine Linie zieht, sieht auf die Spitze der
+    Linie, und die Zahl, die er gerade eintippen will, steht am unteren Rand
+    des Fensters. Fusion legt sie an den Zeiger; darum ist das Eintippen dort
+    der Normalweg und hier war es eine Funktion, die man kennen musste.
+
+    Drei Zusagen, und die dritte ist die, die man vergisst:
+
+    1. Das Feld gehört der Zeichenfläche, nicht der Werkzeugzeile.
+    2. Es folgt dem Zeiger, mit Abstand — läge es darunter, finge es die
+       Mausbewegungen ab, und die Linie bliebe stehen.
+    3. Es bleibt im Bild. Am rechten und unteren Rand kippt es auf die andere
+       Seite des Zeigers, statt hinauszuragen.
+    """
+    panel = SketchPanel()
+    canvas = panel.canvas
+    canvas.resize(400, 300)
+    field = canvas.measure_field
+
+    assert field.parent() is canvas, "das Maß gehört an die Fläche, nicht in die Leiste"
+    assert not field.isVisibleTo(canvas), "ohne angefangenes Element hat es nichts zu zeigen"
+
+    canvas.set_tool("line")
+    canvas.place(canvas._to_screen(0.0, 0.0))
+    canvas._pointer = (10.0, 0.0)
+    canvas.measuringChanged.emit(canvas.pending_measure())
+
+    assert field.isVisibleTo(canvas), "beim Zeichnen steht es da"
+    assert field.value_mm() == pytest.approx(10.0)
+
+    spitze = canvas._to_screen(*canvas._pointer)
+    kasten = field.geometry()
+    assert not kasten.contains(spitze.toPoint()), (
+        "das Feld liegt unter dem Zeiger und fängt damit die Mausbewegungen ab"
+    )
+    assert canvas.rect().contains(kasten), f"das Feld ragt aus dem Bild: {kasten}"
+
+    # Und am Rand kippt es, statt hinauszuragen.
+    canvas._pointer = canvas._to_world(QPointF(canvas.width() - 4.0, canvas.height() - 4.0))
+    canvas.measuringChanged.emit(canvas.pending_measure())
+    assert canvas.rect().contains(field.geometry()), (
+        f"am unteren rechten Rand ragt es hinaus: {field.geometry()}"
+    )
+
+    panel.deleteLater()
+
+
+def test_typing_a_digit_while_drawing_goes_into_the_measure(qt_app: QApplication) -> None:
+    """Wer zeichnet, tippt die Zahl — er klickt nicht erst ins Feld.
+
+    Das ist der Grund, warum das Feld überhaupt an den Zeiger gehört: In Fusion
+    beginnt die Eingabe mit der ersten Ziffer, ohne Klick und ohne Tabulator.
+    Ein Feld, das man erst anklicken muss, verlangt genau die Handbewegung, die
+    das Zeichnen unterbricht — und der Zeiger steht danach woanders.
+    """
+    from PySide6.QtGui import QKeyEvent
+
+    panel = SketchPanel()
+    canvas = panel.canvas
+    canvas.set_tool("line")
+    canvas.place(canvas._to_screen(0.0, 0.0))
+    canvas._pointer = (10.0, 0.0)
+    canvas.measuringChanged.emit(canvas.pending_measure())
+
+    canvas.keyPressEvent(
+        QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key.Key_2, Qt.KeyboardModifier.NoModifier, "2")
+    )
+
+    # **Die Wirkung, nicht der Mechanismus.** ``hasFocus()`` wäre hier immer
+    # falsch: Ein Fenster, das nie gezeigt wurde, ist nie aktiv, und ohne
+    # aktives Fenster vergibt Qt keinen Tastaturfokus. Der Test hätte damit
+    # eine Eigenschaft der Testumgebung geprüft und nicht die Bedienung.
+    assert "2" in canvas.measure_field.text(), (
+        f"die Ziffer kam nicht im Feld an: {canvas.measure_field.text()!r}"
+    )
+
+    panel.deleteLater()

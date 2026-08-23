@@ -17,6 +17,8 @@ Mal sah die Zahl aus wie ein Ergebnis:
 | doppelte Knotennummern | falsche Ebene | in OCCT verschieden — die Doppelung entstand erst durch `merge_vertices()` |
 | eigene Regex über Testkörper | zu weit | zählte `range`, `ast`, `re` als „Grundmenge": 26 statt 16 |
 | dieselbe Ausgabedatei für zwei Läufe | vermischt | Zusammenfassung eines abgebrochenen Laufs über dem neuen gelesen |
+| `ls -la … | head -20` | abgeschnitten | 20 Dateien + 3 Kopfzeilen = 23; die letzten drei waren **alle** `Setup-*.exe`, weil `ls` alphabetisch sortiert |
+| `ruff check app/ui/` | zu eng | `tests/` war nicht dabei, und dort lag die zu lange Zeile |
 
 **Warum:** Jedes dieser Ergebnisse war *plausibel*. Ein Fehlbefund fühlt sich
 nicht falsch an — er fühlt sich wie eine Messung an. Und weitergegeben wird er
@@ -37,6 +39,18 @@ ihn danach zurückgezogen.
 4. **Bei einer Prüfung fragen, ob sie die Frage beantwortet, die man hat.**
    `is_watertight` beantwortet „zählt jede Kante zwei Dreiecke?", nicht „hat
    der Körper ein Loch?" — dafür ist die Euler-Zahl da.
+5. **Zählen, was man sieht, statt zu sehen, was man sucht.** Ich habe vier
+   Download-Links geprüft, drei Dateien gesehen und „eine fehlt" geschlossen —
+   statt zu fragen, warum die Liste nur siebzehn Zeilen hat. Die Zahl stand
+   da. Eine abgeschnittene Ausgabe sieht vollständig aus: `head` sagt nicht,
+   dass es abschneidet, anders als ein eingegrenzter Pfad, der wenigstens im
+   Kommando steht.
+6. **Eine elegante Erklärung ist die gefährlichste.** Zu demselben Fehlbefund
+   bot eine andere Sitzung eine Ursache an, die auf jede Beobachtung passte
+   (`website/dl/` ist ignoriert, ein Arbeitsbaum bekommt es nicht) — und sie
+   erklärte sogar, warum ausgerechnet *eine* Datei fehlt. Das war Zufall. Wer
+   eine Ursache **findet**, statt sie zu **messen**, hört an der Stelle auf zu
+   suchen, an der die Geschichte aufgeht.
 
 Die Gegenprobe kostet zwei Minuten und hat in dieser Nacht viermal eine falsche
 Meldung verhindert und zweimal nicht, weil ich sie nicht gemacht hatte. Siehe

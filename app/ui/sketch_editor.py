@@ -468,6 +468,28 @@ class SketchCanvas(QWidget):
         Nur für den Hinweis zur Schichtrichtung — siehe ``offer_faces``."""
         self._pointer: tuple[float, float] = (0.0, 0.0)
         """Wo der Zeiger zuletzt stand, in Weltkoordinaten."""
+
+        self.measure_field = LengthSpin(self)
+        """Das Maß beim Zeichnen — **am Zeiger und nicht in der Leiste** (E19).
+
+        Es stand unten in der Werkzeugzeile, und das ist beim Zeichnen die
+        falsche Stelle: Wer eine Linie zieht, sieht auf ihre Spitze, und die
+        Zahl, die er eintippen will, stand am Fensterrand. In Fusion steht sie
+        am Zeiger, und darum ist das Eintippen dort der Normalweg — hier war es
+        eine Funktion, die man kennen musste.
+
+        Nebenbei löst es den breitesten Posten der Werkzeugzeile auf; Schritt
+        eins hatte ihn nur ausgeblendet, solange nichts gezeichnet wird.
+        """
+        self.measure_field.set_range_mm(0.0, 10_000.0)
+        self.measure_field.setKeyboardTracking(False)
+        self.measure_field.setVisible(False)
+        self.measure_field.setToolTip(
+            tr("Länge oder Durchmesser eintippen und mit der Eingabetaste setzen.")
+        )
+        self.measure_field.setAccessibleName(tr("Abstand"))
+        self.measure_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
+        self.measuringChanged.connect(self._place_measure_field)
         self.highlighted: frozenset[int] = frozenset()
         """Punkte, die gerade aufleuchten sollen — die Ziele der Bedingung
         unter dem Mauszeiger (E19).
@@ -1328,6 +1350,51 @@ class SketchCanvas(QWidget):
             self._pending.append(begin + 1)
             self._pending_world.append(kept)
 
+    def _place_measure_field(self, value: float) -> None:
+        """Das Maßfeld an den Zeiger legen — oder wegnehmen, wenn es nichts misst.
+
+        **Es kippt an den Rändern**, statt hinauszuragen: Ein Feld, das zur
+        Hälfte außerhalb der Fläche liegt, zeigt seine Zahl nicht, und
+        ausgerechnet in der unteren rechten Ecke wäre das der Regelfall —
+        dorthin zieht man die letzte Linie eines Umrisses.
+
+        Der Fokus wird hier **nicht** geholt. Wer zeichnet, soll weiterzeichnen
+        können; die erste Ziffer holt ihn (siehe ``keyPressEvent``).
+
+        **Weg statt grau**, und die Hausregel „grau und begründet, nicht
+        unsichtbar" gilt hier nicht: Sie steht für Felder eines Dialogs, die
+        ein Umschalter wirkungslos macht — wer die Zeile vermisst, sucht sie.
+        Dieses Feld vermisst niemand, weil es ohne angefangenes Element nichts
+        hätte, worauf es sich bezieht. Es erscheint genau dann, wenn der Blick
+        ohnehin dort liegt.
+        """
+        if value <= 0.0:
+            self.measure_field.setVisible(False)
+            return
+
+        # Stumm gesetzt: ``editingFinished`` schließt das Element ab, und ein
+        # Wert, den die Zeigerbewegung schreibt, ist keine Eingabe.
+        blocked = self.measure_field.blockSignals(True)
+        self.measure_field.set_value_mm(value)
+        self.measure_field.blockSignals(blocked)
+        self.measure_field.adjustSize()
+        self.measure_field.setVisible(True)
+
+        spitze = self._to_screen(*self._pointer)
+        breite = self.measure_field.width()
+        hoehe = self.measure_field.height()
+        links = spitze.x() + MEASURE_GAP
+        oben = spitze.y() + MEASURE_GAP
+        if links + breite > self.width():
+            links = spitze.x() - MEASURE_GAP - breite
+        if oben + hoehe > self.height():
+            oben = spitze.y() - MEASURE_GAP - hoehe
+        # Und wenn beides nicht passt, weil die Fläche kleiner ist als das
+        # Feld: lieber am Rand kleben als halb draußen.
+        links = max(0.0, min(links, float(self.width() - breite)))
+        oben = max(0.0, min(oben, float(self.height() - hoehe)))
+        self.measure_field.move(int(links), int(oben))
+
     def pending_measure(self) -> float:
         """Wie lang die angefangene Linie gerade wäre — oder wie groß der
         Kreis.
@@ -1570,6 +1637,27 @@ class SketchCanvas(QWidget):
             return
         if event.key() == Qt.Key.Key_Delete:
             self.remove_selected()
+            return
+        # **Die erste Ziffer beginnt die Eingabe, ohne Klick und ohne Tabulator.**
+        # Das ist der Grund, warum das Feld überhaupt am Zeiger steht: Ein Feld,
+        # das man erst anklicken muss, verlangt genau die Handbewegung, die das
+        # Zeichnen unterbricht — und der Zeiger steht danach woanders, also auch
+        # das Maß, das er gerade zeigte.
+        # **Die Bedingung ist die Sache, nicht ihre Darstellung.** ``isVisible()``
+        # wäre hier untauglich: Ein Fenster, das nie gezeigt wurde, meldet für
+        # jedes Kind falsch, und der ganze Zweig liefe in der Suite nie.
+        # Gefragt wird, ob es etwas zu messen gibt — genau das, wonach sich
+        # auch das Feld richtet.
+        if self.pending_measure() > 0.0 and event.text()[:1].isdigit():
+            self.measure_field.setFocus(Qt.FocusReason.OtherFocusReason)
+            # Von vorn und nicht an den Zeigerwert angehängt: Wer „25" tippt,
+            # meint 25 und nicht 1025.
+            self.measure_field.selectAll()
+            editor = self.measure_field.lineEdit()
+            # An das Eingabefeld und nicht an das Drehfeld: Qt reicht Tasten
+            # dorthin weiter, und ein ``event()`` auf dem Drehfeld selbst
+            # landet in der Pfeiltastenbehandlung statt im Text.
+            QApplication.sendEvent(editor, event)
             return
         super().keyPressEvent(event)
 
@@ -2256,6 +2344,14 @@ PLANE_FIELD_CHARS = 20
 #: „2,00 mm" heißen. Zwei solche Felder stehen in der Werkzeugzeile.
 TOOLBAR_FIELD_WIDTH = 120
 
+#: Wie weit das Maßfeld vom Zeiger wegsteht, in Bildpunkten.
+#:
+#: Nicht null: Läge es unter dem Zeiger, finge es die Mausbewegungen ab, und
+#: die Linie bliebe beim Ziehen stehen. Nicht viel mehr: Der Sinn des ganzen
+#: Umbaus ist, dass Zahl und Zeichenspitze in **einem** Blick liegen — was
+#: weiter weg steht, ist wieder die Werkzeugzeile, nur an anderer Stelle.
+MEASURE_GAP = 14
+
 #: Wie viele Bedingungsknöpfe *mindestens* in eine Zeile kommen.
 #:
 #: Fünf, weil die zehn zusammen 1332 Bildpunkte brauchen und ein Laptopschirm
@@ -2539,33 +2635,19 @@ class SketchPanel(QWidget):
         project_button.setAutoRaise(True)
         project_button.clicked.connect(self.canvas.project_bodies)
 
-        # Das Maß beim Zeichnen (E19). In Fusion zeichnet man selten und bemaßt
-        # fast immer; hier gab es dafür gar nichts. Das Feld ist nur dann
-        # bedienbar, wenn ein Element angefangen ist — sonst hätte es nichts,
-        # worauf es sich bezieht.
-        self.measure_field = LengthSpin(self)
-        self.measure_field.set_range_mm(0.0, 10_000.0)
-        self.measure_field.setKeyboardTracking(False)
-        self.measure_field.setEnabled(False)
-        # Und unsichtbar, bis etwas gezeichnet wird: Der Anfangszustand ist
-        # derselbe wie jeder spätere ohne angefangenes Element, und ein Feld,
-        # das beim Öffnen dasteht und beim ersten Klick verschwindet, wäre
-        # unruhiger als eines, das erst kommt (siehe _show_pending_measure).
-        self.measure_field.setVisible(False)
-        self.measure_field.setToolTip(
-            tr("Länge oder Durchmesser eintippen und mit der Eingabetaste setzen.")
-        )
-        self.measure_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
-        self.measure_field.setAccessibleName(tr("Abstand"))
-        self.measure_field.editingFinished.connect(self._place_measured)
-        self.canvas.measuringChanged.connect(self._show_pending_measure)
+        # **Das Maß beim Zeichnen steht an der Zeichenfläche, nicht hier** (E19,
+        # Schritt zwei). Es hing in dieser Zeile, und beim Zeichnen sieht
+        # niemand dorthin; die Fläche besitzt es jetzt und legt es an den
+        # Zeiger. Was hier bleibt, ist die Verbindung zum Setzen — das
+        # Abschließen ist eine Sache des Panels, weil der Solverlauf danach
+        # kommt.
+        self.canvas.measure_field.editingFinished.connect(self._place_measured)
 
         tools.addWidget(offset_button)
         tools.addWidget(self.offset_distance)
         tools.addWidget(mirror_button)
         tools.addWidget(construction_button)
         tools.addWidget(project_button)
-        tools.addWidget(self.measure_field)
 
         # Einpassen gehört zu den Ansichtsgriffen und nicht zu den Werkzeugen,
         # steht deshalb hinten bei Rückgängig. Als Knopf und nicht nur als
@@ -2902,8 +2984,13 @@ class SketchPanel(QWidget):
         self.canvas.offset_selected(self.offset_distance.value_mm())
 
     def _place_measured(self) -> None:
-        """Das eingetippte Maß an die Bedingung legen, die darauf wartet."""
-        self.canvas.place_measured(self.measure_field.value_mm())
+        """Das eingetippte Maß an die Bedingung legen, die darauf wartet.
+
+        Das Feld gehört seit Schritt zwei der Zeichenfläche; das Abschließen
+        bleibt hier, weil danach der Solverlauf und die Liste der Bedingungen
+        nachziehen — beides Sachen des Panels.
+        """
+        self.canvas.place_measured(self.canvas.measure_field.value_mm())
 
     def _insert_rectangle(self) -> None:
         """Das Rechteck des Kürzels — vierzig auf zwanzig, wie die Zeichenfläche
@@ -3015,34 +3102,6 @@ class SketchPanel(QWidget):
         self.coordinates.setText(
             f"{first} {across}  ·  {second} {up}" if first and second else f"{across}  ·  {up}"
         )
-
-    def _show_pending_measure(self, value: float) -> None:
-        """Das Feld folgt dem, was gerade gezeichnet wird — und es steht nur
-        da, solange es etwas zu messen gibt.
-
-        **Es war der breiteste Posten der Zeile, der die meiste Zeit grau
-        dasteht.** Gemessen am gebauten Editor mit Thema verlangt die
-        Werkzeugzeile 1007 Bildpunkte; davon gehen 163 an dieses Feld — ein
-        Sechstel für etwas, das erst bedienbar wird, wenn ein Element
-        angefangen ist. Ohne es sind es 844, und kein Werkzeug ist dafür
-        verschwunden.
-
-        **Die Hausregel „grau und begründet, nicht unsichtbar" gilt hier
-        nicht**, und der Unterschied ist wichtig: Sie steht für Felder eines
-        Dialogs, die ein Umschalter gerade wirkungslos macht — wer die Zeile
-        vermisst, sucht sie. Dieses Feld hat niemand vermisst, weil niemand es
-        je benutzen konnte, solange nichts gezeichnet war. Es erscheint genau
-        dann, wenn der Blick ohnehin auf der Zeichenfläche liegt.
-
-        Der eigentliche Ort dafür ist der **Zeiger**, wie in Fusion; das ist
-        ein eigener Umbau und steht als eigener Punkt. Bis dahin kostet diese
-        Zeile nichts und macht ihn weniger dringend.
-        """
-        self.measure_field.setVisible(value > 0.0)
-        self.measure_field.setEnabled(value > 0.0)
-        blocked = self.measure_field.blockSignals(True)
-        self.measure_field.set_value_mm(value)
-        self.measure_field.blockSignals(blocked)
 
     def _point_at(self, item: QListWidgetItem | None) -> None:
         """Lässt die Punkte der überfahrenen Bedingung aufleuchten."""
