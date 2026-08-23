@@ -825,9 +825,9 @@ Der Weg, den `MainWindow` beim Schließen geht, und der einzige, der in einem
 Test dasselbe misst:
 
 ```python
-release(widget)        # von der Klasse geholt, siehe oben
+release(widget)  # von der Klasse geholt, siehe oben
 leash.wait_for_all()
-application.processEvents()   # mehrfach: ein finished reiht selbst wieder ein
+application.processEvents()  # mehrfach: ein finished reiht selbst wieder ein
 gc.collect()
 ```
 
