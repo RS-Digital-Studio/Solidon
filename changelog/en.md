@@ -17,6 +17,13 @@ it into `website/version.json`.
 
 ## 0.1.4
 
+- A selected part can be moved directly with the mouse — grab and drag, without fetching “Move” first. The handle stays for the precise work: per axis, in grid steps and in height.
+- From below you now look through the print bed. If you work on the underside of a part, turn the view beneath it and you see the part instead of the plate.
+- A hole can also be selected by clicking into the middle of it — not only on its wall.
+- The command search now understands everyday words: “copy”, “delete”, “open” and “colour” led nowhere before, although all four exist.
+- The search also finds things for people who do not know the technical term. Type “stiffen”, “snap” or “screw” and you land on the stiffening rib, the snap hook and the screw hole.
+- Two menu entries were both called “remesh”. They are now “Refine edges” and “Even out triangles” — the first splits long edges, the second evens out triangle sizes.
+- The dialogs speak of the “exact body” instead of the “B-rep body”. The toggle had used that word all along; nine descriptions used the heavier one.
 - At startup Solidon checks whether a newer version is out and offers it. It is downloaded and installed only on your confirmation; you can switch this off in the settings.
 - A local language model may now compute for ten minutes. Before, the chat gave up after two and asked for an error report — for a calculation that simply took longer.
 - A ring is recognised as one feature instead of three beads stacked on top of each other.
