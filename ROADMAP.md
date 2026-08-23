@@ -87,7 +87,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein dritter Absturz in `test_operation_ui.py` | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen Lauf unter Valgrind — das Bild sagt „doppelt freigegeben", wer, sagt nur ein Werkzeug |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
-| Das Maß erscheint am Zeiger statt in der Leiste — **Schritt zwei** | Alle Bilder neu aufgenommen — und drei Fehler waren keine Bildfehler (20.08.2026) | den Umbau, der das Maß beim Zeichnen an den Zeiger legt, wie Fusion es tut. Schritt eins ist gebaut (`bd4fbce`): `measure_field` steht nur noch da, solange gezeichnet wird — 1007 → **881** Bildpunkte, Grenze 900 gesetzt. Er macht Schritt zwei weniger dringend, nicht überflüssig |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Verrundung und Fase gehen auf einem Netz nicht — **Konzept liegt vor** | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | **eine Entscheidung von Robert über eine Phase**, nicht über einen Commit: `konzepte/konzept-flaechenrueckgewinnung-2026-08.md`. Flächenrückgewinnung aus dem Netz, fünf Schritte, drei offene Fragen im dritten. Dagegen: **neun von neun** heruntergeladenen Modellen laufen dagegen |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
@@ -99,17 +98,14 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein gescheiterter Merge ist ein Eingriff, kein Nichts | Das Fundament der Wahrnehmung (22.08.2026) | eine Regel im Verfahren: Wer einen Merge abbricht, prüft danach `git status` **und** `git stash list`. Der Autostash überlebt den Abbruch nicht zuverlässig und trifft im geteilten Baum fremde Arbeit |
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
-| Kein Viewport wird jemals freigegeben — **wartet auf den Deadlock** | Das Fundament der Wahrnehmung (22.08.2026) | **erst den Deadlock, dann die restlichen 40 Ringe** (entschieden 23.08.). Jede aufgelöste Stelle macht ein Fenster einsammelbar, und ein Fenster, das eingesammelt werden kann, kann im falschen Thread sterben — weiter aufzulösen macht die Suite instabiler, nicht stabiler |
 | `test_ui.py` reißt unzuverlässig (1/3 ruhig, 5/5 unter Last) | Das Fundament der Wahrnehmung (22.08.2026) | den Fix an `leash.wait_for_all`, gemessen von 3d-druck-b8 — und die Lehre daneben: dieselbe Zahl (5/5) wurde neben einem Torlauf als Fremdlast gedeutet und unter Schloss auf leerer Maschine widerlegt |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
-| `overlay.py` fasst Körper an, die es nicht mehr gibt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | den Fix, den b8 benannt hat: eine Hilfsfunktion `lebende(zone, typ)` und fünf Aufrufstellen darauf umgestellt (`findChildren` an 276, 294, 345, 438, 655, keine mit `isValid`-Wache). **Vor dem Release bewusst nicht gemacht:** Er kostet drei `test_ui.py`-Läufe, und genau diese Datei hat bei drei Läufen drei Ausgänge — seine Wirkung wäre an ihr nicht abzulesen. Der Kunde sieht nichts, die Suite einen ERROR im Teardown |
 | Der Fenstertitel sagt „Unbenannt“, während der Objektbaum den Namen zeigt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert — sachlich richtig (es gibt keine Projektdatei), aber der Kunde hat gerade `plate_holes` geöffnet. Keine Logikfrage |
 | Die deutsche Quelle trennt die Fläche nicht von der Belegung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | 36 Stellen „Druckplatte“ → „Druckbett“ — und **jede ändert einen Katalogschlüssel**, alle fünf Sprachen fielen auf einmal auf unübersetzt zurück. Kein Eingriff für den Tag vor einem Release; solange die Quelle nicht trennt, sammelt jede Übersetzungsrunde einen Teil davon wieder ein |
 | Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
 | Eine Fremdmeldung sagt „Netzwerk“ und meint „Platte voll“ | Vier Wege von Hand, während die Suite grün war (23.08.2026) | einen Satz in `comfy_setup`: Beim Einrichten von Weg 3 brach der 7,5-GB-Download dreimal mit `Background writer channel closed` ab, und `C:` hatte null Byte frei. Die Regel „Fehler des fremden Programms durchreichen“ bleibt richtig — wo wir **mehr** wissen als es, gehört das dazu |
 | Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374 |
 | Ein Importzyklus in `app/core/scene` | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Auflösung von `scene/__init__.py` ↔ `scene/history.py`. Latent, solange nur ein Thread importiert — zwei Threads gaben **5 von 5** Fehlschlägen. Kein Startzeit-Thema: die Ersparnis dort wäre 37 ms |
-| 22 von 70 Widget-Klassen bleiben ungeprüft | Vier Wege von Hand, während die Suite grün war (23.08.2026) | Bauhelfer je Klasse — ein Umbau, kein Abschluss. Die 22 sind die, die Argumente brauchen, also die mitten im Arbeitsablauf; von den 34 prüfbaren hielten sechs fest |
 | Das signierte Lizenz-Manifest ist nicht eingecheckt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Messung, ob die Signatur reproduzierbar ist. Wenn ja, gehört es eingecheckt; wenn nein, bleibt Ansagen die einzige Abhilfe. Zwei Sitzungen haben es in einer Nacht doppelt gebaut |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 
@@ -3561,7 +3557,23 @@ Datei da, Alt-Text da, `width`/`height` gleich den Pixeln.
 
       Der ursprüngliche Befund, weil seine Messung weiter gilt:
 
-- [ ] **Die Werkzeugzeile der Skizze verlangt mit Stylesheet 1007 Bildpunkte.**
+- [x] **Die Werkzeugzeile der Skizze verlangt mit Stylesheet 1007 Bildpunkte —
+      gelöst am 23.08.2026** (`bd4fbce` und `8f11279`, 3d-druck-b8).
+
+      **Die Entscheidung, die der Punkt verlangte, ist gefallen: keine der drei
+      genannten.** Statt etwas aus der Zeile zu streichen, wandert das Maß beim
+      Zeichnen an den **Zeiger** — wie in Fusion. Damit ist das Eintippen der
+      Normalweg und nicht mehr eine Funktion, die man kennen muss.
+
+          HEAD, ohne angefangenes Element    881 Bildpunkte
+          HEAD, beim Zeichnen              1007
+          jetzt, in beiden Lagen            881
+
+      **Schritt eins allein trug nicht:** Er blendete das Feld aus, solange nichts
+      gezeichnet wird — beim ersten Klick sprang die Zeile auf 1007 zurück. Erst
+      Schritt zwei hält die Grenze in **beiden** Lagen.
+
+      Ursprünglich:
       `test_the_constraint_buttons_stay_readable_on_a_laptop` fordert 900 und
       ist trotzdem grün — weil er allein läuft, und dann steht kein Thema. Läuft
       `test_ui.py` im selben Prozess davor, sind die achtzehn Knöpfe der Zeile
@@ -4108,8 +4120,11 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
 
 ### Offen aus diesem Durchgang
 
-- [ ] **`overlay.py` fasst Körper an, die es nicht mehr gibt — fünf Stellen,
+- [x] **`overlay.py` fasst Körper an, die es nicht mehr gibt — fünf Stellen,
       nicht eine.** Aus 33s Belegs-Probelauf, nachgemessen von b8:
+
+      **Gebaut am 23.08.2026** (`ddb27e6`, `02914d5`, 3d-druck-b8): Alle fünf
+      `findChildren`-Stellen filtern auf lebende Objekte.
 
           app/ui/overlay.py:346
           if isinstance(child, RoomTaker) and child.isVisibleTo(zone)
@@ -4207,12 +4222,17 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       Struktur-Thema. Wer künftig irgendwo Parallelität einbaut, läuft wieder
       hinein — und sucht dann im eigenen Code.
 
-- [ ] **22 von 70 Widget-Klassen bleiben ungeprüft, und die Auswahl ist gegen
+- [x] **22 von 70 Widget-Klassen bleiben ungeprüft, und die Auswahl ist gegen
       den Kunden gerichtet.** Gemessen am 23.08.2026 (3d-druck-b8): Der
       Lebensdauertest baut jede Klasse und sieht nach, ob sie freigegeben wird.
       **22 lassen sich nicht ohne Argumente bauen** und fallen dabei heraus —
       darunter `OperationDialog`, `PrintSettingsDialog`, `SettingsDialog`,
       `UpdateDialog`, `FirstRunDialog`.
+
+      **Gebaut am 23.08.2026** (`87cfdbc`, 3d-druck-b8): Bauhelfer für alle 22.
+      Der Test prüft jetzt **41 Klassen statt 14**, alle grün. Ertrag: vier
+      weitere Ringe (`AskDialog`, `ParameterDialog`, `OperationDialog`,
+      `PointDialog`) plus `PartCatalog` — geschätzt waren „rund vier“.
 
       **Der systematische Teil:** Was Argumente braucht, steht meist **mitten in
       einem Arbeitsablauf** — also genau dort, wo ein Leck weh tut. Von den 34
@@ -6908,8 +6928,28 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Werkzeugzeilen-Test misst die Reihenfolge des Laufs, `--fehlend` maß
       Dateilängen statt Inhalt).
 
-- [ ] **Kein Viewport wird jemals freigegeben — und die restlichen Ringe
+- [x] **Kein Viewport wird jemals freigegeben — und die restlichen Ringe
       warten jetzt auf den Deadlock. Entschieden am 23.08.2026.**
+
+      **Überholt, nicht erledigt** (23.08.2026). `tests/test_widget_lifetime.py`
+      prüft `Viewport` und `MainWindow` und ist grün, seit der Test 41 Klassen
+      baut statt 14. **Die Aussage dieses Punktes stimmt nicht mehr.**
+
+      **Was bleibt, ist seine Warnung** — *jede aufgelöste Stelle macht ein
+      Fenster einsammelbar* —, und die ist gemessen worden. `test_operation_ui`
+      im eigenen Arbeitsbaum, sonst identischer Stand:
+
+          fünf Läufe je Seite    mit 0 von 5    ohne 2 von 5
+          zehn Läufe je Seite    mit 4 von 10   ohne 0 von 10
+          zusammen               mit 4 von 15   ohne 2 von 15
+
+      **Die Richtung dreht sich zwischen fünf und zehn Läufen vollständig um.**
+      Die Messende hatte nach den fünf Läufen den Umbau schon halb
+      zurückgenommen; fünf hätten eine Entscheidung getragen, die zehn
+      widerlegen. Kein Unterschied nachweisbar — der Absturz gehört dem Baum.
+
+      **Ein Punkt, der abgehakt wird, obwohl seine Formulierung falsch geworden
+      ist, verschwindet mit seiner Warnung.** Darum steht sie hier.
 
       **Die Reihenfolge steht fest: erst der Deadlock, dann die verbliebenen
       Ringe. Nicht umgekehrt, und nicht parallel.** Der Grund ist die Kehrseite,
