@@ -112,7 +112,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `test_mesh_backend` misst die Umgebung statt sein Thema — **entschieden** | Das Fundament der Wahrnehmung (22.08.2026) | die dritte Zusicherung fällt. Sie prüft die Länge des Temp-Ordners **dieser Maschine** und sagt nichts über den Kunden; die zwei davor prüfen den Programmtext und bleiben. Ein Test, der bei umgebogenem `TEMP` rot wird, kostet jede Sitzung Zeit und schützt niemanden |
 | Kein Viewport wird jemals freigegeben — **wartet auf den Deadlock** | Das Fundament der Wahrnehmung (22.08.2026) | **erst den Deadlock, dann die restlichen 40 Ringe** (entschieden 23.08.). Jede aufgelöste Stelle macht ein Fenster einsammelbar, und ein Fenster, das eingesammelt werden kann, kann im falschen Thread sterben — weiter aufzulösen macht die Suite instabiler, nicht stabiler |
 | `test_ui.py` reißt zehn von zehn | Das Fundament der Wahrnehmung (22.08.2026) | den Fix an `leash.wait_for_all`, gemessen von 3d-druck-b8 — und die Lehre daneben: dieselbe Zahl (5/5) wurde neben einem Torlauf als Fremdlast gedeutet und unter Schloss auf leerer Maschine widerlegt |
-| Fensterdateien enden mit Exit 127 — **drei, und wechselnde** | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — die Roadmap nennt als Signatur des bekannten Absturzes „dieselbe Datei einzeln gefahren ist grün“, und diese zwei sind es nicht. Nachgewiesen im eigenen Arbeitsbaum auf HEAD, vollständig grün und dann 127 |
+| Fensterdateien enden mit Exit 127 — **halb aufgeklärt** | Das Fundament der Wahrnehmung (22.08.2026) | nichts mehr für `test_chat_ui` und `test_first_run`: Dahinter steht `0xC0000409`, der bekannte Abbau-Absturz — zwei Punkte, eine Sache. **127 ist eine Shell-Konvention und sagt nichts;** dieselbe 127 trug bei zwei anderen Dateien `0xc0000374`. Was bleibt, ist der Fall *vor* der Schlusszeile |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
 
 ---
@@ -6556,20 +6556,39 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Im letzten Tor standen deshalb zwei Fehlläufe, obwohl vier Dateien mit
       127 endeten.
 
-      **Die nächste Messung ist benannt und beantwortet die Frage in beide
-      Richtungen:** **127 ist eine Bash-Konvention** („command not found") —
-      was der Prozess *selbst* zurückgibt, hat noch niemand gelesen. Startet
-      man `pytest` direkt aus Python statt über die Shell, kommt der echte
-      Windows-Rückgabewert heraus. Der Verdacht ist
-      `STATUS_ENTRYPOINT_NOT_FOUND` (`0xC0000139`) oder
-      `ERROR_PROC_NOT_FOUND` — **beides DLL-Fehler beim Entladen**, was zu
-      einem Abriss beim Abbau mit Qt und VTK passt. Dann hieße der Punkt nicht
-      mehr „irgendein Abriss", sondern „eine Bibliothek wird in falscher
-      Reihenfolge entladen".
+      **Gemessen am 23.08.2026, und die Antwort räumt den Punkt zur Hälfte
+      ab** (3d-druck-33). **127 ist eine Bash-Konvention** („command not
+      found") und kein Rückgabewert des Prozesses. Direkt aus Python gestartet,
+      damit der Windows-Wert ankommt:
 
-      Zeigt die Messung dagegen wirklich 127, liegt es an der **Shell** und
-      nicht am Prozess — auch das ein Ergebnis, und der Punkt gehört dann
-      anders formuliert.
+          tests/test_first_run.py   0xC0000409   47 passed   2 von 2 Läufen
+          tests/test_chat_ui.py     0xC0000409   40 passed   2 von 2 Läufen
+
+      **`0xC0000409` ist der bekannte Abbau-Absturz.** Für diese beiden
+      Dateien sind die zwei Registerpunkte damit **dieselbe Sache**, und der
+      Satz, der hier stand — *„127 ist ein anderer Code als die
+      Zugriffsverletzung, beide Signaturen bleiben getrennt zu führen"* — ist
+      widerlegt. Der Abriss ist außerdem **nicht sporadisch**: vier von vier
+      Läufen, jedes Mal nach vollständiger Zusammenfassung, auch einzeln
+      gefahren.
+
+      **Und die Deutung dazu wurde zwei Stunden später von der Messenden selbst
+      eingeschränkt.** 3d-druck-3a maß am selben Morgen zwei **andere** Dateien
+      mit 127, die **vor** der Schlusszeile rissen — dort stand `0xc0000374`,
+      Heap-Korruption, Stapel „Garbage-collecting". Dasselbe 127 in der Shell,
+      ein anderer Code dahinter.
+
+      > Nicht „127 ist `0xC0000409`", sondern: **127 sagt nichts, man muss
+      > dahinter sehen.** Die Shell wirft verschiedene Windows-Rückgabewerte in
+      > denselben Topf.
+
+      Beides steht in `suite-getrennt.sh` neben der Stelle, die einen Abriss
+      als „kein Fehlschlag" wertet — wer dort nachliest, *warum* 127 nicht
+      zählt, findet gleich daneben, dass 127 nichts bedeutet.
+
+      **Was bleibt, ist der Fall davor und nicht dieser:** Abrisse **vor** der
+      Schlusszeile mit `0xc0000374`. Sie gehören weiter getrennt geführt — nur
+      eben nicht wegen der 127, sondern wegen des Codes dahinter.
 
       `tests/test_chat_ui.py` (40 passed) und `tests/test_first_run.py`
       (45 passed) laufen vollständig grün durch und beenden sich dann mit 127.
@@ -6596,7 +6615,19 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Zahl der bestandenen Tests war echt, der Exit-Code nicht. Wer diesen Punkt
       prüft, schreibt die Ausgabe in eine Datei und liest sie danach.
 
-- [ ] **Ein Absturz vor der Schlusszeile ist eine dritte Signatur.**
+- [ ] **Ein Absturz vor der Schlusszeile ist eine dritte Signatur — und
+      `test_selection.py` ist die erste reproduzierbare Messstelle dafür.**
+      Gemeldet am 23.08.2026: Die Datei reißt im **geteilten** Lauf bei 18 von
+      20 Punkten und ist **einzeln grün**. Dazu `test_sculpt_session.py` nach
+      23 Punkten mit einer Zugriffsverletzung in `app/ui/session.py:112`.
+
+      **Warum das mehr wert ist als ein weiterer Absturz:** Für den Deadlock
+      und das gc-Verhalten gab es bisher nur Quoten zwischen 1/10 und 5/5 —
+      jede Messung brauchte zehn Läufe, und jede Aussage stand auf Statistik.
+      Eine Stelle, die im geteilten Lauf **reproduzierbar** reißt und einzeln
+      grün ist, lässt eine Änderung in zwei Läufen bewerten statt in zwanzig.
+
+      Ursprünglich:
       `tests/test_ui.py` riss am 22.08.2026 in einem von vier Läufen bei
       **95 Prozent** mit Exit 139 ab — Zugriffsverletzung in `conftest.py:178`,
       also in `application.processEvents()` beim Aufräumen einer
