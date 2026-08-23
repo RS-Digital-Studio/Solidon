@@ -15,6 +15,20 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.1.3
+
+- Il nucleo esatto ora sa forare: «Eseguire un foro esatto» lavora direttamente sul corpo esatto, senza passare da una mesh.
+- Raccordi e smussi vengono riconosciuti in modo più affidabile. Prima un raccordo veniva talvolta segnalato come un perno, con un diametro che non esisteva.
+- Gli esempi inclusi non salutano più con avvisi che non lo sono.
+- La schermata iniziale sta negli schermi piccoli, senza scorrere.
+- Una caratteristica selezionata si colora da sé. Prima l’intero corpo assumeva il colore di selezione e non si vedeva che cosa fosse inteso.
+- L’albero degli oggetti indica la misura di ogni caratteristica riconosciuta.
+- Le mesh esportate non contengono più triangoli vuoti.
+- Salvare due volte dà due volte lo stesso file.
+- Le cinque traduzioni sono state riviste. I termini tecnici si chiamano ora come li chiamano gli slicer.
+- La barra degli strumenti è in ordine: il campo più largo era quello che serve meno spesso.
+- Un secondo errore del programma non mette più una seconda finestra sopra la prima.
+
 ## 0.1.2
 
 - I numeri decimali digitati vengono letti bene ovunque. «12,5» resta dodici e mezzo; prima poteva diventare 125, senza chiedere e senza avvisare.

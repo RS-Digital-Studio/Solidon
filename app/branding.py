@@ -65,7 +65,7 @@ PROJECT_SUFFIX: Final = ".p3d"
 #: mit — die Zahl steht an beiden Orten. Vergessen kann man es nicht mehr:
 #: `test_the_version_is_the_same_in_both_places_that_carry_it` hält sie
 #: zusammen.
-APP_VERSION: Final = "0.1.2"
+APP_VERSION: Final = "0.1.3"
 
 #: Copyright-Zeile für LICENSE, Über-Dialog und Installer.
 COPYRIGHT: Final = f"Copyright © 2026 {APP_VENDOR}"

@@ -15,6 +15,20 @@ dieselben Punkte in derselben Reihenfolge (`tests/test_changelog.py`).
 `tools/make_download.py` holt daraus den Abschnitt der aktuellen Version und
 schreibt ihn in `website/version.json`.
 
+## 0.1.3
+
+- Der exakte Kern kann jetzt bohren: „Exakte Bohrung setzen“ arbeitet direkt am exakten Körper, ohne den Umweg über ein Netz.
+- Verrundungen und Fasen werden zuverlässiger erkannt. Eine Verrundung wurde vorher gelegentlich als Zapfen gemeldet — mit einem Durchmesser, den es nicht gab.
+- Die mitgelieferten Beispiele begrüßen nicht mehr mit Warnungen, die keine sind.
+- Der Startbildschirm passt auf kleine Bildschirme, ohne zu rollen.
+- Ein angeklicktes Merkmal färbt sich selbst. Vorher nahm der ganze Körper die Auswahlfarbe an, und man sah nicht, was gemeint war.
+- Der Objektbaum nennt zu jedem erkannten Merkmal sein Maß.
+- Exportierte Netze enthalten keine leeren Dreiecke mehr.
+- Zweimal gespeichert ergibt zweimal dieselbe Datei.
+- Die fünf Übersetzungen sind durchgesehen. Fachbegriffe heißen jetzt so, wie die Slicer sie nennen.
+- Die Werkzeugzeile ist aufgeräumt: Das breiteste Feld war das, das man am seltensten braucht.
+- Ein zweiter Programmfehler stellt kein zweites Fenster mehr über das erste.
+
 ## 0.1.2
 
 - Getippte Kommazahlen werden überall richtig gelesen. „12,5" blieb zwölfeinhalb — vorher konnte daraus 125 werden, ohne Rückfrage und ohne Hinweis.

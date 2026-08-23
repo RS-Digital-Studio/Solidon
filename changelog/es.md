@@ -16,6 +16,20 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.1.3
+
+- El núcleo exacto ya sabe taladrar: «Taladrar un agujero exacto» trabaja directamente sobre el cuerpo exacto, sin el rodeo por una malla.
+- Los redondeos y chaflanes se reconocen con más fiabilidad. Antes, un redondeo se comunicaba a veces como un saliente, con un diámetro que no existía.
+- Los ejemplos incluidos ya no saludan con advertencias que no lo son.
+- La pantalla de inicio cabe en pantallas pequeñas, sin desplazamiento.
+- Una característica seleccionada se colorea a sí misma. Antes, todo el cuerpo tomaba el color de selección y no se veía a qué se refería.
+- El árbol de objetos indica la medida de cada característica reconocida.
+- Las mallas exportadas ya no contienen triángulos vacíos.
+- Guardar dos veces da dos veces el mismo archivo.
+- Se han revisado las cinco traducciones. Los términos técnicos se llaman ahora como los llaman los slicers.
+- La barra de herramientas está ordenada: el campo más ancho era el que menos se necesita.
+- Un segundo error del programa ya no coloca una segunda ventana sobre la primera.
+
 ## 0.1.2
 
 - Los números decimales escritos se leen bien en todas partes. «12,5» sigue siendo doce y medio; antes podía convertirse en 125, sin preguntar y sin avisar.

@@ -15,6 +15,20 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.1.3
+
+- O núcleo exato já sabe furar: «Fazer um furo exato» trabalha diretamente sobre o corpo exato, sem o desvio por uma malha.
+- As concordâncias e os chanfros são reconhecidos com mais fiabilidade. Antes, uma concordância era por vezes indicada como um pino, com um diâmetro que não existia.
+- Os exemplos incluídos já não recebem o utilizador com avisos que não o são.
+- O ecrã inicial cabe em ecrãs pequenos, sem deslocamento.
+- Uma característica selecionada colore-se a si própria. Antes, todo o corpo assumia a cor de seleção e não se via o que estava em causa.
+- A árvore de objetos indica a medida de cada característica reconhecida.
+- As malhas exportadas já não contêm triângulos vazios.
+- Guardar duas vezes dá duas vezes o mesmo ficheiro.
+- As cinco traduções foram revistas. Os termos técnicos passam a chamar-se como lhes chamam os slicers.
+- A barra de ferramentas está arrumada: o campo mais largo era aquele de que menos se precisa.
+- Um segundo erro do programa já não coloca uma segunda janela sobre a primeira.
+
 ## 0.1.2
 
 - Os números decimais escritos são lidos corretamente em todo o lado. «12,5» continua a ser doze e meio; antes podia tornar-se 125, sem perguntar e sem avisar.
