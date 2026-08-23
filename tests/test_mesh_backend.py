@@ -1365,3 +1365,36 @@ def test_enough_room_lets_the_download_start(
     comfy_setup.fetch_weights(tmp_path, Path("python"))
 
     assert gerufen == ["los"], "die Prüfung hat den Download aufgehalten, obwohl Platz war"
+
+
+def test_a_half_finished_download_is_not_blocked_by_the_space_check(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Was schon liegt, zählt mit — sonst verweigert die Prüfung die Wiederaufnahme.
+
+    ``_run_repeatedly`` setzt einen abgebrochenen Download dort fort, wo er
+    stand: Nur was fehlt, wird noch geholt. Eine Platzprüfung, die den bereits
+    belegten Platz ignoriert, blockiert **ausgerechnet den zweiten Anlauf** —
+    bei 5 von 7,5 GB geladen fehlen 2,5, verlangt würden 9.
+
+    Der Fall ist im Review vom 23.08.2026 aufgefallen, nachdem die Prüfung
+    schon eingebaut war.
+    """
+    from app.core.backends import comfy_setup
+
+    needed = comfy_setup.NEEDED_GIGABYTES
+
+    # 6 MB statt der echten 5 GB: Der Test soll die **Rechnung** pruefen, nicht
+    # die Platte fuellen. Die freie Menge liegt darum knapp unter der Schwelle,
+    # sodass erst der Zuschlag sie ueberschreitet.
+    partial = tmp_path / "models" / "triposg" / "TripoSG"
+    partial.mkdir(parents=True)
+    (partial / "halb.safetensors").write_bytes(b"x" * 6_000_000)
+
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: needed - 0.003)
+    gerufen: list[str] = []
+    monkeypatch.setattr(comfy_setup, "_run_repeatedly", lambda *a, **k: gerufen.append("los"))
+
+    comfy_setup.fetch_weights(tmp_path, Path("python"))
+
+    assert gerufen == ["los"], "die Prüfung hat den zweiten Anlauf blockiert"

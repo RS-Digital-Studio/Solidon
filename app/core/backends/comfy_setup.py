@@ -700,6 +700,19 @@ def free_gigabytes(where: Path) -> float:
     return shutil.disk_usage(existing).free / 1_000_000_000
 
 
+def _gigabytes_in(folder: Path) -> float:
+    """Was in diesem Ordner schon liegt — für die Rechnung, wie viel noch fehlt.
+
+    Ein abgebrochener Download lässt seine Bruchstücke stehen, und der nächste
+    Anlauf holt nur den Rest (:func:`_run_repeatedly`). Eine Platzprüfung, die
+    das ignoriert, verweigert ausgerechnet die Wiederaufnahme.
+    """
+    if not folder.exists():
+        return 0.0
+    total = sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
+    return total / 1_000_000_000
+
+
 def fetch_weights(
     comfyui: Path,
     python: Path,
@@ -716,8 +729,13 @@ def fetch_weights(
     if weights_present(comfyui):
         return
     target = comfyui / "models" / "triposg" / "TripoSG"
-    frei = free_gigabytes(target)
-    if frei < NEEDED_GIGABYTES:
+    # **Was schon liegt, zählt mit.** Ein abgebrochener Download hinterlässt
+    # seine Bruchstücke unter ``target``, und ``_run_repeatedly`` setzt genau
+    # dort fort " " nur was fehlt, wird noch geholt. Ohne diesen Abzug hätte die
+    # Prüfung den zweiten Anlauf verweigert, obwohl er weniger braucht als der
+    # erste: Bei 5 von 7,5 GB geladen fehlen 2,5, und verlangt worden wären 9.
+    free = free_gigabytes(target) + _gigabytes_in(target)
+    if free < NEEDED_GIGABYTES:
         raise SetupFailed(
             str(
                 _(
@@ -725,7 +743,7 @@ def fetch_weights(
                     "{noetig:.0f}. Schaffen Sie Platz, oder legen Sie ComfyUI auf einen "
                     "anderen Datenträger — die Gewichte liegen unter models/triposg."
                 )
-            ).format(frei=frei, noetig=NEEDED_GIGABYTES)
+            ).format(frei=free, noetig=NEEDED_GIGABYTES)
         )
     target.parent.mkdir(parents=True, exist_ok=True)
     _run_repeatedly(

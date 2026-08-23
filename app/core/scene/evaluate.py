@@ -524,13 +524,13 @@ def _why_it_stopped(findings: Sequence[Finding], stopped_at: int) -> str:
     **Geschrieben wird die Message-ID, nicht die Übersetzung.** Ein Protokoll
     aus Portugal muss der Support lesen können; `str()` gäbe portugiesisch.
     """
-    schuldige = [f for f in findings if f.op_id == stopped_at]
-    if not schuldige:
+    blamed = [f for f in findings if f.op_id == stopped_at]
+    if not blamed:
         return "kein Befund zu dieser Operation"
-    letzter = schuldige[-1]
-    grund = letzter.message
-    text = grund.msgid if isinstance(grund, TranslatableText) else str(grund)
-    return f"{letzter.code}: {text}"
+    last = blamed[-1]
+    reason = last.message
+    text = reason.msgid if isinstance(reason, TranslatableText) else str(reason)
+    return f"{last.code}: {text}"
 
 
 def _without_settled(findings: Sequence[Finding]) -> list[Finding]:
