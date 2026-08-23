@@ -112,12 +112,25 @@ def test_a_selected_bore_fills_in_where_it_is(window: MainWindow) -> None:
 
 
 def test_a_part_is_told_the_name_of_the_feature(window: MainWindow) -> None:
+    """Der Name des Merkmals — **und seit dem 23.08.2026 die Größe dazu.**
+
+    Bis dahin stand hier `values == {"at_feature": "hole_1"}`, und das war
+    genau die Lücke: Die Bohrung in `plate_holes` misst 5,19 mm, der Dialog
+    schlug **M3** vor, und M3 bohrt 4,00 mm. Ein Schnitt, der vollständig in
+    der vorhandenen Bohrung liegt, trägt nichts ab — der Kunde bekam einen
+    Schritt im Verlauf über unveränderter Geometrie und keinen Hinweis, warum.
+
+    Geprüft wird deshalb **beides**: dass der Name ankommt (der alte Vertrag)
+    und dass die Größe zur gemessenen Bohrung passt (der neue). M4 bohrt
+    5,60 mm und weitet damit auf; das ist die kleinste Größe, die das tut.
+    """
     object_id = select(window)
     window._on_feature_picked("hole_1")
 
     values = window._from_selection(REGISTRY.get("insert_heatset_m4"), object_id)
 
-    assert values == {"at_feature": "hole_1"}
+    assert values["at_feature"] == "hole_1"
+    assert values["size"] == "M4", values
 
 
 def test_a_feature_that_is_gone_falls_back_to_the_body(window: MainWindow) -> None:
