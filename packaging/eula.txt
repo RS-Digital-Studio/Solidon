@@ -179,11 +179,12 @@ alle drei unter Ihrer Kontrolle:
   - der KI-Chat, sofern Sie einen eigenen API-Schlüssel hinterlegen. Dann
   gehen Ihre Chat-Eingaben an den von Ihnen gewählten Anbieter, nach dessen
   Bedingungen. Mit einem lokalen Modell verlässt nichts den Rechner;
-  - die Rückmeldung an den Support, die Sie unter „Hilfe → Rückmeldung
-  senden“ selbst absenden. Übertragen wird, was der Dialog vor dem Senden
-  anzeigt — Ihr Text und die Programmversion, dazu nur die dort angehakten
-  Anhänge (Bildschirmfoto, Protokoll, laufende Sitzung). Von allein sendet
-  die Anwendung nichts.
+  - die Rückmeldung an den Support, die Sie selbst absenden — über „Hilfe →
+  Rückmeldung senden“ oder über den Bogen, den Solidon während der Demo einmal
+  von sich aus anbietet. Beide Wege führen in denselben Dialog. Übertragen
+  wird, was er vor dem Senden anzeigt — Ihr Text und die Programmversion, dazu
+  nur die dort angehakten Anhänge (Bildschirmfoto, Protokoll, laufende
+  Sitzung). Von allein sendet die Anwendung nichts.
 
 Näheres regelt die Datenschutzerklärung unter
 https://solidon3d.de/datenschutz.html.

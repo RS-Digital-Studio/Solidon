@@ -1127,7 +1127,12 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Protokoll und auf Wunsch die laufende Sitzung gehen mit, die "
             "Vorschau zeigt vorher alles, und ein Knopf schickt es an den "
             "Support. Wer nichts aus der Hand geben möchte, legt im selben "
-            "Dialog stattdessen einen Ordner auf dem eigenen Rechner ab."
+            "Dialog stattdessen einen Ordner auf dem eigenen Rechner ab.\n\n"
+            "**Während der Demo fragt Solidon einmal von selbst.** Nach einer "
+            "halben Stunde Arbeit erscheint ein Streifen mit zwei Fragen — was "
+            "gut läuft und was fehlt. Er führt in denselben Dialog, zeigt "
+            "dieselbe Vorschau und schickt nichts ohne Ihren Klick; "
+            "wegklicken geht auch, und dann kommt er nicht wieder."
         ),
     ),
     Page(
