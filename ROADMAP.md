@@ -100,6 +100,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
 | Zwei Pakete lösen den Deadlock noch nicht auf | Ein Deadlock, der keiner war — und sieben Pakete statt einem (23.08.2026) | einen **Verhaltenswechsel**, keinen Strukturfix — und deshalb je einen eigenen Schritt. `activation`: 223 Zeilen Code an der Lizenzgrenze im `__init__`, die Ladereihenfolge dort ändert man nicht, ohne die Grenze mitzuprüfen. `knowledge.parts`: dort **ist** der Import die Registrierung — die fünf Modulimporte füllen das Bausteinregister, und `bootstrap.load_operations` verlässt sich darauf; verzögert wären sie wirkungslos. Die anderen fünf Pakete sind seit dem 23.08. sauber, `tests/test_core_isolation.py` führt beide Namen mit Begründung |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
+| Ein Klick auf eine 5,19-mm-Bohrung schlägt M3 vor | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **fachliche** Entscheidung in `placement.py`: Eine Senkung sitzt auf der Bohrung, eine Einpressbuchse ersetzt sie — nur die zweite darf den gemessenen Durchmesser übernehmen. Gemessen: M3 bohrt 4,00 mm in ein 5,19-mm-Loch und trägt nichts ab; die Anwendung kennt den Durchmesser und sagt ihn nicht |
 
 ---
 
@@ -4546,6 +4547,46 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       kam eine PySide6-Stub-Falle: `QAction.menu()` ist als `QMenu` deklariert
       statt als `QMenu | None`, also hält mypy ein `is None` für toten Code.
       `if not menu:` geht durch.
+
+- [ ] **Ein Klick auf eine 5,19-mm-Bohrung schlägt M3 vor, und M3 trägt dort
+      nichts ab.** Gemessen am 23.08.2026 im laufenden Fenster, `plate_holes.stl`,
+      Bohrung `hole_1` gewählt:
+
+      | Operation | Vorgabe | Bohrung dazu |
+      |---|---|---|
+      | Heat-Set-Einpressbuchse | **M3** | 4,00 mm |
+      | Mutternfalle | **M3** | — |
+      | Gewinde | **M6** | 8,00 mm |
+
+      Aus der Normteiltabelle: M3 → 4,00 mm, **M4 → 5,60 mm**, M5 → 6,40 mm,
+      M6 → 8,00 mm. Die Anwendung kennt den Durchmesser — er steht in
+      `feature.params["diameter"]` — und sagt ihn nicht.
+
+      **Die Folge ist keine schlechte Passung, sondern gar nichts.**
+      `heatset_m4` ist `subtractive=True`: Der Baustein *bohrt* die
+      Buchsenbohrung, er setzt keine Buchse ein. Ein 4,00-mm-Schnitt liegt
+      vollständig innerhalb einer 5,19-mm-Bohrung, die Einführfase (4,60 mm)
+      ebenfalls. Der Kunde klickt, füllt den Dialog aus, bestätigt — und
+      bekommt einen Schritt im Verlauf über einer unveränderten Geometrie.
+      Richtig wäre M4, die kleinste Größe oberhalb von 5,19.
+
+      **Warum es so ist, und warum das keine Nachlässigkeit war:**
+      `values_for` (`app/core/scene/placement.py:67`) kehrt bei `at_feature`
+      sofort zurück, und der Docstring begründet es:
+
+      > „Nicht seine Größe — eine Senkung nimmt den Durchmesser des
+      > Schraubenkopfs, nicht den der Bohrung, auf der sie sitzt, und eine
+      > hilfsbereit eingetragene 5,2 wäre dort eine falsche Zahl, die wie eine
+      > gemessene aussieht.“
+
+      **Für die Senkung stimmt das vollständig.** Der Unterschied ist fachlich:
+      Eine Senkung *sitzt auf* der Bohrung, eine Einpressbuchse *ersetzt* sie.
+      Eine Regel, die für den einen Fall richtig ist, deckt den anderen mit —
+      und weil sie richtig begründet ist, liest man darüber hinweg.
+
+      Gefunden als Gegenprobe zu `at_hole` (3d-druck-3a, `2f66440`): Die sieben
+      Einträge kommen alle im Kontextmenü an, sind alle bedienbar und lösen
+      alle aus — der Anschluss steht. Nur der Schritt danach fehlt.
 
 ## Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026)
 
