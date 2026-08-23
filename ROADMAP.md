@@ -106,7 +106,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
 | Der Start lädt nacheinander, was nebeneinander laufen könnte | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, wie viel von 369 ms sich wirklich überlappt — und eine Antwort auf die Thread-Sicherheit beim Import. Die einfache Umkehrung scheitert an `_build_menus()`, und die 19 Module sind keine Alternative: alle 19 ziehen trimesh |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
-| Der Ordnername „3D Druck" mit Leerzeichen bricht Werkzeuge | Das Fundament der Wahrnehmung (22.08.2026) | eine Durchsicht der Werkzeuge, die Pfade zusammensetzen. Zweimal an einem Tag an unabhängigen Stellen: das Kürzel der Erinnerungen und der Interpreterpfad im Tor-Skript. Die Annahme dahinter ist dieselbe — ein Pfad ohne Leerzeichen |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
 | `test_mesh_backend` misst die Umgebung statt sein Thema — **entschieden** | Das Fundament der Wahrnehmung (22.08.2026) | die dritte Zusicherung fällt. Sie prüft die Länge des Temp-Ordners **dieser Maschine** und sagt nichts über den Kunden; die zwei davor prüfen den Programmtext und bleiben. Ein Test, der bei umgebogenem `TEMP` rot wird, kostet jede Sitzung Zeit und schützt niemanden |
 | Kein Viewport wird jemals freigegeben — **wartet auf den Deadlock** | Das Fundament der Wahrnehmung (22.08.2026) | **erst den Deadlock, dann die restlichen 40 Ringe** (entschieden 23.08.). Jede aufgelöste Stelle macht ein Fenster einsammelbar, und ein Fenster, das eingesammelt werden kann, kann im falschen Thread sterben — weiter aufzulösen macht die Suite instabiler, nicht stabiler |
@@ -6114,7 +6113,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       widersprachen — und die richtige war die neue. Wer nur eine davon gelesen
       hätte, hätte die falsche geglaubt.*
 
-- [ ] **Der Ordnername „3D Druck" mit Leerzeichen bricht Werkzeuge.** Zweimal
+- [x] **Der Ordnername „3D Druck" mit Leerzeichen bricht Werkzeuge — durchgesehen am 23.08.2026, es blieb bei den beiden.** Zweimal
       am 22.08.2026, an unabhängigen Stellen:
 
       * `tools/link_memory.py` bildete aus `F:D Druck` das Kürzel
@@ -6130,6 +6129,27 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       dort auf, wo jemand sie ausprobiert. Wer ein Werkzeug schreibt, das einen
       Pfad anfasst, prüft es gegen **diesen** Arbeitsbaum — er ist der Ernstfall
       und liegt vor der Tür.
+
+      **Durchgesehen am 23.08.2026, und es blieb bei den beiden.** Gesucht
+      wurde nach den drei Mustern, an denen die Annahme sichtbar wird:
+
+          Pfade in Zeichenketten gesetzt      nur Meldungstexte, kein Aufruf
+          subprocess mit String statt Liste   keiner — alle übergeben Listen
+          Pfade zerlegt (split, replace)      link_memory (behoben, `ad2448c`),
+                                              FTP-Pfade der Website (kein
+                                              Dateisystem)
+
+      **Ein halber Fall bleibt und ist heute folgenlos:** `make_video.py`
+      maskiert für den ffmpeg-Filtergraphen Backslash und Doppelpunkt, aber
+      kein Leerzeichen. Er greift auf `C:\Windows\Fonts`, wo keines vorkommt —
+      wer ihn auf eine Schrift in `C:\Program Files` zeigen lässt, findet es.
+
+      **Und die Grenze der Durchsicht gehört dazu:** `grep` findet Muster, nicht
+      Annahmen. Was hier gefunden wurde, sind die Stellen, an denen jemand einen
+      Pfad *sichtbar* anfasst; eine Annahme, die in einer Bibliothek steckt oder
+      in einem Aufruf ohne verräterisches Muster, bleibt unsichtbar. Der Punkt
+      wird deshalb geschlossen, weil nichts mehr zu finden ist — nicht, weil
+      bewiesen wäre, dass nichts mehr da ist.
 
 - [ ] **Der Stop-Hook meldet Zeitstempel, nicht Urheber.** Bei vier Sitzungen
       in einem Arbeitsbaum schlägt er regelmäßig für fremde Arbeit an: „Seit
