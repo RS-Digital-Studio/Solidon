@@ -93,7 +93,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Verrundung und Fase gehen auf einem Netz nicht | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | den B-Rep-Kern für Eingelesenes; steht so im Bauplan, und dieser Lauf ist der Beleg, wie oft man dagegenläuft — bei jedem der neun Modelle |
 | Der Absturz beim Aufräumen — Stelle bekannt, Ursache nicht | Der Schnapper griff nie, und der Absturz hat jetzt einen Stapel (22.08.2026) | einen Lauf unter einem Werkzeug, das doppelte Freigaben sieht. Zwei Stapel liegen vor, beide an derselben Stelle (`session.py:110`), aber über **verschiedene** Aufrufer — der finished-Slot war also nicht die Ursache. Die Falle steht in `tools/qt_trace.py` |
 | Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
-| Von dreißig Rümpfen sind fünf ungeprüft, zwei offen | Vierzig Prozent der Ansicht sieht das Tor nie (22.08.2026) | `_watch_camera`, `_apply_render_quality` und `_apply_ambient_occlusion`. Gemessen am 23.08.: 35 Methoden mit Wache, 5 ohne Test, 3 davon geschlossen — die Zahl ist eine **Untergrenze**, denn „Name kommt vor" heißt nicht „Rumpf wird gefahren" |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Eine erkannte Verrundung lässt sich nicht ändern | Das Fundament der Wahrnehmung (22.08.2026) | die Operation *Verrundungsradius ändern*, die es nicht gibt — `fillet_edges` wirkt auf Kanten und würde die Rundung runden. Der zweite Weg („Diesen Schritt ändern“) fällt auch aus: `created_by` gibt es nur bei `provenance="generated"`, also an Bausteinen und beim Verstiften. Dahinter steht die größere Frage, ob eine Operation ihre sichtbaren Ergebnisse deklarieren soll |
 | Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
@@ -105,7 +104,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
 | Ein gescheiterter Merge ist ein Eingriff, kein Nichts | Das Fundament der Wahrnehmung (22.08.2026) | eine Regel im Verfahren: Wer einen Merge abbricht, prüft danach `git status` **und** `git stash list`. Der Autostash überlebt den Abbruch nicht zuverlässig und trifft im geteilten Baum fremde Arbeit |
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
-| Ein exakter Körper mit Eckverrundungen liefert ein offenes Netz | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — 16 offene Kanten bei 1380 Dreiecken, nur wenn die acht Kugelflächen an den Ecken entstehen. Die parallele Vernetzung ist als Ursache gemessen und widerlegt; §17 verlangt wasserdicht, und der Weg zum Druck führt durch `to_mesh()` |
 | Der Start lädt nacheinander, was nebeneinander laufen könnte | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, wie viel von 369 ms sich wirklich überlappt — und eine Antwort auf die Thread-Sicherheit beim Import. Die einfache Umkehrung scheitert an `_build_menus()`, und die 19 Module sind keine Alternative: alle 19 ziehen trimesh |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
@@ -4946,7 +4944,22 @@ danach um; was die Ansicht *zeichnet*, sieht er nicht. Deshalb blieb 4.1 auch
 nach einer Messung am echten Bildschirm offen — und deshalb ist ein Test dafür
 schlimmer als keiner: Er wäre grün und würde die Lücke zudecken.
 
-- [ ] **Von dreißig Rümpfen sind fünf ungeprüft, und zwei davon offen.**
+- [x] **Von dreißig Rümpfen sind fünf ungeprüft — alle fünf geschlossen am
+      23.08.2026** (`deb3138` und davor). Nachgemessen: **null** Rümpfe, die
+      weder über ihren Namen noch über einen Helfer erreicht werden.
+
+      Die letzten drei betrafen den Fall, den diese Maschine nie zeigt — einen
+      Treiber, der weniger kann: Kantenglättung und Verdeckung im `try`
+      (einfacheres Bild statt Absturz), der `return` im Fehlerpfad der
+      Verdeckung (ohne ihn verbucht ein einmaliger Treiberfehler dauerhaft
+      „ist an", und der Viewport probiert es nie wieder), und der Kamera-
+      Beobachter, der schwach hält. Jeder mit Gegenprobe, `viewport.py`
+      danach wieder identisch mit HEAD.
+
+      **Die Vorbehalt-Zeile gilt weiter:** „Name kommt in einer Testdatei vor"
+      ist schwächer als „Rumpf wird gefahren".
+
+      Ursprünglich:
       Gemessen am 23.08.2026 (3d-druck-b8), indem je Methode gefragt wurde, ob
       ihr Name **oder einer ihrer Helfer** überhaupt in einer Testdatei
       vorkommt:
@@ -5404,8 +5417,28 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       umzubauen — in Modulen, deren Arbeitsgrundlage es ist. Das ist kein
       Handgriff, sondern ein Umbau des Kerns.
 
-- [ ] **Ein exakter Körper mit Eckverrundungen liefert ein nicht wasserdichtes
-      Netz.** Gemessen am 23.08.2026 (3d-druck-3a) an `to_mesh()`:
+- [x] **Ein exakter Körper mit Eckverrundungen liefert ein nicht wasserdichtes
+      Netz — behoben am 23.08.2026 (`de1ce32`), und der Punkt war zu groß
+      gefasst.** Es war kein Loch: Acht Dreiecke mit **Fläche null** am Pol der
+      Kugelflächen, einer je Eckverrundung.
+
+          vorher   1380 Dreiecke, 8 mit Fläche null, is_watertight False
+          nachher  1372,          0,                 is_watertight True
+          Euler 2, Volumen 23697,9 — beides unverändert
+
+      **Die Oberfläche war nie kaputt**, und `is_watertight` war die falsche
+      Prüfung — trimesh zählt degenerierte Kanten als offen. Der Schaden war
+      trotzdem echt: Die acht wanderten bis in die exportierte STL, und
+      `is_watertight` fahren viele Werkzeuge.
+
+      **Zwei Fehlschlüsse lagen auf dem Weg, beide gemessen und verworfen:**
+      `is_watertight` als Beweis für ein Loch (es ist keiner — Euler 2), und
+      „die drei Knotennummern sind nicht paarweise verschieden" als Bedingung
+      (OCCT vergibt am Pol *zwei* Nummern für denselben Ort; erst trimesh führt
+      sie zusammen). Geprüft wird über die **Koordinaten**, behoben in
+      `tessellate` und nicht am Export.
+
+      Ursprünglich: Gemessen am 23.08.2026 (3d-druck-3a) an `to_mesh()`:
 
           Quader schlicht          12 Dreiecke   wasserdicht
           Quader R2 senkrecht     188 Dreiecke   wasserdicht
@@ -6615,17 +6648,45 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Zahl der bestandenen Tests war echt, der Exit-Code nicht. Wer diesen Punkt
       prüft, schreibt die Ausgabe in eine Datei und liest sie danach.
 
-- [ ] **Ein Absturz vor der Schlusszeile ist eine dritte Signatur — und
-      `test_selection.py` ist die erste reproduzierbare Messstelle dafür.**
-      Gemeldet am 23.08.2026: Die Datei reißt im **geteilten** Lauf bei 18 von
-      20 Punkten und ist **einzeln grün**. Dazu `test_sculpt_session.py` nach
-      23 Punkten mit einer Zugriffsverletzung in `app/ui/session.py:112`.
+- [ ] **Ein Absturz vor der Schlusszeile ist eine dritte Signatur.**
+      `test_selection.py` ist dafür ein **Kandidat** als Messstelle — und
+      ausdrücklich keine gesicherte Grundlage. Zwei Messungen vom 23.08.2026
+      nebeneinander:
 
-      **Warum das mehr wert ist als ein weiterer Absturz:** Für den Deadlock
-      und das gc-Verhalten gab es bisher nur Quoten zwischen 1/10 und 5/5 —
-      jede Messung brauchte zehn Läufe, und jede Aussage stand auf Statistik.
-      Eine Stelle, die im geteilten Lauf **reproduzierbar** reißt und einzeln
-      grün ist, lässt eine Änderung in zwei Läufen bewerten statt in zwanzig.
+          3d-druck-3a   im eigenen Torlauf     Riss bei 18 von 20 Punkten,
+                                               einzeln grün
+          3d-druck-33   mit test_analysis_ui   allein     3/3 grün
+                        daneben, drei Läufe    kombiniert 2/3 grün,
+                                               1/3 gerissen (0xc0000005,
+                                               bei 65 Punkten)
+
+      **Bei 1/3 ist ein grüner Lauf nach einem Fix genau so viel wert wie
+      vorher, nämlich nichts.** Die Empfehlung, hier ließe sich „in zwei Läufen
+      statt in zwanzig" bewerten, trägt damit nicht.
+
+      **Die beiden Messungen widersprechen sich dabei nicht** — sie sind in
+      verschiedenen Lagen entstanden (anderer Nachbar im geteilten Lauf), und
+      der dritte Lauf der zweiten fiel mit einer fremden Änderung an
+      `brep/features.py` zusammen und ist als Datenpunkt nicht sauber. Was sie
+      zeigen, ist: **Die Stelle ist nicht ohne Weiteres übertragbar.**
+
+      **Wer den vierten Deadlock-Anlauf macht, misst sie zuerst in seiner
+      eigenen Lage nach.** Das kostet sechs Läufe und erspart eine Bewertung,
+      die auf Sand steht.
+
+      **Warum das hier so ausführlich steht:** Die Zeile stand eine halbe
+      Stunde lang als „reproduzierbare Messstelle" im Register. Sie kam als
+      Empfehlung von 3d-druck-33, die eine fremde Beobachtung ungeprüft
+      weitergereicht hat — und 3d-druck-64 hat sie ungeprüft eingetragen.
+      **Zwei Sitzungen, eine Zahl, kein einziger eigener Fall.** Die Regel
+      dagegen stand zu dem Zeitpunkt schon in `.claude/rules/tests.md`, von
+      derselben Hand geschrieben, die sie gebrochen hat:
+
+      > Wer eine Zahl weitergibt, gibt das Muster mit — wer eine bekommt,
+      > prüft sie an einem Fall, von dem er weiß, wie er ausgehen muss.
+
+      Dazu `test_sculpt_session.py`, das nach 23 Punkten mit einer
+      Zugriffsverletzung in `app/ui/session.py:112` reißt.
 
       Ursprünglich:
       `tests/test_ui.py` riss am 22.08.2026 in einem von vier Läufen bei
