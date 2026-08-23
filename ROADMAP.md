@@ -98,6 +98,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Eine erkannte Verrundung lässt sich nicht ändern | Das Fundament der Wahrnehmung (22.08.2026) | die Operation *Verrundungsradius ändern*, die es nicht gibt — `fillet_edges` wirkt auf Kanten und würde die Rundung runden. Der zweite Weg („Diesen Schritt ändern“) fällt auch aus: `created_by` gibt es nur bei `provenance="generated"`, also an Bausteinen und beim Verstiften. Dahinter steht die größere Frage, ob eine Operation ihre sichtbaren Ergebnisse deklarieren soll |
 | Ein Verrundungsradius ist nicht abzulesen | Das Fundament der Wahrnehmung (22.08.2026) | das Torusstück einer Verrundung als Merkmal samt Radius, und die Krümmungskarte aus §18.4 mit echten Zahlen statt einer Färbung. Setzt die Erkennung von Kugel und Torus voraus (§41) und ist deren eigentlicher Gewinn — bis dahin sagt die Karte, *dass* es rund ist, und nicht *wie* rund |
 | Kugel und Torus fehlen der Erkennung | Das Fundament der Wahrnehmung (22.08.2026) | eine eigene Abnahme — Kegel ist seit dem 22.08. drin (§21.1), Kugel und Torus stehen als Ausbaustufe in §41. Eine Verrundung hat damit weiter keinen Radius |
+| 26 Tests sind grün, wenn ihre Grundmenge leer ist | Das Fundament der Wahrnehmung (22.08.2026) | je eine Zeile: `assert menge, "sonst prüft dieser Test nichts"`. Gezählt am 23.08. — 108 reine Verbotstests, davon 26 über eine gefilterte Menge; drei behoben, vier als gedeckt belegt. Die Leitfrage steht dabei: *Was wäre eine Implementierung, die diesen Test besteht und die Sache trotzdem nicht tut?* |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Kein Test prüft, womit ein Beispiel den Kunden begrüßt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine Prüfung über die Befunde beim Öffnen, mit einer Liste der erwarteten statt einer Schwelle von null — `SETTLED_BY` gibt es schon, die Prüfung nicht |
 | An einer Säule mit verrundetem Fuß wird kein Zylinder erkannt | Das Fundament der Wahrnehmung (22.08.2026) | eine Trennung nach **Krümmung** statt nach Knick — eine Verrundung schließt tangential an, und `CURVATURE_LIMIT` trennt an Knicken. Gemessen: sieben Flächen, kein Zylinder, Säule und Kehle ein Fleck aus 2305 Dreiecken |
@@ -5393,6 +5394,62 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Damit ist auch die Changelog-Korrektur draußen — das Update-Fenster
       schickt den Kunden nicht mehr mit seinem achten Punkt ins Handbuch, wo
       nichts stand.
+
+- [ ] **26 Tests sind grün, wenn ihre Grundmenge leer ist.** Durchgesehen am
+      23.08.2026 von 3d-druck-3a, und der Punkt hat damit eine Methode statt
+      einer Anekdote.
+
+      **Die ursprüngliche Frage traf daneben.** Sie lautete *„misst der Test
+      gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit?"*
+      — die ersten Treffer waren `first.volume == approx(second.volume)`, also
+      Determinismus-Prüfungen, und die sind eine **eigene Testart** aus
+      `AGENTS.md`. Jede einzelne legitim.
+
+      **Die Frage, die trifft, ist eine andere:**
+
+      > Was wäre eine Implementierung, die diesen Test besteht und die Sache
+      > trotzdem nicht tut?
+
+      **Damit wird es maschinell findbar:**
+
+          Zusicherungen mit Schwelle statt Sollwert     293  (gegen 837 Sollwerte)
+          Tests, die ausschließlich Verbote prüfen      108
+          davon über eine gefilterte Menge               26  <- die scharfe Liste
+
+      Ein `assert not [x for x in menge if …]` ist grün, wenn `menge` leer ist.
+      Die `test_every_…`-Namen darin sind der Typ, bei dem es wehtut:
+      *„jede Operation hat genau einen Menüeintrag"* ist grün, wenn das
+      Register leer ist. Nachgeprüft ist er gedeckt — `load_operations()` steht
+      in einer Fixture —, **aber er sagt es nicht selbst**: Fällt die Fixture
+      weg, prüft er 61 Operationen statt 77 und bleibt grün. (Genau diese
+      Differenz steht als eigene Erinnerung: ohne `load_operations()` fehlen
+      die sechzehn aus der Bausteinbibliothek.)
+
+      **Das Muster für die Behebung ist eine Zeile:** Ein Verbotstest über eine
+      gefilterte Menge braucht eine Zusicherung über die **Grundmenge** daneben
+      — `assert menge, "sonst prüft dieser Test nichts"`. Sie kostet nichts und
+      macht die Deckung sichtbar, statt sie einer Fixture zu überlassen.
+
+      **Drei sind behoben, alle gemessen statt vermutet:**
+
+          open_edges > 0            ->  == 5        „>0" ließ 12 als 1 durch
+          all(d >= 0.5 for d …)     ->  not holes   all() über leer ist wahr;
+                                                    der Test hatte nie etwas geprüft
+          not [… kind == "hole"]    ->  sagt jetzt, was es *ist*
+
+      Der zweite ist der lehrreichste: `detect_holes` liefert auf dem
+      organischen Netz **null** Bohrungen, und `all()` über eine leere Liste
+      ist `True`. Grün, ohne je etwas geprüft zu haben — und er hätte einen
+      Kratzer durchgelassen, der als Ø2 gemeldet wird, weil die Schwelle nur
+      *sehr kleine* Falschmeldungen fängt.
+
+      **Vier weitere sind geprüft und als gedeckt belegt** statt angefasst:
+      Gemessen, dass die Quellen wirklich liefern (`generated_body()` 4
+      Merkmale, `cube()` 6, `plate()` 10). Ein Verbotstest über eine Quelle,
+      die nachweislich liefert, ist in Ordnung — die Lücke ist nur, dass die
+      Deckung nirgends im Test steht.
+
+      **Offen sind die 26**, und sie verteilen sich über alle Gebiete.
 
 - [ ] **Ein Test, der nur seine eigene Konsistenz misst, sieht keinen
       systematischen Versatz.** Zweimal an einem Tag gefunden, beide Male
