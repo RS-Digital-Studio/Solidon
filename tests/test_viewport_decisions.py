@@ -178,11 +178,11 @@ class _RecordingPlotter:
         self.drawn.append(("mesh", kwargs))
         return object()
 
-    def add_point_labels(self, _points: object, labels: object, **kwargs: Any) -> object:
+    def add_point_labels(self, _points: object, labels: Any, **kwargs: Any) -> object:
         # Die Beschriftungen kommen mit: Sie sind bei der Merkmals-Überlagerung
         # die eigentliche Aussage, und ob sie erscheinen, ist die Frage von
         # Regel 18 — nicht, ob überhaupt etwas gezeichnet wurde.
-        self.labelled.append([str(text) for text in labels])  # type: ignore[union-attr]
+        self.labelled.append([str(text) for text in labels])
         self.drawn.append(("labels", kwargs))
         return object()
 
@@ -367,7 +367,10 @@ def test_only_the_triangles_of_the_feature_take_the_selection_colour(
         f"gefärbt sind die zwei Dreiecke des Merkmals, nicht die zwölf des Quaders: {netz.n_cells}"
     )
 
-    original = np.asarray(viewport._result.scene.objects["obj_1"].mesh.raw.vertices, dtype=float)
+    ergebnis = viewport._result
+    assert ergebnis is not None
+    roh: Any = ergebnis.scene.objects["obj_1"].mesh
+    original = np.asarray(roh.raw.vertices, dtype=np.float64)
     punkte = np.asarray(netz.points, dtype=float)
     abstand = np.min(np.linalg.norm(punkte[:, None, :] - original[None, :, :], axis=2), axis=1)
     assert float(abstand.max()) > 0.0, (
@@ -515,7 +518,106 @@ def test_orthographic_reaches_the_plotter(qt_app: QApplication) -> None:
 
     viewport.set_projection("perspective")
     assert plotter.gerufen[-1] == "parallel aus", plotter.gerufen
-    assert viewport._projection == "perspective"
+    assert str(viewport._projection) == "perspective"
+
+
+class _BrokenDriver(_RecordingPlotter):
+    """Ein Plotter, dessen OpenGL die schönen Sachen nicht kann.
+
+    Genau die Maschine, für die die ``try``-Blöcke geschrieben sind: Sie soll
+    ein einfacheres Bild bekommen und keinen Absturz.
+    """
+
+    def enable_anti_aliasing(self, _mode: str) -> None:
+        raise RuntimeError("kein FXAA auf diesem Treiber")
+
+    def enable_ssao(self, **_kwargs: Any) -> None:
+        raise RuntimeError("kein SSAO auf diesem Treiber")
+
+    def disable_ssao(self) -> None:
+        raise RuntimeError("kein SSAO auf diesem Treiber")
+
+
+def test_a_driver_without_the_extras_gets_a_simpler_picture(qt_app: QApplication) -> None:
+    """Kantenglättung und Umgebungsverdeckung hängen am Treiber.
+
+    Eine Maschine, deren OpenGL sie nicht kann, soll ein einfacheres Bild
+    bekommen und keinen Absturz — und was nicht ging, steht im Protokoll, nicht
+    vor dem Nutzer. Der ``try`` steht seit je da; gefahren hat ihn nie jemand,
+    weil der Rumpf hinter der Offscreen-Wache liegt und diese Maschine kann,
+    was sie soll.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.plotter = _BrokenDriver()
+
+    viewport._apply_render_quality()  # darf nicht werfen
+
+
+def test_a_failed_occlusion_is_tried_again(qt_app: QApplication) -> None:
+    """Was nicht ging, gilt nicht als getan.
+
+    ``_occlusion_applied`` merkt sich den Stand, damit derselbe Aufruf nicht
+    bei jedem Zeichnen wiederholt wird. Der ``return`` im Fehlerpfad sorgt
+    dafür, dass ein **gescheiterter** Versuch dort nichts einträgt — sonst
+    merkte sich der Viewport nach einem einmaligen Treiberfehler dauerhaft
+    „ist an", während es aus ist, und probierte es nie wieder.
+
+    Das ist dieselbe Frage wie beim Merkmal, das seinen Schritt anbietet: Ein
+    Zustand, der einen Fehlschlag als Erfolg verbucht, ist schlechter als
+    keiner.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.plotter = _BrokenDriver()
+    # Die Eigenschaft folgt der Regel „keine Analysekarte" und ist damit an;
+    # gesetzt wird sie nicht, sie *ist* die Regel.
+    assert viewport.ambient_occlusion is True
+
+    viewport._apply_ambient_occlusion()  # darf nicht werfen
+
+    assert viewport._occlusion_applied is not True, (
+        "ein gescheiterter Versuch darf sich nicht als erledigt merken"
+    )
+
+
+def test_the_camera_watcher_holds_the_view_only_weakly(qt_app: QApplication) -> None:
+    """VTK hält den Beobachter, und eine starke Referenz von dort auf den
+    Viewport überlebt jedes Schließen.
+
+    Dieselbe Regel wie bei ``set_navigation`` und dieselbe Falle wie beim
+    Zeitgeber der Schichtvorschau: Wer `self` in den Rückruf fängt, schließt
+    einen Ring über die C++-Grenze, den Pythons Speicherbereiniger nicht
+    sieht.
+    """
+    import gc
+    import weakref
+
+    from app.ui.viewport import Viewport
+
+    class _MitInteractor(_RecordingPlotter):
+        def __init__(self) -> None:
+            super().__init__()
+            self.beobachter: list[Any] = []
+            self.interactor = self
+
+        def AddObserver(self, _event: str, ruf: Any) -> int:  # noqa: N802 — VTK-Name
+            self.beobachter.append(ruf)
+            return 1
+
+    viewport = Viewport()
+    plotter = _MitInteractor()
+    viewport.plotter = plotter
+    viewport._watch_camera()
+
+    assert plotter.beobachter, "kein Beobachter angemeldet"
+    spur = weakref.ref(viewport)
+    del viewport
+    gc.collect()
+
+    assert spur() is None, "der Beobachter hält die Ansicht fest — VTK überlebt sie, und damit sie"
 
 
 def test_the_callbacks_reach_the_view_while_it_lives(qt_app: QApplication) -> None:
