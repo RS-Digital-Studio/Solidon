@@ -25,3 +25,31 @@ es **vor** dem Prüfmodul und dem Bau; danach trüge das Paket eine Nummer, die
 es schon gab. `website/version.json` bleibt dabei liegen: Sie sagt, was
 veröffentlicht *ist*, und wird zuletzt hochgeladen. Der Weg steht vollständig
 in der Skill `/erzeugen`.
+
+---
+
+## Und danach: Was steckt eigentlich im Paket?
+
+Am 23.08.2026 lieferte eine Sitzung 0.1.4 aus, während ich noch committete. Die
+Frage „sind Roberts gemeldete Fehler drin?" ließ sich aus **Dateizeitstempeln
+nicht** beantworten: Die Pakete trugen 23:14, gebaut wurde gegen einen Stand von
+**22:35** — der Zeitstempel ist das *Ende* des Laufs, nicht sein Anfang.
+
+Der billige und exakte Weg, von `3d-druck-bd`:
+
+```
+gh run view <run-id> --json headSha        # gegen welchen Commit lief der Bau
+git merge-base --is-ancestor <commit> <headSha>   # steckt meiner darin?
+git grep <marke> <headSha> -- app/         # und der harte Beleg in der Datei
+```
+
+Zehn Sekunden statt zehn Minuten. **Die dritte Zeile ist die wichtigste:** Eine
+Ahnenschaft im Graphen belegt, dass der Commit *erreichbar* war — nicht, was in
+der Datei steht. `git grep CLICK_SLACK 5105e24` gab `= 10` statt `= 2`, und erst
+das war der Beweis.
+
+**Was nicht funktioniert:** `grep` über die gebaute EXE. PyInstaller komprimiert;
+selbst `Solidon3D` und `MainWindow` finden **null** Treffer. Wer nur nach dem
+neuen Namen sucht und null findet, meldet „fehlt im Paket" und liegt falsch — die
+Gegenprobe an einem Namen, der drin sein *muss*, entlarvt das in einer Minute.
+Siehe [[messwerkzeug-misst-sich-selbst]].
