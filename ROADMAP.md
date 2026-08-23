@@ -98,17 +98,19 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
 | Ein gescheiterter Merge ist ein Eingriff, kein Nichts | Das Fundament der Wahrnehmung (22.08.2026) | eine Regel im Verfahren: Wer einen Merge abbricht, prüft danach `git status` **und** `git stash list`. Der Autostash überlebt den Abbruch nicht zuverlässig und trifft im geteilten Baum fremde Arbeit |
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
-| Der Start lädt nacheinander, was nebeneinander laufen könnte | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, wie viel von 369 ms sich wirklich überlappt — und eine Antwort auf die Thread-Sicherheit beim Import. Die einfache Umkehrung scheitert an `_build_menus()`, und die 19 Module sind keine Alternative: alle 19 ziehen trimesh |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Kein Viewport wird jemals freigegeben — **wartet auf den Deadlock** | Das Fundament der Wahrnehmung (22.08.2026) | **erst den Deadlock, dann die restlichen 40 Ringe** (entschieden 23.08.). Jede aufgelöste Stelle macht ein Fenster einsammelbar, und ein Fenster, das eingesammelt werden kann, kann im falschen Thread sterben — weiter aufzulösen macht die Suite instabiler, nicht stabiler |
 | `test_ui.py` reißt unzuverlässig (1/3 ruhig, 5/5 unter Last) | Das Fundament der Wahrnehmung (22.08.2026) | den Fix an `leash.wait_for_all`, gemessen von 3d-druck-b8 — und die Lehre daneben: dieselbe Zahl (5/5) wurde neben einem Torlauf als Fremdlast gedeutet und unter Schloss auf leerer Maschine widerlegt |
-| Fensterdateien enden mit Exit 127 — **halb aufgeklärt** | Das Fundament der Wahrnehmung (22.08.2026) | nichts mehr für `test_chat_ui` und `test_first_run`: Dahinter steht `0xC0000409`, der bekannte Abbau-Absturz — zwei Punkte, eine Sache. **127 ist eine Shell-Konvention und sagt nichts;** dieselbe 127 trug bei zwei anderen Dateien `0xc0000374`. Was bleibt, ist der Fall *vor* der Schlusszeile |
 | Ein Absturz **vor** der Schlusszeile | Das Fundament der Wahrnehmung (22.08.2026) | eine Ursache — `test_ui.py` starb einmal von vier Läufen bei 95 Prozent mit Exit 139 in `conftest.py:178` (`processEvents()` im Teardown). Die bekannte Signatur ist „N passed, dann Absturz“; dieser hier riss den Lauf ab, bevor es eine Zusammenfassung gab |
 | `overlay.py` fasst Körper an, die es nicht mehr gibt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | den Fix, den b8 benannt hat: eine Hilfsfunktion `lebende(zone, typ)` und fünf Aufrufstellen darauf umgestellt (`findChildren` an 276, 294, 345, 438, 655, keine mit `isValid`-Wache). **Vor dem Release bewusst nicht gemacht:** Er kostet drei `test_ui.py`-Läufe, und genau diese Datei hat bei drei Läufen drei Ausgänge — seine Wirkung wäre an ihr nicht abzulesen. Der Kunde sieht nichts, die Suite einen ERROR im Teardown |
 | Der Fenstertitel sagt „Unbenannt“, während der Objektbaum den Namen zeigt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert — sachlich richtig (es gibt keine Projektdatei), aber der Kunde hat gerade `plate_holes` geöffnet. Keine Logikfrage |
 | Die deutsche Quelle trennt die Fläche nicht von der Belegung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | 36 Stellen „Druckplatte“ → „Druckbett“ — und **jede ändert einen Katalogschlüssel**, alle fünf Sprachen fielen auf einmal auf unübersetzt zurück. Kein Eingriff für den Tag vor einem Release; solange die Quelle nicht trennt, sammelt jede Übersetzungsrunde einen Teil davon wieder ein |
 | Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
 | Eine Fremdmeldung sagt „Netzwerk“ und meint „Platte voll“ | Vier Wege von Hand, während die Suite grün war (23.08.2026) | einen Satz in `comfy_setup`: Beim Einrichten von Weg 3 brach der 7,5-GB-Download dreimal mit `Background writer channel closed` ab, und `C:` hatte null Byte frei. Die Regel „Fehler des fremden Programms durchreichen“ bleibt richtig — wo wir **mehr** wissen als es, gehört das dazu |
+| Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Messung, die läuft: dieselben vier Dateien einmal ohne und einmal direkt nach der Sammelgruppe (`-n 8`). Einzeln laufen alle sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Stimmt die Hypothese, ist es eine **Eigenschaft des Tors** und kein Testfehler |
+| Ein Importzyklus in `app/core/scene` | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Auflösung von `scene/__init__.py` ↔ `scene/history.py`. Latent, solange nur ein Thread importiert — zwei Threads gaben **5 von 5** Fehlschlägen. Kein Startzeit-Thema: die Ersparnis dort wäre 37 ms |
+| 22 von 70 Widget-Klassen bleiben ungeprüft | Vier Wege von Hand, während die Suite grün war (23.08.2026) | Bauhelfer je Klasse — ein Umbau, kein Abschluss. Die 22 sind die, die Argumente brauchen, also die mitten im Arbeitsablauf; von den 34 prüfbaren hielten sechs fest |
+| Das signierte Lizenz-Manifest ist nicht eingecheckt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Messung, ob die Signatur reproduzierbar ist. Wenn ja, gehört es eingecheckt; wenn nein, bleibt Ansagen die einzige Abhilfe. Zwei Sitzungen haben es in einer Nacht doppelt gebaut |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 
 ---
@@ -4142,6 +4144,86 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       nicht ablesen kann, ist der schlechteste Kandidat für den Tag vor einem
       Release.
 
+- [ ] **Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung — und einzeln
+      laufen sie durch.** Die Signatur, die nach dem Abbau-Absturz übrig bleibt,
+      und sie ist eine andere. Torlauf vom 23.08.2026 auf ruhigem Baum
+      (`a48d863`), **5057 Tests bestanden, kein einziger roter**:
+
+          test_analysis_ui.py     127   keine Summe, ~33 Tests gelaufen
+          test_chat_ui.py         139   keine Summe, ~11 Tests
+          test_operation_ui.py    139   keine Summe, ~20 Tests
+          test_sculpt_session.py  127   keine Summe, ~28 Tests
+          test_ui.py                ?   keine Summe
+
+      **Dieselben vier laufen einzeln sauber durch** (`test_chat_ui` 40 passed,
+      `test_analysis_ui` 119, `test_operation_ui` 50, `test_sculpt_session` 31).
+      Der Unterschied ist also weder die Datei noch die Aufräum-Fixture — die
+      ist gemessen entlastet: A/B im eigenen Arbeitsbaum, nur die
+      Fixture-Verzweigung getauscht, **4 von 4 sauber mit der neuen gegen 3 von 4
+      mit der alten**.
+
+      **Die Hypothese, die gerade gemessen wird:** `suite-getrennt.sh` fährt vor
+      den Fensterdateien die **Sammelgruppe mit acht Prozessen**. Das ist der
+      einzige Unterschied zum Einzellauf, und in `.claude/rules/tests.md` steht
+      seit dem 22.08., was acht Prozesse anrichten — damals warfen sie **fremde**
+      Tests um. Die Vermutung ist, dass sie einen Zustand hinterlassen, den die
+      Fensterprozesse **danach** erben.
+
+      **Stimmt sie, ist es kein Fehler in einem Test, sondern eine Eigenschaft
+      des Tors** — und gehört beschrieben, nicht gesucht.
+
+- [ ] **Ein Importzyklus in `app/core/scene` — latent, und jede Parallelität
+      stolpert darüber.** Gefunden am 23.08.2026 beim Messen der Startzeit:
+
+          app/core/scene/__init__.py:13   from app.core.scene.history import History
+          app/core/scene/history.py:30    from app.core.scene import expressions
+
+      Sequenziell löst Python das über die Reihenfolge auf, und niemand merkt
+      etwas. Zwei Threads, die gleichzeitig an verschiedenen Stellen einsteigen,
+      sehen das halbfertige Modul: **5 von 5 Läufen gescheitert** mit
+      `cannot import name 'History' from partially initialized module`.
+
+      > Eine Abhängigkeit, die nur deshalb funktioniert, weil niemand sie
+      > **gleichzeitig** benutzt.
+
+      Kein Startzeit-Thema (die Ersparnis dort wären 37 ms), sondern ein
+      Struktur-Thema. Wer künftig irgendwo Parallelität einbaut, läuft wieder
+      hinein — und sucht dann im eigenen Code.
+
+- [ ] **22 von 70 Widget-Klassen bleiben ungeprüft, und die Auswahl ist gegen
+      den Kunden gerichtet.** Gemessen am 23.08.2026 (3d-druck-b8): Der
+      Lebensdauertest baut jede Klasse und sieht nach, ob sie freigegeben wird.
+      **22 lassen sich nicht ohne Argumente bauen** und fallen dabei heraus —
+      darunter `OperationDialog`, `PrintSettingsDialog`, `SettingsDialog`,
+      `UpdateDialog`, `FirstRunDialog`.
+
+      **Der systematische Teil:** Was Argumente braucht, steht meist **mitten in
+      einem Arbeitsablauf** — also genau dort, wo ein Leck weh tut. Von den 34
+      prüfbaren hielten **sechs** fest.
+
+      Was fehlt, sind Bauhelfer je Klasse. Das ist ein Umbau und kein Abschluss;
+      als „erledigt“ getarnt wäre er in einer Woche vergessen. Dazu die zweite
+      Zahl aus demselben Nachmittag: Am Ende eines Laufs leben **1705
+      Top-Level-Widgets**, zweimal gemessen, exakt dieselbe Zahl — ein
+      Fortschrittsmaß, **keine Ursache** (nach 14 Tests waren es achtzig, und
+      der Lauf riss trotzdem).
+
+- [ ] **Das signierte Lizenz-Manifest ist nicht eingecheckt, und darum sieht
+      niemand, ob es zum Baum passt.** `tools/build_licence_module.py` schreibt
+      nach `packaging/build/`; nach dem Lauf zeigt `git status` **nichts**.
+
+      > Ein Arbeitsergebnis, das `git status` nicht zeigt, existiert für die
+      > anderen Sitzungen nicht.
+
+      In der Nacht zum 23.08.2026 haben zwei Sitzungen unabhängig dasselbe
+      Manifest gebaut, ohne voneinander zu wissen. Am selben Tag hätte ein
+      veraltetes Manifest beinahe ein Paket erzeugt, das **startet und gesperrt
+      ist** — gefangen hat es `test_packaging`, nicht der Baum.
+
+      **Zu prüfen wäre, ob die Signatur reproduzierbar ist.** Wenn ja, gehört das
+      Manifest eingecheckt: Dann sieht jede Sitzung am Diff, ob es passt. Wenn
+      nein, bleibt das Ansagen die einzige Abhilfe. **Gemessen hat das niemand.**
+
 - [ ] **Eine Fremdmeldung sagt „Netzwerk“ und meint „Platte voll“.** Beim
       Einrichten von Weg 3 am 23.08.2026 brach der 7,5-GB-Download dreimal ab:
 
@@ -5759,7 +5841,23 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       das erst eine Reparatur braucht — sie läuft, aber sie sollte nicht nötig
       sein.
 
-- [ ] **Der Start lädt nacheinander, was nebeneinander laufen könnte.**
+- [x] **Der Start lädt nacheinander, was nebeneinander laufen könnte — gemessen
+      am 23.08.2026, und es lohnt sich nicht** (3d-druck-33).
+
+          sequenziell, wie es heute läuft   load 1,437 s + build 0,803 s
+          nach dem Import, sequenziell      load 0,072 s + build 0,826 s
+          nach dem Import, parallel         load 0,104 s | build 0,861 s
+
+      **`load_operations()` selbst kostet 72 ms.** Die 1,4 Sekunden sind fast
+      vollständig **Importzeit** (trimesh und was daranhängt) — und die lässt
+      sich nicht parallelisieren. Die gemessene Ersparnis beträgt **37
+      Millisekunden**.
+
+      Dagegen stünde ein aufgelöster Importzyklus (Punkt unten). Kein
+      Verhältnis. **Der Punkt stirbt an einer Messung, und das ist so viel
+      wert wie einer, der gebaut wird — nur billiger.**
+
+      Ursprünglich:
       `load_operations()` (769 ms, zieht trimesh) und `build_application()`
       (369 ms für Qt und VTK) laufen heute hintereinander. Sie könnten
       überlappen: Ein Arbeiter lädt die Operationen, während der Hauptthread Qt
@@ -6998,7 +7096,29 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       anderer Code als die Zugriffsverletzung hier, und beide Signaturen
       bleiben getrennt zu führen.
 
-- [ ] **Fensterdateien enden mit Exit 127 — inzwischen drei, und wechselnde.**
+- [x] **Fensterdateien enden mit Exit 127 nach vollständigem „N passed“ —
+      Ursache gefunden und behoben** (`3e6d182`, `a00d6e4`, 3d-druck-33 und
+      3d-druck-b8, 23.08.2026).
+
+          tests/test_chat_ui.py     40 passed, Exit 0     riss vorher immer
+          tests/test_first_run.py   47 passed, Exit 0     riss vorher immer
+
+      **Es war eine fehlende Schnittstelle, kein Vergessen:** Dialoge starten
+      im Konstruktor einen Arbeiter, und im Test schließt sie niemand. Für
+      „warte auf deinen Arbeiter“ gab es **fünf verschiedene Namen**; die
+      Aufräum-Fixture kannte zwei. Sie fragt jetzt nach dem Muster, und
+      `release()` steht auf allen elf Klassen — damit ist es an der Wurzel
+      behoben statt in der Fixture.
+
+      > Ein Muster, das man **abfragen** muss, ist ein fehlender Vertrag.
+
+      Der Ein-Test-Reproduzierer läuft in **0,35 s statt 86**.
+
+      **Was danach übrig bleibt, ist eine andere Signatur** und steht im Punkt
+      darunter — Risse **vor** der Zusammenfassung. Sie hier mit aufzunehmen
+      wäre der Fehler, der diesen Punkt schon drei Fassungen gekostet hat.
+
+      Ursprünglich: inzwischen drei, und wechselnde.**
 
       **Belegt am 23.08.2026 über vier Läufe** (3d-druck-33):
 
