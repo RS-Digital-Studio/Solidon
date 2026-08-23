@@ -101,6 +101,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Zwei Pakete lösen den Deadlock noch nicht auf | Ein Deadlock, der keiner war — und sieben Pakete statt einem (23.08.2026) | einen **Verhaltenswechsel**, keinen Strukturfix — und deshalb je einen eigenen Schritt. `activation`: 223 Zeilen Code an der Lizenzgrenze im `__init__`, die Ladereihenfolge dort ändert man nicht, ohne die Grenze mitzuprüfen. `knowledge.parts`: dort **ist** der Import die Registrierung — die fünf Modulimporte füllen das Bausteinregister, und `bootstrap.load_operations` verlässt sich darauf; verzögert wären sie wirkungslos. Die anderen fünf Pakete sind seit dem 23.08. sauber, `tests/test_core_isolation.py` führt beide Namen mit Begründung |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 | Ein Klick auf eine 5,19-mm-Bohrung schlägt M3 vor | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **fachliche** Entscheidung in `placement.py`: Eine Senkung sitzt auf der Bohrung, eine Einpressbuchse ersetzt sie — nur die zweite darf den gemessenen Durchmesser übernehmen. Gemessen: M3 bohrt 4,00 mm in ein 5,19-mm-Loch und trägt nichts ab; die Anwendung kennt den Durchmesser und sagt ihn nicht |
+| Nach einem weiten Verschieben dreht die Kamera um den alten Punkt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | den Bau von 0.1.4 — die kleine Variante steht seit `e550b9b` und erfüllt Roberts Anweisung; die saubere setzt den Fokus beim **Beginn einer Drehung** statt bei jedem Aufbau und ändert damit das Kameraverhalten. Nicht in der Nacht vor einem Paket |
 
 ---
 
@@ -4558,6 +4559,27 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
     zehn davon:  perceive.generated_lost
     einer:       repair.components_removed
     Fehler:      keine
+
+- [ ] **Nach einem weiten Verschieben dreht die Kamera um den alten Punkt.**
+      Robert am 23.08.2026: „nach jedem verschieben springt die kamera und das
+      modell immer komisch“, und die Entscheidung gleich dazu: „kamera bei
+      aktueller position dann immer lassen“. Gebaut von 3d-druck-64 in
+      `e550b9b`, und zwar in der kleinen Variante, weil Robert davorsaß.
+
+      Zwei Wege führten dorthin, und der zweite war der sichtbare:
+      `outgrown()` prüft *gewachsen* **oder** *weggerückt* — das zweite trifft
+      auf jeden geschobenen Körper zu —, und `_centre_rotation()` setzte bei
+      jedem Aufbau den Fokus auf die Mitte der Körper und rückte die Kamera
+      mit. Beide fragen jetzt dasselbe: Standen dieselben Objekte schon da?
+
+      **Der Preis, den 64 selbst benannt hat:** Bis zum nächsten echten
+      Szenenwechsel wird um den alten Punkt gedreht. Er fällt erst auf, wenn
+      jemand weit schiebt **und dann** dreht.
+
+      **Die saubere Fassung setzt den Fokus beim Beginn einer Drehung** statt
+      bei jedem Aufbau. Sie ist nicht viel Arbeit, aber sie ändert das
+      Kameraverhalten — mitten vor einem Bau, in genau dem Bereich, den Robert
+      an einem Tag dreimal gemeldet hat. Deshalb danach und nicht davor.
 
 - [ ] **Ein Klick auf eine 5,19-mm-Bohrung schlägt M3 vor, und M3 trägt dort
       nichts ab.** Gemessen am 23.08.2026 im laufenden Fenster, `plate_holes.stl`,
