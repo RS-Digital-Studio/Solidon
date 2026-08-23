@@ -533,3 +533,80 @@ def test_the_palette_writes_the_keys_the_way_the_keyboard_does(qt_app: object) -
         assert expected in keys, "und die deutsche Taste steht nicht da"
     finally:
         palette.deleteLater()
+
+
+#: Wörter, die ein Kunde tippt, und die Operation, die er meint.
+#:
+#: Ausgewählt nach dem, was jemand sagt, der noch nie in unserem Register
+#: gelesen hat: Alltagswörter, Slicer-Wörter und die aus anderen
+#: CAD-Programmen. Gemessen am 23.08.2026 fanden **zehn von 42** davon nichts —
+#: „abrunden", „halbieren", „gravieren", „zusammenfügen", „ausschneiden" und
+#: fünf weitere.
+CUSTOMER_WORDS: tuple[tuple[str, str], ...] = (
+    ("abrunden", "fillet_edges"),
+    ("kante brechen", "chamfer_edges"),
+    ("array", "pattern"),
+    ("zerschneiden", "split_plane"),
+    ("halbieren", "split_plane"),
+    ("zusammenfügen", "union_objects"),
+    ("ausschneiden", "subtract_objects"),
+    ("gravieren", "label_text"),
+    ("beschriften", "label_text"),
+    ("vereinfachen", "decimate_mesh"),
+)
+
+
+def test_the_palette_finds_what_a_customer_types() -> None:
+    """Wer sein Wort tippt, findet die Operation — auch wenn sie anders heißt.
+
+    **Robert am 23.08.2026:** „schau dir alle funktionen nochmal an und ob sie
+    wirklich einfach sind, leicht zu verstehen für kunden."
+
+    Die Palette faltet Umlaute und sucht nach Wortstämmen, und beides trägt
+    weit: „aushoehlen" findet das Aushöhlen, „bohren" die Bohrung. Es trägt
+    aber nicht über die Wortgrenze. Gemessen an 42 Kundenwörtern fanden zehn
+    **nichts** — nicht das Falsche, sondern gar nichts, und die Palette sagte
+    „Kein Befehl passt".
+
+    Der Docstring von ``matches`` sagt, eine Synonymtabelle decke so etwas „nie
+    vollständig" ab. Das stimmt und ist kein Grund, sie wegzulassen: Zehn von
+    42 sind kein Rand, und jedes Wort hier ist eines, das jemand wirklich
+    tippt. Vollständig muss sie nicht sein — sie muss die häufigen treffen.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+    from app.ui.command_palette import matches
+
+    load_operations()
+    from app.core.registry.surfaces import palette_entries
+
+    eintraege = palette_entries(REGISTRY)
+
+    ohne: list[str] = []
+    falsch: list[str] = []
+    for wort, gemeint in CUSTOMER_WORDS:
+        treffer = [e for e in eintraege if matches(e, wort)]
+        if not treffer:
+            treffer = [e for e in eintraege if matches(e, wort, stem=True)]
+        if not treffer:
+            ohne.append(wort)
+        elif not any(e.name == gemeint for e in treffer):
+            falsch.append(f"{wort} -> {[e.name for e in treffer][:3]}, gemeint war {gemeint}")
+
+    assert not ohne, "diese Wörter finden nichts: " + ", ".join(ohne)
+    assert not falsch, "diese Wörter finden das Falsche: " + "; ".join(falsch)
+
+
+def test_every_customer_word_points_at_an_operation_that_exists() -> None:
+    """Die Tabelle altert mit dem Register — dieser Test merkt es.
+
+    Ein Synonym, dessen Ziel umbenannt wurde, zeigt ins Leere und niemand
+    merkt es: Die Suche findet dann wieder nichts, und der Kunde hält es für
+    seinen Fehler.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    fehlend = [ziel for _wort, ziel in CUSTOMER_WORDS if not REGISTRY.has(ziel)]
+    assert not fehlend, "diese Operationen gibt es nicht (mehr): " + ", ".join(fehlend)

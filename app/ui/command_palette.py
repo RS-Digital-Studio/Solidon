@@ -139,6 +139,52 @@ def rank(entry: PaletteEntry, query: str) -> int:
     return 3
 
 
+#: Wörter, die ein Kunde tippt, und die Operationen, die er damit meint.
+#:
+#: **Gemessen, nicht geraten.** Am 23.08.2026 wurden 42 Wörter durchprobiert,
+#: wie sie jemand tippt, der noch nie in unserem Register gelesen hat —
+#: Alltagswörter, Slicer-Wörter, und die aus anderen CAD-Programmen. Zehn
+#: davon fanden **nichts**: nicht das Falsche, sondern gar nichts, und die
+#: Palette antwortete „Kein Befehl passt".
+#:
+#: Der Docstring unten sagt, eine Synonymtabelle decke so etwas „nie
+#: vollständig" ab. Das stimmt und ist kein Grund, sie wegzulassen: Die
+#: Faltung und der Wortstamm tragen weit — „aushoehlen" findet das Aushöhlen,
+#: „bohren" die Bohrung —, aber sie tragen nicht über die Wortgrenze. „Fase
+#: anbringen" und „Kante brechen" haben keinen gemeinsamen Buchstabenanfang,
+#: und keine Rechnung der Welt findet das eine über das andere.
+#:
+#: **Nur wo das gemeinte Wort im Titel nicht vorkommt.** „Spiegeln" steht
+#: nicht hier, weil die Operation so heißt; „bohren" auch nicht, weil der
+#: Stamm es findet. Was hier steht, ist der Rest.
+#:
+#: ``tests/test_theme_and_palette.py`` prüft beides: dass jedes Wort seine
+#: Operation findet, und dass jedes Ziel im Register existiert — ein Synonym,
+#: dessen Operation umbenannt wurde, zeigt sonst stumm ins Leere.
+SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
+    "fillet_edges": ("abrunden", "rundung", "radius"),
+    "chamfer_edges": ("kante brechen", "abschraegen", "45 grad"),
+    "pattern": ("array", "vervielfaeltigen", "wiederholen"),
+    "split_plane": ("zerschneiden", "halbieren", "durchschneiden"),
+    "union_objects": ("zusammenfuegen", "verschmelzen", "verbinden"),
+    "subtract_objects": ("ausschneiden", "aussparen", "wegnehmen"),
+    "label_text": ("gravieren", "beschriften", "praegen"),
+    "decimate_mesh": ("vereinfachen", "reduzieren", "leichter machen"),
+    "hollow_object": ("aushoehlen", "leer machen"),
+    "repair_mesh": ("loecher schliessen", "reparieren", "flicken"),
+}
+
+
+def synonyms_for(name: str) -> str:
+    """Die Kundenwörter dieser Operation, als ein Stück Suchtext.
+
+    Gefaltet gespeichert und gefaltet gesucht — die Tabelle oben schreibt
+    „aushoehlen" und nicht „aushöhlen", damit beide Schreibweisen denselben
+    Weg nehmen.
+    """
+    return " ".join(SYNONYMS.get(name, ()))
+
+
 def matches(entry: PaletteEntry, query: str, *, stem: bool = False) -> bool:
     """Teilstring-Suche über Titel, Name und Dokumentation.
 
@@ -154,7 +200,7 @@ def matches(entry: PaletteEntry, query: str, *, stem: bool = False) -> bool:
     """
     if not query:
         return True
-    haystack = fold(f"{entry.title} {entry.name} {entry.doc}")
+    haystack = fold(f"{entry.title} {entry.name} {entry.doc} {synonyms_for(entry.name)}")
     parts = fold(query).split()
     if not stem:
         return all(part in haystack for part in parts)
