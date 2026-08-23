@@ -112,6 +112,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Fenstertitel sagt „Unbenannt“, während der Objektbaum den Namen zeigt | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert — sachlich richtig (es gibt keine Projektdatei), aber der Kunde hat gerade `plate_holes` geöffnet. Keine Logikfrage |
 | Die deutsche Quelle trennt die Fläche nicht von der Belegung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | 36 Stellen „Druckplatte“ → „Druckbett“ — und **jede ändert einen Katalogschlüssel**, alle fünf Sprachen fielen auf einmal auf unübersetzt zurück. Kein Eingriff für den Tag vor einem Release; solange die Quelle nicht trennt, sammelt jede Übersetzungsrunde einen Teil davon wieder ein |
 | Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
+| Eine Fremdmeldung sagt „Netzwerk“ und meint „Platte voll“ | Vier Wege von Hand, während die Suite grün war (23.08.2026) | einen Satz in `comfy_setup`: Beim Einrichten von Weg 3 brach der 7,5-GB-Download dreimal mit `Background writer channel closed` ab, und `C:` hatte null Byte frei. Die Regel „Fehler des fremden Programms durchreichen“ bleibt richtig — wo wir **mehr** wissen als es, gehört das dazu |
+| `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 
 ---
 
@@ -3994,12 +3996,35 @@ Vor dem Release für 0.1.3 hat 3d-druck-b8 die vier Wege aus §2.2 **bedient**
 statt getestet — echte Qt-Plattform, kein Offscreen, als hätte sie Solidon
 gerade heruntergeladen. Parallel dazu meldete die Suite 5268 bestandene Tests.
 
-**Alle vier Wege tragen.** Weg 1 kommt ohne Handbuch bis zur STL, Weg 2 bis
-zum Körper im Verlauf, Weg 4 bis zur Pinselleiste, Weg 3 ist ohne KI ehrlich
-und sagt, was fehlt. Der Abschluss — Druckeinstellungen und Slicer-Übergabe —
-ist sauber.
+**Drei Wege sind gefahren, der vierte nicht — und der Unterschied ist erst
+aufgefallen, als Robert nachfragte.** Weg 1 kommt ohne Handbuch bis zur STL,
+Weg 2 bis zum Körper im Verlauf, Weg 4 bis zur Pinselleiste. Der Abschluss
+— Druckeinstellungen und Slicer-Übergabe — ist sauber.
 
-**Und trotzdem sind drei Fehler herausgekommen, die kein Test gesehen hat.**
+**Weg 3 stand hier zuerst als „ehrlich ohne KI“ und damit als geprüft.**
+Tatsächlich waren nur die **Vorbedingungen** gemessen: Chat da, Dienste-Status
+ehrlich, Generierungsdialog vorhanden. **Es wurde nie ein Modell erzeugt.**
+
+**Die Rechnung dahinter ist die eigentliche Lehre, und sie gilt für jede
+Weitergabe:**
+
+> Die Meldung war die Quelle, die Weitergabe hat sie fester gemacht, und
+> niemand hätte je nachgesehen. „Weg 3 gefahren“ wurde zu „drei von
+> vier tragen“ wurde zu einer Tatsache. **Ein zu großzügiger Bericht ist kein
+> Fehler, den man später korrigiert — er wird auf dem Weg fester.**
+
+Gefunden hat es keine der vier Sitzungen, sondern Robert, weil er wusste, dass
+ComfyUI in der Zwischenzeit nichts erzeugt hatte.
+
+**Und die Form des Fehlers ist dieselbe wie zweimal daneben**, nur an der
+schwersten Stelle: `if b.text()` maß, was **existiert**, statt was zu sehen
+ist; `arrange.below_bed` wurde im Prüfbericht gemessen und über den Export
+behauptet; hier wurden die Vorbedingungen gemessen und der Weg behauptet.
+**Die ersten beiden fand die Messende an fremdem Code, weil sie dort gesucht
+hat. Beim eigenen Bericht hat sie nicht gesucht — sie wusste ja, was sie getan
+hatte.** Das ist der Unterschied zwischen prüfen und erinnern.
+
+**Und trotzdem sind vier Fehler herausgekommen, die kein Test gesehen hat.**
 Das ist die eigentliche Aussage des Abschnitts:
 
     Ergebnis-Cache fiel bei jedem konstruierten Projekt aus   b46b289, behoben
@@ -4052,6 +4077,37 @@ geschlossen und nicht am Export gemessen hatte.
 > Der Wert liegt darin, ihn vor dem Melden auszusortieren — nicht darin,
 > keinen zu erzeugen.
 
+### Was ein Belegslauf leistet, wenn man ihn ernst nimmt
+
+Der Lauf vor 0.1.3 hat **zwei** Fehler gefangen, und beide hätten ein Paket
+erreicht. Keiner davon stand in einem Test, der vorher rot war.
+
+**Erstens: Der Baumzustand gehört mit belegt.** Vor dem Lauf stand eine sieben
+Stunden alte Arbeitskopie von `tests/test_way_four.py` im Baum — Rest eines
+gescheiterten Merges (Autostash nicht zurückgespielt). Sie nahm `place_on_bed`
+aus dem Test und setzte den Sculpt-Bezug wieder auf `ops[-1]`, also genau das,
+wogegen `abce5f3` gebaut worden war.
+
+> Ohne den Handgriff hätten wir eine 0.1.3 gebaut, in der ein Test still auf den
+> Stand von 01:18 zurückgefallen wäre — **und gemerkt hätte es niemand: Der
+> Test wäre grün gewesen.**
+
+Das ist der Fall, gegen den kein Test hilft, weil der Test selbst das Opfer ist.
+`git diff HEAD --name-only` vor dem Lauf kostet eine Sekunde.
+
+**Zweitens: `test_packaging.py` schlug genau in dem Lauf an, für den es gebaut
+wurde.** Drei erzeugte Dateien trugen noch 0.1.2, während `branding.py` schon
+0.1.3 sagte — ein Paket, das außen neu aussieht und innen alt ist. Im Probelauf
+zwei Stunden vorher war die Datei grün, weil die Version da noch nicht erhöht
+war.
+
+> Das ist kein Ärgernis, das ist ein Treffer.
+
+Behoben wurde die Ursache: `bump_version.py` **ruft** die beiden
+`--files`-Werkzeuge jetzt selbst (`DERIVED`), statt sie im Ausgabetext zu
+nennen. Die Notiz zu dem Werkzeug sagte „beide Stellen“, und es waren drei;
+ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
+
 ### Offen aus diesem Durchgang
 
 - [ ] **`overlay.py` fasst Körper an, die es nicht mehr gibt — fünf Stellen,
@@ -4089,6 +4145,37 @@ geschlossen und nicht am Export gemessen hatte.
       Ausgänge** haben. Ein Fix, dessen Wirkung man an seiner eigenen Datei
       nicht ablesen kann, ist der schlechteste Kandidat für den Tag vor einem
       Release.
+
+- [ ] **Eine Fremdmeldung sagt „Netzwerk“ und meint „Platte voll“.** Beim
+      Einrichten von Weg 3 am 23.08.2026 brach der 7,5-GB-Download dreimal ab:
+
+          RuntimeError: File reconstruction error: Internal Writer Error:
+          Background writer channel closed
+
+      **Kein Wort von fehlendem Platz**, und `C:` hatte null Byte frei. Wer die
+      Meldung liest, sucht am Netz. Aufgeklärt wurde es nicht durch den Text,
+      sondern dadurch, dass der Abbruch **dreimal an derselben Stelle** kam.
+
+      Die Regel „Ein Fehler des fremden Programms wird durchgereicht“
+      (`.claude/rules/kern.md`) bleibt richtig — sie hat hier nur eine Lücke:
+      **Wo wir mehr wissen als das fremde Programm, gehört das dazu.** Ein Blick
+      auf den freien Platz an dieser Ausnahme in `comfy_setup` ist ein Satz und
+      erspart die Suche.
+
+      Der Rest hat dabei funktioniert: Der Download lief dreimal von selbst
+      wieder an, und `readiness` nannte die vier fehlenden Knoten beim Namen
+      (`TripoSGLoader`, `TripoSGImageToMesh`, `TripoSGPostprocess`,
+      `TripoSGExportMesh`) statt „ein Knoten fehlt“.
+
+- [ ] **`3D Drucker/` liegt nur auf einer Maschine.** Der Ordner hat ein
+      **eigenes** `.git` und **kein Remote** — 458 MB, 83 nicht committete
+      Dateien, letzter Commit `5918740`. Die `CLAUDE.md` behauptete bis zum
+      23.08.2026 das Gegenteil (*„im Repository: es wird auf drei Maschinen
+      gearbeitet“*, korrigiert in `3ce454f`).
+
+      **Kein Entwicklungsthema, sondern ein Datenthema:** Fällt die Platte aus,
+      ist die Konstruktionsarbeit an den Druckprojekten weg. Entscheidung von
+      Robert, ob ein Remote eingerichtet wird.
 
 - [ ] **Der Fenstertitel sagt „Unbenannt“, während der Objektbaum den Namen
       zeigt.** Wer eine STL ablegt, sieht oben `Unbenannt* — Solidon3D` und
