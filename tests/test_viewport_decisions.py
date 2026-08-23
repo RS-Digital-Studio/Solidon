@@ -435,6 +435,89 @@ def test_edges_belong_to_the_solid_mode_only(qt_app: QApplication) -> None:
     assert "edges:obj_1" in plotter.names(), "im massiven Modus gehören sie dazu"
 
 
+def test_the_pointer_is_flipped_from_qt_to_vtk(qt_app: QApplication) -> None:
+    """VTK zählt seine Y-Achse von unten, Qt von oben.
+
+    Ohne die Umrechnung sucht das Hover-Picking am gespiegelten Ort — und das
+    ist die Sorte Fehler, die lange überlebt: **In der Bildmitte stimmt sie
+    zufällig.** Bei 600 Bildpunkten Höhe ist 600 − 300 wieder 300, und wer dort
+    prüft, sieht nichts.
+
+    Gemessen wird deshalb **außerhalb** der Mitte. Ein Test bei y = 300 wäre
+    auch dann grün, wenn die Zeile ganz fehlte.
+    """
+    from app.ui.viewport import Viewport
+
+    class _Punkt:
+        def __init__(self, x: int, y: int) -> None:
+            self._x, self._y = x, y
+
+        def x(self) -> int:
+            return self._x
+
+        def y(self) -> int:
+            return self._y
+
+    class _Interactor:
+        @staticmethod
+        def height() -> int:
+            return 600
+
+    class _MitInteractor(_RecordingPlotter):
+        interactor = _Interactor()
+
+    viewport = Viewport()
+    viewport.plotter = _MitInteractor()
+
+    viewport._note_pointer(_Punkt(120, 100))
+    assert viewport._hover_at == (120, 500), (
+        f"Qt zählt von oben, VTK von unten: {viewport._hover_at} statt (120, 500)"
+    )
+
+    # Und der Beleg, warum die Mitte nichts prüft: dort ist beides gleich.
+    viewport._note_pointer(_Punkt(120, 300))
+    assert viewport._hover_at == (120, 300), "in der Mitte fällt der Fehler nicht auf"
+
+
+def test_orthographic_reaches_the_plotter(qt_app: QApplication) -> None:
+    """§18.1: Orthografisch ist das, was gemessene Längen vertrauenswürdig
+    macht.
+
+    Der Zustand steht **vor** der Wache (`self._projection = projection`) und
+    ist damit offscreen prüfbar — was dahinter liegt, ist der Aufruf am
+    Plotter, und der lief in keinem Test. Ein Umschalter, der seinen Zustand
+    merkt und ihn nicht weitergibt, sieht in jeder Abfrage richtig aus und
+    zeigt im Bild eine Perspektive, in der gemessene Längen nicht stimmen.
+
+    Beide Richtungen, weil eine allein auch dann grün wäre, wenn die Methode
+    immer dasselbe täte.
+    """
+    from app.ui.viewport import Viewport
+
+    class _MitProjektion(_RecordingPlotter):
+        def __init__(self) -> None:
+            super().__init__()
+            self.gerufen: list[str] = []
+
+        def enable_parallel_projection(self) -> None:
+            self.gerufen.append("parallel an")
+
+        def disable_parallel_projection(self) -> None:
+            self.gerufen.append("parallel aus")
+
+    viewport = Viewport()
+    plotter = _MitProjektion()
+    viewport.plotter = plotter
+
+    viewport.set_projection("orthographic")
+    assert plotter.gerufen[-1] == "parallel an", plotter.gerufen
+    assert viewport._projection == "orthographic"
+
+    viewport.set_projection("perspective")
+    assert plotter.gerufen[-1] == "parallel aus", plotter.gerufen
+    assert viewport._projection == "perspective"
+
+
 def test_the_callbacks_reach_the_view_while_it_lives(qt_app: QApplication) -> None:
     """Erst die Gegenrichtung: Ein Rückruf, der *nie* etwas tut, wäre auch
     schwach — und damit wären die zwei Tests darunter wertlos.
