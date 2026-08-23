@@ -375,6 +375,66 @@ def test_only_the_triangles_of_the_feature_take_the_selection_colour(
     )
 
 
+def test_a_round_body_gets_no_edges_and_a_box_does(qt_app: QApplication) -> None:
+    """§18.1: Hier stehen die Kanten des *Körpers*, nicht die des Netzes.
+
+    „Massiv mit Kanten" zeichnet jede Dreieckskante — das beantwortet, wie fein
+    das Netz ist. Es beantwortet nicht, wo das Teil eine Kante hat: Bei einem
+    Zylinder aus zweihundert Segmenten geht die eine, auf die es ankommt, in
+    zweihundertneunundneunzig anderen unter.
+
+    Der Docstring sagt beides wörtlich zu — „ein rundes Teil bekommt gar
+    keine: eine Kugel hat keine Kante, und eine erfundene wäre schlimmer als
+    keine" —, und geprüft hat es nichts. Der Rumpf liegt hinter der
+    Offscreen-Wache.
+
+    Zwei Körper, eine Frage: Der Quader hat zwölf echte Kanten, die Kugel
+    keine. Ein Test mit nur einem der beiden wäre auch dann grün, wenn die
+    Methode immer zeichnete oder nie.
+    """
+    import pyvista as pv
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    plotter = _RecordingPlotter()
+    viewport.plotter = plotter
+
+    viewport._draw_feature_edges(pv.Box().triangulate(), "obj_1")
+    viewport._draw_feature_edges(pv.Sphere(theta_resolution=32, phi_resolution=32), "obj_2")
+
+    gezeichnet = plotter.names()
+    assert "edges:obj_1" in gezeichnet, f"der Quader hat Kanten: {gezeichnet}"
+    assert "edges:obj_2" not in gezeichnet, (
+        f"eine Kugel hat keine Kante, und eine erfundene wäre schlimmer: {gezeichnet}"
+    )
+
+
+def test_edges_belong_to_the_solid_mode_only(qt_app: QApplication) -> None:
+    """In den anderen drei Modi ist entweder alles schon gezeichnet oder man
+    sieht hindurch — dann wäre eine zweite Linienlage nur Gitter.
+
+    Die Bedingung steht in derselben Zeile wie die Offscreen-Wache
+    (``self._mode != "solid"``), und genau deshalb hat sie nie jemand gefahren.
+    """
+    import pyvista as pv
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    plotter = _RecordingPlotter()
+    viewport.plotter = plotter
+    quader = pv.Box().triangulate()
+
+    viewport._mode = "wireframe"
+    viewport._draw_feature_edges(quader, "obj_1")
+    assert "edges:obj_1" not in plotter.names(), "im Drahtgitter ist schon alles gezeichnet"
+
+    viewport._mode = "solid"
+    viewport._draw_feature_edges(quader, "obj_1")
+    assert "edges:obj_1" in plotter.names(), "im massiven Modus gehören sie dazu"
+
+
 def test_the_callbacks_reach_the_view_while_it_lives(qt_app: QApplication) -> None:
     """Erst die Gegenrichtung: Ein Rückruf, der *nie* etwas tut, wäre auch
     schwach — und damit wären die zwei Tests darunter wertlos.
