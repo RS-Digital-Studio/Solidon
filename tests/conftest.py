@@ -196,16 +196,27 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
         # der Segmentierungsfehler.
         if not isValid(widget):
             continue
-        release = getattr(widget, "release", None)
-        if callable(release):
-            # Arbeiter auslaufen lassen **und** die Sitzung abbestellen. Das
-            # zweite ist das Neue: ohne es ruft ein späteres Ergebnis in
-            # Widgets, die es nicht mehr gibt.
-            release()
-        else:
-            waiter = getattr(widget, "wait_for_workers", None)
+        # **Drei Namen, weil es drei gibt.** ``release`` lässt die Arbeiter
+        # auslaufen *und* bestellt die Sitzung ab; ``wait_for_workers`` kann
+        # nur das erste; ``wait_for_survey`` heißt beim Erstlauf-Dialog so.
+        #
+        # Der dritte kam am 23.08.2026 dazu, und er ist der Grund, warum diese
+        # Schleife überhaupt Namen aufzählt statt einen zu kennen:
+        # ``test_the_language_picker_shows_names_not_codes`` baut einen
+        # ``FirstRunDialog``, liest dessen Sprachliste und ist fertig. Der
+        # Dialog startet in seinem Konstruktor über ``look()`` einen
+        # Erhebungs-Thread; niemand schließt ihn, also ruft auch niemand
+        # ``wait_for_survey``. Der Thread überlebt den Dialog, und der Prozess
+        # stirbt beim Abbau mit ``0xC0000409``.
+        #
+        # **Der Test allein genügte dafür** — dreimal von dreimal, in einer
+        # Drittelsekunde. Gefunden wurde er, indem die Datei binär eingegrenzt
+        # wurde: 51 Tests liefen sauber, 52 rissen, und der 52. war dieser.
+        for name in ("release", "wait_for_workers", "wait_for_survey"):
+            waiter = getattr(widget, name, None)
             if callable(waiter):
                 waiter()
+                break
     # Zerstört wird hier **nichts**. Zwei Anläufe haben das versucht —
     # ``deleteLater`` allein änderte nichts (``processEvents`` führt
     # ``DeferredDelete`` nicht aus), und mit ``sendPostedEvents`` dazu
