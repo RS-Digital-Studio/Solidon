@@ -66,11 +66,15 @@ def test_every_text_is_translated(language: str) -> None:
     # Quelltext, also über etwas, das sich verschieben kann.
     assert ids, "keine Texte gefunden — sonst prüft dieser Test nichts"
 
+    # **Die Zahl steht vorn, nicht nur die Liste.** pytest kürzt eine lange
+    # Assert-Meldung mit „...“ — wer neun tote Schlüssel hat, sieht drei und
+    # muss den Rest außerhalb des Tests nachbauen. Die Zahl im Kopf sagt
+    # sofort, ob die Liste vollständig dasteht.
     missing = sorted(key for key in ids if not catalog.get(key))
-    assert not missing, f"{language}: no translation for\n" + "\n".join(missing)
+    assert not missing, f"{language}: {len(missing)} ohne Übersetzung\n" + "\n".join(missing)
 
     orphaned = sorted(key for key in catalog if key not in ids)
-    assert not orphaned, f"{language}: no longer used\n" + "\n".join(orphaned)
+    assert not orphaned, f"{language}: {len(orphaned)} nicht mehr gebraucht\n" + "\n".join(orphaned)
 
 
 def test_the_catalog_actually_switches_the_language() -> None:
