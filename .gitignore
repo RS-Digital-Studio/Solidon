@@ -116,3 +116,8 @@ website/dl/
 # Der Bericht von tools/run_ui_audit.py. Er entsteht bei jedem Lauf neu und
 # gehoert dem Rechner, auf dem er lief — nicht dem Repository.
 ui-audit/
+
+# Die physischen Druckprojekte sind ein **eigenes** Repository mit eigenem
+# `.git` — Git zeigt den Ordner sonst dauerhaft als unversioniert an, und in
+# dieses hier gehört er nicht. Wer dort committet, tut es in seinem eigenen.
+/3D Drucker/

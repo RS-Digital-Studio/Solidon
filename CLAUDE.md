@@ -180,8 +180,10 @@ website/      öffentliche Seiten; handbuch.html und en/manual.html erzeugt
               dl/ die Pakete, von tools/make_download.py angelegt
 changelog/    was im Update-Fenster steht, je Sprache eine Datei — Auswahl
               in Kundensprache, keine Liste der Änderungen
-3D Drucker/   physische Druckprojekte, eigene CLAUDE.md — kein Programmcode,
-              aber im Repository: es wird auf drei Maschinen gearbeitet
+3D Drucker/   physische Druckprojekte, eigene CLAUDE.md — kein Programmcode
+              und **nicht** in diesem Repository: der Ordner hat sein eigenes
+              `.git` und steht hier in `.gitignore`. Wer dort committet, tut
+              es in seinem eigenen Repository
 ```
 
 Gebietsregeln liegen in `.claude/rules/` und laden sich selbst, sobald ich
