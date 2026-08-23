@@ -100,6 +100,14 @@ Die vier portugiesischen Bilder blieben dabei drei Tage alt stehen, und
 leere Ausgabedatei. In der Shell kam die Zahl als **127** an, und 127 sagt
 nichts (siehe `ROADMAP.md`).
 
+**Und dieser Absturz ist nicht „die Familie“.** `0xc0000374` heißt „der Heap
+ist kaputt“ und sagt **nicht**, wer ihn kaputtgemacht hat — derselbe Vorhang wie
+die 127, eine Ebene tiefer: Die 127 wirft verschiedene Windows-Codes in einen
+Topf, `0xc0000374` wirft verschiedene Ursachen in einen Code. Die Abstürze der
+Fenstertests teilen sich mit diesem hier den Code und sonst nichts Belegtes;
+geprüft am 23.08.2026 an vier Testdateien, und die Fensterzahl erklärt sie
+nicht (40 reißt konsistent, 118 nie).
+
 Das Mittel ist dasselbe wie bei der Suite: **weniger Fenster je Prozess.**
 Gemessen läuft ein Lauf mit einer einzelnen Sprache sauber durch:
 
