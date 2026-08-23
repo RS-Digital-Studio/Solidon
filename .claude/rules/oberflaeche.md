@@ -704,11 +704,21 @@ das sterben kann, kann im falschen Thread sterben.** Solange die Lambda-Ringe
 die Fenster hielten, sammelte sie niemand ein. Seither tut es der
 Speicherbereiniger — und der läuft in dem Thread, dessen Allokation gerade die
 Schwelle reißt, nicht zwangsläufig im Hauptthread. Findet er dort ein Fenster
-ohne letzte Python-Referenz, ruft er `~QMainWindow` → `~QMenuBar` → `~QMenu`
-**in diesem Thread**, und ein QWidget-Destruktor gehört nie dorthin: Er nimmt
-den Qt-Mutex und braucht dann den GIL für die shiboken-Hülle, während der
-Hauptthread den GIL hält und auf genau diesen Mutex wartet. Das Ergebnis ist
-kein Absturz, sondern ein **Stillstand** bei 0,00 CPU.
+ohne letzte Python-Referenz, gibt er dessen **Python-Hülle** frei — und
+shibokens Deallocator zieht die C++-Zerstörung nach sich, **in diesem
+Thread**. Ein QWidget-Destruktor gehört nie dorthin: Er nimmt den Qt-Mutex
+und braucht dann den GIL für die Hülle, während der Hauptthread den GIL hält
+und auf genau diesen Mutex wartet. Das Ergebnis ist kein Absturz, sondern ein
+**Stillstand** bei 0,00 CPU.
+
+**Und es ist kein Menü-Problem, auch wenn der erste Abzug eines zeigte.**
+Zweimal unabhängig gefangen, mit verschiedenen Paarungen: einmal `~QMenuBar` →
+`~QMenu`, während der Hauptthread eine `QComboBox` aufbaute, einmal ein
+beliebiges `~QWidget`, während er eine `QScrollArea` aufbaute. **Jedes**
+Widget, dessen letzte Python-Referenz in einem Nebenthread fällt, kann es
+auslösen; wer nur Menüs schützt, schützt zu wenig. Im zweiten Abzug steht
+`SbkDeallocWrapper` ganz unten und benennt den Auslöser: Nicht Qt räumt auf,
+sondern Pythons Speicherbereiniger.
 
 Der vollständige Stapelabzug beider Threads steht in `tests/conftest.py`,
 zusammen mit dem, was **nicht** hilft: `gc.collect()` (der Lauf im Hauptthread
