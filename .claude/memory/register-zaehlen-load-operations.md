@@ -1,6 +1,6 @@
 ---
 name: register-zaehlen-load-operations
-description: "Die Zahl der Operationen nur nach load_operations() messen — ohne sie fehlen die Bausteine; der Stand wächst (61 → 77 → 83)."
+description: "Die Zahl der Operationen nur nach load_operations() messen — ohne sie fehlen die Bausteine; der Stand wächst (61 → 77 → 83 → 87)."
 metadata: 
   node_type: memory
   type: project

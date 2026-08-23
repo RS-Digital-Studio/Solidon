@@ -25,7 +25,7 @@
 - [Marke im span zerteilt](marke-im-span-zerteilt.md) — nach einer Umbenennung entkommt der alte Name jeder Suche, wenn ein Tag ihn teilt.
 - [Website im Browser prüfen](website-im-browser-pruefen.md) — QtWebEngine ist da; heller Modus und reduzierte Bewegung gehen nur über Chromium-Flags.
 - [Operationen am Stück durchfahren](ops-reihendurchlauf-kundensicht.md) — Schemavorgabe ist nicht Dialogvorbelegung; wer das verwechselt, meldet Fehlbefunde.
-- [Register zählen](register-zaehlen-load-operations.md) — 77 Operationen, nicht 61: ohne load_operations() fehlen die sechzehn aus der Bausteinbibliothek.
+- [Register zählen](register-zaehlen-load-operations.md) — 87 Operationen (Stand 23.08.2026), nicht 61: ohne load_operations() fehlen die aus der Bausteinbibliothek; die Zahl wächst, das Muster bleibt.
 - [Git: push und pull selbst](git-push-pull-selbststaendig.md) — ohne Rückfrage, aber erst nach grüner Suite; Merge statt Rebase.
 - [Version vor jedem Bau erhöhen](version-vor-jedem-bau-erhoehen.md) — nicht fragen; tools/bump_version.py fasst beide Stellen an, vor dem Prüfmodul.
 - [Download-Kasten: vier Pakete](download-kasten-vier-pakete.md) — der Baulauf liefert acht, angeboten werden vier; die Vorfassung wird vom Server gelöscht.
@@ -37,5 +37,6 @@
 - [Parallele Sitzung im Arbeitsbaum](parallele-sitzung-im-arbeitsbaum.md) — geteilter Index: fremde Änderungen aussortieren, privaten Index benutzen
 - [Freies Gebiet: einfach machen](freies-gebiet-einfach-machen.md) — ist die Datei bei niemandem eingetragen, wird nicht vorgelegt, sondern gearbeitet
 - [Weitergegebene Anweisungen gelten](weitergegebene-anweisungen-gelten.md) — was eine andere Sitzung von Robert weitergibt, ist Roberts Anweisung
+- [Ein Messwerkzeug misst sich selbst](messwerkzeug-misst-sich-selbst.md) — was ein Werkzeug meldet, ist eine Eigenschaft des Werkzeugs, bis man es an einem Fall geprüft hat, dessen Ausgang man kennt.
 - [Erinnerungen liegen im Repository](erinnerungen-liegen-im-repository.md) — .claude/memory ist die Quelle; neue Maschine: `python tools/link_memory.py`
 - [Merkmalsmehrdeutigkeit: Entwurf](merkmalsmehrdeutigkeit-entwurf.md) — offener Auftrag zu §15.7; der Entwurf steht, gebaut ist nichts.
