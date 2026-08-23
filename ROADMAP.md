@@ -106,8 +106,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD |
 | Der Start lädt nacheinander, was nebeneinander laufen könnte | Das Fundament der Wahrnehmung (22.08.2026) | eine Messung, wie viel von 369 ms sich wirklich überlappt — und eine Antwort auf die Thread-Sicherheit beim Import. Die einfache Umkehrung scheitert an `_build_menus()`, und die 19 Module sind keine Alternative: alle 19 ziehen trimesh |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
-| Der Stop-Hook meldet Zeitstempel, nicht Urheber | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob der Hook das Sitzungsbrett selbst befragt. Bei vier Sitzungen schlägt er regelmäßig für fremde Arbeit an; wer den Umweg nicht geht, prüft fremden Code oder hält seinen eigenen für ungeprüft |
-| `test_mesh_backend` misst die Umgebung statt sein Thema — **entschieden** | Das Fundament der Wahrnehmung (22.08.2026) | die dritte Zusicherung fällt. Sie prüft die Länge des Temp-Ordners **dieser Maschine** und sagt nichts über den Kunden; die zwei davor prüfen den Programmtext und bleiben. Ein Test, der bei umgebogenem `TEMP` rot wird, kostet jede Sitzung Zeit und schützt niemanden |
 | Kein Viewport wird jemals freigegeben — **wartet auf den Deadlock** | Das Fundament der Wahrnehmung (22.08.2026) | **erst den Deadlock, dann die restlichen 40 Ringe** (entschieden 23.08.). Jede aufgelöste Stelle macht ein Fenster einsammelbar, und ein Fenster, das eingesammelt werden kann, kann im falschen Thread sterben — weiter aufzulösen macht die Suite instabiler, nicht stabiler |
 | `test_ui.py` reißt zehn von zehn | Das Fundament der Wahrnehmung (22.08.2026) | den Fix an `leash.wait_for_all`, gemessen von 3d-druck-b8 — und die Lehre daneben: dieselbe Zahl (5/5) wurde neben einem Torlauf als Fremdlast gedeutet und unter Schloss auf leerer Maschine widerlegt |
 | Fensterdateien enden mit Exit 127 — **halb aufgeklärt** | Das Fundament der Wahrnehmung (22.08.2026) | nichts mehr für `test_chat_ui` und `test_first_run`: Dahinter steht `0xC0000409`, der bekannte Abbau-Absturz — zwei Punkte, eine Sache. **127 ist eine Shell-Konvention und sagt nichts;** dieselbe 127 trug bei zwei anderen Dateien `0xc0000374`. Was bleibt, ist der Fall *vor* der Schlusszeile |
@@ -6361,7 +6359,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       wird deshalb geschlossen, weil nichts mehr zu finden ist — nicht, weil
       bewiesen wäre, dass nichts mehr da ist.
 
-- [ ] **Der Stop-Hook meldet Zeitstempel, nicht Urheber.** Bei vier Sitzungen
+- [x] **Der Stop-Hook meldet Zeitstempel, nicht Urheber — entschieden am 23.08.2026: er bleibt so.** Bei vier Sitzungen
       in einem Arbeitsbaum schlägt er regelmäßig für fremde Arbeit an: „Seit
       der letzten Änderung an X lief die Suite nicht" — und X gehört jemand
       anderem. Der Hinweis sagt das selbst („stammt die Änderung aus einer
@@ -6376,7 +6374,40 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       Der Umweg hat also etwas gefunden, das sonst niemand gesehen hätte; er ist
       trotzdem einer.
 
-- [ ] **`test_mesh_backend` misst die Umgebung statt sein Thema.**
+      **Entschieden am 23.08.2026: Der Hook bleibt, wie er ist.** Drei Gründe,
+      und der dritte ist der, der die Entscheidung trägt.
+
+      *Erstens ist der Urheber nicht zuverlässig zu ermitteln.* Das Brett trägt
+      Selbstauskünfte und altert — in dieser Nacht standen drei von vier
+      Einträgen stundenlang veraltet da. Ein Hook, der daraus einen Namen
+      ableitet, meldet „gehört 3d-druck-b8", wo längst jemand anders arbeitet,
+      und **eine falsche Zuschreibung ist schlechter als keine**: Wer „nicht
+      deins" liest, sieht nicht nach.
+
+      *Zweitens ist der Umweg kurz und die Auflösung eindeutig.* `git status`
+      und ein Zeitstempel klären den Fall in zehn Sekunden — das ist genau der
+      Griff, der in dieser Nacht mehrfach eine Stunde gespart hat, und er wird
+      durch die Übung nicht schlechter.
+
+      *Drittens hat der Umweg zweimal etwas gefunden, das sonst niemand gesehen
+      hätte* — den falschen Eintrag im Brett am 22.08. und die fremde
+      Übersetzungsarbeit am 23.08. Beide Male war die Frage „wem gehört das?"
+      der Anlass, und beide Male lag die Antwort nicht dort, wo sie stehen
+      sollte. **Ein Hinweis, der zum Nachsehen zwingt, ist an einem Ort mit vier
+      Sitzungen mehr wert als einer, der die Frage vorwegnimmt.**
+
+      *Was stattdessen half:* Der Hinweistext sagt inzwischen selbst, dass die
+      Änderung fremd sein kann und was dann zu tun ist. Das ist die billige
+      Hälfte der Lösung, und sie ist gebaut.
+
+- [x] **`test_mesh_backend` misst die Umgebung statt sein Thema — erledigt,
+      geprüft am 23.08.2026.** Der Test existiert nicht mehr; die Suche nach
+      `mesh_backend` in `tests/` findet nichts. Die dritte Zusicherung, die
+      die Länge des Temp-Ordners **dieser Maschine** prüfte, ist damit fort,
+      und die zwei davor — sie prüften den Programmtext — sind in
+      `test_toolchain.py` aufgegangen.
+
+      Ursprünglich:
       `test_the_weights_are_downloaded_through_a_short_folder` prüft, ob
       `tempfile.gettempdir()` kurz genug für den Download ist. Das ist die
       Länge des Temp-Ordners **der Maschine, auf der die Suite läuft** — nicht
