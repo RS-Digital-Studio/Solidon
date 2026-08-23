@@ -628,6 +628,33 @@ liegt. Ohne diese Eigenschaft bräuchte es hier zwei Listen, die auseinander
 laufen können."""
 
 
+def fixed_seeds(project: Project) -> None:
+    """Gibt jeder Operation mit Startwert einen festen (§11.3).
+
+    **Warum die Beispiele das brauchen und ein Nutzerprojekt nicht.** Wo der
+    Aufrufer keinen Startwert mitbringt, zieht ``History`` einen — mit
+    ``secrets.randbelow``, und das ist für eine Nutzersitzung genau richtig:
+    Entscheidend ist, dass er *aufgehoben* wird, nicht, wer ihn sich ausgedacht
+    hat. Für eine Datei, die im Repository liegt, kehrt sich das um: Zwei Läufe
+    dieses Werkzeugs erzeugten neun Dateien, die sich in genau einer Zahl
+    unterschieden, und `git status` meldete sie fortan als geändert.
+
+    **Das war die zweite Hälfte derselben Sache.** Die erste waren die
+    ZIP-Zeitstempel (:data:`app.core.scene.project.CONTAINER_TIMESTAMP`); als
+    die fest standen, blieb dieser Unterschied übrig und sah aus wie derselbe
+    Fehler. Eine Erklärung, die stimmt, ist nicht immer die ganze.
+
+    Der Wert leitet sich aus der Position im Stapel ab, damit zwei Operationen
+    desselben Beispiels nicht denselben bekommen — ein gemeinsamer Startwert
+    ließe zwei zufällige Prozeduren im Gleichschritt laufen, und das ist eine
+    Eigenschaft, die niemand wollte und die niemand sähe.
+    """
+    for index, operation in enumerate(project.document.ops):
+        if operation.seed is None:
+            continue
+        project.document.ops[index] = dataclasses.replace(operation, seed=1000 + index)
+
+
 def mark_translatable(project: Project) -> None:
     """Vermerkt an jeder Operation, welche Parameter Message-IDs tragen (§4.1).
 
@@ -669,6 +696,7 @@ def main() -> int:
     }
     for example in EXAMPLES:
         project = builders[example.id]()
+        fixed_seeds(project)
         mark_translatable(project)
         result = evaluate(project.document, profile, sources=ProjectSources(project))
         if not result.complete:
@@ -686,7 +714,12 @@ def main() -> int:
         # (§24.3).
         preview = render_preview(entry.mesh for entry in result.scene.objects.values())
         picture = target / example.preview_name
-        picture.write_text(preview, encoding="utf-8")
+        # ``write_bytes`` und nicht ``write_text``: Letzteres schreibt auf
+        # Windows CRLF, und `.gitattributes` verlangt LF (`* text=auto
+        # eol=lf`). Die neun Vorschaubilder standen dadurch dauerhaft als
+        # geändert im Baum — in einer Sitzung, die vier Arbeitsstände teilt,
+        # sieht das aus wie fremde Arbeit, und man lässt es in Ruhe.
+        picture.write_bytes(preview.encode("utf-8"))
 
         objects = ", ".join(
             f"{entry.name} {entry.mesh.volume / 1000.0:.1f} cm3"
