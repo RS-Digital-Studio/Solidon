@@ -162,18 +162,18 @@ MISSING_NOTE = {
     "pt": "Os pacotes para {systems} ainda estão a ser criados. Um aviso assim que existirem:",
 }
 
-#: Welche Fassung dort liegt und seit wann.
+#: Welche Version dort liegt und seit wann.
 #:
 #: **Von Hand gepflegt wäre das die Zeile, die als Erste driftet.** Sie steht
 #: neben Knöpfen, deren Dateinamen die Nummer schon tragen — und genau deshalb
-#: fällt es niemandem auf, wenn sie eine Fassung hinterherhinkt. Geschrieben
+#: fällt es niemandem auf, wenn sie eine Version hinterherhinkt. Geschrieben
 #: wird sie deshalb hier, aus ``APP_VERSION`` und dem Tag des Laufs.
 #:
 #: Das Datum ist der Tag, an dem die Pakete entstehen, und nicht der des
 #: Hochladens: Zwischen beiden liegt eine Viertelstunde, und wer es später von
 #: Hand nachträgt, trägt es irgendwann nicht mehr nach.
 VERSION_LINE = {
-    "de": "Fassung {version}, erschienen am {date}.",
+    "de": "Version {version}, erschienen am {date}.",
     "en": "Version {version}, released on {date}.",
     "es": "Versión {version}, publicada el {date}.",
     "fr": "Version {version}, parue le {date}.",
@@ -414,7 +414,7 @@ def links(packages: list[Package], language: str) -> str:
 
 
 def version_line(language: str, today: date | None = None) -> str:
-    """Welche Fassung im Kasten liegt und seit wann.
+    """Welche Version im Kasten liegt und seit wann.
 
     Robert wollte beides sichtbar, und er hat recht: Die Dateinamen tragen die
     Nummer, aber niemand liest einen Dateinamen, um zu erfahren, ob sich seit
@@ -433,7 +433,7 @@ def version_line(language: str, today: date | None = None) -> str:
         month_name=MONTH_NAMES[stamp.month - 1],
     )
     text = VERSION_LINE[language].format(version=APP_VERSION, date=written)
-    return f'\n            <p class="fassung">{text}</p>'
+    return f'\n            <p class="version">{text}</p>'
 
 
 def missing_note(packages: list[Package], language: str) -> str:

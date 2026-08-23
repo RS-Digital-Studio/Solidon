@@ -2037,12 +2037,12 @@ p.footnote {
   color: var(--muted);
 }
 
-/* Welche Fassung dort liegt und seit wann — von `make_download.py` geschrieben,
+/* Welche Version dort liegt und seit wann — von `make_download.py` geschrieben,
    direkt unter den Ladeknöpfen. Leiser als die Knöpfe und lauter als ein
    Hinweis: Sie ist keine Warnung, sondern die Auskunft, die jemand sucht, der
    schon einmal da war. Etwas mehr Abstand nach oben als der Prüfhinweis, damit
    sie nicht an den Knöpfen klebt. */
-.fassung {
+.version {
   margin: 0.75rem 0 0;
   font-size: 0.84rem;
   color: var(--muted);
