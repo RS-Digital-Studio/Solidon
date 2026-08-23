@@ -31,3 +31,17 @@ set MSSdk=1
 
 So lief der V4c-Bau (fünf .pyd + signiertes Manifest) am 08.08.2026 lokal
 durch. Siehe [[lizenz-privater-schluessel]].
+
+**Wann man ihn braucht, ohne es zu ahnen:** `tests/test_packaging.py` wird rot,
+sobald sich eine der Grenzdateien ändert (`core/scene/history.py` etwa) — das
+Manifest führt ihre Prüfsummen. Die Testmeldung nennt `build_licence_module.py`
+und nicht die MSVC-Zeilen; ohne sie scheitert der Lauf mit „Microsoft Visual
+C++ 14.0 or greater is required", und man installiert Build Tools, die schon da
+sind.
+
+**Und der Zustand ist lokal.** Das Ergebnis liegt unter `packaging/build/` und
+ist nicht eingecheckt — nach dem Lauf zeigt `git status` nichts. In der Nacht
+zum 23.08.2026 haben deshalb zwei Sitzungen unabhängig voneinander dasselbe
+Manifest gebaut, ohne voneinander zu wissen; keine konnte am Baum sehen, dass
+die andere es schon getan hatte. Wer es baut, sagt es den anderen — sonst ist
+es Doppelarbeit, die niemand bemerkt.
