@@ -799,3 +799,95 @@ def test_the_three_sweeps_over_the_pages_find_something_to_check() -> None:
     assert links >= 100, f"nur {links} Verweise — findet LINK noch etwas?"
     assert jumps >= 5, f"nur {jumps} Sprungmarken auf andere Seiten"
     assert questions >= 3, f"nur {questions} FAQ-Blöcke"
+
+
+# --- Was der Download-Kasten verspricht (§35 „Anschluss") --------------------------------
+
+
+def test_the_version_file_says_what_the_application_is() -> None:
+    """``website/version.json`` ist die einzige Stelle, an der der Kunde erfährt,
+    dass es etwas Neues gibt — und bis zum 23.08.2026 sah sie kein Test an.
+
+    **Was daran hängt.** Die Update-Prüfung (``app/core/updates.py``) liest diese
+    Datei: Versionsnummer, Größe, Prüfsumme. Steht darin eine falsche Zahl,
+    bricht das Update **bei jedem Kunden gleichzeitig**, und zwar erst nach dem
+    Hochladen — der Fehler entsteht auf einem Rechner und wirkt auf allen.
+
+    **Warum es keiner gemerkt hätte.** Am Tag des 0.1.3-Releases trugen drei
+    erzeugte Paketmanifeste noch ``0.1.2``, während die Anwendung schon ``0.1.3``
+    war; gefunden hat das ``test_packaging.py``, weil es die erzeugten Dateien
+    gegen ihr Werkzeug hält. Für ``version.json`` gab es kein solches Gegenüber:
+    Sie wird von Hand gepflegt, liegt außerhalb von ``app/``, und
+    ``test_website.py`` prüfte Verweise, nicht Inhalte.
+
+    Geprüft wird deshalb das, was zusammengehören **muss** und aus zwei Quellen
+    kommt: die Zahl in der Datei und die Zahl im Programm.
+    """
+    import json
+
+    from app.branding import APP_VERSION
+
+    payload = json.loads((WEBSITE / "version.json").read_text(encoding="utf-8"))
+    assert payload["version"] == APP_VERSION, (
+        f"version.json sagt {payload['version']}, die Anwendung ist {APP_VERSION} — "
+        "wer die Version erhöht, zieht beide nach (tools/bump_version.py)"
+    )
+    assert payload["packages"], "kein einziges Paket genannt — dann prüft der Rest nichts"
+    for key, entry in payload["packages"].items():
+        assert entry.get("url"), f"{key} ohne Adresse"
+        assert isinstance(entry.get("size"), int) and entry["size"] > 0, f"{key} ohne Größe"
+        assert re.fullmatch(r"[0-9a-f]{64}", str(entry.get("sha256", ""))), (
+            f"{key}: sha256 ist keine sechzigstellige Hexzahl"
+        )
+        # **Beide Namensfelder, und zwar gegeneinander.** ``updates.py`` liest
+        # ``url`` *und* ``file`` — das eine, um zu laden, das andere, um zu
+        # benennen. Ein Test, der nur eines prüft, lässt das andere altern: Die
+        # Gegenprobe zu diesem Test blieb genau daran grün, weil der Paketname
+        # zweimal in der Datei steht und die Mutation das ungeprüfte Feld traf.
+        for feld in ("url", "file"):
+            assert APP_VERSION in str(entry.get(feld, "")), (
+                f"{key}.{feld} ist {entry.get(feld)!r} — das ist nicht Fassung {APP_VERSION}"
+            )
+        assert str(entry["url"]).endswith(str(entry["file"])), (
+            f"{key}: url endet auf {str(entry['url']).rsplit('=', 1)[-1]!r}, "
+            f"file sagt {entry['file']!r} — die Anwendung lädt das eine und "
+            "benennt es nach dem anderen"
+        )
+
+
+@pytest.mark.parametrize(
+    "page",
+    sorted(WEBSITE.glob("**/index.html")),
+    ids=lambda p: p.parent.name or "de",
+)
+def test_every_download_link_names_the_current_version(page: Path) -> None:
+    """Der Download-Kasten darf nicht auf die Vorfassung zeigen.
+
+    **Die Lücke, die das schließt.** Der Verweistest oben überspringt ``/dl/``
+    ausdrücklich, und das zu Recht: Die Pakete wiegen zusammen fast ein Gigabyte
+    und liegen nicht im Repository. Sein Kommentar sagt selbst, was daraus folgt
+    — *„Dass die Datei auf dem Server wirklich liegt, prüft kein Test."*
+
+    Prüfbar ist trotzdem etwas, und zwar ohne ein einziges Megabyte: **ob der
+    Name die Fassung trägt, die die Anwendung ist.** Ein Kasten, der nach einer
+    Versionserhöhung noch die alten Dateien nennt, führt jeden Besucher auf einen
+    404 — die Pakete der Vorfassung werden beim Veröffentlichen gelöscht, damit
+    niemand versehentlich eine alte Fassung zieht.
+
+    Das ist derselbe Fehler wie bei den Paketmanifesten, nur eine Ebene weiter
+    außen: Eine Stelle, die die Versionsnummer trägt und beim Erhöhen vergessen
+    wird.
+    """
+    from app.branding import APP_VERSION
+
+    html = page.read_text(encoding="utf-8")
+    names = set(re.findall(r"/dl/([A-Za-z0-9._-]+)", html))
+    names |= set(re.findall(r"count\.php\?f=([A-Za-z0-9._-]+)", html))
+    assert names, f"{page.parent.name or 'de'}/index.html nennt kein einziges Paket"
+
+    stale = sorted(name for name in names if APP_VERSION not in name)
+    assert not stale, (
+        f"{page.parent.name or 'de'}/index.html bietet noch: {stale}\n"
+        f"Die Anwendung ist {APP_VERSION}, und die alten Pakete werden beim "
+        "Veröffentlichen vom Server gelöscht — die Verweise gingen ins Leere."
+    )
