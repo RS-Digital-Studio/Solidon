@@ -964,6 +964,18 @@ def test_a_menu_where_nothing_works_steps_aside(qt_app: QApplication) -> None:
     window.session.wait_for_idle()
     for _ in range(8):
         qt_app.processEvents()
+    window._update_actions()
+    qt_app.processEvents()
+
+    # **Die Zwischenstufe zuerst, und sie ist die, an der es einmal schiefging:**
+    # Ein Körper liegt da, aber niemand hat ihn angeklickt. Die erste Fassung
+    # blendete hier weiter aus — der Kunde sieht sein Teil und findet *Ändern*
+    # nicht mehr, obwohl ihm nur ein Klick fehlt. Ein Menü, das bei jeder
+    # Auswahl kommt und geht, lässt die Leiste flackern; das ist schlimmer als
+    # eine graue Zeile, die ihren Grund nennt.
+    for name, (_frei, alle, sichtbar) in zustand().items():
+        assert sichtbar or not alle, f"„{name}“ fehlt, obwohl ein Körper in der Szene liegt"
+
     window.object_tree.select_object(next(iter(window.session.last_result.scene.objects)))
     window._update_actions()
     qt_app.processEvents()

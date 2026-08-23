@@ -2322,7 +2322,31 @@ class MainWindow(QMainWindow):
         im Klartext („Dafür braucht es einen Körper in der Szene.") und ist die
         Stelle, an der ein Anfänger zuerst hinsieht — dort wäre Ausblenden der
         Verlust der einzigen Auskunft.
+
+        **Und nur bei leerer Szene**, das ist die zweite Hälfte der Grenze und
+        die teurer erkaufte. Der erste Bau blendete auch dann aus, wenn ein
+        Körper dalag und bloß niemand ihn angeklickt hatte —
+        ``test_the_start_screen_shows_only_menus_that_do_something_there`` fiel
+        darauf, und zu Recht: Wer eine Datei geöffnet hat, **sieht** sein Teil.
+        Ihm fehlt ein Klick, nicht ein Modell. Ein Menü, das dabei verschwindet
+        und beim Anklicken wiederkäme, ließe die Leiste bei jeder Auswahl
+        flackern — eine Oberfläche, die sich unter dem Kunden bewegt, ist
+        schlimmer als eine graue Zeile, die ihren Grund nennt.
+
+        Damit deckt sich der Schnitt mit dem Satz oben: Bei leerer Szene *kann*
+        nichts gehen, gleich was der Kunde täte. Steht ein Körper da, ist das
+        Menü einen Klick entfernt — und dann ist die graue Zeile die Auskunft,
+        die ihn hinführt.
         """
+        result = self.session.last_result
+        if result is not None and result.scene.objects:
+            # Ein Körper liegt da: alles bleibt stehen, auch das Gesperrte.
+            for menu in self._menus:
+                handle = menu.menuAction()
+                if isValid(menu) and handle in self.menuBar().actions():
+                    handle.setVisible(True)
+            return
+
         # **Über die gehaltene Liste, nicht über die Leiste.** Die Leiste gibt
         # Actions zurück, deren Menü sie selbst besitzt; self._menus ist die
         # Quelle, die sie am Leben hält (siehe _menu). Der erste Anlauf ging
