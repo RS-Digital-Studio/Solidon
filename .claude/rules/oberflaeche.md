@@ -258,7 +258,9 @@ Nutzers zu überstimmen. Drei Regeln, alle drei einmal gebrochen gewesen:
 
 Vielseitigkeit gehört in die Tiefe, nicht an die Oberfläche (§2). Die Zahlen
 dazu stehen in `tests/test_interface_limits.py` und werden rot, wenn sie
-gerissen werden:
+gerissen werden — die Breitengrenze des Skizzenbereichs in
+`tests/test_sketch_editor.py`, weil sie ein gebautes Fenster **mit Thema**
+braucht und nicht das Register:
 
 | Grenze | Wert |
 |---|---|
@@ -266,6 +268,7 @@ gerissen werden:
 | Zeilen in einem Menü (ein Untermenü zählt als eine) | ≤ 12 |
 | Umschalter in der Werkzeugzeile | ≤ 8 — **erreicht**: Schnitt, Messen, Bewegen, Analyse, Schichten, Explosion, Trennen, Bemalen — auf `Alt+1` bis `Alt+8` |
 | Felder auf der Vorderseite eines Operationsdialogs | ≤ 8 |
+| Breite des Skizzenbereichs, der Werkzeug- und der Bedingungszeile | je ≤ 900 Bildpunkte |
 | Menüeinträge je Operation | höchstens 1 — zusammengelegte Zwillinge (`MENU_TWINS`) haben 0 und leben im Dialog ihres Partners, erreichbar über Palette und Verlauf |
 
 Wer eine Zahl erhöhen will, tut das mit Absicht und begründet es im Commit.
@@ -696,6 +699,28 @@ Die Kurve **sättigt**: Das erste Fenster kostet einmalig rund 17 MB für Qt und
 VTK, jedes weitere kostet nichts mehr. Vorher wuchs sie ungebremst, und die
 Suite baut über siebenhundert Fenster nacheinander auf.
 
+**Und die Kehrseite, die erst am 23.08.2026 sichtbar wurde: Ein Fenster,
+das sterben kann, kann im falschen Thread sterben.** Solange die Lambda-Ringe
+die Fenster hielten, sammelte sie niemand ein. Seither tut es der
+Speicherbereiniger — und der läuft in dem Thread, dessen Allokation gerade die
+Schwelle reißt, nicht zwangsläufig im Hauptthread. Findet er dort ein Fenster
+ohne letzte Python-Referenz, ruft er `~QMainWindow` → `~QMenuBar` → `~QMenu`
+**in diesem Thread**, und ein QWidget-Destruktor gehört nie dorthin: Er nimmt
+den Qt-Mutex und braucht dann den GIL für die shiboken-Hülle, während der
+Hauptthread den GIL hält und auf genau diesen Mutex wartet. Das Ergebnis ist
+kein Absturz, sondern ein **Stillstand** bei 0,00 CPU.
+
+Der vollständige Stapelabzug beider Threads steht in `tests/conftest.py`,
+zusammen mit dem, was **nicht** hilft: `gc.collect()` (der Lauf im Hauptthread
+ist der harmlose), `leash.undisturbed()` (es hält den gc dieser Zeile an,
+während der Nebenthread weiter alloziert) und `deleteLater` (zweimal versucht,
+beide Male an VTK gescheitert). Wer einen vierten Anlauf nimmt, liest zuerst
+diese Notiz.
+
+Der Ring-Umbau bleibt trotzdem richtig — er hat den Speicher von linear auf
+flach gebracht. Aber er ist die Ursache dafür, dass es diesen Deadlock geben
+kann, und wer ihn für unbeteiligt hält, sucht an der falschen Stelle.
+
 **Kurzlebige Sender sind ausgenommen.** Ein Arbeiter, ein Dialog, eine
 Animation bauen denselben Ring, und er löst sich auf, sobald der Sender geht;
 dort ist das Vorgabeargument aus dem Abschnitt unten richtig und ausreichend.
@@ -780,6 +805,19 @@ der Arbeiter bliebe für immer gehalten.
 
 Das Feld am Dialog bleibt — es ist danach nur noch die Antwort auf „läuft
 gerade einer", nicht mehr die einzige Referenz.
+
+**Fünfzehn Arbeiter hielten sich nicht daran, und gefunden hat sie kein
+Suchen.** Ein `grep` nach `worker.start()` findet die Hälfte; die andere heißt
+`self._worker.start()`. `tests/test_leash.py` liest deshalb den **Quelltext**
+aller Dateien unter `app/ui/` — und zwar am Quelltext, weil das Verhalten es
+nicht zeigt: Ein Arbeiter an der Leine vorbei läuft völlig normal, bis das
+Fenster unter ihm weggeräumt wird. Dieselbe Bauart wie der Wächter, der jedes
+`ResultCache(` ohne `disk=` findet.
+
+Aufgefallen ist es an einer Frage zur Aufräum-Fixture der Suite: Wer über
+`leash.alive()` melden will, wer einen Test überlebt hat, sieht nur, was über
+`WorkerLeash.start` gestartet wurde — eine Zusicherung darüber verspricht sonst
+mehr, als sie halten kann.
 
 ### Ein Dialog, der beim Öffnen nachsieht, öffnet erst danach
 
