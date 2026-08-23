@@ -743,3 +743,30 @@ def test_the_environment_report_names_the_command_that_fixes_the_hooks(
     assert passende, f"kein Vorschlag zu den Hooks: {suggestions}"
     assert "git config core.hooksPath .githooks" in passende[0], passende[0]
     assert any("githooks" in zeile for zeile in findings), findings
+
+
+def test_the_cleanup_refuses_when_the_version_file_promises_nothing() -> None:
+    """Eine leere Schonliste schont nichts — dann wird gar nicht gelöscht.
+
+    **Der Fall, den dieser Test festhält.** ``stale_packages`` verschont, was
+    ``version.json`` nennt. Nennt sie nichts, ist die Schonliste leer, und dann
+    steht **jede** Datei unter ``dl/`` auf der Liste, die nicht zufällig die
+    laufende Fassung im Namen trägt — beim Veröffentlichen von 0.1.3 wären das
+    vierzehn Pakete gewesen.
+
+    Die Bedingung darüber greift hier nicht: Sie prüft die **Versionsnummer**,
+    und die kann stimmen, während ``packages`` fehlt, leer ist oder Einträge
+    trägt, die keine Zuordnungen sind. Genau dann ist die Auskunft
+    unvollständig, und ein Werkzeug, das auf einem Produktivserver löscht, darf
+    daraus keine weitreichende Handlung ableiten.
+    """
+    from app.branding import APP_VERSION
+    from tools.upload_website import stale_packages
+
+    for leer in ({}, {"packages": {}}, {"packages": {"windows": "kein Eintrag, nur Text"}}):
+        payload = {"version": APP_VERSION, **leer}
+        sitzung = _AttrappeFTP(payload, ["Solidon3D-Setup-0.0.1.exe"])
+        stale, reason = stale_packages(sitzung, "httpdocs")  # type: ignore[arg-type]
+
+        assert stale == [], f"würde löschen, obwohl version.json nichts nennt: {leer}"
+        assert "kein einziges Paket" in reason, reason

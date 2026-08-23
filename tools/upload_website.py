@@ -237,6 +237,18 @@ def stale_packages(session: ftplib.FTP_TLS, root: str) -> tuple[list[str], str]:
         )
 
     spared = promised_files(payload)
+    if not spared:
+        # **Eine Schonliste, die leer ist, schont nichts** — und dann stünde
+        # jede Datei unter ``dl/`` auf der Löschliste, die nicht zufällig die
+        # laufende Fassung im Namen trägt. Das passiert, wenn ``version.json``
+        # oben zwar die richtige Version nennt, aber kein ``packages`` hat oder
+        # eines, dessen Einträge keine Zuordnungen sind. Ein Werkzeug, das auf
+        # einem Produktivserver löscht, darf aus einer unvollständigen Auskunft
+        # keine weitreichende Handlung ableiten.
+        return [], (
+            "version.json nennt kein einziges Paket. Solange unklar ist, was "
+            "noch gebraucht wird, wird nichts gelöscht."
+        )
     candidates: list[str] = []
     for name, _size in remote_index(session, f"/{root}/dl").items():
         filename = name.split("/")[-1]

@@ -844,8 +844,15 @@ def test_the_version_file_says_what_the_application_is() -> None:
         # benennen. Ein Test, der nur eines prüft, lässt das andere altern: Die
         # Gegenprobe zu diesem Test blieb genau daran grün, weil der Paketname
         # zweimal in der Datei steht und die Mutation das ungeprüfte Feld traf.
+        # **Mit Wortgrenze, nicht als Teilzeichenkette.** ``"0.1.3" in name``
+        # ist auch für ``Solidon3D-Setup-0.1.30.exe`` wahr — bei 1.1.3 gegen
+        # 1.1.30 ist das kein erdachter Fall. Geprüft wird deshalb, dass hinter
+        # der Fassung keine weitere Ziffer und kein Punkt mit Ziffer steht. Der
+        # Punkt vor ``exe`` ist ein Trennzeichen und muss durch — die erste
+        # Fassung schloss ihn mit aus und machte den Test rot.
+        aktuell = re.compile(rf"{re.escape(APP_VERSION)}(?!\d)(?!\.\d)")
         for feld in ("url", "file"):
-            assert APP_VERSION in str(entry.get(feld, "")), (
+            assert aktuell.search(str(entry.get(feld, ""))), (
                 f"{key}.{feld} ist {entry.get(feld)!r} — das ist nicht Fassung {APP_VERSION}"
             )
         assert str(entry["url"]).endswith(str(entry["file"])), (
@@ -885,7 +892,8 @@ def test_every_download_link_names_the_current_version(page: Path) -> None:
     names |= set(re.findall(r"count\.php\?f=([A-Za-z0-9._-]+)", html))
     assert names, f"{page.parent.name or 'de'}/index.html nennt kein einziges Paket"
 
-    stale = sorted(name for name in names if APP_VERSION not in name)
+    aktuell = re.compile(rf"{re.escape(APP_VERSION)}(?!\d)(?!\.\d)")
+    stale = sorted(name for name in names if not aktuell.search(name))
     assert not stale, (
         f"{page.parent.name or 'de'}/index.html bietet noch: {stale}\n"
         f"Die Anwendung ist {APP_VERSION}, und die alten Pakete werden beim "
