@@ -103,6 +103,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein Klick auf eine 5,19-mm-Bohrung schlägt M3 vor | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **fachliche** Entscheidung in `placement.py`: Eine Senkung sitzt auf der Bohrung, eine Einpressbuchse ersetzt sie — nur die zweite darf den gemessenen Durchmesser übernehmen. Gemessen: M3 bohrt 4,00 mm in ein 5,19-mm-Loch und trägt nichts ab; die Anwendung kennt den Durchmesser und sagt ihn nicht |
 | Nach einem weiten Verschieben dreht die Kamera um den alten Punkt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | den Bau von 0.1.4 — die kleine Variante steht seit `e550b9b` und erfüllt Roberts Anweisung; die saubere setzt den Fokus beim **Beginn einer Drehung** statt bei jedem Aufbau und ändert damit das Kameraverhalten. Nicht in der Nacht vor einem Paket |
 | Vier Stapel zeigen auf `session.py:1515` | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **Lebensdaueruntersuchung**, keinen `gc`-Schutz: Der Sammler ist an zwei Messungen zu verschiedenen Zeiten als Ursache ausgeschlossen. Und die vier Stapel sind ein Zeuge, viermal gefragt — `wait(50)` blockiert in C, der Rahmen steht dort ohnehin. Der Weg führt über die Aufräum-Fixture und trifft damit **jede** Fensterdatei |
+| Ein ladendes Fenster sieht aus wie ein abgestürztes | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | ein sichtbares Wartezeitverhalten (§2.8) statt schwarzer Fläche. Sechs Sekunden beim Öffnen von Weg 1, in denen Menü- und Statusleiste stehen und **kein einziges Panel** — Robert hat es zweimal für einen Absturz gehalten, das Protokoll sagt beide Male `ended normally`. **Gehört der Oberfläche**; sinkt die Ladezeit, bleibt der Punkt |
+| Der Cache spart die Geometrie, nicht die Erkennung | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | zuerst eine **Messung**, wie viel der sechs Sekunden überhaupt auf `detect()` entfällt. `_with_features()` läuft nach jedem Operationsergebnis, auch nach einem Cache-Treffer, wo das Netz bitgleich ist — fünfzehn Läufe über denselben Körper. Der Umbau ist nicht trivial: Der Plattencache nimmt nur `MeshData`, und die Zuordnung hängt an den vorigen Merkmalen und an `operation.matches` (§15.7) |
+| `decimated 992 to 992` — ein Schritt, der nichts tut | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | eine Erklärung. `decimate()` hat einen frühen Rücksprung für genau diesen Fall, und er greift nicht; es läuft eine echte `simplify_quadric_decimation` von 992 auf 992. Drei Aufrufer kommen infrage |
 
 ---
 
@@ -8102,3 +8105,81 @@ nicht, und deshalb war jeder der drei Ansätze folgerichtig wirkungslos.
       `tests/test_core_isolation.py` führt beide Namen in `KNOWN_OPEN`, jeden
       mit seiner Begründung. Wer einen behebt, streicht ihn dort — dann prüft
       der Test ihn mit.
+
+---
+
+## Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026)
+
+Robert hat die Anwendung gefahren, Weg 1 geöffnet und gemeldet: „wir bleiben
+im startbildschirm stehen, er wird nicht richtig dargestellt bei auswahl von
+beispielprojekt weg 1 stürzen wir ab" — und kurz darauf „jetzt stürzen wir
+sofort ab".
+
+**Es war kein Absturz.** Das Protokoll sagt beide Male
+`Solidon3D 0.1.4 ended normally`; das Bildschirmfoto zeigt ein Fenster mit
+Menüleiste, Werkzeugleiste und Statusleiste, dazwischen schwarz — kein
+Objektbaum, keine Parameterleiste, kein Verlauf —, unten rechts ein laufender
+Fortschrittsbalken mit *Abbrechen*.
+
+    21:59:30  opened project weg1-halterung-anpassen.p3d
+    21:59:36  letzte Rechnung                      <- sechs Sekunden
+    21:59:38  ended normally
+
+**Der Befund zerfällt in zwei Hälften, und sie gehören getrennt aufgeschrieben**
+(3d-druck-33): Die eine ist die Ladezeit, die andere das Bild währenddessen.
+Wer sie zusammenschreibt, hakt beide ab, sobald die Zeit sinkt — und ein
+Fenster, das drei Sekunden lang wie abgestürzt aussieht, ist immer noch eines,
+das wie abgestürzt aussieht.
+
+- [ ] **Ein Fenster, das lädt, sieht aus wie eines, das abgestürzt ist**
+      (§2.8). Menüleiste und Statusleiste stehen, die Fläche dazwischen ist
+      schwarz. Genau daran erkennt jeder Nutzer ein hängendes Programm, und
+      Robert hat es zweimal so gelesen — beim zweiten Mal, ohne den ersten
+      Versuch abzuwarten.
+
+      Der Fortschrittsbalken unten rechts widerspricht dem zwar, aber er steht
+      in der Statusleiste am unteren Bildrand, während der Blick auf der
+      schwarzen Fläche in der Mitte liegt. **Gehört b8** (Panels und
+      Ansichtsaufbau).
+
+- [ ] **Der Cache spart die Geometrie, nicht die Erkennung.** Im selben Lauf
+      lief `detect()` **fünfzehnmal** über denselben Körper.
+
+      Die Zahl ist erklärbar und trotzdem ein Befund: `_with_features()` läuft
+      in `scene/evaluate.py` nach **jedem** Operationsergebnis — auch nach
+      einem Cache-Treffer, wo die Geometrie gar nicht gerechnet wurde. Weg 1
+      hat vier Operationen, die ein Objekt ausgeben, und die Auswertung läuft
+      beim Öffnen mehrfach (Entwurf; danach noch einmal, wenn die
+      Verwaistenprüfung etwas umgeschrieben hat; und in Feinqualität für den
+      Prüfbericht). Vier mal drei bis vier ergibt genau die fünfzehn.
+
+      **Dass die Erkennung nach jeder Operation läuft, ist richtig** (§21.2 —
+      sonst ist `hole_3` in Schritt fünf ein anderes Loch als in Schritt vier).
+      Falsch ist, dass sie auch dann läuft, wenn das Netz nachweislich dasselbe
+      ist: Kam das Ergebnis aus dem Cache, ist die Geometrie bitgleich, und
+      damit wäre auch das Erkennungsergebnis bitgleich.
+
+      **Der Weg ist nicht offensichtlich**, deshalb steht er hier und nicht in
+      einem Commit: Der Plattencache speichert `MeshData` und sonst nichts —
+      im selben Protokoll steht dreimal „the disk cache can only store
+      MeshData". Die Merkmale bräuchten einen eigenen Platz, und ihre
+      Zuordnung hängt außerdem an den *vorigen* Merkmalen und an
+      `operation.matches` (§15.7), nicht nur am Netz. Ein Cache, der das
+      übersieht, gibt beim zweiten Öffnen andere Namen zurück als beim ersten
+      — schlimmer als die Wartezeit.
+
+      Zu messen ist zuerst, **wie viel von den sechs Sekunden überhaupt die
+      Erkennung ist**. Ohne diese Zahl ist jeder Umbau hier eine Vermutung.
+
+- [ ] **`decimated 992 to 992 triangles`, dreimal im selben Lauf.** Ein
+      Vereinfachungsschritt, der nichts entfernt und trotzdem läuft.
+
+      `decimate()` hat für genau diesen Fall einen frühen Rücksprung
+      (`triangle_count <= max(target, DECIMATE_FLOOR)`), und er greift hier
+      nicht — die Meldung steht erst *nach* der Vereinfachung. Es läuft also
+      eine echte `simplify_quadric_decimation`, die bei 992 Dreiecken anfängt
+      und bei 992 aufhört. Entweder liegt das Ziel darunter und das Verfahren
+      erreicht es nicht, oder `_welded_for_simplify` gibt etwas anderes zurück,
+      als der Aufrufer erwartet. **Ungeklärt**; die drei Aufrufer sind
+      `examples.py` (Vorschau, Ziel 1500), `drawing.py` und die Operation
+      selbst.

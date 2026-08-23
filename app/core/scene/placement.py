@@ -110,8 +110,23 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
     wäre dort eine falsche Zahl, die wie eine gemessene aussieht.
     """
     names = {entry.name for entry in spec.params.spec()}
-    if FEATURE_FIELD in names:
-        return {FEATURE_FIELD: feature.id, **_from_the_bore(spec, feature, names)}
+    # **Gefragt wird nach der Art, nicht nach dem Namen.** Bis zum 23.08.2026
+    # stand hier ``if FEATURE_FIELD in names`` — also „heißt ein Feld
+    # *at_feature*?". Damit fiel *An Merkmal ausrichten* durch: Ihre Felder
+    # heißen ``feature`` und ``target``, und wer eine Fläche anklickte, bekam
+    # bei einundzwanzig Operationen eine Vorbelegung und bei dieser ein leeres
+    # Textfeld (gefunden von 3d-druck-33).
+    #
+    # Es war die zweite von zwei Stellen, die dieselbe Sache verschieden
+    # fragten: ``scene/orphans.py`` geht nach ``kind == "feature"``, hier ging
+    # es nach dem Namen. Zwei Raster, und eine Operation fiel durch beide.
+    # Seit ``5f94f1d`` deklariert sie ihre Art; damit genügt eine Frage.
+    field = next(
+        (entry.name for entry in spec.params.spec() if entry.kind == "feature"),
+        None,
+    )
+    if field is not None:
+        return {field: feature.id, **_from_the_bore(spec, feature, names)}
 
     values: dict[str, Any] = {}
     if TARGET_FIELD in names and feature.kind == "face":

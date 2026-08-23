@@ -339,3 +339,46 @@ def test_a_part_that_brings_its_own_bore_takes_no_size_from_one() -> None:
 
     countersink = values_for(REGISTRY.get("countersink_hole"), bore)
     assert "diameter" not in countersink, "die Senkung nimmt den Kopf, nicht das Loch"
+
+
+def test_every_operation_with_a_feature_field_gets_it_filled_in() -> None:
+    """Gefragt wird nach der **Art** des Feldes, nicht nach seinem Namen.
+
+    Bis zum 23.08.2026 stand in :func:`values_for` ``if FEATURE_FIELD in
+    names`` — also „heißt hier ein Feld *at_feature*?". *An Merkmal
+    ausrichten* nennt ihres ``feature`` und fiel damit durch: Wer eine Fläche
+    anklickte, bekam bei einundzwanzig Operationen eine Vorbelegung und bei
+    dieser ein leeres Textfeld, in das er ``hole_1`` selbst tippen sollte
+    (gefunden von 3d-druck-33).
+
+    **Es war die zweite von zwei Stellen, die dieselbe Sache verschieden
+    fragten.** ``scene/orphans.py`` geht nach ``kind == "feature"``; hier ging
+    es nach dem Namen, und eine Operation fiel durch beide Raster. Der Test
+    prüft deshalb nicht den einen Fall, sondern **jede** Operation mit einem
+    Merkmalsfeld — ein Test auf ``align_to_feature`` allein hielte genau den
+    Namen fest, der das Problem war.
+    """
+    load_operations()
+    clicked = Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={"diameter": 5.2, "centre": (10.0, 5.0, 0.0), "axis": (0.0, 0.0, 1.0)},
+        face_indices=(),
+    )
+
+    with_field = [
+        spec
+        for spec in REGISTRY.all()
+        if any(entry.kind == "feature" for entry in spec.params.spec())
+    ]
+    assert with_field, "ohne Operationen mit Merkmalsfeld prüft dieser Test nichts"
+
+    empty = []
+    for spec in with_field:
+        values = values_for(spec, clicked)
+        fields = [entry.name for entry in spec.params.spec() if entry.kind == "feature"]
+        if not any(values.get(name) == "hole_1" for name in fields):
+            empty.append(f"{spec.name} ({', '.join(fields)})")
+
+    assert not empty, "diese Operationen lassen den Nutzer die Kennung tippen:\n" + "\n".join(empty)
