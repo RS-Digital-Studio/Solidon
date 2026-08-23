@@ -408,6 +408,35 @@ def test_a_report_with_the_project_says_what_travels_along() -> None:
     assert "Geometrie" in reports.as_text(report)
 
 
+def test_a_report_carries_the_scene_without_the_geometry() -> None:
+    """Der Steckbrief sagt, woran die Szene stand — die Projektdatei bleibt draußen.
+
+    Aus dem Kundenprotokoll vom 23.08.2026: Es sagte, dass die Auswertung
+    anhielt, aber nichts über die Szene. Ein Bildschirmfoto zeigte drei Wülste
+    mit 34,09, 34,06 und 34,03 mm — ob das drei Kanten sind oder eine dreimal
+    erkannte, war ohne die Maße nicht zu entscheiden. Der Steckbrief trägt sie
+    und bleibt dabei Text: kein Modell, keine Dreiecke.
+    """
+    report = reports.ErrorReport(
+        summary="x",
+        digest="Objekt pad_v2  225 x 225 x 2 mm · Wulst Ø 34,09 mm",
+    )
+
+    text = reports.as_text(report)
+
+    assert "Wulst" in text
+    assert "34,09" in text
+    # Und das Angebot bleibt ehrlich: ohne Projektdatei keine Geometrie (§37.2).
+    assert not report.contains_geometry
+    assert "Geometrie" not in text
+
+
+def test_a_report_without_a_digest_stays_short() -> None:
+    """Was leer ist, bekommt keine Überschrift — ein Abschnitt „szene" ohne
+    Inhalt sähe aus wie eine Szene, über die nichts zu sagen war."""
+    assert "--- szene ---" not in reports.as_text(reports.ErrorReport(summary="x"))
+
+
 def test_a_report_is_written_as_a_folder(tmp_path: Path) -> None:
     report = reports.ErrorReport(summary="Etwas ging schief", detail="Details")
 

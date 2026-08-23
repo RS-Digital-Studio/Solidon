@@ -45,6 +45,19 @@ class ErrorReport:
     summary: str
     detail: str = ""
     traceback: str = ""
+    #: Der Steckbrief der Szene (§23) — Objekte mit Maßen und Merkmalen,
+    #: Parameter, Passungen und der Verlauf mit seinen Werten.
+    #:
+    #: **Der Mittelweg zwischen „nichts" und „das ganze Modell".** Ein
+    #: Kundenprotokoll vom 23.08.2026 sagte zwar, dass die Auswertung anhielt,
+    #: aber nicht, woran die Szene stand: Ein Bildschirmfoto zeigte drei Wülste
+    #: mit 34,09, 34,06 und 34,03 mm, und ob das drei Kanten sind oder eine
+    #: dreimal erkannte, war ohne die Maße nicht zu entscheiden. Die
+    #: Projektdatei hätte es gesagt — sie enthält aber die Geometrie, und
+    #: darum reist sie nur auf ausdrücklichen Wunsch mit (§37.2). Der
+    #: Steckbrief ist Text: Er nennt Maße und Merkmale und gibt kein Modell
+    #: preis.
+    digest: str = ""
     include_project: bool = False
     include_log: bool = True
     files: list[Path] = field(default_factory=list)
@@ -88,6 +101,9 @@ def as_text(report: ErrorReport) -> str:
         lines.extend(["", report.detail])
     if report.traceback:
         lines.extend(["", "--- traceback ---", report.traceback.strip()])
+
+    if report.digest:
+        lines.extend(["", "--- szene ---", report.digest.strip()])
 
     lines.extend(["", "--- system ---"])
     lines.extend(f"{name}: {value}" for name, value in environment().items())
