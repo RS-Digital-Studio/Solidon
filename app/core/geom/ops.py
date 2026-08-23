@@ -488,7 +488,16 @@ def union_objects(ctx: OpContext) -> OpResult:
     produces=1,
     deterministic=False,
     shortcut="Ctrl+Shift+A",
-    doc=_("Zieht das zweite Objekt vom ersten ab."),
+    # **„Das erste" ist die Reihenfolge der Auswahl, und das stand nirgends.**
+    # Die Operation hat kein einziges Feld; welcher Körper bleibt, entscheidet
+    # allein, welchen der Nutzer zuerst angeklickt hat. Gemessen an einem Klotz
+    # 20 x 20 x 20 und einem Stift 6 x 6 x 30: richtig herum bleiben 7280 mm³,
+    # verkehrt herum 360 — und dazu kein Hinweis, nur ein Ergebnis, das den
+    # Namen des Stifts trägt.
+    doc=_(
+        "Zieht das zweite Objekt vom ersten ab. Zuerst das Teil anklicken, das "
+        "bleiben soll — dann das, was weggenommen wird."
+    ),
 )
 def subtract_objects(ctx: OpContext) -> OpResult:
     return _boolean_op(ctx, "difference", ctx.seed)
@@ -578,7 +587,10 @@ def align_to_feature(ctx: OpContext) -> OpResult:
     if reference is None:
         raise AppError(
             _("Das Ziel muss ein Merkmal eines Objekts benennen."),
-            detail=f"malformed target {params.target!r}",
+            detail=_(
+                "Ein Ziel besteht aus dem Objekt und dem Merkmal, getrennt durch "
+                "einen Doppelpunkt — etwa obj_2:hole_1."
+            ),
             values={"target": params.target},
             suggestions=(
                 Action(id="write_target", label=_("Schreiben Sie das Ziel als obj_2:hole_1.")),
@@ -592,7 +604,10 @@ def align_to_feature(ctx: OpContext) -> OpResult:
         missing = params.feature if moving is None else params.target
         raise AppError(
             _("Dieses Merkmal gibt es nicht."),
-            detail=f"unknown feature {missing!r}",
+            detail=_(
+                "Kein Merkmal dieses Namens sitzt an den gewählten Objekten. "
+                "Merkmalsnamen entstehen beim Bohren, Aushöhlen oder Einsetzen."
+            ),
             values={"feature": missing},
             suggestions=(
                 Action(id="pick_feature", label=_("Wählen Sie das Merkmal im Objektbaum aus.")),
