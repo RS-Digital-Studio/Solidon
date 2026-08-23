@@ -331,11 +331,13 @@ class SurveyNotice(QFrame):
             f"#surveyNotice #surveyTitle {{ font-weight: 600; }}"
             # **Der Hauptknopf trägt seine Farben hier und nicht aus dem
             # Anwendungs-Stylesheet.** Dort hängen sie an ``QPushButton:default``,
-            # und ``setDefault`` ist eine Eigenschaft von Dialogen: außerhalb
-            # eines ``QDialog`` griff die Regel nicht, und der Knopf stand mit
-            # orangem Rahmen und **ohne Beschriftung** da — im Bild gemessen,
-            # nicht vermutet. ``make_primary`` bleibt trotzdem, denn es rechnet
-            # die Breite gegen die halbfette Schrift.
+            # und diese Regel verliert jeder Knopf, über dem ein **typloses**
+            # Stylesheet liegt — eine Zeile wie ``background: …`` ohne Selektor
+            # gilt für alle Nachkommen und ersetzt dort die Regeln der
+            # Anwendung. Der Knopf stand deshalb mit Rahmen und ohne lesbare
+            # Beschriftung da. Die Regel oben ist mit Kennung geschrieben und
+            # trifft nur ihr Ziel; ``make_primary`` bleibt, denn es rechnet die
+            # Breite gegen die halbfette Schrift.
             f"#surveyNotice #surveyGive {{ background: {colours['highlight']};"
             f" color: {colours['highlight_text']}; border: 1px solid {colours['highlight']}; }}"
         )

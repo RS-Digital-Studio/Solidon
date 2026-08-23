@@ -208,24 +208,41 @@ Kodierung (Regel 18). `tests/test_style.py` misst gegen die Schrift, mit der
 wirklich gezeichnet wird, und verbietet `setDefault(True)` außerhalb von
 `style.py`.
 
-**Und außerhalb eines Dialogs färbt er nicht.** `make_primary` setzt
-`setDefault(True)`, und `default` ist eine Eigenschaft von **Dialogen**: Qt
-vergibt sie an den Knopf, der auf Eingabe reagiert, und außerhalb eines
-`QDialog` gibt es diesen Knopf nicht. Die Regel `QPushButton:default` im
-Stylesheet greift dort also nicht — und weil sie neben `font-weight` auch
-`background` und `color` trägt, steht der Knopf mit **orangem Rahmen und ohne
-jede Beschriftung** da. Gemessen an der Hinweiskarte des Feedbackbogens
-(`app/ui/survey.py`), einmal als Kind der Karte und einmal freistehend: beide
-Male leer.
+**Und ein typloses Stylesheet am Vorfahren nimmt ihm seine Farben.** Eine
+Regel ohne Selektor — `setStyleSheet("background: #202225;")` an einer Karte,
+einer Leiste, einem Rahmen — gilt für den Träger **und jeden Nachkommen** und
+**ersetzt** dort die Regeln des Anwendungs-Stylesheets, statt sie zu ergänzen.
+`QPushButton:default` greift dann nicht mehr, und weil diese Regel neben
+`font-weight` auch `background` und `color` trägt, steht der Hauptknopf mit
+Rahmen und **ohne lesbare Beschriftung** da.
 
-Ein Hauptknopf über der Ansicht setzt seine Farben deshalb selbst, im
-Stylesheet seines Trägers und über eine eigene Kennung
-(`#surveyNotice #surveyGive`). `make_primary` bleibt trotzdem — es rechnet die
-Breite gegen die halbfette Schrift, und das gilt hier wie im Dialog.
+Gemessen an einem Hauptknopf in vier Lagen, jeweils die häufigste Farbe seiner
+Fläche im gerenderten Fenster:
 
-**Gefunden hat es kein Test, sondern ein Blick auf das Bild.** Die zwei
-Klicktests auf demselben Knopf waren grün: Ein Knopf ohne sichtbare
-Beschriftung nimmt Klicks entgegen wie jeder andere.
+| Was ein Stylesheet trägt | Füllung | |
+|---|---|---|
+| nichts | `#f0a54a` | färbt |
+| die Eltern, typlos | `#202225` | färbt **nicht** |
+| die Großeltern, typlos | `#202225` | färbt **nicht** — es wirkt über Ebenen |
+| die Großeltern, `#nurIch { … }` | `#f0a54a` | färbt |
+
+**Die letzte Zeile ist die Abhilfe: Eine Regel mit Kennung trifft nur ihr
+Ziel.** Wer einem Träger ein Stylesheet gibt, schreibt es an dessen
+`objectName` und nicht typlos. Wo eine breite Regel bleiben muss, bekommt der
+Hauptknopf darin seine Farben ausdrücklich (`#surveyNotice #surveyGive` in
+`app/ui/survey.py`). `make_primary` bleibt in beiden Fällen — es rechnet die
+Breite gegen die halbfette Schrift.
+
+**Ein `QDialog` ist dabei nicht der Unterschied**, auch wenn es zuerst so
+aussah: Ohne Stylesheet färbt der Knopf in einem schlichten `QWidget` genauso
+wie im Dialog. Der falsche Schluss entstand an einem Vergleichsbild, in dem
+**beide** Knöpfe unter einem typlosen Stylesheet hingen — und ein
+Gegenbeispiel, das dieselbe Bedingung trägt wie der Fall, ist keines. Gefunden
+hat den Fehler die Nachbarsitzung, die ihn nicht reproduzieren konnte.
+
+**Gefunden hat den leeren Knopf kein Test, sondern ein Blick auf das Bild.**
+Die zwei Klicktests auf ihm waren grün: Ein Knopf ohne sichtbare Beschriftung
+nimmt Klicks entgegen wie jeder andere.
 
 **Und er heißt nicht wie sein Werkzeug.** Der Umschalter der Werkzeugzeile
 nennt das Werkzeug, der Knopf darin seine Handlung — „Trennen" oben, „Jetzt
