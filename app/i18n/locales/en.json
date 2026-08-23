@@ -500,6 +500,7 @@
   "Der Querschnitt. Rund ist die einfachste und braucht zwei Stück gegen Verdrehen; Sechskant und Schwalbenschwanz halten schon einzeln, der Schwalbenschwanz zusätzlich gegen Auseinanderziehen.": "The cross-section. Round is the simplest and needs two of them against twisting; hexagon and dovetail hold on their own, the dovetail also against being pulled apart.",
   "Der Radius ist für diese Kanten zu groß.": "The radius is too large for these edges.",
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius.": "The radius a surface is curved with. Sharp edges are highlighted; flat faces have no radius.",
+  "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius. Wo ein Merkmal erkannt wurde, steht sein gemessenes Maß — sonst eine Schätzung aus den Nachbarflächen.": "The radius a surface is curved with. Sharp edges are highlighted; flat faces have no radius. Where a feature was recognised, its measured size is shown — otherwise an estimate from the neighbouring faces.",
   "Der Schalter „Auflegen“ entscheidet darüber. Der Durchmesser kommt aus der angeklickten Fläche.": "The “Apply as” switch decides. The diameter comes from the face you clicked.",
   "Der Schlüssel beginnt nicht mit „SOLIDON3D-1-“.": "The key does not begin with “SOLIDON3D-1-”.",
   "Der Schlüssel enthält Zeichen, die dort nicht stehen können.": "The key contains characters that cannot appear there.",

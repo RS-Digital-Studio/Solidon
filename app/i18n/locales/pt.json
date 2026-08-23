@@ -500,6 +500,7 @@
   "Der Querschnitt. Rund ist die einfachste und braucht zwei Stück gegen Verdrehen; Sechskant und Schwalbenschwanz halten schon einzeln, der Schwalbenschwanz zusätzlich gegen Auseinanderziehen.": "A secção. Redonda é a mais simples e precisa de duas contra a rotação; hexagonal e cauda de andorinha seguram sozinhas, a cauda de andorinha também contra a separação.",
   "Der Radius ist für diese Kanten zu groß.": "O raio é grande demais para estas arestas.",
   "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius.": "O raio com que uma superfície é curvada. As arestas vivas são realçadas; as faces planas não têm raio.",
+  "Der Radius, mit dem eine Fläche gekrümmt ist. Hervorgehoben sind scharfe Kanten; ebene Flächen haben keinen Radius. Wo ein Merkmal erkannt wurde, steht sein gemessenes Maß — sonst eine Schätzung aus den Nachbarflächen.": "O raio com que uma superfície é curvada. As arestas vivas são realçadas; as faces planas não têm raio. Onde uma característica foi reconhecida, é indicada a sua medida real; caso contrário, uma estimativa a partir das faces vizinhas.",
   "Der Schalter „Auflegen“ entscheidet darüber. Der Durchmesser kommt aus der angeklickten Fläche.": "É o interruptor “Aplicar como” que o decide. O diâmetro vem da face clicada.",
   "Der Schlüssel beginnt nicht mit „SOLIDON3D-1-“.": "A chave não começa por “SOLIDON3D-1-”.",
   "Der Schlüssel enthält Zeichen, die dort nicht stehen können.": "A chave contém carateres que não podem estar aí.",
