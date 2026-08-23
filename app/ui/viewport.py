@@ -3476,9 +3476,63 @@ class Viewport(QWidget):
             if offset < best_offset:
                 best_offset = offset
                 best = feature_id
-        if best is None or best_offset > reach:
+        if best is not None and best_offset <= reach:
+            return best, best_offset
+        # **Mitten im Loch ist kein Dreieck, und der Klick meint es trotzdem.**
+        # Robert am 23.08.2026, auf die Frage, welcher der beiden Fälle gilt:
+        # „beides, es sollte in beiden fällen gehen." Wer eine Bohrung sieht
+        # und hineinklickt, meint sie — und trifft dort die Fläche dahinter
+        # oder die Platte darunter, jedenfalls kein Dreieck der Bohrung. Von
+        # ihrer Mitte aus ist ihre Wand einen **Radius** entfernt, und der ist
+        # bei einer M5-Bohrung fast dreimal so weit wie die Reichweite.
+        #
+        # Deshalb die zweite Frage: Steht der Punkt **innerhalb** des
+        # Bohrungszylinders? Das ist keine gelockerte Reichweite, sondern eine
+        # andere Aussage — „auf dem Rand" gegen „im Loch" —, und sie gilt nur
+        # für Merkmale, die einen Durchmesser und eine Achse haben.
+        return self._feature_inside(target)
+
+    def _feature_inside(self, target: Any) -> tuple[FeatureId, float] | None:
+        """Das Loch, in dem dieser Punkt steht — oder nichts.
+
+        Gerechnet wird der Abstand zur **Achse**: Ein Punkt im Zylinder liegt
+        näher an ihr als der Radius. Die Länge entlang der Achse wird nicht
+        geprüft, und das ist Absicht — wer von schräg oben in eine Bohrung
+        klickt, trifft die Platte darunter, also einen Punkt jenseits der
+        Tiefe. Die Bohrung ist trotzdem gemeint.
+
+        Bei mehreren gewinnt die engste: Eine Senkung um eine Bohrung herum
+        enthält denselben Punkt, und gemeint ist das, worauf man gezeigt hat.
+        """
+        import numpy as np
+
+        source = self._object_at(tuple(float(value) for value in target))  # type: ignore[arg-type]
+        entry = self._result.scene.objects.get(source) if self._result and source else None
+        if entry is None:
             return None
-        return best, best_offset
+        best: FeatureId | None = None
+        best_radius = float("inf")
+        for feature_id, feature in entry.features.items():
+            diameter = feature.params.get("diameter")
+            axis = feature.params.get("axis")
+            centre = feature.params.get("centre")
+            if not diameter or axis is None or centre is None:
+                continue
+            radius = float(diameter) / 2.0
+            if radius >= best_radius:
+                continue
+            direction = np.asarray(axis, dtype=float)
+            length = float(np.linalg.norm(direction))
+            if length <= 0.0:
+                continue
+            direction = direction / length
+            offset = target - np.asarray(centre, dtype=float)
+            # Der Abstand zur Achse: die Länge dessen, was senkrecht auf ihr steht.
+            sideways = offset - float(np.dot(offset, direction)) * direction
+            if float(np.linalg.norm(sideways)) <= radius:
+                best = feature_id
+                best_radius = radius
+        return (best, 0.0) if best is not None else None
 
     def _feature_reach(self, object_id: ObjectId | None) -> float:
         """Wie weit ein Klick neben einem Merkmal noch dessen Merkmal meint.

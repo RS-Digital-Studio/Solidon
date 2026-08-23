@@ -3268,3 +3268,46 @@ def test_a_drag_beside_the_body_still_turns_the_camera(window: MainWindow) -> No
     # Weit außerhalb: dort liegt kein Körper.
     assert not viewport.begin_body_drag_at((5000.0, 5000.0, 5000.0)), "daneben beginnt kein Zug"
     assert not viewport.begin_body_drag_at(None), "und ohne Treffer erst recht nicht"
+
+
+def test_a_click_into_a_hole_selects_the_hole(window: MainWindow) -> None:
+    """Wer eine Bohrung sieht und hineinklickt, meint sie.
+
+    **Robert am 23.08.2026:** „Wenn ich ein 3D Modell auswähle und dann eine
+    Bohrung in dem 3D Modell auswähle, wird die Bohrung nicht selektiert und
+    nicht hervorgehoben." Auf die Frage, ob er auf die Wand oder ins Loch
+    klickt: „beides, es sollte in beiden fällen gehen."
+
+    **Der Klick auf die Wand ging schon**; gemessen trifft ``_feature_at`` dort
+    das Merkmal. Der Klick ins Loch nicht — dort ist kein Dreieck der Bohrung,
+    der Strahl trifft die Fläche dahinter oder die Platte darunter, und von der
+    Bohrungsmitte aus ist ihre Wand einen **Radius** entfernt: bei dieser
+    Bohrung 2,6 mm gegen 0,95 mm Reichweite.
+
+    Die Reichweite dafür zu vergrößern wäre falsch — sie beantwortet „wie weit
+    daneben zählt noch als darauf", und die Antwort soll klein bleiben. Gefragt
+    wird stattdessen etwas anderes: **Steht der Punkt innerhalb des
+    Bohrungszylinders?**
+    """
+    select_plate(window)
+    viewport = window.viewport
+    entry = window.session.last_result.scene.objects[window.object_tree.selected()]
+    bohrungen = [name for name, feature in entry.features.items() if feature.kind == "hole"]
+    assert bohrungen, "ohne Bohrung prüft dieser Test nichts"
+
+    bohrung = entry.features[bohrungen[0]]
+    mitte = bohrung.params["centre"]
+    radius = float(bohrung.params["diameter"]) / 2.0
+
+    auf_der_wand = (mitte[0] + radius, mitte[1], mitte[2])
+    im_loch = (mitte[0], mitte[1], mitte[2])
+    assert viewport._feature_at(auf_der_wand) == bohrungen[0], "auf der Wand traf es schon"
+    assert viewport._feature_at(im_loch) == bohrungen[0], "und jetzt auch mitten hinein"
+
+    # **Die Gegenprobe, ohne die der Test nichts wert wäre**: Ein Klick neben
+    # der Bohrung darf sie nicht wählen. Sonst hätte die neue Frage nur die
+    # Reichweite auf den ganzen Körper ausgedehnt.
+    daneben = (mitte[0] + radius * 4.0, mitte[1] + radius * 4.0, mitte[2])
+    assert viewport._feature_at(daneben) != bohrungen[0], (
+        "vier Radien daneben ist nicht mehr diese Bohrung"
+    )
