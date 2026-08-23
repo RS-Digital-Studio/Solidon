@@ -69,6 +69,21 @@ BACKGROUND_FILE: Final = "background_removal/birefnet.safetensors"
 #: Schritt sie zusammen und nicht getrennt.
 BACKGROUND_MEGABYTES: Final = 445
 
+#: Was auf der Platte frei sein muss, bevor der große Download beginnt.
+#:
+#: 7,5 GB Gewichte, dazu Luft für das, was ``huggingface_hub`` beim Entpacken
+#: zwischenlagert. Geprüft wird **vorher** und nicht im Fehlerfall, und das ist
+#: der Punkt: Am 23.08.2026 lief der Download dreimal an und starb dreimal nach
+#: Minuten, weil ``C:`` voll war. Die Meldung, die dabei herauskam, nennt den
+#: Grund mit keinem Wort:
+#:
+#:     RuntimeError: File reconstruction error: Internal Writer Error:
+#:     Background writer channel closed
+#:
+#: Wer sie liest, sucht am Netz. Gefunden wurde es nur, weil der Abbruch
+#: **dreimal an derselben Stelle** kam.
+NEEDED_GIGABYTES: Final = 9.0
+
 #: Woran der TripoSG-Quelltext hängt und was eine ComfyUI-Installation nicht
 #: ohnehin mitbringt. ``fast_simplification`` steht hier statt ``pymeshlab``:
 #: dasselbe Können, aber MIT statt GPL (Regel 15).
@@ -673,16 +688,45 @@ shutil.rmtree(scratch, ignore_errors=True)
 """
 
 
+def free_gigabytes(where: Path) -> float:
+    """Wie viel auf dem Datenträger dieses Pfades frei ist.
+
+    Gefragt wird der nächste Ordner, den es schon gibt — das Ziel selbst wird
+    erst angelegt, und ``disk_usage`` will einen vorhandenen Pfad.
+    """
+    stelle = where
+    while not stelle.exists() and stelle != stelle.parent:
+        stelle = stelle.parent
+    return shutil.disk_usage(stelle).free / 1_000_000_000
+
+
 def fetch_weights(
     comfyui: Path,
     python: Path,
     progress: ProgressFn = _silent,
     cancelled: CancelledFn | None = None,
 ) -> None:
-    """Die Gewichte holen — rund 7,5 GB, und nur wenn sie fehlen."""
+    """Die Gewichte holen — rund 7,5 GB, und nur wenn sie fehlen.
+
+    **Geprüft wird der Platz vorher** (:data:`NEEDED_GIGABYTES`). Ein Download,
+    der nach zwanzig Minuten an einer vollen Platte stirbt, kostet die zwanzig
+    Minuten **und** die Suche danach — die Meldung des fremden Programms nennt
+    den Grund nicht.
+    """
     if weights_present(comfyui):
         return
     target = comfyui / "models" / "triposg" / "TripoSG"
+    frei = free_gigabytes(target)
+    if frei < NEEDED_GIGABYTES:
+        raise SetupFailed(
+            str(
+                _(
+                    "Auf dem Datenträger sind {frei:.1f} GB frei, gebraucht werden "
+                    "{noetig:.0f}. Schaffen Sie Platz, oder legen Sie ComfyUI auf einen "
+                    "anderen Datenträger — die Gewichte liegen unter models/triposg."
+                )
+            ).format(frei=frei, noetig=NEEDED_GIGABYTES)
+        )
     target.parent.mkdir(parents=True, exist_ok=True)
     _run_repeatedly(
         [str(python), "-s", "-c", _FETCH_WEIGHTS, str(target), WEIGHTS_REPO],

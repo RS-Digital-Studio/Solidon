@@ -1314,3 +1314,54 @@ def test_a_ready_comfy_says_nothing_about_missing_models() -> None:
     backend = ComfyBackend(transport=_answers_for(nodes))
 
     assert backend.missing_models("image_to_mesh") == ()
+
+
+# --- Platz vor dem Download -------------------------------------------------------
+
+
+def test_the_weights_are_not_fetched_onto_a_full_disk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ein 7,5-GB-Download stirbt an einer vollen Platte, und die Meldung lügt.
+
+    Am 23.08.2026 lief er dreimal an und starb dreimal nach Minuten, weil ``C:``
+    voll war. Was huggingface dabei meldet, nennt den Grund mit keinem Wort:
+
+        RuntimeError: File reconstruction error: Internal Writer Error:
+        Background writer channel closed
+
+    Wer das liest, sucht am Netz. Gefunden wurde es nur, weil der Abbruch
+    **dreimal an derselben Stelle** kam.
+
+    Geprüft wird deshalb **vorher**: Ein Problem nach zwei Sekunden zu melden ist
+    mehr wert als nach zwanzig Minuten — dieselbe Begründung, aus der
+    ``nodes_load`` vor dem Download steht und nicht danach.
+    """
+    from app.core.backends import comfy_setup
+
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 2.5)
+
+    with pytest.raises(comfy_setup.SetupFailed) as fehler:
+        comfy_setup.fetch_weights(tmp_path, Path("python"))
+
+    gesagt = str(fehler.value)
+    assert "2.5" in gesagt or "2,5" in gesagt, f"nennt den freien Platz nicht: {gesagt}"
+    assert "9" in gesagt, f"nennt nicht, wie viel gebraucht wird: {gesagt}"
+
+
+def test_enough_room_lets_the_download_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Gegenrichtung: Bei genug Platz hält die Prüfung nicht auf.
+
+    Ohne diesen Test wäre eine Prüfung, die **immer** wirft, genauso grün.
+    """
+    from app.core.backends import comfy_setup
+
+    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: 500.0)
+    gerufen: list[str] = []
+    monkeypatch.setattr(comfy_setup, "_run_repeatedly", lambda *a, **k: gerufen.append("los"))
+
+    comfy_setup.fetch_weights(tmp_path, Path("python"))
+
+    assert gerufen == ["los"], "die Prüfung hat den Download aufgehalten, obwohl Platz war"
