@@ -106,6 +106,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein ladendes Fenster sieht aus wie ein abgestürztes | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | ein sichtbares Wartezeitverhalten (§2.8) statt schwarzer Fläche. Sechs Sekunden beim Öffnen von Weg 1, in denen Menü- und Statusleiste stehen und **kein einziges Panel** — Robert hat es zweimal für einen Absturz gehalten, das Protokoll sagt beide Male `ended normally`. **Gehört der Oberfläche**; sinkt die Ladezeit, bleibt der Punkt |
 | Der Cache spart die Geometrie, nicht die Erkennung | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | zuerst eine **Messung**, wie viel der sechs Sekunden überhaupt auf `detect()` entfällt. `_with_features()` läuft nach jedem Operationsergebnis, auch nach einem Cache-Treffer, wo das Netz bitgleich ist — fünfzehn Läufe über denselben Körper. Der Umbau ist nicht trivial: Der Plattencache nimmt nur `MeshData`, und die Zuordnung hängt an den vorigen Merkmalen und an `operation.matches` (§15.7) |
 | `decimated 992 to 992` — ein Schritt, der nichts tut | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | eine Erklärung. `decimate()` hat einen frühen Rücksprung für genau diesen Fall, und er greift nicht; es läuft eine echte `simplify_quadric_decimation` von 992 auf 992. Drei Aufrufer kommen infrage |
+| Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
+| Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
 
 ---
 
@@ -8286,3 +8288,47 @@ einen Sollwert prüfen, nicht gegen die eigene Wiederholbarkeit.**
       erfundenen Schlüsseln, beide rot. Und er zählt, wie viele Einträge er am
       Korpus überhaupt erreicht hat: unter vier schlägt er fehl, sonst prüfte
       er bei einem geänderten Korpus wieder seine eigene leere Menge.
+
+---
+
+## Was erst am Verkaufsstart fällig wird (24.08.2026)
+
+Gemeldet von `3d-druck-bd` aus der Auslieferung von 0.1.4 und der
+Rechtstext-Durchsicht (`3d-druck-58`): vier Textarbeiten, die heute niemand
+machen kann, weil sie an Gewerbeanmeldung, Rechtsprüfung und Verkaufsstart
+hängen. **Genau solche Punkte fallen durch** — an dem Tag, an dem sie dran
+sind, fallen sie niemandem ein.
+
+Sie stehen hier und nicht am Ende von `konzepte/konzept-demo-2026-10.md`,
+obwohl das Konzept die Bedingungen für 1.0 schon führt: `CLAUDE.md` sagt,
+offene Arbeit steht im Register und nirgends sonst, und der Grund dafür ist
+genau der Fall, der sich beim Nachprüfen dieser vier Punkte wiederholt hat.
+
+**Zwei der vier halten der Prüfung am Code nicht stand**, und das ist der
+eigentliche Ertrag dieser Meldung:
+
+- **„Zahlungsanbieter in AGB und Datenschutzerklärung eintragen" ist
+  erledigt.** Gemessen: **Paddle** steht fünfmal in `datenschutz.html` und in
+  `agb.html` („Vertragspartner des Kaufs. Für den Kauf gelten damit die
+  Bedingungen von Paddle"). Die AGB unterscheiden dabei sauber zwischen jetzt
+  und später — „es gibt keine Bestellung, keinen Kaufpreis und keinen
+  Zahlungsdienstleister" gilt der Demo.
+- **„Kaufknopf fehlt" ist keine Lücke, sondern Absicht.**
+  `konzept-demo-2026-10.md` §H: „Kein Verkauf während der Demo. Das entlastet
+  die Rechtsseite erheblich: ohne entgeltlichen Vertrag greift die
+  Widerrufsbelehrung nicht." Der Knopf ist Arbeit **zum Start**, nicht ein
+  Mangel von heute.
+
+Bleiben zwei, und beide sind echt:
+
+- [ ] **Der Entwurfsvermerk muss von den Rechtstexten herunter**, sobald die
+      fachliche Prüfung durch ist. `agb.html`, `eula.html` und
+      `widerruf.html` tragen je einmal „Sorgfältiger Entwurf, aber keine
+      Rechtsberatung"; erzeugt wird er in `tools/make_legal.py:236`. Also eine
+      Zeile im Werkzeug und ein Neuerzeugen — **nicht** drei Stellen von Hand,
+      die beim nächsten Lauf wiederkämen.
+
+- [ ] **Impressum ohne USt-IdNr. oder Steuernummer.** `website/impressum.html`
+      nennt heute Name, Anschrift und E-Mail; gemessen: keine der beiden
+      Angaben steht darin. Kommt mit der Gewerbeanmeldung und ist bis dahin
+      nicht nachholbar — §5 TMG verlangt sie, sobald es sie gibt.
