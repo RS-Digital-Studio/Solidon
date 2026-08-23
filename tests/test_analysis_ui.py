@@ -24,7 +24,7 @@ from app.core.perceive import maps
 from app.core.types import Finding
 from app.i18n import format_decimal, tr
 from app.ui.analysis_bar import MAP_ORDER, AnalysisBar, LayerBar, MapLegend
-from app.ui.labels import feature_label
+from app.ui.labels import feature_label, length
 from app.ui.main_window import MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
@@ -382,6 +382,40 @@ def test_the_object_tree_lists_the_features(window: MainWindow) -> None:
     assert any(text.startswith(tr("Bohrung")) for text in names)
     assert any(text.startswith("Ø") for text in measures), "das Maß gehört in die Maßspalte"
     assert not any(text in ("hole", "face") for text in measures), "der Typ ist kein Maß"
+
+
+def test_a_fillet_says_what_it_is_and_how_big() -> None:
+    """Im Objektbaum stand „fillet_1" — ein englisches Wort in der Oberfläche,
+    an ``tr()`` vorbei, und daneben eine leere Maßspalte.
+
+    Die Merkmalsart kam im August dazu; die Beschriftung wurde nicht
+    nachgezogen, und ``feature_name`` fiel auf die Kennung zurück. **Kein Test
+    hat es bemerkt, und das ist der eigentliche Befund:** Die Tests fragen, *ob*
+    ein Merkmal erkannt wird, nicht, *was* dort steht. Gemeldet hat es
+    3d-druck-3a beim Durchsehen der eigenen Arbeit.
+
+    **R und nicht Ø**, weil eine Verrundung über ihren Radius benannt wird —
+    der Kunde sagt „R3", der Slicer sagt „R3", Fusion sagt „R3".
+
+    Und die Unterscheidung ist mehr als Kosmetik: Eine einspringende Ecke
+    bedeutet für den Druck etwas anderes als eine ausspringende. Eine
+    Hohlkehle ist die Stelle, an der später die Frage kommt, ob die Düse dort
+    überhaupt hinkommt.
+    """
+    from app.core.types import Feature
+    from app.ui.labels import feature_measure, feature_name
+
+    def fillet(name: str, *, recess: bool) -> Feature:
+        return Feature(
+            id=name,
+            kind="fillet",
+            params={"radius": 3.0, "recess": recess},
+            provenance="test",
+        )
+
+    assert feature_name("fillet_1", fillet("fillet_1", recess=False)) == tr("Verrundung")
+    assert feature_name("fillet_2", fillet("fillet_2", recess=True)) == tr("Hohlkehle")
+    assert feature_measure(fillet("fillet_1", recess=False)) == f"R{length(3.0)}"
 
 
 def test_a_face_is_named_by_where_it_looks() -> None:

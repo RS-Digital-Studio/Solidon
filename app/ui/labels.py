@@ -1013,6 +1013,13 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
         return tr("Pfanne") if feature.params.get("recess") else tr("Kuppel")
     if feature.kind == "torus":
         return tr("Kehle") if feature.params.get("recess") else tr("Wulst")
+    # Dieselbe Unterscheidung wie darüber, und dieselbe Falle: Ohne diese zwei
+    # Zeilen fällt die Beschriftung auf die Kennung zurück, und im Objektbaum
+    # stand „fillet_1" — ein englisches Wort in der Oberfläche, an `tr()`
+    # vorbei. Aufgefallen ist es keinem Test: Sie fragen, *ob* ein Merkmal da
+    # ist, nicht, *was* dort steht.
+    if feature.kind == "fillet":
+        return tr("Hohlkehle") if feature.params.get("recess") else tr("Verrundung")
     if feature.kind == "edge_loop":
         return tr("Offene Kante")
     return feature_id
@@ -1028,6 +1035,12 @@ def feature_measure(feature: Feature) -> str:
     params = feature.params
     if feature.kind == "hole":
         return f"Ø{length(float(params.get('diameter', 0.0)))}"
+    # **R und nicht Ø**, weil eine Verrundung über ihren Radius benannt wird:
+    # Der Kunde sagt „R3", der Slicer sagt „R3", Fusion sagt „R3". Ohne diese
+    # Zeile blieb die Maßspalte des Objektbaums bei jeder Verrundung leer,
+    # während sie bei jedem anderen Merkmal etwas zeigt.
+    if feature.kind == "fillet":
+        return f"R{length(float(params.get('radius', 0.0)))}"
     if feature.kind == "face":
         return area(float(params.get("area", 0.0)))
     if feature.kind == "cone":
