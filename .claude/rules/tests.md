@@ -172,11 +172,39 @@ sich damit um:
   zugeordneter Absturz kostet eine halbe Stunde Suche im richtigen Code.
 * **Der billigste Gegenbeweis ist der einzelne Test.** Läuft er allein in einer
   Sekunde durch, war es die Maschine.
-* **Steht er oder rechnet er?** Der Prozessbaum sagt, welche Datei offen ist
-  (`Get-CimInstance Win32_Process`), und `Get-Process -Id N | Select CPU` zweimal
-  im Abstand von acht Sekunden trennt „hängt" von „dauert". Am selben Tag stand
-  ein Lauf zwölf Minuten bei **0,00 CPU-Sekunden** und 508 MB — ohne diese Zahl
-  wäre es eine Vermutung geblieben, und die Datei lief einzeln in 10,77 s durch.
+* **Steht er oder rechnet er?** Drei Fragen, und erst zusammen tragen sie eine
+  Aussage. Sie kosten zwanzig Sekunden, und jede einzelne davon hat in der Nacht
+  vom 22. auf den 23.08.2026 mindestens einmal jemanden in die Irre geführt.
+
+  1. **Welche Prozesse gehören überhaupt zum Lauf?** Nicht die aus dem
+     Prozessbaum: Windows setzt die Elternnummer nicht um, wenn ein
+     Zwischenprozess endet, und der `pytest` fällt dann heraus. Und nicht alle
+     mit `pytest` in der Kommandozeile: Die Hülle von `gate_lock` trägt den
+     ganzen geschützten Befehl, wartet aber nur.
+
+     ```
+     Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+       Where-Object { $_.CommandLine -match '-m pytest' -and
+                      $_.CommandLine -notmatch 'gate_lock' }
+     ```
+
+     Zwölf wartende Hüllen sahen einmal aus wie zwölf hängende Läufe — keine
+     Rechenzeit, Protokoll steht, die perfekte Signatur, und vollständig falsch.
+
+  2. **Wächst die Rechenzeit?** `Get-Process -Id N | Select CPU`, zweimal im
+     Abstand von mindestens fünf Sekunden. Ein einzelner Blick genügt nicht:
+     Ein Lauf, der je Fensterdatei einen Prozess startet, hat zwischen Abbau und
+     Aufbau **regelmäßig** ein bis zwei Sekunden ohne CPU.
+
+  3. **Wächst das Protokoll?** Die Größe der Ausgabedatei über dieselbe Spanne.
+     Das ist die verlässlichste der drei, weil sie unabhängig davon ist, welchen
+     Prozess man erwischt hat: **Ein Lauf, dessen Ausgabe nicht wächst, arbeitet
+     nicht.**
+
+  Erst wenn über zwanzig Sekunden **keine CPU-Sekunde und kein Byte** dazukommt,
+  ist es ein Hänger. Dann sagt `py-spy dump --pid N --native` (siehe unten),
+  woran er steht — und die Zahl der Fortschrittszeichen im Protokoll sagt
+  zusammen mit `pytest --collect-only -q`, **welcher Test** es ist.
 
 **Und die Grenze des Schlosses, weil sie nicht offensichtlich ist:** Es
 serialisiert die *Rechenzeit*, nicht den *Arbeitsbaum*. Wer im geteilten Baum
@@ -229,6 +257,51 @@ von einem Vorgänger abhängt, wird bei paralleler Ausführung nicht rot — er 
 *manchmal* rot. Zwei gleiche Läufe sind kein Beweis, zwei ungleiche sind sofort
 einer. Beim ersten Einsatz dieses Verfahrens fielen die elf oben auf.
 
+
+
+### Wer das Schloss belegt sieht, schreibt nicht
+
+Das Schloss schützt den Halter vor **Rechenlast**. Es schützt ihn nicht vor
+**dir**. Wer bei belegtem Schloss eine Datei ändert, verfälscht nicht den
+eigenen Lauf — der kommt ja erst noch —, sondern den fremden, der gerade läuft.
+
+Zweimal in einer Nacht, beide Male mit einer „kleinen" Änderung:
+
+* Eine Sitzung schrieb `tr("Außengewinde")` in `digest.py`, während ein fremdes
+  Tor lief. Dessen Suite sah den Text und die Kataloge noch nicht: fünf rote
+  Übersetzungstests, eine halbe Stunde Suche in einer Sache, die zwei Minuten
+  später von selbst geschlossen war.
+* Eine andere ergänzte `suite-getrennt.sh` um eine verabredete Zeile, während
+  ein fremdes Tor **darauf** lief. Bash liest ein Skript zeilenweise nach: Der
+  Lauf starb mit einem Syntaxfehler in einer Zeile, die es nie gegeben hat.
+
+Der zweite Fall ist behoben — das Skript kopiert sich beim Start. Der erste
+nicht: Eine Datei, die der laufende Test importiert, lässt sich nicht
+wegkopieren. Dafür bleibt nur die Regel. `gate_lock.py status` sagt in einer
+Sekunde, ob jemand fährt.
+
+### Der fremden Messung glaubt man so wenig wie der eigenen
+
+Eine Zahl, die eine Sitzung weiterreicht, wird auf dem Weg **fester**, nicht
+lockerer: Jede Weitergabe streift eine Unsicherheit ab, bis am Ende eine Zahl
+steht, die niemand mehr hinterfragt. In derselben Nacht ist eine ungeprüfte
+Zahl über drei Sitzungen gewandert und in einer Meldung gelandet, die sie als
+Ergebnis führte — bis der Urheber selbst zurückzog.
+
+Und der häufigste Grund für eine falsche Zahl ist immer derselbe:
+
+**Eine Mustersuche misst, was das Muster kennt — und schweigt über den Rest,
+ohne es zu sagen.** Dreimal an einem Morgen, in beide Richtungen:
+
+| Suche | Fehler | Folge |
+|---|---|---|
+| `grep -o "le plaque"` | ohne Wortgrenze | zählte `seule plaque` mit — Befund war Rauschen |
+| `re.search(r"\ble plaque\b")` | ein Muster, ein Fall | fand `un même plaque` nicht — „null Fehler" war blind |
+| `"pytest" in CommandLine` | zu weit | zählte wartende `gate_lock`-Hüllen als laufende Tests |
+
+Wer eine Zahl weitergibt, gibt deshalb das **Muster** mit, nicht nur das
+Ergebnis. Und wer eine bekommt, prüft sie an einem Fall, von dem er weiß, wie
+er ausgehen muss — bevor er auf ihr aufbaut.
 
 ### Wie viele Läufe trägt eine Aussage?
 
