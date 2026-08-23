@@ -533,3 +533,158 @@ Probe hat an anderer Stelle schon fünf überzeugend aussehende Tests verworfen.
 Wer sie automatisiert, packt die Rückstellung in ein `finally`; ein Abbruch
 zwischen Mutation und Rückstellung lässt sonst eine verfälschte Datei liegen —
 am 23.08.2026 einmal passiert, aufgefallen nur, weil danach ein `grep` lief.
+
+### Was für die Gesamtmenge gilt, gilt nicht für jedes Element
+
+Der Abschnitt oben sagt, eine erhobene Grundmenge brauche eine Zusicherung. Bei
+einem **parametrisierten** Test ist damit die Parameterliste gemeint und nicht
+der Inhalt je Parameter — und der Unterschied ist keine Feinheit:
+
+* `test_language_rules.py` prüft je Quelldatei die Bezeichner. Eine Zusicherung
+  „diese Datei hat Bezeichner" machte **elf Tests rot**: Eine leere
+  `__init__.py` hat legitim keine.
+* `test_website.py` prüft je Seite die Sprungmarken. Nur **12 von 30** Seiten
+  haben welche, und **6 von 30** einen FAQ-Block. Eine Zusicherung je Seite wäre
+  auf zwei Dritteln nicht zu streng, sondern **inhaltlich verkehrt**.
+
+Die Lösung im zweiten Fall ist die allgemeine: Die Zusicherung steht daneben und
+**summiert über alle Parameter** — „mindestens eine Seite hat Sprungmarken" ist
+wahr und prüfbar, „jede Seite hat welche" ist falsch.
+
+### Ein fertiger Job in einem laufenden Lauf gibt sein Protokoll heraus
+
+`gh run view --log-failed` antwortet „logs will be available when it is
+complete", solange der **Lauf** läuft — auch wenn der Job, den man lesen will,
+längst fertig ist. Ein Lauf mit vier Jobs ist erst zu Ende, wenn der letzte
+durch ist; bis dahin schweigt der Befehl über alle vier.
+
+Die API antwortet je Job:
+
+```
+gh api repos/<eigner>/<repo>/actions/jobs/<job-id>/logs
+```
+
+Ohne führenden Schrägstrich vor `repos` — Git Bash schreibt einen mit `/`
+beginnenden Pfad sonst in einen Dateisystempfad um.
+
+**Die Grenze davon ist gemessen worden, und sie ist enger als sie zuerst
+aussah.** Der Satz „die API gibt auch laufende Jobs heraus" stimmt nicht:
+
+    Job in_progress   Exit 1   228 Bytes   BlobNotFound, HTTP 404
+    Job completed     Exit 0   57 480 Bytes
+
+Was sie hergibt, ist das Protokoll eines **fertigen** Jobs, während der **Lauf**
+noch läuft — und das genügt, weil ein Job, der rot geworden ist, fertig ist. Am
+23.08.2026 hat das eine Diagnose von „nach dem Lauf" auf „in einer Minute"
+verkürzt.
+
+**Und die Falle daneben, die dabei prompt zugeschnappt hat:** Der erste Versuch
+lief als `gh api … | tail -6` und meldete **Exit 0** über einer 404-Antwort —
+der Rückgabewert von `tail`. Dieselbe Pipe-Falle, die weiter oben in dieser
+Datei steht, an einem Werkzeug, das kein Testlauf ist. Sie gilt für jeden
+Befehl, dessen Rückgabewert man liest, nicht nur für `pytest`.
+
+Der Handgriff davor hat die Suche zusätzlich halbiert: Die neueste `ruff` in
+einer **eigenen** Umgebung gegen das Projekt zu fahren (nicht in der `.venv` —
+vor einem Paketbau wird dort nichts installiert) schloss die wahrscheinlichste
+Ursache aus, bevor das Protokoll überhaupt da war.
+
+Am 23.08.2026 hat das eine Diagnose von „nach dem Lauf" auf „in einer Minute"
+verkürzt. Und der Handgriff davor hat sie halbiert: Die neueste `ruff` in einer
+**eigenen** Umgebung gegen das Projekt zu fahren (nicht in der `.venv` — vor
+einem Paketbau wird dort nichts installiert) schloss die wahrscheinlichste
+Ursache aus, bevor das Protokoll da war.
+
+### Eine Automatik, die in Wahrheit Handarbeit ist, ist gefährlicher als keine
+
+`CLAUDE.md` sagt zu: „Jeder Commit geht sofort hinaus, `.githooks/post-commit`
+pusht ihn." Am 23.08.2026 zeigte sich, dass es diesen Hook im Arbeitsbaum **nicht
+gibt**:
+
+    .git/hooks/post-commit     existiert nicht
+    core.hooksPath             auf keiner Ebene gesetzt
+
+Ohne `core.hooksPath` sieht Git `.githooks/` nie an. Gemerkt hat es niemand,
+**weil das Ergebnis stimmte** — es hat immer jemand von Hand gepusht. Aufgefallen
+ist es erst, als zwei Commits vor einem CI-Start liegenblieben und die CI fast
+den Stand *vor* zwei Fehlerbehebungen gebaut hätte.
+
+Daraus folgen zwei Dinge, und das zweite ist die eigentliche Regel:
+
+* Eingeschaltet wird sie mit `git config core.hooksPath .githooks` — **nicht**
+  mitten in einem Release, weil ein Hook, der ab sofort bei jedem Commit pusht,
+  während jemand Pakete baut, mehr kostet als er rettet.
+* **Woran merkt man, dass sie läuft?** Eine Automatik, deren Ausbleiben
+  niemandem auffällt, ist keine. Also gehört zu ihr eine Zusicherung:
+  `core.hooksPath` zeigt auf `.githooks`, und jede Datei darin ist ausführbar.
+
+### Die Isolation deckt Qt, Verzeichnisse und OpenSCAD ab — das Netz nicht
+
+`conftest.py` hält die Maschine aus dem Ergebnis heraus: Offscreen-Qt,
+Nutzerverzeichnisse in einem Temp-Ordner, kein installiertes OpenSCAD. Am
+23.08.2026 stand in einem Absturzstapel von `test_ui.py`:
+
+    app/core/backends/llm.py:501    available
+    app/ui/first_run.py:445         _chat_text
+    app/ui/leash.py:173             run              (Arbeitsthread)
+    ... socket.py:853               create_connection
+
+**Ein Test öffnet eine echte Netzwerkverbindung.** `llm.available()` fragt über
+`socket.create_connection`, ob ein Backend erreichbar ist. Ein Rechner mit
+laufendem Ollama misst damit etwas anderes als einer ohne, und die CI hat gar
+keins — dieselbe Klasse wie das installierte OpenSCAD, nur eine Ebene weiter.
+
+Ob es die Ursache des Absturzes war, ist offen. Ein Isolationsloch ist es
+unabhängig davon.
+
+### Ein Testdatensatz, in dem alles gleich heißt, prüft weniger als er aussieht
+
+Zweimal an einem Tag, beide Male an derselben Stelle und beide Male von der
+Gegenprobe gefangen:
+
+> **Zwei Felder mit gleichem Wert machen jeden Test grün, der nur eines liest.**
+
+* `website/version.json` nennt jedes Paket zweimal — als `"file"` und in der
+  `"url"`. `updates.py` liest **beide**: das eine, um zu laden, das andere, um
+  die geladene Datei zu benennen. Der erste Test prüfte nur `url`; die
+  Mutation traf `file`, und der Test blieb grün.
+* Dasselbe im Werkzeug daneben: `promised_files()` sammelt die Namen aus beiden
+  Feldern, und der Test dazu fütterte sie mit **demselben** Wert. Die
+  Gegenprobe „nur `url` auswerten" blieb grün, obwohl die Auswertung damit die
+  Hälfte verlor.
+
+Die Lösung ist nicht, die Gegenprobe zu verschärfen, sondern **den Datensatz zu
+entzerren**: `{"url": "…f=geladen.exe", "file": "benannt.exe"}`. Ein Test, der
+zwei Wege unterscheiden soll, braucht zwei unterscheidbare Werte — sonst prüft
+er, dass zwei Kopien derselben Zahl übereinstimmen.
+
+Verwandt mit „an der Aussage vorbei" oben (`str(op_id) in tooltip` war grün,
+weil „2" auch in „2,40 mm" steht): Beide Male stimmt der Vergleich zufällig.
+
+### Lokal gegen lokal sagt nichts darüber, was oben liegt
+
+Am 23.08.2026 wurden beim Veröffentlichen von 0.1.3 die alten Pakete gelöscht,
+**bevor** die Seiten und `version.json` hochgeladen waren. Mehrere Minuten lang
+zeigte solidon3d.de in sechs Sprachen auf vier Dateien, die es nicht mehr gab,
+und die Update-Prüfung bot jedem Kunden eine Fassung an, deren Datei 404 gab.
+
+**Keine Prüfung hat es gemerkt, und alle waren grün** — 199 Tests, vier
+hochgeladene Pakete mit verglichenen Prüfsummen, eine `version.json`, die zur
+Anwendung passte. Lokal war durchgehend alles stimmig. Falsch war nur, was
+**oben** lag, und danach hatte niemand gefragt.
+
+Daraus folgen zwei Dinge:
+
+* **Die Reihenfolge gehört in ein Werkzeug, nicht in ein Gedächtnis.**
+  `upload_website.py --alte-pakete` liest die `version.json` **vom Server** und
+  verweigert, solange dort die alte Fassung steht. Die Bedingung kann den
+  Fehler nicht wiederholen, weil sie sich auf den Zustand stützt, um den es
+  geht.
+* **Nach jedem Hochladen wird gegen den Server gemessen**, nicht gegen die
+  Platte: Version, Paketnamen, Größen, und ob die Seiten die neuen Namen
+  tragen. Das ist Handarbeit und bleibt es — ein Test im Tor darf nicht vom
+  Netz abhängen. Aber es ist die einzige Messung, die den Fehler oben findet.
+
+Die allgemeine Form steht schon weiter oben („Was habe ich gerade gemessen?"),
+hier ist die Antwort besonders unauffällig: Man hat *etwas Echtes* gemessen,
+nur eben nicht das, was der Kunde sieht.
