@@ -4014,7 +4014,7 @@ class MainWindow(QMainWindow):
             if entry.name == "edge"
         )
         self.session.apply(
-            tr("Gleichmäßig vernetzen"),
+            tr("Dreiecke angleichen"),
             [
                 OperationDraft(
                     op="remesh_uniform",

@@ -563,7 +563,7 @@ class RemeshParams(BaseParams):
 
 @register_op(
     name="remesh_mesh",
-    title=_("Neu vernetzen"),
+    title=_("Kanten verfeinern"),
     category="mesh",
     params=RemeshParams,
     consumes=1,
@@ -669,7 +669,7 @@ class UniformParams(BaseParams):
 
 @register_op(
     name="remesh_uniform",
-    title=_("Gleichmäßig vernetzen"),
+    title=_("Dreiecke angleichen"),
     category="mesh",
     params=UniformParams,
     consumes=1,
@@ -680,7 +680,7 @@ class UniformParams(BaseParams):
     ),
     caveat=_(
         "Nicht zum Verfeinern allein: Wer nur mehr Dreiecke will, ohne dass irgendwo "
-        "welche verschwinden, nimmt „Neu vernetzen“ — das teilt und fasst nie zusammen."
+        "welche verschwinden, nimmt „Kanten verfeinern“ — das teilt und fasst nie zusammen."
     ),
 )
 def remesh_uniform(ctx: OpContext) -> OpResult:

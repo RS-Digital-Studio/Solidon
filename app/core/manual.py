@@ -477,7 +477,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "**Der Weg dorthin hat drei Stufen, und die erste wird gern "
             "übersprungen.** Erst eine grobe Form aus Grundkörpern, weich "
             "verschmolzen (*Weich verschmelzen* im Menü *Ändern*); dann "
-            "*Gleichmäßig vernetzen*, damit überall gleich viele Eckpunkte "
+            "*Dreiecke angleichen*, damit überall gleich viele Eckpunkte "
             "sitzen; dann *Formen*. Wer die zweite Stufe auslässt, malt auf "
             "einem Netz, das seinem Pinsel nicht folgen kann — die Leiste sagt "
             "es, sobald die Sitzung offen ist.\n\n"

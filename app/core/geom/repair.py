@@ -400,7 +400,7 @@ def repair(
                     message=_(
                         "Selbstdurchdringungen konnten nicht aufgelöst werden: Dieser "
                         "Schritt braucht einen geschlossenen Körper, und das Netz ist "
-                        "auch nach der Reparatur keiner. Neu vernetzen schließt es "
+                        "auch nach der Reparatur keiner. Kanten verfeinern schließt es "
                         "zuverlässig; danach lohnt ein zweiter Lauf."
                     ),
                 )
@@ -419,7 +419,7 @@ def repair(
                 # Nutzer gehört, nicht der Reparatur.
                 message=_(
                     "Das Modell ist weiterhin nicht geschlossen. "
-                    "Neu vernetzen schließt es, kostet aber Feinheit."
+                    "Kanten verfeinern schließt es, kostet aber Feinheit."
                 ),
                 values={"open_edges": open_edge_count(result.mesh)},
             )

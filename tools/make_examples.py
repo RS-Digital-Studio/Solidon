@@ -201,7 +201,7 @@ def way_four() -> Project:
         ],
     )
     history.apply(
-        _("Gleichmäßig vernetzen"),
+        _("Dreiecke angleichen"),
         [
             OperationDraft(
                 op="remesh_uniform",

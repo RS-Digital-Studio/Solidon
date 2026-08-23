@@ -207,7 +207,7 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # Modell läuft.
     #
     # In dieser Reihenfolge bleiben alle vier dicht und behalten 99,9 % ihrer
-    # Dreiecke. Neu vernetzen — der andere Weg, ein Netz zu schließen — hätte
+    # Dreiecke. Kanten verfeinern — der andere Weg, ein Netz zu schließen — hätte
     # sie gekostet.
     #
     # Geraten wird beim Maß nichts (Regel 21): dass ein Stuhl 75 mm hoch
