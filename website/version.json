@@ -1,87 +1,105 @@
 {
-  "version": "0.1.2",
+  "version": "0.1.3",
   "url": "https://solidon3d.de/",
   "notes": "Zweiter Bau der Demo: viele Verbesserungen an Oberfläche, Schichtanalyse und Slicer-Übergabe. Weiterhin vollständig und ohne Schlüssel, bis zum 30.10.2026.",
   "packages": {
     "windows": {
-      "file": "Solidon3D-Setup-0.1.2.exe",
-      "url": "https://solidon3d.de/api/count.php?f=Solidon3D-Setup-0.1.2.exe",
-      "size": 179452109,
-      "sha256": "873def420c7c0096aa5a39b40b02efcb6e0d5010fd2d67436a6430d10e16e77c"
+      "file": "Solidon3D-Setup-0.1.3.exe",
+      "url": "https://solidon3d.de/api/count.php?f=Solidon3D-Setup-0.1.3.exe",
+      "size": 178806172,
+      "sha256": "ac6450cecc826284697bd90e6b830d75c494542bd9d8bb6b6018d84873c9eff7"
     },
     "macos-arm64": {
-      "file": "Solidon3D-0.1.2-macos-arm64.pkg",
-      "url": "https://solidon3d.de/api/count.php?f=Solidon3D-0.1.2-macos-arm64.pkg",
-      "size": 279518356,
-      "sha256": "987771cbef370193bfdffa8b616f491ce27583cbdbc102301526f0d365e1babe"
+      "file": "Solidon3D-0.1.3-macos-arm64.pkg",
+      "url": "https://solidon3d.de/api/count.php?f=Solidon3D-0.1.3-macos-arm64.pkg",
+      "size": 279014203,
+      "sha256": "b3b29342ce41a99c4930dfd97985cc20694203e80a6c31c1b28e6be7fd72e0de"
     },
     "macos-x86_64": {
-      "file": "Solidon3D-0.1.2-macos-x86_64.pkg",
-      "url": "https://solidon3d.de/api/count.php?f=Solidon3D-0.1.2-macos-x86_64.pkg",
-      "size": 313083825,
-      "sha256": "c0a37af9f0e44831aec6726fa9e73e3c0ca2a737b11dd30e3be6aef6f72e6bfd"
+      "file": "Solidon3D-0.1.3-macos-x86_64.pkg",
+      "url": "https://solidon3d.de/api/count.php?f=Solidon3D-0.1.3-macos-x86_64.pkg",
+      "size": 312575359,
+      "sha256": "56102ac4d587bb27d0baf891d0dad98b04a5e2e7ef5e0d5e5bc2ee6a5c771682"
     }
   },
   "changes": {
     "de": [
-      "Getippte Kommazahlen werden überall richtig gelesen. „12,5\" blieb zwölfeinhalb — vorher konnte daraus 125 werden, ohne Rückfrage und ohne Hinweis.",
-      "Jedes der sechsundfünfzig Felder in den Druckeinstellungen sagt jetzt, was es bewirkt, wenn man es bewegt.",
-      "Druckzeit und Materialbedarf werden genauer geschätzt, vor allem bei ausgehöhlten Teilen.",
-      "Die Übergabe an den Slicer trifft die Platte. Bei CuraEngine lagen Teile daneben.",
-      "Beim Trennen mit Verstiftung sitzen die Gegenlöcher in der richtigen Hälfte.",
-      "Millimeter und Zoll gelten jetzt überall, wo eine Zahl steht — auch in den Werkzeugleisten und beim Bemalen.",
-      "Der Fortschritt bleibt stehen, bis wirklich fertig gerechnet ist, und das Fenster bleibt dabei bedienbar.",
-      "Alle Tastenkürzel stehen jetzt in einer Übersicht: im Hilfemenü unter „Tastenkürzel\", oder mit einem Druck auf die Fragezeichentaste."
+      "Der exakte Kern kann jetzt bohren: „Exakte Bohrung setzen“ arbeitet direkt am exakten Körper, ohne den Umweg über ein Netz.",
+      "Verrundungen und Fasen werden zuverlässiger erkannt. Eine Verrundung wurde vorher gelegentlich als Zapfen gemeldet — mit einem Durchmesser, den es nicht gab.",
+      "Die mitgelieferten Beispiele begrüßen nicht mehr mit Warnungen, die keine sind.",
+      "Der Startbildschirm passt auf kleine Bildschirme, ohne zu rollen.",
+      "Ein angeklicktes Merkmal färbt sich selbst. Vorher nahm der ganze Körper die Auswahlfarbe an, und man sah nicht, was gemeint war.",
+      "Der Objektbaum nennt zu jedem erkannten Merkmal sein Maß.",
+      "Exportierte Netze enthalten keine leeren Dreiecke mehr.",
+      "Zweimal gespeichert ergibt zweimal dieselbe Datei.",
+      "Die fünf Übersetzungen sind durchgesehen. Fachbegriffe heißen jetzt so, wie die Slicer sie nennen.",
+      "Die Werkzeugzeile ist aufgeräumt: Das breiteste Feld war das, das man am seltensten braucht.",
+      "Ein zweiter Programmfehler stellt kein zweites Fenster mehr über das erste."
     ],
     "en": [
-      "Typed decimal numbers are read correctly everywhere. \"12.5\" stays twelve and a half — before, it could turn into 125, with no question and no warning.",
-      "Every one of the fifty-six fields in the print settings now says what it does when you move it.",
-      "Print time and material use are estimated more accurately, above all for hollowed parts.",
-      "The handover to the slicer lands on the plate. With CuraEngine, parts ended up beside it.",
-      "When splitting with pins, the matching holes now sit in the correct half.",
-      "Millimetres and inches now apply wherever a number appears — including the tool bars and painting.",
-      "Progress stays until the computation is really done, and the window remains usable throughout.",
-      "Every keyboard shortcut is now in one overview: in the Help menu under \"Keyboard shortcuts\", or by pressing the question mark key."
+      "The exact kernel can now drill: “Drill an exact hole” works directly on the exact body, without the detour through a mesh.",
+      "Fillets and chamfers are recognised more reliably. A fillet was previously reported as a boss now and then — with a diameter that did not exist.",
+      "The bundled examples no longer greet you with warnings that are none.",
+      "The start screen fits on small screens without scrolling.",
+      "A clicked feature colours itself. Previously the whole body took the selection colour, and you could not see what was meant.",
+      "The object tree names the dimension of every recognised feature.",
+      "Exported meshes no longer contain empty triangles.",
+      "Saving twice gives you the same file twice.",
+      "The five translations have been reviewed. Technical terms are now called what the slicers call them.",
+      "The toolbar is tidier: the widest field was the one you need least often.",
+      "A second program error no longer puts a second window over the first."
     ],
     "es": [
-      "Los números decimales escritos se leen bien en todas partes. «12,5» sigue siendo doce y medio; antes podía convertirse en 125, sin preguntar y sin avisar.",
-      "Cada uno de los cincuenta y seis campos de los ajustes de impresión dice ahora qué hace cuando se mueve.",
-      "El tiempo de impresión y el material se estiman con más precisión, sobre todo en piezas ahuecadas.",
-      "La entrega al slicer cae sobre la placa. Con CuraEngine las piezas quedaban al lado.",
-      "Al dividir con pasadores, los agujeros correspondientes quedan en la mitad correcta.",
-      "Milímetros y pulgadas valen ahora allí donde hay un número, también en las barras de herramientas y al pintar.",
-      "El progreso se mantiene hasta que el cálculo termina de verdad, y la ventana sigue siendo utilizable mientras tanto.",
-      "Todos los atajos de teclado están ahora en un único resumen: en el menú Ayuda, bajo «Atajos de teclado», o pulsando la tecla de interrogación."
+      "El núcleo exacto ya sabe taladrar: «Taladrar un agujero exacto» trabaja directamente sobre el cuerpo exacto, sin el rodeo por una malla.",
+      "Los redondeos y chaflanes se reconocen con más fiabilidad. Antes, un redondeo se comunicaba a veces como un saliente, con un diámetro que no existía.",
+      "Los ejemplos incluidos ya no saludan con advertencias que no lo son.",
+      "La pantalla de inicio cabe en pantallas pequeñas, sin desplazamiento.",
+      "Una característica seleccionada se colorea a sí misma. Antes, todo el cuerpo tomaba el color de selección y no se veía a qué se refería.",
+      "El árbol de objetos indica la medida de cada característica reconocida.",
+      "Las mallas exportadas ya no contienen triángulos vacíos.",
+      "Guardar dos veces da dos veces el mismo archivo.",
+      "Se han revisado las cinco traducciones. Los términos técnicos se llaman ahora como los llaman los slicers.",
+      "La barra de herramientas está ordenada: el campo más ancho era el que menos se necesita.",
+      "Un segundo error del programa ya no coloca una segunda ventana sobre la primera."
     ],
     "fr": [
-      "Les nombres décimaux saisis sont lus correctement partout. « 12,5 » reste douze et demi ; auparavant, cela pouvait devenir 125, sans question ni avertissement.",
-      "Chacun des cinquante-six champs des réglages d'impression indique désormais ce qu'il fait quand on le modifie.",
-      "Le temps d'impression et la quantité de matière sont estimés plus finement, surtout pour les pièces évidées.",
-      "Le transfert vers le trancheur atteint le plateau. Avec CuraEngine, les pièces se retrouvaient à côté.",
-      "Lors d'une découpe avec goupilles, les trous correspondants se placent dans la bonne moitié.",
-      "Millimètres et pouces valent maintenant partout où figure un nombre — y compris dans les barres d'outils et lors de la peinture.",
-      "La progression reste affichée jusqu'à la fin réelle du calcul, et la fenêtre demeure utilisable pendant ce temps.",
-      "Tous les raccourcis clavier figurent désormais dans un aperçu unique : dans le menu Aide, sous « Raccourcis clavier », ou en appuyant sur la touche point d’interrogation."
+      "Le noyau exact sait désormais percer : « Percer un trou exact » travaille directement sur le corps exact, sans détour par un maillage.",
+      "Les congés et chanfreins sont reconnus plus sûrement. Un congé était parfois signalé comme un téton — avec un diamètre qui n’existait pas.",
+      "Les exemples fournis n’accueillent plus avec des avertissements qui n’en sont pas.",
+      "L’écran d’accueil tient sur les petits écrans, sans défilement.",
+      "Une caractéristique cliquée se colore elle-même. Auparavant, tout le corps prenait la couleur de sélection et l’on ne voyait pas ce qui était visé.",
+      "L’arborescence des objets indique la cote de chaque caractéristique reconnue.",
+      "Les maillages exportés ne contiennent plus de triangles vides.",
+      "Enregistrer deux fois donne deux fois le même fichier.",
+      "Les cinq traductions ont été relues. Les termes techniques portent maintenant le nom que leur donnent les slicers.",
+      "La barre d’outils est rangée : le champ le plus large était celui dont on se sert le moins.",
+      "Une seconde erreur du programme ne place plus une seconde fenêtre sur la première."
     ],
     "it": [
-      "I numeri decimali digitati vengono letti bene ovunque. «12,5» resta dodici e mezzo; prima poteva diventare 125, senza chiedere e senza avvisare.",
-      "Ciascuno dei cinquantasei campi delle impostazioni di stampa dice ora che cosa fa quando lo si muove.",
-      "Tempo di stampa e materiale sono stimati con più precisione, soprattutto per i pezzi svuotati.",
-      "La consegna allo slicer cade sul piatto. Con CuraEngine i pezzi finivano di fianco.",
-      "Dividendo con le spine, i fori corrispondenti finiscono nella metà giusta.",
-      "Millimetri e pollici valgono ora dovunque compaia un numero, anche nelle barre degli strumenti e nella pittura.",
-      "L'avanzamento resta finché il calcolo è davvero finito, e la finestra rimane utilizzabile nel frattempo.",
-      "Tutte le scorciatoie da tastiera sono ora in un unico prospetto: nel menu Aiuto, sotto «Scorciatoie da tastiera», oppure premendo il tasto punto interrogativo."
+      "Il nucleo esatto ora sa forare: «Eseguire un foro esatto» lavora direttamente sul corpo esatto, senza passare da una mesh.",
+      "Raccordi e smussi vengono riconosciuti in modo più affidabile. Prima un raccordo veniva talvolta segnalato come un perno, con un diametro che non esisteva.",
+      "Gli esempi inclusi non salutano più con avvisi che non lo sono.",
+      "La schermata iniziale sta negli schermi piccoli, senza scorrere.",
+      "Una caratteristica selezionata si colora da sé. Prima l’intero corpo assumeva il colore di selezione e non si vedeva che cosa fosse inteso.",
+      "L’albero degli oggetti indica la misura di ogni caratteristica riconosciuta.",
+      "Le mesh esportate non contengono più triangoli vuoti.",
+      "Salvare due volte dà due volte lo stesso file.",
+      "Le cinque traduzioni sono state riviste. I termini tecnici si chiamano ora come li chiamano gli slicer.",
+      "La barra degli strumenti è in ordine: il campo più largo era quello che serve meno spesso.",
+      "Un secondo errore del programma non mette più una seconda finestra sopra la prima."
     ],
     "pt": [
-      "Os números decimais escritos são lidos corretamente em todo o lado. «12,5» continua a ser doze e meio; antes podia tornar-se 125, sem perguntar e sem avisar.",
-      "Cada um dos cinquenta e seis campos das definições de impressão diz agora o que faz quando se mexe nele.",
-      "O tempo de impressão e o material são estimados com mais rigor, sobretudo em peças ocas.",
-      "A entrega ao slicer acerta na placa. Com o CuraEngine as peças ficavam ao lado.",
-      "Ao dividir com pinos, os furos correspondentes ficam na metade certa.",
-      "Milímetros e polegadas valem agora onde quer que apareça um número — também nas barras de ferramentas e ao pintar.",
-      "O progresso mantém-se até o cálculo estar mesmo terminado, e a janela continua utilizável entretanto.",
-      "Todos os atalhos de teclado estão agora numa única vista: no menu Ajuda, em «Atalhos de teclado», ou premindo a tecla de ponto de interrogação."
+      "O núcleo exato já sabe furar: «Fazer um furo exato» trabalha diretamente sobre o corpo exato, sem o desvio por uma malha.",
+      "As concordâncias e os chanfros são reconhecidos com mais fiabilidade. Antes, uma concordância era por vezes indicada como um pino, com um diâmetro que não existia.",
+      "Os exemplos incluídos já não recebem o utilizador com avisos que não o são.",
+      "O ecrã inicial cabe em ecrãs pequenos, sem deslocamento.",
+      "Uma característica selecionada colore-se a si própria. Antes, todo o corpo assumia a cor de seleção e não se via o que estava em causa.",
+      "A árvore de objetos indica a medida de cada característica reconhecida.",
+      "As malhas exportadas já não contêm triângulos vazios.",
+      "Guardar duas vezes dá duas vezes o mesmo ficheiro.",
+      "As cinco traduções foram revistas. Os termos técnicos passam a chamar-se como lhes chamam os slicers.",
+      "A barra de ferramentas está arrumada: o campo mais largo era aquele de que menos se precisa.",
+      "Um segundo erro do programa já não coloca uma segunda janela sobre a primeira."
     ]
   }
 }
