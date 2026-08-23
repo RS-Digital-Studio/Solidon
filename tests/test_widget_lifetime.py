@@ -170,7 +170,9 @@ def test_everything_that_holds_a_leash_can_be_told_to_let_go() -> None:
             if "WorkerLeash(" in source:
                 holders[node.name] = path
 
-    assert len(holders) >= 10, f"nur {len(holders)} Leinen-Halter gefunden — sucht das noch richtig?"
+    assert len(holders) >= 10, (
+        f"nur {len(holders)} Leinen-Halter gefunden — sucht das noch richtig?"
+    )
 
     without = []
     for name, path in sorted(holders.items()):
