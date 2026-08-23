@@ -83,9 +83,33 @@ class UiSettings:
     shortcut_scheme: str = "default"
     """Welche Kürzelbelegung gilt (Konzept P15, E7). Die Vorgabe ist die des
     Registers; „fusion" legt einzelne Buchstaben darüber."""
-    check_for_updates: bool = False
-    """§37.2: ein Hinweis, nie eine selbsttätige Aktualisierung — und aus, bis
-    es eingeschaltet wird."""
+    check_for_updates: bool = True
+    """§37.2: ein Hinweis, nie eine selbsttätige Aktualisierung.
+
+    **An, seit dem 23.08.2026.** Der Anlass ist ein Datum: Die Demo endet am
+    30.10.2026, und am Tag des Artikels bei 3druck.com wurden 140 Pakete
+    geladen. Stand der Schalter weiter aus, liefen diese Installationen an
+    jenem Tag ab, ohne dass die Anwendung je einen Weg zur nächsten Fassung
+    gezeigt hätte — entschieden von Robert: „wenn man die app startet sollte
+    überprüft werden ob eine neue version vorhanden ist und diese dann bei
+    bestätigung geladen werden."
+
+    Was §37.2 verlangt, bleibt unangetastet: **Die Bestätigung gilt dem Laden,
+    nicht der Prüfung.** Geladen wird auf Klick, gestartet erst nach dem
+    Schließen des Fensters. Selbsttätig ist nur die Frage, ob es etwas Neues
+    gibt."""
+    update_default_lifted: bool = False
+    """Ob die Vorgabe oben schon einmal in eine bestehende Datei getragen wurde.
+
+    **Ohne dieses Feld erreicht die neue Vorgabe niemanden.** ``save_settings``
+    schreibt jedes Feld, ``load_settings`` liest jedes vorhandene zurück —
+    jede Installation, die einmal beendet wurde, trägt ``"check_for_updates":
+    false`` wörtlich in ihrer Datei, und der Wert dort schlägt jede Vorgabe im
+    Code. Wer nur die Vorgabe umlegt, erreicht ausschließlich Rechner, auf
+    denen die Anwendung noch nie gelaufen ist.
+
+    Der Merker unterscheidet „nie gefragt" von „bewusst aus": Angehoben wird
+    genau einmal, danach gilt wieder, was der Nutzer einstellt."""
     remote_enabled: bool = False
     """Ob die MCP-Schnittstelle läuft (Konzept P15 §7 Etappe 9).
 
@@ -122,7 +146,15 @@ def load_settings() -> UiSettings:
         return UiSettings()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        return UiSettings(**{key: data[key] for key in data if key in UiSettings.__slots__})
+        settings = UiSettings(**{key: data[key] for key in data if key in UiSettings.__slots__})
+        # **Geprüft wird am rohen Wörterbuch, nicht am geladenen Feld.** Fehlt
+        # der Schlüssel, setzt die Dataclass ihre Vorgabe ein, und die ist von
+        # „steht auf false" nicht mehr zu unterscheiden. Nur die Datei weiß,
+        # ob sie aus einer Fassung stammt, die das Feld noch nicht kannte.
+        if "update_default_lifted" not in data:
+            settings.check_for_updates = True
+            settings.update_default_lifted = True
+        return settings
     except (OSError, ValueError, TypeError) as problem:
         _log.warning("could not read settings, starting from defaults: %s", problem)
         return UiSettings()

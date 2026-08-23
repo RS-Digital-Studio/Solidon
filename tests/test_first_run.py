@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -589,11 +591,35 @@ def test_a_server_that_does_not_answer_is_not_an_error() -> None:
     assert updates.check(fetch=fail) is None
 
 
-def test_the_check_is_off_until_it_is_switched_on() -> None:
-    """§37.2: eine Anfrage, die den Rechner verlässt, ist eine Entscheidung,
-    keine Vorgabe.
+def test_the_grenze_is_the_click_not_the_check() -> None:
+    """§37.2 zieht die Grenze beim **Auslöser**, nicht beim Vorgang.
+
+    Hier stand bis zum 23.08.2026 das Gegenteil: „eine Anfrage, die den Rechner
+    verlässt, ist eine Entscheidung, keine Vorgabe" — und daraus folgte
+    ``check_for_updates is False``. **Der Satz steht so nicht im Bauplan.**
+    Dort heißt es: „Es lädt nichts von allein, es ersetzt sich nichts im
+    Hintergrund, und es startet nichts ohne einen Klick." Alle drei Verbote
+    gelten dem Herunterladen und dem Starten. Über die Frage, *ob es etwas
+    Neues gibt*, sagt §37.2 nichts.
+
+    **Der Test war also schärfer als der Bauplan** — genau der Fall, vor dem
+    dieser im Nachtrag vom 22.08.2026 warnt: „Ein Test, der schärfer ist als
+    der Bauplan, sieht wie Sicherheit aus, bis jemand den Bauplan für die
+    Wahrheit nimmt und die Prüfung entfernt." Er hat hier nichts geschützt,
+    sondern eine Zusage erfunden und sie zwei Monate lang gehalten.
+
+    Geprüft wird deshalb, was der Bauplan wirklich verlangt: dass nichts ohne
+    Klick geladen und nichts ohne Klick gestartet wird.
     """
-    assert UiSettings().check_for_updates is False
+    from app.ui import main_window
+
+    quelle = Path(main_window.__file__).read_text(encoding="utf-8")
+    beginn = quelle.index("def _update_answered")
+    ende = quelle.index("def ", beginn + 10)
+    antwort = quelle[beginn:ende]
+
+    assert "start_installer" not in antwort, "gestartet wird erst nach dem Schließen"
+    assert "_show_update" in antwort, "gezeigt wird ein Fenster, geladen wird darin auf Klick"
 
 
 def test_nothing_runs_without_a_click() -> None:
@@ -789,3 +815,45 @@ def test_an_ordinary_project_gets_no_empty_addition(
     dialog = SupportDialog(message="Der Deckel sitzt schief.", session=Session())
 
     assert dialog._session_note() == tr("Modell, Operationsstapel und Chat-Verlauf")
+
+
+def test_the_update_check_is_on_and_reaches_older_installations(tmp_path: Path) -> None:
+    """Robert am 23.08.2026: „wenn man die app startet sollte überprüft werden
+    ob eine neue version vorhanden ist und diese dann bei bestätigung geladen
+    werden."
+
+    **Der Anlass ist ein Datum.** Die Demo endet am 30.10.2026, und am Tag des
+    Artikels bei 3druck.com wurden 140 Pakete geladen. Stand der Schalter
+    weiter aus, laufen diese Installationen an jenem Tag ab, ohne dass die
+    Anwendung je einen Weg zur nächsten Fassung gezeigt hätte.
+
+    **Die Vorgabe allein reicht nicht, und das ist der eigentliche Punkt.**
+    ``save_settings`` schreibt jedes Feld, ``load_settings`` liest jedes
+    vorhandene zurück — jede Installation, die einmal beendet wurde, trägt
+    ``"check_for_updates": false`` wörtlich in ihrer Datei. Eine geänderte
+    Vorgabe erreicht sie nie; der Wert in der Datei schlägt sie. Deshalb hebt
+    das Laden den Wert **einmal** an und merkt sich, dass es das getan hat.
+
+    Was §37.2 verlangt, bleibt: Geprüft wird beim Start, geladen erst auf
+    Klick, gestartet erst nach dem Schließen. Die Bestätigung gilt dem Laden,
+    nicht der Prüfung — so hat Robert es gesagt.
+    """
+    from app.ui import settings as settings_module
+
+    assert UiSettings().check_for_updates is True, "neue Installationen prüfen"
+
+    # Eine Datei aus 0.1.3: der Schalter steht wörtlich auf false.
+    ziel = tmp_path / "settings.json"
+    ziel.write_text(
+        json.dumps({"check_for_updates": False, "display_unit": "in"}), encoding="utf-8"
+    )
+    with mock.patch.object(settings_module, "settings_path", lambda: ziel):
+        geladen = settings_module.load_settings()
+        assert geladen.check_for_updates is True, "die alte Datei wird einmal angehoben"
+        assert geladen.display_unit == "in", "alles andere bleibt, wie es war"
+
+        # Und wer ihn danach ausschaltet, behält ihn aus — sonst wäre die
+        # Anhebung keine Migration, sondern eine Bevormundung bei jedem Start.
+        geladen.check_for_updates = False
+        settings_module.save_settings(geladen)
+        assert settings_module.load_settings().check_for_updates is False
