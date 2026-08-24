@@ -4143,6 +4143,14 @@ class MainWindow(QMainWindow):
         self.right.setCurrentWidget(self._constraints_room)
         self._bottom_layout.insertWidget(0, panel)
         panel.sketchChanged.connect(self._redraw_sketch)
+        # Die Fangmarke: Der Canvas kennt den Ort, an dem ein Klick wirklich
+        # landet (Raster **und** „vorhandener Punkt schlägt Raster"), die
+        # Ansicht kann ihn zeigen. Ihn im Viewport nachzurechnen wäre die
+        # zweite Zahl für dieselbe Sache — der Fehler, den d6335c1 schon
+        # einmal behoben hat. Ohne die Marke sitzt der Punkt bis zu einem
+        # halben Rasterschritt neben dem Zeiger, und genau das hat Robert am
+        # 24.08.2026 als „die Klicks sind woanders" gemeldet.
+        panel.pointerMoved.connect(self._on_sketch_pointer)
         # **Das Modell bleibt stehen und tritt zurück.** Es ist der Grund,
         # aus dem man auf einer Fläche zeichnet — verstecken hieße, die Frage
         # wegzuräumen, die man gerade beantwortet. Durchscheinend, damit die
@@ -4242,6 +4250,14 @@ class MainWindow(QMainWindow):
         place = cast(tuple[float, float], point)
         panel.canvas.place_on_plane(place)
 
+    def _on_sketch_pointer(self, x: float, y: float) -> None:
+        """Der Canvas hat den Zeiger gefangen — die Ansicht zeigt, wohin.
+
+        Die zwei Zahlen sind schon die gefangenen; hier wird nichts mehr
+        gerechnet, nur gezeigt (:meth:`Viewport.show_sketch_cursor`).
+        """
+        self.viewport.show_sketch_cursor((x, y))
+
     def _on_sketch_hover(self, point: object) -> None:
         """Der Zeiger steht auf der Ebene — die Vorschau zieht nach."""
         panel = self._sketch_panel
@@ -4331,6 +4347,7 @@ class MainWindow(QMainWindow):
         self._sketch_target = None
         self.viewport.set_sketching(None)
         panel.sketchChanged.disconnect(self._redraw_sketch)
+        panel.pointerMoved.disconnect(self._on_sketch_pointer)
         # **Die Box geht ans Panel zurück, bevor es stirbt.** Sie hing im
         # Reiter, also am Fenster — das Panel zu löschen ließe sie dort stehen,
         # mit Signalen, die ins Leere zeigen, und beim nächsten Skizzenmodus

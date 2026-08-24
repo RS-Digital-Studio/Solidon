@@ -6817,3 +6817,38 @@ def test_drawing_without_a_selection_still_starts_on_the_base_plane(window: Main
         assert panel.canvas.sketch.plane.startswith("plane:"), panel.canvas.sketch.plane
     finally:
         window.finish_sketch(keep=False)
+
+
+def test_the_snap_marker_follows_the_canvas_not_a_second_calculation(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Fangmarke zeigt den Ort, den der Canvas gefangen hat — und stirbt
+    mit dem Modus.
+
+    Roberts „die Klicks sind woanders als ich klick" (24.08.2026) war der
+    Rasterfang ohne sichtbare Marke: bis zu ein halber Rasterschritt zwischen
+    Zeiger und Punkt, elf Bildpunkte bei 2 mm Raster. Der Ort kommt vom
+    Canvas (``pointer_target``), denn nur er kennt Raster **und** „vorhandener
+    Punkt schlägt Raster" — im Viewport nachgerechnet wäre es die zweite Zahl
+    für dieselbe Sache (d6335c1).
+
+    Offscreen gibt es keinen Plotter und damit keine Marke zum Ansehen;
+    geprüft wird die **Verbindung** — dieselbe Haltung wie beim Bild des
+    Fehlerbogens: Wer den Draht kappt, bekommt einen roten Lauf, keinen
+    Zeiger, der wieder lügt.
+    """
+    shown: list[object] = []
+    monkeypatch.setattr(
+        type(window.viewport), "show_sketch_cursor", lambda self, point: shown.append(point)
+    )
+    window.action_sketch_free()
+    try:
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.pointerMoved.emit(4.0, -6.0)
+        assert shown[-1] == (4.0, -6.0), "die gefangene Stelle muss die Marke stellen"
+    finally:
+        window.finish_sketch(keep=False)
+    before = len(shown)
+    panel.pointerMoved.emit(1.0, 1.0)
+    assert len(shown) == before, "nach dem Modus darf der Draht nicht mehr tragen"
