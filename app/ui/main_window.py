@@ -2237,7 +2237,7 @@ class MainWindow(QMainWindow):
                 place,
                 str(group.title),
                 key or None,
-                partial(self.run_operation, first),
+                weak_slot(self, MainWindow.run_operation, first),
                 str(group.doc),
             )
             if key:
