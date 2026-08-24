@@ -12,12 +12,14 @@
 > abgearbeitet wird. Was es nicht beantwortet: die Maße. Die sind ungeklärt,
 > und Abschnitt 5 sagt, warum das die erste Aufgabe ist und keine Fußnote.
 >
-> **Zwei Teile.** Teil I (Abschnitte 1 bis 14) ist der Lochwand-Einhänger und
+> **Drei Teile.** Teil I (Abschnitte 1 bis 14) ist der Lochwand-Einhänger und
 > das, was fremde Raster überhaupt zu Bausteinen macht. **Teil II (ab
 > Abschnitt 15)** ist Roberts Anschlussfrage vom selben Tag: wie ein Kunde
 > ein selbst angelegtes Teil in den Katalog bekommt und wie einen
 > eingebauten konfiguriert. Beide Teile stoßen an dieselben drei Stellen —
 > Registrierung, Bereichstest, Menügrenze — und stehen deshalb zusammen.
+> **Teil III (ab Abschnitt 22)** kam am selben Abend dazu, auf die Frage, was
+> dem Katalog sonst fehlt und oft gefragt ist.
 >
 > Alle Messungen dieses Dokuments stammen vom 24.08.2026 gegen den Stand von
 > `b979b0c`. **„§“ meint immer den Bauplan**; auf Teile dieses Dokuments
@@ -655,3 +657,94 @@ Unabhängig von Teil I; keines davon wartet auf eine Lochplatte.
 * **Keine Bearbeitung eigener Bausteine in einem eigenen Editor.** Sie werden
   im Projekt bearbeitet, aus dem sie stammen, und neu gespeichert. Ein zweiter
   Editor wäre eine zweite Wahrheit.
+
+---
+
+# Teil III — Was dem Katalog sonst fehlt
+
+> Nachgetragen am 24.08.2026 auf Roberts Frage: „such auch noch nach anderem,
+> was wir im Katalog ergänzen können und oft gefragt ist." Die Antwort ist
+> keine Wunschliste, sondern der Abgleich von drei Dingen: dem Bestand, dem,
+> was die Modellportale tatsächlich herunterladen, und der Frage, ob es
+> überhaupt ein **Baustein** ist.
+
+## 22. Der Bestand, ehrlich gezählt
+
+Achtzehn Bausteine in sechs Gruppen, gemessen am 24.08.2026:
+
+| Gruppe | Anzahl | Was drin ist |
+|---|---|---|
+| Verbindungen | 4 | Schraubenloch, Heat-Set-Buchse, Mutternfalle, gedrucktes Gewinde |
+| Mechanik | 5 | Passstift, Rastnase, Filmscharnier, Schnappverbindung, Schnapphaken |
+| Befestigung | 3 | Schlüsselloch, Magnettasche, Wandhalter |
+| Struktur | 2 | Nutfeder für Aluprofil, Versteifungsrippe |
+| **Kabel und Schläuche** | **1** | Kabeldurchführung mit Zugentlastung |
+| Kalibrierung | 3 | Passungsleiter, Wandstärkenleiter, Überhangfächer |
+
+Die Erstbestückung aus Bauplan §24.1 nennt dreizehn, und alle dreizehn stehen
+da. **Der Katalog ist nicht unvollständig — er ist ungleich.** Zwei Gruppen
+tragen neun Einträge, zwei tragen drei.
+
+## 23. Was die Portale herunterladen
+
+Gesucht am 24.08.2026. Die Quellen sind Sammelartikel und Kollektionen, keine
+Downloadzahlen aus erster Hand — das ist die Belastbarkeit, die sie haben.
+
+Die Kategorien, die durchgängig genannt werden: **Kabelmanagement** an erster
+Stelle, dann Ordnungssysteme (Gridfinity), dann Ersatzteile für vorhandene
+Dinge — Knöpfe, Batteriedeckel, Schubladenriegel, Möbelfüße, Clips, Winkel,
+Griffe. Für Verbindungen zwischen gedruckten Teilen nennt die Fachliteratur
+vier verlässliche Formen: Schnapphaken, **Schwalbenschwanz**,
+Print-in-Place-Scharnier und Stift-in-Loch.
+
+**Der Abgleich ist unbequem an einer Stelle.** Kabelmanagement ist die
+meistgenannte Kategorie überhaupt, und unsere Gruppe dafür hat **einen**
+Eintrag — und der ist ein *Loch*, kein *Halter*. Wer ein Kabel führen will,
+findet bei uns die Durchführung durch eine Wand und sonst nichts.
+
+## 24. Die Lücken, nach Belegkraft sortiert
+
+**A — Kabelclip.** Ein Bügel, der auf eine Fläche gesetzt wird und ein Kabel
+hält, mit Durchmesser aus der Schlauchtabelle (die es gibt) und einer
+Einschnappöffnung, die schmaler ist als das Kabel. Das ist die stärkste
+Empfehlung dieses Abschnitts: größte belegte Nachfrage, dünnste Gruppe,
+kleinster Bauaufwand — additiv, eine Fläche, drei Parameter.
+
+**B — Schwalbenschwanz.** Formschlüssige Verbindung zweier Teile, als
+abziehende und aufbauende Hälfte. Von der Fachliteratur als eine der vier
+verlässlichen Formen genannt, und wir haben drei davon. **Nicht** deshalb, um
+das Teilen zu ergänzen: `split_pinned` setzt bereits Passstifte in die
+Schnittfläche. Ein Schwalbenschwanz ist die formschlüssige Alternative dazu,
+für Teile, die sich nicht auseinanderziehen sollen.
+
+**C — Eckwinkel (Gusset).** Eine Dreiecksverstärkung in eine Innenecke.
+Häufig gefragt, trivial zu bauen, und die Gruppe „Struktur" hat zwei Einträge.
+Die Versteifungsrippe deckt die Fläche ab, nicht die Ecke.
+
+**D — Standfuß.** Tasche für einen Gummifuß oder ein gedruckter Fuß mit Fase.
+Gehört zu „Ersatzteile für vorhandene Dinge", der drittgenannten Kategorie.
+
+**E — Bolzenscharnier (print-in-place).** Zwei ineinandergreifende Laschen mit
+einem Stift, der beim Drucken entsteht. Das Filmscharnier deckt den flachen
+Fall ab; dies ist der tragende. Aufwendiger als A bis D — die Spaltmaße
+entscheiden über Erfolg oder Verklebung, und das braucht einen eigenen
+Prüfkörper.
+
+**Was ausdrücklich nicht auf diese Liste gehört:** Griffe, Knöpfe,
+Batteriedeckel, Möbelfüße als *fertige Teile*. Sie sind oft gefragt, aber sie
+sind **Modelle, keine Bausteine** — sie werden nicht an ein vorhandenes Teil
+gesetzt, sie *sind* das Teil. Der Katalog ergänzt Modelle, er ersetzt sie
+nicht; wer einen Knopf braucht, lädt einen und passt ihn mit unseren Ops an.
+Das ist genau der Weg, für den diese Anwendung gebaut ist.
+
+## 25. Was das für die Reihenfolge heißt
+
+Teil I und II haben Vorrang: Teil I, weil ein Kunde danach gefragt hat, Teil
+II, weil Robert dafür eine Bauplanänderung entschieden hat. Die Liste hier ist
+Nachschub, kein Umweg — und sie ist so sortiert, dass A allein schon lohnt.
+
+**Ein Baustein kostet nach dem Muster dieser Bibliothek wenig:** Deklaration,
+Geometrie gegen `manifold3d`, benannte Merkmale, Bereichstest. Menüeintrag,
+Dialog, Kommandozeile, Agentenwerkzeug, Katalogkachel und Vorschaubild
+entstehen daraus von selbst. Was Arbeit macht, sind die Maße — und für A und C
+kommen sie aus Tabellen, die es schon gibt.

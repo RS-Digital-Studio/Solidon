@@ -79,8 +79,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
-| Additive Bausteine fehlen am Flächenklick | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | nichts — der Fix in `_applies_to` kann heute laufen und behebt Wandhalter und Nutfeder mit |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
+| Fünf Bausteine, die dem Katalog fehlen | Die dünnste Gruppe des Katalogs ist die meistgefragte (24.08.2026) | nichts — die Liste steht, sortiert nach Belegkraft. Der erste (Kabelclip) kostet drei Parameter und nimmt seine Maße aus einer Tabelle, die es gibt |
 | Die Startmarke §31 ist seit dem 24.08.2026 rot | Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026) | **eine Entscheidung**: Marke neu setzen oder die Ursache suchen. Nicht der Code — im Wechsel gegen den Stand vor drei Commits gemessen, Unterschied im Rauschen |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
@@ -9335,7 +9335,8 @@ gebaut wird. Hier stehen die zwei Punkte, die es zu Arbeit machen.
   echten Platte gemessen, bevor eine Zeile entsteht, und der Wert kommt mit
   Datum und Herkunft in die Tabelle (§24.2).
 
-- [ ] **Additive Bausteine erscheinen nicht am Flächenklick.**
+- [x] **Additive Bausteine erscheinen am Flächenklick** (`074e5d0` und
+  `73cc2f6`, 24.08.2026). Der Befund von damals lautete:
   `parts/ops.py:_applies_to` nimmt `"face"` nur auf, wenn ein Baustein
   abträgt. Gemessen über alle achtzehn: `wall_mount`, `profile_tongue`, `rib`,
   `snap_fit`, `latch` und `living_hinge` tragen `applies_to == []` — mit den drei Prüfkörpern neun von achtzehn — und stehen
@@ -9346,6 +9347,28 @@ gebaut wird. Hier stehen die zwei Punkte, die es zu Arbeit machen.
   setzen, findet dort alles außer dem Wandhalter. §18.5 nennt genau dieses
   Menü „die wichtigste Einzelfunktion". Der Punkt ist älter als die
   Kundenanfrage und wird unabhängig von ihr behoben.
+
+  **Behoben, und die Reihenfolge war der Ertrag.** Der naive Fix — additive
+  Bausteine einfach an `face` — hätte den Flächenklick von 19 auf 26
+  Operationen gebracht und damit verschlimmert, was er verbessern sollte.
+  Gemessen wurde deshalb zuerst das Menü selbst, und dort lag ein zweiter,
+  größerer Befund: Es faltete **alles** in Untermenüs, sobald die Zeilengrenze
+  überschritten war, und damit kostete jede Operation zwei Klicks — auch die
+  Bohrung, die zu zweit in „Erzeugen" stand. Die Regel dagegen steht seit je
+  in `registry.surfaces.group_is_flat` für die Menüleiste; das Kontextmenü
+  kannte sie nicht.
+
+  Jetzt faltet es von der größten Gruppe abwärts und nur so weit, bis der Rest
+  passt (`folded_groups`, ohne Qt und deshalb ohne Fenster prüfbar). Und die
+  Zuordnung steht in der Deklaration statt in einer Ableitung: `at_face`,
+  Vorgabe wahr, die drei Prüfkörper abgemeldet — dieselbe Bauart wie `at_hole`
+  daneben, dessen Docstring genau diese drei schon als Fall nennt, der
+  nirgends hingehört.
+
+  Der Flächenklick steht damit so: 26 Operationen, neun direkt, ein Untermenü
+  „Bausteine" mit acht direkten Einträgen und zwei tieferen Gruppen. Kein Menü
+  über zwölf Zeilen, und der Wandhalter ist in zwei Klicks erreichbar statt
+  gar nicht.
 
 ---
 
@@ -9709,3 +9732,32 @@ gleichzeitig auf dieser Maschine.
   sie bei 2100, ist die Marke von einem Glückstreffer und gehört korrigiert.
   **Zurückgesetzt wurde sie bewusst nicht** — eine Marke, die man beim ersten
   roten Lauf hochsetzt, misst nie wieder etwas.
+
+---
+
+## Die dünnste Gruppe des Katalogs ist die meistgefragte (24.08.2026)
+
+Auf Roberts Frage nach dem, was im Katalog fehlt und oft gefragt ist,
+abgeglichen: Bestand, Downloadkategorien der Modellportale, und die Frage, ob
+es überhaupt ein **Baustein** ist. Die Liste steht in
+`konzepte/konzept-befestigungssysteme-2026-08.md` Teil III.
+
+**Der Katalog ist nicht unvollständig, er ist ungleich.** Alle dreizehn der
+Erstbestückung aus §24.1 stehen, es sind achtzehn geworden — aber:
+Verbindungen 4, Mechanik 5, Befestigung 3, Struktur 2, Kalibrierung 3, und
+**Kabel und Schläuche: einer.** Kabelmanagement ist die meistgenannte
+Kategorie der Portale, und was wir dafür haben, ist ein *Loch* (Durchführung),
+kein *Halter*.
+
+- [ ] **Fünf Bausteine, nach Belegkraft sortiert.** Kabelclip (größte
+  Nachfrage, dünnste Gruppe, drei Parameter, Maße aus der Schlauchtabelle),
+  Schwalbenschwanz (eine der vier von der Fachliteratur genannten
+  verlässlichen Verbindungen, und wir haben drei davon), Eckwinkel,
+  Standfuß, Bolzenscharnier. Der letzte ist der teuerste — die Spaltmaße
+  entscheiden über Erfolg oder Verklebung und brauchen einen eigenen
+  Prüfkörper.
+
+  **Was ausdrücklich nicht dazugehört:** Griffe, Knöpfe, Batteriedeckel,
+  Möbelfüße als fertige Teile. Sie sind oft gefragt und sind **Modelle, keine
+  Bausteine** — sie werden nicht an ein Teil gesetzt, sie *sind* das Teil. Der
+  Katalog ergänzt Modelle, er ersetzt sie nicht.
