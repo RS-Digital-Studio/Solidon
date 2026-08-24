@@ -139,20 +139,67 @@ class UserError(AppError):
 
 #: Die Beschränkungen, für die „außerhalb des zulässigen Bereichs" zutrifft.
 #:
-#: Alle anderen sind keine Zahlenspanne: leer, unlesbar, falscher Typ, fehlend,
-#: kein Umriss, kein Profil, unbekanntes Objekt. Von rund 170 Stellen, die eine
-#: :class:`ValidationError` werfen, betreffen acht eine Spanne.
+#: **Das Kriterium ist eine Zahl in einem Eingabefeld.** Eine Spanne liegt vor,
+#: wenn der Nutzer einen Wert eingegeben hat, es dafür eine Grenze gibt — fest
+#: oder aus anderen Werten gerechnet —, und die Zahl in die richtige Richtung zu
+#: ändern den Fehler behebt. Danach ist ``hole_fits`` eine Spanne (die Löcher
+#: sind größer als ihr Teilkreis, ``hole_diameter`` verkleinern hilft) und
+#: ``file_too_large`` keine: Dort ist die Datei zu groß, es gibt kein Feld, in
+#: dem eine Zahl stünde, und der Titel zeigte auf eine Eingabe, die es nicht gibt.
 #:
-#: ``positive`` kam am 24.08.2026 dazu und ist der neunte Fall — mit sechzehn
-#: Aufrufern der häufigste von allen, weil :func:`require_positive` sie bündelt.
-#: Er stand vorher nicht hier, und das war eine Lücke, keine Entscheidung: „Dieses
-#: Maß muss größer als null sein" **ist** eine verletzte Spanne, nämlich die nach
-#: unten offene. Der Nutzer las darüber „Die Eingabe war so nicht verwendbar." —
-#: wahr, aber vage, und die Oberfläche zeichnet den Titel groß und das Detail
-#: klein. Genau die Beschwerde, aus der dieser Satz überhaupt entstanden ist,
-#: nur mit umgekehrtem Vorzeichen: Dort behauptete der Titel eine Zahlenspanne,
-#: wo keine war; hier verschwieg er eine, die es gibt.
-_RANGE_CONSTRAINTS: Final = frozenset({"minimum", "maximum", "range", "positive"})
+#: Alles Übrige ist keine Zahlenspanne: leer, unlesbar, falscher Typ, fehlend,
+#: kein Umriss, kein Profil, unbekanntes Objekt.
+#:
+#: ``positive`` kam am 24.08.2026 dazu — mit sechzehn Aufrufern der häufigste
+#: von allen, weil :func:`require_positive` sie bündelt. Er stand vorher nicht
+#: hier, und das war eine Lücke, keine Entscheidung: „Dieses Maß muss größer als
+#: null sein" **ist** eine verletzte Spanne, nämlich die nach unten offene. Der
+#: Nutzer las darüber „Die Eingabe war so nicht verwendbar." — wahr, aber vage,
+#: und die Oberfläche zeichnet den Titel groß und das Detail klein. Genau die
+#: Beschwerde, aus der dieser Satz überhaupt entstanden ist, nur mit umgekehrtem
+#: Vorzeichen: Dort behauptete der Titel eine Zahlenspanne, wo keine war; hier
+#: verschwieg er eine, die es gibt.
+#:
+#: **Am selben Tag kamen die übrigen fünfzehn dazu, und zwar aus demselben
+#: Grund.** ``positive`` allein einzutragen hieß, denselben Fehler an fünfzehn
+#: weiteren Stellen stehenzulassen: ``corner_count`` sagt „zwischen drei und
+#: vierundsechzig Ecken" und nennt damit beide Grenzen wörtlich, ``negative``
+#: ist der unmittelbare Gegenpart zu ``positive``, ``too_short`` verlangt
+#: „mindestens zwei Gänge". Über allen dreien stand der vage Satz. Die Liste ist
+#: seitdem **vollständig gegen den Code geprüft**, nicht nach Gefühl gefüllt:
+#: ``test_errors`` sammelt jeden ``constraint``, den ``app/core`` wirklich setzt,
+#: und besteht darauf, dass er hier oder in der Gegenliste des Tests steht. Ein
+#: neuer Wert, den niemand einordnet, ist ab dann ein roter Lauf und kein
+#: stiller Titel.
+_RANGE_CONSTRAINTS: Final = frozenset(
+    {
+        # Die Grenzen des Parameterschemas selbst (§10).
+        "minimum",
+        "maximum",
+        "range",
+        # Vorzeichen.
+        "positive",
+        "negative",
+        # Anzahlen mit Unter- oder Obergrenze.
+        "corner_count",
+        "pattern_count",
+        "build_volume",
+        # Längen und Dicken gegen eine gerechnete Grenze.
+        "too_short",
+        "too_coarse",
+        "minimum_wall",
+        "nozzle_width",
+        "layer_height",
+        "cell_size",
+        "no_core",
+        "kinks_inside",
+        "crosses_axis",
+        # Ein Maß, das gegen ein anderes Maß desselben Dialogs verstößt.
+        "slot_proportion",
+        "hole_fits",
+        "cavity_too_small",
+    }
+)
 
 
 class ValidationError(UserError):

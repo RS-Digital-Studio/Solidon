@@ -339,14 +339,14 @@ def _build_equations(
                     f"elements[{position}]",
                     _("Das Element hat zu wenige Punkte."),
                     value=len(element.points),
-                    constraint=element.kind,
+                    constraint="point_count",
                 )
         elif len(element.points) != _ELEMENT_POINTS[element.kind]:
             raise ValidationError(
                 f"elements[{position}]",
                 _("Das Element hat die falsche Zahl von Punkten."),
                 value=len(element.points),
-                constraint=element.kind,
+                constraint="point_count",
             )
         offsets.append(len(coords))
         coords.extend(element.points)
@@ -361,7 +361,7 @@ def _build_equations(
                 field,
                 _("Die Bedingung hat die falsche Zahl von Zielpunkten."),
                 value=len(constraint.targets),
-                constraint=constraint.kind,
+                constraint="target_count",
             )
         if constraint.kind in _MEASURING_ONLY:
             # Zielprüfung oben gilt weiter; hier endet der Weg, denn ohne
@@ -372,7 +372,7 @@ def _build_equations(
                         field,
                         _("Diese Bedingung zeigt auf einen Punkt, den es nicht gibt."),
                         value=target,
-                        constraint=constraint.kind,
+                        constraint="unknown_target",
                     )
             continue
         for target in constraint.targets:
@@ -381,21 +381,28 @@ def _build_equations(
                     field,
                     _("Die Bedingung zeigt auf einen Punkt, den es nicht gibt."),
                     value=target,
-                    constraint=constraint.kind,
+                    constraint="unknown_target",
                 )
         length = 0.0
         if constraint.kind == "distance":
             if not constraint.value:
-                raise ValidationError(field, _("Ein Maß braucht einen Wert."))
+                raise ValidationError(
+                    field, _("Ein Maß braucht einen Wert."), constraint="required"
+                )
             length = evaluate(constraint.value, params)
             if length < 0.0:
-                raise ValidationError(field, _("Ein Maß unter null gibt es nicht."), value=length)
+                raise ValidationError(
+                    field,
+                    _("Ein Maß unter null gibt es nicht."),
+                    value=length,
+                    constraint="negative",
+                )
         elif constraint.value:
             raise ValidationError(
                 field,
                 _("Nur ein Maß trägt einen Wert."),
                 value=constraint.value,
-                constraint=constraint.kind,
+                constraint="value_not_allowed",
             )
         rows, fn, grad = _constraint_equation(constraint, length, anchors)
         equations.append(_Equation(index, rows, fn, grad))
@@ -405,10 +412,15 @@ def _build_equations(
             continue
         centre = offsets[position]
         if _span(anchors, centre, centre + 1) < EPS_GEOM:
+            # ``positive`` und nicht ``element.kind``: Die Beschränkung sagt,
+            # **was** verletzt wurde, nicht **woran**. Hier stand einmal
+            # „circle", und weil das keine Spanne ist, las der Kunde über einem
+            # Satz mit einer klaren Grenze den vagen Titel der Oberklasse. Um
+            # welches Element es geht, steht ohnehin im Feld.
             raise ValidationError(
                 f"elements[{position}]",
                 _("Ein Kreis braucht einen Radius größer als null."),
-                constraint=element.kind,
+                constraint="positive",
             )
         if element.kind == "arc":
             fn, grad = _arc_equation(centre, centre + 1, centre + 2)
