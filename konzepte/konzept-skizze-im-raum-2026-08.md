@@ -145,6 +145,15 @@ Umsetzung an der zweiten Gruppe gescheitert, und zwar spät: Der Trefferabstand
 und die Rasterweite hängen daran, und beide fallen nicht auf, wenn man sie
 vergisst — sie werden nur falsch.
 
+**Umgesetzt ist davon die erste Gruppe, und die zweite bewusst nicht**
+(`07d9ba5f`). `sheet_point` und `drawing_point` sind freie Funktionen, die
+Methoden reichen durch. Die sechs Maßstabsstellen lesen weiter `self._scale`,
+und das bleibt richtig, **solange es genau eine Quelle gibt**: Eine
+austauschbare Schnittstelle für einen Nutzer wäre eine Abstraktion ohne
+Gegenüber — genau das, was Regel 2 verbietet. Sie entsteht in P4, wo die
+zweite Quelle aus der Kamera kommt; dann steht auch fest, wie sie aussehen
+muss, statt geraten zu werden.
+
 **Und die dritte Gruppe ist ein Hinweis auf die Umschaltung**, nicht auf einen
 Mangel: Wer die Kamera zoomt, ändert den Maßstab; wer ein 2D-Blatt zoomt,
 ändert `_scale`. Im Viewport-Modus liest die Zeichenfläche ihn also, statt ihn
@@ -413,7 +422,7 @@ protokolliert wird — nicht als Test, der bestünde, weil er nichts tut.
 | P1b | `Viewport.view_on_plane(frame)` mit `camera_for_plane` als freier Funktion; Raster als Anzeige-Actor | S | **grün:** `camera_for_plane` gegen die Ebenennormale, ohne Plotter kehrt `view_on_plane` folgenlos zurück. **Bild:** Kamera steht senkrecht, Raster liegt in der Ebene | offen |
 | P2a | `profile.curves_of` — die gelöste Skizze als Punktfolgen im Raum, abgetastet nach Sehnentoleranz | M | **grün:** neun Tests ohne Plotter — Laufrichtung des Bogens, voller Umlauf, Kreisschluss, Feinheit nach Radius, jeder Punkt in der geneigten Ebene | **fertig** `078d9e00` |
 | P2b | Kurven und Raster als Actor in der Szene (Entscheidung B); Rasterweite aus dem Kameramaßstab | L | **grün:** die Rasterweite als freie Funktion gegen die 1-2-5-Folge; ohne Plotter kehrt das Zeichnen folgenlos zurück. **Bild:** Skizze liegt auf der Fläche, Raster darunter | offen |
-| P2c | Zeigerposition einspeisbar: `_to_screen`, `_to_world` **und der Maßstab** hinter einer austauschbaren Schnittstelle (§1.7, G) | M | **grün:** eingespeiste Zeigerpunkte erzeugen dieselben Elemente wie heute die Mausereignisse; Trefferabstand und Rasterweite bleiben in Millimetern richtig | offen |
+| P2c | Die Umrechnung Blatt ↔ Zeichnung als freie Funktionen (`sheet_point`, `drawing_point`); die Methoden reichen durch | M | **grün:** Umkehrung in beiden Richtungen, Minus in Y, Maßstab als Bildpunkte je Millimeter, Vorzeichen beim Verschieben — und dass das Widget durchreicht statt selbst zu rechnen | **fertig** `07d9ba5f` |
 | P3 | Fläche anklicken → Skizze dort (E). Zeigemodus `_sketching` in `_on_picked`, Kontextmenüeintrag | M | **grün:** ein eingespeister Flächentreffer setzt `sketch.plane` auf `feature:<id>`, das Klappfeld zeigt dieselbe Wahl. **Bild:** Klick auf die Deckfläche beginnt dort | offen |
 | P4 | **Der Schnitt.** `start_sketch` schwenkt statt zu tauschen; Modell abgeblendet; Ansichtsaktionen und Ziffern wieder frei (A, D) | L | **grün:** `middle_stack` wechselt die Seite nicht mehr; Ansichtsaktionen sind aktiv **und wirken** — geprüft an der Kameravorgabe, nicht am `enabled`-Zustand; Escape kommt heraus. **Bild:** der Schwenk | offen |
 | P5 | Abbau: `SketchPanel` als Vollbildseite entfällt; `SketchField`/`SketchEditorDialog` bleiben (zweiter Weg über den Op-Dialog) | M | **grün:** Referenzzahl der Suite unverändert, kein toter Import | offen |
