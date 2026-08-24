@@ -124,7 +124,31 @@ Haus hat:
 | Bildschirmpunkt → Weltpunkt | `Viewport._world_at` über `vtkCellPicker` (`viewport.py:4563`) |
 | Ein weiterer Zeigemodus | `_on_picked` verzweigt bereits nach `_splitting`, `_boning`, `_sculpting`, `_painting` (`viewport.py:3090`) |
 | Skizze auf einer Fläche | `feature:<id>` samt Rahmenrechnung — fertig (§1.2) |
-| Koordinatenrechnung des Canvas | Genau zwei Methoden: `_to_screen`, `_to_world` (`sketch_editor.py:1105`) |
+| Koordinatenrechnung des Canvas | Zwei Methoden: `_to_screen`, `_to_world` (`sketch_editor.py:1105`) — **aber der Maßstab wird breiter gelesen**, siehe unten |
+
+### 1.7 Der Maßstab ist nicht die Umrechnung — nachgemessen am 24.08.2026
+
+Die Zeile darüber stand zuerst als „genau zwei Methoden", und das war **zu
+optimistisch**. Gezählt: `self._scale` wird an **vierzehn** Stellen gelesen,
+`self._centre` an zwölf. Sie fallen in drei Gruppen, und nur die erste ist die
+Umrechnung:
+
+| Gruppe | Stellen | Was sie braucht |
+|---|---|---|
+| **Umrechnung** Punkt ↔ Bildschirmpunkt | `_to_screen`, `_to_world` (2) | den Rahmen, austauschbar |
+| **Maßstab als Zahl** — Trefferabstand (`PICK_PX / _scale`), Rasterweite (`step * _scale`), Radien in Bildpunkten für Qt (4×) | 6 | „wie viele Bildpunkte ist ein Millimeter" |
+| **Maßstab ändern** — Startwert, Einpassen, Rad, Schieben | 4 | entfällt im Viewport: dort zoomt die Kamera |
+
+Daraus folgt für P2c: Die austauschbare Schnittstelle hat **drei** Operationen,
+nicht zwei — Hin, Zurück und der Maßstab. Ein Entwurf mit zwei wäre in der
+Umsetzung an der zweiten Gruppe gescheitert, und zwar spät: Der Trefferabstand
+und die Rasterweite hängen daran, und beide fallen nicht auf, wenn man sie
+vergisst — sie werden nur falsch.
+
+**Und die dritte Gruppe ist ein Hinweis auf die Umschaltung**, nicht auf einen
+Mangel: Wer die Kamera zoomt, ändert den Maßstab; wer ein 2D-Blatt zoomt,
+ändert `_scale`. Im Viewport-Modus liest die Zeichenfläche ihn also, statt ihn
+zu führen.
 
 ---
 
@@ -387,7 +411,9 @@ protokolliert wird — nicht als Test, der bestünde, weil er nichts tut.
 | P0 | Weltpunkt ↔ Zeichenpunkt als reine Funktionen: `to_world`, `to_plane`; `_lift_frame` im B-Rep-Kern ruft sie (Entscheidung G) | S | **grün:** Hin- und Rückrechnung als Umkehrung, Punkt neben der Ebene verliert seinen Abstand, gedrehter Rahmen gegen erwartete Zahlen | **fertig** `97a02a2c` |
 | P1a | `planes.ray_hit` — Sichtstrahl gegen die Zeichenebene, rein gerechnet (Entscheidung C, zweite Fassung) | S | **grün:** fünf Tests ohne Plotter, darunter die Gegenprobe gegen `to_world` und der streifende Strahl | **fertig** `dfa55d0f` |
 | P1b | `Viewport.view_on_plane(frame)` mit `camera_for_plane` als freier Funktion; Raster als Anzeige-Actor | S | **grün:** `camera_for_plane` gegen die Ebenennormale, ohne Plotter kehrt `view_on_plane` folgenlos zurück. **Bild:** Kamera steht senkrecht, Raster liegt in der Ebene | offen |
-| P2 | Skizzengeometrie in die Szene (Entscheidung B); Zeigerposition wird einspeisbar (G) | L | **grün:** Skizze auf `feature:<id>` liegt in der Ebene der Fläche; eingespeiste Zeigerpunkte erzeugen dieselben Elemente wie heute die Mausereignisse; zweimal zeichnen ergibt identische Punkte | offen |
+| P2a | `profile.curves_of` — die gelöste Skizze als Punktfolgen im Raum, abgetastet nach Sehnentoleranz | M | **grün:** neun Tests ohne Plotter — Laufrichtung des Bogens, voller Umlauf, Kreisschluss, Feinheit nach Radius, jeder Punkt in der geneigten Ebene | **fertig** `078d9e00` |
+| P2b | Kurven und Raster als Actor in der Szene (Entscheidung B); Rasterweite aus dem Kameramaßstab | L | **grün:** die Rasterweite als freie Funktion gegen die 1-2-5-Folge; ohne Plotter kehrt das Zeichnen folgenlos zurück. **Bild:** Skizze liegt auf der Fläche, Raster darunter | offen |
+| P2c | Zeigerposition einspeisbar: `_to_screen`, `_to_world` **und der Maßstab** hinter einer austauschbaren Schnittstelle (§1.7, G) | M | **grün:** eingespeiste Zeigerpunkte erzeugen dieselben Elemente wie heute die Mausereignisse; Trefferabstand und Rasterweite bleiben in Millimetern richtig | offen |
 | P3 | Fläche anklicken → Skizze dort (E). Zeigemodus `_sketching` in `_on_picked`, Kontextmenüeintrag | M | **grün:** ein eingespeister Flächentreffer setzt `sketch.plane` auf `feature:<id>`, das Klappfeld zeigt dieselbe Wahl. **Bild:** Klick auf die Deckfläche beginnt dort | offen |
 | P4 | **Der Schnitt.** `start_sketch` schwenkt statt zu tauschen; Modell abgeblendet; Ansichtsaktionen und Ziffern wieder frei (A, D) | L | **grün:** `middle_stack` wechselt die Seite nicht mehr; Ansichtsaktionen sind aktiv **und wirken** — geprüft an der Kameravorgabe, nicht am `enabled`-Zustand; Escape kommt heraus. **Bild:** der Schwenk | offen |
 | P5 | Abbau: `SketchPanel` als Vollbildseite entfällt; `SketchField`/`SketchEditorDialog` bleiben (zweiter Weg über den Op-Dialog) | M | **grün:** Referenzzahl der Suite unverändert, kein toter Import | offen |
