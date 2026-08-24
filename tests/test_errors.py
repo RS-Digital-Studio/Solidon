@@ -194,6 +194,122 @@ def test_the_title_follows_the_constraint_not_the_class() -> None:
     assert str(own.title) == "Dieses Profil gibt es nicht."
 
 
+#: Beschränkungen, die bewusst **keine** Zahlenspanne sind.
+#:
+#: Das Gegenstück zu ``errors._RANGE_CONSTRAINTS``, und beide zusammen müssen
+#: alles abdecken, was ``app/core`` wirklich setzt — dafür sorgt der Test
+#: darunter. Getrennt geführt, weil die Frage nicht maschinell zu beantworten
+#: ist: „zu wenige Punkte" und „zwischen drei und vierundsechzig Ecken" sehen im
+#: Quelltext gleich aus, und nur beim zweiten steht eine Zahl in einem Feld, die
+#: der Kunde ändern kann.
+_NOT_A_RANGE = frozenset(
+    {
+        "absolute_path", "already_solid", "ambiguous_reference", "checksum", "choices",
+        "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
+        "empty", "file_too_large", "format", "grammar", "host", "inverted", "known_pattern",
+        "known_structure", "missing_file", "missing_gathered", "missing_link", "missing_payload",
+        "needs_diameter", "no_area", "no_base_dir", "no_cavity", "no_direction", "no_face",
+        "no_geometry", "no_migration", "no_normal", "no_outline", "no_profile", "no_section",
+        "no_shapes", "no_sources", "no_split", "not_a_face", "not_a_number", "not_a_project",
+        "not_a_twin", "not_outline", "not_step", "not_upright", "point_count", "required",
+        "scheme", "target_behind", "target_count", "target_parallel", "toml",
+        "too_many_triangles", "too_new", "type", "undo_with_changes", "unknown",
+        "unknown_feature", "unknown_format", "unknown_object", "unknown_parameter",
+        "unknown_region", "unknown_shape", "unknown_source", "unknown_target",
+        "unknown_transaction", "unreadable", "unsupported_format", "unwritable",
+        "value_not_allowed", "web_page",
+    }
+)  # fmt: skip
+
+
+def constraints_in_core() -> tuple[dict[str, str], list[str]]:
+    """Jede ``constraint``-Angabe aus ``app/core`` — feste Werte und dynamische.
+
+    Zurück kommt einmal ``{wert: erste Fundstelle}`` und einmal die Liste der
+    Stellen, an denen kein fester Wert steht.
+    """
+    fest: dict[str, str] = {}
+    beweglich: list[str] = []
+    for path in core_sources():
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            for keyword in node.keywords:
+                if keyword.arg != "constraint":
+                    continue
+                wert = keyword.value
+                if isinstance(wert, ast.Constant) and isinstance(wert.value, str):
+                    if wert.value:
+                        fest.setdefault(wert.value, f"{path.name}:{node.lineno}")
+                elif path.name != "errors.py":
+                    # In ``errors.py`` reicht der Konstruktor sein eigenes
+                    # Argument weiter — das ist die Definition, kein Aufruf.
+                    beweglich.append(f"{path.name}:{node.lineno}")
+    return fest, beweglich
+
+
+def test_every_constraint_is_sorted_into_range_or_not() -> None:
+    """Keine Beschränkung darf unbemerkt an beiden Listen vorbeilaufen.
+
+    **Der Vorgänger konnte diese Lücke nicht finden.** Er zählte vier Spannen
+    und fünf Gegenbeispiele auf, beide von Hand — und prüfte nie, was der Code
+    tatsächlich setzt. ``corner_count`` („zwischen drei und vierundsechzig
+    Ecken"), ``negative``, ``too_short`` und ``minimum_wall`` standen in keiner
+    der beiden Listen und trugen deshalb den vagen Titel; für den Test gab es
+    sie nicht. Ein Test, der nur seine eigene Aufzählung bestätigt, misst sich
+    selbst.
+
+    Hier kommt der **Ist-Zustand aus dem Quelltext** und der **Soll-Zustand aus
+    den beiden kuratierten Listen**. Wer eine neue Beschränkung einführt, ordnet
+    sie ein — oder der Lauf ist rot und sagt, welche fehlt.
+    """
+    fest, beweglich = constraints_in_core()
+
+    assert not beweglich, (
+        "Eine Beschränkung aus einer Variablen lässt sich nicht einordnen. "
+        f"Stellen: {beweglich}. In ``solver.py`` stand dort einmal die Elementart "
+        "(„circle“), und der Titel richtete sich danach."
+    )
+
+    unsortiert = {
+        wert: ort
+        for wert, ort in fest.items()
+        if wert not in errors._RANGE_CONSTRAINTS and wert not in _NOT_A_RANGE
+    }
+    assert not unsortiert, (
+        "Diese Beschränkungen kennt keine der beiden Listen — trägt sie in "
+        "``errors._RANGE_CONSTRAINTS`` ein, wenn eine Zahl in einem Feld eine "
+        f"Grenze verletzt, sonst in ``_NOT_A_RANGE``: {unsortiert}"
+    )
+
+    doppelt = errors._RANGE_CONSTRAINTS & _NOT_A_RANGE
+    assert not doppelt, f"in beiden Listen, also ohne Antwort: {sorted(doppelt)}"
+
+    verwaist = (errors._RANGE_CONSTRAINTS | _NOT_A_RANGE) - set(fest)
+    assert not verwaist, (
+        f"Diese Beschränkungen setzt der Kern nicht mehr: {sorted(verwaist)}. "
+        "Eine Karteileiche in der Liste deckt beim nächsten Mal einen echten Fehler."
+    )
+
+
+def test_a_range_constraint_really_reads_like_one() -> None:
+    """Stichprobe über den echten Weg, nicht über den Konstruktor.
+
+    Die vier aus dem Befund vom 24.08.2026: Jede nennt in ihrem Detailtext eine
+    Grenze, und über jeder stand „Die Eingabe war so nicht verwendbar."
+    """
+    from app.core.sketch.shapes import polygon
+
+    with pytest.raises(ValidationError) as ecke:
+        polygon(corners=2, diameter=10.0)
+    assert ecke.value.constraint == "corner_count"
+    assert "Bereichs" in str(ecke.value.title), (
+        "„zwischen drei und vierundsechzig Ecken“ nennt beide Grenzen — "
+        "der Titel darf nicht vager sein als das Detail"
+    )
+
+
 def test_a_suggestion_has_to_fit_the_error() -> None:
     """„Reparieren und erneut versuchen" stand an Fehlern, wo es nichts zu
     reparieren gibt.
