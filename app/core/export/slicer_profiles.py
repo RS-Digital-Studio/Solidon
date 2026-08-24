@@ -437,16 +437,21 @@ def compatible_with(profile: SlicerProfile, known: dict[str, SlicerProfile]) -> 
     return ()
 
 
-def processes(
-    profiles: list[SlicerProfile], machine: SlicerProfile | None = None
+def _of_kind(
+    profiles: list[SlicerProfile], machine: SlicerProfile | None, kind: str
 ) -> list[SlicerProfile]:
-    """Die Prozessprofile, die zu diesem Drucker passen.
+    """Die Profile einer Art, die zu diesem Drucker passen.
 
     Ohne Maschine alle. Mit Maschine nur die verträglichen — sonst führt die
     Liste genau in den Abbruch, den sie verhindern soll, und zwar unter
     zweitausend Einträgen.
+
+    Prozesse und Filamente unterschieden sich in dieser Auswahl nur durch die
+    Art, nach der sie filtern. Trotzdem stand sie zweimal da, und die Begründung
+    für den Rückfall nur einmal — bei den Filamenten traf derselbe Code
+    dieselbe Entscheidung ohne einen Satz dazu.
     """
-    entries = [entry for entry in profiles if entry.kind == "process"]
+    entries = [entry for entry in profiles if entry.kind == kind]
     if machine is None:
         return sorted(entries, key=lambda entry: entry.name)
 
@@ -458,17 +463,18 @@ def processes(
     return sorted(chosen, key=lambda entry: entry.name)
 
 
+def processes(
+    profiles: list[SlicerProfile], machine: SlicerProfile | None = None
+) -> list[SlicerProfile]:
+    """Die Prozessprofile, die zu diesem Drucker passen."""
+    return _of_kind(profiles, machine, "process")
+
+
 def filaments(
     profiles: list[SlicerProfile], machine: SlicerProfile | None = None
 ) -> list[SlicerProfile]:
     """Die Filamentprofile, die zu diesem Drucker passen."""
-    entries = [entry for entry in profiles if entry.kind == "filament"]
-    if machine is None:
-        return sorted(entries, key=lambda entry: entry.name)
-    known = {entry.name: entry for entry in entries}
-    fitting = [entry for entry in entries if machine.name in compatible_with(entry, known)]
-    chosen = fitting or [entry for entry in entries if not compatible_with(entry, known)]
-    return sorted(chosen, key=lambda entry: entry.name)
+    return _of_kind(profiles, machine, "filament")
 
 
 def match_filament(
