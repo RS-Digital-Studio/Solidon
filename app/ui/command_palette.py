@@ -181,6 +181,9 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     "label_text": ("gravieren", "beschriften", "praegen"),
     "decimate_mesh": ("vereinfachen", "reduzieren", "leichter machen"),
     "hollow_object": ("aushoehlen", "leer machen"),
+    # Versteckter Zwilling (``MENU_TWINS``): kein Menüeintrag, also ist die
+    # Palette neben dem Verlauf sein einziger direkter Weg.
+    "shell_exact": ("exakt aushoehlen", "brep aushoehlen"),
     "repair_mesh": ("loecher schliessen", "reparieren", "flicken"),
     # **Die gewöhnlichsten Wörter fehlten**, und das fiel niemandem auf, weil
     # niemand sie sucht, der das Register kennt: „kopieren" und „loeschen"

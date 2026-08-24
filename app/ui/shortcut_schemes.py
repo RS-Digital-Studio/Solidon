@@ -43,7 +43,6 @@ FUSION: Final[dict[str, str]] = {
     "duplicate_object": "Ctrl+D",
     "mirror_object": "Ctrl+M",
     "pattern": "P",
-    "shell_exact": "S",
 }
 
 #: Die Belegungen mit ihrem Namen. ``default`` ist leer: dort gilt, was im

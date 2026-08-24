@@ -112,6 +112,13 @@ MENU_TWINS: Final[dict[str, str]] = {
     "create_brep_box": "create_box",
     "create_brep_cylinder": "create_cylinder",
     "drill_brep_hole": "drill_hole",
+    # „Aushöhlen" und „Exakt aushöhlen" standen nebeneinander im Menü — und
+    # zwar in **zwei verschiedenen** (``prepare`` gegen ``shaping``). Dort
+    # liest „exakt" wie eine Qualitätsstufe („das andere ist also ungenau?"),
+    # obwohl es den Rechenkern meint. Der Umschaltertext von ``create_box``
+    # versprach exaktes Aushöhlen ohnehin schon, während es als eigener
+    # Eintrag daneben stand.
+    "shell_exact": "hollow_object",
 }
 
 #: Der Umschalter der beiden Rechenkerne. Einmal geschrieben und zweimal
@@ -149,10 +156,33 @@ _EXACT_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
 #: *Teilen* mit null Stiften war und in Formatversion 11 darin aufgegangen
 #: ist. Ein versteckter Zwilling ohne Umschalter wäre sonst eine zweite Zeile
 #: in der Befehlspalette, die dasselbe tut wie die erste.
+#: Der Umschalter des Aushöhlens — **ein eigener Text, und zwar zwingend.**
+#:
+#: ``_EXACT_TOGGLE`` zählt auf, was nur im exakten Kern geht, und nennt darin
+#: „exaktes Aushöhlen". Am Haken des Aushöhlens gelesen ist das ein Verweis auf
+#: sich selbst: Der Haken, der exakt aushöhlt, versprach, dass man damit später
+#: exakt aushöhlen könne. Bei den drei Grundform-Zwillingen ist derselbe Satz
+#: richtig — dort ist exaktes Aushöhlen eine **Folge**operation, die der Haken
+#: erst möglich macht.
+#:
+#: Der Titel ist derselbe wie dort, und das ist Absicht: gleicher Satz,
+#: gleicher Katalogschlüssel, eine Übersetzung. Nur die Erklärung ist eigen.
+_HOLLOW_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
+    _EXACT_TOGGLE[0],
+    _(
+        "Höhlt im exakten Kern aus und lässt den Körper exakt — Fase, "
+        "Verrundung, Formschräge und der STEP-Export bleiben danach möglich. "
+        "Verlangt einen exakten Eingangskörper: an einem Netz ist der Haken "
+        "gesperrt und nennt den Grund. Ohne ihn wird als Netz gerechnet, und "
+        "der Körper ist danach ein Netz."
+    ),
+)
+
 TWIN_TOGGLES: Final[dict[str, tuple[TranslatableText, TranslatableText]]] = {
     "create_brep_box": _EXACT_TOGGLE,
     "create_brep_cylinder": _EXACT_TOGGLE,
     "drill_brep_hole": _EXACT_TOGGLE,
+    "shell_exact": _HOLLOW_TOGGLE,
 }
 
 

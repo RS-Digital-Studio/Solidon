@@ -393,7 +393,12 @@ def test_every_operation_of_the_history_can_be_opened(window: MainWindow) -> Non
 # --- Was zur Bauart der Auswahl passt ---------------------------------------------
 
 
-BREP_ONLY = ("fillet_edges", "chamfer_edges", "draft_faces", "shell_exact", "brep_to_mesh")
+# ``shell_exact`` stand hier, bis es als Zwilling zu ``hollow_object``
+# zusammengelegt wurde (MENU_TWINS): Es hat seitdem keinen eigenen
+# Menüeintrag, und ``_op_actions[…]`` fände ihn nicht. Ausgegraut wird an
+# seiner Stelle der **Haken** im Dialog des Partners, geprüft in
+# ``test_ui.py`` über ``_lock_twin_toggle`` — dieselbe Auskunft, andere Stelle.
+BREP_ONLY = ("fillet_edges", "chamfer_edges", "draft_faces", "brep_to_mesh")
 
 
 def test_the_exact_operations_are_greyed_out_on_a_mesh(window: MainWindow) -> None:

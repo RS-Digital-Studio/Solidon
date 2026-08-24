@@ -199,8 +199,9 @@ def _brep_input(ctx: OpContext) -> tuple[SceneObject, Solid]:
             # formatiert nicht. Der Name reist wie überall in ``values``.
             detail=_(
                 "Der gewählte Körper ist ein Netz. Exakte Körper kommen aus einer "
-                "STEP-Datei oder aus den Grundformen, deren Name mit Exakt beginnt; "
-                "wer aushöhlen muss, nimmt Exakt aushöhlen statt Aushöhlen."
+                "STEP-Datei oder aus den Grundformen mit gesetztem Haken „Exakter "
+                "Körper (B-Rep)“; wer aushöhlen muss, setzt denselben Haken bei "
+                "Aushöhlen."
             ),
             values={"name": source.name, "field": "in", "constraint": "needs_brep"},
             object_id=source.id,
