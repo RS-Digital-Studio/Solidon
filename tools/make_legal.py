@@ -311,7 +311,10 @@ def page(title: str, body: str, siblings: str) -> str:
         f'<footer class="site">\n  <div class="wrap">\n'
         f"    © 2026 {APP_VENDOR} ·\n"
         f'    <a href="/">Startseite</a>{siblings}\n'
-        f"  </div>\n</footer>\n\n</body>\n</html>\n"
+        # Auch die Rechtstexte: Wer wissen will, ob jemand das Widerrufs-
+        # recht liest, braucht die Zeile. Was gezählt wird, steht in der
+        # Datenschutzerklärung selbst — der Pfad und sonst nichts.
+        f'  </div>\n</footer>\n\n<script src="/site.js" defer></script>\n</body>\n</html>\n'
     )
 
 

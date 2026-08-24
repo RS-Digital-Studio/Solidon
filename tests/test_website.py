@@ -581,6 +581,36 @@ def _address(page: Path) -> str:
     return "https://solidon3d.de/" + rest
 
 
+def test_every_delivered_page_counts_itself() -> None:
+    """Eine Seite ohne ``site.js`` steht in keiner Statistik — und niemand
+    merkt es, weil die Statistik dann eben eine Seite weniger nennt.
+
+    **Gefunden am 24.08.2026, von Robert an der Statistikseite:** „die meisten
+    seiten werden nicht angezeigt". Gezählt: **12 von 30** Seiten banden das
+    Skript ein. Fehlend waren genau die **erzeugten** — das Handbuch in sechs
+    Sprachen, die fünf Rechtstexte — und die sechs KI-Seiten. Nichts war
+    kaputt: `count.php` zählte tadellos, was bei ihm ankam, und bei ihm kam
+    nichts an.
+
+    **Der Fehlerfall ist nicht Vergesslichkeit, sondern eine neue Seitenart.**
+    Wer eine Seite von Hand anlegt, kopiert eine bestehende und bekommt die
+    Zeile mit. Wer ein *Werkzeug* schreibt, das Seiten erzeugt, schreibt den
+    Rahmen neu — und der Rahmen kennt nur, woran der Autor gedacht hat.
+    Deshalb prüft dieser Test das Ergebnis und nicht die Werkzeuge.
+
+    Ausgenommen ist allein die Verifikationsdatei der Suchmaschine: Sie ist
+    kein Angebot an einen Leser, sondern ein Beleg für einen Dienst, und was
+    dort geschieht, gehört in keine Besucherstatistik. ``_delivered_pages``
+    lässt sie schon aus.
+    """
+    ohne = [
+        page.relative_to(WEBSITE).as_posix()
+        for page in _delivered_pages()
+        if "site.js" not in page.read_text(encoding="utf-8")
+    ]
+    assert not ohne, f"zählen sich nicht: {ohne}"
+
+
 def test_the_sitemap_lists_every_page_that_is_delivered() -> None:
     """Eine Seite, die nicht in der Sitemap steht, wird über Links gefunden.
 

@@ -782,7 +782,9 @@ def page_html(language: str, prefix: str) -> str:
         f'<p class="lede no-print">{lede}</p>\n'
         f"{contents(language)}\n"
         f"{anchored(body)}\n"
-        f"</main>\n</body>\n</html>\n"
+        # Der Zähler, wie auf jeder anderen Seite. Ohne ihn stand das
+        # Handbuch in sechs Sprachen in keiner Statistik.
+        f'</main>\n<script src="/site.js" defer></script>\n</body>\n</html>\n'
     )
 
 
