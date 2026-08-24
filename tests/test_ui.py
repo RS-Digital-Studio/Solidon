@@ -6852,3 +6852,41 @@ def test_the_snap_marker_follows_the_canvas_not_a_second_calculation(
     before = len(shown)
     panel.pointerMoved.emit(1.0, 1.0)
     assert len(shown) == before, "nach dem Modus darf der Draht nicht mehr tragen"
+
+
+def test_the_sketch_hint_names_the_plane_being_drawn_on(window: MainWindow) -> None:
+    """Der Hinweis sagt, worauf gezeichnet wird — und zieht beim Wechsel nach.
+
+    Die andere Hälfte der Fangmarke: Das Kreuz sagt, wohin der Klick fällt,
+    dieser Satz sagt, worauf. Robert hat am 24.08.2026 auf z=0 gezeichnet und
+    es erst am Ergebnis gemerkt — mit dem Satz hätte die Leiste „Draufsicht
+    (XY)" gesagt, während er auf die Deckfläche sah.
+    """
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    top = next(
+        fid
+        for fid, feature in entry.features.items()
+        if feature.kind == "face" and feature.params.get("normal", (0, 0, 0))[2] > 0.9
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, top)
+
+    window.action_sketch_free()
+    try:
+        panel = window._sketch_panel
+        assert panel is not None
+        assert "Fläche an" in window._sketch_hint.text(), (
+            "auf einer Fläche gestartet muss der Hinweis die Fläche nennen"
+        )
+        assert panel.choose_plane("plane:xy")
+        assert "Draufsicht" in window._sketch_hint.text(), (
+            "nach dem Wechsel muss der Hinweis die neue Ebene nennen"
+        )
+        assert "  (" not in window._sketch_hint.text(), (
+            "das Tastenkürzel hilft beim Wechseln, nicht beim Wissen, wo man ist"
+        )
+    finally:
+        window.finish_sketch(keep=False)

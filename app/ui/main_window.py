@@ -4206,19 +4206,14 @@ class MainWindow(QMainWindow):
         # wird, entscheidet der Dialog bei „Fertig". Ein Hinweis, der auf eine
         # Operation zeigt, die niemand gewählt hat, lässt den Nutzer suchen,
         # wo nichts ist.
+        self._update_sketch_hint()
         if op_name:
-            self._sketch_hint.setText(
-                tr("Zeichnen, dann Fertig — die Operation öffnet auf der Skizze.")
-            )
             self.statusBar().showMessage(
                 tr("Skizze für {op} — Escape verlässt den Modus.").format(
                     op=str(REGISTRY.get(op_name).title)
                 )
             )
             return
-        self._sketch_hint.setText(
-            tr("Zeichnen, dann Fertig — dann fragt Solidon, was daraus wird.")
-        )
         self.statusBar().showMessage(tr("Freies Zeichnen — Escape verlässt den Modus."))
 
     def _sketch_plane_changed(self) -> None:
@@ -4235,6 +4230,7 @@ class MainWindow(QMainWindow):
         self.viewport.set_sketching(frame)
         if frame is not None:
             self.viewport.view_on_plane(frame)
+        self._update_sketch_hint()
         self._redraw_sketch()
 
     def _on_sketch_point(self, point: object) -> None:
@@ -4264,6 +4260,40 @@ class MainWindow(QMainWindow):
         if panel is None:
             return
         panel.canvas.hover_on_plane(cast(tuple[float, float], point))
+
+    def _update_sketch_hint(self) -> None:
+        """Der Hinweis über der Zeichenleiste nennt die Ebene, auf der
+        gezeichnet wird.
+
+        Die andere Hälfte der Auskunft, die die Fangmarke gibt: Das Kreuz
+        sagt, wohin der Klick fällt — dieser Satz sagt, worauf. Robert hat am
+        24.08.2026 auf z=0 gezeichnet und es erst am Ergebnis gemerkt; mit dem
+        Satz hätte die Leiste „Draufsicht (XY)" gesagt, während er auf die
+        Deckfläche sah.
+
+        Die Beschriftung kommt aus dem Ebenen-Auswahlfeld, das sie schon
+        führt — keine zweite Quelle. Nur das Tastenkürzel am Ende fällt weg:
+        „(2)" hilft beim Wechseln, nicht beim Wissen, wo man ist.
+        """
+        panel = self._sketch_panel
+        if panel is None:
+            return
+        place = panel.plane_choice.currentText()
+        cut = place.rfind("  (")
+        if cut != -1 and place.endswith(")"):
+            place = place[:cut]
+        source = (
+            tr(
+                "Zeichenebene: {place} · Zeichnen, dann Fertig — "
+                "die Operation öffnet auf der Skizze."
+            )
+            if self._sketch_target
+            else tr(
+                "Zeichenebene: {place} · Zeichnen, dann Fertig — "
+                "dann fragt Solidon, was daraus wird."
+            )
+        )
+        self._sketch_hint.setText(source.format(place=place))
 
     def _sketch_frame(self) -> PlaneFrame | None:
         """Der Rahmen der Ebene, auf der gerade gezeichnet wird."""
