@@ -258,6 +258,28 @@ für etwas anderes als die zwei Rechenkerne zu benutzen, weil dann „ein dritte
 Paar einen Haken bekäme, der von einem exakten Körper spricht, den es nicht
 gibt."
 
+> **Gebaut wurde etwas anderes, und der Entwurf reichte nicht.** Eine Tabelle
+> `dict[str, str]` nach dem Muster von `MENU_TWINS` trägt 4:1 **nicht** — nicht
+> wegen des Umschaltertexts, wie hier angenommen, sondern wegen des **Titels**.
+> Der Twin-Mechanismus zeigt den Eintrag des *sichtbaren* Zwillings; bei „Quader
+> anlegen" stimmt dessen Titel für beide, weil beide einen Quader anlegen. Hier
+> hieße der Eintrag „Grundform extrudieren", und die anderen drei Arten steckten
+> darunter. `sketch_extrude` umzubenennen ist der falsche Ausweg: Derselbe Titel
+> steht im **Verlauf**, und dort soll stehen, was getan wurde.
+>
+> Gebaut ist deshalb `VARIANT_GROUPS: tuple[VariantGroup, ...]` — ein
+> Menüeintrag, der **keiner Operation gehört**, mit eigenem Titel, eigenem
+> `doc` und einer Beschriftung für die Auswahl. Das Vorbild dafür stand schon
+> daneben: *Automatisch teilen* ist seit jeher ein Menüeintrag über einem
+> Ablauf statt über einem Registereintrag. Dazu `variant_members()` für den
+> Menüaufbau und `group_for_variant()` für den Dialog.
+
+**E2.3 — Gebietsfrage, beantwortet: nein.** Die Registereinträge blieben
+unberührt; die Zuordnung steht in `registry.py`, den Dialog baut
+`main_window.py`. Angefasst wurde aus `app/core/sketch/ops.py` nur der
+Fehlertext aus E1.1 und ein `doc`-Satz, beides von `formwerk-9e` freigegeben.
+Der ursprüngliche Stand der Frage:
+
 **E2.3 — Gebietsfrage, offen.** `app/core/sketch/ops.py` gehört derzeit
 `formwerk-9e`. Ob die Ops selbst angefasst werden müssen, entscheidet sich an
 E2.2: Steht die Zuordnung in `registry.py` und baut `main_window.py` den
@@ -487,12 +509,25 @@ dieses Umbaus belegen will, zählt am gebauten Fenster
 Ein Commit je Paket, jedes Paket endet mit grünem Tor. Reihenfolge nach Kosten
 und Erkenntnisgewinn: das billigste zuerst, das fachlich schwerste zuletzt.
 
-| Paket | Inhalt | Umfang | Verifikation |
-|---|---|---|---|
-| **P1** | E4: Gewinde-Titel + fünf Kataloge | S | `test_translations.py`, `test_registry.py`, Sammelgruppe |
-| **P2** | E1: `shell_exact` in `MENU_TWINS`, Fehlertext (E1.1), Kürzel entfernen (E1.2), Palette (E1.3) | M | `test_sketch_ops.py`, `test_operation_ui.py`, `test_interface_limits.py`, Fenstergruppe |
-| **P3** | E2: `MENU_VARIANTS` + Dialog für die vier Skizzen-Ops | L | `test_interface_limits.py` (Felder vorn), `test_sketch*.py`, Fenstergruppe |
-| **P4** | E3: Schraubaufnahme, drei Arten | L | `test_placement.py`, `test_parts.py`, Fenstergruppe |
+| Paket | Inhalt | Umfang | Stand | Commit |
+|---|---|---|---|---|
+| **P1** | E4: Gewinde-Titel + fünf Kataloge | S | **erledigt** | `520b10f0` |
+| **P2** | E1: `shell_exact` in `MENU_TWINS`, Fehlertext (E1.1), Kürzel entfernt (E1.2), Palette (E1.3) | M | **erledigt** | `816cc7d7` |
+| **P3** | E2: Sammeleintrag + Variantenwahl für die vier Skizzen-Ops | L | **erledigt** | `b9460ffd` (Register), `f43284f0` (Oberfläche) |
+| **P4** | E3: Schraubaufnahme, drei Arten | L | **verworfen** — siehe §3 | — |
+| **P4′** | E3 neu: `caveat`-Ring, `inserts` aufgelöst, Katalognähe | S | **erledigt** | `ea693b4c` |
+
+Verifikation je Paket wie geplant gefahren; die Zahlen stehen in den
+Commit-Meldungen. Das Handbuch wurde **zweimal** erzeugt statt viermal —
+einmal nach P1, weil `main` daran rot war (`b9460ffd`), einmal am Ende
+(`ea693b4c`).
+
+**Abweichung zur Empfehlung, bewusst und gemeldet:** `routing` bleibt als
+Gruppe mit einer Kachel bestehen, obwohl die Empfehlung an Robert „`inserts`
+und `routing` auflösen" lautete. Bauplan §24.2 führt „Schlauch- und Rohrmaße"
+in der Normteiltabelle — die Gruppe ist auf Zuwachs angelegt, und eine
+Kabeldurchführung unter *Verbindungen* wäre ein Eintrag am falschen Ort. Das
+ist schlechter als eine kleine Gruppe.
 
 **P1 zuerst und nicht P2**, obwohl P2 die Tabellenzeile ist: P1 ändert nur
 Anzeigetexte und ist damit das Paket, an dem sich die Übersetzungsfallen aus §6
