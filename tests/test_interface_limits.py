@@ -157,6 +157,50 @@ def test_the_variant_entry_keeps_the_shortcut_of_its_first_kind(window: MainWind
     ), "der Sammeleintrag führt nicht das Kürzel seiner ersten Art"
 
 
+def test_a_group_of_one_never_becomes_a_submenu() -> None:
+    """Ein Untermenü, das nichts bündelt, ist ein Klick für nichts (§2.6).
+
+    Die Menüleiste weiß das seit je (``registry.surfaces.group_is_flat``), das
+    **Kontextmenü** wusste es nicht: Es faltete jede Kategorie, sobald die
+    Zeilengrenze überschritten war. Am Flächenklick — 19 Operationen in vier
+    Gruppen, Bausteine 10, Ändern 5, Erzeugen 2, Vorbereiten 2 — kostete das
+    **jede** Operation zwei Klicks, auch die Bohrung, die zu zweit in
+    „Erzeugen" lag.
+
+    Geprüft wird die Rechnung, nicht das Menü: ``folded_groups`` braucht kein
+    Qt, und ein Test, der dafür ein Fenster baute, hebt die Abrissquote der
+    ganzen Datei (gemessen am 24.08.2026, 2 von 9 auf 2 von 3).
+    """
+    from app.ui.panels import folded_groups
+
+    passt = {"Bausteine": 4, "Ändern": 3}
+    assert folded_groups(passt) == [], "was in die Grenze passt, wird nicht gefaltet"
+
+    flaeche = {"Bausteine": 10, "Ändern": 5, "Erzeugen": 2, "Vorbereiten": 2}
+    assert folded_groups(flaeche) == ["Bausteine"], (
+        "am Flächenklick genügt es, die größte Gruppe zu falten — die übrigen "
+        "neun Einträge stehen dann direkt da"
+    )
+
+    einzeln = {f"Gruppe {nr}": 1 for nr in range(20)}
+    assert folded_groups(einzeln) == [], (
+        "zwanzig Gruppen mit je einem Eintrag ergeben zwanzig Untermenüs mit je "
+        "einem Eintrag — dann bleibt das Menü lieber lang"
+    )
+
+    gemischt = {"Groß": 8, "Mittel": 5, "Klein": 2, "Winzig": 1}
+    assert folded_groups(gemischt) == ["Groß"], (
+        "gefaltet wird von oben und nicht weiter, als die Grenze verlangt: "
+        "16 Einträge, „Groß“ gefaltet macht 9 Zeilen (5+2+1 direkt, eine für "
+        "das Untermenü) — „Mittel“ zu falten wäre ein Klick ohne Not"
+    )
+
+    hartnaeckig = {"A": 6, "B": 6, "C": 6}
+    assert folded_groups(hartnaeckig) == ["A", "B"], (
+        "18 Einträge, nach zwei Faltungen 8 Zeilen — die dritte Gruppe bleibt offen"
+    )
+
+
 def test_no_menu_becomes_a_list_to_search(window: MainWindow) -> None:
     """Ein Menü, das man absuchen muss, ist kein Menü mehr.
 

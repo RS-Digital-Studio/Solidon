@@ -88,6 +88,32 @@ SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items
 MAX_MENU_ROWS = 12
 
 
+def folded_groups(sizes: dict[str, int], limit: int = MAX_MENU_ROWS) -> list[str]:
+    """Welche Gruppen ein Untermenü bekommen, damit das Menü in die Grenze passt.
+
+    Reine Rechnung über Namen und Anzahlen — **kein Qt**, und deshalb ohne ein
+    einziges Fenster prüfbar. Das ist hier keine Stilfrage: Am 24.08.2026 wurde
+    gemessen, dass jeder Test, der über die ``window``-Fixture ein
+    ``MainWindow`` baut, die Abrissquote der **ganzen Testdatei** hebt (2 von 9
+    auf 2 von 3). Eine Frage, die eine Funktion beantworten kann, bekommt kein
+    Fenster.
+
+    Gefaltet wird von der größten Gruppe abwärts und nur so weit, bis der Rest
+    in die Grenze passt. Eine Gruppe mit einem einzigen Eintrag wird **nie**
+    gefaltet: Ihr Untermenü spart keine Zeile und kostet einen Klick. Bleibt
+    das Menü danach zu lang, bleibt es zu lang — ein Aufklappen, das nichts
+    bündelt, macht es nicht kürzer, sondern nur tiefer.
+    """
+    rows = sum(sizes.values())
+    folded: list[str] = []
+    for title in sorted(sizes, key=lambda name: (-sizes[name], name)):
+        if rows <= limit or sizes[title] < 2:
+            break
+        folded.append(title)
+        rows -= sizes[title] - 1
+    return folded
+
+
 #: In welcher Reihenfolge die Schweregrade stehen. Die Zeile über der Liste
 #: zählt Fehler, Warnungen und Hinweise getrennt — sie verspricht damit eine
 #: Rangfolge, und die Liste darunter hielt sie nicht: sie hängte an, wie es
@@ -968,6 +994,33 @@ class ObjectTree(QWidget):
         Gruppiert wird dann nach derselben Kategorie, nach der auch die
         Menüleiste gruppiert. Beides kommt aus dem Register, kann also nicht
         auseinanderlaufen.
+
+        **Und gruppiert wird nur, soweit es die Länge verlangt.** Hier stand
+        „über zwölf Zeilen: alles in Untermenüs", und das kostet an einem
+        Merkmal mehr, als es einbringt. Gemessen am Flächenklick, 19
+        Operationen in vier Gruppen:
+
+            10  Bausteine
+             5  Ändern
+             2  Erzeugen
+             2  Vorbereiten
+
+        Vorher wurden daraus vier Untermenüs, und damit brauchte **jede**
+        Operation zwei Klicks — auch die Bohrung, die mit einer zweiten Zeile
+        allein in „Erzeugen" lag. Eine Gruppe aus zwei Einträgen zu falten
+        spart eine Zeile und kostet für beide einen Klick; das ist ein
+        schlechtes Geschäft.
+
+        Untermenüs bekommen deshalb nur die **größten** Gruppen, und nur so
+        viele, bis der Rest in die Zeilengrenze passt. Am Flächenklick ist das
+        genau eine: „Bausteine" bündelt zehn Einträge zu einer Zeile, die
+        übrigen neun stehen direkt da. Zehn Zeilen, neun davon mit einem
+        Klick erreichbar statt keiner.
+
+        Dieselbe Abwägung steht längst in ``registry.surfaces.group_is_flat``
+        für die Menüleiste — eine Zwischenebene, die nichts bündelt, ist ein
+        Klick für nichts. Wiederverwenden ließ sie sich nicht: Sie rechnet
+        über die Gruppen der Leiste, hier geht es um die eines Merkmals.
         """
         if len(entries) <= MAX_MENU_ROWS:
             for spec in entries:
@@ -977,11 +1030,25 @@ class ObjectTree(QWidget):
         groups: dict[str, list[Any]] = {}
         for spec in entries:
             groups.setdefault(group_title(str(spec.category)), []).append(spec)
+
+        # Die größten zuerst zusammenfalten: Jede gefaltete Kategorie spart
+        # ihre Einträge minus die eine Zeile, die ihr Untermenü kostet. Eine
+        # Kategorie mit einem Eintrag spart nichts und wird deshalb nie
+        # gefaltet — auch dann nicht, wenn es danach immer noch zu lang ist.
+        # Dann ist das Menü eben lang; ein Aufklappen, das nichts bündelt,
+        # macht es nicht kürzer, sondern nur tiefer.
+        folded = folded_groups({title: len(found) for title, found in groups.items()})
+
+        direct = [spec for spec in entries if group_title(str(spec.category)) not in folded]
+        for spec in direct:
+            self._add_operation(menu, spec, kinds)
+        if folded and direct:
+            menu.addSeparator()
         # Mit dem Menü als Elternteil erzeugt, nicht über ``addMenu(titel)``:
         # sonst hält nichts auf der Python-Seite das Untermenü, und sein
         # C++-Objekt wird eingesammelt, während es noch im Menü hängt —
         # dieselbe Falle wie in der Menüleiste.
-        for title in sorted(groups):
+        for title in sorted(folded):
             submenu = QMenu(title, menu)
             # Ein Untermenü erbt die Eigenschaft nicht — und am ganzen Körper
             # stehen die Operationen des exakten Kerns gerade hier drin.
