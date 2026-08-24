@@ -433,6 +433,43 @@ letzter Schritt jedes privaten Commits:
 git reset            # ohne --hard: nur der Index, keine Datei
 ```
 
+**Und der private Index muss auf `HEAD` stehen, nicht auf einem gemerkten
+Stand.** Am 23.08.2026 schrieb ein Commit sechs fremde Dateien zurück — einen
+doc-Satz und fünf Sprachkataloge, die eine andere Sitzung zwanzig Minuten
+vorher committet hatte. Das Skript sah so aus:
+
+```
+STAND=$(git rev-parse HEAD)     # am Anfang gelesen
+… Minuten Arbeit …
+git read-tree "$STAND"          # hier war HEAD längst weiter
+git update-index --cacheinfo …
+git commit
+```
+
+`git commit` nimmt den **Index** als Baum und **HEAD** als Elternteil. Steht der
+Index auf einem älteren Stand, ist der Commit inhaltlich ein Revert von allem,
+was dazwischen kam — und der `post-commit`-Hook pusht ihn sofort. Also
+`git read-tree HEAD` **unmittelbar vor** dem Commit, nicht am Anfang des
+Skripts.
+
+**Die Kontrolle danach gehört gegen `HEAD`, und das ist der eigentliche Fund:**
+
+```
+git diff --cached HEAD --stat        # richtig
+git diff --cached "$STAND" --stat    # bestätigt die eigene Annahme
+```
+
+Die Kontrolle *war* eingebaut, und sie meldete brav „1 file changed“. Sie lief
+gegen denselben gemerkten Stand, auf dem schon der Index stand — sie konnte den
+Fehler nicht sehen, weil sie ihn teilte. **Eine Prüfung gegen die eigene Annahme
+bestätigt sie, statt sie zu prüfen**; dieselbe Denkfigur wie ein Gegenbeispiel,
+das dieselbe Bedingung trägt wie der Fall (siehe `oberflaeche.md`, „Was nur das
+Bild zeigt“).
+
+Gefunden hat es kein Test, sondern eine Sitzung, die vor dem Paketbau von Hand
+kontrollierte. Kein Test hätte es sehen können: Der Code war lauffähig, die
+Suite grün — es fehlte nur ein Satz, den fünf Sprachkataloge versprechen.
+
 Es kostet Millisekunden, fasst keine Datei an, und der einzige Verlust ist ein
 Staging — das in diesem Verfahren ohnehin niemand benutzt, weil `git commit -o`
 an ihm vorbeigeht.
@@ -476,6 +513,38 @@ ist die Normalform des Messfehlers, nicht die Ausnahme.
 Die Gegenfrage ist dieselbe, die Bauplan §35 an einen Test stellt, nur an ein
 Werkzeug gerichtet, und sie kostet zehn Sekunden: **Was habe ich gerade
 gemessen, und ist das dasselbe wie das, was ich wissen wollte?**
+
+## Prüft dieser Test eine Zusage — oder den Ist-Zustand?
+
+Ein Test kann einen Fehler **festschreiben**. Er ist dann grün, solange der
+Fehler da ist, und wird rot, sobald jemand ihn behebt.
+
+Am 23.08.2026 stand in `tests/test_operation_ui.py`:
+
+```python
+assert values == {"at_feature": "hole_1"}
+```
+
+Das ist die vollständige Vorbelegung eines Dialogs — und sie sicherte damit zu,
+dass die **Größe nicht mitkommt.** Genau das war der Fehler, den dieselbe
+Sitzung am selben Tag gemeldet hatte: Eine 5,19-mm-Bohrung bekam M3
+vorgeschlagen, M3 bohrt 4,00 mm, der Schnitt trägt nichts ab. Als die Größe
+endlich mitkam, wurde der Test rot — **er hat die Verbesserung blockiert, statt
+sie zu tragen.**
+
+Die Gegenprobe dagegen ist nicht die übliche („einmal ohne den Fix fahren“),
+sondern eine andere Frage:
+
+| Form | prüft |
+|---|---|
+| `assert werte == {...}` | den **Ist-Zustand**: genau das und nichts sonst |
+| `assert werte["a"] == x` | die **Zusage**: das hier muss stimmen |
+
+Beides ist manchmal richtig — eine Obergrenze *soll* die vollständige Menge
+prüfen. Aber wer eine Vorbelegung, eine Ausgabe oder eine Menge von Feldern
+festnagelt, sollte wissen, dass er damit auch zusichert, **was nicht darin
+steht**. Die Frage vor dem `==`: Ist die Abwesenheit dieses Schlüssels wirklich
+Teil der Zusage?
 
 ## Die Gegenprobe
 
