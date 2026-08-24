@@ -25,6 +25,7 @@ kein Fehler, sondern ein abgeschalteter Weg.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import re
 import subprocess
@@ -484,6 +485,28 @@ def show_newer(python: Path) -> int:
 
 
 def main() -> int:
+    # **Dieses Werkzeug läuft ausdrücklich auch ohne die virtuelle Umgebung**
+    # (``python tools/check_env.py``, so steht es in `CLAUDE.md`) — sonst
+    # könnte es im frischen Klon nicht melden, dass sie fehlt. Damit schreibt
+    # es in die Konsole des Systems, und die ist unter Windows cp1252.
+    #
+    # Am 24.08.2026 ist `--outdated` genau daran gestorben: Die Zeile
+    # ``paket 1.2 → 1.3`` enthält einen Pfeil, den cp1252 nicht kennt, und der
+    # ``UnicodeEncodeError`` flog aus ``print`` heraus — **nach** der
+    # Überschrift „Neuer verfügbar (17)". Wer die Liste sehen wollte, bekam
+    # einen Stapelabzug statt siebzehn Zeilen.
+    #
+    # ``errors="replace"`` und **kein** Wechsel auf UTF-8: Der Wechsel machte
+    # aus jedem Umlaut in einer alten Konsole Buchstabensalat, und die
+    # Meldungen dieses Werkzeugs sind voll davon. So bleibt darstellbar, was
+    # darstellbar ist, und der Rest wird zu einem Fragezeichen statt zu einem
+    # Abbruch.
+    for stream in (sys.stdout, sys.stderr):
+        # Eine umgeleitete Ausgabe hat kein ``reconfigure``; das ist kein Grund
+        # aufzuhören, sondern der Normalfall in einer Pipeline.
+        with contextlib.suppress(AttributeError, ValueError):
+            stream.reconfigure(errors="replace")
+
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
