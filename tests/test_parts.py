@@ -1007,3 +1007,46 @@ def test_parts_that_need_a_bore_are_offered_at_one() -> None:
             f"{spec.name} steht an einer Bohrung, ohne dafür gedacht zu sein: "
             "wirken ist nicht dasselbe wie sinnvoll sein"
         )
+
+
+def test_every_group_has_a_title_and_every_title_a_tile() -> None:
+    """Die Anschlussprüfung, die beim Umbau der Bohrungs-Bausteine fehlte.
+
+    **Zwei Richtungen, und beide waren am 24.08.2026 ungeprüft.** Der Katalog
+    zeichnet seine Kacheln nach ``spec.group`` und beschriftet die Abschnitte
+    aus ``GROUPS``. Wer eine Gruppe verschiebt, muss beides anfassen — und
+    keine Zusicherung hielt die zwei zusammen:
+
+    * **Eine Gruppe ohne Titel** liest der Kunde als englischen Schlüssel.
+      ``GROUPS.get(gruppe, gruppe)`` fällt auf den Schlüssel zurück, und dann
+      steht „inserts" über den Kacheln statt „Einlegeteile" — eine feste
+      Zeichenkette in der Oberfläche, die nie durch ``tr()`` gelaufen ist
+      (Regel 20).
+    * **Ein Titel ohne Kachel** ist ein leerer Abschnitt. Genau das entsteht,
+      wenn ein Baustein die Gruppe wechselt und ihr Titel stehen bleibt — und
+      es fällt nur auf, wenn jemand den Katalog aufmacht.
+
+    Der Anlass: `heatset_m4` stand allein in `inserts`, und beim Auflösen
+    dieser Gruppe wanderten Baustein **und** Titel — zwei Änderungen in zwei
+    Dateien, deren Zusammenhang niemand geprüft hätte. Beim nächsten Mal prüft
+    ihn dieser Test.
+
+    Nicht geprüft wird, wie **viele** Kacheln eine Gruppe braucht: Ob eine
+    Einzelgruppe zusammengelegt wird, ist eine Entscheidung über die Oberfläche
+    und keine über die Konsistenz — sie gehört nicht in einen Test.
+    """
+    from app.core.knowledge.parts import GROUPS
+
+    benutzt = {spec.group for spec in PARTS.all()}
+    assert benutzt, "ohne Bausteine prüft dieser Test nichts"
+    assert GROUPS, "und ohne Gruppentitel auch nicht"
+
+    ohne_titel = sorted(benutzt - set(GROUPS))
+    assert not ohne_titel, (
+        f"Gruppen ohne Titel in GROUPS: {ohne_titel} — der Katalog zeigt dann den Schlüssel"
+    )
+
+    ohne_kachel = sorted(set(GROUPS) - benutzt)
+    assert not ohne_kachel, (
+        f"Gruppentitel ohne einen einzigen Baustein: {ohne_kachel} — ein leerer Abschnitt"
+    )
