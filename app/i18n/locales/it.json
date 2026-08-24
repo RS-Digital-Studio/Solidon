@@ -292,8 +292,6 @@
   "Bodenschichten": "Strati di fondo",
   "Bogen": "Arco",
   "Bogen: der nächste Klick setzt das Ende.": "Arco: il prossimo clic fissa la fine.",
-  "Bogen: der nächste Klick setzt den Anfang.": "Arco: il prossimo clic fissa l'inizio.",
-  "Bogen: erster Klick setzt die Mitte.": "Arco: il primo clic fissa il centro.",
   "Bogenradius": "Raggio di curvatura",
   "Bogenwinkel": "Angolo di curvatura",
   "Bohrt ein rundes Loch in einen exakten Körper — er bleibt exakt, und Fase, Verrundung und der STEP-Export bleiben danach möglich.": "Fora un foro rotondo in un corpo esatto: resta esatto, e smusso, raccordo ed esportazione STEP restano disponibili.",
@@ -2991,5 +2989,8 @@
   "„profiles“ zeigt, was zur Auswahl steht.": "«profiles» mostra ciò che è tra le scelte.",
   "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» ha trasformato il corpo esatto in una mesh: le operazioni del kernel esatto funzionano solo prima. Annullare i passi da lì, applicare questa operazione e rifare il resto.",
   "Klicks fallen auf das Raster, das im Bild steht. Vorhandene Punkte fangen vor.": "I clic cadono sulla griglia che si vede. I punti esistenti hanno ancora la precedenza.",
-  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "Il passo della griglia — lo stesso numero su cui cade un clic. Senza immissione segue lo zoom; un passo digitato resta."
+  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "Il passo della griglia — lo stesso numero su cui cade un clic. Senza immissione segue lo zoom; un passo digitato resta.",
+  "Bogen: erster Klick setzt den Anfang.": "Arco: il primo clic fissa l'inizio.",
+  "Bogen: der nächste Klick sagt, wie weit er sich wölbt.": "Arco: il clic successivo dice quanto si incurva.",
+  "Der Punkt lag auf der Geraden zwischen Anfang und Ende — daraus wird kein Bogen. Weiter daneben klicken.": "Il punto stava sulla retta fra inizio e fine — così non nasce un arco. Fai clic più discosto."
 }

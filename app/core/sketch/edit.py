@@ -466,3 +466,59 @@ def _axes_for(plane: str) -> tuple[tuple[float, float, float], tuple[float, floa
     if plane == "plane:yz":
         return ((0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
     return ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+
+
+def arc_through(start: Point2, end: Point2, via: Point2) -> tuple[Point2, Point2, Point2] | None:
+    """Drei Punkte auf einem Bogen → wie ihn die Skizze speichert.
+
+    Zurück kommt ``(Mitte, Anfang, Ende)`` — das Format, in dem ein
+    ``SketchElement("arc", …)`` seine Punkte trägt, in der Projektdatei steht
+    und vom Löser gelesen wird. Es bleibt unangetastet; was sich am 24.08.2026
+    geändert hat, ist allein die **Reihenfolge, in der geklickt wird**: erst
+    Anfang und Ende, dann die Wölbung, wie in Fusion und Onshape. Vorher war
+    der erste Klick die Mitte — ein Punkt, der auf keiner Kante liegt und den
+    man beim Zeichnen eines Umrisses nicht im Kopf hat.
+
+    **Anfang und Ende können dabei tauschen**, und das ist der Teil, den man
+    leicht verliert: Der Kern läuft den Bogen immer gegen den Uhrzeigersinn
+    vom Anfang zum Ende (``sweep = (finish - begin) % 2π``). Liegt die
+    geklickte Wölbung auf der anderen Hälfte des Kreises, wäre das die falsche
+    von zwei möglichen Bögen — dann werden die Enden getauscht.
+
+    ``None`` heißt: kein Bogen. Die drei Punkte liegen auf einer Geraden oder
+    zwei von ihnen fallen zusammen; ein Kreis durch sie gibt es dann nicht.
+    Der Aufrufer entscheidet, was er dem Nutzer sagt — hier unten ist von
+    Bedienung nichts bekannt.
+    """
+    ax, ay = start
+    bx, by = end
+    cx, cy = via
+    # Zweifache Fläche des Dreiecks: null heißt kollinear, und dann gibt es
+    # keinen Umkreis. Der Vergleich läuft gegen die Kantenlängen, nicht gegen
+    # eine feste Zahl — drei Punkte im Abstand von Metern sind bei derselben
+    # absoluten Abweichung noch krumm, drei im Zehntelmillimeter nicht mehr.
+    twice_area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
+    span = max(math.dist(start, end), math.dist(start, via), math.dist(end, via))
+    if span <= EPS_SKETCH or abs(twice_area) <= EPS_SKETCH * span * span:
+        return None
+
+    a2 = ax * ax + ay * ay
+    b2 = bx * bx + by * by
+    c2 = cx * cx + cy * cy
+    d = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by))
+    centre = (
+        (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / d,
+        (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / d,
+    )
+
+    # Läuft der Bogen gegen den Uhrzeigersinn von Anfang nach Ende an der
+    # Wölbung vorbei? Sonst sind es die Enden andersherum.
+    def angle(point: Point2) -> float:
+        return math.atan2(point[1] - centre[1], point[0] - centre[0])
+
+    begin = angle(start)
+    sweep_end = (angle(end) - begin) % (2.0 * math.pi)
+    sweep_via = (angle(via) - begin) % (2.0 * math.pi)
+    if sweep_via > sweep_end:
+        return (centre, end, start)
+    return (centre, start, end)

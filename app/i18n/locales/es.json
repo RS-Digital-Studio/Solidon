@@ -292,8 +292,6 @@
   "Bodenschichten": "Capas inferiores",
   "Bogen": "Arco",
   "Bogen: der nächste Klick setzt das Ende.": "Arco: el siguiente clic fija el final.",
-  "Bogen: der nächste Klick setzt den Anfang.": "Arco: el siguiente clic fija el inicio.",
-  "Bogen: erster Klick setzt die Mitte.": "Arco: el primer clic fija el centro.",
   "Bogenradius": "Radio de curvatura",
   "Bogenwinkel": "Ángulo de curvatura",
   "Bohrt ein rundes Loch in einen exakten Körper — er bleibt exakt, und Fase, Verrundung und der STEP-Export bleiben danach möglich.": "Taladra un agujero redondo en un cuerpo exacto: sigue siendo exacto, y el chaflán, el redondeo y la exportación STEP siguen disponibles.",
@@ -2991,5 +2989,8 @@
   "„profiles“ zeigt, was zur Auswahl steht.": "«profiles» muestra lo que hay para elegir.",
   "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» convirtió el cuerpo exacto en una malla: las operaciones del núcleo exacto solo funcionan antes. Deshaga los pasos desde ahí, aplique esta operación y rehaga el resto.",
   "Klicks fallen auf das Raster, das im Bild steht. Vorhandene Punkte fangen vor.": "Los clics caen en la cuadrícula que se ve. Los puntos existentes siguen teniendo prioridad.",
-  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "El paso de la cuadrícula: la misma cifra a la que cae un clic. Sin indicación sigue al zoom; un paso escrito se mantiene."
+  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "El paso de la cuadrícula: la misma cifra a la que cae un clic. Sin indicación sigue al zoom; un paso escrito se mantiene.",
+  "Bogen: erster Klick setzt den Anfang.": "Arco: el primer clic fija el inicio.",
+  "Bogen: der nächste Klick sagt, wie weit er sich wölbt.": "Arco: el siguiente clic indica cuánto se curva.",
+  "Der Punkt lag auf der Geraden zwischen Anfang und Ende — daraus wird kein Bogen. Weiter daneben klicken.": "El punto quedó en la recta entre el inicio y el final: así no sale un arco. Haga clic más apartado."
 }

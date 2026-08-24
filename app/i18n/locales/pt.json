@@ -292,8 +292,6 @@
   "Bodenschichten": "Camadas inferiores",
   "Bogen": "Arco",
   "Bogen: der nächste Klick setzt das Ende.": "Arco: o próximo clique define o fim.",
-  "Bogen: der nächste Klick setzt den Anfang.": "Arco: o próximo clique define o início.",
-  "Bogen: erster Klick setzt die Mitte.": "Arco: o primeiro clique define o centro.",
   "Bogenradius": "Raio de curvatura",
   "Bogenwinkel": "Ângulo de curvatura",
   "Bohrt ein rundes Loch in einen exakten Körper — er bleibt exakt, und Fase, Verrundung und der STEP-Export bleiben danach möglich.": "Faz um furo redondo num corpo exato — ele continua exato, e chanfro, arredondamento e a exportação STEP continuam possíveis.",
@@ -2991,5 +2989,8 @@
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” mostra o que está disponível.",
   "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» transformou o corpo exato numa malha — as operações do núcleo exato só funcionam antes. Anule os passos a partir daí, aplique esta operação e refaça o resto.",
   "Klicks fallen auf das Raster, das im Bild steht. Vorhandene Punkte fangen vor.": "Os cliques caem na grelha que se vê. Os pontos existentes continuam a ter prioridade.",
-  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "O passo da grelha — o mesmo número em que um clique cai. Sem indicação segue o zoom; um passo escrito mantém-se."
+  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "O passo da grelha — o mesmo número em que um clique cai. Sem indicação segue o zoom; um passo escrito mantém-se.",
+  "Bogen: erster Klick setzt den Anfang.": "Arco: o primeiro clique define o início.",
+  "Bogen: der nächste Klick sagt, wie weit er sich wölbt.": "Arco: o clique seguinte diz quanto se curva.",
+  "Der Punkt lag auf der Geraden zwischen Anfang und Ende — daraus wird kein Bogen. Weiter daneben klicken.": "O ponto ficou na reta entre o início e o fim — assim não sai um arco. Clique mais afastado."
 }

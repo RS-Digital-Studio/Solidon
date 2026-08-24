@@ -292,8 +292,6 @@
   "Bodenschichten": "Bottom layers",
   "Bogen": "Arc",
   "Bogen: der nächste Klick setzt das Ende.": "Arc: the next click sets the end.",
-  "Bogen: der nächste Klick setzt den Anfang.": "Arc: the next click sets the start.",
-  "Bogen: erster Klick setzt die Mitte.": "Arc: the first click sets the centre.",
   "Bogenradius": "Bend radius",
   "Bogenwinkel": "Bend angle",
   "Bohrt ein rundes Loch in einen exakten Körper — er bleibt exakt, und Fase, Verrundung und der STEP-Export bleiben danach möglich.": "Drills a round hole into an exact body — it stays exact, and chamfer, fillet and the STEP export remain available afterwards.",
@@ -2991,5 +2989,8 @@
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” shows what is available.",
   "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "“{step}” turned the exact body into a mesh — exact-kernel operations only work before it. Undo the steps from there, apply this operation, and redo the rest.",
   "Klicks fallen auf das Raster, das im Bild steht. Vorhandene Punkte fangen vor.": "Clicks fall onto the grid you see. Existing points still take priority.",
-  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "The grid spacing — the same number a click falls onto. Without an entry it follows the zoom; a spacing you type stays put."
+  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "The grid spacing — the same number a click falls onto. Without an entry it follows the zoom; a spacing you type stays put.",
+  "Bogen: erster Klick setzt den Anfang.": "Arc: the first click sets the start.",
+  "Bogen: der nächste Klick sagt, wie weit er sich wölbt.": "Arc: the next click says how far it bulges.",
+  "Der Punkt lag auf der Geraden zwischen Anfang und Ende — daraus wird kein Bogen. Weiter daneben klicken.": "That point sat on the straight line between start and end — no arc comes of it. Click further off."
 }

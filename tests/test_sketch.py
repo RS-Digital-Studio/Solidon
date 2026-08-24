@@ -994,3 +994,78 @@ def test_a_face_frame_needs_no_turn() -> None:
     """
     frame = frame_of((1.0, 0.0, 1.0), (5.0, -2.0, 3.0))
     assert image_normal(frame) == pytest.approx(frame.normal)
+
+
+# --- Bogen aus drei Punkten (§30.1, Klickreihenfolge seit 24.08.2026) ------------
+
+
+def test_an_arc_through_three_points_keeps_the_stored_order() -> None:
+    """Geklickt wird Anfang, Ende, Wölbung — gespeichert bleibt Mitte, Anfang, Ende.
+
+    Die Reihenfolge im **Datenmodell** ist unangetastet: Sie steht so in jeder
+    Projektdatei, im Langloch (``shapes.slot``) und in dem, was der Löser
+    liest. Geändert hat sich, wie man sie erzeugt — vorher war der erste Klick
+    die Mitte, ein Punkt, der auf keiner Kante liegt und den beim Zeichnen
+    eines Umrisses niemand im Kopf hat. Fusion und Onshape fragen Anfang, Ende
+    und dann die Wölbung.
+    """
+    from app.core.sketch.edit import arc_through
+
+    stored = arc_through((40.0, 20.0), (0.0, 20.0), (20.0, 40.0))
+    assert stored is not None
+    centre, start, end = stored
+    assert centre == pytest.approx((20.0, 20.0))
+    for point in (start, end):
+        assert math.dist(centre, point) == pytest.approx(20.0), "alle drei liegen auf dem Kreis"
+
+
+def test_the_arc_takes_the_half_the_bulge_points_at() -> None:
+    """Durch zwei Punkte gehen zwei Bögen — die Wölbung entscheidet welcher.
+
+    Der Kern läuft immer gegen den Uhrzeigersinn von Anfang zu Ende
+    (``sweep = (finish - begin) % 2π``). Liegt die geklickte Wölbung auf der
+    anderen Hälfte, sind es die Enden andersherum — sonst zeichnet die
+    Anwendung den Bogen, den niemand gemeint hat.
+    """
+    from app.core.sketch.edit import arc_through
+
+    oben = arc_through((40.0, 20.0), (0.0, 20.0), (20.0, 40.0))
+    unten = arc_through((40.0, 20.0), (0.0, 20.0), (20.0, 0.0))
+    assert oben is not None and unten is not None
+    assert oben[0] == pytest.approx(unten[0]), "derselbe Kreis"
+    assert (oben[1], oben[2]) == ((40.0, 20.0), (0.0, 20.0))
+    assert (unten[1], unten[2]) == ((0.0, 20.0), (40.0, 20.0)), "die Enden tauschen"
+
+    # **Und die Probe aufs Exempel am abgetasteten Bogen.** Nicht an
+    # ``solve_sketch``: das gibt die drei Stützpunkte zurück, und die liegen
+    # bei beiden Bögen gleich — der Test wäre grün, ohne etwas zu prüfen.
+    # ``curves_of`` tastet die Kurve ab, und dort trennen sich die Hälften.
+    from app.core.sketch.planes import frame_for_plane
+    from app.core.sketch.solver import solve_sketch
+    from app.core.types import Sketch as PlainSketch
+    from app.core.types import SketchElement as Element
+
+    frame = frame_for_plane("plane:xy")
+    assert frame is not None
+    for stored, bulge in ((oben, (20.0, 40.0)), (unten, (20.0, 0.0))):
+        solved = solve_sketch(PlainSketch(plane="plane:xy", elements=(Element("arc", stored),)))
+        kurven = curves_of(solved, frame)
+        punkte = [(p[0], p[1]) for kurve in kurven for p in kurve.points]
+        assert len(punkte) > 3, "der Bogen muss abgetastet sein, nicht nur seine Stützpunkte"
+        nächster = min(math.dist(bulge, p) for p in punkte)
+        assert nächster < 1.0, f"der Bogen läuft durch {bulge}, nächster Punkt {nächster:.2f} mm"
+
+
+def test_three_points_on_a_line_are_no_arc() -> None:
+    """Kollinear heißt: kein Kreis. Und das sagt die Funktion, statt zu raten.
+
+    Der Vergleich läuft gegen die Kantenlängen und nicht gegen eine feste
+    Zahl — drei Punkte im Abstand von Metern sind bei derselben absoluten
+    Abweichung noch krumm, drei im Zehntelmillimeter nicht mehr.
+    """
+    from app.core.sketch.edit import arc_through
+
+    assert arc_through((0.0, 0.0), (10.0, 0.0), (5.0, 0.0)) is None
+    assert arc_through((0.0, 0.0), (0.0, 0.0), (5.0, 5.0)) is None, "zwei gleiche Punkte"
+    assert arc_through((0.0, 0.0), (1000.0, 0.0), (500.0, 1e-9)) is None, "über einem Meter krumm"
+    assert arc_through((0.0, 0.0), (1.0, 0.0), (0.5, 0.05)) is not None, "leicht gewölbt zählt"

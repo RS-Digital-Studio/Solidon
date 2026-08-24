@@ -333,8 +333,44 @@ def test_the_status_says_what_the_next_click_does(qt_app: QApplication) -> None:
     canvas.set_tool("select")
     assert "Esc" not in canvas.status_text(), "wer auswählt, zeichnet nicht"
 
+    # **Der Bogen fragt Anfang, Ende, Wölbung** — seit dem 24.08.2026 in
+    # dieser Reihenfolge, wie in Fusion und Onshape. Vorher war der erste
+    # Klick die Mitte: ein Punkt, der auf keiner Kante liegt.
     canvas.set_tool("arc")
-    assert "Mitte" in canvas.status_text()
+    assert "Anfang" in canvas.status_text()
+    canvas.place(canvas._to_screen(0.0, 0.0))
+    assert "Ende" in canvas.status_text()
+    canvas.place(canvas._to_screen(40.0, 0.0))
+    assert "wölbt" in canvas.status_text()
+
+
+def test_a_flat_arc_is_refused_and_says_so(qt_app: QApplication) -> None:
+    """Drei Punkte auf einer Geraden geben keinen Kreis — und das steht da.
+
+    Ein abgelehnter Klick, der nichts sagt, sieht aus wie ein verschluckter:
+    Der Nutzer klickt, es passiert nichts, und er klickt wieder. Regel 17
+    verlangt einen Handlungsvorschlag, und der ist hier „weiter daneben".
+
+    Stehen bleiben Anfang und Ende — nur der eine Klick ist zu wiederholen
+    und nicht der ganze Bogen.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+    canvas.set_tool("arc")
+    canvas.place(canvas._to_screen(0.0, 0.0))
+    canvas.place(canvas._to_screen(40.0, 0.0))
+    vorher = len(canvas.sketch.elements)
+
+    canvas.place(canvas._to_screen(20.0, 0.0))  # genau auf der Sehne
+    assert len(canvas.sketch.elements) == vorher, "aus einer Geraden wird kein Bogen"
+    zeile = canvas.status_text()
+    assert "Geraden" in zeile and "daneben" in zeile, f"die Zeile sagt warum: {zeile!r}"
+
+    # Und weiter daneben geht es: der Bogen entsteht, die Zeile ist wieder
+    # die gewöhnliche.
+    canvas.place(canvas._to_screen(20.0, 15.0))
+    assert len(canvas.sketch.elements) == vorher + 1
+    assert "Geraden" not in canvas.status_text()
 
 
 def test_a_bed_that_arrives_late_still_gets_fitted(qt_app: QApplication) -> None:

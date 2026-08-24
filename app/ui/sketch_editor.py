@@ -20,7 +20,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
-from PySide6.QtCore import QPoint, QPointF, QSignalBlocker, Qt, Signal
+from PySide6.QtCore import QPoint, QPointF, QRectF, QSignalBlocker, Qt, Signal
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QPen, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -491,6 +491,10 @@ class SketchCanvas(QWidget):
         """Beim Zeichnen: die flachen Indizes der schon gesetzten Punkte —
         eine Linie braucht zwei, ein Bogen drei Klicks."""
         self._pending_world: list[tuple[float, float]] = []
+        #: Ob der letzte Bogenklick auf einer Geraden lag. Nur für die Zeile:
+        #: Ein abgelehnter Klick, der nichts sagt, sieht aus wie ein
+        #: verschluckter (Regel 17).
+        self._arc_was_flat = False
         self.selection: list[tuple[str, tuple[int, ...]]] = []
         """Die Auswahl in Klickreihenfolge: („point", (i,)) oder ein Element
         mit seinen flachen Punktindizes — „A parallel B" ist nicht „B
@@ -980,11 +984,21 @@ class SketchCanvas(QWidget):
                 return tr("Kreis: der nächste Klick setzt den Radius. Oder das Maß eintippen.")
             return tr("Kreis: erster Klick setzt die Mitte.")
         if self.tool == "arc":
+            # **Anfang, Ende, Wölbung** — die Reihenfolge von Fusion und
+            # Onshape. Vorher war der erste Klick die Mitte: ein Punkt, der auf
+            # keiner Kante liegt und den beim Zeichnen eines Umrisses niemand
+            # im Kopf hat. Gespeichert wird weiterhin (Mitte, Anfang, Ende) —
+            # ``edit.arc_through`` rechnet um, das Datenformat bleibt.
+            if self._arc_was_flat and started >= 2:
+                return tr(
+                    "Der Punkt lag auf der Geraden zwischen Anfang und Ende — "
+                    "daraus wird kein Bogen. Weiter daneben klicken."
+                )
             if started >= 2:
-                return tr("Bogen: der nächste Klick setzt das Ende.")
+                return tr("Bogen: der nächste Klick sagt, wie weit er sich wölbt.")
             if started:
-                return tr("Bogen: der nächste Klick setzt den Anfang.")
-            return tr("Bogen: erster Klick setzt die Mitte.")
+                return tr("Bogen: der nächste Klick setzt das Ende.")
+            return tr("Bogen: erster Klick setzt den Anfang.")
         return ""
 
     # --- Bearbeitung (auch für Tests) ---------------------------------------------
@@ -1405,6 +1419,9 @@ class SketchCanvas(QWidget):
 
         self._pending.append(snapped if snapped is not None else -1)
         self._pending_world.append(world)
+        # Der Hinweis über den flachen Bogen gilt dem einen abgelehnten Klick.
+        # Bliebe er stehen, läse er sich wie eine Eigenschaft der Zeichnung.
+        self._arc_was_flat = False
 
         if self.tool == "spline":
             self.statusChanged.emit(self.status_text())
@@ -1421,11 +1438,41 @@ class SketchCanvas(QWidget):
             return
 
         begin = len(edit.flat_points(self.sketch))
-        element = SketchElement(self.tool, tuple(self._pending_world))  # type: ignore[arg-type]
+        points = tuple(self._pending_world)
+        # **Wo der wievielte Klick im gespeicherten Element landet.** Bei Linie,
+        # Kreis und Punkt in derselben Folge, in der geklickt wurde; beim Bogen
+        # nicht, siehe unten.
+        seats = {index: index for index in range(len(points))}
+        if self.tool == "arc":
+            # Geklickt wird Anfang, Ende, Wölbung — gespeichert bleibt
+            # (Mitte, Anfang, Ende). Die Reihenfolge im Datenmodell ist
+            # unangetastet: Sie steht so in jeder Projektdatei und im Langloch.
+            stored = edit.arc_through(*points)
+            if stored is None:
+                # Drei Punkte auf einer Geraden geben keinen Kreis. Der Klick
+                # wird nicht angenommen, und die Zeile sagt warum (Regel 17) —
+                # die ersten beiden bleiben stehen, damit nur der eine Klick
+                # zu wiederholen ist und nicht der ganze Bogen.
+                self._pending_world.pop()
+                if self._pending:
+                    self._pending.pop()
+                self._arc_was_flat = True
+                self.statusChanged.emit(self.status_text())
+                self.update()
+                return
+            self._arc_was_flat = False
+            points = stored
+            # Die Wölbung wird zur Mitte gerechnet und hat keinen eigenen
+            # Platz; Anfang und Ende können dabei getauscht sein. Ohne diese
+            # Zuordnung setzte eine Deckung auf den falschen Punkt — sichtbar
+            # erst, wenn der Löser die Skizze verzieht.
+            swapped = stored[1] != self._pending_world[0]
+            seats = {0: 2, 1: 1} if swapped else {0: 1, 1: 2}
+        element = SketchElement(self.tool, points)  # type: ignore[arg-type]
         snapped_pairs = tuple(
-            SketchConstraint("coincident", (snapped_flat, begin + local))
+            SketchConstraint("coincident", (snapped_flat, begin + seats[local]))
             for local, snapped_flat in enumerate(self._pending)
-            if snapped_flat >= 0
+            if snapped_flat >= 0 and local in seats
         )
         kept = self._pending_world[-1]
         self._pending.clear()
@@ -2097,8 +2144,6 @@ class SketchCanvas(QWidget):
             radius = math.hypot(start[0] - centre[0], start[1] - centre[1])
             screen_radius = radius * self._scale
             centre_screen = self._to_screen(*centre)
-            from PySide6.QtCore import QRectF
-
             box = QRectF(
                 centre_screen.x() - screen_radius,
                 centre_screen.y() - screen_radius,
@@ -2174,14 +2219,57 @@ class SketchCanvas(QWidget):
             radius = math.hypot(target[0] - first[0], target[1] - first[1]) * self._scale
             painter.drawEllipse(self._to_screen(*first), radius, radius)
         elif self.tool == "arc":
-            # Ein Bogen entsteht aus Mitte, Anfang und Ende. Bis der Anfang
-            # steht, zeigt die Vorschau den Radius als Strich; danach den
-            # Kreis, auf dem der Bogen liegen wird.
-            painter.drawLine(self._to_screen(*first), self._to_screen(*target))
-            if len(self._pending_world) >= 2:
-                radius = math.hypot(last[0] - first[0], last[1] - first[1]) * self._scale
-                painter.drawEllipse(self._to_screen(*first), radius, radius)
+            # Geklickt wird Anfang, Ende, Wölbung. Bis das Ende steht, zeigt
+            # die Vorschau die Sehne; danach den Bogen selbst, wie er mit der
+            # Wölbung unter dem Zeiger liefe — nicht den ganzen Kreis, denn
+            # gemeint ist eine seiner beiden Hälften.
+            if len(self._pending_world) < 2:
+                painter.drawLine(self._to_screen(*first), self._to_screen(*target))
+            else:
+                stored = edit.arc_through(first, last, target)
+                if stored is None:
+                    # Drei Punkte auf einer Geraden: die Sehne ist die
+                    # ehrlichste Vorschau, und der Klick wird sie ablehnen.
+                    painter.drawLine(self._to_screen(*first), self._to_screen(*last))
+                else:
+                    self._paint_arc_preview(painter, stored)
         self._paint_snap_mark(painter)
+
+    def _paint_arc_preview(
+        self,
+        painter: QPainter,
+        stored: tuple[tuple[float, float], tuple[float, float], tuple[float, float]],
+    ) -> None:
+        """Den Bogen zeigen, der beim nächsten Klick entstünde.
+
+        Gezeichnet wird die **Hälfte**, die die Wölbung unter dem Zeiger
+        meint, nicht der ganze Kreis: Durch zwei Punkte gehen zwei Bögen, und
+        eine Vorschau, die beide zeigt, beantwortet die Frage nicht, die man
+        gerade stellt.
+
+        Qt zählt seine Winkel in Sechzehntelgrad und gegen den Uhrzeigersinn
+        auf dem Bildschirm — dort zeigt Y nach unten, in der Zeichnung nach
+        oben. Deshalb kehren sich die Vorzeichen um.
+        """
+        centre, start, end = stored
+        radius = math.dist(centre, start)
+        if radius <= 0.0:
+            return
+        begin = math.degrees(math.atan2(start[1] - centre[1], start[0] - centre[0]))
+        finish = math.degrees(math.atan2(end[1] - centre[1], end[0] - centre[0]))
+        sweep = (finish - begin) % 360.0
+        spot = self._to_screen(*centre)
+        on_screen = radius * self._scale
+        painter.drawArc(
+            QRectF(
+                spot.x() - on_screen,
+                spot.y() - on_screen,
+                2.0 * on_screen,
+                2.0 * on_screen,
+            ),
+            round(begin * 16.0),
+            round(sweep * 16.0),
+        )
 
     def _paint_snap_mark(self, painter: QPainter) -> None:
         """Ein Kreuz auf dem Rasterpunkt, auf den der nächste Klick fiele.

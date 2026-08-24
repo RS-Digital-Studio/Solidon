@@ -292,8 +292,6 @@
   "Bodenschichten": "Couches inférieures",
   "Bogen": "Arc",
   "Bogen: der nächste Klick setzt das Ende.": "Arc : le prochain clic pose la fin.",
-  "Bogen: der nächste Klick setzt den Anfang.": "Arc : le prochain clic pose le début.",
-  "Bogen: erster Klick setzt die Mitte.": "Arc : le premier clic pose le centre.",
   "Bogenradius": "Rayon de courbure",
   "Bogenwinkel": "Angle de courbure",
   "Bohrt ein rundes Loch in einen exakten Körper — er bleibt exakt, und Fase, Verrundung und der STEP-Export bleiben danach möglich.": "Perce un trou rond dans un corps exact — il reste exact, et le chanfrein, le congé et l'export STEP restent possibles ensuite.",
@@ -2991,5 +2989,8 @@
   "„profiles“ zeigt, was zur Auswahl steht.": "« profiles » montre ce qui est disponible.",
   "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "« {step} » a transformé le corps exact en maillage — les opérations du noyau exact ne fonctionnent qu'avant. Annulez les étapes à partir de là, appliquez cette opération, puis refaites le reste.",
   "Klicks fallen auf das Raster, das im Bild steht. Vorhandene Punkte fangen vor.": "Les clics tombent sur la grille visible. Les points existants restent prioritaires.",
-  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "Le pas de la grille — le même chiffre sur lequel tombe un clic. Sans saisie, il suit le zoom ; un pas saisi reste en place."
+  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "Le pas de la grille — le même chiffre sur lequel tombe un clic. Sans saisie, il suit le zoom ; un pas saisi reste en place.",
+  "Bogen: erster Klick setzt den Anfang.": "Arc : le premier clic place le début.",
+  "Bogen: der nächste Klick sagt, wie weit er sich wölbt.": "Arc : le clic suivant indique de combien il se bombe.",
+  "Der Punkt lag auf der Geraden zwischen Anfang und Ende — daraus wird kein Bogen. Weiter daneben klicken.": "Le point était sur la droite entre le début et la fin — cela ne donne pas d'arc. Cliquez plus à l'écart."
 }
