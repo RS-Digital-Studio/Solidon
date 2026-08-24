@@ -178,5 +178,28 @@ nichts genützt und hätte schaden können. Auch ein gut gemeinter Rat wird beim
 Weitergeben fester, nicht lockerer — siehe
 [[messwerkzeug-misst-sich-selbst]].
 
+**Wenn `git status` eine Datei meldet, die nachweislich identisch ist, ist der
+stat-Cache kaputt — und dagegen hilft `git add`, nicht `reset`.** Am 24.08.2026
+blockierten drei `app/examples/*.svg` einen Fast-Forward-Pull, obwohl `cmp` gegen
+den HEAD-Blob keinen Unterschied fand. Die Reihenfolge, die das klärt, ohne zu
+raten:
+
+    git ls-files --eol -- <datei>      # i/lf w/lf  -> kein Zeilenenden-Problem
+    git hash-object -- <datei>         # gegen  git rev-parse HEAD:<datei>
+
+Sind beide Hashes gleich, weicht **kein Byte** ab; dann ist nur der
+Zwischenspeicher aus Größe und Zeitstempel im Index verdorben.
+`git update-index --refresh` und sogar `--really-refresh` scheitern in diesem
+Zustand mit „needs update" und Exit 1 — sie sind also **kein** Gegenmittel, auch
+wenn ihr Name das verspricht. `git reset -- <datei>` hilft ebenso wenig: Es setzt
+den Eintrag auf HEAD, lässt den kaputten stat-Eintrag aber stehen.
+
+Was wirkt, ist `git add` auf genau diese Pfade. Bei identischem Blob-Hash
+schreibt das keinen neuen Inhalt, sondern nur einen frischen stat-Eintrag — und
+`git diff --cached --stat HEAD` ist danach leer, es steht also nichts Gestagetes
+da, das jemand versehentlich mitcommitten könnte. **Die Hash-Gleichheit ist die
+Bedingung**, nicht ein Detail am Rande: Ohne sie stagt derselbe Befehl echte
+Änderungen, und im geteilten Baum womöglich fremde.
+
 Robert entscheidet, was mit fremden Änderungen passiert — nicht selbst
 mitcommitten und nicht wegwerfen. Siehe [[git-identitaet-mitgeben]].
