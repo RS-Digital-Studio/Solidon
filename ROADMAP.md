@@ -4677,6 +4677,7 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       durchläuft. Reißt es damit, genügt die Allokation; reißt es nicht, ist es
       wirklich die Datei-I/O.
 
+
 - [ ] **Nach einem weiten Verschieben dreht die Kamera um den alten Punkt.**
       Robert am 23.08.2026: „nach jedem verschieben springt die kamera und das
       modell immer komisch“, und die Entscheidung gleich dazu: „kamera bei
