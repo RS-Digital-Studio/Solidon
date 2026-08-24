@@ -182,6 +182,32 @@ Die ersten drei vorderen Felder sind bei allen fünf identisch (`shape`,
 einem Art-Umschalter. Feldrechnung gegen §35: 3 gemeinsame + 1 Umschalter +
 höchstens 2 variantenspezifische = **6 vorn, erlaubt sind 8**.
 
+> **Abweichung vom Konzeptstand, gemessen am 24.08.2026 bei der Umsetzung:
+> Es sind drei, nicht vier — `sketch_revolve` fällt heraus.** Die drei
+> gemeinsamen Felder heißen bei allen vier gleich, sie **bedeuten** aber nicht
+> dasselbe. Gemessen an den `doc`-Texten des Schemas:
+>
+> | Op | `length` | `width` |
+> |---|---|---|
+> | `sketch_extrude`, `_sweep`, `_loft` | „Länge in X" | „Breite in Y" |
+> | `sketch_revolve` | „Ausdehnung des Querschnitts **von der Achse weg**" | „Höhe des Querschnitts **entlang der Achse**" |
+>
+> Ein gemeinsames Feld „Breite (Y)" wäre bei `revolve` eine stille
+> Bedeutungsänderung — der Nutzer liest „Breite in Y" und stellt die Höhe
+> entlang der Rotationsachse ein. `switch_variant` könnte es nicht auffangen:
+> Es tauscht Op-Beschreibung und `caveat`, aber **nicht** Titel und `doc` der
+> einzelnen Felder (gelesen an `op_dialog.py:1106`).
+>
+> `formwerk-9e`s Messung ist damit nicht falsch, sie war auf **Namens**gleichheit
+> gerichtet — „in den ersten drei identisch" stimmt. Die Bedeutung stand nicht
+> in der Frage, die ich gestellt hatte. **E2 gilt für `sketch_extrude`,
+> `sketch_sweep` und `sketch_loft`;** `sketch_revolve` bleibt eigen wie
+> `sketch_pocket`, nur aus einem anderen Grund. Feldrechnung bleibt 6 von 8.
+>
+> Die unterschiedlichen **Vorgaben** (extrude 40/20, sweep 10/10, loft 40/20)
+> bleiben ein hingenommener Rest: Wer die Art wechselt, behält seine Werte.
+> Das ist keine falsche Bedeutung, nur eine andere Ausgangsgröße.
+
 **E2.1 — `sketch_pocket` bleibt eigen.** Sie verbraucht einen Körper, setzt an
 einer Fläche an und verlangt einen exakten Eingang. `consumes` ist eine
 statische Eigenschaft des Registereintrags; eine Op, die je nach
@@ -233,8 +259,27 @@ Buchse braucht die **kleinste** Größe, die die Bohrung *aufweitet*, ein Gewind
 die **größte**, die noch *hineinpasst* (`placement.py:78`, wörtlich: „eine
 gemeinsame Formel wäre in einem der beiden Fälle falsch"). Der Umschalter muss
 also beim Wechsel die Größenvorgabe **neu ableiten**, nicht nur Felder
-ausblenden. Ob `switch_variant` das kann, ist **nicht geprüft** — das ist die
-erste Frage des Pakets.
+ausblenden.
+
+> **Geprüft am 24.08.2026, und die Antwort ist nein.** `switch_variant`
+> (`op_dialog.py:1106`) tut genau drei Dinge: Zeilen über `setRowVisible`
+> ein- und ausblenden, die Op-Beschreibung tauschen, den `caveat` tauschen.
+> **Es setzt keine Werte.** Eine Größenvorgabe kann es nicht neu ableiten.
+>
+> Damit tritt die in §7 vorab festgelegte Folge ein: **P4 wird
+> zurückgestellt und gemeldet**, statt einen Umschalter zu bauen, der die
+> falsche Größe stehen lässt. Ein Nutzer, der von „Gewinde" auf
+> „Einpressbuchse" wechselt, behielte sonst die größte Größe, die in die
+> Bohrung *passt*, während die Buchse die kleinste braucht, die sie
+> *aufweitet* — und das ist wörtlich der Fehler, den
+> `test_a_bore_proposes_the_size_that_fits_it` seit dem 23.08.2026 verhindert
+> (M3 an einer Ø 5,19-Bohrung, Schnitt trug ±0 mm³ ab).
+>
+> **Was P4 möglich machen würde**, als Entscheidung für Robert und nicht
+> unterwegs zu treffen: `switch_variant` um das Neuableiten von Vorgaben
+> erweitern. Das ist keine Zeile, sondern eine Bedienfrage — überschreibt der
+> Wechsel einen Wert, den der Nutzer selbst eingetragen hat? Beide Antworten
+> sind vertretbar und beide haben einen Preis.
 
 **E3.2 — Reihenfolge:** E3 kommt zuletzt. Wenn E1 und E2 stehen, ist bekannt,
 wie weit `switch_variant` trägt.
@@ -361,10 +406,25 @@ Umschalter zu bauen, der die falsche Größe stehen lässt.
 
 *Wird je Paket fortgeschrieben. Commit-Hashes werden nachgetragen.*
 
-- **P1** — offen.
-- **P2** — offen.
-- **P3** — offen, blockiert durch E2.3.
-- **P4** — offen, blockiert durch E3.1.
+- **P1** — **erledigt**, `520b10f0`. Die Falle aus §6 trat sofort ein: Der
+  Katalogschlüssel „Gewinde" gehört auch dem Merkmalsnamen
+  (`registry.py:168`); wer ihn mit dem Op-Titel mitnimmt, benennt in fünf
+  Sprachen das erkannte Merkmal um. Vor dem Schreiben geprüft, Schlüssel
+  unberührt. Verifiziert: `test_translations` 126, `test_interface_limits` 32,
+  mypy 0, Sammelgruppe 3586 passed / 23 skipped.
+- **P2** — läuft. Wartet auf **eine Zeile in fremdem Gebiet**: der Fehlertext
+  `app/core/sketch/ops.py:203` (E1.1) gehört `formwerk-9e`, angefragt.
+  `app/ui/shortcut_schemes.py` und `tests/test_sketch_ops.py` sind frei
+  geworden. Ohne den Fehlertext wird der Eintrag in `MENU_TWINS` nicht gesetzt:
+  Die Reihenfolge ist Vorschlag zuerst, Verstecken danach — andernfalls steht
+  zwischen zwei Commits eine Sackgasse im Produkt.
+- **P3** — **auf drei Ops geschrumpft** (§2, Abweichung): `sketch_revolve`
+  fällt heraus, weil `length`/`width` dort anderes bedeuten. E2.3 ist damit
+  beantwortet — die Registereinträge werden **nicht** angefasst, die Zuordnung
+  kommt in `registry.py`, den Dialog baut `main_window.py`, beide sind meine.
+- **P4** — **zurückgestellt**, E3.1 geprüft und negativ: `switch_variant` setzt
+  keine Werte. Nicht „später vielleicht", sondern eine Entscheidung für Robert
+  (§3).
 
 Beteiligt an §0 bis §6: `formwerk-20` (Titelmessung über 86 Ops, E4-Begründung,
 Übersetzungsfallen), `formwerk-9e` (Skizzen-Messung, `switch_variant`),
