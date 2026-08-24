@@ -33,6 +33,8 @@ it into `website/version.json`.
 - A menu entry called “Thread” now says where the thread goes — into a hole or onto a bolt.
 - The Spanish interface names features the same way everywhere. The same list used to hold two words for the same thing.
 - The application releases memory when a window closes, and shuts down more cleanly.
+- The screenshot that goes with a piece of feedback now shows the model as well. There used to be a black area in the middle — exactly where the part in question sits.
+
 
 ## 0.1.4
 

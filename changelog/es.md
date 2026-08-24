@@ -34,6 +34,8 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una entrada de menú llamada «Rosca» dice ahora dónde va la rosca: en un taladro o sobre un perno.
 - La interfaz en español nombra los rasgos igual en todas partes. En la misma lista había antes dos palabras para lo mismo.
 - La aplicación libera memoria al cerrar una ventana y termina de forma más limpia.
+- La imagen que acompaña a un comentario muestra ahora también el modelo. Antes había en el centro una superficie negra, justo donde está la pieza de la que se trata.
+
 
 ## 0.1.4
 

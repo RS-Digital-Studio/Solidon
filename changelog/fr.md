@@ -34,6 +34,8 @@ dans `website/version.json`.
 - Une entrée de menu « Filetage » indique maintenant où va le filetage — dans un perçage ou sur un boulon.
 - L’interface espagnole nomme les caractéristiques de la même manière partout. La même liste contenait auparavant deux mots pour la même chose.
 - L’application libère la mémoire à la fermeture d’une fenêtre et s’arrête plus proprement.
+- L’image jointe à un retour montre désormais aussi le modèle. Il y avait jusqu’ici une surface noire au milieu — précisément là où se trouve la pièce concernée.
+
 
 ## 0.1.4
 

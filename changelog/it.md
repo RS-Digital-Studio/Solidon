@@ -33,6 +33,8 @@ scrive in `website/version.json`.
 - Una voce di menù «Filettatura» dice ora dove va la filettatura — in un foro o su un bullone.
 - L’interfaccia spagnola nomina le caratteristiche allo stesso modo ovunque. Nella stessa lista c’erano prima due parole per la stessa cosa.
 - L’applicazione libera la memoria quando una finestra si chiude e termina in modo più pulito.
+- L’immagine che accompagna una segnalazione mostra ora anche il modello. Prima al centro c’era una superficie nera, proprio dove sta il pezzo di cui si tratta.
+
 
 ## 0.1.4
 

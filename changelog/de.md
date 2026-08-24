@@ -33,6 +33,8 @@ schreibt ihn in `website/version.json`.
 - Ein Menüeintrag „Gewinde“ sagt jetzt, wohin das Gewinde kommt — in eine Bohrung oder auf einen Bolzen.
 - Die spanische Oberfläche nennt Merkmale überall gleich. In derselben Liste standen vorher zwei Wörter für dieselbe Sache.
 - Die Anwendung gibt Speicher wieder frei, wenn ein Fenster geschlossen wird, und räumt beim Beenden sauberer auf.
+- Das Bild, das mit einer Rückmeldung mitgeht, zeigt jetzt auch das Modell. Bisher stand in der Mitte eine schwarze Fläche — ausgerechnet dort, wo das Teil steht, um das es geht.
+
 
 ## 0.1.4
 

@@ -33,6 +33,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma entrada de menu «Rosca» diz agora para onde vai a rosca — para um furo ou para um perno.
 - A interface espanhola nomeia as características da mesma forma em todo o lado. Na mesma lista havia antes duas palavras para a mesma coisa.
 - A aplicação liberta memória ao fechar uma janela e termina de forma mais limpa.
+- A imagem que segue com um comentário mostra agora também o modelo. Antes havia no centro uma superfície preta, precisamente onde está a peça em questão.
+
 
 ## 0.1.4
 
