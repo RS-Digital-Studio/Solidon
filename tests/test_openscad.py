@@ -99,6 +99,39 @@ def test_a_file_argument_without_a_literal_is_refused() -> None:
     assert check.refused
 
 
+@pytest.mark.parametrize("instruction", openscad.INCLUDING)
+def test_every_including_instruction_is_actually_checked(instruction: str) -> None:
+    """Jeder Eintrag in ``INCLUDING`` muss von der Prüfung auch erkannt werden.
+
+    ``INCLUDING`` zählt neun Anweisungen auf, mit denen OpenSCAD etwas von
+    außerhalb hereinholt, und der Kommentar darüber liest sich wie die
+    maßgebliche Liste. **Wirksam war sie nicht:** Geprüft wird über zwei
+    reguläre Ausdrücke, die dieselben neun Namen ein zweites und drittes Mal
+    aufzählen, und das Tupel selbst las bis zum 24.08.2026 niemand — es war
+    tote Konstante neben lebendiger Prüfung.
+
+    Gemessen waren alle drei Aufzählungen deckungsgleich, es fehlte also
+    nichts. Die Falle liegt in der Zukunft: Wer eine zehnte Anweisung
+    absichern will, trägt sie in die Liste ein, die danach aussieht, und hat
+    nichts abgesichert. Dieser Test macht aus der toten Liste die Zusicherung
+    — ab jetzt ist ein Eintrag ohne Prüfung ein roter Lauf (Regel 11, §32).
+
+    Gefragt wird ``check_source`` und nicht der reguläre Ausdruck: Die Zusage
+    lautet „dieser Quelltext läuft nicht", nicht „dieses Muster passt".
+    """
+    reference = "../../geheim.scad"
+    source = (
+        f"{instruction} <{reference}>"
+        if instruction in ("include", "use")
+        else f'{instruction}("{reference}")'
+    )
+
+    check = openscad.check_source(source)
+
+    assert not check.allowed, f"{instruction} führt aus dem Ordner hinaus und wird nicht geprüft"
+    assert check.refused, f"{instruction} muss als abgelehnter Verweis auftauchen"
+
+
 def test_the_finding_names_what_was_refused() -> None:
     check = openscad.check_source("include <../../geheim.scad>")
 

@@ -45,6 +45,25 @@ _log = get_logger(__name__)
 #: dem Arbeitsordner hinaus, wenn der Pfad nicht geprüft wird. Die hinteren
 #: fünf sind seit Jahren als veraltet gemeldet — OpenSCAD führt sie trotzdem
 #: aus, also prüfen wir sie trotzdem.
+#:
+#: **Diese Liste prüft nicht, sie sagt zu.** Gearbeitet wird mit den beiden
+#: regulären Ausdrücken darunter, und die zählen dieselben Namen ein zweites
+#: und drittes Mal auf — bis zum 24.08.2026 las dieses Tupel niemand, es war
+#: tote Konstante neben lebendiger Prüfung. Gemessen waren alle drei
+#: Aufzählungen deckungsgleich; gefehlt hat also nichts, und die Gefahr lag in
+#: der Zukunft: Wer eine zehnte Anweisung absichern will, trägt sie in die
+#: Liste ein, die danach aussieht, und hat nichts abgesichert.
+#:
+#: Seit `tests/test_openscad.py::test_every_including_instruction_is_actually_checked`
+#: ist das kein stiller Fehlgriff mehr — der Test fährt jeden Eintrag durch
+#: ``check_source`` und wird rot, wenn einer durchkommt. Gegengeprobt mit einer
+#: erfundenen Anweisung: die kommt durch, der Test also wirkt.
+#:
+#: Zusammengelegt sind die drei nicht, und das mit Absicht: Die Reihenfolge in
+#: einer Regex-Alternative ist bedeutungstragend (``import`` vor ``import_stl``
+#: würde ``import_stl`` nie erreichen), und einen Ausdruck an einer
+#: Sicherheitsgrenze zu erzeugen wäre teurer als eine Liste, die von einem Test
+#: gehalten wird.
 INCLUDING = (
     "include",
     "use",
