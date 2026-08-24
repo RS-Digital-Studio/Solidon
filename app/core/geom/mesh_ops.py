@@ -96,8 +96,9 @@ def decimate(mesh: MeshData, target: int) -> MeshData:
 
     Kostenlos ist das nicht, aber es kostet nur, wo es etwas zu tragen gibt:
     Ohne Slots in der Quelle kehrt die Übertragung sofort zurück, ohne eine
-    einzige Anfrage an den ``rtree``-Index — und die allermeisten Körper haben
-    ein Material.
+    einzige Näherungsanfrage — und die allermeisten Körper haben ein
+    Material. (Bis zum 24.08.2026 lief die Anfrage über einen ``rtree``-Index;
+    warum er weg ist, steht an :func:`app.core.geom.mesh.on_surface`.)
     """
     if mesh.triangle_count <= max(target, DECIMATE_FLOOR):
         return mesh

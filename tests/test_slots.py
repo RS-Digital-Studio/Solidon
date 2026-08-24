@@ -433,3 +433,48 @@ def test_the_shortcut_holds_where_the_bodies_meet(
     actual = transfer(merged, [body, label])
 
     assert tuple(actual.slots) == expected
+
+
+def test_on_surface_matches_the_exact_answer_without_any_index() -> None:
+    """Die Näherungssuche ist exakt — verglichen mit der indexfreien Referenz.
+
+    ``on_surface`` fragt seit dem 24.08.2026 einen eigenen Baum über den
+    Dreiecksschwerpunkten statt ``trimesh.proximity`` mit seinem
+    ``rtree``-Index: ``rtree`` griff auf dieser Maschine in fremde Seiten, und
+    ein Kunde verlor beim Ändern eines Maßes die Anwendung — ohne eine Zeile
+    im Protokoll. Der Ersatz ist ein Vorfilter mit Schranke, kein
+    Näherungsverfahren; genau das prüft dieser Vergleich, und zwar gegen
+    ``closest_point_naive``, das jedes Dreieck ansieht und keinerlei Index
+    kennt.
+
+    Der Zylinder steht mit in der Reihe, weil er der unbequeme Fall ist: hohe
+    Seitendreiecke machen die Schwerpunkt-Ecke-Spanne groß und die
+    Kandidatenmengen weit — wer hier besteht, rät nicht.
+    """
+    from trimesh.proximity import closest_point_naive
+
+    from app.core.geom.mesh import on_surface
+
+    rng = np.random.default_rng(11)
+    bodies = (
+        trimesh.creation.box((20.0, 20.0, 20.0)),
+        trimesh.creation.icosphere(subdivisions=3, radius=15.0),
+        trimesh.creation.cylinder(radius=8.0, height=40.0, sections=32),
+    )
+    for body in bodies:
+        # nah, fern und auf der Oberfläche — die drei Lagen, die es gibt
+        points = np.vstack(
+            [
+                rng.uniform(-30.0, 30.0, size=(60, 3)),
+                rng.uniform(200.0, 400.0, size=(20, 3)),
+                body.triangles.mean(axis=1)[:40],
+            ]
+        )
+        closest, distance, triangle = on_surface(body, points)
+        _spot, exact, _tri = closest_point_naive(body, points)
+        assert np.allclose(distance, exact, atol=1e-9), "distances must match the naive truth"
+        assert np.allclose(np.linalg.norm(points - closest, axis=1), distance, atol=1e-9), (
+            "the returned spot must be as far away as the returned distance says"
+        )
+        own = np.linalg.norm(points - body.triangles[triangle].mean(axis=1), axis=1)
+        assert np.all(own < np.inf) and triangle.dtype == np.int64

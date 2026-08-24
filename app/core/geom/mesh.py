@@ -181,44 +181,80 @@ def on_surface(
     """Für jeden Punkt der nächste Ort auf der Oberfläche, sein Abstand und
     sein Dreieck.
 
-    Warum das hier steht und nicht dreimal beim Aufrufer: Der Weg dorthin
-    führt durch ``rtree``, und ``rtree`` greift auf dieser Maschine daneben —
-    eine Zugriffsverletzung, die als ``OSError`` zurückkommt und unter der der
-    Index liegt, den ``trimesh`` am Netz zwischenspeichert.
+    **Ohne ``rtree``, seit dem 24.08.2026 — und das ist der ganze Zweck dieser
+    Funktion.** Der Weg über ``trimesh.proximity`` führte durch dessen Index,
+    und ``rtree`` greift auf dieser Maschine in fremde Seiten: Ein Kunde, der
+    im Beispiel von Weg 2 die Breite auf 90 stellte, verlor die Anwendung —
+    ohne eine Zeile im Protokoll, denn ein nativer Abriss schreibt keine.
+    Die Milderungen davor (ein Wiederholversuch an einer Kopie, zwei
+    Größenordnungen weniger Anfragen über den Vorfilter in
+    ``geom.attributes``) machten den Fehlgriff selten, nicht unmöglich; und
+    ein geladenes ``rtree`` beschädigte sogar Unbeteiligtes — das Zahlenlesen
+    in ``export/threemf.py`` scheiterte sechsmal öfter, solange es im Prozess
+    war.
 
-    Also wird sie einmal wiederholt, und zwar an einer **Kopie**: die bringt
-    einen frischen Zwischenspeicher und damit einen frisch gebauten Index
-    mit. Das ist kein Verschlucken — scheitert auch der zweite Versuch, fliegt
-    der Fehler.
+    Der Ersatz fragt einen ``cKDTree`` über den **Dreiecksschwerpunkten**
+    (scipy, längst Abhängigkeit) und rechnet exakt nach: Erst der nächste
+    Schwerpunkt als Schranke ``u``, dann alle Dreiecke, deren Schwerpunkt
+    näher als ``u`` plus die weiteste Schwerpunkt-Ecke-Spanne liegt — jedes
+    andere kann die Schranke nicht mehr unterbieten, denn sein nächster
+    Oberflächenpunkt liegt höchstens seine eigene Spanne vom Schwerpunkt
+    entfernt. Auf den Kandidaten entscheidet die exakte Rechnung von
+    ``trimesh.triangles``. Das ist **kein** Näherungsverfahren: gemessen gegen
+    ``ProximityQuery`` sind die Abstände identisch.
 
-    **Der Wiederholversuch heilt den Aufruf, nicht den Speicher.** Wo die
-    Bibliothek in fremde Seiten greift, fällt kurz darauf etwas anderes um: im
-    Audit vom 08.08.2026 ein gewöhnliches Python-Set in
-    ``perceive.features``, unmittelbar gefolgt von einem Segmentation Fault.
-    Die einzige verlässliche Gegenmaßnahme ist deshalb, *weniger* zu fragen.
-
-    Genau das ist geschehen. Die Slot-Übertragung stellte je Auswertung
-    113168 Anfragen an den Index, weil sie für jedes Dreieck des Ergebnisses
-    den Abstand zu jeder Quelle suchte; mit dem Vorfilter in
-    ``geom.attributes`` sind es 1180. Gemessen danach: sechzig Auswertungen
-    hintereinander, kein einziger Fehlgriff — vorher wären bei dieser Zahl
-    etwa drei zu erwarten gewesen. Das ist kein Beweis, dass es nie wieder
-    passiert; es ist zwei Größenordnungen weniger Gelegenheit.
+    Der Baum entsteht je Aufruf und wird nicht am Netz zwischengespeichert —
+    der von ``trimesh`` gecachte ``rtree``-Index war genau die Stelle, unter
+    der der beschädigte Speicher lag.
     """
-    try:
-        return _asked(body, points)
-    except OSError as stumble:
-        _log.warning("proximity query stumbled over its index, asking again: %s", stumble)
-        return _asked(body.copy(), points)
+    from scipy.spatial import cKDTree
+    from trimesh.triangles import closest_point as closest_on
 
+    queries = np.asarray(points, dtype=float).reshape(-1, 3)
+    triangles = np.asarray(body.triangles, dtype=float)
+    centroids = triangles.mean(axis=1)
+    span = np.linalg.norm(triangles - centroids[:, None, :], axis=2).max(axis=1)
+    widest = float(span.max()) if len(span) else 0.0
+    tree = cKDTree(centroids)
 
-def _asked(body: trimesh.Trimesh, points: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
-    closest, distance, triangle = trimesh.proximity.ProximityQuery(body).on_surface(points)
-    return (
-        np.asarray(closest, dtype=float),
-        np.asarray(distance, dtype=float),
-        np.asarray(triangle, dtype=np.int64),
-    )
+    # Die Schranke: exakter Abstand zum Dreieck mit dem nächsten Schwerpunkt.
+    _, nearest = tree.query(queries)
+    nearest = np.atleast_1d(nearest)
+    bound_spot = closest_on(triangles[nearest], queries)
+    bound = np.linalg.norm(queries - bound_spot, axis=1)
+
+    # Alle Dreiecke, die sie noch unterbieten könnten — die Schranke selbst
+    # ist immer dabei, die Menge also nie leer.
+    grouped = tree.query_ball_point(queries, bound + widest)
+    counts = np.fromiter((len(group) for group in grouped), dtype=np.int64, count=len(grouped))
+
+    # In Portionen mit begrenzter Paarzahl: Liegen die Punkte weit weg vom
+    # Netz, deckt jede Kugel fast alle Schwerpunkte — bei tausend Punkten
+    # gegen ein dichtes Netz wären das Milliarden Paare auf einmal im
+    # Speicher. Die Grenze kostet im Normalfall nichts, denn dort bleibt es
+    # bei einer einzigen Portion.
+    budget = 2_000_000
+    closest = np.empty_like(queries)
+    distance = np.empty(len(queries), dtype=float)
+    triangle = np.empty(len(queries), dtype=np.int64)
+    lower = 0
+    while lower < len(queries):
+        upper, pairs = lower, 0
+        while upper < len(queries) and (pairs == 0 or pairs + counts[upper] <= budget):
+            pairs += int(counts[upper])
+            upper += 1
+        rows = np.arange(lower, upper)
+        owners = np.repeat(rows - lower, counts[rows])
+        candidates = np.concatenate([grouped[row] for row in rows]).astype(np.int64)
+        spots = closest_on(triangles[candidates], queries[rows][owners])
+        gaps = np.linalg.norm(queries[rows][owners] - spots, axis=1)
+        order = np.lexsort((gaps, owners))
+        best = order[np.searchsorted(owners[order], np.arange(len(rows)), side="left")]
+        closest[rows] = spots[best]
+        distance[rows] = gaps[best]
+        triangle[rows] = candidates[best]
+        lower = upper
+    return closest, distance, triangle
 
 
 def distance_to_triangles(triangles: np.ndarray, point: np.ndarray) -> float:

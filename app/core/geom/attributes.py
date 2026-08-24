@@ -107,7 +107,9 @@ def _candidates(
     vierzigtausend. Gesucht wurde trotzdem für alle vierzigtausend, gegen beide
     Quellen: sechseinhalb der siebeneinhalb Sekunden, die eine Auswertung
     kostete, und einhundertdreizehntausend Anfragen an einen ``rtree``-Index,
-    der auf dieser Maschine in etwa jedem zwanzigsten Lauf danebengreift.
+    der auf dieser Maschine in etwa jedem zwanzigsten Lauf danebengriff —
+    inzwischen ist er ganz ersetzt (:func:`app.core.geom.mesh.on_surface`),
+    und der Vorfilter bleibt trotzdem: weniger fragen ist weiter schneller.
 
     Gemessen wird gegen den Hüllquader der Quelle und nicht gegen ihre
     Oberfläche: das ist genau die Frage, die ohne Index zu beantworten ist,

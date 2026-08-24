@@ -667,6 +667,13 @@ def _numbers_from(vertices: ET.Element, triangles: ET.Element) -> tuple[np.ndarr
     Ein zweiter Anlauf trägt fast immer. Er ist kein Verschlucken: was zweimal
     scheitert, fliegt weiter, und der Aufrufer verwirft den Körper dann mit
     einer Zeile im Protokoll statt schweigend.
+
+    Seit dem 24.08.2026 ruft die Anwendung ``rtree`` nicht mehr auf
+    (:func:`app.core.geom.mesh.on_surface` fragt einen eigenen Baum,
+    ``ingest.outline`` verschachtelt über shapely) — die Rate sollte damit auf
+    das Eins-von-Dreißig ohne ``rtree`` fallen. Der zweite Anlauf bleibt
+    trotzdem: Er kostet nichts, solange nichts scheitert, und die Messung,
+    dass ohne ``rtree`` *gar* nichts scheitert, gibt es nicht.
     """
     try:
         return _read_numbers(vertices, triangles)
