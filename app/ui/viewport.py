@@ -5203,6 +5203,77 @@ class Viewport(QWidget):
                 self.plotter.remove_actor(actor, render=False)
         self._sketch_actors.clear()
 
+    def snapshot(self) -> Any | None:
+        """Der Inhalt der Ansicht als Bild — oder ``None``, wenn keiner da ist.
+
+        **Warum es das braucht.** Ein ``QWidget.grab`` über das Hauptfenster
+        bekommt hier nichts: Der Plotter zeichnet in ein natives
+        OpenGL-Kindfenster, und das malt nicht in Qts Puffer. Genau deshalb war
+        die Bildmitte auf jedem Bild leer, das der Fehlerbogen mitschickte —
+        ausgerechnet das Modell, um das es geht. Gemessen am 24.08.2026: eine
+        einzige Farbe auf 100 % der Fläche.
+
+        **Ein eigener Plotter, nicht der lebende.** ``self.plotter.screenshot``
+        wäre der kürzere Weg und liefert sogar das genauere Bild — Druckplatte,
+        Raster und Auswahl inbegriffen. Er greift aber in das Fenster, das der
+        Kunde gerade vor sich hat: VTK meldete dabei
+        ``FRAMEBUFFER_INCOMPLETE_ATTACHMENT``, und über die Suite stieg die
+        Abrissquote von 2 aus 9 auf 2 aus 3. Beweisen ließ sich der
+        Zusammenhang bei diesen Zahlen nicht — aber ein Bild für einen
+        Fehlerbericht darf die Lage nicht verschlimmern, in der es entsteht.
+        :mod:`app.ui.snapshots` geht denselben Weg und begründet ihn genauso:
+        kurzlebig, weil festgehaltene VTK-Objekte den Abbau mitreißen.
+
+        Der Preis ist ein Bild ohne Bauraum und Raster — das Modell aus der
+        Blickrichtung des Kunden, nicht seine ganze Kulisse. Für die Frage
+        „was hatte er vor sich?" ist das der Kern; die Kulisse steht in jedem
+        anderen Bild derselben Anwendung.
+
+        Ohne Plotter oder ohne Auswertung kommt ``None`` und kein schwarzes
+        Bild: Offscreen gibt es beides nicht, und der Aufrufer soll den
+        Unterschied sehen können.
+        """
+        if self.plotter is None or self._result is None or not self._result.scene.objects:
+            return None
+        import pyvista as pv
+        from PySide6.QtGui import QImage
+
+        from app.core.geom.mesh import as_mesh_data
+
+        size = [max(16, self.width()), max(16, self.height())]
+        shot = pv.Plotter(off_screen=True, window_size=size)
+        try:
+            for entry in self._result.scene.objects.values():
+                # **Farbe und Grund kommen aus dem Fenster, nicht von
+                # pyvista.** Mit den Vorgaben stünde ein türkiser Körper auf
+                # weißem Grund — ein Bild, das der Support anders sieht als der
+                # Kunde, und damit eine Auskunft, die in die Irre führt.
+                shot.add_mesh(pv.wrap(as_mesh_data(entry.mesh).raw), color=self._object_colour)
+            shot.set_background(self.plotter.background_color)
+            # Dieselbe Blickrichtung wie im Fenster — ein Bild aus einer
+            # anderen Richtung beantwortete die Frage nicht, die es stellt.
+            shot.camera_position = self.plotter.camera_position
+            # ``transparent_background=False`` macht die Drei-Kanal-Annahme
+            # darunter zur **Zusage**: Die globale Theme-Einstellung könnte
+            # sonst vier Kanäle liefern, und dann stimmte die Zeilenlänge nicht.
+            raster = shot.screenshot(transparent_background=False, return_img=True)
+        except Exception:  # pragma: no cover - Treiberlaunen, kein Programmfehler
+            # Ein Bild, das nicht entsteht, darf keinen Fehlerbericht
+            # verhindern — der Bogen ist dann eben ohne Bildmitte, statt gar
+            # nicht abzugehen.
+            _log.warning("the viewport could not render itself for a screenshot")
+            return None
+        finally:
+            shot.close()
+        if raster is None or getattr(raster, "ndim", 0) != 3 or raster.shape[2] < 3:
+            return None
+        height, width = int(raster.shape[0]), int(raster.shape[1])
+        # ``copy`` ist Pflicht, nicht Vorsicht: ``QImage`` **borgt** den Puffer,
+        # und ``raw`` fällt beim Verlassen dieser Funktion weg. Ohne die Kopie
+        # zeigte das zurückgegebene Bild auf freigegebenen Speicher.
+        raw = raster[:, :, :3].tobytes()
+        return QImage(raw, width, height, width * 3, QImage.Format.Format_RGB888).copy()
+
     def pixels_per_mm(self, frame: PlaneFrame) -> float:
         """Wie viele Bildpunkte ein Millimeter auf dieser Ebene gerade misst.
 

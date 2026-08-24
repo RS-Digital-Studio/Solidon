@@ -6712,3 +6712,55 @@ def test_changing_the_plane_swings_the_camera_along(window: MainWindow) -> None:
     assert nachher.normal == pytest.approx((0.0, 1.0, 0.0)), "die Ansicht zielt auf die neue Ebene"
 
     window.finish_sketch(keep=False)
+
+
+def test_the_picture_for_the_support_asks_the_viewport_for_its_own(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Das Bild einer Fehlermeldung muss das Modell zeigen, nicht ein Loch.
+
+    **Warum das ein eigener Test ist und kein Bildvergleich.** ``QWidget.grab``
+    malt Qts Puffer ab; der Viewport zeichnet in ein natives OpenGL-Fenster und
+    steht dort nicht drin. Am 24.08.2026 kam so ein Bogen bei Robert an: alles
+    darauf zu sehen — Menüs, Objektbaum, Parameter, Prüfbericht — nur in der
+    Mitte, wo das Teil liegt, war es schwarz. Gemessen war der Viewport-Bereich
+    danach **eine einzige Farbe** auf 100 % der Fläche; nach der Änderung sind
+    es 530.
+
+    Prüfen lässt sich das hier nicht am Bild: ``tests/conftest.py`` setzt
+    ``QT_QPA_PLATFORM=offscreen``, dort gibt es keinen Plotter, und
+    :meth:`Viewport.snapshot` gibt folgerichtig ``None`` zurück. Ein Test über
+    Bildpunkte wäre grün über einer leeren Menge — dieselbe Falle, die im
+    Register unter „Offscreen prüft nichts, was am Aktor hängt" steht.
+
+    Geprüft wird deshalb die **Kette**: dass ``window_shot`` überhaupt jemanden
+    fragt. Wer den Aufruf entfernt, bekommt einen roten Lauf statt eines
+    schwarzen Lochs im nächsten Kundenbogen.
+
+    **Ohne Fenster-Fixture, und das ist gemessen.** Ein zweiter Test daneben
+    hat über ``window`` ein ganzes ``MainWindow`` gebaut, nur um zu sehen, dass
+    ``snapshot`` ohne Plotter ``None`` gibt. Er hob die Abrissquote dieser Datei
+    von 1 aus 3 auf 2 aus 3 — die Suite baut in einem Prozess hunderte
+    VTK-Fenster, und zwei weitere kippten sie. Ein nacktes ``QWidget`` genügt
+    hier, denn die Frage ist der Aufruf und nicht das Bild.
+    """
+    from app.ui import support_dialog
+
+    asked: list[object] = []
+    monkeypatch.setattr(
+        support_dialog, "_paint_viewports", lambda picture, widget: asked.append(widget)
+    )
+    from PySide6.QtWidgets import QWidget
+
+    widget = QWidget()
+    widget.resize(320, 240)
+    try:
+        data = support_dialog.window_shot(widget)
+    finally:
+        widget.deleteLater()
+
+    assert data.startswith(b"\x89PNG"), "ohne PNG hat der Bogen kein Bild"
+    assert asked == [widget], (
+        "window_shot muss die Ansichten nachmalen lassen — sonst bleibt die "
+        "Bildmitte leer, und genau dort liegt das Teil des Kunden"
+    )

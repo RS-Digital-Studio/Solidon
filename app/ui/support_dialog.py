@@ -22,7 +22,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Final
 
-from PySide6.QtCore import QBuffer, QIODevice, Qt, QUrl, Signal
+from PySide6.QtCore import QBuffer, QIODevice, QRect, Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -90,16 +90,94 @@ KINDS: Final = (KIND_IDEA, KIND_BUG, KIND_QUESTION)
 OCCASION_KINDS: Final = (KIND_CRASH, KIND_SURVEY)
 
 
+def _paint_viewports(picture: Any, widget: QWidget) -> None:
+    """Malt jede 3D-Ansicht in das Bild, das ``grab`` von ihr nicht bekommt.
+
+    **Warum es diesen zweiten Durchgang braucht.** ``QWidget.grab`` malt Qts
+    eigenen Puffer ab. Der Viewport zeichnet aber in ein natives
+    OpenGL-Kindfenster, und das steht dort nicht drin — auf dem Bild blieb
+    genau die Fläche leer, in der das Modell liegt. Ein Kunde, der einen
+    Fehler an seinem Teil meldete, schickte ein Bild ohne sein Teil.
+
+    Jede Ansicht rendert sich deshalb selbst (:meth:`Viewport.snapshot`), und
+    das Ergebnis wird an ihren Platz im Fensterbild gesetzt. Ihre Lage kommt
+    aus ``mapTo`` und ist damit dieselbe, die auch ``grab`` gesehen hat.
+
+    Skaliert wird auf die Widgetgröße: Auf einem Bildschirm mit erhöhter
+    Skalierung ist das gerenderte Bild um den Gerätefaktor größer als das
+    Widget, und ungefragt eingesetzt läge es über der halben Oberfläche.
+    """
+    from PySide6.QtGui import QPainter
+
+    from app.ui.overlay import OverlayHost
+    from app.ui.viewport import Viewport
+
+    # **Erst die Bilder, dann der Maler.** Ein ``QPainter`` auf dem Abbild zu
+    # öffnen, wo es nichts einzusetzen gibt, ist nicht folgenlos: Offscreen gibt
+    # es keinen Plotter, jede Ansicht liefert ``None``, und der Maler liefe über
+    # ein Bild, das niemand ändert. In der Suite endete das nach einigen Dutzend
+    # Fenstern in einer Speicherverletzung — an wandernder Stelle, also nicht
+    # dort, wo sie entstand.
+    rendered = [
+        (view, image)
+        for view in widget.findChildren(Viewport)
+        if view.isVisible() and (image := view.snapshot()) is not None
+    ]
+    if not rendered:
+        return
+    painter = QPainter(picture)
+    try:
+        for view, image in rendered:
+            corner = view.mapTo(widget, view.rect().topLeft())
+            painter.drawImage(
+                QRect(corner, view.size()),
+                image,
+                QRect(0, 0, image.width(), image.height()),
+            )
+            # **Und dann alles wieder darüber, was über der Ansicht lag.** Die
+            # Bedienleisten liegen im ``OverlayHost`` und stehen per ``raise_``
+            # vor dem Viewport; ``grab`` hatte sie schon richtig im Bild, das
+            # eingesetzte Rechteck deckt sie aber zu. Ohne diesen Schritt zeigt
+            # das Bild ein Modell und keine Oberfläche — Objektbaum, Parameter
+            # und Prüfbericht wären weg, also gerade das, was dem Support sagt,
+            # wo der Kunde stand.
+            #
+            # **Gesucht wird der Host, nicht der direkte Elternteil.** Der
+            # Viewport steckt in einem ``QStackedWidget`` darin; wer dort nach
+            # Geschwistern fragt, findet nur ihn selbst und malt nichts nach.
+            host: QWidget | None = view.parentWidget()
+            while host is not None and not isinstance(host, OverlayHost):
+                host = host.parentWidget()
+            if host is None:
+                continue
+            for above in host.findChildren(
+                QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly
+            ):
+                # Der Stapel, in dem die Ansicht selbst sitzt, gehört nicht
+                # dazu — ihn zu malen hieße, das gerade Eingesetzte wieder
+                # zuzudecken.
+                if not above.isVisible() or above is view or above.isAncestorOf(view):
+                    continue
+                above.render(painter, above.mapTo(widget, above.rect().topLeft()))
+    finally:
+        painter.end()
+
+
 def window_shot(widget: QWidget | None) -> bytes:
     """Ein Bildschirmfoto des Fensters als PNG.
 
     ``grab`` und nicht der ganze Bildschirm: Was neben Solidon offen ist,
     geht den Support nichts an, und wer ein Bild seines Desktops verschickt,
     verschickt mehr, als er zeigen wollte.
+
+    Was ``grab`` nicht sieht, holt :func:`_paint_viewports` nach — die 3D-
+    Ansicht ist ein natives Fenster und bliebe sonst leer. Beides zusammen
+    ergibt das Bild, das der Kunde vor sich hat, und nichts darüber hinaus.
     """
     if widget is None:
         return b""
     picture = widget.grab().toImage()
+    _paint_viewports(picture, widget)
     if picture.width() > MAX_SHOT_WIDTH:
         picture = picture.scaledToWidth(MAX_SHOT_WIDTH, Qt.TransformationMode.SmoothTransformation)
     buffer = QBuffer()
