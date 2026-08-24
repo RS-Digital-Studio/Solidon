@@ -4632,6 +4632,51 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       Aufräum-Fixture steht mitten darin. Wer hier weitermacht, fängt dort an
       und nicht beim `gc`.
 
+      **Nachtrag vom 24.08.2026 — der erste kontrollierte Griff.** 3d-druck-bd
+      meldete einen Riss **mitten im Lauf** statt beim Abbau, und damit erstmals
+      mit einem Namen: `test_ui.py::test_cancelling_the_question_keeps_the_window_open`.
+
+          allein, 3×                    Exit 0, 0, 0
+          ganze Datei, 3×               Exit 127 (2× exakt bei 28 %)
+          erste 98 Tests, 3×            Exit 127
+          erste 49 / 24 / 9 Tests       Exit 0
+
+      Ein `-p`-Plugin bog `disk_backed_cache` auf `ResultCache()` ohne Platte um
+      — an **beiden** Stellen, weil `session.py` den Namen direkt importiert.
+      **Abwechselnd gefahren**, nicht in Blöcken:
+
+          Runde 1:  mit Platte Exit 127   |   ohne Platte Exit 0
+          Runde 2:  mit Platte Exit 139   |   ohne Platte Exit 0
+          Runde 3:  mit Platte Exit 139   |   ohne Platte Exit 0
+
+      Dazu drei Vorläufe je Seite in Blöcken: **6 von 6 rot mit, 6 von 6 grün
+      ohne.** Die Blöcke allein hätten auf einer Maschine mit sechs Sitzungen
+      eine Aussage über die Uhrzeit ergeben.
+
+      **Und die Deutung ist die Hälfte, auf die es ankommt** (3d-druck-33, am
+      Code gelesen statt gemessen): **Der Plattencache ist die Bedingung, nicht
+      die Ursache.** `DiskCache.get` macht echte Datei-I/O (`read_text`,
+      `read_bytes`), und **Datei-I/O gibt den GIL frei**. Ohne Platte kopiert
+      der Arbeiter Python-Objekte und hält den GIL durchgehend — der Hauptthread
+      kommt gar nicht dran, es gibt kein Nebeneinander, das man zerreißen
+      könnte. Mit Platte gibt der Arbeiter ihn bei jedem `read_bytes` ab, und
+      **genau in diesem Fenster** läuft der Hauptthread in `processEvents`.
+
+      **Wer hier weitersucht, sucht nicht in `cache.py`** — dort ist kein
+      Fehler. Das naheliegende Leck ist ebenfalls ausgeschlossen:
+      `MeshData.from_bytes` schließt sein Zip (`with np.load(...) as data`).
+      Die Ursache liegt darin, was Qt und der Arbeiter in diesem GIL-Fenster
+      miteinander tun.
+
+      **Die Größenschwelle passt dazu und ist keine Ansammlung von Speicher,
+      sondern eine von Gelegenheiten:** Je mehr Fenster und Netze im Spiel sind,
+      desto öfter fällt ein GIL-Fenster mit einem Zustellvorgang zusammen.
+
+      **Die nächste Messung ist benannt** (3d-druck-33, nach dem Bau): ein
+      Cache, der die Bytes im Speicher hält, aber `codec.loads` samt `np.load`
+      durchläuft. Reißt es damit, genügt die Allokation; reißt es nicht, ist es
+      wirklich die Datei-I/O.
+
 - [ ] **Nach einem weiten Verschieben dreht die Kamera um den alten Punkt.**
       Robert am 23.08.2026: „nach jedem verschieben springt die kamera und das
       modell immer komisch“, und die Entscheidung gleich dazu: „kamera bei
