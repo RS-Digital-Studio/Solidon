@@ -127,6 +127,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im Bestellvorgang | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Bestellstrecke, die es noch nicht gibt. `EULA.md` Nummer 10 — kein Prüfinstitut, keine zugesicherte Maßhaltigkeit, keine tragenden Teile — ist gegenüber Verbrauchern eine negative Beschaffenheitsvereinbarung und nach § 327h BGB **ausdrücklich und gesondert** zu vereinbaren. Betrifft den Verkauf, nicht nur die Förderung |
 | Der Kündigungsknopf verlangt eine Webseite, die Förderung sitzt in der Anwendung | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Entscheidung, die die vom 24.08. ergänzt statt sie umzustoßen: § 312k BGB will eine ständig verfügbare Schaltfläche auf einer Webseite, §13 Nummer 6 hat die Förderung in die Anwendung gelegt. Eine Schaltfläche in einem Programm, das man deinstallieren kann, ist nicht ständig verfügbar — und Stufe 1 verspricht eine Nennung auf einer Förderseite, die es dann nicht gibt |
 | Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | den Vertrag selbst, vor der Unterschrift. MoR-Verträge enthalten regelmäßig eine Freistellung zulasten des Verkäufers, oft unbegrenzt und nach fremdem Recht; `EULA.md` Nummer 11 wirkt gegenüber dem Kunden, nicht gegenüber dem Dienstleister. Bei einem Einzelunternehmen haftet dafür das Privatvermögen |
+| Ein Schlüssel, der nicht gilt, sperrt das lokale Modell aus | Drei Stunden gegen ein Programm, das die richtige Adresse nicht annahm (24.08.2026) | **eine Entscheidung von Robert über das Verhalten**: `backends()` gibt `(Anthropic, Ollama)` und `first_available()` nimmt den ersten, dessen `available` gilt — und bei Anthropic heißt das `keys.read(...) is not None`, also *ob* ein Schlüssel da ist, nicht *ob er geht*. Ein einziger Tippversuch im Schlüsselfeld sperrt ein fertig eingerichtetes Ollama dauerhaft aus. Vorschlag: nach dem ersten `authentication_error` gilt das Backend als nicht verfügbar, und der Chat fällt sichtbar zurück |
+| Die Adresse, die Ollama selbst nennt, zerlegt drei Aufrufe | Drei Stunden gegen ein Programm, das die richtige Adresse nicht annahm (24.08.2026) | nichts — der Fix kann heute laufen. `installed_models` (`llm.py:731`) und `pull_model` (`llm.py:759`) bauen ihre Adresse mit `.replace("/api/chat", …)` aus der eingetragenen URL; trägt jemand die Basis-URL ein, greift das Replace nicht und alles geht an die Wurzel. Gegen ein echtes Ollama gemessen: POST auf die Wurzel **405**, auf `/api/pull` **200** |
+| Ein Pfad im Adressfeld reißt den Einrichtungsdialog ab | Drei Stunden gegen ein Programm, das die richtige Adresse nicht annahm (24.08.2026) | nichts — eine Zeile. `discover.reachable` (`discover.py:437`) fängt `OSError`, aber `urlparse(...).port` wirft bei einem Windows-Pfad `ValueError`; der Arbeiter des Installationsdialogs stirbt mitten im Einrichten |
+| Das Schlüsselfeld nimmt eine kopierte Fehlermeldung an | Drei Stunden gegen ein Programm, das die richtige Adresse nicht annahm (24.08.2026) | nichts — Prüfung beim Speichern. `keys.store` (`keys.py:62`) legt jeden String ab, auch mehrzeiligen; der landet als HTTP-Header und fliegt als `ValueError` aus `http.client`. Verstoß gegen Regel 17: der Kunde liest „Im Programm ist ein unerwarteter Fehler aufgetreten" |
+| „Das Sprachmodell hat nicht geantwortet" sagt nicht, welches | Drei Stunden gegen ein Programm, das die richtige Adresse nicht annahm (24.08.2026) | Textarbeit plus die Stelle, die den Anbieter kennt. Der Kunde richtete Ollama ein und las diesen Satz über einem Anthropic-Schlüsselfehler — geantwortet **hatte** das Modell, nur ein anderes als das eingerichtete |
 
 ---
 
@@ -9432,3 +9437,85 @@ zwar immer.
   ob es ein Fehler ist oder eine Abnahme, die zu eng geworden ist — die
   Erfahrung dieses Projekts kennt beide Ausgänge, und der Test selbst ist
   einmal die Ursache gewesen.
+
+---
+
+## Drei Stunden gegen ein Programm, das die richtige Adresse nicht annahm (24.08.2026)
+
+Aus einer Rückmeldung zu 0.1.4: Ein Kunde wollte den Chat auf sein lokales
+Ollama umstellen, hat drei Stunden gebraucht und es nicht geschafft. Er hat
+dabei **nichts falsch gemacht** — jeder seiner Schritte war richtig, und jeder
+lief in eine andere Stelle unseres Codes. Der Fragebogen kam ihm nach dreißig
+Minuten dazwischen; er hat trotzdem freundlich geantwortet und um eine Anleitung
+gebeten.
+
+**Die Kette, aus dem Protokoll gelesen und am Code belegt:**
+
+| Was er tat | Was das Programm tat |
+|---|---|
+| etwas ins Anthropic-Schlüsselfeld getippt | speichert es — ab hier ist Ollama unerreichbar |
+| Chat benutzt | fragt Anthropic, `invalid x-api-key`, meldet „Das Sprachmodell hat nicht geantwortet" |
+| Ollama-Adresse `http://127.0.0.1:11434` eingetragen | Anfragen gehen an die Wurzel → **405**, vierzehnmal im Protokoll |
+| den Modellpfad ins Adressfeld gesetzt | Absturz: `Port could not be cast to integer` |
+| die Fehlermeldung ins Schlüsselfeld kopiert | Absturz: `Invalid header value`, Fehlerbericht ging hinaus |
+
+**Der Satz, der bleibt: Was ein Werkzeug über sich selbst sagt, tippt der Kunde
+ein.** `http://127.0.0.1:11434` ist die Adresse, die Ollama in seiner eigenen
+Ausgabe nennt — sie ist die wahrscheinlichste Eingabe und nicht die
+unwahrscheinlichste. Ein Feld, das nur die volle Chat-URL verträgt, ohne das zu
+sagen, ist gegen den Regelfall gebaut.
+
+- [ ] **Ein Schlüssel, der nicht gilt, sperrt das lokale Modell aus.**
+      `backends()` (`llm.py:1022`) gibt `(AnthropicBackend(), OllamaBackend())`,
+      `first_available()` nimmt den ersten mit `available` — und bei Anthropic
+      heißt das `keys.read(self.id) is not None` (`llm.py:331`), also **ob ein
+      Schlüssel da ist, nicht ob er gilt**. Ein einziger Tippversuch sperrt ein
+      vollständig eingerichtetes Ollama dauerhaft aus, und nichts sagt es.
+
+      **Verhaltensänderung, deshalb eine Entscheidung von Robert.** Vorschlag:
+      Nach einem `authentication_error` gilt das Backend für diese Sitzung als
+      nicht verfügbar, der Chat fällt auf das nächste zurück und sagt in einem
+      Satz, dass er es getan hat. Die Alternative — beim Speichern einmal gegen
+      den Anbieter prüfen — kostet einen Netzaufruf im Einstellungsdialog und
+      widerspricht dem Grundsatz, dass ohne Netz alles außer dem Chat geht.
+
+- [ ] **Die Adresse, die Ollama selbst nennt, zerlegt drei Aufrufe.**
+      `installed_models` (`llm.py:731`) und `pull_model` (`llm.py:759`) bauen
+      ihre Adresse mit `.replace("/api/chat", "/api/tags")` beziehungsweise
+      `"/api/pull"` aus der eingetragenen URL. Enthält die kein `/api/chat`,
+      greift das Replace nicht — die Anfrage geht an die Wurzel, und dasselbe
+      gilt für den Chat-Aufruf selbst.
+
+      **Gemessen gegen ein echtes Ollama**, nicht vermutet: POST auf die Wurzel
+      **405**, POST auf `/api/pull` **200**, GET auf die Wurzel **200**. Die 405
+      im Kundenprotokoll sind damit erklärt.
+
+      Der Fix ist eine Normalisierung statt einer Ersetzung: Basis-URL erkennen,
+      Pfad anhängen; eine eingetragene volle URL weiter akzeptieren. Dazu ein
+      Test mit beiden Schreibweisen — der heutige Bestand prüft nur die volle.
+
+- [ ] **Ein Pfad im Adressfeld reißt den Einrichtungsdialog ab.**
+      `discover.reachable` (`discover.py:437`) fängt `OSError`, aber
+      `urlparse("http://C:\\Users\\…").port` wirft `ValueError`. Der Arbeiter
+      des Installationsdialogs stirbt mitten im Einrichten
+      (`install_dialog.py:84` → `install.py:426` → `tools.py:74`). Eine Zeile
+      am `except`, und daneben die Frage, warum dasselbe Feld bei OpenSCAD
+      einen Pfad und bei Ollama eine Adresse meint, ohne es zu sagen.
+
+- [ ] **Das Schlüsselfeld nimmt eine kopierte Fehlermeldung an.**
+      `keys.store` (`keys.py:62`) legt jeden String im Schlüsselbund ab — auch
+      einen mehrzeiligen, der aus einer Fehlermeldung samt Knopfbeschriftung
+      besteht. Beim nächsten Zug landet er als `x-api-key` in einem HTTP-Header
+      und fliegt als `ValueError` aus `http.client.putheader`. **Regel 17:** Der
+      Kunde liest „Im Programm ist ein unerwarteter Fehler aufgetreten" und
+      wird um einen Fehlerbericht gebeten — für einen Tippfehler.
+
+      Prüfung beim Speichern: trimmen, Zeilenumbrüche und Nicht-ASCII ablehnen,
+      und die Ablehnung als Satz mit Vorschlag zurückgeben.
+
+- [ ] **„Das Sprachmodell hat nicht geantwortet" sagt nicht, welches.**
+      Der Kunde richtete Ollama ein und las diesen Satz über einem
+      Anthropic-Schlüsselfehler. Geantwortet **hatte** das Modell — nur ein
+      anderes als das, das er gerade eingerichtet hatte. Die Meldung nennt den
+      Anbieter nicht, und genau das hätte den Fall in Minute zwei beendet statt
+      in Stunde drei.
