@@ -892,3 +892,138 @@ class _StillCamera:
         focal_point = (7.0, 7.0, 7.0)
 
     camera = _Camera()
+
+
+# --- Das Raster einer Zeichenebene (§30.1, P2b) ------------------------------
+
+
+def test_the_grid_lies_in_the_plane_it_belongs_to() -> None:
+    """Ein Raster neben der Ebene behauptet den falschen Ort.
+
+    Es sagt, wo die Zeichnung liegt und wie groß sie ist. Läge es daneben,
+    wäre beides falsch — und auf einer geneigten Fläche fällt genau das
+    auf, auf einer waagerechten nicht.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import sketch_grid
+
+    frame = frame_of((1.0, 0.0, 1.0), (5.0, -2.0, 3.0))
+    lines = sketch_grid(frame, step=5.0, reach=20.0)
+
+    assert lines, "ein Raster mit Weite und Ausdehnung ist nicht leer"
+    for start, end in lines:
+        for point in (start, end):
+            gap = tuple(point[axis] - frame.origin[axis] for axis in range(3))
+            along = sum(gap[axis] * frame.normal[axis] for axis in range(3))
+            assert along == pytest.approx(0.0, abs=1e-9), f"{point} liegt neben der Ebene"
+
+
+def test_the_grid_counts_its_lines_from_width_and_step() -> None:
+    """Zwei Richtungen, je eine Linie auf null und beidseits so viele wie
+    hineinpassen — bei 20 mm Ausdehnung und 5 mm Weite also neun je Achse.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import sketch_grid
+
+    lines = sketch_grid(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)), step=5.0, reach=20.0)
+
+    assert len(lines) == 2 * (2 * 4 + 1), "vier je Seite, die Null, und das in zwei Richtungen"
+
+
+def test_a_grid_without_a_step_is_empty_and_not_an_error() -> None:
+    """Eine Weite von null ist kein Sonderfall, sondern kein Raster.
+
+    Ohne diesen Zweig teilte ``reach / step`` durch null — und zwar in einer
+    Zeichenfläche, die gerade aufgebaut wird.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import sketch_grid
+
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    assert sketch_grid(frame, step=0.0, reach=20.0) == []
+    assert sketch_grid(frame, step=5.0, reach=0.0) == []
+
+
+def test_a_fine_grid_over_a_wide_plane_stops_at_the_limit() -> None:
+    """Ein Millimeter Raster über einem Meter Ebene wären zweitausend Linien.
+
+    Gezeichnet kämen sie als Fläche an, und gerechnet kosten sie. Die Grenze
+    greift, statt die Ansicht zu füllen.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import MOST_GRID_LINES, sketch_grid
+
+    lines = sketch_grid(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)), step=1.0, reach=1000.0)
+
+    assert len(lines) == 2 * (2 * MOST_GRID_LINES + 1)
+
+
+def test_on_the_flat_plane_the_grid_runs_along_the_axes() -> None:
+    """Auf XY muss das Raster achsparallel liegen — sonst ist es schief.
+
+    Die Probe dafür ist billig: Jede Linie hält entweder ihr x oder ihr y,
+    und das dritte bleibt null.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import sketch_grid
+
+    lines = sketch_grid(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 7.0)), step=10.0, reach=20.0)
+
+    for start, end in lines:
+        held_x = start[0] == pytest.approx(end[0])
+        held_y = start[1] == pytest.approx(end[1])
+        assert held_x != held_y, "eine Rasterlinie hält genau eine der beiden Achsen"
+        assert start[2] == pytest.approx(7.0) and end[2] == pytest.approx(7.0)
+
+
+def test_two_strokes_share_one_flat_line_list() -> None:
+    """VTK erwartet je Linie erst ihre Länge, dann ihre Indizes.
+
+    Zwei Strecken über vier Punkten sind ``[2, 0, 1, 2, 2, 3]``. Die dritte
+    Zahl ist eine **Länge** und sieht aus wie ein Index — deshalb ist diese
+    Rechnung eine eigene Funktion und nicht eine Zeile im Zeichnen.
+    """
+    from app.ui.viewport import polyline_spans
+
+    assert polyline_spans([2]) == [2, 0, 1]
+    assert polyline_spans([2, 2]) == [2, 0, 1, 2, 2, 3]
+    assert polyline_spans([3, 2]) == [3, 0, 1, 2, 2, 3, 4]
+
+
+def test_a_curve_with_one_point_is_skipped_but_still_counted() -> None:
+    """Der Fall, an dem eine naive Fassung stillschweigend falsch wird.
+
+    Ein einzelner Punkt hat keine Strecke und gehört nicht in die Linienliste
+    — aber er liegt im Netz und **verschiebt die Indizes aller folgenden**.
+    Wer ihn nur überspringt, ohne weiterzuzählen, zeichnet danach jede Linie
+    einen Punkt zu früh.
+    """
+    from app.ui.viewport import polyline_spans
+
+    assert polyline_spans([1, 2]) == [2, 1, 2], "die Strecke nutzt Punkt 1 und 2, nicht 0 und 1"
+    assert polyline_spans([2, 1, 2]) == [2, 0, 1, 2, 3, 4]
+    assert polyline_spans([1]) == []
+    assert polyline_spans([]) == []
+
+
+def test_showing_a_sketch_without_a_plotter_changes_nothing() -> None:
+    """Offscreen gibt es keine Szene, und das darf nicht wehtun.
+
+    ``show_sketch`` und ``clear_sketch`` laufen in jedem Fenstertest mit,
+    sobald der Skizzenmodus angefasst wird. Eine Ausnahme hier nähme die
+    halbe Suite mit.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.core.sketch.profile import SketchCurve
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    assert viewport.plotter is None, "diese Probe ergibt nur ohne Plotter einen Sinn"
+
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    viewport.show_sketch(
+        [SketchCurve(points=((0.0, 0.0, 0.0), (10.0, 0.0, 0.0)))], frame, 1.0, 20.0
+    )
+    viewport.clear_sketch()
+
+    assert viewport._sketch_actors == [], "ohne Plotter entsteht kein Actor"

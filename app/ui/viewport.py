@@ -42,6 +42,8 @@ from app.core.geom.transform import (
 from app.core.log import get_logger
 from app.core.perceive.maps import AnalysisMap
 from app.core.scene import EvaluationResult
+from app.core.sketch.planes import to_world
+from app.core.sketch.profile import SketchCurve
 from app.core.types import (
     Feature,
     FeatureId,
@@ -184,6 +186,80 @@ def camera_for_plane(frame: PlaneFrame, distance: float = 1.0) -> tuple[Vec3, Ve
         frame.origin[2] + distance * frame.normal[2],
     )
     return position, frame.origin, frame.y_axis
+
+
+#: Wie viele Rasterlinien einer Zeichenebene je Richtung höchstens entstehen.
+#:
+#: Zweihundert nach jeder Seite sind vierhundertein Linien je Achse und über
+#: achthundert Segmente zusammen — mehr als jede Zeichnung braucht, und die
+#: Grenze greift ohnehin erst bei einem Verhältnis von Ausdehnung zu
+#: Rasterweite über zweihundert. Sie steht hier nicht als Geschmacksfrage,
+#: sondern weil ``reach / step`` aus zwei freien Zahlen kommt: Ein Millimeter
+#: Raster über einem Meter Ebene wären zweitausend Linien, gezeichnet in einem
+#: Bild, in dem sie als Fläche ankommen.
+MOST_GRID_LINES = 200
+
+
+def sketch_grid(
+    frame: PlaneFrame, step: float, reach: float
+) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
+    """Die Rasterlinien einer Zeichenebene, als Paare von Weltpunkten (§30.1).
+
+    Das Raster liegt **in** der Ebene und nicht unter ihr: Es sagt, wo die
+    Zeichnung liegt und wie groß sie ist, und beides wäre falsch, wenn es
+    woanders läge. Gerechnet wird über
+    :func:`app.core.sketch.planes.to_world` — dieselbe Umrechnung, die auch
+    die Skizze an ihren Ort legt, denn zwei Rechnungen für dieselbe Ebene
+    driften.
+
+    ``step`` ist die Rasterweite in Millimetern, ``reach`` die halbe
+    Ausdehnung. Beide kommen von außen: die Weite aus dem Maßstab (der Editor
+    wählt sie aus der 1-2-5-Folge), die Ausdehnung aus dem Bauraum.
+
+    Eine freie Funktion aus demselben Grund wie :func:`volume_edges` und
+    :func:`bed_scale`: Offscreen gibt es keinen Plotter, und was hinter dieser
+    Wache gerechnet wird, prüft in der Suite niemand mehr.
+
+    Nichts kommt zurück, wo nichts zu zeichnen ist — eine Weite oder eine
+    Ausdehnung von null ist keine Ausnahme, sondern ein leeres Raster.
+    """
+    if step <= 0.0 or reach <= 0.0:
+        return []
+    count = min(int(reach / step), MOST_GRID_LINES)
+    span = count * step
+    lines: list[tuple[tuple[float, float, float], tuple[float, float, float]]] = []
+    for index in range(-count, count + 1):
+        offset = index * step
+        # Zwei Linien je Schritt: eine entlang der zweiten Achse, eine entlang
+        # der ersten. Zusammen ergeben sie das Gitter; einzeln wäre es ein
+        # Notenblatt.
+        lines.append((to_world(frame, (offset, -span)), to_world(frame, (offset, span))))
+        lines.append((to_world(frame, (-span, offset)), to_world(frame, (span, offset))))
+    return lines
+
+
+def polyline_spans(counts: Sequence[int]) -> list[int]:
+    """Die Linienstruktur, mit der VTK mehrere Polylinien in einem Netz führt.
+
+    VTK erwartet je Linie zuerst ihre Punktzahl und dann ihre Indizes, alles
+    in **einer** flachen Liste: Zwei Strecken über vier Punkten ergeben
+    ``[2, 0, 1, 2, 2, 3]``. Die Zahlen dazwischen sehen aus wie Indizes und
+    sind Längen — genau deshalb steht die Rechnung hier und nicht mitten im
+    Zeichnen, wo niemand sie prüfen kann.
+
+    Gezählt wird über die Punktzahlen in derselben Reihenfolge, in der die
+    Punkte im Netz liegen. Eine Linie mit weniger als zwei Punkten wird
+    übergangen — sie hätte keine Strecke, und VTK bekäme eine Länge, die ins
+    Leere zeigt.
+    """
+    spans: list[int] = []
+    start = 0
+    for count in counts:
+        if count >= 2:
+            spans.append(count)
+            spans.extend(range(start, start + count))
+        start += count
+    return spans
 
 
 def axes_widget_of(plotter: Any) -> Any:
@@ -1494,6 +1570,14 @@ class Viewport(QWidget):
         self._object_colour = OBJECT_COLOUR
         self._bed_colour = BED_COLOUR
         self._bed_surface = BED_SURFACE_COLOUR
+        self._sketch_actors: list[Any] = []
+        """Was die Skizze gerade in die Szene legt — Raster, Kurven, Punkte.
+
+        Eigene Liste neben ``_frame_actors``: Die Zeichnung kommt und geht mit
+        dem Skizzenmodus, der Bauraum bleibt. Eine gemeinsame Liste hieße,
+        beim Verlassen des Modus auch die Platte wegzuräumen."""
+        self._grid_colour = THEMES["dark"]["grid_minor"]
+        self._sketch_colour = THEMES["dark"]["text"]
         self._measure_mode: MeasureMode = "off"
         self._pending_point: Vec3 | None = None
         self.measurements = MeasurementList()
@@ -2808,6 +2892,17 @@ class Viewport(QWidget):
         self._bed_colour = colours["bed"]
         self._bed_surface = colours["bed_surface"]
         self._edge_colour = colours["edge"]
+        # **Direkt aus THEMES und nicht über ``viewport_colours``**, wie es
+        # ``ViewBar.set_theme`` daneben auch tut. Der Grund ist eine Zusage:
+        # ``test_theme_and_palette`` nagelt die Schlüsselmenge von
+        # ``viewport_colours`` auf genau sechs fest, und das ist richtig so —
+        # sie beschreibt, was die *Szene* braucht. Raster und Zeichnung der
+        # Skizze sind dieselben Farben, die die Zeichenfläche benutzt
+        # (``grid_minor`` und ``text``); sie hier zu einer siebten und achten
+        # Szenenfarbe zu machen, hieße denselben Wert zweimal zu benennen.
+        exact = THEMES["light" if theme == "light" else "dark"]
+        self._grid_colour = exact["grid_minor"]
+        self._sketch_colour = exact["text"]
         self.banner.set_theme(theme)
         self.view_bar.set_theme(theme)
         self.drag_bar.set_theme(theme)
@@ -4883,6 +4978,114 @@ class Viewport(QWidget):
         position, focus, up = camera_for_plane(frame, self._plane_distance())
         self.plotter.camera_position = [position, focus, up]
         self._redraw_shadows()
+
+    def show_sketch(
+        self,
+        curves: Sequence[SketchCurve],
+        frame: PlaneFrame,
+        step: float = 0.0,
+        reach: float = 0.0,
+    ) -> None:
+        """Die Skizze und ihr Raster in die Szene legen (§30.1, Stufe zwei).
+
+        Sie liegt damit **da, wo sie liegt** — auf ihrer Ebene, im Raum, und
+        sie dreht sich mit der Kamera. Genau das war der Unterschied zum
+        Zeichenblatt: Dort war die Ebenenwahl eine Beschriftung, hier ist sie
+        zu sehen.
+
+        Nichts hier rechnet: Die Punkte kommen aus
+        :func:`app.core.sketch.profile.curves_of`, die Rasterlinien aus
+        :func:`sketch_grid`. Beides ist ohne Plotter prüfbar, und was diese
+        Methode hinzufügt, ist ausschließlich das Weiterreichen an VTK.
+
+        **Alles unpickbar** (``pickable=False``), und das ist keine
+        Feinheit: Der Zeiger fragt die Ebene rechnerisch
+        (:func:`app.core.sketch.planes.ray_hit`), nicht über einen Treffer auf
+        dem Raster. Ein pickbares Raster stünde der Auswahl von Körpern im
+        Weg — und der Merkmalssuche, die den Sichtstrahl gegen die Hüllen der
+        Szenenkörper prüft.
+
+        Konstruktionsgeometrie bekommt ihren eigenen Actor: Sie trägt
+        Bedingungen und bildet kein Profil, also darf sie auch nicht wie eine
+        Kante aussehen.
+        """
+        self.clear_sketch()
+        if self.plotter is None:
+            return
+        import numpy as np
+        import pyvista as pv
+
+        segments = sketch_grid(frame, step, reach)
+        if segments:
+            grid = np.asarray([point for pair in segments for point in pair], dtype=float)
+            spans = np.hstack([[2, 2 * index, 2 * index + 1] for index in range(len(segments))])
+            self._sketch_actors.append(
+                self.plotter.add_mesh(
+                    pv.PolyData(grid, lines=spans),
+                    color=self._grid_colour,
+                    line_width=1,
+                    name="sketch_grid",
+                    render=False,
+                    reset_camera=False,
+                    pickable=False,
+                )
+            )
+
+        for construction in (False, True):
+            chosen = [
+                curve
+                for curve in curves
+                if curve.construction is construction and len(curve.points) > 1
+            ]
+            if chosen:
+                drawn = np.asarray(
+                    [point for curve in chosen for point in curve.points], dtype=float
+                )
+                self._sketch_actors.append(
+                    self.plotter.add_mesh(
+                        pv.PolyData(
+                            drawn,
+                            lines=polyline_spans([len(curve.points) for curve in chosen]),
+                        ),
+                        color=self._sketch_colour,
+                        line_width=1 if construction else 2,
+                        # Die zweite Kodierung neben der Strichbreite (Regel
+                        # 18): Hilfsgeometrie ist durchscheinend, und wer den
+                        # Unterschied in der Breite nicht sieht, sieht ihn hier.
+                        opacity=0.45 if construction else 1.0,
+                        name=f"sketch_{'help' if construction else 'lines'}",
+                        render=False,
+                        reset_camera=False,
+                        pickable=False,
+                    )
+                )
+
+        single = [curve.points[0] for curve in curves if len(curve.points) == 1]
+        if single:
+            self._sketch_actors.append(
+                self.plotter.add_points(
+                    np.asarray(single, dtype=float),
+                    color=self._sketch_colour,
+                    point_size=6,
+                    render_points_as_spheres=True,
+                    name="sketch_points",
+                    render=False,
+                    reset_camera=False,
+                    pickable=False,
+                )
+            )
+        self._draw()
+
+    def clear_sketch(self) -> None:
+        """Nimmt die Zeichnung wieder aus der Szene.
+
+        Der Bauraum bleibt: Er hängt an ``_frame_actors`` und gehört der
+        Ansicht, nicht dem Modus.
+        """
+        if self.plotter is not None:
+            for actor in self._sketch_actors:
+                self.plotter.remove_actor(actor, render=False)
+        self._sketch_actors.clear()
 
     def _plane_distance(self) -> float:
         """Wie weit die Kamera von der Zeichenebene wegrückt.
