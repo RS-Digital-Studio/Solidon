@@ -48,6 +48,11 @@ VERWIRFT = re.compile(
     r"git\s+(?:checkout\s+(?:--|\.|HEAD)|restore\b|reset\s+--hard\b|clean\s+-[a-z]*f)"
     r"|git\s+push\s+.*--force(?!-with-lease)"
 )
+#: Befehle, die eine Datei geschrieben haben können, ohne dass Write oder Edit
+#: es gesehen hätte — ein Skript über die Shell, ein `sed -i`, eine Umleitung.
+SCHREIBT_DATEI = re.compile(
+    r"write_text|writelines|\bsed\s+-i|>\s*\S+\.py|\btee\b|ruff\s+format(?!\s+--check)"
+)
 
 
 def nachbarsitzungen() -> list[str]:
@@ -258,7 +263,60 @@ def testlauf() -> None:
             MARKE.write_text(str(time.time()), encoding="utf-8")
         except OSError:
             pass
-    _commit_ansagen(befehl)
+    # Gesammelt und **einmal** gemeldet: Zwei ``melden``-Aufrufe schreiben zwei
+    # JSON-Objekte auf denselben Strom, und das ist keine Antwort mehr.
+    hinweise = [text for text in (_ruff_hinweis(befehl), _commit_hinweis(befehl)) if text]
+    if hinweise:
+        melden("PostToolUse", "\n\n".join(hinweise))
+
+
+def _ruff_hinweis(befehl: str) -> str:
+    """Was ruff zu den Dateien sagt, die dieser Shell-Befehl geschrieben haben
+    könnte.
+
+    **Die Lücke, die dieser Hinweis schließt, und sie ist heute zugeschnappt.**
+    :func:`nach_aenderung` prüft jede geänderte Python-Datei — aber nur, wenn
+    das Modell Write oder Edit benutzt hat. Eine Änderung über die Shell sieht
+    der Matcher ``Write|Edit`` nicht, und am 24.08.2026 kam so eine Zeile von
+    102 Zeichen ins Tor: Geprüft wurde ruff **mit Pfadangabe** auf die eine
+    Datei, die man im Kopf hatte, die zweite fiel einer Nachbarsitzung auf.
+    Zwei Sitzungen an einem Tag, dieselbe Falle — und gefangen hat sie beide
+    Male nicht Umsicht, sondern Zufall.
+
+    **Geprüft, nicht formatiert**, und das ist der Unterschied zum Hook nach
+    Write und Edit. Der kennt die eine Datei, die gerade geschrieben wurde, und
+    darf sie formatieren. Hier ist nur bekannt, dass *irgendetwas* geschrieben
+    wurde; formatiert würde also jede geänderte Datei im Baum — im geteilten
+    Arbeitsbaum wäre das ein Eingriff in die Arbeit von drei anderen Sitzungen.
+
+    Gefragt wird gegen **HEAD** und nicht gegen den Index: Im geteilten Baum
+    steht im Index der Zwischenstand fremder Sitzungen (`.claude/rules/tests.md`).
+    Und weil auch fremde Dateien in der Liste stehen, nennt der Hinweis den
+    Dateinamen — wer ihn liest, sieht selbst, ob er ihm gehört.
+    """
+    if not SCHREIBT_DATEI.search(befehl):
+        return ""
+    dateien: list[str] = []
+    for argumente in (
+        ("diff", "--name-only", "HEAD", "--", "*.py"),
+        ("ls-files", "--others", "--exclude-standard", "--", "*.py"),
+    ):
+        try:
+            lauf = subprocess.run(
+                ["git", *argumente], capture_output=True, text=True, timeout=15, cwd=WURZEL
+            )
+        except (OSError, subprocess.SubprocessError):
+            return ""
+        dateien += [zeile.strip() for zeile in lauf.stdout.splitlines() if zeile.strip()]
+    if not dateien:
+        return ""
+
+    hinweise: list[str] = []
+    for aufgabe in (("check", "--quiet"), ("format", "--check", "--quiet")):
+        schluss, ausgabe = ruff(*aufgabe, *dateien)
+        if schluss != 0 and ausgabe.strip():
+            hinweise.append(f"ruff {aufgabe[0]} meldet:\n" + ausgabe.strip()[:1200])
+    return "\n\n".join(hinweise)
 
 
 #: Wie frisch ``HEAD`` sein muss, damit der Commit als eben gelaufen gilt.
@@ -302,8 +360,13 @@ def _gerade_committet() -> bool:
         return False
 
 
-def _commit_ansagen(befehl: str) -> None:
+def _commit_hinweis(befehl: str) -> str:
     """Nach einem Commit daran erinnern, es den anderen Sitzungen zu sagen.
+
+    **Gibt den Text zurück, statt ihn zu melden**, seit :func:`testlauf` zwei
+    Hinweise haben kann (der andere ist :func:`_ruff_hinweis`): Zwei
+    ``melden``-Aufrufe schreiben zwei JSON-Objekte auf denselben Strom, und das
+    ist keine Antwort mehr.
 
     **Der Hinweis geht an die eigene Sitzung, nicht an die anderen**, und das
     ist keine Sparsamkeit, sondern eine Grenze: Ein Hook hat den Schlüssel
@@ -319,21 +382,20 @@ def _commit_ansagen(befehl: str) -> None:
     daran und nicht an jeder Änderung.
     """
     if not re.search(r"\bgit\b[^|;&]*\bcommit\b", befehl):
-        return
+        return ""
     if not _gerade_committet():
-        return
+        return ""
     andere = nachbarsitzungen()
     if not andere:
-        return
-    melden(
-        "PostToolUse",
+        return ""
+    return (
         "Es arbeiten weitere Sitzungen an diesem Projekt: "
         + ", ".join(andere)
         + ". Ein Commit ändert den gemeinsamen Stand — sag ihnen kurz, was gelandet ist "
         "und was das für ihre Dateien heißt. Welches Gebiet wer hält, steht in "
         "`python tools/session_board.py list`; die verbindliche Liste der Sitzungen gibt "
         "`/list-agents`, denn "
-        "dieser Hinweis liest internen Zustand und kann jemanden übersehen.",
+        "dieser Hinweis liest internen Zustand und kann jemanden übersehen."
     )
 
 
