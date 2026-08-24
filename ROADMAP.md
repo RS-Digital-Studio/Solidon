@@ -82,6 +82,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Additive Bausteine fehlen am Flächenklick | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | nichts — der Fix in `_applies_to` kann heute laufen und behebt Wandhalter und Nutfeder mit |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Entscheidung: ob ein Rezept in Projektdateien mitreisen darf. Regel 13 sagt heute nein, ohne zwischen Code und Daten zu trennen — Bauplanänderung, geht an Robert (Konzept Abschnitt 17) |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
+| Kein MainWindow wird mehr freigegeben | Zehn von zehn Fenstern überlebten ihr Loslassen (24.08.2026) | eine Diagnose — wer hält die Referenz? Der Punkt „Kein Viewport wird jemals freigegeben“ ist abgehakt und seine Aussage überholt; diese hier ist neu und gemessen |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
@@ -9394,3 +9395,33 @@ Arbeitspakete, die Grenzen und die eine Entscheidung stehen dort.
   Kunden reißt und bei uns nie. Der Umbau ist, eigene Bausteine in Katalog und
   Befehlspalette zu führen statt in der Menüleiste; das gilt für die heutigen
   Python-Bausteine genauso.
+
+---
+
+## Zehn von zehn Fenstern überlebten ihr Loslassen (24.08.2026)
+
+`tests/test_widget_lifetime.py::test_a_released_widget_is_actually_released`
+ist auf `main` rot, und zwar in der Ausprägung `MainWindow`: **10 von 10
+überlebten ihr Loslassen**, bei 40 grünen Klassen daneben. Gemessen am
+24.08.2026 von zwei Sitzungen unabhängig — einmal im geteilten Arbeitsbaum,
+einmal in einem eigenen Baum auf `230e498` ohne fremde Änderungen. Es ist
+keine der laufenden Arbeiten.
+
+**Warum das ein eigener Punkt ist und kein Wiederaufmachen.** Der Punkt „Kein
+Viewport wird jemals freigegeben" steht abgehakt in dieser Datei und trägt
+seit dem 23.08.2026 den Vermerk „überholt, nicht erledigt — der Test prüft
+`Viewport` und `MainWindow` und ist grün, seit er 41 Klassen baut statt 14".
+Genau diese Zusage hält nicht mehr. Der alte Eintrag bleibt, wie er ist; seine
+Geschichte gehört zu ihm.
+
+**Alle zehn, nicht einige.** Das unterscheidet den Fall von den Messungen, die
+damals danebenstanden (vier von fünfzehn, zwei von fünfzehn). Wo jede einzelne
+Instanz überlebt, wartet niemand auf einen Zufall — da hält etwas fest, und
+zwar immer.
+
+- [ ] **Wer hält das Fenster?** Erst die Referenz finden, dann urteilen:
+  `gc.get_referrers` auf eine der überlebenden Instanzen, und die Kette bis zu
+  dem Objekt verfolgen, das nicht sterben will. Erst danach ist zu entscheiden,
+  ob es ein Fehler ist oder eine Abnahme, die zu eng geworden ist — die
+  Erfahrung dieses Projekts kennt beide Ausgänge, und der Test selbst ist
+  einmal die Ursache gewesen.
