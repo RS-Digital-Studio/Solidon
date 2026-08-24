@@ -19,10 +19,34 @@ Kreis, dann geschieht nichts, und beim zweiten steht plötzlich eine Linie da.
 
 **Gefangen wird auf das Raster, ein vorhandener Punkt schlägt es.** Sonst risse
 der Fang die Deckung auf, für die er da ist. Der Haken steht an der
-Ebenenzeile, an ist die Vorgabe, ein Millimeter die Weite; ein Kreuz am Zeiger
-zeigt, wohin ein Klick fiele — gefangen wird feiner, als das Raster gezeichnet
-ist. Derselbe Fang gilt beim Ziehen eines Punktes, sonst wäre er eine Zusage
+Ebenenzeile, an ist die Vorgabe; ein Kreuz am Zeiger zeigt, wohin ein Klick
+fiele. Derselbe Fang gilt beim Ziehen eines Punktes, sonst wäre er eine Zusage
 bis zum ersten Nachbessern.
+
+**Und es ist dasselbe Raster, das im Bild steht — eine Zahl für beides.** Hier
+stand bis zum 24.08.2026 das Gegenteil („gefangen wird feiner, als das Raster
+gezeichnet ist"), und das war nicht bloß eine Beschreibung, sondern der
+Zustand: gezeichnet wurden 5 mm, gefangen wurde auf 1 mm, und gemessen landeten
+vier von vier Klicks zwischen zwei sichtbaren Linien — (7,3 | −4,8) fiel auf
+(7,0 | −5,0). Das Kästchen heißt „Am Raster fangen" und hat damit etwas
+versprochen, das nicht eintrat.
+
+`SketchPanel.follow_grid` nimmt deshalb die Weite, die `_redraw_sketch` gerade
+gezeichnet hat, und gibt sie an Canvas **und** Feld. Zwei Dinge hängen daran:
+
+* **Eine eingetippte Weite bleibt stehen** (`_pinned_step`). Danach folgt
+  umgekehrt das Raster ihr — eine Zahl bleibt es in beiden Richtungen. Ohne
+  die Unterscheidung überschriebe der nächste Zoomschritt jede Eingabe.
+* **Das Setzen läuft unter `QSignalBlocker`.** `setValue` feuert
+  `valueChanged`, und das hieße hier „der Nutzer hat etwas eingetippt": Der
+  **erste** Zoomschritt hätte die Weite für immer festgenagelt.
+
+**Gemessen wird erst, wenn es ein Bild gibt** (`LEAST_VIEW_PIXELS` in
+`viewport.py`). Beim Aufbau meldet Qt für ein Widget ohne fertiges Layout
+100 mal 30 Bildpunkte; daran rechnete `pixels_per_mm` 0,28 aus, was ein Raster
+von 100 mm ergab — und da der Fang jetzt dieselbe Zahl nimmt, landeten drei
+Klicks dreimal auf (0 | 0). Deshalb zieht `start_sketch` die Weite über einen
+`QTimer.singleShot(0, …)` nach, sobald das Layout steht.
 
 **Raster und Beschriftung folgen dem Maßstab** (`grid_step`, Folge 1, 2, 5),
 und das Rad zoomt auf den Zeiger. Eine feste Weite ist herausgezoomt eine

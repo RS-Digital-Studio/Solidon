@@ -142,7 +142,6 @@
   "Auf einer Fläche des Körpers — die Schichtrichtung folgt ihrer Neigung.": "On a face of the body — the layer direction follows its tilt.",
   "Auf einer der drei Grundebenen zeichnen": "Draw on one of the three base planes",
   "Auf so viele Platten passt das nicht — eine mehr würde helfen.": "That does not fit on this many plates — one more would help.",
-  "Auf welche Weite ein Klick fällt.": "Which spacing a click falls on.",
   "Auf welche erkannte Fläche das Bild gelegt wird. Nur für „Auf eine Fläche“ — die anderen Arten brauchen keine.": "Which detected face the image is laid onto. Only for “Onto a face” — the other kinds need none.",
   "Auf wie viele Farben umgerechnet wird — so viele, wie eingelegt sind.": "How many colours to reduce to — as many as are loaded.",
   "Aufblasen": "Inflate",
@@ -1569,7 +1568,6 @@
   "Kleinstteile löschen": "Delete stray fragments",
   "Kleinstteile wurden gelöscht.": "Stray fragments were deleted.",
   "Klemmspalt": "Clamping gap",
-  "Klicks fallen auf die eingestellte Weite. Vorhandene Punkte fangen weiterhin vor.": "Clicks fall on the spacing you set. Existing points still snap first.",
   "Klicks im Modell malen den gewählten Slot.": "Clicks in the model paint the chosen slot.",
   "Klotz": "Block",
   "Kneifen": "Pinch",
@@ -2991,5 +2989,7 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "skipped — the mesh is too large for this turn, the analysis map in the window can handle it.",
   "— keines —": "— none —",
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” shows what is available.",
-  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "“{step}” turned the exact body into a mesh — exact-kernel operations only work before it. Undo the steps from there, apply this operation, and redo the rest."
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "“{step}” turned the exact body into a mesh — exact-kernel operations only work before it. Undo the steps from there, apply this operation, and redo the rest.",
+  "Klicks fallen auf das Raster, das im Bild steht. Vorhandene Punkte fangen vor.": "Clicks fall onto the grid you see. Existing points still take priority.",
+  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "The grid spacing — the same number a click falls onto. Without an entry it follows the zoom; a spacing you type stays put."
 }

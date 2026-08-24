@@ -20,7 +20,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
-from PySide6.QtCore import QPoint, QPointF, Qt, Signal
+from PySide6.QtCore import QPoint, QPointF, QSignalBlocker, Qt, Signal
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QPen, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -2685,17 +2685,26 @@ class SketchPanel(QWidget):
         self.snap_toggle = QCheckBox(tr("Am Raster fangen"), self)
         self.snap_toggle.setChecked(self.canvas.snapping)
         self.snap_toggle.setToolTip(
-            tr("Klicks fallen auf die eingestellte Weite. Vorhandene Punkte fangen weiterhin vor.")
+            tr("Klicks fallen auf das Raster, das im Bild steht. Vorhandene Punkte fangen vor.")
         )
         self.snap_step = LengthSpin(self)
         self.snap_step.set_range_mm(0.05, 100.0)
         self.snap_step.set_step_mm(0.5)
         self.snap_step.set_value_mm(self.canvas.snap_step)
-        self.snap_step.setToolTip(tr("Auf welche Weite ein Klick fällt."))
+        self.snap_step.setToolTip(
+            tr(
+                "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne "
+                "Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen."
+            )
+        )
         self.snap_step.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.snap_step.setAccessibleName(tr("Raster"))
+        #: Ob der Nutzer die Weite selbst eingestellt hat. Solange nicht, folgt
+        #: sie dem Zoom (:func:`grid_step_for`); danach steht sie. Ohne diese
+        #: Unterscheidung überschriebe der nächste Zoomschritt jede Eingabe.
+        self._pinned_step = False
         self.snap_toggle.toggled.connect(self._snapping_changed)
-        self.snap_step.valueChanged.connect(self._snapping_changed)
+        self.snap_step.valueChanged.connect(self._step_typed)
         self._snapping_changed()
         plane_row.addWidget(self.snap_toggle)
         plane_row.addWidget(self.snap_step)
@@ -3226,6 +3235,39 @@ class SketchPanel(QWidget):
         active = self.snap_toggle.isChecked()
         self.snap_step.setEnabled(active)
         self.canvas.set_snapping(active, self.snap_step.value_mm())
+
+    def _step_typed(self) -> None:
+        """Eine eingetippte Weite bleibt stehen, auch beim Zoomen."""
+        self._pinned_step = True
+        self._snapping_changed()
+
+    def follow_grid(self, step: float) -> None:
+        """Die Rasterweite übernehmen — als Fangweite und als Anzeige.
+
+        **Der Fang ist das Raster, und zwar dasselbe, das im Bild steht.**
+        Vorher waren es zwei Zahlen: gezeichnet wurden 5 mm, gefangen wurde
+        auf 1 mm, und vier von vier Klicks landeten zwischen zwei sichtbaren
+        Linien. Das Kästchen heißt „Am Raster fangen" und hat damit etwas
+        versprochen, das nicht eintrat.
+
+        Wer eine Weite eintippt, behält sie (``_pinned_step``) — dann folgt
+        umgekehrt das **Raster** ihr, und die beiden bleiben trotzdem eine
+        Zahl. Ohne Eingabe folgen beide dem Zoom, damit das Raster lesbar
+        bleibt.
+
+        Das Signal wird dabei angehalten: ``setValue`` löst ``valueChanged``
+        aus, und das hieße hier „der Nutzer hat etwas eingetippt" — der erste
+        Zoomschritt hätte die Weite für immer festgenagelt.
+        """
+        if self._pinned_step or step <= 0.0:
+            return
+        with QSignalBlocker(self.snap_step):
+            self.snap_step.set_value_mm(step)
+        self.canvas.set_snapping(self.snap_toggle.isChecked(), step)
+
+    def snap_is_pinned(self) -> bool:
+        """Ob die Weite von Hand steht — für Tests und für die Zeile."""
+        return self._pinned_step
 
     def constraint_offers(self) -> dict[SketchConstraintKind, bool]:
         """Welche Bedingung zur Auswahl passt — Kontextmenü und Knöpfe lesen

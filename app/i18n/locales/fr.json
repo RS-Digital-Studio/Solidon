@@ -142,7 +142,6 @@
   "Auf einer Fläche des Körpers — die Schichtrichtung folgt ihrer Neigung.": "Sur une face du corps — la direction des couches suit son inclinaison.",
   "Auf einer der drei Grundebenen zeichnen": "Dessiner sur l'un des trois plans de base",
   "Auf so viele Platten passt das nicht — eine mehr würde helfen.": "Cela ne tient pas sur ce nombre de plaques — un de plus aiderait.",
-  "Auf welche Weite ein Klick fällt.": "Sur quel pas retombe un clic.",
   "Auf welche erkannte Fläche das Bild gelegt wird. Nur für „Auf eine Fläche“ — die anderen Arten brauchen keine.": "Sur quelle face détectée l'image est posée. Uniquement pour « Sur une face » — les autres modes n'en ont pas besoin.",
   "Auf wie viele Farben umgerechnet wird — so viele, wie eingelegt sind.": "En combien de couleurs convertir — autant qu'il y en a de chargées.",
   "Aufblasen": "Gonfler",
@@ -1569,7 +1568,6 @@
   "Kleinstteile löschen": "Supprimer les fragments parasites",
   "Kleinstteile wurden gelöscht.": "Les fragments parasites ont été supprimés.",
   "Klemmspalt": "Fente de serrage",
-  "Klicks fallen auf die eingestellte Weite. Vorhandene Punkte fangen weiterhin vor.": "Les clics tombent sur l'espacement réglé. Les points existants accrochent toujours en premier.",
   "Klicks im Modell malen den gewählten Slot.": "Les clics dans le modèle peignent l'emplacement choisi.",
   "Klotz": "Pavé",
   "Kneifen": "Pincer",
@@ -2991,5 +2989,7 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "ignoré — le maillage est trop grand pour ce tour, la carte d'analyse dans la fenêtre y arrive.",
   "— keines —": "— aucun —",
   "„profiles“ zeigt, was zur Auswahl steht.": "« profiles » montre ce qui est disponible.",
-  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "« {step} » a transformé le corps exact en maillage — les opérations du noyau exact ne fonctionnent qu'avant. Annulez les étapes à partir de là, appliquez cette opération, puis refaites le reste."
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "« {step} » a transformé le corps exact en maillage — les opérations du noyau exact ne fonctionnent qu'avant. Annulez les étapes à partir de là, appliquez cette opération, puis refaites le reste.",
+  "Klicks fallen auf das Raster, das im Bild steht. Vorhandene Punkte fangen vor.": "Les clics tombent sur la grille visible. Les points existants restent prioritaires.",
+  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "Le pas de la grille — le même chiffre sur lequel tombe un clic. Sans saisie, il suit le zoom ; un pas saisi reste en place."
 }

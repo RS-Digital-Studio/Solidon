@@ -211,6 +211,19 @@ def camera_for_plane(frame: PlaneFrame, distance: float = 1.0) -> tuple[Vec3, Ve
 #: der Nutzer eingestellt hat.
 LEAST_PLANE_DISTANCE = 200.0
 
+#: Ab welcher Kantenlänge das Bild groß genug ist, um daran zu messen.
+#:
+#: Beim Aufbau meldet Qt für ein Widget ohne fertiges Layout **100 mal 30** — das
+#: ist sein Startwert und kein Bild. ``pixels_per_mm`` rechnete daran 0,28
+#: Bildpunkte je Millimeter aus, was ein Raster von 100 mm ergab; da der Fang
+#: seit dem 24.08.2026 dieselbe Zahl nimmt, landete jeder Klick auf demselben
+#: Rasterpunkt. Gemessen: drei Klicks, dreimal (0 | 0).
+#:
+#: Zweihundert, weil darunter kein Ausschnitt steht, in dem man zeichnet — und
+#: weil der Startwert mit 100 sicher darunter liegt. Wer sein Fenster wirklich
+#: so klein zieht, bekommt den Rückfallwert statt einer absurden Zahl.
+LEAST_VIEW_PIXELS = 200
+
 #: Der Maßstab, der gilt, wenn keiner zu messen ist — Bildpunkte je Millimeter.
 #:
 #: Dieselbe Zahl, die die Zeichenfläche als Startwert führt
@@ -5211,6 +5224,15 @@ class Viewport(QWidget):
         """
         if self.plotter is None:
             return FALLBACK_SCALE
+        # **Erst messen, wenn es etwas zu messen gibt.** Solange das Layout
+        # nicht steht, meldet Qt die Startgröße eines Widgets (100 mal 30), und
+        # die Projektion daran ist keine Aussage über das Bild, das der Nutzer
+        # sieht. Siehe :data:`LEAST_VIEW_PIXELS`.
+        interactor = getattr(self.plotter, "interactor", None)
+        if interactor is not None:
+            size = interactor.size()
+            if min(size.width(), size.height()) < LEAST_VIEW_PIXELS:
+                return FALLBACK_SCALE
         renderer = self.plotter.renderer
         here = to_world(frame, (0.0, 0.0))
         there = to_world(frame, (1.0, 0.0))

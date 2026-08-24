@@ -142,7 +142,6 @@
   "Auf einer Fläche des Körpers — die Schichtrichtung folgt ihrer Neigung.": "Numa face do corpo — a direção das camadas segue a sua inclinação.",
   "Auf einer der drei Grundebenen zeichnen": "Desenhar num dos três planos base",
   "Auf so viele Platten passt das nicht — eine mehr würde helfen.": "Isto não cabe neste número de placas — mais uma ajudaria.",
-  "Auf welche Weite ein Klick fällt.": "Em que espaçamento cai um clique.",
   "Auf welche erkannte Fläche das Bild gelegt wird. Nur für „Auf eine Fläche“ — die anderen Arten brauchen keine.": "Sobre que face detetada a imagem é colocada. Só para «Sobre uma face» — os outros modos não precisam de nenhuma.",
   "Auf wie viele Farben umgerechnet wird — so viele, wie eingelegt sind.": "Para quantas cores se reduz — tantas quantas estiverem colocadas.",
   "Aufblasen": "Inflar",
@@ -1569,7 +1568,6 @@
   "Kleinstteile löschen": "Eliminar fragmentos soltos",
   "Kleinstteile wurden gelöscht.": "Os fragmentos soltos foram eliminados.",
   "Klemmspalt": "Fenda de aperto",
-  "Klicks fallen auf die eingestellte Weite. Vorhandene Punkte fangen weiterhin vor.": "Os cliques caem no espaçamento definido. Os pontos existentes continuam a atrair primeiro.",
   "Klicks im Modell malen den gewählten Slot.": "Cliques no modelo pintam o slot escolhido.",
   "Klotz": "Paralelepípedo",
   "Kneifen": "Beliscar",
@@ -2991,5 +2989,7 @@
   "übersprungen — das Netz ist zu groß für den Zug, die Analysekarte im Fenster kann es.": "ignorado — a malha é demasiado grande para esta vez; o mapa de análise na janela consegue.",
   "— keines —": "— nenhum —",
   "„profiles“ zeigt, was zur Auswahl steht.": "“profiles” mostra o que está disponível.",
-  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» transformou o corpo exato numa malha — as operações do núcleo exato só funcionam antes. Anule os passos a partir daí, aplique esta operação e refaça o resto."
+  "„{step}“ hat aus dem exakten Körper ein Netz gemacht — Operationen des exakten Kerns gehen nur davor. Die Schritte ab dort zurücknehmen, diese Operation anwenden und den Rest neu setzen.": "«{step}» transformou o corpo exato numa malha — as operações do núcleo exato só funcionam antes. Anule os passos a partir daí, aplique esta operação e refaça o resto.",
+  "Klicks fallen auf das Raster, das im Bild steht. Vorhandene Punkte fangen vor.": "Os cliques caem na grelha que se vê. Os pontos existentes continuam a ter prioridade.",
+  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "O passo da grelha — o mesmo número em que um clique cai. Sem indicação segue o zoom; um passo escrito mantém-se."
 }

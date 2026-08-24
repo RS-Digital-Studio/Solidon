@@ -2803,3 +2803,95 @@ def test_every_sketch_shortcut_is_named_somewhere_on_screen(qt_app: QApplication
         )
     finally:
         window.deleteLater()
+
+
+def test_the_snap_step_is_the_grid_that_is_drawn(qt_app: QApplication) -> None:
+    """Eine Zahl für beides — was man sieht, darauf fällt der Klick.
+
+    Vorher waren es zwei: Gezeichnet wurden 5 mm, gefangen wurde auf 1 mm, und
+    gemessen landeten vier von vier Klicks zwischen zwei sichtbaren Linien
+    ((7,3 | −4,8) → (7,0 | −5,0)). Das Kästchen heißt „Am Raster fangen" und
+    hat damit etwas versprochen, das nicht eintrat. Robert am 24.08.2026: „das
+    fang sollte immer das raster sein."
+
+    Geprüft wird ohne Plotter, also über ``follow_grid`` selbst — offscreen
+    gibt es keine Kamera, an der ein Maßstab zu messen wäre (Entscheidung G).
+    Dass die Weite im Fenster wirklich ankommt, prüft der Test darunter.
+    """
+    panel = SketchPanel()
+    try:
+        assert panel.snap_toggle.isChecked(), "an ist die Vorgabe"
+        assert not panel.snap_is_pinned(), "ohne Eingabe folgt die Weite dem Zoom"
+
+        for step in (5.0, 1.0, 20.0):
+            panel.follow_grid(step)
+            assert panel.canvas.snap_step == pytest.approx(step), (
+                "der Fang nimmt die Weite des gezeichneten Rasters"
+            )
+            assert panel.snap_step.value_mm() == pytest.approx(step), (
+                "und das Feld zeigt dieselbe Zahl"
+            )
+
+        # **Eine eingetippte Weite bleibt stehen.** Sonst nähme ihr der nächste
+        # Zoomschritt die Wirkung, und das Feld wäre eine Anzeige, die aussieht
+        # wie eine Einstellung.
+        panel.snap_step.setValue(2.0)
+        assert panel.snap_is_pinned()
+        panel.follow_grid(50.0)
+        assert panel.canvas.snap_step == pytest.approx(2.0), "die Eingabe gewinnt"
+        assert panel.snap_step.value_mm() == pytest.approx(2.0)
+    finally:
+        panel.deleteLater()
+
+
+def test_following_the_grid_does_not_look_like_typing(qt_app: QApplication) -> None:
+    """``setValue`` feuert ``valueChanged`` — und das hieße „eingetippt".
+
+    Ohne den Signalblocker in ``follow_grid`` hätte der **erste** Zoomschritt
+    die Weite für immer festgenagelt: Er setzt das Feld, das Feld meldet eine
+    Änderung, und der Slot deutet sie als Eingabe des Nutzers. Danach folgte
+    nichts mehr dem Raster.
+    """
+    panel = SketchPanel()
+    try:
+        panel.follow_grid(5.0)
+        panel.follow_grid(2.0)
+        assert not panel.snap_is_pinned(), (
+            "zweimal dem Raster gefolgt ist keine Eingabe des Nutzers"
+        )
+        assert panel.canvas.snap_step == pytest.approx(2.0)
+    finally:
+        panel.deleteLater()
+
+
+def test_the_window_hands_the_grid_step_to_the_canvas(qt_app: QApplication) -> None:
+    """Die Anwendung tut es, nicht bloß die Methode.
+
+    ``follow_grid`` allein zu prüfen sagt nichts darüber, ob jemand sie ruft —
+    und genau daran hing es: Die Weite entsteht in ``_redraw_sketch`` aus dem
+    Kameramaßstab, und ohne die Weitergabe blieben Raster und Fang zwei Zahlen.
+
+    Offscreen gibt es kein Bild, an dem sich ein Maßstab messen ließe; dann
+    steht der Rückfallwert, und aus ihm folgt eine bestimmte Rasterweite. Genau
+    die muss im Canvas ankommen — sonst hat die Kette ein Loch.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+    from app.ui.sketch_editor import grid_step_for
+    from app.ui.viewport import FALLBACK_SCALE
+
+    erwartet = grid_step_for(FALLBACK_SCALE)
+    assert erwartet > 0.0, "ohne eine Weite prüft dieser Test nichts"
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_extrude")
+        panel = window._sketch_panel
+        assert panel is not None
+        assert panel.canvas.snap_step == pytest.approx(erwartet), (
+            "die Weite aus dem Fenster kommt im Canvas an"
+        )
+        assert panel.snap_step.value_mm() == pytest.approx(erwartet), "und steht sichtbar im Feld"
+    finally:
+        window.deleteLater()

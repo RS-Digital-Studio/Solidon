@@ -4136,6 +4136,13 @@ class MainWindow(QMainWindow):
             # Einmal schwenken, beim Betreten. Danach nie wieder von selbst:
             # Wer beim Zeichnen dreht, soll gedreht bleiben.
             self.viewport.view_on_plane(frame)
+            # **Und die Rasterweite einmal nachziehen, wenn das Layout steht.**
+            # Hier ist der Viewport noch 100 mal 30 groß — Qts Startwert für ein
+            # Widget ohne fertiges Layout —, und daran gemessen käme ein Raster
+            # von 100 mm heraus. ``pixels_per_mm`` fängt das ab und gibt seinen
+            # Rückfallwert; der stimmt aber auch nicht, sobald das Fenster steht.
+            # Ein Durchlauf der Ereignisschlange später ist die Größe echt.
+            QTimer.singleShot(0, self._redraw_sketch)
         # Ab jetzt trifft ein Klick die Ebene und nicht die Szene.
         self.viewport.set_sketching(frame)
         panel.plane_choice.currentIndexChanged.connect(self._sketch_plane_changed)
@@ -4252,6 +4259,18 @@ class MainWindow(QMainWindow):
         # heraus, während auf 1 mm gefangen wurde: zwei Zahlen für
         # dieselbe Sache, und die sichtbare war die falsche.
         step = grid_step_for(self.viewport.pixels_per_mm(frame))
+        # **Und der Fang bekommt dieselbe Zahl.** Robert am 24.08.2026: „das
+        # fang sollte immer das raster sein." Vorher waren es zwei — gezeichnet
+        # 5 mm, gefangen auf 1 mm, und gemessen landeten vier von vier Klicks
+        # zwischen zwei sichtbaren Linien. Das Kästchen heißt „Am Raster
+        # fangen"; es hat damit etwas versprochen, das nicht eintrat.
+        #
+        # ``follow_grid`` übernimmt die Weite nur, solange niemand sie
+        # eingetippt hat. Danach steht sie, und das Raster folgt umgekehrt ihr
+        # — eine Zahl bleibt es in beiden Richtungen.
+        panel.follow_grid(step)
+        if panel.snap_is_pinned():
+            step = panel.snap_step.value_mm()
         self.viewport.show_sketch(kurven, frame, step, SKETCH_GRID_REACH)
 
     def finish_sketch(self, keep: bool = True) -> None:
