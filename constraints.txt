@@ -30,6 +30,7 @@ cycler==0.12.1
 cyclopts==4.22.5
 Cython==3.2.9
 docstring_parser==0.18.0
+execnet==2.1.2
 fast_simplification==0.2.0
 fonttools==4.63.0
 idna==3.18
@@ -67,6 +68,7 @@ PySide6_Addons==6.11.1
 PySide6_Essentials==6.11.1
 pytest==9.1.1
 pytest-forked==1.7.5
+pytest-xdist==3.8.0
 python-dateutil==2.9.0.post0
 pyvista==0.48.4
 pyvistaqt==0.12.0

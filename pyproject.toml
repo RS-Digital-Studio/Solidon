@@ -75,6 +75,18 @@ dev = [
   # füllt den Speicher des Runners. Ein Fork löst beides, weil er mit dem
   # Test endet. MIT, reine Testabhängigkeit.
   "pytest-forked>=1.6",
+  # Verteilt den Rest der Suite auf mehrere Prozesse (`-n`). Gebraucht von
+  # `.claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh`, das
+  # alles ohne Qt in einem Zug fährt — seriell 175 s, mit acht Prozessen 66 s.
+  # Die Fenstergruppe bekommt es ausdrücklich nicht: dort stirbt ein Worker und
+  # reißt den ganzen Lauf mit einem `INTERNALERROR` ab.
+  #
+  # Stand hier bis zum 24.08.2026 nicht, obwohl das Skript es seit Langem ruft.
+  # Wer es nicht zufällig installiert hatte, bekam `unrecognized arguments: -n`
+  # — und das Tor zählte den ausgefallenen Lauf als *einen* Fehlschlag unter
+  # dreien, statt zu sagen, dass 3554 Tests gar nicht erst liefen. MIT, reine
+  # Testabhängigkeit; zieht execnet nach (ebenfalls MIT).
+  "pytest-xdist>=3.6",
   "ruff>=0.6",
   "mypy>=1.11",
   # Wertet Umgebungsmarker für die Lizenzprüfung aus.
