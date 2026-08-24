@@ -109,8 +109,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
 | Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
 | Der Zahlungsanbieter steht namentlich da, ohne Vertrag | Was erst am Verkaufsstart fällig wird (24.08.2026) | **eine Entscheidung von Robert** (vorgelegt am 23.08.2026): `datenschutz.html` nennt Paddle mit voller Anschrift und führt es als Empfänger personenbezogener Daten samt Drittlandsbegründung — ein Konto gibt es mangels Gewerbeanmeldung nicht. Name stehen lassen (dann stimmt der Text am Starttag) oder bis dahin durch „der Zahlungsdienstleister“ ersetzen (dann stimmt er heute). Der zeitliche Vorbehalt ist seit `5950321` drin, die Namensfrage bleibt |
-| Ein Nichtlauf zählt wie ein Fehllauf | Ein Tor, das nicht durchfiel und trotzdem die halbe Prüfung ausließ (24.08.2026) | eine Änderung an `suite-getrennt.sh:145` — nichts von außen. `zaehlt_als_fehler` erhöht die Zahl um eins, gleich ob eine Fensterdatei rot ist oder die Sammelgruppe mit 3554 Tests nie anlief |
-| Exit 5 käme als grün durch | Ein Tor, das nicht durchfiel und trotzdem die halbe Prüfung ausließ (24.08.2026) | dieselbe Änderung. Zeile 149 wertet „keine Tests gesammelt“ pauschal als keinen Fehler; für die Sammelgruppe hieße das „Läufe mit Fehler: 0“. Aus dem Code gelesen, nicht gemessen |
+| Offscreen prüft nichts, was am Aktor hängt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine **Messstelle**, die im echten Fenster läuft, und eine Entscheidung, welche Zusagen dort geprüft werden müssen. `Viewport.show_scene` kehrt bei `self.plotter is None` vor dem Aktor-Aufbau zurück (`app/ui/viewport.py:1948`), und `tests/conftest.py` setzt `QT_QPA_PLATFORM=offscreen` für die ganze Suite — jede Zusage über Aktoren, Farben, Kamerastellung oder Bildinhalt ist dort grün über einer leeren Menge. Belegt am 24.08.: `_actors` war vor **und** nach einer Operation `{}`; mit sichtbarem Fenster wanderten dieselben Aktoren von (-10..10) auf (-104..-84, 84..104, 0..20) |
+| Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine Entscheidung, ob ein Prüfstand `report_error` abschalten darf. Ein Fehler öffnet dort einen modalen Dialog: Der Hauptthread stand, die Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu unterscheiden — der Traceback lag still unter `%LOCALAPPDATA%\RS Digital\Solidon3D\reports\bericht-<zeitstempel>\bericht.txt` |
+| Zwei Kernfunktionen sind in der Oberfläche nachgebaut | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | eine Sitzung, die `app/ui/sketch_editor.py` hält. `flat_offsets` (373) ist wortgleich `edit.offsets_of`, `_flat_points` (383) wortgleich `edit.flat_points`, und `from app.core.sketch import edit` steht in Zeile 48 schon da — elf Aufrufstellen, `Point2` ist `tuple[float, float]`. `formwerk-9e` nimmt es in ihr Canvas-Paket mit |
+| Gehört „positive“ in `_RANGE_CONSTRAINTS`? | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | eine **fachliche Entscheidung** über einen Oberflächentext, keine Aufräumarbeit. „Dieses Maß muss größer als null sein“ bekommt heute den Titel „Die Eingabe war so nicht verwendbar.“ statt „Ein Wert liegt außerhalb des zulässigen Bereichs.“ — und es *ist* eine Bereichsverletzung. Betrifft alle sechzehn Aufrufstellen von `require_positive` |
+| 85 weitere Texte stehen mehrfach wortgleich im Quelltext | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Vier Fälle in `app/ui/main_window.py` sind es wert, wenn dort ohnehin jemand arbeitet: „Bitte zuerst ein Objekt auswählen.“ (4×) und „Dafür braucht es einen Körper in der Szene.“ (4×) |
 
 ---
 
@@ -8439,7 +8442,7 @@ Frage.
       passed und 23 skipped in 61 s. Dieselben Tests seriell: 267 s — das ist
       der Grund, warum das Skript `-n` überhaupt will.
 
-- [ ] **Ein Nichtlauf zählt wie ein Fehllauf.** `zaehlt_als_fehler`
+- [x] **Ein Nichtlauf zählt wie ein Fehllauf.** `zaehlt_als_fehler`
       (`suite-getrennt.sh:145`) erhöht `fails` um eins, gleich ob eine
       Fensterdatei mit drei roten Tests endet oder die Sammelgruppe mit 3554
       Tests gar nicht erst anläuft. Der Schlussbericht nennt nur eine Zahl,
@@ -8449,10 +8452,197 @@ Frage.
       Aussagekraft des ganzen Laufs aufhebt, statt sie um ein Drittel zu
       mindern.
 
-- [ ] **Exit 5 wäre derselbe Fall und käme als grün durch.** Zeile 149 wertet
+- [x] **Exit 5 wäre derselbe Fall und käme als grün durch.** Zeile 149 wertet
       „keine Tests gesammelt" pauschal als keinen Fehler. Für eine einzelne
       Fensterdatei ist das richtig; für die Sammelgruppe hieße es, dass 3554
       Tests nicht gesammelt wurden, und das Tor meldete „Läufe mit Fehler: 0".
       Gemessen ist dieser Fall nicht — er steht hier, weil der heutige zeigt,
       dass die Zählung nicht zwischen „nichts gefunden" und „nichts gelaufen"
       unterscheidet.
+
+**Beide behoben in `3916cb1f`, und zwar anders als hier vorgeschlagen** (von
+formwerk-20 am 24.08.2026 am Code nachgeprüft und nachgetragen, weil die
+schreibende Sitzung nicht mehr erreichbar war). Nicht die *Zählung* wurde
+geändert, sondern der *Bericht*: `zaehlt_als_fehler` erhöht `fails` weiterhin
+nur um eins, und `[ "$status" -eq 5 ] && return 1` steht unverändert in Zeile
+174. Dafür schreibt das Skript jetzt die Zusammenfassungszeile der
+Sammelgruppe eigens hin (`Sammelgruppe: 3554 passed, 23 skipped in 58.61s`),
+und fehlt sie, stehen drei `!!`-Zeilen da: „kein einziger Test ohne Qt wurde
+ausgeführt … sagt nichts über den Code."
+
+Das löst beide Punkte, weil bei Exit 5 keine „N passed"-Zeile entsteht — der
+Fall ist also sichtbar, ohne dass die Zahl ihn zählt. Und es ist der bessere
+Weg: Eine Zahl, die Nichtlauf und Fehllauf verschieden gewichtet, müsste
+gewichten *können*; eine Zeile, die den Umfang des Laufs nennt, muss nur
+dastehen. Wer sie einmal gelesen hat, sieht beim nächsten Mal, wenn statt 3554
+plötzlich 120 dort steht — und das ist bei Aufräumarbeit der wahrscheinlichere
+Schaden als ein roter Test.
+
+## Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026)
+
+Ein Durchgang durch `app/core` mit der Frage, was aufzuräumen ist — 159 Dateien,
+60 870 Zeilen. Das Ergebnis vorweg, weil es das eigentliche ist: **Fast nichts.**
+Kein toter Code (die fünf Kandidaten, die eine Textsuche findet, sind alle über
+`@register_op` oder `@register_part` registriert und damit nur textuell
+unsichtbar). Keine Kante aus dem Kern in die Oberfläche. Keine Funktion über
+McCabe-Komplexität 12. Kein einziges `TODO`, `FIXME`, `HACK` oder `XXX` in `app/`
+und `tools/`. Keine überflüssige `type: ignore` — `strict = true` schaltet
+`warn_unused_ignores` ein, und mypy ist grün, also gibt es sie nicht.
+
+Die vier Import-Kreise, die eine Graphanalyse meldet, sind alle zur Laufzeit
+gebrochen oder mit Begründung offen: `geom.mesh ↔ export.threemf` läuft über
+`TYPE_CHECKING` und einen Funktionsimport, beide mit Kommentar daneben;
+`activation` und `knowledge.parts` stehen als bekannte Fälle in
+`test_core_isolation.py`. **Die erste Messung war hier falsch** und hätte einen
+Fund gemeldet, den es nicht gibt: Ein Skript, das `TYPE_CHECKING`-Importe wie
+echte zählt, sieht Kreise, die zur Laufzeit keine sind. Wer Architektur
+vermisst, muss den Unterschied kennen.
+
+Geblieben sind fünf Doppelungen. Vier davon hätten irgendwann geschadet, eine
+hatte schon geschadet.
+
+- [x] **Dieselbe Rotationsmatrix in zwei Modulen** (`8d828a12`).
+      `_rotation_to_down` lag byte-identisch in `geom/orient.py` und
+      `slice/orientation.py`, siebzehn Zeilen, einmal mit Docstring und einmal
+      ohne. Der Import war die ganze Zeit offen — `slice/orientation.py` holt
+      `candidates` seit je aus demselben Modul. Jetzt öffentlich als
+      `rotation_to_down`. 93 Tests.
+
+- [x] **Fünf von sechs Nullprüfungen sagten nicht, was sie prüften**
+      (`ee75d0d7`). „Dieses Maß muss größer als null sein." stand sechsmal in
+      vier Dateien; die private Hilfe in `sketch/shapes.py` setzte
+      `constraint="positive"`, die fünf ausgeschriebenen nicht. Jetzt
+      `require_positive` in `errors.py`, sechzehn Aufrufstellen, der Satz
+      einmal. **Das ist die Doppelung, die schon geschadet hatte:** Zwei der
+      fünf prüften mehrere Maße in *einer* Bedingung und nannten dann immer das
+      erste — wer bei einem Gitter `wall` auf null setzte, bekam `cell`
+      markiert und suchte am falschen Eingabefeld. 342 Tests.
+
+- [x] **Zwei Parametertexte, zwanzigmal geschrieben** (`b7f73b2d`). „Wie das
+      Objekt im Baum heißt…" zehnmal, „Null heißt: Wert aus dem kalibrierten
+      Materialprofil." elfmal. Jetzt `NAME_DOC` und `AUTO_FROM_PROFILE_DOC` in
+      `registry/params.py`. Dass zwanzig Kopien auseinanderlaufen, stand schon
+      im Bestand: `ingest/ops.py` sagt „Leer **übernimmt den Dateinamen**", und
+      das ist dort richtig und bleibt eigen.
+
+- [x] **Eine Regel für Zollstellen, zweimal aufgeschrieben** (`453cfa98`).
+      `format_volume` und `format_area` trugen dieselbe Schleife;
+      `_significant_decimals` in `units.py`. 162 Tests.
+
+- [x] **Dieselbe Profilauswahl für Prozesse und Filamente** (`d959274b`). Acht
+      Zeilen, Unterschied eine Zeichenkette. Der Rückfall auf Profile ohne
+      Verträglichkeitsliste war nur bei den Prozessen begründet — bei den
+      Filamenten traf derselbe Code dieselbe Entscheidung ohne einen Satz dazu.
+      Beide öffentlichen Namen bleiben, `_of_kind` darunter. 285 Tests.
+
+**Der Nachweis, der zählt:** Ein Skript liest alle 86 Operationen, 18 Bausteine
+und 547 Parameter samt aufgelöster Titel, doc-Texte, Grenzen, Einheiten,
+Vorgaben und Kürzel. Gegen einen zweiten Arbeitsbaum auf dem Stand davor
+gehalten: **Zeichen für Zeichen identisch.** Bei einer Aufräumarbeit ist das die
+richtige Frage — nicht „ist ein Test rot", sondern „sieht der Kunde etwas
+anderes". Dazu die Sammelgruppe unverändert bei 3554 passed / 23 skipped, und
+genau darauf ist zu sehen: Tests zu *verlieren*, ohne dass einer rot wird, ist
+hier der wahrscheinlichere Schaden.
+
+Was offen bleibt:
+
+- [ ] **Zwei Kernfunktionen sind in der Oberfläche nachgebaut.**
+      `app/ui/sketch_editor.py:373` `flat_offsets` ist wortgleich
+      `edit.offsets_of`, `:383` `_flat_points` wortgleich `edit.flat_points` —
+      und `from app.core.sketch import edit` steht in Zeile 48 schon da. Elf
+      Aufrufstellen, rein mechanisch; `Point2` ist `tuple[float, float]`, die
+      Rückgabetypen sind identisch. Nicht angefasst, weil die Datei einer
+      anderen Sitzung gehörte; `formwerk-9e` nimmt es in das Paket mit, das die
+      Koordinatenrechnung des Canvas anfasst.
+
+- [ ] **Gehört „positive" in `_RANGE_CONSTRAINTS`?** Eine fachliche
+      Entscheidung über einen Oberflächentext, keine Aufräumarbeit.
+      `ValidationError` setzt den Titel „Ein Wert liegt außerhalb des
+      zulässigen Bereichs." nur für `minimum`, `maximum` und `range`; sonst
+      gilt „Die Eingabe war so nicht verwendbar." Für „Dieses Maß muss größer
+      als null sein" wäre der erste Satz der passendere — es *ist* eine
+      Bereichsverletzung. Betrifft alle sechzehn Aufrufstellen von
+      `require_positive` und ändert, was der Nutzer als Überschrift liest;
+      deshalb hier und nicht im Commit von heute.
+
+- [ ] **85 weitere Texte stehen mehrfach wortgleich im Quelltext.** Gemessen
+      über `app/`: 87 Texte über 25 Zeichen kommen mehr als einmal vor, zwei
+      davon sind oben behoben. Der Rest ist kleiner (meist zwei- bis dreimal,
+      oft in derselben Datei) und lohnt keinen eigenen Durchgang — aber vier
+      Fälle in `app/ui/main_window.py` sind es wert, wenn dort ohnehin jemand
+      arbeitet: „Bitte zuerst ein Objekt auswählen." (4×, Zeilen 2990, 4042,
+      4294, 4978) und „Dafür braucht es einen Körper in der Szene." (4×, Zeilen
+      2219, 2249, 2429, 2435). Vier Stellen, die denselben Satz sagen, sind vier
+      Stellen, an denen er sich ändern kann.
+
+---
+
+## Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026)
+
+Robert hat es gemeldet, während die Anwendung lief: „das an druckbett ausrichten
+funktioniert nicht mehr" — Dialog kommt, OK gedrückt, danach passiert nichts.
+
+Der Menüeintrag war es nicht. Über *Auf dem Bett anordnen* im Menü wandern zwei
+Würfel von (-10,-10,-10) auf (-105, 85, 0) und (-80, 85, 0), und im echten
+Fenster mit VTK wandern die Aktoren mit. Es war der **Knopf gleichen Namens,
+den ein Befund anbietet** — `arrange.off_the_plate` im Prüfbericht, derselbe
+Knopf auch im Fehlerdialog der Slicer-Übergabe.
+
+`_arrange_after_error` trug die Operation **ohne Eingaben** in den Stapel, mit
+der Begründung, sie arbeite ja über die ganze Szene. Das ist der Unterschied,
+an dem es hing: „über die ganze Szene" heißt nicht „ohne Eingaben". Der Stapel
+plant die Ausgänge eines Schritts, und für eine Operation mit variabler
+Objektzahl ohne Eingaben sind das keine (`History._outputs_for`) — der
+Kommentar dort behauptete sogar ausdrücklich, das Fenster reiche die Szene
+immer über `inputs_for` herein, und genau diese eine Stelle tat es nicht.
+
+Gemessen: Der Schritt landet im Verlauf mit `inputs=()` und `outputs=()`, die
+Auswertung meldet `complete=True` und `stopped_at=None`, kein Körper bewegt
+sich, und der Befund, gegen den der Knopf angeboten wurde, steht danach
+unverändert im Bericht. Kein Fehler, keine Meldung, nichts.
+
+Getroffen hat es den häufigsten Importfall überhaupt — eine 3MF aus Bambu
+Studio, Orca oder Elegoo führt Bettkoordinaten, ihre Körper liegen neben dem
+Bett, und `.claude/rules/oberflaeche.md` nennt genau diesen Knopf als die
+Handlung, die dort hilft.
+
+- [x] **Der Knopf wirkt** (`a22ffa48`): Die Eingaben kommen über `inputs_for`,
+      aus demselben Grund, aus dem Menü, Palette und Fernaufruf sie dort holen.
+      Der Abstand kommt aus der Druckbetthaftung wie im Dialog des
+      Menüeintrags — hier ist er nicht Vorbelegung, sondern die einzige
+      Gelegenheit: Ein Knopf ohne Dialog fragt nichts, und zwei Teile mit je
+      fünf Millimetern Brim stehen einander sonst auf der Platte im Weg. Der
+      Test drückt den echten Knopf unter der Befundliste, nicht den Handler von
+      Hand; Gegenprobe gefahren, ohne den Fix rot mit „der Knopf hat nichts
+      bewegt".
+
+- [ ] **Offscreen prüft nichts, was am Aktor hängt.** `Viewport.show_scene`
+      kehrt bei `self.plotter is None` zurück, bevor ein einziger Aktor gebaut
+      wird (`app/ui/viewport.py:1948`), und die ganze Suite läuft offscreen.
+      Die erste Probe verglich `_actors` vor und nach der Operation und
+      verglich damit zwei leere Dicts — grün ohne Aussage. Das ist dieselbe
+      Bauform wie „Ein Verbotstest über eine leere Menge ist immer grün"
+      (`.claude/rules/tests.md`), nur eine Ebene weiter: Nicht der Filter ist
+      leer, sondern die Welt, über die er filtert. Betroffen ist jede Zusage
+      über Aktoren, Farben, Kamerastellung und Bildinhalt — und damit ein
+      Gebiet, in dem gerade zwei Sitzungen arbeiten. Nachstellen ließ es sich
+      nur mit echter Event-Loop und sichtbarem Fenster, die Schritte an einer
+      `QTimer.singleShot`-Kette statt in einer Warteschleife; `wait_for_idle`
+      hängt dort.
+
+- [ ] **Ein Prüfstand, der beim Fehlschlag modal stehen bleibt.** Derselbe
+      Prüfstand ohne `app.core.bootstrap.load_operations()` endet beim ersten
+      Import in `unknown operation 'load'` — und der Fehler öffnet
+      `report_error`, also einen **modalen** Dialog. Der Hauptthread stand, die
+      Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu
+      unterscheiden: zwei Läufe über je drei Minuten ohne eine Zeile Ausgabe.
+      Gesagt hat es erst der Ordner, den die Anwendung dabei still anlegt
+      (`%LOCALAPPDATA%\RS Digital\Solidon3D\reports\`) — dort stand der
+      Traceback. Ein Werkzeug, das beim Fehlschlag stehen bleibt statt zu sagen,
+      was los ist, kostet jeden Nachfolger dieselbe Stunde.
+
+**Und eine Lehre für den geteilten Baum, die keinen eigenen Punkt braucht:**
+Eine Gegenprobe ist für jede andere Sitzung ein roter Test. Der Test hier war
+etwa eine Minute lang rot, weil der Fix für den Nachweis per `git stash`
+beiseite lag — genau in dieser Minute fuhr eine fremde Sitzung ihr Tor und
+meldete ihn. Wer stasht, sagt es vorher an oder tut es im eigenen Arbeitsbaum.
