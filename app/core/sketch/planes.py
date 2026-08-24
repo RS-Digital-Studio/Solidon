@@ -155,6 +155,83 @@ def frame_for(plane: str, objects: Iterable[SceneObject]) -> PlaneFrame:
     )
 
 
+#: Die Rahmen der drei Hauptebenen — Ursprung, erste Achse, zweite Achse,
+#: Normale.
+#:
+#: **Abgeschrieben von ``app.core.brep.profiles.PLANES`` und nicht gerechnet.**
+#: Wer sie aus der Normalen ableitet, bekommt etwas anderes:
+#: ``frame_of((0, 1, 0))`` liefert ``x_axis = (-1, 0, 0)``, wo ``_lift_xz``
+#: ``(1, 0, 0)`` verlangt — die Zeichnung läge spiegelverkehrt, und zwar nur
+#: auf einer der drei Ebenen. Ein Test hält beide Tabellen gegeneinander;
+#: ohne ihn driften sie beim nächsten Nachbessern.
+#:
+#: **``plane:xz`` ist dabei linkshändig**, entgegen der Zusage im Docstring von
+#: :class:`~app.core.types.PlaneFrame`: Dort ist ``x_axis`` kreuz ``y_axis`` gleich
+#: ``(0, -1, 0)``, die Normale aber ``(0, 1, 0)``. Das ist kein Fehler, sondern
+#: eine Doppelrolle — man zeichnet von vorn und extrudiert nach hinten, und die
+#: „Normale" ist hier die **Extrusionsrichtung**. Bei einer Fläche des Körpers
+#: fällt beides zusammen, weil :func:`_outward` sie nach außen dreht.
+BASE_FRAMES: dict[str, PlaneFrame] = {
+    "plane:xy": PlaneFrame(
+        origin=(0.0, 0.0, 0.0),
+        x_axis=(1.0, 0.0, 0.0),
+        y_axis=(0.0, 1.0, 0.0),
+        normal=(0.0, 0.0, 1.0),
+    ),
+    "plane:xz": PlaneFrame(
+        origin=(0.0, 0.0, 0.0),
+        x_axis=(1.0, 0.0, 0.0),
+        y_axis=(0.0, 0.0, 1.0),
+        normal=(0.0, 1.0, 0.0),
+    ),
+    "plane:yz": PlaneFrame(
+        origin=(0.0, 0.0, 0.0),
+        x_axis=(0.0, 1.0, 0.0),
+        y_axis=(0.0, 0.0, 1.0),
+        normal=(1.0, 0.0, 0.0),
+    ),
+}
+
+
+def frame_for_plane(plane: str, objects: Iterable[SceneObject] = ()) -> PlaneFrame | None:
+    """Der Rahmen zu **jeder** Ebenenangabe — Grundebene oder Fläche.
+
+    :func:`frame_for` beantwortet nur ``feature:<id>``, und die drei
+    Grundebenen liegen in ``app.core.brep.profiles``, also hinter einer
+    optionalen Abhängigkeit. Wer eine Skizze **anzeigen** will, braucht beides
+    und darf OpenCASCADE nicht voraussetzen.
+
+    Nichts kommt zurück, wenn die Angabe zu keiner Ebene gehört — etwa weil
+    eine Fläche nicht mehr existiert. Der Aufrufer entscheidet dann, ob er das
+    meldet; eine Ausnahme wäre hier zu scharf, denn eine Ansicht, die nichts
+    zeichnen kann, ist kein Fehlerfall (Regel 17 gilt der Handlung, nicht dem
+    Bild).
+    """
+    if is_feature_plane(plane):
+        try:
+            return frame_for(plane, objects)
+        except ValidationError:
+            return None
+    return BASE_FRAMES.get(plane)
+
+
+def image_normal(frame: PlaneFrame) -> Vec3:
+    """Die Richtung, aus der man auf die Zeichnung **richtig herum** sieht.
+
+    Nicht dasselbe wie ``frame.normal``, und der Unterschied kostet ein
+    spiegelverkehrtes Bild. Die Normale ist die Richtung, in die extrudiert
+    wird; bei ``plane:xz`` zeigt sie nach hinten, weil man von vorn zeichnet
+    und nach hinten aufzieht. Eine Kamera dort würde die Skizze von der
+    Rückseite zeigen.
+
+    Gesucht ist die Achse, die zu erster und zweiter Achse ein rechtshändiges
+    System bildet: ``x_axis`` kreuz ``y_axis``. Für die beiden rechtshändigen
+    Grundebenen und für jede Fläche eines Körpers ist sie mit der Normalen
+    identisch — sie unterscheidet sich genau dort, wo es darauf ankommt.
+    """
+    return _cross(frame.x_axis, frame.y_axis)
+
+
 def to_world(frame: PlaneFrame, point: Point2) -> Vec3:
     """Ein Zeichenpunkt als Ort im Raum.
 

@@ -159,6 +159,46 @@ Mangel: Wer die Kamera zoomt, ändert den Maßstab; wer ein 2D-Blatt zoomt,
 ändert `_scale`. Im Viewport-Modus liest die Zeichenfläche ihn also, statt ihn
 zu führen.
 
+### 1.8 Die XZ-Ebene ist linkshändig — gemessen am 24.08.2026
+
+`PlaneFrame` sagt in seinem Docstring zu, alle drei Achsen seien
+„Einheitsvektoren und rechtshändig". Für die drei Grundebenen aus
+`app/core/brep/profiles.py` (`PLANES`) stimmt das nicht durchgängig:
+
+| Ebene | erste Achse | zweite Achse | Normale | x × y |
+|---|---|---|---|---|
+| `plane:xy` | (1, 0, 0) | (0, 1, 0) | (0, 0, 1) | = Normale |
+| `plane:xz` | (1, 0, 0) | (0, 0, 1) | (0, 1, 0) | **(0, −1, 0)** |
+| `plane:yz` | (0, 1, 0) | (0, 0, 1) | (1, 0, 0) | = Normale |
+
+**Es ist kein Fehler, sondern eine Doppelrolle der Normalen.** Bei `plane:xz`
+zeichnet man *von vorn* (Blick entlang +Y) und extrudiert *nach hinten*
+(ebenfalls +Y). Die „Normale" ist dort die **Extrusionsrichtung**, nicht die
+Blickrichtung; bei einer Fläche eines Körpers fällt beides zusammen, weil
+`_outward` sie nach außen dreht.
+
+**Zwei Folgen, und die zweite ist ein Fehler in P1b.**
+
+Erstens: Wer den Rahmen einer Grundebene *rechnet*, statt ihn zu übernehmen,
+bekommt eine andere Zeichnung. `frame_of((0, 1, 0))` liefert
+`x_axis = (−1, 0, 0)` — die Skizze läge spiegelverkehrt. Eine Rahmentabelle
+für die Grundebenen muss `PLANES` **folgen** und darf sie nicht nachrechnen;
+ein Test hält beide gegeneinander, sonst driften sie beim nächsten Nachbessern.
+
+Zweitens: `camera_for_plane` (P1b) stellt die Kamera auf
+`origin + distance · normal`. Für eine Fläche ist das richtig — dort zeigt die
+Normale nach außen, und von außen sieht man hin. Für `plane:xz` stünde die
+Kamera bei +Y, also **hinter** der Zeichenebene, und die Zeichnung erschiene
+horizontal gespiegelt. Richtig ist die **Bildnormale** `x_axis × y_axis`: Sie
+fällt bei rechtshändigen Rahmen mit der Normalen zusammen und dreht sich bei
+`plane:xz` um.
+
+Dass es nicht aufgefallen ist, hat einen benennbaren Grund: **P1b war
+ausschließlich gegen Flächen-Rahmen und gegen `plane:xy` geprüft** — die
+beiden Fälle, in denen beide Rechnungen dasselbe ergeben. Der Test „Skizze auf
+XY sieht aus wie die Draufsicht" hat genau die Ebene gewählt, an der der
+Unterschied nicht sichtbar wird.
+
 ---
 
 ## §2 Der Maßstab draußen

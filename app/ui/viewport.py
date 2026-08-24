@@ -42,7 +42,7 @@ from app.core.geom.transform import (
 from app.core.log import get_logger
 from app.core.perceive.maps import AnalysisMap
 from app.core.scene import EvaluationResult
-from app.core.sketch.planes import to_world
+from app.core.sketch.planes import image_normal, to_world
 from app.core.sketch.profile import SketchCurve
 from app.core.types import (
     Feature,
@@ -170,20 +170,34 @@ def camera_for_plane(frame: PlaneFrame, distance: float = 1.0) -> tuple[Vec3, Ve
     zusammen — ``VIEW_DIRECTIONS["top"]`` hat ebenfalls ``(0, 1, 0)`` —, und
     das ist die Probe darauf, dass hier nichts verdreht ankommt.
 
-    ``distance`` ist die Entfernung vom Ursprung entlang der Normalen. Sie
-    entscheidet nichts, solange der Aufrufer danach ``reset_camera()`` ruft
-    (so hält es :meth:`Viewport.view_from`); sie steht hier, damit die
-    Richtung nicht von einer Länge null abhängt.
+    ``distance`` ist die Entfernung vom Ursprung. Sie entscheidet nichts,
+    solange der Aufrufer danach ``reset_camera()`` ruft (so hält es
+    :meth:`Viewport.view_from`); sie steht hier, damit die Richtung nicht von
+    einer Länge null abhängt.
+
+    **Gestanden wird auf der Bildnormalen, nicht auf der Normalen** — und der
+    Unterschied kostet ein spiegelverkehrtes Bild. ``frame.normal`` ist die
+    Richtung, in die *extrudiert* wird; bei ``plane:xz`` zeigt sie nach hinten,
+    weil man von vorn zeichnet und nach hinten aufzieht. Eine Kamera dort
+    stünde hinter der Zeichenebene, und die erste Achse liefe im Bild nach
+    links. Für die beiden rechtshändigen Grundebenen und für jede Fläche eines
+    Körpers sind beide Richtungen gleich; sie unterscheiden sich genau an der
+    einen Stelle, an der es auffällt.
+
+    Der erste Entwurf nahm die Normale und war gegen Flächen-Rahmen und gegen
+    ``plane:xy`` geprüft — die zwei Fälle, in denen der Unterschied nicht
+    sichtbar wird.
 
     Eine freie Funktion und keine Methode: Offscreen gibt es keinen Plotter,
     und was hinter dieser Wache liegt, läuft in der Suite nie. Die Rechnung
     davor zu trennen ist der einzige Weg, sie gegen Zahlen zu prüfen —
     dieselbe Aufteilung wie bei :func:`bore_span` und :func:`shadow_points`.
     """
+    towards = image_normal(frame)
     position = (
-        frame.origin[0] + distance * frame.normal[0],
-        frame.origin[1] + distance * frame.normal[1],
-        frame.origin[2] + distance * frame.normal[2],
+        frame.origin[0] + distance * towards[0],
+        frame.origin[1] + distance * towards[1],
+        frame.origin[2] + distance * towards[2],
     )
     return position, frame.origin, frame.y_axis
 

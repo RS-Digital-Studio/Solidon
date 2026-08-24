@@ -7,9 +7,17 @@ import math
 
 import pytest
 
+from app.core.brep.kernel import available as brep_available
 from app.core.errors import AppError, SketchConflictError, ValidationError
 from app.core.sketch import solve_sketch
-from app.core.sketch.planes import frame_of, ray_hit, to_plane, to_world
+from app.core.sketch.planes import (
+    frame_for_plane,
+    frame_of,
+    image_normal,
+    ray_hit,
+    to_plane,
+    to_world,
+)
 from app.core.sketch.profile import _LEAST_STEPS, curves_of
 from app.core.types import PlaneFrame, Sketch, SketchConstraint, SketchElement, SolvedSketch
 
@@ -921,3 +929,68 @@ def test_a_point_stays_a_single_place() -> None:
 
     assert len(curves[0].points) == 1, "ein Punkt ist eine Folge der Laenge eins"
     assert curves[0].points[0] == pytest.approx((2.0, 3.0, 0.0))
+
+
+# --- Rahmen für jede Ebene (§30.1, P4) ---------------------------------------
+
+
+def test_every_plane_has_a_frame_and_an_unknown_one_has_none() -> None:
+    """`frame_for` beantwortet nur Flächen; die Anzeige braucht alle vier."""
+    for plane in ("plane:xy", "plane:xz", "plane:yz"):
+        assert frame_for_plane(plane) is not None, plane
+    assert frame_for_plane("plane:zz") is None, "eine Angabe ohne Ebene ergibt keinen Rahmen"
+    assert frame_for_plane("feature:face_99") is None, "eine Fläche, die es nicht gibt, auch nicht"
+
+
+@pytest.mark.skipif(not brep_available(), reason="OpenCASCADE is an optional dependency")
+def test_the_base_frames_agree_with_the_kernel_to_the_last_digit() -> None:
+    """Zwei Tabellen für dieselben drei Ebenen, und sie müssen gleich sein.
+
+    ``BASE_FRAMES`` ist von ``brep.profiles.PLANES`` **abgeschrieben** und
+    nicht gerechnet — wer sie aus der Normalen ableitet, bekommt bei
+    ``plane:xz`` eine gespiegelte erste Achse (``frame_of((0, 1, 0))`` liefert
+    ``(-1, 0, 0)``). Dieser Test ist der Grund, warum das Abschreiben
+    vertretbar ist: Er hält beide zusammen, und ohne ihn driften sie beim
+    nächsten Nachbessern auseinander — die Anzeige zeigte dann etwas anderes,
+    als der Kern baut.
+    """
+    from app.core.brep.profiles import PLANES
+
+    for plane, (lift, normal) in PLANES.items():
+        frame = frame_for_plane(plane)
+        assert frame is not None, plane
+        assert frame.normal == pytest.approx(normal), f"{plane}: Normale weicht ab"
+        for point in ((0.0, 0.0), (3.0, 0.0), (0.0, 5.0), (-2.5, 7.25)):
+            wanted = lift(point)
+            assert to_world(frame, point) == pytest.approx((wanted.X(), wanted.Y(), wanted.Z())), (
+                f"{plane}: {point} landet woanders als im Kern"
+            )
+
+
+def test_the_image_normal_turns_around_where_the_frame_is_left_handed() -> None:
+    """Sonst sieht die Kamera von hinten auf die Zeichnung.
+
+    ``frame.normal`` ist die Richtung, in die extrudiert wird. Bei
+    ``plane:xz`` zeigt sie nach hinten — man zeichnet von vorn und zieht nach
+    hinten auf. Wer die Kamera dorthin stellt, zeigt die Skizze
+    spiegelverkehrt.
+    """
+    flat = frame_for_plane("plane:xy")
+    front = frame_for_plane("plane:xz")
+    side = frame_for_plane("plane:yz")
+    assert flat is not None and front is not None and side is not None
+
+    assert image_normal(flat) == pytest.approx(flat.normal), "XY ist rechtshändig"
+    assert image_normal(side) == pytest.approx(side.normal), "YZ auch"
+    assert image_normal(front) == pytest.approx((0.0, -1.0, 0.0)), "XZ sieht man von vorn"
+    assert front.normal == pytest.approx((0.0, 1.0, 0.0)), "extrudiert wird nach hinten"
+
+
+def test_a_face_frame_needs_no_turn() -> None:
+    """Bei einer Fläche zeigt die Normale nach außen, und dorthin sieht man.
+
+    Die Gegenprobe zum Test darüber: Wäre ``image_normal`` einfach das
+    Gegenteil der Normalen, wäre er auch grün — hier fiele es auf.
+    """
+    frame = frame_of((1.0, 0.0, 1.0), (5.0, -2.0, 3.0))
+    assert image_normal(frame) == pytest.approx(frame.normal)

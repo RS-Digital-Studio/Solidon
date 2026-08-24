@@ -1027,3 +1027,57 @@ def test_showing_a_sketch_without_a_plotter_changes_nothing() -> None:
     viewport.clear_sketch()
 
     assert viewport._sketch_actors == [], "ohne Plotter entsteht kein Actor"
+
+
+def test_the_camera_stands_in_front_of_the_front_view_not_behind_it() -> None:
+    """Auf ``plane:xz`` zeigt die Normale nach hinten, die Kamera nicht.
+
+    **Der Fall, den P1b nicht geprüft hat.** Dort war ``camera_for_plane``
+    gegen Flächen-Rahmen und gegen ``plane:xy`` gemessen — die zwei Fälle, in
+    denen Normale und Bildnormale zusammenfallen. Bei ``plane:xz`` fallen sie
+    auseinander: Man zeichnet von vorn (−Y) und extrudiert nach hinten (+Y).
+    Eine Kamera auf der Normalen stünde hinter der Zeichenebene, und die erste
+    Achse liefe im Bild nach links — die Skizze wäre spiegelverkehrt.
+    """
+    from app.core.sketch.planes import frame_for_plane
+    from app.ui.viewport import camera_for_plane
+
+    frame = frame_for_plane("plane:xz")
+    assert frame is not None
+    position, focus, up = camera_for_plane(frame, 30.0)
+
+    assert position == pytest.approx((0.0, -30.0, 0.0)), "von vorn, nicht von hinten"
+    assert focus == pytest.approx((0.0, 0.0, 0.0))
+    assert up == pytest.approx((0.0, 0.0, 1.0)), "Z zeigt im Bild nach oben"
+
+    # Und die Probe, um die es geht: die erste Achse der Zeichnung läuft im
+    # Bild nach rechts. Rechts ist das Kreuzprodukt aus Blickrichtung und Oben.
+    towards = tuple(focus[axis] - position[axis] for axis in range(3))
+    span = math.dist((0.0, 0.0, 0.0), towards)
+    forward = tuple(value / span for value in towards)
+    right = (
+        forward[1] * up[2] - forward[2] * up[1],
+        forward[2] * up[0] - forward[0] * up[2],
+        forward[0] * up[1] - forward[1] * up[0],
+    )
+    assert right == pytest.approx(frame.x_axis), "die erste Achse liegt im Bild rechts"
+
+
+def test_the_three_base_planes_all_show_their_first_axis_to_the_right() -> None:
+    """Dieselbe Probe für alle drei — keine darf gespiegelt ankommen."""
+    from app.core.sketch.planes import frame_for_plane
+    from app.ui.viewport import camera_for_plane
+
+    for plane in ("plane:xy", "plane:xz", "plane:yz"):
+        frame = frame_for_plane(plane)
+        assert frame is not None, plane
+        position, focus, up = camera_for_plane(frame, 25.0)
+        towards = tuple(focus[axis] - position[axis] for axis in range(3))
+        span = math.dist((0.0, 0.0, 0.0), towards)
+        forward = tuple(value / span for value in towards)
+        right = (
+            forward[1] * up[2] - forward[2] * up[1],
+            forward[2] * up[0] - forward[0] * up[2],
+            forward[0] * up[1] - forward[1] * up[0],
+        )
+        assert right == pytest.approx(frame.x_axis), f"{plane} kommt gespiegelt an"
