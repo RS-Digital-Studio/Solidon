@@ -692,7 +692,7 @@
   "Die Platte ordnet ein eigener Schritt an: öffnen Sie „Anordnen“ mit einem Doppelklick und ändern Sie den Abstand — die drei Körper rücken sofort um.": "A step of its own arranges the plate: open “Arrange” with a double click and change the spacing — the three bodies move over at once.",
   "Die Projektdatei liegt bei. Sie enthält die Geometrie des Modells.": "The project file is attached. It contains the geometry of the model.",
   "Die Prüfsumme des Pakets stimmt nicht — es wurde gelöscht.": "The package checksum does not match — it has been deleted.",
-  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "The grid spacing — the same number a click falls onto. Without an entry it follows the zoom; a spacing you type stays put.",
+  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen. Ganz herunter gedreht steht „Automatisch\", und sie folgt wieder.": "The grid spacing — the same number a click falls onto. Without an entry it follows the zoom; a spacing you type stays put. Turned all the way down it reads “Automatic”, and it follows along again.",
   "Die Richtung dieses Merkmals hat die Länge null — daraus lässt sich keine Achse bilden.": "The direction of this feature has zero length — no axis can be formed from it.",
   "Die Rückmeldung ist noch leer.": "The feedback is still empty.",
   "Die Rückmeldung ist zu lang.": "The feedback is too long.",

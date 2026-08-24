@@ -692,7 +692,7 @@
   "Die Platte ordnet ein eigener Schritt an: öffnen Sie „Anordnen“ mit einem Doppelklick und ändern Sie den Abstand — die drei Körper rücken sofort um.": "Une étape à part dispose la plaque : ouvrez « Disposer » d'un double-clic et changez l'écartement — les trois corps se déplacent aussitôt.",
   "Die Projektdatei liegt bei. Sie enthält die Geometrie des Modells.": "Le fichier de projet est joint. Il contient la géométrie du modèle.",
   "Die Prüfsumme des Pakets stimmt nicht — es wurde gelöscht.": "La somme de contrôle du paquet ne correspond pas — il a été supprimé.",
-  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen.": "Le pas de la grille — le même chiffre sur lequel tombe un clic. Sans saisie, il suit le zoom ; un pas saisi reste en place.",
+  "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen. Ganz herunter gedreht steht „Automatisch\", und sie folgt wieder.": "Le pas de la grille — le même chiffre sur lequel tombe un clic. Sans saisie, il suit le zoom ; un pas saisi reste en place. Réduit au minimum, il affiche « Automatique » et le suit de nouveau.",
   "Die Richtung dieses Merkmals hat die Länge null — daraus lässt sich keine Achse bilden.": "La direction de cet élément est de longueur nulle — impossible d'en former un axe.",
   "Die Rückmeldung ist noch leer.": "Le retour est encore vide.",
   "Die Rückmeldung ist zu lang.": "Le retour est trop long.",

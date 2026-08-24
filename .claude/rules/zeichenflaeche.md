@@ -40,6 +40,53 @@ gezeichnet hat, und gibt sie an Canvas **und** Feld. Zwei Dinge hängen daran:
 * **Das Setzen läuft unter `QSignalBlocker`.** `setValue` feuert
   `valueChanged`, und das hieße hier „der Nutzer hat etwas eingetippt": Der
   **erste** Zoomschritt hätte die Weite für immer festgenagelt.
+* **Und die Null gibt sie wieder her.** `_pinned_step` wurde gesetzt und nie
+  gelöst: Wer einmal eine Weite eintippte, sah bis zum Verlassen des Modus
+  kein mitwachsendes Raster mehr — herausgezoomt eine Fläche aus Linien,
+  hineingezoomt vier Linien im Bild. Das Feld beginnt deshalb bei null und
+  zeigt dort „Automatisch" (`setSpecialValueText`). Eine Einstellung ohne Weg
+  zurück ist eine Sackgasse, und §2.1 kennt keine.
+* **Die Eingabe muss ins Bild.** `_snapping_changed` sendet `sketchChanged` —
+  ohne das endete die Kette am Canvas, und der ist im Viewport-Modus
+  unsichtbar. Gemeldet als „wenn ich das Raster anpasse ändert es sich im
+  Viewport nicht": Feld und Fang trugen die neue Weite, das Bild die alte.
+  Drei Zahlen für dieselbe Sache. Was der Viewport zuletzt **gezeichnet** hat,
+  steht in `_sketch_step` — sonst wäre von außen nur zu zählen, nicht zu
+  fragen.
+
+**Wohin ein Klick fällt, muss im Bild stehen** (`Viewport.show_sketch_cursor`,
+`sketch_cursor`). Gefangen wird auf das Raster, also landet ein Klick bis zu
+einen halben Schritt neben dem Zeiger — bei 2 mm Raster elf Bildpunkte, bei
+10 mm sechzig. Der Canvas zeigte dafür seit je ein Kreuz; seit die Zeichnung
+im Viewport liegt (§30.1, P4), sieht das niemand mehr. Gemeldet als „die
+Klicks sind wo anders als ich klick", und es war ausdrücklich **kein**
+Koordinatenfehler: `devicePixelRatio` ist 1.0, Qt- und VTK-Größe des
+Interactors stimmen überein, der Ereignisfilter sitzt auf demselben Widget.
+
+Drei Dinge daran, alle drei gemessen:
+
+* **Der Ort kommt aus `pointer_target()`**, weitergereicht über
+  `SketchPanel.pointerMoved`. Ihn im Viewport nachzurechnen wäre die zweite
+  Zahl für dieselbe Sache — derselbe Fehler, an dem das Raster schon einmal
+  auseinanderlief. Beim Auswahlwerkzeug gibt `pointer_target()` absichtlich
+  die **rohe** Lage: Dort entsteht nichts, also ist die Mausstelle die
+  richtige Antwort.
+* **Die Größe steht in Bildpunkten** (`CURSOR_PIXELS`), nicht in Millimetern
+  und nicht als Anteil der Rasterweite. Der erste Anlauf koppelte sie an das
+  Raster; bei 10 mm sah das gut aus und bei 2 mm war das Kreuz zwei
+  Bildpunkte breit — unsichtbar genau dort, wo man es am nötigsten hat.
+  Gesehen hat das die Aufnahme, keine Rechnung.
+* **Ein gesetzter Punkt bleibt kräftiger als die Marke**
+  (`SKETCH_POINT_PIXELS >= CURSOR_PIXELS`, festgehalten in
+  `tests/test_sketch_editor.py`). Er stand auf sechs Bildpunkten gegen zwanzig
+  Spanne: Was schon existiert, sah leiser aus als das, was erst entstünde.
+  Verwechseln kann man beide nicht — Kugel gegen Kreuz, zwei Formen und nicht
+  zwei Farben.
+
+Die Marke lebt in einer **eigenen** Actorliste (`_cursor_actors`): Sie hängt an
+der Maus, die Zeichnung ändert sich beim Zeichnen. Zusammen geräumt flackerte
+sie bei jedem Strich. Weg ist sie, wo der Modus endet — `set_sketching(None)`,
+nicht `finish_sketch`, sonst stünde dieselbe Zusage an zwei Stellen.
 
 **Gemessen wird erst, wenn es ein Bild gibt** (`LEAST_VIEW_PIXELS` in
 `viewport.py`). Beim Aufbau meldet Qt für ein Widget ohne fertiges Layout

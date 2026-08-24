@@ -2787,13 +2787,20 @@ class SketchPanel(QWidget):
             tr("Klicks fallen auf das Raster, das im Bild steht. Vorhandene Punkte fangen vor.")
         )
         self.snap_step = LengthSpin(self)
-        self.snap_step.set_range_mm(0.05, 100.0)
+        # Die Null ist kein Maß, sondern der Weg zurück: Wer ganz herunter
+        # dreht, gibt die Weite wieder dem Zoom. Ohne sie war die Eingabe eine
+        # Einbahnstraße — ``_pinned_step`` wurde gesetzt und nie gelöst, und
+        # damit blieb die Weite für den Rest der Sitzung stehen, wie weit man
+        # auch heraus- oder hineinzoomte (§2.1: keine Sackgassen).
+        self.snap_step.set_range_mm(0.0, 100.0)
+        self.snap_step.setSpecialValueText(tr("Automatisch"))
         self.snap_step.set_step_mm(0.5)
         self.snap_step.set_value_mm(self.canvas.snap_step)
         self.snap_step.setToolTip(
             tr(
                 "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne "
-                "Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen."
+                "Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen. "
+                'Ganz herunter gedreht steht „Automatisch", und sie folgt wieder.'
             )
         )
         self.snap_step.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
@@ -3350,8 +3357,17 @@ class SketchPanel(QWidget):
         self.sketchChanged.emit()
 
     def _step_typed(self) -> None:
-        """Eine eingetippte Weite bleibt stehen, auch beim Zoomen."""
-        self._pinned_step = True
+        """Eine eingetippte Weite bleibt stehen, auch beim Zoomen.
+
+        **Und die Null gibt sie wieder her.** Sie steht im Feld als
+        „Automatisch" und ist der einzige Weg zurück: Vorher wurde
+        ``_pinned_step`` gesetzt und nie gelöst, wer also einmal eine Weite
+        eintippte, sah bis zum Verlassen des Modus kein mitwachsendes Raster
+        mehr — herausgezoomt eine Fläche aus Linien, hineingezoomt vier Linien
+        im Bild. Beim nächsten Neuzeichnen trägt ``follow_grid`` die Weite des
+        Maßstabs wieder ein.
+        """
+        self._pinned_step = self.snap_step.value_mm() > 0.0
         self._snapping_changed()
 
     def follow_grid(self, step: float) -> None:

@@ -3068,3 +3068,74 @@ def test_the_pointer_mark_is_a_cross_and_not_a_dot() -> None:
             "die Marke liegt in der Ebene, nicht darüber"
         )
     assert not sketch_cursor(frame, (0.0, 0.0), 0.0), "ohne Größe gibt es nichts zu zeichnen"
+
+
+def test_a_placed_point_is_not_quieter_than_the_pointer_mark() -> None:
+    """Was schon da ist, darf nicht schwächer aussehen als was erst entsteht.
+
+    Der gesetzte Punkt stand auf sechs Bildpunkten, die Fangmarke daneben
+    spannt zwanzig. Im Bild las sich das umgekehrt zur Sache: Ein Punkt ist
+    ein Ding in der Zeichnung, die Marke nur ein Zeiger — und der Zeiger war
+    das Auffälligere. Gesehen an der Aufnahme, nicht an einer Zahl.
+
+    Geprüft wird das **Verhältnis** und nicht die Größe: Welche Zahl richtig
+    ist, entscheidet das Auge und darf sich ändern; dass der Punkt dabei nicht
+    wieder unter die Marke rutscht, entscheidet dieser Test.
+    """
+    from app.ui.viewport import CURSOR_PIXELS, SKETCH_POINT_PIXELS
+
+    assert SKETCH_POINT_PIXELS >= CURSOR_PIXELS, (
+        f"ein gesetzter Punkt misst {SKETCH_POINT_PIXELS} Bildpunkte, die Marke für den "
+        f"nächsten Klick spannt {CURSOR_PIXELS * 2} — dann ist das Vorhandene das Leisere"
+    )
+
+
+def test_a_typed_grid_step_can_be_given_back(qt_app: QApplication) -> None:
+    """Die eingetippte Weite war eine Einbahnstraße.
+
+    ``_pinned_step`` wurde gesetzt und nie gelöst: Wer einmal eine Weite
+    eintippte, sah bis zum Verlassen des Skizzenmodus kein mitwachsendes
+    Raster mehr — herausgezoomt eine Fläche aus Linien, hineingezoomt vier
+    Linien im Bild. Die Null im Feld heißt „Automatisch" und gibt sie zurück.
+
+    Geprüft wird beides, denn eine Richtung allein wäre die halbe Zusage.
+    """
+    panel = SketchPanel()
+    try:
+        assert not panel.snap_is_pinned(), "ohne Eingabe folgt die Weite dem Zoom"
+
+        panel.snap_step.set_value_mm(7.0)
+        panel._step_typed()
+        assert panel.snap_is_pinned(), "eine eingetippte Weite bleibt stehen"
+        assert panel.canvas.snap_step == pytest.approx(7.0)
+
+        panel.snap_step.set_value_mm(0.0)
+        panel._step_typed()
+        assert not panel.snap_is_pinned(), (
+            "ganz herunter gedreht muss die Weite wieder dem Zoom folgen — sonst "
+            "gibt es keinen Weg zurück"
+        )
+
+        # Und die Weite des Maßstabs kommt wieder an: ``follow_grid`` schreibt
+        # sie in Feld und Fang, sobald sie nicht mehr festgehalten wird.
+        panel.follow_grid(2.5)
+        assert panel.canvas.snap_step == pytest.approx(2.5)
+        assert panel.snap_step.value_mm() == pytest.approx(2.5)
+    finally:
+        panel.deleteLater()
+
+
+def test_the_grid_field_offers_its_way_back_in_words(qt_app: QApplication) -> None:
+    """Der Rückweg steht im Feld, nicht nur im Verhalten.
+
+    Ein Sonderwert, den niemand sieht, ist keiner: Qt zeigt ihn am Minimum,
+    also muss das Minimum null sein und der Text dort stehen.
+    """
+    panel = SketchPanel()
+    try:
+        assert panel.snap_step.minimum() == pytest.approx(0.0), (
+            'ohne eine Null am unteren Ende gibt es keinen Platz für „Automatisch"'
+        )
+        assert panel.snap_step.specialValueText(), "der Rückweg ist unbeschriftet"
+    finally:
+        panel.deleteLater()
