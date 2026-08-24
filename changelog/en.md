@@ -15,6 +15,25 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.1.5
+
+- Sketching now happens in the view itself: the drawing surface lies over the model instead of replacing it, and a click in the view sets a point on the sketch plane.
+- The grid on the drawing surface shows what snapping actually uses again. For a while it stood at a tenth of a millimetre and lay half behind the toolbar.
+- A click in the middle of a hole selects the hole. It used to hit the face beside it or nothing at all — in top view it even cleared the selection.
+- A click into a rectangular cut-out selects the part instead of clearing the selection.
+- The chat now finds your local model whatever way you write the address. Until now it had to be the full address ending in /api/chat.
+- An access key the provider rejects no longer locks out your local model. The chat moves to the next available model by itself instead of sending the same key again.
+- Chat error messages now say which model they mean. Above a key error there used to be nothing but a line saying the language model had not answered.
+- The field for a service address gives an example and says that a folder does not belong there. Enter one anyway and you get it back with the reason above it.
+- The setup dialog no longer crashes when an address field holds a folder path, or the key field holds accidentally pasted text.
+- Drop-down menus show all their entries again. Once a field had keyboard focus, the open menu was missing half an entry.
+- Ctrl+Z and Ctrl+Y now appear on their menu entries, like the other fourteen shortcuts. They always worked; nothing ever named them.
+- Error messages while drawing say which limit was exceeded. “Between three and sixty-four corners” used to sit under nothing but “The input could not be used that way”.
+- Merged actions sit in the same menu and appear only once in the command search — hollowing out and hollowing out exactly, for instance.
+- A menu entry called “Thread” now says where the thread goes — into a hole or onto a bolt.
+- The Spanish interface names features the same way everywhere. The same list used to hold two words for the same thing.
+- The application releases memory when a window closes, and shuts down more cleanly.
+
 ## 0.1.4
 
 - During the demo Solidon asks once: after half an hour of work a card settles over the view and asks how it is going. It holds nothing up, and nothing goes out without your click.

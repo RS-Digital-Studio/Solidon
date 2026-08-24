@@ -16,6 +16,25 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.1.5
+
+- Ahora se dibuja en la propia vista: la superficie de dibujo se coloca sobre el modelo en lugar de sustituirlo, y un clic en la vista sitúa un punto en el plano del boceto.
+- La cuadrícula de la superficie de dibujo vuelve a mostrar aquello a lo que se ajusta. Estuvo un tiempo en una décima de milímetro y quedaba medio oculta tras la barra.
+- Un clic en el centro de un taladro selecciona el taladro. Antes acertaba en la cara contigua o en nada, y en la vista superior incluso anulaba la selección.
+- Un clic dentro de un recorte rectangular selecciona la pieza en lugar de anular la selección.
+- El chat encuentra ahora su modelo local escriba la dirección como la escriba. Hasta ahora tenía que ser la dirección completa terminada en /api/chat.
+- Una clave de acceso que el proveedor rechaza ya no bloquea su modelo local. El chat pasa por sí mismo al siguiente modelo disponible en lugar de enviar de nuevo la misma clave.
+- Los mensajes de error del chat dicen ahora a qué modelo se refieren. Sobre un error de clave solo ponía que el modelo de lenguaje no había respondido.
+- El campo de la dirección de un servicio ofrece un ejemplo y advierte de que ahí no va una carpeta. Si introduce una, lo recupera con el motivo encima.
+- El diálogo de configuración ya no se cierra con error cuando un campo de dirección contiene una ruta de carpeta o el campo de clave un texto pegado por descuido.
+- Los menús desplegables vuelven a mostrar todas sus entradas. En cuanto un campo tenía el foco del teclado, al menú abierto le faltaba media entrada.
+- Ctrl+Z y Ctrl+Y aparecen ahora en su entrada de menú, como los otros catorce atajos. Siempre funcionaron; simplemente nada los nombraba.
+- Los mensajes de error al dibujar indican qué límite se ha superado. Sobre «entre tres y sesenta y cuatro esquinas» solo ponía «La entrada no se podía usar así».
+- Las acciones unificadas están en el mismo menú y aparecen una sola vez en la búsqueda de comandos, como vaciar y vaciar con exactitud.
+- Una entrada de menú llamada «Rosca» dice ahora dónde va la rosca: en un taladro o sobre un perno.
+- La interfaz en español nombra los rasgos igual en todas partes. En la misma lista había antes dos palabras para lo mismo.
+- La aplicación libera memoria al cerrar una ventana y termina de forma más limpia.
+
 ## 0.1.4
 
 - Durante la demo, Solidon pregunta una vez: tras media hora de trabajo, una tarjeta se posa sobre la vista y pregunta qué tal va. No detiene nada, y sin su clic no sale nada.
