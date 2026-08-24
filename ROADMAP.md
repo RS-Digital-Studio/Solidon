@@ -8639,6 +8639,29 @@ Handlung, die dort hilft.
       `QTimer.singleShot`-Kette statt in einer Warteschleife; `wait_for_idle`
       hängt dort.
 
+      **Nachtrag vom 24.08.2026 aus „Ein Klick in eine Bohrung traf die Fläche,
+      oder gar nichts": Es ist nicht nur der Aktor, es ist der ganze
+      Klickpfad.** `vtkCellPicker` antwortet offscreen ebenso wenig, und damit
+      ist alles ungeprüft, was von einer Bildschirmstelle ausgeht — sieben
+      Tests in `tests/test_selection.py` fütterten `_feature_at` mit Punkten,
+      die ein echter Picker an dieser Stelle **nie** zurückgibt. Die Rechnung
+      war korrekt, die Eingabe gab es nicht; ein Klick mitten in eine
+      Durchgangsbohrung hob in der Draufsicht die Auswahl auf, und kein Test
+      konnte das sehen.
+
+      **Das Verfahren, mit dem es messbar wurde**, und es kostet zwanzig
+      Zeilen im Scratchpad: `QT_QPA_PLATFORM` aus der Umgebung nehmen
+      (`os.environ.pop`), Fenster `show()`, `processEvents()`, `show_scene`,
+      Kamera über `plotter.view_xy()` stellen und rendern. Den Weltpunkt, auf
+      den geklickt werden soll, rechnet der Renderer selbst in Pixel um
+      (`SetWorldPoint` → `WorldToDisplay` → `GetDisplayPoint`) — damit ist der
+      Klick reproduzierbar auf einer bekannten Stelle der Geometrie und nicht
+      auf einer geratenen Bildkoordinate. Gepickt wird dann über den
+      Produktionsweg (`viewport._world_at(x, y)`), nicht über einen eigenen
+      Picker: Sonst prüft der Prüfstand seine eigene Nachbildung. Für die
+      Gegenprobe eignet sich jede Ansicht, die dieselbe Stelle anders trifft;
+      `view_xz` liefert hier den Fall „Merkmal liegt hinter dem Material".
+
 - [ ] **Ein Prüfstand, der beim Fehlschlag modal stehen bleibt.** Derselbe
       Prüfstand ohne `app.core.bootstrap.load_operations()` endet beim ersten
       Import in `unknown operation 'load'` — und der Fehler öffnet
