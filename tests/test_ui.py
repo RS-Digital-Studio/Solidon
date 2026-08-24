@@ -6644,3 +6644,71 @@ def test_the_camera_swings_onto_the_plane_that_is_drawn_on(window: MainWindow) -
 
     assert len(panel.canvas.sketch.elements) == 1, "gezeichnet wird auch ohne Bild"
     window.finish_sketch(keep=False)
+
+
+def test_a_click_in_the_view_draws_on_the_plane(window: MainWindow) -> None:
+    """Der Anschluss (§30.1, P4): Klick in der Ansicht, Punkt in der Skizze.
+
+    Offscreen gibt es keinen Plotter, der Sichtstrahl selbst ist also nicht
+    messbar (Entscheidung G). Prüfbar ist die Kette dahinter — und genau die
+    war der Punkt: ``_sketch_hit`` rechnet den Strahl gegen die Ebene, das
+    Signal trägt zwei Zahlen in Millimetern, und die Zeichenfläche macht
+    damit dasselbe wie mit einem Klick auf sich selbst.
+
+    **Was dieser Test ausdrücklich nicht prüft**, und das ist gemessen: Dass
+    ``_on_left_click`` den Skizzenmodus vor der Auswahlkette abfragt. Entfernt
+    man diesen Zweig, bleibt der Test grün — er sendet das Signal selbst,
+    statt einen Klick auszulösen, und einen echten Klick gibt es ohne Plotter
+    nicht (``_pick_ray`` gibt dort ``None``). Diese eine Zeile gehört zur
+    Bild-Hälfte und wird im Prüfstand mit echtem Fenster gemessen, nicht hier.
+    """
+    window.start_sketch("sketch_extrude", "")
+    panel = window._sketch_panel
+    assert panel is not None
+    panel.canvas.set_tool("line")
+
+    window.viewport.sketchPointPicked.emit((0.0, 0.0))
+    window.viewport.sketchPointPicked.emit((20.0, 0.0))
+
+    assert len(panel.canvas.sketch.elements) == 1, "zwei Klicks, eine Linie"
+    start, end = panel.canvas.sketch.elements[0].points
+    assert start == pytest.approx((0.0, 0.0))
+    assert end == pytest.approx((20.0, 0.0))
+
+    window.finish_sketch(keep=False)
+
+
+def test_the_view_stops_aiming_at_the_plane_when_the_sketch_ends(window: MainWindow) -> None:
+    """Sonst zeichnete ein Klick weiter auf eine Ebene, die niemand meint.
+
+    ``set_sketching(None)`` ist die Rücknahme, und ohne sie bliebe der
+    Viewport in einem Modus, in dem er keine Körper mehr auswählt — die
+    Auswahlkette liegt hinter der Skizzenfrage.
+    """
+    window.start_sketch("sketch_extrude", "")
+    assert window.viewport._sketch_frame is not None, "im Modus zielt er auf die Ebene"
+
+    window.finish_sketch(keep=False)
+    assert window.viewport._sketch_frame is None, "danach wieder auf die Szene"
+
+
+def test_changing_the_plane_swings_the_camera_along(window: MainWindow) -> None:
+    """Wer die Ebene wechselt, sieht woanders hin — und will das auch sehen.
+
+    Das ist die eine Stelle, an der nach dem Betreten noch geschwenkt wird.
+    Beim Zeichnen selbst bleibt die Ansicht, wie der Nutzer sie gedreht hat.
+    """
+    window.start_sketch("sketch_extrude", "")
+    panel = window._sketch_panel
+    assert panel is not None
+
+    vorher = window.viewport._sketch_frame
+    assert vorher is not None and vorher.normal == pytest.approx((0.0, 0.0, 1.0))
+
+    panel.choose_plane("plane:xz")
+
+    nachher = window.viewport._sketch_frame
+    assert nachher is not None
+    assert nachher.normal == pytest.approx((0.0, 1.0, 0.0)), "die Ansicht zielt auf die neue Ebene"
+
+    window.finish_sketch(keep=False)

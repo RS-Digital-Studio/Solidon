@@ -42,7 +42,7 @@ from app.core.geom.transform import (
 from app.core.log import get_logger
 from app.core.perceive.maps import AnalysisMap
 from app.core.scene import EvaluationResult
-from app.core.sketch.planes import image_normal, to_world
+from app.core.sketch.planes import image_normal, ray_hit, to_world
 from app.core.sketch.profile import SketchCurve
 from app.core.types import (
     Feature,
@@ -1507,6 +1507,13 @@ class Viewport(QWidget):
     """A finished measurement — carries a ``Measurement``."""
     transformDragged = Signal(object)
     """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
+    sketchPointPicked = Signal(object)
+    """Ein Klick auf die Zeichenebene — trägt den Punkt in Millimetern.
+
+    Zwei Zahlen und kein Weltpunkt: Was die Skizze speichert, sind
+    Zeichenkoordinaten, und die Umrechnung gehört an eine Stelle."""
+    sketchPointHovered = Signal(object)
+    """Der Zeiger steht auf der Zeichenebene — für die Vorschau."""
     faceDragged = Signal(object, float)
     """Ein Zug an einer Fläche — Normale und Weg entlang ihr (§18.11)."""
     scaleDragged = Signal(float)
@@ -1584,6 +1591,12 @@ class Viewport(QWidget):
         self._object_colour = OBJECT_COLOUR
         self._bed_colour = BED_COLOUR
         self._bed_surface = BED_SURFACE_COLOUR
+        self._sketch_frame: PlaneFrame | None = None
+        """Die Ebene, auf die ein Klick gerade zielt — oder nichts.
+
+        Sie ist der Modusschalter des Skizzenmodus in der Ansicht: Solange
+        sie steht, meint ein Klick eine Stelle auf ihr und kein Ding in der
+        Szene (§30.1, P4)."""
         self._sketch_actors: list[Any] = []
         """Was die Skizze gerade in die Szene legt — Raster, Kurven, Punkte.
 
@@ -3216,6 +3229,13 @@ class Viewport(QWidget):
         Merkmal darunter. Ein Zeiger, der eine andere Reihenfolge behauptet als
         die Behandlung, lügt genau dann, wenn zwei Werkzeuge zugleich anstehen.
         """
+        if self._sketch_frame is not None:
+            # **Ganz vorn, wie im Klick selbst.** Im Skizzenmodus meint jeder
+            # Klick eine Stelle auf der Ebene; ein Zeiger, der daneben ein
+            # Merkmal verspricht, verspricht etwas, das nicht eintritt. Die
+            # Rolle ist dieselbe wie auf der Zeichenfläche (`draw`), damit
+            # derselbe Handgriff dasselbe Bild hat.
+            return "draw"
         if self._splitting:
             # Das Fadenkreuz des Messens: Beide setzen einen Punkt, der eine
             # Strecke aufspannt, und derselbe Handgriff soll denselben Zeiger
@@ -3303,6 +3323,18 @@ class Viewport(QWidget):
             return
         height = self.plotter.interactor.height()
         self._hover_at = (int(position.x()), int(height - position.y()))
+        # **Die Skizzenvorschau wartet nicht auf die Ruhepause** (§30.1, P4).
+        # Die Merkmalssuche darunter tut es aus gutem Grund: Sie kostet einen
+        # Zell-Pick, und den bei jeder Bewegung zu zahlen hieße, den
+        # Tiefenpuffer hundertmal in der Sekunde im Qt-Hauptthread zu lesen.
+        # Der Schnitt mit der Zeichenebene kostet nichts dergleichen — er ist
+        # eine Division —, und eine Linie, die dem Zeiger erst nach neunzig
+        # Millisekunden folgt, sieht aus wie ein hängendes Programm.
+        if self._sketch_frame is not None:
+            hit = self._sketch_hit(*self._hover_at)
+            if hit is not None:
+                self.sketchPointHovered.emit(hit)
+            return
         self._hover_timer.start()
 
     def _forget_pointer(self) -> None:
@@ -5375,6 +5407,40 @@ class Viewport(QWidget):
         world = self._from_view((float(point[0]), float(point[1]), float(point[2])))
         return (float(world[0]), float(world[1]))
 
+    def set_sketching(self, frame: PlaneFrame | None) -> None:
+        """Von jetzt an trifft ein Klick die Zeichenebene, nicht die Szene.
+
+        ``None`` beendet den Modus. Solange ein Rahmen steht, gehen Klick und
+        Zeigerbewegung nicht mehr durch die Auswahlkette, sondern durch
+        :meth:`_sketch_hit` — dort ist eine **Stelle auf der Ebene** gemeint
+        und kein Ding in der Szene.
+        """
+        self._sketch_frame = frame
+        self._update_cursor()
+
+    def _sketch_hit(self, x: int, y: int) -> tuple[float, float] | None:
+        """Wo der Sichtstrahl durch diese Bildstelle die Zeichenebene trifft.
+
+        **Gerechnet und nicht gepickt.** Ein ``vtkCellPicker`` trifft nur
+        Geometrie; die Zeichenebene ist keine, und über einer Durchgangsbohrung
+        gäbe es nicht einmal ein Dreieck dahinter (gemessen von ``formwerk-d1``
+        am Referenzkorpus). :func:`app.core.sketch.planes.ray_hit` trifft sie
+        immer — auch dort, wo der Körper ein Loch hat.
+
+        **Der Strahl wird in die Szene zurückgerechnet**, und zwar nur sein
+        Ursprung: Die Richtung ist ein Vektor und von der Plattenverschiebung
+        unberührt. Ohne das läge eine Skizze auf Platte 2 eine Bettbreite
+        daneben — derselbe Fehler, den :meth:`_from_view` für den Klick auf
+        einen Körper abfängt (§25).
+        """
+        if self._sketch_frame is None:
+            return None
+        ray = self._pick_ray(x, y)
+        if ray is None:
+            return None
+        start, step = ray
+        return ray_hit(self._sketch_frame, self._from_view(start), step)
+
     def _on_left_click(self, x: int, y: int) -> None:
         """Ein Linksklick, der keiner Kamerabewegung galt (§18.5).
 
@@ -5393,6 +5459,16 @@ class Viewport(QWidget):
         Werkzeuge das sind, sagt :meth:`_resting_role` und nicht eine zweite
         Aufzählung derselben Flaggen.
         """
+        # **Der Skizzenmodus kommt vor allem anderen** (§30.1, P4). Dort
+        # meint ein Klick eine Stelle auf der Zeichenebene, und die liegt
+        # oft dort, wo gar keine Geometrie ist — über einem Loch, neben dem
+        # Teil, in der Luft. Die Auswahlkette darunter fragt nach Dingen
+        # und hätte dort nichts zu antworten.
+        if self._sketch_frame is not None:
+            hit = self._sketch_hit(x, y)
+            if hit is not None:
+                self.sketchPointPicked.emit(hit)
+            return
         point = self._aim_at(x, y) if self._means_a_feature() else self._world_at(x, y)
         if point is None:
             self.objectPicked.emit("")

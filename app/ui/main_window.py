@@ -18,7 +18,7 @@ from contextlib import contextmanager, suppress
 from dataclasses import dataclass, replace
 from functools import partial
 from pathlib import Path
-from typing import Any, Final
+from typing import Any, Final, cast
 
 from PySide6.QtCore import QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import (
@@ -990,6 +990,8 @@ class MainWindow(QMainWindow):
         self.transform_bar.gizmoToggled.connect(self.viewport.set_gizmo)
         self.transform_bar.snappingChanged.connect(self.viewport.set_snapping)
         self.viewport.transformDragged.connect(self._on_transform_dragged)
+        self.viewport.sketchPointPicked.connect(self._on_sketch_point)
+        self.viewport.sketchPointHovered.connect(self._on_sketch_hover)
         self.viewport.faceDragged.connect(self._on_face_dragged)
         self.viewport.scaleDragged.connect(self._on_scale_dragged)
         self.viewport.featurePicked.connect(self._on_feature_picked)
@@ -4096,6 +4098,9 @@ class MainWindow(QMainWindow):
             # Einmal schwenken, beim Betreten. Danach nie wieder von selbst:
             # Wer beim Zeichnen dreht, soll gedreht bleiben.
             self.viewport.view_on_plane(frame)
+        # Ab jetzt trifft ein Klick die Ebene und nicht die Szene.
+        self.viewport.set_sketching(frame)
+        panel.plane_choice.currentIndexChanged.connect(self._sketch_plane_changed)
         self._redraw_sketch()
         # Der Startbildschirm liegt vor dem Arbeitsbereich, solange nichts
         # offen ist — und zu zeichnen beginnen ist genau der Fall, in dem noch
@@ -4129,6 +4134,42 @@ class MainWindow(QMainWindow):
             tr("Zeichnen, dann Fertig — dann fragt Solidon, was daraus wird.")
         )
         self.statusBar().showMessage(tr("Freies Zeichnen — Escape verlässt den Modus."))
+
+    def _sketch_plane_changed(self) -> None:
+        """Die Zeichenebene wurde gewechselt — Kamera, Ziel und Bild nachziehen.
+
+        **Hier wird geschwenkt, und das ist kein Widerspruch zu „nur beim
+        Betreten".** Wer die Ebene wechselt, sagt damit, dass er woanders
+        hinsieht; ihn auf der alten Blickrichtung stehen zu lassen wäre
+        dasselbe, als hätte der Wechsel nicht stattgefunden. Was nicht
+        schwenkt, ist das Zeichnen selbst — dort bleibt die Ansicht, wie der
+        Nutzer sie gedreht hat.
+        """
+        frame = self._sketch_frame()
+        self.viewport.set_sketching(frame)
+        if frame is not None:
+            self.viewport.view_on_plane(frame)
+        self._redraw_sketch()
+
+    def _on_sketch_point(self, point: object) -> None:
+        """Ein Klick auf die Zeichenebene setzt einen Punkt (§30.1, P4).
+
+        Der Ort kommt in Millimetern; die Zeichenfläche nimmt ihn über
+        ``place_on_plane`` entgegen und macht damit dasselbe wie mit einem
+        Klick auf sich selbst — Fang, Deckung, Undo-Punkt inbegriffen.
+        """
+        panel = self._sketch_panel
+        if panel is None:
+            return
+        place = cast(tuple[float, float], point)
+        panel.canvas.place_on_plane(place)
+
+    def _on_sketch_hover(self, point: object) -> None:
+        """Der Zeiger steht auf der Ebene — die Vorschau zieht nach."""
+        panel = self._sketch_panel
+        if panel is None:
+            return
+        panel.canvas.hover_on_plane(cast(tuple[float, float], point))
 
     def _sketch_frame(self) -> PlaneFrame | None:
         """Der Rahmen der Ebene, auf der gerade gezeichnet wird."""
@@ -4187,6 +4228,7 @@ class MainWindow(QMainWindow):
         # Zeile (gemessen, Segmentierungsfehler in ``test_ui.py``).
         self._sketch_panel = None
         self._sketch_target = None
+        self.viewport.set_sketching(None)
         panel.sketchChanged.disconnect(self._redraw_sketch)
         self._bottom_layout.removeWidget(panel)
         panel.hide()
