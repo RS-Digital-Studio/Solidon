@@ -142,7 +142,17 @@ class UserError(AppError):
 #: Alle anderen sind keine Zahlenspanne: leer, unlesbar, falscher Typ, fehlend,
 #: kein Umriss, kein Profil, unbekanntes Objekt. Von rund 170 Stellen, die eine
 #: :class:`ValidationError` werfen, betreffen acht eine Spanne.
-_RANGE_CONSTRAINTS: Final = frozenset({"minimum", "maximum", "range"})
+#:
+#: ``positive`` kam am 24.08.2026 dazu und ist der neunte Fall — mit sechzehn
+#: Aufrufern der häufigste von allen, weil :func:`require_positive` sie bündelt.
+#: Er stand vorher nicht hier, und das war eine Lücke, keine Entscheidung: „Dieses
+#: Maß muss größer als null sein" **ist** eine verletzte Spanne, nämlich die nach
+#: unten offene. Der Nutzer las darüber „Die Eingabe war so nicht verwendbar." —
+#: wahr, aber vage, und die Oberfläche zeichnet den Titel groß und das Detail
+#: klein. Genau die Beschwerde, aus der dieser Satz überhaupt entstanden ist,
+#: nur mit umgekehrtem Vorzeichen: Dort behauptete der Titel eine Zahlenspanne,
+#: wo keine war; hier verschwieg er eine, die es gibt.
+_RANGE_CONSTRAINTS: Final = frozenset({"minimum", "maximum", "range", "positive"})
 
 
 class ValidationError(UserError):

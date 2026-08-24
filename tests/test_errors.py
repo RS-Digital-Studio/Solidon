@@ -165,9 +165,22 @@ def test_the_title_follows_the_constraint_not_the_class() -> None:
     """
     from app.core.errors import UserError, ValidationError
 
-    for constraint in ("minimum", "maximum", "range"):
+    for constraint in ("minimum", "maximum", "range", "positive"):
         error = ValidationError(field="wall", constraint=constraint, detail="Zu dünn.")
         assert "Bereichs" in str(error.title), f"{constraint} ist eine Spanne"
+
+    # ``positive`` steht hier seit dem 24.08.2026 und stand vorher in keiner der
+    # beiden Listen -- eine Lücke, keine Entscheidung. Die nach unten offene
+    # Spanne ist eine Spanne, und mit sechzehn Aufrufern über
+    # ``require_positive`` ist sie die häufigste von allen. Gegenprobe über den
+    # echten Weg, nicht über den Konstruktor: Sonst prüft der Test die Liste,
+    # die er selbst aufzählt.
+    with pytest.raises(ValidationError) as gemessen:
+        errors.require_positive("wall", 0.0)
+    assert "Bereichs" in str(gemessen.value.title), (
+        "require_positive muss den Bereichstitel tragen, nicht den allgemeinen"
+    )
+    assert gemessen.value.constraint == "positive"
 
     for constraint in ("empty", "type", "unknown_object", "required", ""):
         error = ValidationError(field="source", constraint=constraint, detail="Keine STEP-Datei.")
