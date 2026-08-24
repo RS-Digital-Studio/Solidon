@@ -19,10 +19,10 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
-import trimesh
 
 from app.core.geom.mesh import MeshData
 from app.core.geom.orient import candidates as face_candidates
+from app.core.geom.orient import rotation_to_down
 from app.core.geom.transform import apply, place_on_bed
 from app.core.log import get_logger
 from app.core.slice.analysis import slice_body
@@ -134,7 +134,7 @@ def sample_directions(count: int, seed: int | None = None) -> list[Vec3]:
 def judge(mesh: MeshData, direction: Vec3, layer_height: float) -> Candidate:
     """Dreht den Körper, bis ``direction`` nach unten zeigt, dann schneiden und
     zählen."""
-    turned = place_on_bed(apply(mesh, _rotation_to_down(direction)))
+    turned = place_on_bed(apply(mesh, rotation_to_down(direction)))
     # §28.2: die Suche liest eine Zahl daraus. Strukturbreiten an einem
     # Körper zu messen, der gleich wieder gedreht wird, ist Arbeit, die
     # niemand ansieht.
@@ -145,25 +145,6 @@ def judge(mesh: MeshData, direction: Vec3, layer_height: float) -> Candidate:
         first_layer_area=result.first_layer_area,
         height=turned.bounds.size[2],
     )
-
-
-def _rotation_to_down(direction: Vec3) -> np.ndarray:
-    source = np.asarray(direction, dtype=float)
-    length = float(np.linalg.norm(source))
-    if length <= EPS_GEOM:
-        return np.eye(4)
-    source = source / length
-    target = np.array([0.0, 0.0, -1.0])
-
-    axis = np.cross(source, target)
-    if float(np.linalg.norm(axis)) <= EPS_GEOM:
-        if float(np.dot(source, target)) > 0:
-            return np.eye(4)
-        return np.asarray(
-            trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]), dtype=float
-        )
-    angle = math.acos(float(np.clip(np.dot(source, target), -1.0, 1.0)))
-    return np.asarray(trimesh.transformations.rotation_matrix(angle, axis), dtype=float)
 
 
 def search(
@@ -202,7 +183,7 @@ def search(
         if better(candidate, best, floor):
             best = candidate
 
-    turned = place_on_bed(apply(mesh, _rotation_to_down(best.direction)))
+    turned = place_on_bed(apply(mesh, rotation_to_down(best.direction)))
     findings = [
         Finding(
             code="orient.searched",

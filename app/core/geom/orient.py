@@ -90,7 +90,7 @@ def candidates(mesh: MeshData) -> list[Vec3]:
 
 def evaluate_direction(mesh: MeshData, direction: Vec3) -> Orientation:
     """Wie der Körper aussähe, stünde er auf dieser Fläche."""
-    turned = apply(mesh, _rotation_to_down(direction))
+    turned = apply(mesh, rotation_to_down(direction))
     body = turned.raw
     normals = np.asarray(body.face_normals, dtype=float)
     areas = np.asarray(body.area_faces, dtype=float)
@@ -107,8 +107,15 @@ def evaluate_direction(mesh: MeshData, direction: Vec3) -> Orientation:
     )
 
 
-def _rotation_to_down(direction: Vec3) -> np.ndarray:
-    """Die Drehung, die ``direction`` auf -Z bringt."""
+def rotation_to_down(direction: Vec3) -> np.ndarray:
+    """Die Drehung, die ``direction`` auf -Z bringt.
+
+    Öffentlich, weil die Schichtanalyse sie mitbenutzt: ``slice.orientation``
+    trug sie bis zum 24.08.2026 als wortgleiche Kopie, Zeile für Zeile dieselbe
+    — und damit dieselbe Rechnung an zwei Stellen, von denen nur eine gepflegt
+    worden wäre. Sie gehört hierher, denn hier stehen die Kandidatenrichtungen,
+    die sie dreht.
+    """
     source = np.asarray(direction, dtype=float)
     length = float(np.linalg.norm(source))
     if length <= EPS_GEOM:
@@ -131,7 +138,7 @@ def orient_for_print(mesh: MeshData) -> OrientResult:
     """Dreht den Körper in die Lage, die der Heuristik am besten gefällt."""
     scored = [evaluate_direction(mesh, direction) for direction in candidates(mesh)]
     best = max(scored, key=lambda entry: entry.score)
-    turned = place_on_bed(apply(mesh, _rotation_to_down(best.direction)))
+    turned = place_on_bed(apply(mesh, rotation_to_down(best.direction)))
 
     findings = [
         Finding(
