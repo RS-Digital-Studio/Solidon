@@ -17,7 +17,8 @@ from dataclasses import dataclass, replace
 from typing import Final, Literal
 
 from app.core.errors import CORRECT_INPUT, Action, GeometryError
-from app.core.types import Point2, SolvedSketch
+from app.core.sketch.planes import to_world
+from app.core.types import PlaneFrame, Point2, SketchElement, SolvedSketch, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import TranslatableText, _
 
@@ -311,4 +312,170 @@ def _broken(detail: TranslatableText | str) -> GeometryError:
             Action("open_sketch", _("Skizze ansehen"), primary=True),
             CORRECT_INPUT,
         ),
+    )
+
+
+# --- Die gezeichnete Kurve (§30.1, Konzept „Die Skizze in den Raum") --------
+
+
+#: Wie weit eine Sehne höchstens von ihrem Bogen abweichen darf, in Millimetern.
+#:
+#: Keine Materialtoleranz im Sinne von Regel 7 — hier geht es nicht um eine
+#: Passung, sondern darum, ab wann ein Kreis wie ein Vieleck aussieht. Feiner
+#: als die Vernetzung des B-Rep-Kerns (``DEFLECTION`` = 0,05): In die Skizze
+#: wird hineingezoomt, in ein fertiges Netz seltener.
+CHORD_ERROR = 0.02
+
+#: Untergrenze der Segmentzahl je Bogen. Ein Viertelkreis mit zwei Sehnen sähe
+#: auch dann falsch aus, wenn die Sehnentoleranz es zuließe.
+_LEAST_STEPS = 8
+
+#: Obergrenze. Bei einem Kreis von einem Meter verlangte die Toleranz über
+#: dreitausend Punkte für eine Linie, die niemand von einer feineren
+#: unterscheidet.
+_MOST_STEPS = 360
+
+
+@dataclass(frozen=True, slots=True)
+class SketchCurve:
+    """Ein Skizzenelement als Punktfolge im Raum.
+
+    Was die Ansicht braucht, um eine Skizze dorthin zu zeichnen, wo sie liegt:
+    keine exakten Kurven wie im :class:`ProfileSegment` — die gehen an den
+    B-Rep-Kern —, sondern abgetastete Punkte in Weltkoordinaten.
+
+    Ein **Kreis trägt seinen ersten Punkt am Ende noch einmal**. Damit ist
+    „geschlossen" an der Punktfolge abzulesen und braucht kein eigenes Feld,
+    das man vergessen kann zu setzen.
+
+    Ein **Punkt** kommt als Folge der Länge eins. Wer ihn zeichnet, sieht das
+    an der Länge; eine zweite Liste daneben wäre eine zweite Stelle, an der
+    die Reihenfolge stimmen muss.
+    """
+
+    points: tuple[Vec3, ...]
+    construction: bool = False
+    """Hilfsgeometrie — sie wird anders gezeichnet und bildet kein Profil."""
+
+
+def _steps_for(radius: float, sweep: float) -> int:
+    """Wie viele Sehnen ein Bogen dieses Radius und dieser Weite braucht.
+
+    Aus der Sehnentoleranz: Bei einem Winkelschritt θ liegt die Sehnenmitte um
+    ``r * (1 - cos(θ/2))`` neben dem Bogen. Nach θ aufgelöst ergibt das den
+    größten Schritt, der :data:`CHORD_ERROR` noch einhält.
+
+    Ein Radius unter der Toleranz braucht keine Rechnung — dort ist jede
+    Unterteilung feiner als der Fehler, den sie vermeiden soll.
+    """
+    if radius <= CHORD_ERROR:
+        return _LEAST_STEPS
+    step = 2.0 * math.acos(max(-1.0, 1.0 - CHORD_ERROR / radius))
+    if step <= EPS_GEOM:
+        return _MOST_STEPS
+    return max(_LEAST_STEPS, min(_MOST_STEPS, math.ceil(abs(sweep) / step)))
+
+
+def _along_arc(centre: Point2, start: Point2, sweep: float, radius: float) -> tuple[Point2, ...]:
+    """Die Punkte eines Bogens, von ``start`` aus um ``sweep`` gedreht."""
+    begin = math.atan2(start[1] - centre[1], start[0] - centre[0])
+    steps = _steps_for(radius, sweep)
+    return tuple(
+        (
+            centre[0] + radius * math.cos(begin + sweep * index / steps),
+            centre[1] + radius * math.sin(begin + sweep * index / steps),
+        )
+        for index in range(steps + 1)
+    )
+
+
+def _flat_curve(element: SketchElement) -> tuple[Point2, ...]:
+    """Ein Element als Punktfolge in der Zeichenebene.
+
+    Der Bogen läuft **gegen den Uhrzeigersinn** von Anfang nach Ende — so
+    steht es im Vertrag von :class:`SketchElement`, und daran hängt, ob eine
+    Kontur den kurzen oder den langen Weg nimmt. Ein Bogen, dessen Ende genau
+    auf seinem Anfang liegt, ist ein voller Umlauf und keine Strecke der
+    Länge null.
+    """
+    points = element.points
+    if element.kind == "line":
+        return (points[0], points[1])
+    if element.kind == "circle":
+        centre, rim = points[0], points[1]
+        radius = math.hypot(rim[0] - centre[0], rim[1] - centre[1])
+        return _along_arc(centre, rim, 2.0 * math.pi, radius)
+    if element.kind == "arc":
+        centre, start, end = points[0], points[1], points[2]
+        radius = math.hypot(start[0] - centre[0], start[1] - centre[1])
+        begin = math.atan2(start[1] - centre[1], start[0] - centre[0])
+        finish = math.atan2(end[1] - centre[1], end[0] - centre[0])
+        sweep = (finish - begin) % (2.0 * math.pi)
+        if sweep <= EPS_GEOM:
+            sweep = 2.0 * math.pi
+        return _along_arc(centre, start, sweep, radius)
+    if element.kind == "spline":
+        return _along_spline(points)
+    return (points[0],)
+
+
+def _along_spline(points: tuple[Point2, ...]) -> tuple[Point2, ...]:
+    """Ein Spline als Punktfolge — Catmull-Rom, wie ihn die Zeichenfläche malt.
+
+    Dieselbe Kurve wie in ``SketchCanvas._paint_element``: kubische Stücke,
+    deren Kontrollpunkte aus den Nachbarn gemittelt sind. Eine Vorschau, die
+    Ecken zeigt, wo das Ergebnis keine hat, wäre eine Aussage über die
+    Geometrie, die nicht stimmt.
+    """
+    count = len(points)
+    if count < 2:
+        return points
+    steps = max(_LEAST_STEPS, min(_MOST_STEPS, 12 * (count - 1)))
+    per_piece = max(1, steps // (count - 1))
+    curve: list[Point2] = [points[0]]
+    for index in range(count - 1):
+        before = points[max(index - 1, 0)]
+        first, second = points[index], points[index + 1]
+        after = points[min(index + 2, count - 1)]
+        one = (first[0] + (second[0] - before[0]) / 6.0, first[1] + (second[1] - before[1]) / 6.0)
+        two = (second[0] - (after[0] - first[0]) / 6.0, second[1] - (after[1] - first[1]) / 6.0)
+        for step in range(1, per_piece + 1):
+            share = step / per_piece
+            rest = 1.0 - share
+            curve.append(
+                (
+                    rest**3 * first[0]
+                    + 3.0 * rest**2 * share * one[0]
+                    + 3.0 * rest * share**2 * two[0]
+                    + share**3 * second[0],
+                    rest**3 * first[1]
+                    + 3.0 * rest**2 * share * one[1]
+                    + 3.0 * rest * share**2 * two[1]
+                    + share**3 * second[1],
+                )
+            )
+    return tuple(curve)
+
+
+def curves_of(solved: SolvedSketch, frame: PlaneFrame) -> tuple[SketchCurve, ...]:
+    """Die gelöste Skizze als Punktfolgen im Raum, in Reihenfolge der Elemente.
+
+    Der Weg von der Zeichnung in die Ansicht (§30.1, Stufe zwei): Jedes
+    Element wird in der Ebene abgetastet und über
+    :func:`app.core.sketch.planes.to_world` an seinen Ort gelegt.
+
+    **Ohne Qt und ohne VTK**, und das ist der Zweck. Offscreen gibt es keinen
+    Plotter, und was hinter dieser Wache gerechnet wird, prüft in der Suite
+    niemand mehr. Hier steht die ganze Aussage darüber, *was* zu zeichnen ist;
+    die Ansicht reicht sie weiter, ohne sie zu verändern.
+
+    Konstruktionsgeometrie kommt mit — sie wird anders gezeichnet, aber sie
+    steht im Bild. Nur die Profilbildung übergeht sie (:func:`regions_of`).
+    """
+    return tuple(
+        SketchCurve(
+            points=tuple(to_world(frame, point) for point in _flat_curve(element)),
+            construction=element.construction,
+        )
+        for element in solved.elements
     )

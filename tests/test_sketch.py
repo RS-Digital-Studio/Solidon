@@ -10,7 +10,8 @@ import pytest
 from app.core.errors import AppError, SketchConflictError, ValidationError
 from app.core.sketch import solve_sketch
 from app.core.sketch.planes import frame_of, ray_hit, to_plane, to_world
-from app.core.types import PlaneFrame, Sketch, SketchConstraint, SketchElement
+from app.core.sketch.profile import _LEAST_STEPS, curves_of
+from app.core.types import PlaneFrame, Sketch, SketchConstraint, SketchElement, SolvedSketch
 
 # Ein Rechteck aus vier Linien, absichtlich leicht verzogen: die Koinzidenzen
 # ziehen die Ecken zusammen, die Maße kommen aus Projektparametern.
@@ -784,3 +785,139 @@ def test_a_ray_hits_a_tilted_plane_where_to_world_would_put_it() -> None:
     start = tuple(target[axis] + 250.0 * frame.normal[axis] for axis in range(3))
     direction = tuple(-frame.normal[axis] for axis in range(3))
     assert ray_hit(frame, start, direction) == pytest.approx((11.0, -6.5))
+
+
+# --- Die Skizze als Kurve im Raum (§30.1, P2) --------------------------------
+
+
+def solved_with(*elements: SketchElement) -> SolvedSketch:
+    """Ein gelöstes Ergebnis ohne den Solver — hier zählt die Abtastung."""
+    return SolvedSketch(elements=elements, free_dof=0, max_residual=0.0)
+
+
+def flat_frame() -> PlaneFrame:
+    """Die XY-Ebene auf Höhe null, als Rahmen."""
+    return frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+
+
+def test_a_line_keeps_its_two_ends() -> None:
+    """Eine Strecke wird nicht abgetastet — sie ist schon eine."""
+    curves = curves_of(solved_with(SketchElement("line", ((0.0, 0.0), (10.0, 4.0)))), flat_frame())
+
+    assert len(curves) == 1
+    assert curves[0].points[0] == pytest.approx((0.0, 0.0, 0.0))
+    assert curves[0].points[1] == pytest.approx((10.0, 4.0, 0.0))
+
+
+def test_a_circle_closes_on_its_own_first_point() -> None:
+    """Sonst bliebe eine Lücke, und „geschlossen" wäre nicht ablesbar.
+
+    Der letzte Punkt ist derselbe wie der erste, damit die Ansicht keinen
+    zusätzlichen Merker braucht — den man vergessen könnte zu setzen.
+    """
+    curves = curves_of(
+        solved_with(SketchElement("circle", ((5.0, 5.0), (15.0, 5.0)))), flat_frame()
+    )
+    points = curves[0].points
+
+    assert points[0] == pytest.approx(points[-1]), "der Kreis schließt sich"
+    for point in points:
+        assert math.hypot(point[0] - 5.0, point[1] - 5.0) == pytest.approx(10.0)
+        assert point[2] == pytest.approx(0.0)
+
+
+def test_an_arc_runs_counterclockwise_from_start_to_end() -> None:
+    """Die Laufrichtung steht im Vertrag von ``SketchElement``, und sie zählt.
+
+    Ein Viertelkreis von (10, 0) nach (0, 10) um den Ursprung geht **gegen**
+    den Uhrzeigersinn über 45°, nicht im Uhrzeigersinn über 315°. Wer das
+    Vorzeichen dreht, bekommt denselben Anfang, dasselbe Ende und dazwischen
+    drei Viertel Kreis — eine Kontur, die den langen Weg nimmt.
+    """
+    curves = curves_of(
+        solved_with(SketchElement("arc", ((0.0, 0.0), (10.0, 0.0), (0.0, 10.0)))), flat_frame()
+    )
+    points = curves[0].points
+
+    assert tuple(points[0]) == pytest.approx((10.0, 0.0, 0.0))
+    assert tuple(points[-1]) == pytest.approx((0.0, 10.0, 0.0))
+    # **Jeder** Punkt liegt im ersten Quadranten, nicht nur der in der Mitte
+    # der Liste: Bei gerader Punktzahl ist die Listenmitte nicht die
+    # Bogenmitte, und ein Test, der sie dafür nimmt, prüft die Punktzahl mit.
+    # Der lange Weg über 315 Grad verließe den Quadranten sofort.
+    for point in points:
+        assert point[0] >= -1e-9, f"{point} liegt links der Achse"
+        assert point[1] >= -1e-9, f"{point} liegt unter der Achse"
+
+
+def test_a_full_turn_is_not_a_line_of_length_zero() -> None:
+    """Ein Bogen, dessen Ende auf seinem Anfang liegt, ist ein voller Umlauf.
+
+    Die Winkeldifferenz ist dort null, und ohne diesen Fall käme eine Folge
+    aus lauter identischen Punkten heraus — im Bild nichts.
+    """
+    curves = curves_of(
+        solved_with(SketchElement("arc", ((0.0, 0.0), (10.0, 0.0), (10.0, 0.0)))), flat_frame()
+    )
+    points = curves[0].points
+
+    assert len(points) > _LEAST_STEPS, "ein voller Umlauf braucht seine Punkte"
+    assert max(point[1] for point in points) == pytest.approx(10.0, abs=0.1), "er geht ganz herum"
+
+
+def test_a_bigger_circle_gets_more_points() -> None:
+    """Die Feinheit folgt dem Radius, nicht einer festen Zahl.
+
+    Eine feste Zahl ist bei einer M3-Bohrung Verschwendung und bei einem
+    Ring von zweihundert Millimetern ein Vieleck.
+    """
+    small = curves_of(solved_with(SketchElement("circle", ((0.0, 0.0), (1.0, 0.0)))), flat_frame())
+    large = curves_of(
+        solved_with(SketchElement("circle", ((0.0, 0.0), (200.0, 0.0)))), flat_frame()
+    )
+
+    assert len(large[0].points) > len(small[0].points)
+
+
+def test_every_point_lies_in_the_tilted_plane() -> None:
+    """Auf einer geneigten Fläche darf nichts danebenliegen.
+
+    Gemessen am Abstand entlang der Normalen — das ist die Zahl, die null
+    sein muss, und die einzige, die ein Fehler in ``to_world`` verrät.
+    """
+    frame = tilted_frame()
+    curves = curves_of(
+        solved_with(
+            SketchElement("circle", ((3.0, -2.0), (9.0, -2.0))),
+            SketchElement("line", ((0.0, 0.0), (5.0, 5.0))),
+        ),
+        frame,
+    )
+
+    for curve in curves:
+        for point in curve.points:
+            gap = tuple(point[axis] - frame.origin[axis] for axis in range(3))
+            along = sum(gap[axis] * frame.normal[axis] for axis in range(3))
+            assert along == pytest.approx(0.0, abs=1e-9)
+
+
+def test_construction_geometry_travels_with_its_mark() -> None:
+    """Sie steht im Bild, nur anders gezeichnet — verlöre sie die Marke,
+    sähe eine Mittellinie aus wie eine Kante."""
+    curves = curves_of(
+        solved_with(
+            SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),
+            SketchElement("line", ((0.0, 5.0), (10.0, 5.0)), construction=True),
+        ),
+        flat_frame(),
+    )
+
+    assert [curve.construction for curve in curves] == [False, True]
+
+
+def test_a_point_stays_a_single_place() -> None:
+    """Ein Punkt hat keine Länge, und die Folge der Länge eins sagt das."""
+    curves = curves_of(solved_with(SketchElement("point", ((2.0, 3.0),))), flat_frame())
+
+    assert len(curves[0].points) == 1, "ein Punkt ist eine Folge der Laenge eins"
+    assert curves[0].points[0] == pytest.approx((2.0, 3.0, 0.0))
