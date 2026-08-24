@@ -16,9 +16,10 @@ from __future__ import annotations
 
 from typing import cast
 
+from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
-from app.core.knowledge.parts.build import bore, face, result, union
+from app.core.knowledge.parts.build import bore, face, result, subtract, union
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
     MOUTH_AT_ORIGIN,
@@ -32,6 +33,11 @@ from app.i18n import _
 FIRST_RELEASE = PartChange(
     version="1", date="2026-07-28", reason="Erstbestückung der Bibliothek (§24.1)."
 )
+
+#: Was von der Öffnung eines Clips mindestens bleibt, wenn die Verengung sie
+#: rechnerisch schließen würde. Kein Maß aus einer Tabelle, sondern die Grenze,
+#: unter der ein Quader keine Breite mehr hat.
+MIN_GAP = 0.2
 
 PROFILE_TONGUE_ADDED = PartChange(
     version="1",
@@ -329,4 +335,128 @@ def profile_tongue(raw: BaseParams) -> PartResult:
             (0.0, 0.0, neck_height),
             (0.0, 0.0, -1.0),
         ),
+    )
+
+
+CABLE_CLIP_ADDED = PartChange(
+    version="1",
+    date="2026-08-24",
+    reason="Kabelclip — die dünnste Gruppe des Katalogs war die meistgefragte.",
+)
+
+
+@op_params
+class CableClipParams(BaseParams):
+    size: str = param(
+        title=_("Kabel"),
+        default="cable-5",
+        choices=_TUBES,
+        doc=_("Was der Clip halten soll — Kabel oder Schlauch aus der Tabelle."),
+    )
+    width: float = param(
+        title=_("Breite"),
+        default=8.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=40.0,
+        doc=_("Wie breit der Bügel ist, längs des Kabels gemessen."),
+    )
+    wall: float = param(
+        title=_("Wandstärke"),
+        default=2.0,
+        unit="mm",
+        minimum=0.8,
+        maximum=10.0,
+        doc=_("Dicke des Bügels. Zu dünn federt er auf, zu dick federt er nicht."),
+    )
+    grip: float = param(
+        title=_("Verengung"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=5.0,
+        doc=_(
+            "Wie weit die Öffnung je Seite enger ist als das Kabel — das ist es, "
+            "was den Clip halten lässt. Null heißt: ein Fünftel des Durchmessers."
+        ),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        placement="advanced",
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
+
+
+@register_part(
+    name="cable_clip",
+    title=_("Kabelclip"),
+    group="routing",
+    params=CableClipParams,
+    features=["seat"],
+    doc=_(
+        "Ein Bügel, der auf eine Fläche kommt und ein Kabel hält. Die Öffnung ist "
+        "enger als das Kabel: Man drückt es hinein, und es bleibt."
+    ),
+    caveat=_(
+        "Nicht für Kabel, die unter Zug stehen — dafür ist die Kabeldurchführung "
+        "mit Zugentlastung da. Ein Clip führt, er hält nicht fest."
+    ),
+    changes=[CABLE_CLIP_ADDED],
+)
+def cable_clip(raw: BaseParams) -> PartResult:
+    """Ein liegender C-Bügel auf einem Sockel.
+
+    Der Sockel trägt zwei Aufgaben, und die zweite ist die wichtigere: Er gibt
+    dem Kabel eine Auflage, und er gibt dem Bügel eine **Fläche** zum Aufsetzen.
+    Ein Ring, der die Modelloberfläche nur tangential berührt, träfe sie in
+    einer Linie — genau der Fall, an dem eine Boolesche Operation zuverlässig
+    scheitert (§39). Die untere Hälfte des Rings steckt deshalb im Sockel.
+    """
+    params = cast(CableClipParams, raw)
+    entry = standards.tube(params.size)
+
+    inner = entry.outer + params.play
+    outer = inner + 2.0 * params.wall
+    base = params.wall
+    centre = base + inner / 2.0
+
+    # **Die Verengung wird gekappt, nicht abgelehnt.** Der Bereichstest fährt
+    # genau diese Ecke: Bei ``grip`` = 5 und einem 4-mm-Schlauch bliebe eine
+    # Öffnung von minus sechs Millimetern, und ein Quader mit negativer Breite
+    # ist kein Fehler des Nutzers, sondern einer der Grenze. Was bleibt, ist
+    # ein Clip, der ganz geschlossen ist — unbrauchbar, aber baubar, und die
+    # Grenzen des Feldes sagen es vorher.
+    grip = params.grip or inner / 5.0
+    gap = max(inner - 2.0 * grip, MIN_GAP)
+
+    def lying(diameter: float, length: float) -> MeshData:
+        """Ein Zylinder mit der Achse in Y — das Kabel läuft längs, nicht quer."""
+        upright = shapes.cylinder(diameter, length)
+        centred = shapes.moved(upright, (0.0, 0.0, -length / 2.0))
+        return shapes.turned(centred, 90.0, (1.0, 0.0, 0.0))
+
+    ring = subtract(
+        shapes.moved(lying(outer, params.width), (0.0, 0.0, centre)),
+        shapes.moved(lying(inner, params.width + 2.0 * shapes.OVERLAP), (0.0, 0.0, centre)),
+    )
+    # Der Schnitt beginnt in der Ringmitte und geht nach oben hinaus: Was
+    # darunter liegt, trägt das Kabel, was darüber lag, ist die Öffnung.
+    mouth = shapes.moved(
+        shapes.box(gap, params.width + 2.0 * shapes.OVERLAP, outer),
+        (0.0, 0.0, centre),
+    )
+    body = union(
+        shapes.box(outer, params.width, base),
+        subtract(ring, mouth),
+    )
+
+    return result(
+        body,
+        # Die Auflage des Kabels: die Oberseite des Sockels, innerhalb des
+        # Bügels. Nach oben gerichtet, denn dort liegt, was sie trägt.
+        face("seat_1", inner * params.width, (0.0, 0.0, base), (0.0, 0.0, 1.0)),
     )

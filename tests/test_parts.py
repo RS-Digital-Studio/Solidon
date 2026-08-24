@@ -92,14 +92,14 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
 
 
 def test_the_library_has_the_first_set_from_the_plan() -> None:
-    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung, dazu einen.
+    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung, dazu drei.
 
     Die Kalibrierkörper aus §28.3 sind auch Bausteine, gehören aber nicht zu
     diesem Satz — sie sind Werkzeuge für den Drucker, nicht für das Modell, und
     sie haben ihre eigene Gruppe im Katalog.
 
-    **Zwei stehen nicht in der Erstbestückung**, und beide sind eine Ansage und
-    kein Versehen. Wer die Zahl hier ändert, ändert die Bibliothek, und das soll
+    **Drei stehen nicht in der Erstbestückung**, und alle drei sind eine Ansage
+    und kein Versehen. Wer die Zahl hier ändert, ändert die Bibliothek, und das soll
     auffallen.
 
     ``snap_connector`` ist am 14.08.2026 dazugekommen, weil das Trennwerkzeug
@@ -113,10 +113,17 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     hat sie kein Baustein. Nachschlagen konnte man sie, verbauen nicht. Die zwei
     Maße, die eine Feder darüber hinaus braucht — Stegdicke und Kammertiefe —
     sind mit ihr in die Tabelle gekommen; sie ist seither auf Version 2.
+
+    ``cable_clip`` kam am 24.08.2026 dazu, und der Anlass war eine Zählung. Die
+    Gruppe „Kabel und Schläuche" hatte **einen** Eintrag, und der ist ein Loch
+    (die Durchführung), kein Halter — während Kabelmanagement die
+    meistgenannte Kategorie der Modellportale ist. Dieselbe Sorte Lücke wie bei
+    ``profile_tongue``: Die Schlauchmaße standen seit der Erstbestückung in
+    ``standards.toml``, und gelesen hat sie genau ein Baustein.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 15
+    assert len(building) == 16
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -1050,3 +1057,80 @@ def test_every_group_has_a_title_and_every_title_a_tile() -> None:
     assert not ohne_kachel, (
         f"Gruppentitel ohne einen einzigen Baustein: {ohne_kachel} — ein leerer Abschnitt"
     )
+
+
+# --- Der Kabelclip (insert_cable_clip) ------------------------------------------
+
+
+@pytest.mark.parametrize("size", ["cable-5", "cable-7", "ptfe-4x2", "ptfe-6x3"])
+def test_the_clip_lets_the_cable_lie_but_not_drop_in(size: str) -> None:
+    """Die Zusage des Clips ist ein Widerspruch, und beide Hälften sind messbar:
+    Das Kabel **liegt im Bügel**, und es **kommt nicht senkrecht hinein**.
+
+    Genau daran hängt, ob ein Clip hält. Ist die Öffnung so weit wie das Kabel,
+    fällt es wieder heraus; ist der Innenraum zu eng, drückt der Bügel es platt.
+
+    Gefragt wird über die Boolesche Operation, und ihre **Ausnahme ist die
+    Antwort**: Eine leere Schnittmenge meldet ``boolean`` als
+    ``BooleanFailedError`` („Es bleibt kein Körper übrig"), und das ist hier
+    genau das gesuchte Ergebnis.
+
+    **Warum die Probe neunzig Prozent misst und nicht hundert.** Der Sitz ist
+    so groß wie das Kabel, also berühren sich beide in einer Fläche — und
+    darauf ist keine Boolesche Operation zu bauen (§39). Gemessen, wie weit die
+    Zahl davon abhängt: Bei 98 % kamen für vier Größen 8,6 · 10,4 · 9,3 ·
+    9,4 mm³ heraus, **absolut konstant statt proportional**, und die Kette
+    meldete dabei „jittered". Das ist kein Eindringen, das ist das Werkzeug,
+    das sich selbst misst. Bei neunzig Prozent ist die Antwort eindeutig, und
+    die Zusage — der Sitz ist für das Kabel gebaut — prüft sie immer noch.
+    """
+    from app.core.errors import BooleanFailedError
+    from app.core.geom.boolean import boolean
+    from app.core.geom.mesh import MeshData
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts import PARTS, shapes
+
+    spec = PARTS.get("cable_clip")
+    values = spec.params(size=size)
+    built = spec.fn(values)
+    entry = standards.tube(size)
+
+    # Wo das Kabel liegt, sagt der Baustein selbst: ``seat_1`` ist die Auflage,
+    # und das Kabel liegt mit seinem Radius darüber. Nicht aus der Formel des
+    # Bausteins gerechnet — die prüft sich sonst selbst.
+    axis = built.features["seat_1"].params["centre"][2] + entry.outer / 2.0
+
+    def cable(height: float, share: float) -> MeshData:
+        upright = shapes.cylinder(entry.outer * share, values.width * 4.0)
+        centred = shapes.moved(upright, (0.0, 0.0, -values.width * 2.0))
+        lying = shapes.turned(centred, 90.0, (1.0, 0.0, 0.0))
+        return shapes.moved(lying, (0.0, 0.0, height))
+
+    with pytest.raises(BooleanFailedError):
+        boolean("intersection", [built.mesh, cable(axis, 0.90)])
+
+    # Und der Weg von oben ist versperrt: ein Kabel, das über der Öffnung steht
+    # und heruntergedrückt würde, trifft auf Material. Hier ist der Schnitt
+    # groß und die Antwort eindeutig.
+    blocked = boolean("intersection", [built.mesh, cable(axis + entry.outer, 1.0)]).mesh
+    assert blocked.volume > 0.0, (
+        f"{size}: the opening is as wide as the cable — nothing holds it in"
+    )
+
+
+def test_the_clip_keeps_its_grip_over_the_whole_range() -> None:
+    """Die Verengung wird gekappt, nicht abgelehnt (§24.3, Bereichstest).
+
+    Bei ``grip`` = 5 und einem 4-mm-Schlauch wäre die Öffnung rechnerisch minus
+    sechs Millimeter breit. Der Baustein baut trotzdem — was herauskommt, ist
+    ein geschlossener Ring, unbrauchbar und wasserdicht. Das ist die richtige
+    Antwort auf eine Grenze, die das Feld selbst nennt: Ein Bereichstest, der an
+    seiner eigenen Ecke in eine Ausnahme läuft, prüft nichts.
+    """
+    from app.core.knowledge.parts import PARTS
+
+    spec = PARTS.get("cable_clip")
+    for grip in (0.0, 2.5, 5.0):
+        built = spec.fn(spec.params(size="ptfe-4x2", grip=grip))
+        assert built.mesh.is_watertight, f"grip={grip} is not watertight"
+        assert built.mesh.component_count == 1, f"grip={grip} falls apart"
