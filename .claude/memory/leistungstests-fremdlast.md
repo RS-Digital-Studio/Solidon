@@ -113,6 +113,24 @@ Tag, alle bei ~2050 bis 2150 ms, im Wechsel gemessen sogar der ältere Stand
 langsamer. Ein A/B im selben Baum sagt nur, dass die geprüfte Änderung
 unschuldig ist — **wer schuldig ist, sagt es nicht.**
 
+**Wenn die Maschine nicht ruhig zu bekommen ist, misst man im Wechsel.** „Die
+Marke allein fahren" ist der beste Rat und an manchen Tagen keiner — am
+24.08.2026 arbeiteten vier Sitzungen gleichzeitig. Dann fährt man A und B
+**abwechselnd in derselben Schleife** statt in zwei Blöcken:
+
+    Runde 1:  mit 2147 ms   |   ohne 2112 ms
+    Runde 2:  mit 2130 ms   |   ohne 2094 ms
+    Runde 3:  mit 2094 ms   |   ohne 2131 ms
+
+So trifft jede Laständerung beide Seiten, und der Vergleich trägt, obwohl die
+absoluten Zahlen es nicht tun. Zwei Blöcke nacheinander hätten hier eine
+Aussage über die Uhrzeit ergeben.
+
+**Und `strikes` zählt die eigenen Prüfläufe mit.** Der Zähler steigt bei jedem
+roten Lauf, auch bei denen, mit denen man den roten Lauf untersucht: Am
+24.08.2026 stand er auf 9, davon drei aus der Messung selbst. Wer eine Zahl
+nennt, die er gerade hochgezählt hat, sagt es dazu.
+
 Die Startzeitmarke von 1233 ms wird auf dieser Maschine heute nicht mehr
 erreicht; sie ist der kleinste je gemessene Wert, und der Docstring des Tests
 nennt selbst eine Spanne von 2500 bis 13 764 ms. Zurückgesetzt wird sie
