@@ -434,11 +434,27 @@ class SketchRevolveParams(BaseParams):
         minimum=0.1,
         maximum=1000.0,
         doc=_("Höhe des Querschnitts entlang der Achse. Beim Kreis ohne Wirkung."),
-        # Anders als bei den vier Geschwistern: Hier wirkt die Angabe auch beim
-        # Vieleck — der Satz schließt allein den Kreis aus, und ein
-        # ``depends_on``, das mehr sperrt als der Satz sagt, wäre schlechter
-        # als keines.
-        depends_on=("shape", ("rectangle", "slot", "polygon")),
+        # **Wie bei den Geschwistern, und das stand hier anders.** Der
+        # Kommentar an dieser Stelle behauptete, die Angabe wirke „auch beim
+        # Vieleck", weil der ``doc``-Satz allein den Kreis ausschließt.
+        # Gemessen am 24.08.2026 wirkt sie dort nicht: Ein Sechseck mit
+        # ``length=20`` liefert bei ``width=5`` und ``width=20`` dasselbe
+        # Volumen (32648,3886), ein Rechteck dagegen 12566 gegen 50265.
+        #
+        # Der Grund liegt zwei Ebenen tiefer und in **beiden** Zweigen:
+        # ``_sketch_profile`` baut das Vieleck aus ``length`` und ``corners``
+        # (``shapes.polygon``) und sieht ``width`` nicht, und der Versatz zur
+        # Achse nimmt bei Kreis *und* Vieleck ``length / 2`` statt
+        # ``width / 2``. Ein aktives Feld, das nichts tut, ist genau der Fall,
+        # den `.claude/rules/oberflaeche.md` unter „Ein Feld ohne Wirkung sagt
+        # es" verbietet — und ein Kommentar, der eine Wirkung behauptet, ohne
+        # sie gemessen zu haben, ist der Grund, aus dem er zwei Jahre stehen
+        # bleibt.
+        #
+        # Der ``doc``-Satz bleibt vorerst, wie er ist: Er ist ein Katalogtext
+        # in fünf Sprachen, und beim Vieleck steht ohnehin der Grund der
+        # Sperre an der Zeile statt seiner (``_explain`` in ``op_dialog.py``).
+        depends_on=("shape", ("rectangle", "slot")),
     )
     offset: float = param(
         title=_("Abstand zur Achse"),

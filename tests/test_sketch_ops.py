@@ -800,3 +800,35 @@ def test_lifting_a_drawing_point_keeps_the_order_of_the_axes() -> None:
     )
     lifted = _lift_frame(frame)((3.0, 5.0))
     assert (lifted.X(), lifted.Y(), lifted.Z()) == pytest.approx((4.0, 2.0, 7.0))
+
+
+def test_the_width_of_a_revolved_polygon_does_nothing_and_the_schema_says_so() -> None:
+    """Ein Feld, das nichts tut, darf nicht bedienbar dastehen.
+
+    ``_sketch_profile`` baut das Vieleck aus ``length`` und ``corners``; die
+    Breite sieht es nicht. Und der Versatz zur Achse nimmt bei Kreis **und**
+    Vieleck ``length / 2``, nicht ``width / 2`` — die Angabe wirkt also in
+    keinem der beiden Zweige.
+
+    Geprüft wird die **Wirkung** und daneben, dass das Schema sie richtig
+    ausweist. Nur die Liste festzunageln wäre ein Ist-Zustand-Test: Er wäre
+    auch grün, wenn beides gemeinsam falsch stünde — und genau so stand es
+    hier, mit einem Kommentar daneben, der die Wirkung behauptete.
+    """
+    narrow = solid_of(
+        run("sketch_revolve", shape="polygon", length=20, width=5, corners=6, offset=10, angle=360)
+    )
+    wide = solid_of(
+        run("sketch_revolve", shape="polygon", length=20, width=20, corners=6, offset=10, angle=360)
+    )
+    assert narrow.volume == pytest.approx(wide.volume), "die Breite tut beim Vieleck nichts"
+
+    # Die Gegenprobe: beim Rechteck wirkt sie, sonst prüfte der Test oben nur,
+    # dass zwei gleiche Aufrufe gleich ausgehen.
+    thin = solid_of(run("sketch_revolve", shape="rectangle", length=20, width=5, offset=10))
+    thick = solid_of(run("sketch_revolve", shape="rectangle", length=20, width=20, offset=10))
+    assert thick.volume > thin.volume * 3.0, "beim Rechteck wirkt sie sehr wohl"
+
+    entry = next(e for e in REGISTRY.get("sketch_revolve").params.spec() if e.name == "width")
+    assert entry.depends_on is not None
+    assert "polygon" not in entry.depends_on[1], "und das Schema weist sie nicht als wirksam aus"
