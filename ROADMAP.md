@@ -116,8 +116,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | eine **Deutung**, die noch fehlt. Das Zählverhältnis ist belegt (`installEventFilter` 13×, `removeEventFilter` 2×), die Schlussfolgerung nicht: Ein Versuch, den Fehler mit einem aufgegebenen Filterobjekt nachzustellen, blieb **fehlerfrei** — Qt entfernt sterbende Filter selbst aus seinen Listen. Was die drei gemessenen Fälle erzeugt, ist damit offen |
 | Zwei Downloadgrößen stehen im Text statt in der Message-ID | Was niemand las, und was zweimal dastand (24.08.2026) | fünf Übersetzungen für zwei Sätze. `NEEDED_GIGABYTES` macht es richtig (`.format(noetig=…)`), `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` nicht — die Zahl ist in die Message-ID getippt. Ein Test hält beide Stellen seit `77ad37cb` zusammen; der saubere Weg braucht Übersetzer |
 | Zwei §-Verweise nennen Abschnitte, die der Bauplan nicht hat | Zweitausend Verweise, und zwei ohne Ziel (24.08.2026) | **eine Entscheidung von Robert über den Bauplan**, denn der wird nur mit Ansage geändert. `§33.3` steht fünfmal im Code, zweimal ausdrücklich als „Bauplan §33.3“ — §33 führt nur 33.1 und 33.2, die Sache selbst (der Fehlerbericht) steht in §37.2. `§25.4` steht einmal am `caveat` eines Bausteins; §25 hat keine Unterabschnitte, und bei einem Baustein wäre §24 die Familie. Entweder die Abschnitte entstehen, oder die Verweise werden umgebogen — Letzteres wäre geraten. `tests/test_plan_references.py` hält beide in `BEKANNT_OFFEN` und verlangt, dass sie dort verschwinden, sobald es die Abschnitte gibt |
-| `test_style` ist auf dieser Maschine seit seiner Einführung rot | Ein Test, der auf einer Maschine nie grün war (24.08.2026) | eine Entscheidung, **wo** die Knopfbreite geprüft wird. Der Test hält `QPushButton.sizeHint()` gegen `drawn + 2 * ROOMY` — der Innenabstand kommt aus dem Stylesheet, das im Test niemand anwendet. Alle fünf Texte scheitern um **konstant 10 Bildpunkte**, auch die kurzen; es ist keine Textlänge, sondern ein Vergleich zwischen zwei Welten. Gegengeprobt auf `49d4c731`, dem Einführungs-Commit: dort ebenfalls rot |
-| Handbuch und Website hinken dem Register nach | Ein Test, der auf einer Maschine nie grün war (24.08.2026) | einen Lauf von `tools/make_manual.py`, sobald `formwerk-48` mit den Titeländerungen durch ist. `test_the_website_page_carries_the_generated_reference` ist für `de` und `en` rot, weil `520b10f0` zwei Gewindetitel geändert hat und die erzeugten HTML-Seiten von `7cc07342` stammen. Der Test nennt den Befehl selbst; ein Lauf je Titeländerung wäre verschwendet |
 
 ---
 
@@ -9090,7 +9088,8 @@ Zwischenstände der vier parallel arbeitenden Sitzungen — meldete **3 failed,
 5489 passed, 24 skipped**. Kein `worker crashed`, also echte Fehler, und einzeln
 nachgefahren blieben alle drei rot. `ruff`, `ruff format` und `mypy` sind grün.
 
-- [ ] **`test_style` ist auf dieser Maschine seit seiner Einführung rot.**
+- [x] **`test_style` war auf dieser Maschine seit seiner Einführung rot**
+      (behoben in `5cb6e1ff`).
       `test_a_primary_button_is_wide_enough_for_its_own_bold_label` prüft, ob ein
       Hauptknopf breit genug für seine halbfette Beschriftung ist — die Zusage
       ist richtig und der Fehler, den sie verhindert, ist echt („etzt trenne" auf
@@ -9116,7 +9115,21 @@ nachgefahren blieben alle drei rot. `ruff`, `ruff format` und `mypy` sind grün.
       einem nackten `QPushButton` ohne Stylesheet lässt sich die Frage nicht
       stellen. Am gebauten Fenster mit angewandtem Stylesheet schon.
 
-- [ ] **Handbuch und Website hinken dem Register nach.**
+      **Genau so behoben** (`5cb6e1ff`, von Robert beauftragt, nachdem diese
+      Messung vorlag; `formwerk-9e` hat `style.py` und `test_style.py`
+      freigegeben und das Vorbild mitgeliefert). Gemessen wird jetzt **mit
+      angewandtem Thema**: „Jetzt trennen" bekommt damit 182 statt 170
+      Bildpunkte und braucht 180. **Die Schwelle ist unverändert geblieben** —
+      ein Test, dessen Zahl man verschiebt, bis er grün ist, prüft nichts mehr.
+
+      Das Vorbild stand im Bestand: `tests/test_sketch_editor.py` misst die
+      Breitengrenze der Skizzenleiste seit je mit Thema, und sein Docstring
+      nennt die **Gegenrichtung** desselben Fehlers — ein Test, der zwei Runden
+      grün war, weil ihm die Polsterung fehlte. Dieselbe Ursache, zwei
+      Vorzeichen: Das Stylesheet gehört zur Messung und nicht zur Kulisse.
+
+- [x] **Handbuch und Website hinkten dem Register nach** (behoben in
+      `b9460ffd`).
       `test_the_website_page_carries_the_generated_reference` ist für `de` und
       `en` rot: `520b10f0` hat zwei Gewindetitel geändert
       (`insert_printed_thread`, `thread_exact`), und `website/handbuch.html` samt
