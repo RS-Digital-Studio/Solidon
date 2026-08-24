@@ -10,6 +10,7 @@ wird, ist nach zehn Änderungen keine mehr.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
@@ -694,9 +695,11 @@ def test_an_open_combo_box_shows_every_entry_it_has(qt_app: object) -> None:
     den Rollbetrieb und verlor an dessen zwei Pfeilen zehn weitere. Zwölf
     Punkte sind ein halber Eintrag, und getroffen hat es jede Combobox mit
     Tastaturfokus — also jede, die man anklickt.
+
+    Die Gegenprobe dazu steht darunter in einem eigenen Test: Sie ist an
+    Windows gebunden, diese Zusicherung hier gilt überall.
     """
     from app.ui.style import arrow_files, stylesheet
-    from app.ui.theme import THEMES
 
     sheet = stylesheet("dark", 10, arrow_files("dark"))
     for entries in (2, 3):
@@ -706,10 +709,35 @@ def test_an_open_combo_box_shows_every_entry_it_has(qt_app: object) -> None:
             "unten fehlt ein angeschnittener Eintrag"
         )
 
-    # Und die Gegenprobe, damit dieser Test seinen Grund behält: mit der alten
-    # Regel, die den Rahmen im Fokus verbreitert, muss er fallen. Repariert Qt
-    # seine Rechnung eines Tages, wird diese Zusicherung rot — dann darf der
-    # Test neu begründet werden, aber die Regel darüber bleibt richtig.
+
+@pytest.mark.skipif(
+    sys.platform != "win32",
+    reason="Der Rechenfehler ist auf Windows gemessen; unter Linux tritt er nicht auf",
+)
+def test_the_widened_focus_ring_would_still_cut_the_popup(qt_app: object) -> None:
+    """Die Gegenprobe zum Test darüber — sonst prüft der eines Tages nichts mehr.
+
+    Er wäre auch dann grün, wenn Qt gar nicht mehr falsch rechnen könnte, und
+    damit hätte die Regel „konstante Rahmenbreite" ihren Grund verloren, ohne
+    dass es jemand merkt. Hier steht deshalb die alte Regel noch einmal und
+    muss den Eintrag abschneiden.
+
+    **Und sie gilt nur für Windows.** Der Lauf auf ubuntu-latest hat sie am
+    24.08.2026 fallen lassen: 44 px für 44 px Zeilen, der breitere Rahmen
+    schnitt dort nichts ab. Auf Windows tut er es unverändert, mit PySide6
+    6.11.1 wie mit 6.11.2 — offscreen gemessen und im gebauten Bohrdialog
+    nachgesehen. Der Unterschied liegt also am Betriebssystem und nicht an der
+    Qt-Version, was der erste Verdacht war.
+
+    Ausgeliefert wird für beide (§40), und die Regel bleibt für beide: Sie ist
+    unter Linux nicht *nötig*, aber auch nicht falsch, und ein Stylesheet, das
+    je Plattform andere Rahmenbreiten setzt, wäre der schlechtere Tausch. Fällt
+    diese Zusicherung eines Tages **unter Windows**, hat Qt seine Rechnung
+    geändert; dann braucht sie eine neue Begründung — die Regel darüber nicht.
+    """
+    from app.ui.style import arrow_files, stylesheet
+
+    sheet = stylesheet("dark", 10, arrow_files("dark"))
     widened = sheet + (
         "\nQLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit, QTextEdit "
         f"{{ border: 1px solid {THEMES['dark']['line']}; padding: {TIGHT}px {NORMAL}px; }}\n"
@@ -722,8 +750,8 @@ def test_an_open_combo_box_shows_every_entry_it_has(qt_app: object) -> None:
     qt_app.setStyleSheet(sheet)  # type: ignore[attr-defined]
     assert short < wanted, (
         "der breitere Fokusrahmen schneidet das Aufklappmenü nicht mehr ab — "
-        f"{short} px für {wanted} px. Qt rechnet anders als gemessen; dieser "
-        "Test braucht dann eine neue Begründung"
+        f"{short} px für {wanted} px. Qt rechnet unter Windows anders als "
+        "gemessen; diese Gegenprobe braucht dann eine neue Begründung"
     )
 
 
