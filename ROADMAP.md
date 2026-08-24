@@ -80,7 +80,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
-| Fünf Bausteine, die dem Katalog fehlen | Die dünnste Gruppe des Katalogs ist die meistgefragte (24.08.2026) | nichts — die Liste steht, sortiert nach Belegkraft. Der erste (Kabelclip) kostet drei Parameter und nimmt seine Maße aus einer Tabelle, die es gibt |
+| Vier Bausteine, die dem Katalog noch fehlen | Die dünnste Gruppe des Katalogs ist die meistgefragte (24.08.2026) | nichts — der Kabelclip ist gebaut (`4b9bef2`), die übrigen vier stehen sortiert da. `shapes.dovetail` gibt es bereits, der Schwalbenschwanz wäre also billiger als gedacht |
 | Die Startmarke §31 ist seit dem 24.08.2026 rot | Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026) | **eine Entscheidung**: Marke neu setzen oder die Ursache suchen. Nicht der Code — im Wechsel gegen den Stand vor drei Commits gemessen, Unterschied im Rauschen |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
@@ -9774,11 +9774,19 @@ Verbindungen 4, Mechanik 5, Befestigung 3, Struktur 2, Kalibrierung 3, und
 Kategorie der Portale, und was wir dafür haben, ist ein *Loch* (Durchführung),
 kein *Halter*.
 
-- [ ] **Fünf Bausteine, nach Belegkraft sortiert.** Kabelclip (größte
-  Nachfrage, dünnste Gruppe, drei Parameter, Maße aus der Schlauchtabelle),
+**Der erste ist gebaut** (`4b9bef2`, 24.08.2026): Der Kabelclip steht in der
+Gruppe, die vorher nur ein Loch hatte. Ein liegender C-Bügel auf einem Sockel,
+Maße aus der Schlauchtabelle, die Öffnung enger als das Kabel. Was dabei über
+den Baustein hinaus anfiel, steht im Docstring seines Tests: `trimesh.contains`
+braucht `rtree` und fällt seit heute aus, und eine Schnittmenge gegen ein
+Nennmaß-Kabel misst die Rückfallkette statt der Passung — für vier Größen
+8,6 · 10,4 · 9,3 · 9,4 mm³, absolut konstant statt proportional.
+
+- [ ] **Vier Bausteine, nach Belegkraft sortiert.**
   Schwalbenschwanz (eine der vier von der Fachliteratur genannten
-  verlässlichen Verbindungen, und wir haben drei davon), Eckwinkel,
-  Standfuß, Bolzenscharnier. Der letzte ist der teuerste — die Spaltmaße
+  verlässlichen Verbindungen, und wir haben drei davon — **und
+  `shapes.dovetail` gibt es schon**, der Baustein wäre also billiger als
+  gedacht), Eckwinkel, Standfuß, Bolzenscharnier. Der letzte ist der teuerste — die Spaltmaße
   entscheiden über Erfolg oder Verklebung und brauchen einen eigenen
   Prüfkörper.
 
