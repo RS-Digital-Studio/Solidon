@@ -28,7 +28,7 @@ from typing import Final, cast
 import numpy as np
 import trimesh
 
-from app.core.errors import CORRECT_INPUT, ValidationError
+from app.core.errors import CORRECT_INPUT, ValidationError, require_positive
 from app.core.geom.mesh import MeshData, concatenated
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -197,8 +197,8 @@ def build(structure: str, box: tuple[Vec3, Vec3], cell: float, wall: float) -> M
             value=structure,
             constraint="known_structure",
         )
-    if cell <= 0.0 or wall <= 0.0:
-        raise ValidationError("cell", _("Dieses Maß muss größer als null sein."), value=cell)
+    require_positive("cell", cell)
+    require_positive("wall", wall)
     if structure == "gyroid":
         return _gyroid(box, cell, wall)
     if structure == "honeycomb":

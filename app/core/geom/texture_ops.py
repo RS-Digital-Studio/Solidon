@@ -25,7 +25,7 @@ from typing import Any, Final, cast
 
 import numpy as np
 
-from app.core.errors import CORRECT_INPUT, Action, ValidationError
+from app.core.errors import CORRECT_INPUT, Action, ValidationError, require_positive
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -272,8 +272,9 @@ def pattern_shapes(
             value=pattern,
             constraint="known_pattern",
         )
-    if pitch <= 0.0 or width <= 0.0 or height <= 0.0:
-        raise ValidationError("pitch", _("Dieses Maß muss größer als null sein."), value=pitch)
+    require_positive("pitch", pitch)
+    require_positive("width", width)
+    require_positive("height", height)
     if pattern == "rib":
         return _ribs(width, height, pitch)
     if pattern == "wave":

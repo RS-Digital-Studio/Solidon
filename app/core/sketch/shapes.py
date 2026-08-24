@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import math
 
-from app.core.errors import ValidationError
+from app.core.errors import ValidationError, require_positive
 from app.core.types import Point2, Sketch, SketchConstraint, SketchElement
 from app.i18n import _
 
@@ -27,8 +27,8 @@ def rectangle(length: float, width: float) -> Sketch:
 
     Flache Punktindizes: unten (0, 1), rechts (2, 3), oben (4, 5), links (6, 7).
     """
-    _positive("length", length)
-    _positive("width", width)
+    require_positive("length", length)
+    require_positive("width", width)
     half_l, half_w = length / 2.0, width / 2.0
     return Sketch(
         plane="plane:xy",
@@ -61,8 +61,8 @@ def slot(length: float, width: float) -> Sketch:
     obere Linie (5, 6), linker Bogen (7 Mitte, 8 Anfang, 9 Ende). Beide Bögen
     laufen gegen den Uhrzeigersinn.
     """
-    _positive("length", length)
-    _positive("width", width)
+    require_positive("length", length)
+    require_positive("width", width)
     if length <= width:
         raise ValidationError(
             "length",
@@ -100,7 +100,7 @@ def slot(length: float, width: float) -> Sketch:
 
 def circle(diameter: float) -> Sketch:
     """Ein Kreis um den Ursprung. Punkte: Mitte (0), Randpunkt (1)."""
-    _positive("diameter", diameter)
+    require_positive("diameter", diameter)
     return Sketch(
         plane="plane:xy",
         elements=(SketchElement("circle", ((0.0, 0.0), (diameter / 2.0, 0.0))),),
@@ -116,7 +116,7 @@ def polygon(diameter: float, corners: int) -> Sketch:
 
     ``corners`` Linien; Punktindizes je Linie ``(2·k, 2·k + 1)``.
     """
-    _positive("diameter", diameter)
+    require_positive("diameter", diameter)
     if not 3 <= corners <= 64:
         raise ValidationError(
             "corners",
@@ -188,8 +188,8 @@ def bolt_circle(pitch_diameter: float, count: int, hole_diameter: float) -> Sket
     Uhrzeigersinn. Von Hand hieß dieselbe Skizze, jeden Mittelpunkt einzeln
     auszurechnen, mit einem Rechenfehler je Gelegenheit.
     """
-    _positive("pitch_diameter", pitch_diameter)
-    _positive("hole_diameter", hole_diameter)
+    require_positive("pitch_diameter", pitch_diameter)
+    require_positive("hole_diameter", hole_diameter)
     _at_least_two("count", count)
     if hole_diameter >= pitch_diameter:
         raise ValidationError(
@@ -216,8 +216,8 @@ def hole_grid(columns: int, rows: int, spacing: float, hole_diameter: float) -> 
     derselbe: ein Raster mit zwei Abständen ist zwei Entscheidungen, und die
     zweite braucht selten jemand.
     """
-    _positive("spacing", spacing)
-    _positive("hole_diameter", hole_diameter)
+    require_positive("spacing", spacing)
+    require_positive("hole_diameter", hole_diameter)
     if columns * rows < 2:
         _at_least_two("columns", columns * rows)
     if columns < 1 or rows < 1:
@@ -242,13 +242,3 @@ def hole_grid(columns: int, rows: int, spacing: float, hole_diameter: float) -> 
 def _number(value: float) -> str:
     """Ein Maß als Ausdruck der Grammatik (§13) — immer dezimal, nie ``1e-05``."""
     return format(float(value), ".9f")
-
-
-def _positive(field: str, value: float) -> None:
-    if value <= 0.0:
-        raise ValidationError(
-            field,
-            _("Dieses Maß muss größer als null sein."),
-            value=value,
-            constraint="positive",
-        )

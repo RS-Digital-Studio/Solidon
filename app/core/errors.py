@@ -185,6 +185,29 @@ class ValidationError(UserError):
         self.constraint = constraint
 
 
+def require_positive(field: str, value: float) -> None:
+    """Hält an, wenn ein Maß nicht größer als null ist.
+
+    Sechzehn Stellen im Kern prüfen dasselbe, und bis zum 24.08.2026 taten es
+    zwei Sorten: elf über eine private Hilfe in ``sketch.shapes``, fünf
+    ausgeschrieben — und die fünf ließen ``constraint`` leer. Das Feld ist
+    maschinenlesbar und wird an zwei Dutzend Stellen abgefragt; ein Fehler ohne
+    Kennung ist für jeden Leser ein anderer Fehler als derselbe mit.
+
+    Zwei der fünf prüften mehrere Maße in einer Bedingung und nannten dann
+    immer das erste. Wer bei einem Gitter ``wall`` auf null setzte, bekam
+    ``cell`` markiert — die Oberfläche zeigte auf das falsche Eingabefeld.
+    Einzeln geprüft nennt jeder Fehler das Maß, das ihn ausgelöst hat.
+    """
+    if value <= 0.0:
+        raise ValidationError(
+            field,
+            _("Dieses Maß muss größer als null sein."),
+            value=value,
+            constraint="positive",
+        )
+
+
 class NeedsSolidError(UserError):
     """Die Operation braucht einen exakten Körper, bekommt aber ein Netz (§30).
 

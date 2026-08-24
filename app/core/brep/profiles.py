@@ -16,7 +16,13 @@ from collections.abc import Callable
 from typing import Any, Final
 
 from app.core.brep.kernel import DEFLECTION, Solid, require
-from app.core.errors import PROGRAMMING_ERRORS, Action, GeometryError, ValidationError
+from app.core.errors import (
+    PROGRAMMING_ERRORS,
+    Action,
+    GeometryError,
+    ValidationError,
+    require_positive,
+)
 from app.core.log import get_logger
 from app.core.sketch.profile import Profile
 from app.core.types import PlaneFrame, Point2
@@ -180,8 +186,7 @@ def extrude(
     from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
     from OCP.gp import gp_Vec
 
-    if height <= 0.0:
-        raise ValidationError("height", _("Dieses Maß muss größer als null sein."), value=height)
+    require_positive("height", height)
     if frame is not None:
         lift, normal = _lift_frame(frame), frame.normal
     elif plane in PLANES:
@@ -258,8 +263,7 @@ def loft(bottom: Profile, top: Profile, height: float) -> Solid:
     from OCP.BRepOffsetAPI import BRepOffsetAPI_ThruSections
     from OCP.gp import gp_Pnt
 
-    if height <= 0.0:
-        raise ValidationError("height", _("Dieses Maß muss größer als null sein."), value=height)
+    require_positive("height", height)
 
     def lifted(point: Point2) -> Any:
         return gp_Pnt(point[0], point[1], height)
@@ -279,8 +283,7 @@ def shell_open_top(solid: Solid, thickness: float) -> Solid:
     from OCP.BRepOffsetAPI import BRepOffsetAPI_MakeThickSolid
     from OCP.TopTools import TopTools_ListOfShape
 
-    if thickness <= 0.0:
-        raise ValidationError("wall", _("Dieses Maß muss größer als null sein."), value=thickness)
+    require_positive("wall", thickness)
     tops = _top_faces(solid)
     if not tops:
         raise GeometryError(
