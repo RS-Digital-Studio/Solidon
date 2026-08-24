@@ -24,6 +24,7 @@ from app.core.errors import (
     require_positive,
 )
 from app.core.log import get_logger
+from app.core.sketch.planes import to_world
 from app.core.sketch.profile import Profile
 from app.core.types import PlaneFrame, Point2
 from app.core.units import EPS_GEOM
@@ -146,16 +147,23 @@ def _lift_frame(frame: PlaneFrame) -> _Lift:
 
     Dieselbe Rechnung wie bei den drei Hauptebenen, nur mit Achsen, die nicht
     im Voraus feststehen: der Zeichenpunkt wird als Vielfaches der beiden
-    Rahmenachsen auf den Ursprung addiert."""
+    Rahmenachsen auf den Ursprung addiert.
+
+    **Gerechnet wird sie in** :func:`app.core.sketch.planes.to_world`, hier
+    wird sie nur in ein OpenCASCADE-Objekt gehüllt. Der Grund für den Umzug
+    ist die Zeichenfläche: Sie muss dieselbe Umrechnung machen wie die
+    Auswertung, sonst liegt das Bild woanders als das Ergebnis — und sie muss
+    es können, wenn OpenCASCADE gar nicht installiert ist. Die Richtung
+    stimmt: ``brep`` darf von ``sketch`` abhängen, umgekehrt nicht, und
+    ``planes`` bleibt damit frei von OCC.
+    """
 
     def lift(point: Point2) -> Any:
+        # Der Import bleibt in der Funktion: Diese Datei muss ohne
+        # installiertes OpenCASCADE importierbar sein.
         from OCP.gp import gp_Pnt
 
-        return gp_Pnt(
-            frame.origin[0] + point[0] * frame.x_axis[0] + point[1] * frame.y_axis[0],
-            frame.origin[1] + point[0] * frame.x_axis[1] + point[1] * frame.y_axis[1],
-            frame.origin[2] + point[0] * frame.x_axis[2] + point[1] * frame.y_axis[2],
-        )
+        return gp_Pnt(*to_world(frame, point))
 
     return lift
 

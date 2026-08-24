@@ -18,7 +18,7 @@ import math
 from collections.abc import Iterable
 
 from app.core.errors import Action, ValidationError
-from app.core.types import PlaneFrame, SceneObject, Vec3
+from app.core.types import PlaneFrame, Point2, SceneObject, Vec3
 from app.i18n import _
 
 #: Zwei Richtungen gelten als parallel, wenn ihr Kreuzprodukt darunter liegt.
@@ -153,6 +153,46 @@ def frame_for(plane: str, objects: Iterable[SceneObject]) -> PlaneFrame:
             ),
         ],
     )
+
+
+def to_world(frame: PlaneFrame, point: Point2) -> Vec3:
+    """Ein Zeichenpunkt als Ort im Raum.
+
+    Der Punkt wird als Vielfaches der beiden Rahmenachsen auf den Ursprung
+    addiert. Mehr ist es nicht — aber es ist die Rechnung, die darüber
+    entscheidet, ob eine Skizze dort liegt, wo sie liegen soll.
+
+    **Sie steht hier und nicht im B-Rep-Kern**, obwohl sie von dort kommt
+    (``brep/profiles.py`` hatte sie als privates ``_lift_frame``). Der Grund
+    ist die Anzeige: Die Zeichenfläche muss dieselbe Umrechnung machen wie die
+    Auswertung, sonst liegt das Bild woanders als das Ergebnis — und sie muss
+    es können, wenn OpenCASCADE gar nicht installiert ist. Eine Rechnung, die
+    an zwei Orten steht, driftet; eine, die im optionalen Kern steht, fehlt.
+    """
+    return (
+        frame.origin[0] + point[0] * frame.x_axis[0] + point[1] * frame.y_axis[0],
+        frame.origin[1] + point[0] * frame.x_axis[1] + point[1] * frame.y_axis[1],
+        frame.origin[2] + point[0] * frame.x_axis[2] + point[1] * frame.y_axis[2],
+    )
+
+
+def to_plane(frame: PlaneFrame, point: Vec3) -> Point2:
+    """Ein Ort im Raum als Zeichenpunkt — die Umkehrung von :func:`to_world`.
+
+    Projiziert wird auf die beiden Rahmenachsen; der Abstand zur Ebene fällt
+    dabei weg. Das ist Absicht und der Zweck: Was der Zeiger im Raum trifft,
+    liegt nie exakt auf der Ebene, und die Zeichnung will die zwei Zahlen, mit
+    denen sie rechnet, nicht die dritte.
+
+    Weil die Achsen orthonormal sind (:func:`frame_of`), genügt das
+    Skalarprodukt — es braucht keine Matrixumkehrung.
+    """
+    gap = (
+        point[0] - frame.origin[0],
+        point[1] - frame.origin[1],
+        point[2] - frame.origin[2],
+    )
+    return (_dot(gap, frame.x_axis), _dot(gap, frame.y_axis))
 
 
 def height_to(start: PlaneFrame, target: PlaneFrame) -> float:

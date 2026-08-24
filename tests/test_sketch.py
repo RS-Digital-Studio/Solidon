@@ -9,7 +9,8 @@ import pytest
 
 from app.core.errors import AppError, SketchConflictError, ValidationError
 from app.core.sketch import solve_sketch
-from app.core.types import Sketch, SketchConstraint, SketchElement
+from app.core.sketch.planes import frame_of, to_plane, to_world
+from app.core.types import PlaneFrame, Sketch, SketchConstraint, SketchElement
 
 # Ein Rechteck aus vier Linien, absichtlich leicht verzogen: die Koinzidenzen
 # ziehen die Ecken zusammen, die Maße kommen aus Projektparametern.
@@ -658,3 +659,68 @@ def test_a_degenerate_loop_beside_a_good_one_is_dropped() -> None:
 
     assert len(regions) == 1, "die geschrumpfte Kette ist keine Region"
     assert _area(_outline(regions[0])) == pytest.approx(1200.0)
+
+
+# --- Ebenenkoordinaten (§30.1, Konzept „Die Skizze in den Raum", P0) --------
+#
+# Diese vier Tests brauchen ausdrücklich **kein** OpenCASCADE. Das ist ihr
+# Zweck: Die Zeichenfläche muss dieselbe Umrechnung machen wie die Auswertung,
+# und sie muss es können, wenn der B-Rep-Kern gar nicht installiert ist.
+# `test_sketch_ops.py` überspringt sich ohne OCC komplett — dort wären sie
+# stumm.
+
+
+def tilted_frame() -> PlaneFrame:
+    """Ein Rahmen, der nicht auf einer Hauptebene liegt.
+
+    Die 45°-Neigung ist der interessante Fall: Auf XY stimmt jede Rechnung,
+    die x und y einfach durchreicht, und würde einen Vorzeichenfehler in der
+    dritten Achse nie zeigen.
+    """
+    return frame_of((1.0, 0.0, 1.0), (5.0, -2.0, 3.0))
+
+
+def test_a_drawing_point_lands_where_the_frame_says() -> None:
+    """Der Ursprung der Zeichnung ist der Ursprung des Rahmens."""
+    frame = tilted_frame()
+    assert to_world(frame, (0.0, 0.0)) == pytest.approx(frame.origin)
+
+    # Eine Einheit entlang der ersten Achse ist eine Einheit im Raum — sonst
+    # wäre die Skizze skaliert, und zwar unauffällig.
+    along = to_world(frame, (1.0, 0.0))
+    moved = tuple(along[axis] - frame.origin[axis] for axis in range(3))
+    assert moved == pytest.approx(frame.x_axis)
+
+
+def test_the_two_directions_are_each_others_reverse() -> None:
+    """Hin und zurück muss denselben Punkt ergeben.
+
+    Die teure Variante dieses Fehlers ist keine Ausnahme, sondern eine
+    Zeichnung, die beim Speichern und Öffnen langsam wandert.
+    """
+    frame = tilted_frame()
+    for point in ((0.0, 0.0), (12.5, -7.25), (-40.0, 40.0)):
+        assert to_plane(frame, to_world(frame, point)) == pytest.approx(point)
+
+
+def test_a_point_off_the_plane_drops_its_distance() -> None:
+    """Was der Zeiger im Raum trifft, liegt nie exakt auf der Ebene.
+
+    Der Abstand entlang der Normalen fällt weg, und das ist der Zweck: Die
+    Zeichnung rechnet mit zwei Zahlen. Ohne diese Zusage müsste jeder Aufrufer
+    selbst projizieren — und einer würde es vergessen.
+    """
+    frame = tilted_frame()
+    on_plane = to_world(frame, (3.0, 4.0))
+    above = tuple(on_plane[axis] + 17.0 * frame.normal[axis] for axis in range(3))
+    assert to_plane(frame, above) == pytest.approx((3.0, 4.0))
+
+
+def test_the_flat_plane_keeps_the_drawing_unturned() -> None:
+    """Auf einer waagerechten Fläche ist der Zeichenpunkt der Weltpunkt.
+
+    Die Zusage aus ``frame_of``: dieselbe Skizze liegt auf dem Tisch und auf
+    dem Deckel gleich herum. Eine Zahl dafür, nicht nur ein Satz.
+    """
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 10.0))
+    assert to_world(frame, (7.0, -3.0)) == pytest.approx((7.0, -3.0, 10.0))

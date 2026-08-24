@@ -16,6 +16,7 @@ import numpy as np
 import pytest
 
 from app.core.brep.kernel import Solid, available
+from app.core.brep.profiles import _lift_frame
 from app.core.errors import AppError, NeedsSolidError, ValidationError
 from app.core.registry import REGISTRY
 from app.core.scene import ResultCache, evaluate
@@ -29,6 +30,7 @@ from app.core.types import (
     Operation,
     OpResult,
     Parameter,
+    PlaneFrame,
     Profile,
     Scene,
     SceneObject,
@@ -771,3 +773,30 @@ def test_asking_for_a_region_that_is_not_there_says_how_many_are() -> None:
         )
     assert caught.value.suggestions
     assert caught.value.values.get("regions") == 1
+
+
+def test_lifting_a_drawing_point_keeps_the_order_of_the_axes() -> None:
+    """Der Zeichenpunkt darf beim Weg nach OpenCASCADE nicht verrutschen.
+
+    ``_lift_frame`` rechnet seit dem Umzug nach ``planes.to_world`` nicht mehr
+    selbst; es hüllt das Ergebnis nur noch in ein ``gp_Pnt``. Genau dort kann
+    eine Komponente vertauschen, ohne dass es auffällt — auf einer Hauptebene
+    sähe (x, y, z) auch dann richtig aus, wenn zwei Achsen getauscht wären.
+
+    Der Rahmen hier ist deshalb absichtlich gedreht: erste Achse nach +Y,
+    zweite nach +Z, Ursprung abseits von null. Damit landet jede der drei
+    Komponenten woanders, als sie im Zeichenpunkt stand.
+
+    **Und die drei erwarteten Zahlen sind paarweise verschieden.** Der erste
+    Entwurf dieses Tests erwartete (7, 2, 7) — zwei gleiche Werte, und die
+    Vertauschung von X und Z wäre unbemerkt durchgelaufen. Ein Test gegen
+    Verwechslung braucht Zahlen, die sich verwechseln ließen.
+    """
+    frame = PlaneFrame(
+        origin=(4.0, -1.0, 2.0),
+        x_axis=(0.0, 1.0, 0.0),
+        y_axis=(0.0, 0.0, 1.0),
+        normal=(1.0, 0.0, 0.0),
+    )
+    lifted = _lift_frame(frame)((3.0, 5.0))
+    assert (lifted.X(), lifted.Y(), lifted.Z()) == pytest.approx((4.0, 2.0, 7.0))
