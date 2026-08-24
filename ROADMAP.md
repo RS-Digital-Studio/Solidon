@@ -115,6 +115,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | 81 weitere Texte stehen mehrfach wortgleich im Quelltext | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Die vier Fälle in `app/ui/main_window.py` sind am 24.08.2026 erledigt (`791a1576`); übrig sind Vorkommen, die meist zwei- bis dreimal in derselben Datei stehen |
 | Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | eine **Deutung**, die noch fehlt. Das Zählverhältnis ist belegt (`installEventFilter` 13×, `removeEventFilter` 2×), die Schlussfolgerung nicht: Ein Versuch, den Fehler mit einem aufgegebenen Filterobjekt nachzustellen, blieb **fehlerfrei** — Qt entfernt sterbende Filter selbst aus seinen Listen. Was die drei gemessenen Fälle erzeugt, ist damit offen |
 | Zwei Downloadgrößen stehen im Text statt in der Message-ID | Was niemand las, und was zweimal dastand (24.08.2026) | fünf Übersetzungen für zwei Sätze. `NEEDED_GIGABYTES` macht es richtig (`.format(noetig=…)`), `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` nicht — die Zahl ist in die Message-ID getippt. Ein Test hält beide Stellen seit `77ad37cb` zusammen; der saubere Weg braucht Übersetzer |
+| Zwei §-Verweise nennen Abschnitte, die der Bauplan nicht hat | Zweitausend Verweise, und zwei ohne Ziel (24.08.2026) | **eine Entscheidung von Robert über den Bauplan**, denn der wird nur mit Ansage geändert. `§33.3` steht fünfmal im Code, zweimal ausdrücklich als „Bauplan §33.3“ — §33 führt nur 33.1 und 33.2, die Sache selbst (der Fehlerbericht) steht in §37.2. `§25.4` steht einmal am `caveat` eines Bausteins; §25 hat keine Unterabschnitte, und bei einem Baustein wäre §24 die Familie. Entweder die Abschnitte entstehen, oder die Verweise werden umgebogen — Letzteres wäre geraten. `tests/test_plan_references.py` hält beide in `BEKANNT_OFFEN` und verlangt, dass sie dort verschwinden, sobald es die Abschnitte gibt |
 
 ---
 
@@ -4344,6 +4345,33 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       zu deklarieren beseitigte einen der beiden Fehler und verdeckte, was ihn
       auslöst. Ein Pflaster auf einer Ursache, die man nicht kennt, macht die
       nächste Erscheinungsform schwerer zu finden.
+
+      **Zweite Korrektur derselben Kette** (24.08.2026, formwerk-be). Auch die
+      Rekursions-Erklärung ist zurückgezogen: ein Zähler im Filter, fünf Läufe,
+      **höchste Tiefe 2** — auch in den roten. Die 4378 Frames waren Symptom,
+      nicht Ursache. Vorgearbeitet hat eine Gegenmessung von formwerk-20:
+      `super().eventFilter()` ruft sich nicht selbst, die Tiefe bleibt bei 1,
+      also konnte der Filter die Kaskade nicht erzeugen.
+
+      Was bleibt, ist ein Abzug mit **beiden** Threads: `_PreviewWorker` in
+      `copy.deepcopy` (`app/ui/session.py:1284` — `preview_scene` kopiert das
+      Dokument tief) gegen den Hauptthread im Speicherbereiniger
+      (`session.py:1515` `wait_for_idle` ← `main_window.py:7148` `release` ←
+      `tests/conftest.py:255`), Ende in `Fatal Python error: Aborted`. Damit hat
+      „Vier Stapel zeigen auf `session.py:1515`" einen Gegenspieler mit
+      Zeilennummer: **1284 gegen 1515**.
+
+      A/B: `preview_async` im Hauptthread statt im Arbeiter — drei Läufe
+      **identisch** (`22 failed, 236 passed`; die 22 sind der Patch selbst, weil
+      diese Tests den Arbeiter erwarten), **null Abbrüche**. Dieselbe Datei mit
+      Arbeiter, neun Läufe: sechsmal grün, einmal falsch-rot, zweimal Segfault.
+      Deterministisch ohne den Arbeiter, schwankend mit ihm.
+
+      **Grenze der Aussage, und sie steht hier, weil dieselbe Kette schon zwei
+      Erklärungen verbraucht hat:** Der Patch nimmt einen Thread weg und ändert
+      damit mehr als den Ort der Rechnung — ein Hinweis, kein Beweis. Umgesetzt
+      ist nichts; die Vorschau in den Hauptthread zu verlegen wäre eine
+      Verhaltensänderung an §18.7.
 
 - [ ] **Signatur C: der Hänger — kein Absturz, sondern Stillstand.** Abgegrenzt
       am 23.08.2026 bei der Sortierung der Absturzfamilie an 24 Stapeln.
@@ -8993,3 +9021,62 @@ Eventfilter-Deutung ist widerlegt. Was durchhielt, hielt durch, weil es **am
 Code** belegt war und nicht an einer Zählung. Ein Suchmuster ist ein Vorschlag,
 keine Aussage — und wer es nicht an einem Fall prüft, dessen Ausgang er kennt,
 meldet Funde, die es nicht gibt.
+
+## Zweitausend Verweise, und zwei ohne Ziel (24.08.2026)
+
+Dritter Durchgang, und diesmal nicht gegen den Code, sondern gegen die **Doku im
+Code**. Dieses Projekt erklärt außergewöhnlich viel in Kommentaren, und
+Erklärungen altern schneller als Code: Sie werden von keinem Test gelesen und
+von keinem Linter geprüft.
+
+Drei Sorten Verweise sind hart prüfbar, und alle drei sind gemessen.
+
+**Sphinx-Rollen** (`:func:`, `:class:`, `:data:`, `:mod:`): 102 Verweise auf
+`app.*`, davon **einer** ohne Ziel — und der war ein Fehler der Messung, nicht
+des Codes: `markup.py` verweist auf `app.core.registry.documentation`, und das
+gibt es, nur als Lazy-Export aus `registry.surfaces`. Ein Prüfskript, das
+`__getattr__`-Tabellen nicht auflöst, sieht es nicht.
+
+**`Datei:Zeile`-Angaben:** drei im ganzen Baum, alle drei in `app/ui/leash.py` —
+und alle drei zeigen heute auf andere Zeilen. Trotzdem kein Fund: Es ist ein
+**datierter py-spy-Abzug** („Gefunden am 23.08.2026 in einem Stapelabzug"), also
+die Aufnahme eines Zeitpunkts. Dass die Zeilen wandern, gehört dazu; wer den
+Abzug liest, liest ihn als Geschichte. Ein Werkzeug hätte es als Mangel
+gemeldet.
+
+**§-Verweise auf den Bauplan:** 2214 Stück auf 110 Abschnitte, sieben ohne Ziel.
+Fünf meinen ein anderes Dokument und sagen das — RFC 8032 bei Ed25519, ein
+Konzeptpapier bei der Skelettsitzung. Zwei bleiben, und sie stehen unten.
+
+- [x] **Ab jetzt kann kein neuer §-Verweis ins Leere zeigen** (`0ec51a0e`).
+      `tests/test_plan_references.py` liest die numerierten Überschriften des
+      Bauplans und hält alle Verweise aus `app/` und `tools/` dagegen; Zeilen,
+      die ein anderes Dokument nennen (RFC, Konzept, ISO, DIN), sind ausgenommen.
+      Dazu drei Wächter gegen die Schwächen, die ein solcher Test hat: einer
+      prüft, dass das Überschriftenmuster überhaupt greift (**beim ersten Anlauf
+      fand es sechs von 113 Abschnitten**, weil die Überschriften des Bauplans
+      kein §-Zeichen tragen — ein Test gegen eine leere Menge ist immer grün),
+      einer verlangt das Streichen aus der Ausnahmeliste, sobald ein Abschnitt
+      entsteht, und einer ist die Gegenprobe.
+
+- [ ] **Zwei §-Verweise nennen Abschnitte, die der Bauplan nicht hat.** `§33.3`
+      fünfmal (zweimal ausdrücklich „Bauplan §33.3", in `core/report.py` und
+      `core/support.py`) — §33 führt 33.1 Ausnahmehierarchie und 33.2 Protokoll,
+      der Fehlerbericht selbst steht in §37.2. `§25.4` einmal, am `caveat` eines
+      Bausteins — §25 hat keine Unterabschnitte, und die Zeile darüber verweist
+      auf §24.1, wo 24.1 bis 24.5 stehen. Ein Zahlendreher ist wahrscheinlich
+      und nicht belegt.
+
+      **Beides bleibt liegen, und zwar mit Grund.** Den Bauplan ändert nur
+      Robert; die Verweise umzubiegen wäre geraten, weil nirgends steht, welcher
+      Abschnitt gemeint war. Zwei Zeilen Aufwand, sobald die Frage entschieden
+      ist.
+
+**Und ein Wort über die Werkzeuge dieses Durchgangs**, weil es das dritte Mal
+dasselbe ist: Von den vier Messungen lieferten zwei zunächst ein falsches Bild —
+der Sphinx-Prüfer meldete einen Mangel, den es nicht gibt (Lazy-Export nicht
+aufgelöst), und der §-Prüfer fand sechs von 113 Abschnitten, weil er ein Zeichen
+erwartete, das die Überschriften nicht tragen. **Ein Prüfwerkzeug, das zu wenig
+findet, ist gefährlicher als eines, das zu viel findet:** Zu viel kostet
+Prüfzeit, zu wenig erzeugt die Gewissheit, es sei nichts da. Beide Male hat erst
+ein Fall, dessen Ausgang schon bekannt war, das Werkzeug entlarvt.
