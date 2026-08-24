@@ -77,6 +77,7 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any, Final, Protocol
 
+from app.core.discover import BROKEN_ADDRESS, UNUSABLE_ADDRESS
 from app.core.errors import CANCEL, INSTALL_MISSING, Action, AppError
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.log import get_logger
@@ -270,6 +271,24 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
             values={"url": _origin(url), "reason": str(error.reason)},
             suggestions=(INSTALL_MISSING, CANCEL),
         ) from error
+    except BROKEN_ADDRESS as error:
+        # **Getrennt vom Fall darüber, weil der Nutzer etwas anderes tun muss.**
+        # „ComfyUI antwortet nicht" schickt ihn zum Programm; hier liegt es an
+        # der Adresse, und dann hilft nur das Feld in den Einstellungen. Der
+        # Satz nennt deshalb ein Beispiel — wer noch nie eine Dienstadresse
+        # eingetragen hat, weiß sonst nicht, wie eine aussieht.
+        raise GenerationFailed(
+            title=_("Die Adresse von ComfyUI ist keine Adresse."),
+            detail=_(
+                "In den Einstellungen steht etwas, das Solidon nicht als Adresse "
+                "lesen kann — meist ein Ordner oder ein Programmpfad. Erwartet "
+                "wird die Adresse, unter der ComfyUI im Browser erreichbar ist: "
+                "http://127.0.0.1:8188, oder Rechnername und Port, wenn es auf "
+                "einem anderen Rechner läuft."
+            ),
+            values={"url": url, "reason": str(error)},
+            suggestions=(INSTALL_MISSING, CANCEL),
+        ) from error
 
 
 def _origin(url: str) -> str:
@@ -282,11 +301,16 @@ def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:
     """Ein Socket, keine Anfrage: ein geschlossener Port antwortet sofort,
     HTTP nicht.
     """
-    parts = urllib.parse.urlparse(url)
     try:
+        parts = urllib.parse.urlparse(url)
         with socket.create_connection((parts.hostname or "", parts.port or 80), timeout=seconds):
             return True
-    except OSError:
+    except UNUSABLE_ADDRESS:
+        # ``ValueError`` gehört dazu: Steht im Adressfeld ein Pfad statt einer
+        # Adresse, liest ``urlparse`` alles hinter ``C:`` als Port und wirft
+        # beim Zugriff darauf. Eine unbrauchbare Adresse heißt „nicht
+        # erreichbar", nicht „Absturz" (Regel 17, derselbe Fall wie bei Ollama
+        # am 24.08.2026).
         return False
 
 

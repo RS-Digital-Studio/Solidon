@@ -143,6 +143,24 @@ def _the_display_unit_starts_at_millimetres() -> Iterator[None]:
     labels.set_display_unit("mm")
 
 
+@pytest.fixture(autouse=True)
+def _no_backend_stays_rejected() -> Iterator[None]:
+    """Dieselbe Begründung wie darüber, für einen zweiten Prozesszustand.
+
+    Seit dem 24.08.2026 merkt sich ``llm._rejected``, welchen Zugang die
+    Gegenseite abgelehnt hat — sonst sperrt ein ungültiger Schlüssel das lokale
+    Modell für den Rest der Sitzung aus. Gesetzt wird der Merker **nicht nur im
+    Test**: ``AnthropicBackend.complete`` tut es bei jedem 401 selbst. Ein Test,
+    der einen abgelehnten Schlüssel durchspielt, nähme also jeden folgenden mit,
+    und der fiele an einem Backend um, das er nie angefasst hat — mit
+    ``pytest-randomly`` an einem anderen je Lauf.
+    """
+    yield
+    from app.core.backends import llm
+
+    llm.accept_again()
+
+
 #: Die Warte-Methoden je Widget-Klasse, einmal ermittelt.
 #:
 #: **``dir()`` je Klasse statt je Widget.** Die Fixture unten geht nach *jedem*

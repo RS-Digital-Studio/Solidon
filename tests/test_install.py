@@ -728,3 +728,67 @@ def test_the_dialog_shows_that_something_is_happening(
     qt_app.processEvents()
 
     assert not dialog._tick.isActive(), "danach nicht mehr"
+
+
+# --- Was ein Neuling in ein Adressfeld tippt (24.08.2026) -------------------------
+
+
+def test_the_address_question_shows_an_example_and_where_it_comes_from(
+    qt_app: QApplication,
+) -> None:
+    """**„Adresse, unter der es erreichbar ist" war der ganze Hinweis.**
+
+    Wer noch nie eine Dienstadresse eingetragen hat, weiß daraus weder, wie
+    eine aussieht, noch woher er sie bekommt. Ein Kunde trug am 24.08.2026 den
+    Ordner seiner Modelle ein — der Dialog nahm ihn an, und die Meldung, die
+    ihn Stunden später erreichte, sprach von etwas ganz anderem.
+
+    Das Beispiel kommt aus dem Werkzeug (``ExternalTool.url``) und nicht aus
+    einer Zeichenkette im Dialog: So bleibt es richtig, wenn sich die Vorgabe
+    ändert.
+    """
+    from app.ui.install_dialog import _Row
+
+    row = _Row(by_id("ollama"))
+    try:
+        question = row._address_question()
+
+        assert row.tool is not None
+        assert row.tool.url in question, "ohne Beispiel weiß niemand, wie eine Adresse aussieht"
+        assert "http" in question
+        assert "Ordner" in question, "der häufigste Fehlgriff wird ausdrücklich genannt"
+    finally:
+        row.deleteLater()
+
+
+def test_a_folder_never_reaches_the_settings(qt_app: QApplication, monkeypatch) -> None:
+    """Der Dialog fragt noch einmal, statt Unsinn zu speichern — und der Grund
+    steht dann über demselben Feld."""
+    from app.ui import install_dialog
+    from app.ui.install_dialog import _Row
+
+    gefragt: list[str] = []
+    gespeichert: list[tuple[str, str]] = []
+
+    def antworten(*args: object, **kwargs: object) -> tuple[str, bool]:
+        # Erst der Ordner, dann der Abbruch: ein echter Nutzer korrigiert oder
+        # gibt auf, und beides darf nichts speichern.
+        gefragt.append(str(args[2]) if len(args) > 2 else "")
+        return (r"C:\Users\Jemand\.ollama\models", len(gefragt) == 1)
+
+    monkeypatch.setattr(install_dialog.QInputDialog, "getText", antworten)
+    monkeypatch.setattr(
+        install_dialog.tools,
+        "set_location",
+        lambda tool_id, value: gespeichert.append((tool_id, value)),
+    )
+
+    row = _Row(by_id("ollama"))
+    try:
+        row._choose_address()
+    finally:
+        row.deleteLater()
+
+    assert gespeichert == [], "ein Ordner ist keine Adresse und wird nicht gemerkt"
+    assert len(gefragt) == 2, "es wird erneut gefragt, nicht stillschweigend verworfen"
+    assert "Ordner" in gefragt[1], "beim zweiten Mal steht der Grund über dem Feld"

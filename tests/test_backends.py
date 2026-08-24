@@ -779,10 +779,34 @@ def test_every_way_a_person_writes_the_ollama_address_finds_the_endpoint() -> No
 
 def test_a_path_in_front_of_the_endpoint_survives() -> None:
     """Hinter einem Reverse-Proxy liegt Ollama unter ``/ollama`` — wer das
-    einträgt, meint es."""
-    assert llm.ollama_endpoint("http://host/ollama/api/chat", "/api/tags") == (
-        "http://host/ollama/api/tags"
-    )
+    einträgt, meint es.
+
+    Die Sollwerte stehen hier von Hand und sind **nicht** mit der geprüften
+    Funktion erzeugt: sonst prüfte dieser Test, ob sie sich seit gestern
+    geändert hat, und nicht, ob sie recht hat.
+    """
+    erwartet = {
+        # Was der Endpunkt ist, wird ersetzt …
+        "http://localhost:11434/api/chat": "http://localhost:11434/api/pull",
+        "http://host/api/": "http://host/api/pull",
+        "http://host/api": "http://host/api/pull",
+        # … was davor steht, bleibt.
+        "http://h/ollama/api/chat": "http://h/ollama/api/pull",
+        "http://h/ollama": "http://h/ollama/api/pull",
+        # Und ein Pfad, der nur so *anfängt*, ist kein Endpunkt. Beide Zeilen
+        # hat eine erste Fassung dieser Funktion abgeschnitten — sie suchte
+        # ``/api`` ohne den Schrägstrich dahinter, damit ``…/api`` als Basis
+        # durchginge, und nahm ``/apiary`` gleich mit.
+        "http://h/apiary": "http://h/apiary/api/pull",
+        "http://h/api-gateway": "http://h/api-gateway/api/pull",
+        "http://h/apiary/api/chat": "http://h/apiary/api/pull",
+        # Ein Zugangstoken in der Abfrage gehört dem Proxy und bleibt stehen.
+        "http://host:11434/api/chat?token=x": "http://host:11434/api/pull?token=x",
+        "https://fern:11434/api/chat": "https://fern:11434/api/pull",
+    }
+
+    for written, wanted in erwartet.items():
+        assert llm.ollama_endpoint(written, "/api/pull") == wanted, written
 
 
 def test_an_empty_address_falls_back_to_this_machine() -> None:
@@ -890,14 +914,12 @@ def test_a_refused_key_stops_counting_as_available(monkeypatch: pytest.MonkeyPat
     und galt mit jedem beliebigen Text als verfügbar.
     """
     monkeypatch.setattr(keys, "read", lambda account: "sk-sieht-echt-aus")
-    llm.accept_again()
     backend = llm.AnthropicBackend()
     assert backend.available is True
 
     llm.reject(backend.id)
 
     assert backend.available is False
-    llm.accept_again()
 
 
 def test_storing_a_new_key_is_a_new_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -908,7 +930,6 @@ def test_storing_a_new_key_is_a_new_attempt(monkeypatch: pytest.MonkeyPatch) -> 
     keys.store("anthropic", "sk-der-neue")
 
     assert "anthropic" not in llm._rejected
-    llm.accept_again()
 
 
 def test_an_authentication_error_marks_the_backend_and_names_it(
@@ -922,7 +943,6 @@ def test_an_authentication_error_marks_the_backend_and_names_it(
     eines — nur ein anderes als das eingerichtete.
     """
     monkeypatch.setattr(keys, "read", lambda account: "sk-abgelaufen")
-    llm.accept_again()
 
     def refuse(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
         raise llm.BackendUnavailable(status=401, detail="invalid x-api-key")
@@ -933,7 +953,6 @@ def test_an_authentication_error_marks_the_backend_and_names_it(
 
     assert raised.value.values["provider"] == "anthropic"
     assert backend.available is False, "derselbe Schlüssel wird nicht noch einmal geschickt"
-    llm.accept_again()
 
 
 def test_the_chat_falls_back_to_the_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -945,11 +964,41 @@ def test_the_chat_falls_back_to_the_local_model(monkeypatch: pytest.MonkeyPatch)
     # echten Modell auf dieser Maschine sucht. Genau die Liste ist hier die
     # Sache — das Original steht unter eigenem Namen bereit.
     monkeypatch.setattr(llm, "backends", llm.unpatched_backends)
-    llm.accept_again()
     assert llm.first_available() is not None
     assert llm.first_available().id == "anthropic"
 
     llm.reject("anthropic")
 
     assert llm.first_available().id == "ollama"
-    llm.accept_again()
+
+
+# --- Vier Wege zu Ollama, und drei fingen den Pfad nicht --------------------------
+
+
+def test_no_way_to_ollama_turns_a_typo_into_a_program_error() -> None:
+    """Gefunden von ``3d-druck-61`` im Review von ``335c204``.
+
+    ``available`` fragt die Adresse selbst und sah einen ``ValueError`` aus
+    ``urllib.parse``. Die drei Wege über ``http.client`` bekommen für denselben
+    Pfad ein ``InvalidURL``, und das erbt von ``HTTPException`` — **weder von
+    ``ValueError`` noch von ``OSError``**. Der Kunde hätte also weiter einen
+    Programmfehler samt Bitte um einen Fehlerbericht bekommen, sobald der
+    Einrichtungsdialog die Modellliste holt (Regel 17).
+
+    Geprüft wird der **Weg**, nicht die Ausnahme: Was eine unbrauchbare Adresse
+    wirft, ist Sache der Bibliothek und kann sich ändern. Dass hier nichts
+    herausfliegt, ist unsere Zusage.
+    """
+    path = r"C:\Users\Jemand\.ollama\models"
+
+    assert llm.installed_models(path) == ()
+    assert llm.ollama_size_warning("qwen3:14b", url=path) is None
+    assert llm.pull_model("qwen3:14b", url=path) is not None, "ein Satz, keine Ausnahme"
+
+
+def test_an_address_without_a_scheme_is_no_program_error_either() -> None:
+    """``urllib.request.Request`` wirft selbst, bevor irgendetwas sendet —
+    gemessen an ``://kaputt``. In ``pull_model`` stand sein Aufruf eine Zeile
+    **über** dem ``try``, also außerhalb.
+    """
+    assert llm.pull_model("qwen3:14b", url="://kaputt") is not None

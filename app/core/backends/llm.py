@@ -28,6 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any, Final, Literal, Protocol
 
 from app.core.backends import keys
+from app.core.discover import UNUSABLE_ADDRESS
 from app.core.errors import AppError, ExternalToolError
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
@@ -622,14 +623,13 @@ class OllamaBackend:
                 timeout=PROBE_SECONDS,
             ):
                 return True
-        except (OSError, ValueError):
-            # **``ValueError`` gehört dazu, und zwar wegen eines echten
-            # Falles:** Wer in das Adressfeld einen Windows-Pfad einträgt —
-            # ein Kunde tat es am 24.08.2026 mit seinem Modellordner —, bei dem
-            # liest ``urlsplit`` alles hinter ``C:`` als Port und wirft beim
-            # Zugriff darauf. Der fing hier niemand, und der Einrichtungsdialog
-            # starb daran. Eine unbrauchbare Adresse heißt „nicht erreichbar",
-            # nicht „Absturz".
+        except UNUSABLE_ADDRESS:
+            # Eine unbrauchbare Adresse heißt „nicht erreichbar", nicht
+            # „Absturz" — wer hier einen Windows-Pfad einträgt, bekommt ein
+            # ausgegrautes Modell und keinen Fehlerbericht (Regel 17). Was
+            # eine solche Adresse alles werfen kann, steht bei
+            # :data:`UNUSABLE_ADDRESS`; es sind drei Familien, und keine erbt
+            # von einer anderen.
             return False
 
     def complete(
@@ -798,12 +798,24 @@ def ollama_endpoint(url: str | None, path: str = "/api/chat") -> str:
         address = f"http://{address}"
     parts = urllib.parse.urlsplit(address)
     prefix = parts.path.rstrip("/")
-    endpoint = prefix.rfind("/api/")
-    if endpoint != -1:
-        # Ein bekannter Endpunkt wird durch den gefragten ersetzt, alles davor
-        # bleibt stehen.
-        prefix = prefix[:endpoint]
-    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, prefix + path, "", ""))
+    # Ein bekannter Endpunkt wird durch den gefragten ersetzt, alles davor
+    # bleibt stehen. Zwei Fälle, und beide brauchen ihre eigene Prüfung:
+    # ``…/api/chat`` endet auf einem Endpunkt, ``…/api`` **ist** einer. Ein
+    # bloßes ``rfind("/api")`` deckte beide ab und schnitt dabei auch
+    # ``/apiary`` und ``/api-gateway`` ab — Pfadanfänge, die zufällig so
+    # beginnen und einem Reverse-Proxy gehören.
+    if prefix.endswith("/api"):
+        prefix = prefix[: -len("/api")]
+    else:
+        endpoint = prefix.rfind("/api/")
+        if endpoint != -1:
+            prefix = prefix[:endpoint]
+    # Abfrage und Fragment bleiben stehen. Sie gehören zwar zum Endpunkt und
+    # nicht zur Basis — aber wer einen Zugangstoken in der Adresse führt, weil
+    # sein Reverse-Proxy ihn verlangt, verlöre ihn hier stillschweigend.
+    return urllib.parse.urlunsplit(
+        (parts.scheme, parts.netloc, prefix + path, parts.query, parts.fragment)
+    )
 
 
 def installed_models(url: str | None = None, fetch: Fetch = _get_json) -> tuple[str, ...]:
@@ -815,7 +827,7 @@ def installed_models(url: str | None = None, fetch: Fetch = _get_json) -> tuple[
     address = ollama_endpoint(url or _configured_ollama_url(), "/api/tags")
     try:
         answer = fetch(address)
-    except (OSError, ValueError):
+    except UNUSABLE_ADDRESS:
         return ()
     return tuple(
         str(entry.get("name", "")) for entry in answer.get("models", ()) if entry.get("name")
@@ -842,11 +854,15 @@ def pull_model(
     """
     address = ollama_endpoint(url or _configured_ollama_url(), "/api/pull")
     body = json.dumps({"model": model, "stream": True}).encode("utf-8")
-    request = urllib.request.Request(
-        address, data=body, headers={"Content-Type": "application/json"}
-    )
     _log.info("pulling ollama model %s", model)
     try:
+        # **Der Bau der Anfrage steht mit im ``try``.** ``Request()`` selbst
+        # wirft einen ``ValueError``, sobald die Adresse kein Schema trägt, das
+        # es kennt — gemessen an ``://kaputt``. Davor lag er eine Zeile
+        # oberhalb, und dort fing ihn nichts.
+        request = urllib.request.Request(
+            address, data=body, headers={"Content-Type": "application/json"}
+        )
         with urllib.request.urlopen(request, timeout=PULL_TIMEOUT_SECONDS) as answer:
             for raw in answer:
                 if cancelled is not None and cancelled():
@@ -870,7 +886,7 @@ def pull_model(
         detail = error.read().decode("utf-8", errors="replace")[:200]
         _log.warning("pull of %s refused: %s", model, detail)
         return _("Ollama hat den Namen nicht angenommen.")
-    except (OSError, urllib.error.URLError):
+    except UNUSABLE_ADDRESS:
         return _("Ollama hat nicht geantwortet — läuft es noch?")
     return None
 
@@ -901,7 +917,7 @@ def ollama_size_warning(
     address = ollama_endpoint(url or _configured_ollama_url(), "/api/tags")
     try:
         answer = fetch(address)
-    except (OSError, ValueError):
+    except UNUSABLE_ADDRESS:
         return None
 
     wanted = {model, f"{model}:latest"}

@@ -473,3 +473,42 @@ def test_a_windows_path_where_an_address_belongs_is_unreachable() -> None:
     """
     assert discover.reachable(r"C:\Users\Jemand\.ollama\models") is False
     assert discover.reachable("http://localhost:1") is False, "ein zu-Port bleibt zu"
+
+
+def test_what_a_person_types_into_an_address_field_is_checked_there() -> None:
+    """**Ein Feld, das jede Eingabe annimmt, verschiebt den Fehler nur.**
+
+    Der Einrichtungsdialog fragte „Adresse, unter der es erreichbar ist" und
+    speicherte, was kam. Ein Kunde trug dort am 24.08.2026 den Ordner seiner
+    Modelle ein und suchte den Fehler danach drei Stunden an anderer Stelle —
+    die Meldung, die ihn erreichte, sprach von etwas ganz anderem.
+
+    Die Sollwerte stehen hier als *Fall* und nicht als Satz: Welcher Satz
+    zurückkommt, darf sich ändern; dass diese Eingaben abgelehnt und jene
+    angenommen werden, nicht.
+    """
+    unbrauchbar = (
+        r"C:\Users\Jemand\.ollama\models",
+        "/home/jemand/modelle",
+        "~/modelle",
+        "file:///c:/modelle",
+        "http://host:keinport",
+        "http://:11434",
+    )
+    for eingabe in unbrauchbar:
+        assert discover.unusable_address(eingabe) is not None, eingabe
+
+    brauchbar = (
+        "http://localhost:11434",
+        "http://127.0.0.1:8188",
+        "127.0.0.1:11434",
+        "https://werkstatt.lan:11434/api/chat",
+        "",
+    )
+    for eingabe in brauchbar:
+        assert discover.unusable_address(eingabe) is None, eingabe
+
+
+def test_an_empty_address_is_no_complaint_but_a_reset() -> None:
+    """Leer heißt „wieder die Vorgabe" — ``remember`` behandelt es genauso."""
+    assert discover.unusable_address("   ") is None

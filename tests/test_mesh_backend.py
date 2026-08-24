@@ -1446,3 +1446,38 @@ def test_the_sizes_in_the_progress_text_match_the_constants() -> None:
         assert erwartet_mb in zahlen, (
             f"{text!r} nennt {zahlen}, BACKGROUND_MEGABYTES sagt {erwartet_mb}"
         )
+
+
+# --- Eine Adresse aus Nutzerhand (24.08.2026) -------------------------------------
+
+
+def test_a_folder_in_the_comfy_address_is_unreachable_and_not_a_crash() -> None:
+    """Derselbe Fall wie bei Ollama, zweite Datei.
+
+    ComfyUI ist der zweite Dienst, dessen Adresse jemand von Hand einträgt —
+    und ``reachable`` fing hier nur ``OSError``. Mit einem Pfad im Feld liest
+    ``urlparse`` alles hinter ``C:`` als Port und wirft beim Zugriff darauf.
+    """
+    from app.core.backends import mesh
+
+    assert mesh.reachable(r"http://C:\Users\Jemand\ComfyUI") is False
+    assert mesh.reachable(r"C:\Users\Jemand\ComfyUI") is False
+
+
+def test_a_broken_comfy_address_says_what_belongs_there() -> None:
+    """Und sie sagt es **anders** als „ComfyUI antwortet nicht".
+
+    Zwei Lagen, zwei Handlungen: Läuft der Dienst nicht, hilft der Dienst;
+    ist die Adresse Unsinn, hilft nur das Feld in den Einstellungen. Der Satz
+    nennt deshalb ein Beispiel — wer noch nie eine Dienstadresse eingetragen
+    hat, weiß sonst nicht, wie eine aussieht (Regel 17).
+    """
+    from app.core.backends import mesh
+    from app.core.errors import AppError
+
+    with pytest.raises(AppError) as raised:
+        mesh.fetch(r"http://C:\Users\Jemand\ComfyUI")
+
+    text = f"{raised.value.title} {raised.value.detail}"
+    assert "127.0.0.1:8188" in text, "ohne Beispiel weiß niemand, wie eine Adresse aussieht"
+    assert raised.value.suggestions, "ein Fehler endet nie ohne Handlung"

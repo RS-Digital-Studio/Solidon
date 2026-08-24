@@ -41,6 +41,7 @@ Nutzerkonfiguration. Nichts hiervon schreibt je in ein Projekt.
 
 from __future__ import annotations
 
+import http.client
 import json
 import os
 import shutil
@@ -55,6 +56,7 @@ from urllib.parse import urlparse
 
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_cache_dir, user_config_dir
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -423,6 +425,64 @@ def _below(folder: Path, names: tuple[str, ...]) -> list[Path]:
 
 
 # --- Dienste --------------------------------------------------------------------
+
+#: Was eine kaputte Adresse werfen kann — **ohne** die Netzfehler.
+#:
+#: ``ValueError`` kommt aus ``urllib.parse``, sobald der Teil hinter einem
+#: Doppelpunkt als Port gelesen wird und keine Zahl ist; ``InvalidURL`` ist
+#: derselbe Fall eine Schicht tiefer und erbt von ``http.client.HTTPException``
+#: — also **von keiner der beiden anderen Familien**. Genau daran ist der Fall
+#: vom 24.08.2026 durchgerutscht: Ein Kunde trug seinen Modellordner in ein
+#: Adressfeld ein, eine Stelle fing den ``ValueError``, und drei weitere
+#: bekamen ein ``InvalidURL``, das dort niemand erwartete.
+BROKEN_ADDRESS: Final = (ValueError, http.client.HTTPException)
+
+#: Dasselbe, plus „niemand hört zu" (``OSError`` deckt auch ``URLError``).
+#:
+#: Wer beides gleich behandelt — „von hier kommt keine Antwort" —, nimmt diese
+#: Familie. Wer für einen nicht laufenden Dienst einen **eigenen** Satz hat,
+#: nimmt :data:`BROKEN_ADDRESS` und lässt die Netzfehler an seiner eigenen
+#: Klausel vorbeilaufen.
+UNUSABLE_ADDRESS: Final = (OSError, *BROKEN_ADDRESS)
+
+
+def unusable_address(text: str) -> TranslatableText | None:
+    """Was an dieser Adresse nicht geht — ``None``, wenn nichts.
+
+    **Ein Feld, das jede Eingabe annimmt, verschiebt den Fehler nur.** Der
+    Einrichtungsdialog fragte „Adresse, unter der es erreichbar ist" und
+    speicherte, was kam; ein Kunde trug dort am 24.08.2026 den Ordner seiner
+    Modelle ein. Gemerkt hat er es erst Stunden später an einer Meldung, die
+    von etwas ganz anderem sprach.
+
+    Geprüft wird deshalb dort, wo die Eingabe hereinkommt — mit einem Satz, der
+    sagt, was stattdessen hineingehört.
+    """
+    address = text.strip()
+    if not address:
+        # Leer heißt „wieder die Vorgabe" und ist kein Fehler.
+        return None
+    if Path(address).drive or address.startswith(("/", "\\", "~", "file:")):
+        return _(
+            "Das sieht nach einem Ordner oder einer Datei aus. Hier gehört die "
+            "Adresse hin, unter der der Dienst im Netz antwortet — sie beginnt "
+            "mit http:// und nennt Rechner und Port."
+        )
+    try:
+        parts = urlparse(address if "://" in address else f"http://{address}")
+        # Der Zugriff **ist** die Prüfung: ``urlsplit`` wirft erst hier.
+        _port = parts.port
+    except ValueError:
+        return _(
+            "Nach dem Doppelpunkt gehört die Portnummer, und dort steht keine "
+            "Zahl. Eine Adresse sieht aus wie http://localhost:11434."
+        )
+    if not parts.hostname:
+        return _(
+            "Darin steht kein Rechnername. Eine Adresse sieht aus wie "
+            "http://localhost:11434 — der Name des Rechners, dann der Port."
+        )
+    return None
 
 
 def service_url(tool_id: str, default: str) -> str:

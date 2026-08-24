@@ -44,7 +44,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import install, tools
+from app.core import discover, install, tools
 from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
@@ -226,15 +226,56 @@ class _Row(QWidget):
             self._choose_file()
         self.show_status(install.status_of(self.requirement))
 
+    def _address_question(self, problem: str = "") -> str:
+        """Die Frage über dem Feld — mit einem Beispiel, und im zweiten Anlauf
+        mit dem Grund.
+
+        **Bis zum 24.08.2026 stand hier ein Satz und sonst nichts:** „Adresse,
+        unter der es erreichbar ist." Wer noch nie eine Dienstadresse
+        eingetragen hat, weiß daraus weder, wie eine aussieht, noch woher er
+        sie bekommt — ein Kunde trug den Ordner seiner Modelle ein und suchte
+        den Fehler danach drei Stunden an anderer Stelle.
+
+        Das Beispiel kommt aus dem Werkzeug selbst (``ExternalTool.url``) und
+        nicht aus einer Zeichenkette hier: Es ist genau die Adresse, unter der
+        Solidon den Dienst ohne Zutun sucht, und bleibt damit richtig, wenn sich
+        die Vorgabe ändert.
+        """
+        beispiel = self.tool.url if self.tool else ""
+        satz = tr(
+            "Adresse, unter der der Dienst antwortet — zum Beispiel {beispiel}\n\n"
+            "Solidon startet ihn nicht, es spricht über das Netz mit ihm. Hier "
+            "gehört deshalb kein Ordner und keine Programmdatei hin, sondern "
+            "die Adresse, die das Programm beim Start selbst nennt.\n"
+            "Leer lassen heißt: wieder die Vorgabe benutzen."
+        ).format(beispiel=beispiel)
+        return f"{problem}\n\n{satz}" if problem else satz
+
     def _choose_address(self) -> None:
-        address, accepted = QInputDialog.getText(
-            self,
-            str(self.tool.title) if self.tool else "",
-            tr("Adresse, unter der es erreichbar ist:"),
-            text=self.tool.address() if self.tool else "",
-        )
-        if accepted and self.tool is not None:
-            tools.set_location(self.tool.id, address.strip())
+        """Fragt, bis die Antwort eine Adresse ist — oder der Nutzer abbricht.
+
+        Eine Schleife und kein zweiter Dialog: Der Grund steht über demselben
+        Feld, die getippte Eingabe bleibt stehen, und wer abbricht, bricht ab.
+        Ein Fehlerfenster dazwischen wäre ein Klick mehr für dieselbe Auskunft.
+        """
+        if self.tool is None:
+            return
+        problem = ""
+        entered = self.tool.address()
+        while True:
+            entered, accepted = QInputDialog.getText(
+                self,
+                str(self.tool.title),
+                self._address_question(problem),
+                text=entered,
+            )
+            if not accepted:
+                return
+            trouble = discover.unusable_address(entered)
+            if trouble is None:
+                tools.set_location(self.tool.id, entered.strip())
+                return
+            problem = str(trouble)
 
     def _choose_file(self) -> None:
         assert self.tool is not None
