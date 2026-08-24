@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.registry import PaletteEntry, palette_entries
+from app.core.registry import MENU_TWINS, PaletteEntry, palette_entries, variant_members
 from app.i18n import tr
 
 #: Wie ein Umlaut auf einer Tastatur ohne Umlaute geschrieben wird.
@@ -180,10 +180,29 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     "subtract_objects": ("ausschneiden", "aussparen", "wegnehmen"),
     "label_text": ("gravieren", "beschriften", "praegen"),
     "decimate_mesh": ("vereinfachen", "reduzieren", "leichter machen"),
-    "hollow_object": ("aushoehlen", "leer machen"),
+    "hollow_object": ("aushoehlen", "leer machen", "exakt", "brep", "echte kanten"),
     # Versteckter Zwilling (``MENU_TWINS``): kein Menüeintrag, also ist die
     # Palette neben dem Verlauf sein einziger direkter Weg.
     "shell_exact": ("exakt aushoehlen", "brep aushoehlen"),
+    # **„exakt" gehört an beide Hälften eines Paares**, seit die Grundliste den
+    # Zwilling nicht mehr auflistet (:func:`matches`). Wer das Wort tippt, will
+    # zwei Wege sehen: die Direktwahl des exakten Kerns **und** den Eintrag,
+    # dessen Dialog den Haken trägt — und der ist meist der bessere, weil er
+    # alle Felder zeigt. Ohne diese Zeilen fände er nur den ersten.
+    #
+    # „echte kanten" steht daneben, weil es das Wort ist, mit dem die
+    # ``doc``-Sätze den Unterschied erklären, ohne „exakt" zu benutzen: „Legt
+    # einen Quader mit echten Kanten an."
+    # **Nur diese drei Wörter, keine Zugaben.** Der erste Anlauf hängte
+    # „loch bohren" an ``drill_hole`` — und machte damit die Suche nach
+    # „bohren" zu einem *genauen* Treffer. Daran hing ein fremder Test: Der
+    # Wortstamm-Rückfall greift laut ``_refilter`` erst, wenn die genaue Suche
+    # leer ausgeht, und „bohren" gegen „Bohrung setzen" war sein Prüffall. Ein
+    # Synonym, das der Stamm ohnehin schon findet, bringt nichts und nimmt
+    # einer Zusicherung ihren Fall.
+    "create_box": ("exakt", "brep", "echte kanten"),
+    "create_cylinder": ("exakt", "brep", "echte kanten"),
+    "drill_hole": ("exakt", "brep", "echte kanten"),
     "repair_mesh": ("loecher schliessen", "reparieren", "flicken"),
     # **Die gewöhnlichsten Wörter fehlten**, und das fiel niemandem auf, weil
     # niemand sie sucht, der das Register kennt: „kopieren" und „loeschen"
@@ -213,6 +232,27 @@ def synonyms_for(name: str) -> str:
     return " ".join(SYNONYMS.get(name, ()))
 
 
+def hidden_from_the_menu() -> frozenset[str]:
+    """Die Operationen, die im Menü keinen eigenen Eintrag haben.
+
+    **Eine Regel, nicht zwei**, und das ist der Punkt dieser Funktion: Es gibt
+    inzwischen zwei Wege, einen Eintrag zusammenzulegen — den Zwilling in
+    einem zweiten Rechenkern (:data:`MENU_TWINS`, „Exakten Quader anlegen"
+    unter dem Haken von „Quader anlegen") und die Variantengruppe
+    (:func:`variant_members`, die vier Skizzen-Arten unter „Aus Skizze
+    erzeugen …"). Für die Palette ist der Unterschied gleichgültig: Beide
+    Male steht die Handlung anderswo, und beide Male soll sie nicht ein
+    zweites Mal ungefragt in der Liste stehen.
+
+    Die Menüleiste stellt dieselbe Frage in zwei getrennten Zeilen
+    (``main_window.py``, beim Aufbau der Kategorien). Wer eines Tages die
+    dritte Art hinzufügt, soll hier **eine** Stelle finden und nicht zwei —
+    sonst wächst mit jedem Mechanismus die Zahl der Orte, an denen er
+    vergessen werden kann.
+    """
+    return frozenset(MENU_TWINS) | variant_members()
+
+
 def matches(entry: PaletteEntry, query: str, *, stem: bool = False) -> bool:
     """Teilstring-Suche über Titel, Name und Dokumentation.
 
@@ -225,9 +265,33 @@ def matches(entry: PaletteEntry, query: str, *, stem: bool = False) -> bool:
     die ersten vier Buchstaben lösen. Gelockert wird erst, wenn die genaue
     Suche leer ausgeht (siehe ``CommandPalette._refilter``): Sonst stünde
     zwischen guten Treffern immer auch Ungefähres.
+
+    **Ohne Suchtext fehlt, was im Menü keinen eigenen Eintrag hat**
+    (:func:`hidden_from_the_menu`), und das ist der einzige Fall, in dem diese
+    Funktion etwas weglässt.
+
+    Der Grund steht in der Liste, die der Kunde sonst sieht: Wer „quader"
+    suchte, bekam „Exakten Quader anlegen" **vor** „Quader anlegen" — die
+    Sonderform vor der Normalform, alphabetisch nach dem Bauart-Wort sortiert,
+    und der Unterschied stand nur im Tooltip. Im Menü ist dieselbe Sache seit
+    §35 gelöst: ein Eintrag, und der Haken im Dialog wählt den Kern.
+
+    **Was das nicht antastet, ist die Erreichbarkeit.** §2.6 sagt „alles aus
+    dem Register **per Suche**", und genau das gilt weiter: Ab dem ersten
+    getippten Zeichen ist der Zwilling wieder da, über Titel, Namen, ``doc``
+    und Synonyme. Gefiltert wird die **Anzeige**, nicht der Bestand —
+    :func:`app.core.registry.palette_entries` gibt unverändert jede Operation
+    zurück, und sein Docstring sagt zu Recht zu, dass es „eine Reihenfolge und
+    keine Auswahl" ist: Diese Zusage gilt der Quelle, und
+    ``tests/test_acceptance_p0.py`` hält sie dort fest.
+
+    Dieselbe Lockerung hat das Menü längst: Das Abnahmekriterium aus §40 nennt
+    Ops „sichtbar in Menü, Palette", und für zusammengelegte Zwillinge ist das
+    im Menü seit der ersten Zusammenlegung nicht mehr wörtlich erfüllt,
+    sondern durch „erreichbar über den Partner" ersetzt.
     """
     if not query:
-        return True
+        return entry.name not in hidden_from_the_menu()
     haystack = fold(f"{entry.title} {entry.name} {entry.doc} {synonyms_for(entry.name)}")
     parts = fold(query).split()
     if not stem:
@@ -277,7 +341,16 @@ class CommandPalette(QDialog):
             found = [entry for entry in self._entries if matches(entry, query, stem=True)]
         # Stabil nach Güte: Titel vor Name vor Beschreibung, und innerhalb
         # derselben Güte bleibt die Reihenfolge aus ``applies_to`` stehen.
-        found.sort(key=lambda entry: rank(entry, query))
+        #
+        # **Und der Zwilling zuletzt, bei gleicher Güte.** Sonst kommt die
+        # Verwirrung eine Ebene später wieder: Gemessen stand nach dem Tippen
+        # von „quader" wieder „Exakten Quader anlegen" **vor** „Quader
+        # anlegen" — alphabetisch richtig und für den Kunden falsch, denn das
+        # ist die Sonderform vor der Normalform. Die Grundliste zeigt den
+        # Zwilling gar nicht (:func:`matches`); wer ihn sucht, findet ihn, aber
+        # er drängt sich nicht vor seinen Partner.
+        versteckt = hidden_from_the_menu()
+        found.sort(key=lambda entry: (rank(entry, query), entry.name in versteckt))
         for entry in found:
             label = str(entry.title)
             if entry.shortcut:

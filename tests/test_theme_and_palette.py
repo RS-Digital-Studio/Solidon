@@ -6,8 +6,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from app.core.registry import REGISTRY
-from app.ui.command_palette import CommandPalette, matches
+from app.core.registry import MENU_TWINS, REGISTRY, variant_members
+from app.ui.command_palette import CommandPalette, hidden_from_the_menu, matches
 from app.ui.theme import THEMES, contrast_ratio, viewport_colours
 
 #: WCAG AA for body text.
@@ -301,13 +301,100 @@ def test_the_search_finds_by_title_name_and_documentation() -> None:
     assert not matches(entry, "bohrung")
 
 
-def test_the_palette_lists_every_operation(qt_app: object) -> None:
+def test_the_palette_lists_every_operation_but_the_merged_twins(qt_app: object) -> None:
+    """Die Grundliste zeigt jede Handlung **einmal**.
+
+    Vorher stand hier ``listed == {spec.name for spec in REGISTRY.all()}``, und
+    das war richtig, solange die Palette alles auflistete. Was der Kunde davon
+    hatte: Wer „quader" suchte, bekam „Exakten Quader anlegen" **vor** „Quader
+    anlegen" — die Sonderform vor der Normalform, sortiert nach einem Wort, das
+    die Bauart nennt und nicht die Handlung.
+
+    Zusammengelegte Zwillinge (``MENU_TWINS``) fehlen deshalb in der
+    ungefilterten Liste, genau wie im Menü. **Die Zusage aus §2.6 ist damit
+    nicht angetastet** — „alles aus dem Register per Suche" —, und der Test
+    darunter prüft sie, statt sich auf diesen Satz zu verlassen.
+
+    Gerechnet wird gegen die **Regel** und nicht gegen aufgezählte Namen: Es
+    waren drei Zwillinge, seit `816cc7d7` sind es vier, und seit `f43284f0`
+    kommen vier Variantenmitglieder dazu („Aus Skizze erzeugen …"). Ein Test
+    mit einer festen Liste wäre beim nächsten Mechanismus an einer Stelle rot
+    geworden, die damit nichts zu tun hat.
+    """
     palette = CommandPalette()
     listed = {
         palette.list.item(index).data(0x0100)  # Qt.ItemDataRole.UserRole
         for index in range(palette.list.count())
     }
-    assert listed == {spec.name for spec in REGISTRY.all()}
+
+    versteckt = hidden_from_the_menu()
+    assert MENU_TWINS and variant_members(), "beide Mechanismen müssen belegt sein"
+    assert versteckt >= set(MENU_TWINS) | variant_members(), "die Regel deckt beide"
+    assert listed == {spec.name for spec in REGISTRY.all()} - versteckt
+
+
+def test_every_merged_twin_is_still_reachable_by_typing(qt_app: object) -> None:
+    """Und die andere Hälfte: **jeder** Zwilling ist per Suche da (§2.6).
+
+    Das ist die Deckung, ohne die der Test darüber eine Lockerung ohne Ersatz
+    wäre. Gesucht wird mit dem Titel des Zwillings, also dem Weg, den ein Kunde
+    nimmt, der weiß, was er will — „Exakt aushöhlen" tippt niemand aus, aber
+    „exakt aush" reicht schon.
+
+    Zusätzlich der echte Fall aus der Synonymtabelle: „exakt aushoehlen" ohne
+    Umlaut, weil gefaltet gesucht wird.
+    """
+    entries = {entry.name: entry for entry in _palette_entries()}
+    assert hidden_from_the_menu(), "ohne versteckte Einträge prüft dieser Test nichts"
+
+    for hidden in hidden_from_the_menu():
+        eintrag = entries[hidden]
+        assert matches(eintrag, str(eintrag.title)), f"{hidden} über seinen Titel"
+        assert not matches(eintrag, ""), f"{hidden} steht nicht in der Grundliste"
+
+    assert matches(entries["shell_exact"], "exakt aushoehlen"), "Synonym ohne Umlaut"
+
+
+def test_the_twin_never_stands_before_its_partner(qt_app: object) -> None:
+    """Beim Tippen kommt die Normalform zuerst.
+
+    Ohne diese Rangfolge kehrte der gemeldete Fehler eine Ebene später zurück:
+    Die Grundliste zeigt den Zwilling nicht mehr, aber wer „quader" tippte,
+    bekam „Exakten Quader anlegen" **vor** „Quader anlegen" — alphabetisch
+    richtig, für den Kunden falsch, weil das die Sonderform vor der Normalform
+    ist.
+
+    Geprüft an der **Reihenfolge** und nicht am ersten Eintrag allein: Dass der
+    Partner überhaupt dabei ist, gehört zur Aussage.
+    """
+    palette = CommandPalette()
+    for suche, partner, zwilling in (
+        ("quader", "create_box", "create_brep_box"),
+        ("zylinder", "create_cylinder", "create_brep_cylinder"),
+        ("aushöhlen", "hollow_object", "shell_exact"),
+    ):
+        palette.search.setText(suche)
+        namen = [palette.list.item(index).data(0x0100) for index in range(palette.list.count())]
+        assert partner in namen and zwilling in namen, f"„{suche}“ findet beide"
+        assert namen.index(partner) < namen.index(zwilling), (
+            f"„{suche}“: {zwilling} steht vor {partner}"
+        )
+
+
+def test_typing_exact_finds_the_dialog_with_the_checkbox_too(qt_app: object) -> None:
+    """Wer „exakt" tippt, soll **beide** Wege sehen.
+
+    Der Zwilling ist der eine (Direktwahl des exakten Kerns), der Eintrag des
+    Partners der andere — und der ist meist der bessere, weil sein Dialog alle
+    Felder zeigt und den Haken trägt. Ohne Synonym am Partner fände die Suche
+    nur die Direktwahl, und der Kunde landete auf dem engeren Weg, ohne den
+    breiteren gesehen zu haben.
+    """
+    entries = {entry.name: entry for entry in _palette_entries()}
+
+    for hidden, shown in MENU_TWINS.items():
+        assert matches(entries[hidden], "exakt"), f"{hidden} — die Direktwahl"
+        assert matches(entries[shown], "exakt"), f"{shown} — der Dialog mit dem Haken"
 
 
 def test_the_palette_opens_big_enough_to_be_a_list(qt_app: object) -> None:
@@ -326,7 +413,12 @@ def test_the_palette_opens_big_enough_to_be_a_list(qt_app: object) -> None:
     assert palette.minimumHeight() >= 400, (
         f"die Palette öffnet {palette.minimumHeight()} Punkte hoch — zu wenig zum Blättern"
     )
-    assert palette.list.count() >= len(REGISTRY.all()), "und sie hat wirklich etwas zu zeigen"
+    # Ohne die Einträge, die im Menü keinen eigenen haben und deshalb auch in
+    # der Grundliste fehlen (:func:`hidden_from_the_menu`) — die Zusage hier ist
+    # die **Höhe**, nicht der Bestand.
+    assert palette.list.count() >= len(REGISTRY.all()) - len(hidden_from_the_menu()), (
+        "und sie hat wirklich etwas zu zeigen"
+    )
 
 
 def test_the_palette_shows_the_shortcut_so_it_gets_learned(qt_app: object) -> None:
