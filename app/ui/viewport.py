@@ -1580,6 +1580,12 @@ class Viewport(QWidget):
         self.plotter: Any | None = None
         self._actors: dict[ObjectId, Any] = {}
         self._frame_actors: list[Any] = []
+        #: Die Teilmenge von ``_frame_actors``, die **flach auf dem Bett** liegt:
+        #: Fläche und Raster. Nur sie tritt im Skizzenmodus ab — Bauraumkanten
+        #: und Maßskala bleiben stehen, weil sie eine Grenze zeigen und kein
+        #: zweites Gitter sind. Warum das ein Unterschied ist, steht an
+        #: :meth:`set_sketching`.
+        self._ground_actors: list[Any] = []
         self._selected: ObjectId | None = None
         self._fitted_to: Literal["", "bed", "objects"] = ""
         """Worauf die Kamera zuletzt eingepasst wurde — auf nichts, auf den
@@ -2811,6 +2817,7 @@ class Viewport(QWidget):
         for actor in self._frame_actors:
             self.plotter.remove_actor(actor, render=False)
         self._frame_actors.clear()
+        self._ground_actors.clear()
         for plate in range(beds):
             self._draw_one_bed(pv, plate, plate_shift(plate, width)[0], width, depth, height)
         self._draw()
@@ -2872,6 +2879,7 @@ class Viewport(QWidget):
         # Schatten, wie sie waren.
         surface.prop.culling = "back"
         self._frame_actors.append(surface)
+        self._ground_actors.append(surface)
         bed = pv.Plane(
             center=(shift, 0.0, 0.0),
             direction=(0.0, 0.0, 1.0),
@@ -2880,17 +2888,17 @@ class Viewport(QWidget):
             i_resolution=max(1, int(width // 10)),
             j_resolution=max(1, int(depth // 10)),
         )
-        self._frame_actors.append(
-            self.plotter.add_mesh(
-                bed,
-                color=self._bed_colour,
-                style="wireframe",
-                opacity=0.35,
-                name=f"bed_{plate}",
-                render=False,
-                reset_camera=False,
-            )
+        grid = self.plotter.add_mesh(
+            bed,
+            color=self._bed_colour,
+            style="wireframe",
+            opacity=0.35,
+            name=f"bed_{plate}",
+            render=False,
+            reset_camera=False,
         )
+        self._frame_actors.append(grid)
+        self._ground_actors.append(grid)
         import numpy as np
 
         segments = volume_edges(width, depth, height)
@@ -5508,13 +5516,21 @@ class Viewport(QWidget):
         und kein Ding in der Szene.
         """
         self._sketch_frame = frame
-        # **Das Bett tritt ab, solange die Zeichenebene da ist.** Zwei Gitter
-        # übereinander sind eines zu viel: Beide sind graue Linien in
-        # derselben Größenordnung, und welches die Ebene ist, auf der gerade
-        # gezeichnet wird, sähe man nicht mehr. Der Bauraum ist außerdem eine
-        # Aussage über das Drucken und nicht über die Zeichnung — er kommt
-        # zurück, sobald der Modus endet.
-        for actor in self._frame_actors:
+        # **Der Boden des Bauraums tritt ab, seine Kanten bleiben.** Zwei
+        # Gitter übereinander sind eines zu viel: Bettraster und Zeichenraster
+        # sind beide graue Linien in derselben Größenordnung, und welches die
+        # Ebene ist, auf der gerade gezeichnet wird, sähe man nicht mehr. Bei
+        # einer Skizze auf ``plane:xy`` liegen sie sogar exakt ineinander.
+        #
+        # **Die Kanten und die Maßskala gehen deshalb nicht mit**, und das ist
+        # der Unterschied, der beim ersten Anlauf verlorenging: Sie sind kein
+        # zweites Gitter, sondern eine **Grenze**. Das Handbuch verspricht
+        # genau sie — „wer darüber hinauszeichnet, liest es an derselben
+        # Linie" —, und beim Zeichnen ist das die früheste Stelle, an der
+        # auffällt, dass ein Teil nicht auf das Bett passt. Wer sie mit
+        # ausblendet, nimmt dem Kunden die Auskunft dort, wo sie am meisten
+        # wert ist.
+        for actor in self._ground_actors:
             actor.SetVisibility(frame is None)
         self._update_cursor()
         self._draw()

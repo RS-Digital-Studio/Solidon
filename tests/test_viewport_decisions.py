@@ -1155,3 +1155,60 @@ def test_without_a_plotter_the_scale_falls_back_instead_of_dividing_by_zero(
     assert frame is not None
     viewport = Viewport()
     assert viewport.pixels_per_mm(frame) == pytest.approx(FALLBACK_SCALE)
+
+
+def test_the_bed_floor_steps_aside_but_its_edges_stay(qt_app: QApplication) -> None:
+    """Zwei Gitter übereinander sind eines zu viel — eine Grenze ist kein Gitter.
+
+    Bettraster und Zeichenraster sind beide graue Linien in derselben
+    Größenordnung; bei einer Skizze auf ``plane:xy`` liegen sie exakt
+    ineinander, und welches die Ebene ist, auf der gerade gezeichnet wird,
+    sähe man nicht mehr. Der Boden tritt deshalb ab.
+
+    **Die Bauraumkanten und die Maßskala gehen nicht mit**, und das ist der
+    Unterschied, der beim ersten Anlauf verlorenging: Das Handbuch verspricht
+    genau sie — „wer darüber hinauszeichnet, liest es an derselben Linie" —,
+    und beim Zeichnen ist das die früheste Stelle, an der auffällt, dass ein
+    Teil nicht auf das Bett passt. Sie mit auszublenden nimmt dem Kunden die
+    Auskunft dort, wo sie am meisten wert ist.
+
+    Offscreen gibt es keine Actors (Entscheidung G), also stehen hier
+    Attrappen mit der einen Methode, die benutzt wird.
+    """
+    from app.core.sketch.planes import frame_for_plane
+    from app.ui.viewport import Viewport
+
+    class _Actor:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.visible = True
+
+        def SetVisibility(self, on: bool) -> None:  # noqa: N802 - VTKs Name
+            self.visible = bool(on)
+
+    surface, grid = _Actor("Fläche"), _Actor("Raster")
+    edges, scale = _Actor("Kanten"), _Actor("Skala")
+
+    viewport = Viewport()
+    viewport._frame_actors = [surface, grid, edges, scale]
+    viewport._ground_actors = [surface, grid]
+
+    frame = frame_for_plane("plane:xy")
+    assert frame is not None
+    viewport.set_sketching(frame)
+    assert not surface.visible and not grid.visible, "der Boden tritt ab"
+    assert edges.visible and scale.visible, (
+        "die Grenze bleibt — sonst sieht niemand mehr, wo das Bett endet"
+    )
+
+    viewport.set_sketching(None)
+    assert all(actor.visible for actor in (surface, grid, edges, scale)), (
+        "nach dem Modus steht der Bauraum wieder vollständig da"
+    )
+
+    # Und die Bodenliste ist eine **Teilmenge**, keine zweite Sammlung: Wer sie
+    # getrennt füllt, hat beim nächsten Bauraum einen Actor, den niemand mehr
+    # aufräumt.
+    assert {id(a) for a in viewport._ground_actors} <= {id(a) for a in viewport._frame_actors}, (
+        "jeder Boden-Actor hängt auch in der Liste, die aufgeräumt wird"
+    )
