@@ -280,14 +280,19 @@ def test_the_digit_really_switches_the_plane_inside_the_window(qt_app: QApplicat
         assert panel is not None, "ohne offene Skizze prüft dieser Test nichts"
         assert panel.canvas.sketch.plane == "plane:xy"
 
-        panel.canvas.setFocus()
-        QTest.keyClick(panel.canvas, Qt.Key.Key_2)
+        # **Getippt wird dorthin, wo der Fokus im Betrieb liegt.** Seit dem
+        # Schnitt ist das der Viewport und nicht mehr der Zeichenbereich — der
+        # ist unsichtbar und bekommt keine Tasten. Genau deshalb gelten die
+        # Ebenen-Kürzel im Viewport-Modus fensterweit; ein Kürzel, das nur im
+        # unsichtbaren Bereich feuert, feuert nie.
+        window.viewport.setFocus()
+        QTest.keyClick(window, Qt.Key.Key_2)
         qt_app.processEvents()
         assert panel.canvas.sketch.plane == "plane:xz", (
             "Die Taste 2 kam nicht an — liegt wieder ein Kürzel des Fensters darauf?"
         )
 
-        QTest.keyClick(panel.canvas, Qt.Key.Key_3)
+        QTest.keyClick(window, Qt.Key.Key_3)
         qt_app.processEvents()
         assert panel.canvas.sketch.plane == "plane:yz"
 
@@ -297,7 +302,7 @@ def test_the_digit_really_switches_the_plane_inside_the_window(qt_app: QApplicat
         for action in window._display_actions:
             action.setEnabled(True)
         panel.choose_plane("plane:xy")
-        QTest.keyClick(panel.canvas, Qt.Key.Key_2)
+        QTest.keyClick(window, Qt.Key.Key_2)
         qt_app.processEvents()
         assert panel.canvas.sketch.plane == "plane:xy", (
             "Zwei aktive Kürzel auf einer Taste, und sie feuert trotzdem — dann misst "
@@ -900,8 +905,16 @@ def test_a_sketch_operation_opens_the_mode_not_a_dialog(qt_app: QApplication) ->
         assert not window.sketching()
 
         window.start_sketch("sketch_extrude")
-        assert window.sketching(), "die Zeichenfläche liegt vor der Ansicht"
-        assert window.middle_stack.currentWidget() is not window.viewport
+        assert window.sketching(), "der Skizzenmodus läuft"
+        # **Diese Zusicherung hat sich mit dem Schnitt (§30.1, P4) umgedreht,
+        # und sie ist dabei näher an den Bauplan gerückt.** Er verlangt den
+        # Editor „im Viewport, nicht in einem Fenster darüber"; solange die
+        # Zeichenfläche die Ansicht *ersetzte*, war das nur halb wahr — sie lag
+        # an ihrer Stelle. Jetzt liegt sie darin: Die Ansicht bleibt stehen,
+        # das Modell tritt zurück, und die Skizze liegt auf ihrer Ebene.
+        assert window.middle_stack.currentWidget() is window.viewport, (
+            "die Ansicht bleibt stehen — gezeichnet wird in ihr"
+        )
         # ``isHidden`` statt ``isVisible``: ein Fenster, das nie ``show()``
         # gesehen hat, hat keine sichtbaren Kinder — versteckt worden zu sein
         # ist die Aussage, die hier trägt.

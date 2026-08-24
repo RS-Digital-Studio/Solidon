@@ -2963,6 +2963,18 @@ class SketchPanel(QWidget):
         self.canvas.resize(VIEWPORT_CANVAS, VIEWPORT_CANVAS)
         self.constraint_list.setMaximumHeight(VIEWPORT_LIST_HEIGHT)
         self._in_viewport = True
+        # **Die Ziffern müssen im ganzen Fenster gelten, nicht nur hier
+        # drinnen.** Sie lagen an ``WidgetWithChildrenShortcut``, und das war
+        # richtig, solange dieses Panel die Ansicht *war*: Der Fokus lag dann
+        # in ihm. Jetzt liegt er im Viewport — wer dort zeichnet und die 2
+        # drückt, meint die Vorderansicht, und ein Kürzel, das nur im
+        # unsichtbaren Zeichenbereich feuert, feuert nie.
+        #
+        # Der Konflikt mit *Ansicht → Darstellung* bleibt damit ausgeschlossen:
+        # Deren Einträge sind im Skizzenmodus ausgegraut, und ein gesperrtes
+        # Kürzel nimmt keiner Taste den Weg.
+        for shortcut in self._plane_shortcuts:
+            shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
 
     def in_viewport(self) -> bool:
         """Ob gezeichnet wird, ohne dass dieses Panel das Bild trägt."""
@@ -3044,10 +3056,12 @@ class SketchPanel(QWidget):
         helper.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         helper.activated.connect(self.canvas.toggle_construction)
 
+        self._plane_shortcuts: list[QShortcut] = []
         for plane, key in PLANE_KEYS.items():
             view = QShortcut(QKeySequence(key), self)
             view.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             view.activated.connect(weak_slot(self, SketchPanel._plane_by_key, plane))
+            self._plane_shortcuts.append(view)
 
     def _plane_by_key(self, plane: str) -> None:
         """Ein Tastendruck wählt die Ebene; ob es ging, interessiert hier nicht.
