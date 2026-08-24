@@ -257,16 +257,35 @@ Berechnete auch anzeigt. Dafür gibt es einen Prüfstand mit echtem Fenster und
 zugehörige Schritt steht als manueller Schritt im Paket, nicht als grüner
 Test. `.claude/rules/oberflaeche.md`, Abschnitt „Was nur das Bild zeigt".
 
-### C — Das Raster ist die Pickfläche
+### C — Der Zeiger trifft die Ebene rechnerisch, nicht über einen Picker
 
-`_world_at` benutzt einen `vtkCellPicker` und trifft damit nur Geometrie. Das
-Raster auf der Skizzenebene **ist** Geometrie. Damit liefert ein Klick oder
-eine Mausbewegung über der Ebene einen Weltpunkt, auch wo kein Körper steht —
-ohne eine zweite Rechenart und ohne Änderung an `_world_at`.
+Der Viewport liefert den Sichtstrahl durch eine Bildschirmstelle
+(`Viewport._pick_ray`), und `planes.ray_hit` schneidet ihn mit der
+Zeichenebene. Ergebnis ist der Zeichenpunkt, überall auf der Ebene — auch wo
+kein Körper steht und auch mitten über einer Bohrung.
 
 *Begründung:* Der Mauszeiger wird dadurch ein Ebenenpunkt wie jeder andere.
 Es gibt kein zweites Bezugssystem, das mit dem ersten synchron gehalten werden
 müsste. Diese Entscheidung ist der Grund, aus dem D möglich ist.
+
+**Zweite Fassung, 24.08.2026.** Der erste Entwurf legte dafür ein *pickbares
+Raster* auf die Ebene: `_world_at` benutzt einen `vtkCellPicker`, der nur
+Geometrie trifft, also macht man das Raster zur Geometrie. Das hätte
+funktioniert, war aber schlechter — messbar nur im Prüfstand mit echtem
+Fenster, weil ein Picker einen Renderer braucht. `formwerk-d1` hat am selben
+Tag `_pick_ray` und die freie Funktion `_world_at_depth` angelegt; damit ist
+der Strahl beschaffbar und **der Schnitt reine Mathematik**. Er fällt unter
+Entscheidung G und ist gegen Zahlen prüfbar.
+
+Das Raster bleibt — als **Anzeige**, nicht als Pickfläche.
+
+**Der Fund, der die alte Fassung überhaupt nötig machte, gilt weiter** und ist
+jetzt anders eingelöst: Ein Sichtstrahl senkrecht von oben in eine
+Durchgangsbohrung trifft kein einziges Dreieck (`formwerk-d1`, gemessen am
+Referenzkorpus). Ein Picker hätte dort `None` gegeben — die Zeichenfläche
+hätte über jeder Bohrung ein Loch gehabt, also ausgerechnet dort, wo man am
+ehesten eine Tasche herumzeichnet. `ray_hit` trifft die Ebene unabhängig
+davon, was auf ihr steht.
 
 **Unabhängig bestätigt.** `formwerk-d1` hat am 24.08.2026 am Referenzkorpus
 gemessen: Ein Sichtstrahl senkrecht von oben in eine Durchgangsbohrung trifft
@@ -365,8 +384,9 @@ protokolliert wird — nicht als Test, der bestünde, weil er nichts tut.
 
 | Nr. | Inhalt | Umfang | Verifikation | Stand |
 |---|---|---|---|---|
-| P0 | Reine Funktionen ohne VTK: `camera_for_plane`, Weltpunkt ↔ `(u, v)`, `sketch_geometry` (Entscheidung G) | S | **grün:** Achse gegen die Ebenennormale, Hin- und Rückrechnung als Umkehrung, Geometrie einer bekannten Skizze gegen erwartete Zahlen | offen |
-| P1 | `Viewport.view_on_plane(frame)` setzt die Vorgabe aus P0; Raster als pickbarer Actor auf der Ebene (Entscheidung C) | S | **grün:** ohne Plotter kehrt beides folgenlos zurück, kein Absturz. **Bild:** Kamera steht senkrecht, Raster liegt in der Ebene, Picken trifft es | offen |
+| P0 | Weltpunkt ↔ Zeichenpunkt als reine Funktionen: `to_world`, `to_plane`; `_lift_frame` im B-Rep-Kern ruft sie (Entscheidung G) | S | **grün:** Hin- und Rückrechnung als Umkehrung, Punkt neben der Ebene verliert seinen Abstand, gedrehter Rahmen gegen erwartete Zahlen | **fertig** `97a02a2c` |
+| P1a | `planes.ray_hit` — Sichtstrahl gegen die Zeichenebene, rein gerechnet (Entscheidung C, zweite Fassung) | S | **grün:** fünf Tests ohne Plotter, darunter die Gegenprobe gegen `to_world` und der streifende Strahl | **fertig** `dfa55d0f` |
+| P1b | `Viewport.view_on_plane(frame)` mit `camera_for_plane` als freier Funktion; Raster als Anzeige-Actor | S | **grün:** `camera_for_plane` gegen die Ebenennormale, ohne Plotter kehrt `view_on_plane` folgenlos zurück. **Bild:** Kamera steht senkrecht, Raster liegt in der Ebene | offen |
 | P2 | Skizzengeometrie in die Szene (Entscheidung B); Zeigerposition wird einspeisbar (G) | L | **grün:** Skizze auf `feature:<id>` liegt in der Ebene der Fläche; eingespeiste Zeigerpunkte erzeugen dieselben Elemente wie heute die Mausereignisse; zweimal zeichnen ergibt identische Punkte | offen |
 | P3 | Fläche anklicken → Skizze dort (E). Zeigemodus `_sketching` in `_on_picked`, Kontextmenüeintrag | M | **grün:** ein eingespeister Flächentreffer setzt `sketch.plane` auf `feature:<id>`, das Klappfeld zeigt dieselbe Wahl. **Bild:** Klick auf die Deckfläche beginnt dort | offen |
 | P4 | **Der Schnitt.** `start_sketch` schwenkt statt zu tauschen; Modell abgeblendet; Ansichtsaktionen und Ziffern wieder frei (A, D) | L | **grün:** `middle_stack` wechselt die Seite nicht mehr; Ansichtsaktionen sind aktiv **und wirken** — geprüft an der Kameravorgabe, nicht am `enabled`-Zustand; Escape kommt heraus. **Bild:** der Schwenk | offen |
@@ -395,8 +415,6 @@ Commit-Hashes nachgetragen.
 
 ## §7 Offen
 
-- **Antwort von `formwerk-be`** zu `app/ui/main_window.py` (P3, P4 brauchen
-  sie) und von `formwerk-d1` zum Merkmals-Picking (P3 baut darauf auf).
 - **Der `flat_offsets`-Fund von `formwerk-20`:** `flat_offsets`
   (`sketch_editor.py:373`) ist wortgleich `edit.offsets_of`, `_flat_points`
   (`:383`) wortgleich `edit.flat_points`, elf Aufrufstellen. Mitzunehmen in
@@ -404,3 +422,19 @@ Commit-Hashes nachgetragen.
 - **Ob Drehen beim Zeichnen wirklich häufig ist** — Entscheidung D nimmt es
   an, gemessen ist es nicht. Die Annahme kostet nichts, solange C trägt;
   fiele C, wäre sie neu zu prüfen.
+- **Der Prüfstand für die Bild-Hälfte** liegt bei `formwerk-be` im
+  Scratchpad. Vier Dinge tragen ihn: `bootstrap.load_operations()` vor dem
+  ersten Registerzugriff, **kein** `QT_QPA_PLATFORM`, die Schritte an einer
+  `QTimer.singleShot`-Kette statt in einer Warteschleife, und
+  `faulthandler.dump_traceback_later`. Bilder über
+  `screen.grabWindow(window.winId())` — `widget.grab()` weiß nichts von dem,
+  was OpenGL gezeichnet hat, und lieferte eine schwarze Mitte.
+
+**Erledigt.** `formwerk-be` hat `app/ui/main_window.py` und
+`tests/test_ui.py` freigegeben (`a22ffa48`); `formwerk-20` hat
+`app/core/sketch/**` und `app/ui/sketch_editor.py` freigegeben
+(`453cfa98`…`3eafe584`). `formwerk-d1` hält das Merkmals-Picking in
+`viewport.py` und hat zugesagt, dass eine planare Fläche unverändert als
+`kind == "face"` herauskommt — nur der Grenzfall „Klick in eine Bohrung"
+ändert die Rangfolge, und zwar zugunsten von E: Wer auf die Deckfläche zeigt,
+meint künftig verlässlich die Deckfläche.
