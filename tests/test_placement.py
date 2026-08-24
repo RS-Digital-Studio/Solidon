@@ -301,6 +301,37 @@ def test_a_bore_proposes_the_size_that_fits_it() -> None:
     )
 
 
+def test_a_bore_that_fits_no_thread_still_means_inside() -> None:
+    """Kein Größenvorschlag ist kein Grund, die Richtung zu vergessen.
+
+    **Gemeldet von Robert am 24.08.2026:** Bohrung gesetzt, „Gewinde" gewählt,
+    und das Gewinde saß außen. Der Test darüber deckt den Fall ab, in dem eine
+    Normgröße passt — dort kommt ``internal`` mit. Fehlt sie, gab
+    ``size_for_thread`` ein leeres Wörterbuch zurück, und mit dem Vorschlag
+    verschwand auch die Richtung: Die Schemavorgabe steht auf Außengewinde,
+    also wuchs ein Bolzen aus dem Loch heraus.
+
+    Die zwei Aussagen sind **verschieden sicher**, und genau das war der
+    Fehler. Die Größe ist ein Vorschlag, der fehlschlagen darf — oberhalb von
+    M8 gibt es keine Normgröße mehr, und eine geratene wäre schlechter als
+    keine. Die Richtung ist keine Schätzung, sondern steht im angeklickten
+    Merkmal: Es ist eine Bohrung. Sie mit dem Vorschlag zusammen wegzuwerfen
+    hieß, das Sichere am Unsicheren scheitern zu lassen.
+
+    Gemessen an M8, der größten Normgröße: Jede Bohrung darüber traf es, dazu
+    Ø 6,5 zwischen M6 und M8 — zehn von 22 geprüften Durchmessern.
+    """
+    wide = values_for(REGISTRY.get("insert_printed_thread"), hole(diameter=10.0))
+
+    assert wide.get("internal") is True, (
+        "eine Ø 10-Bohrung bekommt keine Normgröße vorgeschlagen — die Richtung "
+        "steht trotzdem fest, sonst setzt „Gewinde“ einen Bolzen in das Loch"
+    )
+    assert "size" not in wide, (
+        "für Ø 10 gibt es keine passende Normgröße; eine geratene sähe aus wie eine gemessene"
+    )
+
+
 def test_a_bore_that_fits_nothing_keeps_the_default() -> None:
     """Wo keine Größe passt, wird nicht geraten (Regel 21).
 

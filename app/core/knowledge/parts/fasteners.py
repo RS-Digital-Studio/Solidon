@@ -190,20 +190,31 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
     Zwei Schranken, beide fachlich und keine geratene Toleranz: Unterhalb des
     Kernlochdurchmessers greift das Werkzeug nicht ins Material, oberhalb des
     Nennmaßes liegt die Bohrungswand außerhalb des Gewindes. Eine
-    Ø 6,5-Bohrung bekommt deshalb **keinen** Vorschlag statt eines falschen —
+    Ø 6,5-Bohrung bekommt deshalb **keine Größe** statt einer falschen —
     für M6 ist sie zu weit, für M8 zu eng.
 
     Und ``internal``: Wer eine Bohrung anklickt und „Gewinde" wählt, meint
     Gänge in der Wand. Die Schemavorgabe steht auf Außengewinde, und das ist
     für einen freistehenden Bolzen richtig — in einem Loch setzte sie einen
     zweiten Bolzen hinein.
+
+    **Die beiden Angaben sind verschieden sicher, und deshalb hängen sie nicht
+    mehr aneinander.** Die Größe ist ein Vorschlag, der fehlschlagen darf; die
+    Richtung steht im angeklickten Merkmal und kann es nicht. Bis zum
+    24.08.2026 gab diese Funktion bei fehlender Größe ein leeres Wörterbuch
+    zurück und warf die Richtung mit weg — dann griff die Schemavorgabe, und
+    aus der Bohrung wuchs ein Bolzen. Getroffen hat es nicht einen Randfall,
+    sondern alles oberhalb von M8, der größten Normgröße: gemeldet von Robert
+    an einer Bohrung, gemessen an zehn von 22 Durchmessern.
     """
     fitting = [
         size
         for size in standards.screw_sizes()
         if standards.screw(size).tap <= diameter <= standards.screw(size).nominal
     ]
-    return {"size": fitting[-1], "internal": True} if fitting else {}
+    if not fitting:
+        return {"internal": True}
+    return {"size": fitting[-1], "internal": True}
 
 
 @register_part(
