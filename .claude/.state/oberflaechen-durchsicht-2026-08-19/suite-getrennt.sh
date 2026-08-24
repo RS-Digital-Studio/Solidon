@@ -99,9 +99,9 @@ windowed=$(grep -lE "MainWindow|Viewport|pyvista" tests/test_*.py | tr '\n' ' ')
 ignores=""
 for file in $windowed; do ignores="$ignores --ignore=$file"; done
 
-# **Exit 5 ist kein Fehllauf.** pytest meldet damit „keine Tests gesammelt“,
-# und das ist keine Aussage über den Code. Der Fall entsteht aus der Suche
-# oben: Sie findet die Fensterdateien im *Text* und erwischt damit auch eine
+# **Exit 5 ist kein Fehllauf — für eine Fensterdatei.** pytest meldet damit
+# „keine Tests gesammelt“, und das ist keine Aussage über den Code. Der Fall
+# entsteht aus der Suche oben: Sie findet die Fensterdateien im *Text* und erwischt damit auch eine
 # Datei, die über eine Ansicht **schreibt** statt eine zu bauen — stehen darin
 # nur Leistungstests, sammelt `-m "not performance"` nichts. Am 22.08.2026
 # landete `tests/test_performance.py` wegen zweier Docstrings hier und zählte
@@ -123,6 +123,22 @@ for file in $windowed; do ignores="$ignores --ignore=$file"; done
 # Ohne Protokoll bleibt es bei der alten, strengen Bewertung: Ein Aufrufer, der
 # die Ausgabe nicht mitschreibt, bekommt keinen Freibrief.
 #
+# **Für die Sammelgruppe gilt das Gegenteil, und das hat am 24.08.2026 eine
+# halbe Prüfung gekostet.** Dort sind 3554 Tests zu erwarten; „keine gesammelt“
+# ist dann kein harmloser Sonderfall, sondern der schlimmste Ausgang, den es
+# gibt. `pytest-xdist` fehlte in der Deklaration, pytest antwortete mit
+# `unrecognized arguments: -n` und Exit 4, und dieses Skript zählte das als
+# **einen** Fehllauf — gleichwertig neben zwei sporadischen Fensterabstürzen.
+# Der Bericht sagte „Läufe mit Fehler: 3" und sah aus wie drei kaputte Dateien.
+# Tatsächlich waren Geometrie, Skizzen, Schichtanalyse und Agentenschicht gar
+# nicht erst gelaufen.
+#
+# Die Lehre ist nicht „xdist eintragen" — das ist erledigt (ad2d1729). Sie ist,
+# dass die Bewertung die falsche Frage stellte: „ist der Lauf rot?" statt „hat
+# der Lauf stattgefunden?". Beantwortet wird die zweite jetzt an dem einzigen
+# Zeugen, der beides unterscheidet — der Zusammenfassungszeile. Fehlt sie, hat
+# kein Test stattgefunden, ganz gleich welchen Code die Shell zurückgibt.
+#
 # **Und die 127 ist gar kein eigener Code.** Am 23.08.2026 gemessen, indem
 # dieselben Dateien nicht über die Shell, sondern direkt aus Python gestartet
 # wurden — dort kommt der Windows-Rückgabewert an, statt der Bash-Konvention:
@@ -142,6 +158,15 @@ for file in $windowed; do ignores="$ignores --ignore=$file"; done
 # schließt zu schnell: Die Shell wirft verschiedene Windows-Codes in denselben
 # Topf. Die Frage ist immer, was **hinter** der 127 steht, und die beantwortet
 # nur ein Lauf ohne Shell dazwischen.
+# Die Zusammenfassungszeile eines Laufs („3554 passed, 23 skipped in 61.00s"),
+# oder nichts, wenn der Lauf keine geschrieben hat. Sie ist der Beleg dafür,
+# dass überhaupt Tests ausgeführt wurden — ein Exit-Code ist das nicht.
+zusammenfassung() {
+  protokoll=${1:-}
+  [ -n "$protokoll" ] && [ -f "$protokoll" ] || return 1
+  grep -m1 -E "^[0-9]+ (passed|failed|error)" "$protokoll"
+}
+
 zaehlt_als_fehler() {
   status=$1
   protokoll=${2:-}
@@ -182,7 +207,14 @@ echo "=== der Rest in einem Zug (-n $KERNE) ==="
 PYTHONIOENCODING=utf-8 "$PY" -m pytest -q -m "not performance" $ignores -n "$KERNE"   2>&1 | tee "$protokoll"
 status=${PIPESTATUS[0]}
 echo "--> Exit $status"
-if zaehlt_als_fehler "$status" "$protokoll"; then
+# Erst die Frage, ob überhaupt gelaufen wurde, dann die, ob es grün war. In
+# dieser Reihenfolge, weil ein Nichtlauf sonst als gewöhnlicher Fehllauf
+# durchgeht — oder bei Exit 5 sogar als grün.
+sammelgruppe=$(zusammenfassung "$protokoll" || true)
+if [ -z "$sammelgruppe" ]; then
+  fails=$((fails + 1))
+  schlecht="$schlecht rest-in-einem-zug(Exit:$status,NICHT-GELAUFEN)"
+elif zaehlt_als_fehler "$status" "$protokoll"; then
   fails=$((fails + 1))
   schlecht="$schlecht rest-in-einem-zug(Exit:$status)"
 fi
@@ -199,6 +231,17 @@ for file in $windowed; do
 done
 
 echo "======================================"
+# **Die Zahl trägt ihr Gewicht nicht mit.** „Läufe mit Fehler: 3" wiegt eine
+# rote Fensterdatei genauso wie den Ausfall von 3554 Tests. Deshalb steht die
+# Sammelgruppe hier mit ihrer eigenen Zeile: Wer sie einmal gesehen hat, merkt
+# beim nächsten Mal, wenn statt 3554 plötzlich 120 dort stehen.
+if [ -z "$sammelgruppe" ]; then
+  echo "!! DIE SAMMELGRUPPE LIEF NICHT — kein einziger Test ohne Qt wurde"
+  echo "!! ausgeführt. Was sonst in diesem Bericht steht, sagt nichts über"
+  echo "!! den Code. Sieh in das Protokoll, bevor du irgendetwas glaubst."
+else
+  echo "Sammelgruppe: $sammelgruppe"
+fi
 echo "Läufe mit Fehler: $fails"
 # **Die Namen, nicht nur die Zahl.** Wer die Ausgabe durch `tail` schickt,
 # verliert sonst genau das, was er braucht: Am 22.08.2026 meldete ein Lauf
