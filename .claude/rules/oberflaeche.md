@@ -293,6 +293,35 @@ app.processEvents()
 dialog.grab().save("bogen.png")
 ```
 
+**Für den Viewport gilt genau diese Zeile nicht.** `widget.grab()` malt den
+Qt-Widgetbaum ab und weiß nichts von dem, was OpenGL in den Viewport
+gezeichnet hat — das Bild kommt mit einer **schwarzen Mitte** zurück, und
+schlimmer als kein Bild ist eines, das eine leere Ansicht behauptet. Was
+OpenGL zeigt, holt nur der Bildschirm:
+
+```python
+window.show()  # wirklich zeigen, nicht offscreen
+QApplication.primaryScreen().grabWindow(window.winId()).save("bild.png")
+```
+
+Vier weitere Dinge tragen einen solchen Prüfstand, alle vier am 24.08.2026
+einmal gefehlt:
+
+* **`bootstrap.load_operations()` vor dem ersten Registerzugriff**, sonst
+  endet der erste Import in `unknown operation 'load'`.
+* **Kein `QT_QPA_PLATFORM`.** Offscreen hat Qt hier null Schriftfamilien und
+  VTK zeichnet gar nicht — beides ist genau das, was geprüft werden soll.
+* **Die Schritte an einer `QTimer.singleShot`-Kette**, nicht in einer
+  Warteschleife: die hängt bei sichtbarem Fenster. Und
+  `faulthandler.dump_traceback_later`, damit ein Hänger sich meldet, statt zu
+  schweigen. `window.start()` wird **nicht** gerufen — es öffnet beim ersten
+  Start einen modalen Dialog, und der Prüfstand stünde.
+* **`app.processEvents()` unmittelbar vor jedem Schuss.** VTK rendert sofort,
+  die Qt-Widgets erst im nächsten Ereignisdurchlauf: Ohne das zeigte ein Bild
+  eine Skizze in der Szene und daneben „Leere Skizze" in der Statuszeile —
+  zwei Zustände in einem Bild, und beide echt. Wer dem geglaubt hätte, hätte
+  einen Fehler gesucht, den es nicht gibt.
+
 Für eine Zeile, die nicht umbrechen kann — eine Skala, eine Knopfleiste —
 lohnt daneben die Zahl: `sizeHint().width()` gegen `width()`, **in jeder
 Sprache**. Was gequetscht wird, meldet Qt nicht.

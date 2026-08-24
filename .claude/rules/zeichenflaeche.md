@@ -28,6 +28,41 @@ bis zum ersten Nachbessern.
 und das Rad zoomt auf den Zeiger. Eine feste Weite ist herausgezoomt eine
 Fläche aus Linien und hineingezoomt ein Blatt mit vier Linien darauf.
 
+**Seit dem Schnitt (§30.1, P4) kommt dieser Maßstab aus der Kamera, nicht aus
+der Zeichenfläche.** Sie ist im Viewport-Modus unsichtbar, rechnet aber
+weiter — und ihr eigener Maßstab steht damit auf dem Startwert 1,2, weil dort
+niemand mehr zoomt. Gezeichnet wurden so 20 mm, während auf 1 mm gefangen
+wurde: zwei Zahlen für dieselbe Sache, und die sichtbare war die falsche.
+`Viewport.pixels_per_mm(frame)` misst über zwei projizierte Weltpunkte statt
+`parallel_scale` umzukehren — damit stimmt die Zahl bei beiden Projektionen —,
+und `grid_step_for(scale)` ist aus der Methode heraus, damit beide Seiten
+dieselbe Folge rechnen.
+
+**Und die Kamera braucht dafür eine Untergrenze.** In einer leeren Szene hat
+`reset_camera` nie stattgefunden; pyvista startet mit einer Kamera 1,62
+Einheiten vor dem Ursprung, und `_plane_distance` übernahm sie treu — 918
+Bildpunkte je Millimeter, ein Raster von 0,1 mm. Getroffen hätte es
+ausgerechnet **Weg 2**, neu konstruieren: nur dort ist die Szene beim Betreten
+leer, mit geladenem Teil ist die Kamera längst eingepasst und
+`LEAST_PLANE_DISTANCE` wirkungslos.
+
+**Die Zeichenebene wird orthografisch gesehen.** Der Grund steht seit je am
+Umschalter selbst (§18.1) — Parallelprojektion ist das, was gemessene Längen
+vertrauenswürdig macht —, und hier wiegt er schwerer als sonst irgendwo:
+Perspektivisch erscheinen zwei gleich lange Strecken auf derselben Ebene
+verschieden lang, je weiter sie von der Bildmitte weg liegen, und genau darauf
+setzt man beim Zeichnen Punkte. Gesehen hat das kein Test, sondern das Bild:
+Die Korpusplatte stand trapezförmig da, mit sichtbaren Seitenwänden, während
+die Zeile darunter „Draufsicht (XY)" meldete.
+
+Zwei Dinge hängen daran. Beim Verlassen wird auf den Wert des Nutzers
+zurückgestellt und nicht auf „perspektivisch" — wer orthografisch arbeitet,
+hat das gewählt. Und `view_on_plane` rechnet `parallel_scale` aus der
+Kameradistanz (`_fit_parallel_scale`): VTK führt für beide Projektionen
+getrennte Größen, und wer umschaltet, ohne die eine aus der anderen zu
+rechnen, landet auf dem Startwert 1,0 — ein sichtbarer Ausschnitt von zwei
+Millimetern.
+
 **Die Ebene ist eine Ansicht, und sie steht im Bild.** Benannt wird sie danach,
 was man sieht (Draufsicht, Vorderansicht, Seitenansicht), die Ebene steht in
 Klammern daneben — sie ist die Angabe, die in der Projektdatei landet. Die

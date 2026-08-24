@@ -81,6 +81,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
+| Die Warnung beim Zeichnen über den Bauraumrand hinaus | P13.1 — Der Skizzeneditor zieht in den Viewport | eine Stelle im Viewport-Modus, an der der Satz stehen kann — der Rand selbst ist seit dem 24.08. wieder da |
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | eine andere **Bauart** — alle sieben Griffe an `MakePipeShell` sind gemessen und widerlegt (20.08.), und ein Rotationskörper schraubt nicht |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
@@ -1146,6 +1147,78 @@ laufen parallel und stehen weiter oben unter „Bewusst offen".
       Iteration (700 ms → 90 ms, nachgemessen). Nebeneffekt: die exakte
       Jacobimatrix macht die Ranganalyse verlässlich, an der die Erkennung
       überbestimmter Skizzen hängt
+
+## P13.1 — Der Skizzeneditor zieht in den Viewport
+
+Robert am 24.08.2026: „schau dir das 2d zeichnen an, ich finde es sehr
+umständlich und wofür ist es genau? am viewport ändert sich nichts, bei
+draufsicht, seitenansicht usw sieht man auch keinen unterschied.“
+
+Drei Beobachtungen, und **eine** Zeile erklärte alle drei:
+`switch(self.middle_stack, panel)` tauschte die Ansicht gegen die
+Zeichenfläche aus. Am Viewport änderte sich nichts, weil er nicht mehr da
+war; die Ansichtswechsel wirkten auf ein verdecktes Widget; und wozu das
+Zeichnen gut ist, konnte man nicht sehen, weil das Modell fehlte, auf dem
+gezeichnet wird.
+
+Konzept, Entscheidungen und Pakete stehen in
+`konzepte/konzept-skizze-im-raum-2026-08.md`. Hier nur, was gebaut wurde:
+
+- [x] Weltpunkt ↔ Zeichenpunkt als reine Funktionen (`to_world`, `to_plane`,
+      `ray_hit` in `app/core/sketch/planes.py`) — OCC-frei und damit
+      offscreen prüfbar. Der Grund ist Entscheidung G: Unter
+      `QT_QPA_PLATFORM=offscreen` existiert kein Plotter, also muss alles
+      Prüfbare **vor** VTK gerechnet werden
+- [x] Die gelöste Skizze als Punktfolgen im Raum (`profile.curves_of`),
+      abgetastet nach Sehnentoleranz
+- [x] Die Kamera schwenkt auf jede Ebene (`view_on_plane`), auch auf eine
+      angeklickte Fläche. `camera_for_plane` nimmt dafür `image_normal`
+      (x × y) und **nicht** `frame.normal`: Die XZ-Ebene ist linkshändig,
+      und über die Normale stand die Kamera hinter ihr — die Vorderansicht
+      hätte die Skizze spiegelverkehrt gezeigt
+- [x] Skizze und Raster liegen als Netz in der Szene, das Modell tritt
+      durchscheinend zurück. Das Raster hängt **nicht** an der gelösten
+      Skizze — sonst fehlt es bei leerer Zeichnung, also genau dann, wenn
+      man es braucht
+- [x] Ein Klick trifft die Ebene rechnerisch (`_sketch_hit` → `ray_hit`)
+      statt über einen Picker. Ein `vtkCellPicker` trifft nur Geometrie, und
+      über einer Durchgangsbohrung gäbe es nicht einmal ein Dreieck dahinter
+- [x] Eine Fläche anklicken beginnt dort eine Skizze — Kontextmenüeintrag
+      „Auf dieser Fläche zeichnen“, nur bei `kind == "face"`
+- [x] Die Bedingungen stehen als **Reiter** neben Prüfbericht und Chat, nicht
+      als Klappabschnitt darunter
+- [x] Die Rasterweite kommt aus der Kamera (`Viewport.pixels_per_mm`), nicht
+      aus der unsichtbaren Zeichenfläche. Deren Maßstab steht auf dem
+      Startwert, weil dort niemand mehr zoomt: gezeichnet wurden 20 mm,
+      gefangen auf 1 mm
+- [x] Die Kameradistanz hat eine Untergrenze (`LEAST_PLANE_DISTANCE`). Ohne
+      sie übernahm der Skizzenmodus in einer leeren Szene pyvistas
+      Startstellung von 1,62 Einheiten — 918 Bildpunkte je Millimeter, ein
+      Raster von 0,1 mm. Getroffen hätte es ausgerechnet **Weg 2**
+- [x] Die Zeichenebene wird orthografisch gesehen und die Projektion beim
+      Verlassen auf den Wert des Nutzers zurückgestellt. Gefunden hat das
+      kein Test, sondern das Bild: Die Korpusplatte stand trapezförmig da,
+      mit sichtbaren Seitenwänden, unter der Zeile „Draufsicht (XY)“
+- [x] Abbau: `set_zone_margins`, `in_viewport()` und `_in_viewport` sind weg.
+      `SketchField` und `SketchEditorDialog` bleiben — sie sind der zweite
+      Weg über den Operationsdialog
+
+- [ ] **Die Warnung „die Skizze ragt darüber hinaus" fehlt im Viewport-Modus.**
+      Der Bauraumrand steht wieder im Bild — Kanten und Maßskala bleiben beim
+      Zeichnen sichtbar, nur der Boden tritt ab. Der **Warnsatz** dazu liegt
+      aber in der Zeichenfläche (`sketch_editor.py:1954`), und die ist
+      unsichtbar. Das Handbuch verspricht ihn: „wer darüber hinauszeichnet,
+      liest es an derselben Linie“. Damit ist das Versprechen halb
+      eingelöst — man sieht die Grenze, aber nicht den Satz, der sie benennt.
+      Wartet auf: eine Stelle im Viewport-Modus, an der er stehen kann — die
+      Statuszeile führt schon `_outline_state()` und `pointer_target`
+
+**Was dabei nebenbei auffiel und behoben ist:** Die Ziffern 1–3 für die Ebene
+lagen an `WidgetWithChildrenShortcut` und hätten nach dem Schnitt nie mehr
+gefeuert. Die Bedienleiste verdeckte die untere Bildhälfte. Und fünf Tests in
+`test_viewport_decisions.py` bauten einen Viewport ohne `qt_app` in der
+Signatur — in der vollen Datei rettet sie ein früherer Test, einzeln gefahren
+stirbt der Lauf mit 0xC0000409.
 
 ## P14 — Die Oberfläche einlösen
 
