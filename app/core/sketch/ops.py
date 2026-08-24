@@ -25,7 +25,14 @@ from app.core.geom.boolean import without_effect
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.sketch import shapes
 from app.core.sketch.planes import frame_for, frame_of, height_to, is_feature_plane
-from app.core.sketch.profile import Profile, profile_of, regions_of, shifted
+from app.core.sketch.profile import (
+    Profile,
+    bounds_of,
+    profile_of,
+    regions_of,
+    scaled,
+    shifted,
+)
 from app.core.sketch.serialize import sketch_from_text
 from app.core.sketch.solver import solve_sketch
 from app.core.types import BaseParams, OpContext, OpResult, PlaneFrame, SceneObject
@@ -644,6 +651,9 @@ class SketchLoftParams(BaseParams):
         doc=_CORNERS_DOC,
         depends_on=("shape", ("polygon",)),
     )
+    sketch: str = param(
+        title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
+    )
 
 
 @register_op(
@@ -661,14 +671,44 @@ class SketchLoftParams(BaseParams):
 def sketch_loft(ctx: OpContext) -> OpResult:
     params = cast(SketchLoftParams, ctx.params)
     require()
-    bottom = _sketch_profile(params.shape, params.length, params.width, params.corners)
-    top = _sketch_profile(
-        params.shape,
-        params.length * params.top_scale,
-        params.width * params.top_scale,
-        params.corners,
+    if not params.sketch:
+        # Der Weg des Katalogs: zwei Grundformen, die zweite kleiner gerechnet.
+        # Er bleibt, weil die Grundformen um den Ursprung zentriert liegen und
+        # die Maße direkt aus den Parametern kommen — daran ist nichts zu
+        # skalieren.
+        bottom = _sketch_profile(params.shape, params.length, params.width, params.corners)
+        top = _sketch_profile(
+            params.shape,
+            params.length * params.top_scale,
+            params.width * params.top_scale,
+            params.corners,
+        )
+        solid = profiles.loft(bottom, top, params.height)
+        return OpResult(outputs=[_created(params.name, str(_("Übergang")), solid)])
+
+    # **Die gezeichnete Skizze, und ihre eigene verkleinerte Kopie darüber.**
+    # Diese Operation war die einzige der fünf ohne Skizzenfeld, und der
+    # Fertig-Dialog bot sie trotzdem an: Wer nach dem Zeichnen „Zwischen zwei
+    # Umrissen aufspannen" wählte, bekam einen internen Fehler statt eines
+    # Körpers.
+    #
+    # Skaliert wird um den **Mittelpunkt des Umrisses**, nicht um den
+    # Ursprung: Eine Grundform liegt zentriert, eine Zeichnung liegt irgendwo,
+    # und um den Ursprung verkleinert wanderte sie beim Schrumpfen zum
+    # Nullpunkt — aus einem Pyramidenstumpf würde ein schiefer Keil.
+    plane = _plane_of(params.sketch)
+    frame = _frame_of(ctx, plane)
+    chosen = _regions_for(
+        ctx, params.sketch, params.shape, params.length, params.width, params.corners, 0
     )
-    solid = profiles.loft(bottom, top, params.height)
+    bodies = []
+    for one in chosen:
+        low, high = bounds_of(one)
+        centre = ((low[0] + high[0]) / 2.0, (low[1] + high[1]) / 2.0)
+        bodies.append(
+            profiles.loft(one, scaled(one, params.top_scale, centre), params.height, plane, frame)
+        )
+    solid = bodies[0] if len(bodies) == 1 else edit.boolean("union", bodies)
     return OpResult(outputs=[_created(params.name, str(_("Übergang")), solid)])
 
 

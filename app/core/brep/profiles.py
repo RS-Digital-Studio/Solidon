@@ -265,19 +265,46 @@ def sweep_arc(profile: Profile, bend_radius: float, bend_deg: float) -> Solid:
     return _finished(builder, _("Der Bogen ist für diesen Querschnitt zu eng."))
 
 
-def loft(bottom: Profile, top: Profile, height: float) -> Solid:
-    """Spannt einen Körper zwischen zwei Umrissen auf — unten auf Z = 0."""
+def loft(
+    bottom: Profile,
+    top: Profile,
+    height: float,
+    plane: str = "plane:xy",
+    frame: PlaneFrame | None = None,
+) -> Solid:
+    """Spannt einen Körper zwischen zwei Umrissen auf — unten auf der Ebene.
+
+    Ebene und Rahmen wie bei :func:`extrude`, und aus demselben Grund: Seit
+    die Operation eine **gezeichnete** Skizze annimmt, kann diese auf XZ, auf
+    YZ oder auf einer Fläche liegen. Ohne die beiden Argumente entstünde der
+    Körper immer auf XY — bei einer Zeichnung auf der Vorderansicht also um
+    neunzig Grad verdreht, und zwar stillschweigend.
+
+    Der obere Umriss wird um ``height`` entlang der Ebenennormalen gehoben;
+    auf XY ist das die Z-Achse und alles bleibt, wie es war.
+    """
     require()
     from OCP.BRepOffsetAPI import BRepOffsetAPI_ThruSections
     from OCP.gp import gp_Pnt
 
     require_positive("height", height)
+    if frame is not None:
+        lift, normal = _lift_frame(frame), frame.normal
+    elif plane in PLANES:
+        lift, normal = PLANES[plane]
+    else:
+        raise ValidationError("plane", _("Diese Ebene gibt es nicht."), value=plane)
 
     def lifted(point: Point2) -> Any:
-        return gp_Pnt(point[0], point[1], height)
+        low = lift(point)
+        return gp_Pnt(
+            low.X() + normal[0] * height,
+            low.Y() + normal[1] * height,
+            low.Z() + normal[2] * height,
+        )
 
     builder = BRepOffsetAPI_ThruSections(True, False)
-    builder.AddWire(_wire(bottom, _lift_xy))
+    builder.AddWire(_wire(bottom, lift))
     builder.AddWire(_wire(top, lifted))
     return _finished(builder, _("Zwischen diesen beiden Umrissen entsteht kein Körper."))
 

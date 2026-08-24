@@ -479,3 +479,71 @@ def curves_of(solved: SolvedSketch, frame: PlaneFrame) -> tuple[SketchCurve, ...
         )
         for element in solved.elements
     )
+
+
+def bounds_of(profile: Profile) -> tuple[Point2, Point2]:
+    """Der Hüllrechteck-Bereich eines Umrisses, Löcher zählen nicht mit.
+
+    Löcher liegen definitionsgemäß **innerhalb** ihrer Außenkontur, tragen
+    also nichts zum Bereich bei. Bei einem Kreis kommt der Bereich aus Mitte
+    und Radius; bei Bögen aus Anfang, Ende und Stützpunkt — eine Näherung nach
+    außen, denn der Scheitel eines Bogens kann weiter liegen als seine drei
+    Punkte. Für das, wofür der Bereich hier gebraucht wird — einen Mittelpunkt
+    zum Skalieren —, reicht das: Der Mittelpunkt einer symmetrischen Form
+    stimmt, und bei einer unsymmetrischen ist jede Wahl eine Setzung.
+    """
+    if profile.circle is not None:
+        (cx, cy), radius = profile.circle
+        return (cx - radius, cy - radius), (cx + radius, cy + radius)
+    corners: list[Point2] = []
+    for segment in profile.segments:
+        corners.append(segment.start)
+        corners.append(segment.end)
+        if segment.via is not None:
+            corners.append(segment.via)
+        corners.extend(segment.through)
+    if not corners:
+        return (0.0, 0.0), (0.0, 0.0)
+    xs = [p[0] for p in corners]
+    ys = [p[1] for p in corners]
+    return (min(xs), min(ys)), (max(xs), max(ys))
+
+
+def scaled(profile: Profile, factor: float, centre: Point2) -> Profile:
+    """Denselben Umriss um ``centre`` skaliert — Löcher wandern mit.
+
+    **Um einen Mittelpunkt und nicht um den Ursprung**, und das ist der ganze
+    Sinn: Die Grundformen des Katalogs liegen um den Ursprung zentriert, eine
+    gezeichnete Skizze liegt irgendwo. Wer sie um den Ursprung verkleinerte,
+    bekäme keinen Pyramidenstumpf, sondern einen schiefen Keil — die Form
+    wanderte beim Schrumpfen zum Nullpunkt.
+
+    Die Löcher werden mit demselben Mittelpunkt skaliert, nicht mit ihrem
+    eigenen: Sie sollen ihre Lage **relativ zur Außenkontur** behalten.
+    """
+
+    def moved(p: Point2) -> Point2:
+        return (
+            centre[0] + (p[0] - centre[0]) * factor,
+            centre[1] + (p[1] - centre[1]) * factor,
+        )
+
+    if profile.circle is not None:
+        centre_of, radius = profile.circle
+        return Profile(
+            circle=(moved(centre_of), radius * factor),
+            holes=tuple(scaled(one, factor, centre) for one in profile.holes),
+        )
+    return Profile(
+        segments=tuple(
+            ProfileSegment(
+                kind=segment.kind,
+                start=moved(segment.start),
+                end=moved(segment.end),
+                via=None if segment.via is None else moved(segment.via),
+                through=tuple(moved(p) for p in segment.through),
+            )
+            for segment in profile.segments
+        ),
+        holes=tuple(scaled(one, factor, centre) for one in profile.holes),
+    )

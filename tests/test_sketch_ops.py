@@ -262,6 +262,68 @@ def test_a_drawn_sketch_revolves_as_drawn() -> None:
     assert body.volume == pytest.approx(math.pi * (15.0**2 - 10.0**2) * 8.0, rel=1e-9)
 
 
+def test_a_drawn_sketch_lofts_to_its_own_scaled_copy() -> None:
+    """§30.1: Auch das Aufspannen nimmt die gezeichnete Skizze.
+
+    **Diese Operation hatte als einzige der fünf kein Skizzenfeld** — und der
+    Fertig-Dialog des Skizzenmodus bot sie trotzdem an, weil er alle
+    Operationen der Kategorie ``sketch`` auflistet. Wer nach dem Zeichnen
+    „Zwischen zwei Umrissen aufspannen" wählte, bekam einen ``InternalError``
+    (`'sketch_loft' has no sketch parameter`) und seine Zeichnung wurde nicht
+    verwendet. Gemessen am gebauten Dialog, nicht vermutet.
+
+    Der obere Umriss ist die um ``top_scale`` verkleinerte Kopie des unteren,
+    skaliert **um seinen eigenen Mittelpunkt** — sonst wanderte die Form beim
+    Verkleinern zum Ursprung, und aus einem Pyramidenstumpf würde ein
+    schiefer Keil. Bei den Grundformen fällt das nicht auf, weil die um den
+    Ursprung zentriert sind; eine gezeichnete Skizze liegt irgendwo.
+
+    Die absurde Grundform daneben stellt sicher, dass wirklich die Skizze
+    rechnet — dasselbe Muster wie beim Extrudieren darüber.
+    """
+    lower = 30.0 * 12.0
+    upper = lower * 0.5**2
+    body = solid_of(
+        run(
+            "sketch_loft",
+            parameters=scene_parameters(width=30.0, height=12.0),
+            shape="circle",
+            length=999.0,
+            height=10.0,
+            top_scale=0.5,
+            sketch=drawn_text(),
+        )
+    )
+    expected = 10.0 / 3.0 * (lower + upper + math.sqrt(lower * upper))
+    assert body.volume == pytest.approx(expected, rel=1e-6)
+
+
+def test_every_sketch_use_the_dialog_offers_really_takes_a_sketch() -> None:
+    """Was der Fertig-Dialog anbietet, muss die Zeichnung auch annehmen.
+
+    Der Dialog listet die Operationen der Kategorie ``sketch`` — er fragt
+    nicht, ob sie ein Skizzenfeld haben. ``sketch_loft`` hatte keines, und
+    damit endete eine von fünf Verwendungen in einem internen Fehler statt in
+    einem Körper.
+
+    Der Test steht hier und nicht in der Oberfläche, weil die **Ursache** im
+    Register liegt: Eine Operation, die als Verwendung einer Skizze im Menü
+    steht, ohne eine annehmen zu können, ist im Register falsch — nicht im
+    Dialog, der sie treu wiedergibt.
+    """
+    uses = [spec for spec in REGISTRY.all() if spec.category == "sketch"]
+    assert len(uses) >= 5, "ohne geladenes Register prüft diese Zählung nichts"
+
+    ohne = [
+        spec.name
+        for spec in uses
+        if not any(entry.kind == "sketch" for entry in spec.params.spec())
+    ]
+    assert not ohne, (
+        f"diese Verwendungen stehen im Fertig-Dialog und nehmen keine Skizze an: {ohne}"
+    )
+
+
 def test_a_drawn_sketch_cuts_a_pocket_where_x_and_y_say() -> None:
     """Die Skizze ersetzt nur die Grundform — alles andere gilt weiter:
     x und y verschieben auch den gezeichneten Umriss."""
