@@ -81,6 +81,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Additive Bausteine fehlen am Flächenklick | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | nichts — der Fix in `_applies_to` kann heute laufen und behebt Wandhalter und Nutfeder mit |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
+| Die Startmarke §31 ist seit dem 24.08.2026 rot | Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026) | **eine Entscheidung**: Marke neu setzen oder die Ursache suchen. Nicht der Code — im Wechsel gegen den Stand vor drei Commits gemessen, Unterschied im Rauschen |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
@@ -9652,3 +9653,39 @@ sagen, ist gegen den Regelfall gebaut.
       anderes als das, das er gerade eingerichtet hatte. Die Meldung nennt den
       Anbieter nicht, und genau das hätte den Fall in Minute zwei beendet statt
       in Stunde drei.
+
+---
+
+## Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026)
+
+`test_performance.py::test_the_application_is_usable_quickly` ist rot:
+**2087 ms gegen eine Bestmarke von 1233 ms**, und `tests/.performance.json`
+zählt neun Überschreitungen in Folge bei einer Schwelle von zwei. Gemeldet von
+3d-druck-43 mit dem Verdacht auf `72e7bd2`.
+
+**Der Verdacht hält nicht.** Gemessen im Wechsel, damit die Maschinenlast für
+beide Stände dieselbe ist — je ein eigener Prozess mit dem Treiber des Tests,
+„ohne" ist ein Arbeitsbaum auf `9862b57`, also vor `acb0dd5`, `e0540a1` und
+`72e7bd2`:
+
+    Runde 1:  mit 2147 ms   |   ohne 2112 ms
+    Runde 2:  mit 2130 ms   |   ohne 2094 ms
+    Runde 3:  mit 2094 ms   |   ohne 2131 ms
+
+Der Unterschied liegt im Rauschen, in Runde 3 ist der alte Stand sogar
+langsamer. `72e7bd2` kam ohnehin nicht in Frage: Er ändert Regeldokumente und
+in `parts/user.py` genau zwei Docstrings.
+
+**Was die Zahl streuen lässt, sagt der Test selbst.** Sein Docstring nennt für
+denselben Tag 13 764 ms kalt und 2500 bis 3000 ms warm, und die Marke ist der
+**kleinste** je gemessene Wert. Am 24.08.2026 arbeiteten vier Sitzungen
+gleichzeitig auf dieser Maschine.
+
+- [ ] **Marke neu setzen oder Ursache suchen — und zwar allein auf der
+  Maschine.** Die Bestmarke von 1233 ms stammt aus einer Phase, die sich heute
+  nicht wiederherstellen lässt, solange mehrere Sitzungen messen. Wer das
+  entscheidet, fährt die Marke zuerst bei null fremden Prozessen: Liegt sie
+  dann wieder bei 1233, ist der Wert gut und die Roten sind Fremdlast; liegt
+  sie bei 2100, ist die Marke von einem Glückstreffer und gehört korrigiert.
+  **Zurückgesetzt wurde sie bewusst nicht** — eine Marke, die man beim ersten
+  roten Lauf hochsetzt, misst nie wieder etwas.
