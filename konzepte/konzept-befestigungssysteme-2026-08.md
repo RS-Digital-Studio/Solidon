@@ -1,4 +1,4 @@
-# Befestigungssysteme — ein fremdes Raster als Baustein
+# Die Bibliothek wächst — an fremden Rastern und durch den Kunden
 
 > **Stand 24.08.2026.** Entwurf, nichts davon ist gebaut. Anlass ist eine
 > Kundenanfrage vom 24.08.2026 (Alexander Schneider): SKÅDIS-Haken an ein
@@ -10,10 +10,19 @@
 > Was dieses Dokument beantwortet: **ob** es hierhergehört, **was** dabei
 > entsteht, **was heute im Weg steht** und **in welcher Reihenfolge** es
 > abgearbeitet wird. Was es nicht beantwortet: die Maße. Die sind ungeklärt,
-> und §5 sagt, warum das die erste Aufgabe ist und keine Fußnote.
+> und Abschnitt 5 sagt, warum das die erste Aufgabe ist und keine Fußnote.
+>
+> **Zwei Teile.** Teil I (Abschnitte 1 bis 14) ist der Lochwand-Einhänger und
+> das, was fremde Raster überhaupt zu Bausteinen macht. **Teil II (ab
+> Abschnitt 15)** ist Roberts Anschlussfrage vom selben Tag: wie ein Kunde
+> ein selbst angelegtes Teil in den Katalog bekommt und wie einen
+> eingebauten konfiguriert. Beide Teile stoßen an dieselben drei Stellen —
+> Registrierung, Bereichstest, Menügrenze — und stehen deshalb zusammen.
 >
 > Alle Messungen dieses Dokuments stammen vom 24.08.2026 gegen den Stand von
-> `b979b0c`.
+> `b979b0c`. **„§“ meint immer den Bauplan**; auf Teile dieses Dokuments
+> wird als „Abschnitt N“ verwiesen. Wer das vermischt, schreibt
+> Verweise, die ins Leere zeigen — in der ersten Fassung waren es zwei.
 
 ---
 
@@ -31,8 +40,8 @@ Anwendung ihn verspricht.
 
 Der zweite Teil seiner Anfrage ist der interessantere: eine **allgemeine
 Bibliothek für Befestigungssysteme**, SKÅDIS und Gridfinity und was sonst
-verbreitet ist. §10 sagt, wie weit diese Verallgemeinerung trägt — kürzer, als
-sie klingt.
+verbreitet ist. Abschnitt 10 sagt, wie weit diese Verallgemeinerung trägt —
+kürzer, als sie klingt.
 
 ---
 
@@ -51,9 +60,9 @@ Ja, und zwar ohne Dehnung des Bauplans.
 Deklaration erzeugt Menüeintrag, Dialog, Kommandozeilenbefehl,
 Agentenwerkzeug, Katalogkachel und Vorschaubild — `parts/ops.py` sagt es im
 Kopf selbst: „einen Baustein zur Bibliothek hinzuzufügen fügt ihn überall
-hinzu". Was Arbeit macht, ist nicht der Baustein. Es sind die drei Stellen in
-§4, §5 und §8, an denen dieser Fall etwas verlangt, was die Bibliothek noch
-nicht kann.
+hinzu". Was Arbeit macht, ist nicht der Baustein. Es sind die drei Stellen
+in den Abschnitten 4, 5 und 8, an denen dieser Fall etwas verlangt, was die
+Bibliothek noch nicht kann.
 
 ---
 
@@ -118,7 +127,7 @@ Zwei Folgerungen:
 Der Fix ist klein: Ein additiver Baustein, der eine Fläche als Auflage
 braucht, gehört an `face`. Ob das für **jeden** additiven Baustein gilt (ein
 Filmscharnier will vielleicht keine), ist die einzige offene Frage — sie steht
-in §13.
+in Abschnitt 13.
 
 ---
 
@@ -201,14 +210,14 @@ fünf gefüllten Feldern schlagen eine mit zehn halbleeren.
 )
 ```
 
-Parameter, aufgeteilt nach der Dialoggrenze aus §9:
+Parameter, aufgeteilt nach der Dialoggrenze aus Abschnitt 9:
 
 | Feld | Vorn/Hinten | Warum |
 |---|---|---|
 | `system` (Enum, vorerst `skadis`) | vorn | Ein Enum mit einem Wert heute, mit dreien morgen — die Alternative wäre ein Baustein je System und damit ein Menü, das mit dem Katalog wächst |
 | `count` (int, 1–6) | vorn | Die Frage des Kunden, Schritt 4 |
 | `orientation` (Enum: waagerecht/senkrecht) | vorn | Ein Behälter hängt anders als ein Werkzeughalter |
-| `plate` (float, Dicke der Rückplatte) | vorn | Siehe §8 — bei `count > 1` konstruktiv zwingend |
+| `plate` (float, Dicke der Rückplatte) | vorn | Siehe Abschnitt 8 — bei `count > 1` konstruktiv zwingend |
 | `play` (float, Vorgabe 0) | **hinten** | Regel 7: null heißt „aus dem Materialprofil", `ops.py` füllt es |
 | `lead_in` (float, Anfasung an der Zapfenspitze) | **hinten** | Erleichtert das Einhängen, interessiert niemanden beim ersten Mal |
 
@@ -231,20 +240,20 @@ entsteht, und nicht vorher.
 
 Das ist eine Abweichung von dem, was Robert dem Kunden geschrieben hat („eine
 eigene Kategorie für Befestigungssysteme"). Die Zusage bleibt richtig — sie
-beschreibt den Zustand, den §10 anpeilt. Nur beginnt er nicht mit einem
+beschreibt den Zustand, den Abschnitt 10 anpeilt. Nur beginnt er nicht mit einem
 halbleeren Menü.
 
 ---
 
 ## 7. Der Bedienablauf, Klick für Klick
 
-Nach §4 behoben und dem Baustein aus §6:
+Nach Abschnitt 4 behoben und dem Baustein aus Abschnitt 6:
 
 1. **Datei → Öffnen**, STL oder 3MF. Das Netz erscheint, `perceive/` hat die
    Flächen benannt.
 2. **Rechtsklick auf die Rückfläche** — im Viewport oder im Objektbaum.
-3. Im Kontextmenü steht **„Lochwand-Einhänger"**, weil §4 additive Bausteine
-   an `face` gebracht hat.
+3. Im Kontextmenü steht **„Lochwand-Einhänger"**, weil Abschnitt 4 additive
+   Bausteine an `face` gebracht hat.
 4. Der Dialog öffnet mit `at_feature` auf die geklickte Fläche vorbelegt.
    Sechs Felder vorn: System, Anzahl, Ausrichtung, Rückplatte, dazu Ort und
    Achse aus `_PLACEMENT`. Die Achse kommt aus der Flächennormalen und muss
@@ -304,7 +313,7 @@ genau die Verbindung, an der ein einzeln aufgesetzter Zapfen bricht.
 | `standards.py` | Dataclass `Board`, `board()`, `board_sizes()` |
 | `parts/mounting.py` | Der Baustein, plus `PartChange`-Eintrag |
 | `parts/registry.py` | `LIBRARY_VERSION` auf `"5"` — ein neuer Baustein verschiebt keine bestehenden Maße, aber die Bibliothek ist eine andere |
-| `parts/ops.py` | Der Fix aus §4 (`_applies_to`) |
+| `parts/ops.py` | Der Fix aus Abschnitt 4 (`_applies_to`) |
 | `app/i18n/locales/` | Fünf Kataloge: `en`, `es`, `fr`, `it`, `pt`. Kein Katalog darf zurückbleiben — `tests/test_translations.py` prüft jeden gefundenen |
 | Katalog und Menü | Kommen von selbst; das Vorschaubild wird gerendert, nicht gepflegt (§24.3) |
 | Handbuch | Die Referenz erzeugt `manual.py` aus dem Register. Eine geschriebene Seite lohnt erst mit dem zweiten System |
@@ -344,7 +353,7 @@ Reihenfolge ergibt sich aus der Verbreitung — SKÅDIS zuerst, weil danach
 gefragt wurde, Gridfinity als Zweites, weil es seit der Durchsicht vom
 16.08.2026 ohnehin auf der Liste steht (dort als „meistgedruckte
 Funktionsteil-Kategorie" geführt). Sobald der dritte Eintrag kommt, entsteht
-die eigene Gruppe aus §6.3, und dann heißt sie, was Robert dem Kunden
+die eigene Gruppe aus Abschnitt 6.3, und dann heißt sie, was Robert dem Kunden
 geschrieben hat.
 
 ---
@@ -355,18 +364,18 @@ In dieser Reihenfolge, jedes für sich mit grüner Suite abschließbar:
 
 * **P1 — Messen.** Eine SKÅDIS-Platte, ein Messschieber, fünf Werte, jeder an
   mehreren Stellen. Ergebnis ist ein Kommentar in `standards.toml` mit Datum
-  und Herkunft. **Blockiert alles Weitere** (§5).
+  und Herkunft. **Blockiert alles Weitere** (Abschnitt 5).
 * **P2 — Die Tabelle.** Tabellenart `boards`, Dataclass, Zugriff, `version`
   auf `"3"`, Test „jede Tabellenart ist über ihre Art nachschlagbar" zieht von
   selbst nach.
 * **P3 — Der Flächenbefund.** `_applies_to` bringt additive Bausteine an
   `face`. Eigener Commit, eigener Test, unabhängig vom Rest — er behebt
-  Wandhalter und Nutfeder mit (§4).
-* **P4 — Der Baustein.** `pegboard_hook` nach §6.2, mit den drei eigenen
-  Tests. `LIBRARY_VERSION` auf `"5"`.
+  Wandhalter und Nutfeder mit (Abschnitt 4).
+* **P4 — Der Baustein.** `pegboard_hook` nach Abschnitt 6.2, mit den drei
+  eigenen Tests. `LIBRARY_VERSION` auf `"5"`.
 * **P5 — Die Texte.** Deutsche Quelle plus fünf Kataloge.
 * **P6 — Der Durchlauf.** Ein echtes Modell von MakerWorld oder Printables
-  einlesen und die sieben Klicks aus §7 fahren. Was dabei hakt, ist der
+  einlesen und die sieben Klicks aus Abschnitt 7 fahren. Was dabei hakt, ist der
   eigentliche Befund dieses Vorhabens — nicht, was die Tests sagen.
 * **P7 — Drucken.** Ein Prüfstück mit `count = 2` auf dem Centauri Carbon 2,
   einhängen, hängen lassen. Eine Passung, die nicht gedruckt wurde, ist eine
@@ -378,9 +387,9 @@ In dieser Reihenfolge, jedes für sich mit grüner Suite abschließbar:
 
 ## 12. Woran es gemessen wird
 
-* Ein heruntergeladenes STL wird in **sieben Klicks** zur SKÅDIS-Fassung (§7).
+* Ein heruntergeladenes STL wird in **sieben Klicks** zur SKÅDIS-Fassung (Abschnitt 7).
 * Der Bereichstest ist über den ganzen Parameterbereich grün, `count` an
-  beiden Enden, `component_count == 1` (§8).
+  beiden Enden, `component_count == 1` (Abschnitt 8).
 * Jedes Maß des Bausteins lässt sich auf eine Zeile in `standards.toml`
   zurückführen. Keine Zahl im Code, die ein Loch beschreibt.
 * Ein gedrucktes Prüfstück hängt an einer echten Platte, ohne zu klemmen und
@@ -393,24 +402,212 @@ In dieser Reihenfolge, jedes für sich mit grüner Suite abschließbar:
 
 ## 13. Was offen ist
 
-1. **Die Maße** (§5). Blockiert alles. Braucht eine Platte.
-2. **Gilt der Flächenfix aus §4 für jeden additiven Baustein oder für eine
-   Auswahl?** Der Wandhalter und die Nutfeder gehören zweifellos dazu. Beim
+1. **Die Maße** (Abschnitt 5). Blockiert alles. Braucht eine Platte.
+2. **Gilt der Flächenfix aus Abschnitt 4 für jeden additiven Baustein oder
+   für eine Auswahl?** Der Wandhalter und die Nutfeder gehören zweifellos dazu. Beim
    Filmscharnier ist es eine Frage. Vorschlag: alle, und wer nicht will, sagt
    es in seiner Deklaration — die Umkehrung würde bei jedem neuen Baustein
    vergessen.
 3. **Reihenversatz ja oder nein.** Hängt an P1. Falls die Platte versetzte
-   Zwischenlöcher hat, bekommt `count` eine zweite Bedeutung, und §6.2 ist
+   Zwischenlöcher hat, bekommt `count` eine zweite Bedeutung, und Abschnitt 6.2 ist
    nachzuziehen.
-4. **Wann die eigene Gruppe entsteht** (§6.3) — Vorschlag: mit dem dritten
-   Eintrag.
+4. **Wann die eigene Gruppe entsteht** (Abschnitt 6.3) — Vorschlag: mit dem
+   dritten Eintrag.
 
 ## 14. Was hier ausdrücklich nicht gebaut wird
 
-* **Keine Musteroperation** (§8, Weg A). Sie wäre nützlich und ist ein anderes
-  Vorhaben.
+* **Keine Musteroperation** (Abschnitt 8, Weg A). Sie wäre nützlich und ist
+  ein anderes Vorhaben.
 * **Kein Lochplatten-Generator.** Die Platte kauft man; wer sie druckt, findet
   sie fertig. Solidon passt Modelle an, es ersetzt kein Möbelhaus.
 * **Kein automatisches Finden der Rückseite.** Der Kunde klickt sie an. Eine
   geratene Fläche wäre in der Hälfte der Fälle die falsche, und Regel 21 sagt,
   was dann zu tun ist: fragen, nicht raten.
+
+---
+
+# Teil II — Eigene Teile im Katalog
+
+> Nachgetragen am 24.08.2026 auf Roberts Frage: „damit man selbst angelegte
+> Teile in den Katalog mit aufnehmen kann und konfigurieren kann wie unsere
+> normalen". Das ist ein zweiter Strang derselben Sache — die Bibliothek
+> wächst, und hier wächst sie durch den Kunden statt durch uns. Er steht in
+> diesem Dokument, weil beide Stränge an denselben drei Stellen anstoßen:
+> Registrierung, Bereichstest, Menügrenze.
+
+## 15. Was es heute gibt
+
+**Mehr, als man denkt, und an der falschen Stelle.** §24.5 ist gebaut:
+`parts/user.py` liest `<Nutzerdaten>/parts/*.py` beim Start, macht aus jedem
+eine Operation, der Katalog kennzeichnet sie mit einem eigenen Zeichen und dem
+Wort „eigener Baustein", eine kaputte Datei wird gemeldet und übersprungen
+statt den Start zu verhindern, und `fingerprint` hält fest, welcher eigene
+Baustein in ein Projekt eingegangen ist.
+
+Es fehlt genau ein Ding: **der Weg dorthin ohne Python.** Ein eigener Baustein
+ist heute eine Datei mit `@register_part`, einer Parameterklasse und einer
+Funktion gegen `manifold3d`. Wer das schreiben kann, braucht Solidon nicht, um
+einen Haken an eine Platte zu hängen — und wer es nicht kann, ist genau der
+Kunde, für den die Anwendung gebaut wird.
+
+Die Lücke ist also nicht die Registrierung. Sie ist der Schritt davor.
+
+## 16. Der Entwurf: ein eigener Baustein ist ein Rezept, kein Programm
+
+Ein Dokument hält schon alles, was ein Baustein braucht:
+
+* `ops: list[Operation]` — die Schritte, aus denen das Teil entstanden ist,
+* `parameters: dict[ParameterName, Parameter]` — benannte Werte, in Ausdrücken
+  als `@name` gelesen (§13). **Die gibt es, und der Kunde legt sie heute schon
+  an.**
+
+Ein selbst angelegter Baustein ist damit ein **Ausschnitt aus dem Stapel plus
+die Beschreibung seiner Parameter**, gespeichert als Daten. Kein Python, keine
+Funktion, nichts, was ausgeführt wird — eine Liste von Operationsnamen mit
+Werten, und die Operationen sind die installierten.
+
+Der Ablauf, Klick für Klick:
+
+1. Der Kunde konstruiert sein Teil, wie er es ohnehin tut — oder liest eins
+   ein und bearbeitet es.
+2. Er legt für die Maße, die veränderlich sein sollen, **Projektparameter** an
+   und bindet sie an die Operationen. Das ist §13 und existiert.
+3. **„Auswahl als Baustein speichern"** — ein Eintrag im Katalog, nicht im
+   Menü (Abschnitt 18c sagt, warum).
+4. Ein Dialog fragt, was ein `param()` verlangt und was ein Projektparameter
+   noch nicht weiß: **Titel, Einheit, kleinster und größter Wert, Vorgabe,
+   vorn oder hinten im Dialog** — dazu Name, Gruppe und ein Satz
+   Beschreibung. Genau das meint „konfigurieren wie unsere normalen": Ein
+   eingebauter Baustein ist nichts anderes als Geometrie plus diese Angaben.
+5. Die Anwendung **fährt den Bereichstest** über die genannten Grenzen und
+   zeigt, was dabei herauskommt (Abschnitt 18b).
+6. Der Baustein steht im Katalog, gekennzeichnet, mit gerendertem
+   Vorschaubild — das kommt von selbst, `preview.py` zeichnet aus dem
+   Baustein.
+
+## 17. Was der Entwurf nebenbei löst
+
+**Die Sicherheitsfrage.** Regel 13 verbietet, dass eigene Bausteine in
+Projektdateien mitreisen, und §32 verbietet, dass eine hereinkommende Datei
+Code ausführt. Beides zielt auf dasselbe: eine `.py` aus fremder Hand.
+
+Ein Rezept ist keine. Es nennt Namen registrierter Operationen und Zahlen —
+und das tut jede Projektdatei ohnehin, seit es Projektdateien gibt. Die
+Sicherheitslage eines Rezepts ist **identisch mit der einer `project.json`**,
+nicht mit der einer Python-Datei.
+
+Daraus folgt, dass ein Rezept mitreisen *dürfte*, wo ein Python-Baustein es
+nie darf — und damit wäre der Katalog etwas, das man teilt. Das ist die
+naheliegende und die weitreichende Folgerung zugleich:
+
+> **Entscheidung für Robert.** Regel 13 und §24.5 sagen heute „reisen nie
+> mit", ohne zwischen Code und Rezept zu unterscheiden. Die Unterscheidung
+> einzuführen ist eine Bauplanänderung, und die geht nach `CLAUDE.md` immer an
+> ihn — auch unter Vollmacht. **Vorschlag für die erste Fassung: Ein Rezept
+> reist nicht mit.** Es bleibt bei der Regel, bis jemand sie bewusst ändert;
+> ein Baustein, der sich später ausbreiten darf, ist leichter zu haben als
+> einer, den man wieder einfangen muss.
+
+Eine Ausnahme wäre zu prüfen: `create_from_scad` nimmt OpenSCAD-Quelltext als
+Parameterwert. Ein Rezept mit dieser Operation trüge fremden Quelltext. Regel
+11 verlangt dafür ohnehin die Prüfung aus §32 — die greift, und zwar heute
+schon für jede Projektdatei.
+
+## 18. Die Grenzen, an denen es weh tut
+
+**a) Ein Baustein ist eine Funktion, ein Stapel ist ein Ablauf.** `PartFn`
+nimmt Parameter und gibt **einen** Körper mit benannten Merkmalen zurück. Ein
+Stapel darf Objekte anlegen, löschen und teilen. Aufnehmbar sind deshalb nur
+Rezepte, die auf **genau einen** Körper hinauslaufen — die Anwendung prüft das
+beim Speichern und sagt es, statt später etwas Halbes zu bauen.
+
+**b) Der Bereichstest muss in die Anwendung.** §24.3 ist eindeutig: „Ein
+Baustein ohne diesen Test gilt als nicht vorhanden", und §24.5 verlangt für
+eigene Bausteine denselben Test mit Warnhinweis im Katalog, wenn er fehlt.
+Heute steht er in `tests/test_parts.py` und läuft bei uns, nicht beim Kunden.
+`corners()` ist aber gewöhnlicher Code — die Ecken zu bilden und
+durchzurechnen, braucht kein Testwerkzeug. Was es braucht, ist ein Budget: Bei
+sechs Parametern sind es sechs bis acht Läufe des ganzen Rezepts, und ein
+Rezept kann teuer sein. Vorschlag: beim Speichern einmal fahren, mit
+Fortschritt und Abbruch (`ctx.progress`, `ctx.cancelled`), und das Ergebnis
+als Eigenschaft des Bausteins hinterlegen.
+
+**c) Die Menügrenze bricht, und niemand misst es.** Jeder Baustein wird eine
+Operation (`register_all`), jede Operation bekommt einen Menüeintrag, und
+`tests/test_interface_limits.py` erlaubt zwölf Zeilen je Menü. Zwanzig eigene
+Teile machen aus einem Menü eine Liste zum Durchsuchen — genau das, was der
+Test verhindern soll.
+
+Der Test kann es nicht sehen: `bootstrap.load_user_parts` wird ausdrücklich
+nur von Oberfläche und Kommandozeile gerufen, nicht von der Suite, und der
+Docstring nennt den Grund — „ein Testlauf, der sie mitläse, prüfte gegen die
+Maschine des Entwicklers statt gegen die Anwendung (§38)". Die Trennung ist
+richtig. Ihre Folge ist, dass diese Grenze beim Kunden reißt und bei uns nie.
+
+Also: **Eigene Bausteine gehören in den Katalog und die Befehlspalette, nicht
+ins Menü.** Der Katalog ist für beliebig viele gebaut, das Menü nicht. Das gilt
+für die heutigen Python-Bausteine genauso — es ist ein eigener Punkt, und er
+ist älter als dieser Entwurf.
+
+**d) Merkmale müssen benannt werden.** Ein Baustein verspricht `features` und
+muss sie liefern; der Test darüber ist scharf. Ein Rezept erzeugt Merkmale in
+seinen Schritten, aber sie heißen, wie die Operation sie genannt hat. Der
+Dialog aus Abschnitt 16 muss also fragen, welche davon nach außen sichtbar
+sein sollen und unter welchem Namen — sonst ist die Provenienzkette an der
+Naht zwischen Rezept und benutzendem Projekt unterbrochen.
+
+**e) `to_scad()` entfällt.** §24.1 nennt es als Ausgabeformat je Baustein. Für
+ein Rezept aus beliebigen Operationen lässt es sich nicht bilden. Das ist
+hinnehmbar und wird benannt, nicht umgangen.
+
+**f) Die Versionsfrage ist bekannt und offen.** Ändert der Kunde sein Rezept,
+rechnen alte Projekte anders — §24.4, Leitprinzip 4. Der Bauplan sagt für
+eigene Bausteine selbst, dass der übliche Weg „nicht trägt", weil niemand
+einen Änderungsverlauf pflegt, und nennt die Alternative: den Zustand der
+Dateien lesen. `user.py` hat `fingerprint` bereits, und der Plattencache (§38)
+braucht dieselbe Auskunft ohnehin. Für ein Rezept ist sie sogar leichter zu
+bilden als für eine `.py` — der Hash über die Daten **ist** die Version.
+
+## 19. Arbeitspakete
+
+Unabhängig von Teil I; keines davon wartet auf eine Lochplatte.
+
+* **E1 — Katalog statt Menü.** Eigene Bausteine erscheinen im Katalog und in
+  der Befehlspalette, nicht in der Menüleiste. Behebt Abschnitt 18c für den
+  heutigen Bestand und macht den Rest erst möglich.
+* **E2 — Das Rezeptformat.** Ein eigener Baustein als Daten: Ausschnitt des
+  Stapels, Parameterbeschreibungen, Merkmalsnamen, Hash. Mit `format_version`
+  und Migrationsweg wie jedes Format hier.
+* **E3 — Der Bereichstest in der Anwendung.** `corners()` aus dem Testcode in
+  den Kern, mit Fortschritt und Abbruch. Ergebnis am Baustein hinterlegt,
+  Warnhinweis im Katalog, wenn er nicht bestanden ist (§24.5 wörtlich).
+* **E4 — „Als Baustein speichern".** Der Dialog aus Abschnitt 16, Schritt 3
+  bis 5.
+* **E5 — Ein Rezept als Baustein auswerten.** Der `PartFn`-Ersatz: Parameter
+  hinein, ein Körper mit benannten Merkmalen heraus.
+* **E6 — Der Durchlauf.** Ein Kunde legt aus einem eingelesenen Modell einen
+  eigenen Baustein an, benutzt ihn in einem zweiten Projekt, ändert ihn und
+  öffnet das erste wieder. Was dabei hakt, ist der Befund.
+
+## 20. Woran es gemessen wird
+
+* Ein Kunde legt einen eigenen Baustein an, **ohne eine Datei anzufassen**.
+* Der Baustein hat Titel, Einheit, Grenzen, Vorgabe und Beschreibung je
+  Parameter — dieselben Angaben wie ein eingebauter, an derselben Stelle im
+  Dialog.
+* Der Bereichstest läuft beim Anlegen, und sein Ergebnis steht am Baustein.
+* Vierzig eigene Bausteine machen kein Menü unbenutzbar.
+* Ein Projekt, das einen eigenen Baustein benutzt, meldet beim Öffnen, wenn
+  der sich seither geändert hat — oder fehlt (§15.2).
+
+## 21. Was auch hier nicht gebaut wird
+
+* **Kein Plugin-System.** §24.5 zieht die Grenze, und sie gilt für Rezepte
+  erst recht: keine neuen Operationen, keine Oberflächenänderungen, kein
+  Zugriff auf den Stapel. Ein Rezept ist ein Baustein, nichts weiter.
+* **Kein Marktplatz, keine Cloud-Ablage.** Ob ein Rezept überhaupt mitreisen
+  darf, ist die Entscheidung aus Abschnitt 17 — alles Weitere kommt danach
+  oder gar nicht.
+* **Keine Bearbeitung eigener Bausteine in einem eigenen Editor.** Sie werden
+  im Projekt bearbeitet, aus dem sie stammen, und neu gespeichert. Ein zweiter
+  Editor wäre eine zweite Wahrheit.
