@@ -2740,3 +2740,66 @@ def test_no_two_active_shortcuts_collide_while_sketching(qt_app: QApplication) -
         )
     finally:
         window.deleteLater()
+
+
+def test_every_sketch_shortcut_is_named_somewhere_on_screen(qt_app: QApplication) -> None:
+    """Eine Belegung, zu der kein sichtbares Ziel gehört, findet niemand (§19.2).
+
+    Kürzel stehen neben ihrer Handlung, so lernt man sie nebenbei. Im
+    Skizzenmodus heißt das: an einem Knopf der Leiste („Linie (L)"), im
+    Eintrag des Ebenenfelds („Draufsicht (XY) — liegend (1)") oder im Text des
+    Knopfs selbst („Abstand  D").
+
+    Gemessen am gebauten Fenster war von fünfzehn Kürzeln genau **eines**
+    nirgends genannt: `Strg+Z`. Sein Knopf stand da, mit Bild und Tooltip
+    „Rückgängig" — und ohne die Taste, während *Einpassen* zwei Zeilen darüber
+    sein `Pos1` nennt und der Kommentar dazwischen genau diese Regel zitiert.
+
+    **Was der Test ausnimmt und warum:** `Strg++`, `Strg+-` und die
+    Tabulatorkürzel gehören dem **Fenster** und nicht der Skizze — Zoom und
+    Reiterwechsel gelten überall, und ihr sichtbarer Weg ist der Menüeintrag.
+    Sie hier zu verlangen hieße, jede Skizzenleiste müsste die halbe
+    Menüleiste wiederholen.
+    """
+    from PySide6.QtGui import QShortcut
+    from PySide6.QtWidgets import QAbstractButton, QComboBox
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_extrude")
+        panel = window._sketch_panel
+        assert panel is not None
+
+        sichtbar = " || ".join(
+            f"{knopf.text()} {knopf.toolTip()} {knopf.statusTip()}"
+            for knopf in panel.findChildren(QAbstractButton)
+        )
+        for feld in panel.findChildren(QComboBox):
+            sichtbar += " || " + " ".join(feld.itemText(i) for i in range(feld.count()))
+
+        # Dem Fenster gehörig, nicht der Skizze: Zoom und Reiterwechsel.
+        des_fensters = {"Ctrl++", "Ctrl+-", "Ctrl+Tab", "Ctrl+Shift+Tab"}
+        tasten = {
+            shortcut.key().toString()
+            for shortcut in window.findChildren(QShortcut)
+            if shortcut.isEnabled() and shortcut.key().toString()
+        }
+        eigene = {
+            taste for taste in tasten if taste not in des_fensters and not taste.startswith("Alt+")
+        }
+        assert len(eigene) > 10, "ohne aufgebaute Leiste prüft diese Zählung nichts"
+
+        stumm = [
+            taste
+            for taste in sorted(eigene)
+            if f"({taste})" not in sichtbar and f" {taste}" not in sichtbar
+        ]
+        assert not stumm, (
+            f"diese Kürzel des Skizzenmodus stehen nirgends an der Oberfläche: {stumm}"
+        )
+    finally:
+        window.deleteLater()

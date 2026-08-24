@@ -2778,7 +2778,21 @@ class SketchPanel(QWidget):
 
         undo_button = QToolButton(self)
         undo_button.setIcon(icons.icon("sketch_undo", undo_button))
-        undo_button.setToolTip(tr("Rückgängig"))
+        # **Das Kürzel gehört an den Knopf**, wie bei *Einpassen* darüber: Eine
+        # Belegung, zu der kein sichtbares Ziel gehört, findet niemand (§19.2).
+        # Von allen Kürzeln des Skizzenmodus war dieses das einzige, das
+        # nirgends an der Oberfläche stand — gemessen am gebauten Fenster.
+        #
+        # Der Text kommt aus **Qt** und nicht aus einer eigenen Zeichenkette:
+        # ``QKeySequence`` kennt die Schreibweise der Anzeigesprache („Strg+Z"
+        # gegen „Ctrl+Z"), und er kommt aus derselben Quelle wie die Bindung
+        # zwei Bildschirme weiter. Ein von Hand geschriebenes „Strg+Z" wäre ein
+        # fester deutscher Text in der Oberfläche (Regel 20) und liefe beim
+        # nächsten Umbau von der Bindung weg.
+        undo_keys = QKeySequence(QKeySequence.StandardKey.Undo).toString(
+            QKeySequence.SequenceFormat.NativeText
+        )
+        undo_button.setToolTip(f"{tr('Rückgängig')}  ({undo_keys})")
         undo_button.setAutoRaise(True)
         undo_button.clicked.connect(self.canvas.undo)
         tools.addWidget(undo_button)
