@@ -42,7 +42,15 @@ from app.core.geom.transform import (
 from app.core.log import get_logger
 from app.core.perceive.maps import AnalysisMap
 from app.core.scene import EvaluationResult
-from app.core.types import Feature, FeatureId, LayerInfo, ObjectId, Profile, Vec3
+from app.core.types import (
+    Feature,
+    FeatureId,
+    LayerInfo,
+    ObjectId,
+    PlaneFrame,
+    Profile,
+    Vec3,
+)
 from app.core.units import (
     EPS_DISPLAY,
     EPS_GEOM,
@@ -141,6 +149,41 @@ VIEW_DIRECTIONS: dict[str, tuple[tuple[float, float, float], tuple[float, float,
 #: viele Punkte. Das ist der Zweck dieses Tests.
 ORIENTATION_SIZE = 52
 ORIENTATION_MARGIN = 4
+
+
+def camera_for_plane(frame: PlaneFrame, distance: float = 1.0) -> tuple[Vec3, Vec3, Vec3]:
+    """Die Kamerastellung, die senkrecht auf eine Zeichenebene sieht (§30.1).
+
+    Position, Blickpunkt und Oben — in der Reihenfolge, die
+    ``plotter.camera_position`` erwartet. Die achte Kameravorgabe neben den
+    sieben festen aus :data:`VIEW_DIRECTIONS`, nur dass sie nicht in einer
+    Tabelle steht, sondern aus dem Rahmen gerechnet wird: Eine Skizzenebene
+    kann auf jeder planaren Fläche eines Körpers liegen und beliebig geneigt
+    sein.
+
+    **Oben ist die zweite Rahmenachse**, und das ist keine willkürliche Wahl.
+    Sie ist dieselbe Achse, die im Zeichenblatt nach oben zeigt; jede andere
+    drehte die Skizze beim Betreten des Modus um einen Winkel, den niemand
+    erklären kann. Für die XY-Ebene fällt sie mit der vorhandenen Draufsicht
+    zusammen — ``VIEW_DIRECTIONS["top"]`` hat ebenfalls ``(0, 1, 0)`` —, und
+    das ist die Probe darauf, dass hier nichts verdreht ankommt.
+
+    ``distance`` ist die Entfernung vom Ursprung entlang der Normalen. Sie
+    entscheidet nichts, solange der Aufrufer danach ``reset_camera()`` ruft
+    (so hält es :meth:`Viewport.view_from`); sie steht hier, damit die
+    Richtung nicht von einer Länge null abhängt.
+
+    Eine freie Funktion und keine Methode: Offscreen gibt es keinen Plotter,
+    und was hinter dieser Wache liegt, läuft in der Suite nie. Die Rechnung
+    davor zu trennen ist der einzige Weg, sie gegen Zahlen zu prüfen —
+    dieselbe Aufteilung wie bei :func:`bore_span` und :func:`shadow_points`.
+    """
+    position = (
+        frame.origin[0] + distance * frame.normal[0],
+        frame.origin[1] + distance * frame.normal[1],
+        frame.origin[2] + distance * frame.normal[2],
+    )
+    return position, frame.origin, frame.y_axis
 
 
 def axes_widget_of(plotter: Any) -> Any:
@@ -4724,6 +4767,43 @@ class Viewport(QWidget):
         self.plotter.camera_position = [position, (0.0, 0.0, 0.0), up]
         self.plotter.reset_camera()
         self._redraw_shadows()
+
+    def view_on_plane(self, frame: PlaneFrame) -> None:
+        """Die Kamera senkrecht auf eine Zeichenebene stellen (§30.1).
+
+        Der Gegenstück zu :meth:`view_from` für eine Ebene, die in keiner
+        Tabelle steht: Eine Skizze kann auf jeder planaren Fläche eines
+        Körpers liegen. Gerechnet wird die Stellung in
+        :func:`camera_for_plane`; hier wird sie nur gesetzt.
+
+        **Ohne ``reset_camera``.** ``view_from`` ruft es, weil eine
+        Achsansicht das ganze Modell zeigen soll. Hier wäre es falsch: Wer den
+        Skizzenmodus betritt, will auf *seine* Ebene sehen, und ein Zoom auf
+        die Hüllbox aller Objekte schöbe eine Skizze auf einer kleinen
+        Deckfläche an den Bildrand. Der Ausschnitt bleibt, wie er war — es
+        dreht sich nur die Blickrichtung.
+        """
+        if self.plotter is None:
+            return
+        position, focus, up = camera_for_plane(frame, self._plane_distance())
+        self.plotter.camera_position = [position, focus, up]
+        self._redraw_shadows()
+
+    def _plane_distance(self) -> float:
+        """Wie weit die Kamera von der Zeichenebene wegrückt.
+
+        Der bisherige Abstand zum Blickpunkt, damit der Ausschnitt beim
+        Schwenken erhalten bleibt. Ohne Plotter und vor dem ersten Bild gibt
+        es keinen — dann tut es jede Zahl außer null, weil die Richtung zählt
+        und nicht die Länge.
+        """
+        camera = getattr(self.plotter, "camera", None) if self.plotter else None
+        position = getattr(camera, "position", None)
+        focus = getattr(camera, "focal_point", None)
+        if position is None or focus is None:
+            return 1.0
+        span = math.dist(tuple(position), tuple(focus))
+        return span if span > EPS_GEOM else 1.0
 
     # --- navigation (§2.9) ------------------------------------------------------
 

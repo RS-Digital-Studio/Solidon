@@ -44,6 +44,7 @@ Anweisungen — dort steht die meiste ungeprüfte Aussage.
 from __future__ import annotations
 
 import gc
+import math
 import weakref
 from typing import Any
 
@@ -803,3 +804,91 @@ def test_each_plate_draws_under_its_own_names(profile: Profile, qt_app: QApplica
     for plate in range(3):
         assert f"bed_{plate}" in names, f"Platte {plate + 1} bekam kein Raster"
         assert f"bed_surface_{plate}" in names, f"Platte {plate + 1} bekam keinen Grund"
+
+
+# --- Die Kamera auf einer Zeichenebene (§30.1, P1b) --------------------------
+#
+# ``view_on_plane`` liegt hinter der Wache und läuft offscreen nie. Die
+# Rechnung davor tut es — genau die Aufteilung, für die es diese Datei gibt.
+
+
+def test_the_camera_looks_along_the_normal_of_the_plane() -> None:
+    """Sie sieht auf die Ebene, nicht an ihr vorbei.
+
+    Der Blick geht von der Position zum Ursprung, und das muss die Gegenrichtung
+    der Normalen sein. Ein Vorzeichenfehler drehte den Betrachter auf die
+    Rückseite des Teils — sichtbar sofort, prüfbar nur hier.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import camera_for_plane
+
+    frame = frame_of((1.0, 0.0, 1.0), (5.0, -2.0, 3.0))
+    position, focus, up = camera_for_plane(frame, 40.0)
+
+    assert focus == pytest.approx(frame.origin), "geschaut wird auf den Ursprung der Zeichnung"
+    span = math.dist(position, frame.origin)
+    assert span == pytest.approx(40.0), "die Entfernung ist die verlangte"
+    towards = tuple((frame.origin[axis] - position[axis]) / span for axis in range(3))
+    assert towards == pytest.approx(tuple(-value for value in frame.normal))
+    assert up == pytest.approx(frame.y_axis), "oben ist die zweite Rahmenachse"
+
+
+def test_sketching_on_xy_gives_the_same_camera_as_the_top_view() -> None:
+    """Sonst kippt das Bild beim Betreten des Skizzenmodus.
+
+    Die Draufsicht gibt es längst als feste Vorgabe. Wer auf der XY-Ebene zu
+    zeichnen beginnt, sieht dasselbe — und wenn nicht, dreht sich das Teil
+    beim Moduswechsel um einen Winkel, den niemand erklären kann. Die Zusage
+    steht in ``frame_of`` („dieselbe Skizze liegt auf dem Tisch und auf dem
+    Deckel gleich herum"); hier ist die Zahl dazu.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import VIEW_DIRECTIONS, camera_for_plane
+
+    towards_top, up_top = VIEW_DIRECTIONS["top"]
+    position, focus, up = camera_for_plane(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)), 1.0)
+
+    assert position == pytest.approx(towards_top), "die Kamera steht, wo die Draufsicht steht"
+    assert focus == pytest.approx((0.0, 0.0, 0.0))
+    assert up == pytest.approx(up_top), "und sie hält den Kopf genauso"
+
+
+def test_a_sketch_plane_without_a_plotter_changes_nothing() -> None:
+    """Offscreen gibt es keine Kamera, und das darf nicht wehtun.
+
+    Die halbe Suite läuft ohne Plotter (``_available`` steigt bei
+    ``QT_QPA_PLATFORM=offscreen`` aus). Ein Skizzenmodus, der dort mit einer
+    Ausnahme endet, nähme jeden Fenstertest mit.
+    """
+    from app.core.sketch.planes import frame_of
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    assert viewport.plotter is None, "diese Probe ergibt nur ohne Plotter einen Sinn"
+    viewport.view_on_plane(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
+
+
+def test_the_distance_falls_back_when_the_camera_has_no_span() -> None:
+    """Eine Entfernung von null nähme der Kamerastellung ihre Richtung.
+
+    ``_plane_distance`` nimmt den bisherigen Abstand zum Blickpunkt, damit der
+    Ausschnitt beim Schwenken erhalten bleibt. Steht die Kamera auf ihrem
+    eigenen Blickpunkt — vor dem ersten Bild —, wäre die Position gleich dem
+    Ursprung und die Blickrichtung unbestimmt.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    viewport.plotter = _StillCamera()  # type: ignore[assignment]
+
+    assert viewport._plane_distance() == pytest.approx(1.0)
+
+
+class _StillCamera:
+    """Eine Attrappe, deren Kamera auf ihrem Blickpunkt sitzt."""
+
+    class _Camera:
+        position = (7.0, 7.0, 7.0)
+        focal_point = (7.0, 7.0, 7.0)
+
+    camera = _Camera()
