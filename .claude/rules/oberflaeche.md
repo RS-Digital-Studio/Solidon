@@ -1359,6 +1359,73 @@ Der Rechtsklick tat es nicht und die Zeigersuche auch nicht: Auf Platte 2
 fragten beide eine Bettbreite daneben, fanden dort meist keinen Körper, und der
 Rechtsklick hob die Auswahl auf, statt das Menü zu ihr zu zeigen.
 
+### Ein Klick ist eine Blickrichtung, kein Punkt
+
+Der Abschnitt darüber setzt voraus, dass unter dem Zeiger ein Dreieck liegt.
+**Bei einer Bohrung liegt dort keines**, und das war der zweite gemeldete
+Fehler an derselben Stelle: „wir erwischen oft nur die Oberfläche und kommen
+nicht zur Bohrung". Gemessen am echten `vtkCellPicker` in einem sichtbaren
+Fenster, Korpusplatte, Bohrung 32 Bildpunkte breit, Pixel neben der
+Bohrungsmitte:
+
+| | Draufsicht | Isometrisch | Vorderansicht |
+|---|---|---|---|
+| 0–8 px | **kein Treffer** | `hole_1` | `face_3` |
+| 12 px | `hole_1` | **kein Treffer** | `face_3` |
+| 16 px | `face_2` | `face_2` | `face_3` |
+
+Zwei Ursachen, und beide liegen vor der Reichweite:
+
+* **Senkrecht in eine Durchgangsbohrung trifft der Strahl nichts.** Die
+  Zylinderwand liegt parallel zu ihm, dahinter kommt keine Fläche. Der Picker
+  gab nichts zurück, `_on_left_click` machte daraus `objectPicked.emit("")` —
+  ein Klick mitten in die Bohrung **hob die Auswahl auf**. Ausgerechnet in der
+  Ansicht, in der man ein Lochbild anklickt.
+* **Landet der Strahl daneben auf der Deckfläche, gewinnt sie immer.** Ihr
+  Abstand ist null, der der Bohrung größer als null; die Reichweite ist eine
+  Obergrenze und kein Vorrang. Gemessen gab schon ein Punkt 0,4 mm neben dem
+  Bohrungsrand `face_2`, bei einer Reichweite von 0,95 mm.
+
+Gefragt wird deshalb der **Sichtstrahl** (`_pick_ray` → `_bore_aim`, gerechnet
+in `bore_span`): Welche Bohrung durchquert er, bevor er auf dem Sichtbaren
+landet? Drei Eigenschaften daran sind tragend:
+
+* **`until` ist der Auftreffpunkt, und ohne diese Grenze wird es falsch.** In
+  der Vorderansicht liegt hinter der Stirnfläche jede Bohrung der Platte; was
+  der Strahl erst dahinter durchquert, hat niemand gemeint. Die dritte Spalte
+  oben ist die Gegenprobe und bleibt unverändert `face_3`.
+* **Der Achsbereich kommt aus den Dreiecken des Merkmals**, nicht aus `depth`
+  und nicht aus dem Hüllquader — der kennt die Achse nicht, und eine schräge
+  Bohrung hat beides. Ohne die Begrenzung reicht der Zylinder unendlich weit
+  und eine Bohrung am einen Ende fängt Klicks am anderen.
+* **Zurück kommt ein Punkt auf der Achse**, nicht der Auftreffpunkt. Damit
+  bleibt die ganze Kette dahinter unberührt — Stufung, Kontextmenü und Zeiger
+  bekommen einen Punkt wie immer, und von einem Punkt im Loch findet
+  `_feature_inside` die Bohrung. Auf der Achse und nicht in der Mitte des
+  Durchtritts: Ein Punkt über der Öffnung liegt der Deckfläche näher als der
+  Bohrungswand, und dann gewinnt wieder die Fläche.
+
+Der entartete Fall ist der wichtigste und der einzige, den man leicht verliert:
+**Blickt man senkrecht in die Bohrung, läuft der Strahl parallel zur Achse**,
+es gibt keinen Ein- und Austritt durch den Mantel, und die quadratische
+Gleichung dazu hat keinen Leitkoeffizienten. Wer dort durch null teilt,
+verliert genau die Draufsicht.
+
+**Gefragt wird an drei Stellen, und an allen drei derselbe Aufruf**
+(`_aim_at`): Linksklick, Rechtsklick, Zeigersuche. Der Zeiger kostet damit
+einen Zell-Pick je Ruhepause statt eines Blicks in den Tiefenpuffer — gemessen
+0,16 ms, und die Zusage darunter ist es wert: Ein Zeiger, der die
+Merkmalsform über einer Bohrung zeigt, wo der Klick sie nicht wählt,
+verspricht etwas, das nicht eintritt. **Nicht** gefragt wird beim Messen,
+Bemalen und Ziehen — dort ist eine Stelle auf der Oberfläche gemeint, und ein
+Punkt in der Luft wäre falsch.
+
+**Und die Reichweite wirkt hier als Zielhilfe**, nicht als Grenze: Gezielt wird
+in Pixeln, und der Rand einer M3-Bohrung ist an einem großen Teil wenige davon
+breit. Derselbe Wert wie beim Klick auf die Fläche eines Merkmals, denn es ist
+dieselbe Frage — wie weit daneben meint noch dies. Bei 24 Pixeln, also weit
+außerhalb der Bohrung, bleibt es die Fläche.
+
 ### Was gefärbt wird
 
 **Die Auswahlfarbe gehört dem Genauesten, was gewählt ist.** Ein Klick auf eine

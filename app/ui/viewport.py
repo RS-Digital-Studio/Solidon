@@ -477,6 +477,81 @@ FEATURE_REACH_SHARE = 0.01
 FEATURE_REACH_MINIMUM = 0.5
 
 
+def bore_span(
+    origin: Vec3,
+    direction: Vec3,
+    centre: Vec3,
+    axis: Vec3,
+    radius: float,
+    along: tuple[float, float],
+) -> tuple[float, float] | None:
+    """Von wo bis wo ein Sichtstrahl im Inneren einer Bohrung läuft.
+
+    Gerechnet wird gegen den Zylinder um ``centre`` mit dieser ``axis`` und
+    diesem ``radius``, begrenzt auf den Achsbereich ``along`` — die kleinste
+    und größte Projektion der Merkmalsdreiecke auf die Achse. Ohne diese
+    Begrenzung reichte der Zylinder unendlich weit, und eine Bohrung am einen
+    Ende des Teils fing Klicks am anderen.
+
+    Zurück kommen die beiden Strahlparameter in Millimetern, gemessen von
+    ``origin`` entlang ``direction`` (das normiert erwartet wird), oder nichts,
+    wenn der Strahl vorbeigeht.
+
+    **Der entartete Fall ist der wichtigste.** Blickt man senkrecht in eine
+    Bohrung, läuft der Strahl **parallel** zur Achse: Dann gibt es keinen Ein-
+    und Austritt durch den Mantel, der Strahl liegt ganz innen oder ganz außen,
+    und die quadratische Gleichung dazu hat keinen Leitkoeffizienten. Genau
+    diese Ansicht ist die, in der man Bohrungen anklickt.
+
+    Als freie Funktion und nicht als Methode, aus demselben Grund wie
+    :func:`is_click`: eine Rechnung über Vektoren soll ohne VTK prüfbar sein.
+    """
+    import numpy as np
+
+    start = np.asarray(origin, dtype=float)
+    forward = np.asarray(direction, dtype=float)
+    line = np.asarray(axis, dtype=float)
+    length = float(np.linalg.norm(line))
+    if length <= EPS_GEOM:
+        return None
+    line = line / length
+
+    # Quer zur Achse: der Abstand von ihr, als Funktion von t.
+    across = forward - float(forward @ line) * line
+    offset = start - np.asarray(centre, dtype=float)
+    offset = offset - float(offset @ line) * line
+    lead = float(across @ across)
+    if lead <= EPS_GEOM:
+        # Parallel zur Achse — ganz innen oder ganz außen.
+        if float(offset @ offset) > radius * radius:
+            return None
+        crosswise = (-math.inf, math.inf)
+    else:
+        middle = 2.0 * float(offset @ across)
+        gap = float(offset @ offset) - radius * radius
+        under = middle * middle - 4.0 * lead * gap
+        if under < 0.0:
+            return None
+        root = math.sqrt(under)
+        crosswise = ((-middle - root) / (2.0 * lead), (-middle + root) / (2.0 * lead))
+
+    # Entlang der Achse: der Bereich, den das Merkmal überhaupt einnimmt.
+    at_start = float(start @ line)
+    per_step = float(forward @ line)
+    if abs(per_step) <= EPS_GEOM:
+        if not along[0] <= at_start <= along[1]:
+            return None
+        lengthwise = (-math.inf, math.inf)
+    else:
+        first = (along[0] - at_start) / per_step
+        second = (along[1] - at_start) / per_step
+        lengthwise = (min(first, second), max(first, second))
+
+    enter = max(crosswise[0], lengthwise[0])
+    leave = min(crosswise[1], lengthwise[1])
+    return (enter, leave) if enter < leave else None
+
+
 #: Layer analysis (§18.10): contour, island, unsupported region.
 LAYER_COLOUR = ROLES["layer"]
 ISLAND_COLOUR = ROLES["island"]
@@ -3002,6 +3077,16 @@ class Viewport(QWidget):
             return "measure"
         return "feature" if self._hover_feature else "select"
 
+    def _means_a_feature(self) -> bool:
+        """Ob ein Klick jetzt **auswählt**, statt eine Stelle zu setzen.
+
+        Gelesen aus :meth:`_resting_role` und nicht aus den Flaggen selbst: Die
+        Rangfolge der Werkzeuge steht dort schon, und eine zweite Aufzählung
+        daneben liefe irgendwann auseinander — dann setzte ein Pinselstrich
+        seine Farbe an der Stelle, an der der Zeiger eine Bohrung versprach.
+        """
+        return self._resting_role() in {"feature", "select"}
+
     def set_drag_cursor(self, role: str | None) -> None:
         """Meldet, was die Kamera gerade tut — vom Interaktionsstil gerufen.
 
@@ -3018,20 +3103,25 @@ class Viewport(QWidget):
     def _look_under_pointer(self) -> None:
         """Sucht nach der Ruhepause, ob unter dem Zeiger ein Merkmal liegt.
 
-        Über den Tiefenpuffer (:func:`_world_under`) und nicht über einen
-        Aktor-Pick: Der Tiefenwert steht ohnehin im Bild, ein Pick würde die
-        Szene erneut durchlaufen.
+        Gefragt wird :meth:`_aim_at` — dieselbe Rechnung wie beim Klick, samt
+        dem Blick durch eine Bohrung hindurch. Vorher stand hier der
+        Tiefenpuffer (:func:`_world_under`), weil er ohnehin im Bild steht und
+        ein Pick die Szene erneut durchläuft. Das kostet nun einen Zell-Pick,
+        aber **nur nach einer Ruhepause** und nicht bei jeder Mausbewegung —
+        und die Zusage darunter ist es wert: Ein Zeiger, der die Merkmalsform
+        über einer Bohrung zeigt, wo der Klick sie nicht wählt, verspricht
+        etwas, das nicht eintritt.
         """
         if self.plotter is None or self._hover_at is None or self._dragging_role:
             return
         x, y = self._hover_at
-        point = _world_under(self.plotter.renderer, x, y)
         if self._sculpting:
             # Beim Formen ist unter dem Zeiger nie ein Merkmal gemeint,
             # sondern immer eine Stelle. Der Ring zeigt sie; die Suche nach
             # Merkmalen bliebe hier nur teuer.
             self._draw_brush()
             return
+        point = self._aim_at(x, y)
         # Dieselbe Frage, die der Klick stellt, und mit derselben Rechnung: Ein
         # Zeiger, der die Merkmalsform über einer Bohrung zeigt, während der
         # Klick den Körper wählt, verspricht etwas, das nicht eintritt. So wird
@@ -3599,6 +3689,179 @@ class Viewport(QWidget):
         size = entry.mesh.bounds.size
         diagonal = math.sqrt(float(sum(value * value for value in size)))
         return max(FEATURE_REACH_MINIMUM, diagonal * FEATURE_REACH_SHARE)
+
+    def _bore_aim(self, origin: Vec3, direction: Vec3, until: float) -> Vec3 | None:
+        """Die Stelle in der Bohrung, auf die dieser Sichtstrahl zeigt.
+
+        **Der Klick ist eine Blickrichtung und nicht nur ein Punkt**, und das
+        ist der Unterschied zu allem, was hier vorher stand. Ein Punkt setzt
+        voraus, dass unter dem Zeiger ein Dreieck liegt — bei einer Bohrung tut
+        es das oft nicht:
+
+        * Gemessen am echten ``vtkCellPicker``, Platte aus dem Korpus in der
+          Draufsicht, Bohrung 32 Pixel breit: Klicks 0 bis 8 Pixel neben der
+          Bohrungsmitte gaben **keinen Treffer**. Die Zylinderwand liegt
+          parallel zum Strahl, und hinter der Durchgangsbohrung kommt nichts
+          mehr. Ein Klick mitten in die Bohrung hob damit die Auswahl auf.
+        * Landet der Strahl daneben auf der Deckfläche, gewinnt sie **immer**:
+          ihr Abstand ist null, der der Bohrung größer. Damit war
+          :data:`FEATURE_REACH_SHARE` für Bohrungen wirkungslos — gemessen gab
+          schon ein Punkt 0,4 mm neben dem Bohrungsrand ``face_2``, bei einer
+          Reichweite von 0,95 mm.
+
+        Zusammen war das „wir erwischen oft nur die Oberfläche und kommen nicht
+        zur Bohrung".
+
+        ``until`` ist der Strahlparameter des sichtbaren Auftreffpunkts und die
+        Grenze, ohne die das Ganze falsch wird: Was der Strahl erst **hinter**
+        dem Sichtbaren durchquert, hat niemand gemeint — in der Vorderansicht
+        liegt hinter der Stirnfläche jede Bohrung der Platte. Ohne Auftreffpunkt
+        (der Blick geht durch das Loch hindurch ins Leere) steht dort
+        ``inf``.
+
+        Zurück kommt ein Punkt **auf der Bohrungsachse**, nicht der
+        Auftreffpunkt: Von dort führt die schon vorhandene Rechnung
+        (:meth:`_feature_inside`, „mitten im Loch ist kein Dreieck") zur
+        Bohrung, und die Stufung, das Kontextmenü und der Zeiger bleiben
+        unverändert — sie bekommen einen Punkt wie immer.
+        """
+        import numpy as np
+
+        if self._result is None:
+            return None
+        forward = np.asarray(direction, dtype=float)
+        length = float(np.linalg.norm(forward))
+        if length <= EPS_GEOM:
+            return None
+        forward = forward / length
+        start = np.asarray(origin, dtype=float)
+
+        best_enter = math.inf
+        best_radius = math.inf
+        found: Vec3 | None = None
+        for object_id, entry in self._result.scene.objects.items():
+            # Die Reichweite ist die **Zielhilfe**: Gezielt wird in Pixeln, und
+            # der Rand einer M3-Bohrung ist an einem großen Teil wenige davon
+            # breit. Derselbe Wert wie beim Klick auf die Fläche eines Merkmals,
+            # denn es ist dieselbe Frage — wie weit daneben meint noch dies.
+            reach = self._feature_reach(object_id)
+            for feature_id, triangles, _low, _high in self._prepared_features(object_id):
+                feature = entry.features.get(feature_id)
+                if feature is None:
+                    continue
+                diameter = feature.params.get("diameter")
+                axis = feature.params.get("axis")
+                centre = feature.params.get("centre")
+                if not diameter or axis is None or centre is None:
+                    continue
+                line = np.asarray(axis, dtype=float)
+                extent = float(np.linalg.norm(line))
+                if extent <= EPS_GEOM:
+                    continue
+                line = line / extent
+                # Wie weit das Merkmal entlang seiner Achse reicht — aus seinen
+                # eigenen Dreiecken und nicht aus ``depth``: Der Hüllquader
+                # kennt die Achse nicht, und eine schräge Bohrung hat beides.
+                lengthwise = triangles.reshape(-1, 3) @ line
+                bounds = (float(lengthwise.min()), float(lengthwise.max()))
+                radius = float(diameter) / 2.0
+                span = bore_span(
+                    (float(start[0]), float(start[1]), float(start[2])),
+                    (float(forward[0]), float(forward[1]), float(forward[2])),
+                    centre,
+                    (float(line[0]), float(line[1]), float(line[2])),
+                    radius + reach,
+                    (bounds[0] - reach, bounds[1] + reach),
+                )
+                if span is None or span[1] <= 0.0 or span[0] >= until:
+                    continue
+                enter = max(span[0], 0.0)
+                leave = min(span[1], until)
+                if leave <= enter:
+                    continue
+                nearer = enter < best_enter - EPS_GEOM
+                tied = abs(enter - best_enter) <= EPS_GEOM and radius < best_radius
+                if not (nearer or tied):
+                    continue
+                # Der Punkt auf der Achse, auf der Höhe, in der der Strahl die
+                # Bohrung durchläuft — geklemmt auf ihre eigene Länge, damit er
+                # nicht über der Öffnung im Leeren steht, wo die Deckfläche
+                # wieder näher wäre als die Bohrungswand.
+                middle = float(
+                    np.clip(float(start @ line) + forward @ line * (enter + leave) / 2.0, *bounds)
+                )
+                point = np.asarray(centre, dtype=float)
+                point = point + line * (middle - float(point @ line))
+                best_enter = enter
+                best_radius = radius
+                found = (float(point[0]), float(point[1]), float(point[2]))
+        return found
+
+    def _pick_ray(self, x: int, y: int) -> tuple[Vec3, Vec3] | None:
+        """Der Sichtstrahl durch eine Bildschirmstelle, in Ansichtskoordinaten.
+
+        Über die nahe und die ferne Ebene und nicht über die Kamerastellung:
+        Bei einer Parallelprojektion — jeder Ansicht von vorn, von oben, von
+        der Seite — läuft der Strahl nicht durch das Kameraauge, und eine
+        Richtung aus ``GetPosition()`` wäre dort falsch.
+        """
+        if self.plotter is None:
+            return None
+        renderer = self.plotter.renderer
+        near = _world_at_depth(renderer, x, y, 0.0)
+        far = _world_at_depth(renderer, x, y, 1.0)
+        if near is None or far is None:
+            return None
+        step = (far[0] - near[0], far[1] - near[1], far[2] - near[2])
+        if math.sqrt(sum(value * value for value in step)) <= EPS_GEOM:
+            return None
+        return near, step
+
+    def _aim_at(self, x: int, y: int) -> Vec3 | None:
+        """Die Stelle, die ein Klick hier meint — durch eine Bohrung hindurch
+        gesehen, wenn dort eine liegt.
+
+        Der Ersatz für :meth:`_world_at` überall, wo es um **Auswahl** geht:
+        Klick, Kontextmenü und Zeiger. Nicht beim Messen, Bemalen und Ziehen —
+        dort ist eine Stelle auf der Oberfläche gemeint und keine Bohrung, und
+        ein Punkt in der Luft wäre dort falsch.
+        """
+        if self.plotter is None:
+            return None
+        point = self._world_at(x, y)
+        ray = self._pick_ray(x, y)
+        if ray is None:
+            return point
+        origin, direction = ray
+
+        import numpy as np
+
+        # Die Merkmale stehen in Szenenkoordinaten, der Strahl kommt aus der
+        # Ansicht (§25). Verschoben wird um dasselbe Stück wie ein Punkt —
+        # welches das ist, sagt die Stelle, auf die gezeigt wird. Ohne
+        # Auftreffpunkt sagt es die Fokusebene, wie beim Zeiger.
+        reference = point if point is not None else _world_under(self.plotter.renderer, x, y)
+        if reference is None:
+            return point
+        scene = self._from_view(reference)
+        shift = np.asarray(reference, dtype=float) - np.asarray(scene, dtype=float)
+        forward = np.asarray(direction, dtype=float)
+        forward = forward / float(np.linalg.norm(forward))
+        start = np.asarray(origin, dtype=float) - shift
+        until = (
+            float((np.asarray(point, dtype=float) - np.asarray(origin, dtype=float)) @ forward)
+            if point is not None
+            else math.inf
+        )
+        aimed = self._bore_aim(
+            (float(start[0]), float(start[1]), float(start[2])),
+            (float(forward[0]), float(forward[1]), float(forward[2])),
+            until,
+        )
+        if aimed is None:
+            return point
+        back = np.asarray(aimed, dtype=float) + shift
+        return (float(back[0]), float(back[1]), float(back[2]))
 
     def _prepared_features(
         self, object_id: ObjectId | None
@@ -4510,7 +4773,7 @@ class Viewport(QWidget):
         wählt, setzt die Auswahl auf sie — der nächste Linksklick daneben führt
         also von dort weiter und nicht von vorn.
         """
-        point = self._world_at(x, y)
+        point = self._aim_at(x, y)
         if point is None:
             self.objectPicked.emit("")
             return
@@ -4726,8 +4989,19 @@ class Viewport(QWidget):
         Der Weg ist derselbe wie beim Rechtsklick, nur ohne Menü danach: erst
         das Merkmal unter dem Zeiger, sonst der Körper, und ein Klick daneben
         hebt die Auswahl auf.
+
+        **Gefragt wird :meth:`_aim_at` und nicht :meth:`_world_at`**: Ein Klick
+        in eine Bohrung trifft dort oft kein Dreieck, und ohne diesen Umweg hob
+        er die Auswahl auf, statt die Bohrung zu wählen (:meth:`_bore_aim`).
+
+        **Aber nur, wenn der Klick auswählt.** Formen, Bemalen, Messen,
+        Trennen und Skelett setzen eine **Stelle**, und die liegt auf der
+        Oberfläche: Ein Punkt auf der Bohrungsachse wäre dort einer in der Luft
+        — bemalt würde nichts, und der Pinselring stünde im Leeren. Welche
+        Werkzeuge das sind, sagt :meth:`_resting_role` und nicht eine zweite
+        Aufzählung derselben Flaggen.
         """
-        point = self._world_at(x, y)
+        point = self._aim_at(x, y) if self._means_a_feature() else self._world_at(x, y)
         if point is None:
             self.objectPicked.emit("")
             return
@@ -4795,9 +5069,20 @@ def _world_under(renderer: Any, x: int, y: int) -> tuple[float, float, float] | 
     camera = renderer.GetActiveCamera()
     renderer.SetWorldPoint(*camera.GetFocalPoint(), 1.0)
     renderer.WorldToDisplay()
-    depth = renderer.GetDisplayPoint()[2]
+    return _world_at_depth(renderer, x, y, renderer.GetDisplayPoint()[2])
 
-    renderer.SetDisplayPoint(float(x), float(y), depth)
+
+def _world_at_depth(
+    renderer: Any, x: int, y: int, depth: float
+) -> tuple[float, float, float] | None:
+    """Der Weltpunkt hinter einer Bildschirmstelle in dieser Bildtiefe.
+
+    ``depth`` ist die Tiefe, in der VTK sein Bild aufspannt: 0 ist die nahe,
+    1 die ferne Ebene. Zwei Punkte daraus sind der Sichtstrahl
+    (:meth:`Viewport._pick_ray`), einer auf der Fokusebene ist der Ort unter
+    dem Zeiger (:func:`_world_under`).
+    """
+    renderer.SetDisplayPoint(float(x), float(y), float(depth))
     renderer.DisplayToWorld()
     point = renderer.GetWorldPoint()
     if abs(point[3]) < EPS_GEOM:

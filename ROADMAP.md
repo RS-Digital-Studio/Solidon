@@ -113,6 +113,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine Entscheidung, ob ein Prüfstand `report_error` abschalten darf. Ein Fehler öffnet dort einen modalen Dialog: Der Hauptthread stand, die Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu unterscheiden — der Traceback lag still unter `%LOCALAPPDATA%\RS Digital\Solidon3D\reports\bericht-<zeitstempel>\bericht.txt` |
 | Zwei Kernfunktionen sind in der Oberfläche nachgebaut | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | eine Sitzung, die `app/ui/sketch_editor.py` hält. `flat_offsets` (373) ist wortgleich `edit.offsets_of`, `_flat_points` (383) wortgleich `edit.flat_points`, und `from app.core.sketch import edit` steht in Zeile 48 schon da — elf Aufrufstellen, `Point2` ist `tuple[float, float]`. `formwerk-9e` nimmt es in ihr Canvas-Paket mit |
 | Gehört „positive“ in `_RANGE_CONSTRAINTS`? | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | eine **fachliche Entscheidung** über einen Oberflächentext, keine Aufräumarbeit. „Dieses Maß muss größer als null sein“ bekommt heute den Titel „Die Eingabe war so nicht verwendbar.“ statt „Ein Wert liegt außerhalb des zulässigen Bereichs.“ — und es *ist* eine Bereichsverletzung. Betrifft alle sechzehn Aufrufstellen von `require_positive` |
+| Ein nicht-zylindrischer Durchbruch bleibt in der Draufsicht unerreichbar | Ein Klick in eine Bohrung wählte die Fläche, oder nichts (24.08.2026) | eine Entscheidung über die Kosten: Der Strahl gegen die **Dreiecke** der Merkmale deckt auch rechteckige Ausschnitte, kostet aber bei jedem Klick ohne Zell-Treffer einen Durchlauf über alle Merkmalsdreiecke, wo der Zylinder sechs Vergleiche braucht. Gemessen an einer 60×40×8-Platte mit 12×8-Ausschnitt: senkrecht hinein vorher `None`, nachher `None` |
 | 85 weitere Texte stehen mehrfach wortgleich im Quelltext | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Vier Fälle in `app/ui/main_window.py` sind es wert, wenn dort ohnehin jemand arbeitet: „Bitte zuerst ein Objekt auswählen.“ (4×) und „Dafür braucht es einen Körper in der Szene.“ (4×) |
 
 ---
@@ -8646,3 +8647,83 @@ Eine Gegenprobe ist für jede andere Sitzung ein roter Test. Der Test hier war
 etwa eine Minute lang rot, weil der Fix für den Nachweis per `git stash`
 beiseite lag — genau in dieser Minute fuhr eine fremde Sitzung ihr Tor und
 meldete ihn. Wer stasht, sagt es vorher an oder tut es im eigenen Arbeitsbaum.
+
+---
+
+## Ein Klick in eine Bohrung wählte die Fläche, oder nichts (24.08.2026)
+
+Roberts Meldung: „wenn wir eine bohrung anklicken erwischen wir oft nur die
+oberfläche und kommen nicht zur Bohrung". Am 23.08. war an derselben Stelle
+schon einmal gearbeitet worden — die Reichweite eines Merkmals und „mitten im
+Loch ist kein Dreieck" stammen von dort. Beides war richtig und beides griff
+nicht, weil der Fehler **vor** dieser Rechnung lag.
+
+Gemessen am echten `vtkCellPicker` in einem **sichtbaren** Fenster (offscreen
+antwortet er nicht), Korpusplatte, Bohrung 32 Bildpunkte breit, Pixel neben der
+Bohrungsmitte:
+
+| | Draufsicht | Isometrisch | Vorderansicht |
+|---|---|---|---|
+| 0–8 px | **kein Treffer** → `hole_1` | `hole_1` → `hole_1` | `face_3` → `face_3` |
+| 12 px | `hole_1` → `hole_1` | **kein Treffer** → `hole_1` | `face_3` → `face_3` |
+| 16 px | **`face_2`** → `hole_1` | **`face_2`** → `hole_1` | `face_3` → `face_3` |
+| 24 px | `face_2` → `face_2` | `face_2` → `face_2` | `face_3` → `face_3` |
+
+- [x] **Senkrecht in eine Durchgangsbohrung traf der Strahl kein Dreieck.** Die
+      Zylinderwand liegt parallel zu ihm, dahinter kommt keine Fläche; der
+      Picker gab über der **ganzen** Bohrung nichts zurück.
+      `Viewport._on_left_click` machte daraus `objectPicked.emit("")` — ein
+      Klick mitten in die Bohrung **hob die Auswahl auf**, und zwar ausgerechnet
+      in der Ansicht, in der man ein Lochbild anklickt. `_feature_inside`
+      („mitten im Loch ist kein Dreieck", 23.08.) konnte das nicht fangen: Es
+      braucht einen Punkt, und es gab keinen.
+- [x] **Landete der Strahl daneben auf der Deckfläche, gewann sie immer.** Ihr
+      Abstand ist null, der der Bohrung größer als null — `FEATURE_REACH_SHARE`
+      ist eine Obergrenze und kein Vorrang, und damit war die Konstante für
+      Bohrungen wirkungslos. Gemessen gab ein Punkt 0,4 mm neben dem
+      Bohrungsrand `face_2`, bei einer Reichweite von 0,95 mm.
+- [x] **Gefragt wird jetzt der Sichtstrahl** (`_pick_ray` → `_bore_aim`,
+      gerechnet in der freien Funktion `bore_span`): Welche Bohrung durchquert
+      er, **bevor** er auf dem Sichtbaren landet? Die Grenze `until` ist das
+      Stück, ohne das es falsch wird — hinter der Stirnfläche liegt jede Bohrung
+      der Platte, und die dritte Spalte oben bleibt deshalb unverändert
+      `face_3`. Zurück kommt ein Punkt **auf der Bohrungsachse**, nicht der
+      Auftreffpunkt: Damit bleibt die Kette dahinter unberührt — Stufung,
+      Kontextmenü und Zeiger bekommen einen Punkt wie immer.
+- [x] **Auch die gesenkte Durchgangsbohrung, die häufigste eines Druckteils.**
+      Gemessen an `plate_countersunk.stl` durch den Einleseweg der Anwendung:
+      vorher `None`, jetzt `hole_1` — die Bohrung und nicht die Senkung
+      (`cone_1`), wie „die engste gewinnt" es in `_feature_inside` schon sagte.
+      Das gesenkte Sackloch war vorher schon erreichbar (der Boden liefert einen
+      Treffer) und bleibt es.
+- [x] **Der Vorrang gilt der Auswahl, nicht jedem Klick.** Formen, Bemalen,
+      Messen, Trennen und Skelett setzen eine **Stelle** auf der Oberfläche; ein
+      Punkt auf der Achse wäre dort einer in der Luft. Die Weiche liest die
+      Rangfolge aus `_resting_role` statt die fünf Flaggen ein zweites Mal
+      aufzuzählen — laufen die zwei Listen auseinander, setzt ein Pinselstrich
+      seine Farbe dort, wo der Zeiger eine Bohrung versprach.
+- [x] **Der Zeiger fragt dasselbe wie der Klick**, jetzt über einen Zell-Pick je
+      Ruhepause statt über den Tiefenpuffer. Gemessen 0,16 ms; die Zusage ist es
+      wert, denn eine Bohrungsform am Zeiger, die der Klick nicht einlöst,
+      verspricht etwas, das nicht eintritt.
+
+**Ein Messfehler auf dem Weg, und er gehört hierher, weil er zwei Minuten von
+einem Fehlalarm entfernt war:** Der erste Aufbau lud die Korpusdateien mit
+`trimesh.load` statt über `read_mesh` + `normalise`. In `plate_countersunk.stl`
+erkannte `detect` damit **keine** Bohrung, nur sechs Flächen — was wie ein
+schwerer Erkennungsfehler aussah und keiner war: Die Anwendung führt Vertices
+beim Einlesen zusammen, und die Zylindersuche hängt an dieser Nachbarschaft. Bei
+`plate_holes.stl` fiel es nicht auf, dort fand sie die vier Bohrungen auch ohne.
+Ein Prüfaufbau, der den Weg der Anwendung nachbaut, muss ihn **ganz** nachbauen.
+
+- [ ] **Ein nicht-zylindrischer Durchbruch bleibt in der Draufsicht
+      unerreichbar.** `_bore_aim` fragt Merkmale mit `diameter` und `axis`, also
+      `hole`, `cone` und `pin`. Ein rechteckiger Durchbruch besteht aus
+      `face`-Merkmalen: gemessen an einer 60×40×8-Platte mit 12×8-Ausschnitt,
+      senkrecht hinein, vorher `None` und nachher `None` — der Klick hebt dort
+      weiter die Auswahl auf. Die allgemeine Fassung wäre der Strahl gegen die
+      **Dreiecke** der Merkmale statt gegen einen Zylinder, und sie wartet auf
+      eine Entscheidung: Sie kostet bei jedem Klick ohne Zell-Treffer einen
+      Durchlauf über die Merkmalsdreiecke aller Körper, während der Zylinder
+      sechs Vergleiche braucht. Bohrungen sind der häufige Fall, Durchbrüche
+      der seltenere — deshalb steht hier ein Kästchen und keine Erweiterung.

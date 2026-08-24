@@ -199,6 +199,169 @@ def test_a_feature_without_triangles_stays_reachable(qt_app: QApplication) -> No
     assert viewport._feature_at(far) is None, "einen halben Meter daneben keines"
 
 
+# --- der Blick hinein: was ein Klick meint, wo kein Dreieck liegt --------------
+
+
+def looking_down(
+    x: float, y: float
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    """Ein Sichtstrahl senkrecht von oben, wie in der Draufsicht."""
+    return ((x, y, 100.0), (0.0, 0.0, -1.0))
+
+
+#: Wie weit der Strahl in der Draufsicht läuft, bis er die Deckfläche (z = +4)
+#: erreicht: von z = 100 aus sind das 96 mm. Der Wert steht für ``until`` —
+#: alles, was erst dahinter beginnt, hat der Klick nicht gemeint.
+UNTIL_THE_TOP_FACE = 96.0
+
+
+def test_looking_straight_into_a_through_hole_aims_at_it(window: MainWindow) -> None:
+    """Der gemeldete Fehler: in der Draufsicht war eine Bohrung nicht anklickbar.
+
+    **Gemessen am echten ``vtkCellPicker``** in einem sichtbaren Fenster, Platte
+    aus dem Korpus, Bohrung 32 Pixel breit: Ein Klick 0 bis 8 Pixel neben der
+    Bohrungsmitte gab ``kein Treffer`` — der Picker fand nichts, weil die
+    Zylinderwand parallel zum Strahl liegt und hinter der Durchgangsbohrung
+    keine Fläche mehr kommt. Erst 12 Pixel weiter, praktisch auf der Wand,
+    kam ``hole_1``.
+
+    Was der Nutzer davon sah: Ein Klick mitten in die Bohrung tat nichts oder
+    hob die Auswahl auf (``objectPicked.emit("")`` in :meth:`_on_left_click`),
+    ein Klick knapp daneben wählte die Deckfläche. „Wir erwischen oft nur die
+    Oberfläche und kommen nicht zur Bohrung."
+
+    Der Punkt aus :meth:`Viewport._bore_aim` liegt **im Loch**, und von dort
+    findet die schon vorhandene Rechnung (:meth:`_feature_inside`) die Bohrung.
+    """
+    viewport = window.viewport
+    centre = hole_centre(window)
+    origin, direction = looking_down(centre[0], centre[1])
+
+    aimed = viewport._bore_aim(origin, direction, float("inf"))
+    assert aimed is not None, "senkrecht in die Bohrung gesehen ist sie gemeint"
+    assert viewport._feature_at(aimed) == "hole_1", "und von dort führt der Weg zu ihr"
+
+
+def test_a_hole_wins_over_the_face_a_fraction_beside_it(window: MainWindow) -> None:
+    """Knapp neben dem Bohrungsrand meint der Klick die Bohrung, nicht die Fläche.
+
+    Der zweite Teil des gemeldeten Fehlers, und er hing nicht am Picker: Landet
+    der Strahl auf der Deckfläche, gewinnt sie **immer** — ihr Abstand ist
+    null, der der Bohrung größer als null. Damit war
+    :data:`FEATURE_REACH_SHARE` für Bohrungen wirkungslos; gemessen gab schon
+    ein Punkt 0,4 mm neben dem Bohrungsrand ``face_2``, bei einer Reichweite
+    von 0,95 mm.
+
+    Die erste Zusicherung hält den alten Weg fest, damit sichtbar bleibt, was
+    sich ändert: Über den Punkt allein ist es die Fläche.
+    """
+    viewport = window.viewport
+    centre = hole_centre(window)
+    radius = (
+        float(
+            window.session.last_result.scene.objects["obj_1"].features["hole_1"].params["diameter"]
+        )
+        * 0.5
+    )
+    beside = centre[0] + radius + 0.4
+
+    on_the_face = (beside, centre[1], 4.0)
+    assert viewport._feature_at(on_the_face) == "face_2", "über den Punkt allein die Fläche"
+
+    origin, direction = looking_down(beside, centre[1])
+    aimed = viewport._bore_aim(origin, direction, UNTIL_THE_TOP_FACE)
+    assert aimed is not None, "vier Zehntel neben dem Rand ist die Bohrung gemeint"
+    assert viewport._feature_at(aimed) == "hole_1"
+
+
+def test_a_ray_well_beside_the_hole_aims_at_nothing(window: MainWindow) -> None:
+    """Sieben Millimeter daneben bleibt die Fläche die Fläche.
+
+    Die Gegenprobe zu ``test_a_click_beside_a_hole_does_not_find_the_hole``: Der
+    Vorrang der Bohrung gilt nur, solange der Strahl sie überhaupt durchquert.
+    Ohne diese Grenze wäre die Reichweite wieder weg, und wir hätten den Fehler
+    von vorher — „die Auswahl nimmt immer die Bohrung statt des Modells".
+    """
+    viewport = window.viewport
+    origin, direction = looking_down(-30.0, -20.0)
+    assert viewport._bore_aim(origin, direction, UNTIL_THE_TOP_FACE) is None
+
+
+def test_a_hole_behind_the_surface_is_not_aimed_at(window: MainWindow) -> None:
+    """Von der Seite gesehen liegt die Bohrung hinter dem Material.
+
+    Gemessen in der Vorderansicht: Der Klick auf die Stelle, an der die Bohrung
+    *wäre*, gab ``face_3`` — die Stirnfläche, 7,5 mm vor der Bohrung. Das ist
+    richtig, denn dort ist keine Bohrung zu sehen, und es muss richtig bleiben:
+    Der Strahl durchquert den Bohrungszylinder erst **hinter** dem
+    Auftreffpunkt, und was hinter dem Sichtbaren liegt, hat niemand gemeint.
+    """
+    viewport = window.viewport
+    centre = hole_centre(window)
+    # Von vorn (-y) auf die Stirnfläche bei y = -25, die Bohrung liegt bei y = -15.
+    origin = (centre[0], -100.0, 2.0)
+    direction = (0.0, 1.0, 0.0)
+    until = 75.0
+
+    assert viewport._bore_aim(origin, direction, until) is None, "hinter der Fläche zählt nicht"
+    assert viewport._bore_aim(origin, direction, float("inf")) is not None, (
+        "ohne Grenze wäre sie es — genau deshalb braucht die Rechnung den Auftreffpunkt"
+    )
+
+
+def test_bore_span_along_the_axis(window: MainWindow) -> None:
+    """Die Rechnung selbst, im entarteten Fall: Strahl parallel zur Achse.
+
+    Dann gibt es keinen Ein- und Austritt durch den Mantel — der Strahl liegt
+    ganz innen oder ganz außen. Wer das übersieht, teilt durch null und verliert
+    genau den Fall, um den es hier geht: die Draufsicht.
+    """
+    from app.ui.viewport import bore_span
+
+    axis = (0.0, 0.0, 1.0)
+    centre = (0.0, 0.0, 0.0)
+    along = (-4.0, 4.0)
+
+    inside = bore_span((0.0, 0.0, 100.0), (0.0, 0.0, -1.0), centre, axis, 2.5, along)
+    assert inside is not None, "auf der Achse läuft der Strahl durch die ganze Bohrung"
+    assert inside[0] == pytest.approx(96.0), "Eintritt an der Oberkante"
+    assert inside[1] == pytest.approx(104.0), "Austritt an der Unterkante"
+
+    outside = bore_span((9.0, 0.0, 100.0), (0.0, 0.0, -1.0), centre, axis, 2.5, along)
+    assert outside is None, "neun Millimeter neben der Achse geht er vorbei"
+
+
+def test_a_tool_that_sets_a_place_does_not_look_for_a_bore(window: MainWindow) -> None:
+    """Der Bohrungsvorrang gilt der **Auswahl**, nicht jedem Klick.
+
+    Formen, Bemalen, Messen, Trennen und Skelett setzen eine Stelle, und die
+    liegt auf der Oberfläche. Ein Punkt auf der Bohrungsachse wäre dort einer in
+    der Luft: bemalt würde nichts, gemessen würde von einer Stelle, an der kein
+    Material ist, und der Pinselring stünde im Leeren.
+
+    Geprüft wird an :meth:`_means_a_feature`, weil offscreen kein Plotter
+    existiert und :meth:`_on_left_click` deshalb nichts täte — die Weiche ist
+    die Aussage, nicht der Klick.
+    """
+    viewport = window.viewport
+    assert viewport._means_a_feature(), "ohne Werkzeug meint ein Klick die Auswahl"
+
+    for turn_on, turn_off in (
+        (lambda: viewport.set_painting(True), lambda: viewport.set_painting(False)),
+        (lambda: viewport.set_sculpting(True, 5.0), lambda: viewport.set_sculpting(False)),
+        (lambda: viewport.set_boning(True), lambda: viewport.set_boning(False)),
+        (lambda: viewport.set_splitting(True), lambda: viewport.set_splitting(False)),
+        (
+            lambda: viewport.set_measure_mode("distance"),
+            lambda: viewport.set_measure_mode("off"),
+        ),
+    ):
+        turn_on()
+        assert not viewport._means_a_feature(), "mit Werkzeug meint er eine Stelle"
+        turn_off()
+        assert viewport._means_a_feature(), "und danach wieder die Auswahl"
+
+
 # --- die Stufe: wie tief ein Klick geht ----------------------------------------
 
 
@@ -394,9 +557,15 @@ def test_the_resting_pointer_reaches_the_decision(window: MainWindow) -> None:
     Der Grund für die Attrappe: ``_look_under_pointer`` und ``_update_cursor``
     steigen bei ``self.plotter is None`` beide aus, und offscreen gibt es
     keinen Plotter. Ein Test ohne sie prüfte, dass die Methode umkehrt.
-    """
-    from app.ui import viewport as module
 
+    **Gefälscht wird die Punktquelle, und die heißt jetzt ``_aim_at``** — vorher
+    stand hier ``module._world_under``. Der Zeiger fragt dasselbe wie der Klick,
+    und das schließt den Blick durch eine Bohrung hindurch ein; hinter
+    ``_aim_at`` liegt ein echter ``vtkCellPicker``, der eine Attrappe als
+    Renderer nicht annimmt. Was diese Kette **davor** tut, steht in den Tests
+    zu ``_bore_aim`` weiter oben; was sie **danach** tut, ist genau das, was
+    hier geprüft wird.
+    """
     viewport = window.viewport
     point = on_the_bore_wall(window)
     shown: list[Any] = []
@@ -413,9 +582,8 @@ def test_the_resting_pointer_reaches_the_decision(window: MainWindow) -> None:
         interactor = FakeInteractor()
 
     viewport.plotter = FakePlotter()
-    module_world_under = module._world_under
     try:
-        module._world_under = lambda *_args: point  # type: ignore[assignment]
+        viewport._aim_at = lambda *_args: point  # type: ignore[method-assign]
         viewport._hover_at = (10, 10)
 
         viewport._look_under_pointer()
@@ -425,7 +593,7 @@ def test_the_resting_pointer_reaches_the_decision(window: MainWindow) -> None:
         viewport._look_under_pointer()
         assert viewport._cursor_role == "feature", "Teil gewählt: jetzt die Bohrung"
     finally:
-        module._world_under = module_world_under  # type: ignore[assignment]
+        del viewport._aim_at
         viewport.plotter = None
 
     assert shown, "und gesetzt wurde er wirklich, nicht nur vermerkt"
