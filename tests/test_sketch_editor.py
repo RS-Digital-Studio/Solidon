@@ -2596,3 +2596,94 @@ def test_the_pointer_can_be_set_without_a_mouse(qt_app: QApplication) -> None:
     canvas.hover_on_plane((12.0, -8.0))
 
     assert canvas.pointer_target() == pytest.approx((12.0, -8.0))
+
+
+def test_the_sketch_view_is_orthographic_and_gives_the_projection_back(
+    qt_app: QApplication,
+) -> None:
+    """Perspektivisch ist eine Draufsicht keine.
+
+    Gesehen im gerenderten Fenster, nicht in einer Zahl: Die Korpusplatte stand
+    trapezförmig im Bild, mit sichtbaren Seitenwänden, während die Zeile
+    darunter „Draufsicht (XY)" meldete. Der Grund steht seit je am Umschalter
+    selbst (§18.1) — Parallelprojektion ist das, was gemessene Längen
+    vertrauenswürdig macht. Auf einer Zeichenebene wiegt das schwerer als sonst
+    irgendwo: Zwei gleich lange Strecken erscheinen perspektivisch verschieden
+    lang, je nachdem, wie weit sie von der Bildmitte weg liegen, und genau
+    darauf setzt man beim Zeichnen Punkte.
+
+    **Zurückgestellt wird auf den Wert davor, nicht auf „perspektivisch".** Die
+    Projektion ist eine Einstellung des Nutzers; wer orthografisch arbeitet,
+    hat sie gewählt und bekommt sie nach dem Zeichnen nicht weggenommen.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    for davor in ("perspective", "orthographic"):
+        window = MainWindow(Session(), UiSettings())
+        try:
+            window.viewport.set_projection(davor)  # type: ignore[arg-type]
+            assert window.viewport.projection == davor
+
+            window.start_sketch("sketch_extrude")
+            assert window.viewport.projection == "orthographic", (
+                f"aus {davor} heraus wird im Skizzenmodus orthografisch gesehen"
+            )
+
+            window.finish_sketch(keep=False)
+            assert window.viewport.projection == davor, (
+                f"nach dem Zeichnen steht wieder {davor} — die Wahl gehört dem Nutzer"
+            )
+        finally:
+            window.deleteLater()
+
+
+def test_switching_to_parallel_keeps_the_section_instead_of_jumping_to_two_millimetres(
+    qt_app: QApplication,
+) -> None:
+    """VTK führt für beide Projektionen getrennte Größen.
+
+    Die Zentralprojektion lebt vom Blickwinkel, die Parallelprojektion von
+    ``parallel_scale`` — der halben sichtbaren Höhe in Weltmaßen. Wer
+    umschaltet, ohne die eine aus der anderen zu rechnen, landet auf VTKs
+    Startwert von 1,0: ein sichtbarer Ausschnitt von zwei Millimetern, und die
+    Skizze wäre beim Betreten des Modus weg.
+
+    Gerechnet wird in der Fokusebene, denn dort liegt die Zeichnung — der eine
+    Ort, an dem beide Projektionen dasselbe zeigen sollen.
+    """
+    import math
+
+    from app.ui.viewport import Viewport
+
+    class _Camera:
+        parallel_projection = True
+        parallel_scale = 1.0
+        view_angle = 30.0
+
+    camera = _Camera()
+
+    class _Plotter:
+        pass
+
+    plotter = _Plotter()
+    plotter.camera = camera  # type: ignore[attr-defined]
+
+    viewport = Viewport()
+    viewport.plotter = plotter  # type: ignore[assignment]
+
+    viewport._fit_parallel_scale(200.0)
+    erwartet = 200.0 * math.tan(math.radians(30.0) / 2.0)
+    assert camera.parallel_scale == pytest.approx(erwartet)
+    assert camera.parallel_scale == pytest.approx(53.59, abs=0.01), (
+        "gut hundert Millimeter sichtbare Höhe und nicht zwei"
+    )
+
+    # Steht die Kamera perspektivisch, wird nichts angefasst: dort ist
+    # ``parallel_scale`` bedeutungslos, und ein Wert darin wäre eine Falle für
+    # den nächsten, der umschaltet.
+    camera.parallel_projection = False
+    camera.parallel_scale = 7.0
+    viewport._fit_parallel_scale(200.0)
+    assert camera.parallel_scale == pytest.approx(7.0)

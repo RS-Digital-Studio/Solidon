@@ -359,6 +359,27 @@ def _on_multiple(value: float, spacing: float, tolerance: float) -> bool:
     return min(rest, spacing - rest) < tolerance / 2.0
 
 
+def grid_step_for(scale: float) -> float:
+    """Die Rasterweite zu einem Maßstab, in Millimetern.
+
+    ``scale`` sind Bildpunkte je Millimeter. Genommen wird die feinste Stufe
+    der 1-2-5-Folge, deren Linien noch :data:`MIN_GRID_PX` auseinanderliegen:
+    Eine feste Weite ist herausgezoomt eine Fläche aus Linien und
+    hineingezoomt ein Blatt mit vier Linien darauf.
+
+    **Eine freie Funktion, seit es zwei Maßstäbe gibt.** Als Methode las sie
+    ``self._scale`` — den Maßstab der Zeichenfläche. Im Skizzenmodus im
+    Viewport ist das der falsche: Die Fläche ist dort unsichtbar und ihr
+    Maßstab steht auf dem Startwert, während gezoomt wird an der Kamera.
+    Gemessen kam dabei ein Raster von 20 mm heraus, gefangen wurde auf 1 mm —
+    zwei Zahlen für dieselbe Sache, und die sichtbare war die falsche.
+    """
+    for step in GRID_STEPS:
+        if step * scale >= MIN_GRID_PX:
+            return step
+    return GRID_STEPS[-1]
+
+
 def sheet_point(
     drawing: tuple[float, float],
     centre: tuple[float, float],
@@ -1934,18 +1955,8 @@ class SketchCanvas(QWidget):
         painter.drawText(top_left + QPointF(4.0, -4.0), label)
 
     def grid_step(self) -> float:
-        """Wie weit die Rasterlinien auseinanderstehen, in Millimetern.
-
-        Sie standen fest auf zehn. Beim Herauszoomen wurde daraus eine Fläche
-        aus Linien, beim Heranzoomen ein Blatt mit vier Linien darauf — und
-        die beschrifteten Fünfziger blieben in beiden Fällen dieselben. Die
-        Weite folgt jetzt dem Maßstab: genommen wird die feinste Stufe, deren
-        Linien noch :data:`MIN_GRID_PX` auseinanderliegen.
-        """
-        for step in GRID_STEPS:
-            if step * self._scale >= MIN_GRID_PX:
-                return step
-        return GRID_STEPS[-1]
+        """Wie weit die Rasterlinien auseinanderstehen, in Millimetern."""
+        return grid_step_for(self._scale)
 
     def _paint_grid(self, painter: QPainter) -> None:
         palette = self.palette()
@@ -2541,12 +2552,6 @@ class SketchPanel(QWidget):
     ) -> None:
         super().__init__(parent)
         self._params = dict(parameter_values or {})
-        self._in_viewport = False
-        """Ob die Ansicht das Bild trägt und dieses Panel nur noch die Leiste.
-
-        Vorgabe ist der eigene Zeichenbereich: Das Skizzenfeld im
-        Operationsdialog hat keinen Viewport neben sich, und dort bleibt es
-        beim Blatt."""
 
         self.canvas = SketchCanvas(self, parameter_values=self._params)
         opening = ""
@@ -2968,7 +2973,6 @@ class SketchPanel(QWidget):
         """
         self.canvas.setVisible(False)
         self.canvas.resize(VIEWPORT_CANVAS, VIEWPORT_CANVAS)
-        self._in_viewport = True
         # **Die Ziffern müssen im ganzen Fenster gelten, nicht nur hier
         # drinnen.** Sie lagen an ``WidgetWithChildrenShortcut``, und das war
         # richtig, solange dieses Panel die Ansicht *war*: Der Fokus lag dann
@@ -2981,10 +2985,6 @@ class SketchPanel(QWidget):
         # Kürzel nimmt keiner Taste den Weg.
         for shortcut in self._plane_shortcuts:
             shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
-
-    def in_viewport(self) -> bool:
-        """Ob gezeichnet wird, ohne dass dieses Panel das Bild trägt."""
-        return self._in_viewport
 
     def take_constraint_list(self) -> QWidget:
         """Gibt die Bedingungsliste ab — samt ihrer Überschrift.
@@ -3015,25 +3015,6 @@ class SketchPanel(QWidget):
             layout.removeWidget(self._side_box)
         self._side_title.hide()
         return self._side_box
-
-    def set_zone_margins(self, left: int, right: int) -> None:
-        """Weicht den Karten des Fensters aus (§2.5).
-
-        Im Skizzenmodus füllt dieses Panel die Fläche, und Objektbaum und
-        Prüfbericht liegen darüber — die ersten Werkzeuge lagen damit unter der
-        linken Karte, also Linie und Rechteck. Im Dialog gibt es keine Karten,
-        dort bleibt der Rand null; gesetzt wird er von dem, der die Karten
-        platziert.
-        """
-        layout = self.layout()
-        if layout is None:
-            return
-        margins = layout.contentsMargins()
-        if margins.left() == left and margins.right() == right:
-            return
-        layout.setContentsMargins(left, margins.top(), right, margins.bottom())
-        self._refresh_constraints()
-        self._refresh_buttons()
 
     def _install_shortcuts(self) -> None:
         """Die Zeichenkürzel, solange dieses Panel den Fokus hat (E16).

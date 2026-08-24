@@ -853,7 +853,7 @@ def test_sketching_on_xy_gives_the_same_camera_as_the_top_view() -> None:
     assert up == pytest.approx(up_top), "und sie hält den Kopf genauso"
 
 
-def test_a_sketch_plane_without_a_plotter_changes_nothing() -> None:
+def test_a_sketch_plane_without_a_plotter_changes_nothing(qt_app: QApplication) -> None:
     """Offscreen gibt es keine Kamera, und das darf nicht wehtun.
 
     Die halbe Suite läuft ohne Plotter (``_available`` steigt bei
@@ -868,20 +868,25 @@ def test_a_sketch_plane_without_a_plotter_changes_nothing() -> None:
     viewport.view_on_plane(frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0)))
 
 
-def test_the_distance_falls_back_when_the_camera_has_no_span() -> None:
+def test_the_distance_falls_back_when_the_camera_has_no_span(qt_app: QApplication) -> None:
     """Eine Entfernung von null nähme der Kamerastellung ihre Richtung.
 
     ``_plane_distance`` nimmt den bisherigen Abstand zum Blickpunkt, damit der
     Ausschnitt beim Schwenken erhalten bleibt. Steht die Kamera auf ihrem
     eigenen Blickpunkt — vor dem ersten Bild —, wäre die Position gleich dem
     Ursprung und die Blickrichtung unbestimmt.
+
+    Zurück kommt seit dem 24.08.2026 die **Untergrenze** und nicht mehr 1,0:
+    Ein Millimeter ist zwar von null verschieden und rettet die Richtung, aber
+    aus einem Millimeter Abstand sieht man die Zeichenebene nicht. Der Test
+    daneben misst, woran das aufgefallen ist.
     """
-    from app.ui.viewport import Viewport
+    from app.ui.viewport import LEAST_PLANE_DISTANCE, Viewport
 
     viewport = Viewport()
     viewport.plotter = _StillCamera()  # type: ignore[assignment]
 
-    assert viewport._plane_distance() == pytest.approx(1.0)
+    assert viewport._plane_distance() == pytest.approx(LEAST_PLANE_DISTANCE)
 
 
 class _StillCamera:
@@ -1006,7 +1011,7 @@ def test_a_curve_with_one_point_is_skipped_but_still_counted() -> None:
     assert polyline_spans([]) == []
 
 
-def test_showing_a_sketch_without_a_plotter_changes_nothing() -> None:
+def test_showing_a_sketch_without_a_plotter_changes_nothing(qt_app: QApplication) -> None:
     """Offscreen gibt es keine Szene, und das darf nicht wehtun.
 
     ``show_sketch`` und ``clear_sketch`` laufen in jedem Fenstertest mit,
@@ -1081,3 +1086,72 @@ def test_the_three_base_planes_all_show_their_first_axis_to_the_right() -> None:
             forward[0] * up[1] - forward[1] * up[0],
         )
         assert right == pytest.approx(frame.x_axis), f"{plane} kommt gespiegelt an"
+
+
+def test_the_grid_follows_the_camera_and_not_the_hidden_drawing_area() -> None:
+    """Zwei Maßstäbe, und nur einer stimmt im Viewport.
+
+    Die Zeichenfläche ist im Skizzenmodus unsichtbar; ihr Maßstab steht auf
+    dem Startwert, weil dort niemand mehr zoomt. Gemessen kam damit ein
+    Raster von 20 mm heraus, während auf 1 mm gefangen wurde — zwei Zahlen
+    für dieselbe Sache, und die sichtbare war die falsche.
+    """
+    from app.ui.sketch_editor import GRID_STEPS, MIN_GRID_PX, grid_step_for
+
+    for scale in (0.5, 1.2, 7.5, 23.0, 100.0):
+        step = grid_step_for(scale)
+        assert step in GRID_STEPS, f"{scale}: {step} ist keine Stufe der Folge"
+        feiner = [one for one in GRID_STEPS if one < step]
+        if feiner:
+            assert feiner[-1] * scale < MIN_GRID_PX, (
+                f"{scale}: eine feinere Stufe hätte auch noch gepasst"
+            )
+
+    # Und die Richtung: näher heran heißt feiner, nicht gröber.
+    assert grid_step_for(23.0) < grid_step_for(1.2)
+
+
+def test_the_camera_keeps_its_distance_from_an_empty_scene(qt_app: QApplication) -> None:
+    """Ohne Modell hat ``reset_camera`` nie stattgefunden.
+
+    pyvista startet dann mit einer Kamera 1,62 Einheiten vor dem Ursprung.
+    Diesen Abstand treu zu übernehmen hieße, aus 1,6 Millimetern auf die
+    Zeichenebene zu sehen — gemessen 918 Bildpunkte je Millimeter und ein
+    Raster von 0,1 mm.
+
+    Getroffen hätte es ausgerechnet **Weg 2**, neu konstruieren: Nur dort ist
+    die Szene leer, wenn der Skizzenmodus beginnt.
+    """
+    from app.core.units import EPS_GEOM
+    from app.ui.viewport import LEAST_PLANE_DISTANCE, Viewport
+
+    # Genau die Stellung, mit der pyvista einen leeren Plotter aufmacht.
+    class _FreshPlotter:
+        class _Camera:
+            position = (1.0, -1.0, 0.8)
+            focal_point = (0.0, 0.0, 0.0)
+
+        camera = _Camera()
+
+    viewport = Viewport()
+    viewport.plotter = _FreshPlotter()  # type: ignore[assignment]
+
+    span = math.dist(_FreshPlotter._Camera.position, _FreshPlotter._Camera.focal_point)
+    assert span == pytest.approx(1.6248, abs=1e-3), "die gemessene Startstellung"
+    assert span > EPS_GEOM, "sie ist nicht null — die alte Untergrenze hätte sie durchgelassen"
+
+    assert viewport._plane_distance() == pytest.approx(LEAST_PLANE_DISTANCE)
+    assert LEAST_PLANE_DISTANCE > 100.0, "unter hundert Millimetern sieht man kein Druckteil"
+
+
+def test_without_a_plotter_the_scale_falls_back_instead_of_dividing_by_zero(
+    qt_app: QApplication,
+) -> None:
+    """Ohne Bild gibt es nichts zu messen, und null wäre die falsche Antwort."""
+    from app.core.sketch.planes import frame_for_plane
+    from app.ui.viewport import FALLBACK_SCALE, Viewport
+
+    frame = frame_for_plane("plane:xy")
+    assert frame is not None
+    viewport = Viewport()
+    assert viewport.pixels_per_mm(frame) == pytest.approx(FALLBACK_SCALE)

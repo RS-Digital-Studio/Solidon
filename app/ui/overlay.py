@@ -655,6 +655,19 @@ class OverlayHost(QWidget):
         Wer ausweichen will, bringt ``set_zone_margins`` mit; wer nichts
         mitbringt, bekommt weiterhin die ganze Fläche.
 
+        **Derzeit bringt es niemand mit, und der Absatz darüber ist
+        Vergangenheit.** Seit dem Schnitt in §30.1 (P4) ersetzt der
+        Skizzenmodus die Ansicht nicht mehr — er sitzt als Leiste unter ihr,
+        und die Karten weichen *ihr* aus (``_bottom_room``) statt umgekehrt.
+        Im Stapel liegt seither nur noch der Viewport, und für den ist das
+        Übereinanderliegen richtig.
+
+        Die Stelle bleibt, weil sie eine Frage beantwortet, die wieder
+        auftreten kann: Eine Ansicht mit eigener Werkzeugleiste gehört nicht
+        unter die Karten. ``tests/test_overlay.py`` hält sie mit einer eigenen
+        Attrappe fest — ohne die wäre sie eine Zusage, die niemand mehr
+        prüft.
+
         **Gemeldet wird die Breite, die die Karte wirklich bekommt**, also
         dieselbe Rechnung wie in ``_lay_out``. Vorher standen hier die
         Grundwerte, und die gelten nur bis etwa 2000 Pixel Fensterbreite:

@@ -220,7 +220,7 @@ from app.ui.session import AskRequest, Session
 from app.ui.settings import UiSettings, save_settings
 from app.ui.settings_dialog import SettingsDialog
 from app.ui.shortcut_schemes import install_navigation_keys, shortcut_for
-from app.ui.sketch_editor import SketchPanel, Surroundings
+from app.ui.sketch_editor import SketchPanel, Surroundings, grid_step_for
 from app.ui.split_bar import POINTS_NEEDED, SplitBar
 from app.ui.start_screen import StartScreen, accepted_path, accepted_url
 from app.ui.style import NORMAL, TIGHT, make_primary
@@ -232,7 +232,7 @@ from app.ui.tour import TourPanel
 from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
-from app.ui.viewport import DisplayMode, Viewport
+from app.ui.viewport import DisplayMode, Projection, Viewport
 
 _log = get_logger(__name__)
 
@@ -1156,6 +1156,7 @@ class MainWindow(QMainWindow):
         self._sketch_panel: SketchPanel | None = None
         self._sketch_target: str | None = None
         self._mode_before_sketch: DisplayMode = "solid"
+        self._projection_before_sketch: Projection = "perspective"
         """Die Darstellung vor dem Skizzenmodus (§30.1, P4).
 
         Er blendet das Modell durchscheinend, damit die Zeichnung darauf
@@ -4115,6 +4116,21 @@ class MainWindow(QMainWindow):
         # Zeichnung darauf und nicht dahinter liegt.
         self._mode_before_sketch = self.viewport.display_mode
         self.viewport.set_display_mode("transparent")
+        # **Und die Ansicht wird orthografisch.** Der Grund steht schon am
+        # Umschalter (§18.1): Parallelprojektion ist das, was gemessene Längen
+        # vertrauenswürdig macht. Auf einer Zeichenebene wiegt das schwerer als
+        # sonst irgendwo — perspektivisch ist eine Draufsicht keine. Gesehen an
+        # der Korpusplatte: Sie stand trapezförmig im Bild, mit sichtbaren
+        # Seitenwänden, während die Zeile darunter „Draufsicht (XY)" meldete.
+        # Zwei gleich lange Strecken auf derselben Ebene erscheinen dabei
+        # verschieden lang, je nachdem, wie weit sie von der Bildmitte weg
+        # liegen — und genau darauf setzt man beim Zeichnen Punkte.
+        #
+        # Vor dem Schwenk, nicht danach: ``view_on_plane`` rechnet den
+        # Ausschnitt der Parallelprojektion aus der Kameradistanz, und dafür
+        # muss sie schon gelten.
+        self._projection_before_sketch = self.viewport.projection
+        self.viewport.set_projection("orthographic")
         frame = self._sketch_frame()
         if frame is not None:
             # Einmal schwenken, beim Betreten. Danach nie wieder von selbst:
@@ -4230,7 +4246,12 @@ class MainWindow(QMainWindow):
         # Bild nicht von „das Raster ist zu blass" zu unterscheiden.
         solved = panel.canvas.solved
         kurven = curves_of(solved, frame) if solved is not None else ()
-        step = panel.canvas.grid_step()
+        # **Die Rasterweite folgt der Kamera, nicht der Zeichenfläche.**
+        # Deren Maßstab steht im Viewport-Modus auf dem Startwert — dort
+        # zoomt niemand mehr. Gemessen kam damit ein Raster von 20 mm
+        # heraus, während auf 1 mm gefangen wurde: zwei Zahlen für
+        # dieselbe Sache, und die sichtbare war die falsche.
+        step = grid_step_for(self.viewport.pixels_per_mm(frame))
         self.viewport.show_sketch(kurven, frame, step, SKETCH_GRID_REACH)
 
     def finish_sketch(self, keep: bool = True) -> None:
@@ -4273,6 +4294,7 @@ class MainWindow(QMainWindow):
         panel.deleteLater()
         self.viewport.clear_sketch()
         self.viewport.set_display_mode(self._mode_before_sketch)
+        self.viewport.set_projection(self._projection_before_sketch)
         self.tools.setVisible(True)
         self.sketch_bar.setVisible(False)
         self.statusBar().clearMessage()

@@ -202,6 +202,24 @@ def camera_for_plane(frame: PlaneFrame, distance: float = 1.0) -> tuple[Vec3, Ve
     return position, frame.origin, frame.y_axis
 
 
+#: Wie weit die Kamera im Skizzenmodus mindestens von der Ebene wegsteht, in mm.
+#:
+#: Zweihundert: So viel Zeichenfläche sieht man dann etwa, und das ist die
+#: Größenordnung eines Druckbetts — wer ohne Modell zu zeichnen beginnt (Weg 2),
+#: fängt in diesem Rahmen an. Die Zahl greift **nur**, wenn die Kamera noch nie
+#: eingepasst wurde; sobald ein Teil in der Szene liegt, gilt der Abstand, den
+#: der Nutzer eingestellt hat.
+LEAST_PLANE_DISTANCE = 200.0
+
+#: Der Maßstab, der gilt, wenn keiner zu messen ist — Bildpunkte je Millimeter.
+#:
+#: Dieselbe Zahl, die die Zeichenfläche als Startwert führt
+#: (``sketch_editor.START_SCALE``). Sie steht hier noch einmal und wird nicht
+#: importiert: Der Viewport kennt den Skizzeneditor nicht, und eine
+#: Abhängigkeit in diese Richtung wäre teuer erkauft für einen Rückfallwert,
+#: der nur greift, wenn es gar kein Bild gibt.
+FALLBACK_SCALE = 4.0
+
 #: Wie viele Rasterlinien einer Zeichenebene je Richtung höchstens entstehen.
 #:
 #: Zweihundert nach jeder Seite sind vierhundertein Linien je Achse und über
@@ -5031,9 +5049,30 @@ class Viewport(QWidget):
         """
         if self.plotter is None:
             return
-        position, focus, up = camera_for_plane(frame, self._plane_distance())
+        distance = self._plane_distance()
+        position, focus, up = camera_for_plane(frame, distance)
         self.plotter.camera_position = [position, focus, up]
+        self._fit_parallel_scale(distance)
         self._redraw_shadows()
+
+    def _fit_parallel_scale(self, distance: float) -> None:
+        """Den Ausschnitt der Parallelprojektion an den perspektivischen angleichen.
+
+        VTK führt für beide Projektionen **getrennte** Größen: die
+        Zentralprojektion lebt vom Blickwinkel, die Parallelprojektion von
+        ``parallel_scale`` — der halben sichtbaren Höhe in Weltmaßen. Wer
+        umschaltet, ohne die eine aus der anderen zu rechnen, springt auf
+        VTKs Startwert von 1,0: ein sichtbarer Ausschnitt von zwei
+        Millimetern.
+
+        Die Umrechnung gilt in der Fokusebene, und dort liegt die Zeichnung —
+        genau der Ort, an dem beide Projektionen dasselbe zeigen sollen.
+        """
+        camera = getattr(self.plotter, "camera", None) if self.plotter else None
+        if camera is None or not getattr(camera, "parallel_projection", False):
+            return
+        angle = float(getattr(camera, "view_angle", 30.0))
+        camera.parallel_scale = distance * math.tan(math.radians(angle) / 2.0)
 
     def show_sketch(
         self,
@@ -5143,21 +5182,64 @@ class Viewport(QWidget):
                 self.plotter.remove_actor(actor, render=False)
         self._sketch_actors.clear()
 
+    def pixels_per_mm(self, frame: PlaneFrame) -> float:
+        """Wie viele Bildpunkte ein Millimeter auf dieser Ebene gerade misst.
+
+        Der Maßstab, den die Zeichenfläche im Viewport-Modus braucht — für die
+        Rasterweite und für alles, was in Bildpunkten gedacht ist. Sie kann ihn
+        nicht selbst kennen: Ihr eigener steht auf dem Startwert, weil dort
+        niemand mehr zoomt.
+
+        **Gemessen und nicht aus der Kamera abgeleitet.** Zwei Punkte auf der
+        Ebene, einen Millimeter auseinander, durch dieselbe Projektion
+        geschickt, die auch das Bild macht — damit stimmt die Zahl bei
+        Parallel- wie bei Zentralprojektion, ohne dass hier stünde, welche
+        gerade gilt. Ein Kehrwert aus ``parallel_scale`` wäre die halbe
+        Antwort und bei perspektivischer Ansicht die falsche.
+
+        Null kommt nie zurück: Ohne Plotter oder bei entarteter Projektion
+        steht der Startwert der Zeichenfläche, und der ist eine brauchbare
+        Vorgabe statt einer Division durch null.
+        """
+        if self.plotter is None:
+            return FALLBACK_SCALE
+        renderer = self.plotter.renderer
+        here = to_world(frame, (0.0, 0.0))
+        there = to_world(frame, (1.0, 0.0))
+        seen = []
+        for point in (here, there):
+            renderer.SetWorldPoint(point[0], point[1], point[2], 1.0)
+            renderer.WorldToDisplay()
+            spot = renderer.GetDisplayPoint()
+            seen.append((float(spot[0]), float(spot[1])))
+        span = math.dist(seen[0], seen[1])
+        return span if span > EPS_GEOM else FALLBACK_SCALE
+
     def _plane_distance(self) -> float:
         """Wie weit die Kamera von der Zeichenebene wegrückt.
 
         Der bisherige Abstand zum Blickpunkt, damit der Ausschnitt beim
-        Schwenken erhalten bleibt. Ohne Plotter und vor dem ersten Bild gibt
-        es keinen — dann tut es jede Zahl außer null, weil die Richtung zählt
-        und nicht die Länge.
+        Schwenken erhalten bleibt.
+
+        **Mit einer Untergrenze, und die ist kein Zierat.** In einem leeren
+        Fenster hat ``reset_camera`` nie stattgefunden, und pyvista startet mit
+        einer Kamera 1,62 Einheiten vor dem Ursprung. Diesen Abstand treu zu
+        übernehmen hieße, aus 1,6 Millimetern auf die Zeichenebene zu sehen:
+        gemessen 918 Bildpunkte je Millimeter, ein Raster von 0,1 mm und ein
+        Bild, in dem nichts von dem steht, was man zeichnet.
+
+        Getroffen hätte es ausgerechnet **Weg 2** — neu konstruieren, ohne
+        Modell —, denn nur dort ist die Szene leer, wenn der Skizzenmodus
+        beginnt. Mit geladenem Teil ist die Kamera längst eingepasst und die
+        Grenze wirkungslos.
         """
         camera = getattr(self.plotter, "camera", None) if self.plotter else None
         position = getattr(camera, "position", None)
         focus = getattr(camera, "focal_point", None)
         if position is None or focus is None:
-            return 1.0
+            return LEAST_PLANE_DISTANCE
         span = math.dist(tuple(position), tuple(focus))
-        return span if span > EPS_GEOM else 1.0
+        return max(span, LEAST_PLANE_DISTANCE)
 
     # --- navigation (§2.9) ------------------------------------------------------
 
