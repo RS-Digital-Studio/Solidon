@@ -9,8 +9,11 @@ Modellierprogramm. Das hier ist der kurze Weg.
 Löcher kommen als Löcher heraus. Das klingt selbstverständlich und ist der
 Teil, der in naiven Umsetzungen schiefgeht — eine Kontur in einer anderen
 Kontur ist ein Loch, und das entscheidet die Verschachtelung, nicht die
-Reihenfolge, in der die Datei sie aufzählt. Diese Arbeit gehört hier trimesh,
-und es macht sie richtig.
+Reihenfolge, in der die Datei sie aufzählt. Gelesen wird die Zeichnung von
+trimesh; verschachtelt wird seit dem 24.08.2026 hier, über shapely — trimeshs
+eigener Weg (``polygons_full``) läuft durch ``rtree``, und warum das Paket den
+Prozess nicht mehr betreten darf, steht an
+:func:`app.core.geom.mesh.on_surface`.
 
 **Einheiten.** SVG hat keine verlässliche: eine Datei sagt 100 und meint
 Pixel, Millimeter oder Punkt, je nachdem wer sie geschrieben hat. Also werden
@@ -23,7 +26,9 @@ from __future__ import annotations
 
 import io
 from dataclasses import dataclass
+from typing import Any
 
+import numpy as np
 import trimesh
 
 from app.core.errors import PROGRAMMING_ERRORS, ValidationError
@@ -50,6 +55,62 @@ class OutlineResult:
 
 def is_outline(suffix: str) -> bool:
     return suffix.lower() in OUTLINE_SUFFIXES
+
+
+def nested_polygons(rings: list[np.ndarray]) -> list[Any]:
+    """Geschlossene Ringe nach ihrer Verschachtelung zu Flächen mit Löchern.
+
+    **Trimeshs eigener Algorithmus, Zeile für Zeile — nur der Index ist
+    ausgetauscht.** ``polygons_full`` täte dasselbe, holt seine
+    Überlappungskandidaten aber aus einem ``rtree``, und warum das Paket den
+    Prozess nicht mehr betreten darf, steht an
+    :func:`app.core.geom.mesh.on_surface`. Hier liefert sie ein ``STRtree``
+    aus shapely (GEOS, längst Abhängigkeit); die Entscheidung selbst bleibt
+    dieselbe: Polygon-in-Polygon, nicht Punkt-in-Polygon — zwei sich
+    schneidende Konturen enthalten einander nicht, ein innerer Punkt läge
+    trotzdem drin.
+
+    Die Ringreparatur ist ebenfalls die von trimesh
+    (``paths_to_polygons``, ``repair_invalid``): Wer nur die Verschachtelung
+    tauscht, aber anders repariert, bekommt andere Flächen — gemessen am
+    23-Konturen-Unterschied eines ersten Versuchs mit ``buffer(0)``.
+
+    Ein Ring mit gerader Zahl von Umschließern ist ein Rand, seine
+    unmittelbaren Kinder (genau ein Umschließer mehr) sind seine Löcher, und
+    ein Ring im Loch ist wieder ein Rand — die Insel im „O" eines „Ö".
+    Unrettbare Ringe fallen stumm heraus, wie bei trimesh auch.
+    """
+    from shapely.geometry import Polygon
+    from shapely.strtree import STRtree
+    from trimesh.path.polygons import paths_to_polygons, repair_invalid
+
+    closed = [entry for entry in paths_to_polygons(rings) if entry is not None]
+    if not closed:
+        return []
+    if len(closed) == 1:
+        return list(closed)
+
+    tree = STRtree(closed)
+    containers: list[list[int]] = [[] for _ in closed]
+    for outer in range(len(closed)):
+        for inner in (int(found) for found in tree.query(closed[outer])):
+            if outer != inner and closed[outer].contains(closed[inner]):
+                containers[inner].append(outer)
+
+    depth = [len(entry) for entry in containers]
+    result = []
+    for root in range(len(closed)):
+        if depth[root] % 2 != 0:
+            continue
+        holes = [
+            np.array(closed[child].exterior.coords)[::-1]
+            for child in range(len(closed))
+            if root in containers[child] and depth[child] == depth[root] + 1
+        ]
+        repaired = repair_invalid(Polygon(shell=closed[root].exterior, holes=holes))
+        if repaired is not None:
+            result.append(repaired)
+    return result
 
 
 def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> OutlineResult:
@@ -80,7 +141,8 @@ def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> O
             values={"suffix": suffix},
         ) from problem
 
-    polygons = list(getattr(path, "polygons_full", ()) or ())
+    rings = [np.asarray(entry, dtype=float) for entry in getattr(path, "discrete", ())]
+    polygons = nested_polygons(rings)
     if not polygons:
         raise ValidationError(
             field="file",
