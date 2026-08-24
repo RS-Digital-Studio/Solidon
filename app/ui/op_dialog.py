@@ -634,6 +634,7 @@ class OperationDialog(QDialog):
         parameter_values: Mapping[str, float] | None = None,
         features: Mapping[str, str] | None = None,
         extra: QWidget | None = None,
+        extra_label: str = "",
         surroundings: Any = None,
         images: Mapping[str, str] | None = None,
         pick_image: Callable[[], tuple[str, str] | None] | None = None,
@@ -643,6 +644,14 @@ class OperationDialog(QDialog):
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
         ihren „Exakt"-Umschalter, ohne dass der Dialog seine Generik aus
         dem Schema verliert.
+
+        ``extra_label`` beschriftet es. Leer für einen Haken: Der trägt
+        seinen Text selbst, und eine Beschriftung daneben stünde zweimal
+        dasselbe. Eine **Auswahlliste** braucht sie dagegen — sie zeigt nur
+        ihren aktuellen Wert, und „Extrudieren" allein in einer Zeile sagt
+        nicht, dass man dort die Art wählt. So tragen es die
+        Variantengruppen (``VARIANT_GROUPS``), deren ``choice`` genau dieser
+        Text ist.
 
         ``surroundings`` reicht die Szene an ein Skizzenfeld weiter
         (:class:`app.ui.sketch_editor.Surroundings`) — Bauraum, Zeichenebenen
@@ -810,7 +819,7 @@ class OperationDialog(QDialog):
             # Auflösungen, Rückfallverhalten". Eine Entscheidung darüber, was
             # man mit dem Ergebnis noch tun kann, ist keins von beidem — sie
             # gehört dorthin, wo sie getroffen wird.
-            front.addRow("", extra)
+            front.addRow(extra_label, extra)
         if advanced.rowCount():
             # Eine ankreuzbare Gruppe graut ihre Felder aus, statt sie
             # wegzuklappen — die gestufte Tiefe aus §2.4 war damit gedacht und

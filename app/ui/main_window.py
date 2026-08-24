@@ -33,6 +33,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QComboBox,
     QDialog,
     QFileDialog,
     QHBoxLayout,
@@ -118,12 +119,15 @@ from app.core.registry import (
     MENU_TWINS,
     REGISTRY,
     TWIN_TOGGLES,
+    VARIANT_GROUPS,
     OperationSpec,
     PaletteEntry,
     caveat_line,
+    group_for_variant,
     group_is_flat,
     menu_tree,
     palette_entries,
+    variant_members,
 )
 from app.core.scene import (
     EvaluationResult,
@@ -829,6 +833,11 @@ class MainWindow(QMainWindow):
         """Ob die Szene schon einmal einen Körper hatte — der erste bekommt
         die Kamera."""
         self._op_actions: dict[str, QAction] = {}
+        self._variant_actions: dict[str, QAction] = {}
+        """Die Sammeleinträge der Variantengruppen, unter dem Namen ihrer
+        ersten Operation. Getrennt von ``_op_actions``, weil sie keiner
+        Operation gehören: Wer dort nachschlägt, sucht einen Eintrag, der
+        genau eine Operation auslöst, und das tun sie nicht."""
         """Die Menüeinträge der Operationen, damit sie sich ausgrauen lassen.
         Ein Menü, in dem alles anklickbar ist und die Hälfte mit „Bitte zuerst
         etwas auswählen" antwortet, lässt den Nutzer die Regeln erraten."""
@@ -1653,8 +1662,16 @@ class MainWindow(QMainWindow):
                         # der Umschalter im Dialog des Mesh-Zwillings, und
                         # erreichbar bleibt er über Palette und Verlauf.
                         continue
+                    if spec.name in variant_members():
+                        # Variantengruppe (VARIANT_GROUPS): Die vier Wege aus
+                        # einer Skizze stehen unter **einem** Eintrag, und die
+                        # Art wählt der Dialog. Er wird unten angelegt, nach
+                        # der Schleife — sein Titel gehört keiner Operation,
+                        # deshalb kann er nicht hier entstehen.
+                        continue
                     place = self._subgroup_for(spec, target, subgroups)
                     self._op_actions[spec.name] = self._operation_action(place, spec)
+                self._add_variant_entries(section.category, target, subgroups)
 
         # *Automatisch teilen* ist kein Registereintrag, sondern ein Ablauf über
         # mehreren Operationen — und stand deshalb unter *Bearbeiten*, zwei
@@ -2158,6 +2175,39 @@ class MainWindow(QMainWindow):
         action.setShortcutContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         for widget in (self.object_tree, self.viewport):
             widget.addAction(action)
+
+    def _add_variant_entries(self, category: str, target: Any, subgroups: dict[str, QMenu]) -> None:
+        """Für jede Variantengruppe dieser Kategorie **einen** Eintrag.
+
+        Der Titel gehört keiner Operation, deshalb entsteht er nicht in der
+        Schleife darüber — dort steht je ein `OperationSpec`. Angelegt wird er
+        wie *Automatisch teilen*: ein Menüeintrag über einem Ablauf, nicht über
+        einem Registereintrag.
+
+        **Das Kürzel wandert mit.** ``sketch_extrude`` trug „E"; nach dem
+        Zusammenlegen hat es keinen eigenen Eintrag mehr, an dem eine
+        ``QAction`` hinge. Anders als bei ``shell_exact`` (dort ist es
+        entfallen) bleibt es hier erhalten und sitzt am Sammeleintrag: Der
+        öffnet ohnehin mit der ersten Variante, also mit Extrudieren. Wer „E"
+        gewohnt ist, bekommt denselben Dialog wie vorher — nur mit einer Wahl
+        darin.
+        """
+        for group in VARIANT_GROUPS:
+            first = REGISTRY.get(group.members[0])
+            if first.category != category:
+                continue
+            place = self._subgroup_for(first, target, subgroups)
+            key = shortcut_for(first.name, first.shortcut, self.settings.shortcut_scheme)
+            action = self._add_action(
+                place,
+                str(group.title),
+                key or None,
+                partial(self.run_operation, first),
+                str(group.doc),
+            )
+            if key:
+                self._scope_shortcut(action, key)
+            self._variant_actions[group.members[0]] = action
 
     def _add_action(
         self, menu: Any, label: str, shortcut: Any, slot: Any, hint: str = ""
@@ -5310,7 +5360,24 @@ class MainWindow(QMainWindow):
                 exact.setToolTip(str(hint))
                 self._lock_twin_toggle(exact, hidden_twin, len(objects), len(chosen))
 
+            # **Die Variantengruppe (VARIANT_GROUPS), und warum sie eine Liste
+            # bekommt und keinen Haken.** Ein Haken trägt zwei Zustände; hier
+            # sind es vier Arten, aus einer Grundform einen Körper zu machen.
+            # Sie schließen einander aus und sind gleichrangig — keine ist die
+            # Abweichung von einer anderen, wie es der exakte Kern vom Netz
+            # ist. Ein Zwilling und eine Gruppe treffen nie zusammen: Keine
+            # Op steht in beiden Tabellen.
+            group = group_for_variant(spec.name)
+            variant: QComboBox | None = None
+            if group is not None:
+                variant = QComboBox(self)
+                for name in group.members:
+                    variant.addItem(str(REGISTRY.get(name).title), name)
+                variant.setToolTip(str(group.doc))
+
             def chosen_spec() -> OperationSpec:
+                if variant is not None:
+                    return REGISTRY.get(str(variant.currentData()))
                 if exact is not None and exact.isChecked() and hidden_twin is not None:
                     return REGISTRY.get(hidden_twin)
                 return spec
@@ -5336,12 +5403,18 @@ class MainWindow(QMainWindow):
                 # Parameters verspricht die lesbare Bezeichnung. Gemessen:
                 # ohne Liste „hole_1", mit Liste „Bohrung 1 · Ø5,2".
                 features=self._feature_names(),
-                extra=exact,
+                extra=exact if exact is not None else variant,
+                extra_label=str(group.choice) if group is not None else "",
                 surroundings=self._sketch_surroundings(),
                 images=self._image_names(),
                 pick_image=self._pick_image_source,
                 note=note,
             )
+            if variant is not None:
+                # Dieselbe Pflicht wie beim Kernwechsel: Was der Dialog zeigt
+                # und was die Vorschau rechnet, muss dieselbe Variante sein.
+                variant.currentIndexChanged.connect(lambda: dialog.switch_variant(chosen_spec()))
+                variant.currentIndexChanged.connect(dialog.valuesChanged)
             if exact is not None:
                 # Die Live-Vorschau (§18.7) muss den Kernwechsel mitmachen —
                 # eine Vorschau der falschen Variante wäre gelogen. Und der

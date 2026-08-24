@@ -22,15 +22,17 @@ from pathlib import Path
 import pytest
 
 from app.core.bootstrap import load_operations
-from app.core.registry import REGISTRY, palette_entries
+from app.core.registry import REGISTRY, VARIANT_GROUPS, palette_entries
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import QApplication, QMenu, QToolButton
 
 from app.ui.main_window import MENU_GROUPS, MainWindow
 from app.ui.session import Session
 from app.ui.settings import UiSettings
+from app.ui.shortcut_schemes import shortcut_for
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -108,6 +110,51 @@ def _direct_entries(menu: QMenu) -> int:
     würde die Lösung für das Problem halten.
     """
     return sum(1 for action in menu.actions() if not action.isSeparator())
+
+
+def test_a_variant_group_stands_once_and_offers_its_kinds(window: MainWindow) -> None:
+    """Vier Wege aus einer Skizze, ein Menüeintrag, die Art im Dialog.
+
+    **Roberts Satz war „nicht für ähnliches gefühlt 20 verschiedene aktionen,
+    eine und dann im dialog präzisieren."** Geprüft wird beides, denn nur
+    zusammen ist es die Zusage: Der Sammeleintrag steht da **und** die vier
+    Arten sind wählbar. Ein Test, der nur das Verschwinden prüft, wäre auch
+    grün, wenn die Operationen gar nicht mehr erreichbar wären.
+
+    Gezählt wird am gebauten Fenster, nicht am Register — der Eintrag gehört
+    keiner Operation und stünde dort nicht.
+    """
+    titles = {
+        entry
+        for menu in window.menuBar().actions()
+        if menu.menu() is not None
+        for entry in _menu_entries(menu.menu())
+    }
+    group = VARIANT_GROUPS[0]
+
+    assert str(group.title) in titles, "der Sammeleintrag fehlt im Menü"
+    for name in group.members:
+        assert str(REGISTRY.get(name).title) not in titles, (
+            f"{name} steht noch einzeln im Menü — dann sind es wieder vier Einträge"
+        )
+        assert REGISTRY.has(name), f"{name} muss im Register bleiben (Verlauf, Provenienz)"
+
+
+def test_the_variant_entry_keeps_the_shortcut_of_its_first_kind(window: MainWindow) -> None:
+    """Das Kürzel wandert an den Sammeleintrag, statt zu verschwinden.
+
+    ``sketch_extrude`` führt in der Fusion-Belegung „E". Ohne eigenen
+    Menüeintrag gibt es keine ``QAction`` mehr, an der es hinge — anders als
+    bei ``shell_exact``, wo es entfallen ist, bleibt es hier erhalten: Der
+    Sammeleintrag öffnet ohnehin mit der ersten Art.
+    """
+    first = VARIANT_GROUPS[0].members[0]
+    action = window._variant_actions[first]
+    expected = shortcut_for(first, REGISTRY.get(first).shortcut, window.settings.shortcut_scheme)
+
+    assert action.shortcut().toString() == (
+        QKeySequence(expected).toString() if expected else ""
+    ), "der Sammeleintrag führt nicht das Kürzel seiner ersten Art"
 
 
 def test_no_menu_becomes_a_list_to_search(window: MainWindow) -> None:

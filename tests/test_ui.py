@@ -195,15 +195,25 @@ def test_the_menubar_stays_a_bar(window: MainWindow) -> None:
 
 
 def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
-    """Jede Operation bleibt erreichbar — im Menü, oder als zusammengelegter
-    Zwilling über den Umschalter im Dialog ihres Partners plus die Palette.
-    Zwei Menüeinträge für einen Quader waren „eine Operation je Variante",
-    und das Hausprinzip sagt das Gegenteil.
+    """Jede Operation bleibt erreichbar — im Menü, oder zusammengelegt.
+
+    **Zwei Arten von Zusammenlegung, und sie sind verschieden.** Ein
+    ``MENU_TWINS``-Zwilling ist dieselbe Handlung im anderen Rechenkern; sein
+    Weg ist der Umschalter im Dialog des Partners, und der Partner trägt den
+    Eintrag mit seinem eigenen Titel. Eine ``VARIANT_GROUPS``-Variante ist
+    eine von mehreren gleichrangigen Arten; ihr Weg ist die Auswahl in einem
+    Eintrag, der **keiner** Operation gehört und deshalb auch keinen
+    Operationstitel trägt.
+
+    Beide Male gilt dasselbe Hausprinzip — „eine Operation je Handlung, nicht
+    je Variante" — und beide Male dieselbe Auflage: erreichbar bleibt alles,
+    notfalls über die Palette.
     """
-    from app.core.registry import MENU_TWINS, palette_entries
+    from app.core.registry import MENU_TWINS, VARIANT_GROUPS, palette_entries, variant_members
 
     labels = {action.text() for action in all_menu_actions(window)}
     offered = {entry.name for entry in palette_entries()}
+    gruppen = {str(group.title) for group in VARIANT_GROUPS}
 
     for spec in REGISTRY.all():
         if spec.name in MENU_TWINS:
@@ -212,7 +222,13 @@ def test_the_menu_is_built_from_the_registry(window: MainWindow) -> None:
             partner = REGISTRY.get(MENU_TWINS[spec.name])
             assert str(partner.title) in labels, "der sichtbare Zwilling trägt den Eintrag"
             continue
+        if spec.name in variant_members():
+            assert str(spec.title) not in labels, f"{spec.name} soll kein eigener Eintrag sein"
+            assert spec.name in offered, f"{spec.name} muss über die Palette erreichbar bleiben"
+            continue
         assert str(spec.title) in labels, f"{spec.name} is missing from the menu"
+
+    assert gruppen <= labels, f"diese Sammeleinträge fehlen: {gruppen - labels}"
 
 
 def test_shortcuts_from_the_registry_are_installed(window: MainWindow) -> None:
