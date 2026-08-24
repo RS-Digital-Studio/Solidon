@@ -2343,3 +2343,107 @@ def test_typing_a_digit_while_drawing_goes_into_the_measure(qt_app: QApplication
     )
 
     panel.deleteLater()
+
+
+# --- Die Umrechnung Blatt ↔ Zeichnung (§30.1, P2c) ---------------------------
+#
+# Sie war als Methodenpaar eines Widgets nur mit einem Widget prüfbar, und
+# ihre tragende Eigenschaft — dass beide Richtungen zueinander passen —
+# deshalb nie gegen Zahlen gehalten. Ein Klick landete dort, wo `_to_screen`
+# ihn hingelegt hatte, und das sah in jedem Test richtig aus.
+
+SHEET = (400.0, 300.0)
+"""Eine Blattgröße mit ungleichen Seiten: quadratisch fiele eine vertauschte
+Achse nicht auf."""
+
+
+def test_the_centre_of_the_drawing_sits_in_the_middle_of_the_sheet() -> None:
+    """Der Ankerpunkt der ganzen Rechnung."""
+    from app.ui.sketch_editor import sheet_point
+
+    assert sheet_point((7.0, -3.0), (7.0, -3.0), 4.0, SHEET) == pytest.approx((200.0, 150.0))
+
+
+def test_the_sheet_counts_y_downwards_and_the_drawing_does_not() -> None:
+    """Qt zählt Y nach unten, eine Zeichnung nach oben.
+
+    Dieses Minus **ist** die Umrechnung. Ohne es steht die Skizze auf dem
+    Kopf — und zwar spiegelbildlich richtig, was in jedem Test mit
+    symmetrischen Formen unauffällig bleibt.
+    """
+    from app.ui.sketch_editor import sheet_point
+
+    up = sheet_point((0.0, 10.0), (0.0, 0.0), 2.0, SHEET)
+    down = sheet_point((0.0, -10.0), (0.0, 0.0), 2.0, SHEET)
+
+    assert up[1] < down[1], "zehn Millimeter nach oben liegen weiter oben auf dem Blatt"
+    assert up == pytest.approx((200.0, 130.0))
+    assert down == pytest.approx((200.0, 170.0))
+
+
+def test_the_two_directions_undo_each_other() -> None:
+    """Hin und zurück muss denselben Punkt ergeben — in beiden Richtungen.
+
+    Die teure Form dieses Fehlers ist keine Ausnahme, sondern ein Klick, der
+    einen halben Bildpunkt neben dem Punkt landet, den er greifen wollte.
+    """
+    from app.ui.sketch_editor import drawing_point, sheet_point
+
+    centre, scale = (12.0, -4.0), 3.5
+    for drawing in ((0.0, 0.0), (25.5, -13.25), (-40.0, 40.0)):
+        back = drawing_point(sheet_point(drawing, centre, scale, SHEET), centre, scale, SHEET)
+        assert back == pytest.approx(drawing)
+
+    for place in ((0.0, 0.0), (399.0, 1.0), (123.5, 222.25)):
+        again = sheet_point(drawing_point(place, centre, scale, SHEET), centre, scale, SHEET)
+        assert again == pytest.approx(place)
+
+
+def test_a_bigger_scale_spreads_the_drawing() -> None:
+    """Der Maßstab ist Bildpunkte je Millimeter, nicht umgekehrt.
+
+    Ein vertauschter Kehrwert liefert immer noch ein Bild — nur ein winziges,
+    und beim Zoomen wird es kleiner statt größer.
+    """
+    from app.ui.sketch_editor import sheet_point
+
+    near = sheet_point((10.0, 0.0), (0.0, 0.0), 2.0, SHEET)
+    far = sheet_point((10.0, 0.0), (0.0, 0.0), 8.0, SHEET)
+
+    assert near[0] - 200.0 == pytest.approx(20.0)
+    assert far[0] - 200.0 == pytest.approx(80.0)
+
+
+def test_moving_the_centre_moves_the_drawing_the_other_way() -> None:
+    """Wer den Blick nach rechts schiebt, sieht die Zeichnung nach links gehen.
+
+    Das Vorzeichen hier ist das, das beim Schieben mit der Maus umkippt: Ein
+    Fehler darin lässt die Zeichnung dem Zeiger doppelt so schnell und in die
+    falsche Richtung folgen.
+    """
+    from app.ui.sketch_editor import sheet_point
+
+    still = sheet_point((0.0, 0.0), (0.0, 0.0), 2.0, SHEET)
+    shifted = sheet_point((0.0, 0.0), (10.0, 0.0), 2.0, SHEET)
+
+    assert shifted[0] < still[0], "die Mitte wanderte nach rechts, der Ursprung nach links"
+    assert still[0] - shifted[0] == pytest.approx(20.0)
+
+
+def test_the_canvas_only_passes_the_numbers_through(qt_app: QApplication) -> None:
+    """Das Widget rechnet nicht selbst, es reicht durch.
+
+    Sonst wäre die geprüfte Rechnung eine zweite neben der benutzten — genau
+    die Doppelung, die dieser Umbau aufgelöst hat.
+    """
+    from app.ui.sketch_editor import SketchCanvas, sheet_point
+
+    canvas = SketchCanvas()
+    canvas.resize(int(SHEET[0]), int(SHEET[1]))
+    centre, scale, size = canvas._sheet()
+
+    place = canvas._to_screen(15.0, -7.0)
+    wanted = sheet_point((15.0, -7.0), centre, scale, size)
+
+    assert (place.x(), place.y()) == pytest.approx(wanted)
+    assert canvas._to_world(place) == pytest.approx((15.0, -7.0))

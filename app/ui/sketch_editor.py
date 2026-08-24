@@ -359,6 +359,51 @@ def _on_multiple(value: float, spacing: float, tolerance: float) -> bool:
     return min(rest, spacing - rest) < tolerance / 2.0
 
 
+def sheet_point(
+    drawing: tuple[float, float],
+    centre: tuple[float, float],
+    scale: float,
+    size: tuple[float, float],
+) -> tuple[float, float]:
+    """Wo ein Zeichenpunkt auf dem Blatt liegt, in Bildpunkten (§30.1).
+
+    Die Mitte des Blattes zeigt ``centre``, ``scale`` ist der Maßstab in
+    Bildpunkten je Millimeter, ``size`` die Größe der Zeichenfläche. **Y läuft
+    nach unten** — Qt zählt so, die Zeichnung nicht, und dieses Minus ist die
+    ganze Umrechnung dazwischen.
+
+    Eine freie Funktion und keine Methode, aus demselben Grund wie
+    :func:`app.ui.viewport.sketch_grid` und ``bed_scale``: Als Methode eines
+    Widgets ist sie nur mit einem Widget prüfbar, und ihre Umkehrbarkeit —
+    die Eigenschaft, an der die ganze Zeichenfläche hängt — war deshalb nie
+    geprüft. Ein Klick landete dort, wo ``_to_screen`` ihn hingelegt hatte,
+    und ob beide Richtungen zueinander passen, hat niemand gegen Zahlen
+    gehalten.
+    """
+    return (
+        size[0] / 2.0 + (drawing[0] - centre[0]) * scale,
+        size[1] / 2.0 - (drawing[1] - centre[1]) * scale,
+    )
+
+
+def drawing_point(
+    sheet: tuple[float, float],
+    centre: tuple[float, float],
+    scale: float,
+    size: tuple[float, float],
+) -> tuple[float, float]:
+    """Welcher Zeichenpunkt unter einer Blattstelle liegt — die Umkehrung von
+    :func:`sheet_point`.
+
+    Sie ist der Weg, den jeder Klick nimmt: Was der Nutzer trifft, ist eine
+    Stelle in Bildpunkten; was die Skizze speichert, sind Millimeter.
+    """
+    return (
+        (sheet[0] - size[0] / 2.0) / scale + centre[0],
+        -(sheet[1] - size[1] / 2.0) / scale + centre[1],
+    )
+
+
 def _decimals_for(step: float) -> int:
     """Wie viele Nachkommastellen eine Rasterzahl braucht.
 
@@ -1088,17 +1133,25 @@ class SketchCanvas(QWidget):
 
     # --- Koordinaten --------------------------------------------------------------
 
-    def _to_screen(self, x: float, y: float) -> QPointF:
-        return QPointF(
-            self.width() / 2.0 + (x - self._centre.x()) * self._scale,
-            self.height() / 2.0 - (y - self._centre.y()) * self._scale,
+    def _sheet(self) -> tuple[tuple[float, float], float, tuple[float, float]]:
+        """Wie die Zeichnung gerade auf dem Blatt liegt: Mitte, Maßstab, Größe.
+
+        Die drei Angaben zusammen, weil die Umrechnung sie zusammen braucht —
+        und einmal, weil zwei Aufrufstellen sonst dieselbe Zerlegung von
+        ``_centre`` schreiben.
+        """
+        return (
+            (self._centre.x(), self._centre.y()),
+            self._scale,
+            (float(self.width()), float(self.height())),
         )
 
+    def _to_screen(self, x: float, y: float) -> QPointF:
+        place = sheet_point((x, y), *self._sheet())
+        return QPointF(place[0], place[1])
+
     def _to_world(self, position: QPointF) -> tuple[float, float]:
-        return (
-            (position.x() - self.width() / 2.0) / self._scale + self._centre.x(),
-            -(position.y() - self.height() / 2.0) / self._scale + self._centre.y(),
-        )
+        return drawing_point((position.x(), position.y()), *self._sheet())
 
     def _on_last_pending(self, position: QPointF) -> bool:
         """Ob der Klick auf dem zuletzt gesetzten, noch offenen Punkt liegt.
