@@ -50,8 +50,10 @@ sauberes Fehlen: Weil der Ordner noch daliegt, meldet der B-Rep-Kern sich
 nicht ab, sondern `tests/test_brep.py` bricht beim **Sammeln** ab (Exit 2) und
 reißt den ganzen `-m performance`-Lauf mit. Wer nur weiterkommen will, fährt
 ihn mit `--ignore=tests/test_brep.py`; die Reparatur ist
-`pip install --force-reinstall --no-deps cadquery-ocp-novtk==7.9.3.1.1` und
-lädt rund 300 MB.
+`pip install --force-reinstall --no-deps cadquery-ocp-novtk==7.9.3.1.1` — am
+24.08.2026 gefahren, **46 MB** und keine 300, wie der 93-MB-Ordner vermuten
+lässt. Danach `import OCP` (7.9.3.1), BRepPrimAPI und die 95 Tests aus
+`test_brep.py` und `test_operation_ui.py` wieder grün.
 
 Siehe auch [[lokale-umgebung-python-version]] und
 [[leistungstests-fremdlast]].

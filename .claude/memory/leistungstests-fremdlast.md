@@ -102,6 +102,18 @@ bloß, dass in dem Baum noch keine Marke stand.
 
 Brauchbar wird der Vergleich erst über die **absoluten** Zahlen: in beiden
 Ständen `.performance.json` löschen, je drei Läufe fahren, danach `best`
-auslesen. So gemessen standen 2005 ms gegen 2001 ms — die Verlangsamung lag im
-Commit-Stand und nicht in der geprüften Änderung. Die Alternative ist, die
-Marke des Hauptbaums in den Arbeitsbaum zu kopieren.
+auslesen. Die Alternative ist, die Marke des Hauptbaums mitzukopieren.
+
+**Und dieselbe Falle schnappt auf der Referenzseite zu.** So gemessen standen
+2005 gegen 2001 ms, und daraus wurde der Schluss „dann liegt es im
+Commit-Stand" — falsch. Er stützte sich auf einen *früheren* Lauf in einem
+frischen Baum, der grün war, weil dort noch keine Marke stand. Zwei
+Nachbarsitzungen haben es unabhängig widerlegt: vier Stände über den ganzen
+Tag, alle bei ~2050 bis 2150 ms, im Wechsel gemessen sogar der ältere Stand
+langsamer. Ein A/B im selben Baum sagt nur, dass die geprüfte Änderung
+unschuldig ist — **wer schuldig ist, sagt es nicht.**
+
+Die Startzeitmarke von 1233 ms wird auf dieser Maschine heute nicht mehr
+erreicht; sie ist der kleinste je gemessene Wert, und der Docstring des Tests
+nennt selbst eine Spanne von 2500 bis 13 764 ms. Zurückgesetzt wird sie
+trotzdem nicht — das verstecke die nächste echte Regression.
