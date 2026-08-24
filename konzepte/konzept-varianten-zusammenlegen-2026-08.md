@@ -182,6 +182,36 @@ Die ersten drei vorderen Felder sind bei allen fünf identisch (`shape`,
 einem Art-Umschalter. Feldrechnung gegen §35: 3 gemeinsame + 1 Umschalter +
 höchstens 2 variantenspezifische = **6 vorn, erlaubt sind 8**.
 
+> **ZURÜCKGENOMMEN am 24.08.2026, noch am selben Tag. Es bleiben vier.** Die
+> Abweichung unten war ein Fehlschluss von mir, und er steht hier, weil die
+> Begründung mehr wert ist als ihre Löschung: **Ich habe aus den `doc`-Texten
+> auf die Bedeutung geschlossen, statt dem Datenfluss zu folgen.** Der Code
+> sagt es eindeutig — `sketch_revolve` ruft in `ops.py:521` dasselbe
+> `_sketch_profile(shape, length, width, corners)` wie seine drei Geschwister
+> und baut daraus dieselbe 2D-Grundform. Was danach mit dem Profil geschieht
+> (an die Achse schieben, drehen; `ops.py:522` nimmt `width / 2` als Versatz),
+> ist der Grund für den abweichenden Satz — **er beschreibt die Wirkung im
+> Ergebnis, nicht eine andere Bedeutung der Zahl.** Die Zahl ist dieselbe, das
+> gemeinsame Feld ist sicher, und der variantenabhängige `doc`-Satz soll
+> bleiben.
+>
+> Widerlegt von `formwerk-9e`, von mir am Datenfluss nachgeprüft. Die Lehre ist
+> dieselbe wie an drei anderen Stellen dieses Tages: Eine Dokumentationszeile
+> ist ein Beleg für das, was jemand gemeint hat, nicht für das, was der Code
+> tut. Ich hatte sie als Messung behandelt.
+>
+> **Ein echter Fund kam dabei heraus, und er gehört zu P3:** `width` wies über
+> `depends_on` das Vieleck als wirksam aus, obwohl die Zahl dort nirgends
+> ankommt — gemessen `revolve/polygon` mit `width=5` und `width=20`, beide
+> 32648,3886. Behoben von `formwerk-9e` in `5c856212`, die Liste heißt jetzt
+> bei allen vier `("rectangle", "slot")`. **Wäre das offen geblieben, hätte die
+> Zusammenlegung den Fehler auf alle vier verteilt, und er hätte danach wie
+> eine Folge des Umbaus ausgesehen.** Offen bleibt ein Katalogtext: Der
+> `doc`-Satz sagt „Beim Kreis ohne Wirkung" und müsste „Beim Kreis und beim
+> Vieleck ohne Wirkung" heißen, in fünf Sprachen — das gehört zu P3.
+>
+> *Der widerlegte Stand, zur Nachvollziehbarkeit:*
+>
 > **Abweichung vom Konzeptstand, gemessen am 24.08.2026 bei der Umsetzung:
 > Es sind drei, nicht vier — `sketch_revolve` fällt heraus.** Die drei
 > gemeinsamen Felder heißen bei allen vier gleich, sie **bedeuten** aber nicht
@@ -203,6 +233,9 @@ höchstens 2 variantenspezifische = **6 vorn, erlaubt sind 8**.
 > in der Frage, die ich gestellt hatte. **E2 gilt für `sketch_extrude`,
 > `sketch_sweep` und `sketch_loft`;** `sketch_revolve` bleibt eigen wie
 > `sketch_pocket`, nur aus einem anderen Grund. Feldrechnung bleibt 6 von 8.
+>
+> *(Ende des widerlegten Stands. Gültig ist: vier Ops, `sketch_pocket` bleibt
+> eigen, `sketch_revolve` kommt mit.)*
 >
 > Die unterschiedlichen **Vorgaben** (extrude 40/20, sweep 10/10, loft 40/20)
 > bleiben ein hingenommener Rest: Wer die Art wechselt, behält seine Werte.
@@ -418,10 +451,12 @@ Umschalter zu bauen, der die falsche Größe stehen lässt.
   geworden. Ohne den Fehlertext wird der Eintrag in `MENU_TWINS` nicht gesetzt:
   Die Reihenfolge ist Vorschlag zuerst, Verstecken danach — andernfalls steht
   zwischen zwei Commits eine Sackgasse im Produkt.
-- **P3** — **auf drei Ops geschrumpft** (§2, Abweichung): `sketch_revolve`
-  fällt heraus, weil `length`/`width` dort anderes bedeuten. E2.3 ist damit
-  beantwortet — die Registereinträge werden **nicht** angefasst, die Zuordnung
-  kommt in `registry.py`, den Dialog baut `main_window.py`, beide sind meine.
+- **P3** — **bleibt bei vier Ops**; meine Schrumpfung auf drei war ein
+  Fehlschluss und ist am selben Tag zurückgenommen (§2). E2.3 ist beantwortet:
+  Die Registereinträge werden **nicht** angefasst, die Zuordnung kommt in
+  `registry.py`, den Dialog baut `main_window.py`, beide sind meine. Dazu ein
+  Katalogtext in fünf Sprachen („Beim Kreis **und beim Vieleck** ohne
+  Wirkung"), von `formwerk-9e` übergeben.
 - **P4** — **zurückgestellt**, E3.1 geprüft und negativ: `switch_variant` setzt
   keine Werte. Nicht „später vielleicht", sondern eine Entscheidung für Robert
   (§3).
