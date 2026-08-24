@@ -109,6 +109,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
 | Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
 | Der Zahlungsanbieter steht namentlich da, ohne Vertrag | Was erst am Verkaufsstart fällig wird (24.08.2026) | **eine Entscheidung von Robert** (vorgelegt am 23.08.2026): `datenschutz.html` nennt Paddle mit voller Anschrift und führt es als Empfänger personenbezogener Daten samt Drittlandsbegründung — ein Konto gibt es mangels Gewerbeanmeldung nicht. Name stehen lassen (dann stimmt der Text am Starttag) oder bis dahin durch „der Zahlungsdienstleister“ ersetzen (dann stimmt er heute). Der zeitliche Vorbehalt ist seit `5950321` drin, die Namensfrage bleibt |
+| Ein Nichtlauf zählt wie ein Fehllauf | Ein Tor, das nicht durchfiel und trotzdem die halbe Prüfung ausließ (24.08.2026) | eine Änderung an `suite-getrennt.sh:145` — nichts von außen. `zaehlt_als_fehler` erhöht die Zahl um eins, gleich ob eine Fensterdatei rot ist oder die Sammelgruppe mit 3554 Tests nie anlief |
+| Exit 5 käme als grün durch | Ein Tor, das nicht durchfiel und trotzdem die halbe Prüfung ausließ (24.08.2026) | dieselbe Änderung. Zeile 149 wertet „keine Tests gesammelt“ pauschal als keinen Fehler; für die Sammelgruppe hieße das „Läufe mit Fehler: 0“. Aus dem Code gelesen, nicht gemessen |
 
 ---
 
@@ -8402,3 +8404,55 @@ Bleiben drei, und alle drei sind echt:
       nennt heute Name, Anschrift und E-Mail; gemessen: keine der beiden
       Angaben steht darin. Kommt mit der Gewerbeanmeldung und ist bis dahin
       nicht nachholbar — §5 TMG verlangt sie, sobald es sie gibt.
+
+## Ein Tor, das nicht durchfiel und trotzdem die halbe Prüfung ausließ (24.08.2026)
+
+Nach dem Pull von 761 Commits auf `494439a3` einmal das volle Tor gefahren.
+Es meldete „Läufe mit Fehler: 3": zwei bekannte sporadische Fensterabstürze
+(`test_pose_session`, `test_sculpt_session` — siehe oben, beide je zweimal
+nachgefahren und grün) und dazwischen `rest-in-einem-zug(Exit:4)`.
+
+Der dritte war kein Fehlschlag, sondern ein **Nichtlauf**. Die Sammelgruppe in
+`suite-getrennt.sh:182` fährt alles ohne Qt in einem Zug und ruft dafür
+`pytest … -n "$KERNE"`; `pytest-xdist` stand aber weder in `pyproject.toml`
+noch in `constraints.txt`. Ohne das Paket antwortet pytest mit
+`unrecognized arguments: -n` und Exit 4, und die 3554 Tests ohne Qt —
+Geometrie, Skizzen, Schichtanalyse, Agentenschicht — liefen nicht.
+
+**Ein Tor, das nicht durchfällt, sondern die halbe Prüfung stillschweigend
+auslässt, ist schlimmer als eines, das rot ist.** Es sah aus wie drei rote
+Dateien und war „der Großteil fehlt".
+
+`tools/check_env.py` konnte es nicht melden: Es vergleicht das Installierte
+gegen `constraints.txt` und sieht damit nur, was jemand aufgeschrieben hat.
+Eine Voraussetzung, die nirgends steht, hat es für dieses Werkzeug nie
+gegeben. Dass ausgerechnet die Datei, die den Fassungssatz hütet, die Lücke
+nicht sehen kann, ist kein Mangel des Werkzeugs, sondern die Grenze seiner
+Frage.
+
+- [x] **`pytest-xdist` deklariert** (`ad2d1729`): `>=3.6` in der dev-Gruppe,
+      festgeschrieben auf 3.8.0, dazu execnet 2.1.2. Beide MIT und reine
+      Testabhängigkeit — `licences.toml` führt kein dev-Werkzeug (kein pytest,
+      ruff, mypy, forked) und `RUNTIME_EXTRAS` kennt nur geom, ui, agent und
+      brep, also bleiben Lizenzprüfung und `THIRD-PARTY-NOTICES.md` zu Recht
+      unberührt. Nachgewiesen am selben Stand: „Läufe mit Fehler: 0", 3554
+      passed und 23 skipped in 61 s. Dieselben Tests seriell: 267 s — das ist
+      der Grund, warum das Skript `-n` überhaupt will.
+
+- [ ] **Ein Nichtlauf zählt wie ein Fehllauf.** `zaehlt_als_fehler`
+      (`suite-getrennt.sh:145`) erhöht `fails` um eins, gleich ob eine
+      Fensterdatei mit drei roten Tests endet oder die Sammelgruppe mit 3554
+      Tests gar nicht erst anläuft. Der Schlussbericht nennt nur eine Zahl,
+      und die Zahl trägt ihr Gewicht nicht mit — dieselbe Sache wie „Eine Zahl
+      trägt ihre Bedeutung nicht mit" weiter oben, diesmal im Tor selbst.
+      Zu überlegen: den Ausfall der Sammelgruppe gesondert melden, weil er die
+      Aussagekraft des ganzen Laufs aufhebt, statt sie um ein Drittel zu
+      mindern.
+
+- [ ] **Exit 5 wäre derselbe Fall und käme als grün durch.** Zeile 149 wertet
+      „keine Tests gesammelt" pauschal als keinen Fehler. Für eine einzelne
+      Fensterdatei ist das richtig; für die Sammelgruppe hieße es, dass 3554
+      Tests nicht gesammelt wurden, und das Tor meldete „Läufe mit Fehler: 0".
+      Gemessen ist dieser Fall nicht — er steht hier, weil der heutige zeigt,
+      dass die Zählung nicht zwischen „nichts gefunden" und „nichts gelaufen"
+      unterscheidet.
