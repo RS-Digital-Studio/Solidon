@@ -220,7 +220,7 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
 @register_part(
     name="heatset_m4",
     title=_("Heat-Set-Einpressbuchse"),
-    group="inserts",
+    group="fasteners",
     params=HeatsetParams,
     subtractive=True,
     at_hole=True,
@@ -232,8 +232,9 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
     ),
     caveat=_(
         "Nicht ohne Lötkolben: Die Buchse wird warm eingepresst, und der Durchmesser "
-        "ist dafür knapp gehalten. Kalt hineingedrückt sprengt sie die Wand — dann "
-        "ist ein Schraubenloch die bessere Wahl."
+        "ist dafür knapp gehalten. Kalt hineingedrückt sprengt sie die Wand — ohne "
+        "Lötkolben trägt eine Mutternfalle ähnlich viel, und ein Schraubenloch reicht, "
+        "wo die Schraube durch das Teil gehen darf."
     ),
     changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
 )
@@ -313,6 +314,15 @@ class NutTrapParams(BaseParams):
     doc=_(
         "Tasche für eine Sechskantmutter, seitlich eingeschoben oder von unten "
         "eingelegt, auf Wunsch mit durchgehendem Schraubenloch."
+    ),
+    caveat=_(
+        "Nur mit passender Sechskantmutter: Die Tasche ist auf die Schlüsselweite aus "
+        "der Normteiltabelle gebaut, eine beliebige Mutter wackelt darin oder geht "
+        "nicht hinein. Und sie muss erreichbar bleiben — seitlich eingeschoben "
+        "braucht sie eine freie Flanke, von unten eingelegt eine Öffnung, die kein "
+        "späterer Schritt zubaut. Wo keine Mutter zur Hand ist, hält ein gedrucktes "
+        "Gewinde leichte Lasten; für tragende Verschraubungen ist eine Einpressbuchse "
+        "richtig."
     ),
     changes=[FIRST_RELEASE, PLAY_FROM_PROFILE, FACE_GIVES_DIRECTION],
 )
@@ -404,7 +414,8 @@ class ThreadParams(BaseParams):
     caveat=_(
         "Nicht, wo eine Metallschraube greifen soll: Der Kamm ist abgeflacht, damit "
         "ein Drucker ihn überhaupt auflöst — ein genormtes Gegenstück fasst darin "
-        "nicht sauber. Für tragende Verschraubungen ist eine Einpressbuchse richtig."
+        "nicht sauber. Für tragende Verschraubungen ist eine Einpressbuchse richtig, "
+        "und wo kein Lötkolben zur Hand ist, eine Mutternfalle."
     ),
     changes=[FIRST_RELEASE, PLAY_FROM_PROFILE, FACE_GIVES_DIRECTION],
 )

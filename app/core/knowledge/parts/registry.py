@@ -60,7 +60,6 @@ STOP_WORDS: Final[frozenset[str]] = frozenset(
 #: Gruppen des Katalogs (§24.3). Sie ordnen, was der Nutzer sieht.
 GROUPS: Final[dict[str, TranslatableText]] = {
     "fasteners": _("Verbindungen"),
-    "inserts": _("Einlegeteile"),
     "mechanics": _("Mechanik"),
     "mounting": _("Befestigung"),
     "structure": _("Struktur"),

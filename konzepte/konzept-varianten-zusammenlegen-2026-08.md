@@ -282,6 +282,65 @@ Sie stehen in **zwei verschiedenen Gruppen**, `heatset_m4` allein in
 `inserts` — ein Untermenü mit einem einzigen Eintrag. Dass Robert bei genau
 dieser Frage falsch abgebogen ist, ist damit kein Zufall.
 
+> **ZURÜCKGENOMMEN am 24.08.2026. E3 wird nicht gebaut — der Grund ist ein
+> Denkfehler von mir, den `formwerk-d1` gemessen hat.**
+>
+> Ich hatte gesehen, dass alle drei `at_hole` tragen und dieselbe Kundenfrage
+> beantworten, und daraus geschlossen, sie seien dieselbe Handlung. **Ich hatte
+> die Kundenfrage gefunden und sie für die Handlung gehalten.** `at_hole` sagt
+> „geht in ein Loch“, nicht „ist dasselbe“.
+>
+> Die Messung, die es entscheidet — und die zugleich ein **Maß** für jede
+> künftige Zusammenlegung gibt:
+>
+> | | gemeinsame Felder | je Baustein gesamt |
+> |---|---|---|
+> | Skizzen-Varianten (E2, gebaut) | **4** — `shape`, `length`, `width`, `corners` | 6–8 |
+> | Bohrungs-Bausteine (E3) | **1** — `size` | 3–5 |
+>
+> Wichtiger als die Zahl ist, **was** geteilt wird. Bei den Skizzen ist es die
+> Grundform: die Sache selbst, die man beschreibt — die vier Arten sagen nur,
+> was danach damit geschieht. Meine eigene `VariantGroup`-Docstring nennt das
+> „vier Handlungen mit gemeinsamem **Anfang**“. Bei den Bausteinen gibt es
+> keinen gemeinsamen Anfang; `size` ist eine **Folge** der Bohrung.
+>
+> **Der stärkste Einwand ist ein anderer: Die Entscheidungsgrundlage steht in
+> keinem Feld.** Habe ich einen Lötkolben? Muttern zur Hand? Wird die Schraube
+> oft gelöst? Ein Auswahlfeld fragt „welche Art“ — und der Kunde weiß in dem
+> Moment nicht, welche für ihn richtig ist. Ein Umschalter beantwortet die
+> falsche Frage.
+>
+> **Das Maß für die nächste Prüfung:** gemeinsamer Anfang, nicht gemeinsame
+> Folge. Und: Hängt die Entscheidung an etwas, das in keinem Parameter steht,
+> gehört sie vor den Dialog und nicht hinein.
+
+**E3 neu (gebaut): Nicht zusammenlegen — die drei zusammen zeigen und
+aneinander binden.**
+
+Der Bestand löste das Problem fast schon über die `caveat`-Texte: Zwei von drei
+nannten ihre Grenze **und** die Alternative. Es fehlten der dritte und die
+räumliche Nähe.
+
+- **`nut_trap` bekommt seinen `caveat`.** Er war der einzige ohne, und seine
+  Voraussetzung ist die am wenigsten selbstverständliche: Die Tasche ist auf die
+  Schlüsselweite aus der Normteiltabelle gebaut und muss erreichbar bleiben —
+  `direction` trennt „side“ von „bottom“, `slide` gibt den Einschubweg (am Code
+  nachgesehen, nicht vermutet).
+- **Der Ring ist geschlossen.** Jeder der drei nennt jetzt die anderen zwei.
+  `heatset_m4` nannte nur das Schraubenloch, die schwächere Lösung — ohne
+  Lötkolben trägt eine Mutternfalle mehr. `printed_thread` nannte nur die
+  Einpressbuchse, die einen Lötkolben verlangt.
+- **`inserts` ist aufgelöst**, `heatset_m4` steht bei den *Verbindungen*. Die
+  drei liegen damit im Katalog nebeneinander — **mit Vorschaubildern**, und das
+  ist der Vergleich, den ein Auswahlfeld nie gezeigt hätte. Der Kunde liest die
+  Grenzen **vor** der Wahl statt nach dem Umschalten.
+- **`routing` bleibt**, obwohl auch dort nur ein Baustein steht: Bauplan §24.2
+  nennt „Schlauch- und Rohrmaße“ in der Normteiltabelle, die Gruppe ist auf
+  Zuwachs angelegt. Eine Kabeldurchführung unter *Verbindungen* wäre ein Eintrag
+  am falschen Ort, und das ist schlechter als eine kleine Gruppe.
+
+*Der verworfene Stand, zur Nachvollziehbarkeit:*
+
 **E3: Ein Eintrag „Schraubaufnahme einsetzen" mit drei Arten.** Die
 Registereinträge bleiben getrennt (Provenienz, `parts_version`,
 Änderungsverlauf je Baustein); zusammengelegt ist die Bedienung.
@@ -509,9 +568,28 @@ Umschalter zu bauen, der die falsche Größe stehen lässt.
   `registry.py`, den Dialog baut `main_window.py`, beide sind meine. Dazu ein
   Katalogtext in fünf Sprachen („Beim Kreis **und beim Vieleck** ohne
   Wirkung"), von `formwerk-9e` übergeben.
-- **P4** — **zurückgestellt**, E3.1 geprüft und negativ: `switch_variant` setzt
-  keine Werte. Nicht „später vielleicht", sondern eine Entscheidung für Robert
-  (§3).
+- **P4** — **verworfen und durch Besseres ersetzt** (§3). Die Zurückstellung
+  wegen E3.1 (`switch_variant` setzt keine Werte) war richtig, aber nicht der
+  eigentliche Grund: Die drei sind keine Varianten derselben Handlung. Gebaut
+  ist stattdessen der `caveat`-Ring, die aufgelöste Gruppe `inserts` und die
+  Nähe im Katalog — billiger, und es beantwortet die Frage des Kunden **vor**
+  der Wahl statt danach.
+
+  Beraten mit allen vier Sitzungen. `formwerk-d1` hat den Denkfehler gemessen,
+  `formwerk-be` die Form (Zahl statt Meldung) und den Ausdrucks-Sonderfall,
+  `formwerk-20` den Textweg ohne neuen Mechanismus. Zwei von ihnen zitierten
+  dieselbe Regel **gegeneinander** — nur deshalb habe ich sie im Kontext
+  gelesen und gefunden, dass sie asynchrone Erhebungen meint und hier nicht
+  greift. **Der Widerspruch war der Anlass zu prüfen, nicht meine Sorgfalt.**
+
+- **Leitplanke aus der Beratung, für die nächste Variantengruppe:** Leitet sie
+  ein **Zahlenfeld** neu ab, darf ein Ausdruck darin nicht überschrieben
+  werden. Ein `@lochdurchmesser` ist keine eingetippte Zahl, sondern eine
+  Bindung an einen Projektparameter; wer sie still durch einen Wert ersetzt,
+  nimmt sie weg — sichtbar erst, wenn der Parameter sich ändert und nichts
+  nachzieht. Für E3 war der Fall gegenstandslos (`size` ist `enum`, und
+  `ValueField` mit Ausdrucksmodus gibt es nur für `float`), für die nächste
+  vielleicht nicht. Von `formwerk-be`.
 
 Beteiligt an §0 bis §6: `formwerk-20` (Titelmessung über 86 Ops, E4-Begründung,
 Übersetzungsfallen), `formwerk-9e` (Skizzen-Messung, `switch_variant`),
