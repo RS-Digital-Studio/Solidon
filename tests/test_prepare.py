@@ -9,7 +9,6 @@ import numpy as np
 import pytest
 import trimesh
 
-from app.core.geom import mesh as mesh_module
 from app.core.geom.mesh import MeshData, on_surface, read_mesh
 from app.core.geom.prepare import (
     BOOLEAN_OVERLAP,
@@ -673,7 +672,7 @@ def test_the_collision_check_only_reports(document: Document, profile: Profile) 
     assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(8000.0)
 
 
-# --- die Abstandsanfrage und ihr wackliger Unterbau ---------------------------------
+# --- die Abstandsanfrage --------------------------------------------------------
 
 
 def test_the_surface_query_answers_what_it_is_asked() -> None:
@@ -690,49 +689,34 @@ def test_the_surface_query_answers_what_it_is_asked() -> None:
     assert triangle.dtype == np.int64, "damit lässt sich ein Slot-Feld indizieren"
 
 
-def test_a_stumbling_index_is_asked_a_second_time(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``rtree`` greift auf dieser Maschine in etwa jedem zwanzigsten Lauf
-    daneben — eine Zugriffsverletzung, die als ``OSError`` ankommt.
+def test_the_surface_query_needs_no_retry_because_it_has_no_index() -> None:
+    """Die zwei Wiederhol-Tests, die hier standen, prüften eine Krücke.
 
-    Gemessen an ``dose-mit-deckel``: zwanzig Auswertungen derselben Datei ohne
-    eine Zeile Änderung, eine davon rot, im Stapel ``rtree/index.py:832 in
-    intersection``. Der Index hängt am Zwischenspeicher des Netzes, also
-    bekommt der zweite Versuch eine Kopie und damit einen frischen.
+    ``on_surface`` lief bis zum 24.08.2026 über den ``rtree``-Index von
+    ``trimesh`` und stolperte in etwa jedem zwanzigsten Lauf; ein
+    Wiederholversuch an einer Kopie fing das ab, ein zweiter Fehlgriff flog.
+    Beides gibt es nicht mehr, weil es die Ursache nicht mehr gibt — die
+    Suche fragt einen eigenen Baum (:func:`app.core.geom.mesh.on_surface`),
+    und einen Wiederholpfad, den niemand mehr erreichen kann, prüft man
+    nicht, man entfernt ihn.
+
+    Was bleibt, ist die Zusage, an der die alten Tests wirklich hingen: Die
+    Antwort stimmt, und ihr Dreiecksindex taugt zum Indizieren eines
+    Slot-Felds. Mehrere Anfragen hintereinander an denselben Körper — der
+    Fall, in dem der alte Index gealtert und danebengegriffen hat — geben
+    identische Ergebnisse, denn es gibt keinen gealterten Zustand mehr:
+    der Baum entsteht je Aufruf.
     """
     body = read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl").raw
-    points = np.array([[0.0, 0.0, 20.0]], dtype=float)
-    echt = mesh_module._asked
-    versuche: list[int] = []
+    points = np.array([[0.0, 0.0, 20.0], [25.0, 0.0, 0.0]], dtype=float)
 
-    def erst_daneben(target: object, asked: object) -> object:
-        versuche.append(1)
-        if len(versuche) == 1:
-            raise OSError("exception: access violation reading 0x000002C920F4EDE8")
-        return echt(target, asked)
-
-    monkeypatch.setattr(mesh_module, "_asked", erst_daneben)
-    _closest, distance, _triangle = on_surface(body, points)
-
-    assert len(versuche) == 2, "einmal gestolpert, einmal wiederholt"
-    assert distance[0] == pytest.approx(10.0), "und die Antwort stimmt trotzdem"
-
-
-def test_a_second_stumble_is_not_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Wiederholen heißt nicht verschlucken: was zweimal scheitert, fliegt.
-
-    Ein stiller Rückfall auf irgendein Ergebnis wäre hier das Schlimmste — die
-    Zahl entscheidet, welche Farbe eine Fläche behält und wie weit eine
-    Dezimierung die Oberfläche verschoben hat.
-    """
-    body = read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl").raw
-
-    def immer_daneben(target: object, asked: object) -> object:
-        raise OSError("access violation")
-
-    monkeypatch.setattr(mesh_module, "_asked", immer_daneben)
-
-    with pytest.raises(OSError):
-        on_surface(body, np.array([[0.0, 0.0, 20.0]], dtype=float))
+    first = on_surface(body, points)
+    second = on_surface(body, points)
+    assert first[1][0] == pytest.approx(10.0), "20 mm Kante, Mitte auf Null, Deckel bei z=10"
+    assert first[1][1] == pytest.approx(15.0)
+    assert np.array_equal(first[1], second[1]), "kein Zustand, der altern könnte"
+    assert np.array_equal(first[2], second[2])
+    assert first[2].dtype == np.int64
 
 
 def test_arranging_by_material_keeps_the_filaments_apart(

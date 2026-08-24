@@ -253,6 +253,7 @@ exclude = "app/core/backends/data/comfyui/"
 # verdeckt, wenn ein Import daneben greift.
 module = [
   "manifold3d.*",
+  "networkx.*",
   "pyvista.*",
   "scipy.*",
   "skimage.*",

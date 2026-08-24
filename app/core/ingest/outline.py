@@ -60,52 +60,37 @@ def is_outline(suffix: str) -> bool:
 def nested_polygons(rings: list[np.ndarray]) -> list[Any]:
     """Geschlossene Ringe nach ihrer Verschachtelung zu Flächen mit Löchern.
 
-    **Trimeshs eigener Algorithmus, Zeile für Zeile — nur der Index ist
-    ausgetauscht.** ``polygons_full`` täte dasselbe, holt seine
-    Überlappungskandidaten aber aus einem ``rtree``, und warum das Paket den
-    Prozess nicht mehr betreten darf, steht an
-    :func:`app.core.geom.mesh.on_surface`. Hier liefert sie ein ``STRtree``
-    aus shapely (GEOS, längst Abhängigkeit); die Entscheidung selbst bleibt
-    dieselbe: Polygon-in-Polygon, nicht Punkt-in-Polygon — zwei sich
-    schneidende Konturen enthalten einander nicht, ein innerer Punkt läge
-    trotzdem drin.
+    Ringreparatur und Aufbau sind die von trimeshs ``polygons_full``
+    (``paths_to_polygons``, Löcher gedreht, das Ergebnis noch einmal
+    repariert); die Verschachtelung selbst kommt aus
+    :func:`app.core.geom.enclosure.enclosure_tree` — **eine** Fassung für
+    Zeichnung und Schnittdeckel, damit die beiden nicht auseinanderdriften.
+    Warum sie ``rtree`` ersetzt, steht dort und an
+    :func:`app.core.geom.mesh.on_surface`.
 
-    Die Ringreparatur ist ebenfalls die von trimesh
-    (``paths_to_polygons``, ``repair_invalid``): Wer nur die Verschachtelung
-    tauscht, aber anders repariert, bekommt andere Flächen — gemessen am
-    23-Konturen-Unterschied eines ersten Versuchs mit ``buffer(0)``.
-
-    Ein Ring mit gerader Zahl von Umschließern ist ein Rand, seine
-    unmittelbaren Kinder (genau ein Umschließer mehr) sind seine Löcher, und
-    ein Ring im Loch ist wieder ein Rand — die Insel im „O" eines „Ö".
-    Unrettbare Ringe fallen stumm heraus, wie bei trimesh auch.
+    Ein erster eigener Versuch mit inneren Punkten und ``buffer(0)`` ist an
+    der Messung gescheitert — 295 statt 407 Konturen an einer der drei
+    Beispielzeichnungen. Wer nur den Index tauscht, aber anders repariert
+    oder anders enthält, bekommt andere Flächen; deshalb hier Zeile für
+    Zeile trimeshs Weg. An allen drei Beispiel-SVGs sind Konturen,
+    Dreieckszahlen und Volumina identisch mit ``polygons_full``, gemessen
+    ohne ``rtree`` im Prozess.
     """
     from shapely.geometry import Polygon
-    from shapely.strtree import STRtree
     from trimesh.path.polygons import paths_to_polygons, repair_invalid
 
-    closed = [entry for entry in paths_to_polygons(rings) if entry is not None]
-    if not closed:
-        return []
-    if len(closed) == 1:
-        return list(closed)
+    from app.core.geom.enclosure import enclosure_tree
 
-    tree = STRtree(closed)
-    containers: list[list[int]] = [[] for _ in closed]
-    for outer in range(len(closed)):
-        for inner in (int(found) for found in tree.query(closed[outer])):
-            if outer != inner and closed[outer].contains(closed[inner]):
-                containers[inner].append(outer)
-
-    depth = [len(entry) for entry in containers]
+    closed = list(paths_to_polygons(rings))
+    roots, tree = enclosure_tree(closed)
     result = []
-    for root in range(len(closed)):
-        if depth[root] % 2 != 0:
+    for root in roots:
+        if closed[root] is None:
             continue
         holes = [
             np.array(closed[child].exterior.coords)[::-1]
-            for child in range(len(closed))
-            if root in containers[child] and depth[child] == depth[root] + 1
+            for child in tree[root]
+            if closed[child] is not None
         ]
         repaired = repair_invalid(Polygon(shell=closed[root].exterior, holes=holes))
         if repaired is not None:
