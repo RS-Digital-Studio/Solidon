@@ -116,6 +116,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | eine **Deutung**, die noch fehlt. Das Zählverhältnis ist belegt (`installEventFilter` 13×, `removeEventFilter` 2×), die Schlussfolgerung nicht: Ein Versuch, den Fehler mit einem aufgegebenen Filterobjekt nachzustellen, blieb **fehlerfrei** — Qt entfernt sterbende Filter selbst aus seinen Listen. Was die drei gemessenen Fälle erzeugt, ist damit offen |
 | Zwei Downloadgrößen stehen im Text statt in der Message-ID | Was niemand las, und was zweimal dastand (24.08.2026) | fünf Übersetzungen für zwei Sätze. `NEEDED_GIGABYTES` macht es richtig (`.format(noetig=…)`), `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` nicht — die Zahl ist in die Message-ID getippt. Ein Test hält beide Stellen seit `77ad37cb` zusammen; der saubere Weg braucht Übersetzer |
 | Zwei §-Verweise nennen Abschnitte, die der Bauplan nicht hat | Zweitausend Verweise, und zwei ohne Ziel (24.08.2026) | **eine Entscheidung von Robert über den Bauplan**, denn der wird nur mit Ansage geändert. `§33.3` steht fünfmal im Code, zweimal ausdrücklich als „Bauplan §33.3“ — §33 führt nur 33.1 und 33.2, die Sache selbst (der Fehlerbericht) steht in §37.2. `§25.4` steht einmal am `caveat` eines Bausteins; §25 hat keine Unterabschnitte, und bei einem Baustein wäre §24 die Familie. Entweder die Abschnitte entstehen, oder die Verweise werden umgebogen — Letzteres wäre geraten. `tests/test_plan_references.py` hält beide in `BEKANNT_OFFEN` und verlangt, dass sie dort verschwinden, sobald es die Abschnitte gibt |
+| `test_style` ist auf dieser Maschine seit seiner Einführung rot | Ein Test, der auf einer Maschine nie grün war (24.08.2026) | eine Entscheidung, **wo** die Knopfbreite geprüft wird. Der Test hält `QPushButton.sizeHint()` gegen `drawn + 2 * ROOMY` — der Innenabstand kommt aus dem Stylesheet, das im Test niemand anwendet. Alle fünf Texte scheitern um **konstant 10 Bildpunkte**, auch die kurzen; es ist keine Textlänge, sondern ein Vergleich zwischen zwei Welten. Gegengeprobt auf `49d4c731`, dem Einführungs-Commit: dort ebenfalls rot |
+| Handbuch und Website hinken dem Register nach | Ein Test, der auf einer Maschine nie grün war (24.08.2026) | einen Lauf von `tools/make_manual.py`, sobald `formwerk-48` mit den Titeländerungen durch ist. `test_the_website_page_carries_the_generated_reference` ist für `de` und `en` rot, weil `520b10f0` zwei Gewindetitel geändert hat und die erzeugten HTML-Seiten von `7cc07342` stammen. Der Test nennt den Befehl selbst; ein Lauf je Titeländerung wäre verschwendet |
 
 ---
 
@@ -9080,3 +9082,53 @@ erwartete, das die Überschriften nicht tragen. **Ein Prüfwerkzeug, das zu weni
 findet, ist gefährlicher als eines, das zu viel findet:** Zu viel kostet
 Prüfzeit, zu wenig erzeugt die Gewissheit, es sei nichts da. Beide Male hat erst
 ein Fall, dessen Ausgang schon bekannt war, das Werkzeug entlarvt.
+
+## Ein Test, der auf einer Maschine nie grün war (24.08.2026)
+
+Ein Abschlusslauf auf `b2bebed4` in einem eigenen Arbeitsbaum — ohne die
+Zwischenstände der vier parallel arbeitenden Sitzungen — meldete **3 failed,
+5489 passed, 24 skipped**. Kein `worker crashed`, also echte Fehler, und einzeln
+nachgefahren blieben alle drei rot. `ruff`, `ruff format` und `mypy` sind grün.
+
+- [ ] **`test_style` ist auf dieser Maschine seit seiner Einführung rot.**
+      `test_a_primary_button_is_wide_enough_for_its_own_bold_label` prüft, ob ein
+      Hauptknopf breit genug für seine halbfette Beschriftung ist — die Zusage
+      ist richtig und der Fehler, den sie verhindert, ist echt („etzt trenne" auf
+      dem Trennknopf). Der **Vergleich** trägt sie nicht: Gehalten wird
+      `QPushButton.sizeHint()` gegen `drawn + 2 * ROOMY`, und `ROOMY` ist der
+      Innenabstand aus dem Stylesheet, das im Test niemand anwendet. Qt rechnet
+      seinen eigenen.
+
+      Gemessen auf dieser Maschine (`Sans Serif` 9 pt, offscreen): **alle fünf
+      Texte scheitern, und zwar um konstant 10 Bildpunkte** — „Jetzt trennen"
+      170 gegen 180, „Slicen" 86 gegen 96. Dass auch die kurzen scheitern, ist
+      der Beleg: Es ist keine Textlänge, sondern eine feste Differenz zwischen
+      zwei Innenabständen.
+
+      **Gegengeprobt auf `49d4c731`, dem Commit, der ihn eingeführt hat: dort
+      ebenfalls rot.** Der Test war auf dieser Maschine also nie grün, und die
+      schreibende Sitzung hat ihn auf ihrer grün gemessen (ihr Kommentar nennt
+      77 gegen 89 Bildpunkte, hier sind es 156 gegen 170). Damit ist es dieselbe
+      Familie wie die maschinenabhängigen Bestwerte, die deshalb nicht im
+      Repository liegen — nur diesmal in einem Test, der eine Zusage trägt.
+
+      Zu entscheiden ist nicht der Zahlenwert, sondern **wo** geprüft wird: an
+      einem nackten `QPushButton` ohne Stylesheet lässt sich die Frage nicht
+      stellen. Am gebauten Fenster mit angewandtem Stylesheet schon.
+
+- [ ] **Handbuch und Website hinken dem Register nach.**
+      `test_the_website_page_carries_the_generated_reference` ist für `de` und
+      `en` rot: `520b10f0` hat zwei Gewindetitel geändert
+      (`insert_printed_thread`, `thread_exact`), und `website/handbuch.html` samt
+      `website/en/manual.html` stammen von `7cc07342`. Der Test nennt den Fix
+      selbst — `tools/make_manual.py`.
+
+      Liegen geblieben, weil `formwerk-48` noch drei weitere Pakete mit
+      Titeländerungen vor sich hat und jede den Test wieder rot macht: **ein Lauf
+      am Ende ist billiger als vier dazwischen.** Abgesprochen.
+
+      Der Fund gehört zur Hälfte hierher, weil der Vorschlag für die neuen Titel
+      aus dieser Sitzung kam — und die Folge, dass ein Registertitel in zwei
+      erzeugte HTML-Dateien reicht, stand in dem Vorschlag nicht. „Was kostet es
+      an anderer Stelle" ist bei erzeugten Dateien leicht zu übersehen, weil sie
+      im Diff nicht auftauchen, solange niemand das Werkzeug laufen lässt.
