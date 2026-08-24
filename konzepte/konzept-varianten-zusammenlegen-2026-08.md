@@ -359,6 +359,37 @@ Keine Migration, kein Formatwechsel: Titel sind Anzeige, nicht Schlüssel.
   `whole_scene=True` gegen `consumes=1` ist im Register ein echter
   Unterschied. Nicht beauftragt, nicht zu Ende gedacht — gehört geprüft, bevor
   jemand es anfasst.
+
+  > **Und es ist teurer als es aussieht.** Gemeldet von `formwerk-be` am
+  > 24.08.2026: Zwei Knöpfe im Prüfbericht nennen diese Registernamen als
+  > **Zeichenkette**, und sie stehen nicht dort, wo man beim Zusammenlegen
+  > sucht.
+  >
+  > | Datei | Stelle |
+  > |---|---|
+  > | `app/ui/panels.py` | `FINDING_ACTIONS`: `arrange.below_bed`, `arrange.above_bed`, `arrange.off_the_plate` |
+  > | `app/ui/main_window.py` | `error_handlers()`: `"place_on_bed"`, `"arrange_on_bed"` |
+  > | `app/ui/main_window.py:6353` | `REGISTRY.get("place_on_bed")` |
+  > | `app/ui/main_window.py:6388` | `REGISTRY.get("arrange_bed")` |
+  >
+  > **Der Unterschied, auf den es ankommt, ist der zwischen Verstecken und
+  > Auflösen.** Alle vier Pakete dieses Konzepts *verstecken* nur den
+  > Menüeintrag; der Registereintrag bleibt, und `REGISTRY.get(…)` findet ihn
+  > weiter. Wer eine Op dagegen **auflöst** — sie also im Register durch eine
+  > andere ersetzt —, nimmt ihren Namen mit, und dann wirft `REGISTRY.get(…)`
+  > einen `InternalError`: Der Kunde klickt im Prüfbericht auf *Auf das Bett
+  > setzen* und bekommt „Im Programm ist ein unerwarteter Fehler aufgetreten"
+  > samt Fehlerbericht-Ordner.
+  >
+  > **Der bestehende Test fängt es nicht.**
+  > `test_every_offered_error_action_does_something` prüft, dass jede
+  > angebotene Handlung einen *Handler hat* — nicht, dass er *wirkt*. Genau
+  > diese Lücke war Roberts Fehler vom selben Tag: `_arrange_after_error`
+  > existierte, war verdrahtet und tat nichts (`a22ffa48`), und der Test blieb
+  > grün. Ein Namensabgleich gegen das Register wäre deshalb der schwächere
+  > Wächter; der verlässliche misst die Wirkung, Muster in
+  > `tests/test_ui.py::test_arranging_from_the_report_really_moves_the_bodies`.
+  > `formwerk-be` schreibt ihn.
 - **Keine Kandidaten**, damit sie später nicht aufgewärmt werden: „Textur
   aufbringen"/„Text aufbringen" (nur ein gemeinsames Verb), „Dreiecke
   verringern"/„Dreiecke angleichen" (dito), „Bohrung setzen"/„Bohrung
@@ -429,6 +460,14 @@ Umschalter zu bauen, der die falsche Größe stehen lässt.
 - **Keine Änderung an Bauplan §9.** Wo `consumes` im Weg steht (E2.1), bleibt
   die Op eigen. Der Vertrag wird nicht für eine Menüzeile gebeugt.
 - **Erfolg wird am Fenster gemessen**, nicht am Register.
+- **Jede Titel- oder `doc`-Änderung im Register verlangt einen Lauf von
+  `tools/make_manual.py`.** `website/handbuch.html` und
+  `website/en/manual.html` sind **erzeugte** Dateien, und
+  `test_manual.py::test_the_website_page_carries_the_generated_reference`
+  hält sie mit dem Register zusammen. Bei P1 ist genau das passiert: Die zwei
+  neuen Gewinde-Titel machten beide Seiten veraltet, und `main` war rot.
+  Weil weitere Titeländerungen folgen, wird **einmal am Ende** erzeugt und
+  nicht nach jedem Paket.
 - **Bei zwei Lesarten anhalten und fragen** (Regel 21). Dieses Konzept nennt
   drei offene Punkte (E2.3, E3.1, Kandidat E); keiner davon wird unterwegs
   still entschieden.
@@ -445,6 +484,19 @@ Umschalter zu bauen, der die falsche Größe stehen lässt.
   Sprachen das erkannte Merkmal um. Vor dem Schreiben geprüft, Schlüssel
   unberührt. Verifiziert: `test_translations` 126, `test_interface_limits` 32,
   mypy 0, Sammelgruppe 3586 passed / 23 skipped.
+> **Eine Lücke in meinem eigenen Prüfen, und sie hat `main` rot gemacht.**
+> Nach P1 und P2 habe ich nur die Sammelgruppe gefahren, nicht die 30
+> Fensterdateien — mit der Begründung, dass fremde UI-Zwischenstände im Baum
+> lagen und die Fenstergruppe deshalb nicht aussagekräftig sei. Die
+> Begründung stimmte, die Folgerung war falsch: `tests/test_manual.py` liegt
+> in dieser Gruppe (es nennt `MainWindow` im Text), und es ist genau der
+> Test, der meine Titeländerung geprüft hätte. Aus „nicht aussagekräftig"
+> wurde „nicht gelaufen", und das ist dieselbe Verwechslung wie im Tor
+> selbst (`3916cb1f`): **Ein Lauf, den ich auslasse, ist kein Lauf, dem ich
+> misstraue.** Gefunden hat es `formwerk-20` in einem eigenen Arbeitsbaum —
+> also dort, wo die Fenstergruppe aussagekräftig ist. Das ist die Antwort auf
+> mein Problem, nicht das Auslassen.
+
 - **P2** — läuft. Wartet auf **eine Zeile in fremdem Gebiet**: der Fehlertext
   `app/core/sketch/ops.py:203` (E1.1) gehört `formwerk-9e`, angefragt.
   `app/ui/shortcut_schemes.py` und `tests/test_sketch_ops.py` sind frei
