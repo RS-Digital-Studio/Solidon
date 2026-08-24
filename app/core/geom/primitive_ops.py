@@ -22,7 +22,7 @@ from app.core.geom.repair import merge_vertices
 from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import SEGMENTS, box, cylinder
-from app.core.registry import op_params, param, register_op
+from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult, SceneObject
 from app.i18n import TranslatableText, _
 
@@ -71,7 +71,7 @@ class BoxParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
+        doc=NAME_DOC,
     )
 
 
@@ -126,7 +126,7 @@ class CylinderParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
+        doc=NAME_DOC,
     )
 
 
@@ -167,7 +167,7 @@ class SphereParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
+        doc=NAME_DOC,
     )
 
 
@@ -203,7 +203,7 @@ class ScadParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
+        doc=NAME_DOC,
     )
 
 

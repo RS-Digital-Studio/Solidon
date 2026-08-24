@@ -19,7 +19,7 @@ from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
 from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
-from app.core.registry import op_params, param
+from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
 from app.core.types import BaseParams, PartResult
 from app.core.units import DEGREE_UNIT
 from app.i18n import _
@@ -156,7 +156,7 @@ class LatchParams(BaseParams):
         minimum=0.0,
         maximum=1.0,
         placement="advanced",
-        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
 
 
@@ -326,7 +326,7 @@ class DowelParams(BaseParams):
         minimum=0.0,
         maximum=1.0,
         placement="advanced",
-        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
 
 
@@ -486,7 +486,7 @@ class SnapConnectorParams(BaseParams):
         minimum=0.0,
         maximum=1.0,
         placement="advanced",
-        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
 
 

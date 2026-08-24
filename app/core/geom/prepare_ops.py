@@ -36,7 +36,7 @@ from app.core.geom.prepare import (
 from app.core.geom.section import AXIS_NORMALS, SectionPlane
 from app.core.geom.transform import Axis, place_on_bed
 from app.core.knowledge.profiles import for_object, material
-from app.core.registry import VARIABLE, op_params, param, register_op
+from app.core.registry import AUTO_FROM_PROFILE_DOC, VARIABLE, op_params, param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
 from app.core.types import BaseParams, Finding, OpContext, OpResult
 from app.core.units import DEGREE_UNIT, EPS_GEOM
@@ -483,7 +483,7 @@ class ElephantFootParams(BaseParams):
         minimum=0.0,
         maximum=2.0,
         placement="advanced",
-        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
 
 
@@ -719,7 +719,7 @@ class SplitPinnedParams(BaseParams):
         minimum=0.0,
         maximum=1.0,
         placement="advanced",
-        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
 
 
@@ -895,7 +895,7 @@ class SplitLineParams(BaseParams):
         minimum=0.0,
         maximum=1.0,
         placement="advanced",
-        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
 
 

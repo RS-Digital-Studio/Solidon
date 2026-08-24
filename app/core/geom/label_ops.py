@@ -29,7 +29,7 @@ from app.core.geom.boolean import BooleanKind, boolean, without_effect
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import apply, rotation, translation
 from app.core.log import get_logger
-from app.core.registry import op_params, param, register_op
+from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.types import BaseParams, MaterialSlot, OpContext, OpResult, SceneObject, Vec3
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
@@ -331,7 +331,7 @@ class LabelBodyParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
+        doc=NAME_DOC,
     )
 
 

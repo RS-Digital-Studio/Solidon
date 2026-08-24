@@ -27,6 +27,24 @@ from app.i18n import TranslatableText, _
 
 _METADATA_KEY = "param"
 
+#: Der Satz hinter jedem ``name``-Parameter, den eine Operation anbietet.
+#:
+#: Bis zum 24.08.2026 stand er neunmal ausgeschrieben in fünf Dateien, dazu
+#: einmal als ``_NAME_DOC`` in ``sketch.ops`` — und die Drift war schon
+#: eingetreten: ``ingest.ops`` sagt „Leer übernimmt den Dateinamen", weil dort
+#: tatsächlich der Dateiname einspringt. Das ist der richtige Text an der
+#: richtigen Stelle und bleibt eigen; die übrigen neun sagten dasselbe und
+#: hätten beim nächsten Nachschärfen auseinandergelaufen.
+NAME_DOC: Final = _("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen.")
+
+#: Der Satz hinter jedem Maß, das null als „nimm den kalibrierten Wert" liest.
+#:
+#: Elf Stellen in fünf Dateien, alle wortgleich. Er ist die Erklärung von
+#: Regel 7 gegenüber dem Nutzer — keine Zahlenkonstante für eine Toleranz,
+#: sondern ein Verweis ins Materialprofil (``auto:<material>``). Eine Regel,
+#: die an einer Stelle steht, sollte auch an einer Stelle erklärt werden.
+AUTO_FROM_PROFILE_DOC: Final = _("Null heißt: Wert aus dem kalibrierten Materialprofil.")
+
 _KIND_BY_ANNOTATION: dict[str, ParamKind] = {
     "float": "float",
     "int": "int",

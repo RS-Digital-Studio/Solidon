@@ -19,7 +19,7 @@ from app.core.knowledge.parts.registry import (
     PartChange,
     register_part,
 )
-from app.core.registry import op_params, param
+from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
 from app.core.types import BaseParams, PartResult
 from app.i18n import _
 
@@ -46,7 +46,7 @@ class MagnetPocketParams(BaseParams):
         minimum=0.0,
         maximum=1.0,
         placement="advanced",
-        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
     cover: float = param(
         title=_("Deckschicht"),

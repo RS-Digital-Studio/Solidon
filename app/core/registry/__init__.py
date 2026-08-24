@@ -9,7 +9,9 @@ from app.core.lazy import install
 
 if TYPE_CHECKING:
     from app.core.registry.params import (
+        AUTO_FROM_PROFILE_DOC,
         GATHERED_KINDS,
+        NAME_DOC,
         json_schema,
         op_params,
         param,
@@ -49,7 +51,9 @@ if TYPE_CHECKING:
 #: Zugriff, damit zwei Threads sich nicht über die Modul-Locks
 #: verklemmen (:mod:`app.core.lazy`).
 _EXPORTS: Final[dict[str, tuple[str, str]]] = {
+    "AUTO_FROM_PROFILE_DOC": ("params", "AUTO_FROM_PROFILE_DOC"),
     "GATHERED_KINDS": ("params", "GATHERED_KINDS"),
+    "NAME_DOC": ("params", "NAME_DOC"),
     "json_schema": ("params", "json_schema"),
     "op_params": ("params", "op_params"),
     "param": ("params", "param"),
@@ -84,12 +88,14 @@ _EXPORTS: Final[dict[str, tuple[str, str]]] = {
 install(__name__, _EXPORTS)
 
 __all__ = [
+    "AUTO_FROM_PROFILE_DOC",
     "CATEGORIES",
     "FEATURE_KINDS",
     "GATHERED_KINDS",
     "MAX_MENU_ROWS",
     "MENU_GROUPS",
     "MENU_TWINS",
+    "NAME_DOC",
     "REGISTRY",
     "TWIN_TOGGLES",
     "VARIABLE",

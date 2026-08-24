@@ -29,7 +29,7 @@ from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import RIDGE_SHARE, thread_body
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
-from app.core.registry import op_params, param, register_op
+from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.scene.placement import faces_up
 from app.core.slice.analysis import cross_section
 from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult, SceneObject
@@ -328,7 +328,7 @@ class LidParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
+        doc=NAME_DOC,
     )
 
 

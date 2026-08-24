@@ -20,7 +20,7 @@ from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, result, thread, union
 from app.core.knowledge.parts.registry import FACE_GIVES_DIRECTION, PartChange, register_part
-from app.core.registry import op_params, param
+from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
 from app.core.types import BaseParams, PartResult
 from app.i18n import _
 
@@ -281,7 +281,7 @@ class NutTrapParams(BaseParams):
         minimum=0.0,
         maximum=1.0,
         placement="advanced",
-        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
     screw_hole: bool = param(
         title=_("Schraubenloch mitschneiden"),
@@ -373,7 +373,7 @@ class ThreadParams(BaseParams):
         minimum=0.0,
         maximum=1.0,
         placement="advanced",
-        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
 
 

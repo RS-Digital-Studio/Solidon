@@ -22,7 +22,7 @@ from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
 from app.core.errors import Action, NeedsSolidError, ValidationError
 from app.core.geom.boolean import without_effect
-from app.core.registry import op_params, param, register_op
+from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.sketch import shapes
 from app.core.sketch.planes import frame_for, frame_of, height_to, is_feature_plane
 from app.core.sketch.profile import Profile, profile_of, regions_of, shifted
@@ -40,7 +40,6 @@ _LENGTH_DOC = _(
 _WIDTH_DOC = _("Breite in Y. Beim Kreis und beim Vieleck ohne Wirkung.")
 _SHAPE_DOC = _("Rechteck, Langloch, Kreis oder Vieleck — die Maße stehen darunter.")
 _CORNERS_DOC = _("Zahl der Ecken, nur beim Vieleck.")
-_NAME_DOC = _("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen.")
 _SKETCH_DOC = _(
     "Eine gezeichnete Skizze anstelle der Grundform. Leer heißt: die Grundform oben gilt."
 )
@@ -263,7 +262,7 @@ class SketchExtrudeParams(BaseParams):
             "Höhe darüber gilt. Eine angeklickte Fläche trägt sich selbst ein."
         ),
     )
-    name: str = param(title=_("Name"), default="", placement="advanced", doc=_NAME_DOC)
+    name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
     sketch: str = param(
         title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
     )
@@ -461,7 +460,7 @@ class SketchRevolveParams(BaseParams):
         placement="advanced",
         doc=_("Wie weit um die Achse gedreht wird. 360 schließt den Körper."),
     )
-    name: str = param(title=_("Name"), default="", placement="advanced", doc=_NAME_DOC)
+    name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
     corners: int = param(
         title=_("Ecken"),
         default=6,
@@ -546,7 +545,7 @@ class SketchSweepParams(BaseParams):
         maximum=180.0,
         doc=_("Wie weit der Bogen führt — 90 Grad ist ein rechtwinkliger Rohrbogen."),
     )
-    name: str = param(title=_("Name"), default="", placement="advanced", doc=_NAME_DOC)
+    name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
     corners: int = param(
         title=_("Ecken"),
         default=6,
@@ -618,7 +617,7 @@ class SketchLoftParams(BaseParams):
             "ihn — ein Pyramiden- oder Kegelstumpf; über 1 wird es oben weiter."
         ),
     )
-    name: str = param(title=_("Name"), default="", placement="advanced", doc=_NAME_DOC)
+    name: str = param(title=_("Name"), default="", placement="advanced", doc=NAME_DOC)
     corners: int = param(
         title=_("Ecken"),
         default=6,

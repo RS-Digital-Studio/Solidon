@@ -23,7 +23,7 @@ from app.core.brep.kernel import Solid, require
 from app.core.errors import InternalError, NeedsSolidError, ValidationError
 from app.core.geom.prepare import bore_diameter
 from app.core.geom.prepare_ops import DrillParams
-from app.core.registry import op_params, param, register_op
+from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
 from app.core.units import DEGREE_UNIT, EPS_GEOM, format_length
 from app.i18n import _
@@ -64,7 +64,7 @@ class BrepBoxParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
+        doc=NAME_DOC,
     )
 
 
@@ -109,7 +109,7 @@ class BrepCylinderParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
+        doc=NAME_DOC,
     )
 
 
@@ -371,7 +371,7 @@ class ThreadParams(BaseParams):
         title=_("Name"),
         default="",
         placement="advanced",
-        doc=_("Wie das Objekt im Baum heißt. Leer heißt: Solidon vergibt einen."),
+        doc=NAME_DOC,
     )
 
 

@@ -25,7 +25,7 @@ from app.core.knowledge.parts.registry import (
     PartChange,
     register_part,
 )
-from app.core.registry import op_params, param
+from app.core.registry import AUTO_FROM_PROFILE_DOC, op_params, param
 from app.core.types import BaseParams, PartResult
 from app.i18n import _
 
@@ -154,7 +154,7 @@ class CableGlandParams(BaseParams):
         minimum=0.0,
         maximum=2.0,
         placement="advanced",
-        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
     strain_relief: bool = param(
         title=_("Zugentlastung"),
@@ -252,7 +252,7 @@ class ProfileTongueParams(BaseParams):
         minimum=0.0,
         maximum=1.0,
         placement="advanced",
-        doc=_("Null heißt: Wert aus dem kalibrierten Materialprofil."),
+        doc=AUTO_FROM_PROFILE_DOC,
     )
     head: float = param(
         title=_("Kopfhöhe"),
