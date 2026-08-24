@@ -80,6 +80,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Additive Bausteine fehlen am Flächenklick | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | nichts — der Fix in `_applies_to` kann heute laufen und behebt Wandhalter und Nutfeder mit |
+| Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Entscheidung: ob ein Rezept in Projektdateien mitreisen darf. Regel 13 sagt heute nein, ohne zwischen Code und Daten zu trennen — Bauplanänderung, geht an Robert (Konzept Abschnitt 17) |
+| Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
@@ -119,6 +121,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | eine **Deutung**, die noch fehlt. Das Zählverhältnis ist belegt (`installEventFilter` 13×, `removeEventFilter` 2×), die Schlussfolgerung nicht: Ein Versuch, den Fehler mit einem aufgegebenen Filterobjekt nachzustellen, blieb **fehlerfrei** — Qt entfernt sterbende Filter selbst aus seinen Listen. Was die drei gemessenen Fälle erzeugt, ist damit offen |
 | Zwei Downloadgrößen stehen im Text statt in der Message-ID | Was niemand las, und was zweimal dastand (24.08.2026) | fünf Übersetzungen für zwei Sätze. `NEEDED_GIGABYTES` macht es richtig (`.format(noetig=…)`), `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` nicht — die Zahl ist in die Message-ID getippt. Ein Test hält beide Stellen seit `77ad37cb` zusammen; der saubere Weg braucht Übersetzer |
 | Zwei §-Verweise nennen Abschnitte, die der Bauplan nicht hat | Zweitausend Verweise, und zwei ohne Ziel (24.08.2026) | **eine Entscheidung von Robert über den Bauplan**, denn der wird nur mit Ansage geändert. `§33.3` steht fünfmal im Code, zweimal ausdrücklich als „Bauplan §33.3“ — §33 führt nur 33.1 und 33.2, die Sache selbst (der Fehlerbericht) steht in §37.2. `§25.4` steht einmal am `caveat` eines Bausteins; §25 hat keine Unterabschnitte, und bei einem Baustein wäre §24 die Familie. Entweder die Abschnitte entstehen, oder die Verweise werden umgebogen — Letzteres wäre geraten. `tests/test_plan_references.py` hält beide in `BEKANNT_OFFEN` und verlangt, dass sie dort verschwinden, sobald es die Abschnitte gibt |
+| Zwei Sätze in der EULA tragen nicht, was das Fördermodell auf sie baut | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | **eine Entscheidung von Robert**, denn es ist ein Rechtstext: Nummer 11 nennt Erfüllungsgehilfen und gesetzliche Vertreter nicht (§ 309 Nr. 7 BGB, und eine solche Klausel fällt ganz statt teilweise), Nummer 4a begrenzt für die **heute laufende** Demo auf Vorsatz und grobe Fahrlässigkeit und widerspricht damit ihrem eigenen Verweis auf Nummer 11. Zusammen fünf Wörter und ein ersetzter Satz — dazu Fassungsnummer, Neuerzeugen und Upload |
+| Die Versicherung trägt die Rechtsformentscheidung und steht in keiner Liste | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | ein Angebot. `konzept-foerdermodell.md` §5 begründet das Einzelunternehmen unter anderem mit einer Berufshaftpflicht — die in §11 und §13 nicht vorkommt. Gebraucht wird eine **Produkthaftpflicht mit Software-Einschluss**, nicht die übliche Vermögensschadendeckung: Richtlinie (EU) 2024/2853 macht Software ausdrücklich zum Produkt, Umsetzungsfrist 09.12.2026, und der Verkaufsstart liegt danach |
+| Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im Bestellvorgang | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Bestellstrecke, die es noch nicht gibt. `EULA.md` Nummer 10 — kein Prüfinstitut, keine zugesicherte Maßhaltigkeit, keine tragenden Teile — ist gegenüber Verbrauchern eine negative Beschaffenheitsvereinbarung und nach § 327h BGB **ausdrücklich und gesondert** zu vereinbaren. Betrifft den Verkauf, nicht nur die Förderung |
+| Der Kündigungsknopf verlangt eine Webseite, die Förderung sitzt in der Anwendung | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Entscheidung, die die vom 24.08. ergänzt statt sie umzustoßen: § 312k BGB will eine ständig verfügbare Schaltfläche auf einer Webseite, §13 Nummer 6 hat die Förderung in die Anwendung gelegt. Eine Schaltfläche in einem Programm, das man deinstallieren kann, ist nicht ständig verfügbar — und Stufe 1 verspricht eine Nennung auf einer Förderseite, die es dann nicht gibt |
+| Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | den Vertrag selbst, vor der Unterschrift. MoR-Verträge enthalten regelmäßig eine Freistellung zulasten des Verkäufers, oft unbegrenzt und nach fremdem Recht; `EULA.md` Nummer 11 wirkt gegenüber dem Kunden, nicht gegenüber dem Dienstleister. Bei einem Einzelunternehmen haftet dafür das Privatvermögen |
 
 ---
 
@@ -9255,3 +9262,135 @@ gebaut wird. Hier stehen die zwei Punkte, die es zu Arbeit machen.
   setzen, findet dort alles außer dem Wandhalter. §18.5 nennt genau dieses
   Menü „die wichtigste Einzelfunktion". Der Punkt ist älter als die
   Kundenanfrage und wird unabhängig von ihr behoben.
+
+---
+
+## Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026)
+
+Robert hat die Haftungsgrundlagen des Geschäftsmodells noch einmal prüfen
+lassen. Acht Befunde, ausgearbeitet in `konzepte/konzept-foerdermodell.md` §15;
+hier stehen die fünf, die Arbeit sind.
+
+**Der Anlass, in einem Satz:** §10 B6 des Konzepts hatte die Haftungsklauseln
+der EULA als „fachlich solide aufgebaut" abgehakt, und §5 baut die
+Rechtsformentscheidung darauf. Der Aufbau stimmt auch — der Wortlaut nicht.
+
+**Und einer der Punkte gilt heute und nicht erst zum Verkaufsstart:** `AGB.md`
+setzt sich für die Demo-Zeit selbst außer Kraft, der Verkauf ist bis zum
+30.10.2026 zu. Damit ist `EULA.md` Nummer 4a die **einzige Haftungsregelung mit
+heutiger Wirkung** — und die schwächste der drei.
+
+- [ ] **Zwei Sätze in der EULA tragen nicht, was auf sie gebaut wird.**
+      Nummer 11 sagt „**wir** haften unbeschränkt bei Vorsatz und grober
+      Fahrlässigkeit" und schließt danach jede weitergehende Haftung aus;
+      § 309 Nr. 7 lit. b BGB verlangt dieselbe Ausnahme für **gesetzliche
+      Vertreter und Erfüllungsgehilfen**. AGB werden nicht geltungserhaltend
+      reduziert — fällt die Klausel, fällt sie ganz, und dann gilt die volle
+      gesetzliche Haftung.
+
+      Nummer 4a begrenzt für die Demo auf Vorsatz und grobe Fahrlässigkeit,
+      was Körperschäden bei einfacher Fahrlässigkeit ausschlösse (§ 309 Nr. 7
+      lit. a), und verweist im selben Atemzug auf Nummer 11, die das Gegenteil
+      sagt. Dazu die Prämisse: Eine Demo wird zur Absatzförderung überlassen,
+      nicht aus Freigebigkeit — das Privileg des § 521 BGB ist damit nicht
+      selbstverständlich zu haben.
+
+      **Der Fix ist klein** — fünf Wörter in Nummer 11, ein ersetzter Satz in
+      Nummer 4a —, aber es ist ein Rechtstext: Fassungsnummer hoch,
+      `tools/make_legal.py` neu laufen lassen, hochladen. **Robert
+      vorzulegen.**
+
+- [ ] **Die Versicherung trägt die Rechtsformentscheidung und steht in keiner
+      Liste.** `konzept-foerdermodell.md` §5 begründet das Einzelunternehmen
+      auch damit, dass gegen das nicht Ausschließbare „eine Berufshaftpflicht
+      für IT besser und billiger hilft als eine Rechtsform". In §11 stehen zehn
+      Aufgaben, in §13 sechs Entscheidungen — die Versicherung kommt in keiner
+      vor.
+
+      Und sie muss anders aussehen als der Nebensatz vermuten lässt: Eine
+      IT-Berufshaftpflicht deckt typischerweise **Vermögensschäden**. Personen-
+      und Sachschäden aus einem fehlerhaften Produkt brauchen eine
+      **Produkthaftpflicht mit Software-Einschluss** — Richtlinie
+      (EU) 2024/2853 macht Software ausdrücklich zum Produkt, nimmt Datenverlust
+      auf, streicht den Selbstbehalt und lässt sich nicht abbedingen.
+      Umsetzungsfrist **09.12.2026**; der Verkaufsstart liegt danach. Zu fragen
+      ist auch, ob die Police Schäden aus KI-gestützten Ausgaben einschließt und
+      wie sie den Fall behandelt, dass ein Kunde sich **nicht** an Nummer 10
+      hält.
+
+- [ ] **Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im
+      Bestellvorgang.** Nummer 10 — kein Prüfinstitut, keine zugesicherte
+      Maßhaltigkeit, keine tragenden Teile — ist gegenüber Verbrauchern eine
+      negative Beschaffenheitsvereinbarung. Nach § 327h BGB wirkt sie nur, wenn
+      der Verbraucher davon **eigens** in Kenntnis gesetzt wurde und die
+      Abweichung **ausdrücklich und gesondert** vereinbart ist. Ein Abschnitt in
+      einem Vertragstext ist beides nicht.
+
+      Dasselbe gilt für die **Vorabversionen** aus Förderstufe 2: Wer sie gegen
+      Entgelt zusagt, schuldet nach § 327e Abs. 3 BGB die übliche Beschaffenheit
+      — bei einer Vorabversion begriffsnotwendig ein Problem. Betrifft also den
+      Verkauf **und** die Förderung, und beides über dieselbe Formalie.
+
+- [ ] **Der Kündigungsknopf verlangt eine Webseite, die Förderung sitzt in der
+      Anwendung.** § 312k Abs. 2 BGB will eine ständig verfügbare, ohne
+      Anmeldung erreichbare Schaltfläche auf einer Webseite; §13 Nummer 6 des
+      Konzepts hat am selben Tag entschieden, die Förderung in die Anwendung zu
+      legen und keine Website-Seite zu bauen. Eine Schaltfläche in einem
+      Programm, das man deinstallieren kann, ist nicht ständig verfügbar — und
+      wer kündigt, hat es oft schon gelöscht. Dazu verspricht Stufe 1 eine
+      Nennung auf einer Förderseite, die es dann nicht gibt: eine geschuldete
+      Leistung ohne Ort.
+
+      **Das stößt die Entscheidung nicht um, es ergänzt sie:** Die Seite wird
+      gebraucht — als Rechtsseite mit Kündigung, Bedingungen und Nennung, nicht
+      als Werbeseite. Geworben wird weiter in der Anwendung; das war der Befund
+      aus den Zugriffszahlen und der bleibt.
+
+- [ ] **Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück.**
+      `konzept-foerdermodell.md` §8 zählt auf, was ein Merchant of Record
+      abnimmt — Umsatzsteuer, Rechnung, Widerruf, Streitfälle — und nennt die
+      Kehrseite nicht: MoR-Verträge enthalten regelmäßig eine
+      **Freistellungsklausel** zulasten des Verkäufers, häufig der Höhe nach
+      unbegrenzt, nach fremdem Recht und mit fremdem Gerichtsstand.
+      `EULA.md` Nummer 11 wirkt gegenüber dem Kunden, nicht gegenüber dem
+      Dienstleister.
+
+      Bei einem Einzelunternehmen haftet dafür das Privatvermögen. Das ist die
+      größte vertragliche Haftungsübernahme des ganzen Modells, und sie steht in
+      einem Vertrag, den noch niemand gelesen hat — zu lesen, bevor er
+      unterschrieben wird.
+
+---
+
+## Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026)
+
+§24.5 ist gebaut und wird benutzt: `parts/user.py` liest
+`<Nutzerdaten>/parts/*.py`, macht aus jedem Fund eine Operation, kennzeichnet
+sie im Katalog und hält ihren Abdruck im Dokument fest. Was fehlt, ist der
+Schritt davor — heute ist ein eigener Baustein eine Python-Datei mit
+`@register_part`, einer Parameterklasse und einer Funktion gegen
+`manifold3d`. Wer das schreiben kann, braucht Solidon nicht; wer es nicht
+kann, ist der Kunde, für den es gebaut wird.
+
+Der Entwurf steht in `konzepte/konzept-befestigungssysteme-2026-08.md`
+Teil II: Ein eigener Baustein ist ein **Rezept** — ein Ausschnitt des Stapels
+plus die Beschreibung seiner Parameter, gespeichert als Daten. Sechs
+Arbeitspakete, die Grenzen und die eine Entscheidung stehen dort.
+
+- [ ] **Eigene Teile aus der Anwendung heraus in den Katalog**, mit Titel,
+  Einheit, Grenzen, Vorgabe und Beschreibung je Parameter — dieselben Angaben
+  wie ein eingebauter Baustein, an derselben Stelle im Dialog. Dazu gehört,
+  dass der Bereichstest aus §24.3 in die Anwendung wandert: „Ein Baustein ohne
+  diesen Test gilt als nicht vorhanden", und `corners()` ist gewöhnlicher
+  Code, kein Testwerkzeug.
+
+- [ ] **Eigene Bausteine sprengen die Zeilengrenze der Menüs, und die Suite
+  kann es nicht sehen.** Jeder Baustein wird eine Operation und damit ein
+  Menüeintrag; `tests/test_interface_limits.py` erlaubt zwölf Zeilen je Menü.
+  Zwanzig eigene Teile machen daraus die Liste zum Durchsuchen, die der Test
+  verhindern soll. Sehen kann er es nicht: `bootstrap.load_user_parts` wird
+  ausdrücklich nur von Oberfläche und Kommandozeile gerufen, nicht von der
+  Suite — mit gutem Grund (§38), aber mit der Folge, dass diese Grenze beim
+  Kunden reißt und bei uns nie. Der Umbau ist, eigene Bausteine in Katalog und
+  Befehlspalette zu führen statt in der Menüleiste; das gilt für die heutigen
+  Python-Bausteine genauso.

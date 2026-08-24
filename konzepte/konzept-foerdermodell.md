@@ -1,7 +1,9 @@
 # Konzept: Monatliche Förderung in drei Stufen
 
 Stand 23.08.2026, **überarbeitet am 24.08.2026 gegen die ersten Zugriffszahlen**
-(§14). Beauftragt von Robert: ein Konzept für eine monatliche Finanzierung
+(§14) und am selben Tag um eine **Nachkontrolle der Haftungsgrundlagen**
+ergänzt (§15 — acht Befunde, zwei davon wirken heute).
+Beauftragt von Robert: ein Konzept für eine monatliche Finanzierung
 „nebenbei, für Interessierte" in drei Stufen, bei der die höchste Stufe auch den
 Lizenzschlüssel enthält — dazu eine Kontrolle aller Rechtstexte und eine
 Recherche zur Rechtsform.
@@ -345,6 +347,16 @@ IHK und Berufsgenossenschaft weiter.
 3. **Der Wechsel ist jederzeit möglich.** Ein Einzelunternehmen lässt sich
    später in eine UG oder GmbH einbringen. Der umgekehrte Weg ist teurer.
 
+> **Argument 2 ist am 24.08.2026 nachkontrolliert worden und trägt in dieser
+> Form nicht** (§15). Die EULA begrenzt nicht so sauber, wie hier
+> vorausgesetzt: Nummer 11 nennt Erfüllungsgehilfen nicht, und eine
+> AGB-Klausel, die gegen § 309 Nr. 7 BGB verstößt, fällt ganz statt teilweise
+> (H1). Der Vergleich mit der GmbH ist zu grob — dort ist die Gesellschaft
+> Herstellerin, persönlich haftet der Geschäftsführer erst über eine eigene
+> Verkehrspflichtverletzung (H3). **Die Empfehlung bleibt**, sie steht auf
+> Argument 1 und 3 — und auf der Versicherung, die dafür aus dem Nebensatz in
+> die Aufgabenliste gehört (H4).
+
 **Wenn eine Rechtsform gewechselt wird, dann später und aus einem konkreten
 Anlass** — erster Angestellter, erster Großkunde mit eigenen Anforderungen,
 Gewinn jenseits der 80.000 €.
@@ -531,6 +543,15 @@ ausgewiesen; die Rechnung stellt ohnehin Paddle als MoR (§8).
   unbestimmte Zeit verlängert werden, mit einer Kündigungsfrist von höchstens
   einem Monat. Eine Förderung, die man nicht sofort beenden kann, ist keine.
 - **Keine Änderung am Code.** Siehe §4.
+
+> **Diese Aufzählung ist unvollständig, nachkontrolliert am 24.08.2026**
+> (§15). Sie leitet alles aus Stufe 3 ab, aber schon **Stufe 1 hat eine
+> digitale Gegenleistung** und **Stufe 2 liefert Vorabversionen** — damit
+> gelten die §§ 327 ff. BGB in der Fassung für **dauerhafte Bereitstellung**:
+> Aktualisierungspflicht über die ganze Laufzeit, Beweislastumkehr über die
+> ganze Laufzeit, Verjährung erst danach (H5). Und der Kündigungsbutton nach
+> § 312k BGB verlangt eine **Webseite**, während §13 Nummer 6 die Förderung in
+> die Anwendung gelegt hat — beides zusammen geht nicht auf (H6).
 
 ---
 
@@ -740,6 +761,14 @@ Was fehlt:
   Kardinalpflichten, unbeschränkte Haftung bei Vorsatz und grober
   Fahrlässigkeit, Produkthaftungsgesetz, ausdrücklicher Ausschluss für
   sicherheitskritische Anwendungen. Das ist die Grundlage der Empfehlung in §5.
+
+  > **Im Aufbau richtig, im Wortlaut nicht — nachkontrolliert am 24.08.2026**
+  > (§15). Nummer 11 nennt **Erfüllungsgehilfen und gesetzliche Vertreter
+  > nicht**, und Nummer 10 ist eine negative Beschaffenheitsvereinbarung, die
+  > gegenüber Verbrauchern nach § 327h BGB **ausdrücklich und gesondert** zu
+  > vereinbaren wäre — nicht in einem Vertragstext, sondern im Bestellvorgang.
+  > Beides ist Formulierungs- und Ablaufarbeit, keine inhaltliche Kehrtwende;
+  > dieser Punkt ist damit **nicht mehr „in Ordnung"**, sondern H1 und H8.
 - **`AGB.md` § 7** verweist korrekt auf die §§ 327 ff. BGB samt
   Aktualisierungspflicht für digitale Produkte.
 - **Die drei erzeugten Texte tragen alle den Entwurfsvermerk** („Sorgfältiger
@@ -836,6 +865,15 @@ Reihenfolge nach Dringlichkeit, nicht nach Aufwand.
 **Punkt 1 bis 5 sind Textarbeit und in einer Sitzung zu erledigen.** Punkt 6 bis
 9 sind Roberts Entscheidungen und Behördengänge; sie stehen hier, damit keiner
 davon vergessen wird.
+
+> **Sechs weitere Punkte (11 bis 16) sind am 24.08.2026 aus der Nachkontrolle
+> der Haftungsgrundlagen hinzugekommen** — die Tabelle dazu steht am Ende von
+> §15. Zwei davon sind neu in dieser Liste und nicht bloß Textarbeit: die
+> **Produkthaftpflicht mit Software-Einschluss** (Punkt 13), auf der nach H3
+> und H4 die Rechtsformentscheidung ruht, und das **Häkchen im Bestellvorgang**
+> nach § 327h BGB (Punkt 14), von dem die Wirksamkeit von `EULA.md` Nummer 10
+> gegenüber Verbrauchern abhängt. Punkt 12 gilt **heute** und nicht erst zum
+> Verkaufsstart.
 
 ---
 
@@ -1015,3 +1053,211 @@ die einzige Quelle dafür.
 > alles trägt. Wer im Oktober hier liest, prüft sie nach, statt sie zu
 > übernehmen — das ist die Hausregel dieser Sammlung, und hier gilt sie
 > besonders.
+
+---
+
+## §15 Nachkontrolle der Haftungsgrundlagen (24.08.2026)
+
+Beauftragt von Robert: die Haftungsgrundlagen des Modells noch einmal prüfen.
+Geprüft wurden `EULA.md` Nummern 4a, 10, 11, `AGB.md` §§ 7 und 8 und die
+Haftungsaussagen dieses Dokuments in §5 Nummer 2, §8 und §9.
+
+**§10 B6 nannte `EULA.md` 10 und 11 „fachlich solide aufgebaut". Das ist im
+Aufbau richtig und im Wortlaut unvollständig** — und dieser Wortlaut trägt die
+Rechtsformentscheidung in §5. Acht Befunde, die ersten beiden wirken heute.
+
+### H1 — Die Haftungsklausel nennt Erfüllungsgehilfen nicht (`EULA.md` Nr. 11)
+
+Der Text sagt „**wir** haften unbeschränkt bei Vorsatz und grober
+Fahrlässigkeit" und schließt danach „eine weitergehende Haftung" aus.
+§ 309 Nr. 7 lit. b BGB verlangt aber, dass grobes Verschulden **eines
+gesetzlichen Vertreters oder Erfüllungsgehilfen** ebenfalls nicht ausgeschlossen
+wird; lit. a verlangt dasselbe für Körperschäden bereits bei einfacher
+Fahrlässigkeit.
+
+Wer die Klausel eng liest, findet dort einen Ausschluss, den § 309 verbietet.
+Und AGB-Klauseln werden nicht geltungserhaltend reduziert: **Wenn sie fällt,
+fällt sie ganz** — es gilt dann die volle gesetzliche Haftung, also das
+Gegenteil dessen, was §5 Nummer 2 annimmt.
+
+**Fix, fünf Wörter je Absatz:** „bei Vorsatz und grober Fahrlässigkeit — auch
+unserer gesetzlichen Vertreter und Erfüllungsgehilfen". Kein inhaltliches
+Zugeständnis, sondern die Formulierung, die den Schutz überhaupt erst hält.
+
+### H2 — Der einzige heute wirkende Haftungstext ist der schwächste (`EULA.md` Nr. 4a)
+
+`AGB.md` erklärt sich selbst für die Demo-Zeit außer Kraft, der Verkauf ist bis
+30.10.2026 zu. **Damit ist Nummer 4a die einzige Haftungsregelung, die jetzt
+gilt** — und sie hat zwei Fehler auf drei Zeilen:
+
+- *„Wir haften für Vorsatz und grobe Fahrlässigkeit"* schließt Körperschäden
+  bei einfacher Fahrlässigkeit aus. § 309 Nr. 7 lit. a BGB lässt das nicht zu,
+  auch nicht bei unentgeltlicher Überlassung — die Vorschrift knüpft an die
+  AGB gegenüber Verbrauchern an, nicht an ein Entgelt.
+- Der Nachsatz *„im Übrigen gelten die Abschnitte 10 und 11 entsprechend"*
+  widerspricht dem: Nummer 11 gewährt für Körperschäden gerade unbeschränkte
+  Haftung. Zwei Sätze, zwei Aussagen — das ist neben § 309 auch eine Frage des
+  Transparenzgebots (§ 307 Abs. 1 Satz 2 BGB).
+
+Dazu die Prämisse: **Eine Demo ist keine Schenkung.** Sie wird zur
+Absatzförderung überlassen, nicht aus Freigebigkeit; das Haftungsprivileg des
+§ 521 BGB ist damit nicht selbstverständlich zu haben.
+
+**Fix:** Den Satz ersatzlos durch „Für die Haftung gelten die Nummern 10 und
+11" ersetzen. Er gibt ein Privileg auf, das ohnehin unsicher war, und beseitigt
+den Widerspruch mit.
+
+### H3 — Die Produkthaftung wächst genau zum Verkaufsstart
+
+Dieses Dokument behandelt Produkthaftung als bekannte, feststehende Größe. Sie
+ist es nicht mehr: **Richtlinie (EU) 2024/2853** löst die Richtlinie von 1985
+ab, Umsetzungsfrist **9. Dezember 2026**, anzuwenden auf Produkte, die danach
+in Verkehr gebracht werden. Was sich ändert:
+
+- **Software ist ausdrücklich ein Produkt** — der bisherige Streit darüber
+  entfällt.
+- Ersatzfähig werden auch **Datenverlust und -zerstörung** sowie Schäden an
+  privat genutzten Sachen; der Selbstbehalt von 500 € entfällt.
+- Fehlerhaftigkeit kann sich aus **unterbliebenen Sicherheitsaktualisierungen**
+  ergeben, also aus einem Unterlassen nach dem Verkauf.
+- **Abbedingen lässt sie sich nicht** — sie ist deliktisch und wirkt gegenüber
+  jedem Geschädigten, nicht nur gegenüber dem Vertragspartner. `EULA.md`
+  Nummer 10 kann die Sicherheitserwartung prägen; ausschließen kann sie nichts.
+
+**Zeitlage:** Demo bis 30.10.2026, Verkauf danach (§13 Nummer 5). Der erste
+Verkauf fällt damit aller Voraussicht nach **unter das neue Recht**. Der
+deutsche Umsetzungsstand ist am Verkaufstag zu prüfen und nicht heute zu
+unterstellen.
+
+### H4 — Die Versicherung trägt die Rechtsformentscheidung und steht in keiner Liste
+
+§5 Nummer 2 begründet das Einzelunternehmen unter anderem damit, dass eine
+**Berufshaftpflicht für IT** „besser und billiger als eine Rechtsform" hilft.
+In §11 stehen zehn Aufgaben, in §13 sechs Entscheidungen — **die Versicherung
+kommt in keiner von beiden vor.** Das Argument, das die Entscheidung stützt,
+ist nirgends eine Handlung.
+
+Dazu inhaltlich: Eine IT-Berufshaftpflicht deckt typischerweise
+**Vermögensschäden**. Personen- und Sachschäden aus einem fehlerhaften Produkt
+gehören in eine **Produkthaftpflicht mit ausdrücklichem Software-Einschluss** —
+das ist ein anderer Baustein, und nach H3 der wichtigere. Zu fragen ist
+außerdem, ob die Police Schäden aus **KI-gestützten Ausgaben** einschließt und
+wie sie mit den in Nummer 10 ausgeschlossenen Einsatzgebieten umgeht: Versichert
+sein muss der Fall, dass der Kunde sich **nicht** daran hält.
+
+### H5 — Die Förderung löst mehr aus als §9 nennt: §§ 327 ff. BGB
+
+§9 leitet alle Pflichten aus Stufe 3 ab („sobald Stufe 3 den Schlüssel
+enthält") und nennt Kündigungsbutton, Widerruf, Preisangaben. **Schon Stufe 1
+hat eine digitale Gegenleistung** — Zugang zur Änderungsliste vor der
+Veröffentlichung —, **Stufe 2 liefert Vorabversionen.** Beides sind digitale
+Produkte gegen Entgelt in **dauerhafter Bereitstellung**, und dafür gilt die
+schärfere Variante der §§ 327 ff. BGB:
+
+| Vorschrift | Folge bei Dauerbereitstellung |
+|---|---|
+| § 327f | Aktualisierungspflicht über den **gesamten** Bereitstellungszeitraum, nicht nur den erwartbaren |
+| § 327e Abs. 3 | objektive Anforderungen: übliche Beschaffenheit — die eine Vorabversion begriffsnotwendig nicht immer erfüllt |
+| § 327h | eine Abweichung davon wirkt nur, wenn der Verbraucher **eigens** in Kenntnis gesetzt wurde und sie **ausdrücklich und gesondert** vereinbart ist |
+| § 327k Abs. 2 | Beweislastumkehr für den **gesamten** Zeitraum statt für ein Jahr |
+| § 327j Abs. 2 | Verjährung frühestens zwölf Monate **nach Ende** der Bereitstellung |
+| § 327s | Abweichungen zum Nachteil des Verbrauchers sind unwirksam |
+
+**Wer für 7 € im Monat Vorabversionen zusagt, schuldet mangelfreie
+Vorabversionen** — mit Nacherfüllung und Minderung. Das ist das Gegenteil
+dessen, was eine Vorabversion ist.
+
+**Zwei Wege:** Stufe 2 auf etwas zurücknehmen, das keine digitale Leistung ist
+— oder die Abweichung nach § 327h formal sauber vereinbaren, mit einem eigenen
+Häkchen im Bestellvorgang, nicht mit einem Satz in der EULA. §3 macht es beim
+Wunschkanal bereits richtig („kein Anspruch"); hier fehlt dieselbe Sorgfalt.
+
+### H6 — Der Kündigungsbutton steht gegen „Förderung in der Anwendung"
+
+§9 Nummer 1 verlangt eine Schaltfläche, die **ständig verfügbar, ohne Anmeldung
+und unmittelbar erreichbar** ist; § 312k Abs. 2 BGB spricht von einer
+Schaltfläche **auf der Webseite**. §13 Nummer 6 hat am 24.08.2026 entschieden:
+keine Förderseite auf der Website, sondern ein Menüeintrag in der Anwendung.
+**Beide Aussagen stehen unverbunden nebeneinander.**
+
+Eine Schaltfläche in einem Programm, das man deinstallieren kann, ist nicht
+ständig verfügbar — und wer gekündigt hat, weil ihm das Programm nicht gefiel,
+hat es als Erstes gelöscht. Dazu verspricht Stufe 1 eine **Nennung auf der
+Förderseite**, die es nach §13 Nummer 6 nicht gibt: eine geschuldete Leistung
+ohne Ort.
+
+**Das widerruft die Entscheidung nicht, es ergänzt sie.** Die Website-Seite
+wird gebraucht, aber nicht als Werbeseite: als Rechtsseite mit Kündigung,
+Bedingungen und Nennung. Geworben wird weiter in der Anwendung — das war der
+Befund aus den Zahlen und der bleibt.
+
+### H7 — Beim Merchant of Record läuft die Freistellung in die Gegenrichtung
+
+§8 zählt auf, was ein MoR abnimmt: Umsatzsteuer, Rechnung, Widerruf,
+Streitfälle. Das stimmt. **Nicht genannt ist die Kehrseite.** MoR-Verträge
+enthalten regelmäßig eine **Freistellungsklausel** zulasten des Verkäufers,
+häufig der Höhe nach unbegrenzt, nach ausländischem Recht und mit ausländischem
+Gerichtsstand. Was der MoR gegenüber dem Kunden trägt, holt er sich beim
+Verkäufer zurück — und `EULA.md` Nummer 11 wirkt gegenüber dem Kunden, nicht
+gegenüber dem MoR.
+
+Für ein Einzelunternehmen mit Haftung aus dem Privatvermögen ist das **die
+größte vertragliche Haftungsübernahme des ganzen Modells**, und sie steht in
+einem Vertrag, den noch niemand gelesen hat. Gehört zu §11 Nummer 9: vor der
+Unterschrift die Freistellungs- und Haftungsklauseln lesen und hier festhalten.
+
+### H8 — Drei kleinere Punkte, gleicher Anlass
+
+- **`EULA.md` Nr. 11, letzter Satz** sagt „die gesetzlichen Mängelrechte **beim
+  Kauf**". Bei digitalen Produkten sind es die §§ 327 ff. BGB, nicht das
+  Kaufrecht — der Vorbehalt liest sich enger als die Gesetzeslage. `AGB.md` § 7
+  hat es richtig; die EULA zieht nicht nach.
+- **`EULA.md` Nr. 10 ist eine negative Beschaffenheitsvereinbarung.** Inhaltlich
+  ist sie die eigentliche Risikobegrenzung von Solidon — kein Prüfinstitut,
+  keine zugesicherte Maßhaltigkeit, keine tragenden Teile. Gegenüber
+  Verbrauchern hängt ihre Wirksamkeit an derselben Formalie wie in H5
+  (§ 327h BGB): eigens in Kenntnis gesetzt, ausdrücklich und gesondert
+  vereinbart. **Das betrifft den Verkauf, nicht nur die Förderung** — und es
+  ist ein Häkchen im Bestellvorgang, kein Abschnitt in einem Vertragstext.
+- **`AGB.md` § 8** verweist für die Haftung auf `EULA.md` Nr. 11. Tritt der
+  Zahlungsdienstleister als MoR auf, gelten für den Kauf seine Bedingungen
+  (so § 4 selbst) — der Verweis läuft dann teilweise leer. Klarstellen, dass er
+  die Überlassung der Software betrifft.
+
+### Was das für §5 und §11 heißt
+
+**Die Empfehlung Einzelunternehmen kippt nicht.** Argument 1 (Aufwand) und
+Argument 3 (späterer Wechsel) stehen unverändert. Aber **Argument 2 trägt in
+seiner heutigen Form nicht**: Die EULA begrenzt nicht so sauber wie
+angenommen (H1), und der Vergleich mit der GmbH ist zu grob. Bei einer
+Kapitalgesellschaft ist die **Gesellschaft** Herstellerin; persönlich haftet
+der Geschäftsführer erst über eine eigene Verkehrspflichtverletzung nach
+§ 823 BGB. Bei einem Einzelunternehmen haftet Robert von der ersten Minute an
+persönlich, ohne Zwischenstufe. Der Unterschied ist nicht null — er ist der
+zwischen Regel und Ausnahme.
+
+**Damit trägt die Empfehlung allein auf der Versicherung** (H4), und die ist
+bisher ein Nebensatz. Sie gehört in §11, vor den ersten Geldeingang.
+
+### Ergänzung zu §11
+
+| # | Was | Wo | Wann |
+|---|---|---|---|
+| 11 | **Erfüllungsgehilfen in die Haftungsklausel** (H1) | `EULA.md` Nr. 11 | mit Punkt 5, bei der nächsten Fassung |
+| 12 | **Demo-Haftung auf Nr. 10/11 verweisen** (H2) | `EULA.md` Nr. 4a | **sofort** — sie gilt heute |
+| 13 | **Produkthaftpflicht mit Software-Einschluss** anfragen, Deckung und Prämie (H3, H4) | Versicherer | vor dem ersten Geldeingang |
+| 14 | **§ 327h-Häkchen im Bestellvorgang** für Nr. 10 und für Vorabversionen (H5, H8) | Bestellstrecke | vor dem Verkaufsstart |
+| 15 | **Rechtsseite auf der Website** — Kündigung, Bedingungen, Nennung (H6) | `website/` | vor dem Start der Förderung |
+| 16 | **Freistellungsklausel des MoR lesen** und hier festhalten (H7) | Dienstleistervertrag | vor der Unterschrift |
+
+**Was hier nicht geprüft wurde**, weil es nicht Haftung ist: die
+KI-Verordnung. Ihre Transparenzpflichten (Art. 50) gelten seit dem 02.08.2026;
+für einen Chat, der „KI-Chat" heißt und mit dem Schlüssel des Nutzers gegen
+dessen Anbieter läuft, greift die Ausnahme „offensichtlich". Erwähnt, damit
+niemand denkt, sie sei übersehen worden.
+
+> **Und dieselbe Einschränkung wie ganz oben:** Das ist recherchiert und mit
+> Fundstellen belegt, aber es ist keine Rechtsberatung. H1, H2 und H5 sind
+> Formulierungsfragen, die ein Fachanwalt in einer halben Stunde entscheidet.
+> H3 und H4 sind es nicht — das sind Geschäftsrisiken mit einer Frist im
+> Dezember.
