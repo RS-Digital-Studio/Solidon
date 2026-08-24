@@ -174,7 +174,19 @@ function record(string $kind, string $value): void
  */
 function referrer_host(): string
 {
-    $referrer = (string) ($_SERVER['HTTP_REFERER'] ?? '');
+    // **Der mitgeschickte Verweis gewinnt über den Header, und ohne ihn gibt
+    // es überhaupt keinen.** Der Seitenaufruf kommt als Beacon aus `site.js`,
+    // und dessen `Referer` ist die Seite, von der aus gerufen wird — also
+    // immer solidon3d.de selbst. Die Prüfung unten erkennt sie als eigen und
+    // verwirft sie, völlig zu Recht: Ein Sprung von Seite zu Seite ist kein
+    // Verweis von außen. Nur stand damit in „Woher" nie etwas, und es sah aus
+    // wie „niemand schickt seine Herkunft mit". Woher der Besucher wirklich
+    // kam, weiß allein `document.referrer` im Browser; `site.js` reicht ihn
+    // als `r` herein.
+    //
+    // Der Header bleibt der Weg für Downloads: Die laufen über `?f=` direkt
+    // gegen diese Datei, ohne Skript, und dort ist er das Einzige, was es gibt.
+    $referrer = (string) ($_POST['r'] ?? $_SERVER['HTTP_REFERER'] ?? '');
     if ($referrer === '') {
         return '';
     }

@@ -256,7 +256,15 @@
 
   if (navigator.doNotTrack === "1" || window.doNotTrack === "1" || navigator.globalPrivacyControl) return;
 
+  /* **Der Verweis muss mitgeschickt werden, er steht nicht im Header.**
+     `sendBeacon` sendet als `Referer` die Seite, von der aus es ruft — also
+     immer solidon3d.de selbst. `count.php` erkennt die eigene Adresse und
+     verwirft sie, korrekterweise: Ein Sprung von Seite zu Seite ist kein
+     Verweis von außen. Damit kam nie ein Verweis an, und die Liste „Woher"
+     blieb leer, ohne dass etwas kaputt war. Woher der Besucher wirklich kommt,
+     weiß nur `document.referrer`. */
   const body = new URLSearchParams({ p: location.pathname || "/" });
+  if (document.referrer) body.append("r", document.referrer);
   if (navigator.sendBeacon) {
     navigator.sendBeacon("/api/count.php", body);
   } else if (window.fetch) {
