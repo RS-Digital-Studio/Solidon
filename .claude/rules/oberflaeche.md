@@ -258,6 +258,48 @@ nimmt Klicks entgegen wie jeder andere.
 nennt das Werkzeug, der Knopf darin seine Handlung — „Trennen" oben, „Jetzt
 trennen" unten. `tests/test_interface_limits.py` hält das fest.
 
+## Ein Zustand darf die Farbe wechseln, nicht die Rahmenbreite
+
+Gilt für jedes Eingabefeld, und gebrochen hat es genau **eines**: die
+Combobox. `QComboBox:focus` gab dem Rahmen einen zweiten Punkt und nahm ihn
+über den Innenabstand wieder weg, damit die Box beim Fokussieren nicht
+springt — dieselbe Bauart wie bei Knopf und Werkzeugknopf, und dort richtig.
+
+Qt leitet die Höhe des Aufklappmenüs aber aus dem **Innenrechteck** der
+Combobox ab (`SC_ComboBoxListBoxPopup` über den `QStyleSheetStyle`). Mit dem
+zweiten Rahmenpunkt verliert es zwei Punkte, kippt damit in den Rollbetrieb
+und verliert an dessen zwei Pfeilen weitere zehn. Gemessen, dunkles Thema:
+
+| Einträge | Platz | gebraucht |
+|---|---|---|
+| 2 | 36 px | 48 px |
+| 3 | 60 px | 72 px |
+| 5 | 108 px | 120 px |
+
+Zwölf Punkte sind ein halber Eintrag. Im Bohrdialog stand unter dem
+hervorgehobenen „Mündung" ein waagerecht durchgeschnittenes „Mitte" — und
+getroffen hat es **jede** Combobox mit Tastaturfokus, also jede, die man
+anklickt. Ohne Fokus rechnet Qt richtig; das ist der Grund, aus dem eine
+Messung ohne `setFocus` nichts findet.
+
+Drei Auswege sind gemessen und untauglich: `:on` (der Pseudozustand für das
+offene Menü) wird erst nach der Höhenrechnung gesetzt, `outline` zeichnet Qt
+an einer Combobox nur einen Punkt breit, und ein Rahmen, der in einen
+`margin` hineinwächst, vergrößert stattdessen das Feld. Es bleibt: **konstante
+Breite, wechselnde Farbe.**
+
+Der Ruherahmen ist deshalb zwei Punkte breit und nimmt eine gedämpfte
+Mischfarbe (`_blend(line, base, 0.55)` in `style.py`), damit er so leise
+bleibt wie der einpunktige vorher. Das kostet Regel 18 nichts: Ein Punkt
+Rahmenbreite ist keine wahrnehmbare zweite Kodierung — die Kachel des
+Startbildschirms hat das schon einmal gezeigt —, und der Abstand zwischen
+Ruhe und Fokus ist jetzt größer als zuvor.
+
+`tests/test_style.py` hält beide Enden: eine Messung am gebauten Fenster
+(`test_an_open_combo_box_shows_every_entry_it_has`, samt Gegenprobe mit der
+alten Regel, die fallen **muss**) und eine am Text der Regel
+(`test_the_focus_ring_never_changes_the_size_of_a_field`).
+
 ## Was nur das Bild zeigt
 
 Vier Fehler am selben Tag, alle vier durch eine grüne Suite gekommen, alle vier

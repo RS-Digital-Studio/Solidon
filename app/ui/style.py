@@ -111,6 +111,20 @@ def _repolish(widget: QWidget) -> None:
         style.polish(widget)
 
 
+def _blend(one: str, two: str, share: float) -> str:
+    """Mischt zwei Farben des Themas; ``share`` ist der Anteil der ersten.
+
+    Damit steht kein Farbwert doppelt in der Tabelle: Der leise Feldrahmen ist
+    kein eigener Ton, sondern die Linienfarbe auf halbem Weg zur Feldfläche.
+    Wer ein Thema ändert, ändert ihn mit.
+    """
+    first = [int(one[index : index + 2], 16) for index in (1, 3, 5)]
+    second = [int(two[index : index + 2], 16) for index in (1, 3, 5)]
+    return "#" + "".join(
+        f"{round(a * share + b * (1 - share)):02x}" for a, b in zip(first, second, strict=True)
+    )
+
+
 #: Die zwei Pfeile am Zahlenfeld, als Zeichnung ohne Datei im Paket.
 #:
 #: Ein Dreieck, zweimal — nach oben und nach unten. ``{colour}`` füllt die
@@ -217,6 +231,25 @@ def stylesheet(theme: Theme, base_point_size: int, arrows: dict[str, str] | None
     # abgedunkelte Ton daneben: 3,66 auf Weiß, 3,01 auf dem Fenster.
     focus = accent_line
 
+    # Der Rahmen eines Eingabefelds ist immer zwei Punkte breit — im
+    # Ruhezustand wie im Fokus. Er war einen breit und wuchs beim Fokus auf
+    # zwei, und das brach das Aufklappmenü jeder Combobox: Qt leitet die Höhe
+    # des Popups aus dem Innenrechteck der Combobox ab, verlor durch den
+    # zweiten Rahmenpunkt zwei Punkte, kippte damit in den Rollbetrieb und
+    # verlor an dessen zwei Pfeilen weitere zehn. Zwölf Punkte sind ein halber
+    # Eintrag: Wer „Bezugspunkt" anklickte, sah „Mündung" und darunter „Mitte"
+    # waagerecht durchgeschnitten. Gemessen bei zwei, drei, vier und fünf
+    # Einträgen, in beiden Themen, und es traf jede Combobox, die den Fokus
+    # hatte — also jede, die man anklickt.
+    #
+    # Der Fokus sagt es deshalb allein über die **Farbe**. Das ist keine
+    # Verschlechterung gegenüber vorher: Ein Punkt Rahmenbreite ist keine
+    # wahrnehmbare zweite Kodierung, wie die Kachel des Startbildschirms schon
+    # einmal gezeigt hat. Der Ring bleibt zwei Punkte breit und trägt die
+    # geforderten 3,0 Kontrast; der Ruherahmen wird dafür leiser, also ist der
+    # Unterschied zwischen beiden Zuständen größer als zuvor.
+    field_line = _blend(line, base, 0.55)
+
     return f"""
 /* --- Typografie: vier Stufen, Größe und Gewicht und Farbe --------------- */
 *[level="title"] {{ font-size: {sizes["title"][0]}pt; font-weight: {sizes["title"][1]}; }}
@@ -312,9 +345,9 @@ QFrame#exampleTile:focus {{ border: 2px solid {focus}; }}
 /* --- Eingaben: der Fokus muss man sehen -------------------------------- */
 QLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit, QTextEdit {{
     background: {base};
-    border: 1px solid {line};
+    border: 2px solid {field_line};
     border-radius: {SPACE}px;
-    padding: {TIGHT}px {NORMAL}px;
+    padding: {TIGHT - 1}px {NORMAL - 1}px;
     selection-background-color: {highlight};
     selection-color: {on_highlight};
 }}
@@ -322,10 +355,10 @@ QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover,
 QComboBox:hover, QPlainTextEdit:hover, QTextEdit:hover {{
     border-color: {muted};
 }}
+/* Nur die Farbe, nie die Breite — der Grund steht oben bei ``field_line``. */
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus,
 QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus {{
-    border: 2px solid {focus};
-    padding: {TIGHT - 1}px {NORMAL - 1}px;
+    border-color: {focus};
 }}
 QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {{
     color: {disabled};

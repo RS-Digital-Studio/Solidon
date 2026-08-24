@@ -648,3 +648,105 @@ def test_hover_and_focus_are_not_the_same_thing_on_a_tile() -> None:
     assert THEMES["dark"]["highlight"] == THEMES["dark"]["accent_line"], (
         "wenn die Farben auseinandergehen, darf dieser Test neu begründet werden"
     )
+
+
+def _popup_room(application: object, sheet: str, entries: int) -> tuple[int, int]:
+    """Öffnet eine fokussierte Combobox und misst Platz gegen Bedarf.
+
+    Zurück kommt, was der Rollbereich des Aufklappmenüs hoch ist, und was seine
+    Zeilen zusammen brauchen. Der Fokus gehört dazu: Ohne ihn rechnet Qt
+    richtig, und der Fehler, um den es hier geht, wäre unsichtbar.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QComboBox, QDialog, QFormLayout, QLabel
+
+    application.setStyleSheet(sheet)  # type: ignore[attr-defined]
+    dialog = QDialog()
+    form = QFormLayout(dialog)
+    box = QComboBox(dialog)
+    box.addItems([f"Eintrag {number}" for number in range(entries)])
+    form.addRow(QLabel("Bezugspunkt"), box)
+    dialog.show()
+    box.setFocus(Qt.FocusReason.MouseFocusReason)
+    application.processEvents()  # type: ignore[attr-defined]
+
+    box.showPopup()
+    application.processEvents()  # type: ignore[attr-defined]
+    view = box.view()
+    room = view.viewport().height()
+    needed = sum(view.sizeHintForRow(row) for row in range(entries))
+    box.hidePopup()
+    dialog.close()
+    return room, needed
+
+
+def test_an_open_combo_box_shows_every_entry_it_has(qt_app: object) -> None:
+    """Der Fokusrahmen darf nicht breiter werden — sonst fehlt ein halber Eintrag.
+
+    Gemeldet als „viele Comboboxen haben ein Problem beim Aufklappen": Im
+    Bohrdialog stand unter dem hervorgehobenen „Mündung" ein waagerecht
+    durchgeschnittenes „Mitte".
+
+    Die Ursache lag im Stylesheet und nicht im Dialog. ``QComboBox:focus`` gab
+    dem Rahmen einen zweiten Punkt, der Innenabstand nahm einen zurück, damit
+    die Box nicht springt — und Qt leitet die Höhe des Aufklappmenüs aus dem
+    **Innenrechteck** der Combobox ab. Es verlor damit zwei Punkte, kippte in
+    den Rollbetrieb und verlor an dessen zwei Pfeilen zehn weitere. Zwölf
+    Punkte sind ein halber Eintrag, und getroffen hat es jede Combobox mit
+    Tastaturfokus — also jede, die man anklickt.
+    """
+    from app.ui.style import arrow_files, stylesheet
+    from app.ui.theme import THEMES
+
+    sheet = stylesheet("dark", 10, arrow_files("dark"))
+    for entries in (2, 3):
+        room, needed = _popup_room(qt_app, sheet, entries)
+        assert room >= needed, (
+            f"{entries} Einträge: das Aufklappmenü hat {room} px für {needed} px Zeilen — "
+            "unten fehlt ein angeschnittener Eintrag"
+        )
+
+    # Und die Gegenprobe, damit dieser Test seinen Grund behält: mit der alten
+    # Regel, die den Rahmen im Fokus verbreitert, muss er fallen. Repariert Qt
+    # seine Rechnung eines Tages, wird diese Zusicherung rot — dann darf der
+    # Test neu begründet werden, aber die Regel darüber bleibt richtig.
+    widened = sheet + (
+        "\nQLineEdit, QSpinBox, QDoubleSpinBox, QComboBox, QPlainTextEdit, QTextEdit "
+        f"{{ border: 1px solid {THEMES['dark']['line']}; padding: {TIGHT}px {NORMAL}px; }}\n"
+        "QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus, "
+        "QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus "
+        f"{{ border: 2px solid {THEMES['dark']['accent_line']}; "
+        f"padding: {TIGHT - 1}px {NORMAL - 1}px; }}\n"
+    )
+    short, wanted = _popup_room(qt_app, widened, 2)
+    qt_app.setStyleSheet(sheet)  # type: ignore[attr-defined]
+    assert short < wanted, (
+        "der breitere Fokusrahmen schneidet das Aufklappmenü nicht mehr ab — "
+        f"{short} px für {wanted} px. Qt rechnet anders als gemessen; dieser "
+        "Test braucht dann eine neue Begründung"
+    )
+
+
+def test_the_focus_ring_never_changes_the_size_of_a_field() -> None:
+    """Die Fokusregel spricht über die Farbe, nicht über die Breite.
+
+    Die Messung darüber braucht ein gebautes Fenster; diese hier liest die
+    Regel selbst und bleibt auch dann noch stehen, wenn Qt sein Verhalten
+    ändert. Beides zusammen: der eine Test sagt, dass es wirkt, der andere,
+    warum es so geschrieben ist.
+    """
+    from app.ui.style import stylesheet
+
+    for theme in THEMES:
+        sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
+        rule = sheet.split("QLineEdit:focus")[1].split("}")[0]
+        assert "border:" not in rule, (
+            f"{theme}: die Fokusregel setzt den ganzen Rahmen neu ({rule.strip()}) — "
+            "damit wechselt die Breite, und das Aufklappmenü jeder Combobox verliert "
+            "einen halben Eintrag"
+        )
+        assert "padding" not in rule, (
+            f"{theme}: die Fokusregel rührt den Innenabstand an ({rule.strip()}) — "
+            "das ist die Kompensation, die es ohne Breitenwechsel nicht braucht"
+        )
+        assert "border-color:" in rule, f"{theme}: der Fokus sagt gar nichts: {rule.strip()}"
