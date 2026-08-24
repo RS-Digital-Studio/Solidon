@@ -8,6 +8,8 @@ auseinanderhalten kann.
 
 from __future__ import annotations
 
+import dataclasses
+
 import pytest
 import trimesh
 from PySide6.QtWidgets import QApplication
@@ -254,6 +256,66 @@ def test_arranging_writes_the_plate_onto_the_objects(profile: Profile) -> None:
     plates = {output.plate for output in result.outputs}
     assert len(plates) > 1
     assert all(output.plate >= 0 for output in result.outputs)
+
+
+def _arrange(objects: list[SceneObject], profile: Profile, **params: object) -> object:
+    """Die Operation fahren, wie das Menü sie fährt."""
+    spec = REGISTRY.get("arrange_bed")
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry for entry in objects}),
+            inputs=objects,
+            params=spec.params(**params),
+            profile=profile,
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+
+def test_arranging_twice_says_that_nothing_moved(profile: Profile) -> None:
+    """Eine Operation, die nichts bewirkt hat, sagt das — hier für die Lage.
+
+    Robert am 24.08.2026, nachdem er *Auf dem Bett anordnen* zum zweiten Mal
+    geklickt hatte: „das an druckbett ausrichten funktioniert nicht mehr."
+    Es lag schon alles, wo es liegen sollte — der Dialog ging auf, OK rechnete
+    dasselbe Ergebnis, im Verlauf stand ein Schritt, und das Bild blieb, wie es
+    war. Ohne ein Wort dazu ist das von einer kaputten Anwendung nicht zu
+    unterscheiden.
+
+    Dieselbe Zusage wie ``boolean.without_effect`` für das Volumen, nur für die
+    Position — und ein eigener Code, weil es **nicht** dasselbe Problem meldet:
+    Dort liegt ein Werkzeug neben dem Körper und der Nutzer wollte etwas
+    anderes; hier ist das Ergebnis richtig.
+    """
+    objects = [
+        SceneObject(id=f"obj_{index}", name=f"Teil {index}", mesh=slab(60.0)) for index in range(2)
+    ]
+
+    erst = _arrange(objects, profile, spacing=5.0, plates=1)
+    codes = {finding.code for finding in erst.findings}
+    assert "arrange.already_arranged" not in codes, (
+        f"beim ersten Mal wird verschoben, da ist nichts zu melden: {codes}"
+    )
+
+    # Was herauskam, noch einmal anordnen — wie ein zweiter Klick.
+    again = [
+        dataclasses.replace(entry, mesh=output.mesh, plate=output.plate)
+        for entry, output in zip(objects, erst.outputs, strict=True)
+    ]
+    zweit = _arrange(again, profile, spacing=5.0, plates=1)
+
+    assert "arrange.already_arranged" in {finding.code for finding in zweit.findings}, (
+        "der zweite Klick bewegt nichts und muss es sagen"
+    )
+    said = next(f for f in zweit.findings if f.code == "arrange.already_arranged")
+    assert said.severity == "info", "gelungen, nur ohne Wirkung — kein Fehler"
+    assert [tuple(output.mesh.bounds.minimum) for output in zweit.outputs] == [
+        tuple(output.mesh.bounds.minimum) for output in erst.outputs
+    ], "und die Lage bleibt, wie sie war"
 
 
 # --- export ---------------------------------------------------------------------

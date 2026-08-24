@@ -8,6 +8,7 @@ Operation, wenn die Alternative eine Überraschung am Drucker ist.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Sequence
 from functools import lru_cache
 from typing import cast
 
@@ -38,8 +39,8 @@ from app.core.geom.transform import Axis, place_on_bed
 from app.core.knowledge.profiles import for_object, material
 from app.core.registry import AUTO_FROM_PROFILE_DOC, VARIABLE, op_params, param, register_op
 from app.core.slice.orientation import DEFAULT_CANDIDATES, search
-from app.core.types import BaseParams, Finding, OpContext, OpResult
-from app.core.units import DEGREE_UNIT, EPS_GEOM
+from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
+from app.core.units import DEGREE_UNIT, EPS_DISPLAY, EPS_GEOM
 from app.i18n import TranslatableText, _
 
 _AXES = tuple(AXIS_NORMALS)
@@ -1139,6 +1140,25 @@ def arrange_bed(ctx: OpContext) -> OpResult:
             )
         )
 
+    # **Wenn nichts zu verschieben war, sagt die Operation es.** Sonst ist ein
+    # zweiter Klick von einer kaputten Anwendung nicht zu unterscheiden: Der
+    # Dialog geht auf, OK rechnet dasselbe Ergebnis, im Verlauf steht ein
+    # Schritt, und das Bild bleibt, wie es war. Robert am 24.08.2026, nachdem
+    # er es zum zweiten Mal geklickt hatte: „das an druckbett ausrichten
+    # funktioniert nicht mehr" — es lag schon alles, wo es liegen sollte.
+    #
+    # Ein Befund und kein Fehler: Die Operation ist gelungen, das Ergebnis ist
+    # nur dasselbe wie vorher. Regel 17 gilt für Ausnahmen; hier gibt es keine,
+    # und ein Dialog wäre eine Bestätigung ohne Entscheidung (Regel 19).
+    if not _has_moved(ctx.inputs, result):
+        findings.append(
+            Finding(
+                code="arrange.already_arranged",
+                severity="info",
+                message=_("Die Teile liegen schon so — es war nichts zu verschieben."),
+            )
+        )
+
     return OpResult(
         outputs=[
             dataclasses.replace(entry, mesh=mesh, plate=plate)
@@ -1146,6 +1166,29 @@ def arrange_bed(ctx: OpContext) -> OpResult:
         ],
         findings=findings,
     )
+
+
+def _has_moved(entries: Sequence[SceneObject], result: Arrangement) -> bool:
+    """Ob die Anordnung überhaupt einen Körper bewegt hat.
+
+    Gegen ``EPS_DISPLAY`` und nicht gegen ``EPS_GEOM`` (§11.2, Regel 6): Die
+    Frage ist nicht, ob zwei Netze rechnerisch gleich liegen, sondern ob jemand
+    den Unterschied **sieht**. Ein Hundertstelmillimeter ist im Fenster
+    dasselbe Bild, und eine Meldung „verschoben", die nichts zeigt, wäre
+    genauso irre wie die Stille, gegen die sie steht.
+
+    Die Platte zählt mit: Zwei Platten liegen in der Szene an derselben Stelle,
+    weil jede einzeln gedruckt wird (§25). Ein Körper, der auf die nächste
+    wandert, behält damit seine Koordinaten und ist trotzdem woanders.
+    """
+    for entry, mesh, plate in zip(entries, result.meshes, result.plates, strict=True):
+        if plate != entry.plate:
+            return True
+        before = as_mesh_data(entry.mesh).bounds.minimum
+        after = mesh.bounds.minimum
+        if any(abs(a - b) > EPS_DISPLAY for a, b in zip(before, after, strict=True)):
+            return True
+    return False
 
 
 @op_params
