@@ -2944,17 +2944,46 @@ class SketchPanel(QWidget):
         for plane, key in PLANE_KEYS.items():
             view = QShortcut(QKeySequence(key), self)
             view.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
-            view.activated.connect(weak_slot(self, SketchPanel.choose_plane, plane))
+            view.activated.connect(weak_slot(self, SketchPanel._plane_by_key, plane))
 
-    def choose_plane(self, plane: str) -> None:
+    def _plane_by_key(self, plane: str) -> None:
+        """Ein Tastendruck wählt die Ebene; ob es ging, interessiert hier nicht.
+
+        Die Ziffern liegen auf den drei Grundebenen, und die stehen immer zur
+        Wahl — der Rückgabewert von :meth:`choose_plane` gilt dem Weg über
+        eine angeklickte Fläche, die der Körper auch verloren haben kann.
+
+        Ein eigener Slot und kein Rückgabewert an ``weak_slot`` vorbei: Es
+        nimmt ``Callable[..., None]``, und das ist richtig so — ein Signal hat
+        keinen Empfänger für ein Ergebnis. Die Alternative wäre gewesen,
+        ``leash.py`` breiter zu typisieren, damit hier eine Zahl im Nichts
+        verschwinden darf.
+        """
+        self.choose_plane(plane)
+
+    def choose_plane(self, plane: str) -> bool:
         """Die Zeichenebene wechseln — über die Wahl, nicht an ihr vorbei.
 
         Die Zeichenfläche direkt zu setzen ließe das Auswahlfeld auf der
         vorigen Ebene stehen, und dann behaupten zwei Stellen zweierlei.
+
+        **Gibt zurück, ob die Ebene überhaupt zur Wahl stand.** Für die drei
+        Grundebenen ist das immer so; eine Fläche steht nur im Feld, solange
+        der Körper sie hat (:meth:`offer_faces`). Vorher endete der Aufruf
+        dort still, und für die Ziffern 1 bis 3 war das folgenlos — sie
+        treffen immer.
+
+        Für den Weg „Fläche anklicken, dann darauf zeichnen" wäre es die
+        schlechteste Antwort: Wer auf eine Deckfläche zeigt und danach
+        unbemerkt auf der Grundebene zeichnet, merkt es am Ergebnis und sucht
+        den Fehler in seiner Zeichnung. Der Aufrufer bekommt jetzt die
+        Auskunft und kann es sagen (Regel 17).
         """
         index = self.plane_choice.findData(plane)
-        if index >= 0:
-            self.plane_choice.setCurrentIndex(index)
+        if index < 0:
+            return False
+        self.plane_choice.setCurrentIndex(index)
+        return True
 
     def drop_tool(self) -> bool:
         """Legt ein laufendes Zeichenwerkzeug ab. ``True``, wenn eines lief.

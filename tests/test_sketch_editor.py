@@ -2447,3 +2447,55 @@ def test_the_canvas_only_passes_the_numbers_through(qt_app: QApplication) -> Non
 
     assert (place.x(), place.y()) == pytest.approx(wanted)
     assert canvas._to_world(place) == pytest.approx((15.0, -7.0))
+
+
+# --- Auf einer Fläche des Körpers zeichnen (§30.1, P3) -----------------------
+
+
+def test_a_face_of_the_body_can_be_chosen_as_the_drawing_plane(qt_app: QApplication) -> None:
+    """`feature:<id>` ist eine Ebene wie XY auch — und der interessantere Weg.
+
+    ``app/core/sketch/planes.py`` nennt sie so: „der Weg, auf einem
+    vorhandenen Teil weiterzubauen, statt daneben". Geprüft war bisher nur der
+    Wechsel zwischen den drei Grundebenen; dass eine angebotene Fläche
+    dasselbe kann, stand nirgends.
+    """
+    from app.ui.sketch_editor import SketchPanel, Surroundings
+
+    panel = SketchPanel(
+        surroundings=Surroundings(
+            faces=(("face_7", "Fläche an Gehäuse — 2 400 mm², oben", (0.0, 0.0, 1.0)),)
+        )
+    )
+    try:
+        assert panel.choose_plane("feature:face_7") is True
+        assert panel.canvas.sketch.plane == "feature:face_7"
+        assert panel.plane_choice.currentData() == "feature:face_7", "die Wahl steht mit"
+
+        # Auf einer angeklickten Fläche bleiben die Achsenbuchstaben weg: sie
+        # kann beliebig geneigt sein, und „X" auf einer schrägen Wand wäre
+        # eine Angabe, die nicht stimmt.
+        assert panel.canvas.axis_names() == ("", "")
+    finally:
+        panel.deleteLater()
+
+
+def test_a_plane_that_is_not_offered_says_so_instead_of_staying_quiet(
+    qt_app: QApplication,
+) -> None:
+    """Eine Fläche, die der Körper nicht hat, darf nicht still auf XY landen.
+
+    Für die Ziffern 1 bis 3 war der stille Zweig folgenlos — sie treffen
+    immer. Für „Fläche anklicken, dann darauf zeichnen" wäre er die
+    schlechteste Antwort: Wer auf eine Deckfläche zeigt und danach unbemerkt
+    auf der Grundebene zeichnet, sucht den Fehler in seiner Zeichnung.
+    """
+    from app.ui.sketch_editor import SketchPanel
+
+    panel = SketchPanel()
+    try:
+        assert panel.choose_plane("feature:face_99") is False
+        assert panel.canvas.sketch.plane == "plane:xy", "und nichts hat sich geändert"
+        assert panel.plane_choice.currentData() == "plane:xy"
+    finally:
+        panel.deleteLater()
