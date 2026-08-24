@@ -31,6 +31,7 @@ from app.core.scene import OperationDraft
 from app.core.scene.project import load
 from app.core.types import Parameter
 from app.i18n import tr
+from app.ui import main_window as main_window_module
 from app.ui.main_window import REMOTE_ORIGIN, MainWindow
 from app.ui.op_dialog import OperationDialog
 from app.ui.palette import DIFF_PALETTES
@@ -1631,15 +1632,34 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
         )
 
 
-def test_arranging_from_the_report_really_moves_the_bodies(window: MainWindow) -> None:
+#: Die Handlungen am Prüfbericht, die die **Lage** eines Körpers ändern, mit der
+#: Verschiebung, die den Befund erzeugt. Eine Zeile je Knopf und nicht je
+#: Befund: ``arrange.above_bed`` bietet zwei an, und beide müssen wirken.
+LAGE_HANDLUNGEN = [
+    ((0.0, 0.0, -15.0), "arrange.below_bed", errors.PLACE_ON_BED),
+    ((0.0, 0.0, 150.0), "arrange.above_bed", errors.PLACE_ON_BED),
+    ((0.0, 0.0, 150.0), "arrange.above_bed", errors.ARRANGE_ON_BED),
+    ((400.0, 0.0, 0.0), "arrange.off_the_plate", errors.ARRANGE_ON_BED),
+]
+
+
+@pytest.mark.parametrize(
+    ("offset", "code", "action"),
+    LAGE_HANDLUNGEN,
+    ids=lambda value: value if isinstance(value, str) else "",
+)
+def test_every_placement_button_really_moves_the_bodies(
+    window: MainWindow, offset: tuple[float, float, float], code: str, action: errors.Action
+) -> None:
     """Die dritte Hälfte von Regel 17: der Handler muss auch *wirken*.
 
-    Der Test darüber prüft, dass jede angebotene Handlung einen Handler hat —
-    und genau das war bei *Auf dem Bett anordnen* erfüllt, während der Knopf
-    nichts tat. Er trug die Operation ohne Eingaben in den Stapel, und eine
-    Operation mit variabler Objektzahl ohne Eingaben plant keine Ausgänge
-    (``History._outputs_for``): Der Schritt stand im Verlauf, kein Körper
-    bewegte sich, keine Meldung erschien.
+    ``test_every_offered_error_action_does_something`` prüft, dass jede
+    angebotene Handlung einen Handler **hat** — und genau das war bei *Auf dem
+    Bett anordnen* erfüllt, während der Knopf nichts tat. Er trug die Operation
+    ohne Eingaben in den Stapel, und eine Operation mit variabler Objektzahl
+    ohne Eingaben plant keine Ausgänge (``History._outputs_for``): Der Schritt
+    stand im Verlauf, kein Körper bewegte sich, keine Meldung erschien. Robert
+    hat es gemeldet, der Test blieb grün.
 
     Getroffen hat es den häufigsten Importfall überhaupt — eine 3MF aus Bambu
     Studio, Orca oder Elegoo führt Bettkoordinaten, ihre Körper liegen neben
@@ -1648,14 +1668,24 @@ def test_arranging_from_the_report_really_moves_the_bodies(window: MainWindow) -
     Gedrückt wird der **echte Knopf** unter der Befundliste, nicht der Handler
     von Hand: Zwischen beiden liegen ``actions_for``, ``as_error`` und die
     Verdrahtung in ``_show_offers``, und die gehören zur Zusage.
+
+    Über alle vier Lage-Handlungen und nicht nur über die eine, die einmal
+    kaputt war: Sie hängen an denselben zwei Handlern, und ein
+    Registername steht darin als Zeichenkette (siehe den Wächter darunter).
+    Wer eine der Operationen auflöst, bricht hier zwei Knöpfe auf einmal.
     """
     from PySide6.QtWidgets import QPushButton
 
     _with_two_objects(window)
-    # Ein Körper neben die Platte — das ist der Befund, der den Knopf anbietet.
     window.session.apply(
         "Verschieben",
-        [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 400.0})],
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=("obj_1",),
+                params={"dx": offset[0], "dy": offset[1], "dz": offset[2]},
+            )
+        ],
     )
     window.session.wait_for_idle()
     result = window.session.last_result
@@ -1668,30 +1698,102 @@ def test_arranging_from_the_report_really_moves_the_bodies(window: MainWindow) -
             for object_id, entry in scene.objects.items()
         }
 
-    codes = {finding.code for finding in result.scene.report.findings}
-    assert "arrange.off_the_plate" in codes, (
-        f"der Befund muss dastehen, sonst prüft das nichts: {codes}"
+    def klagen() -> set[str]:
+        """Die Körper, für die dieser Befund gerade steht.
+
+        Objektbezogen und nicht als bloße Kennung: ``_with_two_objects`` lädt
+        zwei Würfel, und ein aus der Datei geladener Würfel steckt zur Hälfte
+        unter der Platte — bei ``below_bed`` klagen also beide. *Auf das Bett
+        setzen* behebt genau seinen eigenen (``consumes=1``), und das ist
+        richtig; eine Zusicherung „der Befund ist weg" wäre hier eine über eine
+        Operation, die es nicht gibt.
+        """
+        return {
+            finding.object_id
+            for finding in window.session.last_result.scene.report.findings
+            if finding.code == code and finding.object_id is not None
+        }
+
+    assert "obj_1" in klagen(), (
+        "der Befund muss für den verschobenen Körper dastehen, sonst prüft das nichts: "
+        f"{[f.code for f in result.scene.report.findings]}"
     )
 
     for row in range(window.report.list.count()):
         item = window.report.list.item(row)
-        if item.data(Qt.ItemDataRole.UserRole).code == "arrange.off_the_plate":
+        finding = item.data(Qt.ItemDataRole.UserRole)
+        if finding.code == code and finding.object_id == "obj_1":
             window.report.list.setCurrentRow(row)
             break
     QApplication.processEvents()
 
-    buttons = window.report._offers.findChildren(QPushButton)
-    offered = {button.text(): button for button in buttons}
-    assert str(errors.ARRANGE_ON_BED.label) in offered, f"kein Knopf zum Anordnen: {list(offered)}"
+    offered = {button.text(): button for button in window.report._offers.findChildren(QPushButton)}
+    assert str(action.label) in offered, f"kein Knopf {str(action.label)!r}: {list(offered)}"
 
     before = where()
-    offered[str(errors.ARRANGE_ON_BED.label)].click()
+    offered[str(action.label)].click()
     window.session.wait_for_idle()
 
-    assert where() != before, "der Knopf hat nichts bewegt"
-    assert "arrange.off_the_plate" not in {
-        finding.code for finding in window.session.last_result.scene.report.findings
-    }, "und der Befund, gegen den er angeboten wurde, ist weg"
+    assert where() != before, f"der Knopf {str(action.label)!r} hat nichts bewegt"
+    assert "obj_1" not in klagen(), (
+        f"und der Körper, gegen den {str(action.label)!r} angeboten wurde, klagt nicht mehr"
+    )
+
+
+def test_no_error_handler_names_an_operation_that_is_gone(window: MainWindow) -> None:
+    """Der schnelle Wächter neben dem Wirkungstest darüber (§2.7, Regel 17).
+
+    Die Handler der Fehlerhandlungen holen ihre Operation über
+    ``REGISTRY.get("…")`` — als **Zeichenkette**, mitten in einer Methode.
+    Verschwindet der Registereintrag, wirft ``get`` einen ``InternalError``,
+    und der Kunde bekommt am Prüfbericht-Knopf „Im Programm ist ein
+    unerwarteter Fehler aufgetreten" samt Fehlerbericht-Ordner. Das ist genau
+    die Falle beim Zusammenlegen von Varianten: ``MENU_TWINS`` schützt nicht
+    davor — ein Zwilling behält seinen Eintrag und wird nur im Menü versteckt,
+    wer eine Operation **auflöst**, nimmt ihren Namen mit.
+
+    Gelesen wird der Quelltext und nicht das Verhalten, aus demselben Grund wie
+    bei ``tests/test_leash.py``: Ein Handler, dessen Operation es nicht mehr
+    gibt, sieht völlig normal aus, bis jemand den Knopf drückt. Und es ist der
+    **schnelle** Wächter, nicht der verlässliche — dass ein Name im Register
+    steht, heißt nicht, dass der Handler wirkt; genau das war der Fehler, den
+    der Test darüber fängt.
+    """
+    import ast
+
+    quelle = Path(main_window_module.__file__).read_text(encoding="utf-8")
+    baum = ast.parse(quelle)
+    handler = set(window.error_handlers())
+
+    genannt: dict[str, set[str]] = {}
+    for knoten in ast.walk(baum):
+        if not isinstance(knoten, ast.FunctionDef) or not knoten.name.endswith("_after_error"):
+            continue
+        for innen in ast.walk(knoten):
+            if (
+                isinstance(innen, ast.Call)
+                and isinstance(innen.func, ast.Attribute)
+                and innen.func.attr == "get"
+                and isinstance(innen.func.value, ast.Name)
+                and innen.func.value.id == "REGISTRY"
+                and innen.args
+                and isinstance(innen.args[0], ast.Constant)
+                and isinstance(innen.args[0].value, str)
+            ):
+                genannt.setdefault(knoten.name, set()).add(innen.args[0].value)
+
+    assert genannt, "kein Handler nennt eine Operation — dann prüft dieser Test nichts"
+    fehlen = {
+        f"{methode} → {name}"
+        for methode, namen in genannt.items()
+        for name in namen
+        if not REGISTRY.has(name)
+    }
+    assert not fehlen, (
+        "Ein Handler einer Fehlerhandlung nennt eine Operation, die es nicht "
+        f"mehr gibt — der Knopf endet im InternalError: {sorted(fehlen)}. "
+        f"Angebotene Handlungen: {sorted(handler)}"
+    )
 
 
 def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -> None:
@@ -6349,3 +6451,106 @@ def test_the_decimal_point_check_would_catch_a_violation() -> None:
     assert not _DECIMAL_POINT.search("Pfad: sources/1_cube.stl"), "ein Pfad ist keine Zahl"
     assert not _DECIMAL_POINT.search("Version 0.1.2"), "eine Versionsnummer auch nicht"
     assert not _DECIMAL_POINT.search("https://example.com/x.stl")
+
+
+# --- Auf einer Fläche zeichnen (§30.1, P3) -----------------------------------
+
+
+def _face_menu(window: MainWindow) -> tuple[str, object]:
+    """Ein Modell laden, seine erste Fläche wählen, ihr Kontextmenü bauen."""
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    face = next(fid for fid, feature in entry.features.items() if feature.kind == "face")
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, face)
+    return face, window.object_tree.context_menu()
+
+
+def test_a_face_offers_to_be_drawn_on(window: MainWindow) -> None:
+    """§30.1 nennt die angeklickte Fläche als Ort einer Skizzenebene, und
+    ``planes.py`` nennt sie „die interessantere".
+
+    Erreichbar war sie nur über ein Klappfeld mit Zeilen wie „Fläche an
+    Gehäuse — 2 400 mm², oben" — über das Wiedererkennen in einer Liste statt
+    über das Zeigen auf sie.
+    """
+    _face, menu = _face_menu(window)
+
+    assert menu is not None
+    labels = [action.text() for action in menu.actions()]  # type: ignore[attr-defined]
+    assert "Auf dieser Fläche zeichnen" in labels, f"Eintrag fehlt: {labels}"
+
+
+def test_choosing_that_entry_really_starts_a_sketch_on_that_face(window: MainWindow) -> None:
+    """Der Anschluss, nicht das Angebot.
+
+    Ein Menüeintrag mit einem Handler ist kein eingelöstes Versprechen —
+    ``.claude/rules/tests.md`` führt genau diese Bauform („ein Knopf war
+    formal verdrahtet und wirkte nicht"). Geprüft wird deshalb, dass der
+    Skizzenmodus läuft **und** auf welcher Ebene er steht.
+    """
+    face, menu = _face_menu(window)
+    assert menu is not None
+
+    draw = next(
+        action
+        for action in menu.actions()  # type: ignore[attr-defined]
+        if action.text() == "Auf dieser Fläche zeichnen"
+    )
+    draw.trigger()
+
+    assert window.sketching(), "der Skizzenmodus läuft"
+    panel = window._sketch_panel
+    assert panel is not None
+    assert panel.canvas.sketch.plane == f"feature:{face}", "und zwar auf der geklickten Fläche"
+    assert panel.plane_choice.currentData() == f"feature:{face}", "die Wahl steht mit"
+
+    window.finish_sketch(keep=False)
+
+
+def test_without_a_chosen_face_nothing_offers_to_be_drawn_on(window: MainWindow) -> None:
+    """Am Körper selbst gibt es keine Ebene, auf die man zeigen könnte.
+
+    Die Gegenprobe zum Test oben: Ohne sie wäre auch ein Eintrag grün, der
+    immer erscheint — und der führte am Körper in eine Skizze auf einer
+    Fläche, die niemand gewählt hat.
+    """
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id = next(iter(result.scene.objects))
+
+    window.object_tree.select_object(object_id)
+    menu = window.object_tree.context_menu()
+
+    assert menu is not None
+    labels = [action.text() for action in menu.actions()]  # type: ignore[attr-defined]
+    assert "Auf dieser Fläche zeichnen" not in labels, f"steht am Körper: {labels}"
+
+
+def test_a_hole_does_not_offer_to_be_drawn_on(window: MainWindow) -> None:
+    """Auf einer Bohrung gibt es keine Ebene zu zeichnen.
+
+    **Und dieser Test war der Grund, den vorigen nicht für ausreichend zu
+    halten.** Die Gegenprobe „kein Merkmal gewählt" lief auch ohne die
+    Artprüfung grün: Dort greift schon die zweite Wache (keine Kennung), und
+    der ``kind != "face"``-Zweig war damit ungeprüft. Erst ein Merkmal, das
+    eine Kennung hat und **keine Fläche ist**, misst ihn — dafür braucht es
+    ein Modell mit Bohrung.
+    """
+    window.session.import_model(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    hole = next(fid for fid, feature in entry.features.items() if feature.kind == "hole")
+
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, hole)
+    menu = window.object_tree.context_menu()
+
+    assert menu is not None
+    labels = [action.text() for action in menu.actions()]  # type: ignore[attr-defined]
+    assert "Auf dieser Fläche zeichnen" not in labels, f"steht an einer Bohrung: {labels}"
