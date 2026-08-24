@@ -1362,6 +1362,7 @@ class MainWindow(QMainWindow):
         # der Weg, den §2.6 „den kürzesten Weg vom Sehen zum Tun" nennt.
         self.object_tree.operationRequested.connect(self.launch_operation)
         self.object_tree.stepRequested.connect(self.edit_operation)
+        self.object_tree.sketchOnFaceRequested.connect(self._on_sketch_on_face)
         self.object_tree.visibilityRequested.connect(self._on_visibility)
         self.object_tree.isolateRequested.connect(self._on_isolate)
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
@@ -3960,7 +3961,7 @@ class MainWindow(QMainWindow):
             bodies=tuple(entry.mesh for entry in result.scene.objects.values()) if result else (),
         )
 
-    def start_sketch(self, op_name: str, text: str = "") -> None:
+    def start_sketch(self, op_name: str, text: str = "", plane: str = "") -> None:
         """In den Skizzenmodus wechseln, für die Operation, die sie verbraucht.
 
         Der mittlere Bereich zeigt die Zeichenfläche statt der Ansicht; die
@@ -3972,10 +3973,20 @@ class MainWindow(QMainWindow):
         einer Operation. Am Ende steht derselbe Text, den auch der Dialog
         erzeugt, und alles Weitere — Cache, Undo, die Sperre für den Agenten —
         gilt unverändert.
+
+        ``plane`` ist die vorgewählte Zeichenebene, üblicherweise
+        ``feature:<id>`` aus einem Klick auf eine Fläche. Sie wird über
+        :meth:`SketchPanel.choose_plane` gesetzt, also **über das Auswahlfeld**
+        und nicht an ihm vorbei — sonst behaupten zwei Stellen zweierlei. Und
+        ihr Rückgabewert wird gelesen: Eine Fläche, die der Körper nicht
+        (mehr) hat, steht nicht zur Wahl, und stillschweigend auf der
+        Grundebene zu landen wäre die schlechteste Antwort (Regel 17).
         """
         if self._sketch_panel is not None:
             return
         panel = SketchPanel(text, self._parameter_values(), self, self._sketch_surroundings())
+        if plane and not panel.choose_plane(plane):
+            self.announce(tr("Diese Fläche steht nicht mehr zur Verfügung."))
         self._sketch_panel = panel
         self._sketch_target = op_name
         """Leer beim freien Zeichnen über den Werkzeugzeilen-Knopf — die
@@ -5141,6 +5152,21 @@ class MainWindow(QMainWindow):
             return
         local = QPoint(x, self.viewport.height() - y)
         menu.exec(self.viewport.mapToGlobal(local))
+
+    def _on_sketch_on_face(self, feature_id: str) -> None:
+        """Ein Klick auf eine Fläche beginnt dort eine Skizze (§30.1).
+
+        Der Baum meldet nur die Merkmalskennung; die Ebene daraus zu bauen ist
+        Sache des Fensters — ``feature:<id>`` ist ein Begriff des Kerns
+        (``app.core.sketch.planes``), und der Objektbaum kennt den
+        Skizzenmodus nicht.
+
+        **Ohne festgelegte Operation.** Was aus der Zeichnung wird, fragt der
+        Dialog bei „Fertig" (§2.2, Weg 2) — auf einer Deckfläche ist eine
+        Tasche so plausibel wie ein Aufbau, und die Entscheidung vorwegzunehmen
+        hieße, dem Nutzer eine von zwei gleich guten zu nehmen.
+        """
+        self.start_sketch("", plane=f"feature:{feature_id}")
 
     def _on_object_picked(self, object_id: str) -> None:
         """Ein Klick auf einen Körper wählt ihn im Baum aus; einer daneben hebt

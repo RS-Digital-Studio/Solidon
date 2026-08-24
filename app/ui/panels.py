@@ -393,6 +393,11 @@ class ObjectTree(QWidget):
     stepRequested = Signal(int)
     """Den Schritt öffnen, der das gewählte Merkmal erzeugt hat (§21.2) —
     trägt seine Kennung."""
+    sketchOnFaceRequested = Signal(str)
+    """Auf dieser planaren Fläche zeichnen (§30.1) — trägt die Merkmalskennung.
+
+    Der Empfänger baut daraus die Ebene ``feature:<id>``; der Baum kennt den
+    Skizzenmodus nicht und soll ihn nicht kennen."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -926,6 +931,10 @@ class ObjectTree(QWidget):
         # die ganze Kette da und war unsichtbar.
         menu.setToolTipsVisible(True)
         self._add_source_step(menu)
+        # Vor der Sichtbarkeit und aus demselben Grund wie der Schritt darüber:
+        # Er gilt der **Fläche**, die Sichtbarkeit dem Körper. Wer mit rechts
+        # auf eine Deckfläche zeigt, meint die Deckfläche (§18.5).
+        self._add_sketch_on_face(menu)
         self._add_visibility(menu, chosen)
 
         kind = self._feature_kind()
@@ -1034,6 +1043,41 @@ class ObjectTree(QWidget):
         change.setStatusTip(tr("Öffnet den Schritt, der dieses Merkmal erzeugt hat."))
         change.triggered.connect(lambda _checked=False: self.stepRequested.emit(step))
         menu.addSeparator()
+
+    def _add_sketch_on_face(self, menu: QMenu) -> None:
+        """„Auf dieser Fläche zeichnen" — der Weg auf ein vorhandenes Teil.
+
+        Bauplan §30.1 nennt zwei Orte für eine Skizzenebene: eine Hauptebene
+        **oder eine angeklickte planare Fläche**, und
+        ``app/core/sketch/planes.py`` nennt die zweite „die interessantere,
+        denn sie ist der Weg, auf einem vorhandenen Teil weiterzubauen, statt
+        daneben". Die Rechnung dazu steht seit je; **erreichbar war sie nur
+        über ein Klappfeld** mit Zeilen wie „Fläche an Gehäuse — 2 400 mm²,
+        oben", also über das Wiedererkennen einer Fläche in einer Liste statt
+        über das Zeigen auf sie.
+
+        Dass es der richtige Weg ist, sagt die Anwendung schon selbst:
+        ``sketch_pocket`` verspricht in ihrem ``doc`` „Ein Klick auf eine
+        Fläche trägt den Ort vorab ein". Über den Operationsdialog wird das
+        eingelöst (``OpDialog.take_feature``), über den Skizzenmodus nicht —
+        dasselbe Versprechen, an einer Stelle gehalten und an der anderen
+        nicht.
+
+        Nur an einer **Fläche**: Auf einer Bohrung oder einer Kante gibt es
+        keine Ebene zu zeichnen, und ein Eintrag, der dort ins Leere führte,
+        wäre schlechter als keiner — dieselbe Überlegung wie bei
+        :meth:`_add_source_step` und dem erkannten Merkmal ohne Erzeuger.
+        """
+        if self._feature_kind() != "face":
+            return
+        feature_id = self.selected_feature()
+        if feature_id is None:
+            return
+        draw = menu.addAction(tr("Auf dieser Fläche zeichnen"))
+        draw.setStatusTip(tr("Beginnt eine Skizze auf dieser Fläche statt auf einer Grundebene."))
+        draw.triggered.connect(
+            lambda _checked=False: self.sketchOnFaceRequested.emit(str(feature_id))
+        )
 
     def _add_visibility(self, menu: QMenu, chosen: tuple[ObjectId, ...]) -> None:
         """Ein- und ausblenden und isolieren (§18.8).
