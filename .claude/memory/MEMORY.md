@@ -14,6 +14,7 @@
 - [Live-Durchsicht 08/2026](live-durchsicht-solidon3d-2026-08.md) — zwei Durchgänge: Bedienung, dann Fusion und ElegooSlicer; Hüllquader, Anordnung, Bohrtiefe, Viewport-Picking.
 - [rtree-Abstürze im langen Lauf](rtree-abstuerze-im-langen-lauf.md) — die volle Suite stirbt an Access Violations; portionsweise fahren, nicht dem eigenen Code zuschreiben.
 - [Agenten-Suite-Lauf in der Praxis](agenten-suite-lauf-praxis.md) — ~1,5 h je Modelllauf, Ausgabe gepuffert bis zum Ende; Exit 1 ist eine Quote, kein Fehlschlag.
+- [.venv verliert einzelne Dateien](venv-dateien-verschwinden.md) — sieht aus wie ein Codefehler; RECORD sagt in Sekunden, welche Datei fehlt, und check_env fängt es nicht.
 - [Native Bibliotheken zerlegen den Speicher](native-bibliotheken-speicher.md) — rtree, _elementtree und der Abriss am Prozessende sind eine Familie; erst wiederholen, dann urteilen.
 - [Lokale Umgebung: Python-Version](lokale-umgebung-python-version.md) — die .venv muss 3.13 fahren; ruff merkt es nicht, wenn sie es nicht tut, und mypy prüft dann null Dateien.
 - [TripoSG statt Hunyuan](triposg-statt-hunyuan.md) — MIT statt EU-Ausschluss; drei Fallen (float32-Embedder, diso ohne Wheel, numpy-Pin) und die gemessenen Vorgaben.

@@ -92,3 +92,16 @@ und sie einer Sitzung anrechnet, misst das Falsche.
 `~/AppData/Roaming/Python/Python313/Scripts/py-spy.exe`. `dump --pid N
 --native` zeigt Python- **und** C-Stack; bei einem Hänger sagt erst der native
 Teil, worauf gewartet wird.
+
+**Und die Marke reist nicht mit.** `tests/.performance.json` ist **nicht
+eingecheckt** — sie hält je Kontext `{"best": Sekunden, "strikes": n}`. Ein
+frischer Arbeitsbaum hat sie also gar nicht, sein erster Lauf legt sie an, und
+darum ist er **immer grün**. Am 24.08.2026 sah eine Gegenprobe deshalb wie eine
+Entlastung aus und war keine: „mit meiner Änderung grün, ohne sie grün" hieß
+bloß, dass in dem Baum noch keine Marke stand.
+
+Brauchbar wird der Vergleich erst über die **absoluten** Zahlen: in beiden
+Ständen `.performance.json` löschen, je drei Läufe fahren, danach `best`
+auslesen. So gemessen standen 2005 ms gegen 2001 ms — die Verlangsamung lag im
+Commit-Stand und nicht in der geprüften Änderung. Die Alternative ist, die
+Marke des Hauptbaums in den Arbeitsbaum zu kopieren.
