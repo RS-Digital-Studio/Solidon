@@ -1078,3 +1078,59 @@ def test_a_menu_where_nothing_works_steps_aside(qt_app: QApplication) -> None:
         assert sichtbar, f"„{name}“ kam nicht zurück"
 
     window.release()
+
+
+# --- Eigene Bausteine des Nutzers (§24.5, Konzept E1) -----------------------------
+
+
+def test_a_part_of_the_users_own_never_reaches_the_menu_bar(
+    monkeypatch: pytest.MonkeyPatch, qt_app: QApplication
+) -> None:
+    """**Jeder eigene Baustein wird eine Operation — und damit ein Menüeintrag.**
+
+    Zwanzig eigene Teile machen aus einem Menü eine Liste zum Absuchen, und die
+    Zeilengrenze in dieser Datei kann es nie sehen: ``load_user_parts`` wird
+    ausdrücklich nur von Oberfläche und Kommandozeile gerufen, nie von der
+    Suite (§38). Die Grenze wäre also grün und das Menü trotzdem geflutet.
+
+    **Geprüft wird das Fenster, nicht die Funktion darunter.** Ein Test über
+    ``menu_tree(skip=…)`` allein sagt nur, dass die Aussortierung *möglich*
+    ist — nicht, dass das Fenster sie benutzt. Durchgereicht ist nicht gerufen.
+    """
+    from app.core import bootstrap
+    from app.ui.main_window import MainWindow
+
+    load_operations()
+    # Eine vorhandene Operation als „eigener Baustein" ausgeben: Der Weg über
+    # einen echten Nutzerordner bräuchte eine Datei auf der Platte, und geprüft
+    # werden soll das Fenster, nicht das Einlesen.
+    victim = next(spec.name for spec in REGISTRY.all() if spec.category == "parts")
+    monkeypatch.setattr(bootstrap, "user_operations", lambda: (victim,))
+
+    # Selbst gebaut und nicht über die window-Fixture: Der Patch muss
+    # **vor** dem Menüaufbau stehen, und die Fixture baut das Fenster schon
+    # beim Anfordern.
+    window = MainWindow(Session(), UiSettings())
+    try:
+        # **``_op_actions`` ist die Zuordnung, die der Menüaufbau selbst
+        # anlegt** — Name → Aktion, gefüllt an genau den zwei Stellen, die
+        # Menüeinträge erzeugen. Der erste Anlauf dieses Tests las stattdessen
+        # ``data()`` der Aktionen und fand **nichts**: Er war grün, weil er
+        # eine leere Menge prüfte. Gefangen hat das die Gegenprobe darunter,
+        # nicht der Test selbst.
+        in_menu = set(window._op_actions)
+        others = [
+            name
+            for name in in_menu
+            if REGISTRY.has(name) and REGISTRY.get(name).category == "parts"
+        ]
+        assert others, "die Menüleiste zeigt gar keine Bausteine — dann prüft dieser Test nichts"
+        assert victim not in in_menu, "der eigene Baustein steht in der Menüleiste"
+        assert victim in {entry.name for entry in palette_entries()}, (
+            "und er muss über die Befehlspalette weiter erreichbar sein"
+        )
+    finally:
+        release = getattr(type(window), "release", None)
+        if release is not None:
+            release(window)
+        window.deleteLater()

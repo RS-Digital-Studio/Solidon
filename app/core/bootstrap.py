@@ -63,6 +63,7 @@ def load_operations() -> None:
 
 _user_loaded = False
 _user_findings: tuple[Finding, ...] = ()
+_user_operations: tuple[str, ...] = ()
 
 
 def load_user_parts() -> tuple[Finding, ...]:
@@ -81,7 +82,7 @@ def load_user_parts() -> tuple[Finding, ...]:
     Gibt die Befunde des Ladens zurück — eine Datei, die sich nicht
     importieren lässt, wird gemeldet und übersprungen, nie zum Startabbruch.
     """
-    global _user_loaded, _user_findings
+    global _user_loaded, _user_findings, _user_operations
     if _user_loaded:
         return _user_findings
     load_operations()
@@ -89,8 +90,26 @@ def load_user_parts() -> tuple[Finding, ...]:
     result = user.load()
     if result.loaded:
         # Auch ein eigener Baustein ist eine Operation (§24.1) — der zweite
-        # Aufruf registriert nur, was neu dazukam.
-        importlib.import_module(f"{_PART_MODULE}.ops").register_all()
+        # Aufruf registriert nur, was neu dazukam. **Und genau das ist die
+        # Auskunft, die die Oberfläche braucht**: Welche Operationen aus dem
+        # Nutzerordner stammen, entsteht hier ohnehin und wurde bis zum
+        # 24.08.2026 weggeworfen.
+        _user_operations = importlib.import_module(f"{_PART_MODULE}.ops").register_all()
     _user_loaded = True
     _user_findings = tuple(result.findings)
     return _user_findings
+
+
+def user_operations() -> tuple[str, ...]:
+    """Die Operationen, die aus eigenen Bausteinen des Nutzers entstanden sind.
+
+    Leer, solange :func:`load_user_parts` nicht gelaufen ist — in der Suite
+    also immer, und das ist Absicht (§38).
+
+    **Wofür:** Sie gehören in Katalog und Befehlspalette, aber nicht in die
+    Menüleiste. Jeder eigene Baustein wird eine Operation und damit ein
+    Menüeintrag; zwanzig eigene Teile machen aus einem Menü eine Liste zum
+    Absuchen. Die Grenze aus ``tests/test_interface_limits.py`` kann das nie
+    sehen, weil die Suite den Nutzerordner bewusst nicht liest.
+    """
+    return _user_operations

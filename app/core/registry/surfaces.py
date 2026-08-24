@@ -15,7 +15,7 @@ darstellt.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Container
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -36,13 +36,30 @@ from app.core.types import ParamSpec
 from app.i18n import TranslatableText, _, format_decimal, sort_key
 
 
-def menu_tree(registry: Registry | None = None) -> tuple[MenuSection, ...]:
-    """Das Menü, in der Reihenfolge des Katalogs (§25)."""
+def menu_tree(
+    registry: Registry | None = None, skip: Container[str] = frozenset()
+) -> tuple[MenuSection, ...]:
+    """Das Menü, in der Reihenfolge des Katalogs (§25).
+
+    ``skip`` lässt Operationen aus der Menüleiste heraus, ohne sie aus dem
+    Register zu nehmen — sie bleiben über Katalog, Befehlspalette und
+    Kontextmenü erreichbar.
+
+    **Die Entscheidung, *wen* das trifft, gehört nicht hierher.** Der Kern
+    bekommt Namen und nicht den Grund: Die Oberfläche reicht die eigenen
+    Bausteine des Nutzers herein (§24.5), weil jeder davon eine Operation wird
+    und zwanzig eigene Teile aus einem Menü eine Liste zum Absuchen machen.
+    Welche Regel dahintersteht, weiß der Aufrufer.
+    """
     source = registry or REGISTRY
-    return tuple(
-        MenuSection(category=category, title=CATEGORIES[category], entries=entries)
-        for category, entries in source.by_category().items()
-    )
+    sections = []
+    for category, entries in source.by_category().items():
+        kept = tuple(entry for entry in entries if entry.name not in skip)
+        if kept:
+            sections.append(
+                MenuSection(category=category, title=CATEGORIES[category], entries=kept)
+            )
+    return tuple(sections)
 
 
 #: Wie viele Zeilen ein Menü zeigen darf, bevor es eine Liste zum Absuchen
