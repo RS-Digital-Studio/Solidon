@@ -231,6 +231,26 @@ _log = get_logger(__name__)
 
 AUTOSAVE_INTERVAL_MS = 120_000
 
+#: Zwei Sätze, die diese Datei je viermal sagte.
+#:
+#: **Mit ``_()`` und nicht mit ``tr()``, und das ist hier keine Feinheit.**
+#: ``tr()`` übersetzt sofort und gibt eine nackte Zeichenkette zurück — auf
+#: Modulebene aufgerufen friert es die Sprache ein, die beim *Import* galt, und
+#: ein späteres ``set_language`` erreicht die Konstante nie mehr. Gemessen am
+#: 24.08.2026: nach dem Wechsel auf Englisch liefert ``str(_(…))``
+#: „Please select an object first.", ein zur Importzeit ausgewertetes ``tr(…)``
+#: dagegen weiter den deutschen Satz. Deshalb steht hier der Marker, und die
+#: Verwendungsstelle löst ihn mit ``str()`` auf.
+#:
+#: Der Einsammler findet sie trotzdem: ``i18n.extract`` liest das erste
+#: Argument von ``_()`` und ``tr()``, wenn es eine feste Zeichenkette ist — und
+#: das ist es genau hier. Wer den Satz stattdessen als nackte Zeichenkette
+#: ablegte und an der Verwendungsstelle ``tr(_NEEDS_SELECTION)`` schriebe,
+#: hätte ihn aus dem Katalog geworfen: Dort steht dann eine Variable, und die
+#: sieht der Einsammler nicht.
+_NEEDS_SELECTION = _("Bitte zuerst ein Objekt auswählen.")
+_NEEDS_BODY = _("Dafür braucht es einen Körper in der Szene.")
+
 #: Wie lange der Rahmen steht, mit dem ein Tourschritt auf seinen Bereich
 #: zeigt. Lang genug, um den Blick dorthin zu ziehen, kurz genug, um nicht als
 #: Zustand gelesen zu werden.
@@ -2216,7 +2236,7 @@ class MainWindow(QMainWindow):
         # einen Körper, und keines sagte das.
         self.tools.set_usable(
             objects > 0 and not gesturing,
-            tr("Dafür braucht es einen Körper in der Szene."),
+            str(_NEEDS_BODY),
         )
 
         # Rückgängig und Wiederholen bleiben nach Ablauf offen (§2 C): wer
@@ -2246,7 +2266,7 @@ class MainWindow(QMainWindow):
         # Und jeder der fünf sagt, was ihm fehlt. Die Reihenfolge der Gründe
         # ist die der Bedingungen darüber: Was zuerst zutrifft, wird genannt.
         gesture_note = tr("Solange gezeichnet oder geformt wird, gilt die Taste dem Werkzeug.")
-        needs_body = tr("Dafür braucht es einen Körper in der Szene.")
+        needs_body = str(_NEEDS_BODY)
         self._say_why(
             self.undo_action,
             gesture_note if gesturing else tr("Es ist kein Schritt da, der zurückgehen könnte."),
@@ -2426,13 +2446,13 @@ class MainWindow(QMainWindow):
         """
         if spec.takes_whole_scene:
             if objects <= 0:
-                return str(tr("Dafür braucht es einen Körper in der Szene."))
+                return str(_NEEDS_BODY)
             return None
         if not spec.consumes:
             return None
         if chosen < spec.consumes:
             if objects <= 0:
-                return str(tr("Dafür braucht es einen Körper in der Szene."))
+                return str(_NEEDS_BODY)
             if spec.consumes == 1:
                 return str(tr("Wählen Sie dafür ein Objekt aus — im Bild oder im Objektbaum."))
             return str(
@@ -2986,9 +3006,7 @@ class MainWindow(QMainWindow):
         """
         object_id = object_id or self.object_tree.selected()
         if not object_id:
-            QMessageBox.information(
-                self, tr("Automatisch teilen"), tr("Bitte zuerst ein Objekt auswählen.")
-            )
+            QMessageBox.information(self, tr("Automatisch teilen"), str(_NEEDS_SELECTION))
             return
 
         # Kein Wartezeiger mehr: die Suche prüft Kandidatenebene für
@@ -4039,7 +4057,7 @@ class MainWindow(QMainWindow):
             return
         target = object_id or self.object_tree.selected()
         if not target:
-            self.announce(tr("Bitte zuerst ein Objekt auswählen."))
+            self.announce(str(_NEEDS_SELECTION))
             return
         mesh = self._sculpt_mesh(target)
         if mesh is None:
@@ -4291,7 +4309,7 @@ class MainWindow(QMainWindow):
             return
         target = object_id or self.object_tree.selected()
         if not target:
-            self.announce(tr("Bitte zuerst ein Objekt auswählen."))
+            self.announce(str(_NEEDS_SELECTION))
             return
 
         self._armature_target = target
@@ -4975,7 +4993,7 @@ class MainWindow(QMainWindow):
         """
         object_id = self.object_tree.selected()
         if not object_id:
-            self.announce(tr("Bitte zuerst ein Objekt auswählen."))
+            self.announce(str(_NEEDS_SELECTION))
             return
 
         params = {**self.paint_bar.values(), "x": point[0], "y": point[1], "z": point[2]}
