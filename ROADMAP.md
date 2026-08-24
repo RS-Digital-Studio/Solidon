@@ -4293,37 +4293,57 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       release-kritisch; wer den Punkt aufnimmt, plant die Rechenzeit ein.
 
 
-      **Dieselbe Wurzel macht auch Tests falsch rot, nicht nur Läufe kaputt**
+      **Dieselbe Datei macht Tests falsch rot, nicht nur Läufe kaputt**
       (24.08.2026, gemessen von formwerk-be). Sieben Läufe von `tests/test_ui.py`
       gegen einen Stand: viermal 258 passed, zweimal Segfault, **einmal 2
       failed** — und die zwei sind einzeln grün und mit `-p no:randomly` in der
-      ganzen Datei auch. Beide Stapel zeigen auf Dateien, die unverändert im
-      Baum liegen (`app/ui/overlay.py:497→587`, `app/ui/shortcut_schemes.py:137`).
+      ganzen Datei auch.
 
-      Der härteste Beleg für den Mechanismus steht im zweiten:
-      `TypeError: eventFilter(QWidgetItem, QEvent)`. Qt übergibt nie ein
-      `QWidgetItem` als `watched` — ein `QWidgetItem` ist kein `QObject` und kann
-      kein Ereignisziel sein; der Zeiger zeigt auf neu belegten Speicher.
-      **Use-after-free**, und `'OverlayHost' object has no attribute '_placing'`
-      ist dieselbe Sache eine Ebene höher: shiboken baut zu einem C++-Zeiger
-      ohne lebende Hülle eine neue, deren `__init__` nie lief — es fehlt genau
-      das Attribut, das nur `__init__` setzt. Die naheliegende Erklärung
-      „Reihenfolge im Konstruktor" ist damit widerlegt: `_placing` steht in
-      Zeile 418, `installEventFilter` erst in 479.
+      Der Stapel des roten Laufs nennt den Grund: **4378 verschachtelte Frames**
+      in `NavigationKeys.eventFilter` (`app/ui/shortcut_schemes.py:131`),
+      ausgelöst von `dialog.show()` in `_open_operation_dialog`, als derselbe
+      Test zum zweiten Mal `run_operation` ruft und der erste Dialog sich dabei
+      schließt. Der `TypeError: eventFilter(QWidgetItem, QEvent)` am Ende ist die
+      **Folge** des erschöpften Stapels und keine eigene Ursache — bei dieser
+      Tiefe kommt PySide bei der Argumentkonvertierung durcheinander. Ein
+      Stapelüberlauf auf der C++-Seite ist zugleich die zwanglose Erklärung für
+      die Segfaults derselben Datei.
 
-      Damit hängen drei Dinge an einer Wurzel, die bisher getrennt hier stehen:
-      die Risse vor der Zusammenfassung, der Hänger (Signatur C) und
-      **falsch-rote Tests**.
+      Der Filter ist korrekt nur einmal installiert (`_INSTALLED`), es ist also
+      **keine** gewachsene Filterkette — genau den früheren Fehler beschreibt
+      sein Docstring. Was die Kaskade auslöst, ist offen; `dialog.show()` mit
+      einem sich schließenden Vorgänger und dem Fokuswechsel dazwischen ist die
+      Spur, nicht die Antwort.
 
-      Praktische Folge, die keine Untersuchung braucht: **Ein roter Test in einer
-      Fensterdatei ist erst echt, wenn er einzeln rot ist.** Das kostet eine
-      Sekunde und hat am 24.08. in zwei Sitzungen je eine halbe Stunde Suche
-      gespart.
+      **Zwei naheliegende Erklärungen sind widerlegt, beide von formwerk-be an
+      Minimalbeispielen:** Eine Python-Hülle ohne gelaufenen `__init__` entsteht
+      **nicht**, wenn die letzte Python-Referenz fällt — PySide hält die Hülle
+      einer Klasse mit Überschreibungen fest, und alle Attribute waren da. Und
+      ein wirklich zerstörtes C++-Objekt liefert `RuntimeError: Internal C++
+      object already deleted`, **nicht** `AttributeError`; ein AttributeError ist
+      also gerade kein Zeichen für ein abgebautes Objekt. Ein `QWidgetItem` als
+      `watched` läuft python-seitig anstandslos durch — der TypeError entsteht
+      erst im `super()`-Aufruf, also innerhalb unseres Filters, und nicht beim
+      Zustellen durch Qt.
 
-      Nicht getan und mit Grund: `_placing` als Klassenattribut zu deklarieren
-      beseitigte diesen einen Fehler und verdeckte die Ursache. Ein Pflaster auf
-      einem Use-after-free macht die nächste Erscheinungsform schwerer zu
-      finden, nicht leichter — das ist eine Entscheidung für Robert.
+      **Ein früherer Nachtrag an dieser Stelle behauptete ein Use-after-free und
+      ist zurückgezogen** (eingetragen in `4d473346`, korrigiert am selben Tag).
+      Er nannte „Qt übergibt nie ein `QWidgetItem`" als Beleg für einen
+      Zeiger auf freigegebenen Speicher. Der erste Halbsatz stimmt, der Schluss
+      nicht: Es hat nie jemand ein `QWidgetItem` gesendet. Die Kette ist ein
+      Lehrstück über zwei Sitzungen — eine Beobachtung wurde auf dem Weg zur
+      Nachricht fester, als sie war, und die empfangende Sitzung trug sie ein,
+      weil sie „belegt" hieß.
+
+      Praktische Folge, die keine Untersuchung braucht und von der Ursache
+      unabhängig ist: **Ein roter Test in einer Fensterdatei ist erst echt, wenn
+      er einzeln rot ist.** Das kostet eine Sekunde und hat am 24.08. in zwei
+      Sitzungen je eine halbe Stunde Suche gespart.
+
+      Nicht getan und mit Grund: `_placing` in `overlay.py` als Klassenattribut
+      zu deklarieren beseitigte einen der beiden Fehler und verdeckte, was ihn
+      auslöst. Ein Pflaster auf einer Ursache, die man nicht kennt, macht die
+      nächste Erscheinungsform schwerer zu finden.
 
 - [ ] **Signatur C: der Hänger — kein Absturz, sondern Stillstand.** Abgegrenzt
       am 23.08.2026 bei der Sortierung der Absturzfamilie an 24 Stapeln.
@@ -8933,23 +8953,30 @@ Was offen bleibt — und der erste Punkt ist eine **zurückgezogene Deutung**:
       ist der Fall, den `conftest.py` mit `isValid` behandelt.
 
 - [x] **Drei Widgets bekommen Ereignisse, die ihr Zustand nicht mehr trägt**
-      — erklärt, nicht behoben.
+      — als eigener Punkt aufgelöst, die Suche läuft anderswo weiter.
       Am 24.08.2026 in `test_ui.py` gemessen, alle drei im Teardown, alle drei
-      einzeln grün: `shortcut_schemes.py:137` bekommt ein `QWidgetItem` als
-      `watched` (in Qts Signatur unmöglich), `overlay.py:587` findet `_placing`
-      nicht, `viewport.py:4312` nicht `_drag_kind`. Die Initialisierungs­
-      reihenfolge ist bei allen dreien geprüft und in Ordnung — die Attribute
-      werden im `__init__` gesetzt, der Filter erst danach installiert. Drei
-      Sitzungen haben je einen Fall unabhängig gesehen, und das ist der Grund,
-      warum es hier steht: Es ist kein Einzelfall mehr.
+      einzeln grün: `shortcut_schemes.py:131` endet in einem `TypeError`,
+      `overlay.py:587` findet `_placing` nicht, `viewport.py:4312` nicht
+      `_drag_kind`. Die Initialisierungsreihenfolge ist bei allen dreien geprüft
+      und in Ordnung — die Attribute werden im `__init__` gesetzt, der Filter
+      erst danach installiert. Drei Sitzungen haben je einen Fall unabhängig
+      gesehen, und das ist der Grund, warum es hier stand: Es ist kein
+      Einzelfall.
 
-      **Die Ursache ist seit dem 24.08.2026 gemessen und steht bei „Fünf
-      Fensterdateien reißen vor ihrer Zusammenfassung": Use-after-free.**
-      formwerk-be hat den Beleg geliefert — `eventFilter(QWidgetItem, QEvent)`
-      ist eine Signatur, die Qt nie erzeugt, also zeigt der Zeiger auf neu
-      belegten Speicher. Die fehlenden Attribute sind dasselbe eine Ebene
-      höher. Dieser Punkt ist damit **beantwortet** und nicht mehr eigenständig
-      offen; was zu entscheiden bleibt, steht dort.
+      **Einer der drei ist erklärt, die anderen zwei nicht.** Der `TypeError` in
+      `shortcut_schemes` ist die Folge von 4378 verschachtelten Frames in
+      `NavigationKeys.eventFilter` — Einzelheiten bei „Fünf Fensterdateien
+      reißen vor ihrer Zusammenfassung", wo auch die Messung wartet. Was die
+      Kaskade auslöst, ist offen, und für `_placing` und `_drag_kind` gibt es
+      bislang keine Erklärung; zwei naheliegende sind dort ausdrücklich
+      widerlegt.
+
+      Der Punkt ist trotzdem abgehakt: Er war eine Sammlung von Beobachtungen
+      ohne eigene Frage, und die Frage steht jetzt an der Stelle, an der
+      gemessen wird. Zwei Register-Einträge für dieselbe Suche wären einer zu
+      viel — **und diese Zeile hat schon einmal zu viel behauptet:** Sie nannte
+      die Sache am 24.08. „beantwortet" und berief sich auf ein Use-after-free,
+      das am selben Tag zurückgezogen wurde.
 
 - [ ] **Zwei Downloadgrößen stehen im Text statt in der Message-ID.** Der
       sauberere Weg ist bekannt und steht zwei Dutzend Zeilen daneben:
