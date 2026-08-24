@@ -4866,6 +4866,26 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       nimmt einen eigenen Arbeitsbaum.** Im Hauptbaum ist er reproduzierbar
       rot, ohne dass der Code etwas dafürkann.
 
+      **Nachtrag vom 24.08.2026 (3d-druck-61): jedes zusätzliche Fenster im
+      Prozess hebt die Rate.** Beim Fix für das Viewport-Bild im Fehlerbogen
+      gemessen, je eigener Arbeitsbaum auf demselben HEAD, `tests/test_ui.py`:
+
+          ohne alles                  2 Abrisse von 9
+          Fix ohne die neuen Tests    1 von 3
+          Fix mit zwei neuen Tests    2 von 3
+          Endfassung, ein Test        1 von 3
+
+      Der teure Test baute über die `window`-Fixture ein ganzes `MainWindow`,
+      nur um zu prüfen, dass `snapshot` ohne Plotter `None` gibt — zwei
+      zusätzliche VTK-Fenster in einem Prozess, der ohnehin am Limit ist. Für
+      diese Frage genügt ein nacktes `QWidget`, und mit ihm fällt die Rate
+      zurück auf die Grundrate.
+
+      **Daraus eine Regel, die keine Messung mehr braucht:** Wer einen Test
+      schreibt, der ein `MainWindow` baut, erhöht die Abrissgefahr **der ganzen
+      Datei** — nicht nur seines eigenen Falls. Ein Test, dessen Frage ein
+      nacktes Widget beantwortet, bekommt kein Fenster.
+
       **Nachtrag vom 24.08.2026 (3d-druck-b0): zwei Bäume, ein Inhalt, zwei
       Ergebnisse.** Beim Messen des Fensterfixes fiel derselbe Riss an —
       `0xc0000374` (Heap-Korruption) mitten im `Garbage-collecting`,
