@@ -512,3 +512,43 @@ def test_what_a_person_types_into_an_address_field_is_checked_there() -> None:
 def test_an_empty_address_is_no_complaint_but_a_reset() -> None:
     """Leer heißt „wieder die Vorgabe" — ``remember`` behandelt es genauso."""
     assert discover.unusable_address("   ") is None
+
+
+def test_no_probe_asks_the_own_machine_for_an_address_that_has_no_host(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """**Ein leerer Rechnername ist für ``socket`` nicht „nichts", sondern
+    *localhost*.**
+
+    Alle drei Erreichbarkeitsprüfungen des Projekts hatten denselben Rückfall —
+    ``hostname or "127.0.0.1"`` und ``or "localhost"`` —, und damit fragte eine
+    Adresse, die gar keine ist, den eigenen Rechner. Wo etwas auf dem Port
+    lauscht, meldet das „erreichbar", wo nichts lauscht, nicht.
+
+    Genau daran ist der Test zu ``mesh.reachable`` in der CI gescheitert,
+    während er auf dieser Maschine grün war (24.08.2026). Gefunden wurde eine
+    Stelle; geprüft werden hier alle drei.
+
+    **Geprüft wird, dass keine Verbindung *versucht* wird**, nicht nur, dass
+    ``False`` herauskommt: Ohne Webserver auf Port 80 wäre dieser Test auch
+    ohne den Fix grün — er würde dann die Abwesenheit eines fremden Dienstes
+    messen und nicht unseren Code.
+    """
+    import socket
+
+    from app.core.backends import llm, mesh
+
+    attempts: list[object] = []
+
+    def note(*args: object, **kwargs: object) -> object:
+        attempts.append(args)
+        raise OSError("in diesem Test wird nicht wirklich verbunden")
+
+    monkeypatch.setattr(socket, "create_connection", note)
+
+    for address in (r"C:\Users\Jemand\models", "http:///nur/ein/pfad", "file:///tmp/x"):
+        assert discover.reachable(address) is False, f"discover: {address}"
+        assert mesh.reachable(address) is False, f"mesh: {address}"
+        assert llm.OllamaBackend(url=address).available is False, f"llm: {address}"
+
+    assert attempts == [], f"es wurde trotzdem eine Verbindung versucht: {attempts}"

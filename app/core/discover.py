@@ -503,10 +503,19 @@ def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:
     """
     try:
         address = urlparse(url if "://" in url else f"http://{url}")
-        host = address.hostname or "127.0.0.1"
         port = address.port
     except ValueError:
         return False
+    if not address.hostname:
+        # **Ohne Rechnernamen wird gar nicht erst gefragt.** Hier stand
+        # ``hostname or "127.0.0.1"``, und damit fragte eine Adresse, die gar
+        # keine ist, den eigenen Rechner: ``C:\Users\…`` hat für
+        # ``urlparse`` das Schema ``c`` und keinen Host. Auf einer Maschine, auf
+        # der irgendetwas auf Port 80 lauscht, meldete das „erreichbar" — und
+        # genau dort war der Test dazu grün, wo nichts lauschte. Gefunden hat
+        # es die CI (24.08.2026), auf demselben Betriebssystem wie hier.
+        return False
+    host = address.hostname
     if port is None:
         port = 443 if address.scheme == "https" else 80
     try:

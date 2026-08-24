@@ -618,8 +618,15 @@ class OllamaBackend:
 
         try:
             address = urllib.parse.urlsplit(ollama_endpoint(self.url))
+            if not address.hostname:
+                # Ohne Rechnernamen wird nicht gefragt. Der Rückfall stand hier
+                # auf ``localhost`` — und damit fragte eine Adresse, die keine
+                # ist, den eigenen Rechner. Dieselbe Stelle gab es dreimal
+                # (hier, ``discover.reachable``, ``mesh.reachable``); gefunden
+                # hat sie die CI an einer, nachdem eine davon behoben war.
+                return False
             with socket.create_connection(
-                (address.hostname or "localhost", address.port or 11434),
+                (address.hostname, address.port or 11434),
                 timeout=PROBE_SECONDS,
             ):
                 return True

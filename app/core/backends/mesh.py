@@ -303,7 +303,15 @@ def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:
     """
     try:
         parts = urllib.parse.urlparse(url)
-        with socket.create_connection((parts.hostname or "", parts.port or 80), timeout=seconds):
+        if not parts.hostname:
+            # **Ohne Rechnernamen wird gar nicht erst gefragt.** Ein leerer Host
+            # ist für ``socket`` nicht „nichts", sondern *localhost* — eine
+            # Adresse wie ``C:\Users\...`` hätte damit auf jedem Rechner,
+            # auf dem irgendetwas auf Port 80 lauscht, „erreichbar" gemeldet.
+            # Gefunden hat das die CI: derselbe Test war auf dieser Maschine
+            # grün und auf dem Windows-Runner rot (24.08.2026).
+            return False
+        with socket.create_connection((parts.hostname, parts.port or 80), timeout=seconds):
             return True
     except UNUSABLE_ADDRESS:
         # ``ValueError`` gehört dazu: Steht im Adressfeld ein Pfad statt einer
