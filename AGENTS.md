@@ -56,7 +56,11 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
     Datei — ein eigener Baustein als `.py` bleibt deshalb, wo er liegt. Ein
     Baustein als **Rezept** darf mitreisen (Entscheidung Robert, 24.08.2026):
     Er ist eine Liste registrierter Operationen mit Werten, führt also nichts
-    aus, was eine Projektdatei nicht ohnehin auslöst.
+    aus, was eine Projektdatei nicht ohnehin auslöst. **Ein Wert kann trotzdem
+    Quelltext sein** — `create_from_scad` trägt ihn im Parameter `source`.
+    Dafür greift **Regel 11**, und `scene/foreign.py` sagt es dem Nutzer,
+    bevor er die Datei rechnen lässt (§32); beides gilt unabhängig davon, wie
+    der Quelltext in die Datei kam. Die zwei Regeln halten nur zusammen.
 14. **Kennzahlen aus Schichtanalyse und G-Code werden nie vermischt** —
     Herkunft immer ausweisen (§22.5).
 15. **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. OpenSCAD und
