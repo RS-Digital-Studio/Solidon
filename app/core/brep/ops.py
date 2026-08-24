@@ -377,7 +377,7 @@ class ThreadParams(BaseParams):
 
 @register_op(
     name="thread_exact",
-    title=_("Exakten Gewindebolzen erzeugen"),
+    title=_("Gewindebolzen als neues Objekt"),
     # „primitive" und nicht „shaping": Der Bolzen verbraucht nichts und
     # erzeugt einen Körper — dasselbe wie der exakte Quader und der exakte
     # Zylinder daneben. Unter *Ändern → Formgebung* war er der einzige

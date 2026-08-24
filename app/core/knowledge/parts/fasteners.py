@@ -390,7 +390,7 @@ class ThreadParams(BaseParams):
 
 @register_part(
     name="printed_thread",
-    title=_("Gewinde"),
+    title=_("Gewinde in Bohrung schneiden"),
     group="fasteners",
     params=ThreadParams,
     subtractive=False,
