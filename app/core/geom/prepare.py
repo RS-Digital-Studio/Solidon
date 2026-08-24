@@ -39,7 +39,7 @@ from app.core.types import (
     SolverInfo,
     Vec3,
 )
-from app.core.units import EPS_GEOM, format_length, format_volume
+from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length, format_volume
 from app.i18n import TranslatableText, _
 
 #: §39: Boolesche Ops überlappen immer leicht, nie teilen sie exakt eine Fläche.
@@ -693,7 +693,79 @@ def check_build_volume(
                     values=values,
                 )
             )
+        elif _floats(bounds, index, meshes, plates):
+            findings.append(
+                Finding(
+                    code="arrange.above_bed",
+                    severity="info",
+                    message=_("Ein Objekt schwebt über dem Druckbett."),
+                    object_id=(
+                        object_ids[index]
+                        if object_ids is not None and index < len(object_ids)
+                        else None
+                    ),
+                    values={
+                        "object": index,
+                        "gap": format_length(float(bounds.minimum[2])),
+                    },
+                )
+            )
     return findings
+
+
+def _floats(
+    bounds: BoundingBox,
+    index: int,
+    meshes: Sequence[Mesh],
+    plates: list[int] | None,
+) -> bool:
+    """Hängt dieser Körper in der Luft — ohne etwas unter sich?
+
+    Das Gegenstück zu ``arrange.below_bed``, und es fehlte: Ein Körper, der
+    **unter** der Platte steckt, wurde seit je gemeldet; einer, der darüber
+    schwebt, gar nicht, solange er in den Bauraum passte. Gemessen am 24.08.2026
+    an zwei Millimetern und an hundertvierzig: in beiden Fällen kein Befund,
+    kein Knopf, kein Wort. Robert hatte genau den Fall („einmal als es in der
+    Luft war") und musste den Weg im Menü selbst suchen.
+
+    **Wer etwas unter sich hat, schwebt nicht.** Ein Deckel auf einer Dose, ein
+    Teil auf einer Grundplatte, jede Baugruppe aus einer 3MF: Dort ist die Lücke
+    zum Bett gewollt, und eine Meldung wäre falsch. Gefragt wird nach dem
+    Hüllquader und nicht nach der Geometrie — die genaue Frage („liegt er
+    wirklich auf?") beantwortet die Schichtanalyse mit ihrer Inselerkennung, und
+    die kostet Sekunden (§31). Hier genügt die billige Richtung: Wer in x und y
+    mit niemandem überlappt, dessen Oberkante bis zu seiner Unterkante reicht,
+    hat nichts unter sich.
+
+    Nur auf derselben Platte: Zwei Platten liegen in der Szene an derselben
+    Stelle, weil jede einzeln gedruckt wird (§25) — ein Körper auf Platte 2
+    trägt keinen auf Platte 1.
+
+    Die Grenze ist ``EPS_DISPLAY`` und keine Materialtoleranz (Regel 7): Die
+    Frage ist nicht, wie fest etwas aufliegt, sondern ob ein Spalt **da** ist.
+    Ein Hundertstelmillimeter ist im Fenster dasselbe Bild und rechnerisch
+    Rundung; darüber hängt der Körper.
+    """
+    gap = float(bounds.minimum[2])
+    if gap <= EPS_DISPLAY:
+        return False
+    plate = plates[index] if plates is not None and index < len(plates) else 0
+    for other, mesh in enumerate(meshes):
+        if other == index:
+            continue
+        if plates is not None and other < len(plates) and plates[other] != plate:
+            continue
+        below = mesh.bounds
+        if below.maximum[2] < gap - EPS_DISPLAY:
+            continue
+        overlaps = all(
+            below.minimum[axis] < bounds.maximum[axis] - EPS_DISPLAY
+            and below.maximum[axis] > bounds.minimum[axis] + EPS_DISPLAY
+            for axis in (0, 1)
+        )
+        if overlaps:
+            return False
+    return True
 
 
 def _severity_for(
@@ -759,6 +831,14 @@ def _verdict_for(
         return "arrange.out_of_build_volume", _("Ein Objekt steht über den Bauraum hinaus.")
     if tuple(outside) == (2,) and only_below:
         return "arrange.below_bed", _("Ein Objekt steckt unter dem Druckbett.")
+    if tuple(outside) == (2,):
+        # Nur nach oben hinaus, und das heißt: es schwebt, und zwar so hoch,
+        # dass es oben herausragt. „Liegt außerhalb des Druckbetts" war hier
+        # doppelt irre — in x und y liegt es genau richtig, und angeboten wurde
+        # *Auf dem Bett anordnen*, das beides verschiebt, wo ein Absenken
+        # genügt. Dieselbe Unterscheidung wie eine Zeile darüber, nur in die
+        # andere Richtung.
+        return "arrange.above_bed", _("Ein Objekt schwebt über dem Druckbett.")
     return "arrange.off_the_plate", _("Ein Objekt liegt außerhalb des Druckbetts.")
 
 

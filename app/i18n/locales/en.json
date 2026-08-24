@@ -1025,6 +1025,7 @@
   "Ein Muster braucht mindestens zwei Ausfertigungen.": "A pattern needs at least two copies.",
   "Ein Muster braucht mindestens zwei Elemente.": "A pattern needs at least two elements.",
   "Ein Objekt liegt außerhalb des Druckbetts.": "An object lies outside the build plate.",
+  "Ein Objekt schwebt über dem Druckbett.": "An object floats above the print bed.",
   "Ein Objekt steckt unter dem Druckbett.": "An object sits below the build plate.",
   "Ein Objekt steht über den Bauraum hinaus.": "An object sticks out of the build volume.",
   "Ein Operationsdialog: vorn die zwei bis drei Werte, die man tatsächlich ändert, darunter der zugeklappte Bereich „Weitere Einstellungen“.": "An operation dialog: at the front the two or three values you actually change, below them the collapsed “More settings” section.",

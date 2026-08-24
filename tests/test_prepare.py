@@ -345,6 +345,91 @@ def test_a_body_below_the_bed_is_reported_without_being_asked(profile: Profile) 
     assert findings[0].values["object"] == "Halter", "und zwar mit Namen, nicht mit Listenplatz"
 
 
+def test_a_body_floating_above_the_bed_is_reported(profile: Profile) -> None:
+    """Das Gegenstück zu ``below_bed``, und es fehlte (§17.1, §2.7).
+
+    Ein Körper, der **unter** der Platte steckt, wurde seit je gemeldet; einer,
+    der darüber schwebt, gar nicht — solange er in den Bauraum passte, sagte
+    niemand ein Wort. Gemessen am 24.08.2026 an zwei Millimetern Luft und an
+    hundertvierzig: beide Male kein Befund, kein Knopf. Robert hatte genau
+    diesen Fall („einmal als es in der Luft war") und musste den Weg im Menü
+    selbst suchen.
+
+    Ein Hinweis und keine Warnung, aus demselben Grund wie beim Körper unter der
+    Platte: Ein Klick behebt es.
+    """
+    from app.core.scene.evaluate import check_placement
+    from app.core.types import Scene, SceneObject
+
+    floating = SceneObject(
+        id="obj_1", name="Halter", mesh=apply(cube(), translation((0.0, 0.0, 40.0)))
+    )
+    scene = Scene(objects={"obj_1": floating}, profile=profile)
+
+    findings = check_placement(scene)
+
+    assert findings, "ein Körper in der Luft ist ein Befund"
+    assert findings[0].code == "arrange.above_bed"
+    assert findings[0].severity == "info", "ein Klick behebt es"
+    assert findings[0].object_id == "obj_1"
+
+
+def test_a_body_resting_on_another_one_does_not_float(profile: Profile) -> None:
+    """Und der Fall, in dem die Meldung falsch wäre: ein Deckel auf einer Dose.
+
+    Jede Baugruppe aus einer 3MF hat Körper mit Luft unter sich, und dort ist
+    sie gewollt. Gefragt wird nach dem Hüllquader: Wer in x und y mit einem
+    Nachbarn überlappt, dessen Oberkante bis zu seiner Unterkante reicht, hat
+    etwas unter sich. Die genaue Frage beantwortet die Inselerkennung der
+    Schichtanalyse, und die kostet Sekunden (§31) — hier wäre sie falsch
+    eingesetzt.
+    """
+    from app.core.scene.evaluate import check_placement
+    from app.core.types import Scene, SceneObject
+
+    base = SceneObject(id="obj_1", name="Dose", mesh=cube())
+    lid = SceneObject(id="obj_2", name="Deckel", mesh=apply(cube(), translation((0.0, 0.0, 20.0))))
+    # Der dritte hängt wirklich in der Luft — **ohne ihn wäre dieser Test auch
+    # ohne die Prüfung grün** und würde nichts zusichern (`.claude/rules/
+    # tests.md`, „Ein Verbotstest über eine leere Menge ist immer grün").
+    # Gemessen: In der Gegenprobe war genau das der Fall.
+    apart = SceneObject(
+        id="obj_3", name="Klammer", mesh=apply(cube(), translation((60.0, 0.0, 40.0)))
+    )
+    scene = Scene(objects={"obj_1": base, "obj_2": lid, "obj_3": apart}, profile=profile)
+
+    floating = {
+        finding.object_id
+        for finding in check_placement(scene)
+        if finding.code == "arrange.above_bed"
+    }
+
+    assert floating == {"obj_3"}, (
+        f"nur die Klammer schwebt; der Deckel liegt auf der Dose: {floating}"
+    )
+
+
+def test_floating_so_high_that_it_leaves_the_volume_says_so(profile: Profile) -> None:
+    """Und wer oben hinausragt, bekommt denselben Satz statt des falschen.
+
+    Vorher stand dort „Ein Objekt liegt außerhalb des Druckbetts" — in x und y
+    lag es genau richtig, und angeboten wurde *Auf dem Bett anordnen*, das
+    beides verschiebt, wo ein Absenken genügt.
+    """
+    from app.core.scene.evaluate import check_placement
+    from app.core.types import Scene, SceneObject
+
+    high = SceneObject(
+        id="obj_1", name="Halter", mesh=apply(cube(), translation((0.0, 0.0, 300.0)))
+    )
+    scene = Scene(objects={"obj_1": high}, profile=profile)
+
+    findings = check_placement(scene)
+
+    assert findings
+    assert findings[0].code == "arrange.above_bed", "und nicht der Satz vom Druckbettrand"
+
+
 def test_a_body_on_the_bed_says_nothing(profile: Profile) -> None:
     """Und wer richtig steht, bekommt keine Meldung — sonst wäre sie wertlos."""
     from app.core.scene.evaluate import check_placement

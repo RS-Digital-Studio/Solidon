@@ -133,6 +133,16 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # „Anbieten, nicht erzwingen" heißt dann aber, dass es hier auch angeboten
     # werden muss.
     "arrange.below_bed": (PLACE_ON_BED,),
+    # **Beide Wege, und der zweite ist der, den Robert verlangt hat**
+    # (24.08.2026): „bei an bett ausrichten sollten alle ans bett richtig
+    # angeordnet werden wie fürs drucken." *Auf das Bett setzen* senkt diesen
+    # einen Körper ab und lässt x und y, wie sie sind — das ist die genaue
+    # Antwort auf ein Schweben. *Auf dem Bett anordnen* legt die ganze Szene
+    # druckfertig, und das ist die Antwort, wenn mehr als einer in der Luft
+    # hängt. Bei ``below_bed`` steht der zweite Knopf bewusst nicht: Ein Körper
+    # unter der Platte ist der Normalfall eines frisch geladenen Modells, und
+    # dort soll ein Klick genau das tun, was er sagt.
+    "arrange.above_bed": (PLACE_ON_BED, ARRANGE_ON_BED),
     "arrange.off_the_plate": (ARRANGE_ON_BED,),
     # Derselbe Sachverhalt, nur eine Stufe später gemessen: nicht die Szene
     # ragt hinaus, sondern die **Druckdatei**, die der Slicer daraus gemacht
