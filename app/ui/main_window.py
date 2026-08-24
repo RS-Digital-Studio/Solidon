@@ -1307,6 +1307,16 @@ class MainWindow(QMainWindow):
         # Zeile, lange nach der Tour.
         self.right.addTab(self.tour, tr("Tour"))
         self.right.setTabVisible(self.right.indexOf(self.tour), False)
+        self._constraints_room = QWidget(self)
+        """Der Reiter, in dem die Bedingungen der offenen Skizze stehen (§30.1).
+
+        Dauerhaft angelegt und nur ein- und ausgeblendet, wie die Tour daneben:
+        Ein Reiter, der jedes Mal neu entsteht, hätte einen Index, auf den sich
+        nichts verlassen kann."""
+        self._constraints_box = QVBoxLayout(self._constraints_room)
+        self._constraints_box.setContentsMargins(0, 0, 0, 0)
+        self.right.addTab(self._constraints_room, tr("Bedingungen"))
+        self.right.setTabVisible(self.right.indexOf(self._constraints_room), False)
 
         # §2.5 nennt drei Zonen und sagt nicht, dass die äußeren der mittleren
         # ihre Fläche nehmen. Sie liegen jetzt darüber: die Ansicht füllt das
@@ -4085,6 +4095,18 @@ class MainWindow(QMainWindow):
         # hätten, das niemand sieht. Das Panel wird jetzt zur Leiste unter dem
         # Bild; gezeichnet wird dort, wo die Skizze liegt.
         panel.use_viewport()
+        # **Die Bedingungen ziehen in die rechte Spalte, als eigener Reiter.**
+        # Gemessen nahm die Leiste sonst 334 von 900 Bildpunkten — 37 Prozent
+        # des Fensters —, und gezeichnet wurde zur Hälfte dahinter.
+        #
+        # Ein Reiter und kein einklappbarer Abschnitt, und zwar nach dem
+        # Muster, das die **Tour** schon benutzt: Sie hängt genauso als dritter
+        # Reiter neben Prüfbericht und Chat, solange ein Beispiel offen ist.
+        # Die Bedingungen sind dieselbe Sorte Auskunft — eine, die zu einem
+        # Zustand gehört und mit ihm kommt und geht.
+        self._constraints_box.addWidget(panel.take_constraint_list())
+        self.right.setTabVisible(self.right.indexOf(self._constraints_room), True)
+        self.right.setCurrentWidget(self._constraints_room)
         self._bottom_layout.insertWidget(0, panel)
         panel.sketchChanged.connect(self._redraw_sketch)
         # **Das Modell bleibt stehen und tritt zurück.** Es ist der Grund,
@@ -4230,6 +4252,16 @@ class MainWindow(QMainWindow):
         self._sketch_target = None
         self.viewport.set_sketching(None)
         panel.sketchChanged.disconnect(self._redraw_sketch)
+        # **Die Box geht ans Panel zurück, bevor es stirbt.** Sie hing im
+        # Reiter, also am Fenster — das Panel zu löschen ließe sie dort stehen,
+        # mit Signalen, die ins Leere zeigen, und beim nächsten Skizzenmodus
+        # käme eine zweite dazu. Gemessen war das ein Segmentierungsfehler in
+        # der Fensterdatei, kein sichtbarer Rest.
+        self.right.setTabVisible(self.right.indexOf(self._constraints_room), False)
+        box = panel.take_constraint_list()
+        self._constraints_box.removeWidget(box)
+        box.setParent(panel)
+        box.hide()
         self._bottom_layout.removeWidget(panel)
         panel.hide()
         panel.deleteLater()

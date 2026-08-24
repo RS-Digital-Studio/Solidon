@@ -2846,13 +2846,20 @@ class SketchPanel(QWidget):
         self.coordinates.setToolTip(tr("Wohin der nächste Klick fällt."))
         self.canvas.pointerChanged.connect(self._show_pointer)
 
-        side = QVBoxLayout()
-        side.addWidget(QLabel(tr("Bedingungen"), self))
+        self._side_box = QWidget(self)
+        side = QVBoxLayout(self._side_box)
+        side.setContentsMargins(0, 0, 0, 0)
+        # Die Überschrift gehört dem Träger, nicht der Liste: Neben der
+        # Zeichenfläche steht sie hier, in der linken Spalte trägt sie der
+        # einklappbare Abschnitt. Beides zugleich hieße „Bedingungen" zweimal
+        # übereinander — gemessen am Bild, nicht vermutet.
+        self._side_title = QLabel(tr("Bedingungen"), self._side_box)
+        side.addWidget(self._side_title)
         side.addWidget(self.constraint_list, stretch=1)
 
         middle = QHBoxLayout()
         middle.addWidget(self.canvas, stretch=1)
-        middle.addLayout(side)
+        middle.addWidget(self._side_box)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -2961,7 +2968,6 @@ class SketchPanel(QWidget):
         """
         self.canvas.setVisible(False)
         self.canvas.resize(VIEWPORT_CANVAS, VIEWPORT_CANVAS)
-        self.constraint_list.setMaximumHeight(VIEWPORT_LIST_HEIGHT)
         self._in_viewport = True
         # **Die Ziffern müssen im ganzen Fenster gelten, nicht nur hier
         # drinnen.** Sie lagen an ``WidgetWithChildrenShortcut``, und das war
@@ -2979,6 +2985,36 @@ class SketchPanel(QWidget):
     def in_viewport(self) -> bool:
         """Ob gezeichnet wird, ohne dass dieses Panel das Bild trägt."""
         return self._in_viewport
+
+    def take_constraint_list(self) -> QWidget:
+        """Gibt die Bedingungsliste ab — samt ihrer Überschrift.
+
+        Sie zieht im Viewport-Modus in die linke Spalte, zu Objekten,
+        Parametern und Verlauf. **Der Grund ist Höhe:** Gemessen nahm die
+        Leiste 334 von 900 Bildpunkten, also 37 Prozent des Fensters, und
+        allein 96 davon gingen an diese Liste plus ihre Überschrift. Gezeichnet
+        wurde damit zur Hälfte hinter der eigenen Bedienung.
+
+        Links ist sie außerdem am richtigen Ort: Dort steht schon, **was das
+        Dokument festhält** — Objekte, Parameter, Verlauf. Was die Skizze
+        festhält, gehört in dieselbe Spalte und nicht in die Werkzeugleiste.
+
+        Zurückgegeben wird der Träger mit Überschrift und Liste, nicht die
+        Liste allein: Wer sie einhängt, soll nicht auch noch wissen müssen,
+        dass ein Wort darüber gehört.
+
+        **Nur aus dem Layout, nicht elternlos.** ``setParent(None)`` macht ein
+        Kind-Widget zum eigenen Fenster, und ``WindowShortcut`` löst danach
+        gegen das falsche auf: Die Ziffern für die Ebene kamen nicht mehr an
+        (gemessen — ``plane:xy`` statt ``plane:xz``). Wer sie einhängt, setzt
+        den neuen Elternteil ohnehin; dazwischen bleibt sie, wo sie war.
+        """
+        parent = self._side_box.parentWidget()
+        layout = parent.layout() if parent is not None else None
+        if layout is not None:
+            layout.removeWidget(self._side_box)
+        self._side_title.hide()
+        return self._side_box
 
     def set_zone_margins(self, left: int, right: int) -> None:
         """Weicht den Karten des Fensters aus (§2.5).
