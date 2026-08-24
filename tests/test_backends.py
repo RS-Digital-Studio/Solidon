@@ -752,3 +752,204 @@ def test_a_local_model_gets_more_time_than_a_hosted_one() -> None:
     assert llm.LOCAL_TIMEOUT_SECONDS > llm.TIMEOUT_SECONDS
     assert llm.LOCAL_TIMEOUT_SECONDS >= 600.0, "unter zehn Minuten ist kein Hängen, sondern Rechnen"
     assert llm.OllamaBackend().transport is llm.post_json_local
+
+
+# --- Die Adresse, die der Kunde einträgt (24.08.2026) ------------------------------
+
+
+def test_every_way_a_person_writes_the_ollama_address_finds_the_endpoint() -> None:
+    """Was ein Werkzeug über sich selbst sagt, tippt der Kunde ein.
+
+    Ollamas eigene Ausgabe nennt ``http://127.0.0.1:11434`` — die Basisadresse
+    ohne Endpunkt ist damit die *wahrscheinlichste* Eingabe. Bis zum 24.08.2026
+    entstand die Adresse aus ``replace("/api/chat", …)``, griff bei genau dieser
+    Eingabe nicht, und jede Anfrage ging an die Wurzel. Gegen ein laufendes
+    Ollama gemessen: POST auf die Wurzel **405**, auf ``/api/pull`` **200**.
+    """
+    for written in (
+        "http://localhost:11434/api/chat",
+        "http://127.0.0.1:11434",
+        "127.0.0.1:11434",
+        "http://127.0.0.1:11434/",
+        "  http://127.0.0.1:11434  ",
+    ):
+        assert llm.ollama_endpoint(written, "/api/pull").endswith("/api/pull"), written
+        assert "/api/chat" not in llm.ollama_endpoint(written, "/api/pull"), written
+
+
+def test_a_path_in_front_of_the_endpoint_survives() -> None:
+    """Hinter einem Reverse-Proxy liegt Ollama unter ``/ollama`` — wer das
+    einträgt, meint es."""
+    assert llm.ollama_endpoint("http://host/ollama/api/chat", "/api/tags") == (
+        "http://host/ollama/api/tags"
+    )
+
+
+def test_an_empty_address_falls_back_to_this_machine() -> None:
+    assert llm.ollama_endpoint("", "/api/chat") == llm.OLLAMA_URL
+    assert llm.ollama_endpoint(None, "/api/chat") == llm.OLLAMA_URL
+
+
+def test_pulling_a_model_reaches_the_endpoint_from_a_bare_address(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Der Fall des Kunden, als Test: Basisadresse eingetragen, Modell holen.
+
+    Vorher landete der POST auf der Wurzel, Ollama antwortete 405, und im
+    Protokoll standen vierzehn davon.
+    """
+    server = _PullServer([b'{"status":"success"}\n'])
+    monkeypatch.setattr(llm.urllib.request, "urlopen", server)
+
+    problem = llm.pull_model("qwen3:14b", url="http://127.0.0.1:11434")
+
+    assert problem is None
+    assert server.asked == "http://127.0.0.1:11434/api/pull", server.asked
+
+
+def test_the_installed_models_are_asked_from_a_bare_address() -> None:
+    asked: list[str] = []
+
+    def note(url: str) -> dict[str, Any]:
+        asked.append(url)
+        return _tags(("qwen3:14b", "14.8B"))
+
+    llm.installed_models(url="127.0.0.1:11434", fetch=note)
+
+    assert asked == ["http://127.0.0.1:11434/api/tags"]
+
+
+def test_a_windows_path_in_the_address_field_is_unreachable_and_not_a_crash() -> None:
+    """Ein Kunde trug dort seinen Modellordner ein.
+
+    ``urlsplit`` liest alles hinter ``C:`` als Port und wirft beim Zugriff
+    darauf ``ValueError`` — der fing niemand, und der Arbeiter des
+    Einrichtungsdialogs starb mitten in der Einrichtung (Regel 17).
+    """
+    backend = llm.OllamaBackend(url=r"C:\Users\Jemand\.ollama\models")
+
+    assert backend.available is False
+
+
+class _Keychain:
+    """Ein Schlüsselbund im Speicher — dieselbe Attrappe wie oben, nur benannt,
+    weil ihn jetzt mehr als ein Test braucht."""
+
+    def __init__(self) -> None:
+        self.store: dict[tuple[str, str], str] = {}
+
+    def get_password(self, service: str, account: str) -> str | None:
+        return self.store.get((service, account))
+
+    def set_password(self, service: str, account: str, key: str) -> None:
+        self.store[(service, account)] = key
+
+    def delete_password(self, service: str, account: str) -> None:
+        del self.store[(service, account)]
+
+
+# --- Ein Schlüssel, der keiner sein kann (24.08.2026) ------------------------------
+
+
+def test_a_pasted_error_message_is_refused_as_a_key() -> None:
+    """Der Kunde markierte die Fehlermeldung samt Knopfbeschriftung und fügte
+    sie ins Schlüsselfeld ein. Ungeprüft gespeichert flog sie beim nächsten Zug
+    als ``ValueError`` aus ``http.client.putheader``."""
+    pasted = '{"type":"error","error":{"message":"invalid x-api-key"}}\nErneut versuchen'
+
+    assert keys.unusable(pasted) is not None
+    assert keys.store("anthropic", pasted) is False
+
+
+def test_a_key_keeps_none_of_the_whitespace_it_arrived_with(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ein hängengebliebenes Leerzeichen ist der häufigste Grund für einen
+    Schlüssel, der „nicht geht" — und niemand sieht es ihm an."""
+    # **Eine** Attrappe, nicht je Aufruf eine neue: ``store`` und ``read``
+    # fragen nacheinander, und zwei Schlüsselbünde teilen sich nichts.
+    keychain = _Keychain()
+    monkeypatch.setattr(keys, "_keyring", lambda: keychain)
+
+    assert keys.store("anthropic", "  sk-echt-aussehend  ")
+    assert keys.read("anthropic") == "sk-echt-aussehend"
+
+
+def test_an_empty_field_says_so_instead_of_storing_nothing() -> None:
+    assert keys.unusable("   ") is not None
+
+
+# --- Ein abgelehnter Zugang sperrt das lokale Modell nicht mehr aus ----------------
+
+
+def test_a_refused_key_stops_counting_as_available(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``available`` fragte, ob ein Schlüssel *da* ist — nicht, ob er *gilt*.
+
+    Ein einziger Tippversuch im Schlüsselfeld sperrte damit ein vollständig
+    eingerichtetes Ollama dauerhaft aus: Anthropic steht in ``backends()`` vorn
+    und galt mit jedem beliebigen Text als verfügbar.
+    """
+    monkeypatch.setattr(keys, "read", lambda account: "sk-sieht-echt-aus")
+    llm.accept_again()
+    backend = llm.AnthropicBackend()
+    assert backend.available is True
+
+    llm.reject(backend.id)
+
+    assert backend.available is False
+    llm.accept_again()
+
+
+def test_storing_a_new_key_is_a_new_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Was die Gegenseite abgelehnt hat, war ein *anderer* Schlüssel."""
+    monkeypatch.setattr(keys, "_keyring", lambda: _Keychain())
+    llm.reject("anthropic")
+
+    keys.store("anthropic", "sk-der-neue")
+
+    assert "anthropic" not in llm._rejected
+    llm.accept_again()
+
+
+def test_an_authentication_error_marks_the_backend_and_names_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Zwei Zusagen in einem Zug: Der Zugang gilt danach als abgelehnt, und die
+    Meldung nennt den Anbieter.
+
+    Der Kunde richtete Ollama ein und las „Das Sprachmodell hat nicht
+    geantwortet" über einem Anthropic-Schlüsselfehler. Geantwortet *hatte*
+    eines — nur ein anderes als das eingerichtete.
+    """
+    monkeypatch.setattr(keys, "read", lambda account: "sk-abgelaufen")
+    llm.accept_again()
+
+    def refuse(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+        raise llm.BackendUnavailable(status=401, detail="invalid x-api-key")
+
+    backend = llm.AnthropicBackend(transport=refuse)
+    with pytest.raises(llm.BackendUnavailable) as raised:
+        backend.complete([Message(role="user", content="hallo")])
+
+    assert raised.value.values["provider"] == "anthropic"
+    assert backend.available is False, "derselbe Schlüssel wird nicht noch einmal geschickt"
+    llm.accept_again()
+
+
+def test_the_chat_falls_back_to_the_local_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Sinn des Ganzen: Nach der Ablehnung wählt der Chat das nächste
+    Modell, statt bis zum Neustart denselben Fehler zu melden."""
+    monkeypatch.setattr(keys, "read", lambda account: "sk-abgelaufen")
+    monkeypatch.setattr(llm.OllamaBackend, "available", property(lambda self: True))
+    # ``conftest`` leert die Backend-Liste, damit die Suite nicht nach einem
+    # echten Modell auf dieser Maschine sucht. Genau die Liste ist hier die
+    # Sache — das Original steht unter eigenem Namen bereit.
+    monkeypatch.setattr(llm, "backends", llm.unpatched_backends)
+    llm.accept_again()
+    assert llm.first_available() is not None
+    assert llm.first_available().id == "anthropic"
+
+    llm.reject("anthropic")
+
+    assert llm.first_available().id == "ollama"
+    llm.accept_again()

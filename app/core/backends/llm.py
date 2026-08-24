@@ -21,6 +21,7 @@ from __future__ import annotations
 import base64
 import json
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -206,11 +207,25 @@ class BackendUnavailable(ExternalToolError):
 
     default_title = _("Das Sprachmodell hat nicht geantwortet.")
 
-    def __init__(self, status: int | None = None, detail: str = "") -> None:
-        super().__init__(
-            detail=detail or None,
-            values={"status": str(status)} if status is not None else {},
-        )
+    def __init__(self, status: int | None = None, detail: str = "", provider: str = "") -> None:
+        # **Der Anbieter gehört in die Meldung, und zwar aus einem gemessenen
+        # Grund.** Ein Kunde richtete am 24.08.2026 sein lokales Ollama ein und
+        # las über einem Anthropic-Schlüsselfehler „Das Sprachmodell hat nicht
+        # geantwortet". Geantwortet *hatte* eines — nur ein anderes als das
+        # gerade eingerichtete. Der Satz stimmte und führte drei Stunden in die
+        # Irre; was fehlte, war der Name dessen, der gefragt wurde.
+        #
+        # Er steht in ``values`` und nicht im Satz: Einen Fehlertext aus dem
+        # Kern formatiert niemand nach, ein ``{platzhalter}`` erschiene dem
+        # Kunden mit Klammern (``tests/test_errors.py`` sucht danach).
+        self.status = status
+        self.provider = provider
+        values: dict[str, Any] = {}
+        if status is not None:
+            values["status"] = str(status)
+        if provider:
+            values["provider"] = provider
+        super().__init__(detail=detail or None, values=values)
 
 
 class BackendTooSlow(ExternalToolError):
@@ -328,7 +343,9 @@ class AnthropicBackend:
 
     @property
     def available(self) -> bool:
-        return keys.read(self.id) is not None
+        """Ein Schlüssel liegt vor — und die Gegenseite hat ihn nicht schon
+        abgelehnt (:data:`_rejected`)."""
+        return self.id not in _rejected and keys.read(self.id) is not None
 
     @property
     def supports_images(self) -> bool:
@@ -344,7 +361,16 @@ class AnthropicBackend:
     ) -> Reply:
         key = keys.read(self.id)
         if key is None:
-            raise BackendUnavailable(detail="no key stored")
+            raise BackendUnavailable(detail="no key stored", provider=self.id)
+        # **Auch ein schon gespeicherter Schlüssel wird geprüft.** Seit dem
+        # 24.08.2026 lehnt :func:`keys.store` ab, was keiner sein kann — im
+        # Schlüsselbund derer, die vorher gespeichert haben, liegt es trotzdem.
+        # Ungeprüft flöge es als ``ValueError`` aus ``http.client.putheader``,
+        # also als Programmfehler mit der Bitte um einen Fehlerbericht.
+        problem = keys.unusable(key)
+        if problem is not None:
+            reject(self.id)
+            raise BackendUnavailable(detail=str(problem), provider=self.id)
 
         limit = self.max_tokens
         if max_output_tokens is not None:
@@ -373,11 +399,21 @@ class AnthropicBackend:
             # ganze Liste — Schritt zwei bis acht zahlen sie nicht noch einmal.
             payload["tools"][-1]["cache_control"] = {"type": "ephemeral"}
 
-        answer = self.transport(
-            ANTHROPIC_URL,
-            {"x-api-key": key, "anthropic-version": ANTHROPIC_VERSION},
-            payload,
-        )
+        try:
+            answer = self.transport(
+                ANTHROPIC_URL,
+                {"x-api-key": key, "anthropic-version": ANTHROPIC_VERSION},
+                payload,
+            )
+        except BackendUnavailable as error:
+            error.provider = error.provider or self.id
+            error.values.setdefault("provider", self.id)
+            if error.status in AUTH_REFUSED:
+                # Ab hier gilt dieser Zugang als nicht verfügbar, und der Chat
+                # nimmt den nächsten — statt bei jedem Zug denselben abgelehnten
+                # Schlüssel erneut zu schicken.
+                reject(self.id)
+            raise
         return _from_anthropic(answer)
 
 
@@ -578,16 +614,22 @@ class OllamaBackend:
         um bei jedem Start spürbar zu sein.
         """
         import socket
-        from urllib.parse import urlparse
 
-        address = urlparse(self.url)
         try:
+            address = urllib.parse.urlsplit(ollama_endpoint(self.url))
             with socket.create_connection(
                 (address.hostname or "localhost", address.port or 11434),
                 timeout=PROBE_SECONDS,
             ):
                 return True
-        except OSError:
+        except (OSError, ValueError):
+            # **``ValueError`` gehört dazu, und zwar wegen eines echten
+            # Falles:** Wer in das Adressfeld einen Windows-Pfad einträgt —
+            # ein Kunde tat es am 24.08.2026 mit seinem Modellordner —, bei dem
+            # liest ``urlsplit`` alles hinter ``C:`` als Port und wirft beim
+            # Zugriff darauf. Der fing hier niemand, und der Einrichtungsdialog
+            # starb daran. Eine unbrauchbare Adresse heißt „nicht erreichbar",
+            # nicht „Absturz".
             return False
 
     def complete(
@@ -623,7 +665,15 @@ class OllamaBackend:
                 for entry in tools
             ]
 
-        answer = self.transport(self.url, {}, payload)
+        try:
+            answer = self.transport(ollama_endpoint(self.url), {}, payload)
+        except BackendUnavailable as error:
+            # Kein ``reject``: Ollama hat keinen Schlüssel, den man falsch
+            # eintragen könnte. Der Name gehört trotzdem in die Meldung — er
+            # ist die Antwort auf „welches Modell denn?".
+            error.provider = error.provider or self.id
+            error.values.setdefault("provider", self.id)
+            raise
         return _from_ollama(answer, self.model)
 
 
@@ -722,13 +772,47 @@ PullProgress = Callable[[str, float], None]
 """``schritt, anteil -> None``. Der Anteil ist 0…1, oder -1 für „unbekannt"."""
 
 
+def ollama_endpoint(url: str | None, path: str = "/api/chat") -> str:
+    """Die Adresse eines Ollama-Endpunkts aus dem, was jemand eingetragen hat.
+
+    **Der Kunde trägt ein, was das Werkzeug über sich selbst sagt.** Ollamas
+    eigene Ausgabe nennt ``http://127.0.0.1:11434`` — die Basisadresse ohne
+    Endpunkt ist damit die *wahrscheinlichste* Eingabe und nicht die
+    unwahrscheinlichste.
+
+    Bis zum 24.08.2026 entstand die Adresse hier aus
+    ``url.replace("/api/chat", "/api/pull")``. Enthielt die Eingabe kein
+    ``/api/chat``, blieb sie unverändert, und jede Anfrage ging an die Wurzel;
+    Ollama antwortet darauf mit **405 method not allowed**. Ein Kunde hat drei
+    Stunden dafür gebraucht, und im Protokoll standen vierzehn dieser 405.
+
+    Angenommen werden deshalb alle Schreibweisen — mit und ohne Schema, mit und
+    ohne Endpunkt, mit und ohne Schrägstrich am Ende. **Ein eigener Pfad davor
+    bleibt erhalten:** Hinter einem Reverse-Proxy liegt Ollama unter
+    ``/ollama/api/chat``, und wer das einträgt, meint es so.
+    """
+    address = (url or "").strip() or OLLAMA_URL
+    if "://" not in address:
+        # „127.0.0.1:11434" ohne Schema ist keine Nachlässigkeit, sondern die
+        # Schreibweise, in der Adressen üblicherweise weitergegeben werden.
+        address = f"http://{address}"
+    parts = urllib.parse.urlsplit(address)
+    prefix = parts.path.rstrip("/")
+    endpoint = prefix.rfind("/api/")
+    if endpoint != -1:
+        # Ein bekannter Endpunkt wird durch den gefragten ersetzt, alles davor
+        # bleibt stehen.
+        prefix = prefix[:endpoint]
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, prefix + path, "", ""))
+
+
 def installed_models(url: str | None = None, fetch: Fetch = _get_json) -> tuple[str, ...]:
     """Welche Modelle bei Ollama liegen. Leer, wenn es nicht antwortet.
 
     Für die Auswahl im Einrichtungsdialog: Ein Feld, in das man den Namen
     tippt, setzt voraus, dass man ihn kennt.
     """
-    address = (url or _configured_ollama_url()).replace("/api/chat", "/api/tags")
+    address = ollama_endpoint(url or _configured_ollama_url(), "/api/tags")
     try:
         answer = fetch(address)
     except (OSError, ValueError):
@@ -756,7 +840,7 @@ def pull_model(
     Modellantwort. Was Ollama daraus macht, ist seine Sache; ein unbekannter
     Name kommt als Fehlermeldung zurück und nicht als Download.
     """
-    address = (url or _configured_ollama_url()).replace("/api/chat", "/api/pull")
+    address = ollama_endpoint(url or _configured_ollama_url(), "/api/pull")
     body = json.dumps({"model": model, "stream": True}).encode("utf-8")
     request = urllib.request.Request(
         address, data=body, headers={"Content-Type": "application/json"}
@@ -814,7 +898,7 @@ def ollama_size_warning(
     ohnehin ab — oder Modell groß genug); ein Satz, wenn das eingestellte
     Modell fehlt; ein Satz, wenn es unter der Erfahrungsgrenze liegt.
     """
-    address = (url or _configured_ollama_url()).replace("/api/chat", "/api/tags")
+    address = ollama_endpoint(url or _configured_ollama_url(), "/api/tags")
     try:
         answer = fetch(address)
     except (OSError, ValueError):
@@ -1017,6 +1101,42 @@ def speed_warning(speed: Speed) -> TranslatableText | None:
 
 
 # --- choosing one -----------------------------------------------------------------
+
+
+#: Status, mit denen eine Gegenseite sagt: *dieser Schlüssel nicht*.
+#:
+#: 401 ist die Antwort auf einen falschen Schlüssel, 403 die auf einen
+#: gültigen ohne Recht auf dieses Modell. Beide ändern sich nicht dadurch,
+#: dass man es noch einmal versucht — anders als 429 oder 5xx, die genau
+#: dafür da sind.
+AUTH_REFUSED: Final = (401, 403)
+
+#: Backends, deren Zugang die Gegenseite in dieser Sitzung abgelehnt hat.
+#:
+#: **Warum es das gibt.** ``AnthropicBackend.available`` fragt, ob ein
+#: Schlüssel *da* ist — nicht, ob er *gilt*. Ein einziger Tippversuch im
+#: Schlüsselfeld genügte deshalb, um ein vollständig eingerichtetes lokales
+#: Ollama dauerhaft auszusperren: Anthropic steht in :func:`backends` vorn,
+#: gilt mit jedem beliebigen Text als verfügbar und scheitert dann bei jedem
+#: Zug. Ein Kunde hat am 24.08.2026 drei Stunden dagegen gearbeitet.
+#:
+#: Der Merker lebt nur in dieser Sitzung und wird nicht gespeichert: Ein
+#: abgelehnter Schlüssel kann beim Anbieter wieder gültig werden, und ein
+#: neuer hebt ihn ohnehin auf (:func:`keys.store` ruft :func:`accept_again`).
+_rejected: set[str] = set()
+
+
+def reject(backend_id: str) -> None:
+    """Merken, dass dieser Zugang abgelehnt wurde."""
+    _rejected.add(backend_id)
+
+
+def accept_again(backend_id: str = "") -> None:
+    """Die Ablehnung zurücknehmen — ohne Namen für alle."""
+    if backend_id:
+        _rejected.discard(backend_id)
+    else:
+        _rejected.clear()
 
 
 def backends() -> tuple[LLMBackend, ...]:

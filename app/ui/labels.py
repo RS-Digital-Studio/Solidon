@@ -722,6 +722,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "slot": _("Platz"),
     "slots": _("Plätze"),
     "source": _("Quelle"),
+    "provider": _("Anbieter"),
     "sources": _("Quellen"),
     "span": _("Spannweite"),
     "stages": _("Stufen"),

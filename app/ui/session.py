@@ -305,6 +305,14 @@ class Session(QObject):
     """Stapel, Pfad oder Titel haben sich geändert; die Leisten laden neu."""
     failed = Signal(object)
     """An ``AppError`` the surface shows as a suggestion (§2.7)."""
+    backendChanged = Signal()
+    """Der Chat spricht ab jetzt mit einem anderen Modell — die Kopfzeile lädt neu.
+
+    Ausgelöst, wenn die Gegenseite einen Zugang ablehnt: Dann fällt der Chat
+    auf das nächste verfügbare Modell zurück, und das muss dranstehen. Ohne
+    dieses Signal behielt die Kopfzeile den Namen dessen, der gerade abgelehnt
+    hatte — genau der Anblick, der einen Kunden am 24.08.2026 drei Stunden
+    lang glauben ließ, seine Einstellung sei nicht angekommen."""
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -1399,6 +1407,14 @@ class Session(QObject):
             _log.info("evaluation failed after being superseded: %s", error)
             return
         _log.warning("evaluation failed: %s", error)
+        if self._backend is not None and not self._backend.available:
+            # Die Gegenseite hat den Zugang abgelehnt (``llm.reject``). Das
+            # gemerkte Backend wird verworfen, damit der nächste Zug neu
+            # wählt — sonst schickte der Chat bis zum Neustart denselben
+            # abgelehnten Schlüssel und meldete jedes Mal denselben Fehler.
+            _log.info("backend %s is no longer available, choosing again", self._backend.id)
+            self._backend = None
+            self.backendChanged.emit()
         self.failed.emit(error)
 
     def _on_cancelled(self, finished: _EvaluationWorker | None = None) -> None:

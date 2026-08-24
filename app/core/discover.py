@@ -431,10 +431,22 @@ def service_url(tool_id: str, default: str) -> str:
 
 
 def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:
-    """Hört jemand zu? Ein Socket, keine Anfrage — Begründung bei :data:`PROBE_SECONDS`."""
-    address = urlparse(url if "://" in url else f"http://{url}")
-    host = address.hostname or "127.0.0.1"
-    port = address.port
+    """Hört jemand zu? Ein Socket, keine Anfrage — Begründung bei :data:`PROBE_SECONDS`.
+
+    **Eine unbrauchbare Adresse ist „nicht erreichbar" und kein Absturz.** Was
+    hier ankommt, hat jemand in ein Textfeld getippt, und dasselbe Feld meint
+    bei OpenSCAD einen Pfad und bei Ollama eine Adresse. Trägt jemand dort
+    einen Windows-Pfad ein — am 24.08.2026 tat es ein Kunde mit seinem
+    Modellordner —, dann liest ``urlparse`` alles hinter ``C:`` als Port und
+    wirft beim Zugriff darauf ``ValueError``. Der fing hier niemand, und der
+    Arbeiter des Einrichtungsdialogs starb mitten in der Einrichtung.
+    """
+    try:
+        address = urlparse(url if "://" in url else f"http://{url}")
+        host = address.hostname or "127.0.0.1"
+        port = address.port
+    except ValueError:
+        return False
     if port is None:
         port = 443 if address.scheme == "https" else 80
     try:

@@ -460,3 +460,16 @@ def test_the_sandbox_folder_survives_a_second_run(monkeypatch: pytest.MonkeyPatc
     ):
         assert first != second
         assert first.parent == second.parent, "aber im selben Elternordner"
+
+
+def test_a_windows_path_where_an_address_belongs_is_unreachable() -> None:
+    """Dasselbe Feld meint bei OpenSCAD einen Pfad und bei Ollama eine Adresse.
+
+    Ein Kunde trug am 24.08.2026 seinen Modellordner ein. ``urlparse`` liest
+    alles hinter ``C:`` als Port und wirft beim Zugriff darauf ``ValueError``;
+    gefangen wurde nur ``OSError``, und der Arbeiter des Einrichtungsdialogs
+    starb mitten in der Einrichtung. Eine unbrauchbare Adresse heißt „nicht
+    erreichbar" und nicht „Absturz" (Regel 17).
+    """
+    assert discover.reachable(r"C:\Users\Jemand\.ollama\models") is False
+    assert discover.reachable("http://localhost:1") is False, "ein zu-Port bleibt zu"

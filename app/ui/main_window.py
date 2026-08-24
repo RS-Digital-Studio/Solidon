@@ -2753,6 +2753,9 @@ class MainWindow(QMainWindow):
         self.session.busyChanged.connect(self._on_busy)
         self.session.askRequested.connect(self._on_ask)
         self.session.failed.connect(self._on_error)
+        # Gebundene Methode, kein Lambda: Der Sender ist ein Kind dieses
+        # Fensters, und ein Lambda schlösse den Ring aus `.claude/rules`.
+        self.session.backendChanged.connect(self._refresh_chat_availability)
         self.session.proposalReady.connect(self._on_proposal)
         self.session.agentBusyChanged.connect(self._on_agent_busy)
         self.session.agentProgress.connect(self._on_agent_progress)
