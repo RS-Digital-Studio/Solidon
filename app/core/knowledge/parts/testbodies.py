@@ -94,6 +94,8 @@ class FitLadderParams(BaseParams):
     name="fit_ladder",
     title=_("Toleranz-Testkörper"),
     group="calibration",
+    # Ein Prüfkörper wird gedruckt und gemessen, nicht angebaut (§24.3).
+    at_face=False,
     params=FitLadderParams,
     features=["pin", "bore"],
     doc=_(
@@ -187,6 +189,8 @@ class WallLadderParams(BaseParams):
     name="wall_ladder",
     title=_("Wandstärkenleiter"),
     group="calibration",
+    # Ein Prüfkörper wird gedruckt und gemessen, nicht angebaut (§24.3).
+    at_face=False,
     params=WallLadderParams,
     features=["face"],
     doc=_(
@@ -261,6 +265,8 @@ class OverhangFanParams(BaseParams):
     name="overhang_fan",
     title=_("Überhangfächer"),
     group="calibration",
+    # Ein Prüfkörper wird gedruckt und gemessen, nicht angebaut (§24.3).
+    at_face=False,
     params=OverhangFanParams,
     features=["face"],
     doc=_(

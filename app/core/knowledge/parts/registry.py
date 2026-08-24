@@ -122,6 +122,26 @@ class PartSpec:
     23.08.2026 wirkten auch Passungsleiter, Wandleiter und Überhangfächer an
     einer Bohrung — sie ergeben dort nur keinen Sinn.
     """
+    at_face: bool = True
+    """Wahr für einen Baustein, den man an eine **Fläche** setzt.
+
+    Das ist der Normalfall, und deshalb ist es die Vorgabe: Ein Baustein ist
+    ein Anbauteil, es gibt ihm eine Fläche, auf der er sitzt oder in die er
+    schneidet. Die Ausnahme sind die Prüfkörper — Passungsleiter,
+    Wandstärkenleiter, Überhangfächer —, die für sich stehen und an nichts
+    angebaut werden.
+
+    **Vorher wurde es geraten, und die Regel war die falsche.**
+    ``_applies_to`` bot eine Fläche nur an, wenn der Baustein Material
+    *abträgt*. Damit standen Wandhalter, Nutfeder, Rippe, Rastnase,
+    Schnappverbindung und Filmscharnier in keinem Kontextmenü einer Fläche —
+    sechs von achtzehn, gemessen am 24.08.2026. Wer auf die Rückseite eines
+    Modells zeigte, um einen Wandhalter zu setzen, fand dort alles außer dem
+    Wandhalter, und §18.5 nennt dieses Menü „die wichtigste Einzelfunktion".
+
+    Ob ein Baustein abträgt, sagt nichts darüber, ob er an eine Fläche gehört
+    — dieselbe Einsicht, die über ``at_hole`` steht, nur für die andere Seite.
+    """
     features: tuple[str, ...] = ()
     """Provenienz-Merkmale, die der Baustein zu benennen verspricht (§24.1)."""
     doc: TranslatableText | str = ""
@@ -266,6 +286,7 @@ def register_part(
     subtractive: bool = False,
     at_hole: bool = False,
     at_hole_values: HoleValues | None = None,
+    at_face: bool = True,
     features: Iterable[str] = (),
     doc: TranslatableText | str = "",
     caveat: TranslatableText | str = "",
@@ -297,6 +318,7 @@ def register_part(
                 subtractive=subtractive,
                 at_hole=at_hole,
                 at_hole_values=at_hole_values,
+                at_face=at_face,
                 features=tuple(features),
                 doc=doc,
                 caveat=caveat,

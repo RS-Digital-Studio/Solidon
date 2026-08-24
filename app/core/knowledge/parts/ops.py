@@ -260,7 +260,7 @@ def _applies_to(spec: PartSpec) -> list[str]:
     at: list[str] = []
     if spec.at_hole:
         at.append("hole")
-    if cuts(spec, None):
+    if spec.at_face:
         at.append("face")
     return at
 

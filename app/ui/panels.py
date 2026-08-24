@@ -88,7 +88,7 @@ SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items
 MAX_MENU_ROWS = 12
 
 
-def folded_groups(sizes: dict[str, int], limit: int = MAX_MENU_ROWS) -> list[str]:
+def folded_groups(sizes: dict[str, int], limit: int = MAX_MENU_ROWS, fixed: int = 0) -> list[str]:
     """Welche Gruppen ein Untermenü bekommen, damit das Menü in die Grenze passt.
 
     Reine Rechnung über Namen und Anzahlen — **kein Qt**, und deshalb ohne ein
@@ -103,8 +103,12 @@ def folded_groups(sizes: dict[str, int], limit: int = MAX_MENU_ROWS) -> list[str
     gefaltet: Ihr Untermenü spart keine Zeile und kostet einen Klick. Bleibt
     das Menü danach zu lang, bleibt es zu lang — ein Aufklappen, das nichts
     bündelt, macht es nicht kürzer, sondern nur tiefer.
+
+    ``fixed`` sind Zeilen, die mitzählen, aber nie gefaltet werden können —
+    im Bausteine-Untermenü die Einträge, die zu keinem Baustein der Bibliothek
+    gehören und deshalb keine Gruppe haben.
     """
-    rows = sum(sizes.values())
+    rows = sum(sizes.values()) + fixed
     folded: list[str] = []
     for title in sorted(sizes, key=lambda name: (-sizes[name], name)):
         if rows <= limit or sizes[title] < 2:
@@ -1053,9 +1057,60 @@ class ObjectTree(QWidget):
             # Ein Untermenü erbt die Eigenschaft nicht — und am ganzen Körper
             # stehen die Operationen des exakten Kerns gerade hier drin.
             submenu.setToolTipsVisible(True)
-            for spec in groups[title]:
-                self._add_operation(submenu, spec, kinds)
+            self._fill_submenu(submenu, groups[title], kinds)
             menu.addMenu(submenu)
+
+    def _fill_submenu(self, menu: QMenu, specs: Sequence[Any], kinds: Sequence[str]) -> None:
+        """Ein gefaltetes Untermenü füllen — mit einer zweiten Ebene, wo es
+        sonst zu lang wird.
+
+        Betrifft die Bausteine, und erst seit sie vollständig an der Fläche
+        stehen: Vorher waren es zehn, seit `at_face` sind es siebzehn, und
+        siebzehn flach untereinander sind eine Liste zum Absuchen. Die
+        Gliederung ist nicht erfunden — es ist dieselbe Gruppe, nach der auch
+        der Katalog seine Kacheln und die Menüleiste ihre Einträge ordnet
+        (``parts.GROUPS``), dort in ``_subgroup_for``.
+
+        Was zu keinem Baustein gehört, bleibt oben stehen: ``create_lid`` ist
+        eine Operation und kein Eintrag der Bibliothek.
+        """
+        if len(specs) <= MAX_MENU_ROWS:
+            for spec in specs:
+                self._add_operation(menu, spec, kinds)
+            return
+
+        from app.core.knowledge.parts import GROUPS
+        from app.core.knowledge.parts.ops import part_of
+
+        buckets: dict[str, list[Any]] = {}
+        loose: list[Any] = []
+        for spec in specs:
+            part = part_of(str(spec.name))
+            if part is None:
+                loose.append(spec)
+            else:
+                buckets.setdefault(str(GROUPS[part.group]), []).append(spec)
+
+        # Dieselbe Regel wie eine Ebene höher, und aus demselben Grund: „Kabel
+        # und Schläuche" hat einen einzigen Baustein, und ein Untermenü dafür
+        # wäre der Klick für nichts, den dieser Umbau gerade abschafft.
+        sizes = {title: len(found) for title, found in buckets.items()}
+        deep = folded_groups(sizes, fixed=len(loose))
+
+        for spec in loose:
+            self._add_operation(menu, spec, kinds)
+        for title in sorted(buckets):
+            if title not in deep:
+                for spec in buckets[title]:
+                    self._add_operation(menu, spec, kinds)
+        if deep:
+            menu.addSeparator()
+        for title in sorted(deep):
+            deeper = QMenu(title, menu)
+            deeper.setToolTipsVisible(True)
+            for spec in buckets[title]:
+                self._add_operation(deeper, spec, kinds)
+            menu.addMenu(deeper)
 
     def _add_operation(self, menu: QMenu, spec: Any, kinds: Sequence[str] = ()) -> None:
         action = menu.addAction(str(spec.title))
