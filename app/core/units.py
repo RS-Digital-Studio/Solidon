@@ -151,6 +151,25 @@ def round_display(value_mm: float) -> float:
     return quantize(value_mm, EPS_DISPLAY)
 
 
+def _significant_decimals(size: float) -> int:
+    """Wie viele Nachkommastellen ein Zollmaß braucht, damit zwei geltende
+    Ziffern dastehen.
+
+    Volumen und Fläche brauchen dieselbe Antwort, und sie stand bis zum
+    24.08.2026 zweimal da — dieselbe Schleife mit denselben Grenzen, einmal für
+    Kubikzoll, einmal für Quadratzoll. Bei zwei festen Stellen sähe alles Kleine
+    wie null aus: Ein Quadratmillimeter ist ein Anderthalbtausendstel
+    Quadratzoll.
+
+    Bei fünf Stellen ist Schluss. Wer in Zoll ein Volumen von einem
+    Millionstel liest, ist mit einer Null besser bedient als mit acht.
+    """
+    decimals = 2
+    while decimals < 5 and 0.0 < size < 10.0 ** (1 - decimals):
+        decimals += 1
+    return decimals
+
+
 def format_volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
     """Ein Volumen in der Einheit, die zur Anzeigelänge passt (§19.3).
 
@@ -175,10 +194,7 @@ def format_volume(value_mm3: float, unit: LengthUnit = "mm") -> str:
     """
     if unit == "in":
         cubic_inches = value_mm3 / UNIT_TO_MM["in"] ** 3
-        size = abs(cubic_inches)
-        decimals = 2
-        while decimals < 5 and 0.0 < size < 10.0 ** (1 - decimals):
-            decimals += 1
+        decimals = _significant_decimals(abs(cubic_inches))
         return f"{cubic_inches:.{decimals}f} in³"
     if abs(value_mm3) < 1000.0:
         return f"{value_mm3:.0f} mm³"
@@ -205,10 +221,7 @@ def format_area(value_mm2: float, unit: LengthUnit = "mm") -> str:
     """
     if unit == "in":
         square_inches = value_mm2 / UNIT_TO_MM["in"] ** 2
-        size = abs(square_inches)
-        decimals = 2
-        while decimals < 5 and 0.0 < size < 10.0 ** (1 - decimals):
-            decimals += 1
+        decimals = _significant_decimals(abs(square_inches))
         return f"{square_inches:.{decimals}f} in²"
     return f"{value_mm2:.0f} mm²"
 
