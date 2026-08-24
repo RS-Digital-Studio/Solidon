@@ -16,6 +16,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtWidgets import QApplication
+
 from app.ui.style import LEVELS, NORMAL, ROOMY, SPACE, TIGHT, WIDE, stylesheet, type_scale
 from app.ui.theme import THEMES
 
@@ -302,7 +304,7 @@ def test_a_step_that_does_not_fit_ends_in_an_ellipsis(qt_app: object) -> None:
 # --- der Hauptknopf --------------------------------------------------------------
 
 
-def test_a_primary_button_is_wide_enough_for_its_own_bold_label(qt_app: object) -> None:
+def test_a_primary_button_is_wide_enough_for_its_own_bold_label(qt_app: QApplication) -> None:
     """Der Fehler, den man erst im Bild sieht.
 
     Das Stylesheet zeichnet ``QPushButton:default`` halbfett, Qt rechnet die
@@ -314,20 +316,102 @@ def test_a_primary_button_is_wide_enough_for_its_own_bold_label(qt_app: object) 
     Gemessen wird gegen die Schrift, mit der wirklich gezeichnet wird, plus
     den Innenabstand aus dem Stylesheet. Ein Knopf, der ``setDefault(True)``
     ohne :func:`make_primary` bekommt, fällt hier durch.
+
+    **Und gemessen mit angewandtem Thema** — das fehlte, und damit stand dieser
+    Test von seinem ersten Tag an rot (`49d4c731`, auf dieser Maschine
+    nachgeprüft). Der Innenabstand kommt aus dem Stylesheet; ohne es rechnet Qt
+    seinen eigenen. Gemessen am 24.08.2026, offscreen bei ``Sans Serif`` 9 pt:
+
+    ===================  ==================  ===========
+    Text                 ohne Thema          mit Thema
+    ===================  ==================  ===========
+    „Jetzt trennen"      170 (braucht 180)   **182**
+    „Slicen"             86 (braucht 96)     **98**
+    ===================  ==================  ===========
+
+    Dass auch die **kurzen** Texte scheiterten, ist der Beleg: keine Frage der
+    Textlänge, sondern eine feste Differenz von zehn Bildpunkten zwischen zwei
+    Innenabständen. Alle fünf Texte scheiterten um genau diesen Betrag. Die
+    Schwelle bleibt deshalb unverändert — ein Test, dessen Zahl man verschiebt,
+    bis er grün ist, prüft nichts mehr.
+
+    Das Vorbild steht in ``tests/test_sketch_editor.py``, wo die Breitengrenze
+    der Skizzenleiste seit je mit Thema gemessen wird. Der Docstring dort nennt
+    die **Gegenrichtung** desselben Fehlers: ein Test, der zwei Runden lang
+    grün war, weil ihm die Polsterung fehlte. Dieselbe Ursache, zwei Vorzeichen
+    — das Stylesheet gehört zur Messung und nicht zur Kulisse.
+
+    **Was dieser Test offscreen nicht prüfen kann, und das gehört dazu:** den
+    Unterschied zwischen halbfett und normal. Gemessen am 24.08.2026 sind beide
+    hier **gleich breit** — „Jetzt trennen" 156 Bildpunkte in beiden Schnitten,
+    „Slicen" 72 —, weil die Ersatzschrift der Offscreen-Plattform keine echte
+    DemiBold-Variante hat und Qt sie in der Breite nicht synthetisiert. Die
+    Gegenprobe zeigt es unmittelbar: Ersetzt man :func:`make_primary` durch ein
+    nacktes ``setDefault(True)``, bleibt dieser Test **grün**. Er ist damit
+    eine Untergrenze — „der Innenabstand des Themas kommt in der Rechnung an" —
+    und nicht die Prüfung der Fettschrift. Die steht als eigener Test darunter,
+    und dort ist sie schriftunabhängig.
     """
     from PySide6.QtGui import QFontMetrics
     from PySide6.QtWidgets import QPushButton
 
     from app.ui.style import make_primary
 
-    for text in ("Jetzt trennen", "Neues Projekt", "Slicen", "Fertig", "Weiter"):
-        button = make_primary(QPushButton(text))
-        drawn = QFontMetrics(button.font()).horizontalAdvance(text)
+    # ``qt_app`` ist eine Sitzungs-Fixture: Ein gesetztes Stylesheet nähme jeden
+    # folgenden Test mit. Das ``finally`` gilt darum auch für einen
+    # fehlgeschlagenen Vergleich — dieselbe Auflage wie bei
+    # ``labels.set_display_unit`` (siehe ``.claude/rules/oberflaeche.md``).
+    before = qt_app.styleSheet()
+    qt_app.setStyleSheet(stylesheet("light", 10))
+    try:
+        for text in ("Jetzt trennen", "Neues Projekt", "Slicen", "Fertig", "Weiter"):
+            button = make_primary(QPushButton(text))
+            # Sonst rechnet Qt die Breite womöglich noch ohne das Thema.
+            button.ensurePolished()
+            drawn = QFontMetrics(button.font()).horizontalAdvance(text)
 
-        assert button.sizeHint().width() >= drawn + 2 * ROOMY, (
-            f"{text!r} bekommt {button.sizeHint().width()} Bildpunkte und braucht "
-            f"{drawn + 2 * ROOMY} — die Beschriftung wird abgeschnitten."
-        )
+            assert button.sizeHint().width() >= drawn + 2 * ROOMY, (
+                f"{text!r} bekommt {button.sizeHint().width()} Bildpunkte und braucht "
+                f"{drawn + 2 * ROOMY} — die Beschriftung wird abgeschnitten."
+            )
+    finally:
+        qt_app.setStyleSheet(before)
+
+
+def test_a_primary_button_carries_the_font_it_is_drawn_with(qt_app: QApplication) -> None:
+    """Die Zusage von :func:`make_primary`, schriftunabhängig geprüft.
+
+    Der Test darüber kann sie offscreen nicht prüfen: Dort ist halbfett genauso
+    breit wie normal (gemessen: 156 gegen 156), und ein Knopf mit nacktem
+    ``setDefault(True)`` kommt deshalb durch. Die **Mechanik** dagegen ist ohne
+    Schriftmaße prüfbar, und sie ist der ganze Inhalt der Behebung: Das
+    Stylesheet zeichnet ``QPushButton:default`` mit ``font-weight: 600``, Qt
+    rechnet die bevorzugte Breite aber aus der Schrift **des Widgets** — also
+    muss sie dort stehen. Genau das tut ``make_primary``, und genau das fehlte,
+    als auf dem Trennknopf „etzt trenne" stand.
+
+    Damit fällt hier durch, was dort durchkommt: ein Hauptknopf, der nur
+    ``setDefault(True)`` bekommt. Der Nachbartest darunter sucht solche Knöpfe
+    im Quelltext; dieser prüft, was ``make_primary`` daraus macht.
+    """
+    from PySide6.QtGui import QFont
+    from PySide6.QtWidgets import QPushButton
+
+    from app.ui.style import make_primary
+
+    schlicht = QPushButton("Jetzt trennen")
+    schlicht.setDefault(True)
+    assert schlicht.font().weight() < QFont.Weight.DemiBold, (
+        "Ausgangslage: ein nackter Knopf trägt die normale Schrift — sonst prüft dieser Test nichts"
+    )
+
+    button = make_primary(QPushButton("Jetzt trennen"))
+
+    assert button.isDefault(), "make_primary macht den Knopf zum Hauptknopf"
+    assert button.font().weight() >= QFont.Weight.DemiBold, (
+        "Die Schrift, mit der das Stylesheet zeichnet, muss am Widget stehen — "
+        "sonst rechnet Qt die Breite aus der normalen und schneidet ab."
+    )
 
 
 def test_every_default_button_of_the_surface_goes_through_make_primary(qt_app: object) -> None:
