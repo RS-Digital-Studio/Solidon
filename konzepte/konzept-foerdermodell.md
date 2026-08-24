@@ -119,8 +119,17 @@ die Förderung wird nicht neben den Preisblock gestellt.
 verlinkt aus der Fußzeile. Die Zugriffszahlen vom 24.08.2026 haben das
 widerlegt** (§14): Von 942 Seitenaufrufen entfielen **880 auf die Startseite**
 und **27 auf `funktionen.html`** — etwa ein Dreißigstel, und das bei einer
-Seite, die prominent verlinkt ist. Eine Förderseite in der Fußzeile hätte
-näherungsweise keine Leser.
+Seite, die aus der Kopfzeile verlinkt ist.
+
+> **Der Vergleich trägt, aber nur dieser eine.** `3d-druck-b8` hat am
+> 24.08.2026 gemessen, dass **nur 12 der 30 Seiten den Zähler überhaupt
+> einbanden** — es fehlten genau die erzeugten (Handbuch, Rechtstexte,
+> KI-Seiten). Startseite und `funktionen.html` gehören beide zu den zwölf, der
+> Vergleich 880 zu 27 ist also gültig. Eine Aussage darüber, wie oft Handbuch
+> oder Rechtstexte gelesen werden, ist er **nicht** — diese Seiten hatten null
+> Aufrufe, weil sie nicht zählten, nicht weil sie niemand las. **Eine Seite
+> ohne Zähler und eine Seite ohne Leser sehen in der Auswertung gleich aus.**
+> Behoben in `7cc0734`.
 
 **Der richtige Ort ist die Anwendung selbst.** Drei Gründe, und sie sind
 stärker als der Notbehelf, den sie ersetzen:
@@ -609,7 +618,42 @@ Texte falsch statt einem.
 
 **Empfehlung: Variante 2.** Sie stimmt heute, nimmt keine Entscheidung vorweg
 und macht aus einem Widerspruch keine zweite Festlegung. `3d-druck-bd` kommt
-unabhängig zum selben Schluss. Die Entscheidung steht in §13.
+unabhängig zum selben Schluss.
+
+> **Entschieden von Robert am 24.08.2026: Variante 2. Umgesetzt und erledigt.**
+>
+> Geändert wurde an drei Stellen, und die dritte war in beiden Vorlagen nicht
+> genannt:
+>
+> - **`AGB.md` § 4** nennt keinen Anbieter mehr, sondern „einen
+>   Zahlungsdienstleister. Welcher das ist, erfahren Sie vor dem Absenden der
+>   Bestellung — mit Namen, Anschrift und den dort geltenden Bedingungen." Die
+>   MoR-Konstruktion steht als **Bedingungssatz** da („Tritt dieser
+>   Dienstleister als *Merchant of Record* auf, so wird er selbst
+>   Vertragspartner des Kaufs…"), damit sie bei jeder Anbieterwahl stimmt.
+> - **`AGB.md` § 3** löst damit auch den eigentlichen Widerspruch auf, der ohne
+>   Anbieternamen sonst stehen geblieben wäre: „Wer beim Kauf Ihr
+>   Vertragspartner ist, hängt vom Zahlungsdienstleister ab und wird Ihnen vor
+>   dem Absenden der Bestellung angezeigt. Das Recht, die Software zu benutzen,
+>   räumen Ihnen in jedem Fall wir ein." Vorher stand dort „wenn **wir** die
+>   Bestellung annehmen" — eine Aussage, die bei einem MoR falsch ist.
+> - **`website/datenschutz.html`, die Drittlandspassage.** Sie war
+>   anbieterspezifisch und wäre sonst zu einer stehen gebliebenen Unwahrheit
+>   geworden: Der Absatz begründete die Übermittlung mit dem
+>   Angemessenheitsbeschluss **für das Vereinigte Königreich**. Ohne
+>   feststehenden Anbieter gibt es kein Empfängerland, also auch keine
+>   Rechtsgrundlage dafür. Jetzt steht dort, dass die Grundlage — Art. 45 oder
+>   Art. 46 DSGVO — genannt wird, sobald der Dienstleister feststeht, und in
+>   jedem Fall vor dem ersten Kauf.
+>
+> **Gegenprobe:** Der Name kommt in `AGB.md`, `EULA.md`, `WIDERRUF.md`, allen
+> Seiten unter `website/` und `website/en/` nicht mehr vor. 95 Tests grün.
+>
+> **Was dadurch entsteht, ist eine Schuld auf den Verkaufstag** (§11 Nummer 10,
+> §13). Die Texte sind jetzt dauerhaft wahr, aber unvollständig: Sie
+> versprechen eine Angabe, die jemand nachtragen muss. Ohne
+> Verkaufsstart-Checkliste ist das eine Zusage an den Kunden, die im Ablauf
+> nirgends verankert ist.
 
 ### B3 — Darstellungsfehler im Muster-Widerrufsformular
 
@@ -780,7 +824,7 @@ Reihenfolge nach Dringlichkeit, nicht nach Aufwand.
 |---|---|---|---|
 | 1 | **ODR-Verweis streichen** (B1) | `AGB.md` § 10 | **sofort**, unabhängig vom Fördermodell |
 | 2 | **Konverter-Escaping reparieren** (B3) | `tools/make_legal.py:76` | vor dem nächsten Website-Upload |
-| 3 | **Vertragspartner-Widerspruch auflösen** (B2) — **Entscheidung nötig**, Variante 1 oder 2 | `AGB.md` §§ 1–4, `website/datenschutz.html` | vor dem Verkaufsstart |
+| ~~3~~ | ~~**Vertragspartner-Widerspruch auflösen** (B2)~~ — **erledigt am 24.08.2026**, Variante 2 | `AGB.md` §§ 3–4, `website/datenschutz.html` | — |
 | 4 | **Impressum ergänzen** (B5) | `website/impressum.html` | mit der Gewerbeanmeldung |
 | 5 | **EULA-Nummerierung** (B4) | `EULA.md` | bei der nächsten Fassung |
 | 6 | Gewerbe anmelden, Geschäftskonto, USt-IdNr. | Gewerbeamt Bamberg, Bank, BZSt | vor dem ersten Geldeingang |
@@ -827,11 +871,14 @@ stehen unten als erledigt, nicht gestrichen, weil die Begründung Bestand hat.
 3. **Ob ein Steuerberater dauerhaft mandatiert wird** oder nur für ein
    Erstgespräch. Bei Einzelunternehmen mit EÜR und Kleinunternehmerregelung
    genügt lange ein jährliches Gespräch.
-4. **Variante 1 oder 2 beim Vertragspartner-Widerspruch** (B2). Empfehlung: 2 —
-   keinen Anbieter nennen, solange keiner beauftragt ist. Diese Frage hat
-   `3d-druck-bd` gleichzeitig vorgelegt; sie ist **einmal** zu beantworten,
-   nicht zweimal. **Die dringendste der offenen Fragen**, weil bis zu ihrer
-   Beantwortung zwei Texte einen Anbieter nennen, mit dem kein Vertrag besteht.
+### Von Robert entschieden
+
+4. ~~**Variante 1 oder 2 beim Vertragspartner-Widerspruch** (B2).~~
+   **Variante 2 am 24.08.2026, umgesetzt.** Weder AGB noch
+   Datenschutzerklärung nennen noch einen Anbieter; beide sprechen vom
+   „Zahlungsdienstleister", der vor dem Kauf benannt wird. Einzelheiten in B2 —
+   darunter die anbieterspezifische Drittlandspassage, die in beiden Vorlagen
+   nicht genannt war und ohne Anpassung als Unwahrheit stehen geblieben wäre.
 
 ### Durch die Zahlen beantwortet
 
@@ -940,10 +987,29 @@ Zuwendung setzt, braucht wiederkehrende Aufmerksamkeit.** Bleibt es bei einem
 Peak, ist die Förderung ein netter Zusatz zum Verkauf; wiederholt sich der
 Kanal monatlich, ist sie ein tragender Teil.
 
-Die Auswertung speichert die verweisende Domain (`datenschutz.html`, Abschnitt
-„Diese Website"). Die Antwort liegt also in den eigenen Daten und ist nicht
-geschätzt zu ermitteln — sie steht auf der Auswertungsseite unterhalb des
-Abschnitts „Seiten".
+**Und die Antwort steht nicht in den eigenen Daten, obwohl der Datenschutztext
+sie verspricht.** Ich hatte hier zunächst geschrieben, sie stehe auf der
+Auswertungsseite unterhalb von „Seiten" — **das war falsch, und es ist ein
+Fehlbefund derselben Sorte wie oben.** `3d-druck-b8` hat am 24.08.2026
+nachgewiesen, dass die Liste „Woher" nicht kaputt, sondern **strukturell leer**
+war: Der Zähler-Beacon trägt als `Referer` immer die eigene Seite, und
+`referrer_host()` verwarf sie völlig zu Recht — ein echter Verweis kam nie an.
+
+```
+alt   {"k":"p","v":"/","r":""}
+neu   {"k":"p","v":"/","r":"www.google.com"}
+```
+
+Die Seite erklärte sich das selbst mit „Suchmaschinen schicken ihre Herkunft
+oft nicht mehr mit" — plausibel und falsch. Behoben in `212c086`.
+
+**Für die Vergangenheit ist die Frage damit endgültig unbeantwortbar**: Die
+Daten wurden nie erhoben, und keine spätere Auswertung holt sie zurück. Ab dem
+nächsten Upload entstehen sie. Für ein Modell, das auf wiederkehrende Zuwendung
+setzt, ist das die wichtigste Zahl — und sie fängt bei null an.
+
+Wenn Robert weiß, wo am 23.08. über Solidon geschrieben wurde, ist das heute
+die einzige Quelle dafür.
 
 > **Diese Zahlen altern schnell.** Sie beschreiben fünf Tage, von denen einer
 > alles trägt. Wer im Oktober hier liest, prüft sie nach, statt sie zu

@@ -46,12 +46,17 @@ Die Darstellung der Lizenz auf unserer Website ist kein bindendes Angebot,
 sondern eine Aufforderung zur Bestellung.
 
 Mit dem Absenden der Bestellung geben Sie ein verbindliches Angebot ab. Der
-Vertrag kommt zustande, wenn wir die Bestellung annehmen — spätestens mit der
-Übersendung des Lizenzschlüssels. Eine automatische Empfangsbestätigung ist
-noch keine Annahme.
+Vertrag kommt zustande, wenn die Bestellung angenommen wird — spätestens mit
+der Übersendung des Lizenzschlüssels. Eine automatische Empfangsbestätigung
+ist noch keine Annahme.
 
-Der Vertragstext wird von uns gespeichert und Ihnen zusammen mit dem
-Lizenzschlüssel in Textform zugesandt.
+**Wer beim Kauf Ihr Vertragspartner ist, hängt vom Zahlungsdienstleister ab
+und wird Ihnen vor dem Absenden der Bestellung angezeigt** (§ 4). Das Recht,
+die Software zu benutzen, räumen Ihnen in jedem Fall wir ein; dafür gilt der
+Endnutzer-Lizenzvertrag.
+
+Der Vertragstext wird gespeichert und Ihnen zusammen mit dem Lizenzschlüssel
+in Textform zugesandt.
 
 Die Vertragssprache ist Deutsch.
 
@@ -60,15 +65,17 @@ Die Vertragssprache ist Deutsch.
 Alle Preise sind Endpreise. Ob und in welcher Höhe Umsatzsteuer ausgewiesen
 wird, ergibt sich aus der Bestellübersicht und der Rechnung.
 
-Die Zahlung wird über Paddle abgewickelt — Paddle.com Market Limited,
-30 Old Bailey, London EC4M 7AU, Vereinigtes Königreich (Companies House
-Nr. 08172165). Welche Zahlungsarten zur Verfügung stehen, wird im
-Bestellvorgang angezeigt. Der Kaufpreis ist mit Vertragsschluss fällig.
+**Die Zahlung wird über einen Zahlungsdienstleister abgewickelt. Welcher das
+ist, erfahren Sie vor dem Absenden der Bestellung** — mit Namen, Anschrift und
+den dort geltenden Bedingungen. Welche Zahlungsarten zur Verfügung stehen,
+wird im Bestellvorgang angezeigt. Der Kaufpreis ist mit Vertragsschluss
+fällig.
 
-Paddle tritt dabei als *Merchant of Record* auf und wird selbst
-Vertragspartner des Kaufs. Für den Kauf gelten damit die Bedingungen von
-Paddle, diese hier ergänzend für die Nutzung der Software. Rechnung und
-Umsatzsteuerausweis kommen von Paddle.
+Tritt dieser Dienstleister als *Merchant of Record* auf, so wird er selbst
+Vertragspartner des Kaufs: Dann gelten für den Kauf seine Bedingungen und
+diese hier ergänzend für die Nutzung der Software, und Rechnung und
+Umsatzsteuerausweis kommen von ihm. Ob das der Fall ist, wird Ihnen im
+Bestellvorgang ausgewiesen.
 
 ## § 5 Lieferung
 
