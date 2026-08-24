@@ -77,9 +77,14 @@ eines Reliefs (§25, ``displace_image``). Es reist eingebettet wie ein Modell,
 bekommt aber keine load-Operation — es gehört einer Operation als Wert."""
 
 SolverStage = Literal["direct", "welded", "jittered", "voxel"]
-"""Die Stufen der Booleschen Rückfallkette (§17.2), in ihrer Reihenfolge."""
+"""Die Stufen der Booleschen Rückfallkette (§17.2), in ihrer Reihenfolge.
 
-SOLVER_CHAIN: tuple[SolverStage, ...] = ("direct", "welded", "jittered", "voxel")
+Die Kette als Wert steht in :data:`app.core.geom.boolean.FULL_CHAIN`, neben
+``DRAFT_CHAIN`` und der Stelle, die sie durchläuft. Hier stand sie bis zum
+24.08.2026 ein zweites Mal als ``SOLVER_CHAIN`` — mit identischem Inhalt, von
+niemandem gelesen, und damit ein dritter Ort für dieselbe Reihenfolge neben
+diesem Literal und ``FULL_CHAIN``.
+"""
 
 MetricSource = Literal["internal", "gcode"]
 """Woher eine Druckkennzahl stammt. Wird nie vermischt (§22.5)."""

@@ -16,7 +16,7 @@ dort nichts, und die Maße erscheinen erst, wenn es etwas zu messen gibt.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QWidget
 
 from app.branding import PROJECT_SUFFIX
@@ -186,7 +186,3 @@ QWidget#headerBar {{
     border-bottom: 1px solid {colours["line"]};
 }}
 """
-
-
-#: Die Kopfzeile richtet ihre Beschriftungen senkrecht mittig aus.
-ALIGN = Qt.AlignmentFlag.AlignVCenter

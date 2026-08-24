@@ -1398,3 +1398,51 @@ def test_a_half_finished_download_is_not_blocked_by_the_space_check(
     comfy_setup.fetch_weights(tmp_path, Path("python"))
 
     assert gerufen == ["los"], "die Prüfung hat den zweiten Anlauf blockiert"
+
+
+def test_the_sizes_in_the_progress_text_match_the_constants() -> None:
+    """Was der Fortschritt nennt, muss die Konstante sagen — sonst driftet es.
+
+    ``BACKGROUND_MEGABYTES`` (445) und ``WEIGHT_GIGABYTES`` (7,5) tragen die
+    Größen der beiden Downloads, und ihre Kommentare sagen, sie stünden im
+    Fortschrittstext. Sie standen dort auch — nur **von Hand getippt**, nicht aus
+    der Konstante. Bis zum 24.08.2026 las die beiden Konstanten niemand.
+
+    Der Beleg, dass das driftet, stand daneben: Der Kommentar über
+    ``BACKGROUND_MEGABYTES`` sprach von „444 MB", die Konstante von 445 und der
+    Text von 445. Ein Megabyte ist harmlos; die Bauform ist es nicht — wer die
+    Modellgröße nachzieht, ändert eine der beiden Stellen.
+
+    **Der Text bleibt, wie er ist, und die Konstante wird zur Zusicherung.**
+    Die Zahl in die Message-ID hineinzuformatieren wäre der andere Weg —
+    ``NEEDED_GIGABYTES`` macht es zwei Dutzend Zeilen weiter genau so
+    (``.format(noetig=…)``) und ist damit das Vorbild. Hier kostet er fünf
+    Übersetzungen für zwei Sätze, und die kann diese Sitzung nicht liefern; ein
+    Test kostet nichts und fängt dasselbe.
+    """
+    import re
+
+    from app.core.backends import comfy_setup
+
+    quelle = Path(comfy_setup.__file__).read_text(encoding="utf-8")
+
+    # Die deutsche Quelle schreibt Dezimalkommas: „7,5 GB".
+    erwartet_gb = f"{comfy_setup.WEIGHT_GIGABYTES:g}".replace(".", ",")
+    erwartet_mb = f"{comfy_setup.BACKGROUND_MEGABYTES:g}"
+
+    gb_texte = re.findall(r'_\("([^"]*\bGB\b[^"]*)"\)', quelle)
+    mb_texte = re.findall(r'_\("([^"]*\bMB\b[^"]*)"\)', quelle)
+
+    assert gb_texte, "kein Fortschrittstext mit GB gefunden — der Test prüfte nichts"
+    assert mb_texte, "kein Fortschrittstext mit MB gefunden — der Test prüfte nichts"
+
+    for text in gb_texte:
+        zahlen = re.findall(r"\d+(?:,\d+)?(?=\s*GB)", text)
+        assert erwartet_gb in zahlen, (
+            f"{text!r} nennt {zahlen}, WEIGHT_GIGABYTES sagt {erwartet_gb}"
+        )
+    for text in mb_texte:
+        zahlen = re.findall(r"\d+(?:,\d+)?(?=\s*MB)", text)
+        assert erwartet_mb in zahlen, (
+            f"{text!r} nennt {zahlen}, BACKGROUND_MEGABYTES sagt {erwartet_mb}"
+        )

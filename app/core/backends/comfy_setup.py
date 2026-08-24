@@ -67,6 +67,15 @@ BACKGROUND_FILE: Final = "background_removal/birefnet.safetensors"
 
 #: Wie groß die Freistell-Gewichte sind — 444 MB gegen 7,5 GB, also nennt der
 #: Schritt sie zusammen und nicht getrennt.
+#:
+#: **Die Zahl steht auch im Fortschrittstext, und zwar dort von Hand.** Diese
+#: Konstante las bis zum 24.08.2026 niemand; sie und ``WEIGHT_GIGABYTES`` waren
+#: zwei stille Zweitschriften. Der Text bleibt, wie er ist — die Zahl in die
+#: Message-ID hineinzuformatieren (wie ``NEEDED_GIGABYTES`` es weiter unten
+#: richtig macht) kostet fünf Übersetzungen für zwei Sätze. Stattdessen hält
+#: `tests/test_mesh_backend.py::test_the_sizes_in_the_progress_text_match_the_constants`
+#: beide Stellen zusammen: Wer die Größe hier nachzieht und den Text vergisst,
+#: bekommt einen roten Lauf.
 BACKGROUND_MEGABYTES: Final = 445
 
 #: Was auf der Platte frei sein muss, bevor der große Download beginnt.
