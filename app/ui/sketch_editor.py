@@ -1298,6 +1298,39 @@ class SketchCanvas(QWidget):
         self._apply(changed)
         self.selectionChanged.emit()
 
+    def place_on_plane(self, point: tuple[float, float], *, extend: bool = False) -> None:
+        """Ein Klick, angegeben in **Zeichenkoordinaten** statt in Bildpunkten.
+
+        Der Weg für den Skizzenmodus im Viewport (§30.1, Stufe zwei): Dort
+        kommt der Ort nicht aus einem Mausereignis auf dieser Fläche, sondern
+        aus dem Schnitt des Sichtstrahls mit der Zeichenebene
+        (:func:`app.core.sketch.planes.ray_hit`). Millimeter sind, was beide
+        Wege gemeinsam haben.
+
+        **Umgerechnet wird über :meth:`_to_screen`, und das ist kein Umweg,
+        sondern die Zusage aus P2c.** Hin und zurück sind exakt umkehrbar
+        (`tests/test_sketch_editor.py`), also landet der Punkt genau dort, wo
+        er hingehört — und zwar **unabhängig von der Größe dieser Fläche**:
+        Sie kürzt sich aus beiden Richtungen heraus. Deshalb darf der Canvas
+        im Viewport-Modus unsichtbar bleiben und trotzdem rechnen.
+
+        Und deshalb geht der Klick durch :meth:`place` statt an ihr vorbei:
+        Was ein Klick tut, entscheidet die Methode, die auch ein Test ruft —
+        Fang, Deckung und Undo-Punkt hängen daran
+        (`.claude/rules/zeichenflaeche.md`).
+        """
+        self.place(self._to_screen(point[0], point[1]), extend=extend)
+
+    def hover_on_plane(self, point: tuple[float, float]) -> None:
+        """Der Zeiger steht auf dieser Stelle der Ebene, ohne zu klicken.
+
+        Dieselbe Übersetzung wie in :meth:`place_on_plane`, für die Vorschau:
+        Linie, Kreis und Bogen zeigen, was entsteht, bis der Klick sie
+        festmacht — ohne das setzt ein Klick einen gestrichelten Kreis, dann
+        geschieht nichts, und beim zweiten steht plötzlich eine Linie da.
+        """
+        self.note_pointer(self._to_screen(point[0], point[1]))
+
     def place(self, position: QPointF, *, extend: bool = False) -> None:
         """Ein Klick eines Zeichenwerkzeugs: Punkt setzen, Element schließen.
 
@@ -1528,7 +1561,21 @@ class SketchCanvas(QWidget):
             )
             self.update()
             return
-        position = QPointF(event.position())
+        self.note_pointer(QPointF(event.position()), buttons=event.buttons())
+
+    def note_pointer(self, position: QPointF, buttons: Any = Qt.MouseButton.NoButton) -> None:
+        """Der Zeiger steht hier — Vorschau, Fangmarke und Aufleuchten nachziehen.
+
+        Aus :meth:`mouseMoveEvent` herausgelöst, damit sie auch ohne
+        Mausereignis auf dieser Fläche gerufen werden kann: Im Skizzenmodus im
+        Viewport kommt die Stelle aus dem Sichtstrahl
+        (:meth:`hover_on_plane`), nicht aus einem Klick auf dieses Widget.
+
+        Dieselbe Aufteilung wie bei :meth:`place` und :meth:`grab_point`, und
+        aus demselben Grund: **Was ein Zeiger bewirkt, entscheidet die
+        Methode, die auch ein Test ruft** — die Ereignisse übersetzen nur
+        (`.claude/rules/zeichenflaeche.md`).
+        """
         # Wo der Zeiger steht, entscheidet die **Richtung** eines eingetippten
         # Maßes: die Länge kommt aus dem Feld, wohin es geht aus der Hand.
         self._pointer = self._to_world(position)
@@ -1546,13 +1593,13 @@ class SketchCanvas(QWidget):
         # das Raster wird gröber gezeichnet, als gefangen wird, und ohne die
         # Marke wäre nicht zu sehen, wohin ein Klick fiele.
         moved = self._note_snap_mark(over_point=under is not None)
-        if self._dragging is not None and event.buttons() & Qt.MouseButton.LeftButton:
+        if self._dragging is not None and buttons & Qt.MouseButton.LeftButton:
             # Ein gezogener Punkt fällt auf dieselbe Weite wie ein gesetzter —
             # sonst wäre das Raster eine Zusage, die beim ersten Nachbessern
             # nicht mehr gilt.
             target = self.snapped(self._pointer)
             self.move_point(self._dragging, target[0], target[1])
-        elif self._shift_from is not None and event.buttons() & Qt.MouseButton.LeftButton:
+        elif self._shift_from is not None and buttons & Qt.MouseButton.LeftButton:
             self._shift_selection(position)
         elif self._pending_world:
             self.measuringChanged.emit(self.pending_measure())

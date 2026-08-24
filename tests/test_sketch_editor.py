@@ -2499,3 +2499,87 @@ def test_a_plane_that_is_not_offered_says_so_instead_of_staying_quiet(
         assert panel.plane_choice.currentData() == "plane:xy"
     finally:
         panel.deleteLater()
+
+
+# --- Zeichnen ohne eigene Zeichenfläche (§30.1, P4) --------------------------
+
+
+def test_a_click_given_in_millimetres_lands_where_it_says(qt_app: QApplication) -> None:
+    """Der Weg für den Skizzenmodus im Viewport.
+
+    Dort kommt der Ort nicht aus einem Mausereignis auf dieser Fläche,
+    sondern aus dem Schnitt des Sichtstrahls mit der Zeichenebene.
+    Millimeter sind, was beide Wege gemeinsam haben.
+    """
+    from app.ui.sketch_editor import SketchCanvas
+
+    canvas = SketchCanvas()
+    canvas.resize(400, 300)
+    canvas.set_tool("line")
+    canvas.place_on_plane((10.0, 5.0))
+    canvas.place_on_plane((30.0, 5.0))
+
+    assert len(canvas.sketch.elements) == 1, "eine Linie aus zwei Klicks"
+    start, end = canvas.sketch.elements[0].points
+    assert start == pytest.approx((10.0, 5.0))
+    assert end == pytest.approx((30.0, 5.0))
+
+
+def test_the_size_of_the_drawing_area_does_not_move_the_point(qt_app: QApplication) -> None:
+    """**Die Zusage, auf der der unsichtbare Canvas steht.**
+
+    Im Viewport-Modus hat die Zeichenfläche kein Bild mehr — sie rechnet nur
+    noch. Damit das trägt, muss ein in Millimetern gegebener Klick unabhängig
+    von ihrer Größe landen: ``_to_screen`` und ``_to_world`` sind exakt
+    umkehrbar (P2c), also kürzt sich die Größe aus beiden Richtungen heraus.
+
+    Geprüft an drei sehr verschiedenen Größen. Ginge es schief, läge der
+    Punkt nicht daneben, sondern **skaliert** daneben — ein Fehler, der mit
+    dem Fenster wächst und im Test mit einer festen Größe nie auffällt.
+    """
+    from app.ui.sketch_editor import SketchCanvas
+
+    ohne_fang = []
+    mit_fang = []
+    for width, height in ((400, 300), (1600, 900), (120, 4000)):
+        free = SketchCanvas()
+        free.resize(width, height)
+        free.set_snapping(False)
+        free.set_tool("point")
+        free.place_on_plane((-17.5, 42.25))
+        ohne_fang.append(free.sketch.elements[0].points[0])
+
+        snapped = SketchCanvas()
+        snapped.resize(width, height)
+        snapped.set_tool("point")
+        snapped.place_on_plane((-17.5, 42.25))
+        mit_fang.append(snapped.sketch.elements[0].points[0])
+
+    for place in ohne_fang:
+        assert place == pytest.approx((-17.5, 42.25)), "ohne Fang genau die gegebene Zahl"
+
+    # **Und mit Fang dieselbe Stelle für alle drei.** Der Fang rundet
+    # (-17,5 | 42,25) auf ganze Millimeter — das ist richtig und war der
+    # Grund, warum die erste Fassung dieses Tests rot war. Die Zusage lautet
+    # nicht „der Fang greift nicht", sondern „er greift überall gleich": Hinge
+    # er an der Größe der Fläche, säße derselbe Klick im großen Fenster
+    # woanders als im kleinen.
+    assert len(set(mit_fang)) == 1, f"der Fang fällt verschieden aus: {mit_fang}"
+    assert mit_fang[0] != pytest.approx((-17.5, 42.25)), "und er hat wirklich gefangen"
+
+
+def test_the_pointer_can_be_set_without_a_mouse(qt_app: QApplication) -> None:
+    """Die Vorschau hängt am Zeiger, und der kommt im Viewport aus dem Strahl.
+
+    ``note_pointer`` ist aus ``mouseMoveEvent`` herausgelöst, damit sie ohne
+    Mausereignis auf dieser Fläche gerufen werden kann — dieselbe Aufteilung
+    wie bei ``place`` und ``grab_point``.
+    """
+    from app.ui.sketch_editor import SketchCanvas
+
+    canvas = SketchCanvas()
+    canvas.resize(400, 300)
+    canvas.set_snapping(False)
+    canvas.hover_on_plane((12.0, -8.0))
+
+    assert canvas.pointer_target() == pytest.approx((12.0, -8.0))
