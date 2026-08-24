@@ -244,6 +244,20 @@ FALLBACK_SCALE = 4.0
 #: Bild, in dem sie als Fläche ankommen.
 MOST_GRID_LINES = 200
 
+#: Die halbe Diagonale der Fangmarke, in **Bildpunkten**.
+#:
+#: In Bildpunkten und nicht in Millimetern, und das hat erst das Bild gesagt:
+#: Der erste Anlauf koppelte sie an die Rasterweite (ein Drittel davon), was
+#: bei 10 mm Raster gut aussah und bei 2 mm ein Kreuz von zwei Bildpunkten
+#: ergab — vorhanden, gemessen richtig, und im Fenster kaum zu finden.
+#: Eine Marke ist ein Zeiger; sie soll bei jedem Zoom und jeder Rasterweite
+#: gleich gut zu sehen sein.
+#:
+#: Zehn und nicht acht: Der Fangradius der Zeichenfläche ist acht Bildpunkte,
+#: und eine Marke, die genau so groß ist wie der Bereich, in dem sie fängt,
+#: sieht aus wie seine Berandung. Etwas größer ist sie ein Zeichen.
+CURSOR_PIXELS = 10.0
+
 
 def sketch_grid(
     frame: PlaneFrame, step: float, reach: float
@@ -5249,11 +5263,12 @@ class Viewport(QWidget):
         der nächsten Mausbewegung wieder — ein Flackern genau während des
         Zeichnens.
 
-        **Die Größe kommt aus der Rasterweite** (ein Drittel davon): Sie ist
-        die Zahl, die auch das Bild bestimmt, also bleibt die Marke über jeden
-        Zoom hinweg gleich groß im Verhältnis zu dem, was man sieht. Eine
-        feste Zahl in Millimetern wäre herausgezoomt ein Punkt und
-        hineingezoomt ein Kreuz über das halbe Bild.
+        **Die Größe steht in Bildpunkten** (:data:`CURSOR_PIXELS`) und wird
+        über den gemessenen Maßstab in Millimeter zurückgerechnet. Eine feste
+        Zahl in Millimetern wäre herausgezoomt ein Punkt und hineingezoomt ein
+        Kreuz über das halbe Bild; an die Rasterweite gekoppelt — der erste
+        Anlauf — war sie bei 10 mm Raster gut und bei 2 mm zwei Bildpunkte
+        groß. Gesehen hat das keine Rechnung, sondern die Aufnahme.
         """
         if self.plotter is not None:
             for actor in self._cursor_actors:
@@ -5263,7 +5278,8 @@ class Viewport(QWidget):
         if point is None or frame is None or self.plotter is None:
             self._draw()
             return
-        segments = sketch_cursor(frame, point, max(self._sketch_step, EPS_GEOM) / 3.0)
+        scale = self.pixels_per_mm(frame)
+        segments = sketch_cursor(frame, point, CURSOR_PIXELS / max(scale, EPS_GEOM))
         if not segments:
             self._draw()
             return
