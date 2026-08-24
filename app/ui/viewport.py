@@ -258,6 +258,18 @@ MOST_GRID_LINES = 200
 #: sieht aus wie seine Berandung. Etwas größer ist sie ein Zeichen.
 CURSOR_PIXELS = 10.0
 
+#: Der Durchmesser eines gesetzten Skizzenpunkts, in Bildpunkten.
+#:
+#: Er stand auf sechs, und damit war er **unauffälliger als die Fangmarke**
+#: daneben (zwanzig Bildpunkte Spanne): Was schon existiert, sah schwächer aus
+#: als das, was gleich entstünde. Im Bild las sich das umgekehrt zur Sache —
+#: ein Punkt ist ein Ding in der Zeichnung, die Marke nur ein Zeiger.
+#:
+#: Zehn, also so groß wie die halbe Diagonale der Marke. Verwechseln kann man
+#: die beiden trotzdem nicht: Der Punkt ist eine gefüllte Kugel, die Marke ein
+#: Kreuz aus zwei Strichen — zwei Formen und nicht zwei Farben (Regel 18).
+SKETCH_POINT_PIXELS = 10
+
 
 def sketch_grid(
     frame: PlaneFrame, step: float, reach: float
@@ -5240,7 +5252,7 @@ class Viewport(QWidget):
                 self.plotter.add_points(
                     np.asarray(single, dtype=float),
                     color=self._sketch_colour,
-                    point_size=6,
+                    point_size=SKETCH_POINT_PIXELS,
                     render_points_as_spheres=True,
                     name="sketch_points",
                     render=False,
