@@ -734,7 +734,7 @@ def test_a_ray_straight_down_hits_where_it_points() -> None:
 
 
 def test_the_length_of_the_ray_does_not_change_where_it_lands() -> None:
-    """Der Viewport reicht den Schritt von der nahen zur fernen Ebene herein.
+    """Die Ansicht reicht den Schritt von der nahen zur fernen Ebene herein.
 
     Der ist hunderte Millimeter lang und nicht normiert. Käme dabei ein
     anderer Punkt heraus als bei derselben Richtung in Einheitslänge, hinge
