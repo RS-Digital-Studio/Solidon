@@ -82,7 +82,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Additive Bausteine fehlen am Flächenklick | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | nichts — der Fix in `_applies_to` kann heute laufen und behebt Wandhalter und Nutfeder mit |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Entscheidung: ob ein Rezept in Projektdateien mitreisen darf. Regel 13 sagt heute nein, ohne zwischen Code und Daten zu trennen — Bauplanänderung, geht an Robert (Konzept Abschnitt 17) |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
-| Kein MainWindow wird mehr freigegeben | Zehn von zehn Fenstern überlebten ihr Loslassen (24.08.2026) | eine Diagnose — wer hält die Referenz? Der Punkt „Kein Viewport wird jemals freigegeben“ ist abgehakt und seine Aussage überholt; diese hier ist neu und gemessen |
+| Kein MainWindow wird mehr freigegeben | Zehn von zehn Fenstern überlebten ihr Loslassen (24.08.2026) | **eine Zeile** — `main_window.py:2240`, und der Fix steht in `.claude/rules/oberflaeche.md` als dritte Wahl. Nicht beauftragt, und die Datei ist belegt |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
@@ -9426,12 +9426,35 @@ damals danebenstanden (vier von fünfzehn, zwei von fünfzehn). Wo jede einzelne
 Instanz überlebt, wartet niemand auf einen Zufall — da hält etwas fest, und
 zwar immer.
 
-- [ ] **Wer hält das Fenster?** Erst die Referenz finden, dann urteilen:
-  `gc.get_referrers` auf eine der überlebenden Instanzen, und die Kette bis zu
-  dem Objekt verfolgen, das nicht sterben will. Erst danach ist zu entscheiden,
-  ob es ein Fehler ist oder eine Abnahme, die zu eng geworden ist — die
-  Erfahrung dieses Projekts kennt beide Ausgänge, und der Test selbst ist
-  einmal die Ursache gewesen.
+**Die Frage ist beantwortet** (24.08.2026, 3d-druck-61 per `git bisect run` mit
+`pytest -k MainWindow` als Probe, 2,3 s je Schritt). Erster roter Commit:
+`f43284f` „Ein Menüeintrag, der keiner Operation gehört". Die Zeile ist
+`app/ui/main_window.py:2240`, in `_add_variant_entries` und damit im Menüaufbau
+**jedes** Fensters:
+
+    partial(self.run_operation, first)
+
+**Der Beleg stand die ganze Zeit in unserer eigenen Regel.**
+`.claude/rules/oberflaeche.md` führt eine gemessene Tabelle, je zehn Objekte
+losgelassen: `connect(self.rebuild)` überlebt 0 von 10,
+`connect(partial(self.rebuild, 1))` überlebt **10 von 10** — mit dem Vermerk,
+`functools.partial` helfe nicht, obwohl es wie die saubere Fassung eines
+Lambdas aussieht, denn es hält die gebundene Methode und damit `self`. Die Zahl
+der Tabelle ist exakt die des roten Tests. Nachgeprüft am 24.08.2026: Die Zeile
+steht dort, sie ist der einzige solche Aufruf im Menüaufbau, und `weak_slot`
+(`app/ui/leash.py:300`) wird in derselben Datei bereits 29-mal benutzt. Das
+`partial` ist der Ausreißer, der Fix ist Hausstil und keine Umstellung.
+
+- [ ] **Die eine Zeile umstellen** auf die dritte Wahl der Regel, die
+  ausdrücklich „für Werte aus einer Schleife" gilt — und
+  `_add_variant_entries` ist eine Schleife über `VARIANT_GROUPS`, in der
+  `first` gebunden werden muss:
+
+      weak_slot(self, MainWindow.run_operation, first)
+
+  **Danach messen, nicht annehmen.** Ob es der einzige Halter ist, steht nicht
+  fest; dieselbe Regel erzählt am Ende, dass beim Hauptfenster der letzte
+  Halter erst gefunden wurde, nachdem alle 27 Lambdas umgebaut waren.
 
 ---
 
