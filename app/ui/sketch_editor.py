@@ -2631,6 +2631,17 @@ class SketchPanel(QWidget):
     sketchChanged = Signal()
     """Weitergereicht von der Zeichenfläche, damit ein Rahmen mithören kann."""
 
+    pointerMoved = Signal(float, float)
+    """Wohin der nächste Klick fällt — der **gefangene** Ort, in Millimetern.
+
+    Ebenfalls weitergereicht von der Zeichenfläche
+    (``SketchCanvas.pointerChanged`` → ``pointer_target``). Die Statuszeile
+    dieses Panels nennt ihn als Zahl; der Rahmen legt daraus die Marke in die
+    Ansicht (``Viewport.show_sketch_cursor``). Beide lesen damit dieselbe
+    Antwort — den Fang im Viewport nachzurechnen wäre die zweite Zahl für
+    dieselbe Sache, und genau daran ist das Raster schon einmal
+    auseinandergelaufen."""
+
     def __init__(
         self,
         text: str = "",
@@ -2961,6 +2972,7 @@ class SketchPanel(QWidget):
         self.coordinates.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
         self.coordinates.setToolTip(tr("Wohin der nächste Klick fällt."))
         self.canvas.pointerChanged.connect(self._show_pointer)
+        self.canvas.pointerChanged.connect(self.pointerMoved)
 
         self._side_box = QWidget(self)
         side = QVBoxLayout(self._side_box)
@@ -3323,6 +3335,19 @@ class SketchPanel(QWidget):
         active = self.snap_toggle.isChecked()
         self.snap_step.setEnabled(active)
         self.canvas.set_snapping(active, self.snap_step.value_mm())
+        # **Und das Bild muss es erfahren.** ``set_snapping`` zeichnet den
+        # Canvas neu, und der ist im Viewport-Modus unsichtbar — gemeldet als
+        # „wenn ich das Raster anpasse ändert es sich im Viewport nicht". Das
+        # Raster in der Szene hängt an ``MainWindow._redraw_sketch``, und das
+        # hängt an diesem Signal; ohne es blieb die alte Weite stehen, während
+        # Feld und Fang längst die neue trugen. Drei Zahlen für dieselbe Sache,
+        # und die sichtbare war wieder die falsche.
+        #
+        # ``sketchChanged`` und kein eigenes: Das Signal heißt der Sache nach
+        # „die Ansicht muss nachziehen", und die Rasterweite ist Teil dessen,
+        # was dort gezeichnet wird. Ein zweites daneben hieße, dass jede
+        # Empfangsstelle künftig beide verbinden muss, um vollständig zu sein.
+        self.sketchChanged.emit()
 
     def _step_typed(self) -> None:
         """Eine eingetippte Weite bleibt stehen, auch beim Zoomen."""

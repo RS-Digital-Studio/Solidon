@@ -283,6 +283,37 @@ def sketch_grid(
     return lines
 
 
+def sketch_cursor(
+    frame: PlaneFrame, point: tuple[float, float], size: float
+) -> list[tuple[tuple[float, float, float], tuple[float, float, float]]]:
+    """Das Kreuz, das zeigt, **wohin ein Klick fällt** — als Weltpunktpaare.
+
+    Der Ort ist der schon gefangene (``SketchCanvas.pointer_target``), nicht
+    die rohe Zeigerlage. Das ist der ganze Zweck: Gefangen wird auf das
+    Raster, also landet ein Klick bis zu einen halben Schritt neben dem
+    Mauszeiger — bei 2 mm Raster elf Bildpunkte, bei 10 mm sechzig. Der Canvas
+    zeigte dafür seit je ein Kreuz, und seit die Zeichnung im Viewport liegt
+    (§30.1, P4), sieht das niemand mehr: Der Canvas rechnet dort unsichtbar
+    weiter. Gemeldet wurde es als „die Klicks sind wo anders als ich klick".
+
+    Ein Kreuz und kein Punkt: Ein Punkt sähe aus wie ein gesetzter, und der
+    Unterschied zwischen „hier ist etwas" und „hier entstünde etwas" wäre
+    allein die Farbe (Regel 18). Die Diagonalen stehen zudem quer zu den
+    Rasterlinien, auf denen die Marke meistens sitzt — ein achsparalleles
+    Kreuz verschwände genau dort in ihnen.
+
+    ``size`` ist die halbe Diagonale in Millimetern. Nichts kommt zurück, wo
+    nichts zu zeichnen ist.
+    """
+    if size <= 0.0:
+        return []
+    x, y = point
+    return [
+        (to_world(frame, (x - size, y - size)), to_world(frame, (x + size, y + size))),
+        (to_world(frame, (x - size, y + size)), to_world(frame, (x + size, y - size))),
+    ]
+
+
 def polyline_spans(counts: Sequence[int]) -> list[int]:
     """Die Linienstruktur, mit der VTK mehrere Polylinien in einem Netz führt.
 
@@ -1640,6 +1671,18 @@ class Viewport(QWidget):
         Eigene Liste neben ``_frame_actors``: Die Zeichnung kommt und geht mit
         dem Skizzenmodus, der Bauraum bleibt. Eine gemeinsame Liste hieße,
         beim Verlassen des Modus auch die Platte wegzuräumen."""
+        self._cursor_actors: list[Any] = []
+        """Die Marke, die zeigt, wohin der nächste Klick fällt.
+
+        Getrennt von ``_sketch_actors``, weil sie an der Maus hängt und nicht
+        an der Zeichnung — der Grund steht bei :meth:`clear_sketch`."""
+        self._sketch_step = 0.0
+        """Die Rasterweite, die zuletzt **gezeichnet** wurde.
+
+        Nicht die eingestellte und nicht die gefangene — die, die im Bild
+        steht. Ohne sie war „ändert sich das Raster im Viewport?" von außen
+        nicht zu beantworten: Man sah Linien und musste sie zählen, und ein
+        Test darüber hätte den Actor auseinandergenommen."""
         self._grid_colour = THEMES["dark"]["grid_minor"]
         self._sketch_colour = THEMES["dark"]["text"]
         self._measure_mode: MeasureMode = "off"
@@ -5126,6 +5169,7 @@ class Viewport(QWidget):
         Kante aussehen.
         """
         self.clear_sketch()
+        self._sketch_step = step
         if self.plotter is None:
             return
         import numpy as np
@@ -5192,11 +5236,68 @@ class Viewport(QWidget):
             )
         self._draw()
 
+    def show_sketch_cursor(self, point: tuple[float, float] | None) -> None:
+        """Die Marke setzen, die zeigt, wohin der nächste Klick fällt.
+
+        ``point`` ist der **gefangene** Ort in Zeichenkoordinaten, so wie ihn
+        ``SketchCanvas.pointer_target`` liefert; ``None`` nimmt die Marke weg.
+        Warum sie sein muss, steht bei :func:`sketch_cursor`.
+
+        **Eigene Actorliste**, nicht ``_sketch_actors``: Die Marke folgt der
+        Maus, die Zeichnung ändert sich beim Zeichnen. Lägen beide zusammen,
+        räumte jedes ``_redraw_sketch`` die Marke weg, und sie käme erst mit
+        der nächsten Mausbewegung wieder — ein Flackern genau während des
+        Zeichnens.
+
+        **Die Größe kommt aus der Rasterweite** (ein Drittel davon): Sie ist
+        die Zahl, die auch das Bild bestimmt, also bleibt die Marke über jeden
+        Zoom hinweg gleich groß im Verhältnis zu dem, was man sieht. Eine
+        feste Zahl in Millimetern wäre herausgezoomt ein Punkt und
+        hineingezoomt ein Kreuz über das halbe Bild.
+        """
+        if self.plotter is not None:
+            for actor in self._cursor_actors:
+                self.plotter.remove_actor(actor, render=False)
+        self._cursor_actors.clear()
+        frame = self._sketch_frame
+        if point is None or frame is None or self.plotter is None:
+            self._draw()
+            return
+        segments = sketch_cursor(frame, point, max(self._sketch_step, EPS_GEOM) / 3.0)
+        if not segments:
+            self._draw()
+            return
+
+        import numpy as np
+        import pyvista as pv
+
+        points = np.asarray([end for pair in segments for end in pair], dtype=float)
+        spans = np.hstack([[2, 2 * index, 2 * index + 1] for index in range(len(segments))])
+        self._cursor_actors.append(
+            self.plotter.add_mesh(
+                pv.PolyData(points, lines=spans),
+                color=self._sketch_colour,
+                line_width=2,
+                name="sketch_cursor",
+                render=False,
+                reset_camera=False,
+                pickable=False,
+            )
+        )
+        self._draw()
+
     def clear_sketch(self) -> None:
         """Nimmt die Zeichnung wieder aus der Szene.
 
         Der Bauraum bleibt: Er hängt an ``_frame_actors`` und gehört der
         Ansicht, nicht dem Modus.
+
+        **Die Marke des Zeigers bleibt auch.** Sie hängt an der Maus und nicht
+        an der Zeichnung; hier mitgeräumt verschwände sie bei jedem
+        ``_redraw_sketch``, also bei jedem Strich, und käme erst mit der
+        nächsten Mausbewegung wieder — ein Flackern genau während des
+        Zeichnens. Weggenommen wird sie, wo der Modus endet:
+        :meth:`set_sketching` mit ``None``.
         """
         if self.plotter is not None:
             for actor in self._sketch_actors:
@@ -5609,6 +5710,11 @@ class Viewport(QWidget):
         und kein Ding in der Szene.
         """
         self._sketch_frame = frame
+        # Der Modus endet, die Marke des Zeigers mit ihm — sie ist das
+        # einzige Stück Zeichnung, das ``clear_sketch`` absichtlich stehen
+        # lässt (dort steht der Grund).
+        if frame is None:
+            self.show_sketch_cursor(None)
         # **Der Boden des Bauraums tritt ab, seine Kanten bleiben.** Zwei
         # Gitter übereinander sind eines zu viel: Bettraster und Zeichenraster
         # sind beide graue Linien in derselben Größenordnung, und welches die

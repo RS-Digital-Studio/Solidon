@@ -2931,3 +2931,140 @@ def test_the_window_hands_the_grid_step_to_the_canvas(qt_app: QApplication) -> N
         assert panel.snap_step.value_mm() == pytest.approx(erwartet), "und steht sichtbar im Feld"
     finally:
         window.deleteLater()
+
+
+def test_a_typed_grid_step_reaches_the_picture(qt_app: QApplication) -> None:
+    """Wer die Rasterweite eintippt, sieht sie — auch in der Ansicht.
+
+    Gemeldet als „wenn ich das Raster anpasse ändert es sich im Viewport
+    nicht". Die Kette endete am vorletzten Glied: ``_step_typed`` merkte sich
+    die Weite und gab sie an die Zeichenfläche, und die zeichnete sich neu —
+    unsichtbar, denn seit §30.1 P4 liegt das Bild im Viewport. Dessen Raster
+    hängt an ``MainWindow._redraw_sketch``, das an ``sketchChanged`` hängt, und
+    eine Rasterweite ist keine Zeichenänderung. Also blieb die alte Weite im
+    Bild stehen, während Feld und Fang längst die neue trugen.
+
+    Geprüft wird deshalb an der **Anwendung** und nicht an der Methode: Was
+    zählt, ist die Zahl, die der Viewport zuletzt gezeichnet hat.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_extrude")
+        panel = window._sketch_panel
+        assert panel is not None
+        vorher = window.viewport._sketch_step
+        assert vorher > 0.0, "ohne ein gezeichnetes Raster prüft dieser Test nichts"
+
+        gewuenscht = vorher * 5.0
+        panel.snap_step.set_value_mm(gewuenscht)
+        panel._step_typed()
+
+        assert panel.canvas.snap_step == pytest.approx(gewuenscht), "der Fang folgt der Eingabe"
+        assert window.viewport._sketch_step == pytest.approx(gewuenscht), (
+            "und das gezeichnete Raster auch — sonst zeigt das Bild eine andere "
+            f"Weite als das Feld ({window.viewport._sketch_step} statt {gewuenscht})"
+        )
+    finally:
+        window.deleteLater()
+
+
+def test_turning_the_snap_off_reaches_the_picture_too(qt_app: QApplication) -> None:
+    """Derselbe Weg, andere Geste — der Haken ist die zweite Bedienung daran.
+
+    Er lief durch dieselbe Methode und hatte deshalb dasselbe Loch. Geprüft
+    wird hier, dass überhaupt ein Neuzeichnen stattfindet: Die Weite bleibt,
+    was der Maßstab sagt, aber die Kette muss laufen.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_extrude")
+        panel = window._sketch_panel
+        assert panel is not None
+        window.viewport._sketch_step = -1.0  # eine Zahl, die niemand zeichnet
+
+        panel.snap_toggle.setChecked(False)
+
+        assert not panel.canvas.snapping, "der Fang ist aus"
+        assert window.viewport._sketch_step > 0.0, (
+            "der Haken hat kein Neuzeichnen ausgelöst — die Ansicht steht auf einem "
+            "Stand, den niemand mehr gesetzt hat"
+        )
+    finally:
+        window.deleteLater()
+
+
+def test_the_pointer_mark_sits_where_the_click_lands(qt_app: QApplication) -> None:
+    """Die Marke zeigt den **gefangenen** Ort, nicht die rohe Zeigerlage.
+
+    Der Kern von „die Klicks sind wo anders als ich klick": Gefangen wird auf
+    das Raster, also fällt ein Klick bis zu einen halben Schritt neben den
+    Mauszeiger — bei 2 mm Raster elf Bildpunkte, bei 10 mm sechzig. Der Canvas
+    zeigt dafür seit je ein Kreuz; seit die Zeichnung im Viewport liegt, sieht
+    das niemand mehr, denn dort rechnet er unsichtbar weiter.
+
+    ``pointerMoved`` trägt deshalb ``pointer_target()`` nach außen — dieselbe
+    Antwort, die auch die Statuszeile nennt. Den Fang im Viewport
+    nachzurechnen wäre die zweite Zahl für dieselbe Sache.
+    """
+    panel = SketchPanel()
+    try:
+        panel.canvas.set_snapping(True, 10.0)
+        panel.canvas.set_tool("point")
+        gesehen: list[tuple[float, float]] = []
+        panel.pointerMoved.connect(lambda x, y: gesehen.append((x, y)))
+
+        panel.canvas.note_pointer(panel.canvas._to_screen(13.2, -7.4))
+
+        assert gesehen, "die Bewegung kam nicht nach außen"
+        assert gesehen[-1] == pytest.approx((10.0, -10.0)), (
+            f"die Marke säße auf {gesehen[-1]}, der Klick landet auf (10.0, -10.0)"
+        )
+
+        # Und die Gegenprobe, die zugleich das Verhalten festhält: Beim
+        # **Auswählen** fängt nichts, denn dort entsteht nichts — ein Klick
+        # meint die Stelle, auf die er zeigt. Die Marke sitzt dann unter dem
+        # Zeiger, und das ist richtig so.
+        panel.canvas.set_tool("select")
+        panel.canvas.note_pointer(panel.canvas._to_screen(13.2, -7.4))
+        assert gesehen[-1] == pytest.approx((13.2, -7.4)), (
+            "beim Auswählen ist die rohe Lage der Ort, an dem der Klick landet"
+        )
+    finally:
+        panel.deleteLater()
+
+
+def test_the_pointer_mark_is_a_cross_and_not_a_dot() -> None:
+    """Zwei gekreuzte Strecken, quer zum Raster — und ohne Plotter prüfbar.
+
+    Quer, weil die Marke meistens auf einer Rasterlinie sitzt: Ein
+    achsparalleles Kreuz verschwände genau dort. Ein Punkt wiederum sähe aus
+    wie ein gesetzter, und der Unterschied zwischen „hier ist etwas" und „hier
+    entstünde etwas" hinge allein an der Farbe (Regel 18).
+    """
+    from app.core.types import PlaneFrame
+    from app.ui.viewport import sketch_cursor
+
+    frame = PlaneFrame(
+        origin=(0.0, 0.0, 0.0),
+        x_axis=(1.0, 0.0, 0.0),
+        y_axis=(0.0, 1.0, 0.0),
+        normal=(0.0, 0.0, 1.0),
+    )
+    segments = sketch_cursor(frame, (10.0, -10.0), 2.0)
+
+    assert len(segments) == 2, "ein Kreuz sind zwei Strecken"
+    for start, end in segments:
+        assert start[0] != pytest.approx(end[0]), "eine achsparallele Strecke liegt im Raster"
+        assert start[1] != pytest.approx(end[1]), "eine achsparallele Strecke liegt im Raster"
+        assert start[2] == pytest.approx(0.0) and end[2] == pytest.approx(0.0), (
+            "die Marke liegt in der Ebene, nicht darüber"
+        )
+    assert not sketch_cursor(frame, (0.0, 0.0), 0.0), "ohne Größe gibt es nichts zu zeichnen"
