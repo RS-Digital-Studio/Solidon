@@ -487,7 +487,29 @@ class OverlayHost(QWidget):
         eine Liste darin Zeilen bekommt oder verliert. Ohne ihn bliebe eine
         Karte so hoch, wie sie beim Aufbau war — und der Objektbaum wäre nach
         dem Öffnen eines Projekts genauso leer aussehend wie davor.
+
+        **Wer stirbt, wird nicht weiter beobachtet.** Ein Filter wird am
+        überwachten Objekt installiert und bleibt dort, bis eine Seite ihn
+        entfernt — ``_watch`` tat das nie. Solange kein Fenster starb, fiel es
+        nicht auf; seit sie sterben können (`acb0dd5`), läuft der Filter in den
+        Abbau hinein und fragt halb abgeräumte Widgets nach ihrer Geometrie.
+        Qt schickt ``Destroy``, **bevor** die C++-Seite weg ist: der letzte
+        Takt, in dem das Abbestellen noch möglich ist.
+
+        Gemessen an ``tests/test_first_run.py``, je sechs Läufe: **vier von
+        sechs** mit einem Teardown-Fehler ohne diese drei Zeilen, **null von
+        sechs** mit ihnen.
+
+        Zwei Wachen am Eingang von ``_place`` — auf ``isValid`` von Wirt,
+        Ansicht und Zonen — standen hier zuerst und sind wieder weg: Sie
+        senkten die Quote nicht (drei bis vier von sechs blieben rot), denn
+        eine Prüfung am Eingang gewinnt keinen Wettlauf, der **während**
+        ``_lay_out`` entschieden wird. Das Abbestellen dagegen sorgt dafür,
+        dass ``_lay_out`` gar nicht erst gerufen wird.
         """
+        if event.type() == QEvent.Type.Destroy:
+            watched.removeEventFilter(self)
+            return False
         if event.type() in (
             QEvent.Type.Resize,
             QEvent.Type.Show,
