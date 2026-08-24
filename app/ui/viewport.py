@@ -2928,7 +2928,17 @@ class Viewport(QWidget):
         # (``grid_minor`` und ``text``); sie hier zu einer siebten und achten
         # Szenenfarbe zu machen, hieße denselben Wert zweimal zu benennen.
         exact = THEMES["light" if theme == "light" else "dark"]
-        self._grid_colour = exact["grid_minor"]
+        # **``grid_major`` und nicht ``grid_minor``.** Die feine Rasterfarbe ist
+        # gegen die *Zeichenfläche* gerechnet, und dort trägt sie; gegen den
+        # Verlauf des Viewports nicht. Gemessen im dunklen Thema: 1,51 gegen
+        # den Grund und **1,04** gegen den Himmel — ein Raster, das gezeichnet
+        # wird und das niemand sieht. Zum Vergleich steht das Bettraster bei
+        # 2,60 und ist zu sehen; ``grid_major`` liegt bei 2,44.
+        #
+        # Dieselbe Sorte Fehler, die `theme.py` für die Zeichenfläche schon
+        # einmal beschreibt: Eine Farbe, die gegen einen Untergrund gerechnet
+        # ist, gilt nicht gegen einen anderen.
+        self._grid_colour = exact["grid_major"]
         self._sketch_colour = exact["text"]
         self.banner.set_theme(theme)
         self.view_bar.set_theme(theme)
@@ -5416,7 +5426,16 @@ class Viewport(QWidget):
         und kein Ding in der Szene.
         """
         self._sketch_frame = frame
+        # **Das Bett tritt ab, solange die Zeichenebene da ist.** Zwei Gitter
+        # übereinander sind eines zu viel: Beide sind graue Linien in
+        # derselben Größenordnung, und welches die Ebene ist, auf der gerade
+        # gezeichnet wird, sähe man nicht mehr. Der Bauraum ist außerdem eine
+        # Aussage über das Drucken und nicht über die Zeichnung — er kommt
+        # zurück, sobald der Modus endet.
+        for actor in self._frame_actors:
+            actor.SetVisibility(frame is None)
         self._update_cursor()
+        self._draw()
 
     def _sketch_hit(self, x: int, y: int) -> tuple[float, float] | None:
         """Wo der Sichtstrahl durch diese Bildstelle die Zeichenebene trifft.

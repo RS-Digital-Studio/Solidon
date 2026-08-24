@@ -4220,12 +4220,18 @@ class MainWindow(QMainWindow):
         if panel is None or frame is None:
             self.viewport.clear_sketch()
             return
+        # **Das Raster hängt nicht an der Zeichnung.** Es hing daran, und
+        # damit fehlte es genau dann, wenn man es am nötigsten hat: Eine leere
+        # Skizze hat kein gelöstes Ergebnis, also wurde vor dem ersten Strich
+        # gar nichts gelegt — keine Kurven, aber eben auch kein Raster. Was
+        # man sah, war das Bett; wo die Zeichenebene liegt, sagte nichts.
+        #
+        # Gemessen war das ``sketch_actors == 0`` im laufenden Modus, und im
+        # Bild nicht von „das Raster ist zu blass" zu unterscheiden.
         solved = panel.canvas.solved
-        if solved is None:
-            self.viewport.clear_sketch()
-            return
+        kurven = curves_of(solved, frame) if solved is not None else ()
         step = panel.canvas.grid_step()
-        self.viewport.show_sketch(curves_of(solved, frame), frame, step, SKETCH_GRID_REACH)
+        self.viewport.show_sketch(kurven, frame, step, SKETCH_GRID_REACH)
 
     def finish_sketch(self, keep: bool = True) -> None:
         """Den Modus verlassen. Mit ``keep`` öffnet die Operation auf der
