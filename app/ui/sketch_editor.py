@@ -370,23 +370,9 @@ def _decimals_for(step: float) -> int:
     return 1 if step >= 0.1 else 2
 
 
-def flat_offsets(sketch: Sketch) -> list[int]:
-    """Der flache Punktindex, an dem jedes Element beginnt (§30.1)."""
-    offsets: list[int] = []
-    total = 0
-    for element in sketch.elements:
-        offsets.append(total)
-        total += len(element.points)
-    return offsets
-
-
-def _flat_points(sketch: Sketch) -> list[tuple[float, float]]:
-    return [point for element in sketch.elements for point in element.points]
-
-
 def _located(sketch: Sketch, flat: int) -> tuple[int, int]:
     """Elementindex und lokaler Punktindex zu einem flachen Index."""
-    offsets = flat_offsets(sketch)
+    offsets = edit.offsets_of(sketch)
     for index in reversed(range(len(offsets))):
         if flat >= offsets[index]:
             return index, flat - offsets[index]
@@ -768,7 +754,7 @@ class SketchCanvas(QWidget):
         Nach einem gescheiterten Lauf ist ``solved`` der letzte gültige
         Stand (§15.3) — hat die Skizze inzwischen mehr Punkte, zählen die
         gezeichneten, sonst griffe die Anzeige ins Leere."""
-        drawn = _flat_points(self.sketch)
+        drawn = edit.flat_points(self.sketch)
         if self.solved is not None:
             solved = [point for element in self.solved.elements for point in element.points]
             if len(solved) == len(drawn):
@@ -955,7 +941,7 @@ class SketchCanvas(QWidget):
         """Fügt eine Grundform als weitere Elemente ein — mit verschobenen
         Bedingungszielen, denn die flachen Indizes zählen über die ganze
         Skizze."""
-        shift = len(_flat_points(self.sketch))
+        shift = len(edit.flat_points(self.sketch))
         moved = tuple(
             SketchConstraint(
                 entry.kind,
@@ -979,7 +965,7 @@ class SketchCanvas(QWidget):
         if not element_indices:
             return
 
-        offsets = flat_offsets(self.sketch)
+        offsets = edit.offsets_of(self.sketch)
         removed: set[int] = set()
         for index in element_indices:
             begin = offsets[index]
@@ -987,7 +973,7 @@ class SketchCanvas(QWidget):
 
         mapping: dict[int, int] = {}
         fresh = 0
-        for old in range(len(_flat_points(self.sketch))):
+        for old in range(len(edit.flat_points(self.sketch))):
             if old in removed:
                 continue
             mapping[old] = fresh
@@ -1137,7 +1123,7 @@ class SketchCanvas(QWidget):
         return best[1] if best is not None else None
 
     def _hit_element(self, position: QPointF) -> tuple[str, tuple[int, ...]] | None:
-        offsets = flat_offsets(self.sketch)
+        offsets = edit.offsets_of(self.sketch)
         points = self.points()
         wx, wy = self._to_world(position)
         tolerance = PICK_PX / self._scale
@@ -1327,7 +1313,7 @@ class SketchCanvas(QWidget):
             self.update()
             return
 
-        begin = len(_flat_points(self.sketch))
+        begin = len(edit.flat_points(self.sketch))
         element = SketchElement(self.tool, tuple(self._pending_world))  # type: ignore[arg-type]
         snapped_pairs = tuple(
             SketchConstraint("coincident", (snapped_flat, begin + local))
@@ -1431,7 +1417,7 @@ class SketchCanvas(QWidget):
         direction = (dx / span, dy / span) if span > EPS_DISPLAY else (1.0, 0.0)
         second = (first[0] + direction[0] * value, first[1] + direction[1] * value)
 
-        begin = len(_flat_points(self.sketch))
+        begin = len(edit.flat_points(self.sketch))
         element = SketchElement(self.tool, (first, second))  # type: ignore[arg-type]
         snapped = tuple(
             SketchConstraint("coincident", (flat, begin + local))
@@ -1462,7 +1448,7 @@ class SketchCanvas(QWidget):
             self._pending_world.clear()
             self.update()
             return
-        begin = len(_flat_points(self.sketch))
+        begin = len(edit.flat_points(self.sketch))
         element = SketchElement("spline", tuple(self._pending_world))
         snapped_pairs = tuple(
             SketchConstraint("coincident", (snapped_flat, begin + local))
@@ -1769,7 +1755,7 @@ class SketchCanvas(QWidget):
                 chosen_elements.add(_located(self.sketch, entry[1][0])[0])
 
         points = self.points()
-        offsets = flat_offsets(self.sketch)
+        offsets = edit.offsets_of(self.sketch)
         line_colour = palette.text().color()
         chosen_colour = palette.highlight().color()
         for index, element in enumerate(self.sketch.elements):
