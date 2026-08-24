@@ -2687,3 +2687,56 @@ def test_switching_to_parallel_keeps_the_section_instead_of_jumping_to_two_milli
     camera.parallel_scale = 7.0
     viewport._fit_parallel_scale(200.0)
     assert camera.parallel_scale == pytest.approx(7.0)
+
+
+def test_no_two_active_shortcuts_collide_while_sketching(qt_app: QApplication) -> None:
+    """Der Skizzenmodus legt zehn Tasten dazu, und fünf davon sind schon vergeben.
+
+    ``test_no_two_shortcuts_in_the_window_collide`` misst das Fenster **ohne**
+    Skizzenmodus — dann existiert das Panel nicht, und seine Kürzel auch
+    nicht. Im Modus kommen `L R C A D T O X P S` hinzu, seit dem Schnitt
+    (§30.1, P4) an ``WindowShortcut``: Der Fokus liegt im Viewport, und ein
+    Kürzel, das nur im unsichtbaren Zeichenbereich feuert, feuert nie.
+
+    **Gezählt wird, was aktiv ist, nicht was registriert ist** — und das ist
+    hier der ganze Unterschied. Registriert kollidieren fünf Tasten: `1`, `2`
+    und `3` mit *Massiv*, *Massiv mit Kanten* und *Drahtgitter*, `Strg+Z` mit
+    *Rückgängig*, `Pos1` mit *Alles einpassen*. Gemessen ist bei jeder genau
+    **eine** Seite aktiv, weil die Fensteraktionen im Skizzenmodus gesperrt
+    sind. Ein gesperrtes Kürzel nimmt keiner Taste den Weg.
+
+    Eine Zählung über die reine Registrierung hätte hier fünf Fehler gemeldet,
+    die keine sind — und würde zugleich einen echten übersehen, sobald zwei
+    *aktive* Kürzel aufeinandertreffen. Genau dafür steht dieser Test.
+    """
+    from PySide6.QtGui import QAction, QShortcut
+
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_extrude")
+
+        aktiv: dict[str, list[str]] = {}
+        for action in window.findChildren(QAction):
+            if not action.isEnabled():
+                continue
+            for sequence in action.shortcuts():
+                aktiv.setdefault(sequence.toString(), []).append(action.text() or "(ohne Text)")
+        for shortcut in window.findChildren(QShortcut):
+            if shortcut.isEnabled():
+                aktiv.setdefault(shortcut.key().toString(), []).append("QShortcut")
+
+        assert len(aktiv) > 40, "ohne aufgebautes Fenster prüft diese Zählung nichts"
+        for taste in ("1", "2", "3"):
+            assert taste in aktiv, f"die Ziffer {taste} wechselt im Skizzenmodus die Ebene"
+
+        doppelt = {key: names for key, names in aktiv.items() if key and len(names) > 1}
+        assert not doppelt, (
+            f"zwei aktive Kürzel auf derselben Taste führen keine der beiden "
+            f"Aktionen aus: {doppelt}"
+        )
+    finally:
+        window.deleteLater()
