@@ -88,7 +88,7 @@ durchläuft.
 
 Erst beides zusammen mit ruff, `ruff format --check` und mypy ist das Tor.
 
-Drei Fallen dabei, alle drei am 22.08.2026 einmal zugeschnappt:
+Drei Fallen dabei, alle drei am 22.08.2026 einmal zugeschnappt — die erste in einer zweiten Gestalt am 24.08.2026 noch einmal:
 
 - **Auf den Exit-Code sehen, nicht auf eine Schlusszeile — und den Exit-Code
   nicht durch eine Pipeline lesen.** Wer `FAILED` grept, liest die
@@ -102,6 +102,14 @@ Drei Fallen dabei, alle drei am 22.08.2026 einmal zugeschnappt:
   lesen.** Das gibt den Code **und** die Namen. `set -o pipefail` oder
   `${PIPESTATUS[0]}` retten nur den Code — gemessen, sie wirken, aber sie sagen
   nicht, *welche* vier Läufe es waren.
+
+  **Und nicht nur die Pipeline verdeckt den Code: alles, was danach kommt,
+  auch.** Am 24.08.2026 meldete eine Sitzung „exit code 0", während in ihrer
+  Ausgabedatei `Läufe mit Fehler: 4` stand — kein `tail` diesmal, sondern ein
+  eigenes `echo` als letzter Befehl der Kette. Der Shell-Status ist immer der
+  des **letzten** Befehls, und `echo` gelingt so zuverlässig wie `tail`. Wer
+  den Code braucht, liest ihn unmittelbar (`befehl > datei; echo "Exit: $?"`),
+  bevor irgendetwas anderes läuft — nicht am Ende einer Kette.
 - **Ein Abriss beim Abbau ist kein roter Test.** `suite-getrennt.sh` gab an
   jenem Tag Exit 3, obwohl jeder Test grün war: drei Fensterdateien melden
   „passed" und stürzen danach beim Aufräumen (`0xC0000409`). Der Fall steht in

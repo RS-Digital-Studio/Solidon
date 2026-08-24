@@ -117,6 +117,24 @@ def melden(ereignis: str, text: str) -> None:
 
 
 def ruff(*argumente: str) -> tuple[int, str]:
+    """Ruft ruff aus der virtuellen Umgebung.
+
+    **Jeder Aufruf hier braucht ``--force-exclude``.** Ruff wendet
+    ``extend-exclude`` aus ``pyproject.toml`` nur auf Pfade an, die es selbst
+    findet — ein *explizit genannter* Pfad wird geprüft, und dieser Hook nennt
+    immer explizit. Ohne das Flag prüfte er damit genau die zwei Bäume, die das
+    Projekt ausdrücklich ausnimmt: ``.claude/.state/`` und ``3D Drucker/``.
+
+    Das war zweimal falsch. Gemeldet wurden Verstöße in den Messskripten
+    vergangener Durchsichten, die niemanden mehr angehen — eine Fehlermeldung
+    nach jedem Werkzeugaufruf, die auf nichts zeigt, und das Tor war die ganze
+    Zeit grün (``ruff check .`` gibt Exit 0). Schwerer wiegt die andere Hälfte:
+    ``format`` prüft nicht, es **schreibt**. Unter ``3D Drucker/`` liegen 22
+    Skripte für Roberts physische Druckteile, und der Hook hat sie bei jedem
+    Schreiben umformatiert — gegen die Begründung, die in ``pyproject.toml``
+    daneben steht: „Ein Messskript, das umgeschrieben wurde, belegt seine Zahl
+    nicht mehr."
+    """
     if not VENV_PYTHON.exists():
         return 0, ""
     try:
@@ -222,8 +240,8 @@ def nach_aenderung() -> None:
 
     hinweise: list[str] = []
 
-    ruff("format", str(datei))
-    schluss, ausgabe = ruff("check", "--quiet", str(datei))
+    ruff("format", "--force-exclude", str(datei))
+    schluss, ausgabe = ruff("check", "--quiet", "--force-exclude", str(datei))
     if schluss != 0 and ausgabe.strip():
         hinweise.append("ruff check meldet:\n" + ausgabe.strip()[:1500])
 
@@ -312,7 +330,10 @@ def _ruff_hinweis(befehl: str) -> str:
         return ""
 
     hinweise: list[str] = []
-    for aufgabe in (("check", "--quiet"), ("format", "--check", "--quiet")):
+    for aufgabe in (
+        ("check", "--quiet", "--force-exclude"),
+        ("format", "--check", "--quiet", "--force-exclude"),
+    ):
         schluss, ausgabe = ruff(*aufgabe, *dateien)
         if schluss != 0 and ausgabe.strip():
             hinweise.append(f"ruff {aufgabe[0]} meldet:\n" + ausgabe.strip()[:1200])
