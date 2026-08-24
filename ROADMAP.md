@@ -8541,9 +8541,17 @@ und 547 Parameter samt aufgelöster Titel, doc-Texte, Grenzen, Einheiten,
 Vorgaben und Kürzel. Gegen einen zweiten Arbeitsbaum auf dem Stand davor
 gehalten: **Zeichen für Zeichen identisch.** Bei einer Aufräumarbeit ist das die
 richtige Frage — nicht „ist ein Test rot", sondern „sieht der Kunde etwas
-anderes". Dazu die Sammelgruppe unverändert bei 3554 passed / 23 skipped, und
-genau darauf ist zu sehen: Tests zu *verlieren*, ohne dass einer rot wird, ist
-hier der wahrscheinlichere Schaden.
+anderes". Dazu die Sammelgruppe unverändert bei 3554 passed / 23 skipped vor
+und nach dem Umbau, und genau darauf ist zu sehen: Tests zu *verlieren*, ohne
+dass einer rot wird, ist hier der wahrscheinlichere Schaden.
+
+**Diese Zahl ist eine Messung mit Datum, kein Sollwert** — sie wächst mit jedem
+neuen Test. Am 24.08.2026 gegen Mittag stand sie bei 3554, wenige Stunden später
+bei **3559**, und die fünf zusätzlichen waren die Skizzentests einer parallel
+laufenden Sitzung. Wer sie als feste Grenze liest, sucht eine Regression, wo
+jemand nur Tests geschrieben hat. Brauchbar ist sie **innerhalb eines
+Arbeitsschritts**: vorher messen, nachher messen, und die Differenz muss man
+erklären können. Genau so ist sie hier verwendet.
 
 Was offen bleibt:
 
