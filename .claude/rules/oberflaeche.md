@@ -1426,6 +1426,44 @@ breit. Derselbe Wert wie beim Klick auf die Fläche eines Merkmals, denn es ist
 dieselbe Frage — wie weit daneben meint noch dies. Bei 24 Pixeln, also weit
 außerhalb der Bohrung, bleibt es die Fläche.
 
+### Und wo kein Merkmal ist, ist trotzdem ein Körper
+
+Der Abschnitt darüber löst die **Bohrung**, weil sie ein Merkmal ist, auf das
+man zeigen kann. Ein **rechteckiger Ausschnitt** ist keines: vier Wandflächen,
+von denen keine „richtiger" ist als die andere — und bei senkrechtem Blick
+liegen sie parallel zum Strahl, dort ist so wenig ein Dreieck zu treffen wie an
+der Bohrungswand. Der Picker gab nichts zurück, und ein Klick in den Ausschnitt
+**hob die Auswahl auf**.
+
+Entschieden wird dort deshalb nicht, welches Merkmal gemeint ist, sondern
+**welcher Körper**: Wer in eine Öffnung zeigt, hat auf das Teil gezeigt.
+`_through_aim` fragt dafür die **konvexe Hülle** (`geom.mesh.hull_planes` und
+`ray_span_in_hull` — die Rechnung steht im Kern, in `app/ui` gibt es kein
+`trimesh` und soll keines geben). Drei Eigenschaften, alle drei tragend:
+
+* **Die Hülle und nicht der Hüllquader.** Der Quader eines L-Profils reicht
+  weit ins Leere, und damit wäre die Zusage aus §18.5 weg, dass ein Klick
+  daneben die Auswahl aufhebt — der einzige Weg, sie ohne den Objektbaum
+  loszuwerden. Gemessen: 0 bis 30 px in einem 12×8-Ausschnitt geben jetzt den
+  Körper, ab 60 px unverändert `face_2`, und 100 mm neben dem Teil nichts.
+* **Die Kerbe zählt mit, und das ist gewollt.** Durch den fehlenden Quadranten
+  eines L-Profils läuft der Strahl in der Hülle, ohne das Netz zu treffen. Ein
+  Kriterium, das das ausnimmt, müsste „Loch" von „Einbuchtung" unterscheiden —
+  eine Unterscheidung, die niemand trifft, der auf ein Teil zeigt und zwei
+  Bildpunkte neben die Silhouette kommt.
+* **Nur wenn sonst nichts da ist.** Gefragt wird erst, wenn weder eine Fläche
+  noch eine Bohrung getroffen wurde. Damit kostet der Normalfall nichts, und
+  die Hülle wird je Körper einmal gerechnet (`_object_hulls`, geleert mit den
+  Merkmalsdreiecken in `show_scene`).
+
+**Der Kostendeckel ist derselbe wie beim Schattenumriss, und aus demselben
+Grund:** Die exakte Hülle von `dense_1m.stl` braucht 5084 ms, weil bei einer
+feinen Kugel jeder Punkt auf ihr liegt. Über eine Stichprobe von 4096 Punkten
+plus den äußersten in sechs Achsenrichtungen sind es 20 ms; an der Korpusplatte
+liefern beide dasselbe, zwölf Flächen und 32 000 mm³. Gerechnet wird über
+**Halbräume**, nicht über ein Hüllnetz — ein Strahl gegen 8202 Hülldreiecke
+wäre wieder das, was die Stichprobe gerade vermeidet.
+
 ### Was gefärbt wird
 
 **Die Auswahlfarbe gehört dem Genauesten, was gewählt ist.** Ein Klick auf eine

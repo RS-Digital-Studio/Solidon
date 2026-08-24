@@ -29,7 +29,7 @@ from PySide6.QtWidgets import (
 
 from app.branding import ENVIRONMENT_PREFIX
 from app.core.geom.measure import Measurement, MeasurementList, distance, snap, wall_thickness
-from app.core.geom.mesh import distance_to_triangles
+from app.core.geom.mesh import distance_to_triangles, hull_planes, ray_span_in_hull
 from app.core.geom.mesh_ops import decimate
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import (
@@ -1566,6 +1566,10 @@ class Viewport(QWidget):
         ersten Klick für verschluckt.
         """
         self._feature_geometry: dict[ObjectId, list[tuple[FeatureId, Any, Any, Any]]] = {}
+        # Die konvexe Hülle je Körper, für den Blick durch eine Öffnung
+        # (:meth:`_through_aim`). Wie die Merkmalsdreiecke gehört sie einer
+        # Auswertung und wird mit ihnen geleert.
+        self._object_hulls: dict[ObjectId, Any] = {}
         """Je Körper die Dreiecke jedes Merkmals mit ihrem Hüllquader —
         vorbereitet, weil die Trefferfrage bei jeder Ruhepause des Zeigers neu
         gestellt wird (90 ms, :data:`HOVER_DELAY_MS`).
@@ -2045,6 +2049,7 @@ class Viewport(QWidget):
         # Eine Op, die eine Bohrung verschiebt, ändert ihre Dreiecke, und ein
         # Klick träfe danach, wo sie war.
         self._feature_geometry.clear()
+        self._object_hulls.clear()
         # Eine Platte mehr heißt ein Bett mehr. Die Kulisse gehört
         # ``show_build_volume``, und die kennt die Szene nicht — hier ist die
         # Stelle, an der die Zahl bekannt wird. Nur bei Änderung, sonst baute
@@ -3840,6 +3845,81 @@ class Viewport(QWidget):
                 found = (float(point[0]), float(point[1]), float(point[2]))
         return found
 
+    def _through_aim(self, origin: Vec3, direction: Vec3) -> Vec3 | None:
+        """Der Punkt in der Öffnung, durch die dieser Strahl hindurchgeht.
+
+        **Die zweite Hälfte desselben Fundes, und sie brauchte eine andere
+        Rechnung.** Eine Bohrung ist ein Merkmal, auf das man zeigen kann
+        (:meth:`_bore_aim`). Ein rechteckiger Ausschnitt ist keines: Er besteht
+        aus vier Wandflächen, von denen keine „richtiger" ist als die andere —
+        und bei senkrechtem Blick liegen sie **parallel** zum Strahl, dort ist
+        also so wenig ein Dreieck zu treffen wie an der Bohrungswand. Der
+        Picker gab nichts zurück, und `_on_left_click` machte daraus
+        ``objectPicked.emit("")``: Ein Klick in einen Ausschnitt **hob die
+        Auswahl auf**.
+
+        Was hier entschieden wird, ist deshalb nicht „welches Merkmal", sondern
+        „welcher **Körper**": Wer in eine Öffnung zeigt, hat auf das Teil
+        gezeigt. Gefragt wird die **konvexe Hülle** (:func:`hull_planes`) und
+        nicht der Hüllquader, und dieser Unterschied trägt die Zusage aus §18.5,
+        dass ein Klick daneben die Auswahl aufhebt — der Quader eines
+        L-Profils reicht weit ins Leere, seine Hülle nicht.
+
+        **Die Kerbe zählt dabei mit**, und das ist die gewollte Seite der
+        Abwägung: Durch den fehlenden Quadranten eines L-Profils läuft der
+        Strahl in der Hülle, ohne das Netz zu treffen, und der Klick wählt das
+        Teil. Ein Kriterium, das das ausnimmt, müsste „Loch" von „Einbuchtung"
+        unterscheiden — eine Unterscheidung, die niemand trifft, der auf ein
+        Teil zeigt und zwei Bildpunkte neben die Silhouette kommt.
+
+        Zurück kommt die Mitte des Durchtritts. Sie liegt im Hüllquader des
+        Körpers, also findet :meth:`_object_at` ihn; und sie liegt weit von
+        jeder Wand, also findet :meth:`_feature_at` dort kein Merkmal — der
+        Klick landet auf der ersten Stufe, beim Körper, und erfindet nichts.
+        """
+        import numpy as np
+
+        if self._result is None:
+            return None
+        forward = np.asarray(direction, dtype=float)
+        length = float(np.linalg.norm(forward))
+        if length <= EPS_GEOM:
+            return None
+        forward = forward / length
+        start = np.asarray(origin, dtype=float)
+
+        best_enter = math.inf
+        found: Vec3 | None = None
+        for object_id in self._result.scene.objects:
+            planes = self._hull_of(object_id)
+            if planes is None:
+                continue
+            span = ray_span_in_hull(planes, start, forward)
+            if span is None:
+                continue
+            enter = max(span[0], 0.0)
+            if span[1] <= enter or enter >= best_enter:
+                continue
+            middle = start + forward * (enter + span[1]) / 2.0
+            best_enter = enter
+            found = (float(middle[0]), float(middle[1]), float(middle[2]))
+        return found
+
+    def _hull_of(self, object_id: ObjectId) -> Any:
+        """Die konvexe Hülle eines Körpers als Halbräume, je Auswertung einmal.
+
+        Gerechnet wird sie erst, wenn ein Klick sie braucht — also wenn er
+        weder eine Fläche noch eine Bohrung getroffen hat. Das ist selten, und
+        an einem großen Scan kostet sie zwanzig Millisekunden
+        (:data:`app.core.geom.mesh.HULL_SAMPLE_LIMIT`).
+        """
+        if object_id in self._object_hulls:
+            return self._object_hulls[object_id]
+        entry = self._result.scene.objects.get(object_id) if self._result else None
+        planes = hull_planes(entry.mesh) if entry is not None else None
+        self._object_hulls[object_id] = planes
+        return planes
+
     def _pick_ray(self, x: int, y: int) -> tuple[Vec3, Vec3] | None:
         """Der Sichtstrahl durch eine Bildschirmstelle, in Ansichtskoordinaten.
 
@@ -3847,6 +3927,16 @@ class Viewport(QWidget):
         Bei einer Parallelprojektion — jeder Ansicht von vorn, von oben, von
         der Seite — läuft der Strahl nicht durch das Kameraauge, und eine
         Richtung aus ``GetPosition()`` wäre dort falsch.
+
+        **Die Richtung ist der Schritt von nah nach fern und damit nicht
+        normiert** — sie ist hunderte Millimeter lang. Wer gegen sie
+        schwellwertet, prüft eine Länge und keinen Winkel: Bei einem Strahl
+        ``(1000, 0, -0,5)`` auf die XY-Ebene steht im Skalarprodukt 0,5, also
+        das Fünfhundertfache einer Schwelle von 1e-3, während der Winkel zur
+        Ebene ein halbes Tausendstel beträgt — die Prüfung löste nie aus.
+        (Gefunden von der Nachbarsitzung an ``sketch.planes.ray_hit``, die
+        denselben Strahl benutzt.) Wer einen Winkel braucht, teilt vorher durch
+        die Länge; :meth:`_bore_aim` tut genau das.
         """
         if self.plotter is None:
             return None
@@ -3896,11 +3986,16 @@ class Viewport(QWidget):
             if point is not None
             else math.inf
         )
-        aimed = self._bore_aim(
+        ray = (
             (float(start[0]), float(start[1]), float(start[2])),
             (float(forward[0]), float(forward[1]), float(forward[2])),
-            until,
         )
+        aimed = self._bore_aim(ray[0], ray[1], until)
+        if aimed is None and point is None:
+            # Nichts getroffen und keine Bohrung im Weg: Vielleicht geht der
+            # Blick durch eine Öffnung des Körpers, und dann ist er gemeint und
+            # nicht das Nichts (:meth:`_through_aim`).
+            aimed = self._through_aim(ray[0], ray[1])
         if aimed is None:
             return point
         back = np.asarray(aimed, dtype=float) + shift

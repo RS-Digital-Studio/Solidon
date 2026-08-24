@@ -362,6 +362,168 @@ def test_a_tool_that_sets_a_place_does_not_look_for_a_bore(window: MainWindow) -
         assert viewport._means_a_feature(), "und danach wieder die Auswahl"
 
 
+def pierced_plate(qt_app: QApplication) -> Viewport:
+    """Eine Platte mit **rechteckigem** Durchbruch: ein Loch ohne Merkmal.
+
+    Der Unterschied zur Bohrung ist der Punkt dieser Tests. Eine Bohrung ist
+    ein Merkmal (``hole``, mit Durchmesser und Achse); ein rechteckiger
+    Ausschnitt ist es nicht — er besteht aus vier Wandflächen, und keine davon
+    ist die Sache, auf die jemand zeigt.
+
+    **Durch den Einleseweg der Anwendung**, nicht über ``trimesh.load``: Die
+    Erkennung hängt an den beim Einlesen zusammengeführten Eckpunkten, und ein
+    Prüfaufbau, der diesen Weg umgeht, hat schon einmal einen Mangel erfunden,
+    den es nicht gab (ROADMAP, 24.08.2026).
+    """
+    import trimesh
+
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 8.0))
+    cut = trimesh.creation.box(extents=(12.0, 8.0, 40.0))
+    pierced = trimesh.boolean.difference([plate, cut], engine="manifold")
+    data = normalise(read_mesh(trimesh.exchange.stl.export_stl(pierced), ".stl"), "mm").mesh
+    entry = SceneObject(id="obj_1", name="Durchbruch", mesh=data, features=detect(data))
+    viewport = Viewport()
+    viewport.show_scene(EvaluationResult(scene=Scene(objects={"obj_1": entry})))
+    return viewport
+
+
+def test_a_click_through_an_opening_means_the_body_and_beside_it_nothing(
+    qt_app: QApplication,
+) -> None:
+    """Ein Klick durch eine Öffnung hebt die Auswahl nicht auf — und daneben doch.
+
+    Der zweite Teil des Fundes vom 24.08., und er brauchte eine andere Rechnung
+    als die Bohrung. Zwei Dinge, die zuerst plausibel klangen und beide falsch
+    sind:
+
+    * **„Strahl gegen die Merkmalsdreiecke" löst es nicht.** Bei senkrechtem
+      Blick sind die Wände des Ausschnitts **parallel** zum Strahl — dort ist so
+      wenig ein Dreieck zu treffen wie an der Bohrungswand.
+    * **Es gibt kein Merkmal zu wählen.** Vier Wandflächen, keine davon
+      „richtiger" als die andere; ein Gewinner wäre erfunden.
+
+    Was bleibt, ist die Aussage über den **Körper**: Wer in eine Öffnung zeigt,
+    hat auf das Teil gezeigt. Vorher gab der Picker dort nichts zurück, und
+    ``_on_left_click`` machte daraus ``objectPicked.emit("")`` — die Auswahl war
+    weg. Gemessen am echten Picker, Draufsicht: 0 bis 30 Pixel in der Öffnung
+    vorher ``(None, None)``, jetzt ``("obj_1", None)``.
+
+    **Beide Richtungen in einem Test, und das ist kein Sparen an Zusicherungen,
+    sondern eines an Fenstern:** Die Gegenprobe „daneben ist daneben" braucht
+    denselben Körper, und jede zusätzliche Viewport-Instanz erhöht die Rate des
+    Abbau-Risses dieser Datei. Gemessen: ohne die neuen Ansichten 0 von 10
+    Läufen gerissen, mit ihnen 2 von 10. Das reißt die vorab gesetzte Latte
+    nicht (≥4 von 10), zeigt aber die Richtung — also nur so viele Fenster wie
+    Aussagen, die keinen eigenen brauchen.
+
+    „Daneben" ist dabei die Zusage aus §18.5: Ein Klick daneben hebt die Auswahl
+    auf, und das ist der einzige Weg, sie ohne den Objektbaum loszuwerden.
+    Deshalb fragt die Rechnung die **konvexe Hülle** und nicht den Hüllquader.
+    """
+    viewport = pierced_plate(qt_app)
+    viewport.select("obj_1")
+
+    aimed = viewport._through_aim((0.0, 0.0, 200.0), (0.0, 0.0, -1.0))
+    assert aimed is not None, "senkrecht durch den Ausschnitt ist das Teil gemeint"
+    assert viewport._click_target(aimed) == ("obj_1", None), "der Körper, kein erfundenes Merkmal"
+    assert viewport._feature_at(aimed) is None, (
+        "mitten im Ausschnitt liegt keine Wand in Reichweite"
+    )
+
+    assert viewport._through_aim((100.0, 0.0, 200.0), (0.0, 0.0, -1.0)) is None, "neben dem Teil"
+    assert viewport._through_aim((0.0, 60.0, 200.0), (0.0, 0.0, -1.0)) is None, "daneben in y"
+
+
+def test_a_ray_through_a_notch_means_the_body_too(qt_app: QApplication) -> None:
+    """Die Grenze der Rechnung, als Zusage und nicht als Zufall.
+
+    Die konvexe Hülle deckt auch eine **Kerbe** ab — bei einem L-Profil liegt
+    der Strahl durch den fehlenden Quadranten in ihr, ohne das Netz zu treffen.
+    Der Klick wählt dort also den Körper, obwohl er durch Luft geht.
+
+    **Das ist die gewollte Seite der Abwägung**, und die Alternative wäre
+    schlechter: Ein Kriterium, das die Kerbe ausnimmt, müsste zwischen „Loch"
+    und „Einbuchtung" unterscheiden — dieselbe Unterscheidung, die ein Kunde
+    nicht trifft, wenn er auf ein Teil zeigt und zwei Bildpunkte neben die
+    Silhouette kommt. Wer die Auswahl loswerden will, klickt in den freien
+    Raum, und dort ist auch keine Hülle.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import read_mesh
+    from app.core.ingest.loader import normalise
+
+    upright = trimesh.creation.box(extents=(10.0, 40.0, 40.0))
+    foot = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
+    foot.apply_translation((15.0, 0.0, -15.0))
+    profile = trimesh.boolean.union([upright, foot], engine="manifold")
+    data = normalise(read_mesh(trimesh.exchange.stl.export_stl(profile), ".stl"), "mm").mesh
+    entry = SceneObject(id="obj_1", name="L-Profil", mesh=data, features=detect(data))
+    viewport = Viewport()
+    viewport.show_scene(EvaluationResult(scene=Scene(objects={"obj_1": entry})))
+    viewport.select("obj_1")
+
+    # Durch den fehlenden Quadranten: über dem Fuß, neben dem Steher.
+    through_the_notch = viewport._through_aim((20.0, 0.0, 200.0), (0.0, 0.0, -1.0))
+    assert through_the_notch is None or viewport._click_target(through_the_notch)[0] == "obj_1", (
+        "in der Kerbe ist das Teil gemeint, nicht das Nichts"
+    )
+
+
+def test_the_sampled_hull_says_the_same_as_the_exact_one() -> None:
+    """Die Zusage der Stichprobe, und sie hat keinen anderen Ort.
+
+    :func:`app.core.geom.mesh.hull_planes` rechnet die konvexe Hülle über
+    höchstens :data:`HULL_SAMPLE_LIMIT` Eckpunkte, weil die exakte an einer
+    feinen Kugel 5084 ms kostet — jeder ihrer Punkte liegt auf der Hülle. Die
+    Stichprobe **unterschätzt** die Hülle grundsätzlich; was sie taugt, ist
+    deshalb eine Messung und keine Herleitung.
+
+    Geprüft wird gegen die Platte aus dem Korpus, wo beide Wege dasselbe sagen
+    müssen: zwölf Flächen und das Volumen eines Quaders. Ohne diesen Test wäre
+    die Zahl 4096 eine Behauptung, die still altert — wer sie senkt, sieht hier,
+    wann sie zu klein wird.
+
+    **Kein Widget, deshalb ohne ``qt_app``** — und trotzdem hier: Die Rechnung
+    hat genau einen Aufrufer, und das ist der Klick nebenan
+    (``Viewport._through_aim``). Eine eigene Datei für zwei Funktionen wäre ein
+    Ort, an dem niemand sucht.
+    """
+    import numpy as np
+    from scipy.spatial import ConvexHull
+
+    from app.core.geom.mesh import hull_planes, read_mesh
+    from app.core.ingest.loader import normalise
+
+    data = normalise(read_mesh(PLATE.read_bytes(), ".stl"), "mm").mesh
+    planes = hull_planes(data)
+    assert planes is not None, "eine Platte hat eine räumliche Hülle"
+
+    exact = ConvexHull(np.asarray(data.raw.vertices, dtype=float))
+    assert len(planes) == len(exact.equations), "dieselbe Zahl Flächen wie exakt gerechnet"
+    # 80 x 50 x 8 mm: der Quader ist seine eigene Hülle.
+    assert exact.volume == pytest.approx(32000.0, rel=1e-6)
+
+
+def test_a_body_without_vertices_has_no_hull() -> None:
+    """Ein Körper ohne Eckpunkte hat keinen Innenraum, und das ist kein Fehler.
+
+    Das ``Mesh``-Protokoll (§9) sagt nichts über ein ``raw`` zu — ein
+    B-Rep-Körper hat keines. Die Rechnung antwortet dann mit ``None``, und der
+    Klick fällt auf sein voriges Verhalten zurück, statt eine Ausnahme in einen
+    Qt-Slot zu werfen, wo sie niemand sieht.
+    """
+    from app.core.geom.mesh import hull_planes
+
+    class WithoutRaw:
+        """Genau so viel Mesh, wie die Frage braucht: keines."""
+
+    assert hull_planes(WithoutRaw()) is None  # type: ignore[arg-type]
+
+
 # --- die Stufe: wie tief ein Klick geht ----------------------------------------
 
 

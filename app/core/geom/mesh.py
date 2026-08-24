@@ -11,6 +11,7 @@ zurück — das ist non-destruktives Bearbeiten, eine Ebene tiefer.
 from __future__ import annotations
 
 import io
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -23,6 +24,7 @@ import trimesh
 from app.core.errors import CANCEL, CHOOSE, PROGRAMMING_ERRORS, GeometryError, ValidationError
 from app.core.log import get_logger
 from app.core.types import BoundingBox, Mesh
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -245,6 +247,97 @@ def distance_to_triangles(triangles: np.ndarray, point: np.ndarray) -> float:
     query = np.repeat(np.asarray(point, dtype=float).reshape(1, 3), len(triangles), axis=0)
     nearest = trimesh.triangles.closest_point(np.asarray(triangles, dtype=float), query)
     return float(np.linalg.norm(np.asarray(nearest, dtype=float) - query, axis=1).min())
+
+
+#: Wie viele Eckpunkte höchstens in die konvexe Hülle eingehen
+#: (:func:`hull_planes`). Dieselbe Zahl und derselbe Grund wie beim
+#: Schattenumriss der Ansicht: Bei einer feinen Kugel liegt **jeder** Punkt auf
+#: der Hülle, und die exakte Rechnung kostet dann mehr als sie wert ist.
+#: Gemessen an ``dense_1m.stl`` (655 362 Eckpunkte): **5084 ms** exakt gegen
+#: **20 ms** über die Stichprobe. An der Korpusplatte liefern beide dasselbe —
+#: zwölf Flächen, Volumen 32 000 mm³.
+HULL_SAMPLE_LIMIT = 4096
+
+
+def hull_planes(mesh: Mesh) -> np.ndarray | None:
+    """Die konvexe Hülle eines Netzes als Halbräume, ``n·x + d <= 0`` innen.
+
+    Nicht als Netz, sondern als Ebenengleichungen: Die Frage dahinter ist „läuft
+    dieser Sichtstrahl **durch** den Körper hindurch?" (:func:`ray_span_in_hull`),
+    und die beantwortet ein Halbraumschnitt in einer Handvoll Rechenschritten,
+    während ein Strahl gegen ein Hüllnetz wieder jedes Dreieck anfassen müsste.
+
+    **Die Stichprobe ist der Kostendeckel**, und sie unterschätzt die Hülle
+    leicht: Jeder ``n``-te Eckpunkt, dazu die äußersten in allen sechs
+    Achsenrichtungen, damit ein gescannter Halter seine Ecken behält. Für die
+    Frage, ob ein Klick durch eine Öffnung geht, ist das genau genug — die
+    Öffnung ist millimeterweit, die Abweichung liegt im Bereich der Punktdichte.
+
+    ``None`` heißt „keine räumliche Hülle": ein ebener oder entarteter Körper —
+    oder einer ohne Eckpunkte, denn das ``Mesh``-Protokoll (§9) sagt nichts über
+    ein ``raw`` zu; ein B-Rep-Körper hat keines. Der Aufrufer hat dann keinen
+    Innenraum zu prüfen und braucht dafür keinen Sonderfall.
+    """
+    from scipy.spatial import ConvexHull, QhullError
+
+    raw = getattr(mesh, "raw", None)
+    if raw is None:
+        return None
+    points = np.asarray(raw.vertices, dtype=float)
+    if len(points) < 4:
+        return None
+    if len(points) > HULL_SAMPLE_LIMIT:
+        step = len(points) // HULL_SAMPLE_LIMIT + 1
+        extremes = np.concatenate(
+            [points[points[:, axis].argmin()][None] for axis in range(3)]
+            + [points[points[:, axis].argmax()][None] for axis in range(3)]
+        )
+        points = np.concatenate([points[::step], extremes])
+    try:
+        return np.asarray(ConvexHull(points).equations, dtype=float)
+    except QhullError as problem:
+        # Flach, entartet oder alle Punkte auf einer Linie — kein Innenraum.
+        _log.info("convex hull unavailable: %s", problem)
+        return None
+
+
+def ray_span_in_hull(
+    planes: np.ndarray, origin: np.ndarray, direction: np.ndarray
+) -> tuple[float, float] | None:
+    """Von wo bis wo ein Strahl innerhalb dieser Halbräume läuft.
+
+    Der Schnitt eines Strahls mit einem konvexen Körper, gerechnet wie das
+    Kappen an Schichten: Jede Ebene schiebt entweder den Eintritt nach hinten
+    oder den Austritt nach vorn, und bleibt am Ende ein Stück übrig, geht der
+    Strahl hindurch. Zurück kommen die beiden Strahlparameter in Millimetern,
+    gemessen von ``origin`` entlang ``direction`` (das normiert erwartet wird),
+    oder nichts.
+
+    Der Eintritt kann ``-inf`` sein — dann liegt der Ursprung selbst innen. Wer
+    nur nach vorn sehen will, klemmt auf null; hier bleibt es stehen, weil die
+    Aussage „von hier bis dort" nichts über die Blickrichtung des Aufrufers
+    voraussetzen soll.
+    """
+    if planes is None or not len(planes):
+        return None
+    normals = np.asarray(planes, dtype=float)[:, :3]
+    offsets = np.asarray(planes, dtype=float)[:, 3]
+    along = normals @ np.asarray(direction, dtype=float)
+    gap = normals @ np.asarray(origin, dtype=float) + offsets
+
+    # Parallel zu einer Ebene und außerhalb von ihr: der Strahl kommt nie hinein.
+    parallel = np.abs(along) <= EPS_GEOM
+    if bool(np.any(parallel & (gap > EPS_GEOM))):
+        return None
+
+    crossing = ~parallel
+    if not bool(np.any(crossing)):
+        return None
+    steps = -gap[crossing] / along[crossing]
+    leaving = along[crossing] > 0.0
+    enter = float(steps[~leaving].max()) if bool(np.any(~leaving)) else -math.inf
+    leave = float(steps[leaving].min()) if bool(np.any(leaving)) else math.inf
+    return (enter, leave) if enter < leave else None
 
 
 def read_mesh(payload: bytes, suffix: str) -> MeshData:
