@@ -1,15 +1,28 @@
 # Konzept: Monatliche Förderung in drei Stufen
 
-Stand 23.08.2026. Beauftragt von Robert am selben Tag: ein Konzept für eine
-monatliche Finanzierung „nebenbei, für Interessierte" in drei Stufen, bei der
-die höchste Stufe auch den Lizenzschlüssel enthält — dazu eine Kontrolle aller
-Rechtstexte und eine Recherche zur Rechtsform.
+Stand 23.08.2026, **überarbeitet am 24.08.2026 gegen die ersten Zugriffszahlen**
+(§14). Beauftragt von Robert: ein Konzept für eine monatliche Finanzierung
+„nebenbei, für Interessierte" in drei Stufen, bei der die höchste Stufe auch den
+Lizenzschlüssel enthält — dazu eine Kontrolle aller Rechtstexte und eine
+Recherche zur Rechtsform.
 
 Dieses Dokument beantwortet drei Fragen, und sie hängen zusammen: **Was für ein
 Modell** darf es sein, ohne das Kernversprechen der Marke zu brechen (§1–§4),
 **welche Rechtsform und welche Pflichten** daraus folgen (§5–§9), und **welche
 Rechtstexte** dafür geändert werden müssen — einschließlich der Fehler, die
 heute schon darin stehen (§10).
+
+> **Was die Überarbeitung geändert hat.** Die Zahlen der ersten fünf Tage haben
+> zwei Empfehlungen widerlegt und eine dritte entschärft — das steht **an den
+> betroffenen Stellen** und nicht nur im Nachtrag, damit das Dokument sich nicht
+> selbst widerspricht:
+>
+> - **§2 und §4:** Die Förderung gehört in die **Anwendung**, nicht auf eine
+>   Website-Seite. Damit ist auch „nichts am Code" hinfällig — es ist ein
+>   Menüeintrag.
+> - **§3:** Weg A bleibt empfohlen, aber seine Begründung trägt erst ab einer
+>   Größenordnung, die noch nicht erreicht ist.
+> - **§13:** Von den sechs Entscheidungen sind zwei beantwortet.
 
 > **Keine Rechts- oder Steuerberatung.** Alles hier ist nach bestem Wissen
 > recherchiert und mit Fundstellen belegt, aber die Einordnung eines konkreten
@@ -96,18 +109,41 @@ saubere Variante: Man entzieht nichts, also muss man nichts entziehen dürfen.
 > Codestelle heraus. Das erhöht das Vertrauen in die Schlussfolgerung, ersetzt
 > aber die fachliche Prüfung in §5–§9 nicht.
 
-### Was das für die Werbung bedeutet
+### Wo die Förderung steht — in der Anwendung, nicht auf der Website
 
 Der Verkaufsgrund auf `website/index.html:574` („Einmal, nicht jeden Monat")
-darf **stehen bleiben** — er ist weiterhin wahr und weiterhin der stärkere
-Satz. Die Förderung wird nicht neben den Preisblock gestellt, sondern
-**woanders**: ein eigener, ruhiger Abschnitt weiter unten oder eine eigene
-Seite. Wer kaufen will, kauft. Wer mehr geben will, findet den Weg.
+bleibt **unberührt**. Er ist weiterhin wahr und weiterhin der stärkere Satz;
+die Förderung wird nicht neben den Preisblock gestellt.
 
-Das ist auch die Antwort auf die Frage, die ein aufmerksamer Leser sonst
-stellt: *„Ihr sagt kein Abo und bietet ein Abo an?"* Die Seite muss den
-Unterschied selbst benennen, in einem Satz, an genau der Stelle — sonst wirkt
-sie unehrlich, und das kostet mehr, als die Förderung einbringt.
+**Die erste Fassung dieses Konzepts empfahl dafür eine eigene Website-Seite,
+verlinkt aus der Fußzeile. Die Zugriffszahlen vom 24.08.2026 haben das
+widerlegt** (§14): Von 942 Seitenaufrufen entfielen **880 auf die Startseite**
+und **27 auf `funktionen.html`** — etwa ein Dreißigstel, und das bei einer
+Seite, die prominent verlinkt ist. Eine Förderseite in der Fußzeile hätte
+näherungsweise keine Leser.
+
+**Der richtige Ort ist die Anwendung selbst.** Drei Gründe, und sie sind
+stärker als der Notbehelf, den sie ersetzen:
+
+1. **Dort sind die Menschen, um die es geht.** 291 Downloads gegen 27 Aufrufe
+   einer Unterseite: Wer das Programm benutzt, ist ein anderes Publikum als
+   wer die Startseite überfliegt.
+2. **Der Fördergedanke entsteht beim Benutzen, nicht beim Lesen.** „Ich mag
+   dieses Werkzeug" ist ein Satz, den man nach der dritten Konstruktion sagt,
+   nicht nach dreißig Sekunden auf einer Verkaufsseite.
+3. **Es trennt Kauf und Förderung sauber.** Auf der Website steht der Preis,
+   in der Anwendung steht das Angebot mitzutragen. Die Frage *„Ihr sagt kein
+   Abo und bietet ein Abo an?"* stellt sich damit gar nicht erst an der Stelle,
+   an der jemand über den Kauf nachdenkt.
+
+Konkret: ein Eintrag unter **Hilfe**, in der Nachbarschaft von „Rückmeldung
+senden" — nicht im Über-Dialog, den öffnet man einmal. Was er kostet, steht in
+§4.
+
+**Auf der Website bleibt genau ein Satz**, und zwar dort, wo er den Verdacht
+ausräumt statt ihn zu wecken: in den AGB oder auf der Förderseite selbst, nicht
+im Preisblock. Er muss sagen, dass die Förderung nichts freischaltet und nichts
+abschaltet — sonst liest jemand „Abo" und hat recht.
 
 ---
 
@@ -154,8 +190,36 @@ Teilzahlungsgeschäft nach § 507 BGB** — mit eigenen Informations- und
 Formpflichten. Wenn Weg B, dann gehört genau diese Frage dem Steuerberater
 beziehungsweise dem Anwalt vorgelegt.
 
-**Empfehlung: Weg A.** Er ist ehrlicher, einfacher und passt zu einem Modell,
-das ausdrücklich „für Interessierte" gedacht ist und nicht als Vertriebskanal.
+**Empfehlung: Weg A — aber erst, wenn die Kaufrate bekannt ist.** Er ist
+ehrlicher, einfacher und passt zu einem Modell, das ausdrücklich „für
+Interessierte" gedacht ist und nicht als Vertriebskanal.
+
+**Die Zahlen vom 24.08.2026 (§14) haben diese Empfehlung nicht gekippt, aber
+ihre Begründung beschädigt.** Das Argument für Weg A lautete: „Wer 12 € zahlt,
+um 57 € zu sparen, hätte ohnehin nicht gekauft." Das stimmt im Mittel — **und
+es mittelt sich erst bei großen Zahlen.** Bei der heutigen Größenordnung
+mittelt sich nichts:
+
+| Annahme | Wert |
+|---|---|
+| Downloads in fünf Tagen | 291 |
+| davon echte Interessenten (Doppelladungen abgezogen, geschätzt) | ~250 |
+| übliche Demo-Kaufrate bei Kleinsoftware | 2–10 % |
+| Käufer bei 5 % | **~12** |
+| Umsatz bei 69 € | ~830 € |
+| nehmen **drei** davon stattdessen Stufe 3 für einen Monat | 36 € statt 207 € |
+| entgangen | **171 €, ein Fünftel des Jahresumsatzes** |
+
+Bei tausend Käufern ist so etwas Rauschen. Bei zwölf ist es ein Fünftel, und
+drei Einzelentscheidungen bestimmen das Ergebnis. **Die Kaufrate ist heute
+nicht bekannt** — sie ist geschätzt, denn verkauft wurde noch nichts.
+
+**Daraus folgt keine andere Empfehlung, sondern eine Reihenfolge:** Weg A
+starten, **nachdem** der Verkauf läuft und die echte Kaufrate an ein paar
+Wochen abgelesen ist. Liegt sie bei 2 %, ist die Lücke belanglos; liegt sie bei
+10 %, ist Weg B ernsthaft zu prüfen. Diese Entscheidung für zwei Monate
+offenzulassen kostet nichts — sie jetzt zu treffen hieße, sie auf einer
+geschätzten Zahl zu treffen.
 
 ### Was die Stufen ausdrücklich nicht enthalten dürfen
 
@@ -172,7 +236,29 @@ das ausdrücklich „für Interessierte" gedacht ist und nicht als Vertriebskana
 
 ## §4 Was Stufe 3 technisch bedeutet
 
-Nichts am Code. Das ist die gute Nachricht.
+**An der Lizenzprüfung nichts, an der Oberfläche ein Menüeintrag.** Das ist die
+ganze Rechnung.
+
+> **Die erste Fassung sagte hier „nichts am Code", und das war zu großzügig.**
+> Es stimmte, solange die Förderung auf der Website stand. Seit §2 sie in die
+> Anwendung verlegt — weil die Zugriffszahlen die Website-Variante widerlegt
+> haben (§14) —, braucht es dort einen Weg dorthin. Der ist klein, aber er ist
+> nicht null, und ein Konzept, das seinen eigenen Aufwand kleinrechnet, ist
+> unbrauchbar.
+
+**Was zu bauen ist:** ein Eintrag unter „Hilfe", neben „Rückmeldung senden",
+der die Förderseite im Browser öffnet. Kein Dialog, kein Zustand, keine Abfrage
+— ein Link mit `tr()`-Text und je einem Eintrag in den fünf Sprachkatalogen.
+Er berührt weder `app/core` noch die Lizenzprüfung und fällt unter keine der
+Ausschlüsse aus §12: Ein Link ist keine Funktion, die nur Förderern offensteht.
+
+**Was ausdrücklich nicht gebaut wird:** kein Hinweis, der sich von selbst
+meldet, keine Zählung, wie oft er geklickt wurde, und keine Unterscheidung
+zwischen fördernden und nicht fördernden Installationen. Die Anwendung weiß
+nicht, wer fördert, und soll es nicht wissen — das wäre der Server, den es
+nicht gibt (§1).
+
+### Der Schlüssel selbst
 
 Ein Schlüssel entsteht heute über `tools/make_licence_keys.py` und wird mit dem
 privaten Teil des Lizenz-Schlüsselpaars signiert; der öffentliche Teil steht in
@@ -617,6 +703,26 @@ Was fehlt:
   prüfen"). Der gehört **vor dem Verkaufsstart weg** — und zwar dadurch, dass
   die Prüfung stattfindet, nicht dadurch, dass der Satz gelöscht wird.
 
+### B7 — Nebenbefund: veraltete Preise im Konzeptgedächtnis
+
+`konzepte/konzept-veroeffentlichung-1.0.md` nennt an fünf Stellen 49 € und
+79 €. Die Website nennt seit ihrer letzten Fassung **69 € und 99 €**
+(`website/index.html:547`). Das Dokument ist bereits als „überholt"
+gekennzeichnet, aber die Preisangaben werden zitiert, als seien sie aktuell —
+zuletzt in der MoR-Rechnung in Zeile 266.
+
+**Kein Rechtsfehler**, aber eine Stolperstelle: Wer dort die Gebührenrechnung
+nachliest, rechnet mit dem falschen Betrag.
+
+> **Erledigt am 23.08.2026 durch `3d-druck-bd` (`3ccc72f`).** Die
+> Gebührenrechnung in `:266` ist korrigiert — 3,5 % von 69 € sind 2,42 €, nicht
+> 1,72 €. Die **anderen vier** Stellen mit 49 € bleiben stehen, und das ist
+> richtig: Sie zitieren den Stand vom 06.08. und sind als Bestandsaufnahme
+> korrekt. Ein Dokument, das seinen Stichtag beschreibt, wird nicht dadurch
+> besser, dass man es nachträglich auf heute umschreibt.
+
+---
+
 ### B8 — Der Entwurfsvermerk hängt am Erzeuger, nicht am Rechtsstatus
 
 **Gefunden von `3d-druck-bd` am 24.08.2026, nachgemessen.**
@@ -666,26 +772,6 @@ Platzhalter-Mechanismus, der ihn beim Eintragen der Anschrift von selbst
 entfernt. Eine `DATENSCHUTZ.md` als Quelle würde das heilen; das ist eine
 Umstellung und keine Aufgabe für heute, aber sie gehört ins Register.
 
-### B7 — Nebenbefund: veraltete Preise im Konzeptgedächtnis
-
-`konzepte/konzept-veroeffentlichung-1.0.md` nennt an fünf Stellen 49 € und
-79 €. Die Website nennt seit ihrer letzten Fassung **69 € und 99 €**
-(`website/index.html:547`). Das Dokument ist bereits als „überholt"
-gekennzeichnet, aber die Preisangaben werden zitiert, als seien sie aktuell —
-zuletzt in der MoR-Rechnung in Zeile 266.
-
-**Kein Rechtsfehler**, aber eine Stolperstelle: Wer dort die Gebührenrechnung
-nachliest, rechnet mit dem falschen Betrag.
-
-> **Erledigt am 23.08.2026 durch `3d-druck-bd` (`3ccc72f`).** Die
-> Gebührenrechnung in `:266` ist korrigiert — 3,5 % von 69 € sind 2,42 €, nicht
-> 1,72 €. Die **anderen vier** Stellen mit 49 € bleiben stehen, und das ist
-> richtig: Sie zitieren den Stand vom 06.08. und sind als Bestandsaufnahme
-> korrekt. Ein Dokument, das seinen Stichtag beschreibt, wird nicht dadurch
-> besser, dass man es nachträglich auf heute umschreibt.
-
----
-
 ## §11 Was zu tun ist
 
 Reihenfolge nach Dringlichkeit, nicht nach Aufwand.
@@ -724,25 +810,43 @@ davon vergessen wird.
 
 ## §13 Was Robert entscheiden muss
 
-Alles andere in diesem Dokument ist begründet und ausgearbeitet. Diese fünf
-Punkte sind Geschäftsentscheidungen und keine fachlichen:
+Alles andere in diesem Dokument ist begründet und ausgearbeitet. Diese Punkte
+sind Geschäftsentscheidungen und keine fachlichen.
 
-1. **Weg A oder Weg B** bei der Schlüsselausgabe in Stufe 3 (§3). Empfehlung: A.
-2. **Die Beträge** — 3 / 7 / 12 € sind ein begründeter Vorschlag, kein Ergebnis.
-3. **Ob die Förderung überhaupt jetzt startet** oder erst nach dem Verkaufsstart
-   von 1.0. Dafür spricht: Vor dem Verkauf gibt es keinen Kaufpreis, gegen den
-   sich Stufe 3 rechnen ließe, und die Rechtstexte müssen ohnehin zuerst
-   fachlich geprüft werden.
-4. **Wo die Förderseite steht** — eigener Abschnitt auf der Startseite oder
-   eigene Seite. Empfehlung: eigene Seite, verlinkt aus der Fußzeile und aus
-   dem Über-Dialog. Damit bleibt der Preisblock unangetastet (§2).
-5. **Ob ein Steuerberater dauerhaft mandatiert wird** oder nur für ein
+**Zwei davon haben die Zugriffszahlen vom 24.08.2026 beantwortet** (§14) — sie
+stehen unten als erledigt, nicht gestrichen, weil die Begründung Bestand hat.
+
+### Offen
+
+1. **Die Beträge** — 3 / 7 / 12 € sind ein begründeter Vorschlag, kein Ergebnis.
+2. **Weg A oder Weg B** bei der Schlüsselausgabe in Stufe 3 (§3). Empfehlung: A
+   — **aber die Entscheidung wartet auf die echte Kaufrate.** Bei zwölf Käufern
+   im Jahr entscheiden drei Einzelfälle über ein Fünftel des Umsatzes; das ist
+   keine Frage, die man auf einer geschätzten Zahl beantwortet. Zwei Wochen
+   Verkauf liefern sie.
+3. **Ob ein Steuerberater dauerhaft mandatiert wird** oder nur für ein
    Erstgespräch. Bei Einzelunternehmen mit EÜR und Kleinunternehmerregelung
    genügt lange ein jährliches Gespräch.
-6. **Variante 1 oder 2 beim Vertragspartner-Widerspruch** (B2). Empfehlung: 2 —
+4. **Variante 1 oder 2 beim Vertragspartner-Widerspruch** (B2). Empfehlung: 2 —
    keinen Anbieter nennen, solange keiner beauftragt ist. Diese Frage hat
    `3d-druck-bd` gleichzeitig vorgelegt; sie ist **einmal** zu beantworten,
-   nicht zweimal.
+   nicht zweimal. **Die dringendste der offenen Fragen**, weil bis zu ihrer
+   Beantwortung zwei Texte einen Anbieter nennen, mit dem kein Vertrag besteht.
+
+### Durch die Zahlen beantwortet
+
+5. ~~**Ob die Förderung jetzt startet** oder erst nach dem Verkaufsstart.~~
+   **Nach dem Verkaufsstart.** Nicht wegen der Reichweite, sondern wegen des
+   Apparats: Gewerbeanmeldung, Geschäftskonto, USt-IdNr., Steuerberater,
+   Kündigungsschaltfläche, Widerrufsbelehrung fallen **identisch** an, ob fünf
+   oder fünfhundert Menschen fördern. Nach dem Verkaufsstart trägt der Verkauf
+   sie ohnehin; davor müsste die Förderung sie allein rechtfertigen — bei einer
+   erwarteten Größenordnung von einigen hundert Euro im Jahr (§14).
+6. ~~**Wo die Förderseite steht** — Startseite oder eigene Seite.~~ **Weder
+   noch: in der Anwendung.** Von 942 Seitenaufrufen gingen 880 auf die
+   Startseite und 27 auf `funktionen.html`. Eine Seite in der Fußzeile hätte
+   keine Leser; die 291 Menschen, um die es geht, sitzen vor dem Programm und
+   nicht vor der Website. Ausgeführt in §2, der Aufwand dafür in §4.
 
 > **Und ein Punkt, der auf keine dieser Listen passt, aber existiert: eine
 > Verkaufsstart-Checkliste gibt es nicht.** Variante 2 in B2 verschiebt
@@ -753,3 +857,95 @@ Punkte sind Geschäftsentscheidungen und keine fachlichen:
 > vergessen. Sie anzulegen ist eine halbe Stunde und gehört zur Demo-Phase,
 > nicht zum Fördermodell — deshalb steht sie hier als Hinweis und nicht als
 > Aufgabe.
+
+---
+
+## §14 Was die ersten Zahlen sagen
+
+Nachgetragen am 24.08.2026. Robert hat die Auswertungsseite
+(`solidon3d.de/api/stats.php`) vorgelegt; die Zahlen unten sind daraus
+abgelesen und gegengerechnet — die Tagestabelle summiert sich exakt auf die
+drei Kopfzahlen (942 / 766 / 291).
+
+### Was gemessen wurde
+
+| Tag | Aufrufe | Besuche | Downloads | Downloads je Besuch |
+|---|---:|---:|---:|---:|
+| 24.08. *(läuft noch)* | 79 | 58 | 15 | 25,9 % |
+| **23.08.** | **804** | **694** | **265** | **38,2 %** |
+| 22.08. | 18 | 4 | 3 | *(4 Besuche)* |
+| 21.08. | 3 | 1 | 1 | *(1 Besuch)* |
+| 20.08. | 38 | 9 | 7 | *(9 Besuche)* |
+| **Summe** | **942** | **766** | **291** | 38,0 % |
+
+**Die Messung läuft fünf Tage, nicht einen Monat.** Die Seite überschreibt das
+mit „im Monat", aber der erste gezählte Tag ist der 20.08. Wer die 291
+Downloads als Monatswert liest, liest zu niedrig.
+
+**Und eine Zahl trägt fast alles:** Der 23.08. stellt 91 % der Downloads und
+91 % der Besuche. Die drei Tage davor haben zusammen **14 Besuche** — daraus
+lässt sich nichts rechnen, und die 75 % bzw. 100 % in der Tabelle sind
+Artefakte kleiner Zahlen, keine Quoten.
+
+### Der eine belastbare Befund
+
+**38,2 % der Besucher am 23.08. haben heruntergeladen.** Bei
+Software-Landingpages sind 2–10 % üblich. Das ist die wichtigste Zahl des
+ganzen Abschnitts, und sie ist belastbar, weil sie auf 694 Besuchen beruht.
+
+Wer auf dieser Seite landet, will das Programm. Das Problem ist nicht die
+Überzeugungskraft der Seite — es ist, dass zu wenige sie sehen.
+
+Der 24.08. liegt mit 25,9 % darunter. Der Tag lief beim Ablesen noch; ob die
+Quote sinkt oder Downloads nachkommen, entscheidet sich später. **Aus einem
+laufenden Tag wird kein Trend abgeleitet.**
+
+### Was daraus für dieses Konzept folgt
+
+| Befund | Folge | Wo |
+|---|---|---|
+| 880 von 942 Aufrufen auf `/`, 27 auf `funktionen.html` | Die Förderung gehört in die **Anwendung**, nicht auf die Website. Eine Fußzeilen-Seite hätte keine Leser. | §2, §4, §13 Punkt 6 |
+| Größenordnung: einige hundert Euro im Jahr | Der Verwaltungsapparat fällt unabhängig davon an. Also **nach** dem Verkaufsstart, wenn der Verkauf ihn ohnehin trägt. | §13 Punkt 5 |
+| ~12 erwartete Käufer im ersten Jahr | Bei so kleinen Zahlen mittelt sich die Kannibalisierung nicht weg. Weg A bleibt empfohlen, aber **erst nach zwei Wochen echtem Verkauf**. | §3 |
+| 291 Downloads, 25.000 € Kleinunternehmergrenze | Rechtsform und Steuerempfehlung **bestätigt**, nicht in Frage gestellt. | §5, §6 |
+
+### Zwei Nebenbefunde, die anderswo hingehören
+
+**Die Plattformverteilung**, gerechnet über alle 291 Downloads:
+
+| | Downloads | Anteil |
+|---|---:|---:|
+| Windows (`.exe`) | 235 | 80,8 % |
+| Linux (`.flatpak`) | 41 | 14,1 % |
+| macOS (`.pkg`) | 15 | 5,2 % |
+
+Für das Fördermodell belanglos, für die **Signierfrage** nicht: Die
+SmartScreen-Warnung eines unsignierten Windows-Pakets trifft vier von fünf
+Interessenten. Das ist ein Argument in `konzept-demo-2026-10.md`, nicht hier —
+es steht nur da, weil die Zahl sonst nirgends steht.
+
+**Und 271 der 291 Downloads gingen auf Fassungen vor 0.1.4**, die inzwischen
+vom Server entfernt sind. Das ist kein Fehler, sondern der Update-Weg: Diese
+Installationen erfahren über `version.json`, dass es etwas Neueres gibt. Es
+bedeutet aber, dass ein Rückschritt der Versionsnummer 271 Installationen
+beträfe — der Grund, warum `tools/upload_website.py` sich weigert, eine
+unsignierte `version.json` hochzuladen.
+
+### Die Frage, die diese Zahlen nicht beantworten
+
+**Woher kam der 23.08.?** 694 Besuche an einem Tag, davor 1, 4 und 9. Ob das
+ein wiederholbarer Kanal war oder ein einmaliges Strohfeuer, entscheidet über
+das Fördermodell mehr als jede Zahl hier: **Ein Modell, das auf wiederkehrende
+Zuwendung setzt, braucht wiederkehrende Aufmerksamkeit.** Bleibt es bei einem
+Peak, ist die Förderung ein netter Zusatz zum Verkauf; wiederholt sich der
+Kanal monatlich, ist sie ein tragender Teil.
+
+Die Auswertung speichert die verweisende Domain (`datenschutz.html`, Abschnitt
+„Diese Website"). Die Antwort liegt also in den eigenen Daten und ist nicht
+geschätzt zu ermitteln — sie steht auf der Auswertungsseite unterhalb des
+Abschnitts „Seiten".
+
+> **Diese Zahlen altern schnell.** Sie beschreiben fünf Tage, von denen einer
+> alles trägt. Wer im Oktober hier liest, prüft sie nach, statt sie zu
+> übernehmen — das ist die Hausregel dieser Sammlung, und hier gilt sie
+> besonders.
