@@ -114,7 +114,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine Entscheidung, ob ein Prüfstand `report_error` abschalten darf. Ein Fehler öffnet dort einen modalen Dialog: Der Hauptthread stand, die Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu unterscheiden — der Traceback lag still unter `%LOCALAPPDATA%\RS Digital\Solidon3D\reports\bericht-<zeitstempel>\bericht.txt` |
 | 81 weitere Texte stehen mehrfach wortgleich im Quelltext | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Die vier Fälle in `app/ui/main_window.py` sind am 24.08.2026 erledigt (`791a1576`); übrig sind Vorkommen, die meist zwei- bis dreimal in derselben Datei stehen |
 | Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | eine **Deutung**, die noch fehlt. Das Zählverhältnis ist belegt (`installEventFilter` 13×, `removeEventFilter` 2×), die Schlussfolgerung nicht: Ein Versuch, den Fehler mit einem aufgegebenen Filterobjekt nachzustellen, blieb **fehlerfrei** — Qt entfernt sterbende Filter selbst aus seinen Listen. Was die drei gemessenen Fälle erzeugt, ist damit offen |
-| Drei Widgets bekommen Ereignisse, die ihr Zustand nicht mehr trägt | Was niemand las, und was zweimal dastand (24.08.2026) | zehn Läufe je Seite, wie der Absturzpunkt weiter oben. Gemessen am 24.08.2026 in `test_ui.py`: `shortcut_schemes.py:137` bekommt ein `QWidgetItem` als `watched` (bei Qt unmöglich), `overlay.py:587` findet `_placing` nicht, `viewport.py:4312` nicht `_drag_kind` — alle drei im Teardown, alle drei einzeln grün. Drei Sitzungen haben je einen davon unabhängig gesehen |
 | Zwei Downloadgrößen stehen im Text statt in der Message-ID | Was niemand las, und was zweimal dastand (24.08.2026) | fünf Übersetzungen für zwei Sätze. `NEEDED_GIGABYTES` macht es richtig (`.format(noetig=…)`), `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` nicht — die Zahl ist in die Message-ID getippt. Ein Test hält beide Stellen seit `77ad37cb` zusammen; der saubere Weg braucht Übersetzer |
 
 ---
@@ -4292,6 +4291,39 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       **Eine belastbare Aussage kostet zehn Läufe je Seite** — rund vierzig
       Minuten auf einer Maschine, die drei andere Sitzungen brauchen. Nicht
       release-kritisch; wer den Punkt aufnimmt, plant die Rechenzeit ein.
+
+
+      **Dieselbe Wurzel macht auch Tests falsch rot, nicht nur Läufe kaputt**
+      (24.08.2026, gemessen von formwerk-be). Sieben Läufe von `tests/test_ui.py`
+      gegen einen Stand: viermal 258 passed, zweimal Segfault, **einmal 2
+      failed** — und die zwei sind einzeln grün und mit `-p no:randomly` in der
+      ganzen Datei auch. Beide Stapel zeigen auf Dateien, die unverändert im
+      Baum liegen (`app/ui/overlay.py:497→587`, `app/ui/shortcut_schemes.py:137`).
+
+      Der härteste Beleg für den Mechanismus steht im zweiten:
+      `TypeError: eventFilter(QWidgetItem, QEvent)`. Qt übergibt nie ein
+      `QWidgetItem` als `watched` — ein `QWidgetItem` ist kein `QObject` und kann
+      kein Ereignisziel sein; der Zeiger zeigt auf neu belegten Speicher.
+      **Use-after-free**, und `'OverlayHost' object has no attribute '_placing'`
+      ist dieselbe Sache eine Ebene höher: shiboken baut zu einem C++-Zeiger
+      ohne lebende Hülle eine neue, deren `__init__` nie lief — es fehlt genau
+      das Attribut, das nur `__init__` setzt. Die naheliegende Erklärung
+      „Reihenfolge im Konstruktor" ist damit widerlegt: `_placing` steht in
+      Zeile 418, `installEventFilter` erst in 479.
+
+      Damit hängen drei Dinge an einer Wurzel, die bisher getrennt hier stehen:
+      die Risse vor der Zusammenfassung, der Hänger (Signatur C) und
+      **falsch-rote Tests**.
+
+      Praktische Folge, die keine Untersuchung braucht: **Ein roter Test in einer
+      Fensterdatei ist erst echt, wenn er einzeln rot ist.** Das kostet eine
+      Sekunde und hat am 24.08. in zwei Sitzungen je eine halbe Stunde Suche
+      gespart.
+
+      Nicht getan und mit Grund: `_placing` als Klassenattribut zu deklarieren
+      beseitigte diesen einen Fehler und verdeckte die Ursache. Ein Pflaster auf
+      einem Use-after-free macht die nächste Erscheinungsform schwerer zu
+      finden, nicht leichter — das ist eine Entscheidung für Robert.
 
 - [ ] **Signatur C: der Hänger — kein Absturz, sondern Stillstand.** Abgegrenzt
       am 23.08.2026 bei der Sortierung der Absturzfamilie an 24 Stapeln.
@@ -8900,7 +8932,8 @@ Was offen bleibt — und der erste Punkt ist eine **zurückgezogene Deutung**:
       die Zwischenlage: Python-Objekt halb abgebaut, C++-Seite lebendig — das
       ist der Fall, den `conftest.py` mit `isValid` behandelt.
 
-- [ ] **Drei Widgets bekommen Ereignisse, die ihr Zustand nicht mehr trägt.**
+- [x] **Drei Widgets bekommen Ereignisse, die ihr Zustand nicht mehr trägt**
+      — erklärt, nicht behoben.
       Am 24.08.2026 in `test_ui.py` gemessen, alle drei im Teardown, alle drei
       einzeln grün: `shortcut_schemes.py:137` bekommt ein `QWidgetItem` als
       `watched` (in Qts Signatur unmöglich), `overlay.py:587` findet `_placing`
@@ -8909,6 +8942,14 @@ Was offen bleibt — und der erste Punkt ist eine **zurückgezogene Deutung**:
       werden im `__init__` gesetzt, der Filter erst danach installiert. Drei
       Sitzungen haben je einen Fall unabhängig gesehen, und das ist der Grund,
       warum es hier steht: Es ist kein Einzelfall mehr.
+
+      **Die Ursache ist seit dem 24.08.2026 gemessen und steht bei „Fünf
+      Fensterdateien reißen vor ihrer Zusammenfassung": Use-after-free.**
+      formwerk-be hat den Beleg geliefert — `eventFilter(QWidgetItem, QEvent)`
+      ist eine Signatur, die Qt nie erzeugt, also zeigt der Zeiger auf neu
+      belegten Speicher. Die fehlenden Attribute sind dasselbe eine Ebene
+      höher. Dieser Punkt ist damit **beantwortet** und nicht mehr eigenständig
+      offen; was zu entscheiden bleibt, steht dort.
 
 - [ ] **Zwei Downloadgrößen stehen im Text statt in der Message-ID.** Der
       sauberere Weg ist bekannt und steht zwei Dutzend Zeilen daneben:
