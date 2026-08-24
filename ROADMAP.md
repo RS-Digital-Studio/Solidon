@@ -9402,10 +9402,17 @@ Arbeitspakete, die Grenzen und die eine Entscheidung stehen dort.
 
 `tests/test_widget_lifetime.py::test_a_released_widget_is_actually_released`
 ist auf `main` rot, und zwar in der Ausprägung `MainWindow`: **10 von 10
-überlebten ihr Loslassen**, bei 40 grünen Klassen daneben. Gemessen am
-24.08.2026 von zwei Sitzungen unabhängig — einmal im geteilten Arbeitsbaum,
-einmal in einem eigenen Baum auf `230e498` ohne fremde Änderungen. Es ist
-keine der laufenden Arbeiten.
+überlebten ihr Loslassen**. Gemessen am 24.08.2026 von zwei Sitzungen
+unabhängig — einmal im geteilten Arbeitsbaum, einmal in einem eigenen Baum auf
+`230e498` ohne fremde Änderungen. Es ist keine der laufenden Arbeiten.
+
+**Zur Zahl daneben, damit sie niemanden zweimal aufhält.** Die Datei sammelt
+**42** Tests, die Ausprägungsliste dieses einen Tests umfasst **41**
+Widget-Klassen, und der zweiundvierzigste ist der zweite Test der Datei. Wer
+nur den Test fährt, liest „1 failed, 40 passed"; wer die Datei fährt, liest
+„1 failed, 41 passed". Beides ist dasselbe Ergebnis. Die Differenz kostete
+zwei Sitzungen einen Abgleich, bevor eine Zahl hier stand — **eine Zählung
+ohne ihren Umfang ist keine.**
 
 **Warum das ein eigener Punkt ist und kein Wiederaufmachen.** Der Punkt „Kein
 Viewport wird jemals freigegeben" steht abgehakt in dieser Datei und trägt
