@@ -1,7 +1,7 @@
 Endnutzer-Lizenzvertrag für Solidon3D
 -------------------------------------
 
-Stand: 23. August 2026 · Fassung 1.1
+Stand: 24. August 2026 · Fassung 1.2
 
 Dieser Vertrag regelt, was Sie mit Solidon3D tun dürfen. Er kommt zustande,
 wenn Sie die Software installieren oder benutzen. Vertragspartner ist
@@ -86,9 +86,9 @@ Für die Demo gilt außerdem:
   https://solidon3d.de/ weiter. Eine weitergereichte Setup-Datei ist nach
   dem Stichtag wertlos, und niemand soll ein Programm bekommen, das bei ihm
   nicht mehr startet.
-  - Haftung wie bei einer unentgeltlichen Überlassung. Wir haften für
-  Vorsatz und grobe Fahrlässigkeit; im Übrigen gelten die Abschnitte 10 und
-  11 entsprechend.
+  - Haftung. Es gelten die Nummern 10 und 11 wie für die Vollversion — auch
+  für die unentgeltliche Demo, und ohne Abstriche bei Leben, Körper und
+  Gesundheit.
   - Keine Zusicherung von Support. Rückmeldungen sind willkommen —
   support@solidon3d.de —, ein Anspruch auf Antwort oder Fehlerbehebung
   besteht nicht.
@@ -218,21 +218,24 @@ das auf eigene Verantwortung und hat die Ergebnisse eigenständig zu prüfen.
 11. Haftung
 -----------
 
-Wir haften unbeschränkt bei Vorsatz und grober Fahrlässigkeit, bei
-arglistigem Verschweigen eines Mangels, für Schäden aus der Verletzung des
-Lebens, des Körpers oder der Gesundheit sowie nach dem Produkthaftungsgesetz.
+Wir haften unbeschränkt bei Vorsatz und grober Fahrlässigkeit — auch unserer
+gesetzlichen Vertreter und Erfüllungsgehilfen —, bei arglistigem Verschweigen
+eines Mangels, für Schäden aus der Verletzung des Lebens, des Körpers oder der
+Gesundheit sowie nach dem Produkthaftungsgesetz.
 
-Bei einfacher Fahrlässigkeit haften wir nur bei der Verletzung einer
-wesentlichen Vertragspflicht — also einer Pflicht, deren Erfüllung die
-ordnungsgemäße Durchführung des Vertrags überhaupt erst ermöglicht und auf
-deren Einhaltung Sie regelmäßig vertrauen dürfen. In diesem Fall ist die
-Haftung auf den vertragstypischen, vorhersehbaren Schaden begrenzt.
+Bei einfacher Fahrlässigkeit — auch unserer gesetzlichen Vertreter und
+Erfüllungsgehilfen — haften wir nur bei der Verletzung einer wesentlichen
+Vertragspflicht, also einer Pflicht, deren Erfüllung die ordnungsgemäße
+Durchführung des Vertrags überhaupt erst ermöglicht und auf deren Einhaltung
+Sie regelmäßig vertrauen dürfen. In diesem Fall ist die Haftung auf den
+vertragstypischen, vorhersehbaren Schaden begrenzt.
 
 Eine weitergehende Haftung ist ausgeschlossen. Insbesondere haften wir bei
 einfacher Fahrlässigkeit nicht für Material- und Druckkosten, Maschinenzeit,
 entgangenen Gewinn oder mittelbare Schäden aus fehlerhaften Modellen.
 
-Die gesetzlichen Mängelrechte beim Kauf bleiben davon unberührt.
+Die gesetzlichen Mängelrechte bleiben unberührt — bei digitalen Produkten
+insbesondere die §§ 327 ff. BGB samt Aktualisierungspflicht.
 
 12. Laufzeit und Ende
 ---------------------
