@@ -274,10 +274,24 @@ dieses Vorhaben gemessen wird.
 Der Kunde will Anzahl und Position festlegen. Dafür gibt es drei Wege, und
 zwei davon sind versperrt:
 
-**Weg A: eine Musteroperation.** Es gibt keine. Von den sechsundvierzig
-Operationen des Geometriekerns ist keine ein lineares oder kreisförmiges
-Muster. Eine zu bauen wäre ein eigenes Vorhaben mit eigenem Nutzen — und es
-ist nicht dieses.
+**Weg A: die Musteroperation.** Es gibt sie — `pattern` in
+`scene/ops.py:235`, „Kopien in Reihe oder Kreis", linear und kreisförmig, mit
+Anzahl, Abstand, Winkel und Richtung. Sie arbeitet aber **eine Ebene zu
+hoch**: `consumes=1, produces=VARIABLE` heißt, sie kopiert das *Eingangsobjekt*.
+Auf ein Modell mit einem Einhänger angewandt, entstehen n Modelle mit je einem
+Einhänger — nicht ein Modell mit n Einhängern. Und der Baustein selbst ist kein
+Objekt, auf das sie zeigen könnte: `insert` vereint ihn sofort mit dem
+Zielkörper.
+
+> **Die erste Fassung dieses Abschnitts behauptete, es gebe keine
+> Musteroperation.** Das war falsch, und der Fehler ist lehrreich genug, um
+> stehen zu bleiben: Gezählt worden waren die 46 Operationen in
+> `app/core/geom/*.py`. Das Register führt **86** — der Rest kommt aus
+> `scene/`, `slice/`, `export/` und der Bausteinbibliothek, und `pattern` steht
+> in `scene/`. Dieselbe Falle nennt `.claude/memory` bereits beim Namen: Ohne
+> `load_operations()` zählt man einen Ausschnitt und hält ihn für das Ganze.
+> **Die Schlussfolgerung ändert sich dadurch nicht, die Begründung schon** —
+> und eine richtige Antwort mit falschem Grund fällt beim nächsten Mal um.
 
 **Weg B: den Baustein mehrfach setzen.** Funktioniert heute, verlangt aber vom
 Kunden, den Rasterabstand selbst zu treffen. Genau das soll die Funktion ihm
@@ -416,8 +430,10 @@ In dieser Reihenfolge, jedes für sich mit grüner Suite abschließbar:
 
 ## 14. Was hier ausdrücklich nicht gebaut wird
 
-* **Keine Musteroperation** (Abschnitt 8, Weg A). Sie wäre nützlich und ist
-  ein anderes Vorhaben.
+* **Keine Musteroperation auf Bausteinebene** (Abschnitt 8, Weg A). `pattern`
+  gibt es, sie kopiert Objekte; eine, die Bausteine *innerhalb* eines Körpers
+  vervielfacht, wäre ein eigenes Vorhaben mit eigenem Nutzen — und es ist nicht
+  dieses.
 * **Kein Lochplatten-Generator.** Die Platte kauft man; wer sie druckt, findet
   sie fertig. Solidon passt Modelle an, es ersetzt kein Möbelhaus.
 * **Kein automatisches Finden der Rückseite.** Der Kunde klickt sie an. Eine

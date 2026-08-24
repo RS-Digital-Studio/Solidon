@@ -9255,7 +9255,7 @@ gebaut wird. Hier stehen die zwei Punkte, die es zu Arbeit machen.
 - [ ] **Additive Bausteine erscheinen nicht am Flächenklick.**
   `parts/ops.py:_applies_to` nimmt `"face"` nur auf, wenn ein Baustein
   abträgt. Gemessen über alle achtzehn: `wall_mount`, `profile_tongue`, `rib`,
-  `snap_fit`, `latch` und `living_hinge` tragen `applies_to == []` und stehen
+  `snap_fit`, `latch` und `living_hinge` tragen `applies_to == []` — mit den drei Prüfkörpern neun von achtzehn — und stehen
   damit in keinem Kontextmenü einer angeklickten Fläche. Der Rückfall in
   `panels.py:context_menu` greift nicht, denn er greift nur, wenn die
   Merkmalsart **gar nichts** anbietet — eine Fläche bietet die abtragenden an.
