@@ -118,7 +118,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Offscreen prüft nichts, was am Aktor hängt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine **Messstelle**, die im echten Fenster läuft, und eine Entscheidung, welche Zusagen dort geprüft werden müssen. `Viewport.show_scene` kehrt bei `self.plotter is None` vor dem Aktor-Aufbau zurück (`app/ui/viewport.py:1948`), und `tests/conftest.py` setzt `QT_QPA_PLATFORM=offscreen` für die ganze Suite — jede Zusage über Aktoren, Farben, Kamerastellung oder Bildinhalt ist dort grün über einer leeren Menge. Belegt am 24.08.: `_actors` war vor **und** nach einer Operation `{}`; mit sichtbarem Fenster wanderten dieselben Aktoren von (-10..10) auf (-104..-84, 84..104, 0..20) |
 | Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine Entscheidung, ob ein Prüfstand `report_error` abschalten darf. Ein Fehler öffnet dort einen modalen Dialog: Der Hauptthread stand, die Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu unterscheiden — der Traceback lag still unter `%LOCALAPPDATA%\RS Digital\Solidon3D\reports\bericht-<zeitstempel>\bericht.txt` |
 | 81 weitere Texte stehen mehrfach wortgleich im Quelltext | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Die vier Fälle in `app/ui/main_window.py` sind am 24.08.2026 erledigt (`791a1576`); übrig sind Vorkommen, die meist zwei- bis dreimal in derselben Datei stehen |
-| Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | eine **Deutung**, die noch fehlt. Das Zählverhältnis ist belegt (`installEventFilter` 13×, `removeEventFilter` 2×), die Schlussfolgerung nicht: Ein Versuch, den Fehler mit einem aufgegebenen Filterobjekt nachzustellen, blieb **fehlerfrei** — Qt entfernt sterbende Filter selbst aus seinen Listen. Was die drei gemessenen Fälle erzeugt, ist damit offen |
+| Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | **nichts mehr — das Muster steht, es fehlt die Arbeit.** Der erste reproduzierbare Fall ist am 24.08.2026 gefallen und behoben (`e0540a1`, `overlay.py`): Nicht das *Filterobjekt* stirbt, sondern das *überwachte*, und der Filter läuft in den Abbau hinein. Abbestellen bei `QEvent.Type.Destroy` — vier von sechs Läufen rot ohne, null von sechs mit. Einer von dreizehn ist damit erledigt |
 | Zwei Downloadgrößen stehen im Text statt in der Message-ID | Was niemand las, und was zweimal dastand (24.08.2026) | fünf Übersetzungen für zwei Sätze. `NEEDED_GIGABYTES` macht es richtig (`.format(noetig=…)`), `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` nicht — die Zahl ist in die Message-ID getippt. Ein Test hält beide Stellen seit `77ad37cb` zusammen; der saubere Weg braucht Übersetzer |
 | Zwei §-Verweise nennen Abschnitte, die der Bauplan nicht hat | Zweitausend Verweise, und zwei ohne Ziel (24.08.2026) | **eine Entscheidung von Robert über den Bauplan**, denn der wird nur mit Ansage geändert. `§33.3` steht fünfmal im Code, zweimal ausdrücklich als „Bauplan §33.3“ — §33 führt nur 33.1 und 33.2, die Sache selbst (der Fehlerbericht) steht in §37.2. `§25.4` steht einmal am `caveat` eines Bausteins; §25 hat keine Unterabschnitte, und bei einem Baustein wäre §24 die Familie. Entweder die Abschnitte entstehen, oder die Verweise werden umgebogen — Letzteres wäre geraten. `tests/test_plan_references.py` hält beide in `BEKANNT_OFFEN` und verlangt, dass sie dort verschwinden, sobald es die Abschnitte gibt |
 | Zwei Sätze in der EULA tragen nicht, was das Fördermodell auf sie baut | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | **eine Entscheidung von Robert**, denn es ist ein Rechtstext: Nummer 11 nennt Erfüllungsgehilfen und gesetzliche Vertreter nicht (§ 309 Nr. 7 BGB, und eine solche Klausel fällt ganz statt teilweise), Nummer 4a begrenzt für die **heute laufende** Demo auf Vorsatz und grobe Fahrlässigkeit und widerspricht damit ihrem eigenen Verweis auf Nummer 11. Zusammen fünf Wörter und ein ersetzter Satz — dazu Fassungsnummer, Neuerzeugen und Upload |
@@ -4838,6 +4838,33 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       ohne.** Die Blöcke allein hätten auf einer Maschine mit sechs Sitzungen
       eine Aussage über die Uhrzeit ergeben.
 
+      **Nachtrag vom 24.08.2026 (3d-druck-61), bei ruhiger Maschine.** Null
+      fremde Python-Prozesse, 42 GB frei, gleicher HEAD, gleicher Interpreter:
+
+          Hauptbaum F:\3D Druck                     3/3 Absturz
+          Hauptbaum, ohne pytest-Cache              Absturz
+          Hauptbaum, eigener Bytecode-Ort           1 grün / 2 Absturz
+          Worktree C:\…\Temp                        4/4 grün
+          Worktree F:\wl-probe-f                    2/2 grün
+          Worktree "F:\wl probe mit luecke"         2/2 grün
+          Worktree F: + .venv als Junction daneben  2/2 grün
+
+      Damit sind **ausgeschlossen**: Fremdlast (die eigene Hypothese des
+      Messenden, ausdrücklich zurückgenommen), das Laufwerk, ein Leerzeichen im
+      Pfad, der Bytecode-Cache, der pytest-Cache und die `.venv` im Baum. Übrig
+      bleibt etwas am konkreten Verzeichnis `F:\3D Druck` — Vermutung und nicht
+      mehr: ein Virenscanner oder Indexdienst, der dieses bekannte Verzeichnis
+      beobachtet und einem frisch angelegten Pfad noch nicht folgt. Ohne
+      Adminrechte nicht messbar.
+
+      **Und eine Falle, die im Vorbeigehen entstand:** Der erste Lauf mit
+      `PYTHONPYCACHEPREFIX` war grün, der zweite und dritte rot. Wer nach dem
+      ersten aufhört, schreibt einen Fehlbefund ins Register.
+
+      **Praktische Folge für alle Sitzungen: Wer `test_widget_lifetime` misst,
+      nimmt einen eigenen Arbeitsbaum.** Im Hauptbaum ist er reproduzierbar
+      rot, ohne dass der Code etwas dafürkann.
+
       **Nachtrag vom 24.08.2026 (3d-druck-b0): zwei Bäume, ein Inhalt, zwei
       Ergebnisse.** Beim Messen des Fensterfixes fiel derselbe Riss an —
       `0xc0000374` (Heap-Korruption) mitten im `Garbage-collecting`,
@@ -7452,7 +7479,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
 - [x] **Der Ordnername „3D Druck" mit Leerzeichen bricht Werkzeuge — durchgesehen am 23.08.2026, es blieb bei den beiden.** Zweimal
       am 22.08.2026, an unabhängigen Stellen:
 
-      * `tools/link_memory.py` bildete aus `F:D Druck` das Kürzel
+      * `tools/link_memory.py` bildete aus `F:\3D Druck` das Kürzel
         `F--3D Druck`, während Claude Code seine Erinnerungen unter
         `F--3D-Druck` ablegt — das Werkzeug legte einen leeren Ordner an,
         verknüpfte ihn und meldete „Eingerichtet", ohne etwas zu übernehmen.
@@ -9070,6 +9097,33 @@ Was offen bleibt — und der erste Punkt ist eine **zurückgezogene Deutung**:
       niemand es ein zweites Mal für die Erklärung hält. Wer weitersucht, sucht
       die Zwischenlage: Python-Objekt halb abgebaut, C++-Seite lebendig — das
       ist der Fall, den `conftest.py` mit `isValid` behandelt.
+
+      **Nachtrag vom 24.08.2026: die Folgerung ist da, und die Suchrichtung
+      oben war richtig.** Der erste reproduzierbare Fall fiel an, als die
+      Fenster sterben konnten (`acb0dd5`): Solange jedes an seinem `partial`
+      hing, starb keines, und ein nie abbestellter Filter fiel nicht auf.
+      `tests/test_first_run.py` ist auf dem Commit davor dreimal grün und
+      danach in fünf Läufen dreimal rot — Teardown-Fehler, `OverlayHost` und
+      `ObjectTree` mit abgeräumter C++-Seite.
+
+      **Der Unterschied zur widerlegten Deutung ist die Richtung.** Stirbt das
+      *Filterobjekt*, räumt Qt selbst auf — das war gemessen und hält. Stirbt
+      das *überwachte* Objekt, läuft der Filter des Überlebenden in den Abbau
+      hinein und fragt halb abgeräumte Geschwister nach ihrer Geometrie. Der
+      Griff dagegen ist ``QEvent.Type.Destroy``, das Qt schickt, **bevor** die
+      C++-Seite weg ist: `e0540a1` bestellt dort ab, drei Zeilen, und die Quote
+      geht von vier von sechs auf null von sechs.
+
+      **Was dabei nicht half, ist die Hälfte des Ertrags:** Zwei Wachen am
+      Eingang von `_place` (`isValid` auf Wirt, Ansicht und Zonen) senkten die
+      Quote nicht — drei bis vier von sechs blieben rot. Eine Prüfung am
+      Eingang gewinnt keinen Wettlauf, der **während** des Aufrufs entschieden
+      wird. Wer die übrigen elf angeht, fängt deshalb beim Abbestellen an und
+      nicht bei `isValid`.
+
+      Einer von dreizehn ist erledigt. Die übrigen stehen noch, und
+      `app.py:276` sowie `shortcut_schemes.py:158` installieren auf
+      `application` — die überleben alles und sind der andere Fall.
 
 - [x] **Drei Widgets bekommen Ereignisse, die ihr Zustand nicht mehr trägt**
       — als eigener Punkt aufgelöst, die Suche läuft anderswo weiter.
