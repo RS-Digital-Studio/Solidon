@@ -361,6 +361,57 @@ IHK und Berufsgenossenschaft weiter.
 Anlass** — erster Angestellter, erster Großkunde mit eigenen Anforderungen,
 Gewinn jenseits der 80.000 €.
 
+### Die Wohnung als Betriebsstätte — muss der Vermieter zustimmen?
+
+**Nachgetragen am 24.08.2026 auf Roberts Frage.** Das Formular der
+Gewerbeanmeldung verlangt eine Betriebsstätte, und die ist hier die
+Mietwohnung. Dieser Abschnitt fehlte.
+
+**Kurz: nein, solange nichts nach außen tritt** — und zu informieren ist
+niemand.
+
+Die Schwelle zieht der BGH (Urteil vom 14.07.2009, VIII ZR 165/08): Eine
+geschäftliche Tätigkeit, die **nach außen in Erscheinung tritt**, muss der
+Vermieter ohne Vereinbarung nicht dulden. Er kann aber **nach Treu und Glauben
+verpflichtet sein, sie zu erlauben**, wenn sie **ohne Mitarbeiter und ohne ins
+Gewicht fallenden Publikumsverkehr** stattfindet. Die Darlegungslast dafür, dass
+von der Nutzung keine stärkeren Einwirkungen ausgehen als von einer üblichen
+Wohnnutzung, liegt beim **Mieter**.
+
+Softwareentwicklung am Schreibtisch ist der Musterfall der zweiten Gruppe: kein
+Schild, kein Kundenverkehr, kein Lärm, keine Anlieferungen, keine Mitarbeiter.
+**Und das Gewerbeamt meldet nicht an den Vermieter** — es meldet an Finanzamt,
+IHK und Berufsgenossenschaft.
+
+**Drei Dinge trotzdem, und das erste vor der Anmeldung:**
+
+1. **Den Mietvertrag lesen.** Formularverträge tragen häufig „Die Wohnung darf
+   nur zu Wohnzwecken genutzt werden" oder einen ausdrücklichen
+   Zustimmungsvorbehalt für Gewerbe. Solche Klauseln sind wirksam — der
+   Anspruch auf Zustimmung aus Treu und Glauben besteht daneben, aber dann ist
+   es ein Anspruch, den man geltend macht, und keine Selbstverständlichkeit.
+   **Gehört zu §11 Punkt 6, und zwar davor.**
+2. **Der eine Punkt, der wirklich nach außen tritt, ist das Impressum.** § 5 DDG
+   verlangt eine **ladungsfähige** Anschrift; ein Postfach genügt nicht. Damit
+   steht die Wohnadresse öffentlich im Netz, und zwar bevor der erste Euro
+   fließt. Rechtlich reicht das nach überwiegender Auffassung nicht für eine
+   Untersagung, solange am Haus nichts erkennbar ist — praktisch ist es der
+   Weg, auf dem ein Vermieter es erfährt. Wer das nicht will, braucht eine
+   ladungsfähige Geschäftsadresse (etwa 10 bis 30 € im Monat); bei einer
+   erwarteten Größenordnung von einigen hundert Euro im Jahr (§14) ist das eine
+   Abwägung und keine Empfehlung.
+3. **Steuerlich ist es eine eigene Frage.** Das häusliche Arbeitszimmer nach
+   § 4 Abs. 5 Nr. 6b EStG setzt voraus, dass es der **Mittelpunkt der gesamten**
+   betrieblichen und beruflichen Tätigkeit ist — bei nebenberuflicher
+   Selbstständigkeit neben einer Anstellung regelmäßig nicht. Dann bleibt die
+   **Tagespauschale** von 6 € je Arbeitstag, höchstens 1.260 € im Jahr. Gehört
+   ins Steuerberater-Gespräch (§11 Punkt 8), nicht in eine Selbsteinschätzung.
+
+**Was hier ausdrücklich nicht steht:** ein Rat, den Vermieter vorsorglich zu
+fragen. Eine Frage erzeugt eine Antwort, und eine abschlägige Antwort schafft
+eine Lage, die ohne die Frage nicht bestand. Wenn der Mietvertrag schweigt und
+die Tätigkeit unsichtbar bleibt, gibt es nichts zu genehmigen.
+
 ---
 
 ## §6 Steuern
