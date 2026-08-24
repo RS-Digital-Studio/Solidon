@@ -78,6 +78,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
+| SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
+| Additive Bausteine fehlen am Flächenklick | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | nichts — der Fix in `_applies_to` kann heute laufen und behebt Wandhalter und Nutfeder mit |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
@@ -9218,3 +9220,38 @@ nachgefahren blieben alle drei rot. `ruff`, `ruff format` und `mypy` sind grün.
       erzeugte HTML-Dateien reicht, stand in dem Vorschlag nicht. „Was kostet es
       an anderer Stelle" ist bei erzeugten Dateien leicht zu übersehen, weil sie
       im Diff nicht auftauchen, solange niemand das Werkzeug laufen lässt.
+
+---
+
+## Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026)
+
+Ein Kunde fragte am 24.08.2026, ob man an ein heruntergeladenes Modell IKEA-
+SKÅDIS-Haken hängen kann, ohne es nachzukonstruieren. Die Antwort ist zweimal
+nein und einmal fast: Den Baustein gibt es nicht, seine Maße kennen wir nicht,
+und der Ablauf drumherum steht bis auf einen Handgriff.
+
+Das Konzept liegt in `konzepte/konzept-befestigungssysteme-2026-08.md` und
+nennt acht Arbeitspakete, die Abnahmekriterien und das, was ausdrücklich nicht
+gebaut wird. Hier stehen die zwei Punkte, die es zu Arbeit machen.
+
+- [ ] **Der Einhänger für Lochwände** als Baustein `pegboard_hook` in der
+  Gruppe „Befestigung", mit dem Raster als neuer Tabellenart in
+  `standards.toml`. Vorher steht das Messen: Die Lochung einer SKÅDIS-Platte
+  ist nirgends belastbar dokumentiert — `dimensions.com` nennt nur die
+  Außenmaße, die Modellportale nennen Zahlen ohne Herkunft und widersprechen
+  sich in der Plattendicke (3, 5 und 5,2 mm). Ein Zapfen, der um einen halben
+  Millimeter danebenliegt, geht in kein Loch von fünf. Also wird an einer
+  echten Platte gemessen, bevor eine Zeile entsteht, und der Wert kommt mit
+  Datum und Herkunft in die Tabelle (§24.2).
+
+- [ ] **Additive Bausteine erscheinen nicht am Flächenklick.**
+  `parts/ops.py:_applies_to` nimmt `"face"` nur auf, wenn ein Baustein
+  abträgt. Gemessen über alle achtzehn: `wall_mount`, `profile_tongue`, `rib`,
+  `snap_fit`, `latch` und `living_hinge` tragen `applies_to == []` und stehen
+  damit in keinem Kontextmenü einer angeklickten Fläche. Der Rückfall in
+  `panels.py:context_menu` greift nicht, denn er greift nur, wenn die
+  Merkmalsart **gar nichts** anbietet — eine Fläche bietet die abtragenden an.
+  Wer also auf die Rückseite eines Modells zeigt, um einen Wandhalter zu
+  setzen, findet dort alles außer dem Wandhalter. §18.5 nennt genau dieses
+  Menü „die wichtigste Einzelfunktion". Der Punkt ist älter als die
+  Kundenanfrage und wird unabhängig von ihr behoben.
