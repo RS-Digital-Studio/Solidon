@@ -9,7 +9,7 @@ import pytest
 
 from app.core.errors import AppError, SketchConflictError, ValidationError
 from app.core.sketch import solve_sketch
-from app.core.sketch.planes import frame_of, to_plane, to_world
+from app.core.sketch.planes import frame_of, ray_hit, to_plane, to_world
 from app.core.types import PlaneFrame, Sketch, SketchConstraint, SketchElement
 
 # Ein Rechteck aus vier Linien, absichtlich leicht verzogen: die Koinzidenzen
@@ -724,3 +724,63 @@ def test_the_flat_plane_keeps_the_drawing_unturned() -> None:
     """
     frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 10.0))
     assert to_world(frame, (7.0, -3.0)) == pytest.approx((7.0, -3.0, 10.0))
+
+
+def test_a_ray_straight_down_hits_where_it_points() -> None:
+    """Der einfache Fall, an dem sich das Vorzeichen prüfen lässt."""
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 10.0))
+    assert ray_hit(frame, (3.0, -4.0, 60.0), (0.0, 0.0, -1.0)) == pytest.approx((3.0, -4.0))
+
+
+def test_the_length_of_the_ray_does_not_change_where_it_lands() -> None:
+    """Der Viewport reicht den Schritt von der nahen zur fernen Ebene herein.
+
+    Der ist hunderte Millimeter lang und nicht normiert. Käme dabei ein
+    anderer Punkt heraus als bei derselben Richtung in Einheitslänge, hinge
+    die Zeichnung an der Tiefe des Sichtvolumens.
+    """
+    frame = tilted_frame()
+    short = ray_hit(frame, (20.0, 5.0, 40.0), (-0.6, 0.0, -0.8))
+    long = ray_hit(frame, (20.0, 5.0, 40.0), (-600.0, 0.0, -800.0))
+    assert short is not None
+    assert long == pytest.approx(short)
+
+
+def test_a_grazing_ray_finds_no_place_to_point_at() -> None:
+    """Der Blick fast entlang der Ebene ergibt keine brauchbare Stelle.
+
+    **Und dieser Test misst die Prüfung, nicht nur den Fall.** Die erste
+    Fassung von ``ray_hit`` verglich das rohe Skalarprodukt gegen die
+    Schwelle. Bei diesem Strahl ist es 0,5 — tausendfach über 1e-3 —, obwohl
+    der Winkel zur Ebene ein halbes Tausendstel beträgt. Die Prüfung hätte
+    nie ausgelöst, und die Zeichnung bekäme einen Punkt einen Kilometer
+    daneben. Gemessen wird deshalb der Winkel.
+    """
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    assert ray_hit(frame, (0.0, 0.0, 5.0), (1000.0, 0.0, -0.5)) is None
+
+
+def test_a_plane_behind_the_viewer_is_not_a_target() -> None:
+    """Rückwärts wird nicht getroffen.
+
+    Ohne diese Bedingung liefert der Schnitt brav eine Zahl — die Ebene liegt
+    ja auf der Geraden, nur eben in die andere Richtung. Auf dem Schirm wäre
+    das eine Stelle hinter dem Betrachter.
+    """
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 10.0))
+    assert ray_hit(frame, (0.0, 0.0, 60.0), (0.0, 0.0, 1.0)) is None
+
+
+def test_a_ray_hits_a_tilted_plane_where_to_world_would_put_it() -> None:
+    """Die Gegenprobe gegen die Umrechnung: beide müssen dasselbe sagen.
+
+    Ein Punkt wird über ``to_world`` in den Raum gelegt, ein Strahl von weit
+    außen genau darauf gerichtet — und ``ray_hit`` muss den Zeichenpunkt
+    zurückgeben, mit dem angefangen wurde. Ein Vorzeichenfehler in einer der
+    beiden Richtungen fällt hier auf, in keiner der beiden allein.
+    """
+    frame = tilted_frame()
+    target = to_world(frame, (11.0, -6.5))
+    start = tuple(target[axis] + 250.0 * frame.normal[axis] for axis in range(3))
+    direction = tuple(-frame.normal[axis] for axis in range(3))
+    assert ray_hit(frame, start, direction) == pytest.approx((11.0, -6.5))

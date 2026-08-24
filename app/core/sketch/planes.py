@@ -195,6 +195,60 @@ def to_plane(frame: PlaneFrame, point: Vec3) -> Point2:
     return (_dot(gap, frame.x_axis), _dot(gap, frame.y_axis))
 
 
+def ray_hit(frame: PlaneFrame, origin: Vec3, direction: Vec3) -> Point2 | None:
+    """Wo ein Sichtstrahl die Zeichenebene trifft — als Zeichenpunkt.
+
+    Das ist die Rechnung hinter „der Zeiger steht auf der Skizzenebene": Der
+    Viewport liefert den Strahl durch eine Bildschirmstelle, und hier wird
+    daraus das Zahlenpaar, mit dem die Zeichnung arbeitet.
+
+    **Sie steht im Kern, weil sie sonst nicht prüfbar wäre.** Offscreen gibt
+    es keinen Plotter (``Viewport._available``), also auch keinen Strahl —
+    alles, was hinter einem Plotter-Zugriff liegt, ist in der Suite ein
+    Rückgabebefehl. Die Rechnung davor zu trennen ist der einzige Weg, sie
+    gegen Zahlen zu prüfen statt gegen ein Bild.
+
+    ``direction`` muss nicht normiert sein: Der Strahl kommt als Schritt von
+    der nahen zur fernen Ebene, und für den Schnittpunkt zählt nur seine
+    Richtung.
+
+    Nichts kommt zurück, wenn der Strahl die Ebene nicht *vorwärts* trifft —
+    entweder weil er (beinahe) parallel zu ihr läuft, oder weil sie hinter dem
+    Ausgangspunkt liegt. Beides heißt an der Oberfläche dasselbe: Hier ist
+    keine Stelle, auf die man zeigen kann.
+
+    **Die Parallelprüfung misst den Winkel, nicht das Skalarprodukt.** Ohne
+    die Division durch die Länge hinge sie daran, wie lang der übergebene
+    Vektor zufällig ist: Ein Strahl von der nahen zur fernen Ebene ist
+    hunderte Millimeter lang, und ein streifender Blick käme damit auf ein
+    Skalarprodukt weit über jeder festen Schwelle. Die Prüfung liefe ins Leere,
+    ohne je zu melden, dass sie es tut.
+    """
+    span = _length(direction)
+    if span < _PARALLEL:
+        return None
+    along = _dot(direction, frame.normal) / span
+    if abs(along) < _PARALLEL_ENOUGH:
+        return None
+    along *= span
+    gap = (
+        frame.origin[0] - origin[0],
+        frame.origin[1] - origin[1],
+        frame.origin[2] - origin[2],
+    )
+    reach = _dot(gap, frame.normal) / along
+    if reach < 0.0:
+        return None
+    return to_plane(
+        frame,
+        (
+            origin[0] + reach * direction[0],
+            origin[1] + reach * direction[1],
+            origin[2] + reach * direction[2],
+        ),
+    )
+
+
 def height_to(start: PlaneFrame, target: PlaneFrame) -> float:
     """Wie hoch von der Skizzenebene bis zur Zielebene (D14).
 
