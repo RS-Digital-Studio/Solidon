@@ -20,6 +20,7 @@ dist-info führt jede Datei, die zur Installation gehört:
 
 ```python
 import csv, pathlib
+
 sp = pathlib.Path(".venv/Lib/site-packages")
 rec = sp / "mypy-2.3.0.dist-info" / "RECORD"
 fehlt = [r[0] for r in csv.reader(rec.open(encoding="utf-8")) if r and not (sp / r[0]).exists()]
