@@ -434,7 +434,7 @@ class SketchRevolveParams(BaseParams):
         unit="mm",
         minimum=0.1,
         maximum=1000.0,
-        doc=_("Höhe des Querschnitts entlang der Achse. Beim Kreis ohne Wirkung."),
+        doc=_("Höhe des Querschnitts entlang der Achse. Beim Kreis und beim Vieleck ohne Wirkung."),
         # **Wie bei den Geschwistern, und das stand hier anders.** Der
         # Kommentar an dieser Stelle behauptete, die Angabe wirke „auch beim
         # Vieleck", weil der ``doc``-Satz allein den Kreis ausschließt.

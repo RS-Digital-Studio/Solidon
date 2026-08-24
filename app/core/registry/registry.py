@@ -186,6 +186,83 @@ TWIN_TOGGLES: Final[dict[str, tuple[TranslatableText, TranslatableText]]] = {
 }
 
 
+@dataclass(frozen=True)
+class VariantGroup:
+    """Ein Menüeintrag, der mehrere Operationen zu **einer Handlung**
+    zusammenfasst — die Art wählt der Dialog.
+
+    **Der Unterschied zu ``MENU_TWINS``, und warum es beides gibt.** Ein
+    Zwillingspaar ist dieselbe Handlung in zwei Rechenkernen: „Quader anlegen"
+    heißt der Eintrag, und der Haken entscheidet nur, wie gerechnet wird. Der
+    sichtbare Zwilling *ist* die Handlung, sein Titel stimmt für beide.
+
+    Hier stimmt kein Mitgliedstitel für die Gruppe. Vier Wege, aus einer
+    Grundform einen Körper zu machen — Extrudieren, Rotieren, Sweep, Loft —
+    sind vier Handlungen mit gemeinsamem Anfang; „Extrudieren" über alle vier
+    zu schreiben wäre falsch, und die anderen drei darunter zu verstecken
+    wäre es auch. Der Gruppentitel gehört deshalb **keiner** Operation, und
+    genau das trägt ``MENU_TWINS`` nicht.
+
+    **Im Verlauf steht weiter die Operation**, nicht die Gruppe: Wer
+    extrudiert hat, liest „Extrudieren". Der Gruppentitel ist ein Weg zum
+    Dialog und kein Name für ein Ergebnis — dieselbe Trennung, die
+    ``MENU_TWINS`` zwischen Bedienung und Register zieht.
+
+    Das Vorbild für einen Menüeintrag ohne eigene Operation steht daneben:
+    *Automatisch teilen* ist ein Ablauf über mehreren Operationen und hat
+    schon heute keinen Registereintrag.
+    """
+
+    title: TranslatableText
+    """Was im Menü steht. Mit Auslassungspunkten, weil ein Dialog folgt."""
+
+    doc: TranslatableText
+    """Der Satz für Statuszeile und Tooltip — er muss die Gruppe erklären,
+    nicht eine ihrer Arten."""
+
+    choice: TranslatableText
+    """Die Beschriftung der Auswahl im Dialog."""
+
+    members: tuple[str, ...]
+    """Die Operationen, in der Reihenfolge der Auswahl. Die erste ist die
+    Vorgabe und bestimmt, welcher Dialog zuerst steht."""
+
+
+#: Die zusammengefassten Handlungen. Ihre Mitglieder bekommen **keinen**
+#: eigenen Menüeintrag — erreichbar bleiben sie über Befehlspalette und
+#: Verlauf, wie die versteckten Zwillinge auch.
+VARIANT_GROUPS: Final[tuple[VariantGroup, ...]] = (
+    VariantGroup(
+        title=_("Aus Skizze erzeugen …"),
+        doc=_(
+            "Aus einer Grundform oder einer gezeichneten Skizze einen Körper "
+            "machen — hochziehen, um eine Achse drehen, an einem Bogen "
+            "entlangführen oder zwischen zwei Größen überblenden. Die Art "
+            "steht im Dialog, die Grundform ist für alle dieselbe."
+        ),
+        choice=_("Art"),
+        members=("sketch_extrude", "sketch_revolve", "sketch_sweep", "sketch_loft"),
+    ),
+)
+
+
+def variant_members() -> frozenset[str]:
+    """Jede Operation, die in einer Variantengruppe steckt.
+
+    Der Menüaufbau überspringt sie — dieselbe Rolle, die ``MENU_TWINS`` für
+    die versteckten Zwillinge spielt.
+    """
+    return frozenset(name for group in VARIANT_GROUPS for name in group.members)
+
+
+def group_for_variant(name: str) -> VariantGroup | None:
+    """Die Gruppe, zu der diese Operation gehört — oder ``None``."""
+    for group in VARIANT_GROUPS:
+        if name in group.members:
+            return group
+    return None
+
+
 #: Wie eine Merkmalsart heißt, wenn sie jemand liest. Im erzeugten
 #: Referenzteil stand „Features: face, hole" — die Schlüssel, mit denen
 #: ``applies_to`` rechnet, in einem deutschen Handbuch.
