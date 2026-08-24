@@ -60,6 +60,23 @@ from PySide6.QtWidgets import QApplication, QWidget
 from app.i18n import install_catalog, set_language
 from app.i18n.catalog import read_catalog
 
+#: Den OpenGL-Kontext freigeben, bevor das nächste Fenster kommt.
+#:
+#: Stand hier bis zum 24.08.2026 als wortgleiche zweite Fassung — vier
+#: Anweisungen, Zeile für Zeile dieselben wie in ``make_figures``. Der
+#: Unterschied lag allein im Docstring: Dort steht, **woran** man es merkt (der
+#: Orientierungswürfel lag im zweiten Durchgang als handtellergroßes
+#: Achsenkreuz quer über dem Modell, und das englische Handbuchbild zeigte
+#: statt des Gehäuses ein X, ein Y und ein Z). Hier stand die Kurzfassung, und
+#: wer nur sie las, kannte den Fallstrick nicht.
+#:
+#: Der Weg zwischen zwei Werkzeugen ist nicht neu: ``build_licence_module``
+#: holt sich ``public_key`` und ``sign`` aus ``make_licence_keys``. Und teuer
+#: ist er hier nicht — ``make_video`` lädt das Operationsregister selbst
+#: (``load_operations`` weiter unten), zieht also nichts mit, was es nicht
+#: ohnehin braucht.
+from tools.make_figures import release_viewport
+
 #: Was eine Szene je Bild tut: Nummer und Gesamtzahl herein, Welt eingestellt.
 StepFn = Callable[[int, int], None]
 
@@ -463,23 +480,6 @@ def await_result(app: QApplication, session: object, seconds: float = 60.0) -> b
             return True
         time.sleep(0.05)
     return False
-
-
-def release_viewport(window: Any) -> None:
-    """Den OpenGL-Kontext freigeben, bevor das nächste Fenster kommt.
-
-    ``close()`` allein tut das nicht — das ``QtInteractor`` bleibt am Fenster
-    hängen, und mit ihm sein Renderfenster. Beim zweiten Durchgang kippt sonst
-    der Orientierungswürfel quer über das Modell.
-    """
-    plotter = getattr(getattr(window, "viewport", None), "plotter", None)
-    if plotter is None:
-        return
-    try:
-        plotter.close()
-    except Exception as problem:  # pragma: no cover - hängt am Treiber
-        print(f"  (Viewport ließ sich nicht schließen: {problem})")
-    window.viewport.plotter = None
 
 
 def viewport_rect(window: QWidget) -> tuple[int, int, int, int]:
