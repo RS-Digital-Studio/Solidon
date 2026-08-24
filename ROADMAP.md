@@ -96,6 +96,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Haupt-Index altert, und `git status` lügt für alle mit | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung, ob das Verfahren mit privatem Index den Nachzug selbst übernimmt. Aufgeräumt wird mit `git reset` nach einer Sicherung von `.git/index`; am 23.08. stand er bei 1424 Löschungen gegenüber HEAD, am selben Abend nach sechs weiteren Commits bei **1824** — er altert also messbar mit jedem privaten Commit weiter, und zwar in die gefährliche Richtung. Zweimal aufgeräumt, beide Male ohne Verlust: keine Datei geändert, nur der Index |
 | Das Prüfschloss serialisiert die Rechenzeit, nicht den Arbeitsbaum | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über eigene Arbeitsbäume. Jeder Lauf liest die ungestageten Dateien aller Sitzungen — ein fremder Zwischenstand macht einen Lauf rot, und schlimmer: er kann ihn grün machen |
 | Die Belegung heißt in `es` und `pt` noch nicht entschieden | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Wortwahl, keine Messung: Elegoo sagt für `es` `bandeja` 65 gegen `placa` 18, für `pt` steht es 69:69. Bei unentschiedener Quelle bleibt der Bestand |
+| Die Textsuche der Suitenteilung fragt das falsche | Ein Klick in eine Bohrung wählte die Fläche, oder nichts (24.08.2026) | ein Kriterium am **Fixture-Graphen** statt am Wortlaut. `suite-getrennt.sh` sucht Fensterdateien mit `grep -lE "MainWindow|Viewport|pyvista"`, fragt also „kommt das Wort vor?" statt „baut die Datei ein Fenster?". Zweimal zugeschnappt: `test_performance.py` sammelte in der Fenstergruppe nichts (Exit 5, steht in `CLAUDE.md`), und am 24.08. wanderte `test_sketch.py` wegen des Wortes **in einem Docstring** aus der parallelen Gruppe in die serielle — 49 Tests, grün, aber seriell, und die Sammelgruppe fiel um 36 (3559 → 3523; eine zweite Sitzung maß 3554 → 3527, andere Zeitpunkte). Behoben wurde der Einzelfall durch Umformulieren (`eefba3e9`), nicht die Ursache. Ein engeres Muster (nur `import`- und Fixture-Zeilen) wäre dichter und trotzdem nicht dicht: Eine Datei, die ihr Fixture über `conftest.py` erbt, nennt keines der drei Wörter. Gemeldet von formwerk-48 und formwerk-9e |
 | Fünf Fensterdateien reißen **vor** ihrer Zusammenfassung | Vier Wege von Hand, während die Suite grün war (23.08.2026) | zehn Läufe je Seite (~40 min Rechenzeit). Die Sammelgruppen-Hypothese ist gemessen und **zurückgezogen** — 1 gegen 2 von je 4 liegt im Rauschen. Einzeln laufen alle Dateien sauber; die Aufräum-Fixture ist per A/B entlastet (4/4 gegen 3/4). Rate 25 bis 50 Prozent je Datei, Code 0xC0000374 |
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
 | Zwei Pakete lösen den Deadlock noch nicht auf | Ein Deadlock, der keiner war — und sieben Pakete statt einem (23.08.2026) | einen **Verhaltenswechsel**, keinen Strukturfix — und deshalb je einen eigenen Schritt. `activation`: 223 Zeilen Code an der Lizenzgrenze im `__init__`, die Ladereihenfolge dort ändert man nicht, ohne die Grenze mitzuprüfen. `knowledge.parts`: dort **ist** der Import die Registrierung — die fünf Modulimporte füllen das Bausteinregister, und `bootstrap.load_operations` verlässt sich darauf; verzögert wären sie wirkungslos. Die anderen fünf Pakete sind seit dem 23.08. sauber, `tests/test_core_isolation.py` führt beide Namen mit Begründung |
@@ -111,10 +112,10 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Zahlungsanbieter steht namentlich da, ohne Vertrag | Was erst am Verkaufsstart fällig wird (24.08.2026) | **eine Entscheidung von Robert** (vorgelegt am 23.08.2026): `datenschutz.html` nennt Paddle mit voller Anschrift und führt es als Empfänger personenbezogener Daten samt Drittlandsbegründung — ein Konto gibt es mangels Gewerbeanmeldung nicht. Name stehen lassen (dann stimmt der Text am Starttag) oder bis dahin durch „der Zahlungsdienstleister“ ersetzen (dann stimmt er heute). Der zeitliche Vorbehalt ist seit `5950321` drin, die Namensfrage bleibt |
 | Offscreen prüft nichts, was am Aktor hängt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine **Messstelle**, die im echten Fenster läuft, und eine Entscheidung, welche Zusagen dort geprüft werden müssen. `Viewport.show_scene` kehrt bei `self.plotter is None` vor dem Aktor-Aufbau zurück (`app/ui/viewport.py:1948`), und `tests/conftest.py` setzt `QT_QPA_PLATFORM=offscreen` für die ganze Suite — jede Zusage über Aktoren, Farben, Kamerastellung oder Bildinhalt ist dort grün über einer leeren Menge. Belegt am 24.08.: `_actors` war vor **und** nach einer Operation `{}`; mit sichtbarem Fenster wanderten dieselben Aktoren von (-10..10) auf (-104..-84, 84..104, 0..20) |
 | Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine Entscheidung, ob ein Prüfstand `report_error` abschalten darf. Ein Fehler öffnet dort einen modalen Dialog: Der Hauptthread stand, die Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu unterscheiden — der Traceback lag still unter `%LOCALAPPDATA%\RS Digital\Solidon3D\reports\bericht-<zeitstempel>\bericht.txt` |
-| Zwei Kernfunktionen sind in der Oberfläche nachgebaut | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | eine Sitzung, die `app/ui/sketch_editor.py` hält. `flat_offsets` (373) ist wortgleich `edit.offsets_of`, `_flat_points` (383) wortgleich `edit.flat_points`, und `from app.core.sketch import edit` steht in Zeile 48 schon da — elf Aufrufstellen, `Point2` ist `tuple[float, float]`. `formwerk-9e` nimmt es in ihr Canvas-Paket mit |
-| Gehört „positive“ in `_RANGE_CONSTRAINTS`? | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | eine **fachliche Entscheidung** über einen Oberflächentext, keine Aufräumarbeit. „Dieses Maß muss größer als null sein“ bekommt heute den Titel „Die Eingabe war so nicht verwendbar.“ statt „Ein Wert liegt außerhalb des zulässigen Bereichs.“ — und es *ist* eine Bereichsverletzung. Betrifft alle sechzehn Aufrufstellen von `require_positive` |
-| Ein nicht-zylindrischer Durchbruch bleibt in der Draufsicht unerreichbar | Ein Klick in eine Bohrung wählte die Fläche, oder nichts (24.08.2026) | eine Entscheidung über die Kosten: Der Strahl gegen die **Dreiecke** der Merkmale deckt auch rechteckige Ausschnitte, kostet aber bei jedem Klick ohne Zell-Treffer einen Durchlauf über alle Merkmalsdreiecke, wo der Zylinder sechs Vergleiche braucht. Gemessen an einer 60×40×8-Platte mit 12×8-Ausschnitt: senkrecht hinein vorher `None`, nachher `None` |
-| 85 weitere Texte stehen mehrfach wortgleich im Quelltext | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Vier Fälle in `app/ui/main_window.py` sind es wert, wenn dort ohnehin jemand arbeitet: „Bitte zuerst ein Objekt auswählen.“ (4×) und „Dafür braucht es einen Körper in der Szene.“ (4×) |
+| 81 weitere Texte stehen mehrfach wortgleich im Quelltext | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Die vier Fälle in `app/ui/main_window.py` sind am 24.08.2026 erledigt (`791a1576`); übrig sind Vorkommen, die meist zwei- bis dreimal in derselben Datei stehen |
+| Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | eine **Deutung**, die noch fehlt. Das Zählverhältnis ist belegt (`installEventFilter` 13×, `removeEventFilter` 2×), die Schlussfolgerung nicht: Ein Versuch, den Fehler mit einem aufgegebenen Filterobjekt nachzustellen, blieb **fehlerfrei** — Qt entfernt sterbende Filter selbst aus seinen Listen. Was die drei gemessenen Fälle erzeugt, ist damit offen |
+| Drei Widgets bekommen Ereignisse, die ihr Zustand nicht mehr trägt | Was niemand las, und was zweimal dastand (24.08.2026) | zehn Läufe je Seite, wie der Absturzpunkt weiter oben. Gemessen am 24.08.2026 in `test_ui.py`: `shortcut_schemes.py:137` bekommt ein `QWidgetItem` als `watched` (bei Qt unmöglich), `overlay.py:587` findet `_placing` nicht, `viewport.py:4312` nicht `_drag_kind` — alle drei im Teardown, alle drei einzeln grün. Drei Sitzungen haben je einen davon unabhängig gesehen |
+| Zwei Downloadgrößen stehen im Text statt in der Message-ID | Was niemand las, und was zweimal dastand (24.08.2026) | fünf Übersetzungen für zwei Sätze. `NEEDED_GIGABYTES` macht es richtig (`.format(noetig=…)`), `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` nicht — die Zahl ist in die Message-ID getippt. Ein Test hält beide Stellen seit `77ad37cb` zusammen; der saubere Weg braucht Übersetzer |
 
 ---
 
@@ -4222,6 +4223,22 @@ ein Hinweis hätte die vierte beim nächsten Zuwachs genauso verpasst.
       > Codes `0xC0000005`/`0xC0000374`, immer **vor** der Zusammenfassung,
       > Stelle wandert, Rate 25 bis 50 Prozent je Fensterdatei.
       > **Belegt an 21 von 24 Stapeln.**
+
+      **Nachtrag vom 24.08.2026: die Zahl der Fenster einer Datei ist ein
+      Faktor, und zwar ein schwacher.** Gemessen an `tests/test_selection.py`,
+      zehn Läufe je Seite unter dem Schloss, Latte vorher gesetzt (ab 4 von 10
+      gilt der Beitrag als belegt): **ohne drei zusätzliche Viewport-Instanzen
+      0 von 10 gerissen, mit ihnen 2 von 10.** Damit ist er *nicht* belegt, die
+      Richtung aber sichtbar; zwei Tests wurden zusammengelegt, die denselben
+      Körper doppelt aufbauten. Die Stapel stützen Signatur B: `Session.__init__`
+      → `evaluate_async` → `_on_thread_done` → `wait_for_idle`, einmal
+      „Garbage-collecting" als ganzer Stapel, jedes Mal `0xc0000374` und **kein
+      fehlgeschlagener Test**.
+
+      **Und die Methode ist billiger als hier steht.** „Zehn Läufe je Seite
+      (~40 min)" gilt für `test_ui.py`; an einer Datei, die fünf Sekunden
+      läuft, sind zehn Läufe **eine Minute**. Wer die große Frage angeht, holt
+      sich den Vergleichsarm dort, statt ihn zu überspringen.
 
       **Vier Registerpunkte sind hierin aufgegangen** — sie beschrieben
       dieselbe Sache aus vier Richtungen: *Ein Absturz vor der Schlusszeile*
@@ -8555,7 +8572,7 @@ erklären können. Genau so ist sie hier verwendet.
 
 Was offen bleibt:
 
-- [ ] **Zwei Kernfunktionen sind in der Oberfläche nachgebaut.**
+- [x] **Zwei Kernfunktionen sind in der Oberfläche nachgebaut.**
       `app/ui/sketch_editor.py:373` `flat_offsets` ist wortgleich
       `edit.offsets_of`, `:383` `_flat_points` wortgleich `edit.flat_points` —
       und `from app.core.sketch import edit` steht in Zeile 48 schon da. Elf
@@ -8564,7 +8581,7 @@ Was offen bleibt:
       anderen Sitzung gehörte; `formwerk-9e` nimmt es in das Paket mit, das die
       Koordinatenrechnung des Canvas anfasst.
 
-- [ ] **Gehört „positive" in `_RANGE_CONSTRAINTS`?** Eine fachliche
+- [x] **Gehört „positive" in `_RANGE_CONSTRAINTS`?** Eine fachliche
       Entscheidung über einen Oberflächentext, keine Aufräumarbeit.
       `ValidationError` setzt den Titel „Ein Wert liegt außerhalb des
       zulässigen Bereichs." nur für `minimum`, `maximum` und `range`; sonst
@@ -8747,14 +8764,164 @@ beim Einlesen zusammen, und die Zylindersuche hängt an dieser Nachbarschaft. Be
 `plate_holes.stl` fiel es nicht auf, dort fand sie die vier Bohrungen auch ohne.
 Ein Prüfaufbau, der den Weg der Anwendung nachbaut, muss ihn **ganz** nachbauen.
 
-- [ ] **Ein nicht-zylindrischer Durchbruch bleibt in der Draufsicht
-      unerreichbar.** `_bore_aim` fragt Merkmale mit `diameter` und `axis`, also
-      `hole`, `cone` und `pin`. Ein rechteckiger Durchbruch besteht aus
-      `face`-Merkmalen: gemessen an einer 60×40×8-Platte mit 12×8-Ausschnitt,
-      senkrecht hinein, vorher `None` und nachher `None` — der Klick hebt dort
-      weiter die Auswahl auf. Die allgemeine Fassung wäre der Strahl gegen die
-      **Dreiecke** der Merkmale statt gegen einen Zylinder, und sie wartet auf
-      eine Entscheidung: Sie kostet bei jedem Klick ohne Zell-Treffer einen
-      Durchlauf über die Merkmalsdreiecke aller Körper, während der Zylinder
-      sechs Vergleiche braucht. Bohrungen sind der häufige Fall, Durchbrüche
-      der seltenere — deshalb steht hier ein Kästchen und keine Erweiterung.
+- [x] **Ein nicht-zylindrischer Durchbruch war in der Draufsicht
+      unerreichbar** — behoben am selben Tag auf Roberts „mach das offen
+      genannte auch", und **anders als hier zuerst stand**. Die Zeile darüber
+      lautete: „Die allgemeine Fassung wäre der Strahl gegen die Dreiecke der
+      Merkmale statt gegen einen Zylinder." Das löst den Fall nicht. Zwei
+      Gründe, beide gemessen:
+
+      * **Bei senkrechtem Blick liegen die Wände des Ausschnitts parallel zum
+        Strahl.** Dort ist so wenig ein Dreieck zu treffen wie an der
+        Bohrungswand — die teurere Rechnung hätte dasselbe `None` geliefert.
+      * **Es gibt kein Merkmal zu wählen.** Ein rechteckiger Ausschnitt besteht
+        aus vier `face`-Merkmalen, von denen keine „richtiger" ist als die
+        andere. Ein Gewinner unter ihnen wäre erfunden, und `hole` ist der
+        Gegenfall: Dort *ist* das Merkmal die Sache.
+
+      Entschieden wird deshalb nicht „welches Merkmal", sondern „welcher
+      **Körper**": Wer in eine Öffnung zeigt, hat auf das Teil gezeigt, und die
+      Auswahl aufzuheben ist in jedem Fall falsch. `_through_aim` fragt die
+      **konvexe Hülle** des Körpers (`geom.mesh.hull_planes`,
+      `ray_span_in_hull`) — nicht den Hüllquader, denn der eines L-Profils
+      reicht weit ins Leere und nähme die Zusage „ein Klick daneben hebt die
+      Auswahl auf" (§18.5) mit. Gemessen am echten Picker, 60×40×8-Platte mit
+      12×8-Ausschnitt, Draufsicht: 0 bis 30 px in der Öffnung **vorher
+      `(None, None)`, nachher `('obj_1', None)`**; ab 60 px unverändert
+      `face_2`. Kosten 0,03 ms beim ersten Aufruf, 0,015 ms danach.
+
+      **Der Kostendeckel war die eigentliche Arbeit.** Die exakte konvexe Hülle
+      von `dense_1m.stl` braucht **5084 ms** — bei einer feinen Kugel liegt
+      jeder Punkt auf der Hülle, dieselbe Falle, die `SHADOW_HULL_POINTS` beim
+      Schattenumriss schon kennt. Über eine Stichprobe von 4096 Punkten plus
+      den äußersten in sechs Achsenrichtungen sind es **20 ms**, und an der
+      Korpusplatte liefern beide Wege dasselbe: zwölf Flächen, Volumen
+      32 000 mm³. Gerechnet wird über Halbräume und nicht über ein Hüllnetz —
+      ein Strahl gegen 8202 Hülldreiecke wäre wieder das, was vermieden werden
+      sollte.
+
+- [ ] **Die Textsuche der Suitenteilung fragt das falsche.**
+      `suite-getrennt.sh` sucht seine Fensterdateien mit
+      `grep -lE "MainWindow|Viewport|pyvista"` — also „kommt das Wort vor?"
+      statt „baut die Datei ein Fenster?". Der Grund dafür ist gut: Eine neue
+      Fensterdatei soll keinen Eintrag brauchen. Der Preis ist heute zum
+      **zweiten** Mal fällig geworden: `test_performance.py` sammelte in der
+      Fenstergruppe nichts (Exit 5, steht in `CLAUDE.md`), und am 24.08. wanderte
+      `tests/test_sketch.py` wegen des Wortes **in einem Docstring** aus der
+      parallelen Sammelgruppe in die serielle Gruppe — 49 Tests, grün, aber
+      seriell, und die Sammelgruppe fiel um 36 (3559 → 3523; eine zweite Sitzung
+      maß am selben Tag 3554 → 3527, andere Zeitpunkte im geteilten Baum).
+
+      Ironisch daran: Das Wort stand in einem Satz **über meinen eigenen
+      Strahl** („Der Viewport reicht den Schritt von der nahen zur fernen Ebene
+      herein"), geschrieben von der Nachbarsitzung über `_pick_ray`. Behoben ist
+      der Einzelfall durch Umformulieren (`eefba3e9`), nicht die Ursache — und
+      formwerk-9e hat den Satz dazu geliefert: *Zweimal dieselbe Falle heißt,
+      dass die Suche zu grob ist, nicht dass zwei Leute unachtsam waren.*
+
+      Ein engeres Muster (nur `import`- und Fixture-Zeilen) wäre dichter und
+      trotzdem nicht dicht: Eine Datei, die ihr Fixture über `conftest.py`
+      erbt, nennt keines der drei Wörter. Sauber wäre das Kriterium am
+      **Fixture-Graphen** — was auf `qt_app` oder `window` zugreift, baut ein
+      Fenster. Gemeldet von formwerk-48.
+
+      **Bewusst nicht mitgebaut:** eine Zielhilfe am Rand eines Ausschnitts.
+      Bei der Bohrung meint ein Klick 0,4 mm neben der Kante die Bohrung, weil
+      sie das Merkmal ist; neben einem Ausschnitt ist die Deckfläche das
+      Merkmal, und die ist getroffen. Wer die Innenwand will, sieht sie von
+      schräg — dann liegt dort ein Dreieck, und der Zell-Pick trifft es.
+
+
+## Was niemand las, und was zweimal dastand (24.08.2026)
+
+Zweiter Durchgang, diesmal mit anderen Fragen als beim ersten: nicht „welcher
+Code steht doppelt", sondern „welcher Code wird nie gelesen" und „welche
+Aussage steht an zwei Stellen, von denen nur eine wirkt". Dazu die zwei
+Entscheidungen, die der erste Durchgang offen gelassen hat.
+
+Vorweg wieder das Negative, weil es das Ergebnis mitträgt: **2985 Texte im
+Quelltext, 2985 Einträge in jedem der fünf Kataloge, null verwaist, null
+fehlend** — exakte Deckung. Alle Migrations-Beispieldateien werden geprüft
+(`test_project.py:470` sammelt sie per Glob), alle Bausteine auch
+(`test_parts.py` parametrisiert über `PARTS.all()`). Beide sahen in der ersten
+Messung nach Lücken aus und waren keine: Wer per Glob sammelt, nennt keine
+Namen — und ist damit besser dran als eine gepflegte Liste, weil ein neuer
+Eintrag automatisch mitgeprüft wird.
+
+- [x] **`positive` gehört in `_RANGE_CONSTRAINTS`** (`76c6dd13`). Der offene
+      Punkt aus dem ersten Durchgang, entschieden: Die nach unten offene Spanne
+      **ist** eine Spanne. „Dieses Maß muss größer als null sein" trug die
+      Überschrift „Die Eingabe war so nicht verwendbar." — wahr, aber vage, und
+      die Oberfläche zeichnet den Titel groß. Mit sechzehn Aufrufern über
+      `require_positive` der häufigste der neun Fälle. Der Test prüft jetzt
+      beides: die Liste und den echten Weg durch `require_positive`.
+
+- [x] **Vier Meldungen, zwei Sätze** (`791a1576`). „Bitte zuerst ein Objekt
+      auswählen." stand viermal in `main_window.py`, „Dafür braucht es einen
+      Körper in der Szene." viermal. **Die Falle beim Zusammenlegen ist der
+      eigentliche Ertrag:** `tr()` übersetzt sofort, eine Modulkonstante damit
+      friert die Sprache des Imports ein — gemessen, nach `set_language("en")`
+      liefert `str(_(…))` „Please select an object first.", ein zur Importzeit
+      ausgewertetes `tr(…)` weiter den deutschen Satz. Und der naheliegende
+      Ausweg (Satz als nackte Zeichenkette, an der Stelle `tr(KONSTANTE)`)
+      wirft ihn aus allen fünf Katalogen, weil `i18n.extract` nur feste
+      Zeichenketten liest. Beide Wege sehen richtig aus, keiner wird rot.
+
+- [x] **Eine Sicherheitsliste, die niemand las** (`5c6e57a2`). `INCLUDING` in
+      `openscad.py` zählt die neun Anweisungen auf, mit denen OpenSCAD etwas
+      hereinholt, und liest sich wie die maßgebliche Liste der Prüfung nach
+      Regel 11. Geprüft wird mit zwei regulären Ausdrücken, die dieselben Namen
+      ein zweites und drittes Mal aufzählen. Gemessen deckungsgleich, es fehlte
+      also nichts; die Gefahr lag in der Zukunft. Die Liste ist jetzt die
+      Zusicherung — ein Eintrag ohne Prüfung ist ein roter Lauf. Nicht
+      zusammengelegt, weil in einer Regex-Alternative die Reihenfolge trägt
+      (`import` vor `import_stl` erreicht `import_stl` nie).
+
+- [x] **Drei Konstanten, die niemand las** (`77ad37cb`). `SOLVER_CHAIN` in
+      `types.py` war die dritte Aufzählung derselben Reihenfolge neben dem
+      Literal `SolverStage` und `boolean.FULL_CHAIN` — entfernt. `ALIGN` in
+      `header.py` war tot und nahm den `Qt`-Import mit. `BACKGROUND_MEGABYTES`
+      und `WEIGHT_GIGABYTES` tragen Zahlen, die **von Hand** im Fortschrittstext
+      stehen; dass das driftet, stand im Kommentar selbst (er sagte 444, die
+      Konstante 445).
+
+Was offen bleibt — und der erste Punkt ist eine **zurückgezogene Deutung**:
+
+- [ ] **Elf von dreizehn Eventfiltern werden nie abbestellt, und was das
+      bedeutet, weiß ich nicht.** Das Zählverhältnis ist belegt:
+      `installEventFilter` steht 13× in `app/ui`, `removeEventFilter` 2× —
+      `survey.py:208` und `viewport.py:4183` machen es, `app.py:276` und
+      `shortcut_schemes.py:158` installieren auf `application` und bestellen nie
+      ab. **Die naheliegende Schlussfolgerung ist gemessen und hält nicht:** Ein
+      Versuch, den Fehler mit einem aufgegebenen Filterobjekt nachzustellen,
+      blieb fehlerfrei — Qt entfernt sterbende Filter selbst aus seinen Listen.
+      Das Verhältnis bleibt ein Faktum ohne Folgerung, und es steht hier, damit
+      niemand es ein zweites Mal für die Erklärung hält. Wer weitersucht, sucht
+      die Zwischenlage: Python-Objekt halb abgebaut, C++-Seite lebendig — das
+      ist der Fall, den `conftest.py` mit `isValid` behandelt.
+
+- [ ] **Drei Widgets bekommen Ereignisse, die ihr Zustand nicht mehr trägt.**
+      Am 24.08.2026 in `test_ui.py` gemessen, alle drei im Teardown, alle drei
+      einzeln grün: `shortcut_schemes.py:137` bekommt ein `QWidgetItem` als
+      `watched` (in Qts Signatur unmöglich), `overlay.py:587` findet `_placing`
+      nicht, `viewport.py:4312` nicht `_drag_kind`. Die Initialisierungs­
+      reihenfolge ist bei allen dreien geprüft und in Ordnung — die Attribute
+      werden im `__init__` gesetzt, der Filter erst danach installiert. Drei
+      Sitzungen haben je einen Fall unabhängig gesehen, und das ist der Grund,
+      warum es hier steht: Es ist kein Einzelfall mehr.
+
+- [ ] **Zwei Downloadgrößen stehen im Text statt in der Message-ID.** Der
+      sauberere Weg ist bekannt und steht zwei Dutzend Zeilen daneben:
+      `NEEDED_GIGABYTES` wird mit `.format(noetig=…)` in den Satz gesetzt. Für
+      `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` kostet er fünf
+      Übersetzungen für zwei Sätze, und die kann keine Sitzung erfinden. Bis
+      dahin hält ein Test beide Stellen zusammen.
+
+**Und ein Fund über das Suchen selbst.** Von den Verdachtsfällen dieses
+Durchgangs waren mehr falsch als richtig: Die Bausteine ohne Test hatten einen
+(per Parametrisierung), die Beispieldateien ohne Nennung auch (per Glob), drei
+von vier `return {}`-Fällen waren korrekte Fallunterschiede, und die
+Eventfilter-Deutung ist widerlegt. Was durchhielt, hielt durch, weil es **am
+Code** belegt war und nicht an einer Zählung. Ein Suchmuster ist ein Vorschlag,
+keine Aussage — und wer es nicht an einem Fall prüft, dessen Ausgang er kennt,
+meldet Funde, die es nicht gibt.
