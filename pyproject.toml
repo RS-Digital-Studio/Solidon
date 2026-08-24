@@ -33,10 +33,11 @@ geom = [
   "manifold3d>=3.1",
   # Polygonarbeit hinter dem gedeckelten Schnitt (§18.2). BSD-3, bündelt GEOS (LGPL).
   "shapely>=2.0",
-  # Konturhierarchie für denselben Schnitt: ohne diese beiden lässt sich ein
-  # Schnitt durch eine Platte mit Loch nicht schließen. BSD-3 und MIT.
+  # Konturhierarchie für denselben Schnitt: ohne den Graphen lässt sich ein
+  # Schnitt durch eine Platte mit Loch nicht schließen. BSD-3. rtree stand
+  # hier bis zum 24.08.2026 daneben — es griff in fremde Seiten und ist durch
+  # app/core/geom/enclosure.py ersetzt (shapely/GEOS liefert die Kandidaten).
   "networkx>=3.0",
-  "rtree>=1.2",
   # Marching Cubes für die Voxelstufe der Booleschen Rückfallkette (§17.2). BSD-3.
   "scikit-image>=0.24",
   # 3MF ist das Format, das Slicer bevorzugen, und es braucht einen

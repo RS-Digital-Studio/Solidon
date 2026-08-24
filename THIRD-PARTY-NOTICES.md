@@ -65,7 +65,6 @@ Neu erzeugen:
 | requests | Apache Software License |
 | rich | MIT License |
 | rich-rst | MIT |
-| rtree | MIT |
 | scikit-image | BSD License |
 | scipy | BSD License |
 | scooby | MIT |

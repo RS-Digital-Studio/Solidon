@@ -1,12 +1,32 @@
 ---
 name: rtree-abstuerze-im-langen-lauf
-description: "Die volle pytest-Suite stirbt seit 08/2026 an Access Violations aus rtree — portionsweise fahren, nicht dem eigenen Code zuschreiben."
+description: "rtree war die Absturzursache seit 08/2026 und ist seit 24.08.2026 aus dem Prozess — wer wieder Access Violations sieht, sucht zuerst, wer es zurückgeholt hat."
 metadata: 
   node_type: memory
   type: project
   originSessionId: dbd41399-e6de-443d-b168-384423e01c1a
   modified: 2026-08-08T04:14:31.945Z
 ---
+
+**Seit dem 24.08.2026 ist die Ursache draußen, nicht nur gemildert.** Ein
+Kunde verlor beim Maßeändern (Weg 2, „Breite auf 90") die Anwendung; Robert
+zog die Grenze auf null. Alle drei Nutzer des Index sind ersetzt —
+`geom/mesh.on_surface` (eigener cKDTree über Dreiecksschwerpunkten),
+`ingest/outline` und der **Schnittdeckel** (`geom/enclosure.py` ersetzt
+trimeshs `enclosure_tree`, shapelys STRtree liefert die Kandidaten) — und das
+Paket ist deinstalliert und aus `constraints.txt`, `pyproject.toml` und der
+Lizenzliste entfernt. `tests/test_slots.py::test_the_geometry_paths_never_loads_rtree`
+fährt alle drei Wege in einem eigenen Prozess und besteht darauf, dass
+`rtree` nie in `sys.modules` steht.
+
+Der dritte Nutzer flog **nicht** über die Quelltextsuche auf, sondern über
+die Probe mit blockiertem Import — 171 grüne Tests mit installiertem Paket
+hatten ihn nicht gezeigt. Wer je wieder eine Access Violation aus dieser
+Familie sieht: zuerst prüfen, ob jemand rtree zurückgeholt hat
+(`pip show rtree`), nicht im eigenen Code suchen.
+
+Der Rest dieser Notiz beschreibt die Zeit **davor** und bleibt als
+Begründung stehen:
 
 Seit dem 6. August 2026 bricht `pytest -q` über die ganze Suite auf dieser
 Maschine mit „Windows fatal exception: access violation" ab. Die Stelle

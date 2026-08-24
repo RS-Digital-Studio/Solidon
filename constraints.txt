@@ -80,7 +80,6 @@ QtPy==2.4.3
 requests==2.34.2
 rich==15.0.0
 rich-rst==2.1.0
-rtree==1.4.1
 ruff==0.16.4
 scikit-image==0.26.0
 scipy==1.18.1

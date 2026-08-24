@@ -90,7 +90,6 @@ numpy = { licence = "BSD-3-Clause" }
 scipy = { licence = "BSD-3-Clause", note = "Graphen, Zuordnungslöser und der Skizzenlöser in der Ebene (§30.1)" }
 shapely = { licence = "BSD-3-Clause", note = "Polygone für den geschlossenen Schnitt; bringt GEOS mit (LGPL-2.1)" }
 networkx = { licence = "BSD-3-Clause", note = "Konturhierarchie beim Schließen einer Schnittfläche" }
-rtree = { licence = "MIT", note = "Raumindex für dieselbe Hierarchie; libspatialindex steht unter MIT" }
 scikit-image = { licence = "BSD-3-Clause", note = "Marching Cubes für die Voxelstufe der Rückfallkette" }
 lxml = { licence = "BSD-3-Clause", note = "XML-Schreiber hinter dem 3MF-Export" }
 vhacdx = { licence = "BSD-3-Clause", note = "V-HACD-Hinweis für die Trennebene (§22.3); optional, das Original github.com/kmammou/v-hacd steht unter BSD-3" }

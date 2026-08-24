@@ -478,3 +478,58 @@ def test_on_surface_matches_the_exact_answer_without_any_index() -> None:
         )
         own = np.linalg.norm(points - body.triangles[triangle].mean(axis=1), axis=1)
         assert np.all(own < np.inf) and triangle.dtype == np.int64
+
+
+def test_the_geometry_paths_never_load_rtree() -> None:
+    """Die Zusage hinter dem Umbau vom 24.08.2026: ``rtree`` betritt den
+    Prozess nicht mehr.
+
+    Nicht „der Baum kann es", sondern „die Anwendung tut es" — deshalb ein
+    eigener Prozess, und deshalb alle drei Wege, die je durch den Index
+    liefen: die Näherungssuche (``on_surface``), der **gedeckelte Schnitt**
+    durch eine Platte mit Loch (``slice_plane`` läuft durch
+    ``enclosure_tree``, und genau dieser dritte Nutzer flog erst mit dieser
+    Probe auf, nicht mit der Quelltextsuche) und das Einlesen einer
+    Zeichnung. Danach darf ``rtree`` nicht in ``sys.modules`` stehen — sonst
+    ist der Absturz von Weg 2 („Breite auf 90") nur verschoben, nicht
+    behoben.
+
+    Das Paket ist deinstalliert; trimeshs eigene Importe sind abgesichert.
+    Ein künftiger, übersehener Zugriff ist damit ein lauter Python-Fehler in
+    diesem Test — keine Heap-Korruption beim Kunden.
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    probe = (
+        "import sys\n"
+        "import numpy as np, trimesh\n"
+        "from app.core.geom.mesh import MeshData, on_surface\n"
+        "from app.core.geom.section import cut, SectionPlane\n"
+        "from app.core.ingest.outline import extrude\n"
+        "closest, distance, triangle = on_surface(\n"
+        "    trimesh.creation.box((20.0, 20.0, 20.0)), np.array([[100.0, 0.0, 0.0]])\n"
+        ")\n"
+        "assert abs(float(distance[0]) - 90.0) < 1e-9\n"
+        "plate = trimesh.creation.box((60.0, 40.0, 10.0))\n"
+        "hole = trimesh.creation.cylinder(radius=6.0, height=30.0)\n"
+        "body = trimesh.boolean.difference([plate, hole], engine='manifold')\n"
+        "sliced = cut(MeshData.of(body), SectionPlane(normal=(0.0, 0.0, 1.0), position=0.0))\n"
+        "assert sliced.capped and sliced.mesh.raw.is_watertight\n"
+        "drawing = (root / 'app' / 'examples' / 'weg2-halter-konstruieren.svg').read_bytes()\n"
+        "outline = extrude(drawing, '.svg', height=3.0)\n"
+        "assert outline.contours == 197, outline.contours\n"
+        "assert 'rtree' not in sys.modules, 'rtree wurde geladen'\n"
+        "print('ohne rtree')\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-c", f"from pathlib import Path\nroot = Path(r'{root}')\n" + probe],
+        capture_output=True,
+        text=True,
+        timeout=180,
+        cwd=str(root),
+    )
+    assert done.returncode == 0, done.stderr
+    assert "ohne rtree" in done.stdout
