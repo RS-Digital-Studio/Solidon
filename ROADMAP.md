@@ -9499,6 +9499,35 @@ gebeten.
 > 3637 grün, und die vier Auffälligkeiten des Laufs sind alle vorbestehend oder
 > Abrisse beim Abbau. **Ausgeliefert ist damit nichts** — die Fixes gehen mit
 > dem nächsten Paket hinaus, und dem Kunden ist der Weg von Hand beschrieben.
+>
+> **Zwei Reviews danach kam eine zweite Runde (`3b3114e`), und die eine Hälfte
+> davon war ein halber Fix.** `3d-druck-61` hat nachgesehen, wo der
+> Windows-Pfad überall ankommt: `http.client.InvalidURL` erbt von
+> `HTTPException` und damit **weder von `ValueError` noch von `OSError`** —
+> gefangen war er an einer von vier Stellen. Wer den Kommentar daneben las
+> („eine unbrauchbare Adresse heißt nicht erreichbar, nicht Absturz"), hielt die
+> Sache für erledigt; drei Zeilen weiter galt sie nicht.
+>
+> **Und dieselbe Lücke lag in einer zweiten Datei.** ComfyUI ist der zweite
+> Dienst, dessen Adresse jemand von Hand einträgt: `mesh.reachable` fing nur
+> `OSError`, `mesh.fetch` nur `HTTPError` und `URLError`. Die Familien stehen
+> jetzt in `discover.py` — `BROKEN_ADDRESS` für „das ist keine Adresse",
+> `UNUSABLE_ADDRESS` für „keine Adresse oder niemand hört zu". Zwei Namen, weil
+> zwei Lagen zwei Handlungen brauchen.
+>
+> **Die dritte Ebene ist die, die den Fall gar nicht erst entstehen lässt.** Auf
+> Roberts Ansage („genug Infos für Neunutzer, damit sie es sicher ausführen
+> können"): Der Einrichtungsdialog fragte „Adresse, unter der es erreichbar
+> ist:" und speicherte, was kam. Er nennt jetzt ein Beispiel aus dem Werkzeug
+> selbst (`ExternalTool.url`, damit es mit der Vorgabe altert), sagt warum kein
+> Pfad hineingehört, und prüft die Eingabe über `discover.unusable_address` —
+> wer einen Ordner einträgt, bekommt dasselbe Feld noch einmal, mit dem Grund
+> darüber und seiner Eingabe darin.
+>
+> **Was daraus als Regel bleibt:** Wer eine Ausnahme an der Stelle fängt, an der
+> sie aufgetreten ist, hat die Frage „welche zweite Stelle hat dasselbe Muster?"
+> noch nicht gestellt. Beide Runden sind an genau dieser Frage gescheitert,
+> einmal je Ebene.
 
 **Der Satz, der bleibt: Was ein Werkzeug über sich selbst sagt, tippt der Kunde
 ein.** `http://127.0.0.1:11434` ist die Adresse, die Ollama in seiner eigenen
