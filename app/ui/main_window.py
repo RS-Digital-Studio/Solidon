@@ -137,6 +137,8 @@ from app.core.scene import (
 )
 from app.core.scene.cancel import CancelSignal
 from app.core.scene.project import clear_autosave, find_recovery
+from app.core.sketch.planes import frame_for_plane
+from app.core.sketch.profile import curves_of
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
 from app.core.slice.estimate import total as estimate_total
@@ -148,6 +150,7 @@ from app.core.types import (
     ObjectId,
     Origin,
     Parameter,
+    PlaneFrame,
     SliceResult,
     SourceOrigin,
     Stroke,
@@ -229,7 +232,7 @@ from app.ui.tour import TourPanel
 from app.ui.transform_bar import TransformBar
 from app.ui.update_dialog import UpdateDialog
 from app.ui.variants_dialog import VariantsDialog
-from app.ui.viewport import Viewport
+from app.ui.viewport import DisplayMode, Viewport
 
 _log = get_logger(__name__)
 
@@ -298,6 +301,14 @@ GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g", ".nc")
 #: nachgerechnet wird (Entscheidung L). Bei jedem Zug zu rechnen hieße, den
 #: Pinsel zu verzögern, damit eine Zahl aktuell ist, die sich beim nächsten Zug
 #: wieder ändert.
+#: Wie weit das Raster der Zeichenebene reicht, in Millimetern von der Mitte.
+#:
+#: Der halbe Bauraum eines großen Druckers, aufgerundet: Wer auf einer Ebene
+#: zeichnet, tut es innerhalb dessen, was gedruckt werden kann. Ein Raster,
+#: das darüber hinausreicht, kostet Linien und sagt nichts — und eines, das
+#: früher endet, sähe aus wie eine Grenze, die es nicht gibt.
+SKETCH_GRID_REACH: Final = 150.0
+
 SCULPT_CHECK_MS: Final = 400
 
 #: Wie fein die mitlaufende Wandprüfung rastert, als Anteil der
@@ -1142,6 +1153,12 @@ class MainWindow(QMainWindow):
         """Die MCP-Schnittstelle, solange sie läuft (Konzept P15 §7 Etappe 9)."""
         self._sketch_panel: SketchPanel | None = None
         self._sketch_target: str | None = None
+        self._mode_before_sketch: DisplayMode = "solid"
+        """Die Darstellung vor dem Skizzenmodus (§30.1, P4).
+
+        Er blendet das Modell durchscheinend, damit die Zeichnung darauf
+        liegt und nicht dahinter. Wer vorher im Drahtgitter gearbeitet hat,
+        soll danach wieder darin sein — gemerkt statt geraten."""
         """Der Operationsname, für den gerade gezeichnet wird."""
 
         # Die Leiste des Skizzenmodus. Sie steht neben der Werkzeugzeile statt
@@ -1241,6 +1258,11 @@ class MainWindow(QMainWindow):
         bottom_layout = QVBoxLayout(bottom)
         bottom_layout.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
         bottom_layout.setSpacing(0)
+        self._bottom_layout = bottom_layout
+        """Die schwebende Karte unten — dort hängt sich der Skizzenmodus ein.
+
+        Als Feld, weil ``start_sketch`` das Panel hineinstellt, statt es wie
+        früher gegen die Ansicht zu tauschen (§30.1, P4)."""
         bottom_layout.addWidget(self.sketch_bar)
         bottom_layout.addWidget(self.sculpt_bar)
         bottom_layout.addWidget(self.pose_bar)
@@ -2302,9 +2324,22 @@ class MainWindow(QMainWindow):
         # Strg+Z mit ihrem eigenen Zug-Rückgängig (P16.6).
         self.undo_action.setEnabled(self.session.history.can_undo and not gesturing)
         self.redo_action.setEnabled(self.session.history.can_redo and not gesturing)
-        # Und die Darstellung, aus demselben Grund wie die Operationen: Im
-        # Skizzenmodus liegt der Viewport nicht im Stapel, und ihre Ziffern
-        # blockieren dort den Ebenenwechsel — siehe ``_display_actions``.
+        # Und die Darstellung. **Von den zwei Gründen dafür gilt seit dem
+        # Schnitt (§30.1, P4) nur noch einer.** Der erste — „im Skizzenmodus
+        # liegt der Viewport nicht im Stapel, sie ändern also etwas, das
+        # niemand sieht" — ist weggefallen: Die Ansicht steht jetzt, und eine
+        # Darstellung zu wechseln wäre dort sichtbar.
+        #
+        # Der zweite trägt weiter: Ihre Kürzel sind die Ziffern 1 bis 6, und
+        # dort liegt im Skizzenmodus der Ebenenwechsel. Qt lässt bei zwei
+        # aktiven Kürzeln derselben Taste **keines** von beiden feuern — die
+        # Zeichenfläche verspricht die Taste sichtbar am Ebenenfeld, und
+        # gedrückt geschähe nichts.
+        #
+        # Die Kamera ist davon nicht betroffen und war es nie: *Draufsicht*
+        # und *Seitenansicht* liegen auf Strg+1 bis Strg+6 und blieben immer
+        # bedienbar. Dass sie nichts bewirkten, lag allein am getauschten
+        # Stapel — seit er steht, wirken sie ohne eine Zeile Änderung.
         for action in self._display_actions:
             action.setEnabled(not drawing)
         # Dieselbe Regel für die zwei Einträge, die keine Operationen sind und
@@ -4041,8 +4076,27 @@ class MainWindow(QMainWindow):
         self._sketch_target = op_name
         """Leer beim freien Zeichnen über den Werkzeugzeilen-Knopf — die
         Erzeugungsart kommt dann bei „Fertig" (§2.2, Weg 2)."""
-        self.middle_stack.addWidget(panel)
-        switch(self.middle_stack, panel)
+        # **Der Schnitt (§30.1, P4): Die Ansicht bleibt stehen.** Früher stand
+        # hier ein Tausch im Stapel, und daraus folgte alles, was Robert am
+        # 24.08.2026 gemeldet hat — „am Viewport ändert sich nichts", und
+        # Draufsicht wie Seitenansicht taten nichts, weil sie etwas geändert
+        # hätten, das niemand sieht. Das Panel wird jetzt zur Leiste unter dem
+        # Bild; gezeichnet wird dort, wo die Skizze liegt.
+        panel.use_viewport()
+        self._bottom_layout.insertWidget(0, panel)
+        panel.sketchChanged.connect(self._redraw_sketch)
+        # **Das Modell bleibt stehen und tritt zurück.** Es ist der Grund,
+        # aus dem man auf einer Fläche zeichnet — verstecken hieße, die Frage
+        # wegzuräumen, die man gerade beantwortet. Durchscheinend, damit die
+        # Zeichnung darauf und nicht dahinter liegt.
+        self._mode_before_sketch = self.viewport.display_mode
+        self.viewport.set_display_mode("transparent")
+        frame = self._sketch_frame()
+        if frame is not None:
+            # Einmal schwenken, beim Betreten. Danach nie wieder von selbst:
+            # Wer beim Zeichnen dreht, soll gedreht bleiben.
+            self.viewport.view_on_plane(frame)
+        self._redraw_sketch()
         # Der Startbildschirm liegt vor dem Arbeitsbereich, solange nichts
         # offen ist — und zu zeichnen beginnen ist genau der Fall, in dem noch
         # nichts offen ist (Weg 2, §2.2). Ohne diese Zeile meldete die
@@ -4076,6 +4130,40 @@ class MainWindow(QMainWindow):
         )
         self.statusBar().showMessage(tr("Freies Zeichnen — Escape verlässt den Modus."))
 
+    def _sketch_frame(self) -> PlaneFrame | None:
+        """Der Rahmen der Ebene, auf der gerade gezeichnet wird."""
+        panel = self._sketch_panel
+        if panel is None:
+            return None
+        result = self.session.last_result
+        objects = result.scene.objects.values() if result else ()
+        return frame_for_plane(panel.canvas.sketch.plane, objects)
+
+    def _redraw_sketch(self) -> None:
+        """Die Zeichnung in der Szene nachziehen (§30.1, P4).
+
+        Gezeigt wird die **gelöste** Skizze — dieselbe, die der Kern später
+        rechnet. Eine ungelöste wäre die Lage vor den Bedingungen und damit
+        eine Aussage über etwas, das es nicht gibt; bei einem Konflikt hält
+        der Canvas ohnehin die letzte gültige Lage.
+
+        Die Kamera wird hier **nicht** bewegt. Sie schwenkt einmal beim
+        Betreten und danach nie wieder von selbst: Wer beim Zeichnen dreht,
+        soll gedreht bleiben — ein Bild, das nach jedem Strich zurückspringt,
+        wäre schlimmer als eines, das nie schwenkt.
+        """
+        panel = self._sketch_panel
+        frame = self._sketch_frame()
+        if panel is None or frame is None:
+            self.viewport.clear_sketch()
+            return
+        solved = panel.canvas.solved
+        if solved is None:
+            self.viewport.clear_sketch()
+            return
+        step = panel.canvas.grid_step()
+        self.viewport.show_sketch(curves_of(solved, frame), frame, step, SKETCH_GRID_REACH)
+
     def finish_sketch(self, keep: bool = True) -> None:
         """Den Modus verlassen. Mit ``keep`` öffnet die Operation auf der
         gezeichneten Skizze, sonst wird sie verworfen.
@@ -4085,11 +4173,26 @@ class MainWindow(QMainWindow):
         if panel is None:
             return
         text = panel.sketch_text() if keep else ""
-        switch(self.middle_stack, self.viewport)
-        self.middle_stack.removeWidget(panel)
-        panel.deleteLater()
+        # Die Ansicht stand die ganze Zeit — zurückzuschalten gibt es nichts
+        # mehr (§30.1, P4). Was geht, sind die Zeichnung aus der Szene und
+        # das Panel aus der Leiste.
+        #
+        # **Erst abmelden, dann aufräumen, dann die Ansicht anfassen.**
+        # ``set_display_mode`` baut die Szene neu auf; liefe dabei noch eine
+        # Verbindung vom Panel hierher, zeichnete ``_redraw_sketch`` in eine
+        # Szene, die gerade entsteht, und läse dabei ein Panel, das schon zum
+        # Löschen vorgemerkt ist. Kein ``setParent(None)``: Das macht ein
+        # Kind-Widget für einen Augenblick zum eigenen Fenster, und ein
+        # Fenster, das im selben Atemzug gelöscht wird, ist der Absturz ohne
+        # Zeile (gemessen, Segmentierungsfehler in ``test_ui.py``).
         self._sketch_panel = None
         self._sketch_target = None
+        panel.sketchChanged.disconnect(self._redraw_sketch)
+        self._bottom_layout.removeWidget(panel)
+        panel.hide()
+        panel.deleteLater()
+        self.viewport.clear_sketch()
+        self.viewport.set_display_mode(self._mode_before_sketch)
         self.tools.setVisible(True)
         self.sketch_bar.setVisible(False)
         self.statusBar().clearMessage()

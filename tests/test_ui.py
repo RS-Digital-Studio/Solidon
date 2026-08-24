@@ -4688,28 +4688,48 @@ def test_without_plate_adhesion_the_spacing_stays_the_default(window: MainWindow
     window.session.wait_for_idle()
 
 
-def test_the_sketch_editor_keeps_clear_of_the_cards(window: MainWindow) -> None:
-    """§2.5: die Karten liegen über der Ansicht — die Skizze weicht ihnen aus.
+def test_the_cards_make_room_for_the_sketch_bar(window: MainWindow) -> None:
+    """§2.5: die Karten liegen über der Ansicht — und weichen der Leiste aus.
 
-    Für den Viewport ist das Übereinanderliegen richtig: man sieht das Modell
-    hinter den Karten. Für eine Ansicht mit eigener Werkzeugleiste nicht — im
-    Skizzenmodus lagen die **ersten** Werkzeuge unter der linken Karte, also
-    Linie und Rechteck, und die Bedingungsliste unter der rechten. Bei 1296
-    Pixeln Breite ebenso wie bei 1900: kein Platzproblem, sondern die
-    Stapelreihenfolge.
+    **Diese Zusage hat der Umbau umgedreht, und sie ist dabei besser
+    geworden.** Solange der Skizzenmodus die Ansicht *ersetzte*, lag er unter
+    den schwebenden Karten: die ersten Werkzeuge unter der linken, die
+    Bedingungsliste unter der rechten. Die Antwort darauf war
+    ``set_zone_margins`` — die Ansicht wich den Karten aus.
+
+    Seit dem Schnitt (§30.1, P4) sitzt der Skizzenmodus in der unteren Karte,
+    und für die gilt die Regel schon: ``_bottom_room`` zieht ihre Höhe von der
+    Fläche ab, die den seitlichen Zonen bleibt. Jetzt weichen also **die
+    Karten der Leiste aus** statt die Ansicht den Karten — eine Stelle
+    weniger, an der zwei Rechnungen übereinstimmen müssen.
+
+    Geprüft wird die Wirkung und nicht der Mechanismus: Die Leiste braucht
+    mehr Höhe, sobald der Skizzenmodus läuft, und den seitlichen Zonen bleibt
+    um denselben Betrag weniger.
+
+    **Gerechnet und nicht an den Karten gemessen.** In einem nie gezeigten
+    Fenster ist ``height()`` null — bei beiden Karten, vorher wie nachher, und
+    ein Vergleich zweier Nullen ist grün ohne Aussage
+    (`.claude/rules/oberflaeche.md`, „isVisible lügt in einem nie gezeigten
+    Fenster"). ``_bottom_room`` dagegen fragt den ``sizeHint``, und den gibt
+    es auch ungezeigt.
     """
-    from app.ui.overlay import LEFT_WIDTH, MARGIN
+    window.resize(1400, 900)
+    window.overlay._place()
+    schmal = window.overlay._bottom_room()
 
     window.start_sketch("sketch_extrude", "")
-    panel = window._sketch_panel
-    assert panel is not None
-
+    assert window._sketch_panel is not None
     window.overlay._place()
-    margins = panel.layout().contentsMargins()
+    breit = window.overlay._bottom_room()
 
-    assert margins.left() >= LEFT_WIDTH + MARGIN, "unter der linken Karte liegt kein Werkzeug"
-    assert margins.right() > 0, "und die Bedingungsliste bleibt lesbar"
+    assert breit > schmal, "die Leiste trägt jetzt den Skizzenmodus"
+    # Dieselbe Rechnung, die ``_lay_out`` für die Zonen anstellt.
+    assert (900 - breit) < (900 - schmal), "und den Zonen daneben bleibt weniger"
+
     window.finish_sketch(keep=False)
+    window.overlay._place()
+    assert window.overlay._bottom_room() == schmal, "danach ist sie wieder, was sie war"
 
 
 def _report_codes(window: MainWindow) -> list[str]:
@@ -6570,3 +6590,57 @@ def test_a_hole_does_not_offer_to_be_drawn_on(window: MainWindow) -> None:
     assert menu is not None
     labels = [action.text() for action in menu.actions()]  # type: ignore[attr-defined]
     assert "Auf dieser Fläche zeichnen" not in labels, f"steht an einer Bohrung: {labels}"
+
+
+def test_the_sketch_mode_leaves_the_view_standing(window: MainWindow) -> None:
+    """**Der Schnitt (§30.1, P4).** Robert am 24.08.2026: „am viewport ändert
+    sich nichts, bei draufsicht, seitenansicht usw sieht man auch keinen
+    unterschied".
+
+    Der Grund war ein Tausch im Stapel: Die Ansicht lag unter einem Blatt,
+    also änderte eine Kameravorgabe etwas, das niemand sah. Jetzt bleibt sie
+    stehen, das Modell tritt durchscheinend zurück, und die Zeichnung liegt
+    darin.
+    """
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    window.session.evaluate_now()
+    vorher = window.viewport.display_mode
+
+    window.start_sketch("sketch_extrude", "")
+
+    assert window.middle_stack.currentWidget() is window.viewport, "die Ansicht bleibt im Bild"
+    assert window.viewport.display_mode == "transparent", "das Modell tritt zurück"
+    assert window.sketching(), "und gezeichnet wird trotzdem"
+
+    window.finish_sketch(keep=False)
+
+    assert window.viewport.display_mode == vorher, "danach steht die Darstellung wie zuvor"
+    assert not window.sketching()
+
+
+def test_the_camera_swings_onto_the_plane_that_is_drawn_on(window: MainWindow) -> None:
+    """Beim Betreten schwenkt sie, danach nie wieder von selbst.
+
+    Ohne den Schwenk läge die Zeichenebene schräg im Bild, und die erste
+    Linie ginge irgendwohin. Mit ihm sieht man auf sie — und wer danach
+    dreht, bleibt gedreht: Ein Bild, das nach jedem Strich zurückspringt,
+    wäre schlimmer als eines, das nie schwenkt.
+    """
+    window.start_sketch("sketch_extrude", "")
+    panel = window._sketch_panel
+    assert panel is not None
+
+    frame = window._sketch_frame()
+    assert frame is not None, "die Grundebene hat einen Rahmen"
+    assert frame.normal == pytest.approx((0.0, 0.0, 1.0)), "XY ist die Vorgabe"
+
+    # Offscreen gibt es keinen Plotter, der Schwenk selbst ist also nicht
+    # messbar (Entscheidung G). Prüfbar ist, dass er mit der richtigen Ebene
+    # gerufen würde — und dass das Zeichnen ohne Plotter nicht scheitert.
+    panel.canvas.set_tool("line")
+    panel.canvas.place_on_plane((0.0, 0.0))
+    panel.canvas.place_on_plane((20.0, 0.0))
+
+    assert len(panel.canvas.sketch.elements) == 1, "gezeichnet wird auch ohne Bild"
+    window.finish_sketch(keep=False)

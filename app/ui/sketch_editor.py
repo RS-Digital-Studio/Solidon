@@ -2416,6 +2416,25 @@ TOOL_KEYS: dict[str, str] = {
     "trim": "T",
 }
 
+#: Die Größe, die die Zeichenfläche im Viewport-Modus behält, in Bildpunkten.
+#:
+#: **Sie ist gleichgültig und darf nur nicht null sein.** Der Canvas zeichnet
+#: dort nicht mehr, er rechnet; Klicks kommen in Millimetern herein
+#: (:meth:`SketchCanvas.place_on_plane`), und weil ``_to_screen`` und
+#: ``_to_world`` exakt umkehrbar sind, kürzt sich die Größe aus beiden
+#: Richtungen heraus — gemessen an 400 auf 300, 1600 auf 900 und 120 auf 4000, alle drei
+#: mit demselben Ergebnis. Ein Widget ohne Bild bekommt vom Layout aber gar
+#: keine Größe, und durch null teilt die Umrechnung.
+VIEWPORT_CANVAS = 1000
+
+#: Wie hoch die Bedingungsliste in der Leiste höchstens wird, in Bildpunkten.
+#:
+#: In der Leiste unter der Ansicht ist Höhe teuer — sie geht dem Modell ab.
+#: Ganz wegzulassen wäre trotzdem falsch: Die Liste ist die Auskunft darüber,
+#: was die Skizze festhält, und sie ist zusammen mit der Zeile „Bestimmt" das,
+#: was eine Skizze von einem Umriss unterscheidet.
+VIEWPORT_LIST_HEIGHT = 96
+
 #: Wie viele Zeichen das Ebenenfeld zugeklappt breit ist.
 #:
 #: Zwanzig: „Draufsicht (XY) — l…" — der Anfang trägt die Aussage, und der
@@ -2522,6 +2541,12 @@ class SketchPanel(QWidget):
     ) -> None:
         super().__init__(parent)
         self._params = dict(parameter_values or {})
+        self._in_viewport = False
+        """Ob die Ansicht das Bild trägt und dieses Panel nur noch die Leiste.
+
+        Vorgabe ist der eigene Zeichenbereich: Das Skizzenfeld im
+        Operationsdialog hat keinen Viewport neben sich, und dort bleibt es
+        beim Blatt."""
 
         self.canvas = SketchCanvas(self, parameter_values=self._params)
         opening = ""
@@ -2911,6 +2936,37 @@ class SketchPanel(QWidget):
         self.set_bed(surroundings.bed)
         self.offer_faces(surroundings.faces)
         self.offer_bodies(surroundings.bodies)
+
+    def use_viewport(self) -> None:
+        """Die Zeichenfläche gibt ihr Bild an die Ansicht ab (§30.1, P4).
+
+        Danach ist dieses Panel eine **Leiste**: Werkzeuge, Ebene,
+        Bedingungen und Statuszeile bleiben, gezeichnet wird im Viewport. Die
+        Skizze liegt dann dort, wo sie liegt — auf ihrer Ebene, im Raum —
+        statt auf einem Blatt, das die Ansicht verdeckt.
+
+        **Der Canvas bleibt und rechnet weiter.** Er trägt Fang, Treffertest,
+        Vorschau, Bedingungen und den Undo-Punkt; nur sein Bild wird nicht
+        mehr gebraucht. Die Klicks kommen über :meth:`SketchCanvas.place_on_plane`
+        in Millimetern herein, und weil ``_to_screen`` und ``_to_world`` exakt
+        umkehrbar sind, ist seine Größe dabei gleichgültig — sie kürzt sich
+        heraus. Eine feste Größe steht trotzdem, damit sie nicht null wird:
+        Ein Widget ohne Bild bekommt vom Layout keine.
+
+        Die Bedingungsliste bleibt sichtbar, aber niedrig. Sie ist die
+        Auskunft darüber, was die Skizze festhält, und ohne sie wäre der
+        Wechsel in den Raum ein Verlust an anderer Stelle — die Zeile
+        „Bestimmt" und die Liste dazu sind das, was eine Skizze von einem
+        Umriss unterscheidet.
+        """
+        self.canvas.setVisible(False)
+        self.canvas.resize(VIEWPORT_CANVAS, VIEWPORT_CANVAS)
+        self.constraint_list.setMaximumHeight(VIEWPORT_LIST_HEIGHT)
+        self._in_viewport = True
+
+    def in_viewport(self) -> bool:
+        """Ob gezeichnet wird, ohne dass dieses Panel das Bild trägt."""
+        return self._in_viewport
 
     def set_zone_margins(self, left: int, right: int) -> None:
         """Weicht den Karten des Fensters aus (§2.5).
