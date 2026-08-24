@@ -4866,6 +4866,31 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       nimmt einen eigenen Arbeitsbaum.** Im Hauptbaum ist er reproduzierbar
       rot, ohne dass der Code etwas dafürkann.
 
+      **Nachtrag vom 24.08.2026 (3d-druck-b0): wer im geteilten Baum misst,
+      während jemand schreibt, misst nichts.** 3d-druck-43 fand ein billiges
+      Reproduktionspaar — `test_sketch_editor.py` plus `test_translations.py`
+      in einem Prozess, Exit 139 in neun Sekunden statt in fünfundzwanzig
+      Minuten, und `test_translations.py` ist nicht einmal eine Fensterdatei.
+      Nachgemessen:
+
+          Hauptbaum, während fremde Änderungen uncommittet dastanden  3 von 6 rot
+          eigener Arbeitsbaum auf demselben HEAD, ohne sie            0 von 6 rot
+          jede der beiden Dateien allein                              je 0 von 3
+          nach dem Commit, im Wechsel gemessen, beide Bäume           0 von 10 rot
+
+      **Derselbe Hauptbaum, der 3 von 6 riss, ist danach 0 von 5.** Geändert
+      hat sich nicht der Ort, sondern dass die Dateien nicht mehr mitten im
+      Lauf geschrieben wurden — `sketch_editor.py`, `viewport.py`, `pins.py`
+      und `mesh.py` standen während der ersten Messung als geändert da. Python
+      lädt Module beim Import; ändert sich eine Datei zwischen zwei Testdateien
+      im selben Prozess, ist jedes Ergebnis Zufall.
+
+      Das Paar bleibt als **Werkzeug** brauchbar (neun Sekunden statt
+      fünfundzwanzig Minuten), ist aber **kein bestätigtes Reprodukt** der
+      Familie: unter kontrollierten Bedingungen 0 von 11. Was nach dem
+      rtree-Ausbau sicher bleibt, ist `test_ui.py` — 2 von 2, im eigenen Baum
+      gegengeprüft.
+
       **Nachtrag vom 24.08.2026 (3d-druck-61): jedes zusätzliche Fenster im
       Prozess hebt die Rate.** Beim Fix für das Viewport-Bild im Fehlerbogen
       gemessen, je eigener Arbeitsbaum auf demselben HEAD, `tests/test_ui.py`:
