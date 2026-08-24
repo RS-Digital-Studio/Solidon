@@ -54,7 +54,7 @@ from PySide6.QtWidgets import (
 from shiboken6 import isValid
 
 from app.branding import APP_NAME, APP_VERSION, PROJECT_SUFFIX
-from app.core import activation, examples, manual, updates
+from app.core import activation, bootstrap, examples, manual, updates
 from app.core.agent import apply as agent_apply
 from app.core.agent.analysis import ANALYSIS_KINDS, analysis_text
 from app.core.agent.session import (
@@ -1658,7 +1658,15 @@ class MainWindow(QMainWindow):
         # Alles darunter kommt aus dem Register (§10). Der Hinweis ist die
         # Beschreibung der Operation und steht deshalb an beiden Stellen: in der
         # Statusleiste beim Durchgehen und als Tooltip beim Zögern.
-        sections = {section.category: section for section in menu_tree()}
+        # **Eigene Bausteine des Nutzers bleiben aus der Menüleiste heraus**
+        # (§24.5, Konzept Befestigungssysteme E1). Jeder von ihnen wird eine
+        # Operation und damit ein Menüeintrag; zwanzig eigene Teile machen aus
+        # einem Menü eine Liste zum Absuchen, und die Zeilengrenze aus
+        # ``tests/test_interface_limits.py`` kann es nie sehen — die Suite
+        # liest den Nutzerordner bewusst nicht (§38). Erreichbar bleiben sie
+        # über Bausteinkatalog, Befehlspalette und Kontextmenü.
+        own = bootstrap.user_operations()
+        sections = {section.category: section for section in menu_tree(skip=own)}
         groups: dict[str, QMenu] = {}
         for title, categories in MENU_GROUPS:
             present = [sections[name] for name in categories if name in sections]
@@ -1740,7 +1748,7 @@ class MainWindow(QMainWindow):
         # Was das Register kennt und diese Tabelle nicht, bekommt sein eigenes
         # Menü: eine neue Kategorie soll auftauchen, nicht verschwinden.
         grouped = {name for _title, names in MENU_GROUPS for name in names}
-        for section in menu_tree():
+        for section in menu_tree(skip=own):
             if section.category in grouped:
                 continue
             menu = self._menu(str(section.title))
@@ -3930,6 +3938,18 @@ class MainWindow(QMainWindow):
         feature = entry.features.get(feature_id) if entry else None
         return feature.kind if feature is not None else None
 
+    def _selected_face_plane(self) -> str:
+        """Die gewählte Fläche als Zeichenebene — leer, wenn keine gewählt ist.
+
+        Dieselbe Auskunft, aus der Palette und Kontextmenü ihre Vorschläge
+        bauen, nur als Ebenenname des Kerns (``feature:<id>``). Ob die Fläche
+        als Zeichenebene taugt, entscheidet danach ``choose_plane`` — hier
+        wird nur weitergegeben, was der Nutzer schon gesagt hat.
+        """
+        if self.selected_feature_kind() != "face":
+            return ""
+        return f"feature:{self.object_tree.selected_feature()}"
+
     def _drawable_faces(self) -> list[tuple[str, str, tuple[float, float, float]]]:
         """Die planaren Flächen der Szene, auf denen gezeichnet werden kann.
 
@@ -4082,9 +4102,19 @@ class MainWindow(QMainWindow):
         ihr Rückgabewert wird gelesen: Eine Fläche, die der Körper nicht
         (mehr) hat, steht nicht zur Wahl, und stillschweigend auf der
         Grundebene zu landen wäre die schlechteste Antwort (Regel 17).
+
+        **Ohne ``plane`` zählt die gewählte Fläche.** Robert hat am 24.08.2026
+        die Deckfläche ausgewählt, „Zeichnen" gedrückt — und unter dem Körper
+        auf z=0 gezeichnet: Der Knopf warf die Auswahl weg und startete auf
+        der Grundebene. Wer eine Fläche wählt und dann zeichnet, meint diese
+        Fläche; erst wenn nichts gewählt ist, ist die Grundebene die richtige
+        Vorgabe. Das gilt für jeden Weg ohne eigene Ebene — den Knopf der
+        Werkzeugzeile genauso wie eine Skizzen-Operation aus Menü oder
+        Palette.
         """
         if self._sketch_panel is not None:
             return
+        plane = plane or self._selected_face_plane()
         panel = SketchPanel(text, self._parameter_values(), self, self._sketch_surroundings())
         if plane and not panel.choose_plane(plane):
             self.announce(tr("Diese Fläche steht nicht mehr zur Verfügung."))

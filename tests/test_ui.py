@@ -6764,3 +6764,56 @@ def test_the_picture_for_the_support_asks_the_viewport_for_its_own(
         "window_shot muss die Ansichten nachmalen lassen — sonst bleibt die "
         "Bildmitte leer, und genau dort liegt das Teil des Kunden"
     )
+
+
+def test_drawing_starts_on_the_selected_face_not_under_it(window: MainWindow) -> None:
+    """Fläche gewählt, „Zeichnen" gedrückt — gezeichnet wird auf der Fläche.
+
+    Roberts Fall vom 24.08.2026: Deckfläche ausgewählt, Draufsicht, Zeichnen —
+    und die Striche landeten **unter** dem Körper auf z=0. Der Knopf der
+    Werkzeugzeile rief ``start_sketch("")`` ohne Ebene, und ohne Ebene hieß
+    Grundebene, gleich was gewählt war. Wer eine Fläche wählt und dann
+    zeichnet, meint diese Fläche.
+
+    Geprüft wird bis in die Zahl: Der Rahmen der Zeichenebene muss auf der
+    Höhe der Deckfläche liegen (Würfel 20 mm, Mitte auf null → z = 10), nicht
+    auf null — der Ebenenname allein bewiese nur die halbe Kette.
+    """
+    window.session.import_model(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    result = window.session.evaluate_now()
+    object_id, entry = next(iter(result.scene.objects.items()))
+    top = next(
+        fid
+        for fid, feature in entry.features.items()
+        if feature.kind == "face" and feature.params.get("normal", (0, 0, 0))[2] > 0.9
+    )
+    window.object_tree.select_object(object_id)
+    window.object_tree.select_feature(object_id, top)
+
+    window.action_sketch_free()
+    try:
+        panel = window._sketch_panel
+        assert panel is not None
+        assert panel.canvas.sketch.plane == f"feature:{top}", (
+            "die gewählte Fläche muss die Zeichenebene sein, nicht die Grundebene"
+        )
+        frame = window._sketch_frame()
+        assert frame is not None
+        assert frame.origin[2] == pytest.approx(10.0), (
+            "gezeichnet wird auf der Deckfläche, nicht darunter auf z=0"
+        )
+    finally:
+        window.finish_sketch(keep=False)
+
+
+def test_drawing_without_a_selection_still_starts_on_the_base_plane(window: MainWindow) -> None:
+    """Ohne Auswahl bleibt die Grundebene die Vorgabe — der Fix darf den
+    leeren Start nicht mitreißen."""
+    window.action_sketch_free()
+    try:
+        panel = window._sketch_panel
+        assert panel is not None
+        assert panel.canvas.sketch.plane.startswith("plane:"), panel.canvas.sketch.plane
+    finally:
+        window.finish_sketch(keep=False)
