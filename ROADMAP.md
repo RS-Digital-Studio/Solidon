@@ -82,7 +82,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Additive Bausteine fehlen am Flächenklick | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | nichts — der Fix in `_applies_to` kann heute laufen und behebt Wandhalter und Nutfeder mit |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Entscheidung: ob ein Rezept in Projektdateien mitreisen darf. Regel 13 sagt heute nein, ohne zwischen Code und Daten zu trennen — Bauplanänderung, geht an Robert (Konzept Abschnitt 17) |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
-| Kein MainWindow wird mehr freigegeben | Zehn von zehn Fenstern überlebten ihr Loslassen (24.08.2026) | **eine Zeile** — `main_window.py:2240`, und der Fix steht in `.claude/rules/oberflaeche.md` als dritte Wahl. Nicht beauftragt, und die Datei ist belegt |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
@@ -4839,6 +4838,15 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       ohne.** Die Blöcke allein hätten auf einer Maschine mit sechs Sitzungen
       eine Aussage über die Uhrzeit ergeben.
 
+      **Nachtrag vom 24.08.2026 (3d-druck-b0): zwei Bäume, ein Inhalt, zwei
+      Ergebnisse.** Beim Messen des Fensterfixes fiel derselbe Riss an —
+      `0xc0000374` (Heap-Korruption) mitten im `Garbage-collecting`,
+      reproduzierbar 3 von 3 im Hauptbaum. Im eigenen Arbeitsbaum dagegen 4 von
+      4 grün, **auch nachdem alle uncommitteten Änderungen des Hauptbaums dort
+      eingespielt waren** — inhaltsgleich, Bytecode-Cache in beiden vorhanden.
+      Damit ist der Code als Ursache ausgeschlossen und die Deutung unten
+      gestützt: Es ist der Zustand der Maschine, nicht die Zeile.
+
       **Und die Deutung ist die Hälfte, auf die es ankommt** (3d-druck-33, am
       Code gelesen statt gemessen): **Der Plattencache ist die Bedingung, nicht
       die Ursache.** `DiskCache.get` macht echte Datei-I/O (`read_text`,
@@ -9445,16 +9453,23 @@ steht dort, sie ist der einzige solche Aufruf im Menüaufbau, und `weak_slot`
 (`app/ui/leash.py:300`) wird in derselben Datei bereits 29-mal benutzt. Das
 `partial` ist der Ausreißer, der Fix ist Hausstil und keine Umstellung.
 
-- [ ] **Die eine Zeile umstellen** auf die dritte Wahl der Regel, die
-  ausdrücklich „für Werte aus einer Schleife" gilt — und
-  `_add_variant_entries` ist eine Schleife über `VARIANT_GROUPS`, in der
-  `first` gebunden werden muss:
+- [x] **Die eine Zeile umgestellt, und sie war der einzige Halter**
+  (`acb0dd5`, 24.08.2026):
 
       weak_slot(self, MainWindow.run_operation, first)
 
-  **Danach messen, nicht annehmen.** Ob es der einzige Halter ist, steht nicht
-  fest; dieselbe Regel erzählt am Ende, dass beim Hauptfenster der letzte
-  Halter erst gefunden wurde, nachdem alle 27 Lambdas umgebaut waren.
+  **Gemessen, nicht angenommen** — und in einem eigenen Arbeitsbaum, weil der
+  geteilte gerade fremde unfertige Arbeit trug: vorher 1 failed / 40 passed,
+  nachher **41 passed**, zweimal. Danach dieselbe Messung mit *allen*
+  uncommitteten Änderungen der anderen Sitzungen eingespielt: **42 passed**.
+  Der Fix trägt also auch neben ihrer Arbeit, und die Sorge aus der Regel —
+  beim Hauptfenster sei der letzte Halter erst nach 27 umgebauten Lambdas
+  gefunden worden — hat sich hier nicht bestätigt.
+
+  Nebenbei behoben: `weak_slot` verwirft mit seiner Vorgabe `forward=False` das
+  `checked`-Bool, das `QAction.triggered` sendet. Bisher landete es als zweites
+  Argument in `given` — bei einem Menüeintrag ohne Häkchen immer `False` und
+  damit folgenlos, aber es stand da.
 
 ---
 
