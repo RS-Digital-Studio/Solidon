@@ -6317,11 +6317,42 @@ class MainWindow(QMainWindow):
         """Neben der Platte heißt verschieben, nicht verkleinern (§29).
 
         Dieselbe Verwechslung wie beim Aufsetzen, nur in x und y. *Auf dem Bett
-        anordnen* arbeitet über die ganze Szene und braucht darum keinen
-        Körper — es legt alle nebeneinander, auch den, der herausragte.
+        anordnen* arbeitet über die ganze Szene — es legt alle nebeneinander,
+        auch den, der herausragte.
+
+        **Und es braucht die Szene trotzdem als Eingabe.** „Über die ganze
+        Szene" heißt nicht „ohne Eingaben": Der Stapel plant die Ausgänge eines
+        Schritts, und für eine Operation mit variabler Objektzahl ohne Eingaben
+        sind das keine (``History._outputs_for``). Der Schritt landete im
+        Verlauf, gab nichts zurück, und kein Körper bewegte sich — ein
+        Vorschlag nach Regel 17, der optisch erfüllt und funktional hohl war,
+        wie ``scale_to_fit`` vor ihm. Gemessen an zwei Würfeln unter der
+        Platte: über das Menü wandern sie auf (-105, 85, 0) und (-80, 85, 0),
+        über diesen Knopf blieben beide auf (-10, -10, -10) stehen, ohne
+        Meldung. Getroffen hat es den häufigsten Importfall überhaupt — eine
+        3MF in Bettkoordinaten meldet ``arrange.off_the_plate``, und dieser
+        Knopf ist die Handlung, die dort hilft.
+
+        Die Eingaben kommen über :func:`inputs_for`, aus demselben Grund, aus
+        dem Menü, Palette und Fernaufruf sie dort holen: Die Regel, was eine
+        Operation bekommt, gehört an eine Stelle.
+
+        Der Abstand kommt aus der Druckbetthaftung wie im Dialog des
+        Menüeintrags (:meth:`_spacing_for`). Hier ist er nicht Vorbelegung,
+        sondern die einzige Gelegenheit — ein Knopf ohne Dialog fragt nichts,
+        und zwei Teile mit je fünf Millimetern Brim stehen einander sonst auf
+        der Platte im Weg.
         """
         spec = REGISTRY.get("arrange_bed")
-        self.session.apply(spec.title, [OperationDraft(op=spec.name, params={})])
+        result = self.session.last_result
+        objects = list(result.scene.objects) if result is not None else []
+        inputs = inputs_for(spec, objects, ())
+        if not inputs:
+            return
+        self.session.apply(
+            spec.title,
+            [OperationDraft(op=spec.name, inputs=inputs, params=self._spacing_for(spec))],
+        )
 
     def _scale_after_error(self, error: AppError) -> None:
         """Auf den Bauraum verkleinern — mit dem Faktor, der wirklich passt.

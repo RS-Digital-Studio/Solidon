@@ -1631,6 +1631,69 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
         )
 
 
+def test_arranging_from_the_report_really_moves_the_bodies(window: MainWindow) -> None:
+    """Die dritte Hälfte von Regel 17: der Handler muss auch *wirken*.
+
+    Der Test darüber prüft, dass jede angebotene Handlung einen Handler hat —
+    und genau das war bei *Auf dem Bett anordnen* erfüllt, während der Knopf
+    nichts tat. Er trug die Operation ohne Eingaben in den Stapel, und eine
+    Operation mit variabler Objektzahl ohne Eingaben plant keine Ausgänge
+    (``History._outputs_for``): Der Schritt stand im Verlauf, kein Körper
+    bewegte sich, keine Meldung erschien.
+
+    Getroffen hat es den häufigsten Importfall überhaupt — eine 3MF aus Bambu
+    Studio, Orca oder Elegoo führt Bettkoordinaten, ihre Körper liegen neben
+    dem Bett, und dieser Knopf ist die Handlung, die dort hilft.
+
+    Gedrückt wird der **echte Knopf** unter der Befundliste, nicht der Handler
+    von Hand: Zwischen beiden liegen ``actions_for``, ``as_error`` und die
+    Verdrahtung in ``_show_offers``, und die gehören zur Zusage.
+    """
+    from PySide6.QtWidgets import QPushButton
+
+    _with_two_objects(window)
+    # Ein Körper neben die Platte — das ist der Befund, der den Knopf anbietet.
+    window.session.apply(
+        "Verschieben",
+        [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 400.0})],
+    )
+    window.session.wait_for_idle()
+    result = window.session.last_result
+    window.report.show_result(result, window.session.project.document)
+
+    def where() -> dict[str, tuple[float, ...]]:
+        scene = window.session.last_result.scene
+        return {
+            object_id: tuple(entry.mesh.bounds.minimum)
+            for object_id, entry in scene.objects.items()
+        }
+
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert "arrange.off_the_plate" in codes, (
+        f"der Befund muss dastehen, sonst prüft das nichts: {codes}"
+    )
+
+    for row in range(window.report.list.count()):
+        item = window.report.list.item(row)
+        if item.data(Qt.ItemDataRole.UserRole).code == "arrange.off_the_plate":
+            window.report.list.setCurrentRow(row)
+            break
+    QApplication.processEvents()
+
+    buttons = window.report._offers.findChildren(QPushButton)
+    offered = {button.text(): button for button in buttons}
+    assert str(errors.ARRANGE_ON_BED.label) in offered, f"kein Knopf zum Anordnen: {list(offered)}"
+
+    before = where()
+    offered[str(errors.ARRANGE_ON_BED.label)].click()
+    window.session.wait_for_idle()
+
+    assert where() != before, "der Knopf hat nichts bewegt"
+    assert "arrange.off_the_plate" not in {
+        finding.code for finding in window.session.last_result.scene.report.findings
+    }, "und der Befund, gegen den er angeboten wurde, ist weg"
+
+
 def test_the_report_shows_what_helps_without_a_right_click(window: MainWindow) -> None:
     """§2.7 verspricht anklickbare Handlungen, nicht welche zum Suchen.
 
