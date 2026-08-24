@@ -514,6 +514,36 @@ Die Gegenfrage ist dieselbe, die Bauplan §35 an einen Test stellt, nur an ein
 Werkzeug gerichtet, und sie kostet zehn Sekunden: **Was habe ich gerade
 gemessen, und ist das dasselbe wie das, was ich wissen wollte?**
 
+### Und in welche Richtung habe ich mich geirrt?
+
+Am 24.08.2026 kamen drei weitere dazu, aus drei Sitzungen, und sie zeigen die
+Asymmetrie, die in der Tabelle oben noch nicht steht:
+
+| Werkzeug | maß | gemeint war |
+|---|---|---|
+| §-Prüfer über den Bauplan | 6 Abschnitte (Muster erwartete ein `§`) | 113 |
+| Sphinx-Prüfer | Namen ohne die Lazy-Export-Tabelle | alle erreichbaren |
+| `grep -c "^FAILED"` | die Zusammenfassung, die noch nicht geschrieben war | die roten Tests |
+
+**Zu viel finden kostet Prüfzeit; zu wenig finden erzeugt die Gewissheit, es
+sei nichts da.** Das ist der teurere Fehler, und er sieht wie ein Erfolg aus:
+Ein Prüfer, der sechs von 113 Abschnitten liest, meldet „alles in Ordnung" —
+und ein Test gegen eine leere Menge ist **immer** grün.
+
+Daraus folgt eine Zusicherung, die in jedes selbstgebaute Prüfwerkzeug gehört:
+**Zähle zuerst, wie viel du überhaupt gefunden hast, und lass den Lauf
+scheitern, wenn es zu wenig ist.** `tests/test_plan_references.py` macht es so
+(`assert len(sections) > 100`), `tests/test_translations.py` ebenfalls
+(`assert gb_texte`), und `suite-getrennt.sh` seit dem 24.08. auch — die Zeile
+„Sammelgruppe: 3554 passed" ist genau diese Zusicherung, nur für das Tor.
+
+Die zweite Hälfte kostet noch weniger: **Gib dem Werkzeug einen Fall, dessen
+Ausgang du kennst.** Ein Prüfer für Doppelungen, der den bekannten Fall nicht
+findet, ist kaputt; einer, der ihn findet, hat seine erste Zusicherung. Der
+Duplikat-Sucher vom 24.08. fand `size_for_thread` — den Fall, den eine andere
+Sitzung eine Stunde vorher gemeldet hatte — und war damit brauchbar, bevor er
+etwas Neues meldete.
+
 ## Prüft dieser Test eine Zusage — oder den Ist-Zustand?
 
 Ein Test kann einen Fehler **festschreiben**. Er ist dann grün, solange der
