@@ -257,6 +257,43 @@ def on_surface(
     return closest, distance, triangle
 
 
+def ray_hit_distances(
+    triangles: np.ndarray, origin: np.ndarray, direction: np.ndarray
+) -> np.ndarray:
+    """Alle Abstände, in denen ein Strahl die gegebenen Dreiecke trifft.
+
+    Möller-Trumbore, vektorisiert über die Dreiecke, exakt und ohne Index —
+    die Alternative wäre ``body.ray.intersects_location``, und die baut sich
+    ihren Suchbaum über ``rtree`` (warum das Paket den Prozess nicht mehr
+    betreten darf, steht an :func:`on_surface`). Für die Anfragen dieses
+    Hauses — ein paar Strahlen gegen einen Körper, wie bei der Materialtiefe
+    der Stifte — ist die volle Rechnung billiger als jeder Baum, den man
+    vorher bauen müsste.
+
+    Zurück kommen die **positiven** Trefferabstände, unsortiert; wer den
+    ersten Austritt will, nimmt das Minimum. Ein Strahl entlang der Kante
+    eines Dreiecks zählt als Treffer des Dreiecks, dessen Fläche er streift —
+    dieselbe Konvention wie beim Picken (§18.5).
+    """
+    origin = np.asarray(origin, dtype=float).reshape(3)
+    direction = np.asarray(direction, dtype=float).reshape(3)
+    edge_one = triangles[:, 1] - triangles[:, 0]
+    edge_two = triangles[:, 2] - triangles[:, 0]
+    across = np.cross(direction, edge_two)
+    determinant = np.einsum("ij,ij->i", edge_one, across)
+    parallel = np.abs(determinant) < 1e-12
+    # Division erst nach dem Ausblenden der parallelen — sonst rechnet numpy
+    # mit inf weiter und meldet Warnungen über Fälle, die keiner nimmt.
+    safe = np.where(parallel, 1.0, determinant)
+    to_origin = origin - triangles[:, 0]
+    u = np.einsum("ij,ij->i", to_origin, across) / safe
+    q = np.cross(to_origin, edge_one)
+    v = np.dot(q, direction) / safe
+    t = np.einsum("ij,ij->i", edge_two, q) / safe
+    inside = ~parallel & (u >= -1e-9) & (v >= -1e-9) & (u + v <= 1.0 + 1e-9) & (t > 0.0)
+    return np.asarray(t[inside], dtype=float)
+
+
 def distance_to_triangles(triangles: np.ndarray, point: np.ndarray) -> float:
     """Der kürzeste Abstand von einem Punkt zu einer gegebenen Menge Dreiecke.
 

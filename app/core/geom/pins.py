@@ -34,7 +34,7 @@ import numpy as np
 
 from app.core.geom.autosplit import sections_across, upright_normal
 from app.core.geom.boolean import boolean
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, ray_hit_distances
 from app.core.geom.section import SectionPlane
 from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts import shapes
@@ -334,18 +334,17 @@ def _material_depth(mesh: MeshData, point: Vec3, normal: Vec3) -> float:
     Stift hätte nichts, worin er sitzt. Das ist kein Sonderfall, sondern der
     Normalfall bei einer Naht, die neben dem Hohlraum durch die Wand läuft.
     """
-    body = mesh.raw
+    # ``ray_hit_distances`` statt ``body.ray.intersects_location``: trimeshs
+    # Strahlwerk baut sich seinen Suchbaum über ``rtree``, und das Paket ist
+    # seit dem 24.08.2026 aus dem Prozess (die Geschichte steht an
+    # ``geom.mesh.on_surface``). Ein paar Strahlen gegen einen Nahtkörper
+    # rechnet die volle Dreiecksrechnung billiger, als ein Baum je entstünde.
+    triangles = np.asarray(mesh.raw.triangles, dtype=float)
     origin = np.asarray(point, dtype=float)
     direction = np.asarray(normal, dtype=float)
     both: list[float] = []
     for sign in (1.0, -1.0):
-        hits, _rays, _faces = body.ray.intersects_location(
-            ray_origins=origin.reshape(1, 3),
-            ray_directions=(direction * sign).reshape(1, 3),
-        )
-        if len(hits) == 0:
-            return 0.0
-        distances = np.linalg.norm(np.asarray(hits, dtype=float) - origin, axis=1)
+        distances = ray_hit_distances(triangles, origin, direction * sign)
         # Der Punkt liegt auf der Trennebene und damit oft genau auf einer
         # Kante des Schnitts; ein Treffer im Abstand null ist er selbst.
         ahead = distances[distances > EPS_GEOM]
