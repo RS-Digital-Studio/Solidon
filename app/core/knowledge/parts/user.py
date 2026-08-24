@@ -5,7 +5,10 @@ Dieselbe Registrierung, gelesen aus ``<Nutzerdaten>/parts/*.py`` beim Start.
 
 * eigene Bausteine gelten auf der Maschine, auf der sie liegen, und **reisen
   nie in einer Projektdatei mit** — sonst wäre die Regel aus §32 umgangen, dass
-  eine hereinkommende Datei nie Code ausführt;
+  eine hereinkommende Datei nie Code ausführt. **Das gilt für den Baustein als
+  ``.py``, also für dieses Modul.** Seit dem 24.08.2026 kennt §24.5 daneben den
+  Baustein als *Rezept* — Daten statt Funktion —, und der darf mitreisen; er
+  wird nicht hier geladen, sondern aus dem Dokument gelesen;
 * ein Projekt zu öffnen, das einen unbekannten eigenen Baustein benutzt, **hält
   an** und sagt, was fehlt (§15.2), statt etwas anderes zu rechnen;
 * sie erweitern die Bibliothek, nicht die Anwendung: keine neuen Operationen,
@@ -149,6 +152,10 @@ def travelling_parts(used: dict[str, str], registry: PartRegistry | None = None)
 
     Benutzt beim Speichern und beim Öffnen: auf dem Weg hinaus zum Warnen, auf
     dem Weg hinein zum Anhalten, statt etwas anderes zu rechnen.
+
+    Gemeint sind die aus diesem Modul, also die ``.py``-Bausteine aus dem
+    Nutzerordner. Ein Rezept (§24.5, seit dem 24.08.2026) steht im Dokument
+    selbst und fehlt darum nie — es taucht hier gar nicht erst auf.
     """
     source = registry or PARTS
     return tuple(name for name in sorted(used) if source.has(name) and source.get(name).own)

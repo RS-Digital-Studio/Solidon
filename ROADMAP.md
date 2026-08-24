@@ -80,7 +80,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Additive Bausteine fehlen am Flächenklick | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | nichts — der Fix in `_applies_to` kann heute laufen und behebt Wandhalter und Nutfeder mit |
-| Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Entscheidung: ob ein Rezept in Projektdateien mitreisen darf. Regel 13 sagt heute nein, ohne zwischen Code und Daten zu trennen — Bauplanänderung, geht an Robert (Konzept Abschnitt 17) |
+| Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
@@ -9446,6 +9446,15 @@ Arbeitspakete, die Grenzen und die eine Entscheidung stehen dort.
   dass der Bereichstest aus §24.3 in die Anwendung wandert: „Ein Baustein ohne
   diesen Test gilt als nicht vorhanden", und `corners()` ist gewöhnlicher
   Code, kein Testwerkzeug.
+
+  **Entschieden am 24.08.2026 (Robert): Ein Rezept darf in Projektdateien
+  mitreisen.** Regel 13 schützt jetzt ausdrücklich vor *ausführbarem Code* und
+  nicht vor Bausteinen an sich; §24.5 nennt die Unterscheidung. Drei Folgen
+  stehen im Konzept (Abschnitt 17.1): Die Quelltextprüfung aus §32 gilt
+  unverändert und trifft `create_from_scad` in einem Rezept wie überall sonst;
+  ein mitgereistes Rezept überschreibt **nie** einen gleichnamigen eigenen
+  Baustein, sondern wird umbenannt und als mitgereist gekennzeichnet; und die
+  Version eines Rezepts ist der Hash über seine Daten.
 
 - [ ] **Eigene Bausteine sprengen die Zeilengrenze der Menüs, und die Suite
   kann es nicht sehen.** Jeder Baustein wird eine Operation und damit ein

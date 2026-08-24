@@ -516,13 +516,40 @@ Daraus folgt, dass ein Rezept mitreisen *dürfte*, wo ein Python-Baustein es
 nie darf — und damit wäre der Katalog etwas, das man teilt. Das ist die
 naheliegende und die weitreichende Folgerung zugleich:
 
-> **Entscheidung für Robert.** Regel 13 und §24.5 sagen heute „reisen nie
-> mit", ohne zwischen Code und Rezept zu unterscheiden. Die Unterscheidung
-> einzuführen ist eine Bauplanänderung, und die geht nach `CLAUDE.md` immer an
-> ihn — auch unter Vollmacht. **Vorschlag für die erste Fassung: Ein Rezept
-> reist nicht mit.** Es bleibt bei der Regel, bis jemand sie bewusst ändert;
-> ein Baustein, der sich später ausbreiten darf, ist leichter zu haben als
-> einer, den man wieder einfangen muss.
+> **Entschieden am 24.08.2026 von Robert: Ein Rezept darf mitreisen.** Regel
+> 13 und §24.5 sind nachgezogen — die Regel schützt jetzt ausdrücklich vor
+> *ausführbarem Code*, nicht vor Bausteinen an sich. Ein eigener Baustein als
+> `.py` bleibt, wo er liegt; ein Rezept geht mit dem Projekt.
+>
+> Mein Vorschlag war der vorsichtigere gewesen (erst nicht mitreisen lassen,
+> später öffnen). Die Entscheidung ist die weitergehende, und sie ist gut
+> begründet: Ein Katalog, den man nicht teilen kann, halbiert den Nutzen für
+> genau die Kunden, die keinen eigenen bauen können — sie bekommen dann keinen
+> von jemandem, der es kann.
+
+### 17.1 Was die Entscheidung nach sich zieht
+
+Drei Dinge folgen daraus, und keines davon ist eine offene Frage mehr:
+
+**Die Sicherheitsprüfung bleibt, wo sie ist.** Ein Rezept nennt Namen
+registrierter Operationen und Zahlen. Trägt es einen `create_from_scad`-Schritt,
+kommt fremder OpenSCAD-Quelltext mit — dafür ist Regel 11 und §32 zuständig,
+und diese Prüfung greift heute schon für jede Projektdatei. **Neu ist nichts,
+außer dass sie jetzt auch für Bausteine gilt.**
+
+**Lokal schlägt mitgereist, immer.** Öffnet jemand ein Projekt, dessen Rezept
+`halter_klein` heißt, und es gibt auf seiner Maschine schon einen eigenen
+Baustein dieses Namens, dann **gewinnt der eigene**. Alles andere wäre eine
+Datei, die von außen den Werkzeugkasten des Kunden umschreibt. Das Rezept aus
+der Datei wird unter einem abgeleiteten Namen geführt und im Katalog als
+mitgereist gekennzeichnet — dieselbe Auszeichnung, die §24.5 für eigene
+Bausteine schon verlangt, um eine Herkunft mehr.
+
+**Die Version ist der Hash.** §24.4 verlangt, dass ein geändertes Rezept sich
+meldet; für ein Rezept ist der Hash über seine Daten die Version, und der
+Vergleich beim Öffnen ist derselbe wie für jeden anderen Baustein. Das ist
+sogar leichter als bei einer `.py`, für die der Bauplan selbst einräumt, dass
+der übliche Weg „nicht trägt".
 
 Eine Ausnahme wäre zu prüfen: `create_from_scad` nimmt OpenSCAD-Quelltext als
 Parameterwert. Ein Rezept mit dieser Operation trüge fremden Quelltext. Regel
@@ -621,9 +648,10 @@ Unabhängig von Teil I; keines davon wartet auf eine Lochplatte.
 * **Kein Plugin-System.** §24.5 zieht die Grenze, und sie gilt für Rezepte
   erst recht: keine neuen Operationen, keine Oberflächenänderungen, kein
   Zugriff auf den Stapel. Ein Rezept ist ein Baustein, nichts weiter.
-* **Kein Marktplatz, keine Cloud-Ablage.** Ob ein Rezept überhaupt mitreisen
-  darf, ist die Entscheidung aus Abschnitt 17 — alles Weitere kommt danach
-  oder gar nicht.
+* **Kein Marktplatz, keine Cloud-Ablage.** Ein Rezept darf mitreisen
+  (Abschnitt 17), und das heißt: in der Projektdatei, die jemand jemandem
+  schickt. Es heißt nicht, dass wir einen Ort bauen, an dem man sie sammelt —
+  das steht auf der Liste dessen, was dieses Projekt nicht baut.
 * **Keine Bearbeitung eigener Bausteine in einem eigenen Editor.** Sie werden
   im Projekt bearbeitet, aus dem sie stammen, und neu gespeichert. Ein zweiter
   Editor wäre eine zweite Wahrheit.

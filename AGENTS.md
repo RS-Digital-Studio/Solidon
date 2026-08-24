@@ -51,9 +51,12 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 11. **Kein OpenSCAD-Lauf ohne Quelltextprüfung** (§32) — auch bei
     LLM-Quelltext.
 12. **Keine absoluten Pfade** in Projektdateien.
-13. **Eigene Bausteine reisen nie in Projektdateien mit** (§24.5).
-    Ausführbarer Code kommt aus der Installation und dem Nutzerordner, nie
-    aus einer geöffneten Datei.
+13. **Ausführbarer Code reist nie in einer Projektdatei mit** (§24.5). Er
+    kommt aus der Installation und dem Nutzerordner, nie aus einer geöffneten
+    Datei — ein eigener Baustein als `.py` bleibt deshalb, wo er liegt. Ein
+    Baustein als **Rezept** darf mitreisen (Entscheidung Robert, 24.08.2026):
+    Er ist eine Liste registrierter Operationen mit Werten, führt also nichts
+    aus, was eine Projektdatei nicht ohnehin auslöst.
 14. **Kennzahlen aus Schichtanalyse und G-Code werden nie vermischt** —
     Herkunft immer ausweisen (§22.5).
 15. **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. OpenSCAD und

@@ -1473,8 +1473,17 @@ gekennzeichnet.
 **Das ist kein Plugin-System.** Der Unterschied ist die Reichweite: Eigene
 Bausteine gelten nur auf dem Rechner, auf dem sie liegen.
 
-- Sie **reisen nie in Projektdateien mit** — sonst wäre die Regel aus §32
-  umgangen, dass eine fremde Datei keinen Code ausführt
+- Ein eigener Baustein **als `.py` reist nie in einer Projektdatei mit** —
+  sonst wäre die Regel aus §32 umgangen, dass eine fremde Datei keinen Code
+  ausführt. **Ein Baustein als Rezept darf es** (Entscheidung Robert,
+  24.08.2026): Ein Rezept ist ein Ausschnitt des Op-Stapels plus die
+  Beschreibung seiner Parameter — Daten, keine Funktion. Es nennt Namen
+  registrierter Operationen und Zahlen, und das tut jede Projektdatei ohnehin;
+  seine Sicherheitslage ist die einer `project.json`, nicht die einer fremden
+  `.py`. Für die Ausnahme bleibt §32 zuständig: Trägt ein Rezept einen
+  `create_from_scad`-Schritt, greift die Quelltextprüfung wie bei jedem anderen
+  Weg. Der Katalog weist die Herkunft aus, und ein mitgereistes Rezept
+  überschreibt nie einen gleichnamigen eigenen Baustein
 - Öffnet jemand ein Projekt, das einen unbekannten eigenen Baustein benutzt,
   hält die Auswertung an und meldet, was fehlt (§15.2)
 - Sie erweitern nicht die Anwendung, sondern nur die Bibliothek — keine neuen
