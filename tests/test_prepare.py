@@ -16,6 +16,7 @@ from app.core.geom.prepare import (
     bore_diameter,
     check_build_volume,
     check_collisions,
+    countersink,
     drill,
     plug,
     split_at_plane,
@@ -56,6 +57,36 @@ def l_profile() -> MeshData:
     steg = trimesh.creation.box(extents=(10.0, 40.0, 40.0))
     steg.apply_translation((25.0, 0.0, 20.0))
     return MeshData.of(trimesh.boolean.union([plate, steg]))
+
+
+def plate_with_stud(*, below: bool = False) -> MeshData:
+    """Platte 40 x 40 x 10 (z 0..10) und ein freistehender Dom Ø 8 x 6 hoch
+    daneben, Mitte bei ``x = 8`` — über der Platte (z 10..16) oder unter ihr
+    (z -6..0).
+
+    Der Körper, an dem die Senkung ihre Mündung verlor. Zwischen einer Bohrung
+    Ø 5 auf der Achse und dem Dom liegen 1,5 mm Wand, die Bohrung rührt ihn also
+    nicht an; mit seiner Flanke steht er trotzdem im Radius einer Senkung Ø 10 —
+    und sechs Millimeter höher als die Fläche, in die gesenkt wird.
+    """
+    plate = trimesh.creation.box(extents=(40.0, 40.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    stud = trimesh.creation.cylinder(radius=4.0, height=6.0, sections=48)
+    stud.apply_translation((8.0, 0.0, -3.0 if below else 13.0))
+    return MeshData.of(trimesh.boolean.union([plate, stud]))
+
+
+def section_area(mesh: MeshData, height: float) -> float:
+    """Die Fläche des waagerechten Schnitts auf dieser Höhe.
+
+    Die Frage „was hat die Senkung angefasst" lässt sich am Volumen allein nicht
+    stellen: Ein Kubikmillimeter aus dem Nachbarn wiegt so viel wie einer aus der
+    Bohrung. Der Querschnitt sagt **wo**.
+    """
+    from app.core.slice.analysis import cross_section
+
+    section = cross_section(mesh, height)
+    return 0.0 if section is None or section.is_empty else float(section.area)
 
 
 # --- bores ----------------------------------------------------------------------
@@ -270,6 +301,94 @@ def test_a_blind_bore_into_a_step_reaches_the_material(profile: Profile) -> None
     assert body.volume - result.mesh.volume == pytest.approx(area * 6.0, rel=0.03)
     assert not any(finding.code == "boolean.without_effect" for finding in result.findings)
     assert result.mesh.is_watertight
+
+
+def test_a_countersink_keeps_to_its_own_bore_when_something_taller_stands_beside_it(
+    profile: Profile,
+) -> None:
+    """Der Dom neben der Bohrung zog die Senkung zu sich (§25).
+
+    ``_at_the_mouth`` nahm den **weitesten** Eckpunkt im Senkungsradius, und das
+    ist die Domoberseite, sobald neben der Bohrung etwas höher steht als die
+    Fläche, in die gesenkt wird. Gemessen an dieser Platte: Der Klick auf die
+    Mündung (0, 0, 10) landete bei (0, 0, 16), 1,0 mm³ wurden **aus dem Dom**
+    gebissen, die Bohrung blieb ohne Fase — und weil abgetragen ja etwas wurde,
+    sagte kein Befund ein Wort dazu.
+
+    Gefragt wird am Querschnitt und nicht am Volumen: Ein Kubikmillimeter aus
+    dem Nachbarn wiegt so viel wie einer aus der Bohrung, nur der Ort
+    unterscheidet die beiden Fälle.
+    """
+    body = drill(
+        plate_with_stud(),
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        diameter=5.0,
+        compensate=False,
+        profile=profile,
+    ).mesh
+
+    result = countersink(body, position=(0.0, 0.0, 10.0), axis="z", diameter=10.0, profile=profile)
+
+    assert section_area(result.mesh, 9.5) < section_area(body, 9.5) - 1.0, (
+        "die Fase weitet die Bohrung unter ihrer Mündung"
+    )
+    assert section_area(result.mesh, 15.5) == pytest.approx(section_area(body, 15.5), abs=0.01), (
+        "und der Dom daneben bleibt unversehrt"
+    )
+
+
+def test_a_countersink_from_below_keeps_to_its_own_bore_as_well(profile: Profile) -> None:
+    """Dieselbe Frage mit umgekehrtem Vorzeichen (``outward < 0``).
+
+    Der Zapfen hängt unter der Platte, gesenkt wird an der Unterseite. Auch hier
+    war der weiteste Punkt der falsche: Der Klick auf (0, 0, 0) landete bei
+    z = -6, der Zapfenunterseite, und derselbe eine Kubikmillimeter ging am
+    falschen Ort verloren. Beide Richtungen einzeln, weil die Suche das
+    Vorzeichen selbst führt und ein Tausch von ``min`` und ``max`` genau hier
+    unbemerkt bliebe.
+    """
+    body = drill(
+        plate_with_stud(below=True),
+        position=(0.0, 0.0, 0.0),
+        axis="z",
+        diameter=5.0,
+        compensate=False,
+        profile=profile,
+    ).mesh
+
+    result = countersink(body, position=(0.0, 0.0, 0.0), axis="z", diameter=10.0, profile=profile)
+
+    assert section_area(result.mesh, 0.5) < section_area(body, 0.5) - 1.0, (
+        "die Fase weitet die Bohrung über ihrer Mündung"
+    )
+    assert section_area(result.mesh, -5.5) == pytest.approx(section_area(body, -5.5), abs=0.01), (
+        "und der Zapfen darunter bleibt unversehrt"
+    )
+
+
+def test_a_countersink_without_a_neighbour_still_finds_the_far_mouth(profile: Profile) -> None:
+    """Die Gegenprobe zum Dom: ohne Nachbarn ist die nächste Grenze die Mündung.
+
+    Der Würfel steht von -10 bis 10, die Bohrung geht durch, geklickt wird auf
+    die **Mitte** — so meldet ein erkanntes Loch seine Lage (§21.3). Gesucht
+    werden muss dann über zehn Millimeter hinweg bis ``z = 10``; eine Suche, die
+    zu früh anhält, fiele hier auf. Vor und nach dem Wechsel von der weitesten
+    auf die nächste Grenze dieselbe Zahl: 15,07 mm³.
+    """
+    body = drill(
+        cube(), position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, compensate=False, profile=profile
+    ).mesh
+
+    found = countersink(body, position=(0.0, 0.0, 0.0), axis="z", diameter=8.4, profile=profile)
+    placed = countersink(
+        body, position=(0.0, 0.0, 10.0), axis="z", diameter=8.4, anchor="centre", profile=profile
+    )
+
+    assert body.volume - found.mesh.volume == pytest.approx(15.07, abs=0.05)
+    assert found.mesh.volume == pytest.approx(placed.mesh.volume, abs=0.01), (
+        "die gesuchte Mündung ist die, die man von Hand einträgt"
+    )
 
 
 def test_a_through_plug_fills_the_whole_bore(profile: Profile) -> None:

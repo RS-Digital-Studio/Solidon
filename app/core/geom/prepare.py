@@ -320,17 +320,44 @@ def _inside_the_bounds(mesh: MeshData, position: np.ndarray) -> bool:
 def _at_the_mouth(
     mesh: MeshData, axis: Axis, position: np.ndarray, diameter: float, outward: float
 ) -> np.ndarray:
-    """Schiebt die Position entlang der Achse bis dorthin, wo das Material
-    endet.
+    """Schiebt die Position entlang der Achse bis zur **nächsten**
+    Materialgrenze in Richtung ``outward``.
 
     Gemessen an den Eckpunkten **um die Achse herum**: Eine Bohrung bringt ihre
     Wand mit, und deren äußerster Ring ist die Mündung. Gesucht wird innerhalb
     des Senkungsradius — weit genug für die Wand einer Bohrung, die unter den
-    Schraubenkopf passt, eng genug, um die Nachbarbohrung nicht mitzunehmen.
+    Schraubenkopf passt.
 
-    Findet sich dort nichts, bleibt die Position, wo sie ist: Wer eine Fläche
+    **Die nächste Grenze, nicht die weiteste.** Bis zum 26.08.2026 wurde der
+    weiteste Eckpunkt genommen, und der ist nur dort die Mündung, wo neben der
+    Bohrung nichts steht. Gemessen an einer Platte 40 x 40 x 10 mit einem Dom
+    Ø 8 x 6 hoch daneben — Mitte bei x = 8, also 1,5 mm Wand zur Bohrung Ø 5 —:
+    Der Klick auf die Mündung (0, 0, 10) landete bei (0, 0, 16), der
+    Domoberseite. Herausgebissen wurde ein Kubikmillimeter **aus dem Dom**, die
+    Bohrung blieb ohne Fase, und einen Befund gab es nicht, denn abgetragen
+    wurde ja etwas. Der Docstring versprach hier einmal, „eng genug" zu suchen,
+    „um die Nachbarbohrung nicht mitzunehmen" — der Nachbar wurde bevorzugt
+    mitgenommen.
+
+    **Beide Hälften der Regel tragen, einzeln keine.** Die Mündung, auf die
+    jemand klickt, liegt auf Klickhöhe, und ein striktes „davor" schloss genau
+    sie aus: In der Auswahl standen dann *nur* fremde Punkte, und der nächste
+    war derselbe wie der weiteste (gemessen: beide Male 16,0). Erst zusammen mit
+    „auf gleicher Höhe zählt mit" wird aus der nächsten Grenze die Mündung — wer
+    schon auf ihr steht, wird nicht mehr verschoben.
+
+    Findet sich nichts, bleibt die Position, wo sie ist: Wer eine Fläche
     anklickt, hat die Mündung schon getroffen, und eine Position ohne Bohrung
     darunter zu verschieben wäre Raten (Regel 21).
+
+    **Was diese Suche nicht leistet.** Sie sieht Eckpunkte und nicht die
+    Bohrwand, weiß also nicht, wem eine Grenze gehört. Liegt fremde Geometrie im
+    Senkungsradius **tiefer** als die Mündung — eine Tasche daneben, eine
+    Querbohrung durch die Bohrung —, wird deren Grenze die nächste, und der
+    Kegel sitzt zu tief. An vierzehn Lagen gemessen trifft die nächste Grenze
+    elf, die weiteste acht und die nächste ohne den Gleichstand sechs; sauber
+    trennen ließe sich der Rest nur über den Bohrungsradius, und den kennt eine
+    Senkung nicht.
     """
     index = AXIS_INDEX[axis]
     points = np.asarray(mesh.raw.vertices, dtype=float)
@@ -339,12 +366,14 @@ def _at_the_mouth(
     offset = points - position
     offset[:, index] = 0.0
     near = np.linalg.norm(offset, axis=1) <= diameter / 2.0
-    ahead = near & ((points[:, index] - position[index]) * outward > EPS_GEOM)
+    # Nicht „davor", sondern „nicht dahinter": Material auf Klickhöhe ist die
+    # Mündung, auf der die Position bereits steht.
+    ahead = near & ((points[:, index] - position[index]) * outward > -EPS_GEOM)
     if not ahead.any():
         return position
     along = points[ahead, index]
     moved = position.copy()
-    moved[index] = float(np.max(along) if outward > 0.0 else np.min(along))
+    moved[index] = float(np.min(along) if outward > 0.0 else np.max(along))
     return moved
 
 
