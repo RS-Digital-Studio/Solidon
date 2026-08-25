@@ -216,7 +216,7 @@ _NOT_A_RANGE = frozenset(
         "no_shapes", "no_sources", "no_split", "not_a_face", "not_a_number", "not_a_project",
         "not_a_twin", "not_outline", "not_step", "not_upright", "one_body", "point_count",
         "required",
-        "scheme", "target_behind", "target_count", "target_parallel", "toml",
+        "scheme", "sweep_needs_xy", "target_behind", "target_count", "target_parallel", "toml",
         "too_many_triangles", "too_new", "type", "undo_with_changes", "unknown",
         "unknown_feature", "unknown_format", "unknown_object", "unknown_parameter",
         "unknown_placeholder", "unknown_region", "unknown_shape", "unknown_source",
