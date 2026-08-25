@@ -348,12 +348,34 @@ genau die Verbindung, an der ein einzeln aufgesetzter Zapfen bricht.
 | `parts/ops.py` | Der Fix aus Abschnitt 4 (`_applies_to`) |
 | `app/i18n/locales/` | Fünf Kataloge: `en`, `es`, `fr`, `it`, `pt`. Kein Katalog darf zurückbleiben — `tests/test_translations.py` prüft jeden gefundenen |
 | Katalog und Menü | Kommen von selbst; das Vorschaubild wird gerendert, nicht gepflegt (§24.3) |
-| Handbuch | Die Referenz erzeugt `manual.py` aus dem Register. Eine geschriebene Seite lohnt erst mit dem zweiten System |
+| Handbuch | Die Referenz erzeugt `manual.py` aus dem Register. **Die geschriebene Seite kam am 25.08.2026** (`0f69fa4`, `65d9b09`) — die Bedingung „ab dem zweiten System" war eingetreten, und nicht ich habe es bemerkt |
 | `tests/test_parts.py` | Der Bereichstest greift automatisch. Dazu drei eigene: Zapfen passt ins Lochmaß, Nase greift hinter die Platte, jedes Maß kommt aus der Tabelle — genau die drei, die `profile_tongue` schon hat |
 | `ROADMAP.md` | Register plus Abschnitt; `tests/test_roadmap.py` hält beides zusammen |
 
 **Keine neue Abhängigkeit.** Nichts hiervon braucht ein Paket, das nicht schon
 da ist — die Lizenzfrage stellt sich nicht.
+
+### 9.1 Was ein neuer Baustein sonst noch anfasst
+
+**Diese Tabelle ist am 25.08.2026 aus Schaden entstanden.** Fünf Bausteine in
+einer Nacht, und bei vier Stellen habe ich nicht nachgesehen; drei davon hat
+eine Nachbarsitzung gefunden, nicht ich. Die Checkliste in `AGENTS.md` hat acht
+Punkte und nennt keine davon.
+
+| Stelle | Was passiert | Wie es auffiel |
+|---|---|---|
+| `app/i18n/locales/*.json` | Titel, `doc`, `caveat` und jeder Parametertext fehlen in fünf Sprachen | `test_translations.py` wird rot — **fällt von selbst auf** |
+| `tests/test_parts.py` | Der Zähltest nennt eine Zahl und begründet jeden Zugang | wird rot — **fällt von selbst auf** |
+| Bezeichner im Baustein | Deutsche Namen verstoßen gegen die Sprachregel | `test_language_rules.py` fängt nur die **kuratierten** Stämme: neun deutsche im Scharnierauge, acht im Standfuß, gemeldet wurden drei |
+| `app/ui/labels.py` | Ein neuer Auswahlwert braucht einen lesbaren Namen | `test_translations.py` wird rot — fällt auf, wenn man den ganzen Lauf fährt |
+| `website/*.html` | Die Startseiten nennen die Zahl der Bausteine und Operationen | `test_website.py` war rot, **bevor** jemand hinsah — ich hatte ihn nie gefahren |
+| Handbuch und Bilder | Geschriebene Seite und Katalogbild kennen den Baustein nicht | fällt **gar nicht** auf: kein Test prüft, ob ein Bild vollständig ist |
+
+**Die Lehre ist nicht „mehr Tests fahren", sondern welche.** Nach einem neuen
+Baustein reichen `test_parts` und `test_translations` nicht; es braucht
+mindestens noch `test_language_rules` (drei Sekunden) und `test_website` (eine
+Viertelsekunde). Und die letzte Zeile fängt kein Test — dafür muss jemand
+hinsehen.
 
 **Und keine Rechtsfrage am Namen.** „SKÅDIS" ist eine fremde Marke. Der
 Baustein heißt deshalb `pegboard_hook` und trägt das System als
