@@ -26,13 +26,22 @@ war:
 - `write_plan` wandelt `OSError` in einen Satz — `write_assembly` daneben
   nicht.
 
+**Fall sechs, und er verschärft die Regel (25.08. abends):** `moved_features`
+bekam beim C-Paket `dataclasses.replace` gegen die Fünf-von-sieben-Handkopie,
+samt warnendem Kommentar — und 150 Zeilen weiter oben in **derselben Datei**
+stand die zweite Handkopie (`apply_mapping`) und blieb. Unsichtbar, weil die
+zwei verlorenen Felder bei erkannten Merkmalen bis dahin immer leer waren;
+messbar erst, als ce's created_by-Tor ihnen Inhalt gab. Sechs Merkmale mit
+Erzeuger hinein, null heraus.
+
 **Why:** Ein Fix wird dort gemacht, wo der Fund war, und der Docstring
 dokumentiert die Lehre — aber niemand fragt, wo dieselbe Konstruktion noch
 steht. Die Lehre reist nicht von selbst zu den Geschwistern.
 
 **How to apply:** Nach jedem behobenen Fehler die Geschwister suchen, bevor
 der Commit fertig ist: grep nach dem Muster (dieselbe API, derselbe
-Signalname, dieselbe Vorbelegungsquelle), und jede Fundstelle entweder
+Signalname, dieselbe Vorbelegungsquelle) — **zuerst in derselben Datei**,
+denn dort wohnen Zwillinge am dichtesten und werden am sichersten übersehen, und jede Fundstelle entweder
 mitfixen oder im Commit benennen, warum sie nicht betroffen ist. Beim Review
 umgekehrt: Wo ein Docstring einen behobenen Fehler beschreibt, ist die
 Nachbarschaft der erste Ort zum Suchen.
