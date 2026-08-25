@@ -197,26 +197,26 @@ def frame_sketch(window: Any, app: QApplication) -> None:
     from app.core.sketch import shapes
     from app.core.sketch.serialize import sketch_to_text
 
-    ergebnis = window.session.last_result
-    if ergebnis is None:
+    result = window.session.last_result
+    if result is None:
         raise SystemExit("nichts gerechnet — kein Bild vom Skizzenmodus")
 
-    hoch_liegend: list[tuple[float, float, str]] = []
-    for body in ergebnis.scene.objects.values():
+    topmost: list[tuple[float, float, str]] = []
+    for body in result.scene.objects.values():
         for feature_id, feature in body.features.items():
             normal = feature.params.get("normal", (0.0, 0.0, 0.0))
             if feature.kind != "face" or float(normal[2]) < 0.9:
                 continue
-            hoch_liegend.append(
+            topmost.append(
                 (
                     float(body.mesh.bounds.maximum[2]),
                     float(feature.params.get("area", 0.0)),
                     feature_id,
                 )
             )
-    if not hoch_liegend:
+    if not topmost:
         raise SystemExit("keine nach oben zeigende Fläche — kein Bild vom Skizzenmodus")
-    hoch_liegend.sort(reverse=True)
+    topmost.sort(reverse=True)
 
     window.start_sketch(
         # **Extrudieren und nicht Tasche schneiden.** Eine Tasche verbraucht
@@ -231,7 +231,7 @@ def frame_sketch(window: Any, app: QApplication) -> None:
         # im Bild sieht das aus, als läge die Zeichnung schief im Netz. 50 mal
         # 30 liegt auf ±25 und ±15, der Kreis mit 20 auf ±10.
         sketch_to_text(shapes.rectangle(50.0, 30.0)),
-        plane=f"feature:{hoch_liegend[0][2]}",
+        plane=f"feature:{topmost[0][2]}",
     )
     panel = window._sketch_panel
     if panel is None:
@@ -244,16 +244,16 @@ def frame_sketch(window: Any, app: QApplication) -> None:
         return
     xs = [x for x, _y in panel.canvas.points()]
     ys = [y for _x, y in panel.canvas.points()]
-    sicht = max(window.viewport.height(), 1)
-    leiste = min(0.6, panel.height() / sicht)
-    hoch = (max(ys) - min(ys)) / max(1.0 - leiste, 0.2) * 1.35
+    visible = max(window.viewport.height(), 1)
+    bar_share = min(0.6, panel.height() / visible)
+    tall = (max(ys) - min(ys)) / max(1.0 - bar_share, 0.2) * 1.35
     window.viewport.show_span_on_plane(
         frame,
         (
             (max(xs) + min(xs)) / 2.0,
-            (max(ys) + min(ys)) / 2.0 + hoch * leiste / 2.0,
+            (max(ys) + min(ys)) / 2.0 + tall * bar_share / 2.0,
         ),
-        ((max(xs) - min(xs)) * 1.35, hoch),
+        ((max(xs) - min(xs)) * 1.35, tall),
     )
     settle(app, 40)
 
@@ -567,7 +567,7 @@ def take_all(app: QApplication, language: str) -> None:
     release_viewport(window)
 
     # Der Prüfbericht als eigenes Fenster: im Hauptfenster steckt er in einem
-    # Reiter und ist genau so hoch wie der Reiter, was ein Bild von zwölf Pixeln
+    # Reiter und ist genau so tall wie der Reiter, was ein Bild von zwölf Pixeln
     # Höhe ergibt.
     report = prepared(ReportPanel(), REPORT)
     report.add_findings(sample_findings(language))

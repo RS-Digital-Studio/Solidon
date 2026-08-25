@@ -957,37 +957,37 @@ class OperationDialog(QDialog):
         woher — grau und begründet, wie jedes Feld ohne Wirkung (§2.5). Ändern
         lässt sich das Maß über *Zeichnen …*, wo es hingehört.
         """
-        namen = {entry.name: entry for entry in self.spec.params.spec()}
-        skizze = next((name for name, e in namen.items() if e.kind == "sketch"), "")
-        if not skizze or skizze not in self._editors:
+        declared = {entry.name: entry for entry in self.spec.params.spec()}
+        sketch_field = next((name for name, e in declared.items() if e.kind == "sketch"), "")
+        if not sketch_field or sketch_field not in self._editors:
             return
 
         reason = tr("Die Maße kommen aus der Zeichnung — über „Zeichnen …“ zu ändern.")
-        masse = {"length": 0, "width": 1}
+        axis_of = {"length": 0, "width": 1}
 
-        def folge() -> None:
-            text = str(self.values().get(skizze, "") or "")
-            spanne = sketch_extent(text, self._parameter_values)
-            for name in ("shape", "length", "width", "corners", *masse):
+        def follow_sketch() -> None:
+            text = str(self.values().get(sketch_field, "") or "")
+            extent = sketch_extent(text, self._parameter_values)
+            for name in ("shape", "length", "width", "corners", *axis_of):
                 editor = self._editors.get(name)
-                if editor is None or name not in namen:
+                if editor is None or name not in declared:
                     continue
                 label = self._rows[name].labelForField(editor)
-                if spanne is None:
+                if extent is None:
                     continue
-                if name in masse and isinstance(editor, ValueField):
+                if name in axis_of and isinstance(editor, ValueField):
                     # Ohne ``blockSignals`` löst das Setzen ``valuesChanged``
                     # aus, und diese Funktion riefe sich selbst.
                     gesperrt = editor.blockSignals(True)
-                    editor.set_value(spanne[masse[name]])
+                    editor.set_value(extent[axis_of[name]])
                     editor.blockSignals(gesperrt)
                 editor.setEnabled(False)
                 if label is not None:
                     label.setEnabled(False)
                 _explain(editor, label, reason)
 
-        self.valuesChanged.connect(folge)
-        folge()
+        self.valuesChanged.connect(follow_sketch)
+        follow_sketch()
 
     def _watch(self, editor: QWidget) -> None:
         """Verbindet das Änderungssignal des Editors mit ``valuesChanged``.

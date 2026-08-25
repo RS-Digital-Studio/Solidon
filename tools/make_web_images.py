@@ -86,7 +86,6 @@ GAP = 8
 #: mitten in der letzten Kachelreihe — ein Schnitt, den man für einen Fehler
 #: hält, weil er wie einer aussieht.
 WEB_WINDOW = (1400, 860)
-WEB_SKETCH = (1100, 640)
 WEB_START = (1400, 1000)
 
 #: Wie lange ein Durchgang beim Setzenlassen dauert, in Millisekunden.
