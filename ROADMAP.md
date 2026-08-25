@@ -81,6 +81,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
 | Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | **eine Entscheidung**: ob §24.3 eine Ausnahme bekommt. Die Liste selbst ist abgearbeitet — Kabelclip, Eckwinkel, Standfuß und Scharnierauge stehen, der Schwalbenschwanz war schon da |
+| Das Flächenmenü zeigt 13 Zeilen gegen eine Grenze von 12 | Das Kontextmenü wuchs um eine Zeile, und die Prüfung sah woanders hin (25.08.2026) | **eine Entscheidung**: die Ausnahme bestätigen oder eine zweite Gruppe falten. Der Test lässt genau diese eine Zeile zu und wird bei der nächsten rot |
+| Der Schlitz des Schlüssellochs liegt quer zur Fallrichtung | Das Schlüsselloch hängt waagerecht, und sein eigener Docstring sagt es anders (25.08.2026) | niemanden — der Befund ist gemessen, der Baustein gehört keiner Sitzung, und ein Prüfdruck würde ihn in Minuten bestätigen |
 | Die Startmarke §31 ist seit dem 24.08.2026 rot | Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026) | **eine Entscheidung**: Marke neu setzen oder die Ursache suchen. Nicht der Code — im Wechsel gegen den Stand vor drei Commits gemessen, Unterschied im Rauschen |
 | Ein Rezept nimmt den ganzen Stapel | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Mehrfachauswahl im Verlauf — das Format nimmt beliebige `op_ids`, aber `HistoryPanel` kennt nur einen Index |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
@@ -9866,3 +9868,77 @@ ist im Rahmen und nützlich, und es beantwortet die Frage nicht.
   Wer es entscheidet, ändert §24.3 und den Test dazu — beides mit Ansage. Ein
   Mittelweg wäre eine Deklaration am Baustein (`parts=2` statt einer stillen
   Ausnahme), damit der Test weiter fängt, was **versehentlich** zerfällt.
+
+
+## Das Kontextmenü wuchs um eine Zeile, und die Prüfung sah woanders hin (25.08.2026)
+
+Ein Review von 3d-druck-61 fragte, ob die Zwölf-Zeilen-Grenze für das
+zusammengesetzte Kontextmenü überhaupt gemessen wird. Sie wird es nicht — und
+beim Nachrechnen kam heraus, dass auch die vorhandene Prüfung längst an anderen
+Zahlen rechnete als der Katalog.
+
+**`test_a_group_of_one_never_becomes_a_submenu` prüft `folded_groups`
+gründlich**, aber mit einer von Hand eingetragenen Verteilung: Bausteine 10,
+Ändern 5, Erzeugen 2, Vorbereiten 2, macht 19 Operationen. Die stimmte am
+24.08.2026. Einen Tag später standen an einer Fläche **31**, davon 22
+Bausteine. Die Formel stimmte weiter; die Zahlen, an denen sie geprüft wurde,
+waren keine Aussage über das Produkt mehr. Das ist dieselbe Art alternder
+Liste, die in `test_parts.py` schon zweimal zugeschlagen hat, und sie fällt
+nicht auf, weil ein Test mit ausgedachten Zahlen genauso grün aussieht wie
+einer mit echten.
+
+**Gemessen ergibt das Flächenmenü 13 Zeilen.** Zehn Operationszeilen (fünf
+„Ändern", zwei „Erzeugen", zwei „Vorbereiten", eine für das gefaltete
+Untermenü „Bausteine") plus drei feste: Sichtbarkeit und der Skizzenschritt.
+Die Grenze aus der Testart „Oberflächengrenzen" nennt zwölf.
+
+`_menu` zählt die drei bewusst nicht mit — es ruft `folded_groups` ohne
+`fixed`, und der Grund steht in seinem Docstring: Wer sie mitzählte, müsste
+eine zweite Gruppe falten, und die nächste wäre „Ändern", mit der Bohrung
+darin. Genau der Eintrag also, dessen zweiter Klick den ganzen Umbau vom
+24.08.2026 ausgelöst hat.
+
+Seit `5ac89d32` rechnet der Test aus dem Register statt aus einer Liste, prüft
+die Gegenrichtung mit (jede gefaltete Gruppe wieder aufgemacht muss die Grenze
+sprengen — sonst war ihre Faltung ein Klick ohne Not) und lässt **genau eine**
+Zeile über der Grenze zu.
+
+- [ ] **Die Ausnahme bestätigen oder auflösen.** Beides ist vertretbar: 13
+  Zeilen mit der Bohrung an einem Klick, oder 12 Zeilen und die Bohrung im
+  Untermenü. Die Zahl steht in einer Testart, also entscheidet es nicht die
+  Bedienungsvollmacht allein — wer sie ändert, ändert die Grenze für alle
+  Menüs oder schreibt eine Ausnahme in die Testart. Der Test hält den Zustand
+  fest, bis das geschieht.
+
+## Das Schlüsselloch hängt waagerecht, und sein eigener Docstring sagt es anders (25.08.2026)
+
+Gefunden beim Beheben desselben Fehlers am Lochwand-Einhänger, der von diesem
+Baustein abgeschrieben hatte.
+
+`keyhole` schreibt in seinem Docstring: *„Der Schlitz läuft in -Y, damit er
+nach dem Umlegen auf eine senkrechte Wand aufwärts zeigt: das Teil fällt, die
+Schraube steht relativ dazu höher."* Der Code verschiebt den Körper auch in
+−Y — aber er **baut** ihn mit `shapes.slot(breite, breite + drop, tiefe)`, und
+`slot` legt seine Länge in **X**. Gemessen an `keyhole(drop=8)`: 15,58 mm in X,
+7,60 mm in Y. Die 15,58 sind `head + 0,6 + drop`, also genau der Schlitz — er
+liegt quer zu der Richtung, in der das Teil fällt.
+
+Ein Schlüsselloch mit waagerechtem Schlitz hält nicht: Die Schraube wandert
+seitlich statt sich zu verklemmen, und das Teil hängt nur, solange niemand
+dagegenstößt.
+
+**Warum das hier steht und nicht behoben ist:** Der Baustein gehört keiner
+Sitzung, und die Änderung ist eine Maßänderung an einem ausgelieferten
+Baustein (§24.4, `parts_version` und Änderungseintrag). Der Befund ist
+gemessen und in zwei Zeilen nachvollziehbar; ein Prüfdruck bestätigt ihn in
+Minuten.
+
+- [ ] **Den Schlitz in die Fallrichtung drehen** — `shapes.turned(…, 90.0)` wie
+  jetzt beim Lochwand-Einhänger, dazu `parts_version` und ein Eintrag.
+
+  **Weiter reicht es nicht:** Von 23 Bausteinen benutzen nur zwei
+  `shapes.slot`, und der zweite ist der Lochwand-Einhänger, der seit `57d515b3`
+  ausdrücklich dreht. Nachgezählt, bevor jemand suchen geht — die Falle ist
+  echt (`slot` legt seine Länge immer in X, und wer das nicht weiß, verschiebt
+  in Y und meint, er habe gedreht), aber sie ist hier nur einmal
+  zugeschnappt.
