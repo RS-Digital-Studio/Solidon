@@ -769,3 +769,59 @@ def adopt(
                 values={"reason": str(problem)[:200]},
             )
         ]
+
+
+def replace(
+    recipe: Recipe,
+    parts: PartRegistry | None = None,
+    registry: Registry | None = None,
+    directory: Path | None = None,
+) -> Path:
+    """Legt ein Rezept an **oder** ersetzt seinen vorhandenen Stand — Datei,
+    Katalogeintrag und Operation zusammen.
+
+    Ein Weg für beide Fälle (Absprache mit der Dialogseite, 26.08.2026):
+    Ist der Name frei, wirkt es wie ``save`` plus ``register``; ist er
+    vergeben, werden alle drei Seiten getauscht. „Ersetzen oder anlegen"
+    bleibt damit eine Frage der Knopfbeschriftung, nicht des Ablaufs.
+
+    **Die Operation wird wirklich neu gebunden.** ``register_one`` hält den
+    ``PartSpec`` als Vorgabewert seiner ``run``-Funktion fest — ein neuer
+    Katalogeintrag allein ändert die Rechnung nicht (b0s Messung vom
+    26.08.2026). Deshalb erst abmelden, dann neu registrieren.
+
+    Scheitert ein Schritt, wird zurückgestellt, was schon getauscht war:
+    Halb ersetzt wäre die schlimmste aller Lagen — Katalog neu, Rechnung
+    alt, Platte irgendwo dazwischen.
+    """
+    from app.core.knowledge.parts import ops as part_ops
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    source = parts or PARTS
+    operations = registry or REGISTRY
+    op = part_ops.op_name(recipe.name)
+    previous = source.get(recipe.name) if source.has(recipe.name) else None
+
+    if previous is not None:
+        source.remove(recipe.name)
+        operations.remove(op)
+    try:
+        register(recipe, source, operations)
+    except Exception:
+        if previous is not None:
+            source.register(previous)
+            part_ops.register_one(previous, operations)
+        raise
+    try:
+        return save(recipe, directory, overwrite=True)
+    except Exception:
+        # Die Platte hat den alten Stand behalten — dann behalten ihn auch
+        # Katalog und Register, sonst rechnete die Sitzung mit einem Stand,
+        # den der nächste Start nicht mehr kennt.
+        source.remove(recipe.name)
+        operations.remove(op)
+        if previous is not None:
+            source.register(previous)
+            part_ops.register_one(previous, operations)
+        raise

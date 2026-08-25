@@ -419,6 +419,18 @@ class Registry:
                     values={"op": spec.name, "shortcut": spec.shortcut},
                 )
 
+    def remove(self, name: str) -> None:
+        """Nimmt eine Operation zurück — für das Ersetzen eines Rezepts.
+
+        ``register_one`` bindet den ``PartSpec`` als Vorgabewert seiner
+        ``run``-Funktion; ein neuer Katalogeintrag allein ändert die Rechnung
+        also nicht (gemessen am 26.08.2026: ein ersetzter Spec rechnete mit
+        dem alten Stand weiter). Wer einen Baustein ersetzt, meldet die
+        Operation ab und registriert sie neu. Ein unbekannter Name ist kein
+        Fehler — zurücknehmen ist idempotent.
+        """
+        self._ops.pop(name, None)
+
     def get(self, name: str) -> OperationSpec:
         if name not in self._ops:
             raise InternalError(

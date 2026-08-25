@@ -802,3 +802,74 @@ def test_the_same_recipe_arrives_silently(profile: Profile, tmp_path: Path) -> N
         )
     finally:
         _clean_globals("probe_halter", "probe_halter_travelled")
+
+
+def test_replace_is_one_way_for_both_cases(profile: Profile, tmp_path: Path) -> None:
+    """„Ersetzen oder anlegen" ist eine Frage der Knopfbeschriftung, nicht des
+    Ablaufs: ``replace`` legt an, wo der Name frei ist, und tauscht sonst
+    Datei, Katalogeintrag und Operation **zusammen**.
+
+    Die Operation muss dabei wirklich neu gebunden werden — ``register_one``
+    hält den Spec als Vorgabewert, ein neuer Katalogeintrag allein rechnet
+    mit dem alten Stand weiter (b0s Messung vom 26.08.2026).
+    """
+    parts, registry = PartRegistry(), Registry()
+    made = _recipe(profile)
+
+    first = recipe.replace(made, parts, registry, tmp_path)
+    assert first.exists() and parts.has("probe_halter")
+
+    changed = recipe.capture(
+        _document(width=40.0),
+        {},
+        name="probe_halter",
+        title="Probehalter",
+        group="structure",
+        op_ids=(1,),
+        exposed=(
+            recipe.ExposedParam(name="w", title="Breite", default=40.0, minimum=10.0, maximum=90.0),
+        ),
+        features={"top": "face_top"},
+        profile=profile,
+    )
+    recipe.replace(changed, parts, registry, tmp_path)
+    assert parts.get("probe_halter").version == recipe.fingerprint(changed), (
+        "der Katalog trägt den neuen Stand"
+    )
+
+    # Und die **Operation** rechnet mit ihm: Die Vorgabe der Breite ist jetzt
+    # 40 — der alte gebundene Spec hätte 30 gerechnet.
+    spec = parts.get("probe_halter")
+    built = spec.fn(spec.params())
+    assert as_mesh_data(built.mesh).volume == pytest.approx(40.0 * 20.0 * 8.0), (
+        "die neu gebundene Operation rechnet den neuen Stand"
+    )
+
+    import json as json_module
+
+    on_disk = json_module.loads((tmp_path / "probe_halter.json").read_text(encoding="utf-8"))
+    assert on_disk["exposed"][0]["default"] == 40.0, "und die Platte trägt ihn auch"
+
+
+def test_replace_rolls_back_when_the_disk_refuses(profile: Profile, tmp_path: Path) -> None:
+    """Halb ersetzt wäre die schlimmste Lage: Scheitert das Schreiben, behalten
+    Katalog und Register den alten Stand — sonst rechnete die Sitzung mit
+    einem Stand, den der nächste Start nicht mehr kennt."""
+    import dataclasses
+
+    parts, registry = PartRegistry(), Registry()
+    made = _recipe(profile)
+    recipe.replace(made, parts, registry, tmp_path)
+    old_version = parts.get("probe_halter").version
+
+    changed = dataclasses.replace(made, doc="neuer Stand")
+    blocked = tmp_path / "gesperrt"
+    blocked.mkdir()
+    (blocked / "probe_halter.json").mkdir()  # ein Ordner, wo die Datei hin will
+
+    with pytest.raises(OSError):
+        recipe.replace(changed, parts, registry, blocked)
+
+    assert parts.get("probe_halter").version == old_version, (
+        "nach dem Fehlschlag gilt wieder der alte Stand"
+    )
