@@ -16,6 +16,8 @@ und gehört in den Verlauf (§15.5).
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -31,29 +33,42 @@ from PySide6.QtWidgets import (
 
 from app.core.knowledge import profiles
 from app.core.units import DISPLAY_UNITS
-from app.i18n import language_name, tr
+from app.i18n import TranslatableText, _, language_name, tr
 from app.i18n.catalog import available_languages
 from app.ui.labels import by_title
 from app.ui.palette import DIFF_PALETTES
 from app.ui.settings import UiSettings
 from app.ui.shortcut_schemes import SCHEMES
 
+# **Diese drei Listen standen mit ``tr()`` da, und das übersetzt sofort.**
+# Auf Modulebene heißt „sofort": beim Import, in der Sprache, die dann gerade
+# gilt — und das ist beim Start noch keine. ``app.py`` holt ``MainWindow`` in
+# Zeile 152, ``main_window.py`` zieht diesen Dialog auf Modulebene nach, und
+# ``install_language`` läuft erst siebzehn Zeilen später. Ein Kunde mit
+# portugiesischer Oberfläche fand deshalb in den Einstellungen „Dunkel",
+# „Wie in Cura — links wählt, rechts dreht" und „Blau und Orange (Vorgabe)"
+# vor, während alles andere um sie herum portugiesisch war. Die Texte waren
+# übersetzt; sie wurden nur zu früh abgeholt.
+#
+# ``_()`` gibt stattdessen einen ``TranslatableText``, der seine Sprache erst
+# beim Anzeigen sucht — ``_choices`` ruft ohnehin ``str()`` darauf.
+
 #: Die Bezeichnungen der Navigationsschemata (§2.9).
 NAVIGATION = {
-    "slicer": tr("Wie in Cura — links wählt, rechts dreht"),
-    "orbit": tr("Wie in Bambu Studio, Orca und PrusaSlicer — links dreht"),
-    "cad": tr("Wie im CAD — mittlere Taste dreht"),
-    "blender": tr("Wie in Blender"),
+    "slicer": _("Wie in Cura — links wählt, rechts dreht"),
+    "orbit": _("Wie in Bambu Studio, Orca und PrusaSlicer — links dreht"),
+    "cad": _("Wie im CAD — mittlere Taste dreht"),
+    "blender": _("Wie in Blender"),
 }
 
 #: Die Bezeichnungen der Themen.
-THEMES = {"dark": tr("Dunkel"), "light": tr("Hell")}
+THEMES = {"dark": _("Dunkel"), "light": _("Hell")}
 
 #: Wie die Differenzansicht ihre Farben nennt (§19.1).
 DIFF_LABELS = {
-    "blue_orange": tr("Blau und Orange (Vorgabe)"),
-    "red_green": tr("Rot und Grün"),
-    "greyscale": tr("Graustufen"),
+    "blue_orange": _("Blau und Orange (Vorgabe)"),
+    "red_green": _("Rot und Grün"),
+    "greyscale": _("Graustufen"),
 }
 
 
@@ -83,7 +98,7 @@ class SettingsDialog(QDialog):
         _select(self.navigation, settings.navigation)
 
         self.diff_palette = _choices(
-            self, {key: DIFF_LABELS.get(key, key) for key in DIFF_PALETTES}
+            self, {key: str(DIFF_LABELS.get(key, key)) for key in DIFF_PALETTES}
         )
         _select(self.diff_palette, settings.diff_palette)
 
@@ -249,8 +264,13 @@ class SettingsDialog(QDialog):
         return settings
 
 
-def _choices(parent: QWidget, entries: dict[str, str]) -> QComboBox:
-    """Ein Aufklappmenü, das Namen zeigt und Kennungen weitergibt."""
+def _choices(parent: QWidget, entries: Mapping[str, str | TranslatableText]) -> QComboBox:
+    """Ein Aufklappmenü, das Namen zeigt und Kennungen weitergibt.
+
+    Nimmt beides an: eine fertige Zeichenkette und einen ``TranslatableText``,
+    der seine Sprache erst hier sucht. Die Listen über dem Dialog sind lazy,
+    weil sie beim Import noch keine Sprache haben (siehe dort).
+    """
     box = QComboBox(parent)
     for key, label in entries.items():
         box.addItem(str(label), key)
