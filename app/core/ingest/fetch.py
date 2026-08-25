@@ -153,8 +153,13 @@ def fetch_model(
         # ein http-Server, der mit `Location: ftp://…` antwortet, käme so an
         # der Schemaprüfung vorbei (§32). Gelesen wird erst danach.
         address = check_url(str(getattr(answer, "url", address) or address))
+        # Erst die Herkunft, dann der Name: Eine Modellseite trägt keine Endung
+        # (der Normalfall beim Kopieren aus dem Browser), und ``_name_from``
+        # warf dafür „Format nicht erkannt", bevor der hilfreiche Satz „hier
+        # steht eine Webseite, lade die Datei dort" überhaupt drankam. Den Namen
+        # braucht diese Meldung nicht; sie führt ihn nur zur Ansicht mit.
+        _reject_web_page(answer, "", address)
         name = _name_from(answer, address)
-        _reject_web_page(answer, name, address)
         payload = _read_limited(answer, progress)
 
     _log.info("fetched %d bytes from %s", len(payload), urlsplit(address).netloc)

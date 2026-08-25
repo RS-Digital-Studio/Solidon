@@ -112,6 +112,18 @@ def test_an_unknown_format_is_refused_before_anything_is_read(server: str) -> No
     assert raised.value.values["constraint"] == "unknown_format"
 
 
+def test_a_model_page_without_an_extension_is_named_a_web_page(server: str) -> None:
+    """M8: Eine Modellseite trägt keine Endung — der Normalfall beim Kopieren
+    aus dem Browser (thingiverse.com/thing:123). Die Prüfung auf die Webseite
+    lief erst nach dem Namen, und der Name warf schon „Format nicht erkannt",
+    bevor der hilfreiche Satz drankam. Jetzt kommt die Herkunft zuerst."""
+    with pytest.raises(ValidationError) as raised:
+        fetch_model(f"{server}/seite")
+
+    assert raised.value.values["constraint"] == "web_page", "die hilfreiche Meldung, nicht Format"
+    assert raised.value.suggestions
+
+
 def test_a_missing_file_says_what_the_server_said(server: str) -> None:
     with pytest.raises(ExternalToolError) as raised:
         fetch_model(f"{server}/fehlt.stl")
