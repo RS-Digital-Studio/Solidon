@@ -538,13 +538,48 @@ def _named(entries: list[Any], word: str) -> str:
     return f"{word}: " + ", ".join(names)
 
 
+def _warnings(proposal: Any) -> list[str]:
+    """Die Befunde des Vorschlags als Sätze — Warnungen und Fehler.
+
+    Sie standen bis hierhin allein im Prüfbericht, und der ist die *andere*
+    Karte der rechten Spalte: Wer den Vorschlag ansieht, sieht sie nicht. Der
+    Fall, an dem das zählt, ist ``agent.undo_sweeps`` — „nimm den Bohrschritt
+    zurück" nimmt drei jüngere Schritte mit, und in der Entscheidungszeile
+    stand nur „Rücknahme t1". Regel 16 verspricht eine Transaktion, §26.5
+    verspricht, dass man vor dem Klick weiß, welche.
+
+    Hinweise bleiben draußen. ``agent.undo_single`` sagt „nimmt die zuletzt
+    angewandte zurück" und damit dasselbe wie die Zeile darüber; eine
+    Wiederholung neben der Entscheidung macht die Warnungen daneben leiser.
+
+    Der Text kommt aus ``finding.message`` und geht durch ``str()`` — er ist
+    ein :class:`~app.i18n.TranslatableText` und löst sich damit in der Sprache
+    des Fensters auf. Der Code (``agent.undo_sweeps``) ist ein Schlüssel und
+    steht nirgends in der Oberfläche.
+    """
+    lines: list[str] = []
+    for finding in getattr(proposal, "findings", ()):
+        if finding.severity == "info":
+            continue
+        # Das Wort davor ist die zweite Kodierung (Regel 18): Die
+        # Zusammenfassung ist ein einfarbiges Label, und ohne es wäre eine
+        # Warnung von einer Aufzählung nicht zu unterscheiden.
+        marker = tr("Fehler") if finding.severity == "error" else tr("Warnung")
+        lines.append(f"{marker}: {finding.message}")
+    return lines
+
+
 def describe(preview: Any) -> str:
-    """Was der Vorschlag täte, in einer lesbaren Zeile.
+    """Was der Vorschlag täte, in einer lesbaren Zeile — und was daran hakt.
 
     Mit Namen, nicht nur mit Zahlen: eine Zeile, die „zwei Operationen" meldet,
     verlangt vom Nutzer, über etwas zu entscheiden, das er nicht gelesen hat.
     Ab vier Schritten wird gezählt — dann ist die Aufzählung länger als die
     Zeile und der Verlauf daneben die bessere Quelle.
+
+    Darunter die Warnungen des Vorschlags (:func:`_warnings`), jede in einer
+    eigenen Zeile. Sie gehören **vor** die Entscheidung und nicht in den
+    Bericht daneben.
     """
     proposal = preview.proposal
     parts: list[str] = []
@@ -568,16 +603,22 @@ def describe(preview: Any) -> str:
                 f"-{difference.removed_volume / 1000.0:.2f} cm³"
             )
         )
-    return " · ".join(parts) or tr("Keine Änderung")
+    return "\n".join([" · ".join(parts) or tr("Keine Änderung"), *_warnings(proposal)])
 
 
 def costs(proposal: Any) -> str:
-    """Schritte, Token und — ausgeschrieben — eine erreichte Grenze (§26.5).
+    """Schritte, Token und — ausgeschrieben — ein Zug, der nicht zu Ende kam
+    (§26.5).
 
     „Grenze erreicht" stand als zwei Worte in der Zusammenfassung; was für
     eine Grenze und was das für den Vorschlag heißt, stand nirgends. Jetzt
     steht es hier, und die Kosten daneben machen den Deckel sichtbar, bevor
     er greift.
+
+    Vier Gründe, nicht zwei: Neben Schritt- und Tokendeckel hält ein Zug auch
+    an, wenn die Antwort des Modells abgeschnitten wurde oder das Modell
+    abgelehnt hat (``stop_reason``, ``agent/session.py``). Jeder von ihnen
+    sagt, was passiert ist und was jetzt geht (Regel 17).
     """
     # Eigene Schlüssel statt des Worts „Schritt": das teilte sich seinen
     # Katalogeintrag mit dem Satzanfang der Statuszeile („Step 3/8"), und
@@ -594,5 +635,22 @@ def costs(proposal: Any) -> str:
     elif proposal.stopped == "tokens":
         text += "\n" + tr(
             "Das Tokenbudget ist erreicht — der Vorschlag zeigt den Stand bis hierhin."
+        )
+    elif proposal.stopped == "truncated":
+        # Die zwei Zweige darunter kamen mit ``stop_reason`` dazu
+        # (``agent/session.py``) und fielen hier wortlos durch: Ein Vorschlag,
+        # der aus einer abgebrochenen Antwort entstand, sah aus wie ein
+        # vollständiger — dieselbe Lücke, die es vorher im Kern gab, eine
+        # Ebene weiter oben.
+        text += "\n" + tr(
+            "Die Antwort des Modells brach mitten ab — der Vorschlag zeigt den "
+            "Stand bis hierhin. Eine kürzere Anweisung oder ein kleinerer "
+            "Schritt kommt durch."
+        )
+    elif proposal.stopped == "refused":
+        text += "\n" + tr(
+            "Das Modell hat diese Anfrage abgelehnt — was hier steht, ist der "
+            "Stand davor. Eine andere Formulierung oder ein anderes Modell "
+            "führt weiter; an der Anwendung liegt es nicht."
         )
     return text

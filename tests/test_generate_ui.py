@@ -4,12 +4,15 @@
 
 from __future__ import annotations
 
+import threading
+import time
 from pathlib import Path
 
 import pytest
 from PySide6.QtWidgets import QApplication, QDialogButtonBox
 
 from app.core.backends.mesh import ScriptedMeshBackend
+from app.core.errors import OperationCancelled
 from app.core.scene import History
 from app.core.scene.project import new_project
 from app.ui.generate_dialog import GenerateDialog
@@ -148,10 +151,18 @@ def test_the_dialog_can_be_asked_to_let_go_of_its_worker(qt_app: QApplication) -
 
 
 class _StubWorker:
-    """Nur die zwei Methoden, die ``wait_for_workers`` wirklich ruft."""
+    """Nur die Methoden, die der Weg nach draußen wirklich ruft.
+
+    ``cancel`` kam mit dem Abbruchmerker dazu (§15.6): Wer den Dialog
+    loslässt, sagt dem Wurf zuerst, dass niemand mehr wartet.
+    """
 
     def __init__(self, seen: list[int]) -> None:
         self._seen = seen
+        self.cancelled_here = False
+
+    def cancel(self) -> None:
+        self.cancelled_here = True
 
     def isRunning(self) -> bool:  # noqa: N802 — Qt gibt den Namen vor
         return not self._seen
@@ -591,3 +602,103 @@ def test_a_missing_model_gets_its_own_sentence_and_a_button(qt_app: QApplication
     assert "Modell" in gesagt
     assert "Bild zu wählen" in gesagt, "Regel 17: was jetzt hilft"
     assert dialog.setup.isVisible() or not dialog.isVisible(), "und ein Knopf dazu"
+
+
+class WaitingBackend:
+    """Ein Generator, der wartet, bis jemand abbricht — wie ComfyUI beim Fragen.
+
+    ``ScriptedMeshBackend`` fragt seinen Rückruf einmal und ist dann fertig;
+    hier geht es um den Zustand *dazwischen*, in dem der echte Weg Minuten
+    verbringt. Die Schranke aus fünf Sekunden ist keine Wartezeit, sondern eine
+    Reißleine: Bricht niemand ab, endet der Wurf mit einem Fehler statt mit
+    einem hängenden Testlauf.
+    """
+
+    def __init__(self) -> None:
+        self.started = threading.Event()
+        self.asked = 0
+
+    @property
+    def id(self) -> str:
+        return "waiting"
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    def _poll(self, cancelled: object) -> None:
+        self.started.set()
+        deadline = time.monotonic() + 5.0
+        while time.monotonic() < deadline:
+            self.asked += 1
+            if callable(cancelled) and cancelled():
+                raise OperationCancelled
+            time.sleep(0.005)
+        raise AssertionError("niemand hat abgebrochen — der Merker kam nie an")
+
+    def text_to_mesh(self, prompt: str, **kwargs: object) -> object:
+        self._poll(kwargs.get("cancelled"))
+        raise AssertionError("unerreichbar")
+
+    def image_to_mesh(self, image: bytes, **kwargs: object) -> object:
+        self._poll(kwargs.get("cancelled"))
+        raise AssertionError("unerreichbar")
+
+
+def test_cancelling_stops_the_worker_instead_of_leaving_it_polling(qt_app: QApplication) -> None:
+    """§15.6: *Abbrechen* schloss den Dialog und ließ den Arbeiter laufen.
+
+    Der Rückruf, den die Schnittstelle dafür vorsieht, wurde nicht gereicht —
+    der Arbeiter fragte ComfyUI bis zu einer Stunde weiter
+    (``mesh.STUCK_SECONDS``) und meldete sein Ergebnis an ein Fenster, das es
+    nicht mehr gab. Geprüft wird über den Knopf und nicht über die Methode
+    dahinter: Die Verbindung ist der Teil, der fehlen kann.
+
+    Und der Ausgang ist **still**. ``OperationCancelled`` ist kein
+    ``AppError`` (``tests/test_errors.py``); ungefangen käme sie über
+    ``crashed`` als „Dabei ist etwas schiefgegangen, womit hier niemand
+    gerechnet hat" beim Kunden an — für etwas, das er selbst ausgelöst hat.
+    """
+    backend = WaitingBackend()
+    dialog = GenerateDialog(backend=backend)
+    dialog.prompt.setText("eine Figur")
+
+    crashes: list[str] = []
+    problems: list[object] = []
+    dialog._start()
+    worker = dialog._worker
+    assert worker is not None
+    worker.crashed.connect(crashes.append)
+    worker.failed.connect(problems.append)
+    assert backend.started.wait(5.0), "der Wurf läuft"
+    assert not worker.cancelled(), "und niemand hat abgebrochen"
+
+    dialog.buttons.button(QDialogButtonBox.StandardButton.Cancel).click()
+
+    assert worker.cancelled(), "der Knopf setzt den Merker"
+    assert worker.wait(5000), "und der Arbeiter endet, statt weiterzufragen"
+    qt_app.processEvents()
+    assert not crashes, "ein Abbruch ist kein Absturz"
+    assert not problems, "und kein Fehler"
+
+
+def test_letting_the_dialog_go_stops_the_worker_too(qt_app: QApplication) -> None:
+    """Der zweite Ausgang: Ein Dialog wird nicht nur geschlossen, er wird auch
+    weggeräumt (``release``, die Aufräumhilfe in ``tests/conftest.py``).
+
+    Ein Arbeiter, der nur den einen Weg kennt, überlebt den anderen — und ein
+    Thread, der sein Fenster überlebt, nimmt den Prozess mit.
+    """
+    backend = WaitingBackend()
+    dialog = GenerateDialog(backend=backend)
+    dialog.prompt.setText("eine Figur")
+    dialog._start()
+    worker = dialog._worker
+    assert worker is not None
+    assert backend.started.wait(5.0)
+
+    dialog.release()
+
+    assert worker.cancelled()
+    assert worker.wait(5000)
+    qt_app.processEvents()

@@ -14,6 +14,7 @@ sieht aus wie ein Fehler; eine, die sich erklärt, nicht.
 
 from __future__ import annotations
 
+import threading
 from pathlib import Path
 from typing import Final
 
@@ -36,7 +37,7 @@ from PySide6.QtWidgets import (
 
 from app.core.backends import mesh
 from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
-from app.core.errors import CANCEL, AppError
+from app.core.errors import CANCEL, AppError, OperationCancelled
 from app.core.log import get_logger
 from app.i18n import tr
 from app.ui.labels import localised
@@ -75,6 +76,14 @@ class _Worker(Worker):
     Ein Diffusionsmodell braucht Minuten; das in der Ereignisschleife zu tun
     fröre das Fenster ein — samt jeder Fortschrittszeile, die es zeigen
     soll (§31).
+
+    **Und es muss abbrechbar sein** (§15.6). Der Rückruf, den die Schnittstelle
+    dafür vorsieht (:meth:`~app.core.backends.mesh.MeshBackend.text_to_mesh`),
+    wurde hier nicht gereicht: *Abbrechen* schloss den Dialog, wartete
+    fünfzig Millisekunden und ließ los — der Arbeiter fragte ComfyUI weiter,
+    bis zu einer Stunde (``mesh.STUCK_SECONDS``), und meldete sein Ergebnis an
+    ein Fenster, das es nicht mehr gab. ``app.core.generate`` macht es seit je
+    richtig vor; nur der Weg aus dem Fenster ging daran vorbei.
     """
 
     done = Signal(object)
@@ -87,17 +96,51 @@ class _Worker(Worker):
         self._prompt = prompt
         self._image = image
         self._seed = seed
+        # Ein ``Event`` und kein Wahrheitswert: Gesetzt wird im Qt-Hauptthread,
+        # gelesen im Arbeitsthread.
+        self._stop = threading.Event()
+
+    def cancel(self) -> None:
+        """Niemand wartet mehr auf diesen Wurf.
+
+        Was aufhört, ist das **Warten** — der Auftrag steht in der
+        Warteschlange des fremden Programms und gehört ihm; ihn dort zu
+        unterbrechen träfe unter Umständen den Auftrag eines anderen
+        (``backends/mesh.py``). Genau das Warten ist aber, was der Nutzer
+        angeklickt hat.
+        """
+        self._stop.set()
+
+    def cancelled(self) -> bool:
+        """Der Rückruf, den das Backend regelmäßig fragt."""
+        return self._stop.is_set()
 
     def work(self) -> None:
         try:
             if self._image is not None:
                 result = self._backend.image_to_mesh(
-                    self._image, seed=self._seed, progress=self._progress
+                    self._image,
+                    seed=self._seed,
+                    progress=self._progress,
+                    cancelled=self.cancelled,
                 )
             else:
                 result = self._backend.text_to_mesh(
-                    self._prompt, seed=self._seed, progress=self._progress
+                    self._prompt,
+                    seed=self._seed,
+                    progress=self._progress,
+                    cancelled=self.cancelled,
                 )
+        except OperationCancelled:
+            # **Ein Abbruch ist ein stiller Ausgang, kein Fehler** (§15.6).
+            # ``OperationCancelled`` ist ausdrücklich **kein** ``AppError``
+            # (``tests/test_errors.py``) — ungefangen liefe sie also in
+            # ``Worker.run`` und käme beim Kunden als „Dabei ist etwas
+            # schiefgegangen, womit hier niemand gerechnet hat" an, für etwas,
+            # das er selbst ausgelöst hat. Gemeldet wird nichts: Der Dialog,
+            # der abbricht, geht im selben Zug zu.
+            _log.info("generation cancelled")
+            return
         except AppError as problem:
             self.failed.emit(problem)
             return
@@ -548,13 +591,28 @@ class GenerateDialog(QDialog):
         if worker is not None:
             self._leash.hold_until_done(worker)
 
-    def reject(self) -> None:
-        """Abbrechen wartet auf den Thread, statt ihn laufen zu lassen.
+    def _stop_worker(self) -> None:
+        """Dem laufenden Wurf sagen, dass niemand mehr auf ihn wartet (§15.6).
 
-        Die Anfrage selbst läuft auf der anderen Seite weiter — die
-        Schnittstelle aus §27 hat keinen Aufruf, sie zurückzunehmen, und einen
-        zu erfinden, der lügt, wäre schlechter, als nichts zu sagen.
+        Ohne diesen Schritt war *Abbrechen* eine Anzeige: Der Dialog ging zu,
+        und der Arbeiter fragte ComfyUI bis zu einer Stunde weiter. Das steht
+        an **beiden** Ausgängen — geschlossen wird über :meth:`reject`,
+        weggeräumt über :meth:`release`, und ein Arbeiter, der nur den einen
+        Weg kennt, überlebt den anderen.
         """
+        worker = self._worker
+        if worker is not None:
+            worker.cancel()
+
+    def reject(self) -> None:
+        """Abbrechen hält das Warten an und wartet auf den Thread.
+
+        **Der Auftrag auf der anderen Seite läuft weiter.** Die Schnittstelle
+        aus §27 hat keinen Aufruf, ihn zurückzunehmen, und einen zu erfinden,
+        der lügt, wäre schlechter, als nichts zu sagen — was Solidon aufhört,
+        ist das Warten darauf, und genau das hat der Nutzer angeklickt.
+        """
+        self._stop_worker()
         self.wait_for_workers()
         super().reject()
 
@@ -572,6 +630,7 @@ class GenerateDialog(QDialog):
         ``release`` ist der
         Name, unter dem es von außen gefunden wird.
         """
+        self._stop_worker()
         self.wait_for_workers(timeout_ms)
 
     def wait_for_workers(self, timeout_ms: int = WAIT_MILLISECONDS) -> None:

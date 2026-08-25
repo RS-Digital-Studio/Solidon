@@ -545,6 +545,84 @@ def test_a_token_stop_is_spelled_out(qt_app: QApplication) -> None:
     assert "Tokenbudget" in costs(proposal)
 
 
+def test_every_reason_a_turn_ends_is_spelled_out(qt_app: QApplication) -> None:
+    """Regel 17: ``stop_reason`` brachte zwei weitere Gründe (``truncated``,
+    ``refused``), und die Kostenzeile kannte nur die alten zwei.
+
+    Ein Vorschlag aus einer abgeschnittenen oder abgelehnten Antwort sah damit
+    aus wie ein vollständiger — dieselbe Lücke, die es vorher im Kern gab
+    (``agent/session.py``), eine Ebene weiter oben. Geprüft wird über die
+    Menge der Gründe und nicht über zwei Fälle: Ein fünfter fällt sonst wieder
+    wortlos durch.
+    """
+    from app.core.agent.proposal import Proposal
+    from app.ui.chat import costs
+
+    reasons = ("steps", "tokens", "truncated", "refused")
+    for reason in reasons:
+        proposal = Proposal(request="x")
+        proposal.steps = 3
+        proposal.stopped = reason
+        line = costs(proposal)
+
+        assert "\n" in line, f"{reason}: der Grund steht unter den Kosten"
+        said = line.split("\n", 1)[1]
+        assert len(said) > 40, f"{reason}: ein Satz, kein Wort"
+        assert reason not in said, f"{reason}: der Schlüssel gehört nicht in die Oberfläche"
+
+    quiet = Proposal(request="x")
+    quiet.steps = 3
+    assert "\n" not in costs(quiet), "ein Zug, der zu Ende kam, sagt dazu nichts"
+
+    refused = Proposal(request="x")
+    refused.steps = 1
+    refused.stopped = "refused"
+    assert "abgelehnt" in costs(refused), "und er sagt, was passiert ist"
+
+
+def test_the_summary_says_what_a_take_back_would_take_with_it(qt_app: QApplication) -> None:
+    """Regel 16 und §26.5: Ein Vorschlag ist genau eine Transaktion — und wenn
+    diese eine vier Schritte mitnimmt, gehört das **vor** den Klick.
+
+    Die Zusammenfassung sagte „Rücknahme t1" und sonst nichts. Der Befund
+    ``agent.undo_sweeps`` existierte, stand aber allein im Prüfbericht, und der
+    ist die andere Karte derselben Spalte: Wer den Vorschlag ansieht, sieht ihn
+    nicht.
+    """
+    from app.core.agent.apply import undo_finding
+    from app.core.agent.proposal import Proposal
+    from app.core.types import Finding
+
+    proposal = Proposal(request="nimm den Bohrschritt zurück")
+    proposal.undo_of = "t1"
+    proposal.undo_sweeps = ("t4", "t3", "t2", "t1")
+    proposal.findings.append(undo_finding(proposal.undo_sweeps))
+
+    text = describe(ProposalPreview(proposal=proposal))
+
+    assert "Rücknahme t1" in text
+    assert "nicht zuoberst" in text, "der Satz des Befunds steht da"
+    assert "Warnung" in text, "mit dem Wort davor — Farbe allein trägt nichts (Regel 18)"
+    assert "agent.undo_sweeps" not in text, "der Code ist ein Schlüssel, kein Text"
+
+    panel = ChatPanel()
+    panel.show_proposal(ProposalPreview(proposal=proposal))
+    assert "nicht zuoberst" in panel.summary.text()
+
+    # Ein Hinweis ist keine Warnung: „nimmt die zuletzt angewandte zurück"
+    # sagt dasselbe wie die Zeile darüber.
+    single = Proposal(request="x")
+    single.undo_of = "t1"
+    single.findings.append(undo_finding(("t1",)))
+    assert describe(ProposalPreview(proposal=single)).count("\n") == 0
+
+    broken = Proposal(request="x")
+    broken.findings.append(
+        Finding(code="op.drill_hole.GeometryError", severity="error", message="Nichts abgetragen")
+    )
+    assert "Fehler: Nichts abgetragen" in describe(ProposalPreview(proposal=broken))
+
+
 def qt_app_process(window: MainWindow) -> None:
     """Die Signale des Arbeiters ankommen lassen — der Agent läuft in seinem
     eigenen Thread.

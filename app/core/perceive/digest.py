@@ -32,27 +32,48 @@ from app.i18n import TranslatableText, tr
 NAME_LIMIT = 60
 
 
-def as_name(text: TranslatableText | str) -> str:
-    """Ein Name aus fremder Hand, so wie er in den Steckbrief darf (§32).
-
-    Drei Dinge: Zeilenumbrüche und Steuerzeichen fallen weg, alles wird auf
-    :data:`NAME_LIMIT` gekürzt, und das Ergebnis steht in Anführungszeichen.
+def as_value(text: object) -> str:
+    """Ein Wert aus fremder Hand, auf eine Zeile gebracht und gekürzt (§32).
 
     **Der Umbruch ist der Punkt, nicht die Länge.** Der Steckbrief ist ein
     zeilenweiser Text, und eine Zeile darin ist eine Aussage über ein Objekt.
-    Ein Name mit ``\n`` darin schreibt in diesen Text hinein — beliebig viele
+    Ein Wert mit ``\n`` darin schreibt in diesen Text hinein — beliebig viele
     eigene Zeilen, in derselben Form, in der die echten stehen. Das ist die
     ganze Mechanik von Prompt-Injektion über Daten, und sie kostet eine Zeile
     Code, sie zuzuhalten.
+
+    Ohne Anführungszeichen, weil nicht jede Stelle einen Rahmen verträgt: Eine
+    Einheit hinter einer Zahl, eine Passungskennung, der Name einer Operation
+    und ihre Argumente werden vom Modell **wörtlich weiterverwendet** — ein
+    Rahmen darum sähe aus, als gehörten die Zeichen zum Wert. Wo ein Rahmen
+    passt, steht :func:`as_name` darüber.
+    """
+    flat = " ".join(str(text).split())
+    if len(flat) > NAME_LIMIT:
+        flat = flat[: NAME_LIMIT - 1] + "…"
+    return flat
+
+
+def as_name(text: TranslatableText | str) -> str:
+    """Ein Name aus fremder Hand, so wie er in den Steckbrief darf (§32).
+
+    Drei Dinge: Zeilenumbrüche und Steuerzeichen fallen weg (:func:`as_value`),
+    alles wird auf :data:`NAME_LIMIT` gekürzt, und das Ergebnis steht in
+    Anführungszeichen.
+
+    **Das Anführungszeichen selbst muss dabei aus dem Wert heraus.** Sonst
+    schließt der Name den Rahmen, den er bekommen hat: ``Deckel" ANWEISUNG:
+    …`` kam als ``"Deckel" ANWEISUNG: …"`` an, und was hinter dem zweiten
+    Zeichen steht, liest sich wie Text der Anwendung. Es wird durch das
+    einfache ersetzt und nicht gelöscht — ein Name mit Zoll-Angabe behält so
+    seine Bedeutung.
 
     Die Rahmung dazu steht im Kontext
     (:data:`app.core.agent.context.FOREIGN_NAMES_NOTICE`): Kürzen sagt, wie
     viel Platz ein Name bekommt, der Rahmen sagt, was ein Name ist.
     """
-    flat = " ".join(str(text).split())
-    if len(flat) > NAME_LIMIT:
-        flat = flat[: NAME_LIMIT - 1] + "…"
-    return f'"{flat}"'
+    plain = str(text).replace('"', "'")
+    return f'"{as_value(plain)}"'
 
 
 def digest(
@@ -71,8 +92,11 @@ def digest(
     lines: list[str] = [_scene_line(scene)]
 
     if scene.parameters:
+        # Name und Einheit stehen so in der Projektdatei, wie jemand sie
+        # geschrieben hat — beide durch :func:`as_value`, damit aus „mm" keine
+        # zweite Zeile wird (§32).
         values = " · ".join(
-            f"{name}={round_display(parameter.value):g} {parameter.unit}"
+            f"{as_value(name)}={round_display(parameter.value):g} {as_value(parameter.unit)}"
             for name, parameter in scene.parameters.items()
         )
         lines.append(f"{tr('Parameter')}: {values}")
@@ -115,7 +139,13 @@ def _fit_lines(document: Document, scene: Scene) -> list[str]:
     parts = []
     for fit in document.fits:
         state = f" — {tr('verletzt')}" if fit.name in violated else ""
-        parts.append(f"{fit.name} {fit.a} ↔ {fit.b} ({fit.kind}, {fit.tolerance}){state}")
+        # Alle fünf Felder kommen aus der Projektdatei (§32). Ohne Rahmen:
+        # Der Name einer Passung ist die Kennung, mit der der Agent sie
+        # anspricht — in Anführungszeichen sähe er aus, als gehörten sie dazu.
+        parts.append(
+            f"{as_value(fit.name)} {as_value(fit.a)} ↔ {as_value(fit.b)} "
+            f"({as_value(fit.kind)}, {as_value(fit.tolerance)}){state}"
+        )
     return [f"{tr('Passungen')}: " + " · ".join(parts)]
 
 
@@ -132,8 +162,10 @@ def _print_settings_line(document: Document) -> list[str]:
         return []
     walls = settings.shell.wall_count
     width = settings.layers.line_width
+    # Titel und Stufe stehen im Projekt, also gerahmt beziehungsweise
+    # abgeflacht (§32) — der Titel ist ein Name, die Stufe ein Schlüssel.
     return [
-        f'{tr("Druckeinstellungen")}: "{settings.title}" ({settings.quality}), '
+        f"{tr('Druckeinstellungen')}: {as_name(settings.title)} ({as_value(settings.quality)}), "
         f"{walls} {tr('Wände')} × {width:g} mm = {settings.wall_thickness:g} mm {tr('Wand')}"
     ]
 
@@ -150,7 +182,7 @@ def _source_lines(document: Document) -> list[str]:
     if not document.sources:
         return []
     parts = [
-        f"{source_id} {as_name(PurePosixPath(source.path).name)} ({source.kind})"
+        f"{source_id} {as_name(PurePosixPath(source.path).name)} ({as_value(source.kind)})"
         for source_id, source in document.sources.items()
     ]
     return [f"{tr('Quellen')}: " + " · ".join(parts)]
@@ -402,12 +434,24 @@ def _stack_lines(document: Document) -> list[str]:
             for entry in transaction.ops
         )
         by = tr("Agent") if transaction.origin.by == "agent" else tr("Nutzer")
-        parts.append(f'{transaction.id} "{transaction.title}" ({calls}, {by})')
+        # Der Titel einer Transaktion ist ein Name aus der Projektdatei wie
+        # jeder andere — und einer, den der Agent selbst vorgeschlagen haben
+        # kann (§32).
+        parts.append(f"{transaction.id} {as_name(transaction.title)} ({calls}, {by})")
     return [f"{tr('Verlauf')}: " + " · ".join(parts)]
 
 
 def _op_call(operation: Operation) -> str:
-    """``drill_hole(diameter=6, z=8)`` — die Op als lesbarer Aufruf."""
+    """``drill_hole(diameter=6, z=8)`` — die Op als lesbarer Aufruf.
+
+    **Die Werte kommen aus der Projektdatei, und einer davon ist Quelltext.**
+    ``create_from_scad`` trägt sein ganzes Programm im Parameter ``source``
+    (Regel 13) — mehrzeilig, beliebig lang, und bis hierhin lief es
+    ungefiltert in den Verlaufssatz. Damit schrieb ein Schritt so viele Zeilen
+    in den Steckbrief, wie sein Quelltext lang war, in derselben Form wie die
+    echten. :func:`as_value` macht daraus eine Zeile mit :data:`NAME_LIMIT`
+    Zeichen; wer den vollen Quelltext sehen will, liest ihn im Dokument.
+    """
     shown: list[str] = []
     for key, value in operation.params.items():
         if len(shown) >= _STACK_PARAM_LIMIT:
@@ -418,8 +462,8 @@ def _op_call(operation: Operation) -> str:
         elif isinstance(value, int | float):
             shown.append(f"{key}={round_display(float(value)):g}")
         elif isinstance(value, str) and value:
-            shown.append(f"{key}={value}")
-    return f"{operation.op}({', '.join(shown)})"
+            shown.append(f"{as_value(key)}={as_value(value)}")
+    return f"{as_value(operation.op)}({', '.join(shown)})"
 
 
 def new_feature_lines(before: Scene, after: Scene) -> list[str]:
@@ -442,7 +486,9 @@ def new_feature_lines(before: Scene, after: Scene) -> list[str]:
             if feature_id not in seen
         }
         if object_id not in before.objects:
-            lines.append(f'{tr("Neues Objekt")}: {object_id} "{entry.name}"')
+            # Derselbe Rahmen wie in ``_object_lines``: Der Name kommt aus der
+            # Projektdatei oder aus einem Werkzeugaufruf des Modells (§32).
+            lines.append(f"{tr('Neues Objekt')}: {object_id} {as_name(entry.name)}")
         for feature_id, feature in fresh.items():
             lines.append(
                 f"{tr('Neues Merkmal')}: {_feature_line(feature_id, feature)} "
