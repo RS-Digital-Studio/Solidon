@@ -196,6 +196,7 @@ def frame_sketch(window: Any, app: QApplication) -> None:
     """
     from app.core.sketch import shapes
     from app.core.sketch.serialize import sketch_to_text
+    from app.ui.viewport import FIT_ROOM
 
     result = window.session.last_result
     if result is None:
@@ -245,13 +246,24 @@ def frame_sketch(window: Any, app: QApplication) -> None:
     xs = [x for x, _y in panel.canvas.points()]
     ys = [y for _x, y in panel.canvas.points()]
     visible = max(window.viewport.height(), 1)
+    # **Die Zeichnung gehört über die Leiste, nicht halb dahinter.** Der
+    # sichtbare Ausschnitt ist ``span * FIT_ROOM`` hoch; die Leiste verdeckt
+    # davon den unteren Anteil ``bar_share``. Der freie Streifen liegt also
+    # oben, und seine Mitte ist der Brennpunkt plus die halbe verdeckte Höhe —
+    # der Brennpunkt muss um genau das nach **unten**, damit die Zeichnung
+    # oben ankommt.
+    #
+    # Gerechnet aus der sichtbaren Höhe und nicht aus der Spannweite: Zwischen
+    # beiden liegt der Rand, den ``show_span_on_plane`` dazugibt, und wer ihn
+    # vergisst, verschiebt um ein Siebtel zu wenig.
     bar_share = min(0.6, panel.height() / visible)
     tall = (max(ys) - min(ys)) / max(1.0 - bar_share, 0.2) * 1.35
+    hidden = tall * FIT_ROOM * bar_share
     window.viewport.show_span_on_plane(
         frame,
         (
             (max(xs) + min(xs)) / 2.0,
-            (max(ys) + min(ys)) / 2.0 + tall * bar_share / 2.0,
+            (max(ys) + min(ys)) / 2.0 - hidden / 2.0,
         ),
         ((max(xs) - min(xs)) * 1.35, tall),
     )
@@ -599,6 +611,21 @@ def take_all(app: QApplication, language: str) -> None:
     # zeigte einen Dialog, den es so nicht gibt.
     catalog = prepared(PartCatalog(), catalog_size())
     settle(app, 30)
+    # **Alle Bausteine, nicht die ersten achtzehn.** Der Katalog geht nach
+    # ``catalog_size()`` auf — ein Anteil des Bildschirms —, und was darunter
+    # liegt, erreicht der Kunde durch Rollen. Ein Bild kann das nicht: Es endet
+    # mitten in einer Kachelreihe, und die letzte Gruppe fehlt ganz.
+    #
+    # Gewachsen wird um das, was der Rollbalken noch hergibt, und danach noch
+    # einmal nachgesehen: Ein breiteres Fenster ordnet die Kacheln um, und die
+    # neue Höhe kann kleiner ausfallen als die gerechnete.
+    for _ in range(4):
+        rest = catalog.list.verticalScrollBar().maximum()
+        if rest <= 0:
+            break
+        catalog.resize(catalog.width(), catalog.height() + rest)
+        settle(app, 20)
+    settle(app, 20)
     shoot(catalog, "catalog", language)
     catalog.close()
 

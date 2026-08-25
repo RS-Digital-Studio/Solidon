@@ -867,7 +867,7 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
    breiten leeren Kopf, und `aspect-ratio` mit `object-fit: cover` schnitt ihn
    auf der Seite weg. Der Kommentar sagte selbst, dass die Datei „beim nächsten
    Lauf neu erzeugt" wird — der Lauf ist gelaufen (`fit_height=True`), und das
-   Bild ist 520 × 303 statt 520 × 460. Der Beschnitt hätte jetzt vom **richtigen**
+   Bild ist 520 × 195 statt 520 × 460. Der Beschnitt hätte jetzt vom **richtigen**
    Bild unten etwas abgeschnitten, also ist er weg. */
 
 /* ── Zeichnungen, die sich bewegen ─────────────────────────────────────── */

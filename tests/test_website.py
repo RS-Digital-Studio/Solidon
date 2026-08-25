@@ -41,13 +41,40 @@ PAGES = ("index.html", "en/index.html")
 #: dabei: die erzeugt ein Werkzeug, und `test_manual.py` beziehungsweise
 #: `test_legal.py` prüfen sie. Was hier steht, wird auf Aufbau geprüft —
 #: Verweise, Bildmaße, Sprungmarken.
-ALL_PAGES = (
-    *PAGES,
-    "funktionen.html",
-    "ki-modelle.html",
-    "en/features.html",
-    "en/ai-models.html",
+#: Was ``tools/make_legal.py`` erzeugt — die prüft ``test_legal.py``.
+GENERATED = frozenset(
+    {"agb.html", "datenschutz.html", "eula.html", "impressum.html", "widerruf.html"}
 )
+
+
+def _sales_pages() -> tuple[str, ...]:
+    """Jede von Hand gepflegte Verkaufsseite, in allen Sprachen.
+
+    **Erhoben und nicht aufgezählt.** Die Liste stand hier als Literal — sechs
+    Namen, alle deutsch oder englisch — und versprach im Kommentar daneben
+    „jede". Seit die Seiten in sechs Sprachen stehen, waren zwölf davon in
+    keinem Lauf: Vier gaben für dasselbe Bild eine Höhe an, die es seit einer
+    Änderung nicht mehr hatte, und die Suite blieb grün. Gefunden hat es
+    Robert am fertigen Bild.
+
+    Draußen bleiben die erzeugten Rechtstexte, das Handbuch und die
+    Bestätigungsdatei der Suchmaschine — sie sind keine gepflegten Seiten.
+    """
+    found = []
+    for path in sorted(WEBSITE.rglob("*.html")):
+        relative = path.relative_to(WEBSITE).as_posix()
+        if path.name in ("handbuch.html", "manual.html") or path.name in GENERATED:
+            continue
+        if path.name.startswith("google"):
+            continue
+        found.append(relative)
+    return tuple(found)
+
+
+ALL_PAGES = _sales_pages()
+#: Eine Menge aus dem Dateisystem kann leer werden, ohne dass ein Test rot
+#: wird — dann liefe jede Prüfung darüber ins Nichts und bestünde.
+assert len(ALL_PAGES) >= 18, f"nur {len(ALL_PAGES)} Verkaufsseiten gefunden"
 DATA = Path(__file__).resolve().parent.parent / "app" / "core" / "knowledge" / "data"
 EXAMPLES = Path(__file__).resolve().parent.parent / "app" / "examples"
 
