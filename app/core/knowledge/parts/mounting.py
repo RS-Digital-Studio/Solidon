@@ -437,3 +437,128 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
             (0.0, 0.0, -1.0),
         ),
     )
+
+
+#: Was vom schmalen Ende eines Fußes mindestens bleibt. Kein Maß aus einer
+#: Tabelle, sondern die Grenze, unter der ein Kegelstumpf keine Standfläche
+#: mehr hat.
+MIN_FOOT_TIP = 1.0
+
+FOOT_ADDED = PartChange(
+    version="1",
+    date="2026-08-25",
+    reason="Standfuß — was auf dem Tisch steht, steht sonst auf seiner Druckkante.",
+)
+
+
+@op_params
+class FootParams(BaseParams):
+    kind: str = param(
+        title=_("Art"),
+        default="foot",
+        choices=("foot", "pocket"),
+        subtractive_on=("pocket",),
+        doc=_("Ein gedruckter Fuß, oder die Tasche für einen gekauften aus Gummi."),
+    )
+    diameter: float = param(
+        title=_("Durchmesser"),
+        default=10.0,
+        unit="mm",
+        minimum=3.0,
+        maximum=60.0,
+        doc=_("Wie breit der Fuß aufsteht. Breiter kippt später."),
+    )
+    height: float = param(
+        title=_("Höhe"),
+        default=3.0,
+        unit="mm",
+        minimum=0.6,
+        maximum=30.0,
+        doc=_("Wie hoch er trägt — bei der Tasche: wie tief der Gummifuß einsinkt."),
+    )
+    chamfer: float = param(
+        title=_("Fase"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=10.0,
+        placement="advanced",
+        doc=_(
+            "Schräge am unteren Rand. Null heißt: ein Fünftel der Höhe — genug, "
+            "damit die erste Schicht nicht als Grat vorsteht."
+        ),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        placement="advanced",
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
+
+
+@register_part(
+    name="foot",
+    title=_("Standfuß"),
+    group="mounting",
+    params=FootParams,
+    features=["foot"],
+    doc=_(
+        "Ein Fuß unter einem Gehäuse — gedruckt, oder als Tasche für einen "
+        "gekauften aus Gummi. Vier davon halten ein Gerät ruhig und die "
+        "Unterseite vom Tisch weg."
+    ),
+    caveat=_(
+        "Nicht für Teile, die auf der Fläche kleben sollen — ein Fuß hebt sie ab. "
+        "Und nicht als Abstandshalter unter einer Schraube: dafür ist der Dom da."
+    ),
+    changes=[FOOT_ADDED],
+)
+def foot(raw: BaseParams) -> PartResult:
+    """Ein Kegelstumpf, der auf der breiten Seite steht — oder ein Loch dafür.
+
+    **Die Fase zeigt nach unten, und das ist der ganze Trick.** Ein Zylinder
+    mit scharfer Kante bekommt beim Drucken einen Elefantenfuß: Die erste
+    Schicht quetscht breiter als die zweite und steht als Grat vor, und darauf
+    wackelt das Gerät. Ein Kegelstumpf, der nach unten schmaler wird, hat den
+    Grat dort, wo ohnehin Luft ist.
+
+    Als **Tasche** ist es dieselbe Form, nur umgekehrt gelesen: Das Loch nimmt
+    einen gekauften Gummifuß auf, und die Fase wird zur Einführschräge. Der
+    Ursprung ist dann die Mündung und die Tiefe geht nach unten ins Material
+    (§24.1, ``MOUTH_AT_ORIGIN``).
+    """
+    params = cast(FootParams, raw)
+    schneidet = params.kind == "pocket"
+    breit = params.diameter + (params.play if schneidet else 0.0)
+
+    # **Die Fase wird zweimal gekappt, und die zweite Grenze fehlte zuerst.**
+    # In der Höhe ist sie klar: Mehr als die halbe, und der Kegel liefe in eine
+    # Spitze. In der Breite ist sie es weniger — bis ein Fuß von 30 mm Höhe und
+    # 10 mm Durchmesser eine Fase von 6 mm bekam und sein schmales Ende damit
+    # **minus zwei** Millimeter maß. Heraus kam ein Körper aus fünf Teilen, und
+    # der Bereichstest fährt genau diese Ecke.
+    chamfer = params.chamfer or params.height / 5.0
+    chamfer = min(chamfer, params.height / 2.0, (breit - MIN_FOOT_TIP) / 2.0)
+    schmal = breit - 2.0 * chamfer
+
+    if schneidet:
+        # Die Tasche: die Einführschräge liegt an der Mündung, also oben, und
+        # der Rest ist ein Zylinder nach unten.
+        mund = shapes.cone(schmal, breit, chamfer)
+        rohr = shapes.cylinder(schmal, params.height - chamfer + shapes.OVERLAP)
+        body = union(
+            shapes.moved(mund, (0.0, 0.0, -chamfer)),
+            shapes.moved(rohr, (0.0, 0.0, -params.height)),
+        )
+        merkmal = bore("foot_1", breit, (0.0, 0.0, -params.height / 2.0), depth=params.height)
+    else:
+        # Der Fuß: unten schmal, damit der Elefantenfuß ins Leere quetscht.
+        fuss = shapes.cone(schmal, breit, chamfer)
+        saeule = shapes.cylinder(breit, params.height - chamfer + shapes.OVERLAP)
+        body = union(fuss, shapes.moved(saeule, (0.0, 0.0, chamfer - shapes.OVERLAP)))
+        merkmal = face("foot_1", 3.1416 * (schmal / 2.0) ** 2, (0.0, 0.0, 0.0), (0.0, 0.0, -1.0))
+
+    return result(body, merkmal)

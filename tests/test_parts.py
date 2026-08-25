@@ -53,13 +53,13 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
 
 
 def test_the_library_has_the_first_set_from_the_plan() -> None:
-    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung, dazu vier.
+    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung, dazu sechs.
 
     Die Kalibrierkörper aus §28.3 sind auch Bausteine, gehören aber nicht zu
     diesem Satz — sie sind Werkzeuge für den Drucker, nicht für das Modell, und
     sie haben ihre eigene Gruppe im Katalog.
 
-    **Vier stehen nicht in der Erstbestückung**, und alle vier sind eine Ansage
+    **Sechs stehen nicht in der Erstbestückung**, und alle sechs sind eine Ansage
     und kein Versehen. Wer die Zahl hier ändert, ändert die Bibliothek, und das soll
     auffallen.
 
@@ -93,10 +93,16 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     Kabelclip: Die Versteifungsrippe hält **eine** Wand, und die Ecke zwischen
     zweien blieb offen — ein Eckwinkel steht auf jeder Liste häufig gedruckter
     Funktionsteile, und die Gruppe „Struktur" hatte zwei Einträge.
+
+    ``foot`` kam am 25.08.2026 dazu, aus derselben Liste: Was auf dem Tisch
+    steht, steht sonst auf seiner Druckkante. Er kann beides — ein gedruckter
+    Fuß und die Tasche für einen gekauften aus Gummi —, und das ist kein
+    Doppelbaustein, sondern dieselbe Form zweimal gelesen (``subtractive_on``,
+    wie beim Passstift).
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 18
+    assert len(building) == 19
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 

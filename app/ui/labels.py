@@ -499,6 +499,11 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
     "box": _("Über den Hüllquader"),
     "pin": _("Stift"),
     "bore": _("Bohrung"),
+    # Der Standfuß kann beides, und beide Werte sind englische Schlüssel: Was
+    # der Kunde wählt, heißt „Fuß" oder „Tasche" — die Tasche nimmt einen
+    # gekauften Gummifuß auf, der Fuß wird gedruckt.
+    "foot": _("Fuß"),
+    "pocket": _("Tasche"),
     "rectangle": _("Rechteck"),
     "circle": _("Kreis"),
     "polygon": _("Vieleck"),
