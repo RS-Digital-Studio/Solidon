@@ -349,8 +349,8 @@ class CommandPalette(QDialog):
         # ist die Sonderform vor der Normalform. Die Grundliste zeigt den
         # Zwilling gar nicht (:func:`matches`); wer ihn sucht, findet ihn, aber
         # er drängt sich nicht vor seinen Partner.
-        versteckt = hidden_from_the_menu()
-        found.sort(key=lambda entry: (rank(entry, query), entry.name in versteckt))
+        hidden_names = hidden_from_the_menu()
+        found.sort(key=lambda entry: (rank(entry, query), entry.name in hidden_names))
         for entry in found:
             label = str(entry.title)
             if entry.shortcut:

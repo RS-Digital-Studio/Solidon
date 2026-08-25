@@ -27,6 +27,11 @@ TOOLS_DIR = PACKAGE_DIR.parent / "tools"
 GERMAN_WORDS = frozenset(
     {
         "abstand",
+        "ecken",
+        "lebende",
+        "titel",
+        "versteckt",
+        "vorhanden",
         "anlass",
         "anzahl",
         "arten",
@@ -136,6 +141,7 @@ GERMAN_STEMS = (
     "masse",
     "merkmal",
     "namen",
+    "passt",
     "pruef",
     "schmal",
     "schuld",
@@ -146,6 +152,7 @@ GERMAN_STEMS = (
     "stelle",
     "stueck",
     "versetz",
+    "volumen",
     "waehl",
     "werkzeug",
     "zeile",

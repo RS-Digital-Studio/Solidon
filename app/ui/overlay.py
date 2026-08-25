@@ -120,7 +120,7 @@ MARGIN = ROOMY
 CARD_PADDING = 1
 
 
-def lebende[T: QWidget](zone: QWidget, typ: type[T]) -> list[T]:
+def living[T: QWidget](zone: QWidget, wanted: type[T]) -> list[T]:
     """Die Kinder dieser Art, deren C++-Seite noch lebt.
 
     **Die Python-Hülle überlebt die C++-Seite.** Nimmt ein Qt-Elternteil sein
@@ -153,7 +153,7 @@ def lebende[T: QWidget](zone: QWidget, typ: type[T]) -> list[T]:
     ``isValid`` zusätzlich dort, wo der Wert wirklich angefasst wird — die
     Liste allein schließt das Fenster nicht.
     """
-    return [child for child in zone.findChildren(typ) if isValid(child)]
+    return [child for child in zone.findChildren(wanted) if isValid(child)]
 
 
 def card_width(base: int, cap: int, window: int) -> int:
@@ -310,7 +310,7 @@ def natural_height(zone: QWidget) -> int:
     ohne ihre Listen bräuchte, plus das, was die Listen wirklich brauchen.
     """
     wanted = zone.sizeHint().height()
-    for view in lebende(zone, QAbstractItemView):
+    for view in living(zone, QAbstractItemView):
         if not view.isVisibleTo(zone):
             continue
         # Eine gesetzte Mindesthöhe ist eine Aussage über den Zweck und nicht
@@ -328,7 +328,7 @@ def natural_height(zone: QWidget) -> int:
         # Verlauf hingen unterhalb der Kartenkante.
         contributed = min(max(view.sizeHint().height(), view.minimumHeight()), view.maximumHeight())
         wanted += needs - contributed
-    for area in lebende(zone, QScrollArea):
+    for area in living(zone, QScrollArea):
         if isinstance(area, QAbstractItemView) or not area.isVisibleTo(zone):
             continue
         inner = area.widget()
@@ -379,7 +379,7 @@ def extra_height(zone: QWidget) -> int:
             continue
         takers = [
             child
-            for child in lebende(widget, QWidget)
+            for child in living(widget, QWidget)
             # ``isValid`` ein zweites Mal, und das ist kein Versehen: Zwischen
             # dem Sammeln und dieser Zeile kann der Speicherbereiniger
             # zuschlagen — er läuft in dem Thread, dessen Allokation gerade die
@@ -477,7 +477,7 @@ class OverlayHost(QWidget):
     def _watch(self, zone: QWidget) -> None:
         """Auf diese Zone und alles darin hören."""
         zone.installEventFilter(self)
-        for child in lebende(zone, QWidget):
+        for child in living(zone, QWidget):
             child.installEventFilter(self)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 — Qt-Name
@@ -729,7 +729,7 @@ class OverlayHost(QWidget):
         """
         takers: list[RoomTaker] = [
             child
-            for child in lebende(zone, QWidget)
+            for child in living(zone, QWidget)
             if isinstance(child, RoomTaker) and child.isVisibleTo(zone)
         ]
         if not takers:

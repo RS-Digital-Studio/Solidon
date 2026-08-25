@@ -96,18 +96,18 @@ def test_a_half_torn_down_child_is_stepped_over(qt_app: QApplication) -> None:
     """
     from shiboken6 import delete, isValid
 
-    from app.ui.overlay import lebende
+    from app.ui.overlay import living
 
     zone = QWidget()
     lebt = QLabel("bleibt", zone)
     stirbt = QLabel("geht", zone)
 
-    assert len(lebende(zone, QLabel)) == 2, "vorher sind beide da"
+    assert len(living(zone, QLabel)) == 2, "vorher sind beide da"
 
     delete(stirbt)
     assert not isValid(stirbt), "das C++-Objekt ist weg, die Hülle steht noch"
 
-    uebrig = lebende(zone, QLabel)
+    uebrig = living(zone, QLabel)
 
     assert len(uebrig) == 1, f"das tote Kind gehört übersprungen: {len(uebrig)}"
     assert uebrig[0] is lebt

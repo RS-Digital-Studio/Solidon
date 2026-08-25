@@ -104,9 +104,9 @@ def main(argv: list[str] | None = None) -> int:
         # nicht". Im zweiten Fall stünde die Verknüpfung neben den Erinnerungen
         # statt über ihnen, und niemand merkte es.
         print("Diesen Ort gibt es nicht — das Kürzel passt vermutlich nicht.")
-        vorhanden = sorted(q.name for q in target.parent.parent.iterdir() if q.is_dir())
-        if vorhanden:
-            print("Unter ~/.claude/projects liegen: " + ", ".join(vorhanden))
+        known = sorted(q.name for q in target.parent.parent.iterdir() if q.is_dir())
+        if known:
+            print("Unter ~/.claude/projects liegen: " + ", ".join(known))
         print("Den richtigen Ordner ablesen und harness_dir danach richten.")
         return 1
 

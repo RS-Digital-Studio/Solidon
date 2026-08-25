@@ -4083,22 +4083,22 @@ class MainWindow(QMainWindow):
         *Beenden* wäre in einer Liste, durch die man tippt, ein Klick zu nah am
         Verlust der Arbeit, und *Befehlspalette* öffnete sich selbst.
         """
-        vorhanden = {title for title, _shortcut, _slot in known.values()}
+        known_titles = {title for title, _shortcut, _slot in known.values()}
         # Und wo dieselbe Handlung schon von Hand in der Tabelle steht, wird
         # ihre Action **trotzdem** gemerkt: Exportieren, Rückgängig,
         # Wiederholen und Automatisch teilen stehen dort mit einer gebundenen
         # Methode, und eine Methode weiß nicht, ob sie darf. Vier der fünf
         # gesperrten Befehle eines leeren Projekts sind genau diese vier — sie
         # nur über die Menüschleife zu finden hätte einen von fünf erwischt.
-        nach_titel = {title: key for key, (title, _shortcut, _slot) in known.items()}
+        by_title = {title: key for key, (title, _shortcut, _slot) in known.items()}
         ops = set(self._op_actions.values())
         found: dict[str, Any] = {}
         self._palette_actions.clear()
         for path, action in _menu_lines(self.menuBar()):
             if action in ops:
                 continue
-            if action.text() in vorhanden:
-                self._palette_actions[nach_titel[action.text()]] = action
+            if action.text() in known_titles:
+                self._palette_actions[by_title[action.text()]] = action
                 continue
             if action in (self._quit_action, self._palette_action):
                 continue

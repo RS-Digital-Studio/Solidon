@@ -26,6 +26,7 @@ from app.core.errors import CANCEL, INSTALL_MISSING, AppError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import BoundingBox
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -59,6 +60,19 @@ class BRepUnavailable(AppError):
                 "Alles andere in Solidon funktioniert ohne."
             )
         )
+
+
+def _same_point(a: tuple[float, float, float], b: tuple[float, float, float]) -> bool:
+    """Ob zwei Knoten praktisch zusammenfallen — für den Degeneriert-Test.
+
+    Millimeter gegen ``EPS_GEOM``: identische Koordinaten liegen erst recht
+    darunter, der Bestand bleibt also unverändert grün.
+    """
+    return (
+        abs(a[0] - b[0]) <= EPS_GEOM
+        and abs(a[1] - b[1]) <= EPS_GEOM
+        and abs(a[2] - b[2]) <= EPS_GEOM
+    )
 
 
 def available() -> bool:
@@ -360,12 +374,20 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
             # sonst kommt der Körper umgestülpt heraus und jedes Volumen ist
             # negativ.
             corners = (third, second, first) if reversed_face else (first, second, third)
-            ecken = (
+            corner_points = (
                 points[corners[0] - 1 + offset],
                 points[corners[1] - 1 + offset],
                 points[corners[2] - 1 + offset],
             )
-            if ecken[0] == ecken[1] or ecken[1] == ecken[2] or ecken[0] == ecken[2]:
+            # Über den Abstand, nicht bitgleich (Regel 6): Nach einer echten
+            # Transformation (STEP-Baugruppe mit Location) fallen zwei
+            # Polknoten nicht mehr bitgleich zusammen, und das degenerierte
+            # Dreieck wanderte wieder in die STL.
+            if (
+                _same_point(corner_points[0], corner_points[1])
+                or _same_point(corner_points[1], corner_points[2])
+                or _same_point(corner_points[0], corner_points[2])
+            ):
                 continue
             faces.append(
                 (corners[0] - 1 + offset, corners[1] - 1 + offset, corners[2] - 1 + offset)
