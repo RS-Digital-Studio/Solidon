@@ -88,6 +88,13 @@ SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items
 #: Grund: darüber liest niemand mehr, er sucht.
 MAX_MENU_ROWS = 12
 
+#: Datenrolle einer Verlaufszeile: **alle** Operationen, die sie umfasst, als
+#: Tupel. Neben ``UserRole``, das die *eine* Operation zum Öffnen trägt und
+#: bei einer Transaktion aus mehreren Schritten leer bleibt — ein Doppelklick
+#: hätte dort keine, die er zeigen könnte. Die Mehrfachauswahl fragt diese
+#: Rolle, weil sie die andere Frage stellt: was gehört zu dieser Zeile.
+OPS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
+
 
 def folded_groups(sizes: dict[str, int], limit: int = MAX_MENU_ROWS, fixed: int = 0) -> list[str]:
     """Welche Gruppen ein Untermenü bekommen, damit das Menü in die Grenze passt.
@@ -1563,8 +1570,20 @@ class HistoryPanel(QWidget):
         super().__init__(parent)
         self.list = QListWidget(self)
         self.list.setAccessibleName(tr("Verlauf"))
+        # **Mehrere Schritte wählbar** (§24.5): Ein Rezept nimmt beliebige
+        # ``op_ids``, und solange der Verlauf nur einen Index kannte, wanderte
+        # der ganze Stapel in jeden Baustein — wer einen Halter aus einem
+        # gewachsenen Projekt herauslöst, bekam ein Teil, das Dinge baut, die
+        # niemand bestellt hat. Dieselbe Auswahlart wie im Objektbaum daneben,
+        # damit Strg- und Umschalt-Klick überall dasselbe tun.
+        self.list.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.list.itemDoubleClicked.connect(self._on_activated)
-        self.list.setToolTip(tr("Doppelklick öffnet die Operation und ihre Parameter."))
+        self.list.setToolTip(
+            tr(
+                "Doppelklick öffnet die Operation und ihre Parameter. "
+                "Mit Strg oder Umschalt mehrere Schritte wählen."
+            )
+        )
         self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.list.customContextMenuRequested.connect(self._on_context_menu)
         self._room: int | None = None
@@ -1656,12 +1675,19 @@ class HistoryPanel(QWidget):
             )
             if len(transaction.ops) == 1:
                 item.setData(Qt.ItemDataRole.UserRole, transaction.ops[0])
+            # **Die Zeile trägt auch, was sie umfasst.** ``UserRole`` bleibt
+            # die *eine* Operation zum Öffnen — eine Transaktion aus vier
+            # Schritten hat keine, und das ist richtig, denn welchen sollte ein
+            # Doppelklick zeigen. Für die Mehrfachauswahl zählt dagegen die
+            # ganze Transaktion: Wer „Teilung in vier" wählt, meint alle vier.
+            item.setData(OPS_ROLE, tuple(transaction.ops))
             self.list.addItem(item)
 
             if len(transaction.ops) > 1:
                 for op_id in transaction.ops:
                     child = QListWidgetItem(f"    {op_id}  {titles.get(op_id, '')}")
                     child.setData(Qt.ItemDataRole.UserRole, op_id)
+                    child.setData(OPS_ROLE, (op_id,))
                     self.list.addItem(child)
 
         for transaction in reversed(list(undone)):
@@ -1675,6 +1701,28 @@ class HistoryPanel(QWidget):
 
         self._fit()
         self.list.scrollToBottom()
+
+    def selected_operations(self) -> tuple[int, ...]:
+        """Die gewählten Schritte, aufsteigend und ohne Doppelte.
+
+        Der Ausschnitt für ein Rezept (§24.5). Eine gewählte Transaktion zählt
+        mit **allen** ihren Operationen: Wer „Teilung in vier" anklickt, meint
+        die vier und nicht eine davon.
+
+        **Aufsteigend, weil ein Stapel eine Reihenfolge hat.** Angeklickt wird
+        in beliebiger Folge, gerechnet wird von unten nach oben; ein Rezept aus
+        „Schritt 7, dann Schritt 3" gibt es nicht.
+
+        Leer heißt leer und nicht „alles". Was bei leerer Auswahl geschieht,
+        entscheidet der Aufrufer — das Fenster nimmt dann den ganzen Stapel,
+        und es schreibt das auch hin.
+        """
+        chosen: set[int] = set()
+        for item in self.list.selectedItems():
+            ops = item.data(OPS_ROLE)
+            if ops:
+                chosen.update(int(op_id) for op_id in ops)
+        return tuple(sorted(chosen))
 
     def _on_activated(self, item: QListWidgetItem) -> None:
         op_id = item.data(Qt.ItemDataRole.UserRole)

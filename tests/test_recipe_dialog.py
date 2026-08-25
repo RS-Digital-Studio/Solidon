@@ -22,7 +22,7 @@ from PySide6.QtWidgets import QApplication
 
 from app.core.knowledge.parts.registry import _NAME_PATTERN
 from app.core.scene.project import new_project
-from app.core.types import Document, Feature, Parameter
+from app.core.types import Document, Feature, Operation, Parameter, Transaction
 from app.ui.catalog import PartCatalog
 from app.ui.main_window import MainWindow
 from app.ui.recipe_dialog import RecipeDialog, _identifier, taken_name
@@ -931,3 +931,145 @@ def test_the_window_says_when_the_range_check_did_not_pass(qt_app: QApplication)
         window.session._dirty = False
         window.close()
         window.deleteLater()
+
+
+def _history_document() -> Document:
+    """Ein Dokument mit vier Schritten in drei Transaktionen.
+
+    Die mittlere fasst zwei Operationen zusammen — der Fall, den der Verlauf
+    aufklappt und der die Mehrfachauswahl interessant macht: Wer die
+    Sammelzeile wählt, meint beide darunter.
+    """
+    ops = tuple(
+        Operation(id=number, op="create_box", inputs=(), outputs=(f"body_{number}",), params={})
+        for number in (1, 2, 3, 4)
+    )
+    return replace(
+        new_project().document,
+        ops=ops,
+        transactions=(
+            Transaction(id="t1", title="Quader anlegen", ops=(1,)),
+            Transaction(id="t2", title="Teilung in zwei", ops=(2, 3)),
+            Transaction(id="t3", title="Bohrung setzen", ops=(4,)),
+        ),
+    )
+
+
+def test_the_history_hands_over_what_is_chosen(qt_app: QApplication) -> None:
+    """Der Verlauf gibt die gewählten Schritte heraus — aufsteigend und ganz.
+
+    Das ist die fehlende Hälfte von §24.5: Das Rezeptformat nimmt seit je
+    beliebige ``op_ids``, aber der Verlauf kannte nur einen Index, und deshalb
+    wanderte immer der ganze Stapel in jeden Baustein.
+
+    Zwei Zusagen, die man leicht übersieht. Eine gewählte **Sammelzeile**
+    zählt mit allen ihren Operationen — sie trägt keine ``UserRole``, weil ein
+    Doppelklick dort keine einzelne Operation zeigen könnte, und eine Auswahl,
+    die daran scheitert, wäre stumm falsch. Und die Reihenfolge ist die des
+    Stapels, nicht die der Klicks: Ein Rezept aus „Schritt 7, dann Schritt 3"
+    gibt es nicht.
+    """
+    from app.ui.panels import HistoryPanel
+
+    panel = HistoryPanel()
+    panel.show_document(_history_document())
+
+    assert panel.selected_operations() == (), "ohne Auswahl ist die Auswahl leer"
+
+    rows = {panel.list.item(index).text().strip(): index for index in range(panel.list.count())}
+    panel.list.item(rows["Bohrung setzen"]).setSelected(True)
+    assert panel.selected_operations() == (4,), "eine Zeile, ihre eine Operation"
+
+    panel.list.item(rows["Teilung in zwei"]).setSelected(True)
+    assert panel.selected_operations() == (2, 3, 4), (
+        "die Sammelzeile bringt beide Schritte mit, und sortiert wird nach dem Stapel"
+    )
+
+    panel.list.clearSelection()
+    assert panel.selected_operations() == (), "und Aufheben hebt auf"
+
+
+def test_the_chosen_steps_reach_the_recipe(qt_app: QApplication, monkeypatch: Any) -> None:
+    """Was der Verlauf hergibt, muss im Rezeptdialog ankommen.
+
+    Der Test daneben prüft die Auswahl, ``scope_text`` prüft den Satz darüber
+    — beides wäre grün, während das Fenster weiter den ganzen Stapel
+    übergibt. Genau diese Lücke hat am 25.08.2026 schon einmal zugeschlagen:
+    ``_save_as_part`` reichte ``enumerate``-Plätze statt ``Operation.id``
+    weiter, acht grüne Tests standen daneben, und der letzte Schritt fiel
+    still aus jedem Rezept. Eine Kette endet am letzten Glied.
+
+    Geprüft werden beide Wege: die leere Auswahl (dann der ganze Stapel, der
+    häufige Fall) und die getroffene.
+    """
+    seen: list[tuple[int, ...]] = []
+
+    class _Spy:
+        def __init__(self, document: Any, payloads: Any, op_ids: Any, *rest: Any, **kw: Any):
+            seen.append(tuple(op_ids))
+            self.saved = SimpleNamespace(connect=lambda *_args: None)
+
+        def exec(self) -> int:
+            return 0
+
+        def release(self) -> None: ...
+
+        def deleteLater(self) -> None:  # noqa: N802 — Qt-Name
+            ...
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        monkeypatch.setattr("app.ui.main_window.RecipeDialog", _Spy)
+        monkeypatch.setattr(window, "_result_features", lambda: ())
+        window.session.last_result = SimpleNamespace()  # type: ignore[assignment]
+        window.session.project = replace(window.session.project, document=_history_document())
+        window.history_panel.show_document(window.session.project.document)
+        # Der Katalog wird nur als Elternteil gereicht und bekommt ``refresh``
+        # ans Signal gehängt — mehr braucht dieser Weg von ihm nicht.
+        catalog: Any = SimpleNamespace(refresh=lambda: None)
+
+        window._save_as_part(catalog)
+        assert seen[-1] == (1, 2, 3, 4), "ohne Auswahl geht der ganze Stapel mit"
+
+        rows = {
+            window.history_panel.list.item(index).text().strip(): index
+            for index in range(window.history_panel.list.count())
+        }
+        window.history_panel.list.item(rows["Teilung in zwei"]).setSelected(True)
+        window._save_as_part(catalog)
+        assert seen[-1] == (2, 3), "mit Auswahl genau sie — und nicht mehr"
+    finally:
+        window.session._dirty = False
+        window.close()
+        window.deleteLater()
+
+
+def test_the_dialog_says_what_it_takes(qt_app: QApplication) -> None:
+    """Über dem Dialog steht, welche Schritte in den Baustein wandern.
+
+    „Auswahl als Baustein speichern" nennt eine Auswahl, und welche es ist,
+    entscheidet sich außerhalb des Dialogs — im Verlauf, mit einem Klick, den
+    der Kunde vielleicht gar nicht gemacht hat. Eine Vorgabe, die
+    stillschweigend greift, ist eine Vermutung (§2.4), also sagt der Satz auch
+    den Normalfall an.
+
+    Ohne Fenster: eine Rechnung über zwei Zahlen, wie ``folded_groups``.
+    """
+    from app.ui.recipe_dialog import SCOPE_NUMBERS_SHOWN, scope_text
+
+    whole = scope_text((1, 2, 3, 4), 4)
+    assert "4" in whole, f"die Zahl fehlt: {whole!r}"
+
+    part = scope_text((2, 3), 4)
+    assert "2, 3" in part, f"die gewählten Schritte stehen da: {part!r}"
+    assert "4" in part, "und wie viele es insgesamt sind"
+    assert part != whole, "beide Fälle sagen dasselbe"
+
+    one = scope_text((2,), 4)
+    assert "1 Schritt" in one, f"kein „alle 1 Schritte“: {one!r}"
+
+    many = scope_text(tuple(range(1, SCOPE_NUMBERS_SHOWN + 5)), 40)
+    assert many.endswith("…"), f"eine lange Liste wird gekürzt: {many!r}"
+    assert str(SCOPE_NUMBERS_SHOWN) in many, "bis zur Grenze zählt sie auf"
+
+    assert scope_text((), 4), "und auch der leere Fall sagt etwas"

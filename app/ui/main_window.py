@@ -3837,29 +3837,44 @@ class MainWindow(QMainWindow):
     def _save_as_part(self, catalog: PartCatalog) -> None:
         """Öffnet den Rezeptdialog über dem Katalog (Konzept §16, Schritt 4 und 5).
 
-        **Genommen wird der ganze Stapel, nicht ein Ausschnitt daraus.** Das
-        Konzept spricht von einem Ausschnitt, und ``capture`` nimmt dafür
-        ``op_ids`` — aber der Verlauf kennt heute keine Mehrfachauswahl, und
-        einen Bereich zu erfinden, den niemand wählen kann, wäre eine
-        Bedienung, die es nicht gibt. Wer sein Teil als Baustein ablegt, hat es
-        ohnehin gerade gebaut. Die Teilauswahl ist ein eigener Schritt und
-        steht als solcher im Register.
+        **Genommen wird, was im Verlauf gewählt ist — sonst der ganze Stapel.**
+        Das Konzept spricht von einem Ausschnitt, und ``capture`` nimmt dafür
+        ``op_ids``; bis der Verlauf eine Mehrfachauswahl bekam, wanderte
+        mangels Auswahl immer alles mit. Das fehlt selten und dann deutlich:
+        Wer sein Teil gerade gebaut hat, meint ohnehin den ganzen Stapel — wer
+        aus einem gewachsenen Projekt *einen* Halter herauslöst, bekam einen
+        Baustein, der Dinge baut, die niemand bestellt hat.
+
+        Die leere Auswahl heißt weiter „alles", und zwar ausdrücklich: Sie ist
+        der häufige Fall, und ein Dialog, der bei nichts Gewähltem nichts
+        anbietet, wäre eine Hürde ohne Gewinn. Was er nimmt, schreibt der
+        Dialog in seine Kopfzeile, damit die Vorgabe nicht stillschweigend
+        gilt.
+
+        **Lücken werden nicht abgefangen**, und das ist eine Entscheidung: Ein
+        Ausschnitt aus Schritt 3 und 7 ohne 4 bis 6 kann sinnvoll sein — wenn
+        die Zwischenschritte einen anderen Körper betreffen — oder unsinnig.
+        Welches von beidem, weiß der Bereichstest in ``capture``, der ohnehin
+        vor dem Speichern läuft und sagt, was dabei herauskommt. Eine Regel im
+        Dialog müsste dieselbe Frage schlechter beantworten.
         """
         result = self.session.last_result
         document = self.session.project.document
         if result is None:
             return
+        # **Die IDs der Schritte, nicht ihre Plätze.** ``capture`` filtert nach
+        # ``Operation.id``, und die zählt ab eins; ``enumerate`` ab null. Mit
+        # Indizes fiel der **letzte** Schritt jedes Stapels still aus dem
+        # Rezept — beim Weg-2-Halter die Versteifung. Gefunden am 25.08.2026 im
+        # echten Fenster: Das gespeicherte Rezept trug drei von vier Schritten,
+        # und der Bereichstest war trotzdem grün, denn drei Schritte ergeben
+        # auch einen Körper.
+        whole = tuple(op.id for op in document.ops)
+        chosen = self.history_panel.selected_operations()
         dialog = RecipeDialog(
             document,
             dict(self.session.project.sources),
-            # **Die IDs der Schritte, nicht ihre Plätze.** ``capture`` filtert
-            # nach ``Operation.id``, und die zählt ab eins; ``enumerate`` ab
-            # null. Mit Indizes fiel der **letzte** Schritt jedes Stapels
-            # still aus dem Rezept — beim Weg-2-Halter die Versteifung.
-            # Gefunden am 25.08.2026 im echten Fenster: Das gespeicherte
-            # Rezept trug drei von vier Schritten, und der Bereichstest war
-            # trotzdem grün, denn drei Schritte ergeben auch einen Körper.
-            tuple(op.id for op in document.ops),
+            chosen or whole,
             self._result_features(),
             self.session.profile,
             parent=catalog,
@@ -5735,24 +5750,25 @@ class MainWindow(QMainWindow):
         """Der Rückgängig-Knopf der Übernommen-Leiste (§26.5).
 
         Er nimmt genau die Transaktion zurück, die die Leiste verspricht —
-        und nur, wenn sie noch die oberste ist. ``History.undo`` kennt nur
-        „die letzte": läge inzwischen etwas anderes obenauf, zerstörte der
-        Knopf fremde Arbeit und ließe die versprochene stehen. Der Fall ist
-        durch :meth:`_refresh_applied_bar` selten, aber nicht unmöglich —
-        ein Fernaufruf läuft ohne ``projectChanged``-Lücke dazwischen.
+        und nur, wenn sie noch die oberste ist. Die Regel dazu wohnt im Kern
+        (``agent_apply.undo_applied``, über ``Session.undo_applied``); hier
+        von Hand geprüft war sie die dritte Ausschreibung derselben
+        Bedingung, und ``proposal.py`` beschreibt, wie so etwas
+        auseinanderläuft. Der Fall ist durch :meth:`_refresh_applied_bar`
+        selten, aber nicht unmöglich — ein Fernaufruf läuft ohne
+        ``projectChanged``-Lücke dazwischen.
         """
         applied = self._applied_transaction
         self._applied_transaction = None
-        transactions = self.session.project.document.transactions
-        if applied and transactions and transactions[-1].id == applied:
-            self.session.undo()
-        elif applied and any(entry.id == applied for entry in transactions):
-            self.announce(
-                tr(
-                    "Inzwischen liegt Neueres obenauf — das Rückgängig im Menü "
-                    "nimmt Schritt für Schritt zurück."
+        if applied and not self.session.undo_applied(applied):
+            transactions = self.session.project.document.transactions
+            if any(entry.id == applied for entry in transactions):
+                self.announce(
+                    tr(
+                        "Inzwischen liegt Neueres obenauf — das Rückgängig im Menü "
+                        "nimmt Schritt für Schritt zurück."
+                    )
                 )
-            )
         self._clear_proposal()
 
     def _clear_proposal(self) -> None:
