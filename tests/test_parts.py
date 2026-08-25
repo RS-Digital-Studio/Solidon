@@ -11,6 +11,7 @@ ist, und ein Baustein, der an seinen eigenen Grenzen scheitert, scheitert hier.
 from __future__ import annotations
 
 import dataclasses
+import itertools
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -1163,8 +1164,14 @@ def test_the_hook_goes_through_the_slot_and_catches_behind_it(count: int) -> Non
     **Und er muss hinter die Platte greifen**: Die Nase sitzt jenseits der
     Plattendicke, sonst rutscht das Teil beim ersten Anstoßen heraus.
 
-    Gemessen wird gegen die Tabelle, nicht gegen die Formel des Bausteins — und
-    an der Geometrie, die herauskommt, nicht an den Zahlen, die hineingingen.
+    Gemessen wird an der Geometrie, die herauskommt, und an den benannten
+    Merkmalen — **nicht an der Formel des Bausteins**. Dieser Docstring
+    versprach das schon, während die Prüfung darunter
+    ``slot_width + 2 * slot_width`` nachrechnete, also die Randformel der
+    Rückplatte rückwärts. Als der Rand ein eigenes Maß bekam, wurde der Test
+    rot, obwohl der Baustein besser geworden war — er hatte die Aktualität der
+    Formel geprüft und nie ihre Richtigkeit
+    (``.claude/memory/sollwert-aus-dem-pruefling.md``).
     """
     from app.core.knowledge import standards
     from app.core.knowledge.parts import PARTS
@@ -1184,13 +1191,24 @@ def test_the_hook_goes_through_the_slot_and_catches_behind_it(count: int) -> Non
         f"the {board.thickness} mm board behind the {values.plate} mm plate"
     )
 
-    # Und die Haken sitzen im Raster: bei zwei nebeneinander liegt genau eine
-    # Rasterweite dazwischen, sonst passen sie in keine zwei Schlitze.
+    # Und die Haken sitzen im Raster: zwischen zwei benachbarten liegt genau
+    # eine Rasterweite, sonst passen sie in keine zwei Schlitze. Die Merkmale
+    # sagen, wo sie stehen — die Rückplatte darum herum ist eine andere Frage.
+    zapfen = sorted(
+        f.params["centre"][0] for name, f in built.features.items() if name.startswith("hook_")
+    )
+    assert len(zapfen) == count, f"count={count}: {len(zapfen)} hooks named"
+    for links, rechts in itertools.pairwise(zapfen):
+        assert rechts - links == pytest.approx(board.pitch, abs=0.01), (
+            f"count={count}: neighbouring hooks sit {rechts - links:.2f} mm apart, "
+            f"the grid says {board.pitch}"
+        )
+
+    # Die Rückplatte trägt jeden Zapfen, und zwar mit Rand ringsum: Ein Zapfen
+    # an der Plattenkante hätte kein Material, das ihn hält.
     breit = float(kanten.size[0])
-    erwartet = board.pitch * (count - 1) + board.slot_width + 2.0 * board.slot_width
-    assert breit == pytest.approx(erwartet, abs=0.6), (
-        f"count={count}: {breit:.1f} mm wide, expected about {erwartet:.1f} mm — "
-        "the hooks do not sit on the grid"
+    assert breit > (zapfen[-1] - zapfen[0]) + board.slot_width, (
+        f"count={count}: the plate is {breit:.1f} mm wide and does not reach around the outer hooks"
     )
 
 

@@ -18,12 +18,15 @@ setzt sich der Einhänger.
 
 from __future__ import annotations
 
+import itertools
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 from app.core.bootstrap import load_operations
 from app.core.knowledge import profiles, standards
+from app.core.knowledge.parts import PARTS
 from app.core.scene import History, OperationDraft, evaluate
 from app.core.scene.project import ProjectSources, new_project
 from app.core.types import Profile, Source
@@ -119,30 +122,110 @@ def test_a_downloaded_model_gets_hooks_in_one_step(profile: Profile) -> None:
 def test_the_hooks_keep_the_grid_of_the_board(profile: Profile) -> None:
     """Was der Kunde nicht nachmessen soll: den Rasterabstand.
 
-    Zwei Einhänger an einem Modell müssen dieselbe Rasterweite haben wie die
-    Platte, an die sie kommen — sonst passen sie in keine zwei Schlitze. Die
-    Zahl kommt aus der Tabelle und nicht aus dem Baustein.
+    Gemessen wird an den **benannten Merkmalen** und nicht am Hüllquader. Die
+    erste Fassung dieses Tests rechnete ``bounds.size[0] - 3 * slot_width`` —
+    dieselbe Formel, die der Baustein benutzt, nur rückwärts. Ein Test, der die
+    Formel des Prüflings nachrechnet, prüft, ob sie sich geändert hat, nicht ob
+    sie stimmt (``.claude/memory/sollwert-aus-dem-pruefling.md``). Der
+    Rasterabstand kommt aus der Tabelle; die Zapfen stehen dort, wo die
+    Merkmale es sagen.
     """
     board = standards.board("skadis")
-    project, obj = _downloaded()
+    spec = PARTS.get("pegboard_hook")
 
     for count in (1, 2, 3):
-        wide = _hook_span(project, obj, profile, count)
-        expected = board.pitch * (count - 1)
-        assert wide == pytest.approx(expected, abs=0.6), (
-            f"{count} hooks span {wide:.1f} mm, the grid says {expected:.1f}"
+        built = spec.fn(spec.params(count=count))
+        hooks = sorted(
+            (
+                f.params["centre"][0]
+                for name, f in built.features.items()
+                if name.startswith("hook_")
+            ),
+        )
+        assert len(hooks) == count, f"{count} hooks asked for, {len(hooks)} named"
+        for left, right in itertools.pairwise(hooks):
+            assert right - left == pytest.approx(board.pitch, abs=0.01), (
+                f"neighbouring hooks sit {right - left:.2f} mm apart, the grid says {board.pitch}"
+            )
+
+
+def test_the_shank_fits_the_rounded_slot_and_not_just_its_bounding_box(
+    profile: Profile,
+) -> None:
+    """Der Schlitz hat runde Enden, und daran ist die erste Fassung gescheitert.
+
+    **Ein Hüllquader ist keine Passung.** Ein Rechteck von 4,75 mal 14,75 mm
+    liegt vollständig im Hüllquader einer 5-mal-15-Öffnung und trotzdem
+    außerhalb der Öffnung: Weil deren Enden Halbkreise mit 2,5 mm Radius sind,
+    steht jede Ecke des Rechtecks 0,86 mm über die Rundung hinaus. Erst beim
+    größten zulässigen Spiel von 1,5 mm ginge es hinein — und dann sitzt ein
+    3,5-mm-Zapfen in einem 5-mm-Schlitz und wackelt.
+
+    Gemessen wird deshalb ein echter **Querschnitt** in der Mitte der Lochwand,
+    Punkt für Punkt gegen die Stadionform. Vertices allein genügen nicht: Ein
+    extrudierter Zapfen hat auf halber Höhe keine.
+    """
+    board = standards.board("skadis")
+    spec = PARTS.get("pegboard_hook")
+    straight = (board.slot_height - board.slot_width) / 2.0
+
+    for play in (0.0, 0.25, 0.5):
+        built = spec.fn(spec.params(count=1, play=play, plate=2.0))
+        cut = built.mesh.raw.section(
+            plane_origin=[0.0, 0.0, 2.0 + board.thickness / 2.0],
+            plane_normal=[0.0, 0.0, 1.0],
+        )
+        assert cut is not None, f"play={play}: nothing crosses the board at all"
+        points = np.asarray(cut.vertices, dtype=float)
+        # Abstand zur Mittellinie des Langlochs: im geraden Teil senkrecht,
+        # an den Enden radial um den Rundungsmittelpunkt.
+        centre = np.clip(points[:, 1], -straight, straight)
+        reach = np.hypot(points[:, 0], points[:, 1] - centre).max()
+        assert reach <= board.slot_width / 2.0 + 1e-6, (
+            f"play={play}: the shank reaches {reach:.3f} mm from the centre line, "
+            f"the slot allows {board.slot_width / 2.0}"
         )
 
 
-def _hook_span(project: object, obj: str, profile: Profile, count: int) -> float:
-    """Wie weit die Einhänger auseinanderstehen, am gebauten Baustein gemessen."""
-    from app.core.knowledge.parts import PARTS
+def test_the_hook_has_room_to_sink_and_the_nose_catches(profile: Profile) -> None:
+    """Eingehängt wird in zwei Zügen, und der zweite braucht Platz.
 
-    spec = PARTS.get("pegboard_hook")
-    built = spec.fn(spec.params(count=count))
+    Zapfen und Nase gehen gemeinsam durch den Schlitz; danach sinkt der Haken,
+    bis die Nase hinter dem Steg unter der Öffnung liegt. Was er dabei sinken
+    kann, ist genau das, was der Schlitz höher ist als beide zusammen.
+
+    **Die erste Fassung ließ dafür 0,25 mm.** Zapfen und Nase standen auf der
+    vollen nutzbaren Schlitzhöhe, und die Nase griff danach um ein Viertel
+    Millimeter hinter die Platte — geometrisch vorhanden, praktisch nutzlos.
+    Der Fehler war im gebauten Körper nicht zu sehen: Er war wasserdicht,
+    einteilig und maß in jeder Richtung, was er sollte.
+    """
     board = standards.board("skadis")
-    # Die Platte reicht um jeden Haken herum; abgezogen bleibt der Achsabstand.
-    return float(built.mesh.bounds.size[0]) - board.slot_width - 2.0 * board.slot_width
+    spec = PARTS.get("pegboard_hook")
+    built = spec.fn(spec.params(count=1, play=0.0, plate=2.0))
+
+    def span(height: float) -> tuple[float, float]:
+        cut = built.mesh.raw.section(plane_origin=[0.0, 0.0, height], plane_normal=[0.0, 0.0, 1.0])
+        assert cut is not None, f"nothing to measure at z={height}"
+        y = np.asarray(cut.vertices, dtype=float)[:, 1]
+        return float(y.min()), float(y.max())
+
+    shank = span(2.0 + board.thickness / 2.0)
+    nose = span(2.0 + board.thickness + 0.5)
+
+    inserted = max(shank[1], nose[1]) - min(shank[0], nose[0])
+    travel = board.slot_height - inserted
+    assert travel > 2.0, (
+        f"shank and nose together are {inserted:.2f} mm tall in a "
+        f"{board.slot_height} mm slot — only {travel:.2f} mm left to sink"
+    )
+    assert nose[0] < shank[0] - 1.0, (
+        "the nose does not reach below the shank, so it catches nothing"
+    )
+    assert shank[0] - nose[0] == pytest.approx(travel, abs=0.1), (
+        f"the nose reaches {shank[0] - nose[0]:.2f} mm below the shank but the "
+        f"hook can only sink {travel:.2f} mm — one of the two is wasted"
+    )
 
 
 # --- Sitzt der Haken sinnvoll? --------------------------------------------------

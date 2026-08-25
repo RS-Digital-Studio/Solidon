@@ -20,6 +20,7 @@ Kalibrierung alte Projekte erreichen.
 from __future__ import annotations
 
 import dataclasses
+import math
 from typing import Any
 
 from app.core.errors import Action, AppError
@@ -320,13 +321,15 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     # Werkzeug reicht ohnehin über die Fläche hinaus.
     subtractive = cuts(spec, ctx.params)
     sink = 0.0 if subtractive else BOOLEAN_OVERLAP
-    placed = _place(as_mesh_data(produced.mesh), ctx.params, anchor, sink, direction)
+    placed = _place(as_mesh_data(produced.mesh), ctx.params, anchor, sink, direction, spec.keeps_up)
     body = as_mesh_data(source.mesh)
     kind: BooleanKind = "difference" if subtractive else "union"
     outcome = boolean(kind, [body, placed], quality=ctx.quality)
 
     features = dict(source.features)
-    features.update(_placed_features(produced, spec, ctx.params, anchor, sink, direction))
+    features.update(
+        _placed_features(produced, spec, ctx.params, anchor, sink, direction, spec.keeps_up)
+    )
 
     # Ein Baustein, der den Körper nicht getroffen hat, sagt das. Hier und
     # nicht in jedem einzelnen: die Frage ist für alle dieselbe, und die
@@ -422,6 +425,7 @@ def _place(
     anchor: Vec3 = (0.0, 0.0, 0.0),
     sink: float = 0.0,
     direction: Vec3 | None = None,
+    keeps_up: bool = False,
 ) -> MeshData:
     """Der Baustein an seinem Platz.
 
@@ -435,7 +439,7 @@ def _place(
     """
     from app.core.geom.transform import apply
 
-    return apply(mesh, _matrix(params, anchor, sink, direction))
+    return apply(mesh, _matrix(params, anchor, sink, direction, keeps_up))
 
 
 def _placed_features(
@@ -445,6 +449,7 @@ def _placed_features(
     anchor: Vec3 = (0.0, 0.0, 0.0),
     sink: float = 0.0,
     direction: Vec3 | None = None,
+    keeps_up: bool = False,
 ) -> dict[str, Feature]:
     """Die Merkmale des Bausteins, mitbewegt und so benannt, dass sie nicht
     kollidieren können.
@@ -455,7 +460,7 @@ def _placed_features(
     """
     from app.core.perceive.matching import moved_features
 
-    matrix = _matrix(params, anchor, sink, direction)
+    matrix = _matrix(params, anchor, sink, direction, keeps_up)
     moved = moved_features(dict(produced.features), matrix)
     return {
         f"{spec.name}_{name}": dataclasses.replace(feature, id=f"{spec.name}_{name}")
@@ -463,11 +468,87 @@ def _placed_features(
     }
 
 
+def _roll_upright(direction: Vec3) -> Any:
+    """Die Drehung um ``direction``, die das eigene +Y des Bausteins aufrichtet.
+
+    ``rotation_between`` legt fest, wohin das +Z eines Bausteins zeigt, und
+    lässt offen, wie er dabei um diese Achse **rollt**. Für eine Bohrung ist
+    das gleichgültig. Für einen Baustein mit einem Oben ist es der Unterschied
+    zwischen Halten und Herunterfallen (``PartSpec.keeps_up``).
+
+    Gesucht ist die Drehung um die Flächennormale, nach der das +Y so weit nach
+    oben zeigt, wie die Fläche es zulässt: Von der Welt-Senkrechten bleibt in
+    der Flächenebene der Anteil senkrecht zur Normalen, und auf den wird das +Y
+    gedreht. Steht die Fläche waagerecht, ist dieser Anteil null — in der Ebene
+    eines Deckels gibt es kein Oben, und dann bleibt es bei der kürzesten
+    Drehung. Der Rückgabewert ist dort die Einheitsmatrix, nicht etwa ein
+    Fehler: Ein Einhänger auf einem Deckel ist eine merkwürdige Wahl, aber
+    keine unmögliche.
+    """
+    import numpy as np
+
+    from app.core.geom.align import rotation_between
+
+    normal = np.asarray(direction, dtype=float)
+    length = float(np.linalg.norm(normal))
+    if length < 1e-9:
+        return np.eye(4)
+    normal = normal / length
+
+    # Was von der Welt-Senkrechten in der Flächenebene übrig bleibt.
+    up = np.array([0.0, 0.0, 1.0])
+    up_in_face = up - float(np.dot(up, normal)) * normal
+    if float(np.linalg.norm(up_in_face)) < 1e-6:
+        return np.eye(4)
+    up_in_face = up_in_face / float(np.linalg.norm(up_in_face))
+
+    # Wo das +Y nach der kürzesten Drehung liegt, ebenfalls auf die Ebene
+    # bezogen — nur der Anteil in der Ebene lässt sich durch Rollen bewegen.
+    turned = rotation_between((0.0, 0.0, 1.0), tuple(normal))[:3, :3] @ np.array([0.0, 1.0, 0.0])
+    own = turned - float(np.dot(turned, normal)) * normal
+    if float(np.linalg.norm(own)) < 1e-6:
+        return np.eye(4)
+    own = own / float(np.linalg.norm(own))
+
+    # Der Winkel von ``own`` nach ``up_in_face``, um die Normale gemessen —
+    # ``atan2`` gibt ihn mit Vorzeichen, ein ``arccos`` allein nicht.
+    degrees = math.degrees(
+        math.atan2(
+            float(np.dot(np.cross(own, up_in_face), normal)),
+            float(np.dot(own, up_in_face)),
+        )
+    )
+    if abs(degrees) < 1e-9:
+        return np.eye(4)
+    return _rotation_about(tuple(normal), degrees)
+
+
+def _rotation_about(axis: Vec3, degrees: float) -> Any:
+    """Eine Drehung um eine beliebige Achse durch den Ursprung (Rodrigues)."""
+    import numpy as np
+
+    unit = np.asarray(axis, dtype=float)
+    unit = unit / float(np.linalg.norm(unit))
+    angle = math.radians(degrees)
+    cross = np.array(
+        [
+            [0.0, -unit[2], unit[1]],
+            [unit[2], 0.0, -unit[0]],
+            [-unit[1], unit[0], 0.0],
+        ]
+    )
+    turn = np.eye(3) + math.sin(angle) * cross + (1.0 - math.cos(angle)) * (cross @ cross)
+    matrix = np.eye(4)
+    matrix[:3, :3] = turn
+    return matrix
+
+
 def _matrix(
     params: Any,
     anchor: Vec3 = (0.0, 0.0, 0.0),
     sink: float = 0.0,
     direction: Vec3 | None = None,
+    keeps_up: bool = False,
 ) -> Any:
     """Einsenken, drehen, verschieben — als eine Matrix.
 
@@ -496,6 +577,8 @@ def _matrix(
         if angle:
             matrix = rotation("z", angle) @ matrix
         matrix = rotation_between((0.0, 0.0, 1.0), direction) @ matrix
+        if keeps_up:
+            matrix = _roll_upright(direction) @ matrix
     else:
         if axis != "z":
             # Den Baustein so umlegen, dass sein eigenes +Z entlang der

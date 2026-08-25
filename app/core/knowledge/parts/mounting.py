@@ -295,6 +295,13 @@ def keyhole(raw: BaseParams) -> PartResult:
     )
 
 
+#: Wie viel Rückplatte rings um einen Zapfen steht. Kein abgeleitetes Maß:
+#: Die Frage ist, wie viel Material die Platte braucht, um den Zapfen zu
+#: tragen — nicht, wie breit der Schlitz ist, in dem er später steckt. Vorher
+#: stand hier die Schlitzbreite, und das war dieselbe Zahl aus einer fremden
+#: Frage (siehe ``.claude/rules/bausteine.md``).
+PLATE_MARGIN = 3.0
+
 PEGBOARD_HOOK_ADDED = PartChange(
     version="1",
     date="2026-08-25",
@@ -355,7 +362,8 @@ class PegboardHookParams(BaseParams):
         maximum=6.0,
         placement="advanced",
         doc=_(
-            "Wie weit die Nase hinter die Platte greift. Null heißt: zwei Drittel der Plattendicke."
+            "Wie weit die Nase hinter die Lochwand greift. Null heißt: zwei Drittel "
+            "der Lochwanddicke."
         ),
     )
 
@@ -365,7 +373,8 @@ class PegboardHookParams(BaseParams):
     title=_("Lochwand-Einhänger"),
     group="mounting",
     params=PegboardHookParams,
-    features=["plate"],
+    features=["plate", "hook"],
+    keeps_up=True,
     doc=_(
         "Haken für eine Lochwand, auf einer Rückplatte. Von oben in die Schlitze "
         "gesteckt und heruntergezogen — die Nase greift dann hinter die Platte."
@@ -383,60 +392,92 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     Vierzigerraster sind zwei Körper; ein Baustein muss einer sein (§24.3), und
     der Kunde will ohnehin keine zwei losen Haken, sondern ein Teil, das hängt.
 
-    **Und der Haken greift in einen Schlitz, nicht in ein Loch.** Bei SKÅDIS
-    ist die Öffnung fünf Millimeter breit und fünfzehn hoch; das ist der Weg,
-    den der Haken nach unten hat, und daraus folgt seine Form: Zapfen und Nase
-    zusammen müssen durch die Höhe passen, sonst kommt er gar nicht erst
-    hinein.
+    **Der Haken greift in einen Schlitz, nicht in ein Loch — und ein Schlitz
+    hat runde Enden.** Bei SKÅDIS ist die Öffnung fünf Millimeter breit und
+    fünfzehn hoch, mit Halbkreisen oben und unten. Ein Rechteck, das in den
+    *Hüllquader* dieser Öffnung passt, passt nicht in die Öffnung: Bei
+    4,75 mal 14,75 liegt jede Ecke 0,86 mm außerhalb der Rundung, und erst beim
+    größten zulässigen Spiel von 1,5 mm ginge es hinein — dann wackelt der
+    Zapfen. Zapfen und Nase sind deshalb selbst Langlöcher (``shapes.slot``),
+    wie beim Schlüsselloch nebenan.
+
+    **Und er braucht Weg zum Absinken.** Eingehängt wird in zwei Zügen: Zapfen
+    und Nase gemeinsam durch den Schlitz stecken, dann sinken lassen, bis die
+    Nase hinter dem Steg unter dem Schlitz liegt. Was der Haken dabei sinkt,
+    ist genau das, was der Schlitz höher ist als Zapfen und Nase zusammen.
+    Standen die beiden auf der vollen Schlitzhöhe, blieben 0,25 mm Weg, und die
+    Nase griff um 0,25 mm hinter die Platte — sie hielt nichts. Die Aufteilung
+    lässt deshalb ein Viertel der Höhe frei: halbe Höhe Zapfen, ein Viertel
+    Nase, ein Viertel Weg.
+
+    **Oben und unten sind hier keine Redensart.** Der Zapfen sitzt oben, die
+    Nase unten; verkehrt herum fällt das Teil von der Wand. Welche Seite nach
+    dem Setzen oben liegt, entscheidet aber nicht dieser Baustein, sondern die
+    Drehung an die Fläche — darum ``keeps_up`` im Registereintrag.
     """
     params = cast(PegboardHookParams, raw)
     board = standards.board(params.system)
 
     width = board.slot_width - params.play
     lip = params.lip or board.thickness * (2.0 / 3.0)
-    # Zapfen und Nase zusammen müssen durch den Schlitz passen — sonst hängt
-    # das Teil nicht, es liegt daneben. Die Nase bekommt ein Drittel.
-    reach = board.slot_height - params.play
-    nose = reach / 3.0
-    shank = reach - nose
+
+    # Die nutzbare Schlitzhöhe, aufgeteilt in Zapfen, Nase und Weg. Die Nase
+    # greift am Ende so weit hinter den Steg, wie der Haken sinken konnte —
+    # deshalb sind Nase und Weg gleich groß, ein Viertel jeweils.
+    usable = board.slot_height - params.play
+    travel = usable / 4.0
+    nose = travel
+    shank = usable - nose - travel
 
     span = board.pitch * (params.count - 1)
     across = 0.0 if params.upright else span
     along = span if params.upright else 0.0
 
-    # Die Platte trägt alle Haken und liegt am Teil an. Sie reicht rings um
-    # den Schlitz herum, damit sie den Haken hält und nicht nur berührt.
-    margin = board.slot_width
-    plate = shapes.box(across + width + 2.0 * margin, along + reach + 2.0 * margin, params.plate)
+    # Die Platte trägt die Haken und liegt am Teil an. Ihr Rand ist ein eigenes
+    # Maß und keine abgeleitete Zahl: Er beantwortet, wie viel Material um
+    # einen Zapfen stehen muss, damit die Platte ihn hält — das hat mit der
+    # Breite des Schlitzes nichts zu tun, in dem der Zapfen später steckt.
+    plate = shapes.box(
+        across + width + 2.0 * PLATE_MARGIN,
+        along + shank + nose + 2.0 * PLATE_MARGIN,
+        params.plate,
+    )
+
+    # Wie hoch der Zapfen aus der Rückplatte herausragt: durch die Lochwand
+    # hindurch, plus was die Nase dahinter braucht.
+    through = params.plate + board.thickness + params.play
 
     parts = [plate]
-    for index in range(params.count):
-        offset = index * board.pitch - span / 2.0
-        x = 0.0 if params.upright else offset
-        y = offset if params.upright else 0.0
-        # Der Zapfen geht durch die Platte, die Nase hinter sie. Beide fangen
-        # um OVERLAP früher an, damit keine Fläche auf einer anderen liegt (§39).
-        shaft = shapes.box(width, shank, params.plate + board.thickness + params.play)
-        parts.append(shapes.moved(shaft, (x, y + nose / 2.0, 0.0)))
-        catch = shapes.box(width, nose + shank, lip)
-        parts.append(
-            shapes.moved(
-                catch,
-                (x, y, params.plate + board.thickness + params.play - shapes.OVERLAP),
-            )
-        )
-
-    return result(
-        union(*parts),
+    features = [
         # Die Rückseite der Platte: was am Teil anliegt. Nach unten gerichtet,
         # denn dort ist das Material, das sie trägt.
         face(
             "plate_1",
-            (across + width + 2.0 * margin) * (along + reach + 2.0 * margin),
+            (across + width + 2.0 * PLATE_MARGIN) * (along + shank + nose + 2.0 * PLATE_MARGIN),
             (0.0, 0.0, 0.0),
             (0.0, 0.0, -1.0),
-        ),
-    )
+        )
+    ]
+    for index in range(params.count):
+        offset = index * board.pitch - span / 2.0
+        x = 0.0 if params.upright else offset
+        y = offset if params.upright else 0.0
+        # Zapfen und Nase als Langloch, in Y gelegt: ``shapes.slot`` baut seine
+        # Länge in X, der Schlitz einer Lochwand steht senkrecht.
+        shaft = shapes.turned(shapes.slot(width, shank, through), 90.0)
+        parts.append(shapes.moved(shaft, (x, y + nose / 2.0, 0.0)))
+        # Die Nase reicht über den Zapfen nach unten hinaus und liegt hinter
+        # der Lochwand. Sie beginnt um OVERLAP früher, damit keine Fläche genau
+        # auf einer anderen liegt (§39).
+        catch = shapes.turned(shapes.slot(width, shank + nose, lip), 90.0)
+        parts.append(shapes.moved(catch, (x, y, through - shapes.OVERLAP)))
+        # Der Zapfen als benanntes Merkmal: Wer die Haken nachmisst, misst sie
+        # hier und nicht an einer Formel über den Hüllquader.
+        features.append(
+            face(f"hook_{index + 1}", width * shank, (x, y + nose / 2.0, through), (0.0, 0.0, 1.0))
+        )
+
+    return result(union(*parts), *features)
 
 
 #: Was vom schmalen Ende eines Fußes mindestens bleibt. Kein Maß aus einer
