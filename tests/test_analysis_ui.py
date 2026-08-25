@@ -318,7 +318,12 @@ def test_a_map_of_levels_names_them(qt_app: QApplication) -> None:
         )
     )
 
-    assert [text for text, _colour in legend.entries] == list(maps.DEFECT_LEVELS)
+    # Aufgelöst verglichen, nicht gegen die Message-ID: Die Stufen sind seit
+    # Regel 20 übersetzbar (`maps.DEFECT_LEVELS`), und was in der Legende steht,
+    # ist ihre Übersetzung.
+    assert [text for text, _colour in legend.entries] == [
+        str(level) for level in maps.DEFECT_LEVELS
+    ]
 
 
 def test_the_colours_of_the_legend_rise_in_luminance() -> None:
@@ -1466,6 +1471,35 @@ def test_the_gizmo_comes_off_again(qt_app: QApplication) -> None:
         viewport.deleteLater()
 
 
+def test_leaving_the_gizmo_restores_the_global_depth_resolution(qt_app: QApplication) -> None:
+    """Der Bewegen-Modus darf keine Spuren in der ganzen Ansicht hinterlassen.
+
+    pyvistas ``AffineWidget3D`` und der nachgebaute Skaliergriff rufen
+    ``SetResolveCoincidentTopologyToPolygonOffset()`` — eine **statische**
+    VTK-Einstellung, die prozessweit jeden Mapper trifft (gemessen: über einen
+    zweiten, unbeteiligten Mapper gelesen). Ohne Rückstellung stachen nach dem
+    ersten Besuch im Bewegen-Modus die Kantenlinien aller Körper dauerhaft
+    durch die Flächen — als Striche an den Kantenmitten, die den Modus
+    überlebten und in keiner Aktor-Eigenschaft standen (Gesamtreview
+    25.08.2026, A3). Der Test stellt die Einstellung so um, wie das echte
+    Widget es tut, und verlangt sie nach dem Abschalten zurück.
+    """
+    from vtkmodules.vtkRenderingCore import vtkMapper
+
+    viewport, _plotter = _gizmo_viewport()
+    before = int(vtkMapper.GetResolveCoincidentTopology())
+    try:
+        viewport.select("obj_1")
+        viewport.set_gizmo(True)
+        vtkMapper.SetResolveCoincidentTopologyToPolygonOffset()
+        viewport.set_gizmo(False)
+
+        assert int(vtkMapper.GetResolveCoincidentTopology()) == before
+    finally:
+        vtkMapper.SetResolveCoincidentTopology(before)
+        viewport.deleteLater()
+
+
 def test_the_gizmo_follows_the_selection(qt_app: QApplication) -> None:
     """§18.11: wer ein anderes Objekt wählt, will es auch bewegen.
 
@@ -1906,6 +1940,39 @@ def test_the_smallest_body_wins_when_several_overlap(window: MainWindow) -> None
 
     # Der geladene Körper allein: er ist der kleinste und damit der Treffer.
     assert window.viewport._object_at(centre) == "obj_1"
+
+
+def test_a_click_ignores_hidden_bodies(window: MainWindow) -> None:
+    """§18.8: Ausblenden nimmt den Körper aus dem Bild — und damit aus dem Klick.
+
+    ``_object_at`` prüfte nur den Hüllquader: Ein Klick wählte einen
+    ausgeblendeten Körper, der Objektbaum sprang dorthin, und die nächste
+    Operation traf ein Teil, das niemand sieht (Gesamtreview 25.08.2026, J-1).
+    ``_nearest_mesh`` hatte dieselbe Lücke — es beliefert Messen und Bemalen.
+    """
+    window.viewport.show_scene(window.session.last_result)
+    entry = window.session.last_result.scene.objects["obj_1"]
+    centre = entry.mesh.bounds.centre
+    window.viewport.set_hidden(frozenset({"obj_1"}))
+
+    assert window.viewport._object_at(centre) is None
+    assert window.viewport._nearest_mesh(centre) is None
+
+
+def test_a_click_ignores_bodies_of_other_plates(window: MainWindow) -> None:
+    """§25: Wer eine einzelne Platte ansieht, kann nur auf ihr wählen.
+
+    Die Körper der anderen Platten liegen in Szenenkoordinaten am selben Ort —
+    genau der Grund für die Plattenverschiebung. Ohne den Filter wählte ein
+    Klick das unsichtbare Teil der fremden Platte (Gesamtreview J-1).
+    """
+    window.viewport.show_scene(window.session.last_result)
+    entry = window.session.last_result.scene.objects["obj_1"]
+    centre = entry.mesh.bounds.centre
+    window.viewport.set_plate(entry.plate + 1)
+
+    assert window.viewport._object_at(centre) is None
+    assert window.viewport._nearest_mesh(centre) is None
 
 
 def test_clicking_needs_no_overlay_switch(window: MainWindow) -> None:

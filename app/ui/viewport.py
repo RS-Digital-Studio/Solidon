@@ -1777,6 +1777,15 @@ class Viewport(QWidget):
         """Ob der Gizmo eingeschaltet ist — unabhängig davon, ob gerade einer
         im Bild steht. Der Griff selbst wird bei jedem Auswahl- und
         Szenenwechsel neu angehängt; dieser Schalter sagt, ob überhaupt."""
+        self._coincident_before: int | None = None
+        """Die globale Tiefen-Auflösung von VTK, bevor der Gizmo sie umstellte.
+
+        ``SetResolveCoincidentTopologyToPolygonOffset()`` sieht aus wie eine
+        Mapper-Eigenschaft und ist eine **statische**: pyvistas Widget und der
+        Skaliergriff stellen damit prozessweit jeden Mapper um. Ohne
+        Rückstellung stachen nach dem ersten Bewegen-Besuch die Kantenlinien
+        aller Körper dauerhaft durch die Flächen — Striche an den
+        Kantenmitten, die in keiner Aktor-Eigenschaft standen."""
         self._gizmo_labels: Any | None = None
         """Die Buchstaben an den Gizmo-Achsen. Sie gehen mit ihm."""
         self._gizmo_label_data: Any | None = None
@@ -2386,9 +2395,7 @@ class Viewport(QWidget):
 
         style = DISPLAY_MODES[self._mode]
         for object_id, entry in result.scene.objects.items():
-            if not entry.visible or object_id in self._hidden:
-                continue
-            if self._plate >= 0 and entry.plate != self._plate:
+            if not self._in_view(object_id, entry):
                 continue
             mesh = self._sectioned(self._for_display(object_id, entry.mesh))
             raw = getattr(mesh, "raw", None)
@@ -3595,6 +3602,20 @@ class Viewport(QWidget):
         self._redraw_measurements()
         self.measurementTaken.emit(measurement)
 
+    def _in_view(self, object_id: ObjectId, entry: Any) -> bool:
+        """Ob dieser Körper gerade im Bild ist — und damit ein Klickziel.
+
+        Dieselbe Dreifach-Bedingung, mit der :meth:`show_scene` zeichnet:
+        ``visible``, nicht ausgeblendet (§18.8), auf der betrachteten Platte
+        (§25). Jede Klick-Rechnung fragt sie, denn was nicht im Bild ist, kann
+        niemand meinen — ohne den Filter wählte ein Klick ausgeblendete Körper
+        und Körper fremder Platten, und die nächste Operation traf ein Teil,
+        das niemand sieht.
+        """
+        if not entry.visible or object_id in self._hidden:
+            return False
+        return self._plate < 0 or entry.plate == self._plate
+
     def _nearest_mesh(self, point: Vec3) -> Any:
         """Das Objekt, zu dem ein Klick gehört — das, dessen Hüllquader ihm am
         nächsten ist.
@@ -3603,7 +3624,9 @@ class Viewport(QWidget):
             return None
         best: Any = None
         best_offset = float("inf")
-        for entry in self._result.scene.objects.values():
+        for object_id, entry in self._result.scene.objects.items():
+            if not self._in_view(object_id, entry):
+                continue
             centre = entry.mesh.bounds.centre
             offset = sum((a - b) ** 2 for a, b in zip(centre, point, strict=True))
             if offset < best_offset:
@@ -3637,6 +3660,8 @@ class Viewport(QWidget):
         best: ObjectId | None = None
         best_volume = float("inf")
         for object_id, entry in self._result.scene.objects.items():
+            if not self._in_view(object_id, entry):
+                continue
             bounds = entry.mesh.bounds
             size = bounds.size
             slack = max(EPS_MATCH_MINIMUM, max(size) * EPS_MATCH_RELATIVE)
@@ -4104,6 +4129,8 @@ class Viewport(QWidget):
         best_radius = math.inf
         found: Vec3 | None = None
         for object_id, entry in self._result.scene.objects.items():
+            if not self._in_view(object_id, entry):
+                continue
             # Die Reichweite ist die **Zielhilfe**: Gezielt wird in Pixeln, und
             # der Rand einer M3-Bohrung ist an einem großen Teil wenige davon
             # breit. Derselbe Wert wie beim Klick auf die Fläche eines Merkmals,
@@ -4206,7 +4233,9 @@ class Viewport(QWidget):
 
         best_enter = math.inf
         found: Vec3 | None = None
-        for object_id in self._result.scene.objects:
+        for object_id, entry in self._result.scene.objects.items():
+            if not self._in_view(object_id, entry):
+                continue
             planes = self._hull_of(object_id)
             if planes is None:
                 continue
@@ -4719,6 +4748,12 @@ class Viewport(QWidget):
         actor = self._face_handle(face) if face is not None else self._actors.get(self._selected)
         if actor is None:
             return
+        from vtkmodules.vtkRenderingCore import vtkMapper
+
+        # Vor dem Widget gemerkt: Es stellt die statische Tiefen-Auflösung um
+        # (siehe ``_coincident_before``), und zurückstellen kann nur, wer den
+        # Stand von vorher kennt.
+        self._coincident_before = int(vtkMapper.GetResolveCoincidentTopology())
         self._gizmo = self.plotter.add_affine_transform_widget(
             actor,
             release_callback=self._on_gizmo_released,
@@ -4757,6 +4792,14 @@ class Viewport(QWidget):
             self._scale_handle = None
         self._drop_gizmo_labels()
         self._drop_face_handle()
+        if self._coincident_before is not None:
+            from vtkmodules.vtkRenderingCore import vtkMapper
+
+            # Die statische Umstellung des Widgets zurücknehmen — sie gilt
+            # prozessweit und überlebte sonst den Modus (Striche an allen
+            # Kantenmitten, siehe ``_coincident_before``).
+            vtkMapper.SetResolveCoincidentTopology(self._coincident_before)
+            self._coincident_before = None
 
     def _label_gizmo(self, actor: Any) -> None:
         """Schreibt X, Y und Z an die Achsen (Regel 18).
