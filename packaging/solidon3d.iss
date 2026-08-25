@@ -75,14 +75,17 @@ Name: "it"; MessagesFile: "compiler:Languages\Italian.isl"
 Name: "pt"; MessagesFile: "compiler:Languages\Portuguese.isl"
 
 ; Wie der Dateityp im Explorer heißt. Eine Zeile je Sprache, und der Name
-; kommt auch hier aus app/branding.py.
+; kommt auch hier aus app/branding.py. Das Präfix vor dem Punkt MUSS ein
+; Name aus [Languages] sein — mit den alten Präfixen (german., english.)
+; brach ISCC mit "Unknown language name" ab, seit die Sektion oben die
+; Kürzel der Anwendung trägt.
 [CustomMessages]
-german.ProjectFileType={#AppName}-Projekt
-english.ProjectFileType={#AppName} project
-spanish.ProjectFileType=Proyecto de {#AppName}
-french.ProjectFileType=Projet {#AppName}
-italian.ProjectFileType=Progetto {#AppName}
-portuguese.ProjectFileType=Projeto {#AppName}
+de.ProjectFileType={#AppName}-Projekt
+en.ProjectFileType={#AppName} project
+es.ProjectFileType=Proyecto de {#AppName}
+fr.ProjectFileType=Projet {#AppName}
+it.ProjectFileType=Progetto {#AppName}
+pt.ProjectFileType=Projeto {#AppName}
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -118,6 +121,12 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; Tasks: deskt
 
 [Run]
 Filename: "{app}\{#AppName}.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[UninstallDelete]
+; install-language.txt schreibt der [Code]-Abschnitt unten selbst — was nicht
+; über [Files] kam, steht in keinem Protokoll, und ohne diese Zeile überlebte
+; die Datei die Deinstallation und hielt den Programmordner am Leben.
+Type: files; Name: "{app}\install-language.txt"
 
 [Code]
 procedure CurStepChanged(CurStep: TSetupStep);

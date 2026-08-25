@@ -531,6 +531,38 @@ def test_the_windows_installer_speaks_every_language_the_application_does() -> N
     assert not missing, f"im Installer fehlen diese Sprachen: {sorted(missing)}"
 
 
+def test_every_custom_message_speaks_a_language_the_installer_knows() -> None:
+    """Jedes CustomMessages-Präfix ist ein Name aus [Languages].
+
+    In Inno Setup ist ein unbekanntes Präfix ein Kompilierfehler, kein
+    stiller Rückfall: Als [Languages] auf die Kürzel der Anwendung umzog
+    (de, en, …), behielten die CustomMessages ihre alten Präfixe (german.,
+    english., …), und ISCC brach mit „Unknown language name" ab — gemessen
+    am 25.08.2026, und kein Test sah es, weil nur .isl-Dateien gezählt
+    wurden.
+    """
+    script = INSTALLER_SCRIPT.read_text(encoding="utf-8")
+
+    def section(title: str) -> list[str]:
+        lines: list[str] = []
+        active = False
+        for line in script.splitlines():
+            bare = line.strip()
+            if bare.startswith("["):
+                active = bare == f"[{title}]"
+                continue
+            if active and bare and not bare.startswith(";"):
+                lines.append(bare)
+        return lines
+
+    known = {line.split('"')[1] for line in section("Languages") if line.startswith("Name:")}
+    prefixes = {
+        line.split(".", 1)[0] for line in section("CustomMessages") if "." in line.split("=", 1)[0]
+    }
+    strangers = sorted(prefixes - known)
+    assert not strangers, f"diese CustomMessages-Präfixe kennt [Languages] nicht: {strangers}"
+
+
 def test_the_licence_the_installer_shows_is_the_agreement_and_not_the_notice() -> None:
     """Auf der Lizenzseite steht der Endnutzer-Lizenzvertrag.
 
