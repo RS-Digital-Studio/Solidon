@@ -85,8 +85,36 @@ Drei Dinge daran, alle drei gemessen:
 
 Die Marke lebt in einer **eigenen** Actorliste (`_cursor_actors`): Sie hängt an
 der Maus, die Zeichnung ändert sich beim Zeichnen. Zusammen geräumt flackerte
-sie bei jedem Strich. Weg ist sie, wo der Modus endet — `set_sketching(None)`,
-nicht `finish_sketch`, sonst stünde dieselbe Zusage an zwei Stellen.
+sie bei jedem Strich. Weg ist sie in `set_sketching` und nicht in
+`finish_sketch`, sonst stünde dieselbe Zusage an zwei Stellen — **und zwar bei
+jedem Aufruf, nicht nur bei `None`**: Ein Ebenenwechsel geht durch dieselbe
+Methode mit einem neuen Rahmen, und die alte Marke blieb sonst auf der vorigen
+Ebene im Raum stehen, bis die Maus sich das nächste Mal bewegte.
+
+**Und ein Zeigerschritt, der nichts ändert, zeichnet nicht.** Das ist die
+Hälfte, an der die Sache steht, und sie ist am gebauten Fenster gemessen:
+
+| | Kosten je Aufruf |
+|---|---|
+| `show_sketch_cursor`, Marke wandert | 6,9 ms |
+| davon `pixels_per_mm` | 0,004 ms |
+| `_sketch_hit` zum Vergleich | 0,006 ms |
+| Marke bleibt, wo sie ist | **0,004 ms** |
+
+Bei sechzig Mausereignissen in der Sekunde sind 6,9 ms **41 % eines Kerns** im
+Qt-Hauptthread. Teuer ist weder die Rechnung noch der Actor, sondern
+`render()` — das Netz einmal anzulegen und nur seine Punkte zu tauschen brachte
+gemessen nichts (6,95 gegen 6,92). Was hilft, ist die Eigenschaft der Marke
+selbst: Sie sitzt am **gefangenen** Ort und ändert sich zwischen zwei
+Rasterpunkten nicht. Verglichen wird Ort **und** Maßstab — beim Zoomen bleibt
+der Ort gleich, und die Größe müsste sich ändern.
+
+**Die Null im Rasterfeld kostet die Untergrenze**, wenn man sie nicht
+festhält. Qt setzt den Sonderwert immer auf das Minimum, das Minimum musste
+also auf null — und bei zwei Nachkommastellen nahm das Feld danach 0,01 mm an.
+`LEAST_SNAP_MM` hebt beim Eintippen an, statt abzulehnen: Ein Feld, das eine
+Eingabe verschluckt, ohne es zu zeigen, ist schlimmer als eines, das sie
+berichtigt.
 
 **Gemessen wird erst, wenn es ein Bild gibt** (`LEAST_VIEW_PIXELS` in
 `viewport.py`). Beim Aufbau meldet Qt für ein Widget ohne fertiges Layout

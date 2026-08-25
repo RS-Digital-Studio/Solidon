@@ -300,6 +300,20 @@ Ruhe und Fokus ist jetzt größer als zuvor.
 alten Regel, die fallen **muss**) und eine am Text der Regel
 (`test_the_focus_ring_never_changes_the_size_of_a_field`).
 
+**Und der Ruhezustand behält die volle Linienfarbe.** Der doppelt breite
+Rahmen legte es nahe, ihn zur Feldfläche hin zu dämpfen, damit er so leise
+wirkt wie der einfache vorher. Im Bild sah das richtig aus und war gemessen
+falsch: 3,33 auf 1,90 im dunklen Thema, 2,43 auf 1,57 im hellen — unter den
+3,0, die WCAG 1.4.11 für die Umrandung eines Bedienelements verlangt und die
+zwei Absätze weiter oben für den Fokusring zitiert werden.
+
+Die Fläche fängt das nicht auf: Feld gegen Fenster sind 1,45 im dunklen und
+1,22 im hellen Thema. **Der Rahmen ist die einzige Kante, die ein Feld hat.**
+`test_a_field_keeps_the_edge_that_is_its_only_one` prüft gegen die
+Linienfarbe des Themas und nicht gegen 3,0 — was diese Farbe leistet, ist eine
+Frage an das Thema (im hellen bringt sie seit je nur 2,43), dass der Rahmen sie
+nicht unterschreitet, eine an das Stylesheet.
+
 ## Was nur das Bild zeigt
 
 Vier Fehler am selben Tag, alle vier durch eine grüne Suite gekommen, alle vier
