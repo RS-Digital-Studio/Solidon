@@ -971,6 +971,33 @@ def test_a_finding_without_values_stays_as_it_is() -> None:
     assert _line_for(finding) == "Doppelte Punkte verschweißt."
 
 
+def test_an_orphaned_feature_is_named_in_its_line() -> None:
+    """„Ein Merkmal hat keinen Nachfolger mehr" — welches?
+
+    Nach dem Einsetzen eines Bausteins standen sechs wortgleiche Zeilen im
+    Bericht, jede mit demselben Objektnamen dahinter, und nichts daran war
+    unterscheidbar. Die Kennung stand längst in ``values`` — nur nie in der
+    Zeile. Gefunden am 25.08.2026 bei der Verifikation im echten Fenster.
+    """
+    from app.ui.panels import _line_for
+
+    def orphaned(feature: str) -> Finding:
+        return Finding(
+            code="perceive.orphaned",
+            severity="info",
+            message="Ein Merkmal hat keinen Nachfolger mehr.",
+            object_id="obj_1",
+            values={"feature": feature},
+        )
+
+    first = _line_for(orphaned("face_3"), {"obj_1": "Halter"})
+    second = _line_for(orphaned("face_7"), {"obj_1": "Halter"})
+
+    assert "face_3" in first and "face_7" in second, "jede Zeile nennt ihr Merkmal"
+    assert first != second, "sechs Verwaisungen sind sechs Aussagen, keine sechs Kopien"
+    assert "Halter" in first, "und der Körper steht weiter dabei"
+
+
 def test_a_part_that_fits_gets_told_so(window: MainWindow) -> None:
     """§2.7: eine Handlung endet in einer Aussage, auch wenn nichts zu tun war.
 

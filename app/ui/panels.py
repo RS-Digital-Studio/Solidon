@@ -295,6 +295,12 @@ def origin_label(source: str) -> str:
 #: dieselbe Trennung wie zwischen ``format_length`` und ``length``.
 _LINE_VALUES: dict[str, str] = {
     "object": "",
+    # „Ein Merkmal hat keinen Nachfolger mehr" — welches? Nach dem Einsetzen
+    # eines Bausteins standen sechs wortgleiche Zeilen im Bericht, und nichts
+    # daran war unterscheidbar; die Kennung stand längst im Befund, nur nie in
+    # der Zeile. Derselbe Fund wie bei den zwei ausgehöhlten Klötzen darunter,
+    # gefunden am 25.08.2026 bei der Verifikation im echten Fenster.
+    "feature": "",
     "a": "",
     "b": "",
     "excess": "",
