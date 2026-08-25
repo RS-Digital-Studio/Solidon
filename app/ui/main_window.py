@@ -3965,7 +3965,7 @@ class MainWindow(QMainWindow):
         # nur über die Menüschleife zu finden hätte einen von fünf erwischt.
         nach_titel = {title: key for key, (title, _shortcut, _slot) in known.items()}
         ops = set(self._op_actions.values())
-        gefunden: dict[str, Any] = {}
+        found: dict[str, Any] = {}
         self._palette_actions.clear()
         for path, action in _menu_lines(self.menuBar()):
             if action in ops:
@@ -3978,8 +3978,8 @@ class MainWindow(QMainWindow):
             # Der Weg steht im Titel: „Vorne" allein sagt in einer Liste aus
             # hundert Zeilen nichts, „Kamera: Vorne" schon.
             title = f"{path}: {action.text()}" if path else action.text()
-            key = f"menu.{len(gefunden)}"
-            gefunden[key] = (
+            key = f"menu.{len(found)}"
+            found[key] = (
                 title,
                 action.shortcut().toString(),
                 action.trigger,
@@ -3997,7 +3997,7 @@ class MainWindow(QMainWindow):
             # und eine Signatur zu ändern, um eine Frage zu beantworten, ist
             # der teurere Weg zum selben Ergebnis.
             self._palette_actions[key] = action
-        return gefunden
+        return found
 
     def _extra_availability(self, key: str) -> tuple[bool, str]:
         """Ob ein Fensterbefehl jetzt ausführbar ist, und warum nicht.

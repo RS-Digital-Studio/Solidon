@@ -99,6 +99,8 @@ GERMAN_WORDS = frozenset(
 #: mehr verspricht er nicht, und weniger auch nicht.
 GERMAN_STEMS = (
     "aenderung",
+    "begriff",
+    "beispiel",
     "aussen",
     "auswahl",
     "bohrung",
@@ -111,6 +113,7 @@ GERMAN_STEMS = (
     "flaeche",
     "folge",
     "frei",
+    "gefunden",
     "gemerkt",
     "geschlossen",
     "geschrieben",
@@ -118,6 +121,10 @@ GERMAN_STEMS = (
     "gesperrt",
     "groesse",
     "grund",
+    "offen",
+    "satz",
+    "stufe",
+    "tipp",
     "hoehe",
     "laenge",
     "lasche",

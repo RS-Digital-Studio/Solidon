@@ -1723,15 +1723,15 @@ class ReportPanel(QWidget):
         if visible or not self.list.count():
             self._nothing.setVisible(False)
             return
-        begriff = self.search.text().strip()
-        stufe = self.severity.currentText().strip()
-        if begriff and wanted:
-            satz = tr("Kein Befund passt zu „{begriff}“ und „{stufe}“.")
-        elif begriff:
-            satz = tr("Kein Befund passt zu „{begriff}“.")
+        term = self.search.text().strip()
+        level = self.severity.currentText().strip()
+        if term and wanted:
+            sentence = tr("Kein Befund passt zu „{begriff}“ und „{stufe}“.")
+        elif term:
+            sentence = tr("Kein Befund passt zu „{begriff}“.")
         else:
-            satz = tr("Kein Befund dieser Stufe: „{stufe}“.")
-        self._nothing.setText(str(satz).format(begriff=begriff, stufe=stufe))
+            sentence = tr("Kein Befund dieser Stufe: „{stufe}“.")
+        self._nothing.setText(str(sentence).format(begriff=term, stufe=level))
         self._nothing.setVisible(True)
 
     def show_result(

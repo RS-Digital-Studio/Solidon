@@ -975,7 +975,8 @@ class OperationDialog(QDialog):
         reason = tr("Die Maße kommen aus der Zeichnung — über „Zeichnen …“ zu ändern.")
         axis_of = {"length": 0, "width": 1}
         docs = {name: str(entry.doc or "") for name, entry in declared.items()}
-        seen: dict[str, object] = {}
+        seen_text: dict[str, str] = {}
+        seen_extent: dict[str, tuple[float, float] | None] = {}
 
         def follow_sketch() -> None:
             text = str(self.values().get(sketch_field, "") or "")
@@ -986,12 +987,12 @@ class OperationDialog(QDialog):
             # wird nur die **Rechnung**, nicht der ganze Durchlauf: Die
             # Sperren darunter müssen weiterlaufen, sonst bliebe ein Feld
             # frei, das der Nachbarzweig gerade freigegeben hat.
-            if seen.get("text") == text:
-                extent = seen.get("extent")  # type: ignore[assignment]
+            if seen_text.get("value") == text:
+                extent = seen_extent.get("value")
             else:
                 extent = sketch_extent(text, self._parameter_values)
-                seen["text"] = text
-                seen["extent"] = extent
+                seen_text["value"] = text
+                seen_extent["value"] = extent
             for name in ("shape", "length", "width", "corners", *axis_of):
                 editor = self._editors.get(name)
                 if editor is None or name not in declared:

@@ -3394,16 +3394,16 @@ class SketchPanel(QWidget):
         im Bild. Beim nächsten Neuzeichnen trägt ``follow_grid`` die Weite des
         Maßstabs wieder ein.
         """
-        getippt = self.snap_step.value_mm()
+        typed = self.snap_step.value_mm()
         # Zwischen null und der feinsten Weite liegt nichts Brauchbares: Die
         # Null heißt „Automatisch", und 0,01 mm wäre ein Fang, den kein
         # Drucker auflöst. Angehoben statt abgelehnt — ein Feld, das eine
         # Eingabe verschluckt, sagt nicht, dass es sie verschluckt hat.
-        if 0.0 < getippt < LEAST_SNAP_MM:
+        if 0.0 < typed < LEAST_SNAP_MM:
             with QSignalBlocker(self.snap_step):
                 self.snap_step.set_value_mm(LEAST_SNAP_MM)
-            getippt = LEAST_SNAP_MM
-        self._pinned_step = getippt > 0.0
+            typed = LEAST_SNAP_MM
+        self._pinned_step = typed > 0.0
         self._snapping_changed()
 
     def follow_grid(self, step: float) -> None:

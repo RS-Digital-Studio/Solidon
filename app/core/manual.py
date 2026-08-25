@@ -1461,12 +1461,12 @@ def remote_text(registry: Registry | None = None) -> str:
         "",
     ]
     for name, entries in source.by_category().items():
-        offen = [spec for spec in entries if spec.name in reachable]
-        if not offen:
+        listed = [spec for spec in entries if spec.name in reachable]
+        if not listed:
             continue
         lines.append(f"### {CATEGORIES[name]}")
         lines.append("")
-        for spec in offen:
+        for spec in listed:
             # Zuerst der Titel aus dem Menü, dann der Leitungsname: Der eine
             # sagt dem Leser, was gemeint ist, der andere der Gegenstelle,
             # was zu senden ist.

@@ -241,15 +241,15 @@ class _Row(QWidget):
         Solidon den Dienst ohne Zutun sucht, und bleibt damit richtig, wenn sich
         die Vorgabe ändert.
         """
-        beispiel = self.tool.url if self.tool else ""
-        satz = tr(
+        example = self.tool.url if self.tool else ""
+        sentence = tr(
             "Adresse, unter der der Dienst antwortet — zum Beispiel {beispiel}\n\n"
             "Solidon startet ihn nicht, es spricht über das Netz mit ihm. Hier "
             "gehört deshalb kein Ordner und keine Programmdatei hin, sondern "
             "die Adresse, die das Programm beim Start selbst nennt.\n"
             "Leer lassen heißt: wieder die Vorgabe benutzen."
-        ).format(beispiel=beispiel)
-        return f"{problem}\n\n{satz}" if problem else satz
+        ).format(beispiel=example)
+        return f"{problem}\n\n{sentence}" if problem else sentence
 
     def _choose_address(self) -> None:
         """Fragt, bis die Antwort eine Adresse ist — oder der Nutzer abbricht.
