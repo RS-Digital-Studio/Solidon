@@ -80,7 +80,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
-| Vier Bausteine, die dem Katalog noch fehlen | Die dünnste Gruppe des Katalogs ist die meistgefragte (24.08.2026) | nichts — der Kabelclip ist gebaut (`4b9bef2`), die übrigen vier stehen sortiert da. `shapes.dovetail` gibt es bereits, der Schwalbenschwanz wäre also billiger als gedacht |
+| Drei Bausteine, die dem Katalog noch fehlen | Die dünnste Gruppe des Katalogs ist die meistgefragte (24.08.2026) | nichts — Kabelclip gebaut (`4b9bef2`), Lochwand-Einhänger gebaut (`a3f23d5`), Schwalbenschwanz **gestrichen**: den gibt es schon als Form des Passstifts und als Verbinder beim Teilen |
 | Die Startmarke §31 ist seit dem 24.08.2026 rot | Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026) | **eine Entscheidung**: Marke neu setzen oder die Ursache suchen. Nicht der Code — im Wechsel gegen den Stand vor drei Commits gemessen, Unterschied im Rauschen |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
@@ -9782,8 +9782,15 @@ braucht `rtree` und fällt seit heute aus, und eine Schnittmenge gegen ein
 Nennmaß-Kabel misst die Rückfallkette statt der Passung — für vier Größen
 8,6 · 10,4 · 9,3 · 9,4 mm³, absolut konstant statt proportional.
 
-- [ ] **Vier Bausteine, nach Belegkraft sortiert.**
-  Schwalbenschwanz (eine der vier von der Fachliteratur genannten
+**Und einer der fünf war keiner.** Der Schwalbenschwanz ist am 25.08.2026
+gestrichen: `shapes.dovetail` gibt es, und zwar als Form des Passstifts
+(`dowel`) und als eine der vier Verbinderformen beim Teilen. Gesucht worden
+war nach einem Baustein *dieses Namens*; er ist keiner, sondern ein
+Parameterwert an zwei Stellen. **Eine Lücke im Katalog ist erst eine, wenn man
+nach der Sache gesucht hat und nicht nach dem Namen.**
+
+- [ ] **Drei Bausteine, nach Belegkraft sortiert.**
+  ~~Schwalbenschwanz~~ (eine der vier von der Fachliteratur genannten
   verlässlichen Verbindungen, und wir haben drei davon — **und
   `shapes.dovetail` gibt es schon**, der Baustein wäre also billiger als
   gedacht), Eckwinkel, Standfuß, Bolzenscharnier. Der letzte ist der teuerste — die Spaltmaße

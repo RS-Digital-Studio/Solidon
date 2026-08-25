@@ -724,18 +724,31 @@ findet bei uns die Durchführung durch eine Wand und sonst nichts.
 
 ## 24. Die Lücken, nach Belegkraft sortiert
 
-**A — Kabelclip.** Ein Bügel, der auf eine Fläche gesetzt wird und ein Kabel
+**A — Kabelclip. ✔ Gebaut am 24.08.2026** (`4b9bef2`).
+
+Ursprünglich: Ein Bügel, der auf eine Fläche gesetzt wird und ein Kabel
 hält, mit Durchmesser aus der Schlauchtabelle (die es gibt) und einer
 Einschnappöffnung, die schmaler ist als das Kabel. Das ist die stärkste
 Empfehlung dieses Abschnitts: größte belegte Nachfrage, dünnste Gruppe,
 kleinster Bauaufwand — additiv, eine Fläche, drei Parameter.
 
-**B — Schwalbenschwanz.** Formschlüssige Verbindung zweier Teile, als
-abziehende und aufbauende Hälfte. Von der Fachliteratur als eine der vier
-verlässlichen Formen genannt, und wir haben drei davon. **Nicht** deshalb, um
-das Teilen zu ergänzen: `split_pinned` setzt bereits Passstifte in die
-Schnittfläche. Ein Schwalbenschwanz ist die formschlüssige Alternative dazu,
-für Teile, die sich nicht auseinanderziehen sollen.
+**B — Schwalbenschwanz. ~~Fehlt~~ — gibt es bereits, gestrichen am
+25.08.2026.** Dieser Punkt stand hier, weil die Fachliteratur den
+Schwalbenschwanz als eine der vier verlässlichen Verbindungen nennt „und wir
+haben drei davon". Wir haben vier: `shapes.dovetail` ist eine Form des
+**Passstifts** (`dowel`, `choices=("round", "hex", "dovetail")`) und eine der
+vier Verbinderformen beim **Teilen** (`CONNECTOR_SHAPES` in `prepare_ops.py`).
+
+**Der Fehler war die Suchrichtung.** Ich hatte nach einem Baustein *namens*
+Schwalbenschwanz gesucht und keinen gefunden. Er ist keiner — er ist ein
+Parameterwert an zwei Stellen, und genau so gehört er dorthin: Wer zwei Teile
+verbinden will, sucht „Passstift" und wählt dann die Form, statt zwischen
+einem Passstift-Baustein und einem Schwalbenschwanz-Baustein zu raten.
+
+Die Lehre über diesen Fall hinaus: **Eine Lücke im Katalog ist erst eine, wenn
+man nicht nur nach dem Namen gesucht hat, sondern nach der Sache.** Der
+Katalog hat achtzehn Einträge und ungezählte Parameterwerte; die zweite Zahl
+sieht man nicht, wenn man Titel liest.
 
 **C — Eckwinkel (Gusset).** Eine Dreiecksverstärkung in eine Innenecke.
 Häufig gefragt, trivial zu bauen, und die Gruppe „Struktur" hat zwei Einträge.

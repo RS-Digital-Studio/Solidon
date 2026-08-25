@@ -88,10 +88,15 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     sind keine Normteile, ihre Maße veröffentlicht niemand, und **gegeben sind
     sie trotzdem**: Wer einen Einhänger baut, hat sie nicht zu wählen, sondern
     zu treffen.
+
+    ``gusset`` kam am 25.08.2026 dazu, aus derselben Durchsicht wie der
+    Kabelclip: Die Versteifungsrippe hält **eine** Wand, und die Ecke zwischen
+    zweien blieb offen — ein Eckwinkel steht auf jeder Liste häufig gedruckter
+    Funktionsteile, und die Gruppe „Struktur" hatte zwei Einträge.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 17
+    assert len(building) == 18
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 

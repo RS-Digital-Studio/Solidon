@@ -460,3 +460,93 @@ def cable_clip(raw: BaseParams) -> PartResult:
         # Bügels. Nach oben gerichtet, denn dort liegt, was sie trägt.
         face("seat_1", inner * params.width, (0.0, 0.0, base), (0.0, 0.0, 1.0)),
     )
+
+
+GUSSET_ADDED = PartChange(
+    version="1",
+    date="2026-08-25",
+    reason="Eckwinkel — die Rippe verstärkt eine Wand, die Ecke zwischen zweien blieb offen.",
+)
+
+
+@op_params
+class GussetParams(BaseParams):
+    legs: float = param(
+        title=_("Schenkel"),
+        default=12.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=100.0,
+        doc=_("Wie weit der Winkel an beiden Wänden entlangreicht."),
+    )
+    thickness: float = param(
+        title=_("Dicke"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=20.0,
+        doc=_(
+            "Wie dick der Winkel ist, längs der Kante gemessen. Null heißt: so "
+            "dick wie die Rippe es täte — vier Fünftel der Wand."
+        ),
+    )
+    wall: float = param(
+        title=_("Wandstärke"),
+        default=2.0,
+        unit="mm",
+        minimum=0.4,
+        maximum=20.0,
+        placement="advanced",
+        doc=_("Die Wand, an der er sitzt — sie bestimmt die Vorgabe für die Dicke."),
+    )
+
+
+@register_part(
+    name="gusset",
+    title=_("Eckwinkel"),
+    group="structure",
+    params=GussetParams,
+    features=["gusset"],
+    doc=_(
+        "Dreieck in einer Innenecke: Es hält zwei Wände im rechten Winkel, wo sie "
+        "sonst aufklappen. Der Klassiker gegen eine Ecke, die beim Anfassen federt."
+    ),
+    caveat=_(
+        "Nicht in eine Ecke, durch die etwas hindurchmuss — er füllt sie diagonal. "
+        "Für eine Wand, die für sich zu weich ist, ist die Versteifungsrippe da."
+    ),
+    changes=[GUSSET_ADDED],
+)
+def gusset(raw: BaseParams) -> PartResult:
+    """Ein dreieckiges Prisma, das in der Ecke steht.
+
+    **Die Ecke ist die Kante, nicht die Fläche.** Der Baustein wird an eine
+    Fläche gesetzt und wächst von ihr weg (+Z) und an ihr entlang (+Y) — die
+    zweite Wand steht dort, wo er endet. Wer ihn in die Mitte einer Fläche
+    setzt, bekommt eine Rampe; das ist nicht falsch, nur nutzlos, und der
+    ``caveat`` sagt es.
+
+    Gebaut wird er aus ``shapes.wedge``, demselben Keil, aus dem die Rippe
+    ihren Auslauf nimmt. Eine zweite Form für dieselbe Sache wäre eine, die
+    irgendwann anders aussieht.
+
+    **Drei Parameter, nicht vier.** Hier standen zuerst *Breite* und *Dicke*
+    nebeneinander, und beide meinten dasselbe Maß — wie viel Material längs der
+    Kante steht. Ein Feld, das ein zweites wiederholt, ist kein zusätzlicher
+    Freiheitsgrad, sondern eine Frage, auf die zwei Antworten möglich sind und
+    nur eine wirkt. Geblieben ist *Dicke*, weil das Wort sagt, worum es geht.
+    """
+    params = cast(GussetParams, raw)
+    thickness = params.thickness or params.wall * RIB_SHARE
+
+    # ``wedge(width, depth, height, tip)`` liegt in X breit, läuft in Y tief
+    # und steht in Z hoch. Für die Ecke heißt das: die Breite ist die Kante,
+    # Tiefe und Höhe sind die zwei Schenkel.
+    body = shapes.wedge(thickness, params.legs, params.legs, 0.0)
+
+    return result(
+        body,
+        # Die Fläche, mit der er an der ersten Wand liegt: unten, so lang wie
+        # der Schenkel und so dick wie er selbst.
+        face("gusset_1", params.legs * thickness, (0.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
+    )
