@@ -64,6 +64,12 @@ _log = get_logger(__name__)
 #: dieselbe Vorgabe, die ``recipe.from_data`` für ein Rezept ohne Gruppe nimmt.
 DEFAULT_GROUP = "structure"
 
+#: Wie hoch eine Rollfläche höchstens von sich aus werden darf, in
+#: Bildpunkten. Rund zwei Parameterzeilen — genug, damit sichtbar ist, dass
+#: es je Parameter einen Block gibt, und wenig genug, dass zwölf davon den
+#: Dialog nicht ueber den Schirm schieben.
+MOST_ROOM = 520
+
 # Die zwei Plätze, die ein freigegebener Wert im späteren Dialog haben kann
 # (§2.5, gestufte Tiefe). Schlüssel des Rezeptformats und keine Beschriftungen —
 # als Konstanten, weil ein Literal in einem ``addItem`` von der Prüfung auf
@@ -466,6 +472,13 @@ def _scrolled(inner: QWidget, parent: QWidget) -> QScrollArea:
     area.setWidgetResizable(True)
     area.setFrameShape(QScrollArea.Shape.NoFrame)
     area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+    # **Und sie sagt, wie viel sie zeigen möchte.** Eine QScrollArea meldet von
+    # sich aus eine Wunschhöhe, die mit ihrem Inhalt nichts zu tun hat: Der
+    # Dialog ging damit so klein auf, dass schon der zweite Parameter
+    # angeschnitten war, und wer drei anlegt, sieht beim Öffnen nur den
+    # ersten. Gedeckelt bleibt es trotzdem — zwölf Parameter sollen den
+    # Dialog nicht über den Bildschirm hinaus wachsen lassen.
+    area.setMinimumHeight(min(inner.sizeHint().height(), MOST_ROOM))
     return area
 
 

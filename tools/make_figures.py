@@ -46,7 +46,8 @@ from PySide6.QtWidgets import QApplication, QWidget
 from app.core import figures
 from app.core.bootstrap import load_operations
 from app.core.registry.registry import REGISTRY
-from app.core.types import Finding
+from app.core.scene.project import new_project
+from app.core.types import Feature, Finding, Parameter
 from app.i18n import install_catalog, set_language, tr
 from app.i18n.catalog import available_languages, read_catalog
 
@@ -395,6 +396,7 @@ def take_all(app: QApplication, language: str) -> None:
     from app.ui.main_window import MainWindow
     from app.ui.op_dialog import OperationDialog
     from app.ui.panels import ReportPanel
+    from app.ui.recipe_dialog import RecipeDialog
     from app.ui.session import Session
     from app.ui.settings import UiSettings
     from app.ui.sketch_editor import SketchPanel
@@ -468,6 +470,45 @@ def take_all(app: QApplication, language: str) -> None:
     settle(app, 30)
     shoot(catalog, "catalog", language)
     catalog.close()
+
+    # Der Dialog, mit dem ein selbst gebautes Teil in den Katalog kommt. Er
+    # bekommt hier Werte, die zeigen, worum es geht: Projektparameter mit
+    # Titel und Einheit, damit die Zeilen nicht nach ihrem internen Namen
+    # aussehen, und zwei erkannte Merkmale, damit die untere Liste nicht leer
+    # ist — leer erklärt sie nämlich, warum sie leer ist, und das ist das
+    # Bild eines Sonderfalls.
+    recipe = prepared(
+        RecipeDialog(
+            replace(
+                new_project().document,
+                parameters={
+                    "breite": Parameter(name="breite", value=120.0, unit="mm", title=tr("Breite")),
+                    "hoehe": Parameter(
+                        name="hoehe",
+                        value=24.0,
+                        unit="mm",
+                        title=tr("Höhe"),
+                        minimum=12.0,
+                        maximum=60.0,
+                    ),
+                },
+            ),
+            {},
+            (1, 2),
+            (
+                Feature(id="hole_1", kind="hole", provenance="detected", params={"diameter": 4.2}),
+                Feature(id="face_2", kind="face", provenance="detected", params={"area": 2880.0}),
+            ),
+            session.profile,
+        ),
+        DIALOG,
+        fit_height=True,
+    )
+    recipe.title.setText(tr("Halter für die Werkbank"))
+    settle(app)
+    shoot(recipe, "own-part", language)
+    recipe.release()
+    recipe.close()
 
     # Der Skizzenmodus mit einer Zeichnung darin. Ein leerer Editor zeigt
     # vierzehn Knöpfe und eine leere Fläche — zu sehen sein soll, dass eine

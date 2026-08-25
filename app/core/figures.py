@@ -1208,6 +1208,18 @@ FIGURES: Final[tuple[Figure, ...]] = (
         kind="shot",
     ),
     Figure(
+        key="own-part",
+        alt=_(
+            "Der Dialog „Auswahl als Baustein speichern“: oben Name, Gruppe und "
+            "Beschreibung, darunter je Projektparameter eine Zeile mit Beschriftung, "
+            "Einheit, kleinstem und größtem Wert, Vorgabe und Platz im späteren "
+            "Dialog. Unten die erkannten Merkmale mit dem Namen, unter dem sie "
+            "später anklickbar sind."
+        ),
+        caption=_("Was einstellbar sein soll, sagt der, der das Teil gebaut hat."),
+        kind="shot",
+    ),
+    Figure(
         key="sketch-mode",
         alt=_(
             "Der Skizzenmodus im Fenster: die Zeichenwerkzeuge als Symbolzeile, darunter "
