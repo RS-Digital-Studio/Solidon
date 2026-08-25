@@ -310,7 +310,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     else:
         produced = spec.fn(spec.params(**values))
 
-    anchor, direction = _anchor(source, ctx.params)
+    anchor, direction = _anchor(source, ctx.params, spec)
     # Ein aufgesetzter Baustein sinkt ein Hundertstel ein. Zwei Volumen, die
     # sich nur in einer Fläche berühren, sind das eine, woran eine boolesche
     # Operation zuverlässig scheitert (§39) — die Rastnase steht mit 6 mal 1 mm
@@ -356,7 +356,38 @@ def _part_values(spec: PartSpec, params: Any, profile: Profile | None) -> dict[s
     return values
 
 
-def _anchor(source: SceneObject, params: Any) -> tuple[Vec3, Vec3 | None]:
+def _placed_by_hand(params: Any) -> bool:
+    """Ob jemand die Position selbst eingetragen hat.
+
+    **Ohne Merkmal ist nicht dasselbe wie ohne Wahl.** Die ausgelieferten
+    Beispielprojekte setzen ihre Bausteine über *x/y/z* — die Mutternfalle des
+    Gehäuses steht auf (-25, -15, 4), und ``at_feature`` ist dort leer, weil
+    sie es sein soll. Eine Prüfung, die nur nach dem Merkmal fragt, hält diese
+    Projekte an: gemessen am 25.08.2026 mit 37 roten Tests, davon sieben
+    Beispieldateien, die seit Monaten rechnen.
+
+    Gefragt wird deshalb nach beidem. Erst wenn weder eine Stelle gewählt noch
+    eine Position eingetragen ist, hat wirklich niemand etwas gesagt — und
+    genau das ist der Zustand, in dem ein frisch geöffneter Dialog steht.
+
+    Ein Parameterausdruck (``=@wand``) zählt als eingetragen, auch wenn er sich
+    zu null auswertet: Wer ihn hinschreibt, hat eine Absicht.
+    """
+    for field in ("x", "y", "z"):
+        value = getattr(params, field, 0.0)
+        if isinstance(value, str):
+            return True
+        try:
+            if float(value) != 0.0:
+                return True
+        except (TypeError, ValueError):
+            return True
+    return False
+
+
+def _anchor(
+    source: SceneObject, params: Any, spec: PartSpec | None = None
+) -> tuple[Vec3, Vec3 | None]:
     """Wohin der Baustein kommt **und wohin er schaut** — an ein benanntes
     Merkmal, oder an den Ursprung (§25).
 
@@ -380,6 +411,39 @@ def _anchor(source: SceneObject, params: Any) -> tuple[Vec3, Vec3 | None]:
     """
     name = str(getattr(params, "at_feature", "") or "")
     if not name:
+        if spec is not None and (spec.at_face or spec.at_hole) and not _placed_by_hand(params):
+            # **Nie stillschweigend raten** (Regel 21). Hier stand ein
+            # kommentarloses ``(0, 0, 0), None``, und damit landete ein
+            # Anbauteil ohne gewählte Fläche im Ursprung: mitten im Körper,
+            # halb unter dem Druckbett, mit Richtung Z statt der Flächen-
+            # normalen. Am Lochwand-Einhänger gemessen — 717 mm³ statt 2358,
+            # dazu vier Befunde, von denen keiner sagte, was fehlt.
+            #
+            # Aufgefallen ist es erst, als jemand den Weg **durch die
+            # Oberfläche** ging: Im Katalog wählt man einen Baustein, nicht
+            # eine Fläche, und „An Merkmal" steht dann auf „— keines —".
+            # Jeder Test hatte es gesetzt, weil jeder Test wusste, dass es
+            # gebraucht wird.
+            raise AppError(
+                _("Für diesen Baustein fehlt die Stelle, an die er soll."),
+                detail=_(
+                    "Er wird an eine Fläche oder eine Bohrung gesetzt, und ohne "
+                    "sie weiß er weder wohin noch in welche Richtung. Es ist auch "
+                    "keine Position eingetragen — so säße er im Nullpunkt des "
+                    "Objekts, halb darin und halb darunter."
+                ),
+                values={"part": spec.name},
+                suggestions=(
+                    Action(
+                        id="pick_feature",
+                        label=_("Klicken Sie die Fläche im Viewport an, dann den Baustein."),
+                    ),
+                    Action(
+                        id="pick_in_tree",
+                        label=_("Oder wählen Sie sie unter „An Merkmal“ im Dialog."),
+                    ),
+                ),
+            )
         return (0.0, 0.0, 0.0), None
 
     feature = source.features.get(name)

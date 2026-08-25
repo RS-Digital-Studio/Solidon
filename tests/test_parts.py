@@ -675,6 +675,75 @@ def test_the_magnet_lip_is_narrower_than_the_magnet(play: float) -> None:
     )
 
 
+def test_a_part_that_needs_a_face_says_so_instead_of_guessing(profile: Profile) -> None:
+    """Regel 21: nie stillschweigend raten — auch nicht über die Stelle.
+
+    **Gefunden über die Oberfläche, nicht hier.** Im Bausteinkatalog wählt man
+    einen *Baustein*, keine Fläche; „An Merkmal" steht dann auf „— keines —".
+    Bestätigt man so, lief die Operation durch und setzte den Baustein in den
+    Nullpunkt des Objekts: halb im Körper, halb unter dem Druckbett. Am
+    Lochwand-Einhänger gemessen — 717 mm³ statt 2358, dazu vier Befunde, von
+    denen keiner sagte, was fehlt.
+
+    Kein Test hat das gesehen, und der Grund ist derselbe wie immer: **Jeder
+    Test setzte ``at_feature``, weil jeder Test wusste, dass es gebraucht
+    wird.** Der Kunde weiß es nicht.
+
+    Was **nicht** verlangt wird, ist ein Merkmal um jeden Preis: Wer die
+    Position von Hand einträgt, hat gewählt. Die ausgelieferten Beispiele tun
+    genau das (siehe :func:`~app.core.knowledge.parts.ops._placed_by_hand`),
+    und eine Prüfung nur auf das Merkmal hielt sieben von ihnen an.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+
+    for spec in PARTS.all():
+        if not (spec.at_face or spec.at_hole):
+            continue
+        step = new_project("centauri-carbon-2", "petg")
+        History(step.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+        History(step.document).apply(
+            spec.name,
+            [OperationDraft(op=part_ops.op_name(spec.name), inputs=("obj_1",), params={})],
+        )
+        result = evaluate(step.document, profile, sources=ProjectSources(step))
+
+        assert not result.complete, (
+            f"{spec.name} was placed without a face and without a position — "
+            "it sits in the origin and nobody was asked"
+        )
+        messages = [str(finding.message) for finding in result.scene.report.findings]
+        assert any("Position" in text or "Fläche" in text for text in messages), (
+            f"{spec.name} stopped, but the report does not say what is missing: {messages}"
+        )
+
+
+def test_a_part_placed_by_hand_needs_no_feature(profile: Profile) -> None:
+    """Wer die Position einträgt, hat gewählt — und wird nicht gefragt.
+
+    Die Gegenprobe zur Prüfung darüber, und sie ist die wichtigere: Ohne sie
+    wäre die Regel „ein Baustein braucht ein Merkmal", und das ist falsch. Die
+    Mutternfalle des Beispielgehäuses steht auf (-25, -15, 4) mit leerem
+    ``at_feature``, seit Monaten, und sie soll dort stehen bleiben.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    History(project.document).apply(
+        "Rippe",
+        [
+            OperationDraft(
+                op=part_ops.op_name("rib"), inputs=("obj_1",), params={"x": 5.0, "z": 2.0}
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, (
+        "a part positioned by hand was refused: "
+        f"{[str(f.message) for f in result.scene.report.findings]}"
+    )
+
+
 # --- die Normteiltabelle -----------------------------------------------------------
 
 
