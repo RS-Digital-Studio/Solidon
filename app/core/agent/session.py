@@ -77,6 +77,16 @@ _log = get_logger(__name__)
 
 #: Harte Grenzen aus §26.5. Ein Lauf, der an eine stößt, sagt an welche.
 MAX_STEPS = 8
+
+#: Das Zugbudget, gezählt in **gewichteten** Token
+#: (:attr:`~app.core.backends.llm.Reply.budget_input_tokens`) und nicht in
+#: geflossenen.
+#:
+#: Ungewichtet war der Deckel nach vier von acht Schritten erreicht: Die
+#: markierte Werkzeugliste wiegt rund 25 000 Token, jeder Schritt meldet sie
+#: erneut als Cache-Lesung, und die kostet ein Zehntel. Die acht Schritte aus
+#: §26.5 waren damit nicht fahrbar — der Vorschlag hielt mit ``tokens`` an und
+#: zeigte einen halben Zug.
 MAX_TOKENS = 120_000
 
 AskFn = Callable[[str, list[str]], str]
@@ -239,6 +249,12 @@ class AgentSession:
         # sondern Platz.
         tools = list(tool_schemas(self.registry, compact=self.backend.id == "ollama"))
 
+        # Was der Zug vom Budget verbraucht hat — **gewichtet** (§26.5,
+        # :data:`MAX_TOKENS`). Eine eigene Zahl neben den beiden im Vorschlag:
+        # die dort sind die geflossenen und gehören der Kostenzeile, diese hier
+        # ist die abgerechnete und gehört dem Deckel. Sie steht als lokale
+        # Größe, weil sie nur bis zum Ende dieses Zuges gilt.
+        spent = 0
         while True:
             if self.cancelled is not None:
                 self.cancelled.raise_if_cancelled()
@@ -246,7 +262,7 @@ class AgentSession:
             # §26.5: das Zugbudget deckelt auch die einzelne Antwort — was vom
             # Budget übrig ist, ist das Meiste, das dieser Schritt noch
             # ausgeben darf.
-            remaining = self.max_tokens - (proposal.input_tokens + proposal.output_tokens)
+            remaining = self.max_tokens - spent
             if remaining < MIN_ANSWER_TOKENS:
                 proposal.stopped = "tokens"
                 break
@@ -254,10 +270,15 @@ class AgentSession:
                 messages, tools, temperature=self.temperature, max_output_tokens=remaining
             )
             proposal.steps += 1
-            # Beide Zahlen kommen aus der Antwort und nicht aus einer eigenen
-            # Schätzung; ``Reply.input_tokens`` zählt seit dem 25.08.2026 auch
-            # die zwischengespeicherten Eingabe-Token (§26.5) — sonst maß der
-            # Deckel den kleinsten Teil eines Zuges.
+            # Alle Zahlen kommen aus der Antwort und nicht aus einer eigenen
+            # Schätzung — aber es sind zwei Auskünfte und nicht eine.
+            # ``Reply.input_tokens`` zählt seit dem 25.08.2026 auch die
+            # zwischengespeicherten Eingabe-Token (§26.5), sonst maß die
+            # Kostenzeile den kleinsten Teil eines Zuges. Der **Deckel** nimmt
+            # sie gewichtet: Eine Cache-Lesung kostet ein Zehntel und
+            # wiederholt sich in jedem Schritt, ungewichtet war nach vier von
+            # acht Schritten Schluss.
+            spent += reply.budget_input_tokens + reply.output_tokens
             proposal.input_tokens += reply.input_tokens
             proposal.output_tokens += reply.output_tokens
             if reply.text:
@@ -293,7 +314,7 @@ class AgentSession:
             if proposal.steps >= self.max_steps:
                 proposal.stopped = "steps"
                 break
-            if proposal.input_tokens + proposal.output_tokens >= self.max_tokens:
+            if spent >= self.max_tokens:
                 proposal.stopped = "tokens"
                 break
 

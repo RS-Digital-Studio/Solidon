@@ -8,7 +8,9 @@ ist jede Operation schemageprüft, bevor irgendetwas gerechnet wird.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -17,7 +19,7 @@ from app.core.agent import checks, context, tools
 from app.core.agent.prompt import PROMPT_VERSION
 from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
-from app.core.backends.llm import Reply, ToolCall
+from app.core.backends.llm import Message, Reply, ToolCall
 from app.core.backends.scripted import ScriptedBackend
 from app.core.errors import ValidationError
 from app.core.knowledge import rules
@@ -481,6 +483,110 @@ def test_the_step_limit_is_hard(project: Project, profile: Profile) -> None:
 
     assert proposal.steps == 3
     assert proposal.stopped == "steps"
+
+
+# --- das Zugbudget zählt gewichtet (§26.5) ------------------------------------------
+
+
+class CachingBackend:
+    """Ein Modell, das in jedem Schritt dieselbe markierte Werkzeugliste
+    wiedersieht — so, wie der gehostete Weg sie meldet.
+
+    ``ScriptedBackend`` taugt dafür nicht: Es baut seine Antwort Feld für Feld
+    neu auf und lässt die Zwischenspeicherzahlen dabei liegen. Genau die sind
+    hier die Sache.
+    """
+
+    id = "caching"
+    model = "claude-sonnet-5"
+    supports_images = False
+
+    def __init__(self, reply: Reply) -> None:
+        self.reply = reply
+        self.limits: list[int | None] = []
+        """Was jeder Schritt noch ausgeben durfte — der Deckel deckelt auch
+        die einzelne Antwort."""
+
+    def complete(
+        self,
+        messages: Sequence[Message],
+        tools: Sequence[dict[str, Any]] = (),
+        *,
+        temperature: float = 0.0,
+        max_output_tokens: int | None = None,
+    ) -> Reply:
+        self.limits.append(max_output_tokens)
+        return self.reply
+
+
+def test_the_cached_prompt_does_not_eat_the_turn_budget(project: Project, profile: Profile) -> None:
+    """**§26.5 verspricht acht Schritte, und ungewichtet gab es vier.**
+
+    Die markierte Werkzeugliste wiegt rund 25 000 Token, und jeder Schritt
+    meldet sie erneut als Cache-Lesung. Ungewichtet summierte der Deckel sie
+    Schritt für Schritt zur vollen Höhe — bei 120 000 Token war nach dem
+    fünften Schluss, obwohl die Gegenseite dafür ein Zehntel verlangt. Der
+    Vorschlag hielt mit ``tokens`` an und zeigte einen halben Zug.
+
+    Gewichtet kostet derselbe Schritt 1000 frische Token, 2500 aus dem
+    Zwischenspeicher und 500 Ausgabe: Acht davon sind 32 000, und was den Zug
+    beendet, ist wieder die Schrittgrenze — die Grenze, die ihn beenden soll.
+    """
+    backend = CachingBackend(
+        Reply(
+            tool_calls=(ToolCall(id="1", name="read_digest", arguments={}),),
+            input_tokens=26_000,
+            cache_read_tokens=25_000,
+            output_tokens=500,
+        )
+    )
+    agent = AgentSession(
+        backend=backend,  # type: ignore[arg-type]
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Sieh dir das an")
+
+    assert proposal.steps == 8, "die Schrittgrenze hält an, nicht das Budget"
+    assert proposal.stopped == "steps"
+    assert min(limit for limit in backend.limits if limit is not None) > 80_000, (
+        "und keiner der acht Schritte wird auf einen Rest zusammengedrückt"
+    )
+    # Die Kostenzeile bleibt ungewichtet: Sie sagt, was wirklich geflossen ist.
+    assert (proposal.input_tokens, proposal.output_tokens) == (208_000, 4_000)
+
+
+def test_writing_the_cache_weighs_more_than_plain_input(project: Project, profile: Profile) -> None:
+    """Die Gewichtung lockert den Deckel, sie hebt ihn nicht auf — und in einer
+    Richtung zieht sie ihn an.
+
+    Eine Cache-Schreibung kostet das 1,25-fache regulärer Eingabe. Ein Zug, der
+    einen großen Zwischenspeicher anlegt, stößt deshalb früher an das Budget,
+    als seine Rohsumme vermuten lässt: 10 000 frische plus 1,25 mal 90 000
+    geschriebene sind 122 500 — über der Grenze, während die Rohsumme mit
+    100 000 darunter bliebe und einen zweiten Schritt zugelassen hätte.
+    """
+    backend = CachingBackend(
+        Reply(
+            tool_calls=(ToolCall(id="1", name="read_digest", arguments={}),),
+            input_tokens=100_000,
+            cache_write_tokens=90_000,
+        )
+    )
+    agent = AgentSession(
+        backend=backend,  # type: ignore[arg-type]
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Leg den Zwischenspeicher an")
+
+    assert proposal.steps == 1
+    assert proposal.stopped == "tokens"
+    assert proposal.input_tokens == 100_000, "geflossen sind 100 000, und das sagt der Chat"
 
 
 def test_parameters_are_offered_as_parameters(project: Project, profile: Profile) -> None:

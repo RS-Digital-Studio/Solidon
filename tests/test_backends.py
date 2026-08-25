@@ -4,6 +4,7 @@ heraushält (Bauplan §27).
 
 from __future__ import annotations
 
+import json
 import time
 from typing import Any
 
@@ -1128,6 +1129,64 @@ def test_the_cached_tokens_count_towards_the_budget(monkeypatch: pytest.MonkeyPa
 
     assert reply.input_tokens == 25120, "alle drei Felder, nicht nur das kleinste"
     assert reply.output_tokens == 30
+
+
+def test_the_budget_weighs_a_cache_read_at_a_tenth(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**Zwei Fragen, zwei Zahlen.** Wie viele Token geflossen sind, sagt
+    ``input_tokens``; was der Schritt vom Zugbudget nimmt, ``budget_input_tokens``.
+
+    Die Summe als Deckel zu nehmen war der Fehler dahinter: Die markierte
+    Werkzeugliste geht in jedem Schritt erneut als Cache-Lesung durch die
+    Zählung und kostet dort ein Zehntel. Gewichtet steht hier also ein Zug von
+    25 120 geflossenen Token mit 24 470 im Budget — teuer, weil er den
+    Zwischenspeicher gerade **anlegt** (das 1,25-fache); der nächste Schritt
+    liest ihn nur noch.
+    """
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
+    answer = anthropic_answer()
+    answer["usage"] = {
+        "input_tokens": 120,
+        "cache_creation_input_tokens": 19000,
+        "cache_read_input_tokens": 6000,
+        "output_tokens": 30,
+    }
+
+    reply = AnthropicBackend(transport=Recorder(answer)).complete(
+        [Message(role="user", content="Bohr das")]
+    )
+
+    assert reply.cache_write_tokens == 19000
+    assert reply.cache_read_tokens == 6000
+    assert reply.input_tokens == 25120, "die Kostenzeile bekommt die ungewichtete Summe"
+    assert reply.budget_input_tokens == 24470, "120 + 1,25 * 19000 + 0,1 * 6000"
+
+
+def test_a_reply_without_cache_numbers_weighs_itself(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der lokale Weg meldet keinen Zwischenspeicher, und ein selbst gebautes
+    :class:`Reply` auch nicht. Dann ist die gewichtete Zahl die Rohsumme — sonst
+    hinge an der Gewichtung eine zweite Bedingung, die niemand kennt.
+    """
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
+    local = llm._from_ollama({"message": {"content": "gut"}, "prompt_eval_count": 900}, "qwen3:14b")
+
+    assert local.budget_input_tokens == 900 == local.input_tokens
+    assert Reply(input_tokens=7).budget_input_tokens == 7
+
+
+def test_a_token_count_that_is_too_large_counts_zero() -> None:
+    """JSON kennt kein Unendlich und schreibt es trotzdem hin.
+
+    ``1e400`` wird beim Lesen zu ``inf``, und daraus wird kein ``int``: Das ist
+    ein ``OverflowError``, nicht der ``ValueError``, den der Nachbar unten
+    abfängt. Gefangen wurde also nur die eine Hälfte, und die andere machte aus
+    einer schrägen Zahl einen Programmfehler samt Bitte um Fehlerbericht.
+    """
+    reply = llm._from_anthropic(
+        json.loads('{"content": [], "usage": {"input_tokens": 1e400, "output_tokens": 12}}')
+    )
+
+    assert reply.input_tokens == 0
+    assert reply.output_tokens == 12, "die brauchbare Zahl daneben bleibt brauchbar"
 
 
 def test_a_truncated_answer_says_so(monkeypatch: pytest.MonkeyPatch) -> None:

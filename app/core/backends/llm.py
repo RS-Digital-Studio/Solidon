@@ -103,6 +103,25 @@ TRUNCATED_STOPS: Final = frozenset({"max_tokens", "length"})
 #: starren, der nichts getan hat.
 REFUSAL_STOPS: Final = frozenset({"refusal", "content_filter"})
 
+#: Was eine **gelesene** Zwischenspeicherzeile im Zugbudget wiegt.
+#:
+#: Ein Zehntel eines regulären Eingabe-Tokens — so rechnet die Gegenseite sie
+#: ab (Preisstand 08/2026, Anthropic: reguläre Eingabe einfach, eine Lesung ein
+#: Zehntel, eine Schreibung das 1,25-fache bei fünf Minuten Haltezeit).
+#:
+#: Warum das Budget überhaupt wiegt, statt zu zählen: Die markierte
+#: Werkzeugliste wiegt rund 25 000 Token, und **jeder** Schritt meldet sie
+#: erneut als ``cache_read``. Ungewichtet war das Budget aus §26.5 damit nach
+#: vier von acht Schritten erschöpft, obwohl die Gegenseite dafür ein Zehntel
+#: verlangt hatte.
+CACHE_READ_WEIGHT: Final = 0.1
+
+#: Und was das **Schreiben** in den Zwischenspeicher wiegt: das 1,25-fache
+#: (derselbe Preisstand). Es passiert einmal je Zug — beim ersten Schritt, der
+#: die Markierung anlegt —, und es ist tatsächlich teurer als reguläre
+#: Eingabe. Deshalb wird es aufgewertet und nicht einfach mitgezählt.
+CACHE_WRITE_WEIGHT: Final = 1.25
+
 
 @dataclass(frozen=True, slots=True)
 class Reply:
@@ -114,7 +133,7 @@ class Reply:
     stop_reason: str = ""
     input_tokens: int = 0
     """Alle Eingabe-Token dieses Schrittes — **einschließlich der
-    zwischengespeicherten**.
+    zwischengespeicherten**, und **ungewichtet**.
 
     Anthropic zählt bei ``cache_control`` getrennt: ``input_tokens`` sind nur
     die *neuen*, ``cache_creation_input_tokens`` und
@@ -122,8 +141,47 @@ class Reply:
     auf Systemblock und Werkzeugliste (:meth:`AnthropicBackend.complete`), und
     das ist der weitaus größte Teil des Prompts: Gezählt wurde also der
     kleinste. Zugbudget und Kostenanzeige maßen damit an einem Zug von 25 000
-    Token ein paar hundert."""
+    Token ein paar hundert.
+
+    Das ist die **ehrliche** Zahl: so viele Token sind wirklich geflossen, und
+    genau sie zeigt die Kostenzeile des Chats. Was der Zug vom Budget nimmt,
+    steht daneben in :attr:`budget_input_tokens` — zwei Fragen, zwei
+    Auskünfte."""
+    cache_read_tokens: int = 0
+    """Der Teil von :attr:`input_tokens`, der aus dem Zwischenspeicher der
+    Gegenseite kam (``cache_read_input_tokens``)."""
+    cache_write_tokens: int = 0
+    """Der Teil von :attr:`input_tokens`, der in den Zwischenspeicher
+    geschrieben wurde (``cache_creation_input_tokens``)."""
     output_tokens: int = 0
+
+    @property
+    def budget_input_tokens(self) -> int:
+        """Was dieser Schritt vom Zugbudget nimmt (§26.5) — gewichtet.
+
+        Die Rohsumme taugt als Deckel nicht, und der Grund ist die
+        Wiederholung: Die markierte Werkzeugliste geht in jedem Schritt erneut
+        als Cache-Lesung durch die Zählung, kostet dort aber ein Zehntel. Bei
+        120 000 Token Budget war die Grenze nach vier Schritten erreicht, bei
+        acht erlaubten — der Vorschlag blieb halbfertig stehen und meldete
+        ``stopped="tokens"``.
+
+        Gewichtet wird nach dem Preis der Gegenseite
+        (:data:`CACHE_READ_WEIGHT`, :data:`CACHE_WRITE_WEIGHT`), denn das
+        Budget ist ein Kostendeckel und keine Zeichenzählung. Die **Ausgabe**
+        bleibt draußen: Sie wird nicht zwischengespeichert, hat also nichts zu
+        gewichten, und die Sitzung addiert sie selbst dazu.
+        """
+        # Was weder gelesen noch geschrieben wurde, ist frisch verrechnete
+        # Eingabe und zählt voll. Ein lokales Modell meldet keine der beiden
+        # Zahlen — dort ist die gewichtete Summe die Rohsumme.
+        fresh = max(0, self.input_tokens - self.cache_read_tokens - self.cache_write_tokens)
+        weighted = (
+            fresh
+            + CACHE_WRITE_WEIGHT * self.cache_write_tokens
+            + CACHE_READ_WEIGHT * self.cache_read_tokens
+        )
+        return round(weighted)
 
     @property
     def wants_tools(self) -> bool:
@@ -397,8 +455,11 @@ Zwei Eigenheiten der Thinking-Modelle, die niemandem auffallen, bevor er sie
 sucht: Die ``thinking``-Blöcke der Antwort reisen bei einem mehrschrittigen Zug
 **nicht** zurück — :func:`_from_anthropic` liest nur ``text`` und ``tool_use``,
 und der nächste Schritt baut seine Nachrichten neu auf. Das kostet Kontext,
-aber es bricht nichts. Und ``stop_reason`` kann ``"refusal"`` heißen; der Wert
-wird durchgereicht, aber nicht eigens behandelt.
+aber es bricht nichts. Und ``stop_reason`` kann ``"refusal"`` heißen — der Wert
+wird seit dem 25.08.2026 auch behandelt: :data:`REFUSAL_STOPS` erkennt ihn,
+:attr:`Reply.refused` sagt es, und die Sitzung hält damit an und legt einen
+Befund dazu (``agent/session.py``). Bis dahin wurde er durchgereicht und
+nirgends gelesen, und eine Ablehnung sah aus wie ein Zug ohne Fund.
 """
 
 #: Modelle, die ``temperature`` noch annehmen.
@@ -608,6 +669,8 @@ def _from_anthropic(answer: dict[str, Any]) -> Reply:
         model=str(answer.get("model", "")),
         stop_reason=str(answer.get("stop_reason") or ""),
         input_tokens=_input_tokens(usage),
+        cache_read_tokens=_count(usage, CACHE_READ_FIELD),
+        cache_write_tokens=_count(usage, CACHE_WRITE_FIELD),
         output_tokens=_count(usage, "output_tokens"),
     )
 
@@ -618,15 +681,25 @@ def _count(usage: dict[str, Any], key: str) -> int:
     ``int("viele")`` warf einen ``ValueError`` und machte aus einer schrägen
     Angabe einen Programmfehler. Eine fehlende Zählung ist kein Grund, einen
     fertigen Zug wegzuwerfen — sie ist ein Grund, null zu zählen.
+
+    **Und eine Zahl kann zu groß sein, statt keine zu sein.** JSON kennt kein
+    Unendlich, sein Zahlenformat schreibt es trotzdem hin: Aus einem Feld mit
+    ``1e400`` macht ``json.loads`` ein ``inf``, und daraus wird kein ``int`` —
+    das ist ein ``OverflowError`` und kein ``ValueError``, also ein zweiter
+    Weg zum selben Programmfehler. Beide zählen null.
     """
     value = usage.get(key, 0)
     if isinstance(value, bool) or not isinstance(value, int | float | str):
         return 0
     try:
         return int(float(value))
-    except ValueError:
+    except (ValueError, OverflowError):
         return 0
 
+
+#: Wie Anthropic die zwischengespeicherten Eingabe-Token benennt.
+CACHE_WRITE_FIELD: Final = "cache_creation_input_tokens"
+CACHE_READ_FIELD: Final = "cache_read_input_tokens"
 
 #: Wie Anthropic die Eingabe zählt, wenn ein Zwischenspeicher im Spiel ist.
 #:
@@ -636,14 +709,18 @@ def _count(usage: dict[str, Any], key: str) -> int:
 #: verbraucht hat — und zeigt dieselbe falsche Zahl als Kosten an.
 CACHE_TOKEN_FIELDS: Final = (
     "input_tokens",
-    "cache_creation_input_tokens",
-    "cache_read_input_tokens",
+    CACHE_WRITE_FIELD,
+    CACHE_READ_FIELD,
 )
 
 
 def _input_tokens(usage: dict[str, Any]) -> int:
     """Alle Eingabe-Token, auch die aus dem Zwischenspeicher
-    (:data:`CACHE_TOKEN_FIELDS`)."""
+    (:data:`CACHE_TOKEN_FIELDS`) — **ungewichtet**.
+
+    Das ist die Zahl für die Kostenzeile: so viel ist geflossen. Was davon das
+    Zugbudget belastet, rechnet :attr:`Reply.budget_input_tokens`.
+    """
     return sum(_count(usage, field_name) for field_name in CACHE_TOKEN_FIELDS)
 
 

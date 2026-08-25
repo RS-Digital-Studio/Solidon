@@ -66,6 +66,10 @@ class ScriptedBackend:
             stop_reason=reply.stop_reason or ("tool_use" if reply.tool_calls else "end_turn"),
             input_tokens=reply.input_tokens,
             output_tokens=reply.output_tokens,
+            # Die Cache-Zahlen reisen mit, sonst misst ein Szenario mit
+            # ihnen stillschweigend ungewichtet — das Budget rechnet damit.
+            cache_read_tokens=reply.cache_read_tokens,
+            cache_write_tokens=reply.cache_write_tokens,
         )
 
     @property
