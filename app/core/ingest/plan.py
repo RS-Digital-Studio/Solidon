@@ -24,6 +24,7 @@ from typing import Final
 
 from app.core.brep import step as brep_step
 from app.core.export import threemf
+from app.core.ingest.loader import check_limits, check_unpacked
 from app.core.ingest.outline import is_outline
 from app.core.scene.history import OperationDraft
 from app.i18n import TranslatableText, _
@@ -45,9 +46,11 @@ class ImportPlan:
     asks_unit: bool
     """Ob die Einheitenfrage überhaupt gestellt werden muss.
 
-    Nur ein Netz hat sie. STEP trägt seine Einheit selbst, und eine flache
-    Zeichnung hat keine dritte Dimension, bis jemand sagt, wie dick sie sein
-    soll (§25, §30, §11.1) — dort wäre die Frage eine Zumutung ohne Zweck.
+    Nur ein Netz hat sie, und auch das nicht immer. STEP trägt seine Einheit
+    selbst, und eine flache Zeichnung hat keine dritte Dimension, bis jemand
+    sagt, wie dick sie sein soll (§25, §30, §11.1) — dort wäre die Frage eine
+    Zumutung ohne Zweck. Eine 3MF sagt ihre Einheit ebenfalls selbst, sofern
+    sie das ``unit``-Attribut führt.
     """
 
 
@@ -72,7 +75,24 @@ def import_plan(source_id: str, name: str, payload: bytes, unit: str = "auto") -
             draft=OperationDraft(op="load_outline", params={"source": source_id}),
             asks_unit=False,
         )
-    parts = threemf.count_objects(payload) if suffix.lower() == ".3mf" else 1
+    parts = 1
+    asks = True
+    if suffix.lower() == ".3mf":
+        # **Die Grenze steht vor dem Parsen.** Zählen heißt bei einer 3MF, das
+        # ganze XML zu lesen, und das geschieht hier — im Hauptthread, bevor
+        # irgendeine Operation läuft. Eine Datei von 1,9 MB wird dabei zu
+        # 660 MB im Speicher. ``check_unpacked`` gibt es für genau diesen Fall
+        # (§32); es lief nur an der falschen Stelle, nämlich erst in der
+        # Operation. Die Zahlen dafür stehen im zentralen Verzeichnis des
+        # Archivs — geprüft wird, ohne ein Byte des Inhalts zu lesen.
+        check_limits(len(payload), 0)
+        check_unpacked(payload)
+        parts = threemf.count_objects(payload)
+        # Eine 3MF trägt ihre Einheit im ``unit``-Attribut. Wo sie dasteht,
+        # stellt die Operation die Frage nicht — und dann darf der Aufrufer
+        # sie auch nicht vorweg stellen: Die Kommandozeile tat es, und ihre
+        # Antwort hätte die Angabe der Datei überschrieben.
+        asks = threemf.declared_unit(payload) is None
     return ImportPlan(
         title=_TITLES["load"],
         draft=OperationDraft(
@@ -80,5 +100,5 @@ def import_plan(source_id: str, name: str, payload: bytes, unit: str = "auto") -
             params={"source": source_id, "unit": unit},
             produces=max(parts, 1),
         ),
-        asks_unit=True,
+        asks_unit=asks,
     )

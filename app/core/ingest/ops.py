@@ -15,7 +15,8 @@ from typing import cast
 
 from app.core.errors import InternalError, ValidationError
 from app.core.export import threemf
-from app.core.geom.mesh import MeshData, read_mesh
+from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
+from app.core.geom.transform import apply, scaling, translation
 from app.core.ingest import outline
 from app.core.ingest.loader import (
     IngestResult,
@@ -35,10 +36,28 @@ from app.core.types import (
     SceneObject,
     Vec3,
 )
-from app.core.units import LengthUnit, format_length, to_mm
+from app.core.units import LengthUnit, format_length, is_zero, to_mm
 from app.i18n import _
 
 _UNIT_CHOICES = ("auto", "mm", "cm", "in", "m")
+
+#: Was eine 3MF über sich sagt, ausgedrückt in dem, was der Kern kennt (§11.1):
+#: eine seiner vier Einheiten und ein Faktor davor, wo das Format feiner
+#: unterteilt.
+#:
+#: Mikrometer und Fuß sind der Grund für den Faktor. Beide sind gültige
+#: 3MF-Einheiten, keine der vier Antworten der Einheitenfrage trifft sie, und
+#: eine Datei in Mikrometern ließ sich damit nur falsch importieren. Fuß geht
+#: exakt in zwölf Zoll auf — der Faktor kostet also keine Genauigkeit, er
+#: benennt sie.
+_DECLARED_UNITS: dict[str, tuple[LengthUnit, float | None]] = {
+    "micron": ("mm", 0.001),
+    "millimeter": ("mm", None),
+    "centimeter": ("cm", None),
+    "inch": ("in", None),
+    "foot": ("in", 12.0),
+    "meter": ("m", None),
+}
 
 
 @op_params
@@ -135,15 +154,41 @@ def load(ctx: OpContext) -> OpResult:
     # Der größte Körper der Datei stellt die Frage: seine Diagonale entscheidet
     # die Heuristik, und seine Kantenmaße sind das, was die Rückfrage zeigt.
     biggest = max((part.mesh.bounds for part in parts), key=lambda bounds: bounds.diagonal)
-    unit = _unit_for(ctx, params, biggest)
-    # §15.7: Wurde die Einheit erfragt, wird sie aufgeschrieben. Ohne das käme
-    # die Frage bei jeder Auswertung wieder — und mit einem Cache, der länger
-    # lebt als die Sitzung, käme sie irgendwann *nicht* wieder, und der Nutzer
-    # bekäme eine Annahme, ohne sie zu sehen (Regel 21).
-    answered = {"unit": str(unit)} if params.unit == "auto" else {}
+    # **Erst die Datei, dann die Heuristik, dann die Frage.** Eine 3MF trägt
+    # ihre Einheit im ``unit``-Attribut, und solange sie ungelesen blieb, wurde
+    # über eine Datei gerätselt, die die Antwort mitbrachte. Was im Stapel
+    # steht, geht weiter vor: Wer die Einheit von Hand setzt, korrigiert auch
+    # eine Datei, die sich irrt.
+    stated = _stated_unit(payload, suffix) if params.unit == "auto" else None
+    findings: list[Finding] = []
+    if stated is not None:
+        declared, unit, factor = stated
+        # Nicht aufgeschrieben: Die Datei sagt es beim nächsten Mal wieder, und
+        # ein Faktor (Mikrometer, Fuß) ließe sich im Parameter gar nicht
+        # ausdrücken — er ginge bei der nächsten Auswertung verloren.
+        answered: dict[str, str] = {}
+        if factor is not None:
+            parts = [
+                dataclasses.replace(part, mesh=apply(part.mesh, scaling((factor, factor, factor))))
+                for part in parts
+            ]
+            findings.append(
+                Finding(
+                    code="ingest.declared_unit",
+                    severity="info",
+                    message=_("Die Datei nennt ihre Einheit selbst; sie wurde umgerechnet."),
+                    values={"unit": declared, "scale": factor},
+                )
+            )
+    else:
+        unit = _unit_for(ctx, params, biggest)
+        # §15.7: Wurde die Einheit erfragt, wird sie aufgeschrieben. Ohne das
+        # käme die Frage bei jeder Auswertung wieder — und mit einem Cache, der
+        # länger lebt als die Sitzung, käme sie irgendwann *nicht* wieder, und
+        # der Nutzer bekäme eine Annahme, ohne sie zu sehen (Regel 21).
+        answered = {"unit": str(unit)} if params.unit == "auto" else {}
 
     outputs: list[SceneObject] = []
-    findings: list[Finding] = []
     for index, part in enumerate(parts):
         ctx.progress(index / len(parts), str(_("Modell laden")))
         result: IngestResult = normalise(
@@ -152,9 +197,10 @@ def load(ctx: OpContext) -> OpResult:
             weld=params.weld,
             remove_degenerate=params.remove_degenerate,
             unify_normals=params.unify_normals,
-            # Eine Baugruppe wird so platziert, wie die Datei sie platziert hat:
-            # jeden Körper für sich auf Z = 0 abzusetzen nähme einem Gehäuse den
-            # Deckel ab und stapelte die Teile aufeinander.
+            # Jeden Körper für sich auf Z = 0 abzusetzen nähme einem Gehäuse den
+            # Deckel ab und stapelte die Teile aufeinander. Eine Baugruppe geht
+            # deshalb **gemeinsam** aufs Bett, unten nach der Schleife — nicht
+            # gar nicht.
             place_on_bed=params.place_on_bed and len(parts) == 1,
             progress=ctx.progress,
         )
@@ -164,6 +210,9 @@ def load(ctx: OpContext) -> OpResult:
         findings.extend(
             _named(result.findings, part.name) if len(parts) > 1 else list(result.findings)
         )
+
+    if params.place_on_bed and len(outputs) > 1:
+        outputs = _group_on_bed(outputs, findings)
 
     if len(parts) > 1:
         findings.append(
@@ -273,6 +322,59 @@ def _colour_groups(
     if groups is None:
         return mesh, []
     return MeshData(raw=mesh.raw, slots=groups.slots), list(groups.materials)
+
+
+def _group_on_bed(outputs: list[SceneObject], findings: list[Finding]) -> list[SceneObject]:
+    """Setzt eine Baugruppe **als Ganzes** auf Z = 0 (§17.1, Schritt 6).
+
+    Der Haken war für eine Baugruppe wirkungslos, und zwar stillschweigend:
+    Wer ihn setzte, bekam eine Datei, die lag, wo sie lag, ohne ein Wort
+    darüber. Der Grund dafür war richtig — jeden Körper einzeln abzusetzen
+    stapelte Gehäuse, Deckel und Tülle aufeinander —, die Folgerung nicht: Was
+    zusammengehört, wird zusammen verschoben, und dann ist der tiefste Punkt
+    der Gruppe der, der auf null kommt.
+
+    Steht die Gruppe schon unten, geschieht nichts und wird nichts gemeldet:
+    ein Befund über eine Verschiebung um null wäre Lärm.
+    """
+    lowest = min(float(as_mesh_data(entry.mesh).bounds.minimum[2]) for entry in outputs)
+    if is_zero(lowest):
+        return outputs
+
+    lift = translation((0.0, 0.0, -lowest))
+    moved = [
+        dataclasses.replace(entry, mesh=apply(as_mesh_data(entry.mesh), lift)) for entry in outputs
+    ]
+    findings.append(
+        Finding(
+            code="load.assembly_on_bed",
+            severity="info",
+            message=_(
+                "Die Baugruppe wurde als Ganzes auf das Bett gesetzt — die Teile behalten "
+                "ihre Lage zueinander."
+            ),
+            values={"amount": format_length(-lowest)},
+        )
+    )
+    return moved
+
+
+def _stated_unit(payload: bytes, suffix: str) -> tuple[str, LengthUnit, float | None] | None:
+    """Was die Datei selbst über ihre Einheit sagt (§17.1).
+
+    Zurück kommt ihr eigenes Wort dafür, die Einheit des Kerns dazu und der
+    Faktor, wo das Format feiner unterteilt. Das eigene Wort, weil es in den
+    Befund gehört: „foot" ist die Auskunft, „in mal zwölf" ist die Rechnung.
+
+    Nur 3MF sagt etwas: STL, OBJ und PLY tragen keine Einheit, und STEP geht
+    einen anderen Weg. ``None`` heißt „schweigt" — dann entscheidet die
+    Heuristik, und im Zweifel der Nutzer.
+    """
+    if suffix.lower() != ".3mf":
+        return None
+    declared = threemf.declared_unit(payload)
+    known = _DECLARED_UNITS.get(declared or "")
+    return (declared or "", *known) if known is not None else None
 
 
 def unit_question(size: Vec3, candidates: Sequence[LengthUnit]) -> str:

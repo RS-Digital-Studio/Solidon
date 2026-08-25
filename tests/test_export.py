@@ -12,7 +12,7 @@ from xml.etree import ElementTree as ET
 import pytest
 import trimesh
 
-from app.core.errors import ValidationError
+from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
 from app.core.export import threemf
 from app.core.export.writer import (
     arrangement_holds,
@@ -85,6 +85,40 @@ def test_the_scheme_can_be_changed(profile: Profile) -> None:
         [scene_object()], project_name="P", profile=profile, scheme="{object}-{index}"
     )
     assert plan.entries[0].filename == "Halterung-1.stl"
+
+
+def test_a_typo_in_the_scheme_names_the_placeholders(profile: Profile) -> None:
+    """``--scheme "{name}"`` endete in einem rohen ``KeyError``.
+
+    Das Schema ist eine Eingabe des Nutzers — in der Kommandozeile getippt, im
+    Dialog eingetragen —, und der Platzhalter heißt ``{object}``. Ein
+    Stapelabzug sagt ihm das nicht; er sagt ihm nicht einmal, dass er selbst
+    etwas ändern kann (§2.7, Regel 17).
+    """
+    with pytest.raises(ValidationError) as falsch:
+        plan_export(
+            [scene_object()],
+            project_name="Projekt",
+            profile=profile,
+            scheme="{name}_{index}",
+        )
+
+    assert falsch.value.field == "scheme"
+    assert falsch.value.values["requested"] == "{name}"
+    known = str(falsch.value.values["known"])
+    for platzhalter in ("{project}", "{object}", "{index}", "{count}", "{plate}"):
+        assert platzhalter in known, platzhalter
+    assert falsch.value.suggestions
+
+
+def test_a_scheme_with_a_stray_brace_says_so(profile: Profile) -> None:
+    """Der zweite Weg, dasselbe falsch zu tippen — und er wirft eine andere
+    Ausnahme, die genauso roh durchflog."""
+    with pytest.raises(ValidationError) as kaputt:
+        plan_export([scene_object()], project_name="Projekt", profile=profile, scheme="{project")
+
+    assert kaputt.value.constraint == "broken_scheme"
+    assert kaputt.value.suggestions
 
 
 def test_exporting_nothing_is_a_user_error(profile: Profile) -> None:
@@ -395,6 +429,38 @@ def test_the_assembly_reports_before_writing(tmp_path: Path, profile: Profile) -
     assert findings, "aber der Befund steht dabei"
 
 
+@pytest.mark.parametrize("flavour", ["orca", "cura"])
+def test_an_assembly_that_cannot_be_written_names_the_way_out(
+    tmp_path: Path, profile: Profile, flavour: str
+) -> None:
+    """Ein ``OSError`` ist kein Programmfehler, sondern ein Ziel, das nicht
+    geht (§2.7).
+
+    ``write_plan`` wandelt ihn seit je; die Baugruppe daneben tat es nicht —
+    dieselbe Handlung, zwei Antworten. In der Kommandozeile endete sie in
+    einem Stapelabzug, im Fenster stiller und schlimmer: Der Export-Arbeiter
+    fängt ``AppError``, ein ``OSError`` riss den Thread ab, und danach geschah
+    gar nichts mehr.
+
+    Beide Wege, denn es sind zwei Schreibstellen: die Orca-Familie bekommt
+    eine 3MF, CuraEngine ein STL.
+    """
+    versperrt = tmp_path / "platte"
+    versperrt.write_bytes(b"eine Datei, kein Ordner")
+
+    with pytest.raises(FileWriteError) as gescheitert:
+        write_assembly(
+            [scene_object()],
+            versperrt,
+            project_name="Projekt",
+            profile=profile,
+            flavour=flavour,  # type: ignore[arg-type]
+        )
+
+    assert gescheitert.value.suggestions, "Regel 17"
+    assert gescheitert.value.detail, "der Grund des Betriebssystems steht dabei"
+
+
 # --- Einstellungen je Teil (§29, Stufe 4) -------------------------------------------
 
 
@@ -586,10 +652,13 @@ def test_parts_without_a_named_filament_stay_together() -> None:
 # --- die Anordnung geht nur mit, wenn sie eine ist (§29) ------------------------
 
 
-def at(x: float, y: float, size: float = 20.0) -> MeshData:
-    """Ein Würfel mit seiner Mitte auf (x, y), auf der Platte stehend."""
+def at(x: float, y: float, size: float = 20.0, z: float = 0.0) -> MeshData:
+    """Ein Würfel mit seiner Mitte auf (x, y), auf der Platte stehend.
+
+    ``z`` hebt oder senkt ihn — die Unterkante liegt dann dort statt auf null.
+    """
     cube = trimesh.creation.box((size, size, size))
-    cube.apply_translation((x, y, size / 2.0))
+    cube.apply_translation((x, y, size / 2.0 + z))
     return MeshData.of(cube)
 
 
@@ -608,6 +677,34 @@ def test_a_part_outside_the_bed_is_not(profile: Profile) -> None:
     """Der Bauraum des Testprofils ist 256 mm; ein Würfel bei x = 200 ragt
     über die Kante."""
     assert not arrangement_holds([at(200.0, 0.0)], profile)
+
+
+def test_a_part_sunk_into_the_bed_is_no_arrangement(profile: Profile) -> None:
+    """Geprüft wurde nur nach oben — und die Anordnung wird beim Slicer
+    **durchgesetzt** (``--arrange 0``).
+
+    Ein Teil bei z = -15 steckt zur Hälfte im Druckbett. Der Slicer ordnet
+    nicht an, weil Solidon sagt, die Anordnung halte; er schneidet ab, was
+    unter null liegt, und druckt einen halben Körper. Die Grenze ist dieselbe
+    wie in ``check_build_volume``: unter dem Bett ist unter dem Bett.
+    """
+    assert not arrangement_holds([at(0.0, 0.0, z=-15.0)], profile)
+    assert not arrangement_holds([at(-30.0, 0.0), at(30.0, 0.0, z=-15.0)], profile)
+
+
+def test_a_floating_part_is_no_arrangement(profile: Profile) -> None:
+    """Und die andere Richtung: Ein Teil bei z = 50 hängt in der Luft.
+
+    Mit übernommener Anordnung druckt der Slicer es dort — fünfzig Millimeter
+    Stützmaterial oder ein Klumpen auf der Platte. Wird stattdessen ihm das
+    Anordnen überlassen, setzt er es ab, und genau dafür gibt es diese
+    Prüfung.
+
+    Die Grenze ist die von ``prepare._floats``: ein Hundertstelmillimeter ist
+    Rundung, darüber ist ein Spalt.
+    """
+    assert not arrangement_holds([at(0.0, 0.0, z=50.0)], profile)
+    assert arrangement_holds([at(0.0, 0.0, z=0.005)], profile), "Rundung ist kein Schweben"
 
 
 def test_nothing_at_all_is_no_arrangement(profile: Profile) -> None:
@@ -798,6 +895,59 @@ def test_a_mixed_selection_names_the_body_that_cannot_go(profile: Profile) -> No
 
     betroffen = [f.object_id for f in plan.findings if f.code == "export.needs_solid"]
     assert betroffen == ["obj_1"], "nur das Netz, nicht der exakte Körper"
+
+
+def test_a_mixed_step_export_writes_the_solids_and_leaves_the_meshes(
+    tmp_path: Path, profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Zusage der Prüfung wird eingelöst, statt beim ersten Netz
+    abzubrechen.
+
+    ``check_before_export`` sagt es je Objekt, „weil der Export die exakten
+    Körper schreibt und die Netze auslässt" — geschrieben wurde stattdessen
+    bis zum ersten Netz, und dann flog der Fehler. Was schon auf der Platte
+    lag, blieb liegen: ein halber Export mit einer Fehlermeldung darüber.
+
+    Der zweite Kern ist hier nicht installiert, also schreibt eine Attrappe
+    die Bytes; geprüft wird der Ablauf, nicht der Inhalt einer STEP-Datei.
+    """
+    from app.core.export import writer
+
+    monkeypatch.setattr(writer, "_step_bytes", lambda body, name="": b"ISO-10303-21;\n")
+    plan = plan_export(
+        [scene_object(), _solid(), scene_object("obj_3", "Winkel")],
+        project_name="Projekt",
+        profile=profile,
+        export_format="step",
+    )
+
+    written = write_plan(plan, tmp_path, "step")
+
+    assert [entry.name for entry in written] == ["Projekt_Flansch_2von3.step"]
+    assert {
+        finding.object_id for finding in plan.findings if finding.code == "export.needs_solid"
+    } == {
+        "obj_1",
+        "obj_3",
+    }, "und der Bericht nennt die beiden, die nicht gehen"
+
+
+def test_step_for_meshes_alone_still_refuses(tmp_path: Path, profile: Profile) -> None:
+    """Die Grenze der Nachsicht: Bleibt nichts übrig, wird nichts geschrieben
+    — und das wird gesagt.
+
+    Ein Aufruf, der leise null Dateien schreibt und Erfolg meldet, ist
+    schlimmer als der Fehler davor.
+    """
+    plan = plan_export(
+        [scene_object()], project_name="Projekt", profile=profile, export_format="step"
+    )
+
+    with pytest.raises(NeedsSolidError) as caught:
+        write_plan(plan, tmp_path, "step")
+
+    assert caught.value.suggestions, "Regel 17"
+    assert not list(tmp_path.iterdir()), "und keine halbe Bescherung im Ordner"
 
 
 @pytest.mark.parametrize("export_format", ["stl", "3mf", "obj", "ply"])

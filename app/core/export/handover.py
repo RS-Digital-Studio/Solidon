@@ -31,10 +31,15 @@ from typing import Final
 from app.core import activation, discover
 from app.core.errors import (
     ARRANGE_ON_BED,
+    CANCEL,
+    CHANGE_SELECTION,
     INSTALL_MISSING,
+    OPEN_SETTINGS,
+    RETRY,
     SCALE_TO_FIT,
     Action,
     ExternalToolError,
+    FileWriteError,
     OperationCancelled,
 )
 from app.core.export import slicer_keys, slicer_profiles
@@ -61,6 +66,11 @@ TIMEOUT_SECONDS: Final = 300.0
 
 #: Wonach im Ausgabeordner gesucht wird — die Slicer benennen selbst.
 GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g")
+
+#: Wie die Druckdatei heißt, wo Solidon den Namen selbst nennt — PrusaSlicer
+#: über ``--output``, CuraEngine über ``-o``. Die Orca-Familie benennt selbst
+#: und hängt Plattennummern an; für sie gibt es keinen erwarteten Namen.
+OUTPUT_NAME: Final = "solidon.gcode"
 
 #: Was in einem Profil „dazu sage ich nichts" heißt. Ein Filamentprofil, das
 #: den Rückzug auf ``nil`` stellt, widerspricht Solidon nicht — es überlässt
@@ -1148,7 +1158,7 @@ def _command(
             "--load",
             str(config.process),
             "--output",
-            str(output / "solidon.gcode"),
+            str(output / OUTPUT_NAME),
             *files,
         ]
 
@@ -1160,6 +1170,10 @@ def _command(
         # ab, er öffnet einen Pfad. Steht dort ein Name, endet der Lauf mit
         # „can not find setting file", noch bevor das Modell an die Reihe kommt.
         machine = profile_file(setup.machine_profile, setup, "machine")
+        # Der Trenner steht im Pfad: geprüft, bevor der Slicer daran scheitert.
+        _without_separator(
+            [*([machine] if machine else []), config.process, *config.filaments], setup
+        )
         settings_arg = f"{machine};{config.process}" if machine else str(config.process)
         arguments = [binary, "--load-settings", settings_arg]
         # Das Filament kommt über einen eigenen Schalter. Es mit in
@@ -1209,8 +1223,44 @@ def _command(
     arguments += values
     for entry in files:
         arguments += ["-l", entry]
-    arguments += ["-o", str(output / "solidon.gcode")]
+    arguments += ["-o", str(output / OUTPUT_NAME)]
     return arguments
+
+
+#: Womit die Orca-Familie mehrere Profile in einem Argument trennt.
+PROFILE_SEPARATOR: Final = ";"
+
+
+def _without_separator(paths: Sequence[Path], setup: SlicerSetup) -> None:
+    """Hält an, wenn ein Profilpfad den Trenner selbst enthält (§28).
+
+    ``--load-settings`` und ``--load-filaments`` nehmen mehrere Dateien in
+    **einem** Argument, getrennt durch Semikolon. Ein Semikolon im Pfad macht
+    daraus zwei Pfade, und der Slicer antwortet mit „can not find setting
+    file" über eine Datei, die es so nie gab — die Meldung zeigt dann auf ein
+    Profil und die Ursache liegt im Ordnernamen.
+
+    **Abgelehnt statt maskiert, und das ist keine Bequemlichkeit.** Für diesen
+    Schalter ist nirgends zugesagt, wie man den Trenner maskiert; eine
+    geratene Maskierung ergäbe wieder eine Slicer-Meldung über einen Pfad, den
+    niemand geschrieben hat. Ein Satz, der die Lage benennt, ist mehr wert als
+    ein Versuch, der still danebengeht (Regel 21).
+
+    Der Fall ist selten und nicht erfunden: Der Arbeitsordner liegt unter dem
+    Nutzerverzeichnis, und ein Semikolon ist dort ein erlaubtes Zeichen.
+    """
+    marked = [str(entry) for entry in paths if PROFILE_SEPARATOR in str(entry)]
+    if not marked:
+        return
+    raise ExternalToolError(
+        tool=setup.name,
+        detail=_(
+            "Ein Profilpfad enthält ein Semikolon. Dieser Slicer trennt damit seine "
+            "Profile und liest den Pfad als zwei."
+        ),
+        values={"path": ", ".join(marked)},
+        suggestions=(OPEN_SETTINGS, CANCEL),
+    )
 
 
 def _cura_base(executable: Path) -> str:
@@ -1469,9 +1519,15 @@ def slice_model(
     # Sicht wirklich nicht gibt.
     models = [entry.resolve() for entry in ([model] if isinstance(model, Path) else model)]
     if not models:
+        # **Nicht die geerbten Vorschläge.** ``ExternalToolError`` bietet als
+        # erstes „Zusätzliche Programme …" an, und das ist hier die falsche
+        # Antwort: Es fehlt kein Programm, es fehlt ein Teil auf der Platte.
+        # Ein Knopf, der in eine Liste führt, die mit dem Fehler nichts zu tun
+        # hat, ist schlechter als keiner (Regel 17).
         raise ExternalToolError(
             tool=setup.name,
             detail=_("Es wurde nichts zum Slicen übergeben."),
+            suggestions=(CHANGE_SELECTION, CANCEL),
         )
     missing = [entry for entry in models if not entry.is_file()]
     if missing:
@@ -1479,6 +1535,9 @@ def slice_model(
             tool=setup.name,
             detail=_("Die zu slicende Datei ist nicht da."),
             values={"path": ", ".join(entry.name for entry in missing)},
+            # Die Datei ist zwischen Export und Lauf verschwunden. Was hilft,
+            # ist derselbe Weg noch einmal — er schreibt sie neu.
+            suggestions=(RETRY, CANCEL),
         )
     if not setup.executable.is_file():
         raise ExternalToolError(
@@ -1496,7 +1555,15 @@ def slice_model(
         # neben sein Arbeitsverzeichnis statt dorthin, wo die Datei erwartet
         # wird — und ``_find_gcode`` sucht an der leeren Stelle.
         target = (output_dir if output_dir is not None else workspace).resolve()
-        target.mkdir(parents=True, exist_ok=True)
+        try:
+            target.mkdir(parents=True, exist_ok=True)
+        except OSError as problem:
+            # Ein gewähltes Ziel, das keines ist — schreibgeschützt oder
+            # bereits eine Datei. Roh geworfen riss es den Arbeits-Thread ab.
+            raise FileWriteError(
+                target=str(problem.filename or target),
+                detail=str(problem.strerror or problem),
+            ) from problem
 
         completed = _run_slicer(
             _command(setup, models, config, target, keep_arrangement),
@@ -1505,7 +1572,9 @@ def slice_model(
             setup,
             cancelled,
         )
-        produced = _find_gcode(target)
+        # Der Name, den wir selbst genannt haben — die Orca-Familie benennt
+        # selbst, für sie bleibt es bei der jüngsten Datei.
+        produced = _find_gcode(target, "" if setup.flavour == "orca" else OUTPUT_NAME)
         if produced is None:
             # Beide Ströme: die Orca-Familie protokolliert auf stdout und
             # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
@@ -1568,9 +1637,7 @@ def slice_model(
         if output_dir is None:
             # Der Ordner verschwindet gleich; die Datei muss den Aufrufer noch
             # erreichen können, also wandert sie neben das Modell.
-            kept = models[0].with_suffix(".gcode")
-            kept.write_bytes(produced.read_bytes())
-            produced = kept
+            produced = _kept_beside(models[0], produced)
 
     findings = [
         *profile_differences(settings, setup),
@@ -1723,12 +1790,40 @@ def _tail(*streams: bytes, limit: int = 800) -> str:
     return "\n".join(lines)[-limit:]
 
 
-def _find_gcode(directory: Path) -> Path | None:
-    """Die jüngste Druckdatei im Ordner.
+def _kept_beside(model: Path, produced: Path) -> Path:
+    """Legt die Druckdatei neben das Modell, bevor der Arbeitsordner
+    verschwindet.
 
-    Die Slicer benennen selbst, und Orca hängt Plattennummern an. Gesucht wird
-    deshalb nach Endung, nicht nach Namen — und die jüngste gewinnt, damit ein
-    zweiter Lauf im selben Ordner nicht die Zahlen des ersten meldet.
+    Dieselbe Umwandlung wie in :func:`app.core.export.writer.write_plan` und
+    aus demselben Grund: Der Platz kann belegt, der Ordner schreibgeschützt
+    oder das Laufwerk voll sein. Ein roher ``OSError`` läuft hier aus einem
+    Arbeits-Thread, der nur ``AppError`` fängt — danach geschieht im Fenster
+    gar nichts mehr.
+    """
+    target = model.with_suffix(".gcode")
+    try:
+        target.write_bytes(produced.read_bytes())
+    except OSError as problem:
+        raise FileWriteError(
+            target=str(problem.filename or target),
+            detail=str(problem.strerror or problem),
+        ) from problem
+    return target
+
+
+def _find_gcode(directory: Path, expected: str = "") -> Path | None:
+    """Die Druckdatei dieses Laufs.
+
+    ``expected`` ist der Name, den Solidon dem Slicer selbst genannt hat —
+    PrusaSlicer über ``--output``, CuraEngine über ``-o``. Wo es ihn gibt,
+    entscheidet er, und zwar aus einem Grund, der über Ordnung hinausgeht:
+    Der Zielordner kann der des Nutzers sein, und dort liegen fremde
+    Druckdateien. Die jüngste zu nehmen hieß dann, die Kennzahlen eines
+    fremden Programms in den Prüfbericht zu schreiben (Regel 14, §22.5).
+
+    Die Orca-Familie benennt selbst und hängt Plattennummern an; für sie
+    bleibt es bei der jüngsten. Und wo der erwartete Name fehlt, wird
+    zurückgefallen — aber nicht stillschweigend.
     """
     candidates = [
         entry
@@ -1743,4 +1838,13 @@ def _find_gcode(directory: Path) -> Path | None:
     ]
     if not candidates:
         return None
+    if expected:
+        named = [entry for entry in candidates if entry.name == expected]
+        if named:
+            return named[0]
+        _log.warning(
+            "the slicer wrote no %s in %s — falling back to the newest print file there",
+            expected,
+            directory,
+        )
     return max(candidates, key=lambda entry: entry.stat().st_mtime)

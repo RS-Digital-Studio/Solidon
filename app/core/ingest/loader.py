@@ -27,6 +27,8 @@ import trimesh
 from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData, face_components
 from app.core.log import get_logger
+from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
+from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
 from app.core.types import Finding, IngestInfo, ProgressFn
 from app.core.units import EPS_GEOM, LengthUnit, format_length, to_mm, weld_tolerance
 from app.i18n import _
@@ -37,13 +39,19 @@ _log = get_logger(__name__)
 MAX_TRIANGLES: Final = 20_000_000
 MAX_FILE_BYTES: Final = 512 * 1024 * 1024
 
-#: Darüber sagt die Eingangsstufe etwas. Keine Grenze — die darüber liegt
-#: eine Größenordnung höher —, sondern die Größe, ab der die Analyse aufhört
-#: helfen zu können: die Karten verweigern bei 120 000 und die
-#: Merkmalserkennung bei 200 000 (§31). Ein Community-Modell mit zwei
-#: Millionen Dreiecken ist etwas, das einem normalerweise gereicht wird, und
-#: es sollte sagen, was es ist, statt nur langsam zu sein.
-HEAVY_TRIANGLES: Final = 500_000
+#: Darüber sagt die Eingangsstufe etwas. Keine Grenze — die darüber liegt eine
+#: Größenordnung höher —, sondern die Größe, ab der die Analyse aufhört helfen
+#: zu können. Ein Community-Modell mit zwei Millionen Dreiecken ist etwas, das
+#: einem normalerweise gereicht wird, und es sollte sagen, was es ist, statt
+#: nur langsam zu sein.
+#:
+#: **Keine eigene Zahl.** Hier stand 500 000, und damit gab es drei Schwellen
+#: für dieselbe Frage: Die Karten verweigern ab 120 000, die Merkmalserkennung
+#: ab 200 000 (§31) — die Meldung versprach also, was längst geschehen war,
+#: und zwischen 200 000 und 500 000 schwieg sie ganz. Sie ist jetzt die
+#: kleinere der beiden echten Grenzen, und wer eine davon verschiebt,
+#: verschiebt diese mit.
+HEAVY_TRIANGLES: Final = min(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES)
 
 #: Was ein druckbares Teil üblicherweise misst, in Millimetern.
 PLAUSIBLE_MIN_MM: Final = 10.0
@@ -52,6 +60,12 @@ PLAUSIBLE_MAX_MM: Final = 300.0
 #: Einheiten, in denen eine Datei geschrieben sein könnte — die
 #: wahrscheinlichste zuerst.
 CANDIDATE_UNITS: Final[tuple[LengthUnit, ...]] = ("mm", "cm", "in", "m")
+
+#: Die Datei so zu nehmen, wie sie dasteht. Der Kern rechnet in Millimetern
+#: (§11.1), eine Zahl ohne Umrechnung ist also eine Zahl in Millimetern — und
+#: das ist keine Vermutung über die Datei, sondern die einzige Lesart, die
+#: nichts hinzudichtet.
+MEASURED_UNIT: Final[LengthUnit] = "mm"
 
 #: Eine Komponente unter diesem Anteil der größten zählt als loses Fragment.
 SMALL_COMPONENT_SHARE: Final = 0.001
@@ -88,7 +102,22 @@ def detect_unit(diagonal: float) -> UnitGuess:
     )
     if len(plausible) == 1:
         return UnitGuess(unit=plausible[0], candidates=plausible, diagonal=diagonal)
-    return UnitGuess(unit=None, candidates=plausible or CANDIDATE_UNITS, diagonal=diagonal)
+    if not plausible:
+        return UnitGuess(unit=None, candidates=CANDIDATE_UNITS, diagonal=diagonal)
+    # **Die gemessene Einheit steht immer zur Wahl.** Plausibel heißt hier
+    # „zwischen zehn und dreihundert Millimetern", und darunter fiel „mm" aus
+    # der Antwortliste: Eine M3-Unterlegscheibe misst über alles sieben
+    # Millimeter, und wer sie korrekt in Millimetern gespeichert hatte, konnte
+    # nur zwischen „cm" und „in" wählen — beide falsch — oder abbrechen.
+    #
+    # Als *einzige* Lesart bleibt sie unplausibel; genau deshalb wird
+    # überhaupt gefragt. Als *Antwort* gehört sie dazu, und zwar zuerst: Eine
+    # Frage, deren richtige Antwort fehlt, ist schlimmer als keine Frage
+    # (§17.1, Leitprinzip 6).
+    candidates = tuple(
+        unit for unit in CANDIDATE_UNITS if unit in plausible or unit == MEASURED_UNIT
+    )
+    return UnitGuess(unit=None, candidates=candidates, diagonal=diagonal)
 
 
 def check_limits(payload_size: int, triangle_count: int) -> None:
@@ -270,28 +299,9 @@ def normalise(
         progress(0.9, str(_("Auf das Bett setzen")))
         body.apply_translation((0.0, 0.0, -float(body.bounds[0][2])))
 
-    if len(body.faces) > HEAVY_TRIANGLES:
-        # §31: weit jenseits dessen, was die Analyse bedienen kann. Nicht
-        # abgelehnt — die Grenze dafür liegt eine Größenordnung höher (§17.1) —,
-        # aber ausgesprochen, mit dem Ausweg dazu: ein Modell dieser Größe macht
-        # jeden späteren Schritt langsam.
-        findings.append(
-            Finding(
-                code="ingest.very_large",
-                severity="warning",
-                # Genannt wird die **Operation**, nicht der Menüweg: Hier stand
-                # „Netz → Dezimieren", und beides war falsch — das Menü heißt
-                # *Ändern*, die Operation *Dreiecke verringern*. Ein Weg im Text
-                # driftet, sobald jemand eine Kategorie verschiebt; ein
-                # Operationstitel ist derselbe String, den Menü, Palette und
-                # Kontextmenü zeigen, und die Palette findet ihn.
-                message=_(
-                    "Dieses Modell ist sehr fein vernetzt. Analysekarten und "
-                    "Merkmalserkennung lehnen ab; „Dreiecke verringern“ hilft."
-                ),
-                values={"triangles": len(body.faces), "comfortable": HEAVY_TRIANGLES},
-            )
-        )
+    too_fine = _too_fine(len(body.faces))
+    if too_fine is not None:
+        findings.append(too_fine)
 
     if not body.is_watertight and len(body.faces):
         findings.append(
@@ -323,6 +333,50 @@ def normalise(
             components=components,
         ),
         findings=tuple(findings),
+    )
+
+
+def _too_fine(triangles: int) -> Finding | None:
+    """Sagt, welche Stufe der Analyse bei dieser Dreieckszahl ablehnt (§31).
+
+    Nicht abgelehnt wird deswegen nichts — die Importgrenze liegt eine
+    Größenordnung höher (§17.1). Ausgesprochen wird es trotzdem, mit dem
+    Ausweg dazu: Ein Modell dieser Größe macht jeden späteren Schritt langsam,
+    und ein Teil der Analyse antwortet gar nicht mehr.
+
+    **Zwei Sätze, weil es zwei Grenzen sind.** Der eine Satz für beide log
+    zwischen 120 000 und 200 000: Dort lehnen die Karten ab, die
+    Merkmalserkennung läuft weiter. Ein Befund, der mehr behauptet, als
+    stimmt, kostet den nächsten seinen Kredit.
+
+    Genannt wird die **Operation**, nicht der Menüweg: Hier stand „Netz →
+    Dezimieren", und beides war falsch — das Menü heißt *Ändern*, die
+    Operation *Dreiecke verringern*. Ein Weg im Text driftet, sobald jemand
+    eine Kategorie verschiebt; ein Operationstitel ist derselbe String, den
+    Menü, Palette und Kontextmenü zeigen, und die Palette findet ihn.
+    """
+    if triangles <= HEAVY_TRIANGLES:
+        return None
+    if triangles > max(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES):
+        message = _(
+            "Dieses Modell ist sehr fein vernetzt. Analysekarten und "
+            "Merkmalserkennung lehnen ab; „Dreiecke verringern“ hilft."
+        )
+    elif MAP_LIMIT_TRIANGLES < FEATURE_LIMIT_TRIANGLES:
+        message = _(
+            "Dieses Modell ist fein vernetzt. Die Analysekarten lehnen ab; "
+            "„Dreiecke verringern“ hilft."
+        )
+    else:
+        message = _(
+            "Dieses Modell ist fein vernetzt. Die Merkmalserkennung lehnt ab; "
+            "„Dreiecke verringern“ hilft."
+        )
+    return Finding(
+        code="ingest.very_large",
+        severity="warning",
+        message=message,
+        values={"triangles": triangles, "comfortable": HEAVY_TRIANGLES},
     )
 
 

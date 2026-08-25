@@ -19,6 +19,7 @@ from io import BytesIO
 import pytest
 import trimesh
 
+from app.core.errors import ValidationError
 from app.core.export import threemf
 from app.core.geom.mesh import MeshData
 
@@ -232,6 +233,52 @@ def test_something_that_is_not_a_3mf_is_not_read() -> None:
     assert threemf.count_objects(b"not a container") == 0
 
 
+def zip_with_method(name: str, data: bytes, method: int) -> bytes:
+    """Ein Archiv, dessen Eintrag ein Packverfahren nennt, das Python nicht
+    auspackt — Deflate64 (9) oder AES (99).
+
+    Geschrieben wird ungepackt; getauscht wird nur die Nummer des Verfahrens,
+    im lokalen Kopf und im Verzeichnis. Ein solches Archiv von Hand zu bauen
+    ist der einzige Weg: ``zipfile`` **schreibt** diese Verfahren ebenso wenig,
+    wie es sie liest.
+    """
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_STORED) as container:
+        container.writestr(name, data)
+    raw = bytearray(buffer.getvalue())
+    zahl = method.to_bytes(2, "little")
+    lokal = raw.find(bytes([80, 75, 3, 4]))
+    verzeichnis = raw.find(bytes([80, 75, 1, 2]))
+    raw[lokal + 8 : lokal + 10] = zahl
+    raw[verzeichnis + 10 : verzeichnis + 12] = zahl
+    return bytes(raw)
+
+
+@pytest.mark.parametrize("method", [9, 99])
+def test_a_3mf_in_a_packing_we_cannot_open_is_an_answer(method: int) -> None:
+    """§32: „nicht auspackbar" ist eine Auskunft, kein Stapelabzug.
+
+    Deflate64 und AES stehen im Verzeichnis wie jedes andere Verfahren — die
+    Namensliste kommt, und erst beim Lesen wirft ``zipfile`` ein rohes
+    ``NotImplementedError``. Das flog durch jeden Leser hindurch bis in die
+    Oberfläche: Ablegen tat sichtbar nichts, und die Quelle blieb als Waise im
+    Dokument zurück.
+
+    Die Datei ist dabei nicht kaputt — sie ist anders gepackt, und das ist ein
+    anderer Satz und ein anderer Ausweg (Regel 17).
+    """
+    payload = zip_with_method(threemf.MODEL_PATH, b"<model/>", method)
+
+    for lesen in (threemf.read_objects, threemf.count_objects):
+        with pytest.raises(ValidationError) as caught:
+            lesen(payload)
+        assert caught.value.constraint == "unsupported_compression", lesen.__name__
+        assert caught.value.suggestions, "Regel 17"
+
+    with pytest.raises(ValidationError):
+        threemf.read(payload, 12)
+
+
 def test_a_component_pointing_at_nothing_drops_that_body_only() -> None:
     """Ein kaputter Verweis kostet nicht die anderen drei Teile."""
     parts = threemf.read_objects(
@@ -298,6 +345,151 @@ def test_a_parts_own_slot_numbers_do_not_leak() -> None:
     text = zipfile.ZipFile(BytesIO(payload)).read(threemf.MODEL_PATH).decode("utf-8")
     assert text.count("<base ") == 2, "zwei Farben, nicht eine und nicht drei"
     assert "Rot" in text and "Blau" in text
+
+
+def test_a_two_colour_assembly_comes_back_in_its_colours() -> None:
+    """§20, die runde Reise: schreiben, lesen, dieselben Slots.
+
+    Jedes Teil hier ist einfarbig, und die Farben sind zwei — die gemeinsame
+    Materialliste *ist* die Extruderbelegung. Zurückgelesen war trotzdem jedes
+    Teil ohne Farbe: ``_groups_of`` hielt „ein Slot" für „keine Gruppe", auch
+    wenn der Slot nicht der erste war. Eine Datei, die dieses Modul selbst
+    geschrieben hatte, verlor damit genau das, wofür es geschrieben wurde.
+    """
+    rot = threemf.MaterialSlot(index=0, name="Rot", colour=(1.0, 0.0, 0.0))
+    blau = threemf.MaterialSlot(index=0, name="Blau", colour=(0.0, 0.0, 1.0))
+
+    payload = threemf.write_assembly(
+        [_part((10, 10, 10), "Platte", rot), _part((5, 5, 5), "Schrift", blau)]
+    )
+    zurueck = threemf.read_objects(payload)
+
+    assert [entry.name for entry in zurueck] == ["Platte", "Schrift"]
+    assert [slot.name for slot in zurueck[0].slots] == ["Rot"]
+    assert [slot.name for slot in zurueck[1].slots] == ["Blau"]
+    assert zurueck[0].slots[0].colour == pytest.approx((1.0, 0.0, 0.0), abs=1.0 / 255.0)
+    assert zurueck[1].slots[0].colour == pytest.approx((0.0, 0.0, 1.0), abs=1.0 / 255.0)
+    for entry in zurueck:
+        assert set(entry.mesh.slots) == {0}, "je Teil ein Slot, und jedes Dreieck darauf"
+
+
+def test_a_body_in_two_colours_keeps_both_of_them() -> None:
+    """Der Fall, der schon ging, und er muss weiter gehen: zwei Slots in einem
+    Netz, in der Reihenfolge der Dreiecke."""
+    rot = threemf.MaterialSlot(index=0, name="Rot", colour=(1.0, 0.0, 0.0))
+    blau = threemf.MaterialSlot(index=1, name="Blau", colour=(0.0, 0.0, 1.0))
+    body = trimesh.creation.box((10, 10, 10))
+    zweifarbig = MeshData(raw=body, slots=(0,) * 6 + (1,) * 6)
+
+    payload = threemf.write_assembly(
+        [threemf.AssemblyPart(mesh=zweifarbig, name="Schild", slots=(rot, blau))]
+    )
+    zurueck = threemf.read_objects(payload)
+
+    assert [slot.name for slot in zurueck[0].slots] == ["Rot", "Blau"]
+    assert zurueck[0].mesh.slots == (0,) * 6 + (1,) * 6
+
+
+def coloured_container(
+    faces: list[str], bases: str, *, on_object: str = 'pid="1" pindex="0"'
+) -> bytes:
+    """Eine 3MF von Hand: eine Materialgruppe und ein Tetraeder, dessen
+    Dreiecke tragen, was der Test ihnen mitgibt.
+    """
+    points = ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (0.0, 10.0, 0.0), (0.0, 0.0, 10.0))
+    corners = ((0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3))
+    vertices = "".join(f'<vertex x="{x}" y="{y}" z="{z}"/>' for x, y, z in points)
+    triangles = "".join(
+        f'<triangle v1="{a}" v2="{b}" v3="{c}" {extra}/>'
+        for (a, b, c), extra in zip(corners, faces, strict=True)
+    )
+    root = (
+        f'<?xml version="1.0" encoding="UTF-8"?>'
+        f'<model unit="millimeter" xmlns="{CORE}">'
+        f'<resources><basematerials id="1">{bases}</basematerials>'
+        f'<object id="2" type="model" {on_object}><mesh>'
+        f"<vertices>{vertices}</vertices><triangles>{triangles}</triangles>"
+        f"</mesh></object></resources>"
+        f'<build><item objectid="2"/></build></model>'
+    )
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        container.writestr(threemf.MODEL_PATH, root)
+    return buffer.getvalue()
+
+
+def test_a_triangle_that_points_past_the_material_list_still_gets_a_slot() -> None:
+    """Jeder vergebene Slot hat einen Eintrag.
+
+    Die Liste wurde beim Lesen um alles gekürzt, was über sie hinauszeigte —
+    das Netz behielt seine drei Slotnummern, die Materialliste hatte zwei
+    Einträge, und Slot 2 zeigte ins Leere. Ein Netz, das auf eine Farbe zeigt,
+    die es nicht gibt, ist schlimmer als eine graue Ersatzfarbe mit Namen.
+    """
+    payload = coloured_container(
+        ['pid="1" p1="0"', 'pid="1" p1="1"', 'pid="1" p1="7"', 'pid="1" p1="0"'],
+        '<base name="Rot" displaycolor="#FF0000"/><base name="Blau" displaycolor="#0000FF"/>',
+    )
+
+    parts = threemf.read_objects(payload)
+
+    assert len(parts[0].slots) == len(set(parts[0].mesh.slots)), "je benutztem Slot ein Eintrag"
+    assert [slot.index for slot in parts[0].slots] == [0, 1, 2]
+    assert [slot.name for slot in parts[0].slots] == ["Rot", "Blau", "Slot 7"]
+    assert max(parts[0].mesh.slots) < len(parts[0].slots)
+
+
+def test_a_body_that_names_no_material_gets_none() -> None:
+    """Regel 21: Was die Datei nicht sagt, wird nicht angenommen.
+
+    Ein Objekt ohne ``pid``, dessen Dreiecke ebenfalls schweigen, gehört zu
+    keinem Material — auch wenn die Datei daneben zwei führt. Ihm das erste
+    zuzuschreiben wäre geraten, und geraten wird hier nicht.
+    """
+    payload = coloured_container(
+        ["", "", "", ""],
+        '<base name="Rot" displaycolor="#FF0000"/><base name="Blau" displaycolor="#0000FF"/>',
+        on_object="",
+    )
+
+    parts = threemf.read_objects(payload)
+
+    assert parts[0].slots == (), "keine Farbe ist keine Farbe"
+    assert parts[0].mesh.slots == ()
+
+
+def test_a_second_material_group_is_read_as_itself() -> None:
+    """Zwei ``basematerials``-Gruppen sind zwei Gruppen.
+
+    Gelesen wurde nur die erste, und was auf die zweite zeigte, fiel still auf
+    deren ersten Eintrag: Ein Körper aus zwei Gruppen kam einfarbig zurück.
+    """
+    points = ((0.0, 0.0, 0.0), (10.0, 0.0, 0.0), (0.0, 10.0, 0.0), (0.0, 0.0, 10.0))
+    corners = ((0, 1, 2), (0, 1, 3), (0, 2, 3), (1, 2, 3))
+    vertices = "".join(f'<vertex x="{x}" y="{y}" z="{z}"/>' for x, y, z in points)
+    zuordnung = ('pid="1" p1="0"', 'pid="1" p1="0"', 'pid="3" p1="0"', 'pid="3" p1="0"')
+    triangles = "".join(
+        f'<triangle v1="{a}" v2="{b}" v3="{c}" {extra}/>'
+        for (a, b, c), extra in zip(corners, zuordnung, strict=True)
+    )
+    root = (
+        f'<?xml version="1.0" encoding="UTF-8"?>'
+        f'<model unit="millimeter" xmlns="{CORE}"><resources>'
+        f'<basematerials id="1"><base name="Rot" displaycolor="#FF0000"/></basematerials>'
+        f'<basematerials id="3"><base name="Blau" displaycolor="#0000FF"/></basematerials>'
+        f'<object id="2" type="model" pid="1" pindex="0"><mesh>'
+        f"<vertices>{vertices}</vertices><triangles>{triangles}</triangles>"
+        f"</mesh></object></resources>"
+        f'<build><item objectid="2"/></build></model>'
+    )
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        container.writestr(threemf.MODEL_PATH, root)
+
+    parts = threemf.read_objects(buffer.getvalue())
+
+    assert [slot.name for slot in parts[0].slots] == ["Rot", "Blau"]
+    assert parts[0].mesh.slots == (0, 0, 1, 1)
 
 
 def test_an_assembly_without_parts_is_refused() -> None:

@@ -41,7 +41,7 @@ from app.core.types import (
     Source,
     kind_of,
 )
-from app.core.units import EPS_GEOM, format_length
+from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length
 from app.i18n import _, source_text
 
 if TYPE_CHECKING:
@@ -81,6 +81,11 @@ SINGLE_SCHEME = "{project}_{object}"
 #: Bei mehr als einer Druckplatte kommt die Platte in den Namen (§25). Wer
 #: die Dateien zum Drucker trägt, muss wissen, welche zusammengehören.
 PLATE_SCHEME = "{project}_platte{plate}_{object}_{index}von{count}"
+
+#: Was ein eigenes Namensschema einsetzen darf. Steht im Fehler, wenn etwas
+#: anderes darin steht — eine Liste im Kopf des Nutzers ist keine.
+SCHEME_FIELDS: Final[tuple[str, ...]] = ("project", "object", "index", "count", "plate")
+_KNOWN_FIELDS: Final = ", ".join("{" + name + "}" for name in SCHEME_FIELDS)
 
 _UNSAFE = re.compile(r"[^\w\-. ]+", re.UNICODE)
 
@@ -170,7 +175,43 @@ def plan_export(
         pattern = DEFAULT_SCHEME if count > 1 else SINGLE_SCHEME
     suffix = FORMAT_SUFFIX[export_format]
 
-    entries = tuple(
+    try:
+        entries = _entries_for(objects, pattern, project_name, count, suffix)
+    except KeyError as problem:
+        # **Ein Schema ist eine Eingabe des Nutzers**, in der Kommandozeile
+        # getippt und im Dialog eintragbar — ``{name}`` statt ``{object}`` ist
+        # der naheliegende Fehlgriff. Ein roher ``KeyError`` nennt weder den
+        # richtigen Namen noch die Tatsache, dass man ihn ändern kann.
+        raise ValidationError(
+            field="scheme",
+            detail=_("Das Namensschema nennt einen Platzhalter, den es nicht gibt."),
+            value=pattern,
+            constraint="unknown_placeholder",
+            values={"requested": "{" + str(problem.args[0]) + "}", "known": _KNOWN_FIELDS},
+        ) from problem
+    except (IndexError, ValueError) as problem:
+        # Eine Klammer, die nicht zugeht, oder ``{0}``: dieselbe Sorte Tippfehler,
+        # eine andere Ausnahme — und ohne diesen Zweig ebenso ein Stapelabzug.
+        raise ValidationError(
+            field="scheme",
+            detail=_("Das Namensschema lässt sich nicht lesen; eine Klammer steht falsch."),
+            value=pattern,
+            constraint="broken_scheme",
+            values={"known": _KNOWN_FIELDS},
+        ) from problem
+    return ExportPlan(
+        entries=entries,
+        findings=tuple(check_before_export(objects, profile, sources or {}, export_format)),
+    )
+
+
+def _entries_for(
+    objects: list[SceneObject], pattern: str, project_name: str, count: int, suffix: str
+) -> tuple[ExportEntry, ...]:
+    """Die geplanten Dateien. Ausgelagert, weil das Schema scheitern darf und
+    der Aufrufer den Fehlgriff benennen soll.
+    """
+    return tuple(
         ExportEntry(
             object_id=entry.id,
             filename=safe_name(
@@ -199,10 +240,6 @@ def plan_export(
             plate=entry.plate,
         )
         for index, entry in enumerate(objects, start=1)
-    )
-    return ExportPlan(
-        entries=entries,
-        findings=tuple(check_before_export(objects, profile, sources or {}, export_format)),
     )
 
 
@@ -281,6 +318,22 @@ def arrangement_holds(meshes: Sequence[MeshData], profile: Profile) -> bool:
     Geprüft wird in der Aufsicht und großzügig: die Ränder der Platte bleiben
     frei, weil dort Rand, Düse und Reinigungsstelle liegen, und ein Teil, das
     genau auf der Kante endet, ist kein Fall für eine Zusage.
+
+    **In der Höhe zählen beide Richtungen.** Nach oben stand die Grenze seit
+    je; nach unten stand keine, und die Zusage wird beim Slicer durchgesetzt
+    (``--arrange 0``): Ein Teil bei z = -15 steckte im Bett und wurde
+    abgeschnitten, eines bei z = 50 hing in der Luft — in beiden Fällen hätte
+    der Slicer es abgesetzt, wenn man ihn gelassen hätte.
+
+    Die zwei Grenzen sind nicht neu erfunden, sondern die, die der Bericht
+    ohnehin benutzt: ``EPS_GEOM`` für „unter dem Bett" wie in
+    :func:`app.core.geom.prepare.check_build_volume`, ``EPS_DISPLAY`` für
+    „schwebt" wie in ``prepare._floats``. Eine dritte Zahl für dieselbe Frage
+    hieße, dass Bericht und Übergabe sich widersprechen können.
+
+    Dass ein Deckel über seiner Dose kein Schweben ist, entscheidet hier schon
+    die Aufsicht: Zwei Körper, von denen einer über dem anderen liegt,
+    überlappen im Grundriss — und damit ist die Anordnung ohnehin keine.
     """
     if not meshes:
         return False
@@ -292,7 +345,9 @@ def arrangement_holds(meshes: Sequence[MeshData], profile: Profile) -> bool:
             return False
         if box.minimum[1] < -half_depth or box.maximum[1] > half_depth:
             return False
-        if box.maximum[2] > height:
+        if box.maximum[2] > height or box.minimum[2] < -EPS_GEOM:
+            return False
+        if box.minimum[2] > EPS_DISPLAY:
             return False
     for first in range(len(meshes)):
         for second in range(first + 1, len(meshes)):
@@ -512,9 +567,22 @@ def write_plan(
     #
     # Der Grund kommt vom Betriebssystem und bleibt unübersetzt: „Zugriff
     # verweigert" gegen „Datei nicht gefunden" ist die eigentliche Auskunft.
+    # **Was das Format nicht tragen kann, wird ausgelassen — nicht abgebrochen.**
+    # ``check_before_export`` sagt es je Objekt und begründet es damit, dass
+    # „der Export die exakten Körper schreibt und die Netze auslässt". Getan
+    # hat er das nie: Beim ersten Netz flog die Ausnahme, mitten im Schreiben.
+    # War ein exakter Körper davor, lag seine Datei schon da — ein halber
+    # Export mit einer Fehlermeldung darüber (§30, §29).
+    skipped = [
+        entry.filename
+        for entry in plan.entries
+        if export_format in SOLID_ONLY_FORMATS and not _is_exact(entry.body)
+    ]
     try:
         directory.mkdir(parents=True, exist_ok=True)
         for entry in plan.entries:
+            if entry.filename in skipped:
+                continue
             target = directory / entry.filename
             target.write_bytes(
                 export_bytes(entry.mesh, export_format, list(entry.slots), entry.name, entry.body)
@@ -525,8 +593,49 @@ def write_plan(
             target=str(problem.filename or directory),
             detail=str(problem.strerror or problem),
         ) from problem
+    if skipped and not written:
+        # Nichts blieb übrig. Ein Aufruf, der leise null Dateien schreibt und
+        # Erfolg meldet, ist schlimmer als der Fehler davor.
+        raise _needs_solid()
+    if skipped:
+        _log.info("left out %d body/bodies without exact geometry: %s", len(skipped), skipped)
     _log.info("exported %d file(s) to %s", len(written), directory)
     return written
+
+
+def _is_exact(body: Mesh | None) -> bool:
+    """Hat dieses Objekt Flächen und Kanten — oder nur Dreiecke (§30)?
+
+    ``kind_of`` und kein zweites ``isinstance``, aus demselben Grund wie in
+    :func:`check_before_export`: Welche Sorte ein Körper ist, entscheidet eine
+    Regel an einem Ort. Die beiden Stellen müssen dasselbe sagen, sonst meldet
+    der Bericht etwas anderes, als der Schreiber tut.
+    """
+    return body is not None and kind_of(body) == "brep"
+
+
+def _written(target: Path, payload: bytes) -> Path:
+    """Schreibt eine Datei und macht aus einem ``OSError`` einen ``AppError``.
+
+    Denselben Grund wie in :func:`write_plan`, und dieselbe Wunde: Das Ziel
+    ist schreibgeschützt, liegt im Slicer offen oder ist gar kein Ordner. Ohne
+    diese Umwandlung endet die Kommandozeile in einem Stapelabzug (§2.7
+    verbietet ihn im Nutzerdialog), und im Fenster geschieht etwas Stilleres
+    und Schlimmeres: Der Export-Arbeiter fängt ``AppError``, ein ``OSError``
+    reißt den Thread ab, und danach passiert gar nichts mehr.
+
+    Der Grund kommt vom Betriebssystem und bleibt unübersetzt: „Zugriff
+    verweigert" gegen „Datei nicht gefunden" ist die eigentliche Auskunft.
+    """
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(payload)
+    except OSError as problem:
+        raise FileWriteError(
+            target=str(problem.filename or target),
+            detail=str(problem.strerror or problem),
+        ) from problem
+    return target
 
 
 def _part_settings(
@@ -612,13 +721,14 @@ def write_assembly(
         meshes = [as_mesh_data(entry.mesh) for entry in chosen]
         findings += check_adhesion_clearance(meshes, settings, [entry.plate for entry in chosen])
         findings += check_filament_changes(chosen, settings, plate)
-    directory.mkdir(parents=True, exist_ok=True)
     width, depth, _height = profile.printer.build_volume
     bed = (width, depth) if place_on_bed and wants_bed_coordinates(flavour) else None
 
     if flavour == "cura":
-        target = directory / (safe_name(project_name, "projekt") + ".stl")
-        target.write_bytes(_cura_assembly(chosen, bed))
+        target = _written(
+            directory / (safe_name(project_name, "projekt") + ".stl"),
+            _cura_assembly(chosen, bed),
+        )
         _log.info("exported %d object(s) as one STL to %s", len(chosen), target.name)
         return target, findings
 
@@ -635,8 +745,8 @@ def write_assembly(
         )
         for entry in chosen
     ]
-    target = directory / (safe_name(project_name, "projekt") + ".3mf")
-    target.write_bytes(
+    target = _written(
+        directory / (safe_name(project_name, "projekt") + ".3mf"),
         threemf.write_assembly(
             parts,
             project_name,
@@ -647,7 +757,7 @@ def write_assembly(
             # wäre eine Verschiebung ohne Grund, und die Datei trüge eine
             # Matrix, die nichts sagt.
             stride=width * threemf.PLATE_STRIDE if len({p.plate for p in parts}) > 1 else 0.0,
-        )
+        ),
     )
     _log.info("exported %d object(s) as one assembly to %s", len(parts), target.name)
     return target, findings
@@ -828,15 +938,26 @@ def _step_bytes(body: Mesh | None, name: str = "") -> bytes:
     from app.core.brep import step as brep_step
 
     if body is None or not isinstance(body, BRepBody):
-        # Kein ``ValidationError``: dessen Titel lautet „Ein Wert liegt
-        # außerhalb des zulässigen Bereichs", und im Dialog stand er über der
-        # richtigen Erklärung — hier ist kein Wert außerhalb eines Bereichs,
-        # hier hat der Körper die falsche Art. Denselben Weg ist
-        # ``NeedsSolidError`` schon einmal gegangen (siehe dort).
-        raise NeedsSolidError(
-            detail=_(
-                "STEP hält Flächen und Kanten fest. Ein Netz hat keine — dafür bleiben STL und 3MF."
-            ),
-            values={"field": "format", "constraint": "needs_brep"},
-        )
+        raise _needs_solid()
     return brep_step.write(body, name)  # type: ignore[arg-type]
+
+
+def _needs_solid() -> NeedsSolidError:
+    """Der Satz für „dieses Format braucht einen exakten Körper" — einmal.
+
+    Kein ``ValidationError``: dessen Titel lautet „Ein Wert liegt außerhalb des
+    zulässigen Bereichs", und im Dialog stand er über der richtigen Erklärung —
+    hier ist kein Wert außerhalb eines Bereichs, hier hat der Körper die
+    falsche Art. Denselben Weg ist ``NeedsSolidError`` schon einmal gegangen
+    (siehe dort).
+
+    Zwei Stellen werfen ihn: der Schreiber eines einzelnen Körpers und der
+    Plan, aus dem am Ende keine einzige Datei übrig blieb. Zwei Fassungen
+    desselben Satzes wären zwei Einträge im Katalog und einer davon veraltet.
+    """
+    return NeedsSolidError(
+        detail=_(
+            "STEP hält Flächen und Kanten fest. Ein Netz hat keine — dafür bleiben STL und 3MF."
+        ),
+        values={"field": "format", "constraint": "needs_brep"},
+    )

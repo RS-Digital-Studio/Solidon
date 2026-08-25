@@ -40,12 +40,14 @@ import zipfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from io import BytesIO
+from typing import Final
 from xml.etree import ElementTree as ET
 
 import numpy as np
 import trimesh
 
 from app.branding import APP_NAME, APP_VERSION
+from app.core.errors import CANCEL, Action, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import MaterialSlot
@@ -310,6 +312,36 @@ class Groups:
     materials: tuple[MaterialSlot, ...]
 
 
+def _unpackable(problem: Exception) -> ValidationError:
+    """Ein Archiv, dessen Packverfahren wir nicht auspacken (§32).
+
+    Deflate64 und AES stehen im Verzeichnis wie jedes andere Verfahren: Die
+    Namensliste kommt, und erst beim Lesen wirft ``zipfile`` ein rohes
+    ``NotImplementedError``. Verschlüsselt kommt ein ``RuntimeError`` dazu.
+    Beide flogen durch jeden Leser hindurch — in der Oberfläche tat Ablegen
+    dann sichtbar nichts, und die Quelle blieb als Waise im Dokument.
+
+    **Die Datei ist nicht kaputt, sie ist anders gepackt.** Das ist ein
+    anderer Satz und ein anderer Ausweg als „vermutlich beschädigt", und der
+    Ausweg ist praktisch: Jeder Slicer schreibt beim Speichern ein Archiv in
+    gewöhnlichem Deflate.
+    """
+    return ValidationError(
+        field="file",
+        detail=_("Diese Datei ist in einem Packverfahren geschrieben, das Solidon nicht öffnet."),
+        constraint="unsupported_compression",
+        values={"reason": str(problem)},
+        suggestions=(
+            Action(
+                id="repack_file",
+                label=_("Die Datei im Slicer öffnen und neu speichern."),
+                primary=True,
+            ),
+            CANCEL,
+        ),
+    )
+
+
 def read(payload: bytes, faces: int) -> Groups | None:
     """Liest die Materialgruppen aus einer 3MF zurück — oder ``None``, wenn
     sie keine hat.
@@ -329,6 +361,8 @@ def read(payload: bytes, faces: int) -> Groups | None:
             model = ET.fromstring(container.read(MODEL_PATH))
     except (KeyError, zipfile.BadZipFile, ET.ParseError):
         return None
+    except (NotImplementedError, RuntimeError) as problem:
+        raise _unpackable(problem) from problem
 
     materials = _materials_in(model)
     if not materials:
@@ -339,31 +373,24 @@ def read(payload: bytes, faces: int) -> Groups | None:
     if len(meshes) != 1:
         return None
 
-    group, names = next(iter(materials.items()))
-    default = int(meshes[0].get("pindex") or 0)
-    triangles = meshes[0].findall(f".//{{{CORE_NAMESPACE}}}triangle")
-    if len(triangles) != faces:
+    # Dieselbe Zuordnung wie beim Baugruppenleser, und aus demselben Grund an
+    # einer Stelle: Sie stand hier zweimal, und die beiden Fassungen sind
+    # auseinandergelaufen — die eine kannte die Vorgabe des Objekts
+    # (``pindex``), die andere nicht.
+    groups = _groups_of(
+        meshes[0],
+        materials,
+        meshes[0].get("pid") or "",
+        _position(meshes[0].get("pindex"), 0),
+    )
+    if groups is None:
+        return None
+    if len(groups.slots) != faces:
         _log.info(
-            "3MF has %d triangles, the loaded body %d — no groups read", len(triangles), faces
+            "3MF has %d triangles, the loaded body %d — no groups read", len(groups.slots), faces
         )
         return None
-
-    assignment = tuple(
-        int(entry.get("p1") or default) if (entry.get("pid") or group) == group else default
-        for entry in triangles
-    )
-    used = sorted(set(assignment))
-    if len(used) < 2:
-        return None  # ein Material für den ganzen Körper ist keine Gruppe, die sich lohnt
-    order = {position: index for index, position in enumerate(used)}
-    return Groups(
-        slots=tuple(order[entry] for entry in assignment),
-        materials=tuple(
-            MaterialSlot(index=index, name=names[position][0], colour=names[position][1])
-            for index, position in enumerate(used)
-            if position < len(names)
-        ),
-    )
+    return groups
 
 
 @dataclass(frozen=True, slots=True)
@@ -399,7 +426,7 @@ def read_objects(payload: bytes) -> list[Part]:
         moved = body.raw.copy()
         moved.apply_transform(leaf.transform)
 
-        groups = _groups_of(leaf.node, leaf.palette)
+        groups = _groups_of(leaf.node, leaf.palette, leaf.pid, leaf.pindex)
         mesh = (
             MeshData(raw=moved, slots=groups.slots) if groups is not None else body.replacing(moved)
         )
@@ -409,6 +436,50 @@ def read_objects(payload: bytes) -> list[Part]:
 
     _log.info("read %d part(s) from a 3MF build", len(parts))
     return _numbered(parts)
+
+
+#: Wie der 3MF-Kern seine Einheiten nennt. Sechs Namen, und zwei davon kann
+#: der Kern nicht als Einheit führen (§11.1) — sie sind trotzdem gültig, und
+#: eine Datei in Mikrometern gibt es.
+#:
+#: Vorgabe des Formats ist Millimeter; steht kein Attribut da, gilt sie. Wir
+#: nehmen sie trotzdem nicht an, sondern melden „nichts angegeben": Die
+#: Vorgabe stimmt für eine Datei, die den Standard kennt, und wer sein
+#: ``unit`` weglässt, hat ihn meist nicht gelesen. Dann ist die Frage besser
+#: als die Annahme (Regel 21).
+UNIT_NAMES: Final[tuple[str, ...]] = (
+    "micron",
+    "millimeter",
+    "centimeter",
+    "inch",
+    "foot",
+    "meter",
+)
+
+
+def declared_unit(payload: bytes) -> str | None:
+    """Die Einheit, die eine 3MF selbst nennt — oder ``None``.
+
+    STL kennt keine Einheit, 3MF schon: Sie steht im ``unit``-Attribut des
+    ``model``-Elements, und damit ist die Frage aus §17.1 für dieses Format
+    beantwortet, bevor sie gestellt wird.
+
+    Gelesen wird nur der Wurzelknoten. Der Rest der Datei kann dreihundert
+    Megabyte Koordinaten sein, und für ein Attribut am Anfang lohnt es nicht,
+    sie anzufassen — ``iterparse`` liest häppchenweise, und beim ersten
+    Element ist Schluss.
+
+    ``None`` heißt: kein Attribut, ein unbekannter Name oder eine Datei, die
+    sich nicht öffnen lässt. In allen drei Fällen wird gefragt statt geraten.
+    """
+    try:
+        with zipfile.ZipFile(BytesIO(payload)) as container, container.open(MODEL_PATH) as stream:
+            for _event, element in ET.iterparse(stream, events=("start",)):
+                stated = (element.get("unit") or "").strip().lower()
+                return stated if stated in UNIT_NAMES else None
+    except (KeyError, OSError, zipfile.BadZipFile, ET.ParseError, NotImplementedError):
+        return None
+    return None
 
 
 def count_objects(payload: bytes) -> int:
@@ -433,6 +504,13 @@ class _Leaf:
     node: ET.Element
     transform: np.ndarray
     palette: dict[str, list[tuple[str, tuple[float, float, float]]]]
+    pid: str = ""
+    """Die Materialgruppe, die das **Objekt** nennt. Ein Dreieck ohne eigene
+    Angabe gehört ihr — ohne sie las jeder Körper aus der ersten Gruppe der
+    Datei, auch wenn er auf eine andere zeigte."""
+    pindex: int = 0
+    """Und die Stelle darin. Bei einem einfarbigen Körper steht die Farbe
+    genau hier und an keinem einzigen Dreieck."""
 
 
 def _leaves(payload: bytes) -> list[_Leaf]:
@@ -452,6 +530,11 @@ def _leaves(payload: bytes) -> list[_Leaf]:
     except (KeyError, zipfile.BadZipFile, ET.ParseError) as problem:
         _log.info("3MF could not be read as an assembly: %s", problem)
         return []
+    except (NotImplementedError, RuntimeError) as problem:
+        # Kein Rückfall auf den allgemeinen Leser: Der scheitert am selben
+        # Archiv und nennt es „vermutlich beschädigt" — ein Satz, der auf eine
+        # heile Datei zeigt und in die falsche Richtung schickt.
+        raise _unpackable(problem) from problem
 
     catalog = {path: _objects_in(model) for path, model in models.items()}
     materials = {path: _materials_in(model) for path, model in models.items()}
@@ -575,6 +658,8 @@ def _parts_of(
                 node=mesh_node,
                 transform=transform,
                 palette=materials.get(path, {}),
+                pid=entry.get("pid") or "",
+                pindex=_position(entry.get("pindex"), 0),
             )
         ]
 
@@ -694,40 +779,143 @@ def _read_numbers(vertices: ET.Element, triangles: ET.Element) -> tuple[np.ndarr
     return points, faces
 
 
+#: Ein Dreieck zeigt mit ``pid`` auf eine Materialgruppe und mit ``p1`` auf
+#: einen Eintrag darin. Beides zusammen ist der Schlüssel — nicht ``p1``
+#: allein, denn Position 0 zweier Gruppen sind zwei verschiedene Filamente.
+_Key = tuple[str, int]
+
+
 def _groups_of(
-    node: ET.Element, materials: dict[str, list[tuple[str, tuple[float, float, float]]]]
+    node: ET.Element,
+    materials: dict[str, list[tuple[str, tuple[float, float, float]]]],
+    pid: str = "",
+    pindex: int = 0,
 ) -> Groups | None:
-    """Die Farbgruppen eines Meshes — seine eigenen, nicht die der
+    """Die Farbgruppen eines Körpers — seine eigenen, nicht die der
     Datei (§20).
 
-    Je Mesh statt je Datei, und genau das konnte der ältere Leser nicht: er gab
-    auf, sobald eine 3MF mehr als einen Körper hielt — eine zweifarbige
-    Baugruppe verlor also jede Farbe, die sie hatte.
+    ``pid`` und ``pindex`` sind, was das **Objekt** über sich sagt: seine
+    Materialgruppe und seine Stelle darin. Ein Dreieck darf beides
+    überschreiben; sagt es nichts, gilt das des Objekts.
+
+    Drei Dinge gingen hier verloren, und alle drei an der eigenen Datei:
+
+    * **Gezählt wird die Datei, nicht der einzelne Körper.** „Weniger als zwei
+      benutzte Slots" galt als „keine Farbe". Eine zweifarbige Baugruppe
+      besteht aber aus einfarbigen Teilen: Jedes Teil benutzt genau einen
+      Slot, und die zwei Farben stehen *zwischen* den Teilen. Die eigene
+      Ausgabe kam damit vollständig grau zurück. Führt die Datei nur ein
+      einziges Material, bleibt es dabei — dann ist es die Vorgabe und keine
+      Wahl.
+    * **Eine fremde Gruppe ist eine eigene Gruppe.** Gelesen wurde nur die
+      erste ``basematerials``-Gruppe der Datei; was auf eine andere zeigte,
+      fiel still auf deren ersten Eintrag. Zwei Gruppen kamen einfarbig an.
+    * **Jeder vergebene Slot hat einen Eintrag.** Was über die Materialliste
+      hinauszeigte, wurde aus der Liste gestrichen — das Netz behielt seine
+      Slotnummer, und die zeigte ins Leere.
+
+    Was niemand benennt, bleibt dabei unbenannt: Ein Objekt ohne ``pid``,
+    dessen Dreiecke ebenfalls schweigen, bekommt kein Material — auch nicht
+    das erste der Datei.
+
+    Bleibt der Fall, den auch diese Fassung nicht auflösen kann: ein ``pid``,
+    das keine ``basematerials``-Gruppe benennt (eine Farbgruppe oder eine
+    Textur aus einer Erweiterung). Solche Dreiecke bekommen das Material ihres
+    Objekts — aber nicht mehr stillschweigend: Es steht im Protokoll, mit den
+    Kennungen, um die es geht.
     """
     if not materials:
         return None
-    group, names = next(iter(materials.items()))
-    triangles = node.findall(f"{{{CORE_NAMESPACE}}}triangles/{{{CORE_NAMESPACE}}}triangle")
+    triangles = _triangles_of(node)
     if not triangles:
         return None
 
-    default = 0
-    assignment = tuple(
-        int(entry.get("p1") or default) if (entry.get("pid") or group) == group else default
-        for entry in triangles
-    )
+    # Die Gruppe, die gilt, wenn ein Dreieck keine nennt.
+    own = pid if pid in materials else next(iter(materials))
+    # Ob überhaupt jemand ein Material benennt — das Objekt oder eines seiner
+    # Dreiecke. Sagt keiner etwas, gehört der Körper zu keinem, auch wenn die
+    # Datei daneben Materialien führt: Ihm das erste zuzuschreiben wäre
+    # geraten (Regel 21).
+    stated = pid in materials
+    foreign: set[str] = set()
+    assignment: list[_Key] = []
+    for entry in triangles:
+        group = entry.get("pid") or own
+        stated = stated or bool(entry.get("pid") or entry.get("p1"))
+        if group not in materials:
+            foreign.add(group)
+            assignment.append((own, pindex))
+            continue
+        assignment.append((group, _position(entry.get("p1"), pindex if group == own else 0)))
+    if not stated:
+        return None
+    if foreign:
+        _log.info(
+            "3MF triangles point at %s, which is no material group — they take the "
+            "material of their object",
+            ", ".join(sorted(foreign)),
+        )
+
     used = sorted(set(assignment))
-    if len(used) < 2:
-        return None  # ein Material für den ganzen Körper ist keine Gruppe, die sich lohnt
-    order = {position: index for index, position in enumerate(used)}
+    if len(used) < 2 and sum(len(entries) for entries in materials.values()) < 2:
+        # **Eine Farbe, die die Datei nur einmal kennt, ist keine Zuordnung.**
+        # Sie ist die Vorgabe — und aus ihr einen Materialslot zu machen hieße,
+        # jedem einfarbigen Import einen Slot namens „Slot 0" anzuhängen, den
+        # niemand gewählt hat.
+        #
+        # Führt die Datei dagegen **mehrere** Materialien, ist die Wahl eines
+        # davon eine Aussage, auch wenn dieser Körper nur bei einem bleibt.
+        # Genau das ging verloren: Eine zweifarbige Baugruppe besteht aus
+        # einfarbigen Teilen, und die Bedingung sah nur den einzelnen Körper.
+        return None
+    order = {key: index for index, key in enumerate(used)}
     return Groups(
-        slots=tuple(order[entry] for entry in assignment),
+        slots=tuple(order[key] for key in assignment),
         materials=tuple(
-            MaterialSlot(index=index, name=names[position][0], colour=names[position][1])
-            for index, position in enumerate(used)
-            if position < len(names)
+            MaterialSlot(index=index, name=name, colour=colour)
+            for index, (name, colour) in enumerate(_material_at(materials, key) for key in used)
         ),
     )
+
+
+def _triangles_of(node: ET.Element) -> list[ET.Element]:
+    """Die Dreiecke eines ``mesh``- oder ``object``-Knotens.
+
+    Beide Leser kommen hier durch, und sie halten verschiedene Knoten in der
+    Hand: :func:`read_objects` das Mesh, :func:`read` das Objekt darüber. Ohne
+    diese Zeile bräuchte jede Seite ihre eigene Zuordnung — und die eine
+    driftete von der anderen weg, was sie zweimal getan hat.
+    """
+    mesh = node.find(f"{{{CORE_NAMESPACE}}}mesh")
+    inside = mesh if mesh is not None else node
+    return inside.findall(f"{{{CORE_NAMESPACE}}}triangles/{{{CORE_NAMESPACE}}}triangle")
+
+
+def _position(text: str | None, fallback: int) -> int:
+    """Die Stelle in einer Materialgruppe. Was keine Zahl ist, ist keine
+    Angabe.
+    """
+    try:
+        return int(text) if text else fallback
+    except ValueError:
+        return fallback
+
+
+def _material_at(
+    materials: dict[str, list[tuple[str, tuple[float, float, float]]]], key: _Key
+) -> tuple[str, tuple[float, float, float]]:
+    """Name und Farbe zu einer Stelle — und ein Platzhalter, wo die Datei
+    daneben zeigt.
+
+    Ein Eintrag, den es nicht gibt, ist keine Farbe; er ist aber auch kein
+    Grund, dem Netz seine Slotnummer zu lassen und die Liste dazu wegzuwerfen.
+    """
+    group, position = key
+    names = materials.get(group, [])
+    if 0 <= position < len(names):
+        return names[position]
+    _log.info("3MF names no material at position %d of group %s", position, group)
+    return (f"Slot {position}", DEFAULT_COLOUR)
 
 
 def _matrix(text: str | None) -> np.ndarray:

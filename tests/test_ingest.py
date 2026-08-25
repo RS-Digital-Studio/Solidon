@@ -4,9 +4,12 @@ Importgrenzen (§17.1, §32).
 
 from __future__ import annotations
 
+import zipfile
+from io import BytesIO
 from pathlib import Path
 
 import pytest
+import trimesh
 
 from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshCodec, MeshData, read_mesh
@@ -51,6 +54,26 @@ def test_an_empty_model_offers_every_unit() -> None:
     guess = detect_unit(0.0)
     assert not guess.certain
     assert guess.candidates == ("mm", "cm", "in", "m")
+
+
+def test_a_small_part_can_still_be_read_in_millimetres() -> None:
+    """Die gemessene Einheit steht immer zur Wahl (§17.1).
+
+    Eine M3-Unterlegscheibe misst über alles rund sieben Millimeter, und damit
+    fiel „mm" aus der Antwortliste: Die Heuristik hält alles unter zehn
+    Millimetern für unplausibel, und was unplausibel ist, stand nicht zur
+    Auswahl. Wer eine korrekte Datei in Millimetern importierte, konnte also
+    nur zwischen „cm" und „in" wählen — beide falsch — oder abbrechen.
+
+    Als *einzige* Lesart bleibt „mm" hier unplausibel; das ist der Grund, dass
+    überhaupt gefragt wird. Als *Antwort* muss sie dastehen.
+    """
+    guess = detect_unit(5.0)
+
+    assert not guess.certain, "fünf Millimeter oder fünf Zentimeter — das ist eine Frage"
+    assert "mm" in guess.candidates, "die Datei so zu nehmen, wie sie dasteht"
+    assert guess.candidates[0] == "mm", "und zuerst, denn es ist der häufigste Fall"
+    assert set(guess.candidates) >= {"cm", "in"}, "die plausiblen Lesarten bleiben"
 
 
 def test_the_question_says_how_big_each_answer_would_be() -> None:
@@ -206,6 +229,33 @@ def test_progress_is_reported_while_running() -> None:
 # --- limits (§32) ---------------------------------------------------------------
 
 
+def test_the_warning_about_a_fine_mesh_holds_at_the_limit_it_names() -> None:
+    """Drei Schwellen für eine Frage, und die Warnung stimmte in keiner.
+
+    Gesagt wurde „Analysekarten und Merkmalserkennung lehnen ab" — ab 500 000
+    Dreiecken. Die Karten lehnen aber ab 120 000 ab und die Merkmalserkennung
+    ab 200 000 (§31): Zwischen 200 000 und 500 000 war beides längst
+    abgelehnt, und die Eingangsstufe schwieg dazu. Die Zahl hier ist deshalb
+    keine eigene mehr, sondern die kleinere der beiden echten.
+    """
+    from app.core.ingest import loader
+    from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
+    from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
+
+    assert min(MAP_LIMIT_TRIANGLES, FEATURE_LIMIT_TRIANGLES) == loader.HEAVY_TRIANGLES
+    assert loader._too_fine(MAP_LIMIT_TRIANGLES) is None, "an der Grenze ist noch alles möglich"
+
+    dazwischen = loader._too_fine(MAP_LIMIT_TRIANGLES + 1)
+    assert dazwischen is not None and dazwischen.code == "ingest.very_large"
+    assert "Merkmalserkennung" not in str(dazwischen.message), "die läuft hier noch"
+    assert "Dreiecke verringern" in str(dazwischen.message), "Regel 17: was jetzt hilft"
+
+    darueber = loader._too_fine(FEATURE_LIMIT_TRIANGLES + 1)
+    assert darueber is not None
+    assert "Merkmalserkennung" in str(darueber.message), "und hier lehnt auch sie ab"
+    assert darueber.values["triangles"] == FEATURE_LIMIT_TRIANGLES + 1
+
+
 def test_import_limits_are_stated_clearly() -> None:
     check_limits(1000, 1000)
 
@@ -217,6 +267,42 @@ def test_import_limits_are_stated_clearly() -> None:
     with pytest.raises(ValidationError) as many_triangles:
         check_limits(10, MAX_TRIANGLES + 1)
     assert many_triangles.value.constraint == "too_many_triangles"
+
+
+def test_a_zip_bomb_is_refused_before_anything_parses_it(monkeypatch) -> None:
+    """§32: Die Grenze steht **vor** dem Parsen, nicht daneben.
+
+    ``import_plan`` zählt die Körper einer 3MF, weil der Stapel die Objekt-IDs
+    vergeben muss, bevor gerechnet wird (§11) — und zählen heißt, das ganze
+    XML zu lesen. Eine Datei von 1,9 MB wird dabei zu 660 MB im Speicher des
+    Hauptfensters, und geprüft wurde die entpackte Größe erst in der
+    Operation, also lange danach. ``check_unpacked`` gab es genau für diesen
+    Fall; es lief nur an der falschen Stelle.
+
+    Die Grenze steht hier klein, damit der Test keine 600 MB anlegen muss —
+    geprüft wird die Reihenfolge, nicht die Zahl.
+    """
+    from app.core.export import threemf
+    from app.core.ingest import loader, plan
+
+    monkeypatch.setattr(loader, "MAX_FILE_BYTES", 1_000_000)
+
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as container:
+        container.writestr("3D/3dmodel.model", bytes(4_000_000))
+    payload = buffer.getvalue()
+    assert len(payload) < 100_000, "gepackt harmlos, entpackt nicht"
+
+    def niemals(_payload: bytes) -> int:
+        raise AssertionError("gezählt wurde, bevor die Grenze griff")
+
+    monkeypatch.setattr(threemf, "count_objects", niemals)
+
+    with pytest.raises(ValidationError) as abgewiesen:
+        plan.import_plan("src_1", "bombe.3mf", payload)
+
+    assert abgewiesen.value.constraint == "file_too_large"
+    assert abgewiesen.value.suggestions, "Regel 17"
 
 
 # --- die Lade-Operation ---------------------------------------------------------
@@ -260,6 +346,227 @@ def test_load_asks_when_the_unit_is_ambiguous(profile: Profile) -> None:
     assert asked, "an ambiguous unit is a question, not a guess"
     assert "in" in asked[0][1]
     assert result.scene.objects["obj_1"].mesh.bounds.size == pytest.approx((101.6, 50.8, 6.35))
+
+
+def _three_mf(name: str, unit: str, size: float = 4.0) -> bytes:
+    """Ein Würfel als 3MF, mit einer selbst gewählten Einheitenangabe.
+
+    ``threemf.write`` schreibt immer Millimeter — die Angabe wird danach
+    ausgetauscht, damit im Test die Datei steht und nicht ein zweiter
+    Schreiber daneben. Leer heißt: **kein** Attribut, also eine Datei, die
+    nichts über ihre Einheit sagt.
+    """
+    from app.core.export import threemf
+
+    cube = trimesh.creation.box((size, size, size))
+    payload = threemf.write(MeshData.of(cube), name=name)
+    buffer = BytesIO()
+    with (
+        zipfile.ZipFile(BytesIO(payload)) as quelle,
+        zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as ziel,
+    ):
+        for info in quelle.infolist():
+            data = quelle.read(info.filename)
+            if info.filename == threemf.MODEL_PATH:
+                ersatz = f'unit="{unit}"'.encode() if unit else b""
+                data = data.replace(b'unit="millimeter"', ersatz)
+                assert ersatz in data
+            ziel.writestr(info.filename, data)
+    return buffer.getvalue()
+
+
+def _project_of(payload: bytes, name: str = "wuerfel.3mf") -> Project:
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path=f"sources/{name}", sha256=""
+    )
+    project.sources["src_1"] = payload
+    return project
+
+
+def _asks_never(question: str, choices: list[str]) -> str:
+    raise AssertionError(f"gefragt, obwohl die Datei es sagt: {question}")
+
+
+@pytest.mark.parametrize(
+    ("declared", "factor"),
+    [("millimeter", 1.0), ("centimeter", 10.0), ("inch", 25.4), ("meter", 1000.0)],
+)
+def test_a_3mf_states_its_unit_and_is_not_asked_about_it(
+    profile: Profile, declared: str, factor: float
+) -> None:
+    """§17.1: Gefragt wird, wo die Datei schweigt — nicht, wo sie es sagt.
+
+    STL kennt keine Einheit, 3MF schon: sie steht im ``unit``-Attribut des
+    Modells. Solidon las sie nicht und stellte die Frage trotzdem — bei einem
+    4-mm-Würfel mit „cm" und „in" zur Auswahl, und die Datei sagte die ganze
+    Zeit, was richtig ist.
+    """
+    project = _project_of(_three_mf("Wuerfel", declared))
+    history = History(project.document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1"})])
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project), ask=_asks_never)
+
+    assert result.complete
+    size = result.scene.objects["obj_1"].mesh.bounds.size
+    assert size == pytest.approx((4.0 * factor,) * 3)
+
+
+@pytest.mark.parametrize(("declared", "factor"), [("micron", 0.001), ("foot", 304.8)])
+def test_a_unit_that_none_of_the_four_answers_names_still_arrives(
+    profile: Profile, declared: str, factor: float
+) -> None:
+    """Der Grund, dass die Frage hier nicht reicht: Das Format kennt Mikrometer
+    und Fuß, der Kern kennt sie nicht (§11.1).
+
+    Keine der vier Antworten wäre richtig gewesen — die Datei hätte sich nur
+    falsch importieren lassen. Umgerechnet wird auf eine Einheit, die Solidon
+    führt; der Rest ist ein Faktor davor.
+    """
+    project = _project_of(_three_mf("Wuerfel", declared))
+    history = History(project.document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1"})])
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project), ask=_asks_never)
+
+    assert result.complete
+    size = result.scene.objects["obj_1"].mesh.bounds.size
+    assert size == pytest.approx((4.0 * factor,) * 3)
+    codes = {entry.code for entry in result.scene.report.findings}
+    assert "ingest.declared_unit" in codes, "und es steht dabei, woher die Zahl kommt"
+
+
+def test_placing_an_assembly_on_the_bed_moves_it_as_one(profile: Profile) -> None:
+    """„Auf das Bett setzen" tat bei einer Baugruppe nichts — und sagte es
+    nicht (§17.1, Schritt 6).
+
+    Der Grund war richtig: Jeden Körper für sich abzusetzen nähme einem
+    Gehäuse den Deckel ab und stapelte die Teile aufeinander. Die Antwort
+    darauf ist aber nicht, den Haken wirkungslos zu machen, sondern die Gruppe
+    **gemeinsam** abzusetzen: Der unterste Punkt kommt auf null, und die Teile
+    behalten ihre Lage zueinander.
+    """
+    from app.core.export import threemf
+
+    unten = trimesh.creation.box((10.0, 10.0, 10.0))
+    unten.apply_translation((0.0, 0.0, 15.0))
+    oben = trimesh.creation.box((10.0, 10.0, 10.0))
+    oben.apply_translation((0.0, 0.0, 35.0))
+    payload = threemf.write_assembly(
+        [
+            threemf.AssemblyPart(mesh=MeshData.of(unten), name="Unten"),
+            threemf.AssemblyPart(mesh=MeshData.of(oben), name="Oben"),
+        ]
+    )
+    project = _project_of(payload, "gruppe.3mf")
+    history = History(project.document)
+    history.apply(
+        _("Laden"),
+        [
+            OperationDraft(
+                op="load",
+                params={"source": "src_1", "place_on_bed": True},
+                produces=2,
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete
+    erstes = result.scene.objects["obj_1"].mesh.bounds
+    zweites = result.scene.objects["obj_2"].mesh.bounds
+    assert erstes.minimum[2] == pytest.approx(0.0), "die Gruppe steht auf der Platte"
+    assert zweites.minimum[2] == pytest.approx(20.0), "und der Abstand der Teile bleibt"
+    codes = {entry.code for entry in result.scene.report.findings}
+    assert "load.assembly_on_bed" in codes, "und es steht dabei, dass etwas verschoben wurde"
+
+
+def test_an_assembly_already_on_the_bed_is_left_alone(profile: Profile) -> None:
+    """Die Gegenprobe: Wer schon unten steht, wird nicht verschoben — und
+    bekommt auch keinen Befund darüber."""
+    from app.core.export import threemf
+
+    unten = trimesh.creation.box((10.0, 10.0, 10.0))
+    unten.apply_translation((0.0, 0.0, 5.0))
+    oben = trimesh.creation.box((10.0, 10.0, 10.0))
+    oben.apply_translation((0.0, 0.0, 25.0))
+    payload = threemf.write_assembly(
+        [
+            threemf.AssemblyPart(mesh=MeshData.of(unten), name="Unten"),
+            threemf.AssemblyPart(mesh=MeshData.of(oben), name="Oben"),
+        ]
+    )
+    project = _project_of(payload, "gruppe.3mf")
+    history = History(project.document)
+    history.apply(
+        _("Laden"),
+        [
+            OperationDraft(
+                op="load",
+                params={"source": "src_1", "place_on_bed": True},
+                produces=2,
+            )
+        ],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.scene.objects["obj_2"].mesh.bounds.minimum[2] == pytest.approx(20.0)
+    codes = {entry.code for entry in result.scene.report.findings}
+    assert "load.assembly_on_bed" not in codes
+
+
+def test_the_import_plan_does_not_ask_what_the_file_answers() -> None:
+    """Und die Stelle davor: Die Kommandozeile fragt nach dem Plan, nicht
+    nach der Operation.
+
+    Stand ``asks_unit`` auf wahr, fragte sie — und schrieb die Antwort in die
+    Parameter. Damit hätte eine getippte Einheit die Angabe der Datei
+    überschrieben, ohne dass jemand von ihr wusste.
+    """
+    from app.core.ingest.plan import import_plan
+
+    mit = import_plan("src_1", "wuerfel.3mf", _three_mf("Wuerfel", "inch"))
+    ohne = import_plan("src_1", "wuerfel.3mf", _three_mf("Wuerfel", ""))
+
+    assert not mit.asks_unit, "die Datei sagt es"
+    assert ohne.asks_unit, "und wo sie schweigt, wird gefragt"
+    assert import_plan("src_1", "teil.stl", b"").asks_unit, "ein STL sagt nie etwas"
+
+
+def test_a_3mf_without_a_unit_is_still_asked_about(profile: Profile) -> None:
+    """Die Gegenprobe: Ohne Angabe bleibt es bei der Frage (Regel 21)."""
+    project = _project_of(_three_mf("Wuerfel", ""))
+    history = History(project.document)
+    history.apply(_("Laden"), [OperationDraft(op="load", params={"source": "src_1"})])
+    asked: list[list[str]] = []
+
+    def ask(question: str, choices: list[str]) -> str:
+        asked.append(choices)
+        return "mm"
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project), ask=ask)
+
+    assert result.complete
+    assert asked, "vier Millimeter sind mehrdeutig, und die Datei sagt nichts"
+    assert "mm" in asked[0]
+
+
+def test_the_unit_chosen_by_hand_beats_the_one_in_the_file(profile: Profile) -> None:
+    """Wer die Einheit im Stapel setzt, korrigiert die Datei — auch eine, die
+    sich irrt."""
+    project = _project_of(_three_mf("Wuerfel", "inch"))
+    history = History(project.document)
+    history.apply(
+        _("Laden"),
+        [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})],
+    )
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project), ask=_asks_never)
+
+    assert result.scene.objects["obj_1"].mesh.bounds.size == pytest.approx((4.0, 4.0, 4.0))
 
 
 def test_the_answer_can_be_stored_in_the_operation(profile: Profile) -> None:
