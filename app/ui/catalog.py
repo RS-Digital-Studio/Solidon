@@ -118,6 +118,11 @@ class PartCatalog(QDialog):
     """Bilder, Beschreibungen und ein Suchfeld."""
 
     partChosen = Signal(str)
+    saveRequested = Signal()
+    """Der Kunde will den gewählten Ausschnitt als eigenen Baustein ablegen (E4).
+
+    Ein Signal und kein Aufruf: Der Katalog hat kein Dokument und keine
+    Sitzung. Was daraus wird, entscheidet das Fenster."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -179,6 +184,22 @@ class PartCatalog(QDialog):
         # Art, jemanden ratlos zu machen. Warum er nicht kann, steht daneben:
         # die Detailspalte sagt „Wählen Sie einen Baustein".
         self._insert = ok
+
+        # **Der Weg zum eigenen Baustein steht im Katalog und nicht im Menü**
+        # (Konzept §16 Schritt 3, Begründung in §18c): Wer ein Teil in die
+        # Bibliothek legen will, denkt an die Bibliothek — und die Menüleiste
+        # ist die Stelle, die von eigenen Bausteinen ohnehin frei bleibt.
+        #
+        # Der Knopf schickt nur ein Signal. Was gespeichert wird, weiß das
+        # Fenster: Ausschnitt des Verlaufs, eingebettete Quellen, Merkmale des
+        # gerechneten Körpers. Der Katalog kennt das Dokument nicht und soll es
+        # nicht kennen.
+        self.save_part = buttons.addButton(
+            tr("Auswahl als Baustein speichern …"), QDialogButtonBox.ButtonRole.ActionRole
+        )
+        self.save_part.clicked.connect(self.saveRequested.emit)
+        self.set_can_save(False, "")
+
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 
@@ -200,6 +221,17 @@ class PartCatalog(QDialog):
         QTimer.singleShot(0, self, self._render_pending)
 
     # --- content ----------------------------------------------------------------
+
+    def set_can_save(self, can: bool, reason: str = "") -> None:
+        """Gibt den Knopf frei — oder sagt am Tooltip, was ihm fehlt.
+
+        Ein Knopf, der eine Wirkung verspricht und keine hat, ist die stillste
+        Art, jemanden ratlos zu machen; derselbe Befund, der dem „Einfügen"
+        daneben seine Bedingung gegeben hat. Der Grund kommt vom Fenster, weil
+        nur das ihn kennt — kein Ausschnitt gewählt, kein Körper gerechnet.
+        """
+        self.save_part.setEnabled(can)
+        self.save_part.setToolTip("" if can else reason)
 
     def show_parts(self, text: str = "") -> None:
         """Füllt die Liste, gruppiert wie der Katalog gruppiert."""

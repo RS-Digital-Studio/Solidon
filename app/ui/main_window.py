@@ -110,6 +110,7 @@ from app.core.geom.sculpt import (
 from app.core.geom.section import plane_through
 from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.knowledge import calibration, print_settings, profiles
+from app.core.knowledge.parts import GROUPS
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
@@ -146,6 +147,7 @@ from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
 from app.core.tour import tour_for
 from app.core.types import (
     Bone,
+    Feature,
     Finding,
     ObjectId,
     Origin,
@@ -213,6 +215,7 @@ from app.ui.panels import (
 )
 from app.ui.pose_bar import PoseBar
 from app.ui.print_settings_dialog import PrintSettingsDialog, remembered_setup
+from app.ui.recipe_dialog import RecipeDialog
 from app.ui.remote_server import RemoteServer, WindowBridge
 from app.ui.sculpt_bar import SculptBar
 from app.ui.section_bar import MeasureBar, SectionBar
@@ -3650,11 +3653,92 @@ class MainWindow(QMainWindow):
         führt seine Operation aus.
         """
         catalog = PartCatalog(self)
+        catalog.set_can_save(*self._recipe_readiness())
+        catalog.saveRequested.connect(lambda: self._save_as_part(catalog))
         if catalog.exec() != PartCatalog.DialogCode.Accepted:
             return
         name = catalog.chosen()
         if name:
             self.run_operation(REGISTRY.get(part_op_name(name)))
+
+    def _recipe_readiness(self) -> tuple[bool, str]:
+        """Ob sich aus dem Stand ein eigener Baustein machen lässt — und sonst warum nicht.
+
+        Drei Bedingungen, jede mit einem Satz statt eines grauen Knopfes
+        (§2.7): etwas gerechnet, mindestens ein Schritt, mindestens ein
+        Projektparameter. Die dritte ist die, die am ehesten fehlt — ohne sie
+        wäre der Baustein starr, und das merkt der Kunde erst, wenn er ihn
+        benutzt.
+        """
+        document = self.session.project.document
+        if self.session.last_result is None:
+            return False, tr("Dafür muss zuerst etwas gerechnet sein.")
+        if not document.ops:
+            return False, tr("Dieses Projekt hat noch keine Schritte.")
+        if not document.parameters:
+            return False, tr(
+                "Legen Sie zuerst Projektparameter an und binden Sie die Maße daran, "
+                "die am Baustein einstellbar sein sollen."
+            )
+        return True, ""
+
+    def _save_as_part(self, catalog: PartCatalog) -> None:
+        """Öffnet den Rezeptdialog über dem Katalog (Konzept §16, Schritt 4 und 5).
+
+        **Genommen wird der ganze Stapel, nicht ein Ausschnitt daraus.** Das
+        Konzept spricht von einem Ausschnitt, und ``capture`` nimmt dafür
+        ``op_ids`` — aber der Verlauf kennt heute keine Mehrfachauswahl, und
+        einen Bereich zu erfinden, den niemand wählen kann, wäre eine
+        Bedienung, die es nicht gibt. Wer sein Teil als Baustein ablegt, hat es
+        ohnehin gerade gebaut. Die Teilauswahl ist ein eigener Schritt und
+        steht als solcher im Register.
+        """
+        result = self.session.last_result
+        document = self.session.project.document
+        if result is None:
+            return
+        dialog = RecipeDialog(
+            document,
+            dict(self.session.project.sources),
+            tuple(index for index, _op in enumerate(document.ops)),
+            self._result_features(),
+            self.session.profile,
+            groups=tuple(GROUPS),
+            parent=catalog,
+        )
+        dialog.saved.connect(catalog.show_parts)
+        dialog.saved.connect(self._part_saved)
+        try:
+            dialog.exec()
+        finally:
+            dialog.release()
+            dialog.deleteLater()
+
+    def _result_features(self) -> tuple[Feature, ...]:
+        """Jedes erkannte und erzeugte Merkmal des gerechneten Standes.
+
+        Eigene Methode und keine Zeile im Aufruf darüber: **Szene und Körper
+        führen ihre Inhalte als Wörterbücher.** Über sie zu iterieren gibt
+        Kennungen statt Objekte, und der Dialog fragte danach nach ``.id`` einer
+        Zeichenkette — ein Fehler, der erst beim ersten echten Klick auffällt,
+        weil ein Test mit Attrappen ihn nicht berührt. Als Methode hat er eine
+        Stelle, an der er geprüft werden kann.
+        """
+        result = self.session.last_result
+        if result is None:
+            return ()
+        return tuple(
+            feature
+            for scene_object in result.scene.objects.values()
+            for feature in scene_object.features.values()
+        )
+
+    def _part_saved(self, name: str) -> None:
+        """Ein eigener Baustein ist entstanden — sagen, wo er steht."""
+        self.announce(
+            tr("Der Baustein steht im Katalog. Er gehört Ihnen und bleibt auf diesem Rechner.")
+        )
+        _log.info("own part saved: %s", name)
 
     def action_calibrate(self) -> None:
         """§28.3: gemessene Werte ins Materialprofil, und alles folgt."""
