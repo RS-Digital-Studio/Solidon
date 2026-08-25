@@ -20,8 +20,11 @@ Zertifikat für diesen Namen. Die Prüfsumme fängt, was danach kommt — den
 abgebrochenen Download, den halb geschriebenen Puffer, die Datei aus einem
 Zwischenspeicher.
 
-Die Prüfung beim Start ist aus, bis jemand sie einschaltet. Sie ist eine
-Anfrage, die den Rechner verlässt, und damit eine Entscheidung.
+Die Prüfung beim Start ist an — seit dem 23.08.2026, und die
+Datenschutzerklärung auf der Website sagt es so. Sie bleibt eine Anfrage, die
+den Rechner verlässt, und damit eine Entscheidung: abschaltbar in den
+Einstellungen, und ältere Einstellungsdateien werden beim ersten Lesen einmal
+angehoben (``update_default_lifted`` in ``app/ui/settings.py``).
 """
 
 from __future__ import annotations
@@ -250,7 +253,12 @@ def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | N
     """
     address = url
     try:
-        payload = (fetch or _get)(url, {}, {})
+        # Derselbe Absender wie beim Paketholen weiter unten: Ohne ihn ging
+        # die Anfrage als ``Python-urllib/3.13`` hinaus — manche CDNs sperren
+        # das, die Prüfung scheiterte still, und der Datenschutztext
+        # verspricht ein Programm-Kennzeichen statt eines Bibliotheksnamens
+        # (Gesamtreview L-6).
+        payload = (fetch or _get)(url, {"User-Agent": f"Solidon/{APP_VERSION}"}, {})
     except Exception as problem:  # ein Netz scheitert auf viele Arten, keine davon ist unsere
         _log.info("update check did not answer: %s", problem)
         return None

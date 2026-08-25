@@ -151,10 +151,28 @@ def days_left(today: date | None = None) -> int:
     """
     if DEMO_UNTIL is None:
         return trial_days_left(today)
+    # Auch die Demo führt den höchsten je gesehenen Tag: „Wer die Uhr
+    # zurückstellt, verschiebt nur sein eigenes Kalenderblatt" stand als
+    # Zusage im Modulkopf, gehalten hat sie nur der Testlauf-Zweig — Uhr auf
+    # 2020 hieß zweieinhalbtausend Tage Demo (Gesamtreview L-1). Der Marker
+    # ist derselbe, samt Horizontprüfung gegen die leere BIOS-Batterie.
+    now = today or date.today()
+    stored = _read_trial()
+    if stored is None:
+        _write_trial(now, now)
+        effective = now
+    else:
+        first_run, last_seen = stored
+        if last_seen > first_run + timedelta(days=CLOCK_HORIZON_DAYS):
+            _log.warning("trial marker holds an implausible date, ignoring it: %s", last_seen)
+            last_seen = max(now, first_run)
+        effective = max(now, last_seen)
+        if effective != stored[1]:
+            _write_trial(first_run, effective)
     # Der Stichtag selbst gehört noch dazu: am 30.10. bleibt ein Tag übrig,
     # am 31.10. keiner. Die freundliche Richtung, und die, die auf der Website
     # steht („bis zum 30.10.").
-    return max(0, (DEMO_UNTIL - (today or date.today())).days + 1)
+    return max(0, (DEMO_UNTIL - effective).days + 1)
 
 
 def trial_days_left(today: date | None = None) -> int:

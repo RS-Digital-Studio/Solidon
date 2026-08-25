@@ -63,6 +63,31 @@ def test_a_reworded_manifest_from_the_tool_is_still_rejected(
     assert not integrity.intact()
 
 
+def test_everything_the_manifest_covers_is_checked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Was es darüber hinaus deckt, wird mitgeprüft" — jetzt stimmt der Satz.
+
+    Ein sauber signiertes Manifest, das eine fünfte Datei mit falscher
+    Prüfsumme deckt, lief vorher durch: Geprüft wurden nur die vier
+    Grenzdateien, und die Zusage im Kommentar war leer.
+    """
+    from tools.build_licence_module import sign
+
+    files = dict(integrity.boundary_hashes())
+    files["core/updates.py"] = "0" * 64
+    manifest = {
+        "files": files,
+        "signature": sign(TEST_SEED, integrity.manifest_payload(files)).hex(),
+    }
+    target = tmp_path / "licence.manifest"
+    target.write_text(json.dumps(manifest), encoding="utf-8")
+
+    monkeypatch.setattr(integrity, "MANIFEST_PUBLIC_KEY", public_key(TEST_SEED))
+    monkeypatch.setattr(integrity, "manifest_path", lambda: target)
+    assert not integrity.intact(), "die fünfte Datei weicht ab — das muss sperren"
+
+
 def test_staging_sets_the_build_key_and_refuses_without_the_placeholder(
     tmp_path: Path,
 ) -> None:

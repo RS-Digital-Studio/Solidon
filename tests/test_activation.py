@@ -345,11 +345,13 @@ def test_a_missing_marker_starts_over(own_config: Path) -> None:
 
 
 @pytest.fixture
-def demo(monkeypatch: pytest.MonkeyPatch) -> Iterator[date]:
+def demo(monkeypatch: pytest.MonkeyPatch, own_config: Path) -> Iterator[date]:
     """Ein bekannter Stichtag statt des ausgelieferten.
 
     Die Suite läuft sonst ohne (siehe `conftest._the_calendar_stays_out_of_it`);
-    hier wird die Frist selbst geprüft, also muss sie hier stehen.
+    hier wird die Frist selbst geprüft, also muss sie hier stehen. Mit
+    eigenem Einstellungsordner, denn seit L-1 schreibt auch der Demo-Zweig
+    den Uhr-Marker — sonst trüge er in die Testlauf-Tests hinein.
     """
     deadline = date(2026, 10, 30)
     monkeypatch.setattr(store, "DEMO_UNTIL", deadline)
@@ -365,12 +367,13 @@ def test_the_demo_runs_up_to_and_including_its_deadline(demo: date) -> None:
 
 
 def test_the_demo_does_not_count_from_the_first_run(own_config: Path, demo: date) -> None:
-    """Der Testlaufmarker entscheidet in der Demo nichts mehr.
+    """Der erste Start entscheidet in der Demo nichts.
 
     Das ist der Unterschied der beiden Modelle in einem Test: eine Frist ab
     dem ersten Start ließe sich durch Löschen der Datei erneuern, ein
-    Kalendertag nicht. Deshalb steht in der Demo auch keine Zusicherung über
-    ihn — er wird schlicht nicht gelesen.
+    Kalendertag nicht. Der Marker wird seit L-1 auch hier geführt — aber nur
+    gegen die zurückgestellte Uhr; ``first_run`` und das Löschen der Datei
+    ändern am Stichtag nichts.
     """
     store.trial_path().write_text(
         '{"first_run": "2026-01-01", "last_seen": "2026-08-06"}', encoding="utf-8"
@@ -378,6 +381,18 @@ def test_the_demo_does_not_count_from_the_first_run(own_config: Path, demo: date
     assert store.days_left(demo - timedelta(days=1)) == 2
     store.trial_path().unlink()
     assert store.days_left(demo - timedelta(days=1)) == 2
+
+
+def test_the_demo_clock_does_not_run_backwards(own_config: Path, demo: date) -> None:
+    """Uhr auf 2020 heißt nicht zweieinhalbtausend Tage Demo.
+
+    „Wer die Uhr zurückstellt, verschiebt nur sein eigenes Kalenderblatt"
+    stand als Zusage im Modulkopf — gehalten hat sie nur der Testlauf-Zweig.
+    Auch die Demo führt jetzt den höchsten je gesehenen Tag.
+    """
+    assert store.days_left(demo - timedelta(days=9)) == 10
+    assert store.days_left(date(2020, 1, 1)) == 10, "die Frist läuft nie rückwärts"
+    assert store.days_left(demo - timedelta(days=4)) == 5, "vorwärts zählt der Kalender"
 
 
 def test_after_its_deadline_the_demo_is_over(

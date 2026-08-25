@@ -104,9 +104,21 @@ def intact() -> bool:
     if not ed25519.verify(MANIFEST_PUBLIC_KEY, manifest_payload(files), signature):
         _log.warning("licence manifest signature does not match")
         return False
-    current = boundary_hashes()
-    for name in BOUNDARY_FILES:
-        if files.get(name) != current[name]:
+    if any(name not in files for name in BOUNDARY_FILES):
+        _log.warning("licence manifest does not cover the boundary files")
+        return False
+    # Alles, was das Manifest deckt, wird geprüft — der Satz an
+    # ``BOUNDARY_FILES`` versprach das schon, gehalten hat ihn erst diese
+    # Schleife: Vorher liefen genau vier Vergleiche, und eine fünfte gedeckte
+    # Datei durfte beliebig abweichen (Gesamtreview L-7). Die Pfade sind
+    # vertrauenswürdig, denn die Signatur ist zu diesem Zeitpunkt geprüft.
+    root = app_root()
+    for name, expected in files.items():
+        try:
+            actual = hashlib.sha256((root / name).read_bytes()).hexdigest()
+        except OSError:
+            actual = ""
+        if expected != actual:
             _log.warning("licence boundary file does not match the manifest: %s", name)
             return False
     return True

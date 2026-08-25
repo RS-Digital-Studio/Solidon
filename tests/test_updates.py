@@ -49,6 +49,23 @@ def raw_answering(payload: dict[str, Any]) -> updates.Transport:
     return fetch
 
 
+def test_the_check_names_the_application_not_the_library() -> None:
+    """Die Anfrage sagt, von wem sie kommt — Solidon, nicht Python-urllib.
+
+    Manche CDNs sperren den Bibliotheksnamen, und die Prüfung scheiterte
+    still; die Datenschutzerklärung verspricht zudem ein Programm-Kennzeichen.
+    ``download()`` machte es seit je richtig, ``check()`` nicht.
+    """
+    seen: list[dict[str, str]] = []
+
+    def fetch(_url: str, headers: dict[str, str], _payload: dict[str, Any]) -> dict[str, Any]:
+        seen.append(dict(headers))
+        return signed({"version": "99.0.0", "url": "https://example.org/"})
+
+    updates.check(fetch=fetch)
+    assert seen and seen[0].get("User-Agent", "").startswith("Solidon/")
+
+
 def test_a_newer_version_is_reported() -> None:
     release = updates.check(fetch=answering({"version": "99.0.0", "url": "https://example.org/"}))
 
