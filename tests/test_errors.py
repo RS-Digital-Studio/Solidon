@@ -206,7 +206,8 @@ _NOT_A_RANGE = frozenset(
     {
         "absolute_path", "already_solid", "ambiguous_reference", "checksum", "choices",
         "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
-        "empty", "file_too_large", "format", "grammar", "host", "inverted", "known_pattern",
+        "empty", "exists", "file_too_large", "format", "grammar", "host", "inverted",
+        "known_pattern",
         "known_structure", "missing_file", "missing_gathered", "missing_link", "missing_payload",
         "needs_diameter", "no_area", "no_base_dir", "no_cavity", "no_direction", "no_face",
         "no_geometry", "no_migration", "no_normal", "no_outline", "no_profile", "no_section",

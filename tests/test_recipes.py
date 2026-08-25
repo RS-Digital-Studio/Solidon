@@ -102,8 +102,31 @@ def test_saving_twice_writes_the_same_file(profile: Profile, tmp_path: Path) -> 
     Auswertung und ``project.save`` dem Container macht."""
     made = _recipe(profile)
     first = recipe.save(made, tmp_path).read_bytes()
-    second = recipe.save(made, tmp_path).read_bytes()
+    second = recipe.save(made, tmp_path, overwrite=True).read_bytes()
     assert first == second
+
+
+def test_saving_over_a_foreign_recipe_stops_instead_of_replacing(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Eine vorhandene Rezeptdatei ist Kundenarbeit — ``save`` ersetzt sie nur
+    auf ausdrückliche Absicht.
+
+    Der Dialog lief einmal in die stille Fassung: ``register()`` lehnte den
+    doppelten Namen ab, nachdem ``save()`` die alte Datei schon überschrieben
+    hatte. Die Meldung sprach von einem Fehlschlag, die Platte trug den
+    Verlust.
+    """
+    made = _recipe(profile)
+    target = recipe.save(made, tmp_path)
+    before = target.read_bytes()
+
+    with pytest.raises(ValidationError) as caught:
+        recipe.save(made, tmp_path)
+
+    assert caught.value.values["recipe"] == made.name
+    assert caught.value.suggestions, "Regel 17: auch diese Absage trägt einen Vorschlag"
+    assert target.read_bytes() == before, "die vorhandene Datei bleibt unangetastet"
 
 
 # --- Die Auswertung (E5) ----------------------------------------------------------

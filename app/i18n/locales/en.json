@@ -2512,6 +2512,7 @@
   "Unten": "Bottom",
   "Unten ist das Teil breiter, als es gezeichnet wurde.": "At the bottom the part is wider than it was drawn.",
   "Unter dem Viewport liegt die Werkzeugzeile: Explosion zieht die Hälften auseinander, dann sehen Sie Stifte und Hohlraum.": "Below the viewport sits the tool strip: Exploded pulls the halves apart, and you see pins and cavity.",
+  "Unter diesem Namen liegt schon ein eigener Baustein. Wählen Sie einen anderen Namen — oder ersetzen Sie den vorhandenen ausdrücklich.": "A part of your own already sits under this name. Choose a different name — or replace the existing one deliberately.",
   "Unter dieser Adresse steht eine Webseite, keine Modelldatei. Auf der Seite gibt es einen Knopf zum Herunterladen — die Datei danach hier ablegen.": "That address holds a web page, not a model file. The page has a download button — drop the file here afterwards.",
   "Unter „Weitere Einstellungen“": "Under “More settings”",
   "Untergrenze sind zwei Extrusionsbreiten.": "Two extrusion widths are the lower limit.",

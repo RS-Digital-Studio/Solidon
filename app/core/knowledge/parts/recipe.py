@@ -432,10 +432,31 @@ def recipes_dir(base: Path | None = None) -> Path:
     return (base or user_parts_dir()) / RECIPES_DIRNAME
 
 
-def save(recipe: Recipe, directory: Path | None = None) -> Path:
-    """Schreibt das Rezept als eine Datei; der Dateiname ist der Name."""
+def save(recipe: Recipe, directory: Path | None = None, *, overwrite: bool = False) -> Path:
+    """Schreibt das Rezept als eine Datei; der Dateiname ist der Name.
+
+    Eine vorhandene Datei ist Kundenarbeit: Ersetzt wird nur mit
+    ``overwrite=True`` — „Ändern heißt neu speichern" ist der gewollte Fall,
+    und den sagt der Aufrufer ausdrücklich. Ohne diese Absicht hält die
+    Funktion an, statt still zu tauschen. Der Dialog lief am 25.08.2026 in
+    genau diese Falle: ``register()`` lehnte den doppelten Namen ab, nachdem
+    ``save()`` die alte Datei bereits überschrieben hatte — die Meldung sprach
+    von einem Fehlschlag, die Platte trug längst den Verlust.
+    """
     folder = ensure_dir(recipes_dir() if directory is None else directory)
     target = folder / f"{recipe.name}.json"
+    if target.exists() and not overwrite:
+        raise ValidationError(
+            field="title",
+            detail=_(
+                "Unter diesem Namen liegt schon ein eigener Baustein. Wählen "
+                "Sie einen anderen Namen — oder ersetzen Sie den vorhandenen "
+                "ausdrücklich."
+            ),
+            values={"recipe": recipe.name, "file": target.name},
+            constraint="exists",
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
     data = to_data(recipe)
     if recipe.range_report is not None:
         # Neben den Daten, nicht darin: siehe ``Recipe.range_report``.
