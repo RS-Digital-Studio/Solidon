@@ -1188,6 +1188,66 @@ def test_isolating_hides_the_rest_and_the_same_entry_brings_it_back(
     assert window.viewport.hidden == frozenset()
 
 
+def test_isolating_a_hidden_body_isolates_instead_of_revealing(
+    window: MainWindow,
+) -> None:
+    """Beschriftung und Wirkung teilen sich jetzt eine Antwort (§18.8).
+
+    Rechtsklick auf einen bereits **ausgeblendeten** Körper bot „Alles andere
+    ausblenden" — und die Wirkung war „alles einblenden": Beide Seiten lasen
+    dasselbe Feld mit verschiedener Frage (Gesamtreview 25.08.2026, I-6).
+    """
+    _with_two_objects(window)
+    window._apply_hidden(frozenset({"obj_2"}))
+
+    window._on_isolate(("obj_2",))
+    assert window.viewport.hidden == frozenset({"obj_1"}), (
+        "wer ein verstecktes Teil isoliert, will es sehen — nicht alles"
+    )
+
+    window._on_isolate(("obj_2",))
+    assert window.viewport.hidden == frozenset(), "derselbe Eintrag holt alles zurück"
+
+
+def test_the_palette_refuses_a_locked_choice_with_the_reason(window: MainWindow) -> None:
+    """Gesperrt bleibt gesperrt, auch über die Pfeiltasten (Regel 19).
+
+    Die Liste sperrt ihre Zeilen, aber die Tastatur sprang auf eine gesperrte,
+    und Enter führte sie aus — „Gitter füllen" auf leerer Szene öffnete die
+    modale Sackgasse (Gesamtreview 25.08.2026, I-3). Der Grund geht jetzt in
+    die Statuszeile, gestartet wird nichts.
+    """
+    launched: list[str] = []
+    window.launch_operation = lambda spec: launched.append(spec.name)  # type: ignore[method-assign]
+
+    available, reason = window._palette_availability("lattice_fill")
+    assert not available and reason, "auf leerer Szene ist die Wahl gesperrt, mit Grund"
+
+    window._run_palette_choice("lattice_fill")
+    assert launched == [], "eine gesperrte Wahl startet nichts"
+    assert window.status_message.text() == reason, "der Grund steht in der Zeile"
+
+    window._run_palette_choice("create_box")
+    assert launched == ["create_box"], "eine freie Wahl startet wie bisher"
+
+
+def test_a_typed_name_gets_the_project_suffix(window: MainWindow) -> None:
+    """„Speichern unter" erzwingt die Projektendung (Gesamtreview A2).
+
+    ``save_project`` schrieb jede Endung klaglos, und ``open_path`` verzweigt
+    strikt über sie: Eine als ``halter.stl`` gespeicherte Projektdatei wurde
+    beim Öffnen als Fremdmodell gelesen — „Dieses Dateiformat kann nicht
+    gelesen werden", über der eigenen Datei. Angehängt und nicht ersetzt.
+    """
+    from app.ui.main_window import _as_project_path
+
+    assert _as_project_path("halter").name == "halter.p3d"
+    assert _as_project_path("halter.stl").name == "halter.stl.p3d"
+    assert _as_project_path("halter.p3d").name == "halter.p3d"
+    assert _as_project_path("Halter 2.5").name == "Halter 2.5.p3d"
+    assert _as_project_path("HALTER.P3D").name == "HALTER.P3D", "Großschreibung bleibt"
+
+
 def test_the_tree_names_the_step_a_body_came_from(window: MainWindow) -> None:
     """§18.8: Herkunft aus Operation und Transaktion."""
     _with_two_objects(window)
@@ -4174,6 +4234,28 @@ def test_a_replaced_run_keeps_the_progress_standing(session: Session) -> None:
     assert seen == [True], "und der nächste Lauf meldet sich als laufend"
 
     session.wait_for_idle()
+
+
+def test_cancelling_discards_the_queued_rerun(session: Session) -> None:
+    """Abbrechen heißt aufhören — auch mit dem, was eingereiht wartet.
+
+    ``cancel()`` ließ ``_rerun_pending`` stehen: Die Statuszeile schrieb
+    „Abgebrochen", und ``_on_thread_done`` startete im selben Atemzug den
+    eingereihten Nachlauf — die Maschine rechnete weiter, das Wort stand
+    daneben (Gesamtreview 25.08.2026, I-1). Ein **Ersetzen** behält den
+    Nachlauf weiter, das prüft der Test darüber; ein **Nutzer-Abbruch**
+    verwirft ihn.
+    """
+    session.import_model(MESHES / "cube_clean.stl")
+    running = session._worker
+    assert running is not None
+    session._rerun_pending = True
+
+    session.cancel()
+
+    assert not session._rerun_pending, "der Abbruch verwirft die eingereihte Anfrage"
+    session.wait_for_idle()
+    assert session._worker is None or not session._worker.isRunning()
 
 
 def test_a_late_result_does_not_overwrite_the_current_scene(session: Session) -> None:

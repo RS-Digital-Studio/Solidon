@@ -1147,6 +1147,31 @@ def test_fitting_tells_pyvista_that_it_is_done(window: MainWindow) -> None:
     assert plotter.camera_set, "und danach fasst pyvista die Kamera nicht mehr an"
 
 
+def test_a_problem_note_stays_inside_the_legend_layout(qt_app: QApplication) -> None:
+    """Der Problemsatz der Legende stand außerhalb jeder Anordnung.
+
+    ``show_map`` nimmt beim Aufräumen **jedes** Element aus dem Layout — auch
+    die Notiz (geschützt war nur ihr Löschen) — und hängte sie nur im
+    Erfolgsfall wieder ein. „Die Analysekarte wird berechnet …" und „… zu
+    groß" standen damit auf 100 × 30 Punkten Geometrie irgendwo im Nichts
+    (Gesamtreview 25.08.2026, I-9). Geprüft wird die Zugehörigkeit zum
+    Layout — Sichtbarkeit lügt offscreen.
+    """
+    from app.ui.analysis_bar import AnalysisBar
+
+    bar = AnalysisBar(None)
+    try:
+        legend = bar.legend
+
+        bar.show_problem("Für eine Analysekarte ist dieses Modell zu groß.")
+        assert legend._layout.indexOf(legend.note) >= 0, "der Problemsatz braucht sein Layout"
+
+        bar.show_legend(None)
+        assert legend._layout.indexOf(legend.note) >= 0, "auch beim Leeren"
+    finally:
+        bar.deleteLater()
+
+
 def test_an_axis_view_fits_on_the_bodies_not_the_backdrop(window: MainWindow) -> None:
     """Strg+0 bis Strg+6 rahmten die Kulisse statt des Teils.
 

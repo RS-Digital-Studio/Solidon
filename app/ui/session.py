@@ -1181,8 +1181,17 @@ class Session(QObject):
         return result
 
     def cancel(self) -> None:
-        """Der eine Knopf hält beides an, was gerade laufen kann (§2.8)."""
+        """Der eine Knopf hält beides an, was gerade laufen kann (§2.8).
+
+        **Auch den eingereihten Nachlauf.** Ein Ersetzen behält ihn mit
+        Absicht (siehe ``_on_thread_done``) — ein Nutzer-Abbruch nicht: Wer
+        Abbrechen drückt, während ein zweiter Zug am Schieber wartet, las
+        „Abgebrochen" in der Statuszeile, und im selben Atemzug lief der
+        eingereihte Lauf an. Die Maschine rechnete weiter, das Wort stand
+        daneben.
+        """
         self._cancel_by_user = True
+        self._rerun_pending = False
         self.cancel_signal.cancel()
         self.agent_cancel.cancel()
 

@@ -329,26 +329,63 @@ def test_every_worker_has_somebody_listening_for_its_crash() -> None:
 
     Die Basisklasse allein verschiebt den Fund nur: Sie fängt die Ausnahme und
     protokolliert sie, aber der Wartezustand löst sich erst, wenn jemand
-    ``crashed`` verbindet. Geprüft wird je Datei, dass es dort geschieht, wo
-    Arbeiter gebaut werden.
+    ``crashed`` verbindet.
+
+    **Je Startstelle, nicht je Datei.** Die Dateiprüfung war in der Datei mit
+    sechs Arbeitern blind: Zwei verbundene reichten ihr, und vier Startstellen
+    standen taub da — die Legende blieb für immer auf „wird berechnet", die
+    Schichtanalyse-Zeile stand, und „Nach einer neuen Version sehen" wurde ein
+    toter Knopf (Gesamtreview 25.08.2026, I-2/E-8). Geprüft wird jetzt: In
+    jeder Funktion, die einen ``…Worker(...)`` baut, wird auch
+    ``crashed.connect`` gerufen.
     """
     import ast
     from pathlib import Path
 
     root = Path(__file__).resolve().parent.parent / "app" / "ui"
-    missing: list[str] = []
-    for path in sorted(root.glob("*.py")):
-        text = path.read_text(encoding="utf-8")
-        tree = ast.parse(text)
-        builds_worker = any(
-            isinstance(node, ast.ClassDef)
-            and any(getattr(base, "id", "") == "Worker" for base in node.bases)
-            for node in ast.walk(tree)
-        )
-        if builds_worker and "crashed.connect" not in text:
-            missing.append(path.name)
 
-    assert not missing, "baut Arbeiter, hört aber nicht auf crashed: " + ", ".join(missing)
+    def worker_classes(tree: ast.AST) -> set[str]:
+        return {
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ClassDef)
+            and any(getattr(base, "id", "") == "Worker" for base in node.bases)
+        }
+
+    trees = {
+        path: ast.parse(path.read_text(encoding="utf-8")) for path in sorted(root.glob("*.py"))
+    }
+    known = set().union(*(worker_classes(tree) for tree in trees.values()))
+    assert known, "keine Worker-Klassen gefunden — dann prüft der Lauf nichts"
+
+    deaf: list[str] = []
+    sites = 0
+    for path, tree in trees.items():
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            builds = [
+                call
+                for call in ast.walk(node)
+                if isinstance(call, ast.Call)
+                and (
+                    getattr(call.func, "id", "") in known or getattr(call.func, "attr", "") in known
+                )
+            ]
+            if not builds:
+                continue
+            sites += 1
+            listens = any(
+                isinstance(call, ast.Call)
+                and getattr(call.func, "attr", "") == "connect"
+                and getattr(getattr(call.func, "value", None), "attr", "") == "crashed"
+                for call in ast.walk(node)
+            )
+            if not listens:
+                deaf.append(f"{path.name}:{node.name}")
+
+    assert sites >= 10, f"nur {sites} Startstellen gefunden — dann prüft der Lauf zu wenig"
+    assert not deaf, "baut Arbeiter, hört aber nicht auf crashed: " + ", ".join(deaf)
 
 
 def test_the_sweep_over_the_surface_finds_files_to_read() -> None:

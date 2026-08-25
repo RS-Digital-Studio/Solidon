@@ -452,19 +452,31 @@ class _DownloadWorker(Worker):
 
     done = Signal(object)
     failed = Signal(object)
+    stopped = Signal()
     step = Signal(float, str)
 
     def __init__(self, url: str) -> None:
         super().__init__()
         self._url = url
+        self.cancel = CancelSignal()
+        """§2.8: über zwei Sekunden gehört zum Fortschritt ein Abbrechen —
+        ein 300-MB-Modell an langsamer Leitung war sonst nur über das
+        Beenden der Anwendung zu stoppen. Der Kern liest blockweise und
+        meldet je Block Fortschritt; der Rückruf ist damit der Punkt, an dem
+        sich sauber aufhören lässt, ohne dass der Kern einen eigenen
+        Abbruchparameter braucht."""
 
     def work(self) -> None:
         try:
             self.done.emit(fetch_model(self._url, progress=self._report))
+        except OperationCancelled:
+            self.stopped.emit()
         except AppError as error:
             self.failed.emit(error)
 
     def _report(self, share: float, text: str) -> None:
+        if self.cancel.is_cancelled:
+            raise OperationCancelled(tr("Der Download wurde abgebrochen."))
         self.step.emit(share, text)
 
 
@@ -642,6 +654,21 @@ def _format_of(target: Path, chosen_filter: str) -> ExportFormat:
     return "stl"
 
 
+def _as_project_path(name: str) -> Path:
+    """Der getippte Name bekommt die Projektendung, wenn er keine trägt.
+
+    ``save_project`` schrieb jede Endung klaglos, und ``open_path`` verzweigt
+    strikt über sie: Eine als ``halter.stl`` gespeicherte Projektdatei wurde
+    beim Öffnen als Fremdmodell gelesen — „Dieses Dateiformat kann nicht
+    gelesen werden", über der eigenen Datei (Gesamtreview A2). Angehängt und
+    nicht ersetzt: Wer „Halter 2.5" tippt, meint keine Endung ``.5``.
+    """
+    path = Path(name)
+    if path.suffix.lower() == PROJECT_SUFFIX:
+        return path
+    return path.with_name(path.name + PROJECT_SUFFIX)
+
+
 def _has_sketch_param(spec: OperationSpec) -> bool:
     """Ob diese Operation eine gezeichnete Skizze verbraucht (§30.1)."""
     return any(entry.kind == "sketch" for entry in spec.params.spec())
@@ -788,9 +815,17 @@ class MainWindow(QMainWindow):
         self._ollama_size_worker: Any = None
         """Die Modellgrößen-Frage an Ollama (§27), aus demselben Grund."""
         self._download_worker: Any = None
+        self._downloading = False
+        """Ob gerade eine Datei geholt wird — als eigene Flagge, nicht über
+        das Worker-Feld: ``done``/``failed`` kommen vor ``finished``, und das
+        Feld hält den Arbeiter absichtlich länger (GC-Falle). Der Balken
+        richtet sich nach dem Zustand, nicht nach der Lebensdauer."""
         """Ein Modell, das gerade aus dem Netz kommt (§16.3) — dieselbe
         Halteleine, derselbe Grund."""
         self._export_worker: Any = None
+        self._exporting = False
+        """Wie ``_downloading`` — der Export meldet sein Ende vor dem
+        Auslaufen seines Threads."""
         self._export_attempt: tuple[Path, ExportFormat] | None = None
         """Wohin der laufende Export schreibt — für einen zweiten Anlauf."""
         self._write_failure: _WriteFailure | None = None
@@ -1440,6 +1475,7 @@ class MainWindow(QMainWindow):
         self.cancel_button = QPushButton(tr("Abbrechen"), self)
         self.cancel_button.setVisible(False)
         self.cancel_button.clicked.connect(self.session.cancel)
+        self.cancel_button.clicked.connect(self._cancel_download)
         # Der Knopf gilt für alles, was gerade läuft — auch für die
         # Trennebenensuche, die ihr eigenes Verwerfen hat (§15.6).
         self.cancel_button.clicked.connect(self.session.cancel_split)
@@ -2281,7 +2317,11 @@ class MainWindow(QMainWindow):
         if hint:
             action.setStatusTip(hint)
             action.setToolTip(hint)
-        action.triggered.connect(slot)
+        # ``triggered`` trägt ein ``bool``; drei Slots mit optionalem
+        # Parameter bekamen es als Wert (``action_manual(False)``) und
+        # überlebten nur, weil ihre Rümpfe gegen Falschheit prüfen. Das
+        # Argument endet hier — ein Menüeintrag ruft, er übergibt nichts.
+        action.triggered.connect(lambda _checked=False, call=slot: call())
         menu.addAction(action)
         return action
 
@@ -2903,7 +2943,7 @@ class MainWindow(QMainWindow):
             self, tr("Projekt speichern"), "", PROJECT_FILTER
         )
         if name:
-            self._save_to(Path(name))
+            self._save_to(_as_project_path(name))
 
     def _save_to(self, path: Path) -> None:
         """Speichern mit Wartezeiger — es ist keine Handlung ohne Dauer.
@@ -3016,8 +3056,10 @@ class MainWindow(QMainWindow):
         worker.step.connect(self._on_download_progress)
         worker.done.connect(self._downloaded)
         worker.failed.connect(self._download_failed)
+        worker.stopped.connect(self._download_stopped)
         worker.crashed.connect(lambda detail: self._download_failed(InternalError(detail=detail)))
         worker.finished.connect(lambda done=worker: self._download_worker_done(done))
+        self._downloading = True
         self.status_message.setText(tr("Modell herunterladen …"))
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
@@ -3064,8 +3106,48 @@ class MainWindow(QMainWindow):
         self._show_start_screen(False)
         self.announce(f"{tr('Geladen')}: {fetched.name}")
 
+    def _cancel_download(self) -> None:
+        """Der eine Abbrechen-Knopf gilt auch dem Download (§2.8) — ein
+        300-MB-Modell an langsamer Leitung war sonst nur über das Beenden
+        der Anwendung zu stoppen."""
+        if self._download_worker is not None:
+            self._download_worker.cancel.cancel()
+
+    def _download_stopped(self) -> None:
+        self._end_download()
+        self.announce(tr("Der Download wurde abgebrochen."))
+
     def _end_download(self) -> None:
+        self._downloading = False
         self._progress_idle()
+
+    def _anything_running(self) -> bool:
+        """Ob irgendetwas läuft, das den Balken trägt (§2.8).
+
+        Vier Besitzer mit drei verschiedenen Bedingungen, und keiner fragte
+        Export oder Download: Endete eine Auswertung während eines Exports,
+        verschwand der Balken, während die Datei noch geschrieben wurde — der
+        Kunde hielt das Schreiben für beendet und schloss das Fenster. Eine
+        Auskunft, alle Stellen fragen sie.
+        """
+        return (
+            self.session.busy
+            or self.chat.busy
+            or self.session.split_running
+            or self._exporting
+            or self._downloading
+        )
+
+    def _anything_cancellable(self) -> bool:
+        """Ob der Abbrechen-Knopf gerade etwas hätte, das er abbricht.
+
+        Getrennt vom Balken: Der Export läuft mit Balken und ohne Abbrechen
+        (sein Docstring begründet das), und ein Knopf, der nichts täte, wäre
+        schlimmer als keiner.
+        """
+        return (
+            self.session.busy or self.chat.busy or self.session.split_running or self._downloading
+        )
 
     def _progress_idle(self) -> None:
         """Die Anzeige zurück in den Ruhezustand — aber nur, wenn nicht schon
@@ -3077,7 +3159,7 @@ class MainWindow(QMainWindow):
         ausknipsen.
         """
         self.progress.setRange(0, 100)
-        if not self.session.busy:
+        if not self._anything_running():
             self.progress.setVisible(False)
         self.status_message.setText(self._announcement)
 
@@ -3840,6 +3922,11 @@ class MainWindow(QMainWindow):
             return
         worker = _OllamaSizeWorker(backend.model)
         worker.done.connect(self._ollama_size_answered)
+        # Ein Absturz der Messung ist kein Fall für einen Dialog — sie läuft
+        # unsichtbar im Hintergrund, und ihr Ausfall kostet nur den Hinweis.
+        # Aber taub sein darf sie nicht: ohne Empfänger verschwände der Grund
+        # spurlos (Gesamtreview I-2).
+        worker.crashed.connect(self._ollama_size_crashed)
         self._retire(self._ollama_size_worker)
         self._ollama_size_worker = worker
         worker.finished.connect(lambda done=worker: self._ollama_size_worker_done(done))
@@ -3849,6 +3936,11 @@ class MainWindow(QMainWindow):
         if self._ollama_size_worker is worker:
             self._ollama_size_worker = None
         self._hold_until_done(worker)
+
+    def _ollama_size_crashed(self, detail: str) -> None:
+        """Die Messung ist ein Angebot — ihr Ausfall lässt den Chat ohne
+        Warnhinweis, nicht das Fenster ohne Auskunft."""
+        _log.warning("ollama size probe crashed: %s", detail)
 
     def _ollama_size_answered(self, warning: Any) -> None:
         """Was zum lokalen Modell zu sagen ist, steht an der Chatleiste.
@@ -5044,6 +5136,22 @@ class MainWindow(QMainWindow):
         if name in commands:
             commands[name][2]()
             return
+        self._run_palette_choice(name)
+
+    def _run_palette_choice(self, name: str) -> None:
+        """Führt die gewählte Operation aus — oder sagt, warum nicht.
+
+        **Gesperrt bleibt gesperrt, auch über die Pfeiltasten.** Die Liste
+        sperrt ihre Zeilen, aber die Tastatur konnte auf eine gesperrte
+        springen, und Enter führte sie aus: „Gitter füllen" auf leerer Szene
+        öffnete die modale Sackgasse, die der Kommentar an ``palette_rows``
+        als beseitigt beschreibt (Regel 19, Gesamtreview I-3). Der Grund geht
+        in die Statuszeile — dieselbe Auskunft, die die Zeile trägt.
+        """
+        available, reason = self._palette_availability(name)
+        if not available:
+            self.announce(reason)
+            return
         self.launch_operation(REGISTRY.get(name))
 
     def _palette_availability(self, name: str) -> tuple[bool, str]:
@@ -5186,6 +5294,10 @@ class MainWindow(QMainWindow):
 
         self.analysis_bar.show_problem(tr("Die Analysekarte wird berechnet …"))
         worker = _MapWorker(kind, entry, self.session.profile, result.scene if result else None)
+        # Stirbt der Arbeiter unerwartet, darf die Legende nicht für immer
+        # „wird berechnet" sagen (Gesamtreview I-2): Wartezustand lösen, der
+        # Grund geht den InternalError-Weg (§33.1).
+        worker.crashed.connect(self._map_crashed)
         worker.done.connect(
             lambda analysis, key=key, object_id=object_id: self._map_ready(analysis, key, object_id)
         )
@@ -5237,6 +5349,10 @@ class MainWindow(QMainWindow):
     def _retire(self, worker: Any) -> None:
         """Hält einen ersetzten Arbeiter fest, bis er ausgelaufen ist."""
         self._leash.retire(worker)
+
+    def _map_crashed(self, detail: str) -> None:
+        self.analysis_bar.show_problem(tr("Die Analysekarte ließ sich nicht berechnen."))
+        self._on_error(InternalError(detail=detail))
 
     def _map_ready(self, analysis: Any, key: tuple[Any, ...], object_id: ObjectId) -> None:
         self._map_cache = {key: analysis}
@@ -5307,6 +5423,10 @@ class MainWindow(QMainWindow):
 
         self.status_message.setText(tr("Die Schichtanalyse läuft …"))
         worker = _SliceWorker(entry, self.session.profile.printer.layer_height)
+        # Ohne Empfänger blieb „Die Schichtanalyse läuft …" für immer stehen,
+        # und die Warteschlange der Druckeinstellungen leerte sich nie
+        # (Gesamtreview I-2).
+        worker.crashed.connect(self._slice_crashed)
         self._slice_pending = key
         self._slice_waiters = [] if then is None else [then]
         worker.done.connect(
@@ -5323,6 +5443,15 @@ class MainWindow(QMainWindow):
         worker.finished.connect(lambda done=worker: self._slice_worker_done(done))
         self._leash.start(worker)
         return None
+
+    def _slice_crashed(self, detail: str) -> None:
+        """Wartezustand lösen: Zeile leeren, Anstehende verabschieden, Grund
+        melden — sonst wartete der Druckeinstellungen-Dialog auf eine
+        Analyse, die nie mehr kommt."""
+        self._slice_pending = None
+        self._slice_waiters = []
+        self.status_message.setText("")
+        self._on_error(InternalError(detail=detail))
 
     def _slice_worker_done(self, worker: Any) -> None:
         if self._slice_worker is worker:
@@ -5357,6 +5486,10 @@ class MainWindow(QMainWindow):
 
         kind = maps.map_for(finding)
         if kind is not None:
+            # Wie ``_show_error_location``: Das Werkzeug kommt mit, sonst
+            # färbt die Karte das Modell ohne Legende und Kartenwähler —
+            # reine Farbe ohne zweite Kodierung (Regel 18, §18.4).
+            self.tools.activate("analysis")
             self.analysis_bar.show_map(kind)
             self._analysis_map(kind, entry.id)
             # Die Kamera geht zu dem Ort, den der Befund nennt. Wo der Befund
@@ -5394,15 +5527,21 @@ class MainWindow(QMainWindow):
         """
         self.chat.set_busy(busy)
         self.status_message.setText(tr("Der Agent denkt nach.") if busy else self._announcement)
-        self.cancel_button.setVisible(busy or self.progress.isVisible())
         if busy:
             # Wie viele Schritte ein Zug braucht, steht vorher nicht fest —
             # ein Balken ohne Ende sagt „es läuft", ohne etwas zu versprechen.
             self.progress.setRange(0, 0)
             self.progress.setVisible(True)
-        elif not self.session.busy:
+            self.cancel_button.setVisible(True)
+            return
+        # Erst aufräumen, dann fragen: ``isVisible()`` vor dem Ausblenden
+        # gelesen hielt den Abbrechen-Knopf nach jedem Agentenzug am Leben —
+        # ohne laufende Rechnung, bis das nächste busyChanged ihn zufällig
+        # mitnahm. Der Nachbar ``_on_split_busy`` machte es richtig vor.
+        if not self._anything_running():
             self.progress.setRange(0, 100)
             self.progress.setVisible(False)
+        self.cancel_button.setVisible(self._anything_cancellable())
 
     def _on_agent_progress(self, step: int, label: str) -> None:
         """Was der Zug gerade tut, statt nur dass er läuft (§2.8).
@@ -5422,16 +5561,17 @@ class MainWindow(QMainWindow):
         self.status_message.setText(
             tr("Die Trennebenen werden gesucht …") if busy else self._announcement
         )
-        self.cancel_button.setVisible(busy or self.progress.isVisible())
         if busy:
             # Wie viele Ebenen die Suche prüft, steht vorher nicht fest —
             # derselbe endlose Balken wie beim Agentenzug.
             self.progress.setRange(0, 0)
             self.progress.setVisible(True)
-        elif not self.session.busy and not self.chat.busy:
+            self.cancel_button.setVisible(True)
+            return
+        if not self._anything_running():
             self.progress.setRange(0, 100)
             self.progress.setVisible(False)
-            self.cancel_button.setVisible(False)
+        self.cancel_button.setVisible(self._anything_cancellable())
 
     def _on_proposal(self, preview: Any) -> None:
         """Ein Vorschlag ist da: zeigen, was er änderte — und entscheiden
@@ -5625,11 +5765,20 @@ class MainWindow(QMainWindow):
         self._apply_hidden(self._hidden - chosen if visible else self._hidden | chosen)
 
     def _on_isolate(self, objects: Any) -> None:
-        """Alles andere ausblenden — und derselbe Eintrag holt es zurück (§18.8)."""
+        """Alles andere ausblenden — und derselbe Eintrag holt es zurück (§18.8).
+
+        Beschriftung und Wirkung lasen dasselbe Feld mit verschiedener Frage:
+        Rechtsklick auf einen **ausgeblendeten** Körper zeigte „Alles andere
+        ausblenden" und blendete alles ein (Gesamtreview I-6). Jetzt gilt die
+        Antwort des Baums für beide Seiten.
+        """
         chosen = set(objects)
         result = self.session.last_result
         everything = set(result.scene.objects) if result else set()
-        self._apply_hidden(frozenset() if self._hidden else frozenset(everything - chosen))
+        if self.object_tree.isolation_holds(tuple(chosen)):
+            self._apply_hidden(frozenset())
+        else:
+            self._apply_hidden(frozenset(everything - chosen))
 
     def _apply_hidden(self, hidden: frozenset[str]) -> None:
         self._hidden = hidden
@@ -6661,15 +6810,16 @@ class MainWindow(QMainWindow):
         self.status_message.setText("  ·  ".join(parts))
 
     def _on_busy(self, busy: bool) -> None:
-        # Agent und Trennebenensuche können gleichzeitig laufen; dann bleiben
-        # Balken und Knopf stehen, statt mit der Auswertung zu verschwinden.
-        others = self.chat.busy or self.session.split_running
-        self.progress.setVisible(busy or others)
-        self.cancel_button.setVisible(busy or others)
+        # Agent, Trennebenensuche, Export und Download können neben der
+        # Auswertung laufen; dann bleibt der Balken stehen, statt mit ihr zu
+        # verschwinden — und der Knopf zeigt sich nur, wo er etwas abbricht.
+        running = busy or self._anything_running()
+        self.progress.setVisible(running)
+        self.cancel_button.setVisible(busy or self._anything_cancellable())
         if busy:
             self.progress.setRange(0, 100)
         self._update_veil(busy)
-        if not busy and not others:
+        if not running:
             self.status_message.setText(self._announcement)
 
     def _on_evaluation_cancelled(self) -> None:
@@ -7204,12 +7354,26 @@ class MainWindow(QMainWindow):
         """
         worker = _UpdateWorker()
         worker.done.connect(self._update_answered)
+        # Ohne Empfänger blieb ``_asked_for_update`` stehen, und „Nach einer
+        # neuen Version sehen" war für den Rest der Sitzung ein toter Knopf
+        # (Gesamtreview I-2). Kein Dialog: Die Prüfung läuft unaufgefordert
+        # beim Start, und ihr Scheitern ist eine Zeile, keine Störung.
+        worker.crashed.connect(self._update_crashed)
         # Nicht als Lambda, das ``None`` in genau das Feld schreibt, dessen
         # Objekt es gerade zustellt: derselbe Fehler, der beim Auswertungs-
         # Arbeiter die Suite ohne Traceback abriss (siehe Session).
         worker.finished.connect(self._update_worker_done)
         self._update_worker = worker
         self._leash.start(worker)
+
+    def _update_crashed(self, detail: str) -> None:
+        _log.warning("update check crashed: %s", detail)
+        if self._asked_for_update:
+            # Auf einen Klick hin wäre Schweigen ein toter Knopf — derselbe
+            # Satz wie bei einer unerreichbaren Seite, denn mehr weiß der
+            # Kunde daraus nicht.
+            self._asked_for_update = False
+            self.announce(tr("Die Seite war nicht erreichbar — später noch einmal versuchen."))
 
     def _update_worker_done(self) -> None:
         """Die Abfrage ist ausgelaufen — ihr Arbeiter bleibt bis zur nächsten."""

@@ -966,6 +966,23 @@ class ObjectTree(QWidget):
         entry = self._result.scene.objects.get(object_id)
         return entry.features.get(feature_id) if entry is not None else None
 
+    def isolation_holds(self, chosen: tuple[str, ...]) -> bool:
+        """Ob genau diese Auswahl gerade isoliert ist — alles andere versteckt.
+
+        Eine Antwort für Beschriftung **und** Wirkung: Vorher lasen beide
+        dasselbe Feld mit verschiedener Frage, und der Rechtsklick auf einen
+        ausgeblendeten Körper versprach „Alles andere ausblenden" und blendete
+        alles ein (Gesamtreview I-6).
+        """
+        if not self._hidden:
+            return False
+        everything = {
+            item.data(0, Qt.ItemDataRole.UserRole)
+            for index in range(self.tree.topLevelItemCount())
+            if (item := self.tree.topLevelItem(index)) is not None
+        }
+        return self._hidden == frozenset(everything - set(chosen))
+
     def context_menu(self) -> QMenu | None:
         """Das Menü zur aktuellen Auswahl, oder nichts.
 
@@ -1248,9 +1265,8 @@ class ObjectTree(QWidget):
             lambda _checked=False: self.visibilityRequested.emit(chosen, not wants_hiding)
         )
 
-        isolated = self._hidden and all(object_id not in self._hidden for object_id in chosen)
         isolate = menu.addAction(
-            tr("Alles andere ausblenden") if not isolated else tr("Alle zeigen")
+            tr("Alles andere ausblenden") if not self.isolation_holds(chosen) else tr("Alle zeigen")
         )
         isolate.triggered.connect(lambda _checked=False: self.isolateRequested.emit(chosen))
 
@@ -2005,7 +2021,7 @@ class ReportPanel(QWidget):
             chosen[menu.addAction(str(action.label))] = action
         # Die Stubs versprechen eine Aktion; wer das Menü wegklickt, bekommt
         # None. Dieselbe Notlüge wie bei ``currentItem`` in der Palette.
-        picked = cast(QAction | None, menu.exec(self.list.mapToGlobal(position)))
+        picked = cast(QAction | None, menu.exec(self.list.viewport().mapToGlobal(position)))
         if picked is None:
             return
         # Die Handler des Fensters arbeiten auf einem ``AppError`` — sie

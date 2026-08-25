@@ -92,6 +92,12 @@ class MapLegend(QWidget):
                 widget.deleteLater()
         self.entries = []
         if analysis is None:
+            # **Der Satz braucht sein Layout zurück.** ``takeAt`` hat auch die
+            # Notiz herausgenommen (geschützt war nur ihr Löschen); ohne das
+            # Wiedereinhängen stand „Die Analysekarte wird berechnet …" auf
+            # 100 auf 30 Punkten Geometrie außerhalb jeder Anordnung — genau die
+            # zwei Sätze, die etwas erklären sollen (Gesamtreview I-9).
+            self._layout.addWidget(self.note, stretch=1)
             self.note.setText("")
             return
 
