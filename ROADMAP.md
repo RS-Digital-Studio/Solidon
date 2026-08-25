@@ -9556,11 +9556,19 @@ Arbeitspakete, die Grenzen und die eine Entscheidung stehen dort.
 
 ## Zehn von zehn Fenstern überlebten ihr Loslassen (24.08.2026)
 
+**Behoben mit `acb0dd5`; der Haken und die Zahlen stehen unten.** Dieser
+Absatz stand bis zum 25.08.2026 im Präsens und behauptete damit fünfzig Zeilen
+lang das Gegenteil dessen, was am Ende des Abschnitts abgehakt ist — zwei
+Sitzungen haben ihn nacheinander als offenen Punkt gelesen und den Fehler
+gesucht, den es nicht mehr gab. Eine davon hat ihn dann noch einmal
+bisektiert. **Ein Abschnitt, der einen behobenen Fehler im Präsens erzählt,
+ist ein offener Punkt für jeden, der ihn liest.**
+
 `tests/test_widget_lifetime.py::test_a_released_widget_is_actually_released`
-ist auf `main` rot, und zwar in der Ausprägung `MainWindow`: **10 von 10
+**war** auf `main` rot, und zwar in der Ausprägung `MainWindow`: **10 von 10
 überlebten ihr Loslassen**. Gemessen am 24.08.2026 von zwei Sitzungen
 unabhängig — einmal im geteilten Arbeitsbaum, einmal in einem eigenen Baum auf
-`230e498` ohne fremde Änderungen. Es ist keine der laufenden Arbeiten.
+`230e498` ohne fremde Änderungen. Es war keine der damals laufenden Arbeiten.
 
 **Zur Zahl daneben, damit sie niemanden zweimal aufhält.** Die Datei sammelt
 **42** Tests, die Ausprägungsliste dieses einen Tests umfasst **41**
