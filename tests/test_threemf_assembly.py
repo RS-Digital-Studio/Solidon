@@ -233,6 +233,25 @@ def test_something_that_is_not_a_3mf_is_not_read() -> None:
     assert threemf.count_objects(b"not a container") == 0
 
 
+def test_a_triangle_with_a_negative_index_is_dropped_not_wrapped() -> None:
+    """M4: geprüft wird beide Grenzen, nicht nur die obere.
+
+    Ein negativer Eckindex bestand die Prüfung ``faces.max() >= len(points)``
+    und lief durch ``Trimesh(process=False)``, wo numpy ihn nach hinten
+    umschlägt: der Körper kam offen und mit falschem Vorzeichen des Volumens
+    zurück, der Prüfbericht meldete „nicht geschlossen" über eine Datei, deren
+    wahre Lage niemand nannte. Er wird jetzt wie ein zu großer Index verworfen.
+    """
+    import xml.etree.ElementTree as ET
+
+    body = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    xml = re.sub(r'v1="\d+"', 'v1="-1"', objects_file({"1": body}), count=1)
+    obj = threemf._objects_in(ET.fromstring(xml))["1"]
+    mesh = obj.find(f"{{{CORE}}}mesh")
+
+    assert threemf._mesh_from(mesh) is None, "ein negativer Index ist kein Körper"
+
+
 def zip_with_method(name: str, data: bytes, method: int) -> bytes:
     """Ein Archiv, dessen Eintrag ein Packverfahren nennt, das Python nicht
     auspackt — Deflate64 (9) oder AES (99).

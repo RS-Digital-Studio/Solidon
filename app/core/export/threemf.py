@@ -727,9 +727,14 @@ def _mesh_from(node: ET.Element) -> MeshData | None:
     if not len(points) or not len(faces):
         _log.warning("3MF mesh is empty: %d point(s), %d triangle(s)", len(points), len(faces))
         return None
-    if int(faces.max()) >= len(points):
+    # Beide Grenzen, nicht nur die obere: Ein negativer Index bestand die
+    # Prüfung auf die Eckenzahl und lief durch ``Trimesh(process=False)``, wo
+    # numpy ihn nach hinten umschlägt — der Körper kam offen und mit falschem
+    # Vorzeichen des Volumens zurück, benannt wurde die wahre Lage nie.
+    if int(faces.min()) < 0 or int(faces.max()) >= len(points):
         _log.warning(
-            "3MF mesh points past its own vertices: highest index %d of %d point(s)",
+            "3MF mesh points outside its own vertices: index range %d..%d of %d point(s)",
+            int(faces.min()),
             int(faces.max()),
             len(points),
         )

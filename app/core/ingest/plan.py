@@ -63,6 +63,12 @@ def import_plan(source_id: str, name: str, payload: bytes, unit: str = "auto") -
     einzige Koordinate zu lesen.
     """
     suffix = Path(name).suffix
+    # Die Größengrenze steht vor jeder Operation, für **jedes** Format — nicht
+    # nur für 3MF. Eine zu große STL ging sonst als Quelle ins Dokument, die
+    # Operation landete im Stapel und scheiterte erst bei der Auswertung, und
+    # die übergroße Quelle wanderte beim nächsten Speichern in die Projektdatei.
+    # (Die entpackte Größe bleibt 3MF-eigen — nur ein Archiv hat eine.)
+    check_limits(len(payload), 0)
     if brep_step.is_step(suffix):
         return ImportPlan(
             title=_TITLES["load_step"],
@@ -78,14 +84,13 @@ def import_plan(source_id: str, name: str, payload: bytes, unit: str = "auto") -
     parts = 1
     asks = True
     if suffix.lower() == ".3mf":
-        # **Die Grenze steht vor dem Parsen.** Zählen heißt bei einer 3MF, das
-        # ganze XML zu lesen, und das geschieht hier — im Hauptthread, bevor
-        # irgendeine Operation läuft. Eine Datei von 1,9 MB wird dabei zu
+        # **Die entpackte Grenze steht vor dem Parsen.** Zählen heißt bei einer
+        # 3MF, das ganze XML zu lesen, und das geschieht hier — im Hauptthread,
+        # bevor irgendeine Operation läuft. Eine Datei von 1,9 MB wird dabei zu
         # 660 MB im Speicher. ``check_unpacked`` gibt es für genau diesen Fall
         # (§32); es lief nur an der falschen Stelle, nämlich erst in der
         # Operation. Die Zahlen dafür stehen im zentralen Verzeichnis des
         # Archivs — geprüft wird, ohne ein Byte des Inhalts zu lesen.
-        check_limits(len(payload), 0)
         check_unpacked(payload)
         parts = threemf.count_objects(payload)
         # Eine 3MF trägt ihre Einheit im ``unit``-Attribut. Wo sie dasteht,

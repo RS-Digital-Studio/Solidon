@@ -305,6 +305,26 @@ def test_a_zip_bomb_is_refused_before_anything_parses_it(monkeypatch) -> None:
     assert abgewiesen.value.suggestions, "Regel 17"
 
 
+def test_a_too_large_file_is_refused_for_every_format(monkeypatch: pytest.MonkeyPatch) -> None:
+    """M7: die Größengrenze stand nur im 3MF-Zweig.
+
+    Eine zu große STL ging als Quelle ins Dokument, die Operation landete im
+    Stapel und scheiterte erst bei der Auswertung — und die übergroße Quelle
+    wanderte beim nächsten Speichern in die Projektdatei. Die Grenze steht jetzt
+    vor der Operation, für jedes Format.
+    """
+    from app.core.ingest import loader, plan
+
+    monkeypatch.setattr(loader, "MAX_FILE_BYTES", 1000)
+    payload = bytes(5000)
+
+    for name in ("teil.stl", "teil.obj", "teil.ply", "teil.step", "teil.svg"):
+        with pytest.raises(ValidationError) as refused:
+            plan.import_plan("src_1", name, payload)
+        assert refused.value.constraint == "file_too_large", name
+        assert refused.value.suggestions, "Regel 17"
+
+
 # --- die Lade-Operation ---------------------------------------------------------
 
 
