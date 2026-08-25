@@ -144,12 +144,17 @@ def extrude(payload: bytes, suffix: str, height: float, width: float = 0.0) -> O
             values={"suffix": suffix},
         )
 
-    bounds = path.bounds
-    actual = float(bounds[1][0] - bounds[0][0])
-    scale = (width / actual) if width > EPS_GEOM and actual > EPS_GEOM else 1.0
-
     parts = [trimesh.creation.extrude_polygon(entry, height=height) for entry in polygons]
     body = parts[0] if len(parts) == 1 else concatenated(parts)
+
+    # Gemessen wird der **Körper** aus den geschlossenen Ringen, nicht
+    # ``path.bounds`` über die ganze Zeichnung: eine offene Hilfs-, Maß- oder
+    # Rahmenlinie steht dort mit drin, im Körper aber nicht — bei DXF ist das
+    # der Normalfall. An der Zeichnung gemessen wurde aus 40 mm ein Teil von 17,
+    # und der Befund meldete die Breite der Linie. Maß und Meldung kommen jetzt
+    # aus einer Quelle.
+    actual = float(body.bounds[1][0] - body.bounds[0][0])
+    scale = (width / actual) if width > EPS_GEOM and actual > EPS_GEOM else 1.0
     if abs(scale - 1.0) > EPS_GEOM:
         # Nur in der Ebene: die Höhe wurde in Millimetern verlangt und schrumpft
         # nicht, weil die Zeichnung auf eine Breite skaliert wurde.

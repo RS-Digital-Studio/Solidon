@@ -15,7 +15,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final, Literal
 
@@ -211,7 +211,7 @@ def _entries_for(
     """Die geplanten Dateien. Ausgelagert, weil das Schema scheitern darf und
     der Aufrufer den Fehlgriff benennen soll.
     """
-    return tuple(
+    entries = tuple(
         ExportEntry(
             object_id=entry.id,
             filename=safe_name(
@@ -241,6 +241,41 @@ def _entries_for(
         )
         for index, entry in enumerate(objects, start=1)
     )
+    return _without_name_clashes(entries)
+
+
+def _without_name_clashes(entries: tuple[ExportEntry, ...]) -> tuple[ExportEntry, ...]:
+    """Zwei Objekte, die auf denselben Dateinamen fallen, bekommen eine laufende
+    Nummer vor der Endung.
+
+    Ein Schema ohne unterscheidendes Feld (``{project}`` allein) oder schlicht
+    zwei gleichnamige Körper ergaben sonst zweimal denselben Namen. Geschrieben
+    wurde der Reihe nach mit ``write_bytes``: Der zweite überschrieb den ersten,
+    und beide wurden als „geschrieben" gemeldet — eine Datei, zwei
+    Erfolgsmeldungen, das erste Teil weg. Nummeriert wird wie beim Einlesen
+    einer Baugruppe (:func:`app.core.export.threemf` nummeriert dort dieselbe
+    Kollision).
+    """
+    totals: dict[str, int] = {}
+    for entry in entries:
+        totals[entry.filename] = totals.get(entry.filename, 0) + 1
+    if all(total == 1 for total in totals.values()):
+        return entries
+    seen: dict[str, int] = {}
+    result: list[ExportEntry] = []
+    for entry in entries:
+        if totals[entry.filename] == 1:
+            result.append(entry)
+            continue
+        seen[entry.filename] = seen.get(entry.filename, 0) + 1
+        stem, dot, extension = entry.filename.rpartition(".")
+        numbered = (
+            f"{stem}-{seen[entry.filename]}{dot}{extension}"
+            if dot
+            else f"{entry.filename}-{seen[entry.filename]}"
+        )
+        result.append(replace(entry, filename=numbered))
+    return tuple(result)
 
 
 def adhesion_margin(settings: PrintSettings) -> float:
@@ -573,15 +608,18 @@ def write_plan(
     # hat er das nie: Beim ersten Netz flog die Ausnahme, mitten im Schreiben.
     # War ein exakter Körper davor, lag seine Datei schon da — ein halber
     # Export mit einer Fehlermeldung darüber (§30, §29).
-    skipped = [
-        entry.filename
+    # Ausgelassen wird nach **Objekt-ID**, nicht nach Dateiname: fielen ein
+    # exakter Körper und ein Netz auf denselben Namen, nahm der Vergleich per
+    # Name den exakten mit heraus, obwohl gerade er geschrieben werden sollte.
+    skipped = {
+        entry.object_id
         for entry in plan.entries
         if export_format in SOLID_ONLY_FORMATS and not _is_exact(entry.body)
-    ]
+    }
     try:
         directory.mkdir(parents=True, exist_ok=True)
         for entry in plan.entries:
-            if entry.filename in skipped:
+            if entry.object_id in skipped:
                 continue
             target = directory / entry.filename
             target.write_bytes(

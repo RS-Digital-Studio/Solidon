@@ -87,6 +87,21 @@ def test_the_scheme_can_be_changed(profile: Profile) -> None:
     assert plan.entries[0].filename == "Halterung-1.stl"
 
 
+def test_two_parts_that_would_share_a_name_are_numbered(profile: Profile) -> None:
+    """H2: zwei Objekte, die auf denselben Dateinamen fallen, überschrieben
+    sich — eine Datei, zwei Erfolgsmeldungen, das erste Teil weg. Ein Schema
+    ohne unterscheidendes Feld (hier ``{object}`` bei zwei gleichnamigen Körpern)
+    bekommt jetzt eine laufende Nummer, statt sich zu überschreiben.
+    """
+    objects = [scene_object("obj_1", "Halterung"), scene_object("obj_2", "Halterung")]
+
+    plan = plan_export(objects, project_name="P", profile=profile, scheme="{object}")
+
+    names = [entry.filename for entry in plan.entries]
+    assert names == ["Halterung-1.stl", "Halterung-2.stl"]
+    assert len(set(names)) == 2, "keine zwei Dateien mit demselben Namen"
+
+
 def test_a_typo_in_the_scheme_names_the_placeholders(profile: Profile) -> None:
     """``--scheme "{name}"`` endete in einem rohen ``KeyError``.
 
@@ -265,6 +280,19 @@ def test_writing_produces_readable_files(tmp_path: Path, profile: Profile) -> No
         assert path.is_file()
         reread = read_mesh(path.read_bytes(), ".stl")
         assert reread.triangle_count == 12
+
+
+def test_two_same_named_parts_write_two_files(tmp_path: Path, profile: Profile) -> None:
+    """Die Kollisionsauflösung schreibt wirklich zwei Dateien — nicht eine, über
+    die zweimal Erfolg gemeldet wird."""
+    objects = [scene_object("obj_1", "Halterung"), scene_object("obj_2", "Halterung")]
+    plan = plan_export(objects, project_name="P", profile=profile, scheme="{object}")
+
+    written = write_plan(plan, tmp_path)
+
+    assert len(written) == 2
+    assert len(set(written)) == 2, "zwei verschiedene Pfade"
+    assert len(list(tmp_path.glob("*.stl"))) == 2, "zwei Dateien auf der Platte"
 
 
 @pytest.mark.parametrize("export_format", ["stl", "3mf", "obj", "ply", "glb"])

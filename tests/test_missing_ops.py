@@ -770,6 +770,28 @@ def test_a_target_width_scales_the_plane_and_not_the_height() -> None:
     assert result.mesh.bounds.size[2] == pytest.approx(5.0), "the height was asked for in mm"
 
 
+def test_a_target_width_measures_the_body_and_not_a_stray_line() -> None:
+    """H1: skaliert wird der Körper aus den geschlossenen Ringen, nicht die
+    ganze Zeichnung.
+
+    Eine offene Hilfs- oder Maßlinie geht in die Zeichnung ein, aber nicht in
+    den Körper — bei DXF ist das der Normalfall. An ``path.bounds`` gemessen
+    (Quadrat 80 breit, Linie bis 200) wurde aus 40 mm verlangter Breite ein Teil
+    von 17 mm, und der Befund meldete die Breite der Linie statt des Umrisses.
+    """
+    with_helper_line = (
+        b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 210">'
+        b'<path d="M10,10 L90,10 L90,90 L10,90 Z"/>'
+        b'<path d="M10,150 L200,150"/></svg>'
+    )
+
+    result = extrude(with_helper_line, ".svg", 5.0, width=40.0)
+
+    assert result.contours == 1, "nur das Quadrat wird ein Körper, die Linie nicht"
+    assert result.mesh.bounds.size[0] == pytest.approx(40.0), "das Quadrat, nicht die Zeichnung"
+    assert result.width == pytest.approx(80.0), "gemeldet wird die Breite des Körpers"
+
+
 def test_a_drawing_with_no_closed_area_says_so() -> None:
     open_path = (
         b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0,0 L10,10"/></svg>'
