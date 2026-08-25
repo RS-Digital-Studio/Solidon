@@ -3400,6 +3400,68 @@ def test_auto_split_runs_in_a_worker(session: Session) -> None:
     assert states and states[0] is True and states[-1] is False
 
 
+def test_a_second_split_start_is_refused_while_one_runs(session: Session) -> None:
+    """Zwei Suchen zugleich gab es nie absichtlich — die zweite wird abgewiesen.
+
+    Vorher überschrieb der zweite Start den ersten Arbeiter: dessen Plan kam
+    trotzdem an, ``split_running`` log nach dem ersten Ende, und ein Thread
+    überlebte sein Fenster.
+    """
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+
+    class Running:
+        """Nur was die Wache fragt: läuft er noch — wie ``QThread.isRunning``."""
+
+        def isRunning(self) -> bool:  # noqa: N802 — der Name gehört Qt
+            return True
+
+    stub = Running()
+    session._split = stub
+    refused: list[object] = []
+    session.failed.connect(refused.append)
+    called: list[object] = []
+    try:
+        session.split_async("obj_1", called.append)
+        assert refused, "die zweite Suche wird als Satz abgewiesen"
+        assert refused[0].suggestions
+        assert session._split is stub, "der laufende Arbeiter bleibt der Arbeiter"
+        assert not called
+    finally:
+        session._split = None
+
+
+def test_a_stale_split_worker_cannot_deliver(session: Session) -> None:
+    """Was ein überlebender Arbeiter noch meldet, wird nicht mehr angewandt.
+
+    Jeder Empfänger prüft den Absender: Plan, Fehler und das Auslaufen zählen
+    nur, wenn sie vom aktuellen Arbeiter kommen.
+    """
+    session.import_model(MESHES / "cube_clean.stl")
+    session.wait_for_idle()
+
+    stale = object()
+    busy: list[bool] = []
+    session.splitBusyChanged.connect(busy.append)
+    called: list[object] = []
+    reported: list[object] = []
+    session.failed.connect(reported.append)
+
+    session._split_planned(stale, object(), "obj_1", called.append)
+    assert not called and not busy, "ein fremder Plan wird nicht angewandt"
+
+    session._split_failed(stale, errors.InternalError(detail="stale"))
+    assert not reported, "ein fremder Fehler wird nicht gemeldet"
+
+    keeper = object()
+    session._split = keeper
+    try:
+        session._on_split_done(stale)
+        assert session._split is keeper, "das Auslaufen eines Fremden räumt das Feld nicht"
+    finally:
+        session._split = None
+
+
 # --- Live-Vorschau im Operationsdialog (§18.7) -----------------------------------
 
 

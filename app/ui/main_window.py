@@ -3205,6 +3205,12 @@ class MainWindow(QMainWindow):
         Der Körper lässt sich benennen, damit auch der Fehlerdialog „Modell
         teilen" anbieten kann — er weiß, welches Teil nicht passte.
         """
+        if self.session.split_running:
+            # Erste Hälfte der Sperre (Gesamtreview I-10) — die zweite steht
+            # in ``session.split_async``: Zwei Suchen zugleich gab es nie
+            # absichtlich, und der Abbrechen-Knopf gilt der laufenden.
+            self.announce(tr("Die Teilung läuft schon — der Abbrechen-Knopf hält sie an."))
+            return
         object_id = object_id or self.object_tree.selected()
         if not object_id:
             QMessageBox.information(self, tr("Automatisch teilen"), str(_NEEDS_SELECTION))

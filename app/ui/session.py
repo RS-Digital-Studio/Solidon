@@ -27,7 +27,14 @@ from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import LLMBackend, first_available
 from app.core.backends.mesh import GeneratedMesh
-from app.core.errors import AppError, InternalError, OperationCancelled, ValidationError
+from app.core.errors import (
+    Action,
+    AppError,
+    InternalError,
+    OperationCancelled,
+    UserError,
+    ValidationError,
+)
 from app.core.generate import into_project as generate_into
 from app.core.geom.difference import SceneDifference, compare_scenes
 from app.core.geom.mesh import as_mesh_data
@@ -1027,6 +1034,25 @@ class Session(QObject):
         hält sie an **und** verwirft, was doch noch käme: Der Knopf wirkt
         sofort, und die Maschine hört auf zu rechnen.
         """
+        if self.split_running:
+            # Ein zweiter Start überschriebe den laufenden Arbeiter: sein Plan
+            # käme trotzdem an, ``split_running`` löge nach dessen Ende, und
+            # ein Thread überlebte sein Fenster. Die Aktion im Fenster ist
+            # gesperrt; das hier ist das zweite Netz (Gesamtreview I-10).
+            self.failed.emit(
+                UserError(
+                    _("Die Teilung läuft schon."),
+                    _("Eine zweite Suche zugleich hätte zwei Antworten auf eine Frage."),
+                    suggestions=(
+                        Action(
+                            "cancel_evaluation",
+                            _("Die laufende Teilung abbrechen"),
+                            primary=True,
+                        ),
+                    ),
+                )
+            )
+            return
         self.wait_for_idle()
         result = self.last_result
         entry = result.scene.objects.get(object_id) if result is not None else None
@@ -1041,11 +1067,15 @@ class Session(QObject):
 
         self._split_discarded = False
         worker = _SplitWorker(as_mesh_data(entry.mesh), object_id, self.profile)
-        worker.done.connect(lambda plan: self._split_planned(plan, object_id, then))
-        worker.failedWith.connect(self._split_failed)
-        worker.crashed.connect(lambda detail: self._split_failed(InternalError(detail=detail)))
+        # Jeder Empfänger bekommt den Absender mit: Was ein überlebender
+        # Arbeiter eines früheren Starts noch meldet, zählt nicht mehr.
+        worker.done.connect(lambda plan: self._split_planned(worker, plan, object_id, then))
+        worker.failedWith.connect(lambda error: self._split_failed(worker, error))
+        worker.crashed.connect(
+            lambda detail: self._split_failed(worker, InternalError(detail=detail))
+        )
         worker.cancelled.connect(self._split_cancelled)
-        worker.finished.connect(self._on_split_done)
+        worker.finished.connect(lambda: self._on_split_done(worker))
         self._split = worker
         self.splitBusyChanged.emit(True)
         self._leash.start(worker)
@@ -1068,7 +1098,9 @@ class Session(QObject):
         self._split_discarded = True
         self.splitBusyChanged.emit(False)
 
-    def _split_failed(self, error: AppError) -> None:
+    def _split_failed(self, worker: object, error: AppError) -> None:
+        if worker is not self._split:
+            return
         self.splitBusyChanged.emit(False)
         if not self._split_discarded:
             self.failed.emit(error)
@@ -1081,7 +1113,9 @@ class Session(QObject):
         """
         self.splitBusyChanged.emit(False)
 
-    def _split_planned(self, plan: Any, object_id: str, then: Any) -> None:
+    def _split_planned(self, worker: object, plan: Any, object_id: str, then: Any) -> None:
+        if worker is not self._split:
+            return
         self.splitBusyChanged.emit(False)
         if self._split_discarded:
             return
@@ -1451,12 +1485,17 @@ class Session(QObject):
         worker, self._agent = self._agent, None
         self._leash.hold_until_done(worker)
 
-    def _on_split_done(self) -> None:
+    def _on_split_done(self, worker: Any) -> None:
         """Die Teilungssuche ist ausgelaufen — ihr Arbeiter bleibt am Leben.
 
-        Als benannter Slot und nicht als Lambda: das Lambda schrieb ``None`` in
-        dasselbe Feld, dessen Objekt es gerade zustellte."""
-        worker, self._split = self._split, None
+        Der Absender kommt mit: Nur der aktuelle Arbeiter räumt das Feld,
+        das Auslaufen eines überschriebenen räumt nichts, was ihm nicht
+        gehört. (Der Vorgänger dieser Stelle war ein Lambda, das ``None`` in
+        dasselbe Feld schrieb, dessen Objekt es gerade zustellte — deshalb
+        reist der Arbeiter als Argument und wird nicht aus dem Feld gelesen.)
+        """
+        if worker is self._split:
+            self._split = None
         self._leash.hold_until_done(worker)
 
     def _on_thread_done(self, finished: _EvaluationWorker | None = None) -> None:
