@@ -36,6 +36,7 @@
 - [Zwei Schwellen, eine Frage](zwei-schwellen-eine-frage.md) — entscheiden zwei Konstanten dasselbe, liegt dazwischen ein Bereich, in dem beide Antworten falsch sind; besonders bei zwei Einheiten.
 - [Eine Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) — durchgereicht ist nicht gerufen, und eine zutreffende Begründung im Docstring kann eine Testlücke decken.
 - [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) — wer eine Fähigkeit hinzufügt, sucht die Sätze, die ihre Abwesenheit versprochen haben; sie stehen selten in derselben Datei.
+- [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — sechs Fehler an einem Tag, sechs verschiedene Finder, kein einziger davon pytest; ansehen, mutieren, durchfahren.
 
 ## Haltung
 
