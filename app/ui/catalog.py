@@ -51,6 +51,14 @@ OWN_MARKER = "*"
 #: Farben nicht unterscheidet.
 SUBTRACTIVE_MARKER = "−"
 
+#: Was den gescheiterten oder fehlenden Bereichstest anschreibt (§24.5).
+#: Ein Ausrufezeichen und ein Satz — §24.5 verlangt den Warnhinweis am
+#: Katalogeintrag, kein Verbot: Der Baustein bleibt wählbar, er trägt nur
+#: seine Warnung mit. ``range_passed`` wurde bis zum 26.08.2026 geschrieben,
+#: geprüft und von keiner Oberfläche gelesen — der Satz im Rezeptdialog
+#: („Der Katalog zeigt das an") war unwahr.
+RANGE_MARKER = "!"
+
 #: Anzeigegröße des Vorschaubilds in einer Kachel. Gerendert wird weiter in
 #: ``SIZE`` — die Reserve zahlt sich auf HiDPI-Bildschirmen aus.
 TILE_ICON = 96
@@ -453,12 +461,30 @@ class PartCatalog(QDialog):
         self.accept()
 
 
+def _range_warning(spec: PartSpec) -> str:
+    """Der §24.5-Satz zum Bereichstest — oder nichts.
+
+    Nur für Rezepte: Ein mitgelieferter Baustein wird in der Suite über
+    seinen ganzen Bereich gefahren, sein ``None`` heißt „nicht hier
+    protokolliert" und nicht „ungeprüft". Bei einem Rezept heißt ``None``,
+    dass der Test nie lief — eine von Hand kopierte Datei etwa —, und
+    ``False``, dass an den Grenzen kein brauchbarer Körper herauskam.
+    """
+    if spec.source != "recipe" or spec.range_passed is True:
+        return ""
+    if spec.range_passed is False:
+        return tr("an den Grenzen kam kein brauchbarer Körper heraus")
+    return tr("der Bereichstest ist für diesen Baustein nie gelaufen")
+
+
 def describe(spec: PartSpec) -> str:
     """Titel, die zwei wichtigsten Parameter, und woher der Baustein kommt."""
     parameters = ", ".join(str(entry.title) for entry in spec.params.spec()[:SHOWN_PARAMETERS])
     marker = f" {OWN_MARKER} {tr('eigener Baustein')}" if spec.own else ""
     kind = f"\n{SUBTRACTIVE_MARKER} {tr('nimmt Material weg')}" if spec.subtractive else ""
-    return f"{spec.title}{marker}\n{parameters}{kind}"
+    warning = _range_warning(spec)
+    checked = f"\n{RANGE_MARKER} {warning}" if warning else ""
+    return f"{spec.title}{marker}\n{parameters}{kind}{checked}"
 
 
 def detail(spec: PartSpec | None) -> str:
@@ -476,7 +502,10 @@ def detail(spec: PartSpec | None) -> str:
         lines.append(f"{SUBTRACTIVE_MARKER} {tr('nimmt Material weg')}")
     if spec.own:
         lines.append(f"{OWN_MARKER} {tr('eigener Baustein')}")
-    if spec.subtractive or spec.own:
+    warning = _range_warning(spec)
+    if warning:
+        lines.append(f"<b>{RANGE_MARKER}</b> {warning}")
+    if spec.subtractive or spec.own or warning:
         lines.append("")
 
     lines.append(f"<b>{tr('Parameter')}</b>")

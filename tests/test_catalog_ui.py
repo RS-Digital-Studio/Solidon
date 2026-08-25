@@ -315,3 +315,35 @@ def test_a_saved_part_joins_the_grid_and_gets_its_picture(qt_app: QApplication) 
     finally:
         catalog.release()
         PARTS._parts.pop("nachzuegler_probe", None)
+
+
+def test_a_failed_or_missing_range_check_is_written_on_the_entry(qt_app: QApplication) -> None:
+    """§24.5 verlangt den Warnhinweis am Katalogeintrag, kein Verbot.
+
+    ``range_passed`` wurde geschrieben, deklariert und geprüft — und von
+    keiner Oberfläche gelesen: Ein Rezept mit gebrochenem Bereichstest stand
+    im Katalog wie jedes andere, und der Satz im Rezeptdialog („Der Katalog
+    zeigt das an") war unwahr. Gefunden im Review vom 26.08.2026, von zwei
+    Prüfläufen unabhängig.
+    """
+    import dataclasses
+
+    from app.i18n import tr
+    from app.ui.catalog import RANGE_MARKER, describe, detail
+
+    donor = next(iter(PARTS.all()))
+    broken = dataclasses.replace(donor, source="recipe", range_passed=False)
+    unchecked = dataclasses.replace(donor, source="recipe", range_passed=None)
+    passed = dataclasses.replace(donor, source="recipe", range_passed=True)
+
+    assert tr("an den Grenzen kam kein brauchbarer Körper heraus") in describe(broken)
+    assert RANGE_MARKER in describe(broken), "Regel 18: Zeichen und Satz, nicht nur eines"
+    assert tr("der Bereichstest ist für diesen Baustein nie gelaufen") in describe(unchecked)
+    assert "Bereichstest" not in describe(passed) and "Grenzen" not in describe(passed)
+
+    assert tr("an den Grenzen kam kein brauchbarer Körper heraus") in detail(broken)
+    assert tr("der Bereichstest ist für diesen Baustein nie gelaufen") in detail(unchecked)
+
+    # Ein mitgelieferter Baustein trägt ``None``, weil sein Bereich in der
+    # Suite gefahren wird — der Katalog darf ihn nicht als ungeprüft anschreiben.
+    assert "Bereichstest" not in describe(donor) and "Grenzen" not in describe(donor)
