@@ -369,3 +369,48 @@ def test_the_locked_save_button_shows_its_reason_beside_it(qt_app: QApplication)
         assert catalog.save_part.isEnabled()
     finally:
         catalog.release()
+
+
+def test_without_a_body_the_catalogue_shows_but_does_not_insert(qt_app: QApplication) -> None:
+    """Auf der Startseite gehört der Katalog offen, das Einsetzen nicht.
+
+    Vorher wählte jemand einen Baustein, bestätigte — und bekam erst dann
+    „Wählen Sie zuerst ein Objekt": zwei Dialoge für eine Absage, die beim
+    Öffnen feststand (Robert, 25.08.2026). Gesperrt wird das Einsetzen mit
+    Grund an Knopf und Hinweiszeile; die Bibliothek ansehen bleibt möglich,
+    und der Doppelklick hält sich an dieselbe Sperre wie der Knopf.
+    """
+    catalog = PartCatalog()
+    try:
+        grund = "Die Szene ist leer — ein Baustein wird auf einen Körper gesetzt."
+        catalog.set_can_insert(False, grund)
+
+        chosen_item = None
+        for row in range(catalog.list.count()):
+            item = catalog.list.item(row)
+            if item is not None and item.data(Qt.ItemDataRole.UserRole) is not None:
+                catalog.list.setCurrentItem(item)
+                chosen_item = item
+                break
+        assert chosen_item is not None and catalog.chosen() is not None
+
+        assert catalog._insert is not None
+        assert not catalog._insert.isEnabled(), "mit Auswahl, aber ohne Körper: gesperrt"
+        assert catalog.insert_hint.isVisibleTo(catalog), "der Grund steht sichtbar da"
+        assert "Körper" in catalog.insert_hint.text()
+        assert catalog._insert.toolTip() == grund, "zweite Kodierung am Knopf (Regel 18)"
+
+        picked: list[str] = []
+        catalog.partChosen.connect(picked.append)
+        catalog._chosen(chosen_item)
+        assert picked == [], "der Doppelklick setzt nichts, was der Knopf nicht darf"
+        catalog._accept()
+        assert picked == [], "und die Eingabetaste auch nicht"
+
+        catalog.set_can_insert(True, "")
+        assert catalog._insert.isEnabled(), "mit Körper geht alles wieder"
+        assert not catalog.insert_hint.isVisibleTo(catalog)
+        catalog._chosen(chosen_item)
+        assert picked, "frei heißt: der Doppelklick wählt wieder"
+    finally:
+        catalog.release()

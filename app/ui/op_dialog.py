@@ -889,10 +889,14 @@ class OperationDialog(QDialog):
         )
         # Der Knopf benennt die Handlung: „Bohrung setzen" statt „OK". Was
         # gleich passiert, steht damit dort, wo entschieden wird — der
-        # Fenstertitel ist beim Klicken nicht mehr im Blick.
+        # Fenstertitel ist beim Klicken nicht mehr im Blick. Für die
+        # Bausteine gilt das nicht wörtlich: Ihre Titel sind Substantive,
+        # und ein Knopf namens „Lochwand-Einhänger" sagt nicht, was der
+        # Klick tut. Dort heißt die Handlung „Einsetzen" — den Baustein
+        # nennt der Fenstertitel (Robert, 25.08.2026, über 3d-druck-ce).
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
-            ok.setText(str(spec.title))
+            ok.setText(str(tr("Einsetzen")) if spec.category == "parts" else str(spec.title))
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)

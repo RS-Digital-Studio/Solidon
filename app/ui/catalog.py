@@ -184,6 +184,16 @@ class PartCatalog(QDialog):
         self.save_hint = QLabel("", self)
         self.save_hint.setWordWrap(True)
         self.save_hint.setVisible(False)
+        # Die Schwester für die andere Hälfte der Knopfzeile: warum gerade
+        # nichts eingesetzt werden kann. Ohne sie wählte jemand auf der
+        # Startseite einen Baustein, bestätigte — und bekam erst dann
+        # „Wählen Sie zuerst ein Objekt": zwei Dialoge für eine Absage, die
+        # beim Öffnen schon feststand (Robert, 25.08.2026, über 3d-druck-ce).
+        self.insert_hint = QLabel("", self)
+        self.insert_hint.setWordWrap(True)
+        self.insert_hint.setVisible(False)
+        self._insert_allowed = True
+        self._insert_reason = ""
 
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
@@ -230,6 +240,7 @@ class PartCatalog(QDialog):
         layout.addWidget(self.search)
         layout.addWidget(split, stretch=1)
         layout.addWidget(self.save_hint)
+        layout.addWidget(self.insert_hint)
         layout.addWidget(buttons)
 
         self._previews: dict[str, QPixmap] = {}
@@ -255,6 +266,22 @@ class PartCatalog(QDialog):
         self.save_part.setToolTip("" if can else reason)
         self.save_hint.setText("" if can else reason)
         self.save_hint.setVisible(bool(reason) and not can)
+
+    def set_can_insert(self, can: bool, reason: str = "") -> None:
+        """Gibt das Einsetzen frei — oder sagt daneben, warum nicht.
+
+        Dieselbe Bauart wie :meth:`set_can_save`, und aus demselben Grund:
+        Die Bibliothek ansehen ist auch ohne Modell sinnvoll, nur das
+        Einsetzen nicht — es braucht einen Körper, auf den der Baustein
+        gesetzt wird. Der Grund kommt vom Fenster, weil nur das die Szene
+        und die Auswahl kennt; er steht an Knopf und Hinweiszeile (§2.7),
+        und der Doppelklick auf einen Eintrag hält sich an dieselbe Sperre.
+        """
+        self._insert_allowed = can
+        self._insert_reason = "" if can else reason
+        self.insert_hint.setText(self._insert_reason)
+        self.insert_hint.setVisible(bool(reason) and not can)
+        self._show_detail()
 
     def refresh(self) -> None:
         """Die Liste neu aus dem Register — die Suche bleibt, wie sie steht.
@@ -454,7 +481,8 @@ class PartCatalog(QDialog):
         spec = next((entry for entry in PARTS.all() if entry.name == name), None)
         self.detail.setText(detail(spec))
         if self._insert is not None:
-            self._insert.setEnabled(spec is not None)
+            self._insert.setEnabled(spec is not None and self._insert_allowed)
+            self._insert.setToolTip(self._insert_reason if not self._insert_allowed else "")
 
     # --- choosing ---------------------------------------------------------------
 
@@ -465,13 +493,13 @@ class PartCatalog(QDialog):
 
     def _chosen(self, item: QListWidgetItem) -> None:
         name = item.data(Qt.ItemDataRole.UserRole)
-        if name:
+        if name and self._insert_allowed:
             self.partChosen.emit(name)
             self.accept()
 
     def _accept(self) -> None:
         name = self.chosen()
-        if name:
+        if name and self._insert_allowed:
             self.partChosen.emit(name)
         self.accept()
 

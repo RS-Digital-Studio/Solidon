@@ -3749,12 +3749,33 @@ class MainWindow(QMainWindow):
         """
         catalog = PartCatalog(self)
         catalog.set_can_save(*self._recipe_readiness())
+        catalog.set_can_insert(*self._insert_readiness())
         catalog.saveRequested.connect(lambda: self._save_as_part(catalog))
         if catalog.exec() != PartCatalog.DialogCode.Accepted:
             return
         name = catalog.chosen()
         if name:
             self.run_operation(REGISTRY.get(part_op_name(name)))
+
+    def _insert_readiness(self) -> tuple[bool, str]:
+        """Ob sich gerade ein Baustein einsetzen lässt — und sonst warum nicht.
+
+        Die Absage stand vorher **hinter** dem Katalog: Auf der Startseite
+        ließ sich ein Baustein wählen und bestätigen, und erst dann kam
+        „Wählen Sie zuerst ein Objekt" — zwei Dialoge für eine Antwort, die
+        beim Öffnen feststand (Robert, 25.08.2026). Der Grund für den leeren
+        Fall ist ein eigener Satz: Auf der Startseite gibt es keinen
+        Objektbaum, auf den der Standardsatz zeigen könnte.
+        """
+        result = self.session.last_result
+        if result is None or not result.scene.objects:
+            return False, tr(
+                "Die Szene ist leer — ein Baustein wird auf einen Körper gesetzt. "
+                "Lesen Sie zuerst ein Modell ein oder legen Sie einen Grundkörper an."
+            )
+        if not self.object_tree.selected_objects():
+            return False, _needs_objects(1)
+        return True, ""
 
     def _recipe_readiness(self) -> tuple[bool, str]:
         """Ob sich aus dem Stand ein eigener Baustein machen lässt — und sonst warum nicht.

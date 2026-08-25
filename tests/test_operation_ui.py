@@ -1508,3 +1508,28 @@ def test_a_deleted_sketch_gives_the_measure_fields_back(qt_app: QApplication) ->
         if release is not None:
             release(dialog)
         dialog.deleteLater()
+
+
+def test_a_part_dialog_offers_to_insert_not_to_name_the_part(qt_app: QApplication) -> None:
+    """Der Hauptknopf nennt die Handlung — bei Bausteinen ist der Titel keine.
+
+    „Bohrung setzen" ist ein Verb und darf auf den Knopf; „Lochwand-Einhänger"
+    ist ein Ding, und ein Knopf, der ein Ding heißt, sagt nicht, was der Klick
+    tut (Robert, 25.08.2026). Bausteindialoge sagen „Einsetzen", der
+    Fenstertitel nennt den Baustein; gewöhnliche Operationen behalten ihren
+    handelnden Titel.
+    """
+    from PySide6.QtWidgets import QDialogButtonBox
+
+    from app.core.knowledge.parts.ops import op_name
+
+    part = REGISTRY.get(op_name("nut_trap"))
+    dialog = OperationDialog(part, [], None)
+    ok = dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Ok)
+    assert ok is not None and ok.text() == "Einsetzen"
+    assert part.category == "parts", "sonst prüft dieser Test die falsche Sorte"
+
+    plain = REGISTRY.get("drill_hole")
+    dialog = OperationDialog(plain, [], None)
+    ok = dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Ok)
+    assert ok is not None and ok.text() == str(plain.title), "ein Verb bleibt auf dem Knopf"
