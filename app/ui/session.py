@@ -129,15 +129,21 @@ class _EvaluationWorker(Worker):
             if session.pending_foreign_check:
                 session.pending_foreign_check = False
                 outside = foreign.findings_for(session.project.document)
+            if session.pending_part_check:
+                # §24.4: was die Bibliothek geändert hat, seit diese Datei
+                # gespeichert wurde, wird einmal gesagt — beim Öffnen, nicht
+                # bei jeder Auswertung. **Vor** der Auswertung wie der
+                # foreign-Hinweis darüber, aus demselben Grund: Der
+                # ``parts.scripted_recipe``-Satz ist die zweite Hälfte von
+                # §32, und er lief hier einst nach ``run_evaluation`` —
+                # OpenSCAD war dann längst gestartet, bevor der Satz
+                # überhaupt entstand. Gelesen wird ohnehin nur Dokument und
+                # Register, nichts aus dem Ergebnis.
+                session.pending_part_check = False
+                outside.extend(part_check.check(session.project.document))
 
             result = session.run_evaluation()
             result = _with_findings(result, outside)
-            if session.pending_part_check:
-                # §24.4: was die Bibliothek geändert hat, seit diese Datei gespeichert
-                # wurde, wird einmal gesagt — beim Öffnen, nicht bei jeder
-                # Auswertung.
-                session.pending_part_check = False
-                result = _with_findings(result, part_check.check(session.project.document))
             if session.pending_orphan_check and result.complete:
                 # §21.3: jeder Merkmalsverweis einer geöffneten Datei wird einmal
                 # geprüft, hier im Arbeiter, wo Fragen blockieren darf, ohne das
@@ -1506,12 +1512,22 @@ class Session(QObject):
         dasselbe Feld schrieb, dessen Objekt es gerade zustellte — deshalb
         reist der Arbeiter als Argument und wird nicht aus dem Feld gelesen.)
         """
-        if worker is self._split:
+        current = worker is self._split
+        if current:
             # Die Tauschform, kein nacktes Nullen des Feldes: Der Wächter in
             # test_ui verbietet jenes Muster, weil es andernorts die letzte
             # Referenz vor der Übergabe an die Leine fallen ließ.
             worker, self._split = self._split, None
         self._leash.hold_until_done(worker)
+        if current:
+            # Erst jetzt ist das Ende wahr. ``cancel_split`` und
+            # ``_split_cancelled`` melden früher, aber dort läuft der Thread
+            # noch, und ``_on_split_busy`` fragt ``_anything_running()`` —
+            # das liest ``split_running`` als True und lässt Balken und
+            # Abbrechen-Knopf stehen, für immer, denn danach kam nichts mehr.
+            # Doppelt gemeldet ist dagegen folgenlos: Die Anzeige stellt nur
+            # einen Zustand her.
+            self.splitBusyChanged.emit(False)
 
     def _on_thread_done(self, finished: _EvaluationWorker | None = None) -> None:
         """Ein Lauf ist ausgelaufen — und nur der aktuelle darf das melden.

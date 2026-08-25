@@ -1167,6 +1167,57 @@ def test_the_rebuilt_window_keeps_the_work(qt_app: object) -> None:
         set_language("de")
 
 
+def test_the_rebuilt_window_shows_the_work_it_kept(qt_app: object) -> None:
+    """Behalten reicht nicht — zeigen.
+
+    Die Sitzung wanderte mit, das Fenster zeigte sie nicht: Der Konstruktor
+    endet auf dem Startbildschirm, und ``_connect_session`` verbindet nur
+    künftige Signale. Nach einem Sprachwechsel mit offenem Projekt stand der
+    Startbildschirm über einem unsichtbaren Dokument — bis zufällig die
+    nächste Auswertung lief. ``rebuild_for_language`` übernimmt den Stand
+    deshalb selbst: Ansicht statt Startbildschirm, Dokument in den Panels,
+    letzte Auswertung im Baum.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from app.ui.app import rebuild_for_language
+
+    meshes = Path(__file__).parent / "data" / "meshes"
+
+    install_language("de")
+    set_language("de")
+    settings = UiSettings()
+    settings.language = "de"
+    window = MainWindow(Session(), settings)
+    try:
+        window.open_path(meshes / "cube_clean.stl")
+        window.session.wait_for_idle()
+        assert window.session.last_result is not None, "ohne Auswertung prüft der Test nichts"
+
+        settings.language = "it"
+        application = QApplication.instance()
+        assert application is not None
+        window = rebuild_for_language(application, window, settings)
+
+        assert window.stack.currentWidget() is window.overlay, (
+            "das offene Projekt gehört in die Ansicht, nicht hinter den Startbildschirm"
+        )
+        assert window.object_tree.tree.topLevelItemCount() == 1, (
+            "die letzte Auswertung fehlt im Objektbaum"
+        )
+        assert window.history_panel.list.count() > 0, "der Verlauf blieb leer"
+    finally:
+        # Kein ``close()``: Die Sitzung ist durch den Import „geändert", und
+        # der ``closeEvent`` stellte die Ungesichert-Frage — modal, und im
+        # Offscreen-Lauf beantwortet sie niemand (45 Minuten gemessen: nie).
+        window.release()
+        window.deleteLater()
+        install_language("de")
+        set_language("de")
+
+
 def test_the_first_start_speaks_the_language_of_the_system(monkeypatch: Any) -> None:
     """Ein portugiesisches Windows bekommt keine deutsche Anwendung.
 

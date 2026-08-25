@@ -5658,11 +5658,21 @@ class MainWindow(QMainWindow):
         Übernommen-Leiste mit dem Weg zurück — ein Klick, derselbe Effekt
         wie vorher zwei.
         """
-        if preview.proposal.empty:
+        if preview.proposal.findings:
+            # Die Befunde des Zugs — Verweigerung, Abschneiden, Prüfungen nach
+            # jeder Op — hatten keinen Anzeigeweg: Sie standen am Vorschlag
+            # und nirgends im Fenster. In den Prüfbericht wie jeder andere
+            # Befund; die Chatblase fasst zusammen, der Bericht trägt alles.
+            self.report.add_findings(list(preview.proposal.findings))
+        if preview.proposal.empty and not preview.proposal.stopped:
             # Regel 19 im Geist: ein reiner Auskunftszug ist keine
             # Entscheidung. Übernehmen/Verwerfen über „Keine Änderung"
             # anzubieten war eine Wahl ohne Gegenstand — der Beitrag wird
             # sofort aufgezeichnet, und nur das Gespräch bleibt.
+            #
+            # **Nicht bei ``stopped``:** Eine Verweigerung oder ein
+            # abgeschnittener Zug ist auch leer, aber kein Auskunftszug —
+            # die Abkürzung warf ihn weg, und die Blase dazu blieb leer.
             self.session.discard_proposal(preview)
             self._proposal = None
             self.chat.show_proposal(None)
@@ -5670,17 +5680,26 @@ class MainWindow(QMainWindow):
             self._focus_chat()
             return
         if self.settings.auto_accept_reversible and agent_apply.auto_acceptable(preview.proposal):
-            transaction = self.session.accept_proposal(preview)
-            self._proposal = None
-            self._applied_transaction = transaction.id if transaction else None
-            self.chat.show_applied(preview, transaction.id if transaction else "")
-            self.chat.show_document(self.session.project.document)
-            # Eine wartende Differenz eines abgelösten Vorschlags bliebe sonst
-            # unbeschriftet über der neuen Szene stehen.
-            self.viewport.show_difference(None)
-            self.viewport.mark_preview("")
-            self._focus_chat()
-            return
+            try:
+                transaction = self.session.accept_proposal(preview)
+            except AppError as error:
+                # Derselbe Riss wie beim Klick auf Übernehmen: Der Stapel kann
+                # sich zwischen Entwurf und Zustellung bewegt haben
+                # (``history_moved``). Dann wird aus der automatischen
+                # Übernahme ein normaler Vorschlag — mit dem Fehler dazu,
+                # statt eines stummen Verlusts.
+                show_error(error, self)
+            else:
+                self._proposal = None
+                self._applied_transaction = transaction.id if transaction else None
+                self.chat.show_applied(preview, transaction.id if transaction else "")
+                self.chat.show_document(self.session.project.document)
+                # Eine wartende Differenz eines abgelösten Vorschlags bliebe
+                # sonst unbeschriftet über der neuen Szene stehen.
+                self.viewport.show_difference(None)
+                self.viewport.mark_preview("")
+                self._focus_chat()
+                return
         self._proposal = preview
         self.chat.show_proposal(preview)
         if preview.difference is not None:
@@ -5694,7 +5713,16 @@ class MainWindow(QMainWindow):
     def _on_proposal_accepted(self) -> None:
         if self._proposal is None:
             return
-        self.session.accept_proposal(self._proposal)
+        try:
+            self.session.accept_proposal(self._proposal)
+        except AppError as error:
+            # ``ValidationError(history_moved)`` landete auf stderr, und der
+            # Klick blieb ohne jede Wirkung. Der Fehler trägt seine Handlung
+            # (der Verweis in den Verlauf, §2.7); der Vorschlag bleibt
+            # stehen — ihn wegzuräumen wäre die zweite stumme Folge desselben
+            # Klicks, und Verwerfen geht weiterhin.
+            show_error(error, self)
+            return
         self._clear_proposal()
 
     def _on_proposal_discarded(self) -> None:
@@ -7418,6 +7446,7 @@ class MainWindow(QMainWindow):
         Überspringbar."""
         dialog = first_run.FirstRunDialog(self.settings, self)
         dialog.importRequested.connect(self.action_import)
+        spoken = self.settings.language
         if dialog.exec() == first_run.FirstRunDialog.DialogCode.Accepted:
             dialog.apply_to(self.settings)
             self._adopt_defaults()
@@ -7430,6 +7459,12 @@ class MainWindow(QMainWindow):
         # einem Neustart bekommen — derselbe Weckruf wie in action_llm_key.
         self.session.set_agent_backend(None)
         self._refresh_chat_availability(probe_local=True)
+        # Der Dialog verspricht „Die Oberfläche stellt sich gleich darauf um",
+        # und über das Hilfemenü geöffnet stimmte das nicht: Den Fenstertausch
+        # löst nur der Erststart in ``main()`` aus — oder dieses Signal, wie
+        # in ``action_settings``.
+        if self.settings.language != spoken:
+            self.languageChanged.emit()
 
     def _discarded_names(self) -> list[str]:
         """Wie die zurückgenommenen Schritte heißen, jüngster zuerst.

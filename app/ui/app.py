@@ -112,6 +112,16 @@ class FileOpenListener(QObject):
         super().__init__(parent)
         self._window = window
 
+    def retarget(self, window: MainWindow) -> None:
+        """Auf das aktuelle Fenster zeigen — nach einem Sprachwechsel.
+
+        Der Filter lebt an der Anwendung und überlebt jeden Fenstertausch;
+        ohne den Nachzug hielte er das Fenster von vor dem Wechsel, und der
+        nächste Finder-Doppelklick riefe ``open_path`` auf einem abgebauten
+        C++-Objekt.
+        """
+        self._window = window
+
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
         if isinstance(event, QFileOpenEvent):
             # Beide Felder können leer sein, und ``Path("")`` ist ``Path(".")``
@@ -219,7 +229,28 @@ def rebuild_for_language(
     fresh.restoreGeometry(geometry)
     fresh.show()
 
-    window.close()
+    # Der Stand wandert mit, nicht nur die Sitzung. Der Konstruktor endet auf
+    # dem Startbildschirm und verbindet nur die **künftigen** Signale — ohne
+    # die drei Zeilen hier war ein offenes Projekt nach dem Sprachwechsel
+    # unsichtbar, bis die nächste Auswertung von selbst lief.
+    if window.stack.currentWidget() is not window.start_screen:
+        fresh._show_start_screen(False)
+    fresh._on_project()
+    result = window.session.last_result
+    if result is not None:
+        fresh._on_scene(result)
+
+    # Kein ``close()``: Das liefe durch den ``closeEvent`` — und die
+    # Ungesichert-Frage gehört zum Beenden, nicht zum Fensterwechsel.
+    # „Verwerfen" räumte dort die automatische Sicherung des
+    # **weiterlaufenden** Projekts (§38), „Abbrechen" würde vom
+    # ``deleteLater`` überrollt. Den Fernsteuerdienst stoppt sonst nur der
+    # ``closeEvent``, also hier — vor ihm hielte er den Port des neuen.
+    if window._remote is not None:
+        window._remote.stop()
+        window._remote = None
+    window.release()
+    window.hide()
     window.deleteLater()
     return fresh
 
@@ -237,6 +268,16 @@ class _LanguageSwitch(QObject):
         super().__init__(application)
         self._application = application
         self._window = window
+        self._listener: FileOpenListener | None = None
+
+    def follow(self, listener: FileOpenListener) -> None:
+        """Diesen Datei-Filter bei jedem Austausch nachführen.
+
+        Er lebt an der Anwendung und überlebt das Fenster — ohne den Nachzug
+        zeigte er nach dem ersten Sprachwechsel ins Leere (siehe
+        :meth:`FileOpenListener.retarget`).
+        """
+        self._listener = listener
 
     def arm(self) -> None:
         """Den Austausch für den nächsten Ereignisdurchlauf vormerken."""
@@ -247,6 +288,8 @@ class _LanguageSwitch(QObject):
         fresh = rebuild_for_language(self._application, old, old.settings)
         self._window = fresh
         fresh.languageChanged.connect(self.arm)
+        if self._listener is not None:
+            self._listener.retarget(fresh)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -357,7 +400,9 @@ def main(argv: list[str] | None = None) -> int:
     # laufenden Anwendung ein Ereignis, und ohne diesen Filter fällt es unter
     # den Tisch — die Zuordnung im Bundle wäre dort ein Versprechen ohne
     # Wirkung.
-    application.installEventFilter(FileOpenListener(window, application))
+    listener = FileOpenListener(window, application)
+    application.installEventFilter(listener)
+    holder.follow(listener)
 
     # **Und die Gegenzeile dazu.** Bis zum 23.08.2026 vermerkte das Protokoll
     # den Start und über das Ende nichts — damit sehen ein Absturz, ein
