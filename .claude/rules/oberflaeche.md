@@ -349,6 +349,21 @@ app.processEvents()
 dialog.grab().save("bogen.png")
 ```
 
+**Und wer ihn in mehreren Sprachen ansieht, installiert die Kataloge.**
+`set_language` setzt eine Variable und sonst nichts; geladen wird über
+`install_catalog(sprache, read_catalog(sprache))`, so wie `make_figures.py` es
+tut. Ohne diese Zeile ist jedes Bild deutsch — und der Lauf sieht vollständig
+aus, weil er sechs Dateien schreibt und sechs Zeilen ausgibt. Der
+Rezeptdialog wurde am 25.08.2026 so „in sechs Sprachen geprüft"; aufgefallen
+ist es erst am portugiesischen Bild, auf dem „Welche Maße soll man einstellen
+können?" stand. **Die Gegenprobe kostet nichts: Sind zwei Bilder gleich groß,
+zeigen sie dasselbe.**
+
+Dazu `install_qt_translations(app, sprache)` (`app/ui/app.py`) — Qts eigene
+Standardknöpfe kommen aus seinem Katalog, nicht aus unserem, und ohne den
+Aufruf steht auf jedem Bild „Cancel", wo die Anwendung „Abbrechen" zeigt. Wer
+das für einen Fund hält, sucht einen Fehler, den es nicht gibt.
+
 **Für den Viewport gilt genau diese Zeile nicht.** `widget.grab()` malt den
 Qt-Widgetbaum ab und weiß nichts von dem, was OpenGL in den Viewport
 gezeichnet hat — das Bild kommt mit einer **schwarzen Mitte** zurück, und
