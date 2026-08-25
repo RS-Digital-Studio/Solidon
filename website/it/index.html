@@ -156,7 +156,7 @@
 }
 </script>
 </head>
-<body data-release="2026-08-20T18:00:00+02:00" data-download="">
+<body data-release="2026-08-20T18:00:00+02:00">
 <a class="skip" href="#content">Vai al contenuto</a>
 
 <header class="site">
@@ -202,21 +202,16 @@
         agente IA usa gli stessi strumenti dei menu, e la geometria la calcola
         il codice, mai il modello linguistico.</p>
 
-        <div class="download">
-          <strong data-past-text="Demo — gratuita, senza account" data-release-text="La demo è qui — gratuita, senza account">Demo dal 20 agosto 2026, ore 18:00&nbsp;CEST — gratuita</strong>
+        <div class="download" id="download">
+          <strong data-past-text="Demo — gratuita, senza account" data-release-text="La demo è qui — gratuita, senza account">La demo è qui — gratuita, senza account</strong>
           <p class="countdown" data-countdown
              data-template="Ancora {rest}" aria-hidden="true" hidden></p>
           <p>Completa e senza chiave: niente filigrane, niente blocco
           dell'esportazione, nessuna funzione bloccata. <b>Gira fino al
           30 ottobre 2026</b> e dopo non si avvia più — i tuoi file di
           progetto non ne sono toccati.</p>
-          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20avvisami%20quando%20esce%20la%20demo"
-             data-release-hide>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
-            </svg>
-            Avvisami quando esce
-          </a>
+          <p>E dopo? Si compra una volta sola, niente abbonamento —
+          <a href="#pricing">il prezzo è già fissato</a>.</p>
 
           <div class="dateien" data-files data-release-show hidden>
             <a class="btn" href="/api/count.php?f=Solidon3D-Setup-0.1.5.exe" download="Solidon3D-Setup-0.1.5.exe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Windows 10/11 — 179 MB</a>
@@ -232,7 +227,8 @@
             <p class="version">Versione 0.1.5, pubblicata il 24/08/2026.</p>
           </div>
           <p class="pruefhinweis" data-release-show hidden>Windows mostra un avviso azzurro per un'applicazione nuova e non ancora firmata: <i>Ulteriori informazioni</i> → <i>Esegui comunque</i>. La firma arriverà appena il certificato sarà pronto.</p>
-          <p class="pruefhinweis" data-release-show hidden><b>Nuove versioni.</b> Dalla prossima versione Solidon controlla all'avvio se ne esiste una più recente e la propone per il download — scaricata e installata solo dopo la tua conferma, e si può disattivare nelle impostazioni. Quella offerta oggi non chiede ancora da sé: lì il percorso è <i>Aiuto → Cerca una versione più recente</i>.</p>
+          <p class="pruefhinweis" data-release-show hidden><b>Nuove versioni.</b> Solidon controlla all'avvio se esiste una versione più recente e la propone per il download — scaricata e installata solo dopo la tua conferma, e si può disattivare nelle impostazioni.</p>
+          <p class="pruefhinweis">Dopo l'installazione: <a href="/it/manual.html#start">I primi quindici minuti</a> — dalla finestra vuota al primo pezzo esportato.</p>
 
           <ul class="assure">
             <li>
@@ -282,11 +278,44 @@
     </div>
   </section>
 
+  <section id="primi-passi">
+    <div class="wrap">
+      <h2>In tre passi al pezzo stampato</h2>
+      <p class="sub">Fatto per tutti quelli che stampano — non solo per chi
+      conosce il CAD. La strada dal download al pezzo è corta:</p>
+      <div class="steps">
+        <ol class="steps-list">
+          <li><b>Scarica la demo e avviala.</b> Niente account, niente
+          chiave, nessuna configurazione — installare e partire. Nove
+          progetti di esempio aspettano nella schermata iniziale.</li>
+          <li><b>Trascina dentro un modello.</b> Un STL da Printables o il
+          tuo progetto: il rapporto di verifica dice subito cosa andrebbe
+          storto in stampa — e ogni rilievo porta con sé un'azione
+          proposta.</li>
+          <li><b>Adatta e stampa.</b> Clicca la faccia, cambia la quota,
+          prendi il gioco dal profilo del materiale — poi esporta o passa il
+          modello direttamente al tuo slicer.</li>
+        </ol>
+        <figure class="shot">
+          <div class="stage">
+            <img src="../bilder/beleg-start-it.png" width="1400" height="1000" loading="lazy" decoding="async"
+                 alt="La schermata iniziale di Solidon3D: un'area dove lasciare modelli e progetti, i pulsanti «Nuovo progetto» e «Apri progetto», sotto nove progetti di esempio con anteprima e descrizione">
+          </div>
+          <figcaption>La schermata iniziale della demo — basta lasciare un
+          file, e i nove progetti di esempio percorrono ogni strada una
+          volta.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
   <section id="why">
     <div class="wrap">
       <h2>Ti suona familiare?</h2>
-      <p class="sub">Le quattro frasi che si sentono più spesso attorno a una
-      stampante — e cosa ne fa Solidon3D.</p>
+      <p class="sub">Solidon3D non è uno slicer e non è un catalogo di
+      modelli. Sta in mezzo: tra l'STL scaricato che non combacia e lo slicer
+      che lo stampa senza fare domande. Le quattro frasi che si sentono più
+      spesso attorno a una stampante — e cosa ne fa Solidon3D:</p>
       <ul class="pains">
         <li>
           <q>Il foro è 0,2 mm troppo stretto, e non ho un CAD.</q>
@@ -392,8 +421,9 @@
           viene portata a una risoluzione con cui si può lavorare, riceve un
           rapporto di verifica e, se serve, viene divisa e messa in spine —
           finché non sta stampabile sul piatto. Serve un ComfyUI in
-          esecuzione locale con un modello generatore e una scheda grafica
-          robusta; senza entrambi, le vie 1 e 2 restano pienamente
+          esecuzione locale e una scheda grafica robusta; il modello
+          generatore è TripoSG, sotto licenza MIT, e un comando lo installa.
+          Senza entrambi, le vie 1 e 2 restano pienamente
           utilizzabili.</p>
         </div>
         <div class="way">
@@ -552,17 +582,17 @@
           completa arriva a <b>69 €</b> — una tantum, con tutti gli
           aggiornamenti 1.x inclusi. Il prezzo di lancio vale fino al
           31/01/2027; poi sono 99 €.</p>
-          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20avvisami%20quando%20esce%20la%20demo"
+          <a class="btn" href="#download"
              data-release-href data-release-download>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
-                 data-release-hide>
+                 data-release-hide hidden>
               <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
             </svg>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
-                 data-release-show hidden>
+                 data-release-show>
               <path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/>
             </svg>
-            <span data-release-text="Scarica la demo">Avvisami quando esce</span>
+            <span data-release-text="Scarica la demo">Scarica la demo</span>
           </a>
         </div>
         <div>
@@ -635,7 +665,8 @@
         14 miliardi di parametri in su — che richiede una scheda grafica con
         16 GB di memoria</td></tr>
         <tr><td>Generare (opzionale)</td><td>un ComfyUI in esecuzione locale
-        con modello generatore e una scheda grafica robusta</td></tr>
+        e una scheda grafica con 8 GB di memoria; uno strumento incluso
+        installa il modello TripoSG (MIT)</td></tr>
         <tr><td>Altro (opzionale)</td><td>OpenSCAD, uno slicer — tutto viene
         trovato o indicato a mano, niente di questo è obbligatorio</td></tr>
       </table>
@@ -757,9 +788,9 @@
     <div class="wrap">
       <div class="closing">
         <h2>Il prossimo pezzo che combacia</h2>
-        <p data-past-text="La demo gira fino al 30 ottobre — gratuita e completa. Chi scrive due righe riceve una risposta: risponde un essere umano.">La demo esce il 20 agosto 2026 e gira fino al 30 ottobre —
-        gratuita e completa. Chi scrive due righe riceve un avviso appena
-        c'è: risponde un essere umano.</p>
+        <p data-past-text="La demo gira fino al 30 ottobre — gratuita e completa. Chi scrive due righe riceve una risposta: risponde un essere umano.">La demo gira fino al 30 ottobre — gratuita e completa. Chi
+        scrive due righe riceve una risposta: risponde un essere
+        umano.</p>
         <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20avvisami%20quando%20esce%20la%20demo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>

@@ -701,6 +701,75 @@ section > .wrap > h2:last-of-type { margin-bottom: 1.75rem; }
 
 .pains p b { color: var(--accent); }
 
+/* ── Erste Schritte: drei Schritte, ein Beleg ──────────────────────────── */
+
+/* Der Einstieg als Weg, nicht als Behauptung: links drei nummerierte
+   Schritte, rechts der Startbildschirm, der sie belegt. Beides über
+   Variablen, damit hell und dunkel dieselbe Aussage zeigen. */
+.steps {
+  display: grid;
+  gap: 2.25rem;
+  align-items: center;
+}
+
+@media (min-width: 62rem) {
+  .steps {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 3.5rem;
+  }
+}
+
+ol.steps-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  counter-reset: steps;
+  display: grid;
+  gap: 1.4rem;
+}
+
+ol.steps-list li {
+  counter-increment: steps;
+  position: relative;
+  padding-left: 3.2rem;
+  color: var(--muted);
+}
+
+ol.steps-list li::before {
+  content: counter(steps);
+  position: absolute;
+  left: 0;
+  top: -0.05rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+/* Die Linie verbindet die Nummern zu einem Weg. Sie endet an der letzten —
+   ein Weg, der weiterführt, wo nichts mehr kommt, verspricht zu viel. */
+ol.steps-list li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: calc(1.1rem - 1px);
+  top: 2.5rem;
+  bottom: -1.15rem;
+  width: 2px;
+  background: var(--line);
+}
+
+ol.steps-list b {
+  display: block;
+  color: var(--fg);
+  font-size: 1.08rem;
+  margin-bottom: 0.15rem;
+}
+
 /* ── Die vier Wege ─────────────────────────────────────────────────────── */
 
 /* Zwei Karten je Zeile, nicht vier. Mit `minmax(16rem, …)` standen alle vier
@@ -1293,6 +1362,7 @@ a { color: var(--accent); }
        bevor die Zeitachse greift. */
     .stats div,
     .pains li,
+    ol.steps-list li,
     .way,
     .showcase > *,
     .honest,
@@ -1312,10 +1382,12 @@ a { color: var(--accent); }
        Zeit gebunden, der Bereich ist an den Bildlauf gebunden und läuft
        deshalb auch rückwärts sauber. */
     .pains li:nth-child(2),
+    ol.steps-list li:nth-child(2),
     .way:nth-child(2),
     ul.features li:nth-child(2n) { animation-range: entry 5% cover 27%; }
 
     .pains li:nth-child(3),
+    ol.steps-list li:nth-child(3),
     .way:nth-child(3) { animation-range: entry 5% cover 32%; }
 
     .pains li:nth-child(4) { animation-range: entry 5% cover 37%; }

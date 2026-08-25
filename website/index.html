@@ -159,7 +159,7 @@
 }
 </script>
 </head>
-<body data-release="2026-08-20T18:00:00+02:00" data-download="">
+<body data-release="2026-08-20T18:00:00+02:00">
 <a class="skip" href="#content">Zum Inhalt springen</a>
 
 <header class="site">
@@ -204,21 +204,16 @@
         Abo; ein KI-Agent bedient dieselben Werkzeuge wie die Menüs, und die
         Geometrie rechnet Code, nie das Sprachmodell.</p>
 
-        <div class="download">
-          <strong data-past-text="Demo — kostenlos, ohne Konto" data-release-text="Die Demo ist da — kostenlos, ohne Konto">Demo ab 20. August 2026, 18 Uhr — kostenlos</strong>
+        <div class="download" id="download">
+          <strong data-past-text="Demo — kostenlos, ohne Konto" data-release-text="Die Demo ist da — kostenlos, ohne Konto">Die Demo ist da — kostenlos, ohne Konto</strong>
           <p class="countdown" data-countdown
              data-template="Noch {rest}" aria-hidden="true" hidden></p>
           <p>Vollständig und ohne Schlüssel: keine Wasserzeichen, keine
           Exportsperre, keine gesperrte Funktion. <b>Sie läuft bis zum
           30. Oktober 2026</b> und lässt sich danach nicht mehr starten —
           deine Projektdateien bleiben davon unberührt.</p>
-          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20Bescheid%20geben%2C%20wenn%20die%20Demo%20da%20ist"
-             data-release-hide>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-              <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
-            </svg>
-            Bescheid geben, wenn sie da ist
-          </a>
+          <p>Und danach? Einmal kaufen statt abonnieren —
+          <a href="#preis">Preis und Zusagen</a> stehen schon fest.</p>
 
           <div class="dateien" data-files data-release-show hidden>
             <a class="btn" href="/api/count.php?f=Solidon3D-Setup-0.1.5.exe" download="Solidon3D-Setup-0.1.5.exe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/></svg> Windows 10/11 — 179 MB</a>
@@ -234,7 +229,8 @@
             <p class="version">Version 0.1.5, erschienen am 24.08.2026.</p>
           </div>
           <p class="pruefhinweis" data-release-show hidden>Windows meldet bei einer neuen, noch unsignierten Anwendung einen blauen Hinweis: <i>Weitere Informationen</i> → <i>Trotzdem ausführen</i>. Die Signierung kommt, sobald das Zertifikat steht.</p>
-          <p class="pruefhinweis" data-release-show hidden><b>Neue Versionen.</b> Ab der nächsten Version sieht Solidon beim Start selbst nach, ob eine neuere da ist, und bietet sie zum Laden an — geladen und installiert wird erst auf deine Bestätigung, abschalten lässt es sich in den Einstellungen. Die jetzt angebotene fragt noch nicht von allein: dort führt der Weg über <i>Hilfe → Nach einer neuen Version sehen</i>.</p>
+          <p class="pruefhinweis" data-release-show hidden><b>Neue Versionen.</b> Solidon sieht beim Start selbst nach, ob eine neuere Version da ist, und bietet sie zum Laden an — geladen und installiert wird erst auf deine Bestätigung, abschalten lässt es sich in den Einstellungen.</p>
+          <p class="pruefhinweis">Nach der Installation: <a href="/handbuch.html#start">Die ersten fünfzehn Minuten</a> — vom leeren Fenster zum ersten exportierten Teil.</p>
 
           <ul class="assure">
             <li>
@@ -284,11 +280,43 @@
     </div>
   </section>
 
+  <section id="erste-schritte">
+    <div class="wrap">
+      <h2>In drei Schritten zum gedruckten Teil</h2>
+      <p class="sub">Gebaut für alle, die drucken — nicht nur für die, die
+      CAD können. Der Weg vom Download zum Teil ist kurz:</p>
+      <div class="steps">
+        <ol class="steps-list">
+          <li><b>Demo laden und starten.</b> Kein Konto, kein Schlüssel,
+          keine Einrichtung — installieren und loslegen. Neun
+          Beispielprojekte liegen im Startbildschirm bereit.</li>
+          <li><b>Modell hereinziehen.</b> Eine STL-Datei von Printables oder
+          das eigene Projekt: Der Prüfbericht sagt sofort, was beim Drucken
+          schiefginge — und jeder Befund trägt einen
+          Handlungsvorschlag.</li>
+          <li><b>Anpassen und drucken.</b> Fläche anklicken, Maß ändern,
+          Passung aus dem Materialprofil — dann exportieren oder direkt an
+          den Slicer übergeben.</li>
+        </ol>
+        <figure class="shot">
+          <div class="stage">
+            <img src="bilder/beleg-start.png" width="1400" height="1000" loading="lazy" decoding="async"
+                 alt="Der Startbildschirm von Solidon3D: ein Ablagefeld für Modelle und Projekte, die Knöpfe „Neues Projekt“ und „Projekt öffnen“, darunter neun Beispielprojekte mit Vorschaubild und Beschreibung">
+          </div>
+          <figcaption>Der Startbildschirm der Demo — Datei ablegen genügt,
+          und die neun Beispielprojekte führen jeden Weg einmal vor.</figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
   <section id="warum">
     <div class="wrap">
       <h2>Kennst du das?</h2>
-      <p class="sub">Die vier Sätze, die beim Drucken am häufigsten fallen —
-      und was Solidon3D daraus macht.</p>
+      <p class="sub">Solidon3D ist kein Slicer und kein Modellkatalog. Es
+      sitzt dazwischen: zwischen der heruntergeladenen STL, die nicht passt,
+      und dem Slicer, der sie ohne Rückfrage druckt. Die vier Sätze, die beim
+      Drucken am häufigsten fallen — und was Solidon3D daraus macht:</p>
       <ul class="pains">
         <li>
           <q>Das Loch ist 0,2 mm zu klein, und ich habe kein CAD.</q>
@@ -559,17 +587,17 @@
           Vollversion folgt zu <b>69 €</b> — einmalig, inklusive aller
           1.x-Updates. Der Einführungspreis gilt bis zum 31.01.2027, danach
           kostet sie 99 €.</p>
-          <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20Bescheid%20geben%2C%20wenn%20die%20Demo%20da%20ist"
+          <a class="btn" href="#download"
              data-release-href data-release-download>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
-                 data-release-hide>
+                 data-release-hide hidden>
               <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
             </svg>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"
-                 data-release-show hidden>
+                 data-release-show>
               <path d="M12 3v12" stroke-linecap="round"/><path d="m7 11 5 5 5-5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20h16" stroke-linecap="round"/>
             </svg>
-            <span data-release-text="Demo laden">Bescheid geben, wenn sie da ist</span>
+            <span data-release-text="Demo laden">Demo laden</span>
           </a>
         </div>
         <div>
@@ -766,9 +794,8 @@
     <div class="wrap">
       <div class="closing">
         <h2>Das nächste Teil, das passt</h2>
-        <p data-past-text="Die Demo läuft bis zum 30. Oktober — kostenlos und vollständig. Wer eine Zeile schreibt, bekommt Antwort: es antwortet ein Mensch.">Die Demo erscheint am 20. August 2026 und läuft bis zum 30. Oktober
-        — kostenlos und vollständig. Wer eine Zeile schreibt, bekommt Bescheid,
-        sobald sie liegt: es antwortet ein Mensch.</p>
+        <p data-past-text="Die Demo läuft bis zum 30. Oktober — kostenlos und vollständig. Wer eine Zeile schreibt, bekommt Antwort: es antwortet ein Mensch.">Die Demo läuft bis zum 30. Oktober — kostenlos und vollständig.
+        Wer eine Zeile schreibt, bekommt Antwort: es antwortet ein Mensch.</p>
         <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20Bescheid%20geben%2C%20wenn%20die%20Demo%20da%20ist">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
