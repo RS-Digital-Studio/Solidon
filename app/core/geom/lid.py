@@ -489,7 +489,9 @@ def neck_diameters(outline: Any, cavities: list[Any]) -> tuple[float, float]:
     )
 
 
-def _pipe(outer: float, inner: float, height: float, z: float) -> MeshData:
+def _pipe(
+    outer: float, inner: float, height: float, z: float, quality: Quality = "fine"
+) -> MeshData:
     """Ein Materialring, stehend auf ``z``, ganz durchgehend offen."""
     shell = trimesh.creation.cylinder(radius=outer / 2.0, height=height, sections=NECK_SECTIONS)
     shell.apply_translation((0.0, 0.0, z + height / 2.0))
@@ -499,7 +501,10 @@ def _pipe(outer: float, inner: float, height: float, z: float) -> MeshData:
         radius=inner / 2.0, height=height + 2.0 * BOOLEAN_OVERLAP, sections=NECK_SECTIONS
     )
     bore.apply_translation((0.0, 0.0, z + height / 2.0))
-    return boolean("difference", [MeshData.of(shell), MeshData.of(bore)], quality="fine").mesh
+    # Dieselbe Stufe wie die vier anderen Booleschen des Drehdeckels: fest auf
+    # „fine" konnte dieser eine Schnitt beim Iterieren bis zur Voxelstufe laufen,
+    # während der Rest in Entwurfsqualität nach Stufe 2 endet (§17.2, §31).
+    return boolean("difference", [MeshData.of(shell), MeshData.of(bore)], quality=quality).mesh
 
 
 def _lifted(body: MeshData, z: float) -> MeshData:
@@ -643,7 +648,7 @@ def screw_lid(ctx: OpContext) -> OpResult:
     # Der Kern trägt den Gang, ist also zwei Gangtiefen schmaler als das
     # Gewinde breit: auf einen Hals mit vollem Durchmesser vereinigt säße der
     # Gang im Material und änderte gar nichts.
-    neck = _pipe(core, bore, params.height, z)
+    neck = _pipe(core, bore, params.height, z, ctx.quality)
     turns = _lifted(thread_body(major, params.pitch, params.height), z)
     with_neck = boolean("union", [mesh, neck], quality=ctx.quality)
     with_thread = boolean("union", [with_neck.mesh, turns], quality=ctx.quality)

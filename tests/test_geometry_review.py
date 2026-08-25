@@ -623,11 +623,12 @@ def test_splitting_with_pins_reports_the_fallback_stage(profile: Profile) -> Non
     [
         (hollow_module, "hollow_object", {"wall": 2.0, "vents": 0}),
         (lid_module, "create_lid", {"thickness": 2.4, "collar": 4.0}),
+        (lid_module, "screw_lid", {"pitch": 3.0, "height": 8.0}),
         (pins_module, "split_pinned", {"axis": "z", "position": 20.0, "pins": 2}),
         (prepare_module, "compensate_first_layer", {"height": 0.6, "amount": 0.2}),
         (lattice_module, "lattice_fill", {"structure": "cubic", "cell": 8.0, "wall": 1.2}),
     ],
-    ids=["hollow", "lid", "pins", "elephant_foot", "lattice"],
+    ids=["hollow", "lid", "screw_lid", "pins", "elephant_foot", "lattice"],
 )
 def test_the_quality_setting_reaches_the_boolean_chain(
     module: Any, op: str, params: dict[str, Any], profile: Profile, monkeypatch: pytest.MonkeyPatch
