@@ -397,19 +397,29 @@ def sketch_extent(text: str, values: Mapping[str, float]) -> tuple[float, float]
     if not text.strip():
         return None
     try:
+        from app.core.errors import AppError
+        from app.core.sketch.profile import bounds_of, regions_of
         from app.core.sketch.serialize import sketch_from_text
         from app.core.sketch.solver import solve_sketch
 
-        solved = solve_sketch(sketch_from_text(text), dict(values))
-    except Exception:
+        # Über die **Regionen**, nicht über die rohen Stützpunkte: Ein Kreis
+        # trägt Mitte und einen Randpunkt, ein Bogen drei Punkte — aus den
+        # Punkten gerechnet maß ein Kreis Ø 50 hier „25", und die Zahl stand
+        # schreibgeschützt im Feld. ``regions_of``/``bounds_of`` ist dieselbe
+        # Kette, die ``_regions_for`` für den echten Körper fährt; freie
+        # Hilfspunkte, die kein Profil bilden, zählen damit von selbst nicht.
+        regions = regions_of(solve_sketch(sketch_from_text(text), dict(values)))
+    except AppError:
+        # Eng gefangen wie in ``SketchField._describe`` nebenan: Ein Dialog
+        # ist kein Ort, an dem eine halbfertige Zeichnung einen Fehler wirft —
+        # aber ein Programmierfehler darf nicht still zu „Felder bleiben,
+        # wie sie sind" werden.
         return None
-    points = [
-        point for element in solved.elements if not element.construction for point in element.points
-    ]
-    if not points:
+    if not regions:
         return None
-    xs = [x for x, _y in points]
-    ys = [y for _x, y in points]
+    corners = [bounds_of(region) for region in regions]
+    xs = [x for low, high in corners for x in (low[0], high[0])]
+    ys = [y for low, high in corners for y in (low[1], high[1])]
     return (max(xs) - min(xs), max(ys) - min(ys))
 
 
@@ -964,6 +974,7 @@ class OperationDialog(QDialog):
 
         reason = tr("Die Maße kommen aus der Zeichnung — über „Zeichnen …“ zu ändern.")
         axis_of = {"length": 0, "width": 1}
+        docs = {name: str(entry.doc or "") for name, entry in declared.items()}
 
         def follow_sketch() -> None:
             text = str(self.values().get(sketch_field, "") or "")
@@ -974,6 +985,23 @@ class OperationDialog(QDialog):
                     continue
                 label = self._rows[name].labelForField(editor)
                 if extent is None:
+                    # Zweigleisig wie ``_couple_dependent_fields.follow``: Wer
+                    # die Zeichnung löscht, bekommt seine Felder zurück. Die
+                    # Sperre war einseitig, und ein Dialog mit gelöschter
+                    # Skizze blieb zugemauert — samt einer Begründung („Die
+                    # Maße kommen aus der Zeichnung"), die nicht mehr stimmte,
+                    # während der Kern die Felder längst wieder nahm.
+                    #
+                    # Zurückgenommen wird nur die **eigene** Sperre, erkannt
+                    # an ihrer Begründung: Ein Feld, das ``depends_on`` über
+                    # denselben Signalweg ausgegraut hat, muss grau bleiben —
+                    # blind freigegeben überschrieb dieser Zweig die Sperre
+                    # des Nachbarn, je nachdem, wer zuletzt lief.
+                    if editor.toolTip() == reason:
+                        editor.setEnabled(True)
+                        if label is not None:
+                            label.setEnabled(True)
+                        _explain(editor, label, docs[name])
                     continue
                 if name in axis_of and isinstance(editor, ValueField):
                     # Ohne ``blockSignals`` löst das Setzen ``valuesChanged``

@@ -1451,3 +1451,60 @@ def test_without_a_sketch_the_shape_fields_still_work(qt_app: QApplication) -> N
         if release is not None:
             release(dialog)
         dialog.deleteLater()
+
+
+def test_the_sketch_measures_a_circle_by_its_region_not_its_points(
+    qt_app: QApplication,
+) -> None:
+    """Ein Kreis trägt Mitte und **einen** Randpunkt — aus den rohen Punkten
+    gerechnet maß ein Kreis Ø 50 „25", und die Zahl stand schreibgeschützt im
+    Maßfeld. Gemessen wird über die Regionen, dieselbe Kette wie im Kern.
+
+    Fund des Reviews vom 26.08.2026 — genau der Fehler, gegen den
+    ``sketch_extent`` geschrieben wurde, eine Elementsorte weiter.
+    """
+    bootstrap.load_operations()
+    spec = REGISTRY.get("sketch_extrude")
+    dialog = OperationDialog(spec, [], None, values={"sketch": sketch_to_text(shapes.circle(50.0))})
+    try:
+        werte = dialog.values()
+        assert werte["length"] == pytest.approx(50.0), "der Durchmesser, nicht der Radius"
+        assert werte["width"] == pytest.approx(50.0)
+    finally:
+        release = getattr(type(dialog), "release", None)
+        if release is not None:
+            release(dialog)
+        dialog.deleteLater()
+
+
+def test_a_deleted_sketch_gives_the_measure_fields_back(qt_app: QApplication) -> None:
+    """Die Sperre der Maßfelder war einseitig: Wer die Zeichnung löschte,
+    behielt graue Felder mit der Begründung „Die Maße kommen aus der
+    Zeichnung" — während der Kern die Felder längst wieder nahm. Sackgasse
+    (§2.1), gefunden im Review vom 26.08.2026.
+    """
+    from app.ui.sketch_editor import SketchField
+
+    bootstrap.load_operations()
+    spec = REGISTRY.get("sketch_extrude")
+    dialog = OperationDialog(
+        spec, [], None, values={"sketch": sketch_to_text(shapes.rectangle(50.0, 30.0))}
+    )
+    try:
+        assert not dialog._editors["length"].isEnabled(), "mit Zeichnung ist das Feld gesperrt"
+
+        field = dialog._editors["sketch"]
+        assert isinstance(field, SketchField)
+        field.set_text("")
+
+        for name in ("shape", "length", "width"):
+            editor = dialog._editors[name]
+            assert editor.isEnabled(), f"{name} muss nach dem Löschen wieder bedienbar sein"
+            assert "Zeichnung" not in editor.toolTip(), (
+                f"{name} begründet eine Sperre, die es nicht mehr gibt"
+            )
+    finally:
+        release = getattr(type(dialog), "release", None)
+        if release is not None:
+            release(dialog)
+        dialog.deleteLater()
