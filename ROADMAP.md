@@ -9974,12 +9974,32 @@ mount"). Das bliebe **ein** Körper und verstieße nicht gegen §24.3 — die
 Bibliothek hat mit Rastnase und Schnappverbindung schon zwei Bausteine, die
 federnde Arme rechnen.
 
-- [ ] **Soll der Einhänger eine federnde Rastnase bekommen?** Dafür spricht,
-  dass es die Sache ist, an der das System scherzhaft gemessen wird; dagegen,
-  dass eine Feder Materialkenntnis braucht (die Federarme der Schnappverbindung
-  ziehen ihre Maße aus dem Materialprofil, und für PETG steht dort anderes als
-  für PLA). Ein Zwischenweg wäre ein Parameter *Verriegelung*, der die Nase
-  federnd macht — abschaltbar für den, der das Teil oft abnehmen will.
+**Nachgesehen am 25.08.2026, wie andere es lösen** — und das Ergebnis engt die
+Bauform stark ein.
+
+Die verbreitete Mechanik ist keine Nase am Zapfen, sondern eine **Verspannung
+über zwei Schlitze**: „sliding the lower hook into the pegboard, then bending
+slightly the springy thin element so that the top hook can slide into the
+groove above". Ein Haken trägt, ein zweiter sitzt auf einem federnden Arm, und
+zwischen beiden liegt ein Rastermaß.
+
+**Warum nicht einfacher, im Zapfen selbst?** Weil kein Platz ist, und zwar nach
+den eigenen Regeln der Bibliothek. `SNAP_RATIO` verlangt zehn zu eins,
+`SNAP_MIN_ARM` mindestens 0,8 mm — ein Federarm misst damit mindestens 8,0 mm.
+Der Zapfen ist bei 0,25 mm Spiel **7,38 mm** hoch. Es fehlen sechs Zehntel, und
+darunter wäre der Arm eine Fahne, die beim ersten Einrasten abreißt. Quer geht
+es auch nicht: Der Zapfen ist so breit wie der Schlitz, eine seitlich federnde
+Zunge hätte keinen Weg.
+
+Zwischen zwei Schlitzen sind es dagegen 40 mm — reichlich für einen Arm.
+
+- [ ] **Soll der Einhänger eine Verriegelung über zwei Schlitze bekommen?** Sie
+  bräuchte `upright` und mindestens zwei Haken, einen davon auf einem Federarm,
+  und einen Parameter *Verriegelung* zum Abschalten für den, der das Teil oft
+  abnimmt. Dagegen spricht, dass eine Feder Materialkenntnis braucht — die
+  Federarme der Schnappverbindung ziehen ihre Maße aus dem Materialprofil, und
+  für PETG steht dort anderes als für PLA. Dafür spricht, dass das
+  Herausrutschen das bekannteste Ärgernis des Systems ist.
 
   Bis dahin sagt der `caveat` es dem Kunden: „Er löst sich auf demselben Weg,
   auf dem er eingehängt wird."
