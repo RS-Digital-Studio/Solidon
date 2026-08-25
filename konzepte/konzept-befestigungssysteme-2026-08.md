@@ -377,6 +377,19 @@ mindestens noch `test_language_rules` (drei Sekunden) und `test_website` (eine
 Viertelsekunde). Und die letzte Zeile fängt kein Test — dafür muss jemand
 hinsehen.
 
+**Die große Fassung derselben Sache** steht in
+`.claude/memory/was-die-suite-nicht-findet.md`: Eine Nachbarsitzung hat am
+25.08.2026 gezählt, wie ihre sechs Fehler des Tages gefunden wurden — zweimal
+ein Bildschirmfoto, einmal eine Mutation im Code, einmal das echte Fenster
+einer anderen Sitzung, einmal das Lesen eines Typs, einmal Nachzählen. **Kein
+einziger von der Suite.** Und die Erklärung dort trägt weiter als diese
+Tabelle: Vier der sechs lagen an der Naht zwischen zwei Modulen, wo jeder Test
+die eine Seite selbst baut und die andere als Attrappe bekommt — und eine
+Attrappe bestätigt die Annahme, die man beim Schreiben hatte.
+
+Die Zeile hier, die „gar nicht" sagt, ist derselbe Fall im Kleinen: Zwischen
+Bausteinregister und Katalogbild liegt eine Naht, und niemand prüft sie.
+
 **Und keine Rechtsfrage am Namen.** „SKÅDIS" ist eine fremde Marke. Der
 Baustein heißt deshalb `pegboard_hook` und trägt das System als
 Parameterwert; im Text steht „passend für IKEA SKÅDIS", nicht „IKEA
