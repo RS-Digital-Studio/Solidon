@@ -36,6 +36,7 @@ from app.core.ingest.loader import detect_unit
 from app.core.ingest.plan import import_plan
 from app.core.knowledge import profiles
 from app.core.log import configure
+from app.core.paths import user_config_dir
 from app.core.registry import REGISTRY, cli_commands, documentation
 from app.core.scene import History, OperationDraft, ResultCache, disk_backed_cache, evaluate
 from app.core.scene.project import (
@@ -48,7 +49,8 @@ from app.core.scene.project import (
 )
 from app.core.types import Source
 from app.core.units import format_length
-from app.i18n import _, tr
+from app.i18n import _, set_language, tr
+from app.i18n.catalog import install_language
 
 _PARAM_TYPES: dict[str, Any] = {"float": float, "int": int, "str": str, "enum": str}
 
@@ -632,8 +634,33 @@ def _mistyped_operation(argv: list[str]) -> int | None:
     return 1
 
 
+def _install_language() -> None:
+    """Die Sprache des Nutzers, wie das Fenster sie liest (Gesamtreview L-4).
+
+    Gelesen wird dieselbe Datei wie in ``app.ui.settings`` — aber nur der
+    eine Schlüssel und ohne die UI-Schicht: Die Kommandozeile steht auf dem
+    Kern (Karte in CLAUDE.md), und mehr als das Sprachkürzel braucht sie
+    nicht. Vorher installierte sie nie eine Sprache, und ein spanischer Kunde
+    bekam deutsche Hilfe- und Fehlertexte, obwohl die Kataloge längst da sind.
+
+    Fehlt die Datei oder ist sie beschädigt, bleibt es bei der Quellsprache —
+    dieselbe freundliche Richtung wie in ``load_settings``.
+    """
+    import json
+
+    try:
+        raw = (user_config_dir() / "settings.json").read_text(encoding="utf-8")
+        language = json.loads(raw).get("language", "")
+    except (OSError, ValueError):
+        return
+    if isinstance(language, str) and language:
+        install_language(language)
+        set_language(language)
+
+
 def main(argv: list[str] | None = None) -> int:
     _speak_utf8()
+    _install_language()
     if _demo_is_over():
         return 1
     load_operations()
@@ -675,6 +702,31 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  {key}: {value}", file=sys.stderr)
         for action in error.suggestions:
             print(f"  - {action.label}", file=sys.stderr)
+        return 1
+    except Exception as problem:  # das letzte Netz (Gesamtreview L-11)
+        # Ein Stapelabzug ist keine Antwort an einen Kunden (Regel 17): ein
+        # Satz, der Grund, und der Bericht als Ordner — geschrieben wie im
+        # Fenster, gesendet wird nichts (§37.2).
+        import traceback
+
+        from app.core.errors import InternalError
+        from app.core.report import ErrorReport, write
+
+        print(file=sys.stderr)
+        print(str(InternalError.default_title), file=sys.stderr)
+        print(f"  {type(problem).__name__}: {problem}", file=sys.stderr)
+        try:
+            folder = write(
+                ErrorReport(
+                    summary=f"CLI: {type(problem).__name__}",
+                    detail=str(problem),
+                    traceback=traceback.format_exc(),
+                )
+            )
+        except OSError:
+            pass
+        else:
+            print(f"  - {tr('Der Fehlerbericht liegt hier')}: {folder}", file=sys.stderr)
         return 1
 
 

@@ -44,8 +44,26 @@ def message_ids(paths: list[Path] | None = None) -> set[str]:
             if node.func.id not in MARKERS or not node.args:
                 continue
             first = node.args[0]
-            if isinstance(first, ast.Constant) and isinstance(first.value, str):
-                found.add(first.value)
+            if not (isinstance(first, ast.Constant) and isinstance(first.value, str)):
+                continue
+            # Das zweite Argument ist der Kontext, und mit ihm schlägt
+            # ``TranslatableText`` unter ``Kontext + chr(4) + Text`` nach —
+            # ein Aufruf mit Kontext bliebe sonst in jeder Sprache deutsch,
+            # und die Übersetzungsprüfung (dieselbe Sammlung) merkte nichts
+            # (Gesamtreview L-9).
+            context = None
+            if len(node.args) > 1:
+                second = node.args[1]
+                if isinstance(second, ast.Constant) and isinstance(second.value, str):
+                    context = second.value
+            for keyword in node.keywords:
+                if (
+                    keyword.arg == "context"
+                    and isinstance(keyword.value, ast.Constant)
+                    and isinstance(keyword.value.value, str)
+                ):
+                    context = keyword.value.value
+            found.add(context + chr(4) + first.value if context else first.value)
     return found
 
 

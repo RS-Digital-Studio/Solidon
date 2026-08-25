@@ -77,6 +77,49 @@ def test_every_text_is_translated(language: str) -> None:
     assert not orphaned, f"{language}: {len(orphaned)} nicht mehr gebraucht\n" + "\n".join(orphaned)
 
 
+def test_a_broken_catalog_file_does_not_end_the_start(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: object
+) -> None:
+    """Eine beschädigte Katalogdatei beendet nicht den Start.
+
+    ``read_catalog`` war die einzige ungesicherte Dateilesung des Gebiets:
+    ein halb geschriebenes ``fr.json`` — Update, voller Datenträger — hieß
+    roher ``JSONDecodeError`` beim ersten ``install_language``. Jede
+    Nachbarlesung fängt; jetzt fängt auch diese, mit Protokollzeile und
+    Quellsprache als Ausweg.
+    """
+    from pathlib import Path
+
+    from app.i18n import catalog
+
+    broken = Path(str(tmp_path)) / "fr.json"
+    broken.write_text('{"kaputt": ', encoding="utf-8")
+    monkeypatch.setattr(catalog, "catalog_path", lambda language: broken)
+    assert catalog.read_catalog("fr") == {}
+
+
+def test_the_collector_knows_the_context_argument(tmp_path: object) -> None:
+    """Ein Text mit Kontext wird unter seinem echten Schlüssel eingesammelt.
+
+    ``_(…, Kontext)`` schlägt unter ``Kontext + chr(4) + Text`` nach — der
+    Einsammler kannte nur das erste Argument. Der erste solche Aufruf bliebe
+    in jeder Sprache deutsch, und die Übersetzungsprüfung (dieselbe
+    Sammlung) merkte nichts. Latent, aber billig zu schließen.
+    """
+    from pathlib import Path
+
+    probe = """from app.i18n import _, tr
+A = _("Zug", "Skizze")
+B = tr("Zug", context="Verlauf")
+C = _("Ohne")
+"""
+    source = Path(str(tmp_path)) / "probe.py"
+    source.write_text(probe, encoding="utf-8")
+    marker = chr(4)
+    found = message_ids([source])
+    assert found == {f"Skizze{marker}Zug", f"Verlauf{marker}Zug", "Ohne"}
+
+
 def test_the_catalog_actually_switches_the_language() -> None:
     install_language("en")
     text = TranslatableText("Abbrechen")

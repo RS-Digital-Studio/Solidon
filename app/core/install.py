@@ -38,13 +38,15 @@ warum. Kein stilles Scheitern.
 
 from __future__ import annotations
 
+import queue
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import IO, Final, Literal
 
 from app.core import discover, tools
 from app.core.log import get_logger
@@ -568,6 +570,13 @@ def _stream(command: list[str], progress: ProgressFn) -> tuple[int, str]:
 
         ``stderr`` läuft in denselben Strom: Zwei getrennt zu lesen hieße, auf
         einem zu blocken, während der andere vollläuft.
+
+        **Und gewartet wird auf die Uhr, nicht auf die nächste Zeile.** Die
+        Frist stand hier im Schleifenkörper — geprüft also erst, wenn eine
+        Zeile ankam. Ein stiller Installer hing damit unbegrenzt, und der
+        Arbeiter-Thread überlebte sein Fenster (Gesamtreview L-2). Ein
+        Leser-Thread reicht die Zeilen durch eine Warteschlange; das Warten
+        darauf trägt die Frist.
     """
     lines: list[str] = []
     deadline = time.monotonic() + TIMEOUT_SECONDS
@@ -581,14 +590,31 @@ def _stream(command: list[str], progress: ProgressFn) -> tuple[int, str]:
         bufsize=1,
     ) as process:
         assert process.stdout is not None
-        for raw in process.stdout:
+        feed: queue.Queue[str | None] = queue.Queue()
+
+        def drain(stdout: IO[str] = process.stdout) -> None:
+            # Läuft als Daemon: Nach einem Abbruch endet er, sobald das Rohr
+            # schließt, und hält sonst nichts am Leben.
+            for raw in stdout:
+                feed.put(raw)
+            feed.put(None)
+
+        threading.Thread(target=drain, daemon=True, name="install-stream").start()
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                process.kill()
+                raise subprocess.TimeoutExpired(command, TIMEOUT_SECONDS)
+            try:
+                raw = feed.get(timeout=min(remaining, 1.0))
+            except queue.Empty:
+                continue
+            if raw is None:
+                break
             line = raw.strip()
             if line:
                 lines.append(line)
                 progress(line)
-            if time.monotonic() > deadline:
-                process.kill()
-                raise subprocess.TimeoutExpired(command, TIMEOUT_SECONDS)
         code = process.wait()
     # Nur das Ende: Eine Paketverwaltung schreibt hunderte Fortschrittszeilen,
     # und was jemand weitergeben will, sind die letzten.

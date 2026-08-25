@@ -24,6 +24,51 @@ def test_every_operation_is_reachable_from_the_command_line(
         assert spec.name in printed
 
 
+def test_the_cli_speaks_the_settings_language(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Die Kommandozeile liest dieselbe Sprachwahl wie das Fenster.
+
+    Vorher installierte sie nie eine Sprache: Ein spanischer Kunde bekam
+    deutsche Hilfe- und Fehlertexte, obwohl die Übersetzungen längst in den
+    Katalogen liegen.
+    """
+    from app.cli import main as cli
+    from app.i18n import SOURCE_LANGUAGE, get_language, set_language
+
+    (tmp_path / "settings.json").write_text('{"language": "en"}', encoding="utf-8")
+    monkeypatch.setattr(cli, "user_config_dir", lambda: tmp_path)
+    try:
+        assert main(["ops"]) == 0
+        assert get_language() == "en"
+        assert "There is no such operation" not in capsys.readouterr().err
+    finally:
+        set_language(SOURCE_LANGUAGE)
+
+
+def test_an_unexpected_error_ends_in_a_sentence_not_a_traceback(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """Das letzte Netz der Kommandozeile (Regel 17).
+
+    Sechs naheliegende Fehlerpfade enden sauber — ein unerwarteter erreichte
+    den Kunden als roher Stapelabzug. Jetzt gibt es einen Satz, den Grund und
+    einen Berichtsordner; gesendet wird nichts.
+    """
+    from app.cli import main as cli
+
+    def explode(_args: object) -> int:
+        raise RuntimeError("kaputt auf neue Art")
+
+    monkeypatch.setattr(cli, "command_ops", explode)
+    code = main(["ops"])
+    said = capsys.readouterr().err
+    assert code != 0
+    assert "Traceback" not in said
+    assert "kaputt auf neue Art" in said
+    assert "bericht-" in said, "der Berichtsordner wird genannt"
+
+
 def test_the_reference_is_generated_not_written(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["docs"]) == 0
     printed = capsys.readouterr().out

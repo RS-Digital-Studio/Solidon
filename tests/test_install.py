@@ -134,6 +134,24 @@ def names_of(entry: install.Requirement) -> set[str]:
     }
 
 
+def test_a_silent_installer_still_hits_the_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """TIMEOUT_SECONDS griff nur, wenn der Installer etwas schrieb.
+
+    Ein stiller winget oder brew hing unbegrenzt: Die Frist wurde erst nach
+    der nächsten Zeile geprüft, und die kam nie — der Arbeiter-Thread
+    überlebte sein Fenster. Jetzt wartet die Uhr, nicht die Zeile.
+    """
+    import subprocess
+    import sys
+    import time
+
+    monkeypatch.setattr(install, "TIMEOUT_SECONDS", 0.5)
+    begin = time.monotonic()
+    with pytest.raises(subprocess.TimeoutExpired):
+        install._stream([sys.executable, "-c", "import time; time.sleep(5)"], lambda line: None)
+    assert time.monotonic() - begin < 4.0, "die Frist beendet den Lauf, nicht das Kind"
+
+
 def test_the_names_come_from_this_file_and_nowhere_else() -> None:
     """Die Regel, die dieses Feature sicher macht — als Test gehalten, nicht
     als Kommentar.
