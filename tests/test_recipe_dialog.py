@@ -348,3 +348,43 @@ def test_cancelling_during_the_range_check_creates_nothing(qt_app: QApplication)
     finally:
         dialog.release()
         dialog.deleteLater()
+
+
+def test_the_range_check_shows_how_far_it_is_and_can_be_stopped(qt_app: QApplication) -> None:
+    """§2.8: Was länger als zwei Sekunden dauert, zeigt Fortschritt und lässt sich abbrechen.
+
+    check ruft je Ecke progress(anteil, satz) und fragt davor
+    token.is_cancelled — der Balken stand trotzdem auf setRange(0, 0),
+    also auf unbestimmt, und abbrechen ließ sich nichts. Bei drei freigegebenen
+    Maßen sind es sechs Ecken, und jede rechnet den ganzen Ausschnitt.
+
+    Die Zahl steht dabei **neben** dem Balken: Mittig darauf wandert der Rand
+    der Füllung unter ihr durch, und ab sechzig Prozent liegt sie auf Bernstein
+    (tests/test_style.py).
+    """
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    try:
+        assert not dialog.progress.isTextVisible(), "die Zahl gehört nicht auf den Balken"
+        assert dialog.progress.maximum() == 100, "und der Balken kennt sein Ziel"
+
+        dialog._show_waiting(True)
+        dialog._step(0.5, "Bereichstest, Ecke 3 von 6")
+
+        assert dialog.progress.value() == 50
+        assert "50" in dialog.percent.text(), "die Zahl steht daneben"
+        assert "Ecke 3 von 6" in dialog.report.text()
+
+        # Abbrechen hält die Prüfung an, ohne den Dialog zu verwerfen.
+        dialog._stop_check()
+
+        assert not dialog.progress.isVisible()
+        assert not dialog._abandoned, "der Dialog bleibt offen"
+
+        # Und ein Ergebnis, das danach noch eintrifft, legt nichts mehr an.
+        angelegt: list[object] = []
+        dialog.saved.connect(angelegt.append)
+        dialog._checked(object())
+        assert not angelegt, "nach dem Abbruch entsteht kein Baustein"
+    finally:
+        dialog.release()
+        dialog.deleteLater()

@@ -36,9 +36,11 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QProgressBar,
+    QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
@@ -50,7 +52,7 @@ from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
 from app.core.types import Document, Feature, Profile
 from app.i18n import tr
-from app.ui.labels import NumberSpin, feature_label
+from app.ui.labels import NumberSpin, feature_label, localised
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.style import TIGHT, make_primary
 
@@ -88,14 +90,38 @@ class _RangeWorker(Worker):
     """
 
     done = Signal(object)
+    step = Signal(float, str)
+    """Wie weit er ist (0 bis 1) und woran — eine Ecke je Meldung."""
 
     def __init__(self, recipe: Any, profile: Profile) -> None:
         super().__init__()
         self._recipe = recipe
         self._profile = profile
+        self._stopped = False
+
+    @property
+    def is_cancelled(self) -> bool:
+        """Das Token, nach dem ``check`` vor jeder Ecke fragt."""
+        return self._stopped
+
+    def stop(self) -> None:
+        """Aufhören, sobald die laufende Ecke durch ist.
+
+        Mitten in einer Auswertung lässt sich nichts anhalten — ``check`` fragt
+        zwischen den Ecken. Bei sechs Ecken ist das der Bruchteil, den es
+        dauert, statt der ganzen Rechnung.
+        """
+        self._stopped = True
 
     def work(self) -> None:
-        self.done.emit(recipes.range_check(self._recipe, self._profile))
+        self.done.emit(
+            recipes.range_check(
+                self._recipe,
+                self._profile,
+                progress=lambda share, note: self.step.emit(float(share), str(note)),
+                cancelled=self,
+            )
+        )
 
 
 class _ParamRow:
@@ -271,10 +297,25 @@ class RecipeDialog(QDialog):
         # erst festlegen, sonst prüft er einen Bereich, den er gleich ändert.
         self.report = QLabel("", self)
         self.report.setWordWrap(True)
+        # **Die Zahl steht neben dem Balken, nicht darauf** (`tests/test_style.py`):
+        # Mittig gesetzt wandert der Rand der Füllung darunter durch, und ab
+        # sechzig Prozent liegt sie ganz auf Bernstein — 1,69 Kontrast. Eine
+        # Farbe, die auf beiden Gründen trägt, gibt es nicht.
         self.progress = QProgressBar(self)
-        self.progress.setRange(0, 0)
+        self.progress.setRange(0, 100)
+        self.progress.setTextVisible(False)
         self.progress.setVisible(False)
-        layout.addWidget(self.progress)
+        self.percent = QLabel("", self)
+        self.percent.setVisible(False)
+        self.stop_check = QPushButton(tr("Abbrechen"), self)
+        self.stop_check.setVisible(False)
+        self.stop_check.clicked.connect(self._stop_check)
+        waiting = QHBoxLayout()
+        waiting.setContentsMargins(0, 0, 0, 0)
+        waiting.addWidget(self.progress, 1)
+        waiting.addWidget(self.percent)
+        waiting.addWidget(self.stop_check)
+        layout.addLayout(waiting)
         layout.addWidget(self.report)
 
         buttons = QDialogButtonBox(
@@ -431,11 +472,11 @@ class RecipeDialog(QDialog):
             )
             return
 
-        self.progress.setVisible(True)
+        self._show_waiting(True)
         self.report.setText(tr("Der Baustein wird über seine Grenzen geprüft …"))
-        if self._save is not None:
-            self._save.setEnabled(False)
+        self._save.setEnabled(False)
         worker = _RangeWorker(self._recipe, self._profile)
+        worker.step.connect(self._step)
         worker.done.connect(self._checked)
         worker.crashed.connect(self._failed)
         worker.finished.connect(lambda done=worker: self._worker_done(done))
@@ -451,13 +492,45 @@ class RecipeDialog(QDialog):
         Ergebnis auf eine Frage, die zurückgezogen wurde.
         """
         self._abandoned = True
+        if self._worker is not None:
+            self._worker.stop()
         super().reject()
+
+    def _show_waiting(self, running: bool) -> None:
+        """Balken, Zahl und Abbrechen gehören zusammen — sichtbar oder nicht."""
+        for widget in (self.progress, self.percent, self.stop_check):
+            widget.setVisible(running)
+        if running:
+            self.progress.setValue(0)
+            self.percent.setText("")
+
+    def _step(self, share: float, note: str) -> None:
+        """Eine Ecke ist durch — Balken, Zahl und Satz nachziehen."""
+        self.progress.setValue(max(0, min(100, round(share * 100))))
+        self.percent.setText(f"{localised(f'{share * 100:.0f}')} %")
+        if note:
+            self.report.setText(note)
+
+    def _stop_check(self) -> None:
+        """Der Bereichstest wird abgebrochen, der Dialog bleibt offen.
+
+        Anders als *Abbrechen* unten: Das verwirft den ganzen Vorgang. Wer hier
+        drückt, will die Prüfung nicht abwarten — und darf danach Grenzen
+        ändern und es noch einmal versuchen.
+        """
+        if self._worker is not None:
+            self._worker.stop()
+        self._show_waiting(False)
+        self.report.setText(tr("Der Bereichstest wurde abgebrochen."))
+        self._update_enabled()
 
     def _checked(self, checked: Any) -> None:
         """Der Bereichstest ist durch — ablegen und registrieren."""
-        if self._abandoned:
+        if self._abandoned or not self.progress.isVisible():
+            # Nicht mehr gefragt: Der Dialog ist zu, oder jemand hat die
+            # Prüfung abgebrochen und das Ergebnis kommt hinterher.
             return
-        self.progress.setVisible(False)
+        self._show_waiting(False)
         self._recipe = checked
         try:
             recipes.save(checked)
