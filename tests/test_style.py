@@ -778,3 +778,38 @@ def test_the_focus_ring_never_changes_the_size_of_a_field() -> None:
             "das ist die Kompensation, die es ohne Breitenwechsel nicht braucht"
         )
         assert "border-color:" in rule, f"{theme}: der Fokus sagt gar nichts: {rule.strip()}"
+
+
+@pytest.mark.parametrize("theme", list(THEMES))
+def test_a_field_keeps_the_edge_that_is_its_only_one(theme: str) -> None:
+    """Der Rahmen eines Eingabefelds wird nicht gedämpft.
+
+    Er ist die **einzige** Kante des Feldes: Die Fläche trägt die Grenze nicht
+    mit, gemessen 1,45 im dunklen und 1,22 im hellen Thema — wer den Rahmen
+    leiser macht, nimmt dem Feld seinen Umriss.
+
+    Das ist keine theoretische Sorge. Als der Rahmen von einem auf zwei Punkte
+    ging (das Aufklappmenü der Combobox hängt daran), lag es nahe, die Farbe
+    zur Feldfläche hin zu mischen, damit die doppelte Breite so leise wirkt wie
+    vorher. Im Bild sah das richtig aus und war gemessen falsch: 1,90 statt
+    3,33 im dunklen Thema, also unter den 3,0, die WCAG 1.4.11 für die
+    Umrandung eines Bedienelements verlangt.
+
+    Geprüft wird gegen die **Linienfarbe des Themas** und nicht gegen 3,0: Was
+    diese Farbe leistet, ist eine Frage an das Thema; dass der Rahmen sie nicht
+    unterschreitet, ist eine an das Stylesheet. Zwei Fragen, zwei Orte.
+    """
+    from app.ui.theme import contrast_ratio
+
+    colours = THEMES[theme]  # type: ignore[index]
+    sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
+    rule = sheet.split("QLineEdit, QSpinBox")[1].split("}")[0]
+    found = re.search(r"border:\s*\d+px solid (#[0-9a-fA-F]{6})", rule)
+    assert found, f"{theme}: die Grundregel der Eingabefelder nennt keine Rahmenfarbe: {rule}"
+
+    drawn = contrast_ratio(found.group(1), colours["base"])
+    intended = contrast_ratio(colours["line"], colours["base"])
+    assert drawn >= intended, (
+        f"{theme}: der Feldrahmen bringt {drawn:.2f} auf der Feldfläche, die Linienfarbe "
+        f"des Themas {intended:.2f} — gedämpft verliert das Feld seine einzige Kante"
+    )

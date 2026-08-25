@@ -111,20 +111,6 @@ def _repolish(widget: QWidget) -> None:
         style.polish(widget)
 
 
-def _blend(one: str, two: str, share: float) -> str:
-    """Mischt zwei Farben des Themas; ``share`` ist der Anteil der ersten.
-
-    Damit steht kein Farbwert doppelt in der Tabelle: Der leise Feldrahmen ist
-    kein eigener Ton, sondern die Linienfarbe auf halbem Weg zur Feldfläche.
-    Wer ein Thema ändert, ändert ihn mit.
-    """
-    first = [int(one[index : index + 2], 16) for index in (1, 3, 5)]
-    second = [int(two[index : index + 2], 16) for index in (1, 3, 5)]
-    return "#" + "".join(
-        f"{round(a * share + b * (1 - share)):02x}" for a, b in zip(first, second, strict=True)
-    )
-
-
 #: Die zwei Pfeile am Zahlenfeld, als Zeichnung ohne Datei im Paket.
 #:
 #: Ein Dreieck, zweimal — nach oben und nach unten. ``{colour}`` füllt die
@@ -245,10 +231,17 @@ def stylesheet(theme: Theme, base_point_size: int, arrows: dict[str, str] | None
     # Der Fokus sagt es deshalb allein über die **Farbe**. Das ist keine
     # Verschlechterung gegenüber vorher: Ein Punkt Rahmenbreite ist keine
     # wahrnehmbare zweite Kodierung, wie die Kachel des Startbildschirms schon
-    # einmal gezeigt hat. Der Ring bleibt zwei Punkte breit und trägt die
-    # geforderten 3,0 Kontrast; der Ruherahmen wird dafür leiser, also ist der
-    # Unterschied zwischen beiden Zuständen größer als zuvor.
-    field_line = _blend(line, base, 0.55)
+    # einmal gezeigt hat. Der Ring bleibt zwei Punkte breit und trägt seine
+    # 8,02 Kontrast im dunklen Thema.
+    #
+    # **Und der Ruhezustand behält die volle Linienfarbe.** Ein erster Anlauf
+    # dämpfte sie zur Feldfläche hin, damit der doppelt so breite Rahmen so
+    # leise wirkt wie der einfache vorher — das sah im Bild gut aus und war
+    # gemessen falsch: 1,90 statt 3,33 im dunklen Thema, also unter den 3,0,
+    # die WCAG 1.4.11 für die Umrandung eines Bedienelements verlangt. Und die
+    # Fläche trägt die Grenze nicht mit: Feld gegen Fenster sind 1,45. Wer den
+    # Rahmen dämpft, nimmt dem Feld seine einzige Kante.
+    field_line = line
 
     return f"""
 /* --- Typografie: vier Stufen, Größe und Gewicht und Farbe --------------- */
