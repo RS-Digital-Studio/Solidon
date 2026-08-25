@@ -456,6 +456,61 @@ def test_the_hook_hangs_the_right_way_up_on_every_wall(
     )
 
 
+@pytest.mark.parametrize("steps", [1, 2, 3])
+def test_the_hooks_sit_on_a_multiple_of_the_grid(steps: int, profile: Profile) -> None:
+    """Nicht jeder hängt an jedem Loch.
+
+    Zwei Haken im Vierzigerraster halten ein schmales Teil gegen Verdrehen; ein
+    breites kippt zwischen ihnen, weil die Last weit außerhalb der Stützweite
+    hängt. Der Abstand ist deshalb ein **Vielfaches** — jedes Loch, jedes
+    zweite, jedes dritte.
+
+    Mehr als das Raster hergibt ist nicht zu haben: Zwischen zwei Schlitzen
+    derselben Höhe liegen vierzig Millimeter, und was dazwischen liegt, ist die
+    versetzte Schar auf einer anderen Höhe. Geprüft wird deshalb gegen
+    ``pitch``, nicht gegen eine freie Zahl.
+    """
+    board = standards.board("skadis")
+    spec = PARTS.get("pegboard_hook")
+
+    for count in (2, 3):
+        built = spec.fn(spec.params(count=count, steps=steps))
+        hooks = sorted(
+            f.params["centre"][0] for name, f in built.features.items() if name.startswith("hook_")
+        )
+        assert len(hooks) == count
+        for left, right in itertools.pairwise(hooks):
+            assert right - left == pytest.approx(board.pitch * steps, abs=0.01), (
+                f"steps={steps}: neighbouring hooks sit {right - left:.1f} mm apart, "
+                f"expected {board.pitch * steps:.1f}"
+            )
+        assert built.mesh.is_watertight and built.mesh.component_count == 1, (
+            f"steps={steps} count={count}: the plate falls apart"
+        )
+
+
+def test_the_plate_grows_with_the_spacing(profile: Profile) -> None:
+    """Die Rückplatte muss die weiter außen stehenden Haken noch tragen.
+
+    Ein Abstand, der die Platte nicht mitwachsen lässt, setzte den äußeren
+    Haken über ihren Rand hinaus — er hinge dann an nichts.
+    """
+    spec = PARTS.get("pegboard_hook")
+    narrow = spec.fn(spec.params(count=2, steps=1)).mesh
+    wide = spec.fn(spec.params(count=2, steps=2)).mesh
+
+    assert float(wide.bounds.size[0]) > float(narrow.bounds.size[0]), (
+        "the plate did not grow with the spacing"
+    )
+    built = spec.fn(spec.params(count=2, steps=3))
+    outer = max(
+        abs(f.params["centre"][0]) for n, f in built.features.items() if n.startswith("hook_")
+    )
+    assert float(built.mesh.bounds.size[0]) / 2.0 > outer, (
+        "the outermost hook sits beyond the edge of the plate"
+    )
+
+
 def test_the_hook_reaches_the_customer_through_the_catalogue() -> None:
     """Der Weg, den der Kunde nimmt: Katalog aufschlagen, Baustein finden.
 

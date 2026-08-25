@@ -576,6 +576,27 @@ def _insert_a_thread(window: MainWindow) -> str:
     window.run_operation(REGISTRY.get("insert_printed_thread"))
     dialog = window._op_dialog
     assert dialog is not None
+
+    # **Eine Stelle gehört dazu, seit der Baustein danach fragt.** Bis zum
+    # 25.08.2026 kam dieser Test ohne aus: Ein Baustein ohne gewähltes Merkmal
+    # landete still im Nullpunkt des Objekts, und der Test nahm das Ergebnis.
+    # Jetzt hält die Auswertung an und sagt, was fehlt (Regel 21) — was der
+    # Kunde im Katalog bekommt, bekommt dieser Test auch.
+    before = window.session.last_result
+    assert before is not None
+    faces = [
+        feature_id
+        for entry in before.scene.objects.values()
+        for feature_id, feature in entry.features.items()
+        if feature.kind == "face"
+    ]
+    assert faces, "das eingelesene Modell trägt keine Fläche, an die etwas käme"
+    picker = dialog._editors["at_feature"]
+    index = picker.findData(faces[0])
+    assert index >= 0, (
+        f"{faces[0]} steht nicht zur Wahl: {[picker.itemData(i) for i in range(picker.count())]}"
+    )
+    picker.setCurrentIndex(index)
     dialog.accept()
     window.session.wait_for_idle()
 

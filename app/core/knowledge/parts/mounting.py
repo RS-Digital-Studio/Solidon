@@ -476,6 +476,18 @@ class PegboardHookParams(BaseParams):
             "einer genügt für Leichtes."
         ),
     )
+    steps: int = param(
+        title=_("Rasterschritte"),
+        default=1,
+        minimum=1,
+        maximum=4,
+        doc=_(
+            "Wie viele Löcher zwischen zwei Haken liegen. Eins heißt: jedes Loch, "
+            "zwei heißt jedes zweite. Breite Teile kippen zwischen zwei Haken, die "
+            "nur vierzig Millimeter auseinandersitzen — weiter außen tragen sie "
+            "ruhiger."
+        ),
+    )
     upright: bool = param(
         title=_("Übereinander"),
         default=False,
@@ -559,6 +571,11 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     lässt deshalb ein Viertel der Höhe frei: halbe Höhe Zapfen, ein Viertel
     Nase, ein Viertel Weg.
 
+    **Der Abstand ist ein Vielfaches des Rasters, nicht das Raster.** Ein
+    breites Teil an zwei Haken im Vierzigerabstand kippt; dieselben zwei Haken
+    im Achtzigerabstand tragen es ruhig. Mehr als das Raster hergibt geht
+    nicht — die Löcher stehen, wo sie stehen.
+
     **Oben und unten sind hier keine Redensart.** Der Zapfen sitzt oben, die
     Nase unten; verkehrt herum fällt das Teil von der Wand. Welche Seite nach
     dem Setzen oben liegt, entscheidet aber nicht dieser Baustein, sondern die
@@ -584,7 +601,15 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     nose = travel
     shank = usable - nose - travel
 
-    span = board.pitch * (params.count - 1)
+    # **Ein Rasterschritt war fest, und für breite Teile ist er zu eng.** Zwei
+    # Haken im Vierzigerraster halten ein schmales Teil gegen Verdrehen; ein
+    # breites kippt zwischen ihnen, weil die Last weit außerhalb der Stützweite
+    # hängt. Der Abstand ist deshalb ein **Vielfaches** — jedes Loch, jedes
+    # zweite, jedes dritte. Die Lochwand gibt nichts anderes her: Zwischen zwei
+    # Schlitzen derselben Höhe liegen vierzig Millimeter, und was dazwischen
+    # liegt, ist die versetzte Schar (`stagger`), die eine andere Höhe hat.
+    reach = board.pitch * params.steps
+    span = reach * (params.count - 1)
     across = 0.0 if params.upright else span
     along = span if params.upright else 0.0
 
@@ -614,7 +639,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         )
     ]
     for index in range(params.count):
-        offset = index * board.pitch - span / 2.0
+        offset = index * reach - span / 2.0
         x = 0.0 if params.upright else offset
         y = offset if params.upright else 0.0
         # Zapfen und Nase als Langloch, in Y gelegt: ``shapes.slot`` baut seine
