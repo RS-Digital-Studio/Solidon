@@ -117,15 +117,47 @@ def test_non_deterministic_operations_use_a_seed(spec: OperationSpec) -> None:
     assert "seed" in source, f"{spec.name} is marked non-deterministic but never reads ctx.seed"
 
 
+#: Wo die Bausteine gesammelt geprüft werden, und woran man erkennt, dass es
+#: **alle** sind: an der Ableitung aus dem Register statt aus einer Namensliste.
+PARTS_TEST: Final = "test_parts.py"
+PARTS_FROM_REGISTRY: Final = "PARTS.all()"
+
+
 @pytest.mark.parametrize("spec", registered(), ids=ids)
 def test_every_operation_has_a_test(spec: OperationSpec) -> None:
-    """Eine neue Operation ohne Test ist nicht fertig (AGENTS.md, Checkliste)."""
+    """Eine neue Operation ohne Test ist nicht fertig (AGENTS.md, Checkliste).
+
+    Gesucht wird der **Name** im Text einer Testdatei, und das ist eine
+    Näherung — sie war immer eine. Für Bausteine ist sie am 25.08.2026
+    zerbrochen: `test_parts.py` führte zwei handgepflegte Namenslisten, in
+    denen die zwei neuesten Bausteine fehlten, und als sie durch eine
+    Ableitung aus dem Register ersetzt wurden, verschwanden mit den Listen
+    auch die Erwähnungen. Drei Bausteine wurden rot, die seither **besser**
+    geprüft sind als vorher.
+
+    Für eine Baustein-Operation gilt deshalb ein zweiter Weg: Wird die
+    Sammlung in `test_parts.py` aus `PARTS.all()` gebildet, ist jeder Baustein
+    darin — namentlich genannt wird keiner mehr, und das ist der Fortschritt
+    und nicht die Lücke. Das ist kein Freibrief: Fehlt die Ableitung, greift
+    wieder die Namenssuche, und ein Baustein ohne beides ist so ungeprüft wie
+    jede andere Operation ohne Test.
+    """
     mentions = [
         path.name
         for path in TESTS_DIR.rglob("test_*.py")
         if path.name != Path(__file__).name and spec.name in path.read_text(encoding="utf-8")
     ]
-    assert mentions, f"no test mentions {spec.name}"
+    if mentions:
+        return
+
+    from app.core.knowledge.parts.ops import part_of
+
+    if part_of(spec.name) is not None:
+        gesammelt = TESTS_DIR / PARTS_TEST
+        if gesammelt.exists() and PARTS_FROM_REGISTRY in gesammelt.read_text(encoding="utf-8"):
+            return
+
+    raise AssertionError(f"no test mentions {spec.name}")
 
 
 def test_shortcuts_are_unique() -> None:
