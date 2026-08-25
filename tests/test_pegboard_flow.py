@@ -143,3 +143,143 @@ def _hook_span(project: object, obj: str, profile: Profile, count: int) -> float
     board = standards.board("skadis")
     # Die Platte reicht um jeden Haken herum; abgezogen bleibt der Achsabstand.
     return float(built.mesh.bounds.size[0]) - board.slot_width - 2.0 * board.slot_width
+
+
+# --- Sitzt der Haken sinnvoll? --------------------------------------------------
+
+
+BOX_FACES = [
+    # Alle sechs, auch die Unterseite: Ein Einhänger dort ist unsinnig, und
+    # genau deshalb steht sie hier — die Richtung muss auch dann stimmen, wenn
+    # die Wahl es nicht tut. Gemessen wächst sie um -10,56 in Z und um null
+    # nach oben, wie jede andere.
+    ("face_1", (0.0, 0.0, -1.0)),
+    ("face_3", (0.0, -1.0, 0.0)),
+    ("face_4", (0.0, 1.0, 0.0)),
+    ("face_5", (-1.0, 0.0, 0.0)),
+    ("face_6", (1.0, 0.0, 0.0)),
+    ("face_top", (0.0, 0.0, 1.0)),
+]
+
+
+@pytest.mark.parametrize(("face", "normal"), BOX_FACES, ids=[f[0] for f in BOX_FACES])
+def test_the_hook_grows_outward_and_never_inward(
+    face: str, normal: tuple[float, float, float], profile: Profile
+) -> None:
+    """Ein Baustein, der nach innen wächst, steckt im Teil statt daran.
+
+    **Das ist die Frage, die „das Volumen ist gewachsen" nicht beantwortet.**
+    Ein Einhänger, der in den Körper hineinragt, erzeugt genauso mehr Volumen
+    wie einer, der nach außen steht — er hält nur nichts. Geprüft wird deshalb
+    die **Richtung**: Der Hüllquader darf sich nur auf der Seite ausdehnen, in
+    die die angeklickte Fläche schaut, und auf der Gegenseite um keinen
+    Millimeter.
+
+    Gemessen an einem Quader, weil dessen Flächen ihre Normalen kennen: 40 × 30
+    × 10 mm, sechs benannte Flächen, jede in eine Achsrichtung. Was hier gilt,
+    gilt an einem heruntergeladenen Netz genauso — dort heißen die Flächen nur
+    nicht so ordentlich.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    before = evaluate(project.document, profile, sources=ProjectSources(project))
+    box = before.scene.objects["obj_1"].mesh.bounds
+
+    History(project.document).apply(
+        "Einhänger",
+        [
+            OperationDraft(
+                op="insert_pegboard_hook",
+                inputs=("obj_1",),
+                params={"at_feature": face, "count": 2},
+            )
+        ],
+    )
+    after = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert after.complete, [f.message for f in after.scene.report.findings]
+    grown = after.scene.objects["obj_1"].mesh.bounds
+
+    for axis in range(3):
+        below = box.minimum[axis] - grown.minimum[axis]
+        above = grown.maximum[axis] - box.maximum[axis]
+
+        if normal[axis] > 0.0:
+            assert above > 1.0, f"{face}: nothing grew along the face normal on axis {axis}"
+            assert below == pytest.approx(0.0, abs=0.01), (
+                f"{face}: the hook reaches into the body on axis {axis}"
+            )
+        elif normal[axis] < 0.0:
+            assert below > 1.0, f"{face}: nothing grew along the face normal on axis {axis}"
+            assert above == pytest.approx(0.0, abs=0.01), (
+                f"{face}: the hook reaches into the body on axis {axis}"
+            )
+        else:
+            # **Quer zur Normalen muss es symmetrisch sein**, und diese Zeile
+            # ist die schärfste des Tests. Ohne sie blieb er grün, als eine
+            # Probe die Flächennormale verwarf: Der Einhänger stand dann in der
+            # Vorgabeachse Z statt in der Fläche — er wuchs *trotzdem* nach
+            # außen, weil er am Flächenmittelpunkt sitzt, nur eben schief. In
+            # Zahlen war der Unterschied 0,0/+5,6 gegen -7,4/+7,4.
+            assert below == pytest.approx(above, abs=0.05), (
+                f"{face}: the hook sits lopsided on axis {axis} — {below:.1f} below "
+                f"against {above:.1f} above; it is not aligned with the face"
+            )
+
+
+def test_the_hook_stands_off_the_face_by_plate_and_board(profile: Profile) -> None:
+    """Wie weit er absteht, ist keine freie Zahl: Rückplatte plus Plattendicke
+    plus Nase — und die letzten beiden kommen aus der Tabelle.
+
+    Ein Einhänger, der zu kurz absteht, greift nicht hinter die Lochwand; einer,
+    der zu weit absteht, hält das Teil auf Abstand von der Wand. Beides merkt
+    der Kunde erst am gedruckten Teil, und deshalb steht die Zahl hier.
+    """
+    board = standards.board("skadis")
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    before = evaluate(project.document, profile, sources=ProjectSources(project))
+    box = before.scene.objects["obj_1"].mesh.bounds
+
+    History(project.document).apply(
+        "Einhänger",
+        [
+            OperationDraft(
+                op="insert_pegboard_hook",
+                inputs=("obj_1",),
+                params={"at_feature": "face_top", "count": 1, "plate": 2.0},
+            )
+        ],
+    )
+    after = evaluate(project.document, profile, sources=ProjectSources(project))
+    stand = after.scene.objects["obj_1"].mesh.bounds.maximum[2] - box.maximum[2]
+
+    # Rückplatte 2 + Plattendicke aus der Tabelle + Nase (zwei Drittel davon).
+    expected = 2.0 + board.thickness + board.thickness * (2.0 / 3.0)
+    assert stand == pytest.approx(expected, abs=0.4), (
+        f"the hook stands off {stand:.1f} mm, expected about {expected:.1f} "
+        f"(plate 2 + board {board.thickness} + lip)"
+    )
+
+
+def test_the_hook_reaches_the_customer_through_the_catalogue() -> None:
+    """Der Weg, den der Kunde nimmt: Katalog aufschlagen, Baustein finden.
+
+    Ein Baustein, den man nur kennt, wenn man seinen Namen kennt, ist für den
+    Kunden nicht da — §24.3 sagt es so: „Eine Bibliothek, die man nicht sieht,
+    existiert für den Nutzer nicht." Geprüft wird deshalb, was der Katalog über
+    ihn weiß: Gruppe, Titel, Beschreibung, und ein Bild, das aus ihm selbst
+    gerendert wird und nicht von Hand gepflegt ist.
+    """
+    from app.core.knowledge.parts import PARTS, preview
+    from app.core.knowledge.parts.registry import GROUPS
+
+    spec = PARTS.get("pegboard_hook")
+
+    assert spec.group in GROUPS, "the hook sits in a group the catalogue does not show"
+    assert str(spec.title) != spec.name, "the catalogue would show the key, not a name"
+    assert str(spec.doc), "no description means a tile the customer cannot judge"
+    assert str(spec.caveat), "a part without a caveat never says where it is the wrong choice"
+
+    picture = preview.render(spec)
+    assert picture.triangles > 0, "the preview is empty"
+    assert picture.svg.startswith("<svg"), "the preview is not an image"
