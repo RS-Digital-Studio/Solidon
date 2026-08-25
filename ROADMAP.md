@@ -82,6 +82,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
 | Drei Bausteine, die dem Katalog noch fehlen | Die dünnste Gruppe des Katalogs ist die meistgefragte (24.08.2026) | nichts — Kabelclip gebaut (`4b9bef2`), Lochwand-Einhänger gebaut (`a3f23d5`), Schwalbenschwanz **gestrichen**: den gibt es schon als Form des Passstifts und als Verbinder beim Teilen |
 | Die Startmarke §31 ist seit dem 24.08.2026 rot | Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026) | **eine Entscheidung**: Marke neu setzen oder die Ursache suchen. Nicht der Code — im Wechsel gegen den Stand vor drei Commits gemessen, Unterschied im Rauschen |
+| Ein Rezept nimmt den ganzen Stapel | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Mehrfachauswahl im Verlauf — das Format nimmt beliebige `op_ids`, aber `HistoryPanel` kennt nur einen Index |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
@@ -9524,6 +9525,21 @@ Arbeitspakete, die Grenzen und die eine Entscheidung stehen dort.
   ein mitgereistes Rezept überschreibt **nie** einen gleichnamigen eigenen
   Baustein, sondern wird umbenannt und als mitgereist gekennzeichnet; und die
   Version eines Rezepts ist der Hash über seine Daten.
+
+- [ ] **Ein Rezept nimmt den ganzen Stapel, weil der Verlauf keine Auswahl
+  kennt.** Das Format nimmt beliebige `op_ids`, und das Konzept spricht von
+  einem *Ausschnitt*; der Dialog übergibt seit `9a9c9a4` alle Schritte. Der
+  Grund ist nicht das Format, sondern die Bedienung: `HistoryPanel` hat
+  `operationActivated` und `bakeRequested`, beide auf **einen** Index — eine
+  Mehrfachauswahl gibt es nicht. Einen Bereich zu übergeben, den niemand
+  wählen kann, wäre eine Bedienung, die es nicht gibt.
+
+  Praktisch fehlt das selten: Wer sein Teil als Baustein ablegt, hat es gerade
+  gebaut. Es fehlt, sobald jemand aus einem gewachsenen Projekt *einen* Halter
+  herauslösen will — dann wandert der ganze Stapel mit, und der Baustein baut
+  Dinge, die niemand bestellt hat. Der Umbau ist eine Mehrfachauswahl im
+  Verlauf plus die Frage, was mit Lücken darin geschieht (Schritt 3 und 7 ohne
+  4 bis 6 ist kein Ausschnitt, sondern zwei).
 
 - [ ] **Eigene Bausteine sprengen die Zeilengrenze der Menüs, und die Suite
   kann es nicht sehen.** Jeder Baustein wird eine Operation und damit ein
