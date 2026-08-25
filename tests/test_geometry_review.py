@@ -679,8 +679,9 @@ def test_the_quality_setting_reaches_the_boolean_chain(
     [
         (hollow_module, "hollow_object", {"wall": 2.0, "vents": 1}),
         (lattice_module, "lattice_fill", {"structure": "cubic", "cell": 8.0, "wall": 1.2}),
+        (pins_module, "split_pinned", {"axis": "z", "position": 20.0, "pins": 2}),
     ],
-    ids=["hollow", "lattice"],
+    ids=["hollow", "lattice", "pins"],
 )
 def test_the_cancel_token_reaches_the_boolean_chain(
     module: Any, op: str, params: dict[str, Any], profile: Profile, monkeypatch: pytest.MonkeyPatch

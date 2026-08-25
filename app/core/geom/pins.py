@@ -40,7 +40,16 @@ from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.registry import PARTS
 from app.core.log import get_logger
-from app.core.types import Feature, FeatureId, Finding, Profile, Quality, SolverInfo, Vec3
+from app.core.types import (
+    CancelToken,
+    Feature,
+    FeatureId,
+    Finding,
+    Profile,
+    Quality,
+    SolverInfo,
+    Vec3,
+)
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -377,6 +386,7 @@ def add_pins(
     *,
     play: float | None = None,
     quality: Quality = "fine",
+    cancelled: CancelToken | None = None,
 ) -> PinnedPair:
     """Setzt die Stifte in die eine Hälfte und die Bohrungen in die andere.
 
@@ -443,11 +453,18 @@ def add_pins(
     bore_offset = -float(bore_body.raw.bounds[0][2])
 
     for index, position in enumerate(plan.positions, start=1):
+        # Bis zu zwölf Boolesche je Teilung, jede mit voller Rückfallkette
+        # (§15.6): zwischen zwei Stiften gehört der Abbruch gefragt und in die
+        # Kette hinein durchgereicht.
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         placed_pin = _along_normal(pin_body, plan.normal, position, pin_offset)
         placed_bore = _along_normal(bore_body, plan.normal, position, bore_offset)
 
-        raised = boolean("union", [pair.first, placed_pin], quality=quality)
-        drilled = boolean("difference", [pair.second, placed_bore], quality=quality)
+        raised = boolean("union", [pair.first, placed_pin], quality=quality, cancelled=cancelled)
+        drilled = boolean(
+            "difference", [pair.second, placed_bore], quality=quality, cancelled=cancelled
+        )
         pair.first, pair.second = raised.mesh, drilled.mesh
         pair.solver = deepest([pair.solver, raised.solver, drilled.solver])
 

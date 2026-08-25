@@ -846,6 +846,7 @@ def _cut_and_pin(
             for_object(ctx.profile, source),
             play=play or None,
             quality=ctx.quality,
+            cancelled=ctx.cancelled,
         )
         if plan is not None
         else PinnedPair(first=first, second=second)
