@@ -52,6 +52,63 @@ SLOT_RUNS_DOWNWARD = PartChange(
 )
 
 
+LIP_GRIPS_THE_MAGNET = PartChange(
+    version="5",
+    date="2026-08-25",
+    reason=(
+        "Die Haltelippe wurde der Tasche hinzugefügt statt von ihr abgezogen — "
+        "ein Volumen, das man vereinigt, kann nur weiten, nicht verengen."
+    ),
+    effect=(
+        "Die Mündung ist jetzt ein Zehntel enger als der Magnet, statt genauso "
+        "weit wie die Tasche. An einem 6-mm-Magneten gemessen: 5,91 mm statt "
+        "6,00 bei kalibriertem Material sogar 6,35. Wer die Lippe bisher "
+        "eingeschaltet hatte, bekam keine — der Magnet fiel bei jedem Material "
+        "heraus, sobald das Teil kopfüber lag."
+    ),
+)
+
+HEAD_PLAY_FROM_PROFILE = PartChange(
+    version="6",
+    date="2026-08-25",
+    reason=(
+        "Das Kopfspiel stand als feste 0,6 im Baustein und kam damit nie aus dem "
+        "Materialprofil (Regel 7, §28.3)."
+    ),
+    effect=(
+        "Mit einem kalibrierten Profil wird das runde Ende enger oder weiter, "
+        "statt bei 0,6 mm zu bleiben. Ohne Kalibrierung ändert sich nichts: Der "
+        "Vorgabewert ist derselbe."
+    ),
+)
+
+POCKET_REACHES_PAST_THE_FACE = PartChange(
+    version="2",
+    date="2026-08-25",
+    reason=(
+        "Die Fußtasche endete als einziger abziehender Baustein exakt auf der "
+        "angeklickten Fläche statt einen Überlappungswert darüber hinaus (§39)."
+    ),
+    effect=(
+        "Kein Maß am fertigen Teil ändert sich — die Tasche ist gleich tief und "
+        "gleich weit. Der Schnitt trifft nur nicht mehr Fläche auf Fläche, und "
+        "das ist der Fall, an dem eine Boolesche Operation bricht."
+    ),
+)
+
+#: Wie weit die Haltelippe einer Magnettasche den Magneten unterschreitet.
+#:
+#: Kein Toleranzmaß aus dem Profil, sondern ein Übermaß: Die Lippe **soll**
+#: klemmen. Ein Zehntel Millimeter ist wenig genug, dass der Magnet sich
+#: hineindrücken lässt, und genug, dass er nicht von selbst herausfällt — so
+#: steht es auch im Text des Parameters.
+MAGNET_LIP_GRIP = 0.1
+
+#: Wie hoch die Haltelippe ist — der Weg, über den der Magnet sich
+#: hineindrücken lässt. Kurz genug, dass sie nachgibt statt zu sperren.
+MAGNET_LIP_HEIGHT = 0.4
+
+
 @op_params
 class MagnetPocketParams(BaseParams):
     size: str = param(
@@ -96,7 +153,7 @@ class MagnetPocketParams(BaseParams):
         "Tasche für einen Rundmagneten, auf Wunsch mit Deckschicht zum Überdrucken "
         "und einer Haltelippe am Rand."
     ),
-    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION, LIP_GRIPS_THE_MAGNET],
 )
 def magnet_pocket(raw: BaseParams) -> PartResult:
     params = cast(MagnetPocketParams, raw)
@@ -107,16 +164,39 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
     # Decke schiebt sie tiefer hinein, statt sie anzuheben: über der Mündung
     # ist die Luft, und dort trägt nichts ab.
     mouth = -params.cover
-    pocket = shapes.cylinder(diameter, entry.height)
+    # **Die Lippe verengt die Tasche, also fehlt sie ihr.** Sie stand hier als
+    # eigener Kegel neben dem Taschenzylinder und wurde mit ihm vereinigt — und
+    # ein Volumen, das man einem anderen hinzufügt, kann es nur weiter machen,
+    # nie enger. Das Werkzeug war über die ganze Höhe zylindrisch, die Lippe
+    # verschwand darin, und die Tasche hielt in keiner Einstellung: nicht bei
+    # play = 0, nicht bei kalibriertem Material. Gemessen an einem
+    # 6-mm-Magneten war die Öffnung 6,00 mm weit, wo 5,90 hätten stehen sollen.
+    #
+    # Jetzt endet der Zylinder unter der Lippe, und die letzten Zehntel
+    # übernimmt der Kegel. Sein enges Ende ist der Magnet **minus** Übermaß —
+    # nicht die aufgeweitete Tasche, in der das Profilspiel schon steckt.
+    grip = MAGNET_LIP_GRIP if (params.press_lip and params.cover <= 0.0) else 0.0
+    narrow = entry.diameter - grip
+    lip_height = MAGNET_LIP_HEIGHT if grip else 0.0
+
+    pocket = shapes.cylinder(diameter, entry.height - lip_height)
     parts = [shapes.moved(pocket, (0.0, 0.0, mouth - entry.height))]
 
+    if lip_height:
+        parts.append(
+            shapes.moved(shapes.cone(diameter, narrow, lip_height), (0.0, 0.0, mouth - lip_height))
+        )
+
     if params.cover <= 0.0:
-        # Offene Tasche: ein Haar über die Fläche hinausreichen, damit der Schnitt
-        # sauber wird (§39).
-        parts.append(shapes.moved(shapes.cylinder(diameter, shapes.OVERLAP), (0.0, 0.0, mouth)))
-    if params.press_lip and params.cover <= 0.0:
-        lip = shapes.cone(diameter, diameter - 0.2, 0.4)
-        parts.append(shapes.moved(lip, (0.0, 0.0, mouth - 0.4)))
+        # Offene Tasche: ein Haar über die Fläche hinausreichen, damit der
+        # Schnitt sauber wird (§39) — und zwar so eng wie die Lippe darunter,
+        # sonst risse dieser Zylinder die Verengung wieder auf.
+        parts.append(
+            shapes.moved(
+                shapes.cylinder(narrow if lip_height else diameter, shapes.OVERLAP),
+                (0.0, 0.0, mouth),
+            )
+        )
 
     body = union(*parts)
     return result(
@@ -222,6 +302,15 @@ def wall_mount(raw: BaseParams) -> PartResult:
     return result(body, *features)
 
 
+#: Wie viel Luft der Schraubenkopf im runden Ende eines Schlüssellochs hat,
+#: solange das Materialprofil nichts anderes sagt.
+#:
+#: Der Kopf soll hindurchfallen, nicht klemmen — das ist der eine Fall, in dem
+#: großzügiges Spiel richtig ist. Ein kalibriertes Profil überschreibt den Wert
+#: über den Parameter ``Spiel``.
+HEAD_CLEARANCE = 0.6
+
+
 @op_params
 class KeyholeParams(BaseParams):
     size: str = param(
@@ -258,6 +347,15 @@ class KeyholeParams(BaseParams):
         placement="advanced",
         doc=_("Wie tief der Schraubenkopf einsinkt."),
     )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        placement="advanced",
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
 
 
 @register_part(
@@ -275,7 +373,13 @@ class KeyholeParams(BaseParams):
         "Schlüssellochförmige Aussparung: der Kopf geht durch das runde Ende, "
         "der Schaft hält im Schlitz."
     ),
-    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION, SLOT_RUNS_DOWNWARD],
+    changes=[
+        FIRST_RELEASE,
+        MOUTH_AT_ORIGIN,
+        FACE_GIVES_DIRECTION,
+        SLOT_RUNS_DOWNWARD,
+        HEAD_PLAY_FROM_PROFILE,
+    ],
 )
 def keyhole(raw: BaseParams) -> PartResult:
     params = cast(KeyholeParams, raw)
@@ -301,8 +405,16 @@ def keyhole(raw: BaseParams) -> PartResult:
         """Ein Langloch, dessen Länge in -Y läuft — der Weg der Schraube."""
         return shapes.turned(shapes.slot(width, length, height), 90.0)
 
+    # **Das Kopfspiel kam aus einer festen Zahl** (0,6 mm) und damit an der
+    # Kalibrierung vorbei: Die Prüfung nach §28.3 überspringt genau die
+    # Bausteine ohne ``play``-Feld, dieser Baustein war einer, und ein Kunde,
+    # der sein Material eingemessen hat, bekam trotzdem denselben Wert wie
+    # jeder andere. Regel 7 sagt es allgemeiner: keine Zahlenkonstante für
+    # Toleranzen.
+    clearance = params.play or HEAD_CLEARANCE
+
     # Die Tasche, in die der Kopf versinkt: am Eingang rund, dann ein Schlitz.
-    pocket = falling(screw.head + 0.6, screw.head + 0.6 + params.drop, params.head_room)
+    pocket = falling(screw.head + clearance, screw.head + clearance + params.drop, params.head_room)
     pocket = shapes.moved(pocket, (0.0, drop, -params.head_room))
 
     # Der Schlitz, in den der Schaft gleitet, ganz hindurch.
@@ -316,7 +428,7 @@ def keyhole(raw: BaseParams) -> PartResult:
         body,
         bore(
             "pocket_1",
-            screw.head + 0.6,
+            screw.head + clearance,
             (0.0, 0.0, -params.head_room / 2.0),
             depth=params.head_room,
         ),
@@ -607,7 +719,7 @@ class FootParams(BaseParams):
         "Und nicht zum Verschrauben gedacht: Er hat keine Bohrung, und eine "
         "hineingesetzt stünde die Schraube auf dem Tisch."
     ),
-    changes=[FOOT_ADDED],
+    changes=[FOOT_ADDED, POCKET_REACHES_PAST_THE_FACE],
 )
 def foot(raw: BaseParams) -> PartResult:
     """Ein Kegelstumpf, der auf der schmalen Seite steht — oder ein Loch dafür.
@@ -664,9 +776,16 @@ def foot(raw: BaseParams) -> PartResult:
         # Durchmesser, sonst passt der Fuß nicht hinein, für den er gedacht ist.
         mouth = shapes.cone(wide, wide + 2.0 * chamfer, chamfer)
         shaft = shapes.cylinder(wide, params.height - chamfer + shapes.OVERLAP)
+        # Ein Haar über die Fläche hinaus, wie bei jedem anderen abziehenden
+        # Baustein: Zwei Volumen, die sich nur in einer Fläche berühren, sind
+        # der Fall, an dem eine Boolesche Operation bricht (§39). Die Tasche
+        # endete als einzige exakt auf z = 0 — gemessen ohne Schaden, aber der
+        # Fall tritt nicht bei jedem Netz auf, und darauf beruht die Regel.
+        rim = shapes.cylinder(wide + 2.0 * chamfer, 2.0 * shapes.OVERLAP)
         body = union(
             shapes.moved(mouth, (0.0, 0.0, -chamfer)),
             shapes.moved(shaft, (0.0, 0.0, -params.height)),
+            shapes.moved(rim, (0.0, 0.0, -shapes.OVERLAP)),
         )
         marker = bore("foot_1", wide, (0.0, 0.0, -params.height / 2.0), depth=params.height)
     else:

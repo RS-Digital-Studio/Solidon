@@ -634,6 +634,47 @@ def test_the_nut_trap_takes_the_nut_it_is_named_after() -> None:
         assert deep >= height, f"{size}: the trap is {deep:.2f} mm deep for a {height} mm nut"
 
 
+@pytest.mark.parametrize("play", [0.0, 0.2, 0.35])
+def test_the_magnet_lip_is_narrower_than_the_magnet(play: float) -> None:
+    """Eine Haltelippe, die nichts festhält, ist ein Wort im Dialog.
+
+    **Sie hielt in keiner Einstellung.** Der Kegel stand neben dem
+    Taschenzylinder und wurde mit ihm vereinigt — und ein Volumen, das man
+    einem anderen hinzufügt, kann es nur weiter machen, nie enger. Das Werkzeug
+    war über die ganze Höhe zylindrisch, die Lippe verschwand darin. Dazu
+    verengte sie um feste 0,2 mm gegenüber der bereits um das Profilspiel
+    aufgeweiteten Tasche, also um weniger als nichts: Bei den 0,20 bis 0,35 mm
+    der Materialprofile wäre die Öffnung selbst dann weiter als der Magnet
+    gewesen, wenn die Boolesche Operation mitgespielt hätte. Zwei Fehler
+    übereinander, und beide zeigten dieselbe harmlose Zahl.
+
+    Gemessen wird an der **engsten** Stelle, und die liegt an der Mündung: Ein
+    Querschnitt durch die Mitte des Kegels zeigt den Mittelwert und damit ein
+    freundlicheres Bild, als das Teil verdient — die erste Fassung dieser
+    Messung tat genau das und meldete „hält nicht" für einen Stand, der hielt.
+    """
+    from app.core.knowledge import standards
+
+    spec = PARTS.get("magnet_pocket")
+    entry = standards.magnet("6x3")
+    built = spec.fn(spec.params(size="6x3", play=play, press_lip=True)).mesh
+
+    cut = built.raw.section(plane_origin=[0.0, 0.0, -0.02], plane_normal=[0.0, 0.0, 1.0])
+    assert cut is not None, "nothing at the mouth of the pocket"
+    points = np.asarray(cut.vertices, dtype=float)
+    mouth = 2.0 * float(np.hypot(points[:, 0], points[:, 1]).max())
+
+    assert mouth < entry.diameter, (
+        f"play={play}: the mouth is {mouth:.2f} mm wide for a {entry.diameter} mm magnet — "
+        "the lip holds nothing"
+    )
+    # Und sie sperrt nicht: Der Magnet muss sich hineindrücken lassen.
+    assert mouth > entry.diameter - 0.4, (
+        f"play={play}: the mouth is {mouth:.2f} mm — that is a press the customer "
+        "cannot push through"
+    )
+
+
 # --- die Normteiltabelle -----------------------------------------------------------
 
 
