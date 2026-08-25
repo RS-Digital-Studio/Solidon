@@ -43,6 +43,7 @@ from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import object_hash, operation_hash
+from app.core.scene.orphans import references as feature_references
 from app.core.sketch.serialize import sketch_parameter_references
 from app.core.types import (
     AskFn,
@@ -172,6 +173,15 @@ def evaluate(
     answers: dict[OpId, Mapping[str, Any]] = {}
     matches: dict[OpId, dict[str, Any]] = {}
     stopped_at: OpId | None = None
+
+    # Welche Merkmale das Dokument beim Namen nennt (Passungen, Operationen
+    # mit ``kind="feature"``): Nur für sie lohnt die Zuordnungsfrage aus
+    # §21.3 — eine falsche Bindung eines unverwiesenen Merkmals könnte
+    # nichts brechen. Einmal erhoben, nicht je Operation: Die Menge hängt am
+    # Stapel, und der ändert sich während einer Auswertung nicht.
+    referenced_features: dict[ObjectId, set[str]] = {}
+    for reference in feature_references(document, source):
+        referenced_features.setdefault(reference.ref.object_id, set()).add(reference.ref.feature_id)
 
     for position, operation in enumerate(operations):
         token.raise_if_cancelled()
@@ -373,6 +383,7 @@ def evaluate(
                     result.transform,
                     previous_bounds.get(object_id),
                     recorded,
+                    referenced_features.get(object_id, frozenset()),
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -599,6 +610,7 @@ def _with_features(
     transform: Transform | None = None,
     previous_bounds: BoundingBox | None = None,
     recorded: dict[str, dict[str, Any]] | None = None,
+    referenced: frozenset[str] | set[str] = frozenset(),
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -782,6 +794,15 @@ def _with_features(
 
     saved = operation.matches
     for old_id, candidates in matched.ambiguous.items():
+        if old_id not in referenced:
+            # Niemand verweist auf dieses Merkmal — keine Passung, keine
+            # Operation. Eine Frage schützte hier nichts und flutete den
+            # Nutzer stattdessen: Das erzeugte Netz von Weg 3 trägt zwölf
+            # offene Kantenschleifen, und vor dem zweiten Schritt standen
+            # zwölf modale Fragen (dieselbe Gestalt wie die 99 Fenster, die
+            # §15.7 begraben hat). Die Erkennung behält ihre eigenen Namen;
+            # sobald etwas den alten nennt, kommt die Frage (§21.3).
+            continue
         # **Erst die festgehaltene Antwort, dann erst fragen.** ``resolve``
         # gibt ``None`` zurück, wenn der Beste nicht mit Abstand gewinnt — die
         # Kandidaten waren ja mehrdeutig, *weil* sie sich gleichen, und „der

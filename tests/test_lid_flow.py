@@ -164,3 +164,26 @@ def test_the_flow_says_what_it_did(profile: Profile) -> None:
     applied = apply_lid(document, box, {"thickness": 3.0, "collar": 4.0}, profile)
 
     assert [entry.code for entry in applied.findings] == ["parts.lid_fit"]
+
+
+def test_a_flat_lid_gets_no_fit_onto_a_missing_collar(profile: Profile) -> None:
+    """Bei ``collar=0`` gibt es kein ``lid_collar``-Merkmal mehr (C-12) — eine
+    Passung darauf meldete bei jedem Öffnen eine Geometrie, die es nicht gibt.
+
+    Und die Gegenseite: Wer ``collar`` gar nicht angibt, bekommt die
+    Schemavorgabe (4 mm) und damit weiterhin seine Passung.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    box = _box_with_cavity(document, profile)
+
+    applied = apply_lid(document, box, {"thickness": 3.0, "collar": 0.0}, profile)
+
+    assert applied.fit is None, "ein flacher Deckel hat keinen Kragen zu paaren"
+    assert document.fits == []
+    assert len(applied.object_ids) == 2, "der Deckel selbst entsteht trotzdem"
+
+    project2 = new_project("centauri-carbon-2", "petg")
+    box2 = _box_with_cavity(project2.document, profile)
+    without = apply_lid(project2.document, box2, {"thickness": 3.0}, profile)
+    assert without.fit is not None, "die Schemavorgabe trägt einen Kragen"

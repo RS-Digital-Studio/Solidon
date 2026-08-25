@@ -204,9 +204,11 @@ def test_the_title_follows_the_constraint_not_the_class() -> None:
 #: der Kunde ändern kann.
 _NOT_A_RANGE = frozenset(
     {
-        "absolute_path", "already_solid", "ambiguous_reference", "checksum", "choices",
+        "absolute_path", "already_solid", "ambiguous_reference", "broken_scheme", "checksum",
+        "choices",
         "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
-        "empty", "exists", "file_too_large", "format", "grammar", "host", "inverted",
+        "empty", "exists", "file_too_large", "format", "grammar", "history_moved", "host",
+        "inverted",
         "known_pattern",
         "known_structure", "missing_file", "missing_gathered", "missing_link", "missing_payload",
         "needs_diameter", "no_area", "no_base_dir", "no_cavity", "no_direction", "no_face",
@@ -217,8 +219,10 @@ _NOT_A_RANGE = frozenset(
         "scheme", "target_behind", "target_count", "target_parallel", "toml",
         "too_many_triangles", "too_new", "type", "undo_with_changes", "unknown",
         "unknown_feature", "unknown_format", "unknown_object", "unknown_parameter",
-        "unknown_region", "unknown_shape", "unknown_source", "unknown_target",
-        "unknown_transaction", "unreadable", "unsupported_format", "unwritable",
+        "unknown_placeholder", "unknown_region", "unknown_shape", "unknown_source",
+        "unknown_target",
+        "unknown_transaction", "unreadable", "unsupported_compression", "unsupported_format",
+        "unwritable",
         "value_not_allowed", "web_page",
     }
 )  # fmt: skip

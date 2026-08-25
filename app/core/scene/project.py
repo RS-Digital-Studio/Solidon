@@ -175,8 +175,14 @@ def embedded_source_path(filename: str, source_id: str) -> str:
     verloren (Fund des Gesamtreviews vom 25.08.2026). Alte Projektdateien
     bleiben lesbar: Der Pfad steht im Dokument und wird beim Laden gelesen,
     nicht neu gebildet.
+
+    **Als Ordner, nicht als Namenspräfix.** Der erste Wurf hängte die Kennung
+    vor den Dateinamen — und aus dem Stamm dieses Pfads leitet ``load`` den
+    Objektnamen ab: Im Fenstertitel stand „src_1-cube_clean (ungespeichert)"
+    (gefunden von 3d-druck-43, 25.08.2026). Ein Unterordner je Quelle macht
+    den Pfad genauso eindeutig und lässt den Namen in Ruhe.
     """
-    return f"{SOURCE_FOLDER}/{source_id}-{Path(filename).name}"
+    return f"{SOURCE_FOLDER}/{source_id}/{Path(filename).name}"
 
 
 def _check_relative(path: str, where: str) -> None:

@@ -28,9 +28,17 @@ BAND = (3.0, 9.0)
 
 
 def radii(body: Mesh, low: float = BAND[0], high: float = BAND[1]) -> tuple[float, float]:
-    """Kleinster und größter Abstand von der Achse, im gegebenen Höhenband."""
+    """Kleinster und größter Abstand von der Achse, im gegebenen Höhenband.
+
+    Das Band gilt im **eigenen** Lagebereich des Körpers: Ein Innengewinde
+    liegt seit accac66c unter seiner Mündung (§24.1, Werkzeuglage), sein
+    Material also bei negativem z. Gemessen wird die Gewindeform, nicht die
+    Lage — deshalb wird das Band an die Unterkante des Körpers angelegt,
+    und die Radienvergleiche der Tests bleiben, was sie waren.
+    """
     points = np.asarray(as_mesh_data(body).raw.vertices)
-    inside = points[(points[:, 2] > low) & (points[:, 2] < high)]
+    floor = float(points[:, 2].min())
+    inside = points[(points[:, 2] > floor + low) & (points[:, 2] < floor + high)]
     lengths = np.linalg.norm(inside[:, :2], axis=1)
     lengths = lengths[lengths > 1e-9]
     return float(lengths.min()), float(lengths.max())

@@ -54,6 +54,7 @@ from pathlib import Path
 from typing import Final
 from urllib.parse import urlparse
 
+from app.core import errors
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_cache_dir, user_config_dir
 from app.i18n import TranslatableText, _
@@ -345,17 +346,41 @@ def workspace_for(program: Path | str | None, prefix: str) -> Iterator[Path]:
 
     Für jedes andere Programm bleibt es beim Systemtemp: Er wird zuverlässig
     aufgeräumt, auch wenn Solidon dabei abstürzt.
+
+    Und das Anlegen selbst kann scheitern — volle Platte, ein
+    schreibgeschützter Cache. Ein roher ``OSError`` endet im Export-Arbeiter
+    als abgerissener Thread ohne ein Wort (siehe
+    :class:`~app.core.errors.FileWriteError`); hier wird er deshalb zu einem
+    Fehler mit Handlungsvorschlag, und der Grund des Betriebssystems reist
+    unübersetzt mit.
     """
     if not sandboxed(program):
-        with tempfile.TemporaryDirectory(prefix=prefix) as directory:
+        try:
+            keeper = tempfile.TemporaryDirectory(prefix=prefix)
+        except OSError as problem:
+            raise _workspace_error(tempfile.gettempdir(), problem) from problem
+        with keeper as directory:
             yield Path(directory)
         return
-    home = ensure_dir(user_cache_dir() / "sandbox")
-    directory = tempfile.mkdtemp(prefix=prefix, dir=home)
+    try:
+        home = ensure_dir(user_cache_dir() / "sandbox")
+        directory = tempfile.mkdtemp(prefix=prefix, dir=home)
+    except OSError as problem:
+        raise _workspace_error(str(user_cache_dir() / "sandbox"), problem) from problem
     try:
         yield Path(directory)
     finally:
         shutil.rmtree(directory, ignore_errors=True)
+
+
+def _workspace_error(target: str, problem: OSError) -> errors.FileWriteError:
+    """Der Arbeitsordner ließ sich nicht anlegen — als Fehler mit Vorschlag."""
+    return errors.FileWriteError(
+        target=target,
+        detail=_("Der Arbeitsordner für das externe Programm ließ sich nicht anlegen."),
+        values={"reason": str(problem)},
+        suggestions=(errors.RETRY, errors.CANCEL),
+    )
 
 
 def _from_registry(names: tuple[str, ...]) -> Path | None:

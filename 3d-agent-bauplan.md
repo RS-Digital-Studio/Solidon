@@ -1327,7 +1327,7 @@ Ergebnis in Millisekunden statt Sekunden.
 | Größe | Bedeutung |
 |---|---|
 | Überhangfläche je Schicht | Differenz zur darunterliegenden Kontur |
-| Stützvolumen | Summe der nicht unterstützten Flächen über die Höhe |
+| Stützvolumen | die Säule unter den Überhängen, von der Unterseite bis zum Material darunter oder zur Platte — nur dieser Raum trifft §40 (auf 1 % genau gegen analytische Körper) |
 | Querschnittsverlauf | sprunghafte Änderungen → Verzugs- und Haftungsrisiko |
 | **Inseln** | Konturen ohne Verbindung nach unten — brauchen zwingend Stütze |
 | Erste Schichtfläche | Haftung und Kippstabilität |

@@ -15,7 +15,9 @@ from app.core.scene import CancelSignal, History, OperationDraft, ResultCache, e
 from app.core.types import (
     BaseParams,
     Document,
+    FeatureRef,
     Finding,
+    Fit,
     OpContext,
     OpResult,
     Parameter,
@@ -551,6 +553,11 @@ def test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping(
             return MatchResult()
         return MatchResult(ambiguous={next(iter(old)): tuple(new)[:2]})
 
+    # Die Frage gilt seit dem 25.08.2026 nur verwiesenen Merkmalen — ein
+    # unverwiesenes flutete den Nutzer (zwölf Schleifenfragen in Weg 3),
+    # ohne dass eine falsche Bindung irgendetwas hätte brechen können. Der
+    # Verweis kommt hier als Passung, wie ihn ein echtes Dokument trüge.
+
     # ``import_module`` mit vollem Pfad und nicht ``from app.core.scene import
     # evaluate``: Das Paket re-exportiert die *Funktion* ``evaluate`` und
     # verdeckt damit sein eigenes gleichnamiges Untermodul. Beide kurzen Formen
@@ -567,6 +574,17 @@ def test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping(
             OperationDraft(op="hollow_object", inputs=("obj_1",), params={"wall": 2.0}),
         ],
     )
+    first = evaluate(project.document, profile, sources=ProjectSources(project))
+    feature_id = next(iter(first.scene.objects["obj_1"].features))
+    project.document.fits.append(
+        Fit(
+            name="probe",
+            a=FeatureRef("obj_1", feature_id),
+            b=FeatureRef("obj_1", feature_id),
+            kind="clearance",
+            tolerance="auto:petg",
+        )
+    )
     History(project.document).apply(
         "Elefantenfuß",
         [OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={})],
@@ -577,6 +595,57 @@ def test_an_ambiguous_match_stops_with_a_finding_instead_of_escaping(
     assert not result.complete, "raten wäre schlimmer, aber die Auswertung gibt es weiter"
     codes = {finding.code for finding in result.scene.report.findings}
     assert any("Ambiguity" in code for code in codes), codes
+
+
+def test_an_unreferenced_feature_never_becomes_a_question(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Kehrseite des Tests darüber: ohne Verweis keine Frage (§21.3).
+
+    Der Fall, der das erzwungen hat, ist Weg 3: Ein erzeugtes Netz trägt
+    zwölf offene Kantenschleifen, jede seit E-15 ein eigenes Merkmal, und
+    vor dem zweiten Schritt standen zwölf modale Fragen — dieselbe Gestalt
+    wie die 99 Fenster, die §15.7 begraben hat. Eine falsche Bindung eines
+    Merkmals, das weder eine Passung noch eine Operation beim Namen nennt,
+    könnte nichts brechen; also wird nicht gefragt und nicht geraten,
+    sondern die Erkennung behält ihre eigenen Namen.
+    """
+    from importlib import import_module
+
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.matching import MatchResult
+    from app.core.scene.project import ProjectSources, new_project
+
+    def always_ambiguous(
+        old: dict[str, object],
+        new: dict[str, object],
+        centre: object,
+        diagonal: float,
+        old_centre: object = None,
+    ) -> MatchResult:
+        if not old or len(new) < 2:
+            return MatchResult()
+        return MatchResult(ambiguous={next(iter(old)): tuple(new)[:2]})
+
+    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "match", always_ambiguous)
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Aufbau",
+        [
+            OperationDraft(op="create_box", params={"width": 40.0, "depth": 40.0, "height": 30.0}),
+            OperationDraft(op="hollow_object", inputs=("obj_1",), params={"wall": 2.0}),
+            OperationDraft(op="compensate_first_layer", inputs=("obj_1",), params={}),
+        ],
+    )
+
+    def nobody(question: str, choices: list[str]) -> str:
+        raise AssertionError(f"ohne Verweis darf keine Frage entstehen: {question}")
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project), ask=nobody)
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
 
 
 def test_a_finding_learns_which_body_it_belongs_to(
@@ -1125,7 +1194,12 @@ def test_the_question_of_the_matcher_is_asked_once_and_then_never_again() -> Non
 
     operation = Operation(id=1, op="thicken")
     recorded: dict[str, dict[str, object]] = {}
-    _with_features(entry, dict(previous), operation, ask, [], recorded=recorded)
+    # ``referenced`` ausdrücklich: Die Frage gilt nur Merkmalen, die das
+    # Dokument beim Namen nennt — ``pin_1`` ist hier als verwiesen erklärt,
+    # so wie es eine Passung oder ein ``at_feature`` täte.
+    _with_features(
+        entry, dict(previous), operation, ask, [], recorded=recorded, referenced={"pin_1"}
+    )
 
     assert len(asked) == 1, "two candidates at the same cost must be asked about"
     assert "pin_1" in recorded, f"the answer must be reported: {recorded}"
@@ -1134,7 +1208,7 @@ def test_the_question_of_the_matcher_is_asked_once_and_then_never_again() -> Non
     # Und die Gegenprobe, die den Sinn der Sache ausmacht: kein zweites Fenster.
     answered = dataclasses.replace(operation, matches=recorded)
     again: dict[str, dict[str, object]] = {}
-    _with_features(entry, dict(previous), answered, ask, [], recorded=again)
+    _with_features(entry, dict(previous), answered, ask, [], recorded=again, referenced={"pin_1"})
 
     assert len(asked) == 1, f"the question came back although the answer is in the stack: {asked}"
     assert not again, "nothing was decided this time, so nothing is reported"

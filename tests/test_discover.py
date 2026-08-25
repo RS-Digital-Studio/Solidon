@@ -383,6 +383,38 @@ def test_a_normal_program_works_in_the_system_temp(tmp_path: Path) -> None:
     assert not workspace.exists(), "danach ist er weg"
 
 
+def test_a_workspace_that_cannot_be_created_carries_a_suggestion(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Volle Platte oder schreibgeschützter Cache: kein roher ``OSError``.
+
+    Der liefe im Export-Arbeiter als abgerissener Thread ohne ein Wort aus —
+    ``FileWriteError`` trägt den Grund des Betriebssystems und einen
+    Handlungsvorschlag (Regel 17). Beide Anlegewege sind gefasst.
+    """
+    import tempfile
+
+    from app.core import errors, paths
+
+    def explode(*_args: object, **_kwargs: object) -> object:
+        raise OSError("No space left on device")
+
+    monkeypatch.setattr(tempfile, "TemporaryDirectory", explode)
+    with (
+        pytest.raises(errors.FileWriteError) as caught,
+        discover.workspace_for(tmp_path / "openscad.exe", "probe-"),
+    ):
+        raise AssertionError("bis hierher kommt es nicht")
+    assert caught.value.suggestions, "ein Fehler endet nie mit „fehlgeschlagen“"
+    assert "No space left" in str(caught.value.values.get("reason", ""))
+
+    wrapper = Path("~/.local/share/flatpak/exports/bin/org.openscad.OpenSCAD").expanduser()
+    monkeypatch.setattr(tempfile, "mkdtemp", explode)
+    with pytest.raises(errors.FileWriteError) as caught, discover.workspace_for(wrapper, "probe-"):
+        raise AssertionError("bis hierher kommt es nicht")
+    assert str(paths.user_cache_dir()) in str(caught.value.values.get("target", ""))
+
+
 def test_a_flatpak_works_below_the_home_directory(monkeypatch: pytest.MonkeyPatch) -> None:
     """**Der Fall, der ohne das still scheitert.**
 

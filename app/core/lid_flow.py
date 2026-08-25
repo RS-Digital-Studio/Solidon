@@ -34,6 +34,7 @@ from app.core.types import (
     Profile,
     TransactionId,
 )
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -98,6 +99,21 @@ def apply_lid(
         return LidApplied(object_ids=list(made), transaction=applied.id)
 
     box_id, lid_id = made[0], made[1]
+    collar = params.get("collar")
+    try:
+        # Nur ein ausdrücklich gesetzter Kragen von null zählt: fehlt der
+        # Parameter, gilt die Schemavorgabe (4 mm), und ein Ausdruck
+        # entscheidet erst bei der Auswertung — beide behalten ihre Passung.
+        flat = collar is not None and float(collar) <= EPS_GEOM  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        flat = False
+    if flat:
+        # Ohne Kragen gibt es kein ``lid_collar``-Merkmal (ein flacher Deckel
+        # trägt keines mehr) — eine Passung darauf zeigte ins Leere und
+        # meldete bei jedem Öffnen eine Geometrie, die es nicht gibt.
+        _log.info("lid flow: collar is zero, no fit to pair")
+        return LidApplied(object_ids=list(made), transaction=applied.id)
+
     fit = Fit(
         name=unique_name(document),
         a=FeatureRef(box_id, CAVITY_FEATURE),
