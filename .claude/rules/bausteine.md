@@ -40,6 +40,44 @@ Und die Prüfung dazu misst die **Richtung**, nicht nur die Berührung: Zwei
 Volumen, die sich treffen, treffen sich am falschen Ende genauso. Was der Test
 sagen muss, ist, an welchem Ende die Sperrfläche sitzt.
 
+## Was vereinigt wird, kann nur weiter werden
+
+Ein Baustein ist **ein** Körper, und seine Teile entstehen mit `union`. Wer
+darin etwas *verengen* will, kann es nicht dazulegen: Die Haltelippe der
+Magnettasche stand als eigener Kegel neben dem Taschenzylinder, wurde mit ihm
+vereinigt und verschwand darin. Das Werkzeug war über die ganze Höhe
+zylindrisch, und die Lippe hielt in keiner Einstellung etwas fest — auch nicht
+bei `play = 0`, wo die Rechnung darüber noch stimmte.
+
+Eine Verengung entsteht, indem der Körper an dieser Stelle **fehlt**: Der
+Zylinder endet unter der Lippe, und die letzten Zehntel übernimmt ein Kegel mit
+dem engeren Maß. Wer eine Einführschräge baut, prüft dasselbe andersherum — sie
+muss die Mündung weiten, und ein Schaft mit dem schmalen Kegeldurchmesser
+verengt stattdessen den Sitz (Fußtasche, derselbe Tag).
+
+**Und die Prüfung dazu misst an der engsten Stelle.** Ein Querschnitt durch die
+Mitte eines Kegels zeigt den Mittelwert; die erste Messung tat das und meldete
+„hält nicht" für einen Stand, der hielt.
+
+## Zwei Fehler übereinander zeigen eine harmlose Zahl
+
+Dreimal an einem Tag lagen zwei Fehler so, dass sie einander zudeckten:
+
+* Die Einführfase der Einpressbuchse rechnete `(outer - hole) / 2 + 0,3`, und in
+  der Tabelle stand bei allen sechs Größen zweimal die Bohrung. Die Fase war
+  konstant 0,3 mm — eine plausible Zahl, aus einer Formel, die nichts rechnete.
+* Die Haltelippe verengte um feste 0,2 mm gegen ein Profilspiel von 0,20 bis
+  0,35 **und** wurde vereinigt statt abgezogen. Beide Fehler zeigten dieselbe
+  Öffnung: so weit wie die Tasche.
+* Der Lochwand-Einhänger baute Rechtecke in ein Langloch **und** ließ 0,25 mm
+  Sinkweg. Der gebaute Körper war wasserdicht, einteilig und maß in jeder
+  Richtung, was er sollte.
+
+Daraus folgt nichts über das Suchen, sondern etwas übers Glauben: **Eine Zahl,
+die stimmen könnte, ist kein Beleg.** Wer einen Fehler behoben hat, misst
+nach — und zwar das, was der Baustein dem Kunden verspricht, nicht das, was die
+Formel ausrechnet.
+
 ## Ein Maß, das aus einem fremden Maß folgt, ist ein Fehler in Wartestellung
 
 Der Schnappverbinder hat es vorgemacht: Seine Armlänge kam aus der

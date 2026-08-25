@@ -527,10 +527,9 @@ class PegboardHookParams(BaseParams):
         "gesteckt und heruntergezogen — die Nase greift dann hinter die Platte."
     ),
     caveat=_(
-        "Die Lochmaße veröffentlicht IKEA nirgends — weder auf der Produktseite "
-        "noch in der Montageanleitung. Sie stammen aus einer Sammlung, die selbst "
-        "dazuschreibt, dass sie gemessen und nicht amtlich ist. Vor einer größeren "
-        "Auflage lohnt ein Prüfdruck."
+        "Schlitzmaße und Raster sind gegen eine bemaßte Zeichnung geprüft. Die "
+        "Dicke der Platte ist es nicht — und aus ihr folgt, wie weit die Nase "
+        "hinter die Platte greift. Vor einer größeren Auflage lohnt ein Prüfdruck."
     ),
     changes=[PEGBOARD_HOOK_ADDED],
 )

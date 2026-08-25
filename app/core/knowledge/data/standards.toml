@@ -339,38 +339,32 @@ note = "Nut 8 wie 3030 — die Außenmaße unterscheiden sich, die Nut nicht"
 # eine Reihe oder eine Spalte, und dort ist der Abstand `pitch`, gleich ob die
 # Nachbarreihe versetzt liegt. Der Wert steht trotzdem hier, weil er zur Platte
 # gehört und nicht zum Baustein; wer im Zickzack setzen will, findet ihn vor.
-# Ein ungelesener Wert kann allerdings falsch sein, ohne dass es auffällt —
-# beim Prüfdruck gehört er mitgemessen.
+# Ein ungelesener Wert kann falsch sein, ohne dass es auffällt; dieser ist es
+# nicht — die Zeichnung zeigt beide 20,00 ausdrücklich.
 #
-# **Herkunft, und sie ist schwächer als bei allem anderen hier.** IKEA
-# veröffentlicht die Lochung nicht — das ist am 25.08.2026 gesucht und nicht
-# gefunden worden, an vier offiziellen Stellen:
+# **Herkunft: die Lochung ist geprüft, die Plattendicke nicht.**
 #
-#   * Produktseite US (003.208.03) und DE (00320803): Breite und Höhe, sonst
-#     nichts. Die deutsche nennt nicht einmal eine Materialstärke, nur
-#     „Hartfaserplatte, Acrylfarbe".
-#   * Montageanleitung: Wandschiene, Bohrbild für die *Wand*, nichts zur Platte.
-#   * Buying Guide (offizielles PDF, Januar 2024, sechs Seiten): Produktgrößen
-#     und Artikelnummern, keine einzige Maßangabe zur Lochung.
+# Am 25.08.2026 gegen eine bemaßte Zeichnung geprüft, die Robert beigebracht
+# hat — Schlitz 5,00 × 15,00 mit R2,50 an den Enden, Raster 40,00, zweite
+# Lochschar um 20,00 in beiden Richtungen versetzt, Randabstand 20,00. Alle
+# vier Werte dieser Tabelle stimmen damit auf den Hundertstel, und die R2,50
+# belegen zugleich die Form: ein Langloch, dessen Radius die halbe Breite ist.
+# Das ist der Punkt, an dem der Einhänger zuerst gescheitert war — er baute
+# Rechtecke.
 #
-# Die Zahlen stammen deshalb aus der Gemeinschaft, und die Quelle sagt es
-# selbst: pegboardly.com kennzeichnet Außenmaße als „manufacturer-stated" und
-# Lochung, Raster und Plattendicke ausdrücklich als „community-sourced" — die
-# Dicke zusätzlich als „approximate; the exact decimal is unverified".
-# dimensions.com führt für diese Platte gar keine Lochmaße; seine Zeichnungen
-# stehen dort auf „under development". Ein früherer Stand dieses Kommentars
-# sprach von „zwei unabhängigen Sammlungen übereinstimmend" — das war zu
-# großzügig. Es ist **eine** Sammlung für die Lochung.
+# **`thickness` steht nicht darauf**, denn die Zeichnung ist eine Draufsicht.
+# Der Wert stammt weiter aus einer Sammlung, die ihn selbst als „approximate;
+# the exact decimal is unverified" führt — und er ist der einzige hier, aus dem
+# etwas folgt: Die Nasentiefe des Einhängers ist zwei Drittel davon (`lip`).
+# Wer eine Platte zur Hand hat, misst sie mit dem Messschieber und trägt sie
+# hier ein; alles andere ist erledigt.
 #
-# Was daraus folgt: `thickness` ist der schwächste Wert der Tabelle und
-# zugleich der, an dem die Nasentiefe des Einhängers hängt (`lip`, zwei
-# Drittel davon). Wer eine Platte zur Hand hat, misst nach, bevor er eine
-# Charge druckt — und trägt das Ergebnis hier ein.
-#
-# Zum Muster: 40 mm Raster, und dazu eine zweite Lochschar, die um 20 mm in
-# **beiden** Richtungen versetzt liegt. Zwei Schlitze auf gleicher Höhe stehen
-# damit 40 mm auseinander, zwei in derselben Spalte ebenfalls — `pitch` gilt
-# für beides, und genau das braucht der Einhänger.
+# **Beim Hersteller gesucht und nicht gefunden** (25.08.2026): IKEA
+# veröffentlicht die Lochung an keiner der vier offiziellen Stellen — Produkt-
+# seite US (003.208.03) und DE (00320803) nennen Breite und Höhe, die deutsche
+# nicht einmal eine Materialstärke; die Montageanleitung zeigt das Bohrbild für
+# die Wand; der Buying Guide (offizielles PDF, Januar 2024, sechs Seiten) führt
+# Produktgrößen und Artikelnummern. Deshalb die Zeichnung.
 
 [[boards]]
 size = "skadis"

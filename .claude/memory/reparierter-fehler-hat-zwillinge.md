@@ -1,0 +1,41 @@
+---
+name: reparierter-fehler-hat-zwillinge
+description: "Wer einen Fehler behebt, sucht seine Geschwister — der Gesamtreview vom 25.08.2026 fand denselben behobenen Fehler fünffach unbehoben an Nachbarstellen."
+metadata: 
+  node_type: memory
+  type: feedback
+  originSessionId: 16dae8e9-6992-47e8-9e0f-c3edfb514eea
+  modified: 2026-08-25T13:08:25.694Z
+---
+
+**Der Gesamtreview vom 25.08.2026 (Bericht:
+`.claude/.state/gesamtreview-2026-08-25/BEFUNDE.md`, ~180 Befunde, ~30 hoch)
+zeigte ein tragendes Muster: Ein reparierter Fehler hat unreparierte
+Zwillinge.** Fünf der schwersten Befunde waren exakt der Fehler, der an einer
+Nachbarstelle schon einmal behoben und dort sogar im Docstring dokumentiert
+war:
+
+- `drill` bekam `anchor="mouth"` gegen „bohrt ab der Mitte" — `countersink`
+  und `plug_hole` nicht.
+- `sketch_extrude`/`loft` lesen die Zeichenebene seit einem dokumentierten
+  Fix — `sketch_pocket`/`sketch_sweep` nicht.
+- `ValueField` fängt Ausdrücke in float-Feldern (Docstring beschreibt den
+  alten Absturz) — der int-Zwilling stürzt weiter.
+- `_on_split_busy` blendet den Abbrechen-Knopf richtig aus — `_on_agent_busy`
+  hat den alten Fehler.
+- `write_plan` wandelt `OSError` in einen Satz — `write_assembly` daneben
+  nicht.
+
+**Why:** Ein Fix wird dort gemacht, wo der Fund war, und der Docstring
+dokumentiert die Lehre — aber niemand fragt, wo dieselbe Konstruktion noch
+steht. Die Lehre reist nicht von selbst zu den Geschwistern.
+
+**How to apply:** Nach jedem behobenen Fehler die Geschwister suchen, bevor
+der Commit fertig ist: grep nach dem Muster (dieselbe API, derselbe
+Signalname, dieselbe Vorbelegungsquelle), und jede Fundstelle entweder
+mitfixen oder im Commit benennen, warum sie nicht betroffen ist. Beim Review
+umgekehrt: Wo ein Docstring einen behobenen Fehler beschreibt, ist die
+Nachbarschaft der erste Ort zum Suchen.
+
+Verwandt: [[was-die-suite-nicht-findet]], [[eine-kette-endet-am-letzten-glied]],
+[[sollwert-aus-dem-pruefling]].
