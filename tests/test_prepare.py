@@ -18,6 +18,7 @@ from app.core.geom.prepare import (
     check_collisions,
     countersink,
     drill,
+    into_the_body,
     plug,
     split_at_plane,
 )
@@ -428,6 +429,22 @@ def test_a_plug_on_a_step_does_not_grow_a_stud(profile: Profile) -> None:
         "der Stopfen füllt ins Material und wächst nicht als Zapfen aus der Fläche"
     )
     assert any(finding.code == "boolean.without_effect" for finding in plugged.findings)
+
+
+def test_into_the_body_reads_the_local_column_not_the_whole_box() -> None:
+    """Zwilling des Senkungsfixes eine Ebene weiter: bei zwei offenen Seiten
+    entschied ``into_the_body`` an der Mitte des ganzen Hüllquaders.
+
+    Ein hoher Nachbar — ein Dom, ein Steg — hebt diese Mitte über die
+    angeklickte Fläche, und die feste Halbierung zeigte dann nach oben in die
+    Luft statt nach unten ins Material. Gemessen wird jetzt die Materialsäule an
+    genau dieser Stelle: An der Plattenoberseite liegt das Material unten, egal
+    wie hoch der Dom daneben steht.
+    """
+    body = plate_with_stud()  # Platte z 0..10, Dom darüber -> Hüllquader-Mitte über 5
+    assert body.bounds.maximum[2] > 10.0, "der Dom hebt den Hüllquader über die Platte"
+
+    assert into_the_body(body, "z", (0.0, 0.0, 5.0)) == -1.0, "ins Material (nach unten)"
 
 
 def test_the_boolean_overlap_is_the_one_from_the_rule_set() -> None:

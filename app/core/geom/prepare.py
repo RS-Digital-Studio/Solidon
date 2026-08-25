@@ -459,12 +459,34 @@ def into_the_body(mesh: MeshData, axis: Axis, position: Vec3) -> float:
     """Wohin es von dieser Position aus ins Material geht: -1 oder +1.
 
     Ein Werkzeug, das an der Mündung ansetzt, muss wissen, auf welcher Seite
-    der Körper liegt. Entschieden wird an der Hälfte des Hüllquaders: wer die
-    obere Fläche anklickt, meint nach unten, wer die untere anklickt, nach
-    oben. Für eine angeklickte Fläche ist das eindeutig — und mehr als eine
-    angeklickte Fläche gibt es an dieser Stelle nicht zu entscheiden.
+    der Körper liegt. Entschieden wird an der Mitte der **Materialsäule an
+    genau dieser Stelle** — von der nächsten Fläche unter der Position bis zur
+    nächsten darüber, gemessen mit zwei Strahlen.
+
+    **Nicht am ganzen Hüllquader**, und das ist der Zwilling des Senkungsfixes
+    eine Ebene weiter: Diese Auskunft ist der Rückfall, wenn :func:`open_sides`
+    nicht genau eine offene Seite nennt (mitten im Material, oder zwei offene
+    Seiten). An der Hälfte des Hüllquaders gemessen hob ein hoher Nachbar — ein
+    Dom, ein Steg — die Mitte über die angeklickte Fläche, und die feste
+    Halbierung zeigte nach oben in die Luft. Die Säule an Ort und Stelle hängt
+    nur am Material, das dort wirklich steht.
+
+    Trifft die Achse an dieser Stelle ein Loch — die Mitte einer durchgehenden
+    Bohrung —, kommt keiner der beiden Strahlen zurück, und dann bleibt der
+    Hüllquader die einzige Auskunft; welche der zwei Mündungen gemeint ist, ist
+    dort ohnehin nicht zu entscheiden.
     """
     index = AXIS_INDEX[axis]
+    triangles = np.asarray(mesh.raw.triangles, dtype=float)
+    origin = np.asarray(position, dtype=float)
+    up = np.zeros(3)
+    up[index] = 1.0
+    above = ray_hit_distances(triangles, origin, up)
+    below = ray_hit_distances(triangles, origin, -up)
+    if len(above) and len(below):
+        local_high = float(position[index]) + float(np.min(above))
+        local_low = float(position[index]) - float(np.min(below))
+        return -1.0 if position[index] >= (local_low + local_high) / 2.0 else 1.0
     low = float(mesh.bounds.minimum[index])
     high = float(mesh.bounds.maximum[index])
     return -1.0 if position[index] >= (low + high) / 2.0 else 1.0
