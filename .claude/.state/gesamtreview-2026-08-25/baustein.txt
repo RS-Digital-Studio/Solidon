@@ -1,0 +1,13 @@
+Vorher im Stapel: ['create_box']
+Operation: insert_pegboard_hook — im Register: True
+Dialog: Lochwand-Einhänger
+Werte: {'system': 'skadis', 'count': 2, 'upright': False, 'plate': 2.0, 'play': 0.0, 'lip': 0.0, 'x': 0.0, 'y': 0.0, 'z': 0.0, 'axis': 'z', 'angle': 0.0, 'at_feature': ''}
+Nachher im Stapel: ['create_box', 'insert_pegboard_hook']
+Objekte: ['obj_1']
+    [info] perceive.orphaned: Ein Merkmal hat keinen Nachfolger mehr.
+    [info] perceive.orphaned: Ein Merkmal hat keinen Nachfolger mehr.
+    [info] perceive.orphaned: Ein Merkmal hat keinen Nachfolger mehr.
+    [info] arrange.below_bed: Ein Objekt steckt unter dem Druckbett.
+aufnahme: 61-baustein.png
+Wachhund gesamt: ["modal: FirstRunDialog — 'Erste Schritte'"]
+FERTIG

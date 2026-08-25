@@ -1,0 +1,196 @@
+Projekt mit Quader steht.
+== Menü 1: 'Datei'
+  'Neu'  [Ctrl+N]
+  'Öffnen …'  [Ctrl+O]
+  'Speichern'  [Ctrl+S]
+  'Speichern unter …'  [Ctrl+Shift+S]
+  ---
+  'Modell einfügen …'  [Ctrl+I]
+  'Modell aus dem Netz …'
+  'Modell erzeugen …'  [Ctrl+G]
+  'Bausteinkatalog …'  [Ctrl+K]
+  'Exportieren …'  [Ctrl+E]
+  'Druckeinstellungen …'  [Ctrl+P]
+  'G-Code gegenprüfen …'
+  ---
+  'Beenden'
+  aufnahme: menue-01.png
+== Menü 2: 'Bearbeiten'
+  'Rückgängig'  [Ctrl+Z]
+  'Wiederholen'  [Ctrl+Y]  (AUS)
+  ---
+  'Befehlspalette …'  [Ctrl+Shift+P]
+  'Parameter anlegen …'
+  'Material kalibrieren …'
+  'Varianten erzeugen …'
+  'Einstellungen …'  [Ctrl+,]
+  'Chat einrichten …'
+  aufnahme: menue-02.png
+== Menü 3: 'Objekt'
+  'Auf dem Bett anordnen'  [Ctrl+Shift+O]
+  'Kollisionen prüfen'
+  'Objekt duplizieren'  [Ctrl+D]  (AUS)
+  'Objekt entfernen'  [Del]  (AUS)
+  'Objekt umbenennen'  [F2]  (AUS)
+  aufnahme: menue-03.png
+== Menü 4: 'Erzeugen'
+  'Grundformen'
+    'Gewindebolzen als neues Objekt'
+    'Kugel anlegen'
+    'OpenSCAD-Teil anheften'
+    'Quader anlegen'
+    'Zylinder anlegen'
+  'Import'
+    'Modell laden'
+    'STEP laden'
+    'Zeichnung extrudieren'
+  'Skizze'
+    'Tasche schneiden'  (AUS)
+    'Aus Skizze erzeugen …'
+  'Beschriftung'
+    'Schriftzug als Körper'
+    'Text aufbringen'  (AUS)
+  aufnahme: menue-04.png
+== Menü 5: 'Ändern'
+  'Verbinden und Abziehen'
+    'Abziehen'  [Ctrl+Shift+A]  (AUS)
+    'Schnittmenge'  [Ctrl+Shift+X]  (AUS)
+    'Vereinigen'  [Ctrl+Shift+V]  (AUS)
+    'Weich verschmelzen'  (AUS)
+  'Transformation'
+    'An Merkmal ausrichten'  (AUS)
+    'Auf das Bett setzen'  [Ctrl+Shift+B]  (AUS)
+    'Auf Maß bringen'  (AUS)
+    'Drehen'  [Ctrl+R]  (AUS)
+    'Druckoptimal ausrichten'  (AUS)
+    'Kopien in Reihe oder Kreis'  (AUS)
+    'Skalieren'  (AUS)
+    'Spiegeln'  [Ctrl+M]  (AUS)
+    'Verschieben'  [Ctrl+T]  (AUS)
+  'Formgebung'
+    'Fase anbringen'  (AUS)
+    'Fläche versetzen'  (AUS)
+    'Formschräge anstellen'  (AUS)
+    'Verrunden'  (AUS)
+  'Bohrungen'
+    'Bohrung setzen'  [Ctrl+B]  (AUS)
+    'Bohrung verschließen'  (AUS)
+    'Senken'  (AUS)
+  'Oberfläche'
+    'Gitter füllen'  (AUS)
+    'Relief auflegen'  (AUS)
+    'Textur aufbringen'  (AUS)
+  'Netz'
+    'Dreiecke angleichen'  (AUS)
+    'Dreiecke verringern'  (AUS)
+    'Fläche unterteilen'  (AUS)
+    'Formen'  (AUS)
+    'Glätten'  (AUS)
+    'In ein Netz umwandeln'  (AUS)
+    'Kanten verfeinern'  (AUS)
+    'Offene Fläche schließen'  (AUS)
+    'Stellung geben'  (AUS)
+  'Reparatur'
+    'Reparieren'  [Ctrl+Shift+R]  (AUS)
+  aufnahme: menue-05.png
+== Menü 6: 'Bausteine'
+  'Deckel erzeugen'  (AUS)
+  'Drehdeckel erzeugen'  (AUS)
+  'Struktur'
+    'Eckwinkel'  (AUS)
+    'Nutfeder für Aluprofil'  (AUS)
+    'Versteifungsrippe'  (AUS)
+  'Mechanik'
+    'Filmscharnier'  (AUS)
+    'Passstift und Passbohrung'  (AUS)
+    'Rastnase'  (AUS)
+    'Scharnierauge'  (AUS)
+    'Schnappverbinder für eine Naht'  (AUS)
+    'Schnappverbindung'  (AUS)
+  'Verbindungen'
+    'Gewinde in Bohrung schneiden'  (AUS)
+    'Heat-Set-Einpressbuchse'  (AUS)
+    'Mutternfalle'  (AUS)
+    'Schraubenloch mit Senkung'  (AUS)
+  'Kabel und Schläuche'
+    'Kabelclip'  (AUS)
+    'Kabeldurchführung mit Zugentlastung'  (AUS)
+  'Befestigung'
+    'Lochwand-Einhänger'  (AUS)
+    'Magnettasche'  (AUS)
+    'Schlüsselloch-Aufhängung'  (AUS)
+    'Standfuß'  (AUS)
+    'Wandhalter'  (AUS)
+  'Kalibrierung'
+    'Toleranz-Testkörper'  (AUS)
+    'Überhangfächer'  (AUS)
+    'Wandstärkenleiter'  (AUS)
+  aufnahme: menue-06.png
+== Menü 7: 'Vorbereiten'
+  'An gezeichneter Linie trennen'  (AUS)
+  'Aushöhlen'  [Ctrl+H]  (AUS)
+  'Elefantenfuß ausgleichen'  (AUS)
+  'Material festlegen'  (AUS)
+  'Prüfstück erzeugen'  (AUS)
+  'Teilen'  (AUS)
+  ---
+  'Bemalen'  (AUS)
+  'Farben in Slots umrechnen'  (AUS)
+  'Slot zuweisen'  (AUS)
+  ---
+  'Automatisch teilen …'  (AUS)
+  aufnahme: menue-07.png
+== Menü 8: 'Ansicht'
+  'Alles einpassen'  [Home]
+  'Rechten Bereich zeigen'  [F9]
+  ---
+  'Darstellung'
+    'Massiv'  [1]
+    'Massiv mit Kanten'  [2]
+    'Drahtgitter'  [3]
+    'Transparent'  [4]
+    ---
+    'Flache Schattierung'
+    'Weiche Schattierung'
+    ---
+    'Perspektivisch'  [5]
+    'Orthografisch'  [6]
+  'Kamera'
+    'Isometrisch'  [Ctrl+0]
+    'Vorne'  [Ctrl+1]
+    'Hinten'  [Ctrl+2]
+    'Links'  [Ctrl+3]
+    'Rechts'  [Ctrl+4]
+    'Oben'  [Ctrl+5]
+    'Unten'  [Ctrl+6]
+  ---
+  'Dunkles Thema'  (angehakt)
+  'Helles Thema'
+  'Navigation'
+    'Navigation: Cura'  (angehakt)
+    'Navigation: Bambu, Orca, Prusa'
+    'Navigation: CAD'
+    'Navigation: Blender'
+  aufnahme: menue-08.png
+== Menü 9: 'Hilfe'
+  'Handbuch …'  [F1]
+  'Beispiele'
+  ---
+  'Zusätzliche Programme …'
+  'Tastenkürzel …'  [?]
+  'Erste Schritte …'
+  'Rückmeldung senden …'
+  ---
+  'Nach einer neuen Version sehen'
+  'Neuerungen …'
+  ---
+  'Solidon freischalten …'
+  'Über Solidon'
+  aufnahme: menue-09.png
+== Werkzeugleiste
+  kein Attribut tool_strip — suche Kinder
+== Befehlspalette
+  aufnahme: befehlspalette.png
+  modal: CommandPalette
+Wachhund gesamt: ["modal: FirstRunDialog — 'Erste Schritte'"]
+FERTIG

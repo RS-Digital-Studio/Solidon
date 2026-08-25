@@ -1,0 +1,7 @@
+    Traceback (most recent call last):
+      File "F:\3D Druck\.claude\.state\gesamtreview-2026-08-25\skripte\pruef_beispiel.py", line 39, in <module>
+        eintraege = [a for a in beispiele.actions() if not a.isSeparator()]
+                                ^^^^^^^^^^^^^^^^^
+    AttributeError: 'NoneType' object has no attribute 'actions'
+Wachhund gesamt: ["modal: FirstRunDialog — 'Erste Schritte'"]
+FERTIG

@@ -1,0 +1,9 @@
+Beispiele: ['weg1-halterung-anpassen', 'weg2-halter-konstruieren', 'weg3-generiert-aufbereiten', 'weg4-figur-formen', 'gehaeuse-mit-bausteinen', 'schild-zweifarbig', 'drucker-kalibrieren', 'aushoehlen-und-teilen', 'dose-mit-deckel']
+Titel: 'weg1-halterung-anpassen.p3d — Solidon3D'
+Objekte: ['obj_1']
+Reiter rechts: ['Prüfbericht', 'Chat', 'Tour']
+    [info] ingest.welded: Doppelte Punkte wurden verschweißt.
+    [info] repair.nothing_to_do: An diesem Netz war nichts zu reparieren.
+    [info] bore.compensated: Die Bohrung wurde um die Materialtoleranz vergrößert.
+Wachhund: ["modal: FirstRunDialog — 'Erste Schritte'"]
+FERTIG

@@ -1,0 +1,23 @@
+Sprache gesetzt: pt
+== Startbildschirm (pt)
+  aufnahme: 30-start-pt.png
+== Quader-Dialog (pt)
+  Titel: 'Criar um paralelepípedo'
+  Weitere Einstellungen aufgeklappt
+  aufnahme: 31-quader-dialog-pt.png
+== Bohrung + Prüfbericht (pt)
+  aufnahme: 32-hauptfenster-pt.png
+== Einstellungen-Dialog (pt)
+  aufnahme: 33-einstellungen-pt.png
+  modal: SettingsDialog 'Definições'
+== Tastenkürzel (pt)
+  aufnahme: 34-tastenkuerzel-pt.png
+  modal: ShortcutsWindow 'Atalhos de teclado'
+== Über-Dialog (pt)
+  aufnahme: 35-ueber-pt.png
+  modal: AboutDialog 'Acerca'
+== Freischalten (pt)
+  aufnahme: 36-freischalten-pt.png
+  modal: ActivationDialog 'Desbloquear o Solidon'
+Wachhund gesamt: ["modal: FirstRunDialog — 'Primeiros passos'"]
+FERTIG

@@ -1,0 +1,25 @@
+evaluation stopped at op 2: op.load.ValidationError: Dieses Dateiformat kann nicht gelesen werden.
+2026-08-25 14:40:41.766 (  17.324s) [C7D049443E64C92E]vtkOpenGLFramebufferObj:448    ERR| vtkOpenGLFramebufferObject (0000025876103500): Frame buffer object was not initialized correctly.
+WARNING:root:ERROR: In vtkOpenGLFramebufferObject.cxx, line 448
+vtkOpenGLFramebufferObject (0000025876103500): Frame buffer object was not initialized correctly.
+2026-08-25 14:40:41.767 (  17.324s) [C7D049443E64C92E]vtkOpenGLFramebufferObj:1370   ERR| vtkOpenGLFramebufferObject (0000025876103500): The framebuffer is incomplete : FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+WARNING:root:ERROR: In vtkOpenGLFramebufferObject.cxx, line 1370
+vtkOpenGLFramebufferObject (0000025876103500): The framebuffer is incomplete : FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+2026-08-25 14:40:41.768 (  17.326s) [C7D049443E64C92E]vtkOpenGLFramebufferObj:448    ERR| vtkOpenGLFramebufferObject (0000025876103500): Frame buffer object was not initialized correctly.
+WARNING:root:ERROR: In vtkOpenGLFramebufferObject.cxx, line 448
+vtkOpenGLFramebufferObject (0000025876103500): Frame buffer object was not initialized correctly.
+2026-08-25 14:40:41.768 (  17.326s) [C7D049443E64C92E]vtkOpenGLFramebufferObj:1370   ERR| vtkOpenGLFramebufferObject (0000025876103500): The framebuffer is incomplete : FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+WARNING:root:ERROR: In vtkOpenGLFramebufferObject.cxx, line 1370
+vtkOpenGLFramebufferObject (0000025876103500): The framebuffer is incomplete : FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+2026-08-25 14:40:42.272 (  17.830s) [C7D049443E64C92E]vtkOpenGLFramebufferObj:448    ERR| vtkOpenGLFramebufferObject (0000025876103500): Frame buffer object was not initialized correctly.
+WARNING:root:ERROR: In vtkOpenGLFramebufferObject.cxx, line 448
+vtkOpenGLFramebufferObject (0000025876103500): Frame buffer object was not initialized correctly.
+2026-08-25 14:40:42.272 (  17.830s) [C7D049443E64C92E]vtkOpenGLFramebufferObj:1370   ERR| vtkOpenGLFramebufferObject (0000025876103500): The framebuffer is incomplete : FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+WARNING:root:ERROR: In vtkOpenGLFramebufferObject.cxx, line 1370
+vtkOpenGLFramebufferObject (0000025876103500): The framebuffer is incomplete : FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+2026-08-25 14:40:42.273 (  17.831s) [C7D049443E64C92E]vtkOpenGLFramebufferObj:448    ERR| vtkOpenGLFramebufferObject (0000025876103500): Frame buffer object was not initialized correctly.
+WARNING:root:ERROR: In vtkOpenGLFramebufferObject.cxx, line 448
+vtkOpenGLFramebufferObject (0000025876103500): Frame buffer object was not initialized correctly.
+2026-08-25 14:40:42.273 (  17.831s) [C7D049443E64C92E]vtkOpenGLFramebufferObj:1370   ERR| vtkOpenGLFramebufferObject (0000025876103500): The framebuffer is incomplete : FRAMEBUFFER_INCOMPLETE_ATTACHMENT
+WARNING:root:ERROR: In vtkOpenGLFramebufferObject.cxx, line 1370
+vtkOpenGLFramebufferObject (0000025876103500): The framebuffer is incomplete : FRAMEBUFFER_INCOMPLETE_ATTACHMENT

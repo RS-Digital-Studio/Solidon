@@ -1,0 +1,7 @@
+== Thema hell
+  palette: #e7e9ed
+  aufnahme: thema-01-hell.png
+== Thema dunkel
+  palette: #343a45
+  aufnahme: thema-02-dunkel.png
+ENDE; wachhund sah: ["modal: FirstRunDialog — 'Erste Schritte'"]

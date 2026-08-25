@@ -1,0 +1,17 @@
+== 1. Skizzenmodus starten (Weg 2, Zeichnen)
+  aufnahme: schluss-01-skizzenmodus.png
+  panel da: True
+== 2. Linie zeichnen, dann Ziffer tippen — Maßfeld im Viewport?
+  maßfeld-wirt: Viewport
+  feld sichtbar am wirt: False
+  feldtext: '0,00 mm'
+  aufnahme: schluss-02-massfeld.png
+== 3. Rechtsklick auf die Ebene — kommt das Skizzenmenü?
+  offene menüs: 0 | vom wachhund weggeräumt: ["modal: FirstRunDialog — 'Erste Schritte'"]
+  aufnahme: schluss-03-menue.png
+== 4. Skizze verwerfen, Quader anlegen, Thema wechseln
+  aufnahme: schluss-04-dunkel.png
+  aufnahme: schluss-05-hell.png
+  aufnahme: schluss-06-wieder-dunkel.png
+== fertig; wachhund sah: ["modal: FirstRunDialog — 'Erste Schritte'"]
+ENDE
