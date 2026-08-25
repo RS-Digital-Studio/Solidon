@@ -240,9 +240,20 @@ def evaluate(
             result = cached
         else:
             context = OpContext(
+                # Regel 3 hat jetzt einen Boden unter sich: ``scene`` ist eine
+                # Lesekopie — Wörterbücher kopiert, jede Objekthülle samt
+                # ihres Merkmal-Wörterbuchs ersetzt (``Parameter`` und
+                # ``MeshData`` sind eingefroren). Eine Op, die trotzdem
+                # schreibt, ändert ihre Kopie und nicht das Ergebnis; vorher
+                # erreichte ein geschriebener Parameter die Ergebnisszene
+                # (Fund des Gesamtreviews vom 25.08.2026 — die einzige der 22
+                # Regeln ohne Schutz und ohne Test).
                 scene=Scene(
-                    objects=dict(objects),
-                    parameters=parameters,
+                    objects={
+                        object_id: dataclasses.replace(entry, features=dict(entry.features))
+                        for object_id, entry in objects.items()
+                    },
+                    parameters=dict(parameters),
                     fits=list(document.fits),
                     profile=profile,
                     report=Report(tuple(findings)),

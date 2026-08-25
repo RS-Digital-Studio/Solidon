@@ -203,16 +203,21 @@ def _check_relative(path: str, where: str) -> None:
 # --- Schreiben -------------------------------------------------------------------
 
 
-def _next_gathered(document: Document) -> int:
+def _next_gathered(data: dict[str, Any]) -> int:
     """Die nächste freie Nummer für einen ausgelagerten Wert.
 
-    Aus den vorhandenen Quellen abgeleitet und nicht mitgezählt: Ein Zähler im
-    Dokument wäre ein Zustand, der beim Rückgängigmachen falsch wird.
+    Aus den **Daten**, nicht aus ``document.sources``: Dort steht nie eine
+    gathered-Quelle — die Verweise leben in den Op-Parametern, und die alte
+    Fassung war eine Buchführung, die nichts führte (Fund des Gesamtreviews
+    vom 25.08.2026). Im Normalfall ist die Liste leer, denn ``inline()`` hat
+    beim Laden alles zurückgeholt; bleibt ein Verweis stehen — eine von Hand
+    bearbeitete Datei —, nummeriert das Speichern darüber hinweg, statt den
+    Eintrag zu überschreiben.
     """
     used = [
         int(source_id.rsplit("_", 1)[-1])
-        for source_id in document.sources
-        if source_id.startswith("gathered_") and source_id.rsplit("_", 1)[-1].isdigit()
+        for source_id in references(data)
+        if source_id.rsplit("_", 1)[-1].isdigit()
     ]
     return max(used, default=0) + 1
 
@@ -303,7 +308,7 @@ def save(project: Project, path: Path) -> Path:
     # Container, und im Dokument steht ein Verweis. Gearbeitet wird auf der
     # frisch serialisierten Kopie: Das Dokument im Speicher bleibt, was es ist.
     data = document_to_data(document)
-    gathered_payloads = externalise(data, _next_gathered(document))
+    gathered_payloads = externalise(data, _next_gathered(data))
 
     ensure_dir(path.parent)
     temporary = path.with_name(path.name + ".part")

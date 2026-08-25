@@ -490,3 +490,47 @@ def test_a_ring_that_leaves_the_build_volume_is_refused_with_advice(
     assert result.stopped_at is not None, "der Kranz reicht über den Bauraum hinaus"
     texts = " ".join(f"{entry.code} {entry.values}" for entry in result.scene.report.findings)
     assert "needed_mm" in texts, "der Befund nennt, wie weit es hinausreicht"
+
+
+def test_a_writing_op_cannot_change_the_result_scene(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Regel 3 hatte weder Schutz noch Test — die einzige der 22 Regeln:
+    eine schreibende Probe-Op änderte Parameter der Ergebnisszene (Fund des
+    Gesamtreviews vom 25.08.2026). Die Kontext-Szene ist jetzt eine
+    Lesekopie: Wer trotzdem schreibt, ändert sie und nicht das Ergebnis.
+    """
+    from app.core.types import Parameter
+
+    @register_op(
+        name="probe_writes_into_the_scene",
+        title=_("Schreibprobe"),
+        category="scene",
+        params=StartParams,
+        consumes=0,
+        produces=1,
+        doc=_("Nur für diesen Test."),
+        registry=registry,
+    )
+    def probe(ctx: OpContext) -> OpResult:
+        ctx.scene.parameters["smuggled"] = Parameter(name="smuggled", value=1.0)
+        for entry in ctx.scene.objects.values():
+            entry.features["smuggled_feature"] = None  # type: ignore[assignment]
+            break
+        return OpResult(
+            outputs=[SceneObject(id="", name="Probe", mesh=FakeMesh())]  # type: ignore[arg-type]
+        )
+
+    document.parameters["real"] = Parameter(name="real", value=5.0)
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Schreibprobe"), [OperationDraft(op="probe_writes_into_the_scene")])
+
+    result = evaluate(document, profile, registry=registry)
+    assert result.complete
+    assert "smuggled" not in result.scene.parameters, (
+        "ein geschriebener Parameter darf die Ergebnisszene nie erreichen"
+    )
+    assert all(
+        "smuggled_feature" not in entry.features for entry in result.scene.objects.values()
+    ), "auch ein eingeschmuggeltes Merkmal bleibt in der Lesekopie"
