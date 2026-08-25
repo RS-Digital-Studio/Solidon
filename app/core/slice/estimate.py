@@ -97,6 +97,43 @@ class Estimate:
         return self.seconds / 60.0
 
 
+def support_material(support_volume: float, settings: PrintSettings) -> float:
+    """Was eine Stützsäule an Material kostet, in mm³ (§28.2).
+
+    Die Schichtanalyse liefert einen **Raum**: die Säule unter den Überhängen,
+    von der Unterseite bis zum nächsten Material oder zur Platte
+    (:func:`app.core.slice.analysis.slice_body`). Der Drucker füllt diesen Raum
+    nicht aus — er stellt ein Muster hinein, und wie dicht, sagt
+    ``support.density``.
+
+    **Das ist der Umrechnungsfaktor, der der Gegenprobe fehlte** (§22.5,
+    Regel 14): Dort stand ein Rauminhalt gegen eine gemessene Fadenmenge, und
+    zwei verschiedene Größen liegen immer auseinander — die Warnung kam bei
+    jedem Lauf. Gemessen am Pilz (Hut 40 auf 40 über einem Stiel 10 auf 10,
+    20 mm hoch, PrusaSlicer 2.9.6, 0,2 mm, Stützen an):
+
+    | Größe | Wert |
+    |---|---|
+    | Säule, analytisch | 30 000 mm³ |
+    | Säule, Schichtanalyse | 29 987 mm³ |
+    | mit 15 % Dichte gerechnet | 4 498 mm³ |
+    | im G-Code gemessen | 3 991 mm³ |
+    | Abweichung | -13 % |
+
+    Damit liegt die Gegenprobe erstmals innerhalb ihrer Schwelle von 15 %. Die
+    verbleibenden dreizehn Prozent sind der ``xy_gap``, der die Säule schmaler
+    macht als den Überhang darüber — dass sie stehen bleiben, ist richtig: Die
+    Zahl bleibt eine Schätzung, und die Gegenprobe soll sie nicht bestätigen,
+    sondern messen.
+
+    Ohne Stützen kostet die Säule nichts. Das ist keine Schätzung von null,
+    sondern die Auskunft, dass dort nichts gedruckt wird.
+    """
+    if settings.support.style == "none":
+        return 0.0
+    return max(support_volume, 0.0) * max(settings.support.density, 0.0)
+
+
 def shell_thickness(settings: PrintSettings) -> float:
     """Wie dick die massive Haut wird: Wandzahl mal Bahnbreite.
 
