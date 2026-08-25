@@ -1,4 +1,4 @@
-"""Fehlerberichte (Bauplan §37.2, §33.3).
+"""Fehlerberichte (Bauplan §37.2).
 
 Keine Telemetrie. Nichts verlässt diesen Rechner, außer der Nutzer sendet es
 selbst — das ist der ganze Unterschied zwischen einem Bericht und dem, was der

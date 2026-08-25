@@ -52,7 +52,7 @@ OTHER_DOCUMENT = re.compile(r"\bRFC\b|\bKonzept\b|\bISO\b|\bDIN\b|\bRFC\d+", re.
 #: hat überhaupt keine Unterabschnitte, und die Zeile darüber verweist auf
 #: §24.1; bei einem **Baustein** wäre §24 die richtige Familie. Ein Zahlendreher
 #: ist wahrscheinlich, aber nicht belegt.
-BEKANNT_OFFEN = frozenset({"33.3", "25.4"})
+BEKANNT_OFFEN: frozenset[str] = frozenset()
 
 
 def plan_sections() -> set[str]:

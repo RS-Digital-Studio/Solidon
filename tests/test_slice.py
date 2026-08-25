@@ -18,10 +18,12 @@ from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.transform import place_on_bed
 from app.core.ingest.loader import normalise
 from app.core.slice.analysis import (
+    WIDTH_INTERESTING,
     cross_section,
     island_layers,
     minimum_width,
     narrowest,
+    narrowest_measured,
     slice_body,
     total_overhang,
 )
@@ -321,6 +323,57 @@ def test_a_thin_wall_is_found_across_the_body() -> None:
     result = slice_body(on_bed(wall), 0.5)
 
     assert narrowest(result) == pytest.approx(0.8, rel=0.1)
+
+
+def test_a_wall_above_the_cap_is_measured_when_the_question_reaches_higher() -> None:
+    """Der Fund: zwischen Deckel und Frage lag ein Bereich ohne Antwort.
+
+    ``WIDTH_INTERESTING`` deckelt bei 2,0 mm, die Frage daneben lautet „geht
+    die Wand auf drei Bahnen auf" — an einer 0,8er-Düse sind das 2,55 mm. Eine
+    Wand von 2,3 mm bekam damit weder eine Messung noch eine Antwort: gemeldet
+    wurde der Deckel, und auf den Deckel wird zu Recht nicht gerechnet.
+
+    Gefragt wird deshalb mit der Grenze, um die es geht — eine Zuordnung, kein
+    toter Bereich.
+    """
+    wall = trimesh.creation.box(extents=(40.0, 2.3, 20.0))
+    result = slice_body(on_bed(wall), 0.5)
+
+    assert narrowest(result) == pytest.approx(WIDTH_INTERESTING), "gedeckelt, nicht gemessen"
+    assert narrowest_measured(result) is None, "über dem Deckel gibt es keine Aussage"
+    thin = narrowest_measured(result, interesting_below=3.0 * 0.85)
+    assert thin is not None, "mit der gefragten Grenze ist die Wand messbar"
+    assert thin == pytest.approx(2.3, rel=0.05)
+
+
+def test_a_body_thicker_than_the_question_keeps_its_silence() -> None:
+    """Die Gegenprobe: Die höhere Grenze macht aus einem Klotz keine dünne
+    Stelle. Was auch dort oben nur den Deckel trifft, bleibt ohne Aussage."""
+    block = trimesh.creation.box(extents=(40.0, 30.0, 20.0))
+    result = slice_body(on_bed(block), 0.5)
+
+    assert narrowest_measured(result, interesting_below=3.0 * 0.85) is None
+
+
+def test_the_wall_generator_is_advised_for_a_wall_of_two_point_three() -> None:
+    """Und dieselbe Wand an der Stelle, an der der Kunde es merkt (§29).
+
+    2,3 mm gehen bei 0,85 mm Bahnbreite auf 2,7 Bahnen auf — der klassische
+    Generator lässt dort eine Lücke, die nur Lückenfüllung schließt. Der
+    Vorschlag blieb aus, weil die Messung vorher endete.
+    """
+    from app.core.knowledge import print_settings, profiles
+    from app.core.slice import advise
+
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    settings = print_settings.with_path(settings, "layers.line_width", 0.85)
+    settings = print_settings.with_path(settings, "shell.wall_generator", "classic")
+    result = slice_body(on_bed(trimesh.creation.box(extents=(40.0, 2.3, 20.0))), 0.5)
+
+    entries = advise.advise(settings, profile, result)
+
+    assert "shell.wall_generator" in {entry.path for entry in entries}
 
 
 # --- der Vertrag ----------------------------------------------------------------

@@ -540,12 +540,16 @@ def _from_geometry(
     # 0,8er-Düse sind drei Linienbreiten 2,55 mm, der Deckel liegt darunter,
     # und ein massiver Klotz bekam beide Warnungen von hier. ``None`` heißt
     # „keine Aussage", und darauf wird nicht gerechnet.
-    thin = narrowest_measured(result)
-    if (
-        thin is not None
-        and thin < LINES_FOR_CLASSIC * settings.layers.line_width
-        and settings.shell.wall_generator == "classic"
-    ):
+    #
+    # **Und die Frage geht in die Messung hinein.** Zwischen dem Deckel und
+    # dieser Grenze lag sonst ein Bereich, in dem niemand antwortete: eine Wand
+    # von 2,3 mm geht auf 2,7 Bahnen auf, wurde aber als „mindestens 2,0"
+    # gemeldet und damit übergangen. Eine Zuordnung, kein toter Bereich —
+    # gefragt wird mit der Zahl, um die es geht, und die deckt auch die
+    # Bahnbreitenregel weiter unten (zwei Bahnen sind weniger als drei).
+    asked = LINES_FOR_CLASSIC * settings.layers.line_width
+    thin = narrowest_measured(result, interesting_below=asked)
+    if thin is not None and thin < asked and settings.shell.wall_generator == "classic":
         advice.append(
             SettingAdvice(
                 path="shell.wall_generator",

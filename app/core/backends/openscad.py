@@ -8,7 +8,7 @@ also eine Installation (§24.1).
 Was das hier sicher macht, ist nicht die Sandbox, sondern die Prüfung davor.
 Quelltext erreicht dieses Modul aus zwei gleichermaßen unvertrauten
 Richtungen: aus einer Projektdatei, die als Fehlerbericht herumgereicht wird
-(§33.3), und aus einem Sprachmodell. Beide können ``include <...>`` enthalten,
+(§37.2), und aus einem Sprachmodell. Beide können ``include <...>`` enthalten,
 das irgendwohin auf dem Rechner zeigt.
 
 Also werden die Regeln aus §32 hier durchgesetzt, in dieser Reihenfolge:

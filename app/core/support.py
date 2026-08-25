@@ -1,4 +1,4 @@
-"""Rückmeldungen und Fehlerberichte zum Support senden (Bauplan §37.2, §33.3).
+"""Rückmeldungen und Fehlerberichte zum Support senden (Bauplan §37.2).
 
 Das ist die Ergänzung zu :mod:`app.core.report`, nicht dessen Ersatz. Der
 Bericht bleibt ein Ordner, der auf dem Rechner liegt; hier kommt der Weg dazu,

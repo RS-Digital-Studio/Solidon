@@ -209,7 +209,7 @@ class PartSpec:
     """Provenienz-Merkmale, die der Baustein zu benennen verspricht (§24.1)."""
     doc: TranslatableText | str = ""
     caveat: TranslatableText | str = ""
-    """Wo dieser Baustein die falsche Wahl ist (§25.4).
+    """Wo dieser Baustein die falsche Wahl ist (§24).
 
     **Bis zum 23.08.2026 konnte ein Baustein keinen tragen**, und deshalb hatte
     keiner der zwanzig einen — nicht aus Nachlässigkeit, sondern weil

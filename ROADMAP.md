@@ -127,7 +127,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im Bestellvorgang | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Bestellstrecke, die es noch nicht gibt. `EULA.md` Nummer 10 — kein Prüfinstitut, keine zugesicherte Maßhaltigkeit, keine tragenden Teile — ist gegenüber Verbrauchern eine negative Beschaffenheitsvereinbarung und nach § 327h BGB **ausdrücklich und gesondert** zu vereinbaren. Betrifft den Verkauf, nicht nur die Förderung |
 | Der Kündigungsknopf verlangt eine Webseite, die Förderung sitzt in der Anwendung | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Entscheidung, die die vom 24.08. ergänzt statt sie umzustoßen: § 312k BGB will eine ständig verfügbare Schaltfläche auf einer Webseite, §13 Nummer 6 hat die Förderung in die Anwendung gelegt. Eine Schaltfläche in einem Programm, das man deinstallieren kann, ist nicht ständig verfügbar — und Stufe 1 verspricht eine Nennung auf einer Förderseite, die es dann nicht gibt |
 | Was der Zahlungsdienstleister vorn abnimmt, holt er hinten zurück | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | den Vertrag selbst, vor der Unterschrift. MoR-Verträge enthalten regelmäßig eine Freistellung zulasten des Verkäufers, oft unbegrenzt und nach fremdem Recht; `EULA.md` Nummer 11 wirkt gegenüber dem Kunden, nicht gegenüber dem Dienstleister. Bei einem Einzelunternehmen haftet dafür das Privatvermögen |
-| Die stehende Wand weicht unter 0,9 mm weiter ab | Was der Gesamtreview liegen ließ (25.08.2026) | eine Entscheidung `MIN_PITCH` gegen `MAX_GRID_STEPS` — ein feineres Raster kostet Speicher; ausgewiesen ist die Abweichung seit 74d40af5 |
+| Die stehende Wand weicht unter 0,9 mm weiter ab | Was der Gesamtreview liegen ließ (25.08.2026) | **entschieden (26.08.2026, Messreihe): kein feineres Raster** — es fehlen zwei Doku-Zeilen in `hollow.py` (Messzahlen an `erosion_steps`, `fair_wall_mm` in `coarse_grid`), übergeben ans geom-Paket von 3d-druck-46 |
 | Drei Messwerkzeuge des Kerns ohne Anschluss | Was der Gesamtreview liegen ließ (25.08.2026) | eine Oberfläche für Winkel, Hüllquader und Volumen der Auswahl (§18.3) — der Kern ist fertig und ungerufen |
 | Die orient_200-Marke fällt auf jeder Maschine einmal | Was der Gesamtreview liegen ließ (25.08.2026) | nichts — je Maschine die Marke neu setzen; die Säulenrechnung ist bewusst teurer und richtig (5c90fac6) |
 | Das Schemabild des Skizzeneditors hinkt hinterher | Was der Gesamtreview liegen ließ (25.08.2026) | den Abschluss von 43s D-Paket — vorher ist die Zeichnung ein bewegliches Ziel |
@@ -10079,6 +10079,21 @@ Operation verweist. Vier Dinge sind bewusst liegen geblieben:
   (gemessen: 30 % bei 0,5 mm Wand); ein feineres Raster ist eine
   Speicherentscheidung gegen `MAX_GRID_STEPS`. Bis dahin nennt der Befund
   `eroded_mm` und `tolerance_mm`, und `hollow.coarse_grid` warnt.
+
+  **Entschieden am 26.08.2026, mit Messreihe: kein feineres Raster.** Schon
+  die eine Stufe feiner (Wand/3 statt `MIN_PITCH`) kostet am kleinsten
+  nützlichen Körper +325 MB und das 3,4-fache an Zeit, am realistischen
+  100-mm-Teil +898 MB und das 4,2-fache — an einer Operation am Knopf. Die
+  Grenze liegt strukturell bei 3 × `MIN_PITCH` = 0,9 mm und wird ehrlich
+  ausgewiesen. Nebenbefund der Messung: `MAX_GRID_STEPS` ist gar nicht die
+  Gegenpartei — `hollow` ruft `solid_field` mit eigener Weite, die Bremse
+  ist allein `MIN_PITCH`. Gemessen auch ein Weg, der den Rundungsterm
+  streicht (Abstandsfeld statt iterierter Erosion, +0,16–0,69 s, 0 MB,
+  konstanter −pitch/2-Versatz zum Kalibrieren) — notiert, nicht umgesetzt.
+  **Was den Punkt schließt:** die Messzahlen in den Docstring von
+  `erosion_steps` und `fair_wall_mm = 3 * MIN_PITCH` in die `values` von
+  `hollow.coarse_grid` — zwei Zeilen in `hollow.py`, das im geom-Paket von
+  3d-druck-46 liegt; die Zahlen sind ihr übergeben.
 
 - [ ] **Drei Messwerkzeuge des Kerns haben keinen Anschluss.**
   `angle_between`, `bounding_box_of` und `volume_of` (§18.3) existieren,

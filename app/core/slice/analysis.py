@@ -924,7 +924,9 @@ def narrowest(result: SliceResult) -> float:
     return min(widths) if widths else 0.0
 
 
-def narrowest_measured(result: SliceResult) -> float | None:
+def narrowest_measured(
+    result: SliceResult, interesting_below: float = WIDTH_INTERESTING
+) -> float | None:
     """Dieselbe Zahl, aber nur wo sie eine **Messung** ist — sonst ``None``.
 
     Der Deckel aus :data:`WIDTH_INTERESTING` ist eine untere Schranke und wurde
@@ -936,8 +938,48 @@ def narrowest_measured(result: SliceResult) -> float | None:
     ``None`` heißt „keine Aussage", und darauf lässt sich nichts falsch
     rechnen. Null bleibt Null: ein Körper ohne messbare Schicht hat keine
     dünnste Stelle.
+
+    **Und die Grenze, um die es geht, kommt herein.** Der Deckel allein ließ
+    zwischen sich und der Frage einen Bereich ohne Antwort: Eine Wand von
+    2,3 mm geht bei 0,85 mm Bahnbreite auf keine ganze Zahl von Bahnen auf,
+    wurde aber als „mindestens 2,0" gemeldet und damit übergangen — der Deckel
+    beantwortete eine Frage, die niemand gestellt hatte. Wer eine höhere Grenze
+    braucht, sagt sie hier, und die gedeckelten Schichten werden mit ihr noch
+    einmal gemessen. Eine Grenze *unter* dem Deckel ändert nichts: so weit ist
+    ohnehin exakt gemessen.
+
+    Was das kostet, ist gemessen: 4 ms an einem Klotz, 26 ms an der
+    Lochplatte, 56 ms an der Figur, 0,9 s an einer Kugel mit 1,3 Millionen
+    Dreiecken — und nur, wenn die Frage überhaupt über den Deckel reicht, also
+    ab einer Bahnbreite von 0,67 mm. Mit den mitgelieferten Druckerprofilen
+    (0,4er-Düse, 1,26 mm für drei Bahnen) läuft der zweite Durchgang nie.
     """
     thin = narrowest(result)
     if thin <= EPS_GEOM:
         return None
-    return None if thin >= WIDTH_INTERESTING - EPS_GEOM else thin
+    if thin < WIDTH_INTERESTING - EPS_GEOM:
+        return thin
+    if interesting_below <= WIDTH_INTERESTING + EPS_GEOM:
+        return None
+    # Jede Schicht steht auf dem Deckel — sonst wäre ``thin`` kleiner. Also
+    # wird jede noch einmal gemessen, und was auch dort oben nur den neuen
+    # Deckel trifft, bleibt ohne Aussage.
+    widths = [
+        minimum_width(_layer_shape(layer), interesting_below=interesting_below)
+        for layer in result.layers
+        if layer.min_width > EPS_GEOM
+    ]
+    narrow = min(widths, default=interesting_below)
+    return None if narrow >= interesting_below - EPS_GEOM else narrow
+
+
+def _layer_shape(layer: LayerInfo) -> ShapelyPolygon:
+    """Die Konturen einer Schicht wieder als GEOS-Fläche.
+
+    Der Rückweg zu :func:`_to_polygons`: dieselbe Fläche, mit denselben
+    Koordinaten, denn dort sind sie unverändert herausgeschrieben worden.
+    """
+    parts = [ShapelyPolygon(contour.outline, contour.holes) for contour in layer.contours]
+    if not parts:
+        return ShapelyPolygon()
+    return parts[0] if len(parts) == 1 else unary_union(parts)

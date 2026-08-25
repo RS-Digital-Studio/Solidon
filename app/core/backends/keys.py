@@ -2,7 +2,7 @@
 
 Im System-Schlüsselbund, und sonst nirgends: nicht in der Projektdatei, nicht
 in den Einstellungen, nicht in einer Punktdatei neben den Modellen. Eine
-Projektdatei wird als Fehlerbericht herumgereicht (§33.3), und ein Schlüssel,
+Projektdatei wird als Fehlerbericht herumgereicht (§37.2), und ein Schlüssel,
 der mitgereist wäre, wäre weg.
 
 ``keyring`` ist optional. Ohne es lässt sich der Schlüssel weiterhin über die

@@ -1,7 +1,7 @@
 """Was eine fremde Projektdatei mitbringt, das nicht nur Geometrie ist
 (Bauplan §32).
 
-Projektdateien wandern zwischen Leuten — als Fehlerbericht (§33.3), als
+Projektdateien wandern zwischen Leuten — als Fehlerbericht (§37.2), als
 Beispiel, als Auftrag. Zwei Dinge darin sind mehr als Zahlen: **Quelltext**,
 der beim Auswerten ein fremdes Programm startet, und **Verweise nach außen**
 auf Dateien, die nicht im Container liegen.
