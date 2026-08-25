@@ -705,6 +705,7 @@
   "Die Mesh-Erzeugung hat kein Modell geliefert.": "Mesh generation delivered no model.",
   "Die Mesh-Erzeugung konnte nicht starten.": "Mesh generation could not start.",
   "Die Nutgröße der Schiene — bei den üblichen Profilen die Zahl im Namen.": "The slot size of the rail — on the usual extrusions it is the number in the name.",
+  "Die Oberfläche stellt sich gleich darauf um.": "The interface will switch over right away.",
   "Die Oberfläche, wie sie gedruckt wird.": "The surface as it will be printed.",
   "Die Operation erwartet eine andere Anzahl an Objekten.": "The operation expects a different number of objects.",
   "Die Operation gelang erst nach dem Verschweißen.": "The operation only worked after welding.",

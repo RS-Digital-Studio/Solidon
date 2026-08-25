@@ -188,7 +188,7 @@ class FirstRunDialog(QDialog):
         # einstellt und danach eine deutsche Oberfläche vor sich hat, hält die
         # Einstellung für wirkungslos, nicht für aufgeschoben. Derselbe Satz und
         # derselbe Auslöser wie dort, damit beide Stellen dasselbe versprechen.
-        self.language_note = QLabel(tr("Eine andere Sprache erscheint beim nächsten Start."), self)
+        self.language_note = QLabel(tr("Die Oberfläche stellt sich gleich darauf um."), self)
         self.language_note.setWordWrap(True)
         self.language_note.setVisible(False)
         self.language.currentIndexChanged.connect(self._language_changed)

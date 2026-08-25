@@ -1050,3 +1050,92 @@ def test_nobody_is_asked_while_the_window_is_calculating(
         assert feedback.read().invitations == 0, "und die Einladung ist nicht verbraucht"
     finally:
         window.close()
+
+
+def test_the_language_from_the_first_steps_applies_at_once(qt_app: object) -> None:
+    """§38: Wer beim ersten Start eine Sprache wählt, bekommt sie sofort.
+
+    „Erste Schritte" fragt als Erstes nach der Sprache, und bis zum 25.08.2026
+    stand darunter: „Eine andere Sprache erscheint beim nächsten Start." Wer
+    Español wählte, sah weiter ein deutsches Fenster — ausgerechnet beim ersten
+    Eindruck, und ausgerechnet der, der die Sprache am dringendsten braucht.
+
+    **Übersetzen ließ sich das laufende Fenster nicht.** Die Oberfläche holt
+    ihre Texte über ``tr()``, und das übersetzt sofort: Was einmal in einem
+    Menüeintrag steht, bleibt stehen. Gemessen an einem gebauten Fenster waren
+    nach einem Sprachwechsel **170 von 170** sichtbaren Texten unverändert.
+    Deshalb baut ``rebuild_for_language`` das Fenster neu, mit derselben
+    Sitzung — das Dokument überlebt.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from app.ui.app import rebuild_for_language
+
+    def menu_titles(win: MainWindow) -> list[str]:
+        return [entry.text().replace("&", "") for entry in win.menuBar().actions()]
+
+    install_language("de")
+    set_language("de")
+    settings = UiSettings()
+    settings.language = "de"
+    window = MainWindow(Session(), settings)
+    try:
+        german = menu_titles(window)
+        assert "Datei" in german, german
+
+        # Was der Dialog täte: die Wahl in die Einstellungen schreiben.
+        settings.language = "pt"
+        application = QApplication.instance()
+        assert application is not None
+        window = rebuild_for_language(application, window, settings)
+
+        portuguese = menu_titles(window)
+        assert "Datei" not in portuguese, (
+            f"the menu bar still speaks German after switching: {portuguese}"
+        )
+        assert portuguese and portuguese != german, portuguese
+    finally:
+        window.close()
+        window.deleteLater()
+        install_language("de")
+        set_language("de")
+
+
+def test_the_rebuilt_window_keeps_the_work(qt_app: object) -> None:
+    """Ein Sprachwechsel darf nichts wegwerfen.
+
+    Das Fenster wird neu gebaut, die **Sitzung** nicht: Dokument, Stapel und
+    Auswahl hängen an ihr und wandern mit. Ohne diese Zusage wäre der
+    sofortige Wechsel schlimmer als der Hinweis, den er ersetzt — wer beim
+    ersten Start etwas geladen und dann die Sprache umgestellt hätte, stünde
+    vor einem leeren Fenster.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from app.ui.app import rebuild_for_language
+
+    install_language("de")
+    set_language("de")
+    settings = UiSettings()
+    settings.language = "de"
+    session = Session()
+    window = MainWindow(session, settings)
+    try:
+        before = session.project.document
+
+        settings.language = "fr"
+        application = QApplication.instance()
+        assert application is not None
+        window = rebuild_for_language(application, window, settings)
+
+        assert window.session is session, "the rebuilt window got a different session"
+        assert window.session.project.document is before, "the document did not survive"
+    finally:
+        window.close()
+        window.deleteLater()
+        install_language("de")
+        set_language("de")

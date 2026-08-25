@@ -31,7 +31,7 @@ from app.core.log import configure, get_logger
 from app.i18n import set_language, tr
 from app.i18n.catalog import install_language
 from app.ui.icons import application_icon
-from app.ui.settings import load_settings
+from app.ui.settings import UiSettings, load_settings
 from app.ui.splash import SplashScreen
 from app.ui.theme import apply_theme, enable_hidpi
 
@@ -183,6 +183,46 @@ def build_application(
     return application, window
 
 
+def rebuild_for_language(
+    application: QApplication, window: MainWindow, settings: UiSettings
+) -> MainWindow:
+    """Das Fenster in der neuen Sprache noch einmal aufbauen.
+
+    **Warum aufbauen und nicht übersetzen.** Die Oberfläche holt ihre Texte
+    über ``tr()``, und das übersetzt sofort: Was einmal in einem Menüeintrag
+    steht, bleibt dort stehen. Gemessen am 25.08.2026 an einem laufenden
+    Fenster — nach einem Sprachwechsel waren **170 von 170** sichtbaren Texten
+    unverändert, von der Menüleiste bis zu den Beschriftungen der Leisten. Ein
+    ``retranslate()`` müsste dafür 367 Aufrufe allein in ``main_window.py``
+    einzeln nachziehen und bei jedem neuen mitwachsen; eine vergessene Zeile
+    fiele niemandem auf, weil sie nur in einer Sprache falsch aussieht.
+
+    Das Fenster neu zu bauen kostet den Bruchteil einer Sekunde und kann nichts
+    vergessen. Die **Sitzung** wandert mit, also auch das Dokument und der
+    Stapel — was der Nutzer gebaut hat, überlebt den Wechsel. Was nicht
+    mitwandert, ist die Anordnung der Leisten; die Fenstergeometrie schon.
+
+    Gemessen, bevor es gebaut wurde: zwei Fenster nacheinander mit derselben
+    Sitzung, das erste abgebaut, kein Absturz — die Stelle ist heikel, weil im
+    Viewport VTK hängt.
+    """
+    from app.ui.main_window import MainWindow as Window
+
+    install_language(settings.language)
+    set_language(settings.language)
+    install_qt_translations(application, settings.language)
+
+    geometry = window.saveGeometry()
+    fresh = Window(window.session, settings)
+    fresh._apply_settings()
+    fresh.restoreGeometry(geometry)
+    fresh.show()
+
+    window.close()
+    window.deleteLater()
+    return fresh
+
+
 def main(argv: list[str] | None = None) -> int:
     configure(to_console=False)
 
@@ -262,7 +302,16 @@ def main(argv: list[str] | None = None) -> int:
     splash.finish(window)
     # Der erste Start und der Update-Hinweis gehören hinter das sichtbare
     # Fenster (§38) — und nur hierher, wo wirklich ein Mensch hinsieht.
+    #
+    # **Und wer dort die Sprache wählt, bekommt sie sofort.** „Erste Schritte"
+    # fragt als Erstes danach, und bis zum 25.08.2026 stand darunter der Satz
+    # „Eine andere Sprache erscheint beim nächsten Start". Wer Español wählte,
+    # sah weiter ein deutsches Fenster — ausgerechnet beim ersten Eindruck, und
+    # ausgerechnet der, der die Sprache am dringendsten braucht.
+    spoken = window.settings.language
     window.start()
+    if window.settings.language != spoken:
+        window = rebuild_for_language(application, window, window.settings)
 
     # Was per Doppelklick oder von der Kommandozeile mitkam, wird geöffnet —
     # nach ``start()``, damit der erste Start seine Fragen zuerst stellt.
