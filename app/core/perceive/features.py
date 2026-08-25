@@ -1444,7 +1444,10 @@ def _is_through(mesh: MeshData, fit: CylinderFit, cones: Cones | None = None) ->
 
     Gerechnet wird über einen Punkt-in-Dreieck-Test in der Projektion senkrecht
     zur Achse — baryzentrische Vorzeichen, kein Strahlwurf und damit kein
-    Raumindex (die Suite stirbt an ``rtree``, wenn man ihn oft genug fragt).
+    Raumindex. ``rtree`` war der Grund für diese Bauart und ist seit dem
+    24.08.2026 ganz aus dem Prozess (Heap-Korruption; die Geschichte steht an
+    :func:`app.core.geom.mesh.on_surface`) — die Rechnung hier bleibt auch
+    ohne den alten Grund die billigere.
     """
     del cones  # Die Senkung geht in diese Frage nicht mehr ein.
     axis = np.asarray(fit.axis, dtype=float)

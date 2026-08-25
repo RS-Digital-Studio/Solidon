@@ -476,27 +476,39 @@ def test_on_surface_matches_the_exact_answer_without_any_index() -> None:
         assert np.allclose(np.linalg.norm(points - closest, axis=1), distance, atol=1e-9), (
             "the returned spot must be as far away as the returned distance says"
         )
-        own = np.linalg.norm(points - body.triangles[triangle].mean(axis=1), axis=1)
-        assert np.all(own < np.inf) and triangle.dtype == np.int64
+        # Der dritte Rückgabewert wird **benutzt**, nicht nur angesehen: Der
+        # nächste Ort muss auf genau dem genannten Dreieck liegen — eine
+        # endliche Norm war für jeden Index wahr und prüfte nichts.
+        on_named = trimesh.triangles.closest_point(
+            triangles=body.triangles[triangle], points=points
+        )
+        assert np.allclose(np.linalg.norm(points - on_named, axis=1), distance, atol=1e-9), (
+            "the named triangle must carry the closest spot"
+        )
+        assert triangle.dtype == np.int64
 
 
 def test_the_geometry_paths_never_load_rtree() -> None:
-    """Die Zusage hinter dem Umbau vom 24.08.2026: ``rtree`` betritt den
-    Prozess nicht mehr.
+    """Die Zusage hinter dem Umbau vom 24.08.2026: ``rtree`` rechnet nie mehr
+    mit.
 
     Nicht „der Baum kann es", sondern „die Anwendung tut es" — deshalb ein
-    eigener Prozess, und deshalb alle drei Wege, die je durch den Index
-    liefen: die Näherungssuche (``on_surface``), der **gedeckelte Schnitt**
-    durch eine Platte mit Loch (``slice_plane`` läuft durch
-    ``enclosure_tree``, und genau dieser dritte Nutzer flog erst mit dieser
-    Probe auf, nicht mit der Quelltextsuche) und das Einlesen einer
-    Zeichnung. Danach darf ``rtree`` nicht in ``sys.modules`` stehen — sonst
-    ist der Absturz von Weg 2 („Breite auf 90") nur verschoben, nicht
-    behoben.
+    eigener Prozess, und deshalb alle **vier** Wege, die je durch den Index
+    liefen: die Näherungssuche (``on_surface``), der gedeckelte Schnitt durch
+    eine Platte mit Loch (``slice_plane`` läuft durch ``enclosure_tree``, und
+    genau dieser dritte Nutzer flog erst mit dieser Probe auf), das Einlesen
+    einer Zeichnung — und der Strahlweg der Stiftplanung, die Ersetzung, die
+    zuvor als einzige in keiner Probe stand.
 
-    Das Paket ist deinstalliert; trimeshs eigene Importe sind abgesichert.
-    Ein künftiger, übersehener Zugriff ist damit ein lauter Python-Fehler in
-    diesem Test — keine Heap-Korruption beim Kunden.
+    **Geprüft wird der Code, nicht die Umgebung.** ``import trimesh`` zieht
+    ein installiertes ``rtree`` über seine eigenen abgesicherten Importe
+    herein — ein Rechner, dessen ``.venv`` das Paket noch trägt, wäre mit
+    einem ``sys.modules``-Blick rot, ohne dass ein Fehler vorliegt. Die Probe
+    macht ``rtree`` deshalb **unbenutzbar**, wo es importierbar ist, und
+    verlangt, dass der Patch wirklich unsere Fassung eingesetzt hat; die
+    ``sys.modules``-Frage bleibt nur dort, wo das Paket fehlt. Dass es auf
+    unseren Ständen fehlt, erzwingt daneben die Sperrliste
+    (``banned_packages`` in ``licences.toml`` — Stabilität, nicht Lizenz).
     """
     import subprocess
     import sys
@@ -505,10 +517,24 @@ def test_the_geometry_paths_never_load_rtree() -> None:
     root = Path(__file__).resolve().parent.parent
     probe = (
         "import sys\n"
+        "try:\n"
+        "    import rtree.index as _rtree_index\n"
+        "except Exception:\n"
+        "    _rtree_index = None\n"
+        "if _rtree_index is not None:\n"
+        "    class _Boom:\n"
+        "        def __init__(self, *args, **kwargs):\n"
+        "            raise AssertionError('rtree wurde benutzt')\n"
+        "    _rtree_index.Index = _Boom\n"
+        "from pathlib import Path\n"
         "import numpy as np, trimesh\n"
+        "import trimesh.path.polygons as _polygons\n"
+        "from app.core.geom import enclosure\n"
         "from app.core.geom.mesh import MeshData, on_surface\n"
+        "from app.core.geom.pins import plan_pins\n"
         "from app.core.geom.section import cut, SectionPlane\n"
         "from app.core.ingest.outline import extrude\n"
+        "assert _polygons.enclosure_tree is enclosure.enclosure_tree, 'der Patch greift nicht'\n"
         "closest, distance, triangle = on_surface(\n"
         "    trimesh.creation.box((20.0, 20.0, 20.0)), np.array([[100.0, 0.0, 0.0]])\n"
         ")\n"
@@ -518,14 +544,18 @@ def test_the_geometry_paths_never_load_rtree() -> None:
         "body = trimesh.boolean.difference([plate, hole], engine='manifold')\n"
         "sliced = cut(MeshData.of(body), SectionPlane(normal=(0.0, 0.0, 1.0), position=0.0))\n"
         "assert sliced.capped and sliced.mesh.raw.is_watertight\n"
-        "drawing = (root / 'app' / 'examples' / 'weg2-halter-konstruieren.svg').read_bytes()\n"
+        "wall = trimesh.creation.box((60.0, 40.0, 10.0))\n"
+        "plan = plan_pins(MeshData.of(wall), SectionPlane(normal=(1.0, 0.0, 0.0), position=0.0))\n"
+        "assert plan.count >= 1, plan.count\n"
+        "drawing = Path('app/examples/weg2-halter-konstruieren.svg').read_bytes()\n"
         "outline = extrude(drawing, '.svg', height=3.0)\n"
         "assert outline.contours == 197, outline.contours\n"
-        "assert 'rtree' not in sys.modules, 'rtree wurde geladen'\n"
+        "if _rtree_index is None:\n"
+        "    assert 'rtree' not in sys.modules, 'rtree wurde geladen'\n"
         "print('ohne rtree')\n"
     )
     done = subprocess.run(
-        [sys.executable, "-c", f"from pathlib import Path\nroot = Path(r'{root}')\n" + probe],
+        [sys.executable, "-c", probe],
         capture_output=True,
         text=True,
         timeout=180,

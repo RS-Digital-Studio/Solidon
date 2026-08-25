@@ -14,12 +14,15 @@ beschnittene Graph —, nur liefert die Kandidaten ein ``STRtree`` aus shapely
 (GEOS, längst Abhängigkeit).
 
 **Sie ersetzt trimeshs Fassung beim Import dieses Moduls.** Das ist ein
-bewusster Eingriff in ein fremdes Modul und die kleinste ehrliche Lösung:
-``slice_mesh_plane`` ruft ``enclosure_tree`` als Modulnamen seiner eigenen
-Datei auf — kein Parameter, keine Unterklasse erreicht diesen Aufruf von
-außen. Der Vertrag ist oben festgehalten und wird von
-``tests/test_slots.py`` an einem gedeckelten Schnitt durch eine Platte mit
-Loch geprüft, in einem Prozess ohne ``rtree``.
+bewusster Eingriff in ein fremdes Modul und die kleinste ehrliche Lösung,
+denn beide echten Aufrufer erreichen die Funktion als **Modulglobale** ihrer
+eigenen Datei — kein Parameter, keine Unterklasse erreicht sie von außen:
+``trimesh/path/polygons.py`` ruft sie in ``edges_to_polygons`` (dorthin
+führt ``slice_mesh_plane`` über ``trimesh/intersections.py``), und
+``trimesh/path/path.py`` in ``Path2D.enclosure_directed``. Der Vertrag ist
+oben festgehalten und wird von ``tests/test_slots.py`` an einem gedeckelten
+Schnitt durch eine Platte mit Loch geprüft, in einem Prozess, in dem
+``rtree`` unbenutzbar gemacht ist.
 """
 
 from __future__ import annotations
@@ -89,10 +92,20 @@ def enclosure_tree(polygons: Any) -> tuple[np.ndarray, Any]:
     return roots, contains
 
 
+#: Trimeshs eigene Fassung, festgehalten vor dem Tausch. Ohne sie wäre die
+#: Kernaussage dieses Moduls („Zeile für Zeile dieselbe Entscheidung") nach
+#: dem ersten Import unprüfbar — ein Gleichheitstest braucht das Original,
+#: sobald irgendwo eine Umgebung mit ``rtree`` steht.
+_ORIGINAL: Any = None
+
+
 def _install() -> None:
     """Trimeshs Fassung durch diese ersetzen — einmal, beim ersten Import."""
     import trimesh.path.polygons as polygons
 
+    global _ORIGINAL
+    if _ORIGINAL is None:
+        _ORIGINAL = polygons.enclosure_tree
     polygons.enclosure_tree = enclosure_tree
 
 

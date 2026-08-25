@@ -2205,7 +2205,7 @@ soll?**
 | manifold3d | Apache-2.0 | unkritisch, Kern der Bausteine |
 | numpy, scipy | BSD | unkritisch; scipy trägt Skizzen-Solver und Zuordnung |
 | shapely | BSD-3, bündelt GEOS (LGPL) | Polygonarbeit hinter Schnitt und Schichtanalyse |
-| networkx, rtree | BSD-3 / MIT | Konturhierarchie des gedeckelten Schnitts |
+| networkx | BSD-3 | Konturhierarchie des gedeckelten Schnitts — `rtree` ist am 24.08.2026 durch `app/core/geom/enclosure.py` (shapely-STRtree) ersetzt und steht auf der Sperrliste: libspatialindex korrumpierte den Heap |
 | scikit-image | BSD-3 | Marching Cubes der Voxelstufe (§17.2) |
 | lxml | BSD-3 | 3MF schreiben (§29) |
 | vhacdx (V-HACD) | BSD-3 | konvexe Zerlegung fürs Auto Split |

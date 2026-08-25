@@ -105,10 +105,12 @@ def distance_field(mesh: MeshData, grid: np.ndarray, spacing: float) -> np.ndarr
     Antwort hat ein Paket gekostet.
 
     **Das Vorzeichen kommt aus der Normale, nicht aus einem Strahl.** Der
-    naheliegende Weg wäre ``Trimesh.contains``; er läuft über ``rtree``, und
-    ``rtree`` greift auf dieser Maschine daneben — ein Lauf über 75 000
-    Rasterpunkte endete in einer Zugriffsverletzung. Die Hausregel dazu lautet,
-    diesen Index *weniger* zu fragen, nicht öfter.
+    naheliegende Weg wäre ``Trimesh.contains``; der lief über ``rtree``, und
+    ein Lauf über 75 000 Rasterpunkte endete in einer Zugriffsverletzung.
+    Seit dem 24.08.2026 ist ``rtree`` ganz aus dem Prozess — heute bräche
+    ``contains`` mit trimeshs ``ExceptionWrapper`` ab, nicht mit einer
+    Korruption. Die Bauart hier bleibt richtig: kein Index, keine Abhängigkeit
+    an einer Stelle, die 75 000 Fragen stellt.
 
     **Und nicht aus einem Belegungsgitter.** Der zweite naheliegende Weg,
     ``voxelized().fill()`` mit einer Distanztransformation darauf, ist billig

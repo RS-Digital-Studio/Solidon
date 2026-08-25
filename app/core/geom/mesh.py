@@ -13,7 +13,7 @@ from __future__ import annotations
 import io
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 if TYPE_CHECKING:  # das 3MF-Modul braucht MeshData, der Import geht also nur in eine Richtung
     from app.core.export.threemf import Part
@@ -257,10 +257,17 @@ def on_surface(
     return closest, distance, triangle
 
 
+#: Ab wann eine Möller-Trumbore-Determinante als „Strahl parallel zum
+#: Dreieck" gilt. Keine Millimeter (dafür gäbe es ``EPS_GEOM``), sondern das
+#: Spatprodukt aus Richtung und zwei Kanten — gemessen wird ein Dreieck mit
+#: 1e-6 mm Kantenlänge damit noch getroffen.
+RAY_PARALLEL_EPS: Final = 1e-12
+
+
 def ray_hit_distances(
     triangles: np.ndarray, origin: np.ndarray, direction: np.ndarray
 ) -> np.ndarray:
-    """Alle Abstände, in denen ein Strahl die gegebenen Dreiecke trifft.
+    """Alle Strahlparameter, zu denen ein Strahl die gegebenen Dreiecke trifft.
 
     Möller-Trumbore, vektorisiert über die Dreiecke, exakt und ohne Index —
     die Alternative wäre ``body.ray.intersects_location``, und die baut sich
@@ -270,18 +277,26 @@ def ray_hit_distances(
     der Stifte — ist die volle Rechnung billiger als jeder Baum, den man
     vorher bauen müsste.
 
-    Zurück kommen die **positiven** Trefferabstände, unsortiert; wer den
-    ersten Austritt will, nimmt das Minimum. Ein Strahl entlang der Kante
-    eines Dreiecks zählt als Treffer des Dreiecks, dessen Fläche er streift —
-    dieselbe Konvention wie beim Picken (§18.5).
+    Zurück kommen die **positiven** Strahlparameter ``t``, unsortiert —
+    gemessen von ``origin`` entlang ``direction``, **das normiert erwartet
+    wird** (dieselbe Zusage wie bei :func:`ray_span_in_hull`): Mit einer
+    Richtung der Länge zwei wäre jeder „Abstand" halb so groß wie der echte.
+    Wer den ersten Austritt will, nimmt das Minimum.
+
+    **Ein Treffer auf einer geteilten Kante oder Ecke zählt mehrfach** — je
+    einmal pro angrenzendem Dreieck, gemessen: die Diagonale einer Deckfläche
+    gibt zwei gleiche Werte, eine Ecke fünf. Für ein Minimum ist das egal;
+    für Innen/Außen über die **Parität** der Durchdringungen taugt diese
+    Funktion deshalb nicht.
     """
+    triangles = np.asarray(triangles, dtype=float)
     origin = np.asarray(origin, dtype=float).reshape(3)
     direction = np.asarray(direction, dtype=float).reshape(3)
     edge_one = triangles[:, 1] - triangles[:, 0]
     edge_two = triangles[:, 2] - triangles[:, 0]
     across = np.cross(direction, edge_two)
     determinant = np.einsum("ij,ij->i", edge_one, across)
-    parallel = np.abs(determinant) < 1e-12
+    parallel = np.abs(determinant) < RAY_PARALLEL_EPS
     # Division erst nach dem Ausblenden der parallelen — sonst rechnet numpy
     # mit inf weiter und meldet Warnungen über Fälle, die keiner nimmt.
     safe = np.where(parallel, 1.0, determinant)

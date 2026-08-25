@@ -78,8 +78,11 @@ allowed = [
 forbidden = ["GPL-2", "GPL-3", "GPLv2", "GPLv3", "AGPL", "General Public License"]
 
 # Pakete, die nie installiert werden dürfen, was ihre Metadaten auch sagen
-# mögen (§36).
-banned_packages = ["pymeshlab", "PyQt5", "PyQt6", "PyQt5-Qt5", "PyQt6-Qt6"]
+# mögen (§36). rtree steht hier wegen **Stabilität**, nicht Lizenz:
+# libspatialindex zerlegte den Heap (24.08.2026, „Breite auf 90"), der Code
+# ist seit 933bba4 rtree-frei — und installiert bliebe das Paket eine geladene
+# Falle, weil trimesh es über eigene Importe von selbst hereinzöge.
+banned_packages = ["pymeshlab", "PyQt5", "PyQt6", "PyQt5-Qt5", "PyQt6-Qt6", "rtree"]
 
 # Distributionen, deren Metadaten die Lizenz nicht maschinenlesbar nennen.
 # Von Hand geprüft, Quelle notiert — sonst wird die Prüfung ein Stempel.
