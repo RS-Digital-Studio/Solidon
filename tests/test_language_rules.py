@@ -115,6 +115,7 @@ GERMAN_STEMS = (
     "geschlossen",
     "geschrieben",
     "gespeichert",
+    "gesperrt",
     "groesse",
     "grund",
     "hoehe",

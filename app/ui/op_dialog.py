@@ -978,9 +978,9 @@ class OperationDialog(QDialog):
                 if name in axis_of and isinstance(editor, ValueField):
                     # Ohne ``blockSignals`` löst das Setzen ``valuesChanged``
                     # aus, und diese Funktion riefe sich selbst.
-                    gesperrt = editor.blockSignals(True)
+                    blocked = editor.blockSignals(True)
                     editor.set_value(extent[axis_of[name]])
-                    editor.blockSignals(gesperrt)
+                    editor.blockSignals(blocked)
                 editor.setEnabled(False)
                 if label is not None:
                     label.setEnabled(False)
