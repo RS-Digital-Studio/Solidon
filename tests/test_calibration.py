@@ -158,7 +158,17 @@ def test_calibration_reaches_existing_projects(own_profiles: Path, profile: Prof
             OperationDraft(
                 op="insert_dowel",
                 inputs=("obj_1",),
-                params={"kind": "bore", "diameter": 4.0, "length": 6.0, PLAY_FIELD: 0.0},
+                # **Eine Stelle gehört dazu, seit der Baustein danach fragt.** Ohne
+                # Fläche und ohne Position hält die Auswertung an und sagt, was
+                # fehlt (Regel 21, seit dem 25.08.2026) — vorher landete der
+                # Baustein still im Nullpunkt, und dieser Test nahm das Ergebnis.
+                params={
+                    "kind": "bore",
+                    "diameter": 4.0,
+                    "length": 6.0,
+                    "at_feature": "face_top",
+                    PLAY_FIELD: 0.0,
+                },
             )
         ],
     )

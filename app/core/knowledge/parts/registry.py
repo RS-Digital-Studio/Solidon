@@ -448,7 +448,7 @@ def register_part(
 #: dem Materialprofil statt aus einer festen Vorgabe (``PLAY_FROM_PROFILE``
 #: in ``fasteners.py``). Version 4: die angeklickte Fläche bestimmt die
 #: Richtung des Bausteins (``FACE_GIVES_DIRECTION``).
-LIBRARY_VERSION: Final = "4"
+LIBRARY_VERSION: Final = "6"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

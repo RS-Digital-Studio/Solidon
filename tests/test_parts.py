@@ -785,6 +785,30 @@ def test_a_part_held_by_its_host_becomes_one_with_it(spec: PartSpec, profile: Pr
     assert body.is_watertight, f"{spec.name}: the result is not printable"
 
 
+def test_the_library_version_covers_every_part() -> None:
+    """Die Bibliotheksversion muss den höchsten Baustein abdecken.
+
+    ``changed_since_library`` fragt: Was hat sich seit dem Stand geändert, mit
+    dem dieses Projekt gespeichert wurde? Verglichen wird gegen
+    ``LIBRARY_VERSION`` — und wenn die hinter einem Baustein zurückbleibt,
+    meldet die Prüfung eine Änderung und nennt dazu zwei gleiche Zahlen:
+    „parts: rib, saved: 4, now: 4". Ein Befund, den niemand einordnen kann.
+
+    **Am 25.08.2026 war es genau so.** Sieben Bausteine wanderten an einem Tag
+    auf 5 und einer auf 6, die Bibliothek blieb auf 4. Jede einzelne Erhöhung
+    war richtig und dokumentiert; mitzuziehen war nur diese eine Zahl, und sie
+    steht in einer anderen Datei als die Änderungsverläufe.
+
+    Der Test schließt die Lücke, die drei ähnliche Lücken heute schon hatten:
+    eine Zahl, die von Hand mitwandern muss, wandert irgendwann nicht mit.
+    """
+    highest = max(int(spec.version) for spec in PARTS.all())
+    assert int(LIBRARY_VERSION) >= highest, (
+        f"the library says {LIBRARY_VERSION}, but a part is already at {highest} — "
+        "changed_since_library would report a change and name two equal numbers"
+    )
+
+
 # --- die Normteiltabelle -----------------------------------------------------------
 
 
