@@ -40,6 +40,25 @@ FIRST_RELEASE = PartChange(
 MIN_GAP = 0.2
 
 THIN_WALL_KEEPS_THE_RIB_PRINTABLE = PartChange(
+    version="5",
+    date="2026-08-25",
+    reason=(
+        "Die abgeleitete Dicke fiel an dünnen Wänden unter das Druckbare: Zwei "
+        "Drittel einer 0,4-mm-Wand sind 0,264 mm und damit schmaler als eine "
+        "Bahn der Düse; auch 0,8 mm Wand ergaben mit 0,528 mm weniger als die "
+        "Mindestwandstärke eines PETG-Profils. Unterhalb von 1,2 mm Wand ist "
+        "die Rippe jetzt so dick wie die Wand selbst."
+    ),
+    effect=(
+        "Nur bei einer Wandstärke unter 1,2 mm und nur, wenn die Dicke nicht von "
+        "Hand gesetzt ist: Statt zwei Dritteln der Wand steht dort jetzt die volle "
+        "Wandstärke. Aus 0,264 mm werden 0,4 mm, aus 0,528 mm werden 0,8 mm. Ab "
+        "1,2 mm Wand ändert sich kein Maß — dort war die Zwei-Drittel-Regel schon "
+        "immer die größere der beiden Zahlen."
+    ),
+)
+
+THIN_WALL_KEEPS_THE_GUSSET_PRINTABLE = PartChange(
     version="2",
     date="2026-08-25",
     reason=(
@@ -547,7 +566,7 @@ class GussetParams(BaseParams):
         "Nicht in eine Ecke, durch die etwas hindurchmuss — er füllt sie diagonal. "
         "Für eine Wand, die für sich zu weich ist, ist die Versteifungsrippe da."
     ),
-    changes=[GUSSET_ADDED, THIN_WALL_KEEPS_THE_RIB_PRINTABLE],
+    changes=[GUSSET_ADDED, THIN_WALL_KEEPS_THE_GUSSET_PRINTABLE],
 )
 def gusset(raw: BaseParams) -> PartResult:
     """Ein dreieckiges Prisma, das in der Ecke steht.

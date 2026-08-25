@@ -219,7 +219,13 @@ def by_direction(subtractive: bool) -> list[tuple[PartSpec, BaseParams]]:
             continue
         name, cutting = choice
         entry = next(item for item in spec.params.spec() if item.name == name)
-        for value in entry.choices or ():
+        # **Ein Schalter hat keine ``choices`` und trotzdem zwei Stellungen.**
+        # ``printed_thread`` entscheidet über ``internal: bool``, und die erste
+        # Fassung dieser Funktion las nur ``entry.choices`` — für einen
+        # bool-Parameter ist das ``None``, und der Baustein fiel damit erneut
+        # durch beide Netze, obwohl die Funktion genau dagegen geschrieben war.
+        values = entry.choices or ((False, True) if entry.kind == "bool" else ())
+        for value in values:
             if (value in cutting) is subtractive:
                 pairs.append((spec, spec.params(**{name: value})))
     return pairs
@@ -550,6 +556,50 @@ def test_a_part_that_knows_up_hangs_the_right_way_on_every_wall(kind: str) -> No
         bottom = next(f for name, f in placed.items() if name.endswith(lower))
         assert float(top.params["centre"][2]) > float(bottom.params["centre"][2]), (
             f"{kind} at {face}: '{upper}' should sit above '{lower}' and sits below"
+        )
+
+
+def test_every_change_log_climbs() -> None:
+    """Eine Version, die nicht steigt, warnt niemanden.
+
+    ``PartSpec.version`` wird aus dem **letzten** Eintrag des Verlaufs gelesen,
+    nicht aus dem höchsten — das ist richtig so, denn der letzte Eintrag ist
+    der Stand. Es setzt aber voraus, dass die Einträge aufsteigen, und das
+    prüfte nichts.
+
+    **Zweimal an einem Tag ging es schief, beide Male beim Beheben von etwas
+    anderem.** Die Rippe stand auf 4; ein neuer Eintrag mit „2" senkte sie auf
+    2, und ``changed_since`` meldete einem Projekt mit Stand 4 nichts mehr —
+    die Maßänderung an dünnen Wänden wäre still durchgerechnet worden. Das
+    Schlüsselloch stand auf 4 und bekam einen Eintrag mit „4": gleicher Stand,
+    also keine Meldung, obwohl sich die Richtung seines Schlitzes gedreht
+    hatte. Beide Bausteine sahen dabei völlig gesund aus, ihre Verläufe waren
+    vollständig, jeder Eintrag hatte Datum, Grund und Wirkung.
+
+    Und beide Fehler entstanden aus derselben Bequemlichkeit: einen neuen
+    Eintrag zu schreiben, ohne den vorletzten zu lesen.
+
+    **Ein dritter kam dazu, den niemand geschrieben hatte.** Der
+    Schnappverbinder stand auf 4 und bekam ``FACE_GIVES_DIRECTION`` angehängt —
+    einen Eintrag, den sechs Bausteine teilen und der die Version 4 trägt. Für
+    die fünf anderen war das ein Schritt nach oben, für ihn keiner. Ein
+    geteilter Eintrag trägt **eine** Zahl, und die passt nur, wenn alle, die
+    ihn führen, vom selben Stand kommen. Geprüft wird das hier nicht eigens:
+    Wo es nicht passt, steigt die Kette nicht, und das steht schon in der
+    Bedingung darüber.
+    """
+    for spec in PARTS.all():
+        versions = [change.version for change in spec.changes]
+        assert versions, spec.name
+        numbers = [int(version) for version in versions]
+        for older, newer in itertools.pairwise(numbers):
+            assert newer > older, (
+                f"{spec.name}: the change log goes {' -> '.join(versions)} — "
+                f"version {newer} does not climb past {older}, so a project saved "
+                f"at {older} is never told the part moved"
+            )
+        assert spec.version == versions[-1], (
+            f"{spec.name}: reports version {spec.version} but its log ends at {versions[-1]}"
         )
 
 

@@ -35,7 +35,7 @@ _SCREWS = standards.screw_sizes()
 
 
 SLOT_RUNS_DOWNWARD = PartChange(
-    version="4",
+    version="5",
     date="2026-08-25",
     reason=(
         "Der Schlitz lag quer zur Fallrichtung. ``shapes.slot`` baut seine Länge "

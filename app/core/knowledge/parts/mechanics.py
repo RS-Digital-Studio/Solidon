@@ -537,7 +537,18 @@ class SnapConnectorParams(BaseParams):
                 "Kante einzeln gesetzt."
             ),
         ),
-        FACE_GIVES_DIRECTION,
+        # **Ein eigener Eintrag, weil der Stand schon bei 4 lag.**
+        # ``FACE_GIVES_DIRECTION`` trägt die Version 4 und passt damit zu den
+        # fünf anderen Bausteinen, die ihn führen — dieser hier stand aber
+        # bereits auf 4, und zwei gleiche Zahlen hintereinander heißen für
+        # ``changed_since``: nichts hat sich geändert. Die Flächenrichtung
+        # änderte sein Maß trotzdem, und ein Projekt vom 22.08. erfuhr es nie.
+        PartChange(
+            version="5",
+            date="2026-08-23",
+            reason=FACE_GIVES_DIRECTION.reason,
+            effect=FACE_GIVES_DIRECTION.effect,
+        ),
     ],
 )
 def snap_connector(raw: BaseParams) -> PartResult:

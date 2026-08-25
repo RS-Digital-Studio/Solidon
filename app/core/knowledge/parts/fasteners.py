@@ -363,6 +363,25 @@ def nut_trap(raw: BaseParams) -> PartResult:
 # --- thread --------------------------------------------------------------------------
 
 
+THREAD_CUTS_INWARD = PartChange(
+    version="5",
+    date="2026-08-25",
+    reason=(
+        "Das Innengewinde wurde vereinigt statt abgezogen — entgegen dem "
+        "eigenen Parametertext, der es seit je richtig sagt."
+    ),
+    effect=(
+        "Auf „Innengewinde“ wird das Werkzeug jetzt abgezogen. Wer es bisher in "
+        "ein Kernloch gesetzt hat, bekam einen Gewindebolzen hineingewachsen "
+        "statt eines Gewindes darin: an M6 über 10 mm Länge +190 mm³ statt "
+        "-48 mm³. Und es liegt jetzt **unter** seiner Mündung statt über ihr "
+        "(§24.1) — nach oben gebaut hätte es auch als Werkzeug nichts "
+        "geschnitten, weil es neben dem Bauteil stand. Das Außengewinde bleibt "
+        "unverändert, es wird weiter angesetzt und wächst nach oben."
+    ),
+)
+
+
 @op_params
 class ThreadParams(BaseParams):
     size: str = param(
@@ -385,6 +404,14 @@ class ThreadParams(BaseParams):
     internal: bool = param(
         title=_("Innengewinde"),
         default=False,
+        # **Der Satz stand hier, die Operation tat es nicht.** Ohne
+        # ``subtractive_on`` galt der feste Wert des Registereintrags
+        # (``subtractive=False``), und der Baustein wurde in *beiden*
+        # Stellungen vereinigt. In ein Kernloch gesetzt wuchs damit ein Bolzen
+        # hinein statt eines Gewindes: an M6 über 10 mm gemessen +190 mm³
+        # statt -48. Der Docstring der Funktion nennt den Körper sogar
+        # „das Werkzeug" — ein Werkzeug, das man vereinigt, ist keines.
+        subtractive_on=(True,),
         doc=_("Innengewinde wird abgezogen, Außengewinde wird angesetzt."),
     )
     play: float = param(
@@ -417,7 +444,7 @@ class ThreadParams(BaseParams):
         "nicht sauber. Für tragende Verschraubungen ist eine Einpressbuchse richtig, "
         "und wo kein Lötkolben zur Hand ist, eine Mutternfalle."
     ),
-    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE, FACE_GIVES_DIRECTION, THREAD_CUTS_INWARD],
 )
 def printed_thread(raw: BaseParams) -> PartResult:
     """Ein Gewinde, und sein Gegenstück so gemessen, dass die zwei wirklich
@@ -455,13 +482,21 @@ def printed_thread(raw: BaseParams) -> PartResult:
     limit = shapes.cylinder(diameter * 2.0 + 4.0, params.length)
     body = _intersect(body, limit)
 
+    # **Ein Werkzeug liegt unter seiner Mündung** (§24.1). Das Innengewinde
+    # trägt ab, also gehört es in das Material unter der angeklickten Stelle;
+    # nach oben gebaut steht es in der Luft und schneidet nichts. Das
+    # Außengewinde setzt auf und bleibt, wo es ist.
+    reach = -params.length if params.internal else 0.0
+    if reach:
+        body = shapes.moved(body, (0.0, 0.0, reach))
+
     return result(
         body,
         thread(
             "thread_1",
             screw.nominal,
             screw.pitch,
-            (0.0, 0.0, params.length / 2.0),
+            (0.0, 0.0, reach + params.length / 2.0),
             internal=params.internal,
         ),
     )
