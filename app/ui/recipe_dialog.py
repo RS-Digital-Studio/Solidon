@@ -27,7 +27,7 @@ from __future__ import annotations
 
 import unicodedata
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Final
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -47,7 +47,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.errors import AppError, FileWriteError
+from app.core.errors import AppError, FileWriteError, InternalError
 from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
@@ -160,6 +160,17 @@ class _CheckWorker(Worker):
         )
 
 
+#: Die Einheiten, die ein freigegebenes Maß tragen kann — und was sie bewirken.
+#: Umgerechnet wird ausschließlich ``mm`` (§19.3); alles andere ist eine
+#: Beschriftung. Mehr Auswahl wäre keine: „cm" gäbe es im Kern nicht, es sähe
+#: nur so aus.
+UNITS: Final = (
+    ("mm", tr("mm — Länge")),
+    ("grad", tr("Grad — Winkel")),
+    ("", tr("ohne Einheit")),
+)
+
+
 class _ParamRow:
     """Eine Zeile der Parameterliste: freigeben, und wie er im Dialog aussieht."""
 
@@ -176,9 +187,27 @@ class _ParamRow:
 
         self.title = QLineEdit(str(parameter.title or parameter.name), parent)
         self.title.setAccessibleName(tr("Beschriftung"))
-        self.unit = QLineEdit(str(parameter.unit or ""), parent)
+        # **Die Einheit entscheidet über die Umrechnung, nicht über die
+        # Beschriftung.** ``op_dialog.shown_unit`` zeigt ein Feld genau dann in
+        # der eingestellten Anzeigeeinheit, wenn seine Einheit ``mm`` ist
+        # (§19.3); der Kern bekommt in jedem Fall Millimeter (§11.1). Als
+        # Freitextfeld war das eine Falle: Wer „cm" eintippte, schaltete die
+        # Umrechnung ab, das Feld sagte danach [cm], und gebaut wurden mm.
+        #
+        # Eine unbekannte Einheit des Projektparameters wird **nicht still
+        # umgedeutet**, sondern als eigener Eintrag aufgenommen und vorgewählt
+        # (Regel 21): So sieht der Kunde, was der Fall ist, statt es zu erfahren,
+        # wenn das Teil falsch herauskommt.
+        self.unit = QComboBox(parent)
         self.unit.setAccessibleName(tr("Einheit"))
-        self.unit.setFixedWidth(64)
+        for code, label in UNITS:
+            self.unit.addItem(str(label), code)
+        chosen = str(parameter.unit or "")
+        if self.unit.findData(chosen) < 0:
+            self.unit.addItem(
+                str(tr("{unit} — wird nicht umgerechnet").format(unit=chosen or "?")), chosen
+            )
+        self.unit.setCurrentIndex(self.unit.findData(chosen))
 
         # Die Grenzen stehen am Projektparameter, wenn der Kunde sie gesetzt
         # hat. Wo nicht, ist die Vorgabe ihr eigener Anhaltspunkt: die Hälfte
@@ -223,13 +252,21 @@ class _ParamRow:
         self.doc.setAccessibleName(tr("Beschreibung"))
 
     def ordered(self) -> bool:
-        """Ob kleinster, Vorgabe und größter Wert in dieser Reihenfolge stehen.
+        """Ob kleinster, Vorgabe und größter Wert einen Bereich aufspannen.
 
         Der Bereichstest fährt die Ecken zwischen Minimum und Maximum ab; steht
         das Minimum darüber, prüft er einen Bereich, den es nicht gibt, und
         meldet ihn als bestanden.
+
+        **Gleich ist nicht genug.** ``min == max`` liest sich wie eine gültige
+        Ordnung und ist dieselbe Falschaussage: eine Ecke, geprüft und als
+        Bereich verbucht. Dazu wäre ein freigegebenes Maß, das sich nicht
+        ändern lässt, ein Feld, das der Kunde vergeblich anfasst — wer einen
+        festen Wert will, gibt ihn nicht frei.
         """
-        return self.minimum.value() <= self.default.value() <= self.maximum.value()
+        return self.minimum.value() < self.maximum.value() and (
+            self.minimum.value() <= self.default.value() <= self.maximum.value()
+        )
 
     def widgets(self) -> tuple[QWidget, ...]:
         return (
@@ -248,7 +285,7 @@ class _ParamRow:
             name=self.name,
             title=self.title.text().strip() or self.name,
             default=self.default.value(),
-            unit=self.unit.text().strip(),
+            unit=str(self.unit.currentData()),
             minimum=self.minimum.value(),
             maximum=self.maximum.value(),
             placement=str(self.placement.currentData()),
@@ -281,8 +318,14 @@ class RecipeDialog(QDialog):
     Körpers. Alles Übrige beantwortet der Kunde hier.
     """
 
-    saved = Signal(str)
-    """Der Name des angelegten Bausteins — das Fenster frischt den Katalog auf."""
+    saved = Signal(str, bool)
+    """Der Name des angelegten Bausteins und ob sein Bereichstest bestand.
+
+    Das zweite Feld, weil der Dialog seinen eigenen Warnsatz nicht zeigen
+    kann: Er setzte ihn und rief im selben Atemzug ``accept()``. §24.5
+    verlangt den Hinweis, nicht die Verweigerung — also muss er dorthin, wo
+    nach dem Schließen noch jemand hinsieht.
+    """
 
     def __init__(
         self,
@@ -302,8 +345,11 @@ class RecipeDialog(QDialog):
         self._leash = WorkerLeash(self)
         self._worker: _CheckWorker | None = None
         self._abandoned = False
-        self._checking = False
         """Ob der Dialog verworfen wurde, während der Bereichstest lief."""
+        self._checking = False
+        """Ob gerade geschnitten und geprüft wird — die Frage, die ``isVisible``
+        nicht beantwortet: Ein Kind eines ungezeigten Fensters meldet ``False``,
+        obwohl es gesetzt ist."""
 
         self.title = QLineEdit(self)
         self.title.setPlaceholderText(tr("Zum Beispiel: Halter für die Werkbank"))
@@ -489,7 +535,9 @@ class RecipeDialog(QDialog):
         # soll keinen zweiten Namen erfinden müssen. Der Knopf sagt, was er
         # tut, und daneben steht, was mit dem vorhandenen Stand geschieht.
         taken = bool(title) and taken_name(_identifier(title))
-        self._save.setEnabled(bool(title) and named and adjustable and ordered and unique)
+        self._save.setEnabled(
+            bool(title) and named and adjustable and ordered and unique and not self._checking
+        )
         self._save.setText(tr("Baustein ersetzen") if taken else tr("Baustein anlegen"))
         self._save.setToolTip(
             self._why_locked(named, adjustable, ordered, unique)
@@ -531,13 +579,18 @@ class RecipeDialog(QDialog):
         Ein **vergebener Name steht nicht darunter**: Er ist kein Hindernis,
         sondern der zweite Fall, und was er bedeutet, sagt der Knopf selbst.
         """
+        if self._checking:
+            return str(tr("Der Baustein wird gerade geprüft — einen Augenblick."))
         if not self.title.text().strip():
             return str(tr("Der Baustein braucht einen Namen."))
         if not adjustable:
             return str(tr("Geben Sie mindestens ein Maß frei — sonst ist das Teil starr."))
         if not ordered:
             return str(
-                tr("Ein kleinster Wert steht über seinem größten. Drehen Sie die beiden um.")
+                tr(
+                    "Ein Bereich braucht zwei verschiedene Enden, und die Vorgabe "
+                    "muss dazwischen liegen. Prüfen Sie kleinsten und größten Wert."
+                )
             )
         if not named:
             return str(tr("Geben Sie mindestens eine Stelle frei, an der man das Teil anfasst."))
@@ -555,6 +608,10 @@ class RecipeDialog(QDialog):
         # weiter unten hätte der zweite Klick den Balken des ersten schon auf
         # null zurückgesetzt und seinen Satz überschrieben.
         if self._worker is not None and self._worker.isRunning():
+            # Der Riegel, nicht die Auskunft: Der Knopf ist währenddessen
+            # gesperrt und trägt den Grund (``_why_locked``). Hierher kommt nur,
+            # wer den Weg an ihm vorbei nimmt — ein Kürzel, ein zweites
+            # Fenster, ein Signal, das den Knopf zwischendurch freigegeben hat.
             return
 
         # Was der Schnitt braucht, wird **hier** abgelesen: Widgets gehören dem
@@ -597,12 +654,21 @@ class RecipeDialog(QDialog):
 
         self._show_waiting(True)
         self.report.setText(tr("Der Baustein wird über seine Grenzen geprüft …"))
-        self._save.setEnabled(False)
+        # **Über ``_update_enabled``, nicht mit der Hand.** ``setEnabled(False)``
+        # sperrte den Knopf ohne Grund daneben — und ein Tastendruck ließ ihn
+        # danach wieder aufgehen, weil ``_update_enabled`` von der laufenden
+        # Prüfung nichts wusste. Jetzt weiß es davon, und der Weg ist einer.
+        self._update_enabled()
         worker = _CheckWorker(cut, self._profile)
         worker.step.connect(self._step)
         worker.failed.connect(self._failed)
         worker.done.connect(self._checked)
-        worker.crashed.connect(self._failed)
+        # **``crashed`` gibt eine Zeichenkette, kein ``AppError``** — und eine
+        # Zeichenkette hat ein ``title``: die Methode ``str.title()``. Ohne die
+        # Verpackung las ``_failed`` sie als Titel, und im Fenster stand
+        # ``<built-in method title of str object at 0x…>``. Dieselbe Verpackung
+        # benutzen alle anderen Arbeiter des Projekts.
+        worker.crashed.connect(lambda detail: self._failed(InternalError(detail=detail)))
         worker.finished.connect(lambda done=worker: self._worker_done(done))
         self._worker = worker
         self._leash.start(worker)
@@ -685,17 +751,12 @@ class RecipeDialog(QDialog):
             )
             return
         report = getattr(checked, "range_report", None)
-        passed = getattr(report, "passed", None)
-        if passed is False:
-            # §24.5 verlangt den Hinweis, nicht die Verweigerung: Der Baustein
-            # ist angelegt und im Katalog, er trägt nur die Warnung mit.
-            self.report.setText(
-                tr(
-                    "Angelegt — aber an den Grenzen kam kein brauchbarer Körper "
-                    "heraus. Der Katalog zeigt das an; engere Grenzen beheben es."
-                )
-            )
-        self.saved.emit(str(checked.name))
+        # **Der Warnsatz gehört nach draußen.** Er stand hier, und einen Atemzug
+        # später schloss ``accept()`` den Dialog — gesetzt, nie gelesen. §24.5
+        # verlangt den Hinweis, nicht die Verweigerung: Der Baustein ist
+        # angelegt und im Katalog, er trägt nur die Warnung mit. Wer sie lesen
+        # soll, muss sie dort finden, wo er nach dem Schließen hinsieht.
+        self.saved.emit(str(checked.name), getattr(report, "passed", None) is not False)
         self.accept()
 
     def _failed(self, error: object) -> None:

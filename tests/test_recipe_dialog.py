@@ -93,7 +93,7 @@ def test_the_dialog_offers_a_row_for_every_parameter(qt_app: QApplication) -> No
 
         assert set(rows) == {"breite", "hoehe"}
         assert rows["breite"].title.text() == "Breite"
-        assert rows["breite"].unit.text() == "mm"
+        assert rows["breite"].unit.currentData() == "mm"
         assert rows["breite"].default.value() == pytest.approx(40.0)
         # Gesetzte Grenzen werden übernommen …
         assert rows["hoehe"].minimum.value() == pytest.approx(5.0)
@@ -701,3 +701,233 @@ def test_a_taken_name_offers_replacing_instead_of_refusing(
     finally:
         dialog.release()
         dialog.deleteLater()
+
+
+def test_a_crashed_worker_does_not_show_a_python_method(qt_app: QApplication) -> None:
+    """``crashed`` gibt eine Zeichenkette — und die hat ein ``title``.
+
+    ``str.title()`` ist eine Methode, ``getattr(text, "title")`` gibt sie
+    zurück, und sie ist wahr. Ohne Verpackung in einen ``InternalError`` las
+    ``_failed`` sie als Titel, und im Fenster stand wörtlich
+    ``<built-in method title of str object at 0x…>`` (3d-druck-43, K-4).
+
+    Der Fall entsteht nur bei einem **unerwarteten** Absturz des Arbeiters —
+    ein ``AppError`` fährt über ``failed`` und war nie betroffen. Genau deshalb
+    fiel es niemandem auf.
+    """
+    import time
+
+    import app.ui.recipe_dialog as module
+
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+
+    def burst(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("manifold3d ist abgestürzt")
+
+    original_capture = module.recipes.capture
+    original_taken = module.taken_name
+    try:
+        module.recipes.capture = burst  # type: ignore[assignment]
+        module.taken_name = lambda name: False  # type: ignore[assignment]
+        dialog.title.setText("Werkbankhalter")
+        dialog._store()
+
+        for _ in range(400):
+            if not dialog._checking:
+                break
+            qt_app.processEvents()
+            time.sleep(0.005)
+
+        shown = dialog.report.text()
+        assert "built-in method" not in shown, f"eine Python-Innerei im Fenster: {shown!r}"
+        assert "abgestürzt" in shown, f"und der Grund fehlt: {shown!r}"
+    finally:
+        module.recipes.capture = original_capture  # type: ignore[assignment]
+        module.taken_name = original_taken  # type: ignore[assignment]
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_equal_limits_are_not_a_range(qt_app: QApplication) -> None:
+    """``min == max`` liest sich wie eine Ordnung und ist eine einzige Ecke.
+
+    Der Bereichstest fährt sie ab und meldet „bestanden" — dieselbe
+    Falschaussage wie bei verdrehten Grenzen, nur unauffälliger (K-14). Dazu
+    wäre ein freigegebenes Maß, das sich nicht ändern lässt, ein Feld, das der
+    Kunde vergeblich anfasst: Wer einen festen Wert will, gibt ihn nicht frei.
+    """
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    try:
+        dialog.title.setText("Werkbankhalter")
+        assert dialog._save.isEnabled()
+
+        row = dialog._params[0]
+        row.minimum.setValue(40.0)
+        row.default.setValue(40.0)
+        row.maximum.setValue(40.0)
+
+        assert not row.ordered(), "gleich ist kein Bereich"
+        assert not dialog._save.isEnabled(), "und der Knopf sagt es"
+        assert "zwei verschiedene Enden" in dialog._save.toolTip()
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_button_cannot_while_the_check_runs(qt_app: QApplication) -> None:
+    """Während gerechnet wird, kann der Knopf nicht — und sagt warum (K-20).
+
+    Der Wächter in ``_store`` kehrte wortlos zurück. Er bleibt als Riegel, aber
+    die Auskunft gehört an den Knopf: Ein gesperrter Knopf mit Grund ist eine
+    Antwort, ein Klick ohne Wirkung ist keine.
+    """
+    import app.ui.recipe_dialog as module
+
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    started: list[object] = []
+
+    class Endless(module._CheckWorker):  # type: ignore[misc]
+        def work(self) -> None:
+            while not self.is_cancelled:
+                self.msleep(10)
+
+    original_worker = module._CheckWorker
+    original_taken = module.taken_name
+    original_start = dialog._leash.start
+    try:
+        module._CheckWorker = Endless  # type: ignore[misc]
+        module.taken_name = lambda name: False  # type: ignore[assignment]
+        dialog._leash.start = lambda worker: (  # type: ignore[method-assign]
+            started.append(worker),
+            original_start(worker),
+        )[-1]
+        dialog.title.setText("Werkbankhalter")
+        dialog._store()
+
+        assert not dialog._save.isEnabled(), "während der Prüfung kann er nicht"
+        assert "einen Augenblick" in dialog._save.toolTip(), (
+            f"und sagt warum: {dialog._save.toolTip()!r}"
+        )
+
+        # Und ein Signal, das _update_enabled auslöst, gibt ihn nicht frei —
+        # genau daran scheiterte der alte Stand.
+        dialog.title.setText("Werkbankhalter 2")
+        assert not dialog._save.isEnabled(), "auch nach einem Tastendruck nicht"
+        assert len(started) == 1
+    finally:
+        module._CheckWorker = original_worker  # type: ignore[misc]
+        module.taken_name = original_taken  # type: ignore[assignment]
+        dialog._leash.start = original_start  # type: ignore[method-assign]
+        dialog.reject()
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_a_failed_range_check_leaves_the_dialog_with_the_signal(qt_app: QApplication) -> None:
+    """Der Warnsatz überlebt das Schließen, weil er mit dem Signal hinausfährt.
+
+    Er stand im Dialog und wurde einen Atemzug später von ``accept()``
+    unlesbar gemacht (K-15). §24.5 verlangt den Hinweis, nicht die
+    Verweigerung — also muss er dorthin, wo nach dem Schließen noch jemand
+    hinsieht: in die Statuszeile des Fensters.
+    """
+    from types import SimpleNamespace
+
+    import app.ui.recipe_dialog as module
+
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    heard: list[tuple[str, bool]] = []
+    dialog.saved.connect(lambda name, passed: heard.append((name, passed)))
+
+    original_replace = module.recipes.replace
+    try:
+        module.recipes.replace = lambda *a, **k: None  # type: ignore[assignment]
+        dialog._show_waiting(True)
+        dialog._checked(
+            SimpleNamespace(name="werkbankhalter", range_report=SimpleNamespace(passed=False))
+        )
+
+        assert heard == [("werkbankhalter", False)], (
+            f"der gescheiterte Bereichstest reist nicht mit: {heard!r}"
+        )
+
+        heard.clear()
+        dialog._show_waiting(True)
+        dialog._checked(
+            SimpleNamespace(name="werkbankhalter", range_report=SimpleNamespace(passed=True))
+        )
+        assert heard == [("werkbankhalter", True)]
+    finally:
+        module.recipes.replace = original_replace  # type: ignore[assignment]
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_unit_is_chosen_not_typed(qt_app: QApplication) -> None:
+    """„cm" schaltete die Umrechnung ab, und niemand sagte es (K-10).
+
+    ``op_dialog.shown_unit`` zeigt ein Feld genau dann in der eingestellten
+    Anzeigeeinheit, wenn seine Einheit ``mm`` ist (§19.3); der Kern bekommt in
+    jedem Fall Millimeter (§11.1). Als Freitextfeld war das eine Falle: Das
+    Feld sagte danach [cm], gebaut wurden mm.
+
+    Eine unbekannte Einheit des Projektparameters wird trotzdem nicht still
+    umgedeutet, sondern steht als eigener Eintrag da (Regel 21).
+    """
+    from app.ui.recipe_dialog import UNITS
+
+    assert [code for code, _ in UNITS] == ["mm", "grad", ""], (
+        "die Auswahl bildet ab, was der Kern unterscheidet"
+    )
+
+    document = replace(
+        _document(),
+        parameters={
+            "breite": Parameter(name="breite", value=40.0, unit="mm", title="Breite"),
+            "krumm": Parameter(name="krumm", value=4.0, unit="cm", title="Tiefe"),
+        },
+    )
+    dialog = RecipeDialog(document, {}, (1,), (_feature("hole_1"),), None)  # type: ignore[arg-type]
+    try:
+        rows = {row.name: row for row in dialog._params}
+
+        assert rows["breite"].unit.currentData() == "mm"
+        assert rows["krumm"].unit.currentData() == "cm", "die vorhandene Einheit bleibt stehen"
+        assert "nicht umgerechnet" in rows["krumm"].unit.currentText(), (
+            f"und sagt, was das bedeutet: {rows['krumm'].unit.currentText()!r}"
+        )
+        assert rows["krumm"].unit.findData("mm") >= 0, "und lässt sich zu mm ändern"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_window_says_when_the_range_check_did_not_pass(qt_app: QApplication) -> None:
+    """Die andere Hälfte von K-15: Was mitreist, muss auch ankommen.
+
+    Der Dialog gibt seit dem Umbau mit, ob der Bereichstest bestand — das
+    allein hilft niemandem, wenn das Fenster beide Fälle gleich meldet. §24.5
+    verlangt den Hinweis, nicht die Verweigerung: Der Baustein steht im
+    Katalog, er trägt nur die Warnung mit.
+
+    Dieser Test entstand aus einer **Falschmeldung meiner eigenen
+    Gegenprobe**: Sie hielt einen Lauf ohne passenden Test für rot, weil
+    pytest bei ``-k`` ohne Treffer mit 5 endet und „302 deselected" schreibt,
+    nicht „no tests ran". Die Fensterseite war ungeprüft, und die Prüfung sagte
+    das Gegenteil.
+    """
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window._part_saved("werkbankhalter", True)
+        good = window.status_message.text()
+
+        window._part_saved("werkbankhalter", False)
+        warned = window.status_message.text()
+
+        assert good != warned, "beide Fälle sagen dasselbe"
+        assert "kein brauchbarer Körper" in warned, f"die Warnung fehlt: {warned!r}"
+        assert "Katalog" in warned, "und dass er trotzdem da ist, auch"
+    finally:
+        window.session._dirty = False
+        window.close()
+        window.deleteLater()

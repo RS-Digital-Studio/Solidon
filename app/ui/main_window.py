@@ -3743,12 +3743,28 @@ class MainWindow(QMainWindow):
             for feature in scene_object.features.values()
         )
 
-    def _part_saved(self, name: str) -> None:
-        """Ein eigener Baustein ist entstanden — sagen, wo er steht."""
-        self.announce(
-            tr("Der Baustein steht im Katalog. Er gehört Ihnen und bleibt auf diesem Rechner.")
-        )
-        _log.info("own part saved: %s", name)
+    def _part_saved(self, name: str, range_passed: bool = True) -> None:
+        """Ein eigener Baustein ist entstanden — sagen, wo er steht.
+
+        **Und ob sein Bereichstest bestand.** Der Dialog konnte das nicht
+        sagen: Er setzte den Warnsatz und rief einen Atemzug später
+        ``accept()``, womit ihn niemand las (3d-druck-43, Gesamtreview K-15).
+        §24.5 verlangt den Hinweis, nicht die Verweigerung — der Baustein ist
+        angelegt und steht im Katalog, er trägt nur die Warnung mit.
+        """
+        if range_passed:
+            self.announce(
+                tr("Der Baustein steht im Katalog. Er gehört Ihnen und bleibt auf diesem Rechner.")
+            )
+        else:
+            self.announce(
+                tr(
+                    "Der Baustein steht im Katalog — aber an den Grenzen kam kein "
+                    "brauchbarer Körper heraus. Der Katalog zeigt das an; engere "
+                    "Grenzen beheben es."
+                )
+            )
+        _log.info("own part saved: %s (range passed: %s)", name, range_passed)
 
     def action_calibrate(self) -> None:
         """§28.3: gemessene Werte ins Materialprofil, und alles folgt."""
