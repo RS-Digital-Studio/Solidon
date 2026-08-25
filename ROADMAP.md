@@ -134,6 +134,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die stehende Wand weicht unter 0,9 mm weiter ab | Was der Gesamtreview liegen ließ (25.08.2026) | eine Entscheidung `MIN_PITCH` gegen `MAX_GRID_STEPS` — ein feineres Raster kostet Speicher; ausgewiesen ist die Abweichung seit 74d40af5 |
 | Drei Messwerkzeuge des Kerns ohne Anschluss | Was der Gesamtreview liegen ließ (25.08.2026) | eine Oberfläche für Winkel, Hüllquader und Volumen der Auswahl (§18.3) — der Kern ist fertig und ungerufen |
 | Die orient_200-Marke fällt auf jeder Maschine einmal | Was der Gesamtreview liegen ließ (25.08.2026) | nichts — je Maschine die Marke neu setzen; die Säulenrechnung ist bewusst teurer und richtig (5c90fac6) |
+| Das Schemabild des Skizzeneditors hinkt hinterher | Was der Gesamtreview liegen ließ (25.08.2026) | den Abschluss von 43s D-Paket — vorher ist die Zeichnung ein bewegliches Ziel |
+| Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | den, der die rote Startmarke (§31) angeht — allein ist der Posten unmessbar klein |
 | Kleinreste: tote profile-Zweige, unbenutztes height | Was der Gesamtreview liegen ließ (25.08.2026) | niemanden — sie werfen nur beziehungsweise stören nicht; notiert, damit sie ein Kästchen haben |
 
 ---
@@ -10005,6 +10007,18 @@ Operation verweist. Vier Dinge sind bewusst liegen geblieben:
   Maschine, Zielwert §31 hält); die alte Zahl war 380-fach falsch. Wer den
   Leistungslauf rot sieht, setzt die Marke in `tests/.performance.json`
   neu, statt die Rechnung zurückzudrehen.
+
+- [ ] **Das Schemabild des Skizzeneditors hinkt der Anwendung hinterher.**
+  `figures._sketch_editor` zeichnet die Werkzeugzeile nach, und 3d-druck-43
+  baut den Editor gerade um (D-Paket: Regionen, Flächenebenen, Trimmen).
+  Nachziehen lohnt erst, wenn das Ziel stillsteht — dann gegen den echten
+  Editor, nicht gegen die Erinnerung.
+
+- [ ] **Rezepte rechnen ihren Hash bei jedem Start neu.** Die Fassung eines
+  Rezepts ist der Hash über die kanonischen Daten (§24.4), und der entsteht
+  beim Laden des Katalogs jedes Mal neu, statt im Dateikopf zu stehen und
+  nur geprüft zu werden. Bei einer Handvoll Rezepte unmessbar; wer die rote
+  Startmarke (§31) angeht, nimmt diesen Posten mit.
 
 - [ ] **Kleinreste ohne Dringlichkeit.** Drei weitere unerreichbare
   `ctx.profile is None`-Zweige (`create_lid`, `screw_lid`,
