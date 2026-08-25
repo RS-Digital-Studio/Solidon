@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from app.core.geom.boolean import boolean
-from app.core.knowledge import standards
+from app.core.knowledge import profiles, standards
 from app.core.knowledge.parts import LIBRARY_VERSION, PARTS, changed_since, missing_parts, shapes
 from app.core.knowledge.parts import ops as part_ops
 from app.core.knowledge.parts.range_check import corners as core_corners
@@ -437,6 +437,119 @@ def test_the_gusset_fills_the_corner_it_is_put_into() -> None:
         assert reach_far < reach_near, (
             f"wall={wall}: the gusset reaches {reach_far:.1f} mm out at the top and "
             f"{reach_near:.1f} mm at the base — that is a block, not a brace"
+        )
+
+
+def test_the_keyhole_slot_runs_the_way_the_part_falls() -> None:
+    """Ein Schlüsselloch mit waagerechtem Schlitz hält nicht.
+
+    Die Schraube muss sich beim Absinken im schmalen Teil **verklemmen**. Liegt
+    der Schlitz quer, wandert sie darin seitlich hin und her und hält das Teil
+    nur, solange niemand dagegenstößt.
+
+    **Der Baustein lag drei Wochen lang quer, und sein Docstring sagte das
+    Gegenteil**: „Der Schlitz läuft in -Y." Der Versatz in Y stand auch
+    richtig da — nur baut ``shapes.slot`` seine Länge immer in **X**, und ein
+    Verschieben ist kein Drehen. Gemessen an ``keyhole(drop=8)`` waren es
+    15,58 mm in X gegen 7,60 in Y, und 15,58 ist ``head + 0,6 + drop``, also
+    der Schlitz selbst.
+
+    Geprüft wird die Länge gegen die Breite, nicht der Quelltext: Ein Docstring
+    hat hier schon einmal etwas anderes behauptet als der Code darunter.
+    """
+    spec = PARTS.get("keyhole")
+    for drop in (4.0, 8.0, 16.0):
+        built = spec.fn(spec.params(drop=drop)).mesh
+        along = float(built.bounds.size[1])
+        across = float(built.bounds.size[0])
+        assert along > across, (
+            f"drop={drop}: the keyhole measures {across:.2f} mm across and {along:.2f} mm "
+            "along the direction it falls — the slot lies crosswise"
+        )
+        # Und der Schlitz wächst mit ``drop``: Er *ist* der Weg der Schraube.
+        assert along == pytest.approx(across + drop, abs=0.2), (
+            f"drop={drop}: the slot is {along:.2f} mm long, expected about "
+            f"{across + drop:.2f} — the drop does not end up in the slot"
+        )
+
+
+def test_the_keyhole_puts_the_screw_above_the_hole_it_went_through() -> None:
+    """Wo die Schraube endet, entscheidet, ob das Teil hängt.
+
+    Der Kopf geht durch das runde Ende, dann sinkt das Teil — und die Schraube
+    steht danach **relativ höher**, weil sich das Teil an ihr vorbei nach unten
+    bewegt hat. Sitzt es umgekehrt, fällt das Teil beim Loslassen herunter.
+
+    Im eigenen System des Bausteins heißt „oben" **-Y**: die Konvention von
+    ``axis="y"``, dem auch ``PartSpec.keeps_up`` folgt. Geprüft wird an den
+    benannten Merkmalen, denn genau die liest, wer das Gegenstück ausrichtet.
+    """
+    spec = PARTS.get("keyhole")
+    built = spec.fn(spec.params(drop=8.0))
+
+    mouth = built.features["pocket_1"].params["centre"]
+    seat = built.features["bore_1"].params["centre"]
+    assert float(seat[1]) < float(mouth[1]) - 1.0, (
+        f"the screw ends at y={float(seat[1]):.1f} and the head goes in at "
+        f"y={float(mouth[1]):.1f} — the part would drop off when let go"
+    )
+    # Der Kopf braucht mehr Platz als der Schaft, sonst kommt er nicht hinein.
+    assert (
+        built.features["pocket_1"].params["diameter"]
+        > (built.features["bore_1"].params["diameter"])
+    ), "the head opening is no wider than the shaft slot"
+
+
+@pytest.mark.parametrize("kind", ["keyhole", "pegboard_hook"])
+def test_a_part_that_knows_up_hangs_the_right_way_on_every_wall(kind: str) -> None:
+    """``keeps_up`` gilt beiden gleich — und beinahe hätte es sie gegeneinander
+    ausgespielt.
+
+    Die Aufrichtung entstand für den Lochwand-Einhänger, und der baute sein
+    Oben nach **+Y**. So kam es in die Funktion. Das Schlüsselloch baut seit je
+    nach -Y und hatte damit recht: ``axis="y"`` dreht das eigene +Y nach
+    Welt-unten, seit es diesen Weg gibt. Für einen Nachmittag richtete die
+    Bibliothek deshalb die Bauweise **eines** Bausteins zur Regel für alle auf,
+    und das Schlüsselloch hing verkehrt herum — Schraubensitz unten,
+    Kopfdurchlass oben.
+
+    Dieser Test prüft beide über dieselbe Frage: Was oben liegen soll, muss
+    nach dem Setzen an eine senkrechte Wand **oben** liegen.
+    """
+    spec = PARTS.get(kind)
+    assert spec.keeps_up, f"{kind} does not declare that it knows up"
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+
+    for face in ("face_4", "face_6"):
+        # Je Fläche ein frisches Projekt: Zwei Bausteine nacheinander in
+        # denselben Körper wären ein anderer Test.
+        project = new_project("centauri-carbon-2", "petg")
+        History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+        History(project.document).apply(
+            kind,
+            [
+                OperationDraft(
+                    op=part_ops.op_name(kind), inputs=("obj_1",), params={"at_feature": face}
+                )
+            ],
+        )
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete, (
+            f"{kind} at {face}: {[f.message for f in result.scene.report.findings]}"
+        )
+
+        placed = result.scene.objects["obj_1"].features
+        # Was im eigenen System bei -Y liegt, muss in der Welt oben liegen.
+        own = spec.fn(spec.params())
+        upper = min(own.features, key=lambda name: float(own.features[name].params["centre"][1]))
+        lower = max(own.features, key=lambda name: float(own.features[name].params["centre"][1]))
+        if upper == lower:
+            continue
+        top = next(f for name, f in placed.items() if name.endswith(upper))
+        bottom = next(f for name, f in placed.items() if name.endswith(lower))
+        assert float(top.params["centre"][2]) > float(bottom.params["centre"][2]), (
+            f"{kind} at {face}: '{upper}' should sit above '{lower}' and sits below"
         )
 
 

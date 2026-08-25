@@ -129,7 +129,9 @@ class PartSpec:
     """Wahr für einen Baustein, der ein **Oben** hat, das die Schwerkraft meint.
 
     Ein Lochwand-Einhänger hängt: Sein Zapfen sitzt oben im Schlitz, seine Nase
-    greift unten hinter die Platte. Verkehrt herum gesetzt hält er nichts. Fast
+    greift unten hinter die Platte. Ein Schlüsselloch ebenso — der Kopf geht
+    unten durch, die Schraube sitzt oben. Verkehrt herum gesetzt hält keiner
+    von beiden. Fast
     alle anderen Bausteine haben das Problem nicht — eine Bohrung ist
     drehsymmetrisch, ein Fuß auch, und eine Rippe darf liegen, wie die Fläche
     es vorgibt.
@@ -145,9 +147,15 @@ class PartSpec:
     nie, wohin man ihn dreht.
 
     Ist das Feld gesetzt, dreht ``_place`` ihn zusätzlich um die Flächennormale,
-    bis sein +Y so weit nach oben zeigt, wie die Fläche es zulässt. Bei einer
-    waagerechten Fläche gibt es in deren Ebene kein Oben; dort bleibt es bei
-    der kürzesten Drehung.
+    bis sein **-Y** so weit nach oben zeigt, wie die Fläche es zulässt. Bei
+    einer waagerechten Fläche gibt es in deren Ebene kein Oben; dort bleibt es
+    bei der kürzesten Drehung.
+
+    **Warum -Y und nicht +Y:** Weil der zweite Weg, einen Baustein umzulegen,
+    es so hält. ``axis="y"`` dreht mit ``rotation("x", -90)`` das eigene +Y
+    nach Welt-unten, und das Schlüsselloch baut seit je danach. Wer hier +Y
+    aufrichtete, hätte zwei Konventionen im selben Register — und am
+    25.08.2026 war das für einen Nachmittag auch so.
 
     Die Vorgabe ist falsch und nicht wahr: Wer sie setzt, ändert die Lage
     seines Bausteins, und das darf keinem bestehenden von selbst geschehen.

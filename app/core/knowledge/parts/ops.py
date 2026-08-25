@@ -469,17 +469,17 @@ def _placed_features(
 
 
 def _roll_upright(direction: Vec3) -> Any:
-    """Die Drehung um ``direction``, die das eigene +Y des Bausteins aufrichtet.
+    """Die Drehung um ``direction``, die das eigene -Y des Bausteins aufrichtet.
 
     ``rotation_between`` legt fest, wohin das +Z eines Bausteins zeigt, und
     lässt offen, wie er dabei um diese Achse **rollt**. Für eine Bohrung ist
     das gleichgültig. Für einen Baustein mit einem Oben ist es der Unterschied
     zwischen Halten und Herunterfallen (``PartSpec.keeps_up``).
 
-    Gesucht ist die Drehung um die Flächennormale, nach der das +Y so weit nach
-    oben zeigt, wie die Fläche es zulässt: Von der Welt-Senkrechten bleibt in
-    der Flächenebene der Anteil senkrecht zur Normalen, und auf den wird das +Y
-    gedreht. Steht die Fläche waagerecht, ist dieser Anteil null — in der Ebene
+    Gesucht ist die Drehung um die Flächennormale, nach der das **-Y** so weit
+    nach oben zeigt, wie die Fläche es zulässt: Von der Welt-Senkrechten bleibt
+    in der Flächenebene der Anteil senkrecht zur Normalen, und auf den wird das
+    -Y gedreht. Steht die Fläche waagerecht, ist dieser Anteil null — in der Ebene
     eines Deckels gibt es kein Oben, und dann bleibt es bei der kürzesten
     Drehung. Der Rückgabewert ist dort die Einheitsmatrix, nicht etwa ein
     Fehler: Ein Einhänger auf einem Deckel ist eine merkwürdige Wahl, aber
@@ -507,7 +507,16 @@ def _roll_upright(direction: Vec3) -> Any:
 
     # Wo das +Y nach der kürzesten Drehung liegt, ebenfalls auf die Ebene
     # bezogen — nur der Anteil in der Ebene lässt sich durch Rollen bewegen.
-    turned = rotation_between((0.0, 0.0, 1.0), unit)[:3, :3] @ np.array([0.0, 1.0, 0.0])
+    # **Oben ist -Y, nicht +Y.** Das ist die Konvention des Hauses und nicht
+    # frei gewählt: Der zweite Weg, einen Baustein umzulegen, ist ``axis="y"``,
+    # und der dreht mit ``rotation("x", -90)`` das eigene +Y nach Welt **unten**.
+    # Das Schlüsselloch baut seit je danach — sein Docstring sagt es wörtlich,
+    # „der Schlitz läuft in -Y, damit er nach dem Umlegen aufwärts zeigt". Die
+    # erste Fassung dieser Funktion richtete +Y auf, also genau andersherum, und
+    # machte damit die Bauweise **eines** Bausteins zur Regel für alle: Am
+    # Schlüsselloch saß der Schraubensitz danach unten und der Kopfdurchlass
+    # oben — aufgehängt wäre das Teil beim Loslassen von der Wand gefallen.
+    turned = rotation_between((0.0, 0.0, 1.0), unit)[:3, :3] @ np.array([0.0, -1.0, 0.0])
     own = turned - float(np.dot(turned, normal)) * normal
     if float(np.linalg.norm(own)) < 1e-6:
         return np.eye(4)

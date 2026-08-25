@@ -219,12 +219,21 @@ def test_the_hook_has_room_to_sink_and_the_nose_catches(profile: Profile) -> Non
         f"shank and nose together are {inserted:.2f} mm tall in a "
         f"{board.slot_height} mm slot — only {travel:.2f} mm left to sink"
     )
-    assert nose[0] < shank[0] - 1.0, (
-        "the nose does not reach below the shank, so it catches nothing"
-    )
-    assert shank[0] - nose[0] == pytest.approx(travel, abs=0.1), (
-        f"the nose reaches {shank[0] - nose[0]:.2f} mm below the shank but the "
+
+    # **Im eigenen System des Bausteins ist oben -Y** und unten +Y — die
+    # Konvention von ``axis="y"``, der auch ``PartSpec.keeps_up`` folgt. Die
+    # Nase ragt also nach **+Y** über den Zapfen hinaus, und am -Y-Ende enden
+    # beide bündig. Diese Prüfung stand einen Nachmittag lang andersherum, weil
+    # der Baustein selbst es andersherum baute; gefangen hat den Wechsel nicht
+    # sie, sondern das Schlüsselloch, das an derselben Regel hing.
+    assert nose[1] > shank[1] + 1.0, "the nose does not reach past the shank, so it catches nothing"
+    assert nose[1] - shank[1] == pytest.approx(travel, abs=0.1), (
+        f"the nose reaches {nose[1] - shank[1]:.2f} mm past the shank but the "
         f"hook can only sink {travel:.2f} mm — one of the two is wasted"
+    )
+    assert nose[0] == pytest.approx(shank[0], abs=0.3), (
+        f"nose and shank start at {nose[0]:.2f} and {shank[0]:.2f} at the top — "
+        "they should finish flush, or the nose sits on the wrong end"
     )
 
 

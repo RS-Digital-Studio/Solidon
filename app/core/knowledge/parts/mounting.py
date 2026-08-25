@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 from typing import cast
 
+from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, result, subtract, union
@@ -31,6 +32,24 @@ FIRST_RELEASE = PartChange(
 
 _MAGNETS = standards.magnet_sizes()
 _SCREWS = standards.screw_sizes()
+
+
+SLOT_RUNS_DOWNWARD = PartChange(
+    version="4",
+    date="2026-08-25",
+    reason=(
+        "Der Schlitz lag quer zur Fallrichtung. ``shapes.slot`` baut seine Länge "
+        "immer in X; der Code verschob danach in Y und meinte, er habe gedreht."
+    ),
+    effect=(
+        "Der Schlitz läuft jetzt in -Y statt in X — also dorthin, wohin der "
+        "Docstring seit jeher zeigt. Wer die Aufhängung bisher an einer Wand "
+        "benutzt hat, bekam einen waagerechten Schlitz: Die Schraube wanderte "
+        "seitlich, statt sich beim Absinken zu verklemmen. Die Maße ändern sich "
+        "nicht, nur ihre Richtung. Alte Projekte rechnen den Schlitz neu, und das "
+        "ist beabsichtigt."
+    ),
+)
 
 
 @op_params
@@ -248,11 +267,15 @@ class KeyholeParams(BaseParams):
     params=KeyholeParams,
     subtractive=True,
     features=["pocket", "bore"],
+    # Ein Schlüsselloch hat ein Oben: Der Schlitz muss senkrecht stehen, sonst
+    # trägt er nicht. Dieselbe Frage wie beim Lochwand-Einhänger — und
+    # ``rotation_between`` beantwortet sie an drei von vier Wänden falsch.
+    keeps_up=True,
     doc=_(
         "Schlüssellochförmige Aussparung: der Kopf geht durch das runde Ende, "
         "der Schaft hält im Schlitz."
     ),
-    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION, SLOT_RUNS_DOWNWARD],
 )
 def keyhole(raw: BaseParams) -> PartResult:
     params = cast(KeyholeParams, raw)
@@ -268,12 +291,22 @@ def keyhole(raw: BaseParams) -> PartResult:
     # relativ dazu höher.
     drop = -params.drop / 2.0
 
+    # **Gedreht, nicht nur verschoben.** ``shapes.slot`` legt seine Länge in X,
+    # immer. Der Versatz in Y stand hier von Anfang an richtig, die Länge lag
+    # trotzdem quer dazu: Gemessen an ``keyhole(drop=8)`` waren es 15,58 mm in X
+    # und 7,60 in Y, und 15,58 ist ``head + 0,6 + drop`` — der Schlitz selbst.
+    # Waagerecht hält ein Schlüsselloch nicht, die Schraube wandert seitlich
+    # heraus, statt sich beim Absinken zu verklemmen.
+    def falling(width: float, length: float, height: float) -> MeshData:
+        """Ein Langloch, dessen Länge in -Y läuft — der Weg der Schraube."""
+        return shapes.turned(shapes.slot(width, length, height), 90.0)
+
     # Die Tasche, in die der Kopf versinkt: am Eingang rund, dann ein Schlitz.
-    pocket = shapes.slot(screw.head + 0.6, screw.head + 0.6 + params.drop, params.head_room)
+    pocket = falling(screw.head + 0.6, screw.head + 0.6 + params.drop, params.head_room)
     pocket = shapes.moved(pocket, (0.0, drop, -params.head_room))
 
     # Der Schlitz, in den der Schaft gleitet, ganz hindurch.
-    shaft = shapes.slot(
+    shaft = falling(
         screw.clearance, screw.clearance + params.drop, params.depth + 2.0 * shapes.OVERLAP
     )
     shaft = shapes.moved(shaft, (0.0, drop, -params.depth - shapes.OVERLAP))
@@ -418,6 +451,12 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     Nase unten; verkehrt herum fällt das Teil von der Wand. Welche Seite nach
     dem Setzen oben liegt, entscheidet aber nicht dieser Baustein, sondern die
     Drehung an die Fläche — darum ``keeps_up`` im Registereintrag.
+
+    Im eigenen System ist oben **-Y**. Diese Fassung baute zuerst nach +Y, und
+    weil ``keeps_up`` zur selben Stunde entstand, wurde daraus für einen
+    Nachmittag die Regel für alle — bis das Schlüsselloch daran verkehrt herum
+    hing. Die Konvention ist älter als beide Bausteine: ``axis="y"`` legt das
+    eigene +Y nach unten, seit es diesen Weg gibt.
     """
     params = cast(PegboardHookParams, raw)
     board = standards.board(params.system)
@@ -469,7 +508,8 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # Zapfen und Nase als Langloch, in Y gelegt: ``shapes.slot`` baut seine
         # Länge in X, der Schlitz einer Lochwand steht senkrecht.
         shaft = shapes.turned(shapes.slot(width, shank, through), 90.0)
-        parts.append(shapes.moved(shaft, (x, y + nose / 2.0, 0.0)))
+        # Der Zapfen sitzt oben, und oben ist **-Y** (``PartSpec.keeps_up``).
+        parts.append(shapes.moved(shaft, (x, y - nose / 2.0, 0.0)))
         # Die Nase reicht über den Zapfen nach unten hinaus und liegt hinter
         # der Lochwand. Sie beginnt um OVERLAP früher, damit keine Fläche genau
         # auf einer anderen liegt (§39).
@@ -478,7 +518,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # Der Zapfen als benanntes Merkmal: Wer die Haken nachmisst, misst sie
         # hier und nicht an einer Formel über den Hüllquader.
         features.append(
-            face(f"hook_{index + 1}", width * shank, (x, y + nose / 2.0, through), (0.0, 0.0, 1.0))
+            face(f"hook_{index + 1}", width * shank, (x, y - nose / 2.0, through), (0.0, 0.0, 1.0))
         )
 
     return result(union(*parts), *features)
