@@ -66,7 +66,7 @@ from app.core.units import (
 from app.i18n import tr
 from app.ui import cursors
 from app.ui.icons import icon
-from app.ui.labels import display_unit, feature_label, localised
+from app.ui.labels import display_unit, feature_label, length, localised
 from app.ui.leash import weak_slot
 from app.ui.palette import (
     DIFF_PALETTES,
@@ -2987,6 +2987,13 @@ class Viewport(QWidget):
         self._ground_actors.clear()
         for plate in range(beds):
             self._draw_one_bed(pv, plate, plate_shift(plate, width)[0], width, depth, height)
+        # Der Zustand entscheidet, nicht die Aufruf-Reihenfolge: Während des
+        # Zeichnens tritt der Boden ab (siehe ``set_sketching``), und ein hier
+        # frisch gebautes Bett hat sich daran zu halten — sonst liegen Bett-
+        # und Zeichenraster wieder übereinander, sobald eine Platte dazukommt.
+        if self._sketch_frame is not None:
+            for actor in self._ground_actors:
+                actor.SetVisibility(False)
         self._draw()
 
     def _draw_one_bed(
@@ -3143,6 +3150,12 @@ class Viewport(QWidget):
         # Thema wechseln — eine schwarze Beschriftung auf dunklem Grund ist
         # keine Auskunft.
         self._add_orientation_widget(theme)
+        # Bett und Bauraum sind eigene Aktoren, und ``show_scene`` baut sie nur
+        # bei geänderter Plattenzahl neu — ein Themenwechsel ließe sie sonst in
+        # den alten Farben stehen, bis die nächste Auswertung kommt: eine fast
+        # schwarze Bettfläche auf hellem Grund.
+        if self._profile is not None:
+            self.show_build_volume(self._profile)
         self.show_scene(self._result)
 
     # --- display (§18.1) --------------------------------------------------------
@@ -3715,7 +3728,14 @@ class Viewport(QWidget):
                         line, color=MEASURE_COLOUR, width=2, name=f"measure:{index}"
                     )
                 )
-            label = f"{entry.shown:g} {'mm' if entry.kind != 'angle' else 'grad'}"
+            # Über ``labels`` wie jede Anzeige: Die MeasureBar schrieb
+            # „2,3622 in", das Bild daneben „60 mm" — zwei Zahlen für dieselbe
+            # Messung, und ``grad`` stand fest deutsch da (Regel 20).
+            label = (
+                localised(f"{entry.shown:g}°")
+                if entry.kind == "angle"
+                else length(float(entry.value))
+            )
             anchor = np.array([entry.points[-1]], dtype=float) if entry.points else None
             if anchor is not None:
                 self._measure_actors.append(
@@ -4719,6 +4739,9 @@ class Viewport(QWidget):
         auslöst.
         """
         self.show_scene(self._result)
+        # ``show_scene`` zeichnet die Maße nur im Leer-Zweig neu — nach einem
+        # Einheitenwechsel stünden sie sonst in der alten Einheit da.
+        self._redraw_measurements()
 
     def set_snapping(self, grid_step: float, angle_step: float) -> None:
         """Raster- und Winkeleinrasten für den Gizmo."""
@@ -5078,13 +5101,18 @@ class Viewport(QWidget):
         kind = event.type()
         # Der Zeiger zuerst, und immer: Er hängt an der Mausbewegung und nicht
         # daran, ob gerade ein Zug läuft. Nichts davon wird geschluckt — VTK
-        # bekommt jede dieser Bewegungen weiterhin.
-        if kind == QEvent.Type.MouseMove:
-            self._note_pointer(event.position())
-        elif kind == QEvent.Type.Leave:
-            self._forget_pointer()
-        elif kind == QEvent.Type.Enter:
-            self._update_cursor()
+        # bekommt jede dieser Bewegungen weiterhin. Aber nur vom Interactor:
+        # Der Filter sitzt auch auf dem Wertfeld, und dessen Positionen als
+        # Viewport-Koordinaten gelesen setzten den Zeiger an den oberen Rand —
+        # falscher Hover nach der Ruhepause, Vorschausprung im Skizzenmodus.
+        interactor = self.plotter.interactor if self.plotter is not None else None
+        if watched is interactor:
+            if kind == QEvent.Type.MouseMove:
+                self._note_pointer(event.position())
+            elif kind == QEvent.Type.Leave:
+                self._forget_pointer()
+            elif kind == QEvent.Type.Enter:
+                self._update_cursor()
 
         if self._drag_kind is None or kind != QEvent.Type.KeyPress:
             return False
