@@ -1134,3 +1134,31 @@ def test_the_clip_keeps_its_grip_over_the_whole_range() -> None:
         built = spec.fn(spec.params(size="ptfe-4x2", grip=grip))
         assert built.mesh.is_watertight, f"grip={grip} is not watertight"
         assert built.mesh.component_count == 1, f"grip={grip} falls apart"
+
+
+def test_an_attachment_stands_in_the_face_menu_and_a_test_body_does_not() -> None:
+    """``at_face`` wirkt bis ins Register — die Regression von sechs aus achtzehn.
+
+    Am 24.08.2026 fehlten Wandhalter, Nutfeder, Rippe, Rastnase,
+    Schnappverbindung und Filmscharnier in jedem Kontextmenü einer Fläche,
+    weil die Fläche aus „trägt Material ab" geraten wurde. Der Fix (074e5d0)
+    kam ohne Wache; wer die Ableitung anfasst, konnte die sechs wieder
+    verlieren, ohne dass ein Lauf rot wird.
+
+    Geprüft wird über das Register, nicht über die Menüs: ``applies_to`` ist
+    die eine Quelle, aus der Kontextmenü und Palette lesen. Und die Gegenseite
+    gehört dazu — ein Prüfkörper steht für sich, und an einer Fläche hätte er
+    nichts verloren.
+    """
+    for spec in PARTS.all():
+        expected = spec.at_face
+        got = "face" in REGISTRY.get(part_ops.op_name(spec.name)).applies_to
+        assert got == expected, (
+            f"{spec.name}: at_face={expected}, aber das Register bietet die Fläche "
+            f"{'nicht ' if expected else ''}an"
+        )
+    # Und die Erklärung ist keine leere Menge auf einer Seite: Es gibt beide.
+    assert any(spec.at_face for spec in PARTS.all())
+    assert any(not spec.at_face for spec in PARTS.all()), (
+        "ohne einen Prüfkörper prüft die Gegenseite nichts"
+    )

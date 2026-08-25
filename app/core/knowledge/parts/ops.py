@@ -252,10 +252,12 @@ def cuts(spec: PartSpec, values: BaseParams | None) -> bool:
 def _applies_to(spec: PartSpec) -> list[str]:
     """An welchen Merkmalen der Baustein im Kontextmenü erscheint.
 
-    Zwei Fragen, die nicht dieselbe sind: Trägt er Material ab, dann kann er an
-    einer **Fläche** ansetzen. Setzt er eine Bohrung voraus (``at_hole``), dann
-    gehört er auch an eine **Bohrung** — dort, wo der Kunde ohnehin schon
-    hinzeigt, wenn er ein Gewinde hineinschneiden will.
+    Beides sagt der Baustein selbst (``at_face``, ``at_hole``) — hier wird nur
+    übersetzt. Bis zum 24.08.2026 wurde die Fläche stattdessen **geraten**,
+    und die Regel war die falsche: „trägt Material ab" bot sie an, und damit
+    fehlten Wandhalter, Rippe und vier weitere in jedem Flächenmenü. Warum
+    Abtragen und Anbauen nicht dieselbe Frage sind, steht am Feld
+    (``registry.PartSpec.at_face``).
     """
     at: list[str] = []
     if spec.at_hole:
