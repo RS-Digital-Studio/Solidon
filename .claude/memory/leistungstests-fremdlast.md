@@ -63,6 +63,29 @@ die fremde Arbeit mit weg. Übrig bleiben die beiden anderen: die Marke allein
 fahren (drei Läufe, nicht einer) und prüfen, ob der gemessene Pfad überhaupt
 einen Diff hat.
 
+**Und der eigene Arbeitsbaum schützt davor nicht.** Das ist die Lücke, die am
+25.08.2026 aufgefallen ist: Der Rat unten — eigener Worktree statt Stash — war
+befolgt, und trotzdem lag ein Stash im gemeinsamen Repo. `git stash` legt
+nämlich **nicht** im Arbeitsbaum ab, sondern am Repository; ein Worktree hat
+seinen eigenen Index und sein eigenes HEAD, aber der Stash-Stapel gehört
+allen. Ein `git stash` im Baum A ist in `git stash list` des Baums B zu sehen,
+und ein `git stash pop` von dort spielt fremde Änderungen in eine fremde
+Arbeit — mitten hinein, ohne dass jemand es beabsichtigt.
+
+Zwei Läufe `stash` / `stash pop` für ein A/B im eigenen Baum genügten; das
+letzte `pop` lief mit `> /dev/null 2>&1`, sein Fehlschlag war damit unsichtbar,
+und der Stash blieb liegen. Gefunden hat ihn eine Nachbarsitzung Stunden
+später.
+
+Daraus zwei Dinge:
+
+* **Für ein A/B im eigenen Baum keinen Stash, sondern zwei Stände**
+  (`git checkout <commit>` im Worktree oder Dateien hineinkopieren). Der
+  Vergleich ist derselbe, und es bleibt nichts liegen.
+* **`git stash list` gehört zum Aufräumen** wie `git reset` für den
+  Haupt-Index. Den Index sieht man in `git status`, den Stash sieht nur, wer
+  fragt.
+
 Nicht jeder solche Abriss ist Fremdlast: eine Referenzschleife zwischen Python
 und VTK erzeugt dasselbe Bild und ist echt. Siehe
 [[vtk-qt-referenzen-halten-zu-lange]] und [[parallele-sitzungen-solidon3d]].
