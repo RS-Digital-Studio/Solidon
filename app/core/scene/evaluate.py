@@ -420,6 +420,7 @@ def evaluate(
                     previous_bounds.get(object_id),
                     recorded,
                     referenced_features.get(object_id, frozenset()),
+                    spec.touches_features,
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -647,9 +648,15 @@ def _with_features(
     previous_bounds: BoundingBox | None = None,
     recorded: dict[str, dict[str, Any]] | None = None,
     referenced: frozenset[str] | set[str] = frozenset(),
+    touches_features: bool = False,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
+
+    ``touches_features`` sagt, ob diese Operation Merkmale **einführt** — das
+    Flag stand seit je im Register und hatte bis heute keinen Leser. Es
+    entscheidet hier, ob ein neu erkanntes Merkmal seinen Erzeuger bekommt;
+    ``load`` und ``decimate_mesh`` tragen es nicht, und das ist der Punkt.
 
     §21.2: die Erkennung läuft nach jeder Operation, sonst ist ``hole_3`` in
     Schritt fünf ein anderes Loch als in Schritt vier. Wo die Zuordnung
@@ -697,6 +704,12 @@ def _with_features(
     # Frage: Es wird weiter oben bei **jeder** Operation gesetzt, die das
     # Objekt ausgibt, und zeigt deshalb auf die zuletzt beteiligte statt auf
     # die erzeugende (§21.2).
+    # Ob vor dieser Operation überhaupt schon Merkmale bekannt waren. Ohne das
+    # wäre „neu" nach dem Laden die ganze Menge (3d-druck-61) — und nach einem
+    # Schritt, bei dem die Erkennung wegen der Dreiecksgrenze übersprungen
+    # wurde, hieße „neu" nur „endlich sichtbar".
+    knew_features = bool(previous)
+
     declared = {
         name: (
             feature
@@ -940,6 +953,46 @@ def _with_features(
                 values={"feature": old_id},
             )
         )
+
+    # **Wer ein Merkmal einführt, ist sein Erzeuger — unter drei Riegeln.**
+    # Ein Baustein bringt Verrundungen und Flächen mit, die ``detect`` findet
+    # und die deshalb als „erkannt" gelten. Ohne Erzeuger führt von ihnen kein
+    # Weg zurück zu dem Schritt, der sie gemacht hat: „Diesen Schritt ändern"
+    # (§21.2) hängt an ``created_by``, und der Kunde sieht sechs Verrundungen,
+    # von denen keine den Einhänger nennt (Befund Robert, 25.08.2026).
+    #
+    # Die Grenze im Kommentar oben — „wer ein Merkmal durchreicht, hat es nicht
+    # erzeugt" — bleibt wahr. Sie wird hier nicht verschoben, sondern um einen
+    # Fall ergänzt, den drei Riegel eng halten (Entwurf 3d-druck-61):
+    #
+    # * **Nur Operationen, die Merkmale einführen** (``touches_features``).
+    #   Nach ``load`` ist jedes erkannte Merkmal neu; ohne diesen Riegel trüge
+    #   jede Bohrung jedes importierten Modells den Lade-Schritt, und dasselbe
+    #   nach *Dreiecke verringern*, sobald das Netz unter die Erkennungsgrenze
+    #   fällt.
+    # * **Nur, wenn vorher schon erkannt war** (``knew_features``). Sonst heißt
+    #   „neu" nicht „entstanden", sondern „zum ersten Mal angesehen".
+    # * **Nie ein Kandidat einer Mehrdeutigkeit.** Unverwiesene mehrdeutige
+    #   Merkmale binden seit dem Verweisfilter (08246414) absichtlich nicht und
+    #   erscheinen der Zuordnung in jedem Lauf als neu — ein Kandidat kann das
+    #   alte Merkmal selbst sein.
+    #
+    # Was neu ist, sagt ``matched.fresh`` — auch dieses Feld hatte bis heute
+    # keinen Leser, und es nachzubauen hieße, dieselbe Frage ein zweites Mal
+    # zu beantworten. Die Kandidaten müssen trotzdem eigens heraus: Bei einer
+    # Mehrdeutigkeit bindet die Zuordnung keinen von ihnen, und damit stehen
+    # sie alle in ``fresh``.
+    if touches_features and knew_features:
+        contested = {name for names in matched.ambiguous.values() for name in names}
+        newcomers = set(matched.fresh) - contested
+        detected = {
+            name: (
+                dataclasses.replace(feature, created_by=operation.id)
+                if name in newcomers and feature.created_by is None
+                else feature
+            )
+            for name, feature in detected.items()
+        }
 
     mapped = apply_mapping(detected, matched)
     # Ein Bezeichner, der von einem erzeugten Merkmal kommt, bleibt erzeugt.

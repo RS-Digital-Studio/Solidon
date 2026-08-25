@@ -416,6 +416,56 @@ def _origin_text(created_by: int | None, document: Document | None) -> str:
     return text
 
 
+#: Wo am Gruppenknoten die Nummer seines Schrittes steht.
+#:
+#: Eine eigene Rolle und nicht ``UserRole``: Dort steht die Kennung des
+#: Körpers, und die trägt der Knoten wie jede Zeile darunter — wer ihn
+#: anklickt, hat das Teil gewählt. Die Schrittnummer ist eine zweite Auskunft
+#: über dieselbe Zeile.
+_STEP_ROLE = Qt.ItemDataRole.UserRole + 2
+
+
+def _part_step(created_by: int | None, document: Document | None) -> tuple[str, int] | None:
+    """Titel und Nummer des Schrittes, wenn er einen **Baustein** eingesetzt hat.
+
+    Sonst ``None``. Gruppiert wird nur nach Bausteinen, und das hat einen
+    Grund: Ein Baustein ist eine Sache mit einem Namen, die der Kunde als
+    Ganzes eingesetzt hat — „Lochwand-Einhänger", nicht „drei Flächen und zwei
+    Verrundungen". Eine Bohrung dagegen *ist* ein Merkmal; ein Knoten mit genau
+    einem Kind darunter wäre eine Ebene, die nichts ordnet.
+    """
+    if created_by is None or document is None:
+        return None
+    for entry in document.ops:
+        if entry.id != created_by:
+            continue
+        try:
+            spec = REGISTRY.get(entry.op)
+        except AppError:
+            return None
+        return (str(spec.title), created_by) if spec.category == "parts" else None
+    return None
+
+
+def _feature_item(item: QTreeWidgetItem, feature_id: str) -> QTreeWidgetItem | None:
+    """Die Zeile dieses Merkmals — über alle Ebenen unter ``item``.
+
+    Seit die Merkmale eines Bausteins unter seinem Knoten stehen, ist der Baum
+    unter einem Körper zwei Ebenen tief. Wer nur die erste absucht, findet ein
+    gruppiertes Merkmal nicht mehr.
+    """
+    for index in range(item.childCount()):
+        child = item.child(index)
+        if child is None:
+            continue
+        if child.data(1, Qt.ItemDataRole.UserRole) == feature_id:
+            return child
+        deeper = _feature_item(child, feature_id)
+        if deeper is not None:
+            return deeper
+    return None
+
+
 def _empty_objects_text() -> str:
     """Was in der leeren Objektliste steht.
 
@@ -689,6 +739,11 @@ class ObjectTree(QWidget):
                 # der Unterschied nur an einer Passung, die auf einmal ein
                 # anderes Spiel will.
                 item.setText(1, f"{item.text(1)}  ·  {entry.material}")
+            # **Was aus einem Baustein kam, steht unter ihm.** Vierzehn
+            # Merkmale flach untereinander sagen nicht, welche zusammengehören:
+            # Der Kunde sieht sechs Verrundungen und findet den Einhänger
+            # nicht, aus dem sie stammen (Befund Robert, 25.08.2026).
+            groups: dict[int, QTreeWidgetItem] = {}
             for feature_id, feature in entry.features.items():
                 # Name links, Maß rechts. Vorher stand die ganze Beschriftung
                 # links und rechts der Typ („hole", „face") — links war damit
@@ -699,7 +754,29 @@ class ObjectTree(QWidget):
                 child.setData(0, Qt.ItemDataRole.UserRole, object_id)
                 child.setData(1, Qt.ItemDataRole.UserRole, feature_id)
                 child.setToolTip(0, f"{feature_id} · {feature.provenance}")
-                item.addChild(child)
+
+                part = _part_step(feature.created_by, document)
+                if part is None:
+                    item.addChild(child)
+                    continue
+                title, step = part
+                group = groups.get(step)
+                if group is None:
+                    group = QTreeWidgetItem([title, ""])
+                    # Der Knoten trägt seinen Körper wie jede Zeile darunter —
+                    # wer ihn anklickt, hat das Teil gewählt und nicht nichts.
+                    # Das Merkmal bleibt leer: Er ist keines, sondern ihr Dach.
+                    group.setData(0, Qt.ItemDataRole.UserRole, object_id)
+                    group.setData(1, Qt.ItemDataRole.UserRole, None)
+                    # Und er weiß, aus welchem Schritt er kommt — daran hängt
+                    # „Diesen Schritt ändern" (§21.2).
+                    group.setData(0, _STEP_ROLE, step)
+                    group.setToolTip(0, _origin_text(step, document))
+                    groups[step] = group
+                    item.addChild(group)
+                group.addChild(child)
+            for group in groups.values():
+                group.setExpanded(True)
             self.tree.addTopLevelItem(item)
             item.setExpanded(object_id in selected)
         self.tree.resizeColumnToContents(0)
@@ -800,11 +877,19 @@ class ObjectTree(QWidget):
             if item is None or item.data(0, Qt.ItemDataRole.UserRole) not in wanted:
                 continue
             if feature_id is not None and len(wanted) == 1:
-                for child_index in range(item.childCount()):
-                    child = item.child(child_index)
-                    if child is not None and child.data(1, Qt.ItemDataRole.UserRole) == feature_id:
-                        child.setSelected(True)
-                        break
+                # **Über alle Ebenen, nicht nur die erste.** Die Merkmale eines
+                # eingesetzten Bausteins stehen unter seinem Knoten; eine Suche
+                # in den direkten Kindern findet dort den Knoten und nicht das
+                # Merkmal. Ein Klick im Viewport auf eine Verrundung des
+                # Einhängers markierte damit nichts, und aus dem Prüfbericht
+                # führte der Sprung ins Leere.
+                found = _feature_item(item, feature_id)
+                if found is not None:
+                    found.setSelected(True)
+                    parent = found.parent()
+                    while parent is not None:
+                        parent.setExpanded(True)
+                        parent = parent.parent()
                 else:
                     item.setSelected(True)
                 continue
@@ -1212,15 +1297,30 @@ class ObjectTree(QWidget):
 
         Ein **erkanntes** Merkmal hat keinen Erzeuger und bekommt den Eintrag
         nicht: Er führte dort ins Leere, und das ist schlechter als keiner.
+
+        **Und der Gruppenknoten eines Bausteins bietet ihn auch an.** Er ist
+        kein Merkmal, sondern deren Dach — aber er ist die Zeile, die den
+        Baustein beim Namen nennt, und wer den Einhänger ändern will, zeigt
+        auf „Lochwand-Einhänger" und nicht auf eine seiner Flächen.
         """
-        feature = self._chosen_feature()
-        if feature is None or feature.created_by is None:
-            return
-        step = feature.created_by
+        step = self._chosen_step()
+        if step is None:
+            feature = self._chosen_feature()
+            if feature is None or feature.created_by is None:
+                return
+            step = feature.created_by
         change = menu.addAction(tr("Diesen Schritt ändern"))
         change.setStatusTip(tr("Öffnet den Schritt, der dieses Merkmal erzeugt hat."))
         change.triggered.connect(lambda _checked=False: self.stepRequested.emit(step))
         menu.addSeparator()
+
+    def _chosen_step(self) -> int | None:
+        """Die Schrittnummer der gewählten Zeile — nur Gruppenknoten haben eine."""
+        items = self.tree.selectedItems()
+        if len(items) != 1:
+            return None
+        value: int | None = items[0].data(0, _STEP_ROLE)
+        return value
 
     def _add_sketch_on_face(self, menu: QMenu) -> None:
         """„Auf dieser Fläche zeichnen" — der Weg auf ein vorhandenes Teil.

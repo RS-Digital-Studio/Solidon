@@ -241,13 +241,19 @@ def apply_mapping(new: dict[FeatureId, Feature], result: MatchResult) -> dict[Fe
         if target is None:
             target = identifier if identifier not in taken else _fresh_id(identifier, taken)
         taken.add(target)
-        renamed[target] = Feature(
-            id=target,
-            kind=feature.kind,
-            provenance=feature.provenance,
-            params=feature.params,
-            face_indices=feature.face_indices,
-        )
+        # **``replace`` und nicht ein frisches Feature** — dieselbe Falle wie in
+        # ``moved_features`` weiter unten, und dort steht seit dem 23.08.2026,
+        # was sie kostet: Der Aufbau von Hand nannte fünf der sieben Felder,
+        # und die zwei fehlenden fielen still weg. Hier waren es dieselben
+        # zwei, nur fiel es nicht auf: ``created_by`` trug bei einem erkannten
+        # Merkmal ohnehin nichts, und ``recognised`` steht für sie auf der
+        # Vorgabe.
+        #
+        # Seit erkannte Merkmale ihren Erzeuger bekommen können (§21.2, das
+        # Tor in ``scene.evaluate._with_features``), trägt es: Gemessen gingen
+        # sechs Merkmale mit ``created_by`` hinein und null kamen heraus. Ein
+        # Feld, das später dazukommt, reist jetzt auch hier von selbst mit.
+        renamed[target] = replace(feature, id=target)
     return renamed
 
 

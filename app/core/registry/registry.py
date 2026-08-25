@@ -325,6 +325,17 @@ class OperationSpec:
     steht. Duplizieren nennt seinen ``count``; alles andere lässt dieses Feld
     leer, und die Anzahl folgt aus :attr:`produces`."""
     touches_features: bool = False
+    """Ob diese Operation Merkmale **einführt** — nicht nur weiterreicht.
+
+    Gesetzt von den Baustein-Einsätzen, den Vorbereitungs-Ops und dem B-Rep-
+    Kern: den drei Stellen, an denen Geometrie entsteht, die die Erkennung
+    hinterher als neue Bohrung, Fläche oder Verrundung findet.
+
+    Gelesen von ``scene.evaluate._with_features``: Nur dort bekommt ein neu
+    erkanntes Merkmal den Schritt eingetragen, aus dem es stammt (§21.2). Für
+    ``load`` oder *Dreiecke verringern* gilt das ausdrücklich nicht — dort ist
+    „neu erkannt" kein Beleg dafür, dass etwas entstanden ist.
+    """
     deterministic: bool = True
     shortcut: str | None = None
     icon: str = ""

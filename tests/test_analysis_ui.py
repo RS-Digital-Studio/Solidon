@@ -18,7 +18,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import QThread
+from PySide6.QtCore import Qt, QThread
 from PySide6.QtWidgets import QApplication
 
 from app.core.perceive import maps
@@ -3652,4 +3652,61 @@ def test_a_wobbly_click_still_selects_instead_of_nudging_the_body(qt_app: QAppli
     assert ("pick", 105, 204) in seen, "ein leicht wackliger Klick wählt nicht mehr aus"
     assert "start" not in [entry[0] for entry in seen], (
         f"aus dem Wackeln wurde ein Zug — der Körper rutscht bei jedem Klick: {seen}"
+    )
+
+
+def test_loading_a_model_gives_no_detected_feature_an_originator(
+    window: MainWindow,
+) -> None:
+    """Und die Gegenrichtung: Nach ``load`` ist **jedes** erkannte Merkmal neu.
+
+    Ohne den ``touches_features``-Riegel trüge jede Bohrung jedes importierten
+    Modells den Lade-Schritt, und „Diesen Schritt ändern" öffnete den
+    Lade-Dialog — der falsche Dialog, nur tausendfach und in Weg 1
+    (Messung 3d-druck-61).
+    """
+    result = window.session.last_result
+    assert result is not None
+    features = [
+        (feature_id, feature)
+        for entry in result.scene.objects.values()
+        for feature_id, feature in entry.features.items()
+    ]
+
+    assert features, "die eingelesene Platte trägt Merkmale — sonst prüft der Test nichts"
+    assert all(feature.created_by is None for _name, feature in features), {
+        name: feature.created_by for name, feature in features if feature.created_by is not None
+    }
+
+
+def test_the_features_of_a_part_sit_under_its_own_node(window: MainWindow) -> None:
+    """Was aus einem Baustein kam, steht im Baum unter ihm.
+
+    Vierzehn Merkmale flach untereinander sagen nicht, welche zusammengehören.
+    Der Knoten trägt den Namen des Bausteins und seinen Schritt — und ist damit
+    die Zeile, auf die man zeigt, wenn man *ihn* ändern will und nicht eine
+    seiner Flächen.
+    """
+    from app.ui.panels import _STEP_ROLE
+
+    _insert_a_thread(window)
+    tree = window.object_tree.tree
+    step = next(
+        entry.id
+        for entry in window.session.project.document.ops
+        if entry.op == "insert_printed_thread"
+    )
+
+    nodes = []
+    for index in range(tree.topLevelItemCount()):
+        item = tree.topLevelItem(index)
+        for child_index in range(item.childCount()):
+            child = item.child(child_index)
+            if child.data(0, _STEP_ROLE) == step:
+                nodes.append(child)
+
+    assert len(nodes) == 1, f"genau ein Knoten je Baustein, gefunden: {len(nodes)}"
+    assert nodes[0].childCount(), "und seine Merkmale hängen darunter"
+    assert nodes[0].data(1, Qt.ItemDataRole.UserRole) is None, (
+        "der Knoten ist selbst kein Merkmal — er ist ihr Dach"
     )

@@ -1454,3 +1454,210 @@ def test_an_expression_that_breaks_its_own_bounds_is_reported(
     )
     quiet = evaluate(document, profile, registry=registry)
     assert not [f for f in quiet.scene.report.findings if f.code == "parameter.out_of_range"]
+
+
+def test_a_part_gives_its_detected_features_the_step_that_made_them(profile: Profile) -> None:
+    """Was ein Baustein an erkennbarer Geometrie mitbringt, kennt seinen Schritt.
+
+    Ein eingesetzter Baustein bringt Verrundungen, Kegel und Flächen mit, die
+    ``detect`` findet — sie gelten damit als „erkannt" und trugen bis zum
+    25.08.2026 keinen Erzeuger. Von ihnen führte kein Weg zurück: „Diesen
+    Schritt ändern" (§21.2) hängt an ``created_by``, und der Kunde sieht sechs
+    Verrundungen, von denen keine den Baustein nennt (Befund Robert, am
+    Bildschirm gesehen).
+
+    Der Riegel heißt ``touches_features`` — ein Registerfeld, das seit je
+    dastand und bis dahin keinen Leser hatte.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Aufbau",
+        [
+            OperationDraft(op="create_box", params={"width": 120.0, "depth": 40.0, "height": 10.0}),
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    faces = [
+        feature_id
+        for entry in result.scene.objects.values()
+        for feature_id, feature in entry.features.items()
+        if feature.kind == "face"
+    ]
+    assert faces, "ein Quader hat Flächen — sonst prüft der Test nichts"
+
+    History(project.document).apply(
+        "Haken",
+        [
+            OperationDraft(
+                op="insert_pegboard_hook",
+                inputs=("obj_1",),
+                params={"system": "skadis", "count": 2, "at_feature": faces[0]},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    step = next(entry.id for entry in project.document.ops if entry.op == "insert_pegboard_hook")
+    detected = [
+        feature
+        for entry in result.scene.objects.values()
+        for feature in entry.features.values()
+        if feature.provenance != "generated"
+    ]
+    from_part = [feature for feature in detected if feature.created_by == step]
+
+    assert from_part, "kein erkanntes Merkmal trägt den Baustein-Schritt"
+    assert any(feature.kind == "fillet" for feature in from_part), (
+        "die verrundeten Zapfen des Einhängers gehören dazu"
+    )
+
+
+def test_loading_a_model_gives_no_detected_feature_an_originator(profile: Profile) -> None:
+    """Und der Riegel dagegen: Nach ``load`` ist **jedes** erkannte Merkmal neu.
+
+    Ohne ``touches_features`` trüge jede Bohrung jedes importierten Modells den
+    Lade-Schritt, und „Diesen Schritt ändern" öffnete den Lade-Dialog — der
+    falsche Dialog, nur tausendfach und im häufigsten Weg (Messung
+    3d-druck-61). Dasselbe gälte nach *Dreiecke verringern*, sobald das Netz
+    unter die Erkennungsgrenze fällt und der ganze Bestand „neu" auftaucht.
+    """
+    from pathlib import Path
+
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    load_operations()
+    meshes = Path(__file__).parent / "data" / "meshes"
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/plate_holes.stl", sha256=""
+    )
+    project.sources["src_1"] = (meshes / "plate_holes.stl").read_bytes()
+    History(project.document).apply(
+        "Laden",
+        [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    features = [
+        (feature_id, feature)
+        for entry in result.scene.objects.values()
+        for feature_id, feature in entry.features.items()
+    ]
+
+    assert features, "die Platte trägt Merkmale — sonst prüft der Test nichts"
+    assert all(feature.created_by is None for _name, feature in features), {
+        name: feature.created_by for name, feature in features if feature.created_by is not None
+    }
+
+
+def test_an_operation_that_declares_nothing_gives_no_originator(profile: Profile) -> None:
+    """Der erste Riegel allein, ohne den zweiten: ``touches_features``.
+
+    Aushöhlen lässt neue Innenflächen entstehen, die ``detect`` findet — und
+    trägt das Flag nicht. Ohne diesen Riegel bekämen sie den Aushöhl-Schritt
+    eingetragen; die Grenze aus dem Kommentar bei ``declared`` („wer ein
+    Merkmal durchreicht, hat es nicht erzeugt") ist bewusst eng gezogen und
+    gilt nur für die drei Stellen, die Merkmale wirklich einführen.
+
+    **Dieser Test entstand aus einer Gegenprobe**, die grün blieb: Der
+    Lade-Test daneben prüft in Wahrheit den *zweiten* Riegel — nach ``load``
+    ist ``previous`` leer, und der erste kommt nie zum Zug.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene.project import ProjectSources, new_project
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Aufbau",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 40.0, "height": 30.0})],
+    )
+    evaluate(project.document, profile, sources=ProjectSources(project))
+
+    History(project.document).apply(
+        "Aushöhlen",
+        [OperationDraft(op="hollow_object", inputs=("obj_1",), params={"wall": 2.0})],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    step = next(entry.id for entry in project.document.ops if entry.op == "hollow_object")
+    tagged = [
+        (feature_id, feature)
+        for entry in result.scene.objects.values()
+        for feature_id, feature in entry.features.items()
+        if feature.provenance != "generated" and feature.created_by == step
+    ]
+
+    assert not tagged, {name: feature.created_by for name, feature in tagged}
+
+
+def test_a_contested_feature_never_gets_an_originator(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der dritte Riegel: Kandidaten einer Mehrdeutigkeit bleiben frei.
+
+    Unverwiesene mehrdeutige Merkmale binden seit dem Verweisfilter (08246414)
+    absichtlich nicht mehr — sie erscheinen der Zuordnung damit in **jedem**
+    Lauf als neu und stehen alle in ``matched.fresh``. Bekämen sie pauschal
+    den Erzeuger, wäre darunter womöglich genau das alte Merkmal, um dessen
+    Zuordnung gerade gestritten wird (Einwand 3d-druck-61).
+    """
+    from importlib import import_module
+
+    from app.core.bootstrap import load_operations
+    from app.core.perceive.matching import MatchResult
+    from app.core.scene.project import ProjectSources, new_project
+
+    def all_contested(
+        old: dict[str, object],
+        new: dict[str, object],
+        centre: object,
+        diagonal: float,
+        old_centre: object = None,
+    ) -> MatchResult:
+        if not old or len(new) < 2:
+            return MatchResult(fresh=tuple(new))
+        return MatchResult(ambiguous={next(iter(old)): tuple(new)}, fresh=tuple(new))
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Aufbau",
+        [OperationDraft(op="create_box", params={"width": 120.0, "depth": 40.0, "height": 10.0})],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    faces = [
+        feature_id
+        for entry in result.scene.objects.values()
+        for feature_id, feature in entry.features.items()
+        if feature.kind == "face"
+    ]
+
+    monkeypatch.setattr(import_module("app.core.scene.evaluate"), "match", all_contested)
+    History(project.document).apply(
+        "Haken",
+        [
+            OperationDraft(
+                op="insert_pegboard_hook",
+                inputs=("obj_1",),
+                params={"system": "skadis", "count": 2, "at_feature": faces[0]},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project), ask=lambda *a: "")
+
+    step = next(entry.id for entry in project.document.ops if entry.op == "insert_pegboard_hook")
+    tagged = [
+        feature
+        for entry in result.scene.objects.values()
+        for feature in entry.features.values()
+        if feature.provenance != "generated" and feature.created_by == step
+    ]
+
+    assert not tagged, f"{len(tagged)} umstrittene Merkmale haben einen Erzeuger bekommen"

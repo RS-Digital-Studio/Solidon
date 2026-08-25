@@ -623,3 +623,48 @@ def test_mirroring_keeps_the_pin_that_an_operation_made() -> None:
 
     assert "op3.pin_1" in result.features
     assert result.features["op3.pin_1"].provenance == "generated"
+
+
+def test_apply_mapping_keeps_every_field_of_a_feature() -> None:
+    """``apply_mapping`` baute ein frisches ``Feature`` aus fünf von sieben
+    Feldern — ``created_by`` und ``recognised`` fielen still weg.
+
+    Dieselbe Falle wie in ``moved_features``, und der Kommentar dort warnt seit
+    dem 23.08.2026 wörtlich davor. Hier fiel sie nie auf, weil ein erkanntes
+    Merkmal ohnehin nie einen Erzeuger trug — es gab nichts zu verlieren. Seit
+    §21.2 ihn eintragen kann, trägt es: Gemessen gingen sechs Merkmale mit
+    ``created_by`` hinein und **null** kamen heraus.
+    """
+    from app.core.perceive.matching import MatchResult
+
+    feature = Feature(
+        id="fillet_1",
+        kind="fillet",
+        provenance="detected",
+        params={"radius": 2.4},
+        created_by=7,
+        recognised=False,
+    )
+
+    kept = apply_mapping({"fillet_1": feature}, MatchResult())["fillet_1"]
+
+    assert kept.created_by == 7, "der Erzeuger überlebt die Umbenennung"
+    assert kept.recognised is False, "und die zweite der beiden vergessenen Angaben auch"
+    assert kept.kind == "fillet"
+    assert kept.params == {"radius": 2.4}
+
+
+def test_apply_mapping_still_renames_to_the_surviving_identifier() -> None:
+    """Und das Umbenennen selbst bleibt, wie es war — die Gegenprobe zum Test
+    darüber: ``replace(feature, id=target)`` muss die **neue** Kennung tragen,
+    nicht die alte des erkannten Merkmals.
+    """
+    from app.core.perceive.matching import MatchResult
+
+    feature = Feature(id="hole_2", kind="hole", provenance="detected", params={})
+    result = MatchResult(mapping={"hole_1": "hole_2"})
+
+    renamed = apply_mapping({"hole_2": feature}, result)
+
+    assert set(renamed) == {"hole_1"}, "das neue Merkmal erbt den alten Namen"
+    assert renamed["hole_1"].id == "hole_1", "und trägt ihn auch in sich"
