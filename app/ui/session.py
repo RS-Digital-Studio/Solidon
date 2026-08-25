@@ -1150,6 +1150,23 @@ class Session(QObject):
             self.projectChanged.emit()
             self.evaluate_async()
 
+    def undo_applied(self, transaction: str) -> bool:
+        """Der Weg zurück aus der Übernommen-Leiste (§26.5) — genau diese
+        Transaktion, oder gar nichts.
+
+        Die Regel wohnt im Kern (``agent_apply.undo_applied``); hier stehen
+        nur die Folgen eines echten Undo. Das Fenster prüfte dieselbe
+        Bedingung von Hand, während die Kernfunktion keinen Aufrufer hatte —
+        die Bauart, die ``proposal.py`` als Drift-Quelle beschreibt: dieselbe
+        Regel, dreimal ausgeschrieben, und die dritte Stelle läuft davon.
+        """
+        if not agent_apply.undo_applied(self.history, transaction):
+            return False
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+        return True
+
     def redo(self) -> None:
         if self.history.redo() is not None:
             self._dirty = True
