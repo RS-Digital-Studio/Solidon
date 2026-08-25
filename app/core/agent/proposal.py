@@ -44,6 +44,18 @@ class Proposal:
     """Welche lesenden Werkzeuge der Zug benutzt hat — die Suite misst
     daran, ob eine Frage nachgesehen oder geraten wurde (§40)."""
     undo_of: TransactionId | None = None
+    undo_sweeps: tuple[TransactionId, ...] = ()
+    """Welche Transaktionen ein ``undo_of`` **wirklich** zurücknimmt — die
+    genannte und jede jüngere, von der jüngsten an aufgezählt.
+
+    Undo ist ein Stapel und kennt keine Verzweigungen (§15.4): Zu einem
+    älteren Eintrag zu kommen heißt, die neueren mitzunehmen. Solange das
+    nirgends stand, kündigte der Vorschlag eine Transaktion an und nahm vier
+    zurück (Regel 16). Es gibt keinen Weg, einen Eintrag aus der Mitte
+    herauszupflücken — also wird gesagt, was geschieht, und die Annahme prüft,
+    dass es beim Anwenden noch dieselben sind.
+
+    Ist die genannte Transaktion die jüngste, steht hier genau sie."""
     questions: list[Question] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
     """Was die Prüfung nach jeder Operation gefunden hat (§26.5)."""
@@ -65,7 +77,12 @@ class Proposal:
     Rechnung und kein Fehlgriff des Aufrufers — die Quote misst das Modell,
     nicht das Netz."""
     stopped: str = ""
-    """Gesetzt, wenn eine Grenze den Lauf beendet hat: ``steps`` oder ``tokens`` (§26.5)."""
+    """Gesetzt, wenn der Zug nicht von selbst geendet hat.
+
+    Vier Gründe: ``steps`` und ``tokens`` sind die harten Grenzen aus §26.5,
+    ``truncated`` und ``refused`` kommen vom Modell (``stop_reason``). Die
+    beiden letzten tragen zusätzlich einen Befund mit dem, was jetzt hilft —
+    eine Kennung allein erklärt niemandem etwas."""
 
     @property
     def changes_geometry(self) -> bool:
@@ -96,9 +113,17 @@ class Proposal:
         return bool(self.questions)
 
     def summary(self) -> str:
-        """Eine Zeile für den Verlaufseintrag und den Chat."""
+        """Eine Zeile für den Verlaufseintrag und den Chat.
+
+        Ein Zug, der nur zurücknimmt, hatte hier nichts zu sagen: keine
+        Entwürfe, oft kein Antworttext — der Chatbeitrag blieb leer. Was er
+        tut, steht in :attr:`undo_sweeps`, und dort steht auch, wie viele
+        Schritte wirklich zurückgehen.
+        """
         if self.answer:
             return self.answer.strip().splitlines()[0]
         if self.drafts:
             return ", ".join(draft.op for draft in self.drafts)
+        if self.undo_of:
+            return f"undo {', '.join(self.undo_sweeps or (self.undo_of,))}"
         return ""

@@ -24,7 +24,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Final
 
-from app.core.backends.mesh import GeneratedMesh, MeshBackend
+from app.core.backends.mesh import CancelledFn, GeneratedMesh, MeshBackend
 from app.core.log import get_logger
 from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
 from app.core.scene.history import History, OperationDraft
@@ -104,9 +104,17 @@ def from_text(
     seed: int = 0,
     name: str = "",
     progress: ProgressFn = _silent,
+    cancelled: CancelledFn | None = None,
 ) -> Generation:
-    """Erzeugt einen Körper aus einer Beschreibung und legt ihn ins Projekt."""
-    result = backend.text_to_mesh(prompt, seed=seed, progress=progress)
+    """Erzeugt einen Körper aus einer Beschreibung und legt ihn ins Projekt.
+
+    ``cancelled`` reicht bis in die Warteschleife des Generators durch (§15.6,
+    :meth:`app.core.backends.mesh.MeshBackend.text_to_mesh`) — eine Erzeugung
+    dauert Minuten, und so lange muss sie sich abbrechen lassen. Der Abbruch
+    kommt als ``OperationCancelled`` heraus und ist kein Fehler: Ins Projekt
+    ist dann nichts geschrieben, denn geschrieben wird erst danach.
+    """
+    result = backend.text_to_mesh(prompt, seed=seed, progress=progress, cancelled=cancelled)
     return into_project(project, result, name or prompt)
 
 
@@ -118,9 +126,13 @@ def from_image(
     seed: int = 0,
     name: str = "",
     progress: ProgressFn = _silent,
+    cancelled: CancelledFn | None = None,
 ) -> Generation:
-    """Erzeugt einen Körper aus einem Bild und legt ihn ins Projekt."""
-    result = backend.image_to_mesh(image, seed=seed, progress=progress)
+    """Erzeugt einen Körper aus einem Bild und legt ihn ins Projekt.
+
+    ``cancelled`` wie bei :func:`from_text` — derselbe Weg, dieselbe Zusage.
+    """
+    result = backend.image_to_mesh(image, seed=seed, progress=progress, cancelled=cancelled)
     return into_project(project, result, name or str(_("Aus Bild")))
 
 

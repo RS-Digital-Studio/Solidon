@@ -12,6 +12,7 @@ import pytest
 from app.core.backends import keys, llm
 from app.core.backends.llm import (
     AnthropicBackend,
+    BackendAnswerUnreadable,
     BackendUnavailable,
     Message,
     OllamaBackend,
@@ -24,7 +25,7 @@ from app.core.backends.llm import (
     takes_temperature,
 )
 from app.core.backends.scripted import ScriptedBackend
-from app.core.errors import AppError
+from app.core.errors import AppError, ExternalToolError, InternalError
 
 
 class Recorder:
@@ -1002,3 +1003,173 @@ def test_an_address_without_a_scheme_is_no_program_error_either() -> None:
     **über** dem ``try``, also außerhalb.
     """
     assert llm.pull_model("qwen3:14b", url="://kaputt") is not None
+
+
+# --- Antworten, die keine sind (Review 25.08.2026) --------------------------------
+
+
+def unreadable(raw: bytes) -> BackendAnswerUnreadable:
+    """Was :func:`llm.post_json` aus diesen Bytes macht — der Fehler, nicht der
+    Wert."""
+    with pytest.raises(BackendAnswerUnreadable) as gefangen:
+        llm._as_object(raw, "http://127.0.0.1:11434/api/chat")
+    return gefangen.value
+
+
+def test_a_login_page_from_a_proxy_is_no_program_error() -> None:
+    """**Ein Firmenproxy antwortet mit HTML, und das ist kein Programmfehler.**
+
+    ``json.loads`` warf einen ``ValueError``, den niemand fing: Der Kunde las
+    „Im Programm ist ein unerwarteter Fehler aufgetreten" samt Bitte um einen
+    Fehlerbericht — für eine Adresse, die er selbst ändern kann.
+    """
+    problem = unreadable(b"<!DOCTYPE html><html><body>Bitte anmelden</body></html>")
+
+    assert isinstance(problem, ExternalToolError), "eine Sache der Umgebung, nicht des Programms"
+    assert not isinstance(problem, InternalError)
+    assert "html" in str(problem.values["answer"]).lower(), "der Anfang der Antwort steht dabei"
+    assert [action.id for action in problem.suggestions], "und ein Weg weiter (Regel 17)"
+
+
+def test_a_json_list_is_not_an_answer_either() -> None:
+    """``dict(json.loads(...))`` warf für eine Liste — dieselbe Familie."""
+    problem = unreadable(b'[{"error": "no such model"}]')
+
+    assert isinstance(problem, ExternalToolError)
+    assert "no such model" in str(problem.values["answer"])
+
+
+def test_a_text_content_block_does_not_crash_the_hosted_path() -> None:
+    """``content`` als Zeichenkette ließ die Schleife über *Zeichen* laufen und
+    ``block.get`` einen ``AttributeError`` werfen.
+    """
+    with pytest.raises(BackendAnswerUnreadable):
+        llm._from_anthropic({"content": "Ich setze eine Bohrung.", "usage": {}})
+
+
+def test_a_message_that_is_no_object_is_reported_and_not_crashed() -> None:
+    with pytest.raises(BackendAnswerUnreadable):
+        llm._from_ollama({"message": "fertig"}, "qwen3:14b")
+
+
+def test_tool_arguments_as_json_text_are_read_and_not_refused() -> None:
+    """**Der Normalfall bei OpenAI-kompatiblen Servern**, nicht die Ausnahme:
+    ``arguments`` ist dort eine Zeichenkette mit JSON darin. ``dict("{…}")``
+    warf, und der ganze Zug endete als Programmfehler — obwohl der Aufruf
+    lesbar dastand.
+    """
+    reply = llm._from_ollama(
+        {
+            "message": {
+                "content": "",
+                "tool_calls": [
+                    {"function": {"name": "drill_hole", "arguments": '{"diameter": 5.0}'}}
+                ],
+            }
+        },
+        "qwen3:14b",
+    )
+
+    assert reply.tool_calls[0].arguments == {"diameter": 5.0}
+
+
+def test_arguments_that_are_no_json_become_an_empty_call() -> None:
+    """Nicht lesbar heißt hier nicht „Ausnahme": Die Schemaprüfung der Sitzung
+    macht daraus eine Meldung, die das Modell korrigieren kann (§26.5).
+    """
+    reply = llm._from_ollama(
+        {"message": {"tool_calls": [{"function": {"name": "drill_hole", "arguments": "5 mm"}}]}},
+        "qwen3:14b",
+    )
+
+    assert reply.tool_calls[0].arguments == {}
+    assert reply.tool_calls[0].name == "drill_hole"
+
+
+def test_a_usage_count_that_is_no_number_counts_zero() -> None:
+    """``int("viele")`` machte aus einer schrägen Angabe einen Programmfehler."""
+    reply = llm._from_ollama(
+        {"message": {"content": "gut"}, "prompt_eval_count": "viele"}, "qwen3:14b"
+    )
+
+    assert reply.input_tokens == 0
+    assert reply.text == "gut"
+
+
+def test_content_blocks_from_a_local_server_become_text() -> None:
+    reply = llm._from_ollama(
+        {"message": {"content": [{"text": "halb "}, {"text": "und halb"}]}}, "qwen3:14b"
+    )
+
+    assert reply.text == "halb und halb"
+
+
+# --- was ein Zug wirklich gekostet hat --------------------------------------------
+
+
+def test_the_cached_tokens_count_towards_the_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    """**Der Deckel maß den kleinsten Teil.** Dieser Weg markiert Systemblock
+    und Werkzeugliste für den Zwischenspeicher der Gegenseite; ``input_tokens``
+    zählt dann nur, was **neu** verrechnet wurde. Zugbudget (§26.5) und
+    Kostenanzeige lasen genau diese Zahl.
+    """
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
+    answer = anthropic_answer()
+    answer["usage"] = {
+        "input_tokens": 120,
+        "cache_creation_input_tokens": 19000,
+        "cache_read_input_tokens": 6000,
+        "output_tokens": 30,
+    }
+
+    reply = AnthropicBackend(transport=Recorder(answer)).complete(
+        [Message(role="user", content="Bohr das")]
+    )
+
+    assert reply.input_tokens == 25120, "alle drei Felder, nicht nur das kleinste"
+    assert reply.output_tokens == 30
+
+
+def test_a_truncated_answer_says_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``stop_reason`` wurde gespeichert und nie gelesen."""
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
+    answer = anthropic_answer()
+    answer["stop_reason"] = "max_tokens"
+
+    reply = AnthropicBackend(transport=Recorder(answer)).complete(
+        [Message(role="user", content="Bohr das")]
+    )
+
+    assert reply.truncated and not reply.refused
+
+
+def test_a_refusal_is_told_apart_from_an_empty_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(keys.ENVIRONMENT_VARIABLE, "geheim")
+    answer = anthropic_answer()
+    answer["stop_reason"] = "refusal"
+
+    reply = AnthropicBackend(transport=Recorder(answer)).complete(
+        [Message(role="user", content="Bohr das")]
+    )
+
+    assert reply.refused and not reply.truncated
+    assert not Reply().refused, "ohne Grund wird nichts behauptet"
+
+
+def test_the_speed_probe_goes_through_the_endpoint_like_everything_else() -> None:
+    """**Genau der Kunde mit der krummen Adresse bekam keine Warnung.**
+
+    ``ollama_speed`` schickte an die rohe Eingabe. „127.0.0.1:11434" — die
+    Schreibweise, die Ollama selbst ausgibt — landete damit nicht bei
+    ``/api/chat``, die Messung schlug fehl, und die Langsam-Warnung blieb aus.
+    """
+    gesehen: list[str] = []
+
+    def transport(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
+        gesehen.append(url)
+        return {"prompt_eval_count": 19249, "prompt_eval_duration": 10_000_000_000}
+
+    speed = llm.ollama_speed("qwen3:14b", url="127.0.0.1:11434", transport=transport)
+
+    assert gesehen == ["http://127.0.0.1:11434/api/chat"]
+    assert speed.tokens_per_second is not None, "gemessen, weil die Anfrage ankam"

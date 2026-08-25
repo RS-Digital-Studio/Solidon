@@ -33,10 +33,10 @@ from typing import Any, Final, Protocol
 from urllib.parse import urlsplit
 
 from app.branding import APP_NAME, APP_VERSION
-from app.core.agent.tools import ASK_USER, tool_schemas
+from app.core.agent.tools import ASK_USER, runs_foreign_source, tool_schemas
 from app.core.errors import AppError
 from app.core.registry import Registry
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 #: Die Version des Protokolls, auf die sich beide Seiten einigen.
 PROTOCOL_VERSION: Final = "2024-11-05"
@@ -67,6 +67,12 @@ INTERNAL_ERROR: Final = -32603
 #: über die Leitung säße die Frage in einem Programm fest, das seinen eigenen
 #: Nutzer hat. Wer fern steuert, fragt ihn selbst — und tut es an der Stelle,
 #: an der er sitzt.
+#:
+#: **Diese Liste allein reicht nicht**, und das ist der Grund, warum
+#: :func:`refusal_for` daneben steht: Ein Rezept darf einen
+#: ``create_from_scad``-Schritt tragen (Regel 13) und heißt dann
+#: ``insert_<name>``. Ein Name in einer Liste erwischt das nicht — gefragt wird
+#: zusätzlich, was eine Operation **tut**.
 DENIED: Final[frozenset[str]] = frozenset({"create_from_scad", ASK_USER})
 
 #: Adressen, die als „dieser Rechner" gelten.
@@ -127,8 +133,16 @@ def remote_tools(registry: Registry | None = None) -> tuple[dict[str, Any], ...]
     """Die Werkzeuge, die über die Leitung erreichbar sind.
 
     Dieselben wie im Chat, abzüglich der gesperrten. Aus dem Register, nicht
-    aus einer Liste — siehe ``tools.py``."""
-    return tuple(entry for entry in tool_schemas(registry) if entry["name"] not in DENIED)
+    aus einer Liste — siehe ``tools.py``.
+
+    Gesperrt heißt hier auch: nicht angeboten. Eine Operation, die
+    :func:`check_call` abweisen wird, in der Liste zu führen, hieße, der
+    Gegenstelle einen Weg zu zeigen, den es nicht gibt."""
+    return tuple(
+        entry
+        for entry in tool_schemas(registry)
+        if entry["name"] not in DENIED and not runs_foreign_source(str(entry["name"]))
+    )
 
 
 def looks_like_path(value: str) -> bool:
@@ -181,29 +195,79 @@ def _holds_path(value: Any) -> bool:
     return False
 
 
+def refusal_for(name: str) -> TranslatableText | None:
+    """Warum diese Operation gesperrt ist — ``None``, wenn sie es nicht ist.
+
+    Zwei Gründe, zwei Sätze. Bis hierhin stand einer für beide, und für
+    ``ask_user`` war er schlicht falsch: „sie führt fremden Quelltext aus"
+    schickt jemanden auf die Suche nach einem Quelltext, den es nicht gibt
+    (Regel 17).
+
+    Und die Frage nach dem Quelltext geht an die Wirkung, nicht an den Namen:
+    Ein Rezept mit einem ``create_from_scad``-Schritt heißt ``insert_<name>``
+    (Regel 13) und stand in keiner Liste — über die Leitung erreichbar und
+    ohne Rückfrage annehmbar.
+    """
+    if name == ASK_USER:
+        return _(
+            "Über diese Schnittstelle ist niemand zu fragen — die Rückfrage "
+            "gehört dorthin, wo Ihr eigener Nutzer sitzt."
+        )
+    if name in DENIED or runs_foreign_source(name):
+        return _(
+            "Diese Operation ist über die Schnittstelle gesperrt: sie führt fremden Quelltext aus."
+        )
+    return None
+
+
 def check_call(name: str, arguments: dict[str, Any], registry: Registry | None = None) -> None:
     """Wirft, wenn dieser Aufruf nicht über die Leitung kommen darf.
 
     Vor der Rechnung, nicht danach. Die Reihenfolge ist die eigentliche
-    Zusage: gesperrte Operation, unbekannte Operation, verdächtiger Wert — und
-    erst wenn alle drei durch sind, sieht die Anwendung den Aufruf überhaupt.
+    Zusage: gesperrte Operation, unbekannte Operation, gesammelter Parameter,
+    verdächtiger Wert — und erst wenn alle vier durch sind, sieht die Anwendung
+    den Aufruf überhaupt.
     """
-    if name in DENIED:
-        raise RemoteRefusedError(
-            _(
-                "Diese Operation ist über die Schnittstelle gesperrt: "
-                "sie führt fremden Quelltext aus."
-            )
-        )
+    refusal = refusal_for(name)
+    if refusal is not None:
+        raise RemoteRefusedError(refusal)
     known = {entry["name"] for entry in remote_tools(registry)}
     if name not in known:
         raise RemoteRefusedError(_("Diese Operation gibt es nicht."))
+    _refuse_gathered(name, arguments, registry)
     for key, value in arguments.items():
         if _holds_path(value):
-            refusal = _(
+            refused = _(
                 "Ein Wert sieht aus wie ein Dateipfad — über diese Schnittstelle geht das nicht."
             )
-            raise RemoteRefusedError(f"{refusal} ({key})")
+            raise RemoteRefusedError(f"{refused} ({key})")
+
+
+def _refuse_gathered(name: str, arguments: dict[str, Any], registry: Registry | None) -> None:
+    """Gesammelte Parameter kommen vom Nutzer, nicht über die Leitung
+    (§26, Leitprinzip 5).
+
+    Skizzenpunkte, Pinselstriche, Skelett und Stellung entstehen aus Gesten.
+    Das Werkzeugschema bietet sie deshalb nicht an — die Chat-Sitzung lehnt
+    sie trotzdem ab, falls ein Modell sie rät, und nennt dabei den Weg, der
+    offen bleibt. Hier fehlte beides: Ein Wert unter dem richtigen Namen ging
+    ungeprüft an die Anwendung, wo ihn kein Schema mehr erwartete.
+
+    Ein unbekanntes Werkzeug ist hier kein Fehler mehr — die Zeile darüber hat
+    das schon abgelehnt; was hier ankommt, steht im Register.
+    """
+    from app.core.registry import GATHERED_KINDS, REGISTRY
+
+    source = registry or REGISTRY
+    if not source.has(name):
+        return
+    for entry in source.get(name).params.spec():
+        if entry.kind in GATHERED_KINDS and arguments.get(entry.name):
+            refused = _(
+                "Dieser Parameter entsteht aus Gesten des Nutzers und wird nicht "
+                "ferngesteuert — Skizze, Pinsel und Skelett gehören ins Fenster."
+            )
+            raise RemoteRefusedError(f"{refused} ({entry.name})")
 
 
 class RemoteRefusedError(Exception):

@@ -285,7 +285,7 @@ def test_a_generated_mesh_arrives_workable(project: Project, profile: Profile) -
     generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
     generation = from_text(project, generator, "eine Figur", seed=7)
 
-    assert len(generation.transactions) == 3, "Laden, Reparieren, Dezimieren"
+    assert len(generation.transactions) == 4, "Laden, Größe, Reparieren, Dezimieren"
     result = evaluated(project, profile)
     entry = result.scene.objects[generation.object_id]
     assert entry.mesh.triangle_count <= GENERATED_TRIANGLE_TARGET * 1.1
@@ -324,7 +324,7 @@ def test_a_mesh_between_the_two_old_limits_keeps_its_features(
     generator = ScriptedMeshBackend(fallback=payload, suffix=".ply")
     generation = from_text(project, generator, "eine Vase", seed=7)
 
-    assert len(generation.transactions) == 3, "Laden, Reparieren, Dezimieren"
+    assert len(generation.transactions) == 4, "Laden, Größe, Reparieren, Dezimieren"
 
     result = evaluated(project, profile)
     entry = result.scene.objects[generation.object_id]
@@ -340,3 +340,23 @@ def test_a_mesh_between_the_two_old_limits_keeps_its_features(
     assert "perceive.too_large" not in codes, (
         "die Erkennung steigt weiter aus — die Grenzen widersprechen sich noch"
     )
+
+
+def test_the_list_of_steps_leaves_none_of_them_out(project: Project, profile: Profile) -> None:
+    """**``fit_to_size`` fehlte in der Liste.**
+
+    Wer sie abarbeitet, um eine Erzeugung zurückzurollen, ließ genau diese
+    Transaktion stehen: den Körper auf 100 mm gebracht, ohne die Quelle, aus
+    der er kam. Geprüft wird deshalb nicht die Zahl, sondern die
+    Vollständigkeit — was in einem Zug entstanden ist, steht auch drin.
+    """
+    generator = ScriptedMeshBackend(fallback=generated_body(), suffix=".ply")
+
+    generation = from_text(project, generator, "eine Figur", seed=7)
+
+    im_dokument = [entry.id for entry in project.document.transactions]
+    assert list(generation.transactions) == im_dokument, (
+        "jede Transaktion dieses Zuges gehört in die Liste"
+    )
+    schritte = [operation.op for operation in project.document.ops]
+    assert "fit_to_size" in schritte, "sonst prüft dieser Test nichts"

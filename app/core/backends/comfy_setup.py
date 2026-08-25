@@ -25,14 +25,16 @@ from __future__ import annotations
 
 import json
 import os
+import queue
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Final
+from typing import IO, Final
 
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
@@ -158,6 +160,30 @@ WEIGHT_GIGABYTES: Final = 7.5
 
 ProgressFn = Callable[[TranslatableText | str], None]
 CancelledFn = Callable[[], bool]
+
+
+def scratch_dir(name: str) -> Path:
+    """Ein Zwischenordner für einen Download — im Nutzer-Cache, nicht im Temp.
+
+    **Ein fester Name im gemeinsamen Temp gehört nicht uns.** Unter Linux ist
+    ``/tmp`` für alle Konten schreibbar; wer ``/tmp/solidon-triposg`` vorher
+    anlegt und behält, bestimmt, was hier nach 7,5 GB Download nach ``models``
+    verschoben wird. Der Nutzer-Cache gehört dem Nutzer — dieselbe Wurzel, in
+    die auch die Arbeitsordner eingesperrter Programme gehen
+    (:func:`app.core.discover.workspace_for`).
+
+    Der Name bleibt **fest**, und das ist Absicht: Ein abgebrochener Download
+    soll beim nächsten Lauf fortsetzen, und das kann er nur, wenn seine
+    Bruchstücke da liegen, wo er sie sucht (:data:`_FETCH_WEIGHTS`).
+
+    Kurz muss er außerdem sein — Windows deckelt einen Pfad bei 260 Zeichen,
+    und ``huggingface_hub`` hängt bis zu 163 davon selbst an. Der Cache misst
+    gemessen 55 Zeichen gegen 45 bei ``tempfile``; die zehn sind bezahlbar,
+    ein sprechender Ordnername wären es nicht.
+    """
+    from app.core.paths import ensure_dir, user_cache_dir
+
+    return ensure_dir(user_cache_dir() / name)
 
 
 def _silent(step: TranslatableText | str) -> None:
@@ -322,6 +348,30 @@ def find_python(comfyui: Path) -> Path:
     return Path(sys.executable)
 
 
+#: Wie oft nachgesehen wird, ob abgebrochen wurde oder die Frist steht — auch
+#: wenn der Kindprozess gerade nichts sagt. Kurz genug, dass ein Klick auf
+#: *Abbrechen* sofort wirkt, lang genug, dass die Schleife nichts kostet.
+WATCH_SECONDS: Final = 0.2
+
+
+def _pump(stream: IO[str], sink: queue.Queue[str | None]) -> None:
+    """Liest den Kindprozess leer und legt jede Zeile in die Warteschlange.
+
+    In einem eigenen Faden, weil das Lesen blockiert und ein schweigender
+    Prozess beliebig lange schweigt. ``None`` heißt „der Strom ist zu Ende" —
+    das ist das Signal, auf das :func:`_run` seine Schleife verlässt.
+
+    Der Faden ist ein Daemon und hält beim Beenden nichts auf: Wird der Prozess
+    getötet, endet der Strom von selbst; endet er nicht, geht der Faden mit dem
+    Programm.
+    """
+    try:
+        for raw in stream:
+            sink.put(raw)
+    finally:
+        sink.put(None)
+
+
 def _run(
     command: list[str],
     what: TranslatableText | str,
@@ -340,6 +390,18 @@ def _run(
     beendet den Kindprozess: ``huggingface_hub`` lässt teilweise geladene
     Dateien liegen und setzt beim nächsten Lauf fort, also kostet er nichts als
     die Zeit, die schon vergangen ist.
+
+    **„Zwischen den Zeilen" reichte nicht, denn manche Schritte schweigen.**
+    ``for raw in process.stdout`` blockiert, bis eine Zeile kommt — kommt keine,
+    kam auch die Abbruchprüfung nicht dran, und die Frist genauso wenig. Ein
+    Kindprozess, der ohne Ausgabe hängt (ein Klon, der auf eine Anmeldung
+    wartet, ein Download hinter einer toten Verbindung), fror damit die
+    Einrichtung ein: *Abbrechen* wirkte nicht, und die Stunde aus
+    :data:`STEP_TIMEOUT_SECONDS` verstrich nie, weil niemand auf die Uhr sah.
+
+    Deshalb liest ein eigener Faden (:func:`_pump`), und diese Schleife wartet
+    mit Zeitscheibe: Alle :data:`WATCH_SECONDS` wird gefragt, ob abgebrochen
+    wurde und ob die Frist steht — mit Ausgabe oder ohne.
     """
     progress(what)
     _log.info("comfy setup: %s", command[0])
@@ -356,7 +418,18 @@ def _run(
             bufsize=1,
         ) as process:
             assert process.stdout is not None
-            for raw in process.stdout:
+            sink: queue.Queue[str | None] = queue.Queue()
+            reader = threading.Thread(
+                target=_pump, args=(process.stdout, sink), name="comfy-setup", daemon=True
+            )
+            reader.start()
+            while True:
+                try:
+                    raw = sink.get(timeout=WATCH_SECONDS)
+                except queue.Empty:
+                    raw = ""
+                if raw is None:
+                    break
                 line = raw.strip()
                 if line:
                     lines.append(line)
@@ -610,6 +683,17 @@ def weights_present(comfyui: Path) -> bool:
 #: **ComfyUIs** Python, und :func:`_run` liest dessen Ausgabe Zeile für Zeile
 #: in ``progress``. Es ist der Fortschritt, keine Ausgabe aus dem Kern.
 #:
+#: **Der Ordner liegt im Nutzer-Cache, nicht im gemeinsamen Temp.** Er lag
+#: dort, unter festem Namen — und ein fester Name im gemeinsamen Temp ist unter
+#: Linux von jedem anderen Konto vorbelegbar: Wer ``/tmp/solidon-triposg``
+#: anlegt und behält, entscheidet, was hier 7,5 GB später nach ``models``
+#: verschoben wird. Der Pfad kommt deshalb von :func:`app.core.paths.user_cache_dir`
+#: und wird als Argument übergeben — dieses Programm läuft in **ComfyUIs**
+#: Python und hat unseren Kern nicht auf dem Suchpfad.
+#:
+#: Der Ordner bleibt damit kurz genug: gemessen 55 Zeichen für den Cache statt
+#: 45 für ``tempfile``, und die Grenze liegt bei 260 (siehe oben).
+#:
 #: **Der Ordner trägt einen festen Namen, und das ist der Punkt.** Er hieß
 #: zuerst ``mkdtemp``, also jedes Mal anders, und ein ``finally`` räumte ihn
 #: auf. Beides zusammen machte die Zusage im Docstring von :func:`setup` zur
@@ -624,12 +708,12 @@ def weights_present(comfyui: Path) -> bool:
 #: Abbruch von außen kommt durch — ``_run`` beendet den Prozess, und eine
 #: Schleife im Kind hält das nicht auf.
 _FETCH_WEIGHTS = """
-import shutil, sys, tempfile
+import shutil, sys
 from pathlib import Path
 from huggingface_hub import snapshot_download
 
 target = Path(sys.argv[1])
-scratch = Path(tempfile.gettempdir()) / "solidon-triposg"
+scratch = Path(sys.argv[3])
 scratch.mkdir(parents=True, exist_ok=True)
 snapshot_download(sys.argv[2], local_dir=str(scratch), max_workers=8)
 shutil.rmtree(scratch / ".cache", ignore_errors=True)
@@ -672,6 +756,7 @@ def fetch_background(
             str(target),
             BACKGROUND_REPO,
             BACKGROUND_FILE,
+            str(scratch_dir("dl-bg")),
         ],
         _("Modell fürs Freistellen laden — 445 MB"),
         progress,
@@ -683,12 +768,12 @@ def fetch_background(
 #: für den kurzen Ordner wie bei :data:`_FETCH_WEIGHTS`, und dieselbe
 #: Wiederholung: Die Leitung entscheidet, nicht die Dateigröße.
 _FETCH_FILE = """
-import shutil, sys, tempfile
+import shutil, sys
 from pathlib import Path
 from huggingface_hub import hf_hub_download
 
 target, repo, name = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
-scratch = Path(tempfile.gettempdir()) / "solidon-hf"
+scratch = Path(sys.argv[4])
 scratch.mkdir(parents=True, exist_ok=True)
 got = hf_hub_download(repo, name, local_dir=str(scratch))
 target.mkdir(parents=True, exist_ok=True)
@@ -756,7 +841,15 @@ def fetch_weights(
         )
     target.parent.mkdir(parents=True, exist_ok=True)
     _run_repeatedly(
-        [str(python), "-s", "-c", _FETCH_WEIGHTS, str(target), WEIGHTS_REPO],
+        [
+            str(python),
+            "-s",
+            "-c",
+            _FETCH_WEIGHTS,
+            str(target),
+            WEIGHTS_REPO,
+            str(scratch_dir("dl-triposg")),
+        ],
         _("Gewichte laden — rund 7,5 GB, das dauert"),
         progress,
         cancelled,
@@ -792,7 +885,13 @@ print("Knoten:", ", ".join(names))
 """
 
 
-def nodes_load(comfyui: Path, python: Path, nodes: Path, progress: ProgressFn = _silent) -> None:
+def nodes_load(
+    comfyui: Path,
+    python: Path,
+    nodes: Path,
+    progress: ProgressFn = _silent,
+    cancelled: CancelledFn | None = None,
+) -> None:
     """Nachsehen, ob ComfyUI die Knoten laden **kann**. Wirft, wenn nicht.
 
     **Die Einrichtung sagte „fertig", ohne es zu wissen.** Sie kopierte, klonte,
@@ -806,12 +905,17 @@ def nodes_load(comfyui: Path, python: Path, nodes: Path, progress: ProgressFn = 
     die den Kunden angeht: Läuft es. Was er findet, reist mit — die Meldung des
     Ladefehlers sagt genauer, was fehlt, als jeder Satz, den wir vorher
     erraten könnten.
+
+    **Zwei Sekunden sind nicht null.** Dies war der einzige ``_run``-Aufruf
+    ohne Abbruchmerker; hängt der Import in ComfyUIs Umgebung — er lädt Torch
+    —, wartete *Abbrechen* auf einen Schritt, der ihn gar nicht bemerkt hätte.
     """
     try:
         _run(
             [str(python), "-s", "-c", _LOAD_NODES, str(comfyui), str(nodes)],
             _("Nachsehen, ob die Knoten laden"),
             progress,
+            cancelled,
         )
     except SetupFailed as problem:
         raise SetupFailed(
@@ -861,7 +965,7 @@ def setup(
         # **Erst prüfen, dann „fertig" sagen** — und vor den Gewichten, denn
         # ein fehlendes Paket zu melden ist nach zwei Sekunden mehr wert als
         # nach einer halben Stunde Download.
-        nodes_load(found, python, target, progress)
+        nodes_load(found, python, target, progress, cancelled)
         if not weights:
             return Result(comfyui=found, nodes=target, weights=weights_present(found))
         if cancelled is not None and cancelled():

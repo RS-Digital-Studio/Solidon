@@ -78,7 +78,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Final, Protocol
 
 from app.core.discover import BROKEN_ADDRESS, UNUSABLE_ADDRESS
-from app.core.errors import CANCEL, INSTALL_MISSING, Action, AppError
+from app.core.errors import CANCEL, INSTALL_MISSING, Action, AppError, OperationCancelled
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.log import get_logger
 from app.core.types import ProgressFn
@@ -162,6 +162,18 @@ def _silent(fraction: float, text: str) -> None:
     del fraction, text
 
 
+CancelledFn = Callable[[], bool]
+"""``() -> bool``: Hat der Nutzer abgebrochen?
+
+Ein Rückruf und kein Qt-Objekt — der Kern weiß nichts vom Fenster (§7,
+:data:`app.core.types.ProgressFn` nebenan folgt derselben Regel).
+"""
+
+
+def _never() -> bool:
+    return False
+
+
 def _configured_url() -> str:
     """Die eingetragene ComfyUI-Adresse, sonst die auf dieser Maschine.
 
@@ -172,6 +184,28 @@ def _configured_url() -> str:
     from app.core import discover
 
     return discover.service_url("comfyui", DEFAULT_COMFY_URL)
+
+
+def comfy_base(url: str | None) -> str:
+    """Die Basisadresse von ComfyUI aus dem, was jemand eingetragen hat.
+
+    **„127.0.0.1:8188" ist keine Nachlässigkeit, sondern die Schreibweise, in
+    der Adressen weitergegeben werden** — ComfyUI selbst schreibt sie so in
+    seine Startzeile. Ohne Schema war sie hier trotzdem dauerhaft unbrauchbar:
+    :func:`reachable` fand keinen Rechnernamen und meldete „nicht erreichbar",
+    der Generator blieb ausgegraut, und der Satz „Die Adresse von ComfyUI ist
+    keine Adresse" — der einzige, der auf das Feld gezeigt hätte — war damit
+    unerreichbar, weil vorher schon niemand mehr fragte.
+
+    Dieselbe Normalisierung, die der Ollama-Weg seit dem 24.08.2026 hat
+    (:func:`~app.core.backends.llm.ollama_endpoint`), und aus demselben Grund.
+    Ein eigener Pfad bleibt stehen: Hinter einem Reverse-Proxy liegt ComfyUI
+    unter ``/comfy``, und wer das einträgt, meint es so.
+    """
+    address = (url or "").strip() or DEFAULT_COMFY_URL
+    if "://" not in address:
+        address = f"http://{address}"
+    return address.rstrip("/")
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,11 +238,30 @@ class MeshBackend(Protocol):
         ...
 
     def text_to_mesh(
-        self, prompt: str, *, seed: int = 0, progress: ProgressFn = _silent
-    ) -> GeneratedMesh: ...
+        self,
+        prompt: str,
+        *,
+        seed: int = 0,
+        progress: ProgressFn = _silent,
+        cancelled: CancelledFn | None = None,
+    ) -> GeneratedMesh:
+        """``cancelled`` wird während des Wartens regelmäßig gefragt (§15.6).
+
+        **Ohne ihn ließ sich eine laufende Erzeugung nicht abbrechen** — bis zu
+        einer Stunde (:data:`STUCK_SECONDS`). Der Dialog wartete beim Schließen
+        fünfzig Millisekunden auf seinen Arbeiter und ließ dann los; der
+        Arbeiter rechnete weiter und meldete sein Ergebnis an ein Fenster, das
+        es nicht mehr gab. Ein Backend, für das Abbrechen nichts bedeutet, darf
+        den Rückruf ignorieren — geliefert wird er trotzdem."""
+        ...
 
     def image_to_mesh(
-        self, image: bytes, *, seed: int = 0, progress: ProgressFn = _silent
+        self,
+        image: bytes,
+        *,
+        seed: int = 0,
+        progress: ProgressFn = _silent,
+        cancelled: CancelledFn | None = None,
     ) -> GeneratedMesh: ...
 
 
@@ -300,9 +353,12 @@ def _origin(url: str) -> str:
 def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:
     """Ein Socket, keine Anfrage: ein geschlossener Port antwortet sofort,
     HTTP nicht.
+
+    Gefragt wird die normalisierte Adresse (:func:`comfy_base`) — sonst gilt
+    eine Eingabe ohne Schema als unerreichbar, und das ist sie nicht.
     """
     try:
-        parts = urllib.parse.urlparse(url)
+        parts = urllib.parse.urlparse(comfy_base(url))
         if not parts.hostname:
             # **Ohne Rechnernamen wird gar nicht erst gefragt.** Ein leerer Host
             # ist für ``socket`` nicht „nichts", sondern *localhost* — eine
@@ -421,6 +477,15 @@ class ComfyBackend:
         return "comfyui"
 
     @property
+    def base(self) -> str:
+        """Die Adresse, an die wirklich gefragt wird (:func:`comfy_base`).
+
+        ``url`` bleibt, was jemand eingetragen hat — hier steht, was daraus
+        wird. Getrennt, damit die Einstellungen weiter den eigenen Text zeigen
+        und nicht eine Fassung, die niemand geschrieben hat."""
+        return comfy_base(self.url)
+
+    @property
     def available(self) -> bool:
         return reachable(self.url)
 
@@ -523,7 +588,7 @@ class ComfyBackend:
         """
         missing: list[str] = []
         for kind in self._graph_nodes(workflow):
-            answer = self.transport(f"{self.url}/object_info/{urllib.parse.quote(kind)}", None, {})
+            answer = self.transport(f"{self.base}/object_info/{urllib.parse.quote(kind)}", None, {})
             described = json.loads(answer.decode("utf-8"))
             if kind not in described:
                 missing.append(kind)
@@ -558,22 +623,32 @@ class ComfyBackend:
         return tuple(found)
 
     def text_to_mesh(
-        self, prompt: str, *, seed: int = 0, progress: ProgressFn = _silent
+        self,
+        prompt: str,
+        *,
+        seed: int = 0,
+        progress: ProgressFn = _silent,
+        cancelled: CancelledFn | None = None,
     ) -> GeneratedMesh:
         if not prompt.strip():
             raise GenerationFailed(detail=_("Die Beschreibung ist leer."))
         graph = self._graph("text_to_mesh", {"prompt": prompt, "seed": seed})
-        return self._run(graph, prompt=prompt, seed=seed, progress=progress)
+        return self._run(graph, prompt=prompt, seed=seed, progress=progress, cancelled=cancelled)
 
     def image_to_mesh(
-        self, image: bytes, *, seed: int = 0, progress: ProgressFn = _silent
+        self,
+        image: bytes,
+        *,
+        seed: int = 0,
+        progress: ProgressFn = _silent,
+        cancelled: CancelledFn | None = None,
     ) -> GeneratedMesh:
         if not image:
             raise GenerationFailed(detail=_("Das Bild ist leer."))
         progress(0.05, str(_("Bild übertragen")))
         name = self._upload(image)
         graph = self._graph("image_to_mesh", {"image": name, "seed": seed})
-        return self._run(graph, prompt="", seed=seed, progress=progress)
+        return self._run(graph, prompt="", seed=seed, progress=progress, cancelled=cancelled)
 
     # --- die drei Schritte ---
 
@@ -657,7 +732,7 @@ class ComfyBackend:
     def _offered(self, class_type: str, field: str) -> list[str]:
         """Was ComfyUI für diesen Eingang zur Auswahl stellt."""
         answer = self.transport(
-            f"{self.url}/object_info/{urllib.parse.quote(class_type)}", None, {}
+            f"{self.base}/object_info/{urllib.parse.quote(class_type)}", None, {}
         )
         try:
             described = json.loads(answer.decode("utf-8"))
@@ -730,7 +805,7 @@ class ComfyBackend:
             ]
         )
         answer = self.transport(
-            f"{self.url}/upload/image",
+            f"{self.base}/upload/image",
             body,
             {"Content-Type": f"multipart/form-data; boundary={boundary}"},
         )
@@ -738,16 +813,24 @@ class ComfyBackend:
         return str(given or name)
 
     def _run(
-        self, graph: dict[str, Any], *, prompt: str, seed: int, progress: ProgressFn
+        self,
+        graph: dict[str, Any],
+        *,
+        prompt: str,
+        seed: int,
+        progress: ProgressFn,
+        cancelled: CancelledFn | None = None,
     ) -> GeneratedMesh:
         progress(0.1, str(_("Auftrag abschicken")))
         payload = json.dumps({"prompt": graph, "client_id": uuid.uuid4().hex}).encode("utf-8")
-        answer = self.transport(f"{self.url}/prompt", payload, {"Content-Type": "application/json"})
+        answer = self.transport(
+            f"{self.base}/prompt", payload, {"Content-Type": "application/json"}
+        )
         job = json.loads(answer.decode("utf-8")).get("prompt_id")
         if not job:
             raise GenerationFailed(detail=_("Das Backend hat keinen Auftrag angenommen."))
 
-        outputs = self._wait(str(job), progress)
+        outputs = self._wait(str(job), progress, cancelled or _never)
         progress(0.9, str(_("Modell holen")))
         payload_bytes, suffix = self._download(outputs)
         return GeneratedMesh(
@@ -759,7 +842,9 @@ class ComfyBackend:
             seed=seed,
         )
 
-    def _wait(self, job: str, progress: ProgressFn) -> dict[str, Any]:
+    def _wait(
+        self, job: str, progress: ProgressFn, cancelled: CancelledFn = _never
+    ) -> dict[str, Any]:
         """Fragt, bis der Auftrag im Verlauf steht. Es gibt kein Push zum Zuhören.
 
         Der Satz dazu sagt die verstrichene Zeit, und das ist keine Zierde: ein
@@ -787,7 +872,16 @@ class ComfyBackend:
         """
         started = time.monotonic()
         while True:
-            answer = self.transport(f"{self.url}/history/{job}", None, {})
+            if cancelled():
+                # **Abgebrochen wird das Warten, nicht die fremde Rechnung.**
+                # Dasselbe, was der Satz zu :data:`STUCK_SECONDS` sagt: Der
+                # Auftrag steht in ComfyUIs Schlange, gehört ihm, und ihn dort
+                # zu unterbrechen träfe unter Umständen den Auftrag eines
+                # anderen Programms. Was Solidon aufhört, ist das Warten — und
+                # das ist genau das, was der Nutzer angeklickt hat.
+                _log.info("waiting for %s cancelled", job)
+                raise OperationCancelled
+            answer = self.transport(f"{self.base}/history/{job}", None, {})
             history = json.loads(answer.decode("utf-8"))
             entry = history.get(job)
             if entry and entry.get("outputs"):
@@ -816,7 +910,7 @@ class ComfyBackend:
         greifen dürfen.
         """
         try:
-            answer = self.transport(f"{self.url}/queue", None, {})
+            answer = self.transport(f"{self.base}/queue", None, {})
             queue = json.loads(answer.decode("utf-8"))
         except (AppError, OSError, ValueError):
             return False
@@ -840,7 +934,7 @@ class ComfyBackend:
         abfragen ließ.
         """
         try:
-            answer = self.transport(f"{self.url}/queue", None, {})
+            answer = self.transport(f"{self.base}/queue", None, {})
             queue = json.loads(answer.decode("utf-8"))
         except (AppError, OSError, ValueError):
             return 0
@@ -859,7 +953,7 @@ class ComfyBackend:
                     if located is None:
                         continue
                     query, suffix = located
-                    return self.transport(f"{self.url}/view?{query}", None, {}), suffix
+                    return self.transport(f"{self.base}/view?{query}", None, {}), suffix
         raise GenerationFailed(detail=_("Der Auftrag hat keine Netzdatei erzeugt."))
 
 
@@ -889,19 +983,35 @@ class ScriptedMeshBackend:
         return bool(self.answers) or self.fallback is not None
 
     def text_to_mesh(
-        self, prompt: str, *, seed: int = 0, progress: ProgressFn = _silent
+        self,
+        prompt: str,
+        *,
+        seed: int = 0,
+        progress: ProgressFn = _silent,
+        cancelled: CancelledFn | None = None,
     ) -> GeneratedMesh:
         self.calls.append((prompt, seed))
         progress(0.5, str(_("Modell wird erzeugt")))
+        # Auch der Doppel fragt: Ein Test soll den Abbruchweg fahren können,
+        # ohne eine Grafikkarte und ohne eine Sekunde Wartezeit.
+        if cancelled is not None and cancelled():
+            raise OperationCancelled
         payload = self.answers.get(prompt, self.fallback)
         if payload is None:
             raise GenerationFailed(detail=f"nothing scripted for {prompt!r}")
         return self._as_result(payload, prompt, seed)
 
     def image_to_mesh(
-        self, image: bytes, *, seed: int = 0, progress: ProgressFn = _silent
+        self,
+        image: bytes,
+        *,
+        seed: int = 0,
+        progress: ProgressFn = _silent,
+        cancelled: CancelledFn | None = None,
     ) -> GeneratedMesh:
         self.calls.append((f"<image {len(image)}>", seed))
+        if cancelled is not None and cancelled():
+            raise OperationCancelled
         if self.fallback is None:
             raise GenerationFailed(detail="nothing scripted for an image")
         return self._as_result(self.fallback, "", seed)

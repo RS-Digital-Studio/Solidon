@@ -25,11 +25,11 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
-from typing import Any, Final, Literal, Protocol
+from typing import Any, ClassVar, Final, Literal, Protocol
 
 from app.core.backends import keys
 from app.core.discover import UNUSABLE_ADDRESS
-from app.core.errors import AppError, ExternalToolError
+from app.core.errors import CANCEL, OPEN_SETTINGS, RETRY, AppError, ExternalToolError
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
 
@@ -88,6 +88,22 @@ class Message:
     sie — der Textpfad bleibt für jedes Modell vollständig (Leitprinzip 8)."""
 
 
+#: Ein ``stop_reason``, bei dem die Antwort **unvollständig** ist.
+#:
+#: Anthropic nennt ``max_tokens``, wenn die Ausgabegrenze zuschlug, Ollama
+#: ``length``. Beides heißt: Der Satz bricht mitten ab, und ein angefangener
+#: Werkzeugaufruf fehlt ganz. Gespeichert wurde das bis zum 25.08.2026 und nie
+#: gelesen — die Sitzung nahm eine abgeschnittene Antwort für eine fertige.
+TRUNCATED_STOPS: Final = frozenset({"max_tokens", "length"})
+
+#: Und der Fall, in dem das Modell die Arbeit ablehnt.
+#:
+#: Er sieht wie eine leere Antwort aus: kein Text, kein Werkzeugaufruf, keine
+#: Fehlermeldung. Wer ihn nicht ausweist, lässt den Nutzer auf einen Knopf
+#: starren, der nichts getan hat.
+REFUSAL_STOPS: Final = frozenset({"refusal", "content_filter"})
+
+
 @dataclass(frozen=True, slots=True)
 class Reply:
     """Was zurückkam: Worte, Aufrufe, und was es gekostet hat."""
@@ -97,11 +113,31 @@ class Reply:
     model: str = ""
     stop_reason: str = ""
     input_tokens: int = 0
+    """Alle Eingabe-Token dieses Schrittes — **einschließlich der
+    zwischengespeicherten**.
+
+    Anthropic zählt bei ``cache_control`` getrennt: ``input_tokens`` sind nur
+    die *neuen*, ``cache_creation_input_tokens`` und
+    ``cache_read_input_tokens`` stehen daneben. Dieser Weg setzt die Markierung
+    auf Systemblock und Werkzeugliste (:meth:`AnthropicBackend.complete`), und
+    das ist der weitaus größte Teil des Prompts: Gezählt wurde also der
+    kleinste. Zugbudget und Kostenanzeige maßen damit an einem Zug von 25 000
+    Token ein paar hundert."""
     output_tokens: int = 0
 
     @property
     def wants_tools(self) -> bool:
         return bool(self.tool_calls)
+
+    @property
+    def truncated(self) -> bool:
+        """Ob die Antwort mitten im Satz endete (:data:`TRUNCATED_STOPS`)."""
+        return self.stop_reason in TRUNCATED_STOPS
+
+    @property
+    def refused(self) -> bool:
+        """Ob das Modell die Antwort verweigert hat (:data:`REFUSAL_STOPS`)."""
+        return self.stop_reason in REFUSAL_STOPS
 
 
 class LLMBackend(Protocol):
@@ -165,7 +201,7 @@ def post_json(
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as answer:
-            return dict(json.loads(answer.read().decode("utf-8")))
+            return _as_object(answer.read(), url)
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")[:500]
         raise BackendUnavailable(status=error.code, detail=detail) from error
@@ -184,6 +220,32 @@ def post_json(
         # ein unerwarteter Fehler aufgetreten" plus die Bitte um einen
         # Fehlerbericht — für ein Modell, das schlicht länger rechnet.
         raise BackendTooSlow(seconds=timeout) from error
+
+
+def _as_object(raw: bytes, url: str) -> dict[str, Any]:
+    """Die Antwort als JSON-Objekt — oder eine Meldung, die weiterführt.
+
+    **Was hier ankommt, muss kein JSON sein.** Gemessen an drei echten Lagen:
+    Ein Firmenproxy schiebt eine HTML-Anmeldeseite dazwischen, eine
+    OpenAI-kompatible Gegenstelle antwortet mit einer JSON-**Liste**, und wer
+    die Adresse eines ganz anderen Dienstes einträgt, bekommt dessen Antwort.
+    In allen dreien warf ``json.loads`` beziehungsweise ``dict()`` einen
+    ``ValueError``, den niemand fing — daraus wurde ein ``InternalError``: „Im
+    Programm ist ein unerwarteter Fehler aufgetreten", mit der Bitte um einen
+    Fehlerbericht. Der Fehler lag aber nicht im Programm, sondern in der
+    Adresse, und der Nutzer konnte ihn beheben.
+
+    Der Anfang der Antwort reist mit. Er ist die eigentliche Auskunft: „<!DOCTYPE
+    html" beantwortet die Frage „was steht da denn?" in einem Blick.
+    """
+    text = raw.decode("utf-8", errors="replace")
+    try:
+        loaded = json.loads(text)
+    except ValueError as error:
+        raise BackendAnswerUnreadable(url=url, excerpt=text) from error
+    if not isinstance(loaded, dict):
+        raise BackendAnswerUnreadable(url=url, excerpt=text)
+    return dict(loaded)
 
 
 def post_json_local(url: str, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
@@ -227,6 +289,52 @@ class BackendUnavailable(ExternalToolError):
         if provider:
             values["provider"] = provider
         super().__init__(detail=detail or None, values=values)
+
+
+class BackendAnswerUnreadable(ExternalToolError):
+    """Es kam etwas zurück, aber nichts, was ein Sprachmodell geschickt hätte.
+
+    **Getrennt von :class:`BackendUnavailable`, weil etwas geantwortet hat.**
+    „Nicht erreichbar" schickt den Nutzer zum Starten; hier läuft etwas und
+    spricht eine andere Sprache — ein Proxy, ein falscher Port, eine Adresse,
+    hinter der ein anderer Dienst sitzt, oder ein Modell, das dieses Protokoll
+    nicht bedient.
+
+    Ein ``ExternalToolError`` und ausdrücklich **kein** Programmfehler: Wer für
+    eine falsch eingetragene Adresse einen Fehlerbericht schicken soll, sucht
+    den Fehler bei sich und findet keinen (Regel 17, §33.1).
+    """
+
+    default_title = _("Die Antwort des Sprachmodells war nicht zu lesen.")
+
+    #: Wie viel von der Antwort mitgeht. Genug für „<!DOCTYPE html" und eine
+    #: Fehlerzeile, zu wenig, um ein Protokoll zu fluten.
+    EXCERPT_CHARS: ClassVar[int] = 200
+
+    def __init__(self, url: str = "", excerpt: str = "", provider: str = "") -> None:
+        # Adresse und Auszug stehen in ``values`` und nicht im Satz: Einen
+        # Fehlertext aus dem Kern formatiert niemand nach, ein
+        # ``{platzhalter}`` erschiene dem Kunden mit Klammern
+        # (``tests/test_errors.py`` sucht danach).
+        self.provider = provider
+        values: dict[str, Any] = {}
+        if url:
+            values["url"] = url
+        if excerpt:
+            values["answer"] = " ".join(excerpt.split())[: self.EXCERPT_CHARS]
+        if provider:
+            values["provider"] = provider
+        super().__init__(
+            detail=_(
+                "Unter dieser Adresse hat etwas geantwortet, aber nicht in der "
+                "Sprache, die ein Sprachmodell spricht — meist steckt ein Proxy "
+                "oder ein anderer Dienst dahinter. Der Anfang der Antwort steht "
+                "daneben. Prüfen Sie die Adresse in den Einstellungen, oder "
+                "wählen Sie ein anderes Modell."
+            ),
+            values=values,
+            suggestions=(OPEN_SETTINGS, RETRY, CANCEL),
+        )
 
 
 class BackendTooSlow(ExternalToolError):
@@ -464,9 +572,24 @@ def _as_anthropic_tool(schema: dict[str, Any]) -> dict[str, Any]:
 
 
 def _from_anthropic(answer: dict[str, Any]) -> Reply:
+    """Die Antwort in eine :class:`Reply` — auch wenn sie nicht so aussieht,
+    wie sie soll.
+
+    **``content`` muss keine Liste von Blöcken sein.** Kommt dort eine
+    Zeichenkette an — eine OpenAI-kompatible Gegenstelle unter der
+    Anthropic-Adresse tut genau das —, lief die Schleife über ihre *Zeichen*,
+    und ``block.get`` warf einen ``AttributeError``: ein Programmfehler samt
+    Bitte um Fehlerbericht für eine falsch eingetragene Adresse. Dasselbe für
+    ``usage``, dessen Zahlen keine sein müssen.
+    """
+    blocks = answer.get("content", ())
+    if isinstance(blocks, str) or not isinstance(blocks, list | tuple):
+        raise BackendAnswerUnreadable(excerpt=str(answer)[:400], provider="anthropic")
     text: list[str] = []
     calls: list[ToolCall] = []
-    for block in answer.get("content", ()):
+    for block in blocks:
+        if not isinstance(block, dict):
+            continue
         if block.get("type") == "text":
             text.append(str(block.get("text", "")))
         elif block.get("type") == "tool_use":
@@ -474,18 +597,81 @@ def _from_anthropic(answer: dict[str, Any]) -> Reply:
                 ToolCall(
                     id=str(block.get("id", "")),
                     name=str(block.get("name", "")),
-                    arguments=dict(block.get("input", {})),
+                    arguments=_arguments(block.get("input")),
                 )
             )
-    usage = answer.get("usage", {})
+    found = answer.get("usage")
+    usage: dict[str, Any] = dict(found) if isinstance(found, dict) else {}
     return Reply(
         text="".join(text),
         tool_calls=tuple(calls),
         model=str(answer.get("model", "")),
-        stop_reason=str(answer.get("stop_reason", "")),
-        input_tokens=int(usage.get("input_tokens", 0)),
-        output_tokens=int(usage.get("output_tokens", 0)),
+        stop_reason=str(answer.get("stop_reason") or ""),
+        input_tokens=_input_tokens(usage),
+        output_tokens=_count(usage, "output_tokens"),
     )
+
+
+def _count(usage: dict[str, Any], key: str) -> int:
+    """Eine Token-Zahl aus der Nutzungsangabe. Was keine Zahl ist, zählt null.
+
+    ``int("viele")`` warf einen ``ValueError`` und machte aus einer schrägen
+    Angabe einen Programmfehler. Eine fehlende Zählung ist kein Grund, einen
+    fertigen Zug wegzuwerfen — sie ist ein Grund, null zu zählen.
+    """
+    value = usage.get(key, 0)
+    if isinstance(value, bool) or not isinstance(value, int | float | str):
+        return 0
+    try:
+        return int(float(value))
+    except ValueError:
+        return 0
+
+
+#: Wie Anthropic die Eingabe zählt, wenn ein Zwischenspeicher im Spiel ist.
+#:
+#: Drei Felder, und ``input_tokens`` ist bei gesetztem ``cache_control`` das
+#: kleinste davon: Es zählt nur, was **neu** verrechnet wurde. Wer nur dieses
+#: liest, deckelt ein Budget von 120 000 an einem Zug, der in Wahrheit 25 000
+#: verbraucht hat — und zeigt dieselbe falsche Zahl als Kosten an.
+CACHE_TOKEN_FIELDS: Final = (
+    "input_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+)
+
+
+def _input_tokens(usage: dict[str, Any]) -> int:
+    """Alle Eingabe-Token, auch die aus dem Zwischenspeicher
+    (:data:`CACHE_TOKEN_FIELDS`)."""
+    return sum(_count(usage, field_name) for field_name in CACHE_TOKEN_FIELDS)
+
+
+def _arguments(value: Any) -> dict[str, Any]:
+    """Die Argumente eines Werkzeugaufrufs — als Objekt, auch wenn Text kam.
+
+    **Der Fall ist bei OpenAI-kompatiblen Servern der Normalfall**, nicht die
+    Ausnahme: Dort ist ``arguments`` eine Zeichenkette mit JSON darin, und
+    manche Ollama-Gegenstellen reichen das unverändert durch. ``dict("{…}")``
+    warf einen ``ValueError`` — der ganze Zug endete als Programmfehler, obwohl
+    der Aufruf lesbar dastand. Also wird gelesen statt abgelehnt.
+
+    Was sich auch dann nicht lesen lässt, wird ein leeres Objekt. Die
+    Schemaprüfung der Sitzung macht daraus eine Meldung, die das Modell
+    korrigieren kann — das ist der vorgesehene Weg für einen missratenen
+    Aufruf (§26.5) und besser als eine Ausnahme, die den Zug beendet.
+    """
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except ValueError:
+            _log.warning("tool arguments were neither object nor JSON text")
+            return {}
+    if isinstance(value, dict):
+        return dict(value)
+    if value is not None:
+        _log.warning("tool arguments arrived as %s", type(value).__name__)
+    return {}
 
 
 # --- Lokal, über Ollama -----------------------------------------------------------
@@ -695,23 +881,55 @@ def _as_ollama(message: Message) -> dict[str, Any]:
 
 
 def _from_ollama(answer: dict[str, Any], model: str) -> Reply:
-    message = answer.get("message", {})
+    """Dasselbe für den lokalen Weg — und mit denselben drei Fallen.
+
+    ``message`` muss ein Objekt sein, ``content`` muss keine Zeichenkette sein
+    (manche Gegenstellen schicken eine Liste von Textblöcken), und
+    ``arguments`` ist bei OpenAI-kompatiblen Servern JSON **als Text**. Alle
+    drei endeten hier in einem Programmfehler mit der Bitte um einen
+    Fehlerbericht; die ersten beiden werden jetzt gemeldet, der dritte
+    gelesen (:func:`_arguments`).
+    """
+    message = answer.get("message")
+    if not isinstance(message, dict):
+        raise BackendAnswerUnreadable(excerpt=str(answer)[:400], provider="ollama")
+    raw_calls = message.get("tool_calls") or ()
+    if isinstance(raw_calls, str) or not isinstance(raw_calls, list | tuple):
+        raise BackendAnswerUnreadable(excerpt=str(answer)[:400], provider="ollama")
     calls = tuple(
         ToolCall(
             id=f"call_{index}",
-            name=str(entry.get("function", {}).get("name", "")),
-            arguments=dict(entry.get("function", {}).get("arguments", {})),
+            name=str(_function(entry).get("name", "")),
+            arguments=_arguments(_function(entry).get("arguments")),
         )
-        for index, entry in enumerate(message.get("tool_calls", ()), start=1)
+        for index, entry in enumerate(raw_calls, start=1)
+        if isinstance(entry, dict)
     )
     return Reply(
-        text=str(message.get("content", "")),
+        text=_text_of(message.get("content")),
         tool_calls=calls,
         model=str(answer.get("model", model)),
-        stop_reason=str(answer.get("done_reason", "")),
-        input_tokens=int(answer.get("prompt_eval_count", 0)),
-        output_tokens=int(answer.get("eval_count", 0)),
+        stop_reason=str(answer.get("done_reason") or ""),
+        input_tokens=_count(answer, "prompt_eval_count"),
+        output_tokens=_count(answer, "eval_count"),
     )
+
+
+def _function(entry: dict[str, Any]) -> dict[str, Any]:
+    """Der ``function``-Teil eines Werkzeugaufrufs, notfalls leer."""
+    found = entry.get("function")
+    return found if isinstance(found, dict) else {}
+
+
+def _text_of(value: Any) -> str:
+    """Der Text einer Antwort, auch wenn er in Blöcken ankommt."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list | tuple):
+        return "".join(
+            str(block.get("text", "")) if isinstance(block, dict) else str(block) for block in value
+        )
+    return "" if value is None else str(value)
 
 
 #: Unterhalb dieser Modellgröße (Milliarden Parameter) scheitern
@@ -1085,7 +1303,15 @@ def ollama_speed(model: str, url: str | None = None, transport: Transport = post
         "options": {"num_ctx": OLLAMA_CONTEXT_TOKENS, "num_predict": 8},
     }
     try:
-        answer = transport(backend.url, {"Content-Type": "application/json"}, payload)
+        # **Über ``ollama_endpoint`` und nicht über die rohe Adresse.** Wer
+        # „127.0.0.1:11434" einträgt — die Schreibweise, die Ollama selbst
+        # ausgibt —, bekam hier keine Messung und damit ausgerechnet keine
+        # Langsam-Warnung: also genau der Kunde nicht, dessen Adresse schon
+        # einmal krumm war. Jeder andere Aufruf dieses Moduls geht längst
+        # durch dieselbe Normalisierung.
+        answer = transport(
+            ollama_endpoint(backend.url), {"Content-Type": "application/json"}, payload
+        )
     except (AppError, OSError, ValueError):
         return Speed()
     count = answer.get("prompt_eval_count")

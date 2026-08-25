@@ -696,8 +696,15 @@ def test_every_caller_says_whether_the_result_may_go_to_disk() -> None:
         if path.name == "cache.py":
             continue  # dort wohnt die Klasse, und `DiskCache.put` kennt kein Wort
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if ".put(" in line and "to_disk=" not in line:
-                offenders.append(f"{path.relative_to(root)}:{number}")
+            if ".put(" not in line or "to_disk=" in line:
+                continue
+            if "sink.put(" in line:
+                # ``queue.Queue`` eines Pump-Fadens (comfy_setup._pump) — kein
+                # Cache, kennt kein ``to_disk``. Kuratierte Ausnahme wie
+                # GERMAN_STEMS: Wer eine weitere Warteschlange baut, trägt
+                # ihren Namen hier ein, und das breite Netz bleibt gespannt.
+                continue
+            offenders.append(f"{path.relative_to(root)}:{number}")
     assert not offenders, (
         "these put a result into the cache without saying whether it may be kept: "
         + ", ".join(offenders)

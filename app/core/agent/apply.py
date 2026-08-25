@@ -24,13 +24,22 @@ gibt.
 from __future__ import annotations
 
 import secrets
+from collections.abc import Sequence
 
 from app.core.agent.proposal import Proposal
+from app.core.agent.tools import runs_foreign_source
 from app.core.errors import AppError, ValidationError
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, Registry
 from app.core.scene.history import History, change_for
-from app.core.types import ChatEntry, Document, DocumentChange, Transaction
+from app.core.types import (
+    ChatEntry,
+    Document,
+    DocumentChange,
+    Finding,
+    Transaction,
+    TransactionId,
+)
 from app.i18n import _, tr
 
 _log = get_logger(__name__)
@@ -41,10 +50,16 @@ def auto_acceptable(proposal: Proposal, registry: Registry | None = None) -> boo
 
     §26.5 sagt „kann automatisch laufen", Regel 19 sagt „keine Bestätigung
     vor rücknehmbaren Handlungen" — vier enge Bedingungen entscheiden:
-    ausschließlich umkehrbare Operationen, kein ``create_from_scad``, keine
-    Warnungen oder Fehler in den Befunden, keine Rückfrage und kein
-    angehaltener Lauf. Parameter, Passungen und das Druckziel sind
+    ausschließlich umkehrbare Operationen, nichts, was fremden Quelltext
+    ausführt, keine Warnungen oder Fehler in den Befunden, keine Rückfrage und
+    kein angehaltener Lauf. Parameter, Passungen und das Druckziel sind
     unschädlich: sie reisen als ``DocumentChange``, ein Undo nimmt sie mit.
+
+    **Die zweite Bedingung fragte nach dem Namen** und verglich mit
+    ``create_from_scad``. Ein Rezept mit einem solchen Schritt heißt
+    ``insert_<name>`` (Regel 13) und kam damit hindurch — eingesetzt ohne
+    Rückfrage, mit einem OpenSCAD-Lauf darin. Gefragt wird jetzt, was die
+    Operation tut (:func:`~app.core.agent.tools.runs_foreign_source`).
     """
     source = registry or REGISTRY
     if proposal.empty or proposal.questions or proposal.stopped or proposal.undo_of:
@@ -52,7 +67,7 @@ def auto_acceptable(proposal: Proposal, registry: Registry | None = None) -> boo
     if any(finding.severity != "info" for finding in proposal.findings):
         return False
     for draft in proposal.drafts:
-        if draft.op == "create_from_scad":
+        if runs_foreign_source(draft.op):
             return False
         try:
             if not source.get(draft.op).reversible:
@@ -72,7 +87,7 @@ def accept(proposal: Proposal, history: History) -> Transaction | None:
 
     if proposal.undo_of is not None:
         _refuse_mixed(proposal)
-        _undo_named(history, proposal.undo_of)
+        _undo_named(history, proposal)
 
     # Die Vorher-Seite kommt aus dem Dokument, in das wirklich geschrieben
     # wird, nicht aus der Arbeitskopie, auf welcher der Agent gerechnet hat:
@@ -103,6 +118,32 @@ def accept(proposal: Proposal, history: History) -> Transaction | None:
 def discard(proposal: Proposal, document: Document) -> None:
     """Wirft einen Vorschlag weg. Das Gespräch behält beide Beiträge (§26.3)."""
     record(document, proposal, None, discarded=True)
+
+
+def undo_applied(history: History, transaction: TransactionId) -> bool:
+    """Nimmt **genau diese** Transaktion zurück — oder gar nichts (§26.5).
+
+    Für den Weg zurück aus der Übernommen-Leiste: Ein eindeutig umkehrbarer
+    Vorschlag läuft ohne Rückfrage (Regel 19), und der Knopf daneben sagt
+    „Rückgängig". Er meint **einen** Schritt, nämlich den, der gerade
+    dagestanden hat.
+
+    ``History.undo`` kennt diese Frage nicht: Es nimmt zurück, was oben liegt.
+    Zwischen dem Klick und dem Zug kann aber etwas Neueres angewandt worden
+    sein — vom Nutzer, von einem Fernaufruf, vom nächsten Agentenzug. Dann
+    nähme ein blindes ``undo`` das Falsche zurück, und der Knopf hielte sein
+    Versprechen nicht.
+
+    ``True`` heißt: zurückgenommen. ``False`` heißt: Sie liegt nicht (mehr)
+    obenauf, und es wurde **nichts** angefasst — der Aufrufer sagt dann, dass
+    der Weg zurück jetzt über den Verlauf geht. Kein Fehler, denn falsch
+    gemacht hat niemand etwas.
+    """
+    known = history.document.transactions
+    if not known or known[-1].id != transaction:
+        return False
+    history.undo()
+    return True
 
 
 def record(
@@ -149,31 +190,96 @@ def _refuse_mixed(proposal: Proposal) -> None:
     )
 
 
-def _undo_named(history: History, transaction_id: str) -> None:
-    """Nimmt zurück bis einschließlich einer Transaktion. Undo ist ein
-    Stapel: zu einem älteren Eintrag zu kommen heißt, die neueren mitzunehmen —
-    und das zu sagen ist besser, als so zu tun, als ließe sich ein einzelner
-    Eintrag aus der Mitte herauspflücken.
+def sweep_for(document: Document, transaction_id: str) -> tuple[TransactionId, ...]:
+    """Welche Transaktionen eine Rücknahme wirklich erfasst — jüngste zuerst.
 
-    Vorher wird gefragt, ob es den Eintrag überhaupt noch gibt. Zwischen
-    Vorschlag und Annahme liegt eine Entscheidung des Nutzers, und in der Zeit
-    kann er selbst zurückgenommen haben — die Sitzung prüfte nur gegen die
-    Arbeitskopie von damals. Ohne die Frage hieße „bis einschließlich" bis zum
-    leeren Stapel: die Schleife nähme das ganze Projekt zurück, und das
-    folgende ``apply`` würfe den Redo-Stapel hinterher.
+    Leer heißt: diese Kennung steht nicht (mehr) im Verlauf.
+
+    Der Verlauf ist ein Stapel ohne Verzweigungen (§15.4), und ``History``
+    bietet nichts an, um einen Eintrag aus der Mitte herauszupflücken — es
+    gibt keine kleinere Antwort als „die genannte und jede jüngere". Was es
+    gibt, ist die Wahl zwischen stillschweigend tun und vorher sagen; diese
+    Funktion ist das Vorher-Sagen, und beide Seiten fragen dieselbe (§26.5,
+    Regel 16).
     """
-    if all(entry.id != transaction_id for entry in history.document.transactions):
+    known = [entry.id for entry in document.transactions]
+    if transaction_id not in known:
+        return ()
+    return tuple(reversed(known[known.index(transaction_id) :]))
+
+
+def _undo_named(history: History, proposal: Proposal) -> None:
+    """Nimmt zurück, was der Vorschlag angekündigt hat — und sonst nichts.
+
+    Undo ist ein Stapel: zu einem älteren Eintrag zu kommen heißt, die neueren
+    mitzunehmen. Solange das hier stillschweigend geschah, kündigte ein
+    Vorschlag „nimm t1 zurück" an und leerte bei vier Transaktionen das
+    Projekt — angekündigt eine, ausgeführt vier, gegen Regel 16. Der Weg
+    zurück ist damit auch verstellt: ein Redo bringt nur t1 wieder, und die
+    nächste Anwendung wirft t2 bis t4 endgültig weg (``_forget_undone``).
+
+    Verhindern lässt sich das Mitnehmen nicht — herauspflücken kann der
+    Verlauf nicht. Angekündigt wird es dafür: :func:`sweep_for` sagt es dem
+    Modell im Zug, es steht als Befund am Vorschlag, und **hier** wird
+    verglichen. Weicht der Verlauf von der Ankündigung ab, weil der Nutzer
+    zwischen Vorschlag und Annahme selbst zurückgenommen oder etwas angewandt
+    hat, wird nichts getan: Was angenommen wird, muss dasselbe sein, was
+    dagestanden hat.
+    """
+    transaction_id = proposal.undo_of or ""
+    sweep = sweep_for(history.document, transaction_id)
+    if not sweep:
         raise ValidationError(
             field="transaction",
             detail=_("Diese Transaktion steht nicht mehr im Verlauf."),
             constraint="unknown_transaction",
             values={"transaction": transaction_id},
         )
-    while history.document.transactions:
-        last = history.document.transactions[-1]
+    announced = proposal.undo_sweeps or (transaction_id,)
+    if sweep != tuple(announced):
+        raise ValidationError(
+            field="transaction",
+            detail=_(
+                "Dieser Vorschlag würde andere Schritte zurücknehmen als "
+                "angekündigt — der Verlauf steht anders als bei seiner "
+                "Entstehung. Fragen Sie noch einmal."
+            ),
+            constraint="history_moved",
+            values={
+                "transaction": transaction_id,
+                "announced": ", ".join(announced),
+                "affected": ", ".join(sweep),
+            },
+        )
+    for _step in sweep:
         history.undo()
-        if last.id == transaction_id:
-            return
+
+
+def undo_finding(sweep: Sequence[TransactionId]) -> Finding:
+    """Der Befund, der die Rücknahme ehrlich macht (§26.5, Regel 16).
+
+    Er hängt am Vorschlag und damit in der Entscheidungszeile: Wer „nimm den
+    Bohrschritt zurück" liest, soll nicht erst am leeren Projekt merken, dass
+    drei jüngere Schritte mitgingen. Zwei Schweregrade, weil die Lage zwei
+    verschiedene sind — die jüngste Transaktion zurückzunehmen ist genau das,
+    was dasteht, und braucht keine Warnung.
+    """
+    if len(sweep) < 2:
+        return Finding(
+            code="agent.undo_single",
+            severity="info",
+            message=_("Der Vorschlag nimmt die zuletzt angewandte Transaktion zurück."),
+            values={"transactions": ", ".join(sweep)},
+        )
+    return Finding(
+        code="agent.undo_sweeps",
+        severity="warning",
+        message=_(
+            "Diese Transaktion liegt nicht zuoberst. Sie zurückzunehmen nimmt "
+            "auch alle jüngeren mit — der Verlauf kennt keine Verzweigungen."
+        ),
+        values={"count": len(sweep), "transactions": ", ".join(sweep)},
+    )
 
 
 def _title(proposal: Proposal) -> str:

@@ -335,3 +335,37 @@ def extra_tools() -> tuple[dict[str, Any], ...]:
 
 def names(registry: Registry | None = None) -> tuple[str, ...]:
     return tuple(str(schema["name"]) for schema in tool_schemas(registry))
+
+
+def runs_foreign_source(name: str) -> bool:
+    """Ob diese Operation beim Auswerten fremden Quelltext ausführt (§32).
+
+    **Gefragt wird, was eine Operation tut, nicht wie sie heißt.** Zwei
+    Sperren verglichen den Namen mit ``create_from_scad`` — die
+    Auto-Übernahme (:func:`~app.core.agent.apply.auto_acceptable`) und die
+    Fernbedienung (:mod:`~app.core.agent.remote`). Ein **Rezept** darf seit dem
+    24.08.2026 einen ``create_from_scad``-Schritt tragen (Regel 13), und es
+    heißt dann ``insert_<name>``: Beide Sperren sahen daran vorbei, die
+    Fernbedienung bot es an, und ein Vorschlag damit galt als eindeutig
+    umkehrbar und lief ohne Rückfrage.
+
+    Regel 11 bleibt davon unberührt — der Quelltext wird vor jedem Lauf
+    geprüft. Regel 13 sagt aber, dass die zwei Regeln nur zusammen halten: Was
+    fremden Code startet, wird angesagt und nicht ferngesteuert, gleich unter
+    welchem Namen es im Register steht.
+
+    Gelesen wird dieselbe Quelle wie in ``knowledge.parts.check``: die
+    Rezeptdaten des Bausteins, in denen die Schritte des Dokuments stehen. Ein
+    Baustein ohne Rezept trägt keinen Quelltext — er rechnet gegen
+    ``manifold3d`` (Checkliste „neuer Baustein").
+    """
+    from app.core.knowledge.parts.ops import part_of
+    from app.core.scene.foreign import SCRIPTED_OPS
+
+    if name in SCRIPTED_OPS:
+        return True
+    spec = part_of(name)
+    if spec is None or spec.recipe_data is None:
+        return False
+    steps = dict(spec.recipe_data).get("document", {}).get("ops", ())
+    return any(str(entry.get("op", "")) in SCRIPTED_OPS for entry in steps)

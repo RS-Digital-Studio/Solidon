@@ -28,7 +28,7 @@ from app.core.knowledge.print_settings import resolve
 from app.core.slice import advise as advise_module
 from app.core.slice.analysis import (
     island_layers,
-    narrowest,
+    narrowest_measured,
     slice_body,
     total_overhang,
     worst_overhang,
@@ -135,7 +135,7 @@ def _printability(chosen: dict[str, SceneObject], profile: Profile) -> list[str]
             continue
         result = slice_body(as_mesh_data(entry.mesh), layer_height=profile.printer.layer_height)
         islands = island_layers(result)
-        thinnest = narrowest(result)
+        thinnest = narrowest_measured(result)
         spans = max((layer.bridge_width for layer in result.layers), default=0.0)
         facts = [
             f"{tr('Überhangfläche')} {total_overhang(result):.0f} mm²",
@@ -148,7 +148,7 @@ def _printability(chosen: dict[str, SceneObject], profile: Profile) -> list[str]
             facts.append(f"{len(islands)} {tr('Inseln (ab mm)')}: {heights}")
         if spans > 0.0:
             facts.append(f"{tr('längste Brücke')} {format_length(spans)}")
-        if thinnest < profile.printer.nozzle_diameter * 2.0:
+        if thinnest is not None and thinnest < profile.printer.nozzle_diameter * 2.0:
             facts.append(
                 f"{tr('dünnste Struktur')} {format_length(thinnest)} "
                 f"({tr('Düse')} {format_length(profile.printer.nozzle_diameter)})"

@@ -874,12 +874,24 @@ def test_the_weights_are_downloaded_through_a_short_folder() -> None:
     Handlungsvorschlag anzuhalten (§2.7, §33.1) — „Ihr Zwischenordner ist zu
     tief; setzen Sie TEMP auf einen kürzeren Pfad." Ein Test darauf prüft dann
     das Verhalten und nicht den Rechner, auf dem er läuft.
+
+    **Und seit dem 25.08.2026 kommt der Ordner nicht mehr aus ``tempfile``.**
+    Ein fester Name im gemeinsamen Temp ist unter Linux von jedem anderen Konto
+    vorbelegbar; er liegt jetzt im Nutzer-Cache und wird als Argument
+    hereingereicht — das Programm läuft in ComfyUIs Python und kennt unseren
+    Kern nicht.
     """
     from app.core.backends import comfy_setup
+    from app.core.paths import user_cache_dir
 
     programm = comfy_setup._FETCH_WEIGHTS
-    assert "tempfile.gettempdir" in programm, "geladen wird in einen kurzen Ordner"
+    assert "tempfile" not in programm, "der Zwischenordner kommt nicht mehr aus dem Temp"
+    assert "sys.argv[3]" in programm, "sondern von außen, aus app.core.paths"
     assert "shutil.move" in programm, "und danach an seinen Platz gebracht"
+
+    ordner = comfy_setup.scratch_dir("dl-triposg")
+    assert user_cache_dir() in ordner.parents, "er liegt im Nutzer-Cache"
+    assert ordner.is_dir(), "und er ist angelegt, bevor jemand hineinlädt"
 
 
 def test_a_broken_download_is_resumed_and_not_thrown_away() -> None:
@@ -892,11 +904,17 @@ def test_a_broken_download_is_resumed_and_not_thrown_away() -> None:
     ist das der Normalfall und nicht das Pech.
 
     Geprüft wird der Programmtext: Ein Lauf lädt 7,5 GB.
+
+    Der feste Name steht seit dem 25.08.2026 nicht mehr im Programmtext,
+    sondern in :func:`comfy_setup.scratch_dir` — dieselbe Zusage, eine Stelle
+    weiter oben: Zweimal gefragt, zweimal derselbe Ordner.
     """
     from app.core.backends import comfy_setup
 
     programm = comfy_setup._FETCH_WEIGHTS
-    assert "solidon-triposg" in programm, "der Ordner trägt einen festen Namen"
+    assert comfy_setup.scratch_dir("dl-triposg") == comfy_setup.scratch_dir("dl-triposg"), (
+        "der Ordner trägt einen festen Namen"
+    )
     assert "mkdtemp" not in programm, "sonst liegt das Halbgeladene beim nächsten Mal woanders"
     assert "finally" not in programm, "aufgeräumt wird nur, was gelungen ist"
 
@@ -1481,3 +1499,163 @@ def test_a_broken_comfy_address_says_what_belongs_there() -> None:
     text = f"{raised.value.title} {raised.value.detail}"
     assert "127.0.0.1:8188" in text, "ohne Beispiel weiß niemand, wie eine Adresse aussieht"
     assert raised.value.suggestions, "ein Fehler endet nie ohne Handlung"
+
+
+# --- Die Adresse, so wie sie weitergegeben wird (Review 25.08.2026) ----------------
+
+
+def test_an_address_without_a_scheme_is_the_normal_way_to_write_one() -> None:
+    """**„127.0.0.1:8188" war dauerhaft „nicht erreichbar".**
+
+    So schreibt ComfyUI seine eigene Adresse in die Startzeile, und so gibt
+    jeder sie weiter. ``urlparse`` fand darin keinen Rechnernamen, der
+    Generator blieb ausgegraut, und der einzige Satz, der auf das Feld gezeigt
+    hätte („Die Adresse von ComfyUI ist keine Adresse"), war unerreichbar —
+    weil vorher schon niemand mehr fragte.
+    """
+    from app.core.backends.mesh import comfy_base
+
+    assert comfy_base("127.0.0.1:8188") == "http://127.0.0.1:8188"
+    assert comfy_base("http://127.0.0.1:8188/") == "http://127.0.0.1:8188"
+    assert comfy_base("") == "http://127.0.0.1:8188", "leer heißt: diese Maschine"
+    assert comfy_base("https://rechner:8188/comfy") == "https://rechner:8188/comfy", (
+        "ein eigener Pfad bleibt stehen — hinter einem Reverse-Proxy liegt er dort"
+    )
+
+
+def test_every_request_goes_to_the_normalised_address() -> None:
+    server = Comfy()
+    generator = ComfyBackend(transport=server, poll_seconds=0.0, url="127.0.0.1:8188")
+
+    generator.text_to_mesh("ein Halter", seed=1)
+
+    assert all(entry.startswith("http://127.0.0.1:8188/") for entry in server.requests), (
+        server.requests
+    )
+
+
+# --- Abbrechen wirkt, solange gewartet wird ----------------------------------------
+
+
+def test_a_running_generation_can_be_cancelled() -> None:
+    """**Bis zu einer Stunde war eine laufende Erzeugung nicht abbrechbar.**
+
+    Der Dialog wartet beim Schließen fünfzig Millisekunden auf seinen Arbeiter
+    und lässt dann los; der Arbeiter rechnete weiter und meldete sein Ergebnis
+    an ein Fenster, das es nicht mehr gab. Gefragt wird jetzt in der
+    Warteschleife — dort wird die Zeit verbracht.
+    """
+    from app.core.errors import OperationCancelled
+
+    server = Comfy(ready_after=99)
+    generator = ComfyBackend(transport=server, poll_seconds=0.0)
+    versuche = {"n": 0}
+
+    def abgebrochen() -> bool:
+        versuche["n"] += 1
+        return versuche["n"] > 2
+
+    with pytest.raises(OperationCancelled):
+        generator.text_to_mesh("ein Halter", cancelled=abgebrochen)
+
+
+def test_without_a_callback_nothing_changes() -> None:
+    """Ein Backend ohne Abbruchwunsch läuft wie zuvor — der Rückruf ist eine
+    Zugabe, keine Voraussetzung."""
+    server = Comfy()
+
+    result = ComfyBackend(transport=server, poll_seconds=0.0).text_to_mesh("ein Halter")
+
+    assert result.mesh.triangle_count == 12
+
+
+def test_the_scripted_backend_answers_the_same_question() -> None:
+    """Damit ein Test den Abbruchweg fahren kann, ohne eine Grafikkarte."""
+    from app.core.errors import OperationCancelled
+
+    doppel = ScriptedMeshBackend(fallback=stl())
+
+    with pytest.raises(OperationCancelled):
+        doppel.text_to_mesh("egal", cancelled=lambda: True)
+
+
+# --- Ein schweigender Kindprozess friert die Einrichtung nicht mehr ein ------------
+
+
+def test_a_silent_child_process_is_still_cancellable() -> None:
+    """**„Zwischen den Zeilen fragen" reichte nicht, denn manche Schritte
+    schweigen.**
+
+    ``for raw in process.stdout`` blockiert, bis eine Zeile kommt. Kommt keine
+    — ein Klon, der auf eine Anmeldung wartet, ein Download hinter einer toten
+    Verbindung —, kam auch die Abbruchprüfung nicht dran: *Abbrechen* wirkte
+    nicht, und die Stunde aus ``STEP_TIMEOUT_SECONDS`` verstrich nie, weil
+    niemand auf die Uhr sah.
+
+    Gefahren wird gegen ein echtes Python, das nichts ausgibt und wartet.
+    """
+    import sys
+    import time
+
+    from app.core.backends import comfy_setup
+
+    begonnen = time.monotonic()
+    with pytest.raises(comfy_setup.Cancelled):
+        comfy_setup._run(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            "Warten auf nichts",
+            comfy_setup._silent,
+            lambda: True,
+        )
+
+    assert time.monotonic() - begonnen < 10.0, "der Abbruch wartet nicht auf den Prozess"
+
+
+def test_a_silent_child_process_still_hits_its_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Dieselbe Stelle, die andere Richtung: Die Frist gilt auch ohne Ausgabe."""
+    import sys
+
+    from app.core.backends import comfy_setup
+
+    monkeypatch.setattr(comfy_setup, "STEP_TIMEOUT_SECONDS", 0.3)
+
+    with pytest.raises(comfy_setup.SetupFailed):
+        comfy_setup._run(
+            [sys.executable, "-c", "import time; time.sleep(30)"],
+            "Warten auf nichts",
+            comfy_setup._silent,
+        )
+
+
+def test_a_talking_child_process_still_gets_its_output_read() -> None:
+    """Und was gesagt wird, kommt weiter an — sonst stünde im Fehlerfall nichts
+    da."""
+    import sys
+
+    from app.core.backends import comfy_setup
+
+    with pytest.raises(comfy_setup.SetupFailed) as gefangen:
+        comfy_setup._run(
+            [sys.executable, "-c", "print('so nicht'); raise SystemExit(3)"],
+            "Ein Schritt",
+            comfy_setup._silent,
+        )
+
+    assert "so nicht" in str(gefangen.value)
+
+
+def test_the_node_check_can_be_cancelled_too(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der einzige ``_run``-Aufruf ohne Abbruchmerker — und er lädt Torch."""
+    from app.core.backends import comfy_setup
+
+    gesehen: list[object] = []
+
+    def merken(command, what, progress, cancelled=None) -> None:
+        gesehen.append(cancelled)
+
+    monkeypatch.setattr(comfy_setup, "_run", merken)
+    merker = lambda: False  # noqa: E731 - eine Marke, keine Funktion mit Namen
+
+    comfy_setup.nodes_load(Path("comfy"), Path("python"), Path("nodes"), cancelled=merker)
+
+    assert gesehen == [merker]

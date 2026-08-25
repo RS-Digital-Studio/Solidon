@@ -61,6 +61,7 @@ from app.core.types import (
     CancelToken,
     Document,
     FeatureRef,
+    Finding,
     Fit,
     FitKind,
     ObjectId,
@@ -70,7 +71,7 @@ from app.core.types import (
     Scene,
     SourceAccess,
 )
-from app.i18n import tr
+from app.i18n import _, tr
 
 _log = get_logger(__name__)
 
@@ -97,8 +98,13 @@ MIN_ANSWER_TOKENS = 512
 def _refuse(question: str, options: list[str]) -> str:
     """Ohne jemanden zum Fragen lässt sich eine mehrdeutige Anfrage nicht
     beantworten.
+
+    Der Satz kommt über ``_`` und nicht über ``tr``: Er wird zu einem
+    Fehlertext, und den zeigt die Oberfläche unter Umständen erst später und
+    in einer Sprache, die beim Werfen noch nicht feststand (§33.1). ``tr``
+    übersetzt sofort und friert die Sprache dieses Augenblicks ein.
     """
-    raise AppError(tr("Für diese Rückfrage ist niemand da."), detail=question)
+    raise AppError(_("Für diese Rückfrage ist niemand da."), detail=question)
 
 
 def _gathered_refusal(kind: str) -> str:
@@ -121,6 +127,46 @@ def _gathered_refusal(kind: str) -> str:
     if kind == "armature":
         return tr("Skelett und Stellung setzt der Nutzer selbst — im Skeletteditor und im Dialog.")
     return tr("Skizzen zeichnet der Nutzer selbst — benutze die Grundformen und Maße.")
+
+
+def _truncation_finding(had_calls: bool) -> Finding:
+    """Die Antwort brach mitten ab (:data:`~app.core.backends.llm.TRUNCATED_STOPS`).
+
+    Ausgeführt wird von diesem Schritt nichts mehr: Was abgeschnitten ist, ist
+    auch der letzte Werkzeugaufruf, und ein halb übertragener Aufruf mit halben
+    Zahlen ist schlimmer als keiner. Der Vorschlag zeigt den Stand bis hierhin
+    — dieselbe Zusage wie bei der Schritt- und der Tokengrenze (§26.5).
+    """
+    return Finding(
+        code="agent.answer_truncated",
+        severity="warning",
+        message=_(
+            "Die Antwort des Modells brach mitten ab — sie war länger als das, "
+            "was das Modell je Schritt ausgeben darf. Der Vorschlag zeigt den "
+            "Stand bis hierhin; eine kürzere Anweisung oder ein kleinerer "
+            "Schritt kommt durch."
+        ),
+        values={"dropped_call": "yes" if had_calls else "no"},
+    )
+
+
+def _refusal_finding() -> Finding:
+    """Das Modell hat die Antwort verweigert
+    (:data:`~app.core.backends.llm.REFUSAL_STOPS`).
+
+    Ohne diesen Befund war das von „nichts zu tun gefunden" nicht zu
+    unterscheiden: kein Text, kein Aufruf, keine Meldung — und ein Nutzer, der
+    denselben Satz noch einmal schickt.
+    """
+    return Finding(
+        code="agent.answer_refused",
+        severity="warning",
+        message=_(
+            "Das Modell hat diese Anfrage abgelehnt und nicht geantwortet. Eine "
+            "andere Formulierung oder ein anderes Modell führt weiter — an der "
+            "Anwendung liegt es nicht."
+        ),
+    )
 
 
 def _unknown_objects(wanted: tuple[str, ...], scene: Scene) -> str:
@@ -208,10 +254,29 @@ class AgentSession:
                 messages, tools, temperature=self.temperature, max_output_tokens=remaining
             )
             proposal.steps += 1
+            # Beide Zahlen kommen aus der Antwort und nicht aus einer eigenen
+            # Schätzung; ``Reply.input_tokens`` zählt seit dem 25.08.2026 auch
+            # die zwischengespeicherten Eingabe-Token (§26.5) — sonst maß der
+            # Deckel den kleinsten Teil eines Zuges.
             proposal.input_tokens += reply.input_tokens
             proposal.output_tokens += reply.output_tokens
             if reply.text:
                 proposal.answer = reply.text
+
+            # **``stop_reason`` wurde gespeichert und nie gelesen.** Zwei
+            # Gründe verschwanden damit lautlos: eine abgeschnittene Antwort
+            # galt als vollständige — samt halbem Werkzeugaufruf, den
+            # auszuführen niemand verantworten kann —, und eine Verweigerung
+            # des Modells sah aus wie ein Zug, der nichts zu tun fand. Beide
+            # sagen es jetzt, und beide sagen, was hilft (Regel 17).
+            if reply.refused:
+                proposal.stopped = "refused"
+                proposal.findings.append(_refusal_finding())
+                break
+            if reply.truncated:
+                proposal.stopped = "truncated"
+                proposal.findings.append(_truncation_finding(bool(reply.tool_calls)))
+                break
 
             if not reply.tool_calls:
                 break
@@ -317,11 +382,39 @@ class AgentSession:
         return f"{tr('Antwort')}: {answer}"
 
     def _undo(self, arguments: dict[str, Any], proposal: Proposal, working: Document) -> str:
+        """Eine Transaktion zum Zurücknehmen vormerken — mit dem, was mitgeht.
+
+        Drei Schranken, und jede hat ihren eigenen Grund:
+
+        * **Eine unbekannte Kennung** ist ein Fehlgriff des Modells.
+        * **Ein zweiter Aufruf** überschrieb den ersten wortlos: Der Vorschlag
+          trägt genau ein ``undo_of``, und das Modell erfuhr nie, dass seine
+          erste Rücknahme verschwunden war. Was zwei Transaktionen zurücknehmen
+          soll, sind zwei Vorschläge (Regel 16).
+        * **Zurücknehmen und Anlegen** gehören nicht in denselben Zug (§15.4).
+
+        Und die Antwort sagt, was wirklich geschieht: Undo ist ein Stapel, eine
+        Transaktion aus der Mitte nimmt jede jüngere mit
+        (:func:`~app.core.agent.apply.sweep_for`). Das Modell soll das in
+        seinem Antwortsatz nennen können, statt es dem Nutzer zu verschweigen.
+        """
+        from app.core.agent.apply import sweep_for, undo_finding
+
         wanted = str(arguments.get("transaction", ""))
-        known = {entry.id for entry in working.transactions}
-        if wanted not in known:
+        sweep = sweep_for(working, wanted)
+        if not sweep:
             proposal.invalid_calls += 1
             return f"{tr('Diese Transaktion gibt es nicht')}: {wanted}"
+        if proposal.undo_of is not None:
+            proposal.invalid_calls += 1
+            return (
+                f"{tr('Dieser Vorschlag nimmt schon eine Transaktion zurück')}: "
+                f"{proposal.undo_of}. "
+                + tr(
+                    "Ein Vorschlag nimmt genau eine zurück — für eine weitere "
+                    "gehört ein eigener Zug her."
+                )
+            )
         if proposal.creates_something:
             # Andere Richtung derselben Schranke aus ``_run`` (§15.4, Regel 16):
             # was schon angelegt ist, ließe sich nach einem Undo nicht mehr
@@ -332,6 +425,18 @@ class AgentSession:
                 "einen eigenen Vorschlag — erst diesen abschließen, dann zurücknehmen."
             )
         proposal.undo_of = wanted
+        proposal.undo_sweeps = sweep
+        proposal.findings.append(undo_finding(sweep))
+        if len(sweep) > 1:
+            return (
+                f"{tr('Zum Zurücknehmen vorgemerkt')}: {wanted}. "
+                + tr(
+                    "Sie liegt nicht zuoberst — der Verlauf kennt keine "
+                    "Verzweigungen, also gehen alle jüngeren mit zurück"
+                )
+                + f": {', '.join(sweep)}. "
+                + tr("Sage das in deiner Antwort, bevor der Nutzer entscheidet.")
+            )
         return f"{tr('Zum Zurücknehmen vorgemerkt')}: {wanted}"
 
     def _parameter(

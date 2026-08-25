@@ -267,3 +267,131 @@ def test_an_ordinary_call_still_passes() -> None:
     """Eine Sperre, die „Deckel 2" verschluckt, macht die Schnittstelle
     unbrauchbar und sieht dabei sicher aus."""
     remote.check_call("translate_object", {"objects": ["obj_1"], "dx": 1.0})
+
+
+# --- Was eine Operation tut, nicht wie sie heißt (Review 25.08.2026) ---------------
+
+
+@pytest.fixture
+def scripted_recipe_part():
+    """Ein Rezept-Baustein, dessen Schritte ``create_from_scad`` enthalten.
+
+    Global registriert, weil beide Sperren den Baustein über den
+    Operationsnamen suchen — der Weg, den ein Fernaufruf auch nimmt. Der
+    Eintrag geht danach wieder weg; die Prüfung schaut auf **einen** Namen,
+    nicht auf die Größe des Katalogs.
+    """
+    from app.core.knowledge.parts import ops as part_ops
+    from app.core.knowledge.parts.registry import PARTS, PartSpec
+    from app.core.registry import REGISTRY, Registry, op_params, param
+    from app.core.types import BaseParams, PartResult
+
+    @op_params
+    class Params(BaseParams):
+        size: float = param(title="Größe", default=10.0, minimum=1.0, maximum=100.0)
+
+    def build(values: BaseParams) -> PartResult:  # pragma: no cover - nie gerechnet
+        raise AssertionError("dieser Baustein wird nicht gebaut")
+
+    spec = PartSpec(
+        name="scad_probe",
+        title="Probe aus Quelltext",
+        group="fasteners",
+        params=Params,
+        fn=build,
+        features=("body",),
+        doc="Ein Rezept, dessen Schritte OpenSCAD anwerfen.",
+        source="recipe",
+        recipe_data={
+            "document": {"ops": [{"op": "create_from_scad", "params": {"source": "cube(10);"}}]}
+        },
+    )
+    registry = Registry()
+    PARTS.register(spec)
+    part_ops.register_one(spec, registry)
+    try:
+        yield part_ops.op_name(spec.name), registry
+    finally:
+        PARTS.remove(spec.name)
+        REGISTRY._ops.pop(part_ops.op_name(spec.name), None)
+
+
+def test_a_recipe_that_runs_openscad_is_locked_like_the_operation_itself(
+    scripted_recipe_part,
+) -> None:
+    """**Beide Sperren verglichen den Namen.**
+
+    Ein Rezept darf seit dem 24.08.2026 einen ``create_from_scad``-Schritt
+    tragen (Regel 13) — und es heißt dann ``insert_<name>``. Damit war es über
+    die Leitung erreichbar: angeboten, nicht abgewiesen, und der Aufruf hätte
+    OpenSCAD auf diesem Rechner gestartet. Gefragt wird jetzt, was die
+    Operation **tut**.
+    """
+    name, registry = scripted_recipe_part
+
+    assert name not in {entry["name"] for entry in remote.remote_tools(registry)}
+
+    with pytest.raises(remote.RemoteRefusedError):
+        remote.check_call(name, {"size": 10.0}, registry)
+
+
+def test_such_a_recipe_is_not_accepted_without_asking(scripted_recipe_part) -> None:
+    """Dieselbe Frage an der zweiten Stelle (§26.5): Ein Vorschlag mit diesem
+    Schritt galt als eindeutig umkehrbar und lief ohne Rückfrage durch.
+    """
+    from app.core.agent.apply import auto_acceptable
+    from app.core.agent.proposal import Proposal
+    from app.core.scene.history import OperationDraft
+
+    name, registry = scripted_recipe_part
+    proposal = Proposal(request="Setz die Probe ein")
+    proposal.drafts.append(OperationDraft(op=name, inputs=("obj_1",), params={"size": 10.0}))
+
+    assert not auto_acceptable(proposal, registry)
+
+
+def test_an_ordinary_part_stays_reachable() -> None:
+    """Eine Sperre, die alle Bausteine mitnimmt, macht die Schnittstelle
+    unbrauchbar und sieht dabei sicher aus."""
+    listed = {entry["name"] for entry in remote.remote_tools()}
+
+    assert "insert_screw_hole" in listed
+
+
+def test_the_refusal_for_a_question_names_the_right_reason() -> None:
+    """„Sie führt fremden Quelltext aus" stand für beide Sperrgründe und war
+    für ``ask_user`` schlicht falsch (Regel 17).
+    """
+    grund = str(remote.refusal_for("ask_user"))
+
+    assert "Quelltext" not in grund
+    assert "Quelltext" in str(remote.refusal_for("create_from_scad"))
+
+
+# --- Gesten kommen vom Nutzer, nicht über die Leitung ------------------------------
+
+
+def test_a_gathered_parameter_is_refused_over_the_wire() -> None:
+    """**Die Chat-Sitzung lehnt sie ab, die Leitung tat es nicht.**
+
+    Skizzenpunkte, Pinselstriche und Skelett entstehen aus Gesten (§26,
+    Leitprinzip 5). Das Werkzeugschema bietet sie nicht an — ein Wert unter dem
+    richtigen Namen ging hier trotzdem ungeprüft an die Anwendung, wo ihn kein
+    Schema mehr erwartete.
+    """
+    from app.core.registry import GATHERED_KINDS, REGISTRY
+
+    fundstelle = next(
+        (
+            (spec.name, entry.name)
+            for spec in REGISTRY.all()
+            for entry in spec.params.spec()
+            if entry.kind in GATHERED_KINDS
+        ),
+        None,
+    )
+    assert fundstelle is not None, "ohne gesammelte Parameter prüft dieser Test nichts"
+    name, feld = fundstelle
+
+    with pytest.raises(remote.RemoteRefusedError):
+        remote.check_call(name, {"objects": ["obj_1"], feld: "geraten"})
