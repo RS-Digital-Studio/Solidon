@@ -1,8 +1,9 @@
 """Bausteine, die sich bewegen und verbinden (Bauplan §24.1, Gruppe
 „Mechanik").
 
-Vier der dreizehn: die Schnappverbindung, die Rastnase, das Filmscharnier und
-das Stiftpaar. Alle vier leben von Maßen, die ein Drucker entscheidet und kein
+Hier liegen: die Schnappverbindung, die Rastnase, das Filmscharnier, das
+Stiftpaar, der Schnappverbinder für eine Naht und das Scharnierauge. Sie alle
+leben von Maßen, die ein Drucker entscheidet und kein
 Katalog — wie dünn ein Scharnier sein darf, wie weit ein Arm sich biegen darf,
 wie viel Spiel ein Stift braucht. Diese Zahlen kommen aus dem Materialprofil,
 nie als Literal (AGENTS.md Regel 7): ein Baustein deklariert ``play`` und
@@ -771,6 +772,15 @@ def hinge_eye(raw: BaseParams) -> PartResult:
         # Die Drehachse als Bohrung benannt: Wer das Gegenstück setzt, richtet
         # es daran aus.
         bore(
-            "eye_1", bore_width, (0.0, params.reach, outer / 2.0), depth=params.width, through=True
+            "eye_1",
+            bore_width,
+            (0.0, params.reach, outer / 2.0),
+            depth=params.width,
+            # Die Drehachse liegt in X: ``lying()`` legt den Zylinder um. Ohne
+            # diese Angabe gilt die Vorgabe (0, 0, 1), und ein Passstift, an
+            # ``eye_1`` ausgerichtet, stünde senkrecht aus dem Auge heraus
+            # statt hindurch. ``wall_mount`` macht es genauso.
+            axis=(1.0, 0.0, 0.0),
+            through=True,
         ),
     )

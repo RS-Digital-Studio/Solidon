@@ -1,10 +1,10 @@
 """Bausteine, die etwas versteifen, hindurchführen oder anbinden (Bauplan §24.1).
 
-Die letzten zwei der dreizehn aus der Erstbestückung: die Versteifungsrippe und
-die Kabeldurchführung mit Zugentlastung. Beides ist die Sorte Sache, die
-hundertmal von Hand gezeichnet und in der Hälfte der Fälle falsch wird — eine
-Rippe, die dicker ist als die Wand, die sie versteift, zeichnet sich durch; eine
-Durchführung ohne Zugentlastung reißt den Draht aus der Lötstelle.
+Hier liegen: die Versteifungsrippe, die Kabeldurchführung mit Zugentlastung,
+die Nutfeder für Aluprofil, der Kabelclip und der Eckwinkel. Das ist die Sorte
+Sache, die hundertmal von Hand gezeichnet und in der Hälfte der Fälle falsch
+wird — eine Rippe, die dicker ist als die Wand, die sie versteift, zeichnet sich
+durch; eine Durchführung ohne Zugentlastung reißt den Draht aus der Lötstelle.
 
 Später dazugekommen ist die **Nutfeder für Aluprofil**. Sie schließt eine Lücke,
 die anders lag als die beiden: Die Nutmaße standen seit der Erstbestückung in der
@@ -39,6 +39,25 @@ FIRST_RELEASE = PartChange(
 #: unter der ein Quader keine Breite mehr hat.
 MIN_GAP = 0.2
 
+THIN_WALL_KEEPS_THE_RIB_PRINTABLE = PartChange(
+    version="2",
+    date="2026-08-25",
+    reason=(
+        "Die abgeleitete Dicke fiel an dünnen Wänden unter das Druckbare: Zwei "
+        "Drittel einer 0,4-mm-Wand sind 0,264 mm und damit schmaler als eine "
+        "Bahn der Düse; auch 0,8 mm Wand ergaben mit 0,528 mm weniger als die "
+        "Mindestwandstärke eines PETG-Profils. Unterhalb von 1,2 mm Wand ist "
+        "die Rippe jetzt so dick wie die Wand selbst."
+    ),
+    effect=(
+        "Nur bei einer Wandstärke unter 1,2 mm und nur, wenn die Dicke nicht von "
+        "Hand gesetzt ist: Statt zwei Dritteln der Wand steht dort jetzt die volle "
+        "Wandstärke. Aus 0,264 mm werden 0,4 mm, aus 0,528 mm werden 0,8 mm. Ab "
+        "1,2 mm Wand ändert sich kein Maß — dort war die Zwei-Drittel-Regel schon "
+        "immer die größere der beiden Zahlen."
+    ),
+)
+
 PROFILE_TONGUE_ADDED = PartChange(
     version="1",
     date="2026-08-20",
@@ -56,6 +75,19 @@ _PROFILES = standards.profile_sizes()
 #: Spritzguss — sie gilt hier genauso, weil die Abkühlung ebenso ungleichmäßig
 #: ist.
 RIB_SHARE = 0.66
+
+#: Was von einer abgeleiteten Rippendicke mindestens bleibt.
+#:
+#: Die Zwei-Drittel-Regel beantwortet, wie dick eine Rippe sein darf, ohne sich
+#: auf der Sichtseite abzuzeichnen — sie schützt vor einer **Einfallstelle**.
+#: An einer Wand, die selbst schon an der Grenze des Druckbaren liegt, gibt es
+#: keine Einfallstelle mehr, wohl aber eine Rippe, die niemand drucken kann:
+#: Bei einer 0,4-mm-Wand kamen zwei Drittel davon heraus, also 0,264 mm, und
+#: das ist schmaler als eine einzige Bahn der Düse. Auch 0,8 mm Wand ergaben
+#: mit 0,528 mm noch weniger als die Mindestwandstärke eines PETG-Profils
+#: (0,84 mm). Unterhalb dieser Schwelle ist die Rippe deshalb so dick wie die
+#: Wand, an der sie sitzt — dicker zu werden als die Wand hilft ihr nicht.
+MIN_RIB = 0.8
 
 
 @op_params
@@ -114,11 +146,11 @@ class RibParams(BaseParams):
         "machen. Sie bleibt dünner als die Wand, an der sie sitzt — sonst "
         "zeichnet sie sich auf der anderen Seite ab."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, THIN_WALL_KEEPS_THE_RIB_PRINTABLE],
 )
 def rib(raw: BaseParams) -> PartResult:
     params = cast(RibParams, raw)
-    thickness = params.thickness or params.wall * RIB_SHARE
+    thickness = params.thickness or max(params.wall * RIB_SHARE, min(params.wall, MIN_RIB))
 
     body = shapes.box(thickness, params.length, params.height)
     if params.fillet > 0.0:
@@ -487,7 +519,7 @@ class GussetParams(BaseParams):
         maximum=20.0,
         doc=_(
             "Wie dick der Winkel ist, längs der Kante gemessen. Null heißt: so "
-            "dick wie die Rippe es täte — vier Fünftel der Wand."
+            "dick wie die Rippe es täte — zwei Drittel der Wand."
         ),
     )
     wall: float = param(
@@ -515,7 +547,7 @@ class GussetParams(BaseParams):
         "Nicht in eine Ecke, durch die etwas hindurchmuss — er füllt sie diagonal. "
         "Für eine Wand, die für sich zu weich ist, ist die Versteifungsrippe da."
     ),
-    changes=[GUSSET_ADDED],
+    changes=[GUSSET_ADDED, THIN_WALL_KEEPS_THE_RIB_PRINTABLE],
 )
 def gusset(raw: BaseParams) -> PartResult:
     """Ein dreieckiges Prisma, das in der Ecke steht.
@@ -537,7 +569,7 @@ def gusset(raw: BaseParams) -> PartResult:
     nur eine wirkt. Geblieben ist *Dicke*, weil das Wort sagt, worum es geht.
     """
     params = cast(GussetParams, raw)
-    thickness = params.thickness or params.wall * RIB_SHARE
+    thickness = params.thickness or max(params.wall * RIB_SHARE, min(params.wall, MIN_RIB))
 
     # ``wedge(width, depth, height, tip)`` liegt in X breit, läuft in Y tief
     # und steht in Z hoch. Für die Ecke heißt das: die Breite ist die Kante,

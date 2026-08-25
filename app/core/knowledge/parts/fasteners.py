@@ -1,6 +1,6 @@
 """Bausteine für Schrauben (Bauplan §24.1, Gruppe „Verbindungen").
 
-Vier der dreizehn: das Schraubenloch mit seiner Senkung, die Bohrung für die
+Hier liegen: das Schraubenloch mit seiner Senkung, die Bohrung für die
 Einpressbuchse, die Mutternfalle von der Seite oder von unten, und ein
 druckbares Gewinde.
 

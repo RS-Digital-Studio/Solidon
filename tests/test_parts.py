@@ -186,11 +186,60 @@ def test_a_part_is_reproducible(spec: PartSpec) -> None:
     assert first.mesh.triangle_count == second.mesh.triangle_count
 
 
-SUBTRACTIVE = [spec for spec in PARTS.all() if spec.subtractive]
+def by_direction(subtractive: bool) -> list[tuple[PartSpec, BaseParams]]:
+    """Je Baustein und Richtung ein Paar aus Bauplan und Werten.
+
+    **Drei Bausteine fielen durch beide Netze.** Passstift, Standfuß und
+    Schnappverbinder entscheiden die Richtung über einen Parameter; sie sind
+    weder ``spec.subtractive`` (das gilt nur für die fest abtragenden) noch
+    ``not cuts(spec, None)`` (ohne Werte zählt ein umschaltbarer als
+    abtragend). Der subtraktive Test kannte sie damit nicht und der additive
+    auch nicht — gemessen am 25.08.2026 prüfte niemand, ob die Fußtasche
+    überhaupt ins Material reicht.
+
+    **Der Fehler, der dort tatsächlich saß, wäre auch damit nicht aufgefallen:**
+    Der Sitz der Tasche war um zwei Fasen zu eng für den Fuß, für den sie
+    gedacht ist, und ins Material reichte sie trotzdem. Ein geschlossenes Netz
+    ist keine geprüfte Zusage; dafür steht
+    :func:`test_the_pocket_takes_the_foot_it_is_meant_for` daneben. Das Loch
+    hier zu schließen ist trotzdem richtig — ein Loch **zwischen** zwei Listen
+    ist schlechter als eines in einer: Beide sahen vollständig aus, und was
+    dazwischen durchfiel, tauchte in keiner Fehlliste auf.
+
+    Die Richtung kommt deshalb aus derselben Quelle wie für die Operation
+    selbst (``cuts_by_parameter``) und nicht aus einer Eigenschaft, die sie nur
+    halb beschreibt.
+    """
+    pairs: list[tuple[PartSpec, BaseParams]] = []
+    for spec in PARTS.all():
+        choice = part_ops.cuts_by_parameter(spec.params)
+        if choice is None:
+            if spec.subtractive is subtractive:
+                pairs.append((spec, spec.params()))
+            continue
+        name, cutting = choice
+        entry = next(item for item in spec.params.spec() if item.name == name)
+        for value in entry.choices or ():
+            if (value in cutting) is subtractive:
+                pairs.append((spec, spec.params(**{name: value})))
+    return pairs
 
 
-@pytest.mark.parametrize("spec", SUBTRACTIVE, ids=ids)
-def test_a_subtractive_part_reaches_into_the_material(spec: PartSpec) -> None:
+def direction_ids(pair: tuple[PartSpec, BaseParams]) -> str:
+    spec, values = pair
+    choice = part_ops.cuts_by_parameter(spec.params)
+    if choice is None:
+        return spec.name
+    return f"{spec.name}[{getattr(values, choice[0])}]"
+
+
+SUBTRACTIVE = by_direction(subtractive=True)
+
+
+@pytest.mark.parametrize("pair", SUBTRACTIVE, ids=direction_ids)
+def test_a_subtractive_part_reaches_into_the_material(
+    pair: tuple[PartSpec, BaseParams],
+) -> None:
     """§24.1: der Ursprung ist die Mündung, das Werkzeug geht nach unten.
 
     Wer eine Fläche anklickt, bekommt ihre Höhe in die Position eingetragen.
@@ -201,13 +250,194 @@ def test_a_subtractive_part_reaches_into_the_material(spec: PartSpec) -> None:
     Gemessen wird an der Wirkung, nicht an den Koordinaten: der Baustein sitzt
     auf der Oberseite einer Platte, und danach hat sie weniger Volumen.
     """
+    spec, values = pair
     plate = shapes.box(60.0, 60.0, 20.0)
-    tool = shapes.moved(spec.fn(spec.params()).mesh, (0.0, 0.0, 20.0))
+    tool = shapes.moved(spec.fn(values).mesh, (0.0, 0.0, 20.0))
     cut = boolean("difference", [plate, tool])
 
     assert cut.mesh.volume < plate.volume - 1.0, (
-        f"{spec.name} trägt an der angeklickten Fläche nichts ab"
+        f"{direction_ids(pair)} trägt an der angeklickten Fläche nichts ab"
     )
+
+
+# --- was die drei Neuen versprechen -------------------------------------------------
+#
+# Sie hatten keinen Test ihrer Zusage, und deshalb kamen drei Fehler durch, die
+# jede Kennzahl bestanden: Die Fußtasche war zu eng für ihren Fuß, ihr Merkmal
+# meldete einen anderen Durchmesser als das Loch, und die Fase des Fußes saß am
+# falschen Ende. Volumen, Wasserdichtheit, Komponentenzahl und Hüllquader waren
+# bei allen dreien in Ordnung.
+
+
+def _section_diameter(mesh: Any, height: float) -> float:
+    """Der größte Durchmesser eines Querschnitts auf dieser Höhe.
+
+    Über einen Schnitt und nicht über die Eckpunkte: Ein extrudierter oder
+    gedrehter Körper hat zwischen seinen Enden keine.
+    """
+    cut = mesh.raw.section(plane_origin=[0.0, 0.0, height], plane_normal=[0.0, 0.0, 1.0])
+    assert cut is not None, f"nothing to measure at z={height}"
+    points = np.asarray(cut.vertices, dtype=float)
+    return 2.0 * float(np.hypot(points[:, 0], points[:, 1]).max())
+
+
+@pytest.mark.parametrize(("height", "diameter"), [(5.0, 10.0), (30.0, 10.0), (3.0, 25.0)])
+def test_the_foot_tapers_towards_the_table_and_not_towards_the_part(
+    height: float, diameter: float
+) -> None:
+    """Die Verjüngung gehört ans Standende, sonst steht der Fuß auf seiner Kante.
+
+    Ein Zylinder mit scharfer Kante bekommt beim Drucken einen Elefantenfuß:
+    Die erste Schicht quetscht breiter als die zweite und steht als Grat vor.
+    Ein Kegelstumpf, der zum Tisch hin schmaler wird, hat den Grat dort, wo
+    ohnehin Luft ist.
+
+    **Die erste Fassung setzte ihn ans Anbau-Ende** — genau umgekehrt zu dem
+    Absatz, den ihr eigener Docstring schon so enthielt. Keine Kennzahl
+    bemerkte es: Volumen, Wasserdichtheit und Hüllquader sind bei beiden Lagen
+    identisch. Gemessen wird deshalb an zwei Querschnitten, und die Richtung
+    steht zwischen ihnen.
+    """
+    spec = PARTS.get("foot")
+    built = spec.fn(spec.params(kind="foot", diameter=diameter, height=height)).mesh
+
+    at_part = _section_diameter(built, 0.15)
+    at_table = _section_diameter(built, height - 0.15)
+    assert at_table < at_part - 0.1, (
+        f"h={height} d={diameter}: {at_part:.2f} mm at the part and {at_table:.2f} mm "
+        "at the table — the foot stands on its sharp edge"
+    )
+
+
+@pytest.mark.parametrize(("height", "diameter"), [(5.0, 10.0), (30.0, 10.0), (3.0, 25.0)])
+def test_the_pocket_takes_the_foot_it_is_meant_for(height: float, diameter: float) -> None:
+    """Eine Tasche für einen Ø-10-Gummifuß muss zehn Millimeter weit sein.
+
+    **Sie war es nicht.** Der Schaft wurde mit dem *schmalen* Kegeldurchmesser
+    gebaut, also um zwei Fasen zu eng: Ein Ø-10-Fuß fand ein Loch von 9,05 mm
+    vor, und an der Bereichsecke (Höhe 30, Ø 10) maß der Sitz noch einen
+    einzigen Millimeter. Eine Einführschräge weitet die Mündung, sie verengt
+    nicht den Sitz.
+
+    Gemessen wird an der Stelle, an der der Fuß sitzt — am tiefen Ende, nicht
+    an der Mündung, wo die Schräge das Ergebnis freundlich aussehen lässt.
+    """
+    spec = PARTS.get("foot")
+    values = spec.params(kind="pocket", diameter=diameter, height=height, play=0.25)
+    built = spec.fn(values).mesh
+
+    seat = _section_diameter(built, -height + 0.15)
+    assert seat >= diameter, f"h={height}: the seat measures {seat:.2f} mm for a {diameter} mm foot"
+
+    mouth = _section_diameter(built, -0.15)
+    assert mouth >= seat, "the lead-in chamfer narrows the mouth instead of widening it"
+    assert mouth < seat + 4.0, (
+        f"h={height}: the mouth flares to {mouth:.2f} mm over a {seat:.2f} mm seat — "
+        "a lead-in chamfer is a bevel, not a funnel"
+    )
+
+
+def test_the_pocket_names_the_hole_it_actually_cuts() -> None:
+    """Was das Merkmal meldet, muss das Loch auch messen.
+
+    Ein Merkmal ist eine Zusage an den nächsten Schritt: Wer daran ausrichtet,
+    rechnet mit der Zahl, die dort steht. ``foot_1`` nannte den vollen
+    Durchmesser, während das Loch zwei Fasen enger war — eine Passung, die auf
+    dem Papier stimmte und im Druck geklemmt hätte.
+    """
+    spec = PARTS.get("foot")
+    values = spec.params(kind="pocket", diameter=10.0, height=5.0, play=0.25)
+    built = spec.fn(values)
+    named = built.features["foot_1"].params["diameter"]
+
+    assert _section_diameter(built.mesh, -5.0 + 0.15) == pytest.approx(named, abs=0.15), (
+        f"the feature promises {named:.2f} mm, the hole is something else"
+    )
+
+
+def test_the_hinge_eye_names_the_axis_its_bore_actually_runs_on() -> None:
+    """Die Drehachse liegt quer, nicht senkrecht.
+
+    ``lying()`` legt den Zylinder um, damit die Achse parallel zur Fläche
+    läuft — das ist der Sinn eines Scharniers. Das Merkmal sagte trotzdem
+    ``(0, 0, 1)``, weil das die Vorgabe von :func:`bore` ist und niemand sie
+    überschrieb. Ein Passstift, an ``eye_1`` ausgerichtet, stünde damit
+    senkrecht aus dem Auge heraus statt hindurch.
+
+    Geprüft wird beides gegeneinander: die genannte Achse und die, auf der das
+    Loch wirklich liegt. Eine Angabe, die nur mit sich selbst übereinstimmt,
+    ist keine.
+    """
+    spec = PARTS.get("hinge_eye")
+    values = spec.params(pin=4.0, width=10.0, reach=8.0)
+    built = spec.fn(values)
+    named = tuple(built.features["eye_1"].params["axis"])
+
+    assert named == pytest.approx((1.0, 0.0, 0.0)), f"eye_1 claims the axis is {named}"
+
+    # Und das Loch liegt wirklich dort: Quer zur genannten Achse geschnitten
+    # zeigt sich der Ring um die Bohrung — als zwei getrennte Konturen.
+    across = built.mesh.raw.section(
+        plane_origin=[0.0, values.reach, 0.0], plane_normal=[1.0, 0.0, 0.0]
+    )
+    assert across is not None, "nothing crosses the eye at all"
+    assert len(across.entities) >= 2, (
+        "a cut across the named axis shows one contour — the bore does not run there"
+    )
+
+
+def test_the_hinge_eye_lets_the_pin_through_that_it_asks_for() -> None:
+    """Ein Auge für einen 4er Bolzen muss einen 4er Bolzen durchlassen.
+
+    Die Zusage steht im Parameter: ``pin`` ist der Durchmesser des Bolzens, der
+    hindurchgeht. Das Loch muss ihn samt Spiel aufnehmen, und es muss **durch**
+    gehen — ein Sackloch hielte das Gegenstück nur auf einer Seite.
+    """
+    spec = PARTS.get("hinge_eye")
+    for pin in (2.0, 4.0, 8.0):
+        values = spec.params(pin=pin, width=10.0, reach=8.0, play=0.2)
+        built = spec.fn(values)
+        assert built.features["eye_1"].params["diameter"] >= pin, (
+            f"pin={pin}: the bore is narrower than the pin it names"
+        )
+        assert built.features["eye_1"].params.get("through") is True, (
+            f"pin={pin}: the bore does not go through, so no pin can pass"
+        )
+        assert built.mesh.is_watertight and built.mesh.component_count == 1, (
+            f"pin={pin}: the eye falls apart"
+        )
+
+
+def test_the_gusset_fills_the_corner_it_is_put_into() -> None:
+    """Ein Eckwinkel, der die Ecke nicht berührt, hält nichts.
+
+    Die Zusage ist eine Diagonale zwischen zwei Wänden: Der Körper muss an
+    beiden anliegen und dazwischen Material haben. Ein Dreieck, das die Ecke
+    verfehlt, sieht im Hüllquader genauso aus.
+    """
+    spec = PARTS.get("gusset")
+    for wall in (0.8, 2.0, 5.0):
+        built = spec.fn(spec.params(wall=wall)).mesh
+        low = built.bounds.minimum
+
+        assert built.is_watertight and built.component_count == 1, f"wall={wall}: falls apart"
+        # Beide Schenkel beginnen an der Ecke, nicht daneben.
+        assert abs(float(low[1])) < 0.05, f"wall={wall}: the gusset does not touch the wall"
+        assert abs(float(low[2])) < 0.05, f"wall={wall}: the gusset does not touch the floor"
+
+        # Und es ist eine Rampe, kein Quader: weiter unten als oben.
+        high = float(built.bounds.maximum[2])
+        near = built.raw.section(plane_origin=[0.0, 0.0, high * 0.1], plane_normal=[0.0, 0.0, 1.0])
+        far = built.raw.section(plane_origin=[0.0, 0.0, high * 0.9], plane_normal=[0.0, 0.0, 1.0])
+        assert near is not None, f"wall={wall}: nothing at the base"
+        reach_near = float(np.asarray(near.vertices, dtype=float)[:, 1].max())
+        reach_far = (
+            float(np.asarray(far.vertices, dtype=float)[:, 1].max()) if far is not None else 0.0
+        )
+        assert reach_far < reach_near, (
+            f"wall={wall}: the gusset reaches {reach_far:.1f} mm out at the top and "
+            f"{reach_near:.1f} mm at the base — that is a block, not a brace"
+        )
 
 
 # --- die Normteiltabelle -----------------------------------------------------------
@@ -583,12 +813,10 @@ def test_the_change_log_says_what_moved() -> None:
             assert change.date and change.reason
 
 
-@pytest.mark.parametrize(
-    "name",
-    [part_ops.op_name(spec.name) for spec in PARTS.all() if not part_ops.cuts(spec, None)],
-    ids=lambda name: str(name),
-)
-def test_an_added_part_grows_together_with_the_body(name: str, profile: Profile) -> None:
+@pytest.mark.parametrize("pair", by_direction(subtractive=False), ids=direction_ids)
+def test_an_added_part_grows_together_with_the_body(
+    pair: tuple[PartSpec, BaseParams], profile: Profile
+) -> None:
     """Ein aufgesetzter Baustein muss **ein** Körper mit seinem Träger werden.
 
     Die Rastnase wurde es nicht: sie sitzt mit 6 × 1 mm auf der Fläche auf, und
@@ -601,23 +829,32 @@ def test_an_added_part_grows_together_with_the_body(name: str, profile: Profile)
     standen fünf Namen von Hand, und die letzten beiden Bausteine — Kabelclip
     und Lochwand-Einhänger — waren nicht darunter; niemand hatte es vergessen,
     es fällt nur schlicht nicht auf. Eine Liste, die man beim Anlegen eines
-    Bausteins mitpflegen muss, ist beim übernächsten unvollständig. Gemessen
-    vor dem Umbau: alle zwölf additiven bestehen, keiner wird durch die
-    Umstellung neu rot.
+    Bausteins mitpflegen muss, ist beim übernächsten unvollständig.
+
+    Und seit demselben Tag **je Richtung**: Wer die Liste aus
+    ``not cuts(spec, None)`` zog, ließ die drei umschaltbaren Bausteine
+    draußen, weil sie ohne Werte als abtragend zählen (siehe
+    :func:`by_direction`).
     """
+    spec, values = pair
+    name = part_ops.op_name(spec.name)
+    choice = part_ops.cuts_by_parameter(spec.params)
+    params: dict[str, Any] = {"at_feature": "face_top"}
+    if choice is not None:
+        params[choice[0]] = getattr(values, choice[0])
+
     project = new_project("centauri-carbon-2", "petg")
     History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
     History(project.document).apply(
-        name,
-        [OperationDraft(op=name, inputs=("obj_1",), params={"at_feature": "face_top"})],
+        name, [OperationDraft(op=name, inputs=("obj_1",), params=params)]
     )
 
     result = evaluate(project.document, profile, sources=ProjectSources(project))
 
     assert result.complete, [f.message for f in result.scene.report.findings]
     body = result.scene.objects["obj_1"].mesh
-    assert body.component_count == 1, name
-    assert body.is_watertight, name
+    assert body.component_count == 1, direction_ids(pair)
+    assert body.is_watertight, direction_ids(pair)
 
 
 def test_the_part_keeps_the_size_it_promises(profile: Profile) -> None:

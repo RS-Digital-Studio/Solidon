@@ -12,9 +12,11 @@
 #
 # Alle Maße in Millimetern.
 
-# Version 2 seit dem 20.08.2026: Die Aluprofil-Nutmaße tragen zwei Felder mehr
-# (`lip`, `depth`). Kein bestehender Wert hat sich geändert, alte Projekte
-# rechnen also unverändert — die Zahl sagt, dass die Tabelle mehr weiß.
+# Version 3 seit dem 25.08.2026: Die Lochwandmaße sind als eigene Tabellenart
+# `boards` dazugekommen. Version 2 seit dem 20.08.2026: Die Aluprofil-Nutmaße
+# tragen zwei Felder mehr (`lip`, `depth`). In beiden Schritten hat sich kein
+# bestehender Wert geändert, alte Projekte rechnen also unverändert — die Zahl
+# sagt, dass die Tabelle mehr weiß, nicht dass sie etwas anderes weiß.
 version = "3"
 
 # --- Metrische Schrauben --------------------------------------------------------
@@ -308,6 +310,13 @@ note = "Nut 8 wie 3030 — die Außenmaße unterscheiden sich, die Nut nicht"
 # stehender Schlitz mit halbrunden Enden. pitch: Rastermaß in beide Richtungen.
 # stagger: um wie viel die zweite Lochschar gegen die erste versetzt ist; null
 # hieße ein einfaches Quadratraster. thickness: Plattendicke.
+#
+# `stagger` liest derzeit kein Baustein — der Einhänger setzt seine Haken in
+# eine Reihe oder eine Spalte, und dort ist der Abstand `pitch`, gleich ob die
+# Nachbarreihe versetzt liegt. Der Wert steht trotzdem hier, weil er zur Platte
+# gehört und nicht zum Baustein; wer im Zickzack setzen will, findet ihn vor.
+# Ein ungelesener Wert kann allerdings falsch sein, ohne dass es auffällt —
+# beim Prüfdruck gehört er mitgemessen.
 #
 # **Herkunft, und sie ist schwächer als bei allem anderen hier.** IKEA
 # veröffentlicht die Lochung nicht. Die Werte sind aus zwei unabhängigen

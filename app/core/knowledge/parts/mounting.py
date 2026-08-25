@@ -1,13 +1,15 @@
 """Bausteine, die etwas an etwas anderem halten (Bauplan §24.1).
 
-Drei der dreizehn: die Magnettasche, die Wandhalterung und die
-Schlüsselloch-Aufhängung. Zwei davon sind Formen zum Abziehen, eine ist ein
-Körper zum Hinzufügen — darum sagt die Deklaration es, und ``insert_part`` muss
-nicht raten.
+Hier liegen: die Magnettasche, die Wandhalterung, die
+Schlüsselloch-Aufhängung, der Lochwand-Einhänger und der Standfuß. Manche sind
+Formen zum Abziehen, andere Körper zum Hinzufügen, und der Standfuß ist beides
+je nach Wahl — darum sagt die Deklaration es, und ``insert_part`` muss nicht
+raten.
 """
 
 from __future__ import annotations
 
+import math
 from typing import cast
 
 from app.core.knowledge import standards
@@ -480,6 +482,12 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     return result(union(*parts), *features)
 
 
+#: Die Einführschräge an der Mündung einer Fußtasche. Ein fester Wert, weil
+#: die Frage „wie fange ich den Fuß beim Einsetzen" eine Fase verlangt und
+#: keinen Trichter — sie hängt weder an der Tiefe des Lochs noch am
+#: Durchmesser des Fußes.
+POCKET_LEAD = 0.6
+
 #: Was vom schmalen Ende eines Fußes mindestens bleibt. Kein Maß aus einer
 #: Tabelle, sondern die Grenze, unter der ein Kegelstumpf keine Standfläche
 #: mehr hat.
@@ -525,8 +533,9 @@ class FootParams(BaseParams):
         maximum=10.0,
         placement="advanced",
         doc=_(
-            "Schräge am unteren Rand. Null heißt: ein Fünftel der Höhe — genug, "
-            "damit die erste Schicht nicht als Grat vorsteht."
+            "Schräge am Rand. Null heißt beim Fuß: ein Fünftel der Höhe, genug "
+            "damit die erste Schicht nicht als Grat vorsteht. Bei der Tasche ist "
+            "es eine Fase zum Einfädeln."
         ),
     )
     play: float = param(
@@ -552,24 +561,36 @@ class FootParams(BaseParams):
         "Unterseite vom Tisch weg."
     ),
     caveat=_(
-        "Nicht für Teile, die auf der Fläche kleben sollen — ein Fuß hebt sie ab. "
-        "Und nicht als Abstandshalter unter einer Schraube: dafür ist der Dom da."
+        "Nicht für Teile, die auf der Fläche aufliegen sollen — ein Fuß hebt sie ab. "
+        "Und nicht zum Verschrauben gedacht: Er hat keine Bohrung, und eine "
+        "hineingesetzt stünde die Schraube auf dem Tisch."
     ),
     changes=[FOOT_ADDED],
 )
 def foot(raw: BaseParams) -> PartResult:
-    """Ein Kegelstumpf, der auf der breiten Seite steht — oder ein Loch dafür.
+    """Ein Kegelstumpf, der auf der schmalen Seite steht — oder ein Loch dafür.
 
-    **Die Fase zeigt nach unten, und das ist der ganze Trick.** Ein Zylinder
-    mit scharfer Kante bekommt beim Drucken einen Elefantenfuß: Die erste
-    Schicht quetscht breiter als die zweite und steht als Grat vor, und darauf
-    wackelt das Gerät. Ein Kegelstumpf, der nach unten schmaler wird, hat den
-    Grat dort, wo ohnehin Luft ist.
+    **Die Fase gehört ans Standende, und dort stand sie zuerst nicht.** Ein
+    Zylinder mit scharfer Kante bekommt beim Drucken einen Elefantenfuß: Die
+    erste Schicht quetscht breiter als die zweite und steht als Grat vor, und
+    darauf wackelt das Gerät. Ein Kegelstumpf, der nach unten schmaler wird,
+    hat den Grat dort, wo ohnehin Luft ist. Die erste Fassung setzte ihn ans
+    **Anbau**-Ende — genau umgekehrt zu diesem Absatz, den sie schon so
+    enthielt. Der Fuß stand mit der scharfen Kante auf dem Tisch, und keine
+    Zahl im Test bemerkte es: Volumen, Wasserdichtheit und Hüllquader sind bei
+    beiden Lagen gleich.
 
     Als **Tasche** ist es dieselbe Form, nur umgekehrt gelesen: Das Loch nimmt
     einen gekauften Gummifuß auf, und die Fase wird zur Einführschräge. Der
     Ursprung ist dann die Mündung und die Tiefe geht nach unten ins Material
     (§24.1, ``MOUTH_AT_ORIGIN``).
+
+    **Eine Einführschräge weitet die Mündung, sie verengt nicht den Sitz.** Die
+    erste Fassung baute den Schaft der Tasche mit ``narrow`` — dem *schmalen*
+    Kegeldurchmesser. Ein Ø-10-Gummifuß fand damit ein Loch von 9,05 mm vor,
+    und an der Bereichsecke (Höhe 30, Ø 10) maß der Sitz noch einen einzigen
+    Millimeter. Der Schaft hat jetzt den vollen Durchmesser, und die Schräge
+    sitzt darüber.
     """
     params = cast(FootParams, raw)
     cutting = params.kind == "pocket"
@@ -581,25 +602,44 @@ def foot(raw: BaseParams) -> PartResult:
     # 10 mm Durchmesser eine Fase von 6 mm bekam und sein schmales Ende damit
     # **minus zwei** Millimeter maß. Heraus kam ein Körper aus fünf Teilen, und
     # der Bereichstest fährt genau diese Ecke.
-    chamfer = params.chamfer or params.height / 5.0
-    chamfer = min(chamfer, params.height / 2.0, (wide - MIN_FOOT_TIP) / 2.0)
+    # **Fuß und Tasche fragen hier nicht dasselbe.** Beim Fuß beantwortet die
+    # Vorgabe „wie viel Verjüngung trägt den Elefantenfuß ab", und dafür ist
+    # ein Anteil der Höhe richtig: Ein hoher Fuß darf stärker zulaufen. Bei der
+    # Tasche beantwortet sie „wie fange ich den Gummifuß beim Einsetzen", und
+    # das hat mit der Tiefe des Lochs nichts zu tun — dieselbe Formel machte
+    # aus einer 30 mm tiefen Tasche für einen Ø-10-Fuß einen Trichter von
+    # 19,5 mm Mündung. Eine Einführschräge ist eine Fase, kein Trichter.
+    chamfer = params.chamfer or (POCKET_LEAD if cutting else params.height / 5.0)
+    chamfer = min(chamfer, params.height / 2.0)
+    if not cutting:
+        # Nur der Fuß hat ein schmales Ende, das zu klein werden kann.
+        chamfer = min(chamfer, (wide - MIN_FOOT_TIP) / 2.0)
     narrow = wide - 2.0 * chamfer
 
     if cutting:
-        # Die Tasche: die Einführschräge liegt an der Mündung, also oben, und
-        # der Rest ist ein Zylinder nach unten.
-        mouth = shapes.cone(narrow, wide, chamfer)
-        shaft = shapes.cylinder(narrow, params.height - chamfer + shapes.OVERLAP)
+        # Die Tasche: An der Mündung weitet eine Schräge das Loch, damit der
+        # Gummifuß sich fangen lässt; darunter hat der Sitz den vollen
+        # Durchmesser, sonst passt der Fuß nicht hinein, für den er gedacht ist.
+        mouth = shapes.cone(wide, wide + 2.0 * chamfer, chamfer)
+        shaft = shapes.cylinder(wide, params.height - chamfer + shapes.OVERLAP)
         body = union(
             shapes.moved(mouth, (0.0, 0.0, -chamfer)),
             shapes.moved(shaft, (0.0, 0.0, -params.height)),
         )
         marker = bore("foot_1", wide, (0.0, 0.0, -params.height / 2.0), depth=params.height)
     else:
-        # Der Fuß: unten narrow, damit der Elefantenfuß ins Leere quetscht.
-        taper = shapes.cone(narrow, wide, chamfer)
+        # Der Fuß: Die Säule steht am Teil, die Verjüngung am Boden — dort
+        # quetscht der Elefantenfuß ins Leere.
         column = shapes.cylinder(wide, params.height - chamfer + shapes.OVERLAP)
-        body = union(taper, shapes.moved(column, (0.0, 0.0, chamfer - shapes.OVERLAP)))
-        marker = face("foot_1", 3.1416 * (narrow / 2.0) ** 2, (0.0, 0.0, 0.0), (0.0, 0.0, -1.0))
+        taper = shapes.cone(wide, narrow, chamfer)
+        body = union(column, shapes.moved(taper, (0.0, 0.0, params.height - chamfer)))
+        # Die Standfläche ist die äußerste, nicht die am Teil: Sie berührt den
+        # Tisch, und sie schaut vom Teil weg.
+        marker = face(
+            "foot_1",
+            math.pi * (narrow / 2.0) ** 2,
+            (0.0, 0.0, params.height),
+            (0.0, 0.0, 1.0),
+        )
 
     return result(body, marker)

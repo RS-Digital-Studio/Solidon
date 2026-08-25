@@ -494,6 +494,9 @@ def _roll_upright(direction: Vec3) -> Any:
     if length < 1e-9:
         return np.eye(4)
     normal = normal / length
+    # Als Tripel aus echten ``float``: ``tuple(np.ndarray)`` gibt ``float64``,
+    # und die Signaturen hier erwarten ``tuple[float, float, float]``.
+    unit: Vec3 = (float(normal[0]), float(normal[1]), float(normal[2]))
 
     # Was von der Welt-Senkrechten in der Flächenebene übrig bleibt.
     up = np.array([0.0, 0.0, 1.0])
@@ -504,7 +507,7 @@ def _roll_upright(direction: Vec3) -> Any:
 
     # Wo das +Y nach der kürzesten Drehung liegt, ebenfalls auf die Ebene
     # bezogen — nur der Anteil in der Ebene lässt sich durch Rollen bewegen.
-    turned = rotation_between((0.0, 0.0, 1.0), tuple(normal))[:3, :3] @ np.array([0.0, 1.0, 0.0])
+    turned = rotation_between((0.0, 0.0, 1.0), unit)[:3, :3] @ np.array([0.0, 1.0, 0.0])
     own = turned - float(np.dot(turned, normal)) * normal
     if float(np.linalg.norm(own)) < 1e-6:
         return np.eye(4)
@@ -520,7 +523,7 @@ def _roll_upright(direction: Vec3) -> Any:
     )
     if abs(degrees) < 1e-9:
         return np.eye(4)
-    return _rotation_about(tuple(normal), degrees)
+    return _rotation_about(unit, degrees)
 
 
 def _rotation_about(axis: Vec3, degrees: float) -> Any:
