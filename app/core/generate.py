@@ -140,7 +140,7 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     document.sources[source_id] = Source(
         id=source_id,
         kind="generated",
-        path=embedded_source_path(f"{short}{result.suffix}"),
+        path=embedded_source_path(f"{short}{result.suffix}", source_id),
         # Jede Quelle kennt ihren Inhalt von Anfang an — siehe
         # ``Session._embed_source``. Der Cache-Schlüssel fragt danach (§15).
         sha256=checksum(result.payload),
@@ -215,7 +215,7 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # ist eine Ausgangsgröße, von der aus er in einem Schritt auf sein Maß
     # kommt — und weil es eine eigene Transaktion ist, nimmt ein Undo sie
     # zurück.
-    history.apply(
+    sizing = history.apply(
         _("Auf Arbeitsgröße bringen"),
         [
             OperationDraft(
@@ -245,7 +245,12 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     # Als eigene Transaktion und nicht als stiller Teil der Reparatur: ein
     # Undo nimmt sie zurück, der Stapel zeigt sie, und wer die volle Auflösung
     # braucht, hat sie einen Klick entfernt.
-    steps = [loading.id, repairing.id]
+    # **Vollständig, und das war es nicht.** fit_to_size fehlte hier, und
+    # damit rollte der erste Rückroller — wer immer die Liste abarbeitet — die
+    # Erzeugung nur zu drei Vierteln zurück: Der Körper blieb als Transaktion
+    # stehen, auf 100 mm gebracht, ohne die Quelle, aus der er kam. Was in
+    # einem Zug entstanden ist, gehört vollständig in die Liste.
+    steps = [loading.id, sizing.id, repairing.id]
     if result.mesh.triangle_count > GENERATED_TRIANGLE_LIMIT:
         decimating = history.apply(
             _("Auf Arbeitsauflösung bringen"),

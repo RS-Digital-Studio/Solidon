@@ -165,9 +165,18 @@ def checksum(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
-def embedded_source_path(filename: str) -> str:
-    """Wo eine eingebettete Quelle im Container liegt — immer relativ."""
-    return f"{SOURCE_FOLDER}/{Path(filename).name}"
+def embedded_source_path(filename: str, source_id: str) -> str:
+    """Wo eine eingebettete Quelle im Container liegt — immer relativ.
+
+    Die Kennung gehört in den Pfad: Zwei Quellen mit demselben Dateinamen
+    (``bracket.stl`` aus zwei Ordnern) bekamen sonst denselben Containerpfad,
+    die zweite überschrieb die erste, und beim Wiederöffnen hieß es
+    „Prüfsumme stimmt nicht" — die Datei war heil geschrieben und trotzdem
+    verloren (Fund des Gesamtreviews vom 25.08.2026). Alte Projektdateien
+    bleiben lesbar: Der Pfad steht im Dokument und wird beim Laden gelesen,
+    nicht neu gebildet.
+    """
+    return f"{SOURCE_FOLDER}/{source_id}-{Path(filename).name}"
 
 
 def _check_relative(path: str, where: str) -> None:
@@ -249,6 +258,28 @@ def save(project: Project, path: Path) -> Path:
     # nicht mehr die Zeile von Hand, sondern der Weg, der zusätzlich je
     # benutztem eigenen Baustein einen Abdruck seiner Datei mitschreibt.
     part_check.stamp(document)
+
+    # Zusicherung gegen den Altbestand: In Dateien von vor dem 26.08.2026
+    # können zwei Quellen denselben Containerpfad tragen — beim Schreiben
+    # überschriebe die zweite die erste, und das Wiederöffnen endete an der
+    # Prüfsumme. Besser vor dem Schreiben anhalten als heil aussehend
+    # verlieren.
+    taken: dict[str, str] = {}
+    for source_id, source in document.sources.items():
+        if not source.embedded:
+            continue
+        first = taken.setdefault(source.path, source_id)
+        if first != source_id:
+            raise ValidationError(
+                field=f"sources.{source_id}",
+                detail=_(
+                    "Zwei eingebettete Quellen zeigen auf denselben Ort in "
+                    "der Projektdatei. Entfernen Sie eine der beiden und "
+                    "betten Sie sie neu ein."
+                ),
+                constraint="exists",
+                values={"path": source.path, "sources": f"{first}, {source_id}"},
+            )
 
     for source_id, source in list(document.sources.items()):
         _check_relative(source.path, f"sources.{source_id}.path")
@@ -404,6 +435,20 @@ def load(path: Path) -> Project:
             detail=_("Der Projektinhalt ist beschädigt."),
             constraint="damaged",
             values={"path": path.name},
+        ) from problem
+    except (KeyError, ValueError, TypeError) as problem:
+        # Syntaktisch gültiges, strukturell kaputtes JSON: ein fehlender
+        # Pflichtschlüssel, eine Zeichenkette, wo eine Zahl stehen muss.
+        # Fünf solcher Wege verließen ``load()`` als rohe Ausnahme ohne
+        # Handlungsvorschlag (Regel 17; Fund des Gesamtreviews vom
+        # 25.08.2026). Ein ``ValidationError`` von tiefer unten — etwa die
+        # unbekannte Passungsart — läuft hier unverändert durch: er ist
+        # keiner dieser drei Typen.
+        raise ValidationError(
+            field="container",
+            detail=_("Der Projektinhalt ist beschädigt."),
+            constraint="damaged",
+            values={"path": path.name, "reason": str(problem)[:200]},
         ) from problem
 
     _log.info("opened project %s", path.name)

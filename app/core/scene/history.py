@@ -747,7 +747,12 @@ class History:
         """
         self._next_op = itertools.count(self._highest_op_id() + 1)
         self._next_object = itertools.count(self._highest_object_index() + 1)
-        self._next_transaction = itertools.count(len(self.document.transactions) + 1)
+        # Wie bei den Op-Kennungen: vergeben ist vergeben, auch nach einem
+        # Undo. ``len(transactions) + 1`` vergab „t2" nach dem Zurücknehmen
+        # von t2 erneut — ein Chat-Beitrag zeigte danach auf eine wildfremde
+        # Transaktion und galt als lebendig, und ``_undo_named("t2")`` träfe
+        # die falsche (Fund des Gesamtreviews vom 25.08.2026).
+        self._next_transaction = itertools.count(self._highest_transaction_number() + 1)
 
     def _all_operations(self) -> list[Operation]:
         """Was Kennungen belegt: der Stapel **und** das Zurückgenommene.
@@ -761,6 +766,15 @@ class History:
 
     def _highest_op_id(self) -> OpId:
         return max((entry.id for entry in self._all_operations()), default=0)
+
+    def _highest_transaction_number(self) -> int:
+        """Die höchste je vergebene Transaktionsnummer — Stapel und Zurückgenommenes."""
+        numbers = [
+            int(entry.id[1:])
+            for entry in (*self.document.transactions, *self._undone)
+            if entry.id.startswith("t") and entry.id[1:].isdigit()
+        ]
+        return max(numbers, default=0)
 
     def _highest_object_index(self) -> int:
         indices = [

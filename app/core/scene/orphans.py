@@ -177,10 +177,22 @@ def _candidates(scene: Scene, reference: FeatureRef) -> list[str]:
 
 
 def _kind_of(feature_id: str) -> str | None:
-    """``hole_3`` benennt ein Loch. Das Präfix ist die Namensregel aus §21.1."""
-    for kind in ("hole", "face", "edge_loop", "pin", "slot", "thread"):
+    """``hole_3`` benennt ein Loch. Das Präfix ist die Namensregel aus §21.1.
+
+    Die Liste kommt aus ``FeatureKind`` statt von Hand: Die handgepflegte
+    kannte ``cone``, ``sphere``, ``torus`` und ``fillet`` nicht und führte
+    das tote ``slot`` — für einen verschwundenen Kegel wurden Flächen und
+    Bohrungen als „plausible Nachfolger" angeboten (Fund des Gesamtreviews
+    vom 25.08.2026). Der längste Treffer zuerst, damit ``edge_loop_1`` nie
+    an einem kürzeren Präfix hängen bleibt.
+    """
+    from typing import get_args
+
+    from app.core.types import FeatureKind
+
+    for kind in sorted(get_args(FeatureKind), key=len, reverse=True):
         if feature_id.startswith(f"{kind}_"):
-            return kind
+            return str(kind)
     return None
 
 

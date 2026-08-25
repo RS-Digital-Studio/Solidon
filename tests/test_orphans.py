@@ -306,3 +306,20 @@ def test_a_feature_nobody_refers_to_is_not_a_warning() -> None:
             severities.append(ast.unparse(fields["severity"]))
 
     assert severities == ["'info'"], f"perceive.orphaned ist keine Warnung: {severities}"
+
+
+def test_kind_of_knows_every_feature_kind() -> None:
+    """Die handgepflegte Liste kannte cone/sphere/torus/fillet nicht und
+    führte das tote slot — für einen verschwundenen Kegel wurden Flächen und
+    Bohrungen als „plausible Nachfolger" angeboten (Fund des Gesamtreviews
+    vom 25.08.2026). Die Liste kommt jetzt aus ``FeatureKind``.
+    """
+    from typing import get_args
+
+    from app.core.scene.orphans import _kind_of
+    from app.core.types import FeatureKind
+
+    for kind in get_args(FeatureKind):
+        assert _kind_of(f"{kind}_3") == kind, f"{kind} muss sein eigenes Präfix erkennen"
+    assert _kind_of("edge_loop_1") == "edge_loop", "der längste Treffer gewinnt"
+    assert _kind_of("slot_1") is None, "slot war nie eine Merkmalsart"

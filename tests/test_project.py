@@ -729,3 +729,109 @@ def test_a_plain_message_stays_plain() -> None:
 
     assert restored.message == "roher Text"
     assert not isinstance(restored.message, TranslatableText)
+
+
+def test_two_sources_with_the_same_filename_survive_the_round_trip(tmp_path: Path) -> None:
+    """``bracket.stl`` aus zwei Ordnern: Beide Quellen bekamen denselben
+    Containerpfad, die zweite überschrieb die erste, und das Wiederöffnen
+    endete an der Prüfsumme — heil geschrieben und trotzdem verloren (Fund
+    des Gesamtreviews vom 25.08.2026). Die Kennung gehört in den Pfad.
+    """
+    from app.core.scene.project import embedded_source_path
+
+    document = new_project(printer="centauri-carbon-2", material="petg").document
+    payload_one = b"erste Fassung"
+    payload_two = b"zweite, andere Fassung"
+    document.sources["src_1"] = Source(
+        id="src_1",
+        kind="import",
+        path=embedded_source_path("bracket.stl", "src_1"),
+        sha256="",
+    )
+    document.sources["src_2"] = Source(
+        id="src_2",
+        kind="import",
+        path=embedded_source_path("bracket.stl", "src_2"),
+        sha256="",
+    )
+    assert document.sources["src_1"].path != document.sources["src_2"].path
+
+    project = Project(document=document, sources={"src_1": payload_one, "src_2": payload_two})
+    target = tmp_path / "gleichnamig.p3d"
+    save(project, target)
+    loaded = load(target)
+    assert loaded.sources["src_1"] == payload_one
+    assert loaded.sources["src_2"] == payload_two
+
+
+def test_a_legacy_duplicate_path_stops_the_save_instead_of_losing_data(
+    tmp_path: Path,
+) -> None:
+    """Der Altbestand kann zwei Quellen mit demselben Pfad tragen — dann hält
+    das Speichern an, statt heil auszusehen und die erste zu verlieren."""
+    document = new_project(printer="centauri-carbon-2", material="petg").document
+    for source_id in ("src_1", "src_2"):
+        document.sources[source_id] = Source(
+            id=source_id, kind="import", path="sources/bracket.stl", sha256=""
+        )
+    project = Project(document=document, sources={"src_1": b"a", "src_2": b"b"})
+    with pytest.raises(ValidationError) as caught:
+        save(project, tmp_path / "doppelt.p3d")
+    assert "sources/bracket.stl" in str(caught.value.values.get("path", ""))
+
+
+def test_broken_but_valid_json_is_a_finding_not_a_traceback(tmp_path: Path) -> None:
+    """Syntaktisch gültiges, strukturell kaputtes JSON: fünf Wege verließen
+    ``load()`` als rohe KeyError/ValueError/TypeError ohne Handlungsvorschlag
+    (Regel 17; Fund des Gesamtreviews vom 25.08.2026)."""
+    import zipfile as zf
+
+    document = new_project(printer="centauri-carbon-2", material="petg").document
+    target = tmp_path / "kaputt.p3d"
+    save(Project(document=document), target)
+
+    import json as json_module
+
+    with zf.ZipFile(target) as container:
+        data = json_module.loads(container.read("project.json"))
+    data["ops"] = [{"op": "create_box"}]  # ohne id/outputs — Pflichtschlüssel fehlen
+    broken = tmp_path / "kaputt2.p3d"
+    with zf.ZipFile(target) as source, zf.ZipFile(broken, "w") as out:
+        for name in source.namelist():
+            if name == "project.json":
+                out.writestr(name, json_module.dumps(data))
+            else:
+                out.writestr(name, source.read(name))
+
+    with pytest.raises(ValidationError) as caught:
+        load(broken)
+    assert caught.value.suggestions, "Regel 17: auch die kaputte Struktur trägt einen Vorschlag"
+
+
+def test_an_unknown_fit_kind_is_refused_when_reading(tmp_path: Path) -> None:
+    """``"type": "banane"`` riss die Auswertung mit einer rohen KeyError ab —
+    ``check_fits`` steht außerhalb jedes try. Abgewiesen wird beim Lesen."""
+    from app.core.scene.serialise import fit_from_data
+
+    with pytest.raises(ValidationError) as caught:
+        fit_from_data({"name": "krumm", "a": "obj_1:hole_1", "b": "obj_2:pin_1", "type": "banane"})
+    assert caught.value.values.get("kind") == "banane"
+
+
+def test_a_code_parameter_title_travels_as_message_id(tmp_path: Path) -> None:
+    """Dasselbe Muster wie beim Transaktionstitel: ``str(title)`` fror die
+    Sprache des Speicherzeitpunkts ein — das mitgelieferte Beispiel zeigte
+    einem englischen Kunden „Breite/Tiefe/Höhe/Wandstärke"."""
+    from app.core.scene.serialise import parameter_from_data, parameter_to_data
+    from app.i18n import TranslatableText
+
+    coded = Parameter(name="w", value=30.0, title=TranslatableText("Breite", None))
+    data = parameter_to_data(coded)
+    assert data["title"] == "Breite" and data.get("title_translatable") is True
+
+    back = parameter_from_data("w", data)
+    assert isinstance(back.title, TranslatableText), "die Anzeige löst erst beim Zeigen auf"
+
+    typed = Parameter(name="w", value=30.0, title="meine Breite")
+    plain = parameter_to_data(typed)
+    assert plain.get("title_translatable") is None, "Getipptes wird nie übersetzt"

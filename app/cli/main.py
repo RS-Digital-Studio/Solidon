@@ -293,7 +293,7 @@ def command_import(args: argparse.Namespace) -> int:
     project.document.sources[source_id] = Source(
         id=source_id,
         kind="import",
-        path=embedded_source_path(incoming.name),
+        path=embedded_source_path(incoming.name, source_id),
         sha256="",
     )
     project.sources[source_id] = payload

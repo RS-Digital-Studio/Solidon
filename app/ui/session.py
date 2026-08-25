@@ -793,7 +793,7 @@ class Session(QObject):
         document.sources[source_id] = Source(
             id=source_id,
             kind=kind,
-            path=embedded_source_path(filename or f"{source_id}.stl"),
+            path=embedded_source_path(filename or f"{source_id}.stl", source_id),
             sha256=checksum(payload),
             origin=origin,
         )

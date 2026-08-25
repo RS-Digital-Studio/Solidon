@@ -15,7 +15,9 @@ from __future__ import annotations
 from dataclasses import fields
 from typing import Any, Final
 
+from app.core.errors import ValidationError
 from app.core.types import (
+    FIT_KINDS,
     AdhesionSettings,
     ChatEntry,
     CoolingSettings,
@@ -44,7 +46,7 @@ from app.core.types import (
     TemperatureSettings,
     Transaction,
 )
-from app.i18n import TranslatableText
+from app.i18n import TranslatableText, _
 
 
 def _without_none(data: dict[str, Any]) -> dict[str, Any]:
@@ -55,24 +57,42 @@ def _without_none(data: dict[str, Any]) -> dict[str, Any]:
 
 
 def parameter_to_data(parameter: Parameter) -> dict[str, Any]:
+    """Ein Titel aus dem Code reist als Message-ID, ein getippter als Text.
+
+    Dasselbe Muster wie :func:`transaction_to_data`: ``str(title)`` fror die
+    Übersetzung der Sprache ein, die beim **Speichern** aktiv war — das
+    mitgelieferte Beispiel ``dose-mit-deckel.p3d`` zeigte einem englischen
+    Kunden „Breite/Tiefe/Höhe/Wandstärke", obwohl die Übersetzungen
+    existieren (Fund des Gesamtreviews vom 25.08.2026).
+    """
+    title = parameter.title
     return _without_none(
         {
             "value": parameter.value,
             "unit": parameter.unit,
             "min": parameter.minimum,
             "max": parameter.maximum,
-            "title": str(parameter.title) if parameter.title is not None else None,
+            "title": (
+                None
+                if title is None
+                else (title.msgid if isinstance(title, TranslatableText) else str(title))
+            ),
+            "title_translatable": True if isinstance(title, TranslatableText) else None,
+            "title_context": title.context if isinstance(title, TranslatableText) else None,
             "expression": parameter.expression,
         }
     )
 
 
 def parameter_from_data(name: str, data: dict[str, Any]) -> Parameter:
+    title: TranslatableText | str | None = data.get("title")
+    if title is not None and data.get("title_translatable"):
+        title = TranslatableText(str(title), data.get("title_context"))
     return Parameter(
         name=name,
         value=float(data.get("value", 0.0)),
         unit=data.get("unit", "mm"),
-        title=data.get("title"),
+        title=title,
         minimum=data.get("min"),
         maximum=data.get("max"),
         expression=data.get("expression"),
@@ -93,11 +113,27 @@ def fit_to_data(fit: Fit) -> dict[str, Any]:
 
 
 def fit_from_data(data: dict[str, Any]) -> Fit:
+    kind = data.get("type", "clearance")
+    if kind not in FIT_KINDS:
+        # Vor der Auswertung, nicht mitten in ihr: ``check_fits`` steht
+        # außerhalb jedes ``try``, und eine unbekannte Passungsart aus der
+        # Datei riss die Auswertung mit einer rohen ``KeyError`` ab (Fund
+        # des Gesamtreviews vom 25.08.2026).
+        raise ValidationError(
+            field="fits",
+            detail=_(
+                "Eine Passung in der Datei trägt eine unbekannte Art. "
+                "Entfernen Sie die Passung, oder öffnen Sie die Datei mit "
+                "einer neueren Version."
+            ),
+            constraint="unknown_format",
+            values={"fit": str(data.get("name", "?")), "kind": str(kind)},
+        )
     return Fit(
         name=data["name"],
         a=FeatureRef.parse(data["a"]),
         b=FeatureRef.parse(data["b"]),
-        kind=data.get("type", "clearance"),
+        kind=kind,
         tolerance=data.get("tolerance", "auto:"),
     )
 

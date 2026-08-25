@@ -453,3 +453,40 @@ def test_a_later_operation_on_a_deleted_object_is_refused(
             [OperationDraft(op="rename_object", inputs=("obj_1",), params={"name": "Deckel"})],
         )
     assert problem.value.constraint == "unknown_object"
+
+
+def test_a_ring_that_leaves_the_build_volume_is_refused_with_advice(
+    profile: Profile, registry: Registry
+) -> None:
+    """Die Bauraumprüfung galt nur der Reihe — der Kranz meldete stattdessen
+    Einzelwarnungen der Auswertung, ohne die zwei Handlungsvorschläge (Fund
+    des Gesamtreviews vom 25.08.2026). Jetzt prüft er die Hülle aller Kopien.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+
+    load_operations()
+    document = Document(format_version=1, app_version="test")
+    history = History(document, REGISTRY)
+    history.apply(
+        _("Anlegen"),
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 40.0, "height": 10.0})],
+    )
+    history.apply(
+        _("Verschieben"),
+        [OperationDraft(op="translate_object", inputs=("obj_1",), params={"dx": 150.0})],
+    )
+    history.apply(
+        _("Kranz"),
+        [
+            OperationDraft(
+                op="pattern",
+                inputs=("obj_1",),
+                params={"kind": "circular", "count": 8, "angle": 360.0, "axis": "z"},
+            )
+        ],
+    )
+    result = evaluate(document, profile, registry=REGISTRY)
+    assert result.stopped_at is not None, "der Kranz reicht über den Bauraum hinaus"
+    texts = " ".join(f"{entry.code} {entry.values}" for entry in result.scene.report.findings)
+    assert "needed_mm" in texts, "der Befund nennt, wie weit es hinausreicht"

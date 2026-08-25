@@ -474,3 +474,21 @@ def test_only_twins_may_be_switched() -> None:
 
     assert "Zwilling" in str(raised.value)
     assert project.document.ops[0].op == "create_box", "abgelehnt heißt unverändert"
+
+
+def test_a_transaction_number_is_never_reused_after_undo(history: History) -> None:
+    """Vergeben ist vergeben — wie bei den Op-Kennungen.
+
+    ``len(transactions) + 1`` vergab „t2" nach dem Zurücknehmen von t2
+    erneut: Ein Chat-Beitrag zeigte danach auf eine wildfremde Transaktion
+    und galt als lebendig (Fund des Gesamtreviews vom 25.08.2026).
+    """
+    object_id = create(history)
+    second = history.apply(
+        _("Umbenennen"), [OperationDraft(op="rename_object", inputs=(object_id,))]
+    )
+    history.undo()
+    third = history.apply(
+        _("Noch einmal"), [OperationDraft(op="rename_object", inputs=(object_id,))]
+    )
+    assert third.id != second.id, "eine zurückgenommene Kennung darf nie neu vergeben werden"

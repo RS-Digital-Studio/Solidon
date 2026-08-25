@@ -445,3 +445,60 @@ def test_the_variants_report_progress_and_can_be_stopped(profile: Profile) -> No
     assert 0 < len(partial.variants) < 3, (
         f"nach dem Abbruch stehen {len(partial.variants)} von 3 Varianten da"
     )
+
+
+def _objects(project: Project) -> list[str]:
+    """Die Objektkennungen in Stapelreihenfolge."""
+    return [output for op in project.document.ops for output in op.outputs]
+
+
+def test_a_variant_keeps_two_bodies_apart(profile: Profile) -> None:
+    """Zwei Körper einer Variante behalten ihre Lage zueinander.
+
+    Jeden einzeln auf den Versatz zu schieben legte bei „Dose mit Deckel"
+    Deckel und Rumpf ineinander, und die gemeldete Breite war die des
+    breitesten Einzelkörpers (Fund des Gesamtreviews vom 25.08.2026) — die
+    Gruppe bekommt einen Versatz.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.parameters["spiel"] = Parameter(name="spiel", value=0.1, unit="mm")
+    History(project.document).apply(
+        "Rumpf",
+        [OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 10.0})],
+    )
+    History(project.document).apply(
+        "Deckel daneben",
+        [OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 4.0})],
+    )
+    lid = next(reversed(_objects(project)))
+    History(project.document).apply(
+        "Deckel verschieben",
+        [OperationDraft(op="translate_object", inputs=(lid,), params={"dx": 30.0})],
+    )
+
+    made = variants.build(
+        project.document,
+        profile,
+        parameter="spiel",
+        first=0.10,
+        step=0.05,
+        count=2,
+        sources=ProjectSources(project),
+    )
+    scene = made.scene(profile)
+    assert len(scene.objects) == 4
+
+    # Innerhalb jeder Variante dürfen sich die zwei Körper nicht überlappen —
+    # ineinandergeschoben teilten sie denselben X-Bereich.
+    from itertools import pairwise
+
+    by_variant: dict[str, list[tuple[float, float]]] = {}
+    for object_id, entry in scene.objects.items():
+        suffix = object_id.rsplit("_", 1)[-1]
+        by_variant.setdefault(suffix, []).append(
+            (float(entry.mesh.bounds.minimum[0]), float(entry.mesh.bounds.maximum[0]))
+        )
+    for suffix, spans in by_variant.items():
+        spans.sort()
+        for (_low_a, high_a), (low_b, _high_b) in pairwise(spans):
+            assert low_b >= high_a - 1e-6, f"Variante {suffix}: zwei Körper teilen denselben Raum"

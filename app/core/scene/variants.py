@@ -187,13 +187,23 @@ def _place(
     gap: float,
 ) -> float:
     """Rückt einen Lauf aus dem Weg des vorigen und benennt ihn nach seinem
-    Wert."""
-    width = 0.0
+    Wert.
+
+    **Ein Versatz für die ganze Gruppe, nicht je Körper:** Jeden einzeln auf
+    ``offset`` zu schieben legte bei „Dose mit Deckel" Deckel und Rumpf
+    ineinander, und die gemeldete Breite war die des breitesten
+    Einzelkörpers statt der Gruppe (Fund des Gesamtreviews vom 25.08.2026).
+    Die Lagen der Körper zueinander gehören zur Variante.
+    """
+    meshes = {object_id: as_mesh_data(entry.mesh) for object_id, entry in scene.objects.items()}
+    if not meshes:
+        return 0.0
+    group_min = min(float(mesh.bounds.minimum[0]) for mesh in meshes.values())
+    group_max = max(float(mesh.bounds.maximum[0]) for mesh in meshes.values())
+    width = group_max - group_min
+    shift = offset - group_min
     for object_id, entry in scene.objects.items():
-        mesh = as_mesh_data(entry.mesh)
-        size = mesh.bounds.size
-        width = max(width, float(size[0]))
-        moved = apply(mesh, translation((offset - float(mesh.bounds.minimum[0]), 0.0, 0.0)))
+        moved = apply(meshes[object_id], translation((shift, 0.0, 0.0)))
         name = f"{entry.name} {tr('Variante')} {value:g}"
         variant.objects[f"{object_id}_v{index + 1}"] = dataclasses.replace(
             entry, id=f"{object_id}_v{index + 1}", name=name, mesh=moved

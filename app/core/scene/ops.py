@@ -11,7 +11,7 @@ from __future__ import annotations
 import dataclasses
 import math
 from dataclasses import replace
-from typing import cast
+from typing import Any, cast
 
 from app.core.errors import CORRECT_INPUT, SPLIT_MODEL, ValidationError
 from app.core.geom.mesh import as_mesh_data
@@ -114,9 +114,9 @@ class DuplicateObjectParams(BaseParams):
 def duplicate_object(ctx: OpContext) -> OpResult:
     """§25: „x10" im Dateinamen ist eine Stückzahl, die niemand mehr ändern kann.
 
-    Here it is one step with a number in it, rather than nine duplications
-    nobody can read afterwards — and the arranging spreads whatever comes out
-    over the plates (§25).
+    Hier ist es ein Schritt mit einer Zahl darin statt neun Duplikaten, die
+    hinterher niemand mehr lesen kann — und das Anordnen verteilt, was dabei
+    herauskommt, über die Platten (§25).
     """
     params = cast(DuplicateObjectParams, ctx.params)
     source = ctx.inputs[0]
@@ -305,6 +305,12 @@ def pattern(ctx: OpContext) -> OpResult:
             rotation(cast(Axis, params.axis), params.angle * index / divisor)
             for index in range(params.count)
         ]
+        # Die Bauraumprüfung galt nur der Reihe: Der Kranz meldete stattdessen
+        # acht Einzelwarnungen der Auswertung, ohne die zwei
+        # Handlungsvorschläge (Fund des Gesamtreviews vom 25.08.2026). Die
+        # Hülle aller gedrehten Kopien ist über die acht Quaderecken je
+        # Schritt billig exakt genug.
+        _check_ring_volume(ctx, source, steps)
 
     outputs = [
         dataclasses.replace(
@@ -317,6 +323,46 @@ def pattern(ctx: OpContext) -> OpResult:
         for index, step in enumerate(steps)
     ]
     return OpResult(outputs=outputs)
+
+
+def _check_ring_volume(ctx: OpContext, source: SceneObject, steps: list[Any]) -> None:
+    """Ob der Kranz noch auf die Platte passt — die Hülle aller Kopien.
+
+    Dieselbe Auskunft wie bei der Reihe, mit denselben zwei
+    Handlungsvorschlägen: gerechnet über die acht Ecken des Hüllquaders,
+    durch jede Schrittmatrix gedreht.
+    """
+    import numpy as np
+
+    volume = ctx.profile.printer.build_volume
+    bounds = as_mesh_data(source.mesh).bounds
+    corners = np.array(
+        [
+            (x, y, z, 1.0)
+            for x in (bounds.minimum[0], bounds.maximum[0])
+            for y in (bounds.minimum[1], bounds.maximum[1])
+            for z in (bounds.minimum[2], bounds.maximum[2])
+        ]
+    )
+    moved = np.vstack([(np.asarray(step) @ corners.T).T[:, :3] for step in steps])
+    needed_size = moved.max(axis=0) - moved.min(axis=0)
+    for axis in range(3):
+        needed = float(needed_size[axis])
+        if needed > volume[axis] + EPS_GEOM:
+            raise ValidationError(
+                "count",
+                _(
+                    "So viele Kopien reichen über den Bauraum hinaus. Wie weit, steht "
+                    "in „needed_mm“; was die Maschine kann, in „volume_mm“."
+                ),
+                value=needed,
+                constraint="build_volume",
+                values={"needed_mm": round(needed, 1), "volume_mm": round(volume[axis], 1)},
+                suggestions=[
+                    replace(CORRECT_INPUT, label=_("Anzahl oder Abstand verringern")),
+                    SPLIT_MODEL,
+                ],
+            )
 
 
 def _check_volume(
