@@ -1,8 +1,9 @@
 """Die Bildschirmfotos für das Handbuch aufnehmen (Bauplan §37.2).
 
-Fünf Abbildungen des Handbuchs zeigen die Oberfläche selbst — Startbildschirm,
-Hauptfenster, Operationsdialog, Prüfbericht, Bausteinkatalog. Sie werden hier
-aufgenommen und nicht von Hand gemacht: ein Bildschirmfoto, das jemand vor drei
+Die Abbildungen des Handbuchs, die die Oberfläche selbst zeigen —
+Startbildschirm, Hauptfenster, Operationsdialog, Prüfbericht,
+Bausteinkatalog, Skizzenmodus, Rezeptdialog —, werden hier aufgenommen und
+nicht von Hand gemacht: ein Bildschirmfoto, das jemand vor drei
 Versionen gezogen hat, zeigt drei Versionen alte Knöpfe, und niemand merkt es.
 
     .venv\\Scripts\\python.exe tools/make_figures.py
@@ -208,9 +209,14 @@ def frame_sketch(window: Any, app: QApplication) -> None:
             normal = feature.params.get("normal", (0.0, 0.0, 0.0))
             if feature.kind != "face" or float(normal[2]) < 0.9:
                 continue
+            # Die Höhe der **Fläche**, nicht die Oberkante ihres Körpers:
+            # Die ist je Körper konstant, und innerhalb eines Körpers hätte
+            # allein die Fläche entschieden — bei einer ausgehöhlten Dose
+            # gewönne der Innenboden gegen den Rand.
+            centre = feature.params.get("centre", (0.0, 0.0, 0.0))
             topmost.append(
                 (
-                    float(body.mesh.bounds.maximum[2]),
+                    float(centre[2]),
                     float(feature.params.get("area", 0.0)),
                     feature_id,
                 )
@@ -237,12 +243,21 @@ def frame_sketch(window: Any, app: QApplication) -> None:
     panel = window._sketch_panel
     if panel is None:
         raise SystemExit("der Skizzenmodus ging nicht auf — kein Bild davon")
+    if str(panel.plane_choice.currentData() or "") != f"feature:{topmost[0][2]}":
+        # ``start_sketch`` schreibt einen Rückfall nur in ein ``announce`` —
+        # das Werkzeug hier muss ihn selbst bemerken, sonst zeigt das Bild
+        # eine Zeichnung auf der Grundebene und behauptet die Fläche.
+        raise SystemExit("die Skizze liegt nicht auf der angeforderten Fläche — kein Bild davon")
     panel.canvas.insert_shape(shapes.circle(20.0))
     settle(app, 20)
 
     frame = window._sketch_frame()
     if frame is None:
-        return
+        # Der einzige Fehlerweg dieser Funktion, der schwieg — und der
+        # wahrscheinlichste: ``frame_for_plane`` scheitert an einer Ebene,
+        # die der Körper nicht mehr hat. Das Bild wurde trotzdem geschrieben
+        # und der Lauf endete mit „Fertig."
+        raise SystemExit("die Zeichenebene ließ sich nicht auflösen — kein Bild vom Skizzenmodus")
     xs = [x for x, _y in panel.canvas.points()]
     ys = [y for _x, y in panel.canvas.points()]
     visible = max(window.viewport.height(), 1)
@@ -288,7 +303,8 @@ def shoot(widget: QWidget, key: str, language: str, *, from_screen: bool = False
         shot = screen.grabWindow(widget.winId())
     else:
         shot = widget.grab()
-    shot.save(str(target))
+    if not shot.save(str(target)):
+        raise SystemExit(f"{target} ließ sich nicht schreiben — kein leises Fertig")
     print(f"  {key:14s} → {target.relative_to(Path.cwd()) if target.is_absolute() else target}")
 
 
@@ -482,7 +498,7 @@ def translate_parameter_titles(session: Any) -> None:
 
 
 def take_all(app: QApplication, language: str) -> None:
-    """Alle fünf Aufnahmen einer Sprache."""
+    """Alle Aufnahmen einer Sprache."""
     from app.core import examples
     from app.ui.catalog import PartCatalog, catalog_size
     from app.ui.main_window import MainWindow
@@ -568,18 +584,18 @@ def take_all(app: QApplication, language: str) -> None:
     # Lauf steht. Gefunden mit py-spy an zwei Läufen, die beide in
     # ``confirm_unsaved`` warteten, nachdem alle Bilder längst geschrieben
     # waren.
-    session._dirty = False
     settle(app, 20)
 
-    # Unmittelbar davor und nicht früher: Die Auswertung nach dem Undo läuft
-    # noch und setzt den Änderungsstand erneut. Ein Reset weiter oben wirkte
-    # deshalb nicht, und der Lauf blieb ein zweites Mal in der Frage stehen.
+    # Unmittelbar vor dem Schließen und nicht früher: Die Auswertung nach dem
+    # Undo läuft noch und setzt den Änderungsstand erneut. Ein Reset weiter
+    # oben wirkte deshalb nicht — er stand hier trotzdem, bis der Review ihn
+    # als tote Zeile nannte.
     session._dirty = False
     window.close()
     release_viewport(window)
 
     # Der Prüfbericht als eigenes Fenster: im Hauptfenster steckt er in einem
-    # Reiter und ist genau so tall wie der Reiter, was ein Bild von zwölf Pixeln
+    # Reiter und ist genau so hoch wie der Reiter, was ein Bild von zwölf Pixeln
     # Höhe ergibt.
     report = prepared(ReportPanel(), REPORT)
     report.add_findings(sample_findings(language))

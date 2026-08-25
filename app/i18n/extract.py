@@ -23,7 +23,14 @@ PACKAGE_DIR = Path(__file__).parent.parent
 #: werden: die Transaktionstitel der Beispiel-Bauer reisen in den erzeugten
 #: ``.p3d``-Dateien mit und müssen im Katalog stehen, sonst zeigt der Verlauf
 #: sie unübersetzt.
-EXTRA_SOURCES = (PACKAGE_DIR.parent / "tools" / "make_examples.py",)
+# ``make_figures`` steht hier aus demselben Grund wie ``make_examples``: Es
+# schreibt Oberflächentexte in Bilder, die der Kunde sieht — ein ``tr()``, das
+# die Sammlung nicht kennt, fällt in fünf Sprachen still auf Deutsch zurück
+# („Halter für die Werkbank" stand auf jedem fremdsprachigen own-part-Bild).
+EXTRA_SOURCES = (
+    PACKAGE_DIR.parent / "tools" / "make_examples.py",
+    PACKAGE_DIR.parent / "tools" / "make_figures.py",
+)
 
 
 def message_ids(paths: list[Path] | None = None) -> set[str]:

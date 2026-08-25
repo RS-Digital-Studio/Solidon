@@ -45,23 +45,29 @@ from PySide6.QtWidgets import QApplication
 
 from app.core.bootstrap import load_operations
 from app.i18n import SOURCE_LANGUAGE, install_catalog, set_language
-from app.i18n.catalog import available_languages, read_catalog
+from app.i18n.catalog import read_catalog
 
 #: Wohin die Belege gehen.
 TARGET = Path(__file__).resolve().parent.parent / "website" / "bilder"
 
 #: Welche Gruppen des Katalogs den Beleg bilden.
 #:
-#: „Verbindungen" und „Mechanik" — drei und fünf Bausteine, und zusammen sagen
-#: sie beides, was der Abschnitt behauptet: dass es Normteile gibt (Mutternfalle,
-#: Gewinde, Schraubenloch) und dass es mehr als Normteile gibt (Passstift,
-#: Rastnase, Filmscharnier, zwei Schnappverbindungen). Die Einlegeteile stehen
-#: mit einem einzigen Baustein dazwischen; ein Band aus einer Kachel sieht aus
-#: wie ein Fehler.
+#: „Verbindungen" und „Mechanik" — zusammen sagen sie beides, was der
+#: Abschnitt behauptet: dass es Normteile gibt (Mutternfalle, Gewinde,
+#: Schraubenloch) und dass es mehr als Normteile gibt (Passstift, Rastnase,
+#: Scharniere, Schnappverbindungen). Auf Stückzahlen zählt dieser Kommentar
+#: nicht mehr — die Bibliothek wächst, und eine mitgeschriebene Zahl war beim
+#: Review vom 26.08.2026 bereits zweimal falsch.
 SHOWN_GROUPS = ("fasteners", "mechanics")
 
 #: Wie viel Luft um ein Band bleibt, in Bildpunkten.
 PADDING = 12
+
+
+def _explode(target: Path) -> None:
+    """Ein Speichern, dessen Rückgabe niemand liest, sieht immer nach Erfolg aus."""
+    raise SystemExit(f"{target} ließ sich nicht schreiben — kein leises Fertig")
+
 
 #: Abstand zwischen den beiden Bändern.
 GAP = 8
@@ -234,7 +240,7 @@ def take_parts(language: str) -> Path:
     catalog.close()
 
     target = named("beleg-bausteine", language)
-    sheet.save(str(target))
+    sheet.save(str(target)) or _explode(target)
     return target
 
 
@@ -257,7 +263,7 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
     start = figures.prepared(StartScreen(), WEB_START)
     figures.settle(app)
     target = named("beleg-start", language)
-    start.grab().save(str(target))
+    start.grab().save(str(target)) or _explode(target)
     written.append(target)
     start.close()
 
@@ -282,7 +288,7 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
     # Über den Bildschirm, nicht über den Qt-Painter: der weiß nichts von dem,
     # was OpenGL in den Viewport gezeichnet hat — die Bildmitte bliebe schwarz.
     screen = window.screen() or QApplication.primaryScreen()
-    screen.grabWindow(window.winId()).save(str(target))
+    screen.grabWindow(window.winId()).save(str(target)) or _explode(target)
     written.append(target)
 
     # **Der Skizzenmodus im selben Fenster** — er ist seit P4 keine eigene Seite
@@ -290,7 +296,7 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
     # Werkzeuge, ein Bild, und der Ausschnitt hängt an Maßen, die man messen muss.
     figures.frame_sketch(window, app)
     target = named("beleg-skizze", language)
-    screen.grabWindow(window.winId()).save(str(target))
+    screen.grabWindow(window.winId()).save(str(target)) or _explode(target)
     written.append(target)
     window.finish_sketch(keep=False)
     figures.settle(app, 20)
@@ -312,7 +318,12 @@ def main() -> int:
     assert isinstance(app, QApplication)
     apply_theme(app, "dark")
 
-    wanted = tuple(sys.argv[1:]) or available_languages()
+    # Dieselbe Prüfung wie in ``make_figures``: Eine unbekannte Sprache gäbe
+    # einen leeren Katalog, jedes ``tr()`` fiele auf Deutsch zurück, und der
+    # Lauf endete mit „Fertig." — die Falle aus 229490a, über den anderen Weg.
+    from make_figures import chosen_languages
+
+    wanted = chosen_languages(tuple(sys.argv[1:]))
     translator = None
     for language in wanted:
         install_catalog(language, read_catalog(language))

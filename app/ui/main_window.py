@@ -4374,9 +4374,16 @@ class MainWindow(QMainWindow):
         if panel is None:
             return
         place = panel.plane_choice.currentText()
-        cut = place.rfind("  (")
-        if cut != -1 and place.endswith(")"):
-            place = place[:cut]
+        # Der Zusatz wird über den **bekannten** Schlüssel entfernt, nicht
+        # über eine Klammersuche im übersetzten Text: „(XY)" gehört zum Titel,
+        # „  (1)" ist das Kürzel — eine Übersetzung, die selbst auf eine
+        # Klammer endet, hätte den Hinweis sonst still zerschnitten.
+        from app.ui.sketch_editor import PLANE_KEYS
+
+        key = PLANE_KEYS.get(str(panel.plane_choice.currentData() or ""), "")
+        suffix = f"  ({key})"
+        if key and place.endswith(suffix):
+            place = place[: -len(suffix)]
         source = (
             tr(
                 "Zeichenebene: {place} · Zeichnen, dann Fertig — "
