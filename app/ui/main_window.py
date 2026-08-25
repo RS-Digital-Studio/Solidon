@@ -141,6 +141,7 @@ from app.core.sketch.planes import frame_for_plane
 from app.core.sketch.profile import curves_of
 from app.core.slice import gcode
 from app.core.slice.analysis import slice_body
+from app.core.slice.estimate import support_material
 from app.core.slice.estimate import total as estimate_total
 from app.core.support import KIND_CRASH, KIND_IDEA, KIND_SURVEY
 from app.core.tour import tour_for
@@ -3445,12 +3446,19 @@ class MainWindow(QMainWindow):
             )
 
     def _compare_support(self, estimate: SliceResult | None, measured: float) -> None:
-        """Geschätztes gegen gemessenes Stützvolumen (§22.5, Regel 14)."""
+        """Geschätztes gegen gemessenes Stützvolumen (§22.5, Regel 14).
+
+        Verglichen wird Material gegen Material, nicht Raum gegen Material:
+        Die Säule aus der Schichtanalyse ist ein Rauminhalt, der Drucker füllt
+        ihn nur zu ``support.density`` — :func:`support_material` rechnet um.
+        """
         if estimate is None:
             return
-        self.report.add_findings(
-            gcode.compare(estimate.support_volume, measured, "support").findings
+        settings = self.session.project.document.print_settings or print_settings.resolve(
+            self.session.profile
         )
+        expected = support_material(estimate.support_volume, settings)
+        self.report.add_findings(gcode.compare(expected, measured, "support").findings)
 
     def _compare_totals(self, metrics: gcode.GcodeMetrics) -> None:
         """Geschätzte gegen gemessene Druckzeit und Materialmenge (§28.2).
@@ -5656,8 +5664,7 @@ class MainWindow(QMainWindow):
         menu = self.object_tree.context_menu()
         if menu is None:
             return
-        local = QPoint(x, self.viewport.height() - y)
-        menu.exec(self.viewport.mapToGlobal(local))
+        menu.exec(self.viewport.mapToGlobal(self._from_vtk_point(x, y)))
 
     def _on_sketch_menu(self, point: object, x: int, y: int) -> None:
         """Das Kontextmenü der Zeichnung, am Zeiger (§30.1, P4).
@@ -5674,8 +5681,19 @@ class MainWindow(QMainWindow):
         menu = panel.canvas.context_menu_on_plane((float(point[0]), float(point[1])))
         if menu.isEmpty():
             return
-        local = QPoint(x, self.viewport.height() - y)
-        menu.exec(self.viewport.mapToGlobal(local))
+        menu.exec(self.viewport.mapToGlobal(self._from_vtk_point(x, y)))
+
+    def _from_vtk_point(self, x: int, y: int) -> QPoint:
+        """Eine VTK-Fensterstelle als Qt-Logikpunkt des Viewports.
+
+        VTK zählt von unten und in Gerätepunkten (pyvistas ``rwi`` rechnet
+        jede Mausposition mit ``devicePixelRatio`` hoch); Qt zählt von oben
+        und in Logikpunkten. Wer nur die Höhe umrechnet, öffnet auf einem
+        skalierten Bildschirm das Menü neben dem Zeiger. Bei dpr 1,0 ändert
+        der Faktor nichts.
+        """
+        ratio = float(self.viewport.devicePixelRatioF()) or 1.0
+        return QPoint(int(x / ratio), int(self.viewport.height() - y / ratio))
 
     def _on_sketch_on_face(self, feature_id: str) -> None:
         """Ein Klick auf eine Fläche beginnt dort eine Skizze (§30.1).

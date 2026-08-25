@@ -496,9 +496,15 @@ def test_the_pointer_is_flipped_from_qt_to_vtk(qt_app: QApplication) -> None:
             return self._y
 
     class _Interactor:
+        ratio = 1.0
+
         @staticmethod
         def height() -> int:
             return 600
+
+        @classmethod
+        def devicePixelRatioF(cls) -> float:  # noqa: N802 — Qt-Name
+            return cls.ratio
 
     class _MitInteractor(_RecordingPlotter):
         interactor = _Interactor()
@@ -514,6 +520,18 @@ def test_the_pointer_is_flipped_from_qt_to_vtk(qt_app: QApplication) -> None:
     # Und der Beleg, warum die Mitte nichts prüft: dort ist beides gleich.
     viewport._note_pointer(_Punkt(120, 300))
     assert viewport._hover_at == (120, 300), "in der Mitte fällt der Fehler nicht auf"
+
+    # **Und in Gerätepunkten, nicht in Logikpunkten** (Gesamtreview J-5):
+    # pyvistas ``rwi`` multipliziert jede Mausposition mit dem
+    # ``devicePixelRatio``, bevor sie an VTK geht — die Zeigersuche muss
+    # dieselbe Rechnung machen, sonst fragt sie auf einem skalierten
+    # Bildschirm die falsche Stelle. Höhe 600 Logikpunkte sind bei 1,5 dann
+    # 900 Gerätepunkte.
+    _Interactor.ratio = 1.5
+    viewport._note_pointer(_Punkt(120, 100))
+    assert viewport._hover_at == (180, 750), (
+        f"bei dpr 1,5 zählt VTK in Gerätepunkten: {viewport._hover_at} statt (180, 750)"
+    )
 
 
 def test_orthographic_reaches_the_plotter(qt_app: QApplication) -> None:

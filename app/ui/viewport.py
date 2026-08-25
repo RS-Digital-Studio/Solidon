@@ -2768,8 +2768,9 @@ class Viewport(QWidget):
         wegrückt: das Auseinanderziehen (§18.8) und die Platte (§25).
 
         An einer Stelle zusammengefasst, damit jede Zeichenstelle beides
-        bekommt oder keines. Was hier **nicht** mitgeht, sind die Überlagerungen
-        in Szenenkoordinaten — Maße, Schnittebene, Griffe: sie folgten schon dem
+        bekommt oder keines. Merkmalsfläche, Merkmalsbeschriftung, Griffscheibe
+        und Differenzvorschau gehen inzwischen mit; was weiter **nicht**
+        mitgeht, sind Maße und Schnittebene — sie folgten schon dem
         Auseinanderziehen nicht, und das gehört zusammen behoben, nicht halb.
         """
         return self._exploded(entry, result) + self._plate_offset(entry)
@@ -3537,8 +3538,15 @@ class Viewport(QWidget):
         """
         if self.plotter is None:
             return
-        height = self.plotter.interactor.height()
-        self._hover_at = (int(position.x()), int(height - position.y()))
+        # Dieselbe Rechnung wie pyvistas ``rwi``: Es multipliziert jede
+        # Mausposition mit ``devicePixelRatio``, bevor sie an VTK geht, und
+        # setzt die Renderfenstergröße ebenso. Wer hier in Qt-Logikpunkten
+        # rechnet, fragt auf einem skalierten Bildschirm die falsche Stelle —
+        # Fangkreuz und Vorschau stünden neben dem Klick. Bei dpr 1,0 ändert
+        # der Faktor nichts.
+        ratio = float(self.plotter.interactor.devicePixelRatioF())
+        height = self.plotter.interactor.height() * ratio
+        self._hover_at = (int(position.x() * ratio), int(height - position.y() * ratio))
         # **Die Skizzenvorschau wartet nicht auf die Ruhepause** (§30.1, P4).
         # Die Merkmalssuche darunter tut es aus gutem Grund: Sie kostet einen
         # Zell-Pick, und den bei jeder Bewegung zu zahlen hieße, den
@@ -3897,13 +3905,29 @@ class Viewport(QWidget):
 
         import numpy as np
 
+        # Beschriftet wird dort, wo gezeichnet wird: Die Merkmalsfläche geht
+        # durch ``_view_offset``, ihr Etikett stand daneben auf den nackten
+        # Szenenkoordinaten — dieselbe Bohrung, zwei Orte, eine Bettbreite
+        # auseinander (§25, §18.8).
+        entry = (
+            self._result.scene.objects.get(self._selected)
+            if self._result is not None and self._selected is not None
+            else None
+        )
+        shift = (
+            self._view_offset(entry, self._result)
+            if entry is not None and self._result is not None
+            else np.zeros(3)
+        )
         points: list[list[float]] = []
         labels: list[str] = []
         for feature_id, feature in shown.items():
             centre = feature.params.get("centre")
             if centre is None:
                 continue
-            points.append([float(value) for value in centre])
+            points.append(
+                [float(value) + float(moved) for value, moved in zip(centre, shift, strict=True)]
+            )
             labels.append(feature_label(feature_id, feature))
         if not points:
             return
@@ -4593,14 +4617,30 @@ class Viewport(QWidget):
         if self._difference is None or self._difference_held:
             return
 
+        import numpy as np
+
         colours = DIFF_PALETTES[self._diff_palette]
         for entry in self._difference.entries.values():
-            self._add_body(entry.added, colours.added.colour, f"added:{entry.object_id}", 0.85)
+            # Die Vorschau liegt über dem gezeichneten Körper — der geht durch
+            # ``_view_offset``, also muss sie es auch (§25, §18.8).
+            scene_entry = (
+                self._result.scene.objects.get(entry.object_id)
+                if self._result is not None
+                else None
+            )
+            shift = (
+                np.asarray(self._view_offset(scene_entry, self._result), dtype=float)
+                if scene_entry is not None and self._result is not None
+                else np.zeros(3)
+            )
             self._add_body(
-                entry.removed, colours.removed.colour, f"removed:{entry.object_id}", 0.45
+                entry.added, colours.added.colour, f"added:{entry.object_id}", 0.85, shift
+            )
+            self._add_body(
+                entry.removed, colours.removed.colour, f"removed:{entry.object_id}", 0.45, shift
             )
 
-    def _add_body(self, mesh: Any, colour: str, name: str, opacity: float) -> None:
+    def _add_body(self, mesh: Any, colour: str, name: str, opacity: float, shift: Any) -> None:
         if self.plotter is None or mesh is None or not len(mesh.raw.faces):
             return
         import numpy as np
@@ -4610,7 +4650,7 @@ class Viewport(QWidget):
         faces = np.hstack(
             [np.full((len(raw.faces), 1), 3, dtype=np.int64), np.asarray(raw.faces)]
         ).ravel()
-        surface = pv.PolyData(np.asarray(raw.vertices, dtype=float), faces)
+        surface = pv.PolyData(np.asarray(raw.vertices, dtype=float) + shift, faces)
         self._difference_actors.append(
             self.plotter.add_mesh(surface, color=colour, opacity=opacity, name=name, render=False)
         )
@@ -4959,6 +4999,15 @@ class Viewport(QWidget):
         if self.plotter is None:
             return None
         centre = np.asarray(feature.params["centre"], dtype=float)
+        # Der Griff sitzt auf der gezeichneten Fläche, nicht auf der
+        # Szenenkoordinate — sonst steht er eine Bettbreite daneben (§25).
+        entry = (
+            self._result.scene.objects.get(self._selected)
+            if self._result is not None and self._selected is not None
+            else None
+        )
+        if entry is not None and self._result is not None:
+            centre = centre + np.asarray(self._view_offset(entry, self._result), dtype=float)
         normal = np.asarray(feature.params["normal"], dtype=float)
         span = float(np.linalg.norm(np.asarray(self.bounds_size(), dtype=float)))
         radius = max(span * FACE_HANDLE_SHARE, FACE_HANDLE_MINIMUM)
