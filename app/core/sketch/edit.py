@@ -34,6 +34,10 @@ EPS_SKETCH = 1e-9
 #: „auf ihr" gilt. In Anteilen der Streckenlänge.
 _ON_SEGMENT = 1e-9
 
+#: Unterhalb dieses Abstands sind zwei Treffer dieselbe Stelle — das Maß für
+#: das Rechenrauschen zweier Teilstrecken, die sich einen Knoten teilen.
+_SAME_SPOT = 1e-9
+
 
 def flat_points(sketch: Sketch) -> list[Point2]:
     """Alle Punkte der Skizze in der Reihenfolge, die die Bedingungen zählen."""
@@ -124,6 +128,31 @@ def crossings_on(sketch: Sketch, index: int) -> list[Point2]:
         )
     line = (element.points[0], element.points[1])
 
+    return sorted(
+        (
+            point
+            for point in _meetings(sketch, index, line)
+            if -_ON_SEGMENT <= _parameter_on(line, point) <= 1.0 + _ON_SEGMENT
+        ),
+        key=lambda point: _parameter_on(line, point),
+    )
+
+
+def _meetings(sketch: Sketch, index: int, line: tuple[Point2, Point2]) -> list[Point2]:
+    """Wo die **Gerade** dieser Linie andere Elemente trifft — jede Art.
+
+    Die eine Schnittsuche für beide Werkzeuge: Auf dem anderen Element muss
+    der Treffer liegen, auf der eigenen Strecke nicht — Trimmen filtert das
+    hinterher, Verlängern braucht gerade die Treffer jenseits der Enden.
+    Vorher hatte das Verlängern eine eigene Suche, und die sah nur Linien:
+    ein Kreis oder Bogen als Ziel existierte nicht, während dasselbe Element
+    beim Trimmen längst als Kante zählte.
+
+    **Gleiche Stellen werden zusammengelegt.** Der Knoten einer Punktfolge
+    gehört zwei Teilstrecken, und beide meldeten ihn — zwei Treffer im
+    Abstand des Rechenrauschens, und ein Klick dazwischen machte beim
+    Trimmen aus dem Nachbarpaar ein Nullstück.
+    """
     found: list[Point2] = []
     for other_index, other in enumerate(sketch.elements):
         if other_index == index:
@@ -132,7 +161,9 @@ def crossings_on(sketch: Sketch, index: int) -> list[Point2]:
             point = line_intersection(line, (other.points[0], other.points[1]))
             if (
                 point is not None
-                and 0.0 <= _parameter_on((other.points[0], other.points[1]), point) <= 1.0
+                and -_ON_SEGMENT
+                <= _parameter_on((other.points[0], other.points[1]), point)
+                <= 1.0 + _ON_SEGMENT
             ):
                 found.append(point)
         elif other.kind == "circle":
@@ -150,14 +181,11 @@ def crossings_on(sketch: Sketch, index: int) -> list[Point2]:
                 ):
                     found.append(point)
 
-    return sorted(
-        (
-            point
-            for point in found
-            if -_ON_SEGMENT <= _parameter_on(line, point) <= 1.0 + _ON_SEGMENT
-        ),
-        key=lambda point: _parameter_on(line, point),
-    )
+    unique: list[Point2] = []
+    for point in found:
+        if all(math.hypot(point[0] - kept[0], point[1] - kept[1]) > _SAME_SPOT for kept in unique):
+            unique.append(point)
+    return unique
 
 
 # --- Die vier Werkzeuge ----------------------------------------------------------
@@ -229,7 +257,7 @@ def extend(sketch: Sketch, index: int, at: Point2) -> Sketch:
     """
     element = sketch.elements[index]
     line = (element.points[0], element.points[1])
-    reach = _reachable(sketch, index, line)
+    reach = _meetings(sketch, index, line)
     if not reach:
         raise ValidationError(
             "element",
@@ -387,22 +415,6 @@ def mirror(sketch: Sketch, indices: tuple[int, ...], axis: str) -> Sketch:
 
 
 # --- Bedingungen umnummerieren ---------------------------------------------------
-
-
-def _reachable(sketch: Sketch, index: int, line: tuple[Point2, Point2]) -> list[Point2]:
-    """Kreuzungen auf der **Geraden**, auch außerhalb der Strecke."""
-    found: list[Point2] = []
-    for other_index, other in enumerate(sketch.elements):
-        if other_index == index or other.kind != "line":
-            continue
-        point = line_intersection(line, (other.points[0], other.points[1]))
-        if point is None:
-            continue
-        # Der Treffer muss auf der anderen Strecke liegen — eine Kante, die
-        # dort aufhört, verlängert nichts.
-        if -_ON_SEGMENT <= _parameter_on((other.points[0], other.points[1]), point) <= 1.0:
-            found.append(point)
-    return found
 
 
 def _replace_element(sketch: Sketch, index: int, fresh: tuple[SketchElement, ...]) -> Sketch:

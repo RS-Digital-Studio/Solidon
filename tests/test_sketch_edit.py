@@ -210,6 +210,51 @@ def test_extending_reaches_the_next_edge() -> None:
     assert flat(extended.elements[0].points) == pytest.approx([0.0, 0.0, 12.0, 0.0])
 
 
+def test_extending_reaches_a_circle_like_trimming_does() -> None:
+    """Verlängern sah nur Linien — ein Kreis als Ziel existierte nicht.
+
+    Beim Trimmen zählte derselbe Kreis längst als Schnittkante
+    (Gesamtreview D-10); die zwei Werkzeuge sind dieselbe Geste in zwei
+    Richtungen und fragen deshalb dieselbe Schnittsuche.
+    """
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (5.0, 0.0))),
+            SketchElement(kind="circle", points=((12.0, 0.0), (14.0, 0.0))),
+        ),
+    )
+
+    extended = edit.extend(sketch, 0, (4.0, 0.0))
+
+    # Der nähere Schnitt mit dem Kreis (Radius 2 um x = 12) liegt bei x = 10.
+    assert flat(extended.elements[0].points) == pytest.approx([0.0, 0.0, 10.0, 0.0])
+
+
+def test_a_shared_crossing_point_counts_once() -> None:
+    """Zwei Kanten durch denselben Punkt sind eine Stelle, nicht zwei.
+
+    Dasselbe Muster wie der Knoten einer Punktfolge: Bogen und Spline
+    schneiden über Teilstrecken, und ein Treffer auf deren Naht wurde von
+    beiden Teilstrecken gemeldet — ein Klick zwischen die zwei Rauschkopien
+    machte aus dem Trimmen ein Nullstück.
+    """
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),
+            SketchElement(kind="line", points=((5.0, -5.0), (5.0, 5.0))),
+            # Kreuzt dieselbe Stelle (5, 0) aus anderer Richtung.
+            SketchElement(kind="line", points=((0.0, -5.0), (10.0, 5.0))),
+        ),
+    )
+
+    found = edit.crossings_on(sketch, 0)
+
+    assert len(found) == 1, f"eine Stelle, nicht {len(found)}"
+    assert found[0] == pytest.approx((5.0, 0.0))
+
+
 def test_extending_without_an_edge_says_where_to_click() -> None:
     sketch = Sketch(
         plane="plane:xy",
