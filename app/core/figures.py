@@ -35,7 +35,10 @@ from typing import TYPE_CHECKING, Final, Literal
 
 from app.core import drawing
 from app.core.drawing import Canvas, Theme
+from app.core.log import get_logger
 from app.i18n import SOURCE_LANGUAGE, TranslatableText, _
+
+_log = get_logger(__name__)
 
 if TYPE_CHECKING:
     # Wie in :mod:`app.core.drawing`: zur Laufzeit wird nichts davon importiert,
@@ -1269,10 +1272,13 @@ def svg(key: str, theme: Theme = "light") -> str | None:
         return cached
     try:
         drawn = figure.build(theme)
-    except Exception:
+    except Exception as problem:
         # Ein Baustein, den es nicht mehr gibt, ein fehlendes Zusatzpaket, ein
         # Netz, das nicht zustande kommt: alles Gründe, dieses eine Bild
-        # wegzulassen — und keiner, das Kapitel nicht anzuzeigen.
+        # wegzulassen — und keiner, das Kapitel nicht anzuzeigen. Aber mit
+        # Spur: Ohne die Zeile verschwand eine dauerhaft brechende Abbildung
+        # aus Fenster, Handbuch und Website, und niemand erfuhr es (L-10).
+        _log.warning("figure %s could not be drawn: %s", key, problem)
         return None
     _CACHE[(key, theme)] = drawn
     return drawn

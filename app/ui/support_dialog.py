@@ -388,7 +388,9 @@ class SupportDialog(QDialog):
             tr("Sitzung mit Verlauf anhängen — sie enthält Ihr Modell und den Chat"), self
         )
         self.with_session.setEnabled(session is not None)
-        self.with_log = QCheckBox(tr("Protokoll anhängen"), self)
+        self.with_log = QCheckBox(
+            tr("Protokoll anhängen — es kann Dateipfade Ihres Rechners enthalten"), self
+        )
         self.with_log.setChecked(True)
 
         for box in (self.with_shot, self.with_session, self.with_log):
@@ -577,6 +579,15 @@ class SupportDialog(QDialog):
         """Vorschau und Größen nachziehen — nach jedem Kästchen."""
         ticket = self.ticket()
         lines = [ticket.as_text()]
+        # „Vorher sieht er, was mitgeht" galt nicht fürs vorangekreuzte
+        # Protokoll: In der Vorschau standen Name und Größe, mitgereist wären
+        # die Zeilen — samt Dateipfaden, in denen der Windows-Kontoname steht
+        # (Gesamtreview L-12). Textanhänge stehen deshalb im Wortlaut da; für
+        # Bild und Sitzung bleibt es bei Name und Größe, mehr zeigte nichts.
+        for entry in ticket.attachments:
+            if not entry.name.endswith(".txt"):
+                continue
+            lines.extend(["", f"--- {entry.name} ---", entry.data.decode("utf-8", "replace")])
         size = ticket.total_bytes
         if size:
             lines.append("")

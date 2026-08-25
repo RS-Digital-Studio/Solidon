@@ -1563,28 +1563,29 @@ def messages_text() -> str:
     kommen, ohne hier aufzutauchen.
     """
     import importlib
+    import pkgutil
 
+    import app.core
     from app.core import errors
 
-    # Die Hierarchie ist die Wahrheit, ``vars(errors)`` nur ihr Stammmodul:
-    # OpenSCAD, Sprachmodell, Mesh-Erzeugung, Lizenzschlüssel und die
-    # Analysekarten deklarieren ihre Ausnahmen in eigenen Modulen —
-    # ausgerechnet die, die ein Nutzer am ehesten sieht und nachschlägt,
-    # fehlten in der Tabelle, obwohl der Satz darüber Vollständigkeit
-    # verspricht. Der Import füllt die Hierarchie, bevor sie abgelaufen wird.
-    for module in (
-        "app.core.backends.openscad",
-        "app.core.backends.llm",
-        "app.core.backends.mesh",
-        "app.core.activation.key",
-        "app.core.perceive.maps",
-    ):
-        importlib.import_module(module)
+    # Die Hierarchie ist die Wahrheit, aber sie kennt nur, was importiert ist.
+    # Hier stand eine handgepflegte Liste von fünf Modulen, und sie log:
+    # ``SendFailed`` — „Die Rückmeldung ließ sich nicht senden", der
+    # wahrscheinlichste Fehler überhaupt — wohnt in ``app.core.support`` und
+    # fehlte im ausgelieferten Handbuch; der Inhalt hing daran, was der
+    # erzeugende Prozess zufällig schon importiert hatte (Gesamtreview L-3).
+    # Jetzt läuft der Einsammler über alle Kernmodule; dass jedes davon ohne
+    # Nebenwirkung importierbar ist, sichert ``tests/test_core_isolation.py``.
+    for info in pkgutil.walk_packages(app.core.__path__, prefix="app.core."):
+        importlib.import_module(info.name)
 
     def walk(kind: type[errors.AppError]) -> list[type[errors.AppError]]:
         found: list[type[errors.AppError]] = []
         for child in kind.__subclasses__():
-            found.append(child)
+            # Nur die Anwendung selbst: Eine Testdatei, die sich im selben
+            # Prozess eine Wegwerf-Ausnahme baut, gehört nicht ins Handbuch.
+            if child.__module__.startswith("app.core."):
+                found.append(child)
             found.extend(walk(child))
         return found
 

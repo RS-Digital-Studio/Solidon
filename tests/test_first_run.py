@@ -942,6 +942,31 @@ def test_the_report_carries_the_digest_of_the_scene(qt_app: QApplication) -> Non
     ohne.release()
 
 
+def test_the_preview_shows_the_log_it_sends(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Vorher sieht er, was mitgeht" gilt auch fürs vorangekreuzte Protokoll.
+
+    In der Vorschau standen Name und Größe; mitgereist wären die Zeilen —
+    samt Dateipfaden, in denen der Windows-Kontoname steht. Textanhänge
+    stehen jetzt im Wortlaut in der Vorschau.
+    """
+    from app.ui import support_dialog
+    from app.ui.support_dialog import KIND_BUG, SupportDialog
+
+    zeile = "error report written to C:/Users/beispielkonto/bericht-1"
+    monkeypatch.setattr(support_dialog, "log_tail", lambda: zeile.encode("utf-8"))
+
+    dialog = SupportDialog(kind=KIND_BUG, session=None)
+    dialog.message.setPlainText("Etwas ging schief.")
+    dialog._refresh()
+    try:
+        assert dialog.with_log.isChecked(), "vorangekreuzt — genau darum geht es"
+        assert zeile in dialog.preview.toPlainText()
+    finally:
+        dialog.release()
+
+
 @pytest.fixture
 def own_feedback_state(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Der Stand des Bogens gehört diesem Test allein.

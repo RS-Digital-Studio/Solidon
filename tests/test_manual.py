@@ -826,20 +826,72 @@ def test_the_summary_reaches_the_reader() -> None:
 
 def test_the_message_table_carries_every_exception() -> None:
     """Regel 17: Jede Ausnahme trägt einen Handlungsvorschlag. Eine neue kann
-    nicht in die Anwendung kommen, ohne hier im Wortlaut aufzutauchen."""
-    import inspect
+    nicht in die Anwendung kommen, ohne hier im Wortlaut aufzutauchen.
 
+    Gezählt über **alle** Kernmodule, nicht nur das Stammmodul: Der Test lief
+    über ``vars(errors)`` und die Erzeugung über eine handgepflegte
+    Modulliste — zwei Mengen, beide unvollständig, und ``SendFailed`` („Die
+    Rückmeldung ließ sich nicht senden", der wahrscheinlichste Fehler
+    überhaupt) fehlte im ausgelieferten Handbuch, ohne dass es jemand sah.
+    """
+    import importlib
+    import pkgutil
+
+    import app.core
     from app.core import errors
 
+    for info in pkgutil.walk_packages(app.core.__path__, prefix="app.core."):
+        importlib.import_module(info.name)
+
+    def walk(kind: type[errors.AppError]) -> list[type[errors.AppError]]:
+        found: list[type[errors.AppError]] = []
+        for child in kind.__subclasses__():
+            # Nur die Anwendung selbst: Eine Testdatei, die sich im selben
+            # Prozess eine Wegwerf-Ausnahme baut, gehört nicht ins Handbuch.
+            if child.__module__.startswith("app.core."):
+                found.append(child)
+            found.extend(walk(child))
+        return found
+
+    hierarchy = walk(errors.AppError)
+    assert any(kind.__name__ == "SendFailed" for kind in hierarchy), "die Probe aufs Exempel"
     body = manual.messages_text()
-    for _name, kind in vars(errors).items():
-        if not inspect.isclass(kind) or not issubclass(kind, errors.AppError):
-            continue
-        if kind is errors.AppError:
-            continue
+    for kind in hierarchy:
         assert str(kind.default_title) in body, kind.__name__
         for action in kind.default_suggestions:
             assert str(action.label) in body, action.id
+
+
+def test_the_message_table_stands_on_its_own_imports() -> None:
+    """Der Handbuchinhalt darf nicht an der Importreihenfolge hängen.
+
+    Im Suite-Prozess ist längst alles importiert — der Test darüber lief
+    grün, während im ausgelieferten Handbuch ``SendFailed`` fehlte: Die
+    Erzeugung führte eine handgepflegte Modulliste, und ``app.core.support``
+    stand nicht darauf. Ein eigener Prozess stellt die Frage so, wie
+    ``tools/make_manual.py`` sie stellt.
+    """
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    probe = (
+        # ``support`` wird erst NACH der Erzeugung importiert — sonst füllte
+        # die Probe selbst die Hierarchie und misst sich selbst.
+        "from app.core import manual\n"
+        "body = manual.messages_text()\n"
+        "from app.core import support\n"
+        "title = str(support.SendFailed.default_title)\n"
+        "assert title in body, 'SendFailed fehlt im Handbuch'\n"
+    )
+    done = subprocess.run(
+        [sys.executable, "-X", "utf8", "-c", probe],
+        capture_output=True,
+        text=True,
+        cwd=Path(__file__).parents[1],
+        timeout=120,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
 
 
 def test_an_operation_with_a_limit_says_when_not_to_use_it() -> None:

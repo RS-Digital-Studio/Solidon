@@ -45,11 +45,21 @@ def available_languages() -> tuple[str, ...]:
 
 
 def read_catalog(language: str) -> dict[str, str]:
-    """Liest eine Katalogdatei; fehlende Dateien haben schlicht keine Einträge."""
+    """Liest eine Katalogdatei; fehlende Dateien haben schlicht keine Einträge.
+
+    Und beschädigte auch: Das war die einzige ungesicherte Dateilesung des
+    Gebiets — ein halb geschriebenes ``fr.json`` hieß roher
+    ``JSONDecodeError`` beim Start (Gesamtreview L-8). Die freundliche
+    Richtung ist die Quellsprache; der Grund steht im Protokoll.
+    """
     path = catalog_path(language)
     if not path.is_file():
         return {}
-    data: dict[str, str] = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data: dict[str, str] = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as problem:
+        _log.warning("catalog %s unreadable, staying with the source language: %s", path, problem)
+        return {}
     return data
 
 
