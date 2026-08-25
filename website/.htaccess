@@ -27,12 +27,23 @@
   # Rohliste).
   Header set Cache-Control "no-cache"
 
-  # Bilder sind die Ausnahme. Sie machen den Löwenanteil der übertragenen
-  # Menge aus, ändern sich praktisch nie und heißen stabil — `main-window.png`
-  # heißt nach jedem Lauf von `make_figures.py` wieder so. Eine Woche ist
-  # kurz genug, dass eine neue Abbildung ankommt, und lang genug, dass das
-  # Handbuch beim zweiten Lesen nicht wieder 34 Dateien holt.
-  <FilesMatch "\.(png|jpg|jpeg|webp|avif|svg|ico|woff2)$">
+  # **Bilder werden geprüft wie Seiten, nicht eine Woche lang geglaubt.**
+  # Hier stand `max-age=604800` mit der Begründung, Abbildungen änderten sich
+  # praktisch nie und hießen stabil. Der zweite Teil stimmt — genau deshalb
+  # fragt der Browser bei einer Woche gar nicht erst nach: `catalog.png` heißt
+  # nach jedem Lauf wieder so. Der erste Teil ist am 25.08.2026 gefallen, als
+  # dieselben Bilder zweimal an einem Tag neu entstanden: Der Server lieferte
+  # längst die neuen, und im Browser stand die alte Fassung.
+  #
+  # Was das kostet, ist eine bedingte Anfrage je Bild und Seitenaufruf, die
+  # mit 304 und ein paar hundert Byte beantwortet wird — die Bilddaten
+  # bleiben im Cache. Was es einbringt, ist die Zusage, dass niemand eine
+  # Oberfläche sieht, die es nicht mehr gibt. Schriften bleiben bei einer
+  # Woche: Eine woff2 ändert sich wirklich nie.
+  <FilesMatch "\.(png|jpg|jpeg|webp|avif|svg|ico)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+  <FilesMatch "\.woff2$">
     Header set Cache-Control "public, max-age=604800"
   </FilesMatch>
 
