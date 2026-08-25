@@ -1167,3 +1167,53 @@ def test_a_concave_outline_is_not_a_crossing() -> None:
         ),
     )
     assert len(regions_of(solve_sketch(dart))) == 1
+
+
+def test_an_island_inside_a_hole_is_material_again() -> None:
+    """Kasten im Kasten im Kasten: der innerste steht wieder als Material.
+
+    Vorher fiel die dritte Ebene still weg — nicht „nicht gebohrt", sondern
+    weggeworfen: Die Zeichnung zeigte die Insel, der Körper hatte sie nicht,
+    und keine Zeile sagte es. Am Volumen gemessen, wie beim Loch darüber.
+    """
+    from app.core.brep import profiles as brep_profiles
+    from app.core.brep.edit import boolean
+    from app.core.brep.kernel import available
+    from app.core.sketch.profile import regions_of
+
+    if not available():
+        pytest.skip("ohne B-Rep-Kern gibt es keinen Körper")
+
+    sketch = Sketch(plane="plane:xy", elements=_square(40.0) + _square(20.0) + _square(10.0))
+    regions = regions_of(solve_sketch(sketch))
+    bodies = [brep_profiles.extrude(region, 5.0) for region in regions]
+    body = bodies[0] if len(bodies) == 1 else boolean("union", bodies)
+
+    expected = ((40.0 * 40.0 - 20.0 * 20.0) + 10.0 * 10.0) * 5.0
+    assert body.volume == pytest.approx(expected, rel=1e-6)
+
+
+def test_a_hole_in_an_island_stays_a_hole() -> None:
+    """Und die vierte Ebene bohrt wieder: Loch, Insel, Loch — abwechselnd.
+
+    Die Zuordnung ist rekursiv, nicht zweistufig mit Rest: gerade Tiefe ist
+    Material, ungerade Tiefe ist Loch, auf jeder Ebene.
+    """
+    from app.core.brep import profiles as brep_profiles
+    from app.core.brep.edit import boolean
+    from app.core.brep.kernel import available
+    from app.core.sketch.profile import regions_of
+
+    if not available():
+        pytest.skip("ohne B-Rep-Kern gibt es keinen Körper")
+
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=_square(40.0) + _square(30.0) + _square(20.0) + _square(10.0),
+    )
+    regions = regions_of(solve_sketch(sketch))
+    bodies = [brep_profiles.extrude(region, 5.0) for region in regions]
+    body = bodies[0] if len(bodies) == 1 else boolean("union", bodies)
+
+    expected = ((40.0 * 40.0 - 30.0 * 30.0) + (20.0 * 20.0 - 10.0 * 10.0)) * 5.0
+    assert body.volume == pytest.approx(expected, rel=1e-6)

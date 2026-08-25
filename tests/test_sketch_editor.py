@@ -1258,6 +1258,63 @@ def test_projecting_brings_the_edges_in(qt_app: QApplication) -> None:
     assert all(element.construction for element in canvas.sketch.elements)
 
 
+def test_projecting_on_a_face_plane_cuts_along_that_face(qt_app: QApplication) -> None:
+    """Auf einer Flächenebene schneidet die Projektion durch diese Ebene.
+
+    Vorher lief der Schnitt immer durch die globale XY-Ebene: Wer auf einer
+    Seitenwand zeichnete, bekam die Grundfläche des Körpers als Hilfskontur —
+    Kanten, die auf dieser Wand gar nicht liegen.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.types import PlaneFrame
+
+    wall = PlaneFrame(
+        origin=(0.0, 0.0, 0.0),
+        x_axis=(0.0, 1.0, 0.0),
+        y_axis=(0.0, 0.0, 1.0),
+        normal=(1.0, 0.0, 0.0),
+    )
+    canvas = SketchCanvas()
+    canvas.set_plane("feature:face_3")
+    canvas.offer_frames(lambda plane: wall if plane == "feature:face_3" else None)
+    canvas.offer_bodies([MeshData.of(trimesh.creation.box(extents=(20.0, 10.0, 6.0)))])
+
+    canvas.project_bodies()
+
+    assert canvas.sketch.elements
+    spans_x = [abs(point[0]) for element in canvas.sketch.elements for point in element.points]
+    spans_y = [abs(point[1]) for element in canvas.sketch.elements for point in element.points]
+    # Der Schnitt bei x = 0 ist das 10 x 6-Rechteck (y, z) — nicht das
+    # 20 x 10 der Grundfläche.
+    assert max(spans_x) == pytest.approx(5.0, abs=1e-6)
+    assert max(spans_y) == pytest.approx(3.0, abs=1e-6)
+
+
+def test_projecting_on_a_vanished_face_says_so(qt_app: QApplication) -> None:
+    """Ist die Fläche der Zeichenebene weg, sagt es die Statuszeile.
+
+    Der stille Rückfall auf XY wäre die alte Falle in neuer Gestalt: ein
+    Schnitt durch eine Ebene, die niemand gewählt hat.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    canvas = SketchCanvas()
+    canvas.set_plane("feature:face_9")
+    canvas.offer_frames(lambda plane: None)
+    canvas.offer_bodies([MeshData.of(trimesh.creation.box(extents=(20.0, 10.0, 6.0)))])
+    said: list[str] = []
+    canvas.statusChanged.connect(said.append)
+
+    canvas.project_bodies()
+
+    assert not canvas.sketch.elements
+    assert said and "Fläche" in said[-1]
+
+
 def test_the_reference_tools_are_reachable(qt_app: QApplication) -> None:
     """Projizieren und Konstruktionsgeometrie fehlten ganz — beide waren im
     Vergleich mit Fusion eine leere Zeile."""

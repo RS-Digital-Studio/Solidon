@@ -4322,7 +4322,17 @@ class MainWindow(QMainWindow):
             bed=(float(volume[0]), float(volume[1])),
             faces=tuple(self._drawable_faces()),
             bodies=tuple(entry.mesh for entry in result.scene.objects.values()) if result else (),
+            frame_of=self._plane_frame,
         )
+
+    def _plane_frame(self, plane: str) -> PlaneFrame | None:
+        """Der Rahmen zu einer Ebenenangabe, gegen die aktuelle Szene.
+
+        Fürs Projizieren auf einer Flächenebene (Gesamtreview D-9): Die
+        Zeichenfläche kennt die Szene nicht, hier steht sie."""
+        result = self.session.last_result
+        objects = result.scene.objects.values() if result else ()
+        return frame_for_plane(plane, objects)
 
     def start_sketch(self, op_name: str, text: str = "", plane: str = "") -> None:
         """In den Skizzenmodus wechseln, für die Operation, die sie verbraucht.
@@ -4557,9 +4567,7 @@ class MainWindow(QMainWindow):
         panel = self._sketch_panel
         if panel is None:
             return None
-        result = self.session.last_result
-        objects = result.scene.objects.values() if result else ()
-        return frame_for_plane(panel.canvas.sketch.plane, objects)
+        return self._plane_frame(panel.canvas.sketch.plane)
 
     def _fit_sketch_view(self, x: float, y: float, span_x: float, span_y: float) -> None:
         """*Einpassen* im Skizzenmodus — die Ansicht folgt der Zeichenfläche.

@@ -255,9 +255,11 @@ def _nested(loops: list[Profile]) -> tuple[Profile, ...]:
 
     Dem **kleinsten**, nicht dem ersten: bei einem Kasten in einem Kasten in
     einem Kasten gehört der innerste an den mittleren, und wer den erstbesten
-    Treffer nimmt, hängt ihn nach außen. Tiefer als eine Ebene wird nicht
-    gebohrt — ein Loch in einem Loch ist wieder Material und braucht eine
-    zweite Operation, die es auch gibt.
+    Treffer nimmt, hängt ihn nach außen. Und über alle Ebenen: gerade Tiefe
+    ist Material, ungerade Tiefe ist Loch. Die Insel in einem Loch steht als
+    eigener Umriss wieder da — vorher fiel die dritte Ebene stillschweigend
+    weg: Die Zeichnung zeigte sie, der Körper hatte sie nicht, und keine
+    Zeile sagte es (Gesamtreview D-7).
     """
     if len(loops) == 1:
         return (loops[0],)
@@ -272,10 +274,21 @@ def _nested(loops: list[Profile]) -> tuple[Profile, ...]:
             if other != index and areas[other] > areas[index] and _inside(probe, outlines[other])
         ]
         parents.append(min(candidates, key=lambda other: areas[other]) if candidates else None)
+
+    def depth_of(index: int) -> int:
+        steps = 0
+        current = parents[index]
+        while current is not None:
+            steps += 1
+            current = parents[current]
+        return steps
+
+    # Jeder Ring gerader Tiefe wird ein Umriss; seine direkten Kinder liegen
+    # eine Ebene tiefer und sind damit seine Löcher.
     return tuple(
         replace(loop, holes=tuple(loops[i] for i, parent in enumerate(parents) if parent == index))
         for index, loop in enumerate(loops)
-        if parents[index] is None
+        if depth_of(index) % 2 == 0
     )
 
 

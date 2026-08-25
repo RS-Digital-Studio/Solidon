@@ -46,10 +46,12 @@ from PySide6.QtWidgets import (
 
 from app.core.errors import AppError, SketchConflictError
 from app.core.sketch import edit, shapes
+from app.core.sketch.planes import is_feature_plane
 from app.core.sketch.profile import regions_of
 from app.core.sketch.serialize import sketch_from_text, sketch_to_text
 from app.core.sketch.solver import solve_sketch
 from app.core.types import (
+    PlaneFrame,
     Sketch,
     SketchConstraint,
     SketchConstraintKind,
@@ -549,6 +551,10 @@ class SketchCanvas(QWidget):
         """Die Normalen der Flächen, auf denen gezeichnet werden darf.
 
         Nur für den Hinweis zur Schichtrichtung — siehe ``offer_faces``."""
+        self._frame_of: Callable[[str], PlaneFrame | None] | None = None
+        """Wer zur Ebenenangabe den Rahmen kennt — die Szene, nicht das Blatt.
+
+        Nur fürs Projizieren auf einer Flächenebene — siehe ``offer_frames``."""
         self._pointer: tuple[float, float] = (0.0, 0.0)
         """Wo der Zeiger zuletzt stand, in Weltkoordinaten."""
 
@@ -737,6 +743,16 @@ class SketchCanvas(QWidget):
         """Woraus projiziert werden kann — die Körper der Szene."""
         self._bodies = list(meshes)
 
+    def offer_frames(self, lookup: Callable[[str], PlaneFrame | None] | None) -> None:
+        """Wer zu einer Flächenebene den Rahmen auflöst (Gesamtreview D-9).
+
+        Ohne diesen Weg projizierte ``project_bodies`` auf einer Flächenebene
+        durch die globale XY-Ebene: Die Grundfläche des Körpers landete als
+        Hilfskontur auf der Seitenwand. Die Zeichenfläche kennt die Szene
+        nicht — wer sie kennt, reicht hier die Auflösung herein.
+        """
+        self._frame_of = lookup
+
     def project_bodies(self) -> None:
         """Holt die Schnittkurven aller Körper als Hilfsgeometrie herein.
 
@@ -747,11 +763,24 @@ class SketchCanvas(QWidget):
         if not self._bodies:
             self.statusChanged.emit(tr("Es gibt keinen Körper, aus dem sich projizieren ließe."))
             return
+        frame = None
+        if is_feature_plane(self.sketch.plane):
+            frame = self._frame_of(self.sketch.plane) if self._frame_of else None
+            if frame is None:
+                # Kein stiller Rückfall auf XY: Das wäre ein Schnitt durch
+                # eine Ebene, die niemand gewählt hat.
+                self.statusChanged.emit(
+                    tr(
+                        "Die Fläche dieser Zeichenebene ist nicht mehr da — "
+                        "projizieren geht hier nicht."
+                    )
+                )
+                return
         current = self.sketch
         problems: list[str] = []
         for mesh in self._bodies:
             try:
-                current = edit.project(current, mesh)
+                current = edit.project(current, mesh, frame)
             except AppError as error:
                 problems.append(str(error.detail or error.title))
         if current is self.sketch:
@@ -2753,6 +2782,8 @@ class Surroundings:
     """Ebene Flächen als Zeichenebenen: Kennung, Beschriftung, Normale."""
     bodies: tuple[Any, ...] = ()
     """Die Netze der Szene — Vorlage für die Projektion, nicht Geometrie."""
+    frame_of: Callable[[str], PlaneFrame | None] | None = None
+    """Wer zu einer Flächenebene den Rahmen auflöst — fürs Projizieren (D-9)."""
 
 
 class SketchPanel(QWidget):
@@ -3220,6 +3251,7 @@ class SketchPanel(QWidget):
         self.set_bed(surroundings.bed)
         self.offer_faces(surroundings.faces)
         self.offer_bodies(surroundings.bodies)
+        self.canvas.offer_frames(surroundings.frame_of)
 
     def use_viewport(self) -> None:
         """Die Zeichenfläche gibt ihr Bild an die Ansicht ab (§30.1, P4).
