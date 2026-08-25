@@ -63,12 +63,16 @@ UninstallDisplayIcon={app}\{#AppName}.exe
 ; Portugiesisch benutzt, soll sie nicht auf Englisch installieren müssen. Alle
 ; fünf Kataloge liefert Inno Setup 6 selbst mit; Default.isl ist Englisch.
 [Languages]
-Name: "german"; MessagesFile: "compiler:Languages\German.isl"
-Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"
-Name: "french"; MessagesFile: "compiler:Languages\French.isl"
-Name: "italian"; MessagesFile: "compiler:Languages\Italian.isl"
-Name: "portuguese"; MessagesFile: "compiler:Languages\Portuguese.isl"
+; Die Namen sind die Kürzel der Anwendung und nicht "german"/"english": So
+; steht in ActiveLanguage() genau das, was app/i18n/locales erwartet, und
+; zwischen Installer und Anwendung liegt keine Übersetzungstabelle, die beim
+; siebten Katalog jemand nachziehen müsste.
+Name: "de"; MessagesFile: "compiler:Languages\German.isl"
+Name: "en"; MessagesFile: "compiler:Default.isl"
+Name: "es"; MessagesFile: "compiler:Languages\Spanish.isl"
+Name: "fr"; MessagesFile: "compiler:Languages\French.isl"
+Name: "it"; MessagesFile: "compiler:Languages\Italian.isl"
+Name: "pt"; MessagesFile: "compiler:Languages\Portuguese.isl"
 
 ; Wie der Dateityp im Explorer heißt. Eine Zeile je Sprache, und der Name
 ; kommt auch hier aus app/branding.py.
@@ -114,3 +118,21 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppName}.exe"; Tasks: deskt
 
 [Run]
 Filename: "{app}\{#AppName}.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  { Die Sprachwahl an die Anwendung weitergeben.
+
+    Der Installer fragt sechs Sprachen ab und zeigte sich bis zum 25.08.2026
+    als Einziger darin: Die Anwendung startete danach auf Deutsch, gleich was
+    gewählt wurde, und fragte in "Erste Schritte" ein zweites Mal. Wer den
+    Installer auf Portugiesisch durchgeklickt hat, hat die Frage längst
+    beantwortet.
+
+    Eine Zeile neben der Anwendung, kein Registry-Eintrag: Sie gehört zur
+    Installation, wird genau einmal gelesen (beim allerersten Start, bevor es
+    Einstellungen gibt) und verschwindet mit der Deinstallation. }
+  if CurStep = ssPostInstall then
+    SaveStringToFile(ExpandConstant('{app}\install-language.txt'), ActiveLanguage(), False);
+end;

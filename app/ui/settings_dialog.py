@@ -83,7 +83,7 @@ class SettingsDialog(QDialog):
 
         self.language = _choices(self, {key: language_name(key) for key in available_languages()})
         _select(self.language, settings.language)
-        self.language_note = QLabel(tr("Eine andere Sprache erscheint beim nächsten Start."), self)
+        self.language_note = QLabel(tr("Die Oberfläche stellt sich gleich darauf um."), self)
         self.language_note.setWordWrap(True)
         self.language_note.setVisible(False)
         self.language.currentIndexChanged.connect(self._language_changed)

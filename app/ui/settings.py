@@ -140,10 +140,82 @@ def settings_path() -> Path:
     return user_config_dir() / SETTINGS_FILE
 
 
+#: Wohin der Installer seine Sprachwahl legt, neben die Anwendung.
+#:
+#: Eine Zeile, ein Sprachkürzel. Der Installer fragt sechs Sprachen ab und
+#: zeigt sich selbst darin; bis zum 25.08.2026 war das die einzige Wirkung —
+#: die Anwendung startete danach auf Deutsch, gleich was gewählt wurde, und
+#: fragte in „Erste Schritte" ein zweites Mal.
+INSTALL_LANGUAGE_FILE = "install-language.txt"
+
+
+def installed_language() -> str | None:
+    """Was der Installer gewählt hat, oder ``None``.
+
+    Die Datei liegt neben der Anwendung und nicht im Nutzerprofil: Sie gehört
+    zur Installation und nicht zum Nutzer, und sie wird genau einmal gelesen —
+    beim allerersten Start, bevor es Einstellungen gibt. Wer die Sprache danach
+    umstellt, hat die Einstellungen, und die haben Vorrang.
+    """
+    import sys
+
+    if getattr(sys, "frozen", False):
+        base = Path(sys.executable).parent
+    else:
+        # Im Quellbaum: das Projektverzeichnis, damit sich die Sache von Hand
+        # ausprobieren lässt, ohne ein Paket zu bauen.
+        base = Path(__file__).resolve().parent.parent.parent
+    try:
+        text = (base / INSTALL_LANGUAGE_FILE).read_text(encoding="utf-8").strip()
+    except OSError:
+        return None
+    return text or None
+
+
+def system_language() -> str | None:
+    """Die Sprache des Betriebssystems, wenn ein Katalog dazu vorliegt.
+
+    Gefragt wird ``QLocale.system().uiLanguages()`` und nicht nur ``name()``:
+    Ein deutsches Windows meldet dort ``['de-Latn-DE', 'de-DE', 'de-Latn',
+    'de']``, und gebraucht wird davon der Anfang. Ein System, dessen Sprache
+    die Anwendung nicht spricht, bekommt ``None`` und damit die Quellsprache.
+    """
+    from PySide6.QtCore import QLocale
+
+    from app.i18n.catalog import available_languages
+
+    known = set(available_languages())
+    for tag in QLocale.system().uiLanguages():
+        code = tag.replace("_", "-").split("-")[0].lower()
+        if code in known:
+            return code
+    return None
+
+
+def initial_language() -> str:
+    """Womit die Anwendung startet, wenn sie noch nie gestartet wurde.
+
+    Drei Quellen in dieser Reihenfolge, und die Reihenfolge ist die Aussage:
+    Was der Nutzer im Installer **gewählt** hat, wiegt schwerer als das, was
+    sein System spricht — wer auf einem deutschen Windows den Installer auf
+    Spanisch stellt, meint Spanisch. Erst wenn beides nichts hergibt, bleibt
+    die Quellsprache.
+    """
+    from app.i18n.catalog import available_languages
+
+    known = set(available_languages())
+    chosen = installed_language()
+    if chosen and chosen in known:
+        return chosen
+    return system_language() or SOURCE_LANGUAGE
+
+
 def load_settings() -> UiSettings:
     path = settings_path()
     if not path.is_file():
-        return UiSettings()
+        # **Der allererste Start**, und nur er: Hier gibt es noch keine Wahl
+        # des Nutzers, die man überschreiben könnte.
+        return UiSettings(language=initial_language())
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
         settings = UiSettings(**{key: data[key] for key in data if key in UiSettings.__slots__})

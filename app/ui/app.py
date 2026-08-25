@@ -19,6 +19,7 @@ from PySide6.QtCore import (
     QLibraryInfo,
     QLocale,
     QObject,
+    QTimer,
     QTranslator,
 )
 from PySide6.QtGui import QFileOpenEvent
@@ -223,6 +224,31 @@ def rebuild_for_language(
     return fresh
 
 
+class _LanguageSwitch(QObject):
+    """Tauscht das Fenster, sobald es eine neue Sprache meldet.
+
+    Ein eigenes Objekt, weil es das Fenster überleben muss, das es ersetzt:
+    Wäre der Empfänger das Fenster selbst, hinge die Verbindung nach dem
+    ersten Austausch an einem abgebauten Objekt. Die Anwendung hält den
+    Halter, der Halter hält das jeweils aktuelle Fenster.
+    """
+
+    def __init__(self, application: QApplication, window: MainWindow) -> None:
+        super().__init__(application)
+        self._application = application
+        self._window = window
+
+    def arm(self) -> None:
+        """Den Austausch für den nächsten Ereignisdurchlauf vormerken."""
+        QTimer.singleShot(0, self._swap)
+
+    def _swap(self) -> None:
+        old = self._window
+        fresh = rebuild_for_language(self._application, old, old.settings)
+        self._window = fresh
+        fresh.languageChanged.connect(self.arm)
+
+
 def main(argv: list[str] | None = None) -> int:
     configure(to_console=False)
 
@@ -312,6 +338,15 @@ def main(argv: list[str] | None = None) -> int:
     window.start()
     if window.settings.language != spoken:
         window = rebuild_for_language(application, window, window.settings)
+
+    # **Und später ebenso, aus den Einstellungen heraus.** Das Fenster meldet
+    # den Wechsel mit ``languageChanged``; der Austausch selbst wartet einen
+    # Ereignisdurchlauf ab. Ein Fenster, das sich mitten in einem Signal aus
+    # einem seiner eigenen Dialoge ersetzt, zöge dem Signal den Boden weg —
+    # der Dialog ist zwar schon geschlossen, seine Aufräumarbeit aber noch
+    # nicht gelaufen.
+    holder = _LanguageSwitch(application, window)
+    window.languageChanged.connect(holder.arm)
 
     # Was per Doppelklick oder von der Kommandozeile mitkam, wird geöffnet —
     # nach ``start()``, damit der erste Start seine Fragen zuerst stellt.

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import date
 from pathlib import Path
+from typing import Any
 from unittest import mock
 
 import pytest
@@ -1137,5 +1138,143 @@ def test_the_rebuilt_window_keeps_the_work(qt_app: object) -> None:
     finally:
         window.close()
         window.deleteLater()
+        install_language("de")
+        set_language("de")
+
+
+def test_the_first_start_speaks_the_language_of_the_system(monkeypatch: Any) -> None:
+    """Ein portugiesisches Windows bekommt keine deutsche Anwendung.
+
+    Die Vorgabe war ``SOURCE_LANGUAGE`` — also Deutsch, gleich was das System
+    spricht und gleich was der Installer gefragt hat. Wer den Installer auf
+    Portugiesisch durchklickte, sah danach ein deutsches Fenster und wurde in
+    „Erste Schritte" ein zweites Mal nach derselben Sache gefragt.
+
+    Geprüft wird die Reihenfolge der drei Quellen, denn sie ist die Aussage:
+    Was der Nutzer im Installer **gewählt** hat, wiegt schwerer als das, was
+    sein System spricht.
+    """
+    from app.i18n import SOURCE_LANGUAGE
+    from app.ui import settings as settings_module
+
+    monkeypatch.setattr(settings_module, "system_language", lambda: "fr")
+    monkeypatch.setattr(settings_module, "installed_language", lambda: None)
+    assert settings_module.initial_language() == "fr", "the system language was ignored"
+
+    monkeypatch.setattr(settings_module, "installed_language", lambda: "pt")
+    assert settings_module.initial_language() == "pt", (
+        "the installer's choice must outweigh the system — someone who set the "
+        "installer to Portuguese on a French machine meant Portuguese"
+    )
+
+    # Eine Sprache, für die es keinen Katalog gibt, zählt nicht.
+    monkeypatch.setattr(settings_module, "installed_language", lambda: "sv")
+    assert settings_module.initial_language() == "fr", (
+        "an unknown installer language must fall through to the system"
+    )
+
+    monkeypatch.setattr(settings_module, "system_language", lambda: None)
+    monkeypatch.setattr(settings_module, "installed_language", lambda: None)
+    assert settings_module.initial_language() == SOURCE_LANGUAGE
+
+
+def test_the_system_language_is_only_taken_when_it_can_be_spoken(qt_app: object) -> None:
+    """Eine Sprache ohne Katalog ist keine Wahl.
+
+    ``QLocale.system().uiLanguages()`` liefert eine Liste von Kennungen
+    (``['de-Latn-DE', 'de-DE', 'de-Latn', 'de']`` auf einem deutschen Windows),
+    und gebraucht wird der Anfang. Fehlt der Katalog dazu, muss ``None``
+    herauskommen — sonst startete die Anwendung mit einer Sprache, in der sie
+    nichts zu sagen hat.
+    """
+    from app.i18n.catalog import available_languages
+    from app.ui.settings import system_language
+
+    found = system_language()
+    assert found is None or found in set(available_languages()), (
+        f"system_language() returned {found!r}, which has no catalogue"
+    )
+
+
+def test_the_installer_and_the_application_use_the_same_language_codes() -> None:
+    """Zwischen Installer und Anwendung liegt keine Übersetzungstabelle.
+
+    Die ``[Languages]``-Namen im Inno-Skript **sind** die Kürzel aus
+    ``app/i18n/locales`` — nicht „german"/„english". Sonst bräuchte es eine
+    Zuordnung, und die wäre beim siebten Katalog die Stelle, an der jemand das
+    Nachziehen vergisst. Der Installer schreibt ``ActiveLanguage()`` roh in die
+    Datei, die der erste Start liest.
+    """
+    import re
+
+    from app.i18n.catalog import available_languages
+
+    script = (Path(__file__).parent.parent / "packaging" / "solidon3d.iss").read_text(
+        encoding="utf-8"
+    )
+    section = script.split("[Languages]", 1)[1].split("[", 1)[0]
+    names = set(re.findall(r'Name:\s*"([^"]+)"', section))
+    known = set(available_languages())
+
+    assert names, "the installer offers no languages at all"
+    assert names <= known, (
+        f"the installer offers {sorted(names - known)}, which the application cannot speak"
+    )
+    assert known <= names, (
+        f"the application speaks {sorted(known - names)}, which the installer does not offer"
+    )
+
+
+def test_a_language_change_from_the_settings_swaps_the_window(qt_app: object) -> None:
+    """Derselbe Weg aus den Einstellungen, nur über ein Signal.
+
+    Der Erststart-Weg kann die Sprache nach ``start()`` einfach ablesen; ein
+    Wechsel mitten im Betrieb kommt dagegen aus einem Dialog des Fensters
+    selbst. Deshalb meldet ``MainWindow.languageChanged``, und der Austausch
+    wartet einen Ereignisdurchlauf ab: Ein Fenster, das sich mitten in einem
+    Signal aus einem seiner eigenen Dialoge ersetzt, zöge dem Signal den Boden
+    weg.
+
+    Geprüft wird beides — dass getauscht wird, und dass der Halter danach am
+    **neuen** Fenster hängt. Bliebe er am alten, wirkte der Wechsel genau
+    einmal.
+    """
+    from PySide6.QtWidgets import QApplication
+
+    from app.i18n import set_language
+    from app.i18n.catalog import install_language
+    from app.ui.app import _LanguageSwitch
+
+    install_language("de")
+    set_language("de")
+    settings = UiSettings()
+    settings.language = "de"
+    window = MainWindow(Session(), settings)
+    application = QApplication.instance()
+    assert application is not None
+    switch = _LanguageSwitch(application, window)
+    window.languageChanged.connect(switch.arm)
+    try:
+        assert "Datei" in [a.text().replace("&", "") for a in window.menuBar().actions()]
+
+        settings.language = "pt"
+        window.languageChanged.emit()
+        application.processEvents()
+
+        fresh = switch._window
+        assert fresh is not window, "the window was not swapped"
+        titles = [a.text().replace("&", "") for a in fresh.menuBar().actions()]
+        assert "Datei" not in titles, f"the new window still speaks German: {titles}"
+
+        # Und der Halter hängt am neuen Fenster, nicht am abgebauten.
+        settings.language = "fr"
+        fresh.languageChanged.emit()
+        application.processEvents()
+        assert switch._window is not fresh, (
+            "the holder stayed with the old window — the swap would work only once"
+        )
+        switch._window.close()
+        switch._window.deleteLater()
+    finally:
         install_language("de")
         set_language("de")
