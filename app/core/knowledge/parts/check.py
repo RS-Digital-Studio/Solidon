@@ -49,6 +49,77 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
             )
         )
 
+    travelled = tuple(
+        name
+        for name in sorted(set(used))
+        if source.has(name) and source.get(name).source == "travelled"
+    )
+    if travelled:
+        findings.append(
+            Finding(
+                code="parts.travelled",
+                severity="info",
+                message=_(
+                    "Bausteine sind mit dieser Datei mitgereist und stehen im "
+                    "Katalog. Sie bleiben bei der Datei und werden nicht auf "
+                    "diesem Rechner abgelegt."
+                ),
+                values={"parts": ", ".join(travelled)},
+            )
+        )
+
+    # „Lokal schlägt mitgereist" hat eine sichtbare Seite: Rechnet das
+    # Projekt mit dem lokalen Stand, steht der mitgereiste als eigener
+    # Eintrag daneben — sonst sucht der Kunde, warum sein Ergebnis anders
+    # aussieht als beim Absender.
+    shadowed = tuple(
+        name
+        for name in sorted(set(used))
+        if source.has(f"{name}_travelled") and source.get(f"{name}_travelled").source == "travelled"
+    )
+    if shadowed:
+        findings.append(
+            Finding(
+                code="parts.travelled_shadowed",
+                severity="info",
+                message=_(
+                    "Für Bausteine dieser Datei gilt Ihr eigener Stand — der "
+                    "mitgereiste steht als eigener Eintrag im Katalog."
+                ),
+                values={"parts": ", ".join(shadowed)},
+            )
+        )
+
+    # Regel 13 hält nur mit Regel 11 zusammen (§32): Ein Rezept darf
+    # OpenSCAD-Quelltext tragen, und dann erfährt es der Kunde, bevor er
+    # rechnen lässt — dieselbe Auskunft, die ``scene.foreign`` einer
+    # Projektdatei über ihre eigenen Schritte gibt.
+    from app.core.scene.foreign import SCRIPTED_OPS
+
+    scripted = tuple(
+        name
+        for name in sorted(set(used))
+        if source.has(name)
+        and (data := source.get(name).recipe_data) is not None
+        and any(
+            entry.get("op") in SCRIPTED_OPS
+            for entry in dict(data).get("document", {}).get("ops", ())
+        )
+    )
+    if scripted:
+        findings.append(
+            Finding(
+                code="parts.scripted_recipe",
+                severity="warning",
+                message=_(
+                    "Ein Baustein dieser Datei enthält Quelltext, der beim "
+                    "Berechnen ein externes Programm ausführt. Der Quelltext "
+                    "wird vor jedem Lauf geprüft."
+                ),
+                values={"parts": ", ".join(scripted)},
+            )
+        )
+
     own_changed = changed_own_parts(document, used, source)
     if own_changed:
         findings.append(

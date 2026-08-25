@@ -799,8 +799,10 @@ def test_the_session_attachment_names_the_parts_that_stay_behind(
     """Der Support erfährt **vor** dem Öffnen, dass er das Projekt nicht rechnen
     kann (§24.5, Regel 13).
 
-    Ein eigener Baustein reist nie in einer Projektdatei mit — sonst führte eine
-    hereinkommende Datei Code aus (§32). Ohne diesen Satz bekommt der Support
+    Eine eigene ``.py`` reist nie in einer Projektdatei mit — sonst führte eine
+    hereinkommende Datei Code aus (§32); ein **Rezept** reist seit dem
+    26.08.2026 als Daten mit und braucht diese Warnung nicht. Ohne diesen Satz
+    bekommt der Support
     ein Projekt, das bei ihm anhält, und die Ursache steht auf einem Rechner, an
     den niemand mehr herankommt.
 

@@ -33,6 +33,7 @@ from app.branding import APP_VERSION, PROJECT_SUFFIX
 from app.core import examples
 from app.core.errors import ValidationError
 from app.core.knowledge.parts import check as part_check
+from app.core.knowledge.parts import recipe as part_recipes
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_data_dir
 from app.core.scene.gathered import externalise, gathered_path, inline, references
@@ -43,7 +44,7 @@ from app.core.scene.serialise import (
     report_from_data,
     report_to_data,
 )
-from app.core.types import Document, Report, Source, SourceId
+from app.core.types import Document, Finding, Report, Source, SourceId
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -287,6 +288,13 @@ def save(project: Project, path: Path) -> Path:
             REPORT_ENTRY,
             json.dumps(report_to_data(project.report), indent=2, ensure_ascii=False),
         )
+        # Ein Rezept reist mit jedem Projekt, das es benutzt (Entscheidung
+        # Robert, 24.08.2026; Konzept Befestigungssysteme §17.1). Daten, kein
+        # Code — die Sicherheitslage ist die der ``project.json`` selbst.
+        # Zusätzliche Einträge, kein Formatschritt: Eine ältere Version liest
+        # den Container weiter und hält wie bisher bei ``parts.missing`` an.
+        for part_name, payload_text in part_recipes.for_container(document).items():
+            _write(container, part_recipes.container_entry(part_name), payload_text)
         if project.thumbnail is not None:
             _write(container, THUMBNAIL_ENTRY, project.thumbnail)
     # Derselbe atomare Wechsel wie ``os.replace`` — ``Path.replace`` ruft ihn
@@ -336,6 +344,20 @@ def load(path: Path) -> Project:
             )
             document = document_from_data(data)
 
+            # Mitgereiste Rezepte aufnehmen, bevor irgendetwas rechnet: Die
+            # Auswertung braucht ihre Operationen, sonst hält sie bei
+            # ``parts.missing`` an, obwohl die Datei alles mitbringt.
+            # „Lokal schlägt mitgereist, immer" entscheidet ``adopt``
+            # (Konzept §17.1); eine kaputte Beilage ist ein Befund, kein
+            # Abbruch, und die Befunde landen im Bericht der Datei.
+            arrived: list[Finding] = []
+            for entry_name in sorted(names):
+                if not entry_name.startswith(part_recipes.CONTAINER_PREFIX):
+                    continue
+                if not entry_name.endswith(".json"):
+                    continue
+                arrived.extend(part_recipes.adopt(json.loads(container.read(entry_name))))
+
             payloads: dict[SourceId, bytes] = {}
             for source_id, source in document.sources.items():
                 if not source.embedded:
@@ -362,6 +384,12 @@ def load(path: Path) -> Project:
                 if REPORT_ENTRY in names
                 else Report()
             )
+            if arrived:
+                # Was beim Aufnehmen schiefging, steht im Bericht der Datei —
+                # sichtbar, bis die erste Auswertung ihn ersetzt, und die
+                # scheitert an einem fehlenden Baustein dann mit eigener
+                # Meldung (§15.2).
+                report = Report(findings=(*report.findings, *arrived))
             thumbnail = container.read(THUMBNAIL_ENTRY) if THUMBNAIL_ENTRY in names else None
     except zipfile.BadZipFile as problem:
         raise ValidationError(

@@ -470,7 +470,7 @@ def _range_warning(spec: PartSpec) -> str:
     dass der Test nie lief — eine von Hand kopierte Datei etwa —, und
     ``False``, dass an den Grenzen kein brauchbarer Körper herauskam.
     """
-    if spec.source != "recipe" or spec.range_passed is True:
+    if spec.source not in ("recipe", "travelled") or spec.range_passed is True:
         return ""
     if spec.range_passed is False:
         return tr("an den Grenzen kam kein brauchbarer Körper heraus")
@@ -481,6 +481,10 @@ def describe(spec: PartSpec) -> str:
     """Titel, die zwei wichtigsten Parameter, und woher der Baustein kommt."""
     parameters = ", ".join(str(entry.title) for entry in spec.params.spec()[:SHOWN_PARAMETERS])
     marker = f" {OWN_MARKER} {tr('eigener Baustein')}" if spec.own else ""
+    if spec.source == "travelled":
+        # „Um eine Herkunft mehr" (Konzept §17.1): Der Baustein kam mit einer
+        # Projektdatei und gehört ihr — nicht dieser Maschine.
+        marker = f" {OWN_MARKER} {tr('mitgereister Baustein')}"
     kind = f"\n{SUBTRACTIVE_MARKER} {tr('nimmt Material weg')}" if spec.subtractive else ""
     warning = _range_warning(spec)
     checked = f"\n{RANGE_MARKER} {warning}" if warning else ""
@@ -502,10 +506,15 @@ def detail(spec: PartSpec | None) -> str:
         lines.append(f"{SUBTRACTIVE_MARKER} {tr('nimmt Material weg')}")
     if spec.own:
         lines.append(f"{OWN_MARKER} {tr('eigener Baustein')}")
+    if spec.source == "travelled":
+        lines.append(
+            f"{OWN_MARKER} "
+            + tr("mitgereister Baustein — kam mit einer Projektdatei und bleibt bei ihr")
+        )
     warning = _range_warning(spec)
     if warning:
         lines.append(f"<b>{RANGE_MARKER}</b> {warning}")
-    if spec.subtractive or spec.own or warning:
+    if spec.subtractive or spec.own or spec.source == "travelled" or warning:
         lines.append("")
 
     lines.append(f"<b>{tr('Parameter')}</b>")

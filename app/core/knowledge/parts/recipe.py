@@ -78,6 +78,20 @@ RECIPES_DIRNAME = "recipes"
 #: gehört darum ausdrücklich **nicht** in diese Warnung.
 RECIPE_SOURCE = "recipe"
 
+#: Herkunft eines Rezepts, das mit einer Projektdatei angekommen ist.
+#: „Lokal schlägt mitgereist, immer" (Konzept §17.1): Es wird registriert und
+#: im Katalog gekennzeichnet, aber nie in den Nutzerordner geschrieben — es
+#: gehört der Datei, mit der es kam, nicht dieser Maschine.
+TRAVELLED_SOURCE = "travelled"
+
+#: Wo Rezepte in einer Projektdatei liegen (Konzept §17.1).
+CONTAINER_PREFIX = "recipes/"
+
+
+def container_entry(name: str) -> str:
+    """Der Pfad eines Rezepts im Projektcontainer."""
+    return f"{CONTAINER_PREFIX}{name}.json"
+
 
 @dataclass(frozen=True, slots=True)
 class ExposedParam:
@@ -387,7 +401,11 @@ def range_check(
 
 
 def register(
-    recipe: Recipe, parts: PartRegistry | None = None, registry: Registry | None = None
+    recipe: Recipe,
+    parts: PartRegistry | None = None,
+    registry: Registry | None = None,
+    *,
+    source: str = RECIPE_SOURCE,
 ) -> None:
     """Macht aus dem Rezept einen Baustein wie jeden anderen.
 
@@ -426,8 +444,13 @@ def register(
         version=fingerprint(recipe),
         features=tuple(recipe.features),
         doc=recipe.doc or recipe.title,
-        source=RECIPE_SOURCE,
+        source=source,
         range_passed=(recipe.range_report.passed if recipe.range_report is not None else None),
+        # Für die Reise: Das Speichern eines Projekts, das diesen Baustein
+        # benutzt, bettet genau diese Daten in den Container ein — ohne die
+        # Datei im Nutzerordner erneut zu lesen, die ein mitgereistes Rezept
+        # gar nicht hat.
+        recipe_data=file_data(recipe),
     )
     target = parts or PARTS
     target.register(spec)
@@ -483,9 +506,23 @@ def save(recipe: Recipe, directory: Path | None = None, *, overwrite: bool = Fal
             constraint="exists",
             suggestions=(CORRECT_INPUT, CANCEL),
         )
+    target.write_text(
+        json.dumps(file_data(recipe), ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return target
+
+
+def file_data(recipe: Recipe) -> dict[str, Any]:
+    """Die Daten samt Bereichstest-Bericht — was eine Rezeptdatei trägt.
+
+    Dieselbe Gestalt für die Datei im Nutzerordner und für die Reise in einer
+    Projektdatei: Der Bericht hängt **neben** den Daten, nicht darin (siehe
+    ``Recipe.range_report``) — Prüfen macht aus dem Rezept kein anderes, aber
+    der Empfänger soll die Warnung aus §24.5 sehen, ohne selbst zu prüfen.
+    """
     data = to_data(recipe)
     if recipe.range_report is not None:
-        # Neben den Daten, nicht darin: siehe ``Recipe.range_report``.
         data["range_report"] = {
             "checked": recipe.range_report.checked,
             "failures": [
@@ -493,11 +530,7 @@ def save(recipe: Recipe, directory: Path | None = None, *, overwrite: bool = Fal
                 for entry in recipe.range_report.failures
             ],
         }
-    target.write_text(
-        json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
-        encoding="utf-8",
-    )
-    return target
+    return data
 
 
 @dataclass(slots=True)
@@ -640,3 +673,99 @@ def _mentions(ops: list[Any], source_id: str) -> bool:
             if value == source_id:
                 return True
     return False
+
+
+# --- Die Reise in der Projektdatei (Konzept §17.1) --------------------------------
+
+
+def for_container(document: Document, parts: PartRegistry | None = None) -> dict[str, str]:
+    """Was mit diesem Projekt reisen muss: je benutztem Rezept sein JSON-Text.
+
+    Entscheidung Robert, 24.08.2026: Ein Rezept darf mitreisen — es nennt
+    Namen registrierter Operationen und Zahlen, seine Sicherheitslage ist die
+    einer ``project.json``. Mitgereiste reisen weiter: Wer eine Datei
+    bekommt und weitergibt, gibt den Baustein mit, sonst endet die Kette beim
+    zweiten Empfänger mit ``parts.missing``.
+    """
+    from app.core.knowledge.parts.registry import PARTS, used_parts
+
+    source = parts or PARTS
+    travelling: dict[str, str] = {}
+    for name in sorted(set(used_parts(document.ops))):
+        if not source.has(name):
+            continue
+        spec = source.get(name)
+        if spec.recipe_data is None:
+            continue
+        travelling[name] = json.dumps(
+            dict(spec.recipe_data), ensure_ascii=False, indent=2, sort_keys=True
+        )
+    return travelling
+
+
+def adopt(
+    data: dict[str, Any],
+    parts: PartRegistry | None = None,
+    registry: Registry | None = None,
+) -> list[Finding]:
+    """Nimmt ein mitgereistes Rezept auf — „lokal schlägt mitgereist, immer".
+
+    Drei Lagen (Konzept §17.1):
+
+    * Der Name ist frei: registrieren, als ``travelled`` gekennzeichnet.
+      In den Nutzerordner geschrieben wird nichts — das Rezept gehört der
+      Datei, mit der es kam, und reist mit ihr weiter.
+    * Es gibt lokal denselben Stand (gleicher Abdruck): nichts zu tun.
+    * Es gibt lokal einen **anderen** Stand: Der lokale gewinnt — alles
+      andere wäre eine Datei, die von außen den Werkzeugkasten des Kunden
+      umschreibt. Der mitgereiste bekommt einen abgeleiteten Namen und steht
+      daneben im Katalog; dass das Projekt mit dem lokalen anders rechnet,
+      meldet der §24.4-Abdruckvergleich beim Öffnen ohnehin.
+
+    Eine kaputte Datei ist ein Befund, kein Abbruch (Regel 17) — der Rest
+    des Projekts öffnet.
+    """
+    from app.core.knowledge.parts.registry import PARTS
+
+    source = parts or PARTS
+    try:
+        arrived = from_data(data)
+        mark = fingerprint(arrived)
+        name = arrived.name
+        if source.has(name):
+            local = source.get(name)
+            if local.version == mark:
+                return []
+            name = f"{arrived.name}_travelled"
+            if source.has(name):
+                # Noch einmal geöffnet in derselben Sitzung — oder zwei
+                # Projekte mit demselben fremden Rezept: derselbe Abdruck
+                # heißt dasselbe Rezept, ein anderer bleibt ein Befund statt
+                # einer endlosen Namensreihe.
+                if source.get(name).version == mark:
+                    return []
+                raise ValidationError(
+                    field="recipe",
+                    detail=_(
+                        "Zwei verschiedene mitgereiste Fassungen desselben "
+                        "Bausteins in einer Sitzung — die zweite wird nicht "
+                        "aufgenommen. Schließen Sie das andere Projekt und "
+                        "öffnen Sie diese Datei erneut."
+                    ),
+                    values={"recipe": arrived.name},
+                    constraint="exists",
+                    suggestions=(CANCEL,),
+                )
+            arrived = dataclasses.replace(arrived, name=name)
+        register(arrived, source, registry, source=TRAVELLED_SOURCE)
+        return []
+    except Exception as problem:  # Regel 17: Befund statt Abbruch
+        _log.warning("travelled recipe failed to adopt: %s", problem)
+        return [
+            Finding(
+                code="parts.recipe_failed",
+                severity="warning",
+                message=_("Ein mitgereistes Rezept ließ sich nicht aufnehmen."),
+                values={"reason": str(problem)[:200]},
+            )
+        ]

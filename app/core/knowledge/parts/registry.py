@@ -19,7 +19,7 @@ Zwei Dinge trägt ein Baustein, die eine Operation nicht hat:
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterable, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -211,6 +211,14 @@ class PartSpec:
     und die gehören mit dem Material des **Kunden** aufgelöst, nicht mit
     unserem Standard. ``ops.insert`` bevorzugt diesen Weg, wo er da ist; für
     Vorschau und Bereichstest, wo kein Dokument im Spiel ist, gilt ``fn``."""
+    recipe_data: Mapping[str, Any] | None = None
+    """Die Daten des Rezepts, aus dem dieser Eintrag entstand — für die Reise.
+
+    Ein Rezept reist in jeder Projektdatei mit, die es benutzt (Entscheidung
+    Robert, 24.08.2026; Konzept Befestigungssysteme §17.1). Das Speichern
+    muss dafür an die Daten kommen, ohne die Datei im Nutzerordner erneut zu
+    lesen — ein mitgereistes Rezept hat dort gar keine. ``None`` für alles,
+    was kein Rezept ist."""
 
     @property
     def own(self) -> bool:

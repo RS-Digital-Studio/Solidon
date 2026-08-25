@@ -679,3 +679,126 @@ def test_a_recipe_that_cannot_become_an_operation_leaves_no_catalog_entry(
     assert second.loaded == ()
     assert second.findings, "der Grund steht als Befund da, nicht nur im Protokoll"
     assert not parts2.has("probe_halter"), "kein Katalogeintrag ohne Operation"
+
+
+# --- Die Reise in der Projektdatei (Konzept §17.1) --------------------------------
+
+
+def _clean_globals(*names: str) -> None:
+    """Baut die globalen Einträge eines Reisetests wieder aus — wie bei E6:
+    Die Bausteinsweeps anderer Tests parametrisieren über denselben Katalog."""
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    for name in names:
+        PARTS._parts.pop(name, None)
+        REGISTRY._ops.pop(part_ops.op_name(name), None)
+
+
+def _travelling_project(profile: Profile, tmp_path: Path):
+    """Ein Rezept global registriert und ein Projekt, das es benutzt."""
+    from app.core.scene.project import Project, save
+
+    made = recipe.range_check(_recipe(profile), profile)
+    recipe.register(made)
+    document = _document()
+    document.ops.append(
+        Operation(
+            id=2,
+            op=part_ops.op_name("probe_halter"),
+            outputs=("obj_2",),
+            params={},
+        )
+    )
+    target = tmp_path / "reise.p3d"
+    save(Project(document=document), target)
+    return made, target
+
+
+def test_a_recipe_travels_inside_the_project_file(profile: Profile, tmp_path: Path) -> None:
+    """Entscheidung Robert, 24.08.2026: Ein Rezept reist mit der Projektdatei.
+
+    Vorher versprachen Handbuch und Regel-13-Text die Reise, und in
+    ``app/core/scene`` stand keine Zeile dafür — der Empfänger bekam
+    ``parts.missing`` als Stopp, der Absender keine Warnung. Drei Prüfläufe
+    des Reviews fanden es unabhängig.
+    """
+    import zipfile as zf
+
+    from app.core.knowledge.parts import check as part_check
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+    from app.core.scene.project import load
+
+    try:
+        _made, target = _travelling_project(profile, tmp_path)
+        with zf.ZipFile(target) as container:
+            assert "recipes/probe_halter.json" in container.namelist(), (
+                "das benutzte Rezept muss im Container liegen"
+            )
+
+        # Die fremde Maschine: kein Rezept im Katalog, keine Operation.
+        _clean_globals("probe_halter")
+        loaded = load(target)
+        spec = PARTS.get("probe_halter")
+        assert spec.source == "travelled", "aufgenommen und als mitgereist gekennzeichnet"
+        assert spec.range_passed is True, "der Bereichstest-Bericht reist mit (§24.5)"
+        assert REGISTRY.has(part_ops.op_name("probe_halter")), (
+            "die Auswertung darf nicht bei parts.missing anhalten"
+        )
+        findings = part_check.check(loaded.document)
+        assert any(entry.code == "parts.travelled" for entry in findings)
+        assert not any(entry.code == "parts.missing" for entry in findings)
+    finally:
+        _clean_globals("probe_halter", "probe_halter_travelled")
+
+
+def test_a_local_part_beats_the_travelled_one(profile: Profile, tmp_path: Path) -> None:
+    """„Lokal schlägt mitgereist, immer" (Konzept §17.1): Alles andere wäre
+    eine Datei, die von außen den Werkzeugkasten des Kunden umschreibt."""
+    import dataclasses
+
+    from app.core.knowledge.parts import check as part_check
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.scene.project import load
+
+    try:
+        made, target = _travelling_project(profile, tmp_path)
+        # Die fremde Maschine trägt unter demselben Namen einen anderen Stand.
+        _clean_globals("probe_halter")
+        local = dataclasses.replace(made, doc="lokal ein anderer Satz")
+        recipe.register(local)
+
+        loaded = load(target)
+        assert PARTS.get("probe_halter").version == recipe.fingerprint(local), (
+            "der lokale Stand bleibt, was er ist"
+        )
+        arrived = PARTS.get("probe_halter_travelled")
+        assert arrived.source == "travelled", "der mitgereiste bekommt einen eigenen Namen"
+
+        findings = part_check.check(loaded.document)
+        assert any(entry.code == "parts.travelled_shadowed" for entry in findings), (
+            "der Kunde erfährt, dass sein Stand gilt und der mitgereiste daneben steht"
+        )
+        assert any(entry.code == "parts.own_changed" for entry in findings), (
+            "und §24.4 meldet, dass anders gerechnet wird als beim Absender"
+        )
+    finally:
+        _clean_globals("probe_halter", "probe_halter_travelled")
+
+
+def test_the_same_recipe_arrives_silently(profile: Profile, tmp_path: Path) -> None:
+    """Gleicher Abdruck heißt dasselbe Rezept — kein Doppel, kein Befund."""
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.scene.project import load
+
+    try:
+        _made, target = _travelling_project(profile, tmp_path)
+        # Lokal liegt exakt derselbe Stand — die Beilage hat nichts zu tun.
+        load(target)
+        assert not PARTS.has("probe_halter_travelled")
+        assert PARTS.get("probe_halter").source == recipe.RECIPE_SOURCE, (
+            "der lokale Eintrag wird nicht zum mitgereisten umgestempelt"
+        )
+    finally:
+        _clean_globals("probe_halter", "probe_halter_travelled")
