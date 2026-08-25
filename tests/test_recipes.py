@@ -402,7 +402,7 @@ def test_a_recipe_gets_stamped_and_a_changed_one_is_noticed(
     assert first, "ein Rezept muss einen Abdruck haben — sonst schweigt §24.4"
 
     changed = dataclasses.replace(_recipe(profile), doc="ein anderer Satz")
-    recipe.save(changed, tmp_path)
+    recipe.save(changed, tmp_path, overwrite=True)
     parts2, registry2 = PartRegistry(), Registry()
     recipe.load_all(tmp_path, parts2, registry2)
     assert part_fingerprint("probe_halter", parts2) != first, (
@@ -423,7 +423,7 @@ def test_the_catalog_learns_whether_the_range_check_passed(
     assert parts.get("probe_halter").range_passed is None, "ungeprüft heißt None, nicht True"
 
     checked = recipe.range_check(made, profile)
-    recipe.save(checked, tmp_path)
+    recipe.save(checked, tmp_path, overwrite=True)
     parts2, registry2 = PartRegistry(), Registry()
     recipe.load_all(tmp_path, parts2, registry2)
     assert parts2.get("probe_halter").range_passed is True
@@ -571,7 +571,7 @@ def _run_the_second_project(
 
     # 6. Der Kunde ändert sein Rezept — neue Fassung, gleicher Name.
     changed = dataclasses.replace(made, doc="jetzt mit anderer Beschreibung")
-    recipe.save(changed, tmp_path)
+    recipe.save(changed, tmp_path, overwrite=True)
     parts2 = PartRegistry()
     recipe.load_all(tmp_path, parts2, None)
 
@@ -586,7 +586,7 @@ def _run_the_second_project(
 
     # Und die Gegenrichtung: unverändert heißt still.
     parts3 = PartRegistry()
-    recipe.save(made, tmp_path)
+    recipe.save(made, tmp_path, overwrite=True)
     recipe.load_all(tmp_path, parts3, None)
     quiet = part_check.check(reopened.document, parts3)
     assert not any(finding.code == "parts.own_changed" for finding in quiet), (
