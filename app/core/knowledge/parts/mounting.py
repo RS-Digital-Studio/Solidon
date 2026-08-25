@@ -498,11 +498,15 @@ class PegboardHookParams(BaseParams):
     )
     plate: float = param(
         title=_("Rückplatte"),
-        default=2.0,
+        default=0.0,
         unit="mm",
-        minimum=1.0,
+        minimum=0.0,
         maximum=10.0,
-        doc=_("Dicke der Platte, die die Haken trägt und am Teil sitzt."),
+        doc=_(
+            "Null heißt: keine. Das Teil, an dem die Haken sitzen, verbindet sie "
+            "schon — eine Platte dazwischen wäre Material, das niemand braucht. "
+            "Wer trotzdem eine will, bekommt sie **im** Teil liegend, nicht darauf."
+        ),
     )
     play: float = param(
         title=_("Spiel"),
@@ -532,8 +536,12 @@ class PegboardHookParams(BaseParams):
     title=_("Lochwand-Einhänger"),
     group="mounting",
     params=PegboardHookParams,
-    features=["plate", "hook"],
+    features=["hook"],
     keeps_up=True,
+    # Ohne Rückplatte ist jeder Haken ein eigener Körper; verbunden werden sie
+    # von dem Teil, an das sie kommen. Mit Rückplatte hängen sie ohnehin
+    # zusammen — geprüft wird der Fall, der schwächer ist.
+    joined_by_host=True,
     doc=_(
         "Haken für eine Lochwand, auf einer Rückplatte. Von oben in die Schlitze "
         "gesteckt und heruntergezogen — die Nase greift dann hinter die Platte."
@@ -549,9 +557,13 @@ class PegboardHookParams(BaseParams):
 def pegboard_hook(raw: BaseParams) -> PartResult:
     """Einhänger im Raster, auf einer gemeinsamen Rückplatte.
 
-    **Die Platte ist nicht Zierde, sondern Bedingung.** Zwei Haken im
-    Vierzigerraster sind zwei Körper; ein Baustein muss einer sein (§24.3), und
-    der Kunde will ohnehin keine zwei losen Haken, sondern ein Teil, das hängt.
+    **Die Platte ist nicht Zierde, sondern Bedingung — und sie liegt im Teil.**
+    Zwei Haken im Vierzigerraster sind zwei Körper; ein Baustein muss einer sein
+    (§24.3), und der Kunde will ohnehin keine zwei losen Haken, sondern ein
+    Teil, das hängt. Nur **auf** dem Träger hat sie nichts verloren: Dort war
+    sie zwei Millimeter Material, das niemand braucht, und zwei Millimeter mehr
+    Abstand zur Lochwand. Ihre Oberseite liegt deshalb auf null, bündig mit der
+    angeklickten Fläche; was darunter liegt, verschmilzt mit dem Träger.
 
     **Der Haken greift in einen Schlitz, nicht in ein Loch — und ein Schlitz
     hat runde Enden.** Bei SKÅDIS ist die Öffnung fünf Millimeter breit und
@@ -617,36 +629,55 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     # Maß und keine abgeleitete Zahl: Er beantwortet, wie viel Material um
     # einen Zapfen stehen muss, damit die Platte ihn hält — das hat mit der
     # Breite des Schlitzes nichts zu tun, in dem der Zapfen später steckt.
-    plate = shapes.box(
-        across + width + 2.0 * PLATE_MARGIN,
-        along + shank + nose + 2.0 * PLATE_MARGIN,
-        params.plate,
-    )
-
-    # Wie hoch der Zapfen aus der Rückplatte herausragt: durch die Lochwand
-    # hindurch, plus was die Nase dahinter braucht.
-    through = params.plate + board.thickness + params.play
-
-    parts = [plate]
-    features = [
-        # Die Rückseite der Platte: was am Teil anliegt. Nach unten gerichtet,
-        # denn dort ist das Material, das sie trägt.
-        face(
-            "plate_1",
-            (across + width + 2.0 * PLATE_MARGIN) * (along + shank + nose + 2.0 * PLATE_MARGIN),
-            (0.0, 0.0, 0.0),
-            (0.0, 0.0, -1.0),
+    # **Ohne Rückplatte, wenn keine bestellt ist.** Sie war eine Auflage von zwei
+    # Millimetern zwischen Träger und Haken — Material, das niemand braucht, und
+    # zwei Millimeter mehr Abstand zur Lochwand. Bei einer Wandhalterung ist das
+    # der Unterschied zwischen „sitzt an der Wand" und „steht davor" (Befund
+    # Robert, 25.08.2026, am Bildschirm gesehen; Entscheidung von ihm, sie zur
+    # Ausnahme zu machen statt zur Vorgabe).
+    #
+    # **Die Box wird ausgelassen, nicht auf null gesetzt.** ``shapes.box(…, 0.0)``
+    # ist kein Volumen; die Boolesche Rückfallkette fällt darüber bis auf die
+    # letzte Stufe („Not all meshes are volumes"), und was dabei einteilig
+    # herauskommt, ist eine Notbremse und keine Rechnung. Gar keine Box zu bauen
+    # ist etwas anderes als eine mit Höhe null.
+    #
+    # Wer eine bestellt, bekommt sie **im** Teil: Ihre Oberseite liegt auf z = 0,
+    # bündig mit der angeklickten Fläche.
+    sunk = -params.plate
+    parts: list[MeshData] = []
+    if params.plate > 0.0:
+        plate = shapes.box(
+            across + width + 2.0 * PLATE_MARGIN,
+            along + shank + nose + 2.0 * PLATE_MARGIN,
+            params.plate,
         )
-    ]
+        parts.append(shapes.moved(plate, (0.0, 0.0, sunk)))
+
+    # Wie weit der Zapfen aus der Fläche herausragt: durch die Lochwand
+    # hindurch, plus was die Nase dahinter braucht. Eine Rückplatte zählt nicht
+    # mit — sie liegt darunter, im Teil.
+    through = board.thickness + params.play
+
+    # **Die Platte ist kein Merkmal mehr.** Solange sie auf dem Träger auflag,
+    # war ihre Rückseite eine echte Fläche und ein sinnvoller Anhaltspunkt.
+    # Eingesenkt liegt sie **im** Material, und dort ist keine Fläche — die
+    # Zuordnung fand für sie zwei gleich gute Kandidaten und hielt an
+    # („Die Angabe ist nicht eindeutig", an den Seitenwänden mit zwei Haken).
+    # Was am Teil anliegt, ist jetzt die angeklickte Fläche selbst; die trägt
+    # ihren eigenen Namen und braucht von hier keinen zweiten.
+    features = []
     for index in range(params.count):
         offset = index * reach - span / 2.0
         x = 0.0 if params.upright else offset
         y = offset if params.upright else 0.0
         # Zapfen und Nase als Langloch, in Y gelegt: ``shapes.slot`` baut seine
         # Länge in X, der Schlitz einer Lochwand steht senkrecht.
-        shaft = shapes.turned(shapes.slot(width, shank, through), 90.0)
+        # Der Zapfen reicht von der Plattenunterkante bis hinter die Lochwand;
+        # was davon im Teil steckt, verschmilzt mit ihm.
+        shaft = shapes.turned(shapes.slot(width, shank, through - sunk), 90.0)
         # Der Zapfen sitzt oben, und oben ist **-Y** (``PartSpec.keeps_up``).
-        parts.append(shapes.moved(shaft, (x, y - nose / 2.0, 0.0)))
+        parts.append(shapes.moved(shaft, (x, y - nose / 2.0, sunk)))
         # Die Nase reicht über den Zapfen nach unten hinaus und liegt hinter
         # der Lochwand. Sie beginnt um OVERLAP früher, damit keine Fläche genau
         # auf einer anderen liegt (§39).

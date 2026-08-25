@@ -156,7 +156,8 @@ def test_a_part_holds_over_its_whole_range(spec: PartSpec, profile: Profile) -> 
 
         assert mesh.is_watertight, f"{spec.name} {values} is not watertight"
         assert mesh.volume > 0.0, f"{spec.name} {values} has no volume"
-        assert mesh.component_count == 1, f"{spec.name} {values} falls apart"
+        if not spec.joined_by_host:
+            assert mesh.component_count == 1, f"{spec.name} {values} falls apart"
         assert min(mesh.bounds.size) > minimum_wall / 4.0, (
             f"{spec.name} {values} is thinner than a printer can make"
         )
@@ -742,6 +743,46 @@ def test_a_part_placed_by_hand_needs_no_feature(profile: Profile) -> None:
         "a part positioned by hand was refused: "
         f"{[str(f.message) for f in result.scene.report.findings]}"
     )
+
+
+@pytest.mark.parametrize("spec", [s for s in PARTS.all() if s.joined_by_host], ids=lambda s: s.name)
+def test_a_part_held_by_its_host_becomes_one_with_it(spec: PartSpec, profile: Profile) -> None:
+    """Wer den Träger zum Zusammenhalten braucht, wird dort geprüft.
+
+    Der Bereichstest verlangt sonst ``component_count == 1`` vom Baustein
+    allein. Für einen Lochwand-Einhänger ohne Rückplatte stimmt das nicht: Zwei
+    Haken sind zwei Zapfen, und verbunden werden sie von dem Teil, an das sie
+    kommen — genau dafür sind sie da.
+
+    **Die Zusage wandert damit, sie verschwindet nicht.** Was der Baustein
+    allein nicht leisten muss, muss er am Träger leisten, und zwar in der
+    Stellung, die am schwächsten ist: ohne Platte, mit mehreren Haken, am
+    weitesten auseinander. Ein Test, der die Prüfung nur ausnimmt, hätte hier
+    nichts mehr gesagt.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 200.0, "depth": 120.0, "height": 20.0})],
+    )
+    History(project.document).apply(
+        spec.name,
+        [
+            OperationDraft(
+                op=part_ops.op_name(spec.name),
+                inputs=("obj_1",),
+                params={"at_feature": "face_top", "count": 3, "steps": 2, "plate": 0.0},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    body = result.scene.objects["obj_1"].mesh
+    assert body.component_count == 1, (
+        f"{spec.name}: three hooks on a plate two grid steps apart do not become one body with it"
+    )
+    assert body.is_watertight, f"{spec.name}: the result is not printable"
 
 
 # --- die Normteiltabelle -----------------------------------------------------------
@@ -1745,9 +1786,16 @@ def test_the_hook_goes_through_the_slot_and_catches_behind_it(count: int) -> Non
             f"the grid says {board.pitch}"
         )
 
-    # Die Rückplatte trägt jeden Zapfen, und zwar mit Rand ringsum: Ein Zapfen
-    # an der Plattenkante hätte kein Material, das ihn hält.
-    breit = float(kanten.size[0])
+    # **Eine bestellte Rückplatte trägt jeden Zapfen, mit Rand ringsum.** Ein
+    # Zapfen an der Plattenkante hätte kein Material, das ihn hält.
+    #
+    # Ohne Platte gibt es nichts zu umschließen — seit dem 25.08.2026 ist sie
+    # die Ausnahme statt die Vorgabe, und die Haken hängen dann an dem Teil, an
+    # das sie kommen. Der Baustein misst dort genau so breit wie seine Zapfen,
+    # und das ist richtig; geprüft wird der Zusammenhalt am Träger
+    # (``test_a_part_held_by_its_host_becomes_one_with_it``).
+    ordered = spec.fn(spec.params(count=count, plate=2.0)).mesh
+    breit = float(ordered.bounds.size[0])
     assert breit > (zapfen[-1] - zapfen[0]) + board.slot_width, (
         f"count={count}: the plate is {breit:.1f} mm wide and does not reach around the outer hooks"
     )

@@ -125,6 +125,30 @@ class PartSpec:
     23.08.2026 wirkten auch Passungsleiter, Wandleiter und Überhangfächer an
     einer Bohrung — sie ergeben dort nur keinen Sinn.
     """
+    joined_by_host: bool = False
+    """Wahr, wenn der **Träger** die Teile dieses Bausteins zusammenhält.
+
+    Der Lochwand-Einhänger setzt ohne Rückplatte je Haken einen Zapfen, und
+    zwei Zapfen sind zwei Körper. Am Teil, an das sie kommen, sind sie einer —
+    genau dafür sind sie da.
+
+    **§24.3 verlangt das nicht.** Der Bauplan nennt vier Dinge: wasserdicht,
+    Mindestwandstärke, keine Selbstdurchdringung an den Grenzen, Merkmale
+    korrekt benannt. Die Einteiligkeit hat der Bereichstest hinzugefügt, und
+    zwar aus gutem Anlass: Die Rastnase zerfiel, weil sie die Fläche nur
+    berührte (§39). Gemeint war „zerfällt nicht **versehentlich**"; was der
+    Test prüft, ist „ist nicht mehrteilig".
+
+    Dieses Feld trennt die beiden Fälle, statt eine Ausnahme in den Test zu
+    schreiben. Wer es setzt, sagt: Die Teile gehören an einen Träger, und dort
+    werden sie eins — geprüft wird das dann dort und nicht am Baustein allein
+    (``test_a_part_held_by_its_host_becomes_one_with_it``).
+
+    Es ist **nicht** die print-in-place-Frage aus dem Register: Dort geht es um
+    Teile, die sich gegeneinander bewegen sollen, und die hält kein Träger
+    zusammen.
+    """
+
     keeps_up: bool = False
     """Wahr für einen Baustein, der ein **Oben** hat, das die Schwerkraft meint.
 
@@ -371,6 +395,7 @@ def register_part(
     at_hole_values: HoleValues | None = None,
     at_face: bool = True,
     keeps_up: bool = False,
+    joined_by_host: bool = False,
     features: Iterable[str] = (),
     doc: TranslatableText | str = "",
     caveat: TranslatableText | str = "",
@@ -404,6 +429,7 @@ def register_part(
                 at_hole_values=at_hole_values,
                 at_face=at_face,
                 keeps_up=keeps_up,
+                joined_by_host=joined_by_host,
                 features=tuple(features),
                 doc=doc,
                 caveat=caveat,
