@@ -176,6 +176,15 @@ class PartCatalog(QDialog):
         self.detail.setMargin(NORMAL)
         self.detail.setMinimumWidth(DETAIL_WIDTH)
 
+        # Der Grund für einen gesperrten Speichern-Knopf steht **sichtbar**
+        # über der Knopfzeile, nicht nur im Tooltip — die Detailspalte dieses
+        # Dialogs sagt selbst, dass ein Tooltip nur findet, wer weiß, dass er
+        # da ist. Leer, solange der Knopf frei ist; angelegt vor der
+        # Knopfzeile, weil deren Aufbau ``set_can_save`` bereits ruft.
+        self.save_hint = QLabel("", self)
+        self.save_hint.setWordWrap(True)
+        self.save_hint.setVisible(False)
+
         buttons = QDialogButtonBox(
             QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel, self
         )
@@ -220,6 +229,7 @@ class PartCatalog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(self.search)
         layout.addWidget(split, stretch=1)
+        layout.addWidget(self.save_hint)
         layout.addWidget(buttons)
 
         self._previews: dict[str, QPixmap] = {}
@@ -231,15 +241,20 @@ class PartCatalog(QDialog):
     # --- content ----------------------------------------------------------------
 
     def set_can_save(self, can: bool, reason: str = "") -> None:
-        """Gibt den Knopf frei — oder sagt am Tooltip, was ihm fehlt.
+        """Gibt den Knopf frei — oder sagt daneben, was ihm fehlt.
 
         Ein Knopf, der eine Wirkung verspricht und keine hat, ist die stillste
         Art, jemanden ratlos zu machen; derselbe Befund, der dem „Einfügen"
         daneben seine Bedingung gegeben hat. Der Grund kommt vom Fenster, weil
         nur das ihn kennt — kein Ausschnitt gewählt, kein Körper gerechnet.
+        Er steht als Zeile über den Knöpfen (das Handbuch verspricht „sagt
+        daneben, was ihm fehlt" — ein Tooltip löst das nicht ein); der Tooltip
+        bleibt als zweite Kodierung dazu.
         """
         self.save_part.setEnabled(can)
         self.save_part.setToolTip("" if can else reason)
+        self.save_hint.setText("" if can else reason)
+        self.save_hint.setVisible(bool(reason) and not can)
 
     def refresh(self) -> None:
         """Die Liste neu aus dem Register — die Suche bleibt, wie sie steht.

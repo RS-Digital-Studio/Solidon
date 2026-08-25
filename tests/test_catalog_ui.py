@@ -347,3 +347,25 @@ def test_a_failed_or_missing_range_check_is_written_on_the_entry(qt_app: QApplic
     # Ein mitgelieferter Baustein trägt ``None``, weil sein Bereich in der
     # Suite gefahren wird — der Katalog darf ihn nicht als ungeprüft anschreiben.
     assert "Bereichstest" not in describe(donor) and "Grenzen" not in describe(donor)
+
+
+def test_the_locked_save_button_shows_its_reason_beside_it(qt_app: QApplication) -> None:
+    """„Sagt daneben, was ihm fehlt" — das Handbuch versprach es, der Grund
+    stand aber nur im Tooltip, und die Detailspalte desselben Dialogs sagt
+    selbst, dass einen Tooltip nur findet, wer weiß, dass er da ist.
+
+    ``isVisibleTo``, nicht ``isVisible``: In einem nie gezeigten Fenster lügt
+    das zweite (siehe Regeln der Oberfläche).
+    """
+    catalog = PartCatalog()
+    try:
+        catalog.set_can_save(False, "Dafür muss zuerst etwas gerechnet sein.")
+        assert catalog.save_hint.isVisibleTo(catalog), "der Grund steht sichtbar da"
+        assert "gerechnet" in catalog.save_hint.text()
+        assert not catalog.save_part.isEnabled()
+
+        catalog.set_can_save(True, "")
+        assert not catalog.save_hint.isVisibleTo(catalog), "frei heißt: keine Zeile"
+        assert catalog.save_part.isEnabled()
+    finally:
+        catalog.release()
