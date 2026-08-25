@@ -29,10 +29,19 @@ import numpy as np
 import trimesh
 
 from app.core.errors import CORRECT_INPUT, ValidationError, require_positive
-from app.core.geom.mesh import MeshData, concatenated
+from app.core.geom.mesh import MeshData, concatenated, ray_hit_distances
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, Finding, OpContext, OpResult, Profile, Vec3
+from app.core.types import (
+    BaseParams,
+    CancelToken,
+    Finding,
+    OpContext,
+    OpResult,
+    Profile,
+    Vec3,
+)
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -47,6 +56,13 @@ SAMPLES_PER_CELL: Final = 10
 #: Wie viele Abtastpunkte eine Achse höchstens bekommt. Ein großer Körper mit
 #: feinen Zellen sprengt sonst den Speicher, bevor irgendetwas entsteht.
 MAX_SAMPLES: Final = 160
+
+#: Wie viele Strahlen je Achse den Körper nach eingeschlossenem Leerraum
+#: absuchen (:func:`_enclosed_span`). Neun je Richtung heißt sieben mal sieben
+#: Strahlen im Inneren und dreimal 49 Läufe über die Dreiecke — genug, um einen
+#: Hohlraum zu finden, der eine Füllung überhaupt lohnt, und wenig genug, dass
+#: es bei einem Zehntel einer Sekunde bleibt.
+RAY_SAMPLES: Final = 9
 
 
 def _gyroid(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None:
@@ -102,7 +118,9 @@ def _gyroid(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None
     return MeshData.of(built)
 
 
-def _honeycomb(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None:
+def _honeycomb(
+    box: tuple[Vec3, Vec3], cell: float, wall: float, cancelled: CancelToken | None = None
+) -> MeshData | None:
     """Sechseckige Zellen, senkrecht durchgehend — die klassische Wabe.
 
     Sie trägt in der Ebene ihrer Zellen am besten und ist quer dazu weich; wer
@@ -120,6 +138,8 @@ def _honeycomb(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | N
     row = 0
     y = low[1] - cell
     while y <= high[1] + cell:
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         offset = (cell / 2.0) if row % 2 else 0.0
         x = low[0] - cell + offset
         while x <= high[0] + cell:
@@ -158,7 +178,9 @@ def _honeycomb(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | N
     return MeshData.of(body)
 
 
-def _cubic(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None:
+def _cubic(
+    box: tuple[Vec3, Vec3], cell: float, wall: float, cancelled: CancelToken | None = None
+) -> MeshData | None:
     """Ein Würfelgitter aus Stäben entlang der drei Achsen.
 
     Die einfachste Struktur, und die einzige, die in allen drei Richtungen
@@ -169,6 +191,8 @@ def _cubic(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None:
     size = high - low
     bars = []
     for axis in range(3):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
         first, second = [other for other in range(3) if other != axis]
         for offset_a in np.arange(low[first], high[first] + cell, cell):
             for offset_b in np.arange(low[second], high[second] + cell, cell):
@@ -184,11 +208,22 @@ def _cubic(box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None:
     return MeshData.of(concatenated(bars))
 
 
-def build(structure: str, box: tuple[Vec3, Vec3], cell: float, wall: float) -> MeshData | None:
+def build(
+    structure: str,
+    box: tuple[Vec3, Vec3],
+    cell: float,
+    wall: float,
+    *,
+    cancelled: CancelToken | None = None,
+) -> MeshData | None:
     """Die Füllung für einen Quader, mittig darin.
 
     Gibt ``None`` zurück, wenn nichts entsteht — bei einem Bereich, der kleiner
     ist als eine Zelle, ist das kein Fehler, sondern die Antwort.
+
+    ``cancelled`` wird zwischen den Zellen gefragt (§15.6): Ein Würfelgitter
+    aus 2 mm Zellen in einem 200er Quader sind hunderttausend Stäbe, und bis
+    hierher lief das ohne einen Weg zurück.
     """
     if structure not in STRUCTURES:
         raise ValidationError(
@@ -202,8 +237,8 @@ def build(structure: str, box: tuple[Vec3, Vec3], cell: float, wall: float) -> M
     if structure == "gyroid":
         return _gyroid(box, cell, wall)
     if structure == "honeycomb":
-        return _honeycomb(box, cell, wall)
-    return _cubic(box, cell, wall)
+        return _honeycomb(box, cell, wall, cancelled)
+    return _cubic(box, cell, wall, cancelled)
 
 
 def check_printable(wall: float, cell: float, profile: Profile) -> None:
@@ -324,7 +359,15 @@ def lattice_fill(ctx: OpContext) -> OpResult:
             suggestions=[replace(CORRECT_INPUT, label=_("Erst aushöhlen"))],
         )
 
-    grid = build(params.structure, cavity, params.cell, params.wall)
+    if ctx.progress is not None:
+        ctx.progress(0.2, str(_("Gitter bauen")))
+    grid = build(
+        params.structure,
+        cavity,
+        params.cell,
+        params.wall,
+        cancelled=ctx.cancelled,
+    )
     if grid is None:
         raise ValidationError(
             "cell",
@@ -336,7 +379,18 @@ def lattice_fill(ctx: OpContext) -> OpResult:
 
     # Erst auf den Hohlraum beschneiden, dann anfügen: eine Struktur, die durch
     # die Außenwand stößt, wäre außen sichtbar und innen unbrauchbar.
-    inside = boolean("intersection", [grid, _inner(body)], quality=ctx.quality, allow_empty=True)
+    #
+    # **Als Differenz gegen den Körper und nicht als Verschneidung mit der
+    # Innenschale.** Die Innenschale gibt es nur, solange sie eine eigene
+    # Schale ist — eine Entlüftung verschweißt sie mit der äußeren, und dann
+    # war der Hohlraum unerreichbar. Das Gitter ist ohnehin im Quader des
+    # Hohlraums gebaut, liegt also ganz im Körper; was dort kein Material ist,
+    # ist Hohlraum. Dieselbe Menge, ohne die Annahme über die Schalen.
+    if ctx.progress is not None:
+        ctx.progress(0.6, str(_("Gitter beschneiden")))
+    inside = boolean(
+        "difference", [grid, body], quality=ctx.quality, allow_empty=True, cancelled=ctx.cancelled
+    )
     if inside.mesh.triangle_count == 0:
         raise ValidationError(
             "cell",
@@ -345,7 +399,9 @@ def lattice_fill(ctx: OpContext) -> OpResult:
             constraint="cavity_too_small",
             suggestions=[replace(CORRECT_INPUT, label=_("Zelle verkleinern"))],
         )
-    filled = boolean("union", [body, inside.mesh], quality=ctx.quality)
+    if ctx.progress is not None:
+        ctx.progress(0.85, str(_("Gitter anfügen")))
+    filled = boolean("union", [body, inside.mesh], quality=ctx.quality, cancelled=ctx.cancelled)
 
     _log.info("filled with %r, cell %.1f", params.structure, params.cell)
     return OpResult(
@@ -364,31 +420,85 @@ def lattice_fill(ctx: OpContext) -> OpResult:
 def _cavity_bounds(body: MeshData) -> tuple[Vec3, Vec3] | None:
     """Der Hüllquader des Hohlraums, oder ``None`` bei einem Vollkörper.
 
-    Ein Vollkörper hat genau eine Schale; ein ausgehöhlter hat zwei, und die
-    innere ist der Hohlraum. ``trimesh`` trennt sie über die zusammenhängenden
-    Teile der Oberfläche — die innere Schale ist die, die ganz in der äußeren
-    liegt.
+    **Zwei Wege, und der zweite ist der Fund.** Der erste zählt Schalen: Ein
+    Vollkörper hat genau eine, ein ausgehöhlter zwei, und die innere ist der
+    Hohlraum. Das stimmt — bis jemand aushöhlt, wie die Vorgabe es tut, nämlich
+    **mit Entlüftung**. Die verbindet innen und außen zu einer einzigen Schale,
+    und ``Aushöhlen`` gefolgt von ``Gitter füllen`` — die naheliegendste Folge
+    überhaupt — endete an „Dieser Körper hat keinen Hohlraum. Erst aushöhlen,
+    dann füllen." Der Vorschlag riet genau das, was der Nutzer gerade getan
+    hatte.
+
+    Der zweite Weg fragt darum nicht die Schalen, sondern den Raum: Ein Strahl
+    durch einen Vollkörper trifft zwei Flächen, einer durch einen hohlen vier.
+    Was zwischen der zweiten und der dritten liegt, ist eingeschlossener
+    Leerraum, egal über wie viele Kanäle er nach draußen reicht
+    (:func:`_enclosed_span`).
     """
     parts = body.raw.split(only_watertight=False)
-    if len(parts) < 2:
-        return None
-    outer = max(parts, key=lambda part: float(np.prod(part.extents)))
+    outer = max(parts, key=lambda part: float(np.prod(part.extents))) if parts else None
     inner = [part for part in parts if part is not outer]
-    if not inner:
+    if inner:
+        low = np.min([part.bounds[0] for part in inner], axis=0)
+        high = np.max([part.bounds[1] for part in inner], axis=0)
+        return (
+            (float(low[0]), float(low[1]), float(low[2])),
+            (float(high[0]), float(high[1]), float(high[2])),
+        )
+    return _enclosed_span(body)
+
+
+def _enclosed_span(body: MeshData) -> tuple[Vec3, Vec3] | None:
+    """Der Hüllquader des eingeschlossenen Leerraums, mit Strahlen gemessen.
+
+    Über drei Achsen ein Raster von Strahlen, exakt gerechnet und ohne
+    Raumindex (:func:`app.core.geom.mesh.ray_hit_distances`). Sortiert man die
+    Treffer eines Strahls, wechseln sich Material und Leerraum ab: Das erste
+    Paar ist Wand, das zweite Hohlraum, das dritte wieder Wand. Alles, was in
+    einem Hohlraum-Abschnitt liegt, geht in den Quader ein.
+
+    Über **drei** Achsen, weil ein flacher Hohlraum unter einer flachen Decke
+    von oben gesehen groß und von der Seite gesehen ein Strich ist — und ein
+    einzelner Strich trifft ihn zufällig oder gar nicht.
+
+    Doppelte Treffer auf geteilten Kanten sind hier der Grund für das Runden:
+    Die Funktion zählt einen Kantentreffer je angrenzendem Dreieck, und mit
+    einer ungeraden Trefferzahl kippt die Abfolge Wand/Hohlraum. Ein Strahl,
+    dessen Zahl nach dem Zusammenfassen ungerade bleibt, wird verworfen statt
+    geraten (Regel 21).
+    """
+    triangles = np.asarray(body.raw.triangles, dtype=float)
+    if not len(triangles):
         return None
-    low = np.min([part.bounds[0] for part in inner], axis=0)
-    high = np.max([part.bounds[1] for part in inner], axis=0)
+    low = np.asarray(body.bounds.minimum, dtype=float)
+    high = np.asarray(body.bounds.maximum, dtype=float)
+    span = high - low
+    found: list[np.ndarray] = []
+    for axis in range(3):
+        first, second = (other for other in range(3) if other != axis)
+        direction = np.zeros(3)
+        direction[axis] = 1.0
+        # Die Ränder werden ausgelassen: Ein Strahl genau auf der Außenfläche
+        # trifft sie streifend und zählt anders als einer daneben.
+        for a in np.linspace(low[first], high[first], RAY_SAMPLES)[1:-1]:
+            for b in np.linspace(low[second], high[second], RAY_SAMPLES)[1:-1]:
+                origin = np.zeros(3)
+                origin[axis] = low[axis] - max(float(span[axis]), 1.0)
+                origin[first], origin[second] = float(a), float(b)
+                hits = np.unique(np.round(ray_hit_distances(triangles, origin, direction), 6))
+                if len(hits) < 4 or len(hits) % 2:
+                    continue
+                for start, end in zip(hits[1:-1:2], hits[2::2], strict=True):
+                    if end - start <= EPS_GEOM:
+                        continue
+                    found.append(origin + direction * start)
+                    found.append(origin + direction * end)
+    if not found:
+        return None
+    points = np.asarray(found, dtype=float)
+    inside_low = points.min(axis=0)
+    inside_high = points.max(axis=0)
     return (
-        (float(low[0]), float(low[1]), float(low[2])),
-        (float(high[0]), float(high[1]), float(high[2])),
+        (float(inside_low[0]), float(inside_low[1]), float(inside_low[2])),
+        (float(inside_high[0]), float(inside_high[1]), float(inside_high[2])),
     )
-
-
-def _inner(body: MeshData) -> MeshData:
-    """Der Hohlraum als Körper — das, was beim Aushöhlen herausgenommen wurde."""
-    parts = body.raw.split(only_watertight=False)
-    outer = max(parts, key=lambda part: float(np.prod(part.extents)))
-    inner = [part for part in parts if part is not outer]
-    joined = concatenated(inner)
-    joined.fix_normals()
-    return body.replacing(joined)

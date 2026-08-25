@@ -417,11 +417,17 @@ def repair_object(ctx: OpContext) -> OpResult:
         self_intersections=params.self_intersections,
     )
     findings = list(result.findings)
-    if not result.changed:
+    if not result.changed and not findings:
         # Ein gesundes Netz sah bisher aus wie eine Reparatur, die nicht
         # gelaufen ist: keine Meldung, kein Unterschied, ein Schritt im
         # Verlauf. Das Ergebnis „nichts zu tun" ist ein gutes und gehört
         # gesagt (§2.7).
+        #
+        # **Und nur, wenn sonst nichts zu sagen war.** ``changed`` allein
+        # genügt nicht: Ein Netz, das offen bleibt, ohne dass ein Schritt
+        # gegriffen hat, trägt bereits ``repair.still_open`` — und daneben
+        # „nichts zu reparieren" zu setzen ist ein Widerspruch in derselben
+        # Liste.
         findings.append(
             Finding(
                 code="repair.nothing_to_do",

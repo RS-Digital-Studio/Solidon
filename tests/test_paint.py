@@ -55,13 +55,14 @@ def test_the_brush_stops_at_an_edge_however_wide_it_is() -> None:
     """Der Punkt der ganzen Sache: ein Radius allein malt um die Ecke."""
     painted = brush(plate(), (0.0, 0.0, 10.0), radius=1000.0, slot=1)
 
-    assert counts(painted) == {0: 10, 1: 2}, "the top face, and nothing else"
+    assert counts(painted.mesh) == {0: 10, 1: 2}, "the top face, and nothing else"
+    assert painted.painted == 2, "der Befund zählt den Strich, nicht den Bestand"
 
 
 def test_a_wide_enough_angle_paints_over_everything() -> None:
     painted = brush(plate(), (0.0, 0.0, 10.0), radius=1000.0, slot=1, edge_angle=180.0)
 
-    assert used_slots(painted) == (1,)
+    assert used_slots(painted.mesh) == (1,)
 
 
 def test_on_a_smooth_surface_the_radius_is_what_decides() -> None:
@@ -70,8 +71,8 @@ def test_on_a_smooth_surface_the_radius_is_what_decides() -> None:
     """
     sphere = ball()
 
-    small = counts(brush(sphere, (0.0, 0.0, 20.0), radius=5.0, slot=1)).get(1, 0)
-    large = counts(brush(sphere, (0.0, 0.0, 20.0), radius=12.0, slot=1)).get(1, 0)
+    small = brush(sphere, (0.0, 0.0, 20.0), radius=5.0, slot=1).painted
+    large = brush(sphere, (0.0, 0.0, 20.0), radius=12.0, slot=1).painted
 
     assert 0 < small < large < sphere.triangle_count
 
@@ -82,16 +83,16 @@ def test_painting_does_not_move_a_single_point() -> None:
 
     painted = brush(before, (0.0, 0.0, 10.0), radius=20.0, slot=2)
 
-    assert painted.raw is before.raw
-    assert painted.volume == before.volume
+    assert painted.mesh.raw is before.raw
+    assert painted.mesh.volume == before.volume
 
 
 def test_a_second_stroke_does_not_undo_the_first() -> None:
     once = brush(plate(), (0.0, 0.0, 10.0), radius=1000.0, slot=1)
 
-    twice = brush(once, (0.0, 0.0, 0.0), radius=1000.0, slot=2)
+    twice = brush(once.mesh, (0.0, 0.0, 0.0), radius=1000.0, slot=2)
 
-    assert used_slots(twice) == (0, 1, 2), "top, bottom and the sides in between"
+    assert used_slots(twice.mesh) == (0, 1, 2), "top, bottom and the sides in between"
 
 
 # --- Als Operation ---------------------------------------------------------------

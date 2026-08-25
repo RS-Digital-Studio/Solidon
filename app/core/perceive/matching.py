@@ -22,7 +22,7 @@ Drei Ausgänge, und nur einer davon ist still:
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -395,11 +395,13 @@ def moved_features(
                 if length > EPS_GEOM:
                     direction = direction / length
                 params[key] = (float(direction[0]), float(direction[1]), float(direction[2]))
-        moved[identifier] = Feature(
-            id=feature.id,
-            kind=feature.kind,
-            provenance=feature.provenance,
-            params=params,
-            face_indices=feature.face_indices,
-        )
+        # replace und nicht ein frisches Feature: Der Aufbau von Hand
+        # nannte fünf der sieben Felder, und die zwei fehlenden fielen bei
+        # jedem Verschieben still weg. created_by ist der Eintrag „diesen
+        # Schritt ändern" (§21.2) — nach einer Drehung war er weg. Und
+        # recognised=False" wurde zu True", also maß die Zuordnung beim
+        # nächsten Schritt die Bohrungen eines Bausteins an einer Erkennung,
+        # die sie nie findet, und ließ sie verwaisen. Ein Feld, das später
+        # dazukommt, reist jetzt von selbst mit.
+        moved[identifier] = replace(feature, params=params)
     return moved

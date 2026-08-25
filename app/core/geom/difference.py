@@ -20,6 +20,7 @@ from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import Finding, ObjectId, Quality, Scene, SolverInfo
+from app.core.units import EPS_GEOM
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -117,9 +118,15 @@ def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -
 
 def _same_bounds(first: MeshData, second: MeshData) -> bool:
     """Billige Vorprüfung: gleiches Volumen und gleicher Quader heißt, dass
-    sich auch nichts bewegt hat."""
+    sich auch nichts bewegt hat.
+
+    Verglichen wird mit ``EPS_GEOM``: Beide Seiten sind Millimeter, also ist es
+    dieselbe Frage, die §11.2 mit dieser Toleranz beantwortet. Hier stand die
+    Zahl ``1e-6`` — derselbe Wert, nur ohne den Namen, und damit eine Stelle,
+    die eine Änderung an ``EPS_GEOM`` nicht mitbekommen hätte.
+    """
     return all(
-        abs(a - b) < 1e-6
+        abs(a - b) < EPS_GEOM
         for a, b in zip(
             (*first.bounds.minimum, *first.bounds.maximum),
             (*second.bounds.minimum, *second.bounds.maximum),

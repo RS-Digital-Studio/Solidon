@@ -372,7 +372,15 @@ def test_a_body_that_opens_up_while_being_simplified_says_so(profile: Profile) -
     hohl = _hollow_sphere(profile)
     assert hohl.is_watertight, "der Ausgangspunkt des Tests"
 
-    result = run("decimate_mesh", object_of(hohl), profile, triangles=800)
+    # **60 000, und das ist die Zahl aus dem Kundendurchgang oben.** Hier stand
+    # 800, und der Test war aus dem falschen Grund grün: Die Entlüftung ging bis
+    # zum 25.08.2026 durch den ganzen Körper — auch durch die Decke —, und der
+    # so entstandene Tunnel riss beim Vereinfachen als Erstes auf. Seit die
+    # Entlüftung im Hohlraum endet (geom.hollow._vent), bleibt eine grob
+    # vereinfachte Kugel ein geschlossener Klumpen: Bei 800 Dreiecken ist die
+    # Innenschale ganz verschwunden. Aufreißen tut die **Wand**, und dafür
+    # braucht es eine Auflösung, bei der beide Schalen noch da sind.
+    result = run("decimate_mesh", object_of(hohl), profile, triangles=60_000)
 
     assert not result.outputs[0].mesh.is_watertight, "so grob geht die Wand auf"
     assert "mesh.not_watertight" in [entry.code for entry in result.findings]

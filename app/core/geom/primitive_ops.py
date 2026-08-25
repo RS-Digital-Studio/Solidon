@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import cast
 
+import numpy as np
+
 from app.core.backends import openscad
 from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData, read_mesh
@@ -23,10 +25,24 @@ from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import SEGMENTS, box, cylinder
 from app.core.registry import NAME_DOC, op_params, param, register_op
-from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult, SceneObject
+from app.core.types import (
+    BaseParams,
+    Feature,
+    Finding,
+    OpContext,
+    OpResult,
+    SceneObject,
+    Vec3,
+)
+from app.core.units import EPS_DISPLAY, EPS_GEOM
 from app.i18n import TranslatableText, _
 
 _ANCHORS = ("centre", "corner")
+
+#: Ab wann eine Normale als senkrecht gilt (:func:`top_face_of`). Der Kosinus
+#: von einem Grad — enger wäre eine Frage an die Rechengenauigkeit, weiter
+#: zählte die oberste Segmentreihe einer Kugel als Deckfläche.
+FLAT_ENOUGH = 0.9998
 
 
 @op_params
@@ -275,15 +291,41 @@ def _object(name: TranslatableText | str, mesh: MeshData, height: float) -> Scen
     wie es soll. Was **nicht** mitwandern darf, ist der Exportdateiname, und
     dafür gibt es :func:`app.i18n.source_text`.
     """
-    size = mesh.bounds.size
-    features: dict[str, Feature] = dict(
-        [
-            face(
-                "face_top",
-                float(size[0] * size[1]),
-                (0.0, 0.0, float(mesh.bounds.maximum[2])),
-                (0.0, 0.0, 1.0),
-            )
-        ]
+    area, centre = top_face_of(mesh)
+    features: dict[str, Feature] = (
+        dict([face("face_top", area, centre, (0.0, 0.0, 1.0))]) if area > EPS_GEOM else {}
     )
     return SceneObject(id="", name=name, mesh=mesh, features=features)
+
+
+def top_face_of(mesh: MeshData) -> tuple[float, Vec3]:
+    """Die ebene Oberseite: ihre Fläche und ihre Mitte — oder Fläche null.
+
+    **Gemessen an den Dreiecken, nicht am Hüllquader.** Vorher stand hier
+    ``size[0] * size[1]``, also die Grundfläche des Quaders um den Körper. Beim
+    Quader stimmt das; beim Zylinder Ø 20 meldete das Merkmal 400 mm² statt
+    314, und bei der Kugel behauptete es eine ebene Deckfläche, die es
+    überhaupt nicht gibt — ein Merkmal, auf das man klicken, an dem man
+    ausrichten und gegen das man eine Passung prüfen kann, mit einer Zahl, die
+    niemand nachgemessen hat.
+
+    Gezählt wird, was oben liegt **und** nach oben schaut: Dreiecke, deren
+    Normale innerhalb eines Grades senkrecht steht und die an der Oberkante des
+    Körpers sitzen. Die Kugel hat davon keines und bekommt darum kein Merkmal —
+    das ist die richtige Antwort und keine Lücke.
+    """
+    body = mesh.raw
+    if not len(body.faces):
+        return 0.0, (0.0, 0.0, 0.0)
+    normals = np.asarray(body.face_normals, dtype=float)
+    centres = np.asarray(body.triangles_center, dtype=float)
+    areas = np.asarray(body.area_faces, dtype=float)
+    top = float(mesh.bounds.maximum[2])
+    # Die Dreiecksmitte einer ebenen Deckfläche liegt in ihrer Ebene; ein
+    # Zehntelmillimeter Spiel deckt das Rechenrauschen einer Drehung ab.
+    flat = (normals[:, 2] > FLAT_ENOUGH) & (centres[:, 2] > top - EPS_DISPLAY)
+    if not flat.any():
+        return 0.0, (0.0, 0.0, 0.0)
+    area = float(areas[flat].sum())
+    middle = (areas[flat, None] * centres[flat]).sum(axis=0) / area
+    return area, (float(middle[0]), float(middle[1]), top)

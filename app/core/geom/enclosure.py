@@ -92,20 +92,11 @@ def enclosure_tree(polygons: Any) -> tuple[np.ndarray, Any]:
     return roots, contains
 
 
-#: Trimeshs eigene Fassung, festgehalten vor dem Tausch. Ohne sie wäre die
-#: Kernaussage dieses Moduls („Zeile für Zeile dieselbe Entscheidung") nach
-#: dem ersten Import unprüfbar — ein Gleichheitstest braucht das Original,
-#: sobald irgendwo eine Umgebung mit ``rtree`` steht.
-_ORIGINAL: Any = None
-
-
 def _install() -> None:
-    """Trimeshs Fassung durch diese ersetzen — einmal, beim ersten Import."""
+    """Trimeshs Fassung durch diese ersetzen — beim Import; die Zuweisung ist
+    idempotent, ein zweiter Lauf setzt nur dieselbe Funktion erneut."""
     import trimesh.path.polygons as polygons
 
-    global _ORIGINAL
-    if _ORIGINAL is None:
-        _ORIGINAL = polygons.enclosure_tree
     polygons.enclosure_tree = enclosure_tree
 
 

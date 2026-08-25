@@ -33,7 +33,14 @@ from app.core.errors import Action, NotManifoldError, ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, Finding, OpContext, OpResult
+from app.core.types import (
+    BaseParams,
+    CancelToken,
+    Finding,
+    OpContext,
+    OpResult,
+    ProgressFn,
+)
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -63,6 +70,11 @@ GRID_OFFSET: Final = 0.37
 #: Ergebnis, sondern der Preis für seine Genauigkeit — und im Entwurf wird
 #: iteriert, nicht abgenommen.
 DRAFT_FACTOR: Final = 2.0
+
+#: Wie viele Rasterpunkte auf einmal gegen den Baum gefragt werden. Groß genug,
+#: dass der Aufruf sich lohnt, klein genug, dass ein Abbruch in einem
+#: Sekundenbruchteil ankommt — gemessen rund 0,3 s je Portion.
+FIELD_CHUNK: Final = 400_000
 
 
 def _surface_points(mesh: MeshData, spacing: float) -> tuple[np.ndarray, np.ndarray]:
@@ -98,7 +110,14 @@ def _surface_points(mesh: MeshData, spacing: float) -> tuple[np.ndarray, np.ndar
     )
 
 
-def distance_field(mesh: MeshData, grid: np.ndarray, spacing: float) -> np.ndarray:
+def distance_field(
+    mesh: MeshData,
+    grid: np.ndarray,
+    spacing: float,
+    *,
+    progress: ProgressFn | None = None,
+    cancelled: CancelToken | None = None,
+) -> np.ndarray:
     """Abstand zur Oberfläche für jeden Rasterpunkt: positiv innen, negativ außen.
 
     Welche Normale das sein muss, steht in :func:`_surface_points` — die
@@ -120,11 +139,38 @@ def distance_field(mesh: MeshData, grid: np.ndarray, spacing: float) -> np.ndarr
     Genauigkeit ohnehin am Raster hängt, ist das der falsche Ort zum Sparen.
     """
     points, normals = _surface_points(mesh, spacing)
-    # Über alle Kerne: bei 356 000 Rasterpunkten sind es 1,5 statt 9,6
-    # Sekunden, bei identischem Ergebnis.
-    away, index = cKDTree(points).query(grid, workers=-1)
-    outward: np.ndarray = np.einsum("ij,ij->i", grid - points[index], normals[index])
-    return np.asarray(np.where(outward > 0.0, -away, away), dtype=float)
+    tree = cKDTree(points)
+    field = np.empty(len(grid), dtype=float)
+    # **In Portionen, damit ein Abbruch ankommt** (§15.6). Ein einziger
+    # ``query`` über zehn Millionen Rasterpunkte ist ein nativer Aufruf und
+    # kooperativ nicht zu unterbrechen: Verschmelzen mit Rasterweite 0,5
+    # rechnete gemessen 9,2 Sekunden, in denen der Abbrechen-Knopf nichts tat.
+    # Die Portionen kosten nichts messbares — ``workers=-1`` lastet die Kerne
+    # innerhalb einer Portion genauso aus.
+    for start in range(0, len(grid), FIELD_CHUNK):
+        if cancelled is not None:
+            cancelled.raise_if_cancelled()
+        block = grid[start : start + FIELD_CHUNK]
+        # Über alle Kerne: bei 356 000 Rasterpunkten sind es 1,5 statt 9,6
+        # Sekunden, bei identischem Ergebnis.
+        away, index = tree.query(block, workers=-1)
+        outward = np.einsum("ij,ij->i", block - points[index], normals[index])
+        field[start : start + len(block)] = np.where(outward > 0.0, -away, away)
+        if progress is not None:
+            done = min(start + FIELD_CHUNK, len(grid)) / max(len(grid), 1)
+            progress(done, str(_("Abstandsfeld rechnen")))
+    return field
+
+
+def _share(progress: ProgressFn | None, offset: float) -> ProgressFn | None:
+    """Die zweite Hälfte des Balkens für den zweiten Körper.
+
+    Zwei Abstandsfelder, ein Fortschritt: Ohne die Verschiebung liefe der
+    Balken zweimal von null bis eins, und das liest sich wie ein Neustart.
+    """
+    if progress is None:
+        return None
+    return lambda fraction, text: progress(offset + fraction / 2.0, text)
 
 
 def _smooth_maximum(first: np.ndarray, second: np.ndarray, radius: float) -> np.ndarray:
@@ -165,8 +211,21 @@ def _too_fine(wanted: int, grid: float) -> ValidationError:
     )
 
 
-def blend_bodies(first: MeshData, second: MeshData, radius: float, grid: float) -> MeshData:
-    """Beide Körper über ein gemeinsames Abstandsfeld weich vereinigen."""
+def blend_bodies(
+    first: MeshData,
+    second: MeshData,
+    radius: float,
+    grid: float,
+    *,
+    progress: ProgressFn | None = None,
+    cancelled: CancelToken | None = None,
+) -> MeshData:
+    """Beide Körper über ein gemeinsames Abstandsfeld weich vereinigen.
+
+    ``progress`` und ``cancelled`` reichen bis in die Feldrechnung hinein und
+    nicht nur bis vor sie: Dort liegt die Zeit, und ein Abbruch, der erst
+    danach greift, ist keiner (§15.6).
+    """
     for source in (first, second):
         if not source.raw.is_watertight or source.volume <= 0.0:
             raise NotManifoldError(
@@ -191,10 +250,12 @@ def blend_bodies(first: MeshData, second: MeshData, radius: float, grid: float) 
     points = np.stack(np.meshgrid(*axes, indexing="ij"), axis=-1).reshape(-1, 3)
 
     merged = _smooth_maximum(
-        distance_field(first, points, grid),
-        distance_field(second, points, grid),
+        distance_field(first, points, grid, progress=_share(progress, 0.0), cancelled=cancelled),
+        distance_field(second, points, grid, progress=_share(progress, 0.5), cancelled=cancelled),
         radius,
     )
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
 
     # **Der Rand muss zu sein**, wie beim Gitter (`lattice.py`): Marching Cubes
     # zeichnet nur, wo das Feld sein Vorzeichen wechselt. Endet die Fläche am
@@ -272,7 +333,14 @@ def blend_union(ctx: OpContext) -> OpResult:
     first, second = (as_mesh_data(entry.mesh) for entry in ctx.inputs[:2])
     grid = params.grid * (DRAFT_FACTOR if ctx.quality == "draft" else 1.0)
 
-    merged = blend_bodies(first, second, params.radius, grid)
+    merged = blend_bodies(
+        first,
+        second,
+        params.radius,
+        grid,
+        progress=ctx.progress,
+        cancelled=ctx.cancelled,
+    )
 
     findings = [
         Finding(

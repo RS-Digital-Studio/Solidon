@@ -11,8 +11,8 @@ Buchstabe hat eine ebene Oberseite statt einer Treppe. Alles danach ist
 dieselbe Vereinigung oder Differenz, die jeder andere Baustein auch
 benutzt (§24.1).
 
-The other half is a logo, and that arrives as SVG through the same door: an
-outline is an outline, whether a font drew it or Inkscape did.
+Die andere Hälfte ist ein Logo, und das kommt als SVG durch dieselbe Tür: Ein
+Umriss ist ein Umriss, ob ihn eine Schrift gezeichnet hat oder Inkscape.
 """
 
 from __future__ import annotations

@@ -19,6 +19,8 @@ schnell (§31).
 
 from __future__ import annotations
 
+import dataclasses
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
@@ -382,6 +384,28 @@ def _findings_for(stage: SolverStage) -> list[Finding]:
             message=_("Über die Voxelstufe gelöst — die Maße sind gerundet."),
         )
     ]
+
+
+def deepest(infos: Iterable[SolverInfo | None]) -> SolverInfo | None:
+    """Von mehreren Läufen der Kette derjenige, der am weitesten
+    zurückfallen musste.
+
+    Eine Operation, die drei Boolesche Schnitte fährt, hat drei Antworten und
+    darf nur eine melden — und die ehrliche ist die schlechteste: Wer wissen
+    will, was seine Zahlen wert sind, interessiert sich für die Stufe, die das
+    Ergebnis am stärksten geglättet hat. Eine Voxelstufe irgendwo in der Kette
+    macht das ganze Ergebnis zu einem Voxelergebnis.
+
+    ``attempted`` sammelt alles, was unterwegs probiert wurde, in der
+    Reihenfolge der Kette — sonst sähe ein Ergebnis aus Stufe 4 so aus, als
+    hätte es die drei davor nicht gebraucht.
+    """
+    known = [entry for entry in infos if entry is not None]
+    if not known:
+        return None
+    worst = max(known, key=lambda entry: FULL_CHAIN.index(entry.strategy))
+    attempted = [stage for stage in FULL_CHAIN if any(stage in e.attempted for e in known)]
+    return dataclasses.replace(worst, attempted=tuple(attempted))
 
 
 def without_effect(

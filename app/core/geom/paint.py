@@ -24,8 +24,7 @@ from typing import cast
 
 import numpy as np
 
-from app.core.geom.attributes import counts
-from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.geom.mesh import MeshData, as_mesh_data, distances_to_triangles
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
 from app.core.types import BaseParams, Finding, MaterialSlot, OpContext, OpResult, Vec3
@@ -44,6 +43,22 @@ EDGE_ANGLE = 30.0
 MAX_SLOTS = 8
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class BrushResult:
+    """Der bemalte Körper und wie viele Dreiecke der Pinsel wirklich traf.
+
+    Getrennt, weil die zweite Zahl nirgends sonst herkommt: Wie viele Dreiecke
+    am Ende in einem Slot sitzen, sagt :func:`app.core.geom.attributes.counts`
+    — aber das ist der **Bestand** und nicht der Strich. Bei Slot 0 sind die
+    beiden Zahlen so weit auseinander, wie sie nur sein können: Ein Netz ohne
+    Slots gilt ganz als Slot 0, also meldete ein Klick ins Leere die volle
+    Dreieckszahl als Erfolg.
+    """
+
+    mesh: MeshData
+    painted: int
+
+
 def brush(
     mesh: MeshData,
     point: Vec3,
@@ -51,37 +66,46 @@ def brush(
     slot: int,
     *,
     edge_angle: float = EDGE_ANGLE,
-) -> MeshData:
+) -> BrushResult:
     """Bemalt jedes Dreieck um ``point``, das zur selben Oberfläche gehört.
 
     Erreicht über die Oberfläche, nicht durch die Luft: ein Lauf von Nachbar
     zu Nachbar, der an scharfen Kanten und am Radius endet. Beide Grenzen
     zählen — der Radius allein malte durch eine Wand, die Kante allein eine
     ganze Seite.
+
+    **Gemessen wird zur Dreiecksfläche, nicht zum Schwerpunkt** (§18.5,
+    :func:`app.core.geom.mesh.distance_to_triangles`). Die Deckfläche der
+    Platte aus dem Korpus besteht aus zwei Dreiecken von 60 auf 40 Millimeter; ihr Schwerpunkt
+    liegt gut zwanzig Millimeter von der Mitte entfernt. Ein Klick genau dorthin
+    — die naheliegendste Geste überhaupt — fand mit einem Pinselradius von zehn
+    Millimetern kein einziges Dreieck und meldete „keine Fläche zu treffen".
+    Dieselbe Rechnung begrenzt den Umfang: Ein Radius, der an den Schwerpunkten
+    gemessen wird, hört an einem großen Dreieck auf, bevor er es erreicht.
     """
     body = mesh.raw
     faces = len(body.faces)
     if not faces or radius <= EPS_GEOM:
-        return mesh
+        return BrushResult(mesh=mesh, painted=0)
 
-    centres = np.asarray(body.triangles_center, dtype=float)
-    away = np.linalg.norm(centres - np.asarray(point, dtype=float), axis=1)
+    triangles = np.asarray(body.triangles, dtype=float)
+    away = distances_to_triangles(triangles, np.asarray(point, dtype=float))
     start = int(np.argmin(away))
     if away[start] > radius:
         # Der Strich ist nicht auf dem Körper gelandet. Ein nächstes Dreieck
         # gibt es immer, und es zu bemalen, weil es das nächste war, setzte
         # Farbe auf die andere Seite des Teils als die, auf die jemand
         # geklickt hat.
-        return mesh
+        return BrushResult(mesh=mesh, painted=0)
 
-    within = np.linalg.norm(centres - centres[start], axis=1) <= radius
+    within = away <= radius
     reached = _walk(mesh, start, within, edge_angle)
 
     slots = list(mesh.slots) if mesh.slots else [0] * faces
     for index in reached:
         slots[index] = int(slot)
     _log.info("painted %d of %d faces into slot %d", len(reached), faces, slot)
-    return MeshData(raw=body, slots=tuple(slots))
+    return BrushResult(mesh=MeshData(raw=body, slots=tuple(slots)), painted=len(reached))
 
 
 def _walk(mesh: MeshData, start: int, within: np.ndarray, edge_angle: float) -> set[int]:
@@ -187,14 +211,14 @@ def paint_slot(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
 
-    painted = brush(
+    stroke = brush(
         mesh,
         (params.x, params.y, params.z),
         params.radius,
         params.slot,
         edge_angle=params.edge_angle,
     )
-    covered = counts(painted).get(params.slot, 0)
+    covered = stroke.painted
     if not covered:
         return OpResult(
             outputs=[source],
@@ -220,7 +244,7 @@ def paint_slot(ctx: OpContext) -> OpResult:
         outputs=[
             dataclasses.replace(
                 source,
-                mesh=painted,
+                mesh=stroke.mesh,
                 material_slots=[known[index] for index in sorted(known)],
             )
         ],

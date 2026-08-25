@@ -12,13 +12,13 @@ welcher Kandidat gewann und mit welchem Abstand.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import trimesh
 
 from app.core.geom.mesh import MeshData
-from app.core.geom.transform import apply, place_on_bed
+from app.core.geom.transform import apply, translation
 from app.core.types import Finding, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
@@ -56,6 +56,15 @@ class OrientResult:
     mesh: MeshData
     chosen: Orientation
     findings: list[Finding]
+    transform: np.ndarray = field(default_factory=lambda: np.eye(4))
+    """Die starre Bewegung, die den Körper in diese Lage gebracht hat.
+
+    Ohne sie war *Druckoptimal ausrichten* die einzige bewegende Operation, die
+    schwieg: Die Zuordnung (§21.2) muss danach raten, welches Merkmal welches
+    ist, und bei einer Drehung um neunzig Grad rät sie falsch. Merkmalskennungen
+    wechseln, und jede Passung, die auf eine davon zeigt, zeigt danach ins
+    Leere.
+    """
 
 
 def candidates(mesh: MeshData) -> list[Vec3]:
@@ -134,11 +143,27 @@ def rotation_to_down(direction: Vec3) -> np.ndarray:
     return np.asarray(trimesh.transformations.rotation_matrix(angle, axis), dtype=float)
 
 
+def print_transform(mesh: MeshData, direction: Vec3) -> np.ndarray:
+    """Die eine Matrix, die den Körper auf diese Fläche stellt: erst drehen,
+    dann aufs Bett setzen.
+
+    Als **eine** Bewegung und nicht als zwei, weil genau das der Wert ist, den
+    eine Operation melden muss (``OpResult.transform``, §21.2). Zwei
+    nacheinander angewandte Matrizen ergeben dasselbe Netz und keine Auskunft.
+    Benutzt auch die Schichtanalyse-Suche über die Operation — sie dreht mit
+    denselben zwei Schritten, hat aber nur die Richtung zurückgegeben.
+    """
+    turn = rotation_to_down(direction)
+    lifted = apply(mesh, turn)
+    return np.asarray(translation((0.0, 0.0, -lifted.bounds.minimum[2])) @ turn, dtype=float)
+
+
 def orient_for_print(mesh: MeshData) -> OrientResult:
     """Dreht den Körper in die Lage, die der Heuristik am besten gefällt."""
     scored = [evaluate_direction(mesh, direction) for direction in candidates(mesh)]
     best = max(scored, key=lambda entry: entry.score)
-    turned = place_on_bed(apply(mesh, rotation_to_down(best.direction)))
+    matrix = print_transform(mesh, best.direction)
+    turned = apply(mesh, matrix)
 
     findings = [
         Finding(
@@ -163,4 +188,4 @@ def orient_for_print(mesh: MeshData) -> OrientResult:
                 message=_("Auch in der besten Lage bleibt viel Überhang — Stützen sind nötig."),
             )
         )
-    return OrientResult(mesh=turned, chosen=best, findings=findings)
+    return OrientResult(mesh=turned, chosen=best, findings=findings, transform=matrix)

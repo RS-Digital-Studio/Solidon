@@ -24,7 +24,7 @@ import trimesh
 
 from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.boolean import boolean, shared_volume, without_effect
-from app.core.geom.mesh import MeshData, concatenated, on_surface
+from app.core.geom.mesh import MeshData, concatenated, on_surface, ray_hit_distances
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
 from app.core.knowledge.profiles import resolve_tolerance
@@ -185,6 +185,8 @@ def countersink(
     axis: Axis,
     diameter: float,
     angle: float = 90.0,
+    anchor: BoreAnchor = "mouth",
+    profile: Profile | None = None,
     quality: Quality = "fine",
 ) -> BoreResult:
     """Bricht die Mündung einer Bohrung mit einem Kegel, damit ein
@@ -193,8 +195,52 @@ def countersink(
     Der Winkel ist der volle Kopfwinkel — 90 Grad bei einer metrischen
     Senkkopfschraube. Geschnitten wird der Kegel, den dieser Kopf beschreibt —
     darum folgt die Tiefe aus dem Durchmesser, statt abgefragt zu werden.
+
+    **Wohin der Kegel enger wird, folgt aus dem Körper und nicht aus der
+    Achse.** Bis zum 25.08.2026 stand die Richtung je Achse fest: entlang Z und
+    X in die eine, entlang Y in die andere. An drei der sechs Flächen eines
+    Quaders lag der Kegel damit außen in der Luft und trug 0,55 statt 76,8 mm³
+    ab — ohne einen Befund, denn abgetragen wurde die Überlappung, und die ist
+    mehr als nichts. Gefragt wird jetzt, auf welcher Seite von ``position`` das
+    Material liegt (:func:`open_sides`).
+
+    ``anchor`` sagt, was die Position bedeutet — dieselben zwei Werte wie beim
+    Bohren, weil die Frage dieselbe ist. ``mouth`` heißt: sie darf irgendwo in
+    der Bohrung liegen, gesenkt wird an deren Mündung. Das ist der Fall, den
+    eine angeklickte Bohrung erzeugt — sie meldet ihre **Mitte**, und ein Kegel
+    dort ist ein Hohlraum mitten im Material statt einer Fase am Rand.
+    ``centre`` nimmt die Position wörtlich, für den, der sie eintippt.
     """
     depth = diameter / 2.0 / math.tan(math.radians(angle / 2.0))
+    at = np.asarray(position, dtype=float)
+    sides = open_sides(mesh, axis, tuple(at))
+    # Eine Mündung, zwei Mündungen, keine: bei genau einer ist sie gefunden,
+    # sonst entscheidet dieselbe Hüllquader-Regel wie beim Bohren.
+    outward = sides[0] if len(sides) == 1 else -into_the_body(mesh, axis, tuple(at))
+    findings: list[Finding] = []
+    if anchor == "mouth" and sides:
+        at = _at_the_mouth(mesh, axis, at, diameter, outward)
+    if not sides and _inside_the_bounds(mesh, at):
+        # Weder vorwärts noch rückwärts kommt der Strahl heraus: hier ist
+        # Material, keine Bohrung. Der Kegel schneidet dann einen Hohlraum, den
+        # niemand je zu sehen bekommt — genau der Fall, für den ``anchor`` da
+        # ist, nur ohne Bohrung, an die man ihn hängen könnte.
+        findings.append(
+            Finding(
+                code="bore.sink_buried",
+                severity="warning",
+                message=_(
+                    "An dieser Stelle liegt Material und keine Bohrungsmündung — die "
+                    "Senkung würde ein Hohlraum im Teil. Position auf eine Fläche oder "
+                    "in eine Bohrung legen."
+                ),
+                values={"diameter": format_length(diameter)},
+            )
+        )
+
+    narrows = np.zeros(3)
+    narrows[AXIS_INDEX[axis]] = -outward
+
     cone = trimesh.creation.cone(radius=diameter / 2.0, height=depth, sections=BORE_SECTIONS)
     # Der Kegel kommt auf seiner Basis stehend heraus, Spitze nach oben. Eine
     # Senkung ist andersherum: am weitesten an der Fläche, enger werdend ins
@@ -203,16 +249,103 @@ def countersink(
     # zusammenfallen (§39).
     cone.apply_transform(trimesh.transformations.rotation_matrix(math.pi, [1.0, 0.0, 0.0]))
     cone.apply_translation([0.0, 0.0, BOOLEAN_OVERLAP])
-    cone.apply_transform(_axis_alignment(axis))
-    cone.apply_translation(np.asarray(position, dtype=float))
+    cone.apply_transform(trimesh.geometry.align_vectors(np.array([0.0, 0.0, -1.0]), narrows))
+    cone.apply_translation(at)
 
     outcome = boolean("difference", [mesh, MeshData.of(cone)], quality=quality)
+    findings = [*outcome.findings, *findings]
+    # Dieselbe Auskunft wie beim Bohren: eine Senkung neben dem Körper sagt es
+    # (§2.7). Sie war der eigentliche Schaden an der festen Richtung — der
+    # Kegel lag daneben, und niemand erfuhr davon.
+    nothing = without_effect(mesh, outcome.mesh, "difference", profile)
+    if nothing is not None:
+        findings.append(nothing)
     return BoreResult(
         mesh=outcome.mesh,
         solver=outcome.solver,
         diameter=diameter,
-        findings=list(outcome.findings),
+        findings=findings,
     )
+
+
+def open_sides(mesh: MeshData, axis: Axis, position: Vec3) -> tuple[float, ...]:
+    """In welche Richtungen entlang der Achse von hier aus kein Material mehr
+    kommt — als Vorzeichen, also ``()``, ``(-1,)``, ``(1,)`` oder ``(-1, 1)``.
+
+    Gemessen mit zwei Strahlen entlang der Achse, exakt und ohne Raumindex
+    (:func:`app.core.geom.mesh.ray_hit_distances`). Der Unterschied zu
+    :func:`into_the_body` ist der Bezug: dort entscheidet die Hälfte des
+    Hüllquaders, hier der Körper selbst. Für eine Position **in** einer Bohrung
+    ist das der ganze Punkt — die Bohrungsachse trifft kein Dreieck, also sagt
+    der Strahl, wo es hinausgeht.
+
+    Die drei Antworten unterscheiden drei Lagen, und sie auseinanderzuhalten
+    ist der Zweck: eine offene Seite ist eine Sackbohrung und nennt ihre
+    Mündung; zwei offene Seiten sind eine durchgehende Bohrung — oder eine
+    Position weit neben dem Körper; keine offene Seite heißt Material
+    ringsum. Wer nur nach „einer" Richtung fragt, hält die durchgehende
+    Bohrung für vergraben.
+    """
+    triangles = np.asarray(mesh.raw.triangles, dtype=float)
+    if not len(triangles):
+        return ()
+    origin = np.asarray(position, dtype=float)
+    found: list[float] = []
+    for sign in (-1.0, 1.0):
+        direction = np.zeros(3)
+        direction[AXIS_INDEX[axis]] = sign
+        hits = ray_hit_distances(triangles, origin, direction)
+        # Ein Treffer im Rechenrauschen ist die Fläche, auf der die Position
+        # selbst liegt — sonst wäre jede angeklickte Oberseite „zu".
+        if not len(hits) or float(np.max(hits)) <= EPS_GEOM:
+            found.append(sign)
+    return tuple(found)
+
+
+def _inside_the_bounds(mesh: MeshData, position: np.ndarray) -> bool:
+    """Liegt die Position überhaupt im Hüllquader des Körpers?
+
+    Trennt die zwei Fälle, in denen :func:`open_sides` keine **eine** Richtung
+    nennt: mitten im Material (beide Richtungen zu) und weit daneben (beide
+    offen, weil der Strahl den Körper gar nicht kreuzt). Nur der erste ist eine
+    vergrabene Senkung; der zweite trägt nichts ab und wird von
+    :func:`without_effect` gemeldet.
+    """
+    low, high = mesh.bounds.minimum, mesh.bounds.maximum
+    return all(
+        low[index] - EPS_GEOM <= position[index] <= high[index] + EPS_GEOM for index in range(3)
+    )
+
+
+def _at_the_mouth(
+    mesh: MeshData, axis: Axis, position: np.ndarray, diameter: float, outward: float
+) -> np.ndarray:
+    """Schiebt die Position entlang der Achse bis dorthin, wo das Material
+    endet.
+
+    Gemessen an den Eckpunkten **um die Achse herum**: Eine Bohrung bringt ihre
+    Wand mit, und deren äußerster Ring ist die Mündung. Gesucht wird innerhalb
+    des Senkungsradius — weit genug für die Wand einer Bohrung, die unter den
+    Schraubenkopf passt, eng genug, um die Nachbarbohrung nicht mitzunehmen.
+
+    Findet sich dort nichts, bleibt die Position, wo sie ist: Wer eine Fläche
+    anklickt, hat die Mündung schon getroffen, und eine Position ohne Bohrung
+    darunter zu verschieben wäre Raten (Regel 21).
+    """
+    index = AXIS_INDEX[axis]
+    points = np.asarray(mesh.raw.vertices, dtype=float)
+    if not len(points):
+        return position
+    offset = points - position
+    offset[:, index] = 0.0
+    near = np.linalg.norm(offset, axis=1) <= diameter / 2.0
+    ahead = near & ((points[:, index] - position[index]) * outward > EPS_GEOM)
+    if not ahead.any():
+        return position
+    along = points[ahead, index]
+    moved = position.copy()
+    moved[index] = float(np.max(along) if outward > 0.0 else np.min(along))
+    return moved
 
 
 def plug(
@@ -222,6 +355,7 @@ def plug(
     axis: Axis,
     diameter: float,
     depth: float = 0.0,
+    anchor: BoreAnchor = "mouth",
     profile: Profile | None = None,
     quality: Quality = "fine",
 ) -> BoreResult:
@@ -230,13 +364,26 @@ def plug(
     Etwas größer als das Loch, das er füllt — ein Stopfen exakt in Bohrungsgröße
     trifft sie in einer zusammenfallenden Fläche, dem einen Ding, das eine
     Boolesche Op zuverlässig bricht (§39, ``boolean_overlap``).
+
+    ``anchor`` bedeutet dasselbe wie beim Bohren, und aus demselben Grund: Wer
+    eine Mündung anklickt und dort eine Tiefe von 6 mm einträgt, meint sechs
+    Millimeter **ins Material**. Auf die Position zentriert füllte der Stopfen
+    davon die Hälfte, ragte drei Millimeter aus dem Teil heraus und meldete
+    nichts — die Bohrung blieb zur Hälfte offen. Bei einem durchgehenden
+    Stopfen macht es keinen Unterschied.
     """
-    height = depth if depth > EPS_GEOM else _through_length(mesh, axis)
+    through = depth <= EPS_GEOM
+    height = _through_length(mesh, axis) if through else depth
     cylinder = trimesh.creation.cylinder(
         radius=diameter / 2.0 + BOOLEAN_OVERLAP, height=height, sections=BORE_SECTIONS
     )
     cylinder.apply_transform(_axis_alignment(axis))
-    cylinder.apply_translation(np.asarray(position, dtype=float))
+    offset = np.asarray(position, dtype=float)
+    if not through and anchor == "mouth":
+        direction = np.zeros(3)
+        direction[AXIS_INDEX[axis]] = into_the_body(mesh, axis, position)
+        offset = offset + direction * (height / 2.0)
+    cylinder.apply_translation(offset)
 
     # Erst verschneiden: der Stopfen darf nicht aus dem Körper herauswachsen,
     # den er füllt.
@@ -322,8 +469,13 @@ MAX_PLATES = 12
 
 
 def compensate_elephant_foot(
-    mesh: MeshData, profile: Profile, height: float = 0.6, amount: float | None = None
-) -> tuple[MeshData, list[Finding]]:
+    mesh: MeshData,
+    profile: Profile,
+    height: float = 0.6,
+    amount: float | None = None,
+    *,
+    quality: Quality = "fine",
+) -> tuple[MeshData, list[Finding], SolverInfo | None]:
     """Zieht die ersten Schichten um das ein, was die erste Schicht
     auseinanderläuft (§25, §28.3).
 
@@ -342,40 +494,44 @@ def compensate_elephant_foot(
 
     value = profile.material.elephant_foot if amount is None else amount
     if value <= EPS_GEOM:
-        return mesh, []
+        return mesh, [], None
 
     bottom = float(mesh.bounds.minimum[2])
     section = cross_section(mesh, bottom + height / 2.0)
     if section is None or section.is_empty:
-        return mesh, []
+        return mesh, [], None
 
     pulled = section.buffer(-value)
     if pulled.is_empty:
-        return mesh, [
-            Finding(
-                code="prepare.foot_too_small",
-                severity="warning",
-                message=_("Die Aufstandsfläche ist zu klein, um sie noch einzuziehen."),
-                values={"amount_mm": round(value, 3)},
-            )
-        ]
+        return (
+            mesh,
+            [
+                Finding(
+                    code="prepare.foot_too_small",
+                    severity="warning",
+                    message=_("Die Aufstandsfläche ist zu klein, um sie noch einzuziehen."),
+                    values={"amount_mm": round(value, 3)},
+                )
+            ],
+            None,
+        )
 
     # Was weg muss: der Ring zwischen dem echten Umriss und dem eingezogenen,
     # über die Höhe der ersten Schichten.
     ring = section.difference(pulled)
     if ring.is_empty:
-        return mesh, []
+        return mesh, [], None
     parts = [
         trimesh.creation.extrude_polygon(entry, height=height + BOOLEAN_OVERLAP)
         for entry in getattr(ring, "geoms", [ring])
         if isinstance(entry, ShapelyPolygon) and entry.area > EPS_GEOM
     ]
     if not parts:
-        return mesh, []
+        return mesh, [], None
 
     collar = concatenated(parts)
     collar.apply_translation([0.0, 0.0, bottom - BOOLEAN_OVERLAP / 2.0])
-    outcome = boolean("difference", [mesh, mesh.replacing(collar)])
+    outcome = boolean("difference", [mesh, mesh.replacing(collar)], quality=quality)
     findings = list(outcome.findings)
     findings.append(
         Finding(
@@ -385,7 +541,7 @@ def compensate_elephant_foot(
             values={"amount_mm": round(value, 3), "height_mm": round(height, 2)},
         )
     )
-    return outcome.mesh, findings
+    return outcome.mesh, findings, outcome.solver
 
 
 @dataclass(frozen=True, slots=True)
@@ -796,10 +952,10 @@ def _severity_for(
     Gesperrt wird trotzdem nichts: §29 sagt „ein Bericht, keine Sperre". Wer
     trotzdem drucken will, kann das — er weiß dann nur, was er tut.
     """
-    passt = all(
+    fits = all(
         size <= limit + EPS_GEOM for size, limit in zip(bounds.size, allowed.size, strict=True)
     )
-    return "info" if passt and not about_to_write else "warning"
+    return "info" if fits and not about_to_write else "warning"
 
 
 def _verdict_for(

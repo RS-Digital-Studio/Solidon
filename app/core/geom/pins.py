@@ -33,14 +33,14 @@ from typing import Any
 import numpy as np
 
 from app.core.geom.autosplit import sections_across, upright_normal
-from app.core.geom.boolean import boolean
+from app.core.geom.boolean import boolean, deepest
 from app.core.geom.mesh import MeshData, ray_hit_distances
 from app.core.geom.section import SectionPlane
 from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.registry import PARTS
 from app.core.log import get_logger
-from app.core.types import Feature, FeatureId, Finding, Profile, Vec3
+from app.core.types import Feature, FeatureId, Finding, Profile, Quality, SolverInfo, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -137,6 +137,8 @@ class PinnedPair:
     pin_features: dict[FeatureId, Feature] = field(default_factory=dict)
     bore_features: dict[FeatureId, Feature] = field(default_factory=dict)
     findings: list[Finding] = field(default_factory=list)
+    solver: SolverInfo | None = None
+    """Die Rückfallstufe der Schnitte, die die Stifte gesetzt haben (§17.2)."""
 
 
 def plan_pins(
@@ -374,6 +376,7 @@ def add_pins(
     profile: Profile,
     *,
     play: float | None = None,
+    quality: Quality = "fine",
 ) -> PinnedPair:
     """Setzt die Stifte in die eine Hälfte und die Bohrungen in die andere.
 
@@ -443,8 +446,10 @@ def add_pins(
         placed_pin = _along_normal(pin_body, plan.normal, position, pin_offset)
         placed_bore = _along_normal(bore_body, plan.normal, position, bore_offset)
 
-        pair.first = boolean("union", [pair.first, placed_pin]).mesh
-        pair.second = boolean("difference", [pair.second, placed_bore]).mesh
+        raised = boolean("union", [pair.first, placed_pin], quality=quality)
+        drilled = boolean("difference", [pair.second, placed_bore], quality=quality)
+        pair.first, pair.second = raised.mesh, drilled.mesh
+        pair.solver = deepest([pair.solver, raised.solver, drilled.solver])
 
         axis_vector = plan.normal
         pair.pin_features[f"pin_{index}"] = Feature(

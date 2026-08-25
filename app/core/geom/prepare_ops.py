@@ -18,7 +18,8 @@ from app.core.errors import InternalError, ValidationError
 from app.core.geom.boolean import boolean
 from app.core.geom.hollow import VENT_DIAMETER, hollow
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.geom.orient import orient_for_print
+from app.core.geom.ops import as_transform
+from app.core.geom.orient import orient_for_print, print_transform
 from app.core.geom.pins import PIN_COUNT, PIN_MAX, PinnedPair, add_pins, plan_pins
 from app.core.geom.prepare import (
     MAX_PLATES,
@@ -293,6 +294,17 @@ class CountersinkParams(BaseParams):
     axis: str = param(
         title=_("Achse"), default="z", choices=_AXES, doc=_ALONG, placement="advanced"
     )
+    anchor: str = param(
+        title=_("Bezugspunkt"),
+        default="mouth",
+        choices=_ANCHORS,
+        placement="advanced",
+        doc=_(
+            "Was die Position bedeutet: die Mündung der Bohrung, in der gesenkt "
+            "wird, oder die Stelle selbst. Eine angeklickte Bohrung meldet ihre "
+            "Mitte — dort gesenkt entsteht ein Hohlraum statt einer Fase."
+        ),
+    )
 
 
 @register_op(
@@ -318,6 +330,8 @@ def countersink_hole(ctx: OpContext) -> OpResult:
         axis=cast(Axis, params.axis),
         diameter=params.diameter,
         angle=params.angle,
+        anchor=cast(BoreAnchor, params.anchor),
+        profile=ctx.profile,
         quality=ctx.quality,
     )
     return OpResult(
@@ -358,6 +372,16 @@ class PlugParams(BaseParams):
         placement="advanced",
         doc=_("Null füllt durch das ganze Teil."),
     )
+    anchor: str = param(
+        title=_("Bezugspunkt"),
+        default="mouth",
+        choices=_ANCHORS,
+        placement="advanced",
+        doc=_(
+            "Was die Position bedeutet: die Mündung, an der der Stopfen anfängt, "
+            "oder seine Mitte. Bei einem durchgehenden Stopfen ändert es nichts."
+        ),
+    )
 
 
 @register_op(
@@ -379,6 +403,7 @@ def plug_hole(ctx: OpContext) -> OpResult:
         axis=cast(Axis, params.axis),
         diameter=params.diameter,
         depth=params.depth,
+        anchor=cast(BoreAnchor, params.anchor),
         profile=ctx.profile,
         quality=ctx.quality,
     )
@@ -456,9 +481,16 @@ def hollow_object(ctx: OpContext) -> OpResult:
         vents=params.vents,
         vent_diameter=params.vent_diameter,
         open_top=params.open_top,
+        quality=ctx.quality,
+        progress=ctx.progress,
+        cancelled=ctx.cancelled,
     )
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=result.mesh, features={})],
+        # Aushöhlen fährt bis zu sechs Boolesche Schnitte und meldete keine
+        # Stufe. Wer hinterher fragt, was die Wandstärke wert ist, liest sie
+        # hier (§17.2).
+        solver=result.solver,
         # Die Geometriefunktion kennt keine Kennungen — sie rechnet auf einem
         # Netz. Verorten kann die Operation, und sie muss es: zwei ausgehöhlte
         # Körper meldeten zweimal denselben Satz, und im Bericht standen zwei
@@ -506,7 +538,7 @@ def compensate_first_layer(ctx: OpContext) -> OpResult:
     if ctx.profile is None:
         raise InternalError(detail="the elephant foot compensation needs a profile")
 
-    mesh, findings = compensate_elephant_foot(
+    mesh, findings, solver = compensate_elephant_foot(
         as_mesh_data(source.mesh),
         # Das Auseinanderlaufen gehört zum Material, und dieser Körper ist
         # vielleicht nicht im Material des Projekts (§12) — eine TPU-Dichtung
@@ -514,8 +546,11 @@ def compensate_first_layer(ctx: OpContext) -> OpResult:
         for_object(ctx.profile, source),
         height=params.height,
         amount=params.amount or None,
+        quality=ctx.quality,
     )
-    return OpResult(outputs=[dataclasses.replace(source, mesh=mesh)], findings=findings)
+    return OpResult(
+        outputs=[dataclasses.replace(source, mesh=mesh)], findings=findings, solver=solver
+    )
 
 
 @op_params
@@ -793,16 +828,31 @@ def _cut_and_pin(
     if plan is not None and diameter:
         plan = dataclasses.replace(plan, diameter=diameter)
 
+    # **``ctx.profile`` ist nach §9 keine Option**, und die zweite Bedingung
+    # hier war es doch: ``plan is not None and ctx.profile is not None``. Der
+    # ``else``-Zweig dahinter konnte nie laufen — und er warf die Befunde des
+    # Stiftplans weg, also genau die Sätze, die sagen, *warum* aus zwei
+    # verlangten Stiften keiner wurde. Ein toter Zweig, der im Ernstfall das
+    # Falsche getan hätte; mypy nennt ihn seit ``warn_unreachable`` beim Namen.
+    #
+    # Beide Hälften kommen aus diesem einen Körper, das Spiel ist also das
+    # seines Materials.
     pair = (
-        # Beide Hälften kommen aus diesem einen Körper, das Spiel ist also das
-        # seines Materials.
-        add_pins(first, second, plan, for_object(ctx.profile, source), play=play or None)
-        if plan is not None and ctx.profile is not None
+        add_pins(
+            first,
+            second,
+            plan,
+            for_object(ctx.profile, source),
+            play=play or None,
+            quality=ctx.quality,
+        )
+        if plan is not None
         else PinnedPair(first=first, second=second)
     )
 
     first_name, second_name = half_names(source.name, pinned=bool(pair.pin_features))
     return OpResult(
+        solver=pair.solver,
         outputs=[
             dataclasses.replace(
                 source,
@@ -1003,12 +1053,16 @@ def orient_for_print_op(ctx: OpContext) -> OpResult:
         return OpResult(
             outputs=[dataclasses.replace(ctx.inputs[0], mesh=found.mesh)],
             findings=found.findings,
+            # Dieselbe Bewegung, die die Suche gefahren ist — aus derselben
+            # Funktion, damit die zwei nicht auseinanderlaufen können.
+            transform=as_transform(print_transform(mesh, found.best.direction)),
         )
 
     result = orient_for_print(mesh)
     return OpResult(
         outputs=[dataclasses.replace(ctx.inputs[0], mesh=result.mesh)],
         findings=result.findings,
+        transform=as_transform(result.transform),
     )
 
 

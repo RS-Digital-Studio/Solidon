@@ -330,11 +330,24 @@ def distance_to_triangles(triangles: np.ndarray, point: np.ndarray) -> float:
     vergleicht gegen eine Reichweite, und „unendlich" fällt dort heraus, ohne
     dass er einen Sonderfall braucht.
     """
+    gaps = distances_to_triangles(triangles, point)
+    return float(gaps.min()) if len(gaps) else float("inf")
+
+
+def distances_to_triangles(triangles: np.ndarray, point: np.ndarray) -> np.ndarray:
+    """Dasselbe je Dreieck statt als Minimum — ein Abstand für jedes.
+
+    Der Pinsel braucht beides (:mod:`app.core.geom.paint`): das nächste Dreieck
+    als Startpunkt seines Laufes und die einzelnen Abstände als Grenze seines
+    Umfangs. Beides aus derselben Rechnung, und die steht **hier**, weil
+    ``trimesh.triangles`` keine Signaturen trägt und diese Datei die typisierte
+    Engführung dafür ist — dasselbe Muster wie :func:`concatenated`.
+    """
     if not len(triangles):
-        return float("inf")
+        return np.empty(0, dtype=float)
     query = np.repeat(np.asarray(point, dtype=float).reshape(1, 3), len(triangles), axis=0)
     nearest = trimesh.triangles.closest_point(np.asarray(triangles, dtype=float), query)
-    return float(np.linalg.norm(np.asarray(nearest, dtype=float) - query, axis=1).min())
+    return np.asarray(np.linalg.norm(np.asarray(nearest, dtype=float) - query, axis=1), dtype=float)
 
 
 #: Wie viele Eckpunkte höchstens in die konvexe Hülle eingehen

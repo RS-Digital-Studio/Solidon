@@ -25,10 +25,17 @@ import numpy as np
 import trimesh
 
 from app.core.errors import PROGRAMMING_ERRORS
-from app.core.geom.boolean import boolean
+from app.core.geom.boolean import boolean, deepest
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
-from app.core.types import Finding, Vec3
+from app.core.types import (
+    CancelToken,
+    Finding,
+    ProgressFn,
+    Quality,
+    SolverInfo,
+    Vec3,
+)
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -40,6 +47,11 @@ PITCH_SHARE = 1.0 / 3.0
 
 #: Nie feiner als das — ein Raster aus hundert Millionen Zellen hilft niemandem.
 MIN_PITCH = 0.3
+
+#: Wie weit die Entlüftung in den Hohlraum hineinragt, damit sie den Boden
+#: sicher durchstößt. Ein Marching-Cubes-Rand liegt auf einen halben
+#: Rasterschritt genau, und der ist bei der gröbsten Wand 0,3 mm.
+VENT_BREAKTHROUGH = 1.0
 
 #: Vorgabe-Durchmesser der Entlüftung. Weit genug, damit Luft entweicht, eng
 #: genug, dass das Loch danach nicht verschlossen werden muss.
@@ -55,6 +67,13 @@ class HollowResult:
     """Volumen, das entfernt wurde, in mm³."""
     vents: tuple[Vec3, ...] = ()
     findings: list[Finding] = field(default_factory=list)
+    solver: SolverInfo | None = None
+    """Die Rückfallstufe, auf der das Ergebnis zustande kam (§17.2).
+
+    Aushöhlen fährt bis zu sechs Boolesche Schnitte — den Hohlraum, die
+    Öffnung und je einen pro Entlüftung. Gemeldet hat es keine einzige Stufe,
+    und damit stand im Bericht nichts darüber, ob die Wandstärke aus einem
+    exakten Schnitt kommt oder aus einer Voxelnäherung."""
 
 
 def hollow(
@@ -64,6 +83,9 @@ def hollow(
     vents: int = 1,
     vent_diameter: float = VENT_DIAMETER,
     open_top: bool = False,
+    quality: Quality = "fine",
+    progress: ProgressFn | None = None,
+    cancelled: CancelToken | None = None,
 ) -> HollowResult:
     """Lässt eine Wand von ``wall`` Millimetern stehen und nimmt den Rest
     heraus.
@@ -76,6 +98,13 @@ def hollow(
     if wall <= EPS_GEOM:
         raise ValueError("a wall thickness has to be positive")
 
+    # §15.6: Aushöhlen rastert einen ganzen Körper und fährt danach bis zu sechs
+    # Boolesche Schnitte. Das dauert an einem gescannten Teil Minuten, und bis
+    # hierher erfuhr niemand davon — weder wie weit es ist noch dass man
+    # abbrechen kann. Gemeldet wird zwischen den Stufen: eine Stufe selbst ist
+    # ein nativer Aufruf und kooperativ nicht zu unterbrechen (dieselbe Grenze
+    # wie in :func:`app.core.geom.boolean.boolean`).
+    _step(progress, cancelled, 0.05, _("Raster aufbauen"))
     field = _inner_field(mesh, wall)
     cavity = _meshed(field[0], field[1], field[2], mesh) if field is not None else None
     if cavity is None or cavity.triangle_count == 0:
@@ -92,9 +121,11 @@ def hollow(
         )
 
     before = mesh.volume
-    outcome = boolean("difference", [mesh, cavity])
+    _step(progress, cancelled, 0.4, _("Hohlraum ausschneiden"))
+    outcome = boolean("difference", [mesh, cavity], quality=quality)
     body = outcome.mesh
     findings = list(outcome.findings)
+    stages: list[SolverInfo | None] = [outcome.solver]
 
     if open_top and field is not None:
         opening = _mouth(field[0])
@@ -111,15 +142,20 @@ def hollow(
                 )
             )
         else:
-            opened = boolean("difference", [body, tool])
+            opened = boolean("difference", [body, tool], quality=quality)
             body = opened.mesh
             findings.extend(opened.findings)
+            stages.append(opened.solver)
 
     placed: tuple[Vec3, ...] = ()
     # Eine offene Dose ist ihre eigene Entlüftung. Ein Loch im Boden wäre dort
     # kein Schutz vor der durchsackenden Decke, sondern ein Loch im Boden.
     if vents > 0 and not open_top:
-        body, placed = _vent(body, cavity, vent_diameter, vents)
+        _step(progress, cancelled, 0.8, _("Entlüftungen bohren"))
+        body, placed, drilled = _vent(
+            body, cavity, vent_diameter, vents, quality, progress, cancelled
+        )
+        stages.extend(drilled)
         if not placed:
             findings.append(
                 Finding(
@@ -133,6 +169,7 @@ def hollow(
             )
 
     removed = before - body.volume
+    steps, pitch = erosion_steps(wall)
     _log.info("hollowed out %.1f mm³ behind a %.2f mm wall", removed, wall)
     findings.append(
         Finding(
@@ -141,12 +178,46 @@ def hollow(
             message=_("Ausgehöhlt. Die Wandstärke stimmt im Rahmen des Rasters."),
             values={
                 "wall_mm": round(wall, 2),
+                # Was die Erosion wirklich weggenommen hat, und wie weit der
+                # Rasterrand daneben liegen kann. Der Sollwert allein war
+                # keine Auskunft: Er stand auch dort, wo das Raster ihn gar
+                # nicht treffen konnte.
+                "eroded_mm": round(steps * pitch, 3),
+                "tolerance_mm": round(pitch / 2.0, 3),
                 "removed_cm3": round(removed / 1000.0, 1),
                 "vents": len(placed),
             },
         )
     )
-    return HollowResult(mesh=body, removed=removed, vents=placed, findings=findings)
+    worst = abs(steps * pitch - wall) + pitch / 2.0
+    if worst > wall * PITCH_SHARE / 2.0 + EPS_GEOM:
+        # Unter ``MIN_PITCH`` kommt das Raster nicht, also verfehlt eine dünne
+        # Wand das Versprechen „ein Sechstel" — bei 0,5 mm um das Dreifache.
+        # Das gehört gesagt (§2.7), mit dem Handgriff, der es behebt: Der Wert
+        # steht im Dialog, und eine dickere Wand ist ein Zahlendreher weit weg.
+        findings.append(
+            Finding(
+                code="hollow.coarse_grid",
+                severity="warning",
+                message=_(
+                    "Für diese Wandstärke ist das Raster zu grob — die stehende Wand "
+                    "kann spürbar dicker werden als eingetragen. Eine Wand ab einem "
+                    "Millimeter trifft das Raster genau."
+                ),
+                values={
+                    "wall_mm": round(wall, 2),
+                    "eroded_mm": round(steps * pitch, 3),
+                    "worst_case_mm": round(worst, 3),
+                },
+            )
+        )
+    return HollowResult(
+        mesh=body,
+        removed=removed,
+        vents=placed,
+        findings=findings,
+        solver=deepest(stages),
+    )
 
 
 def _inner_field(mesh: MeshData, wall: float) -> tuple[np.ndarray, Vec3, float] | None:
@@ -160,13 +231,40 @@ def _inner_field(mesh: MeshData, wall: float) -> tuple[np.ndarray, Vec3, float] 
 
     from app.core.perceive.maps import solid_field
 
-    pitch = max(wall * PITCH_SHARE, MIN_PITCH)
+    steps, pitch = erosion_steps(wall)
     field = solid_field(mesh, pitch)
-    steps = max(1, round(wall / pitch))
     inner = ndimage.binary_erosion(field.filled, iterations=steps)
     if not inner.any():
         return None
     return inner, field.origin, pitch
+
+
+def erosion_steps(wall: float) -> tuple[int, float]:
+    """Wie oft erodiert wird und mit welcher Rasterweite.
+
+    Eine Zeile Rechnung, und trotzdem eine eigene Funktion: :func:`hollow`
+    **meldet** diese zwei Zahlen, und sie müssen dieselben sein, mit denen
+    gerechnet wurde. Zweimal hingeschrieben wären sie beim ersten Nachbessern
+    an einer Stelle andere.
+
+    Die Weite ist ein Drittel der Wand, aber nie feiner als ``MIN_PITCH``. Wo
+    diese Grenze greift, geht die Wand nicht mehr in ganzen Schritten auf: 0,8
+    mm werden drei Schritte à 0,3, also 0,9 mm Erosion, und 0,5 mm werden zwei
+    Schritte à 0,3, also 0,6 mm. Das ist kein Fehler, den man wegrunden kann —
+    ein feineres Raster **wäre** genauer und ist ausdrücklich nicht gewollt.
+
+    Der Versuch, es andersherum zu rechnen (erst die Schrittzahl, dann
+    ``wall / steps``), ist gemessen worden und war schlechter: Er trifft die
+    Wand rechnerisch exakt und macht dafür das Raster gröber, und die
+    Unschärfe des Rasterrandes wächst schneller, als die Rundung einbringt —
+    an einem 40er Würfel mit 0,5 mm Wand von 30 % auf 50 % Abweichung.
+
+    Was bleibt, gehört deshalb in den Befund und nicht in eine Rundung:
+    ``steps * pitch`` ist der Betrag, der wirklich abgetragen wird, und
+    ``pitch / 2`` die Unschärfe darüber hinaus.
+    """
+    pitch = max(wall * PITCH_SHARE, MIN_PITCH)
+    return max(1, round(wall / pitch)), pitch
 
 
 def _meshed(matrix: np.ndarray, origin: Vec3, pitch: float, like: MeshData) -> MeshData | None:
@@ -198,21 +296,45 @@ def _mouth(matrix: np.ndarray) -> np.ndarray | None:
     return opening if opening.any() else None
 
 
+def _step(
+    progress: ProgressFn | None, cancelled: CancelToken | None, fraction: float, text: object
+) -> None:
+    """Ein Schritt weiter — und die Frage, ob es noch gewollt ist (§15.6)."""
+    if cancelled is not None:
+        cancelled.raise_if_cancelled()
+    if progress is not None:
+        progress(fraction, str(text))
+
+
 def _vent(
-    body: MeshData, cavity: MeshData, diameter: float, count: int
-) -> tuple[MeshData, tuple[Vec3, ...]]:
+    body: MeshData,
+    cavity: MeshData,
+    diameter: float,
+    count: int,
+    quality: Quality,
+    progress: ProgressFn | None = None,
+    cancelled: CancelToken | None = None,
+) -> tuple[MeshData, tuple[Vec3, ...], list[SolverInfo | None]]:
     """Bohrt vom Hohlraum nach unten durch den Boden.
 
     Nach unten mit Absicht: eine Entlüftung in der Bodenfläche sitzt auf der
     Druckplatte, wo sie weder zu sehen noch im Weg ist, und die Luft entweicht
     in der Richtung, in der der Druck wächst.
+
+    **Und nur nach unten** — das stand hier von Anfang an und stimmte nicht.
+    Der Bohrer war so lang wie der ganze Körper plus vier Millimeter und lag
+    mittig darüber: Er kam zwei Millimeter unter dem Boden heraus **und zwei
+    über der Decke**. Aus „einer Entlüftung im Boden" wurde ein durchgehendes
+    Loch, und eine Dose, die zu bleiben hatte, war oben offen. Jetzt endet er
+    im Hohlraum, einen Millimeter über dessen Boden.
     """
     from app.core.geom.transform import apply, translation
 
     inside = cavity.bounds
     outside = body.bounds
+    stages: list[SolverInfo | None] = []
     if inside.size[2] <= EPS_GEOM:
-        return body, ()
+        return body, (), stages
 
     spots: list[Vec3] = []
     for index in range(count):
@@ -224,19 +346,27 @@ def _vent(
 
     drilled = body
     placed: list[Vec3] = []
-    height = float(outside.size[2]) + 4.0
-    for spot in spots:
+    # Von zwei Millimetern unter dem Boden bis knapp in den Hohlraum hinein.
+    bottom = float(outside.minimum[2]) - 2.0
+    top = float(inside.minimum[2]) + VENT_BREAKTHROUGH
+    height = top - bottom
+    if height <= EPS_GEOM:
+        return body, (), stages
+    for index, spot in enumerate(spots, start=1):
+        _step(progress, cancelled, 0.8 + 0.15 * index / len(spots), _("Entlüftungen bohren"))
         tool = trimesh.creation.cylinder(radius=diameter / 2.0, height=height)
         tool = apply(
             MeshData.of(tool),
-            translation((spot[0], spot[1], float(outside.minimum[2]) + height / 2.0 - 2.0)),
+            translation((spot[0], spot[1], bottom + height / 2.0)),
         )
         try:
-            drilled = boolean("difference", [drilled, tool]).mesh
+            outcome = boolean("difference", [drilled, tool], quality=quality)
+            drilled, stage = outcome.mesh, outcome.solver
         except PROGRAMMING_ERRORS:
             raise
         except Exception as problem:  # eine Entlüftung, die nicht geht, ist nicht fatal
             _log.info("vent at %s failed: %s", spot, problem)
             continue
         placed.append(spot)
-    return drilled, tuple(placed)
+        stages.append(stage)
+    return drilled, tuple(placed), stages

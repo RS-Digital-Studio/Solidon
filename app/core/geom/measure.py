@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import RAY_PARALLEL_EPS, MeshData
 from app.core.types import BoundingBox, Vec3
 from app.core.units import EPS_GEOM, round_display
 
@@ -203,7 +203,12 @@ def ray_distances(mesh: MeshData, origin: np.ndarray, direction: np.ndarray) -> 
 
     side = np.cross(direction, edge_two)
     determinant = np.einsum("ij,ij->i", edge_one, side)
-    hits = np.abs(determinant) > EPS_GEOM
+    # ``EPS_GEOM`` sind Millimeter, die Determinante ist ein Spatprodukt aus
+    # drei Vektoren — mit einem Längenmaß verglichen fällt sie bei kleinen
+    # Dreiecken durch, ohne dass der Strahl parallel läge. Dieselbe Rechnung
+    # steht in :func:`app.core.geom.mesh.ray_hit_distances` und hat dort die
+    # dimensionsrichtige Schranke; jetzt beide dieselbe.
+    hits = np.abs(determinant) > RAY_PARALLEL_EPS
     if not hits.any():
         return np.array([])
 

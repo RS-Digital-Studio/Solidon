@@ -22,7 +22,7 @@ from typing import Any, cast
 import trimesh
 
 from app.core.errors import ValidationError
-from app.core.geom.boolean import boolean
+from app.core.geom.boolean import boolean, deepest
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import BOOLEAN_OVERLAP
 from app.core.knowledge.parts.build import face
@@ -32,7 +32,16 @@ from app.core.log import get_logger
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.scene.placement import faces_up
 from app.core.slice.analysis import cross_section
-from app.core.types import BaseParams, Feature, Finding, OpContext, OpResult, SceneObject
+from app.core.types import (
+    BaseParams,
+    Feature,
+    Finding,
+    OpContext,
+    OpResult,
+    Quality,
+    SceneObject,
+    SolverInfo,
+)
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -127,6 +136,36 @@ def _measurable(
     params = dict(feature.params)
     params["diameter"] = round(width, 4)
     return key, dataclasses.replace(feature, params=params)
+
+
+def _collar_feature(
+    cavities: list[Any], z: float, collar: float, clearance: float
+) -> dict[str, Any]:
+    """Das Kragenmerkmal des Deckels — und nichts, wenn es keinen Kragen gibt.
+
+    ``build`` überspringt den Kragen bei ``collar <= EPS_GEOM``: „Null heißt:
+    flacher Deckel ohne Kragen" steht so im Parameter. Das Merkmal wurde
+    trotzdem eingetragen, mitsamt einer Weite. Eine Passung, die darauf zeigt,
+    misst danach Geometrie, die es nicht gibt — und meldet sie als in Ordnung,
+    denn die Zahlen im Merkmal stimmen ja. Ein Merkmal ohne Körper ist die
+    schlechteste Sorte Zusicherung: Sie hält, bis jemand das Teil in der Hand
+    hat.
+    """
+    if collar <= EPS_GEOM:
+        return {}
+    return dict(
+        [
+            _measurable(
+                COLLAR_FEATURE,
+                _area_of(cavities),
+                _centre_of(cavities, z),
+                # Der Kragen ist genau um Spiel und Entlastung schmaler als die
+                # Öffnung — beidseitig, also zweimal. Dieselbe Rechnung, die
+                # ``build`` mit ``buffer`` an der Kontur macht.
+                _narrowest(cavities) - clearance,
+            )
+        ]
+    )
 
 
 def _with_cavity(source: SceneObject, cavities: list[Any], z: float) -> dict[str, Any]:
@@ -248,7 +287,8 @@ def build(
     collar: float,
     clearance: float,
     z: float,
-) -> MeshData:
+    quality: Quality = "fine",
+) -> tuple[MeshData, SolverInfo | None]:
     """Platte plus Kragen, stehend auf dem Rand der Öffnung.
 
     Die Platte deckt den ganzen Umriss ab, damit sie aussieht wie die Box, zu
@@ -275,11 +315,14 @@ def build(
             bodies.append(body)
 
     if len(bodies) == 1:
-        return MeshData.of(bodies[0])
+        return MeshData.of(bodies[0]), None
     joined = MeshData.of(bodies[0])
+    stages: list[SolverInfo | None] = []
     for entry in bodies[1:]:
-        joined = boolean("union", [joined, MeshData.of(entry)]).mesh
-    return joined
+        outcome = boolean("union", [joined, MeshData.of(entry)], quality=quality)
+        joined = outcome.mesh
+        stages.append(outcome.solver)
+    return joined, deepest(stages)
 
 
 @op_params
@@ -371,13 +414,14 @@ def create_lid(ctx: OpContext) -> OpResult:
             )
         clearance = for_object(ctx.profile, source).material.clearance
 
-    body = build(
+    body, solver = build(
         outline,
         cavities,
         thickness=params.thickness,
         collar=params.collar,
         clearance=clearance,
         z=z,
+        quality=ctx.quality,
     )
 
     _log.info("lid over %d cavities at z=%.2f, clearance %.2f", len(cavities), z, clearance)
@@ -386,6 +430,7 @@ def create_lid(ctx: OpContext) -> OpResult:
     # fraß „Deckel erzeugen" das Gehäuse. Die Op-Tests riefen die Funktion
     # direkt auf und sahen es nie; der Ende-zu-Ende-Weg von P13 sah es sofort.
     return OpResult(
+        solver=solver,
         outputs=[
             dataclasses.replace(source, features=_with_cavity(source, cavities, z)),
             SceneObject(
@@ -393,20 +438,7 @@ def create_lid(ctx: OpContext) -> OpResult:
                 name=params.name or f"{source.name} {_('Deckel').translate()}",
                 mesh=body,
                 material=source.material,
-                features=dict(
-                    [
-                        _measurable(
-                            COLLAR_FEATURE,
-                            _area_of(cavities),
-                            _centre_of(cavities, z),
-                            # Der Kragen ist genau um Spiel und Entlastung
-                            # schmaler als die Öffnung — beidseitig, also
-                            # zweimal. Dieselbe Rechnung, die ``build`` mit
-                            # ``buffer`` an der Kontur macht.
-                            _narrowest(cavities) - clearance,
-                        )
-                    ]
-                ),
+                features=_collar_feature(cavities, z, params.collar, clearance),
             ),
         ],
         findings=[
@@ -613,13 +645,16 @@ def screw_lid(ctx: OpContext) -> OpResult:
     # Gang im Material und änderte gar nichts.
     neck = _pipe(core, bore, params.height, z)
     turns = _lifted(thread_body(major, params.pitch, params.height), z)
-    threaded = boolean("union", [mesh, neck], quality=ctx.quality).mesh
-    threaded = boolean("union", [threaded, turns], quality=ctx.quality).mesh
+    with_neck = boolean("union", [mesh, neck], quality=ctx.quality)
+    with_thread = boolean("union", [with_neck.mesh, turns], quality=ctx.quality)
+    threaded = with_thread.mesh
 
-    lid = _screw_cap(major, params, clearance)
+    lid, cap_solver = _screw_cap(major, params, clearance, ctx.quality)
+    solver = deepest([with_neck.solver, with_thread.solver, cap_solver])
 
     _log.info("screw lid: neck %.2f, pitch %.2f, clearance %.2f", major, params.pitch, clearance)
     return OpResult(
+        solver=solver,
         outputs=[
             dataclasses.replace(source, mesh=threaded, features={}),
             SceneObject(
@@ -644,7 +679,9 @@ def screw_lid(ctx: OpContext) -> OpResult:
     )
 
 
-def _screw_cap(major: float, params: ScrewLidParams, clearance: float) -> MeshData:
+def _screw_cap(
+    major: float, params: ScrewLidParams, clearance: float, quality: Quality = "fine"
+) -> tuple[MeshData, SolverInfo | None]:
     """Der Deckel: eine Kappe, deren Innenseite das Gegenstück zum
     Halsgewinde trägt.
 
@@ -674,5 +711,6 @@ def _screw_cap(major: float, params: ScrewLidParams, clearance: float) -> MeshDa
     hollow.apply_translation((0.0, 0.0, (skirt + BOOLEAN_OVERLAP) / 2.0 - BOOLEAN_OVERLAP))
     groove = thread_body(inside, params.pitch, skirt, internal=True)
 
-    cutter = boolean("union", [MeshData.of(hollow), groove], quality="fine").mesh
-    return boolean("difference", [MeshData.of(body), cutter], quality="fine").mesh
+    cutter = boolean("union", [MeshData.of(hollow), groove], quality=quality)
+    cut = boolean("difference", [MeshData.of(body), cutter.mesh], quality=quality)
+    return cut.mesh, deepest([cutter.solver, cut.solver])

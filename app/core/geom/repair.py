@@ -37,6 +37,11 @@ class RepairResult:
     mesh: MeshData
     findings: list[Finding] = field(default_factory=list)
     changed: bool = False
+    """Ob **irgendein** Schritt am Netz etwas verändert hat.
+
+    Nicht „ist jetzt dicht": Ein Netz mit zwei Löchern, von denen nur eines zu
+    überbrücken war, ist verändert und bleibt offen. Beides zugleich zu melden
+    ist richtig; „nichts zu reparieren" daneben wäre der Widerspruch."""
 
 
 def merge_vertices(mesh: MeshData, tolerance: float | None = None) -> tuple[MeshData, int]:
@@ -200,17 +205,30 @@ def fill_holes(mesh: MeshData, stitch: bool = True) -> tuple[MeshData, bool]:
     :func:`stitch_t_junctions`). ``stitch=False`` ist für Aufrufer, die das
     Vernähen selbst schon gefahren haben — ``repair()`` zahlte es sonst
     doppelt, gemessener Faktor 2,1.
+
+    **Das zweite Rückgabestück heißt „es wurde gefüllt", nicht „es ist jetzt
+    dicht".** Der Unterschied ist ein Netz mit zwei Löchern, von denen eines
+    zu groß zum Überbrücken ist: Das kleine wurde geschlossen, das Netz blieb
+    offen, und die alte Antwort war ``False``. Der Bericht meldete daraufhin
+    beides zugleich — „an diesem Netz war nichts zu reparieren" und „das
+    Modell ist weiterhin nicht geschlossen" —, und wer das las, konnte den
+    Widerspruch nicht auflösen, weil beide Sätze auf ihre Art stimmten.
+    Gemessen wird an den offenen Kanten: weniger offene Kanten als vorher heißt
+    gefüllt, ob dicht oder nicht. Ob das Netz danach dicht ist, sagt
+    ``MeshData.is_watertight`` — der Aufrufer hat das Netz ja in der Hand.
     """
     body = mesh.raw.copy()
     if body.is_watertight:
         return mesh, False
+    before = open_edge_count(mesh)
     if stitch:
         stitched, _seams = stitch_t_junctions(mesh.replacing(body))
         body = stitched.raw.copy()
         if body.is_watertight:
             return mesh.replacing(body), True
     trimesh.repair.fill_holes(body)
-    return mesh.replacing(body), bool(body.is_watertight)
+    filled = mesh.replacing(body)
+    return filled, open_edge_count(filled) < before
 
 
 def remove_small_components(
@@ -381,7 +399,7 @@ def repair(
         # **Was nicht getan wurde, gehört in den Bericht** (§2.7). Wer ihn
         # liest, soll nicht annehmen, dass geprüft wurde, was übersprungen
         # wurde.
-        kein_volumen = not result.mesh.raw.is_volume
+        no_volume = not result.mesh.raw.is_volume
         result.mesh, rebuilt = resolve_self_intersections(result.mesh)
         if rebuilt:
             result.changed = True
@@ -392,7 +410,7 @@ def repair(
                     message=_("Selbstdurchdringungen wurden aufgelöst."),
                 )
             )
-        elif kein_volumen:
+        elif no_volume:
             result.findings.append(
                 Finding(
                     code="repair.self_intersections_skipped",

@@ -459,9 +459,10 @@ def test_without_a_measured_value_nothing_happens(profile: Profile) -> None:
     )
     body = block()
 
-    corrected, findings = compensate_elephant_foot(body, flat)
+    corrected, findings, solver = compensate_elephant_foot(body, flat)
 
     assert corrected is body and not findings
+    assert solver is None, "ohne Schnitt gibt es auch keine Rückfallstufe"
 
 
 # --- holes ----------------------------------------------------------------------
