@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -386,5 +387,163 @@ def test_the_range_check_shows_how_far_it_is_and_can_be_stopped(qt_app: QApplica
         dialog._checked(object())
         assert not angelegt, "nach dem Abbruch entsteht kein Baustein"
     finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_a_value_of_zero_still_gets_a_range(qt_app: QApplication) -> None:
+    """Die Vorbelegung muss auch um die Null herum ein Bereich sein.
+
+    ``min(value/2, value)`` und ``max(value*2, value)`` sind bei 0 beide 0 und
+    stehen bei einem negativen Wert verkehrt herum. Beides ergibt
+    ``min == max``: Der Bereichstest fährt dann eine einzige Ecke ab und meldet
+    sie als bestanden — eine Zusage über einen Bereich, den niemand geprüft hat.
+    """
+    document = replace(
+        new_project().document,
+        parameters={
+            "null": Parameter(name="null", value=0.0, unit="mm", title="Versatz"),
+            "minus": Parameter(name="minus", value=-8.0, unit="mm", title="Tiefe"),
+        },
+    )
+    dialog = RecipeDialog(document, {}, (1,), (_feature("hole_1"),), None)  # type: ignore[arg-type]
+    try:
+        for row in dialog._params:
+            assert row.minimum.value() < row.maximum.value(), (
+                f"{row.name}: {row.minimum.value()} bis {row.maximum.value()} ist kein Bereich"
+            )
+            assert row.ordered(), f"{row.name}: die Vorgabe liegt außerhalb"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_limits_the_wrong_way_round_block_the_button(qt_app: QApplication) -> None:
+    """Min 30 bei Max 10 ist kein Bereich — und der Knopf sagt es.
+
+    Der Bereichstest fährt die Ecken zwischen Minimum und Maximum ab. Steht das
+    Minimum darüber, prüft er einen Bereich, den es nicht gibt.
+    """
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    try:
+        dialog.title.setText("Werkbankhalter")
+        assert dialog._save.isEnabled()
+
+        dialog._params[0].minimum.setValue(300.0)
+
+        assert not dialog._save.isEnabled(), "verdrehte Grenzen sperren das Anlegen"
+        assert "größten" in dialog._save.toolTip(), (
+            f"der Grund nennt die Grenzen nicht: {dialog._save.toolTip()!r}"
+        )
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_two_places_may_not_share_one_name(qt_app: QApplication) -> None:
+    """Zwei gleiche Namen überschreiben sich still im Wörterbuch.
+
+    ``capture`` bekommt die Merkmale als ``{öffentlicher Name: Kennung}``. Wer
+    zwei Bohrungen denselben Namen gibt, bekommt einen Baustein mit einer — ohne
+    Meldung, ohne Fehler.
+    """
+    dialog = _dialog(qt_app, (_feature("hole_1"), _feature("hole_2")))
+    try:
+        dialog.title.setText("Werkbankhalter")
+        assert dialog._save.isEnabled()
+
+        dialog._features[0].name.setText("bohrung")
+        dialog._features[1].name.setText("bohrung")
+
+        assert not dialog._save.isEnabled(), "zwei gleiche Namen sperren das Anlegen"
+        assert "denselben Namen" in dialog._save.toolTip()
+
+        dialog._features[1].name.setText("bohrung_2")
+        assert dialog._save.isEnabled(), "verschiedene Namen gehen wieder"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_a_full_disk_says_so_instead_of_falling_through(qt_app: QApplication) -> None:
+    """``OSError`` beim Schreiben ist kein ``AppError`` — und darf nicht durchfallen.
+
+    Volle Platte, Schreibschutz, ein Ordner, den jemand weggezogen hat: ``save``
+    reicht den Fehler durch. Ungefangen verlässt er den Slot, und der Dialog
+    steht mit laufendem Balken da und sagt nichts (Regel 17).
+    """
+    from app.core.knowledge.parts import recipe as recipes
+
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    original = recipes.save
+    try:
+        dialog._show_waiting(True)
+
+        def voll(*_args: object, **_kwargs: object) -> None:
+            raise OSError(28, "No space left on device")
+
+        recipes.save = voll  # type: ignore[assignment]
+        dialog._checked(object())
+
+        assert not dialog._checking, "der Balken bleibt nicht stehen"
+        assert dialog.report.text().strip(), "und der Dialog sagt, was war"
+        assert "space" in dialog.report.text() or "Datei" in dialog.report.text()
+    finally:
+        recipes.save = original  # type: ignore[assignment]
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_a_second_click_does_not_start_a_second_worker(qt_app: QApplication) -> None:
+    """Zwei Klicks, ein Arbeiter — sonst prüft der erste ins Leere.
+
+    Nach einem Fehlschlag gibt ``_update_enabled`` den Knopf wieder frei. Wer
+    dann noch einmal drückt, während die erste Prüfung läuft, überschrieb
+    ``self._worker``: Der erste lief ohne Halter weiter und meldete in einen
+    Dialog, der ihn nicht mehr kennt — und setzte dabei den Balken des zweiten
+    auf null zurück.
+
+    Geprüft wird der Wächter, nicht die Aufnahme: ``capture`` und die
+    Namensprüfung sind hier Attrappen, der Arbeiter dagegen ein echter, der
+    nur nicht fertig wird.
+    """
+    import app.ui.recipe_dialog as module
+
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    started: list[object] = []
+
+    class Endless(module._RangeWorker):  # type: ignore[misc]
+        """Ein Arbeiter, der nicht fertig wird — wie einer, der wirklich rechnet."""
+
+        def work(self) -> None:
+            while not self.is_cancelled:
+                self.msleep(10)
+
+    original_worker = module._RangeWorker
+    original_capture = module.recipes.capture
+    original_taken = module.taken_name
+    original_start = dialog._leash.start
+    try:
+        module._RangeWorker = Endless  # type: ignore[misc]
+        module.recipes.capture = lambda *a, **k: SimpleNamespace(name="werkbankhalter")  # type: ignore[assignment]
+        module.taken_name = lambda name: False  # type: ignore[assignment]
+        dialog._leash.start = lambda worker: (  # type: ignore[method-assign]
+            started.append(worker),
+            original_start(worker),
+        )[-1]
+        dialog.title.setText("Werkbankhalter")
+
+        dialog._store()
+        first = dialog.report.text()
+        dialog._store()
+
+        assert len(started) == 1, f"{len(started)} Arbeiter statt einem: {dialog.report.text()!r}"
+        assert dialog.report.text() == first, "und der zweite Klick hat nichts zurückgesetzt"
+    finally:
+        module._RangeWorker = original_worker  # type: ignore[misc]
+        module.recipes.capture = original_capture  # type: ignore[assignment]
+        module.taken_name = original_taken  # type: ignore[assignment]
+        dialog._leash.start = original_start  # type: ignore[method-assign]
+        dialog.reject()
         dialog.release()
         dialog.deleteLater()

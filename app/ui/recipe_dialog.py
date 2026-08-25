@@ -46,7 +46,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core.errors import AppError
+from app.core.errors import AppError, FileWriteError
 from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
@@ -159,11 +159,18 @@ class _ParamRow:
             # zwanzigtausend, und für ein Maß in Millimetern ist die dritte
             # Stelle ohnehin unter der Druckgenauigkeit.
             spin.setDecimals(2)
+        # **Auch um die Null herum ein Bereich.** Die Hälfte und das Doppelte
+        # sind bei 0 beide 0, und bei einem negativen Wert stehen sie verkehrt
+        # herum — beides ergibt ``min == max``, und der Bereichstest prüft dann
+        # eine einzige Ecke und meldet sie als bestanden. Ein Millimeter Luft
+        # nach beiden Seiten ist keine Wahrheit über das Teil, aber ein
+        # Bereich, den man ansieht und ändert.
+        span = abs(value) or 1.0
         self.minimum.setValue(
-            float(parameter.minimum) if parameter.minimum is not None else min(value / 2, value)
+            float(parameter.minimum) if parameter.minimum is not None else value - span / 2
         )
         self.maximum.setValue(
-            float(parameter.maximum) if parameter.maximum is not None else max(value * 2, value)
+            float(parameter.maximum) if parameter.maximum is not None else value + span
         )
         self.default.setValue(value)
         self.minimum.setAccessibleName(tr("Kleinster Wert"))
@@ -178,6 +185,15 @@ class _ParamRow:
         self.doc = QLineEdit(parent)
         self.doc.setPlaceholderText(tr("Ein Satz: was passiert, wenn man ihn ändert"))
         self.doc.setAccessibleName(tr("Beschreibung"))
+
+    def ordered(self) -> bool:
+        """Ob kleinster, Vorgabe und größter Wert in dieser Reihenfolge stehen.
+
+        Der Bereichstest fährt die Ecken zwischen Minimum und Maximum ab; steht
+        das Minimum darüber, prüft er einen Bereich, den es nicht gibt, und
+        meldet ihn als bestanden.
+        """
+        return self.minimum.value() <= self.default.value() <= self.maximum.value()
 
     def widgets(self) -> tuple[QWidget, ...]:
         return (
@@ -251,6 +267,7 @@ class RecipeDialog(QDialog):
         self._worker: _RangeWorker | None = None
         self._recipe: Any = None
         self._abandoned = False
+        self._checking = False
         """Ob der Dialog verworfen wurde, während der Bereichstest lief."""
 
         self.title = QLineEdit(self)
@@ -367,6 +384,12 @@ class RecipeDialog(QDialog):
             form.addRow(row.take, line)
             row.take.toggled.connect(line.setEnabled)
             row.take.toggled.connect(self._update_enabled)
+            # **Der Knopf muss mitbekommen, was er prüft.** Bis hierher hörte
+            # er nur auf den Haken; die Grenzen prüft er seit heute mit, und
+            # eine Prüfung, die den Wert nicht mitbekommt, spricht über den
+            # Stand von vorhin.
+            for field in (row.minimum, row.default, row.maximum):
+                field.valueChanged.connect(self._update_enabled)
         return _scrolled(box, self)
 
     def _feature_box(self) -> QWidget:
@@ -400,6 +423,7 @@ class RecipeDialog(QDialog):
             form.addRow(row.take, row.name)
             row.take.toggled.connect(row.name.setEnabled)
             row.take.toggled.connect(self._update_enabled)
+            row.name.textChanged.connect(self._update_enabled)
         return _scrolled(box, self)
 
     # --- Zustand --------------------------------------------------------------
@@ -414,20 +438,63 @@ class RecipeDialog(QDialog):
         """
         named = any(row.take.isChecked() for row in self._features)
         adjustable = any(row.take.isChecked() for row in self._params)
-        self._save.setEnabled(bool(self.title.text().strip()) and named and adjustable)
+        ordered = all(row.ordered() for row in self._params if row.take.isChecked())
+        unique = self._unique_feature_names()
+        self._save.setEnabled(
+            bool(self.title.text().strip()) and named and adjustable and ordered and unique
+        )
         self._save.setToolTip(
-            ""
-            if self._save.isEnabled()
-            else tr(
-                "Zum Anlegen fehlt: ein Name, mindestens eine anklickbare Stelle "
-                "und mindestens ein einstellbares Maß."
-            )
+            "" if self._save.isEnabled() else self._why_locked(named, adjustable, ordered, unique)
         )
 
     # --- Anlegen --------------------------------------------------------------
 
+    def _unique_feature_names(self) -> bool:
+        """Ob jede freigegebene Stelle einen eigenen Namen trägt.
+
+        Die Namen werden zu Schlüsseln eines Wörterbuchs, und zwei gleiche
+        überschreiben sich dort **still**: Der Kunde gibt zwei Bohrungen
+        denselben Namen und bekommt einen Baustein mit einer.
+        """
+        chosen = [
+            row.name.text().strip() or row.feature_id
+            for row in self._features
+            if row.take.isChecked()
+        ]
+        return len(chosen) == len(set(chosen))
+
+    def _why_locked(self, named: bool, adjustable: bool, ordered: bool, unique: bool) -> str:
+        """Warum der Knopf nicht kann — der erste Grund, der zutrifft.
+
+        Einer und nicht alle: Vier Sätze auf einmal liest niemand, und wer den
+        ersten behebt, bekommt den nächsten. Die Reihenfolge folgt dem Weg
+        durch den Dialog, von oben nach unten.
+        """
+        if not self.title.text().strip():
+            return str(tr("Der Baustein braucht einen Namen."))
+        if not adjustable:
+            return str(tr("Geben Sie mindestens ein Maß frei — sonst ist das Teil starr."))
+        if not ordered:
+            return str(
+                tr("Ein kleinster Wert steht über seinem größten. Drehen Sie die beiden um.")
+            )
+        if not named:
+            return str(tr("Geben Sie mindestens eine Stelle frei, an der man das Teil anfasst."))
+        if not unique:
+            return str(tr("Zwei Stellen tragen denselben Namen — jede braucht einen eigenen."))
+        return ""
+
     def _store(self) -> None:
         """Rezept schneiden, Bereich prüfen, ablegen — in dieser Reihenfolge."""
+        # **Nur einer läuft — und die Frage steht vor allem anderen.** Nach
+        # einem Fehlschlag gibt ``_update_enabled`` den Knopf wieder frei, und
+        # ein zweiter Klick startete einen zweiten Arbeiter: ``self._worker``
+        # wurde überschrieben, der erste lief ohne Halter weiter und meldete in
+        # einen Dialog, der ihn nicht mehr kennt. Gefragt wird ganz oben, denn
+        # weiter unten hätte der zweite Klick den Balken des ersten schon auf
+        # null zurückgesetzt und seinen Satz überschrieben.
+        if self._worker is not None and self._worker.isRunning():
+            return
         title = self.title.text().strip()
         try:
             self._recipe = recipes.capture(
@@ -498,6 +565,11 @@ class RecipeDialog(QDialog):
 
     def _show_waiting(self, running: bool) -> None:
         """Balken, Zahl und Abbrechen gehören zusammen — sichtbar oder nicht."""
+        # **Der Zustand steht hier, nicht in ``isVisible()``.** Ein Kind eines
+        # ungezeigten Fensters meldet ``False``, obwohl es gesetzt ist — im
+        # Betrieb fällt das nie auf, im Test sofort. Und die Frage lautet
+        # ohnehin „läuft eine Prüfung?", nicht „sieht man den Balken?".
+        self._checking = running
         for widget in (self.progress, self.percent, self.stop_check):
             widget.setVisible(running)
         if running:
@@ -526,7 +598,7 @@ class RecipeDialog(QDialog):
 
     def _checked(self, checked: Any) -> None:
         """Der Bereichstest ist durch — ablegen und registrieren."""
-        if self._abandoned or not self.progress.isVisible():
+        if self._abandoned or not self._checking:
             # Nicht mehr gefragt: Der Dialog ist zu, oder jemand hat die
             # Prüfung abgebrochen und das Ergebnis kommt hinterher.
             return
@@ -537,6 +609,19 @@ class RecipeDialog(QDialog):
             recipes.register(checked)
         except AppError as error:
             self._failed(error)
+            return
+        except OSError as problem:
+            # **Der Datenträger ist kein AppError.** Volle Platte, Schreibschutz,
+            # ein Ordner, den jemand weggezogen hat: ``save`` reicht den
+            # ``OSError`` durch, und ungefangen verlässt er den Slot — die
+            # Oberfläche steht dann mit laufendem Balken da und sagt nichts
+            # (Regel 17).
+            self._failed(
+                FileWriteError(
+                    target=str(getattr(checked, "name", "")),
+                    detail=str(problem),
+                )
+            )
             return
         report = getattr(checked, "range_report", None)
         passed = getattr(report, "passed", None)
@@ -553,7 +638,7 @@ class RecipeDialog(QDialog):
         self.accept()
 
     def _failed(self, error: object) -> None:
-        self.progress.setVisible(False)
+        self._show_waiting(False)
         self._update_enabled()
         title = getattr(error, "title", None)
         detail = getattr(error, "detail", "") or ""
