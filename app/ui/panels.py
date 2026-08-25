@@ -51,7 +51,7 @@ from app.core.errors import (
     AppError,
 )
 from app.core.log import get_logger
-from app.core.registry import REGISTRY
+from app.core.registry import MENU_GROUPS, REGISTRY
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Feature, Finding, ObjectId
 from app.core.units import LengthUnit
@@ -99,11 +99,25 @@ def folded_groups(sizes: dict[str, int], limit: int = MAX_MENU_ROWS, fixed: int 
     auf 2 von 3). Eine Frage, die eine Funktion beantworten kann, bekommt kein
     Fenster.
 
-    Gefaltet wird von der größten Gruppe abwärts und nur so weit, bis der Rest
-    in die Grenze passt. Eine Gruppe mit einem einzigen Eintrag wird **nie**
-    gefaltet: Ihr Untermenü spart keine Zeile und kostet einen Klick. Bleibt
-    das Menü danach zu lang, bleibt es zu lang — ein Aufklappen, das nichts
-    bündelt, macht es nicht kürzer, sondern nur tiefer.
+    Gefaltet wird nur so weit, bis der Rest in die Grenze passt. Eine Gruppe
+    mit einem einzigen Eintrag wird **nie** gefaltet: Ihr Untermenü spart keine
+    Zeile und kostet einen Klick. Bleibt das Menü danach zu lang, bleibt es zu
+    lang — ein Aufklappen, das nichts bündelt, macht es nicht kürzer, sondern
+    nur tiefer.
+
+    **Welche Gruppe es trifft, entscheidet die Reihenfolge der Menüleiste.**
+    Genügt eine Gruppe allein, um unter die Grenze zu kommen, fällt die
+    **hinterste** aus ``MENU_GROUPS`` — die Leiste ordnet von häufig nach
+    vorbereitend, und wer falten muss, faltet hinten. Genügt keine allein,
+    fällt die größte, sonst käme die Rechnung nicht voran.
+
+    Vorher entschied allein die Größe, und das war am Flächenklick die falsche
+    Frage: Nach „Bausteine" fehlte genau **eine** Zeile, und die größte der
+    übrigen ist „Ändern" — mit der Bohrung darin, also genau dem Eintrag,
+    dessen zweiter Klick den Umbau vom 24.08.2026 ausgelöst hat. Gefaltet wird
+    stattdessen „Vorbereiten": zwei Einträge, hinten in der Leiste, eine
+    gesparte Zeile. Eine Gruppe, die ``MENU_GROUPS`` nicht kennt, steht hinten
+    — dieselbe Antwort, die ``group_title`` einer unbekannten Kategorie gibt.
 
     ``fixed`` sind Zeilen, die mitzählen, aber nie gefaltet werden können —
     im Bausteine-Untermenü die Einträge, die zu keinem Baustein der Bibliothek
@@ -120,13 +134,34 @@ def folded_groups(sizes: dict[str, int], limit: int = MAX_MENU_ROWS, fixed: int 
     if len(sizes) < 2 and not fixed:
         return []
     rows = sum(sizes.values()) + fixed
+    # Nur Gruppen ab zwei Einträgen: eine von eins spart keine Zeile.
+    foldable = {title: count for title, count in sizes.items() if count > 1}
     folded: list[str] = []
-    for title in sorted(sizes, key=lambda name: (-sizes[name], name)):
-        if rows <= limit or sizes[title] < 2:
-            break
+    while rows > limit and foldable:
+        missing = rows - limit
+        enough = [title for title, count in foldable.items() if count - 1 >= missing]
+        if enough:
+            # Die hinterste, die allein genügt; bei gleichem Platz die größere,
+            # und ganz zuletzt der Name, damit die Antwort eindeutig bleibt.
+            title = min(enough, key=lambda name: (-_menu_rank(name), -foldable[name], name))
+        else:
+            title = min(foldable, key=lambda name: (-foldable[name], name))
         folded.append(title)
-        rows -= sizes[title] - 1
+        rows -= foldable.pop(title) - 1
     return folded
+
+
+def _menu_rank(title: str) -> int:
+    """Wo diese Gruppe in der Reihenfolge der Menüleiste steht.
+
+    Kennt ``MENU_GROUPS`` den Titel nicht, steht er hinten — dieselbe Antwort,
+    die ``group_title`` einer unbekannten Kategorie gibt, und aus demselben
+    Grund: Eine neue Kategorie soll auftauchen und nicht verschwinden.
+    """
+    for position, (menu_title, _categories) in enumerate(MENU_GROUPS):
+        if str(menu_title) == title:
+            return position
+    return len(MENU_GROUPS)
 
 
 #: In welcher Reihenfolge die Schweregrade stehen. Die Zeile über der Liste
@@ -1159,15 +1194,22 @@ class ObjectTree(QWidget):
         Klick für nichts. Wiederverwenden ließ sie sich nicht: Sie rechnet
         über die Gruppen der Leiste, hier geht es um die eines Merkmals.
 
-        **Die Grenze gilt den Operationen, nicht dem ganzen Menü.** Über
-        diesen Einträgen stehen noch Sichtbarkeit und der Skizzenschritt;
-        am Flächenklick sind es damit zwölf Zeilen und zwei Trennstriche
-        statt zehn. Das ist bewusst so: Wer die drei mitzählte, müsste eine
-        zweite Gruppe falten, und die erste, die dran wäre, ist „Ändern" —
-        darin liegt die Bohrung, also genau der Eintrag, dessen zweiter Klick
-        diesen Umbau ausgelöst hat.
+        **Die Grenze gilt dem ganzen Menü, nicht nur den Operationen.** Über
+        diesen Einträgen stehen noch Sichtbarkeit und der Skizzenschritt, und
+        am Flächenklick ergab das dreizehn Zeilen gegen eine Grenze von zwölf.
+        Sie zählen deshalb mit — gezählt am **gebauten** Menü und nicht als
+        Zahl im Code: Beide Schritte darüber sind an Bedingungen geknüpft, und
+        eine Konstante wäre in dem Augenblick falsch, in dem einer von ihnen
+        ausbleibt. Trennstriche zählen nicht, sie sind keine Zeile, auf die man
+        zeigt.
+
+        Wer die drei mitzählt, muss eine zweite Gruppe falten — und die darf
+        nicht „Ändern" sein, mit der Bohrung darin. Welche es wird, entscheidet
+        ``folded_groups`` an der Reihenfolge der Menüleiste; hier steht nur die
+        Zahl, gegen die es rechnet.
         """
-        if len(entries) <= MAX_MENU_ROWS:
+        fixed = sum(1 for action in menu.actions() if not action.isSeparator())
+        if len(entries) + fixed <= MAX_MENU_ROWS:
             for spec in entries:
                 self._add_operation(menu, spec, kinds)
             return
@@ -1176,13 +1218,13 @@ class ObjectTree(QWidget):
         for spec in entries:
             groups.setdefault(group_title(str(spec.category)), []).append(spec)
 
-        # Die größten zuerst zusammenfalten: Jede gefaltete Kategorie spart
-        # ihre Einträge minus die eine Zeile, die ihr Untermenü kostet. Eine
-        # Kategorie mit einem Eintrag spart nichts und wird deshalb nie
-        # gefaltet — auch dann nicht, wenn es danach immer noch zu lang ist.
-        # Dann ist das Menü eben lang; ein Aufklappen, das nichts bündelt,
-        # macht es nicht kürzer, sondern nur tiefer.
-        folded = folded_groups({title: len(found) for title, found in groups.items()})
+        # Jede gefaltete Kategorie spart ihre Einträge minus die eine Zeile,
+        # die ihr Untermenü kostet. Eine Kategorie mit einem Eintrag spart
+        # nichts und wird deshalb nie gefaltet — auch dann nicht, wenn es
+        # danach immer noch zu lang ist. Dann ist das Menü eben lang; ein
+        # Aufklappen, das nichts bündelt, macht es nicht kürzer, sondern nur
+        # tiefer.
+        folded = folded_groups({title: len(found) for title, found in groups.items()}, fixed=fixed)
 
         direct = [spec for spec in entries if group_title(str(spec.category)) not in folded]
         for spec in direct:

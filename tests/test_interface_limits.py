@@ -217,16 +217,22 @@ def test_a_group_of_one_never_becomes_a_submenu() -> None:
 
 
 #: Was am Flächenklick über den Operationen steht: Sichtbarkeit und der
-#: Skizzenschritt. Keine Operationen — deshalb zählt ``_menu`` sie nicht mit.
+#: Skizzenschritt. Keine Operationen, aber Zeilen — und die Grenze gilt dem
+#: Menü. ``_add_operations`` zählt sie am gebauten Menü ab; hier steht der
+#: ungünstigste Fall, in dem alle drei da sind.
 FIXED_CONTEXT_ROWS = 3
 
 
 def context_rows(kind: str) -> tuple[int, list[str]]:
     """Wie viele Zeilen das Kontextmenü eines Merkmals zeigt, und was es faltet.
 
-    Gerechnet wie ``PropertiesPanel._menu``: direkte Einträge plus eine Zeile
-    je gefaltetem Untermenü. Ohne Qt, weil ein Fenster hier nichts beiträgt und
-    die Abrissquote der ganzen Datei hebt (gemessen am 24.08.2026).
+    Gerechnet wie ``PropertiesPanel._add_operations``: direkte Einträge plus
+    eine Zeile je gefaltetem Untermenü, und die festen Zeilen zählen beim
+    Falten mit. Zurück kommen die **Operationszeilen** — wer die ganze Menülänge
+    will, zählt ``FIXED_CONTEXT_ROWS`` dazu.
+
+    Ohne Qt, weil ein Fenster hier nichts beiträgt und die Abrissquote der
+    ganzen Datei hebt (gemessen am 24.08.2026).
     """
     from app.core.registry.surfaces import group_title
     from app.ui.panels import folded_groups
@@ -237,7 +243,7 @@ def context_rows(kind: str) -> tuple[int, list[str]]:
             title = group_title(str(spec.category))
             sizes[title] = sizes.get(title, 0) + 1
 
-    folded = folded_groups(sizes)
+    folded = folded_groups(sizes, fixed=FIXED_CONTEXT_ROWS)
     rows = sum(count for title, count in sizes.items() if title not in folded) + len(folded)
     return rows, folded
 
@@ -256,29 +262,28 @@ def test_the_context_menu_stays_within_its_rows() -> None:
     Gezählt wird deshalb, was das Register hergibt, und bis zur fertigen
     Menülänge.
 
-    **Und dann sind da die drei festen Zeilen.** ``_menu`` zählt sie bewusst
-    nicht mit (es ruft ``folded_groups`` ohne ``fixed``), und der Grund steht
-    dort: Wer sie mitzählte, müsste eine zweite Gruppe falten, und die nächste
-    wäre „Ändern" — mit der Bohrung darin, also genau dem Eintrag, dessen
-    zweiter Klick den ganzen Umbau ausgelöst hat. Die Ausnahme ist damit eine
-    Entscheidung und kein Versehen; dieser Test hält sie **fest**, damit sie
-    nicht unbemerkt weiterwächst.
+    **Und die drei festen Zeilen zählen mit.** Sie taten es lange nicht, und
+    das Flächenmenü stand damit auf dreizehn Zeilen gegen eine Grenze von
+    zwölf — geführt als dokumentierte Ausnahme, weil die zweite Gruppe, die
+    sonst fiele, „Ändern" gewesen wäre: mit der Bohrung darin, also genau dem
+    Eintrag, dessen zweiter Klick den ganzen Umbau ausgelöst hat.
+
+    Die Ausnahme ist am 25.08.2026 aufgelöst worden, und zwar an der Stelle,
+    an der sie entstand: ``folded_groups`` faltet nicht mehr die größte Gruppe,
+    sondern die hinterste, die allein genügt. Am Flächenklick ist das
+    „Vorbereiten" — zwei Einträge, eine gesparte Zeile, zwölf statt dreizehn,
+    und „Ändern" steht weiter offen. Kein Eintrag ist dabei tiefer gerutscht,
+    der vorher oben stand.
     """
     from app.ui.panels import MAX_MENU_ROWS
 
     for kind in ("face", "hole"):
         rows, _ = context_rows(kind)
         assert rows, f"{kind}: no operation offers itself at all"
-        assert rows <= MAX_MENU_ROWS, (
-            f"{kind}: the menu folds down to {rows} rows, the limit is {MAX_MENU_ROWS}"
+        assert rows + FIXED_CONTEXT_ROWS <= MAX_MENU_ROWS, (
+            f"{kind}: the menu shows {rows} operation rows plus {FIXED_CONTEXT_ROWS} fixed "
+            f"ones, the limit is {MAX_MENU_ROWS} — fold another group or take a fixed row out"
         )
-
-    face_rows, _ = context_rows("face")
-    assert face_rows + FIXED_CONTEXT_ROWS <= MAX_MENU_ROWS + 1, (
-        f"the face menu shows {face_rows} operation rows plus {FIXED_CONTEXT_ROWS} fixed "
-        f"ones. One row over {MAX_MENU_ROWS} is the documented exception, two are not — "
-        "either fold a second group or take a fixed row out"
-    )
 
 
 def test_nothing_is_folded_that_did_not_have_to_be() -> None:
@@ -292,7 +297,9 @@ def test_nothing_is_folded_that_did_not_have_to_be() -> None:
 
     Geprüft wird deshalb rückwärts: Jede gefaltete Gruppe wieder aufgemacht
     muss die Grenze sprengen. Tut sie es nicht, war ihre Faltung ein Klick ohne
-    Not.
+    Not. Gerechnet wird gegen die **ganze** Menülänge, seit die festen Zeilen
+    mitzählen — sonst gälte die Gegenrichtung gegen eine andere Zahl als die
+    Grenze selbst, und „Vorbereiten" sähe wie eine Faltung ohne Not aus.
     """
     from app.ui.panels import MAX_MENU_ROWS
 
@@ -302,12 +309,46 @@ def test_nothing_is_folded_that_did_not_have_to_be() -> None:
             count = _group_size(kind, title)
             # Diese eine Gruppe aufgemacht: ihre Einträge stehen dann direkt da,
             # die eine Zeile ihres Untermenüs fällt weg.
-            unfolded = rows - 1 + count
+            unfolded = rows - 1 + count + FIXED_CONTEXT_ROWS
             assert unfolded > MAX_MENU_ROWS, (
                 f"{kind}: '{title}' is folded away, but leaving it open would give "
                 f"{unfolded} rows — that fits in {MAX_MENU_ROWS}, so the submenu costs "
                 "a click for nothing"
             )
+
+
+def test_the_drill_stays_one_click_away_on_a_face() -> None:
+    """Am Flächenklick steht die Bohrung direkt im Menü, nicht in einem Untermenü.
+
+    Das ist die Entscheidung vom 25.08.2026 und der Grund, aus dem
+    ``folded_groups`` nach der Reihenfolge der Menüleiste faltet statt nach der
+    Größe. Als die drei festen Zeilen mitzuzählen begannen, fehlte nach
+    „Bausteine" genau eine weitere Zeile — und die größte der übrigen Gruppen
+    ist „Ändern", die mit der Bohrung darin. Sie zu falten hätte genau den
+    zweiten Klick zurückgebracht, den der Umbau vom 24.08.2026 abgeschafft hat.
+
+    Der Test daneben zählt nur Zeilen und wäre auch dann grün: Zwölf Zeilen
+    sind zwölf Zeilen, gleich welche Gruppe zugeklappt ist. Diese Zusage ist
+    eine andere, und sie braucht ihren eigenen Test.
+
+    Gefragt wird an der **Operation** und nicht am Gruppennamen: Wer
+    ``drill_hole`` später in eine andere Kategorie hängt, soll hier eine
+    Antwort bekommen und keine stille Lücke.
+    """
+    from app.core.registry.surfaces import group_title
+
+    drill = next((spec for spec in REGISTRY.all() if str(spec.name) == "drill_hole"), None)
+    assert drill is not None, "drill_hole is gone from the registry — this test lost its subject"
+    assert "face" in (drill.applies_to or ()), (
+        "drill_hole no longer offers itself on a face — this test lost its subject"
+    )
+
+    _, folded = context_rows("face")
+    group = group_title(str(drill.category))
+    assert group not in folded, (
+        f"the face menu folds '{group}' away, and the drill sits in it — that is the second "
+        "click the rebuild of 2026-08-24 removed"
+    )
 
 
 def _group_size(kind: str, title: str) -> int:
