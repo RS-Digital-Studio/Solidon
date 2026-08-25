@@ -516,7 +516,13 @@ def detail(spec: PartSpec | None) -> str:
     if spec is None:
         return tr("Wählen Sie einen Baustein — hier steht dann, was er tut.")
 
-    lines = [f"<b>{spec.title}</b>", "", str(spec.doc), ""]
+    # Maskiert, denn die Spalte ist RichText und Titel wie Beschreibung sind
+    # bei Rezepten Kundeneingaben — und mitgereiste kommen aus fremden
+    # Dateien: „<b>Halter" zerrisse sonst die Anzeige, statt dazustehen
+    # (Fund des Gesamtreviews vom 25.08.2026).
+    from html import escape
+
+    lines = [f"<b>{escape(str(spec.title))}</b>", "", escape(str(spec.doc)), ""]
     if spec.subtractive:
         lines.append(f"{SUBTRACTIVE_MARKER} {tr('nimmt Material weg')}")
     if spec.own:
@@ -534,8 +540,8 @@ def detail(spec: PartSpec | None) -> str:
 
     lines.append(f"<b>{tr('Parameter')}</b>")
     for entry in spec.params.spec():
-        unit = f" [{entry.unit}]" if entry.unit else ""
-        lines.append(f"· {entry.title}{unit}")
+        unit = f" [{escape(str(entry.unit))}]" if entry.unit else ""
+        lines.append(f"· {escape(str(entry.title))}{unit}")
     return "<br>".join(lines)
 
 

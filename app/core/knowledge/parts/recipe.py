@@ -465,12 +465,16 @@ def register(
 
 
 def _default_profile() -> Profile:
-    """Das Profil für Vorschau und Bereichstest, wo keines mitkommt."""
+    """Das Profil für Vorschau und Bereichstest, wo keines mitkommt.
+
+    ``make_profile()`` ohne Argumente — also die **Vorgaben** der Anwendung,
+    nicht das erste Paar der Titelsortierung: Die nahm ABS statt PLA, und
+    damit rechneten Vorschaubild und Bereichstest jedes Rezepts mit
+    ABS-Toleranzen (Fund des Gesamtreviews vom 25.08.2026).
+    """
     from app.core.knowledge import profiles
 
-    printers = profiles.printer_profiles()
-    materials = profiles.material_profiles()
-    return profiles.make_profile(next(iter(printers)), next(iter(materials)))
+    return profiles.make_profile()
 
 
 # --- Ablage im Nutzerordner -------------------------------------------------------
@@ -737,26 +741,28 @@ def adopt(
             if local.version == mark:
                 return []
             name = f"{arrived.name}_travelled"
+            # Verglichen wird der Abdruck der **umbenannten** Fassung: Der
+            # Name gehört zu den kanonischen Daten, und ein Vergleich gegen
+            # den unumbenannten Abdruck wäre nie gleich — jedes erneute
+            # Öffnen tauschte dann ein identisches Rezept gegen sich selbst.
+            arrived = dataclasses.replace(arrived, name=name)
+            mark = fingerprint(arrived)
             if source.has(name):
                 # Noch einmal geöffnet in derselben Sitzung — oder zwei
                 # Projekte mit demselben fremden Rezept: derselbe Abdruck
-                # heißt dasselbe Rezept, ein anderer bleibt ein Befund statt
-                # einer endlosen Namensreihe.
+                # heißt dasselbe Rezept, nichts zu tun. Ein **anderer**
+                # Abdruck tauscht den mitgereisten Eintrag aus, samt seiner
+                # Operation: Die zuletzt geöffnete Datei gilt. Vorher stand
+                # hier eine Absage mit dem Rat, das andere Projekt zu
+                # schließen — ein Mittel ohne Wirkung, denn Schließen meldet
+                # nichts ab (Fund des Gesamtreviews vom 25.08.2026).
                 if source.get(name).version == mark:
                     return []
-                raise ValidationError(
-                    field="recipe",
-                    detail=_(
-                        "Zwei verschiedene mitgereiste Fassungen desselben "
-                        "Bausteins in einer Sitzung — die zweite wird nicht "
-                        "aufgenommen. Schließen Sie das andere Projekt und "
-                        "öffnen Sie diese Datei erneut."
-                    ),
-                    values={"recipe": arrived.name},
-                    constraint="exists",
-                    suggestions=(CANCEL,),
-                )
-            arrived = dataclasses.replace(arrived, name=name)
+                from app.core.knowledge.parts import ops as part_ops
+                from app.core.registry import REGISTRY
+
+                source.remove(name)
+                (registry or REGISTRY).remove(part_ops.op_name(name))
         register(arrived, source, registry, source=TRAVELLED_SOURCE)
         return []
     except Exception as problem:  # Regel 17: Befund statt Abbruch

@@ -873,3 +873,34 @@ def test_replace_rolls_back_when_the_disk_refuses(profile: Profile, tmp_path: Pa
     assert parts.get("probe_halter").version == old_version, (
         "nach dem Fehlschlag gilt wieder der alte Stand"
     )
+
+
+def test_a_newer_travelled_version_swaps_the_older_one(profile: Profile, tmp_path: Path) -> None:
+    """Zwei Projekte, zwei Fassungen desselben fremden Rezepts: Die zuletzt
+    geöffnete gilt. Vorher stand hier eine Absage mit dem Rat, das andere
+    Projekt zu schließen — ein Mittel ohne Wirkung, denn Schließen meldet
+    nichts ab (Fund des Gesamtreviews vom 25.08.2026)."""
+    import dataclasses
+
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    try:
+        made = recipe.range_check(_recipe(profile), profile)
+        # Lokal liegt ein eigener Stand — beide Ankömmlinge landen als
+        # ``_travelled`` daneben.
+        recipe.register(dataclasses.replace(made, doc="lokal"))
+
+        first = dataclasses.replace(made, doc="erste fremde Fassung")
+        second = dataclasses.replace(made, doc="zweite fremde Fassung")
+        assert recipe.adopt(recipe.file_data(first)) == []
+        assert recipe.adopt(recipe.file_data(second)) == [], "kein Befund, ein Tausch"
+
+        arrived = PARTS.get("probe_halter_travelled")
+        renamed = dataclasses.replace(second, name="probe_halter_travelled")
+        assert arrived.version == recipe.fingerprint(renamed), "die neuere Fassung gilt"
+        # Und dieselbe Fassung noch einmal ist ein stiller Kurzschluss, kein Tausch.
+        assert recipe.adopt(recipe.file_data(second)) == []
+        assert REGISTRY.has(part_ops.op_name("probe_halter_travelled"))
+    finally:
+        _clean_globals("probe_halter", "probe_halter_travelled")
