@@ -755,29 +755,85 @@ def test_the_widened_focus_ring_would_still_cut_the_popup(qt_app: object) -> Non
     )
 
 
-def test_the_focus_ring_never_changes_the_size_of_a_field() -> None:
-    """Die Fokusregel spricht über die Farbe, nicht über die Breite.
+#: Rahmenbreite und Strichart einer Stylesheet-Regel.
+_BORDER = re.compile(r"border:\s*(\d+)px\s+(\w+)")
 
-    Die Messung darüber braucht ein gebautes Fenster; diese hier liest die
-    Regel selbst und bleibt auch dann noch stehen, wenn Qt sein Verhalten
-    ändert. Beides zusammen: der eine Test sagt, dass es wirkt, der andere,
-    warum es so geschrieben ist.
+
+def _field_border(sheet: str, state: str) -> tuple[int, str]:
+    """Breite und Strichart des Feldrahmens in diesem Zustand.
+
+    Nennt die Zustandsregel keinen ganzen Rahmen — sie darf sich auf
+    ``border-color`` beschränken —, gilt der Ruhezustand weiter. Das ist keine
+    Feinheit: Ohne diesen Rückfall prüfte der Breitentest darüber wieder die
+    **Bauart** („in der Fokusregel steht ein ``border:``") statt der Zusage
+    („die Breite ändert sich nicht"), und eine zulässige Schreibweise wäre rot.
+    """
+    rest = sheet.split("QLineEdit, QSpinBox")[1].split("}")[0]
+    grund = _BORDER.search(rest)
+    assert grund, f"die Grundregel der Eingabefelder nennt keinen Rahmen: {rest.strip()}"
+    if state != "focus":
+        return int(grund.group(1)), grund.group(2)
+    rule = sheet.split("QLineEdit:focus")[1].split("}")[0]
+    found = _BORDER.search(rule)
+    if found is None:
+        return int(grund.group(1)), grund.group(2)
+    return int(found.group(1)), found.group(2)
+
+
+def test_the_focus_ring_never_changes_the_size_of_a_field() -> None:
+    """Der Fokus darf alles am Rahmen ändern, nur nicht seine Breite.
+
+    Daran hängt das Aufklappmenü jeder Combobox: Qt leitet dessen Höhe aus dem
+    Innenrechteck ab, und ein Punkt mehr Rahmen kostet einen halben Eintrag.
+
+    **Geprüft wird die Zusage, nicht die Bauart.** Die erste Fassung verlangte,
+    dass in der Fokusregel überhaupt kein ``border:`` steht — das war die
+    damalige Umsetzung und nicht die Sache. Als der Ring eine Strichart bekam
+    (Regel 18, siehe unten), wurde dieser Test rot, ohne dass die Zusage
+    verletzt war: Er hätte eine Verbesserung aufgehalten. Verglichen werden
+    jetzt die Breiten.
     """
     from app.ui.style import stylesheet
 
     for theme in THEMES:
         sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
-        rule = sheet.split("QLineEdit:focus")[1].split("}")[0]
-        assert "border:" not in rule, (
-            f"{theme}: die Fokusregel setzt den ganzen Rahmen neu ({rule.strip()}) — "
-            "damit wechselt die Breite, und das Aufklappmenü jeder Combobox verliert "
-            "einen halben Eintrag"
+        ruhe, _ = _field_border(sheet, "rest")
+        fokus, _ = _field_border(sheet, "focus")
+        assert fokus == ruhe, (
+            f"{theme}: der Rahmen wächst im Fokus von {ruhe} auf {fokus} Punkte — "
+            "damit verliert das Aufklappmenü jeder Combobox einen halben Eintrag"
         )
+        rule = sheet.split("QLineEdit:focus")[1].split("}")[0]
         assert "padding" not in rule, (
             f"{theme}: die Fokusregel rührt den Innenabstand an ({rule.strip()}) — "
             "das ist die Kompensation, die es ohne Breitenwechsel nicht braucht"
         )
-        assert "border-color:" in rule, f"{theme}: der Fokus sagt gar nichts: {rule.strip()}"
+
+
+def test_the_focus_says_it_twice_and_not_only_in_colour() -> None:
+    """Regel 18 gilt auch für den Tastaturfokus.
+
+    Nachdem die Breite konstant sein musste (siehe oben) und der Ruherahmen
+    seine volle Farbe behalten musste (siehe unten), blieb dem Fokus nur noch
+    der Farbton — eine Bedeutung allein über Farbe. Das Gegenargument war, ein
+    Punkt Rahmenbreite sei ohnehin nie eine wahrnehmbare Kodierung gewesen; es
+    stimmt und trägt trotzdem nicht, denn die Regel verlangt die zweite
+    Kodierung und nicht den Nachweis, dass die alte auch keine war.
+
+    Die Strichart ist die dritte Möglichkeit neben Breite und Farbe, und sie
+    lässt die Geometrie in Ruhe — gemessen blieb das Combobox-Popup bei 48 von
+    48 Punkten. Dieselbe Wahl trägt der Reiter schon.
+    """
+    from app.ui.style import stylesheet
+
+    for theme in THEMES:
+        sheet = stylesheet(theme, 10)  # type: ignore[arg-type]
+        _, ruhe = _field_border(sheet, "rest")
+        _, fokus = _field_border(sheet, "focus")
+        assert fokus != ruhe, (
+            f"{theme}: Ruhe und Fokus zeichnen beide {ruhe} — dann unterscheidet sie "
+            "nur die Farbe, und Regel 18 verlangt eine zweite Kodierung"
+        )
 
 
 @pytest.mark.parametrize("theme", list(THEMES))

@@ -228,11 +228,12 @@ def stylesheet(theme: Theme, base_point_size: int, arrows: dict[str, str] | None
     # Einträgen, in beiden Themen, und es traf jede Combobox, die den Fokus
     # hatte — also jede, die man anklickt.
     #
-    # Der Fokus sagt es deshalb allein über die **Farbe**. Das ist keine
-    # Verschlechterung gegenüber vorher: Ein Punkt Rahmenbreite ist keine
-    # wahrnehmbare zweite Kodierung, wie die Kachel des Startbildschirms schon
-    # einmal gezeigt hat. Der Ring bleibt zwei Punkte breit und trägt seine
-    # 8,02 Kontrast im dunklen Thema.
+    # Der Fokus sagt es deshalb über **Farbe und Strichart**: Der Ring bleibt
+    # zwei Punkte breit und wird gestrichelt. Ein erster Anlauf ließ nur die
+    # Farbe wechseln, mit dem Argument, ein Punkt Rahmenbreite sei ohnehin
+    # keine wahrnehmbare Kodierung gewesen — das stimmt und trägt trotzdem
+    # nicht: Regel 18 verlangt die zweite Kodierung, nicht den Nachweis, dass
+    # die alte auch keine war. Kontrast unverändert 8,02 im dunklen Thema.
     #
     # **Und der Ruhezustand behält die volle Linienfarbe.** Ein erster Anlauf
     # dämpfte sie zur Feldfläche hin, damit der doppelt so breite Rahmen so
@@ -348,10 +349,16 @@ QLineEdit:hover, QSpinBox:hover, QDoubleSpinBox:hover,
 QComboBox:hover, QPlainTextEdit:hover, QTextEdit:hover {{
     border-color: {muted};
 }}
-/* Nur die Farbe, nie die Breite — der Grund steht oben bei ``field_line``. */
+/* Nie die Breite — der Grund steht oben bei ``field_line``. Wohl aber die
+   **Strichart**: Farbe allein wäre eine Bedeutung über Farbe, und Regel 18
+   verlangt eine zweite Kodierung. Gestrichelt und nicht gepunktet, weil der
+   feinere Strich im Bild unruhig wirkt und weniger Fläche trägt; dieselbe
+   Wahl hat der Reiter schon getroffen (``QTabBar::tab:selected:focus``).
+   Die Rahmenbreite bleibt bei zwei Punkten, also bleibt auch das
+   Aufklappmenü der Combobox heil — gemessen, 48 von 48 Punkten. */
 QLineEdit:focus, QSpinBox:focus, QDoubleSpinBox:focus,
 QComboBox:focus, QPlainTextEdit:focus, QTextEdit:focus {{
-    border-color: {focus};
+    border: 2px dashed {focus};
 }}
 QLineEdit:disabled, QSpinBox:disabled, QDoubleSpinBox:disabled, QComboBox:disabled {{
     color: {disabled};
