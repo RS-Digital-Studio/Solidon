@@ -161,6 +161,29 @@ def _no_backend_stays_rejected() -> Iterator[None]:
     llm.accept_again()
 
 
+@pytest.fixture(autouse=True)
+def _no_user_parts_stay_loaded() -> Iterator[None]:
+    """Dritter Prozesszustand, dieselbe Begründung wie die zwei darüber.
+
+    bootstrap.load_user_parts merkt sich, dass es gelaufen ist, und seit dem
+    24.08.2026 auch, **welche** Operationen aus dem Nutzerordner kamen — die
+    Oberfläche hält sie aus der Menüleiste heraus (§24.5, Konzept E1).
+
+    Gesetzt wird das im Test wie im Produkt: tests/test_parts_catalog.py
+    ruft load_user_parts mit einem eigenen Verzeichnis. Heute trägt der
+    Merker danach nichts, weil jene Datei absichtlich kaputt ist und gar nichts
+    lädt — ein Test mit einem **gültigen** eigenen Baustein nähme jeden
+    folgenden mit, und der fiele an einer Menüleiste um, die er nie angefasst
+    hat. Mit pytest-randomly an einem anderen je Lauf.
+    """
+    yield
+    from app.core import bootstrap
+
+    bootstrap._user_loaded = False
+    bootstrap._user_findings = ()
+    bootstrap._user_operations = ()
+
+
 #: Die Warte-Methoden je Widget-Klasse, einmal ermittelt.
 #:
 #: **``dir()`` je Klasse statt je Widget.** Die Fixture unten geht nach *jedem*
