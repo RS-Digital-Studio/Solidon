@@ -1230,3 +1230,47 @@ def test_the_bed_floor_steps_aside_but_its_edges_stay(qt_app: QApplication) -> N
     assert {id(a) for a in viewport._ground_actors} <= {id(a) for a in viewport._frame_actors}, (
         "jeder Boden-Actor hängt auch in der Liste, die aufgeräumt wird"
     )
+
+
+def test_a_body_in_pieces_casts_one_shadow_per_piece(qt_app: QApplication) -> None:
+    """Ein Körper ist nicht immer ein Stück — und der Schatten weiß es jetzt.
+
+    Der Kontaktschatten ist die konvexe Hülle des Körpers. Über ein Stück ist
+    das richtig und billig: Ein Ansichtswechsel kostet dann nur die Projektion
+    statt einer Triangulierung über jeden Punkt des Anzeigenetzes. Über
+    **drei** Stücke spannt dieselbe Hülle über die Luft dazwischen und wirft
+    den Schatten eines Dings, das es nicht gibt.
+
+    Der Fall ist keiner aus dem Lehrbuch: Ein Baustein auf einem zu schmalen
+    Träger hinterlässt genau das — den Träger und zwei Haken daneben (Befund
+    Robert, 25.08.2026, am Bildschirm gesehen, bevor der Prüfbericht es sagte).
+    """
+    import numpy as np
+    import pyvista as pv
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        one = pv.Cube(center=(0.0, 0.0, 0.0), x_length=10, y_length=10, z_length=10)
+        assert len(viewport._shadow_hulls_of(one.triangulate())) == 1, (
+            "ein einteiliger Körper wirft einen Schatten — wie vorher"
+        )
+
+        far = pv.Cube(center=(40.0, 0.0, 0.0), x_length=4, y_length=4, z_length=4)
+        farther = pv.Cube(center=(-40.0, 0.0, 0.0), x_length=4, y_length=4, z_length=4)
+        apart = (one + far + farther).triangulate()
+
+        hulls = viewport._shadow_hulls_of(apart)
+
+        assert len(hulls) == 3, f"drei Stücke, drei Hüllen — gefunden: {len(hulls)}"
+        # Und keine davon reicht über den Zwischenraum: Die breiteste Hülle ist
+        # der Würfel selbst, nicht die Spanne über alle drei.
+        widest = max(
+            float(np.asarray(hull)[:, 0].max() - np.asarray(hull)[:, 0].min()) for hull in hulls
+        )
+        assert widest < 20.0, (
+            f"eine Hülle spannt über {widest:.1f} mm — das ist der Abstand, nicht ein Stück"
+        )
+    finally:
+        viewport.deleteLater()

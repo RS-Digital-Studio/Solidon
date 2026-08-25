@@ -1851,7 +1851,7 @@ class Viewport(QWidget):
         self._occlusion_applied = False
         self._edge_actors: list[Any] = []
         self._shadow_actors: list[Any] = []
-        self._shadow_hulls: dict[ObjectId, Any] = {}
+        self._shadow_hulls: dict[ObjectId, list[Any]] = {}
         """Je Körper die konvexe Hülle seiner Punkte, für den Schattenwurf.
         Einmal je Szenenaufbau gerechnet — ein Ansichtswechsel projiziert nur
         noch daraus (§18.6)."""
@@ -2200,8 +2200,36 @@ class Viewport(QWidget):
         camera = self.plotter.camera
         return shadow_direction(camera.position, camera.focal_point)
 
+    def _shadow_hulls_of(self, surface: Any) -> list[Any]:
+        """Die Punkte, aus denen ein Körper seinen Schatten wirft — je Stück eines.
+
+        **Ein Körper ist nicht immer ein Stück.** Ein Baustein, dessen Träger zu
+        schmal ist, hinterlässt drei: den Träger und zwei Haken daneben. Eine
+        gemeinsame Hülle darüber spannt über die Luft dazwischen und wirft
+        einen Schatten in der Form eines Dings, das es nicht gibt (Befund
+        Robert, 25.08.2026, am Bildschirm gesehen).
+
+        Der übliche Fall bleibt der billige: ``split_bodies`` gibt bei einem
+        einteiligen Körper ein Stück zurück, und dann ist das hier genau die
+        Rechnung von vorher. Gemessen kostet das Zerlegen 1,5 ms bei
+        eintausendzweihundert Dreiecken und 21 ms bei zweiundachtzigtausend —
+        einmal je Szenenaufbau, nicht je Bild.
+        """
+        bodies = surface.split_bodies()
+        if len(bodies) <= 1:
+            single = self._shadow_hull_of(surface)
+            return [single] if single is not None else []
+        # Die Punkte genügen — ``_shadow_hull_of`` liest ohnehin nur ``points``,
+        # und ein ``extract_surface`` je Stück wäre eine Umwandlung für nichts.
+        hulls = []
+        for block in bodies:
+            hull = self._shadow_hull_of(block)
+            if hull is not None:
+                hulls.append(hull)
+        return hulls
+
     def _shadow_hull_of(self, surface: Any) -> Any:
-        """Die Punkte, aus denen ein Körper seinen Schatten wirft.
+        """Die Punkte, aus denen ein Stück seinen Schatten wirft.
 
         Die konvexe Hülle in **drei** Dimensionen, und zwar einmal je Körper und
         Szenenaufbau. Sie hängt nicht an der Lichtrichtung: welcher Punkt den
@@ -2684,40 +2712,51 @@ class Viewport(QWidget):
         """
         if self.plotter is None or not self.contact_shadows:
             return
-        hull = self._shadow_hull_of(surface)
-        self._shadow_hulls[object_id] = hull
-        if hull is None or len(hull) < 3:
+        hulls = self._shadow_hulls_of(surface)
+        self._shadow_hulls[object_id] = hulls
+        usable = [hull for hull in hulls if hull is not None and len(hull) >= 3]
+        if not usable:
             return
 
         import numpy as np
 
-        heights = np.asarray(hull, dtype=float)[:, 2]
+        # **Der Auffang-Eintrag bleibt körperweise.** Er beantwortet „wer steht
+        # unter wem" (§18.6), und das ist eine Frage über den Körper, nicht
+        # über seine Stücke: Ein Turm auf einer Grundplatte wirft auf sie, und
+        # ob die Platte aus einem Stück besteht, ändert daran nichts. Der
+        # Umriss dafür kommt weiter aus allen Punkten zusammen.
+        points = np.vstack([np.asarray(hull, dtype=float) for hull in usable])
         self._shadow_ground[object_id] = (
-            float(heights.min()),
-            float(heights.max()),
-            outline_of(hull),
+            float(points[:, 2].min()),
+            float(points[:, 2].max()),
+            outline_of(points),
         )
 
     def _place_shadows(self, direction: tuple[float, float]) -> None:
         """Die Schatten aller Körper aus den gemerkten Hüllen setzen."""
         if self.plotter is None:
             return
-        for object_id, hull in self._shadow_hulls.items():
-            for index, (ground, window) in enumerate(self._shadow_catchers(object_id)):
-                outline = self._shadow_outline_of(hull, direction, ground, window)
-                if outline is None:
-                    continue
-                self._shadow_actors.append(
-                    self.plotter.add_mesh(
-                        outline,
-                        color=SHADOW_COLOUR,
-                        opacity=SHADOW_OPACITY,
-                        lighting=False,
-                        name=f"shadow:{object_id}:{index}",
-                        render=False,
-                        pickable=False,
+        for object_id, hulls in self._shadow_hulls.items():
+            for part, hull in enumerate(hulls):
+                for index, (ground, window) in enumerate(self._shadow_catchers(object_id)):
+                    outline = self._shadow_outline_of(hull, direction, ground, window)
+                    if outline is None:
+                        continue
+                    self._shadow_actors.append(
+                        self.plotter.add_mesh(
+                            outline,
+                            color=SHADOW_COLOUR,
+                            opacity=SHADOW_OPACITY,
+                            lighting=False,
+                            # Der Name trägt jetzt auch das Stück: Zwei Schatten
+                            # desselben Körpers auf derselben Fläche hätten sonst
+                            # denselben Namen, und pyvista ersetzt gleichnamige
+                            # Aktoren — von drei Haken bliebe einer.
+                            name=f"shadow:{object_id}:{part}:{index}",
+                            render=False,
+                            pickable=False,
+                        )
                     )
-                )
 
     def _redraw_shadows(self) -> None:
         """Die Schatten der neuen Kamerastellung anpassen (§18.6).
