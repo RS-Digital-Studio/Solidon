@@ -109,6 +109,32 @@ def test_an_expired_trial_blocks_every_document_change(monkeypatch: pytest.Monke
     assert project.document.transactions == before, "abgelehnt heißt: nichts geschrieben"
 
 
+def test_an_expired_trial_blocks_reparametrising_a_step(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Fund der Durchsicht: das nachträgliche Ändern schrieb an der Grenze
+    vorbei. ``change_params``, ``change_inputs`` und ``change_kernel`` schreiben
+    ins Dokument, riefen ``require`` aber nicht — nach Ablauf blieb jeder Schritt
+    umparametrierbar und speicherbar, das Projekt an einer geschlossenen Grenze
+    vorbei vollständig umkonstruierbar. Jede der drei holt jetzt selbst und wirft
+    selbst (kern.md)."""
+    project = _project()
+    history = History(project.document)
+    op_id = project.document.ops[0].id
+    before = list(project.document.ops)
+    _lock(monkeypatch)
+
+    changes = (
+        lambda: history.change_params(op_id, {"unit": "cm"}),
+        lambda: history.change_inputs(op_id, ["obj_1"]),
+        lambda: history.change_kernel(op_id, "load", {}),
+    )
+    for change in changes:
+        with pytest.raises(LicenceRequired) as raised:
+            change()
+        assert raised.value.action == activation.CHANGE
+
+    assert list(project.document.ops) == before, "abgelehnt heißt: nichts geschrieben"
+
+
 def test_an_expired_trial_blocks_the_export(
     profile: Profile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -180,6 +206,22 @@ def test_opening_evaluating_saving_and_undo_stay_free(
     taken_back = history.undo()
     assert taken_back is not None, "undo bleibt frei"
     assert history.redo() is taken_back, "redo bleibt frei"
+
+
+def test_a_licence_lets_a_step_be_reparametrised(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Gegenrichtung: mit Schlüssel geht das Nachbearbeiten wie heute — die
+    Grenze sperrt nur den abgelaufenen Testlauf, nie den Käufer."""
+    project = _project()
+    history = History(project.document)
+    history.apply(
+        "Duplizieren",
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"name": "Kopie"})],
+    )
+    op_id = project.document.ops[-1].id
+    _license(monkeypatch)
+
+    changed = history.change_params(op_id, {"name": "Andere"})
+    assert changed.params["name"] == "Andere"
 
 
 def test_the_slice_analysis_and_the_maps_stay_free(monkeypatch: pytest.MonkeyPatch) -> None:

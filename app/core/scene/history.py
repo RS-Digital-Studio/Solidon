@@ -434,6 +434,12 @@ class History:
         Stapels, über eine Zahl, die jemand am nahen Ende geändert hat, ist die
         Sorte Fehler, die niemand mit dem verbindet, was er getan hat.
         """
+        # Die Lizenzgrenze wie bei ``apply``: Diese Methode schreibt ins
+        # Dokument, gehört also zu den Stellen, die selbst holen und selbst
+        # werfen (kern.md). Ohne sie blieb nach Ablauf der Demo jeder Schritt
+        # umparametrierbar und speicherbar — das Projekt vollständig
+        # umkonstruierbar an einer geschlossenen Grenze vorbei.
+        activation.require(activation.CHANGE)
         entry = self.operation(op_id)
         spec = self._registry.get(entry.op)
         self._check_params(spec.name, spec.params.spec(), params)
@@ -483,6 +489,7 @@ class History:
         werfen dieselbe Ausnahme wie beim Anlegen, damit die Oberfläche sie
         nicht zweimal verstehen muss.
         """
+        activation.require(activation.CHANGE)  # schreibt ins Dokument (kern.md)
         entry = self.operation(op_id)
         spec = self._registry.get(entry.op)
         # Die Objekte am Ende des Stapels: genau das, was der Nutzer im
@@ -539,6 +546,7 @@ class History:
         """
         from app.core.registry import MENU_TWINS
 
+        activation.require(activation.CHANGE)  # schreibt ins Dokument (kern.md)
         entry = self.operation(op_id)
         if op_name != entry.op:
             pairs = {(hidden, shown) for hidden, shown in MENU_TWINS.items()}
