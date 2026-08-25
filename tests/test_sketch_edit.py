@@ -180,7 +180,7 @@ def test_an_arc_and_a_spline_count_as_cutting_edges() -> None:
     trimmed = edit.trim(with_spline, 0, (7.0, 0.0))
     assert flat(trimmed.elements[0].points) == pytest.approx([0.0, 0.0, 5.0, 0.0], abs=1e-6)
 
-    # Oberer Halbkreis um (5 | −1) mit r = 2: kreuzt y = 0 bei 5 ± √3.
+    # Oberer Halbkreis um (5 | -1) mit r = 2: kreuzt y = 0 bei 5 ± √3.
     with_arc = Sketch(
         plane="plane:xy",
         elements=(
