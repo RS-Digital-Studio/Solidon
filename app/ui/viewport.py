@@ -1702,6 +1702,17 @@ class Viewport(QWidget):
 
         Getrennt von ``_sketch_actors``, weil sie an der Maus hängt und nicht
         an der Zeichnung — der Grund steht bei :meth:`clear_sketch`."""
+        self._cursor_mesh: Any = None
+        """Das Netz der Marke, damit sie nicht je Mausbewegung neu entsteht.
+
+        Ein Kreuz hat immer vier Punkte; bewegt es sich, ändern sich nur deren
+        Koordinaten."""
+        self._cursor_at: tuple[tuple[float, float], float] | None = None
+        """Wo die Marke zuletzt lag und bei welchem Maßstab.
+
+        Der Vergleich davor spart das Neuzeichnen: Ein Render kostet gemessen
+        6,9 ms, und die Marke sitzt am **gefangenen** Ort — zwischen zwei
+        Rasterpunkten ändert sie sich nicht."""
         self._sketch_step = 0.0
         """Die Rasterweite, die zuletzt **gezeichnet** wurde.
 
@@ -5281,29 +5292,61 @@ class Viewport(QWidget):
         Kreuz über das halbe Bild; an die Rasterweite gekoppelt — der erste
         Anlauf — war sie bei 10 mm Raster gut und bei 2 mm zwei Bildpunkte
         groß. Gesehen hat das keine Rechnung, sondern die Aufnahme.
+
+        **Ein Zeigerschritt, der nichts ändert, zeichnet nicht.** Das ist die
+        Hälfte, an der die Sache steht: Ein Neuzeichnen der Szene kostet hier
+        gemessen **6,9 ms**, und bei sechzig Mausereignissen in der Sekunde
+        wären das 41 % eines Kerns im Qt-Hauptthread. Nicht die Rechnung ist
+        teuer (``pixels_per_mm`` misst 0,004 ms, der Schnitt mit der Ebene
+        0,006) und auch nicht der Actor — es ist ``render()`` selbst, und
+        gegen das hilft nur, es seltener zu rufen.
+
+        Das geht, weil die Marke am **gefangenen** Ort sitzt: Zwischen zwei
+        Rasterpunkten ändert sie sich nicht, und bei 2 mm Raster sind das rund
+        vierundzwanzig Bildpunkte Mausweg je Sprung. Verglichen wird Ort **und**
+        Maßstab — beim Zoomen bleibt der Ort gleich und die Marke müsste ihre
+        Größe ändern.
+
+        **Das Netz entsteht dabei einmal, danach wandern nur seine vier
+        Punkte.** Das allein hat nichts gebracht (gemessen 6,95 gegen 6,92 ms),
+        aber es ist die richtige Bauart und macht den Sprung billig, wenn er
+        kommt.
         """
-        if self.plotter is not None:
-            for actor in self._cursor_actors:
-                self.plotter.remove_actor(actor, render=False)
-        self._cursor_actors.clear()
         frame = self._sketch_frame
         if point is None or frame is None or self.plotter is None:
-            self._draw()
+            if self.plotter is not None:
+                for actor in self._cursor_actors:
+                    self.plotter.remove_actor(actor, render=False)
+                self._draw()
+            self._cursor_actors.clear()
+            self._cursor_mesh = None
+            self._cursor_at = None
             return
         scale = self.pixels_per_mm(frame)
+        if self._cursor_at == (point, scale):
+            return
+        self._cursor_at = (point, scale)
         segments = sketch_cursor(frame, point, CURSOR_PIXELS / max(scale, EPS_GEOM))
         if not segments:
-            self._draw()
             return
 
         import numpy as np
         import pyvista as pv
 
         points = np.asarray([end for pair in segments for end in pair], dtype=float)
+        if self._cursor_mesh is not None and self._cursor_mesh.n_points == len(points):
+            # Der übliche Fall: dasselbe Kreuz, anderswo.
+            self._cursor_mesh.points = points
+            self._cursor_mesh.Modified()
+            self._draw()
+            return
+
         spans = np.hstack([[2, 2 * index, 2 * index + 1] for index in range(len(segments))])
+        mesh = pv.PolyData(points, lines=spans)
+        self._cursor_mesh = mesh
         self._cursor_actors.append(
             self.plotter.add_mesh(
-                pv.PolyData(points, lines=spans),
+                mesh,
                 color=self._sketch_colour,
                 line_width=2,
                 name="sketch_cursor",
@@ -5738,11 +5781,15 @@ class Viewport(QWidget):
         und kein Ding in der Szene.
         """
         self._sketch_frame = frame
-        # Der Modus endet, die Marke des Zeigers mit ihm — sie ist das
+        # **Die Marke gehört der Ebene, auf der sie liegt** — sie ist das
         # einzige Stück Zeichnung, das ``clear_sketch`` absichtlich stehen
-        # lässt (dort steht der Grund).
-        if frame is None:
-            self.show_sketch_cursor(None)
+        # lässt (dort steht der Grund), und deshalb muss sie hier weg. Nicht
+        # nur beim Ende des Modus: Ein Ebenenwechsel ruft dieselbe Methode mit
+        # einem **neuen** Rahmen, und eine Marke, die dann stehen bleibt,
+        # schwebt auf der vorigen Ebene im Raum, bis die Maus sich das nächste
+        # Mal bewegt. Wer die Ebene über die Ziffern wechselt und die Hand
+        # stillhält, sieht genau das.
+        self.show_sketch_cursor(None)
         # **Der Boden des Bauraums tritt ab, seine Kanten bleiben.** Zwei
         # Gitter übereinander sind eines zu viel: Bettraster und Zeichenraster
         # sind beide graue Linien in derselben Größenordnung, und welches die
