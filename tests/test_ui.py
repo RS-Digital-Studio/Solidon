@@ -3307,6 +3307,37 @@ def test_the_parameter_dialog_validates_inline(qt_app: QApplication) -> None:
     assert dialog.validation_problem() is not None, "alles außerhalb der Grammatik fällt durch"
 
 
+def test_the_parameter_dialog_offers_bounds(qt_app: QApplication) -> None:
+    """Die Schreibseite der Grenzen (Gesamtreview B-15).
+
+    Die Leiste liest minimum/maximum seit je und fiel immer auf ±100 000
+    zurück, weil keine Stelle der Anwendung die Felder je setzte. Der Dialog
+    bietet sie jetzt an — leer heißt weiter: keine Grenze.
+    """
+    from app.ui.dialogs import ParameterDialog
+
+    dialog = ParameterDialog({})
+    dialog.name_field.setText("depth")
+    dialog.value_field.setValue(50.0)
+    assert dialog.validation_problem() is None, "ohne Grenzen wie bisher"
+
+    dialog.minimum_field.setText("0")
+    dialog.maximum_field.setText("60")
+    assert dialog.validation_problem() is None
+    made = dialog.parameter()
+    assert made.minimum == 0.0
+    assert made.maximum == 60.0
+
+    dialog.maximum_field.setText("40")
+    assert dialog.validation_problem() is not None, "der Wert liegt über der Obergrenze"
+
+    dialog.maximum_field.setText("-10")
+    assert dialog.validation_problem() is not None, "Untergrenze über Obergrenze"
+
+    dialog.maximum_field.setText("abc")
+    assert dialog.validation_problem() is not None, "keine Zahl ist keine Grenze"
+
+
 def test_the_catalog_button_says_what_it_does(qt_app: QApplication) -> None:
     """„OK" sagte nicht, was es tut — im Katalog blieb der Standardknopf
     stehen, während jeder Operationsdialog längst nach seiner Operation

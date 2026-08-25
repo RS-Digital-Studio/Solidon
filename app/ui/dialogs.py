@@ -226,6 +226,16 @@ class ParameterDialog(QDialog):
         self.value_field.setDecimals(3)
         self.value_field.setRange(-100_000.0, 100_000.0)
         self.unit_field = QLineEdit("mm", self)
+        # Die Schreibseite der Grenzen (Gesamtreview B-15): Die Leiste liest
+        # minimum/maximum seit je als Spinbox-Grenzen und fiel immer auf
+        # ±100 000 zurück, weil keine Stelle der Anwendung sie je setzte.
+        # Textfelder statt Spinboxen, weil „leer" hier ein Wert ist: keine
+        # Grenze. Was aus Ausdrücken hinausläuft, meldet die Auswertung als
+        # Befund — hier wird nur die Eingabe abgelehnt (§10).
+        self.minimum_field = QLineEdit(self)
+        self.minimum_field.setPlaceholderText(tr("optional — leer heißt: keine"))
+        self.maximum_field = QLineEdit(self)
+        self.maximum_field.setPlaceholderText(tr("optional — leer heißt: keine"))
         self.expression_field = QLineEdit(self)
         self.expression_field.setPlaceholderText(tr("optional — zum Beispiel =@breite/2 + 5"))
         # Der Ausdruck besitzt den Wert (§13) — dieselbe Regel, nach der die
@@ -238,6 +248,8 @@ class ParameterDialog(QDialog):
         form.addRow(tr("Name"), self.name_field)
         form.addRow(tr("Wert"), self.value_field)
         form.addRow(tr("Einheit"), self.unit_field)
+        form.addRow(tr("Untergrenze"), self.minimum_field)
+        form.addRow(tr("Obergrenze"), self.maximum_field)
         form.addRow(tr("Ausdruck"), self.expression_field)
 
         self.problem = QLabel("", self)
@@ -281,7 +293,34 @@ class ParameterDialog(QDialog):
                 self._value = expressions.evaluate(expression, self._values)
             except AppError as error:
                 return str(error.detail or error.title)
+        bounds = self._bounds()
+        if bounds is None:
+            return tr("Eine Grenze muss eine Zahl sein — oder das Feld bleibt leer.")
+        low, high = bounds
+        if low is not None and high is not None and low > high:
+            return tr("Die Untergrenze liegt über der Obergrenze.")
+        value = self._value if expression else self.value_field.value()
+        if (low is not None and value < low) or (high is not None and value > high):
+            return tr("Der Wert liegt außerhalb der eigenen Grenzen.")
         return None
+
+    def _bounds(self) -> tuple[float | None, float | None] | None:
+        """Die eingetragenen Grenzen — oder ``None``, wenn eine keine Zahl ist.
+
+        Leer heißt: keine Grenze. Das Komma gilt wie der Punkt, denn die
+        Felder daneben nehmen beide an.
+        """
+        found: list[float | None] = []
+        for field in (self.minimum_field, self.maximum_field):
+            raw = field.text().strip().replace(",", ".")
+            if not raw:
+                found.append(None)
+                continue
+            try:
+                found.append(float(raw))
+            except ValueError:
+                return None
+        return found[0], found[1]
 
     def _expression_typed(self, text: str) -> None:
         """Solange ein Ausdruck dasteht, ist das Wertfeld gesperrt.
@@ -306,10 +345,13 @@ class ParameterDialog(QDialog):
         from app.core.types import Parameter
 
         expression = self.expression_field.text().strip() or None
+        low, high = self._bounds() or (None, None)
         return Parameter(
             name=self.name_field.text().strip(),
             value=self._value if expression else self.value_field.value(),
             unit=self.unit_field.text().strip() or "mm",
+            minimum=low,
+            maximum=high,
             expression=expression,
         )
 

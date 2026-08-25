@@ -357,7 +357,14 @@ def resolution_order(parameters: Mapping[ParameterName, Parameter]) -> list[Para
 
 
 def resolve(parameters: Mapping[ParameterName, Parameter]) -> dict[ParameterName, float]:
-    """Wertet alle Parameter in Abhängigkeitsreihenfolge aus."""
+    """Wertet alle Parameter in Abhängigkeitsreihenfolge aus.
+
+    Grenzen (``minimum``/``maximum``) prüft **nicht** diese Stelle: Ein Halt
+    hier machte eine geöffnete Datei mit einem hinausgelaufenen Ausdruck
+    unauswertbar — eine Sackgasse, wo ein Befund reicht (Regel 19). Die
+    Eingabe prüft der Dialog, das Ergebnis meldet die Auswertung als Befund
+    (Gesamtreview B-15, ``scene/evaluate.py``).
+    """
     values: dict[ParameterName, float] = {}
     for name in resolution_order(parameters):
         parameter = parameters[name]
