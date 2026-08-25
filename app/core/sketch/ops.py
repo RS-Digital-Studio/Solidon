@@ -831,4 +831,8 @@ def push_face(ctx: OpContext) -> OpResult:
     params = cast(PushFaceParams, ctx.params)
     source, solid = _brep_input(ctx)
     moved = profiles.push_faces(solid, (params.nx, params.ny, params.nz), params.distance)
-    return OpResult(outputs=[dataclasses.replace(source, mesh=moved, features={})])
+    # ``features_of`` wie bei jeder anderen B-Rep-Op: Mit ``features={}``
+    # hatte der Körper nach „Fläche versetzen" keine anklickbaren Flächen
+    # mehr — „Auf dieser Fläche zeichnen", die exakte Bohrung und jede
+    # Passung liefen ins Leere (Gesamtreview D-5).
+    return OpResult(outputs=[dataclasses.replace(source, mesh=moved, features=features_of(moved))])

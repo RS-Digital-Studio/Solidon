@@ -202,7 +202,12 @@ def extrude(
     else:
         raise ValidationError("plane", _("Diese Ebene gibt es nicht."), value=plane)
     direction = gp_Vec(normal[0] * height, normal[1] * height, normal[2] * height)
-    return Solid(BRepPrimAPI_MakePrism(_face(profile, lift), direction).Shape())
+    # Durch ``_finished`` wie die vier Geschwister: Ein Prisma, das scheitert,
+    # war sonst ein roher Kernfehler statt eines Satzes mit Vorschlag.
+    return _finished(
+        BRepPrimAPI_MakePrism(_face(profile, lift), direction),
+        _("Aus diesem Umriss entsteht kein Körper."),
+    )
 
 
 def revolve(profile: Profile, angle_deg: float) -> Solid:
@@ -228,7 +233,7 @@ def revolve(profile: Profile, angle_deg: float) -> Solid:
         )
     axis = gp_Ax1(gp_Pnt(0.0, 0.0, 0.0), gp_Dir(0.0, 0.0, 1.0))
     builder = BRepPrimAPI_MakeRevol(_face(profile, _lift_xz), axis, math.radians(angle_deg))
-    return Solid(builder.Shape())
+    return _finished(builder, _("Aus diesem Querschnitt entsteht kein Drehkörper."))
 
 
 def sweep_arc(profile: Profile, bend_radius: float, bend_deg: float) -> Solid:
@@ -811,9 +816,18 @@ def _rightmost(profile: Profile) -> float:
 
 
 def _points(segment: Any) -> list[Point2]:
+    """Alle Punkte, über die dieses Segment läuft.
+
+    ``through`` gehört dazu: Bei einem Spline sind das **alle** Stützpunkte,
+    und ohne sie sahen ``_leftmost``/``_rightmost`` nur Anfang und Ende — ein
+    Querschnitt, dessen Spline 40 mm über die Drehachse greift, meldete 10,
+    die Achsprüfung von ``revolve`` lief ins Leere, und der Kunde bekam einen
+    rohen Kernfehler für seine eigene Zeichnung (Gesamtreview D-3).
+    """
     found = [segment.start, segment.end]
     if segment.via is not None:
         found.append(segment.via)
+    found.extend(segment.through)
     return found
 
 
@@ -912,9 +926,27 @@ def push_faces(solid: Solid, direction: tuple[float, float, float], distance: fl
         reach = gp_Vec(*(value * abs(distance) for value in normal))
         prism = BRepPrimAPI_MakePrism(face, reach if distance > 0 else reach.Reversed()).Shape()
         joined = BRepAlgoAPI_Fuse(shape, prism) if distance > 0 else BRepAlgoAPI_Cut(shape, prism)
-        joined.Build()
-        shape = joined.Shape()
-    return Solid(shape)
+        # ``_finished`` statt blindem ``Shape()``: Ein Schritt ohne ``IsDone``
+        # lieferte sonst wortlos irgendetwas — bis hin zu gar nichts.
+        shape = _finished(
+            joined,
+            _(
+                "Mit diesem Weg bleibt von der Fläche nichts übrig — kleiner "
+                "versetzen oder die Richtung umkehren."
+            ),
+        ).shape
+    outcome = Solid(shape)
+    # Und das Ergebnis muss ein Körper sein: distance = -25 auf einem 20 mm
+    # hohen Quader gab Volumen null, null Befunde — ein Schritt im Verlauf,
+    # nichts im Bild, und gesagt wurde nichts (Gesamtreview D-6).
+    if outcome.solid_count < 1 or outcome.volume <= EPS_GEOM:
+        raise GeometryError(
+            detail=_(
+                "Mit diesem Weg bleibt vom Körper nichts übrig — kleiner "
+                "versetzen oder die Richtung umkehren."
+            )
+        )
+    return outcome
 
 
 def _facing(

@@ -124,6 +124,56 @@ def test_a_pocket_follows_the_plane_of_its_sketch() -> None:
     )
 
 
+def test_pushing_a_face_keeps_the_features() -> None:
+    """„Fläche versetzen" löschte alle Merkmale des Körpers (D-5).
+
+    Mit ``features={}`` hatte der Körper danach keine anklickbaren Flächen
+    mehr: „Auf dieser Fläche zeichnen", die exakte Bohrung und jede Passung
+    liefen ins Leere — jede andere B-Rep-Op rechnet sie neu.
+    """
+    result = run("push_face", entry=brep_box(), distance=5.0, nx=1.0, ny=0.0, nz=0.0)
+
+    assert result.outputs[0].features, "der versetzte Körper behält seine Merkmale"
+
+
+def test_pushing_a_face_past_the_body_says_so() -> None:
+    """Ein Weg, der den Körper auslöscht, war ein stummer Schritt (D-6).
+
+    distance = -25 auf einem 20 mm hohen Quader: Volumen null, null Befunde,
+    im Verlauf ein Schritt, im Bild nichts. Jetzt ein Satz mit Vorschlag.
+    """
+    from app.core.errors import GeometryError
+
+    with pytest.raises(GeometryError):
+        run("push_face", entry=brep_box(height=20.0), distance=-25.0, nx=0.0, ny=0.0, nz=1.0)
+
+
+def test_a_spline_over_the_axis_is_refused_with_a_sentence() -> None:
+    """Die Achsprüfung von revolve sah Spline-Stützpunkte nicht (D-3).
+
+    Ein Querschnitt, dessen Spline 40 mm über die Drehachse greift, meldete
+    als linkeste Stelle 10 — der Kern lief und starb als roher
+    ``StdFail_NotDone``, verpackt als „unerwarteter Fehler" samt
+    Fehlerbericht, für eine Zeichnung des Kunden.
+    """
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.types import Sketch, SketchElement
+
+    crossing = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="spline", points=((10.0, 0.0), (-40.0, 5.0), (10.0, 10.0))),
+            SketchElement(kind="line", points=((10.0, 10.0), (10.0, 0.0))),
+        ),
+    )
+    with pytest.raises(ValidationError) as caught:
+        run("sketch_revolve", sketch=sketch_to_text(crossing))
+
+    assert caught.value.suggestions or str(caught.value.detail), (
+        "abgewiesen mit Satz — nicht als roher Kernfehler"
+    )
+
+
 def test_a_loft_keeps_the_drawn_hole() -> None:
     """``loft`` verlor jedes gezeichnete Loch stillschweigend (D-1).
 
