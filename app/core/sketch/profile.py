@@ -133,6 +133,13 @@ def regions_of(solved: SolvedSketch) -> tuple[Profile, ...]:
     bearing = [loop for loop in loops if _area(_outline(loop)) > EPS_GEOM * EPS_GEOM]
     if not bearing:
         raise _broken(_("Die Skizze umschließt keine Fläche."))
+    # **Eine Kette, die sich selbst kreuzt, wird hier abgewiesen** und nicht
+    # erst am Ergebnis: extrudiert kam ein Körper heraus, dessen Netz nicht
+    # wasserdicht war — ``is_closed`` sagte am exakten Körper sogar True, und
+    # er ging ohne Befund in STL-Export und Schichtanalyse (Gesamtreview D-8).
+    for loop in bearing:
+        if _crosses_itself(loop):
+            raise _broken(_("Der Umriss kreuzt sich selbst — die Fläche ist dort nicht eindeutig."))
     return _nested(bearing)
 
 
@@ -183,6 +190,41 @@ def _outline(profile: Profile) -> list[Point2]:
             points.append(segment.via)
         points.extend(segment.through[1:-1])
     return points
+
+
+def _crosses_itself(loop: Profile) -> bool:
+    """Ob zwei Linien der Kette sich im Inneren schneiden.
+
+    Nur Linienpaare, keine Bögen oder Splines: Deren Näherungspolylinie
+    könnte eine Kreuzung melden, wo die exakte Kurve keine hat — eine falsche
+    Ablehnung wäre schlimmer als die alte Lücke. Ein geteilter Endpunkt zählt
+    nicht (benachbarte Segmente teilen ihn immer), und ein Punkt, der eine
+    fremde Linie nur berührt, auch nicht — gemeldet wird der echte Schnitt.
+    """
+    lines = [segment for segment in loop.segments if segment.kind == "line"]
+    for index, one in enumerate(lines):
+        for other in lines[index + 1 :]:
+            if any(_joins(a, b) for a in (one.start, one.end) for b in (other.start, other.end)):
+                continue
+            if _strictly_crossing(one.start, one.end, other.start, other.end):
+                return True
+    return False
+
+
+def _strictly_crossing(a: Point2, b: Point2, c: Point2, d: Point2) -> bool:
+    """Ob die Strecken AB und CD sich echt schneiden — Berührung zählt nicht."""
+
+    def side(tail: Point2, head: Point2, point: Point2) -> float:
+        return (head[0] - tail[0]) * (point[1] - tail[1]) - (head[1] - tail[1]) * (
+            point[0] - tail[0]
+        )
+
+    # Das Kreuzprodukt ist eine Fläche — dieselbe Grenze wie beim Flächenfilter
+    # in ``regions_of``.
+    limit = EPS_GEOM * EPS_GEOM
+    first = (side(a, b, c), side(a, b, d))
+    second = (side(c, d, a), side(c, d, b))
+    return min(first) < -limit < limit < max(first) and min(second) < -limit < limit < max(second)
 
 
 def _inside(point: Point2, outline: list[Point2]) -> bool:

@@ -959,6 +959,57 @@ def test_two_regions_become_one_body() -> None:
     assert solid_of(single).volume == pytest.approx(100.0 * 4.0, rel=1e-6)
 
 
+def test_a_bodiless_result_is_a_sentence_not_an_object() -> None:
+    """Ein Ergebnis ohne Körper wird abgewiesen, wo es entsteht.
+
+    Alle vier Erzeuger-Ops laufen durch ``_created`` — kommt dort nichts an
+    (kein Solid, Volumen null), stand vorher trotzdem ein Objekt in der
+    Szene: unsichtbar, Volumen null, und jeder spätere Schritt darauf
+    scheiterte weit weg von der Ursache.
+    """
+    from app.core.brep import edit
+    from app.core.errors import GeometryError
+    from app.core.sketch.ops import _created
+
+    small = brep_box(10.0, 10.0, 10.0).mesh
+    big = brep_box(40.0, 40.0, 40.0).mesh
+    gone = edit.boolean("difference", [small, big])
+    with pytest.raises(GeometryError) as caught:
+        _created("", "x", gone)
+    assert caught.value.suggestions
+
+
+def test_a_pocket_cuts_every_drawn_region() -> None:
+    """Zwei Taschen in einer Zeichnung sind eine Handlung, nicht zwei.
+
+    Das Extrudieren nimmt seit je alle Umrisse; die Tasche lehnte dieselbe
+    Zeichnung ab — dieselbe Skizze war je nach Werkzeug richtig oder falsch.
+    Jetzt schneidet sie jeden Umriss, und die Regionsnummer wählt wie dort.
+    """
+    from app.core.types import SketchElement
+
+    def square(size: float, at: tuple[float, float]) -> tuple[SketchElement, ...]:
+        half = size / 2.0
+        x, y = at
+        corners = [
+            (x - half, y - half),
+            (x + half, y - half),
+            (x + half, y + half),
+            (x - half, y + half),
+        ]
+        return tuple(
+            SketchElement(kind="line", points=(corners[i], corners[(i + 1) % 4])) for i in range(4)
+        )
+
+    drawn = Sketch(plane="plane:xy", elements=square(5.0, (-10.0, 0.0)) + square(5.0, (10.0, 0.0)))
+    box = brep_box()  # 40 x 30 x 20
+    both = run("sketch_pocket", box, sketch=sketch_to_text(drawn), depth=5.0)
+    assert solid_of(both).volume == pytest.approx(24000.0 - 2.0 * 25.0 * 5.0, rel=1e-6)
+
+    single = run("sketch_pocket", box, sketch=sketch_to_text(drawn), depth=5.0, region=1)
+    assert solid_of(single).volume == pytest.approx(24000.0 - 25.0 * 5.0, rel=1e-6)
+
+
 def test_asking_for_a_region_that_is_not_there_says_how_many_are() -> None:
     """Regel 17: der Fehler nennt die Zahl, nach der niemand fragen musste."""
     with pytest.raises(ValidationError) as caught:

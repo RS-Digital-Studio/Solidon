@@ -1121,3 +1121,49 @@ def test_three_points_on_a_line_are_no_arc() -> None:
     assert arc_through((0.0, 0.0), (0.0, 0.0), (5.0, 5.0)) is None, "zwei gleiche Punkte"
     assert arc_through((0.0, 0.0), (1000.0, 0.0), (500.0, 1e-9)) is None, "über einem Meter krumm"
     assert arc_through((0.0, 0.0), (1.0, 0.0), (0.5, 0.05)) is not None, "leicht gewölbt zählt"
+
+
+def test_a_self_crossing_chain_is_refused_with_a_place_to_look() -> None:
+    """Eine Kette, die sich selbst kreuzt, umschließt keine eindeutige Fläche.
+
+    Vorher lief sie bis in den Kern: extrudiert kam ein Körper heraus, dessen
+    Netz nicht wasserdicht war (``is_closed`` sagte sogar True) — er ging ohne
+    Befund in STL-Export und Schichtanalyse. Der Fehler gehört an die
+    Zeichnung, nicht an den Export.
+    """
+    from app.core.errors import GeometryError
+    from app.core.sketch.profile import regions_of
+
+    crossing = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 10.0))),
+            SketchElement("line", ((10.0, 10.0), (10.0, 0.0))),
+            SketchElement("line", ((10.0, 0.0), (0.0, 20.0))),
+            SketchElement("line", ((0.0, 20.0), (0.0, 0.0))),
+        ),
+    )
+    with pytest.raises(GeometryError) as caught:
+        regions_of(solve_sketch(crossing))
+    assert caught.value.suggestions
+    assert "kreuzt" in str(caught.value.detail)
+
+
+def test_a_concave_outline_is_not_a_crossing() -> None:
+    """Ein Pfeilvierling ist konkav, aber ehrlich — er kreuzt sich nicht.
+
+    Die Kreuzungsprüfung darf nur echte Schnitte melden: nicht benachbarte
+    Kanten, die einander nahekommen, sind kein Fehler.
+    """
+    from app.core.sketch.profile import regions_of
+
+    dart = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement("line", ((0.0, 0.0), (10.0, 0.0))),
+            SketchElement("line", ((10.0, 0.0), (5.0, 3.0))),
+            SketchElement("line", ((5.0, 3.0), (0.0, 10.0))),
+            SketchElement("line", ((0.0, 10.0), (0.0, 0.0))),
+        ),
+    )
+    assert len(regions_of(solve_sketch(dart))) == 1

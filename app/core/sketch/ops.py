@@ -20,7 +20,7 @@ from typing import cast
 from app.core.brep import edit, profiles
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
-from app.core.errors import Action, NeedsSolidError, ValidationError
+from app.core.errors import CORRECT_INPUT, Action, GeometryError, NeedsSolidError, ValidationError
 from app.core.geom.boolean import without_effect
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.sketch import shapes
@@ -204,6 +204,24 @@ def _profile_for(
 
 
 def _created(name: str, fallback: str, solid: Solid) -> SceneObject:
+    """Das Ergebnis als Szenenobjekt — nachdem feststeht, dass eines da ist.
+
+    Alle vier Erzeuger-Ops laufen hier durch. Ein Ergebnis ohne Körper wurde
+    vorher trotzdem Objekt: unsichtbar, Volumen null, und jeder spätere
+    Schritt darauf scheiterte weit weg von der Ursache (Gesamtreview D-8).
+    """
+    if solid.solid_count < 1 or solid.volume <= EPS_GEOM:
+        raise GeometryError(
+            _("Aus dieser Skizze wird kein Körper."),
+            _(
+                "Das Ergebnis hat kein Volumen — meist ist der Umriss zu klein "
+                "oder in sich zusammengefallen."
+            ),
+            suggestions=(
+                Action("open_sketch", _("Skizze ansehen"), primary=True),
+                CORRECT_INPUT,
+            ),
+        )
     return SceneObject(
         id="", name=name or fallback, mesh=solid, kind="brep", features=features_of(solid)
     )
@@ -397,6 +415,17 @@ class SketchPocketParams(BaseParams):
         doc=_CORNERS_DOC,
         depends_on=("shape", ("polygon",)),
     )
+    region: int = param(
+        title=_("Region"),
+        default=0,
+        minimum=0,
+        maximum=64,
+        placement="advanced",
+        doc=_(
+            "Bei einer Skizze mit mehreren getrennten Umrissen: welcher davon. "
+            "Null heißt alle — sie werden zu einem Körper vereinigt."
+        ),
+    )
     sketch: str = param(
         title=_("Skizze"), default="", kind="sketch", placement="advanced", doc=_SKETCH_DOC
     )
@@ -427,11 +456,21 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
     # Ebenen-Normalen; auf XY ist das Welt-Z, und dort ändert sich nichts.
     plane = _plane_of(params.sketch)
     frame = _frame_of(ctx, plane)
-    profile = shifted(
-        _profile_for(ctx, params.sketch, params.shape, params.length, params.width, params.corners),
-        params.x,
-        params.y,
-    )
+    # Alle Umrisse, wie beim Extrudieren: Zwei Taschen in einer Zeichnung sind
+    # eine Handlung. Vorher lehnte die Tasche dieselbe Skizze ab, die das
+    # Extrudieren rechnete (Gesamtreview D-15).
+    chosen = [
+        shifted(one, params.x, params.y)
+        for one in _regions_for(
+            ctx,
+            params.sketch,
+            params.shape,
+            params.length,
+            params.width,
+            params.corners,
+            params.region,
+        )
+    ]
     if frame is not None:
         normal = frame.normal
         plane_s = _along(frame.origin, normal)
@@ -452,10 +491,14 @@ def sketch_pocket(ctx: OpContext) -> OpResult:
     else:
         bottom, reach = top - params.depth, params.depth + 1.0
     lifted = bottom - plane_s
-    tool = edit.moved(
-        profiles.extrude(profile, reach, plane, frame),
-        (normal[0] * lifted, normal[1] * lifted, normal[2] * lifted),
-    )
+    tools = [
+        edit.moved(
+            profiles.extrude(one, reach, plane, frame),
+            (normal[0] * lifted, normal[1] * lifted, normal[2] * lifted),
+        )
+        for one in chosen
+    ]
+    tool = tools[0] if len(tools) == 1 else edit.boolean("union", tools)
     solid = edit.boolean("difference", [body, tool])
     # Eine Tasche, die den Körper verfehlt, lief stumm durch: im Verlauf ein
     # Schritt, im Bild dasselbe Teil, und keine Zeile, die das erklärt.
