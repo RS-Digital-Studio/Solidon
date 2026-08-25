@@ -386,6 +386,33 @@ class ImageSourceField(QWidget):
         return str(data) if data is not None else self.combo.currentText()
 
 
+def sketch_extent(text: str, values: Mapping[str, float]) -> tuple[float, float] | None:
+    """Breite und Höhe einer gezeichneten Skizze, in Millimetern.
+
+    ``None``, wenn sich der Text nicht lösen lässt — ein Dialog ist kein Ort,
+    an dem eine halbfertige Zeichnung einen Fehler wirft. Hilfsgeometrie zählt
+    nicht mit: Eine Mittellinie, an der etwas symmetrisch hängt, gehört nicht
+    zum Umriss und würde ihn größer erscheinen lassen, als er ist.
+    """
+    if not text.strip():
+        return None
+    try:
+        from app.core.sketch.serialize import sketch_from_text
+        from app.core.sketch.solver import solve_sketch
+
+        solved = solve_sketch(sketch_from_text(text), dict(values))
+    except Exception:
+        return None
+    points = [
+        point for element in solved.elements if not element.construction for point in element.points
+    ]
+    if not points:
+        return None
+    xs = [x for x, _y in points]
+    ys = [y for _x, y in points]
+    return (max(xs) - min(xs), max(ys) - min(ys))
+
+
 def _same_choice(entered: Any, wanted: str | bool) -> bool:
     """Ob der eingetragene Wert der gesuchte ist — ohne ``str()`` dazwischen.
 
@@ -915,6 +942,52 @@ class OperationDialog(QDialog):
 
         self.valuesChanged.connect(follow)
         follow()
+        self._couple_sketch_measures()
+
+    def _couple_sketch_measures(self) -> None:
+        """Wo eine Zeichnung liegt, tragen die Maßfelder ihre Maße — und nur lesend.
+
+        Der Kern nimmt bei gesetzter Skizze **weder** Grundform **noch** Länge,
+        Breite oder Ecken (``_regions_for``: ``if not sketch_text``). Die Felder
+        standen trotzdem da, mit den Vorgaben der Operation: 40 mal 20 neben
+        einer Zeichnung von 50 mal 30. Wer den Schritt später aufmacht, um
+        nachzusehen, wie groß sein Teil ist, liest dort die falsche Zahl.
+
+        Also beides: Die Zahlen kommen aus der Zeichnung, und die Zeile sagt,
+        woher — grau und begründet, wie jedes Feld ohne Wirkung (§2.5). Ändern
+        lässt sich das Maß über *Zeichnen …*, wo es hingehört.
+        """
+        namen = {entry.name: entry for entry in self.spec.params.spec()}
+        skizze = next((name for name, e in namen.items() if e.kind == "sketch"), "")
+        if not skizze or skizze not in self._editors:
+            return
+
+        reason = tr("Die Maße kommen aus der Zeichnung — über „Zeichnen …“ zu ändern.")
+        masse = {"length": 0, "width": 1}
+
+        def folge() -> None:
+            text = str(self.values().get(skizze, "") or "")
+            spanne = sketch_extent(text, self._parameter_values)
+            for name in ("shape", "length", "width", "corners", *masse):
+                editor = self._editors.get(name)
+                if editor is None or name not in namen:
+                    continue
+                label = self._rows[name].labelForField(editor)
+                if spanne is None:
+                    continue
+                if name in masse and isinstance(editor, ValueField):
+                    # Ohne ``blockSignals`` löst das Setzen ``valuesChanged``
+                    # aus, und diese Funktion riefe sich selbst.
+                    gesperrt = editor.blockSignals(True)
+                    editor.set_value(spanne[masse[name]])
+                    editor.blockSignals(gesperrt)
+                editor.setEnabled(False)
+                if label is not None:
+                    label.setEnabled(False)
+                _explain(editor, label, reason)
+
+        self.valuesChanged.connect(folge)
+        folge()
 
     def _watch(self, editor: QWidget) -> None:
         """Verbindet das Änderungssignal des Editors mit ``valuesChanged``.

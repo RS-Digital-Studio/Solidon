@@ -27,9 +27,12 @@ pytest.importorskip("PySide6")
 
 from PySide6.QtWidgets import QApplication, QMenu, QWidget
 
+from app.core import bootstrap
 from app.core.errors import ValidationError
 from app.core.registry import REGISTRY
 from app.core.scene import OperationDraft
+from app.core.sketch import shapes
+from app.core.sketch.serialize import sketch_to_text
 from app.ui.main_window import MainWindow
 from app.ui.op_dialog import OperationDialog
 from app.ui.session import Session
@@ -1395,3 +1398,56 @@ def test_a_greyed_out_row_says_why_on_both_halves(window: MainWindow) -> None:
     assert candidates.isEnabled()
     assert candidates.toolTip() == caption.toolTip()
     assert _title_of(spec, "thorough") not in caption.toolTip(), "wieder der eigene Satz"
+
+
+def test_a_drawn_sketch_puts_its_own_size_into_the_dialog(qt_app: QApplication) -> None:
+    """Was im Maßfeld steht, muss stimmen — sonst liest der Kunde die falsche Zahl.
+
+    ``_regions_for`` nimmt bei gesetzter Skizze **weder** Grundform **noch**
+    Länge, Breite oder Ecken: ``if not sketch_text`` entscheidet, und mit einer
+    Zeichnung ist der andere Zweig gemeint. Der Dialog zeigte trotzdem die
+    Vorgaben der Operation — gemessen am 25.08.2026 stand dort 40 mal 20 neben
+    einer Zeichnung von 50 mal 30.
+
+    Also beides geprüft: dass die Zahlen aus der Zeichnung kommen, und dass die
+    Zeile sagt, dass man sie dort nicht ändert (§2.5, „ein Feld ohne Wirkung
+    sagt es").
+    """
+    bootstrap.load_operations()
+    spec = REGISTRY.get("sketch_extrude")
+    dialog = OperationDialog(
+        spec, [], None, values={"sketch": sketch_to_text(shapes.rectangle(50.0, 30.0))}
+    )
+    try:
+        werte = dialog.values()
+
+        assert werte["length"] == pytest.approx(50.0), "die Länge kommt aus der Zeichnung"
+        assert werte["width"] == pytest.approx(30.0), "die Breite auch"
+
+        for name in ("shape", "length", "width"):
+            editor = dialog._editors[name]
+            assert not editor.isEnabled(), f"{name} wirkt nicht und ist trotzdem bedienbar"
+            assert "Zeichnung" in editor.toolTip(), f"{name} sagt nicht, woher sein Wert kommt"
+    finally:
+        release = getattr(type(dialog), "release", None)
+        if release is not None:
+            release(dialog)
+        dialog.deleteLater()
+
+
+def test_without_a_sketch_the_shape_fields_still_work(qt_app: QApplication) -> None:
+    """Die Gegenrichtung: Ohne Zeichnung sind die Felder das, was zählt.
+
+    Ohne sie wäre die Sperre oben eine, die immer greift — und die Grundform
+    als Weg zu einem Körper gäbe es nicht mehr.
+    """
+    bootstrap.load_operations()
+    dialog = OperationDialog(REGISTRY.get("sketch_extrude"), [], None)
+    try:
+        assert dialog._editors["length"].isEnabled(), "ohne Zeichnung zählt das Maßfeld"
+        assert dialog._editors["shape"].isEnabled()
+    finally:
+        release = getattr(type(dialog), "release", None)
+        if release is not None:
+            release(dialog)
+        dialog.deleteLater()
