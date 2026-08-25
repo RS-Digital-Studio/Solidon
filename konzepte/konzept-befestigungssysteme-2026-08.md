@@ -410,12 +410,24 @@ In dieser Reihenfolge, jedes für sich mit grüner Suite abschließbar:
   Kunde liest „Lochwand 40 mm" und nicht `skadis` — **ohne Markennamen**, denn
   das Rastermaß gehört niemandem, und wessen die Platte ist, steht in der
   Beschreibung.
-* **P6 — Der Durchlauf.** Ein echtes Modell von MakerWorld oder Printables
-  einlesen und die sieben Klicks aus Abschnitt 7 fahren. Was dabei hakt, ist der
-  eigentliche Befund dieses Vorhabens — nicht, was die Tests sagen.
+* **P6 — Der Durchlauf** ✔ *(25.08.2026)*. `tests/test_pegboard_flow.py`: Ein
+  Halter aus dem Korpus, 32 774 mm³, bekommt in **einem** Schritt zwei
+  Einhänger und wächst auf 36 427 — wasserdicht, ein Körper, zwei Schritte im
+  Stapel.
+
+  **Und der Befund kam prompt, wie vorhergesagt.** Der erste Anlauf war grün
+  und prüfte nichts: mit `unit="mm"` geladen misst der Halter 4 × 2 × 0,2 mm
+  und trägt zwei Flächen — er ist in Zoll gezeichnet. Ein Einhänger von 55 mm
+  Breite daran ist ein Test über einen Fall, den es nicht gibt.
+
+  Dabei fiel auf, was **kein** Fehler ist: Mit `unit="auto"` bricht die
+  Auswertung ab. Das ist Regel 21 bei der Arbeit — STL kennt keine Einheit, die
+  Angabe ist mehrdeutig, und die Anwendung hält an statt zu raten. Ein eigener
+  Test hält es fest, denn es ist die **erste** Frage, die dieser Weg stellt.
 * **P7 — Drucken.** Ein Prüfstück mit `count = 2` auf dem Centauri Carbon 2,
   einhängen, hängen lassen. Eine Passung, die nicht gedruckt wurde, ist eine
-  Behauptung.
+  Behauptung. **Das kann keine Sitzung abarbeiten** — es braucht Robert, den
+  Drucker und eine Platte. Das STL dafür erzeugt der Baustein auf Zuruf.
 * **P8 — Gridfinity.** Eigenes Paket, eigenes Konzept, nach demselben Muster.
   Erst wenn P1 bis P7 durch sind.
 
