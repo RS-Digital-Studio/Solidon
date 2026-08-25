@@ -910,6 +910,23 @@ def test_a_target_behind_the_sketch_is_refused() -> None:
     assert caught.value.suggestions
 
 
+def test_a_vanished_target_face_blames_the_up_to_field() -> None:
+    """Der Fehler zeigt auf das Feld, in dem der Fehler steht.
+
+    Die Zielfläche gehört zum Feld ``up_to``, nicht zur Skizzenebene — vorher
+    nannte der Fehler ``plane`` und riet „Auf einer der drei Grundebenen
+    zeichnen", und beides führte den Kunden vom richtigen Feld weg: gezeichnet
+    war längst, nur das Ziel der Höhe war weg.
+    """
+    box = brep_box()
+    with pytest.raises(ValidationError) as caught:
+        run("sketch_extrude", box, shape="rectangle", length=10, width=10, up_to="face_99")
+    assert caught.value.field == "up_to"
+    advice = [str(action.label) for action in caught.value.suggestions]
+    assert advice, "der Fehler muss Vorschläge tragen"
+    assert not any("Grundebenen" in line for line in advice)
+
+
 def test_two_regions_become_one_body() -> None:
     """Zwei Stege nebeneinander sind eine Handlung, nicht zwei.
 

@@ -906,7 +906,7 @@ def push_faces(solid: Solid, direction: tuple[float, float, float], distance: fl
     from OCP.BRepPrimAPI import BRepPrimAPI_MakePrism
     from OCP.gp import gp_Vec
 
-    if abs(distance) <= 1e-9:
+    if abs(distance) <= EPS_GEOM:
         raise ValidationError(
             "distance",
             _("Ohne Weg bewegt sich nichts — dieser Wert darf nicht null sein."),
@@ -955,7 +955,7 @@ def _facing(
     """Die ebenen Flächen, deren Normale in die gegebene Richtung zeigt, mit
     ihrer eigenen Normalen — das Prisma folgt der Fläche, nicht der Anfrage."""
     length = math.sqrt(sum(value * value for value in direction))
-    if length <= 1e-9:
+    if length <= EPS_GEOM:
         return []
     unit = [value / length for value in direction]
     return [

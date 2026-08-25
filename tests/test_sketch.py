@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 
 from app.core.brep.kernel import available as brep_available
@@ -129,6 +130,57 @@ def test_a_redundant_constraint_names_the_pair() -> None:
     with pytest.raises(SketchConflictError) as caught:
         solve_sketch(doubled, PARAMS)
     assert {caught.value.first, caught.value.second} == {4, 10}
+
+
+def test_a_reference_is_never_the_redundant_partner() -> None:
+    # Referenzmaß zuerst, dann Koinzidenz und Horizontal auf denselben Punkten:
+    # die Horizontale ist redundant (die Koinzidenz zieht beide Punkte
+    # zusammen), und als Partnerin muss die Koinzidenz genannt werden — das
+    # Referenzmaß legt nichts fest und kann an keiner Redundanz beteiligt sein.
+    sketch = Sketch(
+        plane="plane:xy",
+        elements=(SketchElement("line", ((0.0, 0.0), (4.0, 1.0))),),
+        constraints=(
+            SketchConstraint("reference", (0, 1)),
+            SketchConstraint("coincident", (0, 1)),
+            SketchConstraint("horizontal", (0, 1)),
+        ),
+    )
+    with pytest.raises(SketchConflictError) as caught:
+        solve_sketch(sketch)
+    assert {caught.value.first, caught.value.second} == {1, 2}
+
+
+def test_a_shared_redundancy_blames_a_member_not_the_first() -> None:
+    # Verteilt sich die Abhängigkeit über einen Verbund (jede Bedingung trägt
+    # auch Eigenes bei), gab der Rückfall stumpf (0, 0) zurück — hier wäre das
+    # das Referenzmaß. Benannt werden muss ein Mitglied des Verbunds.
+    from app.core.sketch.solver import _Equation, _redundant_pair, _row_blocks
+
+    constraints = (
+        SketchConstraint("reference", (0, 1)),
+        SketchConstraint("coincident", (0, 1)),
+        SketchConstraint("coincident", (1, 2)),
+    )
+    silent = lambda values: ()  # noqa: E731 — nur die Blockform zählt hier
+    equations = (
+        _Equation(constraint=1, rows=2, fn=silent, grad=lambda values, into: None),
+        _Equation(constraint=2, rows=2, fn=silent, grad=lambda values, into: None),
+    )
+    # Jeder Block hält eine eigene und eine geteilte Zeile: Rang 3 bei vier
+    # Zeilen, aber kein Block ist allein entbehrlich.
+    jacobian = np.array(
+        [
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ]
+    )
+    first, second = _redundant_pair(
+        constraints, equations, _row_blocks(equations), jacobian, rank=3
+    )
+    assert {first, second} == {1, 2}
 
 
 def test_circle_radius_is_a_distance() -> None:

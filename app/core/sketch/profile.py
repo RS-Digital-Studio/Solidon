@@ -411,7 +411,10 @@ def _flat_curve(element: SketchElement) -> tuple[Point2, ...]:
         begin = math.atan2(start[1] - centre[1], start[0] - centre[0])
         finish = math.atan2(end[1] - centre[1], end[0] - centre[0])
         sweep = (finish - begin) % (2.0 * math.pi)
-        if sweep <= EPS_GEOM:
+        # Dieselbe Schwelle wie in ``_arc_midpoint`` — zwei Zahlen für die
+        # Frage „ist das ein Vollkreis?" hießen: Der Viewport zeichnete einen
+        # Kreis, in den Kern ging ein Bogen ohne Ausdehnung.
+        if sweep <= _FULL_CIRCLE_EPS:
             sweep = 2.0 * math.pi
         return _along_arc(centre, start, sweep, radius)
     if element.kind == "spline":

@@ -527,24 +527,34 @@ def _redundant_pair(
     ihre Zeilen sagen nichts, was die übrigen nicht auch sagen. Zwei
     Kandidatinnen sind das Paar: jede macht die andere überflüssig. Bleibt
     nur eine (sie hängt an einer Kombination mehrerer), wird ihr die erste
-    Bedingung zur Seite gestellt, die einen Zielpunkt mit ihr teilt."""
-    candidates: list[int] = []
+    Bedingung zur Seite gestellt, die einen Zielpunkt mit ihr teilt — und
+    zwar eine, die im Gleichungssystem steht: Ein Referenzmaß legt nichts
+    fest und kann an keiner Redundanz beteiligt sein. Trägt jede Bedingung
+    auch Eigenes bei (die Abhängigkeit verteilt sich über einen Verbund),
+    wird die mit dem kleinsten eigenen Beitrag benannt — vorher stand hier
+    ein ``(0, 0)``, das blind der ersten Bedingung der Skizze die Schuld
+    gab, gleich ob sie beteiligt war."""
+    measured: list[tuple[int, int]] = []  # (Rangverlust ohne sie, Index)
     for equation, block in zip(equations, blocks, strict=True):
         if equation.constraint is None:
             continue
         kept = [row for row in range(jacobian.shape[0]) if row not in block]
-        if int(np.linalg.matrix_rank(jacobian[kept])) == rank:
-            candidates.append(equation.constraint)
+        loss = rank - int(np.linalg.matrix_rank(jacobian[kept]))
+        measured.append((loss, equation.constraint))
+    candidates = [index for loss, index in measured if loss == 0]
     if len(candidates) >= 2:
         return candidates[0], candidates[1]
+    if not candidates and measured:
+        candidates = [min(measured)[1]]
     if candidates:
         first = candidates[0]
+        bearing = {index for _, index in measured}
         touched = set(constraints[first].targets)
         partner = next(
             (
                 index
                 for index, other in enumerate(constraints)
-                if index != first and touched.intersection(other.targets)
+                if index != first and index in bearing and touched.intersection(other.targets)
             ),
             first,
         )

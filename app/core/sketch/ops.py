@@ -182,7 +182,15 @@ def _height_of(
         # Nur in diesem Zweig nachschlagen: bei einer Flächenebene steht dort
         # nichts, und ein Zugriff davor endete mit einem KeyError.
         frame = frame_of(profiles.PLANES[plane][1], (0.0, 0.0, 0.0))
-    target = frame_for(f"feature:{up_to}", ctx.scene.objects.values())
+    target = frame_for(
+        f"feature:{up_to}",
+        ctx.scene.objects.values(),
+        field="up_to",
+        suggestions=[
+            Action(id="sketch.pick_face", label=_("Eine andere Zielfläche wählen"), primary=True),
+            Action(id="sketch.clear_up_to", label=_("Die Höhe wieder als Zahl eintragen")),
+        ],
+    )
     return height_to(frame, target)
 
 

@@ -15,7 +15,7 @@ wäre der Fall, für den §21 die stabilen IDs eingeführt hat.
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from app.core.errors import Action, ValidationError
 from app.core.types import PlaneFrame, Point2, SceneObject, Vec3
@@ -113,12 +113,24 @@ def is_feature_plane(plane: str) -> bool:
     return plane.startswith("feature:")
 
 
-def frame_for(plane: str, objects: Iterable[SceneObject]) -> PlaneFrame:
+def frame_for(
+    plane: str,
+    objects: Iterable[SceneObject],
+    field: str = "plane",
+    suggestions: Sequence[Action] | None = None,
+) -> PlaneFrame:
     """Der Rahmen zu ``feature:<id>``, gesucht über alle Objekte der Szene.
 
     Über alle und nicht nur über das Eingangsobjekt, weil ``sketch_extrude``
     nichts verbraucht: sie erzeugt einen Körper aus dem Nichts, und die Fläche,
     auf der sie aufsetzt, gehört einem anderen.
+
+    ``field`` und ``suggestions`` gehören dem Aufrufer: Dieselbe Suche dient
+    der Skizzenebene **und** der Zielfläche von ``up_to`` — der Fehler muss
+    aber auf das Feld zeigen, in dem der Wert steht, und raten, was dort
+    weiterhilft. „Auf einer der drei Grundebenen zeichnen" ist ein guter Rat
+    für eine verschwundene Skizzenebene und ein irreführender für ein
+    verschwundenes Höhenziel.
     """
     feature_id = plane.partition(":")[2]
     known: list[str] = []
@@ -141,12 +153,14 @@ def frame_for(plane: str, objects: Iterable[SceneObject]) -> PlaneFrame:
             )
             return frame_of(outward, (centre[0], centre[1], centre[2]))
     raise ValidationError(
-        "plane",
+        field,
         _("Diese Fläche gibt es in der Szene nicht mehr."),
         value=feature_id,
         constraint="unknown_feature",
         values={"known_faces": known},
-        suggestions=[
+        suggestions=list(suggestions)
+        if suggestions is not None
+        else [
             Action(id="sketch.pick_face", label=_("Eine andere Fläche wählen"), primary=True),
             Action(
                 id="sketch.use_global_plane", label=_("Auf einer der drei Grundebenen zeichnen")
