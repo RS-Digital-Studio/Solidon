@@ -403,3 +403,168 @@ def test_the_catalog_learns_whether_the_range_check_passed(
     parts2, registry2 = PartRegistry(), Registry()
     recipe.load_all(tmp_path, parts2, registry2)
     assert parts2.get("probe_halter").range_passed is True
+
+
+# --- E6: der Durchlauf, an dem das Ganze gemessen wird ----------------------------
+
+
+def test_the_whole_way_from_an_imported_model_to_a_reused_and_changed_part(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Konzept §19 E6, Schritt für Schritt: Ein Kunde legt aus einem
+    **eingelesenen Modell** einen eigenen Baustein an, benutzt ihn in einem
+    zweiten Projekt, ändert ihn — und das zweite Projekt meldet es beim
+    nächsten Öffnen (§24.4, §15.2).
+
+    Der Durchlauf ist die Abnahme: Jede Stufe benutzt die echten Wege —
+    Auswertung, Container, Register, Stempel — und keine Attrappe. Was hier
+    hakt, ist der Befund.
+    """
+    from app.core.knowledge.parts import ops as part_ops
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, new_project
+    from app.core.types import Source
+
+    meshes = Path(__file__).parent / "data" / "meshes"
+
+    # 1. Das Ursprungsprojekt: ein eingelesenes Netz, ein Maß als Parameter.
+    origin = new_project("centauri-carbon-2", "petg")
+    origin.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/cube_clean.stl", sha256=""
+    )
+    origin.sources["src_1"] = (meshes / "cube_clean.stl").read_bytes()
+    origin.document.parameters["faktor"] = Parameter(name="faktor", value=1.5)
+    History(origin.document).apply(
+        "Laden", [OperationDraft(op="load", params={"source": "src_1", "unit": "mm"})]
+    )
+    History(origin.document).apply(
+        "Skalieren",
+        [
+            OperationDraft(
+                op="scale_object",
+                inputs=("obj_1",),
+                params={"factor": "@faktor"},
+            )
+        ],
+    )
+
+    # 2. „Als Baustein speichern" — der ganze Stapel, wie es der Dialog tut.
+    #    Die Merkmals-ID kommt aus der echten Auswertung, wie im Dialog auch:
+    #    Ein eingelesenes Netz benennt seine Flächen selbst (perceive), und
+    #    welche die Deckfläche ist, sagt ihre Normale — nicht ein geratener
+    #    Name.
+    first = evaluate(origin.document, profile, sources=ProjectSources(origin))
+    first_body = next(iter(first.scene.objects.values()))
+    top = next(
+        fid
+        for fid, feature in first_body.features.items()
+        if feature.kind == "face" and feature.params.get("normal", (0, 0, 0))[2] > 0.9
+    )
+    made = recipe.capture(
+        origin.document,
+        dict(origin.sources),
+        name="mein_klotz",
+        title="Mein Klotz",
+        group="structure",
+        op_ids=tuple(entry.id for entry in origin.document.ops),
+        exposed=(
+            recipe.ExposedParam(
+                name="faktor", title="Faktor", default=1.5, unit="", minimum=0.5, maximum=3.0
+            ),
+        ),
+        features={"deckel": top},
+        profile=profile,
+    )
+    made = recipe.range_check(made, profile)
+    assert made.range_report is not None and made.range_report.passed
+    recipe.save(made, tmp_path)
+
+    # 3. Laden wie beim Anwendungsstart: Katalog **und** Register global —
+    #    exakt der Weg von ``bootstrap.load_user_parts``, denn am globalen
+    #    Katalog hängt auch der Stempel beim Speichern (§24.4). Der Ausbau am
+    #    Ende ist Pflicht: Die Bausteinsweeps anderer Tests parametrisieren
+    #    über denselben Katalog und dürfen dieses Rezept nicht erben.
+    from app.core.knowledge.parts.registry import PARTS
+    from app.core.registry import REGISTRY
+
+    loaded = recipe.load_all(tmp_path, None, None)
+    assert loaded.loaded == ("mein_klotz",)
+    op_name = part_ops.op_name("mein_klotz")
+    assert REGISTRY.has(op_name)
+
+    try:
+        _run_the_second_project(profile, tmp_path, made, op_name)
+    finally:
+        # Der Ausbau: die zwei globalen Einträge, die Schritt 3 angelegt hat.
+        PARTS._parts.pop("mein_klotz", None)
+        REGISTRY._ops.pop(op_name, None)
+
+
+def _run_the_second_project(
+    profile: Profile, tmp_path: Path, made: recipe.Recipe, op_name: str
+) -> None:
+    """Die Schritte 4 bis 7 des Durchlaufs — ausgelagert, damit der Ausbau
+    der globalen Einträge in einem ``finally`` steht statt am Ende eines
+    langen Tests, wo ihn der erste Fehlschlag überspringt."""
+    import dataclasses
+
+    from app.core.knowledge.parts import check as part_check
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.scene.project import ProjectSources, load, new_project, save
+
+    # 4. Das zweite Projekt benutzt ihn — mit einem eigenen Wert, und die
+    #    Geometrie folgt dem Wert (20-mm-Würfel, Faktor 2 → 40 mm Kante).
+    second = new_project("centauri-carbon-2", "petg")
+    History(second.document).apply(
+        "Klotz",
+        [OperationDraft(op="create_box", params={"width": 10.0, "depth": 10.0, "height": 4.0})],
+    )
+    History(second.document).apply(
+        "Baustein",
+        [
+            OperationDraft(
+                op=op_name,
+                inputs=("obj_1",),
+                params={"faktor": 2.0, "at_feature": "face_top"},
+            )
+        ],
+    )
+    result = evaluate(second.document, profile, sources=ProjectSources(second))
+    assert result.stopped_at is None, "der Baustein muss im zweiten Projekt rechnen"
+    body = next(iter(result.scene.objects.values()))
+    assert body.mesh.bounds.size[0] == pytest.approx(40.0), (
+        "der freigegebene Wert muss bis in die Geometrie wirken"
+    )
+    assert any(name.endswith("deckel") for name in body.features), (
+        "das benannte Merkmal muss am Ergebnis stehen (§24.1)"
+    )
+
+    # 5. Speichern stempelt den Stand des Rezepts ins Projekt (§24.4).
+    target = tmp_path / "zweites.p3d"
+    save(second, target)
+    stamped = [key for key in second.document.libs if "mein_klotz" in key]
+    assert stamped, "ohne Stempel bliebe jede Änderung des Rezepts stumm"
+
+    # 6. Der Kunde ändert sein Rezept — neue Fassung, gleicher Name.
+    changed = dataclasses.replace(made, doc="jetzt mit anderer Beschreibung")
+    recipe.save(changed, tmp_path)
+    parts2 = PartRegistry()
+    recipe.load_all(tmp_path, parts2, None)
+
+    # 7. Das zweite Projekt wieder öffnen: die Änderung wird gemeldet —
+    #    derselbe Weg, den die Sitzung beim Öffnen nimmt.
+    reopened = load(target)
+    findings = part_check.check(reopened.document, parts2)
+    assert any(
+        finding.code == "parts.own_changed" and "mein_klotz" in str(finding.values.get("parts"))
+        for finding in findings
+    ), "ein geändertes Rezept muss sich beim Öffnen melden (§24.4)"
+
+    # Und die Gegenrichtung: unverändert heißt still.
+    parts3 = PartRegistry()
+    recipe.save(made, tmp_path)
+    recipe.load_all(tmp_path, parts3, None)
+    quiet = part_check.check(reopened.document, parts3)
+    assert not any(finding.code == "parts.own_changed" for finding in quiet), (
+        "ein unverändertes Rezept darf keine Meldung erzeugen"
+    )

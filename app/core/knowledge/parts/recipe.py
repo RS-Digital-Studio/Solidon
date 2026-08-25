@@ -256,7 +256,17 @@ def build(
                 constraint="unknown_feature",
                 suggestions=(CORRECT_INPUT, CANCEL),
             )
-        features[public] = found
+        # **Mit dem Namen wechselt die Provenienz.** Das Rezept hat diesem
+        # Merkmal einen Namen gegeben — ab jetzt ist es ein *erzeugtes*, wie
+        # bei jedem eingebauten Baustein: Eine Passung darf darauf zeigen, der
+        # Agent darf darauf verweisen (§21.3, Leitprinzip 5). Als ``detected``
+        # weitergereicht verwaiste es still bei der nächsten Wiedererkennung —
+        # gemessen am E6-Durchlauf: Der Deckel eines Rezepts aus einem
+        # eingelesenen Netz verschwand nach dem Einsetzen als
+        # ``perceive.orphaned``, während derselbe Deckel aus ``create_box``
+        # (dort von Haus aus erzeugt) blieb. Genau das ist die Naht, von der
+        # Konzept §18d spricht.
+        features[public] = dataclasses.replace(found, id=public, provenance="generated")
     return PartResult(
         mesh=body.mesh, features=features, findings=list(result.scene.report.findings)
     )
