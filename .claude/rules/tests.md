@@ -593,6 +593,18 @@ Die drei Weisen, auf denen sie danebengingen, sind alle dieselbe:
   `rejected.connect(self.reject)` blieb unbemerkt. Wer eine Oberfläche prüft,
   drückt, tippt und wählt; die Methode dahinter ist die zweite Zusicherung, nicht
   die erste.
+* **Ein Wert herausgezogen, die Nachbarn geprüft aussehen lassen.** Ein Aufruf
+  mit fünf Argumenten, eines davon in eine eigene Methode gehoben, damit ein
+  Test es fragen kann — und die anderen vier sehen danach mitgeprüft aus. Am
+  25.08.2026 hat das einen stillen Datenfehler gedeckt: `_save_as_part` reichte
+  Merkmale (geprüft, eigene Methode, eigener Test) und `op_ids` (ungeprüft, in
+  der Zeile) an denselben Aufruf. Die IDs waren `enumerate`-Plätze, `capture`
+  filtert nach `Operation.id`, und die zählt ab eins — **der letzte Schritt fiel
+  aus jedem Rezept**, ohne Fehler und ohne Meldung. Acht grüne Tests standen
+  daneben, einer davon zwei Zeilen über der falschen. Wer ein Argument
+  herauszieht, um es prüfbar zu machen, zählt die übrigen desselben Aufrufs —
+  die Extraktion prüft eines und tarnt den Rest.
+
 * **Am Prüfobjekt vorbei.** Der Test baute den `QThread` selbst und startete ihn
   selbst. Damit blieb er grün, als der Dialog von `start()` auf `run()` fiel —
   also genau dann, als die Rechnung wieder im Hauptthread lief. Gebaut wird, was
