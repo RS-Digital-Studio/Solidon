@@ -605,6 +605,14 @@ Die drei Weisen, auf denen sie danebengingen, sind alle dieselbe:
   herauszieht, um es prüfbar zu machen, zählt die übrigen desselben Aufrufs —
   die Extraktion prüft eines und tarnt den Rest.
 
+  Derselbe Aufruf trug im selben Commit einen zweiten stillen Fehler, und der
+  war von der anderen Sorte: `dialog.saved.connect(catalog.show_parts)` —
+  ein `Signal(str)` mit einem Namen darin an einem Slot, der einen Suchtext
+  erwartet. Qt verbindet alles, dessen Stelligkeit passt. Was dagegen hilft,
+  steht in `.claude/memory/signal-passt-an-den-falschen-slot.md`; die zwei
+  gehören zusammen gelesen, weil dieser Punkt sagt, wie man den Fehler beim
+  **Schreiben** vermeidet, und jener, wie man ihn beim **Prüfen** findet.
+
 * **Am Prüfobjekt vorbei.** Der Test baute den `QThread` selbst und startete ihn
   selbst. Damit blieb er grün, als der Dialog von `start()` auf `run()` fiel —
   also genau dann, als die Rechnung wieder im Hauptthread lief. Gebaut wird, was

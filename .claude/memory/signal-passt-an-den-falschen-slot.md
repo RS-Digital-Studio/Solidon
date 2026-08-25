@@ -27,6 +27,9 @@ Parameter anbieten (wie `PartCatalog.refresh()`), der nichts missverstehen
 kann. Und bei der Prüfung: nach jeder Station der Bedienung das Ergebnis
 **ansehen** — die Kette der Funde vom 25.08.2026 (fehlender letzter Schritt,
 gekaperte Suche, fehlendes Vorschaubild, fehlende Kennzeichnung) stand in
-keinem roten Test, aber in jedem Bildschirmfoto. Verwandt:
+keinem roten Test, aber in jedem Bildschirmfoto. Die Gegenrichtung — wie derselbe Aufruf beim Schreiben abzusichern war —
+steht in `.claude/rules/tests.md` unter „Die Gegenprobe“: Wer ein Argument
+herauszieht, um es prüfbar zu machen, zählt die übrigen desselben Aufrufs.
+Verwandt:
 [[oberflaeche-von-hand-fahren]], [[eine-kette-endet-am-letzten-glied]],
 [[text-gesetzt-heisst-nicht-gezeigt]].
