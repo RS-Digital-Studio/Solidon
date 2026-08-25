@@ -1147,6 +1147,31 @@ def test_fitting_tells_pyvista_that_it_is_done(window: MainWindow) -> None:
     assert plotter.camera_set, "und danach fasst pyvista die Kamera nicht mehr an"
 
 
+def test_an_axis_view_fits_on_the_bodies_not_the_backdrop(window: MainWindow) -> None:
+    """Strg+0 bis Strg+6 rahmten die Kulisse statt des Teils.
+
+    ``view_from`` rief ``plotter.reset_camera()`` über alle Aktoren — exakt
+    der Fehler, den ``reset_camera`` daneben in eigenen Worten beschreibt und
+    behebt: Ein 80-mm-Teil im 256er Bauraum wurde ein Fleck. Und ohne
+    ``camera_set`` passte der nächste Kamera-Zugriff gleich noch einmal ein
+    (Gesamtreview 25.08.2026, J-8). Die Achsansicht geht jetzt durch dieselbe
+    Einpassung wie „Alles einpassen".
+    """
+    from app.ui.viewport import with_margin
+
+    window.viewport.show_scene(window.session.last_result)
+    plotter = _CameraPlotter()
+    window.viewport.plotter = plotter
+    window.viewport._shadow_hulls.clear()
+
+    window.viewport.view_from("front")
+
+    bounds = window.viewport._object_bounds()
+    assert bounds is not None
+    assert plotter.fitted_to == [with_margin(bounds)], "auf die Körper, mit Luft darum"
+    assert plotter.camera_set, "sonst rahmt der nächste Zugriff wieder alles"
+
+
 def test_an_empty_scene_still_fits_on_something(window: MainWindow) -> None:
     """Ohne Körper bleibt der Bauraum das Maß — dann ist er das Einzige, was
     es zu sehen gibt.

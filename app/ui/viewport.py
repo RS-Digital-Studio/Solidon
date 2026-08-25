@@ -835,6 +835,18 @@ DISPLAY_DECIMATION_ABOVE = 500_000
 #: Zug am Schnittschieber nicht durch eine Million Dreiecke geht.
 DISPLAY_DECIMATION_TARGET = 200_000
 
+#: Ab welcher Abweichung von 1,0 ein Skalierfaktor als Zug zählt — relativ,
+#: nicht in Millimetern, darum nicht ``EPS_DISPLAY``. Zweimal als Streuzahl
+#: geschrieben, entschied dieselbe Frage an zwei Stellen verschieden, sobald
+#: jemand eine der beiden anfasst.
+SCALE_UNCHANGED = 1e-4
+
+#: Wie viele dezimierte Netze die Anzeige behält. Eines war zu wenig: Zwei
+#: große Körper verdrängten einander, und ``show_scene`` — das bei jeder
+#: Auswahl, jedem Themenwechsel und jedem Zug am Schnittschieber läuft —
+#: dezimierte beide jedes Mal neu, im Qt-Hauptthread (§2.8).
+DISPLAY_CACHE_KEPT = 4
+
 #: Wie lange der Schichtschieber stehen muss, bevor die Körper an der neuen
 #: Höhe gekappt werden. Der Schnitt ist echte Geometrie und kostet an einem
 #: texturierten Netz um die Sekunde — kurz genug, dass er nach dem Loslassen
@@ -1896,7 +1908,6 @@ class Viewport(QWidget):
         self._difference_held = False
         """Ob die Vorschau gerade weggehalten wird, um das Vorher zu sehen."""
         self._diff_palette: DiffPalette = "blue_orange"
-        self._ghost: EvaluationResult | None = None
         self._explosion = 0.0
         """§18.8: wie weit geteilte Stücke auseinandergezogen gezeichnet werden.
         Nur Darstellung, nie Geometrie."""
@@ -2832,10 +2843,12 @@ class Viewport(QWidget):
 
         middle = np.mean(centres, axis=0)
         away = np.asarray(entry.mesh.bounds.centre, dtype=float) - middle
-        length = float(np.linalg.norm(away))
-        if length <= EPS_GEOM:
+        if float(np.linalg.norm(away)) <= EPS_GEOM:
             return np.zeros(3)
-        return away / length * length * self._explosion
+        # Der Versatz wächst mit dem Abstand von der Mitte — das ist die
+        # Absicht, keine fehlende Normierung: Weiter außen liegende Teile
+        # rücken weiter, und die Anordnung bleibt ähnlich.
+        return away * self._explosion
 
     def _scalars_for(self, object_id: ObjectId, faces: int) -> Any:
         """Kartenwerte für diesen Körper, falls es welche gibt, die noch zu ihm
@@ -2866,12 +2879,15 @@ class Viewport(QWidget):
             return mesh
 
         key = (object_id, mesh.triangle_count)
-        found = self._display_cache.get(key)
+        found = self._display_cache.pop(key, None)
         if found is None:
             found = decimate(mesh, DISPLAY_DECIMATION_TARGET)
-            # Nur die zuletzt gezeigten behalten: ein dezimiertes Netz ist
-            # billig zu bauen und teuer zu halten.
-            self._display_cache = {key: found}
+        # Die zuletzt gezeigten behalten, den ältesten verdrängen: ein
+        # dezimiertes Netz ist teuer zu halten — aber genau eines zu halten
+        # hieß, dass zwei große Körper einander bei jedem Aufbau verdrängten.
+        self._display_cache[key] = found
+        while len(self._display_cache) > DISPLAY_CACHE_KEPT:
+            self._display_cache.pop(next(iter(self._display_cache)))
         return found
 
     def _sectioned(self, mesh: Any) -> Any:
@@ -4490,11 +4506,8 @@ class Viewport(QWidget):
 
     # --- difference view (§18.7) ------------------------------------------------
 
-    def show_difference(
-        self, difference: Any | None, ghost: EvaluationResult | None = None
-    ) -> None:
-        """Hinzugekommenes und entferntes Volumen, mit dem vorigen Zustand als
-        Geist.
+    def show_difference(self, difference: Any | None) -> None:
+        """Hinzugekommenes und entferntes Volumen.
 
         Die Farben kommen aus der Palette (§19.1) und sind nie der einzige
         Träger: hinzugekommen und entfernt unterscheiden sich auch in der
@@ -4502,7 +4515,6 @@ class Viewport(QWidget):
         ohne Farbsehen lesbar.
         """
         self._difference = difference
-        self._ghost = ghost
         self._redraw_difference()
         if self.plotter is not None:
             self._draw()
@@ -5014,7 +5026,7 @@ class Viewport(QWidget):
             self.set_navigation(self._scheme)
             self.set_gizmo(self._gizmo_wanted)
             return
-        if abs(factor - 1.0) > 1e-4:
+        if abs(factor - 1.0) > SCALE_UNCHANGED:
             self.scaleDragged.emit(float(factor))
         self._end_drag()
 
@@ -5051,7 +5063,7 @@ class Viewport(QWidget):
                 offset = [0.0, 0.0, 0.0]
                 offset[index] = float(value)
                 self.transformDragged.emit(TransformSteps(offset=(offset[0], offset[1], offset[2])))
-        elif kind == "scale" and abs(value - 1.0) > 1e-4:
+        elif kind == "scale" and abs(value - 1.0) > SCALE_UNCHANGED:
             self.scaleDragged.emit(float(value))
         self._end_drag()
 
@@ -5219,12 +5231,19 @@ class Viewport(QWidget):
         self._draw()
 
     def view_from(self, direction: str) -> None:
-        """Eine der sieben Kameravorgaben (§18.1)."""
+        """Eine der sieben Kameravorgaben (§18.1).
+
+        Eingepasst wird über :meth:`reset_camera` — auf die Körper, mit Luft,
+        und mit gesetztem ``camera_set``. ``plotter.reset_camera()`` stand
+        hier und rahmte alle Aktoren samt Bauraum-Kulisse: exakt der Fehler,
+        den :meth:`reset_camera` in eigenen Worten beschreibt, nur über die
+        Achsansichten (Strg+0 bis Strg+6, ViewBar) wieder offen.
+        """
         if self.plotter is None or direction not in VIEW_DIRECTIONS:
             return
         position, up = VIEW_DIRECTIONS[direction]
         self.plotter.camera_position = [position, (0.0, 0.0, 0.0), up]
-        self.plotter.reset_camera()
+        self.reset_camera()
         self._redraw_shadows()
 
     def view_on_plane(self, frame: PlaneFrame) -> None:
