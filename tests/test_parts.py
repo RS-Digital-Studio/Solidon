@@ -809,6 +809,43 @@ def test_the_library_version_covers_every_part() -> None:
     )
 
 
+def test_the_range_check_knows_which_parts_their_host_holds_together(
+    profile: Profile,
+) -> None:
+    """Das Feld muss dort wirken, wo der Kunde die Folge sieht.
+
+    ``joined_by_host`` stand einen Tag lang nur in einem Test. Der Bereichstest
+    des **Kerns** kannte es nicht, und der ist der, dessen Bericht am
+    Katalogeintrag hängt (§24.5): Ein Kunde hätte über dem Lochwand-Einhänger
+    „zerfällt in Teile" gelesen — über einem Baustein, der im Einsatz tadellos
+    ist.
+
+    Das ist der Fall aus ``.claude/memory/eine-kette-endet-am-letzten-glied.md``
+    in Reinform: Ein Feld einzuführen ist nicht dasselbe, wie es zu lesen. Ich
+    hatte beim Einbauen sogar den richtigen Satz geschrieben — „statt eine
+    Ausnahme in den Test zu schreiben" — und dann genau das getan.
+    """
+    from app.core.knowledge.parts.range_check import check
+
+    spec = PARTS.get("pegboard_hook")
+    assert spec.joined_by_host, "der Einhänger deklariert es nicht mehr"
+
+    strict = check(spec.params, spec.fn, profile)
+    assert not strict.passed, (
+        "ohne den Schalter müsste der Einhänger an einer Ecke zerfallen — "
+        "sonst prüft dieser Test nichts"
+    )
+    assert any("zerfällt" in failure.reason for failure in strict.failures), (
+        f"unerwarteter Grund: {[f.reason for f in strict.failures]}"
+    )
+
+    lenient = check(spec.params, spec.fn, profile, joined_by_host=True)
+    assert lenient.passed, (
+        f"mit dem Schalter darf nichts übrig bleiben: {[f.reason for f in lenient.failures]}"
+    )
+    assert lenient.checked == strict.checked, "es wurden verschieden viele Ecken gefahren"
+
+
 # --- die Normteiltabelle -----------------------------------------------------------
 
 

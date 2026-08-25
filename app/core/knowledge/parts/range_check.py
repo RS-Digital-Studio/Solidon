@@ -99,8 +99,18 @@ def check(
     *,
     progress: ProgressFn | None = None,
     cancelled: CancelToken | None = None,
+    joined_by_host: bool = False,
 ) -> RangeReport:
     """Fährt die Ecken und sagt je Ecke, was nicht hielt.
+
+    ``joined_by_host`` nimmt die Prüfung auf **eine** Komponente heraus — für
+    Bausteine, deren Teile erst der Träger verbindet. Der Lochwand-Einhänger
+    setzt ohne Rückplatte je Haken einen Zapfen; zwei Zapfen sind zwei Körper,
+    und an dem Teil, an das sie kommen, sind sie einer. Ohne diesen Schalter
+    trüge sein Katalogeintrag eine Warnung über einen Baustein, der im Einsatz
+    tadellos ist (§24.5 verlangt, dass ein gebrochener Bericht dort steht).
+    Die übrigen drei Prüfungen gelten unverändert: Ein Baustein darf auch
+    mehrteilig weder undicht noch leer noch zu dünn sein.
 
     ``build`` ist, was aus Werten einen Körper macht — für ein Rezept die
     Auswertung, für eine ``.py`` ihre Funktion. Die vier Prüfungen sind die
@@ -138,7 +148,7 @@ def check(
             failures.append(RangeFailure(dict(values), str(_("nicht wasserdicht"))))
         elif mesh.volume <= 0.0:
             failures.append(RangeFailure(dict(values), str(_("kein Volumen"))))
-        elif mesh.component_count != 1:
+        elif mesh.component_count != 1 and not joined_by_host:
             failures.append(RangeFailure(dict(values), str(_("zerfällt in Teile"))))
         elif min(mesh.bounds.size) <= profile.minimum_wall_thickness / 4.0:
             failures.append(RangeFailure(dict(values), str(_("dünner als druckbar"))))
