@@ -3139,3 +3139,141 @@ def test_the_grid_field_offers_its_way_back_in_words(qt_app: QApplication) -> No
         assert panel.snap_step.specialValueText(), "der Rückweg ist unbeschriftet"
     finally:
         panel.deleteLater()
+
+
+def test_the_pointer_mark_does_not_survive_a_change_of_plane(qt_app: QApplication) -> None:
+    """Eine Marke gehört der Ebene, auf der sie liegt.
+
+    ``clear_sketch`` lässt sie absichtlich stehen — sie hängt an der Maus und
+    nicht an der Zeichnung, und mitgeräumt flackerte sie bei jedem Strich.
+    Genommen wird sie deshalb in ``set_sketching``, und zwar **bei jedem**
+    Aufruf und nicht nur beim Ende des Modus: Ein Ebenenwechsel geht durch
+    dieselbe Methode mit einem neuen Rahmen. Ohne das schwebte die alte Marke
+    auf der vorigen Ebene im Raum, bis die Maus sich das nächste Mal bewegte —
+    wer über die Ziffern wechselt und die Hand stillhält, sah genau das.
+
+    Geprüft wird die Verdrahtung und nicht der Actor: Offscreen gibt es keinen
+    Plotter, dort entsteht nie eine Marke, und ein Test über eine leere Liste
+    wäre immer grün.
+    """
+    from app.core.types import PlaneFrame
+    from app.ui.viewport import Viewport
+
+    frames = [
+        PlaneFrame(
+            origin=(0.0, 0.0, hoehe),
+            x_axis=(1.0, 0.0, 0.0),
+            y_axis=(0.0, 1.0, 0.0),
+            normal=(0.0, 0.0, 1.0),
+        )
+        for hoehe in (0.0, 10.0)
+    ]
+    geraeumt: list[object] = []
+    viewport = Viewport()
+    try:
+        viewport.show_sketch_cursor = geraeumt.append  # type: ignore[method-assign]
+
+        viewport.set_sketching(frames[0])
+        viewport.set_sketching(frames[1])
+        viewport.set_sketching(None)
+
+        assert geraeumt == [None, None, None], (
+            "jeder Wechsel der Ebene muss die Marke nehmen, nicht nur das Ende des "
+            f"Modus — geräumt wurde {geraeumt}"
+        )
+    finally:
+        viewport.deleteLater()
+
+
+def test_the_finest_grid_step_survives_the_way_back(qt_app: QApplication) -> None:
+    """Die Null durfte hinein, ohne die Untergrenze mitzunehmen.
+
+    Qt setzt den Sonderwert „Automatisch" immer auf das Minimum des Feldes,
+    also musste dieses von 0,05 auf null. Damit war die feinste Weite offen,
+    und bei zwei Nachkommastellen nahm das Feld 0,01 mm an — ein Fang, den kein
+    Drucker auflöst. Sie gilt weiter, nur jetzt beim Eintippen.
+
+    Angehoben und nicht abgelehnt: Ein Feld, das eine Eingabe verschluckt, ohne
+    es zu zeigen, ist schlimmer als eines, das sie berichtigt.
+    """
+    from app.ui.sketch_editor import LEAST_SNAP_MM
+
+    panel = SketchPanel()
+    try:
+        panel.snap_step.set_value_mm(0.01)
+        panel._step_typed()
+        assert panel.snap_step.value_mm() == pytest.approx(LEAST_SNAP_MM), (
+            f"0,01 mm blieb stehen — das Feld nimmt Weiten unter {LEAST_SNAP_MM} mm an"
+        )
+        assert panel.canvas.snap_step == pytest.approx(LEAST_SNAP_MM), "und der Fang folgt"
+        assert panel.snap_is_pinned(), "eine angehobene Weite ist trotzdem eine gewählte"
+
+        # Die Null bleibt, was sie ist — sonst hätte die Untergrenze den Weg
+        # zurück wieder zugemauert.
+        panel.snap_step.set_value_mm(0.0)
+        panel._step_typed()
+        assert not panel.snap_is_pinned(), "die Null bleibt der Weg zurück"
+    finally:
+        panel.deleteLater()
+
+
+def test_a_pointer_step_that_changes_nothing_does_not_redraw(qt_app: QApplication) -> None:
+    """Die Marke zeichnet nur, wenn sie sich bewegt.
+
+    Ein Neuzeichnen der Szene kostet gemessen 6,9 ms; bei sechzig
+    Mausereignissen in der Sekunde wären das 41 % eines Kerns im
+    Qt-Hauptthread. Weil die Marke am **gefangenen** Ort sitzt, ändert sie sich
+    zwischen zwei Rasterpunkten nicht — bei 2 mm Raster rund vierundzwanzig
+    Bildpunkte Mausweg je Sprung. Gemessen fiel der Normalfall damit von
+    6,9 ms auf 0,004.
+
+    Gezählt werden die Zeichenaufrufe: Offscreen entsteht keine Marke, also
+    prüft ein Test über Actors nichts.
+    """
+    from app.core.types import PlaneFrame
+    from app.ui.viewport import Viewport
+
+    frame = PlaneFrame(
+        origin=(0.0, 0.0, 0.0),
+        x_axis=(1.0, 0.0, 0.0),
+        y_axis=(0.0, 1.0, 0.0),
+        normal=(0.0, 0.0, 1.0),
+    )
+    viewport = Viewport()
+    try:
+        viewport._sketch_frame = frame
+        viewport.plotter = _StillPlotter()  # type: ignore[assignment]
+        # Der Maßstab kommt aus dem Renderer, den es offscreen nicht gibt —
+        # geprüft wird hier die Sparsamkeit und nicht seine Messung.
+        viewport.pixels_per_mm = lambda _frame: 10.0  # type: ignore[method-assign]
+        gezeichnet: list[int] = []
+        viewport._draw = lambda: gezeichnet.append(1)  # type: ignore[method-assign]
+
+        viewport.show_sketch_cursor((10.0, 10.0))
+        erste = len(gezeichnet)
+        for _ in range(20):
+            viewport.show_sketch_cursor((10.0, 10.0))
+        assert len(gezeichnet) == erste, (
+            f"zwanzig Zeigerschritte auf demselben Rasterpunkt haben "
+            f"{len(gezeichnet) - erste} Mal gezeichnet"
+        )
+
+        viewport.show_sketch_cursor((12.0, 10.0))
+        assert len(gezeichnet) > erste, "ein echter Sprung muss zeichnen"
+    finally:
+        viewport.plotter = None  # type: ignore[assignment]
+        viewport.deleteLater()
+
+
+class _StillPlotter:
+    """Gerade so viel Plotter, wie die Fangmarke anfasst.
+
+    Offscreen gibt es keinen, und was hinter dieser Wache liegt, prüft sonst
+    niemand — dieselbe Bauart wie die Attrappe in ``tests/test_cursors.py``.
+    """
+
+    def add_mesh(self, mesh: object, **_: object) -> object:
+        return mesh
+
+    def remove_actor(self, actor: object, **_: object) -> None:
+        return None

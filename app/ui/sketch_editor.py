@@ -117,6 +117,16 @@ EMPTY = Sketch(plane="plane:xy", elements=())
 #: Weite um; wer gar nicht fangen will, nimmt den Haken weg.
 DEFAULT_SNAP_MM = 1.0
 
+#: Die feinste Weite, die sich eintippen lässt.
+#:
+#: Sie stand als Untergrenze am Feld, bis die Null dort gebraucht wurde: Der
+#: Sonderwert „Automatisch" sitzt bei Qt immer auf dem Minimum, also musste
+#: dieses auf null. Damit war die Grenze weg, und bei zwei Nachkommastellen
+#: nahm das Feld 0,01 mm an — ein Fang, der keiner mehr ist, und weit unter
+#: allem, was ein Drucker auflöst. Sie steht deshalb hier weiter und wird beim
+#: Eintippen angewandt.
+LEAST_SNAP_MM = 0.05
+
 #: Wie eng die Rasterlinien im Bild höchstens stehen, in Bildpunkten. Darunter
 #: wird die nächstgröbere Stufe genommen — ein Raster, dessen Linien sich
 #: berühren, ist eine Fläche.
@@ -3367,7 +3377,16 @@ class SketchPanel(QWidget):
         im Bild. Beim nächsten Neuzeichnen trägt ``follow_grid`` die Weite des
         Maßstabs wieder ein.
         """
-        self._pinned_step = self.snap_step.value_mm() > 0.0
+        getippt = self.snap_step.value_mm()
+        # Zwischen null und der feinsten Weite liegt nichts Brauchbares: Die
+        # Null heißt „Automatisch", und 0,01 mm wäre ein Fang, den kein
+        # Drucker auflöst. Angehoben statt abgelehnt — ein Feld, das eine
+        # Eingabe verschluckt, sagt nicht, dass es sie verschluckt hat.
+        if 0.0 < getippt < LEAST_SNAP_MM:
+            with QSignalBlocker(self.snap_step):
+                self.snap_step.set_value_mm(LEAST_SNAP_MM)
+            getippt = LEAST_SNAP_MM
+        self._pinned_step = getippt > 0.0
         self._snapping_changed()
 
     def follow_grid(self, step: float) -> None:
