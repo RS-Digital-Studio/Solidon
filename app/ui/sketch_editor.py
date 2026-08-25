@@ -635,9 +635,17 @@ class SketchCanvas(QWidget):
         self.update()
 
     def set_snapping(self, active: bool, step: float | None = None) -> None:
-        """Den Rasterfang ein- oder ausschalten, wahlweise mit neuer Weite."""
+        """Den Rasterfang ein- oder ausschalten, wahlweise mit neuer Weite.
+
+        Eine Weite von **null** heißt „Automatisch": Gefangen wird dann auf
+        das Raster, das gerade im Bild steht (:meth:`grid_step`). Vorher
+        hielt die Null stillschweigend den alten Wert fest — im
+        Zeichnen-Dialog, wo niemand ``follow_grid`` nachführt, fing
+        „Automatisch" damit auf einer Weite, die längst nicht mehr die
+        gezeichnete war.
+        """
         self.snapping = active
-        if step is not None and step > 0.0:
+        if step is not None and step >= 0.0:
             self.snap_step = step
         self.update()
 
@@ -649,9 +657,14 @@ class SketchCanvas(QWidget):
         unter dem Zeiger, und bei einer Weite von zehn Millimetern wäre das
         ein sichtbarer Versatz in eine Richtung.
         """
-        if not self.snapping or self.snap_step <= 0.0:
+        if not self.snapping:
             return world
-        step = self.snap_step
+        # Null heißt „Automatisch": Der Fang ist das Raster im Bild — Roberts
+        # Regel vom 24.08.2026 („das fang sollte immer das raster sein"),
+        # jetzt auch dort, wo niemand ``follow_grid`` nachführt.
+        step = self.snap_step if self.snap_step > 0.0 else self.grid_step()
+        if step <= 0.0:
+            return world
         return (round(world[0] / step) * step, round(world[1] / step) * step)
 
     def pointer_target(self) -> tuple[float, float]:
@@ -1265,9 +1278,11 @@ class SketchCanvas(QWidget):
         """Ob der Klick auf dem zuletzt gesetzten, noch offenen Punkt liegt.
 
         Nicht über ``_hit_point``: die angefangenen Punkte stehen noch nicht in
-        der Skizze, und gefangen wird nur, was darin steht. Gemessen wird in
-        Bildschirmpunkten und mit derselben Toleranz wie der Fang — bei einem
-        weit herausgezoomten Blatt wäre ein Weltabstand etwas anderes.
+        der Skizze, und gefangen wird nur, was darin steht. Gemessen wird der
+        **Weltabstand** gegen eine Toleranz, die aus Bildschirmpunkten
+        umgerechnet ist (``SNAP_PX`` durch den Maßstab) — dieselbe Rechnung
+        wie beim Fang. Eine feste Welttoleranz wäre bei einem weit
+        herausgezoomten Blatt etwas anderes.
         """
         if not self._pending_world:
             return False
@@ -2966,6 +2981,12 @@ class SketchPanel(QWidget):
         # auch heraus- oder hineinzoomte (§2.1: keine Sackgassen).
         self.snap_step.set_range_mm(0.0, 100.0)
         self.snap_step.setSpecialValueText(tr("Automatisch"))
+        # Erst beim Übernehmen lesen, nicht bei jedem Tastendruck: Mit
+        # laufender Verfolgung wurde aus dem ersten „0" einer Eingabe wie
+        # „0,5" sofort der Sonderwert — das Feld schrieb sich mitten im
+        # Tippen auf „Automatisch" um, und eine Weite unter einem Millimeter
+        # war schlicht nicht eintippbar.
+        self.snap_step.setKeyboardTracking(False)
         self.snap_step.set_step_mm(0.5)
         self.snap_step.set_value_mm(self.canvas.snap_step)
         self.snap_step.setToolTip(

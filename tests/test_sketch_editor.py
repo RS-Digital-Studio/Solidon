@@ -141,6 +141,25 @@ def test_the_grid_lets_go_when_the_hook_comes_off(qt_app: QApplication) -> None:
     assert canvas.snapped((12.4, -7.7)) == pytest.approx((10.0, -10.0))
 
 
+def test_the_auto_width_snaps_to_the_drawn_grid(qt_app: QApplication) -> None:
+    """Null heißt „Automatisch": Der Fang ist das Raster im Bild.
+
+    Roberts Regel vom 24.08.2026 („das fang sollte immer das raster sein")
+    galt im Zeichnen-Dialog nicht: Dort führt niemand ``follow_grid`` nach,
+    ``set_snapping`` übernahm nur Weiten über null, und gefangen wurde auf
+    dem letzten stehengebliebenen Wert, während das Bild ein zoomabhängiges
+    Raster zeichnete — zwei Zahlen für dieselbe Zusage.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(400, 400)
+
+    canvas.set_snapping(True, 0.0)
+    step = canvas.grid_step()
+    assert step > 0.0, "ohne Rasterweite prüft der Test nichts"
+    close_to_one = (step * 1.4, step * 0.6)
+    assert canvas.snapped(close_to_one) == pytest.approx((step, step))
+
+
 def test_an_existing_point_beats_the_grid(qt_app: QApplication) -> None:
     """Ein vorhandener Punkt fängt vor dem Raster.
 
