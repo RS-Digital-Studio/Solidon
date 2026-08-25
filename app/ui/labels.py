@@ -608,6 +608,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "axis": _("Achse"),
     "b": _("Zweites"),
     "before": _("Vorher"),
+    "board": _("Lochwand"),
     "bones": _("Knochen"),
     "bore": _("Bohrung"),
     "brush": _("Pinsel"),
@@ -642,6 +643,9 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "got": _("Bekommen"),
     "expected_prefix": _("Erwarteter Anfang"),
     "faces": _("Flächen"),
+    # Ohne das ``_mm`` des Werteschlüssels: ``value_label`` streift die
+    # Einheiten-Endung, bevor es hier nachschlägt — wie bei ``eroded``.
+    "fair_wall": _("Verlässlich ab"),
     "feature": _("Merkmal"),
     "field": _("Feld"),
     "file": _("Datei"),
@@ -712,6 +716,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "reachable": _("Erreichbar"),
     "read": _("Gelesen"),
     "reason": _("Grund"),
+    "room": _("Platz daneben"),
     "reference": _("Bezug"),
     "refused": _("Abgelehnt"),
     "regions": _("Bereiche"),
