@@ -501,6 +501,21 @@ def _feature_item(item: QTreeWidgetItem, feature_id: str) -> QTreeWidgetItem | N
     return None
 
 
+def _visible_rows(item: QTreeWidgetItem | None) -> int:
+    """Wie viele Zeilen dieser Ast zeigt: er selbst plus, was offen darunter steht.
+
+    Der Nachbar von ``_feature_item`` und aus demselben Grund rekursiv — der
+    Baum ist unter einem Körper zwei Ebenen tief, seit die Merkmale eines
+    Bausteins unter seinem Knoten stehen.
+    """
+    if item is None:
+        return 0
+    rows = 1
+    if item.isExpanded():
+        rows += sum(_visible_rows(item.child(index)) for index in range(item.childCount()))
+    return rows
+
+
 def _empty_objects_text() -> str:
     """Was in der leeren Objektliste steht.
 
@@ -823,14 +838,24 @@ class ObjectTree(QWidget):
             QTimer.singleShot(0, self, self._render_pending)
 
     def _rows(self) -> int:
-        """Die sichtbaren Zeilen — ein zugeklappter Ast zählt als eine."""
-        rows = 0
-        for index in range(self.tree.topLevelItemCount()):
-            item = self.tree.topLevelItem(index)
-            if item is None:
-                continue
-            rows += 1 + (item.childCount() if item.isExpanded() else 0)
-        return rows
+        """Die sichtbaren Zeilen — ein zugeklappter Ast zählt als eine.
+
+        **Über alle Ebenen, nicht nur die erste.** Gezählt wurden lange die
+        direkten Kinder, und das stimmte, solange der Baum zwei Ebenen hatte.
+        Seit die Merkmale eines eingesetzten Bausteins unter seinem Knoten
+        stehen, sind es drei — und dieser Knoten steht **immer** offen: Ein
+        Körper mit sechs Verrundungen unter einem Einhänger meldete zwei
+        Zeilen und zeigte acht. Die Karte bekam damit Höhe für zwei und einen
+        Rollbalken, den es an dieser Stelle nicht geben soll.
+
+        Dieselbe Ebenenblindheit hatte ``_restore`` schon einmal: Ein Klick im
+        Viewport fand das Merkmal nicht, weil es eine Ebene tiefer lag. Wer
+        eine Ebene einzieht, sucht die Stellen, die über Ebenen laufen.
+        """
+        return sum(
+            _visible_rows(self.tree.topLevelItem(index))
+            for index in range(self.tree.topLevelItemCount())
+        )
 
     def wanted_height(self) -> int:
         """Die Höhe, bei der jede Zeile zu sehen wäre."""
@@ -999,9 +1024,16 @@ class ObjectTree(QWidget):
     def select_feature(self, object_id: ObjectId, feature_id: str) -> None:
         """Folgt einem Klick im Viewport — die zwei Ansichten zeigen eine
         Auswahl (§18.5).
+
+        **Und die Karte wächst mit.** ``_restore`` klappt den Weg zum Merkmal
+        auf, hier also bis zu zwei Knoten; ohne ``_fit`` bleibt die Karte auf
+        der Höhe von vorher stehen, und die aufgeklappten Zeilen liegen unter
+        ihrem Rand. In ``show_scene`` kommt ``_fit`` ohnehin danach — auf
+        diesem Weg kam es nie.
         """
         self.tree.clearSelection()
         self._restore((object_id,), feature_id)
+        self._fit()
 
     def _on_selection(self) -> None:
         self._remember_order()

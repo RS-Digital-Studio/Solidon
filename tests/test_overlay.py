@@ -483,6 +483,49 @@ def test_a_card_uses_the_room_a_tall_window_offers(window: MainWindow) -> None:
     assert tree.tree.height() <= tree.wanted_height(), "aber nie mehr, als er braucht"
 
 
+def test_the_row_count_sees_every_open_level(qt_app: QApplication) -> None:
+    """Die Höhe einer Karte folgt den sichtbaren Zeilen — über **alle** Ebenen.
+
+    Der Test darüber baut lauter Körper ohne Kinder; er hätte den Fehler
+    deshalb nie gesehen. Seit die Merkmale eines eingesetzten Bausteins unter
+    dessen Knoten stehen, ist der Baum unter einem Körper zwei Ebenen tief,
+    und dieser Knoten steht **immer** offen. Gezählt wurden die direkten
+    Kinder: Ein Körper mit sechs Verrundungen unter einem Einhänger meldete
+    zwei Zeilen und zeigte acht — die Karte bekam Höhe für zwei und dazu einen
+    Rollbalken, den es an dieser Stelle nicht geben soll.
+
+    Ohne Fenster, weil die Frage eine Rechnung über Baumknoten ist und ein
+    Test, der dafür ein ``MainWindow`` baut, die Abrissquote der ganzen Datei
+    hebt (gemessen am 24.08.2026).
+
+    Ein ``QTreeWidget`` braucht es trotzdem, und zwar nicht als Zierat:
+    ``setExpanded`` wirkt nur auf ein Item, das in einem Baum hängt — an einem
+    freien meldet ``isExpanded()`` immer ``False``, und der Test wäre grün
+    gegen eine Rechnung, die nie zählt. Gezeigt wird der Baum nicht.
+    """
+    from PySide6.QtWidgets import QTreeWidget, QTreeWidgetItem
+
+    from app.ui.panels import _visible_rows
+
+    tree = QTreeWidget()
+    body = QTreeWidgetItem(["Körper"])
+    group = QTreeWidgetItem(["Einhänger"])
+    body.addChild(group)
+    for number in range(6):
+        group.addChild(QTreeWidgetItem([f"Verrundung {number}"]))
+    tree.addTopLevelItem(body)
+
+    body.setExpanded(True)
+    group.setExpanded(True)
+    assert _visible_rows(body) == 8, "der Körper, sein Bausteinknoten und sechs Merkmale"
+
+    group.setExpanded(False)
+    assert _visible_rows(body) == 2, "ein zugeklappter Baustein ist eine Zeile"
+
+    body.setExpanded(False)
+    assert _visible_rows(body) == 1, "und ein zugeklappter Körper ebenso"
+
+
 def test_one_action_moves_a_card_once(window: MainWindow, monkeypatch: pytest.MonkeyPatch) -> None:
     """Eine Handlung, eine Bewegung — nicht neunhundertfünf.
 
