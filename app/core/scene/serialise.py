@@ -552,6 +552,15 @@ def document_to_data(document: Document) -> dict[str, Any]:
         "transactions": [transaction_to_data(entry) for entry in document.transactions],
         "ops": [operation_to_data(entry) for entry in document.ops],
         "chat": [chat_to_data(entry) for entry in document.chat],
+        # Die Wasserlinie der Nummernvergabe (§15.4). Additiv und optional:
+        # Fehlt sie, zählt der Verlauf aus dem Bestand — die Begründung, warum
+        # das ohne Schritt in der Formatkette geht, steht bei
+        # ``Document.highest_transaction``.
+        "numbering": {
+            "transaction": document.highest_transaction,
+            "op": document.highest_op,
+            "object": document.highest_object,
+        },
         "print_settings": (
             None
             if document.print_settings is None
@@ -562,6 +571,7 @@ def document_to_data(document: Document) -> dict[str, Any]:
 
 def document_from_data(data: dict[str, Any]) -> Document:
     scene = data.get("scene", {})
+    numbering = data.get("numbering", {})
     return Document(
         format_version=int(data["format_version"]),
         app_version=data.get("app_version", ""),
@@ -581,6 +591,12 @@ def document_from_data(data: dict[str, Any]) -> Document:
         transactions=[transaction_from_data(entry) for entry in data.get("transactions", ())],
         ops=[operation_from_data(entry) for entry in data.get("ops", ())],
         chat=[chat_from_data(entry) for entry in data.get("chat", ())],
+        # Fehlt der Eintrag, bleibt die Wasserlinie auf null: eine Datei ohne
+        # dieses Feld zählt aus ihrem Bestand, und der trägt jede Nummer, auf
+        # die noch etwas zeigt.
+        highest_transaction=int(numbering.get("transaction", 0)),
+        highest_op=int(numbering.get("op", 0)),
+        highest_object=int(numbering.get("object", 0)),
         print_settings=(
             print_settings_from_data(stored)
             if isinstance(stored := data.get("print_settings"), dict)

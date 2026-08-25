@@ -1213,6 +1213,39 @@ class Document:
     auch wenn dazwischen etwas anderes gedruckt wurde. ``None`` heißt: noch
     nichts eingestellt, es gilt die Auflösung aus Stufe, Material und Drucker.
     """
+    highest_transaction: int = 0
+    """Die höchste je vergebene Transaktionsnummer — mit ``highest_op`` und
+    ``highest_object`` die Wasserlinie der Nummernvergabe (§15.4).
+
+    **Im Dokument und nicht im Verlaufsobjekt**, weil mehr als ein
+    Verlaufsobjekt über demselben Dokument schreibt: Trennen, Deckeln und Auto
+    Split bauen sich ihr eigenes, und der Redo-Stapel der Sitzung ist für sie
+    unsichtbar. Wer nur zählt, was im Dokument steht, vergibt eine
+    zurückgenommene Nummer ein zweites Mal — und ein Redo hängt danach eine
+    Transaktion ein, deren Kennung inzwischen einer anderen gehört.
+
+    Nur wachsend, nie zurückgesetzt: vergeben ist vergeben, auch nach einem
+    Undo. ``0`` heißt „noch nichts vergeben oder Datei ohne dieses Feld"; dann
+    zählt der Verlauf aus dem Bestand (siehe
+    :meth:`app.core.scene.history.History._highest_transaction_number`).
+
+    **Kein Schritt der Formatkette, und das ist eine Entscheidung.** Das Feld
+    ist additiv und optional: Eine ältere Datei hat es nicht, und aus ihrem
+    Bestand — Stapel, Transaktionen und die Transaktionsverweise des Chats —
+    lässt sich jede Nummer zurückgewinnen, auf die überhaupt noch etwas
+    zeigt. Eine neuere Datei bricht ältere Fassungen nicht: Sie überlesen den
+    Schlüssel und rechnen aus dem Bestand weiter, also genau so, wie sie es
+    immer getan haben. Der Unterschied zu ``title_translatable`` (Schritt
+    5 → 6) liegt genau hier — dort trug die Markierung eine Bedeutung, die im
+    Bestand nicht steht, und ein Verwerfen hätte den Sinn eines gespeicherten
+    Titels verändert. Hier geht nichts verloren als eine Untergrenze, die sich
+    neu berechnen lässt.
+    """
+    highest_op: int = 0
+    """Die höchste je vergebene Op-Kennung — dieselbe Wasserlinie für den
+    Stapel."""
+    highest_object: int = 0
+    """Der höchste je vergebene Objektindex (``obj_<n>``)."""
 
 
 # --- Schichtanalyse (§22) ------------------------------------------------------

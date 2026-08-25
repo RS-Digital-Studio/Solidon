@@ -261,6 +261,7 @@ class History:
         )
         self.document.ops.extend(planned)
         self.document.transactions.append(transaction)
+        self._record_numbering()
         if settled is not None:
             restore(self.document, settled.after)
         return transaction
@@ -444,6 +445,10 @@ class History:
         spec = self._registry.get(entry.op)
         self._check_params(spec.name, spec.params.spec(), params)
 
+        # Auch hier werden Kennungen vergeben — eine Operation mit variabler
+        # Ausgabe bekommt neue Objekte, sobald die Zahl sich ändert. Also
+        # dieselbe Ausrichtung wie vor jeder Transaktion (:meth:`_reseed`).
+        self._reseed()
         merged = {**entry.params, **params}
         draft = OperationDraft(op=entry.op, inputs=entry.inputs, params=merged)
         outputs = self._outputs_for(spec, draft) if spec.produces_from else entry.outputs
@@ -466,6 +471,7 @@ class History:
         self._forget_undone()
         changed = dataclasses.replace(entry, params=dict(merged), outputs=tuple(outputs))
         self.document.ops[self.document.ops.index(entry)] = changed
+        self._record_numbering()
         _log.info("changed parameters of op %s (%s)", op_id, entry.op)
         return changed
 
@@ -752,15 +758,41 @@ class History:
         beim Anlegen und zu Beginn jeder Transaktion; innerhalb einer
         Transaktion zählen die Zähler weiter, denn ihre Operationen stehen
         noch nicht im Dokument.
+
+        **Und „was im Dokument steht" ist mehr als sein Stapel**: Was schon
+        vergeben, aber gerade zurückgenommen ist, steht in keinem Stapel und
+        gehört trotzdem niemand anderem. Dafür führt das Dokument eine
+        Wasserlinie mit, die jede Vergabe fortschreibt
+        (:meth:`_record_numbering`).
         """
         self._next_op = itertools.count(self._highest_op_id() + 1)
         self._next_object = itertools.count(self._highest_object_index() + 1)
-        # Wie bei den Op-Kennungen: vergeben ist vergeben, auch nach einem
-        # Undo. ``len(transactions) + 1`` vergab „t2" nach dem Zurücknehmen
-        # von t2 erneut — ein Chat-Beitrag zeigte danach auf eine wildfremde
-        # Transaktion und galt als lebendig, und ``_undo_named("t2")`` träfe
-        # die falsche (Fund des Gesamtreviews vom 25.08.2026).
         self._next_transaction = itertools.count(self._highest_transaction_number() + 1)
+
+    def _record_numbering(self) -> None:
+        """Schreibt die vergebenen Nummern als Untergrenze ins Dokument (§15.4).
+
+        **Der Bestand allein trägt nicht, und beide Lücken tun weh.**
+
+        *Ein zweites Verlaufsobjekt* sieht den Redo-Stapel des ersten nicht:
+        Trennen, Deckeln und Auto Split bauen sich eine eigene ``History``
+        über demselben Dokument, und wer vorher Rückgängig gedrückt hat, bekam
+        von ihr die zurückgenommene Nummer ein zweites Mal — ein Redo hängte
+        danach eine Transaktion ein, deren Op-Kennung inzwischen einer anderen
+        gehörte, und ``document.ops`` trug dieselbe Kennung doppelt.
+
+        *Eine geschlossene Datei* hat gar keinen Redo-Stapel mehr. Der
+        Chat-Beitrag, der auf die zurückgenommene Transaktion zeigt, steht
+        trotzdem darin (``DocumentState`` deckt den Chat nicht) — die nächste
+        Handlung bekam seine Kennung, und der Beitrag galt wieder als lebendig.
+
+        Geschrieben wird erst, wenn alles andere geschrieben ist: Ein
+        abgelehnter Aufruf lässt das Dokument exakt, wie es war — auch die
+        Wasserlinie.
+        """
+        self.document.highest_transaction = self._highest_transaction_number()
+        self.document.highest_op = self._highest_op_id()
+        self.document.highest_object = self._highest_object_index()
 
     def _all_operations(self) -> list[Operation]:
         """Was Kennungen belegt: der Stapel **und** das Zurückgenommene.
@@ -769,20 +801,39 @@ class History:
         trotzdem nicht frei — solange ein Redo sie zurückholen kann, gehört
         ihr ihre Nummer. „Numbers are never reused" hält
         ``test_a_change_after_undo_discards_the_cut_off_branch`` fest.
+
+        Was hier fehlt, steht in der Wasserlinie des Dokuments: was ein
+        **anderes** Verlaufsobjekt vergeben hat, und was eine frühere Sitzung
+        vergeben hatte (:meth:`_record_numbering`).
         """
         return [*self.document.ops, *self._undone_ops.values()]
 
     def _highest_op_id(self) -> OpId:
-        return max((entry.id for entry in self._all_operations()), default=0)
+        found = max((entry.id for entry in self._all_operations()), default=0)
+        return max(found, self.document.highest_op)
 
     def _highest_transaction_number(self) -> int:
-        """Die höchste je vergebene Transaktionsnummer — Stapel und Zurückgenommenes."""
+        """Die höchste je vergebene Transaktionsnummer.
+
+        Drei Quellen, und jede fehlt in einer Lage, in der die Nummer zählt:
+        der Stapel des Dokuments, das eigene Zurückgenommene — und die
+        Wasserlinie des Dokuments, die beides überdauert.
+
+        **Der Chat gehört dazu**, und zwar für die Dateien, die noch keine
+        Wasserlinie tragen: Ein Beitrag nennt die Transaktion, die er erzeugt
+        hat (§26.3), und ist damit das einzige, was von einer zurückgenommenen
+        und dann gespeicherten Transaktion übrig bleibt. Ohne ihn zählte eine
+        ältere Datei genau die Nummer neu aus, auf die noch jemand zeigt.
+        """
         numbers = [
-            int(entry.id[1:])
-            for entry in (*self.document.transactions, *self._undone)
-            if entry.id.startswith("t") and entry.id[1:].isdigit()
+            *(entry.id for entry in (*self.document.transactions, *self._undone)),
+            *(entry.transaction_id for entry in self.document.chat),
         ]
-        return max(numbers, default=0)
+        found = max(
+            (int(name[1:]) for name in numbers if name and name[:1] == "t" and name[1:].isdigit()),
+            default=0,
+        )
+        return max(found, self.document.highest_transaction)
 
     def _highest_object_index(self) -> int:
         indices = [
@@ -791,4 +842,4 @@ class History:
             for object_id in entry.outputs
             if (match := _OBJECT_PATTERN.match(object_id))
         ]
-        return max(indices, default=0)
+        return max(max(indices, default=0), self.document.highest_object)

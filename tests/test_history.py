@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from app.core.errors import ValidationError
 from app.core.registry import Registry, op_params, param, register_op
 from app.core.scene import History, OperationDraft
 from app.core.scene.history import change_for
+from app.core.scene.serialise import document_from_data, document_to_data
 from app.core.types import (
     BaseParams,
+    ChatEntry,
     Document,
     FeatureRef,
     Fit,
@@ -492,3 +497,120 @@ def test_a_transaction_number_is_never_reused_after_undo(history: History) -> No
         _("Noch einmal"), [OperationDraft(op="rename_object", inputs=(object_id,))]
     )
     assert third.id != second.id, "eine zurückgenommene Kennung darf nie neu vergeben werden"
+
+
+# --- Vergeben ist vergeben, auch über Sitzungen und Verlaufsobjekte hinweg -------
+
+
+def _round_trip(document: Document, *, drop_numbering: bool = False) -> Document:
+    """Speichern und wieder öffnen — durch das Dateiformat, nicht daran vorbei.
+
+    ``drop_numbering`` streicht die Wasserlinie aus den Daten und macht damit
+    aus der Datei eine, wie sie vor diesem Feld entstanden ist: Dann muss der
+    Verlauf allein aus dem Bestand zählen.
+    """
+    data = json.loads(json.dumps(document_to_data(document)))
+    if drop_numbering:
+        data.pop("numbering", None)
+    return document_from_data(data)
+
+
+def test_a_number_survives_undo_saving_and_reopening(
+    document: Document, registry: Registry
+) -> None:
+    """Szenario A: zurückgenommen, gespeichert, geschlossen — und t2 lebt weiter.
+
+    Ein Agentenvorschlag legt t2 an, der Chatbeitrag trägt die Kennung. Der
+    Nutzer nimmt zurück und speichert: ``document.transactions`` endet bei t1,
+    und der Redo-Stapel steht in keiner Datei. Der Beitrag mit „t2" steht
+    trotzdem darin, denn ``DocumentState`` deckt den Chat nicht.
+
+    Wer beim Öffnen nur die Transaktionen zählt, gibt die nächste Handlung als
+    t2 aus. Danach hält ``agent/context.is_discarded`` den alten Beitrag für
+    lebendig, und eine gezielte Rücknahme („nimm t2 zurück") trifft eine
+    wildfremde Transaktion.
+
+    Beide Fassungen der Datei werden geprüft: die neue mit der Wasserlinie und
+    die alte ohne sie, die dieselbe Antwort aus dem Chat gewinnen muss.
+    """
+    history = History(document, registry)
+    object_id = create(history)
+    proposal = history.apply(
+        _("Vorschlag"),
+        [OperationDraft(op="rename_object", inputs=(object_id,))],
+        origin=Origin(by="agent", model="test", rules_version="1"),
+    )
+    document.chat.append(
+        ChatEntry(id="c1", role="agent", text="Erledigt.", transaction_id=proposal.id)
+    )
+    history.undo()
+
+    for old_file in (False, True):
+        reopened = _round_trip(document, drop_numbering=old_file)
+        assert [entry.id for entry in reopened.transactions] == ["t1"]
+        assert reopened.chat[0].transaction_id == proposal.id
+
+        after = History(reopened, registry).apply(
+            _("Danach"), [OperationDraft(op="rename_object", inputs=(object_id,))]
+        )
+        assert after.id != proposal.id, f"Kennung zweimal vergeben (alte Datei: {old_file})"
+        live = {entry.id for entry in reopened.transactions}
+        assert reopened.chat[0].transaction_id not in live, (
+            "der zurückgenommene Beitrag bleibt verworfen"
+        )
+
+
+def test_a_second_history_does_not_reuse_an_undone_number(
+    document: Document, registry: Registry
+) -> None:
+    """Szenario B: Undo, dann *Automatisch teilen* — und die Nummer kommt wieder.
+
+    Trennen, Deckeln und Auto Split bauen sich eine **zweite** ``History`` über
+    demselben Dokument (``core/split.py``, ``core/lid_flow.py``); die Sitzung
+    ruft sie direkt, und ihr eigener Redo-Stapel bleibt dabei stehen. Die
+    zweite sieht ihn nicht — sie zählt, was im Dokument steht, und vergibt die
+    zurückgenommene Kennung ein zweites Mal.
+
+    Folgenreich wird das beim Redo: Es hängt die alte Transaktion wieder ein,
+    und dann trägt ``document.ops`` dieselbe Op-Kennung doppelt. Die Auswertung
+    sortiert danach (§15).
+    """
+    session = History(document, registry)
+    create(session)
+    undone = session.apply(_("Vorschlag"), [OperationDraft(op="make_object")])
+    session.undo()
+
+    other = History(document, registry)
+    made = other.apply(_("Deckel erzeugen"), [OperationDraft(op="make_object")])
+    assert made.id != undone.id, "die zweite History kennt den fremden Redo-Stapel nicht"
+
+    session.redo()
+
+    op_ids = [entry.id for entry in document.ops]
+    assert len(set(op_ids)) == len(op_ids), f"doppelte Op-Kennung: {op_ids}"
+    names = [entry.id for entry in document.transactions]
+    assert len(set(names)) == len(names), f"doppelte Transaktionskennung: {names}"
+    objects = [name for entry in document.ops for name in entry.outputs]
+    assert len(set(objects)) == len(objects), f"doppelte Objektkennung: {objects}"
+
+
+def test_an_old_file_counts_from_its_stock(registry: Registry) -> None:
+    """Eine eingecheckte Datei kennt die Wasserlinie nicht und zählt trotzdem
+    richtig (§16.2).
+
+    ``example_v11.p3d`` trägt eine Transaktion, zwei Operationen und drei
+    Objekte. Ohne das Feld ist der Bestand die Quelle — und er muss es bleiben,
+    solange Dateien aus der Zeit davor geöffnet werden.
+    """
+    from app.core.scene.project import load
+
+    document = load(Path(__file__).parent / "data" / "projects" / "example_v11.p3d").document
+    assert document.highest_transaction == 0, "die eingecheckte Datei kennt das Feld nicht"
+    assert [entry.id for entry in document.transactions] == ["t1"]
+    assert [entry.id for entry in document.ops] == [1, 2]
+
+    added = History(document, registry).apply(_("Danach"), [OperationDraft(op="make_object")])
+
+    assert added.id == "t2"
+    assert document.ops[-1].id == 3
+    assert document.ops[-1].outputs == ("obj_4",), "obj_1 bis obj_3 sind vergeben"
