@@ -105,6 +105,30 @@ class ProfileSlot:
 
 
 @dataclass(frozen=True, slots=True)
+class Board:
+    """Eine Lochwand, wie sie an der Wand hängt (§24.2).
+
+    Kein Normteil im engeren Sinn: Die Maße stehen in keiner Norm und werden
+    vom Hersteller nicht veröffentlicht. Sie sind trotzdem hier richtig, denn
+    sie sind **gegeben** — wer einen Einhänger baut, hat sie nicht zu wählen,
+    sondern zu treffen. Genau dafür ist diese Tabelle da.
+    """
+
+    size: str
+    slot_width: float
+    """Breite des Lochs. Bei SKÅDIS ist es kein Rund-, sondern ein Langloch."""
+    slot_height: float
+    """Höhe desselben Lochs — der Weg, den ein Einhänger nach unten hat."""
+    pitch: float
+    """Rastermaß, in beide Richtungen gleich."""
+    stagger: float = 0.0
+    """Versatz der zweiten Lochschar. Null heißt ein einfaches Quadratraster."""
+    thickness: float = 0.0
+    """Plattendicke — was ein Haken hintergreifen muss."""
+    note: str = ""
+
+
+@dataclass(frozen=True, slots=True)
 class Tube:
     size: str
     outer: float
@@ -125,6 +149,7 @@ class Tables:
     bearings: dict[str, Bearing]
     profiles: dict[str, ProfileSlot]
     tubes: dict[str, Tube]
+    boards: dict[str, Board]
 
 
 def load(path: Path | None = None) -> Tables:
@@ -146,6 +171,7 @@ def load(path: Path | None = None) -> Tables:
         bearings=_index(Bearing, data.get("bearings", ())),
         profiles=_index(ProfileSlot, data.get("profiles", ())),
         tubes=_index(Tube, data.get("tubes", ())),
+        boards=_index(Board, data.get("boards", ())),
     )
     if path is None:
         _tables = tables
@@ -170,6 +196,7 @@ TABLES: Final[dict[str, str]] = {
     "bearing": "bearings",
     "profile": "profiles",
     "tube": "tubes",
+    "board": "boards",
 }
 
 
@@ -228,6 +255,11 @@ def tube(size: str) -> Tube:
     return found
 
 
+def board(size: str) -> Board:
+    found: Board = _lookup(load().boards, size, "board")
+    return found
+
+
 def screw_sizes() -> tuple[str, ...]:
     """Die Größen, die ein Parameter zur Auswahl anbietet."""
     return tuple(load().screws)
@@ -251,6 +283,10 @@ def profile_sizes() -> tuple[str, ...]:
 
 def tube_sizes() -> tuple[str, ...]:
     return tuple(load().tubes)
+
+
+def board_sizes() -> tuple[str, ...]:
+    return tuple(load().boards)
 
 
 def _lookup(entries: dict[str, Any], size: str, what: str) -> Any:

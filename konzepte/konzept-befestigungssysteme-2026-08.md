@@ -9,8 +9,10 @@
 >
 > Was dieses Dokument beantwortet: **ob** es hierhergehört, **was** dabei
 > entsteht, **was heute im Weg steht** und **in welcher Reihenfolge** es
-> abgearbeitet wird. Was es nicht beantwortet: die Maße. Die sind ungeklärt,
-> und Abschnitt 5 sagt, warum das die erste Aufgabe ist und keine Fußnote.
+> abgearbeitet wird. **Die Maße sind seit dem 25.08.2026 geklärt** — Robert
+> hat entschieden, sie aus dem Netz zu holen, und die gezieltere Suche hat
+> nicht nur genauere Zahlen gefunden, sondern eine andere Form: Das Loch ist
+> ein Schlitz. Abschnitt 5 hält fest, was die erste Suche falsch hatte.
 >
 > **Drei Teile.** Teil I (Abschnitte 1 bis 14) ist der Lochwand-Einhänger und
 > das, was fremde Raster überhaupt zu Bausteinen macht. **Teil II (ab
@@ -133,35 +135,45 @@ in Abschnitt 13.
 
 ---
 
-## 5. Die Maße, und warum sie zuerst kommen
+## 5. Die Maße — und was die erste Suche falsch hatte
 
-**Wir kennen sie nicht.** Das ist die ehrliche Lage, und Regel 21 verlangt,
-sie so zu benennen.
+**Die Löcher sind keine Löcher.** Das ist der Kern, und er wirft um, wovon
+dieser Abschnitt zuerst ausging.
 
-Was eine Suche am 24.08.2026 hergab: Lochdurchmesser 5 mm, Lochabstand 40 mm,
-Plattendicke 5,2 mm. Was dieselbe Suche **nicht** hergab: ob zwischen den
-40-mm-Löchern versetzte Zwischenlöcher liegen — und genau davon hängt ab, ob
-ein Zapfenpaar 40 mm auseinandersteht oder ob dazwischen noch etwas ist, in
-das ein zweiter Zapfen greifen kann. `dimensions.com` nennt nur die
-Außenmaße und keine einzige Lochangabe; die Modellportale nennen Zahlen ohne
-Herkunft, und sie widersprechen sich in der Plattendicke (3, 5 und 5,2 mm).
+Die erste Suche am 24.08.2026 ergab „Lochdurchmesser 5 mm, Lochabstand 40 mm",
+und daraus folgte hier die Aussage, die Angaben widersprächen sich und man
+müsse nachmessen. Am 25.08.2026 hat Robert entschieden, die Werte aus dem Netz
+zu holen, und eine gezieltere Suche fand, was die erste verfehlt hatte — nicht
+mehr Genauigkeit, sondern eine andere **Form**:
 
-Der Kopf von `standards.toml` hat für genau diesen Fall schon eine Haltung:
-„Wo Hersteller sich unterscheiden, steht der gebräuchlichste Wert und in
-`note` woher er kommt." Das reicht hier **nicht**, denn ein Zapfen, der um
-einen halben Millimeter danebenliegt, geht nicht in ein Loch, das 5 mm misst.
+| Maß | Wert |
+|---|---|
+| Loch | **stehender Schlitz**, 5 mm breit, 15 mm hoch, halbrunde Enden |
+| Raster | 40 mm, in beide Richtungen |
+| Versatz | jede zweite Lochschar um 20 mm — zwei verschränkte 40er-Gitter |
+| Plattendicke | 5 mm |
 
-Also: **an einer echten Platte nachmessen, bevor eine Zeile Code entsteht.**
-Gebraucht wird eine SKÅDIS-Platte und ein Messschieber; gemessen werden
-Lochdurchmesser, Mittenabstand in beiden Richtungen, ein etwaiger
-Reihenversatz und die Plattendicke, jedes an mehreren Stellen. Wer keine
-Platte hat, kauft eine — das ist die billigste Position des ganzen Vorhabens.
+**Zwei unabhängige Quellen, und die zweite nennt ihre eigene Schwäche.**
+`pegboardly.com` schreibt dazu: von der Gemeinschaft gemessen, nicht vom
+Hersteller veröffentlicht — und empfiehlt, an der eigenen Platte
+nachzumessen. `dimensions.com` nennt nur die Außenmaße. Genau dieser Satz
+steht jetzt als `note` in der Tabelle und als `caveat` am Baustein, wo ihn der
+Kunde liest.
 
-Bis dahin steht dieses Vorhaben. Das ist keine Verzögerung, sondern das
-Verfahren: „Test zuerst bei Geometrie" heißt hier, dass der Sollwert von der
-Platte kommt und nicht aus dem Netz. Ein Baustein, dessen Maße aus einer
-Suchmaschine stammen, ist ein Baustein, der beim Kunden nicht passt — und er
-passt dann bei **jedem** Kunden nicht, weil die Platte überall dieselbe ist.
+**Was der Irrtum gekostet hätte, wäre er stehen geblieben.** Ein Zapfen für
+ein Ø5-Rundloch ist rund und kurz. Ein Einhänger für einen 5 × 15er Schlitz
+ist flach und hoch, und er hat eine Nase, weil der Schlitz ihm fünfzehn
+Millimeter Weg nach unten gibt — daher hängt das Teil überhaupt. Aus der
+falschen Form wäre nicht ein ungenauer Baustein geworden, sondern der falsche.
+
+**Und der Widerspruch, den die erste Suche fand, war keiner.** Die
+Plattendicken 3 / 5 / 5,2 mm stammen aus Modellbeschreibungen, die den Wert
+für ihren eigenen Zweck angeben. Beide Sammlungen, die die Lochung selbst
+beschreiben, nennen 5 mm.
+
+Das Verfahren hält trotzdem, nur eine Stufe später: Ein Prüfdruck vor der
+ersten größeren Auflage. Der `caveat` des Bausteins sagt es dem Kunden, statt
+es zu verschweigen.
 
 ---
 
@@ -173,64 +185,68 @@ Neue Tabellenart in `app/core/knowledge/data/standards.toml`, dazu die
 Dataclass und die drei Zugriffsfunktionen in `standards.py` nach dem Muster
 von `ProfileSlot`:
 
-```toml
-# --- Lochwandsysteme ------------------------------------------------------------
-# hole: Lochdurchmesser · pitch_x/pitch_y: Mittenabstand · stagger: Reihenversatz
-# thickness: Plattendicke · Alle Werte am 00.00.2026 an einer Platte gemessen.
+**Gebaut am 25.08.2026**, und die Felder heißen anders, als hier zuerst stand
+— weil die Form eine andere ist (Abschnitt 5):
 
+```toml
 [[boards]]
 size = "skadis"
-hole = 5.0
-pitch_x = 40.0
-pitch_y = 40.0
-stagger = 0.0
-thickness = 5.2
-note = "IKEA SKÅDIS, gemessen an <Platte>; Herstellerangaben nennen die Lochung nicht"
+slot_width = 5.0
+slot_height = 15.0
+pitch = 40.0
+stagger = 20.0
+thickness = 5.0
+note = "IKEA SKÅDIS; Schlitz mit halbrunden Enden, zweite Lochschar um 20 mm versetzt"
 ```
 
-`version` der Tabelle geht auf `"3"`. Die Werte oben sind **Platzhalter mit
-Nullen an der Stelle des Datums**, damit niemand sie versehentlich für
-gemessen hält.
+`version` der Tabelle steht auf `"3"`. Ein Feld `hole` gibt es nicht: Was der
+Einhänger trifft, ist ein Schlitz mit Breite **und** Höhe, und die Höhe ist
+kein Nebenmaß — sie ist der Weg, den der Haken nach unten hat, und damit der
+Grund, warum das Teil hängt. Ein `pitch` statt zweier: Das Raster ist in
+beiden Richtungen gleich, und zwei Felder mit derselben Zahl laden zu einem
+Widerspruch ein, den niemand bemerkt.
 
 Warum eine eigene Tabellenart und nicht `profiles`: Eine Lochplatte ist kein
 Nutprofil, und ein gemeinsames Schema aus sechs optionalen Feldern wäre die
 Sorte Abstraktion, die AGENTS.md „spekulativ" nennt. Zwei Tabellen mit je
 fünf gefüllten Feldern schlagen eine mit zehn halbleeren.
 
+**Und eine Lochwand ist kein Normteil** — das steht so im Docstring der
+Klasse, weil es eine Frage ist, die sich jemand stellen wird. Ihre Maße stehen
+in keiner Norm und werden vom Hersteller nicht veröffentlicht. Sie sind
+trotzdem hier richtig, denn sie sind **gegeben**: Wer einen Einhänger baut,
+hat sie nicht zu wählen, sondern zu treffen. Genau dafür ist diese Tabelle
+da.
+
 ### 6.2 Der Baustein
 
-```python
-@register_part(
-    name="pegboard_hook",
-    title=_("Lochwand-Einhänger"),
-    group="mounting",
-    params=PegboardHookParams,
-    features=["hook_1", "plate"],
-    doc=_("Zapfen mit Rastnase für eine Lochwand. Die Lochmaße kommen aus der "
-          "Normteiltabelle; das Spiel geht vom Zapfen ab, nie vom Loch."),
-    changes=[PEGBOARD_ADDED],
-)
-```
-
+**Gebaut am 25.08.2026** als `pegboard_hook` in `parts/mounting.py`. Die
 Parameter, aufgeteilt nach der Dialoggrenze aus Abschnitt 9:
 
 | Feld | Vorn/Hinten | Warum |
 |---|---|---|
-| `system` (Enum, vorerst `skadis`) | vorn | Ein Enum mit einem Wert heute, mit dreien morgen — die Alternative wäre ein Baustein je System und damit ein Menü, das mit dem Katalog wächst |
+| `system` (Enum, heute `skadis`) | vorn | Ein Enum mit einem Wert heute, mit dreien morgen — die Alternative wäre ein Baustein je System und damit ein Menü, das mit dem Katalog wächst |
 | `count` (int, 1–6) | vorn | Die Frage des Kunden, Schritt 4 |
-| `orientation` (Enum: waagerecht/senkrecht) | vorn | Ein Behälter hängt anders als ein Werkzeughalter |
-| `plate` (float, Dicke der Rückplatte) | vorn | Siehe Abschnitt 8 — bei `count > 1` konstruktiv zwingend |
+| `upright` (bool) | vorn | Nebeneinander hält gegen Verdrehen, übereinander passt an schmale Teile |
+| `plate` (float) | vorn | Siehe Abschnitt 8 — bei `count > 1` konstruktiv zwingend |
 | `play` (float, Vorgabe 0) | **hinten** | Regel 7: null heißt „aus dem Materialprofil", `ops.py` füllt es |
-| `lead_in` (float, Anfasung an der Zapfenspitze) | **hinten** | Erleichtert das Einhängen, interessiert niemanden beim ersten Mal |
+| `lip` (float, Nasentiefe) | **hinten** | Null heißt zwei Drittel der Plattendicke; wer es anfasst, weiß warum |
 
-Sechs Felder vorn plus die vier Ortsfelder aus `_PLACEMENT` — die Grenze von
-acht steht auf `placement="front"` und ist damit eingehalten, aber sie ist
-knapp. Ein siebtes Feld vorn gibt es nicht.
+Vier Felder vorn statt der sechs, die hier zuerst standen: `orientation` als
+Enum wurde ein Schalter (`upright`), weil zwei Möglichkeiten keine Liste
+brauchen, und `lead_in` fiel weg — der Schlitz führt den Haken selbst.
 
-Die Geometrie folgt `profile_tongue` bis in die Vorzeichen: Zapfendurchmesser
-ist `hole - play`, die Rastnase greift hinter die Platte und ist deshalb
-`thickness + play` vom Ansatz entfernt, und wo zwei Körper sich sonst nur in
-einer Fläche berührten, überlappen sie um `shapes.OVERLAP` (§39).
+**Die Geometrie folgt der Form des Lochs, nicht der Vorstellung davon.** Ein
+Schlitz von 5 × 15 mm gibt dem Haken fünfzehn Millimeter Weg nach unten, und
+genau daraus besteht er: ein Zapfen, der zwei Drittel davon einnimmt, und eine
+Nase, die das letzte Drittel bekommt. Beide zusammen müssen durch die Höhe
+passen — sonst kommt der Haken nicht hinein, und das Teil liegt daneben statt
+zu hängen. Die Nase greift `thickness · ⅔` hinter die Platte.
+
+Gemessen, was daraus wird: 55 × 25 × 10,3 mm für zwei Haken im Raster,
+wasserdicht, eine Komponente. Ein Test hält beide Zusagen fest — was hinter
+der Rückplatte steckt, passt in Breite und Höhe durch den Schlitz und nutzt
+ihn zu mehr als der Hälfte.
 
 ### 6.3 Die Gruppe
 
@@ -378,18 +394,22 @@ geschrieben hat.
 
 In dieser Reihenfolge, jedes für sich mit grüner Suite abschließbar:
 
-* **P1 — Messen.** Eine SKÅDIS-Platte, ein Messschieber, fünf Werte, jeder an
-  mehreren Stellen. Ergebnis ist ein Kommentar in `standards.toml` mit Datum
-  und Herkunft. **Blockiert alles Weitere** (Abschnitt 5).
-* **P2 — Die Tabelle.** Tabellenart `boards`, Dataclass, Zugriff, `version`
-  auf `"3"`, Test „jede Tabellenart ist über ihre Art nachschlagbar" zieht von
-  selbst nach.
-* **P3 — Der Flächenbefund.** `_applies_to` bringt additive Bausteine an
-  `face`. Eigener Commit, eigener Test, unabhängig vom Rest — er behebt
-  Wandhalter und Nutfeder mit (Abschnitt 4).
-* **P4 — Der Baustein.** `pegboard_hook` nach Abschnitt 6.2, mit den drei
-  eigenen Tests. `LIBRARY_VERSION` auf `"5"`.
-* **P5 — Die Texte.** Deutsche Quelle plus fünf Kataloge.
+* **P1 — Maße** ✔ *(25.08.2026)*. Nicht am Messschieber, sondern aus zwei
+  unabhängigen Sammlungen, auf Roberts Entscheidung. Herkunft und ihre
+  Schwäche stehen in `standards.toml` und im `caveat` des Bausteins.
+* **P2 — Die Tabelle** ✔ *(25.08.2026)*. Tabellenart `boards`, Dataclass
+  `Board`, `board()` und `board_sizes()`, `version` auf `"3"`. Der Test „jede
+  Tabellenart ist über ihre Art nachschlagbar" zog von selbst nach.
+* **P3 — Der Flächenbefund** ✔ *(24.08.2026, `074e5d0` und `73cc2f6`)*.
+  `at_face` steht in der Deklaration statt in einer Ableitung, und das
+  Kontextmenü faltet nur noch, was bündelt.
+* **P4 — Der Baustein** ✔ *(25.08.2026)*. `pegboard_hook` nach Abschnitt 6.2,
+  mit zwei eigenen Tests neben dem Bereichstest.
+* **P5 — Die Texte** ✔ *(25.08.2026)*. Deutsche Quelle plus fünf Kataloge,
+  dreizehn Texte je Sprache. Dazu ein Anzeigename für den Auswahlwert: Der
+  Kunde liest „Lochwand 40 mm" und nicht `skadis` — **ohne Markennamen**, denn
+  das Rastermaß gehört niemandem, und wessen die Platte ist, steht in der
+  Beschreibung.
 * **P6 — Der Durchlauf.** Ein echtes Modell von MakerWorld oder Printables
   einlesen und die sieben Klicks aus Abschnitt 7 fahren. Was dabei hakt, ist der
   eigentliche Befund dieses Vorhabens — nicht, was die Tests sagen.

@@ -968,6 +968,16 @@ def choice_label(value: str) -> str:
     if named is not None:
         return str(named)
     try:
+        board = standards.board(value)
+    except AppError:
+        pass
+    else:
+        # **Ohne den Markennamen**, und das ist eine Entscheidung: „SKÅDIS"
+        # gehört einem Möbelhaus, das Rastermaß gehört niemandem. Was der
+        # Kunde erkennen muss, ist die Platte vor ihm, und die erkennt er am
+        # Raster. Wessen sie ist, steht in der Beschreibung des Bausteins.
+        return f"{tr('Lochwand')} {length(board.pitch)}"
+    try:
         tube = standards.tube(value)
     except AppError:
         return value

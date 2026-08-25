@@ -15,7 +15,7 @@
 # Version 2 seit dem 20.08.2026: Die Aluprofil-Nutmaße tragen zwei Felder mehr
 # (`lip`, `depth`). Kein bestehender Wert hat sich geändert, alte Projekte
 # rechnen also unverändert — die Zahl sagt, dass die Tabelle mehr weiß.
-version = "2"
+version = "3"
 
 # --- Metrische Schrauben --------------------------------------------------------
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
@@ -302,6 +302,28 @@ lip = 2.0
 depth = 5.5
 screw = "M8"
 note = "Nut 8 wie 3030 — die Außenmaße unterscheiden sich, die Nut nicht"
+
+# --- Lochwände ------------------------------------------------------------------
+# slot_width/slot_height: das Loch, das keine Bohrung ist — bei SKÅDIS ein
+# stehender Schlitz mit halbrunden Enden. pitch: Rastermaß in beide Richtungen.
+# stagger: um wie viel die zweite Lochschar gegen die erste versetzt ist; null
+# hieße ein einfaches Quadratraster. thickness: Plattendicke.
+#
+# **Herkunft, und sie ist schwächer als bei allem anderen hier.** IKEA
+# veröffentlicht die Lochung nicht. Die Werte sind aus zwei unabhängigen
+# Sammlungen übereinstimmend übernommen (dimensions.com nennt nur die
+# Außenmaße, pegboardly.com die Lochung und schreibt selbst dazu: „von der
+# Gemeinschaft gemessen, nicht vom Hersteller veröffentlicht"). Wer eine Platte
+# zur Hand hat, misst nach, bevor er eine Charge druckt.
+
+[[boards]]
+size = "skadis"
+slot_width = 5.0
+slot_height = 15.0
+pitch = 40.0
+stagger = 20.0
+thickness = 5.0
+note = "IKEA SKÅDIS; Schlitz mit halbrunden Enden, zweite Lochschar um 20 mm versetzt"
 
 # --- Schläuche und Rohre --------------------------------------------------------
 

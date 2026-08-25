@@ -293,3 +293,147 @@ def keyhole(raw: BaseParams) -> PartResult:
             through=True,
         ),
     )
+
+
+PEGBOARD_HOOK_ADDED = PartChange(
+    version="1",
+    date="2026-08-25",
+    reason="Lochwand-Einhänger — die Kundenanfrage, mit der dieses Konzept anfing.",
+)
+
+_BOARDS = standards.board_sizes()
+
+
+@op_params
+class PegboardHookParams(BaseParams):
+    system: str = param(
+        title=_("Lochwand"),
+        default="skadis",
+        choices=_BOARDS,
+        doc=_("An welche Platte das Teil kommt. Die Maße stehen in der Tabelle."),
+    )
+    count: int = param(
+        title=_("Einhänger"),
+        default=2,
+        minimum=1,
+        maximum=6,
+        doc=_(
+            "Wie viele Haken. Zwei nebeneinander halten ein Teil gegen Verdrehen; "
+            "einer genügt für Leichtes."
+        ),
+    )
+    upright: bool = param(
+        title=_("Übereinander"),
+        default=False,
+        doc=_(
+            "Setzt die Haken senkrecht statt nebeneinander — für schmale Teile, "
+            "die sonst über das Raster hinausragen."
+        ),
+    )
+    plate: float = param(
+        title=_("Rückplatte"),
+        default=2.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=10.0,
+        doc=_("Dicke der Platte, die die Haken trägt und am Teil sitzt."),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1.5,
+        placement="advanced",
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
+    lip: float = param(
+        title=_("Nasentiefe"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=6.0,
+        placement="advanced",
+        doc=_(
+            "Wie weit die Nase hinter die Platte greift. Null heißt: zwei Drittel der Plattendicke."
+        ),
+    )
+
+
+@register_part(
+    name="pegboard_hook",
+    title=_("Lochwand-Einhänger"),
+    group="mounting",
+    params=PegboardHookParams,
+    features=["plate"],
+    doc=_(
+        "Haken für eine Lochwand, auf einer Rückplatte. Von oben in die Schlitze "
+        "gesteckt und heruntergezogen — die Nase greift dann hinter die Platte."
+    ),
+    caveat=_(
+        "Die Lochmaße veröffentlicht IKEA nicht; sie sind aus zwei unabhängigen "
+        "Sammlungen übernommen. Vor einer größeren Auflage lohnt ein Prüfdruck."
+    ),
+    changes=[PEGBOARD_HOOK_ADDED],
+)
+def pegboard_hook(raw: BaseParams) -> PartResult:
+    """Einhänger im Raster, auf einer gemeinsamen Rückplatte.
+
+    **Die Platte ist nicht Zierde, sondern Bedingung.** Zwei Haken im
+    Vierzigerraster sind zwei Körper; ein Baustein muss einer sein (§24.3), und
+    der Kunde will ohnehin keine zwei losen Haken, sondern ein Teil, das hängt.
+
+    **Und der Haken greift in einen Schlitz, nicht in ein Loch.** Bei SKÅDIS
+    ist die Öffnung fünf Millimeter breit und fünfzehn hoch; das ist der Weg,
+    den der Haken nach unten hat, und daraus folgt seine Form: Zapfen und Nase
+    zusammen müssen durch die Höhe passen, sonst kommt er gar nicht erst
+    hinein.
+    """
+    params = cast(PegboardHookParams, raw)
+    board = standards.board(params.system)
+
+    width = board.slot_width - params.play
+    lip = params.lip or board.thickness * (2.0 / 3.0)
+    # Zapfen und Nase zusammen müssen durch den Schlitz passen — sonst hängt
+    # das Teil nicht, es liegt daneben. Die Nase bekommt ein Drittel.
+    reach = board.slot_height - params.play
+    nose = reach / 3.0
+    shank = reach - nose
+
+    span = board.pitch * (params.count - 1)
+    across = 0.0 if params.upright else span
+    along = span if params.upright else 0.0
+
+    # Die Platte trägt alle Haken und liegt am Teil an. Sie reicht rings um
+    # den Schlitz herum, damit sie den Haken hält und nicht nur berührt.
+    margin = board.slot_width
+    plate = shapes.box(across + width + 2.0 * margin, along + reach + 2.0 * margin, params.plate)
+
+    parts = [plate]
+    for index in range(params.count):
+        offset = index * board.pitch - span / 2.0
+        x = 0.0 if params.upright else offset
+        y = offset if params.upright else 0.0
+        # Der Zapfen geht durch die Platte, die Nase hinter sie. Beide fangen
+        # um OVERLAP früher an, damit keine Fläche auf einer anderen liegt (§39).
+        shaft = shapes.box(width, shank, params.plate + board.thickness + params.play)
+        parts.append(shapes.moved(shaft, (x, y + nose / 2.0, 0.0)))
+        catch = shapes.box(width, nose + shank, lip)
+        parts.append(
+            shapes.moved(
+                catch,
+                (x, y, params.plate + board.thickness + params.play - shapes.OVERLAP),
+            )
+        )
+
+    return result(
+        union(*parts),
+        # Die Rückseite der Platte: was am Teil anliegt. Nach unten gerichtet,
+        # denn dort ist das Material, das sie trägt.
+        face(
+            "plate_1",
+            (across + width + 2.0 * margin) * (along + reach + 2.0 * margin),
+            (0.0, 0.0, 0.0),
+            (0.0, 0.0, -1.0),
+        ),
+    )

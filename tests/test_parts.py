@@ -92,13 +92,13 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
 
 
 def test_the_library_has_the_first_set_from_the_plan() -> None:
-    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung, dazu drei.
+    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung, dazu vier.
 
     Die Kalibrierkörper aus §28.3 sind auch Bausteine, gehören aber nicht zu
     diesem Satz — sie sind Werkzeuge für den Drucker, nicht für das Modell, und
     sie haben ihre eigene Gruppe im Katalog.
 
-    **Drei stehen nicht in der Erstbestückung**, und alle drei sind eine Ansage
+    **Vier stehen nicht in der Erstbestückung**, und alle vier sind eine Ansage
     und kein Versehen. Wer die Zahl hier ändert, ändert die Bibliothek, und das soll
     auffallen.
 
@@ -120,10 +120,17 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     meistgenannte Kategorie der Modellportale ist. Dieselbe Sorte Lücke wie bei
     ``profile_tongue``: Die Schlauchmaße standen seit der Erstbestückung in
     ``standards.toml``, und gelesen hat sie genau ein Baustein.
+
+    ``pegboard_hook`` kam am 25.08.2026 dazu, und der Anlass war eine
+    Kundenanfrage: an ein heruntergeladenes Modell IKEA-SKÅDIS-Haken hängen,
+    ohne es nachzukonstruieren. Mit ihm kam eine neue Tabellenart — Lochwände
+    sind keine Normteile, ihre Maße veröffentlicht niemand, und **gegeben sind
+    sie trotzdem**: Wer einen Einhänger baut, hat sie nicht zu wählen, sondern
+    zu treffen.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 16
+    assert len(building) == 17
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 
@@ -1161,4 +1168,92 @@ def test_an_attachment_stands_in_the_face_menu_and_a_test_body_does_not() -> Non
     assert any(spec.at_face for spec in PARTS.all())
     assert any(not spec.at_face for spec in PARTS.all()), (
         "ohne einen Prüfkörper prüft die Gegenseite nichts"
+    )
+
+
+# --- Der Lochwand-Einhänger (insert_pegboard_hook) ------------------------------
+
+
+@pytest.mark.parametrize("count", [1, 2, 4])
+def test_the_hook_goes_through_the_slot_and_catches_behind_it(count: int) -> None:
+    """Zwei Zusagen, und ein Einhänger, der eine davon bricht, hängt nicht.
+
+    **Er muss hinein**: Zapfen und Nase zusammen sind der Weg durch den Schlitz,
+    und der ist bei SKÅDIS fünfzehn Millimeter hoch und fünf breit. Passt der
+    Haken nicht hindurch, liegt das Teil daneben statt zu hängen.
+
+    **Und er muss hinter die Platte greifen**: Die Nase sitzt jenseits der
+    Plattendicke, sonst rutscht das Teil beim ersten Anstoßen heraus.
+
+    Gemessen wird gegen die Tabelle, nicht gegen die Formel des Bausteins — und
+    an der Geometrie, die herauskommt, nicht an den Zahlen, die hineingingen.
+    """
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts import PARTS
+
+    spec = PARTS.get("pegboard_hook")
+    values = spec.params(count=count)
+    built = spec.fn(values)
+    board = standards.board(values.system)
+
+    kanten = built.mesh.bounds
+    tief = float(kanten.size[2])
+
+    # Der Haken ragt hinter die Rückplatte, und zwar über die Plattendicke
+    # hinaus — sonst greift die Nase ins Leere.
+    assert tief > values.plate + board.thickness, (
+        f"count={count}: the hook is {tief:.1f} mm deep, which does not reach past "
+        f"the {board.thickness} mm board behind the {values.plate} mm plate"
+    )
+
+    # Und die Haken sitzen im Raster: bei zwei nebeneinander liegt genau eine
+    # Rasterweite dazwischen, sonst passen sie in keine zwei Schlitze.
+    breit = float(kanten.size[0])
+    erwartet = board.pitch * (count - 1) + board.slot_width + 2.0 * board.slot_width
+    assert breit == pytest.approx(erwartet, abs=0.6), (
+        f"count={count}: {breit:.1f} mm wide, expected about {erwartet:.1f} mm — "
+        "the hooks do not sit on the grid"
+    )
+
+
+def test_the_hook_fits_the_slot_it_is_made_for() -> None:
+    """Was hinter der Rückplatte steckt, muss durch den Schlitz passen.
+
+    Gemessen wird am gebauten Netz und gegen die Tabelle: Alle Punkte jenseits
+    der Rückplatte gehören zu dem Teil, das in die Lochwand greift, und ihre
+    Spanne in Breite und Höhe ist der Weg durch den Schlitz. Ist sie größer als
+    das Loch, kommt der Haken nicht hinein — dann liegt das Teil daneben statt
+    zu hängen.
+
+    **Ohne Boolesche Operation, und das ist kein Umweg.** Der erste Versuch
+    stellte eine Platte mit Schlitz daneben und fragte nach der Schnittmenge.
+    Sie ist nie leer: Die Rückplatte des Hakens liegt an der Lochwand an, und
+    zwar flächig — das ist keine Klemmung, sondern der Zweck. Wer hier eine
+    Boolesche Operation befragt, misst die Berührung und nicht die Passung.
+    """
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts import PARTS
+
+    spec = PARTS.get("pegboard_hook")
+    values = spec.params(count=1, play=0.2)
+    built = spec.fn(values)
+    board = standards.board(values.system)
+
+    punkte = built.mesh.raw.vertices
+    dahinter = punkte[punkte[:, 2] > values.plate + 0.1]
+    assert len(dahinter), "nothing reaches behind the plate at all"
+
+    breit = float(dahinter[:, 0].max() - dahinter[:, 0].min())
+    hoch = float(dahinter[:, 1].max() - dahinter[:, 1].min())
+
+    assert breit <= board.slot_width, (
+        f"the part behind the plate is {breit:.2f} mm wide, the slot is {board.slot_width}"
+    )
+    assert hoch <= board.slot_height, (
+        f"the part behind the plate is {hoch:.2f} mm tall, the slot is {board.slot_height}"
+    )
+    # Und es soll den Schlitz auch ausnutzen: Ein Haken, der nur halb so hoch
+    # ist wie das Loch, hält beim ersten Anstoßen nicht.
+    assert hoch > board.slot_height / 2.0, (
+        f"the hook only uses {hoch:.2f} mm of the {board.slot_height} mm slot"
     )
