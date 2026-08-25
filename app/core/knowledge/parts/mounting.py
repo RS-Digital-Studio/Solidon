@@ -543,7 +543,7 @@ class PegboardHookParams(BaseParams):
     # zusammen — geprüft wird der Fall, der schwächer ist.
     joined_by_host=True,
     doc=_(
-        "Haken für eine Lochwand, auf einer Rückplatte. Von oben in die Schlitze "
+        "Haken für eine Lochwand, direkt am Teil. Von oben in die Schlitze "
         "gesteckt und heruntergezogen — die Nase greift dann hinter die Platte."
     ),
     caveat=_(
