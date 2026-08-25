@@ -16,7 +16,7 @@ import weakref
 from collections.abc import Callable, Sequence
 from typing import Any, Final, Literal, NamedTuple, cast
 
-from PySide6.QtCore import QEvent, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -1749,6 +1749,11 @@ class Viewport(QWidget):
         self._bed_colour = BED_COLOUR
         self._bed_surface = BED_SURFACE_COLOUR
         self._sketch_frame: PlaneFrame | None = None
+        self._sketch_measure_pending: Callable[[], float] | None = None
+        """Ob gerade ein Maß aussteht — vom Fenster je Skizzenmodus gesetzt
+        und beim Verlassen gelöst, sonst hielte die Ansicht den Canvas fest
+        (ein aufbewahrter Rückruf ist eine Referenz, siehe oberflaeche.md)."""
+        self._sketch_measure_begin: Callable[[Any], bool] | None = None
         """Die Ebene, auf die ein Klick gerade zielt — oder nichts.
 
         Sie ist der Modusschalter des Skizzenmodus in der Ansicht: Solange
@@ -5163,6 +5168,26 @@ class Viewport(QWidget):
             elif kind == QEvent.Type.Enter:
                 self._update_cursor()
 
+        # **E19 im gefahrenen Modus: die erste Ziffer beginnt die Eingabe.**
+        # Der Fokus liegt auf der Ansicht; ``ShortcutOverride`` nimmt den
+        # Ebenen-Kürzeln 1 bis 3 die Vorfahrt, solange ein Maß aussteht, und
+        # der Tastendruck geht an das verliehene Feld des Canvas.
+        if self._sketch_frame is not None and watched is interactor:
+            if (
+                kind == QEvent.Type.ShortcutOverride
+                and self._sketch_measure_pending is not None
+                and self._sketch_measure_pending() > 0.0
+                and str(event.text())[:1].isdigit()
+            ):
+                event.accept()
+                return True
+            if (
+                kind == QEvent.Type.KeyPress
+                and self._sketch_measure_begin is not None
+                and self._sketch_measure_begin(event)
+            ):
+                return True
+
         if self._drag_kind is None or kind != QEvent.Type.KeyPress:
             return False
         key = event.key()
@@ -6042,6 +6067,38 @@ class Viewport(QWidget):
             actor.SetVisibility(frame is None)
         self._update_cursor()
         self._draw()
+
+    def set_sketch_entry(
+        self,
+        pending: Callable[[], float] | None,
+        begin: Callable[[Any], bool] | None,
+    ) -> None:
+        """Verdrahtet die Maßeingabe des Skizzenmodus (E19).
+
+        Beides zusammen oder beides ``None`` — das Fenster setzt sie beim
+        Betreten und löst sie beim Verlassen, damit hier keine Referenz auf
+        ein gestorbenes Panel liegen bleibt.
+        """
+        self._sketch_measure_pending = pending
+        self._sketch_measure_begin = begin
+
+    def sketch_screen_at(self, point: tuple[float, float]) -> QPoint | None:
+        """Wo eine Stelle der Zeichenebene im Bild liegt — in Qt-Logikpunkten.
+
+        Die Umkehrung von :meth:`_sketch_hit`, für das verliehene Maßfeld:
+        Es liegt als Qt-Kind über der Ansicht und braucht deren Koordinaten.
+        ``None``, wenn es kein Bild gibt oder keine Ebene steht.
+        """
+        if self.plotter is None or self._sketch_frame is None:
+            return None
+        world = to_world(self._sketch_frame, point)
+        renderer = self.plotter.renderer
+        renderer.SetWorldPoint(world[0], world[1], world[2], 1.0)
+        renderer.WorldToDisplay()
+        display = renderer.GetDisplayPoint()
+        ratio = float(self.plotter.interactor.devicePixelRatioF()) or 1.0
+        height = float(self.plotter.interactor.height())
+        return QPoint(int(display[0] / ratio), int(height - display[1] / ratio))
 
     def _sketch_hit(self, x: int, y: int) -> tuple[float, float] | None:
         """Wo der Sichtstrahl durch diese Bildstelle die Zeichenebene trifft.

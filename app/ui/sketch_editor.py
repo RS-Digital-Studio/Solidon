@@ -20,7 +20,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any, Final
 
-from PySide6.QtCore import QPoint, QPointF, QRectF, QSignalBlocker, Qt, Signal
+from PySide6.QtCore import QEvent, QPoint, QPointF, QRectF, QSignalBlocker, Qt, Signal
 from PySide6.QtGui import QColor, QKeySequence, QPainter, QPainterPath, QPen, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
@@ -573,6 +573,15 @@ class SketchCanvas(QWidget):
         self.measure_field.setAccessibleName(tr("Abstand"))
         self.measure_field.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.measuringChanged.connect(self._place_measure_field)
+        self._measure_host: QWidget | None = None
+        """Wo das Maßfeld gerade wohnt — im Viewport-Modus die Ansicht.
+
+        Das Feld ist ein Kind dieser Fläche, und die ist dort unsichtbar:
+        E19 („das Maß steht am Zeiger, die erste Ziffer beginnt die Eingabe")
+        gab es im gefahrenen Modus schlicht nicht. Verliehen wird das Feld,
+        nicht kopiert — eine zweite Anzeige desselben Werts wäre die zweite
+        Zahl für dieselbe Sache."""
+        self._measure_screen_of: Callable[[tuple[float, float]], QPoint | None] | None = None
         self.highlighted: frozenset[int] = frozenset()
         """Punkte, die gerade aufleuchten sollen — die Ziele der Bedingung
         unter dem Mauszeiger (E19).
@@ -1567,22 +1576,99 @@ class SketchCanvas(QWidget):
         self.measure_field.set_value_mm(value)
         self.measure_field.blockSignals(blocked)
         self.measure_field.adjustSize()
-        self.measure_field.setVisible(True)
 
-        tip = self._to_screen(*self._pointer)
+        # Verliehen rechnet die Lage der **Wirt**: Im Viewport-Modus liegt der
+        # Zeiger auf der Zeichenebene, und wo das im Bild ist, weiß nur die
+        # Ansicht (``sketch_screen_at``). Ohne Bildstelle bleibt das Feld weg —
+        # eine Ebene hinter der Kamera hat keine.
+        host: QWidget = self._measure_host or self
+        if self._measure_screen_of is not None:
+            spot = self._measure_screen_of(self._pointer)
+            if spot is None:
+                self.measure_field.setVisible(False)
+                return
+            tip = QPointF(spot)
+        else:
+            tip = self._to_screen(*self._pointer)
+        self.measure_field.setVisible(True)
         width = self.measure_field.width()
         height = self.measure_field.height()
         left = tip.x() + MEASURE_GAP
         top = tip.y() + MEASURE_GAP
-        if left + width > self.width():
+        if left + width > host.width():
             left = tip.x() - MEASURE_GAP - width
-        if top + height > self.height():
+        if top + height > host.height():
             top = tip.y() - MEASURE_GAP - height
         # Und wenn beides nicht passt, weil die Fläche kleiner ist als das
         # Feld: lieber am Rand kleben als halb draußen.
-        left = max(0.0, min(left, float(self.width() - width)))
-        top = max(0.0, min(top, float(self.height() - height)))
+        left = max(0.0, min(left, float(host.width() - width)))
+        top = max(0.0, min(top, float(host.height() - height)))
         self.measure_field.move(int(left), int(top))
+
+    def lend_measure_field(
+        self,
+        host: QWidget,
+        screen_of: Callable[[tuple[float, float]], QPoint | None],
+    ) -> None:
+        """Gibt das Maßfeld an die Ansicht ab (§30.1, P4 — E19).
+
+        ``screen_of`` übersetzt eine Stelle der Zeichenebene in Bildpunkte des
+        Wirts; die Logik (Wert, Kippen an den Rändern, Abschließen über
+        ``editingFinished``) bleibt hier — verliehen wird nur das Widget.
+        """
+        self._measure_host = host
+        self._measure_screen_of = screen_of
+        self.measure_field.setVisible(False)
+        self.measure_field.setParent(host)
+
+    def reclaim_measure_field(self) -> None:
+        """Holt das Feld zurück, bevor das Panel stirbt.
+
+        Ein Kind im fremden Fenster überlebte sonst seinen Besitzer — mit
+        ``editingFinished`` ins Leere, dieselbe Familie wie die
+        Bedingungsliste in ``finish_sketch``.
+        """
+        self._measure_host = None
+        self._measure_screen_of = None
+        self.measure_field.setVisible(False)
+        self.measure_field.setParent(self)
+
+    def begin_measure_entry(self, event: Any) -> bool:
+        """Die erste Ziffer beginnt die Eingabe — von beiden Wegen aus (E19).
+
+        Aus ``keyPressEvent`` herausgelöst, damit der Viewport-Modus denselben
+        Griff hat: Dort liegt der Fokus auf der Ansicht, und deren
+        Ereignisfilter reicht die Ziffer hierher.
+        """
+        if self.pending_measure() <= 0.0 or not str(event.text())[:1].isdigit():
+            return False
+        self.measure_field.setFocus(Qt.FocusReason.OtherFocusReason)
+        # Von vorn und nicht an den Zeigerwert angehängt: Wer „25" tippt,
+        # meint 25 und nicht 1025.
+        self.measure_field.selectAll()
+        editor = self.measure_field.lineEdit()
+        # An das Eingabefeld und nicht an das Drehfeld: Qt reicht Tasten
+        # dorthin weiter, und ein ``event()`` auf dem Drehfeld selbst
+        # landet in der Pfeiltastenbehandlung statt im Text.
+        QApplication.sendEvent(editor, event)
+        return True
+
+    def event(self, happening: Any) -> bool:
+        """Ziffern gehören dem Maß, solange eines aussteht.
+
+        Die Ebenen-Kürzel liegen auf 1, 2 und 3, und ein Kürzel gewinnt vor
+        jedem ``keyPressEvent``: Ohne diese Vorfahrt schaltete die erste
+        Ziffer von „12,5" die Ebene um, statt die Eingabe zu beginnen.
+        ``ShortcutOverride`` ist der Weg, den Textfelder dafür nehmen.
+        """
+        if (
+            happening.type() == QEvent.Type.ShortcutOverride
+            and self.pending_measure() > 0.0
+            and str(happening.text())[:1].isdigit()
+        ):
+            happening.accept()
+            return True
+        return super().event(happening)
 
     def pending_measure(self) -> float:
         """Wie lang die angefangene Linie gerade wäre — oder wie groß der
@@ -1851,16 +1937,7 @@ class SketchCanvas(QWidget):
         # jedes Kind falsch, und der ganze Zweig liefe in der Suite nie.
         # Gefragt wird, ob es etwas zu messen gibt — genau das, wonach sich
         # auch das Feld richtet.
-        if self.pending_measure() > 0.0 and event.text()[:1].isdigit():
-            self.measure_field.setFocus(Qt.FocusReason.OtherFocusReason)
-            # Von vorn und nicht an den Zeigerwert angehängt: Wer „25" tippt,
-            # meint 25 und nicht 1025.
-            self.measure_field.selectAll()
-            editor = self.measure_field.lineEdit()
-            # An das Eingabefeld und nicht an das Drehfeld: Qt reicht Tasten
-            # dorthin weiter, und ein ``event()`` auf dem Drehfeld selbst
-            # landet in der Pfeiltastenbehandlung statt im Text.
-            QApplication.sendEvent(editor, event)
+        if self.begin_measure_entry(event):
             return
         super().keyPressEvent(event)
 

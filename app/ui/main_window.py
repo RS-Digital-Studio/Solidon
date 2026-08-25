@@ -4258,6 +4258,13 @@ class MainWindow(QMainWindow):
         # hätten, das niemand sieht. Das Panel wird jetzt zur Leiste unter dem
         # Bild; gezeichnet wird dort, wo die Skizze liegt.
         panel.use_viewport()
+        # E19 zieht mit in den Viewport: Das Maßfeld wohnt jetzt über der
+        # Ansicht (der Canvas ist unsichtbar), und die erste Ziffer erreicht
+        # es über deren Ereignisfilter.
+        panel.canvas.lend_measure_field(self.viewport, self.viewport.sketch_screen_at)
+        self.viewport.set_sketch_entry(
+            panel.canvas.pending_measure, panel.canvas.begin_measure_entry
+        )
         # **Die Bedingungen ziehen in die rechte Spalte, als eigener Reiter.**
         # Gemessen nahm die Leiste sonst 334 von 900 Bildpunkten — 37 Prozent
         # des Fensters —, und gezeichnet wurde zur Hälfte dahinter.
@@ -4531,6 +4538,11 @@ class MainWindow(QMainWindow):
         self._sketch_panel = None
         self._sketch_target = None
         self.viewport.set_sketching(None)
+        # Die Maßeingabe abklemmen und das Feld heimholen, **bevor** das Panel
+        # stirbt: Die Ansicht hielte sonst Rückrufe auf einen toten Canvas,
+        # und das Feld bliebe als Waise über dem Bild stehen.
+        self.viewport.set_sketch_entry(None, None)
+        panel.canvas.reclaim_measure_field()
         panel.sketchChanged.disconnect(self._redraw_sketch)
         panel.pointerMoved.disconnect(self._on_sketch_pointer)
         # Die dritte Verbindung aus derselben Zeilengruppe wie die zwei

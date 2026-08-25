@@ -2787,6 +2787,128 @@ def test_switching_to_parallel_keeps_the_section_instead_of_jumping_to_two_milli
     assert camera.parallel_scale == pytest.approx(7.0)
 
 
+def test_the_measure_field_moves_to_the_viewport_and_back(qt_app: QApplication) -> None:
+    """E19 gab es im gefahrenen Modus nicht: Das Maßfeld ist ein Kind des
+    Canvas, und der ist im Viewport-Modus unsichtbar (Gesamtreview 25.08.2026,
+    J-7). Verliehen wohnt es über der Ansicht und rechnet seine Lage gegen
+    deren Bild; zurückgeholt wird es, bevor das Panel stirbt.
+
+    ``isVisibleTo`` statt ``isVisible`` — in einem nie gezeigten Fenster lügt
+    das zweite (siehe oberflaeche.md).
+    """
+    from PySide6.QtCore import QPoint
+    from PySide6.QtWidgets import QWidget
+
+    host = QWidget()
+    host.resize(800, 600)
+    canvas = SketchCanvas()
+    try:
+        canvas.resize(600, 600)
+        canvas.set_tool("line")
+        canvas.lend_measure_field(host, lambda point: QPoint(50, 40))
+        assert canvas.measure_field.parent() is host
+
+        canvas.place(canvas._to_screen(0.0, 0.0))
+        canvas.note_pointer(canvas._to_screen(30.0, 0.0))
+
+        assert canvas.pending_measure() > 0.0, "eine angefangene Linie misst"
+        assert canvas.measure_field.isVisibleTo(host), "das Feld steht im Wirt"
+        assert canvas.measure_field.pos().x() > 50, "neben der Bildstelle, nicht auf ihr"
+
+        # Ohne Bildstelle (Ebene hinter der Kamera) bleibt das Feld weg.
+        canvas.lend_measure_field(host, lambda point: None)
+        canvas.note_pointer(canvas._to_screen(40.0, 0.0))
+        assert not canvas.measure_field.isVisibleTo(host)
+
+        canvas.reclaim_measure_field()
+        assert canvas.measure_field.parent() is canvas
+    finally:
+        canvas.deleteLater()
+        host.deleteLater()
+
+
+def test_a_digit_beats_the_plane_shortcut_while_measuring(qt_app: QApplication) -> None:
+    """Die Ebenen-Kürzel liegen auf 1, 2 und 3 — und ein Kürzel gewinnt vor
+    jedem keyPressEvent: Die erste Ziffer von „12,5" schaltete die Ebene um,
+    statt die Eingabe zu beginnen. ``ShortcutOverride`` gibt dem Maß die
+    Vorfahrt, solange eines aussteht (Gesamtreview 25.08.2026, J-7).
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QKeyEvent
+
+    canvas = SketchCanvas()
+    try:
+        canvas.resize(600, 600)
+        canvas.set_tool("line")
+
+        override = QKeyEvent(
+            QEvent.Type.ShortcutOverride, Qt.Key.Key_1, Qt.KeyboardModifier.NoModifier, "1"
+        )
+        assert not canvas.event(override) or not override.isAccepted(), (
+            "ohne ausstehendes Maß bleibt die 1 ein Ebenen-Kürzel"
+        )
+
+        canvas.place(canvas._to_screen(0.0, 0.0))
+        canvas.note_pointer(canvas._to_screen(30.0, 0.0))
+        assert canvas.pending_measure() > 0.0
+
+        override = QKeyEvent(
+            QEvent.Type.ShortcutOverride, Qt.Key.Key_1, Qt.KeyboardModifier.NoModifier, "1"
+        )
+        assert canvas.event(override) and override.isAccepted(), (
+            "mit ausstehendem Maß gehört die Ziffer der Eingabe"
+        )
+
+        press = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_1, Qt.KeyboardModifier.NoModifier, "1")
+        assert canvas.begin_measure_entry(press), "und der Tastendruck beginnt sie"
+        assert canvas.measure_field.lineEdit().text().startswith("1")
+    finally:
+        canvas.deleteLater()
+
+
+def test_the_viewport_routes_digits_to_the_lent_measure_field(qt_app: QApplication) -> None:
+    """Im gefahrenen Modus liegt der Fokus auf der Ansicht — deren
+    Ereignisfilter muss die erste Ziffer zum verliehenen Feld bringen und dem
+    Ebenen-Kürzel vorher die Taste nehmen (Gesamtreview 25.08.2026, J-7).
+    """
+    from PySide6.QtCore import QEvent
+    from PySide6.QtGui import QKeyEvent
+
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+
+        class _Interactor:
+            pass
+
+        class _Plotter:
+            interactor = _Interactor()
+
+        viewport.plotter = _Plotter()
+        viewport._sketch_frame = object()
+        begun: list[str] = []
+        viewport.set_sketch_entry(lambda: 12.0, lambda event: begun.append(event.text()) or True)
+
+        override = QKeyEvent(
+            QEvent.Type.ShortcutOverride, Qt.Key.Key_2, Qt.KeyboardModifier.NoModifier, "2"
+        )
+        assert viewport.eventFilter(_Plotter.interactor, override)
+        assert override.isAccepted(), "die Ziffer gehört dem Maß, nicht der Ebene"
+
+        press = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_2, Qt.KeyboardModifier.NoModifier, "2")
+        assert viewport.eventFilter(_Plotter.interactor, press)
+        assert begun == ["2"], "der Tastendruck erreicht den Canvas"
+
+        viewport.set_sketch_entry(None, None)
+        press = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_2, Qt.KeyboardModifier.NoModifier, "2")
+        assert not viewport.eventFilter(_Plotter.interactor, press), (
+            "abgeklemmt läuft nichts mehr in ein totes Panel"
+        )
+    finally:
+        viewport.deleteLater()
+
+
 def test_the_sketch_menu_is_reachable_from_a_plane_point(qt_app: QApplication) -> None:
     """Das Kontextmenü der Zeichnung braucht einen Weg über Millimeter.
 
