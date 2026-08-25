@@ -1274,3 +1274,164 @@ def test_a_body_in_pieces_casts_one_shadow_per_piece(qt_app: QApplication) -> No
         )
     finally:
         viewport.deleteLater()
+
+
+# --- Der Drehpunkt beim Drehbeginn (§2.9) ------------------------------------
+
+
+def test_the_rotation_focus_moves_in_depth_but_never_sideways() -> None:
+    """Der Fokus bekommt die Tiefe der Körper, ohne das Bild zu ändern.
+
+    Nach einem weiten Verschieben drehte die Kamera um den alten Punkt: Beim
+    Aufbau wurde der Fokus nicht mehr nachgeführt, weil das Nachrücken das
+    Bild springen ließ (Robert, 23.08.2026: „kamera bei aktueller position
+    dann immer lassen"). Beim Drehbeginn gesetzt, muss der neue Fokus deshalb
+    **auf dem Sichtstrahl** liegen — jede seitliche Bewegung wäre genau der
+    Sprung, den diese Anweisung verbietet, nur eine Geste später.
+    """
+    from app.ui.viewport import rotation_focus
+
+    position = (0.0, -10.0, 0.0)
+    focus = (0.0, 0.0, 0.0)
+    # Ein Körper, weit zur Seite geschoben — und tiefer im Bild.
+    centre = (30.0, 10.0, 4.0)
+
+    target = rotation_focus(position, focus, centre)
+
+    assert target is not None
+    assert target[0] == pytest.approx(0.0), "keine seitliche Bewegung"
+    assert target[2] == pytest.approx(0.0), "auch nicht nach oben"
+    assert target[1] == pytest.approx(10.0), "die Tiefe der Körpermitte entlang des Strahls"
+
+
+def test_a_centre_behind_the_camera_leaves_the_focus_alone() -> None:
+    """Hinter der Kamera gibt es nichts anzusehen — der Drehpunkt bleibt."""
+    from app.ui.viewport import rotation_focus
+
+    assert rotation_focus((0.0, -10.0, 0.0), (0.0, 0.0, 0.0), (0.0, -30.0, 0.0)) is None
+
+
+def test_a_fitting_focus_stays_and_a_dead_camera_cannot_aim() -> None:
+    """Nichts zu tun und nichts zu wissen sind beide kein Grund zu setzen."""
+    from app.ui.viewport import rotation_focus
+
+    # Die Körpermitte liegt seitlich auf Fokustiefe — der Fokus stimmt schon.
+    assert rotation_focus((0.0, -10.0, 0.0), (0.0, 0.0, 0.0), (5.0, 0.0, 3.0)) is None
+    # Kamera auf ihrem Blickpunkt: keine Richtung, aus der sich rechnen ließe.
+    assert rotation_focus((7.0, 7.0, 7.0), (7.0, 7.0, 7.0), (0.0, 0.0, 0.0)) is None
+
+
+class _AimedCamera:
+    """Eine Attrappe mit den vier Methoden, die ``_aim_rotation`` benutzt."""
+
+    def __init__(self) -> None:
+        self.set_to: tuple[float, ...] | None = None
+
+    def GetPosition(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
+        return (0.0, -10.0, 0.0)
+
+    def GetFocalPoint(self) -> tuple[float, float, float]:  # noqa: N802 — VTK-Name
+        return (0.0, 0.0, 0.0)
+
+    def SetFocalPoint(self, *point: float) -> None:  # noqa: N802 — VTK-Name
+        self.set_to = point
+
+
+class _AimedPlotter:
+    """Renderer und Kamera, mehr braucht der Drehbeginn nicht."""
+
+    class _Renderer:
+        def __init__(self, camera: _AimedCamera) -> None:
+            self._camera = camera
+            self.clipped = False
+
+        def GetActiveCamera(self) -> _AimedCamera:  # noqa: N802 — VTK-Name
+            return self._camera
+
+        def ResetCameraClippingRange(self) -> None:  # noqa: N802 — VTK-Name
+            self.clipped = True
+
+    def __init__(self) -> None:
+        self.camera = _AimedCamera()
+        self.renderer = self._Renderer(self.camera)
+
+
+def test_the_rotation_start_aims_over_the_weak_callback(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Drehbeginn setzt den Fokus — über den schwachen Rückruf.
+
+    Der Weg ist derselbe wie bei den übrigen Rückrufen an den
+    Interaktionsstil: ``_weak_callbacks`` hält die Ansicht schwach, sonst
+    stünde die Schleife Stil → Viewport → Plotter → Interactor → Stil wieder
+    da. Geprüft wird die Kette bis in die Kamera, mit einer Attrappe, die
+    genau die benutzten VTK-Methoden trägt.
+    """
+    from app.ui.viewport import Viewport, _weak_callbacks
+
+    viewport = Viewport()
+    try:
+        plotter = _AimedPlotter()
+        viewport.plotter = plotter  # type: ignore[assignment]
+        monkeypatch.setattr(viewport, "rotation_centre", lambda: (30.0, 10.0, 4.0))
+
+        _weak_callbacks(viewport).on_rotate_start()
+
+        assert plotter.camera.set_to == pytest.approx((0.0, 10.0, 0.0))
+        assert plotter.renderer.clipped, "ein neuer Fokus braucht neue Schnittebenen"
+    finally:
+        viewport.plotter = None
+        viewport.deleteLater()
+
+
+def test_a_body_is_split_once_while_its_mesh_stays(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zerlegt wird ein Körper, wenn sein Netz ein anderes ist — sonst nicht.
+
+    ``split_bodies`` kostet 21 ms bei zweiundachtzigtausend Dreiecken, und
+    ``_shadow_hulls_of`` nannte das „einmal je Szenenaufbau, nicht je Bild".
+    Der zweite Halbsatz stimmt, der erste beruhigt zu Unrecht: Ein Aufbau ist
+    nichts Seltenes. ``show_scene`` läuft bei jeder Auswahl, jedem
+    Themenwechsel, jedem Ein- und Ausblenden — und bei **jedem Schritt** der
+    Schieber für Explosion, Schnitt und Schicht. Bei zwanzig Teilen auf der
+    Platte sind das über vierhundert Millisekunden je Schieberschritt, im
+    Qt-Hauptthread.
+
+    Geprüft wird die **Entscheidung** und nicht die Zeit: wie oft zerlegt
+    wird. Eine Messung in Millisekunden gehört ins Leistungsbudget (§31) und
+    hieße hier auf jeder Maschine etwas anderes.
+
+    Der letzte Schritt ist der, der den Cache ehrlich hält: Ein anderes Netz
+    **muss** neu zerlegt werden. Der Schnittschieber erzeugt genau das, und
+    ein zerschnittener Körper zerfällt womöglich in andere Stücke als vorher.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        split: list[object] = []
+
+        def _count(surface: object) -> list[str]:
+            split.append(surface)
+            return ["hülle"]
+
+        monkeypatch.setattr(viewport, "_shadow_hulls_of", _count)
+
+        mesh = object()
+        other = object()
+
+        assert viewport._shadow_hulls_for("body_1", "fläche", mesh) == ["hülle"]
+        assert len(split) == 1, "das erste Mal wird gerechnet"
+
+        viewport._shadow_hulls_for("body_1", "fläche", mesh)
+        viewport._shadow_hulls_for("body_1", "fläche", mesh)
+        assert len(split) == 1, "dasselbe Netz wird kein zweites Mal zerlegt"
+
+        viewport._shadow_hulls_for("body_2", "fläche", mesh)
+        assert len(split) == 2, "ein anderer Körper hat seinen eigenen Eintrag"
+
+        viewport._shadow_hulls_for("body_1", "fläche", other)
+        assert len(split) == 3, "ein anderes Netz schon — der Schnitt baut eines"
+    finally:
+        viewport.deleteLater()

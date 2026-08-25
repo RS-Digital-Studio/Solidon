@@ -908,6 +908,37 @@ def shadow_direction(position: Any, focal_point: Any) -> tuple[float, float]:
     return (float(step[0]), float(step[1]))
 
 
+def rotation_focus(
+    position: Sequence[float], focus: Sequence[float], centre: Sequence[float]
+) -> Vec3 | None:
+    """Der Fokuspunkt für den Beginn einer Drehung — oder nichts.
+
+    Der Punkt auf dem Sichtstrahl, der der Mitte der Körper am nächsten
+    liegt: gleiche Stellung, gleiche Blickrichtung, nur die Fokustiefe
+    wechselt. Das Bild ändert sich dadurch um nichts, und der Drehpunkt
+    bekommt die Tiefe der Körper. Nichts zurück heißt: so lassen — die Mitte
+    liegt hinter der Kamera, oder der Fokus stimmt schon.
+
+    Als eigene Funktion, damit die Regel ohne Plotter prüfbar bleibt —
+    dieselbe Begründung wie bei :meth:`Viewport.rotation_centre`.
+    """
+    import numpy as np
+
+    where = np.asarray(position, dtype=float)
+    aim = np.asarray(focus, dtype=float) - where
+    span = float(np.linalg.norm(aim))
+    if span <= EPS_GEOM:
+        return None
+    aim /= span
+    depth = float(np.dot(np.asarray(centre, dtype=float) - where, aim))
+    if depth <= EPS_GEOM:
+        return None
+    target = where + depth * aim
+    if all(abs(float(target[axis]) - float(focus[axis])) < EPS_DISPLAY for axis in range(3)):
+        return None
+    return (float(target[0]), float(target[1]), float(target[2]))
+
+
 def _thinned_for_hull(points: Any) -> Any:
     """So viele Punkte, wie die Schattenhülle braucht — nicht mehr.
 
@@ -1743,8 +1774,8 @@ class Viewport(QWidget):
         #: dieselben noch da, hat der Nutzer nur geschoben, und die Kamera
         #: bleibt (:func:`outgrown`, ``moved_only``).
         self._fitted_objects: frozenset[str] = frozenset()
-        #: Ob der letzte Aufbau nur ein Verschieben war. Gesetzt in
-        #: :meth:`_fit_once_for`, gelesen in :meth:`_centre_rotation`.
+        #: Ob der letzte Aufbau nur ein Verschieben war. Gesetzt und gelesen
+        #: in :meth:`_fit_once_for` (für :func:`outgrown`).
         self._moved_only: bool = False
         """Die Maße, auf die eingepasst wurde — der Vergleich für
         :func:`outgrown`. „Innerhalb desselben Zustands" hat eine Grenze: Ein
@@ -1855,6 +1886,13 @@ class Viewport(QWidget):
         """Je Körper die konvexe Hülle seiner Punkte, für den Schattenwurf.
         Einmal je Szenenaufbau gerechnet — ein Ansichtswechsel projiziert nur
         noch daraus (§18.6)."""
+        self._shadow_splits: dict[ObjectId, tuple[Any, list[Any]]] = {}
+        """Je Körper das Netz, aus dem seine Hüllen stammen, und sie selbst.
+
+        Überlebt den Szenenaufbau, anders als ``_shadow_hulls``: Er ist genau
+        dafür da, das Zerlegen zu sparen, wenn sich am Netz nichts geändert
+        hat. Verglichen wird die Identität des Netzes (siehe
+        ``_shadow_hulls_for``)."""
         self._shadow_ground: dict[ObjectId, tuple[float, float, Any]] = {}
         """Je Körper Unterkante, Oberkante und sein Umriss von oben. Damit
         steht fest, wer auf wem steht — und damit, welche Fläche den Schatten
@@ -2200,6 +2238,37 @@ class Viewport(QWidget):
         camera = self.plotter.camera
         return shadow_direction(camera.position, camera.focal_point)
 
+    def _shadow_hulls_for(self, object_id: ObjectId, surface: Any, source: Any) -> list[Any]:
+        """Die Hüllen dieses Körpers — neu gerechnet nur bei einem anderen Netz.
+
+        ``_shadow_hulls_of`` zerlegt den Körper, und das kostet 21 ms bei
+        zweiundachtzigtausend Dreiecken. Sein Docstring nannte das „einmal je
+        Szenenaufbau" und meinte damit „selten" — das stimmte nicht.
+        ``show_scene`` läuft auch bei jeder Auswahl, jedem Themenwechsel und
+        **bei jedem Schritt der Schieber** für Explosion, Schnitt und Schicht.
+        Bei zwanzig Teilen auf der Platte sind das über vierhundert
+        Millisekunden je Schieberschritt, im Qt-Hauptthread.
+
+        Verglichen wird die **Identität** des Netzes, nicht sein Inhalt: Ein
+        Hash über zweiundachtzigtausend Dreiecke wäre nicht billiger als die
+        Zerlegung, die er sparen soll. Solange die Auswertung steht, ist das
+        Netz dasselbe Objekt — unter der Dezimierungsschwelle reicht
+        ``_for_display`` es unverändert durch, darüber kommt es aus seinem
+        Cache.
+
+        **Der Schnittschieber trifft den Cache absichtlich nicht.** ``cut``
+        erzeugt dort wirklich ein neues Netz, und ein Körper, der zerschnitten
+        wurde, zerfällt womöglich in andere Stücke als vorher — die Zerlegung
+        ist dann keine Ersparnis, sondern die richtige Antwort.
+        """
+        cached = self._shadow_splits.get(object_id)
+        if cached is not None and source is not None and cached[0] is source:
+            return cached[1]
+        hulls = self._shadow_hulls_of(surface)
+        if source is not None:
+            self._shadow_splits[object_id] = (source, hulls)
+        return hulls
+
     def _shadow_hulls_of(self, surface: Any) -> list[Any]:
         """Die Punkte, aus denen ein Körper seinen Schatten wirft — je Stück eines.
 
@@ -2212,8 +2281,14 @@ class Viewport(QWidget):
         Der übliche Fall bleibt der billige: ``split_bodies`` gibt bei einem
         einteiligen Körper ein Stück zurück, und dann ist das hier genau die
         Rechnung von vorher. Gemessen kostet das Zerlegen 1,5 ms bei
-        eintausendzweihundert Dreiecken und 21 ms bei zweiundachtzigtausend —
-        einmal je Szenenaufbau, nicht je Bild.
+        eintausendzweihundert Dreiecken und 21 ms bei zweiundachtzigtausend.
+
+        Hier stand „einmal je Szenenaufbau, nicht je Bild", und das war als
+        Beruhigung gemeint und als Behauptung falsch: Ein Szenenaufbau ist
+        nicht selten — jede Auswahl und jeder Schritt der Schieber ist einer.
+        Gerufen wird deshalb über ``_shadow_hulls_for``, das die Zerlegung
+        behält, solange das Netz dasselbe ist. **Wer hier vorbei ruft, zahlt
+        die Millisekunden je Aufbau.**
         """
         bodies = surface.split_bodies()
         if len(bodies) <= 1:
@@ -2436,6 +2511,18 @@ class Viewport(QWidget):
         # weiter seinen Schatten.
         self._shadow_hulls.clear()
         self._shadow_ground.clear()
+        # Die Zerlegungen überleben das — sie zu leeren hieße, sie bei jedem
+        # Aufbau neu zu rechnen, und genau das sollen sie sparen. Was einem
+        # Körper gehört, den es nicht mehr gibt, fällt hier weg: Der Cache
+        # wächst sonst über eine lange Sitzung mit jedem gelöschten Körper.
+        if result is not None:
+            self._shadow_splits = {
+                object_id: entry
+                for object_id, entry in self._shadow_splits.items()
+                if object_id in result.scene.objects
+            }
+        else:
+            self._shadow_splits.clear()
         self._shadow_cast = self._shadow_direction()
         self._uncapped = False
         if result is None:
@@ -2501,7 +2588,10 @@ class Viewport(QWidget):
             )
             self._actors[object_id] = actor
             self._draw_feature_edges(surface, object_id)
-            self._remember_shadow(surface, object_id)
+            # ``mesh`` und nicht ``surface``: Das PolyData entsteht in jeder
+            # Runde neu, das Netz dahinter bleibt dasselbe, solange sich nichts
+            # geändert hat. Daran erkennt der Schatten, ob er neu zerlegen muss.
+            self._remember_shadow(surface, object_id, mesh)
 
         # Erst jetzt: ein Schatten fällt auf die Fläche, auf der sein Körper
         # steht, und welche das ist, weiß nur die vollständige Szene.
@@ -2509,43 +2599,34 @@ class Viewport(QWidget):
         self.select(self._selected)
         self._redraw_features()
         self._redraw_layer()
-        self._centre_rotation()
         self._render_now()
 
-    def _centre_rotation(self) -> None:
-        """Gedreht wird um das, was man ansieht (§2.9).
+    def _aim_rotation(self) -> None:
+        """Der Drehpunkt bekommt beim Drehbeginn die Tiefe der Körper (§2.9).
 
-        VTK dreht um den Fokuspunkt der Kamera, und der stand auf dem
-        Weltursprung: ein Teil, das neben dem Ursprung liegt — und das tut
-        jedes heruntergeladene Modell —, wanderte beim Drehen im Bogen durch
-        das Bild, statt sich zu drehen. Der Fokus wandert deshalb in die Mitte
-        der **Körper**.
+        VTK dreht um den Fokuspunkt der Kamera. Der wurde früher bei jedem
+        Szenenaufbau auf die Mitte der Körper gesetzt (``_centre_rotation``),
+        und die Kamera rückte mit — nach einem Verschieben sprang damit das
+        Bild (Robert, 23.08.2026: „nach jedem verschieben springt die kamera
+        und das modell immer komisch"). Die Notlösung ließ den Fokus nach
+        einem reinen Verschieben stehen, und ihr Preis war benannt: Gedreht
+        wurde um den alten Punkt, bis zum nächsten echten Szenenwechsel.
 
-        Nicht in die Mitte dessen, was der Renderer sieht: dazu gehören der
-        Bauraumrahmen und die Druckplatte. Der Rahmen ist 250 mm hoch, das
-        Teil 40 — die Mitte lag hundert Millimeter über dem Modell, die Kamera
-        rückte dorthin mit, und im Bild stand die Kulisse, während das Teil
-        unten aus der Ecke ragte. Genau das zeigte das Handbuchbild des
-        Hauptfensters. Dieselbe Quelle wie beim Einpassen (`_object_bounds`),
-        aus demselben Grund.
+        Deshalb jetzt hier, im Beginn der Drehung — dem einzigen Moment, in
+        dem der Fokuspunkt etwas bedeutet. Und unsichtbar: Der Fokus rückt auf
+        den Punkt des Sichtstrahls, der der Mitte der Körper am nächsten liegt
+        (:func:`rotation_focus`). Stellung und Blickrichtung der Kamera
+        bleiben unangetastet, das Bild ändert sich um nichts; nur die Tiefe
+        des Drehpunkts stimmt wieder. Seitlich bleibt er in der Bildmitte:
+        Gedreht wird um das, was man ansieht — nicht um einen Punkt daneben,
+        dessen Anfahren mitten in der Geste einen Sprung ins Bild brächte.
 
-        Die Blickrichtung und der Abstand bleiben dabei erhalten: die Kamera
-        rückt mit, statt sich zu verdrehen. Wer gerade von vorn schaut, schaut
-        danach immer noch von vorn.
+        Den Fall »Kulisse statt Körper« — Bauraumrahmen 250 mm, Teil 40, die
+        Mitte alles Sichtbaren hundert Millimeter über dem Modell — löst
+        :meth:`rotation_centre`: Die Mitte kommt aus den Körpern, nie aus dem
+        Renderer.
         """
         if self.plotter is None:
-            return
-        if self._moved_only:
-            # **Wer selbst geschoben hat, behält seine Ansicht.** Die Mitte der
-            # Körper wandert mit dem geschobenen Teil, und die Kamera rückte
-            # bisher mit: Das Teil blieb in der Bildmitte stehen und die
-            # Umgebung bewegte sich — genau verkehrt herum. Robert am
-            # 23.08.2026: „die kamera bleibt immer noch nicht an der stelle an
-            # der sie war und richtet sich wieder auf das modell aus."
-            #
-            # Der Preis ist klein und benannt: Bis zum nächsten echten
-            # Szenenwechsel wird um den alten Punkt gedreht. Das merkt, wer
-            # danach dreht; das Nachrücken merkte jeder, der schob.
             return
         renderer = getattr(self.plotter, "renderer", None)
         if renderer is None:
@@ -2554,12 +2635,10 @@ class Viewport(QWidget):
         if centre is None:
             return
         camera = renderer.GetActiveCamera()
-        focus = camera.GetFocalPoint()
-        if all(abs(centre[i] - focus[i]) < EPS_DISPLAY for i in range(3)):
+        target = rotation_focus(camera.GetPosition(), camera.GetFocalPoint(), centre)
+        if target is None:
             return
-        position = camera.GetPosition()
-        camera.SetFocalPoint(*centre)
-        camera.SetPosition(*(position[i] + centre[i] - focus[i] for i in range(3)))
+        camera.SetFocalPoint(*target)
         renderer.ResetCameraClippingRange()
 
     def rotation_centre(self) -> Vec3 | None:
@@ -2703,16 +2782,20 @@ class Viewport(QWidget):
             )
         )
 
-    def _remember_shadow(self, surface: Any, object_id: ObjectId) -> None:
+    def _remember_shadow(self, surface: Any, object_id: ObjectId, source: Any = None) -> None:
         """Was dieser Körper zum Schattenwurf beiträgt — geworfen wird später.
 
         Getrennt vom Setzen, weil ein Schatten wissen muss, worauf er fällt:
         welcher Körper unter welchem steht, steht erst fest, wenn alle
         gezeichnet sind.
+
+        ``source`` ist das Netz, aus dem ``surface`` gebaut wurde — der
+        Schlüssel, an dem ``_shadow_hulls_for`` erkennt, ob sich überhaupt
+        etwas geändert hat.
         """
         if self.plotter is None or not self.contact_shadows:
             return
-        hulls = self._shadow_hulls_of(surface)
+        hulls = self._shadow_hulls_for(object_id, surface, source)
         self._shadow_hulls[object_id] = hulls
         usable = [hull for hull in hulls if hull is not None and len(hull) >= 3]
         if not usable:
@@ -5320,9 +5403,9 @@ class Viewport(QWidget):
         der Zustand stünde danach trotzdem auf „erledigt". Genau so gemessen:
         ``_fitted_to`` sagte „bed", und die Kamera stand weiter auf (1, -1, 0,8).
         """
-        # **Zuerst das Urteil, dann die Rücksprünge.** ``_centre_rotation``
-        # liest es später im selben Aufbau; stünde es hinter einem ``return``,
-        # trüge es dort den Wert des vorigen Aufbaus.
+        # **Zuerst das Urteil, dann die Rücksprünge.** Stünde es hinter einem
+        # ``return``, trüge es beim nächsten Leser den Wert des vorigen
+        # Aufbaus.
         here = frozenset(result.scene.objects) if result is not None else frozenset()
         self._moved_only = bool(here) and here == self._fitted_objects
 
@@ -5840,6 +5923,7 @@ class Viewport(QWidget):
             on_paint=calls.on_paint,
             is_sculpting=calls.is_sculpting,
             on_body_drag=calls.on_body_drag,
+            on_rotate_start=calls.on_rotate_start,
         )
         self.plotter.interactor.SetInteractorStyle(style)
         # Ein neuer Stil bringt seine eigenen Beobachter mit; was beim Wechsel
@@ -6294,7 +6378,7 @@ def _world_at_depth(
 
 
 class _ViewCallbacks(NamedTuple):
-    """Die fünf Rückrufe, die der Interaktionsstil von der Ansicht bekommt."""
+    """Die Rückrufe, die der Interaktionsstil von der Ansicht bekommt."""
 
     on_context: Callable[[int, int], None]
     on_pick: Callable[[int, int], None]
@@ -6302,6 +6386,7 @@ class _ViewCallbacks(NamedTuple):
     on_paint: Callable[[int, int, bool], None]
     is_sculpting: Callable[[], bool]
     on_body_drag: Callable[[str, int, int], bool]
+    on_rotate_start: Callable[[], None]
 
 
 def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
@@ -6369,7 +6454,14 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
         found.finish_body_drag()
         return True
 
-    return _ViewCallbacks(on_context, on_pick, on_cursor, on_paint, is_sculpting, on_body_drag)
+    def on_rotate_start() -> None:
+        found = weak()
+        if found is not None:
+            found._aim_rotation()
+
+    return _ViewCallbacks(
+        on_context, on_pick, on_cursor, on_paint, is_sculpting, on_body_drag, on_rotate_start
+    )
 
 
 def _InteractorStyle(  # noqa: N802
@@ -6381,6 +6473,7 @@ def _InteractorStyle(  # noqa: N802
     on_paint: Any = None,
     is_sculpting: Any = None,
     on_body_drag: Any = None,
+    on_rotate_start: Any = None,
 ) -> Any:
     """Baut einen VTK-Interaktionsstil mit den Tasten des gewählten Schemas.
 
@@ -6478,6 +6571,10 @@ def _InteractorStyle(  # noqa: N802
                 self.StartPan()
                 self._tell("panning")
                 return
+            if on_rotate_start is not None:
+                # Vor dem Start, nicht danach: Der Drehpunkt bekommt die
+                # Tiefe der Körper, unsichtbar (§2.9, ``_aim_rotation``).
+                on_rotate_start()
             self.StartRotate()
             self._tell("rotate")
 
@@ -6580,6 +6677,10 @@ def _InteractorStyle(  # noqa: N802
                 self.StartPan()
                 self._tell("panning")
                 return
+            if on_rotate_start is not None:
+                # Vor dem Start, nicht danach: Der Drehpunkt bekommt die
+                # Tiefe der Körper, unsichtbar (§2.9, ``_aim_rotation``).
+                on_rotate_start()
             self.StartRotate()
             self._tell("rotate")
 
