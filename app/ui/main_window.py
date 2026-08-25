@@ -751,6 +751,11 @@ class MainWindow(QMainWindow):
     """Fenster, Menüs und die Verdrahtung zwischen Sitzung und Panels."""
 
     projectOpened = Signal(Path)
+    languageChanged = Signal()
+    """Die Sprache wurde im Einstellungsdialog gewechselt. Übersetzen lässt
+    sich ein stehendes Fenster nicht (gemessen: 170 von 170 Texten blieben) —
+    ``app.rebuild_for_language`` baut es neu, und das gehört in den nächsten
+    Ereignisdurchlauf, nicht in den Signalpfad eines eigenen Dialogs."""
 
     def __init__(self, session: Session, settings: UiSettings) -> None:
         super().__init__()
@@ -3851,17 +3856,22 @@ class MainWindow(QMainWindow):
     def action_settings(self) -> None:
         """§19.3, §38: alles, was die Anwendung sich merkt, an einer Stelle.
 
-        Was sofort wirken kann, wirkt sofort — Thema, Einheit, Navigation und
-        die Farben der Differenzansicht. Die Sprache kann es nicht, und der
-        Dialog sagt das, statt es den Nutzer herausfinden zu lassen.
+        Alles wirkt sofort — Thema, Einheit, Navigation, Farben, und seit dem
+        Erststart-Weg auch die Sprache: ``languageChanged`` meldet den
+        Wechsel, und ``app.py`` baut das Fenster mit derselben Sitzung neu.
+        Ohne Rückfrage, aus demselben Grund wie dort: Der Dialog ist modal,
+        offen ist sonst nichts, und Dokument samt Verlauf wandern mit.
         """
         dialog = SettingsDialog(self.settings, self)
         if dialog.exec() != SettingsDialog.DialogCode.Accepted:
             return
+        spoken = self.settings.language
         dialog.apply_to(self.settings)
         save_settings(self.settings)
         self._apply_settings()
         self._apply_remote()
+        if self.settings.language != spoken:
+            self.languageChanged.emit()
 
     def _apply_settings(self) -> None:
         """Trägt die Einstellungen dorthin, wo sie wirken."""
@@ -5659,10 +5669,9 @@ class MainWindow(QMainWindow):
         Objektauswahl.
         """
         panel = self._sketch_panel
-        if panel is None:
+        if panel is None or not isinstance(point, tuple) or len(point) != 2:
             return
-        across, up = point  # type: ignore[misc]
-        menu = panel.canvas.context_menu_on_plane((float(across), float(up)))
+        menu = panel.canvas.context_menu_on_plane((float(point[0]), float(point[1])))
         if menu.isEmpty():
             return
         local = QPoint(x, self.viewport.height() - y)
