@@ -81,7 +81,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
 | Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | nichts mehr — **§24.3 trägt die Ausnahme seit dem 25.08.2026** (Entscheidung Robert): Deklaration statt stiller Ausnahme. Es fehlt die Arbeit: Registerfeld, Druckspaltenprüfung im Bereichstest, das Bolzenscharnier als erster Nutzer |
-| Ein Rezept nimmt den ganzen Stapel | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Mehrfachauswahl im Verlauf — das Format nimmt beliebige `op_ids`, aber `HistoryPanel` kennt nur einen Index |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
@@ -9612,20 +9611,31 @@ Arbeitspakete, die Grenzen und die eine Entscheidung stehen dort.
   Baustein, sondern wird umbenannt und als mitgereist gekennzeichnet; und die
   Version eines Rezepts ist der Hash über seine Daten.
 
-- [ ] **Ein Rezept nimmt den ganzen Stapel, weil der Verlauf keine Auswahl
-  kennt.** Das Format nimmt beliebige `op_ids`, und das Konzept spricht von
-  einem *Ausschnitt*; der Dialog übergibt seit `9a9c9a4` alle Schritte. Der
-  Grund ist nicht das Format, sondern die Bedienung: `HistoryPanel` hat
-  `operationActivated` und `bakeRequested`, beide auf **einen** Index — eine
-  Mehrfachauswahl gibt es nicht. Einen Bereich zu übergeben, den niemand
-  wählen kann, wäre eine Bedienung, die es nicht gibt.
+- [x] **Behoben am 26.08.2026 mit `410bdb06`.** Der Verlauf nimmt Strg- und
+  Umschalt-Klick, `HistoryPanel.selected_operations()` gibt die gewählten
+  Schritte aufsteigend und ohne Doppelte heraus, und `_save_as_part` reicht
+  sie durch. Leere Auswahl heißt weiterhin „ganzer Stapel" — das ist der
+  häufige Fall und steht seit dem Umbau ausdrücklich im Dialog, statt
+  stillschweigend zu gelten (`scope_text`, §2.4).
 
-  Praktisch fehlt das selten: Wer sein Teil als Baustein ablegt, hat es gerade
-  gebaut. Es fehlt, sobald jemand aus einem gewachsenen Projekt *einen* Halter
-  herauslösen will — dann wandert der ganze Stapel mit, und der Baustein baut
-  Dinge, die niemand bestellt hat. Der Umbau ist eine Mehrfachauswahl im
-  Verlauf plus die Frage, was mit Lücken darin geschieht (Schritt 3 und 7 ohne
-  4 bis 6 ist kein Ausschnitt, sondern zwei).
+  **Eine Sammelzeile brauchte eine zweite Datenrolle.** Eine Transaktion aus
+  vier Schritten trägt keine `UserRole` — ein Doppelklick könnte dort keine
+  einzelne Operation zeigen —, und über sie wäre eine gewählte Sammelzeile
+  stumm leer geblieben. `OPS_ROLE` beantwortet die andere Frage: was gehört zu
+  dieser Zeile. Wer „Teilung in vier" wählt, meint alle vier.
+
+  **Die Frage nach den Lücken ist entschieden, und zwar gegen eine Regel im
+  Dialog.** Ein Ausschnitt aus Schritt 3 und 7 ohne 4 bis 6 kann sinnvoll sein
+  — wenn die Zwischenschritte einen anderen Körper betreffen — oder unsinnig;
+  welches von beidem, weiß der Bereichstest in `capture`, der ohnehin vor dem
+  Speichern läuft und sagt, was herauskommt. Eine Regel im Dialog müsste
+  dieselbe Frage schlechter beantworten und dabei den gültigen Fall
+  verbieten.
+
+  Drei Tests, und der dritte ist der, der die Lücke schließt: Auswahl und Satz
+  wären beide grün, während das Fenster weiter alles übergibt — genau so ist
+  am 25.08.2026 der `enumerate`-Fehler durchgekommen. Beide Gegenproben
+  gefahren.
 
 - [ ] **Eigene Bausteine sprengen die Zeilengrenze der Menüs, und die Suite
   kann es nicht sehen.** Jeder Baustein wird eine Operation und damit ein
