@@ -475,21 +475,21 @@ def test_a_full_disk_says_so_instead_of_falling_through(qt_app: QApplication) ->
     from app.core.knowledge.parts import recipe as recipes
 
     dialog = _dialog(qt_app, (_feature("hole_1"),))
-    original = recipes.save
+    original = recipes.replace
     try:
         dialog._show_waiting(True)
 
         def voll(*_args: object, **_kwargs: object) -> None:
             raise OSError(28, "No space left on device")
 
-        recipes.save = voll  # type: ignore[assignment]
+        recipes.replace = voll  # type: ignore[assignment]
         dialog._checked(object())
 
         assert not dialog._checking, "der Balken bleibt nicht stehen"
         assert dialog.report.text().strip(), "und der Dialog sagt, was war"
         assert "space" in dialog.report.text() or "Datei" in dialog.report.text()
     finally:
-        recipes.save = original  # type: ignore[assignment]
+        recipes.replace = original  # type: ignore[assignment]
         dialog.release()
         dialog.deleteLater()
 
@@ -655,5 +655,49 @@ def test_a_refused_cut_keeps_its_own_words(qt_app: QApplication) -> None:
     finally:
         module.recipes.capture = original_capture  # type: ignore[assignment]
         module.taken_name = original_taken  # type: ignore[assignment]
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_a_taken_name_offers_replacing_instead_of_refusing(
+    qt_app: QApplication,
+) -> None:
+    """„Ändern heißt neu speichern" — das verspricht das Handbuch (§Eigene Bausteine).
+
+    Wer die Breite seines Halters nachträglich ändert, soll keinen zweiten
+    Namen erfinden müssen. Der Weg war nie eingelöst: Vor dem 25.08.2026 endete
+    er im Datenverlust (``save`` überschrieb, ``register`` lehnte danach ab),
+    danach in einer ehrlichen Absage. Jetzt ist er ein Weg.
+
+    Geprüft wird gegen einen **wirklich vergebenen** Namen — die
+    Bausteinbibliothek trägt ``pegboard_hook``. Eine Attrappe für ``taken_name``
+    prüfte, ob der Dialog eine Attrappe ruft; sie sagte nichts darüber, ob die
+    echte Prüfung anschlägt.
+    """
+    from app.core.knowledge.parts import PARTS
+
+    assert PARTS.has("pegboard_hook"), "der Name ist die Grundlage dieses Tests"
+
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    try:
+        dialog.title.setText("Werkbankhalter")
+        assert dialog._save.isEnabled()
+        assert dialog._save.text() == "Baustein anlegen", "ein freier Name legt an"
+        assert not dialog._save.toolTip(), "und braucht keine Warnung"
+
+        dialog.title.setText("Pegboard Hook")
+
+        assert dialog._save.isEnabled(), "ein vergebener Name ist kein Hindernis"
+        assert dialog._save.text() == "Baustein ersetzen", (
+            f"der Knopf sagt, was er tut: {dialog._save.text()!r}"
+        )
+        assert "Ersetzt den vorhandenen" in dialog._save.toolTip(), (
+            f"und daneben steht, was mit dem alten Stand geschieht: {dialog._save.toolTip()!r}"
+        )
+
+        dialog.title.setText("Pegboard Hook 2")
+        assert dialog._save.text() == "Baustein anlegen", "und zurück, sobald der Name frei ist"
+        assert not dialog._save.toolTip()
+    finally:
         dialog.release()
         dialog.deleteLater()

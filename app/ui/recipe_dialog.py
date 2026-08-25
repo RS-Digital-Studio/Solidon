@@ -466,20 +466,43 @@ class RecipeDialog(QDialog):
     def _update_enabled(self) -> None:
         """Der Knopf kann nur, was er verspricht.
 
-        Drei Bedingungen, und jede hat ihren Grund im Kern: ein Name (sonst
-        heißt der Baustein wie nichts), mindestens ein benanntes Merkmal
-        (``capture`` weist leere Mengen ab, §18d) und mindestens ein
-        freigegebener Parameter (sonst ist das Teil unveränderlich).
+        Jede Bedingung hat ihren Grund im Kern: ein Name (sonst heißt der
+        Baustein wie nichts), mindestens ein benanntes Merkmal (``capture``
+        weist leere Mengen ab, §18d), mindestens ein freigegebener Parameter
+        (sonst ist das Teil unveränderlich), Grenzen in ihrer Ordnung, je
+        Stelle ein eigener Name — und ein Name, den es noch nicht gibt.
+
+        **Der vergebene Name gehört hierher und nicht ans Ende.** Er wurde
+        beim Klick auf *Anlegen* geprüft, also nachdem der Kunde Name, Gruppe,
+        Beschreibung, zu jedem Parameter sechs Felder und zu jedem Merkmal eine
+        Zeile ausgefüllt hatte. Die Auskunft war richtig und kam zwölf Felder
+        zu spät.
         """
+        title = self.title.text().strip()
         named = any(row.take.isChecked() for row in self._features)
         adjustable = any(row.take.isChecked() for row in self._params)
         ordered = all(row.ordered() for row in self._params if row.take.isChecked())
         unique = self._unique_feature_names()
-        self._save.setEnabled(
-            bool(self.title.text().strip()) and named and adjustable and ordered and unique
-        )
+        # **Ein vergebener Name ist kein Fehler, sondern der zweite Fall.**
+        # „Ändern heißt neu speichern" steht im Handbuch (Kapitel *Eigene
+        # Bausteine*), und wer die Breite seines Halters nachträglich ändert,
+        # soll keinen zweiten Namen erfinden müssen. Der Knopf sagt, was er
+        # tut, und daneben steht, was mit dem vorhandenen Stand geschieht.
+        taken = bool(title) and taken_name(_identifier(title))
+        self._save.setEnabled(bool(title) and named and adjustable and ordered and unique)
+        self._save.setText(tr("Baustein ersetzen") if taken else tr("Baustein anlegen"))
         self._save.setToolTip(
-            "" if self._save.isEnabled() else self._why_locked(named, adjustable, ordered, unique)
+            self._why_locked(named, adjustable, ordered, unique)
+            if not self._save.isEnabled()
+            else str(
+                tr(
+                    "Ersetzt den vorhandenen Baustein dieses Namens — Datei, "
+                    "Katalogeintrag und Rechnung. Projekte, die ihn benutzen, "
+                    "rechnen beim nächsten Öffnen mit dem neuen Stand."
+                )
+            )
+            if taken
+            else ""
         )
 
     # --- Anlegen --------------------------------------------------------------
@@ -504,6 +527,9 @@ class RecipeDialog(QDialog):
         Einer und nicht alle: Vier Sätze auf einmal liest niemand, und wer den
         ersten behebt, bekommt den nächsten. Die Reihenfolge folgt dem Weg
         durch den Dialog, von oben nach unten.
+
+        Ein **vergebener Name steht nicht darunter**: Er ist kein Hindernis,
+        sondern der zweite Fall, und was er bedeutet, sagt der Knopf selbst.
         """
         if not self.title.text().strip():
             return str(tr("Der Baustein braucht einen Namen."))
@@ -554,17 +580,6 @@ class RecipeDialog(QDialog):
         # dazu. Gefragt wird ganz vorn, denn der Name steht fest, bevor
         # irgendetwas gerechnet ist — und eine Absage nach vier Sekunden
         # Wartebalken ist eine Absage zu spät.
-        if taken_name(name):
-            self.report.setText(
-                str(
-                    tr(
-                        "Einen Baustein dieses Namens gibt es schon. Wählen Sie einen "
-                        "anderen Namen — der vorhandene bleibt, wie er ist."
-                    )
-                )
-            )
-            return
-
         def cut() -> Any:
             """Der Schnitt mit den abgelesenen Werten — läuft im Arbeiter."""
             return recipes.capture(
@@ -646,8 +661,13 @@ class RecipeDialog(QDialog):
             return
         self._show_waiting(False)
         try:
-            recipes.save(checked)
-            recipes.register(checked)
+            # **Ein Aufruf für beide Fälle.** ``replace`` legt an, wenn der Name
+            # frei ist, und tauscht sonst Datei, Katalogeintrag und Operation
+            # zusammen — mit Rückstellung, wenn ein Schritt scheitert. Der
+            # frühere Weg war ``save`` und dann ``register``, und dazwischen lag
+            # die Lücke: ``save`` hatte die alte Datei längst überschrieben,
+            # wenn ``register`` den Namen ablehnte.
+            recipes.replace(checked)
         except AppError as error:
             self._failed(error)
             return
