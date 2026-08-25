@@ -527,9 +527,10 @@ class PegboardHookParams(BaseParams):
         "gesteckt und heruntergezogen — die Nase greift dann hinter die Platte."
     ),
     caveat=_(
-        "Schlitzmaße und Raster sind gegen eine bemaßte Zeichnung geprüft. Die "
-        "Dicke der Platte ist es nicht — und aus ihr folgt, wie weit die Nase "
-        "hinter die Platte greift. Vor einer größeren Auflage lohnt ein Prüfdruck."
+        "Er löst sich auf demselben Weg, auf dem er eingehängt wird: Wer das Teil "
+        "anhebt, nimmt es ab. Das ist bei jedem einteiligen Einhänger so. "
+        "Schlitzmaße und Raster sind gegen eine bemaßte Zeichnung geprüft, die "
+        "Dicke der Platte nicht — und aus ihr folgt, wie weit die Nase greift."
     ),
     changes=[PEGBOARD_HOOK_ADDED],
 )

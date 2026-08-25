@@ -82,6 +82,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
 | Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | **eine Entscheidung**: ob §24.3 eine Ausnahme bekommt. Die Liste selbst ist abgearbeitet — Kabelclip, Eckwinkel, Standfuß und Scharnierauge stehen, der Schwalbenschwanz war schon da |
 | Das Flächenmenü zeigt 13 Zeilen gegen eine Grenze von 12 | Das Kontextmenü wuchs um eine Zeile, und die Prüfung sah woanders hin (25.08.2026) | **eine Entscheidung**: die Ausnahme bestätigen oder eine zweite Gruppe falten. Der Test lässt genau diese eine Zeile zu und wird bei der nächsten rot |
+| Ein einteiliger Einhänger löst sich, wie er eingehängt wurde | Der Haken hält, bis jemand das Teil anhebt (25.08.2026) | **eine Entscheidung**: ob der Baustein eine federnde Rastnase bekommt. Der caveat sagt es dem Kunden inzwischen |
 | Der Schlitz des Schlüssellochs liegt quer zur Fallrichtung | Das Schlüsselloch hängt waagerecht, und sein eigener Docstring sagt es anders (25.08.2026) | niemanden — der Befund ist gemessen, der Baustein gehört keiner Sitzung, und ein Prüfdruck würde ihn in Minuten bestätigen |
 | Die Startmarke §31 ist seit dem 24.08.2026 rot | Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026) | **eine Entscheidung**: Marke neu setzen oder die Ursache suchen. Nicht der Code — im Wechsel gegen den Stand vor drei Commits gemessen, Unterschied im Rauschen |
 | Ein Rezept nimmt den ganzen Stapel | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Mehrfachauswahl im Verlauf — das Format nimmt beliebige `op_ids`, aber `HistoryPanel` kennt nur einen Index |
@@ -9942,3 +9943,37 @@ Minuten.
   echt (`slot` legt seine Länge immer in X, und wer das nicht weiß, verschiebt
   in Y und meint, er habe gedreht), aber sie ist hier nur einmal
   zugeschnappt.
+
+
+## Der Haken hält, bis jemand das Teil anhebt (25.08.2026)
+
+Robert hat angeregt, nach vorhandenen SKÅDIS-Haken zu suchen — und die Suche
+liefert ein Ergebnis, das keine Maßkorrektur ist, sondern eine Grenze.
+
+**Das Herausfallen ist das bekannte Problem des ganzen Systems**, auch bei den
+Originalhaken von IKEA. Der Satz, der es am schärfsten fasst, stammt aus einer
+Bauanleitung: *„any single piece will always be able to detach in the same way
+it attached."* Ein Teil, das man einhängt, indem man es einführt und absinken
+lässt, löst sich, indem man es anhebt und herauszieht — und genau diese Geste
+macht jemand, der etwas vom Halter nimmt.
+
+Der Lochwand-Einhänger dieser Bibliothek hat die Eigenschaft. Sie ist kein
+Maßfehler und durch bessere Maße auch nicht zu beheben: Der Sinkweg, der die
+Nase greifen lässt, ist derselbe Weg zurück.
+
+**Es gibt einteilige Lösungen**, und das ist der interessante Teil. Mehrere
+Entwürfe arbeiten mit einer federnden Zunge, die beim Absinken hinter der Platte
+einrastet und zum Lösen eingedrückt werden muss („self locking", „snap-lock
+mount"). Das bliebe **ein** Körper und verstieße nicht gegen §24.3 — die
+Bibliothek hat mit Rastnase und Schnappverbindung schon zwei Bausteine, die
+federnde Arme rechnen.
+
+- [ ] **Soll der Einhänger eine federnde Rastnase bekommen?** Dafür spricht,
+  dass es die Sache ist, an der das System scherzhaft gemessen wird; dagegen,
+  dass eine Feder Materialkenntnis braucht (die Federarme der Schnappverbindung
+  ziehen ihre Maße aus dem Materialprofil, und für PETG steht dort anderes als
+  für PLA). Ein Zwischenweg wäre ein Parameter *Verriegelung*, der die Nase
+  federnd macht — abschaltbar für den, der das Teil oft abnehmen will.
+
+  Bis dahin sagt der `caveat` es dem Kunden: „Er löst sich auf demselben Weg,
+  auf dem er eingehängt wird."
