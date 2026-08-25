@@ -5121,6 +5121,31 @@ def test_the_veil_covers_the_view_only_while_it_shows_nothing(window: MainWindow
     assert not window.veil.showing, "über einem Körper bleibt die Ansicht die Ansicht"
 
 
+def test_the_veil_hides_the_native_view_while_it_stands(window: MainWindow) -> None:
+    """Verborgen, nicht nur verdeckt (§2.8).
+
+    Die Ansicht ist ein natives Fenster (VTK): auf dem Bildschirm liegt es
+    über jedem gemalten Geschwister, egal was die Qt-Stapelung sagt — und
+    solange es nie gerendert hat, zeigt es alte Pixel. Beim Öffnen von Weg 1
+    stand deshalb sechs Sekunden der Startbildschirm bzw. Schwarz, während
+    der Schleier unsichtbar darunter lag; Robert hielt es zweimal für einen
+    Absturz. Der ``childAt``-Test daneben sah davon nichts: er fragt die
+    Stapelung, nicht den Bildschirm.
+    """
+    # ``isHidden`` und nicht ``isVisibleTo``: gefragt ist die ausdrückliche
+    # Verbergung — der Stapel zeigt im frischen Fenster den Startbildschirm,
+    # und dahinter ist jede Sichtbarkeitskette folgenlos False.
+    window._on_busy(True)
+    assert window.veil.showing
+    assert window.middle_stack.isHidden(), (
+        "die native Ansicht muss weg sein, solange der Schleier steht"
+    )
+
+    window._on_busy(False)
+    assert not window.veil.showing
+    assert not window.middle_stack.isHidden(), "mit dem Ende des Schleiers kommt die Ansicht zurück"
+
+
 def test_reading_a_file_stands_under_the_wait_cursor(
     window: MainWindow, monkeypatch: pytest.MonkeyPatch
 ) -> None:

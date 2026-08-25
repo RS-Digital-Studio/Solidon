@@ -120,6 +120,57 @@ def test_a_second_run_starts_its_own_clock(qt_app: QApplication) -> None:
         veil.deleteLater()
 
 
+def test_the_veil_tells_when_it_really_stands(qt_app: QApplication) -> None:
+    """``appeared`` kommt beim Erscheinen, ``ended`` nur nach einem Stand.
+
+    Das Hauptfenster verbirgt am ``appeared`` die native Ansicht — zu früh
+    gesendet stünde das nie gerenderte VTK-Fenster über dem Schleier, zu
+    spät bliebe die Ansicht verborgen. Ein ``ended`` ohne vorherigen Stand
+    meldete etwas, das nie geschah: ``end`` läuft nach jedem Lauf, auch wenn
+    die Verzögerung die Anzeige nie hat erscheinen lassen.
+    """
+    veil = LoadingVeil()
+    seen: list[str] = []
+    veil.appeared.connect(lambda: seen.append("auf"))
+    veil.ended.connect(lambda: seen.append("zu"))
+    try:
+        veil.end()
+        assert seen == [], "ended kam ohne einen Stand"
+
+        veil.begin("Projekt öffnen")  # offscreen: erscheint sofort
+        assert seen == ["auf"]
+
+        veil.end()
+        assert seen == ["auf", "zu"]
+    finally:
+        veil.deleteLater()
+
+
+def test_a_certain_wait_skips_the_delay(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """``at_once`` überspringt die 200 ms — auch eine laufende Verzögerung.
+
+    Beim Öffnen eines Projekts mit Schritten ist die Wartezeit sicher, und
+    jede unbedeckte Millisekunde gehört dem nativen Ansichtsfenster mit
+    seinen alten Pixeln: Beim Öffnen von Weg 1 standen sechs Sekunden
+    Startbildschirmreste über dem unsichtbaren Schleier (23.08.2026).
+    """
+    import app.ui.loading as loading_module
+
+    monkeypatch.setattr(loading_module, "animations_enabled", lambda: True)
+    veil = LoadingVeil()
+    try:
+        veil.begin("Wird berechnet …")
+        assert not veil.showing, "ohne at_once wartet die Anzeige ihre 200 ms"
+
+        veil.begin("Projekt wird geladen …", at_once=True)
+        assert veil.showing, "die sichere Wartezeit erscheint sofort"
+    finally:
+        veil.end()
+        veil.deleteLater()
+
+
 def test_the_splash_can_appear_before_the_heavy_half_is_loaded() -> None:
     """Zwei der zweikommavier Sekunden vor dem Ladebildschirm waren Importe.
 

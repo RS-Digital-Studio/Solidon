@@ -150,6 +150,23 @@ class LoadingVeil(QWidget):
     cancelRequested = Signal()
     """Der Knopf wurde gedrückt. Was abgebrochen wird, weiß das Hauptfenster."""
 
+    appeared = Signal()
+    """Die Anzeige steht wirklich — erst jetzt, nicht schon bei ``begin``.
+
+    Das Hauptfenster verbirgt daraufhin die Ansicht. Verdecken allein reicht
+    nicht: Das Ansichtsfenster ist ein natives Fenster (VTK), und ein natives
+    Kind liegt auf dem Bildschirm über jedem gemalten Geschwister, egal was
+    die Qt-Stapelung sagt. Solange es gezeigt und noch nie gerendert ist,
+    stehen dort alte Pixel — beim Öffnen von Weg 1 sechs Sekunden lang der
+    Startbildschirm bzw. Schwarz, und Robert hielt es zweimal für einen
+    Absturz, während dieser Schleier unsichtbar darunter lag."""
+
+    ended = Signal()
+    """Die Anzeige ist weg — die Ansicht darf zurückkommen.
+
+    Gesendet nur, wenn sie wirklich stand: ``end`` läuft nach jedem Lauf,
+    auch wenn die Verzögerung die Anzeige nie hat erscheinen lassen."""
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._renderer = QSvgRenderer(QByteArray(application_icon_source().encode("utf-8")))
@@ -195,24 +212,38 @@ class LoadingVeil(QWidget):
             self._theme = theme
             self.update()
 
-    def begin(self, headline: str) -> None:
+    def begin(self, headline: str, at_once: bool = False) -> None:
         """Ein Lauf hat begonnen — die Anzeige kommt, wenn er dauert.
 
         Mehrfach aufzurufen ist gefahrlos: der zweite Aufruf schreibt nur die
         Überschrift um und lässt eine laufende Verzögerung laufen.
+
+        ``at_once`` überspringt die Verzögerung. Sie schützt vor einem
+        Aufblitzen bei Läufen unter 200 ms — beim Öffnen eines Projekts mit
+        Schritten ist die Wartezeit aber sicher, und jede unbedeckte
+        Millisekunde gehört dem nativen Ansichtsfenster mit seinen alten
+        Pixeln (siehe ``appeared``). Dort muss die Anzeige vor dem ersten
+        Bild stehen, nicht 200 ms danach.
         """
         self._headline = headline
         # Was ein Bildschirmleser vorliest. Der Text hier ist gemalt und kein
         # Label — ohne das wäre die Fläche für ihn stumm.
         self.setAccessibleName(headline)
-        if self.showing or self._delay.isActive():
+        if self.showing:
             self.update()
+            return
+        if self._delay.isActive():
+            if at_once:
+                self._delay.stop()
+                self._appear()
+            else:
+                self.update()
             return
         self._detail = ""
         self._target = 0.0
         self._shown = 0.0
         self._started = time.monotonic()
-        if not animations_enabled():
+        if at_once or not animations_enabled():
             # Offscreen sieht niemand ein Aufblitzen, und ein Test, der auf
             # einen Zeitgeber wartet, prüft die Uhr statt das Verhalten.
             self._appear()
@@ -235,9 +266,12 @@ class LoadingVeil(QWidget):
 
     def end(self) -> None:
         """Der Lauf ist vorbei — auch, wenn die Anzeige nie kam."""
+        stood = self.showing
         self._delay.stop()
         self._frames.stop()
         self.hide()
+        if stood:
+            self.ended.emit()
 
     def _appear(self) -> None:
         # Kein ``raise_``: die Stapelung setzt ``OverlayHost.set_veil`` einmal,
@@ -250,6 +284,7 @@ class LoadingVeil(QWidget):
         else:
             self._shown = self._target
         self.update()
+        self.appeared.emit()
 
     def _advance(self) -> None:
         """Ein Bild weiter auf dem Weg zur gemessenen Höhe."""
