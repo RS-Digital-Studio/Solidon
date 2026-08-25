@@ -846,6 +846,69 @@ def test_the_range_check_knows_which_parts_their_host_holds_together(
     assert lenient.checked == strict.checked, "es wurden verschieden viele Ecken gefahren"
 
 
+@pytest.mark.parametrize(
+    ("width", "steps", "loose"),
+    [(20.0, 1, True), (60.0, 1, False), (60.0, 2, True), (200.0, 2, False)],
+)
+def test_a_part_beside_the_object_says_so(
+    width: float, steps: int, loose: bool, profile: Profile
+) -> None:
+    """Was neben dem Teil hängt, wird gemeldet — auf Fehlerstufe.
+
+    **Robert hat es an seinem Würfel gesehen.** Zwei Haken im Vierzigerraster
+    stehen ±22,5 mm von der Mitte; auf einem 20 mm breiten Würfel berühren sie
+    ihn nicht. Heraus kamen drei lose Stücke, wasserdicht und mit plausiblem
+    Volumen, und der Prüfbericht führte „3 Teile" als **Angabe**: null Fehler,
+    null Warnungen, zwei Hinweise. Wer nicht weiß, dass dort eine Eins stehen
+    müsste, druckt sie.
+
+    Seit die Rückplatte die Ausnahme ist, ist das der Preis dafür — und
+    Roberts Entscheidung dazu war eindeutig: melden, und die Platte empfehlen.
+
+    Gemessen wird am **Ergebnis**, nicht an der Breite der Zielfläche. Eine
+    Fläche ist schnell nachgerechnet, trifft aber nicht jeden Fall: eine
+    schmale Fläche auf einem breiten Teil, ein Loch dazwischen, eine Rundung —
+    da stimmt die Rechnung und der Körper zerfällt trotzdem. Die vier Fälle
+    hier decken beide Richtungen ab, damit die Prüfung nicht bloß immer
+    „Fehler" sagt.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": width, "depth": width, "height": 20.0})],
+    )
+    History(project.document).apply(
+        "Einhänger",
+        [
+            OperationDraft(
+                op="insert_pegboard_hook",
+                inputs=("obj_1",),
+                params={"at_feature": "face_top", "count": 2, "steps": steps},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+
+    errors = [f for f in result.scene.report.findings if f.severity == "error"]
+    hanging = [f for f in errors if f.code == "parts.hanging_loose"]
+    body = result.scene.objects["obj_1"].mesh
+
+    if loose:
+        assert hanging, (
+            f"width={width} steps={steps}: {body.component_count} Teile und kein Fehler — "
+            "der Kunde druckt lose Stücke"
+        )
+        assert "Rückplatte" in str(hanging[0].message), (
+            "der Befund empfiehlt die Rückplatte nicht (Regel 17)"
+        )
+    else:
+        assert not hanging, (
+            f"width={width} steps={steps}: Fehlalarm bei {body.component_count} Teilen"
+        )
+        assert body.component_count == 1, "der Träger hält den Baustein doch nicht"
+
+
 # --- die Normteiltabelle -----------------------------------------------------------
 
 

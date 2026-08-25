@@ -34,6 +34,7 @@ from app.core.registry import Registry, op_params, param, register_op
 from app.core.types import (
     BaseParams,
     Feature,
+    Finding,
     OpContext,
     OpResult,
     PartResult,
@@ -298,6 +299,52 @@ def _title_for(spec: PartSpec) -> TranslatableText | str:
     return spec.title
 
 
+def _hanging_loose(
+    before: MeshData, after: MeshData, spec: PartSpec, subtractive: bool
+) -> Finding | None:
+    """Ist etwas neben dem Träger stehengeblieben, statt an ihm zu hängen?
+
+    **Der Fall, den Roberts Würfel gezeigt hat.** Zwei Haken im Vierzigerraster
+    stehen ±22,5 mm von der Mitte; auf einem 20 mm breiten Würfel berühren sie
+    ihn nicht mehr. Heraus kamen drei lose Stücke, wasserdicht und mit
+    plausiblem Volumen — der Prüfbericht führte „3 Teile" als **Angabe**, nicht
+    als Befund, und wer nicht weiß, dass dort eine Eins stehen müsste, druckt
+    sie.
+
+    Gemessen wird am Ergebnis und nicht an der Breite der Zielfläche. Eine
+    Fläche ist schnell nachgerechnet, aber sie trifft nicht jeden Fall: eine
+    schmale Fläche auf einem breiten Teil, ein Loch dazwischen, eine Rundung —
+    da stimmt die Rechnung und der Körper zerfällt trotzdem. Die Teilezahl
+    lügt nicht.
+
+    Nur für **angebaute** Bausteine: Ein abziehender darf teilen, das ist bei
+    manchen sein Zweck.
+    """
+    if subtractive or after.component_count <= before.component_count:
+        return None
+    loose = after.component_count - before.component_count
+    return Finding(
+        code="parts.hanging_loose",
+        severity="error",
+        # **Der Vorschlag steht im Satz.** Ein ``Finding`` trägt keine
+        # ``Action``-Liste — das kann nur eine Ausnahme. Regel 17 verlangt
+        # trotzdem einen Weg nach vorn, und ``without_effect`` macht es
+        # nebenan genauso: erst was ist, dann was hilft.
+        message=_(
+            "Ein Teil des Bausteins sitzt neben dem Objekt und hängt in der Luft — "
+            "gedruckt würden lose Stücke. Geben Sie eine Rückplatte an, dann "
+            "verbindet sie, was danebensteht; oder verringern Sie die "
+            "Rasterschritte, damit alles enger zusammenrückt."
+        ),
+        values={
+            "part": spec.name,
+            "loose": str(loose),
+            "before": str(before.component_count),
+            "after": str(after.component_count),
+        },
+    )
+
+
 def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     """Baut den Baustein, setzt ihn an seinen Platz und vereint oder schneidet."""
     source = ctx.inputs[0]
@@ -335,11 +382,19 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     # nicht in jedem einzelnen: die Frage ist für alle dieselbe, und die
     # Antwort steht im Volumen (§2.7).
     nothing = without_effect(body, as_mesh_data(outcome.mesh), kind, ctx.profile)
+    # Und die Gegenprobe zu „hat nichts bewirkt": Er hat etwas hinzugefügt, nur
+    # nicht **am** Teil.
+    loose = _hanging_loose(body, as_mesh_data(outcome.mesh), spec, subtractive)
 
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features=features)],
         solver=outcome.solver,
-        findings=[*outcome.findings, *produced.findings, *([nothing] if nothing else [])],
+        findings=[
+            *outcome.findings,
+            *produced.findings,
+            *([nothing] if nothing else []),
+            *([loose] if loose else []),
+        ],
     )
 
 
