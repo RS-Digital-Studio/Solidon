@@ -231,8 +231,11 @@ def build(
     if len(bodies) != 1:
         raise ValidationError(
             field="recipe",
+            # Ohne Platzhalter: ``show_details`` zeigt den Satz wörtlich und
+            # hängt die ``values`` als eigene Zeilen darunter — ein ``{count}``
+            # bliebe als geschweifte Klammer stehen (tests/test_errors.py).
             detail=_(
-                "Dieses Rezept ergibt {count} Körper statt einem. Ein Baustein "
+                "Dieses Rezept ergibt nicht genau einen Körper. Ein Baustein "
                 "ist genau ein Teil — teilen Sie den Ausschnitt oder vereinen "
                 "Sie die Körper, bevor Sie speichern."
             ),
@@ -248,7 +251,7 @@ def build(
             raise ValidationError(
                 field="features",
                 detail=_(
-                    "Das Merkmal „{name}“ gibt es im Ergebnis nicht mehr. "
+                    "Ein benanntes Merkmal gibt es im Ergebnis nicht mehr. "
                     "Benennen Sie die Merkmale des Rezepts neu, oder entfernen "
                     "Sie den Eintrag."
                 ),
@@ -297,7 +300,7 @@ def _with_values(document: Document, recipe: Recipe, values: dict[str, float]) -
             raise ValidationError(
                 field="exposed",
                 detail=_(
-                    "Der freigegebene Parameter „{name}“ steht nicht im "
+                    "Ein freigegebener Parameter steht nicht im "
                     "Ausschnitt. Legen Sie ihn im Projekt an, bevor Sie ihn "
                     "freigeben."
                 ),
