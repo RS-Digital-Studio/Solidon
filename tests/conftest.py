@@ -44,6 +44,69 @@ _PINNED_WINDOWS: list[object] = []
 _PIN_PAUSED = False
 
 
+def _pin_main_window(module: object) -> None:
+    """Hängt den Pin an ``MainWindow`` — einmal, gleich wer zuerst kommt."""
+    window_type = getattr(module, "MainWindow", None)
+    if window_type is None or getattr(window_type, "_suite_pinned", False):
+        return
+    original = window_type.__init__
+
+    def pinning(self: object, *args: object, **kwargs: object) -> None:
+        original(self, *args, **kwargs)
+        if not _PIN_PAUSED:
+            _PINNED_WINDOWS.append(self)
+
+    window_type.__init__ = pinning
+    window_type._suite_pinned = True
+
+
+class _PinningLoader:
+    """Führt den echten Lader aus und pinnt danach — sonst nichts."""
+
+    def __init__(self, wrapped: object) -> None:
+        self._wrapped = wrapped
+
+    def create_module(self, spec: object) -> object:
+        return self._wrapped.create_module(spec)  # type: ignore[attr-defined]
+
+    def exec_module(self, module: object) -> None:
+        self._wrapped.exec_module(module)  # type: ignore[attr-defined]
+        _pin_main_window(module)
+
+
+class _PinOnImport:
+    """Pinnt beim Import des Fenstermoduls, nicht erst beim nächsten Test.
+
+    Die Fixture ``_windows_live_to_the_end`` sieht das Modul nur, wenn es beim
+    Teststart schon geladen ist. ``tests/test_sketch_editor.py`` importiert es
+    erst im Testrumpf: Das erste Fenster jenes Prozesses entstand ungepinnt,
+    starb mit seiner letzten Referenz mitten im Lauf und riss ihn mit dem
+    bekannten 0xc0000374. Der Haken fängt den Import selbst ab und kostet
+    sonst nichts — insbesondere keinen eifrigen Import von Qt und VTK in
+    Läufe, die beides nie anfassen.
+    """
+
+    def find_spec(self, fullname: str, path: object = None, target: object = None) -> object:
+        if fullname != "app.ui.main_window":
+            return None
+        import importlib.util
+
+        # Sich selbst kurz aus der Kette nehmen, sonst fragt find_spec hierher
+        # zurück. Der Importmechanismus hält währenddessen sein Schloss.
+        sys.meta_path.remove(self)
+        try:
+            spec = importlib.util.find_spec(fullname)
+        finally:
+            sys.meta_path.insert(0, self)
+        if spec is None or spec.loader is None:
+            return None
+        spec.loader = _PinningLoader(spec.loader)  # type: ignore[assignment]
+        return spec
+
+
+sys.meta_path.insert(0, _PinOnImport())
+
+
 @pytest.fixture(autouse=True)
 def _windows_live_to_the_end() -> Iterator[None]:
     """Jedes MainWindow der Suite lebt absichtlich bis zum Prozessende.
@@ -77,17 +140,11 @@ def _windows_live_to_the_end() -> Iterator[None]:
     Testende: Die letzte Referenz eines Fenster-Fixtures fällt vor dem
     Teardown der autouse-Fixtures, dort wäre es längst tot.
     """
+    # Der Regelfall läuft über den Import-Haken oben; dieser Griff bleibt als
+    # zweiter für ein Modul, das schon vor dem Haken geladen war.
     module = sys.modules.get("app.ui.main_window")
-    if module is not None and not getattr(module.MainWindow, "_suite_pinned", False):
-        original = module.MainWindow.__init__
-
-        def pinning(self: object, *args: object, **kwargs: object) -> None:
-            original(self, *args, **kwargs)
-            if not _PIN_PAUSED:
-                _PINNED_WINDOWS.append(self)
-
-        module.MainWindow.__init__ = pinning  # type: ignore[method-assign]
-        module.MainWindow._suite_pinned = True
+    if module is not None:
+        _pin_main_window(module)
     yield
 
 
@@ -247,10 +304,28 @@ def _no_user_parts_stay_loaded() -> Iterator[None]:
     lädt — ein Test mit einem **gültigen** eigenen Baustein nähme jeden
     folgenden mit, und der fiele an einer Menüleiste um, die er nie angefasst
     hat. Mit pytest-randomly an einem anderen je Lauf.
+
+    **Und die Register selbst, nicht nur die Merker.** Nur die Merker zu
+    leeren kehrte den Schutz um: Die Operationen und Katalogeinträge eines
+    gültigen eigenen Bausteins blieben registriert, während die Auskunft
+    ``user_operations()`` behauptete, es gebe keine — die Menüleiste zeigte
+    sie dann, und die Grenzentests zählten Einträge, die aus einer fremden
+    Maschine stammen. Abgemeldet wird über die Namen, die der Merker vor dem
+    Leeren noch kennt; ``remove`` ist an beiden Registern idempotent.
     """
     yield
     from app.core import bootstrap
 
+    if bootstrap._user_operations:
+        from app.core.knowledge.parts.ops import part_of
+        from app.core.knowledge.parts.registry import PARTS
+        from app.core.registry import REGISTRY
+
+        for operation in bootstrap._user_operations:
+            spec = part_of(operation)
+            if spec is not None:
+                PARTS.remove(spec.name)
+            REGISTRY.remove(operation)
     bootstrap._user_loaded = False
     bootstrap._user_findings = ()
     bootstrap._user_operations = ()
