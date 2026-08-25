@@ -469,6 +469,13 @@ class SketchCanvas(QWidget):
 
     sketchChanged = Signal()
     selectionChanged = Signal()
+    viewFitted = Signal(float, float, float, float)
+    """Mitte und Spannweite der Einpassung, in Millimetern der Zeichenebene.
+
+    Seit P4 wird im Viewport gezeichnet, und dort setzt nicht dieses Widget
+    den Ausschnitt, sondern die Kamera. Der Canvas rechnet weiter, was ins
+    Bild gehört — er sagt es jetzt nur weiter, statt es allein an sich
+    selbst zu setzen."""
     statusChanged = Signal(str)
     measuringChanged = Signal(float)
     """Das Maß des angefangenen Elements, oder 0 — das Feld in der Leiste
@@ -795,6 +802,11 @@ class SketchCanvas(QWidget):
 
         span_x = max(span_x, MIN_FIT_MM)
         span_y = max(span_y, MIN_FIT_MM)
+        # **Auch wenn das eigene Bild niemand sieht.** Im Viewport-Modus ist
+        # dieses Widget unsichtbar; alles Folgende setzt einen Maßstab, der
+        # dort auf nichts wirkt. Die Kamera hört auf dieses Signal, und ohne
+        # es war der Einpassen-Knopf im Skizzenmodus folgenlos.
+        self.viewFitted.emit(centre[0], centre[1], span_x, span_y)
         room_x = max(self.width() - 2 * FIT_MARGIN_PX, FIT_MARGIN_PX)
         room_y = max(self.height() - 2 * FIT_MARGIN_PX, FIT_MARGIN_PX)
         self._scale = min(
@@ -2641,6 +2653,10 @@ class SketchPanel(QWidget):
     sketchChanged = Signal()
     """Weitergereicht von der Zeichenfläche, damit ein Rahmen mithören kann."""
 
+    viewFitted = Signal(float, float, float, float)
+    """Durchgereicht von der Zeichenfläche — der Rahmen stellt danach die
+    Kamera. Mitte und Spannweite in Millimetern der Zeichenebene."""
+
     pointerMoved = Signal(float, float)
     """Wohin der nächste Klick fällt — der **gefangene** Ort, in Millimetern.
 
@@ -3018,6 +3034,7 @@ class SketchPanel(QWidget):
         layout.addLayout(status_row)
 
         self.canvas.sketchChanged.connect(self.sketchChanged)
+        self.canvas.viewFitted.connect(self.viewFitted)
         self.canvas.sketchChanged.connect(self._refresh_constraints)
         self.canvas.selectionChanged.connect(self._refresh_buttons)
         self.canvas.statusChanged.connect(self.status.setText)

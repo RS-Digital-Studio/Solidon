@@ -4237,6 +4237,7 @@ class MainWindow(QMainWindow):
         self.right.setCurrentWidget(self._constraints_room)
         self._bottom_layout.insertWidget(0, panel)
         panel.sketchChanged.connect(self._redraw_sketch)
+        panel.viewFitted.connect(self._fit_sketch_view)
         # Die Fangmarke: Der Canvas kennt den Ort, an dem ein Klick wirklich
         # landet (Raster **und** „vorhandener Punkt schlägt Raster"), die
         # Ansicht kann ihn zeigen. Ihn im Viewport nachzurechnen wäre die
@@ -4397,6 +4398,18 @@ class MainWindow(QMainWindow):
         result = self.session.last_result
         objects = result.scene.objects.values() if result else ()
         return frame_for_plane(panel.canvas.sketch.plane, objects)
+
+    def _fit_sketch_view(self, x: float, y: float, span_x: float, span_y: float) -> None:
+        """*Einpassen* im Skizzenmodus — die Ansicht folgt der Zeichenfläche.
+
+        Dieselbe Vermittlung wie beim Zeichnen: Das Panel kennt den Viewport
+        nicht, es meldet nur, was es eingepasst hat. Ohne diesen Weg setzte der
+        Knopf den Maßstab eines Widgets, das seit P4 niemand mehr sieht.
+        """
+        frame = self._sketch_frame()
+        if frame is None:
+            return
+        self.viewport.show_span_on_plane(frame, (x, y), (span_x, span_y))
 
     def _redraw_sketch(self) -> None:
         """Die Zeichnung in der Szene nachziehen (§30.1, P4).

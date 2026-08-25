@@ -11,6 +11,8 @@ das Zeichnen.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -3277,3 +3279,55 @@ class _StillPlotter:
 
     def remove_actor(self, actor: object, **_: object) -> None:
         return None
+
+
+def test_fitting_the_view_says_what_it_fitted(qt_app: QApplication) -> None:
+    """Der Knopf *Einpassen* muss die Ansicht erreichen, nicht nur sich selbst.
+
+    Seit die Skizze im Viewport liegt (P4), ist die Zeichenfläche unsichtbar:
+    ``fit_view`` setzte einen Maßstab, den niemand mehr sieht. Gemessen am
+    25.08.2026 stand die Kamera vor und nach dem Druck auf derselben Stelle,
+    während eine Zeichnung von 300 mm zu drei Vierteln außerhalb des Bildes
+    lag — ein Knopf, der genau dagegen da ist.
+
+    Geprüft wird die **Rechnung**, nicht das Bild: Offscreen gibt es keinen
+    Plotter, und ein Test über die Kamera wäre dort grün, weil er nichts tut
+    (Konzept „Skizze im Raum", Entscheidung G). Was hier zählt, ist, dass die
+    Fläche die Werte überhaupt nach außen gibt.
+    """
+    panel = SketchPanel(sketch_to_text(shapes.rectangle(120.0, 60.0)))
+    try:
+        gemeldet: list[tuple[float, float, float, float]] = []
+        panel.viewFitted.connect(lambda *werte: gemeldet.append(werte))
+
+        panel.canvas.fit_view()
+
+        assert gemeldet, "die Einpassung erreicht die Ansicht nicht"
+        x, y, span_x, span_y = gemeldet[-1]
+        assert (x, y) == pytest.approx((0.0, 0.0)), "ein mittiges Rechteck ist mittig"
+        assert span_x == pytest.approx(120.0), "die Breite der Zeichnung"
+        assert span_y == pytest.approx(60.0), "ihre Höhe"
+    finally:
+        release = getattr(type(panel), "release", None)
+        if release is not None:
+            release(panel)
+        panel.deleteLater()
+
+
+def test_the_window_listens_when_the_sketch_fits_itself() -> None:
+    """Und das Fenster hört zu — sonst endet die Kette am vorletzten Glied.
+
+    Am Quelltext geprüft und nicht am laufenden Fenster: Der Skizzenmodus
+    braucht ein Ergebnis, einen Plotter und ein Beispielprojekt, und ein Test,
+    der sich das alles baut, prüft am Ende die Attrappen. Was hier fehlen kann,
+    ist eine einzige Zeile — dass jemand das Signal anschließt.
+    """
+    quelle = (Path(__file__).resolve().parents[1] / "app" / "ui" / "main_window.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert "panel.viewFitted.connect(self._fit_sketch_view)" in quelle, (
+        "das Fenster verbindet die Einpassung nicht"
+    )
+    assert "def _fit_sketch_view(" in quelle, "und hätte auch keinen Empfänger dafür"
+    assert "show_span_on_plane" in quelle, "der Empfänger erreicht die Ansicht nicht"

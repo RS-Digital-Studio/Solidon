@@ -153,6 +153,12 @@ ORIENTATION_SIZE = 52
 ORIENTATION_MARGIN = 4
 
 
+#: Wie viel Luft eine Einpassung um die Zeichnung lässt. Ohne Rand liegt
+#: die äußerste Linie genau auf dem Bildrand, und ein Maß daran steht
+#: halb außerhalb.
+FIT_ROOM = 1.15
+
+
 def camera_for_plane(frame: PlaneFrame, distance: float = 1.0) -> tuple[Vec3, Vec3, Vec3]:
     """Die Kamerastellung, die senkrecht auf eine Zeichenebene sieht (§30.1).
 
@@ -5155,6 +5161,49 @@ class Viewport(QWidget):
         self.plotter.camera_position = [position, focus, up]
         self._fit_parallel_scale(distance)
         self._redraw_shadows()
+
+    def show_span_on_plane(
+        self, frame: PlaneFrame, centre: tuple[float, float], span: tuple[float, float]
+    ) -> None:
+        """Die Kamera so stellen, dass dieser Ausschnitt der Ebene im Bild liegt.
+
+        Das Gegenstück zu :meth:`view_on_plane`, das den Ausschnitt
+        ausdrücklich **nicht** anfasst: Wer den Skizzenmodus betritt, will auf
+        seine Ebene sehen, ohne dass der Zoom springt. Wer dagegen *Einpassen*
+        drückt, will genau das Gegenteil.
+
+        ``centre`` und ``span`` kommen in Millimetern der Zeichenebene, so wie
+        die Zeichenfläche sie rechnet; hierher gelangen sie über das Signal
+        ``SketchCanvas.viewFitted``. Gerechnet wird in
+        :func:`app.core.sketch.planes.to_world` — die Umrechnung gehört dem
+        Kern, nicht der Ansicht (Konzept „Skizze im Raum", Entscheidung G).
+
+        **Ohne diesen Weg war der Knopf tot.** ``fit_view`` setzte den Maßstab
+        der Zeichenfläche, und die ist seit P4 unsichtbar. Gemessen am
+        25.08.2026: Kamera vor und nach dem Aufruf identisch, bei einer Skizze,
+        die zu drei Vierteln außerhalb des Bildes lag.
+        """
+        if self.plotter is None:
+            return
+        world = to_world(frame, centre)
+        distance = self._plane_distance()
+        position, _focus, up = camera_for_plane(frame, distance)
+        offset = tuple(p - f for p, f in zip(position, (0.0, 0.0, 0.0), strict=True))
+        self.plotter.camera_position = [
+            tuple(w + o for w, o in zip(world, offset, strict=True)),
+            world,
+            up,
+        ]
+        camera = getattr(self.plotter, "camera", None)
+        if camera is not None and getattr(camera, "parallel_projection", False):
+            # ``parallel_scale`` ist die halbe sichtbare **Höhe**. Die Breite
+            # kommt aus dem Seitenverhältnis, also muss eine breite Zeichnung
+            # über die Höhe hineingerechnet werden — sonst steht sie seitlich
+            # heraus, und das Einpassen hätte seinen Namen nicht verdient.
+            wide, high = self.width() or 1, self.height() or 1
+            needed = max(span[1] / 2.0, (span[0] / 2.0) * high / wide)
+            camera.parallel_scale = needed * FIT_ROOM
+        self.plotter.render()
 
     def _fit_parallel_scale(self, distance: float) -> None:
         """Den Ausschnitt der Parallelprojektion an den perspektivischen angleichen.
