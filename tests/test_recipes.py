@@ -33,9 +33,16 @@ def profile() -> Profile:
 
 
 def _document(width: float = 30.0) -> Document:
-    """Ein Quader, dessen Breite am Projektparameter ``w`` hängt (§13)."""
+    """Ein Quader, dessen Breite am Projektparameter ``w`` hängt (§13).
+
+    ``format_version`` ist die echte: Seit ``from_data`` den Dokumentteil
+    durch die Migrationen schickt, hieße eine 1 hier, dass elf
+    Umstellungsschritte über modern geformte Daten laufen.
+    """
+    from app.core.scene.migrations import FORMAT_VERSION
+
     return Document(
-        format_version=1,
+        format_version=FORMAT_VERSION,
         app_version="test",
         parameters={"w": Parameter(name="w", value=width)},
         ops=[
@@ -573,7 +580,10 @@ def _run_the_second_project(
     changed = dataclasses.replace(made, doc="jetzt mit anderer Beschreibung")
     recipe.save(changed, tmp_path, overwrite=True)
     parts2 = PartRegistry()
-    recipe.load_all(tmp_path, parts2, None)
+    # Ein frisches Register, kein ``None``: global stünde ``insert_mein_klotz``
+    # schon, ``register`` nähme seit der Atomarität den Katalogeintrag wieder
+    # mit zurück — und dieser Test lebte vorher unbemerkt vom halben Zustand.
+    recipe.load_all(tmp_path, parts2, Registry())
 
     # 7. Das zweite Projekt wieder öffnen: die Änderung wird gemeldet —
     #    derselbe Weg, den die Sitzung beim Öffnen nimmt.
@@ -587,8 +597,85 @@ def _run_the_second_project(
     # Und die Gegenrichtung: unverändert heißt still.
     parts3 = PartRegistry()
     recipe.save(made, tmp_path, overwrite=True)
-    recipe.load_all(tmp_path, parts3, None)
+    recipe.load_all(tmp_path, parts3, Registry())
     quiet = part_check.check(reopened.document, parts3)
     assert not any(finding.code == "parts.own_changed" for finding in quiet), (
         "ein unverändertes Rezept darf keine Meldung erzeugen"
     )
+
+
+# --- Die Härtung nach dem Review vom 26.08.2026 -----------------------------------
+
+
+def test_a_stopped_stack_is_an_error_not_a_half_body(profile: Profile) -> None:
+    """``evaluate`` wirft bei einem gescheiterten Schritt nicht — es hält an
+    und behält, was bis dahin entstand. Für einen Baustein wäre das ein halber
+    Körper, der wie ein ganzer aussieht; ``build`` muss den Riss melden.
+
+    Der Wächter sitzt **vor** der Körperzählung: Damit ist auch der Fall
+    gedeckt, in dem ein früher Schritt einen Körper hinterlässt und ein
+    späterer scheitert.
+    """
+    from app.core.errors import GeometryError
+
+    made = _recipe(profile)
+    with pytest.raises(GeometryError) as caught:
+        recipe.build(made, {"w": -5.0}, profile=profile)
+    assert caught.value.values.get("stopped_at") == 1
+    assert caught.value.suggestions, "Regel 17: auch dieser Fehler trägt einen Vorschlag"
+
+
+def test_a_recipe_from_the_future_is_refused(profile: Profile) -> None:
+    """Der Dokumentteil erbt die Migrationen der Projektdatei — und damit auch
+    die Sperre gegen eine Datei aus einer neueren Version (``too_new``)."""
+    data = recipe.to_data(_recipe(profile))
+    data["document"] = dict(data["document"])
+    data["document"]["format_version"] = int(data["document"]["format_version"]) + 1
+    with pytest.raises(ValidationError) as caught:
+        recipe.from_data(data)
+    assert caught.value.constraint == "too_new"
+
+
+def test_a_recipe_with_scripted_source_is_flagged_when_loaded(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Regel 13 hält nur mit Regel 11 zusammen: Trägt ein Rezept
+    ``create_from_scad``-Quelltext, muss der Nutzer es beim Laden erfahren —
+    dieselbe Auskunft, die ``foreign.findings_for`` einer Projektdatei gibt."""
+    made = _recipe(profile)
+    made.document.ops.append(
+        Operation(
+            id=2,
+            op="create_from_scad",
+            outputs=("obj_9",),
+            params={"source": "cube(1);"},
+        )
+    )
+    recipe.save(made, tmp_path)
+    parts, registry = PartRegistry(), Registry()
+    result = recipe.load_all(tmp_path, parts, registry)
+    assert result.loaded == ("probe_halter",)
+    flagged = [entry for entry in result.findings if entry.code == "project.scripted_source"]
+    assert flagged, "der Quelltext-Hinweis (§32) muss als Befund mitkommen"
+    assert flagged[0].values.get("recipe") == "probe_halter"
+
+
+def test_a_recipe_that_cannot_become_an_operation_leaves_no_catalog_entry(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Halb registriert ist schlimmer als gar nicht: Ein Katalogeintrag ohne
+    Operation ist ein Knopf, dessen Klick in einem ``InternalError`` endet.
+
+    Nachgestellt über ein Register, das die Operation schon trägt — der
+    zweite Ladelauf scheitert an ihr, und der Katalog muss leer bleiben.
+    """
+    recipe.save(_recipe(profile), tmp_path)
+    parts, registry = PartRegistry(), Registry()
+    first = recipe.load_all(tmp_path, parts, registry)
+    assert first.loaded == ("probe_halter",)
+
+    parts2 = PartRegistry()
+    second = recipe.load_all(tmp_path, parts2, registry)
+    assert second.loaded == ()
+    assert second.findings, "der Grund steht als Befund da, nicht nur im Protokoll"
+    assert not parts2.has("probe_halter"), "kein Katalogeintrag ohne Operation"

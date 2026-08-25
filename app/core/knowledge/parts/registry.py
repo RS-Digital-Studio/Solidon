@@ -125,6 +125,34 @@ class PartSpec:
     23.08.2026 wirkten auch Passungsleiter, Wandleiter und Überhangfächer an
     einer Bohrung — sie ergeben dort nur keinen Sinn.
     """
+    keeps_up: bool = False
+    """Wahr für einen Baustein, der ein **Oben** hat, das die Schwerkraft meint.
+
+    Ein Lochwand-Einhänger hängt: Sein Zapfen sitzt oben im Schlitz, seine Nase
+    greift unten hinter die Platte. Verkehrt herum gesetzt hält er nichts. Fast
+    alle anderen Bausteine haben das Problem nicht — eine Bohrung ist
+    drehsymmetrisch, ein Fuß auch, und eine Rippe darf liegen, wie die Fläche
+    es vorgibt.
+
+    **Warum das Setzen es sonst nicht weiß.** An eine Fläche gesetzt wird ein
+    Baustein über ``rotation_between``, und das nimmt die *kürzeste* Drehung
+    von seinem +Z auf die Flächennormale. Um die Normale herum rollt er dabei
+    frei, und wohin, ist eine Eigenschaft der Formel und nicht der Absicht:
+    Gemessen am 25.08.2026 stand die Schlitzlänge des Einhängers an einer
+    ±Y-Wand senkrecht und an einer ±X-Wand **waagerecht** — dort passte er in
+    keinen Schlitz. Eine von vier Wandrichtungen war richtig, und das sieht man
+    dem Baustein nicht an: Er wird in seinem eigenen System gebaut und erfährt
+    nie, wohin man ihn dreht.
+
+    Ist das Feld gesetzt, dreht ``_place`` ihn zusätzlich um die Flächennormale,
+    bis sein +Y so weit nach oben zeigt, wie die Fläche es zulässt. Bei einer
+    waagerechten Fläche gibt es in deren Ebene kein Oben; dort bleibt es bei
+    der kürzesten Drehung.
+
+    Die Vorgabe ist falsch und nicht wahr: Wer sie setzt, ändert die Lage
+    seines Bausteins, und das darf keinem bestehenden von selbst geschehen.
+    """
+
     at_face: bool = True
     """Wahr für einen Baustein, den man an eine **Fläche** setzt.
 
@@ -207,6 +235,17 @@ class PartRegistry:
         self._check(spec)
         self._parts[spec.name] = spec
         return spec
+
+    def remove(self, name: str) -> None:
+        """Nimmt einen Eintrag zurück — für den halben Registrierlauf.
+
+        Ein Rezept wird an zwei Stellen registriert, Katalog und
+        Operationsregister. Scheitert die zweite, muss die erste zurück:
+        Ein Katalogeintrag ohne Operation ist ein Knopf, dessen Klick in
+        einem ``InternalError`` endet. Ein unbekannter Name ist hier kein
+        Fehler — zurücknehmen ist idempotent.
+        """
+        self._parts.pop(name, None)
 
     def _check(self, spec: PartSpec) -> None:
         if not _NAME_PATTERN.match(spec.name):
@@ -315,6 +354,7 @@ def register_part(
     at_hole: bool = False,
     at_hole_values: HoleValues | None = None,
     at_face: bool = True,
+    keeps_up: bool = False,
     features: Iterable[str] = (),
     doc: TranslatableText | str = "",
     caveat: TranslatableText | str = "",
@@ -347,6 +387,7 @@ def register_part(
                 at_hole=at_hole,
                 at_hole_values=at_hole_values,
                 at_face=at_face,
+                keeps_up=keeps_up,
                 features=tuple(features),
                 doc=doc,
                 caveat=caveat,

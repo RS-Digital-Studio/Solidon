@@ -44,11 +44,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from app.core.errors import CANCEL, CORRECT_INPUT, ValidationError
+from app.core.errors import CANCEL, CORRECT_INPUT, GeometryError, ValidationError
 from app.core.knowledge.parts.registry import PartRegistry, PartSpec
 from app.core.log import get_logger
 from app.core.paths import ensure_dir, user_parts_dir
 from app.core.registry import Registry, op_params, param
+from app.core.scene.migrations import migrate
 from app.core.scene.serialise import document_from_data, document_to_data
 from app.core.types import (
     BaseParams,
@@ -155,7 +156,10 @@ def from_data(data: dict[str, Any]) -> Recipe:
         title=str(data.get("title") or data["name"]),
         group=str(data.get("group", "structure")),
         doc=str(data.get("doc", "")),
-        document=document_from_data(data["document"]),
+        # Durch die Migrationen, wie eine Projektdatei: Der Dokumentteil
+        # eines Rezepts altert mit dem Dokumentformat, und eine Datei aus
+        # der Zukunft wird abgewiesen statt falsch gelesen (``too_new``).
+        document=document_from_data(migrate(dict(data["document"]))),
         payloads={
             key: base64.b64decode(value) for key, value in dict(data.get("payloads", {})).items()
         },
@@ -227,6 +231,20 @@ def build(
         registry=registry,
         sources=ProjectSources(project),
     )
+    if result.stopped_at is not None:
+        # ``evaluate`` wirft bei einem gescheiterten Schritt nicht — es setzt
+        # ``stopped_at`` und behält, was bis dahin entstand. Für ein Projekt
+        # ist das richtig (der Verlauf zeigt den Riss); für einen Baustein
+        # wäre es ein halber Körper, der wie ein ganzer aussieht: Ein Rezept
+        # aus Quader und Bohrung gäbe bei gescheiterter Differenz den Klotz
+        # ohne Loch zurück, und der Bereichstest hielte ihn für bestanden.
+        cause = next((str(entry.message) for entry in result.scene.report.findings), "")
+        raise GeometryError(
+            title=_("Das Rezept ließ sich nicht bis zum Ende rechnen."),
+            detail=cause or _("Ein Schritt des Rezepts scheiterte an dieser Parameterkombination."),
+            values={"recipe": recipe.name, "stopped_at": result.stopped_at},
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
     bodies = list(result.scene.objects.values())
     if len(bodies) != 1:
         raise ValidationError(
@@ -411,8 +429,16 @@ def register(
         source=RECIPE_SOURCE,
         range_passed=(recipe.range_report.passed if recipe.range_report is not None else None),
     )
-    (parts or PARTS).register(spec)
-    part_ops.register_one(spec, registry)
+    target = parts or PARTS
+    target.register(spec)
+    try:
+        part_ops.register_one(spec, registry)
+    except Exception:
+        # Halb registriert ist schlimmer als gar nicht: Ein Katalogeintrag
+        # ohne Operation ist ein Knopf, dessen Klick in einem
+        # ``InternalError`` endet. Der Eintrag geht zurück, der Fehler weiter.
+        target.remove(spec.name)
+        raise
 
 
 def _default_profile() -> Profile:
@@ -503,6 +529,20 @@ def load_all(
             recipe = from_data(json.loads(path.read_text(encoding="utf-8")))
             register(recipe, parts, registry)
             loaded.append(recipe.name)
+            # Regel 13 hält nur mit Regel 11 zusammen: Ein Rezept darf
+            # Quelltext tragen (``create_from_scad``), und dann muss der
+            # Nutzer es erfahren, **bevor** er den Baustein rechnen lässt —
+            # dieselbe Auskunft, die ``foreign.findings_for`` einer geöffneten
+            # Projektdatei gibt. Eine Datei im eigenen Ordner ist keine
+            # Entwarnung: Rezepte werden weitergegeben.
+            from app.core.scene.foreign import findings_for
+
+            for warning in findings_for(recipe.document):
+                findings.append(
+                    dataclasses.replace(
+                        warning, values={**dict(warning.values), "recipe": recipe.name}
+                    )
+                )
         except Exception as problem:  # Regel 17: Befund statt Abbruch
             _log.warning("recipe %s failed to load: %s", path.name, problem)
             findings.append(
