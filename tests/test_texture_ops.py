@@ -171,6 +171,25 @@ def test_a_raised_texture_adds_material_and_an_engraved_one_removes_it() -> None
     assert grown - plain == pytest.approx(plain - cut, rel=0.05)
 
 
+def test_an_engraved_texture_beside_the_body_says_so() -> None:
+    """„Wer Boolesches rechnet, fragt danach — ohne Ausnahme." Ein Muster weit
+    neben dem Körper trug nichts ab und meldete nichts — dieselbe Auskunft, die
+    Bohren, Stopfen und die Beschriftung längst geben (operationen.md)."""
+    result = _run(
+        pattern="rib",
+        width=30.0,
+        height=20.0,
+        pitch=2.0,
+        depth=0.6,
+        x=200.0,
+        z=3.0,
+        mode="engraved",
+    )
+
+    assert result.outputs[0].mesh.volume == pytest.approx(40.0 * 30.0 * 6.0, rel=1e-6)
+    assert "boolean.without_effect" in [finding.code for finding in result.findings]
+
+
 def test_a_texture_that_cannot_print_is_refused_before_anything_is_built() -> None:
     """E1 an der Operation: die Frage kommt vor der Rechnung.
 

@@ -316,6 +316,26 @@ def test_the_skirt_is_taller_than_the_neck(profile: Profile) -> None:
     assert lid.bounds.size[2] > 8.0 + 2.4
 
 
+def test_the_screw_cap_ceiling_stays_closed(profile: Profile) -> None:
+    """Die Gewindenut endet an der Schürze und frisst nicht die Deckeldecke.
+
+    ``thread_body`` reicht um ``pitch * RIDGE_END`` über seine angegebene Höhe
+    hinaus. Auf die volle Schürzenhöhe geschnitten, durchbrach die Nut die
+    Decke, sobald ``pitch * RIDGE_END`` die Deckelstärke erreichte: bei Steigung
+    4 mm ein Loch von rund 25 mm², ab dann ein offener Deckel. Gemessen am
+    Querschnitt knapp unter der Deckeloberseite — er muss die volle Scheibe sein.
+    """
+    lid = make_screw_lid(jar(), profile, height=8.0, pitch=4.0, thickness=2.4).outputs[1].mesh
+    top = float(lid.bounds.maximum[2])
+
+    section = lid.raw.section(plane_origin=[0.0, 0.0, top - 0.05], plane_normal=[0.0, 0.0, 1.0])
+    assert section is not None, "knapp unter der Decke steht Material"
+    planar, _ = section.to_2D()
+    outer_radius = float(lid.bounds.size[0]) / 2.0
+    full_disk = float(np.pi) * outer_radius**2
+    assert full_disk - planar.area < 5.0, "die Decke ist voll, kein Loch der Gewindenut"
+
+
 def test_a_thin_wall_cannot_carry_a_coarse_thread(profile: Profile) -> None:
     """Zwei Gangtiefen bei 5 mm Steigung passen nicht in eine Wand von 1,5."""
     with pytest.raises(ValidationError) as problem:

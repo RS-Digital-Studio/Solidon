@@ -17,6 +17,7 @@ from app.core.geom.prepare import (
     check_build_volume,
     check_collisions,
     drill,
+    plug,
     split_at_plane,
 )
 from app.core.geom.section import SectionPlane
@@ -39,6 +40,22 @@ def plate():
 
 def cube():
     return normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
+
+
+def l_profile() -> MeshData:
+    """Grundplatte 60x40x10 und ein Steg 10x40x40 an einem Ende — Hüllquader
+    z 0..40, aus zwei Quadern verschmolzen (Volumen 36000 mm³).
+
+    Ein gestufter Körper, an dem sich die Mitte des Hüllquaders und das Material
+    trennen: Wer die Plattenoberseite bei ``z = 10`` anklickt, liegt unter der
+    Hüllquader-Mitte (``z = 20``), das Material aber darunter. Nur an der
+    Hüllquader-Hälfte gemessen zeigte ein Werkzeug hier nach oben, in die Luft.
+    """
+    plate = trimesh.creation.box(extents=(60.0, 40.0, 10.0))
+    plate.apply_translation((0.0, 0.0, 5.0))
+    steg = trimesh.creation.box(extents=(10.0, 40.0, 40.0))
+    steg.apply_translation((25.0, 0.0, 20.0))
+    return MeshData.of(trimesh.boolean.union([plate, steg]))
 
 
 # --- bores ----------------------------------------------------------------------
@@ -233,6 +250,65 @@ def test_a_bore_follows_its_axis(axis: str, profile: Profile) -> None:
     )
     assert result.mesh.is_watertight
     assert result.mesh.volume < cube().volume
+
+
+def test_a_blind_bore_into_a_step_reaches_the_material(profile: Profile) -> None:
+    """Zwilling des Senkungs-Fixes (25.08.): auch das Bohren fragt den Körper,
+    nicht den Hüllquader.
+
+    Die Plattenoberseite des L-Profils liegt bei ``z = 10``, unter der Mitte des
+    Hüllquaders (``z = 20``); das Material liegt darunter. Eine Sackbohrung dort
+    schneidet nach unten. An der Hüllquader-Hälfte gemessen ging sie nach oben in
+    die Luft und trug 0,28 statt 169 mm³ ab — ohne einen Befund, weil die
+    Überlappung mehr als nichts ist.
+    """
+    body = l_profile()
+    result = drill(
+        body, position=(-10.0, 0.0, 10.0), axis="z", diameter=6.0, depth=6.0, profile=profile
+    )
+    area = math.pi * (result.diameter / 2.0) ** 2
+    assert body.volume - result.mesh.volume == pytest.approx(area * 6.0, rel=0.03)
+    assert not any(finding.code == "boolean.without_effect" for finding in result.findings)
+    assert result.mesh.is_watertight
+
+
+def test_a_through_plug_fills_the_whole_bore(profile: Profile) -> None:
+    """Ein durchgehender Stopfen ab der Mündung füllt die ganze Bohrung.
+
+    Auf die Mündung zentriert reichte der Zylinder nur in eine Richtung und
+    füllte die Hälfte, während die Bohrung offen blieb. Dieselbe
+    ``* 2.0``-Länge wie beim Bohren deckt den ganzen Körper ab, und ``_shell``
+    schneidet den Überstand weg.
+    """
+    body = cube()
+    drilled = drill(
+        body, position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, compensate=False, profile=profile
+    )
+    assert drilled.mesh.volume < body.volume, "die Bohrung hat Material genommen"
+    plugged = plug(drilled.mesh, position=(0.0, 0.0, 10.0), axis="z", diameter=6.0, profile=profile)
+    assert plugged.mesh.volume == pytest.approx(body.volume, rel=0.01)
+    assert plugged.mesh.is_watertight
+    assert plugged.mesh.raw.body_count == 1, "ein gefüllter Körper, kein loser Zylinder"
+
+
+def test_a_plug_on_a_step_does_not_grow_a_stud(profile: Profile) -> None:
+    """Zwilling der Bohr-Richtung: der Stopfen füllt ins Material, nicht in die
+    Luft.
+
+    An der Plattenoberseite des L-Profils (``z = 10``) liegt das Material
+    darunter. Ein Stopfen dort füllt nach unten — wo schon Material ist, ändert
+    er nichts und sagt das (``boolean.without_effect``). An der Hüllquader-Hälfte
+    gemessen wuchs er stattdessen nach oben und stand als Zapfen von 170 mm³ auf
+    der Fläche, ohne einen Befund.
+    """
+    body = l_profile()
+    plugged = plug(
+        body, position=(-10.0, 0.0, 10.0), axis="z", diameter=6.0, depth=6.0, profile=profile
+    )
+    assert plugged.mesh.volume == pytest.approx(body.volume, abs=1.0), (
+        "der Stopfen füllt ins Material und wächst nicht als Zapfen aus der Fläche"
+    )
+    assert any(finding.code == "boolean.without_effect" for finding in plugged.findings)
 
 
 def test_the_boolean_overlap_is_the_one_from_the_rule_set() -> None:

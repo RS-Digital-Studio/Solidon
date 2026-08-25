@@ -26,7 +26,7 @@ from app.core.geom.boolean import boolean, deepest
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.prepare import BOOLEAN_OVERLAP
 from app.core.knowledge.parts.build import face
-from app.core.knowledge.parts.shapes import RIDGE_SHARE, thread_body
+from app.core.knowledge.parts.shapes import RIDGE_END, RIDGE_SHARE, thread_body
 from app.core.knowledge.profiles import for_object
 from app.core.log import get_logger
 from app.core.registry import NAME_DOC, op_params, param, register_op
@@ -709,7 +709,13 @@ def _screw_cap(
         radius=inside / 2.0, height=skirt + BOOLEAN_OVERLAP, sections=NECK_SECTIONS
     )
     hollow.apply_translation((0.0, 0.0, (skirt + BOOLEAN_OVERLAP) / 2.0 - BOOLEAN_OVERLAP))
-    groove = thread_body(inside, params.pitch, skirt, internal=True)
+    # Der Gang reicht um ``pitch * RIDGE_END`` über seine Höhe hinaus (shapes.py).
+    # Auf die volle Schürze geschnitten, durchbrach er die Deckeldecke, sobald
+    # dieser Überstand die Deckelstärke erreichte — bei Steigung 4 mm ein Loch,
+    # darüber ein offener Deckel. Um den Überstand gekürzt endet die Nut an der
+    # Schürze, und die Stärke darüber bleibt stehen.
+    groove_height = max(EPS_GEOM, skirt - params.pitch * RIDGE_END)
+    groove = thread_body(inside, params.pitch, groove_height, internal=True)
 
     cutter = boolean("union", [MeshData.of(hollow), groove], quality=quality)
     cut = boolean("difference", [MeshData.of(body), cutter.mesh], quality=quality)

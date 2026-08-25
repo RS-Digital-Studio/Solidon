@@ -566,7 +566,7 @@ def apply_texture(ctx: OpContext) -> OpResult:
     """
     import dataclasses
 
-    from app.core.geom.boolean import BooleanKind, boolean
+    from app.core.geom.boolean import BooleanKind, boolean, without_effect
     from app.core.geom.label_ops import label_solid, place
     from app.core.geom.mesh import as_mesh_data
     from app.core.geom.transform import apply, translation
@@ -627,11 +627,20 @@ def apply_texture(ctx: OpContext) -> OpResult:
         )
 
     kind: BooleanKind = "union" if params.mode == "raised" else "difference"
-    outcome = boolean(kind, [as_mesh_data(source.mesh), placed], quality=ctx.quality, cut_slot=0)
+    body_mesh = as_mesh_data(source.mesh)
+    outcome = boolean(kind, [body_mesh, placed], quality=ctx.quality, cut_slot=0)
+
+    # Ein Muster, das den Körper nicht erreicht hat, sagt das (§2.7) — dieselbe
+    # Auskunft wie bei der Beschriftung, die aus denselben Bausteinen entsteht;
+    # der Fix von ``label_text`` hatte den Nachbarn übersehen.
+    findings = list(outcome.findings)
+    nothing = without_effect(body_mesh, outcome.mesh, kind, ctx.profile)
+    if nothing is not None:
+        findings.append(nothing)
 
     _log.info("textured with %r, %s", params.pattern, params.mode)
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=outcome.mesh, features={})],
         solver=outcome.solver,
-        findings=outcome.findings,
+        findings=findings,
     )

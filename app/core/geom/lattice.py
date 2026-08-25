@@ -194,8 +194,12 @@ def _cubic(
         if cancelled is not None:
             cancelled.raise_if_cancelled()
         first, second = [other for other in range(3) if other != axis]
-        for offset_a in np.arange(low[first], high[first] + cell, cell):
-            for offset_b in np.arange(low[second], high[second] + cell, cell):
+        # Bis an den Quader, nicht eine ganze Zelle darüber hinaus: eine
+        # Stabmitte jenseits von ``high`` liegt außerhalb des Hohlraums, und wo
+        # sie zugleich jenseits der Außenwand liegt, überlebt sie die Differenz
+        # gegen den Körper und hängt frei neben dem Teil.
+        for offset_a in np.arange(low[first], high[first] + EPS_GEOM, cell):
+            for offset_b in np.arange(low[second], high[second] + EPS_GEOM, cell):
                 extents = [wall, wall, wall]
                 extents[axis] = float(size[axis])
                 centre = [0.0, 0.0, 0.0]

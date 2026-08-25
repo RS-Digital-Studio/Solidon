@@ -10,9 +10,9 @@ from __future__ import annotations
 import dataclasses
 from typing import Any, cast
 
-from app.core.errors import Action, AppError, GeometryError
+from app.core.errors import CANCEL, CORRECT_INPUT, Action, AppError, GeometryError
 from app.core.geom.align import align_matrix
-from app.core.geom.boolean import BooleanKind, boolean
+from app.core.geom.boolean import BooleanKind, boolean, without_effect
 from app.core.geom.mesh import as_mesh_data
 from app.core.geom.repair import repair
 from app.core.geom.transform import (
@@ -448,17 +448,49 @@ class BooleanParams(BaseParams):
 
 
 def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult:
-    """Zwei Körper hinein, einer heraus — mit der Rückfallkette
-    dahinter (§17.2).
+    """Zwei Körper hinein, einer heraus — mit der Rückfallkette dahinter (§17.2).
+
+    Zwei Auskünfte kommen dazu, die dem freien ``boolean`` fehlen, weil sie erst
+    an der Operation Sinn ergeben (operationen.md, „Wer Boolesches rechnet,
+    fragt danach"):
+
+    - Eine **leere Schnittmenge** ist kein Kettenfehler, sondern eine Tatsache:
+      die zwei Körper treffen sich nicht. ``allow_empty`` hält die Kette davon
+      ab, das viermal bis zur Voxelstufe zu bestätigen, und der Grund wird
+      genannt statt „das Werkzeug deckt ihn vollständig ab".
+    - **Vereinigung und Differenz, die nichts bewirken**, sagen es über
+      ``without_effect`` — ein Abzugskörper neben dem Teil oder ein Körper, der
+      schon ganz im anderen steckt, ließ sonst einen Schritt im Verlauf und ein
+      unverändertes Bild zurück.
     """
     first, second = (as_mesh_data(entry.mesh) for entry in ctx.inputs[:2])
     outcome = boolean(
-        kind, [first, second], quality=ctx.quality, seed=seed, cancelled=ctx.cancelled
+        kind,
+        [first, second],
+        quality=ctx.quality,
+        seed=seed,
+        allow_empty=kind == "intersection",
+        cancelled=ctx.cancelled,
     )
+    findings = list(outcome.findings)
+    if kind == "intersection":
+        if outcome.mesh.triangle_count == 0:
+            raise GeometryError(
+                _("Die Körper haben keinen gemeinsamen Bereich."),
+                detail=_(
+                    "Die Schnittmenge ist leer — die beiden Körper überschneiden sich "
+                    "nicht. Lage und Maße prüfen, damit sie sich treffen."
+                ),
+                suggestions=(CORRECT_INPUT, CANCEL),
+            )
+    else:
+        nothing = without_effect(first, outcome.mesh, kind, ctx.profile)
+        if nothing is not None:
+            findings.append(nothing)
     return OpResult(
         outputs=[dataclasses.replace(ctx.inputs[0], mesh=outcome.mesh)],
         solver=outcome.solver,
-        findings=outcome.findings,
+        findings=findings,
     )
 
 

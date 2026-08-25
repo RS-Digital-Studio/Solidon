@@ -26,6 +26,13 @@ SEGMENTS = 48
 #: keiner Hälfte für sich zu sehen.
 RIDGE_SHARE = 0.55
 
+#: Wo der Gang eines Rings endet, als Anteil der Steigung: Der oberste Punkt
+#: jedes Rings sitzt ``pitch * RIDGE_END`` über seiner Grundhöhe. Der letzte
+#: Ring liegt auf ``height``, also reicht der Gewindekörper um genau diesen
+#: Betrag über seine angegebene Höhe hinaus — wer ihn auf eine Fläche schneidet,
+#: rechnet das ab, sonst durchbricht der Gang die Wand dahinter.
+RIDGE_END = 0.8
+
 #: Wie weit eine abgezogene Form über die Fläche hinausreicht, die sie
 #: durchschneidet. Die Regelsammlung verlangt es (§39): zusammenfallende
 #: Flächen sind der klassische Weg, eine Boolesche Operation zu brechen.
@@ -257,7 +264,7 @@ def thread_body(
                 root + up * level,
                 crest + up * (level + pitch * 0.25),
                 crest + up * (level + pitch * RIDGE_SHARE),
-                root + up * (level + pitch * 0.8),
+                root + up * (level + pitch * RIDGE_END),
             ]
         )
 

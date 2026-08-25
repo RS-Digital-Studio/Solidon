@@ -12,10 +12,15 @@ from pathlib import Path
 import pytest
 import trimesh
 
-from app.core.errors import BooleanFailedError
+from app.core.bootstrap import load_operations
+from app.core.errors import BooleanFailedError, GeometryError
 from app.core.geom.boolean import DRAFT_CHAIN, FULL_CHAIN, boolean, shared_volume
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
+from app.core.knowledge import profiles
+from app.core.registry import REGISTRY
+from app.core.scene.cancel import NeverCancelled
+from app.core.types import OpContext, OpResult, Scene, SceneObject
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -28,6 +33,28 @@ def box(size: float, offset: tuple[float, float, float]) -> MeshData:
     body = trimesh.creation.box(extents=(size, size, size))
     body.apply_translation(offset)
     return MeshData.of(body)
+
+
+def run_op(op: str, first: MeshData, second: MeshData) -> OpResult:
+    """Eine boolesche Operation über das Register fahren — mit Profil, damit
+    ``without_effect`` an der Düse misst und nicht am Rechenepsilon."""
+    load_operations()
+    spec = REGISTRY.get(op)
+    a = SceneObject(id="obj_1", name="A", mesh=first)
+    b = SceneObject(id="obj_2", name="B", mesh=second)
+    return spec.fn(
+        OpContext(
+            scene=Scene(objects={"obj_1": a, "obj_2": b}, parameters={}),
+            inputs=[a, b],
+            params=spec.params(),
+            profile=profiles.make_profile(),
+            quality="fine",
+            seed=0,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
 
 
 def test_union_of_two_overlapping_cubes() -> None:
@@ -226,6 +253,42 @@ def test_intersect_objects_runs_as_an_operation(document, profile) -> None:
     result = evaluate(document, profile, sources=ProjectSources(project))
     assert result.complete
     assert result.scene.objects["obj_3"].mesh.volume == pytest.approx(4000.0, rel=1e-6)
+
+
+# --- Eine boolesche Op, die nichts bewirkt, sagt das (§2.7, operationen.md) ------
+
+
+def test_subtracting_a_body_that_does_not_touch_says_so() -> None:
+    """„Wer Boolesches rechnet, fragt danach — ohne Ausnahme." Ein Abzugskörper
+    weit neben dem Teil trägt nichts ab, und das stand nirgends: ein Schritt im
+    Verlauf, dasselbe Teil im Bild."""
+    result = run_op("subtract_objects", solid(), box(20.0, (100.0, 0.0, 0.0)))
+
+    assert result.outputs[0].mesh.volume == pytest.approx(8000.0, rel=1e-6)
+    assert "boolean.without_effect" in [finding.code for finding in result.findings]
+
+
+def test_a_union_that_adds_nothing_says_so() -> None:
+    """Ein Körper, der ganz im anderen steckt, fügt der Vereinigung nichts
+    hinzu — dieselbe Auskunft, andersherum."""
+    result = run_op("union_objects", solid(), box(4.0, (0.0, 0.0, 0.0)))
+
+    assert result.outputs[0].mesh.volume == pytest.approx(8000.0, rel=1e-6)
+    assert "boolean.without_effect" in [finding.code for finding in result.findings]
+
+
+def test_an_intersection_of_two_separate_bodies_says_it_is_empty() -> None:
+    """Zwei Körper, die sich nicht treffen, haben keine Schnittmenge. Statt die
+    ganze Rückfallkette bis zur Voxelstufe zu fahren und dann „das Werkzeug
+    deckt ihn vollständig ab" zu melden, hält die Operation sofort an und nennt
+    den zutreffenden Grund."""
+    with pytest.raises(GeometryError) as problem:
+        run_op("intersect_objects", solid(), box(20.0, (100.0, 0.0, 0.0)))
+
+    assert problem.value.suggestions, "Regel 17: der Fehler nennt einen Weg"
+    said = f"{problem.value.title} {problem.value.detail}"
+    assert "gemeinsam" in said.lower(), "der zutreffende Grund, nicht der der Vereinigung"
+    assert "deckt" not in said, "nicht die alte, falsche Begründung aus der Rückfallkette"
 
 
 # --- Ein falscher Aufruf ist keine Antwort (§33.1) -------------------------------

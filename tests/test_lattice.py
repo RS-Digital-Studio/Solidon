@@ -124,6 +124,28 @@ def test_filling_a_hollow_body_adds_material_inside() -> None:
     assert body.bounds.size == pytest.approx(outside, abs=1e-6), "von außen unverändert"
 
 
+def test_a_cubic_fill_stays_inside_the_body() -> None:
+    """Das Würfelgitter bleibt im Hohlraum — keine Stäbe außerhalb des Teils.
+
+    Die Stabmitten liefen bis eine ganze Zelle über den Hohlraum hinaus; was
+    dabei jenseits der Außenwand lag, überlebte die Differenz gegen den Körper
+    und hing frei neben dem Teil. Gemessen war ein Außenmaß von +2,5 mm und drei
+    Dutzend lose Balken. Der Gyroid-Test daneben deckt genau diese Struktur
+    nicht ab.
+    """
+    entry = hollow_cube(size=40.0, wall=2.0)
+    outside = entry.mesh.bounds.size
+    before = entry.mesh.volume
+
+    result = run(entry, structure="cubic", cell=8.0, wall=1.0)
+
+    body = result.outputs[0].mesh
+    assert body.bounds.size == pytest.approx(outside, abs=1e-6), (
+        "von außen unverändert — kein Stab jenseits der Außenwand"
+    )
+    assert body.volume > before, "im Hohlraum steht jetzt Material"
+
+
 def test_filling_a_solid_body_says_it_needs_a_cavity() -> None:
     """Ein Vollkörper hat keinen Hohlraum, und eine Füllung ohne Hohlraum ist
     nichts — das sagt die Operation, statt stillschweigend nichts zu tun."""

@@ -150,7 +150,7 @@ def drill(
     offset = np.asarray(position, dtype=float)
     if not through and anchor == "mouth":
         direction = np.zeros(3)
-        direction[AXIS_INDEX[axis]] = into_the_body(mesh, axis, position)
+        direction[AXIS_INDEX[axis]] = _into_the_material(mesh, axis, position)
         offset = offset + direction * (height / 2.0)
     cylinder.apply_translation(offset)
 
@@ -373,7 +373,11 @@ def plug(
     Stopfen macht es keinen Unterschied.
     """
     through = depth <= EPS_GEOM
-    height = _through_length(mesh, axis) if through else depth
+    # Wie beim Bohren: ein durchgehender Stopfen ist doppelt so lang wie der
+    # Körper, damit er von jeder Position aus in beide Richtungen hinausreicht —
+    # ``_shell`` schneidet den Überstand ohnehin weg. Zentriert auf die Mündung
+    # füllte die einfache Länge nur die Hälfte und ließ die Bohrung offen.
+    height = _through_length(mesh, axis) * 2.0 if through else depth
     cylinder = trimesh.creation.cylinder(
         radius=diameter / 2.0 + BOOLEAN_OVERLAP, height=height, sections=BORE_SECTIONS
     )
@@ -381,7 +385,7 @@ def plug(
     offset = np.asarray(position, dtype=float)
     if not through and anchor == "mouth":
         direction = np.zeros(3)
-        direction[AXIS_INDEX[axis]] = into_the_body(mesh, axis, position)
+        direction[AXIS_INDEX[axis]] = _into_the_material(mesh, axis, position)
         offset = offset + direction * (height / 2.0)
     cylinder.apply_translation(offset)
 
@@ -435,6 +439,27 @@ def into_the_body(mesh: MeshData, axis: Axis, position: Vec3) -> float:
     low = float(mesh.bounds.minimum[index])
     high = float(mesh.bounds.maximum[index])
     return -1.0 if position[index] >= (low + high) / 2.0 else 1.0
+
+
+def _into_the_material(mesh: MeshData, axis: Axis, position: Vec3) -> float:
+    """Wohin es von der Mündung aus ins Material geht — am Körper gemessen, nicht
+    am Hüllquader.
+
+    Derselbe Griff wie bei der Senkung (:func:`countersink`, seit dem
+    25.08.2026): Bei genau einer offenen Seite (:func:`open_sides`) ist die
+    Bohrungsmündung gefunden, und ins Material geht es ihr entgegen. Sonst —
+    mitten im Material oder weit neben dem Körper — bleibt die Hüllquader-Hälfte
+    (:func:`into_the_body`) die einzige Auskunft.
+
+    Der Unterschied trägt an einem gestuften Teil: Wer die Oberseite einer Stufe
+    anklickt, die unter der Mitte des Hüllquaders liegt, meint das Material
+    darunter — die Hüllquader-Hälfte allein zeigte dort nach oben, in die Luft,
+    und Bohrung wie Stopfen setzten daneben an.
+    """
+    sides = open_sides(mesh, axis, position)
+    if len(sides) == 1:
+        return -sides[0]
+    return into_the_body(mesh, axis, position)
 
 
 def _axis_alignment(axis: Axis) -> np.ndarray:
