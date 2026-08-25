@@ -95,8 +95,16 @@ def load_user_parts() -> tuple[Finding, ...]:
         # Nutzerordner stammen, entsteht hier ohnehin und wurde bis zum
         # 24.08.2026 weggeworfen.
         _user_operations = importlib.import_module(f"{_PART_MODULE}.ops").register_all()
+    # Die Rezepte danach (§24.5, seit dem 24.08.2026): eigene Bausteine als
+    # Daten, aus demselben Nutzerordner. Sie registrieren sich einzeln —
+    # Katalog und Palette lesen das Register, die Menüleiste lässt
+    # ``user_operations()`` aus, und beides gilt für Rezepte wie für ``.py``s.
+    recipes = importlib.import_module(f"{_PART_MODULE}.recipe").load_all()
+    if recipes.loaded:
+        ops = importlib.import_module(f"{_PART_MODULE}.ops")
+        _user_operations = _user_operations + tuple(ops.op_name(name) for name in recipes.loaded)
     _user_loaded = True
-    _user_findings = tuple(result.findings)
+    _user_findings = (*result.findings, *recipes.findings)
     return _user_findings
 
 

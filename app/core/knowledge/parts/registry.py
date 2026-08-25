@@ -24,8 +24,11 @@ from dataclasses import dataclass
 from typing import Any, Final
 
 from app.core.errors import InternalError
-from app.core.types import BaseParams, HoleValues, PartFn
+from app.core.types import BaseParams, HoleValues, PartFn, PartResult, Profile
 from app.i18n import TranslatableText, _
+
+BuildWithProfile = Callable[[BaseParams, Profile | None], PartResult]
+"""Der profilbewusste Bauweg eines Rezepts — siehe ``PartSpec.build_with_profile``."""
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -162,7 +165,24 @@ class PartSpec:
     """
     changes: tuple[PartChange, ...] = ()
     source: str = "shipped"
-    """``shipped`` oder ``user`` — der Katalog weist den Unterschied aus (§24.5)."""
+    """``shipped``, ``user`` oder ``recipe`` — der Katalog weist die Herkunft
+    aus (§24.5). ``user`` heißt weiter: eine ``.py`` aus dem Nutzerordner; ein
+    Rezept ist Daten und reist mit (Regel 13 in der Fassung vom 24.08.2026)."""
+    range_passed: bool | None = None
+    """Ob der Bereichstest bestanden ist — ``None`` heißt: nie gefahren.
+
+    Für die mitgelieferten Bausteine läuft er in der Suite, und dieses Feld
+    bleibt ``None``; für ein Rezept läuft er beim Anlegen, und §24.5 verlangt
+    den **Warnhinweis im Katalog**, wenn er fehlt oder nicht bestanden ist —
+    dieses Feld ist die Auskunft dafür."""
+    build_with_profile: BuildWithProfile | None = None
+    """Bauen mit dem Profil des Dokuments — nur Rezepte tragen es.
+
+    ``fn`` bleibt der Vertrag (§24.1: Parameter hinein, Körper heraus) und
+    rechnet ohne Profil; ein Rezept aber darf ``auto:``-Toleranzen enthalten,
+    und die gehören mit dem Material des **Kunden** aufgelöst, nicht mit
+    unserem Standard. ``ops.insert`` bevorzugt diesen Weg, wo er da ist; für
+    Vorschau und Bereichstest, wo kein Dokument im Spiel ist, gilt ``fn``."""
 
     @property
     def own(self) -> bool:

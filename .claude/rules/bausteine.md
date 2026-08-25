@@ -77,9 +77,37 @@ sonst still anders:
 ## Eigene Bausteine sind kein Plugin-System
 
 Aus `<Nutzerdaten>/parts/*.py`, beim Start eingelesen, im Katalog
-gekennzeichnet. Sie **reisen nie in Projektdateien mit** (Regel 13): fehlt
-einer, hält die Auswertung an und meldet, was fehlt. Sie erweitern die
+gekennzeichnet. Eine **`.py` reist nie in Projektdateien mit** (Regel 13 in
+der Fassung vom 24.08.2026: die Regel schützt vor ausführbarem Code): fehlt
+eine, hält die Auswertung an und meldet, was fehlt. Sie erweitern die
 Bibliothek, nicht die Anwendung — keine neuen Ops, kein Zugriff auf den Stack.
+
+## Ein Rezept ist der eigene Baustein ohne Python
+
+Seit dem 25.08.2026 gebaut (`parts/recipe.py`, Konzept Befestigungssysteme
+§16–§19): ein Ausschnitt des Op-Stapels plus die Beschreibung seiner
+Parameter, als Daten in `<Nutzerdaten>/parts/recipes/*.json`. Was dabei gilt:
+
+- **Der Dokument-Ausschnitt reist als Dokument** (`scene.serialise`) und erbt
+  dessen Migrationen; die Hülle trägt ihre eigene `FORMAT_VERSION`.
+- **Die Version ist der Hash** über die kanonischen Daten (§24.4). Der
+  Bereichstest-Bericht hängt am Rezept, aber **außerhalb** des Hashes —
+  Prüfen macht aus dem Rezept kein anderes.
+- **Ausgewertet wird mit dem Auswerter der Szene** (`recipe.build`): dieselbe
+  Rückfallkette, dieselben `auto:`-Toleranzen, dieselbe §32-Quelltextprüfung.
+  Beim Einsetzen läuft `build_with_profile` mit dem Profil des Dokuments
+  (`ops.insert` bevorzugt es); `fn` mit dem Standardprofil trägt Vorschau und
+  Bereichstest.
+- **Genau ein Körper, benannte Merkmale** — beides wird beim `capture`
+  abgewiesen, nicht später halb gebaut (Konzept §18a/§18d).
+- **Der Bereichstest läuft in der Anwendung** (`parts/range_check.py`, §24.3):
+  dieselben Ecken wie in der Suite, mit Fortschritt und Abbruch; das Ergebnis
+  steht als `PartSpec.range_passed` am Katalogeintrag (§24.5 verlangt den
+  Warnhinweis, kein Verbot).
+- **`travelling_parts` warnt weiter nur vor `.py`s** — ein Rezept reist als
+  Daten; sein `source` ist `recipe`, nicht `user`.
+- **`to_scad()` gibt es für Rezepte nicht** — benannt, nicht umgangen
+  (Konzept §18e).
 
 ## Normteiltabelle
 

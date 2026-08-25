@@ -133,6 +133,12 @@ def fingerprint(name: str, registry: PartRegistry | None = None) -> str:
     if not source.has(name):
         return ""
     spec = source.get(name)
+    if spec.source == "recipe":
+        # Ein Rezept trägt seinen Abdruck schon: Seine Version **ist** der
+        # Hash über die Daten (§24.4, ``recipe.fingerprint``). Die Datei noch
+        # einmal zu lesen wäre dieselbe Auskunft, teurer und über einen Pfad,
+        # den es beim Auswerten eines fremden Projekts nicht geben muss.
+        return spec.version[:12]
     if not spec.own:
         return ""
     module = inspect.getmodule(spec.fn)

@@ -267,6 +267,12 @@ def _applies_to(spec: PartSpec) -> list[str]:
     return at
 
 
+def register_one(spec: PartSpec, registry: Registry | None = None) -> None:
+    """Einen einzelnen Baustein als Operation registrieren — der Weg der
+    Rezepte. ``register_all`` bleibt der der Bibliothek; beide enden hier."""
+    _register_one(spec, build_params(spec), registry)
+
+
 def _register_one(spec: PartSpec, params: type[BaseParams], registry: Registry | None) -> None:
     title = _title_for(spec)
 
@@ -295,7 +301,13 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     """Baut den Baustein, setzt ihn an seinen Platz und vereint oder schneidet."""
     source = ctx.inputs[0]
     values = _part_values(spec, ctx.params, ctx.profile)
-    produced = spec.fn(spec.params(**values))
+    # Ein Rezept baut mit dem Profil des Dokuments (``build_with_profile``):
+    # eine ``auto:``-Toleranz darin gehört mit dem Material des Kunden
+    # aufgelöst. Für die ``.py``-Bausteine bleibt ``fn`` der ganze Vertrag.
+    if spec.build_with_profile is not None:
+        produced = spec.build_with_profile(spec.params(**values), ctx.profile)
+    else:
+        produced = spec.fn(spec.params(**values))
 
     anchor, direction = _anchor(source, ctx.params)
     # Ein aufgesetzter Baustein sinkt ein Hundertstel ein. Zwei Volumen, die
