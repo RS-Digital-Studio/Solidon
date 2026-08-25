@@ -105,7 +105,10 @@ Parameter, als Daten in `<Nutzerdaten>/parts/recipes/*.json`. Was dabei gilt:
   steht als `PartSpec.range_passed` am Katalogeintrag (§24.5 verlangt den
   Warnhinweis, kein Verbot).
 - **`travelling_parts` warnt weiter nur vor `.py`s** — ein Rezept reist als
-  Daten; sein `source` ist `recipe`, nicht `user`.
+  Daten; sein `source` ist `recipe`, nicht `user`. Gekennzeichnet wird es
+  trotzdem: **`own` heißt „gehört dem Kunden"** und umfasst seit dem
+  25.08.2026 beide Gestalten (§24.5 will die Kennzeichnung im Katalog) — wer
+  nur die `.py`-Gestalt meint, fragt `source == "user"`, nicht `own`.
 - **`to_scad()` gibt es für Rezepte nicht** — benannt, nicht umgangen
   (Konzept §18e).
 
