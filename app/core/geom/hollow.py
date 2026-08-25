@@ -50,7 +50,9 @@ MIN_PITCH = 0.3
 
 #: Wie weit die Entlüftung in den Hohlraum hineinragt, damit sie den Boden
 #: sicher durchstößt. Ein Marching-Cubes-Rand liegt auf einen halben
-#: Rasterschritt genau, und der ist bei der gröbsten Wand 0,3 mm.
+#: Rasterschritt genau; der feinste Rasterschritt ist ``MIN_PITCH`` = 0,3 mm
+#: (an dünnen Wänden), ein Millimeter Überstand deckt ihn und die halben
+#: Schritte gröberer Raster sicher. In fünf Körpern gemessen bricht sie durch.
 VENT_BREAKTHROUGH = 1.0
 
 #: Vorgabe-Durchmesser der Entlüftung. Weit genug, damit Luft entweicht, eng
@@ -122,7 +124,7 @@ def hollow(
 
     before = mesh.volume
     _step(progress, cancelled, 0.4, _("Hohlraum ausschneiden"))
-    outcome = boolean("difference", [mesh, cavity], quality=quality)
+    outcome = boolean("difference", [mesh, cavity], quality=quality, cancelled=cancelled)
     body = outcome.mesh
     findings = list(outcome.findings)
     stages: list[SolverInfo | None] = [outcome.solver]
@@ -142,7 +144,7 @@ def hollow(
                 )
             )
         else:
-            opened = boolean("difference", [body, tool], quality=quality)
+            opened = boolean("difference", [body, tool], quality=quality, cancelled=cancelled)
             body = opened.mesh
             findings.extend(opened.findings)
             stages.append(opened.solver)
@@ -208,6 +210,8 @@ def hollow(
                     "wall_mm": round(wall, 2),
                     "eroded_mm": round(steps * pitch, 3),
                     "worst_case_mm": round(worst, 3),
+                    # Die strukturelle Grenze als Zahl: ab hier trifft das Raster.
+                    "fair_wall_mm": round(3.0 * MIN_PITCH, 2),
                 },
             )
         )
@@ -247,17 +251,22 @@ def erosion_steps(wall: float) -> tuple[int, float]:
     gerechnet wurde. Zweimal hingeschrieben wären sie beim ersten Nachbessern
     an einer Stelle andere.
 
-    Die Weite ist ein Drittel der Wand, aber nie feiner als ``MIN_PITCH``. Wo
-    diese Grenze greift, geht die Wand nicht mehr in ganzen Schritten auf: 0,8
-    mm werden drei Schritte à 0,3, also 0,9 mm Erosion, und 0,5 mm werden zwei
-    Schritte à 0,3, also 0,6 mm. Das ist kein Fehler, den man wegrunden kann —
-    ein feineres Raster **wäre** genauer und ist ausdrücklich nicht gewollt.
+    Die Weite ist ein Drittel der Wand, aber nie feiner als ``MIN_PITCH``. Die
+    strukturelle Grenze ist damit ``3 * MIN_PITCH`` = 0,9 mm: darüber geht die
+    Wand in ganzen Schritten auf und stimmt auf ein Sechstel; darunter greift
+    ``MIN_PITCH``, und die ±1/6-Zusage hält nicht mehr — 0,8 mm werden drei
+    Schritte à 0,3, also 0,9 mm Erosion, und 0,5 mm werden zwei Schritte à 0,3,
+    also 0,6 mm (+30 %). Das ist kein Fehler, den man wegrunden kann — ein
+    feineres Raster **wäre** genauer und ist ausdrücklich nicht gewollt.
 
     Der Versuch, es andersherum zu rechnen (erst die Schrittzahl, dann
     ``wall / steps``), ist gemessen worden und war schlechter: Er trifft die
     Wand rechnerisch exakt und macht dafür das Raster gröber, und die
     Unschärfe des Rasterrandes wächst schneller, als die Rundung einbringt —
-    an einem 40er Würfel mit 0,5 mm Wand von 30 % auf 50 % Abweichung.
+    an einem 40er Würfel mit 0,5 mm Wand von 30 % auf 50 % Abweichung. Und das
+    feinere Raster kostet Speicher: gemessen ``wall / 3`` gegen den Bestand
+    +325 MB (3,4-fach) am 40er Würfel, +898 MB (4,2-fach) am 100-mm-Teil,
+    +1354 auf 2326 MB an ``dense_1m`` — der Grund für die feste Untergrenze.
 
     Was bleibt, gehört deshalb in den Befund und nicht in eine Rundung:
     ``steps * pitch`` ist der Betrag, der wirklich abgetragen wird, und
@@ -360,7 +369,7 @@ def _vent(
             translation((spot[0], spot[1], bottom + height / 2.0)),
         )
         try:
-            outcome = boolean("difference", [drilled, tool], quality=quality)
+            outcome = boolean("difference", [drilled, tool], quality=quality, cancelled=cancelled)
             drilled, stage = outcome.mesh, outcome.solver
         except PROGRAMMING_ERRORS:
             raise

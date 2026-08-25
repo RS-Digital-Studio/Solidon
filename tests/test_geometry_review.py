@@ -674,6 +674,61 @@ def test_the_quality_setting_reaches_the_boolean_chain(
     assert set(seen) == {"draft"}, f"{op} reicht die Qualität nicht durch: {seen}"
 
 
+@pytest.mark.parametrize(
+    ("module", "op", "params"),
+    [
+        (hollow_module, "hollow_object", {"wall": 2.0, "vents": 1}),
+        (lattice_module, "lattice_fill", {"structure": "cubic", "cell": 8.0, "wall": 1.2}),
+    ],
+    ids=["hollow", "lattice"],
+)
+def test_the_cancel_token_reaches_the_boolean_chain(
+    module: Any, op: str, params: dict[str, Any], profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """§15.6: der Abbruch reicht bis in die Rückfallkette.
+
+    ``test_an_expensive_operation_can_be_stopped`` prüft nur, dass **gefragt**
+    wird — und das taten die ``_step``-Aufrufe schon. Zwischen zweien von ihnen
+    liegen aber bis zu vier boolesche Stufen samt Voxelisierung, und ``hollow``
+    reichte ``cancelled`` an keinen seiner ``boolean``-Aufrufe weiter: dort stand
+    der Abbrechen-Knopf minutenlang still. Gemessen wird am Token selbst, nicht
+    an einer Wirkung — der Wert muss ankommen.
+    """
+    seen: list[Any] = []
+    target = module if hasattr(module, "boolean") else boolean_module
+    original = target.boolean
+
+    def recording(kind: str, meshes: list[Any], **kwargs: Any) -> Any:
+        seen.append(kwargs.get("cancelled"))
+        return original(kind, meshes, **kwargs)
+
+    monkeypatch.setattr(target, "boolean", recording)
+    if op == "lattice_fill":
+        source = hollow(cube(standing=True), 3.0, vents=0).mesh
+    else:
+        source = cube(standing=True)
+    entry = SceneObject(id="obj_1", name="Teil", mesh=source)
+    token = NeverCancelled()
+
+    spec = REGISTRY.get(op)
+    spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(**params),
+            profile=profile,
+            quality="draft",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=token,
+        )
+    )
+
+    assert seen, "diese Operation ruft die Kette gar nicht — dann prüft der Test nichts"
+    assert all(entry is token for entry in seen), f"{op} reicht den Abbruch nicht durch: {seen}"
+
+
 # --- C-15: teure Operationen ohne Abbruch ---------------------------------------
 
 
