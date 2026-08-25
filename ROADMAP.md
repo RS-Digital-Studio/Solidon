@@ -94,6 +94,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Verrundung und Fase gehen auf einem Netz nicht — **Konzept liegt vor** | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | **eine Entscheidung von Robert über eine Phase**, nicht über einen Commit: `konzepte/konzept-flaechenrueckgewinnung-2026-08.md`. Flächenrückgewinnung aus dem Netz, fünf Schritte, drei offene Fragen im dritten. Dagegen: **neun von neun** heruntergeladenen Modellen laufen dagegen |
+| Der Verweisfilter schlüsselt nach Objekt-Kennungen, die im Stapel wechseln | Das Fundament der Wahrnehmung (22.08.2026) | eine Objektidentität über den Stapel hinweg — ein breiterer Schlüssel stellte die Fragenflut wieder her, die §15.7 begraben hat. Die Skizzenebenen-Hälfte desselben Fundes ist seit dem 26.08.2026 gebaut („irgendwo"-Menge) |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
@@ -6174,6 +6175,19 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
 * Ein eigener Baustein, dessen Maß der Nutzer ändert, behält Name und
   Parameter — der Operations-Hash sieht nichts, und auf der Platte überlebt das
   Ergebnis (siehe unten).
+
+- [ ] **Der Verweisfilter schlüsselt nach Objekt-Kennungen, die im Stapel
+      wechseln.** `referenced_features` in `evaluate` entsteht einmal je
+      Auswertung und hängt Merkmale an die Objekt-ID aus dem Dokument — aber
+      Kennungen entstehen und wechseln über den Stapel hinweg, und ein
+      Verweis auf `obj_2` erreicht die Mehrdeutigkeitsfrage von `obj_2`
+      nur, solange die Kennung beim Verweiszeitpunkt dieselbe ist wie beim
+      Aufbau (Fund 16 des Update-Reviews, 26.08.2026 — die andere Hälfte,
+      die Skizzenebenen, ist seither über die „irgendwo"-Menge abgedeckt).
+      Eine ehrliche Lösung braucht Objektidentität über den Stapel, nicht
+      einen breiteren Schlüssel: Alles in die „irgendwo"-Menge zu heben
+      stellte genau die Fragenflut wieder her, die §15.7 begraben hat —
+      `hole_1` gibt es an jedem Körper mit Löchern.
 
 - [ ] **Die Antwort der Zuordnung steht nirgends — die Mechanik steht, die
       Abnahme fehlt.** Gebaut am 23.08.2026 (`67b0386`): `Operation.matches`

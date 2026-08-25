@@ -216,7 +216,15 @@ def evaluate(
     # nichts brechen. Einmal erhoben, nicht je Operation: Die Menge hängt am
     # Stapel, und der ändert sich während einer Auswertung nicht.
     referenced_features: dict[ObjectId, set[str]] = {}
+    referenced_anywhere: set[str] = set()
     for reference in feature_references(document, source):
+        if reference.ref.object_id == "":
+            # Eine Skizzenebene kennt ihren Körper nicht (``frame_for`` sucht
+            # über alle) — ihr Merkmal zählt deshalb an jedem Objekt als
+            # verwiesen. Genau diese Verweise fehlten hier ganz, und die
+            # §21.3-Frage entfiel ausgerechnet bei „Skizze auf Fläche".
+            referenced_anywhere.add(reference.ref.feature_id)
+            continue
         referenced_features.setdefault(reference.ref.object_id, set()).add(reference.ref.feature_id)
 
     for position, operation in enumerate(operations):
@@ -419,7 +427,7 @@ def evaluate(
                     result.transform,
                     previous_bounds.get(object_id),
                     recorded,
-                    referenced_features.get(object_id, frozenset()),
+                    referenced_features.get(object_id, set()) | referenced_anywhere,
                     spec.touches_features,
                 )
             except AppError as error:

@@ -110,7 +110,51 @@ def references(document: Document, registry: Registry | None = None) -> list[Ref
             found.append(
                 Reference(f"op:{operation.id}:{field_name}", FeatureRef(operation.inputs[0], named))
             )
+        for field_name in _sketch_fields(source, operation.op):
+            plane_feature = _face_of_sketch(str(operation.params.get(field_name) or ""))
+            if plane_feature is None:
+                continue
+            # Eine Skizze auf einer Fläche benennt ein Merkmal — im
+            # Skizzentext statt in einem feature-Parameter, und genau deshalb
+            # sah dieser Filter sie nie: Die Datei bekam bei „Skizze auf
+            # Fläche" keine §21.3-Frage. Der **leere Objektname** ist Absicht:
+            # Wem die Fläche gehört, weiß erst die Auswertung — ``frame_for``
+            # sucht über alle Körper, weil ``sketch_extrude`` nichts
+            # verbraucht.
+            found.append(
+                Reference(f"plane:{operation.id}:{field_name}", FeatureRef("", plane_feature))
+            )
     return found
+
+
+def _sketch_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
+    """Parameter dieser Operation, die eine Skizze tragen — aus der
+    Deklaration, wie bei :func:`_feature_fields`."""
+    if not registry.has(op_name):
+        return ()
+    return tuple(
+        entry.name for entry in registry.get(op_name).params.spec() if entry.kind == "sketch"
+    )
+
+
+def _face_of_sketch(text: str) -> str | None:
+    """Die Fläche, auf der diese Skizze liegt — oder nichts.
+
+    Ein unlesbarer Skizzentext ist der Fehler der Operation, nicht dieser
+    Prüfung: Sie zählt Verweise auf und übergeht, was sie nicht lesen kann.
+    """
+    if not text:
+        return None
+    from app.core.sketch.planes import is_feature_plane
+    from app.core.sketch.serialize import sketch_from_text
+
+    try:
+        plane = sketch_from_text(text).plane
+    except Exception:
+        return None
+    if not is_feature_plane(plane):
+        return None
+    return plane.partition(":")[2]
 
 
 def _feature_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
@@ -149,6 +193,11 @@ def check(
             _rewrite(document, reference, answer)
             result.rewritten += 1
             result.findings.append(_rewritten_finding(reference, answer))
+        elif reference.kind == "plane":
+            # Keine Antwort streicht keine Ebene: Das Dokument bleibt, wie es
+            # ist, und die Auswertung hält an der Operation mit ``frame_fors``
+            # eigenem Satz an (§15.2). Der Befund sagt trotzdem, wo es hakt.
+            result.findings.append(_lost(reference, None))
         else:
             _remove(document, reference)
             result.removed += 1
@@ -159,16 +208,34 @@ def check(
 
 
 def _resolves(scene: Scene, reference: FeatureRef) -> bool:
+    if reference.object_id == "":
+        # Der leere Objektname heißt „irgendwo in der Szene" — eine
+        # Skizzenebene kennt ihren Körper nicht, ``frame_for`` sucht genauso.
+        return any(reference.feature_id in entry.features for entry in scene.objects.values())
     entry = scene.objects.get(reference.object_id)
     return entry is not None and reference.feature_id in entry.features
 
 
 def _candidates(scene: Scene, reference: FeatureRef) -> list[str]:
-    """Merkmale gleicher Art am selben Objekt — die plausiblen Nachfolger."""
+    """Merkmale gleicher Art am selben Objekt — die plausiblen Nachfolger.
+
+    Beim leeren Objektnamen über **alle** Körper: Eine Skizzenebene darf auf
+    jeder planaren Fläche der Szene neu zu Hause sein, so wie ``frame_for``
+    sie dort auch suchen würde.
+    """
+    wanted = _kind_of(reference.feature_id)
+    if reference.object_id == "":
+        return sorted(
+            {
+                feature_id
+                for entry in scene.objects.values()
+                for feature_id, feature in entry.features.items()
+                if wanted is None or feature.kind == wanted
+            }
+        )
     entry = scene.objects.get(reference.object_id)
     if entry is None:
         return []
-    wanted = _kind_of(reference.feature_id)
     return sorted(
         feature_id
         for feature_id, feature in entry.features.items()
@@ -198,17 +265,40 @@ def _kind_of(feature_id: str) -> str | None:
 
 def question_for(reference: Reference, candidates: Sequence[str]) -> tuple[str, list[str]]:
     """Die Frage und ihre Antworten; die Passung zu streichen ist der letzte
-    Ausweg."""
+    Ausweg.
+
+    **Eine Skizzenebene bietet kein Streichen an**: Ohne Ebene gibt es die
+    Skizze nicht — wer nicht antwortet, verliert nichts, die Operation hält
+    später mit dem eigenen Satz von ``frame_for`` an (§15.2).
+    """
     question = (
         f"{tr('Dieser Verweis zeigt ins Leere:')} {reference.ref}. "
         f"{tr('Welches Merkmal ist gemeint?')}"
     )
+    if reference.kind == "plane":
+        return question, [*candidates]
     return question, [*candidates, REMOVE_CHOICE]
 
 
 def _rewrite(document: Document, reference: Reference, feature_id: str) -> None:
     """Zeigt den Verweis auf das gewählte Merkmal — einmal beantwortet, nicht
     täglich."""
+    if reference.kind == "plane":
+        # Die Antwort gehört in den Skizzentext, nicht in einen eigenen
+        # Parameter: Dort steht die Ebene, dort liest die Auswertung sie.
+        from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+
+        for index, operation in enumerate(document.ops):
+            if operation.id != reference.op_id:
+                continue
+            drawn = sketch_from_text(str(operation.params.get(reference.field) or ""))
+            params = dict(operation.params)
+            params[reference.field] = sketch_to_text(
+                dataclasses.replace(drawn, plane=f"feature:{feature_id}")
+            )
+            document.ops[index] = dataclasses.replace(operation, params=params)
+            return
+        return
     if reference.kind == "op":
         _set_param(document, reference, feature_id)
         return
@@ -273,6 +363,11 @@ def _lost(reference: Reference, removed_fit: str | None) -> Finding:
 
 def candidates_of(scene: Scene, reference: FeatureRef) -> dict[str, Feature]:
     """Die Kandidaten-Merkmale selbst — die Oberfläche hebt sie hervor (§21.3)."""
+    if reference.object_id == "":
+        gathered: dict[str, Feature] = {}
+        for anybody in scene.objects.values():
+            gathered.update(anybody.features)
+        return {name: gathered[name] for name in _candidates(scene, reference) if name in gathered}
     entry = scene.objects.get(reference.object_id)
     if entry is None:
         return {}

@@ -323,3 +323,103 @@ def test_kind_of_knows_every_feature_kind() -> None:
         assert _kind_of(f"{kind}_3") == kind, f"{kind} muss sein eigenes Präfix erkennen"
     assert _kind_of("edge_loop_1") == "edge_loop", "der längste Treffer gewinnt"
     assert _kind_of("slot_1") is None, "slot war nie eine Merkmalsart"
+
+
+# --- Skizzenebenen (Fund 16 des Update-Reviews, 26.08.2026) ----------------------
+
+
+def sketch_on(plane: str) -> str:
+    """Eine kleine Skizze auf der genannten Ebene, als gespeicherter Text."""
+    import dataclasses
+
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.sketch.shapes import rectangle
+
+    return sketch_to_text(dataclasses.replace(rectangle(10.0, 10.0), plane=plane))
+
+
+def document_with_sketch(plane: str) -> Document:
+    document = Document(format_version=1, app_version="0.0.1")
+    document.ops.append(
+        Operation(
+            id=1,
+            op="sketch_extrude",
+            inputs=(),
+            outputs=("obj_2",),
+            params={"sketch": sketch_on(plane), "height": 5.0},
+        )
+    )
+    return document
+
+
+def test_a_sketch_plane_on_a_face_is_a_reference() -> None:
+    """Eine Skizze auf einer Fläche benennt ein Merkmal — nur eben im
+    Skizzentext statt in einem feature-Parameter.
+
+    Der Verweisfilter kannte sie nicht: Eine Datei, deren Fläche fort war,
+    bekam genau bei „Skizze auf Fläche" keine §21.3-Frage, und die
+    Mehrdeutigkeitsfrage der Zuordnung wurde für die Fläche übersprungen.
+    Der leere Objektname ist Absicht: Wem die Fläche gehört, weiß erst die
+    Auswertung — ``frame_for`` sucht über alle Körper, weil
+    ``sketch_extrude`` nichts verbraucht.
+    """
+    found = orphans.references(document_with_sketch("feature:face_1"))
+
+    assert [entry.where for entry in found] == ["plane:1:sketch"]
+    assert found[0].ref == FeatureRef("", "face_1")
+
+
+def test_a_world_plane_is_no_reference() -> None:
+    """``plane:xy`` hängt an der Welt, nicht an einem Merkmal."""
+    assert orphans.references(document_with_sketch("plane:xy")) == []
+
+
+def test_a_resolving_sketch_plane_asks_nothing(scene: Scene) -> None:
+    the_face = next(
+        name for name, feature in scene.objects["obj_1"].features.items() if feature.kind == "face"
+    )
+    document = document_with_sketch(f"feature:{the_face}")
+
+    result = orphans.check(document, scene, refuse)
+
+    assert result.findings == []
+    assert not result.changed
+
+
+def test_a_lost_sketch_plane_is_put_to_the_user(scene: Scene) -> None:
+    """Die Frage kommt, die Antwort landet im Skizzentext — und streichen
+    lässt sich eine Ebene nicht: ohne sie gibt es die Skizze nicht."""
+    from app.core.sketch.serialize import sketch_from_text
+
+    document = document_with_sketch("feature:face_99")
+    asked: list[tuple[str, list[str]]] = []
+
+    def answer(question: str, choices: list[str]) -> str:
+        asked.append((question, choices))
+        return choices[0]
+
+    result = orphans.check(document, scene, answer)
+
+    assert asked and "face_99" in asked[0][0]
+    assert orphans.REMOVE_CHOICE not in asked[0][1], "eine Ebene bietet kein Streichen an"
+    assert all(choice.startswith("face_") for choice in asked[0][1]), "Flächen, nichts anderes"
+    rewritten = sketch_from_text(str(document.ops[0].params["sketch"]))
+    assert rewritten.plane == f"feature:{asked[0][1][0]}", "die Antwort steht im Skizzentext"
+    assert result.rewritten == 1
+
+
+def test_a_declined_sketch_plane_stays_untouched(scene: Scene) -> None:
+    """Wer nicht antwortet, verliert nichts: Die Operation hält später mit
+    dem eigenen Satz von ``frame_for`` an (§15.2) — das ist die Sackgasse
+    nicht, die eine stumm gestrichene Ebene wäre."""
+    document = document_with_sketch("feature:face_99")
+    before = document.ops[0].params["sketch"]
+
+    def decline(question: str, choices: list[str]) -> None:
+        return None
+
+    result = orphans.check(document, scene, decline)
+
+    assert document.ops[0].params["sketch"] == before
+    assert result.rewritten == 0 and result.removed == 0
+    assert result.findings and result.findings[0].code == "feature.orphaned"
