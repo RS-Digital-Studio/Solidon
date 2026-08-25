@@ -22,6 +22,7 @@ from app.core.geom.boolean import boolean
 from app.core.knowledge import standards
 from app.core.knowledge.parts import LIBRARY_VERSION, PARTS, changed_since, missing_parts, shapes
 from app.core.knowledge.parts import ops as part_ops
+from app.core.knowledge.parts.range_check import corners as core_corners
 from app.core.knowledge.parts.registry import PartRegistry, PartSpec, register_part
 from app.core.registry import REGISTRY, op_params, param
 from app.core.scene import History, OperationDraft, evaluate
@@ -36,56 +37,16 @@ def ids(spec: PartSpec) -> str:
 
 
 def corners(spec: PartSpec) -> list[dict[str, Any]]:
-    """Der Parameterbereich als die Werte, die ein Baustein überstehen muss.
+    """Die Ecken des Parameterbereichs — seit dem 25.08.2026 aus dem Kern.
 
-    Kein Durchlauf über alles — die Ecken sind, wo ein Baustein bricht: der
-    kleinste und der größte Wert jeder Zahl, jede Wahl jedes Enums, beide
-    Zustände jedes Schalters. **Jeder davon kommt mindestens einmal vor**, und
-    genau darum geht es hier.
-
-    **Was das Produkt mit einer Obergrenze anrichtet.** Hier stand ein
-    kartesisches Produkt, nach jedem Parameter auf die ersten
-    vierundzwanzig Einträge gekürzt. Vom vierten Parameter an gewinnt dieser
-    Schnitt: Die ersten vierundzwanzig von zweiundsiebzig tragen alle den
-    ersten Wert der früheren Parameter, und mit jedem weiteren verengt es sich.
-    Gezählt am 21.08.2026 hatten **siebzehn von achtzehn** Bausteinen Ecken,
-    die nie gefahren wurden — bei nut_trap, screw_hole,
-    printed_thread und keyhole alle Normgrößen außer einer. Die
-    Mutternfalle ist der meistbenutzte Baustein der Bibliothek, und geprüft
-    war eine Größe von sechs.
-
-    Nachgemessen wurde auch, was das gekostet hat: Die neunundfünfzig
-    fehlenden Kombinationen einmal von Hand gefahren, keine davon fehlerhaft.
-    Der Fund war eine Lücke in der Prüfung, kein Schaden am Modell — und ein
-    Baustein, der morgen geändert wird, hätte sie gefunden.
-
-    Statt des Produkts deshalb: so viele Kombinationen wie die längste
-    Werteliste, jede Liste zyklisch durchgezählt. Damit kommt jeder Wert jedes
-    Parameters vor, und der Lauf wird **kürzer** statt länger. Was diese Form
-    nicht prüft, ist das Zusammenspiel zweier Extreme; dafür wäre das Produkt
-    nötig, und das ist bei zwölf Parametern kein Test mehr, sondern ein
-    Nachmittag.
+    Die Fassung mit der ganzen Geschichte (warum kein kartesisches Produkt,
+    was der 24er-Schnitt gekostet hat) steht in
+    :func:`app.core.knowledge.parts.range_check.corners` — dort läuft sie
+    beim Kunden, wenn er ein Rezept anlegt (§24.5), hier läuft sie in der
+    Suite. Eine Regel, ein Ort; die Kopie, die hier stand, wäre beim
+    nächsten Nachbessern auseinandergelaufen.
     """
-    entries = spec.params.spec()
-    lists: dict[str, list[Any]] = {}
-    for entry in entries:
-        values: list[Any] = []
-        if entry.kind == "enum":
-            values = list(entry.choices)
-        elif entry.kind == "bool":
-            values = [True, False]
-        elif entry.kind in ("float", "int"):
-            values = [entry.minimum, entry.maximum, entry.default]
-            values = [value for value in values if value is not None]
-        if values:
-            lists[entry.name] = values
-    if not lists:
-        return [{}]
-    longest = max(len(values) for values in lists.values())
-    return [
-        {name: values[index % len(values)] for name, values in lists.items()}
-        for index in range(longest)
-    ]
+    return core_corners(spec.params)
 
 
 # --- die Bibliothek ---------------------------------------------------------------
