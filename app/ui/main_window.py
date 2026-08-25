@@ -4467,7 +4467,13 @@ class MainWindow(QMainWindow):
         # zoomt niemand mehr. Gemessen kam damit ein Raster von 20 mm
         # heraus, während auf 1 mm gefangen wurde: zwei Zahlen für
         # dieselbe Sache, und die sichtbare war die falsche.
-        step = grid_step_for(self.viewport.pixels_per_mm(frame))
+        shown_scale = self.viewport.pixels_per_mm(frame)
+        step = grid_step_for(shown_scale)
+        # **Auch der Fangradius rechnet gegen das sichtbare Bild.** Der Canvas
+        # ist im Viewport-Modus unsichtbar und sein Maßstab steht auf dem
+        # Startwert — acht Bildpunkte wären darüber 6,7 mm, und ein Klick
+        # fünf Millimeter neben einem Punkt schnappte auf ihn.
+        panel.canvas.set_view_scale(shown_scale)
         # **Und der Fang bekommt dieselbe Zahl.** Robert am 24.08.2026: „das
         # fang sollte immer das raster sein." Vorher waren es zwei — gezeichnet
         # 5 mm, gefangen auf 1 mm, und gemessen landeten vier von vier Klicks

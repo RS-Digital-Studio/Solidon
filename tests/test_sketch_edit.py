@@ -269,6 +269,41 @@ def test_construction_geometry_carries_constraints_but_no_profile() -> None:
     assert len(regions) == 1, "die Hilfslinie bildet keinen eigenen Umriss"
 
 
+def test_the_four_tools_keep_the_construction_flag() -> None:
+    """Trimmen, Verlängern, Versetzen und Spiegeln bauen Elemente neu — und
+    verloren dabei das Kennzeichen: Aus einer getrimmten Mittellinie wurde
+    eine Profilkante, und der extrudierte Körper bekam eine Trennung mitten
+    hindurch, ohne Meldung (Gesamtreview 25.08.2026, J-3). Was aus einer
+    Hilfslinie entsteht, bleibt eine.
+    """
+    helper = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((-10.0, 0.0), (10.0, 0.0)), construction=True),
+            SketchElement(kind="line", points=((0.0, -10.0), (0.0, 10.0))),
+        ),
+    )
+
+    trimmed = edit.trim(helper, 0, (5.0, 0.0))
+    assert trimmed.elements[0].construction, "getrimmt bleibt Hilfsgeometrie"
+
+    short = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((-10.0, 0.0), (-5.0, 0.0)), construction=True),
+            SketchElement(kind="line", points=((0.0, -10.0), (0.0, 10.0))),
+        ),
+    )
+    extended = edit.extend(short, 0, (-5.0, 0.0))
+    assert extended.elements[0].construction, "verlängert bleibt Hilfsgeometrie"
+
+    moved = edit.offset(helper, (0,), 3.0)
+    assert moved.elements[-1].construction, "die versetzte Kopie bleibt Hilfsgeometrie"
+
+    mirrored = edit.mirror(helper, (0,), "x")
+    assert mirrored.elements[-1].construction, "die gespiegelte Kopie bleibt Hilfsgeometrie"
+
+
 def test_the_solver_keeps_the_construction_flag() -> None:
     """Gerechnet wird sie wie jede andere Linie — nur die Profilbildung
     übergeht sie, und die sieht ausschließlich das gelöste Ergebnis."""

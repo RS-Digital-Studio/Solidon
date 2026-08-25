@@ -165,17 +165,33 @@ def trim(sketch: Sketch, index: int, at: Point2) -> Sketch:
             sketch,
             index,
             (
-                SketchElement(kind="line", points=(line[0], before[-1])),
-                SketchElement(kind="line", points=(after[0], line[1])),
+                SketchElement(
+                    kind="line", points=(line[0], before[-1]), construction=element.construction
+                ),
+                SketchElement(
+                    kind="line", points=(after[0], line[1]), construction=element.construction
+                ),
             ),
         )
     if after:
         return _replace_element(
-            sketch, index, (SketchElement(kind="line", points=(after[0], line[1])),)
+            sketch,
+            index,
+            (
+                SketchElement(
+                    kind="line", points=(after[0], line[1]), construction=element.construction
+                ),
+            ),
         )
     if before:
         return _replace_element(
-            sketch, index, (SketchElement(kind="line", points=(line[0], before[-1])),)
+            sketch,
+            index,
+            (
+                SketchElement(
+                    kind="line", points=(line[0], before[-1]), construction=element.construction
+                ),
+            ),
         )
     return _replace_element(sketch, index, ())
 
@@ -207,7 +223,11 @@ def extend(sketch: Sketch, index: int, at: Point2) -> Sketch:
         candidates, key=lambda point: abs(_parameter_on(line, point) - (1.0, 0.0)[not towards_end])
     )
     points = (line[0], target) if towards_end else (target, line[1])
-    return _replace_element(sketch, index, (SketchElement(kind="line", points=points),))
+    return _replace_element(
+        sketch,
+        index,
+        (SketchElement(kind="line", points=points, construction=element.construction),),
+    )
 
 
 def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
@@ -241,6 +261,7 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
                         (ax + nx * distance, ay + ny * distance),
                         (bx + nx * distance, by + ny * distance),
                     ),
+                    construction=element.construction,
                 )
             )
         elif element.kind == "circle":
@@ -253,7 +274,11 @@ def offset(sketch: Sketch, indices: tuple[int, ...], distance: float) -> Sketch:
                     value=distance,
                 )
             copies.append(
-                SketchElement(kind="circle", points=(centre, (centre[0] + radius, centre[1])))
+                SketchElement(
+                    kind="circle",
+                    points=(centre, (centre[0] + radius, centre[1])),
+                    construction=element.construction,
+                )
             )
 
     if not copies:
@@ -326,7 +351,7 @@ def mirror(sketch: Sketch, indices: tuple[int, ...], axis: str) -> Sketch:
             # Ein Bogen läuft gegen den Uhrzeigersinn; gespiegelt liefe er
             # andersherum. Anfang und Ende zu tauschen dreht ihn zurück.
             points = (points[0], points[2], points[1])
-        copies.append(SketchElement(kind=element.kind, points=points))
+        copies.append(replace(element, points=points))
 
     if not copies:
         raise ValidationError(

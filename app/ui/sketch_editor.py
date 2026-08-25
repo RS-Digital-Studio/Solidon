@@ -523,6 +523,16 @@ class SketchCanvas(QWidget):
         self._shifting = False
         """Ob die Schwelle schon überschritten ist (:meth:`_shift_selection`)."""
         self._scale = START_SCALE
+        self._view_scale: float | None = None
+        """Der Maßstab des Bildes, das der Nutzer wirklich sieht (px je mm).
+
+        Im Viewport-Modus ist der Canvas unsichtbar und ``_scale`` steht auf
+        dem Startwert der Einpassung — auf einem 220-mm-Bett rund 1,2. Ein
+        Fang von acht Bildpunkten wäre über ihn gerechnet 6,7 Millimeter: Ein
+        Klick fünf Millimeter neben einem Punkt schnappte auf ihn und erzeugte
+        eine ungewollte Deckungsbedingung. Das Fenster meldet deshalb je
+        Neuzeichnen den Kamera-Maßstab; ``None`` heißt Zeichenflächen-Modus,
+        dann gilt der eigene."""
         self._centre = QPointF(0.0, 0.0)
         self._fitting = False
         """Ob die Ansicht der Einpassung folgt, statt dem eigenen Maßstab.
@@ -1160,7 +1170,10 @@ class SketchCanvas(QWidget):
         points = list(element.points)
         points[local] = (x, y)
         elements = list(self.sketch.elements)
-        elements[element_index] = SketchElement(element.kind, tuple(points))
+        # ``replace`` statt Neubau: Ein neu gebautes Element fiele auf
+        # ``construction=False`` zurück, und eine nachgezogene Mittellinie
+        # würde zur Profilkante (§30.1).
+        elements[element_index] = replace(element, points=tuple(points))
         self.sketch = replace(self.sketch, elements=tuple(elements))
         self._resolve()
 
@@ -1220,15 +1233,29 @@ class SketchCanvas(QWidget):
         """
         if not self._pending_world:
             return False
-        screen = self._to_screen(*self._pending_world[-1])
-        return math.hypot(screen.x() - position.x(), screen.y() - position.y()) <= SNAP_PX
+        wx, wy = self._to_world(position)
+        last = self._pending_world[-1]
+        return math.hypot(last[0] - wx, last[1] - wy) <= SNAP_PX / self._snap_scale()
+
+    def set_view_scale(self, scale: float | None) -> None:
+        """Meldet den Maßstab des sichtbaren Bildes (siehe ``_view_scale``)."""
+        self._view_scale = scale if scale is not None and scale > 0.0 else None
+
+    def _snap_scale(self) -> float:
+        """Der Maßstab, gegen den Fang und Treffer rechnen.
+
+        Acht Bildpunkte sind acht Punkte des Bildes, das der Nutzer ansieht —
+        im Viewport-Modus die Kamera, sonst diese Fläche.
+        """
+        return self._view_scale if self._view_scale is not None else self._scale
 
     def _hit_point(self, position: QPointF) -> int | None:
+        wx, wy = self._to_world(position)
+        reach = SNAP_PX / self._snap_scale()
         best: tuple[float, int] | None = None
         for flat, (x, y) in enumerate(self.points()):
-            screen = self._to_screen(x, y)
-            distance = math.hypot(screen.x() - position.x(), screen.y() - position.y())
-            if distance <= SNAP_PX and (best is None or distance < best[0]):
+            distance = math.hypot(x - wx, y - wy)
+            if distance <= reach and (best is None or distance < best[0]):
                 best = (distance, flat)
         return best[1] if best is not None else None
 
@@ -1236,7 +1263,7 @@ class SketchCanvas(QWidget):
         offsets = edit.offsets_of(self.sketch)
         points = self.points()
         wx, wy = self._to_world(position)
-        tolerance = PICK_PX / self._scale
+        tolerance = PICK_PX / self._snap_scale()
         for index, element in enumerate(self.sketch.elements):
             begin = offsets[index]
             if element.kind == "line":

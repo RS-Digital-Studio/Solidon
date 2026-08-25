@@ -1700,6 +1700,63 @@ def test_the_grabbed_point_moves_and_comes_back(qt_app: QApplication) -> None:
     assert canvas.points()[0] == pytest.approx((20.0, 0.0))
 
 
+def test_the_snap_radius_follows_the_visible_scale(qt_app: QApplication) -> None:
+    """Acht Bildpunkte Fang sind acht Punkte des Bildes, das man ansieht.
+
+    Im Viewport-Modus ist der Canvas unsichtbar und sein Maßstab steht auf
+    der Start-Einpassung (~1,2 px/mm über ein 220-mm-Bett): Der Fang wurde
+    darüber gerechnet 6,7 mm weit — ein Klick fünf Millimeter neben einem
+    Punkt schnappte auf ihn und erzeugte eine ungewollte Deckungsbedingung
+    (Gesamtreview 25.08.2026, J-2). Das Fenster meldet deshalb den
+    Kamera-Maßstab, und die Trefferrechnung nimmt ihn.
+    """
+    canvas = SketchCanvas()
+    canvas.resize(600, 600)
+    canvas.set_tool("point")
+    canvas.place(canvas._to_screen(20.0, 0.0))
+
+    # Zeichenflächen-Modus: der eigene Maßstab gilt weiter.
+    nearby = canvas._to_screen(20.0, 0.0)
+    nearby.setX(nearby.x() + 4.0)
+    assert canvas._hit_point(nearby) == 0, "vier Canvas-Punkte daneben fängt"
+
+    # Das sichtbare Bild zeigt 20 px je mm: 0,5 mm sind zehn Bildpunkte.
+    canvas.set_view_scale(20.0)
+    assert canvas._hit_point(canvas._to_screen(20.5, 0.0)) is None, (
+        "ein halber Millimeter ist bei 20 px/mm außerhalb der acht Punkte"
+    )
+    assert canvas._hit_point(canvas._to_screen(20.3, 0.0)) == 0, (
+        "0,3 mm sind sechs Bildpunkte — der Fang bleibt ein Fang"
+    )
+
+    canvas.set_view_scale(None)
+    assert canvas._hit_point(nearby) == 0, "zurück im Zeichenflächen-Modus"
+
+
+def test_dragging_a_point_keeps_the_construction_flag(qt_app: QApplication) -> None:
+    """Ziehen baut das Element neu — und verlor dabei das Kennzeichen: Aus
+    einer nachgezogenen Mittellinie wurde eine Profilkante, und der Körper
+    bekam eine Trennung mitten hindurch, ohne Meldung (Gesamtreview
+    25.08.2026, J-3). Dasselbe gilt für „Koordinaten …", das denselben Weg
+    nimmt.
+    """
+    from app.core.types import Sketch, SketchElement
+
+    canvas = SketchCanvas()
+    canvas.set_sketch(
+        Sketch(
+            plane="plane:xy",
+            elements=(
+                SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0)), construction=True),
+            ),
+        )
+    )
+
+    canvas.move_point(0, 2.0, 3.0)
+
+    assert canvas.sketch.elements[0].construction, "gezogen bleibt Hilfsgeometrie"
+
+
 def test_drawing_goes_on_next_to_the_grabbed_point(qt_app: QApplication) -> None:
     """Das Werkzeug bleibt, was es ist: daneben entsteht weiter ein Punkt."""
     canvas = SketchCanvas()
