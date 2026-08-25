@@ -9,8 +9,8 @@ Ein Sprachwechsel in Solidon braucht **beide** Aufrufe, und zwar in dieser
 Reihenfolge:
 
 ```python
-install_language("pt")   # lädt den Katalog
-set_language("pt")       # aktiviert ihn
+install_language("pt")  # lädt den Katalog
+set_language("pt")  # aktiviert ihn
 ```
 
 Wer nur einen von beiden ruft, bekommt die deutsche Quelle zurück — und zwar
