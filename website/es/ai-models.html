@@ -127,6 +127,14 @@
           <tr><td>Instalación tras instalar ComfyUI</td><td>un comando</td></tr>
         </tbody>
       </table>
+      <p class="footnote">Los tiempos están medidos en una tarjeta
+      NVIDIA de 8&nbsp;GB. En gráficas Intel y AMD los caminos locales
+      van más lentos o directamente en el procesador: el chat local
+      carga allí su prompt de sistema a 7,8 tokens por segundo — 41
+      minutos hasta que empieza una respuesta. Hay rodeos (IPEX-LLM,
+      ROCm, OpenVINO); no los incluimos ni los hemos probado. Lo que
+      allí funciona es una clave de API — la aplicación lo mide por sí
+      misma y te lo dice antes de que esperes.</p>
 
       <h3>Seis frases, seis cuerpos</h3>
       <p class="sub">Cada pieza de aquí es una sola frase que Solidon3D entregó al generador — sin retoques, sin segundo intento, sin elegir una entre diez. Están escogidas por aquello en lo que fallan estos modelos: salientes finos, paredes caladas, contrasalidas, repetición fina.</p>

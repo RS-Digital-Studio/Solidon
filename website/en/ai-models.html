@@ -123,6 +123,14 @@
           <tr><td>Setup after installing ComfyUI</td><td>one command</td></tr>
         </tbody>
       </table>
+      <p class="footnote">The times are measured on an NVIDIA card
+      with 8&nbsp;GB. On Intel and AMD graphics the local paths run
+      slower or entirely on the CPU: the local chat loads its system
+      prompt there at 7.8 tokens per second — 41 minutes before an
+      answer begins. Workarounds exist (IPEX-LLM, ROCm, OpenVINO); we
+      neither ship nor have tested them. What works there is an API
+      key — the application measures this itself and tells you before
+      you wait.</p>
 
       <h3>Six sentences, six bodies</h3>
       <p class="sub">Every piece here is a single sentence that Solidon3D handed to the generator — no touching up, no second attempt, no picking one out of ten. They were chosen for what makes such models fail: thin protrusions, pierced walls, undercuts, fine repetition.</p>

@@ -126,6 +126,15 @@
           <tr><td>Mise en place après l'installation de ComfyUI</td><td>une commande</td></tr>
         </tbody>
       </table>
+      <p class="footnote">Les temps sont mesurés sur une carte NVIDIA
+      de 8&nbsp;Go. Sur les cartes Intel et AMD, les chemins locaux
+      tournent plus lentement ou entièrement sur le processeur : le
+      chat local y charge son prompt système à 7,8 tokens par seconde
+      — 41 minutes avant le début d'une réponse. Des contournements
+      existent (IPEX-LLM, ROCm, OpenVINO) ; nous ne les livrons pas et
+      ne les avons pas testés. Ce qui fonctionne là, c'est une clé
+      API — l'application le mesure elle-même et vous le dit avant
+      que vous n'attendiez.</p>
 
       <h3>Six phrases, six corps</h3>
       <p class="sub">Chaque pièce ici est une seule phrase que Solidon3D a donnée au générateur — sans retouche, sans deuxième essai, sans choisir parmi dix résultats. Elles ont été retenues pour ce qui fait échouer ces modèles : appendices fins, parois ajourées, contre-dépouilles, répétition fine.</p>

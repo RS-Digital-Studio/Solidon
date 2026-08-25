@@ -95,7 +95,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Verrundung und Fase gehen auf einem Netz nicht — **Konzept liegt vor** | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | **eine Entscheidung von Robert über eine Phase**, nicht über einen Commit: `konzepte/konzept-flaechenrueckgewinnung-2026-08.md`. Flächenrückgewinnung aus dem Netz, fünf Schritte, drei offene Fragen im dritten. Dagegen: **neun von neun** heruntergeladenen Modellen laufen dagegen |
-| Der lokale Weg auf Intel- und AMD-Grafik | Der Bildweg zum ersten Mal wirklich gefahren (21.08.2026) | eine Entscheidung, ob Solidon einen zweiten lokalen Weg **nennt** (IPEX-LLM, ROCm, OpenVINO) oder ob „hier lohnt es nicht, nimm einen Schlüssel“ die ganze Antwort bleibt; gemessen 7,8 Token je Sekunde und 41 Minuten bis zum ersten Wort |
 | Die Antwort der Zuordnung steht nirgends — **gebaut, Abnahme offen** | Das Fundament der Wahrnehmung (22.08.2026) | **einen Fall, der die Frage überhaupt noch stellt.** Feld, Serialisierung und Wiederverwendung stehen seit `67b0386`, zwei Einheitstests decken sie. Die Abnahmezahl (99 → 7 → 0) ist am 23.08. nicht nachzumessen gewesen: Weder eingelesene Zwillingsbohrungen noch erzeugte stellen heute eine Frage. Ursprünglich stand hier: die zweite Hälfte von Bauplan §15.7 — was eine **Operation** erfragt, steht seit `311134a` im Stapel; was die **Zuordnung** entscheidet (§21.3, die 99 Fenster), passt in keinen Parameter und braucht ein Feld an der Operation samt Formatänderung. Entwurf und offene Frage liegen in `.claude/memory/merkmalsmehrdeutigkeit-entwurf.md` |
 | Ein Test, der nur seine eigene Konsistenz misst, sieht keinen systematischen Versatz | Das Fundament der Wahrnehmung (22.08.2026) | eine Frage an jede vorhandene Prüfung: gegen einen Wert von außen oder nur gegen die eigene Wiederholbarkeit? Zwei Fälle an einem Tag — die Krümmungskarte war bei jeder Netzfeinheit **gleich** falsch (zwei Drittel des wahren Radius), `ring_diameter` machte zwei verschieden große Tori ununterscheidbar |
 | Parallelität und Schloss bedingen einander | Das Fundament der Wahrnehmung (22.08.2026) | eine Entscheidung über den Umbau des Tors — und die Reihenfolge darin. Gemessen: `-n 8` bringt Faktor 2,6, aber zwei Läufe nebeneinander machen den **fremden** rot (11 failed gegen 0). Der Deadlock kostet 10–27 min je Lauf und ist damit der größere Posten |
@@ -115,14 +114,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `decimated 992 to 992` — ein Schritt, der nichts tut | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | eine Erklärung. `decimate()` hat einen frühen Rücksprung für genau diesen Fall, und er greift nicht; es läuft eine echte `simplify_quadric_decimation` von 992 auf 992. Drei Aufrufer kommen infrage |
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
 | Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
-| Der Zahlungsanbieter steht namentlich da, ohne Vertrag | Was erst am Verkaufsstart fällig wird (24.08.2026) | **eine Entscheidung von Robert** (vorgelegt am 23.08.2026): `datenschutz.html` nennt Paddle mit voller Anschrift und führt es als Empfänger personenbezogener Daten samt Drittlandsbegründung — ein Konto gibt es mangels Gewerbeanmeldung nicht. Name stehen lassen (dann stimmt der Text am Starttag) oder bis dahin durch „der Zahlungsdienstleister“ ersetzen (dann stimmt er heute). Der zeitliche Vorbehalt ist seit `5950321` drin, die Namensfrage bleibt |
 | Offscreen prüft nichts, was am Aktor hängt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine **Messstelle**, die im echten Fenster läuft, und eine Entscheidung, welche Zusagen dort geprüft werden müssen. `Viewport.show_scene` kehrt bei `self.plotter is None` vor dem Aktor-Aufbau zurück (`app/ui/viewport.py:1948`), und `tests/conftest.py` setzt `QT_QPA_PLATFORM=offscreen` für die ganze Suite — jede Zusage über Aktoren, Farben, Kamerastellung oder Bildinhalt ist dort grün über einer leeren Menge. Belegt am 24.08.: `_actors` war vor **und** nach einer Operation `{}`; mit sichtbarem Fenster wanderten dieselben Aktoren von (-10..10) auf (-104..-84, 84..104, 0..20) |
 | Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine Entscheidung, ob ein Prüfstand `report_error` abschalten darf. Ein Fehler öffnet dort einen modalen Dialog: Der Hauptthread stand, die Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu unterscheiden — der Traceback lag still unter `%LOCALAPPDATA%\RS Digital\Solidon3D\reports\bericht-<zeitstempel>\bericht.txt` |
 | 81 weitere Texte stehen mehrfach wortgleich im Quelltext | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Die vier Fälle in `app/ui/main_window.py` sind am 24.08.2026 erledigt (`791a1576`); übrig sind Vorkommen, die meist zwei- bis dreimal in derselben Datei stehen |
 | Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | **nichts mehr — das Muster steht, es fehlt die Arbeit.** Der erste reproduzierbare Fall ist am 24.08.2026 gefallen und behoben (`e0540a1`, `overlay.py`): Nicht das *Filterobjekt* stirbt, sondern das *überwachte*, und der Filter läuft in den Abbau hinein. Abbestellen bei `QEvent.Type.Destroy` — vier von sechs Läufen rot ohne, null von sechs mit. Einer von dreizehn ist damit erledigt |
 | Zwei Downloadgrößen stehen im Text statt in der Message-ID | Was niemand las, und was zweimal dastand (24.08.2026) | fünf Übersetzungen für zwei Sätze. `NEEDED_GIGABYTES` macht es richtig (`.format(noetig=…)`), `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` nicht — die Zahl ist in die Message-ID getippt. Ein Test hält beide Stellen seit `77ad37cb` zusammen; der saubere Weg braucht Übersetzer |
-| Zwei §-Verweise nennen Abschnitte, die der Bauplan nicht hat | Zweitausend Verweise, und zwei ohne Ziel (24.08.2026) | **eine Entscheidung von Robert über den Bauplan**, denn der wird nur mit Ansage geändert. `§33.3` steht fünfmal im Code, zweimal ausdrücklich als „Bauplan §33.3“ — §33 führt nur 33.1 und 33.2, die Sache selbst (der Fehlerbericht) steht in §37.2. `§25.4` steht einmal am `caveat` eines Bausteins; §25 hat keine Unterabschnitte, und bei einem Baustein wäre §24 die Familie. Entweder die Abschnitte entstehen, oder die Verweise werden umgebogen — Letzteres wäre geraten. `tests/test_plan_references.py` hält beide in `BEKANNT_OFFEN` und verlangt, dass sie dort verschwinden, sobald es die Abschnitte gibt |
-| Zwei Sätze in der EULA tragen nicht, was das Fördermodell auf sie baut | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | **eine Entscheidung von Robert**, denn es ist ein Rechtstext: Nummer 11 nennt Erfüllungsgehilfen und gesetzliche Vertreter nicht (§ 309 Nr. 7 BGB, und eine solche Klausel fällt ganz statt teilweise), Nummer 4a begrenzt für die **heute laufende** Demo auf Vorsatz und grobe Fahrlässigkeit und widerspricht damit ihrem eigenen Verweis auf Nummer 11. Zusammen fünf Wörter und ein ersetzter Satz — dazu Fassungsnummer, Neuerzeugen und Upload |
 | Die Versicherung trägt die Rechtsformentscheidung und steht in keiner Liste | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | ein Angebot. `konzept-foerdermodell.md` §5 begründet das Einzelunternehmen unter anderem mit einer Berufshaftpflicht — die in §11 und §13 nicht vorkommt. Gebraucht wird eine **Produkthaftpflicht mit Software-Einschluss**, nicht die übliche Vermögensschadendeckung: Richtlinie (EU) 2024/2853 macht Software ausdrücklich zum Produkt, Umsetzungsfrist 09.12.2026, und der Verkaufsstart liegt danach |
 | Der Haftungsausschluss der EULA wirkt nur mit einem Häkchen im Bestellvorgang | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Bestellstrecke, die es noch nicht gibt. `EULA.md` Nummer 10 — kein Prüfinstitut, keine zugesicherte Maßhaltigkeit, keine tragenden Teile — ist gegenüber Verbrauchern eine negative Beschaffenheitsvereinbarung und nach § 327h BGB **ausdrücklich und gesondert** zu vereinbaren. Betrifft den Verkauf, nicht nur die Förderung |
 | Der Kündigungsknopf verlangt eine Webseite, die Förderung sitzt in der Anwendung | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | eine Entscheidung, die die vom 24.08. ergänzt statt sie umzustoßen: § 312k BGB will eine ständig verfügbare Schaltfläche auf einer Webseite, §13 Nummer 6 hat die Förderung in die Anwendung gelegt. Eine Schaltfläche in einem Programm, das man deinstallieren kann, ist nicht ständig verfügbar — und Stufe 1 verspricht eine Nennung auf einer Förderseite, die es dann nicht gibt |
@@ -5839,7 +5835,7 @@ sie sind der Abstand zwischen „das geht" und „das lohnt".
 
 ### Was auffiel und eine Entscheidung braucht
 
-- [ ] **Der lokale Weg ist auf Intel- und AMD-Grafik nicht praktikabel, und
+- [x] **Der lokale Weg ist auf Intel- und AMD-Grafik nicht praktikabel, und
       wir nennen keinen Ausweg.** Ollama unterstützt CUDA und Metal; auf allem
       anderen rechnet es auf dem Prozessor. Für Intel gibt es IPEX-LLM, für
       AMD ROCm-Versionen, für beides OpenVINO — jedes davon ist eine eigene
@@ -5847,6 +5843,15 @@ sie sind der Abstand zwischen „das geht" und „das lohnt".
       angeboten. Wartet auf eine Entscheidung, ob Solidon einen zweiten
       lokalen Weg **nennt** (nicht einrichtet) oder ob die Auskunft „hier lohnt
       es nicht, nimm einen Schlüssel" die ganze Antwort bleibt.
+
+      **Entschieden am 26.08.2026 (Kundenmaßstab): nennen, ehrlich, abratend.**
+      Die KI-Modelle-Seite trägt in allen sechs Sprachen eine Fußnote nach
+      der TripoSG-Tabelle: NVIDIA gemessen, auf Intel/AMD rechnet der lokale
+      Chat auf dem Prozessor (7,8 Token je Sekunde, 41 Minuten bis zur ersten
+      Antwort), die Umwege heißen IPEX-LLM, ROCm und OpenVINO, werden weder
+      mitgeliefert noch geprüft, und was trägt, ist ein Schlüssel — die
+      Anwendung misst das seit dem 21.08. selbst und sagt es vor dem Warten.
+      Eingerichtet wird weiterhin keiner der Umwege.
 
 - [x] **Der Textweg prüfte seine Voraussetzungen nicht.** `readiness()` las
       `image_to_mesh.json`, und das war mit Absicht so: Der Bildweg ist der
@@ -8652,7 +8657,7 @@ habe ich das Gegenteil dessen gemessen, was gefragt war (siehe unten):
 
 Bleiben drei, und alle drei sind echt:
 
-- [ ] **Der Zahlungsanbieter steht namentlich da, ohne dass ein Vertrag
+- [x] **Der Zahlungsanbieter steht namentlich da, ohne dass ein Vertrag
       besteht.** `datenschutz.html` nennt ihn mit voller Anschrift — „Paddle.com
       Market Limited, 30 Old Bailey, London EC4M 7AU" — und führt ihn als
       Empfänger personenbezogener Daten samt Drittlandsbegründung nach Art. 45
@@ -8678,6 +8683,13 @@ Bleiben drei, und alle drei sind echt:
       „soll er drinstehen, bevor es ihn gibt?". Das ist wörtlich die Gegenfrage
       aus `.claude/rules/tests.md`: *Was habe ich gerade gemessen, und ist das
       dasselbe wie das, was ich wissen wollte?* — diesmal nicht an einem
+
+      **Erledigt, festgestellt am 26.08.2026:** In `website/` steht kein
+      „Paddle" mehr — die Datenschutzerklärung sagt „Zahlungsdienstleister.
+      Welcher das ist, steht vor dem Kauf …", also die heute-wahre Variante,
+      die Robert am 25.08. mit „alles perfekt für Kunden machen" gedeckt hat.
+      Der Punkt stand länger offen als sein Fix; die Namenszeile kehrt am
+      Starttag mit dem echten Vertrag zurück.
       Werkzeug, sondern an einer Meldung.
 
 
@@ -9273,7 +9285,7 @@ Konzeptpapier bei der Skelettsitzung. Zwei bleiben, und sie stehen unten.
       einer verlangt das Streichen aus der Ausnahmeliste, sobald ein Abschnitt
       entsteht, und einer ist die Gegenprobe.
 
-- [ ] **Zwei §-Verweise nennen Abschnitte, die der Bauplan nicht hat.** `§33.3`
+- [x] **Zwei §-Verweise nennen Abschnitte, die der Bauplan nicht hat.** `§33.3`
       fünfmal (zweimal ausdrücklich „Bauplan §33.3", in `core/report.py` und
       `core/support.py`) — §33 führt 33.1 Ausnahmehierarchie und 33.2 Protokoll,
       der Fehlerbericht selbst steht in §37.2. `§25.4` einmal, am `caveat` eines
@@ -9285,6 +9297,14 @@ Konzeptpapier bei der Skelettsitzung. Zwei bleiben, und sie stehen unten.
       Robert; die Verweise umzubiegen wäre geraten, weil nirgends steht, welcher
       Abschnitt gemeint war. Zwei Zeilen Aufwand, sobald die Frage entschieden
       ist.
+
+      **Entschieden und umgebogen am 26.08.2026** (Roberts Pauschal-Freigabe
+      vom 25.08., „alles perfekt für Kunden machen"): §33.3 heißt an allen
+      fünf Stellen §37.2 — der Fehlerbericht wohnt dort, das ist kein Raten
+      mehr, seit §37.2 ihn ausdrücklich führt —, der `caveat` verweist auf
+      die Familie §24, und `BEKANNT_OFFEN` in `tests/test_plan_references.py`
+      ist leer. Der Bauplan selbst blieb unangetastet; neue Abschnitte
+      entstehen keine.
 
 **Und ein Wort über die Werkzeuge dieses Durchgangs**, weil es das dritte Mal
 dasselbe ist: Von den vier Messungen lieferten zwei zunächst ein falsches Bild —
@@ -9435,7 +9455,7 @@ setzt sich für die Demo-Zeit selbst außer Kraft, der Verkauf ist bis zum
 30.10.2026 zu. Damit ist `EULA.md` Nummer 4a die **einzige Haftungsregelung mit
 heutiger Wirkung** — und die schwächste der drei.
 
-- [ ] **Zwei Sätze in der EULA tragen nicht, was auf sie gebaut wird.**
+- [x] **Zwei Sätze in der EULA tragen nicht, was auf sie gebaut wird.**
       Nummer 11 sagt „**wir** haften unbeschränkt bei Vorsatz und grober
       Fahrlässigkeit" und schließt danach jede weitergehende Haftung aus;
       § 309 Nr. 7 lit. b BGB verlangt dieselbe Ausnahme für **gesetzliche
@@ -9454,6 +9474,14 @@ heutiger Wirkung** — und die schwächste der drei.
       Nummer 4a —, aber es ist ein Rechtstext: Fassungsnummer hoch,
       `tools/make_legal.py` neu laufen lassen, hochladen. **Robert
       vorzulegen.**
+
+      **Erledigt, festgestellt am 26.08.2026:** Fassung 1.2 vom 24.08.
+      (`230e4985`) trägt beides längst — Nummer 11 nennt gesetzliche
+      Vertreter und Erfüllungsgehilfen an beiden Stellen, 4a verweist ohne
+      Abstriche bei Leben, Körper und Gesundheit auf die Nummern 10 und 11 —
+      und `website/eula.html` wie `packaging/eula.txt` sind auf 1.2 erzeugt.
+      Roberts Freigabe vom 25.08. deckt die Fassung; offen ist allein der
+      nächste Website-Upload, der die erzeugte Seite mitnimmt.
 
 - [ ] **Die Versicherung trägt die Rechtsformentscheidung und steht in keiner
       Liste.** `konzept-foerdermodell.md` §5 begründet das Einzelunternehmen
