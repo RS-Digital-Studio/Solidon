@@ -535,8 +535,22 @@ SHADOW_LIFT = 0.05
 #: Farbe und Deckkraft des Kontaktschattens. Dunkler als die Platte, aber
 #: nie schwarz: er soll den Ort zeigen, nicht ein Loch in die Platte
 #: schneiden.
+#:
+#: **Halb so stark wie früher** (0,35 → 0,18, Entscheidung Robert,
+#: 25.08.2026). Der Anlass war ein Bildschirmfoto, auf dem der Schatten
+#: „komisch" aussah — und er war es nicht: Er ist die konvexe Hülle des
+#: Körpers, und dort bestand der Körper aus **drei getrennten Teilen** (ein
+#: Würfel und zwei Haken, die neben ihm in der Luft hingen). Die Hülle spannte
+#: über alle drei und umfasste die Luft dazwischen. Der Schatten hat also den
+#: Zerfall angezeigt, bevor der Prüfbericht ihn meldete.
+#:
+#: Weggelassen wird er deshalb nicht — er beantwortet, ob ein Teil auf der
+#: Platte steht oder darüber schwebt (§18.6), und genau diese Frage stellte
+#: sich dort. Er tritt nur leiser auf. Die eigentliche Lösung für den Fall
+#: wäre ein Schatten **je Zusammenhangskomponente** statt je Körper; das steht
+#: im Register und ist eine eigene Entscheidung.
 SHADOW_COLOUR = "#11151a"
-SHADOW_OPACITY = 0.35
+SHADOW_OPACITY = 0.18
 
 #: Wie weit der Schatten je Millimeter Höhe vom Betrachter weg läuft, und wie
 #: weit dabei zur Seite.
