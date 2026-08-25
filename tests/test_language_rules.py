@@ -105,6 +105,7 @@ GERMAN_WORDS = frozenset(
 #: mehr verspricht er nicht, und weniger auch nicht.
 GERMAN_STEMS = (
     "aenderung",
+    "befehl",
     "begriff",
     "beispiel",
     "aussen",
@@ -116,6 +117,7 @@ GERMAN_STEMS = (
     "durchmesser",
     "einstellung",
     "ergebnis",
+    "fertig",
     "flaeche",
     "folge",
     "frei",
@@ -123,27 +125,33 @@ GERMAN_STEMS = (
     "gemerkt",
     "geworden",
     "geschlossen",
+    "geschoben",
     "geschrieben",
     "gespeichert",
     "gesperrt",
     "groesse",
     "grund",
+    "haupt",
     "offen",
     "satz",
+    "sauber",
     "stufe",
     "tipp",
+    "umgebung",
     "vorher",
     "hoehe",
     "laenge",
     "lasche",
     "leiste",
     "letzt",
+    "liefer",
     "loesch",
     "masse",
     "merkmal",
     "namen",
     "passt",
     "pruef",
+    "schluss",
     "schmal",
     "schuld",
     "sicht",
@@ -152,11 +160,13 @@ GERMAN_STEMS = (
     "staerke",
     "stelle",
     "stueck",
+    "verschmolzen",
     "versetz",
     "volumen",
     "waehl",
     "werkzeug",
     "zeile",
+    "zweig",
 )
 
 #: Deutsche Beugungen der Wörter oben. ``wert`` stand in der Liste und
@@ -257,6 +267,23 @@ def test_the_check_would_catch_a_violation() -> None:
     assert offences_in("hoehe")
     assert not offences_in("detail_view")
     assert not offences_in("part_registry")
+    # Der Nachtrag vom 25.08.2026: ``tools/to_main.py`` sprach durchgehend
+    # deutsch, und keiner dieser Stämme stand auf der Liste.
+    assert offences_in("zweig")
+    assert offences_in("sauber")
+    assert offences_in("liefere")
+    assert offences_in("umgebung")
+    assert offences_in("befehl")
+    assert offences_in("fertig")
+    assert offences_in("verschmolzen")
+    assert offences_in("geschoben")
+    assert offences_in("schluss")
+    assert offences_in("haupt")
+    # Und die Gegenprobe zu genau diesen: Was englisch ist, bleibt es.
+    assert not offences_in("branch_name")
+    assert not offences_in("clean_tree")
+    assert not offences_in("command_line")
+    assert not offences_in("main_branch")
 
 
 def test_the_check_sees_through_a_german_plural() -> None:

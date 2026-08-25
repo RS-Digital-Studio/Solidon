@@ -173,6 +173,53 @@ def user_profiles_dir() -> Path:
     return user_config_dir() / "profiles"
 
 
+#: Wohin der Installer seine Sprachwahl legt, neben die Anwendung.
+#:
+#: Eine Zeile, ein Sprachkürzel. Der Installer fragt sechs Sprachen ab und
+#: zeigt sich selbst darin; bis zum 25.08.2026 war das die einzige Wirkung —
+#: die Anwendung startete danach auf Deutsch, gleich was gewählt wurde, und
+#: fragte in „Erste Schritte" ein zweites Mal.
+INSTALL_LANGUAGE_FILE = "install-language.txt"
+
+
+def installed_language() -> str | None:
+    """Was der Installer gewählt hat, oder ``None``.
+
+    Die Datei liegt neben der Anwendung und nicht im Nutzerprofil: Sie gehört
+    zur Installation und nicht zum Nutzer, und sie wird genau einmal gelesen —
+    beim allerersten Start, bevor es Einstellungen gibt. Wer die Sprache danach
+    umstellt, hat die Einstellungen, und die haben Vorrang.
+
+    **Sie steht im Kern und nicht in der Oberfläche, wo sie entstanden ist.**
+    Dieselbe Frage stellt die Kommandozeile, und die darf ``app/ui`` nicht
+    anfassen (Regel 1) — für sie war die Antwort damit unerreichbar, und ein
+    spanischer Kunde bekam beim allerersten Aufruf deutsche Hilfe- und
+    Fehlertexte, obwohl er den Installer auf Spanisch gestellt hatte. Eine
+    zweite Fassung daneben wäre der nächste Fehler: Von zwei Kopien altert
+    immer eine.
+
+    Geprüft wird das Kürzel gegen die vorliegenden Kataloge. Ein Kürzel ohne
+    Katalog ist keine Wahl, sondern eine Anwendung, die nichts zu sagen hätte;
+    ``ValueError`` fängt dabei den ``UnicodeDecodeError`` einer beschädigten
+    Datei mit ab — die freundliche Richtung ist hier die Quellsprache.
+    """
+    # Erst beim Aufruf: ``app.i18n.catalog`` liest über ``app.core.log`` dieses
+    # Modul, und ein Import oben wäre ein Kreis.
+    from app.i18n.catalog import available_languages
+
+    if getattr(sys, "frozen", False):
+        base = Path(sys.executable).parent
+    else:
+        # Im Quellbaum: das Projektverzeichnis, damit sich die Sache von Hand
+        # ausprobieren lässt, ohne ein Paket zu bauen.
+        base = Path(__file__).resolve().parent.parent.parent
+    try:
+        text = (base / INSTALL_LANGUAGE_FILE).read_text(encoding="utf-8").strip()
+    except (OSError, ValueError):
+        return None
+    return text if text in set(available_languages()) else None
+
+
 def ensure_dir(path: Path) -> Path:
     """Legt ein Verzeichnis samt Eltern an und gibt es zurück."""
     path.mkdir(parents=True, exist_ok=True)

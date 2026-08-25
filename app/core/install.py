@@ -492,6 +492,34 @@ def install(requirement: Requirement, progress: ProgressFn = _silent) -> Install
     try:
         # Der Befehl entsteht aus den Konstanten oben und aus sonst nichts.
         code, output = _stream(command, progress)
+    except subprocess.TimeoutExpired as expired:
+        # **Die Frist ist etwas anderes als ein Fehlstart.** Sie fällt in die
+        # Sammelklausel darunter, denn ``TimeoutExpired`` erbt von
+        # ``SubprocessError`` — und dann las jemand nach einer Viertelstunde
+        # Wartezeit „Die Paketverwaltung ließ sich nicht starten.". Sie war
+        # gestartet, sie lief, und sie ist mitten in der Arbeit abgebrochen
+        # worden: Genau das gehört dagestanden, samt der halb fertigen
+        # Installation, die dabei zurückbleiben kann (Regel 17, §33.1).
+        minutes = int(TIMEOUT_SECONDS // 60)
+        _log.warning("install of %s hit the deadline after %s min", requirement.id, minutes)
+        # Die Minutenzahl steht **neben** dem Satz und nicht als Platzhalter
+        # darin: Ein übersetzter Text wird angezeigt, wie er im Katalog steht,
+        # nicht nachformatiert — dieselbe Bauart wie in ``why_not`` darüber.
+        what_now = tr(
+            "Ein zweiter Versuch nimmt den Rest; sonst führt die Seite des "
+            "Herstellers die Datei zum Selbstinstallieren."
+        )
+        return InstallResult(
+            requirement=requirement,
+            installed=False,
+            output=str(expired),
+            reason=(
+                f"{tr('Die Paketverwaltung lief noch, als die Zeitgrenze kam')}: "
+                f"{minutes} min. "
+                f"{tr('Sie ist beendet worden, die Installation kann halb fertig sein.')} "
+                f"{what_now}"
+            ),
+        )
     except (OSError, subprocess.SubprocessError) as problem:
         return InstallResult(
             requirement=requirement,

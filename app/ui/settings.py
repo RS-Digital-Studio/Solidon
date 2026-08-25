@@ -12,7 +12,11 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_config_dir
+
+# ``installed_language`` liegt im Kern, weil die Kommandozeile dieselbe Frage
+# stellt und ``app/ui`` nicht anfassen darf (Regel 1). Hier steht der Name
+# weiter im Modul, damit ``initial_language`` ihn wie bisher findet.
+from app.core.paths import ensure_dir, installed_language, user_config_dir
 from app.i18n import SOURCE_LANGUAGE
 
 _log = get_logger(__name__)
@@ -138,38 +142,6 @@ class UiSettings:
 
 def settings_path() -> Path:
     return user_config_dir() / SETTINGS_FILE
-
-
-#: Wohin der Installer seine Sprachwahl legt, neben die Anwendung.
-#:
-#: Eine Zeile, ein Sprachkürzel. Der Installer fragt sechs Sprachen ab und
-#: zeigt sich selbst darin; bis zum 25.08.2026 war das die einzige Wirkung —
-#: die Anwendung startete danach auf Deutsch, gleich was gewählt wurde, und
-#: fragte in „Erste Schritte" ein zweites Mal.
-INSTALL_LANGUAGE_FILE = "install-language.txt"
-
-
-def installed_language() -> str | None:
-    """Was der Installer gewählt hat, oder ``None``.
-
-    Die Datei liegt neben der Anwendung und nicht im Nutzerprofil: Sie gehört
-    zur Installation und nicht zum Nutzer, und sie wird genau einmal gelesen —
-    beim allerersten Start, bevor es Einstellungen gibt. Wer die Sprache danach
-    umstellt, hat die Einstellungen, und die haben Vorrang.
-    """
-    import sys
-
-    if getattr(sys, "frozen", False):
-        base = Path(sys.executable).parent
-    else:
-        # Im Quellbaum: das Projektverzeichnis, damit sich die Sache von Hand
-        # ausprobieren lässt, ohne ein Paket zu bauen.
-        base = Path(__file__).resolve().parent.parent.parent
-    try:
-        text = (base / INSTALL_LANGUAGE_FILE).read_text(encoding="utf-8").strip()
-    except OSError:
-        return None
-    return text or None
 
 
 def system_language() -> str | None:

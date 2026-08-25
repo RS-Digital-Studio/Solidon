@@ -29,6 +29,13 @@ Der Ablauf, und jeder Schritt hat einen Grund:
 
 **Was es nie tut:** mit ``--force`` schieben, auf ``main`` committen, einen
 roten Lauf durchwinken oder eine Konfliktauflösung erfinden.
+
+Die Bezeichner sind englisch wie überall unter ``tools/`` (AGENTS.md) — sie
+waren es bis zum 25.08.2026 nicht, und in derselben Runde ist aufgefallen, dass
+das Werkzeug bei **jedem** Aufruf an einem davon starb: Der Schalter hieß
+``--nur-check``, gelesen wurde ``chosen.check_only``. Ein deutscher Schaltername
+ist also nicht nur ein Regelverstoß, sondern hier eine zweite Schreibweise
+desselben Wortes.
 """
 
 from __future__ import annotations
@@ -40,11 +47,11 @@ import sys
 from pathlib import Path
 
 #: Der Branch, auf dem am Ende alles zusammenläuft.
-HAUPT = "main"
+MAIN = "main"
 
 #: Das Tor. Genau der Lauf, den `/pruefen` fährt — hier über das Schloss, damit
 #: vier Sitzungen sich nicht gegenseitig die Messung verderben.
-TOR = [
+GATE = [
     "bash",
     ".claude/.state/oberflaechen-durchsicht-2026-08-19/suite-getrennt.sh",
 ]
@@ -52,33 +59,33 @@ TOR = [
 
 def git(*args: str, check: bool = True) -> subprocess.CompletedProcess[str]:
     """Ein Git-Aufruf, dessen Ausgabe lesbar bleibt."""
-    fertig = subprocess.run(
+    done = subprocess.run(
         ["git", *args], capture_output=True, text=True, encoding="utf-8", errors="replace"
     )
-    if check and fertig.returncode != 0:
+    if check and done.returncode != 0:
         print(f"  git {' '.join(args)} scheiterte:")
-        print("  " + (fertig.stderr or fertig.stdout).strip().replace("\n", "\n  "))
-    return fertig
+        print("  " + (done.stderr or done.stdout).strip().replace("\n", "\n  "))
+    return done
 
 
-def zweig() -> str:
+def branch() -> str:
     """Auf welchem Branch dieser Arbeitsbaum steht."""
     return git("rev-parse", "--abbrev-ref", "HEAD").stdout.strip()
 
 
-def sauber() -> bool:
+def is_clean() -> bool:
     """Ist alles committet? Ungestagtes würde nicht mitgeprüft und nicht mitreisen."""
     return not git("status", "--porcelain").stdout.strip()
 
 
-def tor_laeuft_durch(wer: str) -> bool:
+def gate_passes(who: str) -> bool:
     """Das vollständige Tor unter dem Schloss — Suite, Leistung, ruff, format, mypy.
 
     Der Exit-Code kommt von den Läufen selbst und nicht von einer Zählzeile:
     Wer die Zusammenfassung liest statt ``returncode``, misst einen Filter.
     """
     steps: list[tuple[str, list[str]]] = [
-        ("Suite", TOR),
+        ("Suite", GATE),
         ("Leistung", [sys.executable, "-m", "pytest", "-q", "-m", "performance"]),
         ("ruff", [sys.executable, "-m", "ruff", "check", "."]),
         ("format", [sys.executable, "-m", "ruff", "format", "--check", "."]),
@@ -88,96 +95,96 @@ def tor_laeuft_durch(wer: str) -> bool:
     # diesen Durchgriff sucht das Tor-Skript sie relativ und findet nichts;
     # jede Fensterdatei meldete dann Exit 127, was wie der bekannte Absturz
     # beim Abbau aussieht und keiner ist.
-    umgebung = {**os.environ, "SUITE_PYTHON": sys.executable}
-    for name, befehl in steps:
+    environment = {**os.environ, "SUITE_PYTHON": sys.executable}
+    for name, command in steps:
         print(f"  {name} …", end="", flush=True)
-        fertig = subprocess.run(
+        done = subprocess.run(
             [
                 sys.executable,
                 "tools/gate_lock.py",
                 "run",
                 "--who",
-                wer,
+                who,
                 "--wait",
                 "3000",
                 "--",
-                *befehl,
+                *command,
             ],
             capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
-            env=umgebung,
+            env=environment,
         )
-        if fertig.returncode != 0:
-            print(f" rot (Exit {fertig.returncode})")
-            schluss = (fertig.stdout or "").strip().splitlines()[-12:]
-            for line in schluss:
+        if done.returncode != 0:
+            print(f" rot (Exit {done.returncode})")
+            tail = (done.stdout or "").strip().splitlines()[-12:]
+            for line in tail:
                 print(f"    {line}")
             return False
         print(" grün")
     return True
 
 
-def liefere(wer: str, check_only: bool) -> int:
+def deliver(who: str, check_only: bool) -> int:
     """Der ganze Weg, mit Halt bei jedem Grund zum Halten."""
-    eigener = zweig()
-    if eigener == HAUPT:
-        print(f"Dieser Baum steht auf {HAUPT}. Der Weg führt von einem eigenen Branch dorthin —")
+    own_branch = branch()
+    if own_branch == MAIN:
+        print(f"Dieser Baum steht auf {MAIN}. Der Weg führt von einem eigenen Branch dorthin —")
         print("lege einen an (`git switch -c <name>`) oder arbeite in einem eigenen Arbeitsbaum.")
         return 2
-    if not sauber():
+    if not is_clean():
         print("Es liegt Ungestagtes im Baum. Was nicht committet ist, wird nicht geprüft")
         print("und reist nicht mit — committe es oder lege es beiseite.")
         return 2
 
-    print(f"Branch: {eigener}")
-    print(f"1. {HAUPT} holen und einweben")
-    git("fetch", "origin", HAUPT, check=False)
-    verschmolzen = git("merge", f"origin/{HAUPT}", "--no-edit", check=False)
-    if verschmolzen.returncode != 0:
+    print(f"Branch: {own_branch}")
+    print(f"1. {MAIN} holen und einweben")
+    git("fetch", "origin", MAIN, check=False)
+    merged = git("merge", f"origin/{MAIN}", "--no-edit", check=False)
+    if merged.returncode != 0:
         print("  Der Zusammenschluss hat Konflikte. Die löst kein Skript:")
         print("  `git status` zeigt die Dateien, danach `git merge --continue`.")
         return 3
-    print("  " + (verschmolzen.stdout.strip().splitlines() or ["nichts Neues"])[0])
+    print("  " + (merged.stdout.strip().splitlines() or ["nichts Neues"])[0])
 
     print("2. das Tor")
-    if not tor_laeuft_durch(wer):
-        print(f"\nRot — nichts geht nach {HAUPT}. Der Branch {eigener} behält deine Arbeit.")
+    if not gate_passes(who):
+        print(f"\nRot — nichts geht nach {MAIN}. Der Branch {own_branch} behält deine Arbeit.")
         return 1
 
     if check_only:
-        print(f"\nGrün. (--nur-check: nichts nach {HAUPT} geschoben.)")
+        print(f"\nGrün. (--check-only: nichts nach {MAIN} geschoben.)")
         return 0
 
-    print(f"3. nach {HAUPT}")
+    print(f"3. nach {MAIN}")
     # Vorspulen und nichts anderes: Ein echter Zusammenschluss hier hieße, dass
     # `main` einen Stand bekommt, den das Tor nie gesehen hat.
-    if git("switch", HAUPT).returncode != 0:
+    if git("switch", MAIN).returncode != 0:
         return 4
-    git("merge", "--ff-only", eigener)
-    geschoben = git("push", "origin", HAUPT, check=False)
-    git("switch", eigener)
-    if geschoben.returncode != 0:
-        print(f"  {HAUPT} ist weitergewandert. Noch einmal von vorn — dann passt es.")
+    git("merge", "--ff-only", own_branch)
+    pushed = git("push", "origin", MAIN, check=False)
+    git("switch", own_branch)
+    if pushed.returncode != 0:
+        print(f"  {MAIN} ist weitergewandert. Noch einmal von vorn — dann passt es.")
         return 5
-    print(f"  {eigener} steht in {HAUPT} und ist draußen.")
+    print(f"  {own_branch} steht in {MAIN} und ist draußen.")
     return 0
 
 
 def main() -> int:
-    zerleger = argparse.ArgumentParser(description=__doc__)
-    zerleger.add_argument("--who", default="unbenannt", help="Name der Sitzung fürs Schloss")
-    zerleger.add_argument(
-        "--nur-check",
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--who", default="unbenannt", help="Name der Sitzung fürs Schloss")
+    parser.add_argument(
+        "--check-only",
         action="store_true",
         help="Das Tor fahren, aber nichts nach main schieben",
     )
-    chosen = zerleger.parse_args()
+    chosen = parser.parse_args()
     if not Path(".git").exists() and not Path(".git").is_file():
         print("Kein Git-Arbeitsbaum hier.")
         return 2
-    return liefere(chosen.who, chosen.check_only)
+    return deliver(chosen.who, chosen.check_only)
 
 
 if __name__ == "__main__":

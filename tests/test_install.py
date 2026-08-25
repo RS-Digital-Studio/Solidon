@@ -538,6 +538,40 @@ def test_a_package_manager_that_will_not_start_says_so(monkeypatch: pytest.Monke
     assert result.reason
 
 
+def test_hitting_the_deadline_is_not_the_same_as_never_starting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Zwei Lagen, zwei Sätze — und eine davon dauert eine Viertelstunde.
+
+    ``TimeoutExpired`` erbt von ``SubprocessError`` und fiel damit in dieselbe
+    Klausel wie ein Fehlstart. Wer eine Installation anstieß und nach fünfzehn
+    Minuten „Die Paketverwaltung ließ sich nicht starten." las, bekam die
+    Auskunft, die am wenigsten zutraf: Sie war gestartet, sie lief, und sie ist
+    mitten in der Arbeit beendet worden — womöglich mit einer halb fertigen
+    Installation auf der Platte.
+
+    Geprüft wird gegen den **anderen** Satz und nicht nur auf „irgendein
+    Grund": Vor der Trennung war auch dieser Test grün gewesen.
+    """
+    import subprocess
+
+    def hangs(*_args: object, **_options: object) -> None:
+        raise subprocess.TimeoutExpired(cmd=["winget"], timeout=install.TIMEOUT_SECONDS)
+
+    monkeypatch.setattr(install, "present", lambda _requirement: False)
+    monkeypatch.setattr(install, "installable", lambda _requirement: True)
+    monkeypatch.setattr(install.subprocess, "Popen", hangs)
+
+    result = install.install(by_id("vhacd"))
+    said = str(result.reason)
+
+    assert not result.installed
+    assert "starten" not in said, "sie ist gestartet — genau das ist der Unterschied"
+    assert str(int(install.TIMEOUT_SECONDS // 60)) in said, "wie lange gewartet wurde, zählt"
+    assert "halb fertig" in said, "eine angefangene Installation gehört benannt"
+    assert "Versuch" in said, "Regel 17: was jetzt möglich ist"
+
+
 def test_what_needs_a_second_step_says_so_and_has_a_button(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -18,6 +18,13 @@ auch der höchste je gesehene Tag, und die Frist läuft nie rückwärts. Ein Tag
 weit jenseits des ersten Starts wird dabei verworfen und nicht festgeschrieben
 — sonst nähme ein einziger Start mit falsch gestellter Uhr den Testlauf
 dauerhaft weg, auch nachdem die Uhr wieder stimmt.
+
+**Und die beiden Zugeständnisse gelten einzeln, nicht zusammen.** Wer den
+Marker löscht, fängt in der Verkaufsversion neu an — das steht oben und bleibt
+so. Wer ihn löscht *und* die Uhr zurückstellt, hätte in der Demo damit beides
+umgangen: Ohne Marker gab es keinen höchsten Tag, gegen den sich die Uhr messen
+lassen musste. Dagegen steht :data:`DEMO_FROM`, der Tag der Auslieferung — vor
+ihm kann die Demo nicht gelaufen sein, gleich was die Uhr behauptet.
 """
 
 from __future__ import annotations
@@ -48,6 +55,17 @@ TRIAL_DAYS: Final = 14
 #: statt als lesbare Zeile daneben. Öffnen kann er ohnehin nichts, was ein
 #: Schlüssel nicht öffnete — er kann nur sperren.
 DEMO_UNTIL: Final[date | None] = date(2026, 10, 30)
+
+#: Der Tag, an dem die Demo erschienen ist — die Untergrenze jeder Zählung.
+#:
+#: Sie schließt die Lücke, die beide Schutze **zusammen** offen ließen: Der
+#: Marker fängt die zurückgestellte Uhr, und wer ihn löscht, hat wieder keinen
+#: — dann stand in :func:`days_left` der erste gesehene Tag frei zur Wahl, und
+#: eine Uhr auf 2020 hieß 2495 Resttage. Der Auslieferungstag kann nicht
+#: unterschritten werden, weil es die Demo vorher nicht gab; er reist mit dem
+#: Stichtag in derselben übersetzten Erweiterung und ist so wenig zu ändern wie
+#: dieser.
+DEMO_FROM: Final[date] = date(2026, 8, 20)
 
 #: Dateiname des Schlüssels im Einstellungsordner.
 KEY_FILE: Final = "licence.key"
@@ -159,14 +177,22 @@ def days_left(today: date | None = None) -> int:
     now = today or date.today()
     stored = _read_trial()
     if stored is None:
-        _write_trial(now, now)
-        effective = now
+        # **Ohne Marker zählt trotzdem nicht die Uhr allein.** Beide Schutze
+        # einzeln hielten; zusammen — Datei löschen *und* Uhr zurückstellen —
+        # blieb hier der frei gewählte Tag stehen, und 2020 hieß 2495 Resttage.
+        # Vor der Auslieferung gab es die Demo nicht, also ist ihr Erscheinen
+        # der früheste Tag, an dem jemand sie gestartet haben kann.
+        effective = max(now, DEMO_FROM)
+        # Beide Felder auf denselben Tag: Ein ``first_run`` aus der falschen
+        # Uhr läge jenseits von CLOCK_HORIZON_DAYS und ließe den nächsten Lauf
+        # genau den Tag verwerfen, der hier gerade festgehalten wird.
+        _write_trial(effective, effective)
     else:
         first_run, last_seen = stored
         if last_seen > first_run + timedelta(days=CLOCK_HORIZON_DAYS):
             _log.warning("trial marker holds an implausible date, ignoring it: %s", last_seen)
             last_seen = max(now, first_run)
-        effective = max(now, last_seen)
+        effective = max(now, last_seen, DEMO_FROM)
         if effective != stored[1]:
             _write_trial(first_run, effective)
     # Der Stichtag selbst gehört noch dazu: am 30.10. bleibt ein Tag übrig,

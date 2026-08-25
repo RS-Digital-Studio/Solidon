@@ -46,6 +46,96 @@ def test_the_cli_speaks_the_settings_language(
         set_language(SOURCE_LANGUAGE)
 
 
+def test_the_first_run_speaks_the_language_from_the_installer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Der allererste Aufruf, und nur er: Es gibt noch keine ``settings.json``.
+
+    Der Installer fragt sechs Sprachen ab und legt die Wahl neben die
+    Anwendung. Gelesen hat sie nur das Fenster — ``installed_language`` lag in
+    ``app/ui``, und der Kern darf das nicht anfassen (Regel 1). Ein spanischer
+    Kunde bekam damit bei seinem ersten Aufruf deutsche Ausgabe, obwohl er die
+    Frage längst beantwortet hatte.
+
+    Geprüft wird die **übersetzte Ausgabe** und nicht ``get_language()``:
+    Laden und Aktivieren sind zwei Schritte, und ein gesetztes Kürzel ohne
+    geladenen Katalog gibt weiter deutsche Texte aus.
+    """
+    from app.i18n import SOURCE_LANGUAGE, set_language
+    from app.i18n.catalog import install_language
+
+    beside_the_app = tmp_path / "app"
+    beside_the_app.mkdir()
+    (beside_the_app / "install-language.txt").write_text("es", encoding="utf-8")
+    config = tmp_path / "config"
+    config.mkdir()
+    assert not (config / "settings.json").exists(), "der erste Start hat keine Einstellungen"
+
+    # Die gebaute Anwendung liegt neben ihrer Datei — derselbe Weg, den
+    # ``installed_language`` im Paket geht, ohne in den Quellbaum zu schreiben.
+    monkeypatch.setattr("app.cli.main.user_config_dir", lambda: config)
+    monkeypatch.setattr("sys.frozen", True, raising=False)
+    monkeypatch.setattr("sys.executable", str(beside_the_app / "solidon3d.exe"))
+    try:
+        assert main(["profiles"]) == 0
+        printed = capsys.readouterr().out
+        # Die Überschrift, nicht irgendein Vorkommen: „Drucker" steht auch im
+        # Titel eines Profils („Allgemeiner FDM-Drucker"), und der wird nicht
+        # übersetzt.
+        assert printed.splitlines()[0] == "Impresora", (
+            f"deutsche Ausgabe trotz Installer-Wahl: {printed[:80]!r}"
+        )
+        assert "Valor de partida" in printed or "calibrado" in printed
+    finally:
+        install_language(SOURCE_LANGUAGE)
+        set_language(SOURCE_LANGUAGE)
+
+
+def test_a_broken_settings_file_does_not_take_the_start_with_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``null`` und ``[]`` sind gültiges JSON und kein Objekt.
+
+    ``json.loads(raw).get(...)`` warf darauf ``AttributeError`` — und zwar
+    **vor** dem ``try`` des Hauptprogramms, also als roher Stapelabzug für eine
+    Datei, die niemand von Hand geschrieben hat.
+    """
+    config = tmp_path / "config"
+    config.mkdir()
+    monkeypatch.setattr("app.cli.main.user_config_dir", lambda: config)
+    for content in ("null", "[]", '{"language": 7}', "kein JSON"):
+        (config / "settings.json").write_text(content, encoding="utf-8")
+        assert main(["ops"]) == 0, f"an {content!r} gescheitert"
+        capsys.readouterr()
+
+
+def test_a_recipe_that_will_not_load_says_which_one_and_why(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """§2.7 gilt auch für einen Befund beim Start.
+
+    Gedruckt wurde allein ``message`` — „Ein eigenes Rezept ließ sich nicht
+    laden." ohne Dateinamen und ohne Grund, obwohl der Befund beides trägt.
+    Der Kunde durchsuchte danach seinen Bausteinordner von Hand.
+    """
+    from app.cli import main as cli
+    from app.core.types import Finding
+
+    broken = Finding(
+        code="parts.recipe_failed",
+        severity="warning",
+        message="Ein eigenes Rezept ließ sich nicht laden.",
+        values={"file": "halter.json", "reason": "Zeile 3: unbekannte Operation"},
+    )
+    monkeypatch.setattr(cli, "load_user_parts", lambda: (broken,))
+
+    assert main(["ops"]) == 0
+    said = capsys.readouterr().err
+
+    assert "halter.json" in said, "ohne den Namen sucht der Kunde die Datei selbst"
+    assert "Zeile 3: unbekannte Operation" in said
+
+
 def test_an_unexpected_error_ends_in_a_sentence_not_a_traceback(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
@@ -67,6 +157,39 @@ def test_an_unexpected_error_ends_in_a_sentence_not_a_traceback(
     assert "Traceback" not in said
     assert "kaputt auf neue Art" in said
     assert "bericht-" in said, "der Berichtsordner wird genannt"
+
+
+def test_even_a_report_that_cannot_be_written_leaves_a_way_out(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Regel 17 am letzten Netz: Ein volles oder schreibgeschütztes Profil
+    hinterließ ``except OSError: pass`` — Satz, Grund, und danach nichts.
+
+    Das ist genau die Lage, in der ein Kunde etwas braucht: Der Bericht, der
+    sonst alles erklärt, ist gerade der, der fehlt. Übrig bleiben das
+    Protokoll, das schon geschrieben ist, und eine Adresse.
+    """
+    from app.branding import SUPPORT_ADDRESS
+    from app.cli import main as cli
+    from app.core import report
+
+    def explode(_args: object) -> int:
+        raise RuntimeError("kaputt auf neue Art")
+
+    def refuse(_report: object) -> object:
+        raise OSError("Kein Platz auf dem Gerät")
+
+    monkeypatch.setattr(cli, "command_ops", explode)
+    monkeypatch.setattr(report, "write", refuse)
+
+    code = main(["ops"])
+    said = capsys.readouterr().err
+
+    assert code != 0
+    assert "Traceback" not in said
+    assert "Kein Platz auf dem Gerät" in said, "der Grund gehört dazu"
+    assert SUPPORT_ADDRESS in said, "ein Fehler endet nie ohne einen nächsten Schritt"
+    assert "logs" in said.replace(chr(92), "/").lower(), "das Protokoll wird beim Pfad genannt"
 
 
 def test_the_reference_is_generated_not_written(capsys: pytest.CaptureFixture[str]) -> None:

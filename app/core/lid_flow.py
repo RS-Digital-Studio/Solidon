@@ -19,8 +19,11 @@ Ein Undo nimmt beides zusammen zurück.
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
+from app.core.errors import AppError
+from app.core.expressions import resolve, resolve_value
 from app.core.geom.lid import CAVITY_FEATURE, COLLAR_FEATURE
 from app.core.log import get_logger
 from app.core.scene.history import History, OperationDraft, change_for
@@ -68,6 +71,36 @@ def unique_name(document: Document, wanted: str = FIT_NAME) -> str:
     return f"{wanted}_{number}"
 
 
+def _collar_height(document: Document, params: Mapping[str, object]) -> float | None:
+    """Wie hoch der Kragen wird, oder ``None``, wenn es sich nicht sagen lässt.
+
+    **Ein Ausdruck ist hier ein Wert und keine Ausnahme.** ``float("@kragen")``
+    scheitert, und der Fehlschlag hieß bis hierhin „kein flacher Deckel" — also
+    genau das Gegenteil dessen, was ``@kragen = 0`` bedeutet. Die Passung
+    entstand, das Merkmal ``lid_collar`` gab es nicht, und beim nächsten Öffnen
+    stand ein verwaister Verweis im Prüfbericht (§21.3).
+
+    Aufgelöst wird über den eigenen Auswerter gegen die Projektparameter
+    (Regel 10, §13) — denselben Weg, den auch ``scene/evaluate.py`` für jeden
+    Operationsparameter geht. Kein ``eval``, und keine zweite Grammatik.
+
+    ``None`` heißt „nicht entscheidbar": Der Parameter fehlt (dann gilt die
+    Schemavorgabe von 4 mm), oder der Ausdruck lässt sich nicht auflösen. Im
+    zweiten Fall scheitert die Operation ohnehin an derselben Stelle; eine
+    Passung auf gut Glück wegzulassen wäre die schlechtere Antwort als die,
+    die der Nutzer beim Anlegen gesehen hat.
+    """
+    given = params.get("collar")
+    if given is None:
+        return None
+    try:
+        resolved = resolve_value(given, resolve(document.parameters))
+        return float(resolved)  # type: ignore[arg-type]
+    except (TypeError, ValueError, AppError) as problem:
+        _log.info("lid flow: the collar %r could not be resolved: %s", given, problem)
+        return None
+
+
 def apply_lid(
     document: Document,
     object_id: ObjectId,
@@ -99,14 +132,10 @@ def apply_lid(
         return LidApplied(object_ids=list(made), transaction=applied.id)
 
     box_id, lid_id = made[0], made[1]
-    collar = params.get("collar")
-    try:
-        # Nur ein ausdrücklich gesetzter Kragen von null zählt: fehlt der
-        # Parameter, gilt die Schemavorgabe (4 mm), und ein Ausdruck
-        # entscheidet erst bei der Auswertung — beide behalten ihre Passung.
-        flat = collar is not None and float(collar) <= EPS_GEOM  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        flat = False
+    collar = _collar_height(document, params)
+    # Nur ein ausdrücklich gesetzter Kragen von null zählt: fehlt der
+    # Parameter, gilt die Schemavorgabe (4 mm), und die behält ihre Passung.
+    flat = collar is not None and collar <= EPS_GEOM
     if flat:
         # Ohne Kragen gibt es kein ``lid_collar``-Merkmal (ein flacher Deckel
         # trägt keines mehr) — eine Passung darauf zeigte ins Leere und

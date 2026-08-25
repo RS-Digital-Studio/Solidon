@@ -25,6 +25,7 @@ from app.branding import (
     APP_VERSION,
     DISTRIBUTION_NAME,
     PROJECT_SUFFIX,
+    SUPPORT_ADDRESS,
     WEBSITE_URL,
 )
 from app.core import activation, manual
@@ -36,7 +37,7 @@ from app.core.ingest.loader import detect_unit
 from app.core.ingest.plan import import_plan
 from app.core.knowledge import profiles
 from app.core.log import configure
-from app.core.paths import user_config_dir
+from app.core.paths import installed_language, user_config_dir
 from app.core.registry import REGISTRY, cli_commands, documentation
 from app.core.scene import History, OperationDraft, ResultCache, disk_backed_cache, evaluate
 from app.core.scene.project import (
@@ -637,23 +638,39 @@ def _mistyped_operation(argv: list[str]) -> int | None:
 def _install_language() -> None:
     """Die Sprache des Nutzers, wie das Fenster sie liest (Gesamtreview L-4).
 
-    Gelesen wird dieselbe Datei wie in ``app.ui.settings`` — aber nur der
-    eine Schlüssel und ohne die UI-Schicht: Die Kommandozeile steht auf dem
-    Kern (Karte in CLAUDE.md), und mehr als das Sprachkürzel braucht sie
-    nicht. Vorher installierte sie nie eine Sprache, und ein spanischer Kunde
-    bekam deutsche Hilfe- und Fehlertexte, obwohl die Kataloge längst da sind.
+    Zwei Quellen in derselben Reihenfolge wie ``ui.settings.initial_language``:
+    die Einstellungen des Nutzers, dann die Wahl aus dem Installer. Was das
+    Fenster als dritte Quelle hat — die Sprache des Betriebssystems — fragt Qt,
+    und die Kommandozeile steht auf dem Kern (Karte in CLAUDE.md); ohne beide
+    bleibt es bei der Quellsprache.
+
+    **Der Installer war die Lücke.** Er fragt sechs Sprachen ab und notiert die
+    Wahl neben der Anwendung; gelesen hat sie nur das Fenster, weil
+    ``installed_language`` in ``app/ui`` lag. Der allererste Aufruf der
+    Kommandozeile — also der, bei dem es noch keine ``settings.json`` gibt —
+    antwortete damit deutsch, obwohl die Wahl längst getroffen war.
 
     Fehlt die Datei oder ist sie beschädigt, bleibt es bei der Quellsprache —
-    dieselbe freundliche Richtung wie in ``load_settings``.
+    dieselbe freundliche Richtung wie in ``load_settings``. Beschädigt heißt
+    dabei auch: gültiges JSON, das kein Objekt ist. ``null`` und ``[]`` kennen
+    kein ``get``, und der ``AttributeError`` daraus entstand **vor** dem
+    ``try`` des Hauptprogramms — ein Stapelabzug für eine Datei, die niemand
+    von Hand geschrieben hat.
     """
     import json
 
+    language = ""
     try:
         raw = (user_config_dir() / "settings.json").read_text(encoding="utf-8")
-        language = json.loads(raw).get("language", "")
+        data = json.loads(raw)
     except (OSError, ValueError):
-        return
-    if isinstance(language, str) and language:
+        data = None
+    if isinstance(data, dict):
+        chosen = data.get("language", "")
+        language = chosen if isinstance(chosen, str) else ""
+    if not language:
+        language = installed_language() or ""
+    if language:
         install_language(language)
         set_language(language)
 
@@ -668,8 +685,17 @@ def main(argv: list[str] | None = None) -> int:
     # eigenen Baustein setzt, ist derselbe Anwendungsfall wie das Menü. Ihre
     # Befunde gehen ins Protokoll — die Kommandozeile hat keinen Prüfbericht
     # vor dem ersten Lauf.
+    #
+    # **Mit den Werten**, und aus demselben Grund wie im ``AppError``-Zweig
+    # unten: „Ein eigenes Rezept ließ sich nicht laden." nennt weder die Datei
+    # noch den Grund, und beides steht im Befund (``file``, ``reason``). Ohne
+    # sie durchsucht der Kunde seinen Bausteinordner von Hand.
     for finding in load_user_parts():
         print(f"{finding.message}", file=sys.stderr)
+        for key, value in finding.values.items():
+            if value in (None, ""):
+                continue
+            print(f"  {key}: {value}", file=sys.stderr)
     parser = build_parser()
     mistyped = _mistyped_operation(argv if argv is not None else sys.argv[1:])
     if mistyped is not None:
@@ -723,8 +749,20 @@ def main(argv: list[str] | None = None) -> int:
                     traceback=traceback.format_exc(),
                 )
             )
-        except OSError:
-            pass
+        except OSError as denied:
+            # **Das letzte Netz bekommt kein Loch.** Ein ``pass`` hier hieß:
+            # ein Satz, ein Grund — und dann nichts, was jemand tun kann
+            # (Regel 17). Wer den Bericht nicht schreiben kann, hat trotzdem
+            # das Protokoll und eine Adresse; beide stehen sonst nirgends in
+            # dieser Ausgabe.
+            from app.core.paths import user_log_dir
+
+            print(f"  {tr('Der Fehlerbericht ließ sich nicht ablegen')}: {denied}", file=sys.stderr)
+            print(f"  - {tr('Das Protokoll liegt hier')}: {user_log_dir()}", file=sys.stderr)
+            print(
+                f"  - {tr('Damit hilft der Support weiter')}: {SUPPORT_ADDRESS}",
+                file=sys.stderr,
+            )
         else:
             print(f"  - {tr('Der Fehlerbericht liegt hier')}: {folder}", file=sys.stderr)
         return 1

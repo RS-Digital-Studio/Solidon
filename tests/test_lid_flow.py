@@ -187,3 +187,37 @@ def test_a_flat_lid_gets_no_fit_onto_a_missing_collar(profile: Profile) -> None:
     box2 = _box_with_cavity(project2.document, profile)
     without = apply_lid(project2.document, box2, {"thickness": 3.0}, profile)
     assert without.fit is not None, "die Schemavorgabe trägt einen Kragen"
+
+
+def test_a_collar_written_as_an_expression_counts_as_a_number(profile: Profile) -> None:
+    """Ein Ausdruck ist ein Wert und keine Ausnahme (§13).
+
+    ``float("@collar")`` scheitert, und der Fehlschlag hieß „kein flacher
+    Deckel" — also das Gegenteil dessen, was ``@collar = 0`` bedeutet. Die
+    Nullprüfung darüber ließ sich damit umgehen, indem man denselben Wert als
+    Parameter schrieb: Die Passung zeigte auf ein ``lid_collar``, das es nicht
+    gibt.
+
+    Aufgelöst wird über den Auswerter des Kerns gegen die Projektparameter —
+    kein ``eval`` (Regel 10). Beide Richtungen stehen hier, denn ein Ausdruck
+    über null ist genauso ein Ausdruck.
+    """
+    from app.core.types import Parameter
+
+    project = new_project("centauri-carbon-2", "petg")
+    document = project.document
+    document.parameters["collar"] = Parameter(name="collar", value=0.0)
+    box = _box_with_cavity(document, profile)
+
+    applied = apply_lid(document, box, {"thickness": 3.0, "collar": "@collar"}, profile)
+
+    assert applied.fit is None, "ein Kragen von null bleibt null, auch als Ausdruck geschrieben"
+    assert document.fits == []
+
+    # Die Gegenprobe: derselbe Weg mit einem Wert, der einen Kragen ergibt.
+    other = new_project("centauri-carbon-2", "petg")
+    other.document.parameters["collar"] = Parameter(name="collar", value=4.0)
+    box2 = _box_with_cavity(other.document, profile)
+    thick = apply_lid(other.document, box2, {"thickness": 3.0, "collar": "@collar"}, profile)
+
+    assert thick.fit is not None, "ein Ausdruck über vier Millimeter trägt seine Passung"

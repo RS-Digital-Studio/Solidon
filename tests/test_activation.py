@@ -395,6 +395,34 @@ def test_the_demo_clock_does_not_run_backwards(own_config: Path, demo: date) -> 
     assert store.days_left(demo - timedelta(days=4)) == 5, "vorwärts zählt der Kalender"
 
 
+def test_deleting_the_marker_and_turning_the_clock_back_does_not_extend_the_demo(
+    own_config: Path, demo: date
+) -> None:
+    """Die zwei Zugeständnisse einzeln geprüft heißt nicht: zusammen geprüft.
+
+    Der Test darüber stellt die Uhr zurück (Marker da), der davor löscht den
+    Marker (Uhr richtig). **Beides zusammen** hat keiner gefahren, und genau
+    darin lag die Lücke: Ohne Marker gab es keinen höchsten gesehenen Tag, also
+    schrieb der Demo-Zweig die zurückgestellte Uhr als ersten Start fest —
+    gemessen 2495 Resttage bei einer Uhr auf 2020.
+
+    Gezählt wird stattdessen ab ``DEMO_FROM``, dem Tag der Auslieferung. Damit
+    bleibt die Zahl innerhalb der Demo-Laufzeit, gleich wie oft jemand den
+    Marker löscht.
+    """
+    store.days_left(demo - timedelta(days=9))
+    store.trial_path().unlink()
+
+    left = store.days_left(date(2020, 1, 1))
+
+    whole_demo = (demo - store.DEMO_FROM).days + 1
+    assert left == whole_demo, "mehr als die ganze Demo darf dabei nie herauskommen"
+    assert left < 100, "2020 hieß 2495 Tage — die Zahl gehört an den Kalender gebunden"
+    # Und die Gegenprobe: Wer danach die Uhr wieder richtig stellt, verliert
+    # nichts. Die Untergrenze ist ein Boden und kein festgeschriebener Tag.
+    assert store.days_left(demo - timedelta(days=4)) == 5
+
+
 def test_after_its_deadline_the_demo_is_over(
     own_config: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
