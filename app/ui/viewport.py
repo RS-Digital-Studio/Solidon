@@ -159,6 +159,46 @@ ORIENTATION_MARGIN = 4
 FIT_ROOM = 1.15
 
 
+def camera_for_span(
+    frame: PlaneFrame,
+    centre: tuple[float, float],
+    span: tuple[float, float],
+    distance: float,
+    aspect: float,
+) -> tuple[Vec3, Vec3, Vec3, float]:
+    """Kamerastellung und Ausschnitt für einen Bereich der Zeichenebene.
+
+    Gibt Position, Brennpunkt, Oben-Richtung und ``parallel_scale`` zurück —
+    alles, was :meth:`Viewport.show_span_on_plane` setzt, und keines davon dort
+    gerechnet: Hinter der Plotter-Wache läuft offscreen nichts, und ein Test
+    dahinter besteht, weil er nichts tut. Dieselbe Aufteilung wie bei
+    :func:`camera_for_plane`, :func:`bore_span` und :func:`shadow_points`
+    (Konzept „Skizze im Raum", Entscheidung G).
+
+    ``aspect`` ist Höhe durch Breite des Bildes. ``parallel_scale`` ist die
+    halbe sichtbare **Höhe**; eine breite Zeichnung muss deshalb über die Höhe
+    hineingerechnet werden, sonst steht sie seitlich heraus und das Einpassen
+    hätte seinen Namen nicht verdient.
+
+    **Der Versatz geht gegen den Brennpunkt der Ebene, nicht gegen den
+    Weltursprung.** ``camera_for_plane`` stellt die Kamera über
+    ``frame.origin``; wer stattdessen (0, 0, 0) abzieht, addiert diesen
+    Ursprung ein zweites Mal und lässt die Kamera schräg blicken. Auf der
+    Grundebene ist beides dasselbe — dort liegt der Ursprung im Nullpunkt, und
+    genau deshalb fällt es dort nicht auf.
+    """
+    world = to_world(frame, centre)
+    position, focus, up = camera_for_plane(frame, distance)
+    offset = tuple(p - f for p, f in zip(position, focus, strict=True))
+    needed = max(span[1] / 2.0, (span[0] / 2.0) * aspect)
+    return (
+        (world[0] + offset[0], world[1] + offset[1], world[2] + offset[2]),
+        world,
+        up,
+        needed * FIT_ROOM,
+    )
+
+
 def camera_for_plane(frame: PlaneFrame, distance: float = 1.0) -> tuple[Vec3, Vec3, Vec3]:
     """Die Kamerastellung, die senkrecht auf eine Zeichenebene sieht (§30.1).
 
@@ -5185,24 +5225,17 @@ class Viewport(QWidget):
         """
         if self.plotter is None:
             return
-        world = to_world(frame, centre)
-        distance = self._plane_distance()
-        position, _focus, up = camera_for_plane(frame, distance)
-        offset = tuple(p - f for p, f in zip(position, (0.0, 0.0, 0.0), strict=True))
-        self.plotter.camera_position = [
-            tuple(w + o for w, o in zip(world, offset, strict=True)),
-            world,
-            up,
-        ]
         camera = getattr(self.plotter, "camera", None)
+        position, focus, up, scale = camera_for_span(
+            frame,
+            centre,
+            span,
+            self._plane_distance(),
+            (self.height() or 1) / (self.width() or 1),
+        )
+        self.plotter.camera_position = [position, focus, up]
         if camera is not None and getattr(camera, "parallel_projection", False):
-            # ``parallel_scale`` ist die halbe sichtbare **Höhe**. Die Breite
-            # kommt aus dem Seitenverhältnis, also muss eine breite Zeichnung
-            # über die Höhe hineingerechnet werden — sonst steht sie seitlich
-            # heraus, und das Einpassen hätte seinen Namen nicht verdient.
-            wide, high = self.width() or 1, self.height() or 1
-            needed = max(span[1] / 2.0, (span[0] / 2.0) * high / wide)
-            camera.parallel_scale = needed * FIT_ROOM
+            camera.parallel_scale = scale
         self.plotter.render()
 
     def _fit_parallel_scale(self, distance: float) -> None:

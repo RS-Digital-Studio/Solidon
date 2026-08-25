@@ -23,7 +23,9 @@ from PySide6.QtWidgets import QApplication
 
 from app.core.registry import REGISTRY
 from app.core.sketch import shapes
+from app.core.sketch.planes import image_normal
 from app.core.sketch.serialize import sketch_from_text, sketch_to_text
+from app.core.types import PlaneFrame
 from app.ui.op_dialog import OperationDialog
 from app.ui.sketch_editor import (
     ExpressionDialog,
@@ -33,6 +35,7 @@ from app.ui.sketch_editor import (
     SketchPanel,
     _constraint_label,
 )
+from app.ui.viewport import FIT_ROOM, camera_for_span
 
 
 def test_a_drawn_line_becomes_determined_by_constraints(qt_app: QApplication) -> None:
@@ -3331,3 +3334,50 @@ def test_the_window_listens_when_the_sketch_fits_itself() -> None:
     )
     assert "def _fit_sketch_view(" in quelle, "und hätte auch keinen Empfänger dafür"
     assert "show_span_on_plane" in quelle, "der Empfänger erreicht die Ansicht nicht"
+
+
+def test_fitting_keeps_the_camera_square_to_the_plane() -> None:
+    """Die Kamera schaut senkrecht auf die Ebene — auch wenn die nicht im Nullpunkt liegt.
+
+    ``show_span_on_plane`` verschiebt die Kamera auf die Mitte der Zeichnung
+    und behält dabei ihren Abstand. Der Versatz dafür ist ``position - focus``,
+    und beides kommt aus ``camera_for_plane``; wer stattdessen gegen (0, 0, 0)
+    rechnet, addiert den Ursprung der Ebene ein zweites Mal.
+
+    Der Fall, an dem es auffällt, ist eine Skizze auf einer Deckfläche: Dort
+    liegt der Ursprung bei z = 40, und die Kamera blickt schräg. Auf der
+    Grundebene — dem einzigen Fall, den die erste Messung kannte — ist der
+    Fehler unsichtbar.
+    """
+    frame = PlaneFrame(
+        origin=(12.0, -8.0, 40.0),
+        x_axis=(1.0, 0.0, 0.0),
+        y_axis=(0.0, 1.0, 0.0),
+        normal=(0.0, 0.0, 1.0),
+    )
+    mitte = (5.0, 3.0)
+    abstand = 200.0
+
+    kamera, welt, _up, _scale = camera_for_span(frame, mitte, (40.0, 20.0), abstand, 0.5)
+
+    blick = tuple(k - w for k, w in zip(kamera, welt, strict=True))
+    normale = image_normal(frame)
+
+    # Die Blickrichtung ist die Ebenennormale, mal dem Abstand — kein Rest
+    # daneben. Ein Versatz gegen den Weltursprung ergäbe hier (17, -5, 240)
+    # statt (0, 0, 200).
+    for gemessen, erwartet in zip(blick, (n * abstand for n in normale), strict=True):
+        assert gemessen == pytest.approx(erwartet, abs=1e-9), f"die Kamera blickt schräg: {blick}"
+
+    assert welt == pytest.approx((17.0, -5.0, 40.0)), "die Mitte liegt in der Ebene"
+
+    # **Und der Ausschnitt fasst die breite Seite mit.** ``parallel_scale`` ist
+    # die halbe sichtbare Höhe; eine Zeichnung, die breiter ist als hoch, passt
+    # nur hinein, wenn ihre Breite über das Seitenverhältnis hineingerechnet
+    # wird. Der erste Testfall hatte beide Seiten gleich groß gewählt und
+    # konnte den Unterschied deshalb nicht sehen.
+    _p, _w, _u, breit = camera_for_span(frame, mitte, (100.0, 20.0), abstand, 0.5)
+    assert breit == pytest.approx(25.0 * FIT_ROOM), "die Breite bestimmt den Ausschnitt"
+
+    _p, _w, _u, hoch = camera_for_span(frame, mitte, (40.0, 60.0), abstand, 0.5)
+    assert hoch == pytest.approx(30.0 * FIT_ROOM), "und sonst die Höhe"
