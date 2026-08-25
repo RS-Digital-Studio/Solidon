@@ -8,9 +8,11 @@ from pathlib import Path
 
 import trimesh
 
+from app.core.bootstrap import load_operations
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.geom.transform import apply, translation
 from app.core.ingest.loader import normalise
+from app.core.knowledge import standards
 from app.core.perceive.features import detect_holes
 from app.core.perceive.matching import (
     apply_mapping,
@@ -18,9 +20,14 @@ from app.core.perceive.matching import (
     match,
     question_for,
 )
+from app.core.registry import REGISTRY
+from app.core.scene.placement import bore_advice, screw_for_bore, values_for
 from app.core.types import Feature
+from app.core.units import format_length
 
 MESHES = Path(__file__).parent / "data" / "meshes"
+
+load_operations()
 
 
 def body(name: str) -> MeshData:
@@ -668,3 +675,159 @@ def test_apply_mapping_still_renames_to_the_surviving_identifier() -> None:
 
     assert set(renamed) == {"hole_1"}, "das neue Merkmal erbt den alten Namen"
     assert renamed["hole_1"].id == "hole_1", "und trägt ihn auch in sich"
+
+
+# --- Welche Schraube zu einer gemessenen Bohrung gehört --------------------------
+#
+# Dieselbe Denkfigur wie ``question_for`` weiter oben, nur an einem Maß statt an
+# einem Namen: Was sich nicht eindeutig zuordnen lässt, wird **gesagt und
+# gefragt**, nicht geraten (Regel 21). Deshalb stehen diese Fälle hier und nicht
+# bei den Vorbelegungen — geprüft wird die Zuordnung samt ihrem Ausgang, wenn
+# keine passt.
+#
+# Der Anlass ist gemessen (23.08.2026, ``plate_holes.stl``, Bohrung ``hole_1``):
+# Ein Klick auf eine 5,19-mm-Bohrung schlug **M3** vor. M3 bohrt 4,00 mm, liegt
+# damit vollständig innerhalb der vorhandenen Bohrung und trägt nichts ab.
+
+
+#: Die gemessene Bohrung aus dem gemeldeten Fall.
+MEASURED_BORE = 5.19
+
+
+def clicked_bore(diameter: float = MEASURED_BORE) -> Feature:
+    """Eine angeklickte Durchgangsbohrung mit gemessenem Durchmesser."""
+    return Feature(
+        id="hole_1",
+        kind="hole",
+        provenance="detected",
+        params={
+            "diameter": diameter,
+            "centre": (5.0, -5.0, 4.0),
+            "axis": (0.0, 0.0, 1.0),
+            "through": True,
+        },
+    )
+
+
+def test_a_bore_belongs_to_the_screw_whose_clearance_hole_it_is() -> None:
+    """Die **eine** Zuordnung: Nennmaß bis Durchgangsloch, aus der Tabelle.
+
+    Zwei Schranken, beide fachlich: Unter dem Nennmaß geht die Schraube nicht
+    hindurch, über dem Durchgangsloch ist die Bohrung weiter, als das Normmaß
+    für diese Größe vorsieht. Beide stehen in derselben Zeile der
+    Normteiltabelle — es gibt also keine zweite Konstante, die dieselbe Frage
+    anders beantwortet, und zwischen zwei Größen liegt kein Bereich, in dem
+    stillschweigend die eine gewinnt.
+    """
+    for size in standards.screw_sizes():
+        entry = standards.screw(size)
+        assert screw_for_bore(entry.nominal) == size, f"{size} geht durch ihr eigenes Nennmaß"
+        assert screw_for_bore(entry.clearance) == size, f"{size} passt in ihr Durchgangsloch"
+
+    assert standards.screw("M5").nominal <= MEASURED_BORE <= standards.screw("M5").clearance, (
+        "Grundlage des gemeldeten Falls: 5,19 mm liegt zwischen 5,00 und 5,50"
+    )
+    assert screw_for_bore(MEASURED_BORE) == "M5"
+
+
+def test_a_countersink_takes_the_head_of_that_screw_and_never_the_bore() -> None:
+    """Eine Senkung **sitzt auf** der Bohrung — sie nimmt den Schraubenkopf.
+
+    Der gemessene Durchmesser wäre dort eine falsche Zahl, die wie eine
+    gemessene aussieht; die Schraube dagegen folgt aus ihm. Aus 5,19 mm wird
+    also nicht 5,19, sondern der Senkkopf der M5 aus der Tabelle.
+
+    Vorher stand im Feld die Schemavorgabe — ein Kopf, der zu keiner Bohrung
+    des Teils gehört, und niemand sagte es.
+    """
+    values = values_for(REGISTRY.get("countersink_hole"), clicked_bore())
+
+    assert values["diameter"] == standards.screw("M5").countersink, (
+        "der Senkkopf der Schraube, die durch diese Bohrung geht"
+    )
+    assert values["diameter"] != MEASURED_BORE, "die Bohrung ist nicht der Kopf"
+    default = next(
+        entry.default
+        for entry in REGISTRY.get("countersink_hole").params.spec()
+        if entry.name == "diameter"
+    )
+    assert values["diameter"] != default, "und auch nicht mehr die Schemavorgabe"
+
+
+def test_an_insert_replaces_the_bore_and_so_takes_its_measurement() -> None:
+    """Eine Einpressbuchse **ersetzt** die Bohrung — sie darf sie übernehmen.
+
+    Die Gegenprobe zum Test darüber, und der eigentliche gemeldete Fehler:
+    Gewählt wird die kleinste Buchse, die die vorhandene Bohrung noch
+    *aufweitet*. Eine kleinere schneidet vollständig innerhalb und trägt
+    nichts ab — genau das tat die Vorgabe M3 mit ihren 4,00 mm.
+    """
+    values = values_for(REGISTRY.get("insert_heatset_m4"), clicked_bore())
+
+    assert values["size"] == "M4"
+    assert standards.insert("M4").hole >= MEASURED_BORE, "M4 weitet die Bohrung auf"
+    assert standards.insert("M3").hole < MEASURED_BORE, (
+        "M3 läge vollständig darin und trüge nichts ab"
+    )
+
+
+def test_a_bore_between_two_sizes_is_named_and_asked_about() -> None:
+    """Wo keine Größe passt, wird der Durchmesser genannt und gefragt.
+
+    4,75 mm ist weiter als das Durchgangsloch der M4 (4,50) und enger als das
+    Nennmaß der M5 (5,00). Eine der beiden zu wählen wäre geraten; keine zu
+    nennen wäre ein stiller Vorschlag über ein leeres Feld.
+    """
+    between = 4.75
+    assert standards.screw("M4").clearance < between < standards.screw("M5").nominal, (
+        "der Fall dieses Tests: zwischen zwei Größen"
+    )
+
+    assert screw_for_bore(between) is None, "keine Größe wird herbeigerundet"
+
+    text, choices = bore_advice(between)
+
+    assert "4.75" in text, "der Kunde liest, was gemessen wurde"
+    assert choices[:2] == ["M4", "M5"], "die beiden Nachbarn, in dieser Reihenfolge"
+    assert len(choices) == 3, "und ein Ausweg, der keine Größe behauptet"
+
+    values = values_for(REGISTRY.get("countersink_hole"), clicked_bore(between))
+    assert "diameter" not in values, "ohne Zuordnung wird auch kein Kopf eingetragen"
+
+
+def test_the_measured_diameter_is_said_out_loud() -> None:
+    """Der Kern kennt den Durchmesser — also nennt er ihn.
+
+    Das war der zweite Teil des Befunds: Die Anwendung wusste, dass die Bohrung
+    5,19 mm misst, und schlug wortlos etwas anderes vor. Wo eine Größe passt,
+    ist die Auskunft ein Satz und keine Frage; zu fragen, was ohnehin feststeht,
+    wäre eine Rückfrage ohne Mehrdeutigkeit.
+    """
+    text, choices = bore_advice(MEASURED_BORE)
+
+    assert "5.19" in text, "das gemessene Maß steht im Satz"
+    assert "M5" in text, "und die Größe, die daraus folgt"
+    assert not choices, "wo eine Größe passt, gibt es nichts zu fragen"
+
+
+def test_no_bore_falls_between_the_two_answers() -> None:
+    """Kein toter Bereich: Jede Bohrung bekommt eine Größe **oder** eine Frage.
+
+    Die Lehre „zwei Schwellen, eine Frage": Entscheiden zwei Konstanten
+    dasselbe, liegt dazwischen ein Bereich, in dem beide Antworten falsch sind.
+    Hier entscheidet eine Funktion, und ihr Ausgang ist an jeder Stelle
+    entweder eine Größe oder eine Rückfrage — nie beides und nie keines.
+    """
+    for tenth in range(10, 121):
+        diameter = tenth / 10.0
+        size = screw_for_bore(diameter)
+        text, choices = bore_advice(diameter)
+
+        assert format_length(diameter, with_unit=False) in text, (
+            f"das Maß {diameter} fehlt in seiner eigenen Auskunft"
+        )
+        assert bool(choices) == (size is None), (
+            f"bei {diameter} mm wird {'gefragt und zugeordnet' if size else 'weder noch'}"
+        )
+        if size is not None:
+            assert size in text, f"{diameter} mm gehört zu {size}, und der Satz sagt es"

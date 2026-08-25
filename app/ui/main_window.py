@@ -133,6 +133,8 @@ from app.core.registry import (
 from app.core.scene import (
     EvaluationResult,
     OperationDraft,
+    advises_on_bores,
+    bore_advice,
     values_for,
     values_for_object,
 )
@@ -1420,6 +1422,10 @@ class MainWindow(QMainWindow):
         # was gerade läuft, und die Trennebenensuche hat ihr eigenes Verwerfen.
         self.veil.cancelRequested.connect(self.session.cancel)
         self.veil.cancelRequested.connect(self.session.cancel_split)
+        # Solange der Schleier steht, wird die Ansicht verborgen, nicht nur
+        # verdeckt — warum, steht am Signal ``appeared`` in loading.py.
+        self.veil.appeared.connect(self._on_veil_appeared)
+        self.veil.ended.connect(self._on_veil_ended)
         self.overlay.set_veil(self.veil)
 
         self.start_screen = StartScreen(self)
@@ -3074,6 +3080,10 @@ class MainWindow(QMainWindow):
         self.progress.setRange(0, 100)
         self.progress.setValue(0)
         self.progress.setVisible(True)
+        # Der Knopf, nicht nur der Balken: ``_on_busy`` zeigt ihn nur bei
+        # Auswertungen, und ein reiner Download lief ohne erreichbares
+        # Abbrechen — ``_cancel_download`` hing an einem unsichtbaren Knopf.
+        self.cancel_button.setVisible(True)
         self._leash.start(worker)
 
     def _on_download_progress(self, share: float, label: str) -> None:
@@ -3130,6 +3140,9 @@ class MainWindow(QMainWindow):
     def _end_download(self) -> None:
         self._downloading = False
         self._progress_idle()
+        # Dieselbe Frage wie in ``_on_busy``: Läuft sonst nichts Abbrechbares,
+        # geht der Knopf mit dem Download.
+        self.cancel_button.setVisible(self._anything_cancellable())
 
     def _anything_running(self) -> bool:
         """Ob irgendetwas läuft, das den Balken trägt (§2.8).
@@ -3693,6 +3706,11 @@ class MainWindow(QMainWindow):
             material=self.session.profile.material.id,
         )
         self._export_worker = worker
+        # Die Flagge, nicht nur das Worker-Feld: ``_anything_running`` fragt
+        # sie, und ohne sie nahm das Ende einer Auswertung dem noch
+        # schreibenden Export den Balken weg — genau der Satz im Docstring
+        # von ``_anything_running``, nur war die Flagge nie gesetzt worden.
+        self._exporting = True
         worker.done.connect(self._export_done)
         worker.failed.connect(self._export_failed)
         # **Und das Unerwartete.** Der Menüeintrag ist gesperrt, solange
@@ -3712,6 +3730,8 @@ class MainWindow(QMainWindow):
 
     def _export_done(self, written: list[Path], findings: list[Finding]) -> None:
         """Was geschrieben wurde, und was dabei aufgefallen ist (§29)."""
+        # Das Ende kommt vor dem Auslaufen des Threads (siehe Feld-Docstring).
+        self._exporting = False
         # Geschrieben heißt: es gibt nichts zu wiederholen.
         self._export_attempt = None
         self._write_failure = None
@@ -5179,6 +5199,15 @@ class MainWindow(QMainWindow):
         if not name:
             return
         if name in commands:
+            # Dieselbe Wache wie in ``_run_palette_choice``, im Nachbarzweig:
+            # Die Liste sperrt ihre Zeilen, aber die Tastatur springt auch auf
+            # eine gesperrte, und Enter führte den Fensterbefehl trotzdem aus
+            # (Regel 19 — dieselbe Bauart, die für Operationen seit cc40aaa4
+            # behoben ist). Der Grund geht in die Statuszeile, wie dort.
+            available, reason = self._extra_availability(name)
+            if not available:
+                self.announce(reason)
+                return
             commands[name][2]()
             return
         self._run_palette_choice(name)
@@ -6008,6 +6037,18 @@ class MainWindow(QMainWindow):
             if inputs and not spec.takes_whole_scene
             else ""
         )
+        # Der gemessene Durchmesser gehört in den Dialog: Die Anwendung kennt
+        # ihn und sagt ihn, statt wortlos eine Größe vorzuschlagen, die nicht
+        # dazu passt. Formuliert im Kern (bore_advice), gezeigt hier — und nur
+        # bei den Dialogen, die aus der Bohrung eine Größe ableiten.
+        picked = self.object_tree.selected_feature()
+        entry = result.scene.objects.get(chosen[0]) if result and chosen else None
+        feature = entry.features.get(picked) if entry and picked else None
+        if feature is not None and feature.kind == "hole" and advises_on_bores(spec):
+            diameter = feature.params.get("diameter")
+            if diameter is not None:
+                said, _choices = bore_advice(float(diameter))
+                note = f"{note}\n{said}" if note else said
 
         def run(params: Mapping[str, Any]) -> None:
             if spec.name in LID_OPS and inputs:
@@ -6904,8 +6945,36 @@ class MainWindow(QMainWindow):
             self.veil.end()
             return
         # Ein Projekt ohne Ergebnis wird geladen; eines mit leerem Ergebnis
-        # rechnet an etwas, das noch keinen Körper hat.
-        self.veil.begin(tr("Projekt wird geladen …") if result is None else tr("Wird berechnet …"))
+        # rechnet an etwas, das noch keinen Körper hat. Beim Laden eines
+        # Projekts **mit** Schritten kommt die Anzeige sofort: die Wartezeit
+        # ist dort sicher, und jede unbedeckte Millisekunde zeigt das nie
+        # gerenderte native Ansichtsfenster (loading.py, ``appeared``). Die
+        # Verzögerung bleibt dem leeren Dokument, dessen Lauf in
+        # Millisekunden fertig ist.
+        self.veil.begin(
+            tr("Projekt wird geladen …") if result is None else tr("Wird berechnet …"),
+            at_once=result is None and bool(self.session.project.document.ops),
+        )
+
+    def _on_veil_appeared(self) -> None:
+        """Die Ansicht ist weg, solange der Schleier steht — nicht nur verdeckt.
+
+        Das Ansichtsfenster ist ein natives Fenster (VTK) und läge auf dem
+        Bildschirm über dem gemalten Schleier; solange es nie gerendert hat,
+        zeigt es alte Pixel. Verborgen ist es kein Fenster, und der Schleier
+        gewinnt. Der Wechsel zurück läuft über ``ended`` — denselben Weg, den
+        auch der Seitenwechsel des ``middle_stack`` täglich geht.
+        """
+        self.middle_stack.setVisible(False)
+
+    def _on_veil_ended(self) -> None:
+        """Der Schleier ist weg — die Ansicht kommt zurück.
+
+        Erst jetzt wird das native Fenster erzeugt und gerendert; die Szene
+        steht zu diesem Zeitpunkt bereits, das erste Bild ist also das
+        fertige Modell und nicht Schwarz.
+        """
+        self.middle_stack.setVisible(True)
 
     def _on_ask(self, request: AskRequest) -> None:
         """Der Arbeiter wartet, solange dieser Dialog offen ist (§21.3)."""

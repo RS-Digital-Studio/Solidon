@@ -101,12 +101,16 @@ def test_the_diameter_is_never_guessed() -> None:
     """Eine Senkung nimmt den Kopf der Schraube, nicht die Bohrung, auf der
     sie sitzt.
 
-    Eine dort eingetragene 5,2 ist eine falsche Zahl, die wie eine gemessene
-    aussieht.
+    Bis zum 25.08.2026 hieß die Zusage „gar kein Wert" — seither ist sie
+    stärker: 5,2 mm ist das Durchgangsloch von M5, also kommt der Senkkopf
+    von M5 ins Feld (10,0 mm, ISO-10642-Spalte der Normteiltabelle, hier
+    abgeschrieben statt nachgeschlagen). Das gemessene Maß selbst wäre
+    weiterhin eine falsche Zahl, die wie eine richtige aussieht.
     """
     values = values_for(REGISTRY.get("countersink_hole"), hole(diameter=5.2))
 
-    assert "diameter" not in values
+    assert values["diameter"] == pytest.approx(10.0)
+    assert values["diameter"] != pytest.approx(5.2)
 
 
 def test_an_operation_that_names_features_gets_the_name() -> None:
@@ -369,7 +373,10 @@ def test_a_part_that_brings_its_own_bore_takes_no_size_from_one() -> None:
         )
 
     countersink = values_for(REGISTRY.get("countersink_hole"), bore)
-    assert "diameter" not in countersink, "die Senkung nimmt den Kopf, nicht das Loch"
+    assert countersink["diameter"] == pytest.approx(10.0), (
+        "die Senkung nimmt den Kopf der passenden Schraube (M5), nicht das Loch"
+    )
+    assert countersink["diameter"] != pytest.approx(5.19)
 
 
 def test_every_operation_with_a_feature_field_gets_it_filled_in() -> None:

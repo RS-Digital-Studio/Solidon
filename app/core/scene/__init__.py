@@ -23,7 +23,12 @@ if TYPE_CHECKING:
     from app.core.scene.evaluate import EvaluationResult, evaluate
     from app.core.scene.history import History, OperationDraft
     from app.core.scene.migrations import FORMAT_VERSION
-    from app.core.scene.placement import values_for, values_for_object
+    from app.core.scene.placement import (
+        advises_on_bores,
+        bore_advice,
+        values_for,
+        values_for_object,
+    )
     from app.core.scene.project import Project, new_project
     from app.core.scene.variants import VariantSet
     from app.core.scene.variants import build as build_variants
@@ -45,6 +50,8 @@ _EXPORTS: Final[dict[str, tuple[str, str]]] = {
     "History": ("history", "History"),
     "OperationDraft": ("history", "OperationDraft"),
     "FORMAT_VERSION": ("migrations", "FORMAT_VERSION"),
+    "advises_on_bores": ("placement", "advises_on_bores"),
+    "bore_advice": ("placement", "bore_advice"),
     "values_for": ("placement", "values_for"),
     "values_for_object": ("placement", "values_for_object"),
     "Project": ("project", "Project"),
@@ -70,6 +77,8 @@ __all__ = [
     "Project",
     "ResultCache",
     "VariantSet",
+    "advises_on_bores",
+    "bore_advice",
     "build_variants",
     "disk_backed_cache",
     "drop_other_versions",

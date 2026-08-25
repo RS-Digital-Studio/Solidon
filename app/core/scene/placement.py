@@ -26,11 +26,13 @@ in der Datei, und die Operation schlägt es bei jedem Rechnen der Szene nach.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Final
 
 from app.core.log import get_logger
 from app.core.registry import OperationSpec
 from app.core.types import Feature, Vec3
+from app.core.units import format_length
+from app.i18n import tr
 
 _log = get_logger(__name__)
 
@@ -62,6 +64,137 @@ DIAMETER_FIELD = "wrap_diameter"
 #: Darunter steht das Merkmal schräg, und ihm eine Achse zu nennen wäre eine
 #: Rundung, die jemand hinterher bemerken muss.
 AXIS_CLARITY = 0.9
+
+#: Operationen, deren ``diameter`` den **Schraubenkopf** meint und nicht die
+#: Bohrung, in der er sitzt.
+#:
+#: Eine Aufzählung und keine Regel, weil das Register die *Bedeutung* eines
+#: Durchmessers nicht führt: ``drill_hole`` und ``plug_hole`` nennen ihr Feld
+#: genauso und meinen die Bohrung selbst. Heute steht genau eine Operation
+#: darin; wer eine zweite baut, die auf einer Bohrung **sitzt**, trägt sie hier
+#: ein — und wer sie vergisst, bekommt die Schemavorgabe und nicht eine falsche
+#: Zahl.
+HEAD_DIAMETER_OPS: Final[frozenset[str]] = frozenset({"countersink_hole"})
+
+
+def screw_for_bore(diameter: float) -> str | None:
+    """Die Schraube, für die diese **gemessene** Bohrung ein Durchgangsloch ist.
+
+    Die eine Zuordnung von einem Maß auf eine Normgröße, und deshalb steht sie
+    hier einmal statt an jeder Stelle, die sie braucht. Zwei Schranken, beide
+    aus derselben Zeile der Normteiltabelle und keine davon gegriffen:
+    Unterhalb des **Nennmaßes** geht die Schraube nicht hindurch, oberhalb des
+    **Durchgangslochs** ist die Bohrung weiter als das Normmaß für diese Größe.
+
+    Die Bänder der Größen berühren sich nicht (M4 endet bei 4,50, M5 beginnt
+    bei 5,00), es kann also höchstens eine Antwort geben. Und dazwischen wird
+    nichts herbeigerundet: Wer keine bekommt, bekommt :func:`bore_advice` —
+    genannt statt geraten (Regel 21). Zwei Konstanten, die dieselbe Frage
+    verschieden beantworten, gäbe es damit auch nicht.
+
+    Nicht zu verwechseln mit den Zuordnungen bei den Bausteinen
+    (``PartSpec.at_hole_values``): Eine Einpressbuchse fragt, welche Größe die
+    Bohrung *aufweitet*, ein Gewinde, welche noch *hineinpasst*. Das sind
+    andere Fragen an dieselbe Tabelle, keine zweite Antwort auf diese.
+    """
+    # Spät importiert: ``knowledge`` kennt ``scene`` nicht, und andersherum soll
+    # die Abhängigkeit nur dort entstehen, wo sie gebraucht wird.
+    from app.core.knowledge import standards
+
+    for size in standards.screw_sizes():
+        entry = standards.screw(size)
+        if entry.nominal <= diameter <= entry.clearance:
+            return size
+    return None
+
+
+def bore_advice(diameter: float) -> tuple[str, list[str]]:
+    """Was zu dieser Bohrung zu sagen ist — und, wo nichts passt, zu fragen.
+
+    **Der gemessene Durchmesser steht in beiden Fällen darin.** Er war der
+    zweite Teil des gemeldeten Fehlers: Die Anwendung kannte ihn — er steht in
+    ``feature.params["diameter"]`` — und schlug wortlos eine Größe vor, die
+    nicht dazu passte. Wer ihn liest, sieht selbst, ob der Vorschlag stimmt.
+
+    Die leere Antwortliste ist die Unterscheidung, und sie ist Absicht: Wo eine
+    Größe passt, ist die Auskunft ein **Satz**; wo keine passt, eine **Frage**
+    mit den beiden Nachbargrößen und einem Ausweg, der keine behauptet. Zu
+    fragen, was ohnehin feststeht, wäre eine Rückfrage ohne Mehrdeutigkeit —
+    und stumm zu bleiben, wo es zwei Möglichkeiten gibt, wäre Raten.
+
+    Gedacht für ``ctx.ask`` und für den Hinweis über einem Dialog, wie
+    ``question_for`` in ``perceive/matching.py``: Der Kern formuliert, der
+    Aufrufer zeigt. Das Dezimaltrennzeichen bleibt dabei ein Punkt —
+    lokalisiert wird in der Oberfläche.
+    """
+    measured = format_length(diameter, with_unit=False)
+    size = screw_for_bore(diameter)
+    if size is not None:
+        # Ganze Sätze mit Platzhaltern statt zusammengesetzter Halbsätze: Wer
+        # nur „das Durchgangsloch für" zu übersetzen bekommt, weiß nicht, was
+        # danach steht — und in mancher Sprache steht es davor.
+        said = tr("Diese Bohrung misst {measure} mm — das Durchgangsloch für {screw}.")
+        return said.replace("{measure}", measured).replace("{screw}", size), []
+    asked = tr(
+        "Diese Bohrung misst {measure} mm und passt zu keiner Normgröße. "
+        "Zu welcher Schraube gehört sie?"
+    )
+    return (
+        asked.replace("{measure}", measured),
+        [*_sizes_around(diameter), tr("Selbst eintragen")],
+    )
+
+
+def advises_on_bores(spec: OperationSpec) -> bool:
+    """Ob der Dialog dieser Operation zu einer angeklickten Bohrung einen
+    Satz verdient (:func:`bore_advice`).
+
+    Genau die Fälle, in denen aus dem gemessenen Durchmesser eine Größe folgt
+    oder folgen sollte: die Senkung (der Kopf über die Schraube) und die
+    Bausteine, die in der Bohrung sitzen (``at_hole_values``). Alle anderen
+    Dialoge zeigen den Satz nicht — ein Hinweis, der überall steht, steht
+    nirgends.
+    """
+    if spec.name in HEAD_DIAMETER_OPS:
+        return True
+    from app.core.knowledge.parts.ops import part_of
+
+    part = part_of(spec.name)
+    return part is not None and part.at_hole_values is not None
+
+
+def _head_diameter(feature: Feature) -> float | None:
+    """Der Senkkopf der Schraube, die durch diese gemessene Bohrung geht.
+
+    Der Senkkopf (ISO 10642) und nicht der Zylinderkopf: Die Operation heißt
+    *Senken* und macht Platz für einen Kopf, der bündig sitzt. Wo keine Größe
+    passt, kommt nichts zurück — die Schemavorgabe ist dann ehrlicher als ein
+    Kopf, den sich niemand ausgesucht hat.
+    """
+    diameter = feature.params.get("diameter")
+    if diameter is None:
+        return None
+    size = screw_for_bore(float(diameter))
+    if size is None:
+        return None
+    from app.core.knowledge import standards
+
+    return round(standards.screw(size).countersink, 4)
+
+
+def _sizes_around(diameter: float) -> list[str]:
+    """Die Größen unter und über einer Bohrung, die zu keiner passt.
+
+    Beide oder eine — an den Enden der Tabelle gibt es keine zweite Seite, und
+    eine erfundene wäre schlechter als eine kurze Liste.
+    """
+    from app.core.knowledge import standards
+
+    # Die Reihenfolge der Tabelle ist aufsteigend; die Bausteine rechnen seit je
+    # damit (``size_for_insert`` nimmt die erste passende als die kleinste).
+    below = [size for size in standards.screw_sizes() if standards.screw(size).clearance < diameter]
+    above = [size for size in standards.screw_sizes() if standards.screw(size).nominal > diameter]
+    return [*below[-1:], *above[:1]]
 
 
 def _from_the_bore(spec: OperationSpec, feature: Feature, names: set[str]) -> dict[str, Any]:
@@ -108,6 +241,14 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
     seine Größe — eine Senkung nimmt den Durchmesser des Schraubenkopfs, nicht
     den der Bohrung, auf der sie sitzt, und eine hilfsbereit eingetragene 5,2
     wäre dort eine falsche Zahl, die wie eine gemessene aussieht.
+
+    **Der Kopf folgt trotzdem aus der Bohrung**, seit dem 25.08.2026: nicht als
+    ihr Maß, sondern über die Schraube, die durch sie geht
+    (:func:`screw_for_bore`). Aus 5,19 mm wird der Senkkopf der M5 und nicht
+    5,19 — und wo keine Größe passt, bleibt das Feld auf seiner Vorgabe und
+    :func:`bore_advice` sagt warum. Der Satz oben blieb richtig und deckte den
+    Fall zu: Die Schemavorgabe im Feld gehört zu keiner Bohrung des Teils, und
+    niemand sagte es.
     """
     names = {entry.name for entry in spec.params.spec()}
     # **Gefragt wird nach der Art, nicht nach dem Namen.** Bis zum 23.08.2026
@@ -138,6 +279,14 @@ def values_for(spec: OperationSpec, feature: Feature) -> dict[str, Any]:
         diameter = feature.params.get("diameter")
         if diameter is not None:
             values[DIAMETER_FIELD] = round(float(diameter), 4)
+    if spec.name in HEAD_DIAMETER_OPS and "diameter" in names and feature.kind == "hole":
+        # **Nur an einer Bohrung**, nicht an einem angeklickten Kegel: Der ist
+        # eine vorhandene Senkung, und sein Durchmesser ist schon ein Kopfmaß —
+        # daraus noch eine Schraube zu suchen hieße, dieselbe Zahl zweimal
+        # durch die Tabelle zu schicken.
+        head = _head_diameter(feature)
+        if head is not None:
+            values["diameter"] = head
     centre = _vector(feature.params.get("centre"))
     if centre is not None:
         for name, value in zip(POSITION, centre, strict=True):

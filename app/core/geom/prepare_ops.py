@@ -265,7 +265,8 @@ class CountersinkParams(BaseParams):
         maximum=100.0,
         doc=_(
             "Durchmesser des Schraubenkopfes, nicht der Bohrung darunter. Eine "
-            "angeklickte Bohrung trägt ihn deshalb bewusst nicht ein."
+            "angeklickte Bohrung trägt den Kopf der passenden Schraube ein — "
+            "nie ihr eigenes, gemessenes Maß."
         ),
     )
     angle: float = param(
