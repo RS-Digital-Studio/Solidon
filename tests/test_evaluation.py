@@ -1420,3 +1420,37 @@ def test_a_stopped_evaluation_says_why_in_the_log(caplog: pytest.LogCaptureFixtu
     assert zeilen, "keine Abbruchzeile im Protokoll"
     assert zeilen[0] != "evaluation stopped at op 1", "nennt nur die Nummer"
     assert "." in zeilen[0].split("op 1: ")[-1], f"nennt keinen Befundcode: {zeilen[0]}"
+
+
+def test_an_expression_that_breaks_its_own_bounds_is_reported(
+    history: History, document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Grenzen gelten auch für Ausdrücke (Gesamtreview B-15).
+
+    ``maximum=60`` mit ``=@a*10`` ergab 600, und niemand sagte etwas. Die
+    Eingabe lehnt der Dialog ab (§10); was aus Ausdrücken folgt oder aus
+    einer von Hand bearbeiteten Datei kommt, sieht erst die Auswertung — und
+    die sagt es als Befund, statt anzuhalten: Die Lage ist rücknehmbar und
+    korrigierbar, ein Halt machte eine Sackgasse daraus (Regel 19).
+    """
+    document.parameters["a"] = Parameter(name="a", value=60.0)
+    document.parameters["scaled"] = Parameter(
+        name="scaled", value=0.0, expression="=@a*10", minimum=10.0, maximum=60.0
+    )
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+
+    result = evaluate(document, profile, registry=registry)
+
+    assert result.complete, "der Befund hält nichts an"
+    broken = [f for f in result.scene.report.findings if f.code == "parameter.out_of_range"]
+    assert len(broken) == 1, "eine Verletzung, ein Befund"
+    assert broken[0].values["parameter"] == "scaled"
+    assert broken[0].values["actual"] == pytest.approx(600.0)
+    assert broken[0].values["maximum"] == pytest.approx(60.0)
+
+    # Und die Gegenrichtung: ein Ausdruck innerhalb seiner Grenzen schweigt.
+    document.parameters["scaled"] = Parameter(
+        name="scaled", value=0.0, expression="=@a/2", minimum=10.0, maximum=60.0
+    )
+    quiet = evaluate(document, profile, registry=registry)
+    assert not [f for f in quiet.scene.report.findings if f.code == "parameter.out_of_range"]

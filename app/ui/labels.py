@@ -592,6 +592,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "first": _("Erste Bedingung"),
     "first_layer": _("Erste Schicht"),
     "overshoot": _("Überstand je Achse"),
+    "plane": _("Ebene"),
     "recipe": _("Rezept"),
     "second": _("Zweite Bedingung"),
     "stopped_at": _("Angehalten bei Schritt"),

@@ -167,6 +167,42 @@ def evaluate(
     hashes: dict[ObjectId, str] = {}
     names: dict[ObjectId, str] = {}
     findings: list[Finding] = []
+    # Grenzen gelten auch für Ausdrücke (Gesamtreview B-15): ``max=60`` mit
+    # ``=@a*10`` ergab 600, und niemand sagte etwas. Die Eingabe prüft der
+    # Dialog; hier landet, was aus Ausdrücken folgt oder aus einer von Hand
+    # bearbeiteten Datei kommt. Ein Befund und kein Halt: Die Geometrie
+    # rechnet mit dem Wert, und der Bericht sagt, dass er sein Versprechen
+    # bricht — anhalten hieße, eine rücknehmbare Lage in eine Sackgasse zu
+    # verwandeln (Regel 19).
+    for parameter_name, declared in document.parameters.items():
+        resolved_value = values.get(parameter_name)
+        if resolved_value is None:
+            continue
+        below = declared.minimum is not None and resolved_value < declared.minimum - EPS_DISPLAY
+        above = declared.maximum is not None and resolved_value > declared.maximum + EPS_DISPLAY
+        if not below and not above:
+            continue
+        bounds: dict[str, Any] = {
+            "parameter": str(parameter_name),
+            "actual": round(resolved_value, 3),
+        }
+        if declared.minimum is not None:
+            bounds["minimum"] = declared.minimum
+        if declared.maximum is not None:
+            bounds["maximum"] = declared.maximum
+        findings.append(
+            Finding(
+                code="parameter.out_of_range",
+                severity="warning",
+                message=_(
+                    "Ein Parameter liegt außerhalb seiner Grenzen — gerechnet wird "
+                    "trotzdem mit ihm. Prüfen Sie den Ausdruck, oder passen Sie "
+                    "die Grenzen an."
+                ),
+                values=bounds,
+                source="internal",
+            )
+        )
     completed: list[OpId] = []
     pending: list[tuple[str, CachedResult, bool]] = []
     solvers: dict[OpId, SolverInfo] = {}
