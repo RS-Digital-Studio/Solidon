@@ -110,7 +110,6 @@ from app.core.geom.sculpt import (
 from app.core.geom.section import plane_through
 from app.core.ingest.fetch import FetchedModel, check_url, fetch_model
 from app.core.knowledge import calibration, print_settings, profiles
-from app.core.knowledge.parts import GROUPS
 from app.core.knowledge.parts.ops import op_name as part_op_name
 from app.core.log import get_logger
 from app.core.perceive import maps
@@ -3703,7 +3702,6 @@ class MainWindow(QMainWindow):
             tuple(index for index, _op in enumerate(document.ops)),
             self._result_features(),
             self.session.profile,
-            groups=tuple(GROUPS),
             parent=catalog,
         )
         dialog.saved.connect(catalog.show_parts)

@@ -44,11 +44,12 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.errors import AppError
+from app.core.knowledge.parts import GROUPS
 from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
 from app.core.types import Document, Feature, Profile
 from app.i18n import tr
-from app.ui.labels import NumberSpin
+from app.ui.labels import NumberSpin, feature_label
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.style import TIGHT, make_primary
 
@@ -59,7 +60,9 @@ _log = get_logger(__name__)
 #: Eine eigene und nicht die des Vorbilds: Der Kunde soll sein Teil
 #: wiederfinden, ohne es zwischen siebzehn mitgelieferten zu suchen. Ändern
 #: kann er sie im Dialog — die vorhandenen Gruppen stehen zur Auswahl.
-OWN_GROUP = "Eigene"
+#: Wo ein eigener Baustein landet, solange der Kunde nichts anderes wählt —
+#: dieselbe Vorgabe, die ``recipe.from_data`` für ein Rezept ohne Gruppe nimmt.
+DEFAULT_GROUP = "structure"
 
 # Die zwei Plätze, die ein freigegebener Wert im späteren Dialog haben kann
 # (§2.5, gestufte Tiefe). Schlüssel des Rezeptformats und keine Beschriftungen —
@@ -93,7 +96,12 @@ class _ParamRow:
 
     def __init__(self, parameter: Any, parent: QWidget) -> None:
         self.name = parameter.name
-        self.take = QCheckBox(parent)
+        # **Der Haken trägt den Namen des Projektparameters.** Ohne ihn stehen
+        # bei drei Parametern dreimal dieselben sieben Zeilen untereinander —
+        # „Beschriftung: Breite", „Beschriftung: Höhe" —, und welcher Parameter
+        # gerade eingerichtet wird, steht nirgends. Sichtbar wurde das erst am
+        # gerenderten Dialog; die Felder waren einzeln alle richtig.
+        self.take = QCheckBox(str(parameter.name), parent)
         self.take.setChecked(True)
         self.take.setAccessibleName(tr("Diesen Wert freigeben"))
 
@@ -114,7 +122,10 @@ class _ParamRow:
         self.default = NumberSpin(parent)
         for spin in (self.minimum, self.maximum, self.default):
             spin.setRange(-1_000_000.0, 1_000_000.0)
-            spin.setDecimals(3)
+            # Zwei Stellen wie überall sonst: „20,000" liest sich als
+            # zwanzigtausend, und für ein Maß in Millimetern ist die dritte
+            # Stelle ohnehin unter der Druckgenauigkeit.
+            spin.setDecimals(2)
         self.minimum.setValue(
             float(parameter.minimum) if parameter.minimum is not None else min(value / 2, value)
         )
@@ -165,7 +176,12 @@ class _FeatureRow:
 
     def __init__(self, feature: Feature, parent: QWidget) -> None:
         self.feature_id = str(feature.id)
-        self.take = QCheckBox(parent)
+        # „Bohrung 3 · ⌀4,2" und nicht „hole_1": Die Kennung ist der Schlüssel
+        # des Rezepts, nicht die Sprache des Kunden — vor dem Speichern soll er
+        # sehen, welche Stelle er freigibt. Dieselbe Quelle wie Viewport und
+        # Statusleiste (§18.5); zwei Formulierungen für ein Merkmal wären zwei
+        # Gelegenheiten, auseinanderzulaufen.
+        self.take = QCheckBox(feature_label(feature.id, feature), parent)
         self.take.setChecked(True)
         self.take.setAccessibleName(tr("Dieses Merkmal nach außen geben"))
         self.name = QLineEdit(self.feature_id, parent)
@@ -190,7 +206,6 @@ class RecipeDialog(QDialog):
         op_ids: tuple[int, ...],
         features: tuple[Feature, ...],
         profile: Profile,
-        groups: tuple[str, ...] = (),
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -208,10 +223,20 @@ class RecipeDialog(QDialog):
         self.title.setAccessibleName(tr("Name des Bausteins"))
         self.title.textChanged.connect(self._update_enabled)
 
+        # **Die sechs Gruppen des Katalogs, keine siebte.** Der Schlüssel ist
+        # englisch und steht im Rezept, der Titel ist übersetzt und steht im
+        # Fenster — wie überall im Katalog. Ein selbst getippter Name wäre
+        # weder das eine noch das andere: ``Registry.register`` weist jede
+        # Gruppe ab, die nicht in ``GROUPS`` steht, und der Kunde bekäme beim
+        # Speichern einen internen Fehler statt eines Bausteins.
+        #
+        # Eine eigene Gruppe für selbst gebaute Teile kommt, wenn es vier
+        # davon gibt (Konzept §6.3) — bis dahin wäre sie eine Zeile im Katalog,
+        # hinter der meistens nichts steht.
         self.group = QComboBox(self)
-        self.group.setEditable(True)
-        for entry in (OWN_GROUP, *(name for name in groups if name != OWN_GROUP)):
-            self.group.addItem(entry)
+        for key, title in GROUPS.items():
+            self.group.addItem(str(title), key)
+        self.group.setCurrentIndex(max(0, self.group.findData(DEFAULT_GROUP)))
         self.group.setAccessibleName(tr("Gruppe im Katalog"))
 
         self.doc = QLineEdit(self)
@@ -309,6 +334,18 @@ class RecipeDialog(QDialog):
                 )
             )
             return _scrolled(box, self)
+        # Eine Kopfzeile über den zwei Spalten. Ohne sie steht neben „Bohrung 1
+        # · Ø5,20 mm" ein Feld mit „hole_1" darin, und niemand weiß, ob er das
+        # ändern darf oder soll — der Kastentitel erklärt den Haken, nicht das
+        # Feld daneben.
+        head_place = QLabel(tr("Stelle"), box)
+        head_name = QLabel(tr("Name im Rezept"), box)
+        for label in (head_place, head_name):
+            font = label.font()
+            font.setBold(True)
+            label.setFont(font)
+        form.addRow(head_place, head_name)
+
         for row in self._features:
             form.addRow(row.take, row.name)
             row.take.toggled.connect(row.name.setEnabled)
@@ -348,7 +385,7 @@ class RecipeDialog(QDialog):
                 self._payloads,
                 name=_identifier(title),
                 title=title,
-                group=self.group.currentText().strip() or OWN_GROUP,
+                group=str(self.group.currentData()),
                 op_ids=self._op_ids,
                 exposed=tuple(row.exposed() for row in self._params if row.take.isChecked()),
                 features={

@@ -30,11 +30,16 @@ from app.ui.settings import UiSettings
 MESHES = Path(__file__).parent / "data" / "meshes"
 
 
-class _Feature:
-    """Ein Merkmal, wie der Dialog es liest — er braucht nur die Kennung."""
+def _feature(identifier: str) -> Feature:
+    """Ein echtes Merkmal, keine Attrappe.
 
-    def __init__(self, identifier: str) -> None:
-        self.id = identifier
+    Die erste Fassung hier war eine Klasse mit einem einzigen Feld ``id`` —
+    genug für den Dialog von damals. Seit er die Zeile über ``feature_label``
+    beschriftet, braucht er ``kind`` und ``params``, und die Attrappe fiel um.
+    Ein Fake, der weniger kann als die Sache, prüft den Tag, an dem er
+    geschrieben wurde.
+    """
+    return Feature(id=identifier, kind="hole", provenance="detected", params={"diameter": 5.2})
 
 
 def _document() -> Document:
@@ -55,7 +60,7 @@ def _document() -> Document:
     )
 
 
-def _dialog(qt_app: QApplication, features: tuple[_Feature, ...] = ()) -> RecipeDialog:
+def _dialog(qt_app: QApplication, features: tuple[Feature, ...] = ()) -> RecipeDialog:
     profile: Any = None
     return RecipeDialog(_document(), {}, (0,), features, profile)  # type: ignore[arg-type]
 
@@ -80,7 +85,7 @@ def test_the_dialog_offers_a_row_for_every_parameter(qt_app: QApplication) -> No
     Kunde beim Anlegen des Parameters schon gesagt (§13). Zweimal danach zu
     fragen wäre die Sorte Dialog, die man wegklickt.
     """
-    dialog = _dialog(qt_app, (_Feature("hole_1"),))
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
     try:
         rows = {row.name: row for row in dialog._params}
 
@@ -101,7 +106,7 @@ def test_the_dialog_offers_a_row_for_every_parameter(qt_app: QApplication) -> No
 
 def test_what_the_dialog_hands_to_the_core(qt_app: QApplication) -> None:
     """Die Naht zu E2: genau die Felder, die ``ExposedParam`` verlangt."""
-    dialog = _dialog(qt_app, (_Feature("hole_1"),))
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
     try:
         dialog._params[0].placement.setCurrentIndex(1)
         exposed = dialog._params[0].exposed()
@@ -121,7 +126,7 @@ def test_the_button_says_what_is_missing_instead_of_greying_out(qt_app: QApplica
     Drei Bedingungen sperren ihn, und alle drei sind behebbar — deshalb nennt
     der Tooltip sie, statt den Kunden raten zu lassen.
     """
-    dialog = _dialog(qt_app, (_Feature("hole_1"),))
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
     try:
         assert not dialog._save.isEnabled(), "ohne Namen kann nichts angelegt werden"
         assert dialog._save.toolTip(), "und der Grund steht daneben"
