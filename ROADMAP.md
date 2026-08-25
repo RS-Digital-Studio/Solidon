@@ -80,10 +80,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
-| Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | **eine Entscheidung**: ob §24.3 eine Ausnahme bekommt. Die Liste selbst ist abgearbeitet — Kabelclip, Eckwinkel, Standfuß und Scharnierauge stehen, der Schwalbenschwanz war schon da |
-| Das Flächenmenü zeigt 13 Zeilen gegen eine Grenze von 12 | Das Kontextmenü wuchs um eine Zeile, und die Prüfung sah woanders hin (25.08.2026) | **eine Entscheidung**: die Ausnahme bestätigen oder eine zweite Gruppe falten. Der Test lässt genau diese eine Zeile zu und wird bei der nächsten rot |
+| Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | nichts mehr — **§24.3 trägt die Ausnahme seit dem 25.08.2026** (Entscheidung Robert): Deklaration statt stiller Ausnahme. Es fehlt die Arbeit: Registerfeld, Druckspaltenprüfung im Bereichstest, das Bolzenscharnier als erster Nutzer |
 | Ein einteiliger Einhänger löst sich, wie er eingehängt wurde | Der Haken hält, bis jemand das Teil anhebt (25.08.2026) | **eine Entscheidung**: ob der Baustein eine federnde Rastnase bekommt. Der caveat sagt es dem Kunden inzwischen |
-| Der Schlitz des Schlüssellochs liegt quer zur Fallrichtung | Das Schlüsselloch hängt waagerecht, und sein eigener Docstring sagt es anders (25.08.2026) | niemanden — der Befund ist gemessen, der Baustein gehört keiner Sitzung, und ein Prüfdruck würde ihn in Minuten bestätigen |
 | Die Startmarke §31 ist seit dem 24.08.2026 rot | Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026) | **eine Entscheidung**: Marke neu setzen oder die Ursache suchen. Nicht der Code — im Wechsel gegen den Stand vor drei Commits gemessen, Unterschied im Rauschen |
 | Ein Rezept nimmt den ganzen Stapel | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Mehrfachauswahl im Verlauf — das Format nimmt beliebige `op_ids`, aber `HistoryPanel` kennt nur einen Index |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
@@ -111,7 +109,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
 | Zwei Pakete lösen den Deadlock noch nicht auf | Ein Deadlock, der keiner war — und sieben Pakete statt einem (23.08.2026) | einen **Verhaltenswechsel**, keinen Strukturfix — und deshalb je einen eigenen Schritt. `activation`: 223 Zeilen Code an der Lizenzgrenze im `__init__`, die Ladereihenfolge dort ändert man nicht, ohne die Grenze mitzuprüfen. `knowledge.parts`: dort **ist** der Import die Registrierung — die fünf Modulimporte füllen das Bausteinregister, und `bootstrap.load_operations` verlässt sich darauf; verzögert wären sie wirkungslos. Die anderen fünf Pakete sind seit dem 23.08. sauber, `tests/test_core_isolation.py` führt beide Namen mit Begründung |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
-| Ein Klick auf eine 5,19-mm-Bohrung schlägt M3 vor | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **fachliche** Entscheidung in `placement.py`: Eine Senkung sitzt auf der Bohrung, eine Einpressbuchse ersetzt sie — nur die zweite darf den gemessenen Durchmesser übernehmen. Gemessen: M3 bohrt 4,00 mm in ein 5,19-mm-Loch und trägt nichts ab; die Anwendung kennt den Durchmesser und sagt ihn nicht |
 | Nach einem weiten Verschieben dreht die Kamera um den alten Punkt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | den Bau von 0.1.4 — die kleine Variante steht seit `e550b9b` und erfüllt Roberts Anweisung; die saubere setzt den Fokus beim **Beginn einer Drehung** statt bei jedem Aufbau und ändert damit das Kameraverhalten. Nicht in der Nacht vor einem Paket |
 | Vier Stapel zeigen auf `session.py:1515` | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **Lebensdaueruntersuchung**, keinen `gc`-Schutz: Der Sammler ist an zwei Messungen zu verschiedenen Zeiten als Ursache ausgeschlossen. Und die vier Stapel sind ein Zeuge, viermal gefragt — `wait(50)` blockiert in C, der Rahmen steht dort ohnehin. Der Weg führt über die Aufräum-Fixture und trifft damit **jede** Fensterdatei |
 | Ein ladendes Fenster sieht aus wie ein abgestürztes | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | ein sichtbares Wartezeitverhalten (§2.8) statt schwarzer Fläche. Sechs Sekunden beim Öffnen von Weg 1, in denen Menü- und Statusleiste stehen und **kein einziges Panel** — Robert hat es zweimal für einen Absturz gehalten, das Protokoll sagt beide Male `ended normally`. **Gehört der Oberfläche**; sinkt die Ladezeit, bleibt der Punkt |
@@ -4976,7 +4973,7 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       Kameraverhalten — mitten vor einem Bau, in genau dem Bereich, den Robert
       an einem Tag dreimal gemeldet hat. Deshalb danach und nicht davor.
 
-- [ ] **Ein Klick auf eine 5,19-mm-Bohrung schlägt M3 vor, und M3 trägt dort
+- [x] **Ein Klick auf eine 5,19-mm-Bohrung schlägt M3 vor, und M3 trägt dort
       nichts ab.** Gemessen am 23.08.2026 im laufenden Fenster, `plate_holes.stl`,
       Bohrung `hole_1` gewählt:
 
@@ -5015,6 +5012,23 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       Gefunden als Gegenprobe zu `at_hole` (3d-druck-3a, `2f66440`): Die sieben
       Einträge kommen alle im Kontextmenü an, sind alle bedienbar und lösen
       alle aus — der Anschluss steht. Nur der Schritt danach fehlt.
+
+      **Behoben am 25.08.2026, in zwei Hälften.** Die Baustein-Hälfte war
+      schon vorher gefallen und stand hier zu lange als offen:
+      `size_for_insert` / `size_for_nut_trap` / `size_for_thread`
+      (`fasteners.py`, `6f064792`) wählen seit dem gemessenen M3-Fall die
+      passende Größe zur Bohrung. Heute kam die Senkungs-Hälfte dazu:
+      `screw_for_bore` ordnet die gemessene Bohrung über das
+      Durchgangsloch-Band ihrer Schraube zu (5,19 → M5), die Senkung nimmt
+      deren Kopf statt der Schemavorgabe, und `bore_advice` nennt den
+      gemessenen Durchmesser im Dialog — als Satz, wo eine Größe passt, als
+      Frage mit den Nachbargrößen, wo keine passt. Angeschlossen in
+      `run_operation` (Freigabe 3d-druck-43), geprüft in `test_matching.py`
+      (35 Fälle, kein toter Bereich über 1,0–12,0 mm) und
+      `test_placement.py`. Die Zuordnung sitzt damit an zwei Orten, und das
+      ist fachlich: Die drei bausteinbezogenen Fragen in `fasteners.py`
+      (ersetzt die Bohrung → gemessenes Maß), die schraubenbezogene in
+      `placement.py` (sitzt auf der Bohrung → Kopf der Schraube).
 
 - [x] **Die Figur in „Weg 4" stand 0,29 mm unter der Druckplatte — behoben
       am 23.08.2026 (`abce5f3`).** Das weiche Verschmelzen mit Radius 4 rundet
@@ -9865,7 +9879,7 @@ aus einem guten Anlass: Die Rastnase zerfiel, weil sie die Fläche nur berührte
 Bohrung, einteilig, und zwei davon plus ein Passstift ergeben ein Gelenk. Das
 ist im Rahmen und nützlich, und es beantwortet die Frage nicht.
 
-- [ ] **Soll die Bibliothek erklärt mehrteilige Bausteine kennen?** Dahinter
+- [x] **Soll die Bibliothek erklärt mehrteilige Bausteine kennen?** Dahinter
   steht eine ganze Klasse: Scharniere, Ketten, Kugelgelenke, Schnappdeckel mit
   Achse — print-in-place-Mechanik ist einer der Gründe, aus denen Leute
   drucken. Dagegen steht, dass ein Baustein **angebaut** wird: Was am Träger
@@ -9875,6 +9889,19 @@ ist im Rahmen und nützlich, und es beantwortet die Frage nicht.
   Wer es entscheidet, ändert §24.3 und den Test dazu — beides mit Ansage. Ein
   Mittelweg wäre eine Deklaration am Baustein (`parts=2` statt einer stillen
   Ausnahme), damit der Test weiter fängt, was **versehentlich** zerfällt.
+
+  **Entschieden am 25.08.2026 (Robert, auf Vorlage von 3d-druck-46): Ja, und
+  zwar als Deklaration** — genau der Mittelweg. §24.3 trägt die Ausnahme seit
+  demselben Tag: mehrere Körper erlaubt, wenn der Baustein ihre Zahl
+  deklariert; geprüft werden dann die Druckspalten gegen das Materialprofil
+  und die gebaute Zahl gegen die Deklaration, und unerklärtes Zerfallen
+  bleibt rot.
+
+- [ ] **Die Deklaration bauen:** ein Feld am `register_part` für die erklärte
+  Teilezahl, im Bereichstest die Druckspaltenprüfung (Spaltweite aus dem
+  Materialprofil, nie als Zahl im Baustein) und der Abgleich der gebauten
+  Komponenten gegen die Deklaration — dazu das Bolzenscharnier, an dem die
+  Frage aufkam, als ihr erster Nutzer.
 
 
 ## Das Kontextmenü wuchs um eine Zeile, und die Prüfung sah woanders hin (25.08.2026)
@@ -9910,12 +9937,31 @@ die Gegenrichtung mit (jede gefaltete Gruppe wieder aufgemacht muss die Grenze
 sprengen — sonst war ihre Faltung ein Klick ohne Not) und lässt **genau eine**
 Zeile über der Grenze zu.
 
-- [ ] **Die Ausnahme bestätigen oder auflösen.** Beides ist vertretbar: 13
-  Zeilen mit der Bohrung an einem Klick, oder 12 Zeilen und die Bohrung im
-  Untermenü. Die Zahl steht in einer Testart, also entscheidet es nicht die
-  Bedienungsvollmacht allein — wer sie ändert, ändert die Grenze für alle
-  Menüs oder schreibt eine Ausnahme in die Testart. Der Test hält den Zustand
-  fest, bis das geschieht.
+- [x] **Die Ausnahme ist aufgelöst — und keine der beiden erwarteten Antworten
+  war es.** Entschieden am 25.08.2026 (3d-druck-46 unter Roberts
+  Bedienungsvollmacht, umgesetzt von 3d-druck-ce): **zweite Gruppe falten,
+  Ausnahme nicht bestätigen.** Die Wahl fiel damit auf den Zweig, der die
+  Testart *nicht* anfasst — der Grund, aus dem der Absatz darüber die
+  Bedienungsvollmacht als nicht zuständig führte, galt allein der anderen
+  Möglichkeit.
+
+  Der Satz oben stellte die Frage aber als „13 Zeilen **oder** die Bohrung im
+  Untermenü", und das war eine falsche Alternative: Sie folgte aus
+  `folded_groups`, das die **größte** Gruppe zuerst faltete. Nach „Bausteine"
+  fehlte genau eine Zeile, und die größte der übrigen ist „Ändern" — daher die
+  Bohrung. Gefaltet wird jetzt die **hinterste Gruppe aus `MENU_GROUPS`, die
+  allein genügt**; genügt keine allein, weiter die größte. Am Flächenklick
+  trifft das „Vorbereiten": zwei Einträge, eine gesparte Zeile.
+
+  Gemessen: 22 Bausteine, 5 Ändern, 2 Erzeugen, 2 Vorbereiten plus drei feste
+  Zeilen — **12 von 12**, „Ändern" und „Erzeugen" stehen offen, kein Eintrag ist
+  tiefer gerutscht als vorher. Am Lochklick ändert sich nichts (7 + 3 = 10, kein
+  Falten). Die drei festen Zeilen zählt `_add_operations` am gebauten Menü ab
+  statt als Konstante — beide Schritte darüber sind an Bedingungen geknüpft.
+  Die sieben Rechenbeispiele in `test_a_group_of_one_never_becomes_a_submenu`
+  ergeben unverändert dasselbe; `test_the_drill_stays_one_click_away_on_a_face`
+  hält die Zusage fest, die eine Zeilenzählung nicht sieht, und ist gegen den
+  zurückgestellten Fix einmal rot gesehen worden.
 
 ## Das Schlüsselloch hängt waagerecht, und sein eigener Docstring sagt es anders (25.08.2026)
 
@@ -9940,7 +9986,7 @@ Baustein (§24.4, `parts_version` und Änderungseintrag). Der Befund ist
 gemessen und in zwei Zeilen nachvollziehbar; ein Prüfdruck bestätigt ihn in
 Minuten.
 
-- [ ] **Den Schlitz in die Fallrichtung drehen** — `shapes.turned(…, 90.0)` wie
+- [x] **Den Schlitz in die Fallrichtung drehen** — `shapes.turned(…, 90.0)` wie
   jetzt beim Lochwand-Einhänger, dazu `parts_version` und ein Eintrag.
 
   **Weiter reicht es nicht:** Von 23 Bausteinen benutzen nur zwei
@@ -9949,6 +9995,12 @@ Minuten.
   echt (`slot` legt seine Länge immer in X, und wer das nicht weiß, verschiebt
   in Y und meint, er habe gedreht), aber sie ist hier nur einmal
   zugeschnappt.
+
+  **Behoben mit `45f87d8e`** („Zwei Bausteine hatten ein Oben, und es zeigte
+  in verschiedene Richtungen"): der Schlitz dreht mit `shapes.turned(…, 90.0)`,
+  `parts_version` 4, Änderungseintrag `SLOT_RUNS_DOWNWARD`. Der Punkt stand
+  hier zwei Tage länger offen als der Fix — die behebende Sitzung kannte den
+  Abschnitt nicht, und das Register zog erst am 25.08.2026 nach.
 
 
 ## Der Haken hält, bis jemand das Teil anhebt (25.08.2026)

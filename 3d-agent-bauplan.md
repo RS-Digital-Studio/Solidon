@@ -1444,6 +1444,15 @@ Jeder Baustein wird über seinen Parameterbereich durchgerechnet: wasserdicht,
 Mindestwandstärke, keine Selbstdurchdringung an den Grenzen, Features korrekt
 benannt. Ein Baustein ohne diesen Test gilt als nicht vorhanden.
 
+Ein Baustein ist dabei **ein** Körper. Seit dem 25.08.2026 gibt es die eine
+erklärte Ausnahme (Entscheidung Robert): **print-in-place-Mechanik** darf aus
+mehreren Teilen bestehen, wenn der Baustein ihre Zahl am Register deklariert.
+Der Bereichstest prüft dann statt der Einteiligkeit die **Druckspalten**
+zwischen den erklärten Teilen — je Spalt mindestens das druckbare Spiel aus
+dem Materialprofil — und dass die gebaute Teilezahl der Deklaration
+entspricht. Was **unerklärt** zerfällt, bleibt ein roter Lauf: Die Ausnahme
+gilt der Absicht, nicht dem Versehen.
+
 ### 24.4 Versionierung
 Die Bibliothek ist Teil des Rechenwegs — also wird sie wie eine Abhängigkeit
 behandelt. Ohne das rechnet eine spätere Korrektur an `heatset_m4` alte
