@@ -25,6 +25,7 @@ Schritten spürbar lange (§2.8).
 
 from __future__ import annotations
 
+import unicodedata
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
@@ -44,7 +45,7 @@ from PySide6.QtWidgets import (
 )
 
 from app.core.errors import AppError
-from app.core.knowledge.parts import GROUPS
+from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
 from app.core.types import Document, Feature, Profile
@@ -223,6 +224,8 @@ class RecipeDialog(QDialog):
         self._leash = WorkerLeash(self)
         self._worker: _RangeWorker | None = None
         self._recipe: Any = None
+        self._abandoned = False
+        """Ob der Dialog verworfen wurde, während der Bereichstest lief."""
 
         self.title = QLineEdit(self)
         self.title.setPlaceholderText(tr("Zum Beispiel: Halter für die Werkbank"))
@@ -409,6 +412,25 @@ class RecipeDialog(QDialog):
             self.report.setText(f"{error.title}\n{error.detail or ''}".strip())
             return
 
+        # **Erst nachsehen, ob der Name frei ist — vor dem Schreiben und vor
+        # dem Warten.** ``recipes.save`` legt die Datei unter dem Namen an und
+        # überschreibt dabei, was dort liegt; ``register`` merkt die Kollision
+        # erst danach. Wer einen Namen zweimal vergibt, verlöre still sein
+        # erstes Rezept und bekäme einen internen Fehler dazu.
+        #
+        # Gefragt wird vor dem Bereichstest: Der dauert, und eine Absage nach
+        # dreißig Sekunden Wartebalken ist eine Absage zu spät.
+        if taken_name(self._recipe.name):
+            self.report.setText(
+                str(
+                    tr(
+                        "Einen Baustein dieses Namens gibt es schon. Wählen Sie einen "
+                        "anderen Namen — der vorhandene bleibt, wie er ist."
+                    )
+                )
+            )
+            return
+
         self.progress.setVisible(True)
         self.report.setText(tr("Der Baustein wird über seine Grenzen geprüft …"))
         if self._save is not None:
@@ -420,8 +442,21 @@ class RecipeDialog(QDialog):
         self._worker = worker
         self._leash.start(worker)
 
+    def reject(self) -> None:
+        """Abbrechen heißt abbrechen — auch mitten im Bereichstest.
+
+        Der Test läuft in einem Arbeiter, und der lässt sich nicht anhalten;
+        was er meldet, muss deshalb hier verfallen. Ohne diese Notiz legte
+        ``_checked`` den Baustein an, nachdem der Dialog längst zu war — ein
+        Ergebnis auf eine Frage, die zurückgezogen wurde.
+        """
+        self._abandoned = True
+        super().reject()
+
     def _checked(self, checked: Any) -> None:
         """Der Bereichstest ist durch — ablegen und registrieren."""
+        if self._abandoned:
+            return
         self.progress.setVisible(False)
         self._recipe = checked
         try:
@@ -482,6 +517,18 @@ def _scrolled(inner: QWidget, parent: QWidget) -> QScrollArea:
     return area
 
 
+def taken_name(name: str) -> bool:
+    """Ob dieser Bausteinname schon vergeben ist — im Register oder auf Platte.
+
+    Beides, und nicht nur eines: Registriert ist, was beim Start geladen wurde;
+    auf der Platte kann eine Datei liegen, die dabei fehlgeschlagen ist. Wer
+    nur das Register fragt, überschreibt sie.
+    """
+    if PARTS.has(name):
+        return True
+    return (recipes.recipes_dir() / f"{name}.json").exists()
+
+
 def _identifier(title: str) -> str:
     """Aus dem Titel einen Bezeichner, wie ihn das Register verlangt.
 
@@ -490,6 +537,20 @@ def _identifier(title: str) -> str:
     """
     table = {"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"}
     folded = "".join(table.get(char, char) for char in title.casefold())
-    cleaned = "".join(char if char.isalnum() else "_" for char in folded)
+    # **Alles andere Fremde wird zerlegt, nicht durchgelassen.** ``é`` und ``ñ``
+    # sind ``isalnum()`` und überlebten den Filter darunter — das Register
+    # nimmt sie nicht (``^[a-z][a-z0-9_]*$``), und der Kunde bekam für
+    # „Café-Halter" einen internen Fehler statt eines Bausteins. NFKD trennt
+    # den Akzent vom Buchstaben, und die kombinierenden Zeichen fallen weg.
+    folded = unicodedata.normalize("NFKD", folded)
+    folded = "".join(char for char in folded if not unicodedata.combining(char))
+    cleaned = "".join(char if char.isascii() and char.isalnum() else "_" for char in folded)
     stripped = "_".join(part for part in cleaned.split("_") if part)
-    return stripped or "eigener_baustein"
+    if not stripped:
+        return "eigener_baustein"
+    # **Und er fängt mit einem Buchstaben an.** „3er Halter" ergab „3er_halter",
+    # und auch das lehnt das Muster ab. Ein Wort davor ist ehrlicher als eine
+    # abgeschnittene Ziffer: Der Kunde hat sie hingeschrieben, weil sie zählt.
+    if not stripped[0].isalpha():
+        stripped = f"teil_{stripped}"
+    return stripped

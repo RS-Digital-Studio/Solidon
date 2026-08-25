@@ -19,11 +19,12 @@ from typing import Any
 import pytest
 from PySide6.QtWidgets import QApplication
 
+from app.core.knowledge.parts.registry import _NAME_PATTERN
 from app.core.scene.project import new_project
 from app.core.types import Document, Feature, Parameter
 from app.ui.catalog import PartCatalog
 from app.ui.main_window import MainWindow
-from app.ui.recipe_dialog import RecipeDialog, _identifier
+from app.ui.recipe_dialog import RecipeDialog, _identifier, taken_name
 from app.ui.session import Session
 from app.ui.settings import UiSettings
 
@@ -260,3 +261,90 @@ def test_the_button_stays_locked_until_the_project_can_carry_a_part(qt_app: QApp
         if release is not None:
             release(window)
         window.deleteLater()
+
+
+# --- die drei Funde aus Roberts Komplett-Review vom 25.08.2026 --------------------
+
+
+def test_every_title_becomes_a_name_the_registry_accepts() -> None:
+    """Was der Kunde tippt, muss durch ``^[a-z][a-z0-9_]*$`` passen.
+
+    Zwei Lücken, beide vom Rezept-Reviewer gefunden und hier nachgemessen: Eine
+    führende Ziffer bleibt vorn stehen, und ``é`` wie ``ñ`` sind ``isalnum()``
+    — sie überlebten den Filter und scheiterten erst im Register. Der Kunde
+    tippte „Café-Halter" und bekam einen internen Fehler statt eines Bausteins.
+
+    Geprüft wird gegen **das Muster des Registers**, nicht gegen eine Liste
+    erwarteter Namen: Ein Test, der die Umschrift festschreibt, verbietet ihre
+    Verbesserung.
+    """
+    for titel in (
+        "3er Halter",
+        "Café-Halter",
+        "Señor Box",
+        "2. Versuch",
+        "Größe 3 / Version 2",
+        "!!!",
+        "Halter für die Werkbank",
+        "ÜBERHANG",
+    ):
+        name = _identifier(titel)
+        assert _NAME_PATTERN.match(name), f"{titel!r} ergibt {name!r} — das Register lehnt es ab"
+
+    # **Und der Buchstabe bleibt ein Buchstabe.** Gültig wäre auch
+    # ``caf_halter`` — der Filter macht aus jedem fremden Zeichen einen
+    # Unterstrich, und das Muster nimmt es an. Der Name soll aber lesbar sein,
+    # und dafür wird der Akzent abgetrennt statt das ``e`` weggeworfen. Die
+    # Gegenprobe ohne die Faltung blieb sonst grün.
+    assert "cafe" in _identifier("Café-Halter"), "aus é wird e, nicht ein Unterstrich"
+    assert "senor" in _identifier("Señor Box"), "und aus ñ ein n"
+
+
+def test_a_name_that_is_taken_is_recognised_as_taken(tmp_path: Path) -> None:
+    """Ein zweiter Baustein desselben Namens darf den ersten nicht überschreiben.
+
+    ``recipes.save`` schreibt ``<name>.json`` bedingungslos, ``register`` meldet
+    die Kollision erst danach — wer einen Namen zweimal vergibt, verlöre still
+    sein erstes Rezept. Gefragt wird deshalb vor dem Schreiben, und zwar an
+    **beiden** Orten: Registriert ist, was beim Start geladen wurde; auf der
+    Platte kann eine Datei liegen, die dabei fehlgeschlagen ist.
+    """
+    from app.core.knowledge.parts import recipe as recipes
+
+    assert not taken_name("nagelneuer_name_ohne_datei")
+
+    ordner = recipes.recipes_dir()
+    ordner.mkdir(parents=True, exist_ok=True)
+    liegend = ordner / "schon_da.json"
+    liegend.write_text("{}", encoding="utf-8")
+    try:
+        assert taken_name("schon_da"), "eine Datei auf der Platte zählt"
+    finally:
+        liegend.unlink()
+
+    assert taken_name("nut_trap"), "und ein registrierter Baustein erst recht"
+
+
+def test_cancelling_during_the_range_check_creates_nothing(qt_app: QApplication) -> None:
+    """Wer abbricht, bekommt keinen Baustein — auch wenn der Test schon läuft.
+
+    Der Bereichstest läuft in einem Arbeiter und lässt sich nicht anhalten. Sein
+    Ergebnis muss deshalb verfallen: Ohne das legte ``_checked`` an, nachdem der
+    Dialog längst zu war — ein Ergebnis auf eine zurückgezogene Frage.
+    """
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    try:
+        dialog.title.setText("Werkbankhalter")
+        geschrieben: list[object] = []
+
+        dialog.reject()
+        assert dialog._abandoned, "der Abbruch wird vermerkt"
+
+        # Das Ergebnis kommt jetzt zu spät — es darf nichts mehr auslösen.
+        dialog.saved.connect(geschrieben.append)
+        dialog._checked(object())
+
+        assert not geschrieben, "nach dem Abbruch entsteht kein Baustein"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
