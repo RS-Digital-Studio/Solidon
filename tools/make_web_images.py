@@ -72,6 +72,58 @@ def _explode(target: Path) -> None:
 #: Abstand zwischen den beiden Bändern.
 GAP = 8
 
+#: Das Schaustück der Verkaufsseite — bewusst ein anderes als das
+#: Handbuch-Beispiel (``figures.EXAMPLE``, die Dose): Das Handbuch lehrt am
+#: Lehrgang, die Startseite verkauft am Ergebnis, und das zweifarbige Schild
+#: zeigt auf einen Blick, was die Dose nicht zeigen kann — erhabene Prägung
+#: in zwei Materialien. Der erste Eindruck trägt außerdem keinen
+#: Warnungsstapel (Hebel A der Website-Durchsicht vom 25.08.2026): Die
+#: Befundsorten zeigt weiterhin das ``report.png`` der Fremddatei im
+#: Handbuch; hier steht ein Bericht, der sagt, dass nichts zu tun ist.
+WEB_EXAMPLE = "schild-zweifarbig.p3d"
+
+#: Zwei grüne Sätze je Sprache: wasserdicht, druckfertig. Gestellt wie
+#: ``figures.SAMPLE_FINDINGS`` und aus demselben Grund — nur passt hier die
+#: Aussage zum gezeigten Teil statt zur Sortenschau.
+SHOWCASE_FINDINGS = {
+    "de": (
+        "Wasserdicht und aus einem Stück — keine offenen Kanten.",
+        "Passt auf das Druckbett; keine Stützen nötig.",
+    ),
+    "en": (
+        "Watertight and in one piece — no open edges.",
+        "Fits the build plate; no supports needed.",
+    ),
+    "es": (
+        "Estanco y de una pieza — sin aristas abiertas.",
+        "Cabe en la placa de impresión; no necesita soportes.",
+    ),
+    "fr": (
+        "Étanche et d'une seule pièce — aucune arête ouverte.",
+        "Tient sur le plateau ; aucun support nécessaire.",
+    ),
+    "it": (
+        "A tenuta stagna e in un pezzo solo — nessuno spigolo aperto.",
+        "Entra nel piatto di stampa; nessun supporto necessario.",
+    ),
+    "pt": (
+        "Estanque e de uma só peça — sem arestas abertas.",
+        "Cabe na mesa de impressão; não precisa de suportes.",
+    ),
+}
+
+
+def showcase_findings(language: str) -> list:
+    """Der Bericht des Schaustücks: zwei Zeilen, beide grün."""
+    from app.core.types import Finding
+
+    watertight, printable = SHOWCASE_FINDINGS.get(language, SHOWCASE_FINDINGS["de"])
+    return [
+        Finding(code="ingest.watertight", severity="info", message=watertight),
+        Finding(code="slice.printable", severity="info", message=printable),
+    ]
+
+
 #: Wie groß die Fenster für die Website aufgenommen werden.
 #:
 #: **Nicht bildschirmfüllend, und genau darin liegt der Zweck.** Fürs Handbuch
@@ -271,7 +323,7 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
     window = figures.prepared(
         MainWindow(session, UiSettings()), WEB_WINDOW, hidden=False, maximize=False
     )
-    project = examples.directory() / figures.EXAMPLE
+    project = examples.directory() / WEB_EXAMPLE
     if not project.is_file():
         raise SystemExit(f"Beispielprojekt fehlt: {project}")
     session.open_project(project)
@@ -280,7 +332,7 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
     window._show_start_screen(False)
     if not figures.await_result(app, session):
         raise SystemExit("Die Auswertung wurde nicht fertig — kein Bild vom Hauptfenster")
-    window.report.add_findings(figures.sample_findings(language))
+    window.report.add_findings(showcase_findings(language))
     window.raise_()
     window.activateWindow()
     figures.settle(app, 60)
