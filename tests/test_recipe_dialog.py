@@ -512,19 +512,19 @@ def test_a_second_click_does_not_start_a_second_worker(qt_app: QApplication) -> 
     dialog = _dialog(qt_app, (_feature("hole_1"),))
     started: list[object] = []
 
-    class Endless(module._RangeWorker):  # type: ignore[misc]
+    class Endless(module._CheckWorker):  # type: ignore[misc]
         """Ein Arbeiter, der nicht fertig wird — wie einer, der wirklich rechnet."""
 
         def work(self) -> None:
             while not self.is_cancelled:
                 self.msleep(10)
 
-    original_worker = module._RangeWorker
+    original_worker = module._CheckWorker
     original_capture = module.recipes.capture
     original_taken = module.taken_name
     original_start = dialog._leash.start
     try:
-        module._RangeWorker = Endless  # type: ignore[misc]
+        module._CheckWorker = Endless  # type: ignore[misc]
         module.recipes.capture = lambda *a, **k: SimpleNamespace(name="werkbankhalter")  # type: ignore[assignment]
         module.taken_name = lambda name: False  # type: ignore[assignment]
         dialog._leash.start = lambda worker: (  # type: ignore[method-assign]
@@ -540,10 +540,120 @@ def test_a_second_click_does_not_start_a_second_worker(qt_app: QApplication) -> 
         assert len(started) == 1, f"{len(started)} Arbeiter statt einem: {dialog.report.text()!r}"
         assert dialog.report.text() == first, "und der zweite Klick hat nichts zurückgesetzt"
     finally:
-        module._RangeWorker = original_worker  # type: ignore[misc]
+        module._CheckWorker = original_worker  # type: ignore[misc]
         module.recipes.capture = original_capture  # type: ignore[assignment]
         module.taken_name = original_taken  # type: ignore[assignment]
         dialog._leash.start = original_start  # type: ignore[method-assign]
         dialog.reject()
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_the_cut_runs_off_the_main_thread(qt_app: QApplication) -> None:
+    """``capture`` rechnet — und rechnete im Qt-Hauptthread (§2.8).
+
+    Der Name täuscht: ``capture`` liest nicht nur Werte ab, es rechnet den
+    Ausschnitt einmal durch (die Probe aus Konzept §18a). Gemessen am
+    25.08.2026 an einem echten Ausschnitt: 85 ms für einunddreißig Boolesche an
+    Grundkörpern, aber **3900 ms** für Kugel → glätten → aushöhlen. Das lief im
+    Hauptthread, und zwar bevor der Fortschrittsbalken sichtbar wurde — der
+    Kunde sah vier Sekunden ein totes Fenster und danach einen Balken.
+
+    Geprüft wird die Thread-Kennung, nicht die Dauer: Eine Zeitmessung sagt
+    „schnell genug auf dieser Maschine", die Kennung sagt „woanders". Die Dauer
+    steht als zweite Aussage daneben, weil eine Attrappe, die im richtigen
+    Thread liefe und trotzdem blockierte, den ersten Satz erfüllte.
+    """
+    import threading
+    import time
+
+    import app.ui.recipe_dialog as module
+    from app.core.errors import ValidationError
+
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+    main_thread = threading.get_ident()
+    seen: dict[str, int] = {}
+    release = threading.Event()
+
+    def slow_cut(*_args: object, **_kwargs: object) -> None:
+        seen["thread"] = threading.get_ident()
+        release.wait(3.0)
+        # Ein Fehler statt eines Rezepts: Der Test will den Schnitt messen,
+        # nicht den Bereichstest danach mitrechnen.
+        raise ValidationError(field="op_ids", detail="Probe", constraint="empty")
+
+    original_capture = module.recipes.capture
+    original_taken = module.taken_name
+    try:
+        module.recipes.capture = slow_cut  # type: ignore[assignment]
+        module.taken_name = lambda name: False  # type: ignore[assignment]
+        dialog.title.setText("Werkbankhalter")
+
+        started = time.perf_counter()
+        dialog._store()
+        took = time.perf_counter() - started
+
+        assert dialog._checking, "der Balken steht schon da, während gerechnet wird"
+
+        for _ in range(400):
+            if "thread" in seen:
+                break
+            qt_app.processEvents()
+            time.sleep(0.005)
+
+        assert seen.get("thread") is not None, "der Schnitt wurde nie betreten"
+        assert seen["thread"] != main_thread, "der Schnitt läuft im Oberflächen-Thread"
+        assert took < 0.5, f"_store hat {took:.2f} s blockiert — es wartet auf den Schnitt"
+    finally:
+        release.set()
+        module.recipes.capture = original_capture  # type: ignore[assignment]
+        module.taken_name = original_taken  # type: ignore[assignment]
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_a_refused_cut_keeps_its_own_words(qt_app: QApplication) -> None:
+    """Der Satz des Kerns überlebt die Fahrt aus dem Arbeiter heraus (Regel 17).
+
+    ``Worker.crashed`` gibt eine Zeichenkette. Käme der Fehler des Schnitts auf
+    diesem Weg, fände ``_failed`` weder ``title`` noch ``detail`` und zeigte
+    seinen Notsatz — und der Kunde läse „ließ sich nicht anlegen" statt
+    „wählen Sie mindestens einen Schritt".
+    """
+    import time
+
+    import app.ui.recipe_dialog as module
+    from app.core.errors import ValidationError
+
+    dialog = _dialog(qt_app, (_feature("hole_1"),))
+
+    def refuse(*_args: object, **_kwargs: object) -> None:
+        raise ValidationError(
+            field="op_ids",
+            detail="Der Ausschnitt ist leer — wählen Sie mindestens einen Schritt.",
+            constraint="empty",
+        )
+
+    original_capture = module.recipes.capture
+    original_taken = module.taken_name
+    try:
+        module.recipes.capture = refuse  # type: ignore[assignment]
+        module.taken_name = lambda name: False  # type: ignore[assignment]
+        dialog.title.setText("Werkbankhalter")
+        dialog._store()
+
+        for _ in range(400):
+            if not dialog._checking:
+                break
+            qt_app.processEvents()
+            time.sleep(0.005)
+
+        assert "mindestens einen Schritt" in dialog.report.text(), (
+            f"der Grund kam nicht an: {dialog.report.text()!r}"
+        )
+        assert not dialog._checking, "und der Balken bleibt nicht stehen"
+    finally:
+        module.recipes.capture = original_capture  # type: ignore[assignment]
+        module.taken_name = original_taken  # type: ignore[assignment]
         dialog.release()
         dialog.deleteLater()

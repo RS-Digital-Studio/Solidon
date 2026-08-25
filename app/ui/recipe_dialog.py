@@ -26,6 +26,7 @@ Schritten spürbar lange (§2.8).
 from __future__ import annotations
 
 import unicodedata
+from collections.abc import Callable
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
@@ -81,21 +82,42 @@ PLACE_FRONT = "front"
 PLACE_ADVANCED = "advanced"
 
 
-class _RangeWorker(Worker):
-    """Der Bereichstest, abseits des Oberflächen-Threads (§2.8, §38).
+class _CheckWorker(Worker):
+    """Schneiden und prüfen, beides abseits des Oberflächen-Threads (§2.8, §38).
 
-    Er wertet das Rezept an den Ecken jedes Zahlenbereichs aus — bei drei
-    freigegebenen Maßen sind das sechs Auswertungen, und jede rechnet den
-    ganzen Ausschnitt. Im Hauptthread wäre der Dialog dabei eingefroren.
+    Der Bereichstest wertet das Rezept an den Ecken jedes Zahlenbereichs aus —
+    bei drei freigegebenen Maßen sechs Auswertungen, jede über den ganzen
+    Ausschnitt. Dass das hierher gehört, war von Anfang an klar.
+
+    **Das Schneiden gehört ebenfalls hierher**, und das war es nicht.
+    ``capture`` liest nicht nur Werte ab, es rechnet den Ausschnitt einmal
+    durch (die Probe aus Konzept §18a) — gemessen am 25.08.2026: 85 ms für
+    einunddreißig Boolesche an Grundkörpern, aber 3900 ms für Kugel → glätten
+    → aushöhlen. Das lief im Hauptthread, und zwar bevor der
+    Fortschrittsbalken sichtbar wurde: Der Kunde sah vier Sekunden lang ein
+    totes Fenster und danach einen Balken. §2.8 setzt die Schwelle bei zwei
+    Sekunden.
+
+    Abbrechen wirkt erst nach dem Schnitt — ``capture`` nimmt kein Token, und
+    mitten in einer Auswertung lässt sich nichts anhalten. Der Unterschied ist
+    trotzdem der ganze: Das Fenster bleibt bedienbar.
     """
 
     done = Signal(object)
+    failed = Signal(object)
+    """Ein Fehler des Kerns, mit seinem Satz — nicht ``crashed``.
+
+    ``Worker.crashed`` gibt eine Zeichenkette, und ein ``AppError`` trägt einen
+    Titel, einen Grund und Handlungsvorschläge (Regel 17). Durch ``crashed``
+    käme davon nichts an: ``_failed`` fände weder ``title`` noch ``detail`` und
+    zeigte seinen Notsatz.
+    """
     step = Signal(float, str)
     """Wie weit er ist (0 bis 1) und woran — eine Ecke je Meldung."""
 
-    def __init__(self, recipe: Any, profile: Profile) -> None:
+    def __init__(self, cut: Callable[[], Any], profile: Profile) -> None:
         super().__init__()
-        self._recipe = recipe
+        self._cut = cut
         self._profile = profile
         self._stopped = False
 
@@ -114,9 +136,23 @@ class _RangeWorker(Worker):
         self._stopped = True
 
     def work(self) -> None:
+        # Der Schnitt hat keinen eigenen Fortschritt — er ist ein Stück, nicht
+        # eine Reihe. Was er hat, ist ein Satz, und der steht da, bevor er
+        # anfängt: Vier Sekunden ohne Auskunft sind vier Sekunden Zweifel.
+        self.step.emit(0.0, str(tr("Der Ausschnitt wird geschnitten und einmal gerechnet …")))
+        try:
+            recipe = self._cut()
+        except AppError as error:
+            # Der Kern prüft beim Schneiden und sagt mit Vorschlag, was fehlt.
+            # Hier wird nichts umformuliert — der Satz von dort ist genauer als
+            # jeder, den dieser Dialog erfinden könnte.
+            self.failed.emit(error)
+            return
+        if self.is_cancelled:
+            return
         self.done.emit(
             recipes.range_check(
-                self._recipe,
+                recipe,
                 self._profile,
                 progress=lambda share, note: self.step.emit(float(share), str(note)),
                 cancelled=self,
@@ -264,8 +300,7 @@ class RecipeDialog(QDialog):
         self._op_ids = op_ids
         self._profile = profile
         self._leash = WorkerLeash(self)
-        self._worker: _RangeWorker | None = None
-        self._recipe: Any = None
+        self._worker: _CheckWorker | None = None
         self._abandoned = False
         self._checking = False
         """Ob der Dialog verworfen wurde, während der Bereichstest lief."""
@@ -495,40 +530,31 @@ class RecipeDialog(QDialog):
         # null zurückgesetzt und seinen Satz überschrieben.
         if self._worker is not None and self._worker.isRunning():
             return
-        title = self.title.text().strip()
-        try:
-            self._recipe = recipes.capture(
-                self._document,
-                self._payloads,
-                name=_identifier(title),
-                title=title,
-                group=str(self.group.currentData()),
-                op_ids=self._op_ids,
-                exposed=tuple(row.exposed() for row in self._params if row.take.isChecked()),
-                features={
-                    row.name.text().strip() or row.feature_id: row.feature_id
-                    for row in self._features
-                    if row.take.isChecked()
-                },
-                doc=self.doc.text().strip(),
-                profile=self._profile,
-            )
-        except AppError as error:
-            # Der Kern prüft beim Schneiden und sagt mit Vorschlag, was fehlt
-            # (Regel 17). Hier wird nichts umformuliert — der Satz von dort ist
-            # genauer als jeder, den dieser Dialog erfinden könnte.
-            self.report.setText(f"{error.title}\n{error.detail or ''}".strip())
-            return
 
-        # **Erst nachsehen, ob der Name frei ist — vor dem Schreiben und vor
-        # dem Warten.** ``recipes.save`` legt die Datei unter dem Namen an und
-        # überschreibt dabei, was dort liegt; ``register`` merkt die Kollision
-        # erst danach. Wer einen Namen zweimal vergibt, verlöre still sein
-        # erstes Rezept und bekäme einen internen Fehler dazu.
-        #
-        # Gefragt wird vor dem Bereichstest: Der dauert, und eine Absage nach
-        # dreißig Sekunden Wartebalken ist eine Absage zu spät.
-        if taken_name(self._recipe.name):
+        # Was der Schnitt braucht, wird **hier** abgelesen: Widgets gehören dem
+        # Hauptthread, und ein Arbeiter, der sie anfasst, ist ein Absturz, der
+        # nur meistens ausbleibt (§38). Das Ablesen kostet nichts — es ist der
+        # Schnitt danach, der rechnet.
+        title = self.title.text().strip()
+        name = _identifier(title)
+        group = str(self.group.currentData())
+        exposed = tuple(row.exposed() for row in self._params if row.take.isChecked())
+        features = {
+            row.name.text().strip() or row.feature_id: row.feature_id
+            for row in self._features
+            if row.take.isChecked()
+        }
+        doc = self.doc.text().strip()
+
+        # **Erst nachsehen, ob der Name frei ist — vor dem Schneiden, vor dem
+        # Schreiben und vor dem Warten.** ``recipes.save`` legt die Datei unter
+        # dem Namen an und überschreibt dabei, was dort liegt; ``register``
+        # merkt die Kollision erst danach. Wer einen Namen zweimal vergibt,
+        # verlöre still sein erstes Rezept und bekäme einen internen Fehler
+        # dazu. Gefragt wird ganz vorn, denn der Name steht fest, bevor
+        # irgendetwas gerechnet ist — und eine Absage nach vier Sekunden
+        # Wartebalken ist eine Absage zu spät.
+        if taken_name(name):
             self.report.setText(
                 str(
                     tr(
@@ -539,11 +565,27 @@ class RecipeDialog(QDialog):
             )
             return
 
+        def cut() -> Any:
+            """Der Schnitt mit den abgelesenen Werten — läuft im Arbeiter."""
+            return recipes.capture(
+                self._document,
+                self._payloads,
+                name=name,
+                title=title,
+                group=group,
+                op_ids=self._op_ids,
+                exposed=exposed,
+                features=features,
+                doc=doc,
+                profile=self._profile,
+            )
+
         self._show_waiting(True)
         self.report.setText(tr("Der Baustein wird über seine Grenzen geprüft …"))
         self._save.setEnabled(False)
-        worker = _RangeWorker(self._recipe, self._profile)
+        worker = _CheckWorker(cut, self._profile)
         worker.step.connect(self._step)
+        worker.failed.connect(self._failed)
         worker.done.connect(self._checked)
         worker.crashed.connect(self._failed)
         worker.finished.connect(lambda done=worker: self._worker_done(done))
@@ -603,7 +645,6 @@ class RecipeDialog(QDialog):
             # Prüfung abgebrochen und das Ergebnis kommt hinterher.
             return
         self._show_waiting(False)
-        self._recipe = checked
         try:
             recipes.save(checked)
             recipes.register(checked)
