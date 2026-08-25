@@ -104,6 +104,132 @@ def test_a_steep_cone_on_its_tip_costs_support() -> None:
     assert standing.support_volume == pytest.approx(0.0, abs=1.0)
 
 
+# --- das Stützvolumen (§22.2) ---------------------------------------------------
+
+
+def mushroom() -> MeshData:
+    """Ein Pilz: ein Stiel 10 × 10 × 20, darauf ein Hut 40 × 40 × 5.
+
+    Der Körper, an dem sich das Stützvolumen mit einem Bleistift ausrechnen
+    lässt: Der Hut kragt auf 40 · 40 − 10 · 10 = 1 500 mm² frei aus, und
+    darunter stehen 20 mm Luft bis zur Platte. Die Säule misst also
+    30 000 mm³.
+    """
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 20.0))
+    stem.apply_translation((0.0, 0.0, 10.0))
+    cap = trimesh.creation.box(extents=(40.0, 40.0, 5.0))
+    cap.apply_translation((0.0, 0.0, 22.5))
+    return MeshData.of(trimesh.boolean.union([stem, cap]))
+
+
+#: Was die Säule unter dem Pilzhut analytisch misst, in mm³.
+MUSHROOM_SUPPORT = (40.0 * 40.0 - 10.0 * 10.0) * 20.0
+
+
+def test_the_support_volume_is_the_column_and_not_the_overhanging_shell() -> None:
+    """Gestützt wird der Raum **unter** dem Überhang, nicht der Überhang selbst.
+
+    Gerechnet wurde ``Überhangfläche × Schichthöhe`` — das ist das Volumen der
+    auskragenden Schale, also des Materials, das der Drucker dort ablegt. Was
+    eine Stütze kostet, ist der Raum darunter: bei diesem Pilz 79 mm³ gegen
+    30 000, ein Faktor von fast vierhundert. Auf dieser Zahl steht die
+    Kostenschätzung, die Orientierungssuche und die Gegenprobe gegen den
+    G-Code — die dadurch bei jedem Lauf Alarm schlug.
+    """
+    result = slice_body(place_on_bed(mushroom()), 0.2)
+
+    assert result.support_volume == pytest.approx(MUSHROOM_SUPPORT, rel=0.05)
+
+
+def test_the_support_volume_does_not_depend_on_the_layer_height() -> None:
+    """Dieselbe Säule, doppelt so fein geschnitten — dieselbe Zahl.
+
+    Die Probe, die den alten Fehler nicht überleben konnte: Über die Schale
+    gerechnet skalierte das Ergebnis linear mit der Schichthöhe (79 mm³ bei
+    0,2 mm, 385 bei 1,0). Eine Kennzahl, die sich mit der Auflösung ändert, mit
+    der man sie misst, ist keine Eigenschaft des Körpers.
+    """
+    body = place_on_bed(mushroom())
+
+    fine = slice_body(body, 0.2).support_volume
+    coarse = slice_body(body, 0.4).support_volume
+
+    assert fine == pytest.approx(coarse, rel=0.1), (
+        f"{fine:.0f} mm³ bei 0,2 mm gegen {coarse:.0f} mm³ bei 0,4 mm"
+    )
+
+
+def test_the_support_volume_stops_at_the_material_below() -> None:
+    """Eine Säule endet, wo sie auf das Teil trifft — nicht erst auf der Platte.
+
+    Zwei Stufen: Der Hut sitzt hier auf einem Sockel, der die Hälfte des
+    Überhangs auffängt. Ohne diese Prüfung ginge auch eine Rechnung durch, die
+    schlicht jede Überhangfläche bis zum Bett verlängert.
+    """
+    base = trimesh.creation.box(extents=(30.0, 40.0, 10.0))
+    base.apply_translation((-5.0, 0.0, 5.0))
+    stem = trimesh.creation.box(extents=(10.0, 10.0, 20.0))
+    stem.apply_translation((0.0, 0.0, 10.0))
+    cap = trimesh.creation.box(extents=(40.0, 40.0, 5.0))
+    cap.apply_translation((0.0, 0.0, 22.5))
+    body = MeshData.of(trimesh.boolean.union([base, stem, cap]))
+
+    result = slice_body(place_on_bed(body), 0.2)
+
+    # Über dem Sockel (30 auf 40, abzüglich des Stiels) fällt der Hut nur
+    # 10 mm, daneben (10 auf 40) volle 20 mm.
+    over_base = (30.0 * 40.0 - 10.0 * 10.0) * 10.0
+    beside_base = 10.0 * 40.0 * 20.0
+    assert result.support_volume == pytest.approx(over_base + beside_base, rel=0.08)
+
+
+#: Was PrusaSlicer 2.9.6 für denselben Pilz an Stützmaterial gemessen hat, in
+#: mm³ — Lauf vom 25.08.2026, 0,2 mm, Stützen an, sonst Vorgaben.
+#: (``prusa-slicer-console --export-gcode --support-material``, Typkommentare
+#: über ``gcode.parse`` ausgezählt.)
+MEASURED_SUPPORT = 3990.6
+
+
+def test_the_cross_check_against_a_real_sliced_file_passes() -> None:
+    """§28.2: Die Gegenprobe feuerte bei jedem Lauf — und hatte recht.
+
+    Verglichen wurde ein **Rauminhalt** mit einer gemessenen **Fadenmenge**.
+    Zwei verschiedene Größen liegen immer auseinander; die Schwelle von 15 %
+    war dabei nie erreichbar, und eine Warnung, die immer kommt, liest nach
+    dem dritten Mal niemand mehr.
+
+    Der Drucker füllt die Säule nicht aus, er stellt ein Muster hinein —
+    ``support.density``, hier fünfzehn Prozent. Mit dieser einen Umrechnung
+    (:func:`estimate.support_material`) liegt die Gegenprobe innerhalb ihrer
+    Schwelle.
+    """
+    from app.core.knowledge import print_settings, profiles
+    from app.core.slice import estimate, gcode
+
+    settings = print_settings.with_path(
+        print_settings.resolve(profiles.make_profile()), "support.style", "grid"
+    )
+    column = slice_body(place_on_bed(mushroom()), 0.2).support_volume
+
+    check = gcode.compare(estimate.support_material(column, settings), MEASURED_SUPPORT, "support")
+
+    assert check.within_limit, f"{check.deviation:+.0%} gegen einen echten Lauf"
+    assert not check.findings
+    # Und die Gegenrichtung: ohne die Umrechnung schlägt derselbe Lauf an.
+    assert not gcode.compare(column, MEASURED_SUPPORT, "support").within_limit
+
+
+def test_without_supports_the_column_costs_nothing() -> None:
+    """Kein Muster, kein Material — und das ist keine Schätzung von null."""
+    from app.core.knowledge import print_settings, profiles
+    from app.core.slice import estimate
+
+    settings = print_settings.resolve(profiles.make_profile())
+
+    assert settings.support.style == "none"
+    assert estimate.support_material(30000.0, settings) == 0.0
+
+
 # --- islands --------------------------------------------------------------------
 
 
@@ -222,8 +348,19 @@ def test_an_empty_body_slices_to_nothing() -> None:
 
 
 def test_a_layer_height_of_zero_is_refused() -> None:
-    with pytest.raises(ValueError):
+    """Und zwar mit einem Satz, den ein Kunde lesen kann (Regel 17).
+
+    Hier stand ``ValueError("layer height has to be positive")`` — englisch,
+    ohne Handlungsvorschlag, und erreichbar: Die Schichthöhe kommt aus dem
+    Druckerprofil, und ein eigenes ``printers.toml`` bringt sie bis hierher.
+    """
+    from app.core.errors import ValidationError
+
+    with pytest.raises(ValidationError) as raised:
         slice_body(on_bed(trimesh.creation.box(extents=(10.0, 10.0, 10.0))), 0.0)
+
+    assert raised.value.suggestions, "jede Ausnahme trägt einen Handlungsvorschlag"
+    assert "Schichthöhe" in str(raised.value.detail)
 
 
 # --- Ein Schnitt mit einem Loch mitten darin ------------------------------------
@@ -396,6 +533,30 @@ def test_a_shelf_over_a_hollow_reports_its_free_span() -> None:
     # Frei hängt die Bahn über der Öffnung, die die Schulter umschließt — also
     # über deren Durchmesser, nicht über der Breite der Schulter selbst.
     assert worst.bridge_width == pytest.approx(20.0, rel=0.1)
+
+
+def test_a_cable_duct_spans_its_narrow_side_not_its_long_one() -> None:
+    """Gemessen wird die **kürzeste** freie Spannweite, nicht die Ausdehnung.
+
+    Ein Kabelkanal, dessen Decke über einem Hohlraum von 30 auf 8 mm liegt,
+    stand mit 30 mm im Bericht: Genommen wurde die größere Seite des
+    Hüllrechtecks. Der Slicer legt seine Bahnen aber quer über die schmale
+    Seite — acht Millimeter, und die überspannt jede Düse. Aus einer Decke, die
+    problemlos druckt, wurde so eine Warnung, die zu Stützen riet.
+    """
+    outer = trimesh.creation.box(extents=(40.0, 20.0, 20.0))
+    outer.apply_translation((0.0, 0.0, 10.0))
+    cavity = trimesh.creation.box(extents=(30.0, 8.0, 8.0))
+    cavity.apply_translation((0.0, 0.0, 6.0))
+    body = MeshData.of(trimesh.boolean.difference([outer, cavity]))
+
+    result = slice_body(body, 0.2)
+    spans = [layer for layer in result.layers if layer.bridge_width > 1.0]
+
+    assert spans, "die Decke über dem Kanal spannt frei und muss gemessen werden"
+    worst = max(spans, key=lambda layer: layer.bridge_width)
+    assert worst.z == pytest.approx(10.0, abs=0.3)
+    assert worst.bridge_width == pytest.approx(8.0, rel=0.15)
 
 
 def test_a_forty_five_degree_transition_spans_nothing() -> None:

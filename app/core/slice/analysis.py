@@ -24,10 +24,12 @@ import shapely
 from shapely.geometry import Polygon as ShapelyPolygon
 from shapely.ops import unary_union
 
+from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import LayerInfo, Polygon, SliceResult
 from app.core.units import EPS_GEOM
+from app.i18n import _
 
 _log = get_logger(__name__)
 
@@ -121,7 +123,16 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
     ansieht.
     """
     if layer_height <= EPS_GEOM:
-        raise ValueError("layer height has to be positive")
+        # Kein nackter ``ValueError``: Die Schichthöhe kommt aus dem
+        # Druckerprofil, und ein eigenes ``printers.toml`` bringt diesen Fall
+        # bis in die Oberfläche. Dort stand ein englischer Satz ohne
+        # Handlungsvorschlag (Regel 17).
+        raise ValidationError(
+            "layer_height",
+            _("Die Schichthöhe muss größer als null sein."),
+            value=layer_height,
+            constraint="layer_height",
+        )
 
     bounds = mesh.bounds
     low, high = bounds.minimum[2], bounds.maximum[2]
@@ -129,12 +140,12 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
         return SliceResult(layers=(), support_volume=0.0, first_layer_area=0.0, source="internal")
 
     layers: list[LayerInfo] = []
-    support = 0.0
 
     # Eine halbe Schicht über dem Boden: der erste Schnitt muss Material treffen.
     heights = np.arange(low + layer_height / 2.0, high, layer_height)
     sections = cross_sections(mesh, heights)
     measured = _measure_all(sections, layer_height, detail)
+    support = _support_volume(sections, measured, layer_height)
 
     previous: ShapelyPolygon | None = None
     for z, shape, metrics in zip(heights, sections, measured, strict=True):
@@ -142,7 +153,6 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
             previous = None
             continue
 
-        support += metrics.overhang_area * layer_height
         layers.append(
             LayerInfo(
                 z=float(z),
@@ -169,6 +179,100 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
     )
 
 
+def _support_volume(
+    sections: list[ShapelyPolygon | None],
+    measured: list[LayerMetrics | None],
+    layer_height: float,
+) -> float:
+    """Das Volumen der **Stützsäulen** unter allen Überhängen, in mm³ (§22.2).
+
+    Gerechnet wurde hier ``Überhangfläche mal Schichthöhe``, aufsummiert. Das ist
+    das Volumen der auskragenden **Schale** — des Materials, das der Drucker
+    dort oben ablegt — und nicht das, was eine Stütze kostet. Zwei Dinge waren
+    daran falsch, und das zweite ist das schlimmere: Die Zahl war an einem Pilz
+    (Hut 40 auf 40 über einem Stiel 10 auf 10, 20 mm hoch) um den Faktor 380 zu
+    klein, **und** sie hing an der Schichthöhe: 79 mm³ bei 0,2 mm, 385 bei 1,0.
+    Eine Eigenschaft des Körpers, die sich mit der Auflösung ändert, mit der man
+    sie misst, ist keine.
+
+    Gestützt wird der Raum **unter** dem Überhang, bis zum nächsten Material
+    oder bis zur Platte. Gerechnet wird das in einem Durchgang von oben nach
+    unten: ``pending`` ist die Fläche, die auf dieser Höhe noch von unten
+    getragen werden muss. Sie wächst um den Überhang jeder Schicht und schrumpft
+    um alles, was die Schicht darunter an Material bietet — je Schichtabstand
+    kommt ihre Fläche mal der Fallhöhe dazu. Damit ist das Ergebnis von der
+    Schichthöhe unabhängig: halb so hohe Schichten sind doppelt so viele.
+
+    **Unter der untersten Schicht bleibt eine halbe Schichthöhe.** Der erste
+    Schnitt liegt eine halbe Schicht über der Unterkante des Körpers, und ob
+    dort die Platte steht, weiß der Schneider nicht — er kennt nur den Körper.
+    Der Term geht mit der Schichthöhe gegen null und ist damit kein Beitrag,
+    der eine Aussage trägt.
+
+    **Die Säulen werden nie vereinigt, und das ist der Unterschied zwischen
+    37 Millisekunden und 6,7 Sekunden.** Sie können sich nicht überschneiden:
+    Ein Überhang gehört zum Material seiner eigenen Schicht, und was von oben
+    kommt, ist eine Schicht vorher an genau diesem Material zerteilt worden.
+    Der erste Anlauf rief trotzdem ``unary_union`` — an einer Kugel mit
+    327 000 Dreiecken kostete das 33 ms je Schicht, weil das Verschneiden
+    hunderter schmaler Ringe genau die Arbeit ist, die eine Vereinigung teuer
+    macht. Gehalten wird deshalb eine **Liste** überschneidungsfreier Teile;
+    ihre Flächen addieren sich, und der räumliche Index sagt in einem Aufruf,
+    welche davon die Schicht darunter überhaupt berührt. Beide Wege ergeben
+    dieselbe Zahl (4016,6 mm³ an derselben Kugel), einer davon in einem
+    Hundertachtzigstel der Zeit.
+    """
+    pending: list[ShapelyPolygon] = []
+    volume = 0.0
+    for index in range(len(sections) - 1, -1, -1):
+        metrics = measured[index]
+        region = None if metrics is None else metrics.overhang
+        if region is not None and not region.is_empty:
+            pending += _areas_of(region)
+        if not pending:
+            continue
+        below = sections[index - 1] if index else None
+        if below is not None and not below.is_empty:
+            pending = _above_material(pending, below)
+            if not pending:
+                continue
+        volume += float(shapely.area(np.asarray(pending, dtype=object)).sum()) * (
+            layer_height if index else layer_height / 2.0
+        )
+    return volume
+
+
+def _areas_of(shape: ShapelyPolygon) -> list[ShapelyPolygon]:
+    """Die flächigen Teile einer Geometrie, einzeln.
+
+    Eine Differenz kann Linien zurückgeben, wo zwei Flächen sich nur berühren.
+    Die tragen keine Fläche und keine Säule.
+    """
+    parts = getattr(shape, "geoms", [shape])
+    return [part for part in parts if part.geom_type == "Polygon" and not part.is_empty]
+
+
+def _above_material(pending: list[ShapelyPolygon], below: ShapelyPolygon) -> list[ShapelyPolygon]:
+    """Was von den Säulen übrig bleibt, wenn die Schicht darunter trägt.
+
+    Geschnitten wird nur, was sich überhaupt berührt, und gefragt wird das
+    **vektorisiert**: ein Aufruf über alle Teile, nicht einer je Teil. Ein
+    räumlicher Index stand hier zuerst und war die schlechtere Wahl — er will
+    je Schicht neu gebaut werden, und bei hundert Teilen kostet der Bau mehr
+    als die Fragen, die er spart. An der Orientierungssuche über 200
+    Kandidaten gemessen: 27,4 s mit Baum, 19,1 s ohne.
+    """
+    parts = np.asarray(pending, dtype=object)
+    touching = np.nonzero(shapely.intersects(parts, below))[0].tolist()
+    if not touching:
+        return pending
+    hit = set(touching)
+    kept = [part for number, part in enumerate(pending) if number not in hit]
+    for number in touching:
+        kept += _areas_of(pending[number].difference(below))
+    return kept
+
+
 def _measure_all(
     sections: list[ShapelyPolygon | None], layer_height: float, detail: Detail
 ) -> list[LayerMetrics | None]:
@@ -186,9 +290,11 @@ def _measure_all(
     sequenzielle Schleife.
 
     ``on_plate`` ist das eine, womit das Auffächern vorsichtig sein muss: die
-    erste Schicht mit Material liegt auf der Platte und braucht keine Stütze,
-    und die erste nach einer Lücke auch nicht. Das wird hier entschieden, bevor
-    irgendetwas beginnt.
+    erste Schicht mit Material liegt auf der Platte und braucht keine Stütze.
+    Die erste nach einer **Lücke** braucht sehr wohl eine — sie beginnt in der
+    Luft, und genau das ist eine Insel (:func:`_islands`); ``on_plate`` gilt
+    deshalb nur der untersten Schicht des Körpers. Das wird hier entschieden,
+    bevor irgendetwas beginnt.
     """
     from concurrent.futures import ThreadPoolExecutor
 
@@ -707,6 +813,16 @@ def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> flo
     über der **Öffnung**, die sie umschließt. Genau diese Zahl war beim
     Gewürzbehälter der Schaden: eine 3-mm-Schulter, deren Bahnen 24 mm frei
     quer über den Becher liefen.
+
+    **Und es ist auch nicht die längere Seite des Hüllrechtecks.** Gemessen
+    wurde die größere Ausdehnung der Öffnung, und damit stand über einem
+    Kabelkanal von 30 auf 8 mm eine Brücke von 30 mm im Bericht. Der Slicer
+    legt seine Bahnen quer über die **schmale** Seite — acht Millimeter, die
+    jede Düse überspannt. Gefragt ist die kürzeste freie Weite, und die misst
+    :func:`minimum_width` ohnehin schon, nur zwei Funktionen weiter oben:
+    erodieren, bis nichts mehr übrig ist. Ohne Deckel gerufen
+    (``interesting_below=0.0``), denn hier ist die Zahl selbst die Antwort und
+    nicht die Frage „dünner als eine Bahn?".
     """
     if previous is None or previous.is_empty:
         return 0.0
@@ -728,9 +844,9 @@ def _bridge_width(shape: ShapelyPolygon, previous: ShapelyPolygon | None) -> flo
         # Umschließt der ungestützte Bereich eine Öffnung, ist deren Weite die
         # freie Spannweite; ist er selbst eine Fläche (eine Decke über einem
         # Hohlraum), zählt seine eigene.
-        rings = [ring.bounds for ring in part.interiors] or [part.bounds]
-        for low, left, high, right in rings:
-            widest = max(widest, high - low, right - left)
+        spans = [ShapelyPolygon(ring) for ring in part.interiors] or [part]
+        for span in spans:
+            widest = max(widest, minimum_width(span, interesting_below=0.0))
     return float(widest)
 
 
@@ -800,6 +916,28 @@ def narrowest(result: SliceResult) -> float:
     (§22.2). Ein Körper, dessen dünnste Stelle dicker ist, meldet genau diese
     Grenze — „mindestens zwei Millimeter", keine Messung. Was diese Zahl zeigt,
     muss das sagen.
+
+    **Wer auf ihr rechnet, nimmt :func:`narrowest_measured`.** Dort ist der
+    Deckel ``None`` und keine Zahl.
     """
     widths = [layer.min_width for layer in result.layers if layer.min_width > EPS_GEOM]
     return min(widths) if widths else 0.0
+
+
+def narrowest_measured(result: SliceResult) -> float | None:
+    """Dieselbe Zahl, aber nur wo sie eine **Messung** ist — sonst ``None``.
+
+    Der Deckel aus :data:`WIDTH_INTERESTING` ist eine untere Schranke und wurde
+    trotzdem weiterverrechnet. An einer 0,8er-Düse ist das teuer: Drei
+    Linienbreiten sind dort 2,55 mm, der Deckel liegt bei 2,00, und damit
+    meldete ein massiver Klotz „die schmalste Stelle geht auf keine ganze Zahl
+    von Bahnen auf" — eine Warnung über eine Stelle, die niemand gemessen hat.
+
+    ``None`` heißt „keine Aussage", und darauf lässt sich nichts falsch
+    rechnen. Null bleibt Null: ein Körper ohne messbare Schicht hat keine
+    dünnste Stelle.
+    """
+    thin = narrowest(result)
+    if thin <= EPS_GEOM:
+        return None
+    return None if thin >= WIDTH_INTERESTING - EPS_GEOM else thin

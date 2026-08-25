@@ -2210,6 +2210,154 @@ def test_a_slicer_that_cannot_start_is_an_answer(tmp_path: Path) -> None:
     assert caught.value.suggestions
 
 
+def test_slicing_without_a_model_offers_nothing_to_install(tmp_path: Path) -> None:
+    """Regel 17 heißt nicht „irgendein Knopf".
+
+    Beide Fehler erbten die Vorschläge von :class:`ExternalToolError`, und der
+    erste davon heißt „Zusätzliche Programme …". Es fehlt hier aber kein
+    Programm: Übergeben wurde nichts, beziehungsweise die Datei ist weg. Wer
+    dem Knopf folgt, landet in einer Liste, die mit seinem Fehler nichts zu
+    tun hat.
+    """
+    profile = profiles.make_profile()
+    setup = handover.SlicerSetup(executable=tmp_path / "cura.exe", flavour="cura")
+
+    with pytest.raises(ExternalToolError) as leer:
+        handover.slice_model([], print_settings.resolve(profile), profile, setup)
+    assert leer.value.suggestions
+    assert "install" not in {action.id for action in leer.value.suggestions}
+    assert "change_selection" in {action.id for action in leer.value.suggestions}
+
+    with pytest.raises(ExternalToolError) as weg:
+        handover.slice_model(
+            tmp_path / "verschwunden.stl", print_settings.resolve(profile), profile, setup
+        )
+    assert "install" not in {action.id for action in weg.value.suggestions}
+    assert "retry" in {action.id for action in weg.value.suggestions}
+
+
+def test_a_semicolon_in_a_profile_path_is_refused_before_the_slicer_sees_it(
+    tmp_path: Path,
+) -> None:
+    """``--load-settings`` trennt seine Profile mit Semikolon.
+
+    Ein Semikolon im Pfad macht aus einem Profil zwei, und der Slicer
+    antwortet mit „can not find setting file" auf einen Pfad, den es so nie
+    gab. Ein Maskierungsweg ist für diesen Schalter nirgends zugesagt — also
+    wird die Lage benannt, statt sie zu raten.
+    """
+    heikel = tmp_path / "ma;schine.json"
+    heikel.write_text("{}", encoding="utf-8")
+    setup = handover.SlicerSetup(
+        executable=tmp_path / "orca.exe", flavour="orca", machine_profile=str(heikel)
+    )
+    config = handover.SlicerConfig(process=tmp_path / "prozess.json")
+
+    with pytest.raises(ExternalToolError) as caught:
+        handover._command(setup, [tmp_path / "platte.3mf"], config, tmp_path)
+
+    assert ";" in str(caught.value.values.get("path", "")), "der Pfad, um den es geht"
+    assert caught.value.suggestions, "Regel 17"
+
+    harmlos = tmp_path / "maschine.json"
+    harmlos.write_text("{}", encoding="utf-8")
+    gut = handover.SlicerSetup(
+        executable=tmp_path / "orca.exe", flavour="orca", machine_profile=str(harmlos)
+    )
+    assert "--load-settings" in handover._command(gut, [tmp_path / "p.3mf"], config, tmp_path)
+
+
+def test_the_print_file_we_asked_for_beats_a_stranger_in_the_folder(tmp_path: Path) -> None:
+    """§22.5: Kennzahlen sind nur etwas wert, wenn sie aus *dieser* Datei
+    kommen.
+
+    Prusa und Cura schreiben dorthin, wohin Solidon zeigt, und unter dem
+    Namen, den Solidon nennt. Gesucht wurde trotzdem nur nach Endung, und die
+    jüngste gewann — in einem Zielordner des Nutzers ist das die Datei eines
+    fremden Programms, und ihre Zahlen standen dann im Prüfbericht.
+    """
+    import os
+
+    unser = tmp_path / handover.OUTPUT_NAME
+    unser.write_text("G1 X1 Y1 E1\n", encoding="utf-8")
+    fremd = tmp_path / "irgendwas.gcode"
+    fremd.write_text("G1 X2 Y2 E2\n", encoding="utf-8")
+    spaeter = unser.stat().st_mtime + 60.0
+    os.utime(fremd, (spaeter, spaeter))
+
+    assert handover._find_gcode(tmp_path, handover.OUTPUT_NAME) == unser
+    assert handover._find_gcode(tmp_path) == fremd, "wo der Slicer selbst benennt, die jüngste"
+
+    unser.unlink()
+    assert handover._find_gcode(tmp_path, handover.OUTPUT_NAME) == fremd, "Rückfall bleibt"
+
+
+def test_the_slicer_run_reads_back_the_file_it_asked_for(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Und die Anschlussprüfung dazu: nicht „``_find_gcode`` kann es", sondern
+    „der Lauf tut es"."""
+    import os
+
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    executable = tmp_path / "cura.exe"
+    executable.write_bytes(b"")
+
+    def _writes(*_args: object, **_kwargs: object) -> _Finished:
+        (tmp_path / handover.OUTPUT_NAME).write_text(
+            _gcode_printing_at(-10.0, 10.0), encoding="utf-8"
+        )
+        fremd = tmp_path / "fremd.gcode"
+        fremd.write_text(_gcode_printing_at(400.0), encoding="utf-8")
+        spaeter = fremd.stat().st_mtime + 60.0
+        os.utime(fremd, (spaeter, spaeter))
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", _writes)
+    setup = handover.SlicerSetup(executable=executable, flavour="cura")
+
+    outcome = handover.slice_model(
+        model, print_settings.resolve(profile), profile, setup, output_dir=tmp_path
+    )
+
+    assert outcome.gcode_path.name == handover.OUTPUT_NAME
+
+
+def test_a_print_file_that_cannot_be_kept_says_so(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ohne ``output_dir`` verschwindet der Arbeitsordner, und die Druckdatei
+    wandert neben das Modell. Ging das nicht, flog ein roher ``OSError`` —
+    aus einem Arbeits-Thread, der nur ``AppError`` fängt.
+    """
+    from app.core.errors import FileWriteError
+
+    profile = profiles.make_profile()
+    model = tmp_path / "model.stl"
+    model.write_bytes(b"solid x\nendsolid x\n")
+    (tmp_path / "model.gcode").mkdir()  # der Platz ist belegt, und zwar von einem Ordner
+    executable = tmp_path / "cura.exe"
+    executable.write_bytes(b"")
+
+    def _writes(*args: object, **_kwargs: object) -> _Finished:
+        workspace = args[1]
+        assert isinstance(workspace, Path)
+        (workspace / handover.OUTPUT_NAME).write_text(
+            _gcode_printing_at(-10.0, 10.0), encoding="utf-8"
+        )
+        return _Finished(b"")
+
+    monkeypatch.setattr(handover, "_run_slicer", _writes)
+    setup = handover.SlicerSetup(executable=executable, flavour="cura")
+
+    with pytest.raises(FileWriteError) as caught:
+        handover.slice_model(model, print_settings.resolve(profile), profile, setup)
+
+    assert caught.value.suggestions, "Regel 17"
+
+
 def test_an_unknown_material_is_reported_not_silent() -> None:
     """Regel 21: `_material_table` fällt mit Absicht still auf die
     Modellvorgaben zurück — der Satz an den Nutzer fehlte: ein selbst

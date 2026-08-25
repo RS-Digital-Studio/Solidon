@@ -26,7 +26,12 @@ from typing import Final
 
 from app.core.knowledge import print_settings as settings_table
 from app.core.log import get_logger
-from app.core.slice.analysis import island_layers, narrowest, total_overhang, worst_overhang
+from app.core.slice.analysis import (
+    island_layers,
+    narrowest_measured,
+    total_overhang,
+    worst_overhang,
+)
 from app.core.types import (
     BoundingBox,
     Finding,
@@ -35,6 +40,7 @@ from app.core.types import (
     SettingAdvice,
     SliceResult,
 )
+from app.core.units import is_close
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -65,6 +71,15 @@ OVERHANG_WORTH_SUPPORT = 150.0
 #: gut elf Millimetern, also das Doppelte dessen, was die Slicer als längste
 #: freie Brücke zulassen.
 OVERHANG_LAYER_WORTH_SUPPORT = 100.0
+
+#: Und wie viel je Schicht mindestens anfallen muss, damit die **Summe**
+#: überhaupt zählt.
+#:
+#: Ohne diese Untergrenze wäre der Becher wieder drin: dreihundertachtunddreißig
+#: Schichten mit weniger als vier Quadratmillimetern, die jede Wand in sich
+#: auffängt. Zehn Quadratmillimeter sind ein Quadrat von gut drei Millimetern —
+#: darunter ist ein Überhang eine Kante und kein Feld.
+OVERHANG_LAYER_MINIMUM = 10.0
 
 #: So viele Schichten mit Inseln machen aus Gitterstützen Baumstützen: viele
 #: verteilte Ansatzpunkte sind genau der Fall, für den Bäume gebaut wurden.
@@ -167,7 +182,27 @@ def _merged(settings: PrintSettings, advice: list[SettingAdvice]) -> list[Settin
     for entry in advice:
         by_path[entry.path] = replace(entry, was=settings_table.read_path(settings, entry.path))
     # Vorschläge, die nach dem Zusammenführen nichts mehr ändern, fallen weg.
-    return [entry for entry in by_path.values() if entry.value != entry.was]
+    return [entry for entry in by_path.values() if _differs(entry.value, entry.was)]
+
+
+def _differs(value: object, was: object) -> bool:
+    """Unterscheiden sich diese zwei Werte — und bei Zahlen: hörbar?
+
+    Hier stand ``!=``, und das ist auf Fließkomma die falsche Frage (Regel 6).
+    Eine gerechnete Bahnbreite, die sich von der eingestellten erst in der
+    zwölften Stelle unterscheidet, blieb damit als Vorschlag stehen: im Dialog
+    eine Zeile „0,42 → 0,42", die niemand deuten kann und die die vier
+    Vorschläge daneben unglaubwürdig macht.
+
+    Text, Wahrheitswerte und Aufzählungen — ``support.style``,
+    ``adhesion.kind`` — werden weiter genau verglichen; dort gibt es kein
+    „fast gleich".
+    """
+    if isinstance(value, bool) or isinstance(was, bool):
+        return value is not was
+    if isinstance(value, int | float) and isinstance(was, int | float):
+        return not is_close(float(value), float(was))
+    return value != was
 
 
 def flow_of(settings: PrintSettings, speed: float) -> float:
@@ -193,15 +228,35 @@ def _from_flow(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]
     Zwei Wege heraus, und beide werden genannt: heißer, solange die Maschine
     das kann, sonst langsamer. Welcher richtig ist, weiß Solidon nicht —
     darum entscheidet es das nicht.
+
+    **Gedeckelt wird der Wert, der die Grenze reißt.** Hier stand immer
+    ``speed.infill``, auch wenn die Innenwand die schnellere von beiden war:
+    Herausgekommen ist der Rat „Füllung 20 → 143" — eine **Erhöhung** —,
+    während der Wert, an dem es lag, unangetastet blieb und der Volumenstrom
+    verletzt. Gefragt wird deshalb jeder Wert einzeln.
+
+    **Und was der heißere Weg nicht leistet:** ``max_flow`` ist eine Zahl des
+    Materialprofils und hängt dort an keiner Temperatur. Zehn Grad mehr machen
+    das Filament flüssiger, die Grenze in den Einstellungen bewegen sie nicht —
+    der Vorschlag nennt den anderen Weg, er rechnet ihn nicht nach. Wer ihn
+    annimmt, bekommt die Zeile beim nächsten Durchgang wieder, und das ist
+    ehrlicher, als eine Grenze zu verschieben, die niemand gemessen hat.
     """
     advice: list[SettingAdvice] = []
     limit = settings.filament.max_flow
-    if limit <= 0.0:
+    per_millimetre = settings.layers.layer_height * settings.layers.line_width
+    if limit <= 0.0 or per_millimetre <= 0.0:
         return advice
 
-    fastest = max(settings.speed.infill, settings.speed.inner_wall)
-    needed = flow_of(settings, fastest)
-    if needed <= limit:
+    breaking = [
+        (path, speed)
+        for path, speed in (
+            ("speed.infill", settings.speed.infill),
+            ("speed.inner_wall", settings.speed.inner_wall),
+        )
+        if flow_of(settings, speed) > limit
+    ]
+    if not breaking:
         return advice
 
     headroom = profile.printer.nozzle_temperature_max - settings.temperature.nozzle
@@ -218,14 +273,24 @@ def _from_flow(settings: PrintSettings, profile: Profile) -> list[SettingAdvice]
                 severity="warning",
             )
         )
-    else:
-        # Ohne Luft nach oben bleibt nur der andere Weg — und ein Vorschlag,
-        # der die Maschinengrenze überschreitet, wäre keiner.
+        return advice
+
+    # Ohne Luft nach oben bleibt nur der andere Weg — und ein Vorschlag,
+    # der die Maschinengrenze überschreitet, wäre keiner.
+    # Abgerundet und nicht gerundet: Ein aufgerundeter Wert liegt wieder über
+    # der Grenze, um die es geht — knapp, aber der Vorschlag hätte sie dann
+    # nicht eingehalten.
+    allowed = float(math.floor(limit / per_millimetre))
+    for path, speed in breaking:
+        if allowed <= 0.0 or allowed >= speed:
+            # Nur Rundung, oder eine Einstellung, für die es kein sinnvolles
+            # Tempo mehr gibt: ein „Vorschlag", der nichts senkt, ist keiner.
+            continue
         advice.append(
             SettingAdvice(
-                path="speed.infill",
-                value=round(limit / (settings.layers.layer_height * settings.layers.line_width)),
-                was=settings.speed.infill,
+                path=path,
+                value=allowed,
+                was=speed,
                 reason=_(
                     "Schneller bekommt dieses Hotend das Material nicht mehr aufgeschmolzen, "
                     "und heißer kann der Drucker nicht."
@@ -370,10 +435,20 @@ def _from_geometry(
     # zweihundertvierzig Quadratmillimeter und bekam dieselbe Warnung wie ein
     # Deckel, dessen Lochplatte mit achthundertfünfundvierzig auf einmal
     # anfängt. Beim Becher trägt jede Wand ihren Anteil selbst; beim Deckel
-    # hängt eine ganze Fläche über einem Hohlraum. Gefragt ist deshalb beides
-    # — wie viel insgesamt, und wie viel davon auf einmal.
-    needs_support = bool(islands) or (
-        overhang > OVERHANG_WORTH_SUPPORT and worst > OVERHANG_LAYER_WORTH_SUPPORT
+    # hängt eine ganze Fläche über einem Hohlraum.
+    #
+    # **Beides mit „und" zu verbinden war trotzdem falsch.** Die Fläche einer
+    # Schicht kann nie größer sein als die Summe über alle; die Bedingung
+    # bedeutete damit „mehr als hundert auf einer Schicht", mit einem toten
+    # Streifen zwischen hundert und hundertfünfzig. Eine Decke von 138 mm²,
+    # die vollständig in der Luft hängt, fiel genau dort hinein und bekam
+    # nichts. Die zwei Zahlen sind zwei **Wege**, und jeder trägt für sich:
+    # viel auf einmal, oder viel insgesamt bei einem Anteil je Schicht, den
+    # keine Wand mehr nebenbei auffängt.
+    needs_support = (
+        bool(islands)
+        or worst > OVERHANG_LAYER_WORTH_SUPPORT
+        or (overhang > OVERHANG_WORTH_SUPPORT and worst > OVERHANG_LAYER_MINIMUM)
     )
 
     if needs_support and settings.support.style == "none":
@@ -459,9 +534,16 @@ def _from_geometry(
             )
         )
 
-    thin = narrowest(result)
+    # **Gemessen, nicht gedeckelt.** ``narrowest`` meldet
+    # ``WIDTH_INTERESTING``, wo der Körper nirgends dünner ist — „mindestens
+    # zwei Millimeter", eine untere Schranke und keine Messung. An einer
+    # 0,8er-Düse sind drei Linienbreiten 2,55 mm, der Deckel liegt darunter,
+    # und ein massiver Klotz bekam beide Warnungen von hier. ``None`` heißt
+    # „keine Aussage", und darauf wird nicht gerechnet.
+    thin = narrowest_measured(result)
     if (
-        0.0 < thin < LINES_FOR_CLASSIC * settings.layers.line_width
+        thin is not None
+        and thin < LINES_FOR_CLASSIC * settings.layers.line_width
         and settings.shell.wall_generator == "classic"
     ):
         advice.append(
@@ -492,7 +574,7 @@ def _from_geometry(
         )
 
     minimum = 2.0 * settings.layers.line_width
-    if 0.0 < thin < minimum:
+    if thin is not None and thin < minimum:
         advice.append(
             SettingAdvice(
                 path="layers.line_width",

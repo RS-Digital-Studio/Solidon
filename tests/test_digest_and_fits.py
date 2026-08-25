@@ -204,6 +204,10 @@ def test_the_digest_names_print_settings_when_the_project_has_them(profile: Prof
 def test_the_digest_names_the_sources(profile: Profile) -> None:
     """Konzept Agent-Vertiefung 3.2: „mach es wie beim importierten Deckel"
     scheitert sonst daran, dass der Agent nie erfährt, was importiert wurde.
+
+    Der Name steht seit dem 25.08.2026 in Anführungszeichen: Er kommt aus einer
+    fremden Datei, und im Steckbrief soll zu sehen sein, wo er anfängt und wo
+    er aufhört (§32, digest.as_name).
     """
     document = Document(format_version=1, app_version="0.0.1")
     document.sources["src_1"] = Source(
@@ -212,7 +216,7 @@ def test_the_digest_names_the_sources(profile: Profile) -> None:
 
     text = digest(plate_scene(profile), document)
 
-    assert "Quellen: src_1 plate_holes.stl (import)" in text
+    assert 'Quellen: src_1 "plate_holes.stl" (import)' in text
 
 
 def test_the_digest_can_narrow_to_named_objects(profile: Profile) -> None:

@@ -103,6 +103,66 @@ def test_two_coaxial_bores_are_numbered_from_below() -> None:
     assert heights == sorted(heights), f"die untere ist hole_1: {heights}"
 
 
+def u_profile() -> MeshData:
+    """Ein U-Profil mit einer Durchgangsbohrung im linken Schenkel.
+
+    Der rechte Schenkel steht auf derselben Achse — er liegt in der Projektion
+    „über" der Bohrung, ohne sie zu verschließen. Genau die Lage, an der die
+    Prüfung „liegt irgendein Dreieck über der Achse" das falsche Ergebnis
+    liefert.
+    """
+    left = trimesh.creation.box(extents=(4.0, 30.0, 20.0))
+    left.apply_translation((-11.0, 0.0, 0.0))
+    right = trimesh.creation.box(extents=(4.0, 30.0, 20.0))
+    right.apply_translation((11.0, 0.0, 0.0))
+    base = trimesh.creation.box(extents=(26.0, 30.0, 4.0))
+    base.apply_translation((0.0, 0.0, -12.0))
+    bore = trimesh.creation.cylinder(
+        radius=3.0,
+        height=40.0,
+        sections=64,
+        transform=trimesh.transformations.rotation_matrix(math.pi / 2.0, [0.0, 1.0, 0.0]),
+    )
+    bore.apply_translation((-11.0, 0.0, 0.0))
+    frame = trimesh.boolean.union([left, right, base])
+    return MeshData.of(trimesh.boolean.difference([frame, bore]))
+
+
+def test_a_bore_through_one_leg_of_a_u_is_a_through_bore() -> None:
+    """Der Fund: „durchgehend" hieß wörtlich „kein Dreieck irgendwo darüber".
+
+    Der gegenüberliegende Schenkel eines U-Profils liegt in der Projektion
+    senkrecht zur Achse genau über der Bohrung — er verschließt sie aber
+    nicht, er steht zwanzig Millimeter daneben. Die Bohrung galt damit als
+    Sackloch; im Steckbrief steht dann „Sackbohrung Ø 6" über einem Loch, durch
+    das man hindurchsieht, und eine Passung dagegen zu setzen ist sinnlos.
+
+    Gefragt wird deshalb entlang der Achse: Material zählt, wo es **im**
+    Bohrungsabschnitt liegt.
+    """
+    holes = detect_holes(u_profile())
+
+    assert len(holes) == 1, [hole.id for hole in holes]
+    assert holes[0].params["through"] is True
+
+
+def test_a_blind_bore_stays_blind() -> None:
+    """Die Gegenprobe: Ein Sackloch hat seinen Boden **im** eigenen Abschnitt.
+
+    Ohne sie wäre die Prüfung mit „immer durchgehend" grün.
+    """
+    plate_body = trimesh.creation.box(extents=(30.0, 30.0, 12.0))
+    bore = trimesh.creation.cylinder(radius=3.0, height=8.0, sections=64)
+    # Von oben eingesenkt, der Boden liegt bei z = -2.
+    bore.apply_translation((0.0, 0.0, 6.0))
+    body = MeshData.of(trimesh.boolean.difference([plate_body, bore]))
+
+    holes = detect_holes(body)
+
+    assert holes, "die Sackbohrung wird gefunden"
+    assert all(hole.params["through"] is False for hole in holes)
+
+
 def test_a_cube_has_no_bores() -> None:
     assert detect_holes(cube()) == []
 
@@ -200,6 +260,61 @@ def test_the_largest_face_comes_first() -> None:
     assert faces[0].params["area"] == pytest.approx(80.0 * 50.0, rel=0.05)
 
 
+def test_faces_of_the_same_size_are_numbered_the_same_way_every_time() -> None:
+    """§21.2: Eine Provenienz-ID muss eine Neuberechnung überleben.
+
+    Die sechs Flächen eines Würfels sind exakt gleich groß, sortiert wurde
+    aber nur nach Fläche — welche ``face_1`` wird, hing damit an der
+    Reihenfolge der Dreiecke im Netz. Dieselbe Geometrie mit anders
+    nummerierten Dreiecken gab eine andere Zuordnung: ``face_1`` lag einmal
+    links und einmal unten.
+
+    Die Zuordnung (§21.2) fängt das im Regelbetrieb wieder ein, weil sie über
+    die Lage vergleicht — aber die **Ersterkennung** ist der Fall, in dem es
+    noch nichts zum Vergleichen gibt.
+    """
+    box = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+    turned = trimesh.Trimesh(
+        vertices=box.vertices.copy(), faces=np.roll(box.faces, 5, axis=0), process=False
+    )
+
+    first = {
+        face.id: tuple(round(value, 2) for value in face.params["centre"])
+        for face in detect_faces(MeshData.of(box))
+    }
+    second = {
+        face.id: tuple(round(value, 2) for value in face.params["centre"])
+        for face in detect_faces(MeshData.of(turned))
+    }
+
+    assert len(first) == 6
+    assert first == second
+
+
+def test_turning_a_part_does_not_renumber_its_faces() -> None:
+    """Die Gegenbedingung, und sie schließt den naheliegenden Tiebreak aus.
+
+    Nach Koordinaten zu sortieren wäre deterministisch und trotzdem falsch:
+    Deck- und Bodenfläche einer Platte sind gleich groß, und um zwanzig Grad
+    gekippt tauschen sie ihre Reihenfolge. ``align`` legt aber ``face_1``
+    eines gedrehten Teils auf ``face_1`` des festen — beide müssen dieselbe
+    Fläche des Teils meinen, sonst liegt das Teil verkehrt herum auf dem
+    anderen.
+    """
+    flat = plate()
+    tilted = MeshData.of(
+        flat.raw.copy().apply_transform(
+            trimesh.transformations.rotation_matrix(math.radians(20.0), [1.0, 0.0, 0.0])
+        )
+    )
+
+    before = {face.id: face.face_indices for face in detect_faces(flat)}
+    after = {face.id: face.face_indices for face in detect_faces(tilted)}
+
+    assert before, "ohne erkannte Flächen prüft der Vergleich nichts"
+    assert before == after, "dieselben Dreiecke tragen dieselbe Nummer"
+
+
 def test_a_face_knows_where_it_looks() -> None:
     top = max(detect_faces(cube()), key=lambda face: face.params["centre"][2])
     assert top.params["normal"][2] == pytest.approx(1.0, abs=1e-6)
@@ -220,6 +335,35 @@ def test_an_open_model_reports_its_edges() -> None:
 
 def test_a_closed_model_has_no_open_edges() -> None:
     assert detect_edge_loops(cube()) == []
+
+
+def test_two_holes_in_a_shell_are_two_features() -> None:
+    """Der Fund: Alle offenen Kanten wurden **ein** Merkmal.
+
+    Der gemeinsame Schwerpunkt zweier Löcher liegt zwischen ihnen — also im
+    Leeren. Die Kamera flog auf einen Punkt, an dem nichts ist, und die Zahl
+    daneben („8 offene Kanten") gehörte zu zwei Stellen, die nichts
+    miteinander zu tun haben. Jede zusammenhängende Kantenschleife ist ein
+    eigener Defekt und bekommt ein eigenes Merkmal.
+    """
+    parts = []
+    for shift in (-20.0, 20.0):
+        box = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        box.apply_translation((shift, 0.0, 0.0))
+        # Die Deckfläche heraus: übrig bleibt ein offener Kasten mit einer
+        # Schleife aus vier Kanten.
+        box.update_faces(
+            np.array([index for index, normal in enumerate(box.face_normals) if normal[2] < 0.9])
+        )
+        parts.append(box)
+    broken = MeshData.of(trimesh.util.concatenate(parts))
+
+    loops = detect_edge_loops(broken)
+
+    assert len(loops) == 2, [loop.id for loop in loops]
+    assert sum(int(loop.params["open_edges"]) for loop in loops) == 8
+    xs = sorted(round(float(loop.params["centre"][0]), 1) for loop in loops)
+    assert xs == [-20.0, 20.0], "jede Schleife sitzt an ihrem eigenen Loch"
 
 
 # --- everything together --------------------------------------------------------

@@ -18,6 +18,7 @@ Merkmal, und der Steckbrief sagt, wie viele gefunden wurden.
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import NamedTuple
 
@@ -609,7 +610,7 @@ def detect_holes(
                 "axis": fit.axis,
                 "centre": fit.centre,
                 "depth": round(_patch_extent(body, patch, fit.axis), 4),
-                "through": _is_through(mesh, fit, cones),
+                "through": _is_through(mesh, fit, cones, patch),
                 "residual": round(fit.residual, 4),
             },
             face_indices=tuple(patch),
@@ -1419,14 +1420,32 @@ def _patch_extent(body: trimesh.Trimesh, patch: list[int], axis: Vec3) -> float:
     return high - low
 
 
-def _is_through(mesh: MeshData, fit: CylinderFit, cones: Cones | None = None) -> bool:
+def _is_through(
+    mesh: MeshData,
+    fit: CylinderFit,
+    cones: Cones | None = None,
+    patch: Sequence[int] | None = None,
+) -> bool:
     """Eine Bohrung ist durchgehend, wenn man durch sie hindurchsieht.
 
-    **Wörtlich gemeint, und es ist die ganze Prüfung:** Liegt irgendein Dreieck
+    **Wörtlich gemeint, und es ist fast die ganze Prüfung:** Liegt ein Dreieck
     des Körpers über der Bohrachse, ist da Material — ein Boden, ein Steg, eine
     Rückwand —, und das Loch endet. Liegt keines dort, geht es durch. Gemessen
     am Korpus: null Dreiecke über der Achse bei jeder durchgehenden Bohrung,
     dreiundzwanzig bei der gesenkten Sackbohrung.
+
+    **„Über der Achse" allein war zu weit gefasst**, und ein U-Profil zeigt das
+    in einer Zeile: Der gegenüberliegende Schenkel liegt in der Projektion
+    senkrecht zur Achse genau über der Bohrung im ersten — verschließt sie aber
+    nicht, er steht zwei Zentimeter daneben. Die Durchgangsbohrung galt damit
+    als Sackloch, und im Steckbrief stand „Sackbohrung Ø 6" über einem Loch,
+    durch das man hindurchsieht.
+
+    Gezählt wird deshalb nur, was **entlang der Achse im Abschnitt der
+    Bohrung** liegt: von ihrem Anfang bis zu ihrem Ende, mit einer halben
+    Facettenbreite Zugabe an beiden Enden, denn der Boden eines Sacklochs sitzt
+    genau auf dieser Grenze. Ohne ``patch`` — also ohne den Fleck, der den
+    Abschnitt kennt — bleibt es bei der alten, weiteren Frage.
 
     **Vorher stand hier eine Rechnung, und sie war an drei Stellen angreifbar.**
     Sie verglich die Höhe der Zylinderwand mit der Dicke des Körpers und
@@ -1454,6 +1473,21 @@ def _is_through(mesh: MeshData, fit: CylinderFit, cones: Cones | None = None) ->
     centre = np.asarray(fit.centre, dtype=float)
     basis_u, basis_v = _plane_basis(axis)
     corners = np.asarray(mesh.raw.triangles, dtype=float) - centre
+
+    if patch is not None:
+        along = corners @ axis
+        low, high = _axial_span(mesh.raw, list(patch), fit.axis)
+        # Der Boden eines Sacklochs sitzt exakt auf dem Ende des Flecks — die
+        # Grenzen gehören also dazu, und ``EPS_GEOM`` fängt, was das Netz an
+        # dieser Kante an Rundung übriglässt.
+        offset = float(centre @ axis)
+        reach = (along.min(axis=1) <= high - offset + EPS_GEOM) & (
+            along.max(axis=1) >= low - offset - EPS_GEOM
+        )
+        corners = corners[reach]
+        if not len(corners):
+            return True
+
     flat = np.stack([corners @ basis_u, corners @ basis_v], axis=-1)
 
     first, second, third = flat[:, 0], flat[:, 1], flat[:, 2]
@@ -1687,31 +1721,39 @@ def detect_faces(mesh: MeshData) -> list[Feature]:
     # und hier nicht noch einmal als achtundvierzig Rechtecke.
     planar = _large_facet_faces(body)
     entries = [
-        (facet, area)
+        (facet, area, _facet_centre(body, facet))
         for facet, area in zip(facets, areas, strict=True)
         if area >= largest * MIN_FACE_SHARE
         and area >= MIN_FACE_AREA
         and all(int(index) in planar for index in facet)
     ]
-    entries.sort(key=lambda entry: -entry[1])
+    # **Bei gleicher Fläche entscheiden die Eckennummern der Fläche.**
+    # Die sechs Flächen eines Würfels sind exakt gleich groß; sortiert allein
+    # nach Fläche hing es an der Reihenfolge der Dreiecke im Netz, welche davon
+    # ``face_1`` wird — dieselbe Geometrie mit anders nummerierten Dreiecken
+    # gab eine andere Zuordnung. Die Zuordnung (§21.2) fängt das im
+    # Regelbetrieb wieder ein, weil sie über die Lage vergleicht; die
+    # **Ersterkennung** hat nichts, womit sie vergleichen könnte.
+    #
+    # **Und ausdrücklich nicht der Ort**, obwohl er sich anbietet. Eine
+    # Nummerierung nach Koordinaten überlebt keine Drehung: Bei einer Platte
+    # sind Deck- und Bodenfläche gleich groß, und um zwanzig Grad gekippt
+    # tauschen sie ihre Reihenfolge. Genau darauf steht ein Teil des
+    # Bestands — ``align`` legt ``face_1`` eines gedrehten Teils auf
+    # ``face_1`` des festen, und beide müssen dieselbe Fläche des Teils
+    # meinen. Die kleinste Eckennummer ändert sich weder beim Drehen noch beim
+    # Umsortieren der Dreiecke. Genommen werden alle Ecken der Fläche und
+    # nicht bloß die kleinste: An einem Würfel treffen sich drei Flächen in
+    # derselben Ecke, und drei gleiche Schlüssel sind so gut wie keiner.
+    #
+    # Gerundet wird auch die Fläche, aus demselben Grund: Zwei gleich große
+    # Flächen unterscheiden sich im Netz gern in der zwölften Stelle, und dann
+    # entschiede wieder diese Stelle.
+    entries.sort(key=lambda entry: (-round(entry[1], 4), _corner_key(body, entry[0])))
 
     features: list[Feature] = []
-    for number, (facet, area) in enumerate(entries, start=1):
+    for number, (facet, area, centre) in enumerate(entries, start=1):
         normal = np.asarray(body.face_normals[facet[0]], dtype=float)
-        # Flächengewichtet, nicht als Mittel über die Dreiecke: sonst hängt der
-        # Mittelpunkt an der Vernetzung statt an der Form. Eine Bohrung in eine
-        # Platte lässt rund um sich viele kleine Dreiecke entstehen, und der
-        # ungewichtete Mittelwert wandert daraufhin zum Loch — bei einem
-        # 60-auf-40-Deckel um 16,8 mm. Die Zuordnung (§21.2) hielt die Fläche
-        # danach für eine andere und meldete die alte als verwaist.
-        weights = np.asarray(body.area_faces[facet], dtype=float)
-        points = np.asarray(body.triangles_center[facet], dtype=float)
-        total = float(weights.sum())
-        centre = (
-            (points * weights[:, None]).sum(axis=0) / total
-            if total > EPS_GEOM
-            else points.mean(axis=0)
-        )
         features.append(
             Feature(
                 id=f"face_{number}",
@@ -1728,12 +1770,50 @@ def detect_faces(mesh: MeshData) -> list[Feature]:
     return features
 
 
+def _corner_key(body: trimesh.Trimesh, facet: np.ndarray) -> tuple[int, ...]:
+    """Die Eckennummern einer ebenen Fläche, aufsteigend — ihr Ausweis im Netz.
+
+    Was diese Reihenfolge tragen muss, steht bei ihrem einzigen Aufrufer: Sie
+    entscheidet bei gleich großen Flächen und darf sich deshalb weder beim
+    Drehen des Körpers noch beim Umsortieren seiner Dreiecke ändern.
+    """
+    return tuple(int(index) for index in np.unique(body.faces[facet]))
+
+
+def _facet_centre(body: trimesh.Trimesh, facet: np.ndarray) -> np.ndarray:
+    """Der Mittelpunkt einer ebenen Fläche, **flächengewichtet**.
+
+    Nicht als Mittel über die Dreiecke: sonst hängt der Mittelpunkt an der
+    Vernetzung statt an der Form. Eine Bohrung in eine Platte lässt rund um
+    sich viele kleine Dreiecke entstehen, und der ungewichtete Mittelwert
+    wandert daraufhin zum Loch — bei einem 60-auf-40-Deckel um 16,8 mm. Die
+    Zuordnung (§21.2) hielt die Fläche danach für eine andere und meldete die
+    alte als verwaist.
+    """
+    weights = np.asarray(body.area_faces[facet], dtype=float)
+    points = np.asarray(body.triangles_center[facet], dtype=float)
+    total = float(weights.sum())
+    if total <= EPS_GEOM:
+        return np.asarray(points.mean(axis=0), dtype=float)
+    return np.asarray((points * weights[:, None]).sum(axis=0) / total, dtype=float)
+
+
 # --- Offene Kanten ---------------------------------------------------------------
 
 
 def detect_edge_loops(mesh: MeshData) -> list[Feature]:
     """Offene Kanten sind Defekte, und zu wissen wo sie sind, ist die halbe
     Reparatur.
+
+    **Eine Schleife ist ein Merkmal, nicht alle zusammen.** Hier entstand ein
+    einziges ``edge_loop_1`` über den Schwerpunkt sämtlicher offener Kanten —
+    und der liegt bei zwei Löchern genau zwischen ihnen, also im Leeren. Die
+    Kamera flog auf einen Punkt, an dem nichts ist (§18.4), und die Zahl
+    daneben zählte zwei Stellen zusammen, die nichts miteinander zu tun haben.
+
+    Zusammengehörig heißt: über gemeinsame Ecken verbunden. Nummeriert wird
+    nach Größe, dann nach Ort — eine Provenienz-ID muss die nächste Auswertung
+    überleben (§21.2), und die Reihenfolge der Kanten im Netz tut das nicht.
     """
     body = mesh.raw
     single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
@@ -1741,18 +1821,32 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
         return []
 
     edges = np.asarray(body.edges_sorted)[single]
-    points = np.asarray(body.vertices[np.unique(edges)], dtype=float)
-    centre = points.mean(axis=0)
+    corners = np.unique(edges)
+    groups = trimesh.graph.connected_components(edges, nodes=corners, engine="scipy")
+
+    loops: list[tuple[int, tuple[float, float, float]]] = []
+    for group in groups:
+        members = np.asarray(group)
+        if not len(members):
+            continue
+        belongs = np.isin(edges[:, 0], members)
+        count = int(belongs.sum())
+        if not count:
+            # Eine Ecke ohne offene Kante gehört keiner Schleife — ``nodes``
+            # nimmt sie mit, das Merkmal nicht.
+            continue
+        middle = np.asarray(body.vertices[members], dtype=float).mean(axis=0)
+        loops.append((count, (float(middle[0]), float(middle[1]), float(middle[2]))))
+
+    loops.sort(key=lambda entry: (-entry[0], *(round(value, 3) for value in entry[1])))
     return [
         Feature(
-            id="edge_loop_1",
+            id=f"edge_loop_{number}",
             kind="edge_loop",
             provenance="detected",
-            params={
-                "open_edges": len(single),
-                "centre": (float(centre[0]), float(centre[1]), float(centre[2])),
-            },
+            params={"open_edges": count, "centre": centre},
         )
+        for number, (count, centre) in enumerate(loops, start=1)
     ]
 
 

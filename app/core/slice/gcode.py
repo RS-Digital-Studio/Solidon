@@ -88,8 +88,8 @@ _PATTERNS: tuple[tuple[str, str], ...] = (
     ("print_seconds", r";\s*estimated printing time.*?=\s*(?P<value>[0-9hmsd ]+)"),
     ("print_seconds", r";\s*TIME:\s*(?P<value>[0-9.]+)"),
     ("print_seconds", r";\s*total print time.*?:\s*(?P<value>[0-9hmsd ]+)"),
-    ("filament_mm", r";\s*filament used \[mm\]\s*=\s*(?P<value>[0-9.]+)"),
-    ("filament_mm", r";\s*Filament used:\s*(?P<value>[0-9.]+)m\b"),
+    ("filament_mm", r";\s*filament used \[(?P<unit>mm)\]\s*=\s*(?P<value>[0-9.]+)"),
+    ("filament_mm", r";\s*Filament used:\s*(?P<value>[0-9.]+)\s*(?P<unit>m)\b"),
     ("filament_grams", r";\s*filament used \[g\]\s*=\s*(?P<value>[0-9.]+)"),
     ("layer_count", r";\s*(?:total )?layer count\s*[:=]\s*(?P<value>[0-9]+)"),
     ("layer_count", r";\s*LAYER_COUNT:\s*(?P<value>[0-9]+)"),
@@ -152,7 +152,10 @@ def parse(text: str) -> GcodeMetrics:
         found = re.search(pattern, text, re.IGNORECASE)
         if found is None:
             continue
-        _set(metrics, name, found.group("value").strip())
+        # Die Einheit steht im Muster, das getroffen hat — sie wird nicht aus
+        # der Größe der Zahl geraten (:func:`_length_mm`).
+        unit = found.groupdict().get("unit") or ""
+        _set(metrics, name, found.group("value").strip(), unit)
 
     for line in text.splitlines():
         found = _WARNING.match(line.strip())
@@ -358,7 +361,7 @@ def _e_value(line: str) -> str:
     return "0" if found is None else found.group("e")
 
 
-def _set(metrics: GcodeMetrics, name: str, value: str) -> None:
+def _set(metrics: GcodeMetrics, name: str, value: str, unit: str = "") -> None:
     if name == "slicer":
         metrics.slicer = value
         return
@@ -369,14 +372,43 @@ def _set(metrics: GcodeMetrics, name: str, value: str) -> None:
     if number is None:
         return
     if name == "filament_mm":
-        # „Filament used: 3.42m" sind Meter, „filament used [mm] = 3420" nicht.
-        metrics.filament_mm = number * 1000.0 if number < 100.0 else number
+        metrics.filament_mm = _length_mm(number, unit)
     elif name == "filament_grams":
         metrics.filament_grams = number
     elif name == "layer_count":
         metrics.layer_count = int(number)
     elif name == "layer_height":
         metrics.layer_height = number
+
+
+#: Was ein Slicer als Einheit einer Filamentlänge schreibt, in Millimetern.
+_LENGTH_UNITS: dict[str, float] = {"mm": 1.0, "cm": 10.0, "m": 1000.0}
+
+#: Unter dieser Zahl hält der Rückfall eine Länge ohne Einheit für Meter.
+GUESSED_METRES_BELOW = 100.0
+
+
+def _length_mm(value: float, unit: str) -> float:
+    """Eine Filamentlänge in Millimetern — die Einheit kommt aus der Zeile.
+
+    Hier stand ``number * 1000.0 if number < 100.0 else number``: „Filament
+    used: 3.42m" sind Meter, „filament used [mm] = 3420" nicht — und
+    unterschieden wurden die beiden an der **Größe** der Zahl. Ein kleines
+    Teil mit 95 mm Faden wurde damit zu 95 Metern: 283 Gramm statt 0,3, dazu
+    eine Abweichungswarnung, die Solidon sich selbst gestellt hat.
+
+    Die Größe einer Zahl sagt nichts über ihre Einheit. Das Muster, das sie
+    gefunden hat, sagt alles darüber — beide Zeilen nennen ihre Einheit, und
+    beide geben sie als Gruppe ``unit`` weiter.
+
+    Der Rückfall bleibt für ein Muster, das einmal ohne Einheit dazukommt. Er
+    ist dann eine Vermutung und steht als solche hier, statt als Regel im
+    Auswerter.
+    """
+    factor = _LENGTH_UNITS.get(unit.strip().lower())
+    if factor is not None:
+        return value * factor
+    return value * 1000.0 if value < GUESSED_METRES_BELOW else value
 
 
 def _number(value: str) -> float | None:
@@ -399,6 +431,33 @@ def _seconds(value: str) -> float | None:
     return total if found else None
 
 
+#: ``M82`` (absolut) oder ``M83`` (relativ) als **Befehl** am Zeilenanfang.
+#: Führende Leerzeichen sind erlaubt, ein Semikolon davor nicht: In einem
+#: Kommentar ist das kein Befehl, sondern Text.
+_EXTRUSION_MODE = re.compile(r"^[ \t]*M(?P<code>8[23])\b", re.IGNORECASE | re.MULTILINE)
+
+
+def _starts_absolute(text: str) -> bool:
+    """Fördert diese Datei absolut, bevor sie es selbst sagt?
+
+    Hier stand ``";" not in text or "M83" not in text``, und beide Hälften
+    gingen daneben. Cura hängt seine Einstellungen als ``;SETTING_3``-Block
+    ans Dateiende, und darin steht der Endcode der Maschine — mit ``M83``.
+    Eine absolut fördernde Datei ohne Modus-Zeile vor der ersten Bahn wurde
+    damit relativ gelesen: Statt der Differenzen summierte sich jeder Wert der
+    E-Achse, und die Gesamtlänge war um ein Vielfaches zu groß. Die andere
+    Hälfte fragte nach Kommentaren und schloss von ihrem Fehlen auf den Modus —
+    zwei Tatsachen, die nichts miteinander zu tun haben.
+
+    Gefragt wird deshalb nach dem **Befehl**: die erste Zeile, die mit ``M82``
+    oder ``M83`` beginnt, entscheidet. Findet sich keine, gilt absolut — so
+    steht es in der RepRap-Konvention, und so verhält sich jeder Drucker nach
+    dem Einschalten.
+    """
+    found = _EXTRUSION_MODE.search(text)
+    return found is None or found.group("code") == "82"
+
+
 def _extruded(text: str) -> tuple[float, float | None]:
     """Wie viel Filament durch die Düse ging — insgesamt und für Stützen (§28.1).
 
@@ -416,7 +475,7 @@ def _extruded(text: str) -> tuple[float, float | None]:
     total = 0.0
     support = 0.0
     previous = 0.0
-    absolute = ";" not in text or "M83" not in text
+    absolute = _starts_absolute(text)
 
     for line in text.splitlines():
         stripped = line.strip()
@@ -497,13 +556,19 @@ def compare(estimated: float, measured: float, what: str = "support") -> CrossCh
         # null zurück — die größtmögliche Abweichung sähe aus wie die
         # perfekte Übereinstimmung. „Nicht vergleichbar" ist die ehrliche
         # Antwort, und sie trägt ihre Herkunft (Regel 14).
+        #
+        # **Und die Herkunft ist hier ``internal``.** Der Befund entsteht beim
+        # Lesen des G-Code und trug deshalb ``source="gcode"`` — nur ist die
+        # einzige Zahl darin die **Schätzung**, und die Datei nennt keinen
+        # Messwert; das ist ja der Anlass. So ausgezeichnet stand eine interne
+        # Zahl als gemessene da, genau die Verwechslung, die §22.5 verbietet.
         check.findings.append(
             Finding(
                 code="gcode.no_measurement",
                 severity="info",
                 message=_("Die Druckdatei nennt für diese Größe keinen Messwert."),
                 values={"what": what, "estimated": round(estimated, 2)},
-                source="gcode",
+                source="internal",
             )
         )
         return check

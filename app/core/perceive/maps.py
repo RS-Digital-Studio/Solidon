@@ -72,10 +72,27 @@ OVERHANG_LIMIT_DEGREES = 45.0
 WALL_SCALE_FACTOR = 5.0
 
 #: Flächenkategorien der Defektkarte, in der Reihenfolge ihrer Werte.
-DEFECT_LEVELS = ("in Ordnung", "offene Kante", "Non-Manifold")
+#:
+#: Übersetzbar, und das war es sechs Texte lang nicht: Die Stufen standen als
+#: feste deutsche Zeichenketten hier und liefen an ``tr()`` vorbei bis in die
+#: Legende (Regel 20). Aufgelöst wird erst beim Bauen der Karte
+#: (:func:`_named`) — beim Import steht die Sprache noch nicht fest.
+DEFECT_LEVELS: Final = (_("in Ordnung"), _("offene Kante"), _("Non-Manifold"))
 
-#: Flächenkategorien der Passungskarte.
-FIT_LEVELS = ("unbeteiligt", "Teil einer Passung", "Passung verletzt")
+#: Flächenkategorien der Passungskarte, ebenso übersetzbar.
+FIT_LEVELS: Final = (_("unbeteiligt"), _("Teil einer Passung"), _("Passung verletzt"))
+
+
+def _named(levels: tuple[TranslatableText, ...]) -> tuple[str, ...]:
+    """Die Stufen einer Karte in der eingestellten Sprache.
+
+    Aufgelöst im Kern und nicht in der Legende, weil ``categories`` neben
+    Stufennamen auch Provenienz-IDs trägt (``hole_3``) — die Legende bekommt
+    Zeichenketten, und was übersetzt gehört, ist hier schon übersetzt.
+    Dieselbe Stelle, an der :func:`feature_map` seit je ``str(_("ohne
+    Merkmal"))`` schreibt.
+    """
+    return tuple(str(level) for level in levels)
 
 
 @dataclass(frozen=True, slots=True)
@@ -439,7 +456,7 @@ def defect_map(mesh: MeshData) -> AnalysisMap:
         high=2.0,
         highlighted=tuple(int(index) for index in np.nonzero(values > 0.0)[0]),
         threshold=1.0,
-        categories=DEFECT_LEVELS,
+        categories=_named(DEFECT_LEVELS),
     )
 
 
@@ -684,7 +701,7 @@ def fit_map(mesh: MeshData, entry: SceneObject, scene: Scene | None) -> Analysis
         high=2.0,
         highlighted=tuple(int(index) for index in np.nonzero(values >= 2.0)[0]),
         threshold=2.0,
-        categories=FIT_LEVELS,
+        categories=_named(FIT_LEVELS),
     )
 
 

@@ -17,7 +17,42 @@ from pathlib import PurePosixPath
 
 from app.core.types import Document, Feature, ObjectId, Operation, Scene, SceneObject
 from app.core.units import format_length, round_display
-from app.i18n import tr
+from app.i18n import TranslatableText, tr
+
+#: Wie viele Zeichen ein Name aus einer fremden Datei im Steckbrief belegen
+#: darf.
+#:
+#: Sechzig reichen für jeden Namen, den jemand vergibt („Deckel hinten links,
+#: 3 mm Wand"), und decken den Fall, der hier zählt: Objekt- und Dateinamen
+#: stehen in der Projektdatei, Projektdateien wandern zwischen Leuten, und der
+#: Steckbrief reist ungefiltert in den Prompt. Ein „Name" von zweitausend
+#: Zeichen ist kein Name, sondern ein Text, den jemand anderes dem Modell
+#: unterschieben will — und er verdrängt dabei das, was wirklich in der Szene
+#: steht.
+NAME_LIMIT = 60
+
+
+def as_name(text: TranslatableText | str) -> str:
+    """Ein Name aus fremder Hand, so wie er in den Steckbrief darf (§32).
+
+    Drei Dinge: Zeilenumbrüche und Steuerzeichen fallen weg, alles wird auf
+    :data:`NAME_LIMIT` gekürzt, und das Ergebnis steht in Anführungszeichen.
+
+    **Der Umbruch ist der Punkt, nicht die Länge.** Der Steckbrief ist ein
+    zeilenweiser Text, und eine Zeile darin ist eine Aussage über ein Objekt.
+    Ein Name mit ``\n`` darin schreibt in diesen Text hinein — beliebig viele
+    eigene Zeilen, in derselben Form, in der die echten stehen. Das ist die
+    ganze Mechanik von Prompt-Injektion über Daten, und sie kostet eine Zeile
+    Code, sie zuzuhalten.
+
+    Die Rahmung dazu steht im Kontext
+    (:data:`app.core.agent.context.FOREIGN_NAMES_NOTICE`): Kürzen sagt, wie
+    viel Platz ein Name bekommt, der Rahmen sagt, was ein Name ist.
+    """
+    flat = " ".join(str(text).split())
+    if len(flat) > NAME_LIMIT:
+        flat = flat[: NAME_LIMIT - 1] + "…"
+    return f'"{flat}"'
 
 
 def digest(
@@ -108,12 +143,14 @@ def _source_lines(document: Document) -> list[str]:
 
     „Mach es wie beim importierten Deckel" scheitert sonst daran, dass der
     Agent nie erfährt, was importiert wurde. Nur der Dateiname — der Pfad ist
-    relativ zur Projektdatei und sagt dem Modell nichts.
+    relativ zur Projektdatei und sagt dem Modell nichts. Und nur so viel davon,
+    wie ein Name lang sein darf (:func:`as_name`): Er kommt aus einer fremden
+    Datei und reist ungefiltert in den Prompt.
     """
     if not document.sources:
         return []
     parts = [
-        f"{source_id} {PurePosixPath(source.path).name} ({source.kind})"
+        f"{source_id} {as_name(PurePosixPath(source.path).name)} ({source.kind})"
         for source_id, source in document.sources.items()
     ]
     return [f"{tr('Quellen')}: " + " · ".join(parts)]
@@ -155,7 +192,7 @@ def _object_lines(object_id: ObjectId, entry: SceneObject) -> list[str]:
         # jenes bereits, und es an jedem Körper zu wiederholen wäre Rauschen (§26.1).
         facts.append(entry.material)
 
-    lines = [f'{object_id}  "{entry.name}"  ' + ", ".join(facts)]
+    lines = [f"{object_id}  {as_name(entry.name)}  " + ", ".join(facts)]
     lines.append("  " + _extent_line(entry))
     for feature_id, feature in entry.features.items():
         lines.append("  " + _feature_line(feature_id, feature))

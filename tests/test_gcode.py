@@ -151,6 +151,27 @@ def test_a_stated_length_beats_the_moves() -> None:
     assert metrics.filament_mm == pytest.approx(4000.0)
 
 
+def test_a_short_length_in_millimetres_stays_millimetres() -> None:
+    """Die Einheit steht in der Zeile — sie wird nicht aus der Größe geraten.
+
+    Der Fund: ``metrics.filament_mm = number * 1000.0 if number < 100.0``. Ein
+    kleines Teil mit 95 mm Faden wurde damit zu 95 Metern, aus 0,3 Gramm
+    wurden 283, und die Gegenprobe gegen die Schätzung schlug Alarm. Die
+    Größe einer Zahl sagt nichts über ihre Einheit; das Muster, das sie
+    gefunden hat, sagt alles darüber.
+    """
+    metrics = gcode.parse("; filament used [mm] = 95\nM82\nG1 X10 Y10 E2.0\n")
+
+    assert metrics.filament_mm == pytest.approx(95.0)
+
+
+def test_metres_are_still_metres() -> None:
+    """Die Gegenprobe: Cura schreibt Meter, und die werden umgerechnet."""
+    metrics = gcode.parse("; Filament used: 0.095m\nM82\nG1 X10 Y10 E2.0\n")
+
+    assert metrics.filament_mm == pytest.approx(95.0)
+
+
 def test_the_support_volume_is_measured_not_guessed() -> None:
     """§28.1: gemessenes Stützmaterial — aus den Typ-Kommentaren und der
     E-Achse.
@@ -167,6 +188,42 @@ def test_absolute_extrusion_is_counted_as_differences() -> None:
     assert metrics.support_mm3 is not None
     # E läuft 1 → 3 → 5, mit dem Werkzeug auf Stützen für die letzten zwei Wege.
     assert metrics.support_mm3 == pytest.approx(4.0 * gcode.FILAMENT_AREA, rel=1e-6)
+
+
+def test_an_m83_in_a_comment_does_not_switch_the_file_to_relative() -> None:
+    """Der Fund: ``";" not in text or "M83" not in text``.
+
+    Cura hängt seine Einstellungen als ``;SETTING_3``-Block ans Dateiende, und
+    darin steht der Endcode der Maschine — mit ``M83``. Die Datei selbst
+    fördert absolut, hatte aber keine Modus-Zeile vor der ersten Bahn: Aus
+    einem Vorschub von 3 mm wurden 4, und bei einer echten Datei summiert sich
+    jeder Wert der E-Achse statt der Differenzen. Gesucht wird deshalb der
+    **Befehl** am Zeilenanfang, nicht die Zeichenfolge irgendwo im Text.
+    """
+    text = (
+        ";Generated with Cura_SteamEngine 5.7.0\n"
+        ";TYPE:WALL-OUTER\n"
+        "G1 X10 Y10 E1.0\n"
+        "G1 X20 Y10 E3.0\n"
+        ";SETTING_3 machine_end_gcode = M104 S0 M83\n"
+    )
+
+    metrics = gcode.parse(text)
+
+    assert metrics.filament_mm == pytest.approx(3.0), "absolut gezählt sind es die Differenzen"
+
+
+def test_a_file_without_comments_still_finds_its_mode() -> None:
+    """Die Gegenprobe von der anderen Seite: keine Kommentare, aber ``M83``.
+
+    ``";" not in text`` hielt eine kommentarlose Datei für absolut. Hier
+    rettete die Schleife den Fall, weil der Befehl vor den Bahnen steht — der
+    Modus wird jetzt vor dem ersten Vorschub bestimmt und nicht aus dem
+    Vorhandensein von Kommentaren geschlossen.
+    """
+    metrics = gcode.parse("M83\nG1 X10 Y10 E1.0\nG1 X20 Y10 E3.0\n")
+
+    assert metrics.filament_mm == pytest.approx(4.0), "relativ gezählt ist es die Summe"
 
 
 def test_the_weight_follows_from_the_length() -> None:
@@ -316,6 +373,21 @@ def test_a_zero_measurement_is_not_a_perfect_match() -> None:
 
     assert [entry.code for entry in check.findings] == ["gcode.no_measurement"]
     assert all(entry.code != "gcode.deviation" for entry in check.findings)
+
+
+def test_the_finding_without_a_measurement_carries_the_origin_of_its_number() -> None:
+    """Regel 14: Der einzige Zahlenwert darin ist die **Schätzung**.
+
+    Der Befund trug ``source="gcode"``, weil er beim Lesen des G-Code
+    entsteht — und stellte damit eine interne Zahl als gemessene aus. Genau
+    die Verwechslung, die §22.5 verbietet: Die Datei nennt hier keinen
+    Messwert, das ist ja der Anlass des Befunds.
+    """
+    check = gcode.compare(12.0, 0.0, "material")
+
+    finding = check.findings[0]
+    assert finding.source == "internal"
+    assert "estimated" in finding.values
 
 
 def test_a_zero_gram_header_falls_back_to_the_length() -> None:
