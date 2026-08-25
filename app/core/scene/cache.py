@@ -232,6 +232,13 @@ def _feature_to_data(feature: Feature) -> dict[str, Any]:
         "params": dict(feature.params),
         "face_indices": list(feature.face_indices),
         "created_by": feature.created_by,
+        # Ohne dies fiel ein Merkmal aus dem warmen Cache auf die Vorgabe
+        # ``True`` zurück: Ein Baustein benennt seine Bohrungen beim Bauen,
+        # ``detect`` findet sie an ihrer Stelle nicht, und ``recognised=False``
+        # hält sie trotzdem fest (types.py). Als ``True`` wandert das Merkmal in
+        # die Erkennungsprüfung, findet keinen Partner und verwaist — der Fehler,
+        # gegen den das Feld eingebaut wurde, nur eine Cache-Ebene weiter.
+        "recognised": feature.recognised,
     }
 
 
@@ -250,6 +257,10 @@ def _feature_from_data(data: dict[str, Any]) -> Feature:
         # ohne Handlungsvorschlag an einer Stelle, an der es nichts zu
         # entscheiden gibt.
         created_by=data.get("created_by"),
+        # ``get`` mit der Vorgabe wie oben: Ein Eintrag von vor diesem Feld
+        # kennt ``recognised`` nicht, und der Cache ist wegwerfbar, nicht
+        # versioniert.
+        recognised=data.get("recognised", True),
     )
 
 

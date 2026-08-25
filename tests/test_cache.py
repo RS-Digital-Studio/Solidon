@@ -44,6 +44,43 @@ def result(triangles: int = 100, object_id: str = "obj_1") -> CachedResult:
     return CachedResult(objects=(make_object(object_id, triangles=triangles),))
 
 
+def test_a_recognised_flag_survives_the_cache() -> None:
+    """Szene 3: ohne ``recognised`` im Cache verwaisen benannte Baustein-Bohrungen.
+
+    Ein Baustein benennt seine Bohrungen beim Bauen und setzt ``recognised=False``,
+    weil ``detect`` sie an ihrer Stelle nicht findet. Fiel das Feld beim
+    Cache-Treffer auf die Vorgabe ``True`` zurück, wanderte das Merkmal in die
+    Erkennungsprüfung, fand keinen Partner und verwaiste — der Fehler, gegen den
+    das Feld eingebaut wurde, nur eine Cache-Ebene weiter.
+    """
+    from app.core.scene.cache import _feature_from_data, _feature_to_data
+    from app.core.types import Feature
+
+    named = Feature(
+        id="heatset_m4_bore_1",
+        kind="hole",
+        provenance="generated",
+        params={"diameter": 4.0},
+        face_indices=(),
+        recognised=False,
+        created_by=3,
+    )
+
+    revived = _feature_from_data(_feature_to_data(named))
+    assert revived.recognised is False, "recognised überlebt den Cache"
+
+    # Rückwärtsverträglich wie ``created_by``: ein Eintrag ohne das Feld gilt als
+    # erkannt.
+    old_entry = {
+        "id": "x",
+        "kind": "hole",
+        "provenance": "detected",
+        "params": {},
+        "face_indices": [],
+    }
+    assert _feature_from_data(old_entry).recognised is True
+
+
 def test_a_hit_returns_what_was_stored() -> None:
     cache = ResultCache()
     cache.put("key", result())
