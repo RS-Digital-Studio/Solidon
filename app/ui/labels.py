@@ -667,6 +667,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "layer_height": _("Schichthöhe"),
     "layers": _("Schichten"),
     "limit": _("Grenze"),
+    "loose": _("Lose Stücke"),
     "materials": _("Materialien"),
     "lost": _("Verloren"),
     "major": _("Hauptversion"),
