@@ -20,7 +20,7 @@
 <meta property="og:title" content="Funciones: editar STL y comprobar imprimibilidad — Solidon3D">
 <meta property="og:description" content="Todas las funciones de Solidon3D con imágenes: agente de IA, bocetos con restricciones, informe de comprobación, análisis de capas, bloques, división automática, patrones de superficie.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/es/catalog.png">
-<meta property="og:image:alt" content="El catálogo de bloques con los grupos uniones y mecánica: alojamiento de tuerca, rosca, agujero para tornillo con avellanado, pasador, pestaña de retención, bisagra de película, conector a presión para una junta y unión de encaje, cada uno con vista previa y sus medidas">
+<meta property="og:image:alt" content="El catálogo de bloques con los grupos uniones y mecánica: inserto termofijado, alojamiento de tuerca, rosca, agujero para tornillo con avellanado, pasador, ojal de bisagra, pestaña de retención, bisagra de película, conector a presión y unión de encaje, cada uno con vista previa y sus medidas">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -64,20 +64,21 @@
   <section id="anfang">
     <div class="wrap">
       <h1>Lo que Solidon3D sabe hacer</h1>
-      <p class="sub">Doce funciones, cada una con una imagen de la aplicación en marcha o un dibujo que enseña exactamente lo que hace. Si prefieres saber antes el precio: <a href="/es/#pricing">demo y precio</a>.</p>
+      <p class="sub">Cada función con una imagen de la aplicación en marcha o un dibujo que enseña exactamente lo que hace. Si prefieres saber antes el precio: <a href="/es/#pricing">demo y precio</a>.</p>
     </div>
   </section>
 
   <section id="uebersicht" class="tint">
     <div class="wrap">
-      <h2>Las doce de un vistazo</h2>
-      <nav class="toc" aria-label="Las doce de un vistazo">
+      <h2>De un vistazo</h2>
+      <nav class="toc" aria-label="De un vistazo">
         <ol>
           <li><a href="#ai-agent">Agente de IA</a></li>
           <li><a href="#sketches-with-constraints">Bocetos con restricciones</a></li>
           <li><a href="#inspection-report">Informe de comprobación</a></li>
           <li><a href="#parametric">Paramétrico</a></li>
           <li><a href="#building-blocks">Bloques</a></li>
+          <li><a href="#your-own-blocks">Bloques propios</a></li>
           <li><a href="#surfaces">Superficies</a></li>
           <li><a href="#layer-analysis">Análisis de capas</a></li>
           <li><a href="#auto-split">Dividir y división automática</a></li>
@@ -172,9 +173,9 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-skizze-es.png" width="1400" height="860" loading="lazy" decoding="async"
-                 alt="El modo boceto: las herramientas de dibujo como fila de iconos, la elección de plano, la fila de botones de restricciones y un rectángulo acotado con un círculo dentro; a la derecha, las trece restricciones del dibujo listadas una a una">
+                 alt="El modo boceto en la ventana principal: se dibuja en la propia vista, la cuadrícula queda sobre el modelo con un rectángulo acotado y un círculo; abajo, la barra flotante con las herramientas de dibujo, el paso de la cuadrícula, la línea del plano de dibujo y los botones de restricciones; a la derecha, la pestaña con las trece restricciones del dibujo">
           </div>
-          <figcaption>El modo boceto — la misma superficie que normalmente muestra el modelo.</figcaption>
+          <figcaption>Se dibuja en la vista — sobre la cara en la que has hecho clic.</figcaption>
         </figure>
       </div>
 
@@ -245,11 +246,12 @@
         <div>
           <span class="kicker">Bloques</span>
           <h3>Un alojamiento de tuerca en cuatro clics, no en cuatro medias horas</h3>
-          <p>Diecisiete bloques probados — agujero para tornillo con
+          <p>Bloques probados en seis grupos — agujero para tornillo con
           avellanado, alojamiento de tuerca, inserto termofijado, rosca,
-          pasador, bisagra de película, unión de encaje, bolsillo para imán.
-          Las medidas salen de una tabla de piezas normalizadas con 40
-          entradas, no de la intuición.</p>
+          pasador, bisagra de película, unión de encaje, bolsillo para imán,
+          además de soporte de pared, gancho para panel perforado, clip de
+          cable, escuadra y pie. Las medidas salen de una tabla de piezas
+          normalizadas, no de la intuición.</p>
           <p class="note">Cada bloque está probado en todo su rango de
           parámetros: <b>estanco, espesor de pared mínimo, sin
           autointersecciones.</b></p>
@@ -257,9 +259,37 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-bausteine-es.png" width="1048" height="502" loading="lazy" decoding="async"
-                 alt="El catálogo de bloques con los grupos uniones y mecánica: alojamiento de tuerca, rosca, agujero para tornillo con avellanado, pasador, pestaña de retención, bisagra de película, conector a presión para una junta y unión de encaje, cada uno con vista previa y sus medidas">
+                 alt="El catálogo de bloques con los grupos uniones y mecánica: inserto termofijado, alojamiento de tuerca, rosca, agujero para tornillo con avellanado, pasador, ojal de bisagra, pestaña de retención, bisagra de película, conector a presión y unión de encaje, cada uno con vista previa y sus medidas">
           </div>
           <figcaption>El catálogo — cada vista previa está renderizada, no dibujada.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="your-own-blocks">
+        <div>
+          <span class="kicker">Bloques propios</span>
+          <h3>Construido una vez, para siempre en el catálogo</h3>
+          <p>El soporte para el banco de trabajo costó una tarde — la próxima
+          vez debería ser una entrada. Construye la pieza una vez, crea
+          parámetros para sus medidas y elige en el catálogo <b>Guardar la
+          selección como pieza</b>: desde entonces figura junto a los bloques
+          incluidos, con vista previa y campos, y tú decides por cada medida
+          hasta dónde se puede ajustar.</p>
+          <p>Al crearlo se calcula, no solo se guarda: el bloque se construye
+          una vez en cada esquina de su rango — si en algún punto no sale un
+          cuerpo utilizable, queda escrito en la entrada antes de que se note
+          en una impresión.</p>
+          <p class="note">Es tuyo, se queda en tu equipo — y <b>viaja como
+          receta dentro de cada archivo de proyecto</b> que lo usa: una lista
+          de pasos y valores, no un programa. Quien recibe el archivo puede
+          calcular y cambiar sin instalar nada.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <img src="../handbuch/es/own-part.png" width="520" height="816" loading="lazy" decoding="async"
+                 alt="El diálogo «Guardar la selección como pieza»: arriba nombre, grupo y descripción, debajo por cada parámetro la etiqueta, la unidad, el valor mínimo y máximo, el valor por defecto y su lugar en el diálogo, después los puntos seleccionables con sus nombres en la receta — abajo el botón «Crear pieza»">
+          </div>
+          <figcaption>El diálogo pregunta cinco cosas — y calcula todo el rango antes de guardar.</figcaption>
         </figure>
       </div>
 

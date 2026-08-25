@@ -20,7 +20,7 @@
 <meta property="og:title" content="Features: edit STL files, check printability — Solidon3D">
 <meta property="og:description" content="Every Solidon3D feature with pictures: AI agent, constrained sketches, inspection report, layer analysis, building blocks, auto split, surface patterns.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/en/catalog.png">
-<meta property="og:image:alt" content="The building block catalogue with the groups fasteners and mechanics: nut pocket, thread, counterbored screw hole, alignment pin, snap hook, living hinge, snap connector for a seam and snap fit, each with a preview and its dimensions">
+<meta property="og:image:alt" content="The building block catalogue with the groups fasteners and mechanics: heat-set insert, nut pocket, thread, counterbored screw hole, alignment pin, hinge eye, snap hook, living hinge, snap connector and snap fit, each with a preview and its dimensions">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -64,20 +64,21 @@
   <section id="anfang">
     <div class="wrap">
       <h1>What Solidon3D does</h1>
-      <p class="sub">Twelve features, each with a screenshot from the running application or a drawing that shows exactly what it does. If you would rather know the price first: <a href="/en/#pricing">demo and price</a>.</p>
+      <p class="sub">Every feature with a screenshot from the running application or a drawing that shows exactly what it does. If you would rather know the price first: <a href="/en/#pricing">demo and price</a>.</p>
     </div>
   </section>
 
   <section id="uebersicht" class="tint">
     <div class="wrap">
-      <h2>The twelve at a glance</h2>
-      <nav class="toc" aria-label="The twelve at a glance">
+      <h2>At a glance</h2>
+      <nav class="toc" aria-label="At a glance">
         <ol>
           <li><a href="#ai-agent">AI agent</a></li>
           <li><a href="#sketches-with-constraints">Sketches with constraints</a></li>
           <li><a href="#inspection-report">Inspection report</a></li>
           <li><a href="#parametric">Parametric</a></li>
           <li><a href="#building-blocks">Building blocks</a></li>
+          <li><a href="#your-own-blocks">Your own blocks</a></li>
           <li><a href="#surfaces">Surfaces</a></li>
           <li><a href="#layer-analysis">Layer analysis</a></li>
           <li><a href="#auto-split">Split and auto split</a></li>
@@ -171,9 +172,9 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-skizze-en.png" width="1400" height="860" loading="lazy" decoding="async"
-                 alt="The sketch mode: the drawing tools as a row of icons, the plane choice, the row of constraint buttons and a dimensioned rectangle with a circle in it; on the right the thirteen constraints of the drawing listed one by one">
+                 alt="The sketch mode inside the main window: you draw in the view itself, the grid lies over the model with a dimensioned rectangle and a circle; at the bottom the floating bar with drawing tools, grid width, the line “Sketch plane: face on Dose” and the constraint buttons; on the right the Constraints tab with the thirteen constraints of the drawing">
           </div>
-          <figcaption>The sketch mode — the same area that otherwise shows the model.</figcaption>
+          <figcaption>You draw in the view — on the face you clicked.</figcaption>
         </figure>
       </div>
 
@@ -243,10 +244,11 @@
         <div>
           <span class="kicker">Building blocks</span>
           <h3>A nut pocket in four clicks instead of half an hour</h3>
-          <p>Seventeen tested building blocks — counterbored screw hole, nut
-          pocket, heat-set insert, thread, alignment pin, living hinge, snap
-          fit, magnet pocket. Their dimensions come from a standard-parts
-          table with 40 entries, not from a feeling.</p>
+          <p>Tested building blocks in six groups — counterbored screw hole,
+          nut pocket, heat-set insert, thread, alignment pin, living hinge,
+          snap fit, magnet pocket, plus wall mount, pegboard hook, cable clip,
+          corner gusset and foot. Their dimensions come from a standard-parts
+          table, not from a feeling.</p>
           <p class="note">Every block is tested across its whole parameter
           range: <b>watertight, minimum wall thickness, no
           self-intersection.</b></p>
@@ -254,9 +256,37 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-bausteine-en.png" width="1048" height="502" loading="lazy" decoding="async"
-                 alt="The building block catalogue with the groups fasteners and mechanics: nut pocket, thread, counterbored screw hole, alignment pin, snap hook, living hinge, snap connector for a seam and snap fit, each with a preview and its dimensions">
+                 alt="The building block catalogue with the groups fasteners and mechanics: heat-set insert, nut pocket, thread, counterbored screw hole, alignment pin, hinge eye, snap hook, living hinge, snap connector and snap fit, each with a preview and its dimensions">
           </div>
           <figcaption>The catalogue — every preview is rendered, not drawn.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="your-own-blocks">
+        <div>
+          <span class="kicker">Your own blocks</span>
+          <h3>Built once, in the catalogue forever</h3>
+          <p>The bracket for the workbench took an evening — next time it
+          should be an entry. Build the part once, create parameters for the
+          dimensions and choose <b>Save selection as a part</b> in the
+          catalogue: from then on it sits next to the supplied blocks, with a
+          preview image and fields, and you decide per dimension how far it
+          may be adjusted.</p>
+          <p>Creating it computes, it does not just save: the part is built
+          once at every corner of its range — if no usable body comes out
+          anywhere, that is written on the entry before it shows up in a
+          print.</p>
+          <p class="note">It belongs to you, stays on your computer — and
+          <b>travels as a recipe inside every project file</b> that uses it: a
+          list of steps and values, not a program. Whoever receives the file
+          can compute and change it without installing anything.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <img src="../handbuch/en/own-part.png" width="520" height="816" loading="lazy" decoding="async"
+                 alt="The dialog “Save selection as a part”: name, group and description at the top, below them per parameter the label, unit, smallest and largest value, default and its place in the dialog, then the clickable features with their names in the recipe — at the bottom the button “Create part”">
+          </div>
+          <figcaption>The dialog asks five things — and computes the whole range before it saves.</figcaption>
         </figure>
       </div>
 

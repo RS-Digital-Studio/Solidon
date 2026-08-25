@@ -22,7 +22,7 @@
 <meta property="og:title" content="Funções: editar STL e verificar a imprimibilidade — Solidon3D">
 <meta property="og:description" content="Todas as funções do Solidon3D com imagens: agente de IA, esboços com restrições, relatório de verificação, análise de camadas, blocos, divisão automática, padrões de superfície.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/pt/catalog.png">
-<meta property="og:image:alt" content="O catálogo de blocos com os grupos ligações e mecânica: alojamento de porca, rosca, furo de parafuso com escareamento, pino de posicionamento, lingueta de encaixe, dobradiça de filme, conector de encaixe para uma junta e ligação de encaixe, cada um com pré-visualização e medidas">
+<meta property="og:image:alt" content="O catálogo de blocos com os grupos ligações e mecânica: bucha de inserção a quente, alojamento de porca, rosca, furo de parafuso com escareamento, pino de posicionamento, olhal de dobradiça, lingueta de encaixe, dobradiça de filme, conector de encaixe e ligação de encaixe, cada um com pré-visualização e medidas">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -66,20 +66,21 @@
   <section id="anfang">
     <div class="wrap">
       <h1>O que o Solidon3D faz</h1>
-      <p class="sub">Doze funções, cada uma com uma imagem da aplicação em funcionamento ou um desenho que mostra exatamente o que faz. Quem preferir saber primeiro o preço: <a href="/pt/#pricing">demo e preço</a>.</p>
+      <p class="sub">Cada função com uma imagem da aplicação em funcionamento ou um desenho que mostra exatamente o que faz. Quem preferir saber primeiro o preço: <a href="/pt/#pricing">demo e preço</a>.</p>
     </div>
   </section>
 
   <section id="uebersicht" class="tint">
     <div class="wrap">
-      <h2>As doze num relance</h2>
-      <nav class="toc" aria-label="As doze num relance">
+      <h2>Num relance</h2>
+      <nav class="toc" aria-label="Num relance">
         <ol>
           <li><a href="#ai-agent">Agente de IA</a></li>
           <li><a href="#sketches-with-constraints">Esboços com restrições</a></li>
           <li><a href="#inspection-report">Relatório de verificação</a></li>
           <li><a href="#parametric">Paramétrico</a></li>
           <li><a href="#building-blocks">Blocos</a></li>
+          <li><a href="#your-own-blocks">Blocos próprios</a></li>
           <li><a href="#surfaces">Superfícies</a></li>
           <li><a href="#layer-analysis">Análise de camadas</a></li>
           <li><a href="#auto-split">Separar e dividir automaticamente</a></li>
@@ -174,9 +175,9 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-skizze-pt.png" width="1400" height="860" loading="lazy" decoding="async"
-                 alt="O modo de esboço: as ferramentas de desenho como fila de símbolos, a escolha do plano, a fila de botões de restrição e um retângulo cotado com um círculo lá dentro; à direita, as treze restrições do desenho listadas uma a uma">
+                 alt="O modo de esboço na janela principal: desenha-se na própria vista, a grelha fica sobre o modelo com um retângulo cotado e um círculo; em baixo, a barra flutuante com as ferramentas de desenho, o passo da grelha, a linha do plano de desenho e os botões de restrição; à direita, o separador com as treze restrições do desenho">
           </div>
-          <figcaption>O modo de esboço — a mesma área que de resto mostra o modelo.</figcaption>
+          <figcaption>Desenha-se na vista — na face em que clicou.</figcaption>
         </figure>
       </div>
 
@@ -246,11 +247,12 @@
         <div>
           <span class="kicker">Blocos</span>
           <h3>Um alojamento de porca em quatro cliques, não em quatro meias horas</h3>
-          <p>Dezassete blocos verificados — furo de parafuso com
+          <p>Blocos verificados em seis grupos — furo de parafuso com
           escareamento, alojamento de porca, bucha de inserção a quente,
           rosca, pino de posicionamento, dobradiça de filme, ligação de
-          encaixe, alojamento de íman. As medidas vêm de uma tabela de peças
-          normalizadas com 40 entradas, não do palpite.</p>
+          encaixe, alojamento de íman, e ainda suporte de parede, gancho para
+          painel perfurado, clip de cabo, esquadro e pé. As medidas vêm de
+          uma tabela de peças normalizadas, não do palpite.</p>
           <p class="note">Cada bloco é testado em todo o seu intervalo de
           parâmetros: <b>estanque, espessura mínima de parede, sem
           autointerseções.</b></p>
@@ -258,9 +260,37 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-bausteine-pt.png" width="1048" height="502" loading="lazy" decoding="async"
-                 alt="O catálogo de blocos com os grupos ligações e mecânica: alojamento de porca, rosca, furo de parafuso com escareamento, pino de posicionamento, lingueta de encaixe, dobradiça de filme, conector de encaixe para uma junta e ligação de encaixe, cada um com pré-visualização e medidas">
+                 alt="O catálogo de blocos com os grupos ligações e mecânica: bucha de inserção a quente, alojamento de porca, rosca, furo de parafuso com escareamento, pino de posicionamento, olhal de dobradiça, lingueta de encaixe, dobradiça de filme, conector de encaixe e ligação de encaixe, cada um com pré-visualização e medidas">
           </div>
           <figcaption>O catálogo — cada imagem de pré-visualização é renderizada, não desenhada.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="your-own-blocks">
+        <div>
+          <span class="kicker">Blocos próprios</span>
+          <h3>Construído uma vez, para sempre no catálogo</h3>
+          <p>O suporte para a bancada custou uma noite — para a próxima deve
+          ser uma entrada. Construa a peça uma vez, crie parâmetros para as
+          medidas e escolha no catálogo <b>Guardar a seleção como peça</b>:
+          a partir daí fica ao lado dos blocos fornecidos, com
+          pré-visualização e campos, e decide por medida até onde se pode
+          ajustar.</p>
+          <p>Ao criar calcula-se, não se guarda apenas: o bloco é construído
+          uma vez em cada canto do seu intervalo — se nalgum ponto não sair
+          um corpo utilizável, fica escrito na entrada antes de se notar numa
+          impressão.</p>
+          <p class="note">É seu, fica no seu computador — e <b>viaja como
+          receita em cada ficheiro de projeto</b> que o usa: uma lista de
+          passos e valores, não um programa. Quem recebe o ficheiro pode
+          calcular e alterar sem instalar nada.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <img src="../handbuch/pt/own-part.png" width="520" height="816" loading="lazy" decoding="async"
+                 alt="A caixa de diálogo «Guardar a seleção como peça»: em cima nome, grupo e descrição, por baixo, por cada parâmetro, a etiqueta, a unidade, o valor mínimo e máximo, a predefinição e o seu lugar na caixa, depois os pontos clicáveis com os seus nomes na receita — em baixo o botão «Criar peça»">
+          </div>
+          <figcaption>A caixa de diálogo pergunta cinco coisas — e calcula todo o intervalo antes de guardar.</figcaption>
         </figure>
       </div>
 

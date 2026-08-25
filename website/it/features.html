@@ -22,7 +22,7 @@
 <meta property="og:title" content="Funzioni: modificare STL e verificare la stampa — Solidon3D">
 <meta property="og:description" content="Tutte le funzioni di Solidon3D con immagini: agente IA, schizzi con vincoli, rapporto di verifica, analisi degli strati, blocchi, divisione automatica, motivi superficiali.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/it/catalog.png">
-<meta property="og:image:alt" content="Il catalogo dei blocchi con i gruppi collegamenti e meccanica: sede per dado, filettatura, foro per vite con svasatura, spina, dente di scatto, cerniera a film, connettore a scatto per una giunzione e aggancio a scatto, ciascuno con anteprima e misure">
+<meta property="og:image:alt" content="Il catalogo dei blocchi con i gruppi collegamenti e meccanica: inserto a caldo, sede per dado, filettatura, foro per vite con svasatura, spina, occhiello di cerniera, dente di scatto, cerniera a film, connettore a scatto e aggancio a scatto, ciascuno con anteprima e misure">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -66,20 +66,21 @@
   <section id="anfang">
     <div class="wrap">
       <h1>Cosa sa fare Solidon3D</h1>
-      <p class="sub">Dodici funzioni, ognuna con un'immagine dall'applicazione in esecuzione o con un disegno che mostra esattamente cosa fa. Se preferisci sapere prima il prezzo: <a href="/it/#pricing">demo e prezzo</a>.</p>
+      <p class="sub">Ogni funzione con un'immagine dall'applicazione in esecuzione o con un disegno che mostra esattamente cosa fa. Se preferisci sapere prima il prezzo: <a href="/it/#pricing">demo e prezzo</a>.</p>
     </div>
   </section>
 
   <section id="uebersicht" class="tint">
     <div class="wrap">
-      <h2>Le dodici in sintesi</h2>
-      <nav class="toc" aria-label="Le dodici in sintesi">
+      <h2>In sintesi</h2>
+      <nav class="toc" aria-label="In sintesi">
         <ol>
           <li><a href="#ai-agent">Agente IA</a></li>
           <li><a href="#sketches-with-constraints">Schizzi con vincoli</a></li>
           <li><a href="#inspection-report">Rapporto di verifica</a></li>
           <li><a href="#parametric">Parametrico</a></li>
           <li><a href="#building-blocks">Blocchi</a></li>
+          <li><a href="#your-own-blocks">Blocchi tuoi</a></li>
           <li><a href="#surfaces">Superfici</a></li>
           <li><a href="#layer-analysis">Analisi degli strati</a></li>
           <li><a href="#auto-split">Dividere e divisione automatica</a></li>
@@ -174,9 +175,9 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-skizze-it.png" width="1400" height="860" loading="lazy" decoding="async"
-                 alt="La modalità schizzo: gli strumenti di disegno come riga di icone, la scelta del piano, la fila dei pulsanti dei vincoli e un rettangolo quotato con dentro un cerchio; a destra i tredici vincoli del disegno elencati uno per uno">
+                 alt="La modalità schizzo nella finestra principale: si disegna nella vista stessa, la griglia sta sopra il modello con un rettangolo quotato e un cerchio; in basso la barra flottante con gli strumenti di disegno, il passo della griglia, la riga del piano di disegno e i pulsanti dei vincoli; a destra la scheda con i tredici vincoli del disegno">
           </div>
-          <figcaption>La modalità schizzo — la stessa area che altrimenti mostra il modello.</figcaption>
+          <figcaption>Si disegna nella vista — sulla faccia su cui hai fatto clic.</figcaption>
         </figure>
       </div>
 
@@ -247,10 +248,11 @@
         <div>
           <span class="kicker">Blocchi</span>
           <h3>Una sede per dado in quattro clic, non in quattro mezz'ore</h3>
-          <p>Diciassette blocchi verificati — foro per vite con svasatura, sede
-          per dado, inserto a caldo, filettatura, spina, cerniera a film,
-          aggancio a scatto, tasca per magnete. Le quote vengono da una
-          tabella dei componenti normalizzati con 40 voci, non
+          <p>Blocchi verificati in sei gruppi — foro per vite con svasatura,
+          sede per dado, inserto a caldo, filettatura, spina, cerniera a film,
+          aggancio a scatto, tasca per magnete, e poi supporto a parete,
+          gancio per pannello forato, clip per cavi, squadretta e piede. Le
+          quote vengono da una tabella dei componenti normalizzati, non
           dall'istinto.</p>
           <p class="note">Ogni blocco è testato su tutto il suo intervallo di
           parametri: <b>a tenuta stagna, spessore minimo di parete, nessuna
@@ -259,9 +261,37 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-bausteine-it.png" width="1048" height="502" loading="lazy" decoding="async"
-                 alt="Il catalogo dei blocchi con i gruppi collegamenti e meccanica: sede per dado, filettatura, foro per vite con svasatura, spina, dente di scatto, cerniera a film, connettore a scatto per una giunzione e aggancio a scatto, ciascuno con anteprima e misure">
+                 alt="Il catalogo dei blocchi con i gruppi collegamenti e meccanica: inserto a caldo, sede per dado, filettatura, foro per vite con svasatura, spina, occhiello di cerniera, dente di scatto, cerniera a film, connettore a scatto e aggancio a scatto, ciascuno con anteprima e misure">
           </div>
           <figcaption>Il catalogo — ogni anteprima è renderizzata, non disegnata.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="your-own-blocks">
+        <div>
+          <span class="kicker">Blocchi tuoi</span>
+          <h3>Costruito una volta, nel catalogo per sempre</h3>
+          <p>Il supporto per il banco da lavoro è costato una serata — la
+          prossima volta dev'essere una voce. Costruisci il pezzo una volta,
+          crea i parametri per le sue quote e scegli nel catalogo <b>Salva la
+          selezione come componente</b>: da quel momento sta accanto ai
+          blocchi forniti, con anteprima e campi, e decidi tu per ogni quota
+          fino a dove si può regolare.</p>
+          <p>Creare calcola, non si limita a salvare: il blocco viene
+          costruito una volta a ogni angolo del suo intervallo — se da qualche
+          parte non esce un corpo utilizzabile, sta scritto sulla voce prima
+          che si veda in stampa.</p>
+          <p class="note">È tuo, resta sul tuo computer — e <b>viaggia come
+          ricetta in ogni file di progetto</b> che lo usa: un elenco di passi
+          e valori, non un programma. Chi riceve il file può calcolare e
+          modificare senza installare nulla.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <img src="../handbuch/it/own-part.png" width="520" height="816" loading="lazy" decoding="async"
+                 alt="La finestra «Salva la selezione come componente»: in alto nome, gruppo e descrizione, sotto per ogni parametro l'etichetta, l'unità, il valore minimo e massimo, il valore predefinito e il suo posto nella finestra, poi i punti selezionabili con i loro nomi nella ricetta — in basso il pulsante «Crea componente»">
+          </div>
+          <figcaption>La finestra chiede cinque cose — e calcola l'intero intervallo prima di salvare.</figcaption>
         </figure>
       </div>
 

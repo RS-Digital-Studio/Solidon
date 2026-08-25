@@ -20,7 +20,7 @@
 <meta property="og:title" content="Funktionen: STL bearbeiten, Druckbarkeit prüfen — Solidon3D">
 <meta property="og:description" content="Alle Funktionen von Solidon3D mit Bildern: KI-Agent, Skizzen mit Zwängen, Prüfbericht, Schichtanalyse, Bausteine, Auto-Split, Oberflächenmuster.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/de/catalog.png">
-<meta property="og:image:alt" content="Der Bausteinkatalog mit den Gruppen Verbindungen und Mechanik: Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Rastnase, Filmscharnier, Schnappverbinder für eine Naht und Schnappverbindung, jeder mit Vorschau und seinen Maßen">
+<meta property="og:image:alt" content="Der Bausteinkatalog mit den Gruppen Verbindungen und Mechanik: Heat-Set-Einpressbuchse, Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Scharnierauge, Rastnase, Filmscharnier, Schnappverbinder und Schnappverbindung, jeder mit Vorschau und seinen Maßen">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -64,20 +64,21 @@
   <section id="anfang">
     <div class="wrap">
       <h1>Was Solidon3D kann</h1>
-      <p class="sub">Zwölf Funktionen, jede mit einem Bild aus der laufenden Anwendung oder einer Zeichnung, die genau zeigt, was sie tut. Wer lieber zuerst den Preis wissen will: <a href="/#preis">Demo und Preis</a>.</p>
+      <p class="sub">Jede Funktion mit einem Bild aus der laufenden Anwendung oder einer Zeichnung, die genau zeigt, was sie tut. Wer lieber zuerst den Preis wissen will: <a href="/#preis">Demo und Preis</a>.</p>
     </div>
   </section>
 
   <section id="uebersicht" class="tint">
     <div class="wrap">
-      <h2>Die zwölf im Überblick</h2>
-      <nav class="toc" aria-label="Die zwölf im Überblick">
+      <h2>Der Überblick</h2>
+      <nav class="toc" aria-label="Der Überblick">
         <ol>
           <li><a href="#ki-agent">KI-Agent</a></li>
           <li><a href="#skizzen-mit-zwaengen">Skizzen mit Zwängen</a></li>
           <li><a href="#pruefbericht">Prüfbericht</a></li>
           <li><a href="#parametrisch">Parametrisch</a></li>
           <li><a href="#bausteine">Bausteine</a></li>
+          <li><a href="#eigene-bausteine">Eigene Bausteine</a></li>
           <li><a href="#oberflaechen">Oberflächen</a></li>
           <li><a href="#schichtanalyse">Schichtanalyse</a></li>
           <li><a href="#auto-split">Trennen und Auto-Split</a></li>
@@ -172,9 +173,9 @@
         <figure class="shot">
           <div class="stage">
             <img src="bilder/beleg-skizze.png" width="1400" height="860" loading="lazy" decoding="async"
-                 alt="Der Skizzenmodus: die Zeichenwerkzeuge als Symbolzeile, die Ebenenwahl, die Reihe der Bedingungsknöpfe und ein bemaßtes Rechteck mit einem Kreis darin; rechts die dreizehn Bedingungen der Zeichnung einzeln aufgelistet">
+                 alt="Der Skizzenmodus im Hauptfenster: Gezeichnet wird in der Ansicht selbst, über dem Modell liegt das Raster mit einem bemaßten Rechteck und einem Kreis; unten die schwebende Leiste mit Zeichenwerkzeugen, Rasterweite, der Zeile „Zeichenebene: Fläche an Dose“ und den Bedingungsknöpfen; rechts der Reiter „Bedingungen“ mit den dreizehn Bedingungen der Zeichnung">
           </div>
-          <figcaption>Der Skizzenmodus — dieselbe Fläche, die sonst das Modell zeigt.</figcaption>
+          <figcaption>Gezeichnet wird in der Ansicht — auf der Fläche, die man angeklickt hat.</figcaption>
         </figure>
       </div>
 
@@ -245,11 +246,11 @@
         <div>
           <span class="kicker">Bausteine</span>
           <h3>Mutternfalle in vier Klicks statt vier halben Stunden</h3>
-          <p>Siebzehn geprüfte Bausteine — Schraubenloch mit Senkung,
+          <p>Geprüfte Bausteine in sechs Gruppen — Schraubenloch mit Senkung,
           Mutternfalle, Heat-Set-Einpressbuchse, Gewinde, Passstift,
-          Filmscharnier, Schnappverbindung, Magnettasche. Die Maße kommen
-          aus einer Normteiltabelle mit 40 Einträgen, nicht aus dem
-          Bauchgefühl.</p>
+          Filmscharnier, Schnappverbindung, Magnettasche, dazu Wandhalter,
+          Lochwand-Einhänger, Kabelclip, Eckwinkel und Standfuß. Die Maße
+          kommen aus einer Normteiltabelle, nicht aus dem Bauchgefühl.</p>
           <p class="note">Jeder Baustein ist über seinen ganzen
           Parameterbereich getestet: <b>wasserdicht, Mindestwandstärke,
           keine Selbstdurchdringung.</b></p>
@@ -257,9 +258,38 @@
         <figure class="shot">
           <div class="stage">
             <img src="bilder/beleg-bausteine.png" width="1048" height="502" loading="lazy" decoding="async"
-                 alt="Der Bausteinkatalog mit den Gruppen Verbindungen und Mechanik: Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Rastnase, Filmscharnier, Schnappverbinder für eine Naht und Schnappverbindung, jeder mit Vorschau und seinen Maßen">
+                 alt="Der Bausteinkatalog mit den Gruppen Verbindungen und Mechanik: Heat-Set-Einpressbuchse, Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Scharnierauge, Rastnase, Filmscharnier, Schnappverbinder und Schnappverbindung, jeder mit Vorschau und seinen Maßen">
           </div>
           <figcaption>Der Katalog — jedes Vorschaubild ist gerendert, nicht gezeichnet.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="eigene-bausteine">
+        <div>
+          <span class="kicker">Eigene Bausteine</span>
+          <h3>Einmal gebaut, für immer im Katalog</h3>
+          <p>Der Halter für die Werkbank hat einen Abend gekostet — beim
+          nächsten Brett soll er ein Eintrag sein. Bau das Teil einmal,
+          leg die Maße als Parameter an und wähle im Katalog
+          <b>Auswahl als Baustein speichern</b>: Danach steht er mit
+          Vorschaubild und Feldern neben den mitgelieferten, und du sagst je
+          Maß, wie weit man es stellen darf.</p>
+          <p>Beim Anlegen wird gerechnet, nicht nur gespeichert: Der Baustein
+          entsteht einmal an jeder Ecke seines Maßbereichs — kommt irgendwo
+          kein brauchbarer Körper heraus, steht das am Eintrag, bevor es beim
+          Drucken auffällt.</p>
+          <p class="note">Er gehört dir, bleibt auf deinem Rechner — und
+          <b>reist als Rezept in jeder Projektdatei mit</b>, die ihn benutzt:
+          eine Liste von Schritten und Werten, kein Programm. Wer die Datei
+          bekommt, kann sie rechnen und ändern, ohne etwas zu
+          installieren.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <img src="handbuch/de/own-part.png" width="520" height="816" loading="lazy" decoding="async"
+                 alt="Der Dialog „Auswahl als Baustein speichern“: oben Name, Gruppe und Beschreibung, darunter je Parameter Beschriftung, Einheit, kleinster und größter Wert, Vorgabe und der Platz im Dialog, dann die anklickbaren Stellen mit ihren Namen im Rezept — unten der Knopf „Baustein anlegen“">
+          </div>
+          <figcaption>Der Dialog fragt fünf Dinge — und rechnet den Maßbereich durch, bevor er speichert.</figcaption>
         </figure>
       </div>
 

@@ -20,7 +20,7 @@
 <meta property="og:title" content="Fonctions : modifier un STL, vérifier l'impression — Solidon3D">
 <meta property="og:description" content="Toutes les fonctions de Solidon3D en images&nbsp;: agent IA, esquisses sous contraintes, rapport de contrôle, analyse des couches, blocs, découpe automatique, motifs de surface.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/fr/catalog.png">
-<meta property="og:image:alt" content="Le catalogue de blocs avec les groupes assemblages et mécanique&nbsp;: piège à écrou, filetage, trou de vis avec fraisure, goupille, ergot d'encliquetage, charnière-film, connecteur à clip pour une jointure et clip d'encliquetage, chacun avec un aperçu et ses cotes">
+<meta property="og:image:alt" content="Le catalogue de blocs avec les groupes assemblages et mécanique&nbsp;: insert à chaud, piège à écrou, filetage, trou de vis avec fraisure, goupille, œil de charnière, ergot d'encliquetage, charnière-film, connecteur à clip et clip d'encliquetage, chacun avec un aperçu et ses cotes">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -64,20 +64,21 @@
   <section id="anfang">
     <div class="wrap">
       <h1>Ce que Solidon3D sait faire</h1>
-      <p class="sub">Douze fonctions, chacune avec une capture de l'application en marche ou un dessin qui montre exactement ce qu'elle fait. Pour connaître d'abord le prix&nbsp;: <a href="/fr/#pricing">démo et prix</a>.</p>
+      <p class="sub">Chaque fonction avec une capture de l'application en marche ou un dessin qui montre exactement ce qu'elle fait. Pour connaître d'abord le prix&nbsp;: <a href="/fr/#pricing">démo et prix</a>.</p>
     </div>
   </section>
 
   <section id="uebersicht" class="tint">
     <div class="wrap">
-      <h2>Les douze en un coup d'œil</h2>
-      <nav class="toc" aria-label="Les douze en un coup d'œil">
+      <h2>En un coup d'œil</h2>
+      <nav class="toc" aria-label="En un coup d'œil">
         <ol>
           <li><a href="#ai-agent">Agent IA</a></li>
           <li><a href="#sketches-with-constraints">Esquisses sous contraintes</a></li>
           <li><a href="#inspection-report">Rapport de contrôle</a></li>
           <li><a href="#parametric">Paramétrique</a></li>
           <li><a href="#building-blocks">Blocs</a></li>
+          <li><a href="#your-own-blocks">Vos propres blocs</a></li>
           <li><a href="#surfaces">Surfaces</a></li>
           <li><a href="#layer-analysis">Analyse des couches</a></li>
           <li><a href="#auto-split">Découpe et découpe automatique</a></li>
@@ -174,9 +175,9 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-skizze-fr.png" width="1400" height="860" loading="lazy" decoding="async"
-                 alt="Le mode esquisse&nbsp;: les outils de dessin en bandeau d'icônes, le choix du plan, la rangée de boutons de contraintes et un rectangle coté avec un cercle dedans&nbsp;; à droite, les treize contraintes du dessin listées une à une">
+                 alt="Le mode esquisse dans la fenêtre principale&nbsp;: on dessine dans la vue elle-même, la grille recouvre le modèle avec un rectangle coté et un cercle&nbsp;; en bas, la barre flottante avec les outils de dessin, le pas de la grille, la ligne du plan de dessin et les boutons de contraintes&nbsp;; à droite, l'onglet avec les treize contraintes du dessin">
           </div>
-          <figcaption>Le mode esquisse — la même surface qui montre le modèle le reste du temps.</figcaption>
+          <figcaption>On dessine dans la vue — sur la face que l'on a cliquée.</figcaption>
         </figure>
       </div>
 
@@ -248,10 +249,12 @@
         <div>
           <span class="kicker">Blocs</span>
           <h3>Un piège à écrou en quatre clics au lieu de quatre demi-heures</h3>
-          <p>Dix-sept blocs testés — trou de vis avec fraisure, piège à écrou,
-          insert à chaud, filetage, goupille, charnière-film, clip
-          d'encliquetage, poche à aimant. Les cotes viennent d'une table de
-          pièces normalisées de 40 entrées, pas de l'intuition.</p>
+          <p>Des blocs testés en six groupes — trou de vis avec fraisure,
+          piège à écrou, insert à chaud, filetage, goupille, charnière-film,
+          clip d'encliquetage, poche à aimant, plus support mural, crochet
+          pour panneau perforé, clip de câble, gousset et pied. Les cotes
+          viennent d'une table de pièces normalisées, pas de
+          l'intuition.</p>
           <p class="note">Chaque bloc est testé sur toute sa plage de
           paramètres&nbsp;: <b>étanche, épaisseur de paroi minimale, aucune
           auto-intersection.</b></p>
@@ -259,9 +262,38 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-bausteine-fr.png" width="1048" height="502" loading="lazy" decoding="async"
-                 alt="Le catalogue de blocs avec les groupes assemblages et mécanique&nbsp;: piège à écrou, filetage, trou de vis avec fraisure, goupille, ergot d'encliquetage, charnière-film, connecteur à clip pour une jointure et clip d'encliquetage, chacun avec un aperçu et ses cotes">
+                 alt="Le catalogue de blocs avec les groupes assemblages et mécanique&nbsp;: insert à chaud, piège à écrou, filetage, trou de vis avec fraisure, goupille, œil de charnière, ergot d'encliquetage, charnière-film, connecteur à clip et clip d'encliquetage, chacun avec un aperçu et ses cotes">
           </div>
           <figcaption>Le catalogue — chaque aperçu est rendu, pas dessiné.</figcaption>
+        </figure>
+      </div>
+
+      <div class="showcase flip" id="your-own-blocks">
+        <div>
+          <span class="kicker">Vos propres blocs</span>
+          <h3>Construit une fois, au catalogue pour toujours</h3>
+          <p>Le support pour l'établi a coûté une soirée — la prochaine fois,
+          il doit être une entrée. Construisez la pièce une fois, créez des
+          paramètres pour ses cotes et choisissez dans le catalogue
+          <b>Enregistrer la sélection comme brique</b>&nbsp;: elle figure dès
+          lors à côté des blocs fournis, avec aperçu et champs, et vous
+          décidez par cote jusqu'où elle peut être réglée.</p>
+          <p>La création calcule, elle ne se contente pas d'enregistrer&nbsp;:
+          le bloc est construit une fois à chaque coin de sa plage — si nulle
+          part il n'en sort un corps utilisable, c'est écrit sur l'entrée
+          avant que cela ne se voie à l'impression.</p>
+          <p class="note">Il est à vous, il reste sur votre ordinateur — et
+          <b>il voyage comme recette dans chaque fichier de projet</b> qui
+          l'utilise&nbsp;: une liste d'étapes et de valeurs, pas un programme.
+          Qui reçoit le fichier peut calculer et modifier sans rien
+          installer.</p>
+        </div>
+        <figure class="shot">
+          <div class="stage">
+            <img src="../handbuch/fr/own-part.png" width="520" height="816" loading="lazy" decoding="async"
+                 alt="Le dialogue «&nbsp;Enregistrer la sélection comme brique&nbsp;»&nbsp;: en haut le nom, le groupe et la description, en dessous pour chaque paramètre le libellé, l'unité, les valeurs minimale et maximale, la valeur par défaut et sa place dans le dialogue, puis les emplacements cliquables avec leurs noms dans la recette — en bas le bouton «&nbsp;Créer la brique&nbsp;»">
+          </div>
+          <figcaption>Le dialogue pose cinq questions — et calcule toute la plage avant d'enregistrer.</figcaption>
         </figure>
       </div>
 
