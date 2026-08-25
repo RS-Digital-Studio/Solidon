@@ -4485,6 +4485,11 @@ class MainWindow(QMainWindow):
         self.viewport.set_sketching(None)
         panel.sketchChanged.disconnect(self._redraw_sketch)
         panel.pointerMoved.disconnect(self._on_sketch_pointer)
+        # Die dritte Verbindung aus derselben Zeilengruppe wie die zwei
+        # darüber — heute folgenlos (der unsichtbare Canvas ruft fit_view
+        # nie), aber die Begründung „erst abmelden, dann aufräumen" gilt für
+        # sie genauso.
+        panel.viewFitted.disconnect(self._fit_sketch_view)
         # **Die Box geht ans Panel zurück, bevor es stirbt.** Sie hing im
         # Reiter, also am Fenster — das Panel zu löschen ließe sie dort stehen,
         # mit Signalen, die ins Leere zeigen, und beim nächsten Skizzenmodus

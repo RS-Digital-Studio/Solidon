@@ -994,6 +994,9 @@ def test_an_orphaned_feature_is_named_in_its_line() -> None:
     second = _line_for(orphaned("face_7"), {"obj_1": "Halter"})
 
     assert "face_3" in first and "face_7" in second, "jede Zeile nennt ihr Merkmal"
+    assert "Merkmal face_3" in first, (
+        "die Kennung trägt ihr Wort davor — nackt läse sie sich wie ein zweiter Name"
+    )
     assert first != second, "sechs Verwaisungen sind sechs Aussagen, keine sechs Kopien"
     assert "Halter" in first, "und der Körper steht weiter dabei"
 

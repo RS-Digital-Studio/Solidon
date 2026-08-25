@@ -371,7 +371,16 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
         # Über ``localised_value``: Ein Befund trägt neben Zahlen auch Pfade,
         # Adressen und Endungen, und ``localised`` tauschte dort jeden Punkt
         # gegen ein Komma — „sources/1_cube_clean,stl".
-        f"{localised_value(finding.values[key])} {unit}".strip()
+        #
+        # Die Merkmalskennung bekommt ihr Wort davor: Neben dem aufgelösten
+        # Objektnamen läse sich ein nacktes „face_3" wie ein zweiter Name —
+        # und der eigene Maßstab des Fensters sagt, dass eine Kennung allein
+        # niemandem sagt, welche Fläche gemeint ist.
+        (
+            f"{tr('Merkmal')} {finding.values[key]}"
+            if key == "feature"
+            else f"{localised_value(finding.values[key])} {unit}".strip()
+        )
         for key, unit in _LINE_VALUES.items()
         if key in finding.values
     ]

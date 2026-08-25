@@ -975,10 +975,23 @@ class OperationDialog(QDialog):
         reason = tr("Die Maße kommen aus der Zeichnung — über „Zeichnen …“ zu ändern.")
         axis_of = {"length": 0, "width": 1}
         docs = {name: str(entry.doc or "") for name, entry in declared.items()}
+        seen: dict[str, object] = {}
 
         def follow_sketch() -> None:
             text = str(self.values().get(sketch_field, "") or "")
-            extent = sketch_extent(text, self._parameter_values)
+            # ``valuesChanged`` feuert an **jedem** Feld, und ``sketch_extent``
+            # löst die ganze Zeichnung — mit einer SVD über die volle
+            # Bedingungsmatrix, im Qt-Hauptthread (§2.8). Wer im Feld daneben
+            # eine Höhe tippte, rechnete je Taste einmal den Löser. Gemerkt
+            # wird nur die **Rechnung**, nicht der ganze Durchlauf: Die
+            # Sperren darunter müssen weiterlaufen, sonst bliebe ein Feld
+            # frei, das der Nachbarzweig gerade freigegeben hat.
+            if seen.get("text") == text:
+                extent = seen.get("extent")  # type: ignore[assignment]
+            else:
+                extent = sketch_extent(text, self._parameter_values)
+                seen["text"] = text
+                seen["extent"] = extent
             for name in ("shape", "length", "width", "corners", *axis_of):
                 editor = self._editors.get(name)
                 if editor is None or name not in declared:
