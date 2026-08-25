@@ -162,10 +162,16 @@ def test_a_group_of_one_never_becomes_a_submenu() -> None:
 
     Die Menüleiste weiß das seit je (``registry.surfaces.group_is_flat``), das
     **Kontextmenü** wusste es nicht: Es faltete jede Kategorie, sobald die
-    Zeilengrenze überschritten war. Am Flächenklick — 19 Operationen in vier
-    Gruppen, Bausteine 10, Ändern 5, Erzeugen 2, Vorbereiten 2 — kostete das
-    **jede** Operation zwei Klicks, auch die Bohrung, die zu zweit in
+    Zeilengrenze überschritten war. Am Flächenklick — damals 19 Operationen in
+    vier Gruppen, Bausteine 10, Ändern 5, Erzeugen 2, Vorbereiten 2 — kostete
+    das **jede** Operation zwei Klicks, auch die Bohrung, die zu zweit in
     „Erzeugen" lag.
+
+    **Die Zahlen unten sind Rechenbeispiele und nicht der Katalog.** Sie waren
+    einmal beides, und das hielt nicht: Am 25.08.2026 standen an einer Fläche
+    31 Operationen, davon 22 Bausteine. Was das Register wirklich hergibt,
+    prüft :func:`test_the_context_menu_stays_within_its_rows`; hier steht die
+    Formel, und dafür sind ausgedachte Zahlen die klareren.
 
     Geprüft wird die Rechnung, nicht das Menü: ``folded_groups`` braucht kein
     Qt, und ein Test, der dafür ein Fenster baute, hebt die Abrissquote der
@@ -208,6 +214,127 @@ def test_a_group_of_one_never_becomes_a_submenu() -> None:
     assert folded_groups(hartnaeckig) == ["A", "B"], (
         "18 Einträge, nach zwei Faltungen 8 Zeilen — die dritte Gruppe bleibt offen"
     )
+
+
+#: Was am Flächenklick über den Operationen steht: Sichtbarkeit und der
+#: Skizzenschritt. Keine Operationen — deshalb zählt ``_menu`` sie nicht mit.
+FIXED_CONTEXT_ROWS = 3
+
+
+def context_rows(kind: str) -> tuple[int, list[str]]:
+    """Wie viele Zeilen das Kontextmenü eines Merkmals zeigt, und was es faltet.
+
+    Gerechnet wie ``PropertiesPanel._menu``: direkte Einträge plus eine Zeile
+    je gefaltetem Untermenü. Ohne Qt, weil ein Fenster hier nichts beiträgt und
+    die Abrissquote der ganzen Datei hebt (gemessen am 24.08.2026).
+    """
+    from app.core.registry.surfaces import group_title
+    from app.ui.panels import folded_groups
+
+    sizes: dict[str, int] = {}
+    for spec in REGISTRY.all():
+        if kind in (spec.applies_to or ()):
+            title = group_title(str(spec.category))
+            sizes[title] = sizes.get(title, 0) + 1
+
+    folded = folded_groups(sizes)
+    rows = sum(count for title, count in sizes.items() if title not in folded) + len(folded)
+    return rows, folded
+
+
+def test_the_context_menu_stays_within_its_rows() -> None:
+    """Die Grenze gilt dem **Menü**, nicht der Formel dahinter.
+
+    ``test_a_group_of_one_never_becomes_a_submenu`` daneben prüft
+    ``folded_groups`` gründlich — aber mit einer von Hand eingetragenen
+    Verteilung, und die altert. Sie steht auf „Bausteine 10, Ändern 5,
+    Erzeugen 2, Vorbereiten 2", also 19 Operationen; am 25.08.2026 waren es
+    **31**, davon 22 Bausteine. Die Formel stimmt weiter, die Zahlen, an denen
+    sie geprüft wird, nicht mehr — dieselbe Art alternder Liste, die in
+    ``test_parts.py`` schon zweimal zugeschlagen hat.
+
+    Gezählt wird deshalb, was das Register hergibt, und bis zur fertigen
+    Menülänge.
+
+    **Und dann sind da die drei festen Zeilen.** ``_menu`` zählt sie bewusst
+    nicht mit (es ruft ``folded_groups`` ohne ``fixed``), und der Grund steht
+    dort: Wer sie mitzählte, müsste eine zweite Gruppe falten, und die nächste
+    wäre „Ändern" — mit der Bohrung darin, also genau dem Eintrag, dessen
+    zweiter Klick den ganzen Umbau ausgelöst hat. Die Ausnahme ist damit eine
+    Entscheidung und kein Versehen; dieser Test hält sie **fest**, damit sie
+    nicht unbemerkt weiterwächst.
+    """
+    from app.ui.panels import MAX_MENU_ROWS
+
+    for kind in ("face", "hole"):
+        rows, _ = context_rows(kind)
+        assert rows, f"{kind}: no operation offers itself at all"
+        assert rows <= MAX_MENU_ROWS, (
+            f"{kind}: the menu folds down to {rows} rows, the limit is {MAX_MENU_ROWS}"
+        )
+
+    face_rows, _ = context_rows("face")
+    assert face_rows + FIXED_CONTEXT_ROWS <= MAX_MENU_ROWS + 1, (
+        f"the face menu shows {face_rows} operation rows plus {FIXED_CONTEXT_ROWS} fixed "
+        f"ones. One row over {MAX_MENU_ROWS} is the documented exception, two are not — "
+        "either fold a second group or take a fixed row out"
+    )
+
+
+def test_nothing_is_folded_that_did_not_have_to_be() -> None:
+    """Gefaltet wird, weil es sein muss — nicht, weil es ordentlich aussieht.
+
+    Die Zeilengrenze fängt nur die eine Richtung: Ein Menü, in dem **jede**
+    Gruppe zu einem Untermenü wird, hat vier Zeilen statt zehn und liegt damit
+    bequem unter der Grenze. Es kostet nur jede einzelne Operation einen
+    zweiten Klick — genau der Zustand, den der Umbau vom 24.08.2026 abgeschafft
+    hat, und den eine Prüfung auf „höchstens zwölf" nicht bemerkt.
+
+    Geprüft wird deshalb rückwärts: Jede gefaltete Gruppe wieder aufgemacht
+    muss die Grenze sprengen. Tut sie es nicht, war ihre Faltung ein Klick ohne
+    Not.
+    """
+    from app.ui.panels import MAX_MENU_ROWS
+
+    for kind in ("face", "hole"):
+        rows, folded = context_rows(kind)
+        for title in folded:
+            count = _group_size(kind, title)
+            # Diese eine Gruppe aufgemacht: ihre Einträge stehen dann direkt da,
+            # die eine Zeile ihres Untermenüs fällt weg.
+            unfolded = rows - 1 + count
+            assert unfolded > MAX_MENU_ROWS, (
+                f"{kind}: '{title}' is folded away, but leaving it open would give "
+                f"{unfolded} rows — that fits in {MAX_MENU_ROWS}, so the submenu costs "
+                "a click for nothing"
+            )
+
+
+def _group_size(kind: str, title: str) -> int:
+    """Wie viele Operationen dieses Merkmals in dieser Gruppe liegen."""
+    from app.core.registry.surfaces import group_title
+
+    return sum(
+        1
+        for spec in REGISTRY.all()
+        if kind in (spec.applies_to or ()) and group_title(str(spec.category)) == title
+    )
+
+
+def test_no_submenu_holds_a_single_entry() -> None:
+    """Ein Untermenü mit einem Eintrag ist ein Klick für nichts (§2.6).
+
+    ``folded_groups`` faltet nie eine Gruppe von eins — geprüft ist das an der
+    Funktion. Hier steht dieselbe Frage an den **echten** Gruppen des
+    Registers, denn eine Gruppe schrumpft auch: Wer die vorletzte Operation aus
+    „Vorbereiten" wegnimmt, bekommt kein rotes Licht von einer Prüfung, die mit
+    ausgedachten Zahlen rechnet.
+    """
+    for kind in ("face", "hole"):
+        _, folded = context_rows(kind)
+        for title in folded:
+            count = _group_size(kind, title)
+            assert count > 1, f"{kind}: '{title}' holds {count} entry and still became a submenu"
 
 
 def test_no_menu_becomes_a_list_to_search(window: MainWindow) -> None:
