@@ -125,7 +125,17 @@ class NavigationKeys(QObject):
         Ereignis geht an das Bedienelement, das die Taste bekäme, und das ist
         genau die Frage. Über den Fokus gefragt hinge die Antwort daran, ob das
         Fenster gerade sichtbar ist — in der Suite ist es das nicht.
+
+        Und ``watched`` wird geprüft, bevor irgendwer damit rechnet: Beim
+        Abbau einer GL-Fläche mitten in der Suite (QPlatformSurfaceEvent)
+        kann shiboken unter einem recycelten Zeiger einen fremden Wrapper
+        liefern — ein ``QWidgetItem`` ist kein ``QObject``, und der
+        ``super()``-Aufruf platzte daran mit einer TypeError-Kaskade durch
+        jede Python-Override auf dem Stapel (gemessen am 25.08.2026 in
+        test_ui.py). Nicht unser Ereignis; es wird durchgereicht.
         """
+        if not isinstance(watched, QObject):  # laut Signatur unmöglich — siehe oben
+            return False  # type: ignore[unreachable]
         if (
             event.type() == QEvent.Type.ShortcutOverride
             and isinstance(event, QKeyEvent)

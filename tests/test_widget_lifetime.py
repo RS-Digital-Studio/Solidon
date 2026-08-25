@@ -186,7 +186,10 @@ def _builders() -> list[tuple[str, Callable[[], QWidget]]]:
 
 @pytest.mark.parametrize("name,build", _builders())
 def test_a_released_widget_is_actually_released(
-    name: str, build: Callable[[], QWidget], qt_app: QApplication
+    name: str,
+    build: Callable[[], QWidget],
+    qt_app: QApplication,
+    unpinned_windows: None,
 ) -> None:
     """Zehn bauen, zehn loslassen, zählen, wie viele bleiben.
 

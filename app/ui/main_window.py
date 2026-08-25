@@ -11,6 +11,7 @@ Kommandozeile, sobald sie deklariert ist (§10).
 
 from __future__ import annotations
 
+import inspect
 import time
 import traceback
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -2321,7 +2322,16 @@ class MainWindow(QMainWindow):
         # Parameter bekamen es als Wert (``action_manual(False)``) und
         # überlebten nur, weil ihre Rümpfe gegen Falschheit prüfen. Das
         # Argument endet hier — ein Menüeintrag ruft, er übergibt nichts.
-        action.triggered.connect(lambda _checked=False, call=slot: call())
+        #
+        # Über ``weak_slot``, nicht über ein Lambda: Qt hält eine gebundene
+        # Methode schwach, ein Lambda mit ``call=slot`` dagegen stark — 41
+        # Menüeinträge hielten so jedes Fenster fest, zehn von zehn
+        # überlebten ihr Loslassen. Was nicht gebunden ist (die
+        # ``weak_slot``-Aufrufstellen der Schleifen), hält niemanden und
+        # verwirft das ``checked`` selbst.
+        if inspect.ismethod(slot):
+            slot = weak_slot(slot.__self__, slot.__func__)
+        action.triggered.connect(slot)
         menu.addAction(action)
         return action
 

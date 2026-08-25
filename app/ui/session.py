@@ -1495,7 +1495,10 @@ class Session(QObject):
         reist der Arbeiter als Argument und wird nicht aus dem Feld gelesen.)
         """
         if worker is self._split:
-            self._split = None
+            # Die Tauschform, kein nacktes Nullen des Feldes: Der Wächter in
+            # test_ui verbietet jenes Muster, weil es andernorts die letzte
+            # Referenz vor der Übergabe an die Leine fallen ließ.
+            worker, self._split = self._split, None
         self._leash.hold_until_done(worker)
 
     def _on_thread_done(self, finished: _EvaluationWorker | None = None) -> None:

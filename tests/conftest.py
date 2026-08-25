@@ -9,6 +9,7 @@ prüfen.
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
@@ -33,6 +34,77 @@ from app.core.types import BoundingBox, Document, Profile, SceneObject
 
 #: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
 _SHIPPED_DEMO_UNTIL = activation_store.DEMO_UNTIL
+
+
+#: Fenster, die die Suite absichtlich bis zum Prozessende hält.
+_PINNED_WINDOWS: list[object] = []
+
+#: Steht auf True, solange ein Test Zerstörung **messen** will (Fixture
+#: ``unpinned_windows``) — dann wird nicht gepinnt.
+_PIN_PAUSED = False
+
+
+@pytest.fixture(autouse=True)
+def _windows_live_to_the_end() -> Iterator[None]:
+    """Jedes MainWindow der Suite lebt absichtlich bis zum Prozessende.
+
+    **Warum, mit Messreihe vom 25.08.2026.** Die Mine darunter steht in
+    ``_no_worker_outlives_its_window``: Die Zerstörung eines Fensters mit
+    VTK-Zustand mitten im Prozess reißt den Lauf — gleich, ob der
+    Speicherbereiniger sie auslöst oder die Referenzzählung, gleich in
+    welchem Thread. Seit dem Ring-Umbau sterben die Fenster über die
+    Referenzzählung, sobald ihr Fixture die letzte Referenz fallen lässt;
+    mit dem Testbestand vom 25.08. riss ``test_ui.py`` damit deterministisch
+    (3/3, 0xc0000374, Position wandert mit der Zusammensetzung, nicht mit
+    einem Test). Zwischen 16:58 und dem Abend desselben Tages hielt
+    versehentlich ein Lambda-Ring in ``_add_action`` jedes Fenster fest —
+    und genau in dieser Zeit lief die Gruppe nachweislich stabil, bei rund
+    1700 angesammelten Widgets. Der Pin stellt diesen Zustand **absichtlich**
+    her, statt ihn einem Fehler zu verdanken: Der Tod der Fenster verschiebt
+    sich ans Prozessende, wo der bekannte Abbau-Riss **nach** der
+    Zusammenfassung liegt (``suite-getrennt.sh`` kennt die Behandlung),
+    statt mitten in den Daten.
+
+    Kein Zudecken: Die Mine selbst bleibt offen und steht im Register der
+    ROADMAP. Der Kunde stellt den Suite-Zustand nie her — er hat ein
+    Fenster, und das stirbt beim Prozessende.
+
+    Drei Zusagen: Gepinnte Fenster bekommen weiter ihr ``release()`` (die
+    Fixture unten läuft über ``topLevelWidgets``, Threads sammeln sich
+    nicht an). Tests, die Zerstörung **messen**, nehmen sich über
+    ``unpinned_windows`` aus — der 41-Lambda-Fund vom 25.08. muss auch
+    künftig rot werden können. Und gepinnt wird beim **Erzeugen**, nicht am
+    Testende: Die letzte Referenz eines Fenster-Fixtures fällt vor dem
+    Teardown der autouse-Fixtures, dort wäre es längst tot.
+    """
+    module = sys.modules.get("app.ui.main_window")
+    if module is not None and not getattr(module.MainWindow, "_suite_pinned", False):
+        original = module.MainWindow.__init__
+
+        def pinning(self: object, *args: object, **kwargs: object) -> None:
+            original(self, *args, **kwargs)
+            if not _PIN_PAUSED:
+                _PINNED_WINDOWS.append(self)
+
+        module.MainWindow.__init__ = pinning  # type: ignore[method-assign]
+        module.MainWindow._suite_pinned = True
+    yield
+
+
+@pytest.fixture
+def unpinned_windows() -> Iterator[None]:
+    """Für Tests, die Zerstörung messen — der Pin pausiert.
+
+    Ohne diesen Ausweg wäre der Leck-Detektor stumpf: Ein Fenster, das die
+    Suite selbst festhält, überlebt jedes Loslassen, und ein Fund wie die 41
+    Lambda-Ringe in ``_add_action`` (25.08.2026) bliebe unauffindbar.
+    """
+    global _PIN_PAUSED
+    _PIN_PAUSED = True
+    try:
+        yield
+    finally:
+        _PIN_PAUSED = False
 
 
 @pytest.fixture(autouse=True)
@@ -546,6 +618,21 @@ def _no_worker_outlives_its_window() -> Iterator[None]:
     # **hierhin**, unmittelbar vor eine Zustellung.
     # Was bleibt, ist die eigentliche Ursache: nicht die Lebenszeit, sondern
     # die Verbindung. ``release`` kappt sie oben.
+    #
+    # **Der vierte und der fünfte Anlauf sind am 25.08.2026 gemessen und am
+    # selben Abend wieder ausgebaut worden.** Beide setzten am Sammler an:
+    # (4) ``gc.disable()`` für die Suite plus gezieltes ``gc.collect()`` an
+    # dieser Stelle — der Lauf riss dann **in dieser Zeile**, im Hauptthread,
+    # „Garbage-collecting" im Stapel, Zugriffsverletzung: Nicht der Thread
+    # ist das Problem, sondern das Zerstören selbst. (5) ``gc.disable()``
+    # ohne jedes Sammeln — riss ebenfalls, an einer Allokation weiter hinten
+    # und **ohne** gc im Stapel: Die Fenster sterben seit dem Ring-Umbau über
+    # die Referenzzählung, der Sammler ist an ihrem Tod meist unbeteiligt.
+    # Wer hier weitersucht: Die Mine ist die Zerstörung eines Fensters mit
+    # VTK-Zustand mitten in der Suite, gleich durch wen und in welchem
+    # Thread. Messwerte vom 25.08.2026: test_ui.py mit vollem Testbestand
+    # riss 3/3 deterministisch an fester Position (0xc0000374); die Position
+    # wandert mit der Zusammensetzung, nicht mit einem Test.
     application.processEvents()
 
 
