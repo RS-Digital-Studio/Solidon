@@ -344,6 +344,109 @@ def test_the_hook_stands_off_the_face_by_plate_and_board(profile: Profile) -> No
     )
 
 
+WALLS = [
+    ("face_3", (0.0, -1.0, 0.0)),
+    ("face_4", (0.0, 1.0, 0.0)),
+    ("face_5", (-1.0, 0.0, 0.0)),
+    ("face_6", (1.0, 0.0, 0.0)),
+]
+
+
+@pytest.mark.parametrize(("face", "normal"), WALLS, ids=[entry[0] for entry in WALLS])
+def test_the_hook_hangs_the_right_way_up_on_every_wall(
+    face: str, normal: tuple[float, float, float], profile: Profile
+) -> None:
+    """An welchem Ende die Sperrfläche sitzt — und ob der Schlitz überhaupt passt.
+
+    ``.claude/rules/bausteine.md`` verlangt genau das: „Zwei Volumen, die sich
+    treffen, treffen sich am falschen Ende genauso. Was der Test sagen muss,
+    ist, an welchem Ende die Sperrfläche sitzt." Für einen Einhänger sind es
+    zwei Fragen, und beide beantwortet kein Hüllquader.
+
+    **Erstens: steht er senkrecht?** An eine Fläche gesetzt wird ein Baustein
+    über ``rotation_between``, und das nimmt die kürzeste Drehung von seinem +Z
+    auf die Normale — um die Normale rollt er frei. Gemessen am 25.08.2026
+    stand die Schlitzlänge an einer ±Y-Wand senkrecht und an einer ±X-Wand
+    waagerecht, wo sie in keinen Schlitz der Welt passt. Drei von vier Wänden
+    waren falsch, und am gebauten Körper sah man es nicht: Er war wasserdicht,
+    einteilig, und sein Volumen stimmte.
+
+    **Zweitens: hängt er richtig herum?** Der Zapfen sitzt oben im Schlitz, die
+    Nase greift unten hinter die Platte. Verkehrt herum gesetzt fällt das Teil
+    von der Wand, sobald man loslässt — und auch das ist am Netz nicht zu
+    sehen.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    before = evaluate(project.document, profile, sources=ProjectSources(project))
+    box = before.scene.objects["obj_1"].mesh
+
+    History(project.document).apply(
+        "Einhänger",
+        [
+            OperationDraft(
+                op="insert_pegboard_hook",
+                inputs=("obj_1",),
+                params={"at_feature": face, "count": 1},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    assert result.complete, [f.message for f in result.scene.report.findings]
+
+    # Was über den Quader hinaussteht, ist der Haken und sonst nichts.
+    points = np.asarray(result.scene.objects["obj_1"].mesh.raw.vertices, dtype=float)
+    limits = np.asarray(box.raw.bounds, dtype=float)
+    outside = points[
+        (points < limits[0] - 1e-6).any(axis=1) | (points > limits[1] + 1e-6).any(axis=1)
+    ]
+    assert len(outside), f"{face}: nothing stands out at all"
+
+    size = outside.max(axis=0) - outside.min(axis=0)
+    sideways = max(size[axis] for axis in range(2) if abs(normal[axis]) < 0.5)
+    assert size[2] > sideways, (
+        f"{face}: the hook measures {size[2]:.1f} mm upright and {sideways:.1f} mm across — "
+        "the slot of a pegboard stands vertically, so this one fits none"
+    )
+
+    # Und die Nase sitzt unten. Gemessen an zwei Schnitten parallel zur Wand:
+    # einer im Schlitz, einer dahinter. **Nicht an den Eckpunkten** — zwischen
+    # Rückplatte und Nase liegt der Zapfen, und der ist ein Strangkörper ohne
+    # Eckpunkte auf halber Tiefe. Wer dort Punkte sammelt, bekommt die
+    # Rückplatte in die Hand und vergleicht die mit der Nase; sie ist höher als
+    # beide und die Prüfung schlägt fehl, obwohl der Haken richtig hängt.
+    board = standards.board("skadis")
+    # Die angeklickte Fläche liegt dort, wo der Quader in Richtung der Normalen
+    # endet — bei einer negativen Normalen ist das die *untere* Schranke, nicht
+    # die obere. Beide durchgerechnet und die größere genommen.
+    corners = np.asarray(box.raw.bounds)
+    face_at = max(
+        float(np.dot(np.asarray(normal), corners[0])), float(np.dot(np.asarray(normal), corners[1]))
+    )
+    body = result.scene.objects["obj_1"].mesh.raw
+
+    def upright_span(depth: float) -> tuple[float, float]:
+        cut = body.section(
+            plane_origin=(np.asarray(normal) * (face_at + depth)).tolist(),
+            plane_normal=list(normal),
+        )
+        assert cut is not None, f"{face}: nothing at {depth:.1f} mm out from the wall"
+        upright = np.asarray(cut.vertices, dtype=float)[:, 2]
+        return float(upright.min()), float(upright.max())
+
+    in_slot = upright_span(2.0 + board.thickness / 2.0)
+    behind = upright_span(2.0 + board.thickness + 0.5)
+
+    assert behind[0] < in_slot[0] - 1.0, (
+        f"{face}: the nose reaches down to {behind[0]:.1f} mm, the shank to "
+        f"{in_slot[0]:.1f} mm — the hook hangs upside down and would drop off the wall"
+    )
+    assert behind[1] == pytest.approx(in_slot[1], abs=0.3), (
+        f"{face}: nose and shank end at {behind[1]:.1f} and {in_slot[1]:.1f} at the top — "
+        "they should finish flush, or the nose is on the wrong end"
+    )
+
+
 def test_the_hook_reaches_the_customer_through_the_catalogue() -> None:
     """Der Weg, den der Kunde nimmt: Katalog aufschlagen, Baustein finden.
 
