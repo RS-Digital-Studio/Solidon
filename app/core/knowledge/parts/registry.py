@@ -447,8 +447,12 @@ def register_part(
 #: verschiebt. Version 3: das Spiel von Mutternfalle und Gewinde kommt aus
 #: dem Materialprofil statt aus einer festen Vorgabe (``PLAY_FROM_PROFILE``
 #: in ``fasteners.py``). Version 4: die angeklickte Fläche bestimmt die
-#: Richtung des Bausteins (``FACE_GIVES_DIRECTION``).
-LIBRARY_VERSION: Final = "6"
+#: Richtung des Bausteins (``FACE_GIVES_DIRECTION``). Version 7: das Kopfspiel
+#: des Schlüssellochs wird wieder zum Durchgangsmaß addiert statt dagegen
+#: ausgetauscht, und das Merkmal des Einhängers liegt auf einer Fläche, die es
+#: gibt. Version 8: der Lochwand-Einhänger bekommt eine federnde Rastzunge
+#: (alles ``mounting.py``, 25.08.2026).
+LIBRARY_VERSION: Final = "8"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

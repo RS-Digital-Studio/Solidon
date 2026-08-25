@@ -164,26 +164,38 @@ def test_the_shank_fits_the_rounded_slot_and_not_just_its_bounding_box(
     Gemessen wird deshalb ein echter **Querschnitt** in der Mitte der Lochwand,
     Punkt für Punkt gegen die Stadionform. Vertices allein genügen nicht: Ein
     extrudierter Zapfen hat auf halber Höhe keine.
+
+    **Und die Öffnung steht nicht auf y = 0.** Seit der Rastzunge sitzt neben
+    dem Zapfen noch etwas im Schlitz, und zwar oberhalb von ihm; wer den
+    Querschnitt gegen ein Langloch um den Ursprung misst, misst dann die Lage
+    des Hakens im Schlitz mit. Die Frage ist aber, ob er **bei irgendeiner
+    Höhe** hineingeht — geprüft wird deshalb über den Versatz, und zwar mit
+    demselben Verfahren, das ``test_parts.py`` für die Verriegelung benutzt.
     """
     board = standards.board("skadis")
     spec = PARTS.get("pegboard_hook")
     straight = (board.slot_height - board.slot_width) / 2.0
 
-    for play in (0.0, 0.25, 0.5):
-        built = spec.fn(spec.params(count=1, play=play, plate=2.0))
+    for play, latch in itertools.product((0.0, 0.25, 0.5), (False, True)):
+        built = spec.fn(spec.params(count=1, play=play, plate=2.0, latch=latch))
         cut = built.mesh.raw.section(
-            plane_origin=[0.0, 0.0, 2.0 + board.thickness / 2.0],
+            plane_origin=[0.0, 0.0, board.thickness / 2.0],
             plane_normal=[0.0, 0.0, 1.0],
         )
         assert cut is not None, f"play={play}: nothing crosses the board at all"
         points = np.asarray(cut.vertices, dtype=float)
         # Abstand zur Mittellinie des Langlochs: im geraden Teil senkrecht,
-        # an den Enden radial um den Rundungsmittelpunkt.
-        centre = np.clip(points[:, 1], -straight, straight)
-        reach = np.hypot(points[:, 0], points[:, 1] - centre).max()
-        assert reach <= board.slot_width / 2.0 + 1e-6, (
-            f"play={play}: the shank reaches {reach:.3f} mm from the centre line, "
-            f"the slot allows {board.slot_width / 2.0}"
+        # an den Enden radial um den Rundungsmittelpunkt — für jede Höhe, in
+        # der das Loch stehen kann, und es genügt eine, die trägt.
+        passt = False
+        for shift in np.arange(-board.slot_height, board.slot_height, 0.05):
+            y = points[:, 1] + shift
+            centre = np.clip(y, -straight, straight)
+            reach = float(np.hypot(points[:, 0], y - centre).max())
+            passt = passt or reach <= board.slot_width / 2.0 + 1e-6
+        assert passt, (
+            f"play={play} latch={latch}: the shank reaches past the "
+            f"{board.slot_width / 2.0} mm the slot allows, at every height"
         )
 
 
@@ -199,10 +211,19 @@ def test_the_hook_has_room_to_sink_and_the_nose_catches(profile: Profile) -> Non
     Millimeter hinter die Platte — geometrisch vorhanden, praktisch nutzlos.
     Der Fehler war im gebauten Körper nicht zu sehen: Er war wasserdicht,
     einteilig und maß in jeder Richtung, was er sollte.
+
+    **Gemessen ohne Rastzunge, und das ist hier die Sache selbst.** Der Weg zum
+    Absinken ist der Weg, auf dem sich der Haken auch wieder löst; die Zunge
+    sperrt ihn, sie verkürzt ihn nicht. Was sie ändert, ist die Rechnung
+    darunter: Mit ihr steht über dem Zapfen noch etwas im Schlitz, und der Hub
+    folgt nicht mehr aus „Schlitzhöhe minus alles zusammen", sondern aus dem
+    Abstand zwischen Zapfenunterkante und Nasenunterkante. Beides prüft
+    ``test_parts.py`` an der Zunge; hier bleibt die Aufteilung, aus der beides
+    hervorgeht.
     """
     board = standards.board("skadis")
     spec = PARTS.get("pegboard_hook")
-    built = spec.fn(spec.params(count=1, play=0.0, plate=2.0))
+    built = spec.fn(spec.params(count=1, play=0.0, plate=2.0, latch=False))
 
     def span(height: float) -> tuple[float, float]:
         cut = built.mesh.raw.section(plane_origin=[0.0, 0.0, height], plane_normal=[0.0, 0.0, 1.0])
@@ -210,14 +231,27 @@ def test_the_hook_has_room_to_sink_and_the_nose_catches(profile: Profile) -> Non
         y = np.asarray(cut.vertices, dtype=float)[:, 1]
         return float(y.min()), float(y.max())
 
-    shank = span(2.0 + board.thickness / 2.0)
-    nose = span(2.0 + board.thickness + 0.5)
+    shank = span(board.thickness / 2.0)
+    nose = span(board.thickness + 0.5)
 
     inserted = max(shank[1], nose[1]) - min(shank[0], nose[0])
     travel = board.slot_height - inserted
     assert travel > 2.0, (
         f"shank and nose together are {inserted:.2f} mm tall in a "
         f"{board.slot_height} mm slot — only {travel:.2f} mm left to sink"
+    )
+    # Und derselbe Hub, anders gefragt: Wie weit die Nase unter dem Zapfen
+    # steht, ist das, was der Haken sinken kann, bis sie hinter dem Steg liegt.
+    # Diese Form gilt auch mit Zunge — sie ist der Grund, dass die Zunge den
+    # Hub nicht kostet.
+    mit_zunge = spec.fn(spec.params(count=1, play=0.0, plate=2.0))
+    tief = mit_zunge.mesh.raw.section(
+        plane_origin=[0.0, 0.0, board.thickness + 0.5], plane_normal=[0.0, 0.0, 1.0]
+    )
+    unten = float(np.asarray(tief.vertices, dtype=float)[:, 1].max())
+    assert unten - shank[1] == pytest.approx(travel, abs=0.1), (
+        f"with the latch the nose reaches {unten - shank[1]:.2f} mm past the shank, "
+        f"without it the hook sinks {travel:.2f} mm — the latch took the sink away"
     )
 
     # **Im eigenen System des Bausteins ist oben -Y** und unten +Y — die
@@ -340,6 +374,15 @@ def test_the_hook_stands_off_the_face_by_the_board_alone(profile: Profile) -> No
     bestellt, bekommt sie im Träger liegend. Der Abstand kommt damit allein aus
     der Tabelle — Plattendicke plus Nase — und ändert sich nicht mehr, wenn
     jemand an der Rückplatte dreht. Genau das prüft der zweite Teil.
+
+    **Mit Rastzunge kommt eine Armlänge dazu, und die ist keine freie Zahl
+    mehr, sondern eine gerechnete.** Ein Federarm trägt zehnmal so lang wie
+    dick (``SNAP_RATIO``), sonst bricht er statt zu federn; die Zunge läuft
+    neben dem Zapfen nach hinten und endet dort, wo diese Länge erreicht ist.
+    Gemessen sind das anderthalb Millimeter mehr, und sie liegen **hinter** der
+    Lochwand, wo Luft ist — vom Teil zur Wand ändert sich nichts. Geprüft wird
+    hier deshalb beides: die Zusage von vorher, wenn die Zunge aus ist, und die
+    Grenze mit ihr.
     """
     board = standards.board("skadis")
     project = new_project("centauri-carbon-2", "petg")
@@ -353,7 +396,7 @@ def test_the_hook_stands_off_the_face_by_the_board_alone(profile: Profile) -> No
             OperationDraft(
                 op="insert_pegboard_hook",
                 inputs=("obj_1",),
-                params={"at_feature": "face_top", "count": 1},
+                params={"at_feature": "face_top", "count": 1, "latch": False},
             )
         ],
     )
@@ -368,6 +411,29 @@ def test_the_hook_stands_off_the_face_by_the_board_alone(profile: Profile) -> No
         f"(board {board.thickness} + lip)"
     )
 
+    # Mit Zunge kommt der Federarm dazu, und nicht mehr: Zehn Armstärken plus
+    # Wurzel und Anlaufschräge sind das, was ein Federarm braucht — wer hier
+    # mehr misst, hat einen Zapfen gebaut, der das Teil auf Abstand hält.
+    mit_zunge = new_project("centauri-carbon-2", "petg")
+    History(mit_zunge.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    History(mit_zunge.document).apply(
+        "Einhänger",
+        [
+            OperationDraft(
+                op="insert_pegboard_hook",
+                inputs=("obj_1",),
+                params={"at_feature": "face_top", "count": 1},
+            )
+        ],
+    )
+    verriegelt = evaluate(mit_zunge.document, profile, sources=ProjectSources(mit_zunge))
+    assert verriegelt.complete, [str(f.message) for f in verriegelt.scene.report.findings]
+    tief = verriegelt.scene.objects["obj_1"].mesh.bounds.maximum[2] - box.maximum[2]
+    assert expected <= tief <= expected + 2.0, (
+        f"with the latch the hook reaches {tief:.1f} mm instead of {expected:.1f} — "
+        "that is more than a spring arm costs"
+    )
+
     # Und eine bestellte Rückplatte ändert daran nichts: Sie liegt im Träger.
     with_plate = new_project("centauri-carbon-2", "petg")
     History(with_plate.document).apply("Quader", [OperationDraft(op="create_box", params={})])
@@ -377,7 +443,7 @@ def test_the_hook_stands_off_the_face_by_the_board_alone(profile: Profile) -> No
             OperationDraft(
                 op="insert_pegboard_hook",
                 inputs=("obj_1",),
-                params={"at_feature": "face_top", "count": 1, "plate": 3.0},
+                params={"at_feature": "face_top", "count": 1, "plate": 3.0, "latch": False},
             )
         ],
     )
@@ -387,6 +453,27 @@ def test_the_hook_stands_off_the_face_by_the_board_alone(profile: Profile) -> No
     assert raised == pytest.approx(stand, abs=0.05), (
         f"a 3 mm back plate raised the hook from {stand:.2f} to {raised:.2f} mm — "
         "it is supposed to sit inside the part, not under the hooks"
+    )
+
+    # Mit Zunge gilt dieselbe Zusage in der Richtung, auf die es ankommt: Die
+    # Platte hebt den Haken nicht an. Gleich lang wird er dabei nicht — der
+    # Federarm wird an der Plattenoberseite frei statt an seiner eigenen
+    # Wurzel und endet dadurch um eine Armstärke früher.
+    History(mit_zunge.document).apply(
+        "Einhänger mit Platte",
+        [
+            OperationDraft(
+                op="insert_pegboard_hook",
+                inputs=("obj_1",),
+                params={"at_feature": "face_top", "count": 1, "plate": 3.0},
+            )
+        ],
+    )
+    beides = evaluate(mit_zunge.document, profile, sources=ProjectSources(mit_zunge))
+    assert beides.complete, [str(f.message) for f in beides.scene.report.findings]
+    hoch = beides.scene.objects["obj_1"].mesh.bounds.maximum[2] - box.maximum[2]
+    assert hoch <= tief + 0.05, (
+        f"a 3 mm back plate raised the latched hook from {tief:.2f} to {hoch:.2f} mm"
     )
 
 

@@ -81,7 +81,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
 | Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | nichts mehr — **§24.3 trägt die Ausnahme seit dem 25.08.2026** (Entscheidung Robert): Deklaration statt stiller Ausnahme. Es fehlt die Arbeit: Registerfeld, Druckspaltenprüfung im Bereichstest, das Bolzenscharnier als erster Nutzer |
-| Ein einteiliger Einhänger löst sich, wie er eingehängt wurde | Der Haken hält, bis jemand das Teil anhebt (25.08.2026) | **eine Entscheidung**: ob der Baustein eine federnde Rastnase bekommt. Der caveat sagt es dem Kunden inzwischen |
 | Die Startmarke §31 ist seit dem 24.08.2026 rot | Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026) | **eine Entscheidung**: Marke neu setzen oder die Ursache suchen. Nicht der Code — im Wechsel gegen den Stand vor drei Commits gemessen, Unterschied im Rauschen |
 | Ein Rezept nimmt den ganzen Stapel | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Mehrfachauswahl im Verlauf — das Format nimmt beliebige `op_ids`, aber `HistoryPanel` kennt nur einen Index |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
@@ -10045,7 +10044,7 @@ Zunge hätte keinen Weg.
 
 Zwischen zwei Schlitzen sind es dagegen 40 mm — reichlich für einen Arm.
 
-- [ ] **Soll der Einhänger eine Verriegelung über zwei Schlitze bekommen?** Sie
+- [x] **Soll der Einhänger eine Verriegelung über zwei Schlitze bekommen?** Sie
   bräuchte `upright` und mindestens zwei Haken, einen davon auf einem Federarm,
   und einen Parameter *Verriegelung* zum Abschalten für den, der das Teil oft
   abnimmt. Dagegen spricht, dass eine Feder Materialkenntnis braucht — die
@@ -10055,6 +10054,18 @@ Zwischen zwei Schlitzen sind es dagegen 40 mm — reichlich für einen Arm.
 
   Bis dahin sagt der `caveat` es dem Kunden: „Er löst sich auf demselben Weg,
   auf dem er eingehängt wird."
+
+  **Entschieden und gebaut am 25.08.2026 (Robert: „aus Kundensicht perfekt"),
+  und zwar anders als hier vermutet:** Die Zunge braucht keine zwei Schlitze.
+  Die Messung, die „7,38 mm, gebraucht 8,0" ergab, suchte den Federarm in der
+  **Höhe** des Zapfens — in der **Tiefe** (Plattendicke plus Nase) sind
+  8,33 mm da, und dorthin läuft er. Der Einhänger trägt jetzt eine federnde
+  Rastzunge über dem Zapfen (`latch`, Vorgabe an, abschaltbar): eingerastet
+  hält das Teil in jeder Höhe, gelöst wird durch Niederdrücken durch den
+  Schlitz. Randdehnung 1,5 % gegen die 2-%-Grenze, neun Mutationsproben,
+  `parts_version` 7 und 8, caveat und Handbuch erzählen die neue Lage. Lässt
+  ein fremdes Lochwandmaß keinen Federweg, hält der Baustein an und sagt es
+  (Regel 21), statt einen starren Vorsprung zu bauen.
 
 ## Was der Gesamtreview liegen ließ (25.08.2026)
 

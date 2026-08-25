@@ -1925,14 +1925,127 @@ def test_the_hook_goes_through_the_slot_and_catches_behind_it(count: int) -> Non
     )
 
 
-def test_the_hook_fits_the_slot_it_is_made_for() -> None:
-    """Was hinter der Rückplatte steckt, muss durch den Schlitz passen.
+def fits_the_slot(points: np.ndarray, board: Any, shift: float) -> bool:
+    """Passt dieser Punkthaufen durch den Schlitz, wenn er um ``shift`` steigt?
 
-    Gemessen wird am gebauten Netz und gegen die Tabelle: Alle Punkte jenseits
-    der Rückplatte gehören zu dem Teil, das in die Lochwand greift, und ihre
-    Spanne in Breite und Höhe ist der Weg durch den Schlitz. Ist sie größer als
-    das Loch, kommt der Haken nicht hinein — dann liegt das Teil daneben statt
-    zu hängen.
+    **Gegen die Öffnung, nicht gegen ihren Hüllquader.** Ein Schlitz hat runde
+    Enden; ein Rechteck, das in 5 mal 15 passt, passt deshalb noch lange nicht
+    in das Loch (der Docstring des Bausteins rechnet es vor). Geprüft wird
+    darum gegen die Stadionform: innerhalb des geraden Stücks zählt nur die
+    Breite, an den Enden der Abstand zum Mittelpunkt des Halbkreises.
+
+    ``shift`` ist die Höhe, in der das Teil gerade hängt. Dass die Frage über
+    **alle** Höhen gestellt werden muss, ist der Kern der Sache: Ein Einhänger
+    ohne Rastzunge passt bei einer davon hindurch, und genau dort nimmt ihn
+    jemand versehentlich ab.
+    """
+    radius = board.slot_width / 2.0
+    straight = board.slot_height / 2.0 - radius
+    x = points[:, 0]
+    y = points[:, 1] + shift
+    inside = (np.abs(x) <= radius + 1e-9) & (
+        (np.abs(y) <= straight + 1e-9) | (x**2 + (np.abs(y) - straight) ** 2 <= radius**2 + 1e-9)
+    )
+    return bool(inside.all())
+
+
+def slot_heights(points: np.ndarray, board: Any) -> list[float]:
+    """Bei welchen Höhen der Punkthaufen durch den Schlitz ginge."""
+    return [
+        float(shift)
+        for shift in np.arange(-board.slot_height, board.slot_height, 0.05)
+        if fits_the_slot(points, board, float(shift))
+    ]
+
+
+def behind_the_board(built: Any, board: Any) -> np.ndarray:
+    """Die Punkte jenseits der Plattenrückseite — was hinter der Wand liegt.
+
+    Die Lochwand liegt zwischen der angeklickten Fläche und ihrer eigenen
+    Dicke; eine bestellte Rückplatte steckt **im** Teil und damit unter null.
+    Gezählt wird deshalb ab der Plattendicke und nicht ab der Rückplatte.
+    """
+    points = np.asarray(built.mesh.raw.vertices, dtype=float)
+    return points[points[:, 2] > board.thickness + 0.05]
+
+
+def through_the_board(built: Any, board: Any) -> np.ndarray:
+    """Der Querschnitt im Brett — was durch den Schlitz muss.
+
+    Als Schnitt und nicht über die Eckpunkte: Zapfen und Zunge sind Prismen
+    durch das ganze Brett, die haben zwischen ihren Enden keine.
+    """
+    cut = built.mesh.raw.section(
+        plane_origin=[0.0, 0.0, board.thickness / 2.0], plane_normal=[0.0, 0.0, 1.0]
+    )
+    assert cut is not None, "nothing goes through the board at all"
+    return np.asarray(cut.vertices, dtype=float)
+
+
+def spring_gap(mesh: Any, height: float) -> float:
+    """Der größte freie Abstand in Y auf dieser Höhe — der Weg der Zunge.
+
+    Am Schnitt gemessen und nicht an einer Formel: Wo Zunge und Zapfen zwei
+    getrennte Umrisse sind, ist der größte Sprung zwischen zwei Umrisskanten
+    genau der Spalt, in den die Zunge ausweichen kann.
+    """
+    cut = mesh.raw.section(plane_origin=[0.0, 0.0, height], plane_normal=[0.0, 0.0, 1.0])
+    assert cut is not None, f"nothing to measure at z={height}"
+    values = np.unique(np.round(np.asarray(cut.vertices, dtype=float)[:, 1], 4))
+    return float(np.diff(values).max()) if len(values) > 1 else 0.0
+
+
+def loose_at(mesh: Any, height: float) -> bool:
+    """Ob die Zunge auf dieser Höhe frei ist — zwei Umrisse statt einem."""
+    cut = mesh.raw.section(plane_origin=[0.0, 0.0, height], plane_normal=[0.0, 0.0, 1.0])
+    return cut is not None and len(cut.discrete) > 1
+
+
+def solid_fraction(mesh: Any, centre: Any, size: float = 0.4) -> float:
+    """Wie viel eines kleinen Würfels um diesen Punkt im Material liegt.
+
+    Ein Merkmal ist ein Anhaltspunkt an der Oberfläche. Liegt sein Mittelpunkt
+    mitten im Körper, findet die Zuordnung dort nichts, worauf sie zeigen
+    könnte — und keine Kennzahl merkt es. Ein halber Würfel heißt: auf einer
+    Fläche. Ein ganzer heißt: im Material.
+    """
+    probe = shapes.moved(
+        shapes.box(size, size, size),
+        (float(centre[0]), float(centre[1]), float(centre[2]) - size / 2.0),
+    )
+    # ``allow_empty``, weil leer hier eine Antwort ist: Ein Würfel in der Luft
+    # schneidet nichts, und genau danach wird für die Richtung gefragt. Ohne
+    # das Wort hält die Rückfallkette den leeren Schnitt für ihr eigenes
+    # Versagen und wirft.
+    schnitt = boolean("intersection", [mesh, probe], allow_empty=True).mesh
+    return float(schnitt.volume / size**3)
+
+
+def shoulder_step(built: Any, board: Any) -> float:
+    """Um wie viel die Rastschulter über den Querschnitt im Brett hinaussteht.
+
+    Das ist der Federweg, den die Zunge beim Einführen zurücklegen muss, und
+    zugleich das Maß, mit dem sie hinter der Platte sperrt — gemessen am Netz
+    und nicht an der Formel, die ihn ausrechnet.
+    """
+    return float(
+        through_the_board(built, board)[:, 1].min() - behind_the_board(built, board)[:, 1].min()
+    )
+
+
+def test_the_hook_fits_the_slot_it_is_made_for() -> None:
+    """Was durch den Schlitz muss, muss durch den Schlitz passen.
+
+    Gemessen wird am gebauten Netz und gegen die Tabelle: Alle Punkte, die im
+    Brett liegen, gehören zu dem Teil, das durch das Loch geht, und sie müssen
+    bei irgendeiner Höhe hineinpassen. Tun sie es nicht, liegt das Teil daneben
+    statt zu hängen.
+
+    **Die Grenze verläuft seit der Rastzunge an der Plattenrückseite, nicht an
+    der Rückplatte.** Vorher maß dieser Test alles jenseits der Rückplatte —
+    also Zapfen, Nase und Zunge zusammen — gegen die Schlitzhöhe. Was hinter
+    der Wand liegt, *soll* aber höher sein als der Schlitz: Genau das ist die
+    Verriegelung. Durch das Loch geht nur, was im Loch steckt.
 
     **Ohne Boolesche Operation, und das ist kein Umweg.** Der erste Versuch
     stellte eine Platte mit Schlitz daneben und fragte nach der Schnittmenge.
@@ -1940,29 +2053,328 @@ def test_the_hook_fits_the_slot_it_is_made_for() -> None:
     zwar flächig — das ist keine Klemmung, sondern der Zweck. Wer hier eine
     Boolesche Operation befragt, misst die Berührung und nicht die Passung.
     """
-    from app.core.knowledge import standards
-    from app.core.knowledge.parts import PARTS
-
     spec = PARTS.get("pegboard_hook")
     values = spec.params(count=1, play=0.2)
     built = spec.fn(values)
     board = standards.board(values.system)
 
-    punkte = built.mesh.raw.vertices
-    dahinter = punkte[punkte[:, 2] > values.plate + 0.1]
-    assert len(dahinter), "nothing reaches behind the plate at all"
-
-    breit = float(dahinter[:, 0].max() - dahinter[:, 0].min())
-    hoch = float(dahinter[:, 1].max() - dahinter[:, 1].min())
-
-    assert breit <= board.slot_width, (
-        f"the part behind the plate is {breit:.2f} mm wide, the slot is {board.slot_width}"
+    im_schlitz = through_the_board(built, board)
+    assert len(im_schlitz), "nothing reaches into the board at all"
+    assert slot_heights(im_schlitz, board), (
+        f"the hook is {np.ptp(im_schlitz[:, 0]):.2f} by {np.ptp(im_schlitz[:, 1]):.2f} mm and "
+        f"goes into no {board.slot_width} by {board.slot_height} slot at any height"
     )
-    assert hoch <= board.slot_height, (
-        f"the part behind the plate is {hoch:.2f} mm tall, the slot is {board.slot_height}"
-    )
-    # Und es soll den Schlitz auch ausnutzen: Ein Haken, der nur halb so hoch
+
+    # Und er soll den Schlitz auch ausnutzen: Ein Haken, der nur halb so hoch
     # ist wie das Loch, hält beim ersten Anstoßen nicht.
+    hoch = float(im_schlitz[:, 1].max() - im_schlitz[:, 1].min())
     assert hoch > board.slot_height / 2.0, (
         f"the hook only uses {hoch:.2f} mm of the {board.slot_height} mm slot"
     )
+
+
+@pytest.mark.parametrize("latch", [True, False])
+def test_the_latch_leaves_no_height_at_which_the_hook_comes_off(latch: bool) -> None:
+    """Die Zusage der Rastzunge, in einem Satz: **es gibt keine solche Höhe.**
+
+    Ein Einhänger löst sich, indem man ihn anhebt, bis die Nase frei ist, und
+    dann herauszieht. Beides zusammen ist eine einzige Frage an die Geometrie:
+    Gibt es eine Höhe, bei der alles hinter der Platte durch den Schlitz
+    zurückpasst? Ohne Zunge gibt es sie — sonst ließe sich das Teil gar nicht
+    erst einhängen. Mit Zunge darf es sie nicht geben, in **keiner** Höhe.
+
+    Gemessen wird an der Richtung und nicht nur an der Berührung
+    (``.claude/rules/bausteine.md``): Die Rastschulter muss am **oberen** Ende
+    sitzen, dort, wo der Haken beim Anheben hinwandert. Eine gleich große
+    Schulter am unteren Ende sperrte nichts — sie wanderte beim Anheben in den
+    Schlitz hinein.
+    """
+    spec = PARTS.get("pegboard_hook")
+    values = spec.params(count=1, latch=latch)
+    built = spec.fn(values)
+    board = standards.board(values.system)
+
+    dahinter = behind_the_board(built, board)
+    assert len(dahinter), "nothing reaches behind the board at all"
+    passend = slot_heights(dahinter, board)
+
+    if not latch:
+        assert passend, (
+            "without the latch the hook must come out again — otherwise it could "
+            "never have gone in, and this test would prove nothing"
+        )
+        return
+
+    assert not passend, (
+        f"the latched hook slips back through the slot at {len(passend)} heights, "
+        f"first at {passend[:1]}"
+    )
+
+    # Die Richtung: Die Sperre sitzt oben. Der höchste Punkt hinter der Platte
+    # liegt über dem, was im Brett steckt — die Schulter steht also dorthin
+    # hinaus, wo der Haken beim Anheben hinwill.
+    im_schlitz = through_the_board(built, board)
+    assert float(dahinter[:, 1].min()) < float(im_schlitz[:, 1].min()) - 0.3, (
+        f"the shoulder sits at y={dahinter[:, 1].min():.2f} and the shank reaches to "
+        f"{im_schlitz[:, 1].min():.2f} — it does not stand out at the top end"
+    )
+    # Und unten steht sie nicht über: Dort greift die Nase, und mehr braucht
+    # es nicht.
+    assert float(dahinter[:, 1].max()) == pytest.approx(
+        float(spec.fn(spec.params(count=1, latch=False)).mesh.bounds.maximum[1]), abs=0.01
+    ), "the latch changed the lower end of the hook, where the nose already holds"
+
+
+def test_the_latched_hook_still_goes_into_the_slot() -> None:
+    """Eine Verriegelung, die das Einhängen verhindert, ist keine.
+
+    Der Querschnitt im Brett — Zapfen und Zunge nebeneinander — muss durch das
+    Loch gehen, und zwar bei einer Höhe, bei der auch die Nase hindurchkommt.
+    Die Zunge selbst federt dabei ein; **hier** wird gemessen, dass sie das
+    ohne die Schulter überhaupt tun könnte: Was im Brett liegt, ist die
+    eingefederte Gestalt.
+    """
+    spec = PARTS.get("pegboard_hook")
+    for play in (0.0, 0.2, 1.5):
+        values = spec.params(count=1, play=play)
+        built = spec.fn(values)
+        board = standards.board(values.system)
+        im_schlitz = through_the_board(built, board)
+        assert slot_heights(im_schlitz, board), (
+            f"play={play}: shank and tongue together measure "
+            f"{np.ptp(im_schlitz[:, 0]):.2f} by {np.ptp(im_schlitz[:, 1]):.2f} mm and fit "
+            f"no {board.slot_width} by {board.slot_height} slot"
+        )
+
+
+def test_the_tongue_has_room_to_spring() -> None:
+    """Eine Zunge ohne Spalt ist ein Vorsprung, kein Federarm.
+
+    Sie muss um ihre Rastschulter ausweichen können, sonst kommt der Haken
+    nicht durch den Schlitz. Gemessen am Schnitt durch den Arm: der freie
+    Abstand zwischen Zunge und Zapfen gegen den Überstand der Schulter, den der
+    Hüllquader verrät.
+    """
+    spec = PARTS.get("pegboard_hook")
+    board = standards.board("skadis")
+
+    for play, plate, lip in ((0.0, 0.0, 0.0), (1.5, 0.0, 6.0), (0.0, 10.0, 0.0)):
+        values = spec.params(count=1, play=play, plate=plate, lip=lip)
+        built = spec.fn(values)
+        step = shoulder_step(built, board)
+        gap = spring_gap(built.mesh, board.thickness / 2.0)
+        assert gap >= step > 0.2, (
+            f"play={play} plate={plate} lip={lip}: the shoulder stands {step:.2f} mm proud "
+            f"and the tongue has {gap:.2f} mm to give way"
+        )
+
+
+def test_the_tongue_stays_under_the_strain_a_printed_arm_survives() -> None:
+    """Der Federweg kommt aus dem Arm, in dem er entsteht — nachgerechnet.
+
+    Für einen Rechteckquerschnitt ist die Randdehnung an der Wurzel
+    ``ε = 3·t·δ/(2·L²)``. Alle drei Größen stehen am gebauten Körper: die
+    Armstärke als Dicke der Zunge, der Federweg als Überstand der Schulter, die
+    freie Länge als der Bereich, in dem Zunge und Zapfen zwei getrennte Umrisse
+    sind. Was herauskommt, muss unter ``LATCH_STRAIN`` bleiben — sonst bricht
+    der Arm beim ersten Einrasten, und der Baustein verspricht etwas, das er
+    nicht hält.
+
+    **Nicht mit der Formel des Bausteins gerechnet.** Die Erwartung kommt aus
+    der Biegemechanik und die Messwerte aus dem Netz; wer den Sollwert aus dem
+    Prüfling zöge, prüfte die Aktualität der Formel und nicht ihre Richtigkeit.
+    """
+    from app.core.knowledge.parts.mounting import LATCH_STRAIN
+
+    spec = PARTS.get("pegboard_hook")
+    board = standards.board("skadis")
+    values = spec.params(count=1)
+    built = spec.fn(values)
+
+    step = shoulder_step(built, board)
+    schulter = float(behind_the_board(built, board)[:, 2].min())
+    hoehen = np.arange(0.05, schulter, 0.05)
+    frei = [float(z) for z in hoehen if loose_at(built.mesh, float(z))]
+    assert frei, "the tongue is fused to the shank over its whole length"
+    length = schulter - frei[0]
+
+    cut = built.mesh.raw.section(
+        plane_origin=[0.0, 0.0, frei[len(frei) // 2]], plane_normal=[0.0, 0.0, 1.0]
+    )
+    umriss = min(cut.discrete, key=lambda ring: np.asarray(ring)[:, 1].min())
+    thickness = float(np.ptp(np.asarray(umriss)[:, 1]))
+
+    strain = 3.0 * thickness * step / (2.0 * length**2)
+    assert strain <= LATCH_STRAIN, (
+        f"the tongue is {thickness:.2f} mm thick, {length:.2f} mm long and has to give "
+        f"way {step:.2f} mm — that is {strain * 100:.1f} % strain at the root"
+    )
+    # Und nicht beliebig weich: Ein Arm, der zehnmal so lang ist wie nötig,
+    # federt nicht mehr zurück. Ein Zehntel der zulässigen Dehnung wäre einer.
+    assert strain > LATCH_STRAIN / 10.0, (
+        f"only {strain * 100:.2f} % strain — this arm is a flag, not a spring"
+    )
+
+
+@pytest.mark.parametrize("values", corners(PARTS.get("pegboard_hook")), ids=str)
+def test_the_latched_hook_holds_over_the_whole_range(values: dict[str, Any]) -> None:
+    """§24.3 für die Zunge: jede Ecke des Bereichs, Zunge eingeschaltet.
+
+    Der Bereichstest der Datei fährt die Ecken zyklisch, und ein Schalter
+    bekommt dabei abwechselnd beide Stellungen — die Ecke mit dem größten Spiel
+    und der tiefsten Nase liefe also ohne Zunge. Hier wird sie eingeschaltet
+    erzwungen: Was an den Rändern bricht, bricht nicht in der Mitte.
+    """
+    spec = PARTS.get("pegboard_hook")
+    board = standards.board("skadis")
+    werte = spec.params(**{**values, "latch": True})
+    built = spec.fn(werte)
+    mesh = built.mesh
+
+    assert mesh.is_watertight, f"{values} is not watertight"
+    assert mesh.volume > 0.0, f"{values} has no volume"
+    # Ein Haken je Zapfen, und die Zunge gehört zu ihrem: mehr Teile hieße,
+    # sie hängt an nichts. Mit Rückplatte sind es keine zwei mehr — die Platte
+    # verbindet, wozu sonst der Träger da ist.
+    erwartet = 1 if werte.plate > 0.0 else werte.count
+    assert mesh.component_count == erwartet, (
+        f"{values} falls into {mesh.component_count} pieces, expected {erwartet}"
+    )
+    assert sorted(built.features) == sorted(
+        [f"hook_{i + 1}" for i in range(werte.count)]
+        + [f"latch_{i + 1}" for i in range(werte.count)]
+    ), f"{values} names {sorted(built.features)}"
+
+    dahinter = behind_the_board(built, board)
+    assert not slot_heights(dahinter, board), f"{values}: the latched hook slips back out"
+
+
+def test_without_the_latch_the_hook_is_the_shape_it_was() -> None:
+    """Abgeschaltet muss die alte Form herauskommen, aufs Zehntel.
+
+    §24.4 lebt davon, dass ein alter Stand erreichbar bleibt: Wer die Meldung
+    beim Öffnen liest und lieber weiterrechnet wie bisher, schaltet die Zunge
+    ab. Die Maße stehen hier aus der Tabelle und der Aufteilung des Docstrings
+    — halbe Schlitzhöhe Zapfen, ein Viertel Nase, ein Viertel Weg —, nicht aus
+    dem Baustein.
+    """
+    spec = PARTS.get("pegboard_hook")
+    board = standards.board("skadis")
+    values = spec.params(count=1, latch=False)
+    built = spec.fn(values)
+
+    lip = board.thickness * (2.0 / 3.0)
+    hoch = board.slot_height * 3.0 / 4.0
+    size = built.mesh.bounds.size
+    assert float(size[0]) == pytest.approx(board.slot_width, abs=0.01)
+    # Die runden Enden eines Langlochs sind ein Vieleck; dessen äußerster Punkt
+    # liegt ein Hundertstel innerhalb der Rundung.
+    assert float(size[1]) == pytest.approx(hoch, abs=0.02)
+    assert float(size[2]) == pytest.approx(board.thickness + lip, abs=0.02)
+    assert sorted(built.features) == ["hook_1"], "a hook without a latch names no latch"
+
+
+def test_the_hook_names_its_features_on_faces_that_exist() -> None:
+    """Ein Merkmal mitten im Material ist kein Anhaltspunkt.
+
+    ``hook_1`` lag auf der Höhe der Plattenrückseite und damit **im** Zapfen:
+    gemessen zu 99 % innen, mit der Fläche eines Rechtecks, das der Haken gar
+    nicht hat. Derselbe Fehler wie beim Plattenmerkmal, das aus demselben Grund
+    verschwunden ist — und keine Kennzahl des Bereichstests bemerkt ihn.
+
+    Gemessen wird mit einem kleinen Würfel um den Mittelpunkt: halb im
+    Material heißt „auf einer Fläche", ganz im Material heißt „daneben
+    gegriffen". Dazu die Richtung — einen halben Millimeter in Richtung der
+    Normalen muss Luft sein.
+    """
+    spec = PARTS.get("pegboard_hook")
+    built = spec.fn(spec.params(count=1))
+    mesh = built.mesh
+
+    for name, feature in built.features.items():
+        centre = np.asarray(feature.params["centre"], dtype=float)
+        normal = np.asarray(feature.params["normal"], dtype=float)
+        anteil = solid_fraction(mesh, centre)
+        assert 0.2 < anteil < 0.8, (
+            f"{name} sits {anteil * 100:.0f} % inside the body — that is not a face"
+        )
+        draussen = solid_fraction(mesh, centre + 0.5 * normal, size=0.2)
+        assert draussen < 0.2, f"{name} points into the material, not out of it"
+
+
+def test_a_board_without_room_for_a_tongue_says_so() -> None:
+    """Regel 21: wo es nicht geht, wird es gesagt — nicht halb gebaut.
+
+    Die Tabelle führt heute eine einzige Lochwand, und in deren Schlitz ist
+    reichlich Platz. Eine Zeile mehr ist eine Datenänderung, keine
+    Codeänderung: Sie käme ohne Test durch und ergäbe eine Zunge, die keinen
+    Federweg hat. Der Baustein hält dann an und nennt den Ausweg — die Zunge
+    abzuschalten —, statt einen Vorsprung zu bauen, der sich nicht eindrücken
+    lässt.
+    """
+    from app.core.errors import ValidationError
+
+    spec = PARTS.get("pegboard_hook")
+    eng = standards.Board(size="eng", slot_width=4.0, slot_height=6.0, pitch=20.0, thickness=3.0)
+
+    with mock.patch.object(standards, "board", return_value=eng):
+        with pytest.raises(ValidationError) as gefangen:
+            spec.fn(spec.params(count=1))
+        # Ohne Zunge geht dieselbe Lochwand durch — sonst wäre die Meldung ein
+        # Rat ins Leere.
+        assert spec.fn(spec.params(count=1, latch=False)).mesh.is_watertight
+
+    assert gefangen.value.suggestions, "Regel 17: eine Ausnahme ohne Handlungsvorschlag"
+
+
+def test_the_two_changed_parts_report_themselves_to_old_projects() -> None:
+    """§24.4: wer die Maße ändert, sagt es den Projekten, die sie benutzt haben.
+
+    Beide Änderungen des 25.08.2026 verschieben Maße — der Einhänger um seine
+    Zunge, das Schlüsselloch um das Kopfspiel, das es wieder addiert statt
+    ersetzt. Ein Projekt, das mit Bibliotheksstand 6 gerechnet wurde, muss
+    beide genannt bekommen.
+    """
+    from app.core.knowledge.parts.registry import changed_since_library
+
+    gemeldet = changed_since_library("6", ["pegboard_hook", "keyhole", "wall_mount"])
+    assert set(gemeldet) == {"pegboard_hook", "keyhole"}, gemeldet
+
+    # **Und zwar jede der beiden Änderungen einzeln.** Gegen 6 gefragt genügt
+    # dem Einhänger sein älterer Eintrag; die Zunge wäre dabei stumm geblieben,
+    # und die Gegenprobe hat genau das gezeigt: Der Test blieb grün, als ihr
+    # Eintrag entwertet wurde. Gefragt wird deshalb gegen den Stand unmittelbar
+    # davor — dort spricht nur noch der jüngste Eintrag.
+    vorher = str(int(LIBRARY_VERSION) - 1)
+    assert changed_since_library(vorher, ["pegboard_hook"]) == ("pegboard_hook",), (
+        f"a project computed at library {vorher} is never told the hook grew a latch"
+    )
+
+
+@pytest.mark.parametrize("size", ["M3", "M4", "M6"])
+def test_the_keyhole_head_falls_through_with_a_profile(size: str, profile: Profile) -> None:
+    """Der Kopf soll hindurchfallen — auch mit unkalibriertem Material.
+
+    **Er tat es nicht.** Version 6 schrieb ``params.play or HEAD_CLEARANCE``,
+    und ``ops.insert`` füllt das Spiel bei *jedem* Profil aus dem Material ein,
+    nicht erst bei einem kalibrierten. Damit ersetzte ein Spiel von 0,25 mm das
+    Durchgangsmaß von 0,6: Ein M4-Kopf von 7,00 mm fand eine Öffnung von
+    7,25 mm vor, und gedruckt geht er da nicht mehr durch.
+
+    Gemessen wird auf dem Weg, den die Anwendung geht — mit den Werten, die
+    ``insert_part`` dem Baustein reicht —, und nicht mit einer eigenen
+    Nachbildung davon.
+    """
+    spec = PARTS.get("keyhole")
+    werte = part_ops._part_values(spec, spec.params(size=size), profile)
+    built = spec.fn(spec.params(**werte))
+    screw = standards.screw(size)
+
+    from app.core.knowledge.parts.mounting import HEAD_CLEARANCE
+
+    weite = float(built.features["pocket_1"].params["diameter"])
+    assert weite >= screw.head + HEAD_CLEARANCE, (
+        f"{size}: the head is {screw.head} mm and the opening {weite} mm — printed it "
+        "no longer goes through"
+    )
+    assert weite == pytest.approx(screw.head + HEAD_CLEARANCE + profile.material.clearance)

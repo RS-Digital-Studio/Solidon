@@ -10,12 +10,21 @@ raten.
 from __future__ import annotations
 
 import math
-from typing import cast
+from dataclasses import dataclass
+from typing import Final, cast
 
+from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, result, subtract, union
+
+# **Die Federarmregeln stehen bei der Mechanik, und dort bleiben sie.** Ein
+# Federarm ist zehnmal so lang wie dick und mindestens zwei Außenwände stark —
+# dieselbe Frage wie bei der Schnappverbindung, also dieselbe Zahl. Sie hier
+# ein zweites Mal hinzuschreiben hieße, sie beim nächsten Nachbessern an einer
+# Stelle zu ändern und an der anderen nicht.
+from app.core.knowledge.parts.mechanics import SNAP_LEAD_ANGLE, SNAP_MIN_ARM, SNAP_RATIO
 from app.core.knowledge.parts.registry import (
     FACE_GIVES_DIRECTION,
     MOUTH_AT_ORIGIN,
@@ -79,6 +88,24 @@ HEAD_PLAY_FROM_PROFILE = PartChange(
         "Mit einem kalibrierten Profil wird das runde Ende enger oder weiter, "
         "statt bei 0,6 mm zu bleiben. Ohne Kalibrierung ändert sich nichts: Der "
         "Vorgabewert ist derselbe."
+    ),
+)
+
+HEAD_PLAY_ADDS_INSTEAD_OF_REPLACING = PartChange(
+    version="7",
+    date="2026-08-25",
+    reason=(
+        "Version 6 ersetzte das Kopfspiel durch das Profilspiel, statt es "
+        "dazuzurechnen — und ``ops.insert`` füllt das Spiel bei **jedem** Profil "
+        "ein, nicht erst bei einem kalibrierten."
+    ),
+    effect=(
+        "Das runde Ende wird wieder weit genug, dass der Kopf hindurchfällt. "
+        "Gemessen an M4 mit PETG: 7,25 mm Öffnung bei 7,00 mm Kopf — gedruckt "
+        "geht der Kopf da nicht mehr durch. Jetzt sind es 7,25 mm über dem "
+        "Durchgangsmaß, also 7,85. Der Satz „Ohne Kalibrierung ändert sich "
+        "nichts“ aus Version 6 war falsch: Er änderte sich für jedes Profil, "
+        "denn der Vorgabewert wurde gar nicht mehr benutzt."
     ),
 )
 
@@ -303,11 +330,16 @@ def wall_mount(raw: BaseParams) -> PartResult:
 
 
 #: Wie viel Luft der Schraubenkopf im runden Ende eines Schlüssellochs hat,
-#: solange das Materialprofil nichts anderes sagt.
+#: **über** das Spiel des Materialprofils hinaus.
 #:
 #: Der Kopf soll hindurchfallen, nicht klemmen — das ist der eine Fall, in dem
-#: großzügiges Spiel richtig ist. Ein kalibriertes Profil überschreibt den Wert
-#: über den Parameter ``Spiel``.
+#: großzügiges Spiel richtig ist. Ein Durchgangsmaß also, kein Passungsmaß, und
+#: darum wird das Profilspiel dazugerechnet und nicht dagegen ausgetauscht:
+#: ``ops.insert`` füllt ``play`` bei **jedem** Profil aus
+#: ``material.clearance``, nicht erst bei einem kalibrierten. Version 6 las
+#: ``params.play or HEAD_CLEARANCE``, und damit bekam ein M4-Kopf von 7,00 mm
+#: unter PETG eine Öffnung von 7,25 statt 7,60 — gedruckt geht er da nicht mehr
+#: hindurch.
 HEAD_CLEARANCE = 0.6
 
 
@@ -379,6 +411,7 @@ class KeyholeParams(BaseParams):
         FACE_GIVES_DIRECTION,
         SLOT_RUNS_DOWNWARD,
         HEAD_PLAY_FROM_PROFILE,
+        HEAD_PLAY_ADDS_INSTEAD_OF_REPLACING,
     ],
 )
 def keyhole(raw: BaseParams) -> PartResult:
@@ -411,7 +444,15 @@ def keyhole(raw: BaseParams) -> PartResult:
     # der sein Material eingemessen hat, bekam trotzdem denselben Wert wie
     # jeder andere. Regel 7 sagt es allgemeiner: keine Zahlenkonstante für
     # Toleranzen.
-    clearance = params.play or HEAD_CLEARANCE
+    #
+    # **Dazu, nicht dafür.** Version 6 schrieb ``params.play or HEAD_CLEARANCE``
+    # und ersetzte damit das Durchgangsmaß durch das Profilspiel — und
+    # ``ops.insert`` füllt ``play`` bei jedem Profil ein, nicht erst bei einem
+    # kalibrierten. Gemessen an M4 unter PETG: Öffnung 7,25 mm bei 7,00 mm
+    # Kopf. Die beiden Zahlen beantworten verschiedene Fragen: „wie viel Luft
+    # braucht ein Kopf, der hindurchfallen soll" und „wie viel Maß verliert
+    # dieser Drucker in diesem Material". Beides gilt, also wird addiert.
+    clearance = HEAD_CLEARANCE + params.play
 
     # Die Tasche, in die der Kopf versinkt: am Eingang rund, dann ein Schlitz.
     pocket = falling(screw.head + clearance, screw.head + clearance + params.drop, params.head_room)
@@ -455,7 +496,171 @@ PEGBOARD_HOOK_ADDED = PartChange(
     reason="Lochwand-Einhänger — die Kundenanfrage, mit der dieses Konzept anfing.",
 )
 
+HOOK_HOLDS_WHEN_LIFTED = PartChange(
+    version="8",
+    date="2026-08-25",
+    reason=(
+        "Ein einteiliger Einhänger löste sich auf demselben Weg, auf dem er "
+        "eingehängt wird — wer etwas vom Halter nimmt, hebt das Teil an und hat "
+        "es in der Hand. Er bekommt eine federnde Rastzunge (Entscheidung "
+        "Robert, 25.08.2026)."
+    ),
+    effect=(
+        "Der Zapfen trägt jetzt oben eine federnde Zunge, die beim Einführen "
+        "einfedert und hinter der Platte ausrastet. Zwei Maße ändern sich damit: "
+        "Der Einhänger misst über alles eine Zungenstärke, einen Federweg und "
+        "eine Rastschulter mehr in der Höhe (bei SKÅDIS 15,47 statt 11,25 mm) "
+        "und reicht weiter hinter die Platte (9,94 statt 8,33 mm), weil der "
+        "Federarm zehnmal so lang sein muss wie dick. Eine bestellte Rückplatte "
+        "wächst entsprechend mit. Wer die alte Form braucht — etwa für ein Teil, "
+        "das oft abgenommen wird —, schaltet den Parameter „Rastzunge“ ab; dann "
+        "ist die Geometrie dieselbe wie vorher."
+    ),
+)
+
+HOOK_FEATURE_ON_A_REAL_FACE = PartChange(
+    version="7",
+    date="2026-08-25",
+    reason=(
+        "Das Merkmal ``hook_N`` lag mitten im Material: auf der Höhe der Nase, "
+        "die den Querschnitt dort ausfüllt (gemessen zu 99 % innen)."
+    ),
+    effect=(
+        "Es liegt jetzt auf der Rückseite der Nase — einer Fläche, die es "
+        "wirklich gibt — und meldet deren Langlochfläche statt eines Rechtecks. "
+        "Wer über dieses Merkmal eine Passung oder eine Operation angesetzt hat, "
+        "findet es an anderer Stelle wieder; die Zapfenmitte in X und Y ist "
+        "dieselbe geblieben."
+    ),
+)
+
 _BOARDS = standards.board_sizes()
+
+#: Zulässige Randdehnung eines gedruckten Federarms beim Einrasten.
+#:
+#: **Kein Toleranzmaß** — Regel 7 meint das Spiel einer Passung, und das kommt
+#: weiter aus dem Materialprofil. Das hier ist eine Werkstoffeigenschaft: PLA
+#: hat einen E-Modul um 3 GPa und fließt um 50 MPa, das sind rund 1,7 %
+#: Dehnung; die Auslegungstafeln für Schnapphaken rechnen für einen einmaligen
+#: Fügevorgang mit 2 %. PLA ist von den gängigen Druckmaterialien das
+#: sprödeste, für PETG und ABS ist der Wert also die sichere Seite.
+#:
+#: Er steht hier und nicht im Profil, weil das Profil Toleranzen und
+#: Druckmaße führt und keine Festigkeitswerte. Kommt dort einmal einer dazu,
+#: gehört er dorthin.
+LATCH_STRAIN: Final = 0.02
+
+
+@dataclass(frozen=True, slots=True)
+class _LatchTongue:
+    """Die Maße der federnden Rastzunge — je Frage eine Zahl."""
+
+    thickness: float
+    """Stärke des Arms in Biegerichtung (Y). Zwei Außenwände, sonst federt er
+    nicht, sondern reißt (``SNAP_MIN_ARM``)."""
+    width: float
+    """Breite quer dazu (X). Halb so breit wie der Zapfen — mehr passt nicht
+    unter die Rundung des Schlitzendes, ohne dass die Ecken anstoßen."""
+    gap: float
+    """Der Spalt zwischen Zunge und Zapfen: der Weg, den sie ausweichen kann.
+
+    Er ist zugleich der Abstand, den die Zunge unter der Schlitzkuppe hält: Ein
+    Schlitz endet halbrund, und eine rechteckige Zunge, deren Oberkante genau
+    an der Kuppe läge, stieße mit ihren Ecken an — dieselbe Falle, wegen der
+    Zapfen und Nase Langlöcher sind und keine Rechtecke.
+    """
+    lock: float
+    """Wo die Rastschulter sitzt, gemessen von der angeklickten Fläche."""
+    run: float
+    """Länge der Anlaufschräge, mit der sich die Zunge selbst eindrückt."""
+    step: float
+    """Wie weit die Schulter über die Zunge hinaussteht — das Rastmaß."""
+
+    @property
+    def stack(self) -> float:
+        """Was die Zunge über der Zapfenoberkante braucht, mit Schulter."""
+        return self.gap + self.thickness + self.step
+
+
+def _latch_tongue(
+    *, width: float, travel: float, through: float, lip: float, sunk: float, system: str
+) -> _LatchTongue:
+    """Die Zunge, gerechnet aus dem Körper, in dem der Arm sitzt.
+
+    **Der Weg zurück ist der Weg hinein, und genau das ist das Problem.** Ein
+    Einhänger wird eingeführt und abgesenkt; wer ihn anhebt und herauszieht,
+    hat ihn in der Hand — bei den Originalhaken des Systems ebenso wie hier.
+    Was das verhindert, muss etwas sein, das **hinter** der Platte breiter oder
+    höher ist als der Schlitz und beim Einführen ausweicht.
+
+    **Warum die Zunge oben sitzt und nach oben rastet.** Der Schlitz ist höher
+    als Zapfen und Nase zusammen; dieser Rest ist der Weg zum Absinken und
+    liegt über dem Zapfen. Dort — und nur dort — ist Platz für eine Zunge, die
+    mit durch den Schlitz geht. Ihre Rastschulter steht darüber hinaus: Damit
+    ist alles hinter der Platte zusammen **höher als der Schlitz**, und zwar in
+    jeder Höhe, in der das Teil hängen kann. Angehoben löst sich die Nase, und
+    das Teil kommt trotzdem nicht heraus.
+
+    **Wo der Federweg herkommt.** Nicht aus einer Zahl daneben, sondern aus dem
+    Arm: Für einen Rechteckquerschnitt ist die Randdehnung an der Wurzel
+    ``ε = 3·t·δ/(2·L²)``. Nach der Länge aufgelöst und ``δ = t`` gesetzt — die
+    Schulter steht eine Armstärke über, dieselbe Regel wie beim
+    Schnappverbinder — ergibt das ``L = t·√(3/(2ε))``, bei 2 % also das
+    8,66-fache der Stärke. Die Bibliothek rechnet Federarme seit je mit zehn zu
+    eins (``SNAP_RATIO``), und das ist der strengere der beiden Werte; genommen
+    wird er, damit nicht zwei Regeln dieselbe Frage beantworten. Die Dehnung
+    bleibt damit bei 1,5 %.
+
+    **Und der Arm hat Platz, obwohl der Zapfen zu kurz ist.** Die Durchsicht
+    vom 25.08.2026 hat ihn in der *Höhe* des Zapfens gesucht — 7,38 mm bei
+    0,25 mm Spiel, und ein Federarm braucht 8,0 — und geschlossen, es gehe
+    nicht. In der **Tiefe** sind es Plattendicke plus Nasentiefe, bei SKÅDIS
+    8,33 mm, und dorthin läuft der Arm: neben dem Zapfen durch den Schlitz.
+
+    Was er dabei kostet, ist ehrlich zu nennen: Der Einhänger reicht um die
+    fehlenden Millimeter weiter hinter die Platte, und angehoben lässt sich das
+    Teil ein Stück herausziehen, bis die Schulter an der Plattenrückseite
+    anschlägt. Herunterfallen kann es nicht.
+    """
+    thickness = SNAP_MIN_ARM
+    # Halb so breit wie der Zapfen: Was darüber hinausgeht, kostet mehr
+    # Kuppenabstand, als es an Auflagefläche einbringt — und der Kuppenabstand
+    # geht direkt vom Rastmaß ab.
+    tongue = width / 2.0
+    radius = width / 2.0
+    head_room = radius - math.sqrt(max(radius**2 - (tongue / 2.0) ** 2, 0.0))
+
+    # Der freie Weg über dem Zapfen gehört ganz der Zunge: Kuppenabstand,
+    # Zungenstärke, Federweg. Was davon übrig bliebe, wäre Hub, den das Teil
+    # zusätzlich hätte — und Hub ist genau das, was die Zunge verhindern soll.
+    gap = travel - head_room - thickness
+    if gap < thickness:
+        raise ValidationError(
+            field="latch",
+            detail=_(
+                "In den Schlitz dieser Lochwand passt neben dem Zapfen keine "
+                "federnde Zunge. Ohne sie hält der Einhänger trotzdem — er "
+                "löst sich nur, wenn jemand das Teil anhebt."
+            ),
+            values={"board": system, "room": f"{gap:.2f}", "needed": f"{thickness:.2f}"},
+        )
+
+    run = thickness / math.tan(math.radians(SNAP_LEAD_ANGLE))
+    # Zehn zu eins, mindestens; wo neben dem Zapfen mehr Platz ist, wird der
+    # Arm so lang wie der Zapfen tief ist und die Zunge schließt bündig mit der
+    # Nase ab. Die Wurzel ist ein Block von einer Armstärke — mit einer
+    # Rückplatte übernimmt die Platte sie, und der Arm wird an ihrer Oberseite
+    # frei.
+    root = max(sunk + thickness, 0.0)
+    arm = max(SNAP_RATIO * thickness, through + lip - run - root)
+    return _LatchTongue(
+        thickness=thickness,
+        width=tongue,
+        gap=gap,
+        lock=root + arm,
+        run=run,
+        step=thickness,
+    )
 
 
 @op_params
@@ -494,6 +699,16 @@ class PegboardHookParams(BaseParams):
         doc=_(
             "Setzt die Haken senkrecht statt nebeneinander — für schmale Teile, "
             "die sonst über das Raster hinausragen."
+        ),
+    )
+    latch: bool = param(
+        title=_("Rastzunge"),
+        default=True,
+        doc=_(
+            "Eine federnde Zunge am Zapfen, die hinter der Platte einrastet: Das "
+            "Teil bleibt hängen, auch wenn jemand es beim Abnehmen anhebt. Zum "
+            "Lösen wird sie durch den Schlitz niedergedrückt. Abgeschaltet ist "
+            "der Einhänger die einfache Form, die sich anheben und abnehmen lässt."
         ),
     )
     plate: float = param(
@@ -536,7 +751,7 @@ class PegboardHookParams(BaseParams):
     title=_("Lochwand-Einhänger"),
     group="mounting",
     params=PegboardHookParams,
-    features=["hook"],
+    features=["hook", "latch"],
     keeps_up=True,
     # Ohne Rückplatte ist jeder Haken ein eigener Körper; verbunden werden sie
     # von dem Teil, an das sie kommen. Mit Rückplatte hängen sie ohnehin
@@ -544,26 +759,33 @@ class PegboardHookParams(BaseParams):
     joined_by_host=True,
     doc=_(
         "Haken für eine Lochwand, direkt am Teil. Von oben in die Schlitze "
-        "gesteckt und heruntergezogen — die Nase greift dann hinter die Platte."
+        "gesteckt und heruntergezogen — die Nase greift dann hinter die Platte, "
+        "und die federnde Zunge rastet ein. Gedruckt wird das Teil liegend: die "
+        "Zunge in der Druckebene, damit sie über ihre Schichten federt und nicht "
+        "an ihnen aufreißt."
     ),
     caveat=_(
-        "Er löst sich auf demselben Weg, auf dem er eingehängt wird: Wer das Teil "
-        "anhebt, nimmt es ab. Das ist bei jedem einteiligen Einhänger so. "
-        "Schlitzmaße und Raster sind gegen eine bemaßte Zeichnung geprüft, die "
-        "Dicke der Platte nicht — und aus ihr folgt, wie weit die Nase greift."
+        "Zum Abnehmen muss die Rastzunge durch den Schlitz niedergedrückt werden "
+        "— ohne Werkzeug geht das nur, wenn man vor der Wand steht. Wer ein Teil "
+        "oft abnimmt, schaltet sie ab; dann löst sich der Einhänger auf "
+        "demselben Weg, auf dem er eingehängt wird. Schlitzmaße und Raster sind "
+        "gegen eine bemaßte Zeichnung geprüft, die Dicke der Platte nicht — und "
+        "aus ihr folgt, wie weit Nase und Zunge greifen."
     ),
-    changes=[PEGBOARD_HOOK_ADDED],
+    changes=[PEGBOARD_HOOK_ADDED, HOOK_FEATURE_ON_A_REAL_FACE, HOOK_HOLDS_WHEN_LIFTED],
 )
 def pegboard_hook(raw: BaseParams) -> PartResult:
-    """Einhänger im Raster, auf einer gemeinsamen Rückplatte.
+    """Einhänger im Raster, direkt am Teil — mit federnder Rastzunge.
 
-    **Die Platte ist nicht Zierde, sondern Bedingung — und sie liegt im Teil.**
-    Zwei Haken im Vierzigerraster sind zwei Körper; ein Baustein muss einer sein
-    (§24.3), und der Kunde will ohnehin keine zwei losen Haken, sondern ein
-    Teil, das hängt. Nur **auf** dem Träger hat sie nichts verloren: Dort war
-    sie zwei Millimeter Material, das niemand braucht, und zwei Millimeter mehr
-    Abstand zur Lochwand. Ihre Oberseite liegt deshalb auf null, bündig mit der
-    angeklickten Fläche; was darunter liegt, verschmilzt mit dem Träger.
+    **Die Rückplatte ist die Ausnahme, nicht die Vorgabe.** Sie war einmal
+    beides: Bedingung, weil zwei Haken im Vierzigerraster zwei Körper sind und
+    ein Baustein einer sein muss (§24.3) — und Ballast, weil sie zwei
+    Millimeter Material zwischen Träger und Lochwand legte, das niemand
+    braucht. Beides zusammen ging nicht auf; seit dem 25.08.2026 hängen die
+    Haken am Teil selbst, und das verbindet sie (``joined_by_host``). Wer
+    trotzdem eine Platte bestellt, bekommt sie **im** Teil: Ihre Oberseite liegt
+    auf null, bündig mit der angeklickten Fläche, und was darunter liegt,
+    verschmilzt mit dem Träger.
 
     **Der Haken greift in einen Schlitz, nicht in ein Loch — und ein Schlitz
     hat runde Enden.** Bei SKÅDIS ist die Öffnung fünf Millimeter breit und
@@ -582,6 +804,23 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     Nase griff um 0,25 mm hinter die Platte — sie hielt nichts. Die Aufteilung
     lässt deshalb ein Viertel der Höhe frei: halbe Höhe Zapfen, ein Viertel
     Nase, ein Viertel Weg.
+
+    **Und dieses Viertel ist zugleich der Weg, auf dem er sich löst.** Wer
+    etwas vom Halter nimmt, hebt das Teil an — genau die Geste, die den Haken
+    aushängt. Dagegen sitzt oben auf dem Zapfen eine federnde Zunge, die beim
+    Einführen einfedert und hinter der Platte ausrastet: Ihre Rastschulter
+    macht alles hinter der Platte höher als der Schlitz, und zwar in jeder
+    Höhe, in der das Teil hängen kann. Wie sie bemessen ist, steht bei
+    :func:`_latch_tongue`; ``latch`` schaltet sie ab, und dann ist die
+    Geometrie dieselbe wie vor dem 25.08.2026.
+
+    **Gedruckt wird liegend, und das ist keine Empfehlung, sondern die
+    Bedingung für die Zunge.** Ein Federarm hält, wenn er über seine Schichten
+    federt, und reißt, wenn er an ihnen zieht: Die Zunge biegt in Y, also darf
+    die Aufbaurichtung nicht in Y liegen. Das Teil liegt dafür auf der Seite —
+    die Zapfenbreite (X) ist die Aufbaurichtung, Zunge, Zapfen und Nase liegen
+    in der Druckebene. Frei schwebend beginnt dabei nichts: Die Zunge hängt mit
+    ihrer Wurzel am Zapfen, und jede ihrer Lagen hat eine darunter.
 
     **Der Abstand ist ein Vielfaches des Rasters, nicht das Raster.** Ein
     breites Teil an zwei Haken im Vierzigerabstand kippt; dieselben zwei Haken
@@ -625,6 +864,28 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     across = 0.0 if params.upright else span
     along = span if params.upright else 0.0
 
+    # Wie weit der Zapfen aus der Fläche herausragt: durch die Lochwand
+    # hindurch, plus was die Nase dahinter braucht. Eine Rückplatte zählt nicht
+    # mit — sie liegt darunter, im Teil.
+    through = board.thickness + params.play
+    sunk = -params.plate
+
+    # Die federnde Zunge, wenn sie bestellt ist. Sie wächst nach oben über den
+    # Zapfen hinaus; was sie dort braucht, muss die Rückplatte mit abdecken.
+    tongue = (
+        _latch_tongue(
+            width=width,
+            travel=travel,
+            through=through,
+            lip=lip,
+            sunk=sunk,
+            system=params.system,
+        )
+        if params.latch
+        else None
+    )
+    stack = tongue.stack if tongue is not None else 0.0
+
     # Die Platte trägt die Haken und liegt am Teil an. Ihr Rand ist ein eigenes
     # Maß und keine abgeleitete Zahl: Er beantwortet, wie viel Material um
     # einen Zapfen stehen muss, damit die Platte ihn hält — das hat mit der
@@ -644,20 +905,18 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
     #
     # Wer eine bestellt, bekommt sie **im** Teil: Ihre Oberseite liegt auf z = 0,
     # bündig mit der angeklickten Fläche.
-    sunk = -params.plate
+    #
+    # Mit Zunge steht der Einhänger nicht mehr mittig zu ihr: Sie sitzt über dem
+    # Zapfen, also wächst die Platte nach oben mit und rückt um ihre halbe Höhe
+    # nach. Ohne Zunge ist ``stack`` null, und es bleibt die Platte von vorher.
     parts: list[MeshData] = []
     if params.plate > 0.0:
         plate = shapes.box(
             across + width + 2.0 * PLATE_MARGIN,
-            along + shank + nose + 2.0 * PLATE_MARGIN,
+            along + shank + nose + stack + 2.0 * PLATE_MARGIN,
             params.plate,
         )
-        parts.append(shapes.moved(plate, (0.0, 0.0, sunk)))
-
-    # Wie weit der Zapfen aus der Fläche herausragt: durch die Lochwand
-    # hindurch, plus was die Nase dahinter braucht. Eine Rückplatte zählt nicht
-    # mit — sie liegt darunter, im Teil.
-    through = board.thickness + params.play
+        parts.append(shapes.moved(plate, (0.0, -stack / 2.0, sunk)))
 
     # **Die Platte ist kein Merkmal mehr.** Solange sie auf dem Träger auflag,
     # war ihre Rückseite eine echte Fläche und ein sinnvoller Anhaltspunkt.
@@ -683,13 +942,73 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # auf einer anderen liegt (§39).
         catch = shapes.turned(shapes.slot(width, shank + nose, lip), 90.0)
         parts.append(shapes.moved(catch, (x, y, through - shapes.OVERLAP)))
-        # Der Zapfen als benanntes Merkmal: Wer die Haken nachmisst, misst sie
-        # hier und nicht an einer Formel über den Hüllquader.
+        # **Das Merkmal liegt auf der Rückseite der Nase**, und das ist die
+        # einzige Fläche des Hakens, die es dort wirklich gibt. Vorher stand es
+        # auf der Höhe der Plattenrückseite mitten im Zapfen — gemessen zu 99 %
+        # im Material, mit der Fläche eines Rechtecks, das der Haken gar nicht
+        # hat. Derselbe Fehler wie beim Plattenmerkmal dreißig Zeilen höher:
+        # ein Punkt im Material ist für die Zuordnung kein Anhaltspunkt.
         features.append(
-            face(f"hook_{index + 1}", width * shank, (x, y - nose / 2.0, through), (0.0, 0.0, 1.0))
+            face(
+                f"hook_{index + 1}",
+                _slot_area(width, shank + nose),
+                (x, y, through - shapes.OVERLAP + lip),
+                (0.0, 0.0, 1.0),
+            )
+        )
+
+        if tongue is None:
+            continue
+
+        # Die Zunge sitzt über der Oberkante des Zapfens, durch den Federweg
+        # von ihr getrennt — der Spalt ist der Weg, den sie ausweichen kann.
+        crown = y - nose / 2.0 - shank / 2.0
+        base = crown - tongue.gap
+        crest = base - tongue.thickness
+
+        # Der Arm, von der angeklickten Fläche bis zur Rastschulter. Mit
+        # Rückplatte steckt sein vorderes Stück in ihr; frei wird er an ihrer
+        # Oberseite, und genau von dort rechnet ``_latch_tongue`` seine Länge.
+        arm = shapes.box(tongue.width, tongue.thickness, tongue.lock - sunk)
+        parts.append(shapes.moved(arm, (x, crest + tongue.thickness / 2.0, sunk)))
+
+        # Die Wurzel schließt den Spalt am vorderen Ende und ist das, was die
+        # Zunge überhaupt zu einem Teil des Hakens macht. Sie greift bis zur
+        # Mitte der Zapfenkuppe hinein: Am Scheitel selbst ist das Langloch
+        # unendlich schmal, dort wäre die Verbindung eine Kante und kein Körper.
+        reachdown = tongue.gap + tongue.thickness + width / 2.0
+        root = shapes.box(tongue.width, reachdown, tongue.thickness)
+        parts.append(shapes.moved(root, (x, crest + reachdown / 2.0, sunk)))
+
+        # Die Rastschulter mit ihrer Anlaufschräge. Der Keil steht auf der
+        # Schulter und läuft nach hinten aus — beim Einführen drückt er die
+        # Zunge selbst nieder, herausziehen lässt er sich nicht: Seine
+        # Vorderfläche steht quer zum Zug.
+        # Um Z gedreht, nicht um X: ``shapes.wedge`` baut seine Tiefe nach +Y
+        # und lässt sie nach oben auslaufen; hier soll sie nach **-Y** stehen
+        # und nach hinten auslaufen. Eine Drehung um X hätte die Höhe mit
+        # umgelegt und die Schräge an das falsche Ende gebracht.
+        barb = shapes.turned(
+            shapes.wedge(tongue.width, tongue.step + shapes.OVERLAP, tongue.run), 180.0
+        )
+        parts.append(shapes.moved(barb, (x, crest + shapes.OVERLAP, tongue.lock)))
+        features.append(
+            face(
+                f"latch_{index + 1}",
+                tongue.width * tongue.step,
+                (x, crest - tongue.step / 2.0, tongue.lock),
+                (0.0, 0.0, -1.0),
+            )
         )
 
     return result(union(*parts), *features)
+
+
+def _slot_area(width: float, length: float) -> float:
+    """Die Fläche eines Langlochs: Rechteck plus die beiden Halbkreise."""
+    if length <= width:
+        return math.pi * (width / 2.0) ** 2
+    return width * (length - width) + math.pi * (width / 2.0) ** 2
 
 
 #: Die Einführschräge an der Mündung einer Fußtasche. Ein fester Wert, weil
