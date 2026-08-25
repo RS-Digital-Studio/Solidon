@@ -7265,7 +7265,7 @@ Drei Fälle, an einem Tag, aus drei verschiedenen Ecken:
       dem letzten Commit. **Git sperrte wegen einer Änderung, die es nicht
       mehr gab.**
 
-      **Der Weg dorthin steht bereits als Werkzeug** — `tools/nach_main.py` von
+      **Der Weg dorthin steht bereits als Werkzeug** — `tools/to_main.py` von
       3d-druck-b8 (auf `b8/nach-main`): eigener Branch je Sitzung, `origin/main`
       einweben, Tor unter dem Schloss, und **nur bei grün** nach `main`
       vorspulen. Nie mit `--force`, nie auf `main` committen, nie einen roten

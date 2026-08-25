@@ -31,6 +31,7 @@ GERMAN_WORDS = frozenset(
         "lebende",
         "titel",
         "versteckt",
+        "nach",
         "vorhanden",
         "anlass",
         "anzahl",
