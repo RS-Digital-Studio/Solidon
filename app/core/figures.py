@@ -1220,15 +1220,26 @@ FIGURES: Final[tuple[Figure, ...]] = (
         kind="shot",
     ),
     Figure(
+        key="sketch-result",
+        alt=_(
+            "Dasselbe Fenster nach dem Fertigstellen: Aus der Zeichnung ist ein Körper "
+            "geworden, der im Objektbaum, im Verlauf und in der Ansicht steht. Der "
+            "Kreis der Zeichnung ist ein Loch im Teil."
+        ),
+        caption=_("Was gezeichnet war, ist jetzt ein Schritt im Verlauf."),
+        kind="shot",
+    ),
+    Figure(
         key="sketch-mode",
         alt=_(
-            "Der Skizzenmodus im Fenster: die Zeichenwerkzeuge als Symbolzeile, darunter "
-            "die Ebenenwahl, die Reihe der Bedingungsknöpfe und die Zeichenfläche mit "
-            "einem Rechteck, bemaßt auf 120 und 60 mm, und einem Kreis darin. Rechts "
-            "stehen die dreizehn Bedingungen der Zeichnung einzeln aufgelistet, unten "
-            "die Zahl der freien Freiheitsgrade."
+            "Der Skizzenmodus: gezeichnet wird in der Ansicht, auf der Fläche des "
+            "Teils, die in der Leiste unten steht. Die Leiste trägt die "
+            "Zeichenwerkzeuge, die Ebenenwahl mit dem Hinweis auf die Druckschichten, "
+            "die Reihe der Bedingungsknöpfe und die Zahl der freien Freiheitsgrade. "
+            "Rechts stehen die Bedingungen der Zeichnung als eigener Reiter, einzeln "
+            "aufgelistet."
         ),
-        caption=_("Dieselbe Fläche trägt die Zeichnung, die sonst das Modell zeigt."),
+        caption=_("Die Ansicht bleibt die Ansicht — die Zeichnung liegt darin."),
         kind="shot",
     ),
 )

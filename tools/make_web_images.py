@@ -248,12 +248,9 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
     sobald jemand an einem der beiden etwas ändert.
     """
     from app.core import examples
-    from app.core.sketch import shapes
-    from app.core.sketch.serialize import sketch_to_text
     from app.ui.main_window import MainWindow
     from app.ui.session import Session
     from app.ui.settings import UiSettings
-    from app.ui.sketch_editor import SketchPanel
     from app.ui.start_screen import StartScreen
 
     written = []
@@ -288,20 +285,19 @@ def take_windows(app: QApplication, language: str) -> list[Path]:
     screen = window.screen() or QApplication.primaryScreen()
     screen.grabWindow(window.winId()).save(str(target))
     written.append(target)
+
+    # **Der Skizzenmodus im selben Fenster** — er ist seit P4 keine eigene Seite
+    # mehr. Wie er fürs Bild aufgesetzt wird, steht in ``make_figures``: Zwei
+    # Werkzeuge, ein Bild, und der Ausschnitt hängt an Maßen, die man messen muss.
+    figures.frame_sketch(window, app)
+    target = named("beleg-skizze", language)
+    screen.grabWindow(window.winId()).save(str(target))
+    written.append(target)
+    window.finish_sketch(keep=False)
+    figures.settle(app, 20)
+
     window.close()
     figures.release_viewport(window)
-
-    sketch = figures.prepared(
-        SketchPanel(sketch_to_text(shapes.rectangle(120.0, 60.0))), WEB_SKETCH
-    )
-    sketch.canvas.insert_shape(shapes.circle(40.0))
-    volume = session.profile.printer.build_volume
-    sketch.set_bed((float(volume[0]), float(volume[1])))
-    figures.settle(app, 30)
-    target = named("beleg-skizze", language)
-    sketch.grab().save(str(target))
-    written.append(target)
-    sketch.close()
 
     return written
 

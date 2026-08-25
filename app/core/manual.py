@@ -441,6 +441,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "drehen, entlang eines Bogens führen, oder zwischen zwei "
             "Umrissen aufspannen. *Zurück zum Zeichnen* geht dort auch — es "
             "wirft nichts weg, sondern öffnet dieselbe Zeichnung wieder.\n\n"
+            "![](figure:sketch-result)\n\n"
             "**Die Zeichnung ist danach ein Wert wie jeder andere.** Sie "
             "steht als Parameter der Operation im Verlauf, und ein "
             "Doppelklick auf den Schritt öffnet sie über *Zeichnen …* erneut. "

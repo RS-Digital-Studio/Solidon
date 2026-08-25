@@ -176,6 +176,88 @@ def await_result(app: QApplication, session: object, seconds: float = 30.0) -> b
     return False
 
 
+def frame_sketch(window: Any, app: QApplication) -> None:
+    """Den Skizzenmodus so aufsetzen, dass ein Bild davon etwas zeigt.
+
+    Drei Dinge, und jedes hat einen Anlauf gekostet:
+
+    * **Auf einer Fläche des Teils**, nicht auf der Grundebene. Das Beispiel
+      steht angeordnet auf dem Bett, die Grundebene liegt im Ursprung — jeder
+      Ausschnitt, der beides zeigt, schiebt die Zeichnung an den unteren
+      Bildrand.
+    * **Auf der höchsten** nach oben zeigenden Fläche, über die Geometrie
+      gesucht und nicht über den Namen: Die größte Fläche der Szene ist der
+      Deckel, und der liegt zum Drucken umgedreht — die Kamera sähe seine
+      Unterseite und die eingeprägte Beschriftung spiegelverkehrt. Ein Filter
+      über den Objektnamen träfe außerdem in fünf Sprachen etwas anderes.
+    * **Die Bedienleiste ausgespart**, und ihre Höhe wird gemessen. Sie steht
+      unten im Bild, und ihr Anteil hängt an der Fenstergröße: Was bei 2560
+      Punkten passt, verdeckt bei 1400 die halbe Zeichnung.
+    """
+    from app.core.sketch import shapes
+    from app.core.sketch.serialize import sketch_to_text
+
+    ergebnis = window.session.last_result
+    if ergebnis is None:
+        raise SystemExit("nichts gerechnet — kein Bild vom Skizzenmodus")
+
+    hoch_liegend: list[tuple[float, float, str]] = []
+    for body in ergebnis.scene.objects.values():
+        for feature_id, feature in body.features.items():
+            normal = feature.params.get("normal", (0.0, 0.0, 0.0))
+            if feature.kind != "face" or float(normal[2]) < 0.9:
+                continue
+            hoch_liegend.append(
+                (
+                    float(body.mesh.bounds.maximum[2]),
+                    float(feature.params.get("area", 0.0)),
+                    feature_id,
+                )
+            )
+    if not hoch_liegend:
+        raise SystemExit("keine nach oben zeigende Fläche — kein Bild vom Skizzenmodus")
+    hoch_liegend.sort(reverse=True)
+
+    window.start_sketch(
+        # **Extrudieren und nicht Tasche schneiden.** Eine Tasche verbraucht
+        # einen Körper (``consumes=1``), und im Bildlauf ist keiner ausgewählt:
+        # ``run_operation`` bleibt dann in einer modalen Meldung stehen und der
+        # ganze Lauf hängt. Für den Kunden ist dieselbe Stelle ein eigener
+        # Befund — er hat auf der Fläche eines Körpers gezeichnet, und trotzdem
+        # verlangt die Tasche eine Auswahl.
+        "sketch_extrude",
+        # **Maße auf dem Raster.** Das Raster steht auf fünf Millimetern, und
+        # ein Rechteck von 46 mal 24 legt seine Kanten zwischen die Linien —
+        # im Bild sieht das aus, als läge die Zeichnung schief im Netz. 50 mal
+        # 30 liegt auf ±25 und ±15, der Kreis mit 20 auf ±10.
+        sketch_to_text(shapes.rectangle(50.0, 30.0)),
+        plane=f"feature:{hoch_liegend[0][2]}",
+    )
+    panel = window._sketch_panel
+    if panel is None:
+        raise SystemExit("der Skizzenmodus ging nicht auf — kein Bild davon")
+    panel.canvas.insert_shape(shapes.circle(20.0))
+    settle(app, 20)
+
+    frame = window._sketch_frame()
+    if frame is None:
+        return
+    xs = [x for x, _y in panel.canvas.points()]
+    ys = [y for _x, y in panel.canvas.points()]
+    sicht = max(window.viewport.height(), 1)
+    leiste = min(0.6, panel.height() / sicht)
+    hoch = (max(ys) - min(ys)) / max(1.0 - leiste, 0.2) * 1.35
+    window.viewport.show_span_on_plane(
+        frame,
+        (
+            (max(xs) + min(xs)) / 2.0,
+            (max(ys) + min(ys)) / 2.0 + hoch * leiste / 2.0,
+        ),
+        ((max(xs) - min(xs)) * 1.35, hoch),
+    )
+    settle(app, 40)
+
+
 def shoot(widget: QWidget, key: str, language: str, *, from_screen: bool = False) -> None:
     """Ein Widget aufnehmen und unter dem Schlüssel seiner Abbildung ablegen.
 
@@ -390,8 +472,6 @@ def translate_parameter_titles(session: Any) -> None:
 def take_all(app: QApplication, language: str) -> None:
     """Alle fünf Aufnahmen einer Sprache."""
     from app.core import examples
-    from app.core.sketch import shapes
-    from app.core.sketch.serialize import sketch_to_text
     from app.ui.catalog import PartCatalog, catalog_size
     from app.ui.main_window import MainWindow
     from app.ui.op_dialog import OperationDialog
@@ -399,7 +479,6 @@ def take_all(app: QApplication, language: str) -> None:
     from app.ui.recipe_dialog import RecipeDialog
     from app.ui.session import Session
     from app.ui.settings import UiSettings
-    from app.ui.sketch_editor import SketchPanel
     from app.ui.start_screen import StartScreen
 
     print(f"{language}:")
@@ -432,6 +511,58 @@ def take_all(app: QApplication, language: str) -> None:
     window.activateWindow()
     settle(app, 60)
     shoot(window, "main-window", language, from_screen=True)
+
+    # **Der Skizzenmodus, und zwar dort, wo er stattfindet.** Bis zum
+    # 25.08.2026 stand hier ein ``SketchPanel`` als eigenes Vollbild — die
+    # Ansicht, die es seit P4 nicht mehr gibt. Gezeichnet wird im Viewport:
+    # Die Kamera schwenkt auf die Zeichenebene, das Modell bleibt abgeblendet
+    # stehen, das Panel ist die Leiste unter dem Bild, die Bedingungen sind ein
+    # Reiter rechts. Deshalb dasselbe Fenster wie eben und ``from_screen`` —
+    # was OpenGL zeichnet, holt nur der Bildschirm.
+    frame_sketch(window, app)
+    shoot(window, "sketch-mode", language, from_screen=True)
+
+    # **Und was daraus wird.** Die Skizze allein zeigt die Hälfte; der Kunde
+    # will sehen, dass am Ende ein Körper steht. Gegangen wird der Weg, den er
+    # geht: *Fertig*, dann der Operationsdialog, dann *Übernehmen*.
+    #
+    # Der Dialog ist **nicht modal** (``_open_operation_dialog``, wegen der
+    # Vorschau) — er blockiert hier also nichts, sondern steht danach in
+    # ``window._op_dialog`` und wird von Hand angenommen. Ein Prüfstand, der
+    # das nicht weiß, misst die Szene vor der Antwort und hält den Weg für tot;
+    # genau das ist am 25.08.2026 einmal passiert.
+    window.finish_sketch(keep=True)
+    settle(app, 80)
+    dialog = window._op_dialog
+    if dialog is not None:
+        dialog.accept()
+        settle(app, 40)
+    if not await_result(app, session):
+        raise SystemExit("die Extrusion wurde nicht fertig — kein Bild vom Ergebnis")
+    # **Die Ansicht zurück auf die Übersicht.** Sie stand zuletzt eng auf der
+    # Zeichenebene, weil das Skizzenbild sie dorthin gestellt hat — auf dem
+    # Ergebnis wäre davon nur eine graue Fläche zu sehen, und was entstanden
+    # ist, müsste man im Objektbaum nachlesen.
+    window.viewport.view_from("iso")
+    window.viewport.reset_camera()
+    settle(app, 60)
+    shoot(window, "sketch-result", language, from_screen=True)
+
+    # Zurücknehmen, damit das Beispiel für die folgenden Bilder unverändert ist.
+    session.undo()
+    await_result(app, session)
+    # **Und den Änderungsstand mit zurücknehmen.** Sonst fragt ``closeEvent``
+    # am Ende des Laufs nach ungespeicherten Änderungen — modal, und der ganze
+    # Lauf steht. Gefunden mit py-spy an zwei Läufen, die beide in
+    # ``confirm_unsaved`` warteten, nachdem alle Bilder längst geschrieben
+    # waren.
+    session._dirty = False
+    settle(app, 20)
+
+    # Unmittelbar davor und nicht früher: Die Auswertung nach dem Undo läuft
+    # noch und setzt den Änderungsstand erneut. Ein Reset weiter oben wirkte
+    # deshalb nicht, und der Lauf blieb ein zweites Mal in der Frage stehen.
+    session._dirty = False
     window.close()
     release_viewport(window)
 
@@ -509,28 +640,6 @@ def take_all(app: QApplication, language: str) -> None:
     shoot(recipe, "own-part", language)
     recipe.release()
     recipe.close()
-
-    # Der Skizzenmodus mit einer Zeichnung darin. Ein leerer Editor zeigt
-    # vierzehn Knöpfe und eine leere Fläche — zu sehen sein soll, dass eine
-    # gelöste Skizze Bedingungen trägt, die rechts einzeln nachlesbar sind.
-    # Ein Kreis gehört dazu, weil eine Skizze aus Geraden allein nicht zeigt,
-    # dass ein Kreis hier wirklich rund bleibt.
-    #
-    # Die Zeichnung ist groß gewählt, und das hat einen Grund: die Zeichenfläche
-    # bringt ihren Maßstab mit, und ein 40er Rechteck lag als Briefmarke in der
-    # Bildmitte. Ein Lochkreis stand hier zuerst — vier Löcher von 4 mm, deren
-    # acht Maßzahlen übereinanderlagen, und daneben eine Bedingungsliste aus
-    # neun mal „Abstand 2,00".
-    #
-    # Bildschirmfüllend wie das Hauptfenster: Der Skizzenmodus *ist* das
-    # Hauptfenster, er tauscht nur den Viewport gegen die Zeichenfläche.
-    sketch = prepared(SketchPanel(sketch_to_text(shapes.rectangle(120.0, 60.0))))
-    sketch.canvas.insert_shape(shapes.circle(40.0))
-    volume = session.profile.printer.build_volume
-    sketch.set_bed((float(volume[0]), float(volume[1])))
-    settle(app, 30)
-    shoot(sketch, "sketch-mode", language)
-    sketch.close()
 
     window.close()
 
