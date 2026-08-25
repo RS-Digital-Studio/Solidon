@@ -12,12 +12,15 @@
 #
 # Alle Maße in Millimetern.
 
+# Version 4 seit dem 25.08.2026: Drei Mutternhöhen auf ISO 4032 berichtigt und
+# eine Buchsenlänge (M2.5). Das sind die ersten Änderungen an bestehenden
+# Werten — bis dahin kam nur hinzu.
 # Version 3 seit dem 25.08.2026: Die Lochwandmaße sind als eigene Tabellenart
 # `boards` dazugekommen. Version 2 seit dem 20.08.2026: Die Aluprofil-Nutmaße
 # tragen zwei Felder mehr (`lip`, `depth`). In beiden Schritten hat sich kein
 # bestehender Wert geändert, alte Projekte rechnen also unverändert — die Zahl
 # sagt, dass die Tabelle mehr weiß, nicht dass sie etwas anderes weiß.
-version = "3"
+version = "4"
 
 # --- Metrische Schrauben --------------------------------------------------------
 # nominal: Nenndurchmesser · clearance: Durchgangsloch (mittel)
@@ -103,7 +106,14 @@ hex = 6.0
 pitch = 1.25
 
 # --- Sechskantmuttern -----------------------------------------------------------
-# width: Schlüsselweite · height: Höhe (Regelmutter)
+# width: Schlüsselweite · height: Höhe (Regelmutter, m max nach ISO 4032)
+#
+# **Drei Höhen waren die der zurückgezogenen DIN 934**, und zwar genau die drei,
+# in denen sich beide Normen unterscheiden: M5 stand auf 4,00 statt 4,70, M6 auf
+# 5,00 statt 5,20, M8 auf 6,50 statt 6,80. Für M2 bis M4 sind die Werte in
+# beiden Normen gleich, deshalb fiel es nirgends auf. Eine M5-Mutternfalle war
+# damit 0,6 mm zu flach — bei der verbreitetsten Größe, und der Baustein
+# verspricht im caveat das Gegenteil.
 
 [[nuts]]
 size = "M2"
@@ -128,17 +138,17 @@ height = 3.2
 [[nuts]]
 size = "M5"
 width = 8.0
-height = 4.0
+height = 4.7
 
 [[nuts]]
 size = "M6"
 width = 10.0
-height = 5.0
+height = 5.2
 
 [[nuts]]
 size = "M8"
 width = 13.0
-height = 6.5
+height = 6.8
 
 # --- Unterlegscheiben -----------------------------------------------------------
 
@@ -169,6 +179,20 @@ thickness = 1.6
 # --- Heat-Set-Einpressbuchsen ---------------------------------------------------
 # Maße nach den gängigen Katalogangaben (Ruthex, CNC Kitchen). Das Loch wird
 # etwas enger als der Außendurchmesser gebohrt, damit sich Material verdrängt.
+#
+# **`outer` steht bei allen sechs auf demselben Wert wie `hole`, und das ist
+# nicht der Rändeldurchmesser.** Eingetragen ist zweimal die Bohrung; der echte
+# Außendurchmesser einer Buchse liegt darüber, sonst verdrängte sie nichts. Am
+# 25.08.2026 beim Hersteller gesucht und nicht gefunden: Ruthex veröffentlicht
+# die Maße weder auf den Produktseiten noch auf seiner Dokumenten-Seite, nur als
+# STEP-Dateien. Was aus den Bezeichnungen ablesbar war, steht drin — die Längen
+# (RX-M3x5.7, RX-M4x8.1, …), und eine davon war falsch: M2.5 stand auf 5,0
+# statt 5,7. Die Bohrungen bestätigt der Bohrersatz des Herstellers
+# (3,2 / 4,0 / 5,6 / 6,4 / 8,0 mm).
+#
+# Wer eine Buchse zur Hand hat, misst den Rändel nach. Bis dahin liest kein
+# Baustein `outer` — die Einführfase hatte es getan und wurde davon
+# unabhängig gemacht (`INSERT_LEAD_IN` in `parts/fasteners.py`).
 
 [[inserts]]
 size = "M2"
@@ -180,9 +204,9 @@ note = "Ruthex M2"
 [[inserts]]
 size = "M2.5"
 outer = 3.6
-length = 5.0
+length = 5.7
 hole = 3.6
-note = "Ruthex M2.5"
+note = "Ruthex M2.5 (RX-M2.5x5.7)"
 
 [[inserts]]
 size = "M3"

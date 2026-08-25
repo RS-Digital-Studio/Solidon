@@ -603,6 +603,37 @@ def test_every_change_log_climbs() -> None:
         )
 
 
+def test_the_nut_trap_takes_the_nut_it_is_named_after() -> None:
+    """Eine M5-Falle muss eine M5-Mutter aufnehmen — ganz, nicht fast.
+
+    **Sie tat es nicht, und zwar bei der verbreitetsten Größe.** Die
+    Mutternhöhen der Tabelle waren die der zurückgezogenen DIN 934, und die
+    weicht von ISO 4032 in genau drei Größen ab: M5 stand auf 4,00 statt 4,70,
+    M6 auf 5,00 statt 5,20, M8 auf 6,50 statt 6,80. Für M2 bis M4 sind beide
+    Normen gleich — deshalb fiel es an keiner Stelle auf, an der jemand
+    nachgemessen hätte.
+
+    Geprüft wird gegen die Norm und nicht gegen die Tabelle: Wer die Erwartung
+    aus derselben Quelle nimmt wie den Prüfling, prüft nur, ob sich etwas
+    geändert hat (``.claude/memory/sollwert-aus-dem-pruefling.md``).
+    """
+    #: Höhe m max nach ISO 4032, abgeschrieben aus der Norm und nicht aus
+    #: ``standards.toml`` — sonst prüfte sich die Tabelle selbst.
+    iso_4032 = {"M2": 1.6, "M2.5": 2.0, "M3": 2.4, "M4": 3.2, "M5": 4.7, "M6": 5.2, "M8": 6.8}
+
+    spec = PARTS.get("nut_trap")
+    for size, height in iso_4032.items():
+        if size not in standards.nut_sizes():
+            continue
+        assert standards.nut(size).height >= height - 0.01, (
+            f"{size}: the table says the nut is {standards.nut(size).height} mm tall, "
+            f"ISO 4032 says {height} — a real nut does not fit the pocket"
+        )
+        built = spec.fn(spec.params(size=size)).mesh
+        deep = float(built.bounds.size[2])
+        assert deep >= height, f"{size}: the trap is {deep:.2f} mm deep for a {height} mm nut"
+
+
 # --- die Normteiltabelle -----------------------------------------------------------
 
 

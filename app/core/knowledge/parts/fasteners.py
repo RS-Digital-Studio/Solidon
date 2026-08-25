@@ -50,6 +50,41 @@ PLAY_FROM_PROFILE = PartChange(
 # --- screw hole -------------------------------------------------------------------
 
 
+NUT_HEIGHT_FROM_ISO = PartChange(
+    version="5",
+    date="2026-08-25",
+    reason=(
+        "Die Mutternhöhen der Tabelle waren die der zurückgezogenen DIN 934 statt "
+        "ISO 4032 — und zwar genau in den drei Größen, in denen sich beide "
+        "unterscheiden."
+    ),
+    effect=(
+        "Die Tasche wird bei M5, M6 und M8 tiefer: 4,70 statt 4,00 mm, 5,20 statt "
+        "5,00 und 6,80 statt 6,50. Wer eine M5-Mutternfalle gedruckt hat, hatte "
+        "eine Tasche 0,6 mm zu flach für die Mutter, die hineingehört — bei der "
+        "verbreitetsten Größe. M2 bis M4 ändern sich nicht, dort sind beide Normen "
+        "gleich."
+    ),
+)
+
+INSERT_LEAD_IS_ITS_OWN_SIZE = PartChange(
+    version="5",
+    date="2026-08-25",
+    reason=(
+        "Die Einführfase kam aus ``outer - hole``, und in der Tabelle steht bei "
+        "allen sechs Größen zweimal die Bohrung — sie war damit konstant 0,3 mm "
+        "statt der halben Wandverdrängung."
+    ),
+    effect=(
+        "Die Fase misst jetzt 0,5 mm bei jeder Größe, die Mündung also Bohrung "
+        "plus 1,0 mm. Vorher waren es 0,6 mm Mündungszuschlag, unabhängig von der "
+        "Größe — der Unterschied ist ein knapper halber Millimeter am Loch. Dazu "
+        "wächst die M2.5-Buchse von 5,0 auf 5,7 mm Länge: Der Hersteller nennt "
+        "sie RX-M2.5x5.7."
+    ),
+)
+
+
 @op_params
 class ScrewHoleParams(BaseParams):
     size: str = param(
@@ -236,7 +271,7 @@ def size_for_thread(diameter: float) -> dict[str, Any]:
         "Lötkolben trägt eine Mutternfalle ähnlich viel, und ein Schraubenloch reicht, "
         "wo die Schraube durch das Teil gehen darf."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, INSERT_LEAD_IS_ITS_OWN_SIZE],
 )
 def heatset_insert(raw: BaseParams) -> PartResult:
     params = cast(HeatsetParams, raw)
@@ -251,7 +286,15 @@ def heatset_insert(raw: BaseParams) -> PartResult:
     ]
 
     if params.lead_in:
-        chamfer = (entry.outer - entry.hole) / 2.0 + 0.3
+        # **Die Fase fragt nicht, wie viel Material die Buchse verdrängt.** Sie
+        # fragt, wie man sie ansetzt, ohne dass sie kippt — und das ist ein
+        # eigenes Maß. Vorher stand hier ``(outer - hole) / 2 + 0,3``, also die
+        # halbe Wandverdrängung; da in der Tabelle bei allen sechs Größen
+        # ``outer == hole`` eingetragen ist (zweimal die Bohrung, nicht der
+        # Rändeldurchmesser), war die Fase in Wahrheit konstant 0,3 mm. Der
+        # Fehler in der Tabelle und die falsche Ableitung deckten einander zu:
+        # Wäre nur eines von beidem falsch gewesen, hätte man es gesehen.
+        chamfer = INSERT_LEAD_IN
         lead = shapes.cone(entry.hole, entry.hole + 2.0 * chamfer, chamfer)
         parts.append(shapes.moved(lead, (0.0, 0.0, -chamfer)))
         features.append(
@@ -324,7 +367,7 @@ class NutTrapParams(BaseParams):
         "Gewinde leichte Lasten; für tragende Verschraubungen ist eine Einpressbuchse "
         "richtig."
     ),
-    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE, FACE_GIVES_DIRECTION, NUT_HEIGHT_FROM_ISO],
 )
 def nut_trap(raw: BaseParams) -> PartResult:
     params = cast(NutTrapParams, raw)
@@ -362,6 +405,14 @@ def nut_trap(raw: BaseParams) -> PartResult:
 
 # --- thread --------------------------------------------------------------------------
 
+
+#: Die Einführschräge am Mund einer Einpressbuchsen-Bohrung.
+#:
+#: Ein fester Wert, weil die Frage eine feste ist: Die Buchse soll sich fangen
+#: lassen, bevor der Lötkolben sie senkrecht hält. Eine halbe Millimeter-Fase
+#: reicht dafür bei M2 wie bei M6 — sie skaliert nicht mit dem Durchmesser,
+#: denn die Hand, die ansetzt, tut es auch nicht.
+INSERT_LEAD_IN = 0.5
 
 THREAD_CUTS_INWARD = PartChange(
     version="5",
