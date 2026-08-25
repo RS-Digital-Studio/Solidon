@@ -852,7 +852,19 @@ class Session(QObject):
         # stand hier vollständig und dort gar nicht: ``solidon3d import`` legte
         # immer ``load`` auf den Stapel und antwortete auf eine STEP-Datei
         # „Dieses Dateiformat kann nicht gelesen werden."
-        plan = import_plan(source_id, path.name, payload, unit)
+        #
+        # Weist der Plan die Datei ab (zu groß, Zip-Bombe), wird die eben
+        # eingebettete Quelle wieder ausgetragen (Gesamtreview F-10): sonst
+        # bleibt sie als Waise im Dokument und wandert mit dem nächsten
+        # Speichern in die Projektdatei. Eingebettet wird trotzdem zuerst —
+        # die Kennungsregel ``src_<n>`` lebt in ``_embed_source``, und eine
+        # Aufrufstelle, die sie vorwegnimmt, hätte zwei Wahrheiten.
+        try:
+            plan = import_plan(source_id, path.name, payload, unit)
+        except AppError:
+            self.project.document.sources.pop(source_id, None)
+            self.project.sources.pop(source_id, None)
+            raise
         self.apply(plan.title, [plan.draft])
 
     def import_image(self, path: Path) -> str:

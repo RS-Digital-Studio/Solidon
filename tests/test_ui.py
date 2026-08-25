@@ -1676,6 +1676,25 @@ def test_undo_and_redo_follow_the_stack(window: MainWindow) -> None:
     assert window.redo_action.isEnabled()
 
 
+def test_the_undo_sweep_warning_offers_the_history(window: MainWindow) -> None:
+    """Die Rücknahme-Warnung des Agenten ist anklickbar (Gesamtreview H-1).
+
+    ``agent.undo_sweeps`` existierte als Befund im Kern, aber die Oberfläche
+    kannte ihn nicht: kein Eintrag in FINDING_ACTIONS, keine Handlung — der
+    Kunde las „nimmt auch alle jüngeren mit" und konnte nirgends nachsehen,
+    welche das sind.
+    """
+    from app.core.types import Finding
+    from app.ui.panels import actions_for
+
+    finding = Finding(code="agent.undo_sweeps", severity="warning", message="x")
+    offered = actions_for(finding)
+    assert offered, "die Warnung trägt eine Handlung"
+    known = window.error_handlers()
+    for action in offered:
+        assert action.id in known, f"{action.id} hat keinen Handler"
+
+
 def test_every_offered_error_action_does_something(window: MainWindow) -> None:
     """Regel 17 hat zwei Hälften, und die zweite fehlte.
 
@@ -3429,6 +3448,28 @@ def test_auto_split_runs_in_a_worker(session: Session) -> None:
     applied = results[0]
     assert applied.transaction is None, "ein 20-mm-Würfel passt aufs Bett"
     assert states and states[0] is True and states[-1] is False
+
+
+def test_a_failed_import_plan_leaves_no_orphan_source(
+    session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Scheitert der Einleseplan, bleibt keine Waisen-Quelle zurück (F-10).
+
+    Eingebettet wurde vor dem Planen — wies der Plan die Datei ab (zu groß,
+    Zip-Bombe), stand die kaputte Quelle trotzdem im Dokument und wanderte
+    mit dem nächsten Speichern in die Projektdatei. Die Kommandozeile war nie
+    betroffen: sie speichert nur nach vollständiger Auswertung.
+    """
+    from app.ui import session as session_module
+
+    def refusing(*_args: object, **_kwargs: object) -> object:
+        raise errors.ValidationError("file", "diese Datei nimmt der Plan nicht")
+
+    monkeypatch.setattr(session_module, "import_plan", refusing)
+    with pytest.raises(errors.AppError):
+        session.import_payload("kaputt.3mf", b"x")
+    assert not session.project.document.sources, "die Quelle wurde wieder ausgetragen"
+    assert not session.project.sources, "auch ihr Inhalt"
 
 
 def test_a_second_split_start_is_refused_while_one_runs(session: Session) -> None:

@@ -44,6 +44,7 @@ from app.core.errors import (
     PLACE_ON_BED,
     REPAIR_AND_RETRY,
     SCALE_TO_FIT,
+    SHOW_HISTORY,
     SHOW_LOCATIONS,
     SPLIT_MODEL,
     Action,
@@ -202,6 +203,11 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # Er ist dabei der einzige der drei, der seine Objektkennung mitbringt:
     # ``_object_of`` muss hier nicht auf die Auswahl raten.
     "agent.not_watertight": (REPAIR_AND_RETRY, SHOW_LOCATIONS),
+    # Die Rücknahme-Warnung des Agenten (Gesamtreview H-1): „nimmt auch alle
+    # jüngeren mit" braucht den Blick in den Verlauf — dort stehen die
+    # Transaktionen, um die es geht. Der Befund existierte im Kern, die
+    # Oberfläche kannte ihn nicht.
+    "agent.undo_sweeps": (SHOW_HISTORY,),
     # Vierter Melder derselben Sache: eine Netzoperation, die den Körper
     # aufgemacht hat (``mesh_ops._deviation_findings``). Gemessen beim
     # Vereinfachen einer Ente — geschlossen hinein, offen heraus, und im

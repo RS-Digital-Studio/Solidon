@@ -21,7 +21,7 @@ from functools import partial
 from pathlib import Path
 from typing import Any, Final, cast
 
-from PySide6.QtCore import QPoint, Qt, QTimer, Signal
+from PySide6.QtCore import QObject, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QAction,
     QActionGroup,
@@ -2330,7 +2330,7 @@ class MainWindow(QMainWindow):
         # ``weak_slot``-Aufrufstellen der Schleifen), hält niemanden und
         # verwirft das ``checked`` selbst.
         if inspect.ismethod(slot):
-            slot = weak_slot(slot.__self__, slot.__func__)
+            slot = weak_slot(cast(QObject, slot.__self__), slot.__func__)
         action.triggered.connect(slot)
         menu.addAction(action)
         return action
@@ -6940,6 +6940,9 @@ class MainWindow(QMainWindow):
             "report_error": lambda error: self.report_error(error),
             "show_details": lambda error: show_details(error, self),
             "show_locations": self._show_error_location,
+            # Die Rücknahme-Warnung des Agenten zeigt in den Verlauf — dort
+            # stehen die Transaktionen, die eine Annahme mitnähme (H-1).
+            "show_history": lambda _error: self._flash_area("history"),
             "repair_and_retry": self._repair_after_error,
             "split_model": self._split_after_error,
             "scale_to_fit": self._scale_after_error,
