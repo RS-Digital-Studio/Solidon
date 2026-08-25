@@ -2787,6 +2787,99 @@ def test_switching_to_parallel_keeps_the_section_instead_of_jumping_to_two_milli
     assert camera.parallel_scale == pytest.approx(7.0)
 
 
+def test_the_sketch_menu_is_reachable_from_a_plane_point(qt_app: QApplication) -> None:
+    """Das Kontextmenü der Zeichnung braucht einen Weg über Millimeter.
+
+    Im Viewport-Modus kommt der Rechtsklick als Stelle der Zeichenebene an,
+    nicht als Mausereignis auf dieser Fläche — ohne ``context_menu_on_plane``
+    war das gebaute Menü (Koordinaten, Löschen, Bedingungen) dort unerreichbar
+    (Gesamtreview 25.08.2026, J-6). Der Treffertest ist derselbe wie beim
+    Klick: auf dem Punkt gibt es „Koordinaten …", daneben nicht.
+    """
+    canvas = SketchCanvas()
+    try:
+        canvas.resize(600, 600)
+        canvas.set_tool("point")
+        canvas.place(canvas._to_screen(20.0, 0.0))
+
+        on_the_point = canvas.context_menu_on_plane((20.0, 0.0))
+        texts = [action.text() for action in on_the_point.actions() if action.text()]
+        assert any("Koordinaten" in text for text in texts), texts
+
+        beside = canvas.context_menu_on_plane((80.0, 40.0))
+        beside_texts = [action.text() for action in beside.actions() if action.text()]
+        assert not any("Koordinaten" in text for text in beside_texts), beside_texts
+    finally:
+        canvas.deleteLater()
+
+
+def test_a_right_click_while_sketching_asks_the_sketch_not_the_scene(
+    qt_app: QApplication,
+) -> None:
+    """Rechts fragt beim Zeichnen die Zeichnung, nicht die Objektauswahl.
+
+    ``_on_right_click`` kannte den Skizzenmodus nicht: Es lief in
+    ``_select_at`` und öffnete das Objektbaum-Menü — die Auswahl wechselte
+    mitten im Zeichnen, und das Skizzenmenü gab es nicht (Gesamtreview
+    25.08.2026, J-6). Jetzt gilt dieselbe Wache wie beim Linksklick.
+    """
+    from app.ui.viewport import Viewport
+
+    viewport = Viewport()
+    try:
+        happened: list[object] = []
+        viewport.sketchMenuAt.connect(lambda point, x, y: happened.append(("menu", point, x, y)))
+        viewport.objectPicked.connect(lambda oid: happened.append(("picked", oid)))
+        viewport._sketch_frame = object()
+
+        viewport._sketch_hit = lambda x, y: (3.0, 4.0)  # type: ignore[method-assign]
+        viewport._on_right_click(10, 20)
+        assert happened == [("menu", (3.0, 4.0), 10, 20)], happened
+
+        happened.clear()
+        viewport._sketch_hit = lambda x, y: None  # type: ignore[method-assign]
+        viewport._on_right_click(10, 20)
+        assert happened == [], "neben der Ebene passiert nichts — auch keine Abwahl"
+    finally:
+        viewport.deleteLater()
+
+
+def test_viewport_mode_rehangs_every_sketch_shortcut(qt_app: QApplication) -> None:
+    """Elf von dreizehn Zeichenkürzeln feuerten im Viewport-Modus nie.
+
+    ``use_viewport`` hob nur die Ebenen-Ziffern auf ``WindowShortcut`` — mit
+    der richtigen Begründung, die für alle gilt: Der Fokus liegt im Viewport,
+    und ein Kürzel, das nur im unsichtbaren Zeichenbereich feuert, feuert
+    nie. Linie, Kreis, Bogen, Trimmen, Rechteck, Abstand, Versatz, Strg+Z und
+    Pos1 blieben an ``WidgetWithChildrenShortcut`` — für Strg+Z und Pos1 gab
+    es damit gar keinen Tastaturweg, obwohl der Einpassen-Knopf die Taste im
+    Tooltip nennt (Gesamtreview 25.08.2026, J-4).
+
+    Das Tippen im Chat bleibt dabei sicher: Textfelder nehmen ihre Zeichen
+    über ``ShortcutOverride``, bevor ein Fensterkürzel greift.
+    """
+    from PySide6.QtGui import QShortcut
+
+    panel = SketchPanel()
+    try:
+        shortcuts = panel.findChildren(QShortcut)
+        assert len(shortcuts) >= 13, "ohne gefundene Kürzel prüft die Zählung nichts"
+        assert all(
+            entry.context() == Qt.ShortcutContext.WidgetWithChildrenShortcut for entry in shortcuts
+        ), "auf der Zeichenfläche bleiben die Kürzel kontextgebunden"
+
+        panel.use_viewport()
+
+        dead = [
+            entry.key().toString()
+            for entry in panel.findChildren(QShortcut)
+            if entry.context() != Qt.ShortcutContext.WindowShortcut
+        ]
+        assert not dead, f"feuern im Viewport-Modus nie: {dead}"
+    finally:
+        panel.deleteLater()
+
+
 def test_no_two_active_shortcuts_collide_while_sketching(qt_app: QApplication) -> None:
     """Der Skizzenmodus legt zehn Tasten dazu, und fünf davon sind schon vergeben.
 

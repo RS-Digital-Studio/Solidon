@@ -1932,6 +1932,17 @@ class SketchCanvas(QWidget):
 
         return menu
 
+    def context_menu_on_plane(self, point: tuple[float, float]) -> QMenu:
+        """Das Kontextmenü für eine Stelle der Zeichenebene (§30.1, P4).
+
+        Der Weg für den Viewport-Modus: Dort kommt der Ort in Millimetern aus
+        dem Sichtstrahl, nicht aus einem Mausereignis auf dieser Fläche. Der
+        Treffertest ist derselbe wie beim Klick — ohne diesen Weg war das
+        gebaute Menü (Koordinaten, Löschen, Bedingungen) im gefahrenen Modus
+        unerreichbar: Der Rechtsklick lief in die Objektauswahl.
+        """
+        return self.context_menu_at(self._hit_point(self._to_screen(point[0], point[1])))
+
     def edit_point(self, flat: int) -> None:
         """Einen Punkt auf genaue Koordinaten setzen.
 
@@ -3157,17 +3168,22 @@ class SketchPanel(QWidget):
         """
         self.canvas.setVisible(False)
         self.canvas.resize(VIEWPORT_CANVAS, VIEWPORT_CANVAS)
-        # **Die Ziffern müssen im ganzen Fenster gelten, nicht nur hier
+        # **Jedes Kürzel muss im ganzen Fenster gelten, nicht nur hier
         # drinnen.** Sie lagen an ``WidgetWithChildrenShortcut``, und das war
         # richtig, solange dieses Panel die Ansicht *war*: Der Fokus lag dann
-        # in ihm. Jetzt liegt er im Viewport — wer dort zeichnet und die 2
-        # drückt, meint die Vorderansicht, und ein Kürzel, das nur im
-        # unsichtbaren Zeichenbereich feuert, feuert nie.
+        # in ihm. Jetzt liegt er im Viewport — wer dort zeichnet und L drückt,
+        # meint die Linie, und ein Kürzel, das nur im unsichtbaren
+        # Zeichenbereich feuert, feuert nie. Zuerst wanderten nur die
+        # Ebenen-Ziffern mit; für Strg+Z und Pos1 gab es damit gar keinen
+        # Tastaturweg, obwohl der Einpassen-Knopf die Taste nennt.
         #
-        # Der Konflikt mit *Ansicht → Darstellung* bleibt damit ausgeschlossen:
-        # Deren Einträge sind im Skizzenmodus ausgegraut, und ein gesperrtes
-        # Kürzel nimmt keiner Taste den Weg.
-        for shortcut in self._plane_shortcuts:
+        # Konflikte mit dem Fenster bleiben ausgeschlossen: Dessen Einträge
+        # auf denselben Tasten (Darstellung 1 bis 6, Rückgängig, Alles einpassen)
+        # sind im Skizzenmodus ausgegraut, und ein gesperrtes Kürzel nimmt
+        # keiner Taste den Weg. Das Tippen im Chat bleibt frei — Textfelder
+        # nehmen ihre Zeichen über ``ShortcutOverride``, bevor ein
+        # Fensterkürzel greift.
+        for shortcut in self._shortcuts:
             shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
 
     def take_constraint_list(self) -> QWidget:
@@ -3209,6 +3225,11 @@ class SketchPanel(QWidget):
         es Fusion, und anders lassen sich die beiden Sätze nicht
         widerspruchsfrei halten.
         """
+        self._shortcuts: list[QShortcut] = []
+        """Alle Kürzel dieses Panels — ``use_viewport`` hängt sie gemeinsam
+        ans Fenster um. Eine Teilmenge dort wäre der Fehler von vorher: Nur
+        die Ebenen-Ziffern wanderten mit, und elf von dreizehn Kürzeln
+        feuerten im Viewport-Modus nie."""
         for name, key in TOOL_KEYS.items():
             if key == "Esc":
                 # **Escape bindet hier nicht.** Das Fenster hat dieselbe Taste
@@ -3227,18 +3248,22 @@ class SketchPanel(QWidget):
             shortcut = QShortcut(QKeySequence(key), self)
             shortcut.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             shortcut.activated.connect(weak_slot(self, SketchPanel.choose_tool, name))
+            self._shortcuts.append(shortcut)
 
         rectangle = QShortcut(QKeySequence(ACTION_KEYS["rectangle"]), self)
         rectangle.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         rectangle.activated.connect(self._insert_rectangle)
+        self._shortcuts.append(rectangle)
 
         measure = QShortcut(QKeySequence(ACTION_KEYS["distance"]), self)
         measure.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         measure.activated.connect(self._request_distance)
+        self._shortcuts.append(measure)
 
         offsetting = QShortcut(QKeySequence(ACTION_KEYS["offset"]), self)
         offsetting.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         offsetting.activated.connect(self._offset_selected)
+        self._shortcuts.append(offsetting)
 
         # Rückgängig gehört an das Panel und nicht an einen Rahmen darum: den
         # Rahmen gibt es nur auf einem der beiden Wege. Im Skizzenmodus des
@@ -3248,21 +3273,23 @@ class SketchPanel(QWidget):
         undo = QShortcut(QKeySequence(QKeySequence.StandardKey.Undo), self)
         undo.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         undo.activated.connect(self.canvas.undo)
+        self._shortcuts.append(undo)
 
         fit = QShortcut(QKeySequence(VIEW_KEYS["fit"]), self)
         fit.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         fit.activated.connect(self.canvas.fit_view)
+        self._shortcuts.append(fit)
 
         helper = QShortcut(QKeySequence(ACTION_KEYS["construction"]), self)
         helper.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         helper.activated.connect(self.canvas.toggle_construction)
+        self._shortcuts.append(helper)
 
-        self._plane_shortcuts: list[QShortcut] = []
         for plane, key in PLANE_KEYS.items():
             view = QShortcut(QKeySequence(key), self)
             view.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
             view.activated.connect(weak_slot(self, SketchPanel._plane_by_key, plane))
-            self._plane_shortcuts.append(view)
+            self._shortcuts.append(view)
 
     def _plane_by_key(self, plane: str) -> None:
         """Ein Tastendruck wählt die Ebene; ob es ging, interessiert hier nicht.

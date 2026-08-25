@@ -993,6 +993,7 @@ class MainWindow(QMainWindow):
         self.transform_bar.snappingChanged.connect(self.viewport.set_snapping)
         self.viewport.transformDragged.connect(self._on_transform_dragged)
         self.viewport.sketchPointPicked.connect(self._on_sketch_point)
+        self.viewport.sketchMenuAt.connect(self._on_sketch_menu)
         self.viewport.sketchPointHovered.connect(self._on_sketch_hover)
         self.viewport.faceDragged.connect(self._on_face_dragged)
         self.viewport.scaleDragged.connect(self._on_scale_dragged)
@@ -5644,6 +5645,25 @@ class MainWindow(QMainWindow):
         """
         menu = self.object_tree.context_menu()
         if menu is None:
+            return
+        local = QPoint(x, self.viewport.height() - y)
+        menu.exec(self.viewport.mapToGlobal(local))
+
+    def _on_sketch_menu(self, point: object, x: int, y: int) -> None:
+        """Das Kontextmenü der Zeichnung, am Zeiger (§30.1, P4).
+
+        Gebaut wird es vom Canvas (``context_menu_on_plane``), gezeigt hier —
+        dieselbe Trennung wie überall: Ein Menü, das sich selbst öffnet, hält
+        eine Suite an. Ohne diesen Weg war das Menü im Viewport-Modus
+        unerreichbar, und der Rechtsklick verstellte beim Zeichnen die
+        Objektauswahl.
+        """
+        panel = self._sketch_panel
+        if panel is None:
+            return
+        across, up = point  # type: ignore[misc]
+        menu = panel.canvas.context_menu_on_plane((float(across), float(up)))
+        if menu.isEmpty():
             return
         local = QPoint(x, self.viewport.height() - y)
         menu.exec(self.viewport.mapToGlobal(local))

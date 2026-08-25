@@ -1641,6 +1641,11 @@ class Viewport(QWidget):
     """A finished measurement — carries a ``Measurement``."""
     transformDragged = Signal(object)
     """A finished gizmo drag — carries ``TransformSteps`` (§18.11)."""
+    sketchMenuAt = Signal(object, int, int)
+    """Ein Rechtsklick im Skizzenmodus — trägt den Ebenenpunkt in Millimetern
+    und die Fensterstelle für das Menü. Ohne diese Naht lief der Rechtsklick
+    beim Zeichnen in die Objektauswahl, und das Skizzen-Kontextmenü
+    (Koordinaten, Löschen, Bedingungen) war im Viewport-Modus unerreichbar."""
     sketchPointPicked = Signal(object)
     """Ein Klick auf die Zeichenebene — trägt den Punkt in Millimetern.
 
@@ -5687,6 +5692,14 @@ class Viewport(QWidget):
         wählt, setzt die Auswahl auf sie — der nächste Linksklick daneben führt
         also von dort weiter und nicht von vorn.
         """
+        # **Der Skizzenmodus kommt vor allem anderen**, wie beim Linksklick:
+        # Ein Rechtsklick beim Zeichnen meint eine Stelle der Zeichenebene und
+        # ihr Menü — nicht die Objektauswahl, die er sonst verstellt hätte.
+        if self._sketch_frame is not None:
+            hit = self._sketch_hit(x, y)
+            if hit is not None:
+                self.sketchMenuAt.emit(hit, x, y)
+            return
         point = self._aim_at(x, y)
         if point is None:
             self.objectPicked.emit("")
