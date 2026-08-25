@@ -102,6 +102,71 @@ def test_an_extruded_hexagon_matches_the_regular_polygon_area() -> None:
 # --- Tasche ---------------------------------------------------------------------
 
 
+def test_a_pocket_follows_the_plane_of_its_sketch() -> None:
+    """Auf einer anderen Ebene gezeichnet schnitt die Tasche trotzdem von oben.
+
+    ``sketch_extrude`` liest die Ebene seit seinem Fix; ``sketch_pocket``
+    blieb auf Welt-Z (Gesamtreview 25.08.2026, D-2). Eine 10×10-Zeichnung auf
+    XZ, durchgehend: Der Kanal läuft entlang Y — Kastenquerschnitt 10 × 5 (nur
+    die obere Hälfte der Zeichnung liegt im Körper), mal 30 Tiefe.
+    """
+    import dataclasses
+
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.sketch.shapes import rectangle as shape_rectangle
+
+    drawn = dataclasses.replace(shape_rectangle(10.0, 10.0), plane="plane:xz")
+    result = run("sketch_pocket", brep_box(), sketch=sketch_to_text(drawn), through=True)
+    body = solid_of(result)
+
+    assert body.volume == pytest.approx(40.0 * 30.0 * 20.0 - 10.0 * 30.0 * 5.0, rel=1e-6), (
+        "der Kanal folgt der Zeichenebene, nicht Welt-Z"
+    )
+
+
+def test_a_loft_keeps_the_drawn_hole() -> None:
+    """``loft`` verlor jedes gezeichnete Loch stillschweigend (D-1).
+
+    ``extrude`` daneben hält dieselbe Zusage seit je (its Test steht in
+    ``test_sketch.py``): Eine Platte mit Loch hat das Volumen beider. Der
+    Übergang bekam den vollen Körper — 16000 statt 15000 mm³, null Befunde.
+    """
+    import dataclasses
+
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.sketch.shapes import rectangle as shape_rectangle
+
+    outer = shape_rectangle(40.0, 40.0)
+    inner = shape_rectangle(10.0, 10.0)
+    drawn = dataclasses.replace(outer, elements=outer.elements + inner.elements)
+
+    body = solid_of(run("sketch_loft", sketch=sketch_to_text(drawn), height=10.0, top_scale=1.0))
+
+    assert body.volume == pytest.approx((1600.0 - 100.0) * 10.0, rel=1e-6), (
+        "das gezeichnete Loch gehört in den Übergang"
+    )
+
+
+def test_a_sweep_refuses_a_sketch_on_a_foreign_plane() -> None:
+    """Der Bogen läuft entlang X und Z — das ist seine Definition.
+
+    Eine Skizze auf einer anderen Ebene wurde stillschweigend wie auf XY
+    gerechnet (D-2). Abgelehnt statt übergangen (Regel 21), mit Vorschlag
+    (Regel 17).
+    """
+    import dataclasses
+
+    from app.core.errors import ValidationError
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.sketch.shapes import rectangle as shape_rectangle
+
+    drawn = dataclasses.replace(shape_rectangle(10.0, 10.0), plane="plane:yz")
+    with pytest.raises(ValidationError) as caught:
+        run("sketch_sweep", sketch=sketch_to_text(drawn))
+
+    assert caught.value.suggestions, "eine Absage trägt eine Handlung (Regel 17)"
+
+
 def test_a_pocket_removes_exactly_its_volume() -> None:
     result = run("sketch_pocket", brep_box(), shape="rectangle", length=10, width=10, depth=5)
     assert solid_of(result).volume == pytest.approx(24000.0 - 500.0, rel=1e-9)

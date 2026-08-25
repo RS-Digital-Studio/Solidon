@@ -36,7 +36,7 @@ from app.core.sketch.profile import (
 from app.core.sketch.serialize import sketch_from_text
 from app.core.sketch.solver import solve_sketch
 from app.core.types import BaseParams, OpContext, OpResult, PlaneFrame, SceneObject
-from app.core.units import DEGREE_UNIT
+from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
 #: Ein Satz, den drei Parameterschemata teilen — deshalb steht er einmal hier.
@@ -139,6 +139,24 @@ def _regions_for(
             ],
         )
     return [found[region - 1]]
+
+
+def _along(point: tuple[float, float, float], normal: tuple[float, float, float]) -> float:
+    """Wo ein Punkt entlang einer Normalen liegt — das Lot auf die Achse."""
+    return point[0] * normal[0] + point[1] * normal[1] + point[2] * normal[2]
+
+
+def _span_along(body: Solid, normal: tuple[float, float, float]) -> tuple[float, float]:
+    """Wie weit ein Körper entlang dieser Normalen reicht.
+
+    Aus den acht Ecken des Hüllquaders — für die Tasche genügt das: Sie
+    braucht eine Ober- und eine Durchstoßgrenze, keine exakte Silhouette.
+    """
+    xmin, ymin, zmin, xmax, ymax, zmax = profiles.bounds(body)
+    marks = [
+        _along((x, y, z), normal) for x in (xmin, xmax) for y in (ymin, ymax) for z in (zmin, zmax)
+    ]
+    return min(marks), max(marks)
 
 
 def _height_of(
@@ -394,18 +412,42 @@ class SketchPocketParams(BaseParams):
 def sketch_pocket(ctx: OpContext) -> OpResult:
     params = cast(SketchPocketParams, ctx.params)
     source, body = _brep_input(ctx)
+    # **Die Ebene der Zeichnung zählt** — wie bei ``sketch_extrude``, dessen
+    # Fix hier fehlte: Auf einer Seitenwand gezeichnet schnitt die Tasche
+    # trotzdem von oben (Welt-Z), und eine falsche Ebene sah aus wie eine
+    # erfüllte Zusage (Gesamtreview D-2). Gerechnet wird entlang der
+    # Ebenen-Normalen; auf XY ist das Welt-Z, und dort ändert sich nichts.
+    plane = _plane_of(params.sketch)
+    frame = _frame_of(ctx, plane)
     profile = shifted(
         _profile_for(ctx, params.sketch, params.shape, params.length, params.width, params.corners),
         params.x,
         params.y,
     )
-    _, _, zmin, _, _, zmax = profiles.bounds(body)
-    top = params.z if abs(params.z) > 1e-9 else zmax
+    if frame is not None:
+        normal = frame.normal
+        plane_s = _along(frame.origin, normal)
+    else:
+        _, normal = profiles.PLANES[plane]
+        plane_s = 0.0
+    low_s, high_s = _span_along(body, normal)
+    # Mit Rahmen liegt die Skizze auf der Fläche — dort beginnt die Tasche;
+    # ein Welt-Z vom Klick hat auf einer schrägen Fläche keine Bedeutung.
+    if frame is not None:
+        top = plane_s
+    elif abs(params.z) > EPS_GEOM:
+        top = params.z
+    else:
+        top = high_s
     if params.through:
-        bottom, reach = zmin - 1.0, (zmax - zmin) + 2.0
+        bottom, reach = low_s - 1.0, (high_s - low_s) + 2.0
     else:
         bottom, reach = top - params.depth, params.depth + 1.0
-    tool = edit.moved(profiles.extrude(profile, reach), (0.0, 0.0, bottom))
+    lifted = bottom - plane_s
+    tool = edit.moved(
+        profiles.extrude(profile, reach, plane, frame),
+        (normal[0] * lifted, normal[1] * lifted, normal[2] * lifted),
+    )
     solid = edit.boolean("difference", [body, tool])
     # Eine Tasche, die den Körper verfehlt, lief stumm durch: im Verlauf ein
     # Schritt, im Bild dasselbe Teil, und keine Zeile, die das erklärt.
@@ -598,6 +640,28 @@ class SketchSweepParams(BaseParams):
 )
 def sketch_sweep(ctx: OpContext) -> OpResult:
     params = cast(SketchSweepParams, ctx.params)
+    # **Der Bogen läuft entlang X und Z — das ist seine Definition**, nicht
+    # eine vergessene Ebene: Eine Skizze auf einer anderen Ebene wurde bisher
+    # stillschweigend wie auf XY gerechnet (Gesamtreview D-2). Abgelehnt
+    # statt übergangen (Regel 21).
+    sweep_plane = _plane_of(params.sketch)
+    if sweep_plane != "plane:xy":
+        raise ValidationError(
+            "sketch",
+            _(
+                "Der Bogen führt den Querschnitt entlang X und Z — diese "
+                "Zeichnung liegt auf einer anderen Ebene."
+            ),
+            constraint="sweep_needs_xy",
+            values={"plane": sweep_plane},
+            suggestions=[
+                Action(
+                    id="sketch.use_global_plane",
+                    label=_("Auf der Grundebene (XY) zeichnen"),
+                    primary=True,
+                )
+            ],
+        )
     require()
     profile = _profile_for(
         ctx, params.sketch, params.shape, params.length, params.width, params.corners

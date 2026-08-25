@@ -130,6 +130,71 @@ def test_trimming_keeps_the_constraints_of_untouched_elements() -> None:
 # --- Verlängern ------------------------------------------------------------------
 
 
+def test_trimming_ignores_crossings_beyond_the_segment() -> None:
+    """Eine Kante jenseits des Linienendes machte aus Trimmen ein Verlängern.
+
+    Aus 0→10 mit einer Kante bei x = 30 wurde 30→10 — ein Stück, das
+    vollständig außerhalb des Originals liegt, ohne Meldung (Gesamtreview
+    25.08.2026, D-4). Kreuzt sonst nichts, sagt Trimmen das jetzt; kreuzt
+    zusätzlich eine Kante innerhalb, zählt nur die.
+    """
+    beyond_only = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),
+            SketchElement(kind="line", points=((30.0, -10.0), (30.0, 10.0))),
+        ),
+    )
+    with pytest.raises(ValidationError):
+        edit.trim(beyond_only, 0, (5.0, 0.0))
+
+    also_inside = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),
+            SketchElement(kind="line", points=((4.0, -10.0), (4.0, 10.0))),
+            SketchElement(kind="line", points=((30.0, -10.0), (30.0, 10.0))),
+        ),
+    )
+    trimmed = edit.trim(also_inside, 0, (5.0, 0.0))
+    lines = [element for element in trimmed.elements if element.points[0][1] == 0.0]
+    assert flat(lines[0].points) == pytest.approx([0.0, 0.0, 4.0, 0.0]), (
+        "gekürzt an der Kante innerhalb — kein Phantomstück an der äußeren"
+    )
+
+
+def test_an_arc_and_a_spline_count_as_cutting_edges() -> None:
+    """Bogen und Spline waren als Schnittkante unsichtbar (D-10).
+
+    Ehrlich war das nur, wenn sonst nichts kreuzte; daneben trimmte die Linie
+    an der falschen Stelle. Geschnitten wird über dieselbe Punktfolge, die
+    auch das Profil rechnet.
+    """
+    with_spline = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),
+            SketchElement(kind="spline", points=((5.0, 5.0), (5.0, -5.0))),
+        ),
+    )
+    trimmed = edit.trim(with_spline, 0, (7.0, 0.0))
+    assert flat(trimmed.elements[0].points) == pytest.approx([0.0, 0.0, 5.0, 0.0], abs=1e-6)
+
+    # Oberer Halbkreis um (5 | −1) mit r = 2: kreuzt y = 0 bei 5 ± √3.
+    with_arc = Sketch(
+        plane="plane:xy",
+        elements=(
+            SketchElement(kind="line", points=((0.0, 0.0), (10.0, 0.0))),
+            SketchElement(kind="arc", points=((5.0, -1.0), (7.0, -1.0), (3.0, -1.0))),
+        ),
+    )
+    trimmed = edit.trim(with_arc, 0, (5.0, 0.0))
+    pieces = [element for element in trimmed.elements if element.kind == "line"]
+    assert len(pieces) == 2, "zwischen zwei Kreuzungen: zwei Stücke — der Bogen bleibt"
+    assert pieces[0].points[1][0] == pytest.approx(5.0 - math.sqrt(3.0), abs=0.05)
+    assert pieces[1].points[0][0] == pytest.approx(5.0 + math.sqrt(3.0), abs=0.05)
+
+
 def test_extending_reaches_the_next_edge() -> None:
     """Geklickt wird auf die Hälfte, die wachsen soll."""
     sketch = Sketch(

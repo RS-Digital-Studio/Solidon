@@ -22,6 +22,7 @@ import math
 from dataclasses import replace
 
 from app.core.errors import ValidationError
+from app.core.sketch.profile import _flat_curve
 from app.core.types import Point2, Sketch, SketchConstraint, SketchElement
 from app.i18n import _
 
@@ -103,9 +104,17 @@ def _parameter_on(line: tuple[Point2, Point2], point: Point2) -> float:
 def crossings_on(sketch: Sketch, index: int) -> list[Point2]:
     """Alle Stellen, an denen andere Elemente diese Linie kreuzen.
 
-    Sortiert nach ihrer Lage auf der Linie. Nur für Linien — ein Bogen, den
-    man trimmt, ist eine eigene Rechnung, und ihn hier stillschweigend zu
-    übergehen wäre schlimmer, als ihn abzulehnen.
+    Sortiert nach ihrer Lage auf der Linie, und **nur auf der Strecke
+    selbst**: Eine Kante jenseits des Linienendes machte aus dem Trimmen ein
+    Verlängern — aus 0→10 mit einer Kante bei 30 wurde 30→10, ein Stück, das
+    vollständig außerhalb des Originals liegt (Gesamtreview D-4). Nur für
+    Linien — ein Bogen, den man trimmt, ist eine eigene Rechnung, und ihn
+    hier stillschweigend zu übergehen wäre schlimmer, als ihn abzulehnen.
+
+    Als **Schnittkante** zählt dagegen jede Art: Bogen und Spline schneiden
+    über dieselbe Punktfolge, die auch das Profil rechnet — unsichtbar als
+    Kante trimmten sie an der falschen Stelle, sobald zusätzlich eine Linie
+    kreuzte (Gesamtreview D-10).
     """
     element = sketch.elements[index]
     if element.kind != "line":
@@ -131,8 +140,24 @@ def crossings_on(sketch: Sketch, index: int) -> list[Point2]:
             edge = other.points[1]
             radius = math.hypot(edge[0] - centre[0], edge[1] - centre[1])
             found.extend(circle_intersections(line, centre, radius))
+        else:
+            flat = _flat_curve(other)
+            for begin, end in itertools.pairwise(flat):
+                point = line_intersection(line, (begin, end))
+                if (
+                    point is not None
+                    and -_ON_SEGMENT <= _parameter_on((begin, end), point) <= 1.0 + _ON_SEGMENT
+                ):
+                    found.append(point)
 
-    return sorted(found, key=lambda point: _parameter_on(line, point))
+    return sorted(
+        (
+            point
+            for point in found
+            if -_ON_SEGMENT <= _parameter_on(line, point) <= 1.0 + _ON_SEGMENT
+        ),
+        key=lambda point: _parameter_on(line, point),
+    )
 
 
 # --- Die vier Werkzeuge ----------------------------------------------------------

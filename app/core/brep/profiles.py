@@ -306,7 +306,31 @@ def loft(
     builder = BRepOffsetAPI_ThruSections(True, False)
     builder.AddWire(_wire(bottom, lift))
     builder.AddWire(_wire(top, lifted))
-    return _finished(builder, _("Zwischen diesen beiden Umrissen entsteht kein Körper."))
+    solid = _finished(builder, _("Zwischen diesen beiden Umrissen entsteht kein Körper."))
+    # **Die Löcher reisen mit.** ``extrude``, ``revolve`` und ``sweep_arc``
+    # setzen sie über ``_face`` als innere Ringe; ``ThruSections`` nimmt nur
+    # Drähte — hier ging jedes gezeichnete Loch stillschweigend verloren
+    # (Regel 21): Der Kunde bekam einen Körper ohne das Loch, das er
+    # gezeichnet hat, und kein Wort dazu. Je Lochpaar ein eigener Durchzug,
+    # abgezogen mit derselben Fuzzy-Toleranz wie bei den Nachbarn.
+    if len(bottom.holes) != len(top.holes):
+        raise ValidationError(
+            "sketch",
+            _(
+                "Die beiden Umrisse tragen verschieden viele Löcher — so lässt "
+                "sich kein Übergang aufspannen."
+            ),
+        )
+    for below, above in zip(bottom.holes, top.holes, strict=True):
+        drill = BRepOffsetAPI_ThruSections(True, False)
+        drill.AddWire(_wire(below, lift))
+        drill.AddWire(_wire(above, lifted))
+        solid = _fuzzy_boolean(
+            "difference",
+            solid,
+            _finished(drill, _("Aus einem der gezeichneten Löcher entsteht kein Durchzug.")),
+        )
+    return solid
 
 
 def shell_open_top(solid: Solid, thickness: float) -> Solid:
@@ -715,9 +739,14 @@ def _fuzzy_boolean(kind: str, first: Solid, second: Solid, tolerance: float = EP
     ``tolerance`` ist die zweite Stufe aus :func:`_joined_rod`: gröber, wenn
     die feine Rechnung eine Naht offen gelassen hat.
     """
-    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Fuse
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Common, BRepAlgoAPI_Cut, BRepAlgoAPI_Fuse
 
-    maker = BRepAlgoAPI_Fuse if kind == "union" else BRepAlgoAPI_Common
+    if kind == "union":
+        maker = BRepAlgoAPI_Fuse
+    elif kind == "difference":
+        maker = BRepAlgoAPI_Cut
+    else:
+        maker = BRepAlgoAPI_Common
     operation = maker(first.shape, second.shape)
     operation.SetFuzzyValue(tolerance)
     # OCCT darf seine Argumente ändern, solange man es nicht verbietet — und
