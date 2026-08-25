@@ -330,18 +330,51 @@ def _hanging_loose(
         # ``Action``-Liste — das kann nur eine Ausnahme. Regel 17 verlangt
         # trotzdem einen Weg nach vorn, und ``without_effect`` macht es
         # nebenan genauso: erst was ist, dann was hilft.
-        message=_(
-            "Ein Teil des Bausteins sitzt neben dem Objekt und hängt in der Luft — "
-            "gedruckt würden lose Stücke. Geben Sie eine Rückplatte an, dann "
-            "verbindet sie, was danebensteht; oder verringern Sie die "
-            "Rasterschritte, damit alles enger zusammenrückt."
-        ),
+        message=_loose_advice(spec),
         values={
             "part": spec.name,
             "loose": str(loose),
             "before": str(before.component_count),
             "after": str(after.component_count),
         },
+    )
+
+
+#: Die Felder, mit denen sich ein Lochwand-Einhänger einfangen lässt. Wer sie
+#: hat, bekommt den Satz dazu; wer nicht, bekommt ihn nicht.
+_REACH_FIELDS = ("plate", "steps")
+
+
+def _loose_advice(spec: PartSpec) -> TranslatableText:
+    """Was gegen lose Stücke hilft — und zwar an **diesem** Baustein.
+
+    Der Satz nannte bis zum 26.08.2026 immer die Rückplatte und die
+    Rasterschritte. Das sind die Felder des Lochwand-Einhängers, und der Befund
+    gilt jedem anbauenden Baustein: Eine Rippe, ein Scharnierauge, ein
+    Kabelclip haben beides nicht, und der Kunde suchte zwei Felder, die es in
+    seinem Dialog nicht gibt. Ein Vorschlag, der nicht einzulösen ist, ist
+    keiner (Regel 17).
+
+    Gefragt wird das Parameterschema und nicht der Name des Bausteins — sonst
+    steht hier beim nächsten Einhänger wieder eine Liste, die niemand pflegt.
+
+    **Beide Sätze stehen ganz da.** Aus einer gemeinsamen ersten Hälfte und
+    zwei Enden zusammengesetzt wäre einer der beiden Teile ein Satzfragment,
+    und ein Katalog übersetzt Fragmente nicht: Was im Deutschen hinten steht,
+    steht anderswo vorn.
+    """
+    names = {entry.name for entry in spec.params.spec()}
+    if all(field in names for field in _REACH_FIELDS):
+        return _(
+            "Ein Teil des Bausteins sitzt neben dem Objekt und hängt in der Luft — "
+            "gedruckt würden lose Stücke. Geben Sie eine Rückplatte an, dann "
+            "verbindet sie, was danebensteht; oder verringern Sie die "
+            "Rasterschritte, damit alles enger zusammenrückt."
+        )
+    return _(
+        "Ein Teil des Bausteins sitzt neben dem Objekt und hängt in der Luft — "
+        "gedruckt würden lose Stücke. Setzen Sie den Baustein an ein Merkmal des "
+        "Objekts oder rücken Sie seine Position näher heran."
     )
 
 
@@ -357,7 +390,8 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     else:
         produced = spec.fn(spec.params(**values))
 
-    anchor, direction = _anchor(source, ctx.params, spec)
+    built = as_mesh_data(produced.mesh)
+    anchor, direction = _anchor(source, ctx.params, spec, built)
     # Ein aufgesetzter Baustein sinkt ein Hundertstel ein. Zwei Volumen, die
     # sich nur in einer Fläche berühren, sind das eine, woran eine boolesche
     # Operation zuverlässig scheitert (§39) — die Rastnase steht mit 6 mal 1 mm
@@ -368,7 +402,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     # Werkzeug reicht ohnehin über die Fläche hinaus.
     subtractive = cuts(spec, ctx.params)
     sink = 0.0 if subtractive else BOOLEAN_OVERLAP
-    placed = _place(as_mesh_data(produced.mesh), ctx.params, anchor, sink, direction, spec.keeps_up)
+    placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up)
     body = as_mesh_data(source.mesh)
     kind: BooleanKind = "difference" if subtractive else "union"
     outcome = boolean(kind, [body, placed], quality=ctx.quality)
@@ -441,7 +475,10 @@ def _placed_by_hand(params: Any) -> bool:
 
 
 def _anchor(
-    source: SceneObject, params: Any, spec: PartSpec | None = None
+    source: SceneObject,
+    params: Any,
+    spec: PartSpec | None = None,
+    built: MeshData | None = None,
 ) -> tuple[Vec3, Vec3 | None]:
     """Wohin der Baustein kommt **und wohin er schaut** — an ein benanntes
     Merkmal, oder an den Ursprung (§25).
@@ -463,6 +500,9 @@ def _anchor(
     Eine Fläche schaut entlang ihrer Normalen, eine Bohrung entlang ihrer
     Achse. Eine Kantenschleife hat weder noch; dann bleibt die Richtung
     ``None``, und es gilt wieder, was unter *Achse* gewählt ist.
+
+    **Und eine Bohrung wird an ihrer Mündung angesetzt, nicht in ihrer
+    Mitte** — dafür ist ``built`` da (:func:`_at_the_mouth`).
     """
     name = str(getattr(params, "at_feature", "") or "")
     if not name:
@@ -515,8 +555,53 @@ def _anchor(
             ),
         )
     centre = feature.params.get("centre", (0.0, 0.0, 0.0))
-    point = (float(centre[0]), float(centre[1]), float(centre[2]))
-    return point, _direction_of(feature)
+    point: Vec3 = (float(centre[0]), float(centre[1]), float(centre[2]))
+    direction = _direction_of(feature)
+    return _at_the_mouth(point, direction, feature, built), direction
+
+
+def _at_the_mouth(
+    point: Vec3, direction: Vec3 | None, feature: Feature, built: MeshData | None
+) -> Vec3:
+    """Der Ansatzpunkt an einer Bohrung — ihre Mündung statt ihrer Mitte.
+
+    Ein Bohrungsmerkmal nennt als ``centre`` die **Mitte** des Zylinders, und
+    genau die stand hier lange als Ansatzpunkt. Ein abtragender Baustein liegt
+    aber unter seiner Mündung (§24.1): Das Innengewinde beginnt bei z = 0 und
+    reicht nach -Z. Zusammen hieß das, dass ein 12 mm langes Gewinde in einer
+    10 mm dicken Platte bei z = 5 anfing — die untere Hälfte geschnitten, die
+    obere glatt, und sieben Millimeter Werkzeug hingen unter der Platte in der
+    Luft. Über eine *Fläche* gesetzt war derselbe Handgriff immer richtig, und
+    deshalb ist es an keiner Stelle aufgefallen.
+
+    Die Mündung ist das Ende in Richtung der Achse: Das Werkzeug baut in die
+    Gegenrichtung, also deckt es von dort aus die ganze Bohrung ab. **Das gilt
+    für beide Vorzeichen** — die Achse einer erkannten Bohrung kommt aus einem
+    Eigenvektor und darf zeigen, wohin sie will. Zeigt sie nach unten, liegt
+    die Mündung unten und das Werkzeug wächst nach oben; gedeckt ist derselbe
+    Bereich.
+
+    **Nur für einen Baustein, der unter seinem Ursprung liegt.** Die
+    Mutternfalle tut das nicht — ihre Tasche wächst nach oben, weil die Mutter
+    im Material sitzt. An die Mündung gesetzt stünde sie vollständig über dem
+    Teil und trüge nichts ab. Gefragt wird deshalb der gebaute Körper und
+    nicht eine Liste von Namen: Wer einen Baustein dazunimmt, der unter seiner
+    Mündung liegt, bekommt die richtige Behandlung, ohne sie irgendwo
+    einzutragen.
+    """
+    if feature.kind != "hole" or direction is None or built is None:
+        return point
+    depth = float(feature.params.get("depth") or 0.0)
+    if depth <= EPS_GEOM:
+        return point
+    if float(built.bounds.maximum[2]) > BOOLEAN_OVERLAP + EPS_GEOM:
+        return point
+    reach = depth / 2.0
+    return (
+        point[0] + direction[0] * reach,
+        point[1] + direction[1] * reach,
+        point[2] + direction[2] * reach,
+    )
 
 
 def _direction_of(feature: Feature) -> Vec3 | None:

@@ -1397,25 +1397,94 @@ def test_a_half_finished_download_is_not_blocked_by_the_space_check(
 
     Der Fall ist im Review vom 23.08.2026 aufgefallen, nachdem die Prüfung
     schon eingebaut war.
+
+    **Und die Bruchstücke liegen im Zwischenordner**, nicht am Ziel: Seit dem
+    ``scratch_dir``-Umbau lädt ``huggingface_hub`` dorthin, und erst der
+    gelungene Lauf verschiebt. Bis zum 26.08.2026 legte dieser Test sie unter
+    ``models/triposg`` ab — geprüft wurde damit eine Wiederaufnahme an einem
+    Ort, an dem keine stattfindet.
     """
     from app.core.backends import comfy_setup
 
     needed = comfy_setup.NEEDED_GIGABYTES
+    scratch = comfy_setup.scratch_dir("dl-triposg")
 
     # 6 MB statt der echten 5 GB: Der Test soll die **Rechnung** pruefen, nicht
     # die Platte fuellen. Die freie Menge liegt darum knapp unter der Schwelle,
     # sodass erst der Zuschlag sie ueberschreitet.
-    partial = tmp_path / "models" / "triposg" / "TripoSG"
-    partial.mkdir(parents=True)
-    (partial / "halb.safetensors").write_bytes(b"x" * 6_000_000)
+    (scratch / "halb.safetensors").write_bytes(b"x" * 6_000_000)
 
-    monkeypatch.setattr(comfy_setup, "free_gigabytes", lambda _where: needed - 0.003)
+    monkeypatch.setattr(
+        comfy_setup,
+        "free_gigabytes",
+        lambda where: needed - 0.003 if where == scratch else 500.0,
+    )
     gerufen: list[str] = []
     monkeypatch.setattr(comfy_setup, "_run_repeatedly", lambda *a, **k: gerufen.append("los"))
 
     comfy_setup.fetch_weights(tmp_path, Path("python"))
 
     assert gerufen == ["los"], "die Prüfung hat den zweiten Anlauf blockiert"
+
+
+def test_the_space_is_measured_where_the_download_lands(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Gemessen wurde der falsche Datenträger — und zwar seit dem Umbau.
+
+    Geprüft wurde am ComfyUI-Ordner, geladen wird seit dem ``scratch_dir``-Umbau
+    in den Nutzer-Cache (unter Windows ``%LOCALAPPDATA%``). Roberts Aufbau ist
+    genau der Fall, den das trifft: ComfyUI liegt auf ``D:`` mit viel Platz, ``C:``
+    ist knapp — die Prüfung meldete grün, und der Download starb zwanzig Minuten
+    später an der vollen Platte. Der Fehlertext, der dabei herauskam, nennt den
+    Grund mit keinem Wort; genau dagegen war die Prüfung gebaut.
+
+    Und die Absage nennt den Ort (Regel 17): „auf dem Datenträger ist zu wenig
+    Platz" schickt niemanden weiter, der zwei Datenträger hat.
+    """
+    from app.core.backends import comfy_setup
+
+    scratch = comfy_setup.scratch_dir("dl-triposg")
+    monkeypatch.setattr(
+        comfy_setup, "free_gigabytes", lambda where: 2.5 if where == scratch else 500.0
+    )
+    gerufen: list[str] = []
+    monkeypatch.setattr(comfy_setup, "_run_repeatedly", lambda *a, **k: gerufen.append("los"))
+
+    with pytest.raises(comfy_setup.SetupFailed) as fehler:
+        comfy_setup.fetch_weights(tmp_path, Path("python"))
+
+    gesagt = str(fehler.value)
+    assert not gerufen, "der Download lief trotz voller Platte an"
+    assert str(scratch) in gesagt, f"nennt den Ort nicht, an dem der Platz fehlt: {gesagt}"
+
+
+def test_the_target_volume_is_checked_as_well(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Und der Zwischenordner allein genügt nicht.
+
+    ``shutil.move`` verschiebt innerhalb eines Datenträgers und **kopiert** über
+    seine Grenze hinweg. Liegt der Cache auf ``C:`` und ComfyUI auf ``D:``, muss
+    der Platz zweimal da sein — einmal zum Laden, einmal am Ziel. Geprüft werden
+    deshalb beide, und die Meldung sagt, welcher der beiden es ist.
+    """
+    from app.core.backends import comfy_setup
+
+    scratch = comfy_setup.scratch_dir("dl-triposg")
+    ziel = tmp_path / "models" / "triposg" / "TripoSG"
+    monkeypatch.setattr(
+        comfy_setup, "free_gigabytes", lambda where: 500.0 if where == scratch else 1.0
+    )
+    gerufen: list[str] = []
+    monkeypatch.setattr(comfy_setup, "_run_repeatedly", lambda *a, **k: gerufen.append("los"))
+
+    with pytest.raises(comfy_setup.SetupFailed) as fehler:
+        comfy_setup.fetch_weights(tmp_path, Path("python"))
+
+    gesagt = str(fehler.value)
+    assert not gerufen, "der Download lief an, obwohl das Ziel ihn nicht fassen kann"
+    assert str(ziel) in gesagt, f"nennt den Ort nicht, an dem der Platz fehlt: {gesagt}"
 
 
 def test_the_sizes_in_the_progress_text_match_the_constants() -> None:

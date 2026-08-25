@@ -807,6 +807,37 @@ def _gigabytes_in(folder: Path) -> float:
     return total / 1_000_000_000
 
 
+def _space_or_stop(where: Path) -> None:
+    """Hält an, wenn der Datenträger dieses Ordners die Gewichte nicht fasst.
+
+    **Was schon liegt, zählt mit.** Ein abgebrochener Download hinterlässt seine
+    Bruchstücke im Zwischenordner, und ``_run_repeatedly`` setzt genau dort fort
+    — nur was fehlt, wird noch geholt. Ohne diesen Zuschlag verweigerte die
+    Prüfung ausgerechnet den zweiten Anlauf, obwohl er weniger braucht als der
+    erste: Bei 5 von 7,5 GB geladen fehlen 2,5, und verlangt worden wären 9. Am
+    Ziel gilt dasselbe aus einem anderen Grund — es wird vor dem Verschieben
+    geräumt, sein Inhalt wird also frei.
+
+    **Die Meldung nennt den Ordner** (Regel 17). „Auf dem Datenträger ist zu
+    wenig Platz" ist für einen Rechner mit zwei Platten keine Auskunft, sondern
+    eine Suchaufgabe — und die beiden Orte liegen hier regelmäßig auf
+    verschiedenen Datenträgern.
+    """
+    free = free_gigabytes(where) + _gigabytes_in(where)
+    if free >= NEEDED_GIGABYTES:
+        return
+    raise SetupFailed(
+        str(
+            _(
+                "Auf dem Datenträger von {ort} sind {frei:.1f} GB frei, gebraucht "
+                "werden {noetig:.0f}. Schaffen Sie dort Platz — geladen wird in den "
+                "Zwischenordner, und von dort wandern die Gewichte nach "
+                "models/triposg; beide Orte müssen sie fassen."
+            )
+        ).format(ort=where, frei=free, noetig=NEEDED_GIGABYTES)
+    )
+
+
 def fetch_weights(
     comfyui: Path,
     python: Path,
@@ -819,26 +850,22 @@ def fetch_weights(
     der nach zwanzig Minuten an einer vollen Platte stirbt, kostet die zwanzig
     Minuten **und** die Suche danach — die Meldung des fremden Programms nennt
     den Grund nicht.
+
+    **Und geprüft werden beide Orte.** Geladen wird in den Nutzer-Cache, liegen
+    bleibt es unter ``models/triposg`` — das kann derselbe Datenträger sein und
+    muss es nicht: ComfyUI auf ``D:`` mit viel Platz und ein knappes ``C:`` ist
+    der Normalfall, nicht der Sonderfall. Vom 25.08.2026 bis zum 26.08.2026 fragte
+    die Prüfung nur den ComfyUI-Datenträger und meldete grün, während der
+    Download auf dem anderen starb. Beide braucht es auch dann, wenn der Platz
+    da ist: ``shutil.move`` verschiebt innerhalb eines Datenträgers und
+    **kopiert** über seine Grenze hinweg.
     """
     if weights_present(comfyui):
         return
     target = comfyui / "models" / "triposg" / "TripoSG"
-    # **Was schon liegt, zählt mit.** Ein abgebrochener Download hinterlässt
-    # seine Bruchstücke unter ``target``, und ``_run_repeatedly`` setzt genau
-    # dort fort " " nur was fehlt, wird noch geholt. Ohne diesen Abzug hätte die
-    # Prüfung den zweiten Anlauf verweigert, obwohl er weniger braucht als der
-    # erste: Bei 5 von 7,5 GB geladen fehlen 2,5, und verlangt worden wären 9.
-    free = free_gigabytes(target) + _gigabytes_in(target)
-    if free < NEEDED_GIGABYTES:
-        raise SetupFailed(
-            str(
-                _(
-                    "Auf dem Datenträger sind {frei:.1f} GB frei, gebraucht werden "
-                    "{noetig:.0f}. Schaffen Sie Platz, oder legen Sie ComfyUI auf einen "
-                    "anderen Datenträger — die Gewichte liegen unter models/triposg."
-                )
-            ).format(frei=free, noetig=NEEDED_GIGABYTES)
-        )
+    scratch = scratch_dir("dl-triposg")
+    _space_or_stop(scratch)
+    _space_or_stop(target)
     target.parent.mkdir(parents=True, exist_ok=True)
     _run_repeatedly(
         [
@@ -848,7 +875,7 @@ def fetch_weights(
             _FETCH_WEIGHTS,
             str(target),
             WEIGHTS_REPO,
-            str(scratch_dir("dl-triposg")),
+            str(scratch),
         ],
         _("Gewichte laden — rund 7,5 GB, das dauert"),
         progress,

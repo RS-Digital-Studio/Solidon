@@ -909,6 +909,43 @@ def test_a_part_beside_the_object_says_so(
         assert body.component_count == 1, "der Träger hält den Baustein doch nicht"
 
 
+def test_the_advice_for_a_loose_part_names_fields_that_part_has(profile: Profile) -> None:
+    """Regel 17: ein Vorschlag, der trägt — und nicht einer, der ins Leere zeigt.
+
+    ``parts.hanging_loose`` gilt für **jeden** anbauenden Baustein, und der
+    Satz nannte trotzdem die Felder des Lochwand-Einhängers: „Geben Sie eine
+    Rückplatte an … oder verringern Sie die Rasterschritte." Eine Rippe hat
+    weder eine Rückplatte noch Rasterschritte, ein Scharnierauge und ein
+    Kabelclip auch nicht — wer den Satz befolgen wollte, suchte zwei Felder,
+    die es in seinem Dialog nicht gibt.
+
+    Gefragt wird das Parameterschema des Bausteins, nicht sein Name: Der
+    Zusatz erscheint dort, wo er einzulösen ist.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Quader",
+        [OperationDraft(op="create_box", params={"width": 20.0, "depth": 20.0, "height": 20.0})],
+    )
+    History(project.document).apply(
+        "Rippe",
+        [OperationDraft(op="insert_rib", inputs=("obj_1",), params={"x": 100.0})],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    hanging = [f for f in result.scene.report.findings if f.code == "parts.hanging_loose"]
+    assert hanging, "eine Rippe 100 mm neben dem Würfel hängt in der Luft und niemand sagt es"
+
+    message = str(hanging[0].message)
+    assert "Rückplatte" not in message and "Rasterschritte" not in message, (
+        f"die Rippe hat weder das eine noch das andere Feld: {message}"
+    )
+    assert "Merkmal" in message or "Position" in message, (
+        f"und ohne einen Weg nach vorn endet der Befund mit „fehlgeschlagen“: {message}"
+    )
+
+
 # --- die Normteiltabelle -----------------------------------------------------------
 
 
@@ -1425,6 +1462,123 @@ def test_a_bore_in_a_side_wall_runs_through_that_wall(profile: Profile) -> None:
     assert all(abs(float(axis @ normal)) == pytest.approx(1.0, abs=1e-3) for axis in bores), (
         f"bore axes {bores} against wall normal {normal}"
     )
+
+
+def _plate_with_a_through_bore() -> Project:
+    """Eine 10 mm dicke Platte mit einer durchgehenden Bohrung Ø 6.
+
+    Gebohrt wird ohne Materialzugabe, damit die gemessenen Durchmesser unten
+    nicht vom Profil abhängen: Die Bohrung misst 6,00 mm, und alles darüber
+    kommt vom Baustein.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Platte",
+        [OperationDraft(op="create_box", params={"width": 40.0, "depth": 40.0, "height": 10.0})],
+    )
+    History(project.document).apply(
+        "Bohrung",
+        [
+            OperationDraft(
+                op="drill_hole",
+                inputs=("obj_1",),
+                params={"diameter": 6.0, "depth": 0.0, "compensate": False},
+            )
+        ],
+    )
+    return project
+
+
+def _widest_bore(mesh: Any, height: float) -> float:
+    """Der weiteste Durchmesser des mittigen Lochs auf dieser Höhe.
+
+    Gemessen wird nur, was innerhalb von 15 mm um die Achse liegt — die
+    Außenkontur der Platte steht bei 20 mm und würde jede Zahl überdecken.
+    """
+    cut = mesh.raw.section(plane_origin=[0.0, 0.0, height], plane_normal=[0.0, 0.0, 1.0])
+    assert cut is not None, f"z={height}: der Schnitt trifft die Platte nicht"
+    points = np.asarray(cut.vertices, dtype=float)
+    radii = np.hypot(points[:, 0], points[:, 1])
+    inner = radii[radii < 15.0]
+    assert inner.size, f"z={height}: auf dieser Höhe ist gar kein Loch"
+    return 2.0 * float(inner.max())
+
+
+def test_a_tool_in_a_bore_starts_at_its_mouth(profile: Profile) -> None:
+    """Ein Gewinde in einer Bohrung schneidet die **ganze** Bohrung.
+
+    ``_anchor`` gab für ein Bohrungsmerkmal ``centre`` zurück — die *Mitte* des
+    Zylinders. Ein abtragender Baustein liegt aber unter seiner Mündung
+    (§24.1), also fing das Werkzeug in halber Materialstärke an: Auf einer
+    10 mm dicken Platte trug ein Innengewinde mit 12 mm Länge unten zwischen
+    z = 0 und z = 5 ab und ließ die obere Hälfte glatt — gemessen 6,25 mm
+    Gewindeaußenmaß bei z = 1 und 3 gegen glatte 6,00 mm bei z = 7 und 9.
+    Sieben von zwölf Millimetern Werkzeug hingen unter der Platte in der Luft.
+
+    Über eine **Fläche** gesetzt war derselbe Handgriff immer richtig, und
+    genau deshalb ist es niemandem aufgefallen: Der Weg, den jeder Test ging,
+    war der heile. Der zweite Fall unten hält ihn fest — er darf sich nicht
+    ändern.
+    """
+    for feature, threaded in (("hole_1", "die Bohrung"), ("face_top", "die Fläche")):
+        project = _plate_with_a_through_bore()
+        History(project.document).apply(
+            "Gewinde",
+            [
+                OperationDraft(
+                    op="insert_printed_thread",
+                    inputs=("obj_1",),
+                    params={
+                        "at_feature": feature,
+                        "internal": True,
+                        "size": "M6",
+                        "length": 12.0,
+                    },
+                )
+            ],
+        )
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        mesh = result.scene.objects["obj_1"].mesh
+        smooth = [
+            height for height in (1.0, 3.0, 5.0, 7.0, 9.0) if _widest_bore(mesh, height) < 6.1
+        ]
+        assert not smooth, (
+            f"an {feature} gesetzt ({threaded}) blieb die Bohrung auf z={smooth} glatt — "
+            "dort greift keine Schraube"
+        )
+
+
+def test_a_part_that_reaches_upwards_keeps_the_middle_of_the_bore(profile: Profile) -> None:
+    """Die Gegenprobe, und ohne sie wäre die Regel oben falsch.
+
+    Nicht jeder Baustein an einer Bohrung liegt unter seinem Ursprung: Die
+    Mutternfalle baut ihre Tasche **nach oben**, weil die Mutter im Material
+    sitzt und nicht an der Oberfläche. An die Mündung gesetzt stünde sie
+    vollständig über der Platte und trüge nichts ab — aus einem halben Fehler
+    wäre ein ganzer geworden.
+
+    Gemessen wird an der Tasche selbst: Auf halber Höhe muss sie da sein, und
+    dicht unter der Oberfläche darf sie es nicht.
+    """
+    project = _plate_with_a_through_bore()
+    History(project.document).apply(
+        "Mutternfalle",
+        [
+            OperationDraft(
+                op="insert_nut_trap",
+                inputs=("obj_1",),
+                params={"at_feature": "hole_1", "size": "M3", "slide": 12.0},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    mesh = result.scene.objects["obj_1"].mesh
+    assert _widest_bore(mesh, 5.5) > 6.5, "die Tasche liegt nicht mehr im Material"
+    assert _widest_bore(mesh, 9.5) < 6.5, "die Tasche ist an die Oberfläche gewandert"
 
 
 def test_every_play_field_defaults_to_the_profile() -> None:

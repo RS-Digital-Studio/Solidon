@@ -226,6 +226,44 @@ def test_a_file_without_comments_still_finds_its_mode() -> None:
     assert metrics.filament_mm == pytest.approx(4.0), "relativ gezählt ist es die Summe"
 
 
+def test_an_m83_in_the_end_gcode_does_not_reach_back_to_the_first_line() -> None:
+    """Derselbe Fund eine Stufe später — als **Befehl**, nicht als Kommentar.
+
+    Der Docstring von ``_starts_absolute`` beschrieb das Fehlbild als behoben,
+    und der Fall daneben prüfte es auch: ein ``M83`` in einem Kommentar am
+    Dateiende. Gesucht wurde aber die erste Modus-Zeile der **ganzen** Datei,
+    und die verbreitetste aller Redewendungen im Endcode ist genau ein
+    ``M83`` mit einem Rückzug dahinter. Damit galt eine absolut fördernde
+    Datei wieder als relativ, und die E-Werte summierten sich: gemessen 6,0 mm
+    statt 3,0 mm für drei Bahnen mit E1, E2, E3.
+
+    Entschieden wird deshalb im Text **vor** der ersten Bahn. Steht dort
+    nichts, gilt absolut — die RepRap-Konvention und der Zustand jedes
+    Druckers nach dem Einschalten.
+    """
+    text = "G1 X10 Y10 E1\nG1 X20 Y10 E2\nG1 X30 Y10 E3\nM83\nG1 E-3\n"
+
+    metrics = gcode.parse(text)
+
+    assert metrics.filament_mm == pytest.approx(3.0), (
+        "der Endcode entscheidet nicht über den Anfang der Datei"
+    )
+
+
+def test_the_mode_before_the_first_path_still_counts() -> None:
+    """Die Gegenprobe: derselbe Endcode, aber ``M83`` steht auch vorn.
+
+    Ohne sie wäre die Regel „der Modus am Dateiende zählt nie", und daraus
+    würde beim nächsten Nachbessern leicht „nur die erste Zeile zählt".
+    Gemeint ist: was vor der ersten Bahn steht, entscheidet.
+    """
+    text = "M83\nG1 X10 Y10 E1\nG1 X20 Y10 E2\nG1 X30 Y10 E3\nM83\nG1 E-3\n"
+
+    metrics = gcode.parse(text)
+
+    assert metrics.filament_mm == pytest.approx(6.0), "relativ gezählt ist es die Summe"
+
+
 def test_the_weight_follows_from_the_length() -> None:
     metrics = gcode.parse(CURA)
 

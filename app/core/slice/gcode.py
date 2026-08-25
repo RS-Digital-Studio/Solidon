@@ -436,6 +436,14 @@ def _seconds(value: str) -> float | None:
 #: Kommentar ist das kein Befehl, sondern Text.
 _EXTRUSION_MODE = re.compile(r"^[ \t]*M(?P<code>8[23])\b", re.IGNORECASE | re.MULTILINE)
 
+#: Die erste Bahn, die Material fördert — dieselbe Bedingung wie
+#: :data:`_EXTRUSION`, nur über den ganzen Text gesucht statt Zeile für Zeile.
+#: Sie ist die Grenze zwischen Startcode und Druck: Was danach kommt, kann über
+#: den Anfang der Datei nichts mehr sagen.
+_FIRST_EXTRUSION = re.compile(
+    r"^[ \t]*G1\b(?=.*\bE-?[0-9.]+)(?=.*\b[XY])", re.IGNORECASE | re.MULTILINE
+)
+
 
 def _starts_absolute(text: str) -> bool:
     """Fördert diese Datei absolut, bevor sie es selbst sagt?
@@ -453,8 +461,19 @@ def _starts_absolute(text: str) -> bool:
     oder ``M83`` beginnt, entscheidet. Findet sich keine, gilt absolut — so
     steht es in der RepRap-Konvention, und so verhält sich jeder Drucker nach
     dem Einschalten.
+
+    **Und gesucht wird nur vor der ersten Bahn.** Der Absatz darüber galt für
+    den Kommentar und ließ denselben Fehler als *Befehl* durch: Die
+    verbreitetste Redewendung im Endcode ist ein ``M83`` mit einem Rückzug
+    dahinter, und als erste Modus-Zeile der Datei gelesen machte sie eine
+    absolut fördernde Datei relativ — drei Bahnen mit E1, E2, E3 kamen als
+    6,0 mm heraus statt als 3,0. Was nach der ersten Bahn steht, sagt nichts
+    über den Anfang; was dort steht, liest die Schleife ohnehin an seiner
+    Stelle.
     """
-    found = _EXTRUSION_MODE.search(text)
+    first = _FIRST_EXTRUSION.search(text)
+    limit = first.start() if first is not None else len(text)
+    found = _EXTRUSION_MODE.search(text, 0, limit)
     return found is None or found.group("code") == "82"
 
 
