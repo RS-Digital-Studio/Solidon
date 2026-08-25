@@ -2446,7 +2446,7 @@
   "Slot 0 nimmt die Farbe zurück, die das Teil selbst hat.": "O slot 0 devolve a cor própria da peça.",
   "Slot wählen, dann auf die Fläche klicken. Das ändert das Modell, nicht nur das Bild — Strg+Z nimmt es zurück.": "Escolher um slot e depois clicar na superfície. Isto altera o modelo, não apenas a imagem — Ctrl+Z desfaz.",
   "Slot zuweisen": "Atribuir slot",
-  "Slot {nummer}": "Slot {nummer}",
+  "Slot {nummer}": "Ranhura {nummer}",
   "So viele Kopien reichen über den Bauraum hinaus. Wie weit, steht in „needed_mm“; was die Maschine kann, in „volume_mm“.": "Tantas cópias ultrapassam o volume de impressão. Quanto, consta de “needed_mm”; o que a máquina consegue, de “volume_mm”.",
   "So viele Schichten bleiben ungekühlt. Der Lüfter würde die erste Schicht vom Bett lösen.": "Estas camadas ficam sem arrefecimento. O ventilador descolaria a primeira camada da mesa.",
   "So viele Varianten ergeben keinen Kalibrierdruck mehr.": "Tantas variantes já não dão uma impressão de calibração.",

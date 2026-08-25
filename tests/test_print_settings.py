@@ -23,6 +23,7 @@ from app.core.slice import advise
 from app.core.types import (
     BoundingBox,
     LayerInfo,
+    Polygon,
     SliceResult,
 )
 
@@ -38,7 +39,7 @@ def _layers(
     layers = tuple(
         LayerInfo(
             z=float(index) * 0.2,
-            contours=(square,),
+            contours=(Polygon(outline=square),),
             area=area,
             overhang_area=overhang,
             islands=(square,) if islands and index > 0 else (),

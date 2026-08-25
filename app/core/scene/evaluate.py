@@ -304,7 +304,14 @@ def evaluate(
                 # Regeln ohne Schutz und ohne Test).
                 scene=Scene(
                     objects={
-                        object_id: dataclasses.replace(entry, features=dict(entry.features))
+                        object_id: dataclasses.replace(
+                            entry,
+                            features=dict(entry.features),
+                            # Auch die Slotliste gehört der Kopie — geteilt
+                            # erreichte ein append die Ergebnisszene, und der
+                            # Boden unter Regel 3 hätte ein Loch.
+                            material_slots=list(entry.material_slots),
+                        )
                         for object_id, entry in objects.items()
                     },
                     parameters=dict(parameters),
@@ -803,7 +810,7 @@ def _with_features(
     # Mitnehmen heißt nicht glauben. Wo die Erkennung die Art des Merkmals
     # sieht, wird es wie ein erkanntes zugeordnet und fällt heraus, wenn es
     # wirklich weg ist — sonst wäre aus dem lautlosen Verlust ein lautloses
-    # Gespenst kind_after, und das ist schlimmer: §21.3 hält die Auswertung an,
+    # Gespenst geworden, und das ist schlimmer: §21.3 hält die Auswertung an,
     # sobald eine späte Op auf eine ID zeigt, die nichts mehr bezeichnet.
     # ``recognised`` und nicht nur die Art: Ein Baustein bringt Bohrungen mit,
     # die ``detect`` an ihrer Stelle nicht findet (§24.1). Sie an der Erkennung
