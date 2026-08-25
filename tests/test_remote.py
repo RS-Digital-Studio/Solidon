@@ -350,6 +350,64 @@ def test_such_a_recipe_is_not_accepted_without_asking(scripted_recipe_part) -> N
     assert not auto_acceptable(proposal, registry)
 
 
+@pytest.fixture
+def nested_recipe_part(scripted_recipe_part):
+    """Ein Rezept, das ein Rezept mit Quelltext einsetzt — Ebene zwei.
+
+    ``recipe.capture`` nimmt beliebige registrierte Operationen auf, also auch
+    ein ``insert_<name>``. Die Schrittliste des äußeren Rezepts nennt dann nur
+    diesen Namen, und der Quelltext steht eine Etage tiefer.
+    """
+    from app.core.knowledge.parts import ops as part_ops
+    from app.core.knowledge.parts.registry import PARTS, PartSpec
+    from app.core.registry import REGISTRY, op_params, param
+    from app.core.types import BaseParams, PartResult
+
+    inner, registry = scripted_recipe_part
+
+    @op_params
+    class Params(BaseParams):
+        size: float = param(title="Größe", default=10.0, minimum=1.0, maximum=100.0)
+
+    def build(values: BaseParams) -> PartResult:  # pragma: no cover - nie gerechnet
+        raise AssertionError("dieser Baustein wird nicht gebaut")
+
+    spec = PartSpec(
+        name="scad_huelle",
+        title="Hülle um die Probe",
+        group="fasteners",
+        params=Params,
+        fn=build,
+        features=("body",),
+        doc="Ein Rezept, das ein Rezept mit Quelltext einsetzt.",
+        source="recipe",
+        recipe_data={"document": {"ops": [{"op": inner, "params": {}}]}},
+    )
+    PARTS.register(spec)
+    part_ops.register_one(spec, registry)
+    try:
+        yield part_ops.op_name(spec.name), registry
+    finally:
+        PARTS.remove(spec.name)
+        REGISTRY._ops.pop(part_ops.op_name(spec.name), None)
+
+
+def test_a_recipe_inside_a_recipe_is_locked_just_the_same(nested_recipe_part) -> None:
+    """Die Sperre sah genau eine Ebene tief.
+
+    Wer Rezept A über ``insert_A`` in Rezept B aufnimmt, bekam ein
+    ``insert_B``, dessen Schrittliste nur ``insert_A`` nennt: über die Leitung
+    angeboten und aufrufbar, obwohl der Aufruf OpenSCAD auf diesem Rechner
+    startet. Gefragt wird jetzt beliebig tief.
+    """
+    name, registry = nested_recipe_part
+
+    assert name not in {entry["name"] for entry in remote.remote_tools(registry)}
+
+    with pytest.raises(remote.RemoteRefusedError):
+        remote.check_call(name, {"size": 10.0}, registry)
+
+
 def test_an_ordinary_part_stays_reachable() -> None:
     """Eine Sperre, die alle Bausteine mitnimmt, macht die Schnittstelle
     unbrauchbar und sieht dabei sicher aus."""

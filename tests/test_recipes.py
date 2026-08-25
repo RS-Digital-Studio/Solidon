@@ -695,17 +695,22 @@ def _clean_globals(*names: str) -> None:
         REGISTRY._ops.pop(part_ops.op_name(name), None)
 
 
-def _travelling_project(profile: Profile, tmp_path: Path):
-    """Ein Rezept global registriert und ein Projekt, das es benutzt."""
+def _travelling_project(profile: Profile, tmp_path: Path, prepared: recipe.Recipe | None = None):
+    """Ein Rezept global registriert und ein Projekt, das es benutzt.
+
+    ``prepared`` nimmt ein fertiges Rezept entgegen — für den Fall, in dem der
+    Bereichstest nicht laufen darf, weil der Ausschnitt OpenSCAD anwerfen
+    würde.
+    """
     from app.core.scene.project import Project, save
 
-    made = recipe.range_check(_recipe(profile), profile)
+    made = prepared if prepared is not None else recipe.range_check(_recipe(profile), profile)
     recipe.register(made)
     document = _document()
     document.ops.append(
         Operation(
             id=2,
-            op=part_ops.op_name("probe_halter"),
+            op=part_ops.op_name(made.name),
             outputs=("obj_2",),
             params={},
         )
@@ -713,6 +718,43 @@ def _travelling_project(profile: Profile, tmp_path: Path):
     target = tmp_path / "reise.p3d"
     save(Project(document=document), target)
     return made, target
+
+
+def _scripted_recipe(profile: Profile, name: str = "probe_halter") -> recipe.Recipe:
+    """Ein Rezept, dessen Ausschnitt einen ``create_from_scad``-Schritt trägt.
+
+    Angehängt statt über ``capture`` aufgenommen: Die Probe in ``capture``
+    würde OpenSCAD wirklich starten, und geprüft wird hier die **Auskunft**
+    über den Quelltext, nicht sein Lauf.
+    """
+    made = _recipe(profile, name)
+    made.document.ops.append(
+        Operation(
+            id=2,
+            op="create_from_scad",
+            outputs=("obj_9",),
+            params={"source": "cube(1);"},
+        )
+    )
+    return made
+
+
+def _nesting_recipe(inner: str, name: str) -> recipe.Recipe:
+    """Ein Rezept, das ein anderes Rezept einsetzt — Ebene zwei.
+
+    Von Hand gebaut und nicht über ``capture``: Die Probe dort rechnete das
+    innere Rezept mit, und genau das soll hier niemand tun müssen, um die
+    Frage „startet das fremden Quelltext?" zu beantworten.
+    """
+    document = _document()
+    document.ops.append(Operation(id=2, op=part_ops.op_name(inner), outputs=("obj_2",), params={}))
+    return recipe.Recipe(
+        name=name,
+        title="Probehülle",
+        group="structure",
+        document=document,
+        features={"top": "face_top"},
+    )
 
 
 def test_a_recipe_travels_inside_the_project_file(profile: Profile, tmp_path: Path) -> None:
@@ -799,6 +841,116 @@ def test_the_same_recipe_arrives_silently(profile: Profile, tmp_path: Path) -> N
         assert not PARTS.has("probe_halter_travelled")
         assert PARTS.get("probe_halter").source == recipe.RECIPE_SOURCE, (
             "der lokale Eintrag wird nicht zum mitgereisten umgestempelt"
+        )
+    finally:
+        _clean_globals("probe_halter", "probe_halter_travelled")
+
+
+def test_a_travelling_recipe_with_source_code_is_announced_when_the_file_opens(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Regel 13 hält nur mit Regel 11 zusammen — auch für ein Rezept, das aus
+    einer **fremden** Datei kommt.
+
+    ``load_all`` sagt es für den eigenen Ordner (Test oben), ``adopt`` sagte es
+    nicht: Eine gemailte ``.p3d`` mit einem Rezept, dessen Dokumentteil
+    ``create_from_scad`` trägt, meldete beim Öffnen ``parts.travelled`` und
+    kein Wort über den Quelltext. Verlangt ist die Auskunft **vor** der ersten
+    Auswertung, also im Bericht der geladenen Datei (§32).
+    """
+    from app.core.knowledge.parts import check as part_check
+    from app.core.scene.project import load
+
+    try:
+        _made, target = _travelling_project(profile, tmp_path, _scripted_recipe(profile))
+        # Die fremde Maschine: kein Rezept im Katalog, keine Operation.
+        _clean_globals("probe_halter")
+        loaded = load(target)
+
+        scripted = [
+            entry for entry in loaded.report.findings if entry.code == "project.scripted_source"
+        ]
+        assert scripted, "der Quelltext des mitgereisten Rezepts gehört in den Bericht der Datei"
+        assert scripted[0].values.get("recipe") == "probe_halter", (
+            "und der Befund nennt, in welchem Baustein er steckt"
+        )
+        assert any(
+            entry.code == "parts.scripted_recipe" for entry in part_check.check(loaded.document)
+        ), "dieselbe Auskunft aus der zweiten Richtung, über den benutzten Baustein"
+    finally:
+        _clean_globals("probe_halter", "probe_halter_travelled")
+
+
+def test_a_recipe_inside_a_recipe_still_runs_foreign_source(profile: Profile) -> None:
+    """Die Prüfung sah genau **eine** Ebene tief.
+
+    ``capture`` nimmt beliebige Operationen auf, also auch ein ``insert_A``.
+    Rezept B trug damit ``create_from_scad`` mittelbar, und seine Schrittliste
+    nannte nur ``insert_A``: über die Leitung angeboten, ohne Rückfrage
+    übernehmbar, und ``parts.check`` schwieg dazu.
+    """
+    from app.core.knowledge.parts import check as part_check
+    from app.core.scene.foreign import runs_foreign_source
+
+    parts, registry = PartRegistry(), Registry()
+    recipe.register(_scripted_recipe(profile, "probe_kern"), parts, registry)
+    recipe.register(_nesting_recipe("probe_kern", "probe_huelle"), parts, registry)
+
+    assert runs_foreign_source(part_ops.op_name("probe_kern"), parts)
+    assert runs_foreign_source(part_ops.op_name("probe_huelle"), parts), (
+        "mittelbar ist auch ausgeführt — die Frage gilt der Wirkung"
+    )
+
+    document = _document()
+    document.ops.append(
+        Operation(id=2, op=part_ops.op_name("probe_huelle"), outputs=("obj_2",), params={})
+    )
+    codes = [entry.code for entry in part_check.check(document, parts)]
+    assert "parts.scripted_recipe" in codes
+
+
+def test_a_recipe_that_names_itself_does_not_loop(profile: Profile) -> None:
+    """Der Zyklenwächter: Zwei Rezepte, die einander einsetzen, sind eine
+    Datei, die ankommen kann — die Prüfung darf daran nicht hängenbleiben."""
+    from app.core.scene.foreign import runs_foreign_source
+
+    parts, registry = PartRegistry(), Registry()
+    recipe.register(_nesting_recipe("probe_zwei", "probe_eins"), parts, registry)
+    recipe.register(_nesting_recipe("probe_eins", "probe_zwei"), parts, registry)
+
+    assert not runs_foreign_source(part_ops.op_name("probe_eins"), parts)
+
+
+def test_a_broken_recipe_beside_the_document_is_a_finding_and_not_an_abort(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """„Eine kaputte Beilage ist ein Befund, kein Abbruch" (Regel 17).
+
+    Der Kommentar in ``project.load`` sagte es, und das ``json.loads`` stand
+    **außerhalb** des ``try`` in ``adopt``: Eine abgeschnittene
+    ``recipes/foo.json`` ließ das ganze Projekt mit „Der Projektinhalt ist
+    beschädigt" abbrechen, obwohl das Dokument heil war.
+    """
+    import zipfile as zf
+
+    from app.core.scene.project import load
+
+    try:
+        _made, target = _travelling_project(profile, tmp_path)
+        _clean_globals("probe_halter")
+        damaged = tmp_path / "beschaedigt.p3d"
+        with zf.ZipFile(target) as source, zf.ZipFile(damaged, "w") as broken:
+            for entry_name in source.namelist():
+                payload = source.read(entry_name)
+                if entry_name == "recipes/probe_halter.json":
+                    payload = payload[: len(payload) // 2]
+                broken.writestr(entry_name, payload)
+
+        loaded = load(damaged)
+
+        assert loaded.document.ops, "das Dokument ist heil und öffnet"
+        assert any(entry.code == "parts.recipe_failed" for entry in loaded.report.findings), (
+            "der Grund steht als Befund da, statt das Öffnen abzubrechen"
         )
     finally:
         _clean_globals("probe_halter", "probe_halter_travelled")

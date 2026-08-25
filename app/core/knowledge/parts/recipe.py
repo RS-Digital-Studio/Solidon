@@ -728,18 +728,29 @@ def adopt(
 
     Eine kaputte Datei ist ein Befund, kein Abbruch (Regel 17) — der Rest
     des Projekts öffnet.
+
+    **Und was mitkommt, wird angesagt.** Trägt der Ausschnitt einen
+    ``create_from_scad``-Schritt, gibt diese Funktion dieselbe Auskunft, die
+    ``load_all`` für den eigenen Ordner gibt (§32, Regel 11 und 13 zusammen).
+    Sie fehlte hier, und damit war der eine Weg blind, auf dem ein fremdes
+    Rezept wirklich ankommt: Eine gemailte Projektdatei meldete
+    ``parts.travelled`` und kein Wort über den Quelltext. Gemeldet wird in
+    jeder der drei Lagen — auch wo nichts zu registrieren ist, denn gerechnet
+    wird dann mit dem lokalen Stand desselben Rezepts, und der trägt denselben
+    Quelltext.
     """
     from app.core.knowledge.parts.registry import PARTS
 
     source = parts or PARTS
     try:
         arrived = from_data(data)
+        announced = _announced(arrived)
         mark = fingerprint(arrived)
         name = arrived.name
         if source.has(name):
             local = source.get(name)
             if local.version == mark:
-                return []
+                return announced
             name = f"{arrived.name}_travelled"
             # Verglichen wird der Abdruck der **umbenannten** Fassung: Der
             # Name gehört zu den kanonischen Daten, und ein Vergleich gegen
@@ -757,24 +768,70 @@ def adopt(
                 # schließen — ein Mittel ohne Wirkung, denn Schließen meldet
                 # nichts ab (Fund des Gesamtreviews vom 25.08.2026).
                 if source.get(name).version == mark:
-                    return []
+                    return announced
                 from app.core.knowledge.parts import ops as part_ops
                 from app.core.registry import REGISTRY
 
                 source.remove(name)
                 (registry or REGISTRY).remove(part_ops.op_name(name))
         register(arrived, source, registry, source=TRAVELLED_SOURCE)
-        return []
+        return announced
     except Exception as problem:  # Regel 17: Befund statt Abbruch
         _log.warning("travelled recipe failed to adopt: %s", problem)
-        return [
-            Finding(
-                code="parts.recipe_failed",
-                severity="warning",
-                message=_("Ein mitgereistes Rezept ließ sich nicht aufnehmen."),
-                values={"reason": str(problem)[:200]},
-            )
-        ]
+        return [_not_adopted(problem)]
+
+
+def adopt_payload(
+    raw: bytes,
+    entry: str,
+    parts: PartRegistry | None = None,
+    registry: Registry | None = None,
+) -> list[Finding]:
+    """Dasselbe, solange das Rezept noch als Text im Container liegt.
+
+    Der Grund für diese zweite Tür: Das ``json.loads`` stand beim Aufrufer,
+    also **außerhalb** des ``try`` in :func:`adopt`. Eine abgeschnittene
+    ``recipes/foo.json`` ließ damit das ganze Projekt mit „Der Projektinhalt
+    ist beschädigt" abbrechen, obwohl das Dokument heil war — und der
+    Kommentar zwei Zeilen über der Aufrufstelle sagte längst, eine kaputte
+    Beilage sei ein Befund und kein Abbruch (Regel 17). Lesen gehört zum
+    Aufnehmen, also gehört es in dasselbe ``try``.
+    """
+    try:
+        data = json.loads(raw)
+    except Exception as problem:  # Regel 17: Befund statt Abbruch
+        _log.warning("travelled recipe %s is unreadable: %s", entry, problem)
+        return [_not_adopted(problem, entry)]
+    return adopt(data, parts, registry)
+
+
+def _announced(arrived: Recipe) -> list[Finding]:
+    """Was an einem mitgereisten Rezept erklärt gehört, bevor es rechnet (§32).
+
+    Dieselben Zeilen wie in :func:`load_all` — mit dem Rezeptnamen
+    angereichert, denn der Befund kommt aus einem Dokument, das der Kunde
+    nirgends aufgeschlagen sieht.
+    """
+    from app.core.scene.foreign import findings_for
+
+    return [
+        dataclasses.replace(warning, values={**dict(warning.values), "recipe": arrived.name})
+        for warning in findings_for(arrived.document)
+    ]
+
+
+def _not_adopted(problem: Exception, entry: str = "") -> Finding:
+    """Der Befund für eine Beilage, die nicht ankam — mit Grund und, wo
+    bekannt, dem Namen der Datei im Container."""
+    values = {"reason": str(problem)[:200]}
+    if entry:
+        values["file"] = entry
+    return Finding(
+        code="parts.recipe_failed",
+        severity="warning",
+        message=_("Ein mitgereistes Rezept ließ sich nicht aufnehmen."),
+        values=values,
+    )
 
 
 def replace(

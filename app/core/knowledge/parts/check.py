@@ -93,18 +93,16 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
     # Regel 13 hält nur mit Regel 11 zusammen (§32): Ein Rezept darf
     # OpenSCAD-Quelltext tragen, und dann erfährt es der Kunde, bevor er
     # rechnen lässt — dieselbe Auskunft, die ``scene.foreign`` einer
-    # Projektdatei über ihre eigenen Schritte gibt.
-    from app.core.scene.foreign import SCRIPTED_OPS
+    # Projektdatei über ihre eigenen Schritte gibt. Und dieselbe **Funktion**:
+    # Sie sieht durch ein Rezept hindurch, das ein zweites einsetzt, und eine
+    # eigene Fassung hier sah genau eine Ebene tief.
+    from app.core.knowledge.parts.ops import op_name
+    from app.core.scene.foreign import runs_foreign_source
 
     scripted = tuple(
         name
         for name in sorted(set(used))
-        if source.has(name)
-        and (data := source.get(name).recipe_data) is not None
-        and any(
-            entry.get("op") in SCRIPTED_OPS
-            for entry in dict(data).get("document", {}).get("ops", ())
-        )
+        if source.has(name) and runs_foreign_source(op_name(name), source)
     )
     if scripted:
         findings.append(

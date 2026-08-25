@@ -354,18 +354,14 @@ def runs_foreign_source(name: str) -> bool:
     fremden Code startet, wird angesagt und nicht ferngesteuert, gleich unter
     welchem Namen es im Register steht.
 
-    Gelesen wird dieselbe Quelle wie in ``knowledge.parts.check``: die
-    Rezeptdaten des Bausteins, in denen die Schritte des Dokuments stehen. Ein
-    Baustein ohne Rezept trägt keinen Quelltext — er rechnet gegen
-    ``manifold3d`` (Checkliste „neuer Baustein").
+    Gerechnet wird die Frage **eine** Etage tiefer, in
+    :func:`app.core.scene.foreign.runs_foreign_source`: dieselbe Antwort für
+    die zwei Sperren hier, für den Prüfbericht der Bausteine und für die
+    Auskunft über eine geöffnete Projektdatei. Sie sieht auch durch ein
+    Rezept hindurch, das ein zweites einsetzt — drei Kopien der Prüfung sahen
+    genau eine Ebene tief, und ein ``insert_B`` mit einem ``insert_A`` darin
+    kam an allen dreien vorbei.
     """
-    from app.core.knowledge.parts.ops import part_of
-    from app.core.scene.foreign import SCRIPTED_OPS
+    from app.core.scene.foreign import runs_foreign_source as scripted
 
-    if name in SCRIPTED_OPS:
-        return True
-    spec = part_of(name)
-    if spec is None or spec.recipe_data is None:
-        return False
-    steps = dict(spec.recipe_data).get("document", {}).get("ops", ())
-    return any(str(entry.get("op", "")) in SCRIPTED_OPS for entry in steps)
+    return scripted(name)

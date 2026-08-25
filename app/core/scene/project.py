@@ -398,7 +398,12 @@ def load(path: Path) -> Project:
                     continue
                 if not entry_name.endswith(".json"):
                     continue
-                arrived.extend(part_recipes.adopt(json.loads(container.read(entry_name))))
+                # Gelesen wird **in** ``adopt_payload``: Stand das
+                # ``json.loads`` hier, lief eine abgeschnittene Beilage am
+                # ``try`` des Aufnehmens vorbei und ließ das ganze Projekt mit
+                # „Der Projektinhalt ist beschädigt" abbrechen — obwohl das
+                # Dokument heil war.
+                arrived.extend(part_recipes.adopt_payload(container.read(entry_name), entry_name))
 
             payloads: dict[SourceId, bytes] = {}
             for source_id, source in document.sources.items():
