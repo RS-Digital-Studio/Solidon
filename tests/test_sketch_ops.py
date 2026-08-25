@@ -197,6 +197,30 @@ def test_a_loft_keeps_the_drawn_hole() -> None:
     )
 
 
+def test_a_pocket_keeps_the_drawn_island() -> None:
+    """``sketch_pocket`` fräste die Insel eines gezeichneten Lochs weg.
+
+    Zwilling des Loft-Fundes darüber: ``shifted`` legt jede Region um — auch
+    bei 0/0 — und verlor dabei die Löcher; ``scaled`` daneben nimmt sie seit
+    je mit. Dieselbe Skizze extrudierte also MIT Loch und schnitt als Tasche
+    OHNE — der Rahmen war gemeint, gefräst wurde die volle Fläche.
+    """
+    import dataclasses
+
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.sketch.shapes import rectangle as shape_rectangle
+
+    outer = shape_rectangle(20.0, 20.0)
+    inner = shape_rectangle(10.0, 10.0)
+    drawn = dataclasses.replace(outer, elements=outer.elements + inner.elements)
+
+    body = solid_of(run("sketch_pocket", brep_box(), sketch=sketch_to_text(drawn), through=True))
+
+    assert body.volume == pytest.approx(40.0 * 30.0 * 20.0 - (400.0 - 100.0) * 20.0, rel=1e-6), (
+        "die Insel des gezeichneten Lochs gehört stehen"
+    )
+
+
 def test_a_sweep_refuses_a_sketch_on_a_foreign_plane() -> None:
     """Der Bogen läuft entlang X und Z — das ist seine Definition.
 

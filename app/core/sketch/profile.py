@@ -294,10 +294,19 @@ def _nested(loops: list[Profile]) -> tuple[Profile, ...]:
 
 def shifted(profile: Profile, dx: float, dy: float) -> Profile:
     """Derselbe Umriss, in der Ebene verschoben — wo er hingehört, entscheidet
-    die Operation, nicht die Skizze."""
+    die Operation, nicht die Skizze.
+
+    Die Löcher ziehen mit, wie bei :func:`scaled`. Sie fehlten hier, und
+    ``sketch_pocket`` legt **jede** Region durch diese Funktion, auch bei
+    0/0: Dieselbe Skizze extrudierte mit Loch und schnitt als Tasche ohne —
+    die Insel war weggefräst, still.
+    """
     if profile.circle is not None:
         centre, radius = profile.circle
-        return Profile(circle=((centre[0] + dx, centre[1] + dy), radius))
+        return Profile(
+            circle=((centre[0] + dx, centre[1] + dy), radius),
+            holes=tuple(shifted(one, dx, dy) for one in profile.holes),
+        )
     return Profile(
         segments=tuple(
             ProfileSegment(
@@ -310,7 +319,8 @@ def shifted(profile: Profile, dx: float, dy: float) -> Profile:
                 through=tuple((x + dx, y + dy) for x, y in segment.through),
             )
             for segment in profile.segments
-        )
+        ),
+        holes=tuple(shifted(one, dx, dy) for one in profile.holes),
     )
 
 
