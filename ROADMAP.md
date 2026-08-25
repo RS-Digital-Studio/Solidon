@@ -80,7 +80,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
-| Drei Bausteine, die dem Katalog noch fehlen | Die dünnste Gruppe des Katalogs ist die meistgefragte (24.08.2026) | nichts — Kabelclip gebaut (`4b9bef2`), Lochwand-Einhänger gebaut (`a3f23d5`), Schwalbenschwanz **gestrichen**: den gibt es schon als Form des Passstifts und als Verbinder beim Teilen |
+| Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | **eine Entscheidung**: ob §24.3 eine Ausnahme bekommt. Die Liste selbst ist abgearbeitet — Kabelclip, Eckwinkel, Standfuß und Scharnierauge stehen, der Schwalbenschwanz war schon da |
 | Die Startmarke §31 ist seit dem 24.08.2026 rot | Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026) | **eine Entscheidung**: Marke neu setzen oder die Ursache suchen. Nicht der Code — im Wechsel gegen den Stand vor drei Commits gemessen, Unterschied im Rauschen |
 | Ein Rezept nimmt den ganzen Stapel | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Mehrfachauswahl im Verlauf — das Format nimmt beliebige `op_ids`, aber `HistoryPanel` kennt nur einen Index |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
@@ -9805,15 +9805,56 @@ war nach einem Baustein *dieses Namens*; er ist keiner, sondern ein
 Parameterwert an zwei Stellen. **Eine Lücke im Katalog ist erst eine, wenn man
 nach der Sache gesucht hat und nicht nach dem Namen.**
 
-- [ ] **Drei Bausteine, nach Belegkraft sortiert.**
-  ~~Schwalbenschwanz~~ (eine der vier von der Fachliteratur genannten
-  verlässlichen Verbindungen, und wir haben drei davon — **und
-  `shapes.dovetail` gibt es schon**, der Baustein wäre also billiger als
-  gedacht), Eckwinkel, Standfuß, Bolzenscharnier. Der letzte ist der teuerste — die Spaltmaße
-  entscheiden über Erfolg oder Verklebung und brauchen einen eigenen
-  Prüfkörper.
+- [x] **Die Liste ist abgearbeitet** (25.08.2026). Von fünf Vorschlägen sind
+  vier gebaut und einer gestrichen:
+
+      Kabelclip        4b9bef2   die dünnste Gruppe hatte nur ein Loch
+      Eckwinkel        327319b   die Rippe hält eine Wand, nicht die Ecke
+      Standfuß         9a900df   Fuß oder Tasche, subtractive_on wie beim Stift
+      Scharnierauge    —         das Filmscharnier biegt, dieses dreht
+      Schwalbenschwanz gestrichen — den gibt es als Form des Passstifts
+
+  Der Katalog zählt damit zwanzig Bausteine statt der dreizehn aus der
+  Erstbestückung, und keine Gruppe steht mehr mit einem einzigen Eintrag da.
+
+  **Vom Bolzenscharnier ist die Hälfte geworden, und die andere Hälfte ist
+  eine Frage** — sie steht unter „Ein Baustein muss ein Körper sein, ein
+  Gelenk sind zwei".
 
   **Was ausdrücklich nicht dazugehört:** Griffe, Knöpfe, Batteriedeckel,
   Möbelfüße als fertige Teile. Sie sind oft gefragt und sind **Modelle, keine
   Bausteine** — sie werden nicht an ein Teil gesetzt, sie *sind* das Teil. Der
   Katalog ergänzt Modelle, er ersetzt sie nicht.
+
+---
+
+## Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026)
+
+Beim letzten Baustein der Katalogliste — dem Bolzenscharnier — stieß die Sache
+an eine Regel, und die Regel steht nicht dort, wo man sie sucht.
+
+**Ein Scharnier, das schon beim Drucken beweglich ist, besteht aus zwei
+Teilen.** Der Bereichstest verlangt aber `component_count == 1` („falls
+apart"). Beide Forderungen zusammen gehen nicht.
+
+**Und die Einteiligkeit steht nicht im Bauplan.** §24.3 nennt vier Dinge:
+wasserdicht, Mindestwandstärke, keine Selbstdurchdringung an den Grenzen,
+Merkmale korrekt benannt. Die Einteiligkeit hat der Test hinzugefügt, und zwar
+aus einem guten Anlass: Die Rastnase zerfiel, weil sie die Fläche nur berührte
+(§39). Gemeint war „zerfällt nicht **versehentlich**" — was der Test prüft, ist
+„ist nicht mehrteilig".
+
+**Gebaut wurde deshalb das Scharnierauge** (`hinge_eye`): eine Lasche mit
+Bohrung, einteilig, und zwei davon plus ein Passstift ergeben ein Gelenk. Das
+ist im Rahmen und nützlich, und es beantwortet die Frage nicht.
+
+- [ ] **Soll die Bibliothek erklärt mehrteilige Bausteine kennen?** Dahinter
+  steht eine ganze Klasse: Scharniere, Ketten, Kugelgelenke, Schnappdeckel mit
+  Achse — print-in-place-Mechanik ist einer der Gründe, aus denen Leute
+  drucken. Dagegen steht, dass ein Baustein **angebaut** wird: Was am Träger
+  hängt, hängt an ihm, und ein Teil, das lose danebenliegt, ist eher ein Modell
+  als ein Baustein.
+
+  Wer es entscheidet, ändert §24.3 und den Test dazu — beides mit Ansage. Ein
+  Mittelweg wäre eine Deklaration am Baustein (`parts=2` statt einer stillen
+  Ausnahme), damit der Test weiter fängt, was **versehentlich** zerfällt.

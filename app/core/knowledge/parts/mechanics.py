@@ -653,3 +653,122 @@ def _ring(diameter: float, chamfer: float):  # type: ignore[no-untyped-def]
     outer = shapes.cylinder(diameter + 2.0 * shapes.OVERLAP, chamfer + shapes.OVERLAP)
     inner = shapes.cone(diameter, diameter - 2.0 * chamfer, chamfer)
     return subtract(outer, inner)
+
+
+HINGE_EYE_ADDED = PartChange(
+    version="1",
+    date="2026-08-25",
+    reason="Scharnierauge — das Filmscharnier biegt, dieses hier dreht.",
+)
+
+
+@op_params
+class HingeEyeParams(BaseParams):
+    pin: float = param(
+        title=_("Stift"),
+        default=3.0,
+        unit="mm",
+        minimum=1.0,
+        maximum=20.0,
+        doc=_("Durchmesser des Bolzens, der durchgeht — ein Passstift oder eine Schraube."),
+    )
+    width: float = param(
+        title=_("Breite"),
+        default=8.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=60.0,
+        doc=_("Wie breit das Auge ist, längs der Drehachse gemessen."),
+    )
+    reach: float = param(
+        title=_("Abstand"),
+        default=8.0,
+        unit="mm",
+        # Nicht null: Bei null hat die Lasche keine Länge, und ein Quader ohne
+        # Tiefe ist kein Körper — der Bereichstest fand drei Teile statt einem.
+        # Ein Auge, das auf der Fläche aufsitzt, wäre ohnehin kein Drehpunkt.
+        minimum=1.0,
+        maximum=60.0,
+        doc=_("Wie weit die Achse von der Fläche wegsteht — das ist der Drehpunkt."),
+    )
+    wall: float = param(
+        title=_("Wandstärke"),
+        default=2.0,
+        unit="mm",
+        minimum=0.8,
+        maximum=15.0,
+        doc=_("Material rings um die Bohrung. Zu dünn reißt beim ersten Zug auf."),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        placement="advanced",
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
+
+
+@register_part(
+    name="hinge_eye",
+    title=_("Scharnierauge"),
+    group="mechanics",
+    params=HingeEyeParams,
+    features=["eye"],
+    doc=_(
+        "Eine Lasche mit Bohrung, die sich um einen Bolzen dreht. Zwei davon an "
+        "zwei Teilen und ein Passstift dazwischen ergeben ein Scharnier, das "
+        "hält — anders als das Filmscharnier, das nur biegt."
+    ),
+    caveat=_(
+        "Ein halbes Scharnier: Das zweite Auge gehört an das Gegenstück, der "
+        "Bolzen kommt aus der Bibliothek (Passstift) oder aus dem Handel."
+    ),
+    changes=[HINGE_EYE_ADDED],
+)
+def hinge_eye(raw: BaseParams) -> PartResult:
+    """Lasche mit Auge, die Achse liegt parallel zur Fläche.
+
+    **Warum ein halbes Scharnier und kein ganzes.** Ein Scharnier, das schon
+    beim Drucken beweglich ist, besteht aus zwei Teilen, die sich gegeneinander
+    drehen — und ein Baustein dieser Bibliothek muss **ein** Körper sein
+    (`tests/test_parts.py`, „falls apart"). Die beiden Forderungen schließen
+    sich aus, und das ist keine Lücke im Test: Ein Baustein wird *angebaut*,
+    und was angebaut wird, hängt am Träger. Wer ein Gelenk will, setzt zwei
+    Augen und steckt einen Stift durch; den Stift gibt es als ``dowel``.
+
+    Die offene Frage dahinter — ob die Bibliothek erklärt-mehrteilige Bausteine
+    kennen soll, also print-in-place-Mechanik — steht im Register und nicht
+    hier. Sie ist größer als dieser Baustein.
+    """
+    params = cast(HingeEyeParams, raw)
+
+    aussen = params.pin + params.play + 2.0 * params.wall
+    bohrung = params.pin + params.play
+
+    def liegend(durchmesser: float, laenge: float) -> MeshData:
+        """Ein Zylinder mit der Achse in X — die Drehachse des Scharniers."""
+        stehend = shapes.cylinder(durchmesser, laenge)
+        mittig = shapes.moved(stehend, (0.0, 0.0, -laenge / 2.0))
+        return shapes.turned(mittig, 90.0, (0.0, 1.0, 0.0))
+
+    auge = shapes.moved(liegend(aussen, params.width), (0.0, params.reach, aussen / 2.0))
+    # Die Lasche reicht bis in die Mitte des Auges hinein: Zwei Körper, die sich
+    # nur berühren, sind der Fall, an dem eine Boolesche Operation bricht (§39).
+    lasche = shapes.box(params.width, params.reach, aussen)
+    body = union(auge, shapes.moved(lasche, (0.0, params.reach / 2.0, 0.0)))
+    body = subtract(
+        body,
+        shapes.moved(
+            liegend(bohrung, params.width + 2.0 * shapes.OVERLAP),
+            (0.0, params.reach, aussen / 2.0),
+        ),
+    )
+
+    return result(
+        body,
+        # Die Drehachse als Bohrung benannt: Wer das Gegenstück setzt, richtet
+        # es daran aus.
+        bore("eye_1", bohrung, (0.0, params.reach, aussen / 2.0), depth=params.width, through=True),
+    )
