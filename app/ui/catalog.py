@@ -233,6 +233,24 @@ class PartCatalog(QDialog):
         self.save_part.setEnabled(can)
         self.save_part.setToolTip("" if can else reason)
 
+    def refresh(self) -> None:
+        """Die Liste neu aus dem Register — die Suche bleibt, wie sie steht.
+
+        Gerufen, wenn ein eigener Baustein gespeichert wurde. Zwei Fehler
+        saßen an dieser Stelle, beide am 25.08.2026 im echten Fenster
+        gefunden: ``saved`` trägt den **Namen** des Rezepts, und direkt an
+        ``show_parts`` verbunden wurde er zum Suchtext — der Katalog zeigte
+        nur noch den neuen Baustein, bei leerem Suchfeld. Ein Slot ohne
+        Parameter kann einen Namen nicht als Suche missverstehen.
+
+        Und die Bilderkette läuft wieder an: Sie endet, sobald alle Bilder da
+        sind — ein Baustein, der erst danach dazukommt, bliebe sonst ohne
+        Vorschau.
+        """
+        self.show_parts(self.search.text())
+        if self._rendering:
+            QTimer.singleShot(0, self, self._render_pending)
+
     def show_parts(self, text: str = "") -> None:
         """Füllt die Liste, gruppiert wie der Katalog gruppiert."""
         self.list.clear()

@@ -6890,3 +6890,66 @@ def test_the_sketch_hint_names_the_plane_being_drawn_on(window: MainWindow) -> N
         )
     finally:
         window.finish_sketch(keep=False)
+
+
+def test_saving_a_part_takes_the_whole_stack_by_id_not_by_position(window: MainWindow) -> None:
+    """Der Rezeptdialog bekommt die IDs der Schritte — nicht ihre Plätze.
+
+    ``capture`` filtert nach ``Operation.id`` (zählt ab eins), ``enumerate``
+    zählt ab null: Mit Indizes fiel der **letzte** Schritt jedes Stapels
+    still aus dem Rezept, und niemand sah es — drei Schritte ergeben auch
+    einen Körper, der Bereichstest blieb grün. Gefunden am 25.08.2026 bei der
+    Verifikation im echten Fenster: Der Weg-2-Halter verlor seine
+    Versteifung.
+
+    Geprüft wird die Übergabe an den Dialog — dieselbe Stelle, an der der
+    Fehler saß —, nicht der Dialog selbst: Der gehört seinen eigenen Tests.
+    Und in derselben Übergabe steckte der zweite Fund desselben Tages: Das
+    ``saved``-Signal trägt den **Namen** des Rezepts, und direkt an
+    ``show_parts`` verbunden wurde er zum Suchtext — der Katalog zeigte nach
+    dem Speichern nur noch den neuen Baustein, bei leerem Suchfeld. Verbunden
+    gehört ``refresh``, das keinen Parameter nimmt.
+    """
+    from unittest import mock
+
+    from app.core import examples
+
+    window.session.open_project(examples.directory() / "weg2-halter-konstruieren.p3d")
+    window.session.wait_for_idle()
+    window.session.evaluate_now()
+    document = window.session.project.document
+    assert len(document.ops) >= 2, "der Fall braucht einen Stapel mit mehreren Schritten"
+
+    captured: dict[str, object] = {}
+
+    class Attrappe:
+        def __init__(self, _doc, _payloads, op_ids, _features, _profile, parent=None):
+            captured["op_ids"] = tuple(op_ids)
+            captured["dialog"] = self
+            self.saved = mock.Mock()
+
+        def exec(self):
+            return 0
+
+        def release(self):
+            return None
+
+        def deleteLater(self):  # noqa: N802 - Qt-Namen gehoeren Qt
+            return None
+
+    katalog = mock.Mock()
+    with mock.patch("app.ui.main_window.RecipeDialog", Attrappe):
+        window._save_as_part(katalog)
+
+    assert captured["op_ids"] == tuple(op.id for op in document.ops), (
+        "jeder Schritt des Stapels muss das Rezept erreichen — auch der letzte"
+    )
+    dialog = captured["dialog"]
+    assert isinstance(dialog, Attrappe)
+    verbunden = [aufruf.args[0] for aufruf in dialog.saved.connect.call_args_list]
+    assert katalog.refresh in verbunden, (
+        "nach dem Speichern wird der Katalog aufgefrischt, mit stehender Suche"
+    )
+    assert katalog.show_parts not in verbunden, (
+        "der Rezeptname darf nie als Suchtext im Katalog landen"
+    )

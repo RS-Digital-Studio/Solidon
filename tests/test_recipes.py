@@ -215,6 +215,7 @@ def test_a_saved_recipe_loads_into_catalog_and_register(profile: Profile, tmp_pa
 
     spec = parts.get("probe_halter")
     assert spec.source == recipe.RECIPE_SOURCE
+    assert spec.own, "§24.5: der Katalog kennzeichnet, was dem Kunden gehört — Rezepte auch"
     assert spec.features == ("top",)
     entry = next(e for e in spec.params.spec() if e.name == "w")
     assert (entry.minimum, entry.maximum, entry.unit) == (10.0, 90.0, "mm")

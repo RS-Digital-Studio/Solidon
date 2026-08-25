@@ -164,4 +164,9 @@ def travelling_parts(used: dict[str, str], registry: PartRegistry | None = None)
     selbst und fehlt darum nie — es taucht hier gar nicht erst auf.
     """
     source = registry or PARTS
-    return tuple(name for name in sorted(used) if source.has(name) and source.get(name).own)
+    # Ausdrücklich ``source == "user"`` und nicht ``own``: ``own`` umfasst
+    # seit dem 25.08.2026 auch Rezepte, und die reisen als Daten im Dokument —
+    # über ``own`` gefiltert würde jedes Rezept beim Speichern falsch gemeldet.
+    return tuple(
+        name for name in sorted(used) if source.has(name) and source.get(name).source == "user"
+    )

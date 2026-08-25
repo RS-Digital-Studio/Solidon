@@ -3699,12 +3699,24 @@ class MainWindow(QMainWindow):
         dialog = RecipeDialog(
             document,
             dict(self.session.project.sources),
-            tuple(index for index, _op in enumerate(document.ops)),
+            # **Die IDs der Schritte, nicht ihre Plätze.** ``capture`` filtert
+            # nach ``Operation.id``, und die zählt ab eins; ``enumerate`` ab
+            # null. Mit Indizes fiel der **letzte** Schritt jedes Stapels
+            # still aus dem Rezept — beim Weg-2-Halter die Versteifung.
+            # Gefunden am 25.08.2026 im echten Fenster: Das gespeicherte
+            # Rezept trug drei von vier Schritten, und der Bereichstest war
+            # trotzdem grün, denn drei Schritte ergeben auch einen Körper.
+            tuple(op.id for op in document.ops),
             self._result_features(),
             self.session.profile,
             parent=catalog,
         )
-        dialog.saved.connect(catalog.show_parts)
+        # ``refresh``, nicht ``show_parts``: ``saved`` trägt den **Namen** des
+        # Rezepts, und ``show_parts`` versteht sein Argument als Suchtext. So
+        # verbunden zeigte der Katalog nach dem Speichern nur noch den neuen
+        # Baustein — bei leerem Suchfeld, also ohne dass der Kunde sähe,
+        # warum. Gefunden am 25.08.2026 im echten Fenster.
+        dialog.saved.connect(catalog.refresh)
         dialog.saved.connect(self._part_saved)
         try:
             dialog.exec()

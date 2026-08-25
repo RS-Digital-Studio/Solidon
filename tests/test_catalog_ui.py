@@ -260,3 +260,58 @@ def test_the_catalogue_grows_with_the_screen(qt_app: QApplication) -> None:
 
     huge = for_screen(5120, 2880)
     assert huge == CATALOG_MAX, "auf einer Wand hört das Wachsen auf"
+
+
+def test_a_saved_part_joins_the_grid_and_gets_its_picture(qt_app: QApplication) -> None:
+    """Nach dem Speichern steht der neue Baustein **neben** den alten (§24.5).
+
+    Drei Funde aus demselben Bild, 25.08.2026 im echten Fenster: Der Katalog
+    zeigte nach dem Speichern nur noch das Rezept (der Name war als Suchtext
+    in ``show_parts`` gelandet), das Rezept hatte kein Vorschaubild (die
+    Bilderkette endet, sobald alles gerendert ist, und lief nie wieder an),
+    und es trug keine Kennzeichnung als eigener Baustein (``own`` kannte nur
+    die ``.py``-Gestalt).
+    """
+    import dataclasses
+
+    from PySide6.QtGui import QPixmap
+
+    from app.i18n import tr
+    from app.ui.catalog import describe
+
+    donor = next(spec for spec in PARTS.all() if "magnet" not in spec.name)
+    nachzuegler = dataclasses.replace(donor, name="nachzuegler_probe", source="recipe")
+    assert nachzuegler.own, "ein Rezept gehört dem Kunden — §24.5 will die Kennzeichnung"
+    assert tr("eigener Baustein") in describe(nachzuegler)
+
+    catalog = PartCatalog()
+    try:
+        # Die Bilder der Bibliothek gelten als fertig — geprüft wird, dass die
+        # Kette für den Nachzügler wieder anläuft, nicht, dass sie achtzehn
+        # Bausteine rendern kann; das tut ``test_parts_catalog`` bereits.
+        for existing in PARTS.all():
+            catalog._previews.setdefault(existing.name, QPixmap(1, 1))
+
+        PARTS.register(nachzuegler)
+        assert "nachzuegler_probe" not in catalog_names(catalog), (
+            "vor dem Auffrischen weiß der Katalog nichts von ihm"
+        )
+
+        catalog.refresh()
+        names = catalog_names(catalog)
+        assert "nachzuegler_probe" in names
+        assert donor.name in names, "die mitgelieferten bleiben stehen — der Name ist keine Suche"
+        assert catalog.search.text() == "", "das Suchfeld bleibt leer"
+        wait_until(
+            lambda: "nachzuegler_probe" in catalog._previews,
+            "das Vorschaubild des Nachzüglers",
+        )
+
+        # Eine stehende Suche bleibt stehen — auffrischen heißt nicht leeren.
+        catalog.search.setText("Magnet")
+        catalog.refresh()
+        assert catalog.search.text() == "Magnet"
+        assert "nachzuegler_probe" not in catalog_names(catalog), "die Suche gilt weiter"
+    finally:
+        catalog.release()
+        PARTS._parts.pop("nachzuegler_probe", None)

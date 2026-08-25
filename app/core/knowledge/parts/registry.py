@@ -186,7 +186,15 @@ class PartSpec:
 
     @property
     def own(self) -> bool:
-        return self.source == "user"
+        """Gehört dem Kunden — Katalog und Detailspalte kennzeichnen das (§24.5).
+
+        Eigene gibt es in zwei Gestalten: als ``.py`` aus dem Nutzerordner
+        (``user``) und als Rezept (``recipe``). Solange hier nur ``user``
+        stand, trug ein Rezept keine Kennzeichnung — gefunden am 25.08.2026
+        im echten Fenster. Wer nur die ``.py``-Gestalt meint (Dateiabdruck,
+        Reisewarnung), fragt nach ``source``, nicht hierher.
+        """
+        return self.source in ("user", "recipe")
 
 
 class PartRegistry:
