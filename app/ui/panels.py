@@ -107,7 +107,17 @@ def folded_groups(sizes: dict[str, int], limit: int = MAX_MENU_ROWS, fixed: int 
     ``fixed`` sind Zeilen, die mitzählen, aber nie gefaltet werden können —
     im Bausteine-Untermenü die Einträge, die zu keinem Baustein der Bibliothek
     gehören und deshalb keine Gruppe haben.
+
+    **Und die einzige Gruppe wird nie gefaltet**, gleich wie lang sie ist.
+    Bliebe sonst ein Menü, das aus einem einzigen Untermenü besteht: ein Klick
+    für alles, und die Zwischenebene hieße, wonach man ohnehin schon geklickt
+    hat. Das ist dieselbe Ausnahme, die ``registry.surfaces.group_is_flat`` für
+    die Menüleiste macht — dort wörtlich als „Bausteine → Bausteine → Deckel
+    erzeugen" beschrieben. Sie stand hier zuerst nicht, obwohl der Text auf die
+    Regel verwies: Eine zitierte Regel ist keine befolgte.
     """
+    if len(sizes) < 2 and not fixed:
+        return []
     rows = sum(sizes.values()) + fixed
     folded: list[str] = []
     for title in sorted(sizes, key=lambda name: (-sizes[name], name)):
@@ -1025,6 +1035,14 @@ class ObjectTree(QWidget):
         für die Menüleiste — eine Zwischenebene, die nichts bündelt, ist ein
         Klick für nichts. Wiederverwenden ließ sie sich nicht: Sie rechnet
         über die Gruppen der Leiste, hier geht es um die eines Merkmals.
+
+        **Die Grenze gilt den Operationen, nicht dem ganzen Menü.** Über
+        diesen Einträgen stehen noch Sichtbarkeit und der Skizzenschritt;
+        am Flächenklick sind es damit zwölf Zeilen und zwei Trennstriche
+        statt zehn. Das ist bewusst so: Wer die drei mitzählte, müsste eine
+        zweite Gruppe falten, und die erste, die dran wäre, ist „Ändern" —
+        darin liegt die Bohrung, also genau der Eintrag, dessen zweiter Klick
+        diesen Umbau ausgelöst hat.
         """
         if len(entries) <= MAX_MENU_ROWS:
             for spec in entries:

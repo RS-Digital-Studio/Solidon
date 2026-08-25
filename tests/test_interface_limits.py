@@ -188,6 +188,15 @@ def test_a_group_of_one_never_becomes_a_submenu() -> None:
         "einem Eintrag — dann bleibt das Menü lieber lang"
     )
 
+    allein = {"Bausteine": 17}
+    assert folded_groups(allein) == [], (
+        "die einzige Gruppe wird nie gefaltet — sonst besteht das Menü aus einem "
+        "einzigen Untermenü, das heißt, wonach man gerade geklickt hat"
+    )
+    assert folded_groups(allein, fixed=3) == ["Bausteine"], (
+        "sobald daneben etwas Ungefaltetes steht, lohnt das Untermenü wieder"
+    )
+
     gemischt = {"Groß": 8, "Mittel": 5, "Klein": 2, "Winzig": 1}
     assert folded_groups(gemischt) == ["Groß"], (
         "gefaltet wird von oben und nicht weiter, als die Grenze verlangt: "
