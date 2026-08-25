@@ -744,25 +744,25 @@ def hinge_eye(raw: BaseParams) -> PartResult:
     """
     params = cast(HingeEyeParams, raw)
 
-    aussen = params.pin + params.play + 2.0 * params.wall
-    bohrung = params.pin + params.play
+    outer = params.pin + params.play + 2.0 * params.wall
+    bore_width = params.pin + params.play
 
-    def liegend(durchmesser: float, laenge: float) -> MeshData:
+    def lying(diameter: float, length: float) -> MeshData:
         """Ein Zylinder mit der Achse in X — die Drehachse des Scharniers."""
-        stehend = shapes.cylinder(durchmesser, laenge)
-        mittig = shapes.moved(stehend, (0.0, 0.0, -laenge / 2.0))
-        return shapes.turned(mittig, 90.0, (0.0, 1.0, 0.0))
+        upright = shapes.cylinder(diameter, length)
+        centred = shapes.moved(upright, (0.0, 0.0, -length / 2.0))
+        return shapes.turned(centred, 90.0, (0.0, 1.0, 0.0))
 
-    auge = shapes.moved(liegend(aussen, params.width), (0.0, params.reach, aussen / 2.0))
+    eye_body = shapes.moved(lying(outer, params.width), (0.0, params.reach, outer / 2.0))
     # Die Lasche reicht bis in die Mitte des Auges hinein: Zwei Körper, die sich
     # nur berühren, sind der Fall, an dem eine Boolesche Operation bricht (§39).
-    lasche = shapes.box(params.width, params.reach, aussen)
-    body = union(auge, shapes.moved(lasche, (0.0, params.reach / 2.0, 0.0)))
+    lug = shapes.box(params.width, params.reach, outer)
+    body = union(eye_body, shapes.moved(lug, (0.0, params.reach / 2.0, 0.0)))
     body = subtract(
         body,
         shapes.moved(
-            liegend(bohrung, params.width + 2.0 * shapes.OVERLAP),
-            (0.0, params.reach, aussen / 2.0),
+            lying(bore_width, params.width + 2.0 * shapes.OVERLAP),
+            (0.0, params.reach, outer / 2.0),
         ),
     )
 
@@ -770,5 +770,7 @@ def hinge_eye(raw: BaseParams) -> PartResult:
         body,
         # Die Drehachse als Bohrung benannt: Wer das Gegenstück setzt, richtet
         # es daran aus.
-        bore("eye_1", bohrung, (0.0, params.reach, aussen / 2.0), depth=params.width, through=True),
+        bore(
+            "eye_1", bore_width, (0.0, params.reach, outer / 2.0), depth=params.width, through=True
+        ),
     )

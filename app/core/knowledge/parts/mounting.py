@@ -531,8 +531,8 @@ def foot(raw: BaseParams) -> PartResult:
     (§24.1, ``MOUTH_AT_ORIGIN``).
     """
     params = cast(FootParams, raw)
-    schneidet = params.kind == "pocket"
-    breit = params.diameter + (params.play if schneidet else 0.0)
+    cutting = params.kind == "pocket"
+    wide = params.diameter + (params.play if cutting else 0.0)
 
     # **Die Fase wird zweimal gekappt, und die zweite Grenze fehlte zuerst.**
     # In der Höhe ist sie klar: Mehr als die halbe, und der Kegel liefe in eine
@@ -541,24 +541,24 @@ def foot(raw: BaseParams) -> PartResult:
     # **minus zwei** Millimeter maß. Heraus kam ein Körper aus fünf Teilen, und
     # der Bereichstest fährt genau diese Ecke.
     chamfer = params.chamfer or params.height / 5.0
-    chamfer = min(chamfer, params.height / 2.0, (breit - MIN_FOOT_TIP) / 2.0)
-    schmal = breit - 2.0 * chamfer
+    chamfer = min(chamfer, params.height / 2.0, (wide - MIN_FOOT_TIP) / 2.0)
+    narrow = wide - 2.0 * chamfer
 
-    if schneidet:
+    if cutting:
         # Die Tasche: die Einführschräge liegt an der Mündung, also oben, und
         # der Rest ist ein Zylinder nach unten.
-        mund = shapes.cone(schmal, breit, chamfer)
-        rohr = shapes.cylinder(schmal, params.height - chamfer + shapes.OVERLAP)
+        mouth = shapes.cone(narrow, wide, chamfer)
+        shaft = shapes.cylinder(narrow, params.height - chamfer + shapes.OVERLAP)
         body = union(
-            shapes.moved(mund, (0.0, 0.0, -chamfer)),
-            shapes.moved(rohr, (0.0, 0.0, -params.height)),
+            shapes.moved(mouth, (0.0, 0.0, -chamfer)),
+            shapes.moved(shaft, (0.0, 0.0, -params.height)),
         )
-        merkmal = bore("foot_1", breit, (0.0, 0.0, -params.height / 2.0), depth=params.height)
+        marker = bore("foot_1", wide, (0.0, 0.0, -params.height / 2.0), depth=params.height)
     else:
-        # Der Fuß: unten schmal, damit der Elefantenfuß ins Leere quetscht.
-        fuss = shapes.cone(schmal, breit, chamfer)
-        saeule = shapes.cylinder(breit, params.height - chamfer + shapes.OVERLAP)
-        body = union(fuss, shapes.moved(saeule, (0.0, 0.0, chamfer - shapes.OVERLAP)))
-        merkmal = face("foot_1", 3.1416 * (schmal / 2.0) ** 2, (0.0, 0.0, 0.0), (0.0, 0.0, -1.0))
+        # Der Fuß: unten narrow, damit der Elefantenfuß ins Leere quetscht.
+        taper = shapes.cone(narrow, wide, chamfer)
+        column = shapes.cylinder(wide, params.height - chamfer + shapes.OVERLAP)
+        body = union(taper, shapes.moved(column, (0.0, 0.0, chamfer - shapes.OVERLAP)))
+        marker = face("foot_1", 3.1416 * (narrow / 2.0) ** 2, (0.0, 0.0, 0.0), (0.0, 0.0, -1.0))
 
-    return result(body, merkmal)
+    return result(body, marker)
