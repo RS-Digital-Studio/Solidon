@@ -505,6 +505,9 @@ gemacht, und alle sieben hatten dieselbe Form:
 | der Wächter | irgendeinen `pytest` | den Lauf **dieses** Halters |
 | sein Selbsttest | `os.getpid()` | ob der Lauf sichtbar ist |
 | `git diff` | den Index | HEAD |
+| ein Sprachprüfstand | sechsmal denselben deutschen Dialog | sechs Sprachen |
+
+Die vorletzte Zeile ist die, die am vollständigsten aussieht: Der Lauf schrieb sechs Dateien und gab sechs Zeilen aus. `set_language` setzt eine Variable, `install_catalog` lädt den Katalog — eine Sprachprüfung, die nur die erste ruft, misst sechsmal Deutsch. Die Gegenprobe steht in `oberflaeche.md` unter „Was nur das Bild zeigt“ und kostet nichts: **Sind zwei Bilder gleich groß, zeigen sie dasselbe.**
 
 Keiner war Nachlässigkeit. Jeder maß etwas, das echt, greifbar und benachbart
 war — **man misst, was leicht zu greifen ist, und nicht, was gemeint war.** Das
