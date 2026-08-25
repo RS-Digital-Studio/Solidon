@@ -502,18 +502,8 @@ def test_the_play_comes_from_the_material_profile(profile: Profile) -> None:
 
 @pytest.mark.parametrize(
     "name",
-    [
-        "insert_screw_hole",
-        "insert_nut_trap",
-        "insert_printed_thread",
-        "insert_snap_fit",
-        "insert_latch",
-        "insert_living_hinge",
-        "insert_keyhole",
-        "insert_wall_mount",
-        "insert_cable_gland",
-        "insert_snap_connector",
-    ],
+    [part_ops.op_name(spec.name) for spec in PARTS.all()],
+    ids=lambda name: str(name),
 )
 def test_every_part_operation_runs_on_a_body(name: str, profile: Profile) -> None:
     """Ein Lauf je Operation — eine Deklaration, die nie jemand aufgerufen
@@ -615,7 +605,8 @@ def test_the_change_log_says_what_moved() -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["insert_latch", "insert_rib", "insert_snap_fit", "insert_wall_mount", "insert_overhang_fan"],
+    [part_ops.op_name(spec.name) for spec in PARTS.all() if not part_ops.cuts(spec, None)],
+    ids=lambda name: str(name),
 )
 def test_an_added_part_grows_together_with_the_body(name: str, profile: Profile) -> None:
     """Ein aufgesetzter Baustein muss **ein** Körper mit seinem Träger werden.
@@ -625,6 +616,14 @@ def test_an_added_part_grows_together_with_the_body(name: str, profile: Profile)
     eine boolesche Operation zuverlässig scheitert (§39). Heraus kam ein
     wasserdichtes Netz aus zwei Komponenten — beim nächsten Bohren waren es
     drei. Die breiteren Bausteine fielen nie auf, weil manifold sie verschmolz.
+
+    **Aus dem Register statt aus einer Liste**, seit dem 25.08.2026. Hier
+    standen fünf Namen von Hand, und die letzten beiden Bausteine — Kabelclip
+    und Lochwand-Einhänger — waren nicht darunter; niemand hatte es vergessen,
+    es fällt nur schlicht nicht auf. Eine Liste, die man beim Anlegen eines
+    Bausteins mitpflegen muss, ist beim übernächsten unvollständig. Gemessen
+    vor dem Umbau: alle zwölf additiven bestehen, keiner wird durch die
+    Umstellung neu rot.
     """
     project = new_project("centauri-carbon-2", "petg")
     History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
