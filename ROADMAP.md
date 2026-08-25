@@ -81,7 +81,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
 | Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | nichts mehr — **§24.3 trägt die Ausnahme seit dem 25.08.2026** (Entscheidung Robert): Deklaration statt stiller Ausnahme. Es fehlt die Arbeit: Registerfeld, Druckspaltenprüfung im Bereichstest, das Bolzenscharnier als erster Nutzer |
-| Die Startmarke §31 ist seit dem 24.08.2026 rot | Der Anwendungsstart misst 2100 ms gegen eine Marke von 1233 (24.08.2026) | **eine Entscheidung**: Marke neu setzen oder die Ursache suchen. Nicht der Code — im Wechsel gegen den Stand vor drei Commits gemessen, Unterschied im Rauschen |
 | Ein Rezept nimmt den ganzen Stapel | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | eine Mehrfachauswahl im Verlauf — das Format nimmt beliebige `op_ids`, aber `HistoryPanel` kennt nur einen Index |
 | Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
@@ -107,9 +106,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Signatur C: der Hänger — kein Absturz, sondern Stillstand | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine **Messstelle**, die eine Änderung in wenigen Läufen bewertet statt in zwanzig. Drei Behebungsversuche sind gemessen und widerlegt. Hauptthread hält den GIL und wartet auf einen Qt-Mutex, Nebenthread umgekehrt — **B stirbt sofort, C stirbt gar nicht** |
 | Zwei Pakete lösen den Deadlock noch nicht auf | Ein Deadlock, der keiner war — und sieben Pakete statt einem (23.08.2026) | einen **Verhaltenswechsel**, keinen Strukturfix — und deshalb je einen eigenen Schritt. `activation`: 223 Zeilen Code an der Lizenzgrenze im `__init__`, die Ladereihenfolge dort ändert man nicht, ohne die Grenze mitzuprüfen. `knowledge.parts`: dort **ist** der Import die Registrierung — die fünf Modulimporte füllen das Bausteinregister, und `bootstrap.load_operations` verlässt sich darauf; verzögert wären sie wirkungslos. Die anderen fünf Pakete sind seit dem 23.08. sauber, `tests/test_core_isolation.py` führt beide Namen mit Begründung |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
-| Nach einem weiten Verschieben dreht die Kamera um den alten Punkt | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | den Bau von 0.1.4 — die kleine Variante steht seit `e550b9b` und erfüllt Roberts Anweisung; die saubere setzt den Fokus beim **Beginn einer Drehung** statt bei jedem Aufbau und ändert damit das Kameraverhalten. Nicht in der Nacht vor einem Paket |
 | Vier Stapel zeigen auf `session.py:1515` | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **Lebensdaueruntersuchung**, keinen `gc`-Schutz: Der Sammler ist an zwei Messungen zu verschiedenen Zeiten als Ursache ausgeschlossen. Und die vier Stapel sind ein Zeuge, viermal gefragt — `wait(50)` blockiert in C, der Rahmen steht dort ohnehin. Der Weg führt über die Aufräum-Fixture und trifft damit **jede** Fensterdatei |
-| Ein ladendes Fenster sieht aus wie ein abgestürztes | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | ein sichtbares Wartezeitverhalten (§2.8) statt schwarzer Fläche. Sechs Sekunden beim Öffnen von Weg 1, in denen Menü- und Statusleiste stehen und **kein einziges Panel** — Robert hat es zweimal für einen Absturz gehalten, das Protokoll sagt beide Male `ended normally`. **Gehört der Oberfläche**; sinkt die Ladezeit, bleibt der Punkt |
 | Der Cache spart die Geometrie, nicht die Erkennung | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | zuerst eine **Messung**, wie viel der sechs Sekunden überhaupt auf `detect()` entfällt. `_with_features()` läuft nach jedem Operationsergebnis, auch nach einem Cache-Treffer, wo das Netz bitgleich ist — fünfzehn Läufe über denselben Körper. Der Umbau ist nicht trivial: Der Plattencache nimmt nur `MeshData`, und die Zuordnung hängt an den vorigen Merkmalen und an `operation.matches` (§15.7) |
 | `decimated 992 to 992` — ein Schritt, der nichts tut | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | eine Erklärung. `decimate()` hat einen frühen Rücksprung für genau diesen Fall, und er greift nicht; es läuft eine echte `simplify_quadric_decimation` von 992 auf 992. Drei Aufrufer kommen infrage |
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
@@ -126,7 +123,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Drei Messwerkzeuge des Kerns ohne Anschluss | Was der Gesamtreview liegen ließ (25.08.2026) | eine Oberfläche für Winkel, Hüllquader und Volumen der Auswahl (§18.3) — der Kern ist fertig und ungerufen |
 | Die orient_200-Marke fällt auf jeder Maschine einmal | Was der Gesamtreview liegen ließ (25.08.2026) | nichts — je Maschine die Marke neu setzen; die Säulenrechnung ist bewusst teurer und richtig (5c90fac6) |
 | Das Schemabild des Skizzeneditors hinkt hinterher | Was der Gesamtreview liegen ließ (25.08.2026) | den Abschluss von 43s D-Paket — vorher ist die Zeichnung ein bewegliches Ziel |
-| Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | den, der die rote Startmarke (§31) angeht — allein ist der Posten unmessbar klein |
+| Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
 | Kleinreste: tote profile-Zweige, unbenutztes height | Was der Gesamtreview liegen ließ (25.08.2026) | niemanden — sie werfen nur beziehungsweise stören nicht; notiert, damit sie ein Kästchen haben |
 
 ---
@@ -4946,7 +4943,7 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       wirklich die Datei-I/O.
 
 
-- [ ] **Nach einem weiten Verschieben dreht die Kamera um den alten Punkt.**
+- [x] **Nach einem weiten Verschieben dreht die Kamera um den alten Punkt.**
       Robert am 23.08.2026: „nach jedem verschieben springt die kamera und das
       modell immer komisch“, und die Entscheidung gleich dazu: „kamera bei
       aktueller position dann immer lassen“. Gebaut von 3d-druck-64 in
@@ -4966,6 +4963,17 @@ Neun Dateien, jede geladen, ausgewertet und der Prüfbericht angesehen.
       bei jedem Aufbau. Sie ist nicht viel Arbeit, aber sie ändert das
       Kameraverhalten — mitten vor einem Bau, in genau dem Bereich, den Robert
       an einem Tag dreimal gemeldet hat. Deshalb danach und nicht davor.
+
+      **Gebaut (3d-druck-43, 26.08.2026), 0.1.5 ist draußen.** Der Drehstart
+      (`_left_down`/`_right_down` im Interaktionsstil, schwacher Rückruf
+      `on_rotate_start`) rückt den Fokus auf den Punkt des Sichtstrahls, der
+      der Mitte der Körper am nächsten liegt (`rotation_focus`,
+      `viewport.py`): Stellung und Blickrichtung bleiben, das Bild ändert
+      sich um nichts, nur die Tiefe des Drehpunkts stimmt wieder — kein
+      Sprung, weder beim Aufbau noch in der Geste. `_centre_rotation` und
+      damit das Nachrücken beim Aufbau sind ersatzlos weg; `_moved_only`
+      bleibt für `outgrown`. Tests: `rotation_focus` in drei Lagen plus die
+      Kette bis in die Kamera (`test_viewport_decisions.py`).
 
 - [x] **Ein Klick auf eine 5,19-mm-Bohrung schlägt M3 vor, und M3 trägt dort
       nichts ab.** Gemessen am 23.08.2026 im laufenden Fenster, `plate_holes.stl`,
@@ -8474,11 +8482,26 @@ Wer sie zusammenschreibt, hakt beide ab, sobald die Zeit sinkt — und ein
 Fenster, das drei Sekunden lang wie abgestürzt aussieht, ist immer noch eines,
 das wie abgestürzt aussieht.
 
-- [ ] **Ein Fenster, das lädt, sieht aus wie eines, das abgestürzt ist**
+- [x] **Ein Fenster, das lädt, sieht aus wie eines, das abgestürzt ist**
       (§2.8). Menüleiste und Statusleiste stehen, die Fläche dazwischen ist
       schwarz. Genau daran erkennt jeder Nutzer ein hängendes Programm, und
       Robert hat es zweimal so gelesen — beim zweiten Mal, ohne den ersten
       Versuch abzuwarten.
+
+      **Behoben (3d-druck-43, 26.08.2026), auf echten Bildschirmfotos
+      nachgestellt und belegt.** Es waren nie sechs Sekunden schlechter
+      Anzeige — es war gar keine: Das native VTK-Fenster liegt auf dem
+      Bildschirm über jedem gemalten Geschwister, und bis zu seinem ersten
+      Render (der erst mit dem ersten Ergebnis kam) standen dort alte
+      Pixel — der Startbildschirm oder Schwarz. Der Ladeschleier stand
+      unsichtbar **darunter**; `widget.grab()` malte ihn und log damit, nur
+      `grabWindow` (der echte Bildschirm) zeigte Roberts Bild. Jetzt
+      verbirgt das Fenster die Ansicht, solange der Schleier steht
+      (`loading.py` ``appeared``/``ended`` → `middle_stack`), und beim
+      Öffnen eines Projekts mit Schritten erscheint der Schleier sofort
+      statt nach 200 ms (``at_once``). Karten und Tour stehen von Anfang an;
+      das erste Bild der Ansicht ist das fertige Modell. Der Balken unten
+      bleibt, wo er war.
 
       Der Fortschrittsbalken unten rechts widerspricht dem zwar, aber er steht
       in der Statusleiste am unteren Bildrand, während der Blick auf der
@@ -9822,7 +9845,7 @@ denselben Tag 13 764 ms kalt und 2500 bis 3000 ms warm, und die Marke ist der
 **kleinste** je gemessene Wert. Am 24.08.2026 arbeiteten vier Sitzungen
 gleichzeitig auf dieser Maschine.
 
-- [ ] **Marke neu setzen oder Ursache suchen — und zwar allein auf der
+- [x] **Marke neu setzen oder Ursache suchen — und zwar allein auf der
   Maschine.** Die Bestmarke von 1233 ms stammt aus einer Phase, die sich heute
   nicht wiederherstellen lässt, solange mehrere Sitzungen messen. Wer das
   entscheidet, fährt die Marke zuerst bei null fremden Prozessen: Liegt sie
@@ -9830,6 +9853,20 @@ gleichzeitig auf dieser Maschine.
   sie bei 2100, ist die Marke von einem Glückstreffer und gehört korrigiert.
   **Zurückgesetzt wurde sie bewusst nicht** — eine Marke, die man beim ersten
   roten Lauf hochsetzt, misst nie wieder etwas.
+
+  **Entschieden und ausgeführt.** Robert am 25.08.2026: „ursachen suchen,
+  optimieren und falls nötig marke anheben." Gesucht (3d-druck-43,
+  26.08.2026, unter dem Prüfschloss): Best-of-6 sind 2206 ms, und
+  `-X importtime` legt die Verteilung offen — der Importblock
+  `trimesh`/`scipy`/`networkx` kostet ~1,9 s der 2,2 und hängt am Füllen
+  des Registers (`load_operations` → `geom.mesh`); VTK lädt längst
+  verzögert, `main_window` kostet 128 ms, die Rezepte tauchen nicht auf.
+  Der Code bleibt doppelt ausgeschlossen (Commit-Wechsel oben, Importbild).
+  Also angehoben: Marke 2206 ms, Zähler genullt (`tests/.performance.json`,
+  maschinenlokal). Der Hebel für eine echte Senkung — Geometrieimporte aus
+  `load_operations` in die erste Auswertung verschieben — wäre ein eigener
+  Umbau über alle Op-Module; er steht hier benannt und ist nicht Teil
+  dieses Punktes.
 
 ---
 

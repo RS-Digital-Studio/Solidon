@@ -744,14 +744,26 @@ Warten niemand hinsieht. `LoadingVeil` (`app/ui/loading.py`) legt sich deshalb
 über die Ansicht — das Anwendungssymbol wird gedruckt wie beim Start,
 darunter Linie, Prozentzahl, laufender Schritt und *Abbrechen*.
 
-Drei Bedingungen, alle drei tragend:
+Vier Bedingungen, alle vier tragend:
 
 * **Nur bei leerem Bild.** Steht ein Körper da, bleibt er stehen; wer
   entscheidet das, ist `MainWindow._update_veil`.
 * **Unter den Karten, nicht darüber** (`OverlayHost.set_veil`). Über ihnen wäre
   es ein Vorhang ohne Ausgang.
-* **Erst nach 200 ms.** Ein leeres Projekt ist schneller gerechnet, und eine
-  Anzeige, die dabei aufblitzt, ist Unruhe ohne Auskunft.
+* **Erst nach 200 ms — außer die Wartezeit ist sicher.** Ein leeres Projekt
+  ist schneller gerechnet, und eine Anzeige, die dabei aufblitzt, ist Unruhe
+  ohne Auskunft. Beim Öffnen eines Projekts **mit Schritten** kommt sie
+  dagegen sofort (`begin(..., at_once=True)`): Die Wartezeit ist dort sicher,
+  und jede unbedeckte Millisekunde gehört dem Punkt darunter.
+* **Solange sie steht, ist die Ansicht verborgen, nicht nur verdeckt**
+  (`appeared`/`ended` → `middle_stack.setVisible`). Das Ansichtsfenster ist
+  ein natives Fenster (VTK): Auf dem Bildschirm liegt es über jedem gemalten
+  Geschwister, egal was die Qt-Stapelung sagt, und bis zu seinem ersten
+  Render zeigt es alte Pixel — Startbildschirm oder Schwarz. Genau so sah
+  Robert sechs Sekunden „Absturz", während der Schleier unsichtbar darunter
+  lag. **Und `widget.grab()` sieht davon nichts:** Es malt den Qt-Baum ab
+  und zeigte den Schleier, den der Bildschirm nie zeigte — Beweisbilder für
+  diese Zone macht nur `grabWindow` (siehe „Was nur das Bild zeigt").
 
 Deckend gezeichnet, mit dem Verlauf aus `viewport_colours` — ein
 halbdurchsichtiges Qt-Widget über dem OpenGL-Fenster zeigt die Fensterfarbe,
