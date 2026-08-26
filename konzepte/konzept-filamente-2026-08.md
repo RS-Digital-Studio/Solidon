@@ -156,7 +156,7 @@ Fehlerrichtungen:
 |---|---|---|
 | `slot` (Z. 844) | „Platz" | **verpasst** — muss mit |
 | `slots` (Z. 845) | „Plätze" | **verpasst** — muss mit |
-| `strokes` (Z. 852) | „Striche" | **verpasst** — fällt mit dem Pinsel |
+| `strokes` (Z. 852) | „Striche" | ~~verpasst~~ **Falschtreffer — nicht anfassen** |
 | `brush` (Z. 717) | „Pinsel" | gefunden |
 | `slot` (Z. 510, 630) | „Langloch" | **Falschtreffer — nicht anfassen** |
 | `radius` (Z. 819) | „Radius" | **Falschtreffer — nicht anfassen** |
@@ -166,6 +166,18 @@ Stellen **Langloch** — ein Schlitz für Schrauben, die Spiel brauchen —, und
 `radius` gehört zu Bohrungen und Verrundungen (`brep/features.py`,
 `perceive/features.py`). Wer den Umbau am Schlüsselnamen entlangfährt,
 benennt sie mit um und macht aus einer Bohrungsangabe eine Filamentangabe.
+
+**Berichtigt am 26.08.2026, eine Stunde später:** `strokes` stand hier
+zuerst als vierter Pinsel-Kandidat — falsch. Es ist der Sammelparameter des
+**Formens**: `stroke_at` lebt in `app/core/geom/sculpt.py`, die Leiste dazu ist
+`sculpt_bar.py`, und `values={"strokes": …}` kommt aus drei Stellen in
+`sculpt.py`. Wer es mit dem Pinsel ausbaut, reißt das Formen mit. Gefunden hat
+es 27 beim Vorbereiten ihres Ausbau-Zuges.
+
+Der Fehler ist derselbe, vor dem der Absatz darunter warnt — begangen im
+Absatz darüber, im selben Nachtrag: Ich habe `strokes` am Namen zugeordnet
+und die Verwendung nicht nachgesehen. Die Regel taugt nur, wenn man sie auf
+den eigenen Treffer anwendet.
 
 **Die Regel daraus:** Weder Text- noch Schlüsselsuche allein trägt. Die
 Textsuche verpasst, was anders heißt; die Schlüsselsuche findet, was zufällig
