@@ -18,6 +18,9 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+
+pytest.importorskip("PySide6")
+
 from PySide6.QtWidgets import QApplication
 
 from app.core.knowledge.parts.registry import _NAME_PATTERN
