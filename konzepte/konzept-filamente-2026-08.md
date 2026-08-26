@@ -78,10 +78,68 @@ sich, wenn nicht:
   (oder Name+Farbe) — sonst erbt ein Kunde nach dem Update stumm falsche
   Zuordnungen.
 
+## Bestandsaufnahme Doku-Block (ce, 26.08.2026)
+
+Gemessen über die **Katalogschlüssel**, nicht über den Quelltext: Ein
+„radius" in `blend.py` ist eine Verrundung und kein Pinsel — die Rohsuche
+meldete allein in `app/ui` 285 Treffer, von denen fast nichts einschlägig ist.
+
+| Ort | Umfang | Anmerkung |
+|---|---|---|
+| Oberflächentexte „Pinsel" | 26 Quelltexte | verschwinden mit dem Werkzeug |
+| Oberflächentexte „Slot" | 22 Quelltexte | werden umformuliert, nicht gelöscht |
+| **Kataloge zusammen** | **48 × 5 = 240 Einträge** | |
+| Handbuch (`manual.py`) | 14 Stellen | darunter ein ganzer Abschnitt |
+| Website erzeugt | 6 Seiten | zieht aus `manual.py` nach, kein Handbetrieb |
+| Website von Hand | `index.html` (2), `en/features.html` (1) | |
+| Changelog | 5 Stellen | **bleiben** — Geschichte wird nicht umgeschrieben |
+| Tour | 0 Stellen | nichts zu tun |
+| Abbildungen | `figures.py:139` | muss **neu gerendert** werden |
+
+**Drei Stellen, die man leicht übersieht:**
+
+1. `manual.py:290` heißt **„Bewegen und Bemalen"** — der Abschnitt braucht
+   einen neuen Titel, nicht nur neue Sätze.
+2. `manual.py:201` schreibt die Werkzeugzahl aus („von links nach rechts auf
+   Alt+1 bis Alt+8"). Fällt *Bemalen* aus der Leiste, altert der Satz mit.
+3. `figures.py:139` beschriftet die Werkzeugleiste mit „Schnitt · Messen ·
+   Bewegen · Analyse · Bemalen". Das ist ein **Bild**, kein Text — es wird
+   gerendert und nicht übersetzt.
+
+**Reihenfolge beim Scharfschalten:** `manual.py` zuerst (die Website folgt aus
+ihm), dann die Kataloge, dann die Abbildung. Die Fundstellen liegen
+zeilengenau vor.
+
 ## Aufteilung
 
 | Teil | Wer |
 |---|---|
 | Kern: Merkmal-Füllung, Pinsel-Ausbau, Migration, Filamentkatalog, Farbmodell (Grau/Orange-Exklusiv in `theme`) | 3d-druck-30 |
-| Oberfläche: Filamentwähler mit Farbpalette + Katalog, Kontextmenü, Werkzeugzeile/`paint_bar`-Ausbau, Blau-Vorschau | offen (27/d1/de angefragt) |
-| Handbuch, Tour, Übersetzungen | offen (angefragt) |
+| Oberfläche: Filamentwähler mit Farbpalette + Katalog, Kontextmenü, Werkzeugzeile/`paint_bar`-Ausbau, Blau-Vorschau | **3d-druck-27** (Board-Claim steht) |
+| Handbuch, Tour, Übersetzungen | **de** (Board-Claim steht) |
+
+## Die Verträge, die die Oberfläche vom Kern braucht (27, Regel 5)
+
+Die Oberfläche ist gesichtet (Bestand: `paint_bar` 180 Zeilen, das Overlay
+und der `stroke_at`-Pfad im Fenster, Pinselring und `_slot_colours` im
+Viewport). Gebaut wird gegen diese vier Verträge — 30 legt sie fest, hier
+stehen die Wünsche der Gegenseite:
+
+1. **Filamentkatalog:** Modulpfad und Signaturen — erwartet wird etwas wie
+   `filaments() -> list[Filament]`, `save_filament(...)`,
+   `remove_filament(...)` mit `Filament = (name, colour)`, Ablage im Profil
+   (§38-Umbiegung greift dann in der Suite von selbst).
+2. **Farbmodell in `theme`:** der Ersatz für `slot_colour(index)` — eine
+   Funktion, die aus einem `MaterialSlot` die Anzeigefarbe macht, mit
+   **Grau** als Fallback statt Okabe/Ito, dazu die Grau-Konstante und das
+   Vorschau-Blau als benannte Werte. Die Orange-überdeckt-Regel setzt der
+   Viewport um (`_slot_colours` ist bei 27), aber die Farben kommen aus
+   `theme`.
+3. **Die Ops:** Bleibt der Registername `paint_slot` (dann mit
+   `at_feature` statt x/y/z/radius), oder kommt ein neuer? `assign_slot`
+   unverändert? Die Antwort entscheidet Kontextmenü-Verdrahtung und
+   Draft-Bau im Fenster.
+4. **Reihenfolge beim Landen:** Der Ausbau von Werkzeug „Bemalen",
+   `paint_bar` und Pinselring geht zusammen mit dem Kern-Ausbau von
+   `stroke_at` in **einem** abgestimmten Zug — je ein halber Stand wäre
+   ein Fenster mit Knopf ohne Rückgrat oder Rückgrat ohne Knopf.
