@@ -106,10 +106,14 @@ class UpdateDialog(QDialog):
             )
         )
 
-        self.notes = QLabel(release.notes, self)
+        # **Auch der Hinweis steht in Kundensprache** — er ist die Überschrift
+        # über der übersetzten Punkteliste darunter, und die beiden aus zwei
+        # Sprachen zu setzen wäre schlechter als gar kein Hinweis.
+        note = release.note()
+        self.notes = QLabel(note, self)
         self.notes.setWordWrap(True)
         self.notes.setTextFormat(Qt.TextFormat.PlainText)
-        self.notes.setVisible(bool(release.notes))
+        self.notes.setVisible(bool(note))
 
         # **Was neu ist, in Kundensprache** — die Auswahl steht in
         # ``changelog/<sprache>.md`` und kommt über die Versionsdatei hierher.

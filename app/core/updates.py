@@ -170,6 +170,19 @@ class Release:
     version: str
     url: str = ""
     notes: str = ""
+    """Der Hinweistext ohne Sprachangabe — der Rückfall, wenn :attr:`notes_by_language`
+    für die Sprache des Fensters nichts hat."""
+
+    notes_by_language: Mapping[str, str] = field(default_factory=dict)
+    """Derselbe Hinweis je Sprache.
+
+    Ein eigenes Feld und nicht ``notes`` als Wörterbuch, weil die Versionsdatei
+    von **jeder** ausgelieferten Fassung gelesen wird: Bis 0.1.5 nimmt der
+    Leser ``notes`` unbesehen als Zeichenkette, und ein Wörterbuch stünde dort
+    als Python-Abbild im Fenster. Der alte Schlüssel bleibt deshalb, was er
+    war; die Sprachen kommen daneben.
+    """
+
     packages: Mapping[str, Package] = field(default_factory=dict)
     changes: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     """Was neu ist, in Kundensprache — je Sprache eine Liste."""
@@ -186,6 +199,21 @@ class Release:
         """
         chosen = language or get_language()
         return self.changes.get(chosen) or self.changes.get(SOURCE_LANGUAGE) or ()
+
+    def note(self, language: str = "") -> str:
+        """Der Hinweistext in der Sprache des Fensters, sonst in der Quellsprache.
+
+        Derselbe Rückfall wie bei :meth:`points`, und aus demselben Grund: Der
+        Satz steht als Überschrift über der Punkteliste, und die ist übersetzt.
+        Ein deutscher Satz über einer englischen Liste sagt dem Leser vor allem,
+        dass hier jemand die Hälfte vergessen hat.
+        """
+        chosen = language or get_language()
+        return (
+            self.notes_by_language.get(chosen)
+            or self.notes_by_language.get(SOURCE_LANGUAGE)
+            or self.notes
+        )
 
     def package(self, key: str = "") -> Package | None:
         """Das Paket für diese Plattform, wenn die Versionsdatei eines nennt."""
@@ -295,9 +323,26 @@ def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | N
         # Adresse — beides gehört nicht in die Statusleiste.
         url=url if url.startswith("https://") else "",
         notes=_field(payload.get("notes")),
+        notes_by_language=_notes(payload.get("notes_by_language")),
         packages=_packages(payload.get("packages"), origin=address),
         changes=_changes(payload.get("changes")),
     )
+
+
+def _notes(raw: object) -> dict[str, str]:
+    """Der Hinweistext je Sprache, gestutzt auf das, was hineinpasst.
+
+    Dieselbe Vorsicht wie bei :func:`_changes`: Was keine Zeichenkette ist,
+    fällt weg; was zu lang ist, wird gekürzt. Eine Obergrenze für die Zahl der
+    Sprachen braucht es nicht — gezeigt wird ohnehin genau eine.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    found: dict[str, str] = {}
+    for key, value in raw.items():
+        if isinstance(value, str) and value.strip():
+            found[str(key)[:16]] = _field(value)
+    return found
 
 
 def _changes(raw: object) -> dict[str, tuple[str, ...]]:

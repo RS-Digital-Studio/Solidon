@@ -566,8 +566,10 @@ def write_version(packages: list[Package]) -> None:
     zweite Stelle ist immer die, die driftet. Gerechnet sind sie hier ohnehin
     schon — für den Kasten.
 
-    ``url`` und ``notes`` bleiben unberührt: Die eine ist die Adresse der
-    Seite, die andere ein Satz, den ein Mensch schreibt. Ohne Pakete — also
+    ``url``, ``notes`` und ``notes_by_language`` bleiben unberührt: Die eine
+    ist die Adresse der Seite, die anderen ein Satz, den ein Mensch schreibt —
+    einmal ohne Sprachangabe für die Fassungen bis 0.1.5, die das zweite Feld
+    noch nicht kennen, und einmal je Sprache für alle seither. Ohne Pakete — also
     beim Zurückziehen — verschwindet nur die Paketliste. Die Anwendung fällt
     dann auf den Hinweis zurück und zeigt auf die Download-Seite, statt etwas
     anzubieten, das nicht mehr liegt.

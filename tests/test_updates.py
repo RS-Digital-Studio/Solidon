@@ -117,6 +117,91 @@ def test_an_older_version_is_not_announced() -> None:
     assert not release.newer_than()
 
 
+# --- Was der Kunde in seiner Sprache liest --------------------------------------
+#
+# Beides steht im selben Fenster übereinander: der Hinweis als Überschrift, die
+# Punkte darunter. Sie aus zwei Sprachen zu setzen wäre schlechter als nur eine.
+
+SPEAKING: dict[str, Any] = {
+    "version": "99.0.0",
+    "notes": "Der Satz ohne Sprachangabe.",
+    "notes_by_language": {"de": "Auf Deutsch.", "en": "In English."},
+    "changes": {"de": ["Ein deutscher Punkt."], "en": ["An English point."]},
+}
+
+
+def test_the_points_arrive_in_the_language_of_the_window() -> None:
+    release = updates.check(fetch=answering(SPEAKING))
+
+    assert release is not None
+    assert release.points("en") == ("An English point.",)
+    assert release.points("de") == ("Ein deutscher Punkt.",)
+
+
+def test_the_note_arrives_in_the_language_of_the_window() -> None:
+    release = updates.check(fetch=answering(SPEAKING))
+
+    assert release is not None
+    assert release.note("en") == "In English."
+    assert release.note("de") == "Auf Deutsch."
+
+
+def test_an_unwritten_language_falls_back_to_the_source_and_not_to_nothing() -> None:
+    """Lieber der deutsche Satz als eine Überschrift ohne Inhalt darunter."""
+    release = updates.check(fetch=answering(SPEAKING))
+
+    assert release is not None
+    assert release.points("it") == ("Ein deutscher Punkt.",)
+    assert release.note("it") == "Auf Deutsch."
+
+
+def test_a_version_file_without_languages_still_shows_its_note() -> None:
+    """Der Rückfall auf ``notes``, und der Grund, aus dem das Feld bleibt.
+
+    Die Versionsdatei wird von **jeder** ausgelieferten Fassung gelesen, auch
+    von denen, die ``notes_by_language`` nicht kennen. Wer den alten Schlüssel
+    fallen ließe, nähme ihnen den Satz weg.
+    """
+    release = updates.check(fetch=answering({"version": "99.0.0", "notes": "Nur dieser Satz."}))
+
+    assert release is not None
+    assert release.note("en") == "Nur dieser Satz."
+
+
+def test_a_note_that_is_not_a_string_is_dropped_rather_than_shown() -> None:
+    """Was von einem Server kommt, wird geprüft — auch hier.
+
+    Ohne die Prüfung stünde das Abbild eines Wörterbuchs im Fenster, und zwar
+    an der Stelle, an der ein Satz erwartet wird.
+    """
+    release = updates.check(
+        fetch=answering(
+            {
+                "version": "99.0.0",
+                "notes": "Der Rückfall.",
+                "notes_by_language": {"de": {"verschachtelt": "ja"}, "en": 7, "es": "Bien."},
+            }
+        )
+    )
+
+    assert release is not None
+    assert release.note("de") == "Der Rückfall."
+    assert release.note("en") == "Der Rückfall."
+    assert release.note("es") == "Bien."
+
+
+def test_a_note_cannot_flood_the_window_in_any_language() -> None:
+    release = updates.check(
+        fetch=answering(
+            {"version": "99.0.0", "notes_by_language": {"de": "x" * 5000, "en": "y" * 5000}}
+        )
+    )
+
+    assert release is not None
+    assert len(release.note("de")) <= updates.MAX_FIELD_LENGTH
+    assert len(release.note("en")) <= updates.MAX_FIELD_LENGTH
+
+
 # --- Die Pakete in der Versionsdatei --------------------------------------------
 
 

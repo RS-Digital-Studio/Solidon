@@ -1,7 +1,7 @@
 {
   "version": "0.1.5",
   "url": "https://solidon3d.de/",
-  "notes": "Zweiter Bau der Demo: viele Verbesserungen an Oberfläche, Schichtanalyse und Slicer-Übergabe. Weiterhin vollständig und ohne Schlüssel, bis zum 30.10.2026.",
+  "notes": "",
   "packages": {
     "windows": {
       "file": "Solidon3D-Setup-0.1.5.exe",
@@ -138,5 +138,13 @@
       "A imagem que segue com um comentário mostra agora também o modelo. Antes havia no centro uma superfície preta, precisamente onde está a peça em questão."
     ]
   },
-  "signature": "1e86002dac91790bf2c7311e1861e570362a93674309af86c541bab736b72e509ef8ab804c8b7b5de90ffe0f156d93a5e039148fe848a3c094a5eb007984d902"
+  "notes_by_language": {
+    "de": "Das bisher größte Update. Neu ist vor allem: Aus Schritten im Verlauf wird ein eigener Baustein, den Sie wie jeden anderen einsetzen und mit dem Projekt weitergeben. Die Demo bleibt vollständig und ohne Schlüssel, bis zum 30.10.2026.",
+    "en": "The biggest update so far. Above all: steps from your history become a building block of your own, which you place like any other and pass on inside the project. The demo stays complete and needs no key, until 30 October 2026.",
+    "es": "La mayor actualización hasta ahora. Sobre todo: los pasos del historial se convierten en un bloque propio, que coloca como cualquier otro y comparte dentro del proyecto. La demo sigue completa y sin clave, hasta el 30 de octubre de 2026.",
+    "fr": "La plus grande mise à jour à ce jour. Surtout : les étapes de l’historique deviennent un bloc à vous, que vous posez comme un autre et transmettez avec le projet. La démo reste complète et sans clé, jusqu’au 30 octobre 2026.",
+    "it": "L’aggiornamento più grande finora. Soprattutto: i passi della cronologia diventano un blocco tuo, che inserisci come ogni altro e trasmetti insieme al progetto. La demo resta completa e senza chiave, fino al 30 ottobre 2026.",
+    "pt": "A maior atualização até agora. Sobretudo: os passos do histórico tornam-se um bloco seu, que coloca como qualquer outro e partilha dentro do projeto. A demo continua completa e sem chave, até 30 de outubro de 2026."
+  },
+  "signature": "9780b5c3c94e799f6c551ab33d9e19ae99bbe81dc602d360106f0df69db6616a85fe54e51ee154b80d55db968ef8706c16287284729af098f8382177c0c07407"
 }
