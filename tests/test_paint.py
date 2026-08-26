@@ -128,6 +128,69 @@ def test_the_slot_keeps_the_name_it_was_given(profile: Profile) -> None:
     assert [slot.name for slot in second.material_slots] == ["Rot"]
 
 
+# --- die Merkmal-Füllung (Konzept Filamente, 26.08.2026) --------------------------
+
+
+def _with_top_face(entry: SceneObject, indices: tuple[int, ...]) -> SceneObject:
+    """Das Objekt mit einem erkannten Flächenmerkmal über ``indices``."""
+    import dataclasses
+
+    from app.core.types import Feature
+
+    face = Feature(
+        id="face_1",
+        kind="face",
+        provenance="detected",
+        params={"area": 1600.0},
+        face_indices=indices,
+    )
+    return dataclasses.replace(entry, features={"face_1": face})
+
+
+def test_filling_a_feature_paints_exactly_its_triangles(profile: Profile) -> None:
+    """Der Kern des Umbaus: Rechtsklick auf „Oberseite" färbt die Oberseite.
+
+    Kein Radius, kein Klickpunkt — die Dreiecke kommen aus dem Merkmal
+    (``face_indices``), und damit wandert die Färbung mit, wenn ein früherer
+    Schritt die Maße ändert. Ein gespeicherter Punkt läge dann daneben.
+    """
+    entry = _with_top_face(SceneObject(id="obj_1", name="Deckel", mesh=plate()), (0, 1, 4))
+
+    result = run("paint_slot", entry, profile, slot=2, at_feature="face_1", name="Weiß")
+
+    slots = result.outputs[0].mesh.slots
+    assert slots is not None
+    painted = {index for index, slot in enumerate(slots) if slot == 2}
+    assert painted == {0, 1, 4}, "genau die Dreiecke des Merkmals, keines mehr, keines weniger"
+    assert [finding.code for finding in result.findings] == ["colour.painted"]
+    assert [slot.name for slot in result.outputs[0].material_slots] == ["Weiß"]
+
+
+def test_an_unknown_feature_stops_with_advice(profile: Profile) -> None:
+    """Ein Merkmal, das es am Körper nicht gibt, ist ein Halt mit Vorschlag —
+    nicht ein stilles Nichtstun und nicht ein Rückfall auf irgendeinen Punkt."""
+    from app.core.errors import ValidationError
+
+    entry = _with_top_face(SceneObject(id="obj_1", name="Deckel", mesh=plate()), (0, 1))
+
+    with pytest.raises(ValidationError) as raised:
+        run("paint_slot", entry, profile, slot=1, at_feature="face_99")
+
+    assert raised.value.suggestions, "Regel 17: auch diese Ausnahme trägt Handlungen"
+    assert raised.value.values.get("feature") == "face_99"
+
+
+def test_a_feature_without_triangles_says_so(profile: Profile) -> None:
+    """Eine offene Kantenschleife hat keine eigenen Dreiecke — gefärbt wird
+    nichts, und das steht als Befund da statt als stiller Erfolg."""
+    entry = _with_top_face(SceneObject(id="obj_1", name="Deckel", mesh=plate()), ())
+
+    result = run("paint_slot", entry, profile, slot=1, at_feature="face_1")
+
+    assert result.outputs[0] is entry, "nothing changed, so nothing is replaced"
+    assert [finding.code for finding in result.findings] == ["colour.nothing_painted"]
+
+
 # --- die Leiste -----------------------------------------------------------------
 
 

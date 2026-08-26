@@ -24,6 +24,7 @@ from typing import cast
 
 import numpy as np
 
+from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData, as_mesh_data, distances_to_triangles
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -108,6 +109,30 @@ def brush(
     return BrushResult(mesh=MeshData(raw=body, slots=tuple(slots)), painted=len(reached))
 
 
+def fill_feature(mesh: MeshData, indices: tuple[int, ...], slot: int) -> BrushResult:
+    """Färbt genau die Dreiecke eines Merkmals — die Füllung des
+    Filament-Konzepts (26.08.2026).
+
+    Kein Lauf über Nachbarn, kein Radius, kein Kantenwinkel: Die Erkennung hat
+    die Grenze der Fläche schon gezogen (``Feature.face_indices``), und sie
+    noch einmal zu suchen hieße, eine zweite Antwort auf eine beantwortete
+    Frage zu riskieren. Indizes außerhalb des Netzes werden übergangen statt
+    zu werfen — ein Merkmal einer früheren Auswertung kann mehr Dreiecke
+    kennen, als das Netz nach einer Änderung noch hat, und der Rest der
+    Fläche ist dann immer noch gemeint.
+    """
+    body = mesh.raw
+    faces = len(body.faces)
+    reached = [int(index) for index in indices if 0 <= int(index) < faces]
+    if not reached:
+        return BrushResult(mesh=mesh, painted=0)
+    slots = list(mesh.slots) if mesh.slots else [0] * faces
+    for index in reached:
+        slots[index] = int(slot)
+    _log.info("filled %d of %d faces into slot %d", len(reached), faces, slot)
+    return BrushResult(mesh=MeshData(raw=body, slots=tuple(slots)), painted=len(reached))
+
+
 def _walk(mesh: MeshData, start: int, within: np.ndarray, edge_angle: float) -> set[int]:
     """Flächen, die von ``start`` aus erreichbar sind, ohne eine Kante oder
     den Radius zu überschreiten.
@@ -146,6 +171,14 @@ class PaintParams(BaseParams):
         minimum=0,
         maximum=MAX_SLOTS - 1,
         doc=_("In welchen Materialslot der Pinsel malt."),
+    )
+    at_feature: str = param(
+        title=_("Fläche"),
+        default="",
+        doc=_(
+            "Die erkannte Fläche, die vollständig gefärbt wird — gesetzt vom "
+            "Klick auf das Merkmal. Leer heißt: um den Punkt malen."
+        ),
     )
     radius: float = param(
         title=_("Radius"),
@@ -211,27 +244,52 @@ def paint_slot(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
 
-    stroke = brush(
-        mesh,
-        (params.x, params.y, params.z),
-        params.radius,
-        params.slot,
-        edge_angle=params.edge_angle,
-    )
+    if params.at_feature:
+        # **Die Füllung ist der Hauptfall** (Konzept Filamente, 26.08.2026):
+        # Ein Klick auf „Oberseite" färbt die Oberseite — die Dreiecke kommen
+        # aus dem Merkmal, nicht aus einem Radius um einen Punkt. Damit wandert
+        # die Färbung mit, wenn ein früherer Schritt die Maße ändert; ein
+        # gespeicherter Punkt läge dann daneben (§21).
+        feature = source.features.get(params.at_feature)
+        if feature is None:
+            raise ValidationError(
+                title=_("Dieses Merkmal gibt es am Körper nicht."),
+                field="at_feature",
+                detail=_(
+                    "Die Fläche wurde nicht gefunden — vielleicht hat ein "
+                    "früherer Schritt sie verändert. Wählen Sie sie neu, oder "
+                    "färben Sie das ganze Teil."
+                ),
+                value=params.at_feature,
+                constraint="unknown_feature",
+                values={"feature": params.at_feature},
+            )
+        stroke = fill_feature(mesh, feature.face_indices, params.slot)
+        empty = Finding(
+            code="colour.nothing_painted",
+            severity="warning",
+            message=_("Dieses Merkmal hat keine eigene Fläche zu färben."),
+            object_id=source.id,
+            values={"feature": params.at_feature},
+        )
+    else:
+        stroke = brush(
+            mesh,
+            (params.x, params.y, params.z),
+            params.radius,
+            params.slot,
+            edge_angle=params.edge_angle,
+        )
+        empty = Finding(
+            code="colour.nothing_painted",
+            severity="warning",
+            message=_("An dieser Stelle war keine Fläche zu treffen."),
+            object_id=source.id,
+            values={"radius_mm": round(params.radius, 2)},
+        )
     covered = stroke.painted
     if not covered:
-        return OpResult(
-            outputs=[source],
-            findings=[
-                Finding(
-                    code="colour.nothing_painted",
-                    severity="warning",
-                    message=_("An dieser Stelle war keine Fläche zu treffen."),
-                    object_id=source.id,
-                    values={"radius_mm": round(params.radius, 2)},
-                )
-            ],
-        )
+        return OpResult(outputs=[source], findings=[empty])
 
     known = {entry.index: entry for entry in source.material_slots}
     known.setdefault(
