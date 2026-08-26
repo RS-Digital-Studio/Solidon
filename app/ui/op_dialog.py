@@ -18,10 +18,11 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, QObject, Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QCompleter,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -98,6 +99,12 @@ def _decimals_for(entry: ParamSpec, unit: LengthUnit | None = None) -> int:
 #: sie länger ist als das größte, was der Wertebereich hergibt.
 NUMBER_AIR = 24
 
+#: Wie viele Parameternamen der Hinweis unter einem leeren Ausdrucksfeld nennt.
+#:
+#: Eine Zeile soll eine Zeile bleiben — wer zwanzig Parameter führt, bekommt
+#: die ersten vier und die Vervollständigung im Feld, die alle kennt.
+_HINT_NAMES = 4
+
 
 class ValueField(QWidget):
     """Ein Zahlenfeld, das auch einen Parameterausdruck tragen kann (§13).
@@ -170,8 +177,30 @@ class ValueField(QWidget):
         self.spin.setMaximumWidth(self.spin.sizeHint().width() + NUMBER_AIR)
 
         self.text = QLineEdit(self)
-        self.text.setPlaceholderText(tr("zum Beispiel =@breite / 2"))
+        # Dieselbe Schreibweise wie im Handbuch — dort steht „@breite/2" ohne
+        # Leerzeichen. Zwei Kundentexte, die dieselbe Sache verschieden
+        # schreiben, lassen den Leser nach dem Unterschied suchen.
+        self.text.setPlaceholderText(tr("zum Beispiel =@breite/2"))
         self.text.setVisible(False)
+        # **Was hier erlaubt ist, steht nicht im Feld.** Wer umschaltet, sah ein
+        # leeres Textfeld und ein Beispiel — welche Parameter es gibt und welche
+        # Funktionen die Grammatik kennt, stand nirgends. Beides kommt aus der
+        # Sache selbst: die Namen aus dem Projekt, die Funktionen aus dem
+        # Auswerter (Regel: eine Wahrheit, nicht zwei Listen).
+        self.text.setToolTip(self._grammar_help())
+        self.text.setStatusTip(str(tr("Ein Ausdruck rechnet mit Projektparametern.")))
+        self.text.setAccessibleDescription(self._grammar_help())
+
+        #: Vervollständigt ``@name`` beim Tippen. Ohne sie muss der Kunde die
+        #: Namen seiner Parameter auswendig wissen — und ein Tippfehler wird
+        #: erst beim Übernehmen zum Fehler.
+        self._completer = QCompleter(
+            sorted(f"{expressions.REFERENCE_PREFIX}{name}" for name in self._parameter_values),
+            self,
+        )
+        self._completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self._completer.setWidget(self.text)
+        self._completer.activated.connect(self._insert_reference)
 
         self.toggle = QToolButton(self)
         self.toggle.setText(self.TOGGLE_TEXT)
@@ -205,6 +234,9 @@ class ValueField(QWidget):
         self.toggle.toggled.connect(self._switch)
         self.spin.valueChanged.connect(self.changed)
         self.text.textChanged.connect(self._on_text)
+        # Ohne diese Zeile läuft ``eventFilter`` nie — und damit bliebe der
+        # Weg zu, den Handbuch und Parameterdialog beschreiben.
+        self.spin.installEventFilter(self)
 
     # --- Wert -------------------------------------------------------------------
 
@@ -292,12 +324,129 @@ class ValueField(QWidget):
             # so. „= 1.5748 mm" unter einem Feld, in dem 40 mm gemeint waren,
             # war die Anzeige, die ihren eigenen Fehler bezeugt.
             self.text.setText(f"={self._number():g}")
+        if to_expression:
+            # **Der Fokus geht mit.** Ohne diese Zeile bleibt er auf dem
+            # Umschalter, und das Textfeld liegt in der Tab-Reihenfolge davor
+            # (Spin, Text, Umschalter) — der Kunde muss Umschalt+Tab drücken,
+            # um in das Feld zu kommen, das er gerade aufgemacht hat.
+            self.text.setFocus()
+            self.text.setCursorPosition(len(self.text.text()))
         self._describe()
         self.changed.emit()
 
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 - Qt gibt den Namen
+        """Fängt ``=`` und ``@`` im Zahlenfeld ab und macht daraus einen
+        Ausdruck.
+
+        Am Filter und nicht in :class:`NumberSpin`: Die Klasse steht auch dort,
+        wo es gar keine Ausdrücke gibt (Druckeinstellungen, Skizzenmaße), und
+        dort wäre ein Zeichen, das plötzlich ein Textfeld aufmacht, ein
+        Rätsel. Hier gehört es zur Sache — neben dem Feld steht der fx-Knopf.
+        """
+        if watched is self.spin and event.type() == QEvent.Type.KeyPress:
+            typed = getattr(event, "text", lambda: "")()
+            if typed in (expressions.EXPRESSION_PREFIX, expressions.REFERENCE_PREFIX):
+                self.start_expression(typed)
+                return True
+        return super().eventFilter(watched, event)
+
+    def start_expression(self, first: str) -> None:
+        """Schaltet auf den Ausdruck um und beginnt ihn mit ``first``.
+
+        **Weil drei Texte des Programms genau das versprechen.** Das Handbuch
+        schreibt „Im Feld einer Operation schreiben Sie dann ``=@breite``
+        statt einer Zahl", der Parameterdialog sagt „Operationen und Skizzen
+        verweisen mit @name darauf", und die Werkzeugbeschreibung des Agenten
+        setzt dieselbe Schreibweise. Wer dem folgte und in das Zahlenfeld
+        tippte, bekam **nichts**: :class:`NumberSpin` weist ``=`` und ``@``
+        ab — kein Ton, kein Zeichen, keine Meldung.
+
+        Damit war der fx-Knopf nicht die Anzeige eines Zustands, sondern die
+        Voraussetzung, ihn überhaupt zu erreichen — und die kannte nur, wer
+        ihn schon gefunden hatte. Jetzt ist das getippte Zeichen selbst der
+        Weg, und der Knopf zeigt bloß, wo man gelandet ist.
+        """
+        self.toggle.setChecked(True)
+        self.text.setText(first)
+        self.text.setFocus()
+        self.text.setCursorPosition(len(first))
+        self._describe()
+        self._offer_references()
+
     def _on_text(self) -> None:
         self._describe()
+        self._offer_references()
         self.changed.emit()
+
+    def _grammar_help(self) -> str:
+        """Was ein Ausdruck darf, in vier Zeilen.
+
+        Die Funktionsnamen holt :func:`app.core.expressions.function_names` aus
+        der Tabelle des Auswerters — hier aufgezählt wären sie eine zweite
+        Wahrheit, die beim nächsten Zuwachs still veraltet.
+        """
+        return "\n".join(
+            (
+                str(tr("Ein Ausdruck beginnt mit = und rechnet in Millimetern.")),
+                str(tr("@name setzt einen Projektparameter ein.")),
+                # **Der Tastatur-Bindestrich, nicht das typografische Minus.**
+                # Der Auswerter nimmt nur die vier ASCII-Zeichen; das lange
+                # Minus aus dem Schriftsatz lehnt er ab (gemessen). Eine Hilfe,
+                # die ein Zeichen zeigt, das danach nicht funktioniert, ist
+                # schlimmer als keine.
+                str(tr("Erlaubt: + - * / und Klammern.")),
+                # Und die Falle daneben: Das Zahlenfeld nebenan liest „12,5",
+                # der Auswerter nicht — dort trennt das Komma die Argumente von
+                # min und max. Wer das nicht weiß, tippt sein gewohntes Komma.
+                str(tr("Zahlen mit Punkt: 10.5 statt 10,5.")),
+                f"{tr('Funktionen:', 'Ausdruck')} {', '.join(expressions.function_names())}",
+            )
+        )
+
+    def _reference_prefix(self) -> tuple[int, str] | None:
+        """Der angefangene ``@name`` links vom Cursor — Startstelle und Text.
+
+        ``None``, wenn dort keiner steht. Gesucht wird nur bis zum letzten
+        Zeichen, das in einem Namen nicht vorkommen darf: Ein ``@`` weiter
+        vorne im Ausdruck gehört einem anderen Verweis.
+        """
+        cursor = self.text.cursorPosition()
+        head = self.text.text()[:cursor]
+        start = head.rfind(expressions.REFERENCE_PREFIX)
+        if start < 0:
+            return None
+        word = head[start + 1 :]
+        if word and not word.replace("_", "").isalnum():
+            return None
+        return start, head[start:]
+
+    def _offer_references(self) -> None:
+        """Zeigt die passenden Parameternamen, sobald ein ``@`` getippt ist."""
+        popup = self._completer.popup()
+        if popup is None:
+            # Offscreen gibt es keins — dann gibt es auch nichts anzubieten.
+            return
+        found = self._reference_prefix()
+        if found is None or not self.text.isVisible():
+            popup.hide()
+            return
+        _, typed = found
+        self._completer.setCompletionPrefix(typed)
+        if not self._completer.completionCount():
+            popup.hide()
+            return
+        popup.setCurrentIndex(self._completer.completionModel().index(0, 0))
+        self._completer.complete()
+
+    def _insert_reference(self, chosen: str) -> None:
+        """Ersetzt den angefangenen ``@name`` durch den gewählten."""
+        found = self._reference_prefix()
+        if found is None:
+            return
+        start, typed = found
+        text = self.text.text()
+        self.text.setText(f"{text[:start]}{chosen}{text[start + len(typed) :]}")
+        self.text.setCursorPosition(start + len(chosen))
 
     def _describe(self) -> None:
         """Sagt unter dem Feld, was der Ausdruck gerade ergibt — oder woran er
@@ -311,7 +460,20 @@ class ValueField(QWidget):
             return
         entered = self.text.text().strip()
         if not entered:
-            self.hint.setText(str(tr("Noch kein Ausdruck — er beginnt mit =")))
+            # Der Satz bleibt, wie er ist — er ist sein eigener Katalogschlüssel.
+            # Was die Namen angeht, kommt als eigenständiger Zusatz dahinter:
+            # Ein leeres Feld, das „beginnt mit =" sagt, verschweigt genau das,
+            # was der Kunde als Nächstes braucht — womit er rechnen kann.
+            waiting = str(tr("Noch kein Ausdruck — er beginnt mit ="))
+            names = sorted(self._parameter_values)
+            if names:
+                shown = ", ".join(
+                    f"{expressions.REFERENCE_PREFIX}{name}" for name in names[:_HINT_NAMES]
+                )
+                if len(names) > _HINT_NAMES:
+                    shown = f"{shown} …"
+                waiting = f"{waiting}  ·  {tr('Parameter:', 'Ausdruck')} {shown}"
+            self.hint.setText(waiting)
             return
         try:
             expressions.check(entered)

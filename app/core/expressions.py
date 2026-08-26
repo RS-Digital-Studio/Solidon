@@ -161,6 +161,19 @@ class _Parser:
     def run(self) -> float:
         value = self.expression(0)
         if self.current.kind != "end":
+            # **Ein übrig gebliebenes Komma ist fast immer ein Dezimalkomma.**
+            # Die Zahlenfelder der Oberfläche lesen „12,5" richtig — sie sind
+            # ausdrücklich dafür gebaut —, hier geht es nicht: Das Komma trennt
+            # die Argumente von ``min`` und ``max``, und ``max(1,5)`` wäre sonst
+            # nicht von ``max(1.5)`` zu unterscheiden. Das ist ein Grund, den
+            # der Kunde nicht ahnen kann, und „Nach dem Ausdruck steht noch
+            # etwas" schickt ihn ans Ende statt in die Mitte.
+            if self.current.kind == ",":
+                raise _fail(
+                    str(_("Zahlen werden hier mit Punkt geschrieben: 10.5 statt 10,5.")),
+                    self.source,
+                    self.current.position,
+                )
             raise _fail(
                 str(_("Nach dem Ausdruck steht noch etwas.")),
                 self.source,
@@ -298,6 +311,18 @@ def references(text: str) -> frozenset[str]:
 def check(text: str) -> None:
     """Lehnt alles außerhalb der Grammatik ab. Wirft — oder kehrt still zurück."""
     references(text)
+
+
+def function_names() -> tuple[str, ...]:
+    """Die Namen, die ein Ausdruck aufrufen darf — alphabetisch.
+
+    Für die Hilfe an der Oberfläche: Wer das Ausdrucksfeld aufmacht, sieht ein
+    leeres Feld und muss raten, was darin erlaubt ist. Die Namen kommen aus
+    **derselben** Tabelle, gegen die der Auswerter prüft (:data:`_FUNCTIONS`);
+    eine zweite Liste in der Oberfläche wäre beim nächsten Zuwachs still falsch
+    und würde etwas anbieten, das die Grammatik ablehnt.
+    """
+    return tuple(sorted(_FUNCTIONS))
 
 
 # --- Parameterauflösung ----------------------------------------------------------

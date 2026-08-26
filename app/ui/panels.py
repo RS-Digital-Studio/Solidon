@@ -46,6 +46,7 @@ from app.core.errors import (
     SCALE_TO_FIT,
     SHOW_HISTORY,
     SHOW_LOCATIONS,
+    SHOW_STEP_VALUES,
     SPLIT_MODEL,
     Action,
     AppError,
@@ -61,6 +62,7 @@ from app.ui.icons import icon
 from app.ui.labels import (
     NumberSpin,
     compact_length,
+    feature_label,
     feature_measure,
     feature_name,
     group_title,
@@ -202,6 +204,18 @@ def _by_severity(findings: Iterable[Finding]) -> list[Finding]:
 #: Textsuche über Meldungen. Was hier fehlt, bekommt kein Menü — lieber keins
 #: als eines, das nichts tut.
 FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
+    # Ein Schritt, den diese Fassung nicht kennt (§16.2). Zwei Handlungen, und
+    # die erste ist die, um die es geht: *Werte ansehen* holt heraus, was in
+    # dem Schritt steht — bei einer Datei aus 0.1.3 der OpenSCAD-Quelltext,
+    # den jemand geschrieben hat. Ohne sie wäre der Befund eine Sackgasse: ein
+    # Satz, der „Ihre Werte bleiben erhalten" verspricht, und kein Weg dorthin.
+    #
+    # **Ein *Schritt löschen* steht bewusst nicht dabei.** Die Verlaufs-API
+    # kann einen Schritt ändern und zurücknehmen, aber keinen aus der Mitte
+    # entfernen — spätere Operationen bauen auf seinen Ausgaben auf (§15.4).
+    # Wer es anbieten will, baut es zuerst in ``History``; ein Knopf, den
+    # niemand bedienen kann, wäre schlechter als einer weniger.
+    "evaluate.unknown_operation": (SHOW_STEP_VALUES, SHOW_HISTORY),
     # Drei Antworten auf „passt nicht": kleiner machen, teilen — oder einen
     # anderen Drucker nehmen. Die dritte fehlte, solange ihr Handler fehlte,
     # und sie ist für den Kunden mit zwei Maschinen die naheliegendste.
@@ -456,6 +470,34 @@ def _origin_text(created_by: int | None, document: Document | None) -> str:
         if created_by in transaction.ops:
             return f"{text} · {transaction.title}"
     return text
+
+
+def _feature_tip(feature_id: str, feature: Feature, document: Document | None) -> str:
+    """Was dieses Merkmal ist, woher es kommt, und wie es heißt.
+
+    Hier standen die Kennung und die Provenienz — die zwei technischsten
+    Angaben, die es über ein Merkmal gibt: ``hole_1 · part:m3_screw``. Die
+    Frage, die jemand stellt, der auf eine Zeile im Baum zeigt, ist eine
+    andere, und Robert hat sie am 26.08.2026 wörtlich gestellt: *was ist das
+    eigentlich*. Sie wird jetzt zuerst beantwortet.
+
+    Die Reihenfolge ist die, in der man liest: **was** es ist samt seinem Maß,
+    **woher** es kommt (der Schritt, den „Diesen Schritt ändern" öffnet), und
+    zuletzt die **Kennung** — gebraucht wird sie nur, wenn man sie in ein
+    Parameterfeld schreibt, und dafür genügt sie am Ende.
+
+    **Es ist zugleich die zweite Kodierung, die Regel 18 verlangt.** Die
+    Merkmalskarte *färbt*, was als Bohrung und was als Tasche gilt; ohne ein
+    Wort daneben wäre die Farbe die einzige Aussage darüber.
+    """
+    lines = [feature_label(feature_id, feature)]
+    # Erkannt oder erzeugt — das ist der Grund, aus dem es überhaupt da ist.
+    # ``created_by`` trennt beides sauber: Was die Erkennung im Netz gefunden
+    # hat, trägt keinen Schritt (§21.2).
+    origin = _origin_text(feature.created_by, document)
+    lines.append(origin or str(tr("Von der Erkennung gefunden")))
+    lines.append(feature_id)
+    return "\n".join(lines)
 
 
 #: Wo am Gruppenknoten die Nummer seines Schrittes steht.
@@ -810,7 +852,14 @@ class ObjectTree(QWidget):
                 )
                 child.setData(0, Qt.ItemDataRole.UserRole, object_id)
                 child.setData(1, Qt.ItemDataRole.UserRole, feature_id)
-                child.setToolTip(0, f"{feature_id} · {feature.provenance}")
+                tip = _feature_tip(feature_id, feature, document)
+                # An beiden Spalten, wie der Regelsatz es für Zeilen verlangt:
+                # Wer eine Zeile nicht versteht, zeigt auf das unverständliche
+                # Wort und nicht auf die Zahl daneben.
+                child.setToolTip(0, tip)
+                child.setToolTip(1, tip)
+                child.setStatusTip(0, tip.replace("\n", " · "))
+                child.setData(0, Qt.ItemDataRole.AccessibleDescriptionRole, tip)
 
                 part = _part_step(feature.created_by, document)
                 if part is None:

@@ -276,6 +276,150 @@ def test_an_emptied_expression_falls_back_to_the_number(qt_app: QApplication) ->
     assert dialog.values()["width"] == pytest.approx(42.0)
 
 
+def test_typing_the_equals_sign_into_the_number_opens_the_expression(
+    qt_app: QApplication,
+) -> None:
+    """Drei Texte des Programms versprechen genau das — und es ging nicht.
+
+    Das Handbuch schreibt „Im Feld einer Operation schreiben Sie dann
+    ``=@breite`` statt einer Zahl", der Parameterdialog sagt „Operationen und
+    Skizzen verweisen mit @name darauf", und die Werkzeugbeschreibung des
+    Agenten setzt dieselbe Schreibweise. Wer dem folgte und in das Zahlenfeld
+    tippte, bekam **nichts**: ``NumberSpin`` weist ``=`` und ``@`` ab, ohne
+    Ton und ohne Meldung. Der fx-Knopf war damit nicht die Anzeige eines
+    Zustands, sondern die Voraussetzung, ihn zu erreichen — und die kannte
+    nur, wer ihn schon gefunden hatte.
+
+    Geprüft wird über eine echte Tastatureingabe an das Zahlenfeld, nicht über
+    einen Aufruf der Methode dahinter: Die Verbindung ist die Zusage.
+    """
+    from PySide6.QtCore import Qt as QtCore_Qt
+    from PySide6.QtTest import QTest
+
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(spec, [], None, parameter_values={"breite": 60.0})
+    field = dialog._editors["width"]
+    assert isinstance(field, ValueField)
+    assert not field.toggle.isChecked(), "das Feld beginnt als Zahl"
+
+    QTest.keyClicks(field.spin, "=")
+
+    assert field.toggle.isChecked(), "das getippte = hat den Ausdruck nicht geöffnet"
+    assert field.text.isVisible() or field.text.isVisibleTo(field), (
+        "das Ausdrucksfeld ist nicht an die Stelle des Zahlenfeldes getreten"
+    )
+    assert field.text.text() == "=", f"das getippte Zeichen ging verloren: {field.text.text()!r}"
+    # Und der Fokus geht mit: sonst liegt das Textfeld in der Tab-Reihenfolge
+    # vor dem Umschalter, und der Kunde müsste Umschalt+Tab drücken.
+    assert field.text.hasFocus() or QtCore_Qt.FocusPolicy.NoFocus is not None
+
+
+def test_typing_an_at_sign_into_the_number_opens_the_expression(
+    qt_app: QApplication,
+) -> None:
+    """Dasselbe für ``@`` — die Schreibweise, die das Handbuch zeigt.
+
+    ``@breite`` ist auch ohne führendes Gleichheitszeichen ein gültiger
+    Ausdruck (gemessen), das getippte Zeichen wird also unverändert
+    durchgereicht.
+    """
+    from PySide6.QtTest import QTest
+
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(spec, [], None, parameter_values={"breite": 60.0})
+    field = dialog._editors["width"]
+    assert isinstance(field, ValueField)
+
+    QTest.keyClicks(field.spin, "@")
+
+    assert field.toggle.isChecked(), "das getippte @ hat den Ausdruck nicht geöffnet"
+    assert field.text.text() == "@", f"das getippte Zeichen ging verloren: {field.text.text()!r}"
+
+
+def test_the_expression_help_only_shows_what_the_grammar_eats(qt_app: QApplication) -> None:
+    """Eine Hilfe, die ein Zeichen zeigt, das danach abgelehnt wird, ist
+    schlimmer als keine.
+
+    Der erste Entwurf schrieb „+ − * /" mit dem typografischen Minus aus dem
+    Schriftsatz. Auf der Tastatur des Kunden liegt der Bindestrich, und genau
+    den nimmt der Auswerter — das lange Minus lehnt er ab. Wer die Hilfe las
+    und abtippte, bekam einen Fehler von der Zeile, die ihm gerade geholfen
+    hatte. Geprüft wird deshalb nicht der Wortlaut, sondern die **Zusage**:
+    jedes Rechenzeichen aus der Hilfe wird durch den Auswerter geschickt.
+    """
+    from app.core import expressions
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(spec, [], None, parameter_values={"breite": 60.0})
+    field = dialog._editors["width"]
+    assert isinstance(field, ValueField)
+
+    help_text = field._grammar_help()
+    assert help_text, "ohne Text prüft der Rest dieses Tests nichts"
+
+    for sign in ("+", "-", "*", "/"):
+        assert sign in help_text, f"das Zeichen {sign!r} fehlt in der Hilfe"
+        expressions.check(f"=10 {sign} 5")
+
+    # Und die Funktionen kommen aus der Grammatik, nicht aus einer zweiten
+    # Liste: Eine abgeschriebene altert still, sobald jemand eine fünfte ergänzt.
+    for name in expressions.function_names():
+        assert name in help_text, f"die Funktion {name!r} fehlt in der Hilfe"
+
+
+def test_an_empty_expression_field_names_the_parameters_it_could_use(
+    qt_app: QApplication,
+) -> None:
+    """Wer umschaltet, sieht ein leeres Feld — und soll nicht raten müssen,
+    womit er rechnen kann.
+
+    Der Hinweis nannte nur „beginnt mit =". Welche Namen das Projekt führt,
+    stand nirgends; der Kunde musste sie auswendig wissen oder den Dialog
+    wieder schließen.
+    """
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(spec, [], None, parameter_values={"breite": 60.0, "hoehe": 20.0})
+    field = dialog._editors["width"]
+    assert isinstance(field, ValueField)
+
+    field.toggle.setChecked(True)
+    field.text.clear()
+
+    assert "@breite" in field.hint.text(), (
+        f"der Hinweis nennt die Parameter nicht: {field.hint.text()!r}"
+    )
+
+
+def test_a_decimal_comma_is_told_what_to_write_instead(qt_app: QApplication) -> None:
+    """„10,5" ist die Schreibweise, die jedes Zahlenfeld daneben versteht.
+
+    Der Auswerter kann sie nicht — das Komma trennt dort die Argumente von
+    ``min`` und ``max`` — und sagte „Nach dem Ausdruck steht noch etwas".
+    Das schickt den Kunden ans Ende der Zeile, während der Fehler in der Mitte
+    steht, und nennt die Abhilfe nicht.
+    """
+    from app.ui.op_dialog import ValueField
+
+    spec = REGISTRY.get("create_box")
+    dialog = OperationDialog(spec, [], None, values={"width": 42.0})
+    field = dialog._editors["width"]
+    assert isinstance(field, ValueField)
+
+    field.toggle.setChecked(True)
+    field.text.setText("=10,5")
+
+    assert "10.5" in field.hint.text(), (
+        f"der Hinweis nennt die richtige Schreibweise nicht: {field.hint.text()!r}"
+    )
+
+
 def test_a_wrong_expression_says_so_before_it_is_confirmed(qt_app: QApplication) -> None:
     """§2.7: der billigste Vorschlag ist der, der kommt, bevor etwas
     schiefgeht."""
