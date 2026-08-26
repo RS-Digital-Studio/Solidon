@@ -182,7 +182,12 @@ Textquelle je Auskunft, drei Kodierungen an gesperrten Knöpfen.
 Der Kein-Netz-Fall ist der wichtigste: Er darf **nichts kosten**. Der
 Schlüssel bleibt abgelegt, der Testzeitraum läuft unverändert weiter, und wer
 noch Tage hat, arbeitet einfach weiter — die ausstehende Aktivierung ist ein
-Hinweis, keine Sperre, solange etwas anderes freischaltet.
+Hinweis, keine Sperre, solange etwas anderes freischaltet. Und wenn nichts
+anderes mehr freischaltet — Kauf am letzten Testtag, kein Netz —, greift die
+**vorläufige Freischaltung** aus Teil A (Entscheidung 8): Der lokal gültige
+Schlüssel trägt befristet, der Zustand heißt „Aktivierung ausstehend — noch
+N Tage" und zeigt dieselben zwei Knöpfe. Ein Kauf ist damit nie schlechter
+als kein Kauf.
 
 ### D3 — Umzug und Deaktivieren
 
