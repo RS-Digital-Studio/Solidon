@@ -120,7 +120,9 @@ def test_a_second_run_starts_its_own_clock(qt_app: QApplication) -> None:
         veil.deleteLater()
 
 
-def test_the_veil_tells_when_it_really_stands(qt_app: QApplication) -> None:
+def test_the_veil_tells_when_it_really_stands(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """``appeared`` kommt beim Erscheinen, ``ended`` nur nach einem Stand.
 
     Das Hauptfenster verbirgt am ``appeared`` die native Ansicht — zu früh
@@ -128,7 +130,16 @@ def test_the_veil_tells_when_it_really_stands(qt_app: QApplication) -> None:
     spät bliebe die Ansicht verborgen. Ein ``ended`` ohne vorherigen Stand
     meldete etwas, das nie geschah: ``end`` läuft nach jedem Lauf, auch wenn
     die Verzögerung die Anzeige nie hat erscheinen lassen.
+
+    ``animations_enabled`` wird festgenagelt statt von der Plattform
+    erraten: Offscreen erscheint der Schleier von selbst sofort, unter xcb
+    (die CI fährt xvfb) erst nach 200 ms — und ein synchroner Blick auf das
+    Signal sah dort nie eines. Geprüft wird der Signalvertrag, nicht die
+    Uhr.
     """
+    import app.ui.loading as loading_module
+
+    monkeypatch.setattr(loading_module, "animations_enabled", lambda: False)
     veil = LoadingVeil()
     seen: list[str] = []
     veil.appeared.connect(lambda: seen.append("auf"))
@@ -137,7 +148,7 @@ def test_the_veil_tells_when_it_really_stands(qt_app: QApplication) -> None:
         veil.end()
         assert seen == [], "ended kam ohne einen Stand"
 
-        veil.begin("Projekt öffnen")  # offscreen: erscheint sofort
+        veil.begin("Projekt öffnen")  # erscheint ohne Verzögerung, s. o.
         assert seen == ["auf"]
 
         veil.end()
