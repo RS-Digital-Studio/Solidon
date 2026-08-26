@@ -88,7 +88,7 @@ def test_the_running_version_is_marked() -> None:
     """Ohne Marke sucht der Kunde in einer Liste von Nummern die eigene."""
     text = history_html(changes.history("de"))
 
-    assert "diese Fassung" in text
+    assert "diese Version" in text
 
 
 def test_a_point_with_a_pointed_bracket_survives() -> None:
@@ -97,7 +97,10 @@ def test_a_point_with_a_pointed_bracket_survives() -> None:
     Als Auszeichnung gelesen verschwände der Satz ab dort bis zum nächsten
     ``>``. Das ist kein Angriff, nur ein Punkt, der dann fehlt.
     """
-    entry = changes.Entry(version="9.9.9", points=("Wände unter <2 Breiten werden gemeldet.",))
+    entry = changes.Entry(
+        version="9.9.9",
+        groups=(changes.Group(title="", points=("Wände unter <2 Breiten werden gemeldet.",)),),
+    )
 
     text = history_html((entry,))
 

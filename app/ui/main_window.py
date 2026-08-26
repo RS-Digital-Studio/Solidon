@@ -2059,7 +2059,7 @@ class MainWindow(QMainWindow):
             tr("Neuerungen …"),
             None,
             self.action_changes,
-            tr("Was sich in dieser und den vorigen Fassungen geändert hat."),
+            tr("Was sich in dieser und den vorigen Versionen geändert hat."),
         )
         help_menu.addSeparator()
         self._add_action(

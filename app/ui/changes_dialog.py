@@ -64,7 +64,7 @@ def history_html(entries: tuple[changes.Entry, ...], current: str = APP_VERSION)
     for entry in entries:
         title = html.escape(entry.version)
         if entry.version == current:
-            title += " — " + html.escape(tr("diese Fassung"))
+            title += " — " + html.escape(tr("diese Version"))
         blocks.append(f'<h3 style="margin-bottom:2px">{title}</h3>')
         for group in entry.groups:
             if group.title:
@@ -114,7 +114,7 @@ class ChangesDialog(QDialog):
         # **Der leere Fall ist kein Fehler und bekommt trotzdem einen Satz.**
         # Er entsteht, wenn der Verlauf im Paket fehlt; ein leerer Kasten ließe
         # den Nutzer raten, ob es nichts gibt oder etwas kaputt ist.
-        self.empty = QLabel(tr("Für diese Fassung liegt kein Verlauf bei."), self)
+        self.empty = QLabel(tr("Für diese Version liegt kein Verlauf bei."), self)
         self.empty.setWordWrap(True)
         self.empty.setVisible(not entries)
         self.scroller.setVisible(bool(entries))
