@@ -36,8 +36,10 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una pieza más delgada que una capa impresa ya no se pone de canto.
 - La división automática cuenta el saliente del pasador para el límite de la mesa y no deja ajustes que apunten a sitios desaparecidos.
 - Una cavidad hecha desde un dibujo con agujero conserva el agujero. Hasta ahora fresaba también la isla.
+- Un agujero dibujado se resta sin importar en qué sentido lo dibujó. Según el orden de los clics salía antes una pieza más llena.
 - Al hacer clic en un taladro se propone el tornillo que realmente pasa por él — y se indica el diámetro medido.
 - Un archivo de un slicer llegaba con cuerpos duplicados: una pieza con diecisiete objetos se leía diecisiete veces, con el doble de volumen y el doble de tiempo de impresión.
+- Los archivos grandes de un slicer se abren con soltura, sin que la ventana se congele. Antes, el mero recuento de cuerpos leía todo el archivo en memoria.
 - Al escalar a una anchura dada se medía también una línea auxiliar. De cincuenta milímetros salían cinco.
 - Al exportar, piezas con el mismo nombre se sobrescribían: un archivo, dos mensajes de éxito, una pieza perdida.
 - Un cambio de idioma surte efecto en toda la ventana. Los ajustes de impresión se quedaban en el idioma con el que se inició la aplicación.

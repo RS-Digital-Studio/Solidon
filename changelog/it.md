@@ -35,8 +35,10 @@ scrive in `website/version.json`.
 - Un pezzo più sottile di uno strato di stampa non viene più messo in piedi.
 - La divisione automatica conta la sporgenza della spina nel limite del piatto e non lascia accoppiamenti che puntano a posti scomparsi.
 - Una tasca da un disegno con foro conserva il foro. Finora fresava via anche l'isola.
+- Un foro disegnato viene sottratto in qualunque verso tu lo abbia disegnato. A seconda dell'ordine dei clic prima usciva un pezzo più pieno.
 - Un clic su un foro propone ora la vite che ci passa davvero — e indica il diametro misurato.
 - Un file da uno slicer arrivava con corpi doppi: un pezzo con diciassette oggetti veniva letto diciassette volte, con volume e tempo di stampa doppi.
+- I file grandi da uno slicer si aprono senza che la finestra si blocchi. Prima il solo conteggio dei corpi leggeva l'intero file in memoria.
 - Scalando a una larghezza data veniva misurata anche una linea di costruzione. Da cinquanta millimetri ne uscivano cinque.
 - All'esportazione, pezzi con lo stesso nome si sovrascrivevano: un file, due messaggi di riuscita, un pezzo perso.
 - Un cambio di lingua ha effetto in tutta la finestra. Le impostazioni di stampa restavano nella lingua di avvio.

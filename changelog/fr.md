@@ -36,8 +36,10 @@ dans `website/version.json`.
 - Une pièce plus fine qu'une couche imprimée n'est plus dressée sur chant.
 - La division automatique compte le dépassement du tenon dans la limite du plateau et ne laisse aucun ajustement pointant vers des endroits disparus.
 - Une poche issue d'un dessin avec trou conserve le trou. Jusqu'ici elle fraisait aussi l'îlot.
+- Un trou dessiné est soustrait quel que soit le sens dans lequel vous l'avez tracé. Selon l'ordre des clics, une pièce plus pleine sortait auparavant.
 - Un clic sur un perçage propose désormais la vis qui y passe vraiment — et indique le diamètre mesuré.
 - Un fichier venant d'un trancheur arrivait avec des corps en double : une pièce de dix-sept objets était lue dix-sept fois, avec le double de volume et de temps d'impression.
+- Les gros fichiers d'un trancheur s'ouvrent sans que la fenêtre se fige. Auparavant, le simple comptage des corps chargeait tout le fichier en mémoire.
 - La mise à une largeur donnée mesurait aussi une ligne de construction. Cinquante millimètres devenaient cinq.
 - À l'export, des pièces de même nom s'écrasaient : un fichier, deux messages de réussite, une pièce perdue.
 - Un changement de langue agit maintenant dans toute la fenêtre. Les réglages d'impression restaient dans la langue de démarrage.

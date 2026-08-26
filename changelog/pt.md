@@ -35,8 +35,10 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma peça mais fina do que uma camada impressa já não é posta ao alto.
 - A divisão automática conta a saliência do pino para o limite da mesa e não deixa ajustes a apontar para sítios que desapareceram.
 - Uma cavidade feita a partir de um desenho com furo mantém o furo. Até agora fresava também a ilha.
+- Um furo desenhado é subtraído seja qual for o sentido em que o desenhou. Conforme a ordem dos cliques saía antes uma peça mais cheia.
 - Um clique num furo propõe agora o parafuso que realmente passa por ele — e indica o diâmetro medido.
 - Um ficheiro de um slicer chegava com corpos duplicados: uma peça com dezassete objetos era lida dezassete vezes, com o dobro do volume e do tempo de impressão.
+- Os ficheiros grandes de um slicer abrem sem que a janela congele. Antes, a mera contagem dos corpos lia o ficheiro todo para a memória.
 - Ao escalar para uma largura dada media-se também uma linha auxiliar. De cinquenta milímetros saíam cinco.
 - Na exportação, peças com o mesmo nome sobrepunham-se: um ficheiro, duas mensagens de sucesso, uma peça perdida.
 - Uma mudança de idioma passa a valer em toda a janela. As definições de impressão ficavam no idioma com que a aplicação arrancou.

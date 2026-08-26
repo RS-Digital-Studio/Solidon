@@ -35,8 +35,10 @@ schreibt ihn in `website/version.json`.
 - Ein Teil, das dünner ist als eine Druckschicht, wird nicht mehr hochkant gestellt.
 - Automatisch teilen rechnet den Stiftüberstand zur Bettgrenze und lässt keine Passungen zurück, die auf verschwundene Stellen zeigen.
 - Eine Tasche aus einer Zeichnung mit Loch behält das Loch. Bisher fräste sie die Insel mit weg.
+- Ein gezeichnetes Loch wird abgezogen, gleich in welcher Richtung Sie es gezeichnet haben. Bisher kam je nach Klickreihenfolge ein volleres Teil heraus.
 - Ein Klick auf eine Bohrung schlägt die Schraube vor, die wirklich hindurchgeht — und nennt den gemessenen Durchmesser dazu.
 - Eine Datei aus einem Slicer kam mit doppelten Körpern an: Ein Teil mit siebzehn Objekten wurde siebzehnmal gelesen, mit doppeltem Volumen und doppelter Druckzeit.
+- Große Dateien aus einem Slicer öffnen zügig, ohne dass das Fenster einfriert. Bisher las schon das bloße Zählen der Körper die ganze Datei in den Speicher.
 - Beim Skalieren auf eine bestimmte Breite wurde eine Hilfslinie mitgemessen. Aus fünfzig Millimetern wurden fünf.
 - Beim Export überschrieben sich gleichnamige Teile: eine Datei, zwei Erfolgsmeldungen, ein Teil weg.
 - Ein Sprachwechsel wirkt jetzt im ganzen Fenster. Die Druckeinstellungen blieben bisher in der Sprache, in der die Anwendung gestartet war.

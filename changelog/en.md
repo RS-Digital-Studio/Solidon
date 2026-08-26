@@ -35,8 +35,10 @@ it into `website/version.json`.
 - A part thinner than one printed layer is no longer stood on its edge.
 - Auto split counts the pin overhang towards the bed limit and leaves behind no fits pointing at places that are gone.
 - A pocket from a drawing with a hole keeps the hole. Until now it milled the island away.
+- A drawn hole is subtracted no matter which way round you drew it. Depending on the order of clicks, a fuller part used to come out.
 - Clicking a bore now suggests the screw that really passes through — and names the measured diameter along with it.
 - A file from a slicer arrived with duplicated bodies: a part with seventeen objects was read seventeen times, with twice the volume and twice the print time.
+- Large files from a slicer open promptly without the window freezing. Merely counting the bodies used to read the whole file into memory.
 - Scaling to a given width measured a construction line as well. Fifty millimetres became five.
 - On export, parts with the same name overwrote each other: one file, two success messages, one part gone.
 - A language change now takes effect throughout the window. The print settings used to stay in the language the application started in.
