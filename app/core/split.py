@@ -88,7 +88,7 @@ def plan_split(
     Eingabe des nächsten Schnitts ist eines der zwei Stücke, die der vorige
     gemacht hat.
     """
-    outcome = split_to_fit(mesh, profile, cancelled=cancelled)
+    outcome = split_to_fit(mesh, profile, pins=pins, cancelled=cancelled)
     drafts = [
         OperationDraft(
             op="split_pinned",
@@ -166,17 +166,27 @@ def apply_planned(
 
     history = History(document)
     pieces: list[ObjectId] = [object_id]
-    fits: list[Fit] = []
+    existing = list(document.fits)  # Passungen aus früheren Transaktionen
+    created: list[Fit] = []  # was dieser Lauf angelegt hat und noch lebt
     dropped: list[Fit] = []
     transaction = None
 
     for index, (step, draft) in enumerate(zip(plan.outcome.cuts, plan.drafts, strict=True)):
         target = pieces[step.part_index]
-        # Auch hier wird ein Stück geteilt, das aus einem früheren Schnitt
-        # dieser Teilung stammt — mit seinen Passungen. Sie gehen denselben
-        # Weg wie bei einer gezeichneten Linie: siehe :func:`_fits_without`.
-        kept, gone = _fits_without(document, target)
-        dropped.extend(gone)
+        # Ein Stück, das ein späterer Schnitt desselben Laufs noch einmal teilt,
+        # ist danach zwei — die Passungen, die es benennen, zeigen ins Leere.
+        # Sie entfallen, gleich ob sie vor diesem Lauf im Dokument standen oder
+        # ein früherer Schnitt sie eben erst angelegt hat. **Beide Listen
+        # werden geprüft:** ``change_for`` schreibt die vollständige neue Liste,
+        # und eine tote Passung aus dem eigenen Lauf käme sonst über den
+        # Akkumulator erneut ins Dokument — der Prüfbericht meldete danach je
+        # verwaister Naht ein ``fit.missing_feature`` (§14). Umgehängt wird
+        # nichts: der zweite Schnitt vergibt wieder ``pin_1``, ein Verweis
+        # darauf zeigte auf einen anderen Stift als gemeint (:func:`_fits_without`).
+        existing, gone_old = _partition_fits(existing, target)
+        created, gone_new = _partition_fits(created, target)
+        dropped.extend(gone_old)
+        dropped.extend(gone_new)
         made: list[ObjectId] = []
 
         # Die Schleifenvariablen wandern als Vorgabewerte hinein: Ein
@@ -185,15 +195,16 @@ def apply_planned(
         def change(
             planned: Sequence[Any],
             made: list[ObjectId] = made,
-            kept: list[Fit] = kept,
+            existing: list[Fit] = existing,
+            created: list[Fit] = created,
             seated: int = plan.pins_at(index, pins),
         ) -> Any:
             made.extend(planned[0].outputs)
             # So viele Paare, wie Stifte sitzen — nicht so viele, wie
             # gewünscht waren. Eine zu schmale Schnittfläche bekommt keinen
             # Stift und deshalb auch keine Passung, die auf ihn zeigt.
-            fits.extend(_pairs(made[0], made[1], seated, profile, len(kept) + len(fits)))
-            return change_for(document, fits=[*kept, *fits])
+            created.extend(_pairs(made[0], made[1], seated, profile, len(existing) + len(created)))
+            return change_for(document, fits=[*existing, *created])
 
         applied = history.apply(
             _("Teilen und verstiften"),
@@ -204,10 +215,10 @@ def apply_planned(
         transaction = applied.id
         pieces[step.part_index : step.part_index + 1] = list(made)
 
-    _log.info("split into %d part(s) with %d fit pair(s)", len(pieces), len(fits))
+    _log.info("split into %d part(s) with %d fit pair(s)", len(pieces), len(created))
     return SplitApplied(
         object_ids=pieces,
-        fits=fits,
+        fits=created,
         transaction=transaction,
         findings=[*plan.outcome.findings, *(_fit_dropped(fit) for fit in dropped)],
     )
@@ -297,9 +308,20 @@ def _fits_without(document: Document, consumed: ObjectId) -> tuple[list[Fit], li
     und der Verweis zeigte auf einen anderen Stift als gemeint. Eine Passung,
     die auf das Falsche zeigt, ist schlechter als keine.
     """
-    kept = [fit for fit in document.fits if consumed not in (fit.a.object_id, fit.b.object_id)]
-    dropped = [fit for fit in document.fits if consumed in (fit.a.object_id, fit.b.object_id)]
-    return kept, dropped
+    return _partition_fits(list(document.fits), consumed)
+
+
+def _partition_fits(fits: list[Fit], consumed: ObjectId) -> tuple[list[Fit], list[Fit]]:
+    """Teilt eine Passungsliste in die, die bleiben, und die, deren Teil
+    verschwindet.
+
+    Dieselbe Sortierung wie :func:`_fits_without`, nur über eine beliebige Liste
+    statt über das Dokument — Auto Split braucht sie auch über die Paare, die es
+    im selben Lauf schon angelegt hat.
+    """
+    kept = [fit for fit in fits if consumed not in (fit.a.object_id, fit.b.object_id)]
+    gone = [fit for fit in fits if consumed in (fit.a.object_id, fit.b.object_id)]
+    return kept, gone
 
 
 def _fit_dropped(fit: Fit) -> Finding:

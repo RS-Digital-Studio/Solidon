@@ -124,6 +124,57 @@ def test_the_search_stops_instead_of_cutting_forever(profile: Profile) -> None:
     assert "split.too_many_parts" in {finding.code for finding in outcome.findings}
 
 
+def test_the_pin_overhang_counts_towards_the_bed(profile: Profile) -> None:
+    """§25: Ein Passstift steht über die Schnittfläche, also ragt die
+    verstiftete Hälfte weiter als ihr nacktes Netz.
+
+    ``oversize`` mit Zugabe rechnet ihn mit; ohne Zugabe misst es das blanke
+    Netz wie zuvor. Der Quader passt nackt genau aufs Bett.
+    """
+    limit = profile.printer.build_volume[0] - 2.0 * autosplit.MARGIN
+    box = MeshData.of(trimesh.creation.box(extents=(limit, 40.0, 40.0)))
+
+    assert autosplit.oversize(box, profile)[0] == pytest.approx(0.0), "nackt passt es genau"
+    assert autosplit.oversize(box, profile, allowance=(7.0, 0.0, 0.0))[0] == pytest.approx(7.0)
+
+
+def test_a_half_with_its_pin_stays_on_the_bed(profile: Profile) -> None:
+    """§25: Auto Split rechnet den Stiftüberstand ein und teilt feiner.
+
+    Der Quader ist zwei Bettlängen weniger sechs Millimeter lang: eine einzige
+    Naht ließe beide Hälften nackt aufs Bett passen — knapp. Mit Stift stünde
+    jede darüber (gemessen 259,8 mm auf einem 252er Bett, bevor die Prüfung den
+    Überstand kannte). Also entsteht ein dritter Schnitt, und keine Hälfte ragt
+    mitsamt Stift über das Bett.
+    """
+    limit = profile.printer.build_volume[0] - 2.0 * autosplit.MARGIN
+    box = MeshData.of(trimesh.creation.box(extents=(2.0 * limit - 6.0, 60.0, 60.0)))
+
+    outcome = autosplit.split_to_fit(box, profile)
+
+    assert len(outcome.parts) >= 3, "eine Naht reichte nackt, mit Stift nicht"
+    for part in outcome.parts:
+        seam = SectionPlane(autosplit.AXIS_NORMALS["x"], float(part.bounds.centre[0]))
+        overhang = pins.plan_pins(part, seam).length / 2.0
+        assert part.bounds.size[0] + overhang <= limit + autosplit.EPS_GEOM, (
+            "Hälfte samt Stift bleibt auf dem Bett"
+        )
+
+
+def test_without_pins_the_bed_check_is_the_bare_extent(profile: Profile) -> None:
+    """Die Gegenprobe: Wer ohne Stifte teilt, bekommt keine Zugabe.
+
+    Derselbe Quader wie oben, aber ``pins=0``. Ohne Stift steht nichts über, die
+    alte Rechnung bleibt, und eine einzige Naht genügt.
+    """
+    limit = profile.printer.build_volume[0] - 2.0 * autosplit.MARGIN
+    box = MeshData.of(trimesh.creation.box(extents=(2.0 * limit - 6.0, 60.0, 60.0)))
+
+    outcome = autosplit.split_to_fit(box, profile, pins=0)
+
+    assert len(outcome.parts) == 2, "nackt reicht eine Naht"
+
+
 def test_convex_parts_take_an_l_apart(profile: Profile) -> None:
     """§22.3: die Zerlegung findet, wo ein L von selbst auseinanderfällt.
 
@@ -487,6 +538,41 @@ def test_undo_brings_the_dropped_fits_back(profile: Profile) -> None:
     History(project.document).undo()
 
     assert project.document.fits == [], "was die Teilung anlegte, nimmt das Undo mit"
+
+
+def test_auto_split_leaves_no_dead_fit_after_two_cuts(profile: Profile) -> None:
+    """Zwei Schnitte in **einem** Auto-Split-Lauf hinterlassen keine tote Passung.
+
+    Auto Split legt je Schnitt ein Passungspaar an. Teilte ein späterer Schnitt
+    desselben Laufs ein schon verstiftetes Stück noch einmal, blieben dessen
+    Paare stehen und zeigten ins Leere: zwei ``fit.missing_feature`` im
+    Prüfbericht, obwohl niemand einen Parameter angefasst hatte. Der Balken ist
+    doppelt zu lang und braucht darum zwei Schnitte.
+
+    Das Gegenstück zu ``test_splitting_a_piece_again_lets_its_fits_go``: dort
+    zwei gezeichnete Schnitte in zwei Läufen, hier zwei aus einem Lauf — die
+    entfielen bisher nur im Dokument, nicht im Lauf-Akkumulator, und der schrieb
+    sie über ``change_for`` erneut hinein.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply(
+        "Anlegen",
+        [OperationDraft(op="create_box", params={"width": 600.0, "depth": 60.0, "height": 40.0})],
+    )
+    block = MeshData.of(trimesh.creation.box(extents=(600.0, 60.0, 40.0)))
+
+    applied = apply_split(project.document, block, "obj_1", profile)
+
+    assert len(applied.object_ids) == 3, "doppelt zu lang: zwei Schnitte, drei Stücke"
+    assert [finding.code for finding in applied.findings].count("split.fit_dropped") == 2
+
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+    codes = [finding.code for finding in result.scene.report.findings]
+    assert "fit.missing_feature" not in codes, codes
+
+    live = set(applied.object_ids)
+    for fit in project.document.fits:
+        assert fit.a.object_id in live and fit.b.object_id in live, fit.name
 
 
 def test_the_seams_become_fit_pairs(loaded, profile: Profile) -> None:

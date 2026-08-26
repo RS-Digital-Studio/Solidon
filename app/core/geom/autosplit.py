@@ -130,12 +130,26 @@ class SplitOutcome:
 
 
 def oversize(
-    mesh: MeshData, profile: Profile, margin: float = MARGIN
+    mesh: MeshData,
+    profile: Profile,
+    margin: float = MARGIN,
+    *,
+    allowance: Vec3 = (0.0, 0.0, 0.0),
 ) -> tuple[float, float, float]:
-    """Wie weit der Körper über den Bauraum hinaussteht, je Achse, in mm."""
+    """Wie weit der Körper über den Bauraum hinaussteht, je Achse, in mm.
+
+    ``allowance`` ist die Zugabe je Achse, um die ein Passstift über die
+    Schnittfläche hinaussteht (§25): Der Stift reicht aus der einen Hälfte in die
+    andere, also ragt die verstiftete Hälfte weiter als ihr nacktes Netz. Wer
+    prüft, ob ein Stück aufs Bett passt, rechnet den Überstand mit — sonst kommt
+    ein Teil zurück, das nackt passt und mit Stift über die Kante steht. Ohne
+    Zugabe (der Regelfall dieser Funktion) misst sie das blanke Netz wie zuvor.
+    """
     limits = [value - 2.0 * margin for value in profile.printer.build_volume]
     size = mesh.bounds.size
-    return tuple(max(0.0, float(size[index]) - limits[index]) for index in range(3))  # type: ignore[return-value]
+    return tuple(  # type: ignore[return-value]
+        max(0.0, float(size[index]) + float(allowance[index]) - limits[index]) for index in range(3)
+    )
 
 
 #: Wie viele Kandidatenebenen ein Block der Abtastung umfasst.
@@ -147,9 +161,18 @@ def oversize(
 JUDGE_BLOCK: Final = 8
 
 
-def fits(mesh: MeshData, profile: Profile, margin: float = MARGIN) -> bool:
-    """Passt der Körper überhaupt auf die Platte, in der Lage, die er hat?"""
-    return max(oversize(mesh, profile, margin)) <= EPS_GEOM
+def fits(
+    mesh: MeshData,
+    profile: Profile,
+    margin: float = MARGIN,
+    *,
+    allowance: Vec3 = (0.0, 0.0, 0.0),
+) -> bool:
+    """Passt der Körper überhaupt auf die Platte, in der Lage, die er hat?
+
+    ``allowance`` rechnet den Stiftüberstand mit, siehe :func:`oversize`.
+    """
+    return max(oversize(mesh, profile, margin, allowance=allowance)) <= EPS_GEOM
 
 
 def split_to_fit(
@@ -158,6 +181,7 @@ def split_to_fit(
     *,
     max_parts: int = MAX_PARTS,
     samples: int = SAMPLES,
+    pins: int | None = None,
     cancelled: CancelToken | None = None,
 ) -> SplitOutcome:
     """Schneidet, bis jedes Stück passt — oder klar ist, dass Schneiden es
@@ -168,31 +192,61 @@ def split_to_fit(
     Übeltäter zuerst zu schneiden ist, was ein Mensch mit einer Säge tut, und
     aus demselben Grund.
 
+    **Der Passstift zählt zur Ausdehnung.** Ein Stift steht über die
+    Schnittfläche hinaus (§25); eine Hälfte, die nackt genau aufs Bett passt,
+    ragt mit Stift darüber. Jeder Schnitt legt darum eine Zugabe auf beide neuen
+    Hälften — den Überstand an dieser Naht —, und die Bettprüfung
+    (:func:`oversize`) rechnet sie mit. Wo eine Hälfte damit übersteht, wird
+    feiner geteilt. ``pins`` ist die gewünschte Stiftzahl; ohne Stifte
+    (``pins=0``) gibt es keine Zugabe und die alte Rechnung bleibt.
+
     ``cancelled`` wird **zwischen** den Schnitten und innerhalb der Abtastung
     abgefragt (§15.6). Ein halb geschnittener Körper entsteht dabei nicht: Der
     Abbruch wirft, und was schon gefunden war, ist ein Plan und noch keine
     Änderung am Dokument.
     """
+    if pins is None:
+        from app.core.geom.pins import PIN_COUNT
+
+        pins = PIN_COUNT
+
     outcome = SplitOutcome(parts=[mesh])
+    # Die Stiftzugabe je Stück und Achse, in Lockschritt mit ``outcome.parts``.
+    # Der ganze Körper trägt keine (er ist nicht verstiftet), erst ein Schnitt
+    # legt eine an.
+    reserves: list[Vec3] = [(0.0, 0.0, 0.0)]
     if fits(mesh, profile):
         return outcome
 
     while len(outcome.parts) < max_parts:
         if cancelled is not None:
             cancelled.raise_if_cancelled()
-        index = _worst(outcome.parts, profile)
+        index = _worst(outcome.parts, profile, reserves)
         if index is None:
             return outcome
 
         part = outcome.parts[index]
-        candidate = find_plane(part, profile, samples=samples, cancelled=cancelled)
+        reserve = reserves[index]
+        axis = _axis_to_cut(part, profile, reserve)
+        if axis is None:
+            return outcome
+        # Wie weit der Stift dieser Naht überstünde — an einer Ebene durch die
+        # Mitte gemessen, weil dort der Querschnitt für ein prismatisches Stück
+        # steht. Die Zahl geht in das Suchfenster (damit der Schnitt Raum für den
+        # Stift lässt) und in die Reserve der Kinder.
+        allowance = _pin_allowance(part, axis, profile, pins)
+        candidate = find_plane(
+            part, profile, axis=axis, allowance=allowance, samples=samples, cancelled=cancelled
+        )
         if candidate is None:
             outcome.findings.append(
                 Finding(
                     code="split.no_plane",
                     severity="warning",
                     message=_("Für dieses Teil war keine brauchbare Trennebene zu finden."),
-                    values={"oversize_mm": round(max(oversize(part, profile)), 1)},
+                    values={
+                        "oversize_mm": round(max(oversize(part, profile, allowance=reserve)), 1)
+                    },
                 )
             )
             return outcome
@@ -210,10 +264,16 @@ def split_to_fit(
             return outcome
 
         outcome.parts[index : index + 1] = [first, second]
+        # Beide Hälften erben die Zugabe des Elternteils und bekommen die des
+        # neuen Schnitts auf der Schnittachse dazu. Auf **beide**, weil erst der
+        # nächste Schnitt entscheidet, welche die knappe wird — der sichere
+        # Fehler ist, einer zu viel Reserve zu geben, nicht einer zu wenig.
+        child = _add_on_axis(reserve, axis, allowance)
+        reserves[index : index + 1] = [child, child]
         outcome.cuts.append(Step(part_index=index, plane=candidate, source=part))
         _log.info("split along %s at %.2f mm", candidate.axis, candidate.position)
 
-    if _worst(outcome.parts, profile) is not None:
+    if _worst(outcome.parts, profile, reserves) is not None:
         outcome.findings.append(
             Finding(
                 code="split.too_many_parts",
@@ -225,19 +285,55 @@ def split_to_fit(
     return outcome
 
 
-def _worst(parts: list[MeshData], profile: Profile) -> int | None:
-    """Welches Stück am weitesten übersteht — oder ``None``, wenn alle passen."""
-    overshoot = [max(oversize(part, profile)) for part in parts]
+def _worst(parts: list[MeshData], profile: Profile, reserves: list[Vec3]) -> int | None:
+    """Welches Stück am weitesten übersteht — oder ``None``, wenn alle passen.
+
+    Gemessen mit der Stiftzugabe je Stück (:func:`oversize`): Ein Teil, das
+    nackt aufs Bett passt, aber mit Stift übersteht, ist noch nicht fertig.
+    """
+    overshoot = [
+        max(oversize(part, profile, allowance=reserve))
+        for part, reserve in zip(parts, reserves, strict=True)
+    ]
     largest = max(overshoot, default=0.0)
     if largest <= EPS_GEOM:
         return None
     return overshoot.index(largest)
 
 
+def _add_on_axis(reserve: Vec3, axis: Axis, extra: float) -> Vec3:
+    """Die Zugabe je Achse, um ``extra`` auf ``axis`` erhöht."""
+    values = list(reserve)
+    values["xyz".index(axis)] += extra
+    return (values[0], values[1], values[2])
+
+
+def _pin_allowance(mesh: MeshData, axis: Axis, profile: Profile, pins: int) -> float:
+    """Wie weit ein Passstift über die Schnittfläche dieser Achse stünde, in mm.
+
+    Der Überstand ist die halbe Stiftlänge (``plan.length / 2``) — der Teil, der
+    aus der einen Hälfte in die andere reicht (§25). Gemessen an einer Ebene
+    durch die Mitte des Stücks: Dort steht der Querschnitt für ein prismatisches
+    Teil, und ein prismatisches ist genau das, was Auto Split zu schneiden sucht.
+
+    Null, wenn keine Stifte gewünscht sind oder die Naht keinen trägt — dann
+    steht nichts über, und die Bettprüfung bleibt, wie sie ohne Verstiftung war.
+    """
+    if pins <= 0:
+        return 0.0
+    from app.core.geom.pins import plan_pins  # spät: pins importiert dieses Modul
+
+    centre = float(mesh.bounds.centre["xyz".index(axis)])
+    plane = SectionPlane(normal=AXIS_NORMALS[axis], position=centre)
+    return plan_pins(mesh, plane, count=pins).length / 2.0
+
+
 def find_plane(
     mesh: MeshData,
     profile: Profile,
     *,
+    axis: Axis | None = None,
+    allowance: float = 0.0,
     samples: int = SAMPLES,
     cancelled: CancelToken | None = None,
 ) -> Candidate | None:
@@ -245,12 +341,19 @@ def find_plane(
 
     Nur Ebenen zählen, die das Stück wirklich passender machen. Eine schöne
     Naht, die beide Hälften zu groß lässt, ist keine Antwort.
+
+    ``axis`` und ``allowance`` gibt die Suche vor, wenn sie den Stiftüberstand
+    schon kennt (:func:`split_to_fit`): Die Achse ist dann mit der Reserve des
+    Stücks gewählt, und ``allowance`` engt das Fenster so ein, dass die Hälften
+    mitsamt Stift aufs Bett passen. Ohne beides — ein Aufruf von außen —
+    entscheidet die Achse die nackte Ausdehnung und das Fenster bleibt weit.
     """
-    axis = _axis_to_cut(mesh, profile)
+    if axis is None:
+        axis = _axis_to_cut(mesh, profile)
     if axis is None:
         return None
 
-    window = _window(mesh, profile, axis)
+    window = _window(mesh, profile, axis, allowance)
     positions = np.linspace(window[0], window[1], samples)
     candidates = [
         entry
@@ -273,16 +376,22 @@ def find_plane(
     return best
 
 
-def _axis_to_cut(mesh: MeshData, profile: Profile) -> Axis | None:
+def _axis_to_cut(mesh: MeshData, profile: Profile, reserve: Vec3 = (0.0, 0.0, 0.0)) -> Axis | None:
     """Quer zu der Richtung schneiden, die nicht passt — der längsten, die
-    übersteht."""
-    over = oversize(mesh, profile)
+    übersteht.
+
+    ``reserve`` ist die Stiftzugabe je Achse: Eine Hälfte kann nackt passen und
+    erst mit Stift überstehen, dann ist genau diese Achse die zu schneidende.
+    """
+    over = oversize(mesh, profile, allowance=reserve)
     if max(over) <= EPS_GEOM:
         return None
     return ("x", "y", "z")[int(np.argmax(over))]
 
 
-def _window(mesh: MeshData, profile: Profile, axis: Axis) -> tuple[float, float]:
+def _window(
+    mesh: MeshData, profile: Profile, axis: Axis, allowance: float = 0.0
+) -> tuple[float, float]:
     """Der Bereich der Schnittpositionen, die sich zu probieren lohnen.
 
     Normalerweise ist das, wo *beide* Hälften kurz genug herauskommen. Ein
@@ -290,9 +399,13 @@ def _window(mesh: MeshData, profile: Profile, axis: Axis) -> tuple[float, float]
     Position — dort nimmt der erste Schnitt ein passendes Stück ab und lässt
     den Rest für die nächste Runde. Auch das tut jemand mit einer Säge
     genauso.
+
+    ``allowance`` verkürzt die nutzbare Länge um den Stiftüberstand: Die Hälften
+    müssen mitsamt Stift aufs Bett passen, also darf jede höchstens so lang
+    werden wie die Platte weniger dieser Zugabe (§25).
     """
     index = "xyz".index(axis)
-    limit = profile.printer.build_volume[index] - 2.0 * MARGIN
+    limit = profile.printer.build_volume[index] - 2.0 * MARGIN - allowance
     low = float(mesh.bounds.minimum[index])
     high = float(mesh.bounds.maximum[index])
 
