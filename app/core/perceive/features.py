@@ -1824,7 +1824,7 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
     corners = np.unique(edges)
     groups = trimesh.graph.connected_components(edges, nodes=corners, engine="scipy")
 
-    loops: list[tuple[int, tuple[float, float, float]]] = []
+    loops: list[tuple[int, tuple[float, float, float], tuple[int, ...]]] = []
     for group in groups:
         members = np.asarray(group)
         if not len(members):
@@ -1836,9 +1836,24 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
             # nimmt sie mit, das Merkmal nicht.
             continue
         middle = np.asarray(body.vertices[members], dtype=float).mean(axis=0)
-        loops.append((count, (float(middle[0]), float(middle[1]), float(middle[2]))))
+        loops.append(
+            (
+                count,
+                (float(middle[0]), float(middle[1]), float(middle[2])),
+                tuple(int(index) for index in np.unique(members)),
+            )
+        )
 
-    loops.sort(key=lambda entry: (-entry[0], *(round(value, 3) for value in entry[1])))
+    # **Bei gleich vielen offenen Kanten entscheiden die Eckennummern, nicht
+    # der Ort.** Hier stand der gerundete Mittelpunkt, und damit galt genau
+    # das, wovor ``detect_faces`` neunzig Zeilen weiter oben ausdrücklich
+    # warnt: Eine Nummerierung nach Koordinaten überlebt keine Drehung. Zwei
+    # gleich große Ausschnitte in einer Platte tauschen gekippt ihre Plätze,
+    # ``edge_loop_1`` meint danach die andere Schleife — und daran hängen
+    # Ops und Passungen (§21.2). Die Eckennummern ändern sich weder beim
+    # Drehen noch beim Umsortieren der Dreiecke; genommen werden alle, denn
+    # eine einzelne teilen sich benachbarte Schleifen.
+    loops.sort(key=lambda entry: (-entry[0], entry[2]))
     return [
         Feature(
             id=f"edge_loop_{number}",
@@ -1846,7 +1861,7 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
             provenance="detected",
             params={"open_edges": count, "centre": centre},
         )
-        for number, (count, centre) in enumerate(loops, start=1)
+        for number, (count, centre, _corners) in enumerate(loops, start=1)
     ]
 
 

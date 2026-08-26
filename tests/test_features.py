@@ -366,6 +366,51 @@ def test_two_holes_in_a_shell_are_two_features() -> None:
     assert xs == [-20.0, 20.0], "jede Schleife sitzt an ihrem eigenen Loch"
 
 
+def test_an_edge_loop_keeps_its_number_when_the_body_turns() -> None:
+    """Zwei gleich große Schleifen behalten ihre Nummer, wenn das Teil sich dreht.
+
+    An den IDs hängen Ops und Passungen (§21.2), und ``detect_faces`` sagt
+    neunzig Zeilen weiter oben ausdrücklich, warum: Eine Nummerierung nach
+    Koordinaten überlebt keine Drehung. ``detect_edge_loops`` tat trotzdem
+    genau das — bei gleicher Kantenzahl entschied der gerundete Mittelpunkt.
+
+    **Gedreht wird um 180 Grad, und das ist keine Willkür.** Bei zwanzig Grad
+    bliebe die linke Schleife links; der Test wäre auch mit der alten
+    Sortierung grün und würde eine Zusage prüfen, die er gar nicht auslöst.
+    Erst eine Drehung, welche die Reihenfolge *umkehrt*, stellt die Frage.
+
+    Verglichen wird über den mitgedrehten Mittelpunkt: Trägt ``edge_loop_1``
+    danach die Stelle, die vorher ``edge_loop_1`` war, meint die ID dieselbe
+    Schleife.
+    """
+    parts = []
+    for shift in (-20.0, 20.0):
+        box = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        box.apply_translation((shift, 0.0, 0.0))
+        box.update_faces(
+            np.array([index for index, normal in enumerate(box.face_normals) if normal[2] < 0.9])
+        )
+        parts.append(box)
+    body = trimesh.util.concatenate(parts)
+
+    before = detect_edge_loops(MeshData.of(body))
+    assert len(before) == 2, "sonst prüft der Test seinen eigenen Aufbau"
+    assert before[0].params["open_edges"] == before[1].params["open_edges"], (
+        "nur bei gleicher Kantenzahl entscheidet das zweite Kriterium — darum geht es hier"
+    )
+
+    turn = trimesh.transformations.rotation_matrix(np.pi, (0.0, 0.0, 1.0))
+    turned = body.copy()
+    turned.apply_transform(turn)
+    after = detect_edge_loops(MeshData.of(turned))
+
+    assert len(after) == 2
+    expected = trimesh.transform_points([list(before[0].params["centre"])], turn)[0]
+    assert tuple(after[0].params["centre"]) == pytest.approx(tuple(expected), abs=1e-6), (
+        "edge_loop_1 meint nach der Drehung die andere Schleife — daran hängen Ops und Passungen"
+    )
+
+
 # --- everything together --------------------------------------------------------
 
 
