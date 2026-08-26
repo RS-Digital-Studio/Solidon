@@ -1012,7 +1012,10 @@ def test_each_slot_can_carry_its_own_spool_settings(tmp_path: Path) -> None:
     assert settings.temperature.nozzle == 240, "das Projekt fährt PETG"
 
     schrift = replace(settings.temperature, nozzle=210, nozzle_first_layer=215, bed=60)
-    settings = replace(settings, slot_overrides=(None, SlotOverride(temperature=schrift)))
+    settings = replace(
+        settings,
+        slot_overrides=(SlotOverride(name="Schrift", colour=(1.0, 1.0, 1.0), temperature=schrift),),
+    )
     slots = (
         MaterialSlot(index=0, name="Gehäuse", colour=(0.1, 0.1, 0.1)),
         MaterialSlot(index=1, name="Schrift", colour=(1.0, 1.0, 1.0)),
@@ -1034,6 +1037,44 @@ def test_each_slot_can_carry_its_own_spool_settings(tmp_path: Path) -> None:
     assert schriftzug["hot_plate_temp"] == ["60"]
 
 
+def test_a_spool_keeps_its_settings_when_the_order_changes(tmp_path: Path) -> None:
+    """Die Werte gehören dem Filament, nicht dem Platz in einer Liste (§20).
+
+    Der Dialog zeigt die Zusammenlegung der gewählten Platten; gedruckt wird
+    Platte für Platte, und jede legt für sich zusammen. Bei Rot auf Platte 1
+    und Weiß+Rot auf Platte 2 steht [Rot, Weiß] im Dialog und [Weiß, Rot] im
+    Lauf der zweiten. Solange der Übersteuerer an der Position hing, bekam
+    **Weiß die 210 Grad, die für Rot eingestellt waren** — gemessen am
+    26.08.2026, und schwerer als derselbe Fehler bei den Filamentprofilen:
+    Dort wandert die Temperatur mit dem Profil, hier *ist* sie der Wert. 210
+    Grad auf ein PETG, das 240 braucht, geben einen Druck, der auseinanderfällt.
+    """
+    from dataclasses import replace
+
+    from app.core.types import MaterialSlot, SlotOverride
+
+    rot = MaterialSlot(index=0, name="Rot", colour=(1.0, 0.0, 0.0))
+    weiss = MaterialSlot(index=1, name="Weiß", colour=(1.0, 1.0, 1.0))
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    kalt = replace(settings.temperature, nozzle=210)
+    settings = replace(
+        settings,
+        slot_overrides=(SlotOverride(name="Rot", colour=(1.0, 0.0, 0.0), temperature=kalt),),
+    )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    # Die Reihenfolge des **Laufs**: Weiß zuerst, Rot danach — anders als im
+    # Dialog, wo Rot oben stand.
+    written = handover.write_config(settings, profile, setup, tmp_path, slots=(weiss, rot))
+
+    erste = json.loads(written.filaments[0].read_text(encoding="utf-8"))
+    zweite = json.loads(written.filaments[1].read_text(encoding="utf-8"))
+    assert erste["nozzle_temperature"] == ["240"], "Weiß fährt das Projektmaterial"
+    assert zweite["nozzle_temperature"] == ["210"], "Rot fährt seine eigenen Werte"
+
+
 def test_a_slicer_that_takes_one_filament_says_so() -> None:
     """Was ein Slicer nicht entgegennimmt, wird gesagt — nicht verschwiegen.
 
@@ -1049,7 +1090,7 @@ def test_a_slicer_that_takes_one_filament_says_so() -> None:
 
     settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
     eigen = replace(settings.temperature, nozzle=210)
-    mit = replace(settings, slot_overrides=(None, SlotOverride(temperature=eigen)))
+    mit = replace(settings, slot_overrides=(SlotOverride(name="Rot", temperature=eigen),))
 
     for flavour in ("prusa", "cura"):
         setup = handover.SlicerSetup(executable=Path("slicer.exe"), flavour=flavour)
@@ -1067,7 +1108,7 @@ def test_a_slicer_that_takes_one_filament_says_so() -> None:
     # ist schlimmer als keine.
     prusa = handover.SlicerSetup(executable=Path("slicer.exe"), flavour="prusa")
     assert handover.unreachable_overrides(settings, prusa) == []
-    leer = replace(settings, slot_overrides=(None, SlotOverride()))
+    leer = replace(settings, slot_overrides=(SlotOverride(name="Rot"),))
     assert handover.unreachable_overrides(leer, prusa) == []
 
 
@@ -1085,7 +1126,10 @@ def test_a_slot_override_survives_the_project_file(tmp_path: Path) -> None:
 
     settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
     eigen = replace(settings.temperature, nozzle=210)
-    settings = replace(settings, slot_overrides=(None, SlotOverride(temperature=eigen)))
+    settings = replace(
+        settings,
+        slot_overrides=(SlotOverride(name="Rot", colour=(1.0, 0.0, 0.0), temperature=eigen),),
+    )
 
     # Durch JSON hindurch, nicht nur durch die beiden Funktionen: Ein Wert,
     # den ``json.dumps`` nicht schreiben kann, fiele sonst nicht auf.
@@ -1097,8 +1141,11 @@ def test_a_slot_override_survives_the_project_file(tmp_path: Path) -> None:
     # Ein Slot ohne eigene Werte steht als ``null`` da und nicht als vier
     # leere Gruppen, die vortäuschen, jemand hätte etwas eingestellt.
     daten = serialise.print_settings_to_data(settings)
-    assert daten["slot_overrides"][0] is None
-    assert set(daten["slot_overrides"][1]) == {"temperature"}
+    # Die Identität reist mit — ohne sie fände der Übersteuerer sein Filament
+    # beim nächsten Öffnen nicht wieder.
+    assert daten["slot_overrides"][0]["name"] == "Rot"
+    assert daten["slot_overrides"][0]["colour"] == [1.0, 0.0, 0.0]
+    assert set(daten["slot_overrides"][0]) == {"name", "colour", "temperature"}
 
     # Und eine Datei ohne das Feld öffnet weiterhin — der Normalfall bei
     # jedem Projekt, das vor dieser Fassung entstanden ist.

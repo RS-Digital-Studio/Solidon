@@ -531,7 +531,18 @@ def _override_to_data(override: SlotOverride | None) -> dict[str, Any] | None:
     """Ein Slot-Übersteuerer als Schlüssel und Werte, oder ``None``."""
     if override is None or override.empty:
         return None
-    data: dict[str, Any] = {}
+    # Verzögert, weil ``cache.py`` seinerseits von hier importiert: Ein
+    # Modulimport oben schlösse den Kreis, und ``core`` liesse sich nicht mehr
+    # laden. Dieselben zwei Funktionen halten den Slotnamen im Cache.
+    from app.core.scene.cache import _name_to_data
+
+    # Die Identität zuerst: Ohne sie fände der Übersteuerer sein Filament
+    # beim nächsten Öffnen nicht wieder, und die Werte lägen auf der
+    # Spule, die zufällig an derselben Stelle steht.
+    data: dict[str, Any] = {
+        "name": _name_to_data(override.name),
+        "colour": list(override.colour) if override.colour is not None else None,
+    }
     for group in _OVERRIDE_GROUPS:
         section = getattr(override, group)
         if section is not None:
@@ -557,7 +568,16 @@ def _override_from_data(data: Any) -> SlotOverride | None:
         groups[group] = klass(**{key: value for key, value in stored.items() if key in known})
     if not groups:
         return None
-    return SlotOverride(**groups)
+    from app.core.scene.cache import _name_from_data
+
+    colour = data.get("colour")
+    return SlotOverride(
+        name=_name_from_data(data.get("name", "")),
+        colour=tuple(float(one) for one in colour)  # type: ignore[arg-type]
+        if isinstance(colour, (list, tuple)) and len(colour) == 3
+        else None,
+        **groups,
+    )
 
 
 def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:

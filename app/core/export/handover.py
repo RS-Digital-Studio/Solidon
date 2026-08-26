@@ -704,14 +704,22 @@ def unreachable_overrides(settings: PrintSettings, setup: SlicerSetup) -> list[F
     ]
 
 
-def override_for(settings: PrintSettings, position: int) -> SlotOverride | None:
-    """Der Übersteuerer dieses Slots, wenn es einen gibt.
+def override_for(settings: PrintSettings, slot: MaterialSlot) -> SlotOverride | None:
+    """Der Übersteuerer dieses Filaments, wenn es einen gibt (§20).
 
-    Kürzer als die Slotliste zu sein ist der Normalfall — ein einfarbiges Teil
-    hat gar keine Einträge.
+    Gesucht wird über die **Identität** — Name und Farbe, derselbe Schlüssel
+    wie in :func:`app.core.export.threemf.merge_slots` —, nicht über die
+    Position in der Liste. Der Grund steht bei :class:`SlotOverride`: Was der
+    Dialog zeigt und was ein Plattenlauf fährt, sind zwei verschiedene
+    Reihenfolgen, und positionsweise landete die Temperatur der einen Spule
+    auf der anderen.
+
+    Ohne Eintrag gilt das Projekt. Das ist der Normalfall — ein einfarbiges
+    Teil hat gar keine.
     """
-    if position < len(settings.slot_overrides):
-        return settings.slot_overrides[position]
+    for entry in settings.slot_overrides:
+        if entry is not None and entry.key == (slot.name, slot.colour):
+            return entry
     return None
 
 
@@ -790,7 +798,7 @@ def write_config(
             # denn sie hängen an der Spule. Was der Slot nicht setzt,
             # kommt aus dem Projekt — deshalb wird die Aufteilung hier
             # noch einmal gerechnet und nicht die von oben genommen.
-            mine = settings_for_slot(settings, override_for(settings, index))
+            mine = settings_for_slot(settings, override_for(settings, slot))
             part = split if mine is settings else by_section(mine, setup.flavour)
             path = directory / f"solidon_filament_{index}.json"
             path.write_text(

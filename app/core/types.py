@@ -670,6 +670,24 @@ class SlotOverride:
     :attr:`PrintSettings.slot_profiles` nebenan.
     """
 
+    name: TranslatableText | str = ""
+    """Zu welchem Filament das gehört — zusammen mit :attr:`colour` der Schlüssel.
+
+    **Nicht die Position.** Sie stand hier zuerst, und sie war falsch: Was der
+    Dialog zeigt, ist die Zusammenlegung der gewählten Platten; gedruckt wird
+    Platte für Platte, und jede legt für sich zusammen. Bei Rot auf Platte 1
+    und Weiß+Rot auf Platte 2 steht [Rot, Weiß] im Dialog und [Weiß, Rot] im
+    Lauf der zweiten — gemessen am 26.08.2026 bekam **Weiß die 210 Grad, die
+    für Rot eingestellt waren**, und Rot die 240 des Projekts. Bei den
+    Filamentprofilen wandert dabei die Temperatur mit; hier *ist* sie der Wert.
+
+    Derselbe Schlüssel wie in :func:`app.core.export.threemf.merge_slots` —
+    zwei Teile in derselben Farbe sind ein Filament, und ein Übersteuerer
+    gehört dem Filament, nicht dem Platz in einer Liste.
+    """
+    colour: tuple[float, float, float] | None = None
+    """Die Farbe des Filaments, zweite Hälfte des Schlüssels."""
+
     temperature: TemperatureSettings | None = None
     cooling: CoolingSettings | None = None
     retraction: RetractionSettings | None = None
@@ -679,6 +697,11 @@ class SlotOverride:
     def empty(self) -> bool:
         """Ob dieser Slot überhaupt etwas übersteuert."""
         return not any((self.temperature, self.cooling, self.retraction, self.filament))
+
+    @property
+    def key(self) -> tuple[TranslatableText | str, tuple[float, float, float] | None]:
+        """Der Schlüssel, unter dem dieser Übersteuerer sein Filament findet."""
+        return (self.name, self.colour)
 
 
 @dataclass(frozen=True, slots=True)
