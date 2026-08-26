@@ -119,7 +119,7 @@ class PaintParams(BaseParams):
 
 @register_op(
     name="paint_slot",
-    title=_("Bemalen"),
+    title=_("Fläche färben"),
     category="colour",
     params=PaintParams,
     consumes=1,

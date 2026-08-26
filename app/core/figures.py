@@ -135,8 +135,14 @@ def _window(theme: Theme) -> str:
     # Die zweite Leiste, unter dem Modell. Sie fehlte hier, und der Text des
     # Kapitels nannte sie deshalb auch nicht — dabei liegen in ihr die
     # Werkzeuge, mit denen man hinsieht, und die zwei, die etwas ändern.
+    #
+    # **Ein Bild altert stumm.** „Bemalen" stand hier weiter, nachdem das
+    # Werkzeug aus der Leiste gefallen war (Filament-Umbau, 26.08.2026) —
+    # und keine Katalogprüfung hätte es gemeldet: Der Text wird **gerendert**
+    # und nicht übersetzt. Wer ein Werkzeug hinzunimmt oder streicht, sieht
+    # hier nach; die Reihenfolge ist die der Leiste.
     canvas.box(170, 254, 260, 24, fill=colours.fill)
-    canvas.label(180, 270, str(_("Schnitt · Messen · Bewegen · Analyse · Bemalen")), size=9)
+    canvas.label(180, 270, str(_("Schnitt · Messen · Bewegen · Analyse · Trennen")), size=9)
 
     canvas.box(10, 288, 580, 26, fill=colours.fill)
     canvas.label(20, 306, str(_("Statusleiste: Maße · Auswahl · Fortschritt · Warnungen")), size=10)
