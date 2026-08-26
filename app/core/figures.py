@@ -1147,6 +1147,54 @@ FIGURES: Final[tuple[Figure, ...]] = (
         build=_part("living_hinge", around=-35.0, down=55.0),
     ),
     Figure(
+        key="part-pegboard-hook",
+        alt=_(
+            "Ein Lochwand-Einhänger: Haken im Raster einer Lochwand, mit der "
+            "federnden Rastzunge, die hinter der Platte einrastet."
+        ),
+        caption=_(
+            "Von oben eingehängt, durch die Zunge gehalten — zum Lösen durch den Schlitz gedrückt."
+        ),
+        kind="rendered",
+        build=_part("pegboard_hook", around=-35.0, down=25.0),
+    ),
+    Figure(
+        key="part-gusset",
+        alt=_(
+            "Ein Eckwinkel: das Dreieck in einer Innenecke, das zwei Wände im "
+            "rechten Winkel gegeneinander hält."
+        ),
+        kind="rendered",
+        build=_part("gusset", around=-35.0, down=25.0),
+    ),
+    Figure(
+        key="part-foot",
+        alt=_(
+            "Ein Standfuß: ein gedruckter Fuß mit Fase nach unten, damit der "
+            "Elefantenfuß der ersten Schicht ins Leere quetscht."
+        ),
+        kind="rendered",
+        build=_part("foot", around=-35.0, down=25.0),
+    ),
+    Figure(
+        key="part-cable-clip",
+        alt=_(
+            "Ein Kabelclip: der Bügel auf einer Fläche, dessen Öffnung enger ist "
+            "als das Kabel, das er führt."
+        ),
+        kind="rendered",
+        build=_part("cable_clip", around=-35.0, down=25.0),
+    ),
+    Figure(
+        key="part-hinge-eye",
+        alt=_(
+            "Ein Scharnierauge: eine Lasche mit Bohrung, durch die ein Passstift "
+            "geht — die Hälfte eines Gelenks, das sich dreht statt zu biegen."
+        ),
+        kind="rendered",
+        build=_part("hinge_eye", around=-35.0, down=25.0),
+    ),
+    Figure(
         key="part-fit-ladder",
         alt=_(
             "Der Toleranz-Testkörper: mehrere Zapfen und Bohrungen mit gestaffeltem "
@@ -1213,11 +1261,13 @@ FIGURES: Final[tuple[Figure, ...]] = (
     Figure(
         key="own-part",
         alt=_(
-            "Der Dialog „Auswahl als Baustein speichern“: oben Name, Gruppe und "
-            "Beschreibung, darunter je Projektparameter eine Zeile mit Beschriftung, "
-            "Einheit, kleinstem und größtem Wert, Vorgabe und Platz im späteren "
-            "Dialog. Unten die erkannten Merkmale mit dem Namen, unter dem sie "
-            "später anklickbar sind."
+            "Der Dialog „Auswahl als Baustein speichern“: ganz oben die Zeile, "
+            "welche Schritte des Verlaufs mitgehen — ausgewählte oder der ganze "
+            "Stapel —, darunter Name, Gruppe und Beschreibung, dann je "
+            "Projektparameter eine Zeile mit Beschriftung, Einheit, kleinstem "
+            "und größtem Wert, Vorgabe und Platz im späteren Dialog. Unten die "
+            "erkannten Merkmale mit dem Namen, unter dem sie später anklickbar "
+            "sind."
         ),
         caption=_("Was einstellbar sein soll, sagt der, der das Teil gebaut hat."),
         kind="shot",
