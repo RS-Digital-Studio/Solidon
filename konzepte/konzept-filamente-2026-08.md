@@ -77,6 +77,20 @@ sich, wenn nicht:
   (d1): Sobald Filamente Namen tragen, gehört der Schlüssel auf den Namen
   (oder Name+Farbe) — sonst erbt ein Kunde nach dem Update stumm falsche
   Zuordnungen.
+- **Einstellungen je Filament sind von Robert freigegeben, und de baut das
+  Modell** (26.08.2026): ein `SlotOverride` je Materialslot, das die vier
+  Spulengruppen (`temperatures`, `cooling`, `retraction`, `filament`)
+  optional übersteuert, plus `PrintSettings.slot_overrides` und die
+  Anwendung in der Slicer-Übergabe. Die Architektur folgt Bauplan §29:
+  **Der Filamentkatalog liefert die Vorgabe, der Slot im Projekt
+  übersteuert sie** — dieselben drei Ebenen wie überall (Profil → Material
+  → Projekt). Für den Katalog heißt das: Er *darf* Spulenwerte tragen
+  (dann sind sie die Vorgabe), er *muss* nicht — ohne sie greift schlicht
+  das Projekt; vorzubauen ist nichts. Der Anschlusspunkt ist eine
+  Funktion Katalogeintrag + `SlotOverride` → Slotwerte, und de richtet
+  sie nach 30s Katalogmodell, wenn das anders geschnitten wird — früh
+  sagen. Die Bedienung (wo der Kunde die Werte je Slot einstellt) liegt
+  beim Filamentwähler, also bei 27.
 
 ## Bestandsaufnahme Doku-Block (ce, 26.08.2026)
 
