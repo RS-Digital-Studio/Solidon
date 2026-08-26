@@ -14,6 +14,7 @@ import trimesh
 
 from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
 from app.core.export import threemf
+from app.core.export.handover import with_slot_profiles
 from app.core.export.writer import (
     arrangement_holds,
     check_adhesion_clearance,
@@ -642,6 +643,44 @@ def test_the_exported_plates_of_one_job_agree_on_the_extruders(
     assert order_first.index("Rot") == order_second.index("Rot"), (
         "dieselbe Farbe steht in beiden Dateien an derselben Extruderstelle"
     )
+
+
+def test_the_chosen_filament_profile_follows_the_colour_not_the_position() -> None:
+    """Die zweite Hälfte der Extruderfrage — und die teurere.
+
+    ``slot_profiles`` und ``slot_overrides`` sind **positionsbasiert**: Der
+    Kunde wählt im Dialog „Position 0 druckt mit PETG-Rot", und
+    ``with_slot_profiles`` heftet den Namen an den Slot an dieser Stelle. Das
+    ist richtig — solange die Stelle für den ganzen Auftrag dieselbe bedeutet.
+
+    Solange jede Platte für sich nummerierte, tat sie das nicht: Auf Platte 2
+    stand an Position 0 Weiß statt Rot, und der Kunde bekam sein
+    Rot-Profil auf das weiße Filament gedruckt. Das ist schlimmer als eine
+    vertauschte Düse — die Temperatur stimmt dann nicht mehr.
+
+    Der Auftrag als Zählung (``across``) behebt es, ohne dass die
+    Positionslogik angefasst werden muss: Wenn die Reihenfolge über alle
+    Platten gleich ist, meint Position 0 überall dasselbe Filament.
+    """
+    red = MaterialSlot(index=1, name="Rot")
+    white = MaterialSlot(index=1, name="Weiß")
+    red_again = MaterialSlot(index=2, name="Rot")
+    job = [
+        threemf.AssemblyPart(mesh=MeshData.of(trimesh.creation.box()), name="A", slots=(red,)),
+        threemf.AssemblyPart(
+            mesh=MeshData.of(trimesh.creation.box()), name="B", slots=(white, red_again)
+        ),
+    ]
+    chosen = ["PETG-Rot", "PLA-Weiss"]
+
+    def profile_of(colour: str, plate: list[threemf.AssemblyPart]) -> str | None:
+        slots = with_slot_profiles(threemf.merge_slots(plate, across=job), chosen)
+        return next(slot.material for slot in slots if str(slot.name) == colour)
+
+    assert profile_of("Rot", [job[0]]) == profile_of("Rot", [job[1]]) == "PETG-Rot", (
+        "dasselbe Filament bekommt auf jeder Platte dasselbe Profil"
+    )
+    assert profile_of("Weiß", [job[1]]) == "PLA-Weiss"
 
 
 def test_only_the_part_that_needs_it_gets_the_setting() -> None:
