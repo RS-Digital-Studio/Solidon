@@ -62,6 +62,21 @@ Farbknopf nennt darin den Hexwert, den sonst nichts zeigt, und hängt den Satz
 dahinter. Fünfzehn erklärte Felder von sechsundfünfzig wären schlimmer als
 keines — dann lernt niemand, dass es hier Sätze gibt.
 
+**Und die Auswahlwerte selbst tragen je einen Satz.** Der Name aus
+`_CHOICE_NAMES` benennt, der Satz aus `_CHOICE_NOTES` daneben sagt, was der
+Wert bewirkt und was er kostet — „Gyroid" ist ein Name, erst „in alle
+Richtungen gleich fest" ist eine Entscheidungshilfe. `explain_choices(box)`
+hängt ihn an jeden Eintrag (ToolTipRole **und** AccessibleDescriptionRole,
+Regel 18), gelesen am rohen Schlüssel im `itemData`; nach jeder Neubefüllung
+erneut aufrufen, `clear()` nimmt die Rollen mit. Dieselben zwei Zusagen wie
+bei der Namenstabelle — flach (derselbe Schlüssel bedeutet überall dasselbe,
+der Satz muss in jedem Kontext wahr sein: `grid` beschreibt Füllung und
+Stützmuster zugleich) und vollständig (`test_every_named_choice_also_says_
+what_it_does` hält Namen und Sätze deckungsgleich, Selbstnamen wie „M4"
+stehen absichtlich in keiner der beiden). Anders als bei `QMenu` braucht die
+offene Combo-Liste keinen Schalter: ToolTipRole zeigt sie von sich aus,
+gemessen unter der echten Plattform per QHelpEvent.
+
 Bilder statt
 Wörter, wo ein Wort nichts zeigt: die Texturmuster tragen ihre Kachel aus
 `figures.texture_tile`, erkannt an den Werten des Feldes und nicht an seinem

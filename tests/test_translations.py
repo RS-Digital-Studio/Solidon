@@ -385,6 +385,29 @@ def test_every_choice_has_a_name_someone_can_read() -> None:
     assert not offenders, "choice values shown as keys:\n" + "\n".join(sorted(offenders))
 
 
+def test_every_named_choice_also_says_what_it_does() -> None:
+    """Der Satz zum Namen — vollständig oder gar nicht.
+
+    ``_CHOICE_NAMES`` benennt einen Auswahlwert, ``_CHOICE_NOTES`` daneben
+    sagt, was er bewirkt (Tooltip und Bildschirmleser, über
+    ``explain_choices``). Fünfzehn erklärte Werte von siebenundsechzig wären
+    schlimmer als keine — dann lernt niemand, dass es die Sätze gibt; dieselbe
+    Regel wie bei den ``note``-Sätzen der Druckeinstellungen.
+
+    Beide Richtungen, wie beim Katalogabgleich: Ein Name ohne Satz ist die
+    Lücke, ein Satz ohne Name ist tot — ``choice_note`` wird nur erreicht, wo
+    ``choice_label`` den Wert kennt, und ein verwaister Satz überlebte sonst
+    jede Umbenennung. Selbstnamen (M4, mm, z) stehen absichtlich in keiner
+    der beiden Tabellen.
+    """
+    from app.ui.labels import _CHOICE_NAMES, _CHOICE_NOTES
+
+    unexplained = set(_CHOICE_NAMES) - set(_CHOICE_NOTES)
+    orphaned = set(_CHOICE_NOTES) - set(_CHOICE_NAMES)
+    assert not unexplained, "named choices without a note: " + ", ".join(sorted(unexplained))
+    assert not orphaned, "notes for unnamed choices: " + ", ".join(sorted(orphaned))
+
+
 #: Ab wie vielen gemeinsamen Anfangsbuchstaben zwei Katalogruppen einer Sprache
 #: als derselbe Name gelten. Gefunden am französischen Paar
 #: „Fixations" (Verbindungen) und „Fixation" (Befestigung): ein Buchstabe
