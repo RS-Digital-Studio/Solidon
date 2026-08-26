@@ -143,6 +143,17 @@ def slice_body(mesh: MeshData, layer_height: float = 0.2, detail: Detail = "full
 
     # Eine halbe Schicht über dem Boden: der erste Schnitt muss Material treffen.
     heights = np.arange(low + layer_height / 2.0, high, layer_height)
+    if not len(heights):
+        # Ist das Teil dünner als eine halbe Schichthöhe, liegt ``low +
+        # layer_height/2`` schon über ``high``, und ``arange`` bleibt leer.
+        # Ohne Schnitt gäbe es keine Schicht und ``first_layer_area`` fiele auf
+        # 0 — für die Orientierungssuche fatal: Sie verwirft jede Lage mit 0 mm²
+        # Grundfläche (§22.3). So wurde eine liegende 0,4-mm-Karte 54 mm
+        # hochkant gestellt, weil bei der groben Suchschichthöhe (1,0 mm) nur die
+        # hochkante Lage überhaupt eine nicht-leere Schichtliste hatte. Ein Teil
+        # oberhalb von EPS_GEOM ist genau eine gedruckte Lage; ihr Schnitt liegt
+        # in der Mitte, wo er sicher Material trifft.
+        heights = np.array([(low + high) / 2.0], dtype=float)
     sections = cross_sections(mesh, heights)
     measured = _measure_all(sections, layer_height, detail)
     support = _support_volume(sections, measured, layer_height)

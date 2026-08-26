@@ -27,6 +27,7 @@ from app.core.slice.analysis import (
     slice_body,
     total_overhang,
 )
+from app.core.slice.orientation import search
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -398,6 +399,64 @@ def test_an_empty_body_slices_to_nothing() -> None:
     result = slice_body(MeshData.of(trimesh.Trimesh()), 0.2)
     assert result.layers == ()
     assert result.support_volume == 0.0
+
+
+# --- Ein Teil dünner als eine Schichthöhe (§22.3) -------------------------------
+
+
+def test_a_plate_thinner_than_a_layer_still_reports_its_footprint() -> None:
+    """Der Fund aus dem Gesamtreview: eine flache Karte wurde hochkant gestellt.
+
+    ``np.arange(low + layer_height/2, high, layer_height)`` ist leer, sobald ein
+    Teil dünner als eine halbe Schichthöhe ist — ``low + layer_height/2`` liegt
+    dann schon über ``high``. Ohne Schnitt gab es keine Schicht,
+    ``first_layer_area`` fiel auf 0, und die Orientierungssuche verwirft eine
+    Lage mit 0 mm² Grundfläche (§22.3). Bei der groben Suchschichthöhe von
+    1,0 mm zeigt sich der Fehler: die 0,4-mm-Karte bekam nur hochkant überhaupt
+    Schichten. Ihre Grundfläche muss die echten 1200 mm² tragen, nicht 0.
+    """
+    plate = trimesh.creation.box(extents=(40.0, 30.0, 0.4))
+    result = slice_body(on_bed(plate), 1.0)
+
+    assert result.layers, "ein Teil über EPS_GEOM bekommt mindestens einen Schnitt"
+    assert result.first_layer_area == pytest.approx(1200.0, rel=TOLERANCE)
+    assert result.support_volume == pytest.approx(0.0, abs=1.0)
+
+
+def test_a_part_exactly_half_a_layer_thick_is_the_boundary() -> None:
+    """Genau an der Schwelle: ``high - low == layer_height/2`` lässt das
+    ``arange`` leer werden — ``low + layer_height/2 == high``, und die obere
+    Grenze ist offen. Auch dieses Teil ist genau eine gedruckte Lage und muss
+    seine Fläche melden.
+    """
+    plate = trimesh.creation.box(extents=(20.0, 20.0, 0.5))
+    result = slice_body(on_bed(plate), 1.0)  # 0,5 == layer_height / 2
+
+    assert result.layers
+    assert result.first_layer_area == pytest.approx(400.0, rel=TOLERANCE)
+
+
+def test_a_normal_part_keeps_its_first_cut_half_a_layer_up() -> None:
+    """Gegenprobe: ein hohes Teil geht unverändert den gewöhnlichen Weg — viele
+    Schichten, der erste Schnitt eine halbe Schicht über dem Boden.
+    """
+    result = slice_body(on_bed(trimesh.creation.box(extents=(20.0, 20.0, 20.0))), 1.0)
+
+    assert len(result.layers) == pytest.approx(20, abs=1)
+    assert result.first_layer_area == pytest.approx(400.0, rel=TOLERANCE)
+    assert result.layers[0].z == pytest.approx(0.5, abs=0.01), "erster Schnitt bei layer_height/2"
+
+
+def test_the_search_lays_a_flat_plate_down_instead_of_standing_it_up() -> None:
+    """Der Fund Ende zu Ende (§22.3): Mit ``first_layer_area == 0`` gewann die
+    einzige Lage mit nicht-leerer Schichtliste — die hochkante. Jetzt trägt die
+    liegende Lage ihre 1200 mm² und gewinnt gegen die 30-mm-hohe Kante.
+    """
+    plate = MeshData.of(trimesh.creation.box(extents=(40.0, 30.0, 0.4)))
+    found = search(plate, count=60, seed=3)
+
+    assert found.mesh.bounds.size[2] == pytest.approx(0.4, abs=0.1), "flach auf der Platte"
+    assert found.best.first_layer_area == pytest.approx(1200.0, rel=0.05)
 
 
 def test_a_layer_height_of_zero_is_refused() -> None:
