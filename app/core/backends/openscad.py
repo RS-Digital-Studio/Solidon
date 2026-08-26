@@ -165,6 +165,55 @@ def check_source(source: str) -> SourceCheck:
     andere — ein absoluter Pfad, ein Laufwerksbuchstabe, ein Schritt nach oben,
     eine URL — wird abgelehnt, und der Befund nennt, *was* abgelehnt wurde,
     nicht nur, dass etwas abgelehnt wurde.
+
+    **Ein Kommentar ist für OpenSCAD ein Trenner wie Leerraum.**
+    ``import /*x*/("/etc/passwd")`` ist ein gültiges ``import`` — die Muster
+    darunter erwarteten zwischen Anweisung und Klammer aber nur ``\\s*`` und
+    fielen an dem Kommentar vorbei, sodass ein absoluter Pfad durch beide
+    Muster durchkam (Fund 25 aus dem Gesamtreview). Geprüft wird deshalb
+    **zweimal**: über den rohen Quelltext und über den kommentarfreien. Was der
+    zweite Durchgang zusätzlich ablehnt, zählt genauso.
+
+    Zwei Durchgänge statt eines abgeflachten allein, weil ein Kommentar den
+    umgekehrten Weg gehen kann: OpenSCAD wertet in ``include </*x*/etc/passwd>``
+    den Kommentar **nicht** aus — der Pfad ist absolut. Der rohe Durchgang
+    liest ihn richtig als absolut, der abgeflachte läse ihn als lokal. Die
+    Vereinigung der Ablehnungen fängt beide Richtungen.
+    """
+    references, refused = _scan(source)
+
+    stripped = _strip_comments(source)
+    if stripped != source:
+        _ignored, refused_stripped = _scan(stripped)
+        for entry in refused_stripped:
+            if entry not in refused:
+                refused.append(entry)
+
+    findings = tuple(
+        Finding(
+            code="scad.refused_reference",
+            severity="error",
+            message=_("Ein Verweis führt aus dem Arbeitsordner hinaus."),
+            values={"reference": entry},
+        )
+        for entry in refused
+    )
+    if refused:
+        _log.warning("refused %d OpenSCAD references", len(refused))
+    return SourceCheck(
+        allowed=not refused,
+        references=tuple(references),
+        refused=tuple(refused),
+        findings=findings,
+    )
+
+
+def _scan(source: str) -> tuple[list[str], list[str]]:
+    """Liest die Einbindungen aus einem Text: die lesbaren Pfade und die
+    abgelehnten.
+
+    Der Kern von :func:`check_source`, zweimal gerufen — einmal über den rohen
+    Quelltext, einmal über den kommentarfreien (siehe dort, warum beides).
     """
     references: list[str] = []
     refused: list[str] = []
@@ -194,23 +243,62 @@ def check_source(source: str) -> SourceCheck:
         if not any(start <= match.start() < end for start, end in readable):
             refused.append(match.group(0).strip())
 
-    findings = tuple(
-        Finding(
-            code="scad.refused_reference",
-            severity="error",
-            message=_("Ein Verweis führt aus dem Arbeitsordner hinaus."),
-            values={"reference": entry},
-        )
-        for entry in refused
-    )
-    if refused:
-        _log.warning("refused %d OpenSCAD references", len(refused))
-    return SourceCheck(
-        allowed=not refused,
-        references=tuple(references),
-        refused=tuple(refused),
-        findings=findings,
-    )
+    return references, refused
+
+
+def _strip_comments(source: str) -> str:
+    """Ersetzt Kommentare durch ein Leerzeichen, ohne Zeichenketten anzutasten.
+
+    OpenSCAD behandelt ``/* */`` und ``//`` als Trenner wie der C-Lexer, und
+    genau das nutzte Fund 25 aus: ``import /*x*/("/etc/passwd")`` ist ein
+    gültiges ``import``, das die Muster in :func:`check_source` nicht sahen.
+    Vor der zweiten Prüfung wird der Kommentar deshalb entfernt.
+
+    **Ersetzt, nicht gelöscht:** ``impo/**/rt`` sind für OpenSCAD zwei Namen
+    und kein ``import`` — ein Leerzeichen hält diese Grenze, ein Löschen würde
+    ein falsches Schlüsselwort erzeugen.
+
+    Zeichenketten bleiben unberührt: ``"a//b"`` ist ein Text, kein Kommentar,
+    und ``\\"`` beendet ihn nicht. Ein ``/*`` innerhalb einer Zeichenkette
+    beginnt keinen Kommentar.
+    """
+    out: list[str] = []
+    index = 0
+    length = len(source)
+    in_string = False
+    while index < length:
+        char = source[index]
+        if in_string:
+            out.append(char)
+            if char == "\\" and index + 1 < length:
+                # Escape-Folge: das nächste Zeichen gehört noch zum Text.
+                out.append(source[index + 1])
+                index += 2
+                continue
+            if char == '"':
+                in_string = False
+            index += 1
+            continue
+        if char == '"':
+            in_string = True
+            out.append(char)
+            index += 1
+            continue
+        if char == "/" and index + 1 < length and source[index + 1] == "/":
+            # Zeilenkommentar bis zum Zeilenende; das Zeilenende bleibt stehen.
+            end = source.find("\n", index + 2)
+            index = length if end == -1 else end
+            out.append(" ")
+            continue
+        if char == "/" and index + 1 < length and source[index + 1] == "*":
+            # Blockkommentar bis zum nächsten ``*/`` — oder bis zum Textende.
+            end = source.find("*/", index + 2)
+            index = length if end == -1 else end + 2
+            out.append(" ")
+            continue
+        out.append(char)
+        index += 1
+    return "".join(out)
 
 
 def _is_local(path: str) -> bool:

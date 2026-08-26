@@ -149,6 +149,78 @@ def test_a_mixture_is_refused_as_a_whole() -> None:
     assert check.refused == ("/etc/passwd",)
 
 
+# --- ein Kommentar versteckt keine Einbindung (Fund 25) ---------------------------
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        # Ein Blockkommentar zwischen Anweisung und Klammer: für OpenSCAD ein
+        # Trenner wie Leerraum, für die alten Muster ein toter Winkel.
+        'import /*x*/("/etc/passwd");',
+        'surface /* */ ("/etc/hosts");',
+        "include /*c*/ </etc/passwd>",
+        # Ein Zeilenkommentar tut dasselbe.
+        "use // versteckt\n</etc/passwd>",
+        # Und der umgekehrte Weg: der Kommentar steckt im ``<…>``-Pfad, den
+        # OpenSCAD gar nicht auswertet — abgeflacht sähe er lokal aus, roh ist
+        # er absolut.
+        "include </*x*/etc/passwd>",
+    ],
+)
+def test_a_comment_does_not_hide_a_reference(source: str) -> None:
+    """§32, Regel 11: ein Kommentar macht ``import /*x*/(…)`` nicht harmlos.
+
+    OpenSCAD behandelt Kommentare als Trenner wie Leerraum, die Prüfung tat es
+    lange nicht — ein absoluter Pfad kam so durch beide Muster (Fund 25 aus dem
+    Gesamtreview). Ein Modellzug hätte OpenSCAD damit auf eine beliebige Datei
+    ansetzen können.
+    """
+    check = openscad.check_source(source)
+
+    assert not check.allowed
+    assert check.refused
+    assert check.findings[0].code == "scad.refused_reference"
+
+
+def test_a_comment_hidden_reference_is_never_executed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Beweis wie bei jedem abgelehnten Quelltext: kein Prozess startet."""
+    started: list[object] = []
+
+    def never(*args: object, **kwargs: object) -> object:
+        started.append(args)
+        raise AssertionError("a comment-hidden reference must not reach OpenSCAD")
+
+    monkeypatch.setattr(openscad, "run_guarded", never)
+    monkeypatch.setattr(openscad, "executable", lambda: "openscad")
+
+    with pytest.raises(openscad.UnsafeSource):
+        openscad.render('import /*x*/("/etc/passwd");\ncube(1);')
+
+    assert started == [], "no process was started"
+
+
+def test_a_harmless_comment_runs_through() -> None:
+    """Die Gegenprobe: ein Kommentar ohne gefährliche Anweisung bleibt harmlos.
+
+    Eine Sperre, die jeden Kommentar für verdächtig hält, wäre unbrauchbar —
+    ``cube(10); // …`` muss durchlaufen.
+    """
+    check = openscad.check_source("cube(10); // ein ganz gewöhnlicher Kommentar")
+
+    assert check.allowed
+    assert not check.has_references
+
+
+def test_a_slash_inside_a_string_is_not_a_comment() -> None:
+    """``"a//b"`` ist ein Text und kein Kommentar — das Abflachen darf ihn
+    nicht antasten, sonst zerfällt gültiger Quelltext.
+    """
+    check = openscad.check_source('echo("a//b"); echo("/* kein Kommentar */"); cube(10);')
+
+    assert check.allowed
+
+
 # --- Und der Lauf findet nie statt ------------------------------------------------
 
 
