@@ -1725,3 +1725,38 @@ def test_a_part_dialog_offers_to_insert_not_to_name_the_part(qt_app: QApplicatio
         if release is not None:
             release(plain_dialog)
         plain_dialog.deleteLater()
+
+
+def test_the_source_field_offers_a_way_to_pick_a_file(qt_app: QApplication) -> None:
+    """Ein leeres Projekt war in den drei Einstiegsdialogen eine Sackgasse.
+
+    *Modell laden*, *STEP laden* und *Zeichnung extrudieren* zeigen im Feld
+    „Quelle" die Dateien, die das Projekt schon eingebettet hat — in einem
+    frischen Projekt also keine. Die Liste klappte auf und war leer; das liest
+    sich nicht als „hier fehlt etwas", sondern als kaputt. Wer über Drag & Drop
+    kam, merkte davon nichts; wer die Operation aus dem Menü rief, klickte ins
+    Leere (Regel 19: keine Sackgassen).
+
+    **Das Bildfeld hatte seinen Wähler seit je** — derselbe Fall, eine Zeile
+    weiter oben im selben Zweig, und nur einer der beiden hatte den Ausweg.
+
+    Ohne Rückruf bleibt es die reine Liste: Ein Aufrufer, der keine Dateien
+    einbetten kann, soll keinen Knopf zeigen, der nichts tut.
+    """
+    from PySide6.QtWidgets import QComboBox
+
+    from app.ui.op_dialog import ImageSourceField, OperationDialog
+
+    for name in ("load", "load_step", "load_outline"):
+        spec = REGISTRY.get(name)
+
+        plain = OperationDialog(spec, {})
+        assert isinstance(plain._editors.get("source"), QComboBox), (
+            f"{name}: ohne Rückruf bleibt es die Liste"
+        )
+
+        with_pick = OperationDialog(spec, {}, pick_source=lambda: ("src_1", "teil.stl"))
+        editor = with_pick._editors.get("source")
+        assert isinstance(editor, ImageSourceField), f"{name}: kein Weg zu einer Datei"
+        assert not editor.button.isHidden(), f"{name}: der Knopf ist da, aber unsichtbar"
+        assert "wählen" in editor.button.text(), f"{name}: {editor.button.text()!r}"

@@ -486,13 +486,22 @@ class ValueField(QWidget):
 
 
 class ImageSourceField(QWidget):
-    """Bildquelle wählen — oder eine neue von der Platte holen (§25, P16.7).
+    """Eine Quelle wählen — oder eine neue von der Platte holen (§25, P16.7).
 
-    Ein ``source``-Feld bot hier an, was das Projekt an Quellen hat, und
-    dorthin führte kein Bildformat: Wer „Relief auflegen" wählte, sah eine
-    STL in einem Feld namens „Bild", und der Befund danach schlug „Ein Bild
-    wählen." vor — eine Handlung, die die Oberfläche nicht anbot. Der Knopf
-    ist dieser fehlende Weg.
+    Ein ``source``-Feld bot an, was das Projekt an Quellen hat, und dorthin
+    führte kein Bildformat: Wer „Relief auflegen" wählte, sah eine STL in einem
+    Feld namens „Bild", und der Befund danach schlug „Ein Bild wählen." vor —
+    eine Handlung, die die Oberfläche nicht anbot. Der Knopf ist dieser
+    fehlende Weg.
+
+    **Und er fehlte am Quellenfeld genauso, nur ohne dass es jemand meldete.**
+    *Modell laden*, *STEP laden* und *Zeichnung extrudieren* zeigen dort die
+    Quellen, die das Projekt schon hat — in einem frischen Projekt also nichts.
+    Die Liste klappte auf und war leer; das liest sich nicht als „hier fehlt
+    etwas", sondern als kaputt, und getroffen hat es ausgerechnet die drei
+    Einstiegsdialoge (Regel 19: keine Sackgassen). Deshalb trägt die Klasse
+    beide Fälle und ihr Knopf seine Beschriftung als Parameter — der Name
+    stammt aus dem Bildfall, die Sache tut es nicht mehr.
     """
 
     changed = Signal()
@@ -503,6 +512,7 @@ class ImageSourceField(QWidget):
         pick: Callable[[], tuple[str, str] | None] | None,
         start: str = "",
         parent: QWidget | None = None,
+        button_text: str | None = None,
     ) -> None:
         super().__init__(parent)
         self.combo = QComboBox(self)
@@ -516,7 +526,7 @@ class ImageSourceField(QWidget):
                 self.combo.addItem(str(start), str(start))
                 index = self.combo.count() - 1
             self.combo.setCurrentIndex(index)
-        self.button = QPushButton(tr("Bild wählen …"), self)
+        self.button = QPushButton(button_text or tr("Bild wählen …"), self)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.combo, 1)
@@ -837,6 +847,7 @@ class OperationDialog(QDialog):
         surroundings: Any = None,
         images: Mapping[str, str] | None = None,
         pick_image: Callable[[], tuple[str, str] | None] | None = None,
+        pick_source: Callable[[], tuple[str, str] | None] | None = None,
         note: str = "",
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
@@ -886,6 +897,10 @@ class OperationDialog(QDialog):
         self._pick_image = pick_image
         """Holt ein Bild von der Platte ins Projekt und gibt (Kennung, Name)
         zurück — der Weg, den ein leeres Projekt braucht."""
+        self._pick_source = pick_source
+        """Dasselbe für eine Modelldatei. Ohne ihn ist das Quellenfeld in
+        *Modell laden*, *STEP laden* und *Zeichnung extrudieren* eine leere
+        Liste, aus der kein Weg führt."""
         self._bones = armature_bones(str(given.get("armature") or ""))
         """Die Knochen, an denen die Stellung hängt — aus dem Skelett, das der
         Editor gerade gesetzt hat, oder aus dem Wert einer wieder geöffneten
@@ -1299,6 +1314,19 @@ class OperationDialog(QDialog):
             return ArmatureSummary(str(start or ""), self._bones, self)
         if entry.kind == "image":
             return ImageSourceField(self._images, self._pick_image, str(start or ""), self)
+        if entry.kind == "source" and self._pick_source is not None:
+            # **Das Quellenfeld bekommt denselben Wähler wie das Bildfeld.**
+            # Ohne ihn ist ein frisches Projekt eine Sackgasse: Die Liste kennt
+            # nur, was schon eingebettet ist, und in *Modell laden* ist das
+            # nichts. Wer die Operation aus dem Menü ruft statt über Drag & Drop
+            # zu kommen, klickte ins Leere.
+            return ImageSourceField(
+                self._sources,
+                self._pick_source,
+                str(start or ""),
+                self,
+                button_text=tr("Datei wählen …"),
+            )
         if entry.kind in ("object", "source"):
             # Der Name steht da, die Kennung reist mit. Ein frei beschreibbares
             # Feld war hier ein Weg, „obj_12" falsch zu tippen — und der Baum

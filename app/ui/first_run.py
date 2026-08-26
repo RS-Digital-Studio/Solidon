@@ -376,13 +376,19 @@ class FirstRunDialog(QDialog):
         super().accept()
 
     def _language_changed(self) -> None:
-        """§38: eine Änderung, die erst nach dem Neustart wirkt, sagt das.
+        """§38: eine Änderung, die den Dialog überlebt, sagt das vorher.
 
-        Wortgleich mit ``SettingsDialog._language_changed`` und aus demselben
-        Grund: Der Sprachkatalog wird beim Start installiert, und was schon auf
-        dem Bildschirm steht, wechselt nicht mit. Hier fehlte der Hinweis — und
-        hier trifft es am ehesten zu, denn das ist die Stelle, an der die
-        Sprache überhaupt gewählt wird.
+        Wortgleich mit ``SettingsDialog._language_changed``. Der Hinweis fehlte
+        hier lange, und das ist die Stelle, an der die Sprache überhaupt zum
+        ersten Mal gewählt wird — eine Einstellung ohne sichtbare Wirkung sieht
+        kaputt aus, nicht aufgeschoben.
+
+        **Der Satz hieß einmal „wirkt erst nach dem Neustart", und das stimmt
+        seit dem 25.08.2026 nicht mehr** (`2f2b184b`): ``main`` vergleicht die
+        Sprache nach ``start()`` und baut das Fenster über
+        ``rebuild_for_language`` neu auf. Der **Dialog** selbst wechselt
+        weiterhin nicht mit — er steht ja schon auf dem Bildschirm —, und genau
+        das kündigt der Satz an: gleich, nicht jetzt.
         """
         self.language_note.setVisible(str(self.language.currentData()) != self.settings.language)
 

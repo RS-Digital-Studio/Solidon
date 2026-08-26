@@ -954,6 +954,29 @@ class Session(QObject):
         self.project.document.sources.pop(source_id, None)
         self.project.sources.pop(source_id, None)
 
+    def embed_model(self, path: Path) -> str:
+        """Eine Modelldatei ins Projekt holen, ohne sie auf den Stapel zu legen.
+
+        **Der Gegenpart zum Quellenfeld im Operationsdialog.** Wer *Modell
+        laden* aus dem Menü öffnet, sieht dort eine Auswahl der Quellen, die
+        das Projekt schon hat — und in einem frischen Projekt ist die leer.
+        Die Liste klappte auf und zeigte nichts; das liest sich nicht als „hier
+        fehlt etwas", sondern als kaputt (Regel 19: keine Sackgassen).
+
+        Anders als :meth:`import_payload` legt diese Methode **keine**
+        Operation an: Der Dialog, der sie ruft, ist ja gerade dabei, eine zu
+        bauen. Zwei ``load``-Schritte für eine Datei wären das Gegenteil dessen,
+        was der Kunde wollte.
+
+        Dieselbe Bauart wie :meth:`import_image`, und aus demselben Grund an
+        derselben Grenze: Der Weg ändert das Dokument, also gilt Konzept §2 C.
+        """
+        activation.require(activation.CHANGE)
+        source_id = self._embed_source("import", path.name, path.read_bytes())
+        self._dirty = True
+        self.projectChanged.emit()
+        return source_id
+
     def import_image(self, path: Path) -> str:
         """Ein Bild als Quelle fürs Relief (§25, ``displace_image``).
 

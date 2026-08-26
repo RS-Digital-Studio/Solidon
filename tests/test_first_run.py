@@ -764,14 +764,20 @@ def test_the_report_says_where_it_went_and_stays_open(
     )
 
 
-def test_the_first_run_says_the_language_waits_for_a_restart(qt_app: QApplication) -> None:
+def test_the_first_run_announces_the_language_change(qt_app: QApplication) -> None:
     """Der Erststart nahm eine andere Sprache stumm an.
 
-    Der Katalog wird beim Start installiert; wer hier „Español" wählt, sieht
-    danach weiter eine deutsche Oberfläche. Der Einstellungsdialog sagt das seit
-    je mit demselben Satz — an der Stelle, an der die Sprache zum ersten Mal
-    überhaupt gewählt wird, stand er nicht, und eine Einstellung ohne sichtbare
-    Wirkung sieht kaputt aus, nicht aufgeschoben.
+    **Der Test hieß bis zum 26.08.2026 ``…_waits_for_a_restart``**, und das war
+    einmal richtig: Der Katalog wurde beim Start installiert, wer „Español"
+    wählte, sah danach weiter ein deutsches Fenster. Seit `2f2b184b` baut
+    ``main`` das Fenster nach dem Dialog neu auf — der Name behauptete also das
+    Gegenteil dessen, was die Anwendung tut. Geprüft wird unverändert der
+    **Hinweis**, und der ist weiterhin richtig: Der Dialog selbst wechselt nicht
+    mit, er steht schon auf dem Bildschirm.
+
+    Eine Einstellung ohne sichtbare Wirkung sieht kaputt aus, nicht
+    aufgeschoben — deshalb steht der Satz da, wo die Sprache zum ersten Mal
+    überhaupt gewählt wird.
 
     Bei der eigenen Sprache bleibt der Hinweis weg: Wer nichts ändert, braucht
     keine Ankündigung.

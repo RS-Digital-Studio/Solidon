@@ -6286,6 +6286,7 @@ class MainWindow(QMainWindow):
                 surroundings=self._sketch_surroundings(),
                 images=self._image_names(),
                 pick_image=self._pick_image_source,
+                pick_source=self._pick_model_source,
                 note=note,
             )
             if variant is not None:
@@ -6576,6 +6577,7 @@ class MainWindow(QMainWindow):
             surroundings=self._sketch_surroundings(),
             images=self._image_names(),
             pick_image=self._pick_image_source,
+            pick_source=self._pick_model_source,
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
         if exact is not None:
@@ -6729,6 +6731,26 @@ class MainWindow(QMainWindow):
         path = Path(name)
         try:
             source_id = self.session.import_image(path)
+        except AppError as error:
+            show_error(error, self)
+            return None
+        return source_id, path.name
+
+    def _pick_model_source(self) -> tuple[str, str] | None:
+        """Holt eine Modelldatei von der Platte ins Projekt — der Rückruf des
+        Quellenwählers im Operationsdialog.
+
+        Zwilling von :meth:`_pick_image_source`, und er fehlte: Das Bildfeld
+        hatte seinen Wähler seit je, das Quellenfeld nicht. Betroffen waren
+        ausgerechnet die drei Einstiegsdialoge — *Modell laden*, *STEP laden*,
+        *Zeichnung extrudieren*.
+        """
+        name, _filter = QFileDialog.getOpenFileName(self, tr("Datei wählen"), "", model_filter())
+        if not name:
+            return None
+        path = Path(name)
+        try:
+            source_id = self.session.embed_model(path)
         except AppError as error:
             show_error(error, self)
             return None
