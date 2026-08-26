@@ -520,7 +520,13 @@ def test_a_plug_at_the_mouth_fills_the_depth_that_was_asked_for(profile: Profile
         "nichts steht über die Oberfläche hinaus"
     )
     added = plugged.mesh.volume - bored.volume
-    assert added == pytest.approx(math.pi * 3.0**2 * 6.0, rel=0.05), "sechs Millimeter voll"
+    # Gerechnet wird mit dem **gefüllten** Maß, nicht mit dem eingetippten:
+    # Seit dem 26.08.2026 weitet der Stopfen wie die Bohrung um die
+    # Materialtoleranz auf, sonst bliebe rings um ihn der Spalt stehen. Der
+    # Nennradius stand hier fest, und damit hätte dieser Test die alte Lücke
+    # festgeschrieben — geprüft ist die **Tiefe**, und die sagt der Name.
+    radius = plugged.diameter / 2.0
+    assert added == pytest.approx(math.pi * radius**2 * 6.0, rel=0.05), "sechs Millimeter voll"
 
 
 def test_a_plug_by_its_centre_fills_only_half_of_it(profile: Profile) -> None:
@@ -549,9 +555,10 @@ def test_a_plug_by_its_centre_fills_only_half_of_it(profile: Profile) -> None:
         profile=profile,
     )
 
-    assert centred.mesh.volume - bored.volume == pytest.approx(math.pi * 3.0**2 * 3.0, rel=0.06), (
-        "die halbe Tiefe — das war die Vorgabe, bis anchor dazukam"
-    )
+    radius = centred.diameter / 2.0
+    assert centred.mesh.volume - bored.volume == pytest.approx(
+        math.pi * radius**2 * 3.0, rel=0.06
+    ), "die halbe Tiefe — das war die Vorgabe, bis anchor dazukam"
 
 
 # --- C-12: ein Kragen, den es nicht gab -----------------------------------------
