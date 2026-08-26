@@ -129,6 +129,32 @@ meldete allein in `app/ui` 285 Treffer, von denen fast nichts einschlägig ist.
    Bewegen · Analyse · Bemalen". Das ist ein **Bild**, kein Text — es wird
    gerendert und nicht übersetzt.
 
+### Nachtrag: Was die Textsuche verpasst — und was sie zu viel findet
+
+Die Zählung oben sucht im **Text** der Katalogschlüssel. Die Werte-Labels in
+`app/ui/labels.py` entziehen sich dem, weil dort der *Schlüssel* englisch ist
+und der Text die Sache anders benennt. Am Schlüssel nachgesucht, mit beiden
+Fehlerrichtungen:
+
+| `labels.py` | Text | |
+|---|---|---|
+| `slot` (Z. 844) | „Platz" | **verpasst** — muss mit |
+| `slots` (Z. 845) | „Plätze" | **verpasst** — muss mit |
+| `strokes` (Z. 852) | „Striche" | **verpasst** — fällt mit dem Pinsel |
+| `brush` (Z. 717) | „Pinsel" | gefunden |
+| `slot` (Z. 510, 630) | „Langloch" | **Falschtreffer — nicht anfassen** |
+| `radius` (Z. 819) | „Radius" | **Falschtreffer — nicht anfassen** |
+
+Die beiden Falschtreffer sind der lehrreichere Teil: `slot` heißt an zwei
+Stellen **Langloch** — ein Schlitz für Schrauben, die Spiel brauchen —, und
+`radius` gehört zu Bohrungen und Verrundungen (`brep/features.py`,
+`perceive/features.py`). Wer den Umbau am Schlüsselnamen entlangfährt,
+benennt sie mit um und macht aus einer Bohrungsangabe eine Filamentangabe.
+
+**Die Regel daraus:** Weder Text- noch Schlüsselsuche allein trägt. Die
+Textsuche verpasst, was anders heißt; die Schlüsselsuche findet, was zufällig
+gleich heißt. Jeder Treffer wird an seiner Verwendung geprüft, nicht am Namen.
+
 ### Was schon gemessen ist — und warum trotzdem noch nichts geschrieben wird
 
 Der Färbeweg über das Kontextmenü ist am echten Fenster durchgeklickt (27,
