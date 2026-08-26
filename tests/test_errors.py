@@ -9,6 +9,8 @@ durchrutschen.
 from __future__ import annotations
 
 import ast
+import importlib
+import pkgutil
 import re
 from pathlib import Path
 
@@ -27,13 +29,42 @@ from app.core.errors import (
 )
 
 
+def _import_every_core_module() -> None:
+    """Zieht jedes Modul unter ``app.core`` einmal herein.
+
+    ``AppError.__subclasses__()`` kennt nur die Klassen, deren Modul schon
+    importiert ist — und das waren beim Sammeln dieser Datei genau fünfzehn von
+    fünfundzwanzig. Zehn Ausnahmen lebten in Modulen, die erst der Betrieb lädt
+    (``UnsafeSource`` aus der Quelltextprüfung, ``LicenceKeyError``,
+    ``BackendUnavailable`` und die anderen Backend-Fehler): Sie liefen nie durch
+    die Prüfung auf einen Handlungsvorschlag, und ob sie *dieser* Lauf zufällig
+    doch sah, hing an der Importreihenfolge der übrigen Testdateien — ein
+    stiller Erfolg, kein zugesicherter.
+    """
+    import app.core
+
+    for module in pkgutil.walk_packages(app.core.__path__, "app.core."):
+        importlib.import_module(module.name)
+
+
 def all_error_classes() -> list[type[AppError]]:
+    _import_every_core_module()
     found: list[type[AppError]] = []
+    seen: set[type[AppError]] = set()
     stack = [AppError]
     while stack:
         current = stack.pop()
+        if current in seen:
+            continue
+        seen.add(current)
         found.append(current)
         stack.extend(current.__subclasses__())
+    # Erhobene Menge (Ladevorgang): Bleibt ein Modul stumm liegen, schrumpft sie,
+    # ohne dass ein Test rot wird — parametrisiert über eine kürzere Liste ist
+    # jeder Einzelfall weiter grün. Die Bodenzusicherung fängt genau das.
+    assert len(found) >= 25, (
+        f"zu wenige Fehlerklassen gesammelt ({len(found)}) — Import unvollständig?"
+    )
     return found
 
 
