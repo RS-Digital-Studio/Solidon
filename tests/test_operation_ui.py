@@ -276,6 +276,40 @@ def test_an_emptied_expression_falls_back_to_the_number(qt_app: QApplication) ->
     assert dialog.values()["width"] == pytest.approx(42.0)
 
 
+def test_a_choice_in_an_operation_dialog_says_what_it_does(qt_app: QApplication) -> None:
+    """Ein Auswahlwert trug bisher nur seinen **Namen**.
+
+    „Würfelgitter" benennt ``cubic`` und erklärt es nicht; wo der Slicer-Begriff
+    absichtlich stehen bleibt („gyroid", „arachne"), steht ein Wort da, das der
+    Kunde nachschlagen müsste. Die Sätze liegen als eine Tabelle neben der
+    Namenstabelle — geprüft wird hier die **Anbindung**: dass der Dialog sie
+    auch anhängt. Eine Tabelle, die niemand ruft, hilft niemandem.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QComboBox
+
+    from app.ui.labels import choice_note
+
+    spec = REGISTRY.get("lattice_fill")
+    dialog = OperationDialog(spec, ["obj_1"], None)
+    combo = dialog._editors["structure"]
+    assert isinstance(combo, QComboBox)
+
+    explained = 0
+    for index in range(combo.count()):
+        value = str(combo.itemData(index))
+        note = choice_note(value)
+        if note is None:
+            continue
+        explained += 1
+        assert combo.itemData(index, Qt.ItemDataRole.ToolTipRole) == note, (
+            f"der Wert {value!r} trägt seinen Satz nicht"
+        )
+    assert explained, (
+        "kein einziger Wert dieser Auswahl hat einen Satz — dann prüft der Test nichts"
+    )
+
+
 def test_typing_the_equals_sign_into_the_number_opens_the_expression(
     qt_app: QApplication,
 ) -> None:

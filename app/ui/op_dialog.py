@@ -47,7 +47,7 @@ from app.core.registry import OperationSpec, caveat_line
 from app.core.types import ParamSpec
 from app.core.units import DEGREE_UNIT, LengthUnit, decimals_for, from_mm, to_mm
 from app.i18n import tr
-from app.ui.labels import NumberSpin, choice_label, display_unit
+from app.ui.labels import NumberSpin, choice_label, display_unit, explain_choices
 from app.ui.leash import weak_slot
 from app.ui.style import TIGHT, make_primary, set_level
 
@@ -1247,6 +1247,14 @@ class OperationDialog(QDialog):
             combo = QComboBox(self)
             for choice in entry.choices:
                 combo.addItem(choice_label(str(choice)), choice)
+            # **Der Name sagt, wie der Wert heißt — nicht, was er tut.**
+            # „Würfelgitter" benennt ``cubic`` und erklärt es nicht, und wo
+            # der Slicer-Begriff absichtlich stehen bleibt („arachne",
+            # „gyroid"), steht ein Wort da, das der Kunde nachschlagen müsste.
+            # Der Satz je Wert liegt in ``labels`` neben der Namenstabelle
+            # (3d-druck-43) und wird hier nur angehängt — er gilt in jedem
+            # Dialog gleich, und zwei Tabellen liefen auseinander.
+            explain_choices(combo)
             _show_patterns(combo, entry.choices)
             if start is not None and start in entry.choices:
                 combo.setCurrentIndex(combo.findData(start))
