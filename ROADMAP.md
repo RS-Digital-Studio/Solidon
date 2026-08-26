@@ -132,6 +132,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Regel 17 endet an der Auswertungsgrenze | Was das Update-Review liegen ließ (26.08.2026) | eine Messung, welche Befund-Familien ohne tragende Handlung ankommen — FINDING_ACTIONS und die op.*-Familie decken einen Teil; fallgenaue Auswege wie split_model fallen in _finding_from | 
 | Kleinreste: tote profile-Zweige, unbenutztes height | Was der Gesamtreview liegen ließ (25.08.2026) | niemanden — sie werfen nur beziehungsweise stören nicht; notiert, damit sie ein Kästchen haben |
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
+| Handbuch-PDF ohne Bilder | Das Handbuch-PDF druckt seine Bilder nicht mit (26.08.2026) | eine Messung auf der Chromium-Seite: druckt `printToPdf` Rasterbilder aus `file://`, und trägt ein Gegenversuch mit `data:`-URIs |
 
 ---
 
@@ -10416,3 +10417,41 @@ Commit in derselben Höhe.
 
 Die allgemeine Lehre steht in `.claude/rules/tests.md` (`d7df8535`): Die
 Zweimal-Regel fängt Fremdlast, aber keinen Wert, der um die Schwelle streut.
+
+## Das Handbuch-PDF druckt seine Bilder nicht mit (26.08.2026)
+
+`tools/make_manual.py` schreibt das Handbuch als Website-Seite **und** als PDF
+nach `Releases/Solidon3D-Handbuch-<sprache>.pdf`. Die PDFs entstehen, sind
+vollständig gesetzt und tragen ihre Schriften — aber **kein einziges Bild**.
+An jeder Abbildung steht eine Lücke in exakt ihrer Größe: Das Layout kennt das
+Bild, die Pixel fehlen.
+
+Gemeldet hat es Robert am 26.08.2026 an den erzeugten Dateien. Es ist **kein
+Auslieferungsfehler**: Die PDFs sind nirgends verlinkt, liegen nicht unter
+`website/` und reisen nicht im Paket mit; das Handbuch **im Programm** ist
+sauber, weil der Viewer je Anzeige frisch von Platte lädt und SVG selbst
+rendert. Betroffen ist allein der Druckweg.
+
+**Was gemessen und ausgeschlossen ist:**
+
+| Vermutung | Messung |
+|---|---|
+| Bildpfade falsch | nein — `handbuch/de/…` bzw. `../handbuch/en/…`, beide korrekt relativ |
+| Bilder laden nicht | nein — 39 von 39 `complete` mit `naturalWidth > 0` |
+| `@media print` versteckt sie | nein — der Druckblock setzt nur Größen, kein `display: none` |
+| Ruhezeit zu kurz, `decode()` abwarten hilft | nein — das Promise löst **nie** auf, auch mit `loading="eager"` und neu gesetztem `src` |
+| `runJavaScript` wartet auf das Promise | **nein** — es gibt den synchronen Wert zurück (gemessen: `''`), der Rückruf kommt sofort |
+| Kein Viewport, weil `QWebEnginePage` ohne View | nein — eine `QWebEngineView` mit 1200×1600 und drei Sekunden Ruhe druckt genauso ohne Bilder |
+
+**Dazu ein zweiter Fehler, der den ersten verdeckt hat.** Es gibt zwei
+Druckanläufe, der zweite mit mehr Ruhezeit — er läuft nie. `attempt` gilt als
+gelungen, sobald `printToPdf` Bytes liefert, und ein PDF ohne Bilder ist auch
+Bytes. Die Absicht stand im Kommentar, die Bedingung hat sie nie geprüft.
+
+- [ ] **Bilder im Handbuch-PDF.** Die sechs Vermutungen oben sind gemessen
+  ausgeschlossen; offen sind die Chromium-Seite (druckt `printToPdf` in dieser
+  Fassung Rasterbilder aus `file://` überhaupt?) und ein Gegenversuch mit
+  eingebetteten `data:`-URIs — trägt der, ist es eine Herkunftsfrage und keine
+  Zeitfrage. Dazu gehört eine Erfolgsbedingung, die Bilder **verlässlich**
+  zählt: Ein Grep auf `/Subtype /Image` liefert bei komprimierten Objektströmen
+  auch über einem guten PDF null und taugt nur als Befund, nicht als Tor.

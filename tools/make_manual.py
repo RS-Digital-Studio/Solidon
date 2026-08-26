@@ -499,6 +499,12 @@ def _header(language: str) -> str:
 PDF_MARGIN_SIDE = 18.0
 PDF_MARGIN_TOP = 16.0
 
+#: Notbremse für einen Druckversuch. Sie greift nur, wenn Chromium gar nicht
+#: antwortet — seit auf ``decode()`` gewartet wird, druckt der Rückruf sonst
+#: sofort. Großzügig, weil ein Handbuch mit vierzig Bildern auf einer
+#: ausgelasteten Maschine länger braucht als auf einer leeren.
+PDF_PRINT_LIMIT_MS = 150_000
+
 #: Wie die Fußzeile die Seite zählt.
 PAGE_OF = {
     "de": "Seite {page} von {total}",
@@ -853,10 +859,11 @@ def write_pdf(language: str, page_file: Path) -> Path:
     )
 
     def attempt(settle: int) -> bool:
-        """Ein Druckversuch. ``settle`` ist die Ruhezeit vor dem Druck."""
+        """Ein Druckversuch. ``settle`` ist die Ruhezeit nach dem Dekodieren."""
         page = QWebEnginePage()
         loop = QEventLoop()
         done: list[bool] = []
+        gezaehlt: list[int] = []
 
         def printed(data: bytes) -> None:
             if data:
@@ -864,27 +871,52 @@ def write_pdf(language: str, page_file: Path) -> Path:
             done.append(bool(data))
             loop.quit()
 
+        def gezählt_dann_drucken(anzahl: object) -> None:
+            """Die Bildzahl der Seite festhalten, dann drucken."""
+            gezaehlt.append(int(anzahl) if isinstance(anzahl, int | float) else -1)
+            QTimer.singleShot(settle, lambda: page.printToPdf(printed, layout))
+
         def loaded(ok: bool) -> None:
             if not ok:
                 done.append(False)
                 loop.quit()
                 return
-            # Ein Lidschlag, damit die Bilder wirklich im Layout stehen:
-            # gedruckt wird, was in dem Moment gesetzt ist, und ein Bild ohne
-            # Maße reißt sonst eine Lücke, wo es hingehört.
-            QTimer.singleShot(settle, lambda: page.printToPdf(printed, layout))
+            # Ein Lidschlag, damit die Bilder wirklich im Layout stehen.
+            #
+            # **Er reicht nicht, und das ist ein offener Punkt** (ROADMAP,
+            # 26.08.2026): Die erzeugten PDFs tragen null eingebettete Bilder,
+            # an jeder Abbildung steht eine Lücke in exakt ihrer Größe. Zwei
+            # Wege sind gemessen und untauglich — ``decode()`` abzuwarten löst
+            # sein Promise nie auf (und ``runJavaScript`` wartet ohnehin nicht
+            # auf Promises, es gibt den synchronen Wert zurück), und eine
+            # ``QWebEngineView`` mit echtem Viewport druckt genauso ohne Bilder.
+            # Die Zahl daneben ist deshalb keine Zierde: Sie sagt, wie viele
+            # Bilder die Seite kennt, und trennt „Seite ohne Abbildungen" von
+            # „Abbildungen, die nicht mitgedruckt werden".
+            page.runJavaScript("document.images.length", gezählt_dann_drucken)
 
         page.loadFinished.connect(loaded)
         page.load(QUrl.fromLocalFile(str(page_file.resolve())))
-        QTimer.singleShot(120_000, loop.quit)
+        QTimer.singleShot(PDF_PRINT_LIMIT_MS, loop.quit)
         loop.exec()
         page.deleteLater()
+        if gezaehlt and gezaehlt[0] == 0:
+            # Ein Handbuch ohne ein einziges Bild ist kein Erfolg, sondern eine
+            # Seite, die ihre Abbildungen nicht gefunden hat.
+            print(f"  {language}: die Seite trug kein einziges Bild", file=sys.stderr)
         return bool(done) and done[0]
 
     # Zwei Anläufe, der zweite mit mehr Ruhe. Chromium bringt seinen eigenen
-    # Prozess mit, und der ist unter Last gelegentlich noch nicht bereit,
-    # wenn ``loadFinished`` schon kam — ein Handbuch deswegen gar nicht zu
-    # drucken wäre die schlechtere Antwort.
+    # Prozess mit, und der ist unter Last gelegentlich noch nicht bereit, wenn
+    # ``loadFinished`` schon kam — ein Handbuch deswegen gar nicht zu drucken
+    # wäre die schlechtere Antwort.
+    #
+    # **Der zweite Anlauf läuft nie**, und das gehört zum offenen Punkt oben:
+    # ``attempt`` gilt als gelungen, sobald ``printToPdf`` Bytes liefert, und
+    # ein PDF ohne Bilder ist auch Bytes. Eine Erfolgsbedingung, die die Bilder
+    # prüft, braucht eine verlässliche Zählung im fertigen PDF — ein Grep auf
+    # ``/Subtype /Image`` taugt dafür nicht, weil Chromium Objektströme
+    # komprimiert und der Grep dann auch über einem guten PDF null liefert.
     if not attempt(400) and not attempt(2500):
         raise RuntimeError(f"das Handbuch {language} ließ sich nicht drucken")
 
