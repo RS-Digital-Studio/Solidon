@@ -5,8 +5,18 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 493de4ef-2355-4029-9d86-1e68996c4909
-  modified: 2026-08-08T10:45:51.300Z
+  modified: 2026-08-26T09:40:39.081Z
 ---
+
+> **Achtung (26.08.2026): Jede Messtabelle in dieser Notiz außer der
+> Fenster-Tabelle im Nachtrag vom 08.08 wurde OHNE `num_ctx` gemessen — also
+> gegen ein stilles 4096-Token-Fenster, das den Systemprompt kappte. Sie sind
+> Vorgeschichte, kein Ergebnis; wer eine Zahl daraus zieht, zieht eine
+> Trunkierung, nicht die Fähigkeit eines Modells. Eine neue Reihe mit gesetztem
+> `num_ctx` erhebt 3d-druck-ce gerade (der Widerspruch „voller Satz 16386,
+> kompakter 22300" war genau dieselbe Trunkierung: 16386 = 32768/2 + 2). Die
+> Tabellen unten werden ersetzt, sobald ces Reihe steht — bis dahin nicht als
+> Modellvergleich lesen.**
 
 Formwerks `DEFAULT_OLLAMA_MODEL` war `qwen2.5-coder:14b`. Gemessen am
 07.08.2026 gegen Ollama 0.32.6 **funktionierte es für den Agenten nicht**: Das
