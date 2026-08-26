@@ -93,7 +93,23 @@ sich, wenn nicht:
   beim Filamentwähler, also bei 27. **Gelandet als `1261935f`:** Der
   Anschlusspunkt heißt `handover.settings_for_slot(settings, override)`,
   reist additiv durch die Projektdatei, alte Projekte öffnen unverändert.
-- **Für 30, zur Kenntnis:** `at_feature` an `paint_slot` kam ohne
+- **Korrektur vor dem Kern-Schritt 2, an der Verwendung geprüft (27):**
+  `stroke_at` fällt **nicht** — es lebt in `app/core/geom/sculpt.py`, sein
+  einziger Aufrufer ist `_on_sculpt` mit den Werten der **Formen**-Leiste
+  (Weg 4). Der Satz in Punkt 3 („der Strichpfad (`stroke_at`)") meinte den
+  Mal-Klickpfad, und der heißt `_on_paint` → `paint_slot(x/y/z/radius)`.
+  Dasselbe gilt für des Doku-Zeile „`strokes` → Striche fällt mit dem
+  Pinsel": `strokes` ist der Sammelparameter des Formens und bleibt. Zur
+  Weg-4-Sperrliste gehören damit: `stroke_at`, `apply_strokes`,
+  `strokes_to_text`, `sculpt_bar`, `set_brush_radius` und der Pinselring
+  im Viewport (`_draw_brush` — die Formen-Leiste speist ihn).
+- **Ausbau-Ansage (27, von Robert freigegeben):** Der UI-Zug läuft jetzt —
+  Werkzeug „Bemalen" (Zeile wird 7 von 8), `paint_bar` samt Overlay und
+  Verdrahtung, `_on_paint`-Klickpfad, `set_painting`/`paint`-Zeigerrolle
+  und `paintRequested` im Viewport, in **einem** Commit; danach erreicht
+  kein Kunde den Punktpfad mehr, der Kern bleibt kompatibel. 30 zieht als
+  Schritt 2 die Kernseite nach (`radius`/`x`/`y`/`z` an `paint_slot`,
+  Migration, `format_version`) — **nicht `stroke_at`**, siehe Korrektur.
   `kind="feature"` an — daran hängen Dialog-Combo, Klick-Vorbelegung
   (`values_for`) und der Träger-Hash im Cache-Schlüssel, und
   `test_a_feature_parameter_is_declared_as_one` stand rot auf origin.
