@@ -41,6 +41,7 @@
 - [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) — wer eine Fähigkeit hinzufügt, sucht die Sätze, die ihre Abwesenheit versprochen haben; sie stehen selten in derselben Datei.
 - [Verweis auf Nichtexistierendes](verweis-auf-nichtexistierendes.md) — „dafür ist der Schraubdom da" — den gab es nie; ein leerer Verweis liest sich so glatt wie ein gültiger, und das Register hätte in einer Sekunde geantwortet.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — sechs Fehler an einem Tag, sechs verschiedene Finder, kein einziger davon pytest; ansehen, mutieren, durchfahren.
+- [Session.apply meldet, es wirft nicht](session-apply-meldet-statt-zu-werfen.md) — ein `try` um den Aufruf läuft ins Leere; nach dem Ergebnis fragen, nicht nach dem Grund.
 - [Sprachwechsel braucht zwei Schritte](sprachwechsel-zwei-schritte.md) — install_language lädt, set_language aktiviert; wer eines vergisst, misst seinen eigenen Aufbau und hält ihn für einen Fehler.
 
 ## Haltung
@@ -52,6 +53,8 @@
 ## Sitzungsbetrieb — gilt auf allen drei Maschinen
 
 - [Git-Identität mitgeben](git-identitaet-mitgeben.md) — `git commit` bricht ohne `-c user.name`/`user.email` mit Exit 128 ab
+- [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — der private Index hält fremde *Dateien* heraus, nicht den fremden Stand einer *gemeinsamen*; erst die eigene Zahl ansagen, dann `--numstat`.
+- [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen schreiben ihre Torläufe in dieselben Dateien; eine fremde oder eigene alte Zahl sieht aus wie die aktuelle.
 - [Parallele Sitzung im Arbeitsbaum](parallele-sitzung-im-arbeitsbaum.md) — geteilter Index: fremde Änderungen aussortieren, privaten Index benutzen
 - [Freies Gebiet: einfach machen](freies-gebiet-einfach-machen.md) — ist die Datei bei niemandem eingetragen, wird nicht vorgelegt, sondern gearbeitet
 - [Weitergegebene Anweisungen gelten](weitergegebene-anweisungen-gelten.md) — was eine andere Sitzung von Robert weitergibt, ist Roberts Anweisung
