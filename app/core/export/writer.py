@@ -787,11 +787,25 @@ def write_assembly(
         )
         for entry in chosen
     ]
+    # **Die Extruderbelegung gehört dem Auftrag, nicht der Platte.** Ohne diese
+    # Liste nummeriert jede Platte für sich, und dieselbe Farbe liegt auf
+    # Platte 1 an einer anderen Düse als auf Platte 2 — Umstecken mitten im
+    # Auftrag (Fund von 3d-druck-de, 26.08.2026). Gebaut wird sie aus
+    # ``objects`` und nicht aus ``chosen``: Letzteres *ist* die Platte.
+    whole_job = [
+        threemf.AssemblyPart(
+            mesh=as_mesh_data(entry.mesh),
+            name=source_text(entry.name),
+            slots=tuple(entry.material_slots),
+        )
+        for entry in objects
+    ]
     target = _written(
         directory / (safe_name(project_name, "projekt") + ".3mf"),
         threemf.write_assembly(
             parts,
             project_name,
+            across=whole_job,
             bed=bed,
             project_settings=_plate_settings(settings, profile, flavour, setup),
             prusa_config=_plate_config(settings, profile, flavour),

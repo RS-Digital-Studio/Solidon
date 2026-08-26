@@ -544,6 +544,106 @@ def test_a_prusa_assembly_carries_its_settings(tmp_path: Path, profile: Profile)
     assert written["first_layer_temperature"] == str(settings.temperature.nozzle_first_layer)
 
 
+def test_a_filament_keeps_its_extruder_across_the_plates_of_one_job() -> None:
+    """Vier Spulen sind nicht vier Farben desselben Materials — und eine Farbe
+    ist nicht auf jeder Platte ein anderer Extruder.
+
+    ``merge_slots`` nummeriert nach dem ersten Auftreten, und der Export ruft
+    es **je Platte**. Damit lag dieselbe Farbe in einem Auftrag an
+    verschiedenen Düsen: Platte 1 nur Rot (Extruder 0), Platte 2 Weiß und Rot
+    (Rot dann Extruder 1). Wer den Auftrag am Stück druckt, müsste mittendrin
+    umstecken — und merkt es an der zweiten Platte.
+
+    Die Zuordnung gehört deshalb dem **Auftrag**: Wer alle Platten kennt,
+    nummeriert einmal für alle. ``across`` nimmt die Teile des ganzen Auftrags
+    und gibt die gemeinsame Belegung; ohne Angabe bleibt es beim alten
+    Verhalten je Platte, denn eine einzelne exportierte Platte *ist* der
+    Auftrag.
+    """
+    red = MaterialSlot(index=1, name="Rot")
+    white = MaterialSlot(index=1, name="Weiß")
+    red_again = MaterialSlot(index=2, name="Rot")
+
+    first = [threemf.AssemblyPart(mesh=MeshData.of(trimesh.creation.box()), name="A", slots=(red,))]
+    second = [
+        threemf.AssemblyPart(
+            mesh=MeshData.of(trimesh.creation.box()), name="B", slots=(white, red_again)
+        )
+    ]
+
+    whole_job = [*first, *second]
+    plate_one = threemf.merge_slots(first, across=whole_job)
+    plate_two = threemf.merge_slots(second, across=whole_job)
+
+    def extruder_of(name: str, slots: list[MaterialSlot]) -> int:
+        return next(slot.index for slot in slots if str(slot.name) == name)
+
+    assert extruder_of("Rot", plate_one) == extruder_of("Rot", plate_two), (
+        "dieselbe Farbe, derselbe Extruder — sonst wird mitten im Auftrag umgesteckt"
+    )
+    assert extruder_of("Rot", plate_one) != extruder_of("Weiß", plate_two), (
+        "und zwei Farben teilen sich keine Düse"
+    )
+
+
+def test_the_exported_plates_of_one_job_agree_on_the_extruders(
+    profile: Profile, tmp_path: Path
+) -> None:
+    """Der Anschluss: Die Zusage wird im **Export** eingelöst, nicht in
+    ``merge_slots``.
+
+    Der Test daneben prüft die Zählung; dieser prüft, dass der Weg dorthin sie
+    auch benutzt. Ohne das könnte ``across`` richtig rechnen und der Export es
+    trotzdem nie mitgeben — genau die Sorte Lücke, die die Testart „Anschluss"
+    meint: nicht „die Funktion kann es", sondern „die Anwendung tut es".
+    """
+    red = MaterialSlot(index=1, name="Rot")
+    white = MaterialSlot(index=1, name="Weiß")
+    red_again = MaterialSlot(index=2, name="Rot")
+    objects = [
+        SceneObject(
+            id="obj_1",
+            name="A",
+            mesh=MeshData.of(trimesh.creation.box((10, 10, 10))),
+            material_slots=[red],
+            plate=0,
+        ),
+        SceneObject(
+            id="obj_2",
+            name="B",
+            mesh=MeshData.of(trimesh.creation.box((10, 10, 10))),
+            material_slots=[white, red_again],
+            plate=1,
+        ),
+    ]
+
+    def extruders(plate: int) -> dict[str, int]:
+        target, _findings = write_assembly(
+            objects,
+            tmp_path / f"platte{plate}",
+            project_name="auftrag",
+            profile=profile,
+            plate=plate,
+        )
+        with zipfile.ZipFile(target) as container:
+            root = ET.fromstring(container.read(threemf.MODEL_PATH))
+        found: dict[str, int] = {}
+        for index, node in enumerate(root.iter()):
+            label = node.get("name")
+            if label and node.tag.endswith("base"):
+                found[label] = index
+        return found
+
+    first, second = extruders(0), extruders(1)
+
+    assert "Rot" in first and "Rot" in second, "beide Platten führen die Farbe"
+    order_first = sorted(first, key=lambda name: first[name])
+    order_second = sorted(second, key=lambda name: second[name])
+    assert order_first.index("Rot") == order_second.index("Rot"), (
+        "dieselbe Farbe steht in beiden Dateien an derselben Extruderstelle"
+    )
+
+
 def test_only_the_part_that_needs_it_gets_the_setting() -> None:
     """Eine Platte hat einen Satz Werte, aber nicht jedes Teil darauf braucht
     dasselbe — ohne diesen Ort gäbe es nur „alle" oder „keiner"."""

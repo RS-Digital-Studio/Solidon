@@ -147,7 +147,9 @@ class AssemblyPart:
     """Auf welche Druckplatte dieses Teil gehört, von null an gezählt."""
 
 
-def merge_slots(parts: Sequence[AssemblyPart]) -> list[MaterialSlot]:
+def merge_slots(
+    parts: Sequence[AssemblyPart], across: Sequence[AssemblyPart] | None = None
+) -> list[MaterialSlot]:
     """Eine Materialliste über alle Teile — das ist die Extruderzuordnung
     (§20).
 
@@ -159,20 +161,39 @@ def merge_slots(parts: Sequence[AssemblyPart]) -> list[MaterialSlot]:
     Ohne diese Zusammenlegung bekäme eine Baugruppe aus drei einfarbigen Teilen
     drei Materialien — und der Slicer fragte nach drei Filamenten für einen
     einfarbigen Druck.
+
+    **``across`` ist der Auftrag, ``parts`` die Platte** (Fund von 3d-druck-de,
+    26.08.2026). Nummeriert wird nach dem ersten Auftreten — und weil der
+    Export je Platte aufruft, lag dieselbe Farbe in einem Auftrag an
+    verschiedenen Düsen: Platte 1 nur Rot (Extruder 0), Platte 2 Weiß und Rot
+    (Rot dann Extruder 1). Wer den Auftrag am Stück druckt, müsste mittendrin
+    umstecken. Wer alle Platten kennt, gibt sie hier mit; die Nummern kommen
+    dann für alle aus derselben Zählung. Ohne Angabe bleibt es bei ``parts``,
+    denn eine einzeln exportierte Platte *ist* der Auftrag.
     """
-    merged: list[MaterialSlot] = []
+    order: list[MaterialSlot] = []
     # Der Name darf ein ``TranslatableText`` sein (:attr:`MaterialSlot.name`).
     # Zusammengelegt wird trotzdem richtig: Ein solcher Text vergleicht und
     # hasht wie seine Message-ID, auch gegen eine schlichte Zeichenkette.
     seen: dict[tuple[TranslatableText | str, tuple[float, float, float] | None], int] = {}
-    for part in parts:
+    for part in across if across is not None else parts:
         for slot in part.slots or (MaterialSlot(index=0, name=""),):
             key = (slot.name, slot.colour)
             if key in seen:
                 continue
-            seen[key] = len(merged)
-            merged.append(dataclasses.replace(slot, index=len(merged)))
-    return merged
+            seen[key] = len(order)
+            order.append(dataclasses.replace(slot, index=len(order)))
+    if across is None:
+        return order
+    # Die Belegung des Auftrags, beschränkt auf das, was diese Platte braucht —
+    # mit den Nummern des Auftrags. Ein Slicer, der eine Platte allein bekommt,
+    # soll nicht nach Filamenten fragen, die auf ihr nicht vorkommen.
+    here = {
+        (slot.name, slot.colour)
+        for part in parts
+        for slot in part.slots or (MaterialSlot(index=0, name=""),)
+    }
+    return [slot for slot in order if (slot.name, slot.colour) in here]
 
 
 def write_assembly(
@@ -182,6 +203,7 @@ def write_assembly(
     project_settings: Mapping[str, object] | None = None,
     stride: float = 0.0,
     prusa_config: Mapping[str, str] | None = None,
+    across: Sequence[AssemblyPart] | None = None,
 ) -> bytes:
     """Mehrere Körper als eine 3MF-Baugruppe (§20, §29).
 
@@ -220,7 +242,7 @@ def write_assembly(
     if not parts:
         raise ValueError("an assembly needs at least one part")
 
-    materials = merge_slots(parts)
+    materials = merge_slots(parts, across=across)
     model = _assembly_xml(parts, materials, name, bed, stride)
 
     buffer = BytesIO()
