@@ -3729,3 +3729,56 @@ def test_fitting_keeps_the_camera_square_to_the_plane() -> None:
 
     _p, _w, _u, hoch = camera_for_span(frame, mitte, (40.0, 60.0), abstand, 0.5)
     assert hoch == pytest.approx(30.0 * FIT_ROOM), "und sonst die Höhe"
+
+
+def test_a_camera_move_redraws_the_grid_in_the_scene(qt_app: QApplication) -> None:
+    """Die dritte Kante: Kamera → Raster (§30.1, P4).
+
+    Feld → Bild läuft über ``sketchChanged``, Bild → Feld über
+    ``follow_grid`` — aber Rad, Drehzug und Einpassen änderten den Maßstab,
+    ohne dass irgendwer neu zeichnete: Das Raster zeigte die Weite vom
+    Betreten, und erst der nächste Strich ließ es springen. Gemeldet von
+    Robert am 26.08.2026 („die Gitterlinien sollten genau das Raster sein").
+
+    ``Viewport.cameraMoved`` ist das Signal dafür; dieser Test prüft den
+    **Anschluss** (§35): Nach dem Betreten zeichnet ein Kameraschritt die
+    Szene neu, nach dem Verlassen ist die Verbindung gelöst — sonst
+    zeichnete jede Kamerabewegung im Normalbetrieb eine Skizze, die es
+    nicht mehr gibt.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.show()
+        window._show_start_screen(False)
+        window.start_sketch("sketch_extrude")
+        qt_app.processEvents()
+        assert window._sketch_panel is not None, "ohne offene Skizze prüft dieser Test nichts"
+
+        # ``show_sketch`` schreibt die gezeichnete Weite **vor** der
+        # Plotter-Wache (offscreen gibt es keinen) — sie ist damit der eine
+        # messbare Beleg, dass wirklich neu gezeichnet wurde.
+        window.viewport._sketch_step = -1.0
+        window.viewport.cameraMoved.emit()
+        qt_app.processEvents()
+        assert window.viewport._sketch_step > 0.0, (
+            "Ein Kameraschritt muss das Raster neu zeichnen — die Verbindung aus start_sketch fehlt"
+        )
+
+        window.finish_sketch(keep=False)
+        qt_app.processEvents()
+        # ``finish_sketch`` hat die Verbindung gelöst; ein zweiter Versuch
+        # findet nichts mehr. PySide meldet das als ``RuntimeWarning``
+        # („Failed to disconnect"), nicht als ``RuntimeError`` — und
+        # ``filterwarnings = error`` machte daraus einen ``SystemError``
+        # mitten im C-Aufruf. ``pytest.warns`` fängt sie als das, was sie
+        # ist: der Beleg, dass nach dem Verlassen niemand mehr zeichnet.
+        with pytest.warns(RuntimeWarning):
+            window.viewport.cameraMoved.disconnect(window._redraw_sketch)
+    finally:
+        window.close()
+        window.deleteLater()
+        qt_app.processEvents()

@@ -137,6 +137,30 @@ wurde: zwei Zahlen für dieselbe Sache, und die sichtbare war die falsche.
 und `grid_step_for(scale)` ist aus der Methode heraus, damit beide Seiten
 dieselbe Folge rechnen.
 
+**Und die Kamera meldet jede Bewegung zurück** (`Viewport.cameraMoved`,
+verbunden in `start_sketch`, gelöst in `finish_sketch`). Das ist die dritte
+Kante, und sie fehlte: Feld → Bild läuft über `sketchChanged`, Bild → Feld
+über `follow_grid` — aber Rad, Drehzug und *Einpassen* änderten den Maßstab,
+ohne dass irgendwer neu zeichnete. Das Raster zeigte die Weite vom Betreten,
+und erst der nächste Strich ließ es springen (gemeldet von Robert am
+26.08.2026: „die Gitterlinien sollten genau das Raster sein"). Gesendet wird
+am **Ende** einer Bewegung — `EndInteractionEvent` für Dreh- und Schiebezug,
+der Radzoom und `show_span_on_plane` melden selbst, weil sie kein
+Interactor-Ereignis auslösen. Ein Neuzeichnen kostet gemessen 7,8 ms; wer
+hier ein Ereignis je Mausbewegung sendet statt je Zug, bezahlt es im
+Qt-Hauptthread. `_pinned_step` gilt dabei unverändert: Die Kamera-Kante ruft
+`_redraw_sketch`, und dort gewinnt eine eingetippte Weite wie überall.
+
+**Das Rad war orthografisch tot, und im Skizzenmodus ist orthografisch
+immer** (`apply_wheel_zoom` in `viewport.py`). `vtkCamera.Dolly` teilt nur
+die Distanz — in der Parallelprojektion bestimmt `parallel_scale` die
+Bildgröße, und die Position ist ihr gleichgültig: acht Radschritte, Bild
+byteweise unverändert (gemessen 26.08.2026, am echten Fenster). VTKs eigener
+Trackball-Dolly (rechte Taste im CAD-Schema) trägt die Fallunterscheidung
+intern — nur der direkte `Dolly`-Aufruf trug sie nicht. Wer an der Kamera
+zoomt, geht durch `apply_wheel_zoom`; `tests/test_viewport_decisions.py`
+prüft beide Projektionen gegen die echte `vtkCamera`.
+
 **Und die Kamera braucht dafür eine Untergrenze.** In einer leeren Szene hat
 `reset_camera` nie stattgefunden; pyvista startet mit einer Kamera 1,62
 Einheiten vor dem Ursprung, und `_plane_distance` übernahm sie treu — 918

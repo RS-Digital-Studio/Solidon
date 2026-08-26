@@ -2989,13 +2989,18 @@ class SketchPanel(QWidget):
         self.snap_step.setKeyboardTracking(False)
         self.snap_step.set_step_mm(0.5)
         self.snap_step.set_value_mm(self.canvas.snap_step)
-        self.snap_step.setToolTip(
-            tr(
-                "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne "
-                "Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen. "
-                'Ganz herunter gedreht steht „Automatisch", und sie folgt wieder.'
-            )
+        snap_note = tr(
+            "Die Rasterweite — dieselbe Zahl, auf die ein Klick fällt. Ohne "
+            "Eingabe folgt sie dem Zoom; eine eingetippte Weite bleibt stehen. "
+            'Ganz herunter gedreht steht „Automatisch", und sie folgt wieder.'
         )
+        self.snap_step.setToolTip(snap_note)
+        # Statuszeile und Vorleser sagen dasselbe wie der Tooltip (Regel 18) —
+        # das Feld des Versetzen-Knopfs in der Zeile darüber zeigt dieselben
+        # Millimeter, und ohne Auskunft ohne Wartezeit blieb nur Raten,
+        # welches was ist (der Zwilling dieser Zeilen steht dort).
+        self.snap_step.setStatusTip(snap_note)
+        self.snap_step.setAccessibleDescription(snap_note)
         self.snap_step.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         self.snap_step.setAccessibleName(tr("Raster"))
         #: Ob der Nutzer die Weite selbst eingestellt hat. Solange nicht, folgt
@@ -3019,7 +3024,17 @@ class SketchPanel(QWidget):
         self.offset_distance = LengthSpin(self)
         self.offset_distance.set_range_mm(-1000.0, 1000.0)
         self.offset_distance.set_value_mm(2.0)
-        self.offset_distance.setToolTip(tr("Um wie viel versetzt wird. Negativ ist nach innen."))
+        offset_note = tr("Um wie viel versetzt wird. Negativ ist nach innen.")
+        self.offset_distance.setToolTip(offset_note)
+        # In der Statuszeile und beim Vorleser derselbe Satz wie im Tooltip
+        # (Regel 18): Dieses Feld und die Rasterweite darunter sind die zwei
+        # einzigen nackten mm-Felder des Bereichs, und wofür welches ist, war
+        # ohne Hover nicht zu erkennen (Robert, 26.08.2026). Ein sichtbares
+        # Wort scheitert an der 900er-Breitengrenze — gemessen: als Wort am
+        # Knopf 1017, als Label davor 971 —, also antwortet die Statuszeile
+        # ohne Wartezeit, sobald der Zeiger das Feld nur berührt.
+        self.offset_distance.setStatusTip(offset_note)
+        self.offset_distance.setAccessibleDescription(offset_note)
         self.offset_distance.setMaximumWidth(TOOLBAR_FIELD_WIDTH)
         # Ohne Namen liest ein Vorleser hier „Drehfeld, 2,00 mm" vor. Der
         # Name ist der des Werkzeugs, zu dem das Feld gehört.

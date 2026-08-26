@@ -1750,6 +1750,15 @@ class Viewport(QWidget):
     meldet einen Ort, das Fenster macht daraus einen Zug, und Geometrie ändert
     einzig die Operation (Regel 2). Was der Viewport währenddessen zeigt, ist
     eine Vorschau."""
+    cameraMoved = Signal()
+    """Die Kamera hat sich bewegt — Rad, Dreh- oder Schiebezug, Einpassen.
+
+    Für alles, was seine Größe aus dem Bild rechnet und nicht aus der Szene:
+    Das Skizzenraster wählt seine Weite aus ``pixels_per_mm`` (§30.1), und
+    ohne dieses Signal veraltete sie mit jedem Zoom — das Bild zeigte die
+    Weite vom Betreten, der nächste Strich ließ sie springen. Gesendet wird
+    **nach** der Bewegung, nie währenddessen; wer daran zeichnet, zeichnet
+    einmal je Bewegung und nicht sechzigmal je Sekunde."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -2110,6 +2119,10 @@ class Viewport(QWidget):
             view = weak()
             if view is not None:
                 view._redraw_shadows()
+                # Dreh- und Schiebezüge enden hier; der Radzoom meldet sich
+                # selbst (``on_camera`` im Interaktionsstil), weil er kein
+                # ``EndInteractionEvent`` auslöst.
+                view.cameraMoved.emit()
 
         self.plotter.interactor.AddObserver("EndInteractionEvent", on_end)
 
@@ -5542,6 +5555,7 @@ class Viewport(QWidget):
         if camera is not None and getattr(camera, "parallel_projection", False):
             camera.parallel_scale = scale
         self.plotter.render()
+        self.cameraMoved.emit()
 
     def _fit_parallel_scale(self, distance: float) -> None:
         """Den Ausschnitt der Parallelprojektion an den perspektivischen angleichen.
@@ -5924,6 +5938,7 @@ class Viewport(QWidget):
             is_sculpting=calls.is_sculpting,
             on_body_drag=calls.on_body_drag,
             on_rotate_start=calls.on_rotate_start,
+            on_camera=calls.on_camera,
         )
         self.plotter.interactor.SetInteractorStyle(style)
         # Ein neuer Stil bringt seine eigenen Beobachter mit; was beim Wechsel
@@ -6377,6 +6392,27 @@ def _world_at_depth(
     return (point[0] / point[3], point[1] / point[3], point[2] / point[3])
 
 
+def apply_wheel_zoom(camera: Any, factor: float) -> None:
+    """Ein Radschritt an der Kamera — in **beiden** Projektionen.
+
+    ``vtkCamera.Dolly`` bewegt nur die Position, und in der Parallelprojektion
+    bestimmt allein ``parallel_scale`` die Bildgröße — die Position ist ihr
+    gleichgültig. Das Rad war damit überall tot, wo orthografisch gearbeitet
+    wird, im Skizzenmodus also immer (§30.1 stellt dort orthografisch):
+    gemessen am 26.08.2026, acht Radschritte, Bild byteweise unverändert.
+    VTKs eigener Trackball-Dolly (rechte Taste im CAD-Schema) trägt dieselbe
+    Fallunterscheidung — nur der direkte ``Dolly``-Aufruf trug sie nicht.
+
+    Eine freie Funktion aus demselben Grund wie :func:`sketch_grid`:
+    Offscreen gibt es keinen Plotter, und was hinter dieser Wache gerechnet
+    wird, prüft in der Suite niemand mehr.
+    """
+    if camera.GetParallelProjection():
+        camera.SetParallelScale(camera.GetParallelScale() / factor)
+    else:
+        camera.Dolly(factor)
+
+
 class _ViewCallbacks(NamedTuple):
     """Die Rückrufe, die der Interaktionsstil von der Ansicht bekommt."""
 
@@ -6387,6 +6423,7 @@ class _ViewCallbacks(NamedTuple):
     is_sculpting: Callable[[], bool]
     on_body_drag: Callable[[str, int, int], bool]
     on_rotate_start: Callable[[], None]
+    on_camera: Callable[[], None]
 
 
 def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
@@ -6459,8 +6496,22 @@ def _weak_callbacks(view: Viewport) -> _ViewCallbacks:
         if found is not None:
             found._aim_rotation()
 
+    def on_camera() -> None:
+        # Der Radzoom läuft am Interactor-Ereignis vorbei (kein
+        # ``EndInteractionEvent``) — dieser Rückruf ist sein Meldeweg.
+        found = weak()
+        if found is not None:
+            found.cameraMoved.emit()
+
     return _ViewCallbacks(
-        on_context, on_pick, on_cursor, on_paint, is_sculpting, on_body_drag, on_rotate_start
+        on_context,
+        on_pick,
+        on_cursor,
+        on_paint,
+        is_sculpting,
+        on_body_drag,
+        on_rotate_start,
+        on_camera,
     )
 
 
@@ -6474,6 +6525,7 @@ def _InteractorStyle(  # noqa: N802
     is_sculpting: Any = None,
     on_body_drag: Any = None,
     on_rotate_start: Any = None,
+    on_camera: Any = None,
 ) -> Any:
     """Baut einen VTK-Interaktionsstil mit den Tasten des gewählten Schemas.
 
@@ -6652,7 +6704,7 @@ def _InteractorStyle(  # noqa: N802
             x, y = self._position()
 
             before = _world_under(renderer, x, y)
-            camera.Dolly(factor)
+            apply_wheel_zoom(camera, factor)
             renderer.ResetCameraClippingRange()
             after = _world_under(renderer, x, y)
 
@@ -6664,6 +6716,8 @@ def _InteractorStyle(  # noqa: N802
                 camera.SetFocalPoint(*(focus[axis] + shift[axis] for axis in range(3)))
                 renderer.ResetCameraClippingRange()
             plotter.render()
+            if on_camera is not None:
+                on_camera()
 
         def _right_down(self, *_: Any) -> None:
             self._right_at = self._position()

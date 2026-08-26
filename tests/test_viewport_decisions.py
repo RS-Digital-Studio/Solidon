@@ -1435,3 +1435,39 @@ def test_a_body_is_split_once_while_its_mesh_stays(
         assert len(split) == 3, "ein anderes Netz schon — der Schnitt baut eines"
     finally:
         viewport.deleteLater()
+
+
+def test_the_wheel_zooms_in_both_projections() -> None:
+    """Das Rad war orthografisch tot, und kein Test hat es gemessen.
+
+    ``vtkCamera.Dolly`` teilt die Distanz zur Fokusebene — in der
+    Parallelprojektion bestimmt aber allein ``parallel_scale`` die Bildgröße,
+    und die Position ist ihr gleichgültig. Der Skizzenmodus stellt
+    orthografisch (§30.1), also tat dort jeder Radschritt **nichts**:
+    gemessen am 26.08.2026 am echten Fenster, acht Schritte, Bild byteweise
+    unverändert. ``apply_wheel_zoom`` trägt die Fallunterscheidung, die VTKs
+    eigener Trackball-Dolly (rechte Taste im CAD-Schema) intern schon trug.
+
+    Gegen die echte ``vtkCamera`` und nicht gegen eine Attrappe: Die Aussage
+    „Dolly ändert die Scale nicht" ist eine über VTK, und eine Attrappe
+    bezeugte nur sich selbst. Ein Kameraobjekt braucht kein Fenster.
+    """
+    from vtkmodules.vtkRenderingCore import vtkCamera
+
+    from app.ui.viewport import apply_wheel_zoom
+
+    camera = vtkCamera()
+    camera.SetParallelProjection(True)
+    camera.SetParallelScale(50.0)
+    apply_wheel_zoom(camera, 2.0)
+    assert camera.GetParallelScale() == pytest.approx(25.0), (
+        "hineinzoomen muss den sichtbaren Ausschnitt verkleinern"
+    )
+
+    camera.SetParallelProjection(False)
+    camera.SetPosition(0.0, 0.0, 100.0)
+    camera.SetFocalPoint(0.0, 0.0, 0.0)
+    apply_wheel_zoom(camera, 2.0)
+    assert camera.GetDistance() == pytest.approx(50.0), (
+        "perspektivisch bleibt der Weg der alte: Dolly teilt die Distanz"
+    )

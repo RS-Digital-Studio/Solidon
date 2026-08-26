@@ -4517,6 +4517,13 @@ class MainWindow(QMainWindow):
         self._bottom_layout.insertWidget(0, panel)
         panel.sketchChanged.connect(self._redraw_sketch)
         panel.viewFitted.connect(self._fit_sketch_view)
+        # **Die dritte Kante: Kamera → Raster.** Feld → Bild läuft über
+        # ``sketchChanged``, Bild → Feld über ``follow_grid`` — aber Rad,
+        # Drehzug und Einpassen änderten den Maßstab, ohne dass irgendwer
+        # neu zeichnete: Das Raster zeigte die Weite vom Betreten, und der
+        # nächste Strich ließ es springen. ``cameraMoved`` kommt am Ende
+        # einer Bewegung, nicht während ihr — ein Neuzeichnen je Zug.
+        self.viewport.cameraMoved.connect(self._redraw_sketch)
         # Die Fangmarke: Der Canvas kennt den Ort, an dem ein Klick wirklich
         # landet (Raster **und** „vorhandener Punkt schlägt Raster"), die
         # Ansicht kann ihn zeigen. Ihn im Viewport nachzurechnen wäre die
@@ -4779,6 +4786,7 @@ class MainWindow(QMainWindow):
         self.viewport.set_sketch_entry(None, None)
         panel.canvas.reclaim_measure_field()
         panel.sketchChanged.disconnect(self._redraw_sketch)
+        self.viewport.cameraMoved.disconnect(self._redraw_sketch)
         panel.pointerMoved.disconnect(self._on_sketch_pointer)
         # Die dritte Verbindung aus derselben Zeilengruppe wie die zwei
         # darüber — heute folgenlos (der unsichtbare Canvas ruft fit_view
