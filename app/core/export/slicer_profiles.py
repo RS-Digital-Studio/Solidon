@@ -321,6 +321,10 @@ def find_profiles(
 
 #: Felder, die das Profil beschreiben statt einen Wert zu setzen. Sie erben
 #: sich nicht weiter — ein Name gilt für ein Profil, nicht für seine Kinder.
+#: Woran die Orca-Familie die Verträglichkeit prüft — nicht Werte,
+#: sondern die Frage, zu welchem Drucker ein Profil überhaupt gehört.
+_BINDING = ("compatible_printers", "compatible_printers_condition")
+
 _DESCRIBING: Final = frozenset(
     {
         "type",
@@ -365,6 +369,48 @@ def resolve_values(path: Path) -> dict[str, Any]:
     :func:`find_profiles` nicht auf. Hier werden sie gebraucht, also werden sie
     hier gelesen.
     """
+    values: dict[str, Any] = {}
+    for loaded in reversed(_chain(path)):  # Wurzel zuerst, Spezielles gewinnt
+        values.update({key: value for key, value in loaded.items() if key not in _DESCRIBING})
+    return values
+
+
+def binding(path: Path) -> dict[str, Any]:
+    """Woran ein Profil seine Verträglichkeit knüpft (§29).
+
+    :func:`resolve_values` lässt die beschreibenden Schlüssel aus
+    (``_DESCRIBING``), und das ist für Werte richtig — ein geerbtes
+    ``from: system`` wäre gelogen. Für **die Bindung** ist es falsch:
+    ``compatible_printers`` steht selten in der obersten Datei.
+
+    Gemessen am Elegoo-Bestand: ``0.12mm Fine @Elegoo C 0.4 nozzle``
+    trägt es nicht, eine Stufe tiefer steht
+    ``['Elegoo Centauri 0.4 nozzle']``. Wer die Kette auflöst und die
+    Erbschaft wegwirft, verliert es — und der Slicer bricht mit
+    „process not compatible with printer" ab, bevor er das Modell
+    ansieht.
+
+    Zurück kommt nur, was gesetzt und nicht leer ist: Die unteren
+    Stufen führen ``compatible_printers: []`` als Platzhalter, und ein
+    leerer Eintrag verträgt sich mit keinem Drucker.
+    """
+    found: dict[str, Any] = {}
+    for loaded in _chain(path):  # spezifisch zuerst
+        for key in _BINDING:
+            value = loaded.get(key)
+            if key not in found and value:
+                found[key] = value
+    return found
+
+
+def _chain(path: Path) -> list[dict[str, Any]]:
+    """Die Profile der Erbkette, spezifisches zuerst.
+
+    Roh, ohne Zusammenlegen und ohne Filter: Die beiden Auswertungen
+    darüber brauchen Verschiedenes — :func:`resolve_values` die Werte
+    ohne die beschreibenden Schlüssel, :func:`binding` ausgerechnet
+    einen davon.
+    """
     # Der Index läuft über den Profilnamen, nicht über den Dateinamen: darauf
     # zeigt ``inherits``. Bei Elegoo sind beide zufällig gleich
     # (`Elegoo PETG @base.json`), garantiert ist das nirgends — und wo es nicht
@@ -399,10 +445,7 @@ def resolve_values(path: Path) -> dict[str, Any]:
         seen.add(parent)
         current = index.get(parent)
 
-    values: dict[str, Any] = {}
-    for loaded in reversed(chain):  # von der Wurzel nach vorn, Spezielles gewinnt
-        values.update({key: value for key, value in loaded.items() if key not in _DESCRIBING})
-    return values
+    return chain
 
 
 def machines(profiles: list[SlicerProfile]) -> list[SlicerProfile]:

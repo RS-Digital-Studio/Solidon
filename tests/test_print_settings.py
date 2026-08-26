@@ -908,6 +908,111 @@ def test_an_orca_process_keeps_what_the_base_profile_knew(tmp_path: Path) -> Non
     assert "hot_plate_temp" not in document
 
 
+def test_the_orca_machine_profile_is_written_out_not_referenced(tmp_path: Path) -> None:
+    """Solidon schreibt das Maschinenprofil aus, statt auf eines zu verweisen.
+
+    Bisher bekam der Slicer den **Namen** eines Profils aus seinem Bestand
+    und löste alles Weitere selbst auf. Gemessen am Elegoo-Bestand stehen in
+    ``Elegoo Centauri 0.2 nozzle`` sechzehn Schlüssel und im Lauf
+    dreiundachtzig — die übrigen siebenundsechzig kamen aus einer Erbkette,
+    die dem Slicer gehört.
+
+    Der Anfahrcode ist dabei der Prüfstein: Er steht nie in der obersten
+    Datei, sondern immer eine Stufe tiefer. Kommt er hier an, ist die Kette
+    aufgelöst; fehlt er, fährt der Drucker ohne Bettvermessung los.
+    """
+    wurzel = tmp_path / "fdm_machine_common.json"
+    wurzel.write_text(
+        json.dumps(
+            {
+                "type": "machine",
+                "name": "fdm_machine_common",
+                "machine_start_gcode": "G28 ;Startpunkt anfahren",
+                "printable_height": "256",
+                "retraction_length": ["0.8"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    oben = tmp_path / "Drucker 0.4 nozzle.json"
+    oben.write_text(
+        json.dumps(
+            {
+                "type": "machine",
+                "name": "Drucker 0.4 nozzle",
+                "inherits": "fdm_machine_common",
+                "nozzle_diameter": ["0.4"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(
+        executable=Path("orca-slicer.exe"),
+        flavour="orca",
+        machine_profile=str(oben),
+    )
+    written = handover.write_config(settings, profile, setup, tmp_path)
+
+    assert written.machine is not None, "die Übergabe trägt ein Maschinenprofil"
+    document = json.loads(written.machine.read_text(encoding="utf-8"))
+    # Der geerbte Anfahrcode — der Grund für die ganze Auflösung.
+    assert document["machine_start_gcode"] == "G28 ;Startpunkt anfahren"
+    assert document["retraction_length"] == ["0.8"], "auch der geerbte Rückzug"
+    assert document["nozzle_diameter"] == ["0.4"], "und der eigene Wert der Stufe"
+    # Nichts wird nachgeladen: Was in der Datei steht, gilt.
+    assert "inherits" not in document, "ausgeschrieben, nicht verwiesen"
+    assert document["from"] == "User", "sonst lehnt der Slicer die Datei ab"
+    assert document["name"].startswith("Solidon"), "und es ist Solidons Datei"
+
+
+def test_the_orca_process_names_the_machine_solidon_wrote(tmp_path: Path) -> None:
+    """Prozess und Maschine tragen denselben Namen — sonst nimmt der Slicer nichts.
+
+    Die Orca-Familie bricht mit „process not compatible with printer" ab,
+    bevor sie das Modell ansieht. Solange die Bindung geerbt war, hielt sie
+    ``inherits``; da die Werte jetzt ausgeschrieben sind, setzt Solidon sie
+    selbst — und beide Namen kommen aus derselben Funktion.
+    """
+    maschine = tmp_path / "Drucker 0.4 nozzle.json"
+    maschine.write_text(
+        json.dumps({"type": "machine", "name": "Drucker 0.4 nozzle", "printable_height": "256"}),
+        encoding="utf-8",
+    )
+    prozess = tmp_path / "0.20mm Standard.json"
+    prozess.write_text(
+        json.dumps(
+            {
+                "type": "process",
+                "name": "0.20mm Standard",
+                "compatible_printers": ["Ein ganz anderer Drucker"],
+                "wall_loops": "2",
+            }
+        ),
+        encoding="utf-8",
+    )
+    profile = profiles.make_profile()
+    settings = print_settings.resolve(profile)
+    setup = handover.SlicerSetup(
+        executable=Path("orca-slicer.exe"),
+        flavour="orca",
+        machine_profile=str(maschine),
+        base_process=str(prozess),
+    )
+    written = handover.write_config(settings, profile, setup, tmp_path)
+
+    assert written.machine is not None
+    maschinendatei = json.loads(written.machine.read_text(encoding="utf-8"))
+    prozessdatei = json.loads(written.process.read_text(encoding="utf-8"))
+    assert prozessdatei["compatible_printers"] == [maschinendatei["name"]], (
+        "der Prozess nennt die Maschine, die daneben geschrieben wurde"
+    )
+    # Und nicht mehr die des Herstellers: Sie zeigte auf ein Profil aus
+    # seinem Bestand, das hier gar nicht mitgeliefert wird.
+    assert prozessdatei["compatible_printers"] != ["Ein ganz anderer Drucker"]
+
+
 def test_the_orca_filament_profile_carries_what_hangs_on_the_filament(tmp_path: Path) -> None:
     """Temperatur, Kühlung und Rückzug gehören ins Filamentprofil.
 
@@ -1713,8 +1818,11 @@ def test_a_profile_name_finds_its_file(tmp_path, monkeypatch) -> None:
     trug einen Namen, ``Path(name).is_file()`` sagte nein, und das
     geschriebene Prozessprofil hatte zweiundvierzig Schlüssel statt
     zweiundsechzig — ohne ``inherits``, ohne ``compatible_printers``. Genau an
-    denen prüft die Orca-Familie die Verträglichkeit, und der Lauf brach mit
+    denen prüfte die Orca-Familie die Verträglichkeit, und der Lauf brach mit
     „can not find setting file" ab, bevor das Modell an die Reihe kam.
+
+    Seit dem 26.08.2026 löst Solidon die Kette selbst auf, ``inherits``
+    fällt weg — die Bindung bleibt, sie ist der Teil, der bleiben muss.
     """
     from pathlib import Path
 
@@ -1765,7 +1873,16 @@ def test_a_profile_name_finds_its_file(tmp_path, monkeypatch) -> None:
         settings, profiles.make_profile("centauri-carbon-2", "petg"), setup, tmp_path
     )
     daten = json.loads(written.process.read_text(encoding="utf-8"))
-    assert daten["inherits"] == "fdm_process_common", "die Erbschaft bleibt erhalten"
+    # Keine Erbschaft mehr: Die Werte stehen seit dem 26.08.2026
+    # ausgeschrieben in der Datei, und ein ``inherits`` daneben lüde
+    # die Kette ein zweites Mal — aus einem Bestand, der sich ändern
+    # kann, während die geschriebene Datei es nicht tut.
+    assert "inherits" not in daten, "die Erbkette ist aufgelöst, nicht verwiesen"
+    assert daten["layer_height"] == "0.2", "und ihr Wert steht in der Datei"
+    # Die Bindung überlebt das Auflösen — hier die geerbte, weil dieser
+    # Aufruf kein eigenes Maschinenprofil kennt (``machine_profile``
+    # ist leer). Ohne sie bräche der Slicer mit „process not compatible
+    # with printer" ab.
     assert daten["compatible_printers"] == ["Elegoo Centauri Carbon 2 0.4 nozzle"]
     assert daten["name"].startswith("Solidon"), "aber der Name ist Solidons eigener"
 

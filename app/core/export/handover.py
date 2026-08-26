@@ -633,6 +633,7 @@ class SlicerConfig:
 
     process: Path
     filaments: tuple[Path, ...] = ()
+    machine: Path | None = None
 
     @property
     def filament(self) -> Path | None:
@@ -688,6 +689,14 @@ def write_config(
 
     if setup.flavour == "orca":
         split = by_section(settings, setup.flavour)
+        # Das Maschinenprofil zuerst: Der Prozess daneben nennt es in
+        # ``compatible_printers``, und beide Namen kommen aus
+        # ``_machine_name``.
+        machine_target = directory / "solidon_machine.json"
+        machine_target.write_text(
+            json.dumps(_orca_machine(setup), indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
         target = directory / "solidon_process.json"
         target.write_text(
             json.dumps(
@@ -712,7 +721,7 @@ def write_config(
                 encoding="utf-8",
             )
             written.append(path)
-        return SlicerConfig(process=target, filaments=tuple(written))
+        return SlicerConfig(process=target, filaments=tuple(written), machine=machine_target)
 
     target = directory / "solidon_cura.txt"
     target.write_text(
@@ -831,6 +840,59 @@ def _profile_name(reference: str) -> str:
     return reference
 
 
+def _machine_name(setup: SlicerSetup) -> str:
+    """Der Name, unter dem Solidons eigenes Maschinenprofil läuft.
+
+    An einer Stelle festgelegt, weil zwei Dateien ihn brauchen: Das
+    Maschinenprofil trägt ihn als ``name``, das Prozessprofil daneben als
+    ``compatible_printers``. Gehen die beiden auseinander, nimmt der Slicer
+    den Auftrag nicht an, und die Meldung nennt den Drucker — nicht die
+    Ursache.
+    """
+    printer = _profile_name(setup.machine_profile) if setup.machine_profile else ""
+    return f"Solidon {printer}" if printer else "Solidon"
+
+
+def _orca_machine(setup: SlicerSetup) -> dict[str, object]:
+    """Das Maschinenprofil fuer die Orca-Familie — ausgeschrieben.
+
+    Bisher bekam der Slicer hier den **Namen** eines Profils aus seinem
+    eigenen Bestand, und alles Weitere löste er selbst auf. Das ging, solange
+    der Bestand stimmte: Gemessen am Elegoo-Profil ``Elegoo Centauri 0.2
+    nozzle`` stehen sechzehn Schlüssel in der Datei und dreiundachtzig im
+    Lauf. Die übrigen siebenundsechzig — Anfahrcode, Maschinengrenzen,
+    Rückzug — kamen aus einer Erbkette, die dem Slicer gehört.
+
+    Jetzt schreibt Solidon sie aus. Der Gewinn ist nicht Genauigkeit, denn
+    beide Wege ergeben dieselben Werte, sondern **Unabhängigkeit**: Die
+    Übergabe steht auch dann, wenn der Drucker im Bestand anders heißt, das
+    Herstellerprofil sich mit einem Update verschiebt oder der Anwender einen
+    anderen Slicer derselben Familie führt. Für einen Bambu-Drucker mit
+    Bambu Studio läuft derselbe Code — es ist dieselbe Familie, und Solidon
+    fragt nichts mehr aus ihrem Bestand ab, was es nicht selbst mitgibt.
+
+    **Der Anfahrcode bleibt der des Herstellers** (Entscheidung Robert,
+    26.08.2026). Er wird übernommen, nicht erzeugt und nicht verändert: Was
+    ein Drucker beim Start tut — Düse säubern, Bett vermessen, Naht
+    anlegen —, weiß der Hersteller, und ein selbstgeschriebener Ablauf wäre
+    eine Zusage, die Solidon nicht halten kann.
+    """
+    document: dict[str, object] = {
+        "type": "machine",
+        "from": "User",
+        "instantiation": "true",
+    }
+    base = profile_file(setup.machine_profile, setup, "machine")
+    if base is not None:
+        # ``resolve_values`` lässt die beschreibenden Schlüssel weg
+        # (``inherits``, ``name``, ``type`` …). Genau richtig: Das Profil
+        # soll keinen fremden Namen tragen und nichts nachladen.
+        document.update(slicer_profiles.resolve_values(base))
+    # Nach dem Auffüllen, damit kein geerbter Wert ihn überschreibt.
+    document["name"] = _machine_name(setup)
+    return document
+
+
 def _orca_process(
     values: dict[str, str],
     settings: PrintSettings,
@@ -849,19 +911,27 @@ def _orca_process(
     stehen, wie der Hersteller es abgestimmt hat — das ist die Aufteilung aus
     §29 in einer Datei.
     """
-    document: dict[str, object] = {}
+    # Die beschreibenden Schlüssel zuerst, weil ``resolve_values`` sie
+    # ausdrücklich weglässt (``_DESCRIBING``: ``type``, ``from``,
+    # ``instantiation``, ``inherits`` …). Für die Erbkette ist das
+    # richtig — ein geerbtes ``from: system`` wäre gelogen —, für die
+    # geschriebene Datei fehlt es dann. Der Slicer sagt dazu
+    # „solidon_process.json's from  unsupported" und bricht ab, bevor
+    # er das Modell ansieht.
+    document: dict[str, object] = {
+        "type": "process",
+        "from": "User",
+        "instantiation": "true",
+    }
     base = profile_file(setup.base_process, setup, "process")
     if base is not None:
-        loaded = json.loads(base.read_text(encoding="utf-8"))
-        if isinstance(loaded, dict):
-            document.update(loaded)
-    if not document:
-        document = {
-            "type": "process",
-            "name": f"Solidon {settings.title}",
-            "from": "User",
-            "instantiation": "true",
-        }
+        # Aufgelöst, nicht kopiert — wie beim Filament nebenan.
+        # Gemessen am Elegoo-Bestand: ``0.12mm Fine`` trägt sieben
+        # Schlüssel und fährt mit einhundertsechsunddreißig. Die
+        # übrigen einhundertneunundzwanzig holte bisher der Slicer
+        # selbst über ``inherits`` — also aus seinem Bestand, an dem
+        # Solidon damit hing.
+        document.update(slicer_profiles.resolve_values(base))
     document.update(values)
     # Objektmarken, unabhängig von den Einstellungen: Solidon schickt eine
     # Baugruppe mit benannten Teilen, und ohne die Marken im G-Code kann der
@@ -876,6 +946,31 @@ def _orca_process(
     # Projektdatei trug den Namen eines Systemprofils, der Slicer lud sein
     # eigenes darunter, und zehn von elf Werten waren still weg.
     document["name"] = f"Solidon {settings.title}"
+    # Die Bindung an den Drucker, selbst gesetzt.
+    #
+    # Die Orca-Familie nimmt kein Prozessprofil an, das nicht zu einem
+    # ihr bekannten Drucker gehört; sie bricht mit „process not
+    # compatible with printer" ab, bevor sie das Modell ansieht. Bisher
+    # hielt diese Bindung ``inherits``: In der kopierten Datei stand
+    # kein ``compatible_printers`` — es steht eine Stufe tiefer
+    # (gemessen: ``0.20mm Standard @Elegoo C 0.4 nozzle`` trägt
+    # ``['Elegoo Centauri 0.4 nozzle']``), und der Slicer fand es, weil
+    # er die Kette selbst ablief.
+    #
+    # Da die Werte jetzt ausgeschrieben sind, fällt ``inherits`` weg,
+    # und mit ihm der Fund. Solidon setzt die Bindung deshalb selbst —
+    # auf das Maschinenprofil, das es daneben schreibt. Damit hängt die
+    # Übergabe an keinem fremden Profilnamen mehr.
+    if setup.machine_profile:
+        document["compatible_printers"] = [_machine_name(setup)]
+    elif base is not None:
+        # Kein eigenes Maschinenprofil, also auch keine eigene Bindung:
+        # ``_command`` lädt dann keines, und der Slicer bleibt bei seinem
+        # eigenen. Der Prozess muss zu **dem** passen, und das tut er nur
+        # mit der geerbten Angabe. Sie steht selten in der obersten Datei,
+        # deshalb über ``binding`` aus der Kette statt aus ``document``.
+        document.update(slicer_profiles.binding(base))
+    document.pop("inherits", None)
     return document
 
 
@@ -1170,7 +1265,12 @@ def _command(
         # Auch hier die Datei, nicht der Name: der Slicer sucht keinen Bestand
         # ab, er öffnet einen Pfad. Steht dort ein Name, endet der Lauf mit
         # „can not find setting file", noch bevor das Modell an die Reihe kommt.
-        machine = profile_file(setup.machine_profile, setup, "machine")
+        # Solidons eigenes Maschinenprofil, nicht das des Herstellers.
+        # Es trägt dieselben Werte — ausgeschrieben statt geerbt — und
+        # bindet den Prozess daneben über seinen Namen. Fällt es aus
+        # (ein Aufruf ohne ``write_config``), bleibt der alte Weg als
+        # Rückfall: besser das Profil des Herstellers als keines.
+        machine = config.machine or profile_file(setup.machine_profile, setup, "machine")
         # Der Trenner steht im Pfad: geprüft, bevor der Slicer daran scheitert.
         _without_separator(
             [*([machine] if machine else []), config.process, *config.filaments], setup
