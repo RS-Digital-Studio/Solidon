@@ -28,7 +28,7 @@ import trimesh
 from app.core.geom.mesh import MeshData, face_components
 from app.core.log import get_logger
 from app.core.types import Feature, FeatureId, Vec3
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
 
 _log = get_logger(__name__)
 
@@ -1801,9 +1801,69 @@ def _facet_centre(body: trimesh.Trimesh, facet: np.ndarray) -> np.ndarray:
 # --- Offene Kanten ---------------------------------------------------------------
 
 
+#: Wie viele offene Stellen einzeln benannt werden; der Rest kommt als **eine**
+#: zusammenfassende Zeile.
+#:
+#: Die Zahl ist eine Bedienzahl und keine Rechengrenze. Zwanzig Einträge im
+#: Merkmalsbaum geht jemand durch, klickt sie an, springt sie ab; bei
+#: dreitausend tut das niemand, und die Liste ist dann keine Bedienung mehr,
+#: sondern ein Protokoll.
+#:
+#: Was die Grenze **nicht** antastet, ist der Fall, für den die Aufteilung in
+#: einzelne Schleifen gebaut wurde: Bei zwei Löchern in einer Schale bleiben es
+#: zwei Merkmale an zwei Orten. Erst jenseits von zwanzig fasst sie zusammen.
+#:
+#: Und sie ist die **zweite** Linie, nicht die erste. Der Fall, der sie
+#: gefunden hat — 3 372 Merkmale aus einer ungeschweißten STL —, war kein Netz
+#: mit dreitausend Defekten, sondern eine falsche Frage an die Datei; das
+#: beantwortet ``detect_edge_loops`` selbst. Hier bleibt der Fall, dass ein
+#: Netz wirklich in dreitausend Stücken ankommt.
+EDGE_LOOP_LIMIT = 20
+
+
 def detect_edge_loops(mesh: MeshData) -> list[Feature]:
     """Offene Kanten sind Defekte, und zu wissen wo sie sind, ist die halbe
     Reparatur.
+
+    **Gefragt wird nach dem Teil, nicht nach der Speicherform.** Eine STL kennt
+    keine gemeinsamen Ecken: Sie schreibt jedes Dreieck mit seinen eigenen drei
+    Punkten hin, und damit hat *jede* Kante topologisch keinen Partner. Wird
+    eine solche Datei ungeschweißt geladen — ``generate.into_project`` tut das
+    für jedes erzeugte Modell, mit guter Begründung —, meldete diese Funktion
+    eine offene Stelle je Dreieck: 2 388 offene Kanten an ``plate_holes.stl``,
+    6 912 an ``torus_ring.stl``, 36 an ``cube_clean.stl``. Alle drei Netze sind
+    dicht; über die zusammengeführte Topologie sind es null, null und null.
+
+    Warum das nicht bloß eine Laufzeitfrage ist: Weg 1 aus §2.2 verspricht dem
+    Kunden, dass er ein heruntergeladenes Teil hereinzieht und **abgelesen**
+    bekommt, was damit ist. Der Prüfbericht ist dieses Versprechen. Eine Zahl,
+    die das Dateiformat beschreibt statt sein Teil, gehört dort nicht hin —
+    auch nicht gekürzt. Und einstellen soll er dafür nichts: Die richtige
+    Auskunft muss ohne sein Zutun herauskommen.
+
+    Zusammengeführt wird deshalb **vor** dem Urteil, und zwar nur rechnerisch:
+    Zwei Punkte am selben Ort bekommen dieselbe Nummer, das Netz im Dokument
+    bleibt unangetastet. Eine Erkennung ist eine Auskunft und kein Schritt
+    (Regel 2).
+
+    **Das ist etwas anderes als das Verschweißen beim Laden, und der
+    Unterschied trägt diese Entscheidung.** ``loader.normalise`` nimmt sein
+    Verschweißen zurück, wenn das Netz danach offen ist (``ingest.weld_skipped``)
+    — es *ändert* dort Geometrie, und zwei zusammengelegte Blätter einer Fläche
+    können ein dichtes Netz aufreißen. Hier wird keine Fläche angefasst und
+    keine Ecke gelöscht, nur gezählt; und Ecken zusammenzulegen kann die Zahl
+    der Kanten ohne Partner allein **senken**, nie erhöhen. Es gibt also nichts
+    zurückzunehmen. Aus demselben Grund greift auch der Vorbehalt aus
+    ``generate.py`` hier nicht: Dort zerstörte das Aufräumen die Form eines
+    zwei Millimeter großen Modells; hier bleibt die Form unberührt, und die
+    Toleranz folgt ohnehin der Modellgröße (``weld_tolerance``, ein
+    Zehntausendstel Prozent der Diagonale — bei 2 mm so streng wie bei 500).
+
+    Ein **echtes** Loch übersteht das unbeschadet: Zusammengelegt werden nur
+    Ecken am selben Ort, und eine Kante, die wirklich am Rand sitzt, findet
+    auch dann keinen Partner. Genau das hält
+    ``test_a_real_hole_survives_the_merge`` fest — ohne diese Zusage nähme die
+    Änderung der Reparatur ihre Grundlage.
 
     **Eine Schleife ist ein Merkmal, nicht alle zusammen.** Hier entstand ein
     einziges ``edge_loop_1`` über den Schwerpunkt sämtlicher offener Kanten —
@@ -1814,33 +1874,83 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
     Zusammengehörig heißt: über gemeinsame Ecken verbunden. Nummeriert wird
     nach Größe, dann nach Ort — eine Provenienz-ID muss die nächste Auswertung
     überleben (§21.2), und die Reihenfolge der Kanten im Netz tut das nicht.
+
+    **Ab ``EDGE_LOOP_LIMIT`` kommt der Rest als eine Zeile** — für das Netz,
+    das wirklich in Stücken ankommt.
     """
     body = mesh.raw
-    single = trimesh.grouping.group_rows(body.edges_sorted, require_count=1)
+    if not len(body.faces):
+        return []
+
+    # **Welche Ecken derselbe Ort sind, wird einmal ausgerechnet.**
+    # ``unique_rows`` gruppiert über dasselbe Gitter, über das auch
+    # ``repair.merge_vertices`` verschweißt (``weld_digits``) — zwei Antworten
+    # auf „ist das dieselbe Ecke" wären zwei Topologien desselben Körpers.
+    #
+    # ``same[k]`` ist dabei die **kleinste** Original-Eckennummer an diesem Ort,
+    # und darauf ruht die Nummernstabilität weiter unten: Die Gruppen selbst
+    # sind nach Koordinaten geordnet, und eine Ordnung nach Koordinaten
+    # überlebt keine Drehung (siehe ``detect_faces``). Die Original-Nummern tun
+    # es — sie ändern sich weder beim Drehen noch beim Umsortieren.
+    digits = weld_digits(weld_tolerance(mesh.bounds.diagonal))
+    same, place = trimesh.grouping.unique_rows(
+        np.asarray(body.vertices, dtype=float), digits=digits
+    )
+    at_place = np.asarray(place, dtype=np.int64)
+
+    edges_all = np.sort(at_place[np.asarray(body.edges_sorted, dtype=np.int64)], axis=1)
+    single = trimesh.grouping.group_rows(edges_all, require_count=1)
     if not len(single):
         return []
 
-    edges = np.asarray(body.edges_sorted)[single]
+    edges = edges_all[single]
+    # Eine Kante, deren beide Enden derselbe Ort sind, ist keine offene Stelle,
+    # sondern ein Nadeldreieck — ein Defekt, den ``repair`` als entartetes
+    # Dreieck entfernt und nicht als Loch schließt. Erst das Zusammenlegen
+    # macht sie überhaupt sichtbar; sie mitzuzählen hieße, den einen Defekt
+    # unter dem Namen des anderen zu melden.
+    edges = edges[edges[:, 0] != edges[:, 1]]
+    if not len(edges):
+        return []
+
     corners = np.unique(edges)
     groups = trimesh.graph.connected_components(edges, nodes=corners, engine="scipy")
 
+    # Zurück auf die Original-Eckennummern: An ihnen hängen Sortierung und
+    # Koordinaten, und nur sie überstehen eine Drehung.
+    original = np.asarray(same, dtype=np.int64)
+
+    # **Welche Ecke zu welcher Schleife gehört, steht einmal in einer Tabelle**
+    # — es wird nicht je Schleife über sämtliche offenen Kanten gesucht. Hier
+    # stand ``np.isin(edges[:, 0], members)`` mitten in der Schleife, also ein
+    # Durchgang über alle Kanten je Gruppe. Bei zwei Löchern sind das zwei
+    # Durchgänge und niemand merkt es; bei einem ungeschweißten Netz ist jedes
+    # Dreieck eine Gruppe, und die Rechnung wächst mit dem Produkt statt mit
+    # der Summe. Gemessen an ungeschweißten Kugeln: 5 120 Dreiecke 0,21 s,
+    # 20 480 Dreiecke 2,09 s — viermal so viele Dreiecke, zehnmal so viel Zeit.
+    # Über die Tabelle zählt ``bincount`` alle Kanten in einem Durchgang.
+    label = np.full(int(corners.max()) + 1, -1, dtype=np.int64)
+    for number, group in enumerate(groups):
+        label[np.asarray(group, dtype=np.int64)] = number
+    counts = np.bincount(label[edges[:, 0]], minlength=len(groups))
+
     loops: list[tuple[int, tuple[float, float, float], tuple[int, ...]]] = []
-    for group in groups:
-        members = np.asarray(group)
+    for number, group in enumerate(groups):
+        members = np.asarray(group, dtype=np.int64)
         if not len(members):
             continue
-        belongs = np.isin(edges[:, 0], members)
-        count = int(belongs.sum())
+        count = int(counts[number])
         if not count:
             # Eine Ecke ohne offene Kante gehört keiner Schleife — ``nodes``
             # nimmt sie mit, das Merkmal nicht.
             continue
-        middle = np.asarray(body.vertices[members], dtype=float).mean(axis=0)
+        at = original[members]
+        middle = np.asarray(body.vertices[at], dtype=float).mean(axis=0)
         loops.append(
             (
                 count,
                 (float(middle[0]), float(middle[1]), float(middle[2])),
-                tuple(int(index) for index in np.unique(members)),
+                tuple(int(index) for index in np.unique(at)),
             )
         )
 
@@ -1854,15 +1964,45 @@ def detect_edge_loops(mesh: MeshData) -> list[Feature]:
     # Drehen noch beim Umsortieren der Dreiecke; genommen werden alle, denn
     # eine einzelne teilen sich benachbarte Schleifen.
     loops.sort(key=lambda entry: (-entry[0], entry[2]))
-    return [
+
+    named = loops[:EDGE_LOOP_LIMIT]
+    features = [
         Feature(
             id=f"edge_loop_{number}",
             kind="edge_loop",
             provenance="detected",
             params={"open_edges": count, "centre": centre},
         )
-        for number, (count, centre, _corners) in enumerate(loops, start=1)
+        for number, (count, centre, _corners) in enumerate(named, start=1)
     ]
+
+    rest = loops[EDGE_LOOP_LIMIT:]
+    if rest:
+        # **Der Sammeleintrag sitzt auf einer echten Stelle, nicht auf dem
+        # Schwerpunkt aller.** Genau dieser Schwerpunkt war der Fehler, den die
+        # Aufteilung behoben hat: Er liegt zwischen den Löchern, also im
+        # Leeren, und die Kamera flog auf einen Punkt, an dem nichts ist
+        # (§18.4). ``rest`` ist absteigend sortiert; genommen wird also die
+        # größte der zusammengefassten Stellen. Das ist nicht der Ort *aller*
+        # — aber es ist ein Ort, an dem der Nutzer wirklich eine offene Kante
+        # vorfindet, und das ist die Zusage, die diese Zahl daneben tragen muss.
+        #
+        # ``loops`` sagt, wie viele Stellen darin stecken; ohne diese Zahl
+        # stünde im Baum eine einzelne Schleife mit zehntausend offenen Kanten,
+        # und das wäre eine falsche Auskunft statt einer verkürzten.
+        features.append(
+            Feature(
+                id=f"edge_loop_{len(named) + 1}",
+                kind="edge_loop",
+                provenance="detected",
+                params={
+                    "open_edges": sum(count for count, _centre, _corners in rest),
+                    "centre": rest[0][1],
+                    "loops": len(rest),
+                },
+            )
+        )
+    return features
 
 
 # --- Komponenten -----------------------------------------------------------------

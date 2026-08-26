@@ -17,6 +17,7 @@ from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.perceive.features import (
     CYLINDER_TOLERANCE,
+    EDGE_LOOP_LIMIT,
     component_count,
     detect,
     detect_cones,
@@ -39,6 +40,24 @@ def plate(name: str = "plate_holes.stl") -> MeshData:
 
 def cube() -> MeshData:
     return normalise(read_mesh((MESHES / "cube_clean.stl").read_bytes(), ".stl"), "mm").mesh
+
+
+def as_a_file_arrives(body: trimesh.Trimesh) -> MeshData:
+    """Durch eine STL geschickt und **ungeschweißt** zurückgelesen.
+
+    Genau so kommt jede STL an, und genau so lädt ``generate.into_project``
+    (``weld: False``). Das Format kennt keine gemeinsamen Ecken: Jedes Dreieck
+    bringt seine eigenen drei Punkte mit, also hat topologisch jede Kante
+    keinen Partner — auch an einem Körper, der rundum geschlossen ist.
+
+    Der Umweg über die Datei ist Absicht und nicht Umständlichkeit: Ein von
+    Hand gebautes ``Trimesh`` ist bereits zusammengeführt, und ein Test darauf
+    prüfte den Fall nicht, um den es hier geht.
+    """
+    data = trimesh.exchange.stl.export_stl(body)
+    return MeshData.of(
+        trimesh.load(trimesh.util.wrap_as_stream(data), file_type="stl", process=False)
+    )
 
 
 # --- bores ----------------------------------------------------------------------
@@ -364,6 +383,190 @@ def test_two_holes_in_a_shell_are_two_features() -> None:
     assert sum(int(loop.params["open_edges"]) for loop in loops) == 8
     xs = sorted(round(float(loop.params["centre"][0]), 1) for loop in loops)
     assert xs == [-20.0, 20.0], "jede Schleife sitzt an ihrem eigenen Loch"
+
+
+@pytest.mark.parametrize("name", ["plate_holes.stl", "torus_ring.stl", "cube_clean.stl"])
+def test_a_closed_model_stays_closed_when_it_arrives_unwelded(name: str) -> None:
+    """Der Fund: Eine geschlossene Datei meldete eine offene Stelle je Dreieck.
+
+    Eine STL speichert jedes Dreieck mit eigenen Ecken. Wer die gespeicherte
+    Topologie befragt statt der geometrischen, bekommt deshalb an **jeder**
+    Kante „kein Partner" — gemessen 2 388 offene Kanten an ``plate_holes.stl``,
+    6 912 an ``torus_ring.stl``, 36 an ``cube_clean.stl``. Alle drei Teile sind
+    dicht; die Zahlen beschrieben das Dateiformat und nicht das Modell.
+
+    Für den Kunden ist das die Auskunft, für die er Solidon öffnet (Weg 1,
+    §2.2): Er zieht ein heruntergeladenes Teil herein und liest im Prüfbericht,
+    was damit ist. Eine Zahl, die dort etwas anderes beschreibt als sein Teil,
+    ist schlimmer als keine.
+
+    Geprüft wird an drei Dateien und nicht an einer: Die Zahl der Dreiecke
+    reicht von 12 bis 2 304, und die Toleranz des Zusammenführens hängt an der
+    Modellgröße.
+    """
+    path = MESHES / name
+    body = trimesh.load(path, process=False, force="mesh")
+
+    assert not body.is_watertight, (
+        f"{name} kommt hier bereits zusammengeführt an — dann prüft der Test seinen Aufbau"
+    )
+    assert trimesh.load(path, process=True, force="mesh").is_watertight, (
+        f"{name} ist auch zusammengeführt nicht dicht — dann ist es der falsche Prüfling"
+    )
+
+    assert detect_edge_loops(MeshData.of(body)) == [], (
+        "ein dichtes Teil hat keine offene Stelle, gleich wie die Datei es speichert"
+    )
+
+
+def test_a_real_hole_survives_the_merge() -> None:
+    """Und die Gegenrichtung, ohne die die Änderung oben wertlos wäre.
+
+    Was ``repair`` schließt, muss die Erkennung erst finden. Ein Zusammenführen,
+    das ein echtes Loch verschwinden ließe, nähme der Reparatur die Grundlage —
+    und das wäre der schlechtere Fehler: Der Kunde bekäme „alles in Ordnung"
+    über einem Teil, das beim Drucken auffliegt.
+
+    Der Kasten ohne Deckel kommt hier denselben Weg wie oben, also
+    ungeschweißt. Zusammengelegt werden nur Ecken **am selben Ort**; die vier
+    Kanten des offenen Randes haben keinen Partner am selben Ort und bleiben
+    deshalb, was sie sind.
+    """
+    box = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    box.update_faces(
+        np.array([index for index, normal in enumerate(box.face_normals) if normal[2] < 0.9])
+    )
+
+    loops = detect_edge_loops(as_a_file_arrives(box))
+
+    assert len(loops) == 1, [loop.id for loop in loops]
+    assert loops[0].params["open_edges"] == 4, "die vier Kanten der fehlenden Deckfläche"
+    assert loops[0].params["centre"][2] == pytest.approx(5.0, abs=1e-6), (
+        "die Schleife sitzt oben, wo der Deckel fehlt"
+    )
+
+
+def test_two_holes_stay_two_when_the_file_arrives_unwelded() -> None:
+    """Die Absicht von ``5c90fac6`` gilt auch hier — sie ist der Grund, warum
+    nicht einfach alles zu einem Merkmal zusammengefasst wird.
+
+    Zwei Löcher, ungeschweißt geladen: zwei Merkmale an zwei Orten, nicht eines
+    dazwischen im Leeren.
+    """
+    parts = []
+    for shift in (-20.0, 20.0):
+        part = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        part.apply_translation((shift, 0.0, 0.0))
+        part.update_faces(
+            np.array([index for index, normal in enumerate(part.face_normals) if normal[2] < 0.9])
+        )
+        parts.append(part)
+
+    loops = detect_edge_loops(as_a_file_arrives(trimesh.util.concatenate(parts)))
+
+    assert len(loops) == 2, [loop.id for loop in loops]
+    xs = sorted(round(float(loop.params["centre"][0]), 1) for loop in loops)
+    assert xs == [-20.0, 20.0], "jede Schleife sitzt an ihrem eigenen Loch"
+
+
+def test_an_unwelded_edge_loop_keeps_its_number_when_the_body_turns() -> None:
+    """Dieselbe Zusage wie unten, aber am ungeschweißten Netz — und nur hier
+    lässt sie sich überhaupt verletzen.
+
+    Das Zusammenführen nummeriert die Ecken um, und es ordnet sie dabei **nach
+    Koordinaten**. Genau davor warnt ``detect_faces``: Eine Ordnung nach
+    Koordinaten überlebt keine Drehung. Die Erkennung rechnet deshalb zwar über
+    die zusammengeführte Topologie, sortiert aber über die **Original**-Nummern
+    der Ecken, die sich weder beim Drehen noch beim Umsortieren ändern.
+
+    **Der Test unten kann das nicht prüfen**, und das ist der Grund für diesen
+    hier: Er baut sein Netz von Hand, damit ist es bereits zusammengeführt, und
+    Orts- und Original-Nummern fallen zusammen. Gegengeprobt — mit den
+    Ortsnummern wandert ``edge_loop_1`` bei dieser Drehung von x=−20 auf x=−20,
+    obwohl es bei +20 liegen müsste; der Test unten bleibt dabei grün.
+    """
+    parts = []
+    for shift in (-20.0, 20.0):
+        part = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+        part.apply_translation((shift, 0.0, 0.0))
+        part.update_faces(
+            np.array([index for index, normal in enumerate(part.face_normals) if normal[2] < 0.9])
+        )
+        parts.append(part)
+    body = trimesh.util.concatenate(parts)
+
+    before = detect_edge_loops(as_a_file_arrives(body))
+    assert len(before) == 2, "sonst prüft der Test seinen eigenen Aufbau"
+    assert before[0].params["open_edges"] == before[1].params["open_edges"], (
+        "nur bei gleicher Kantenzahl entscheidet das zweite Kriterium — darum geht es hier"
+    )
+
+    turn = trimesh.transformations.rotation_matrix(np.pi, (0.0, 0.0, 1.0))
+    turned = body.copy()
+    turned.apply_transform(turn)
+    after = detect_edge_loops(as_a_file_arrives(turned))
+
+    assert len(after) == 2
+    expected = trimesh.transform_points([list(before[0].params["centre"])], turn)[0]
+    assert tuple(after[0].params["centre"]) == pytest.approx(tuple(expected), abs=1e-6), (
+        "edge_loop_1 meint nach der Drehung die andere Schleife — daran hängen Ops und Passungen"
+    )
+
+
+def test_many_open_places_come_as_one_summary() -> None:
+    """Die zweite Linie: ein Netz, das wirklich in Stücken ankommt.
+
+    Nicht mehr der ungeschweißte Regelfall — den beantwortet die Erkennung
+    selbst —, sondern ein Körper, der tatsächlich aus lauter losen Dreiecken
+    besteht. Die bleiben auch zusammengeführt lose, denn sie liegen wirklich
+    nicht aneinander.
+
+    Zwanzig Stellen bekommen einen eigenen Namen, der Rest **eine** Zeile.
+    Dreitausend einzeln anklickbare Einträge sind keine Bedienung, und die
+    Zuordnung (§21.2) wächst quadratisch in der Zahl der Merkmale.
+
+    Die Schranke daneben ist keine Zierde: Der Test baut seinen Prüfling aus
+    ``EDGE_LOOP_LIMIT`` und wanderte damit stillschweigend mit, wenn jemand die
+    Grenze auf hunderttausend setzte — er prüfte dann die Aktualität der Zahl
+    statt ihrer Richtigkeit. Was die Zahl leisten muss, ist eine Liste, die
+    jemand durchgeht; das ist die Zusage, und sie steht hier.
+    """
+    assert EDGE_LOOP_LIMIT <= 50, (
+        "die Grenze ist eine Bedienzahl — was darüber liegt, geht niemand mehr durch"
+    )
+
+    count = EDGE_LOOP_LIMIT + 12
+    apart = trimesh.util.concatenate(
+        [
+            trimesh.Trimesh(
+                vertices=np.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+                + np.array([10.0 * index, 0.0, 0.0]),
+                faces=np.array([[0, 1, 2]]),
+                process=False,
+            )
+            for index in range(count)
+        ]
+    )
+
+    loops = detect_edge_loops(MeshData.of(apart))
+
+    assert len(loops) == EDGE_LOOP_LIMIT + 1, [loop.id for loop in loops]
+    summary = loops[-1]
+    assert summary.kind == "edge_loop", "das Kontextmenü zum Reparieren hängt an der Art"
+    assert summary.params["loops"] == count - EDGE_LOOP_LIMIT, (
+        "die Sammelzeile sagt, wie viele Stellen sie zusammenfasst"
+    )
+    assert summary.params["open_edges"] == 3 * (count - EDGE_LOOP_LIMIT)
+    # **Der Ort ist eine echte Stelle, kein Schwerpunkt.** Ein Mittelwert über
+    # alle läge zwischen ihnen und damit im Leeren — genau der Fehler, den die
+    # Aufteilung in einzelne Schleifen behoben hat (§18.4).
+    assert any(
+        summary.params["centre"] == loop.params["centre"]
+        for loop in detect_edge_loops(MeshData.of(apart))
+    )
+    assert sum(int(loop.params["open_edges"]) for loop in loops) == 3 * count, (
+        "keine offene Kante geht beim Zusammenfassen verloren"
+    )
 
 
 def test_an_edge_loop_keeps_its_number_when_the_body_turns() -> None:

@@ -896,3 +896,79 @@ def test_the_application_is_usable_quickly(tmp_path: Path) -> None:
         f"the application did not come up: {finished[0].stderr[-2000:]}"
     )
     assert taken < 30.0, "the target is three seconds; thirty catches an order of magnitude"
+
+
+def test_a_second_step_on_an_unwelded_model_stays_quick(profile: Profile) -> None:
+    """Die Regression, die 102 Sekunden gekostet hat — als Marke.
+
+    **Der Bestand konnte sie prinzipiell nicht fangen.**
+    ``test_reevaluating_from_the_cache_is_quick`` lädt ``cube_clean.stl`` mit
+    **einer** Operation, und bei einem Schritt ist ``old`` leer: ``match`` kehrt
+    sofort zurück, ohne je eine Kostenmatrix zu bauen. Gemessen wird die
+    Zuordnung erst ab dem **zweiten** Schritt, und teuer wird sie nur bei vielen
+    Merkmalen — also braucht dieser Test beides.
+
+    Der Aufbau ist deshalb der des erzeugten Stapels aus ``generate.py``:
+    ungeschweißt laden (``weld: False``, dort mit guter Begründung), dann auf
+    Maß bringen. Genau zwischen diesen zwei Zuständen lag die Explosion — eine
+    STL speichert jedes Dreieck mit eigenen Ecken, die Erkennung hielt jede
+    dieser Kanten für eine offene Stelle, und aus 3 372 Dreiecken wurde eine
+    Kostenmatrix mit 11,4 Millionen Einträgen.
+
+    Die Schranke fängt die Größenordnung: gemessen 102,3 s vorher und 0,2 s
+    nachher. Was innerhalb der Größenordnung schleicht, fängt die
+    25-%-Schwelle von ``measure``.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    project = new_project("centauri-carbon-2", "petg")
+    project.document.sources["src_1"] = Source(
+        id="src_1", kind="import", path="sources/generated_figure.stl", sha256=""
+    )
+    project.sources["src_1"] = (MESHES / "generated_figure.stl").read_bytes()
+    history = History(project.document)
+    history.apply(
+        _("Laden"),
+        [
+            OperationDraft(
+                op="load",
+                params={
+                    "source": "src_1",
+                    "unit": "mm",
+                    "weld": False,
+                    "remove_degenerate": False,
+                    "unify_normals": False,
+                },
+            )
+        ],
+    )
+    body = project.document.ops[-1].outputs[0]
+    history.apply(
+        _("Auf Maß"),
+        [OperationDraft(op="fit_to_size", inputs=(body,), params={"largest": 100.0})],
+    )
+
+    sources = ProjectSources(project)
+    outcome: list[Any] = []
+    taken = measure(
+        "evaluate_unwelded_two_steps",
+        lambda: outcome.append(evaluate(project.document, profile, sources=sources)),
+    )
+
+    result = outcome[0]
+    assert result.complete, "eine abgebrochene Auswertung misst nicht, was sie soll"
+    # **Ohne diese Zusicherung misst der Test nichts.** Liefe die Erkennung gar
+    # nicht — Dreiecksgrenze, Merkmalsgrenze, ein Fehler —, wäre er der
+    # schnellste Test der Suite und völlig blind.
+    loops = [
+        feature
+        for entry in result.scene.objects.values()
+        for feature in entry.features.values()
+        if feature.kind == "edge_loop"
+    ]
+    assert loops, "ohne erkannte Merkmale hat die Zuordnung nichts zu tun"
+    assert len(loops) < 100, (
+        f"{len(loops)} offene Stellen — das ist die Speicherform der Datei, nicht das Modell"
+    )
+    assert taken < 5.0, "the target is well under a second; five catches the old 102 s"

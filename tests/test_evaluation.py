@@ -1675,3 +1675,166 @@ def test_a_contested_feature_never_gets_an_originator(
     ]
 
     assert not tagged, f"{len(tagged)} umstrittene Merkmale haben einen Erzeuger bekommen"
+
+
+# --- Die Merkmalsgrenze und das Durchreichen (§2.8, §21.2) -------------------
+
+
+def _small_body() -> object:
+    """Ein echtes ``MeshData`` — ``_with_features`` kehrt bei allem anderen
+    sofort um, und ein Test darauf prüfte dann seinen eigenen Aufbau.
+
+    Was darin steht, spielt keine Rolle: Die Erkennung ist in diesen Tests
+    ausgetauscht. Gebraucht wird nur ein Körper mit Hüllquader und Diagonale.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    return MeshData.of(trimesh.creation.box(extents=(20.0, 20.0, 20.0)))
+
+
+def _many_features(count: int) -> dict[str, object]:
+    """``count`` erkannte Bohrungen, wie ``detect`` sie liefern würde."""
+    from app.core.types import Feature
+
+    return {
+        f"hole_{index}": Feature(
+            id=f"hole_{index}",
+            kind="hole",
+            provenance="detected",
+            params={
+                "centre": (float(index), 0.0, 0.0),
+                "axis": (0.0, 0.0, 1.0),
+                "diameter": 4.0,
+            },
+        )
+        for index in range(count)
+    }
+
+
+def test_too_many_features_stop_the_matching_and_say_so(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Das Sicherheitsnetz hinter der Erkennung: ``match`` wächst quadratisch.
+
+    Die Dreiecksgrenze daneben schützt davor nicht — sie zählt Dreiecke, und
+    zwischen Dreiecken und Merkmalen liegt kein fester Faktor. Gemessen kostet
+    ``match`` bei 250 Merkmalen 0,63 s, bei 1 000 knapp zehn und bei 2 000
+    vierzig; ein echtes Modell des Korpus bringt höchstens sechzehn mit.
+
+    Geprüft wird beides: dass **kein** ``match`` läuft (nicht nur, dass es
+    schneller ist), und dass ein Befund sagt, warum. Ohne den zweiten Teil wäre
+    das eine stille Verstümmelung — der Kunde sähe, dass Namen verlorengehen,
+    und fände nirgends den Grund (Regel 17).
+    """
+    from importlib import import_module
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.types import Operation, SceneObject
+
+    limit = evaluate_module.FEATURE_LIMIT_COUNT
+    crowd = _many_features(limit + 1)
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh: dict(crowd))
+
+    ran: list[int] = []
+    monkeypatch.setattr(
+        evaluate_module,
+        "match",
+        lambda *args, **kwargs: ran.append(1),  # type: ignore[misc,return-value]
+    )
+
+    entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
+    findings: list[Finding] = []
+    result = evaluate_module._with_features(
+        entry, dict(_many_features(3)), Operation(id=1, op="thicken"), lambda q, c: c[0], findings
+    )
+
+    assert not ran, "über der Grenze darf keine Zuordnung laufen"
+    codes = [item.code for item in findings]
+    assert codes == ["perceive.too_many"], codes
+    values = findings[0].values
+    assert values["features"] == limit + 1 and values["limit"] == limit, values
+    assert result is entry, "was die Operation ausgab, bleibt stehen — geraten wird nicht"
+
+
+def test_a_model_below_the_feature_limit_is_matched_as_before(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Gegenrichtung, ohne die die Grenze alles abschneiden könnte.
+
+    Ein Verbotstest über eine leere Menge ist immer grün; dieser hier stellt
+    sicher, dass die Grenze im Normalfall **nicht** greift.
+    """
+    from importlib import import_module
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.types import Operation, SceneObject
+
+    crowd = _many_features(evaluate_module.FEATURE_LIMIT_COUNT)
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh: dict(crowd))
+
+    entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
+    findings: list[Finding] = []
+    evaluate_module._with_features(
+        entry, dict(_many_features(3)), Operation(id=1, op="thicken"), lambda q, c: c[0], findings
+    )
+
+    assert [item.code for item in findings if item.code == "perceive.too_many"] == [], (
+        "genau auf der Grenze wird noch zugeordnet"
+    )
+
+
+def test_the_recognition_can_be_cancelled(monkeypatch: pytest.MonkeyPatch) -> None:
+    """§2.8: Was rechnet, ist abbrechbar — auch die Erkennung.
+
+    Sie stand außerhalb: ``raise_if_cancelled`` wurde nur am Kopf der
+    Operationsschleife abgefragt, und Erkennung samt Zuordnung liefen danach
+    ohne jede Rückfrage. Gemessen waren das an einem einzigen Schritt 101,6 von
+    101,8 Sekunden, in denen der Abbrechen-Knopf nichts tat.
+    """
+    from importlib import import_module
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.types import Operation, SceneObject
+
+    signal = CancelSignal()
+    signal.cancel()
+    entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
+
+    def must_not_run(mesh: object) -> dict[str, object]:
+        raise AssertionError("nach dem Abbrechen darf nicht mehr erkannt werden")
+
+    monkeypatch.setattr(evaluate_module, "detect", must_not_run)
+
+    with pytest.raises(OperationCancelled):
+        evaluate_module._with_features(
+            entry, {}, Operation(id=1, op="thicken"), lambda q, c: c[0], [], cancelled=signal
+        )
+
+
+def test_the_recognition_reports_what_it_is_doing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Und dieselbe Strecke meldet, woran sie ist.
+
+    Ohne das nannte die Leiste weiter die Operation, die längst fertig war —
+    hundert Sekunden lang derselbe Satz. Der Bruchteil bleibt der des Schritts;
+    was sich ändert, ist der Text.
+    """
+    from importlib import import_module
+
+    evaluate_module = import_module("app.core.scene.evaluate")
+    from app.core.types import Operation, SceneObject
+
+    monkeypatch.setattr(evaluate_module, "detect", lambda mesh: dict(_many_features(2)))
+    said: list[str] = []
+    entry = SceneObject(id="obj_1", name="Teil", mesh=_small_body())
+
+    evaluate_module._with_features(
+        entry,
+        dict(_many_features(2)),
+        Operation(id=1, op="thicken"),
+        lambda q, c: c[0],
+        [],
+        say=said.append,
+    )
+
+    assert said, "die Erkennung meldet sich nicht"
+    assert any("zuordnen" in text.lower() for text in said), said

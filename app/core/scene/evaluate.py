@@ -22,7 +22,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
-from functools import cache
+from functools import cache, partial
 from typing import Any, Final
 
 from app.core import expressions
@@ -81,6 +81,27 @@ _log = get_logger(__name__)
 #: bei einer Sekunde für 200 000 Dreiecke; sie nach jeder Operation auf einer
 #: Million laufen zu lassen, kostete mehr, als es wert ist.
 FEATURE_LIMIT_TRIANGLES = 200_000
+
+#: Und darüber läuft die **Zuordnung** nicht — dieselbe Bremse, die andere
+#: Größe.
+#:
+#: Die Dreiecksgrenze darüber schützt davor nicht, denn sie zählt Dreiecke und
+#: nicht Merkmale, und zwischen beidem liegt kein fester Faktor: Eine
+#: ungeschweißte STL mit 3 372 Dreiecken — weit unter der Dreiecksgrenze —
+#: brachte 3 372 Merkmale mit, und ``match`` baute daraus eine Kostenmatrix mit
+#: 11,4 Millionen Einträgen. Ein Schritt kostete 101 Sekunden.
+#:
+#: Die Zahl ist gemessen, nicht gegriffen. ``match`` wächst quadratisch:
+#: 250 Merkmale 0,63 s, 500 Merkmale 2,47 s, 1 000 Merkmale 9,94 s, 2 000
+#: Merkmale 39,97 s. Und was echte Modelle mitbringen, liegt zwei
+#: Größenordnungen darunter — über die zwanzig Netze des Korpus gemessen ist
+#: der Höchstwert **16** Merkmale.
+#:
+#: Sie liegt deshalb bewusst hoch. Ohne Zuordnung verliert **jedes** Merkmal
+#: seinen Bezeichner, und daran hängen Operationen und Passungen (§21.2) — eine
+#: enge Grenze schnitte ein Lochblech mit sechshundert Bohrungen ab, das
+#: legitim ist. Gefangen werden soll der Ausreißer, nicht der Alltag.
+FEATURE_LIMIT_COUNT = 1_000
 
 
 @dataclass(frozen=True, slots=True)
@@ -438,6 +459,11 @@ def evaluate(
                     recorded,
                     referenced_features.get(object_id, set()) | referenced_anywhere,
                     spec.touches_features,
+                    token,
+                    # Der Bruchteil ist der dieser Operation — die Erkennung
+                    # gehört zu ihr, und ein Balken, der dafür zurückspränge,
+                    # sagte etwas Falsches. Was sich ändert, ist der Text.
+                    partial(progress, position / total),
                 )
             except AppError as error:
                 # Die Zuordnung fragt, wenn sie mehrere Kandidaten sieht
@@ -666,6 +692,8 @@ def _with_features(
     recorded: dict[str, dict[str, Any]] | None = None,
     referenced: frozenset[str] | set[str] = frozenset(),
     touches_features: bool = False,
+    cancelled: CancelToken | None = None,
+    say: Callable[[str], None] | None = None,
 ) -> SceneObject:
     """Merkmale neu erkennen und die alten Bezeichner behalten, wo sie noch
     passen.
@@ -690,7 +718,17 @@ def _with_features(
     Funktion, die §15.1 verlangt — eine Antwort, die nur in der Sitzung lebt,
     wäre ein sechster Eingang neben Stack, Quellen, Parametern, Profilen und
     Startwerten.
+
+    **``cancelled`` und ``say`` reichen bis hierher (§2.8).** Beides fehlte,
+    und die Folge war messbar: Erkennung und Zuordnung sind der längere Teil
+    eines Schritts, sobald ein Netz viele Merkmale mitbringt — 101,6 von 101,8
+    Sekunden an einem einzigen ``fit_to_size``. Der Abbrechen-Knopf wirkte in
+    dieser ganzen Zeit nicht, denn das Token wurde nur am Kopf der
+    Operationsschleife abgefragt, und die Leiste nannte weiter eine Operation,
+    die längst fertig war. ``say`` bekommt nur den Text: Welcher Bruchteil des
+    Ganzen gerade läuft, weiß der Aufrufer, nicht diese Funktion.
     """
+    watch = cancelled or NeverCancelled()
     mesh = entry.mesh
     if not isinstance(mesh, MeshData):
         return entry
@@ -739,7 +777,41 @@ def _with_features(
     if declared and transform is not None:
         declared = moved_features(declared, transform)
 
+    watch.raise_if_cancelled()
+    if say is not None:
+        say(str(_("Merkmale erkennen")))
     detected = detect(mesh)
+
+    # **Und hier hört es auf, wenn es zu viele geworden sind.** Die
+    # Dreiecksgrenze oben zählt Dreiecke; diese zählt, was daraus geworden ist,
+    # und die zwei hängen nicht aneinander. Ein ungeschweißtes Netz weit
+    # unterhalb der Dreiecksgrenze brachte ein Merkmal je Dreieck mit, und die
+    # Zuordnung darunter ist quadratisch in deren Zahl (siehe
+    # ``FEATURE_LIMIT_COUNT``).
+    #
+    # **Gar keine Zuordnung und nicht eine halbe.** Die erkannten Merkmale
+    # trotzdem einzuhängen wäre die verlockende Hälfte — und die falsche: Ihre
+    # Namen entstünden dann bei jeder Auswertung neu, und eine Passung, die auf
+    # ``hole_3`` zeigt, zeigte danach still auf ein anderes Loch. Das ist genau
+    # das Raten, das §21.2 verbietet. Übrig bleibt, was die Operation ausgegeben
+    # hat, dazu ein Satz, der sagt warum — dieselbe Bauart wie
+    # ``perceive.too_large``.
+    if len(detected) > FEATURE_LIMIT_COUNT:
+        findings.append(
+            Finding(
+                code="perceive.too_many",
+                severity="info",
+                message=_(
+                    "Dieses Modell hat zu viele einzelne Merkmale, um sie über die "
+                    "Schritte hinweg zuzuordnen. Verschweißen Sie es beim Laden, oder "
+                    "reparieren Sie es."
+                ),
+                object_id=entry.id,
+                op_id=operation.id,
+                values={"features": len(detected), "limit": FEATURE_LIMIT_COUNT},
+            )
+        )
+        return entry
 
     # **Was die Erkennung hier nicht sieht, wird später nicht an ihr gemessen.**
     # Ein Baustein benennt seine Bohrungen beim Bauen; ``detect`` findet sie
@@ -753,6 +825,9 @@ def _with_features(
     # Partner findet, ist ``orphaned``. Mehrdeutig zählt als gefunden — zwei
     # Kandidaten sind ein Kandidat zu viel, nicht keiner.
     if declared:
+        watch.raise_if_cancelled()
+        if say is not None:
+            say(str(_("Merkmale zuordnen")))
         seen = match(declared, detected, mesh.bounds.centre, mesh.bounds.diagonal)
         blind = set(seen.orphaned)
         declared = {
@@ -856,6 +931,9 @@ def _with_features(
         and _same_size(previous_bounds, mesh.bounds)
     )
     old_centre = previous_bounds.centre if moved and previous_bounds is not None else centre
+    watch.raise_if_cancelled()
+    if say is not None:
+        say(str(_("Merkmale zuordnen")))
     matched = match(previous, detected, centre, mesh.bounds.diagonal, old_centre=old_centre)
 
     saved = operation.matches

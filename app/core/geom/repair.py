@@ -21,7 +21,7 @@ from app.core.errors import PROGRAMMING_ERRORS
 from app.core.geom.mesh import MeshData, face_components
 from app.core.log import get_logger
 from app.core.types import Finding
-from app.core.units import EPS_GEOM, weld_tolerance
+from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -50,8 +50,7 @@ def merge_vertices(mesh: MeshData, tolerance: float | None = None) -> tuple[Mesh
     body = mesh.raw.copy()
     before = len(body.vertices)
     limit = tolerance if tolerance is not None else weld_tolerance(mesh.bounds.diagonal)
-    digits = max(0, min(12, round(float(-np.log10(max(limit, EPS_GEOM))))))
-    body.merge_vertices(digits_vertex=digits)
+    body.merge_vertices(digits_vertex=weld_digits(limit))
     return mesh.replacing(body), before - len(body.vertices)
 
 

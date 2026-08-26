@@ -647,6 +647,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     # Einheiten-Endung, bevor es hier nachschlägt — wie bei ``eroded``.
     "fair_wall": _("Verlässlich ab"),
     "feature": _("Merkmal"),
+    "features": _("Merkmale"),
     "field": _("Feld"),
     "file": _("Datei"),
     "file_version": _("Dateiversion"),
@@ -1100,6 +1101,11 @@ def feature_measure(feature: Feature) -> str:
         ring = length(float(params.get("diameter", 0.0)))
         return f"Ø{ring} / Ø{length(float(params.get('tube_diameter', 0.0)))}"
     if feature.kind == "edge_loop":
+        # Dieselbe Unterscheidung wie im Steckbrief: Die Sammelzeile trägt
+        # ``loops`` und meint Stellen, nicht Kanten.
+        more = int(params.get("loops", 0))
+        if more:
+            return f"{more} {tr('weitere offene Stellen')}"
         return f"{params.get('open_edges', 0)} {tr('offene Kanten')}"
     return ""
 

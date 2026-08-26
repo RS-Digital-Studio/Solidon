@@ -131,6 +131,23 @@ def weld_tolerance(diagonal_mm: float) -> float:
     return max(EPS_GEOM, abs(diagonal_mm) * 1e-6)
 
 
+def weld_digits(tolerance_mm: float) -> int:
+    """Dieselbe Toleranz als Zahl von Nachkommastellen.
+
+    Verschweißen läuft über ein Gitter und nicht über Abstände: ``trimesh``
+    gruppiert Eckpunkte nach gerundeten Koordinaten, und die Rundungsstelle ist
+    das, was dort von einer Toleranz übrig bleibt. Die Umrechnung steht hier
+    und nicht zweimal daneben — sie entscheidet, ob zwei Ecken derselbe Ort
+    sind, und zwei Antworten auf diese Frage wären zwei Topologien desselben
+    Körpers.
+
+    Gedeckelt auf null bis zwölf Stellen: darunter verschmölze ein ganzer
+    Millimeter, darüber ist nichts mehr übrig, was ein ``float`` unterscheiden
+    könnte.
+    """
+    return max(0, min(12, round(float(-math.log10(max(tolerance_mm, EPS_GEOM))))))
+
+
 # --- Anzeige -------------------------------------------------------------------
 
 

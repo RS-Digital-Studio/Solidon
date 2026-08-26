@@ -349,6 +349,13 @@ def _feature_line(feature_id: str, feature: Feature) -> str:
         size = format_length(float(params.get("radius", 0.0)))
         return f"{feature_id}  {shape} R{size}{along}{at}"
     if feature.kind == "edge_loop":
+        # ``loops`` trägt nur die Sammelzeile, die ``detect_edge_loops`` ab
+        # ihrer Obergrenze anhängt. Ohne diesen Zweig stünde dort eine einzelne
+        # Schleife mit zehntausend offenen Kanten — eine falsche Auskunft statt
+        # einer verkürzten.
+        more = int(params.get("loops", 0))
+        if more:
+            return f"{feature_id}  {more} {tr('weitere offene Stellen')}"
         return f"{feature_id}  {params.get('open_edges', 0)} {tr('offene Kanten')}"
     # **Der Fallback nennt den englischen Schlüssel.** Er sieht aus wie ein Name
     # — genau daran sind pin, thread, sphere, torus und fillet vorbeigelaufen,
