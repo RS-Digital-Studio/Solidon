@@ -1262,6 +1262,45 @@ def test_an_operation_without_a_menu_entry_is_not_simply_allowed(window: MainWin
     assert launched == [], "gestartet wird nichts"
 
 
+def test_a_flashed_area_gets_opened_before_it_lights_up(window: MainWindow) -> None:
+    """Ein zugeklappter Abschnitt blinkt an einer Stelle, an der nichts steht.
+
+    „Sehen Sie links in den Verlauf" nennt einen Bereich, und ein Rahmen für
+    eine Sekunde beantwortet die Frage, ohne sie zu stellen — solange der
+    Bereich sichtbar ist. Die drei Karten der linken Spalte sitzen aber in
+    einklappbaren Abschnitten (§2.5), und zugeklappt leuchtete der Rahmen um
+    eine Kopfzeile auf, unter der nichts zu sehen ist. Für den Prüfbericht war
+    das längst bedacht — er wird über seinen Reiter nach vorn geholt —, für
+    die andere Bauart nicht.
+
+    Dieselbe Frage stellt der Agent: Seine Rücknahme-Warnung zeigt über
+    ``show_history`` in den Verlauf (H-1).
+
+    Gefragt wird mit ``isVisibleTo``: ``isVisible()`` meldet in einem nie
+    gezeigten Fenster immer ``False`` und beantwortet damit eine andere Frage
+    als die gestellte.
+    """
+    from PySide6.QtWidgets import QToolButton
+
+    wrapper = window.history_panel.parentWidget()
+    assert wrapper is not None, (
+        "der Verlauf steckt in einem Abschnitt — sonst prüft das hier nichts"
+    )
+    heading = next(
+        child
+        for child in wrapper.children()
+        if isinstance(child, QToolButton) and child.objectName() == "sectionHeading"
+    )
+
+    heading.setChecked(False)
+    assert not window.history_panel.isVisibleTo(wrapper), "zugeklappt ist zugeklappt"
+
+    window._flash_area("history")
+
+    assert heading.isChecked(), "der Abschnitt geht auf, bevor der Rahmen leuchtet"
+    assert window.history_panel.isVisibleTo(wrapper), "und der Verlauf steht wirklich da"
+
+
 def test_a_typed_name_gets_the_project_suffix(window: MainWindow) -> None:
     """„Speichern unter" erzwingt die Projektendung (Gesamtreview A2).
 

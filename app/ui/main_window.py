@@ -215,6 +215,7 @@ from app.ui.panels import (
     ReportPanel,
     collapsible,
     describe_selection,
+    open_section,
 )
 from app.ui.pose_bar import PoseBar
 from app.ui.print_settings_dialog import PrintSettingsDialog, remembered_setup
@@ -7897,6 +7898,14 @@ class MainWindow(QMainWindow):
             return
         if area is self.report:
             self.right.setCurrentWidget(self.report)
+        # **Und die andere Bauart derselben Zusage.** Der Bericht teilt sich
+        # eine Spalte mit der Tour und wird über den Reiter geholt; Objektbaum,
+        # Parameter und Verlauf sitzen in einklappbaren Abschnitten (§2.5).
+        # War einer zugeklappt, leuchtete der Rahmen um eine Kopfzeile auf,
+        # unter der nichts steht — „Sehen Sie links in den Verlauf" zeigte auf
+        # eine leere Stelle. Genau dieselbe Frage stellt der Agent, wenn seine
+        # Rücknahme-Warnung in den Verlauf zeigt (H-1).
+        open_section(area)
 
         area.setStyleSheet(f"border: 2px solid {ROLES['select']};")
         QTimer.singleShot(FLASH_MS, self, lambda: area.setStyleSheet(""))

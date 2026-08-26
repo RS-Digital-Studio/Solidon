@@ -2449,6 +2449,29 @@ def collapsible(title: str, content: QWidget, *, open_now: bool = True) -> QWidg
     return wrapper
 
 
+def open_section(content: QWidget) -> None:
+    """Klappt den Abschnitt auf, in dem dieser Inhalt steckt — falls er zu ist.
+
+    Der Gegenpart zu :func:`collapsible`, und er fehlte: Wer einen Bereich
+    hervorhebt, muss ihn erst sichtbar machen. „Sehen Sie links in den
+    Verlauf" ließ einen Rahmen um einen zugeklappten Abschnitt aufleuchten —
+    also um eine Kopfzeile, unter der nichts steht.
+
+    Gesucht wird unter den **direkten** Kindern des Wrappers: Der Inhalt hat
+    eigene Knöpfe, und einer davon wäre sonst der erste Treffer. Steckt das
+    Widget in keinem Abschnitt — der Prüfbericht sitzt in einem Reiter —,
+    geschieht nichts.
+    """
+    wrapper = content.parentWidget()
+    if wrapper is None:
+        return
+    for child in wrapper.children():
+        if isinstance(child, QToolButton) and child.objectName() == "sectionHeading":
+            if not child.isChecked():
+                child.setChecked(True)
+            return
+
+
 def describe_selection(result: EvaluationResult | None, object_id: ObjectId | None) -> Any:
     """Name, Größe und Volumen des gewählten Objekts, oder None."""
     if result is None or object_id is None:
