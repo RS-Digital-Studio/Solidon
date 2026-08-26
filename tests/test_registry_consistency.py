@@ -120,7 +120,34 @@ def test_non_deterministic_operations_use_a_seed(spec: OperationSpec) -> None:
 #: Wo die Bausteine gesammelt geprüft werden, und woran man erkennt, dass es
 #: **alle** sind: an der Ableitung aus dem Register statt aus einer Namensliste.
 PARTS_TEST: Final = "test_parts.py"
-PARTS_FROM_REGISTRY: Final = "PARTS.all()"
+PARTS_SWEEP: Final = "test_a_part_holds_over_its_whole_range"
+
+
+def parts_under_range_check() -> set[str]:
+    """Welche Bausteine der Bereichstest aus `test_parts.py` wirklich fährt.
+
+    **Gefragt wird die Sammlung, nicht der Dateitext.** Der Freibrief unten
+    hing bis zum 26.08.2026 an ``"PARTS.all()" in test_parts.py`` — eine
+    Zeichenkette, die ein Kommentar am Leben hält und die auch dann noch
+    dasteht, wenn die Liste vor der Parametrisierung gefiltert wird. Gelesen
+    wird deshalb die Parameterliste des Sweeps selbst: Was dort nicht
+    drinsteht, wird nicht gefahren, gleich was in der Datei geschrieben steht.
+    """
+    from tests import test_parts
+
+    sweep = getattr(test_parts, PARTS_SWEEP, None)
+    assert sweep is not None, (
+        f"{PARTS_TEST} hat kein {PARTS_SWEEP} mehr — §24.3 hängt an diesem Sweep"
+    )
+    marks = [
+        mark
+        for mark in getattr(sweep, "pytestmark", [])
+        if mark.name == "parametrize" and mark.args and mark.args[0] == "spec"
+    ]
+    assert marks, f"{PARTS_SWEEP} läuft nicht mehr über eine Bausteinliste"
+    geprueft = {entry.name for mark in marks for entry in mark.args[1]}
+    assert geprueft, f"{PARTS_SWEEP} sammelt keinen einzigen Baustein ein"
+    return geprueft
 
 
 @pytest.mark.parametrize("spec", registered(), ids=ids)
@@ -135,12 +162,12 @@ def test_every_operation_has_a_test(spec: OperationSpec) -> None:
     auch die Erwähnungen. Drei Bausteine wurden rot, die seither **besser**
     geprüft sind als vorher.
 
-    Für eine Baustein-Operation gilt deshalb ein zweiter Weg: Wird die
-    Sammlung in `test_parts.py` aus `PARTS.all()` gebildet, ist jeder Baustein
-    darin — namentlich genannt wird keiner mehr, und das ist der Fortschritt
-    und nicht die Lücke. Das ist kein Freibrief: Fehlt die Ableitung, greift
-    wieder die Namenssuche, und ein Baustein ohne beides ist so ungeprüft wie
-    jede andere Operation ohne Test.
+    Für eine Baustein-Operation gilt deshalb ein zweiter Weg: Steht der
+    Baustein in der Parameterliste des Bereichstests, ist er gefahren —
+    namentlich genannt wird keiner mehr, und das ist der Fortschritt und nicht
+    die Lücke. Das ist kein Freibrief: Fehlt er dort, greift wieder die
+    Namenssuche, und ein Baustein ohne beides ist so ungeprüft wie jede andere
+    Operation ohne Test.
     """
     mentions = [
         path.name
@@ -152,10 +179,9 @@ def test_every_operation_has_a_test(spec: OperationSpec) -> None:
 
     from app.core.knowledge.parts.ops import part_of
 
-    if part_of(spec.name) is not None:
-        gesammelt = TESTS_DIR / PARTS_TEST
-        if gesammelt.exists() and PARTS_FROM_REGISTRY in gesammelt.read_text(encoding="utf-8"):
-            return
+    part = part_of(spec.name)
+    if part is not None and part.name in parts_under_range_check():
+        return
 
     raise AssertionError(f"no test mentions {spec.name}")
 

@@ -1448,6 +1448,20 @@ def test_an_expression_that_breaks_its_own_bounds_is_reported(
     assert broken[0].values["actual"] == pytest.approx(600.0)
     assert broken[0].values["maximum"] == pytest.approx(60.0)
 
+    # Und die Untergrenze, die eigene Hälfte der Prüfung: ``minimum`` und
+    # ``maximum`` sind in der Auswertung zwei Zweige, und geprüft war bisher
+    # nur der obere — der untere hätte wegfallen können, ohne dass ein Lauf
+    # rot wird.
+    document.parameters["scaled"] = Parameter(
+        name="scaled", value=0.0, expression="=@a/60", minimum=10.0, maximum=60.0
+    )
+    below = evaluate(document, profile, registry=registry)
+    zu_klein = [f for f in below.scene.report.findings if f.code == "parameter.out_of_range"]
+    assert len(zu_klein) == 1, "auch die Untergrenze ist eine Zusage"
+    assert zu_klein[0].values["parameter"] == "scaled"
+    assert zu_klein[0].values["actual"] == pytest.approx(1.0)
+    assert zu_klein[0].values["minimum"] == pytest.approx(10.0)
+
     # Und die Gegenrichtung: ein Ausdruck innerhalb seiner Grenzen schweigt.
     document.parameters["scaled"] = Parameter(
         name="scaled", value=0.0, expression="=@a/2", minimum=10.0, maximum=60.0

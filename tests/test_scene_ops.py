@@ -464,6 +464,7 @@ def test_a_ring_that_leaves_the_build_volume_is_refused_with_advice(
     """
     from app.core.bootstrap import load_operations
     from app.core.registry import REGISTRY
+    from app.core.scene.cancel import NeverCancelled
 
     load_operations()
     document = Document(format_version=1, app_version="test")
@@ -490,6 +491,31 @@ def test_a_ring_that_leaves_the_build_volume_is_refused_with_advice(
     assert result.stopped_at is not None, "der Kranz reicht über den Bauraum hinaus"
     texts = " ".join(f"{entry.code} {entry.values}" for entry in result.scene.report.findings)
     assert "needed_mm" in texts, "der Befund nennt, wie weit es hinausreicht"
+
+    # **Und die zwei Handlungsvorschläge, die dem Fund den Namen gaben.**
+    # Geprüft an der Operation selbst, mit dem Körper und dem Profil, an denen
+    # die Kette eben angehalten hat: Die Auswertung macht aus der Ausnahme eine
+    # Berichtszeile, und ein ``Finding`` hat kein Feld für Handlungen — dort
+    # sind sie nicht mehr zu sehen. Ohne diese Frage prüft der Test genau die
+    # Hälfte dessen, was sein eigener Docstring behauptet.
+    spec = REGISTRY.get("pattern")
+    with pytest.raises(ValidationError) as problem:
+        spec.fn(
+            OpContext(
+                scene=result.scene,
+                inputs=[result.scene.objects["obj_1"]],
+                params=spec.params(kind="circular", count=8, angle=360.0, axis="z"),
+                profile=profile,
+                quality="fine",
+                seed=None,
+                progress=lambda fraction, text: None,
+                ask=lambda question, choices: choices[0],
+                cancelled=NeverCancelled(),
+            )
+        )
+    assert {"correct_input", "split_model"} <= {
+        action.id for action in problem.value.suggestions
+    }, f"Regel 17: nur {[action.id for action in problem.value.suggestions]}"
 
 
 def test_a_writing_op_cannot_change_the_result_scene(

@@ -399,6 +399,15 @@ def test_the_hinge_eye_lets_the_pin_through_that_it_asks_for() -> None:
     Die Zusage steht im Parameter: ``pin`` ist der Durchmesser des Bolzens, der
     hindurchgeht. Das Loch muss ihn samt Spiel aufnehmen, und es muss **durch**
     gehen — ein Sackloch hielte das Gegenstück nur auf einer Seite.
+
+    **Gemessen wird das Loch, nicht das Merkmal.** Bis zum 26.08.2026 stand
+    hier nur, was ``eye_1`` verspricht — ein Wert, den derselbe Baustein selbst
+    hineinschreibt. Ein Subtraktionszylinder, der statt ``pin + play`` nur
+    ``pin`` nimmt, hätte diese Prüfung bestanden und den Bolzen klemmen
+    lassen: Das Merkmal wäre unverändert richtig geblieben. Quer zur Drehachse
+    geschnitten zeigen sich zwei Konturen; der kleinere Zug ist die Bohrung,
+    und ihre Weite ist die Antwort (dieselbe Art Messung wie beim Fuß, nur um
+    die liegende Achse gedreht).
     """
     spec = PARTS.get("hinge_eye")
     for pin in (2.0, 4.0, 8.0):
@@ -412,6 +421,19 @@ def test_the_hinge_eye_lets_the_pin_through_that_it_asks_for() -> None:
         )
         assert built.mesh.is_watertight and built.mesh.component_count == 1, (
             f"pin={pin}: the eye falls apart"
+        )
+
+        across = built.mesh.raw.section(plane_origin=[0.0, 0.0, 0.0], plane_normal=[1.0, 0.0, 0.0])
+        assert across is not None, f"pin={pin}: nothing crosses the eye at all"
+        contours = [np.asarray(entry, dtype=float) for entry in across.discrete]
+        assert len(contours) == 2, (
+            f"pin={pin}: a cut across the axis shows {len(contours)} contours, "
+            "so there is no ring to measure"
+        )
+        bore = min(contours, key=lambda entry: float(np.ptp(entry[:, 1])))
+        assert float(np.ptp(bore[:, 1])) == pytest.approx(pin + values.play, abs=0.05), (
+            f"pin={pin}: the hole measures {float(np.ptp(bore[:, 1])):.2f} mm, "
+            f"a {pin} mm pin with {values.play} mm play needs {pin + values.play:.2f}"
         )
 
 
@@ -2224,6 +2246,18 @@ def test_the_hook_fits_the_slot_it_is_made_for() -> None:
     hoch = float(im_schlitz[:, 1].max() - im_schlitz[:, 1].min())
     assert hoch > board.slot_height / 2.0, (
         f"the hook only uses {hoch:.2f} mm of the {board.slot_height} mm slot"
+    )
+
+    # **Und das Spiel ist wirklich abgezogen.** ``fits_the_slot`` fragt „passt
+    # es hinein" — und das täte ein Zapfen in voller Schlitzbreite auch, auf
+    # den Hundertstel genau. Ein Baustein, der ``play`` vergisst, käme damit
+    # durch und klemmte beim Kunden in einer Wand, deren Schlitze nie exakt
+    # fünf Millimeter breit sind. Also gegen die Zahl und nicht gegen die
+    # Grenze.
+    breit = float(np.ptp(im_schlitz[:, 0]))
+    assert breit == pytest.approx(board.slot_width - values.play, abs=0.05), (
+        f"the shank is {breit:.2f} mm wide in a {board.slot_width} mm slot — "
+        f"with {values.play} mm play it should be {board.slot_width - values.play:.2f}"
     )
 
 

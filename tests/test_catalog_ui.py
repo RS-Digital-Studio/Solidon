@@ -314,7 +314,12 @@ def test_a_saved_part_joins_the_grid_and_gets_its_picture(qt_app: QApplication) 
         assert "nachzuegler_probe" not in catalog_names(catalog), "die Suche gilt weiter"
     finally:
         catalog.release()
-        PARTS._parts.pop("nachzuegler_probe", None)
+        # Über den öffentlichen Weg zurück: ``remove`` ist für genau diesen
+        # Fall da und ein unbekannter Name ist dort kein Fehler. Wer am
+        # Wörterbuch vorbei aufräumt, prüft eine Kette, die es beim Kunden
+        # nicht gibt — und merkt es nicht, wenn das Register eines Tages mehr
+        # zurückzunehmen hat als einen Eintrag.
+        PARTS.remove("nachzuegler_probe")
 
 
 def test_a_failed_or_missing_range_check_is_written_on_the_entry(qt_app: QApplication) -> None:

@@ -24,6 +24,15 @@ TOOLS_DIR = PACKAGE_DIR.parent / "tools"
 #: ein deutsches Wörterbuch träfe zu viel: `object`, `radius`, `position` und
 #: `parameter` stehen wörtlich in den deutschen Oberflächentexten und sind
 #: trotzdem englische Bezeichner. Was hier steht, ist eindeutig.
+#:
+#: **Hier steht auch, was als Stamm zu kurz ist.** ``masse``, ``spanne`` und
+#: ``passt`` standen bis zum 26.08.2026 unter `GERMAN_STEMS` und wurden dort
+#: als Teilzeichenkette gesucht — sie trafen damit ``masses``, ``spanned`` und
+#: ``passthrough``, drei englische Wörter, die jederzeit in einem Bezeichner
+#: stehen dürfen. Ein Falschmelder auf Vorrat: Der erste, der eines davon
+#: schreibt, sucht den Fehler in seinem englischen Code. Als ganzes Wort
+#: gesucht fangen sie weiter, was sie fangen sollen — ``masse_pro_teil`` ist
+#: nach wie vor ein Verstoß.
 GERMAN_WORDS = frozenset(
     {
         "abstand",
@@ -55,12 +64,14 @@ GERMAN_WORDS = frozenset(
         "kante",
         "koerper",
         "loch",
+        "masse",
         "menge",
         "meldung",
         "minuten",
         "mutter",
         "objekt",
         "ordner",
+        "passt",
         "pfad",
         "punkt",
         "schicht",
@@ -68,6 +79,7 @@ GERMAN_WORDS = frozenset(
         "schritt",
         "seite",
         "spalte",
+        "spanne",
         "stelle",
         "stift",
         "stunde",
@@ -103,6 +115,11 @@ GERMAN_WORDS = frozenset(
 #: **Wer ein deutsches Wort in einem Bezeichner findet, trägt seinen Stamm
 #: hier ein.** Der Test fängt, was schon einmal jemand falsch gemacht hat —
 #: mehr verspricht er nicht, und weniger auch nicht.
+#:
+#: Und die Gegenfrage dazu, bevor ein Stamm hier landet: **Steckt er in einem
+#: englischen Wort?** Dann gehört er nach `GERMAN_WORDS` und wird als ganzes
+#: Wort gesucht — drei Einträge sind aus genau diesem Grund umgezogen (siehe
+#: dort).
 GERMAN_STEMS = (
     "aenderung",
     "befehl",
@@ -146,17 +163,14 @@ GERMAN_STEMS = (
     "letzt",
     "liefer",
     "loesch",
-    "masse",
     "merkmal",
     "namen",
-    "passt",
     "pruef",
     "schluss",
     "schmal",
     "schuld",
     "sicht",
     "skizze",
-    "spanne",
     "staerke",
     "stelle",
     "stueck",
@@ -284,6 +298,12 @@ def test_the_check_would_catch_a_violation() -> None:
     assert not offences_in("clean_tree")
     assert not offences_in("command_line")
     assert not offences_in("main_branch")
+    # Die drei Umzügler vom 26.08.2026 fangen als ganzes Wort weiter — und
+    # gefragt wird nach ihnen selbst: In ``masse_pro_teil`` hätte auch ``teil``
+    # gereicht, und die Zeile prüfte dann den Nachbarn statt den Umzügler.
+    assert "masse" in offences_in("masse_der_platte")
+    assert "spanne" in offences_in("spanne_der_platte")
+    assert "passt" in offences_in("passt_das")
 
 
 def test_the_check_sees_through_a_german_plural() -> None:
@@ -304,11 +324,19 @@ def test_the_check_leaves_english_words_alone() -> None:
     ``wand`` und ``loch`` stehen in der Liste; mit ``-er`` und ``-s`` daran
     entstünden ``wander`` und ``lochs``, und beide sind englisch. Deshalb
     kennt `GERMAN_ENDINGS` nur ``-e``, ``-en`` und ``-n``.
+
+    Und dieselbe Frage eine Ebene höher: ``masse``, ``spanne`` und ``passt``
+    stecken in ``masses``, ``spanned`` und ``passthrough``. Als Stamm gesucht
+    meldeten sie diese drei englischen Wörter — deshalb stehen sie seit dem
+    26.08.2026 unter `GERMAN_WORDS` und werden als ganzes Wort verglichen.
     """
     assert not offences_in("wander")
     assert not offences_in("wanders")
     assert not offences_in("lochs")
     assert not offences_in("ends")
+    assert not offences_in("masses")
+    assert not offences_in("spanned")
+    assert not offences_in("passthrough")
 
 
 #: Wörter, an denen eine Sprache zu erkennen ist, ohne den Satz zu verstehen.

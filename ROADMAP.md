@@ -123,6 +123,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Die orient_200-Marke fällt auf jeder Maschine einmal | Was der Gesamtreview liegen ließ (25.08.2026) | nichts — je Maschine die Marke neu setzen; die Säulenrechnung ist bewusst teurer und richtig (5c90fac6) |
 | Das Schemabild des Skizzeneditors hinkt hinterher | Was der Gesamtreview liegen ließ (25.08.2026) | den Abschluss von 43s D-Paket — vorher ist die Zeichnung ein bewegliches Ziel |
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
+| Regel 17 endet an der Auswertungsgrenze | Was das Update-Review liegen ließ (26.08.2026) | eine Messung, welche Befund-Familien ohne tragende Handlung ankommen — FINDING_ACTIONS und die op.*-Familie decken einen Teil; fallgenaue Auswege wie split_model fallen in _finding_from | 
 | Kleinreste: tote profile-Zweige, unbenutztes height | Was der Gesamtreview liegen ließ (25.08.2026) | niemanden — sie werfen nur beziehungsweise stören nicht; notiert, damit sie ein Kästchen haben |
 
 ---
@@ -10170,6 +10171,26 @@ Zwischen zwei Schlitzen sind es dagegen 40 mm — reichlich für einen Arm.
   `parts_version` 7 und 8, caveat und Handbuch erzählen die neue Lage. Lässt
   ein fremdes Lochwandmaß keinen Federweg, hält der Baustein an und sagt es
   (Regel 21), statt einen starren Vorsprung zu bauen.
+
+## Was das Update-Review liegen ließ (26.08.2026)
+
+Aus den elf Durchgängen über die Commits seit 0.1.5 (Befundliste in
+`.claude/.state/update-review-0.1.5-2026-08-25/BEFUNDE.md`) ist alles
+Zugeteilte behoben; ein Fund entstand erst beim Schließen der Testlücken
+und braucht einen Umbau statt eines Tests.
+
+- [ ] **Regel 17 endet an der Auswertungsgrenze — zu prüfen, wie viel die
+  Familie schon deckt.** Ein Fehler, der die Kette anhält, erreicht den
+  Prüfbericht ohne seine spezifischen Auswege: `Finding` hat kein
+  `suggestions`-Feld, `_finding_from` (`scene/evaluate.py:1224`) lässt sie
+  fallen. `FINDING_ACTIONS` (`ui/panels.py`) und die
+  `edit_operation`-Handlung der `op.*`-Familie fangen einen Teil generisch —
+  was fehlt, sind die fallgenauen Vorschläge wie `split_model` neben
+  `correct_input` bei „Anzahl oder Abstand verringern". Erst messen, welche
+  Befund-Familien heute ohne tragende Handlung ankommen, dann entscheiden:
+  Feld am `Finding` samt Durchreichung, oder Familien-Einträge ergänzen.
+  Gefunden beim Testlücken-Schließen am 26.08.2026, belegt an
+  `scene/ops.py:361`.
 
 ## Was der Gesamtreview liegen ließ (25.08.2026)
 

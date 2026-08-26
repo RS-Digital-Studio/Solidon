@@ -1525,11 +1525,25 @@ def test_a_part_dialog_offers_to_insert_not_to_name_the_part(qt_app: QApplicatio
 
     part = REGISTRY.get(op_name("nut_trap"))
     dialog = OperationDialog(part, [], None)
-    ok = dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Ok)
-    assert ok is not None and ok.text() == "Einsetzen"
-    assert part.category == "parts", "sonst prüft dieser Test die falsche Sorte"
+    try:
+        ok = dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Ok)
+        assert ok is not None and ok.text() == "Einsetzen"
+        assert part.category == "parts", "sonst prüft dieser Test die falsche Sorte"
+    finally:
+        release = getattr(type(dialog), "release", None)
+        if release is not None:
+            release(dialog)
+        dialog.deleteLater()
 
     plain = REGISTRY.get("drill_hole")
-    dialog = OperationDialog(plain, [], None)
-    ok = dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Ok)
-    assert ok is not None and ok.text() == str(plain.title), "ein Verb bleibt auf dem Knopf"
+    # Ein eigener Name: Die zweite Zuweisung auf ``dialog`` nahm dem ersten
+    # Fenster die letzte Referenz, und aufgeräumt wurde danach nur noch eines.
+    plain_dialog = OperationDialog(plain, [], None)
+    try:
+        ok = plain_dialog.findChild(QDialogButtonBox).button(QDialogButtonBox.StandardButton.Ok)
+        assert ok is not None and ok.text() == str(plain.title), "ein Verb bleibt auf dem Knopf"
+    finally:
+        release = getattr(type(plain_dialog), "release", None)
+        if release is not None:
+            release(plain_dialog)
+        plain_dialog.deleteLater()
