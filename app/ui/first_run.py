@@ -29,6 +29,7 @@ from dataclasses import dataclass
 
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -47,8 +48,8 @@ from app.core.backends import llm
 from app.core.export import slicer_keys, slicer_profiles
 from app.core.knowledge import profiles
 from app.core.log import get_logger
-from app.i18n import language_name, tr
-from app.i18n.catalog import available_languages
+from app.i18n import language_name, set_language, tr
+from app.i18n.catalog import available_languages, install_language
 from app.ui.icons import icon
 from app.ui.labels import by_title, deadline_date
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
@@ -137,6 +138,16 @@ class ToolRow(QWidget):
         row.addWidget(what, stretch=1)
 
 
+#: Der Dialog hat sich für einen Sprachwechsel geschlossen und will neu
+#: aufgebaut werden.
+#:
+#: Qt vergibt 0 für *Rejected* und 1 für *Accepted*; alles darüber steht dem
+#: Aufrufer frei. Ein eigener Code statt eines Merkmals am Dialog, weil
+#: ``exec()`` genau eine Zahl zurückgibt und der Aufrufer sonst zwei Dinge
+#: fragen müsste, von denen er eines vergessen kann.
+LANGUAGE_CHANGED = 2
+
+
 class FirstRunDialog(QDialog):
     """Eine Seite, vier Fragen, alles überspringbar."""
 
@@ -202,9 +213,6 @@ class FirstRunDialog(QDialog):
         # einstellt und danach eine deutsche Oberfläche vor sich hat, hält die
         # Einstellung für wirkungslos, nicht für aufgeschoben. Derselbe Satz und
         # derselbe Auslöser wie dort, damit beide Stellen dasselbe versprechen.
-        self.language_note = QLabel(tr("Die Oberfläche stellt sich gleich darauf um."), self)
-        self.language_note.setWordWrap(True)
-        self.language_note.setVisible(False)
         self.language.currentIndexChanged.connect(self._language_changed)
 
         self.printer = QComboBox(self)
@@ -224,7 +232,6 @@ class FirstRunDialog(QDialog):
 
         form = QFormLayout()
         form.addRow(tr("Sprache"), self.language)
-        form.addRow("", self.language_note)
         form.addRow(tr("Drucker"), self.printer)
         form.addRow(tr("Material"), self.material)
 
@@ -376,21 +383,41 @@ class FirstRunDialog(QDialog):
         super().accept()
 
     def _language_changed(self) -> None:
-        """§38: eine Änderung, die den Dialog überlebt, sagt das vorher.
+        """Die Sprache wechselt sofort — auch im Dialog selbst.
 
-        Wortgleich mit ``SettingsDialog._language_changed``. Der Hinweis fehlte
-        hier lange, und das ist die Stelle, an der die Sprache überhaupt zum
-        ersten Mal gewählt wird — eine Einstellung ohne sichtbare Wirkung sieht
-        kaputt aus, nicht aufgeschoben.
+        **Ein Hinweis stand hier und war das Falsche.** „Die Oberfläche stellt
+        sich gleich darauf um" kündigte an, was erst nach dem Bestätigen
+        geschah; der Dialog blieb deutsch. Wer die Sprache wechselt, tut das
+        aber meistens, **weil er den Text nicht lesen kann** — und dem nützt
+        eine Ankündigung in genau dieser Sprache nichts. Entschieden von
+        Robert am 26.08.2026.
 
-        **Der Satz hieß einmal „wirkt erst nach dem Neustart", und das stimmt
-        seit dem 25.08.2026 nicht mehr** (`2f2b184b`): ``main`` vergleicht die
-        Sprache nach ``start()`` und baut das Fenster über
-        ``rebuild_for_language`` neu auf. Der **Dialog** selbst wechselt
-        weiterhin nicht mit — er steht ja schon auf dem Bildschirm —, und genau
-        das kündigt der Satz an: gleich, nicht jetzt.
+        **Neu gebaut statt übersetzt**, aus demselben Grund wie beim
+        Hauptfenster (:func:`app.ui.app.rebuild_for_language`): ``tr()``
+        übersetzt beim Setzen, und was einmal in einem Widget steht, bleibt
+        dort stehen. Neunzehn Texte einzeln nachzuziehen hieße, beim
+        zwanzigsten einen zu vergessen — und eine vergessene Zeile fällt nur
+        in einer Sprache auf. Der Dialog schließt sich deshalb mit
+        :data:`LANGUAGE_CHANGED`, und der Aufrufer öffnet ihn neu.
+
+        **Die Antworten reisen mit.** Vor dem Schließen wandert der ganze Stand
+        in die Einstellungen, aus denen der neue Dialog seine Vorbelegung holt
+        — wer schon einen Drucker gewählt hat, findet ihn wieder. Dass damit
+        auch ein „Später einstellen" danach die Wahl behält, ist gewollt: Was
+        sichtbar gewirkt hat, wird nicht heimlich zurückgenommen.
         """
-        self.language_note.setVisible(str(self.language.currentData()) != self.settings.language)
+        chosen = str(self.language.currentData())
+        if not chosen or chosen == self.settings.language:
+            return
+        self.apply_to(self.settings)
+        install_language(chosen)
+        set_language(chosen)
+        application = QApplication.instance()
+        if application is not None:
+            from app.ui.app import install_qt_translations
+
+            install_qt_translations(application, chosen)
+        self.done(LANGUAGE_CHANGED)
 
     # --- result -----------------------------------------------------------------
 

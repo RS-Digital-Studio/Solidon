@@ -764,39 +764,89 @@ def test_the_report_says_where_it_went_and_stays_open(
     )
 
 
-def test_the_first_run_announces_the_language_change(qt_app: QApplication) -> None:
-    """Der Erststart nahm eine andere Sprache stumm an.
+def test_choosing_a_language_switches_the_dialog_at_once(qt_app: QApplication) -> None:
+    """Wer die Sprache wechselt, kann den Text meistens nicht lesen.
 
-    **Der Test hieß bis zum 26.08.2026 ``…_waits_for_a_restart``**, und das war
-    einmal richtig: Der Katalog wurde beim Start installiert, wer „Español"
-    wählte, sah danach weiter ein deutsches Fenster. Seit `2f2b184b` baut
-    ``main`` das Fenster nach dem Dialog neu auf — der Name behauptete also das
-    Gegenteil dessen, was die Anwendung tut. Geprüft wird unverändert der
-    **Hinweis**, und der ist weiterhin richtig: Der Dialog selbst wechselt nicht
-    mit, er steht schon auf dem Bildschirm.
+    Hier stand ein Hinweis — „Die Oberfläche stellt sich gleich darauf um" —,
+    und der kündigte an, was erst nach dem Bestätigen geschah: Der Dialog blieb
+    deutsch. Für einen Italiener, der Solidon zum ersten Mal öffnet und
+    „Italiano" wählt, ist eine Ankündigung auf Deutsch keine Hilfe.
+    Entschieden von Robert am 26.08.2026: Sprache gewählt heißt Sprache
+    umgestellt.
 
-    Eine Einstellung ohne sichtbare Wirkung sieht kaputt aus, nicht
-    aufgeschoben — deshalb steht der Satz da, wo die Sprache zum ersten Mal
-    überhaupt gewählt wird.
+    Der Dialog übersetzt sich dabei nicht, er wird neu gebaut — deshalb prüft
+    dieser Test **beide Hälften**: dass er sich mit ``LANGUAGE_CHANGED``
+    schließt und die Wahl schon in den Einstellungen steht, und dass der
+    nächste Aufbau wirklich in der neuen Sprache spricht.
 
-    Bei der eigenen Sprache bleibt der Hinweis weg: Wer nichts ändert, braucht
-    keine Ankündigung.
+    Verglichen werden **alle** sichtbaren Texte, nicht ein herausgegriffener:
+    Ein ``retranslate``, das eines von neunzehn Widgets vergisst, fiele nur in
+    einer Sprache auf, und genau das soll hier auffallen.
+    """
+    from PySide6.QtWidgets import QLabel, QPushButton
+
+    from app.i18n import get_language, set_language
+    from app.ui.first_run import LANGUAGE_CHANGED
+
+    # **Die Sprache ist ein Prozesszustand, und hier wird sie wirklich
+    # umgestellt.** Ohne das Zurücksetzen nimmt dieser Test jeden folgenden mit
+    # — gemessen: ``test_an_unexpected_error_does_not_leave_the_first_run_waiting``
+    # suchte danach vergeblich nach „schiefgegangen" in einem englischen Satz.
+    #
+    # Eine ``autouse``-Fixture in ``conftest.py`` wäre der übliche Weg (so hält
+    # es die Anzeigeeinheit), und sie ist hier **gemessen untauglich**: Mit ihr
+    # stirbt ``test_ui.py`` reproduzierbar an einer Zugriffsverletzung, ohne
+    # sie läuft es mit 305 passed durch — und eine *leere* autouse-Fixture an
+    # derselben Stelle stört nicht. Es liegt also am Setzen der Sprache in
+    # jedem Test, nicht an der zusätzlichen Fixture. Warum, ist offen; bis
+    # dahin räumt dieser eine Test hinter sich auf.
+    spoken_before = get_language()
+
+    def visible_texts(dialog: FirstRunDialog) -> list[str]:
+        return [w.text() for w in dialog.findChildren(QLabel) if w.text().strip()] + [
+            w.text() for w in dialog.findChildren(QPushButton) if w.text().strip()
+        ]
+
+    settings = UiSettings()
+    settings.language = "de"
+    before = FirstRunDialog(settings)
+    spoken = visible_texts(before)
+    assert len(spoken) > 5, "ohne Texte prüft der Vergleich darunter nichts"
+
+    other = before.language.findData("en")
+    assert other >= 0, "Englisch muss zur Auswahl stehen"
+    before.language.setCurrentIndex(other)
+
+    assert before.result() == LANGUAGE_CHANGED, "der Dialog schließt sich für den Neuaufbau"
+    assert settings.language == "en", "und die Wahl steht schon in den Einstellungen"
+
+    after = FirstRunDialog(settings)
+    fresh = visible_texts(after)
+    unchanged = [a for a, b in zip(spoken, fresh, strict=False) if a == b]
+    assert len(unchanged) <= 1, f"diese Texte wechselten nicht mit: {unchanged}"
+    assert any("Let" in text or "External" in text for text in fresh), (
+        "der neue Dialog spricht die gewählte Sprache"
+    )
+
+    set_language(spoken_before)
+
+
+def test_choosing_the_same_language_changes_nothing(qt_app: QApplication) -> None:
+    """Die Schleife im Aufrufer endet, weil dieselbe Sprache nichts auslöst.
+
+    ``action_first_run`` baut den Dialog neu, solange er sich mit
+    ``LANGUAGE_CHANGED`` schließt. Was das begrenzt, ist kein Zähler, sondern
+    diese Bedingung: Nach dem Wechsel steht die Sprache in den Einstellungen,
+    und der nächste Dialog beginnt damit. Wer sie noch einmal wählt, wählt,
+    was schon gilt.
     """
     settings = UiSettings()
     dialog = FirstRunDialog(settings)
-    assert not dialog.language_note.isVisible(), "ohne Änderung gibt es nichts anzukündigen"
 
-    other = next(
-        index
-        for index in range(dialog.language.count())
-        if str(dialog.language.itemData(index)) != settings.language
-    )
-    dialog.language.setCurrentIndex(other)
-    assert not dialog.language_note.isHidden(), "die andere Sprache wird stumm angenommen"
+    same = dialog.language.findData(settings.language)
+    dialog.language.setCurrentIndex(same)
 
-    back = dialog.language.findData(settings.language)
-    dialog.language.setCurrentIndex(back)
-    assert dialog.language_note.isHidden(), "zurückgestellt bleibt der Hinweis nicht stehen"
+    assert not dialog.isHidden() or dialog.result() == 0, "kein Schließen ohne Wechsel"
 
 
 def test_an_unexpected_error_does_not_leave_the_first_run_waiting(

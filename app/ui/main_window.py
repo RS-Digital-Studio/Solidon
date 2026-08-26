@@ -7630,11 +7630,31 @@ class MainWindow(QMainWindow):
 
     def action_first_run(self) -> None:
         """§38: Sprache, Drucker, Material, externe Programme, Chat-Zugang.
-        Überspringbar."""
-        dialog = first_run.FirstRunDialog(self.settings, self)
-        dialog.importRequested.connect(self.action_import)
+        Überspringbar.
+
+        **Die Schleife ist der Sprachwechsel.** Der Dialog übersetzt sich nicht,
+        er wird neu gebaut — dieselbe Entscheidung wie beim Hauptfenster
+        (:func:`app.ui.app.rebuild_for_language`), und aus demselben Grund: Ein
+        ``retranslate()`` müsste neunzehn Texte einzeln nachziehen, und die
+        vergessene Zeile fällt nur in einer Sprache auf. Er schließt sich
+        deshalb mit ``LANGUAGE_CHANGED``, seine Antworten stehen dann schon in
+        den Einstellungen, und der nächste Durchgang baut ihn daraus wieder
+        auf.
+
+        Ein Deckel ist keiner: Jeder Durchgang setzt ``settings.language`` auf
+        die gewählte Sprache, und der Dialog schließt nur, wenn die Wahl davon
+        abweicht. Zweimal dieselbe Sprache zu wählen beendet die Schleife also
+        von selbst.
+        """
         spoken = self.settings.language
-        if dialog.exec() == first_run.FirstRunDialog.DialogCode.Accepted:
+        while True:
+            dialog = first_run.FirstRunDialog(self.settings, self)
+            dialog.importRequested.connect(self.action_import)
+            answer = dialog.exec()
+            if answer != first_run.LANGUAGE_CHANGED:
+                break
+            dialog.release()
+        if answer == first_run.FirstRunDialog.DialogCode.Accepted:
             dialog.apply_to(self.settings)
             self._adopt_defaults()
         else:
@@ -7646,10 +7666,10 @@ class MainWindow(QMainWindow):
         # einem Neustart bekommen — derselbe Weckruf wie in action_llm_key.
         self.session.set_agent_backend(None)
         self._refresh_chat_availability(probe_local=True)
-        # Der Dialog verspricht „Die Oberfläche stellt sich gleich darauf um",
-        # und über das Hilfemenü geöffnet stimmte das nicht: Den Fenstertausch
-        # löst nur der Erststart in ``main()`` aus — oder dieses Signal, wie
-        # in ``action_settings``.
+        # **Der Dialog hat sich schon umgestellt, das Fenster dahinter nicht.**
+        # Den Fenstertausch löst der Erststart in ``main()`` aus — oder dieses
+        # Signal, wie in ``action_settings``; über das Hilfemenü geöffnet gäbe
+        # es ihn sonst gar nicht.
         if self.settings.language != spoken:
             self.languageChanged.emit()
 
