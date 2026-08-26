@@ -469,6 +469,8 @@
   "Dasselbe Teil mehrfach mit gestaffelten Werten exportieren, statt von Hand zu ändern.": "Exporter la même pièce plusieurs fois avec des valeurs étagées, au lieu de modifier à la main.",
   "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der Öffnung anklicken, Bausteine → Deckel erzeugen.": "La même chose marche avec n'importe quelle boîte déjà là : cliquer la face à l'ouverture, puis Blocs → Créer un couvercle.",
   "Datei": "Fichier",
+  "Datei wählen": "Choisir un fichier",
+  "Datei wählen …": "Choisir un fichier …",
   "Dateien": "fichiers",
   "Dateien geschrieben": "fichiers écrits",
   "Dateiversion": "Version de fichier",

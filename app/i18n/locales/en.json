@@ -469,6 +469,8 @@
   "Dasselbe Teil mehrfach mit gestaffelten Werten exportieren, statt von Hand zu ändern.": "Export the same part several times with stepped values, instead of editing by hand.",
   "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der Öffnung anklicken, Bausteine → Deckel erzeugen.": "The same works for any box that already exists: click the face at the opening, then Parts → Create a lid.",
   "Datei": "File",
+  "Datei wählen": "Choose a file",
+  "Datei wählen …": "Choose a file …",
   "Dateien": "files",
   "Dateien geschrieben": "files written",
   "Dateiversion": "File version",

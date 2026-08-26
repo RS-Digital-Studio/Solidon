@@ -469,6 +469,8 @@
   "Dasselbe Teil mehrfach mit gestaffelten Werten exportieren, statt von Hand zu ändern.": "Esporta lo stesso pezzo più volte con valori scalati, invece di modificarlo a mano.",
   "Dasselbe geht mit jeder Schachtel, die schon da ist: Fläche an der Öffnung anklicken, Bausteine → Deckel erzeugen.": "Lo stesso funziona con qualsiasi scatola già esistente: clicca la faccia sull'apertura, poi Blocchi → Crea coperchio.",
   "Datei": "File",
+  "Datei wählen": "Scegli un file",
+  "Datei wählen …": "Scegli un file …",
   "Dateien": "file",
   "Dateien geschrieben": "file scritti",
   "Dateiversion": "Versione file",
