@@ -586,6 +586,93 @@ FILAMENT_READBACK: Final[tuple[tuple[str, str, type], ...]] = (
 _AS_FRACTION: Final = frozenset({"cooling.fan_speed", "cooling.bridge_fan_speed"})
 
 
+#: Was ein Orca-Maschinenprofil über die Maschine sagt und Solidon nicht
+#: ableiten kann.
+#:
+#: **Die Auswahl ist der ganze Punkt, und sie ist eng.** Bauraum, Düse und
+#: Bauart stehen längst im eigenen Druckerprofil und werden gerechnet, nicht
+#: übernommen — was hier steht, ist das, was nur der Hersteller weiß: wie die
+#: Maschine anfährt, wie schnell sie beschleunigen darf, wie sie zurückzieht.
+#: Ein Wert, den Solidon selbst kennt, gehört nicht in diese Liste; sonst
+#: entstünden zwei Wahrheiten über dieselbe Zahl.
+#:
+#: **Übernommen wird roh.** Anders als bei den Filamenten (:data:`FILAMENT_READBACK`)
+#: gibt es keine Solidon-Felder dafür — es *soll* keine geben: Niemand stellt
+#: die Maximalbeschleunigung seiner Y-Achse in einem Konstruktionsprogramm
+#: ein. Die Werte reisen unter ihrem Orca-Namen weiter und werden beim
+#: Schreiben unverändert eingesetzt.
+MACHINE_READBACK: Final[tuple[str, ...]] = (
+    # Wie die Maschine anfängt und aufhört. Ohne das fährt kein Drucker los —
+    # Homing, Bettausgleich, Düse reinigen, am Ende Kühlen und Parken.
+    "machine_start_gcode",
+    "machine_end_gcode",
+    "before_layer_change_gcode",
+    "layer_change_gcode",
+    "change_filament_gcode",
+    "machine_pause_gcode",
+    "gcode_flavor",
+    # Was die Mechanik aushält. Ein Wert zu hoch heißt übersprungene Schritte,
+    # ein Wert zu niedrig heißt eine Stunde mehr Druckzeit.
+    "machine_max_acceleration_x",
+    "machine_max_acceleration_y",
+    "machine_max_acceleration_z",
+    "machine_max_acceleration_e",
+    "machine_max_acceleration_extruding",
+    "machine_max_acceleration_retracting",
+    "machine_max_acceleration_travel",
+    "machine_max_speed_x",
+    "machine_max_speed_y",
+    "machine_max_speed_z",
+    "machine_max_speed_e",
+    "machine_max_jerk_x",
+    "machine_max_jerk_y",
+    "machine_max_jerk_z",
+    "machine_max_jerk_e",
+    "machine_min_extruding_rate",
+    "machine_min_travel_rate",
+    # Wie der Extruder zurückzieht. Hängt an der Bauart des Hotends, nicht am
+    # Filament — deshalb hier und nicht bei den Filamentwerten.
+    "retraction_length",
+    "retraction_speed",
+    "deretraction_speed",
+    "retract_lift_below",
+    "retraction_minimum_travel",
+    "retract_before_wipe",
+    "wipe_distance",
+    "z_hop",
+    "z_hop_types",
+    # Was der Bauraum an Bewegung erlaubt, über den Quader hinaus.
+    "extruder_clearance_radius",
+    "extruder_clearance_height_to_rod",
+    "extruder_clearance_height_to_lid",
+    "printer_technology",
+    "printer_structure",
+    "auxiliary_fan",
+    "support_air_filtration",
+)
+
+
+def machine_values(path: Path) -> dict[str, Any]:
+    """Was dieses Maschinenprofil über die Maschine sagt (§29).
+
+    **Der Gegenpart zu** :func:`filament_values`, und aus demselben Grund
+    gebaut: Ein Hersteller staffelt seine Angaben über mehrere Ebenen, und wer
+    nur die oberste Datei liest, sieht ein Dutzend Werte und hält den Rest für
+    nicht gesetzt. Gemessen am Elegoo Centauri: 38 Schlüssel in der eigenen
+    Datei, **83 in der aufgelösten Kette**.
+
+    Zurück kommen die Schlüssel unter ihrem **Orca-Namen**, nicht übersetzt —
+    die Begründung steht bei :data:`MACHINE_READBACK`.
+
+    Was das Profil nicht nennt, fehlt auch hier. Ein Anfahrcode, den niemand
+    gesetzt hat, ist keine Angabe des Herstellers, und ihn zu erfinden wäre
+    schlimmer als ihn wegzulassen — bei G-Code sogar gefährlich: Ein geratener
+    Homing-Befehl fährt die Düse ins Bett.
+    """
+    resolved = resolve_values(path)
+    return {key: resolved[key] for key in MACHINE_READBACK if key in resolved}
+
+
 def filament_values(path: Path) -> dict[str, float | int]:
     """Was dieses Filamentprofil über sein Material sagt (§29).
 

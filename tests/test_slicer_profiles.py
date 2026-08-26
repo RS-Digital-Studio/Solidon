@@ -472,3 +472,70 @@ def test_what_a_filament_does_not_say_is_not_invented(tmp_path: Path) -> None:
     assert werte["temperature.nozzle"] == 230
     assert "retraction.length" not in werte, "nil ist keine Zahl"
     assert "filament.max_flow" not in werte, "was fehlt, fehlt"
+
+
+def test_a_machine_profile_gives_up_what_solidon_cannot_know(tmp_path: Path) -> None:
+    """§29: Was nur der Hersteller weiß, wird übernommen statt erfunden.
+
+    Bauraum, Düse und Bauart stehen im eigenen Druckerprofil und werden
+    gerechnet. Was hier gelesen wird, ist das andere: wie die Maschine
+    anfährt, wie schnell sie beschleunigen darf, wie sie zurückzieht. Ohne
+    diese Werte lehnt die Orca-Familie ein Prozessprofil ab, bevor sie das
+    Modell ansieht — deshalb hing die Übergabe bisher an einem Herstellerprofil,
+    das der Kunde von Hand auswählen musste.
+
+    Über die Erbkette, wie bei den Filamenten: Am echten Elegoo Centauri sind
+    es 38 Schlüssel in der eigenen Datei und 83 in der aufgelösten Kette.
+
+    **Ein geratener Anfahrcode fährt die Düse ins Bett.** Was das Profil nicht
+    nennt, fehlt deshalb auch hier — die Prüfung darauf steht unten.
+    """
+    (tmp_path / "Grundlage.json").write_text(
+        json.dumps(
+            {
+                "name": "Grundlage",
+                "machine_start_gcode": "G28 ; home",
+                "machine_end_gcode": "M104 S0",
+                "gcode_flavor": "marlin",
+                "machine_max_acceleration_x": ["5000", "5000"],
+                "retraction_length": ["0.8"],
+                "nozzle_diameter": ["0.4"],
+            }
+        ),
+        encoding="utf-8",
+    )
+    oben = tmp_path / "Maschine.json"
+    oben.write_text(
+        json.dumps(
+            {
+                "name": "Maschine",
+                "inherits": "Grundlage",
+                "gcode_flavor": "klipper",
+                "printer_structure": "corexy",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    werte = sp.machine_values(oben)
+
+    assert werte["gcode_flavor"] == "klipper", "der eigene Wert schlägt den geerbten"
+    assert werte["machine_start_gcode"] == "G28 ; home", "und was nur geerbt ist, steht da"
+    assert werte["retraction_length"] == ["0.8"], "roh übernommen, nicht übersetzt"
+    assert werte["printer_structure"] == "corexy"
+    assert "nozzle_diameter" not in werte, (
+        "was Solidon selbst kennt, wird gerechnet und nicht übernommen — "
+        "sonst gäbe es zwei Wahrheiten über dieselbe Zahl"
+    )
+
+
+def test_a_machine_profile_that_says_nothing_yields_nothing(tmp_path: Path) -> None:
+    """Ein Wert, den niemand gesetzt hat, ist keine Angabe des Herstellers.
+
+    Die Gegenrichtung zum Test darüber, und bei G-Code die wichtigere: Eine
+    Vorgabe zu erfinden wäre hier nicht bloß ungenau, sondern gefährlich.
+    """
+    leer = tmp_path / "Leer.json"
+    leer.write_text(json.dumps({"name": "Leer"}), encoding="utf-8")
+
+    assert sp.machine_values(leer) == {}
