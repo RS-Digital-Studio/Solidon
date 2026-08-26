@@ -20,7 +20,7 @@
 <meta property="og:title" content="Features: edit STL files, check printability — Solidon3D">
 <meta property="og:description" content="Every Solidon3D feature with pictures: AI agent, constrained sketches, inspection report, layer analysis, building blocks, auto split, surface patterns.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/en/catalog.png">
-<meta property="og:image:alt" content="The building block catalogue with the groups fasteners and mechanics: heat-set insert, nut pocket, thread, counterbored screw hole, alignment pin, hinge eye, snap hook, living hinge, snap connector and snap fit, each with a preview and its dimensions">
+<meta property="og:image:alt" content="The building block catalogue with the groups fasteners and mechanics: heat-set insert, nut pocket, thread, counterbored screw hole, alignment pin, hinge eye, snap hook, living hinge, snap connector and snap fit, plus foot, keyhole hanger, magnet pocket, pegboard hook and wall mount, each with a preview and its dimensions">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -104,8 +104,8 @@
           model. <b>Every dimension in a proposal is exact — nothing is
           “roughly generated”.</b></p>
           <p class="note">And that is measured, not promised: a suite of
-          <b>39 reference requests</b> runs against every change to the
-          agent. As of 2026-08-08, with a local 14-billion-parameter model
+          <b>39 reference requests</b> runs before and after every change to
+          the agent's rule set. As of 2026-08-08, with a local 14-billion-parameter model
           and no cloud at all: 28 of 39 answered well, 98 % of tool calls
           valid on the first attempt — and every ambiguous request ended in
           a question back, not in a guess.</p>
@@ -168,11 +168,16 @@
           <p class="note">The outline enters the B-rep kernel as an exact
           curve. <b>A drawn circle becomes a round cylinder, not a polygon
           with many corners.</b></p>
+          <p>The grid shows what snapping is measured against, and its
+          spacing can be typed in. The dimension sits at the pointer, and the
+          bar below names the face you are drawing on. A construction line
+          stays a construction line — even after trim, extend, offset and
+          mirror.</p>
         </div>
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-skizze-en.png" width="1400" height="860" loading="lazy" decoding="async"
-                 alt="The sketch mode inside the main window: you draw in the view itself, the grid lies over the model with a dimensioned rectangle and a circle; at the bottom the floating bar with drawing tools, grid width, the line “Sketch plane: face on Dose” and the constraint buttons; on the right the Constraints tab with the thirteen constraints of the drawing">
+                 alt="The sketch mode inside the main window: you draw in the view itself, the grid lies over the model with a dimensioned rectangle and a circle; at the bottom the floating bar with drawing tools, grid width, the line “Sketch plane: face on Sign — 2247 mm²” and the constraint buttons; on the right the Constraints tab with the thirteen constraints of the drawing">
           </div>
           <figcaption>You draw in the view — on the face you clicked.</figcaption>
         </figure>
@@ -208,6 +213,9 @@
           the same result.</p>
           <p class="note">Named project parameters instead of scattered
           numbers: <b>one change in one place, not seven.</b></p>
+          <p>Bounds can be changed after the fact, even once the parameter
+          exists. In the history, select several steps at once — for a
+          shared delete or move, instead of handling each one alone.</p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
@@ -244,19 +252,31 @@
         <div>
           <span class="kicker">Building blocks</span>
           <h3>A nut pocket in four clicks instead of half an hour</h3>
+          <p>The face you click is the one that counts: a building block
+          lands where you pointed in the model — every operation on a face
+          used to cost two clicks. A face's context menu now also offers
+          wall mount, rib, tongue and groove, snap tab, snap fit and living
+          hinge.</p>
           <p>Tested building blocks in six groups — counterbored screw hole,
-          nut pocket, heat-set insert, thread, alignment pin, living hinge,
-          snap fit, magnet pocket, plus wall mount, pegboard hook, cable clip,
-          corner gusset and foot. Their dimensions come from a standard-parts
-          table, not from a feeling.</p>
+          nut pocket, heat-set insert, thread, alignment pin, hinge eye,
+          living hinge, snap fit, magnet pocket, plus wall mount, pegboard
+          hook, cable clip, corner gusset and foot. Their dimensions come
+          from a standard-parts table, not from a feeling.</p>
           <p class="note">Every block is tested across its whole parameter
           range: <b>watertight, minimum wall thickness, no
           self-intersection.</b></p>
+          <p>If you pick a block before choosing a spot, Solidon3D asks,
+          instead of dropping it at the origin. The catalogue itself opens
+          without a model loaded, too — placing a block is then locked, and
+          it says why.</p>
+          <p>The object tree shows what a building block brought with it:
+          its features appear as their own entries underneath, and the node
+          offers to change exactly that step.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="../bilder/beleg-bausteine-en.png" width="1048" height="502" loading="lazy" decoding="async"
-                 alt="The building block catalogue with the groups fasteners and mechanics: heat-set insert, nut pocket, thread, counterbored screw hole, alignment pin, hinge eye, snap hook, living hinge, snap connector and snap fit, each with a preview and its dimensions">
+            <img src="../bilder/beleg-bausteine-en.png" width="1048" height="757" loading="lazy" decoding="async"
+                 alt="The building block catalogue with the groups fasteners and mechanics: heat-set insert, nut pocket, thread, counterbored screw hole, alignment pin, hinge eye, snap hook, living hinge, snap connector and snap fit, plus foot, keyhole hanger, magnet pocket, pegboard hook and wall mount, each with a preview and its dimensions">
           </div>
           <figcaption>The catalogue — every preview is rendered, not drawn.</figcaption>
         </figure>
@@ -283,7 +303,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="../handbuch/en/own-part.png" width="520" height="816" loading="lazy" decoding="async"
+            <img src="../handbuch/en/own-part.png" width="520" height="836" loading="lazy" decoding="async"
                  alt="The dialog “Save selection as a part”: name, group and description at the top, below them per parameter the label, unit, smallest and largest value, default and its place in the dialog, then the clickable features with their names in the recipe — at the bottom the button “Create part”">
           </div>
           <figcaption>The dialog asks five things — and computes the whole range before it saves.</figcaption>
@@ -431,8 +451,8 @@
           <p>Behind every number field there is an <b>fx</b>: instead of 4.20
           it may say <code>screw_m4 + clearance</code>. Tolerances take their
           value from the material profile rather than disappearing into the
-          model as a constant. The three numbers you need are up front — the
-          rest lives under “More settings”.</p>
+          model as a constant. The two or three values you actually change
+          are up front — the rest lives under “More settings”.</p>
           <p class="note">91 operations, all built the same way:
           <b>menu, context menu, command line and chat read the same
           declaration.</b></p>
@@ -442,7 +462,8 @@
             <img src="../handbuch/en/op-dialog.png" width="520" height="195" loading="lazy" decoding="async"
                  alt="The “Drill hole” dialog with diameter and position X, an fx button behind every number field and the collapsed “More settings” section">
           </div>
-          <figcaption>An operation dialog — three numbers up front, everything else behind.</figcaption>
+          <figcaption>An operation dialog — the two or three values you
+          actually change up front, everything else behind.</figcaption>
         </figure>
       </div>
 
@@ -460,9 +481,10 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-start-en.png" width="1400" height="1000" loading="lazy" decoding="async"
-                 alt="The start screen: a drop area for models and projects, the buttons “New project” and “Open project”, and below them nine example projects with a preview image and a description">
+                 alt="The start screen: a drop area for models and projects, the buttons “New project” and “Open project”, and below them four example projects — one per way — with a preview image and a description, and below that the collapsed section “What else is there?”">
           </div>
-          <figcaption>The start screen with the nine examples.</figcaption>
+          <figcaption>The start screen with four of the nine examples — the
+          other five sit behind “What else is there?”.</figcaption>
         </figure>
       </div>
     </div>
@@ -474,6 +496,9 @@
       <ul class="features">
         <li><b>Exact edges.</b> B-rep kernel for chamfers, fillets and
         round-trip STEP.</li>
+        <li><b>Speed.</b> The same computations now run up to sixty times
+        faster than at the start — and the progress display stays put until
+        the result is actually done.</li>
         <li><b>Two colours without a second program.</b> Labels raised,
         recessed, or as a colour change in a single 3MF file.</li>
         <li><b>Hand-over to your slicer.</b> Directly, with the matching

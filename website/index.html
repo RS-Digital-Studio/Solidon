@@ -24,7 +24,7 @@
 <meta property="og:url" content="https://solidon3d.de/">
 <meta property="og:title" content="Solidon3D — fremde 3D-Modelle anpassen und druckbar machen">
 <meta property="og:description" content="Desktop-Anwendung für den 3D-Druck: fremde Modelle anpassen, eigene konstruieren, Druckbarkeit prüfen — lokal, ohne Konto, ohne Abo.">
-<meta property="og:image" content="https://solidon3d.de/handbuch/de/main-window.png">
+<meta property="og:image" content="https://solidon3d.de/bilder/beleg-fenster.png">
 <meta property="og:image:alt" content="Das Hauptfenster von Solidon3D: Objektbaum, 3D-Ansicht und Prüfbericht nebeneinander">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
@@ -88,7 +88,7 @@
       "name": "Kann ich eigene Bausteine anlegen, ohne zu programmieren?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Ja. Bau das Teil einmal, leg die Maße als Parameter an und wähle im Bausteinkatalog „Auswahl als Baustein speichern". Beim Anlegen wird der Baustein über seinen ganzen Maßbereich durchgerechnet; danach steht er mit Vorschaubild und Feldern neben den mitgelieferten. Er bleibt auf deinem Rechner — und reist als Rezept in jeder Projektdatei mit, die ihn benutzt: eine Liste von Schritten und Werten, kein Programm."
+        "text": "Ja. Bau das Teil einmal, leg die Maße als Parameter an und wähle im Bausteinkatalog Auswahl als Baustein speichern . Beim Anlegen wird der Baustein über seinen ganzen Maßbereich durchgerechnet; danach steht er mit Vorschaubild und Feldern neben den mitgelieferten. Er bleibt auf deinem Rechner — und reist als Rezept in jeder Projektdatei mit , die ihn benutzt: eine Liste von Schritten und Werten, kein Programm. Wer die Datei bekommt, kann damit rechnen, ohne etwas zu installieren."
       }
     },
     {
@@ -120,7 +120,7 @@
       "name": "Gehen meine Modelle irgendwohin?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Nur wenn du den Chat mit einem fremden API-Schlüssel benutzt — dann geht der Steckbrief der Szene an diesen Anbieter: Objekte mit ihren Maßen, die Namen der Merkmale, die Parameter und der Verlauf in Kurzform. Keine Geometrie, keine Dateien. Mit Ollama bleibt auch das lokal. Ohne Chat verlässt nichts den Rechner: keine Konten, keine Ablage im Netz, keine Telemetrie. Was du selbst absendest, ist die Ausnahme: eine Rückmeldung an den Support, deren Inhalt vorher in der Vorschau steht."
+        "text": "Nur wenn du den Chat mit einem fremden API-Schlüssel benutzt — dann geht der Steckbrief der Szene an diesen Anbieter: Objekte mit ihren Maßen, die Namen der Merkmale, die Parameter und der Verlauf in Kurzform. Keine Geometrie, keine Dateien. Mit Ollama bleibt auch das lokal. Ohne Chat verlässt fast nichts den Rechner: keine Konten, keine Ablage im Netz, keine Telemetrie. Zwei Ausnahmen bleiben. Beim Start fragt Solidon3D optional nach, ob eine neuere Version da ist — die Anfrage nennt nur die eigene Versionsnummer und lässt sich in den Einstellungen abschalten. Und was du selbst absendest: eine Rückmeldung an den Support, deren Inhalt vorher in der Vorschau steht."
       }
     },
     {
@@ -301,10 +301,11 @@
         <figure class="shot">
           <div class="stage">
             <img src="bilder/beleg-start.png" width="1400" height="1000" loading="lazy" decoding="async"
-                 alt="Der Startbildschirm von Solidon3D: ein Ablagefeld für Modelle und Projekte, die Knöpfe „Neues Projekt“ und „Projekt öffnen“, darunter neun Beispielprojekte mit Vorschaubild und Beschreibung">
+                 alt="Der Startbildschirm von Solidon3D: ein Ablagefeld für Modelle und Projekte, die Knöpfe „Neues Projekt“ und „Projekt öffnen“, darunter vier Beispielprojekte — je eins pro Weg — mit Vorschaubild und Beschreibung, darunter der zugeklappte Abschnitt „Was kann das noch?“">
           </div>
-          <figcaption>Der Startbildschirm der Demo — Datei ablegen genügt,
-          und die neun Beispielprojekte führen jeden Weg einmal vor.</figcaption>
+          <figcaption>Der Startbildschirm der Demo — Datei ablegen genügt.
+          Vier der neun mitgelieferten Beispielprojekte führen die Wege vor,
+          die übrigen fünf liegen hinter „Was kann das noch?“.</figcaption>
         </figure>
       </div>
     </div>
@@ -408,7 +409,7 @@
                   d="M28 112 l4 -30 8 -14 6 6 8 -14 12 2 6 10 8 -4 4 14 -6 12 8 8 -10 10 -24 4 -16 -4 z"/>
             <g class="anim fig-w3-fixed">
               <path class="hot" d="M150 88 h24 v-6 l14 10 -14 10 v-6 h-24 z"/>
-              <text class="dim" x="208" y="34">repariert und geprüft</text>
+              <text class="dim" x="248" y="34" text-anchor="middle">repariert und geprüft</text>
               <line class="rule" x1="204" y1="114" x2="306" y2="114" stroke-width="2" stroke-linecap="round"/>
               <path class="body" d="M216 114 V74 q0 -24 24 -24 h14 q24 0 24 24 v40 z"/>
               <path class="hot" d="m230 124 5 6 10 -13 3 3 -13 16 -8 -9z"/>
@@ -437,7 +438,8 @@
               <text class="dim" x="176" y="34">geformt</text>
               <path class="body" d="M212 62 q18 -18 34 0 q10 14 2 30 l6 34 h-50 l6 -34 q-8 -16 2 -30 z"/>
               <circle fill="none" stroke="#e08a3c" stroke-width="1.6" cx="228" cy="82" r="13"/>
-              <text class="ink" x="264" y="90" font-size="11">Wand 1,4 mm</text>
+              <text class="ink" x="264" y="84" font-size="11">Wand</text>
+              <text class="ink" x="264" y="97" font-size="11">1,4 mm</text>
             </g>
           </svg>
           <span class="tag">Weg 4 — Formen</span>
@@ -469,9 +471,9 @@
           Fehler, Warnung und Hinweis.</figcaption>
         </figure>
         <figure>
-          <img src="bilder/beleg-bausteine.png" width="1048" height="502" loading="lazy"
-               alt="Der Bausteinkatalog: Heat-Set-Einpressbuchse, Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Scharnierauge, Rastnase, Filmscharnier, Schnappverbinder und Schnappverbindung, jeder mit Vorschau und seinen Maßen">
-          <figcaption><b>Geprüfte Bausteine in sechs Gruppen.</b> Mutternfalle,
+          <img src="bilder/beleg-bausteine.png" width="1048" height="757" loading="lazy"
+               alt="Der Bausteinkatalog: Heat-Set-Einpressbuchse, Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Scharnierauge, Rastnase, Filmscharnier, Schnappverbinder und Schnappverbindung, dazu Standfuß, Schlüsselloch-Aufhängung, Magnettasche, Lochwand-Einhänger und Wandhalter, jeder mit Vorschau und seinen Maßen">
+          <figcaption><b>Geprüfte Bausteine in sechs Gruppen, hier drei davon.</b> Mutternfalle,
           Heat-Set-Buchse, Filmscharnier, Lochwand-Einhänger — die Maße kommen
           aus einer Normteiltabelle, nicht aus dem Bauchgefühl.</figcaption>
         </figure>
@@ -481,7 +483,13 @@
         <li><b>Ein KI-Agent, der nichts rät.</b> Ein Satz im Chat wird ein
         Vorschlag, den ein einziges Undo vollständig zurücknimmt. Die Geometrie
         rechnet Code, nie das Sprachmodell — und das ist gemessen: eine Suite
-        aus <b>39 Referenzanfragen</b> läuft gegen jede Änderung am Agenten.</li>
+        aus <b>39 Referenzanfragen</b> läuft vor und nach jeder Änderung an der
+        Regelsammlung des Agenten.</li>
+        <li><b>Die angeklickte Fläche zählt.</b> Bohrung, Baustein oder
+        Skizze entstehen dort, wo gezeigt wurde — vorher kostete jede
+        Operation an einer Fläche zwei Klicks. Im Menü einer Fläche stehen
+        jetzt auch Wandhalter, Rippe, Nutfeder, Rastnase, Schnappverbindung
+        und Filmscharnier.</li>
         <li><b>Prüfbericht vor dem Druck.</b> Offene Stellen, falsche Normalen,
         Wände unter zwei Bahnen — jeder Befund springt an die Stelle im Modell
         und trägt einen Handlungsvorschlag.</li>
@@ -664,7 +672,8 @@
         Die Mac-Version ist noch nicht bei Apple signiert: beim ersten Start
         einmal mit der rechten Maustaste auf das Programm und „Öffnen“ wählen,
         danach startet es wie jedes andere.</td></tr>
-        <tr><td>Speicherplatz</td><td>rund 750 MB installiert, Download rund 255 MB</td></tr>
+        <tr><td>Speicherplatz</td><td>rund 750 MB installiert, Download je
+        nach System zwischen 180 und 315 MB</td></tr>
         <tr><td>Grundbetrieb</td><td>8 GB Arbeitsspeicher und eine
         Grafik, die OpenGL kann — die KI-Zeilen darunter sind Zusätze,
         keine Mindestanforderungen</td></tr>
@@ -749,10 +758,13 @@
           dann geht der Steckbrief der Szene an diesen Anbieter: Objekte mit
           ihren Maßen, die Namen der Merkmale, die Parameter und der Verlauf
           in Kurzform. Keine Geometrie, keine Dateien. Mit Ollama bleibt auch
-          das lokal. Ohne Chat verlässt nichts den Rechner: keine Konten,
-          keine Ablage im Netz, keine Telemetrie. Was du selbst absendest,
-          ist die Ausnahme: eine Rückmeldung an den Support, deren Inhalt
-          vorher in der Vorschau steht.</p>
+          das lokal. Ohne Chat verlässt fast nichts den Rechner: keine Konten,
+          keine Ablage im Netz, keine Telemetrie.</p>
+          <p>Zwei Ausnahmen bleiben. Beim Start fragt Solidon3D optional
+          nach, ob eine neuere Version da ist — die Anfrage nennt nur die
+          eigene Versionsnummer und lässt sich in den Einstellungen
+          abschalten. Und was du selbst absendest: eine Rückmeldung an den
+          Support, deren Inhalt vorher in der Vorschau steht.</p>
         </details>
         <details>
           <summary>Welche Formate liest und schreibt Solidon3D?</summary>
@@ -799,7 +811,7 @@
         <h2>Das nächste Teil, das passt</h2>
         <p data-past-text="Die Demo läuft bis zum 30. Oktober — kostenlos und vollständig. Wer eine Zeile schreibt, bekommt Antwort: es antwortet ein Mensch.">Die Demo läuft bis zum 30. Oktober — kostenlos und vollständig.
         Wer eine Zeile schreibt, bekommt Antwort: es antwortet ein Mensch.</p>
-        <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20Bescheid%20geben%2C%20wenn%20die%20Demo%20da%20ist">
+        <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20Frage%20zur%20Demo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
           </svg>

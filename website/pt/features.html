@@ -22,7 +22,7 @@
 <meta property="og:title" content="Funções: editar STL e verificar a imprimibilidade — Solidon3D">
 <meta property="og:description" content="Todas as funções do Solidon3D com imagens: agente de IA, esboços com restrições, relatório de verificação, análise de camadas, blocos, divisão automática, padrões de superfície.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/pt/catalog.png">
-<meta property="og:image:alt" content="O catálogo de blocos com os grupos ligações e mecânica: bucha de inserção a quente, alojamento de porca, rosca, furo de parafuso com escareamento, pino de posicionamento, olhal de dobradiça, lingueta de encaixe, dobradiça de filme, conector de encaixe e ligação de encaixe, cada um com pré-visualização e medidas">
+<meta property="og:image:alt" content="O catálogo de blocos com os grupos ligações e mecânica: bucha de inserção a quente, alojamento de porca, rosca, furo de parafuso com escareamento, pino de posicionamento, olhal de dobradiça, lingueta de encaixe, dobradiça de filme, conector de encaixe e ligação de encaixe, além de pé, suspensão em buraco de fechadura, alojamento de íman, gancho para painel perfurado e suporte de parede, cada um com pré-visualização e medidas">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -106,8 +106,9 @@
           modelo de linguagem. <b>Cada cota na proposta é exata — nada é
           «gerado por alto».</b></p>
           <p class="note">E isso é medido, não prometido: uma suite de
-          <b>39 pedidos de referência</b> corre contra cada alteração ao
-          agente. À data de 08/08/2026, com um modelo local de 14 mil milhões
+          <b>39 pedidos de referência</b> corre antes e depois de cada
+          alteração ao conjunto de regras do agente. À data de 08/08/2026,
+          com um modelo local de 14 mil milhões
           de parâmetros e sem nuvem nenhuma: 28 de 39 bem respondidos, 98 %
           das chamadas de ferramentas válidas à primeira tentativa — e cada
           pedido ambíguo terminou numa pergunta de volta, não numa
@@ -171,11 +172,16 @@
           <p class="note">O contorno entra no núcleo B-Rep como curva exata.
           <b>Um círculo desenhado torna-se um cilindro redondo, não um
           polígono com muitos cantos.</b></p>
+          <p>A grelha mostra a que é que o imantado se agarra, e o seu passo
+          pode ser escrito. A cota fica junto ao ponteiro, e a barra por
+          baixo diz a face em que se está a desenhar. Uma linha auxiliar
+          continua auxiliar — mesmo depois de aparar, prolongar, deslocar e
+          espelhar.</p>
         </div>
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-skizze-pt.png" width="1400" height="860" loading="lazy" decoding="async"
-                 alt="O modo de esboço na janela principal: desenha-se na própria vista, a grelha fica sobre o modelo com um retângulo cotado e um círculo; em baixo, a barra flutuante com as ferramentas de desenho, o passo da grelha, a linha do plano de desenho e os botões de restrição; à direita, o separador com as treze restrições do desenho">
+                 alt="O modo de esboço na janela principal: desenha-se na própria vista, a grelha fica sobre o modelo com um retângulo cotado e um círculo; em baixo, a barra flutuante com as ferramentas de desenho, o passo da grelha, a linha «Plano de desenho: face em Letreiro — 2247 mm²» e os botões de restrição; à direita, o separador com as treze restrições do desenho">
           </div>
           <figcaption>Desenha-se na vista — na face em que clicou.</figcaption>
         </figure>
@@ -211,6 +217,10 @@
           recalculam-se — pela mesma ordem, com o mesmo resultado.</p>
           <p class="note">Parâmetros de projeto com nome em vez de números
           espalhados: <b>uma alteração num sítio, não em sete.</b></p>
+          <p>Os limites podem ser alterados mais tarde, mesmo depois de o
+          parâmetro já existir. No histórico, vários passos selecionam-se de
+          uma vez — para apagar ou mover em conjunto, em vez de um a
+          um.</p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
@@ -247,20 +257,33 @@
         <div>
           <span class="kicker">Blocos</span>
           <h3>Um alojamento de porca em quatro cliques, não em quatro meias horas</h3>
+          <p>A face em que clica é que conta: um bloco aparece onde apontou
+          no modelo — antes, cada operação numa face custava dois cliques. O
+          menu de contexto de uma face oferece agora também suporte de
+          parede, nervura, lingueta e ranhura, lingueta de encaixe, ligação
+          de encaixe e dobradiça de filme.</p>
           <p>Blocos verificados em seis grupos — furo de parafuso com
           escareamento, alojamento de porca, bucha de inserção a quente,
-          rosca, pino de posicionamento, dobradiça de filme, ligação de
-          encaixe, alojamento de íman, e ainda suporte de parede, gancho para
-          painel perfurado, clip de cabo, esquadro e pé. As medidas vêm de
-          uma tabela de peças normalizadas, não do palpite.</p>
+          rosca, pino de posicionamento, olhal de dobradiça, dobradiça de
+          filme, ligação de encaixe, alojamento de íman, e ainda suporte de
+          parede, gancho para painel perfurado, clip de cabo, esquadro e pé.
+          As medidas vêm de uma tabela de peças normalizadas, não do
+          palpite.</p>
           <p class="note">Cada bloco é testado em todo o seu intervalo de
           parâmetros: <b>estanque, espessura mínima de parede, sem
           autointerseções.</b></p>
+          <p>Quem escolher um bloco antes de apontar um sítio é interrogado
+          pelo Solidon3D, em vez de o ver colocado na origem. O catálogo
+          também se abre sem nenhum modelo carregado — colocar um bloco
+          fica então bloqueado, com o motivo indicado.</p>
+          <p>A árvore de objetos mostra o que um bloco traz consigo: as suas
+          características aparecem como entradas próprias por baixo dele, e
+          o nó propõe alterar exatamente esse passo.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="../bilder/beleg-bausteine-pt.png" width="1048" height="502" loading="lazy" decoding="async"
-                 alt="O catálogo de blocos com os grupos ligações e mecânica: bucha de inserção a quente, alojamento de porca, rosca, furo de parafuso com escareamento, pino de posicionamento, olhal de dobradiça, lingueta de encaixe, dobradiça de filme, conector de encaixe e ligação de encaixe, cada um com pré-visualização e medidas">
+            <img src="../bilder/beleg-bausteine-pt.png" width="1048" height="757" loading="lazy" decoding="async"
+                 alt="O catálogo de blocos com os grupos ligações e mecânica: bucha de inserção a quente, alojamento de porca, rosca, furo de parafuso com escareamento, pino de posicionamento, olhal de dobradiça, lingueta de encaixe, dobradiça de filme, conector de encaixe e ligação de encaixe, além de pé, suspensão em buraco de fechadura, alojamento de íman, gancho para painel perfurado e suporte de parede, cada um com pré-visualização e medidas">
           </div>
           <figcaption>O catálogo — cada imagem de pré-visualização é renderizada, não desenhada.</figcaption>
         </figure>
@@ -287,7 +310,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="../handbuch/pt/own-part.png" width="520" height="816" loading="lazy" decoding="async"
+            <img src="../handbuch/pt/own-part.png" width="520" height="836" loading="lazy" decoding="async"
                  alt="A caixa de diálogo «Guardar a seleção como bloco»: em cima nome, grupo e descrição, por baixo, por cada parâmetro, a etiqueta, a unidade, o valor mínimo e máximo, a predefinição e o seu lugar na caixa, depois os pontos clicáveis com os seus nomes na receita — em baixo o botão «Criar bloco»">
           </div>
           <figcaption>A caixa de diálogo pergunta cinco coisas — e calcula todo o intervalo antes de guardar.</figcaption>
@@ -436,8 +459,8 @@
           <p>Atrás de cada campo numérico há um <b>fx</b>: em vez de 4,20
           pode lá estar <code>parafuso_m4 + folga</code>. As tolerâncias vão
           buscar o seu valor ao perfil de material, em vez de desaparecerem
-          no modelo como constantes. À frente estão os três números de que se
-          precisa — o resto vive em «Mais definições».</p>
+          no modelo como constantes. À frente estão os dois ou três valores
+          que se muda de facto — o resto vive em «Mais definições».</p>
           <p class="note">91 operações, todas com o mesmo padrão:
           <b>menu, menu de contexto, linha de comandos e chat veem a mesma
           declaração.</b></p>
@@ -447,7 +470,8 @@
             <img src="../handbuch/pt/op-dialog.png" width="520" height="195" loading="lazy" decoding="async"
                  alt="O diálogo «Abrir furo» com diâmetro e posição X, um botão fx atrás de cada campo numérico e a secção recolhida «Mais definições»">
           </div>
-          <figcaption>O diálogo de uma operação — três números à frente, tudo o resto atrás.</figcaption>
+          <figcaption>O diálogo de uma operação — à frente os dois ou três
+          valores que se muda de facto, atrás tudo o resto.</figcaption>
         </figure>
       </div>
 
@@ -465,9 +489,10 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-start-pt.png" width="1400" height="1000" loading="lazy" decoding="async"
-                 alt="O ecrã inicial: uma área de largar para modelos e projetos, os botões «Novo projeto» e «Abrir projeto», e por baixo nove projetos de exemplo com imagem de pré-visualização e descrição">
+                 alt="O ecrã inicial: uma área de largar para modelos e projetos, os botões «Novo projeto» e «Abrir projeto», e por baixo quatro projetos de exemplo — um por caminho — com imagem de pré-visualização e descrição, e por baixo disso a secção recolhida «Que mais há?»">
           </div>
-          <figcaption>O ecrã inicial com os nove exemplos.</figcaption>
+          <figcaption>O ecrã inicial com quatro dos nove exemplos — os
+          outros cinco estão atrás de «Que mais há?».</figcaption>
         </figure>
       </div>
     </div>
@@ -479,6 +504,9 @@
       <ul class="features">
         <li><b>Arestas exatas.</b> Núcleo B-Rep para chanfros, arredondamentos
         e STEP de ida e volta.</li>
+        <li><b>Velocidade.</b> Os mesmos cálculos correm até sessenta vezes
+        mais depressa do que no início — e o indicador de progresso fica
+        parado até o resultado estar mesmo pronto.</li>
         <li><b>Duas cores sem segundo programa.</b> Inscrição em relevo,
         gravada ou como mudança de cor num único ficheiro 3MF.</li>
         <li><b>Entrega ao seu slicer.</b> Direta, com as definições certas —

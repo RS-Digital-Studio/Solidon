@@ -58,7 +58,13 @@ TARGET = Path(__file__).resolve().parent.parent / "website" / "bilder"
 #: Scharniere, Schnappverbindungen). Auf Stückzahlen zählt dieser Kommentar
 #: nicht mehr — die Bibliothek wächst, und eine mitgeschriebene Zahl war beim
 #: Review vom 26.08.2026 bereits zweimal falsch.
-SHOWN_GROUPS = ("fasteners", "mechanics")
+#:
+#: **„Befestigung" kam dazu, weil der Text daneben damit wirbt.** Die
+#: Startseite nennt vier Bausteine beim Namen, und einer davon — der
+#: Lochwand-Einhänger — lag in einer Gruppe, die das Bild nicht zeigte. Ein
+#: Beleg, der das Genannte nicht enthält, belegt nichts; wer hier eine Gruppe
+#: streicht, liest deshalb zuerst, welche Namen auf der Seite stehen.
+SHOWN_GROUPS = ("fasteners", "mechanics", "mounting")
 
 #: Wie viel Luft um ein Band bleibt, in Bildpunkten.
 PADDING = 12
@@ -145,6 +151,27 @@ def showcase_findings(language: str) -> list:
 #: hält, weil er wie einer aussieht.
 WEB_WINDOW = (1400, 860)
 WEB_START = (1400, 1000)
+
+#: **Warum hier keine Dialoge stehen, obwohl die Verkaufsseite drei zeigt.**
+#:
+#: Gemessen am 26.08.2026 im Browser: Auf ``funktionen.html`` werden
+#: ``own-part.png`` und ``op-dialog.png`` auf 133 Prozent gezogen,
+#: ``report.png`` auf 112 — die Spalte ist 691 Punkte breit, die Bilder sind
+#: 520 und 620. Drei unscharfe Bildschirmfotos auf einer Seite, die mit
+#: Genauigkeit wirbt.
+#:
+#: Der naheliegende Griff wäre, sie hier in Spaltenbreite noch einmal
+#: aufzunehmen. **Er ist falsch:** Ein Dialog, den man auf 760 Punkte zieht,
+#: zeigt Felder in einer Breite, die der Kunde nie zu sehen bekommt — dasselbe
+#: hat beim Operationsdialog schon einmal zweihundert Punkte Leerraum erzeugt
+#: (siehe ``make_figures``). Ein Fenster darf man kleiner aufnehmen, weil es
+#: mitwächst; ein Dialog hat seine Größe.
+#:
+#: Was wirklich hilft, ist die doppelte Pixeldichte — dieselbe Aufnahme mit
+#: ``devicePixelRatio`` 2, dann ist sie in jeder Anzeigegröße scharf und auf
+#: einem hochauflösenden Bildschirm gleich mit. Das betrifft **alle**
+#: Bildschirmfotos, nicht nur diese drei, und gehört als eigener Schritt
+#: gemessen — nicht nebenbei in einer Auslieferung.
 
 #: Wie lange ein Durchgang beim Setzenlassen dauert, in Millisekunden.
 SETTLE_MS = 50

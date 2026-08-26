@@ -22,7 +22,7 @@
 <meta property="og:title" content="Funzioni: modificare STL e verificare la stampa — Solidon3D">
 <meta property="og:description" content="Tutte le funzioni di Solidon3D con immagini: agente IA, schizzi con vincoli, rapporto di verifica, analisi degli strati, blocchi, divisione automatica, motivi superficiali.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/it/catalog.png">
-<meta property="og:image:alt" content="Il catalogo dei blocchi con i gruppi collegamenti e meccanica: inserto a caldo, sede per dado, filettatura, foro per vite con svasatura, spina, occhiello di cerniera, dente di scatto, cerniera a film, connettore a scatto e aggancio a scatto, ciascuno con anteprima e misure">
+<meta property="og:image:alt" content="Il catalogo dei blocchi con i gruppi collegamenti e meccanica: inserto a caldo, sede per dado, filettatura, foro per vite con svasatura, spina, occhiello di cerniera, dente di scatto, cerniera a film, connettore a scatto e aggancio a scatto, oltre a piedino, attacco a buco di serratura, tasca per magnete, gancio per pannello forato e supporto a parete, ciascuno con anteprima e misure">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -106,8 +106,9 @@
           linguistico. <b>Ogni quota nella proposta è esatta — niente è
           «generato all'incirca».</b></p>
           <p class="note">Ed è misurato, non promesso: una suite di
-          <b>39 richieste di riferimento</b> gira contro ogni modifica
-          all'agente. All'8 agosto 2026, con un modello locale da 14 miliardi
+          <b>39 richieste di riferimento</b> gira prima e dopo ogni modifica
+          alla regolamentazione dell'agente. All'8 agosto 2026, con un
+          modello locale da 14 miliardi
           di parametri e senza alcun cloud: 28 su 39 risposte bene, il 98%
           delle chiamate agli strumenti valide al primo tentativo — e ogni
           richiesta ambigua è finita in una domanda di ritorno, non in una
@@ -171,11 +172,16 @@
           <p class="note">Il contorno entra nel kernel B-rep come curva
           esatta. <b>Un cerchio disegnato diventa un cilindro rotondo, non un
           poligono con tanti angoli.</b></p>
+          <p>La griglia mostra a cosa si aggancia il magnete, e il suo passo
+          si può digitare. La quota sta accanto al puntatore, e la barra
+          sotto indica la faccia su cui si sta disegnando. Una linea ausiliaria
+          resta ausiliaria — anche dopo tagliare, prolungare, spostare e
+          specchiare.</p>
         </div>
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-skizze-it.png" width="1400" height="860" loading="lazy" decoding="async"
-                 alt="La modalità schizzo nella finestra principale: si disegna nella vista stessa, la griglia sta sopra il modello con un rettangolo quotato e un cerchio; in basso la barra flottante con gli strumenti di disegno, il passo della griglia, la riga del piano di disegno e i pulsanti dei vincoli; a destra la scheda con i tredici vincoli del disegno">
+                 alt="La modalità schizzo nella finestra principale: si disegna nella vista stessa, la griglia sta sopra il modello con un rettangolo quotato e un cerchio; in basso la barra flottante con gli strumenti di disegno, il passo della griglia, la riga «Piano di disegno: faccia su Insegna — 2247 mm²» e i pulsanti dei vincoli; a destra la scheda con i tredici vincoli del disegno">
           </div>
           <figcaption>Si disegna nella vista — sulla faccia su cui hai fatto clic.</figcaption>
         </figure>
@@ -212,6 +218,10 @@
           nello stesso ordine, con lo stesso risultato.</p>
           <p class="note">Parametri di progetto con un nome invece di numeri
           sparsi: <b>una modifica in un punto, non in sette.</b></p>
+          <p>I limiti si possono cambiare in seguito, anche dopo che il
+          parametro esiste già. Nella cronologia si selezionano più passi
+          insieme — per cancellarli o spostarli in blocco, invece che uno
+          alla volta.</p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
@@ -248,20 +258,32 @@
         <div>
           <span class="kicker">Blocchi</span>
           <h3>Una sede per dado in quattro clic, non in quattro mezz'ore</h3>
+          <p>La faccia cliccata conta: un blocco si posa dove hai indicato
+          nel modello — prima ogni operazione su una faccia costava due
+          clic. Il menu contestuale di una faccia offre ora anche supporto a
+          parete, nervatura, linguetta e scanalatura, dente di scatto,
+          aggancio a scatto e cerniera a film.</p>
           <p>Blocchi verificati in sei gruppi — foro per vite con svasatura,
-          sede per dado, inserto a caldo, filettatura, spina, cerniera a film,
-          aggancio a scatto, tasca per magnete, e poi supporto a parete,
-          gancio per pannello forato, clip per cavi, squadretta e piede. Le
-          quote vengono da una tabella dei componenti normalizzati, non
-          dall'istinto.</p>
+          sede per dado, inserto a caldo, filettatura, spina, occhiello di
+          cerniera, cerniera a film, aggancio a scatto, tasca per magnete, e
+          poi supporto a parete, gancio per pannello forato, clip per cavi,
+          squadretta e piede. Le quote vengono da una tabella dei componenti
+          normalizzati, non dall'istinto.</p>
           <p class="note">Ogni blocco è testato su tutto il suo intervallo di
           parametri: <b>a tenuta stagna, spessore minimo di parete, nessuna
           autointersezione.</b></p>
+          <p>Chi sceglie un blocco prima di indicare un punto viene
+          interpellato da Solidon3D, invece di vederlo piazzato all'origine.
+          Anche il catalogo si apre senza un modello caricato — inserire un
+          blocco è allora bloccato, con il motivo indicato.</p>
+          <p>L'albero degli oggetti mostra cosa porta con sé un blocco: le
+          sue caratteristiche compaiono come voci proprie sotto di esso, e il
+          nodo propone di modificare esattamente quel passo.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="../bilder/beleg-bausteine-it.png" width="1048" height="502" loading="lazy" decoding="async"
-                 alt="Il catalogo dei blocchi con i gruppi collegamenti e meccanica: inserto a caldo, sede per dado, filettatura, foro per vite con svasatura, spina, occhiello di cerniera, dente di scatto, cerniera a film, connettore a scatto e aggancio a scatto, ciascuno con anteprima e misure">
+            <img src="../bilder/beleg-bausteine-it.png" width="1048" height="757" loading="lazy" decoding="async"
+                 alt="Il catalogo dei blocchi con i gruppi collegamenti e meccanica: inserto a caldo, sede per dado, filettatura, foro per vite con svasatura, spina, occhiello di cerniera, dente di scatto, cerniera a film, connettore a scatto e aggancio a scatto, oltre a piedino, attacco a buco di serratura, tasca per magnete, gancio per pannello forato e supporto a parete, ciascuno con anteprima e misure">
           </div>
           <figcaption>Il catalogo — ogni anteprima è renderizzata, non disegnata.</figcaption>
         </figure>
@@ -288,7 +310,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="../handbuch/it/own-part.png" width="520" height="816" loading="lazy" decoding="async"
+            <img src="../handbuch/it/own-part.png" width="520" height="836" loading="lazy" decoding="async"
                  alt="La finestra «Salva la selezione come blocco»: in alto nome, gruppo e descrizione, sotto per ogni parametro l'etichetta, l'unità, il valore minimo e massimo, il valore predefinito e il suo posto nella finestra, poi i punti selezionabili con i loro nomi nella ricetta — in basso il pulsante «Crea blocco»">
           </div>
           <figcaption>La finestra chiede cinque cose — e calcola l'intero intervallo prima di salvare.</figcaption>
@@ -438,8 +460,8 @@
           <p>Dietro ogni campo numerico c'è un <b>fx</b>: invece di 4,20 lì
           può stare <code>vite_m4 + gioco</code>. Le tolleranze prendono il
           loro valore dal profilo del materiale, invece di sparire nel
-          modello come costante. Davanti stanno i tre numeri che servono —
-          il resto vive sotto «Altre impostazioni».</p>
+          modello come costante. Davanti stanno i due o tre valori che si
+          cambiano davvero — il resto vive sotto «Altre impostazioni».</p>
           <p class="note">91 operazioni, tutte sullo stesso schema:
           <b>menu, menu contestuale, riga di comando e chat leggono la
           stessa dichiarazione.</b></p>
@@ -449,7 +471,8 @@
             <img src="../handbuch/it/op-dialog.png" width="520" height="195" loading="lazy" decoding="async"
                  alt="Il dialogo «Pratica un foro» con diametro e posizione X, un pulsante fx dietro ogni campo numerico e la sezione chiusa «Altre impostazioni»">
           </div>
-          <figcaption>Il dialogo di un'operazione — davanti tre numeri, dietro tutto il resto.</figcaption>
+          <figcaption>Il dialogo di un'operazione — davanti i due o tre
+          valori che si cambiano davvero, dietro tutto il resto.</figcaption>
         </figure>
       </div>
 
@@ -468,9 +491,10 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-start-it.png" width="1400" height="1000" loading="lazy" decoding="async"
-                 alt="La schermata iniziale: un'area dove lasciare modelli e progetti, i pulsanti «Nuovo progetto» e «Apri progetto», sotto nove progetti di esempio con anteprima e descrizione">
+                 alt="La schermata iniziale: un'area dove lasciare modelli e progetti, i pulsanti «Nuovo progetto» e «Apri progetto», sotto quattro progetti di esempio — uno per via — con anteprima e descrizione, e sotto la sezione chiusa «Cos'altro c'è?»">
           </div>
-          <figcaption>La schermata iniziale con i nove esempi.</figcaption>
+          <figcaption>La schermata iniziale con quattro dei nove esempi — gli
+          altri cinque stanno dietro «Cos'altro c'è?».</figcaption>
         </figure>
       </div>
     </div>
@@ -482,6 +506,10 @@
       <ul class="features">
         <li><b>Spigoli esatti.</b> Kernel B-rep per smussi, raccordi e STEP
         che regge andata e ritorno.</li>
+        <li><b>Velocità.</b> Gli stessi calcoli girano fino a sessanta volte
+        più veloci di quando si è cominciato — e l'indicatore di
+        avanzamento resta fermo finché il risultato non è davvero
+        pronto.</li>
         <li><b>Due colori senza un secondo programma.</b> Scritte in rilievo,
         in incavo o come cambio colore in un unico file 3MF.</li>
         <li><b>Consegna al tuo slicer.</b> Diretta, con le impostazioni

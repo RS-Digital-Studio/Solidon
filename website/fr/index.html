@@ -21,7 +21,7 @@
 <meta property="og:url" content="https://solidon3d.de/fr/">
 <meta property="og:title" content="Solidon3D — adapter des modèles 3D et les rendre imprimables">
 <meta property="og:description" content="Application de bureau pour l'impression 3D&nbsp;: adapter les modèles des autres, construire les vôtres, vérifier l'imprimabilité — en local, sans compte, sans abonnement.">
-<meta property="og:image" content="https://solidon3d.de/handbuch/fr/main-window.png">
+<meta property="og:image" content="https://solidon3d.de/bilder/beleg-fenster-fr.png">
 <meta property="og:image:alt" content="La fenêtre principale de Solidon3D&nbsp;: l'arbre des objets, la vue 3D et le rapport de contrôle côte à côte">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
@@ -77,7 +77,7 @@
       "name": "Puis-je créer mes propres blocs sans programmer ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Oui. Construisez la pièce une fois, créez des paramètres pour ses cotes et choisissez dans le catalogue « Enregistrer la sélection comme bloc ». La création calcule le bloc sur toute sa plage ; il figure ensuite à côté des blocs fournis, avec aperçu et champs. Il reste sur votre ordinateur — et voyage comme recette dans chaque fichier de projet qui l'utilise : une liste d'étapes et de valeurs, pas un programme."
+        "text": "Oui. Construisez la pièce une fois, créez des paramètres pour ses cotes et choisissez dans le catalogue Enregistrer la sélection comme bloc . La création calcule le bloc sur toute sa plage ; il figure ensuite à côté des blocs fournis, avec aperçu et champs. Il reste sur votre ordinateur — et voyage comme recette dans chaque fichier de projet qui l'utilise : une liste d'étapes et de valeurs, pas un programme. Qui reçoit le fichier peut calculer avec, sans rien installer."
       }
     },
     {
@@ -93,7 +93,7 @@
       "name": "Suis-je obligé d'utiliser une IA ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Non. Le chat est une voie parmi quatre. Sans clé et sans Ollama, tout reste entièrement utilisable, hormis le chat — menus, menus contextuels, ligne de commande et les 87 opérations."
+        "text": "Non. Le chat est une voie parmi quatre. Sans clé et sans Ollama, tout reste entièrement utilisable, hormis le chat — menus, menus contextuels, ligne de commande et les 91 opérations."
       }
     },
     {
@@ -117,7 +117,7 @@
       "name": "Mes modèles partent-ils quelque part ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Seulement si vous utilisez le chat avec la clé API d'un fournisseur tiers — la fiche de la scène part alors chez ce fournisseur : les objets avec leurs cotes, les noms des caractéristiques, les paramètres et l'historique en abrégé. Pas de géométrie, pas de fichiers. Avec Ollama, même cela reste local. Sans le chat, rien ne quitte la machine : aucun compte, aucun stockage en ligne, aucune télémétrie. L'exception, c'est ce que vous envoyez vous-même : un retour au support, dont vous voyez le contenu au préalable dans un aperçu."
+        "text": "Seulement si vous utilisez le chat avec la clé API d'un fournisseur tiers — la fiche de la scène part alors chez ce fournisseur : les objets avec leurs cotes, les noms des caractéristiques, les paramètres et l'historique en abrégé. Pas de géométrie, pas de fichiers. Avec Ollama, même cela reste local. Sans le chat, presque rien ne quitte la machine : aucun compte, aucun stockage en ligne, aucune télémétrie. Deux exceptions demeurent. Au démarrage, Solidon3D vérifie en option si une version plus récente existe — la requête n'indique que son propre numéro de version et se désactive dans les réglages. Et ce que vous envoyez vous-même : un retour au support, dont vous voyez le contenu au préalable dans un aperçu."
       }
     },
     {
@@ -301,11 +301,12 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-start-fr.png" width="1400" height="1000" loading="lazy" decoding="async"
-                 alt="L'écran de démarrage de Solidon3D&nbsp;: une zone de dépôt pour modèles et projets, les boutons «&nbsp;Nouveau projet&nbsp;» et «&nbsp;Ouvrir un projet&nbsp;», en dessous neuf projets d'exemple avec aperçu et description">
+                 alt="L'écran de démarrage de Solidon3D&nbsp;: une zone de dépôt pour modèles et projets, les boutons «&nbsp;Nouveau projet&nbsp;» et «&nbsp;Ouvrir un projet&nbsp;», en dessous quatre projets d'exemple — un par voie — avec aperçu et description, et en dessous la section repliée «&nbsp;Quoi d'autre&nbsp;?&nbsp;»">
           </div>
           <figcaption>L'écran de démarrage de la démo — déposer un fichier
-          suffit, et les neuf projets d'exemple parcourent chaque chemin une
-          fois.</figcaption>
+          suffit. Quatre des neuf projets d'exemple fournis parcourent les
+          voies&nbsp;; les cinq autres se trouvent derrière «&nbsp;Quoi
+          d'autre&nbsp;?&nbsp;».</figcaption>
         </figure>
       </div>
     </div>
@@ -411,7 +412,7 @@
                   d="M28 112 l4 -30 8 -14 6 6 8 -14 12 2 6 10 8 -4 4 14 -6 12 8 8 -10 10 -24 4 -16 -4 z"/>
             <g class="anim fig-w3-fixed">
               <path class="hot" d="M150 88 h24 v-6 l14 10 -14 10 v-6 h-24 z"/>
-              <text class="dim" x="208" y="34">réparé et contrôlé</text>
+              <text class="dim" x="248" y="34" text-anchor="middle">réparé et contrôlé</text>
               <line class="rule" x1="204" y1="114" x2="306" y2="114" stroke-width="2" stroke-linecap="round"/>
               <path class="body" d="M216 114 V74 q0 -24 24 -24 h14 q24 0 24 24 v40 z"/>
               <path class="hot" d="m230 124 5 6 10 -13 3 3 -13 16 -8 -9z"/>
@@ -441,7 +442,8 @@
               <text class="dim" x="176" y="34">sculpté</text>
               <path class="body" d="M212 62 q18 -18 34 0 q10 14 2 30 l6 34 h-50 l6 -34 q-8 -16 2 -30 z"/>
               <circle fill="none" stroke="#e08a3c" stroke-width="1.6" cx="228" cy="82" r="13"/>
-              <text class="ink" x="256" y="90" font-size="11">paroi 1,4 mm</text>
+              <text class="ink" x="264" y="84" font-size="11">paroi</text>
+              <text class="ink" x="264" y="97" font-size="11">1,4 mm</text>
             </g>
           </svg>
           <span class="tag">Voie 4 — Sculpter</span>
@@ -471,9 +473,9 @@
           <figcaption><b>Le rapport.</b> Ce qui cloche à l'impression y figure avant que le trancheur n'y passe le temps — compté par erreur, avertissement et remarque.</figcaption>
         </figure>
         <figure>
-          <img src="../bilder/beleg-bausteine-fr.png" width="1048" height="502" loading="lazy"
-               alt="Le catalogue de blocs : insert à chaud, piège à écrou, filetage, trou de vis avec fraisure, goupille, œil de charnière, ergot d'encliquetage, charnière-film, connecteur à clip et clip d'encliquetage, chacun avec un aperçu et ses cotes">
-          <figcaption><b>Des blocs vérifiés en six groupes.</b> Piège à écrou, insert à chaud, charnière-film, crochet pour panneau perforé — les cotes viennent d'un tableau de pièces normalisées, pas d'une intuition.</figcaption>
+          <img src="../bilder/beleg-bausteine-fr.png" width="1048" height="757" loading="lazy"
+               alt="Le catalogue de blocs : insert à chaud, piège à écrou, filetage, trou de vis avec fraisure, goupille, œil de charnière, ergot d'encliquetage, charnière-film, connecteur à clip et clip d'encliquetage, ainsi que pied, suspension en trou de serrure, poche à aimant, crochet pour panneau perforé et support mural, chacun avec un aperçu et ses cotes">
+          <figcaption><b>Des blocs vérifiés en six groupes, dont trois ici.</b> Piège à écrou, insert à chaud, charnière-film, crochet pour panneau perforé — les cotes viennent d'un tableau de pièces normalisées, pas d'une intuition.</figcaption>
         </figure>
       </div>
 
@@ -482,7 +484,14 @@
         devient une proposition qu'un seul Annuler retire entièrement. La
         géométrie est calculée par du code, jamais par le modèle de langage —
         et c'est mesuré&nbsp;: une suite de <b>39 requêtes de référence</b>
-        tourne contre chaque modification de l'agent.</li>
+        tourne avant et après chaque modification du corpus de règles de
+        l'agent.</li>
+        <li><b>La face cliquée compte.</b> Un perçage, un bloc ou une
+        esquisse se posent là où vous avez pointé — chaque opération sur une
+        face coûtait auparavant deux clics. Le menu contextuel d'une face
+        propose désormais aussi support mural, nervure, languette et
+        rainure, ergot d'encliquetage, clip d'encliquetage et
+        charnière-film.</li>
         <li><b>Un rapport de contrôle avant l'impression.</b> Zones ouvertes,
         normales inversées, parois sous deux cordons — chaque constat saute à
         l'endroit du modèle qu'il vise et porte une action proposée.</li>
@@ -668,7 +677,8 @@
         chez Apple&nbsp;: au premier lancement, un clic droit sur
         l'application, choisir «&nbsp;Ouvrir&nbsp;», et ensuite elle démarre
         comme n'importe quelle autre.</td></tr>
-        <tr><td>Espace disque</td><td>environ 750&nbsp;Mo installés, téléchargement d'environ 255&nbsp;Mo</td></tr>
+        <tr><td>Espace disque</td><td>environ 750&nbsp;Mo installés,
+        téléchargement entre 180 et 315&nbsp;Mo selon le système</td></tr>
         <tr><td>Usage de base</td><td>8&nbsp;Go de RAM et une carte
         graphique qui parle OpenGL — les lignes IA ci-dessous sont
         des extras, pas des minimums</td></tr>
@@ -731,7 +741,7 @@
           <summary>Suis-je obligé d'utiliser une IA&nbsp;?</summary>
           <p>Non. Le chat est une voie parmi quatre. Sans clé et sans
           Ollama, tout reste entièrement utilisable, hormis le chat — menus,
-          menus contextuels, ligne de commande et les 87 opérations.</p>
+          menus contextuels, ligne de commande et les 91 opérations.</p>
         </details>
         <details>
           <summary>L'IA calcule-t-elle ma géométrie&nbsp;?</summary>
@@ -758,10 +768,13 @@
           fournisseur&nbsp;: les objets avec leurs cotes, les noms des
           caractéristiques, les paramètres et l'historique en abrégé. Pas de
           géométrie, pas de fichiers. Avec Ollama, même cela reste local.
-          Sans le chat, rien ne quitte la machine&nbsp;: aucun compte, aucun
-          stockage en ligne, aucune télémétrie. L'exception, c'est ce que
-          vous envoyez vous-même : un retour au support, dont vous voyez
-          le contenu au préalable dans un aperçu.</p>
+          Sans le chat, presque rien ne quitte la machine&nbsp;: aucun
+          compte, aucun stockage en ligne, aucune télémétrie.</p>
+          <p>Deux exceptions demeurent. Au démarrage, Solidon3D vérifie en
+          option si une version plus récente existe — la requête n'indique
+          que son propre numéro de version et se désactive dans les
+          réglages. Et ce que vous envoyez vous-même : un retour au support,
+          dont vous voyez le contenu au préalable dans un aperçu.</p>
         </details>
         <details>
           <summary>Quels formats Solidon3D lit-il et écrit-il&nbsp;?</summary>
@@ -811,7 +824,7 @@
         <p data-past-text="La démo court jusqu'au 30 octobre — gratuite et complète. Écrivez une ligne et vous aurez une réponse : c'est un humain qui répond.">La démo court jusqu'au 30&nbsp;octobre — gratuite et complète.
         Écrivez une ligne et vous aurez une réponse&nbsp;: c'est un humain
         qui répond.</p>
-        <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20pr%C3%A9venez-moi%20quand%20la%20d%C3%A9mo%20sera%20l%C3%A0">
+        <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20question%20sur%20la%20d%C3%A9mo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
           </svg>

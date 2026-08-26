@@ -24,7 +24,7 @@
 <meta property="og:url" content="https://solidon3d.de/en/">
 <meta property="og:title" content="Solidon3D — adapt 3D models and make them printable">
 <meta property="og:description" content="Desktop application for 3D printing: adapt other people's models, design your own, check printability — local, no account, no subscription.">
-<meta property="og:image" content="https://solidon3d.de/handbuch/en/main-window.png">
+<meta property="og:image" content="https://solidon3d.de/bilder/beleg-fenster-en.png">
 <meta property="og:image:alt" content="The Solidon3D main window: object tree, 3D view and inspection report side by side">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
@@ -80,7 +80,7 @@
       "name": "Can I create my own building blocks without programming?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Yes. Build the part once, create parameters for its dimensions and choose “Save selection as a part” in the catalogue. Creating it computes the block across its whole range; afterwards it sits next to the supplied ones with a preview image and fields. It stays on your computer — and travels as a recipe inside every project file that uses it: a list of steps and values, not a program."
+        "text": "Yes. Build the part once, create parameters for its dimensions and choose Save selection as a part in the catalogue. Creating it computes the block across its whole range; afterwards it sits next to the supplied ones with a preview image and fields. It stays on your computer — and travels as a recipe inside every project file that uses it: a list of steps and values, not a program. Whoever receives the file can compute with it without installing anything."
       }
     },
     {
@@ -120,7 +120,7 @@
       "name": "Do my models go anywhere?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Only if you use the chat with a third-party API key — then a digest of the scene goes to that provider: objects with their dimensions, the names of the features, the parameters and the history in brief. No geometry, no files. With Ollama even that stays local. Without the chat, nothing leaves the machine: no accounts, no storage on someone else's server, no telemetry. The exception is what you send yourself: a feedback message to support, whose contents you see in a preview beforehand."
+        "text": "Only if you use the chat with a third-party API key — then a digest of the scene goes to that provider: objects with their dimensions, the names of the features, the parameters and the history in brief. No geometry, no files. With Ollama even that stays local. Without the chat, almost nothing leaves the machine: no accounts, no storage on someone else's server, no telemetry. Two exceptions remain. At startup, Solidon3D optionally checks whether a newer version is out — the check states only its own version number and can be switched off in the settings. And what you send yourself: a feedback message to support, whose contents you see in a preview beforehand."
       }
     },
     {
@@ -300,10 +300,11 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-start-en.png" width="1400" height="1000" loading="lazy" decoding="async"
-                 alt="The Solidon3D start screen: a drop area for models and projects, the buttons New project and Open project, below them nine example projects with preview and description">
+                 alt="The Solidon3D start screen: a drop area for models and projects, the buttons New project and Open project, below them four example projects — one per way — with preview and description, and below that the collapsed section What else is there?">
           </div>
           <figcaption>The start screen of the demo — dropping a file is
-          enough, and the nine example projects walk each way once.</figcaption>
+          enough. Four of the nine bundled example projects walk the ways;
+          the other five sit behind “What else is there?”.</figcaption>
         </figure>
       </div>
     </div>
@@ -406,7 +407,7 @@
                   d="M28 112 l4 -30 8 -14 6 6 8 -14 12 2 6 10 8 -4 4 14 -6 12 8 8 -10 10 -24 4 -16 -4 z"/>
             <g class="anim fig-w3-fixed">
               <path class="hot" d="M150 88 h24 v-6 l14 10 -14 10 v-6 h-24 z"/>
-              <text class="dim" x="208" y="34">repaired and checked</text>
+              <text class="dim" x="248" y="34" text-anchor="middle">repaired and checked</text>
               <line class="rule" x1="204" y1="114" x2="306" y2="114" stroke-width="2" stroke-linecap="round"/>
               <path class="body" d="M216 114 V74 q0 -24 24 -24 h14 q24 0 24 24 v40 z"/>
               <path class="hot" d="m230 124 5 6 10 -13 3 3 -13 16 -8 -9z"/>
@@ -435,7 +436,8 @@
               <text class="dim" x="176" y="34">sculpted</text>
               <path class="body" d="M212 62 q18 -18 34 0 q10 14 2 30 l6 34 h-50 l6 -34 q-8 -16 2 -30 z"/>
               <circle fill="none" stroke="#e08a3c" stroke-width="1.6" cx="228" cy="82" r="13"/>
-              <text class="ink" x="264" y="90" font-size="11">wall 1.4 mm</text>
+              <text class="ink" x="264" y="84" font-size="11">wall</text>
+              <text class="ink" x="264" y="97" font-size="11">1.4 mm</text>
             </g>
           </svg>
           <span class="tag">Way 4 — Sculpting</span>
@@ -464,9 +466,9 @@
           <figcaption><b>The report.</b> What goes wrong when printing stands there before the slicer spends the time — counted by error, warning and note.</figcaption>
         </figure>
         <figure>
-          <img src="../bilder/beleg-bausteine-en.png" width="1048" height="502" loading="lazy"
-               alt="The building block catalogue: heat-set insert, nut trap, thread, counterbored screw hole, alignment pin, hinge eye, snap hook, living hinge, snap connector and snap fit, each with a preview and its dimensions">
-          <figcaption><b>Tested building blocks in six groups.</b> Nut trap, heat-set insert, living hinge, pegboard hook — the dimensions come from a standard-parts table, not from a gut feeling.</figcaption>
+          <img src="../bilder/beleg-bausteine-en.png" width="1048" height="757" loading="lazy"
+               alt="The building block catalogue: heat-set insert, nut trap, thread, counterbored screw hole, alignment pin, hinge eye, snap hook, living hinge, snap connector and snap fit, plus foot, keyhole hanger, magnet pocket, pegboard hook and wall mount, each with a preview and its dimensions">
+          <figcaption><b>Tested building blocks in six groups, three of them shown here.</b> Nut trap, heat-set insert, living hinge, pegboard hook — the dimensions come from a standard-parts table, not from a gut feeling.</figcaption>
         </figure>
       </div>
 
@@ -474,8 +476,13 @@
         <li><b>An AI agent that does not guess.</b> One sentence in the chat
         becomes a proposal that a single undo takes back completely. Geometry is
         computed by code, never by the language model — and that is measured: a
-        suite of <b>39 reference requests</b> runs against every change to the
-        agent.</li>
+        suite of <b>39 reference requests</b> runs before and after every change
+        to the agent's rule set.</li>
+        <li><b>The face you click is the one that counts.</b> A hole, block
+        or sketch lands where you pointed — every operation on a face used
+        to cost two clicks. A face's context menu now also offers wall
+        mount, rib, tongue and groove, snap tab, snap fit and living
+        hinge.</li>
         <li><b>An inspection report before printing.</b> Open edges, flipped
         normals, walls under two extrusion widths — every finding jumps to the
         spot in the model and carries a suggested action.</li>
@@ -655,7 +662,8 @@
         Intel. The Mac build is not yet signed with Apple: on first launch,
         right-click the application once and choose “Open”, after that it
         starts like any other.</td></tr>
-        <tr><td>Disk space</td><td>about 750 MB installed, download about 255 MB</td></tr>
+        <tr><td>Disk space</td><td>about 750 MB installed, download between
+        180 and 315 MB depending on your system</td></tr>
         <tr><td>Basic use</td><td>8 GB of RAM and any graphics that
         speak OpenGL — the AI rows below are extras, not minimum
         requirements</td></tr>
@@ -739,10 +747,13 @@
           digest of the scene goes to that provider: objects with their
           dimensions, the names of the features, the parameters and the
           history in brief. No geometry, no files. With Ollama even that stays
-          local. Without the chat, nothing leaves the machine: no accounts, no
-          storage on someone else's server, no telemetry. The exception is
-          what you send yourself: a feedback message to support, whose
-          contents you see in a preview beforehand.</p>
+          local. Without the chat, almost nothing leaves the machine: no
+          accounts, no storage on someone else's server, no telemetry.</p>
+          <p>Two exceptions remain. At startup, Solidon3D optionally checks
+          whether a newer version is out — the check states only its own
+          version number and can be switched off in the settings. And what
+          you send yourself: a feedback message to support, whose contents
+          you see in a preview beforehand.</p>
         </details>
         <details>
           <summary>Which formats does Solidon3D read and write?</summary>
@@ -788,7 +799,7 @@
         <h2>The next part that fits</h2>
         <p data-past-text="The demo runs until 30 October — free and complete. Write a line and you'll get an answer: a human answers.">The demo runs until 30 October — free and complete. Write a line
         and you'll get an answer: a human answers.</p>
-        <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20tell%20me%20when%20the%20demo%20is%20out">
+        <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20question%20about%20the%20demo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
           </svg>

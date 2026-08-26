@@ -20,7 +20,7 @@
 <meta property="og:title" content="Funktionen: STL bearbeiten, Druckbarkeit prüfen — Solidon3D">
 <meta property="og:description" content="Alle Funktionen von Solidon3D mit Bildern: KI-Agent, Skizzen mit Zwängen, Prüfbericht, Schichtanalyse, Bausteine, Auto-Split, Oberflächenmuster.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/de/catalog.png">
-<meta property="og:image:alt" content="Der Bausteinkatalog mit den Gruppen Verbindungen und Mechanik: Heat-Set-Einpressbuchse, Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Scharnierauge, Rastnase, Filmscharnier, Schnappverbinder und Schnappverbindung, jeder mit Vorschau und seinen Maßen">
+<meta property="og:image:alt" content="Der Bausteinkatalog mit den Gruppen Verbindungen und Mechanik: Heat-Set-Einpressbuchse, Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Scharnierauge, Rastnase, Filmscharnier, Schnappverbinder und Schnappverbindung, dazu Standfuß, Schlüsselloch-Aufhängung, Magnettasche, Lochwand-Einhänger und Wandhalter, jeder mit Vorschau und seinen Maßen">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -105,7 +105,8 @@
           <b>Jedes Maß im Vorschlag ist exakt — nichts ist „ungefähr
           generiert“.</b></p>
           <p class="note">Und das ist gemessen, nicht versprochen: eine Suite
-          aus <b>39 Referenzanfragen</b> läuft gegen jede Änderung am Agenten.
+          aus <b>39 Referenzanfragen</b> läuft vor und nach jeder Änderung an
+          der Regelsammlung des Agenten.
           Stand 08.08.2026, mit einem lokalen 14-Milliarden-Modell ganz ohne
           Cloud: 28 von 39 gut beantwortet, 98 % der Werkzeugaufrufe im
           ersten Versuch gültig — und jede mehrdeutige Anfrage endete in
@@ -169,11 +170,16 @@
           <p class="note">Der Umriss geht als exakte Kurve in den B-Rep-Kern.
           <b>Ein gezeichneter Kreis wird ein runder Zylinder, kein Vieleck mit
           vielen Ecken.</b></p>
+          <p>Das Raster zeigt, wonach gefangen wird, und seine Weite lässt
+          sich eintippen. Das Maß steht am Zeiger, die Leiste darunter nennt
+          die Fläche, auf der gerade gezeichnet wird. Eine Hilfslinie bleibt
+          eine Hilfslinie — auch nach Trimmen, Verlängern, Versetzen und
+          Spiegeln.</p>
         </div>
         <figure class="shot">
           <div class="stage">
             <img src="bilder/beleg-skizze.png" width="1400" height="860" loading="lazy" decoding="async"
-                 alt="Der Skizzenmodus im Hauptfenster: Gezeichnet wird in der Ansicht selbst, über dem Modell liegt das Raster mit einem bemaßten Rechteck und einem Kreis; unten die schwebende Leiste mit Zeichenwerkzeugen, Rasterweite, der Zeile „Zeichenebene: Fläche an Dose“ und den Bedingungsknöpfen; rechts der Reiter „Bedingungen“ mit den dreizehn Bedingungen der Zeichnung">
+                 alt="Der Skizzenmodus im Hauptfenster: Gezeichnet wird in der Ansicht selbst, über dem Modell liegt das Raster mit einem bemaßten Rechteck und einem Kreis; unten die schwebende Leiste mit Zeichenwerkzeugen, Rasterweite, der Zeile „Zeichenebene: Fläche an Schild — 2247 mm²“ und den Bedingungsknöpfen; rechts der Reiter „Bedingungen“ mit den dreizehn Bedingungen der Zeichnung">
           </div>
           <figcaption>Gezeichnet wird in der Ansicht — auf der Fläche, die man angeklickt hat.</figcaption>
         </figure>
@@ -210,6 +216,10 @@
           derselben Reihenfolge, mit demselben Ergebnis.</p>
           <p class="note">Benannte Projektparameter statt Streuzahlen:
           <b>eine Änderung an einer Stelle, nicht an sieben.</b></p>
+          <p>Maßgrenzen lassen sich nachträglich ändern, auch nach dem
+          Anlegen des Parameters. Im Verlauf markierst du mehrere Schritte auf
+          einmal — für eine gemeinsame Löschung oder Verschiebung, statt jeden
+          einzeln anzufassen.</p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
@@ -246,19 +256,32 @@
         <div>
           <span class="kicker">Bausteine</span>
           <h3>Mutternfalle in vier Klicks statt vier halben Stunden</h3>
+          <p>Die angeklickte Fläche zählt: Ein Baustein setzt sich dort, wo du
+          im Modell hingezeigt hast — vorher kostete jede Operation an einer
+          Fläche zwei Klicks. Im Kontextmenü einer Fläche stehen inzwischen
+          auch Wandhalter, Rippe, Nutfeder, Rastnase, Schnappverbindung und
+          Filmscharnier.</p>
           <p>Geprüfte Bausteine in sechs Gruppen — Schraubenloch mit Senkung,
           Mutternfalle, Heat-Set-Einpressbuchse, Gewinde, Passstift,
-          Filmscharnier, Schnappverbindung, Magnettasche, dazu Wandhalter,
-          Lochwand-Einhänger, Kabelclip, Eckwinkel und Standfuß. Die Maße
-          kommen aus einer Normteiltabelle, nicht aus dem Bauchgefühl.</p>
+          Scharnierauge, Filmscharnier, Schnappverbindung, Magnettasche, dazu
+          Wandhalter, Lochwand-Einhänger, Kabelclip, Eckwinkel und Standfuß.
+          Die Maße kommen aus einer Normteiltabelle, nicht aus dem
+          Bauchgefühl.</p>
           <p class="note">Jeder Baustein ist über seinen ganzen
           Parameterbereich getestet: <b>wasserdicht, Mindestwandstärke,
           keine Selbstdurchdringung.</b></p>
+          <p>Wählst du vor dem Einsetzen keine Stelle, fragt Solidon3D nach,
+          statt an den Nullpunkt zu setzen. Der Katalog selbst lässt sich auch
+          ohne geöffnetes Modell ansehen — das Einsetzen ist dann gesperrt,
+          mit dem Grund dabei.</p>
+          <p>Der Objektbaum zeigt, was ein Baustein mitbringt: seine
+          Merkmale stehen als eigene Einträge darunter, und der Knoten bietet
+          an, genau diesen Schritt zu ändern.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="bilder/beleg-bausteine.png" width="1048" height="502" loading="lazy" decoding="async"
-                 alt="Der Bausteinkatalog mit den Gruppen Verbindungen und Mechanik: Heat-Set-Einpressbuchse, Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Scharnierauge, Rastnase, Filmscharnier, Schnappverbinder und Schnappverbindung, jeder mit Vorschau und seinen Maßen">
+            <img src="bilder/beleg-bausteine.png" width="1048" height="757" loading="lazy" decoding="async"
+                 alt="Der Bausteinkatalog mit den Gruppen Verbindungen und Mechanik: Heat-Set-Einpressbuchse, Mutternfalle, Gewinde, Schraubenloch mit Senkung, Passstift, Scharnierauge, Rastnase, Filmscharnier, Schnappverbinder und Schnappverbindung, dazu Standfuß, Schlüsselloch-Aufhängung, Magnettasche, Lochwand-Einhänger und Wandhalter, jeder mit Vorschau und seinen Maßen">
           </div>
           <figcaption>Der Katalog — jedes Vorschaubild ist gerendert, nicht gezeichnet.</figcaption>
         </figure>
@@ -286,7 +309,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="handbuch/de/own-part.png" width="520" height="816" loading="lazy" decoding="async"
+            <img src="handbuch/de/own-part.png" width="520" height="836" loading="lazy" decoding="async"
                  alt="Der Dialog „Auswahl als Baustein speichern“: oben Name, Gruppe und Beschreibung, darunter je Parameter Beschriftung, Einheit, kleinster und größter Wert, Vorgabe und der Platz im Dialog, dann die anklickbaren Stellen mit ihren Namen im Rezept — unten der Knopf „Baustein anlegen“">
           </div>
           <figcaption>Der Dialog fragt fünf Dinge — und rechnet den Maßbereich durch, bevor er speichert.</figcaption>
@@ -437,8 +460,8 @@
           <p>Hinter jedem Zahlenfeld steht ein <b>fx</b>: statt 4,20 darf dort
           <code>schraube_m4 + spiel</code> stehen. Toleranzen holen sich ihren
           Wert aus dem Materialprofil, statt als Konstante im Modell zu
-          verschwinden. Vorne stehen die drei Zahlen, die man braucht — der
-          Rest liegt unter „Weitere Einstellungen“.</p>
+          verschwinden. Vorne stehen die zwei bis drei Werte, die man
+          wirklich ändert — der Rest liegt unter „Weitere Einstellungen“.</p>
           <p class="note">91 Operationen, alle nach demselben Muster:
           <b>Menü, Kontextmenü, Kommandozeile und Chat sehen dieselbe
           Deklaration.</b></p>
@@ -448,7 +471,8 @@
             <img src="handbuch/de/op-dialog.png" width="520" height="195" loading="lazy" decoding="async"
                  alt="Der Dialog „Bohrung setzen“ mit Durchmesser und Position X, einem fx-Knopf hinter jedem Zahlenfeld und dem zugeklappten Bereich „Weitere Einstellungen“">
           </div>
-          <figcaption>Der Dialog einer Operation — vorne drei Zahlen, hinten alles andere.</figcaption>
+          <figcaption>Der Dialog einer Operation — vorne die zwei bis drei
+          Werte, die man wirklich ändert, hinten alles andere.</figcaption>
         </figure>
       </div>
 
@@ -467,9 +491,10 @@
         <figure class="shot">
           <div class="stage">
             <img src="bilder/beleg-start.png" width="1400" height="1000" loading="lazy" decoding="async"
-                 alt="Der Startbildschirm: ein Ablagefeld für Modelle und Projekte, die Knöpfe „Neues Projekt“ und „Projekt öffnen“, darunter neun Beispielprojekte mit Vorschaubild und Beschreibung">
+                 alt="Der Startbildschirm: ein Ablagefeld für Modelle und Projekte, die Knöpfe „Neues Projekt“ und „Projekt öffnen“, darunter vier Beispielprojekte — je eins pro Weg — mit Vorschaubild und Beschreibung, darunter der zugeklappte Abschnitt „Was kann das noch?“">
           </div>
-          <figcaption>Der Startbildschirm mit den neun Beispielen.</figcaption>
+          <figcaption>Der Startbildschirm mit vier der neun Beispiele — die
+          übrigen fünf liegen hinter „Was kann das noch?“.</figcaption>
         </figure>
       </div>
     </div>
@@ -481,6 +506,9 @@
       <ul class="features">
         <li><b>Exakte Kanten.</b> B-Rep-Kern für Fasen, Verrundungen und
         rundreisefähiges STEP.</li>
+        <li><b>Tempo.</b> Dieselben Rechnungen laufen bis zum Sechzigfachen
+        schneller als zu Beginn — und die Fortschrittsanzeige bleibt stehen,
+        bis wirklich fertig gerechnet ist.</li>
         <li><b>Zwei Farben ohne zweites Programm.</b> Beschriftung erhaben,
         vertieft oder als Farbwechsel in einer 3MF-Datei.</li>
         <li><b>Übergabe an deinen Slicer.</b> Direkt, mit den passenden

@@ -21,7 +21,7 @@
 <meta property="og:url" content="https://solidon3d.de/it/">
 <meta property="og:title" content="Solidon3D — adattare modelli 3D e renderli stampabili">
 <meta property="og:description" content="Applicazione desktop per la stampa 3D: adatta i modelli altrui, costruisci i tuoi, verifica la stampabilità — in locale, senza account, senza abbonamento.">
-<meta property="og:image" content="https://solidon3d.de/handbuch/it/main-window.png">
+<meta property="og:image" content="https://solidon3d.de/bilder/beleg-fenster-it.png">
 <meta property="og:image:alt" content="La finestra principale di Solidon3D: albero degli oggetti, vista 3D e rapporto di verifica affiancati">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
@@ -77,7 +77,7 @@
       "name": "Posso creare i miei blocchi senza programmare?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sì. Costruisci il pezzo una volta, crea i parametri per le sue quote e scegli nel catalogo «Salva la selezione come blocco». Alla creazione il blocco viene calcolato su tutto il suo intervallo; poi sta accanto a quelli forniti, con anteprima e campi. Resta sul tuo computer — e viaggia come ricetta in ogni file di progetto che lo usa: un elenco di passi e valori, non un programma."
+        "text": "Sì. Costruisci il pezzo una volta, crea i parametri per le sue quote e scegli nel catalogo Salva la selezione come blocco . Alla creazione il blocco viene calcolato su tutto il suo intervallo; poi sta accanto a quelli forniti, con anteprima e campi. Resta sul tuo computer — e viaggia come ricetta in ogni file di progetto che lo usa: un elenco di passi e valori, non un programma. Chi riceve il file può calcolare senza installare nulla."
       }
     },
     {
@@ -117,7 +117,7 @@
       "name": "I miei modelli vanno da qualche parte?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Solo se usi la chat con una chiave API di terzi — allora a quel fornitore va la scheda della scena: gli oggetti con le loro quote, i nomi delle caratteristiche, i parametri e la cronologia in breve. Niente geometria, niente file. Con Ollama anche quello resta in locale. Senza chat non esce nulla dal computer: nessun account, nessun archivio in rete, nessuna telemetria. L'eccezione è quello che invii tu: un riscontro al supporto, il cui contenuto vedi prima in un'anteprima."
+        "text": "Solo se usi la chat con una chiave API di terzi — allora a quel fornitore va la scheda della scena: gli oggetti con le loro quote, i nomi delle caratteristiche, i parametri e la cronologia in breve. Niente geometria, niente file. Con Ollama anche quello resta in locale. Senza chat non esce quasi nulla dal computer: nessun account, nessun archivio in rete, nessuna telemetria. Restano due eccezioni. All'avvio, Solidon3D controlla facoltativamente se esiste una versione più recente — la richiesta indica solo il proprio numero di versione e si può disattivare nelle impostazioni. E quello che invii tu: un riscontro al supporto, il cui contenuto vedi prima in un'anteprima."
       }
     },
     {
@@ -299,11 +299,11 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-start-it.png" width="1400" height="1000" loading="lazy" decoding="async"
-                 alt="La schermata iniziale di Solidon3D: un'area dove lasciare modelli e progetti, i pulsanti «Nuovo progetto» e «Apri progetto», sotto nove progetti di esempio con anteprima e descrizione">
+                 alt="La schermata iniziale di Solidon3D: un'area dove lasciare modelli e progetti, i pulsanti «Nuovo progetto» e «Apri progetto», sotto quattro progetti di esempio — uno per via — con anteprima e descrizione, e sotto la sezione chiusa «Cos'altro c'è?»">
           </div>
           <figcaption>La schermata iniziale della demo — basta lasciare un
-          file, e i nove progetti di esempio percorrono ogni strada una
-          volta.</figcaption>
+          file. Quattro dei nove progetti di esempio inclusi percorrono le
+          vie; gli altri cinque stanno dietro «Cos'altro c'è?».</figcaption>
         </figure>
       </div>
     </div>
@@ -408,7 +408,7 @@
                   d="M28 112 l4 -30 8 -14 6 6 8 -14 12 2 6 10 8 -4 4 14 -6 12 8 8 -10 10 -24 4 -16 -4 z"/>
             <g class="anim fig-w3-fixed">
               <path class="hot" d="M150 88 h24 v-6 l14 10 -14 10 v-6 h-24 z"/>
-              <text class="dim" x="208" y="34">riparata e verificata</text>
+              <text class="dim" x="248" y="34" text-anchor="middle">riparata e verificata</text>
               <line class="rule" x1="204" y1="114" x2="306" y2="114" stroke-width="2" stroke-linecap="round"/>
               <path class="body" d="M216 114 V74 q0 -24 24 -24 h14 q24 0 24 24 v40 z"/>
               <path class="hot" d="m230 124 5 6 10 -13 3 3 -13 16 -8 -9z"/>
@@ -438,7 +438,8 @@
               <text class="dim" x="176" y="34">modellata</text>
               <path class="body" d="M212 62 q18 -18 34 0 q10 14 2 30 l6 34 h-50 l6 -34 q-8 -16 2 -30 z"/>
               <circle fill="none" stroke="#e08a3c" stroke-width="1.6" cx="228" cy="82" r="13"/>
-              <text class="ink" x="264" y="90" font-size="11">parete 1,4 mm</text>
+              <text class="ink" x="264" y="84" font-size="11">parete</text>
+              <text class="ink" x="264" y="97" font-size="11">1,4 mm</text>
             </g>
           </svg>
           <span class="tag">Via 4 — Modellare</span>
@@ -468,9 +469,9 @@
           <figcaption><b>Il rapporto.</b> Quello che va storto in stampa sta lì prima che lo slicer ci spenda il tempo — contato per errore, avviso e nota.</figcaption>
         </figure>
         <figure>
-          <img src="../bilder/beleg-bausteine-it.png" width="1048" height="502" loading="lazy"
-               alt="Il catalogo dei blocchi: inserto a caldo, sede per dado, filettatura, foro per vite con svasatura, spina, occhiello di cerniera, dente di scatto, cerniera a film, connettore a scatto e aggancio a scatto, ciascuno con anteprima e misure">
-          <figcaption><b>Blocchi verificati in sei gruppi.</b> Sede per dado, boccola a caldo, cerniera a film, gancio per pannello forato — le misure vengono da una tabella di parti normalizzate, non a sensazione.</figcaption>
+          <img src="../bilder/beleg-bausteine-it.png" width="1048" height="757" loading="lazy"
+               alt="Il catalogo dei blocchi: inserto a caldo, sede per dado, filettatura, foro per vite con svasatura, spina, occhiello di cerniera, dente di scatto, cerniera a film, connettore a scatto e aggancio a scatto, oltre a piedino, attacco a buco di serratura, tasca per magnete, gancio per pannello forato e supporto a parete, ciascuno con anteprima e misure">
+          <figcaption><b>Blocchi verificati in sei gruppi, tre dei quali qui.</b> Sede per dado, boccola a caldo, cerniera a film, gancio per pannello forato — le misure vengono da una tabella di parti normalizzate, non a sensazione.</figcaption>
         </figure>
       </div>
 
@@ -478,8 +479,13 @@
         <li><b>Un agente IA che non tira a indovinare.</b> Una frase in chat
         diventa una proposta, che un solo Annulla ritira per intero. La
         geometria la calcola il codice, mai il modello linguistico — ed è
-        misurato: una suite di <b>39 richieste di riferimento</b> gira contro
-        ogni modifica all'agente.</li>
+        misurato: una suite di <b>39 richieste di riferimento</b> gira prima
+        e dopo ogni modifica alla regolamentazione dell'agente.</li>
+        <li><b>La faccia cliccata conta.</b> Un foro, un blocco o uno
+        schizzo si posano dove hai indicato — prima ogni operazione su una
+        faccia costava due clic. Il menu contestuale di una faccia offre ora
+        anche supporto a parete, nervatura, linguetta e scanalatura, dente di
+        scatto, aggancio a scatto e cerniera a film.</li>
         <li><b>Rapporto di verifica prima della stampa.</b> Punti aperti,
         normali invertite, pareti sotto i due cordoni — ogni rilievo salta al
         punto del modello e porta con sé un'azione proposta.</li>
@@ -659,7 +665,8 @@
         Silicon e Intel. La versione Mac non è ancora firmata presso Apple:
         al primo avvio clicca una volta col tasto destro sull'applicazione e
         scegli «Apri», poi parte come qualsiasi altra.</td></tr>
-        <tr><td>Spazio su disco</td><td>circa 750 MB installata, download circa 255 MB</td></tr>
+        <tr><td>Spazio su disco</td><td>circa 750 MB installata, download
+        tra 180 e 315 MB a seconda del sistema</td></tr>
         <tr><td>Uso di base</td><td>8 GB di RAM e una grafica che
         parli OpenGL — le righe IA qui sotto sono extra, non
         requisiti minimi</td></tr>
@@ -743,10 +750,13 @@
           fornitore va la scheda della scena: gli oggetti con le loro quote,
           i nomi delle caratteristiche, i parametri e la cronologia in breve.
           Niente geometria, niente file. Con Ollama anche quello resta in
-          locale. Senza chat non esce nulla dal computer: nessun account,
-          nessun archivio in rete, nessuna telemetria. L'eccezione è
-          quello che invii tu: un riscontro al supporto, il cui contenuto
-          vedi prima in un'anteprima.</p>
+          locale. Senza chat non esce quasi nulla dal computer: nessun
+          account, nessun archivio in rete, nessuna telemetria.</p>
+          <p>Restano due eccezioni. All'avvio, Solidon3D controlla
+          facoltativamente se esiste una versione più recente — la richiesta
+          indica solo il proprio numero di versione e si può disattivare
+          nelle impostazioni. E quello che invii tu: un riscontro al
+          supporto, il cui contenuto vedi prima in un'anteprima.</p>
         </details>
         <details>
           <summary>Quali formati legge e scrive Solidon3D?</summary>
@@ -794,7 +804,7 @@
         <p data-past-text="La demo gira fino al 30 ottobre — gratuita e completa. Chi scrive due righe riceve una risposta: risponde un essere umano.">La demo gira fino al 30 ottobre — gratuita e completa. Chi
         scrive due righe riceve una risposta: risponde un essere
         umano.</p>
-        <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20avvisami%20quando%20esce%20la%20demo">
+        <a class="btn" href="mailto:support@solidon3d.de?subject=Solidon3D%20%E2%80%94%20domanda%20sulla%20demo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
             <path d="M4 5h16v14H4z" stroke-linejoin="round"/><path d="m4 6 8 6 8-6"/>
           </svg>

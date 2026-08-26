@@ -20,7 +20,7 @@
 <meta property="og:title" content="Fonctions : modifier un STL, vérifier l'impression — Solidon3D">
 <meta property="og:description" content="Toutes les fonctions de Solidon3D en images&nbsp;: agent IA, esquisses sous contraintes, rapport de contrôle, analyse des couches, blocs, découpe automatique, motifs de surface.">
 <meta property="og:image" content="https://solidon3d.de/handbuch/fr/catalog.png">
-<meta property="og:image:alt" content="Le catalogue de blocs avec les groupes assemblages et mécanique&nbsp;: insert à chaud, piège à écrou, filetage, trou de vis avec fraisure, goupille, œil de charnière, ergot d'encliquetage, charnière-film, connecteur à clip et clip d'encliquetage, chacun avec un aperçu et ses cotes">
+<meta property="og:image:alt" content="Le catalogue de blocs avec les groupes assemblages et mécanique&nbsp;: insert à chaud, piège à écrou, filetage, trou de vis avec fraisure, goupille, œil de charnière, ergot d'encliquetage, charnière-film, connecteur à clip et clip d'encliquetage, ainsi que pied, suspension en trou de serrure, poche à aimant, crochet pour panneau perforé et support mural, chacun avec un aperçu et ses cotes">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#f7f6f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#171614" media="(prefers-color-scheme: dark)">
@@ -105,8 +105,9 @@
           le modèle de langage. <b>Chaque cote d'une proposition est exacte —
           rien n'est «&nbsp;généré à peu près&nbsp;».</b></p>
           <p class="note">Et c'est mesuré, pas promis&nbsp;: une suite de
-          <b>39 requêtes de référence</b> tourne contre chaque modification
-          de l'agent. Au 8&nbsp;août 2026, avec un modèle local de
+          <b>39 requêtes de référence</b> tourne avant et après chaque
+          modification du corpus de règles de l'agent. Au 8&nbsp;août 2026,
+          avec un modèle local de
           14 milliards de paramètres, sans aucun cloud&nbsp;: 28 réponses
           correctes sur 39, 98&nbsp;% d'appels d'outils valides du premier
           coup — et chaque demande ambiguë s'est terminée par une question en
@@ -171,11 +172,16 @@
           <p class="note">Le contour entre dans le noyau B-Rep comme courbe
           exacte. <b>Un cercle dessiné devient un cylindre rond, pas un
           polygone à beaucoup de sommets.</b></p>
+          <p>La grille montre à quoi l'aimantation se mesure, et son pas se
+          saisit au clavier. La cote se tient près du pointeur, et la barre
+          du dessous nomme la face sur laquelle on dessine. Une ligne de
+          construction reste une ligne de construction — même après
+          ajustage, prolongement, décalage et symétrie.</p>
         </div>
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-skizze-fr.png" width="1400" height="860" loading="lazy" decoding="async"
-                 alt="Le mode esquisse dans la fenêtre principale&nbsp;: on dessine dans la vue elle-même, la grille recouvre le modèle avec un rectangle coté et un cercle&nbsp;; en bas, la barre flottante avec les outils de dessin, le pas de la grille, la ligne du plan de dessin et les boutons de contraintes&nbsp;; à droite, l'onglet avec les treize contraintes du dessin">
+                 alt="Le mode esquisse dans la fenêtre principale&nbsp;: on dessine dans la vue elle-même, la grille recouvre le modèle avec un rectangle coté et un cercle&nbsp;; en bas, la barre flottante avec les outils de dessin, le pas de la grille, la ligne «&nbsp;Plan de dessin&nbsp;: face sur Enseigne — 2247&nbsp;mm²&nbsp;» et les boutons de contraintes&nbsp;; à droite, l'onglet avec les treize contraintes du dessin">
           </div>
           <figcaption>On dessine dans la vue — sur la face que l'on a cliquée.</figcaption>
         </figure>
@@ -213,6 +219,10 @@
           avec le même résultat.</p>
           <p class="note">Des paramètres de projet nommés au lieu de chiffres
           éparpillés&nbsp;: <b>une modification à un endroit, pas à sept.</b></p>
+          <p>Les bornes se modifient après coup, même une fois le paramètre
+          créé. Dans l'historique, plusieurs étapes se sélectionnent d'un
+          coup — pour une suppression ou un déplacement commun, plutôt qu'un
+          par un.</p>
         </div>
         <figure class="shot">
           <svg class="figure" viewBox="0 0 560 250" role="img"
@@ -249,20 +259,32 @@
         <div>
           <span class="kicker">Blocs</span>
           <h3>Un piège à écrou en quatre clics au lieu de quatre demi-heures</h3>
+          <p>La face cliquée compte&nbsp;: un bloc se pose là où vous avez
+          pointé dans le modèle — chaque opération sur une face coûtait
+          auparavant deux clics. Le menu contextuel d'une face propose
+          désormais aussi support mural, nervure, languette et rainure,
+          ergot d'encliquetage, clip d'encliquetage et charnière-film.</p>
           <p>Des blocs testés en six groupes — trou de vis avec fraisure,
-          piège à écrou, insert à chaud, filetage, goupille, charnière-film,
-          clip d'encliquetage, poche à aimant, plus support mural, crochet
-          pour panneau perforé, clip de câble, gousset et pied. Les cotes
-          viennent d'une table de pièces normalisées, pas de
-          l'intuition.</p>
+          piège à écrou, insert à chaud, filetage, goupille, œil de
+          charnière, charnière-film, clip d'encliquetage, poche à aimant,
+          plus support mural, crochet pour panneau perforé, clip de câble,
+          gousset et pied. Les cotes viennent d'une table de pièces
+          normalisées, pas de l'intuition.</p>
           <p class="note">Chaque bloc est testé sur toute sa plage de
           paramètres&nbsp;: <b>étanche, épaisseur de paroi minimale, aucune
           auto-intersection.</b></p>
+          <p>Qui choisit un bloc avant de pointer un endroit se voit
+          interrogé par Solidon3D, plutôt que de le voir posé à l'origine. Le
+          catalogue lui-même s'ouvre aussi sans modèle chargé — poser un bloc
+          est alors verrouillé, avec le motif indiqué.</p>
+          <p>L'arbre des objets montre ce qu'apporte un bloc&nbsp;: ses
+          caractéristiques figurent en entrées propres en dessous, et le
+          nœud propose de modifier exactement cette étape.</p>
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="../bilder/beleg-bausteine-fr.png" width="1048" height="502" loading="lazy" decoding="async"
-                 alt="Le catalogue de blocs avec les groupes assemblages et mécanique&nbsp;: insert à chaud, piège à écrou, filetage, trou de vis avec fraisure, goupille, œil de charnière, ergot d'encliquetage, charnière-film, connecteur à clip et clip d'encliquetage, chacun avec un aperçu et ses cotes">
+            <img src="../bilder/beleg-bausteine-fr.png" width="1048" height="757" loading="lazy" decoding="async"
+                 alt="Le catalogue de blocs avec les groupes assemblages et mécanique&nbsp;: insert à chaud, piège à écrou, filetage, trou de vis avec fraisure, goupille, œil de charnière, ergot d'encliquetage, charnière-film, connecteur à clip et clip d'encliquetage, ainsi que pied, suspension en trou de serrure, poche à aimant, crochet pour panneau perforé et support mural, chacun avec un aperçu et ses cotes">
           </div>
           <figcaption>Le catalogue — chaque aperçu est rendu, pas dessiné.</figcaption>
         </figure>
@@ -290,7 +312,7 @@
         </div>
         <figure class="shot">
           <div class="stage">
-            <img src="../handbuch/fr/own-part.png" width="520" height="816" loading="lazy" decoding="async"
+            <img src="../handbuch/fr/own-part.png" width="520" height="836" loading="lazy" decoding="async"
                  alt="Le dialogue «&nbsp;Enregistrer la sélection comme bloc&nbsp;»&nbsp;: en haut le nom, le groupe et la description, en dessous pour chaque paramètre le libellé, l'unité, les valeurs minimale et maximale, la valeur par défaut et sa place dans le dialogue, puis les emplacements cliquables avec leurs noms dans la recette — en bas le bouton «&nbsp;Créer le bloc&nbsp;»">
           </div>
           <figcaption>Le dialogue pose cinq questions — et calcule toute la plage avant d'enregistrer.</figcaption>
@@ -439,10 +461,10 @@
           <p>Derrière chaque champ numérique se trouve un <b>fx</b>&nbsp;:
           au lieu de 4,20, on peut y écrire <code>vis_m4 + jeu</code>. Les
           tolérances prennent leur valeur dans le profil de matériau au lieu
-          de disparaître dans le modèle comme constantes. Devant, les trois
-          chiffres dont on a besoin — le reste vit sous «&nbsp;Autres
-          réglages&nbsp;».</p>
-          <p class="note">87 opérations, toutes sur le même modèle&nbsp;:
+          de disparaître dans le modèle comme constantes. Devant, les deux ou
+          trois valeurs qu'on change vraiment — le reste vit sous
+          «&nbsp;Autres réglages&nbsp;».</p>
+          <p class="note">91 opérations, toutes sur le même modèle&nbsp;:
           <b>menu, menu contextuel, ligne de commande et chat lisent la même
           déclaration.</b></p>
         </div>
@@ -451,7 +473,8 @@
             <img src="../handbuch/fr/op-dialog.png" width="520" height="195" loading="lazy" decoding="async"
                  alt="Le dialogue «&nbsp;Percer un trou&nbsp;» avec le diamètre et la position X, un bouton fx derrière chaque champ numérique et la section repliée «&nbsp;Autres réglages&nbsp;»">
           </div>
-          <figcaption>Le dialogue d'une opération — trois chiffres devant, tout le reste derrière.</figcaption>
+          <figcaption>Le dialogue d'une opération — devant, les deux ou trois
+          valeurs qu'on change vraiment, derrière tout le reste.</figcaption>
         </figure>
       </div>
 
@@ -470,9 +493,10 @@
         <figure class="shot">
           <div class="stage">
             <img src="../bilder/beleg-start-fr.png" width="1400" height="1000" loading="lazy" decoding="async"
-                 alt="L'écran de démarrage&nbsp;: une zone de dépôt pour modèles et projets, les boutons «&nbsp;Nouveau projet&nbsp;» et «&nbsp;Ouvrir un projet&nbsp;», et en dessous neuf projets d'exemple avec aperçu et description">
+                 alt="L'écran de démarrage&nbsp;: une zone de dépôt pour modèles et projets, les boutons «&nbsp;Nouveau projet&nbsp;» et «&nbsp;Ouvrir un projet&nbsp;», et en dessous quatre projets d'exemple — un par voie — avec aperçu et description, et en dessous la section repliée «&nbsp;Quoi d'autre&nbsp;?&nbsp;»">
           </div>
-          <figcaption>L'écran de démarrage avec les neuf exemples.</figcaption>
+          <figcaption>L'écran de démarrage avec quatre des neuf exemples — les
+          cinq autres se trouvent derrière «&nbsp;Quoi d'autre&nbsp;?&nbsp;».</figcaption>
         </figure>
       </div>
     </div>
@@ -484,6 +508,9 @@
       <ul class="features">
         <li><b>Des arêtes exactes.</b> Un noyau B-Rep pour les chanfreins,
         les congés et un STEP qui fait l'aller-retour.</li>
+        <li><b>Vitesse.</b> Les mêmes calculs tournent jusqu'à soixante fois
+        plus vite qu'au début — et l'indicateur de progression ne bouge pas
+        tant que le résultat n'est pas vraiment terminé.</li>
         <li><b>Deux couleurs sans deuxième logiciel.</b> Inscription en
         relief, en creux ou en changement de couleur dans un seul fichier
         3MF.</li>

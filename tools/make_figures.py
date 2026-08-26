@@ -41,7 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QApplication, QWidget
 
 from app.core import figures
@@ -504,7 +504,6 @@ def take_all(app: QApplication, language: str) -> None:
     from app.ui.main_window import MainWindow
     from app.ui.op_dialog import OperationDialog
     from app.ui.panels import ReportPanel
-    from app.ui.recipe_dialog import RecipeDialog
     from app.ui.session import Session
     from app.ui.settings import UiSettings
     from app.ui.start_screen import StartScreen
@@ -645,13 +644,33 @@ def take_all(app: QApplication, language: str) -> None:
     shoot(catalog, "catalog", language)
     catalog.close()
 
-    # Der Dialog, mit dem ein selbst gebautes Teil in den Katalog kommt. Er
-    # bekommt hier Werte, die zeigen, worum es geht: Projektparameter mit
-    # Titel und Einheit, damit die Zeilen nicht nach ihrem internen Namen
-    # aussehen, und zwei erkannte Merkmale, damit die untere Liste nicht leer
-    # ist — leer erklärt sie nämlich, warum sie leer ist, und das ist das
-    # Bild eines Sonderfalls.
-    recipe = prepared(
+    recipe = recipe_dialog(session.profile)
+    settle(app)
+    shoot(recipe, "own-part", language)
+    recipe.release()
+    recipe.close()
+
+    window.close()
+
+
+def recipe_dialog(profile: Any, size: QSize | None = None) -> Any:
+    """Der Dialog, mit dem ein selbst gebautes Teil in den Katalog kommt.
+
+    Er bekommt hier Werte, die zeigen, worum es geht: Projektparameter mit
+    Titel und Einheit, damit die Zeilen nicht nach ihrem internen Namen
+    aussehen, und zwei erkannte Merkmale, damit die untere Liste nicht leer
+    ist — leer erklärt sie nämlich, warum sie leer ist, und das ist das Bild
+    eines Sonderfalls.
+
+    **Eine Funktion und kein Block im Ablauf**, seit die Verkaufsseite
+    denselben Dialog zeigt: Er ist das Bild zu dem, womit 0.2.0 wirbt, und
+    zwei Aufbauten desselben Dialogs laufen auseinander, sobald jemand an
+    einem von beiden etwas ändert — genau die Begründung, mit der
+    ``make_web_images`` seine Fenster schon hier holt.
+    """
+    from app.ui.recipe_dialog import RecipeDialog
+
+    dialog = prepared(
         RecipeDialog(
             replace(
                 new_project().document,
@@ -673,18 +692,13 @@ def take_all(app: QApplication, language: str) -> None:
                 Feature(id="hole_1", kind="hole", provenance="detected", params={"diameter": 4.2}),
                 Feature(id="face_2", kind="face", provenance="detected", params={"area": 2880.0}),
             ),
-            session.profile,
+            profile,
         ),
-        DIALOG,
+        size or DIALOG,
         fit_height=True,
     )
-    recipe.title.setText(tr("Halter für die Werkbank"))
-    settle(app)
-    shoot(recipe, "own-part", language)
-    recipe.release()
-    recipe.close()
-
-    window.close()
+    dialog.title.setText(tr("Halter für die Werkbank"))
+    return dialog
 
 
 def chosen_screen(arguments: list[str]) -> list[str]:

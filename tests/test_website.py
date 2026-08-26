@@ -86,10 +86,18 @@ STAT = re.compile(r"<div><b>(\d+)</b><span>([^<]+)</span></div>")
 LINK = re.compile(r'(?:src|href)="([^"]+)"')
 
 #: Die Registergröße im Fließtext: eine Zahl, dahinter das Wort für Operation.
-#: Der Stamm „oper“ trägt durch alle sechs Sprachen — Operationen, operations,
+#: Der Stamm trägt durch alle sechs Sprachen — Operationen, operations,
 #: operaciones, opérations, operazioni, operações. Eine siebte Sprache ist
 #: damit mitgeprüft, ohne dass hier jemand etwas nachträgt.
-OPERATION_COUNT = re.compile(r"(\d+)(?:&nbsp;|\s)+[Oo]per\w*")
+#:
+#: **Das ``é`` steht hier, weil es einmal gefehlt hat.** Das Muster hieß
+#: ``[Oo]per\w*``, und der Kommentar darüber zählte „opérations" ausdrücklich
+#: mit — gemessen hat das niemand. Französisch schreibt aber ``opér``, und
+#: damit lief die eine Sprache ungeprüft, in der dann auch der Fehler stand:
+#: drei Stellen nannten 87 Operationen, während der Statistikblock derselben
+#: Seite 91 sagte. Ein Wächter, dessen Reichweite nur im Kommentar steht, ist
+#: keiner.
+OPERATION_COUNT = re.compile(r"(\d+)(?:&nbsp;|\s)+[Oo]p[eé]r\w*")
 
 #: Die Illustrationen sind Inline-SVG und führen erfundene Beispielzahlen
 #: („Vorschlag — 3 Operationen“). Das ist keine Aussage über das Register.
@@ -135,8 +143,26 @@ def test_the_number_of_examples_on_the_page_matches_the_folder() -> None:
     assert _stats("index.html")[4] == len(list(EXAMPLES.glob("*.p3d")))
 
 
-def test_both_languages_state_the_same_numbers() -> None:
-    assert _stats("index.html") == _stats("en/index.html")
+@pytest.mark.parametrize(
+    "page",
+    sorted(str(p.relative_to(WEBSITE)).replace("\\", "/") for p in WEBSITE.glob("*/index.html")),
+)
+def test_every_language_states_the_same_numbers(page: str) -> None:
+    """Der Statistikblock jeder Sprache gegen den der Quellsprache.
+
+    **Vorher standen hier zwei Sprachen von sechs.** Der Test verglich
+    ``index.html`` gegen ``en/index.html``, und für die vier übrigen prüfte
+    allein die Operationszahl-Regel darunter — die ausgerechnet bei Französisch
+    ein Loch hatte. Eine Zahl, die auf der italienischen Seite altert, ist
+    genauso falsch wie auf der deutschen; sie fällt nur später auf, weil
+    seltener jemand hinsieht.
+
+    Über ``glob`` und nicht über eine Liste: Eine siebte Sprache ist damit vom
+    ersten Einchecken an mitgeprüft, ohne dass hier jemand etwas nachträgt.
+    """
+    assert _stats(page) == _stats("index.html"), (
+        f"{page} nennt {_stats(page)}, die Quellsprache {_stats('index.html')}"
+    )
 
 
 def test_the_number_of_agent_cases_on_the_page_matches_the_suite() -> None:
@@ -942,6 +968,24 @@ def test_the_version_file_says_what_the_application_is() -> None:
             f"file sagt {entry['file']!r} — die Anwendung lädt das eine und "
             "benennt es nach dem anderen"
         )
+
+    # **Der Hinweistext steht über der übersetzten Punkteliste** und gehört
+    # deshalb selbst übersetzt (``updates.Release.note``). Geprüft wird nur,
+    # *wenn* das Feld dasteht: ``notes_by_language`` ist neu in 0.2.0, und eine
+    # Datei ohne es ist keine kaputte, sondern eine ältere — dann greift der
+    # Rückfall auf ``notes``. Steht es aber da, muss es vollständig sein; eine
+    # fehlende Sprache fällt sonst erst dem Kunden auf, der sie spricht.
+    sprachen = payload.get("notes_by_language")
+    if sprachen:
+        from app.i18n.catalog import available_languages
+
+        fehlend = sorted(set(available_languages()) - set(sprachen))
+        assert not fehlend, (
+            f"notes_by_language kennt {sorted(sprachen)}, es fehlen {fehlend} — "
+            "diese Kunden lesen den Hinweis in einer fremden Sprache"
+        )
+        for sprache, satz in sprachen.items():
+            assert isinstance(satz, str) and satz.strip(), f"{sprache}: leerer Hinweis"
 
 
 @pytest.mark.parametrize(
