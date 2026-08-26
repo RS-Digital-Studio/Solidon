@@ -863,7 +863,7 @@ def write_pdf(language: str, page_file: Path) -> Path:
         page = QWebEnginePage()
         loop = QEventLoop()
         done: list[bool] = []
-        gezaehlt: list[int] = []
+        seen_images: list[int] = []
 
         def printed(data: bytes) -> None:
             if data:
@@ -871,9 +871,9 @@ def write_pdf(language: str, page_file: Path) -> Path:
             done.append(bool(data))
             loop.quit()
 
-        def gezählt_dann_drucken(anzahl: object) -> None:
+        def count_then_print(found: object) -> None:
             """Die Bildzahl der Seite festhalten, dann drucken."""
-            gezaehlt.append(int(anzahl) if isinstance(anzahl, int | float) else -1)
+            seen_images.append(int(found) if isinstance(found, int | float) else -1)
             QTimer.singleShot(settle, lambda: page.printToPdf(printed, layout))
 
         def loaded(ok: bool) -> None:
@@ -893,14 +893,14 @@ def write_pdf(language: str, page_file: Path) -> Path:
             # Die Zahl daneben ist deshalb keine Zierde: Sie sagt, wie viele
             # Bilder die Seite kennt, und trennt „Seite ohne Abbildungen" von
             # „Abbildungen, die nicht mitgedruckt werden".
-            page.runJavaScript("document.images.length", gezählt_dann_drucken)
+            page.runJavaScript("document.images.length", count_then_print)
 
         page.loadFinished.connect(loaded)
         page.load(QUrl.fromLocalFile(str(page_file.resolve())))
         QTimer.singleShot(PDF_PRINT_LIMIT_MS, loop.quit)
         loop.exec()
         page.deleteLater()
-        if gezaehlt and gezaehlt[0] == 0:
+        if seen_images and seen_images[0] == 0:
             # Ein Handbuch ohne ein einziges Bild ist kein Erfolg, sondern eine
             # Seite, die ihre Abbildungen nicht gefunden hat.
             print(f"  {language}: die Seite trug kein einziges Bild", file=sys.stderr)
