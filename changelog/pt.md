@@ -19,33 +19,77 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 
 - Blocos próprios sem uma linha de código: escolha passos no histórico e coloque-os no catálogo como bloco — com campos próprios, pré-visualização e intervalo de valores verificado.
 - Um bloco construído por si viaja dentro do ficheiro de projeto. Quem o abrir pode inserir a sua peça sem ter de instalar nada.
-- Seis blocos novos no catálogo: gancho para painel perfurado, suporte de parede, esquadro, pé, clipe de cabos e olhal de dobradiça.
+- Cinco blocos novos no catálogo: gancho para painel perfurado, esquadro, pé, clipe de cabos e olhal de dobradiça.
 - O gancho para painel agora aguenta mesmo que alguém levante a peça ao tirar algo — uma lingueta elástica encaixa atrás do painel. Desativável se tirar a peça muitas vezes.
 - Uma face selecionada conta: furo, bloco e esboço vão para onde apontou. Antes cada operação numa face custava dois cliques.
+- Suporte de parede, nervura, lingueta e ranhura, lingueta de encaixe, ligação de encaixe e dobradiça de filme aparecem já no menu de uma face clicada. Faltava justamente o suporte de parede.
+- Quem insere um bloco do catálogo sem escolher um sítio é agora questionado. Até agora ficava na origem, metade dentro da peça e metade debaixo da placa.
+- O catálogo de blocos pode ser visto mesmo sem modelo. Inserir fica então bloqueado e diz porquê, em vez de cancelar só depois da confirmação.
 - Ao desenhar, a grelha mostra ao que o ajuste obedece, o passo pode ser escrito, as medidas ficam junto ao ponteiro e a barra diz em que face está a desenhar.
+- Os atalhos de teclado voltam a funcionar no modo de desenho — linha, círculo, arco, aparar, deslocamento, Ctrl+Z — e o clique direito abre o menu do desenho em vez do modelo.
+- Ajustar à vista traz de novo o desenho para o enquadramento, e um clique a cinco milímetros de um ponto já não se ajusta a ele.
+- Uma linha auxiliar continua a ser uma linha auxiliar, mesmo depois de aparada, prolongada, deslocada ou espelhada. Até agora uma linha de centro tornava-se aresta de perfil e separava a peça.
+- A janela de um passo mostra as medidas do seu desenho em vez dos valores predefinidos, e um círculo aparece com o seu diâmetro completo, não com metade.
 - No histórico é possível selecionar vários passos de uma vez.
 - Os limites de uma medida podem ser alterados depois — até agora valia para sempre o que foi introduzido ao criá-la.
+- A aplicação já não desaparece sem aviso quando uma medida é alterada, um desenho é lido ou um corte é calculado. Os mesmos cálculos passam a ser até sessenta vezes mais rápidos.
+- Alterar um passo depois já se pode desfazer. Até agora Ctrl+Z removia a ação errada e deixava ficar o valor alterado.
+- Esvaziar e colocar cavilhas podem mesmo ser cancelados. Numa peça digitalizada, o botão ficava parado durante minutos.
+- Um passo que aponta para uma face de outro corpo recalcula após cada alteração. Até agora, uma peça alinhada ficava no sítio antigo, mesmo depois de fechar.
 - A estimativa de material para suportes estava errada por um fator grande: calculava a área sob a saliência em vez da coluna por baixo.
+- A largura da ponte mede agora o troço realmente vencido sem apoio. Uma calha de cabos indicava antes a largura da sua caixa envolvente e recebia o conselho errado.
 - O escareamento só funcionava num sentido por eixo. Clicado do lado errado não tirava nada e não dizia nada.
 - Em peças escalonadas, furo e tampão trabalhavam no ar: a direção vinha da caixa envolvente em vez do material naquele sítio.
 - Um tampão passante enchia apenas metade do furo — e deixava à volta a folga com que o furo tinha sido alargado para o material.
 - O enchimento em grelha punha barras ao lado da peça em vez de dentro da sua cavidade.
+- O respiro de uma peça esvaziada termina agora na cavidade em vez de atravessar a tampa, e a ranhura roscada da tampa giratória já não abre um furo na sua própria parte de cima.
+- Unir, subtrair e pintar avisam agora quando nada aconteceu. Até agora um passo ficava no histórico por cima de um modelo inalterado.
+- Se uma peça se parte porque um bloco já não toca no seu suporte, o relatório assinala-o agora como erro e recomenda o que ajuda. Até agora o número de pedaços era apenas uma indicação.
+- As características mantêm o seu nome quando uma peça é rodada ou deslocada para imprimir. Os passos e ajustes que apontam para elas já não caem no vazio.
 - Uma rosca num furo clicado cortava só a metade de baixo. O mesmo acontecia com a bucha de inserção a quente.
+- Uma rosca interior é agora subtraída, tal como o seu texto promete. Até agora crescia em vez disso um parafuso dentro do furo de núcleo.
 - O alojamento de porca e a folga para a cabeça do parafuso não tiravam nada: ambos construíam por cima da face em vez de por baixo.
+- O alojamento do íman volta a segurar o íman: o lábio de retenção era até agora acrescentado ao alojamento em vez de escavado nele, e desaparecia lá dentro.
+- A ranhura em buraco de fechadura fica agora suspensa na vertical, de modo que o parafuso encrava ao descer. Deitada de lado, deslocava-se para o lado e a cabeça não tinha espaço suficiente.
+- O alojamento de porca encaixa agora na porca: para M5, M6 e M8 a tabela tinha uma altura demasiado pequena, seis décimas a menos no M5.
 - Uma peça mais fina do que uma camada impressa já não é posta ao alto.
 - A divisão automática conta a saliência do pino para o limite da mesa e não deixa ajustes a apontar para sítios que desapareceram.
 - Uma cavidade feita a partir de um desenho com furo mantém o furo. Até agora fresava também a ilha.
 - Um furo desenhado é subtraído seja qual for o sentido em que o desenhou. Conforme a ordem dos cliques saía antes uma peça mais cheia.
+- Aparar corta agora apenas dentro do seu próprio troço, e Prolongar também encontra círculos e arcos como alvo — até agora só via linhas.
+- Uma transição entre dois desenhos mantém os seus furos, e uma cavidade numa parede lateral corta na parede em vez de vir de cima.
+- Um contorno que se cruza a si próprio é agora assinalado no desenho, em vez de gerar um corpo que não é estanque e ainda assim é exportado.
+- Um desenho com furo dentro de furo mantém todos os níveis, e Projetar usa o plano em que está a desenhar — até agora o terceiro nível perdia-se e o corte vinha de baixo.
+- Depois de «Deslocar face» as faces da peça voltam a poder ser clicadas. Até agora não restava nada onde desenhar, furar ou definir um ajuste.
+- Se a face até onde se extrude desaparecer, o erro aponta agora para esse campo e sugere escolher outra — em vez do plano do esboço.
 - Um clique num furo propõe agora o parafuso que realmente passa por ele — e indica o diâmetro medido.
-- Um ficheiro de um slicer chegava com corpos duplicados: uma peça com dezassete objetos era lida dezassete vezes, com o dobro do volume e do tempo de impressão.
 - Os ficheiros grandes de um slicer abrem sem que a janela congele. Antes, a mera contagem dos corpos lia o ficheiro todo para a memória.
+- As montagens já respondem também a «Pousar na mesa»: descem como um todo, as peças mantêm a sua posição relativa. Até agora não acontecia nada, sem aviso.
+- Dois ficheiros importados com o mesmo nome já não se perdem. O segundo sobrepunha-se antes ao primeiro, e o projeto deixava de poder ser aberto depois.
+- Um endereço sem extensão de ficheiro diz agora que ali está uma página web e onde fica o botão de transferência, em vez de «Formato não reconhecido».
+- A quantidade de filamento lida de um ficheiro G-code volta a estar correta. Um comando no fim do ficheiro fazia calcular tudo o resto de forma diferente e duplicava o total.
 - Ao escalar para uma largura dada media-se também uma linha auxiliar. De cinquenta milímetros saíam cinco.
 - Na exportação, peças com o mesmo nome sobrepunham-se: um ficheiro, duas mensagens de sucesso, uma peça perdida.
+- Ao abrir um projeto aparece de imediato um indicador de carregamento. Até agora o centro da janela ficava preto durante segundos ou mostrava o ecrã inicial — parecia uma falha.
+- Um clique na vista acerta agora apenas no que realmente vê — nenhuma peça oculta e nenhuma de outra placa. E depois de passar pelo modo Mover, as arestas deixam de aparecer através de todas as faces.
+- As vistas de eixo de Ctrl+0 a Ctrl+6 voltam a enquadrar o modelo, em vez de incluírem também a placa e o volume de impressão.
+- Quem deslocou muito uma peça e depois a roda, volta a rodar em torno da peça e não em torno de um ponto ao lado.
+- Uma medida na vista usa agora a unidade que definiu, uma mudança de tema recolore também a placa e o volume de impressão, e com várias placas a etiqueta e a pega ficam na peça em vez de ao lado.
+- O que um bloco inserido traz consigo fica na árvore de objetos sob o seu nome, e o nó propõe alterar precisamente esse passo.
+- A sombra debaixo da peça mostra agora cada pedaço em separado e é mais discreta. Se um corpo se parte, agora vê-se na sombra.
+- Se um cálculo em segundo plano encravar, a aplicação agora avisa. Caso contrário, a legenda, a análise de camadas e a procura de uma versão nova ficavam paradas para sempre.
+- Cancelar descarta agora também a próxima execução já em fila, e a barra de progresso deixa de desaparecer sobre um ficheiro que ainda está a ser escrito.
+- O idioma escolhido no instalador aplica-se de imediato, senão o do sistema. E um idioma escolhido na janela tem efeito de imediato, em vez de só no arranque seguinte.
 - Uma mudança de idioma passa a valer em toda a janela. As definições de impressão ficavam no idioma com que a aplicação arrancou.
+- Os exemplos incluídos indicam agora as suas medidas no seu idioma. Antes lá estava «Breite, Tiefe, Höhe» em alemão, mesmo numa interface em inglês.
+- A linha de comandos fala agora o idioma definido. Até agora dava ajuda e mensagens de erro em alemão, seja qual fosse a escolha.
 - Uma mudança de impressora ou material mantém o que definiu. Até agora todo o conjunto era reposto sem aviso.
 - A escolha de filamento por ranhura de material chega ao slicer. Era guardado o texto mostrado em vez do perfil.
+- A extensão de projeto é agora acrescentada por «Guardar como». Um projeto guardado como suporte.stl era, ao abrir, um modelo estranho ilegível.
 - Um projeto alterado já não se perde quando arrasta um ficheiro para o ecrã inicial — é perguntado antes.
 - Uma proposta do chat que retira passos diz antes quais vão com ela. E Cancelar cancela mesmo, em vez de continuar a calcular em segundo plano.
+- O chat volta a conseguir oito passos por pergunta em vez de quatro, e a linha de custo já não calcula a mais.
+- O que segue com uma resposta ao apoio é mostrado antes, ao pormenor — incluindo o registo. E se não chegar, a mensagem indica o motivo real.
 
 
 ## 0.1.5

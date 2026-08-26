@@ -118,11 +118,18 @@ CHUNK_BYTES: Final = 256 * 1024
 #: liest niemand vor einem Update.
 #:
 #: Die Zahl stand auf zwanzig und ist zu 0.2.0 gestiegen (Entscheidung Robert,
-#: 26.08.2026): Ein Update, das eigene Bausteine, sechs neue Katalogteile und
+#: 26.08.2026): Ein Update, das eigene Bausteine, fünf neue Katalogteile und
 #: eine Reihe falsch gerechneter Geometrien mitbringt, hat mehr zu sagen als
 #: ein Wartungsschritt. Die Grenze bleibt eine Grenze — sie fängt den Server,
 #: der achthundert Zeilen schickt, und das Fenster rollt für den Rest.
-MAX_CHANGES: Final = 40
+#:
+#: Auf hundert gestiegen, als der Abschnitt für 0.2.0 auf 73 Punkte kam
+#: (Entscheidung Robert: alles behalten). Der Satz im Kopf von
+#: ``changelog/de.md`` — „achtzig sind eine Liste" — gilt weiter und ist der
+#: Grund, warum hier nicht einfach jede Zahl steht: Wer diese Grenze das
+#: nächste Mal anfasst, sollte erst prüfen, ob er wirklich mehr zu sagen hat
+#: oder nur weniger ausgewählt.
+MAX_CHANGES: Final = 100
 
 #: Wie ein Paketschlüssel in der Versionsdatei heißt. Die Architektur steht nur
 #: dort, wo es zwei gibt: Auf einem Mac startet ein für arm64 gebautes Programm
