@@ -154,9 +154,9 @@ Windows-Installation liegen die betreffenden Dateien dafür unverschlüsselt im
 Programmordner; auf Anfrage an <support@solidon3d.de> nennen wir Ihnen die
 genauen Versionen und den Bezugsort des Quelltexts.
 
-OpenSCAD, Slicer, Ollama und ComfyUI werden **nicht mitgeliefert**. Sie
-werden, wenn vorhanden, als eigenständig installierte Programme aufgerufen und
-unterliegen ausschließlich ihren eigenen Lizenzen.
+Slicer, Ollama und ComfyUI werden **nicht mitgeliefert**. Sie werden, wenn
+vorhanden, als eigenständig installierte Programme aufgerufen und unterliegen
+ausschließlich ihren eigenen Lizenzen.
 
 ## 9. Keine Cloud, keine Telemetrie
 
