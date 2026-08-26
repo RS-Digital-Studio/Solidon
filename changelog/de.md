@@ -16,7 +16,7 @@ dieselben Punkte in derselben Reihenfolge (`tests/test_changelog.py`).
 schreibt ihn in `website/version.json`.
 
 **0.2.0 ist die ausdrückliche Ausnahme von allem darüber**, und sie hebt es
-nicht auf: 73 Punkte aus 244 Commits, weil Robert alles behalten wollte —
+nicht auf: 75 Punkte aus 244 Commits, weil Robert alles behalten wollte —
 zwischen 0.1.5 und 0.2.0 liegt kein Wartungsschritt, sondern ein halbes Jahr
 Arbeit in einem Sprung, samt einem Absturz, den der Kunde von heute noch hat.
 Wer den nächsten Abschnitt schreibt, fängt wieder bei acht Zeilen an; die
@@ -106,6 +106,8 @@ Nutzen da und sonst nichts.
 - Ein Vorschlag des Chats, der Schritte zurücknimmt, sagt vorher, welche mitgehen. Und Abbrechen bricht wirklich ab, statt im Hintergrund weiterzurechnen.
 - Der Chat schafft wieder acht Schritte je Frage statt vier, und die Kostenzeile rechnet nicht mehr zu hoch.
 - Was mit einer Rückmeldung an den Support geht, steht vorher im Wortlaut da — auch das Protokoll. Und kommt sie nicht an, nennt die Meldung den wirklichen Grund.
+- Für Freiformen wird kein zweites Programm mehr gebraucht: Was OpenSCAD konnte, können die Zeichenwerkzeuge und die Bausteine — eine Installation weniger, um die Sie sich kümmern müssen.
+- Ein Projekt mit OpenSCAD-Quelltext öffnet weiterhin, alles andere darin rechnet wie bisher. Der Prüfbericht nennt den Schritt, und „Werte ansehen“ kopiert seinen Quelltext heraus.
 
 
 ## 0.1.5

@@ -91,6 +91,8 @@ dans `website/version.json`.
 - Une proposition du chat qui retire des étapes dit d'avance lesquelles partent avec elle. Et Annuler annule vraiment au lieu de continuer à calculer en arrière-plan.
 - Le chat parvient de nouveau à huit étapes par question au lieu de quatre, et la ligne de coût ne surestime plus.
 - Ce qui part avec un retour vers l'assistance s'affiche auparavant, mot pour mot — y compris le journal. Et si l'envoi échoue, le message donne la vraie raison.
+- Les formes libres ne demandent plus de second programme : ce que faisait OpenSCAD, les outils de dessin et les blocs le font — une installation de moins à gérer.
+- Un projet contenant du code OpenSCAD s'ouvre toujours, et tout le reste s'y calcule comme avant. Le Rapport nomme l'étape, et « Afficher les valeurs » en copie le code.
 
 
 ## 0.1.5

@@ -123,7 +123,7 @@ CHUNK_BYTES: Final = 256 * 1024
 #: ein Wartungsschritt. Die Grenze bleibt eine Grenze — sie fängt den Server,
 #: der achthundert Zeilen schickt, und das Fenster rollt für den Rest.
 #:
-#: Auf hundert gestiegen, als der Abschnitt für 0.2.0 auf 73 Punkte kam
+#: Auf hundert gestiegen, als der Abschnitt für 0.2.0 auf über siebzig Punkte kam
 #: (Entscheidung Robert: alles behalten). Der Satz im Kopf von
 #: ``changelog/de.md`` — „achtzig sind eine Liste" — gilt weiter und ist der
 #: Grund, warum hier nicht einfach jede Zahl steht: Wer diese Grenze das

@@ -90,6 +90,8 @@ it into `website/version.json`.
 - A chat proposal that takes steps back now says beforehand which ones go with it. And Cancel really cancels instead of computing on in the background.
 - The chat manages eight steps per question again instead of four, and the cost line no longer overestimates.
 - What goes out with feedback to support is shown beforehand, word for word — including the log. And if it fails to arrive, the message names the real reason.
+- Free-form shapes no longer need a second program: what OpenSCAD did, the drawing tools and the building blocks do — one installation less to look after.
+- A project holding OpenSCAD source still opens, and everything else in it computes as before. The Report names the step, and “Show the values” copies its source out.
 
 
 ## 0.1.5

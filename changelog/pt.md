@@ -90,6 +90,8 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 - Uma proposta do chat que retira passos diz antes quais vão com ela. E Cancelar cancela mesmo, em vez de continuar a calcular em segundo plano.
 - O chat volta a conseguir oito passos por pergunta em vez de quatro, e a linha de custo já não calcula a mais.
 - O que segue com uma resposta ao apoio é mostrado antes, ao pormenor — incluindo o registo. E se não chegar, a mensagem indica o motivo real.
+- As formas livres já não precisam de um segundo programa: o que o OpenSCAD fazia, fazem-no as ferramentas de desenho e os blocos — menos uma instalação de que tratar.
+- Um projeto com código OpenSCAD continua a abrir e todo o resto é calculado como antes. O Relatório nomeia o passo e «Mostrar os valores» copia o seu código.
 
 
 ## 0.1.5
