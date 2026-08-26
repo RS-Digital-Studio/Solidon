@@ -1074,6 +1074,83 @@ def test_every_plate_keeps_its_own_print_file(dialog: PrintSettingsDialog, tmp_p
     assert "2" in dialog.state.text()
 
 
+def _two_plate_scene() -> object:
+    """Eine Szene mit zwei Platten: rot allein, dann weiß und rot."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import MaterialSlot, Scene, SceneObject
+
+    def body(name: str, plate: int, slots: tuple[MaterialSlot, ...]) -> SceneObject:
+        mesh = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+        mesh.apply_translation((0.0, 0.0, 10.0))
+        return SceneObject(
+            id=name, name=name, mesh=MeshData.of(mesh), plate=plate, material_slots=slots
+        )
+
+    rot = MaterialSlot(index=0, name="Rot", colour=(1.0, 0.0, 0.0))
+    weiss = MaterialSlot(index=0, name="Weiss", colour=(1.0, 1.0, 1.0))
+    return EvaluationResult(
+        scene=Scene(
+            objects={
+                "a": body("a", 0, (rot,)),
+                "b": body("b", 1, (weiss,)),
+                "c": body("c", 1, (rot,)),
+            }
+        )
+    )
+
+
+def test_the_plate_choice_appears_only_when_there_is_a_choice(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Eine Wahl ohne Alternative ist keine — und der Kunde liest sie doch.
+
+    Bei einer Platte bleibt die Zeile verborgen; ab der zweiten erscheint sie
+    mit „Alle Platten" als Vorgabe, denn das ist der bisherige Weg. Wer nichts
+    wählt, bekommt weiterhin jede Platte als eigene Druckdatei.
+    """
+    # ``isHidden`` und nicht ``isVisible``: Letzteres antwortet ``False``,
+    # solange der Dialog nicht angezeigt wurde, und zwar für jedes Widget.
+    assert dialog.plate_row.isHidden(), "leere Szene: keine Wahl"
+
+    dialog.session.last_result = _two_plate_scene()  # type: ignore[assignment]
+    dialog._refresh_plates()
+
+    assert not dialog.plate_row.isHidden(), "zwei Platten: jetzt gibt es etwas zu wählen"
+    assert dialog.plate_choice.count() == 3, "die Sammelzeile und zwei einzelne"
+    assert dialog.plate_choice.currentData() is None, "Vorgabe ist die Sammelzeile"
+    assert dialog._chosen_plates() == [0, 1], "und die umfasst beide"
+
+
+def test_choosing_one_plate_narrows_the_run_and_the_filament_rows(
+    dialog: PrintSettingsDialog,
+) -> None:
+    """Die Wahl wirkt auf beides — den Lauf und die Spulen, die er braucht.
+
+    Solange ``_plate_slots`` fest die erste Platte nahm, ordnete der Kunde
+    Filamente einer Platte zu, die er gar nicht slicte. Der Fehler wäre erst
+    am fertigen Druck zu sehen gewesen.
+    """
+    dialog.session.last_result = _two_plate_scene()  # type: ignore[assignment]
+    dialog._refresh_plates()
+
+    # Platte 1 trägt nur Rot, Platte 2 trägt Weiß und Rot.
+    dialog.plate_choice.setCurrentIndex(1)
+    assert dialog._chosen_plates() == [0]
+    assert [slot.name for slot in dialog._plate_slots()] == ["Rot"]
+
+    dialog.plate_choice.setCurrentIndex(2)
+    assert dialog._chosen_plates() == [1]
+    assert sorted(slot.name for slot in dialog._plate_slots()) == ["Rot", "Weiss"]
+
+    # Und zurück auf „Alle": beide Platten, alle Spulen.
+    dialog.plate_choice.setCurrentIndex(0)
+    assert dialog._chosen_plates() == [0, 1]
+    assert sorted(slot.name for slot in dialog._plate_slots()) == ["Rot", "Weiss"]
+
+
 def test_every_plate_becomes_its_own_run(dialog: PrintSettingsDialog, tmp_path: Path) -> None:
     """Die Übergabe nimmt alle Platten, nicht die erste.
 

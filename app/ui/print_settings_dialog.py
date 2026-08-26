@@ -1230,6 +1230,11 @@ class PrintSettingsDialog(QDialog):
         self._slicer_path = discover.find_program("slicer", tools.SLICERS)
 
         layout = QVBoxLayout(self)
+        # **Vor** dem Slicer-Abschnitt: Dessen Filamentzeilen fragen die
+        # Plattenwahl bereits beim Aufbau (``_plate_slots``). Erzeugt
+        # wird sie deshalb hier, eingehängt wird sie weiter unten in
+        # ``_build_state`` — dort, wo der Kunde sie braucht.
+        self._make_plate_row()
         layout.addLayout(self._build_head())
         layout.addWidget(self._build_front())
         layout.addWidget(self._build_tabs(), 1)
@@ -1840,22 +1845,107 @@ class PrintSettingsDialog(QDialog):
         found = box.findData(name)
         return found if found >= 0 else box.findText(name)
 
-    def _plate_slots(self) -> list[MaterialSlot]:
-        """Die Materialslots der ersten Platte, zusammengelegt wie beim Export."""
+    def _make_plate_row(self) -> None:
+        """Die Plattenwahl anlegen — eingehängt wird sie in ``_build_state``.
+
+        Bei einer einzigen Platte bleibt die Zeile verborgen: Eine Wahl ohne
+        Alternative ist keine, und der Kunde liest sie trotzdem.
+        """
+        self.plate_row = QWidget(self)
+        line = QHBoxLayout(self.plate_row)
+        line.setContentsMargins(0, 0, 0, 0)
+        self.plate_label = QLabel(tr("Platte"), self.plate_row)
+        self.plate_choice = QComboBox(self.plate_row)
+        self.plate_label.setBuddy(self.plate_choice)
+        self.plate_choice.activated.connect(self._plate_chosen)
+        line.addWidget(self.plate_label)
+        # Kein Dehnfaktor, dafür ein Anschlag dahinter: Das Feld trägt
+        # „Platte 2" und die Sammelzeile, mehr nicht. Über die ganze
+        # Dialogbreite gezogen sah es aus wie das Hauptfeld der Seite,
+        # während die Auswahl daneben zwei Wörter lang ist.
+        self.plate_choice.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToContents)
+        line.addWidget(self.plate_choice)
+        line.addStretch(1)
+        self.plate_row.setVisible(False)
+        self._refresh_plates()
+
+    def _refresh_plates(self) -> None:
+        """Die Plattenzeile füllen — sichtbar erst ab der zweiten Platte.
+
+        „Alle" steht oben und ist die Vorgabe, weil das der bisherige Weg
+        ist: Wer nichts wählt, bekommt weiterhin jede Platte als eigene
+        Druckdatei. Die Wahl einer einzelnen ist der Zusatz, nicht die neue
+        Regel.
+        """
+        plates = self._all_plates()
+        self.plate_choice.clear()
+        if len(plates) < 2:
+            self.plate_row.setVisible(False)
+            return
+        self.plate_choice.addItem(
+            tr("Alle Platten ({anzahl})").replace("{anzahl}", str(len(plates))), None
+        )
+        for plate in plates:
+            self.plate_choice.addItem(
+                tr("Platte {nummer}").replace("{nummer}", str(plate + 1)), plate
+            )
+        self.plate_choice.setCurrentIndex(0)
+        self.plate_row.setVisible(True)
+
+    def _all_plates(self) -> list[int]:
+        """Die Platten der Szene, aufsteigend."""
         result = self.session.last_result
         if result is None:
             return []
-        objects = [result.scene.objects[oid] for oid in result.scene.objects]
+        return sorted({entry.plate for entry in result.scene.objects.values()})
+
+    def _chosen_plates(self) -> list[int]:
+        """Welche Platten der Lauf umfasst — alle, oder die eine gewählte.
+
+        Gefragt wird die **Datenlage**, nicht die Sichtbarkeit der Zeile:
+        ``isVisible`` antwortet ``False``, solange der Dialog nicht
+        angezeigt wurde, und zwar auch für ein Widget, das ausdrücklich
+        auf sichtbar steht. Wer daran hängt, bekommt beim Aufbau und in
+        jedem Test außerhalb eines echten Fensters stillschweigend alle
+        Platten zurück — die Wahl des Kunden wäre folgenlos gewesen.
+        """
+        plates = self._all_plates()
+        if len(plates) < 2:
+            return plates
+        chosen = self.plate_choice.currentData()
+        return plates if chosen is None else [int(chosen)]
+
+    def _plate_chosen(self, _index: int) -> None:
+        """Nach dem Wechsel zeigen die Filamentzeilen die Slots dieser Platte.
+
+        Ohne diesen Ruf blieben sie auf der Wahl von vorhin stehen, und der
+        Kunde ordnete Spulen einer Platte zu, die er gar nicht slict — der
+        Fehler wäre erst am fertigen Druck zu sehen.
+        """
+        self._build_slot_rows(self.slot_form)
+        self._show_slicer_state()
+
+    def _plate_slots(self) -> list[MaterialSlot]:
+        """Die Materialslots der gewählten Platten, zusammengelegt wie beim Export.
+
+        **Der gewählten, nicht der ersten.** Solange hier ``min(entry.plate)``
+        stand, zeigte der Dialog die Spulen von Platte 1 — auch wenn Platte 2
+        geslicet wurde und andere trug. Der Kunde ordnete Filamente einer
+        Platte zu, die er nicht druckte, und sah den Fehler erst am Ergebnis.
+        """
+        result = self.session.last_result
+        if result is None:
+            return []
+        wanted = set(self._chosen_plates())
+        objects = [entry for entry in result.scene.objects.values() if entry.plate in wanted]
         if not objects:
             return []
-        erste = min(entry.plate for entry in objects)
         return threemf.merge_slots(
             [
                 threemf.AssemblyPart(
                     mesh=as_mesh_data(entry.mesh), slots=tuple(entry.material_slots)
                 )
                 for entry in objects
-                if entry.plate == erste
             ]
         )
 
@@ -1959,6 +2049,11 @@ class PrintSettingsDialog(QDialog):
         holder = QWidget(self)
         row = QVBoxLayout(holder)
         row.setContentsMargins(0, 0, 0, 0)
+        # Die Plattenwahl steht **hier** und nicht bei den Profilen: Sie
+        # gehört dorthin, wo geslicet wird, damit vor dem Klick zu sehen
+        # ist, was gleich hinausgeht. Erzeugt wurde sie früher
+        # (``_make_plate_row``), eingehängt wird sie hier.
+        row.addWidget(self.plate_row)
         self.state = QLabel("", holder)
         self.state.setWordWrap(True)
         # **Keine Zahl im Balken.** Sie steht mittig, und der Rand der
@@ -2503,7 +2598,9 @@ class PrintSettingsDialog(QDialog):
         self._temporary = TemporaryDirectory(prefix="solidon-handover-")
         folder = Path(self._temporary.name)
         name = self.session.path.stem if self.session.path else "solidon"
-        plates = sorted({entry.plate for entry in objects})
+        # Die gewählten, nicht alle: Wer Platte 2 slicen will, bekommt
+        # eine Druckdatei und nicht drei, von denen er zwei wegwirft.
+        plates = self._chosen_plates()
         try:
             runs = [self._plate_run(objects, plate, folder, name, setup) for plate in plates]
         except AppError as problem:
