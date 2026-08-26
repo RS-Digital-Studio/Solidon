@@ -290,8 +290,12 @@ def bore(
         length = depth
         if anchor == "mouth":
             # Ins Material hinein, und das ist die Richtung, in der der Körper
-            # liegt: Wer die Oberseite anklickt, bohrt nach unten.
-            into = -1.0 if position[index] > box.centre[index] else 1.0
+            # liegt: Wer die Oberseite anklickt, bohrt nach unten. Der
+            # Gleichstand — die Achsmitte, die Vorgabeposition — geht wie auf
+            # der Mesh-Seite (``into_the_body``, ``>=``) nach unten; sonst
+            # bohrt ein Umschalten zwischen create_box und create_brep_box in
+            # die Gegenrichtung, und MENU_TWINS ist kein Umschalten mehr.
+            into = -1.0 if position[index] >= box.centre[index] else 1.0
             start = position[index] if into > 0 else position[index] - length
         else:
             start = position[index] - length / 2.0

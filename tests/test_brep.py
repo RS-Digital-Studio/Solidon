@@ -576,6 +576,23 @@ def test_a_blind_bore_stops_at_its_depth() -> None:
     assert blind.is_closed, "ein Sackloch lässt den Boden stehen"
 
 
+def test_the_exact_bore_agrees_with_the_mesh_on_direction_at_the_centre() -> None:
+    """Skizze 10: bei der Vorgabeposition — der Achsmitte — entschieden die zwei
+    Kerne den Tiebreak verschieden. Das Netz nimmt ``>=`` (nach unten), der
+    exakte Kern nahm ``>`` (nach oben); wer zwischen ``create_box`` und
+    ``create_brep_box`` umschaltete, bohrte in die Gegenrichtung — und
+    ``MENU_TWINS`` ist dann kein Umschalten. Beide gehen jetzt zur
+    tieferliegenden Hälfte, gemessen am Schwerpunkt.
+    """
+    from app.core.brep import edit as brep_edit
+
+    solid = brep_edit.box(40.0, 30.0, 20.0)  # z 0..20, Mitte bei z = 10
+    bored = brep_edit.bore(solid, position=(0.0, 0.0, 10.0), axis="z", diameter=6.0, depth=5.0)
+
+    # Nach unten gebohrt (z 5..10 entfernt) steigt der Schwerpunkt über die Mitte.
+    assert float(bored.mesh.raw.center_mass[2]) > 10.0, "ins Material nach unten, wie das Netz"
+
+
 def test_a_bore_across_the_body_follows_its_axis() -> None:
     """Quer durch, entlang X — die Achse geht in den Zylinder und nicht in eine
     nachträgliche Drehung.
