@@ -81,7 +81,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
 | Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | nichts mehr — **§24.3 trägt die Ausnahme seit dem 25.08.2026** (Entscheidung Robert): Deklaration statt stiller Ausnahme. Es fehlt die Arbeit: Registerfeld, Druckspaltenprüfung im Bereichstest, das Bolzenscharnier als erster Nutzer |
-| Eigene Bausteine sprengen die Menügrenze | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | nichts — der Umbau auf Katalog statt Menüleiste kann heute laufen und gilt für den heutigen Bestand mit |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
@@ -9637,16 +9636,33 @@ Arbeitspakete, die Grenzen und die eine Entscheidung stehen dort.
   am 25.08.2026 der `enumerate`-Fehler durchgekommen. Beide Gegenproben
   gefahren.
 
-- [ ] **Eigene Bausteine sprengen die Zeilengrenze der Menüs, und die Suite
-  kann es nicht sehen.** Jeder Baustein wird eine Operation und damit ein
-  Menüeintrag; `tests/test_interface_limits.py` erlaubt zwölf Zeilen je Menü.
-  Zwanzig eigene Teile machen daraus die Liste zum Durchsuchen, die der Test
-  verhindern soll. Sehen kann er es nicht: `bootstrap.load_user_parts` wird
-  ausdrücklich nur von Oberfläche und Kommandozeile gerufen, nicht von der
-  Suite — mit gutem Grund (§38), aber mit der Folge, dass diese Grenze beim
-  Kunden reißt und bei uns nie. Der Umbau ist, eigene Bausteine in Katalog und
-  Befehlspalette zu führen statt in der Menüleiste; das gilt für die heutigen
-  Python-Bausteine genauso.
+- [x] **Der Umbau ist längst gebaut** — nachgesehen am 26.08.2026, weil dieser
+  Punkt als offen im Register stand. `bootstrap.user_operations()` sammelt,
+  was aus dem Nutzerordner kam, `menu_tree(skip=…)` lässt es aus der
+  Menüleiste heraus, und `MainWindow` reicht das eine ins andere. Erreichbar
+  bleiben die Bausteine über Katalog, Befehlspalette und Kontextmenü, und
+  `test_a_part_of_the_users_own_never_reaches_the_menu_bar` prüft das am
+  **gebauten Fenster** statt an der Funktion darunter — durchgereicht ist
+  nicht gerufen.
+
+  Ein Punkt, der als offen dasteht, kostet einen Nachmittag, an dem jemand
+  etwas baut, das es gibt. Genau davor warnt `CLAUDE.md`: „Wer ‚offen‘ in
+  einem Konzept liest, prüft es am Code, bevor er es glaubt."
+
+- [x] **Was daran wirklich fehlte, war die andere Seite: die
+  Verfügbarkeit.** Behoben am 26.08.2026. Wer aus der Menüleiste
+  herausgenommen wird, hat keine Menü-Action mehr — und
+  `_palette_availability` las die Sperre genau daraus: `action is None` ergab
+  „erlaubt". Für jeden eigenen Baustein hätte die Befehlspalette damit auf
+  **leerer Szene** „geht" gesagt und den Kunden in die modale Sackgasse
+  geschickt, gegen die `_run_palette_choice` gebaut wurde. Gerechnet wird
+  jetzt über `_reason_locked` — dieselbe Funktion, die auch den Menüeintrag
+  ausgraut, also keine zweite Quelle.
+
+  Der Umbau hat den Fehler nicht verursacht, er hat ihn **freigelegt**: Die
+  Annahme „jede Operation hat einen Menüeintrag" stimmte schon vorher nicht,
+  seit die Zwillinge zusammengelegt sind. Sie fiel nur niemandem auf, solange
+  es zwei Fälle waren statt zwanzig.
 
 ---
 
