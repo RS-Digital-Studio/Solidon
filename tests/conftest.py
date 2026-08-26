@@ -24,7 +24,21 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 # was die Tests sehen — und schlimmer: ein Testlauf hinterließe Kalibrierungen
 # in seinem Profilordner.
 _ISOLATED = tempfile.mkdtemp(prefix="solidon-tests-")
-for _variable in ("APPDATA", "LOCALAPPDATA", "XDG_DATA_HOME", "XDG_CONFIG_HOME", "XDG_CACHE_HOME"):
+# HOME gehört dazu, und zwar für macOS: Dort läuft jede Nutzerverzeichnis-
+# Auflösung über ``Path.home()`` (~/Library/…), und ohne den Eintrag las und
+# schrieb die Suite in Roberts echtem Profil — §38 griff auf genau der
+# Plattform nicht, die die XDG-Variablen nie liest (Gesamtreview-b, Tests 1).
+# Auf Windows ist der Eintrag folgenlos (Python nimmt USERPROFILE); der Beleg
+# auf macOS ist der nächste Suitenlauf dort — von dieser Maschine aus ist er
+# nicht zu führen.
+for _variable in (
+    "APPDATA",
+    "LOCALAPPDATA",
+    "HOME",
+    "XDG_DATA_HOME",
+    "XDG_CONFIG_HOME",
+    "XDG_CACHE_HOME",
+):
     os.environ[_variable] = _ISOLATED
 
 from app.core import discover
