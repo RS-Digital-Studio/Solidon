@@ -241,6 +241,9 @@ _NOT_A_RANGE = frozenset(
     {
         "absolute_path", "already_solid", "ambiguous_reference", "broken_scheme", "checksum",
         "choices",
+        # „#RRGGBB" ist ein Format und keine Spanne: Eine Filamentfarbe kann
+        # nicht „zu groß" sein, sie ist lesbar oder nicht.
+        "colour",
         "consumes", "count_in_use", "cycle", "damaged", "damaged_sketch", "degenerate_normal",
         "empty", "exists", "file_too_large", "format", "grammar", "history_moved", "host",
         "inverted",

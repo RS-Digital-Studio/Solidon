@@ -479,6 +479,40 @@ def test_every_older_example_migrates_to_today() -> None:
         ], path.name
 
 
+def test_a_point_stroke_from_before_the_filament_rebuild_still_opens() -> None:
+    """13 → 14: ``paint_slot`` malt nicht mehr um einen Punkt, die Datei bleibt.
+
+    Dieselbe Zusage wie beim Schritt darunter, aus demselben Grund: Ein alter
+    Bemal-Schritt trägt einen Klickpunkt und einen Radius, und daraus lässt
+    sich das gemeinte Merkmal nicht zurückrechnen — die Erkennung von heute
+    kann an derselben Stelle eine andere Fläche finden als die von damals.
+    Geraten wäre schlimmer als angehalten: Eine Farbe, die nach dem Update auf
+    der falschen Fläche sitzt, sieht der Kunde erst im Slicer.
+
+    Die Datei ist am 26.08.2026 mit dem alten Pfad erzeugt worden, kurz bevor
+    er entfiel — danach kann kein Code sie mehr bauen.
+    """
+    from app.core.knowledge import profiles
+    from app.core.scene.evaluate import evaluate
+
+    project = load(Path(__file__).parent / "data" / "projects" / "painted_v13.p3d")
+
+    assert project.document.format_version == FORMAT_VERSION
+    steps = [entry.op for entry in project.document.ops]
+    assert steps == ["load", "paint_slot"], "der Schritt bleibt stehen"
+    assert project.document.ops[1].params["radius"] == 12.0, (
+        "und seine Werte mit ihm — sie sind die Arbeit des Kunden"
+    )
+
+    result = evaluate(project.document, profiles.make_profile("centauri-carbon-2", "petg"))
+
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert codes, "eine Datei, die nicht rechnen kann, sagt es"
+    assert not any(code.startswith("internal") for code in codes), (
+        "ein Zustand, mit dem zu rechnen war, ist kein Programmfehler"
+    )
+
+
 def test_a_file_with_a_step_this_version_cannot_run_still_opens() -> None:
     """12 → 13: ``create_from_scad`` gibt es nicht mehr, die Datei schon.
 
@@ -518,6 +552,25 @@ def test_a_file_with_a_step_this_version_cannot_run_still_opens() -> None:
     assert "unerwarteter Fehler" not in str(finding.message), (
         "ein Zustand, mit dem zu rechnen war, ist kein Programmfehler"
     )
+
+    # Regel 17: nie nur ein Befund, immer ein Weg. Der Satz sagte bis zum
+    # 26.08.2026 „alles andere im Projekt rechnet weiter" — zwei Zeilen unter
+    # dem ``break``, das die Auswertung beendet. Wer das las, suchte den Fehler
+    # bei sich und hatte keine Handhabe.
+    satz = str(finding.message)
+    assert "Verlauf" in satz, "der Befund nennt, wo die Werte zu sehen sind"
+    assert "verwirft" in satz, "und wie der Schritt loszuwerden ist"
+    assert "rechnet weiter" not in satz, (
+        "ab hier rechnet nichts mehr — der Satz sagte das Gegenteil"
+    )
+
+    # Und der genannte Weg muss auch bedienbar sein: Rückgängig hängt an den
+    # Transaktionen des **Dokuments**, nicht an denen dieser Sitzung. Sonst
+    # wäre der Vorschlag ein Verweis auf etwas, das es nach dem Öffnen einer
+    # Datei gar nicht gibt.
+    from app.core.scene.history import History
+
+    assert History(project.document).can_undo, "der vorgeschlagene Weg steht nach dem Öffnen offen"
 
 
 def test_a_title_from_an_older_file_stays_literal(tmp_path: Path) -> None:

@@ -1,43 +1,32 @@
-"""Slots auf eine Oberfläche malen (Bauplan §20, „Bemalen").
+"""Flächen in ein Filament färben (Bauplan §20, Konzept Filamente).
 
-Ein Pinsel mit Radius, und Kantenerkennung — letztere macht ihn erst
-brauchbar. Einen Radius ohne sie ins Netz zu malen heißt, dass die Farbe um
-die Ecke auf die Rückseite des Teils läuft, und das von Hand aufzuräumen
-kostet mehr, als das Malen gespart hat.
-
-Also breitet sich der Pinsel über die Oberfläche aus statt durch den Raum: er
-beginnt am angeklickten Dreieck und läuft zu Nachbarn, und er hält an einer
-Kante an, die schärfer ist als ein gegebener Winkel. Die Oberseite eines
-Deckels wird bemalt, die Seite nicht, ohne dass jemand eine Grenze zeichnet.
+Bis zum 26.08.2026 stand hier ein Pinsel: ein Radius um einen Klickpunkt, mit
+Kantenerkennung als Grenze. Robert hat ihn ersetzt — eine Anwendung, die ihre
+Flächen beim Namen kennt, malt nicht um Punkte: Ein Klick auf „Oberseite"
+färbt die Oberseite, und die Grenze der Fläche hat die Erkennung schon
+gezogen (``Feature.face_indices``). Die Füllung ist damit merkmalsstabil:
+Ändert ein früherer Schritt die Maße, wandert sie mit — ein gespeicherter
+Punkt läge daneben (§21). Alte Punkt-Schritte bleiben in ihren Dateien stehen
+und halten beim Auswerten ehrlich an (Migration 13 → 14).
 
 Die andere Hälfte von §20 — Textur zu Slots — steht in
-:mod:`app.core.geom.texture`. Diese hier ist das manuelle Gegenstück: für die
-Beschriftung, die keine Textur hat, und zum Korrigieren dessen, was die
-Quantisierung falsch getroffen hat.
+:mod:`app.core.geom.texture`. Das ganze Teil färbt ``assign_slot``
+(:mod:`app.core.geom.colour_ops`).
 """
 
 from __future__ import annotations
 
 import dataclasses
-from collections import deque
 from typing import cast
 
-import numpy as np
-
 from app.core.errors import ValidationError
-from app.core.geom.mesh import MeshData, as_mesh_data, distances_to_triangles
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, Finding, MaterialSlot, OpContext, OpResult, Vec3
-from app.core.units import DEGREE_UNIT, EPS_GEOM
+from app.core.types import BaseParams, Finding, MaterialSlot, OpContext, OpResult
 from app.i18n import _
 
 _log = get_logger(__name__)
-
-#: Über diesem Winkel zwischen zwei Dreiecken hält der Pinsel an. Dreißig Grad
-#: halten ihn auf einer gerundeten Fläche und stoppen ihn an allem, was sich
-#: wie eine Kante liest.
-EDGE_ANGLE = 30.0
 
 #: Wie viele Filamente eine Slotnummer benennen darf (§20, wie bei den
 #: Farb-Operationen).
@@ -46,67 +35,18 @@ MAX_SLOTS = 8
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class BrushResult:
-    """Der bemalte Körper und wie viele Dreiecke der Pinsel wirklich traf.
+    """Der gefärbte Körper und wie viele Dreiecke der Strich wirklich traf.
 
     Getrennt, weil die zweite Zahl nirgends sonst herkommt: Wie viele Dreiecke
     am Ende in einem Slot sitzen, sagt :func:`app.core.geom.attributes.counts`
     — aber das ist der **Bestand** und nicht der Strich. Bei Slot 0 sind die
     beiden Zahlen so weit auseinander, wie sie nur sein können: Ein Netz ohne
-    Slots gilt ganz als Slot 0, also meldete ein Klick ins Leere die volle
-    Dreieckszahl als Erfolg.
+    Slots gilt ganz als Slot 0, also meldete eine leere Füllung sonst die
+    volle Dreieckszahl als Erfolg.
     """
 
     mesh: MeshData
     painted: int
-
-
-def brush(
-    mesh: MeshData,
-    point: Vec3,
-    radius: float,
-    slot: int,
-    *,
-    edge_angle: float = EDGE_ANGLE,
-) -> BrushResult:
-    """Bemalt jedes Dreieck um ``point``, das zur selben Oberfläche gehört.
-
-    Erreicht über die Oberfläche, nicht durch die Luft: ein Lauf von Nachbar
-    zu Nachbar, der an scharfen Kanten und am Radius endet. Beide Grenzen
-    zählen — der Radius allein malte durch eine Wand, die Kante allein eine
-    ganze Seite.
-
-    **Gemessen wird zur Dreiecksfläche, nicht zum Schwerpunkt** (§18.5,
-    :func:`app.core.geom.mesh.distance_to_triangles`). Die Deckfläche der
-    Platte aus dem Korpus besteht aus zwei Dreiecken von 60 auf 40 Millimeter; ihr Schwerpunkt
-    liegt gut zwanzig Millimeter von der Mitte entfernt. Ein Klick genau dorthin
-    — die naheliegendste Geste überhaupt — fand mit einem Pinselradius von zehn
-    Millimetern kein einziges Dreieck und meldete „keine Fläche zu treffen".
-    Dieselbe Rechnung begrenzt den Umfang: Ein Radius, der an den Schwerpunkten
-    gemessen wird, hört an einem großen Dreieck auf, bevor er es erreicht.
-    """
-    body = mesh.raw
-    faces = len(body.faces)
-    if not faces or radius <= EPS_GEOM:
-        return BrushResult(mesh=mesh, painted=0)
-
-    triangles = np.asarray(body.triangles, dtype=float)
-    away = distances_to_triangles(triangles, np.asarray(point, dtype=float))
-    start = int(np.argmin(away))
-    if away[start] > radius:
-        # Der Strich ist nicht auf dem Körper gelandet. Ein nächstes Dreieck
-        # gibt es immer, und es zu bemalen, weil es das nächste war, setzte
-        # Farbe auf die andere Seite des Teils als die, auf die jemand
-        # geklickt hat.
-        return BrushResult(mesh=mesh, painted=0)
-
-    within = away <= radius
-    reached = _walk(mesh, start, within, edge_angle)
-
-    slots = list(mesh.slots) if mesh.slots else [0] * faces
-    for index in reached:
-        slots[index] = int(slot)
-    _log.info("painted %d of %d faces into slot %d", len(reached), faces, slot)
-    return BrushResult(mesh=MeshData(raw=body, slots=tuple(slots)), painted=len(reached))
 
 
 def fill_feature(mesh: MeshData, indices: tuple[int, ...], slot: int) -> BrushResult:
@@ -133,36 +73,6 @@ def fill_feature(mesh: MeshData, indices: tuple[int, ...], slot: int) -> BrushRe
     return BrushResult(mesh=MeshData(raw=body, slots=tuple(slots)), painted=len(reached))
 
 
-def _walk(mesh: MeshData, start: int, within: np.ndarray, edge_angle: float) -> set[int]:
-    """Flächen, die von ``start`` aus erreichbar sind, ohne eine Kante oder
-    den Radius zu überschreiten.
-    """
-    adjacency = np.asarray(mesh.raw.face_adjacency)
-    if not len(adjacency):
-        return {start} if within[start] else set()
-
-    angles = np.degrees(np.asarray(mesh.raw.face_adjacency_angles, dtype=float))
-    passable = angles <= edge_angle
-
-    neighbours: dict[int, list[int]] = {}
-    for (first, second), open_edge in zip(adjacency, passable, strict=True):
-        if not open_edge:
-            continue
-        neighbours.setdefault(int(first), []).append(int(second))
-        neighbours.setdefault(int(second), []).append(int(first))
-
-    seen = {start}
-    queue = deque([start])
-    while queue:
-        current = queue.popleft()
-        for other in neighbours.get(current, ()):
-            if other in seen or not within[other]:
-                continue
-            seen.add(other)
-            queue.append(other)
-    return seen
-
-
 @op_params
 class PaintParams(BaseParams):
     slot: int = param(
@@ -181,47 +91,8 @@ class PaintParams(BaseParams):
         # ``test_a_feature_parameter_is_declared_as_one`` hält sie fest.
         kind="feature",
         doc=_(
-            "Die erkannte Fläche, die vollständig gefärbt wird — gesetzt vom "
-            "Klick auf das Merkmal. Leer heißt: um den Punkt malen."
+            "Die erkannte Fläche, die vollständig gefärbt wird — gesetzt vom Klick auf das Merkmal."
         ),
-    )
-    radius: float = param(
-        title=_("Radius"),
-        default=10.0,
-        unit="mm",
-        minimum=0.1,
-        maximum=500.0,
-        doc=_("Wie weit der Strich um den Klickpunkt herum reicht."),
-    )
-    x: float = param(
-        title=_("Position X"),
-        default=0.0,
-        unit="mm",
-        doc=_("Wo geklickt wurde. Beim Malen trägt der Klick die drei Werte selbst ein."),
-        placement="advanced",
-    )
-    y: float = param(
-        title=_("Position Y"),
-        default=0.0,
-        unit="mm",
-        doc=_("Zweite Achse des Klickpunkts."),
-        placement="advanced",
-    )
-    z: float = param(
-        title=_("Position Z"),
-        default=0.0,
-        unit="mm",
-        doc=_("Dritte Achse des Klickpunkts."),
-        placement="advanced",
-    )
-    edge_angle: float = param(
-        title=_("Kantenwinkel"),
-        default=EDGE_ANGLE,
-        unit=DEGREE_UNIT,
-        minimum=1.0,
-        maximum=180.0,
-        placement="advanced",
-        doc=_("Ab diesem Winkel hält der Pinsel an. 180 Grad heißt: über alles hinweg."),
     )
     name: str = param(
         title=_("Bezeichnung"),
@@ -240,8 +111,8 @@ class PaintParams(BaseParams):
     produces=1,
     applies_to=["face"],
     doc=_(
-        "Malt einen Materialslot auf die Fläche um einen Punkt. Der Pinsel läuft "
-        "über die Oberfläche und hält an Kanten an, statt um die Ecke zu malen."
+        "Färbt eine erkannte Fläche vollständig in ein Filament. Die Grenze "
+        "der Fläche kommt aus der Erkennung — kein Pinsel, kein Radius."
     ),
 )
 def paint_slot(ctx: OpContext) -> OpResult:
@@ -249,52 +120,51 @@ def paint_slot(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     mesh = as_mesh_data(source.mesh)
 
-    if params.at_feature:
-        # **Die Füllung ist der Hauptfall** (Konzept Filamente, 26.08.2026):
-        # Ein Klick auf „Oberseite" färbt die Oberseite — die Dreiecke kommen
-        # aus dem Merkmal, nicht aus einem Radius um einen Punkt. Damit wandert
-        # die Färbung mit, wenn ein früherer Schritt die Maße ändert; ein
-        # gespeicherter Punkt läge dann daneben (§21).
-        feature = source.features.get(params.at_feature)
-        if feature is None:
-            raise ValidationError(
-                title=_("Dieses Merkmal gibt es am Körper nicht."),
-                field="at_feature",
-                detail=_(
-                    "Die Fläche wurde nicht gefunden — vielleicht hat ein "
-                    "früherer Schritt sie verändert. Wählen Sie sie neu, oder "
-                    "färben Sie das ganze Teil."
-                ),
-                value=params.at_feature,
-                constraint="unknown_feature",
-                values={"feature": params.at_feature},
-            )
-        stroke = fill_feature(mesh, feature.face_indices, params.slot)
-        empty = Finding(
-            code="colour.nothing_painted",
-            severity="warning",
-            message=_("Dieses Merkmal hat keine eigene Fläche zu färben."),
-            object_id=source.id,
+    # **Nur noch die Füllung** (Konzept Filamente, 26.08.2026): Ein Klick auf
+    # „Oberseite" färbt die Oberseite — die Dreiecke kommen aus dem Merkmal.
+    # Damit wandert die Färbung mit, wenn ein früherer Schritt die Maße
+    # ändert; der Punkt-Radius-Pinsel, der hier bis v13 stand, konnte das
+    # nicht und ist mit dem Format 14 entfallen.
+    if not params.at_feature:
+        raise ValidationError(
+            title=_("Zum Färben gehört eine Fläche."),
+            field="at_feature",
+            detail=_(
+                "Klicken Sie das Merkmal an, das gefärbt werden soll — oder "
+                "färben Sie über das Kontextmenü das ganze Teil."
+            ),
+            value=params.at_feature,
+            constraint="empty",
+        )
+    feature = source.features.get(params.at_feature)
+    if feature is None:
+        raise ValidationError(
+            title=_("Dieses Merkmal gibt es am Körper nicht."),
+            field="at_feature",
+            detail=_(
+                "Die Fläche wurde nicht gefunden — vielleicht hat ein "
+                "früherer Schritt sie verändert. Wählen Sie sie neu, oder "
+                "färben Sie das ganze Teil."
+            ),
+            value=params.at_feature,
+            constraint="unknown_feature",
             values={"feature": params.at_feature},
         )
-    else:
-        stroke = brush(
-            mesh,
-            (params.x, params.y, params.z),
-            params.radius,
-            params.slot,
-            edge_angle=params.edge_angle,
-        )
-        empty = Finding(
-            code="colour.nothing_painted",
-            severity="warning",
-            message=_("An dieser Stelle war keine Fläche zu treffen."),
-            object_id=source.id,
-            values={"radius_mm": round(params.radius, 2)},
-        )
+    stroke = fill_feature(mesh, feature.face_indices, params.slot)
     covered = stroke.painted
     if not covered:
-        return OpResult(outputs=[source], findings=[empty])
+        return OpResult(
+            outputs=[source],
+            findings=[
+                Finding(
+                    code="colour.nothing_painted",
+                    severity="warning",
+                    message=_("Dieses Merkmal hat keine eigene Fläche zu färben."),
+                    object_id=source.id,
+                    values={"feature": params.at_feature},
+                )
+            ],
+        )
 
     known = {entry.index: entry for entry in source.material_slots}
     known.setdefault(

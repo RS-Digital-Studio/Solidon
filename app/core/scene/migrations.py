@@ -24,7 +24,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 13
+FORMAT_VERSION: Final = 14
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,6 +243,29 @@ def _scad_steps_stay_but_stop_computing(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _point_strokes_stay_but_stop_computing(data: dict[str, Any]) -> dict[str, Any]:
+    """13 → 14: ``paint_slot`` malt nicht mehr um einen Punkt (Filament-Umbau).
+
+    Bis Version 13 trug ein Bemal-Schritt einen Klickpunkt und einen Radius;
+    seit dem 26.08.2026 färbt er eine **erkannte Fläche** vollständig
+    (``at_feature``). Ein alter Schritt lässt sich nicht umrechnen: Der Punkt
+    weiß nicht, welches Merkmal gemeint war, und die Erkennung von heute kann
+    an seiner Stelle eine andere Fläche finden als die von damals.
+
+    **Umgeschrieben wird deshalb nichts**, dieselbe Entscheidung wie bei
+    Schritt 12 → 13. Der Schritt bleibt mit seinen Werten stehen; die
+    Auswertung hält an ihm an und sagt, welcher es ist. Geraten wäre
+    schlimmer als angehalten: Eine Farbe, die nach dem Update auf einer
+    anderen Fläche sitzt, sieht der Kunde erst im Slicer — und dann glaubt er
+    seiner Datei nicht mehr.
+
+    Die Version steigt trotzdem, und darin liegt die Aussage: Eine Datei ab
+    v14 **kann** keinen Bemal-Schritt ohne Fläche tragen, weil die Operation
+    keinen ohne annimmt.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -257,6 +280,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=10, to_version=11, apply=_fold_split_plane_into_split_pinned),
     Step(from_version=11, to_version=12, apply=_add_edited_operations),
     Step(from_version=12, to_version=13, apply=_scad_steps_stay_but_stop_computing),
+    Step(from_version=13, to_version=14, apply=_point_strokes_stay_but_stop_computing),
 )
 
 
