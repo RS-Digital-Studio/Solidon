@@ -267,6 +267,15 @@ unbezahlbar:
 - **Klein halten und nachfüllen** (Vorschlag: 50 Stück). Der Vorrat ist die
   eine Stelle, an der fertige Lizenzen auf dem Server liegen; seine Größe
   ist die Obergrenze des Diebstahlschadens (B3).
+- **Erzeugt wird nach der Stichtag-Festlegung, nicht davor.** Ein Schlüssel
+  mit Kaufdatum vor dem Stichtag braucht nie ein Zertifikat (Teil A) — er
+  ist damit dauerhaft ohne Aktivierung gültig und durch kein Limit und
+  keinen Widerruf der Bindung erreichbar. Entstünde bei jeder Hauptversion
+  ein Vorrat vor deren Stichtag, wüchse eine nie widerrufbare Liste.
+  Vor-Stichtag-Bestände (der erste: 20 Schlüssel POOL-252DB7, offline bei
+  Robert, 26.08.2026) bleiben die benannte, klein gehaltene Ausnahme mit
+  Offline-Archiv — brauchbar für den Übergangsweg aus Frage 10, nie für den
+  Server-Vorrat.
 
 **Und der leere Vorrat ist ein definierter Fall, kein Unfall** (Fund der
 Durchsicht vom 26.08.2026 — er tritt am wahrscheinlichsten am besten
@@ -423,7 +432,14 @@ dem Kunden ohne Netz offen). Zu ändern sind:
   Daten" bleibt wahr und bleibt stehen — die Aktivierung löst der Kunde
   aus; die Präzisierung des §2-Satzes regelt D4.
 - **EULA:** Klausel zur Aktivierung — Maschinenlimit, Selbst-Deaktivierung,
-  Widerruf bei Erstattung. Der Erzeugungsweg hat eine bekannte Falle:
+  Widerruf bei Erstattung. **Fällig mit dem Server, nicht vorher, und in
+  derselben Auslieferung** wie Datenschutzerklärung, Kauftexte und die
+  Software, die es durchsetzt (a2, 26.08.2026): Heute setzt Solidon keine
+  Grenze durch, und ein Vertragstext, der strenger ist als das Produkt,
+  wäre der falsche Fehler. Der Formulierungsvorschlag liegt vor —
+  „installieren überall, freigeschaltet ein Rechner zugleich, Wechsel
+  jederzeit selbst, ohne Wartezeit"; der dritte Halbsatz ist das, was die
+  Grenze erträglich macht. Der Erzeugungsweg hat eine bekannte Falle:
   `EULA.md` ist die Quelle, `tools/make_legal.py` schreibt
   `website/eula.html` **und** `packaging/eula.txt`, und die zweite Hälfte
   reist im Installer — **beide erzeugten Fassungen werden mitcommittet**
@@ -961,6 +977,7 @@ Update-Prüfung, die Sie selbst auslösen."
 | `website/index.html` (4×: meta, og, JSON-LD, Kacheln) | „ohne Konto, ohne Abo", „ohne Telemetrie" | **bleibt wahr, bleibt stehen** — die Startseite verspricht kein „ohne Netz" |
 | Trial-/Demo-Texte im `ActivationDialog` | „… brauchen einen Schlüssel" | bleibt wahr (Schlüssel schließt Aktivierung ein); Handbuchseite „Freischalten" erklärt den Schritt |
 | EULA / Datenschutzerklärung | — | Teil B (B5): Aktivierungsdaten benennen; beide erzeugten EULA-Fassungen mitcommitten |
+| EULA §2 (seit ddee0d41) | „keine Aktivierungspflicht über das Netz … wir erfahren nicht, wann und wo" | **ändern zusammen mit der B5-Klausel, nicht vorher** — für Bestandsschlüssel wahr, mit dem Server falsch (Aktivierung meldet einmalig *dass* und *wann*); Formel wie der §2-Rahmensatz oben: Freischaltung braucht einmal Kontakt oder den Offline-Weg, im Betrieb erfahren wir nichts |
 
 Dazu eine neue Handbuchseite „Freischalten und Umziehen": Aktivieren,
 Offline-Weg Schritt für Schritt, Rechner wechseln, was bei Serverausfall gilt
@@ -991,7 +1008,12 @@ Schlüssel; (3) der Konstruktor des Dialogs macht keinen Netzaufruf
    neben dem Laptop) eine zweite Lizenz ist — das ist die
    Geschäftsentscheidung, und sie ist gefallen.
 2. Trial lokal lassen oder serverseitig registrieren (Vorschlag: lokal).
-3. Bestandsschlüssel-Stichtag.
+3. Bestandsschlüssel-Stichtag. **Seit Entscheidung 1 hängt daran auch die
+   EULA-Frage** (über a2 vorgelegt, 26.08.2026): Wer vor dem Stichtag
+   gekauft hat, hat eine Fassung gelesen, die unbegrenzte Geräte zusagt —
+   ob diese Schlüssel von der Ein-Rechner-Grenze ausgenommen bleiben (die
+   Übergangsregel aus Teil A nimmt sie ohnehin von der Aktivierung aus)
+   oder die neue Fassung für alle gilt, ist keine technische Frage.
 4. Notfallplan „Firma weg" — **inhaltlich durch C6 beantwortet, es fehlt
    nur noch Roberts Ja/Nein:** Die Dauer-Freischaltung wird vorbereitet,
    aber nicht ausgeliefert; solange die Firma da ist, existiert sie nur
