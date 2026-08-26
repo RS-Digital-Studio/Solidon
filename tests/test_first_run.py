@@ -228,6 +228,33 @@ def settled(dialog: FirstRunDialog, qt_app: QApplication) -> FirstRunDialog:
     return dialog
 
 
+def test_the_answers_do_not_squeeze_the_questions(qt_app: QApplication) -> None:
+    """Die nachgereichten Zeilen wachsen ins Fenster, nicht in die Felder.
+
+    Die Erhebung tauscht „Wird nachgesehen …" gegen drei Programmzeilen und
+    die Chat-Auskunft. Das Fenster blieb dabei auf seiner Aufmachgröße —
+    das umbrochene Intro meldet der Layoutrechnung nur eine Zeile —, und der
+    Fehlbetrag wurde aus den Auswahlfeldern gepresst: Sprache, Drucker und
+    Material standen mit 16 von 28 Punkten da, die Schrift oben und unten
+    abgeschnitten (Robert, 26.08.2026, mit Bild). Der Dialog wächst jetzt
+    nach dem Eintragen der Antworten; geprüft wird die Wirkung an den
+    Feldern, nicht die Fenstergröße — sie ist das Mittel, nicht die Zusage.
+    """
+    dialog = FirstRunDialog(UiSettings())
+    dialog.show()
+    qt_app.processEvents()
+    settled(dialog, qt_app)
+    # Der Wachstumsruf läuft über singleShot(0) — eine Runde später.
+    qt_app.processEvents()
+    qt_app.processEvents()
+
+    for name in ("language", "printer", "material"):
+        combo = getattr(dialog, name)
+        assert combo.height() >= combo.minimumSizeHint().height(), (
+            f"{name}: {combo.height()} von {combo.minimumSizeHint().height()} Punkten"
+        )
+
+
 def test_the_dialog_is_there_before_the_answers_are(qt_app: QApplication) -> None:
     """§38, §2.8: das Allererste, was ein Kunde sieht, wartet auf nichts.
 

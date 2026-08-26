@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import QTimer, Signal
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -333,6 +333,43 @@ class FirstRunDialog(QDialog):
         self.wait_for_survey()
         self._leash.wait_all(timeout_ms)
 
+    def _grow_to_content(self) -> None:
+        """Der Dialog wächst mit den nachgereichten Zeilen — von selbst tut
+        er es nicht.
+
+        Die Erhebung tauscht „Wird nachgesehen …" gegen drei Programmzeilen
+        und die Chat-Auskunft; das Intro-Label darüber bricht um und meldet
+        der Layoutrechnung nur eine Zeile Mindesthöhe. Das Fenster blieb
+        deshalb auf seiner Aufmachgröße stehen, und der Fehlbetrag wurde aus
+        den Auswahlfeldern gepresst: Sprache, Drucker und Material standen
+        mit 16 von 28 Punkten Höhe da, die Schrift oben und unten
+        abgeschnitten (Robert, 26.08.2026, mit Bild).
+
+        Gerufen wird über ``QTimer.singleShot(0, self, …)``, nicht direkt:
+        Unmittelbar nach dem Zeilentausch meldet ``sizeHint`` noch den alten
+        Stand (die weggeräumten Zeilen leben bis zum nächsten
+        Ereignisdurchlauf), und ein ``max`` mit einer veralteten Zahl wächst
+        nicht. Mit ``self`` als Empfänger verfällt der Ruf, wenn der Dialog
+        vorher weggeräumt wird — ein Rückruf in ein zerstörtes C++-Objekt
+        ist der Absturz ohne Zeile.
+        """
+        # Erst die Lügen festnageln, dann messen: **Jedes** umbrochene Label
+        # meldet der Layoutrechnung nur eine Zeile Mindesthöhe — das Intro,
+        # die drei Programmzeilen, die Chat-Auskunft. Die Reste summieren
+        # sich; offscreen (null Schriftfamilien) fehlten am Ende noch Pixel,
+        # obwohl das Intro schon gepinnt war. ``heightForWidth`` über der
+        # wirklich gelegten Breite ist je Label die ehrliche Zahl (die Bauart
+        # von ``panels.fit_wrapped``, hier über den ganzen Dialog). Der Dialog
+        # wird nicht von Hand verbreitert, die gepinnten Mindesthöhen können
+        # also nicht zu groß zurückbleiben.
+        for label in self.findChildren(QLabel):
+            if label.wordWrap() and label.width() > 0:
+                label.setMinimumHeight(label.heightForWidth(label.width()))
+        self.resize(self.width(), max(self.height(), self.sizeHint().height()))
+
+    def _grow_soon(self) -> None:
+        QTimer.singleShot(0, self, self._grow_to_content)
+
     def _show(self, found: object) -> None:
         """Die Antworten eintragen."""
         assert isinstance(found, Findings)
@@ -341,6 +378,7 @@ class FirstRunDialog(QDialog):
         self.install_button.setText(f"{tr('Fehlendes installieren …')}  ·  {found.missing}")
         self.install_button.setEnabled(True)
         self.chat_state.setText(found.chat)
+        self._grow_soon()
         # **Nur, solange niemand selbst gewählt hat.** Eine gute Vorgabe ist
         # mehr wert als eine gute Einstellmöglichkeit (§2.4) — aber eine, die
         # eine getroffene Wahl überschreibt, ist keine Vorgabe mehr.
@@ -367,6 +405,7 @@ class FirstRunDialog(QDialog):
                 "zusätzlichen Programme lassen sich trotzdem einrichten."
             )
         )
+        self._grow_soon()
 
     def _survey_done(self) -> None:
         survey = self._survey
