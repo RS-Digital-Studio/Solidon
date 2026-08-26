@@ -1231,6 +1231,37 @@ def test_the_palette_refuses_a_locked_choice_with_the_reason(window: MainWindow)
     assert launched == ["create_box"], "eine freie Wahl startet wie bisher"
 
 
+def test_an_operation_without_a_menu_entry_is_not_simply_allowed(window: MainWindow) -> None:
+    """Keine Menü-Action zu haben heißt nicht, dass alles geht.
+
+    ``_palette_availability`` las die Sperre aus der Action, die auch das Menü
+    ausgraut — richtig, solange jede Operation eine hat. ``action is None``
+    ergab „erlaubt", und das ist eine Annahme über den Bestand, keine über die
+    Sache: Die zusammengelegten Zwillinge haben schon heute keinen eigenen
+    Eintrag, und sobald eigene Bausteine in den Katalog wandern statt in die
+    Menüleiste, hat **keiner** von ihnen einen. Dann bekäme jeder auf leerer
+    Szene ein „erlaubt" und der Kunde die modale Sackgasse, gegen die der Test
+    darüber gebaut wurde.
+
+    Nachgestellt, indem der Eintrag entfernt wird — dieselbe Lage, die der
+    Katalogumbau für die eigenen Bausteine dauerhaft herstellt.
+    """
+    launched: list[str] = []
+    window.launch_operation = lambda spec: launched.append(spec.name)  # type: ignore[method-assign]
+
+    removed = window._op_actions.pop("lattice_fill", None)
+    assert removed is not None, (
+        "ohne Eintrag im Register prüft dieser Test nur seinen eigenen Aufbau"
+    )
+
+    available, reason = window._palette_availability("lattice_fill")
+    assert not available, "auf leerer Szene geht „Gitter füllen“ auch ohne Menüeintrag nicht"
+    assert reason, "und der Grund steht dabei — sonst sucht der Kunde ihn bei sich"
+
+    window._run_palette_choice("lattice_fill")
+    assert launched == [], "gestartet wird nichts"
+
+
 def test_a_typed_name_gets_the_project_suffix(window: MainWindow) -> None:
     """„Speichern unter" erzwingt die Projektendung (Gesamtreview A2).
 

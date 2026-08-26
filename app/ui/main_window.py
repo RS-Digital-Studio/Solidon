@@ -5248,12 +5248,36 @@ class MainWindow(QMainWindow):
 
         Aus den Menü-Actions gelesen statt neu gerechnet: zwei Quellen für
         dieselbe Frage drifteten beim nächsten Zuwachs auseinander.
+
+        **Und wo es keine Action gibt, wird gerechnet — mit derselben
+        Funktion, die auch die Action ausgraut.** ``action is None`` hieß
+        „erlaubt", und das war eine stille Annahme: dass jede Operation einen
+        Menüeintrag hat. Sie stimmt heute schon nicht für die zusammengelegten
+        Zwillinge, und sie hört ganz auf zu stimmen, sobald eigene Bausteine
+        in den Katalog wandern statt in die Menüleiste — dann hätte *jeder*
+        von ihnen die Antwort „erlaubt" bekommen, auch auf leerer Szene, und
+        der Kunde wäre in genau der modalen Sackgasse gelandet, gegen die
+        ``_run_palette_choice`` gebaut wurde.
+
+        ``_reason_locked`` ist dabei keine zweite Quelle, sondern **die**
+        Quelle: Der Menüeintrag wird über sie ausgegraut (``_kind_hint``), der
+        Zwillingshaken fragt sie, und hier antwortet sie eben direkt statt über
+        den Umweg einer Action, die es nicht gibt.
         """
+        spec = REGISTRY.get(name)
         action = self._op_actions.get(name)
-        if action is None or action.isEnabled():
+        if action is None:
+            result = self.session.last_result
+            reason = self._reason_locked(
+                spec,
+                self._kinds_of_selection(result),
+                len(result.scene.objects) if result else 0,
+                len(self.object_tree.selected_objects()),
+            )
+            return reason is None, reason or ""
+        if action.isEnabled():
             return True, ""
         hint = action.toolTip()
-        spec = REGISTRY.get(name)
         if hint and hint != str(spec.doc):
             # `_lock_hint`/`_kind_hint` haben einen Grund gesetzt.
             return False, hint
