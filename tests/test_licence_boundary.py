@@ -208,6 +208,33 @@ def test_opening_evaluating_saving_and_undo_stay_free(
     assert history.redo() is taken_back, "redo bleibt frei"
 
 
+def test_answers_to_questions_of_the_evaluation_stay_free(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Die Entscheidung, festgenagelt — sonst geht sie beim nächsten Audit
+    wieder als Lücke auf (dort stand sie schon einmal, 26.08.2026).
+
+    ``record_answers`` und ``record_matches`` schreiben in den Stapel, aber
+    nur, was die **Auswertung selbst erfragt** hat: die Einheit einer Datei,
+    die Zuordnung eines Merkmals. Ein ``require`` dort sperrte das Öffnen
+    einer Datei mit offener Rückfrage — der Betrachter wäre nicht mehr
+    vollständig (§2 C). Die Grenze verläuft am Fragesteller: Was der Kunde
+    anstößt, geht durch ``apply`` und dessen ``require``; was die Auswertung
+    fragt, ist Teil des Lesens.
+    """
+    project = _project()
+    history = History(project.document)
+    _lock(monkeypatch)
+
+    with pytest.raises(LicenceRequired):
+        activation.require(activation.CHANGE)
+
+    assert history.record_answers({1: {"unit": "in"}}), (
+        "die Antwort auf eine Frage der Auswertung bleibt frei"
+    )
+    assert history.record_matches({1: {"at_feature": "hole_1"}}), "die Zuordnungsantwort ebenso"
+
+
 def test_a_licence_lets_a_step_be_reparametrised(monkeypatch: pytest.MonkeyPatch) -> None:
     """Die Gegenrichtung: mit Schlüssel geht das Nachbearbeiten wie heute — die
     Grenze sperrt nur den abgelaufenen Testlauf, nie den Käufer."""

@@ -276,20 +276,29 @@ def test_every_rejection_carries_a_way_out() -> None:
 @pytest.fixture
 def own_config(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[Path]:
     """Ein eigener Einstellungsordner je Test — sonst trägt der Marker des
-    einen in den nächsten hinein."""
-    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path)
+    einen in den nächsten hinein.
+
+    Seit der Marker doppelt liegt, gehören **beide** Orte je Test frisch: Der
+    zweite läge sonst im suiteweiten Temp, und die Zusammenführung (früherer
+    erster Start gewinnt) trüge jeden Test in jeden späteren hinein.
+    """
+    (tmp_path / "config").mkdir()
+    (tmp_path / "data").mkdir()
+    monkeypatch.setattr(store, "user_config_dir", lambda: tmp_path / "config")
+    monkeypatch.setattr(store, "user_data_dir", lambda: tmp_path / "data")
     activation.forget_cache()
     yield tmp_path
     activation.forget_cache()
 
 
 def test_the_trial_starts_at_first_run(own_config: Path) -> None:
-    assert store.trial_days_left(date(2026, 8, 6)) == store.TRIAL_DAYS
+    assert store.trial_days_left(date(2026, 9, 6)) == store.TRIAL_DAYS
     assert store.trial_path().is_file()
+    assert store.second_trial_path().is_file(), "der Marker liegt doppelt (Härtung 26.08.2026)"
 
 
 def test_the_trial_counts_down_and_ends(own_config: Path) -> None:
-    start = date(2026, 8, 6)
+    start = date(2026, 9, 6)
     store.trial_days_left(start)
     assert store.trial_days_left(start + timedelta(days=1)) == store.TRIAL_DAYS - 1
     assert store.trial_days_left(start + timedelta(days=store.TRIAL_DAYS)) == 0
@@ -302,7 +311,7 @@ def test_turning_the_clock_back_does_not_extend_it(own_config: Path) -> None:
     Gespeichert wird auch der höchste je gesehene Tag; die Frist läuft nie
     rückwärts.
     """
-    start = date(2026, 8, 6)
+    start = date(2026, 9, 6)
     store.trial_days_left(start)
     store.trial_days_left(start + timedelta(days=13))
     assert store.trial_days_left(start - timedelta(days=365)) == 1
@@ -315,7 +324,7 @@ def test_a_wildly_wrong_clock_does_not_burn_the_trial(own_config: Path) -> None:
     je gesehenen fest — und weil die Frist nie rückwärts läuft, blieb der
     Testlauf auch nach dem Richtigstellen der Uhr für immer abgelaufen.
     """
-    start = date(2026, 8, 6)
+    start = date(2026, 9, 6)
     store.trial_days_left(start)
     assert store.trial_days_left(date(2030, 1, 1)) == 0, "mit falscher Uhr abgelaufen — richtig"
     assert store.trial_days_left(start + timedelta(days=1)) == store.TRIAL_DAYS - 1
@@ -340,24 +349,134 @@ def test_a_first_run_in_the_future_does_not_make_the_trial_endless(own_config: P
     )
 
 
+def test_a_first_run_before_the_release_does_not_kill_the_trial(own_config: Path) -> None:
+    """Die andere Richtung derselben Uhr, und sie trifft nur den ehrlichen
+    Kunden: eine leere BIOS-Batterie beim allerersten Start.
+
+    Ein erster Start im Jahr 2020 hieß beim nächsten richtig gestellten Start
+    ``used`` von rund 2400 Tagen — null Resttage, dauerhaft. Vor dem
+    Auslieferungstag (:data:`store.DEMO_FROM`) gab es aber nichts zu starten;
+    die Untergrenze hebt den unmöglichen Tag an, statt ihn zu glauben.
+    """
+    store.trial_days_left(date(2020, 1, 1))
+
+    assert not store.trial_path().is_file(), (
+        "eine Uhr vor der Auslieferung wird nicht festgeschrieben — sie ist beweisbar falsch"
+    )
+    assert store.trial_days_left(date(2026, 9, 6)) == store.TRIAL_DAYS, (
+        "der erste Start mit glaubwürdiger Uhr ist der erste Start"
+    )
+
+
+def test_an_old_marker_from_before_the_release_is_lifted(own_config: Path) -> None:
+    """Der Altbestand desselben Falls: Eine Fassung **vor** der Härtung hat
+    die 2020er-Uhr bereits festgeschrieben.
+
+    Der neue Kein-Marker-Zweig kann das nicht mehr verhindern — der Marker
+    liegt ja schon da, unsigniert, mit einem ersten Start Jahre vor der
+    Auslieferung. Ohne die Untergrenze wäre ``used`` sechseinhalb Jahre und
+    der Testlauf des ehrlichen Kunden dauerhaft verbrannt.
+    """
+    store.trial_path().write_text(
+        '{"first_run": "2020-01-01", "last_seen": "2020-01-01"}', encoding="utf-8"
+    )
+
+    assert store.trial_days_left(date(2026, 8, 26)) > 0, (
+        "ein erster Start vor der Auslieferung wird auf sie angehoben, nicht geglaubt"
+    )
+
+
 def test_a_plausible_gap_still_blocks_the_clock_going_back(own_config: Path) -> None:
     """Der Deckel darf den Rückwärtsschutz nicht aushebeln: wer Solidon nach
     Monaten wieder öffnet, bekommt seine Frist nicht zurück."""
-    start = date(2026, 8, 6)
+    start = date(2026, 9, 6)
     store.trial_days_left(start)
     store.trial_days_left(start + timedelta(days=200))
     assert store.trial_days_left(start + timedelta(days=2)) == 0
 
 
-def test_a_missing_marker_starts_over(own_config: Path) -> None:
-    """Bewusst so: der Marker liegt offen im Nutzerprofil, und wer ihn löscht,
-    hat wieder vierzehn Tage. Ihn zu verstecken bräuchte Verstecke im System.
+def test_deleting_one_marker_place_does_not_restart_the_trial(own_config: Path) -> None:
+    """Hier stand die alte Zusage — „wer ihn löscht, hat wieder vierzehn
+    Tage" — und Robert hat sie am 26.08.2026 gekippt: Die Testphase ist eine
+    harte Grenze, nicht eine Erinnerung.
+
+    Der Marker liegt seitdem doppelt. Wer einen Ort löscht, hat den anderen
+    noch, und der nächste Start schreibt beide wieder — in beide Richtungen
+    geprüft, denn ein Schutz, der nur einen der zwei Orte deckt, wäre eine
+    Wegbeschreibung zum anderen.
     """
-    start = date(2026, 8, 6)
+    start = date(2026, 9, 6)
     store.trial_days_left(start)
     store.trial_days_left(start + timedelta(days=13))
+
     store.trial_path().unlink()
+    assert store.trial_days_left(start + timedelta(days=13)) == 1, (
+        "der zweite Ort trägt weiter — Löschen bringt keinen Tag zurück"
+    )
+    assert store.trial_path().is_file(), "der nächste Start heilt den gelöschten Ort"
+
+    store.second_trial_path().unlink()
+    assert store.trial_days_left(start + timedelta(days=13)) == 1, "und andersherum genauso"
+    assert store.second_trial_path().is_file()
+
+
+def test_deleting_both_places_starts_over(own_config: Path) -> None:
+    """Die bewusste Restgrenze, damit sie niemand für ein Loch hält.
+
+    Wer **beide** Orte findet und löscht, beginnt neu. Die Alternative wäre
+    ein Konto oder ein Aktivierungsserver, und §2 sagt zu, dass Solidon ohne
+    Netz und ohne Konto läuft. Die Hürde ist so hoch wie das Neuaufsetzen des
+    Profils — höher geht lokal nicht, und das ist eine Entscheidung, kein
+    Versehen (Robert, 26.08.2026).
+    """
+    start = date(2026, 9, 6)
+    store.trial_days_left(start)
+    store.trial_days_left(start + timedelta(days=13))
+
+    store.trial_path().unlink()
+    store.second_trial_path().unlink()
+
     assert store.trial_days_left(start + timedelta(days=13)) == store.TRIAL_DAYS
+
+
+def test_editing_a_marker_wins_nothing(own_config: Path) -> None:
+    """Der Editor: ``first_run`` nach vorn schreiben hieße mehr Tage.
+
+    Die Unterschrift kann er nicht nachrechnen, also strippt er sie — dann
+    zählt sein Ort als Altbestand, und die Zusammenführung lässt den
+    **früheren** ersten Start des anderen Ortes gewinnen. Editieren eines
+    Ortes ist damit wirkungslos; beide zu editieren ist das Löschen von oben.
+    """
+    start = date(2026, 9, 6)
+    store.trial_days_left(start)
+    store.trial_days_left(start + timedelta(days=10))
+
+    store.trial_path().write_text(
+        '{"first_run": "2026-09-16", "last_seen": "2026-09-16"}', encoding="utf-8"
+    )
+
+    assert store.trial_days_left(start + timedelta(days=10)) == store.TRIAL_DAYS - 10
+
+
+def test_a_forged_marker_ends_the_trial(own_config: Path) -> None:
+    """Wer die Tage ändert und die Unterschrift stehen lässt, beendet die
+    Frist — ein angefasster Marker verlängert nichts.
+
+    Fehlend und angefasst sind Gegensätze: fehlend heißt frisch (der andere
+    Ort deckt es, und beide können ehrlich fehlen), angefasst kann nicht
+    ehrlich passieren.
+    """
+    import json as json_module
+
+    start = date(2026, 9, 6)
+    store.trial_days_left(start)
+
+    data = json_module.loads(store.trial_path().read_text(encoding="utf-8"))
+    assert "signature" in data, "der Marker trägt seine Unterschrift"
+    data["first_run"] = "2026-09-16"
+    store.trial_path().write_text(json_module.dumps(data), encoding="utf-8")
+
+    assert store.trial_days_left(start + timedelta(days=1)) == 0
 
 
 # --- Die Demo -------------------------------------------------------------------
@@ -451,7 +570,10 @@ def test_deleting_the_marker_and_turning_the_clock_back_does_not_extend_the_demo
     Marker löscht.
     """
     store.days_left(demo - timedelta(days=9))
+    # Seit der Härtung liegt der Marker doppelt — wer ihn loswerden will,
+    # muss beide Orte finden. Genau dieser Fall soll hier geprüft werden.
     store.trial_path().unlink()
+    store.second_trial_path().unlink()
 
     left = store.days_left(date(2020, 1, 1))
 
@@ -491,9 +613,12 @@ def test_a_sale_build_is_never_over(own_config: Path) -> None:
 
     Der abgelaufene Testlauf lässt alles Lesende offen (Veröffentlichungs-
     konzept §2 C) — genau das, was die Demo nicht tut.
+
+    Der Marker steht ohne Unterschrift da — so schreibt ihn eine Fassung vor
+    der Härtung, und dass er gelesen wird, ist die Migrationszusage.
     """
     store.trial_path().write_text(
-        '{"first_run": "2026-01-01", "last_seen": "2026-08-06"}', encoding="utf-8"
+        '{"first_run": "2026-09-01", "last_seen": "2027-01-01"}', encoding="utf-8"
     )
     state = activation.state()
     assert state.expired
@@ -545,7 +670,7 @@ def test_a_fresh_machine_is_in_trial(own_config: Path) -> None:
 
 def test_an_expired_trial_locks_the_writing_side(own_config: Path) -> None:
     store.trial_path().write_text(
-        '{"first_run": "2026-01-01", "last_seen": "2026-08-06"}', encoding="utf-8"
+        '{"first_run": "2026-09-01", "last_seen": "2027-01-01"}', encoding="utf-8"
     )
     state = activation.state()
     assert state.expired
@@ -559,7 +684,7 @@ def test_an_expired_trial_locks_the_writing_side(own_config: Path) -> None:
 def test_a_stored_key_unlocks_it(own_config: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(key, "PUBLIC_KEY", TEST_PUBLIC)
     store.trial_path().write_text(
-        '{"first_run": "2026-01-01", "last_seen": "2026-08-06"}', encoding="utf-8"
+        '{"first_run": "2026-09-01", "last_seen": "2027-01-01"}', encoding="utf-8"
     )
     activation.forget_cache()
     state = activation.remember(make_key(TEST_SEED, a_licence()))

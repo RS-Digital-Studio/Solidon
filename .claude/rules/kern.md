@@ -104,6 +104,33 @@ keine Umgebungsvariable, keine Freigabedatei — die Suite patcht
 `activation._cached` über monkeypatch. Wer eine der vier Grenzdateien
 umbenennt oder verschiebt, zieht `integrity.BOUNDARY_FILES` und die
 PyInstaller-Spec nach (`tests/test_licence_build.py` hält beide zusammen).
+Das Manifest deckt **genau diese vier** — eine Änderung an `activation/`
+selbst macht es nicht ungültig (am 26.08.2026 zweimal falsch zugeschrieben;
+`integrity.boundary_hashes()` antwortet in einer Sekunde).
+
+**Die Testphase ist eine harte Grenze, keine Erinnerung** (Entscheidung
+Robert, 26.08.2026). Der Marker liegt doppelt (`trial.json` im
+Einstellungs-, `activation.state` im Datenordner), trägt eine HMAC-Unterschrift
+über seine Tage, und die Zusammenführung lässt den früheren ersten Start und
+den späteren gesehenen Tag gewinnen: Löschen oder Editieren **eines** Ortes
+ist wirkungslos, ein angefasster Marker (falsche Unterschrift) beendet die
+Frist. Wer beide Orte löscht, beginnt neu — das ist die bewusste Restgrenze,
+denn die Alternative wäre ein Konto oder ein Server, und §2 sagt „ohne Netz,
+ohne Konto" zu. Ein **Aktivierungsserver** ist entschieden und wird als
+Konzept ausgearbeitet, bevor er gebaut wird. Vier Uhr-Deckel halten die
+Zählung: Rückwärtsschutz (höchster gesehener Tag), Horizont (ein Jahr),
+Untergrenze Auslieferungstag, und eine Uhr **vor** der Auslieferung wird gar
+nicht erst festgeschrieben — sie ist beweisbar falsch, und der Zukunftsdeckel
+feuert nur bei glaubwürdiger Uhr, sonst zerstörte ein Uhr-Rücksprung einen
+echten Marker.
+
+**Antworten auf Fragen der Auswertung sind Lesen, keine Änderung.**
+`History.record_answers` und `record_matches` laufen ohne `require` — mit
+Absicht: Sie schreiben nur fest, was die Auswertung selbst erfragt hat
+(Einheit, Merkmalszuordnung), und ein `require` dort sperrte das **Öffnen**
+einer Datei mit offener Rückfrage. `tests/test_licence_boundary.py` nagelt
+sie ausdrücklich als frei fest, damit die Entscheidung beim nächsten Audit
+nicht wieder als Lücke aufgeht.
 
 ## Pfade
 

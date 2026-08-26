@@ -7,11 +7,25 @@ geheim, er ist personalisiert — wer ihn hat, hat auch den Namen darin. Und ein
 Schlüsselbund kann gesperrt sein. Dann fragt das Betriebssystem beim Start nach
 einem Passwort, und ein Lizenzschlüssel ist der falsche Anlass für diese Frage.
 
-Der Testlaufmarker ist **absichtlich nicht versteckt**. Wer ihn löscht, hat
-wieder vierzehn Tage. Ihn zu verstecken bräuchte Streuung über Registry und
-verborgene Dateien — also genau das Verhalten, das Solidon seinen Nutzern
-nirgends zumutet. Die Frist ist eine Erinnerung; die Schwelle für den
-dauerhaften Gebrauch ist die Signatur, und die hält.
+Der Testlaufmarker ist **unterschrieben und liegt doppelt** (Entscheidung
+Robert, 26.08.2026 — sie ersetzt die frühere Haltung, die Frist sei nur eine
+Erinnerung): Die Testphase ist eine harte Grenze, und was einen weiterbringt,
+läuft danach über den Lizenzschlüssel. Drei Bausteine tragen das:
+
+* **Jeder Marker trägt eine Unterschrift** über seine beiden Tage. Ein
+  editierter Marker fällt damit auf und beendet die Frist, statt sie zu
+  verlängern. Ein Marker **ohne** Unterschrift wird gelesen — er stammt aus
+  einer Fassung vor dieser Härtung, und den Bestandskunden trifft keine
+  Schuld; verlängern kann er nichts, weil die Zusammenführung darunter das
+  frühere Datum gewinnen lässt.
+* **Zwei Orte, eine Wahrheit.** Der Marker liegt im Einstellungs- und im
+  Datenordner; gelesen wird der frühere erste Start und der spätere gesehene
+  Tag aus beiden, geschrieben wird immer an beide. Wer einen löscht, hat den
+  anderen noch — und beim nächsten Start beide wieder.
+* **Wer beide löscht, beginnt neu.** Das bleibt, und es ist kein Versehen:
+  Die Alternative wäre ein Konto oder ein Aktivierungsserver, und §2 sagt zu,
+  dass Solidon ohne Netz und ohne Konto läuft. Die Hürde ist bewusst so hoch
+  wie das Neuaufsetzen des Profils, nicht höher.
 
 Eine zurückgestellte Systemuhr verlängert trotzdem nichts: gespeichert wird
 auch der höchste je gesehene Tag, und die Frist läuft nie rückwärts. Ein Tag
@@ -33,13 +47,15 @@ ihm kann die Demo nicht gelaufen sein, gleich was die Uhr behauptet.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
 
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_config_dir
+from app.core.paths import ensure_dir, user_config_dir, user_data_dir
 
 _log = get_logger(__name__)
 
@@ -76,6 +92,25 @@ KEY_FILE: Final = "licence.key"
 
 #: Dateiname des Testlaufmarkers.
 TRIAL_FILE: Final = "trial.json"
+
+#: Der zweite Ort desselben Markers, im Datenordner. Kein Tarnname — Solidon
+#: versteckt nichts vor seinen Nutzern; der Ort ist nur ein anderer Baum, damit
+#: das Löschen des einen den anderen stehen lässt.
+STATE_FILE: Final = "activation.state"
+
+#: Der Schlüssel, mit dem der Marker unterschrieben wird. Er reist im
+#: übersetzten Prüfmodul (dieses Paket wird mit Cython gebaut, §36) — wer ihn
+#: herausholen kann, kann auch die Datei zweimal löschen, und mehr gewinnt er
+#: hier nicht. Die Unterschrift hält den einfachen Fall auf: den Editor.
+_MARKER_SECRET: Final = bytes.fromhex(
+    "769e4e5415d9bca7294b17a625671d43cafc68a8652ee240409f50f259644244"
+)
+
+#: Was :func:`_read_trial` meldet, wenn eine Unterschrift nicht zu ihren Tagen
+#: passt: Der Marker wurde angefasst. Ein eigener Wert und kein ``None``, weil
+#: die zwei Fälle entgegengesetzt behandelt werden — fehlend heißt frisch,
+#: angefasst heißt vorbei.
+FORGED: Final = "forged"
 
 #: Ab welchem Abstand zum ersten Start ein gespeicherter Tag keine verstrichene
 #: Zeit mehr sein kann, sondern eine falsch gestellte Uhr. Ein Jahr ist
@@ -141,26 +176,87 @@ def forget_key() -> bool:
     return True
 
 
-def _read_trial() -> tuple[date, date] | None:
+def second_trial_path() -> Path:
+    return user_data_dir() / STATE_FILE
+
+
+def _marker_signature(first_run: date, last_seen: date) -> str:
+    payload = f"{first_run.isoformat()}|{last_seen.isoformat()}".encode()
+    return hmac.new(_MARKER_SECRET, payload, hashlib.sha256).hexdigest()
+
+
+def _read_place(path: Path) -> tuple[date, date] | Literal["forged"] | None:
+    """Ein Ort des Markers: seine Tage, ``FORGED``, oder ``None``.
+
+    ``None`` heißt fehlend oder unlesbar — beides kann ehrlich passieren
+    (frische Installation, Stromausfall beim Schreiben), und der andere Ort
+    deckt es. Eine **vorhandene, aber falsche** Unterschrift kann nicht
+    ehrlich passieren: Die Tage wurden geändert, ohne neu unterschreiben zu
+    können. Ein Marker **ohne** Unterschrift stammt aus einer Fassung vor der
+    Härtung und wird gelesen — beim nächsten Schreiben trägt er eine.
+    """
     try:
-        data = json.loads(trial_path().read_text(encoding="utf-8"))
-        return date.fromisoformat(data["first_run"]), date.fromisoformat(data["last_seen"])
+        data = json.loads(path.read_text(encoding="utf-8"))
+        first_run = date.fromisoformat(data["first_run"])
+        last_seen = date.fromisoformat(data["last_seen"])
     except (OSError, ValueError, KeyError, TypeError):
         return None
+    stated = data.get("signature")
+    if stated is None:
+        return first_run, last_seen
+    if not hmac.compare_digest(str(stated), _marker_signature(first_run, last_seen)):
+        _log.warning("trial marker at %s does not match its signature", path)
+        return FORGED
+    return first_run, last_seen
+
+
+def _read_trial() -> tuple[date, date] | Literal["forged"] | None:
+    """Beide Orte, zusammengeführt zur strengeren Auskunft.
+
+    Der **frühere** erste Start und der **spätere** gesehene Tag gewinnen —
+    damit ist das Editieren oder Löschen eines einzelnen Ortes wirkungslos:
+    Was dem Schummler nützen würde, verliert die Zusammenführung wieder. Ein
+    angefasster Ort macht das Ganze angefasst.
+    """
+    places = (_read_place(trial_path()), _read_place(second_trial_path()))
+    if any(place == FORGED for place in places):
+        return FORGED
+    read = [place for place in places if isinstance(place, tuple)]
+    if not read:
+        return None
+    return min(first for first, _ in read), max(last for _, last in read)
+
+
+def _places_complete() -> bool:
+    """Ob der Marker an beiden Orten liegt — sonst heilt der nächste Schreiber."""
+    return trial_path().is_file() and second_trial_path().is_file()
+
+
+def _write_place(path: Path, text: str) -> None:
+    """Ein Ort, atomar geschrieben — halbe Marker sähen wie angefasste aus."""
+    ensure_dir(path.parent)
+    scratch = path.parent / (path.name + ".tmp")
+    scratch.write_text(text, encoding="utf-8")
+    scratch.replace(path)
 
 
 def _write_trial(first_run: date, last_seen: date) -> None:
-    try:
-        ensure_dir(user_config_dir())
-        trial_path().write_text(
-            json.dumps({"first_run": first_run.isoformat(), "last_seen": last_seen.isoformat()}),
-            encoding="utf-8",
-        )
-    except OSError as problem:
-        # Ein schreibgeschütztes Profil heißt: der Testlauf beginnt bei jedem
-        # Start neu. Das ist die freundliche Richtung des Fehlers, und ein
-        # Abbruch wäre die falsche.
-        _log.warning("trial marker could not be written: %s", problem)
+    text = json.dumps(
+        {
+            "first_run": first_run.isoformat(),
+            "last_seen": last_seen.isoformat(),
+            "signature": _marker_signature(first_run, last_seen),
+        }
+    )
+    for path in (trial_path(), second_trial_path()):
+        try:
+            _write_place(path, text)
+        except OSError as problem:
+            # Ein schreibgeschützter Ort heißt: dort steht der Marker eben
+            # nicht — der andere trägt weiter. Sind beide geschützt, beginnt
+            # der Testlauf bei jedem Start neu; das ist die freundliche
+            # Richtung des Fehlers, und ein Abbruch wäre die falsche.
+            _log.warning("trial marker could not be written to %s: %s", path, problem)
 
 
 def days_left(today: date | None = None) -> int:
@@ -180,6 +276,10 @@ def days_left(today: date | None = None) -> int:
     # ist derselbe, samt Horizontprüfung gegen die leere BIOS-Batterie.
     now = today or date.today()
     stored = _read_trial()
+    if isinstance(stored, str):  # FORGED
+        # Ein angefasster Marker beendet die Frist, statt sie zu verlängern —
+        # wer die Tage editiert, hat gesagt, was er von ihnen hält.
+        return 0
     if stored is None:
         # **Ohne Marker zählt trotzdem nicht die Uhr allein.** Beide Schutze
         # einzeln hielten; zusammen — Datei löschen *und* Uhr zurückstellen —
@@ -212,7 +312,8 @@ def days_left(today: date | None = None) -> int:
             _log.warning("trial marker holds an implausible date, ignoring it: %s", last_seen)
             last_seen = max(now, first_run)
         effective = max(now, last_seen, DEMO_FROM)
-        if effective != stored[1]:
+        # Ein fehlender Ort ist ein Schreibgrund — wie im Testlauf-Zweig.
+        if effective != stored[1] or not _places_complete():
             _write_trial(first_run, effective)
     # Der Stichtag selbst gehört noch dazu: am 30.10. bleibt ein Tag übrig,
     # am 31.10. keiner. Die freundliche Richtung, und die, die auf der Website
@@ -228,10 +329,28 @@ def trial_days_left(today: date | None = None) -> int:
     """
     now = today or date.today()
     stored = _read_trial()
+    if isinstance(stored, str):  # FORGED
+        # Wie im Demo-Zweig: Ein angefasster Marker beendet die Frist. Fehlend
+        # und angefasst sind Gegensätze — fehlend heißt frisch, angefasst vorbei.
+        return 0
     if stored is None:
+        if now < DEMO_FROM:
+            # Eine Uhr vor der Auslieferung ist beweisbar falsch — die
+            # Software gab es da nicht. Was sie sagt, wird nicht
+            # festgeschrieben: Der Testlauf beginnt beim ersten Start mit
+            # einer glaubwürdigen Uhr, nicht bei einer leeren BIOS-Batterie.
+            _log.warning("clock reads %s, before the release — not starting the trial", now)
+            return TRIAL_DAYS
         _write_trial(now, now)
         return TRIAL_DAYS
     first_run, last_seen = stored
+    # Die Untergrenze auch für den Bestand: Ein erster Start vor der
+    # Auslieferung stammt aus einer falsch gestellten Uhr (leere BIOS-Batterie
+    # beim Erststart) und nahm dem ehrlichen Kunden sonst den ganzen Testlauf,
+    # dauerhaft — used war dann jahrelang.
+    if first_run < DEMO_FROM:
+        _log.warning("trial marker begins before the release, lifting it: %s", first_run)
+        first_run = DEMO_FROM
     # **Auch der erste Start kann falsch datiert sein**, und dagegen hilft der
     # Horizont darunter nicht: Er misst ``last_seen`` gegen ``first_run``, und
     # bei einem falschen Erststart stehen beide auf demselben falschen Tag.
@@ -250,15 +369,21 @@ def trial_days_left(today: date | None = None) -> int:
     # sobald seine Uhr zurücksprang — sie ist ja genau die Größe, der hier
     # nicht zu trauen ist. Ein Jahr Abstand ist dagegen keine Uhr mehr, die
     # ungenau geht, sondern eine, die nie gestellt wurde.
-    if first_run > now + timedelta(days=CLOCK_HORIZON_DAYS):
+    #
+    # **Und nur, wenn die Uhr selbst glaubwürdig ist** (``now >= DEMO_FROM``):
+    # Springt sie in die Vergangenheit, liegt ein völlig echter erster Start
+    # ebenfalls „jenseits des Horizonts" — der Deckel schriebe dann ``now``
+    # fest und nähme dem ehrlichen Kunden beim Richtigstellen die schon
+    # verbrauchte Spanne doppelt. Ein 2099-Marker und ein echter Marker bei
+    # zurückgesprungener Uhr sehen von innen gleich aus; was sie trennt, ist
+    # allein, welche der beiden Uhren beweisbar lügt.
+    if now >= DEMO_FROM and first_run > now + timedelta(days=CLOCK_HORIZON_DAYS):
         _log.warning("trial marker holds an implausible first run, correcting: %s", first_run)
         first_run = now
     # Ein Tag jenseits des Horizonts ist keine verstrichene Zeit, sondern eine
     # leere BIOS-Batterie. Er wird verworfen statt festgeschrieben — sonst
     # kostet ein einziger Start mit falscher Uhr den ganzen Testlauf, und zwar
-    # dauerhaft, weil er unten als höchster gesehener Tag zurückkäme. Wer die
-    # Uhr absichtlich verstellt, kommt damit nicht weiter als der, der
-    # ``trial.json`` löscht — und das ist oben ausdrücklich zugestanden.
+    # dauerhaft, weil er unten als höchster gesehener Tag zurückkäme.
     if last_seen > first_run + timedelta(days=CLOCK_HORIZON_DAYS):
         _log.warning("trial marker holds an implausible date, ignoring it: %s", last_seen)
         last_seen = max(now, first_run)
@@ -267,8 +392,11 @@ def trial_days_left(today: date | None = None) -> int:
     effective = max(now, last_seen)
     # Auch ein berichtigter erster Start wird festgehalten: Bliebe er in der
     # Datei stehen, käme derselbe unmögliche Tag bei jedem Start zurück, und
-    # die Prüfung darüber liefe für immer gegen denselben falschen Wert.
-    if effective != stored[1] or first_run != stored[0]:
+    # die Prüfung darüber liefe für immer gegen denselben falschen Wert. Und
+    # ein fehlender Ort ist ebenfalls ein Schreibgrund — die Heilung des
+    # gelöschten Zwillings soll beim nächsten Start geschehen, nicht erst am
+    # nächsten Tag, wenn sich zufällig ein Wert bewegt.
+    if effective != stored[1] or first_run != stored[0] or not _places_complete():
         _write_trial(first_run, effective)
     used = (effective - first_run).days
     return max(0, TRIAL_DAYS - used)
