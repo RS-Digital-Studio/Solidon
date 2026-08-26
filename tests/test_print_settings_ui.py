@@ -249,6 +249,68 @@ def test_an_enum_shows_words_and_stores_the_english_value(dialog: PrintSettingsD
     assert editor.itemText(editor.findData("grid")) != "grid", "Gitter, nicht grid"
 
 
+def test_every_choice_entry_says_what_it_does(dialog: PrintSettingsDialog) -> None:
+    """Der Name benennt, der Satz erklärt — an jedem Eintrag jeder Auswahl.
+
+    „Gyroid" oder „Baumstruktur" sagen einem Kunden nicht, wann er sie wählen
+    soll; der Satz aus ``choice_note`` tut es, als Tooltip über der offenen
+    Liste und als ``AccessibleDescriptionRole`` für den Bildschirmleser.
+    Geprüft über **alle** Enum-Felder, nicht an einem Beispiel: fünfzehn
+    erklärte Einträge von siebenundsechzig wären schlimmer als keine.
+    """
+    from app.ui.labels import choice_note
+
+    missing = []
+    for field in FIELDS:
+        if field.kind != "enum":
+            continue
+        editor = dialog._editors[field.path]
+        assert isinstance(editor, QComboBox)
+        for index in range(editor.count()):
+            value = editor.itemData(index)
+            note = choice_note(value)
+            if note is None:
+                continue
+            if editor.itemData(index, Qt.ItemDataRole.ToolTipRole) != note:
+                missing.append(f"{field.path}: {value!r} ohne Tooltip")
+            if editor.itemData(index, Qt.ItemDataRole.AccessibleDescriptionRole) != note:
+                missing.append(f"{field.path}: {value!r} ohne AccessibleDescription")
+
+    assert not missing, "Auswahlwerte ohne Satz am Eintrag:\n" + "\n".join(missing)
+
+
+def test_slicing_greys_out_before_the_click_when_the_licence_ran_out(
+    qt_app: QApplication, session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Die Lizenzgrenze steht vor dem Klick, nicht hinter dem Dialog.
+
+    `handover.slice_model` fragt `activation.require` erst im Arbeiter — mit
+    abgelaufener Demo füllte der Kunde den ganzen Dialog aus, drückte
+    *Slicen* und bekam dann die Absage (Regel 19). Von den vier Grenzen war
+    SLICER die einzige ohne Ausgrauen; CHANGE, EXPORT und CHAT hatten es.
+    Der Slicer-Pfad wird gesetzt, damit der Knopf nicht aus dem falschen
+    Grund grau ist.
+    """
+    from app.core import activation
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog._slicer_path = Path("fake-slicer")
+    dialog._show_slicer_state()
+
+    assert not dialog.slice_button.isEnabled(), "abgelaufen sperrt vor dem Klick"
+    reason = dialog.slice_button.toolTip()
+    assert reason, "der Grund steht am Knopf"
+    assert dialog.slice_button.statusTip() == reason
+    assert dialog.slice_button.accessibleDescription() == reason
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=5))
+    dialog._show_slicer_state()
+
+    assert dialog.slice_button.isEnabled(), "Testzeitraum plus Slicer heißt frei"
+    assert not dialog.slice_button.toolTip()
+
+
 def test_a_share_is_shown_in_percent_and_stored_as_a_fraction(
     dialog: PrintSettingsDialog,
 ) -> None:

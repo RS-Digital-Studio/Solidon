@@ -52,7 +52,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.core import discover, tools
+from app.core import activation, discover, tools
 from app.core.errors import AppError, InternalError, OperationCancelled
 from app.core.export import handover, slicer_keys, slicer_profiles, threemf
 from app.core.export.slicer_keys import SlicerFlavour
@@ -74,8 +74,15 @@ from app.core.types import (
 )
 from app.core.units import DEGREE_UNIT, is_close
 from app.i18n import TranslatableText, _, tr
-from app.ui.dialogs import show_error
-from app.ui.labels import NumberSpin, by_title, choice_label, colour_name, localised
+from app.ui.dialogs import damaged_line, show_error
+from app.ui.labels import (
+    NumberSpin,
+    by_title,
+    choice_label,
+    colour_name,
+    explain_choices,
+    localised,
+)
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.session import Session
@@ -1958,9 +1965,29 @@ class PrintSettingsDialog(QDialog):
 
         §27: das Backend meldet sich ab, es nörgelt nicht. Regel 17: aber es
         sagt, was jetzt möglich ist.
+
+        Und die Lizenzgrenze steht vor dem Klick, nicht dahinter: `handover`
+        fragt `activation.require` erst im Arbeiter, und mit abgelaufener
+        Demo hätte der Kunde den ganzen Dialog ausgefüllt, bevor die Absage
+        kam (Regel 19). Von den vier Grenzen war SLICER die einzige ohne
+        dieses Ausgrauen. Der Kern bleibt die zweite Hürde; das hier ist die
+        Freundlichkeit davor — dieselbe Bauart wie bei den Operationen im
+        Menü, mit dem Grund an beiden Kodierungen (Regel 18: Tooltip,
+        Statuszeile, Bildschirmleser).
         """
         found = self._slicer_path
-        self.slice_button.setEnabled(found is not None)
+        state = activation.state()
+        self.slice_button.setEnabled(found is not None and state.unlocked)
+        reason = ""
+        if state.damaged:
+            reason = damaged_line()
+        elif not state.unlocked:
+            reason = tr(
+                "Der Testzeitraum ist abgelaufen — das Slicen braucht einen Lizenzschlüssel."
+            )
+        self.slice_button.setToolTip(reason)
+        self.slice_button.setStatusTip(reason)
+        self.slice_button.setAccessibleDescription(reason)
         self.setup_button.setVisible(found is None)
         if found is None:
             self.state.setText(
@@ -2037,6 +2064,9 @@ class PrintSettingsDialog(QDialog):
             # geht in die Projektdatei und zum Slicer (§4.1).
             for choice in field.choices:
                 combo.addItem(choice_label(choice), choice)
+            # Und je Eintrag der Satz zum Wert: „Gyroid" ist ein Name, erst
+            # „in alle Richtungen gleich fest" ist eine Entscheidungshilfe.
+            explain_choices(combo)
             combo.currentIndexChanged.connect(self._editor_changed)
             editor = combo
         elif field.kind == "colour":
