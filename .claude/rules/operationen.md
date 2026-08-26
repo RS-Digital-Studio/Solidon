@@ -77,6 +77,19 @@ baut, trägt ihn hier ein; das ist eine Zeile und keine Suche.
 `strokes` steht bewusst nicht drin: Ein Pinselstrich *ist* eine Koordinate,
 kein Maß, das jemand an einen Parameter hängt.
 
+**Und der Schlüssel muss die Träger kennen, von denen eine Operation an den
+eigenen Eingängen vorbei liest.** `operation_hash` deckt die Hashes der
+Eingänge — drei Lesarten greifen aber auf fremde Körper der Szene zu: das
+Ziel von `align_to_feature` (`kind="feature"`), die `up_to`-Fläche
+(`TARGET_FIELD`) und die `feature:<id>`-Ebene jeder Skizze
+(`face_of_sketch`, dieselbe Funktion wie im Verweisfilter).
+`_with_nested_context` mischt die Hashes **aller** Träger des benannten
+Merkmals in den Schlüssel — alle, weil zwei Körper denselben Merkmalsnamen
+tragen können. Ohne das behielt ein ausgerichteter Körper mit Cache die alte
+Lage und eine `up_to`-Extrusion die alte Höhe, über das Schließen hinaus.
+Wer eine neue Lesart aus `ctx.scene` baut, trägt sie hier ein — dieselbe
+Pflicht wie bei `NESTED_REFERENCES` darüber.
+
 **Der Agent bekommt den Parameter nicht zu sehen.** Skizzen entstehen über
 benannte Grundformen und Maße, nie über rohe Punktlisten (§26, Leitprinzip 5).
 `json_schema()` lässt `kind="sketch"` deshalb ganz aus, und die Sitzung lehnt

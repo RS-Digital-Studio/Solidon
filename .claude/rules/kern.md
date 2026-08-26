@@ -68,6 +68,18 @@ entgegen, `undo` und `redo` spielen sie zurück und vor. Die Vorher-Seite baut
 `change_for()` aus dem Dokument — wer sie selbst zusammensucht, vergisst einen
 Fall.
 
+**Auch das nachträgliche Ändern eines Schritts** — andere Parameter, andere
+Eingänge, der Zwilling im anderen Rechenkern. Die drei `change_*`-Methoden
+schrieben lange direkt in `document.ops`: Der alte Stand war nach dem
+Speichern unwiederbringlich, und Strg+Z traf einen anderen Schritt. Seit
+Format v12 trägt die Transaktion beide **Fassungen** des Schritts
+(`DocumentState.edited_ops`, `History._swap_operation`): Kennung und Platz
+bleiben, der Verlauf wächst um keinen Schritt (§15.4), und `restore` legt
+die Fassung in beide Richtungen zurück. Wer einen vierten Änderungsweg baut,
+geht durch `_swap_operation` — und misst „kein zweiter Schritt" an der
+Schrittliste, nie an der Transaktionszahl: Genau diese Verwechslung hatte
+einen Test die Nicht-Rücknehmbarkeit festschreiben lassen.
+
 Wer stattdessen `document.parameters[...] = ...` schreibt, baut den Fehler
 nach, der hier zweimal steckte: die Änderung ist nicht rücknehmbar, sie gilt
 nicht als Änderung, und beim Schließen ist sie weg.
