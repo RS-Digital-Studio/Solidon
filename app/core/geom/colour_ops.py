@@ -34,10 +34,11 @@ _HEX = re.compile(r"^#?([0-9a-fA-F]{6})$")
 @op_params
 class AssignSlotParams(BaseParams):
     slot: int = param(
-        title=_("Slot"),
+        title=_("Filament"),
         default=0,
         minimum=0,
         maximum=MAX_SLOTS - 1,
+        kind="filament",
         doc=_("Der Materialslot, in den das ganze Objekt kommt."),
     )
     name: str = param(
@@ -70,7 +71,7 @@ def assign_slot(ctx: OpContext) -> OpResult:
     slot = MaterialSlot(
         index=params.slot,
         name=params.name or f"{_('Slot').translate()} {params.slot}",
-        colour=_colour_from(params.colour),
+        colour=colour_from(params.colour),
     )
     painted = with_slot(as_mesh_data(source.mesh), params.slot)
     return OpResult(
@@ -82,8 +83,14 @@ def assign_slot(ctx: OpContext) -> OpResult:
     )
 
 
-def _colour_from(text: str) -> tuple[float, float, float] | None:
-    """``#RRGGBB`` als drei Zahlen, und ein klarer Fehler für alles andere."""
+def colour_from(text: str) -> tuple[float, float, float] | None:
+    """``#RRGGBB`` als drei Zahlen, und ein klarer Fehler für alles andere.
+
+    Öffentlich, seit die Füllung (``paint_slot``) dieselbe Farbe annimmt:
+    Zwei Umrechnungen für ein Format wären zwei Gelegenheiten,
+    auseinanderzulaufen — und die Fehlermeldung soll in beiden Fällen
+    derselbe Satz sein.
+    """
     if not text:
         return None
     match = _HEX.match(text.strip())

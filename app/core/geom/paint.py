@@ -20,6 +20,7 @@ import dataclasses
 from typing import cast
 
 from app.core.errors import ValidationError
+from app.core.geom.colour_ops import colour_from
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -76,11 +77,12 @@ def fill_feature(mesh: MeshData, indices: tuple[int, ...], slot: int) -> BrushRe
 @op_params
 class PaintParams(BaseParams):
     slot: int = param(
-        title=_("Slot"),
+        title=_("Filament"),
         default=1,
         minimum=0,
         maximum=MAX_SLOTS - 1,
-        doc=_("In welchen Materialslot der Pinsel malt."),
+        kind="filament",
+        doc=_("Welches Filament die Fläche bekommt. Die Nummer ist der Platz im 3MF-Farbwechsel."),
     )
     at_feature: str = param(
         title=_("Fläche"),
@@ -93,6 +95,19 @@ class PaintParams(BaseParams):
         doc=_(
             "Die erkannte Fläche, die vollständig gefärbt wird — gesetzt vom Klick auf das Merkmal."
         ),
+    )
+    colour: str = param(
+        title=_("Farbe"),
+        default="",
+        placement="advanced",
+        # **Die Farbe gehört dazu, seit ein Filament eine hat.** Gemessen am
+        # 26.08.2026 im Durchklick des Filamentwählers: Wer „PETG Rot" wählte,
+        # bekam den Namen in den Slot und keine Farbe — im Bild lag danach
+        # Grau, und die Frage „welche Farbe hat Slot 1?" war wieder offen,
+        # diesmal eine Ebene tiefer. ``assign_slot`` trägt das Feld seit je;
+        # dass die Füllung es nicht hatte, fiel niemandem auf, solange der
+        # Pinsel ohnehin nur Nummern kannte.
+        doc=_("Anzeigefarbe als #RRGGBB. Nur zur Ansicht — gedruckt wird, was eingelegt ist."),
     )
     name: str = param(
         title=_("Bezeichnung"),
@@ -170,7 +185,9 @@ def paint_slot(ctx: OpContext) -> OpResult:
     known.setdefault(
         params.slot,
         MaterialSlot(
-            index=params.slot, name=params.name or f"{_('Slot').translate()} {params.slot}"
+            index=params.slot,
+            name=params.name or f"{_('Slot').translate()} {params.slot}",
+            colour=colour_from(params.colour),
         ),
     )
     return OpResult(

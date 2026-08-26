@@ -158,7 +158,7 @@ class LabelParams(BaseParams):
         doc=_("Erhaben druckt sich besser, vertieft bleibt beim Schleifen erhalten."),
     )
     slot: int = param(
-        title=_("Materialslot"),
+        title=_("Filament"),
         default=0,
         minimum=0,
         maximum=MAX_SLOTS - 1,
@@ -166,6 +166,7 @@ class LabelParams(BaseParams):
         # hat, sucht ihn gezielt; wer einfarbig druckt — das ist die Mehrheit —
         # hat hier ein Feld ohne Wirkung vor sich (§2.4).
         placement="advanced",
+        kind="filament",
         doc=_(
             "Legt die Schrift in einen eigenen Slot — der 3MF-Export macht daraus "
             "den Farbwechsel, ohne zweite Datei."

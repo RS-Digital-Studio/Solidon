@@ -274,6 +274,9 @@ _JSON_TYPE: dict[ParamKind, str] = {
     "object": "string",
     "feature": "string",
     "part": "string",
+    # Ein Filament ist für den Agenten die Slotnummer, die es immer war — der
+    # Wähler mit Farbe und Namen ist Bedienung und keine andere Angabe.
+    "filament": "integer",
     "source": "string",
     "image": "string",
     "sketch": "string",

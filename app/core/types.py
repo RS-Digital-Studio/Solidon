@@ -885,6 +885,7 @@ ParamKind = Literal[
     "object",
     "feature",
     "part",
+    "filament",
     "source",
     "image",
     "sketch",
@@ -904,7 +905,14 @@ bekommt diesen Parameter nicht: Grundformen statt roher Punktlisten (§26).
 aus demselben Grund ohne den Agenten: Ein Strich *ist* eine Koordinate, und
 die KI erzeugt keine (Leitprinzip 5). ``armature`` trägt ein Skelett, dessen
 Knochen ebenfalls Koordinaten sind. Alle drei unterliegen den fünf Prüfungen
-aus :mod:`tests.test_gesture_ops`."""
+aus :mod:`tests.test_gesture_ops`.
+
+``filament`` ist die Nummer eines Materialslots — im Kern eine Zahl wie
+zuvor, in der Oberfläche der Filamentwähler mit Farbfeld, Namen und der
+Vorwahl aus :mod:`app.core.knowledge.filaments`. Die Art steht am Parameter
+und nicht sein Name in einer Tabelle der Oberfläche: „slot" heißt anderswo
+Langloch, und ein Dialog, der Felder am Namen erkennt, färbt irgendwann eine
+Schraubenaufnahme ein."""
 ParamPlacement = Literal["front", "advanced"]
 """Vorderseite oder „Weitere Einstellungen" — die gestufte Tiefe aus §2.4."""
 

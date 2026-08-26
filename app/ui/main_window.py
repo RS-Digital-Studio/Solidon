@@ -6264,6 +6264,7 @@ class MainWindow(QMainWindow):
                 images=self._image_names(),
                 pick_image=self._pick_image_source,
                 pick_source=self._pick_model_source,
+                slots=self._slots_of_selection(),
                 note=note,
             )
             if variant is not None:
@@ -6555,6 +6556,7 @@ class MainWindow(QMainWindow):
             images=self._image_names(),
             pick_image=self._pick_image_source,
             pick_source=self._pick_model_source,
+            slots=self._slots_of_selection(),
         )
         dialog.setWindowTitle(f"{spec.title} — {tr('Operation')} {op_id}")
         if exact is not None:
@@ -6732,6 +6734,25 @@ class MainWindow(QMainWindow):
             show_error(error, self)
             return None
         return source_id, path.name
+
+    def _slots_of_selection(self) -> tuple[Any, ...]:
+        """Die Materialslots des gewählten Körpers — für den Filamentwähler.
+
+        Dieselbe Bauart wie :meth:`_feature_names` daneben und aus demselben
+        Grund: Der Dialog fragt nicht die Szene, er bekommt, was zum gewählten
+        Körper gehört. Damit beantwortet der Wähler die Frage, an der das
+        alte Zahlenfeld gescheitert ist — *welche Farbe hat Slot 1?* —, ohne
+        dass jemand erst malen muss.
+
+        Ohne Auswahl bleibt die Liste leer: Dann zeigt der Wähler die Vorwahl
+        und die freien Nummern, und das ist die ehrliche Auskunft.
+        """
+        result = self.session.last_result
+        chosen = self.object_tree.selected()
+        if result is None or chosen is None:
+            return ()
+        entry = result.scene.objects.get(chosen)
+        return tuple(entry.material_slots) if entry is not None else ()
 
     def _feature_names(self) -> dict[str, str]:
         """Die Merkmale des gewählten Körpers, Kennung auf Beschriftung (§18.5).

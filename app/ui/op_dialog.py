@@ -849,6 +849,7 @@ class OperationDialog(QDialog):
         pick_image: Callable[[], tuple[str, str] | None] | None = None,
         pick_source: Callable[[], tuple[str, str] | None] | None = None,
         note: str = "",
+        slots: Sequence[Any] = (),
     ) -> None:
         """``extra`` hängt ein Widget des Aufrufers unter „Weitere
         Einstellungen" — die zusammengelegten Menü-Zwillinge tragen dort
@@ -880,6 +881,10 @@ class OperationDialog(QDialog):
         self._surroundings = surroundings
         """Bauraum, Zeichenebenen und Projektionsvorlagen für ein
         Skizzenfeld — durchgereicht, nicht benutzt."""
+        self._slots = list(slots or ())
+        """Die Materialslots des gewählten Körpers — der Filamentwähler
+        beantwortet damit „welche Farbe hat Slot 1?", ohne dass jemand erst
+        malen muss."""
         given = dict(values or {})
         # Der Dialog spricht in Namen, das Dokument in Kennungen. Wer nur eine
         # Liste übergibt, bekommt die Kennungen zu sehen.
@@ -1242,6 +1247,16 @@ class OperationDialog(QDialog):
             editor = QCheckBox(self)
             editor.setChecked(bool(start))
             return editor
+        if entry.kind == "filament":
+            # Die Slotnummer bleibt der Wert (``currentData``), gewählt wird
+            # aber ein Filament mit Farbe und Namen. Name und Farbe wandern
+            # in ihre eigenen Felder, sichtbar und weiter änderbar — der
+            # Wähler füllt sie aus, er ersetzt sie nicht.
+            from app.ui.filament_picker import FilamentField
+
+            picker = FilamentField(int(start or 0), self._slots, self)
+            picker.filamentChosen.connect(self._fill_filament_fields)
+            return picker
         if entry.kind == "int":
             spin = QSpinBox(self)
             spin.setMinimum(int(entry.minimum) if entry.minimum is not None else -1_000_000)
@@ -1507,14 +1522,43 @@ class OperationDialog(QDialog):
         self.advanced.setArrowType(Qt.ArrowType.DownArrow if open_now else Qt.ArrowType.RightArrow)
         self.adjustSize()
 
+    def _fill_filament_fields(self, name: str, colour: str) -> None:
+        """Name und Farbe des gewählten Filaments in ihre eigenen Felder.
+
+        Der Wähler kennt beide, die Operation hat je ein Feld dafür
+        (``name``, ``colour``) — und ohne diesen Weg hätte der Kunde die
+        Spule zwar ausgewählt und müsste ihren Namen daneben trotzdem
+        abtippen.
+
+        **Gefüllt, nicht ersetzt:** Die Felder bleiben sichtbar und
+        änderbar. Wer für dieses eine Teil „Deckel rot" statt „PETG Rot"
+        schreiben will, kann es; die Vorwahl ist ein Vorschlag (§2.4).
+
+        Wo es ein Feld nicht gibt, passiert nichts: ``label_text`` hat einen
+        Slot, aber keinen Namen dazu, und ein Griff ins Leere wäre ein
+        Absturz an einer Stelle, an der nur ein Komfort fehlt.
+        """
+        for key, value in (("name", name), ("colour", colour)):
+            editor = self._editors.get(key)
+            if isinstance(editor, QLineEdit) and value:
+                editor.setText(value)
+
     def values(self) -> dict[str, Any]:
         """Was der Nutzer eingetragen hat, fertig für die Operationsparameter."""
+        from app.ui.filament_picker import FilamentField
         from app.ui.sketch_editor import SketchField
 
         collected: dict[str, Any] = {}
         for entry in self.spec.params.spec():
             editor = self._editors[entry.name]
-            if isinstance(editor, ValueField):
+            if isinstance(editor, FilamentField):
+                # **Vor dem Combo-Zweig, und als Zahl.** Der Wähler ist eine
+                # ``QComboBox``, und der Zweig darunter macht aus jedem
+                # ``currentData`` einen Text — eine Slotnummer als „3" hätte
+                # das Schema (``int``) beim ersten Anwenden abgelehnt.
+                chosen = editor.currentData()
+                collected[entry.name] = int(chosen) if isinstance(chosen, int) else 0
+            elif isinstance(editor, ValueField):
                 # Zahl oder Ausdruck — und der Ausdruck bleibt wörtlich. Ihn
                 # hier aufzulösen hieße, die Bindung beim ersten Öffnen des
                 # Dialogs zu verlieren, ohne dass es jemand sähe.
