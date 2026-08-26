@@ -158,9 +158,9 @@ es kein Konto, keine Telemetrie und keine Frage danach — wer den Chat gegen
 einen Dienst fahren will, gibt die Berechtigung in der Software-Verwaltung
 dazu.
 
-OpenSCAD, Slicer, Ollama und ComfyUI werden **nicht** mitgeliefert, sondern
-konfiguriert (§36, §38). Beim ersten Start zeigt die Anwendung, welche davon
-gefunden wurden; Pflicht ist keines.
+Slicer, Ollama und ComfyUI werden **nicht** mitgeliefert, sondern konfiguriert
+(§36, §38). Beim ersten Start zeigt die Anwendung, welche davon gefunden
+wurden; Pflicht ist keines.
 
 Unter **Hilfe → Zusätzliche Programme** steht dieselbe Liste mit einem Knopf
 daneben. Python-Pakete (B-Rep-Kern, V-HACD, Schlüsselbund) holt Solidon über
@@ -319,9 +319,7 @@ weiter breit. Mit *Material festlegen* bekommt der einzelne Körper sein eigenes
 Profil, und Toleranzen, Elefantenfuß und Passungsprüfung rechnen damit.
 
 Draußen bleibt, was draußen besser ist: der **Slicer** schreibt die Druckdatei
-(§22.5), das **Sprachmodell** und **ComfyUI** laufen, wo sie hingehören, und
-**OpenSCAD** ist die Rückfallebene für Formen, für die es weder Baustein noch
-Kern gibt.
+(§22.5), das **Sprachmodell** und **ComfyUI** laufen, wo sie hingehören.
 
 ## Exakte Körper (B-Rep) und STEP
 

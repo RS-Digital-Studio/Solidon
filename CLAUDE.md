@@ -164,7 +164,7 @@ app/core/     kein Qt, keine Dialoge — Kommunikation nur über OpContext
   knowledge/  Profile, Normteile, Regelsammlung, Kalibrierung, parts/ Bausteine,
               print_settings.py löst Stufe + Material + Drucker auf
   agent/      LLM-Schicht: Sitzung, Vorschlag als eine Transaktion, Prüfungen
-  backends/   LLM, OpenSCAD, Mesh-Erzeuger — alles extern, alles abschaltbar
+  backends/   LLM und Mesh-Erzeuger — beides extern, beides abschaltbar
               comfy_setup.py richtet ein fremdes ComfyUI für Weg 3 ein,
               data/comfyui/ sind die Knoten dazu (TripoSG, MIT): beides im
               Kern, weil tools/ im gebauten Paket nicht mitreist

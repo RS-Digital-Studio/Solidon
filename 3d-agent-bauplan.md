@@ -393,8 +393,8 @@ Tabelle, dann in den Code.
 | **Ausdrücklich nicht** | Web-Anwendung im Browser, Mehrbenutzerbetrieb, Cloud-Ablage |
 
 Wichtigster Nebeneffekt: **Auf dem Server läuft niemals Code, den ein LLM
-erzeugt hat.** OpenSCAD läuft ausschließlich lokal; der gehostete Backend
-nimmt nur Text oder Bild und gibt ein Mesh zurück.
+erzeugt hat.** Er läuft auch lokal nicht (§32); der gehostete Backend nimmt
+nur Text oder Bild und gibt ein Mesh zurück.
 
 ---
 
@@ -403,16 +403,18 @@ nimmt nur Text oder Bild und gibt ein Mesh zurück.
 | | **A — Konstruieren** | **B — Generieren** | **C — Bearbeiten** |
 |---|---|---|---|
 | Eingabe | Beschreibung + Maße | Text oder Bild | STL/3MF/OBJ + Anweisung |
-| Motor | LLM → Op-Liste aus Bausteinen, ersatzweise OpenSCAD | ComfyUI lokal *oder* gehostet | Feature-Erkennung + Boolesche Ops |
+| Motor | LLM → Op-Liste aus Bausteinen, Primitiven und Skizzen | ComfyUI lokal *oder* gehostet | Feature-Erkennung + Boolesche Ops |
 | Ergebnis | parametrisch, maßhaltig | organisch, texturiert | modifiziertes Mesh |
 | Ausführungsort | immer lokal | lokal oder Backend | immer lokal |
 
-Säule A hat zwei Ausgabeformen in verbindlicher Reihenfolge:
+Säule A hat genau **eine** Ausgabeform: die Op-Liste aus Bausteinen und
+Primitiven. Sie bleibt im Kern, ist schemageprüft, im Stack sichtbar,
+rücknehmbar, erzeugt Provenienz-Features und kann Projektparameter benutzen.
 
-1. **Op-Liste aus Bausteinen und Primitiven** — bevorzugt. Bleibt im Kern,
-   schemageprüft, im Stack sichtbar, rücknehmbar, erzeugt
-   Provenienz-Features und kann Projektparameter benutzen.
-2. **OpenSCAD** — Rückfallebene für Freiformen. Ergebnis wird Quelle im Stack.
+Eine Rückfallebene daneben gibt es nicht, und sie fehlt auch nicht: Was sich
+nicht als Baustein fassen lässt, entsteht als Skizze mit Extrudieren, Drehen,
+Sweep oder Loft gegen den exakten Kern (§30.1). Auch eine Freiform bleibt
+damit parametrisch, maßhaltig und rücknehmbar.
 
 ---
 
@@ -433,9 +435,9 @@ Säule A hat zwei Ausgabeformen in verbindlicher Reihenfolge:
 ║  │Geometriekern│ │ Wahrnehmung     │ │ Wissensbasis    │      ║
 ║  │manifold3d   │ │ Features,       │ │ Bausteine (Py), │      ║
 ║  │trimesh      │ │ Steckbrief,     │ │ Normteile,      │      ║
-║  │(OpenSCAD)   │ │ Analysekarten   │ │ Profile, Regeln │      ║
-║  │(B-Rep §30)  │ └──┬──────────────┘ └─────────────────┘      ║
-║  └─────────────┘    │ speist Viewport UND Agent               ║
+║  │(B-Rep §30)  │ │ Analysekarten   │ │ Profile, Regeln │      ║
+║  └─────────────┘ └──┬──────────────┘ └─────────────────┘      ║
+║                     │ speist Viewport UND Agent               ║
 ║              ┌──────▼─────────────────────────────────────┐   ║
 ║              │ Agentenschicht — LLM, Werkzeuge, Kontext   │   ║
 ║              └──────┬─────────────────────────────────────┘   ║
@@ -1416,9 +1418,9 @@ def heatset_m4(params: HeatsetParams) -> PartResult: ...
 
 Bausteine bauen gegen `manifold3d`. Damit hängt `insert_part` an keiner
 externen Installation, ist testbar, schemageprüft und liefert
-Provenienz-Features. **OpenSCAD wird optional** und nur für Freiformen in
-Säule A gebraucht — das löst zugleich die GPL-Frage (§36). Ein `to_scad()` je
-Baustein bleibt als Ausgabeformat erhalten.
+Provenienz-Features — und die GPL-Frage (§36) stellt sich für die Bibliothek
+nicht. Ein `to_scad()` je Baustein bleibt als **Ausgabeformat** erhalten: Es
+schreibt eine Datei zum Weitergeben und führt nichts aus.
 
 **Erstbestückung**: Schraubenloch mit Senkung, Heat-Set-Einpressbuchse,
 Mutternfalle (seitlich und von unten), Magnettasche, Kabeldurchführung mit
@@ -1489,10 +1491,11 @@ Bausteine gelten nur auf dem Rechner, auf dem sie liegen.
   Beschreibung seiner Parameter — Daten, keine Funktion. Es nennt Namen
   registrierter Operationen und Zahlen, und das tut jede Projektdatei ohnehin;
   seine Sicherheitslage ist die einer `project.json`, nicht die einer fremden
-  `.py`. Für die Ausnahme bleibt §32 zuständig: Trägt ein Rezept einen
-  `create_from_scad`-Schritt, greift die Quelltextprüfung wie bei jedem anderen
-  Weg. Der Katalog weist die Herkunft aus, und ein mitgereistes Rezept
-  überschreibt nie einen gleichnamigen eigenen Baustein
+  `.py`. Die Erlaubnis gilt **ohne Vorbehalt**, weil kein registrierter
+  Parameter mehr Quelltext trägt (§32); entsteht je wieder einer, gilt für ihn
+  dieselbe Sperre wie für jeden anderen Weg. Der Katalog weist die Herkunft
+  aus, und ein mitgereistes Rezept überschreibt nie einen gleichnamigen
+  eigenen Baustein
 - Öffnet jemand ein Projekt, das einen unbekannten eigenen Baustein benutzt,
   hält die Auswertung an und meldet, was fehlt (§15.2)
 - Sie erweitern nicht die Anwendung, sondern nur die Bibliothek — keine neuen
@@ -1519,8 +1522,7 @@ Vertices verschmelzen
 skalieren, auf Bett ausrichten, druckoptimal orientieren
 
 **Boolesch** — Vereinigung, Differenz, Schnitt (mit Rückfallkette §17.2);
-Primitive einfügen; **Baustein an ein erkanntes Feature setzen** (§24);
-OpenSCAD-Teil anheften (optional)
+Primitive einfügen; **Baustein an ein erkanntes Feature setzen** (§24)
 
 **Skizze** (§30.1, B-Rep) — Grundform anlegen (Rechteck, Langloch, Kreisbild,
 Vieleck), Skizze extrudieren, rotieren, als Tasche schneiden, entlang Pfad
@@ -1646,9 +1648,8 @@ sind hart. Nach jeder Op läuft die Prüfung (wasserdicht, Volumen plausibel,
 keine unerwarteten Komponenten, keine verwaisten Referenzen, keine verletzten
 Passungen); der Befund geht zurück in den Kontext.
 
-**Bausteine vor Primitiven, Op-Liste vor OpenSCAD, Parameter vor Zahlen,
-Fragen vor Raten** — alle vier im Systemprompt verankert und in der Suite
-gemessen.
+**Bausteine vor Primitiven, Parameter vor Zahlen, Fragen vor Raten** — alle
+drei im Systemprompt verankert und in der Suite gemessen.
 
 ### 26.6 Fernsteuerung über MCP
 Ein zweites Programm auf demselben Rechner ruft dieselben Operationen auf wie
@@ -1986,13 +1987,17 @@ zwischen Leuten. Eine fremde Datei darf nichts ausführen.
 - **Keine absoluten Pfade** in Projektdateien
 - **Parameterausdrücke** über eigenen Auswerter mit beschränkter Grammatik —
   **kein `eval`**, auch nicht abgesichert
-- **OpenSCAD-Quelltext wird vor dem Lauf geprüft**: `import`, `include`, `use`
-  und `surface` nur mit relativen Pfaden unterhalb des Arbeitsordners. Gilt für
-  Quelltext aus Projektdateien **und** aus dem LLM.
-- **Fester Arbeitsordner** je Lauf, Zeit- und Speicherlimit für den
-  Unterprozess, kein Netzzugriff
-- **Warnhinweis beim Öffnen** einer fremden Datei mit Quelltext oder externen
-  Verweisen
+- **Kein fremder Quelltext wird ausgeführt** — weder aus einer Projektdatei
+  noch aus dem LLM. Es gibt keinen Weg dorthin: Keine registrierte Operation
+  nimmt Quelltext als Parameter, und kein Unterprozess bekommt welchen. Die
+  Zusage steht als **Sperre** für jeden künftigen Weg — wer einen baut, baut
+  die Prüfung mit
+- **Jedes externe Werkzeug läuft eingehegt**: fester Arbeitsordner je Aufruf,
+  Zeit- und Speichergrenze, getrimmte Umgebung. Das gilt für die Übergabe an
+  den Slicer (§28) wie für jedes weitere Programm, das der Kern startet (§27)
+- **Warnhinweis beim Öffnen** einer fremden Datei mit externen Verweisen —
+  nicht mehr, weil etwas laufen könnte, sondern damit der Nutzer weiß, woher
+  der Inhalt stammt
 - **Prüfsummen** aller Quellen beim Laden verifizieren
 - **Grenzen beim Öffnen**: Dreieckszahl, Dateigröße **und die entpackte
   Größe** gedeckelt, mit klarer Meldung statt Speicherüberlauf. Die entpackte
@@ -2021,7 +2026,7 @@ AppError                     # Basis, trägt Titel, Ursache, Handlungsvorschläg
 │   ├── NotManifoldError
 │   ├── BooleanFailedError   # trägt die versuchten Rückfallstufen
 │   └── OutOfBuildVolume
-├── ExternalToolError        # OpenSCAD, Slicer, ComfyUI, LLM
+├── ExternalToolError        # Slicer, ComfyUI, LLM
 └── InternalError            # Programmfehler — Fehlerbericht anbieten
 ```
 
@@ -2228,8 +2233,7 @@ soll?**
 | **pymeshlab** | **GPL** | **nicht verwenden** |
 | open3d | MIT | **nicht verwendet** — Reparatur und Remeshing laufen über trimesh und manifold3d |
 | CoACD | MIT | **geprüft und verworfen**, siehe unten |
-| OpenSCAD | GPL | nur extern installiert aufrufen, nicht mitliefern |
-| Slicer (Orca/Prusa/Cura) | GPL/AGPL | ebenso extern |
+| Slicer (Orca/Prusa/Cura) | GPL/AGPL | nur extern installiert aufrufen, nicht mitliefern |
 | ComfyUI | GPL | extern, eigener Prozess — Weg 3 |
 | Ollama | MIT | extern, eigener Prozess — der lokale Chat |
 | Generative Modelle | uneinheitlich, teils regional eingeschränkt | einzeln prüfen |
@@ -2471,9 +2475,10 @@ und ohne Schlüssel geht sie nirgendwohin.
 - **Speicher und Cache.** Obergrenze im RAM, darunter ein Plattencache über den
   Op-Hash. Er liegt in **seinem eigenen Ordner**, und zwar aus zwei Gründen, die
   beide beim Anschließen scharf wurden. Der erste ist die Nachbarschaft: Im
-  Cache-Verzeichnis wohnen auch der Arbeitsordner für OpenSCAD (§32), geladene
-  Aktualisierungspakete (§37.2) und die Oberflächenvorlagen. Ein Aufräumen, das
-  sein Budget über den ganzen Ordner rechnet, zählt fremde Daten mit und löscht
+  Cache-Verzeichnis wohnen auch die Arbeitsordner der externen Werkzeuge
+  (§32), geladene Aktualisierungspakete (§37.2) und die Oberflächenvorlagen.
+  Ein Aufräumen, das sein Budget über den ganzen Ordner rechnet, zählt fremde
+  Daten mit und löscht
   fremde Dateien — darunter ein Paket, dessen Prüfsumme gerade geprüft werden
   soll. Der zweite ist die **Versionsschranke**: Der Op-Hash trägt Operation,
   Parameter, Eingänge, Profil, Qualität und Startwert — er ändert sich **nicht**,
@@ -2525,7 +2530,7 @@ und ohne Schlüssel geht sie nirgendwohin.
   beim ersten Start niemand Bauraummaße abtippt; eigene Profile werden davon
   abgeleitet. Der Startsatz ist eine Datentabelle wie die Normteile (§24.2)
   und wird genauso gepflegt.
-- **Paketierung.** PyInstaller. ComfyUI, Ollama, OpenSCAD und Slicer werden
+- **Paketierung.** PyInstaller. ComfyUI, Ollama und Slicer werden
   nicht mitgeliefert, sondern konfiguriert — mit Prüfung beim Start und klarer
   Meldung, wenn eines fehlt.
 
@@ -2551,7 +2556,6 @@ Aktueller Stand:
 - Bei Booleschen Ops immer 0,01 mm Überlappung, nie koinzidente Flächen
 - Löcher größer als Nennmaß, weil FDM enger druckt — Wert aus der Kalibrierung
 - Erste Schicht: Elefantenfuß einkalkulieren
-- Bei OpenSCAD: `$fn` zentral, sonst explodieren die Renderzeiten
 
 ---
 
@@ -2635,15 +2639,17 @@ wasserdicht und wandstärkenkonform — die Erstbestückung aus §24.1 sind
 dreizehn, es sind inzwischen mehr, und eine Zahl in einem Abnahmekriterium
 altert schneller als die Bibliothek · Features als Provenienz-IDs im Steckbrief · Vorschaubilder
 automatisch gerendert · `to_scad()` erzeugt gültigen Quelltext · kein Kernpfad
-benötigt OpenSCAD · `parts_version` in der Projektdatei, geänderter Baustein
-wird beim Öffnen namentlich gemeldet · eigene Bausteine aus dem Nutzerordner
-werden geladen und reisen nachweislich nicht mit der Projektdatei.
+braucht ein externes Programm · `parts_version` in der Projektdatei,
+geänderter Baustein wird beim Öffnen namentlich gemeldet · eigene Bausteine
+aus dem Nutzerordner werden geladen und reisen nachweislich nicht mit der
+Projektdatei.
 
 ### P6 — Säule A
 *Fertig, wenn:* Agenten-Suite zu Säule A besteht · Bausteine werden messbar vor
 eigener Geometrie bevorzugt · Hauptabmessungen landen messbar als Parameter ·
-**Weg 2 aus §2.2 läuft als Ende-zu-Ende-Test** · abgewiesener
-OpenSCAD-Quelltext mit `include` wird nachweislich nicht ausgeführt.
+**Weg 2 aus §2.2 läuft als Ende-zu-Ende-Test** · es gibt nachweislich keinen
+Weg, auf dem Quelltext aus einer Projektdatei oder aus dem LLM ausgeführt
+wird (§32).
 
 ### P7 — Slicer-Rückkopplung und Kalibrierung
 *Fertig, wenn:* die G-Code-Gegenprobe weicht auf dem Korpus um weniger als

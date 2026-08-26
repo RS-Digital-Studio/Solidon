@@ -48,23 +48,28 @@ Jede hat einen Test. Ein Verstoß ist ein roter Lauf, keine Geschmacksfrage.
 
 **Sicherheit**
 10. **Kein `eval`** — Parameterausdrücke über den eigenen Auswerter.
-11. **Kein OpenSCAD-Lauf ohne Quelltextprüfung** (§32) — auch bei
-    LLM-Quelltext.
+11. **Kein fremder Quelltext wird ausgeführt** (§32) — auch nicht der eines
+    Sprachmodells. Seit dem Ausbau von OpenSCAD (26.08.2026) gibt es keinen
+    Weg mehr dorthin; die Regel steht jetzt als Sperre: Wer einen neuen baut,
+    baut die Prüfung mit.
 12. **Keine absoluten Pfade** in Projektdateien.
 13. **Ausführbarer Code reist nie in einer Projektdatei mit** (§24.5). Er
     kommt aus der Installation und dem Nutzerordner, nie aus einer geöffneten
     Datei — ein eigener Baustein als `.py` bleibt deshalb, wo er liegt. Ein
     Baustein als **Rezept** darf mitreisen (Entscheidung Robert, 24.08.2026):
     Er ist eine Liste registrierter Operationen mit Werten, führt also nichts
-    aus, was eine Projektdatei nicht ohnehin auslöst. **Ein Wert kann trotzdem
-    Quelltext sein** — `create_from_scad` trägt ihn im Parameter `source`.
-    Dafür greift **Regel 11**, und `scene/foreign.py` sagt es dem Nutzer,
-    bevor er die Datei rechnen lässt (§32); beides gilt unabhängig davon, wie
-    der Quelltext in die Datei kam. Die zwei Regeln halten nur zusammen.
+    aus, was eine Projektdatei nicht ohnehin auslöst. **Seit dem Ausbau von
+    OpenSCAD (26.08.2026) steht das ohne Vorbehalt.** Vorher konnte ein Wert
+    selbst Quelltext sein — `create_from_scad` trug ihn im Parameter
+    `source` —, und die Erlaubnis hielt nur zusammen mit Regel 11. Diese
+    Öffnung gibt es nicht mehr: Eine Projektdatei trägt Operationen und Werte,
+    und keiner davon wird ausgeführt. `scene/foreign.py` weist fremde Herkunft
+    weiterhin aus (§32) — nicht mehr, weil etwas laufen könnte, sondern weil
+    der Nutzer wissen soll, woher der Inhalt stammt.
 14. **Kennzahlen aus Schichtanalyse und G-Code werden nie vermischt** —
     Herkunft immer ausweisen (§22.5).
-15. **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. OpenSCAD und
-    Slicer nur extern aufrufen, nie mitliefern.
+15. **Keine GPL-Abhängigkeit.** Kein `pymeshlab`, kein `PyQt`. Einen Slicer
+    nur extern aufrufen, nie mitliefern.
 
 **Bedienung**
 16. **Jeder Agentenvorschlag ist genau eine Transaktion.** Ein Undo nimmt ihn
@@ -184,9 +189,11 @@ Dialoge.
 ## Checkliste: neuer Baustein
 
 1. `@register_part(...)` mit `params`, `features`, `preview`, `doc`
-2. Umsetzung gegen `manifold3d` — **nicht** OpenSCAD
+2. Umsetzung gegen `manifold3d`
 3. Benannte Features zurückgeben (Provenienz-IDs)
-4. `to_scad()` für den Quelltext-Export
+4. `to_scad()` für den Quelltext-Export — **das bleibt.** Es schreibt eine
+   Datei und führt nichts aus; mit dem Ausbau von OpenSCAD (26.08.2026) ist
+   der *Lauf* verschwunden, nicht das Format
 5. Test über den gesamten Parameterbereich: wasserdicht, Mindestwandstärke,
    keine Selbstdurchdringung an den Grenzen
 6. Normteilmaße aus der Tabelle, nie im Baustein hart eintragen
