@@ -35,10 +35,24 @@ from tests.release_signing import accept_test_signatures, signed  # noqa: F401
 def test_the_survey_names_every_tool_and_what_it_is_for() -> None:
     """§38: eingerichtet, nicht mitgeliefert — die Anwendung muss also sagen,
     was da ist.
+
+    **Die Namen standen hier als Aufzählung**, und mit dem OpenSCAD-Ausbau am
+    26.08.2026 wurde der Test rot, obwohl an der Zusage keine Silbe anders war.
+    Ein Testname oder eine Liste, die einen Bestand *aufzählt*, altert mit ihm —
+    und trägt den Namen des Entfernten nirgends, weshalb keine Suche sie findet.
+
+    Verglichen wird deshalb gegen :data:`tools.TOOLS`. Das ist bewusst die
+    Quelle der Erhebung und trotzdem kein Zirkelschluss: ``survey()`` fragt die
+    **Maschine** ab und entscheidet dabei, was sie zurückgibt — die Zusage ist,
+    dass sie dabei keines auslässt. Die drei inhaltlichen Prüfungen darunter
+    tragen den Rest.
     """
     found = tools.survey()
 
-    assert {state.tool.id for state in found} == {"openscad", "slicer", "ollama", "comfyui"}
+    assert found, "ohne Erhebung prüft alles darunter nichts"
+    assert {state.tool.id for state in found} == {tool.id for tool in tools.TOOLS}, (
+        "die Erhebung lässt kein Programm aus"
+    )
     for state in found:
         assert str(state.tool.what_for).strip(), state.tool.id
         assert state.tool.optional, "none of them is required (§24.1)"
@@ -218,7 +232,7 @@ def test_the_dialog_is_there_before_the_answers_are(qt_app: QApplication) -> Non
     """§38, §2.8: das Allererste, was ein Kunde sieht, wartet auf nichts.
 
     Gemessen brauchte der Dialog 1,88 Sekunden bis auf den Bildschirm — die
-    Suche nach vier Programmen, das Auslesen eines Slicer-Profils und eine
+    Suche nach den externen Programmen, das Auslesen eines Slicer-Profils und eine
     HTTP-Frage an Ollama, alles im Oberflächen-Thread. Er zeigt jetzt sofort
     seine Fragen; wo eine Antwort fehlt, steht ein Satz und keine Behauptung.
     """
@@ -299,11 +313,18 @@ def test_the_first_run_asks_the_four_things(qt_app: QApplication) -> None:
     assert dialog.printer.count() >= 1
     assert dialog.material.count() >= 1
     # Die Programme stehen als Zeilen da, nicht mehr als ein Textblock: eine
-    # je Programm, mit Zeichen, Zustand und Zweck.
+    # je Programm, mit Zeichen, Zustand und Zweck. Geprüft an **jedem**, das
+    # die Anwendung kennt, und nicht an einem herausgegriffenen Namen: Hier
+    # stand „OpenSCAD", und der Test fiel mit dem Ausbau, ohne dass sich an
+    # dieser Zusage etwas geändert hätte.
     from PySide6.QtWidgets import QLabel
 
+    from app.core import tools as external_tools
+
     shown = " ".join(label.text() for label in dialog.tools.findChildren(QLabel))
-    assert "OpenSCAD" in shown
+    assert external_tools.TOOLS, "ohne Werkzeugliste prüft die Schleife nichts"
+    for tool in external_tools.TOOLS:
+        assert str(tool.title) in shown, f"{tool.id} fehlt in der Erstinbetriebnahme"
     assert dialog.open_button.text().startswith("Modell")
 
 

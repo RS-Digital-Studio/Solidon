@@ -137,7 +137,7 @@ def test_a_broken_body_still_gets_an_answer(server: tuple[RemoteServer, _Bridge]
 def test_a_refused_operation_never_reaches_the_bridge(
     server: tuple[RemoteServer, _Bridge],
 ) -> None:
-    """``create_from_scad`` führt fremden Quelltext aus und ist gesperrt.
+    """Eine Operation, die fremden Quelltext ausführt, ist gesperrt.
 
     Die Sperre sitzt im Protokoll — hier wird geprüft, dass sie über die
     Leitung auch wirkt und nicht nur im Modultest.

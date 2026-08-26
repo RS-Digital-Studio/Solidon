@@ -302,10 +302,12 @@ CASES_A: tuple[Case, ...] = (
         pillar="A",
         empty_scene=True,
         expects_ops=("sketch_loft",),
-        forbids_ops=("create_from_scad",),
         note=(
-            "Bis P13 war das der Fall für den OpenSCAD-Rückfall — jetzt kann "
-            "sketch_loft ihn im Haus, und der Rückfall wäre die falsche Wahl (§30.1)."
+            "Bis P13 war das der Fall für den OpenSCAD-Rückfall — sketch_loft kann "
+            "ihn seither im Haus (§30.1). Hier stand deshalb ein forbids_ops auf "
+            "create_from_scad; die Operation ist am 26.08.2026 entfallen, und ein "
+            "Verbot auf einen Namen, den das Register nicht kennt, kann nie greifen "
+            "— es machte den Fall leichter, statt ihn zu schärfen."
         ),
     ),
     Case(

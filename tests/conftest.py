@@ -205,7 +205,7 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     """Die Suite fragt nicht die Maschine, auf der sie läuft (§38).
 
     Dieselbe Begründung wie bei den Nutzerverzeichnissen oben: ein
-    Entwicklerrechner mit installiertem OpenSCAD sieht sonst etwas anderes als
+    Entwicklerrechner mit installiertem Slicer sieht sonst etwas anderes als
     ein Bauserver ohne, und ein Test, dessen Ergebnis davon abhängt, prüft
     nicht, was er zu prüfen vorgibt. Was ausdrücklich gesetzt wurde, gilt
     weiter — daran hängen die Tests, die einen Fund brauchen.
@@ -244,8 +244,8 @@ def _the_network_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     **ja** — die Oberfläche baut einen Chat auf, ein Arbeitsthread rechnet, und
     der Test misst etwas anderes als auf dem Bauserver, wo gar keins läuft.
 
-    Dieselbe Begründung wie bei OpenSCAD eine Fixture darüber, nur eine Ebene
-    weiter: Die Isolation deckte Qt, die Nutzerverzeichnisse und die
+    Dieselbe Begründung wie bei den Fremdprogrammen eine Fixture darüber, nur
+    eine Ebene weiter: Die Isolation deckte Qt, die Nutzerverzeichnisse und die
     Fremdprogramme ab — **das Netz nicht.**
 
     **Geleert wird die Liste der Backends, nicht die Erreichbarkeitsprüfung.**

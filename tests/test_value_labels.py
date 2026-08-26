@@ -152,6 +152,34 @@ def test_the_dictionary_carries_nothing_dead() -> None:
     assert not dead, f"Beschriftung ohne Schlüssel: {dead}"
 
 
+def test_explaining_a_choice_reaches_tooltip_and_screen_reader(qt_app: object) -> None:
+    """Der Satz zum Auswahlwert hängt am Eintrag — in beiden Rollen.
+
+    „Gyroid" ist ein Name und keine Entscheidungshilfe; erst der Satz sagt,
+    wann man es wählt. ``explain_choices`` liest den rohen Schlüssel aus dem
+    ``itemData`` (so legen ihn beide Dialoge ab) und setzt Tooltip **und**
+    ``AccessibleDescriptionRole`` — Regel 18, nicht nur eine Kodierung. Ein
+    Selbstname wie „M4" bleibt ohne Satz: ein Tooltip, der den Namen
+    wiederholt, wäre Tapete.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QComboBox
+
+    from app.ui.labels import choice_label, choice_note, explain_choices
+
+    box = QComboBox()
+    box.addItem(choice_label("gyroid"), "gyroid")
+    box.addItem(choice_label("M4"), "M4")
+    explain_choices(box)
+
+    note = box.itemData(0, Qt.ItemDataRole.ToolTipRole)
+    assert note == choice_note("gyroid")
+    assert note, "der benannte Wert trägt einen Satz"
+    assert box.itemData(0, Qt.ItemDataRole.AccessibleDescriptionRole) == note
+    assert box.itemData(1, Qt.ItemDataRole.ToolTipRole) is None
+    assert box.itemData(1, Qt.ItemDataRole.AccessibleDescriptionRole) is None
+
+
 def test_the_unit_comes_from_the_suffix_not_from_the_dictionary(qt_app: object) -> None:
     """``size`` und ``size_mm`` teilen sich einen Eintrag.
 
@@ -1017,3 +1045,22 @@ def test_a_number_without_a_decimal_part_stays_ambiguous(qt_app: object) -> None
         assert field.lineEdit().text() == "1,00", "und das Feld zeigt, was es gelesen hat"
     finally:
         QLocale.setDefault(before)
+
+
+def test_an_unknown_step_offers_the_way_to_its_values() -> None:
+    """Der Befund verspricht „Ihre Werte bleiben erhalten" — dann muss es einen
+    Weg zu ihnen geben.
+
+    Ohne *Werte ansehen* wäre der Satz eine Sackgasse: Der Operationsdialog
+    wird aus einem Registereintrag gebaut, den es für diesen Schritt nicht
+    gibt, und löschen kann der Verlauf ihn auch nicht (§15.4). Was bleibt, sind
+    die Werte selbst — bei einer Datei aus 0.1.3 der OpenSCAD-Quelltext.
+    """
+    from app.ui.panels import FINDING_ACTIONS
+
+    offered = FINDING_ACTIONS["evaluate.unknown_operation"]
+
+    assert [action.id for action in offered] == ["show_step_values", "show_history"], (
+        "der Weg zu den Werten steht vorn, das Zeigen im Verlauf daneben"
+    )
+    assert offered[0].primary, "die Handlung, um die es geht, ist die Hauptsache"

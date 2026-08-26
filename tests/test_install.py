@@ -118,10 +118,10 @@ def test_a_program_goes_through_the_system_package_manager(
     monkeypatch.setattr(install.sys, "platform", "win32")
     monkeypatch.setattr(install.shutil, "which", lambda name: name)
 
-    command = install._command(by_id("openscad"))
+    command = install._command(by_id("slicer"))
 
     assert "winget" in command[0]
-    assert "--id" in command and "OpenSCAD.OpenSCAD" in command
+    assert "--id" in command and "SoftFever.OrcaSlicer" in command
     assert "--disable-interactivity" in command, "an installer must not wait for a keypress"
 
 
@@ -237,12 +237,12 @@ def test_the_two_reasons_a_program_is_missing_stay_apart(
     monkeypatch.setattr(install.sys, "platform", "darwin")
     monkeypatch.setattr(install.shutil, "which", lambda name: None)
 
-    ohne_verwaltung = str(install.why_not(by_id("openscad")))
+    ohne_verwaltung = str(install.why_not(by_id("slicer")))
     ohne_kennung = str(install.why_not(by_id("comfyui")))
 
     assert "brew" in ohne_verwaltung, "der Name der Verwaltung gehört in die Auskunft"
     assert ohne_verwaltung != ohne_kennung, "zwei Ursachen, zwei Sätze"
-    assert by_id("openscad").by_hand().startswith("brew install"), "der Befehl zum Abschreiben"
+    assert by_id("slicer").by_hand().startswith("brew install"), "der Befehl zum Abschreiben"
     assert not by_id("comfyui").by_hand(), "wo es keine Kennung gibt, gibt es keinen Befehl"
 
 
@@ -268,12 +268,12 @@ def test_a_flathub_identifier_becomes_a_reference_file() -> None:
     ``.flatpakref`` bringt Quelle und Laufzeitquelle mit.
     """
     flatpak = next(entry for entry in install.MANAGERS if entry.id == "flatpak")
-    openscad = by_id("openscad")
+    slicer = by_id("slicer")
 
-    wanted = openscad.identifier(flatpak)
+    wanted = slicer.identifier(flatpak)
 
     assert wanted and wanted[0].endswith(".flatpakref")
-    assert openscad.flatpak in wanted[0]
+    assert slicer.flatpak in wanted[0]
     assert "flathub" not in flatpak.before, "die Quelle steckt in der Datei, nicht im Befehl"
 
 
@@ -293,7 +293,7 @@ def test_without_a_package_manager_a_program_is_not_offered(
 ) -> None:
     monkeypatch.setattr(install, "manager", lambda: None)
 
-    assert not install.installable(by_id("openscad"))
+    assert not install.installable(by_id("slicer"))
 
 
 def test_something_with_no_installer_at_all_names_its_page() -> None:
@@ -310,7 +310,7 @@ def test_installing_the_impossible_does_not_run_anything(
     monkeypatch.setattr(install, "manager", lambda: None)
     ran = watch_popen(monkeypatch)
 
-    result = install.install(by_id("openscad"))
+    result = install.install(by_id("slicer"))
 
     assert not result.installed
     assert result.reason
@@ -484,14 +484,14 @@ def test_where_it_cannot_install_it_hands_over_the_command(
     monkeypatch.setattr(install.shutil, "which", lambda name: None)
 
     dialog = settled(InstallDialog(), qt_app)
-    row = next(entry for entry in dialog.rows if entry.requirement.id == "openscad")
+    row = next(entry for entry in dialog.rows if entry.requirement.id == "slicer")
 
     assert not row.copy.isHidden(), "der Befehl gehört an die Stelle, an der es nicht geht"
     assert "brew install" in row.where.text(), "und im Blick, nicht nur in der Ablage"
     row.copy.click()
     from PySide6.QtGui import QGuiApplication
 
-    assert "openscad" in (QGuiApplication.clipboard().text() or "")
+    assert "orcaslicer" in (QGuiApplication.clipboard().text() or "")
 
 
 def test_a_failed_install_says_what_went_wrong(monkeypatch: pytest.MonkeyPatch) -> None:

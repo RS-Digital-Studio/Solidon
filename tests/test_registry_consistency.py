@@ -674,7 +674,7 @@ def test_no_operation_reads_the_clock_the_environment_or_the_machine() -> None:
     Module, die Operationen halten, sehen zu wenig — sie fänden nichts, was eine
     Hilfsfunktion zwei Ebenen tiefer tut. Der ganze Aufrufgraph durch ``app.``
     dagegen meldet fünfzehn Stellen, und alle fünfzehn sind in Ordnung:
-    ``perf_counter`` in ``backends/openscad`` misst die Laufzeit eines
+    ``perf_counter`` in einem Backend misst die Laufzeit eines
     Unterprozesses, ``os.environ`` und ``Path.home`` in ``discover`` und
     ``paths`` suchen das fremde Werkzeug und den Nutzerordner. Eine Prüfung mit
     fünfzehn Ausnahmen prüft nichts mehr. Verfolgt wird deshalb der Aufrufgraph

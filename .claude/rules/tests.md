@@ -33,7 +33,7 @@ Testdatei, kein Sonderfall im Code.
 
 `tests/conftest.py` setzt `QT_QPA_PLATFORM=offscreen`, biegt die
 Nutzerverzeichnisse in einen Temp-Ordner (§38) und hält die Maschine aus dem
-Ergebnis heraus: ein Entwicklerrechner mit installiertem OpenSCAD sieht sonst
+Ergebnis heraus: ein Entwicklerrechner mit installiertem Slicer sieht sonst
 etwas anderes als ein Bauserver ohne. Wer diese Fixtures umgeht, prüft nicht,
 was er zu prüfen vorgibt.
 
@@ -786,10 +786,10 @@ Daraus folgen zwei Dinge, und das zweite ist die eigentliche Regel:
   niemandem auffällt, ist keine. Also gehört zu ihr eine Zusicherung:
   `core.hooksPath` zeigt auf `.githooks`, und jede Datei darin ist ausführbar.
 
-### Die Isolation deckt Qt, Verzeichnisse und OpenSCAD ab — das Netz nicht
+### Die Isolation deckt Qt, Verzeichnisse und die Fremdprogramme ab — das Netz nicht
 
 `conftest.py` hält die Maschine aus dem Ergebnis heraus: Offscreen-Qt,
-Nutzerverzeichnisse in einem Temp-Ordner, kein installiertes OpenSCAD. Am
+Nutzerverzeichnisse in einem Temp-Ordner, kein gefundenes Fremdprogramm. Am
 23.08.2026 stand in einem Absturzstapel von `test_ui.py`:
 
     app/core/backends/llm.py:501    available
@@ -800,7 +800,7 @@ Nutzerverzeichnisse in einem Temp-Ordner, kein installiertes OpenSCAD. Am
 **Ein Test öffnet eine echte Netzwerkverbindung.** `llm.available()` fragt über
 `socket.create_connection`, ob ein Backend erreichbar ist. Ein Rechner mit
 laufendem Ollama misst damit etwas anderes als einer ohne, und die CI hat gar
-keins — dieselbe Klasse wie das installierte OpenSCAD, nur eine Ebene weiter.
+keins — dieselbe Klasse wie ein installierter Slicer, nur eine Ebene weiter.
 
 Ob es die Ursache des Absturzes war, ist offen. Ein Isolationsloch ist es
 unabhängig davon.

@@ -2162,7 +2162,7 @@ def test_without_connectors_nothing_is_said() -> None:
 
 
 def test_a_slicer_over_the_time_limit_is_an_answer_not_a_crash(tmp_path: Path) -> None:
-    """Der Zwilling zu ``test_openscad``: ``subprocess.run`` warf einen rohen
+    """``subprocess.run`` warf einen rohen
     ``TimeoutExpired`` aus dem Arbeits-Thread, der nur ``AppError`` fing —
     der Dialog stand dauerhaft auf „Der Slicer rechnet …"."""
     import sys

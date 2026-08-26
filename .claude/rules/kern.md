@@ -122,7 +122,7 @@ eigenen Handlung zweifeln lässt.
 Zweimal danebengegangen, beide Fälle stehen in `app/core/discover.py`:
 
 * **Flatpak** legt seine Startprogramme unter der Anwendungskennung ab
-  (`org.openscad.OpenSCAD`) und setzt den PATH ausdrücklich **nicht**. Weder
+  (`com.orcaslicer.OrcaSlicer`) und setzt den PATH ausdrücklich **nicht**. Weder
   `shutil.which` noch ein Durchgang durch `/opt` findet das. Verglichen wird
   deshalb über `plain_name` — klein, ohne Trenner —, damit „orca-slicer",
   „OrcaSlicer" und das letzte Stück der Kennung derselbe Name sind.

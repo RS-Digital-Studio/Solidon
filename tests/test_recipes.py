@@ -23,6 +23,7 @@ from app.core.knowledge.parts import recipe
 from app.core.knowledge.parts.registry import PartRegistry
 from app.core.knowledge.parts.user import travelling_parts
 from app.core.registry.registry import Registry
+from app.core.scene import foreign
 from app.core.types import Document, Operation, Parameter, Profile
 
 
@@ -684,11 +685,12 @@ def test_a_recipe_from_the_future_is_refused(profile: Profile) -> None:
 
 
 def test_a_recipe_with_scripted_source_is_flagged_when_loaded(
-    profile: Profile, tmp_path: Path
+    profile: Profile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Regel 13 hält nur mit Regel 11 zusammen: Trägt ein Rezept
-    ``create_from_scad``-Quelltext, muss der Nutzer es beim Laden erfahren —
-    dieselbe Auskunft, die ``foreign.findings_for`` einer Projektdatei gibt."""
+    """Regel 13 hält nur mit Regel 11 zusammen: Trägt ein Rezept einen Schritt
+    mit fremdem Quelltext, muss der Nutzer es beim Laden erfahren — dieselbe
+    Auskunft, die ``foreign.findings_for`` einer Projektdatei gibt."""
+    monkeypatch.setattr(foreign, "SCRIPTED_OPS", frozenset({"create_box"}))
     made = _recipe(profile)
     made.document.ops.append(
         Operation(
@@ -768,20 +770,20 @@ def _travelling_project(profile: Profile, tmp_path: Path, prepared: recipe.Recip
 
 
 def _scripted_recipe(profile: Profile, name: str = "probe_halter") -> recipe.Recipe:
-    """Ein Rezept, dessen Ausschnitt einen ``create_from_scad``-Schritt trägt.
+    """Ein Rezept, dessen Ausschnitt eine quelltextführende Operation trägt.
+
+    **Welche das ist, sagt** :data:`foreign.SCRIPTED_OPS`, und die ist seit dem
+    OpenSCAD-Ausbau am 26.08.2026 leer. Hier stand ``create_from_scad``; heute
+    steht eine gewöhnliche Operation da, und der Test setzt die Zuordnung. Was
+    geprüft wird, ist die **Auskunft** über den Quelltext — nicht sein Lauf und
+    nicht der Name der Operation, die ihn trägt.
 
     Angehängt statt über ``capture`` aufgenommen: Die Probe in ``capture``
-    würde OpenSCAD wirklich starten, und geprüft wird hier die **Auskunft**
-    über den Quelltext, nicht sein Lauf.
+    rechnete den Schritt mit.
     """
     made = _recipe(profile, name)
     made.document.ops.append(
-        Operation(
-            id=2,
-            op="create_from_scad",
-            outputs=("obj_9",),
-            params={"source": "cube(1);"},
-        )
+        Operation(id=2, op="create_box", outputs=("obj_9",), params={"width": 10.0})
     )
     return made
 
@@ -894,20 +896,21 @@ def test_the_same_recipe_arrives_silently(profile: Profile, tmp_path: Path) -> N
 
 
 def test_a_travelling_recipe_with_source_code_is_announced_when_the_file_opens(
-    profile: Profile, tmp_path: Path
+    profile: Profile, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Regel 13 hält nur mit Regel 11 zusammen — auch für ein Rezept, das aus
     einer **fremden** Datei kommt.
 
     ``load_all`` sagt es für den eigenen Ordner (Test oben), ``adopt`` sagte es
     nicht: Eine gemailte ``.p3d`` mit einem Rezept, dessen Dokumentteil
-    ``create_from_scad`` trägt, meldete beim Öffnen ``parts.travelled`` und
+    fremden Quelltext trägt, meldete beim Öffnen ``parts.travelled`` und
     kein Wort über den Quelltext. Verlangt ist die Auskunft **vor** der ersten
     Auswertung, also im Bericht der geladenen Datei (§32).
     """
     from app.core.knowledge.parts import check as part_check
     from app.core.scene.project import load
 
+    monkeypatch.setattr(foreign, "SCRIPTED_OPS", frozenset({"create_box"}))
     try:
         _made, target = _travelling_project(profile, tmp_path, _scripted_recipe(profile))
         # Die fremde Maschine: kein Rezept im Katalog, keine Operation.
@@ -928,17 +931,20 @@ def test_a_travelling_recipe_with_source_code_is_announced_when_the_file_opens(
         _clean_globals("probe_halter", "probe_halter_travelled")
 
 
-def test_a_recipe_inside_a_recipe_still_runs_foreign_source(profile: Profile) -> None:
+def test_a_recipe_inside_a_recipe_still_runs_foreign_source(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Die Prüfung sah genau **eine** Ebene tief.
 
     ``capture`` nimmt beliebige Operationen auf, also auch ein ``insert_A``.
-    Rezept B trug damit ``create_from_scad`` mittelbar, und seine Schrittliste
+    Rezept B trug damit den Quelltext mittelbar, und seine Schrittliste
     nannte nur ``insert_A``: über die Leitung angeboten, ohne Rückfrage
     übernehmbar, und ``parts.check`` schwieg dazu.
     """
     from app.core.knowledge.parts import check as part_check
     from app.core.scene.foreign import runs_foreign_source
 
+    monkeypatch.setattr(foreign, "SCRIPTED_OPS", frozenset({"create_box"}))
     parts, registry = PartRegistry(), Registry()
     recipe.register(_scripted_recipe(profile, "probe_kern"), parts, registry)
     recipe.register(_nesting_recipe("probe_kern", "probe_huelle"), parts, registry)

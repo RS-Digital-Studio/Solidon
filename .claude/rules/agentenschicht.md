@@ -20,18 +20,27 @@ Nach jeder Op läuft die Prüfung — wasserdicht, Volumen plausibel, keine
 unerwarteten Komponenten, keine verwaisten Referenzen, keine verletzten
 Passungen — und der Befund geht zurück in den Kontext.
 
-## Die vier Vorrangregeln
+## Die drei Vorrangregeln
 
-**Bausteine vor Primitiven, Op-Liste vor OpenSCAD, Parameter vor Zahlen,
-Fragen vor Raten.** Alle vier im Systemprompt verankert und in der Suite
-gemessen. Wer eine davon lockert, misst vorher und nachher.
+**Bausteine vor Primitiven, Parameter vor Zahlen, Fragen vor Raten.** Alle
+drei im Systemprompt verankert und in der Suite gemessen. Wer eine davon
+lockert, misst vorher und nachher.
+
+**Es waren vier, und die zweite hieß „Op-Liste vor OpenSCAD".** Sie ist am
+26.08.2026 mit dem OpenSCAD-Ausbau entfallen — nicht gelockert, sondern
+gegenstandslos: Der Quelltextweg, vor dem sie warnte, existiert nicht mehr.
+Was sie inhaltlich schützte, sagt „Bausteine vor Primitiven" ohnehin. Eine
+Regel, die ein Modell vor etwas warnt, das es gar nicht tun kann, kostet Platz
+im Auftrag und lehrt eine Unterscheidung ohne Gegenstand
+(`PROMPT_VERSION = "4"`, Regelsammlung Version 3).
 
 `ask_user` ist Pflicht, keine Höflichkeit: Die Suite enthält absichtlich
 mehrdeutige Anfragen und zählt, ob gefragt statt geraten wurde.
 
 **„Fragen vor Raten" trägt nur als Vorbedingung, nicht als Gewohnheit.** Als
 vierter Punkt einer Liste war sie anleitend, und das hielt gegen die damals
-84 Werkzeuge nicht — heute sind es 85 Operationen und elf Zusatzwerkzeuge: sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
+84 Werkzeuge nicht — heute sind es 90 Operationen und elf Zusatzwerkzeuge:
+sobald der Systemprompt vollständig ankam, fiel die Quote von 3/3 auf
 1/3 — wer genug Angebote hat, findet immer eines, das plausibel aussieht.
 Prompt-Version 2 stellt deshalb drei Prüfungen *vor* den ersten
 Werkzeugaufruf, jede einzeln hinreichend für eine Rückfrage: Ziel eindeutig,
@@ -94,7 +103,7 @@ Version des Systemprompts, Version der Regelsammlung, Temperatur.
 **Ollama schneidet den Prompt stillschweigend ab.** Sein Vorgabefenster ist
 4096 Token; allein die 85 Werkzeugschemata aus dem Register sind rund 109 000
 Zeichen, gemessen 24 474 Token. Was nicht hineinpasst, fällt weg — und mit ihm
-der Systemprompt samt der vier Vorrangregeln. Das Modell ist dann nicht
+der Systemprompt samt der Vorrangregeln. Das Modell ist dann nicht
 ungehorsam, es hat den Auftrag nie gesehen.
 
 Genau das war der Befund „der Agent greift nicht zu den Bausteinen (0/13)".
@@ -107,6 +116,17 @@ Modell, das den Auftrag kennt, nicht herumrät. `OLLAMA_CONTEXT_TOKENS` in
 Wer die Werkzeugmenge ändert, prüft diese Zahl nach: `prompt_eval_count` in
 Ollamas Antwort sagt, wie viel wirklich ankam. Liegt es bei etwa der Hälfte des
 Fensters, wurde gekürzt.
+
+**Stand 26.08.2026: 90 Operationen, 101 Werkzeuge** (nach dem OpenSCAD-Ausbau
+eines weniger). Systemprompt und Werkzeugsatz zusammen sind 149 061 Zeichen im
+vollen und 110 027 im kompakten Satz.
+
+Die Tokenmessung darunter ist **älter als diese Zahlen** und steht trotzdem
+hier, weil sie in die sichere Richtung altert: Der Ausbau hat den Auftrag an
+drei Stellen *kürzer* gemacht — ein Werkzeug weniger, eine Gewohnheit weniger
+im Prompt, zwei Regeln weniger in der Sammlung. Was bei mehr Werkzeugen
+hineinpasste, passt bei weniger erst recht. Wer die Zahl scharf braucht, misst
+sie neu; `prompt_eval_count` ist der einzige ehrliche Weg dorthin.
 
 Bei 85 Operationen nachgemessen, `qwen3:14b` gegen `num_ctx` 32768: 26 601
 Token für Systemprompt und alle 96 Werkzeuge, 19 249 für den kompakten Satz,
@@ -144,10 +164,16 @@ ausführen.
 
 - **Kein `eval`.** Parameterausdrücke über den eigenen Auswerter mit
   beschränkter Grammatik, auch nicht „abgesichert".
-- **OpenSCAD-Quelltext wird vor jedem Lauf geprüft**: `import`, `include`,
-  `use`, `surface` nur mit relativen Pfaden unterhalb des Arbeitsordners. Gilt
-  für Quelltext aus Projektdateien **und aus dem LLM**.
-- Fester Arbeitsordner je Lauf, Zeit- und Speicherlimit, kein Netzzugriff.
+- **Kein fremder Quelltext wird ausgeführt.** Hier stand die Prüfung, die
+  OpenSCAD-Quelltext vor jedem Lauf durchsah (`import`, `include`, `use`,
+  `surface` nur relativ). Sie ist seit dem 26.08.2026 gegenstandslos: Der
+  einzige Weg, der fremden Code ausführte, ist ausgebaut. Damit wird aus einer
+  Prüfung eine **Zusage** — eine Projektdatei kann nichts starten. Wer je
+  wieder eine Operation baut, die Quelltext entgegennimmt, baut die Prüfung
+  mit (Regel 11) und trägt sie in `foreign.SCRIPTED_OPS` ein; die Maschinerie
+  dafür steht und wird an einer Attrappe geprüft.
+- Fester Arbeitsordner je Lauf für **jedes** externe Programm, Zeit- und
+  Speicherlimit, kein Netzzugriff.
 - Beim Import Dreieckszahl und Dateigröße deckeln — klare Meldung statt
   Speicherüberlauf.
 
@@ -155,7 +181,7 @@ ausführen.
 
 Ohne Schlüssel sind die Agentenfunktionen ausgegraut und die Anwendung bleibt
 voll nutzbar. Ein Hinweis an der Chatleiste, mehr nicht — kein Werbebanner,
-kein wiederholtes Nachfragen. Dasselbe gilt für OpenSCAD, den Slicer und die
+kein wiederholtes Nachfragen. Dasselbe gilt für den Slicer und die
 Mesh-Erzeugung: fehlt das Programm, sagt die betroffene Funktion das in einem
 Satz mit Hinweis auf die Einstellung.
 

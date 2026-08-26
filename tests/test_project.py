@@ -479,6 +479,47 @@ def test_every_older_example_migrates_to_today() -> None:
         ], path.name
 
 
+def test_a_file_with_a_step_this_version_cannot_run_still_opens() -> None:
+    """12 → 13: ``create_from_scad`` gibt es nicht mehr, die Datei schon.
+
+    **Geprüft wird, dass sie ehrlich degradiert — nicht, dass sie rechnet.**
+    Die Checkliste in ``AGENTS.md`` verlangt „alte Datei öffnet und rechnet
+    korrekt"; hier kann sie es nicht, und die Zusage ist deshalb eine andere:
+    Der Schritt bleibt stehen, sein Quelltext auch, und wer die Datei
+    auswertet, bekommt einen Satz statt eines Programmfehlers.
+
+    Vor dem 26.08.2026 kam an dieser Stelle ``InternalError: Im Programm ist
+    ein unerwarteter Fehler aufgetreten`` — mitsamt dem Knopf für den
+    Fehlerbericht, für eine Datei, die der Kunde selbst angelegt hatte.
+    """
+    from app.core.knowledge import profiles
+    from app.core.scene.evaluate import evaluate
+
+    project = load(Path(__file__).parent / "data" / "projects" / "scad_v12.p3d")
+
+    assert project.document.format_version == FORMAT_VERSION
+    steps = [entry.op for entry in project.document.ops]
+    assert steps == ["create_box", "create_from_scad"], "der Schritt bleibt stehen"
+    assert "cylinder" in str(project.document.ops[1].params["source"]), (
+        "und sein Quelltext mit ihm — er ist Arbeit des Kunden"
+    )
+
+    result = evaluate(project.document, profiles.make_profile("centauri-carbon-2", "petg"))
+
+    codes = {finding.code for finding in result.scene.report.findings}
+    assert "evaluate.unknown_operation" in codes
+    finding = next(
+        entry
+        for entry in result.scene.report.findings
+        if entry.code == "evaluate.unknown_operation"
+    )
+    assert finding.op_id == 2, "der Befund nennt den Schritt, nicht bloß die Datei"
+    assert finding.values["operation"] == "create_from_scad"
+    assert "unerwarteter Fehler" not in str(finding.message), (
+        "ein Zustand, mit dem zu rechnen war, ist kein Programmfehler"
+    )
+
+
 def test_a_title_from_an_older_file_stays_literal(tmp_path: Path) -> None:
     """5 → 6: was eine ältere Datei als Titel trägt, bleibt wörtlich.
 

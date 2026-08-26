@@ -289,7 +289,7 @@ def test_a_technical_detail_stays_behind_the_readable_sentence(
 
     Der Bericht zeigt das Detail, weil der Titel oft die Art des Fehlers nennt
     statt seines Grundes. Bei einer blanken Zeichenkette schlug das um: dort
-    stand ``malformed target ''``, und beim OpenSCAD-Aufruf eine halbe Seite
+    stand ``malformed target ''``, und bei einem Quelltext-Aufruf eine halbe Seite
     roher Programmausgabe — während der lesbare Satz in ``values`` lag.
     """
     from app.core.errors import AppError

@@ -565,6 +565,13 @@ def test_tool_descriptions_carry_the_menu_place() -> None:
 def test_the_prompt_makes_the_chat_a_search_box() -> None:
     """§2.6, eingelöst in Prompt-Version 3: eine Wie-Frage bekommt neben dem
     Vorschlag den Menüort. Die Version steigt mit dem Text (§26.4).
+
+    **Geprüft wird die Zusage, nicht der Stand.** Hier stand
+    ``PROMPT_VERSION == "3"``, und damit sicherte der Test zu, dass der Prompt
+    sich nie wieder ändert — Version 4 (der OpenSCAD-Ausbau) machte ihn rot,
+    obwohl an §2.6 keine Silbe anders war. Ein Test, der eine Verbesserung
+    blockiert, prüft die Gewohnheit und nicht die Zusage. Die Zusage lautet:
+    seit Version 3 nennt der Prompt den Menüort, also ab drei aufwärts.
     """
     from app.core.agent.prompt import PROMPT_VERSION, system_prompt
 
@@ -572,7 +579,7 @@ def test_the_prompt_makes_the_chat_a_search_box() -> None:
 
     assert "Suchfeld" in text
     assert "Menü" in text
-    assert PROMPT_VERSION == "3"
+    assert int(PROMPT_VERSION) >= 3
 
 
 def test_views_reach_only_a_backend_that_can_see(project: Project, profile: Profile) -> None:
@@ -918,14 +925,31 @@ def test_the_free_shape_no_longer_needs_the_fallback() -> None:
     """Der Trichter war der Vorzeigefall des OpenSCAD-Rückfalls (§24.1).
 
     Seit P13 spannt ``sketch_loft`` ihn im Haus auf (§30.1) — die gute Antwort
-    benutzt die eigene Operation, und der Rückfall wäre jetzt die falsche
-    Wahl. Genau diese Umkehr hält der Fall fest."""
+    benutzt die eigene Operation. Genau diese Umkehr hält der Fall fest.
+
+    **Und seit dem 26.08.2026 braucht er kein Verbot mehr dafür.** Hier stand
+    ``case.forbids_ops == ("create_from_scad",)``; mit dem OpenSCAD-Ausbau ist
+    die Operation aus dem Register gefallen, und ein Verbot auf einen Namen,
+    den das Register nicht kennt, kann nie greifen — der Bewerter prüft
+    ``set(forbids_ops) & set(operations)``, und das bleibt leer, gleich was das
+    Modell tut. Es hätte den Fall also **leichter** gemacht statt schärfer.
+
+    Der Test sichert deshalb beides zu: kein Verbot mehr, und der Grund dafür
+    ist wirklich der Bestand des Registers und nicht ein vergessener Eintrag.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
     from tests.agent_cases import by_id
 
+    load_operations()
     case = by_id("free_shape")
 
     assert case.expects_ops == ("sketch_loft",)
-    assert case.forbids_ops == ("create_from_scad",)
+    assert not case.forbids_ops
+    assert not REGISTRY.has("create_from_scad"), (
+        "das Verbot ist entfallen, weil es die Operation nicht mehr gibt — "
+        "gäbe es sie wieder, gehörte es zurück"
+    )
     assert not case.expects_part
 
 

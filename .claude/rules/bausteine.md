@@ -12,8 +12,10 @@ und damit Teil des Rechenwegs, nicht bloß Beiwerk.
 ## Bausteine
 
 - `@register_part(...)` mit `params`, `features`, `preview`, `doc`.
-- Gebaut wird gegen **`manifold3d`**, nicht gegen OpenSCAD. Damit hängt
-  `insert_part` an keiner Installation und bleibt testbar.
+- Gebaut wird gegen **`manifold3d`**, im eigenen Prozess. Damit hängt
+  `insert_part` an keiner Installation und bleibt testbar — die Entscheidung
+  fiel gegen OpenSCAD als Rechenweg, und seit dessen Ausbau (26.08.2026) gibt
+  es die Alternative gar nicht mehr.
 - Benannte Features zurückgeben (`bore`, `chamfer`, …) — das sind die
   Provenienz-IDs, an denen später Ops und Passungen ansetzen.
 - `to_scad()` bleibt als Ausgabeformat erhalten.

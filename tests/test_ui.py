@@ -2340,17 +2340,22 @@ def test_only_actions_with_a_handler_are_offered(window: MainWindow) -> None:
 def test_missing_software_gets_a_button_into_the_install_list(window: MainWindow) -> None:
     """Der Vorschlag war da, der Handler nicht — also stand er als grauer Satz.
 
-    ``ScadUnavailable`` schlägt seit Anfang an ``install`` vor. Verdrahtet war
+    Jede Meldung über fehlende Software schlägt ``install`` vor. Verdrahtet war
     unter dieser Kennung nichts; die Liste der zusätzlichen Programme hing
     unter ``open_settings``, also unter einem Namen, den kein Knopf trug.
-    Ergebnis: „OpenSCAD installieren …" als Text zum Lesen, während der Dialog,
-    der es holt, zwei Menüs entfernt stand.
+    Ergebnis: „… installieren" als Text zum Lesen, während der Dialog, der es
+    holt, zwei Menüs entfernt stand.
+
+    Gefunden wurde es an ``ScadUnavailable``, und die Klasse ist mit dem
+    OpenSCAD-Ausbau am 26.08.2026 entfallen. Geprüft wird seither an den zwei
+    übrigen Wegen, auf denen fehlende Software gemeldet wird — die Zusage
+    gilt der **Verdrahtung**, nicht dem Programm, das gerade fehlt.
     """
-    from app.core.backends.openscad import ScadUnavailable
     from app.core.brep.kernel import BRepUnavailable
+    from app.core.errors import ExternalToolError
     from app.ui.dialogs import offered_actions
 
-    for problem in (ScadUnavailable(), BRepUnavailable()):
+    for problem in (ExternalToolError(detail="PrusaSlicer"), BRepUnavailable()):
         offered = {action.id for action in offered_actions(problem, window.error_handlers())}
         assert "install" in offered, f"{type(problem).__name__}: kein Weg zur Installation"
         assert "report_error" not in offered, "fehlende Software ist kein Fehlerbericht"

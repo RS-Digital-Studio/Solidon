@@ -667,3 +667,44 @@ def test_an_old_file_counts_from_its_stock(registry: Registry) -> None:
     assert added.id == "t2"
     assert document.ops[-1].id == 3
     assert document.ops[-1].outputs == ("obj_4",), "obj_1 bis obj_3 sind vergeben"
+
+
+def test_a_step_this_version_cannot_run_is_not_a_program_error() -> None:
+    """§16.2, und der Zwilling zu ``evaluate.unknown_operation``.
+
+    **Der schwerere von beiden.** Der Befund aus der Auswertung schickt den
+    Kunden mit *Verlauf zeigen* genau hierher; wer den Schritt dann anklickt,
+    um seine Werte zu sehen, bekam ``InternalError`` — „Im Programm ist ein
+    unerwarteter Fehler aufgetreten", samt Knopf für den Fehlerbericht, für
+    eine Datei, die er selbst angelegt hat. Ein Handlungsvorschlag, der in
+    einen Programmfehler führt, ist schlimmer als gar keiner.
+
+    Geprüft an beiden Änderungswegen, denn beide holten den Registereintrag
+    ungeprüft: ``change_params`` und ``change_inputs``.
+    """
+    from app.core.errors import InternalError, UserError
+    from app.core.types import Document, Operation
+
+    document = Document(format_version=13, app_version="0.0.1")
+    document.ops.append(Operation(id=1, op="create_from_scad", params={"source": "cube(10);"}))
+    history = History(document)
+
+    for name, call in (
+        ("change_params", lambda: history.change_params(1, {"source": "cube(20);"})),
+        ("change_inputs", lambda: history.change_inputs(1, ())),
+    ):
+        try:
+            call()
+        except UserError as fehler:
+            assert fehler.suggestions, f"{name}: Regel 17 — ohne Vorschlag endet es im Nichts"
+            assert "show_step_values" in {a.id for a in fehler.suggestions}, (
+                f"{name}: die Werte des Schritts sind das Einzige, was noch zu holen ist"
+            )
+            assert fehler.values.get("operation") == "create_from_scad"
+            assert fehler.op_id == 1, f"{name}: der Vorschlag braucht die Schrittkennung"
+        except InternalError:  # pragma: no cover - genau das darf nicht mehr sein
+            raise AssertionError(
+                f"{name}: eine Operation aus einer Datei ist kein Programmfehler"
+            ) from None
+        else:  # pragma: no cover
+            raise AssertionError(f"{name}: der Schritt ist unbekannt, das gehört gesagt")

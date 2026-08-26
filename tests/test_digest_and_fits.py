@@ -376,16 +376,20 @@ def test_no_transaction_title_writes_its_own_line(profile: Profile) -> None:
     assert "Verlauf" in text
 
 
-def test_the_stack_line_does_not_carry_a_whole_scad_program(profile: Profile) -> None:
-    """Regel 13: Ein Rezept darf mitreisen, und ein Wert darin kann Quelltext
-    sein — ``create_from_scad`` trägt ihn im Parameter ``source``.
+def test_the_stack_line_does_not_carry_a_whole_gathered_value(profile: Profile) -> None:
+    """Ein Parameterwert kann beliebig lang sein, und dann flutet er den
+    Steckbrief.
 
-    Bis hierhin schrieb der Verlaufssatz so viele Zeilen in den Steckbrief, wie
-    das Programm lang war, in derselben Form wie die echten.
+    Gefunden an ``create_from_scad``, das sein ganzes OpenSCAD-Programm im
+    Parameter ``source`` trug: Der Verlaufssatz schrieb so viele Zeilen, wie
+    das Programm lang war, in derselben Form wie die echten. Die Operation ist
+    seit dem 26.08.2026 fort, der Fall nicht — ein **Sammelparameter**
+    (``kind`` in ``sketch``, ``strokes``, ``armature``) trägt genauso einen
+    beliebig langen Text, und ``sketch_extrude`` ist der häufigste davon.
     """
     source = "cube([10,10,10]);\n" + INJECTION + "\n" + "// " + "x" * 400
     document = Document(format_version=1, app_version="0.0.1")
-    document.ops.append(Operation(id=1, op="create_from_scad", params={"source": source}))
+    document.ops.append(Operation(id=1, op="sketch_extrude", params={"sketch": source}))
     document.transactions.append(
         Transaction(id="t1", title="Aus Quelltext", ops=(1,), origin=Origin(by="agent"))
     )

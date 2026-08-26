@@ -17,6 +17,7 @@ import pytest
 
 from app.core.agent import remote
 from app.core.errors import ValidationError
+from app.core.scene import foreign
 
 
 class _Bridge:
@@ -81,21 +82,33 @@ def test_broken_json_gets_an_answer_too() -> None:
 # --- Die Auflagen ---------------------------------------------------------------
 
 
-def test_openscad_source_never_travels_over_the_wire() -> None:
+def test_an_operation_that_runs_foreign_source_never_travels_over_the_wire(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Regel 11 und die dritte Auflage aus §7 Etappe 9.
 
-    ``create_from_scad`` nimmt ausführbaren Quelltext. Über eine offene
-    Schnittstelle wäre das die Ausführung fremden Codes auf diesem Rechner —
-    unabhängig davon, wie gut die Quelltextprüfung ist. Die Operation gibt es
-    weiter; sie ist nur nicht fernbedienbar.
+    Eine Operation, die ausführbaren Quelltext entgegennimmt, wäre über eine
+    offene Schnittstelle die Ausführung fremden Codes auf diesem Rechner —
+    unabhängig davon, wie gut die Quelltextprüfung ist. Sie bliebe im Menü und
+    wäre nur nicht fernbedienbar.
+
+    **Die Attrappe ist seit dem 26.08.2026 nötig.** Hier stand
+    ``create_from_scad``, die einzige Operation dieser Art; mit dem
+    OpenSCAD-Ausbau ist sie entfallen, und ein Test mit ihrem Namen hätte
+    danach nur noch geprüft, dass eine Operation, die es nicht gibt, nicht
+    gelistet wird. Geprüft wird die **Sperre**, also bekommt eine echte
+    Operation die erfundene Eigenschaft.
     """
+    monkeypatch.setattr(foreign, "SCRIPTED_OPS", frozenset({"create_box"}))
+
     answer = remote.handle(request("tools/list"), _Bridge())
     listed = {entry["name"] for entry in answer["result"]["tools"]}
-    assert "create_from_scad" not in listed
+    assert listed, "ohne Werkzeugliste prüft der Vergleich darunter nichts"
+    assert "create_box" not in listed
 
     bridge = _Bridge()
     answer = remote.handle(
-        request("tools/call", {"name": "create_from_scad", "arguments": {"source": "cube(10);"}}),
+        request("tools/call", {"name": "create_box", "arguments": {"width": 10.0}}),
         bridge,
     )
     assert answer["result"]["isError"] is True
@@ -273,8 +286,13 @@ def test_an_ordinary_call_still_passes() -> None:
 
 
 @pytest.fixture
-def scripted_recipe_part():
-    """Ein Rezept-Baustein, dessen Schritte ``create_from_scad`` enthalten.
+def scripted_recipe_part(monkeypatch: pytest.MonkeyPatch):
+    """Ein Rezept-Baustein, dessen Schritte eine quelltextführende Op enthalten.
+
+    Welche Operation das ist, sagt :data:`foreign.SCRIPTED_OPS` — und die ist
+    seit dem OpenSCAD-Ausbau leer. Die Fixture setzt sie deshalb auf eine echte
+    Operation: Geprüft wird, dass die Sperre **durch ein Rezept hindurch**
+    sieht, und das hat mit dem Namen der Operation nichts zu tun.
 
     Global registriert, weil beide Sperren den Baustein über den
     Operationsnamen suchen — der Weg, den ein Fernaufruf auch nimmt. Der
@@ -300,12 +318,11 @@ def scripted_recipe_part():
         params=Params,
         fn=build,
         features=("body",),
-        doc="Ein Rezept, dessen Schritte OpenSCAD anwerfen.",
+        doc="Ein Rezept, dessen Schritte ein fremdes Programm anwerfen.",
         source="recipe",
-        recipe_data={
-            "document": {"ops": [{"op": "create_from_scad", "params": {"source": "cube(10);"}}]}
-        },
+        recipe_data={"document": {"ops": [{"op": "create_box", "params": {"width": 10.0}}]}},
     )
+    monkeypatch.setattr(foreign, "SCRIPTED_OPS", frozenset({"create_box"}))
     registry = Registry()
     PARTS.register(spec)
     part_ops.register_one(spec, registry)
@@ -416,14 +433,18 @@ def test_an_ordinary_part_stays_reachable() -> None:
     assert "insert_screw_hole" in listed
 
 
-def test_the_refusal_for_a_question_names_the_right_reason() -> None:
+def test_the_refusal_for_a_question_names_the_right_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """„Sie führt fremden Quelltext aus" stand für beide Sperrgründe und war
     für ``ask_user`` schlicht falsch (Regel 17).
     """
     grund = str(remote.refusal_for("ask_user"))
 
     assert "Quelltext" not in grund
-    assert "Quelltext" in str(remote.refusal_for("create_from_scad"))
+
+    monkeypatch.setattr(foreign, "SCRIPTED_OPS", frozenset({"create_box"}))
+    assert "Quelltext" in str(remote.refusal_for("create_box"))
 
 
 # --- Gesten kommen vom Nutzer, nicht über die Leitung ------------------------------

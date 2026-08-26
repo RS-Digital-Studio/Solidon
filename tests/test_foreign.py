@@ -11,6 +11,8 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
 from app.core.registry import REGISTRY
 from app.core.scene import foreign
 from app.core.types import ChatEntry, Document, Operation, Source
@@ -30,9 +32,23 @@ def test_a_plain_document_says_nothing() -> None:
     assert foreign.findings_for(document) == []
 
 
-def test_scad_in_the_stack_is_reported() -> None:
+def test_a_scripted_step_is_reported(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Schritt, der fremden Quelltext ausführt, wird angesagt.
+
+    **Geprüft an einer Attrappe, und das ist seit dem 26.08.2026 nötig.** Bis
+    dahin stand hier ``create_from_scad`` — die einzige Operation, die je
+    fremden Quelltext ausführte, entfallen mit dem OpenSCAD-Ausbau. Seither ist
+    :data:`foreign.SCRIPTED_OPS` leer, und ein Test mit einem echten Namen
+    prüfte nur noch, dass eine leere Menge nichts enthält.
+
+    Die Attrappe ist eine **echte** Operation mit einer **erfundenen**
+    Zuordnung: So läuft alles dahinter unverändert — Dokument, Auswertung,
+    Bericht — und geprüft wird die Maschinerie und nicht der Bestand. Warum sie
+    überhaupt stehen bleibt, steht bei :data:`foreign.SCRIPTED_OPS`.
+    """
+    monkeypatch.setattr(foreign, "SCRIPTED_OPS", frozenset({"create_box"}))
     document = _document()
-    document.ops.append(Operation(id=1, op="create_from_scad", params={"source": "cube(10);"}))
+    document.ops.append(Operation(id=1, op="create_box", params={"width": 10.0}))
 
     findings = foreign.findings_for(document)
 
@@ -64,9 +80,10 @@ def test_an_embedded_source_is_not_a_warning() -> None:
     assert foreign.findings_for(document) == []
 
 
-def test_both_at_once_are_two_findings() -> None:
+def test_both_at_once_are_two_findings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(foreign, "SCRIPTED_OPS", frozenset({"create_box"}))
     document = _document()
-    document.ops.append(Operation(id=1, op="create_from_scad", params={"source": "cube(10);"}))
+    document.ops.append(Operation(id=1, op="create_box", params={"width": 10.0}))
     document.sources["src_1"] = Source(
         id="src_1", kind="import", path="teil.stl", sha256="", embedded=False
     )
@@ -74,65 +91,109 @@ def test_both_at_once_are_two_findings() -> None:
     assert len(foreign.findings_for(document)) == 2
 
 
-def _ops_that_call_openscad() -> set[str]:
-    """Jede registrierte Operation, deren Rumpf ``openscad.render`` aufruft.
+def _registered_operations() -> dict[str, ast.FunctionDef]:
+    """Jede Funktion unter ``app/``, die einen ``@register_op(name=…)`` trägt.
 
-    Über den Quelltext und nicht über eine gepflegte Liste: eine Liste neben
-    dem Code ist an dem Tag falsch, an dem jemand die zweite solche Operation
-    schreibt — und genau dann fehlt der Warnhinweis.
+    Über den Quelltext und nicht über das Register, weil die Frage darunter
+    dem **Rumpf** gilt: Was eine Operation aufruft, steht nicht im
+    Registereintrag.
     """
     package = Path(app.__file__).parent
-    found: set[str] = set()
+    found: dict[str, ast.FunctionDef] = {}
 
     for path in sorted(package.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.FunctionDef):
                 continue
-            calls_openscad = any(
-                isinstance(inner, ast.Call)
-                and isinstance(inner.func, ast.Attribute)
-                and inner.func.attr == "render"
-                and isinstance(inner.func.value, ast.Name)
-                and inner.func.value.id == "openscad"
-                for inner in ast.walk(node)
-            )
-            if not calls_openscad:
-                continue
             for decorator in node.decorator_list:
                 if not isinstance(decorator, ast.Call):
                     continue
                 for keyword in decorator.keywords:
                     if keyword.arg == "name" and isinstance(keyword.value, ast.Constant):
-                        found.add(str(keyword.value.value))
+                        found[str(keyword.value.value)] = node
     return found
 
 
-def test_every_op_that_runs_openscad_is_named() -> None:
-    """Der Wächter über ``SCRIPTED_OPS``.
+#: Woran man erkennt, dass ein Rumpf ein fremdes Programm startet.
+#:
+#: Eine Heuristik, und sie kennt ihre Grenze: Sie sieht den **direkten** Aufruf
+#: im Rumpf der Operation, nicht den über zwei Helfer hinweg. Genau diese
+#: Grenze hatte der Vorgänger auch — ``create_from_scad`` rief
+#: ``openscad.render()`` unmittelbar. Wer den Wächter verschärfen will,
+#: verfolgt die Aufrufe; das ist ein eigener Bau und keine Zeile hier.
+_STARTS_A_PROGRAM: frozenset[str] = frozenset({"subprocess", "run_guarded", "Popen", "render"})
 
-    Ohne ihn veraltet die Liste still, und eine Datei mit der zweiten
-    quelltextführenden Operation öffnet sich wortlos.
+
+def _operations_that_start_a_program() -> set[str]:
+    """Registrierte Operationen, deren Rumpf nach einem fremden Programm greift."""
+    found: set[str] = set()
+    for name, node in _registered_operations().items():
+        for inner in ast.walk(node):
+            reaches = (isinstance(inner, ast.Name) and inner.id in _STARTS_A_PROGRAM) or (
+                isinstance(inner, ast.Attribute) and inner.attr in _STARTS_A_PROGRAM
+            )
+            if reaches:
+                found.add(name)
+    return found
+
+
+def test_no_operation_runs_a_foreign_program() -> None:
+    """Die Zusage, die den Wächter ersetzt hat (§32).
+
+    **Er stand hier umgekehrt**, und das war richtig, solange es
+    ``create_from_scad`` gab: „Wer OpenSCAD startet, steht in
+    :data:`foreign.SCRIPTED_OPS`." Mit dem OpenSCAD-Ausbau am 26.08.2026 fand
+    er nichts mehr — und weil er seine eigene Grundmenge zusicherte
+    (``assert running``), wurde er zu Recht rot, statt still grün zu bleiben.
+
+    Was an seine Stelle tritt, ist die stärkere Aussage: **keine** registrierte
+    Operation greift nach einem fremden Programm. Eine Projektdatei kann
+    deshalb nichts ausführen — nicht weil es geprüft wird, sondern weil es
+    nichts zu prüfen gibt.
+
+    Die Zusicherung über die Grundmenge bleibt, denn ohne sie prüft ein
+    Verbotstest über eine leere Menge gar nichts: Findet der Leser keine
+    Operationen mehr — umbenanntes Paket, geänderter Dekorator —, fällt er hier
+    auf und nicht in sechs Monaten.
     """
-    running = _ops_that_call_openscad()
+    operations = _registered_operations()
 
-    assert running, "der Wächter selbst muss etwas finden, sonst prüft er nichts"
-    assert running <= foreign.SCRIPTED_OPS, (
-        "diese Operationen starten OpenSCAD und fehlen in foreign.SCRIPTED_OPS:\n"
-        + "\n".join(sorted(running - foreign.SCRIPTED_OPS))
+    assert len(operations) > 50, (
+        f"der Wächter selbst muss etwas finden, sonst prüft er nichts: {len(operations)}"
+    )
+
+    starting = _operations_that_start_a_program()
+    assert not starting, (
+        "diese Operationen greifen nach einem fremden Programm und gehören "
+        "in foreign.SCRIPTED_OPS: " + ", ".join(sorted(starting))
     )
 
 
-def test_the_named_ops_exist() -> None:
-    """Keine Karteileiche: was in der Liste steht, gibt es auch."""
+def test_the_list_is_empty_and_that_is_the_promise() -> None:
+    """Kein Name in der Liste, und jeder, der dazukommt, muss es auch geben.
+
+    Zwei Aussagen in einer: Heute ist sie leer — das ist die Zusage aus §32 in
+    ihrer stärksten Form. Und wenn sie es einmal nicht mehr ist, steht darin
+    ein Name, den das Register kennt; eine Karteileiche wäre eine Sperre, die
+    nie greift.
+    """
     known = {spec.name for spec in REGISTRY.all()}
+
+    assert known, "ohne geladenes Register prüft der Vergleich darunter nichts"
     assert known >= foreign.SCRIPTED_OPS
+    assert not foreign.SCRIPTED_OPS, (
+        "Wer hier einen Namen einträgt, hat eine Operation gebaut, die fremden "
+        "Quelltext ausführt — dann gehört dieser Test angepasst und §32 gelesen."
+    )
 
 
 # --- Und der Hinweis kommt beim Nutzer an -----------------------------------------
 
 
-def test_the_report_learns_about_scripted_content(qt_app: object) -> None:
+def test_the_report_learns_about_scripted_content(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Der Befund nützt nichts, solange er im Kern bleibt (§32).
 
     Geprüft am Auswertungs-Arbeiter, weil dort die drei Prüfungen beim Öffnen
@@ -140,10 +201,9 @@ def test_the_report_learns_about_scripted_content(qt_app: object) -> None:
     """
     from app.ui.session import Session, _EvaluationWorker
 
+    monkeypatch.setattr(foreign, "SCRIPTED_OPS", frozenset({"create_box"}))
     session = Session()
-    session.project.document.ops.append(
-        Operation(id=1, op="create_from_scad", params={"source": "cube(10);"})
-    )
+    session.project.document.ops.append(Operation(id=1, op="create_box", params={"width": 10.0}))
     session.pending_foreign_check = True
 
     received: list[object] = []
@@ -163,14 +223,15 @@ def test_the_report_learns_about_scripted_content(qt_app: object) -> None:
     assert "project.scripted_source" in codes
 
 
-def test_the_hint_comes_once_and_not_at_every_run(qt_app: object) -> None:
+def test_the_hint_comes_once_and_not_at_every_run(
+    qt_app: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Sonst steht die Zeile bei jeder Auswertung da, und niemand liest sie."""
     from app.ui.session import Session, _EvaluationWorker
 
+    monkeypatch.setattr(foreign, "SCRIPTED_OPS", frozenset({"create_box"}))
     session = Session()
-    session.project.document.ops.append(
-        Operation(id=1, op="create_from_scad", params={"source": "cube(10);"})
-    )
+    session.project.document.ops.append(Operation(id=1, op="create_box", params={"width": 10.0}))
     session.pending_foreign_check = True
 
     received: list[object] = []
