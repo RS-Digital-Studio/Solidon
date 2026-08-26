@@ -175,6 +175,11 @@ class PaintParams(BaseParams):
     at_feature: str = param(
         title=_("Fläche"),
         default="",
+        # Die Art, nicht nur der Name: ``kind="feature"`` ist die eine Frage,
+        # nach der Dialog-Combo, Klick-Vorbelegung (``values_for``, §21.3)
+        # und der Cache-Schlüssel der Auswertung dieses Feld erkennen — und
+        # ``test_a_feature_parameter_is_declared_as_one`` hält sie fest.
+        kind="feature",
         doc=_(
             "Die erkannte Fläche, die vollständig gefärbt wird — gesetzt vom "
             "Klick auf das Merkmal. Leer heißt: um den Punkt malen."
