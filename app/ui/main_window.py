@@ -176,6 +176,7 @@ from app.ui.dialogs import (
     ParameterDialog,
     confirm_discard,
     confirm_unsaved,
+    damaged_line,
     open_website,
     show_details,
     show_error,
@@ -2811,7 +2812,14 @@ class MainWindow(QMainWindow):
         """
         state = activation.state()
         message = ""
-        if state.in_demo and state.days_left > 0:
+        if state.damaged:
+            # Demo und Testlauf nennen sich hier selbst — ausgerechnet der
+            # Zustand, der alles sperrt, schwieg: Der Kunde sah eine
+            # Oberfläche wie immer und erfuhr den Grund erst am ersten
+            # Änderungsversuch. Derselbe Satz wie im Freischaltdialog, aus
+            # derselben Quelle — zwei Formulierungen liefen auseinander.
+            message = damaged_line()
+        elif state.in_demo and state.days_left > 0:
             message = demo_line(state)
         elif state.in_trial and state.days_left < 3:
             message = tr("Testzeitraum: noch {days} Tage — Hilfe → Solidon freischalten …").format(

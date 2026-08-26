@@ -5906,6 +5906,28 @@ def test_the_last_trial_days_show_up_once_in_the_status_bar(
     assert "freischalten" in window.trial_line.text()
 
 
+def test_a_damaged_installation_names_itself_in_the_status_bar(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Zustand, der alles sperrt, war der einzige ohne Zeile.
+
+    Demo und Testlauf nennen sich in der Statusleiste selbst; eine
+    beschädigte Installation (H4) schwieg dort — der Kunde sah eine
+    Oberfläche wie immer und erfuhr den Grund erst am ersten
+    Änderungsversuch. Derselbe Satz wie im Freischaltdialog, aus derselben
+    Quelle (``damaged_line``), denn zwei Formulierungen derselben Auskunft
+    laufen auseinander (Bedienungs-Vollmacht, 26.08.2026).
+    """
+    from app.core import activation
+    from app.ui.dialogs import damaged_line
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(damaged=True))
+    window = MainWindow(Session(), UiSettings())
+
+    assert window.trial_line.text() == damaged_line(), "die Zeile nennt den Zustand"
+    assert window.trial_line.isVisibleTo(window), "und sie steht sichtbar da"
+
+
 def test_a_comfortable_trial_rest_stays_quiet(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
 ) -> None:
