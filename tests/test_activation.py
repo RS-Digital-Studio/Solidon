@@ -395,6 +395,27 @@ def test_the_demo_clock_does_not_run_backwards(own_config: Path, demo: date) -> 
     assert store.days_left(demo - timedelta(days=4)) == 5, "vorwärts zählt der Kalender"
 
 
+def test_a_future_clock_at_first_start_does_not_burn_the_demo(own_config: Path, demo: date) -> None:
+    """Eine leere BIOS-Batterie beim allerersten Start darf die Demo nicht
+    dauerhaft nehmen.
+
+    Anders als der Testlauf zählt die Demo gegen einen festen Kalendertag: ein
+    ``last_seen`` in der Zukunft schob ``effective`` über ``DEMO_UNTIL`` und
+    ließ die Frist auch nach dem Richtigstellen der Uhr für immer bei null
+    (Gesamtreview Infra 1, die Vorwärts-Richtung zu L-1). Weil schon der erste
+    Start das Datum in der Zukunft hatte, war ``first_run`` selbst verdächtig,
+    und die Horizontprüfung, die von ihm ausgeht, konnte es nicht fangen — der
+    Deckel gegen ``DEMO_UNTIL`` schon.
+    """
+    # Erster Start mit einer Uhr weit in der Zukunft — der Marker entsteht hier.
+    assert store.days_left(date(2099, 1, 1)) == 0, "mit falscher Uhr abgelaufen — richtig"
+    # Uhr wieder richtig: die Demo findet auf die echte Zeit zurück, nicht auf
+    # den zuletzt gesehenen Zukunftstag.
+    assert store.days_left(demo - timedelta(days=9)) == 10
+    # Und sie zählt danach normal weiter, statt am geretteten Tag zu kleben.
+    assert store.days_left(demo - timedelta(days=4)) == 5
+
+
 def test_deleting_the_marker_and_turning_the_clock_back_does_not_extend_the_demo(
     own_config: Path, demo: date
 ) -> None:

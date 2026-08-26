@@ -12,6 +12,7 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 
 import pytest
 
@@ -173,6 +174,75 @@ def test_a_server_that_says_no_is_not_a_success() -> None:
         support.send(Ticket(message="x"), "https://example.invalid/support", sender)
 
     assert "zu groß" in str(caught.value.values.get("reason"))
+
+
+def test_the_rate_limit_does_not_invite_an_immediate_retry() -> None:
+    """429 heißt: die (oft am NAT geteilte) Ratengrenze ist erreicht.
+
+    Ein sofortiger zweiter Versuch verlängert die Sperre — also darf kein „Noch
+    einmal senden" vorn stehen, und der Fall trägt seinen Status, damit sich das
+    Muster später auch messen lässt (Gesamtreview: jede Absage kam als „nicht
+    erreichbar" an).
+    """
+
+    def sender(url: str, content_type: str, body: bytes) -> dict[str, Any]:
+        raise HTTPError(url, 429, "Too Many Requests", {}, None)  # type: ignore[arg-type]
+
+    with pytest.raises(support.SendFailed) as caught:
+        support.send(Ticket(message="x"), "https://example.invalid/support", sender)
+
+    offered = {action.id for action in caught.value.suggestions}
+    assert "retry_send" not in offered, "429: kein Knopf, der sofort noch einmal sendet"
+    assert {"send_by_mail", "save_report"} <= offered, "die Wege ohne diese Leitung bleiben"
+    assert caught.value.values.get("status") == 429
+
+
+def test_a_server_error_is_not_reported_as_unreachable() -> None:
+    """5xx heißt: der Server hat geantwortet, nur mit einem Problem. „Nicht
+    erreichbar" wäre falsch — erreichbar war er."""
+
+    def sender(url: str, content_type: str, body: bytes) -> dict[str, Any]:
+        raise HTTPError(url, 503, "Service Unavailable", {}, None)  # type: ignore[arg-type]
+
+    with pytest.raises(support.SendFailed) as caught:
+        support.send(Ticket(message="x"), "https://example.invalid/support", sender)
+
+    assert caught.value.values.get("status") == 503
+    assert "erreichbar" not in str(caught.value.detail), "der Server war erreichbar"
+
+
+def test_a_refused_request_is_not_reported_as_unreachable() -> None:
+    """Auch 403 ist eine Antwort, keine tote Leitung: die Gegenstelle hat die
+    Sendung abgelehnt, nicht geschwiegen — und ein Wiederholen ändert daran
+    nichts."""
+
+    def sender(url: str, content_type: str, body: bytes) -> dict[str, Any]:
+        raise HTTPError(url, 403, "Forbidden", {}, None)  # type: ignore[arg-type]
+
+    with pytest.raises(support.SendFailed) as caught:
+        support.send(Ticket(message="x"), "https://example.invalid/support", sender)
+
+    offered = {action.id for action in caught.value.suggestions}
+    assert "retry_send" not in offered, "403 ändert sich durch Wiederholen nicht"
+    assert caught.value.values.get("status") == 403
+    assert "erreichbar" not in str(caught.value.detail)
+
+
+def test_a_genuine_connection_failure_still_says_unreachable() -> None:
+    """Ohne HTTP-Status hat die Gegenstelle nicht geantwortet — Netz, DNS,
+    Zeitlimit. Das ist der Fall, für den „nicht erreichbar" richtig ist und der
+    Wiederholungsknopf sinnvoll (die Regressionsprobe zum Fund oben)."""
+
+    def sender(url: str, content_type: str, body: bytes) -> dict[str, Any]:
+        raise OSError("Name or service not known")
+
+    with pytest.raises(support.SendFailed) as caught:
+        support.send(Ticket(message="x"), "https://example.invalid/support", sender)
+
+    offered = {action.id for action in caught.value.suggestions}
+    assert "status" not in caught.value.values
+    assert "erreichbar" in str(caught.value.detail)
+    assert "retry_send" in offered
 
 
 def test_a_header_field_carries_no_line_breaks() -> None:

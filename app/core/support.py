@@ -242,6 +242,61 @@ def check(ticket: Ticket) -> None:
         )
 
 
+def _failure_for(problem: Exception) -> SendFailed:
+    """Übersetzt einen gescheiterten Versand in eine Absage mit dem Vorschlag,
+    der zum Fall passt (Regel 17).
+
+    Die Frage, die den Vorschlag trägt, ist: **hat die Gegenstelle geantwortet
+    oder nicht?** Ein HTTP-Status heißt geantwortet — dann ist „nicht
+    erreichbar" falsch, denn erreichbar war der Server, und bei der Ratengrenze
+    ist „sofort noch einmal" sogar schädlich, weil ein zweiter Versuch die
+    Sperre verlängert. Ohne Status hat niemand geantwortet (Netz, DNS,
+    Zeitlimit), und dafür ist „nicht erreichbar" der richtige Satz.
+
+    Gelesen wird der Status über ``code`` — das trägt ``urllib.error.HTTPError``,
+    ein Verbindungsfehler nicht. So bleibt der Versandweg austauschbar: geprüft
+    wird eine Eigenschaft der Ausnahme, nicht ihr Typ.
+    """
+    reason = str(problem)[:200]
+    code = getattr(problem, "code", None)
+    if code == 429:
+        # Ratengrenze, oft die des gemeinsamen Anschlusses (NAT): warten, nicht
+        # drängeln. Kein sofortiger Wiederholungsknopf — der Weg über die eigene
+        # Mail umgeht die Grenze ganz und steht deshalb vorn.
+        return SendFailed(
+            detail=_(
+                "Die Gegenstelle nimmt gerade zu viele Anfragen an. "
+                "Bitte versuchen Sie es später noch einmal."
+            ),
+            suggestions=(SEND_BY_MAIL, SAVE_REPORT, CANCEL),
+            values={"reason": reason, "status": code},
+        )
+    if isinstance(code, int) and 500 <= code < 600:
+        # Der Server hat ein Problem, nicht die Leitung. Ein späterer Versuch
+        # kann gelingen, also bleibt der Wiederholungsweg (Vorgabe) — nur der
+        # Satz sagt jetzt, dass es am Dienst liegt.
+        return SendFailed(
+            detail=_(
+                "Der Dienst hat gerade ein Problem. Bitte versuchen Sie es später noch einmal."
+            ),
+            values={"reason": reason, "status": code},
+        )
+    if isinstance(code, int):
+        # Eine andere Absage der Gegenstelle (etwa 403): sie hat geantwortet,
+        # die Sendung aber nicht angenommen. Ein sofortiger zweiter Versuch
+        # ändert daran nichts, also steht er nicht vorn.
+        return SendFailed(
+            detail=_("Die Gegenstelle hat die Sendung abgelehnt."),
+            suggestions=(SEND_BY_MAIL, SAVE_REPORT, CANCEL),
+            values={"reason": reason, "status": code},
+        )
+    # Kein Status: die Gegenstelle hat nicht geantwortet — Netz, DNS, Zeitlimit.
+    return SendFailed(
+        detail=_("Die Gegenstelle war nicht erreichbar."),
+        values={"reason": reason},
+    )
+
+
 def send(ticket: Ticket, url: str = SUPPORT_URL, sender: Sender | None = None) -> Receipt:
     """Schickt die Sendung ab und gibt zurück, was der Server dazu sagt.
 
@@ -261,15 +316,12 @@ def send(ticket: Ticket, url: str = SUPPORT_URL, sender: Sender | None = None) -
         answer = (sender or _post)(url, content_type, body)
     except AppError:
         raise
-    except Exception as problem:  # ein Netz scheitert auf viele Arten
+    except Exception as problem:  # ein Netz oder ein Server scheitert auf viele Arten
         _log.warning("support ticket did not go out: %s", problem)
         # Der Grund steht in ``values`` und nicht im Satz: Ein ``{reason}`` im
         # Text eines Kernfehlers bleibt stehen, wie es dasteht — der Kern
         # formatiert nichts, das erst die Anzeige auflöst.
-        raise SendFailed(
-            detail=_("Die Gegenstelle war nicht erreichbar."),
-            values={"reason": str(problem)[:200]},
-        ) from problem
+        raise _failure_for(problem) from problem
 
     if not answer.get("ok"):
         refusal = str(answer.get("error") or "").strip()[:200]

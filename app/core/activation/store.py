@@ -17,7 +17,11 @@ Eine zurückgestellte Systemuhr verlängert trotzdem nichts: gespeichert wird
 auch der höchste je gesehene Tag, und die Frist läuft nie rückwärts. Ein Tag
 weit jenseits des ersten Starts wird dabei verworfen und nicht festgeschrieben
 — sonst nähme ein einziger Start mit falsch gestellter Uhr den Testlauf
-dauerhaft weg, auch nachdem die Uhr wieder stimmt.
+dauerhaft weg, auch nachdem die Uhr wieder stimmt. In der Demo ist der Maßstab
+dafür :data:`DEMO_UNTIL` und nicht der erste Start: ein gespeicherter Tag
+jenseits des Demo-Endes kann keine echte Zeit sein — er wird auf die echte Uhr
+zurückgenommen, weil sonst schon der allererste Start mit einer Uhr in der
+Zukunft (leere BIOS-Batterie) die Demo dauerhaft beendete.
 
 **Und die beiden Zugeständnisse gelten einzeln, nicht zusammen.** Wer den
 Marker löscht, fängt in der Verkaufsversion neu an — das steht oben und bleibt
@@ -189,6 +193,21 @@ def days_left(today: date | None = None) -> int:
         _write_trial(effective, effective)
     else:
         first_run, last_seen = stored
+        # Ein gespeicherter Tag jenseits des Demo-Endes kann keine verstrichene
+        # Zeit innerhalb der Demo sein — die Demo läuft nur bis DEMO_UNTIL. Er
+        # stammt aus einer in die Zukunft gestellten Uhr (leere BIOS-Batterie)
+        # und wird auf die echte Zeit zurückgenommen, statt die Frist dauerhaft
+        # zu beenden (Gesamtreview Infra 1). Ohne diesen Deckel nahm ein
+        # einziger Start mit einer Uhr auf 2099 die Demo für immer weg: Der
+        # höchste gesehene Tag lag dann jenseits von DEMO_UNTIL, und weil die
+        # Frist nie rückwärts läuft, blieb sie auch nach dem Richtigstellen der
+        # Uhr bei null. Der Deckel liegt enger als die Horizontprüfung darunter
+        # und fängt auch den Fall, dass schon der erste Start in der Zukunft lag
+        # — dann ist first_run selbst verdächtig, und die von ihm ausgehende
+        # Horizontprüfung greift nicht.
+        if last_seen > DEMO_UNTIL:
+            _log.warning("demo marker holds a date past the deadline, ignoring it: %s", last_seen)
+            last_seen = now
         if last_seen > first_run + timedelta(days=CLOCK_HORIZON_DAYS):
             _log.warning("trial marker holds an implausible date, ignoring it: %s", last_seen)
             last_seen = max(now, first_run)
