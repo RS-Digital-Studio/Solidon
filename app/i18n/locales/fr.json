@@ -993,6 +993,7 @@
   "Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen.": "Ce slicer a besoin d'un profil d'imprimante — en choisir un.",
   "Dieser Slicer braucht kein Grundprofil — Solidon schreibt eine vollständige Konfiguration.": "Ce slicer n'a pas besoin de profil de base — Solidon écrit une configuration complète.",
   "Dieser Slicer braucht kein Profil — Solidon beschreibt die Maschine selbst.": "Ce slicer n'a besoin d'aucun profil — Solidon décrit la machine lui-même.",
+  "Dieser Slicer nimmt nur einen Satz Filamentwerte. Was für die weiteren Filamente eingestellt ist, wird nicht gedruckt — dafür braucht es einen Slicer der Orca-Familie, etwa OrcaSlicer oder Bambu Studio.": "Ce slicer n'accepte qu'un seul jeu de valeurs de filament. Ce qui est réglé pour les autres filaments ne sera pas imprimé — il faut pour cela un slicer de la famille Orca, par exemple OrcaSlicer ou Bambu Studio.",
   "Dieser Stand ist festgeschrieben — die Züge stehen als Beleg da, geändert werden kann an ihnen nichts mehr.": "Cet état est figé — les traits restent comme trace, plus rien n’y est modifiable.",
   "Dieser Verweis zeigt ins Leere:": "Ce renvoi pointe dans le vide :",
   "Dieser Vorschlag legt bereits etwas an. Zurücknehmen gehört in einen eigenen Vorschlag — erst diesen abschließen, dann zurücknehmen.": "Cette proposition crée déjà quelque chose. Annuler relève d'une proposition à part — terminer d'abord celle-ci, puis annuler.",

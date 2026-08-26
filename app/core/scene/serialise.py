@@ -38,6 +38,7 @@ from app.core.types import (
     Report,
     RetractionSettings,
     ShellSettings,
+    SlotOverride,
     SolverInfo,
     Source,
     SourceOrigin,
@@ -515,6 +516,50 @@ _SETTING_GROUPS: Final[dict[str, type]] = {
 }
 
 
+#: Die Gruppen, die ein Slot übersteuern darf — was an der Spule hängt.
+#: Geometrie steht nicht dabei: Wandstärke und Schichthöhe sind Eigenschaften
+#: des Teils, nicht des Materials (§20).
+_OVERRIDE_GROUPS = {
+    "temperature": TemperatureSettings,
+    "cooling": CoolingSettings,
+    "retraction": RetractionSettings,
+    "filament": FilamentSettings,
+}
+
+
+def _override_to_data(override: SlotOverride | None) -> dict[str, Any] | None:
+    """Ein Slot-Übersteuerer als Schlüssel und Werte, oder ``None``."""
+    if override is None or override.empty:
+        return None
+    data: dict[str, Any] = {}
+    for group in _OVERRIDE_GROUPS:
+        section = getattr(override, group)
+        if section is not None:
+            data[group] = {entry.name: getattr(section, entry.name) for entry in fields(section)}
+    return data
+
+
+def _override_from_data(data: Any) -> SlotOverride | None:
+    """Zurück aus der Projektdatei — unbekannte Schlüssel fallen weg.
+
+    Dieselbe Nachsicht wie bei den Einstellungen selbst: Eine Datei aus einer
+    späteren Fassung kann ein Feld tragen, das es hier noch nicht gibt, und
+    das Projekt öffnet trotzdem.
+    """
+    if not isinstance(data, dict):
+        return None
+    groups: dict[str, Any] = {}
+    for group, klass in _OVERRIDE_GROUPS.items():
+        stored = data.get(group)
+        if not isinstance(stored, dict):
+            continue
+        known = {entry.name for entry in fields(klass)}
+        groups[group] = klass(**{key: value for key, value in stored.items() if key in known})
+    if not groups:
+        return None
+    return SlotOverride(**groups)
+
+
 def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:
     """Die Druckeinstellungen als Schlüssel und Werte (§29)."""
     data: dict[str, Any] = {
@@ -524,6 +569,11 @@ def print_settings_to_data(settings: PrintSettings) -> dict[str, Any]:
         # Die Zuordnung Slot zu Filament (§20). Als Liste, weil JSON kein
         # Tupel kennt — beim Lesen wird wieder eines daraus.
         "slot_profiles": list(settings.slot_profiles),
+        # Was je Slot anders gilt (§20). Geschrieben werden nur die
+        # gesetzten Gruppen: Ein Slot ohne eigene Werte steht als
+        # ``null`` da und nicht als vier leere Objekte, die vortäuschen,
+        # dass jemand etwas eingestellt hätte.
+        "slot_overrides": [_override_to_data(one) for one in settings.slot_overrides],
     }
     for group in _SETTING_GROUPS:
         section = getattr(settings, group)
@@ -548,6 +598,7 @@ def print_settings_from_data(data: dict[str, Any]) -> PrintSettings:
         title=str(data.get("title", "")),
         quality=data.get("quality", "standard"),
         slot_profiles=tuple(str(one) for one in data.get("slot_profiles", ())),
+        slot_overrides=tuple(_override_from_data(one) for one in data.get("slot_overrides", ())),
         **groups,
     )
 

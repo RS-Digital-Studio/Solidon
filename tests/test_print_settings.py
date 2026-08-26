@@ -992,6 +992,121 @@ def test_the_plate_choice_appears_and_narrows_what_gets_sliced(qt_app: object) -
     assert sorted(slot.name for slot in dialog._plate_slots()) == ["Rot", "Weiss"]
 
 
+def test_each_slot_can_carry_its_own_spool_settings(tmp_path: Path) -> None:
+    """Vier Spulen sind nicht vier Farben desselben Materials (§20).
+
+    Ein Schriftzug in PLA auf einem Gehäuse aus PETG fährt 210 Grad statt 250.
+    Solange alle Slots die Werte des Projektmaterials bekamen, verkohlte
+    entweder die Schrift oder das Gehäuse hielt nicht — und zu sehen war es
+    erst am fertigen Druck.
+
+    Geprüft wird an der Datei, die der Slicer lädt, nicht am Modell: Ein
+    Übersteuerer, der die Übergabe nicht erreicht, ist folgenlos.
+    """
+    from dataclasses import replace
+
+    from app.core.types import MaterialSlot, SlotOverride
+
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    assert settings.temperature.nozzle == 240, "das Projekt fährt PETG"
+
+    schrift = replace(settings.temperature, nozzle=210, nozzle_first_layer=215, bed=60)
+    settings = replace(settings, slot_overrides=(None, SlotOverride(temperature=schrift)))
+    slots = (
+        MaterialSlot(index=0, name="Gehäuse", colour=(0.1, 0.1, 0.1)),
+        MaterialSlot(index=1, name="Schrift", colour=(1.0, 1.0, 1.0)),
+    )
+    setup = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+
+    written = handover.write_config(settings, profile, setup, tmp_path, slots=slots)
+    assert len(written.filaments) == 2, "je Slot eine Datei"
+
+    gehaeuse = json.loads(written.filaments[0].read_text(encoding="utf-8"))
+    schriftzug = json.loads(written.filaments[1].read_text(encoding="utf-8"))
+
+    # Der Slot ohne eigene Werte bleibt beim Projekt …
+    assert gehaeuse["nozzle_temperature"] == ["240"]
+    assert gehaeuse["hot_plate_temp"] == ["80"]
+    # … der mit eigenen fährt seine.
+    assert schriftzug["nozzle_temperature"] == ["210"]
+    assert schriftzug["nozzle_temperature_initial_layer"] == ["215"]
+    assert schriftzug["hot_plate_temp"] == ["60"]
+
+
+def test_a_slicer_that_takes_one_filament_says_so() -> None:
+    """Was ein Slicer nicht entgegennimmt, wird gesagt — nicht verschwiegen.
+
+    Nur die Orca-Familie lädt ein Filamentprofil je Slot. PrusaSlicer bekommt
+    eine ``.ini`` und ``CuraEngine`` einen Satz Schlüssel; die Werte der
+    zweiten Spule fallen dort weg. Still wäre das der schlechteste Fall: Der
+    Kunde sieht seine Einstellung im Dialog stehen und bekommt einen Druck,
+    der sie nicht verwendet.
+    """
+    from dataclasses import replace
+
+    from app.core.types import SlotOverride
+
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
+    eigen = replace(settings.temperature, nozzle=210)
+    mit = replace(settings, slot_overrides=(None, SlotOverride(temperature=eigen)))
+
+    for flavour in ("prusa", "cura"):
+        setup = handover.SlicerSetup(executable=Path("slicer.exe"), flavour=flavour)
+        findings = handover.unreachable_overrides(mit, setup)
+        assert len(findings) == 1, f"{flavour}: der Kunde erfährt es"
+        assert findings[0].severity == "warning", "kein Fehler — der Slicer kann nicht mehr"
+        # Regel 17: nie mit „fehlgeschlagen" enden, sondern mit einem Weg.
+        assert "Orca" in str(findings[0].message), "und wo er es bekäme"
+
+    # Die Orca-Familie nimmt sie an, also gibt es nichts zu melden.
+    orca = handover.SlicerSetup(executable=Path("orca-slicer.exe"), flavour="orca")
+    assert handover.unreachable_overrides(mit, orca) == []
+
+    # Und ohne eigene Werte schweigt auch Prusa — eine Warnung ohne Anlass
+    # ist schlimmer als keine.
+    prusa = handover.SlicerSetup(executable=Path("slicer.exe"), flavour="prusa")
+    assert handover.unreachable_overrides(settings, prusa) == []
+    leer = replace(settings, slot_overrides=(None, SlotOverride()))
+    assert handover.unreachable_overrides(leer, prusa) == []
+
+
+def test_a_slot_override_survives_the_project_file(tmp_path: Path) -> None:
+    """Was der Kunde je Spule einstellt, steht beim nächsten Öffnen noch da.
+
+    Ohne diesen Weg wäre die Übersteuerung eine Sitzungseinstellung: einmal
+    gesetzt, beim Speichern verloren, und der zweite Druck desselben Projekts
+    liefe wieder mit den Werten des Projektmaterials.
+    """
+    from dataclasses import replace
+
+    from app.core.scene import serialise
+    from app.core.types import SlotOverride
+
+    settings = print_settings.resolve(profiles.make_profile("centauri-carbon-2", "petg"))
+    eigen = replace(settings.temperature, nozzle=210)
+    settings = replace(settings, slot_overrides=(None, SlotOverride(temperature=eigen)))
+
+    # Durch JSON hindurch, nicht nur durch die beiden Funktionen: Ein Wert,
+    # den ``json.dumps`` nicht schreiben kann, fiele sonst nicht auf.
+    zurueck = serialise.print_settings_from_data(
+        json.loads(json.dumps(serialise.print_settings_to_data(settings)))
+    )
+    assert zurueck.slot_overrides == settings.slot_overrides
+
+    # Ein Slot ohne eigene Werte steht als ``null`` da und nicht als vier
+    # leere Gruppen, die vortäuschen, jemand hätte etwas eingestellt.
+    daten = serialise.print_settings_to_data(settings)
+    assert daten["slot_overrides"][0] is None
+    assert set(daten["slot_overrides"][1]) == {"temperature"}
+
+    # Und eine Datei ohne das Feld öffnet weiterhin — der Normalfall bei
+    # jedem Projekt, das vor dieser Fassung entstanden ist.
+    alt = serialise.print_settings_to_data(settings)
+    del alt["slot_overrides"]
+    assert serialise.print_settings_from_data(alt).slot_overrides == ()
+
+
 def test_the_orca_machine_profile_is_written_out_not_referenced(tmp_path: Path) -> None:
     """Solidon schreibt das Maschinenprofil aus, statt auf eines zu verweisen.
 

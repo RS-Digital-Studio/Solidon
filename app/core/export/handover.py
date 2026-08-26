@@ -56,6 +56,7 @@ from app.core.types import (
     PrintSettings,
     Profile,
     SettingAdvice,
+    SlotOverride,
 )
 from app.i18n import _
 
@@ -641,6 +642,79 @@ class SlicerConfig:
         return self.filaments[0] if self.filaments else None
 
 
+def settings_for_slot(settings: PrintSettings, override: SlotOverride | None) -> PrintSettings:
+    """Die Einstellungen, mit denen dieser eine Slot fährt (§20, §29).
+
+    Vier Spulen sind nicht vier Farben desselben Materials: Ein Schriftzug in
+    PLA auf einem Gehäuse aus PETG fährt 210 Grad statt 250. Ohne diese
+    Auflösung bekamen alle Slots die Werte des Projektmaterials, und die
+    zweite Spule fuhr mit den Temperaturen der ersten.
+
+    Übersteuert wird **gruppenweise**: Was der Slot nicht setzt, kommt aus dem
+    Projekt. Ein leerer Übersteuerer gibt die Einstellungen unverändert
+    zurück — dasselbe Objekt, nicht eine gleiche Kopie, damit der häufige Fall
+    nichts kostet.
+    """
+    if override is None or override.empty:
+        return settings
+    return replace(
+        settings,
+        temperature=override.temperature or settings.temperature,
+        cooling=override.cooling or settings.cooling,
+        retraction=override.retraction or settings.retraction,
+        filament=override.filament or settings.filament,
+    )
+
+
+def unreachable_overrides(settings: PrintSettings, setup: SlicerSetup) -> list[Finding]:
+    """Meldet Werte je Spule, die dieser Slicer nicht entgegennimmt (§20, §29).
+
+    Nur die Orca-Familie bekommt ein Filamentprofil **je Slot**
+    (``--load-filaments`` nimmt mehrere). PrusaSlicer bekommt eine ``.ini``
+    und ``CuraEngine`` einen Satz Schlüssel — beide kennen genau ein Filament,
+    und was für den zweiten Slot eingestellt wurde, fällt weg.
+
+    Es fällt still weg, und das ist der Grund für diese Meldung: Der Kunde
+    hat die Temperatur seiner zweiten Spule gesetzt, sieht sie im Dialog
+    stehen und bekäme einen Druck, der sie nicht verwendet. Ein Fehler ist es
+    nicht — der Slicer kann nicht mehr —, aber eine Auskunft schon
+    (Regel 17: mit Handlungsvorschlag, nicht mit „fehlgeschlagen").
+    """
+    if setup.flavour == "orca":
+        return []
+    affected = [
+        position
+        for position, entry in enumerate(settings.slot_overrides)
+        if entry is not None and not entry.empty
+    ]
+    if not affected:
+        return []
+    return [
+        Finding(
+            code="slicer.overrides_unreachable",
+            severity="warning",
+            message=_(
+                "Dieser Slicer nimmt nur einen Satz Filamentwerte. Was für die "
+                "weiteren Filamente eingestellt ist, wird nicht gedruckt — dafür "
+                "braucht es einen Slicer der Orca-Familie, etwa OrcaSlicer oder "
+                "Bambu Studio."
+            ),
+            values={"slots": len(affected), "slicer": setup.name},
+        )
+    ]
+
+
+def override_for(settings: PrintSettings, position: int) -> SlotOverride | None:
+    """Der Übersteuerer dieses Slots, wenn es einen gibt.
+
+    Kürzer als die Slotliste zu sein ist der Normalfall — ein einfarbiges Teil
+    hat gar keine Einträge.
+    """
+    if position < len(settings.slot_overrides):
+        return settings.slot_overrides[position]
+    return None
+
+
 def with_slot_profiles(
     slots: Sequence[MaterialSlot], chosen: Sequence[str]
 ) -> tuple[MaterialSlot, ...]:
@@ -711,10 +785,17 @@ def write_config(
         written: list[Path] = []
         for index, slot in enumerate(slots or (MaterialSlot(index=0, name=""),)):
             own = replace(setup, base_filament=slot.material) if slot.material else setup
+            # Je Slot seine eigenen Werte: Temperaturen, Kühlung,
+            # Rückzug und Materialkennwerte dürfen sich unterscheiden,
+            # denn sie hängen an der Spule. Was der Slot nicht setzt,
+            # kommt aus dem Projekt — deshalb wird die Aufteilung hier
+            # noch einmal gerechnet und nicht die von oben genommen.
+            mine = settings_for_slot(settings, override_for(settings, index))
+            part = split if mine is settings else by_section(mine, setup.flavour)
             path = directory / f"solidon_filament_{index}.json"
             path.write_text(
                 json.dumps(
-                    _orca_filament(split.get("filament", {}), settings, profile, own, slot),
+                    _orca_filament(part.get("filament", {}), mine, profile, own, slot),
                     indent=2,
                     ensure_ascii=False,
                 ),
@@ -1742,6 +1823,7 @@ def slice_model(
     findings = [
         *profile_differences(settings, setup),
         *unknown_keys(settings, profile, setup),
+        *unreachable_overrides(settings, setup),
         *ignored,
         *([beyond] if beyond is not None else []),
         *gcode.findings_for(metrics),

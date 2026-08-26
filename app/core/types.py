@@ -645,6 +645,43 @@ class FilamentSettings:
 
 
 @dataclass(frozen=True, slots=True)
+class SlotOverride:
+    """Was für einen Materialslot anders gilt als für den Rest (§20, §29).
+
+    Vier Spulen bedeuten nicht vier Farben desselben Materials: Ein Schriftzug
+    in PLA auf einem Gehäuse aus PETG fährt 210 Grad statt 250, und wer beide
+    mit einem Satz Werte druckt, bekommt entweder eine verkohlte Schrift oder
+    ein Gehäuse, das nicht hält.
+
+    **Übersteuerbar ist, was an der Spule hängt** — Temperaturen, Kühlung,
+    Rückzug, Materialkennwerte. Geometrie steht ausdrücklich nicht hier:
+    Wandstärke und Schichthöhe sind Eigenschaften des *Teils*, und ein Feld,
+    das beides vermischte, machte aus einem zweifarbigen Teil zwei
+    verschiedene Teile (Entscheidung Robert, 26.08.2026).
+
+    **Gruppenweise, nicht feldweise.** Wer die Düsentemperatur ändern will,
+    setzt die ganze ``temperature``-Gruppe — vorbelegt mit den Projektwerten,
+    ein Wert anders. Das ist gröber als einzelne Felder und dafür ehrlich:
+    ``None`` heißt „gilt wie im Projekt", und diese Frage muss die Oberfläche
+    beantworten können, ohne zwanzig Häkchen zu führen.
+
+    Die Reihenfolge der Einträge in :attr:`PrintSettings.slot_overrides` ist
+    die der Slots und damit die Extruderbelegung — dieselbe Regel wie bei
+    :attr:`PrintSettings.slot_profiles` nebenan.
+    """
+
+    temperature: TemperatureSettings | None = None
+    cooling: CoolingSettings | None = None
+    retraction: RetractionSettings | None = None
+    filament: FilamentSettings | None = None
+
+    @property
+    def empty(self) -> bool:
+        """Ob dieser Slot überhaupt etwas übersteuert."""
+        return not any((self.temperature, self.cooling, self.retraction, self.filament))
+
+
+@dataclass(frozen=True, slots=True)
 class PrintSettings:
     """Alle Druckeinstellungen an einer Stelle (§29).
 
@@ -666,6 +703,18 @@ class PrintSettings:
     adhesion: AdhesionSettings = field(default_factory=AdhesionSettings)
     retraction: RetractionSettings = field(default_factory=RetractionSettings)
     filament: FilamentSettings = field(default_factory=FilamentSettings)
+    slot_overrides: tuple[SlotOverride | None, ...] = ()
+    """Was je Materialslot anders gilt als im Projekt (§20).
+
+    Ein Eintrag je Slot, in der Reihenfolge der Slots — die *ist* die
+    Extruderbelegung, dieselbe Regel wie bei :attr:`slot_profiles`
+    darunter. ``None`` und eine kürzere Liste heißen dasselbe: Für
+    diesen Slot gelten die Werte des Projekts.
+
+    Der Filamentkatalog liefert die Vorgabe, das hier schlägt sie —
+    dieselben drei Ebenen wie sonst auch (§29).
+    """
+
     slot_profiles: tuple[str, ...] = ()
     """Welches Filamentprofil des Slicers auf welchem Materialslot liegt (§20).
 

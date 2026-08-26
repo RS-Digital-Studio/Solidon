@@ -993,6 +993,7 @@
   "Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen.": "Este slicer precisa de um perfil de impressora — escolher um, por favor.",
   "Dieser Slicer braucht kein Grundprofil — Solidon schreibt eine vollständige Konfiguration.": "Este slicer não precisa de perfil base — o Solidon escreve uma configuração completa.",
   "Dieser Slicer braucht kein Profil — Solidon beschreibt die Maschine selbst.": "Este fatiador não precisa de um perfil — o Solidon descreve a máquina por si próprio.",
+  "Dieser Slicer nimmt nur einen Satz Filamentwerte. Was für die weiteren Filamente eingestellt ist, wird nicht gedruckt — dafür braucht es einen Slicer der Orca-Familie, etwa OrcaSlicer oder Bambu Studio.": "Este slicer aceita apenas um conjunto de valores de filamento. O que estiver definido para os restantes filamentos não será impresso — para isso é necessário um slicer da família Orca, como o OrcaSlicer ou o Bambu Studio.",
   "Dieser Stand ist festgeschrieben — die Züge stehen als Beleg da, geändert werden kann an ihnen nichts mehr.": "Este estado está fixado — os traços ficam como registo, já não se pode alterar nada neles.",
   "Dieser Verweis zeigt ins Leere:": "Esta referência aponta para o vazio:",
   "Dieser Vorschlag legt bereits etwas an. Zurücknehmen gehört in einen eigenen Vorschlag — erst diesen abschließen, dann zurücknehmen.": "Esta proposta já cria alguma coisa. Retirar pertence a uma proposta própria — primeiro concluir esta, depois retirar.",
