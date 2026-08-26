@@ -92,7 +92,13 @@ def import_plan(source_id: str, name: str, payload: bytes, unit: str = "auto") -
         # Operation. Die Zahlen dafür stehen im zentralen Verzeichnis des
         # Archivs — geprüft wird, ohne ein Byte des Inhalts zu lesen.
         check_unpacked(payload)
-        parts = threemf.count_objects(payload)
+        # Körper und Dreiecke in einem streamenden Lauf. Die entpackte Grenze
+        # allein hält den Speicher nicht auf: read_objects hebt beim Vollparse
+        # rund das Zwölffache der entpackten XML in ET.Element-Objekte, und die
+        # Dreiecksgrenze griff bisher erst *nach* diesem Parsen. Sie greift
+        # jetzt hier, vor jeder Operation — gezählt wurde ohne eine Koordinate.
+        parts, triangles = threemf.scan_assembly(payload)
+        check_limits(len(payload), triangles)
         # Eine 3MF trägt ihre Einheit im ``unit``-Attribut. Wo sie dasteht,
         # stellt die Operation die Frage nicht — und dann darf der Aufrufer
         # sie auch nicht vorweg stellen: Die Kommandozeile tat es, und ihre

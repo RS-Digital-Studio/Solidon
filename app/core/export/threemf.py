@@ -96,9 +96,6 @@ PRUSA_CONFIG_HEADER = "; von Solidon geschrieben"
 #: einer Datei kam.
 NAME_SUFFIXES = (".stl", ".3mf", ".obj", ".step", ".stp")
 
-#: Platzhalter fürs Zählen, wo nur die Namen zählen.
-_EMPTY = MeshData.of(trimesh.Trimesh())
-
 #: Farbe, die ein Slot ohne eigene bekommt. Grau, damit niemand sie für eine
 #: Wahl hält.
 DEFAULT_COLOUR = (0.72, 0.72, 0.72)
@@ -482,16 +479,129 @@ def declared_unit(payload: bytes) -> str | None:
     return None
 
 
+#: Die zwei Teilbäume, die eine Modelldatei schwer machen: je ein Kind pro Ecke
+#: und pro Dreieck. Die Struktur darüber — Objekt, Mesh-Hülle, Komponenten,
+#: Build — ist klein.
+_VERTICES_TAG: Final = f"{{{CORE_NAMESPACE}}}vertices"
+_TRIANGLES_TAG: Final = f"{{{CORE_NAMESPACE}}}triangles"
+
+
+def _model_without_geometry(container: zipfile.ZipFile, entry: str) -> tuple[ET.Element, int]:
+    """Eine Modelldatei als Baum ohne ihre Koordinaten, dazu die Zahl ihrer
+    Dreiecke.
+
+    ``ET.iterparse`` liest häppchenweise, und jeder ``vertices``/``triangles``-
+    Teilbaum wird geleert, sobald er geschlossen ist: Die Objekt- und
+    Build-Struktur bleibt vollständig — :func:`_objects_in` und :func:`_parts_of`
+    sehen ohnehin nie hinein —, die Millionen Ecken und Dreiecke fallen weg. So
+    bleibt der Spitzenspeicher bei einem einzelnen Block statt bei der ganzen
+    Datei; ``ET.fromstring`` dagegen hob das gesamte XML in ET.Element-Objekte,
+    rund das Zwölffache der entpackten Größe.
+    """
+    triangles = 0
+    root: ET.Element | None = None
+    with container.open(entry) as stream:
+        for event, element in ET.iterparse(stream, events=("start", "end")):
+            if root is None:
+                # Das erste Startelement ist die Wurzel; ohne diesen Griff wäre
+                # sie nach dem Leeren der Kinder nicht mehr zu greifen.
+                root = element
+            if event != "end":
+                continue
+            if element.tag == _TRIANGLES_TAG:
+                triangles += len(element)
+                element.clear()
+            elif element.tag == _VERTICES_TAG:
+                element.clear()
+    if root is None:
+        raise ET.ParseError("model file without a root element")
+    return root, triangles
+
+
+def _scan(payload: bytes) -> tuple[int, int]:
+    """Zählt Körper und Dreiecke einer Baugruppe, ohne eine Koordinate in den
+    Speicher zu heben.
+
+    Zwei Fragen stehen vor der Geometrie: Wie viele Objekt-IDs vergibt der
+    Stapel (§11), und passt die Datei überhaupt in den Speicher (§32)? Beide
+    beantwortet ein streamender Lauf. Die Körper werden über dieselben
+    :func:`_objects_in`/:func:`_parts_of` gezählt wie beim Lesen, damit die Zahl
+    garantiert die ist, die :func:`read_objects` zurückgäbe. Die Dreiecke fallen
+    beim Streamen ab und decken **alle** Modelldateien ab, auch die vom Build
+    nicht erreichten — der Vollparse in :func:`read_objects` liest sie ebenso,
+    und der Speicher, der ihn sprengt, hängt an ihrer Gesamtzahl.
+    """
+    try:
+        with zipfile.ZipFile(BytesIO(payload)) as container:
+            names = set(container.namelist())
+            if MODEL_PATH not in names:
+                return 0, 0
+            triangles = 0
+            models: dict[str, ET.Element] = {}
+            for entry in [MODEL_PATH, *sorted(names)]:
+                if entry in models:
+                    continue
+                if entry != MODEL_PATH and not (
+                    entry.startswith("3D/Objects/") and entry.endswith(".model")
+                ):
+                    continue
+                models[entry], found = _model_without_geometry(container, entry)
+                triangles += found
+            titles = _titles(container.read(SETTINGS_PATH)) if SETTINGS_PATH in names else {}
+    except (KeyError, zipfile.BadZipFile, ET.ParseError) as problem:
+        _log.info("3MF could not be scanned as an assembly: %s", problem)
+        return 0, 0
+    except (NotImplementedError, RuntimeError) as problem:
+        # Wie :func:`_leaves`: anders gepackt (Deflate64, AES) ist kein kaputtes
+        # Archiv, sondern eine eigene Auskunft mit eigenem Ausweg — kein stummes
+        # (0, 0), das die Datei als leer ausgäbe (§32, Regel 17).
+        raise _unpackable(problem) from problem
+
+    catalog = {path: _objects_in(model) for path, model in models.items()}
+    # Für das Zählen zählt die Palette nicht — _parts_of legt sie nur ab.
+    without_palette: dict[str, dict[str, list[tuple[str, tuple[float, float, float]]]]] = {
+        path: {} for path in models
+    }
+    bodies = 0
+    for item in models[MODEL_PATH].findall(f"{{{CORE_NAMESPACE}}}build/{{{CORE_NAMESPACE}}}item"):
+        identifier = item.get("objectid")
+        if identifier is None:
+            continue
+        bodies += len(
+            _parts_of(
+                identifier,
+                _inside(item.get(f"{{{PRODUCTION_NAMESPACE}}}path")),
+                _matrix(item.get("transform")),
+                catalog,
+                without_palette,
+                titles,
+                item.get("name") or titles.get(identifier, ""),
+                0,
+            )
+        )
+    return bodies, triangles
+
+
+def scan_assembly(payload: bytes) -> tuple[int, int]:
+    """(Zahl der Körper, Zahl der Dreiecke) einer 3MF — streamend, ohne
+    Koordinaten im Speicher.
+
+    Die Körperzahl braucht der Stapel für die Objekt-IDs (§11), die Dreieckzahl
+    die Größengrenze: Sie geht an ``check_limits``, **bevor** ``read_objects``
+    das ganze XML in den Speicher hebt. Beides in einem Lauf, damit die Datei
+    nur einmal durchläuft.
+    """
+    return _scan(payload)
+
+
 def count_objects(payload: bytes) -> int:
     """Wie viele Körper :func:`read_objects` zurückgäbe.
 
     Der Stapel vergibt Objekt-IDs, bevor irgendetwas gerechnet ist (§11) — die
-    Anzahl muss also bekannt sein, bevor es die Geometrie ist. Es läuft
-    denselben Baum ab, ohne ein einziges Dreieck in eine Zahl zu verwandeln:
-    die Koordinaten sind das, was kostet, nicht die Feststellung, dass es sie
-    gibt.
+    Anzahl muss also bekannt sein, bevor es die Geometrie ist, und ohne ein
+    einziges Dreieck in den Speicher zu heben (:func:`_scan`).
     """
-    return len(_numbered([Part(name=leaf.name, mesh=_EMPTY) for leaf in _leaves(payload)]))
+    return _scan(payload)[0]
 
 
 @dataclass(frozen=True, slots=True)

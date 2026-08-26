@@ -293,10 +293,10 @@ def test_a_zip_bomb_is_refused_before_anything_parses_it(monkeypatch) -> None:
     payload = buffer.getvalue()
     assert len(payload) < 100_000, "gepackt harmlos, entpackt nicht"
 
-    def niemals(_payload: bytes) -> int:
-        raise AssertionError("gezählt wurde, bevor die Grenze griff")
+    def niemals(_payload: bytes) -> tuple[int, int]:
+        raise AssertionError("gescannt wurde, bevor die Grenze griff")
 
-    monkeypatch.setattr(threemf, "count_objects", niemals)
+    monkeypatch.setattr(threemf, "scan_assembly", niemals)
 
     with pytest.raises(ValidationError) as abgewiesen:
         plan.import_plan("src_1", "bombe.3mf", payload)

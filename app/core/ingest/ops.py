@@ -133,9 +133,13 @@ def load(ctx: OpContext) -> OpResult:
     suffix = Path(source.path).suffix
     if suffix.lower() == ".3mf":
         # Vor dem Parsen, nicht danach: die gepackte Größe sagt bei einem
-        # Container nichts — 2,6 MB wurden beim Lesen zu 1,08 GB, und die
-        # Dreiecksgrenze griff erst, als der Speicher schon voll war (§32).
+        # Container nichts — 2,6 MB wurden beim Lesen zu 1,08 GB (§32).
         check_unpacked(payload)
+        # Und die Dreiecke ebenso vor dem Parsen. read_objects hebt gleich das
+        # ganze XML in den Speicher, rund das Zwölffache der entpackten Größe;
+        # die Grenze weiter unten (nach read_objects) käme dafür zu spät.
+        # scan_assembly zählt streamend, in beschränktem Speicher.
+        check_limits(len(payload), threemf.scan_assembly(payload)[1])
     stem = Path(source.path).stem
     parts = threemf.read_objects(payload) if suffix.lower() == ".3mf" else []
     if not parts:

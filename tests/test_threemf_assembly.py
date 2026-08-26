@@ -160,6 +160,61 @@ def test_the_count_matches_what_is_read() -> None:
     assert threemf.count_objects(payload) == len(threemf.read_objects(payload)) == 3
 
 
+def test_the_scan_streams_the_count_without_the_full_parse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """M5: Zählen hob früher das ganze XML in den Speicher.
+
+    ``ET.fromstring`` über jede Ecke und jedes Dreieck: eine Million Dreiecke
+    wurden so zu 1,18 GB, nur für die Zahl der Körper, im Hauptfenster und ohne
+    Abbrechen (§2.8). Der Scan streamt jetzt und rührt ``ET.fromstring`` für die
+    Modelldateien nicht mehr an.
+
+    Bewiesen, indem ``ET.fromstring`` gesperrt wird: Der Vollparse
+    (``read_objects``) — genau er hob das XML am Stück herein — gibt danach
+    nichts mehr zurück, der streamende Scan aber die volle Wahrheit. Dieselbe
+    Datei, dieselbe Sperre.
+    """
+    payload = production_container({"1": cube(10.0), "2": cube(20.0), "3": cube(30.0)})
+
+    def kein_vollparse(*_args: object, **_kwargs: object) -> object:
+        raise threemf.ET.ParseError("der Zählweg liest das XML nicht am Stück")
+
+    monkeypatch.setattr(threemf.ET, "fromstring", kein_vollparse)
+
+    assert threemf.read_objects(payload) == []
+    # Ein Würfel aus trimesh hat zwölf Dreiecke; drei also sechsunddreißig.
+    assert threemf.scan_assembly(payload) == (3, 36)
+    assert threemf.count_objects(payload) == 3
+
+
+def test_too_many_triangles_are_refused_before_the_parse(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """M6: Die Dreiecksgrenze griff erst nach dem Vollparse.
+
+    ``read_objects`` hebt beim Parsen rund das Zwölffache der entpackten XML in
+    ET.Element-Objekte, und die Grenze stand erst dahinter — also erst, als der
+    Speicher schon voll war. Sie greift jetzt beim streamenden Scan, vor jeder
+    Operation: Eine Datei mit zu vielen Dreiecken wird schon vom Importplan
+    abgewiesen, bevor eine Koordinate in den Speicher kommt.
+
+    Die Grenze steht klein, damit der Test keine Millionen Dreiecke anlegt —
+    geprüft wird die Reihenfolge, nicht die Zahl.
+    """
+    from app.core.ingest import loader, plan
+
+    payload = production_container(  # 3 * 12 = 36 Dreiecke
+        {"1": cube(10.0), "2": cube(20.0), "3": cube(30.0)}
+    )
+    monkeypatch.setattr(loader, "MAX_TRIANGLES", 30)
+
+    with pytest.raises(ValidationError) as refused:
+        plan.import_plan("src_1", "zu_fein.3mf", payload)
+    assert refused.value.constraint == "too_many_triangles"
+    assert refused.value.suggestions, "Regel 17"
+
+
 # --- die Transformationen -------------------------------------------------------
 
 
