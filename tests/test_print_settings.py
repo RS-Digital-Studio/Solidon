@@ -908,6 +908,90 @@ def test_an_orca_process_keeps_what_the_base_profile_knew(tmp_path: Path) -> Non
     assert "hot_plate_temp" not in document
 
 
+def _two_plate_scene() -> object:
+    """Eine Szene mit zwei Platten: rot allein, dann weiß und rot."""
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.scene.evaluate import EvaluationResult
+    from app.core.types import MaterialSlot, Scene, SceneObject
+
+    def body(name: str, plate: int, slots: tuple[MaterialSlot, ...]) -> SceneObject:
+        mesh = trimesh.creation.box(extents=(20.0, 20.0, 20.0))
+        mesh.apply_translation((0.0, 0.0, 10.0))
+        return SceneObject(
+            id=name, name=name, mesh=MeshData.of(mesh), plate=plate, material_slots=slots
+        )
+
+    rot = MaterialSlot(index=0, name="Rot", colour=(1.0, 0.0, 0.0))
+    weiss = MaterialSlot(index=0, name="Weiss", colour=(1.0, 1.0, 1.0))
+    return EvaluationResult(
+        scene=Scene(
+            objects={
+                "a": body("a", 0, (rot,)),
+                "b": body("b", 1, (weiss,)),
+                "c": body("c", 1, (rot,)),
+            }
+        )
+    )
+
+
+def test_the_plate_choice_appears_and_narrows_what_gets_sliced(qt_app: object) -> None:
+    """Die Wahl erscheint nur, wenn es etwas zu wählen gibt — und sie wirkt.
+
+    Beides in einem Test, und das ist eine Entscheidung gegen den üblichen
+    Zuschnitt „ein Test, eine Zusage": Zwei Tests bauen zwei Dialoge, und der
+    zweite riss die Datei in eine Zugriffsverletzung (Position 57, im Abbau
+    von ``_no_worker_outlives_its_window``). Gemessen am 26.08.2026 — ohne
+    einen der beiden lief die Datei grün, mit beiden dreimal von dreimal
+    nicht, und ein trivialer 75. Test an derselben Stelle war folgenlos. Es
+    ist also nicht die Zahl, sondern dieser Dialog ein zweites Mal.
+
+    Das ist die bekannte Mine aus ``conftest.py`` — die Zerstörung eines
+    Fensters mit VTK-Zustand mitten in der Suite —, kein eigener Fehler und
+    hier nicht zu beheben. Ihr wird ausgewichen, und das steht hier, damit
+    der Nächste den Test trennen kann, sobald sie entschärft ist, statt sich
+    über den Zuschnitt zu wundern.
+
+    **Die Zusagen selbst:** Bei einer Platte bleibt die Zeile verborgen — eine
+    Wahl ohne Alternative ist keine, und der Kunde liest sie doch. Ab der
+    zweiten erscheint sie mit „Alle Platten" als Vorgabe, denn das ist der
+    bisherige Weg. Und die Wahl wirkt auf beides: den Lauf und die Spulen, die
+    er braucht. Solange ``_plate_slots`` fest die erste Platte nahm, ordnete
+    der Kunde Filamente einer Platte zu, die er gar nicht slicte.
+    """
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    dialog = PrintSettingsDialog(Session(), UiSettings())
+    assert dialog.plate_row.isHidden(), "leere Szene: keine Wahl"
+
+    dialog.session.last_result = _two_plate_scene()  # type: ignore[assignment]
+    dialog._refresh_plates()
+
+    # ``isHidden`` und nicht ``isVisible``: Letzteres antwortet ``False``,
+    # solange der Dialog nicht angezeigt wurde, und zwar für jedes Widget.
+    assert not dialog.plate_row.isHidden(), "zwei Platten: jetzt gibt es etwas zu wählen"
+    assert dialog.plate_choice.count() == 3, "die Sammelzeile und zwei einzelne"
+    assert dialog.plate_choice.currentData() is None, "Vorgabe ist die Sammelzeile"
+    assert dialog._chosen_plates() == [0, 1], "und die umfasst beide"
+
+    # Platte 1 trägt nur Rot, Platte 2 trägt Weiß und Rot.
+    dialog.plate_choice.setCurrentIndex(1)
+    assert dialog._chosen_plates() == [0]
+    assert [slot.name for slot in dialog._plate_slots()] == ["Rot"]
+
+    dialog.plate_choice.setCurrentIndex(2)
+    assert dialog._chosen_plates() == [1]
+    assert sorted(slot.name for slot in dialog._plate_slots()) == ["Rot", "Weiss"]
+
+    # Und zurück auf „Alle": beide Platten, alle Spulen.
+    dialog.plate_choice.setCurrentIndex(0)
+    assert dialog._chosen_plates() == [0, 1]
+    assert sorted(slot.name for slot in dialog._plate_slots()) == ["Rot", "Weiss"]
+
+
 def test_the_orca_machine_profile_is_written_out_not_referenced(tmp_path: Path) -> None:
     """Solidon schreibt das Maschinenprofil aus, statt auf eines zu verweisen.
 
