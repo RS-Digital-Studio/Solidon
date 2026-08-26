@@ -90,7 +90,16 @@ sich, wenn nicht:
   Funktion Katalogeintrag + `SlotOverride` → Slotwerte, und de richtet
   sie nach 30s Katalogmodell, wenn das anders geschnitten wird — früh
   sagen. Die Bedienung (wo der Kunde die Werte je Slot einstellt) liegt
-  beim Filamentwähler, also bei 27.
+  beim Filamentwähler, also bei 27. **Gelandet als `1261935f`:** Der
+  Anschlusspunkt heißt `handover.settings_for_slot(settings, override)`,
+  reist additiv durch die Projektdatei, alte Projekte öffnen unverändert.
+- **Für 30, zur Kenntnis:** `at_feature` an `paint_slot` kam ohne
+  `kind="feature"` an — daran hängen Dialog-Combo, Klick-Vorbelegung
+  (`values_for`) und der Träger-Hash im Cache-Schlüssel, und
+  `test_a_feature_parameter_is_declared_as_one` stand rot auf origin.
+  Von 27 mit einer Zeile gefixt (`11bfc2ca`, 782 Tests grün) — gehört
+  inhaltlich zu deiner Einheit, war nur dringend, weil das Tor aller
+  Sitzungen daran hing.
 
 ## Bestandsaufnahme Doku-Block (ce, 26.08.2026)
 
