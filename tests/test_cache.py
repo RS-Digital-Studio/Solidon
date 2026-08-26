@@ -813,3 +813,95 @@ def test_a_self_chosen_name_stays_a_plain_string(tmp_path: Path) -> None:
     assert restored is not None
     assert restored.objects[0].name == "Meine Halterung"
     assert not isinstance(restored.objects[0].name, TranslatableText)
+
+
+# --- Fremde Träger im Schlüssel (Gesamtreview-b, Szene 1 Rest) -------------------
+
+
+def _face_carrier(object_id: str, face: str) -> SceneObject:
+    from app.core.types import Feature
+
+    return SceneObject(
+        id=object_id,
+        name=object_id,
+        mesh=FakeMesh(),  # type: ignore[arg-type]
+        features={
+            face: Feature(id=face, kind="face", provenance="detected", params={}, face_indices=(1,))
+        },
+    )
+
+
+def test_the_key_reads_the_carrier_of_a_named_feature() -> None:
+    """``align_to_feature`` liest ein Ziel auf einem fremden Körper.
+
+    ``operation_hash`` deckt die eigenen Eingänge — das benannte Merkmal
+    steht aber auf einem fremden Körper, und dessen Hash stand nicht im
+    Schlüssel: Platte um 40 mm verschoben, der ausgerichtete Körper blieb
+    mit Cache an der alten Lage, und der Eintrag überlebte das Schließen
+    (Gesamtreview-b, Bericht 01). Der Kontext trägt jetzt die Hashes
+    **aller** Träger des Merkmals — alle, weil zwei Körper denselben
+    Merkmalsnamen tragen können und der Schlüssel jede Lesart decken muss.
+    """
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import _with_nested_context
+
+    params_class = REGISTRY.get("align_to_feature").params
+    objects = {"obj_9": _face_carrier("obj_9", "face_a")}
+
+    before = _with_nested_context(
+        params_class, {"feature": "face_a"}, {}, None, objects, {"obj_9": "h1"}
+    )
+    after = _with_nested_context(
+        params_class, {"feature": "face_a"}, {}, None, objects, {"obj_9": "h2"}
+    )
+    assert "#feature" in before, "der Träger gehört in den Kontext"
+    assert before["#feature"] != after["#feature"], "sein Hash muss den Schlüssel ändern"
+
+    empty = _with_nested_context(params_class, {"feature": ""}, {}, None, objects, {"obj_9": "h1"})
+    assert "#feature" not in empty, "ohne benanntes Merkmal bleibt der Schlüssel, wie er war"
+
+
+def test_the_key_reads_the_up_to_target_and_the_sketch_plane() -> None:
+    """Dieselbe Blindstelle zweimal: ``up_to`` und die Skizzenebene.
+
+    ``sketch_extrude`` mit ``up_to`` liest die Höhe eines fremden Körpers
+    (Quader 10 → 30 mm: die Extrusion blieb mit Cache bei z = 10), und jede
+    ``sketch_*``-Op liest die Lage ihrer ``feature:<id>``-Ebene. Beide
+    Träger gehören in den Kontext, jeder unter seinem eigenen Namen.
+    """
+    import dataclasses
+
+    from app.core.bootstrap import load_operations
+
+    load_operations()
+    from app.core.registry import REGISTRY
+    from app.core.scene.evaluate import _with_nested_context
+    from app.core.sketch.serialize import sketch_to_text
+    from app.core.sketch.shapes import rectangle
+
+    params_class = REGISTRY.get("sketch_extrude").params
+    drawn = sketch_to_text(dataclasses.replace(rectangle(10.0, 10.0), plane="feature:face_p"))
+    resolved = {"up_to": "face_t", "sketch": drawn}
+    objects = {
+        "obj_a": _face_carrier("obj_a", "face_t"),
+        "obj_b": _face_carrier("obj_b", "face_p"),
+    }
+
+    base = _with_nested_context(
+        params_class, resolved, {}, None, objects, {"obj_a": "t1", "obj_b": "p1"}
+    )
+    taller = _with_nested_context(
+        params_class, resolved, {}, None, objects, {"obj_a": "t2", "obj_b": "p1"}
+    )
+    moved = _with_nested_context(
+        params_class, resolved, {}, None, objects, {"obj_a": "t1", "obj_b": "p2"}
+    )
+
+    assert base["#up_to"] != taller["#up_to"], "wächst der Körper unter up_to, kippt der Schlüssel"
+    assert base["#sketch.plane"] != moved["#sketch.plane"], (
+        "wandert die Trägerfläche der Skizze, kippt der Schlüssel"
+    )
+    assert base["#up_to"] == moved["#up_to"], "und die zwei Träger bleiben getrennte Einträge"

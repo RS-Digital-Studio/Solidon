@@ -43,7 +43,9 @@ from app.core.scene.cache import CachedResult, ResultCache
 from app.core.scene.cancel import NeverCancelled
 from app.core.scene.fits import check as check_fits
 from app.core.scene.hashing import object_hash, operation_hash
+from app.core.scene.orphans import face_of_sketch
 from app.core.scene.orphans import references as feature_references
+from app.core.scene.placement import TARGET_FIELD
 from app.core.sketch.serialize import sketch_parameter_references
 from app.core.types import (
     AskFn,
@@ -275,7 +277,7 @@ def evaluate(
             # nachschlug, was fehlen konnte.
             key = operation_hash(
                 operation,
-                _with_nested_context(spec.params, resolved, values, sources),
+                _with_nested_context(spec.params, resolved, values, sources, objects, hashes),
                 [hashes[entry] for entry in operation.inputs],
                 profile,
                 quality,
@@ -1097,6 +1099,8 @@ def _with_nested_context(
     resolved: Mapping[str, Any],
     values: Mapping[ParameterName, float],
     sources: SourceAccess | None = None,
+    objects: Mapping[ObjectId, SceneObject] | None = None,
+    hashes: Mapping[ObjectId, str] | None = None,
 ) -> Mapping[str, Any]:
     """Der Parametersatz für den Cache-Schlüssel, ergänzt um das, was ein
     Parameter von außen liest.
@@ -1115,7 +1119,18 @@ def _with_nested_context(
     geleert wird und eine Sitzung lang lebt; sichtbar wurde es, als eine Ebene
     dazukam, die länger lebt, und ein Projekt die Geometrie eines anderen
     bekam. Also steht hier die Inhaltsprüfsumme, nicht der Name (§15,
-    Leitprinzip 4)."""
+    Leitprinzip 4).
+
+    **Und für jeden benannten Träger.** Drei Lesarten greifen an fremden
+    Körpern vorbei an den eigenen Eingängen in die Szene: das Ziel von
+    ``align_to_feature`` (``kind="feature"``), die Zielfläche von ``up_to``
+    und die ``feature:<id>``-Ebene einer Skizze. Keiner ihrer Hashes stand im
+    Schlüssel — Platte um 40 mm verschoben, der ausgerichtete Körper blieb
+    mit Cache an der alten Lage; Quader von 10 auf 30 mm, die Extrusion bis
+    ``face_top`` blieb bei z = 10. Und der Plattencache lebt länger als die
+    Sitzung, der falsche Eintrag überlebte das Schließen. Aufgenommen werden
+    die Hashes **aller** Träger des Merkmals: Zwei Körper können denselben
+    Merkmalsnamen tragen, und der Schlüssel muss jede Lesart decken."""
     context: dict[str, Any] = {}
     for spec in params_class.spec():
         if spec.kind == "source" and sources is not None:
@@ -1123,6 +1138,23 @@ def _with_nested_context(
             if isinstance(source_id, str) and source_id:
                 context[f"#{spec.name}"] = sources.identity(source_id)
             continue
+        if spec.kind == "feature" or spec.name == TARGET_FIELD:
+            named = resolved.get(spec.name)
+            if isinstance(named, str) and named and objects is not None and hashes is not None:
+                carriers = _carrier_hashes(named, objects, hashes)
+                if carriers:
+                    context[f"#{spec.name}"] = carriers
+            continue
+        if spec.kind == "sketch" and objects is not None and hashes is not None:
+            drawn = resolved.get(spec.name)
+            if isinstance(drawn, str) and drawn:
+                plane_feature = face_of_sketch(drawn)
+                if plane_feature is not None:
+                    carriers = _carrier_hashes(plane_feature, objects, hashes)
+                    if carriers:
+                        context[f"#{spec.name}.plane"] = carriers
+            # Kein ``continue``: Der Skizzentext trägt daneben @-Parameter,
+            # und die sammelt der Zweig darunter wie bisher.
         collect = nested_references().get(spec.kind)
         if collect is None:
             continue
@@ -1133,6 +1165,20 @@ def _with_nested_context(
             if name in values:
                 context[f"@{name}"] = values[name]
     return {**resolved, **context} if context else resolved
+
+
+def _carrier_hashes(
+    feature_id: str, objects: Mapping[ObjectId, SceneObject], hashes: Mapping[ObjectId, str]
+) -> tuple[str, ...]:
+    """Die Hashes aller Körper, die dieses Merkmal tragen — sortiert nach
+    Objektkennung, damit der Schlüssel stabil bleibt. Leer, wenn keiner es
+    trägt: Dann hält die Operation selbst an, und ein leerer Eintrag würde
+    nur jeden bestehenden Schlüssel kippen."""
+    return tuple(
+        hashes[object_id]
+        for object_id in sorted(objects)
+        if object_id in hashes and feature_id in objects[object_id].features
+    )
 
 
 def _evaluated_parameters(

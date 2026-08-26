@@ -111,7 +111,7 @@ def references(document: Document, registry: Registry | None = None) -> list[Ref
                 Reference(f"op:{operation.id}:{field_name}", FeatureRef(operation.inputs[0], named))
             )
         for field_name in _sketch_fields(source, operation.op):
-            plane_feature = _face_of_sketch(str(operation.params.get(field_name) or ""))
+            plane_feature = face_of_sketch(str(operation.params.get(field_name) or ""))
             if plane_feature is None:
                 continue
             # Eine Skizze auf einer Fläche benennt ein Merkmal — im
@@ -137,11 +137,14 @@ def _sketch_fields(registry: Registry, op_name: str) -> tuple[str, ...]:
     )
 
 
-def _face_of_sketch(text: str) -> str | None:
+def face_of_sketch(text: str) -> str | None:
     """Die Fläche, auf der diese Skizze liegt — oder nichts.
 
     Ein unlesbarer Skizzentext ist der Fehler der Operation, nicht dieser
     Prüfung: Sie zählt Verweise auf und übergeht, was sie nicht lesen kann.
+    Öffentlich, weil der Cache-Schlüssel dieselbe Frage stellt
+    (``evaluate._with_nested_context``): Wer die Ebene liest, hängt vom
+    Träger ab, und zwei Fassungen derselben Auskunft liefen auseinander.
     """
     if not text:
         return None
