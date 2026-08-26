@@ -34,14 +34,25 @@ from app.core import changes
 from app.i18n import tr
 from app.ui.style import NORMAL
 
-#: Wie hoch der Rollbereich höchstens wird. Derselbe Grund wie im
-#: Update-Fenster: Ein Dialog, der über den Bildschirmrand wächst, verliert
-#: seine Knöpfe nach unten — und der Verlauf wird mit jeder Fassung länger.
-HISTORY_MAX_HEIGHT = 420
+#: Womit der Dialog aufgeht. Eine **Anfangsgröße**, kein Deckel: Der Deckel
+#: saß vorher als ``setMaximumHeight`` auf dem Rollbereich, und wer das
+#: Fenster größer zog, vergrößerte damit nur die Leere darüber — die Liste
+#: blieb bei 420 Bildpunkten stehen (Robert, 26.08.2026, mit Bild). Was den
+#: Bildschirmrand schützt, ist die Größe beim Öffnen; was der Nutzer danach
+#: zieht, gehört der Liste.
+INITIAL_SIZE = (640, 620)
 
 
 def history_html(entries: tuple[changes.Entry, ...], current: str = APP_VERSION) -> str:
     """Der Verlauf als Auszeichnung, mit der laufenden Fassung markiert.
+
+    Gegliedert, wie die Datei es vorgibt: je Version die Gruppen mit
+    unterstrichener Überschrift, darunter ihre Punkte als Liste. Unterstrichen
+    **und** halbfett — die zweite Kodierung neben der Auszeichnung ist hier
+    nicht Farbe, aber dieselbe Regel: Eine Gruppenzeile muss sich von einem
+    Punkt auch dann unterscheiden, wenn man nur Helligkeit sieht (Regel 18).
+    Ein Abschnitt ohne Gruppen (die Fassungen vor 0.2.0) liest sich wie
+    bisher: eine Liste unter der Versionszeile.
 
     ``html.escape`` auf jedem Punkt, obwohl der Text aus dem eigenen Paket
     kommt und nicht von einem Server: Ein Punkt, der ein ``<`` enthält — „Wände
@@ -54,8 +65,15 @@ def history_html(entries: tuple[changes.Entry, ...], current: str = APP_VERSION)
         title = html.escape(entry.version)
         if entry.version == current:
             title += " — " + html.escape(tr("diese Fassung"))
-        points = "".join(f"<li>{html.escape(point)}</li>" for point in entry.points)
-        blocks.append(f"<p><b>{title}</b></p><ul>{points}</ul>")
+        blocks.append(f'<h3 style="margin-bottom:2px">{title}</h3>')
+        for group in entry.groups:
+            if group.title:
+                heading = html.escape(group.title)
+                blocks.append(
+                    f'<p style="margin-top:10px;margin-bottom:0"><b><u>{heading}</u></b></p>'
+                )
+            points = "".join(f"<li>{html.escape(point)}</li>" for point in group.points)
+            blocks.append(f'<ul style="margin-top:4px">{points}</ul>')
     return "".join(blocks)
 
 
@@ -92,7 +110,6 @@ class ChangesDialog(QDialog):
         self.scroller.setWidget(self.body)
         self.scroller.setWidgetResizable(True)
         self.scroller.setFrameShape(QScrollArea.Shape.NoFrame)
-        self.scroller.setMaximumHeight(HISTORY_MAX_HEIGHT)
 
         # **Der leere Fall ist kein Fehler und bekommt trotzdem einen Satz.**
         # Er entsteht, wenn der Verlauf im Paket fehlt; ein leerer Kasten ließe
@@ -110,5 +127,9 @@ class ChangesDialog(QDialog):
         layout.setSpacing(NORMAL)
         layout.addWidget(self.headline)
         layout.addWidget(self.empty)
-        layout.addWidget(self.scroller)
+        # Der Rollbereich bekommt jeden gezogenen Bildpunkt (Stretch 1):
+        # Überschrift und Knöpfe brauchen nicht mehr, als sie haben, und ein
+        # größeres Fenster soll mehr Verlauf zeigen, nicht mehr Leere.
+        layout.addWidget(self.scroller, 1)
         layout.addWidget(buttons)
+        self.resize(*INITIAL_SIZE)

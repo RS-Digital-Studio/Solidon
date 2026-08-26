@@ -40,8 +40,12 @@ from app.i18n import tr
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.style import make_primary
 
-#: Wie hoch die Liste der Neuerungen höchstens wird, bevor sie rollt.
-CHANGES_MAX_HEIGHT = 240
+#: Wie hoch die Liste der Neuerungen beim Öffnen ist, bevor sie rollt — eine
+#: **Anfangshöhe**, kein Deckel: Als ``setMaximumHeight`` am Rollbereich ging
+#: jeder gezogene Bildpunkt in Leere statt in die Liste (derselbe Fund wie im
+#: Neuerungen-Dialog, Robert 26.08.2026). Den Bildschirmrand schützt die
+#: Größe beim Öffnen; was der Nutzer zieht, gehört der Liste.
+CHANGES_START_HEIGHT = 240
 
 
 class _DownloadWorker(Worker):
@@ -134,7 +138,6 @@ class UpdateDialog(QDialog):
         self.scroller.setWidget(self.changes)
         self.scroller.setWidgetResizable(True)
         self.scroller.setFrameShape(QScrollArea.Shape.NoFrame)
-        self.scroller.setMaximumHeight(CHANGES_MAX_HEIGHT)
         self.scroller.setVisible(bool(points))
 
         self.state = QLabel(self)
@@ -167,10 +170,14 @@ class UpdateDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.addWidget(self.headline)
         layout.addWidget(self.notes)
-        layout.addWidget(self.scroller)
+        # Stretch 1: Ein größer gezogenes Fenster gibt jeden Bildpunkt der
+        # Liste, nicht der Leere zwischen den Zeilen darunter.
+        layout.addWidget(self.scroller, 1)
         layout.addWidget(self.progress)
         layout.addWidget(self.state)
         layout.addWidget(self.buttons)
+        if points:
+            self.resize(self.sizeHint().width(), self.sizeHint().height() + CHANGES_START_HEIGHT)
 
         self._show_offer()
 

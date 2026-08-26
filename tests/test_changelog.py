@@ -51,6 +51,53 @@ def test_every_language_carries_the_same_points(language: str) -> None:
 
 
 @pytest.mark.parametrize("language", sorted(available_languages()))
+def test_every_language_carries_the_same_groups(language: str) -> None:
+    """Dieselbe Gliederung in jeder Sprache — Gruppen samt Reihenfolge.
+
+    Seit 0.2.0 gliedern ``###``-Überschriften die Punkte (Entscheidung
+    Robert, 26.08.2026). Die Titel sind übersetzt und dürfen sich
+    unterscheiden; was gleich sein muss, ist die **Struktur**: gleich viele
+    Gruppen, in jeder dieselbe Punktzahl an derselben Stelle. Sonst zeigt
+    ein italienisches Fenster andere Bündel als das deutsche daneben — und
+    ein verrutschter Punkt fiele in keiner Zählung der flachen Liste auf.
+    """
+    from app.core import changes
+
+    def shape(lang: str) -> list[int]:
+        for entry in changes.history(lang):
+            if entry.version == APP_VERSION:
+                return [len(group.points) for group in entry.groups]
+        return []
+
+    source = shape(SOURCE_LANGUAGE)
+    assert source, f"{SOURCE_LANGUAGE} kennt {APP_VERSION} nicht"
+    assert shape(language) == source, (
+        f"{language}: Gruppenform {shape(language)} gegen {source} in {SOURCE_LANGUAGE}"
+    )
+    for entry in changes.history(language):
+        if entry.version == APP_VERSION:
+            untitled = [i for i, group in enumerate(entry.groups) if not group.title]
+            assert not untitled, f"{language}: Gruppe(n) ohne Überschrift an {untitled}"
+
+
+def test_an_old_section_still_reads_as_one_list() -> None:
+    """Die Fassungen vor 0.2.0 tragen keine Gruppen und bleiben gültig.
+
+    Ihre Punkte stehen in genau einer Gruppe ohne Titel — so rendert der
+    Dialog sie wie eh und je als eine Liste unter der Versionszeile.
+    """
+    from app.core import changes
+
+    older = [entry for entry in changes.history(SOURCE_LANGUAGE) if entry.version != APP_VERSION]
+    assert older, "es gibt keine ältere Fassung zum Prüfen"
+    for entry in older:
+        assert len(entry.groups) == 1 and entry.groups[0].title == "", (
+            f"{entry.version}: unerwartete Gliederung"
+        )
+        assert entry.points == entry.groups[0].points
+
+
+@pytest.mark.parametrize("language", sorted(available_languages()))
 def test_a_point_fits_into_the_window(language: str) -> None:
     """Die Anwendung stutzt jedes Feld auf :data:`MAX_FIELD_LENGTH`.
 

@@ -18,27 +18,43 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 
 ## 0.2.0
 
+
+### Bloques
 - Bloques propios sin una línea de código: seleccione pasos del historial y colóquelos en el catálogo como bloque — con campos propios, vista previa y rango de valores comprobado.
 - Un bloque creado por usted viaja dentro del archivo de proyecto. Quien lo abra puede insertar su pieza sin tener que instalar nada.
 - Cinco bloques nuevos en el catálogo: gancho para panel perforado, escuadra, pie, clip para cables y ojal de bisagra.
 - El gancho para panel aguanta ahora aunque alguien levante la pieza al retirar algo — una lengüeta elástica encaja detrás del panel. Desactivable si retira la pieza a menudo.
-- Una cara seleccionada cuenta: taladro, bloque y boceto van adonde usted señaló. Antes cada operación sobre una cara costaba dos clics.
 - Soporte de pared, nervadura, lengüeta y ranura, pestaña, unión de encaje y bisagra de película aparecen ya en el menú de una cara pulsada. Faltaba justo el soporte de pared.
 - Quien inserta un bloque del catálogo sin elegir un sitio recibe ahora una pregunta. Hasta ahora se colocaba en el origen, mitad dentro de la pieza y mitad bajo la placa.
 - El catálogo de bloques se puede consultar incluso sin modelo. Insertar queda entonces bloqueado y dice por qué, en vez de cancelar solo tras confirmar.
+- El alojamiento de tuerca y el hueco para la cabeza del tornillo no quitaban nada: ambos construían sobre la cara en vez de debajo.
+- El alojamiento de imán vuelve a sujetar el imán: el labio de retención se añadía antes al alojamiento en vez de vaciarse en él, y desaparecía dentro.
+- La ranura de ojo de cerradura cuelga ahora en vertical, de modo que el tornillo se atasca al descender. Tumbada de lado, se desplazaba hacia un costado y la cabeza no encontraba sitio.
+- El alojamiento de tuerca encaja ahora con la tuerca: para M5, M6 y M8 la tabla tenía una altura demasiado pequeña, en M5 seis décimas de menos.
+
+### Dibujo
 - Al dibujar, la retícula muestra a qué se ajusta, el paso se puede escribir, las medidas están junto al puntero y la barra dice sobre qué cara dibuja.
 - Los atajos de teclado vuelven a funcionar en el modo de dibujo — línea, círculo, arco, recortar, desfase, Ctrl+Z — y el clic derecho abre el menú del dibujo en vez del modelo.
 - Ajustar a la vista devuelve el dibujo al encuadre, y un clic a cinco milímetros de un punto ya no se ajusta a él.
 - Una línea auxiliar sigue siendo una línea auxiliar, incluso tras recortarla, alargarla, desfasarla o reflejarla. Hasta ahora una línea de centro se convertía en arista de perfil y partía la pieza.
 - El diálogo de un paso muestra las medidas de su dibujo en vez de los valores predeterminados, y un círculo aparece con su diámetro completo, no con la mitad.
+- Una cavidad hecha desde un dibujo con agujero conserva el agujero. Hasta ahora fresaba también la isla.
+- Un agujero dibujado se resta sin importar en qué sentido lo dibujó. Según el orden de los clics salía antes una pieza más llena.
+- Recortar corta ahora solo dentro de su propio tramo, y Alargar también encuentra círculos y arcos como destino — hasta ahora solo veía líneas.
+- Una transición entre dos dibujos conserva sus agujeros, y un vaciado en una pared lateral corta en la pared en vez de desde arriba.
+- Un contorno que se cruza consigo mismo se señala ahora en el dibujo, en vez de producir un cuerpo que no es estanco y aun así se exporta.
+- Un dibujo con agujero dentro de agujero conserva todos los niveles, y Proyectar toma el plano en el que dibuja — hasta ahora se perdía el tercer nivel y el corte venía desde abajo.
+- Al escalar a una anchura dada se medía también una línea auxiliar. De cincuenta milímetros salían cinco.
+
+### Historial y pasos
 - En el historial se pueden seleccionar varios pasos a la vez.
 - Los límites de una medida se pueden cambiar después — hasta ahora valía para siempre lo que se introdujo al crearla.
-- La aplicación ya no desaparece sin avisar cuando se cambia una medida, se lee un dibujo o se calcula un corte. Los mismos cálculos van ahora hasta sesenta veces más rápido.
 - Cambiar un paso después ahora se puede deshacer. Hasta ahora Ctrl+Z eliminaba la acción equivocada y dejaba en pie el valor cambiado.
-- Vaciar y colocar espigas se pueden cancelar de verdad. En una pieza escaneada, el botón se quedaba quieto minutos enteros.
 - Un paso que apunta a una cara de otro cuerpo se vuelve a calcular tras cada cambio. Hasta ahora una pieza alineada se quedaba en el sitio antiguo, incluso tras cerrar.
-- La estimación de material para soportes estaba equivocada por un factor grande: calculaba la superficie bajo el saliente en vez de la columna debajo.
-- La anchura de puente mide ahora el tramo que realmente se salva sin apoyo. Un canal de cables informaba antes de la anchura de su caja envolvente y recibía el consejo equivocado.
+- Las características conservan su nombre cuando una pieza se gira o desplaza para imprimir. Los pasos y ajustes que las señalan ya no apuntan al vacío.
+- Si desaparece la cara hasta la que se extruye, el error señala ahora ese campo y sugiere elegir otra — en vez de señalar el plano del boceto.
+
+### Herramientas y geometría
 - El avellanado solo funcionaba en un sentido por eje. Seleccionado desde el lado equivocado no quitaba nada y no decía nada.
 - En piezas escalonadas, taladro y tapón trabajaban en el aire: la dirección venía de la caja envolvente en vez del material en ese punto.
 - Un tapón pasante rellenaba solo la mitad del taladro — y dejaba alrededor la holgura con la que el taladro se había ensanchado para el material.
@@ -46,31 +62,23 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - El orificio de ventilación de una pieza vaciada termina ahora en el hueco en vez de atravesar la tapa, y la ranura roscada de la tapa giratoria ya no abre un agujero en su propia parte superior.
 - Unir, restar y pintar avisan ahora cuando no ha ocurrido nada. Hasta ahora un paso permanecía en el historial sobre un modelo sin cambios.
 - Si una pieza se rompe porque un bloque ya no toca su soporte, el informe lo señala ahora como error y recomienda qué hacer. Hasta ahora el número de trozos era solo un dato.
-- Las características conservan su nombre cuando una pieza se gira o desplaza para imprimir. Los pasos y ajustes que las señalan ya no apuntan al vacío.
 - Una rosca en un taladro seleccionado cortaba solo su mitad inferior. Lo mismo ocurría con la bucha de inserción.
 - Una rosca interior se resta ahora, tal como dice su nombre. Hasta ahora crecía en su lugar un perno dentro del taladro de núcleo.
-- El alojamiento de tuerca y el hueco para la cabeza del tornillo no quitaban nada: ambos construían sobre la cara en vez de debajo.
-- El alojamiento de imán vuelve a sujetar el imán: el labio de retención se añadía antes al alojamiento en vez de vaciarse en él, y desaparecía dentro.
-- La ranura de ojo de cerradura cuelga ahora en vertical, de modo que el tornillo se atasca al descender. Tumbada de lado, se desplazaba hacia un costado y la cabeza no encontraba sitio.
-- El alojamiento de tuerca encaja ahora con la tuerca: para M5, M6 y M8 la tabla tenía una altura demasiado pequeña, en M5 seis décimas de menos.
+
+### Impresión y slicer
+- La estimación de material para soportes estaba equivocada por un factor grande: calculaba la superficie bajo el saliente en vez de la columna debajo.
+- La anchura de puente mide ahora el tramo que realmente se salva sin apoyo. Un canal de cables informaba antes de la anchura de su caja envolvente y recibía el consejo equivocado.
 - Una pieza más delgada que una capa impresa ya no se pone de canto.
 - La división automática cuenta el saliente del pasador para el límite de la mesa y no deja ajustes que apunten a sitios desaparecidos.
-- Una cavidad hecha desde un dibujo con agujero conserva el agujero. Hasta ahora fresaba también la isla.
-- Un agujero dibujado se resta sin importar en qué sentido lo dibujó. Según el orden de los clics salía antes una pieza más llena.
-- Recortar corta ahora solo dentro de su propio tramo, y Alargar también encuentra círculos y arcos como destino — hasta ahora solo veía líneas.
-- Una transición entre dos dibujos conserva sus agujeros, y un vaciado en una pared lateral corta en la pared en vez de desde arriba.
-- Un contorno que se cruza consigo mismo se señala ahora en el dibujo, en vez de producir un cuerpo que no es estanco y aun así se exporta.
-- Un dibujo con agujero dentro de agujero conserva todos los niveles, y Proyectar toma el plano en el que dibuja — hasta ahora se perdía el tercer nivel y el corte venía desde abajo.
-- Tras «Desplazar cara» las caras de la pieza vuelven a poder pulsarse. Hasta ahora no quedaba nada sobre lo que dibujar, taladrar o poner un ajuste.
-- Si desaparece la cara hasta la que se extruye, el error señala ahora ese campo y sugiere elegir otra — en vez de señalar el plano del boceto.
-- Al hacer clic en un taladro se propone el tornillo que realmente pasa por él — y se indica el diámetro medido.
-- Los archivos grandes de un slicer se abren con soltura, sin que la ventana se congele. Antes, el mero recuento de cuerpos leía todo el archivo en memoria.
 - Los conjuntos también responden ya a «Posar sobre la cama»: bajan como un todo y las piezas conservan su posición relativa. Hasta ahora no pasaba nada, sin aviso.
-- Dos archivos importados con el mismo nombre ya no se pierden. El segundo sobrescribía antes al primero, y el proyecto ya no se podía abrir después.
-- Una dirección sin extensión de archivo dice ahora que allí hay una página web y dónde está el botón de descarga, en vez de «Formato no reconocido».
 - La cantidad de filamento leída de un archivo G-code vuelve a ser correcta. Un comando al final del archivo hacía que todo lo anterior se calculase distinto y duplicaba el total.
-- Al escalar a una anchura dada se medía también una línea auxiliar. De cincuenta milímetros salían cinco.
-- Al exportar, piezas con el mismo nombre se sobrescribían: un archivo, dos mensajes de éxito, una pieza perdida.
+- Un cambio de impresora o material conserva lo que usted ajustó. Hasta ahora se restablecía todo el conjunto sin avisar.
+- La elección de filamento por ranura de material llega al slicer. Antes se guardaba el texto mostrado en vez del perfil.
+
+### Vista y manejo
+- Una cara seleccionada cuenta: taladro, bloque y boceto van adonde usted señaló. Antes cada operación sobre una cara costaba dos clics.
+- Al hacer clic en un taladro se propone el tornillo que realmente pasa por él — y se indica el diámetro medido.
+- Tras «Desplazar cara» las caras de la pieza vuelven a poder pulsarse. Hasta ahora no quedaba nada sobre lo que dibujar, taladrar o poner un ajuste.
 - Al abrir un proyecto aparece de inmediato un indicador de carga. Hasta ahora el centro de la ventana quedaba negro varios segundos o mostraba la pantalla de inicio — parecía un cuelgue.
 - Un clic en la vista solo acierta ahora en lo que realmente ve — ninguna pieza oculta ni de otra placa. Y tras pasar por el modo Mover, las aristas ya no se ven a través de todas las caras.
 - Las vistas de eje de Ctrl+0 a Ctrl+6 vuelven a encuadrar el modelo, en vez de incluir también la placa y el volumen de impresión.
@@ -78,22 +86,35 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - Una medida en la vista usa ahora la unidad elegida, un cambio de tema recolorea también la placa y el volumen de impresión, y con varias placas la etiqueta y el asa quedan en la pieza, no al lado.
 - Lo que trae consigo un bloque insertado figura en el árbol de objetos bajo su nombre, y el nodo ofrece modificar precisamente ese paso.
 - La sombra bajo la pieza muestra ahora cada trozo por separado y es más discreta. Si un cuerpo se rompe, ahora se ve en la sombra.
+
+### Archivos y exportación
+- Dos archivos importados con el mismo nombre ya no se pierden. El segundo sobrescribía antes al primero, y el proyecto ya no se podía abrir después.
+- Una dirección sin extensión de archivo dice ahora que allí hay una página web y dónde está el botón de descarga, en vez de «Formato no reconocido».
+- Al exportar, piezas con el mismo nombre se sobrescribían: un archivo, dos mensajes de éxito, una pieza perdida.
+- La extensión de proyecto se añade ahora con «Guardar como». Un proyecto guardado como soporte.stl era, al abrirlo, un modelo ajeno ilegible.
+- Un proyecto modificado ya no se pierde al arrastrar un archivo a la pantalla de inicio — se pregunta antes.
+
+### Velocidad y estabilidad
+- La aplicación ya no desaparece sin avisar cuando se cambia una medida, se lee un dibujo o se calcula un corte. Los mismos cálculos van ahora hasta sesenta veces más rápido.
+- Vaciar y colocar espigas se pueden cancelar de verdad. En una pieza escaneada, el botón se quedaba quieto minutos enteros.
+- Los archivos grandes de un slicer se abren con soltura, sin que la ventana se congele. Antes, el mero recuento de cuerpos leía todo el archivo en memoria.
 - Si un cálculo en segundo plano se queda atascado, la aplicación ahora lo dice. Si no, la leyenda, el análisis de capas y la búsqueda de una versión nueva se quedaban parados para siempre.
 - Cancelar descarta ahora también la siguiente ejecución ya en cola, y la barra de progreso ya no desaparece sobre un archivo que aún se está escribiendo.
+
+### Idiomas
 - El idioma elegido en el instalador se aplica de inmediato, o el del sistema en su defecto. Y un idioma elegido en la ventana surte efecto al momento, no solo al reiniciar.
 - Un cambio de idioma surte efecto en toda la ventana. Los ajustes de impresión se quedaban en el idioma con el que se inició la aplicación.
 - Los ejemplos incluidos nombran ahora sus medidas en su idioma. Antes ponía «Breite, Tiefe, Höhe» en alemán, incluso con la interfaz en inglés.
 - La línea de comandos habla ahora el idioma configurado. Hasta ahora daba ayuda y mensajes de error en alemán, fuera cual fuera la elección.
-- Un cambio de impresora o material conserva lo que usted ajustó. Hasta ahora se restablecía todo el conjunto sin avisar.
-- La elección de filamento por ranura de material llega al slicer. Antes se guardaba el texto mostrado en vez del perfil.
-- La extensión de proyecto se añade ahora con «Guardar como». Un proyecto guardado como soporte.stl era, al abrirlo, un modelo ajeno ilegible.
-- Un proyecto modificado ya no se pierde al arrastrar un archivo a la pantalla de inicio — se pregunta antes.
+
+### Chat y soporte
 - Una propuesta del chat que retira pasos dice de antemano cuáles se van con ella. Y Cancelar cancela de verdad, en vez de seguir calculando en segundo plano.
 - El chat vuelve a lograr ocho pasos por pregunta en vez de cuatro, y la línea de coste ya no calcula de más.
 - Lo que se envía con una respuesta al soporte se muestra antes, palabra por palabra, incluido el registro. Y si no llega, el mensaje da el motivo real.
+
+### OpenSCAD
 - Las formas libres ya no necesitan un segundo programa: lo que hacía OpenSCAD lo hacen las herramientas de dibujo y los bloques — una instalación menos de la que ocuparse.
 - Un proyecto con código de OpenSCAD se sigue abriendo y todo lo demás se calcula como antes. El Informe nombra el paso, y «Mostrar los valores» copia su código.
-
 
 ## 0.1.5
 

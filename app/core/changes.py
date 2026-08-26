@@ -31,17 +31,45 @@ from app.i18n import SOURCE_LANGUAGE, get_language
 #: Eine Versionsüberschrift: ``## 0.1.4``.
 SECTION: Final = re.compile(r"^##\s+(\S+)\s*$")
 
+#: Eine Gruppenüberschrift innerhalb einer Version: ``### Bausteine``.
+#: Seit 0.2.0 — 75 Punkte als eine Liste liest niemand, gegliedert schon
+#: (Entscheidung Robert, 26.08.2026). Ältere Abschnitte tragen keine und
+#: bleiben gültig: ihre Punkte stehen in einer Gruppe ohne Titel.
+GROUP: Final = re.compile(r"^###\s+(.*\S)\s*$")
+
 #: Ein Punkt darunter: ``- Solidon sieht beim Start nach …``. Das Sternchen
 #: gilt mit, weil Markdown es zulässt und der Bestand beides kennt.
 BULLET: Final = re.compile(r"^[-*]\s+(.*\S)\s*$")
 
 
 @dataclass(frozen=True, slots=True)
+class Group:
+    """Ein Bündel Punkte unter einer gemeinsamen Überschrift.
+
+    Der Titel darf leer sein — so lesen sich die Abschnitte vor 0.2.0, und so
+    liest sich ein Vorspann, der vor der ersten Überschrift steht.
+    """
+
+    title: str
+    points: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class Entry:
-    """Eine Version mit dem, was sie gebracht hat."""
+    """Eine Version mit dem, was sie gebracht hat.
+
+    ``points`` bleibt die flache Sicht für alle, die keine Gliederung
+    brauchen — das Update-Fenster und ``make_download`` lesen sie unverändert.
+    Wer gliedert, liest ``groups``.
+    """
 
     version: str
-    points: tuple[str, ...]
+    groups: tuple[Group, ...]
+
+    @property
+    def points(self) -> tuple[str, ...]:
+        """Alle Punkte in Dateireihenfolge, über die Gruppen hinweg."""
+        return tuple(point for group in self.groups for point in group.points)
 
 
 def folder() -> Path:
@@ -74,29 +102,56 @@ def _read(language: str) -> tuple[Entry, ...]:
         return ()
     found: list[Entry] = []
     version = ""
+    title = ""
+    groups: list[Group] = []
     points: list[str] = []
+
+    def close_group() -> None:
+        """Die laufende Gruppe abschließen — leer bleibt sie draußen.
+
+        Eine Überschrift ohne Punkte darunter ist kein Inhalt, und sie zählte
+        sonst still als einer: Die Zusage „75 Punkte" im Kopf der Datei misst
+        sich an ``Entry.points``.
+        """
+        nonlocal title
+        if points:
+            groups.append(Group(title=title, points=tuple(points)))
+        points.clear()
+        title = ""
+
+    def close_entry() -> None:
+        nonlocal version
+        close_group()
+        if version and groups:
+            found.append(Entry(version=version, groups=tuple(groups)))
+        groups.clear()
+        version = ""
+
     for line in text.splitlines():
         heading = SECTION.match(line)
         if heading:
-            if version:
-                found.append(Entry(version=version, points=tuple(points)))
-            version, points = heading.group(1), []
+            close_entry()
+            version = heading.group(1)
+            continue
+        grouping = GROUP.match(line)
+        if grouping and version:
+            # Vor der ``#``-Weiche darunter, sonst beendete jede
+            # Gruppenüberschrift den ganzen Abschnitt.
+            close_group()
+            title = grouping.group(1)
             continue
         if line.startswith("#"):
             # Eine andere Überschrift beendet den Abschnitt — der Kopf der
             # Datei erklärt, was hineingehört, und ist kein Punkt.
-            if version:
-                found.append(Entry(version=version, points=tuple(points)))
-            version, points = "", []
+            close_entry()
             continue
         if not version:
             continue
         bullet = BULLET.match(line)
         if bullet:
             points.append(bullet.group(1))
-    if version:
-        found.append(Entry(version=version, points=tuple(points)))
-    return tuple(entry for entry in found if entry.points)
+    close_entry()
+    return tuple(found)
 
 
 def history(language: str = "") -> tuple[Entry, ...]:

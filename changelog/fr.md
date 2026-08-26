@@ -18,27 +18,43 @@ dans `website/version.json`.
 
 ## 0.2.0
 
+
+### Blocs
 - Vos propres blocs sans une ligne de code : sélectionnez des étapes dans l'historique et placez-les dans le catalogue comme bloc — avec vos champs, un aperçu et une plage de valeurs vérifiée.
 - Un bloc que vous avez créé voyage dans le fichier de projet. Celui qui l'ouvre peut insérer votre pièce sans rien installer.
 - Cinq nouveaux blocs au catalogue : crochet pour panneau perforé, équerre, pied, clip de câble et œil de charnière.
 - Le crochet tient désormais même si l'on soulève la pièce en retirant quelque chose — une languette élastique s'enclenche derrière le panneau. Désactivable si vous retirez souvent la pièce.
-- Une face sélectionnée compte : perçage, bloc et esquisse vont là où vous avez pointé. Chaque opération sur une face coûtait auparavant deux clics.
 - Support mural, nervure, languette-rainure, ergot, clip d'encliquetage et charnière-film figurent désormais dans le menu d'une face cliquée. Il manquait justement le support mural.
 - Qui insère un bloc du catalogue sans choisir un endroit se voit désormais poser la question. Jusqu'ici il se plaçait à l'origine, moitié dans la pièce, moitié sous le plateau.
 - Le catalogue de blocs peut être consulté même sans modèle. L'insertion est alors désactivée et en dit la raison, au lieu d'annuler seulement après confirmation.
+- Le logement d'écrou et le dégagement de tête du trou de vis n'enlevaient rien : tous deux construisaient au-dessus de la face au lieu d'en dessous.
+- Le logement d'aimant retient de nouveau l'aimant : la lèvre de retenue était jusqu'ici ajoutée au logement au lieu d'y être évidée, et disparaissait dedans.
+- La fente en trou de serrure pend maintenant à la verticale, si bien que la vis se coince en descendant. Couchée de travers, elle glissait de côté et la tête manquait de place.
+- Le logement d'écrou correspond désormais à l'écrou : pour M5, M6 et M8 le tableau indiquait une hauteur trop faible, six dixièmes de trop peu pour le M5.
+
+### Dessin
 - En dessinant, la grille montre ce à quoi l'accrochage obéit, le pas se saisit au clavier, les cotes sont près du pointeur, et la barre dit sur quelle face vous dessinez.
 - Les raccourcis clavier fonctionnent de nouveau en mode dessin — ligne, cercle, arc, ajuster, décalage, Ctrl+Z — et le clic droit ouvre le menu du dessin au lieu de celui du modèle.
 - Ajuster à la vue ramène le dessin dans le cadre, et un clic à cinq millimètres d'un point ne s'y accroche plus.
 - Une ligne de construction reste une ligne de construction, même après avoir été ajustée, prolongée, décalée ou reflétée. Jusqu'ici une ligne d'axe devenait une arête de profil et séparait la pièce.
 - La boîte de dialogue d'une étape affiche les cotes de votre dessin au lieu des valeurs par défaut, et un cercle apparaît avec son diamètre entier, pas la moitié.
+- Une poche issue d'un dessin avec trou conserve le trou. Jusqu'ici elle fraisait aussi l'îlot.
+- Un trou dessiné est soustrait quel que soit le sens dans lequel vous l'avez tracé. Selon l'ordre des clics, une pièce plus pleine sortait auparavant.
+- Ajuster ne coupe plus qu'à l'intérieur de son propre segment, et Prolonger trouve aussi des cercles et des arcs comme cible — jusqu'ici il ne voyait que des lignes.
+- Une transition entre deux dessins conserve leurs trous, et une poche sur une paroi latérale coupe dans la paroi au lieu d'en haut.
+- Un contour qui se croise lui-même est désormais signalé sur le dessin, au lieu de produire un corps non étanche qui s'exporte quand même.
+- Un dessin avec trou dans un trou conserve tous les niveaux, et Projeter prend le plan sur lequel vous dessinez — jusqu'ici le troisième niveau disparaissait et la coupe venait du dessous.
+- La mise à une largeur donnée mesurait aussi une ligne de construction. Cinquante millimètres devenaient cinq.
+
+### Historique et étapes
 - Plusieurs étapes de l'historique peuvent être sélectionnées à la fois.
 - Les limites d'une cote se modifient après coup — jusqu'ici, ce qui était saisi à la création valait pour toujours.
-- L'application ne disparaît plus sans un mot quand une cote change, un dessin est lu ou une coupe est calculée. Les mêmes calculs vont maintenant jusqu'à soixante fois plus vite.
 - Modifier une étape après coup peut désormais être annulé. Jusqu'ici Ctrl+Z retirait la mauvaise action et laissait la valeur modifiée en place.
-- Évider et goupiller peuvent vraiment être annulés. Sur une pièce scannée, le bouton restait immobile pendant des minutes.
 - Une étape qui vise une face d'un autre corps se recalcule après chaque changement. Jusqu'ici une pièce alignée restait à l'ancien endroit, même après la fermeture.
-- L'estimation de matière pour les supports était fausse d'un grand facteur : elle calculait la surface sous le porte-à-faux au lieu de la colonne en dessous.
-- La largeur de pont mesure désormais la portion vraiment franchie sans appui. Une goulotte à câbles rapportait auparavant la largeur de sa boîte englobante et recevait le mauvais conseil.
+- Les caractéristiques gardent leur nom quand une pièce est tournée ou déplacée pour l'impression. Les étapes et ajustements qui les visent ne tombent plus dans le vide.
+- Si la face jusqu'où l'extrusion va disparaît, l'erreur pointe désormais ce champ et suggère d'en choisir une autre — au lieu du plan de l'esquisse.
+
+### Outils et géométrie
 - La fraisure ne fonctionnait que dans un sens par axe. Cliquée du mauvais côté, elle n'enlevait rien et ne disait rien.
 - Sur les pièces à gradins, perçage et bouchon travaillaient dans le vide : la direction venait de la boîte englobante et non de la matière à cet endroit.
 - Un bouchon traversant ne remplissait que la moitié du perçage — et laissait tout autour l'écart dont le perçage avait été élargi pour la matière.
@@ -46,31 +62,23 @@ dans `website/version.json`.
 - L'évent d'une pièce évidée se termine désormais dans la cavité au lieu de traverser le dessus, et la rainure filetée du couvercle à visser ne perce plus un trou dans son propre dessus.
 - Union, soustraction et peinture signalent désormais quand rien ne s'est produit. Jusqu'ici une étape restait dans l'historique au-dessus d'un modèle inchangé.
 - Si une pièce se disloque parce qu'un bloc ne touche plus son support, le rapport le signale comme une erreur et recommande une solution. Jusqu'ici le nombre de morceaux n'était qu'une indication.
-- Les caractéristiques gardent leur nom quand une pièce est tournée ou déplacée pour l'impression. Les étapes et ajustements qui les visent ne tombent plus dans le vide.
 - Un filetage dans un perçage cliqué ne coupait que sa moitié inférieure. Même chose pour l'insert à chaud.
 - Un filetage intérieur est désormais soustrait, comme son intitulé le promet. Jusqu'ici un boulon poussait à la place dans le trou de noyau.
-- Le logement d'écrou et le dégagement de tête du trou de vis n'enlevaient rien : tous deux construisaient au-dessus de la face au lieu d'en dessous.
-- Le logement d'aimant retient de nouveau l'aimant : la lèvre de retenue était jusqu'ici ajoutée au logement au lieu d'y être évidée, et disparaissait dedans.
-- La fente en trou de serrure pend maintenant à la verticale, si bien que la vis se coince en descendant. Couchée de travers, elle glissait de côté et la tête manquait de place.
-- Le logement d'écrou correspond désormais à l'écrou : pour M5, M6 et M8 le tableau indiquait une hauteur trop faible, six dixièmes de trop peu pour le M5.
+
+### Impression et slicer
+- L'estimation de matière pour les supports était fausse d'un grand facteur : elle calculait la surface sous le porte-à-faux au lieu de la colonne en dessous.
+- La largeur de pont mesure désormais la portion vraiment franchie sans appui. Une goulotte à câbles rapportait auparavant la largeur de sa boîte englobante et recevait le mauvais conseil.
 - Une pièce plus fine qu'une couche imprimée n'est plus dressée sur chant.
 - La division automatique compte le dépassement du tenon dans la limite du plateau et ne laisse aucun ajustement pointant vers des endroits disparus.
-- Une poche issue d'un dessin avec trou conserve le trou. Jusqu'ici elle fraisait aussi l'îlot.
-- Un trou dessiné est soustrait quel que soit le sens dans lequel vous l'avez tracé. Selon l'ordre des clics, une pièce plus pleine sortait auparavant.
-- Ajuster ne coupe plus qu'à l'intérieur de son propre segment, et Prolonger trouve aussi des cercles et des arcs comme cible — jusqu'ici il ne voyait que des lignes.
-- Une transition entre deux dessins conserve leurs trous, et une poche sur une paroi latérale coupe dans la paroi au lieu d'en haut.
-- Un contour qui se croise lui-même est désormais signalé sur le dessin, au lieu de produire un corps non étanche qui s'exporte quand même.
-- Un dessin avec trou dans un trou conserve tous les niveaux, et Projeter prend le plan sur lequel vous dessinez — jusqu'ici le troisième niveau disparaissait et la coupe venait du dessous.
-- Après « Décaler la face », les faces de la pièce peuvent de nouveau être cliquées. Jusqu'ici il ne restait rien sur quoi dessiner, percer ou poser un ajustement.
-- Si la face jusqu'où l'extrusion va disparaît, l'erreur pointe désormais ce champ et suggère d'en choisir une autre — au lieu du plan de l'esquisse.
-- Un clic sur un perçage propose désormais la vis qui y passe vraiment — et indique le diamètre mesuré.
-- Les gros fichiers d'un trancheur s'ouvrent sans que la fenêtre se fige. Auparavant, le simple comptage des corps chargeait tout le fichier en mémoire.
 - Un assemblage répond désormais aussi à « Poser sur le plateau » : il descend en bloc, les pièces gardant leur position les unes par rapport aux autres. Jusqu'ici rien ne se passait.
-- Deux fichiers importés portant le même nom ne se perdent plus. Le second écrasait auparavant le premier, et le projet ne pouvait plus être rouvert ensuite.
-- Une adresse sans extension de fichier indique désormais qu'une page web s'y trouve et où se situe le bouton de téléchargement, au lieu de « Format non reconnu ».
 - La quantité de filament lue dans un fichier G-code est de nouveau correcte. Une commande en fin de fichier faisait calculer différemment tout ce qui précédait et doublait le total.
-- La mise à une largeur donnée mesurait aussi une ligne de construction. Cinquante millimètres devenaient cinq.
-- À l'export, des pièces de même nom s'écrasaient : un fichier, deux messages de réussite, une pièce perdue.
+- Un changement d'imprimante ou de matériau conserve ce que vous avez réglé. Jusqu'ici tout le jeu était réinitialisé sans un mot.
+- Le choix de filament par emplacement de matériau parvient au trancheur. C'était le texte affiché qui était enregistré, pas le profil.
+
+### Vue et utilisation
+- Une face sélectionnée compte : perçage, bloc et esquisse vont là où vous avez pointé. Chaque opération sur une face coûtait auparavant deux clics.
+- Un clic sur un perçage propose désormais la vis qui y passe vraiment — et indique le diamètre mesuré.
+- Après « Décaler la face », les faces de la pièce peuvent de nouveau être cliquées. Jusqu'ici il ne restait rien sur quoi dessiner, percer ou poser un ajustement.
 - À l'ouverture d'un projet, un indicateur de chargement apparaît aussitôt. Jusqu'ici le centre de la fenêtre restait noir un moment ou affichait l'écran d'accueil — on aurait dit un plantage.
 - Un clic dans la vue ne touche que ce que vous voyez — aucune pièce masquée, aucune d'une autre plaque. Après le mode Déplacer, les arêtes ne transpercent plus toutes les faces.
 - Les vues d'axe de Ctrl+0 à Ctrl+6 cadrent de nouveau le modèle, au lieu d'y inclure aussi le plateau et le volume d'impression.
@@ -78,22 +86,35 @@ dans `website/version.json`.
 - Une cote dans la vue utilise désormais l'unité choisie, un changement de thème recolore le plateau et le volume d'impression, et l'étiquette et la poignée se placent sur la pièce plutôt qu'à côté.
 - Ce qu'apporte un bloc inséré figure dans l'arborescence sous son nom, et le nœud propose de modifier précisément cette étape.
 - L'ombre sous la pièce montre désormais chaque morceau séparément et se fait plus discrète. Si un corps se disloque, on le voit maintenant à l'ombre.
+
+### Fichiers et export
+- Deux fichiers importés portant le même nom ne se perdent plus. Le second écrasait auparavant le premier, et le projet ne pouvait plus être rouvert ensuite.
+- Une adresse sans extension de fichier indique désormais qu'une page web s'y trouve et où se situe le bouton de téléchargement, au lieu de « Format non reconnu ».
+- À l'export, des pièces de même nom s'écrasaient : un fichier, deux messages de réussite, une pièce perdue.
+- L'extension du projet est désormais ajoutée par « Enregistrer sous ». Un projet enregistré sous support.stl était, à l'ouverture, un modèle étranger illisible.
+- Un projet modifié n'est plus perdu quand vous glissez un fichier sur l'écran d'accueil — la question est posée avant.
+
+### Vitesse et stabilité
+- L'application ne disparaît plus sans un mot quand une cote change, un dessin est lu ou une coupe est calculée. Les mêmes calculs vont maintenant jusqu'à soixante fois plus vite.
+- Évider et goupiller peuvent vraiment être annulés. Sur une pièce scannée, le bouton restait immobile pendant des minutes.
+- Les gros fichiers d'un trancheur s'ouvrent sans que la fenêtre se fige. Auparavant, le simple comptage des corps chargeait tout le fichier en mémoire.
 - Si un calcul en arrière-plan se bloque, l'application le signale désormais. Sinon, la légende, l'analyse des couches et la recherche d'une nouvelle version restaient bloquées pour toujours.
 - Annuler abandonne désormais aussi la prochaine exécution déjà mise en file, et la barre de progression ne disparaît plus sur un fichier encore en cours d'écriture.
+
+### Langues
 - La langue choisie dans l'installeur s'applique aussitôt, sinon celle du système. Et une langue choisie dans la fenêtre prend effet immédiatement, au lieu d'attendre le prochain démarrage.
 - Un changement de langue agit maintenant dans toute la fenêtre. Les réglages d'impression restaient dans la langue de démarrage.
 - Les exemples fournis nomment désormais leurs cotes dans votre langue. « Breite, Tiefe, Höhe » y figurait auparavant en allemand, même avec une interface en anglais.
 - La ligne de commande parle désormais la langue réglée. Jusqu'ici elle donnait l'aide et les messages d'erreur en allemand, quel que soit le choix.
-- Un changement d'imprimante ou de matériau conserve ce que vous avez réglé. Jusqu'ici tout le jeu était réinitialisé sans un mot.
-- Le choix de filament par emplacement de matériau parvient au trancheur. C'était le texte affiché qui était enregistré, pas le profil.
-- L'extension du projet est désormais ajoutée par « Enregistrer sous ». Un projet enregistré sous support.stl était, à l'ouverture, un modèle étranger illisible.
-- Un projet modifié n'est plus perdu quand vous glissez un fichier sur l'écran d'accueil — la question est posée avant.
+
+### Chat et support
 - Une proposition du chat qui retire des étapes dit d'avance lesquelles partent avec elle. Et Annuler annule vraiment au lieu de continuer à calculer en arrière-plan.
 - Le chat parvient de nouveau à huit étapes par question au lieu de quatre, et la ligne de coût ne surestime plus.
 - Ce qui part avec un retour vers l'assistance s'affiche auparavant, mot pour mot — y compris le journal. Et si l'envoi échoue, le message donne la vraie raison.
+
+### OpenSCAD
 - Les formes libres ne demandent plus de second programme : ce que faisait OpenSCAD, les outils de dessin et les blocs le font — une installation de moins à gérer.
 - Un projet contenant du code OpenSCAD s'ouvre toujours, et tout le reste s'y calcule comme avant. Le Rapport nomme l'étape, et « Afficher les valeurs » en copie le code.
-
 
 ## 0.1.5
 
