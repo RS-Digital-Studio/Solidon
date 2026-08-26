@@ -1,4 +1,0 @@
-Aktoren vorher: 8
-Aktoren im Bewegen-Modus: 16 — neu: ['PolyData(Addr=000001C32CFBE470)', 'PolyData(Addr=000001C32CFD0220)', 'PolyData(Addr=000001C32CFD2600)', 'PolyData(Addr=000001C32CFDA5C0)', 'PolyData(Addr=000001C32CFDBEB0)', 'PolyData(Addr=000001C32CFDC620)', 'gizmo_labels-labels', 'scale-handle']
-Aktoren nach Verlassen: 8 — Reste: []
-FERTIG
