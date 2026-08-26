@@ -82,6 +82,19 @@ der härteste §2-Konflikt für den geringsten Gewinn (die lokale Härtung
 deckt den einfachen Fall; wer Profile neu aufsetzt, um alle zwei Wochen 14
 Tage zu schummeln, kauft auch mit Server nicht). Offen für die Runde.
 
+**Vorläufig freigeschaltet — die Lücke, die der Abgleich mit Teil D fand.**
+D2 sagt richtig: Der Kein-Netz-Fall darf nichts kosten, die ausstehende
+Aktivierung ist keine Sperre, „solange etwas anderes freischaltet". Genau
+dieses *solange* hat ein Loch: Wer am letzten Testtag kauft (oder nach dem
+Ablauf) und kein Netz hat, hat am Tag darauf nichts anderes mehr — ein
+zahlender Kunde wäre gesperrt, der Fall, der heute zweimal Befund war.
+Deshalb: **Ein lokal gültiger Schlüssel ohne Zertifikat schaltet vorläufig
+frei**, befristet (Vorschlag: 14 Tage ab Eintragen — dieselbe Zahl wie der
+Testlauf, leicht zu sagen), mit sichtbarem Zustand „Aktivierung ausstehend —
+noch N Tage" und den zwei Knöpfen aus D. Die Frist läuft über dieselbe
+gehärtete Marker-Mechanik (signiert, zwei Orte). Ein Kauf ist damit nie
+schlechter als kein Kauf, und die Aktivierung bleibt trotzdem keine Formsache.
+
 **Bestandskunden-Migration.** Bereits verkaufte Schlüssel funktionieren
 offline weiter (die App kann `purchased_on`/`major` lesen): Schlüssel mit
 Kaufdatum vor dem Stichtag der Server-Einführung brauchen kein Zertifikat.
@@ -240,3 +253,6 @@ Schlüssel; (3) der Konstruktor des Dialogs macht keinen Netzaufruf
    Ansage).
 7. Wortlaut der §2-Präzisierung (Vorschlag in Teil D4 — ein Satz, überall
    gleich).
+8. Vorläufige Freischaltung ohne Zertifikat (Vorschlag: 14 Tage ab
+   Eintragen, sichtbar als „Aktivierung ausstehend" — sonst sperrt der
+   Kauf am letzten Testtag ohne Netz einen zahlenden Kunden; Teil A).
