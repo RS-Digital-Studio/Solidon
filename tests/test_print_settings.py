@@ -2525,7 +2525,15 @@ def test_without_a_slicer_the_dialog_offers_a_way_to_one(
 def test_a_slicer_that_arrived_is_picked_up_without_reopening(
     qt_app: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    """Wer einen Slicer gerade installiert hat, soll nicht schließen müssen."""
+    """Wer einen Slicer gerade installiert hat, soll nicht schließen müssen.
+
+    Gemessen mit einem PrusaSlicer, nicht mit der Orca-Familie: Die verlangt
+    seit dem Profil-Wächter zu Recht erst eine Profilwahl, und ihr Knopf
+    bliebe hier grau — dann prüfte dieser Test zwei Zusagen auf einmal und
+    keine sauber. Das Aufgreifen misst sich an einem Slicer ohne
+    Profilpflicht; den Wächter der Orca-Familie hält
+    ``tests/test_print_settings_ui.py`` fest.
+    """
     from app.core import discover
     from app.ui.print_settings_dialog import PrintSettingsDialog
     from app.ui.session import Session
@@ -2535,7 +2543,7 @@ def test_a_slicer_that_arrived_is_picked_up_without_reopening(
     dialog = PrintSettingsDialog(Session(), UiSettings())
     assert not dialog.slice_button.isEnabled()
 
-    program = tmp_path / "orca-slicer.exe"
+    program = tmp_path / "prusa-slicer.exe"
     program.write_text("")
     monkeypatch.setattr(discover, "find_program", lambda *_args: program)
 
