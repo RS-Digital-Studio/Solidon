@@ -99,6 +99,37 @@ def test_an_extruded_hexagon_matches_the_regular_polygon_area() -> None:
     assert body.volume == pytest.approx(3.0 * math.sqrt(3.0) / 2.0 * 100.0 * 3.0, rel=1e-9)
 
 
+def _square(half: float, *, clockwise: bool) -> tuple[SketchElement, ...]:
+    """Vier Linien um den Ursprung, links- oder rechtsherum geschlossen."""
+    corners = [(-half, -half), (half, -half), (half, half), (-half, half)]
+    if clockwise:
+        corners = [corners[0], corners[3], corners[2], corners[1]]
+    return tuple(SketchElement("line", (corners[i], corners[(i + 1) % 4])) for i in range(4))
+
+
+@pytest.mark.parametrize("hole_clockwise", [False, True], ids=["Loch-links", "Loch-rechts"])
+def test_a_hole_is_subtracted_whichever_way_it_was_drawn(hole_clockwise: bool) -> None:
+    """Skizze 1: ein Loch wird abgezogen, egal in welchem Drehsinn es gezeichnet
+    wurde.
+
+    ``_face`` drehte jeden Lochring bedingungslos um. Lief er im selben Drehsinn
+    wie seine Außenkontur, wurde er dadurch zur zweiten Außenkontur und
+    **addiert** statt abgezogen — +67 % Volumen, ohne einen Befund. In der
+    Zeichenfläche gibt es kein Rechteckwerkzeug: Ein Umriss entsteht Linie für
+    Linie, der Drehsinn ist reiner Zufall der Klickreihenfolge.
+
+    Gemessen: 40 x 40 mit einem Loch 20 x 20, fünf hoch — (1600 − 400) · 5.
+    """
+    from app.core.types import Sketch
+
+    outline = _square(20.0, clockwise=False) + _square(10.0, clockwise=hole_clockwise)
+    sketch = Sketch(plane="plane:xy", elements=outline, constraints=())
+
+    body = solid_of(run("sketch_extrude", sketch=sketch_to_text(sketch), height=5.0))
+
+    assert body.volume == pytest.approx(6000.0, rel=0.001)
+
+
 # --- Tasche ---------------------------------------------------------------------
 
 

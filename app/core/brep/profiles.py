@@ -123,22 +123,46 @@ def _circle_edge(centre: Point2, radius: float, lift: _Lift) -> Any:
     return BRepBuilderAPI_MakeEdge(circle).Edge()
 
 
+def _signed_area(profile: Profile) -> float:
+    """Die vorzeichenbehaftete Fläche des Umrisses (Gauß'sche Trapezformel).
+
+    Nur das Vorzeichen zählt, und es nennt den Drehsinn: positiv linksherum,
+    negativ rechtsherum. Gerechnet über die Stützpunkte der Segmente — für den
+    Drehsinn genügt das Vieleck, die genaue Kurve braucht es nicht.
+    """
+    points = [point for segment in profile.segments for point in _points(segment)]
+    total = 0.0
+    for (x0, y0), (x1, y1) in zip(points, points[1:] + points[:1], strict=True):
+        total += x0 * y1 - x1 * y0
+    return total / 2.0
+
+
 def _face(profile: Profile, lift: _Lift) -> Any:
     """Die Fläche des Umrisses, mit seinen Löchern als inneren Ringen.
 
-    Umgekehrt herum eingesetzt, wie OpenCASCADE es verlangt: ein innerer Ring
-    läuft gegen den äußeren, sonst gilt er als zweite Außenkontur und die
-    Fläche kommt leer heraus. ``Add`` sagt dazu nichts — der Fehler zeigt sich
-    erst am Volumen."""
+    Ein innerer Ring muss **gegen** den äußeren laufen, sonst gilt er
+    OpenCASCADE als zweite Außenkontur und die Fläche wächst, statt ein Loch zu
+    bekommen — ``Add`` sagt dazu nichts, der Fehler zeigt sich erst am Volumen.
+
+    Ob umgedreht werden muss, entscheidet der **gemessene** Drehsinn, nicht die
+    Annahme, jedes Loch sei linksherum gezeichnet. Bedingungslos umgedreht kippte
+    genau der Fall in den Fehler, in dem das Loch schon gegen die Außenkontur
+    lief: Aus dem Umdrehen wurde ein Gleichsinn, aus dem Loch eine zweite
+    Außenkontur (+67 % Volumen). In der Zeichenfläche ist der Drehsinn reiner
+    Zufall der Klickreihenfolge — es gibt kein Rechteckwerkzeug."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
     from OCP.TopoDS import TopoDS
 
     maker = BRepBuilderAPI_MakeFace(_wire(profile, lift), True)
+    outer_left = _signed_area(profile) >= 0.0
     for hole in profile.holes:
-        # ``Reversed`` gibt eine Form zurück, keinen Draht — der Rückweg über
-        # ``TopoDS.Wire_s`` ist die Stelle, an der OpenCASCADE das wieder
-        # geradezieht.
-        maker.Add(TopoDS.Wire_s(_wire(hole, lift).Reversed()))
+        wire = _wire(hole, lift)
+        # Läuft das Loch im selben Drehsinn wie die Außenkontur, wird es
+        # umgedreht (``Reversed`` gibt eine Form, ``TopoDS.Wire_s`` zieht sie
+        # zum Draht zurück); lief es schon dagegen, bleibt es.
+        if (_signed_area(hole) >= 0.0) == outer_left:
+            wire = TopoDS.Wire_s(wire.Reversed())
+        maker.Add(wire)
     return maker.Face()
 
 
