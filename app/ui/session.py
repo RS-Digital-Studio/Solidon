@@ -28,7 +28,7 @@ from app.core.agent.session import AgentSession
 from app.core.backends.llm import LLMBackend, first_available
 from app.core.backends.mesh import GeneratedMesh
 from app.core.errors import (
-    Action,
+    CANCEL_SPLIT,
     AppError,
     InternalError,
     OperationCancelled,
@@ -1061,13 +1061,7 @@ class Session(QObject):
                 UserError(
                     _("Die Teilung läuft schon."),
                     _("Eine zweite Suche zugleich hätte zwei Antworten auf eine Frage."),
-                    suggestions=(
-                        Action(
-                            "cancel_evaluation",
-                            _("Die laufende Teilung abbrechen"),
-                            primary=True,
-                        ),
-                    ),
+                    suggestions=(CANCEL_SPLIT,),
                 )
             )
             return

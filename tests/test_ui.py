@@ -1262,6 +1262,81 @@ def test_an_operation_without_a_menu_entry_is_not_simply_allowed(window: MainWin
     assert launched == [], "gestartet wird nichts"
 
 
+def test_a_locked_window_command_is_refused_with_the_reason(window: MainWindow) -> None:
+    """Regel 19, der Nachbarzweig: auch ein Fensterbefehl bleibt gesperrt.
+
+    ``_run_palette_choice`` bekam die Wache mit cc40aaa4; der Zweig für
+    Fensterbefehle rief seinen Rückruf weiter direkt — die Tastatur sprang
+    auf eine gesperrte Zeile, und Enter führte aus (Update-Review 25.08.,
+    ce-Befund). ``palette_rows`` sperrte die Zeile längst richtig; nur der
+    Vollzug fragte nie nach.
+    """
+    commands = window.window_commands()
+    name = next(key for key in commands if window._palette_actions.get(key) is not None)
+    action = window._palette_actions[name]
+    ran: list[str] = []
+    guarded = dict(commands)
+    guarded[name] = (*commands[name][:2], lambda: ran.append(name))
+    was_enabled = action.isEnabled()
+    try:
+        action.setEnabled(False)
+        window._run_window_command(name, guarded)
+        assert ran == [], "ein gesperrter Fensterbefehl startet nichts"
+        assert window.status_message.text(), "der Grund steht in der Zeile"
+
+        action.setEnabled(True)
+        window._run_window_command(name, guarded)
+        assert ran == [name], "frei heißt weiterhin: er läuft"
+    finally:
+        action.setEnabled(was_enabled)
+
+
+def test_a_running_export_keeps_the_bar_when_the_evaluation_ends(window: MainWindow) -> None:
+    """§2.8: Der Balken gehört dem Export, solange die Datei geschrieben wird.
+
+    ``_anything_running`` fragte die Flagge seit je — gesetzt hatte sie nie
+    jemand: Endete eine Auswertung während eines Exports, verschwand der
+    Balken, und der Kunde hielt das Schreiben für beendet und schloss das
+    Fenster (Update-Review, Fund 30).
+    """
+    window._exporting = True
+    try:
+        window._on_busy(False)
+        assert window.progress.isVisibleTo(window), "der Export trägt den Balken weiter"
+        assert not window.cancel_button.isVisibleTo(window), (
+            "und Abbrechen gibt es beim Export bewusst nicht (sein Docstring sagt warum)"
+        )
+    finally:
+        window._exporting = False
+    window._on_busy(False)
+    assert not window.progress.isVisibleTo(window), "ohne Export endet der Balken"
+
+
+def test_a_pure_download_offers_its_cancel_button(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Abbruch eines Downloads braucht einen sichtbaren Knopf (§2.8).
+
+    ``_on_busy`` zeigt ihn nur bei Auswertungen; ein reiner Download lief mit
+    Balken und ohne erreichbares Abbrechen — ``_cancel_download`` hing an
+    einem unsichtbaren Knopf, und kein Test fasste ihn an (Update-Review,
+    Fund 30). Der Arbeiter wird nicht gestartet: geprüft wird die Anzeige,
+    nicht das Netz.
+    """
+    started: list[object] = []
+    monkeypatch.setattr(window._leash, "start", started.append)
+
+    window.download_model("https://beispiel.invalid/halter.stl")
+
+    assert started, "ohne angenommenen Arbeiter prüft der Test nur check_url"
+    assert window._downloading
+    assert window.cancel_button.isVisibleTo(window), "der Weg zum Abbruch ist sichtbar"
+
+    window._download_stopped()
+    assert not window._downloading
+    assert not window.cancel_button.isVisibleTo(window), "mit dem Download geht der Knopf"
+
+
 def test_a_flashed_area_gets_opened_before_it_lights_up(window: MainWindow) -> None:
     """Ein zugeklappter Abschnitt blinkt an einer Stelle, an der nichts steht.
 
@@ -1795,6 +1870,66 @@ def test_every_offered_error_action_does_something(window: MainWindow) -> None:
         assert value.id in known or value.id in postponed, (
             f"{name} wird angeboten, aber nichts führt sie aus"
         )
+
+
+#: Kennungen, die absichtlich neben ``errors.py`` entstehen — sie gehören einem
+#: Fenster, das seine Knöpfe selbst baut (der Support-Dialog), oder einem Rat,
+#: den ``unhandled_advice`` als Satz zeigt. Wer hier etwas einträgt, sagt damit:
+#: Diese Kennung braucht keine Konstante und keinen Handler.
+ACTIONS_WITHOUT_A_CONSTANT = {"open_sketch", "save_report", "send_by_mail", "retry_send"}
+
+
+def test_no_error_action_is_invented_at_the_call_site() -> None:
+    """Eine Kennung, die nur an ihrer Aufrufstelle steht, entgeht jeder Prüfung.
+
+    Der Test darüber liest die **Konstanten** aus ``errors.py`` — gründlich,
+    aber er sieht nur, was dort steht. ``session.split_bodies`` erzeugte seinen
+    Vorschlag von Hand:
+
+        Action("cancel_evaluation", _("Die laufende Teilung abbrechen"))
+
+    Zwei Fehler in einer Zeile, und beide blieben jahrelang unsichtbar. Die
+    Kennung hieß nach der **Auswertung** und meinte die Teilung — zwei Dinge,
+    die beide abbrechbar sind. Und verdrahtet war sie nirgends, also wurde aus
+    dem einzigen Vorschlag dieses Fehlers ein Satz zum Lesen: Der Kunde bekam
+    den Rat, die Teilung abzubrechen, und keinen Weg, es zu tun. Dabei gibt es
+    die Handlung (``Session.cancel_split``).
+
+    Gefunden hat das kein Test, sondern eine Kontrolle von Hand am Ende eines
+    Tages. Diese Prüfung ist die Antwort darauf: Sie liest den **Quelltext**,
+    nicht das Modul — dieselbe Bauart wie der Wächter in ``test_leash.py``, der
+    jeden Arbeiter findet, der an der Leine vorbei startet.
+    """
+    import ast
+
+    constants = {value.id for value in vars(errors).values() if isinstance(value, errors.Action)}
+    assert len(constants) > 15, "die Konstanten wurden nicht gelesen — der Test prüft nichts"
+
+    invented: dict[str, str] = {}
+    files = [path for path in Path("app").rglob("*.py") if path.name != "errors.py"]
+    assert len(files) > 100, "die Quelldateien wurden nicht gefunden"
+    for path in files:
+        text = path.read_text(encoding="utf-8")
+        if "Action(" not in text:
+            continue
+        for node in ast.walk(ast.parse(text)):
+            if not isinstance(node, ast.Call) or not node.args:
+                continue
+            if not (isinstance(node.func, ast.Name) and node.func.id == "Action"):
+                continue
+            first = node.args[0]
+            if (
+                isinstance(first, ast.Constant)
+                and isinstance(first.value, str)
+                and first.value not in constants
+                and first.value not in ACTIONS_WITHOUT_A_CONSTANT
+            ):
+                invented[first.value] = f"{path}:{first.lineno}"
+
+    assert not invented, (
+        "Aktionskennung ohne Konstante in errors.py — sie entgeht damit der Prüfung "
+        f"darüber: {invented}"
+    )
 
 
 #: Die Handlungen am Prüfbericht, die die **Lage** eines Körpers ändern, mit der
@@ -3571,6 +3706,34 @@ def test_a_second_split_start_is_refused_while_one_runs(session: Session) -> Non
         assert not called
     finally:
         session._split = None
+
+
+def test_the_split_end_reports_when_the_thread_is_truly_gone(session: Session) -> None:
+    """Das endgültige Ende der Trennsuche meldet im finished-Pfad (§2.8).
+
+    ``cancel_split`` und ``_split_cancelled`` melden früher, aber dort läuft
+    der Thread noch: ``_on_split_busy`` fragt ``_anything_running()``, liest
+    ``split_running`` als True und ließ Balken und Abbrechen für immer
+    stehen — nach dem Auslaufen kam nie wieder ein False (Update-Review,
+    Fund 30). Doppelt gemeldet ist folgenlos, die Anzeige stellt nur einen
+    Zustand her.
+    """
+
+    class Done:
+        """Nur was Leine und Wache fragen: läuft er noch — nein."""
+
+        def isRunning(self) -> bool:  # noqa: N802 — der Name gehört Qt
+            return False
+
+    worker = Done()
+    session._split = worker
+    busy: list[bool] = []
+    session.splitBusyChanged.connect(busy.append)
+
+    session._on_split_done(worker)
+
+    assert busy == [False], "genau eine Nachmeldung, nach dem Auslaufen"
+    assert session._split is None, "und das Feld ist geräumt"
 
 
 def test_a_stale_split_worker_cannot_deliver(session: Session) -> None:

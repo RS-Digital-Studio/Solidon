@@ -48,6 +48,15 @@ CHANGE_SELECTION = Action("change_selection", _("Andere Objekte wählen"), prima
 REPAIR_AND_RETRY = Action("repair_and_retry", _("Reparieren und erneut versuchen"), primary=True)
 SHOW_LOCATIONS = Action("show_locations", _("Stellen zeigen"))
 SHOW_HISTORY = Action("show_history", _("Verlauf zeigen"))
+#: Die laufende Teilungssuche anhalten und verwerfen.
+#:
+#: **Sie hieß ``cancel_evaluation`` und meinte die Teilung.** Ein zweiter
+#: Start der Suche wirft „Die Teilung läuft schon", und der einzige Vorschlag
+#: dazu trug den Namen der *Auswertung* — eine andere Sache, die daneben
+#: ebenfalls abbrechbar ist. Verdrahtet war er nirgends, also wurde er über
+#: ``unhandled_advice`` zu einem Satz zum Lesen: Der Kunde bekam den Rat, die
+#: Teilung abzubrechen, und keinen Weg, es zu tun.
+CANCEL_SPLIT = Action("cancel_split", _("Die laufende Teilung abbrechen"), primary=True)
 USE_VOXEL_STAGE = Action("use_voxel_stage", _("Voxelstufe erzwingen"))
 SCALE_TO_FIT = Action("scale_to_fit", _("Auf den Bauraum verkleinern"))
 SPLIT_MODEL = Action("split_model", _("Modell teilen"), primary=True)

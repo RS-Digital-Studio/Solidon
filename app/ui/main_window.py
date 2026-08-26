@@ -5215,18 +5215,26 @@ class MainWindow(QMainWindow):
         if not name:
             return
         if name in commands:
-            # Dieselbe Wache wie in ``_run_palette_choice``, im Nachbarzweig:
-            # Die Liste sperrt ihre Zeilen, aber die Tastatur springt auch auf
-            # eine gesperrte, und Enter führte den Fensterbefehl trotzdem aus
-            # (Regel 19 — dieselbe Bauart, die für Operationen seit cc40aaa4
-            # behoben ist). Der Grund geht in die Statuszeile, wie dort.
-            available, reason = self._extra_availability(name)
-            if not available:
-                self.announce(reason)
-                return
-            commands[name][2]()
+            self._run_window_command(name, commands)
             return
         self._run_palette_choice(name)
+
+    def _run_window_command(self, name: str, commands: Mapping[str, tuple[str, str, Any]]) -> None:
+        """Führt den gewählten Fensterbefehl aus — oder sagt, warum nicht.
+
+        Dieselbe Wache wie in :meth:`_run_palette_choice`, im Nachbarzweig:
+        Die Liste sperrt ihre Zeilen, aber die Tastatur springt auch auf eine
+        gesperrte, und Enter führte den Fensterbefehl trotzdem aus (Regel 19 —
+        dieselbe Bauart, die für Operationen seit cc40aaa4 behoben ist). Der
+        Grund geht in die Statuszeile, wie dort. Als eigene Methode, weil
+        ``action_command_palette`` an einem ``exec`` hängt und ein Test die
+        Wache sonst nur mit offenem Dialog erreichte.
+        """
+        available, reason = self._extra_availability(name)
+        if not available:
+            self.announce(reason)
+            return
+        commands[name][2]()
 
     def _run_palette_choice(self, name: str) -> None:
         """Führt die gewählte Operation aus — oder sagt, warum nicht.
@@ -7081,6 +7089,13 @@ class MainWindow(QMainWindow):
             # Die Rücknahme-Warnung des Agenten zeigt in den Verlauf — dort
             # stehen die Transaktionen, die eine Annahme mitnähme (H-1).
             "show_history": lambda _error: self._flash_area("history"),
+            # **Ein Rat, den nur der Kunde ausführen kann, ist ein halber.**
+            # „Die Teilung läuft schon" schlägt vor, sie abzubrechen, und die
+            # Handlung gibt es (``Session.cancel_split`` hält an *und*
+            # verwirft). Ohne Draht wurde daraus über ``unhandled_advice`` ein
+            # Satz zum Lesen — richtig gegenüber einem Knopf ohne Wirkung, aber
+            # eben nur die Notlösung für Kennungen, die niemand einlösen kann.
+            "cancel_split": lambda _error: self.session.cancel_split(),
             "repair_and_retry": self._repair_after_error,
             "split_model": self._split_after_error,
             "scale_to_fit": self._scale_after_error,
