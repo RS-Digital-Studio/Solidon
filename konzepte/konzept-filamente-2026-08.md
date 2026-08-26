@@ -218,7 +218,7 @@ zeilengenau vor.
 
 | Teil | Wer |
 |---|---|
-| Kern: Merkmal-Füllung, Pinsel-Ausbau, Migration, Filamentkatalog, Farbmodell (Grau/Orange-Exklusiv in `theme`) | 3d-druck-30 |
+| Kern: Merkmal-Füllung, Pinsel-Ausbau, Migration, Filamentkatalog, Farbmodell (Grau/Orange-Exklusiv in `theme`) | 3d-druck-30 — **fertig** |
 | Oberfläche: Filamentwähler mit Farbpalette + Katalog, Kontextmenü, Werkzeugzeile/`paint_bar`-Ausbau, Blau-Vorschau | **3d-druck-27** (Board-Claim steht) |
 | Handbuch, Tour, Übersetzungen | **de** (Board-Claim steht) |
 
@@ -247,3 +247,29 @@ stehen die Wünsche der Gegenseite:
    `paint_bar` und Pinselring geht zusammen mit dem Kern-Ausbau von
    `stroke_at` in **einem** abgestimmten Zug — je ein halber Stand wäre
    ein Fenster mit Knopf ohne Rückgrat oder Rückgrat ohne Knopf.
+
+## Stand des Kerns (26.08.2026, 3d-druck-30)
+
+Alle fünf Blöcke gebaut, jeder mit eigenem Commit und Gegenprobe:
+
+1. **Merkmal-Füllung** (`ffda916f`) — `paint_slot` färbt über `at_feature`
+   genau die Dreiecke der erkannten Fläche; merkmalsstabil statt punktfest.
+2. **Grauleiter** (`ade029b5`) — `SLOT_COLOURS` ist unbunt, Orange gehört der
+   Auswahl; der Test misst Buntheit statt Helligkeit, weil der alte Fehler
+   gleicher Ton **und** gleiche Helligkeit war.
+3. **Filamentkatalog** (`7ca4f5a5`) — `knowledge/filaments.py`,
+   projektübergreifend, atomar, beliebig viele Einträge; gleicher Name ändert
+   die Farbe statt zu verdoppeln.
+4. **Pinsel-Ausbau + Format 13 → 14** — Radius, Klickpunkt, Kantenwinkel und
+   `brush()` entfallen; alte Schritte bleiben stehen und halten ehrlich an,
+   weil sich aus Punkt und Radius kein Merkmal zurückrechnen lässt.
+   Beispieldateien `painted_v13.p3d` und `example_v14.p3d`.
+5. **Extruder je Auftrag** (`2acd7960`) — `merge_slots(parts, across=…)`, dazu
+   ein Anschluss-Test, der die Reihenfolge aus zwei wirklich geschriebenen
+   3MF-Dateien liest. Damit ist die de-Zulieferung erledigt.
+
+**Offen aus den Zulieferungen:** `settings.slot_profiles` schlüsselt die
+Filamentwahl weiter **per Position** (d1) — mit benannten Katalog-Filamenten
+gehört der Schlüssel auf den Namen, sonst erbt ein Kunde nach dem Update
+stumm falsche Zuordnungen. Das gehört in den Dialog, der die Zuordnung führt
+(`print_settings_dialog`), und wartet auf die Oberflächenseite.
