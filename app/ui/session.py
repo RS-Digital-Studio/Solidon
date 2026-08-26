@@ -21,7 +21,7 @@ from typing import Any
 
 from PySide6.QtCore import QCoreApplication, QEventLoop, QObject, Signal
 
-from app.core import expressions
+from app.core import activation, expressions
 from app.core.agent import apply as agent_apply
 from app.core.agent.proposal import Proposal
 from app.core.agent.session import AgentSession
@@ -912,13 +912,47 @@ class Session(QObject):
         # Speichern in die Projektdatei. Eingebettet wird trotzdem zuerst —
         # die Kennungsregel ``src_<n>`` lebt in ``_embed_source``, und eine
         # Aufrufstelle, die sie vorwegnimmt, hätte zwei Wahrheiten.
+        #
+        # **Der Rücknahmepfad galt nur dem Plan, nicht dem Anwenden**, und
+        # damit war die Zusage darüber nur die halbe. `History.apply` fragt
+        # als Erstes die Lizenzgrenze (`activation.require`); wird dort
+        # abgelehnt, bleibt das Dokument unberührt — bis auf die Quelle, die
+        # eine Zeile vorher hineinkam. Gemessen mit `days_left=0`: kein
+        # Bypass, keine Geometrie, aber ein 300-MB-STL wandert unsichtbar in
+        # die Projektdatei, und weil `_embed_source` kein `_dirty` setzt,
+        # schließt der Kunde ohne Nachfrage. Seine Datei trägt danach etwas,
+        # das er nie hineingetan hat und von dem ihm niemand erzählt hat —
+        # dasselbe Argument, mit dem §32 die Ansage fremder Inhalte
+        # begründet. Gefunden von 3d-druck-46 im Lizenz-Audit.
         try:
             plan = import_plan(source_id, path.name, payload, unit)
         except AppError:
-            self.project.document.sources.pop(source_id, None)
-            self.project.sources.pop(source_id, None)
+            self._drop_source(source_id)
             raise
+
+        # **Und ``apply`` wirft nicht — es meldet.** Ein ``try`` darum greift
+        # deshalb nie: :meth:`apply` fängt jeden ``AppError`` und schickt ihn
+        # über ``failed`` an die Oberfläche. Ob der Schritt entstanden ist,
+        # sagt allein der Stapel; gemessen mit ``days_left=0`` blieb hier eine
+        # Quelle ohne Operation liegen, ohne Ausnahme und ohne ``_dirty``.
+        #
+        # Gefragt wird deshalb nach dem **Ergebnis** und nicht nach dem Grund:
+        # Das trägt die Lizenzgrenze genauso wie einen abgelehnten Plan oder
+        # was sonst noch dazukommt.
+        before = len(self.project.document.ops)
         self.apply(plan.title, [plan.draft])
+        if len(self.project.document.ops) == before:
+            self._drop_source(source_id)
+
+    def _drop_source(self, source_id: str) -> None:
+        """Eine eben eingebettete Quelle wieder austragen.
+
+        Zwei Wörterbücher, und beide gehören dazu: das Dokument nennt sie,
+        das Projekt hält ihren Inhalt. Wer nur eines räumt, lässt entweder
+        einen Namen ohne Datei oder hunderte Megabyte ohne Namen zurück.
+        """
+        self.project.document.sources.pop(source_id, None)
+        self.project.sources.pop(source_id, None)
 
     def import_image(self, path: Path) -> str:
         """Ein Bild als Quelle fürs Relief (§25, ``displace_image``).
@@ -927,7 +961,16 @@ class Session(QObject):
         kein Körper, es gehört einer Operation als Wert. Ohne diesen Weg
         führte kein Bildformat in die Quellen — das Feld „Bild" bot STLs an,
         und der Befund schlug eine Handlung vor, die es nicht gab.
+
+        **Die Grenze steht hier ausdrücklich**, obwohl keine Operation folgt.
+        Der Weg ändert das Dokument, also gilt Konzept §2 C — und dass er
+        praktisch nur aus einem Operationsdialog erreichbar ist, der ohnehin
+        gesperrt ist, ist ein Zufall der Oberfläche und keine Grenze. Wer sich
+        darauf verlässt, hat eine Zusage, die beim nächsten neuen Aufrufer
+        still verschwindet (`kern.md`: jede Stelle holt den Zustand selbst und
+        wirft selbst).
         """
+        activation.require(activation.CHANGE)
         source_id = self._embed_source("image", path.name, path.read_bytes())
         self._dirty = True
         self.projectChanged.emit()

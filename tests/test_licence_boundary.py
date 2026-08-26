@@ -471,3 +471,73 @@ def test_typing_a_key_does_not_repair_a_damaged_installation(
         activation.require(activation.CHANGE)
     with pytest.raises(InstallationDamaged):
         activation.require(activation.EXPORT)
+
+
+def test_a_refused_import_leaves_nothing_behind(
+    monkeypatch: pytest.MonkeyPatch, qt_app: object, tmp_path: Path
+) -> None:
+    """Abgelehnt heißt: nichts geschrieben — auch keine Quelle.
+
+    **Die Grenze hielt, und trotzdem blieb etwas liegen.** `import_model`
+    bettet die Quelle ein und lässt danach `apply` rechnen; `History.apply`
+    fragt als Erstes die Lizenzgrenze. Der Rücknahmepfad galt aber nur dem
+    Einleseplan, nicht dem Anwenden — also entstand keine Geometrie (die
+    Grenze hielt), und die Quelle blieb im Dokument. Bei einem großen STL sind
+    das hunderte Megabyte, die mit dem nächsten Speichern in die Projektdatei
+    wandern.
+
+    Der schwerere Teil ist nicht die Größe: `_embed_source` setzt kein
+    `_dirty`, der Kunde schließt also **ohne Nachfrage**, und seine Datei
+    trägt danach etwas, das er nie hineingetan hat. Dasselbe Argument, mit dem
+    §32 die Ansage fremder Inhalte begründet.
+
+    **Und der Aufrufer merkt davon nichts**, was den Fall erst vollständig
+    macht: ``Session.apply`` fängt jeden ``AppError`` und schickt ihn über
+    ``failed`` an die Oberfläche, wirft also nicht. Ein ``try`` um den Aufruf
+    griffe nie. Gefragt wird deshalb nach dem Ergebnis — ist ein Schritt
+    entstanden? —, und das trägt die Lizenzgrenze genauso wie jeden anderen
+    Ablehnungsgrund, der einmal dazukommt.
+
+    Gefunden von 3d-druck-46 im Lizenz-Audit.
+    """
+    from app.ui.session import Session
+
+    session = Session()
+    stl = (Path(__file__).parent / "data" / "meshes" / "plate_holes.stl").read_bytes()
+    gemeldet: list[object] = []
+    session.failed.connect(gemeldet.append)
+    _lock(monkeypatch)
+
+    session.import_payload("plate_holes.stl", stl, unit="mm")
+
+    assert gemeldet, "abgelehnt wird nicht stumm — die Oberfläche bekommt den Grund"
+    assert not session.project.document.sources, "die Quelle ist wieder draußen"
+    assert not session.project.sources, "und ihr Inhalt auch"
+    assert not session.project.document.ops, "Geometrie ist ohnehin keine entstanden"
+    assert not session._dirty, "und nichts zu speichern, worüber niemand gefragt hätte"
+
+
+def test_an_image_needs_the_same_permission_as_everything_else(
+    monkeypatch: pytest.MonkeyPatch, qt_app: object, tmp_path: Path
+) -> None:
+    """Auch ohne Operation ist ein eingebettetes Bild eine Änderung (§2 C).
+
+    ``import_image`` legt eine Quelle ins Dokument und fragte niemanden.
+    Erreichbar war der Weg praktisch nur aus einem Operationsdialog, und die
+    sind gesperrt — aber das ist ein Zufall der Oberfläche und keine Grenze.
+    Wer sich darauf verlässt, hat eine Zusage, die beim nächsten Aufrufer still
+    verschwindet; `kern.md` verlangt deshalb, dass jede schreibende Stelle den
+    Zustand selbst holt und selbst wirft.
+    """
+    from app.core.errors import LicenceRequired
+    from app.ui.session import Session
+
+    bild = tmp_path / "relief.png"
+    bild.write_bytes(bytes([137]) + b"PNG" + b"0" * 64)
+    session = Session()
+    _lock(monkeypatch)
+
+    with pytest.raises(LicenceRequired):
+        session.import_image(bild)
+
+    assert not session.project.document.sources, "abgelehnt heißt: nichts geschrieben"

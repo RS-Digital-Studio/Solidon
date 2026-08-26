@@ -24,6 +24,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Final
 
+from app.core import activation
 from app.core.backends.mesh import CancelledFn, GeneratedMesh, MeshBackend
 from app.core.log import get_logger
 from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
@@ -146,6 +147,23 @@ def into_project(project: Project, result: GeneratedMesh, name: str = "") -> Gen
     """
     name = name or result.prompt or str(_("Aus Bild"))
     document = project.document
+
+    # **Gefragt wird, bevor geschrieben wird.** Die Quelle unten geht sofort
+    # ins Dokument, und `History.apply` weiter unten fragt als Erstes die
+    # Lizenzgrenze — schlägt sie dort zu, bleibt das Dokument unberührt bis
+    # auf genau diese Quelle. Sie bliebe als Waise zurück und wanderte mit dem
+    # nächsten Speichern in die Projektdatei, und weil das Einbetten kein
+    # `_dirty` setzt, schlösse der Kunde ohne Nachfrage. Bei einem erzeugten
+    # Modell ist das kein kleiner Rest: Die Quelle trägt Prompt und Startwert
+    # im `SourceOrigin`, also die Anfrage des Kunden.
+    #
+    # Ein Rücknahmepfad wie in `Session.import_model` ginge hier nicht mit
+    # einer Zeile — es folgen mehrere Transaktionen. Die Frage vorzuziehen ist
+    # billiger und deckt den gemeldeten Fall vollständig: Zwischen hier und
+    # dem ersten `apply` ändert sich der Freischaltzustand nicht.
+    # Gefunden von 3d-druck-46 im Lizenz-Audit.
+    activation.require(activation.CHANGE)
+
     source_id = f"src_{len(document.sources) + 1}"
     short = _short(name)
 
