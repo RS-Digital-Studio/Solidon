@@ -42,7 +42,7 @@ from app.core.types import (
     kind_of,
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length
-from app.i18n import _, source_text
+from app.i18n import TranslatableText, _, source_text
 
 if TYPE_CHECKING:
     # Nur für die Signatur: zur Laufzeit zieht ``handover`` die
@@ -469,7 +469,11 @@ def plates_by_material(objects: Sequence[SceneObject]) -> dict[str, int]:
     Zurück kommt ein Vorschlag, keine Änderung: die Platte eines Objekts ist
     Teil des Dokuments und wird über eine Transaktion gesetzt, nicht hier.
     """
-    order: list[str] = []
+    # Der Slotname darf ein ``TranslatableText`` sein (:attr:`MaterialSlot.name`).
+    # Gruppiert wird trotzdem richtig: Ein solcher Text vergleicht wie seine
+    # Message-ID, auch gegen eine schlichte Zeichenkette. Angezeigt oder
+    # geschrieben wird hier nichts — der Name ist nur der Schlüssel.
+    order: list[TranslatableText | str] = []
     chosen: dict[str, int] = {}
     for entry in objects:
         names = [slot.name for slot in entry.material_slots] or [""]
@@ -962,7 +966,10 @@ def _parts_by_slot(
                 [*(round(channel * 255.0) for channel in colour), 255], (len(faces), 1)
             ).astype(np.uint8),
         )
-        parts.append((index, (known[index].name, part)))
+        # ``str``, weil der Name in die GLB reist: Ein Slotname darf ein
+        # ``TranslatableText`` sein, und dort steht Text, den ein fremdes
+        # Programm liest.
+        parts.append((index, (str(known[index].name), part)))
     return parts
 
 

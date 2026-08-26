@@ -145,7 +145,11 @@ class PaintBar(QWidget):
             self.slot_name.setText(tr("neu"))
             self.slot_name.setToolTip(tr("Diesen Slot gibt es am gewählten Körper noch nicht."))
             return
-        self.slot_name.setText(entry.name)
+        # ``str`` und nicht der rohe Name: Ein Slotname darf ein
+        # ``TranslatableText`` sein (:attr:`MaterialSlot.name`), und ``setText``
+        # nimmt nur Zeichenketten — roh übergeben warf Qt einen ``TypeError``.
+        # Angezeigt gehört ohnehin die Übersetzung.
+        self.slot_name.setText(str(entry.name))
         self.slot_name.setToolTip(
             tr("Die Farbe ist die der Ansicht. Gedruckt wird, was im Slot eingelegt ist.")
         )

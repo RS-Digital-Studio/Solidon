@@ -801,6 +801,127 @@ def test_a_cached_name_is_stored_as_its_message_id(tmp_path: Path) -> None:
     assert written["objects"][0]["name"] == {"msgid": "Quader", "context": None}
 
 
+def test_a_translatable_slot_name_does_not_drop_the_whole_entry(tmp_path: Path) -> None:
+    """Der Zwilling drei Tage später, an derselben Protokollzeile.
+
+    Der Test darüber hält den **Objektnamen** fest. Am 26.08.2026 kam dieselbe
+    Zeile aus einem Lauf von ``tools/make_web_images.py de`` — ``could not
+    write cache entry …: Object of type TranslatableText is not JSON
+    serializable`` —, diesmal aus ``app/examples/schild-zweifarbig.p3d`` und
+    aus einem anderen Feld: dem Namen eines **Materialslots**. Der Weg dorthin
+    ist derselbe wie beim Objektnamen: Das Beispiel vermerkt an ``assign_slot``,
+    dass ``name`` eine Message-ID trägt (``Operation.translatable``, §4.1), die
+    Auswertung macht daraus ein ``TranslatableText``, und die Operation reicht
+    ihn unverändert in den Slot weiter.
+
+    **Geprüft wird der Ordner, nicht der Rückgabewert.** ``DiskCache.put`` gibt
+    nichts zurück und fängt den ``TypeError`` selbst ab: Es räumt den Ordner
+    weg, schreibt eine Zeile ins Protokoll und kehrt zurück, als wäre nichts
+    gewesen. Ein Test, der nur ``put`` aufruft, sähe den Fehler deshalb nie —
+    genau daran lag es, dass er dreimal durchkam.
+
+    Beide Namen stehen absichtlich in **einem** Objekt: Der Payload wird in
+    einem Zug geschrieben, ein einziges nicht ablegbares Feld nimmt alle
+    anderen mit.
+    """
+    from app.core.types import MaterialSlot
+
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    named = SceneObject(
+        id="obj_2",
+        name=TranslatableText("Lettern"),
+        mesh=FakeMesh(triangles=42),  # type: ignore[arg-type]
+        material_slots=[
+            MaterialSlot(index=1, name=TranslatableText("Weiß"), colour=(1.0, 1.0, 1.0))
+        ],
+    )
+
+    disk.put("key", CachedResult(objects=(named,)))
+
+    written = list(tmp_path.rglob("objects.json"))
+    assert written, "der Eintrag wurde weggeräumt, statt geschrieben zu werden"
+
+    restored = DiskCache(codec=FakeCodec(), directory=tmp_path).get("key")
+    assert restored is not None
+    slot = restored.objects[0].material_slots[0]
+    assert slot.name == TranslatableText("Weiß"), "der Slotname überlebt den Rundlauf"
+    assert isinstance(slot.name, TranslatableText), "und zwar als Message-ID, nicht als Text"
+    assert slot.colour == (1.0, 1.0, 1.0), "und die Farbe daneben ebenso"
+
+    # In der Datei steht die ID, nicht ihre Übersetzung — sonst hieße der Slot
+    # nach einem Sprachwechsel weiter „Weiß". Dasselbe prüft
+    # ``test_a_cached_name_is_stored_as_its_message_id`` für den Objektnamen.
+    data = json.loads(written[0].read_text(encoding="utf-8"))
+    assert data["objects"][0]["material_slots"][0]["name"] == {"msgid": "Weiß", "context": None}
+
+
+def test_every_field_of_a_cache_entry_survives_a_translatable_text(tmp_path: Path) -> None:
+    """Der Wächter gegen den **nächsten** Zwilling, nicht gegen die zwei bekannten.
+
+    Zweimal ist derselbe Fehler an einem anderen Feld desselben Payloads
+    aufgetaucht, und beide Male hat ihn kein Test gefunden, sondern eine Zeile
+    im Protokoll eines Laufs, der etwas ganz anderes wollte. Dieser Test füllt
+    deshalb **jedes** Feld, das einen Text tragen kann, mit einem
+    ``TranslatableText`` und verlangt, dass der Eintrag trotzdem entsteht:
+    Objektname, Slotname, Befundtext und die Notiz des Lösers.
+
+    Was dabei nicht in Frage kommt, steht ausdrücklich daneben — ``id``,
+    ``kind``, ``provenance``, ``created_by``, ``visible``, ``plate``,
+    ``index``, ``colour``, ``material``, ``face_indices`` und ``transform``
+    sind Kennungen, Zahlen und Wahrheitswerte, und ``Feature.params`` trägt
+    Maße. Wer dort einen Text unterbringt, hat ein anderes Problem als den
+    Cache.
+
+    Geprüft wird wieder am Ordner: ``put`` verschluckt den ``TypeError``.
+    """
+    from app.core.types import Feature, Finding, MaterialSlot, SolverInfo
+
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    entry = SceneObject(
+        id="obj_1",
+        name=TranslatableText("Quader"),
+        mesh=FakeMesh(triangles=7),  # type: ignore[arg-type]
+        features={
+            "hole_1": Feature(
+                id="hole_1",
+                kind="hole",
+                provenance="generated",
+                params={"diameter": 4.2},
+                face_indices=(1, 2),
+                created_by=3,
+            )
+        },
+        material_slots=[MaterialSlot(index=0, name=TranslatableText("Körper"))],
+    )
+
+    disk.put(
+        "key",
+        CachedResult(
+            objects=(entry,),
+            findings=(
+                Finding(
+                    code="boolean.voxel",
+                    severity="warning",
+                    message=TranslatableText("Voxelstufe."),
+                ),
+            ),
+            solver=SolverInfo(strategy="voxel", note=TranslatableText("Zurück vernetzt.")),
+        ),
+    )
+
+    assert list(tmp_path.rglob("objects.json")), (
+        "ein einziges nicht ablegbares Feld nimmt den ganzen Eintrag mit — "
+        "und das Projekt rechnet danach bei jedem Öffnen neu"
+    )
+
+    restored = DiskCache(codec=FakeCodec(), directory=tmp_path).get("key")
+    assert restored is not None
+    assert restored.objects[0].name == TranslatableText("Quader")
+    assert restored.objects[0].material_slots[0].name == TranslatableText("Körper")
+    assert restored.findings[0].message == TranslatableText("Voxelstufe.")
+    assert restored.solver is not None and restored.solver.strategy == "voxel"
+
+
 def test_a_self_chosen_name_stays_a_plain_string(tmp_path: Path) -> None:
     """Was ein Nutzer selbst benannt hat, wird nicht übersetzt — und ein
     Eintrag aus einem älteren Cache, der die Unterscheidung noch nicht kannte,

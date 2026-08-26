@@ -51,7 +51,7 @@ from app.core.errors import CANCEL, Action, ValidationError
 from app.core.geom.mesh import MeshData
 from app.core.log import get_logger
 from app.core.types import MaterialSlot
-from app.i18n import _
+from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
 
@@ -161,7 +161,10 @@ def merge_slots(parts: Sequence[AssemblyPart]) -> list[MaterialSlot]:
     einfarbigen Druck.
     """
     merged: list[MaterialSlot] = []
-    seen: dict[tuple[str, tuple[float, float, float] | None], int] = {}
+    # Der Name darf ein ``TranslatableText`` sein (:attr:`MaterialSlot.name`).
+    # Zusammengelegt wird trotzdem richtig: Ein solcher Text vergleicht und
+    # hasht wie seine Message-ID, auch gegen eine schlichte Zeichenkette.
+    seen: dict[tuple[TranslatableText | str, tuple[float, float, float] | None], int] = {}
     for part in parts:
         for slot in part.slots or (MaterialSlot(index=0, name=""),):
             key = (slot.name, slot.colour)
@@ -1156,7 +1159,13 @@ def _assembly_xml(
         ET.SubElement(
             group,
             "base",
-            {"name": entry.name or f"Slot {entry.index}", "displaycolor": _colour(entry)},
+            # ``str`` ist hier keine Höflichkeit, sondern Pflicht: Ein Slotname
+            # darf ein ``TranslatableText`` sein, und ``ElementTree`` schreibt
+            # nur Zeichenketten — roh übergeben brach der ganze Export mit
+            # ``cannot serialize`` (gemessen am Beispiel „Schild zweifarbig",
+            # 26.08.2026). In die Datei gehört ohnehin die Übersetzung: Sie
+            # wird von einem Slicer gelesen, nicht von Solidon.
+            {"name": str(entry.name) or f"Slot {entry.index}", "displaycolor": _colour(entry)},
         )
 
     # Wohin ein objekteigener Slot in der gemeinsamen Liste zeigt. Ohne diese
@@ -1250,7 +1259,9 @@ def _model_xml(mesh: MeshData, slots: list[MaterialSlot], name: str) -> bytes:
         ET.SubElement(
             materials,
             "base",
-            {"name": entry.name or f"Slot {entry.index}", "displaycolor": _colour(entry)},
+            # ``str`` aus demselben Grund wie in :func:`write_assembly` — ein
+            # übersetzbarer Slotname brachte ``ElementTree`` zu Fall.
+            {"name": str(entry.name) or f"Slot {entry.index}", "displaycolor": _colour(entry)},
         )
 
     body = ET.SubElement(

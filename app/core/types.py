@@ -265,7 +265,22 @@ class MaterialSlot:
     """Ein Filamentslot eines Objekts (§20)."""
 
     index: int
-    name: str
+    name: TranslatableText | str
+    """Wie das Filament heißt — wie bei :attr:`SceneObject.name` **beides**.
+
+    Hier stand ``str``, und der Typ hat gelogen: ``assign_slot`` und *Malen*
+    reichen ``params.name`` unverändert weiter, und die Auswertung macht daraus
+    ein :class:`TranslatableText`, sobald die Operation den Parameter als
+    Message-ID vermerkt (``Operation.translatable``, §4.1) — so tun es die
+    mitgelieferten Beispiele. Der Ergebnis-Cache legte den Wert daraufhin roh
+    in ``json.dumps``, bekam einen ``TypeError`` und verwarf den Eintrag der
+    **ganzen** Auswertung; ``scene/cache.py`` erzählt den Fall.
+
+    Wer den Namen anzeigt oder in eine Datei schreibt, nimmt ``str(...)`` —
+    das löst die Übersetzung in der eingestellten Sprache auf. Wer ihn
+    **ablegt**, nimmt ``_name_to_data``: Die Übersetzung wechselt mit der
+    Sprache, die Message-ID nicht.
+    """
     colour: tuple[float, float, float] | None = None
     material: str | None = None
 

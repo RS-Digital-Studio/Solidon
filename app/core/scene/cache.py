@@ -265,7 +265,13 @@ def _feature_from_data(data: dict[str, Any]) -> Feature:
 
 
 def _name_to_data(name: TranslatableText | str) -> str | dict[str, Any]:
-    """Der **stabile** Teil eines Objektnamens, nicht seine Übersetzung.
+    """Der **stabile** Teil eines Namens, nicht seine Übersetzung.
+
+    Benutzt für den Objektnamen und für den Namen eines Materialslots
+    (:func:`_slot_to_data`) — zwei Felder, ein Verfahren. Der zweite kam drei
+    Tage nach dem ersten dazu, mit derselben Protokollzeile und derselben
+    Folge; die beiden Aufrufe stehen deshalb nebeneinander und nicht in zwei
+    Fassungen.
 
     Seit Objektnamen aus dem Register kommen, ist ``SceneObject.name`` ein
     :class:`TranslatableText` und kein ``str`` — und ``json.dumps`` kann den
@@ -303,9 +309,28 @@ def _name_from_data(data: str | dict[str, Any]) -> TranslatableText | str:
 
 
 def _slot_to_data(slot: MaterialSlot) -> dict[str, Any]:
+    """Ein Materialslot als Daten — der Name über :func:`_name_to_data`.
+
+    **Der Zwilling des Objektnamens, gefunden am 26.08.2026** an derselben
+    Protokollzeile, die ihn drei Tage vorher schon einmal genannt hatte:
+    ``could not write cache entry …: Object of type TranslatableText is not
+    JSON serializable``, diesmal beim Erzeugen der Website-Bilder aus
+    ``schild-zweifarbig.p3d``. Der Weg dorthin: Die Beispielprojekte vermerken
+    an einer Operation, welche Parameter Message-IDs tragen
+    (``Operation.translatable``, §4.1), die Auswertung macht daraus ein
+    :class:`TranslatableText` (``scene/evaluate.py``), und ``assign_slot``
+    reicht ``params.name`` unverändert in den Slot weiter. Ein einziger
+    übersetzbarer Slotname ließ damit den Cache-Eintrag der **ganzen**
+    Auswertung fallen — das Projekt rechnete bei jedem Öffnen neu.
+
+    Abgelegt wird deshalb dasselbe wie beim Objektnamen: die Message-ID, nie
+    ``str(...)``. Ein Slotname wandert in den Objektbaum, in den Farbdialog und
+    in die 3MF-Baugruppe; läge die Übersetzung in der Cache-Datei, hieße der
+    Slot nach einem Sprachwechsel weiter „Weiß".
+    """
     return {
         "index": slot.index,
-        "name": slot.name,
+        "name": _name_to_data(slot.name),
         "colour": list(slot.colour) if slot.colour else None,
         "material": slot.material,
     }
@@ -315,7 +340,7 @@ def _slot_from_data(data: dict[str, Any]) -> MaterialSlot:
     colour = data.get("colour")
     return MaterialSlot(
         index=data["index"],
-        name=data["name"],
+        name=_name_from_data(data["name"]),
         colour=(colour[0], colour[1], colour[2]) if colour else None,
         material=data.get("material"),
     )
@@ -469,11 +494,24 @@ class DiskCache:
                 payload["transform"] = [list(row) for row in result.transform]
             (folder / "objects.json").write_text(json.dumps(payload), encoding="utf-8")
         except (OSError, TypeError) as problem:
-            # TypeError heißt: ein Körper, den der Codec nicht ablegen kann —
-            # ein B-Rep-Ergebnis (§30). Die werden neu gerechnet statt
-            # gecacht: den Cache gibt es für teure Boolesche Arbeit auf großen
-            # Netzen, und eine Verrundung auf einem exakten Körper sind
-            # Millisekunden.
+            # ``TypeError`` hat hier **zwei** Ursachen, und die zweite hat
+            # zweimal Tage gekostet, weil dieser Kommentar nur die erste nannte:
+            #
+            # 1. Ein Körper, den der Codec nicht ablegen kann — ein
+            #    B-Rep-Ergebnis (§30). Das ist gewollt: Die werden neu gerechnet
+            #    statt gecacht, denn den Cache gibt es für teure Boolesche Arbeit
+            #    auf großen Netzen, und eine Verrundung auf einem exakten Körper
+            #    sind Millisekunden.
+            # 2. Ein Wert im Payload, den ``json.dumps`` nicht kennt — bisher
+            #    zweimal ein :class:`TranslatableText`, erst im Objektnamen
+            #    (23.08.2026), dann im Namen eines Materialslots (26.08.2026).
+            #    Das ist **nicht** gewollt: Der Eintrag fällt still weg, und das
+            #    Projekt rechnet bei jedem Öffnen den ganzen Stapel neu.
+            #
+            # Wer die Zeile im Protokoll liest, prüft deshalb beides — sie
+            # sehen gleich aus und meinen Gegenteiliges. ``_name_to_data``
+            # deckt die zwei bekannten Stellen ab; eine dritte wäre ein
+            # weiteres Feld dieses Payloads.
             _log.warning("could not write cache entry %s: %s", key, problem)
             shutil.rmtree(folder, ignore_errors=True)
             return
