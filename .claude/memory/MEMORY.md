@@ -23,6 +23,7 @@
 - [Fehlertexte ohne Platzhalter](fehlertexte-ohne-platzhalter.md) — {platzhalter} in detail/title bleibt stehen; in der Oberfläche ist er richtig, im Kern nicht.
 - [Fehlertexte zeigten nur den Titel](fehlertexte-nur-titel.md) — der ist je Klasse gleich; der Grund steht im detail und fehlte in jedem Protokoll.
 - [Oberfläche von Hand fahren](oberflaeche-von-hand-fahren.md) — echte Qt-Plattform, Vollbild, modale Dialoge **und Popup-Menüs** abfangen, Ausgabe in eine Datei statt durch tail.
+- [Katalogschlüssel sind Wörter](katalog-schluessel-sind-woerter.md) — ein neues Label kapert still einen vergebenen Quelltext; das Minus im Katalog-Diff ist der Alarm, der Test sieht es nicht.
 - [Marke im span zerteilt](marke-im-span-zerteilt.md) — nach einer Umbenennung entkommt der alte Name jeder Suche, wenn ein Tag ihn teilt.
 - [Website im Browser prüfen](website-im-browser-pruefen.md) — QtWebEngine ist da; heller Modus und reduzierte Bewegung gehen nur über Chromium-Flags.
 - [Operationen am Stück durchfahren](ops-reihendurchlauf-kundensicht.md) — Schemavorgabe ist nicht Dialogvorbelegung; wer das verwechselt, meldet Fehlbefunde.
