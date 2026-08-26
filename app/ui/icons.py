@@ -113,12 +113,6 @@ PATHS: Final[dict[str, str]] = {
         '<path d="M8.6 3.5h6.8L20.5 8.6v6.8L15.4 20.5H8.6L3.5 15.4V8.6z" />'
         '<path d="M9.4 9.4l5.2 5.2" /><path d="M14.6 9.4l-5.2 5.2" />'
     ),
-    # Ein Pinsel, der eine Fläche einfärbt.
-    "paint": (
-        '<path d="M5 13.5 13.5 5a2.5 2.5 0 0 1 3.5 3.5L8.5 17z" />'
-        '<path d="M5 13.5 8.5 17l-3 2.5-2-2z" />'
-        '<path d="M14 6.5 17.5 10" />'
-    ),
     # Ein leeres Blatt mit umgeknickter Ecke.
     "new": ('<path d="M6 3h7l5 5v13H6z" /><path d="M13 3v5h5" />'),
     # Ein Ordner, halb geöffnet.

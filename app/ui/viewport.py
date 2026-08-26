@@ -1728,9 +1728,6 @@ class Viewport(QWidget):
     Weltkoordinaten. Ein offener Dialog, der nach einer Position fragt, trägt
     ihn ein; wer ein Merkmal anklickt, meint das Merkmal und bekommt
     ``featurePicked``."""
-    paintRequested = Signal(object)
-    """A point on the surface to paint at (§20). The window turns it into an
-    operation — the view never changes geometry itself."""
     boneRequested = Signal(object)
     """Eine Stelle, an der ein Knochenpunkt gesetzt wird (§25).
 
@@ -1985,7 +1982,6 @@ class Viewport(QWidget):
         self._beds_drawn = 0
         """Wie viele Betten gerade im Bild stehen. Ändert sich die Zahl, wird
         die Kulisse neu gebaut; bleibt sie, wird nichts angefasst."""
-        self._painting = False
         self._sculpting = False
         self._boning = False
         self._splitting = False
@@ -3563,17 +3559,6 @@ class Viewport(QWidget):
         )
         self.plotter.render()
 
-    def set_painting(self, active: bool) -> None:
-        """Macht aus Klicks Pinselstriche (§20).
-
-        Dasselbe Picking, das auch das Messen benutzt; was sich ändert, ist, wer
-        den Punkt bekommt. Ein eigener Modus statt einer Zusatztaste: das Modell
-        zu bemalen, wenn jemand es drehen wollte, ist die Art Überraschung, die
-        ein Undo behebt und Vertrauen nicht übersteht.
-        """
-        self._painting = active
-        self._update_cursor()
-
     # --- der Zeiger (§19.3) -----------------------------------------------------
 
     def _update_cursor(self) -> None:
@@ -3619,8 +3604,6 @@ class Viewport(QWidget):
             return "sculpt"
         if self._sculpting:
             return "sculpt"
-        if self._painting:
-            return "paint"
         if self._measure_mode != "off":
             return "measure"
         return "feature" if self._hover_feature else "select"
@@ -3754,9 +3737,6 @@ class Viewport(QWidget):
             return
         if self._sculpting:
             self.sculptRequested.emit(picked)
-            return
-        if self._painting:
-            self.paintRequested.emit(picked)
             return
         if self._measure_mode == "off":
             # Nicht am Messen: die Auswahl, gestuft (:meth:`_click_target`).

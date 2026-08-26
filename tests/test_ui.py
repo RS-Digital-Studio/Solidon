@@ -916,7 +916,7 @@ def test_the_tool_strip_starts_with_every_bar_closed(qt_app: QApplication) -> No
 
     assert window.tools.active() is None
     assert not window.section_bar.isVisibleTo(window.tools)
-    assert not window.paint_bar.isVisibleTo(window.tools)
+    assert not window.split_bar.isVisibleTo(window.tools)
 
 
 def test_opening_a_tool_shows_exactly_its_bar(qt_app: QApplication) -> None:
@@ -1016,7 +1016,12 @@ def test_every_tool_button_carries_a_label(qt_app: QApplication) -> None:
 
     titles = window.tools.tool_titles()
 
-    assert len(titles) == 8
+    # **Jedes** Werkzeug trägt sein Wort — die Zahl selbst prüft
+    # ``test_interface_limits`` als Obergrenze (höchstens acht). Hier stand
+    # ``== 8``, und damit hätte der Ausbau des Punkt-Radius-Pinsels einen
+    # Test über *Beschriftungen* rot gemacht: Die Zusage ist „keines ohne
+    # Wort", nicht „genau acht Stück".
+    assert titles, "ohne Werkzeuge prüft dieser Test nichts"
     for key, title in titles.items():
         assert title.strip(), key
 

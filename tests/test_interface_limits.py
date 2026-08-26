@@ -823,7 +823,7 @@ def test_a_menu_is_sorted_the_way_it_is_read() -> None:
     """Sortiert wurde nach dem internen Namen, gelesen wird der Titel.
 
     Unter *Grundformen* stand deshalb „Quader, Exakter Quader, Exakter
-    Zylinder, Zylinder, OpenSCAD, Kugel" — die Reihenfolge von ``create_box``,
+    Zylinder, Zylinder, Kugel" — die Reihenfolge von ``create_box``,
     ``create_brep_box``, ``create_brep_cylinder``, … Wer ein Menü aufklappt,
     sucht in den Titeln, und alphabetisch ist die einzige Ordnung, die man
     dabei voraussetzen darf.
@@ -1041,8 +1041,13 @@ def test_the_shortcut_list_knows_every_key_the_window_holds(window: MainWindow) 
     assert owned, "ohne Fenstertasten prüft dieser Test nichts"
     assert owned <= named, f"die Übersicht kennt diese Tasten des Fensters nicht: {owned - named}"
 
-    # Die acht Werkzeugtasten einzeln, denn sie sind der Anlass.
-    for number in range(1, 9):
+    # Die Werkzeugtasten einzeln, denn sie sind der Anlass — gezählt an den
+    # angemeldeten Werkzeugen statt als feste Acht: Mit dem Pinsel fiel
+    # Alt+8, und eine festgenagelte Zahl hätte den Ausbau blockiert, statt
+    # die Zusage zu prüfen (jedes Werkzeug der Zeile ist auffindbar).
+    count = len(window.tools.tools())
+    assert count, "ohne angemeldete Werkzeuge prüft diese Schleife nichts"
+    for number in range(1, count + 1):
         key = native(QKeySequence(f"Alt+{number}"))
         assert key in named, f"{key} fehlt — das Werkzeug dazu ist unauffindbar"
 

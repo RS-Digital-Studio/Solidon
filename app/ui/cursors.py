@@ -107,18 +107,10 @@ SHAPES: Final[dict[str, tuple[str, tuple[float, float]]]] = {
         '<path d="M2 16h28" /><path d="M9 11 16 5l7 6" /><path d="M9 21 16 27l7-6" />',
         (16.0, 16.0),
     ),
-    # Bemalen: ein Stiel mit breiter Spitze links oben. Die Haare des Pinsels
-    # waren als Kurve gezeichnet und bei Zeigergröße nicht von einem Fleck zu
-    # unterscheiden; jetzt trägt die Schräge der Spitze die Erkennung.
-    "paint": (
-        '<path d="M3.5 3.5 9 9" /><path d="M9 9 21 21" />'
-        '<path d="M20 15.5 26.5 22 22 26.5 15.5 20z" />',
-        (3.5, 3.5),
-    ),
     # Formen: ein Ring auf der Spitze eines Stiels — der Pinsel greift eine
-    # Fläche, kein einzelner Punkt. Bewusst nicht derselbe wie beim Bemalen:
-    # Der eine färbt ein Dreieck, der andere verschiebt es, und wer beide für
-    # dasselbe hält, malt in eine Form hinein.
+    # Fläche, kein einzelner Punkt. (Die Rolle „paint" stand daneben, bis der
+    # Punkt-Radius-Pinsel fiel — Färben ist seither eine Operation am
+    # Merkmal und braucht keinen eigenen Zeiger.)
     "sculpt": (
         '<path d="M4 28 12 20" /><circle cx="19" cy="13" r="8" />',
         (4.0, 28.0),

@@ -347,7 +347,6 @@ def test_a_tool_that_sets_a_place_does_not_look_for_a_bore(window: MainWindow) -
     assert viewport._means_a_feature(), "ohne Werkzeug meint ein Klick die Auswahl"
 
     for turn_on, turn_off in (
-        (lambda: viewport.set_painting(True), lambda: viewport.set_painting(False)),
         (lambda: viewport.set_sculpting(True, 5.0), lambda: viewport.set_sculpting(False)),
         (lambda: viewport.set_boning(True), lambda: viewport.set_boning(False)),
         (lambda: viewport.set_splitting(True), lambda: viewport.set_splitting(False)),

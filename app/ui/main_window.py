@@ -206,7 +206,6 @@ from app.ui.manual_window import ManualWindow
 from app.ui.motion import switch
 from app.ui.op_dialog import OperationDialog, SketchUseDialog
 from app.ui.overlay import CARD_PADDING, OverlayHost, card_stylesheet
-from app.ui.paint_bar import PaintBar
 from app.ui.palette import ROLES
 from app.ui.panels import (
     SEVERITY_MARKER,
@@ -1056,9 +1055,6 @@ class MainWindow(QMainWindow):
         self.layer_bar.layerChanged.connect(self._on_layer_changed)
         self.explode_bar = ExplodeBar(self)
         self.explode_bar.factorChanged.connect(self.viewport.set_explosion)
-        self.paint_bar = PaintBar(self)
-        self.paint_bar.paintingToggled.connect(self.viewport.set_painting)
-        self.viewport.paintRequested.connect(self._on_paint)
         self.split_bar = SplitBar(self)
         self.split_bar.applyRequested.connect(self._apply_split_line)
         self.split_bar.clearRequested.connect(self._clear_split_line)
@@ -1157,12 +1153,14 @@ class MainWindow(QMainWindow):
                 "exportiert wird, bleibt, wo es ist."
             ),
         )
-        # Trennen ist das zweite Werkzeug, das das Modell ändert und nicht nur
-        # die Ansicht — aus demselben Grund wie das Bemalen daneben: Es ist der
-        # Handgriff, den ein Anfänger als Erstes braucht, sobald ein Teil nicht
-        # auf die Platte passt, und ein Menüweg dahin wäre einer zu viel. Was
-        # das Schließen zurücknimmt, ist die gezeichnete Linie; ein getrenntes
-        # Teil bleibt getrennt und geht über Strg+Z zurück.
+        # Trennen ist das eine Werkzeug der Zeile, das das Modell ändert und
+        # nicht nur die Ansicht: Es ist der Handgriff, den ein Anfänger als
+        # Erstes braucht, sobald ein Teil nicht auf die Platte passt, und ein
+        # Menüweg dahin wäre einer zu viel. Was das Schließen zurücknimmt, ist
+        # die gezeichnete Linie; ein getrenntes Teil bleibt getrennt und geht
+        # über Strg+Z zurück. (Das Bemalen stand mit demselben Argument
+        # daneben, bis der Punkt-Radius-Pinsel fiel — Färben läuft seither
+        # über das Kontextmenü am Merkmal, als Operation wie jede andere.)
         self.tools.add(
             "split",
             tr("Trennen"),
@@ -1179,20 +1177,6 @@ class MainWindow(QMainWindow):
                 "Zusammenstecken, wenn der Haken steht."
             ),
         )
-        # Bemalen ändert Materialslots und nicht bloß die Ansicht: das Schließen
-        # beendet das Bemalen, nimmt aber nichts Gemaltes zurück.
-        self.tools.add(
-            "paint",
-            tr("Bemalen"),
-            self.paint_bar,
-            weak_slot(self, lambda view: view.paint_bar.active.setChecked(False)),
-            symbol="paint",
-            hint=tr(
-                "Slot wählen, dann auf die Fläche klicken. Das ändert das Modell, "
-                "nicht nur das Bild — Strg+Z nimmt es zurück."
-            ),
-        )
-
         # §30.1 Stufe zwei: die Skizze ist ein Modus des mittleren Bereichs,
         # kein Fenster darüber. Der Stapel hat zwei Seiten — die Ansicht und
         # die Zeichenfläche —, und ein Modus, der die Ansicht ersetzt, ist
@@ -1380,8 +1364,8 @@ class MainWindow(QMainWindow):
         # Überlagerung setzt Geometrien, statt sie von einem Layout rechnen zu
         # lassen — sie muss also erfahren, dass sich der Bedarf geändert hat.
         # Ohne diese Verbindung blieb die Zone auf der Höhe der Knopfreihe,
-        # und die Leiste des Werkzeugs lag über den Umschaltern: bei allen
-        # sieben, von Schnitt bis Bemalen.
+        # und die Leiste des Werkzeugs lag über den Umschaltern — bei jedem
+        # einzelnen, von Schnitt bis Trennen.
         self.tools.toolChanged.connect(weak_slot(self, lambda view: view.overlay.reflow()))
         # Wer *Schichten* öffnet, will Schichten sehen. Der Schalter dafür war
         # ein zweites Auswahlfeld in der Leiste selbst — ein Umschalter hinter
@@ -2395,8 +2379,8 @@ class MainWindow(QMainWindow):
 
         # Dieselbe Regel für die Werkzeugzeile unten. Sie stand dem Anfänger
         # näher als jedes Menü und bot auf einer leeren Szene weiter Messen,
-        # Bewegen, Analyse, Schichten und Bemalen an — jedes davon braucht
-        # einen Körper, und keines sagte das.
+        # Bewegen, Analyse und Schichten an — jedes davon braucht einen
+        # Körper, und keines sagte das.
         self.tools.set_usable(
             objects > 0 and not gesturing,
             str(_NEEDS_BODY),
@@ -4576,8 +4560,8 @@ class MainWindow(QMainWindow):
         self._show_start_screen(False)
         self.tools.close_tool()
         # Die Ansichtswerkzeuge tun im Skizzenmodus nichts — Schnitt, Messen
-        # und Bemalen brauchen einen Körper und ein Bild. Sie standen dort als
-        # zweite Leiste unter der des Editors und boten sieben Umschalter an,
+        # und Trennen brauchen einen Körper und ein Bild. Sie standen dort als
+        # zweite Leiste unter der des Editors und boten ihre Umschalter an,
         # von denen keiner etwas bewirkte.
         self.tools.setVisible(False)
         self.sketch_bar.setVisible(True)
@@ -5885,21 +5869,6 @@ class MainWindow(QMainWindow):
         if self.right.isVisible():
             switch(self.right, self.chat)
 
-    def _on_paint(self, point: Any) -> None:
-        """§20: ein Klick, eine Operation — ein Undo nimmt also einen Strich
-        zurück.
-        """
-        object_id = self.object_tree.selected()
-        if not object_id:
-            self.announce(str(_NEEDS_SELECTION))
-            return
-
-        params = {**self.paint_bar.values(), "x": point[0], "y": point[1], "z": point[2]}
-        self.session.apply(
-            _("Bemalen"),
-            [OperationDraft(op="paint_slot", inputs=(object_id,), params=params)],
-        )
-
     # --- Trennen entlang einer gezeichneten Linie (§25) --------------------------
 
     def _on_split_point(self, point: Any) -> None:
@@ -6904,10 +6873,6 @@ class MainWindow(QMainWindow):
         self.header.show_plates(max(plates, default=0) + 1)
         self.tools.set_available("explode", self.explode_bar.show_for(len(result.scene.objects)))
         self.report.show_result(result, self.session.project.document)
-        # Ein Strich legt einen Slot an: Nach der Auswertung soll die
-        # Pinselleiste ihn kennen, sonst steht dort weiter „neu".
-        chosen = self.object_tree.selected_objects()
-        self._tell_the_brush_about_the_slots(chosen[0] if len(chosen) == 1 else None)
         self._update_header()
         self.viewport.show_build_volume(self.session.profile)
         self.viewport.show_scene(result)
@@ -7493,28 +7458,12 @@ class MainWindow(QMainWindow):
         self._on_map_changed(self.analysis_bar.chosen())
         self._on_layer_changed(self.layer_bar.index())
         self._update_actions()
-        self._tell_the_brush_about_the_slots(object_id)
         described = describe_selection(self.session.last_result, object_id)
         if described is None:
             self.measurements.clear_selection()
             return
         name, size, volume = described
         self.measurements.show_object(name, size, volume)
-
-    def _tell_the_brush_about_the_slots(self, object_id: str | None) -> None:
-        """Die Pinselleiste nennt Farbe und Namen des Slots — beides gehört dem
-        Körper, nicht dem Werkzeug.
-
-        Ohne diesen Weg wüsste die Leiste nur ihre Nummer, und die sagt nicht,
-        was auf dem Teil landet. Ein Strich legt einen Slot an; nach der
-        Auswertung ruft ``_refresh_all`` denselben Pfad, damit „neu" danach
-        seinen Namen hat.
-        """
-        result = self.session.last_result
-        entry = None
-        if result is not None and object_id is not None:
-            entry = result.scene.objects.get(object_id)
-        self.paint_bar.set_slots(entry.material_slots if entry is not None else [])
 
     def action_add_parameter(self) -> None:
         """§13: ein Hauptmaß benennen — auch ohne den Agenten (§2.3)."""

@@ -119,8 +119,8 @@ def test_the_pointer_says_what_a_click_would_do(qt_app: QApplication) -> None:
     viewport.set_measure_mode("points")
     assert viewport._resting_role() == "measure"
 
-    viewport.set_painting(True)
-    assert viewport._resting_role() == "paint"
+    viewport.set_sculpting(True)
+    assert viewport._resting_role() == "sculpt"
 
 
 def test_dragging_the_camera_beats_every_other_role(qt_app: QApplication) -> None:
@@ -128,7 +128,7 @@ def test_dragging_the_camera_beats_every_other_role(qt_app: QApplication) -> Non
     from app.ui.viewport import Viewport
 
     viewport = Viewport()
-    viewport.set_painting(True)
+    viewport.set_sculpting(True)
     viewport.set_drag_cursor("rotate")
     assert viewport._cursor_role == "rotate"
 
@@ -207,9 +207,9 @@ def test_the_cursor_actually_reaches_the_interactor(qt_app: QApplication) -> Non
     plotter = FakePlotter()
     viewport.plotter = plotter
 
-    viewport.set_painting(True)
+    viewport.set_sculpting(True)
     assert plotter.interactor.cursors, "der Pinselzeiger kam nie am Fenster an"
-    assert viewport._cursor_role == "paint"
+    assert viewport._cursor_role == "sculpt"
 
     before = len(plotter.interactor.cursors)
     viewport.set_drag_cursor("rotate")
