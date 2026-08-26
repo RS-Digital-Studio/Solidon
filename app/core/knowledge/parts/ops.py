@@ -51,6 +51,11 @@ _log = get_logger(__name__)
 #: braucht. Null heißt: aus dem Profil füllen.
 PLAY_FIELD = "play"
 
+#: Das Gegenstück zum Spiel: ein Übermaß, mit dem ein Teil klemmt statt
+#: gleitet. Es steht im Profil als ``press`` und dort negativ — Regel 7 gilt
+#: für beide Richtungen.
+GRIP_FIELD = "grip"
+
 #: Ortsangaben, die jede Baustein-Operation zusätzlich zu ihren eigenen bekommt.
 #: Die Erklärungen stehen hier und nicht bei den achtzehn Bausteinen: dieselbe
 #: Zahl bedeutet überall dasselbe, und einmal geschrieben kann sie nicht an
@@ -386,7 +391,7 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     # eine ``auto:``-Toleranz darin gehört mit dem Material des Kunden
     # aufgelöst. Für die ``.py``-Bausteine bleibt ``fn`` der ganze Vertrag.
     if spec.build_with_profile is not None:
-        produced = spec.build_with_profile(spec.params(**values), ctx.profile)
+        produced = spec.build_with_profile(spec.params(**values), ctx.profile, ctx.quality)
     else:
         produced = spec.fn(spec.params(**values))
 
@@ -443,6 +448,10 @@ def _part_values(spec: PartSpec, params: Any, profile: Profile | None) -> dict[s
         # Regel 7: die Toleranz ist ein Verweis ins Materialprofil, nie eine Zahl
         # in der Datei.
         values[PLAY_FIELD] = profile.material.clearance
+    if GRIP_FIELD in values and not values[GRIP_FIELD] and profile is not None:
+        # Dasselbe für das Übermaß, und ``press`` steht im Profil negativ:
+        # gemeint ist der Betrag, um den es enger wird.
+        values[GRIP_FIELD] = abs(profile.material.press)
     return values
 
 

@@ -350,6 +350,47 @@ def test_an_invalid_call_comes_back_as_a_message(project: Project, profile: Prof
     assert "Ungültige" in answer.content
 
 
+def test_an_unreadable_call_does_not_become_a_default_body(
+    project: Project, profile: Profile
+) -> None:
+    """Regel 21: Ein Aufruf, den niemand lesen konnte, wird nicht ausgeführt.
+
+    ``_arguments`` gab bei unlesbarem JSON ein leeres Objekt zurück, und die
+    Begründung daneben lautete, die Schemaprüfung mache daraus eine Meldung.
+    Bei einer Operation mit ``consumes=0`` macht sie das nicht: Sie füllt jeden
+    nicht verlangten Parameter mit seiner Vorgabe, und ``create_box`` ist damit
+    vollständig gültig. Heraus kam ein Vorgabequader, und die Antwort ans Modell
+    lautete „Ausgeführt" — für einen Aufruf, dessen Maße nie angekommen sind.
+
+    Gemessen am Ergebnis und nicht an der Meldung: Es darf kein Entwurf
+    entstehen, der Aufruf zählt als ungültig, und das Modell erfährt, dass es
+    ihn wiederholen soll.
+    """
+    from app.core.backends.llm import UNREADABLE_ARGUMENTS
+
+    backend = ScriptedBackend(
+        answers=[
+            Reply(
+                tool_calls=(ToolCall(id="1", name="create_box", arguments=UNREADABLE_ARGUMENTS),)
+            ),
+            Reply(text="Ich schicke die Maße noch einmal."),
+        ]
+    )
+    agent = AgentSession(
+        backend=backend,
+        document=project.document,
+        profile=profile,
+        sources=ProjectSources(project),
+    )
+
+    proposal = agent.propose("Mach mir einen Quader 40 x 20 x 10")
+
+    assert proposal.drafts == [], "ein unlesbarer Aufruf wird nie eine Operation"
+    assert proposal.invalid_calls == 1
+    answer = [entry for entry in backend.seen[-1] if entry.role == "tool"][-1]
+    assert "Argumente" in answer.content, answer.content
+
+
 def test_a_drawn_sketch_from_the_model_is_rejected(project: Project, profile: Profile) -> None:
     """§26, Leitprinzip 5: rät das Modell den Skizzentext trotzdem, lehnt die
     Sitzung ihn ab — das Schema nicht anzubieten allein wäre eine Bitte."""

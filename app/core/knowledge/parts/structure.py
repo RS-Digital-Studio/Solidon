@@ -77,6 +77,47 @@ THIN_WALL_KEEPS_THE_GUSSET_PRINTABLE = PartChange(
     ),
 )
 
+RIB_MEETS_THE_MINIMUM_WALL = PartChange(
+    version="10",
+    date="2026-08-26",
+    reason=(
+        "Die Untergrenze der Rippendicke lag mit 0,8 mm unter der "
+        "Mindestwandstärke, die jedes ausgelieferte Profil meldet (zwei "
+        "Extrusionsbreiten, also 0,84 mm bei einer 0,42er Bahn). Eine 1,0-mm-Wand "
+        "bekam damit eine 0,80-mm-Rippe — unter dem Maß, das Version 5 selbst als "
+        "Kriterium nennt."
+    ),
+    effect=(
+        "Nur zwischen 0,8 und 1,27 mm Wandstärke und nur, wenn die Dicke nicht von "
+        "Hand gesetzt ist: Aus 0,80 mm werden 0,84 mm. Darüber war die "
+        "Zwei-Drittel-Regel schon immer die größere der beiden Zahlen, darunter "
+        "ist die Rippe so dick wie die Wand."
+    ),
+)
+
+#: Zwei Anlässe, ein Eintrag: Ein Änderungsverlauf trägt je Stand **eine**
+#: Zahl, und zwei Einträge mit derselben stiegen nicht (``test_every_change_log
+#: _climbs``). Beide fallen auf denselben Tag und denselben Baustein.
+GUSSET_MEASURES_AND_NAMES_ITS_FACE = PartChange(
+    version="10",
+    date="2026-08-26",
+    reason=(
+        "Zwei Dinge am Eckwinkel. Erstens leitet er seine Dicke aus derselben "
+        "Regel ab wie die Rippe und erbte damit deren zu niedrige Untergrenze von "
+        "0,8 mm — unter der Mindestwandstärke, die jedes ausgelieferte Profil "
+        "meldet. Zweitens nannte das Merkmal ``gusset_1`` als Mitte seiner "
+        "Auflagefläche den Ursprung, und der ist bei diesem Keil die vordere "
+        "**Kante**: Die Unterseite läuft von y = 0 bis y = Schenkel (§24.1)."
+    ),
+    effect=(
+        "Die Dicke ändert sich nur zwischen 0,8 und 1,27 mm Wandstärke und nur, "
+        "wenn sie nicht von Hand gesetzt ist: Aus 0,80 mm werden 0,84 mm. Wer "
+        "einen weiteren Baustein oder eine Operation an ``gusset_1`` ausrichtet, "
+        "trifft jetzt die Mitte der Auflagefläche statt ihrer Vorderkante — das "
+        "sind ein halber Schenkel, bei der Vorgabe also 6 mm."
+    ),
+)
+
 PROFILE_TONGUE_ADDED = PartChange(
     version="1",
     date="2026-08-20",
@@ -103,10 +144,29 @@ RIB_SHARE = 0.66
 #: keine Einfallstelle mehr, wohl aber eine Rippe, die niemand drucken kann:
 #: Bei einer 0,4-mm-Wand kamen zwei Drittel davon heraus, also 0,264 mm, und
 #: das ist schmaler als eine einzige Bahn der Düse. Auch 0,8 mm Wand ergaben
-#: mit 0,528 mm noch weniger als die Mindestwandstärke eines PETG-Profils
-#: (0,84 mm). Unterhalb dieser Schwelle ist die Rippe deshalb so dick wie die
-#: Wand, an der sie sitzt — dicker zu werden als die Wand hilft ihr nicht.
-MIN_RIB = 0.8
+#: mit 0,528 mm noch weniger als die Mindestwandstärke. Unterhalb dieser
+#: Schwelle ist die Rippe deshalb so dick wie die Wand, an der sie sitzt —
+#: dicker zu werden als die Wand hilft ihr nicht.
+#:
+#: **Der Wert ist die Mindestwandstärke selbst, nicht ein Wert knapp darunter.**
+#: Er stand auf 0,8, und das ist genau der Fehler, vor dem der Absatz darüber
+#: warnt: ``Profile.minimum_wall_thickness`` ist zwei Extrusionsbreiten (§39),
+#: also 0,84 mm bei den 0,42er-Düsen, die fünfzehn der sechzehn ausgelieferten
+#: Druckerprofile führen. Eine 1,0-mm-Wand bekam damit eine 0,80-mm-Rippe —
+#: unter dem Maß, das der Änderungstext von Version 5 selbst als Kriterium
+#: nennt.
+#:
+#: **Warum eine Zahl und kein Profilverweis.** Ein ``.py``-Baustein bekommt kein
+#: Profil: ``PartSpec.fn`` nimmt nur seine Parameter, und den profilbewussten
+#: Weg (``build_with_profile``) gibt es bisher allein für Rezepte. Eine Zahl,
+#: die sich beim Import aus dem Standardprofil holt, wäre schlechter als diese:
+#: Sie sähe profilbewusst aus, folgte aber dem Drucker, den der Kunde *nicht*
+#: eingestellt hat, und ein überschriebenes Profil verschöbe Maße, ohne dass
+#: ``parts_version`` es je bemerkt (§24.4). Die drei Prusa-Profile mit 0,45er
+#: Bahn liegen mit 0,90 mm darüber; dort bleibt die Rippe eine Bahnbreite unter
+#: ihrer Mindestwand, und das ist der Rest, den erst ein Profil im Baustein
+#: schließt.
+MIN_RIB = 0.84
 
 
 @op_params
@@ -165,7 +225,12 @@ class RibParams(BaseParams):
         "machen. Sie bleibt dünner als die Wand, an der sie sitzt — sonst "
         "zeichnet sie sich auf der anderen Seite ab."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, THIN_WALL_KEEPS_THE_RIB_PRINTABLE],
+    changes=[
+        FIRST_RELEASE,
+        FACE_GIVES_DIRECTION,
+        THIN_WALL_KEEPS_THE_RIB_PRINTABLE,
+        RIB_MEETS_THE_MINIMUM_WALL,
+    ],
 )
 def rib(raw: BaseParams) -> PartResult:
     params = cast(RibParams, raw)
@@ -566,7 +631,11 @@ class GussetParams(BaseParams):
         "Nicht in eine Ecke, durch die etwas hindurchmuss — er füllt sie diagonal. "
         "Für eine Wand, die für sich zu weich ist, ist die Versteifungsrippe da."
     ),
-    changes=[GUSSET_ADDED, THIN_WALL_KEEPS_THE_GUSSET_PRINTABLE],
+    changes=[
+        GUSSET_ADDED,
+        THIN_WALL_KEEPS_THE_GUSSET_PRINTABLE,
+        GUSSET_MEASURES_AND_NAMES_ITS_FACE,
+    ],
 )
 def gusset(raw: BaseParams) -> PartResult:
     """Ein dreieckiges Prisma, das in der Ecke steht.
@@ -599,5 +668,18 @@ def gusset(raw: BaseParams) -> PartResult:
         body,
         # Die Fläche, mit der er an der ersten Wand liegt: unten, so lang wie
         # der Schenkel und so dick wie er selbst.
-        face("gusset_1", params.legs * thickness, (0.0, 0.0, 0.0), (0.0, 0.0, -1.0)),
+        #
+        # **Ihre Mitte, nicht ihre Kante.** Der Keil steht in x über die Dicke
+        # zentriert und läuft in y von 0 bis zum Schenkel — der Ursprung ist
+        # damit die Vorderkante dieser Fläche. Hier stand er trotzdem, und wer
+        # einen Baustein an ``gusset_1`` ausrichtete, setzte ihn einen halben
+        # Schenkel daneben (bei der Vorgabe 6 mm). Ein Merkmal ist eine Zusage
+        # an den nächsten Schritt (§24.1), und „centre" ist darin kein Wort für
+        # den Anfang.
+        face(
+            "gusset_1",
+            params.legs * thickness,
+            (0.0, params.legs / 2.0, 0.0),
+            (0.0, 0.0, -1.0),
+        ),
     )

@@ -1074,17 +1074,45 @@ def test_tool_arguments_as_json_text_are_read_and_not_refused() -> None:
     assert reply.tool_calls[0].arguments == {"diameter": 5.0}
 
 
-def test_arguments_that_are_no_json_become_an_empty_call() -> None:
-    """Nicht lesbar heißt hier nicht „Ausnahme": Die Schemaprüfung der Sitzung
-    macht daraus eine Meldung, die das Modell korrigieren kann (§26.5).
+def test_arguments_that_are_no_json_are_marked_as_unreadable() -> None:
+    """Nicht lesbar heißt hier nicht „Ausnahme" — aber auch nicht „leer".
+
+    Das leere Objekt stand hier als der harmlose Ausgang: Die Schemaprüfung der
+    Sitzung mache daraus eine Meldung, die das Modell korrigieren kann (§26.5).
+    Bei einer Operation mit ``consumes=0`` tut sie das nicht — sie füllt jeden
+    nicht verlangten Parameter mit seiner Vorgabe, und aus einem unlesbaren
+    Aufruf wird ein Vorgabekörper mit der Antwort „Ausgeführt" (Regel 21).
+
+    Ein Aufruf, der nicht zu lesen war, trägt jetzt eine erkennbare Spur.
+    ``UnreadableArguments`` ist trotzdem ein ``dict``: Wer die Spur nicht liest,
+    bekommt das bisherige Verhalten und keine Ausnahme.
     """
     reply = llm._from_ollama(
         {"message": {"tool_calls": [{"function": {"name": "drill_hole", "arguments": "5 mm"}}]}},
         "qwen3:14b",
     )
 
-    assert reply.tool_calls[0].arguments == {}
+    assert isinstance(reply.tool_calls[0].arguments, llm.UnreadableArguments)
+    assert reply.tool_calls[0].arguments == {}, (
+        "und bleibt für jeden anderen Leser ein leeres Objekt"
+    )
     assert reply.tool_calls[0].name == "drill_hole"
+
+
+def test_arguments_that_are_really_empty_are_not_marked() -> None:
+    """Die Gegenprobe: ``{}`` als Argumentliste ist gültig und häufig.
+
+    ``read_report`` und ``read_digest`` werden ohne Argumente aufgerufen — eine
+    Markierung, die auch sie trifft, machte aus jedem dieser Aufrufe eine
+    Ablehnung.
+    """
+    reply = llm._from_ollama(
+        {"message": {"tool_calls": [{"function": {"name": "read_report", "arguments": "{}"}}]}},
+        "qwen3:14b",
+    )
+
+    assert reply.tool_calls[0].arguments == {}
+    assert not isinstance(reply.tool_calls[0].arguments, llm.UnreadableArguments)
 
 
 def test_a_usage_count_that_is_no_number_counts_zero() -> None:

@@ -164,6 +164,53 @@ def test_a_value_the_recipe_does_not_expose_is_refused(profile: Profile) -> None
     assert caught.value.suggestions, "auch diese Abweisung schlägt eine Handlung vor"
 
 
+def test_a_recipe_is_built_in_the_quality_it_is_asked_for(
+    profile: Profile, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Checkliste „neuer Baustein", Punkt 5: beide Stufen, und hier besonders.
+
+    Ein Rezept rechnet keinen Körper, sondern einen ganzen Stapel durch
+    denselben Auswerter, mit der Rückfallkette je Schritt — es ist der teuerste
+    Baustein der Bibliothek. ``build_with_profile`` reichte trotzdem keine
+    Qualität durch: Die Vorgabe ``fine`` aus :func:`recipe.build` galt für jeden
+    Aufruf, auch für den, mit dem der Kunde gerade iteriert.
+
+    Gemessen an dem Wert, der wirklich beim Auswerter ankommt, nicht an dem, der
+    hineingegeben wurde — sonst prüfte der Test seinen eigenen Aufruf.
+    """
+    import importlib
+
+    # Über ``importlib``, weil ``app.core.scene`` den Namen ``evaluate`` als
+    # **Funktion** re-exportiert — gepatcht werden muss das Modul, aus dem
+    # ``recipe.build`` sie holt.
+    evaluate_module = importlib.import_module("app.core.scene.evaluate")
+
+    seen: list[str] = []
+    original = evaluate_module.evaluate
+
+    def spy(*args: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        seen.append(str(kwargs.get("quality")))
+        return original(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(evaluate_module, "evaluate", spy)
+
+    made = _recipe(profile)
+    parts, registry = PartRegistry(), Registry()
+    recipe.register(made, parts, registry)
+    spec = parts.get("probe_halter")
+    assert spec.build_with_profile is not None
+
+    # Was Aufnehmen und Registrieren selbst gerechnet haben, gehört nicht zur
+    # Frage — gemessen werden die zwei Aufrufe darunter.
+    seen.clear()
+    spec.build_with_profile(spec.params(w=40.0), profile, "draft")
+    spec.build_with_profile(spec.params(w=40.0), profile)
+
+    assert seen == ["draft", "fine"], (
+        f"der Auswerter sah {seen} — die Qualitätsstufe kommt nicht bis zum Stapel durch"
+    )
+
+
 def test_a_slice_with_two_bodies_is_refused_at_capture(profile: Profile) -> None:
     """Konzept §18a: Ein Baustein ist eine Funktion auf genau einen Körper.
 

@@ -362,6 +362,45 @@ def test_the_pocket_names_the_hole_it_actually_cuts() -> None:
     )
 
 
+def test_the_gusset_names_the_middle_of_its_face_and_not_its_edge() -> None:
+    """``gusset_1`` ist eine Fläche, und eine Fläche hat eine Mitte.
+
+    Der Keil steht mit seiner Unterseite auf der Wand: in x über die Dicke
+    zentriert, in y von 0 bis zum Schenkel (``shapes.wedge``). Genannt wurde als
+    Mitte ``(0, 0, 0)`` — das ist die Vorderkante dieser Fläche und nicht ihr
+    Mittelpunkt. Wer daran ausrichtet, setzt einen halben Schenkel daneben, bei
+    der Vorgabe also 6 mm; §24.1 macht ein Merkmal aber zur Zusage an den
+    nächsten Schritt.
+
+    Geprüft wird gegen die Geometrie und nicht gegen die Formel: Der genannte
+    Punkt muss auf der Auflagefläche liegen, und zwar in ihrem Inneren. Die alte
+    Angabe lag auf ihrem Rand — ein Unterschied, den kein Volumen und kein
+    Hüllquader zeigt.
+    """
+    from shapely.geometry import Point
+
+    from app.core.slice.analysis import cross_section
+
+    spec = PARTS.get("gusset")
+    legs = 12.0
+    built = spec.fn(spec.params(legs=legs, thickness=3.0))
+    centre = built.features["gusset_1"].params["centre"]
+    normal = built.features["gusset_1"].params["normal"]
+
+    assert normal == (0.0, 0.0, -1.0), "die Auflagefläche schaut nach unten"
+    assert centre[2] == pytest.approx(0.0), "sie liegt auf z = 0"
+
+    # Ein Haar über der Fläche, weil ein Schnitt genau auf ihr entartet.
+    footprint = cross_section(built.mesh, 0.01)
+    assert footprint is not None and not footprint.is_empty, "nothing to stand on"
+
+    assert footprint.contains(Point(centre[0], centre[1])), (
+        f"gusset_1 nennt {centre[:2]}, und dort ist die Fläche nicht — "
+        f"ihr Umriss reicht von y={footprint.bounds[1]:.2f} bis y={footprint.bounds[3]:.2f}"
+    )
+    assert centre[1] == pytest.approx(legs / 2.0)
+
+
 def test_the_hinge_eye_names_the_axis_its_bore_actually_runs_on() -> None:
     """Die Drehachse liegt quer, nicht senkrecht.
 
@@ -696,6 +735,66 @@ def test_the_magnet_lip_is_narrower_than_the_magnet(play: float) -> None:
         f"play={play}: the mouth is {mouth:.2f} mm — that is a press the customer "
         "cannot push through"
     )
+
+
+@pytest.mark.parametrize("grip", [0.05, 0.1, 0.3])
+def test_the_magnet_lip_grips_by_the_amount_it_is_given(grip: float) -> None:
+    """Das Übermaß der Haltelippe ist ein Wert, keine Zahl im Code.
+
+    Es stand als feste 0,1 daneben, mit der Begründung, ein Übermaß sei keine
+    Toleranz aus dem Profil. Genau das ist es aber: Das Materialprofil führt
+    ``press`` (PLA und PETG -0,05, ABS und ASA -0,06, TPU -0,10), der Wert wird
+    kalibriert (§28.3), und eine Zahl daneben untergräbt die Kalibrierung —
+    dieselbe Tasche liest ihr Spiel längst aus dem Profil (Regel 7).
+
+    Gemessen wird an der **engsten** Stelle, also an der Mündung: Der Kegel
+    zeigt in seiner Mitte den Mittelwert und damit ein freundlicheres Bild, als
+    das Teil verdient. Und gegen den Magneten, nicht gegen die Tasche — die ist
+    um das Profilspiel weiter, und ein Übermaß dagegen wäre keines.
+    """
+    from app.core.knowledge import standards
+
+    spec = PARTS.get("magnet_pocket")
+    entry = standards.magnet("6x3")
+    built = spec.fn(spec.params(size="6x3", play=0.25, press_lip=True, grip=grip)).mesh
+
+    # Ein Tausendstel unter der Fläche und nicht zwei Hundertstel: Der Kegel
+    # wird über 0,4 mm eng, ein Schnitt 0,02 tiefer liegt fünf Prozent seiner
+    # Spanne daneben — bei 0,3 mm Übermaß sind das 0,03 mm, also mehr als die
+    # Zusage selbst. Der Test darüber misst gröber, weil er nur „enger als der
+    # Magnet" fragt; hier steht eine Zahl.
+    cut = built.raw.section(plane_origin=[0.0, 0.0, -0.001], plane_normal=[0.0, 0.0, 1.0])
+    assert cut is not None, "nothing at the mouth of the pocket"
+    points = np.asarray(cut.vertices, dtype=float)
+    mouth = 2.0 * float(np.hypot(points[:, 0], points[:, 1]).max())
+
+    assert mouth == pytest.approx(entry.diameter - grip, abs=0.02), (
+        f"grip={grip}: the mouth is {mouth:.2f} mm for a {entry.diameter} mm magnet — "
+        "the lip does not grip by the amount it was given"
+    )
+
+
+def test_the_magnet_lip_falls_back_when_no_profile_reaches_the_part() -> None:
+    """Null im Feld heißt „aus dem Profil" — und ohne Profil nicht „keine Lippe".
+
+    ``PartSpec.fn`` bekommt kein Profil; eingefüllt wird der Wert erst vom
+    Bausteinaufruf, so wie beim Spiel. Wo das nicht geschieht, muss die Lippe
+    trotzdem halten: Null als Übermaß wäre eine Mündung so weit wie der Magnet,
+    also der Zustand, den Version 5 gerade behoben hat.
+    """
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts.mounting import MAGNET_LIP_GRIP
+
+    spec = PARTS.get("magnet_pocket")
+    entry = standards.magnet("6x3")
+    built = spec.fn(spec.params(size="6x3", play=0.25, press_lip=True)).mesh
+
+    cut = built.raw.section(plane_origin=[0.0, 0.0, -0.001], plane_normal=[0.0, 0.0, 1.0])
+    assert cut is not None
+    points = np.asarray(cut.vertices, dtype=float)
+    mouth = 2.0 * float(np.hypot(points[:, 0], points[:, 1]).max())
+
+    assert mouth == pytest.approx(entry.diameter - MAGNET_LIP_GRIP, abs=0.02)
 
 
 def test_a_part_that_needs_a_face_says_so_instead_of_guessing(profile: Profile) -> None:

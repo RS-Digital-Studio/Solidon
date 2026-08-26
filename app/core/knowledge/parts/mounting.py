@@ -77,6 +77,25 @@ LIP_GRIPS_THE_MAGNET = PartChange(
     ),
 )
 
+LIP_GRIP_FROM_PROFILE = PartChange(
+    version="10",
+    date="2026-08-26",
+    reason=(
+        "Das Übermaß der Haltelippe stand als feste 0,1 im Baustein. Für "
+        "Übermaße führt das Materialprofil den Wert ``press`` — er wird "
+        "kalibriert (§28.3), und eine Zahl daneben untergräbt genau diese "
+        "Kalibrierung (Regel 7). Die Tasche las ihr Spiel längst aus dem Profil "
+        "und ihr Übermaß nicht."
+    ),
+    effect=(
+        "Neues Feld *Übermaß* unter Weitere Einstellungen. Null heißt wie beim "
+        "Spiel: der Wert aus dem Materialprofil, sobald es den Baustein erreicht "
+        "— ohne Profil bleibt es bei den bisherigen 0,1 mm. Wer eine Zahl "
+        "einträgt, bekommt genau sie; die Mündung wird um diesen Betrag enger "
+        "als der Magnet."
+    ),
+)
+
 HEAD_PLAY_FROM_PROFILE = PartChange(
     version="6",
     date="2026-08-25",
@@ -123,12 +142,23 @@ POCKET_REACHES_PAST_THE_FACE = PartChange(
     ),
 )
 
-#: Wie weit die Haltelippe einer Magnettasche den Magneten unterschreitet.
+#: Wie weit die Haltelippe einer Magnettasche den Magneten unterschreitet,
+#: **solange kein Profil den Baustein erreicht**.
 #:
-#: Kein Toleranzmaß aus dem Profil, sondern ein Übermaß: Die Lippe **soll**
-#: klemmen. Ein Zehntel Millimeter ist wenig genug, dass der Magnet sich
-#: hineindrücken lässt, und genug, dass er nicht von selbst herausfällt — so
-#: steht es auch im Text des Parameters.
+#: Hier stand das Übermaß als feste Zahl, mit der Begründung, ein Übermaß sei
+#: keine Toleranz aus dem Profil — und das ist die Begründung, die Regel 7
+#: gerade nicht gelten lässt: Für Übermaße führt das Materialprofil ``press``
+#: (``profiles.py``, ``resolve_tolerance(value, "press", profile)``), und es ist
+#: dort negativ, weil ein Pressmaß der Gegenfall zum Spiel ist. PLA und PETG
+#: nennen -0,05, ABS und ASA -0,06, TPU -0,10. Ein Zehntel für alle vier
+#: untergrub dieselbe Kalibrierung (§28.3), die der Baustein beim Spiel längst
+#: liest: Wer sein Material misst, bekam das gemessene Spiel und ein geratenes
+#: Übermaß.
+#:
+#: Der Weg ist derselbe wie beim Spiel — der Parameter steht auf null, und der
+#: Bausteinaufruf füllt ihn aus dem Profil ein. Diese Zahl bleibt als Rückfall
+#: für den Fall ohne Profil: Null hieße dort keine Lippe, und das ist die eine
+#: Antwort, die der Kunde nicht gemeint haben kann.
 MAGNET_LIP_GRIP = 0.1
 
 #: Wie hoch die Haltelippe ist — der Weg, über den der Magnet sich
@@ -167,6 +197,15 @@ class MagnetPocketParams(BaseParams):
         placement="advanced",
         doc=_("Ein Zehntel Verengung am Rand, damit der Magnet nicht herausfällt."),
     )
+    grip: float = param(
+        title=_("Übermaß"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=1.0,
+        placement="advanced",
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
 
 
 @register_part(
@@ -180,7 +219,13 @@ class MagnetPocketParams(BaseParams):
         "Tasche für einen Rundmagneten, auf Wunsch mit Deckschicht zum Überdrucken "
         "und einer Haltelippe am Rand."
     ),
-    changes=[FIRST_RELEASE, MOUTH_AT_ORIGIN, FACE_GIVES_DIRECTION, LIP_GRIPS_THE_MAGNET],
+    changes=[
+        FIRST_RELEASE,
+        MOUTH_AT_ORIGIN,
+        FACE_GIVES_DIRECTION,
+        LIP_GRIPS_THE_MAGNET,
+        LIP_GRIP_FROM_PROFILE,
+    ],
 )
 def magnet_pocket(raw: BaseParams) -> PartResult:
     params = cast(MagnetPocketParams, raw)
@@ -202,7 +247,11 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
     # Jetzt endet der Zylinder unter der Lippe, und die letzten Zehntel
     # übernimmt der Kegel. Sein enges Ende ist der Magnet **minus** Übermaß —
     # nicht die aufgeweitete Tasche, in der das Profilspiel schon steckt.
-    grip = MAGNET_LIP_GRIP if (params.press_lip and params.cover <= 0.0) else 0.0
+    # Das Übermaß kommt aus dem Materialprofil, nicht aus einer Zahl im Code
+    # (Regel 7): Null im Parameter heißt „aus dem Profil", genau wie beim Spiel
+    # eine Zeile darüber. Wo kein Profil bis hierher kommt, bleibt
+    # ``MAGNET_LIP_GRIP`` der Rückfall — null hieße dort keine Lippe.
+    grip = (params.grip or MAGNET_LIP_GRIP) if (params.press_lip and params.cover <= 0.0) else 0.0
     narrow = entry.diameter - grip
     lip_height = MAGNET_LIP_HEIGHT if grip else 0.0
 

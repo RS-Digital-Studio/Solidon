@@ -386,6 +386,7 @@ def plug(
     depth: float = 0.0,
     anchor: BoreAnchor = "mouth",
     profile: Profile | None = None,
+    compensate: bool = True,
     quality: Quality = "fine",
 ) -> BoreResult:
     """Füllt eine Bohrung wieder auf (§25, „verschließen").
@@ -393,6 +394,20 @@ def plug(
     Etwas größer als das Loch, das er füllt — ein Stopfen exakt in Bohrungsgröße
     trifft sie in einer zusammenfallenden Fläche, dem einen Ding, das eine
     Boolesche Op zuverlässig bricht (§39, ``boolean_overlap``).
+
+    **„Etwas größer" heißt größer als das *geschnittene* Loch, nicht als das
+    genannte.** ``compensate`` bedeutet hier dasselbe wie beim Bohren und steht
+    aus demselben Grund per Vorgabe an: :func:`drill` weitet die Bohrung um den
+    Wert aus dem Materialprofil (:func:`bore_diameter`, §39, Regel 7), und ein
+    Stopfen, der nur das Nennmaß plus die Überlappung kennt, ist damit **enger
+    als das Loch, das er zumachen soll**. Gemessen an einem 20er Würfel mit
+    einer Bohrung Ø 6 im PETG-Profil: gebohrt 6,20 mm, gefüllt 6,02 mm, übrig
+    ein Ringspalt von 1,72 mm² über die ganze Bohrungslänge — 34,45 mm³, die
+    niemand meldete. Der Körper war wasserdicht, einteilig und hatte in jedem
+    Querschnitt ein Loch.
+
+    Ohne ``profile`` bleibt es beim Nennmaß: Wer keinen Drucker kennt, soll
+    keinen erfinden (Regel 7).
 
     ``anchor`` bedeutet dasselbe wie beim Bohren, und aus demselben Grund: Wer
     eine Mündung anklickt und dort eine Tiefe von 6 mm einträgt, meint sechs
@@ -407,8 +422,9 @@ def plug(
     # ``_shell`` schneidet den Überstand ohnehin weg. Zentriert auf die Mündung
     # füllte die einfache Länge nur die Hälfte und ließ die Bohrung offen.
     height = _through_length(mesh, axis) * 2.0 if through else depth
+    filled = diameter if profile is None else bore_diameter(diameter, profile, compensate)
     cylinder = trimesh.creation.cylinder(
-        radius=diameter / 2.0 + BOOLEAN_OVERLAP, height=height, sections=BORE_SECTIONS
+        radius=filled / 2.0 + BOOLEAN_OVERLAP, height=height, sections=BORE_SECTIONS
     )
     cylinder.apply_transform(_axis_alignment(axis))
     offset = np.asarray(position, dtype=float)
@@ -432,7 +448,7 @@ def plug(
     return BoreResult(
         mesh=outcome.mesh,
         solver=outcome.solver,
-        diameter=diameter,
+        diameter=filled,
         findings=findings,
     )
 

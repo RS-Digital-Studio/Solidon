@@ -411,6 +411,73 @@ def test_a_through_plug_fills_the_whole_bore(profile: Profile) -> None:
     assert plugged.mesh.raw.body_count == 1, "ein gefüllter Körper, kein loser Zylinder"
 
 
+def section_rings(mesh: MeshData, height: float) -> int:
+    """Wie viele Löcher der waagerechte Schnitt auf dieser Höhe einschließt.
+
+    Die Frage „ist die Bohrung wirklich zu" lässt sich am Volumen allein nicht
+    stellen: Ein Ringspalt von anderthalb Prozent des Bohrungsquerschnitts
+    verschwindet in jeder Toleranz, die man auf 8000 mm³ ansetzt. Die Zahl der
+    Innenränder sagt **ob** noch ein Loch da ist, und zwar unabhängig davon,
+    wie schmal es ist.
+    """
+    from app.core.slice.analysis import cross_section
+
+    section = cross_section(mesh, height)
+    if section is None or section.is_empty:
+        return 0
+    return sum(len(part.interiors) for part in getattr(section, "geoms", [section]))
+
+
+def test_a_plug_closes_a_bore_that_was_widened_for_the_material(profile: Profile) -> None:
+    """Wer 6 mm bohrt und 6 mm stopft, behält kein Loch.
+
+    ``drill`` weitet per Vorgabe um die Materialtoleranz aus dem Profil (§39,
+    Regel 7) — beim PETG-Profil sind das 0,2 mm im Durchmesser. Der Stopfen
+    rechnete dagegen mit dem Nennmaß plus der Booleschen Überlappung: gebohrt
+    wurden 6,20 mm, gefüllt 6,02 mm. Zurück blieb ein Ringspalt von 1,72 mm²
+    über die ganze Bohrungslänge, also 34,45 mm³ — wasserdicht, einteilig, ein
+    Innenrand in jedem Querschnitt und kein einziger Befund.
+
+    Der Test daneben (:func:`test_a_through_plug_fills_the_whole_bore`) umgeht
+    die Frage mit ``compensate=False`` und konnte sie deshalb nicht stellen.
+    """
+    body = cube()
+    drilled = drill(body, position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, profile=profile)
+    assert section_rings(drilled.mesh, 0.0) == 1, "die Bohrung ist da"
+
+    plugged = plug(drilled.mesh, position=(0.0, 0.0, 10.0), axis="z", diameter=6.0, profile=profile)
+
+    assert section_rings(plugged.mesh, 0.0) == 0, "kein Ringspalt mehr im Querschnitt"
+    assert section_area(plugged.mesh, 0.0) == pytest.approx(section_area(body, 0.0), abs=0.05)
+    assert plugged.mesh.volume == pytest.approx(body.volume, abs=0.5)
+    assert plugged.mesh.is_watertight
+    assert plugged.mesh.raw.body_count == 1
+
+
+def test_a_plug_can_be_told_to_ignore_the_material_tolerance(profile: Profile) -> None:
+    """``compensate=False`` heißt beim Stopfen dasselbe wie beim Bohren.
+
+    Wer nominal bohrt, stopft nominal — sonst wüchse der Stopfen um die
+    Toleranz in ein Loch hinein, das sie nie bekommen hat. Die zwei Schalter
+    gehören zusammengedacht, und darum trägt der Stopfen denselben.
+    """
+    body = cube()
+    drilled = drill(
+        body, position=(0.0, 0.0, 0.0), axis="z", diameter=6.0, compensate=False, profile=profile
+    )
+    plugged = plug(
+        drilled.mesh,
+        position=(0.0, 0.0, 10.0),
+        axis="z",
+        diameter=6.0,
+        compensate=False,
+        profile=profile,
+    )
+
+    assert section_rings(plugged.mesh, 0.0) == 0
+    assert plugged.mesh.volume == pytest.approx(body.volume, abs=0.5)
+
+
 def test_a_plug_on_a_step_does_not_grow_a_stud(profile: Profile) -> None:
     """Zwilling der Bohr-Richtung: der Stopfen füllt ins Material, nicht in die
     Luft.

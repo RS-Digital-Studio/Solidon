@@ -383,6 +383,16 @@ class PlugParams(BaseParams):
             "oder seine Mitte. Bei einem durchgehenden Stopfen ändert es nichts."
         ),
     )
+    compensate: bool = param(
+        title=_("Materialtoleranz berücksichtigen"),
+        default=True,
+        placement="advanced",
+        doc=_(
+            "Füllt so weit, wie *Bohrung setzen* mit derselben Einstellung schneidet — "
+            "sonst bleibt rings um den Stopfen der Spalt stehen, um den die Bohrung "
+            "aufgeweitet wurde."
+        ),
+    )
 
 
 @register_op(
@@ -406,6 +416,7 @@ def plug_hole(ctx: OpContext) -> OpResult:
         depth=params.depth,
         anchor=cast(BoreAnchor, params.anchor),
         profile=ctx.profile,
+        compensate=params.compensate,
         quality=ctx.quality,
     )
     return OpResult(

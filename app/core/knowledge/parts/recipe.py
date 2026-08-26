@@ -314,6 +314,31 @@ def _with_values(document: Document, recipe: Recipe, values: dict[str, float]) -
     Dialog vorbei in ein fremdes Rezept zu greifen. Der Wert ersetzt Wert
     **und** Ausdruck des Projektparameters: Ein Ausdruck bliebe sonst die
     stärkere Quelle, und der Dialogwert täte nichts.
+
+    **Und das Wegschneiden bleibt, obwohl es einmal Arbeit gekostet hat.**
+    Ein Weg-2-Projekt mit ``breite = 40`` und ``hoehe = =@breite/2`` wurde als
+    Baustein gespeichert und hatte darin zwei unabhängige Felder: „Breite" auf
+    60 ließ „Höhe" auf 20 stehen statt auf 30. Die Frage war, ob hier ein
+    Befund fällig ist — die Antwort ist nein, und zwar aus dem Verhalten
+    heraus:
+
+    * **Hier ist der Schnitt richtig.** Wer einen Wert von außen hereingibt,
+      meint ihn; ein überlebender Ausdruck machte aus dem Feld im
+      Bausteindialog eine Attrappe, die nichts bewirkt (§13 — der Ausdruck
+      besitzt den Wert, also muss einer von beiden weichen).
+    * **Und der Schnitt ist nicht die Stelle, an der jemand entscheidet.**
+      Entschieden wird beim *Freigeben*, also einmal in :func:`capture`, und
+      nicht bei jedem Bauen. Ein Befund an dieser Stelle stünde in jedem
+      Prüfbericht jedes Projekts, das den Baustein benutzt — für eine
+      Entscheidung, die längst gefallen ist.
+    * **Ein Befund braucht einen Leser.** :func:`capture` hat genau einen
+      Aufrufer, den Rezeptdialog, und der fragt jetzt vorher: Eine Zeile mit
+      Ausdruck geht **ohne** Haken auf und sagt daneben, was ein Haken dort
+      bedeutet (``app/ui/recipe_dialog.py``). Ein zweiter Befund daneben, den
+      niemand abholt, wäre eine Kette, die vor ihrem letzten Glied endet.
+
+    Kommt ein zweiter Aufrufer dazu — ein Agentenwerkzeug, die
+    Kommandozeile —, gehört die Frage nach :func:`capture` und nicht hierher.
     """
     exposed = {entry.name for entry in recipe.exposed}
     unknown = sorted(set(values) - exposed)
@@ -420,16 +445,26 @@ def register(
     ``build_with_profile`` mit dem Profil des Dokuments (``ops.insert``
     bevorzugt es): Eine ``auto:``-Toleranz im Rezept rechnet dann mit dem
     Material des Kunden, nicht mit unserem.
+
+    **Und mit der Qualitätsstufe des Aufrufers.** Ein Rezept ist der teuerste
+    Baustein, den es gibt: Es rechnet keinen Körper, sondern einen ganzen
+    Stapel durch denselben Auswerter, mitsamt Rückfallkette je Schritt. Genau
+    dort muss ``draft`` durchkommen, sonst rechnet die Iteration in Feinheit
+    (Checkliste „neuer Baustein", Punkt 5). ``quality`` steht deshalb als
+    dritter, vorbelegter Parameter — ein Aufrufer, der nur zwei kennt (der
+    Typ ``BuildWithProfile``), ruft weiter wie bisher und bekommt ``fine``.
     """
     from app.core.knowledge.parts import ops as part_ops
     from app.core.knowledge.parts.registry import PARTS
 
     params_cls = _params_class(recipe)
 
-    def build_with_profile(params: BaseParams, profile: Profile | None) -> PartResult:
+    def build_with_profile(
+        params: BaseParams, profile: Profile | None, quality: Quality = "fine"
+    ) -> PartResult:
         chosen = profile or _default_profile()
         values = {entry.name: float(getattr(params, entry.name)) for entry in recipe.exposed}
-        return build(recipe, values, profile=chosen)
+        return build(recipe, values, profile=chosen, quality=quality)
 
     def fn(params: BaseParams) -> PartResult:
         return build_with_profile(params, None)
@@ -622,6 +657,17 @@ def capture(
     Mitgenommen werden alle Projektparameter des Dokuments — sie sind kleine
     Daten, und welche der Ausschnitt wirklich liest, entscheiden seine
     Ausdrücke — und nur die Quellen, auf die der Ausschnitt sich bezieht.
+
+    **Ein freigegebener Parameter mit Ausdruck verliert seine Formel**
+    (:func:`_with_values` sagt, warum das dort richtig ist). Abgewiesen wird
+    er deshalb nicht: Die Bindung zu lösen ist ein zulässiger Wunsch — im
+    Projekt hing die Höhe an der Breite, im Baustein soll sie ein eigenes Maß
+    sein. Gefragt wird stattdessen, und zwar dort, wo jemand antworten kann:
+    Der Rezeptdialog legt eine solche Zeile **ohne** Haken an und schreibt
+    daneben, was ein Haken dort bedeutet. Wer :func:`capture` als zweiter
+    Aufrufer benutzt, übernimmt diese Frage — hier weiß niemand, wen er fragen
+    soll (Regel 21: nie stillschweigend raten, aber auch kein Dialog aus dem
+    Kern heraus).
     """
     if not features:
         # §24.1 verlangt es ohnehin beim Registrieren — aber dort hieße der

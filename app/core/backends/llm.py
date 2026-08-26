@@ -724,6 +724,29 @@ def _input_tokens(usage: dict[str, Any]) -> int:
     return sum(_count(usage, field_name) for field_name in CACHE_TOKEN_FIELDS)
 
 
+class UnreadableArguments(dict[str, Any]):
+    """Die Argumente eines Werkzeugaufrufs, die sich nicht lesen ließen.
+
+    Ein ``dict``, damit nichts bricht, was Argumente einfach benutzt — und ein
+    eigener Typ, damit die Sitzung den Aufruf ablehnen kann, statt ihn mit
+    lauter Vorgabewerten auszuführen (:data:`UNREADABLE_ARGUMENTS`).
+    """
+
+
+#: Was ``_arguments`` zurückgibt, wenn nichts zu lesen war.
+#:
+#: **Ein leeres Objekt war hier die falsche Antwort**, und die Begründung
+#: daneben trug nicht: Die Schemaprüfung der Sitzung mache daraus eine Meldung,
+#: die das Modell korrigieren kann (§26.5). Das gilt nur, solange die Operation
+#: etwas verlangt. Bei ``consumes=0`` — ``create_box`` und seine Geschwister —
+#: füllt ``validate`` jeden nicht verlangten Parameter mit seiner Vorgabe, der
+#: Aufruf ist damit vollständig gültig, und heraus kommt ein Vorgabekörper samt
+#: der Antwort „Ausgeführt". Ein Modell, dessen Maße unterwegs verlorengingen,
+#: erfährt davon nichts und hat keinen Grund, den Aufruf zu wiederholen — genau
+#: das stillschweigende Raten, das Regel 21 verbietet.
+UNREADABLE_ARGUMENTS: Final[UnreadableArguments] = UnreadableArguments()
+
+
 def _arguments(value: Any) -> dict[str, Any]:
     """Die Argumente eines Werkzeugaufrufs — als Objekt, auch wenn Text kam.
 
@@ -733,22 +756,29 @@ def _arguments(value: Any) -> dict[str, Any]:
     warf einen ``ValueError`` — der ganze Zug endete als Programmfehler, obwohl
     der Aufruf lesbar dastand. Also wird gelesen statt abgelehnt.
 
-    Was sich auch dann nicht lesen lässt, wird ein leeres Objekt. Die
-    Schemaprüfung der Sitzung macht daraus eine Meldung, die das Modell
-    korrigieren kann — das ist der vorgesehene Weg für einen missratenen
-    Aufruf (§26.5) und besser als eine Ausnahme, die den Zug beendet.
+    Was sich auch dann nicht lesen lässt, kommt als
+    :data:`UNREADABLE_ARGUMENTS` zurück — nicht als Ausnahme, die den Zug
+    beendet, und nicht als leeres Objekt, das wie eine gültige Angabe aussieht.
+    Die Sitzung lehnt den Aufruf damit ab und sagt dem Modell, was zu tun ist.
+
+    Ein wirklich leeres ``{}`` bleibt unmarkiert: ``read_report`` und
+    ``read_digest`` werden ohne Argumente gerufen, und die dürfen nicht in
+    dieselbe Ablehnung laufen.
     """
     if isinstance(value, str):
         try:
             value = json.loads(value)
         except ValueError:
             _log.warning("tool arguments were neither object nor JSON text")
-            return {}
+            return UNREADABLE_ARGUMENTS
     if isinstance(value, dict):
         return dict(value)
-    if value is not None:
-        _log.warning("tool arguments arrived as %s", type(value).__name__)
-    return {}
+    if value is None:
+        # Kein Feld ``arguments`` heißt „ohne Argumente" und nicht „unlesbar" —
+        # so ruft ein Modell jedes Werkzeug, das keine braucht.
+        return {}
+    _log.warning("tool arguments arrived as %s", type(value).__name__)
+    return UNREADABLE_ARGUMENTS
 
 
 # --- Lokal, über Ollama -----------------------------------------------------------

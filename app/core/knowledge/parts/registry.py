@@ -21,14 +21,25 @@ from __future__ import annotations
 import re
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Final
+from typing import Any, Final, Protocol
 
 from app.core.errors import InternalError
-from app.core.types import BaseParams, HoleValues, PartFn, PartResult, Profile
+from app.core.types import BaseParams, HoleValues, PartFn, PartResult, Profile, Quality
 from app.i18n import TranslatableText, _
 
-BuildWithProfile = Callable[[BaseParams, Profile | None], PartResult]
-"""Der profilbewusste Bauweg eines Rezepts — siehe ``PartSpec.build_with_profile``."""
+
+class BuildWithProfile(Protocol):
+    """Der profilbewusste Bauweg eines Rezepts — siehe ``PartSpec.build_with_profile``.
+
+    Als Protokoll und nicht als ``Callable``, weil die Qualität vorbelegt ist:
+    Ein Rezept rechnet einen ganzen Stapel, und wer es ohne Stufe ruft, bekommt
+    weiterhin die feine (Checkliste „neuer Baustein", Punkt 5).
+    """
+
+    def __call__(
+        self, params: BaseParams, profile: Profile | None, quality: Quality = "fine", /
+    ) -> PartResult: ...
+
 
 _NAME_PATTERN: Final = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -454,8 +465,12 @@ def register_part(
 #: (alles ``mounting.py``, 25.08.2026). Version 9: die Kopffreiheit des
 #: Schraubenlochs trägt jetzt Material ab statt in der Luft über der Fläche zu
 #: wachsen, und die Mutternfalle sinkt an einer Fläche ins Material statt
-#: darüber (beides ``fasteners.py``, 26.08.2026).
-LIBRARY_VERSION: Final = "9"
+#: darüber (beides ``fasteners.py``, 26.08.2026). Version 10: Rippe und
+#: Eckwinkel halten die Mindestwandstärke, der Eckwinkel nennt die Mitte
+#: seiner Auflagefläche statt ihrer Kante, und das Übermaß der
+#: Magnet-Haltelippe kommt aus dem Materialprofil statt aus einer Zahl
+#: (``structure.py``, ``mounting.py``, 26.08.2026).
+LIBRARY_VERSION: Final = "10"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

@@ -48,7 +48,7 @@ from app.core.agent.tools import (
     UNDO_TRANSACTION,
     tool_schemas,
 )
-from app.core.backends.llm import LLMBackend, Message, ToolCall
+from app.core.backends.llm import LLMBackend, Message, ToolCall, UnreadableArguments
 from app.core.errors import AppError, UserError
 from app.core.knowledge import rules
 from app.core.log import get_logger
@@ -337,6 +337,21 @@ class AgentSession:
         die das Modell liest.
         """
         name = call.name
+        if isinstance(call.arguments, UnreadableArguments):
+            # **Vor allem anderen**, denn ein unlesbarer Aufruf ist kein
+            # Aufruf ohne Argumente (Regel 21). Die Schemaprüfung weiter unten
+            # fängt ihn nicht: Bei einer Operation mit ``consumes=0`` füllt
+            # ``validate`` jeden nicht verlangten Parameter mit seiner Vorgabe,
+            # und aus „was das Modell wollte, kam nie an" wurde ein
+            # Vorgabekörper mit der Antwort „Ausgeführt".
+            proposal.invalid_calls += 1
+            return (
+                tr(
+                    "Die Argumente dieses Aufrufs waren nicht lesbar. Bitte "
+                    "wiederhole ihn und schicke die Werte als JSON-Objekt."
+                ),
+                scene,
+            )
         arguments = dict(call.arguments)
 
         # §40: die Suite misst über ``readings``, ob eine Frage nachgesehen
