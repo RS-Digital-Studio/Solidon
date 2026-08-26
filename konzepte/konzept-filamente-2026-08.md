@@ -129,6 +129,32 @@ meldete allein in `app/ui` 285 Treffer, von denen fast nichts einschlägig ist.
    Bewegen · Analyse · Bemalen". Das ist ein **Bild**, kein Text — es wird
    gerendert und nicht übersetzt.
 
+### Was schon gemessen ist — und warum trotzdem noch nichts geschrieben wird
+
+Der Färbeweg über das Kontextmenü ist am echten Fenster durchgeklickt (27,
+26.08.2026, Prüfstand mit Bild): Quader → Fläche im Baum → Rechtsklick →
+Dialog öffnet mit einer Merkmal-Combo, vorbelegt auf die angeklickte Fläche.
+
+**Zwei Fundstücke, die den Handbuchsatz verändert hätten:**
+
+1. „Bemalen" steht **nicht** direkt im Rechtsklick-Menü, sondern unter
+   **„Vorbereiten → Bemalen"** — die Kategorie wird am Flächenklick gefaltet.
+   Ein Satz ohne das Untermenü schickte den Kunden auf die Suche.
+2. Der Weg trug **erst seit** dem Fix an `paint_slot` (`kind="feature"`,
+   `11bfc2ca`). Davor war die Vorbelegung tot, und derselbe Satz wäre wörtlich
+   richtig und in der Sache falsch gewesen.
+
+**Geschrieben wird trotzdem noch nicht**, und das ist der Punkt: Das Feld
+daneben heißt heute „Slot" mit Nummer 0–7, und Radius samt Punktpfad stehen
+noch im Dialog. Beides fällt mit den nächsten Schritten. Ein Handbuch, das
+einen **Übergangszustand** beschreibt, ist falsch, sobald der Übergang durch
+ist — und niemand merkt es, weil kein Test einen Satz prüft.
+
+Daraus die Arbeitsregel für diesen Block: **Sätze über einen Bedienweg
+entstehen, wenn der Weg gemessen läuft *und* der Zielzustand erreicht ist** —
+nicht wenn er gebaut ist, und nicht solange daneben noch etwas steht, das
+verschwinden soll.
+
 **Reihenfolge beim Scharfschalten:** `manual.py` zuerst (die Website folgt aus
 ihm), dann die Kataloge, dann die Abbildung. Die Fundstellen liegen
 zeilengenau vor.
