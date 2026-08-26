@@ -311,6 +311,47 @@ def test_slicing_greys_out_before_the_click_when_the_licence_ran_out(
     assert not dialog.slice_button.toolTip()
 
 
+def test_slicing_greys_out_until_the_profiles_are_chosen(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Die dritte Hürde derselben Bauart: Profilwahl vor dem Klick.
+
+    Ein Slicer der Orca-Familie ohne gewähltes Drucker- und Prozessprofil
+    lehnt jeden Auftrag ab — das stand bisher erst **nach** dem Klick in der
+    Statuszeile, der Knopf blieb aktiv (Fund ce, 26.08.2026: Klick ohne
+    sichtbare Folge, Prüfstand hing). Der Knopf kennt jetzt die Stufen:
+    Suche läuft, Drucker fehlt, Prozess fehlt, frei — und der Grund am Knopf
+    ist wörtlich derselbe Satz wie der Wächter in `_slice` (eine Quelle).
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog._slicer_path = Path("fake-orca")
+    dialog._needs_profiles = True
+    dialog._profiles_pending = True
+    dialog._show_slicer_state()
+
+    assert not dialog.slice_button.isEnabled()
+    assert "durchgesehen" in dialog.slice_button.toolTip(), "laufende Suche heißt warten"
+
+    dialog._profiles_pending = False
+    dialog._show_slicer_state()
+
+    assert not dialog.slice_button.isEnabled()
+    assert dialog.slice_button.toolTip() == dialog._machine_missing_line()
+    assert dialog.slice_button.statusTip() == dialog.slice_button.toolTip()
+
+    dialog.machine_choice.addItem("Drucker", "m1")
+    dialog.machine_choice.setCurrentIndex(0)
+
+    assert not dialog.slice_button.isEnabled()
+    assert dialog.slice_button.toolTip() == dialog._process_missing_line()
+
+    dialog.process_choice.addItem("Prozess", "p1")
+    dialog.process_choice.setCurrentIndex(0)
+
+    assert dialog.slice_button.isEnabled(), "beide Profile gewählt heißt frei"
+    assert not dialog.slice_button.toolTip()
+
+
 def test_a_share_is_shown_in_percent_and_stored_as_a_fraction(
     dialog: PrintSettingsDialog,
 ) -> None:

@@ -1199,6 +1199,11 @@ class PrintSettingsDialog(QDialog):
         """Hält ausgelaufene Arbeiter, bis Qt mit ihnen durch ist — das
         Warum steht in :mod:`app.ui.leash`."""
         self._profiles: list[slicer_profiles.SlicerProfile] = []
+        self._needs_profiles = False
+        """Ob der gefundene Slicer Profile verlangt (nur die Orca-Familie)."""
+        self._profiles_pending = False
+        """Ob die Profilsuche noch läuft — solange sagt der Knopf „wird
+        durchgesehen" statt „bitte wählen": kein Zustand ohne Erhebung."""
         self._temporary: TemporaryDirectory[str] | None = None
         self._gcode: list[Path] = []
         """Die Druckdateien des letzten Laufs — eine je Platte."""
@@ -1403,17 +1408,40 @@ class PrintSettingsDialog(QDialog):
         return box
 
     def _unfold_tabs(self, open_now: bool) -> None:
-        """Zugeklappt bekommt die Gruppe auch keinen Platz mehr.
+        """Zugeklappt bekommt die Gruppe auch keinen Platz mehr — und offen
+        bekommt sie echten.
 
         Das Register verschwand schon vorher; sein Rahmen behielt aber den
         Dehnungsfaktor und damit den ganzen freien Raum des Dialogs — ein
         leerer Kasten, in dem nichts stand.
+
+        Beim Öffnen wächst der Dialog selbst (Robert, 26.08.2026: „klappt zu
+        klein auf"). `adjustSize` taugt dafür nicht: Es deckelt bei zwei
+        Dritteln der Bildschirmhöhe, und weil die Vorderseite davon schon
+        740 Punkte hält, blieben dem Register 220 von gewünschten 416 —
+        vier Zeilen mit Rollbalken. Gemessen wird stattdessen die **größte**
+        Gruppe: Sie soll ohne Rollen passen, wenn der Bildschirm es hergibt;
+        die Grenze ist die nutzbare Bildschirmhöhe, nicht ein Anteil davon.
         """
         layout = self.layout()
         box = self.tabs.parentWidget()
         if isinstance(layout, QVBoxLayout) and box is not None:
             layout.setStretch(layout.indexOf(box), 1 if open_now else 0)
-        self.adjustSize()
+        if not open_now:
+            self.adjustSize()
+            return
+        tallest = 0
+        for index in range(self.tabs.count()):
+            area = self.tabs.widget(index)
+            page = area.widget() if isinstance(area, QScrollArea) else None
+            if page is not None:
+                tallest = max(tallest, page.sizeHint().height())
+        frame = self.tabs.tabBar().sizeHint().height() + 8
+        wanted = self.height() + tallest + frame + 12
+        screen = self.screen()
+        if screen is not None:
+            wanted = min(wanted, screen.availableGeometry().height() - 48)
+        self.resize(self.width(), max(wanted, self.height()))
 
     def _build_slicer(self) -> QWidget:
         """Auf welche Profile des Slicers Solidon seine Werte legt (§29).
@@ -1438,6 +1466,9 @@ class PrintSettingsDialog(QDialog):
         self.machine_choice.currentIndexChanged.connect(self._machine_chosen)
         self.process_choice = QComboBox(self.slicer_inner)
         self.process_choice.setEnabled(False)
+        # Der Slicen-Knopf fragt die Profilwahl vor dem Klick (Regel 19) —
+        # also muss er jede Änderung daran erfahren, nicht nur die Maschine.
+        self.process_choice.currentIndexChanged.connect(self._show_slicer_state)
         self.filament_choice = QComboBox(self.slicer_inner)
         self.filament_choice.setEnabled(False)
         self.filament_choice.activated.connect(self._filament_chosen)
@@ -1502,14 +1533,18 @@ class PrintSettingsDialog(QDialog):
 
     def _start_profile_search(self) -> None:
         self._clear_profile_choices()
+        self._needs_profiles = False
+        self._profiles_pending = False
         found = self._slicer_path
         if found is None:
             self.slicer_box.setVisible(False)
+            self._show_slicer_state()
             return
         try:
             flavour = handover.detect(found).flavour
         except AppError:
             self.slicer_box.setVisible(False)
+            self._show_slicer_state()
             return
         if flavour == "prusa":
             # §29: eine PrusaSlicer-ini läuft eigenständig, sobald Düse und
@@ -1520,6 +1555,7 @@ class PrintSettingsDialog(QDialog):
                     "Konfiguration."
                 )
             )
+            self._show_slicer_state()
             return
         if flavour == "cura":
             # CuraEngine hat keinen wählbaren Profilbestand: seine Ordner
@@ -1532,8 +1568,12 @@ class PrintSettingsDialog(QDialog):
             self.profile_note.setText(
                 tr("Dieser Slicer braucht kein Profil — Solidon beschreibt die Maschine selbst.")
             )
+            self._show_slicer_state()
             return
 
+        self._needs_profiles = True
+        self._profiles_pending = True
+        self._show_slicer_state()
         worker = _ProfileWorker(found, flavour)
         worker.done.connect(self._profiles_found)
         # Der Profilbestand ist eine Zugabe: Was hier schiefgeht, darf den
@@ -1552,6 +1592,7 @@ class PrintSettingsDialog(QDialog):
         dort für immer und behauptet einen Vorgang, den es nicht mehr gibt.
         """
         _log.warning("profile search crashed: %s", detail)
+        self._profiles_pending = False
         self.profile_note.setText(
             tr(
                 "Der Profilbestand ließ sich nicht durchsehen. Die Profile lassen sich "
@@ -1560,6 +1601,7 @@ class PrintSettingsDialog(QDialog):
         )
         if self.slicer_toggle is not None:
             self.slicer_toggle.setChecked(True)
+        self._show_slicer_state()
 
     def _profiles_found(self, found: list[slicer_profiles.SlicerProfile]) -> None:
         # **Zuerst lesen, was schon gewählt ist.** Nach dem ersten ``addItem``
@@ -1568,6 +1610,7 @@ class PrintSettingsDialog(QDialog):
         # ersten Eintrag des Bestands für die Wahl des Nutzers.
         already = str(self.machine_choice.currentData() or "")
         self._profiles = found
+        self._profiles_pending = False
         machines = slicer_profiles.machines(found)
         if not machines:
             # Regel 17: Der Satz sagte, was fehlt, und hörte dort auf. Was hilft,
@@ -1580,6 +1623,7 @@ class PrintSettingsDialog(QDialog):
                     "sein Profil hier."
                 )
             )
+            self._show_slicer_state()
             return
 
         self.machine_choice.blockSignals(True)
@@ -1631,10 +1675,12 @@ class PrintSettingsDialog(QDialog):
                     "seine Werte darauf."
                 )
             )
+        self._show_slicer_state()
 
     def _machine_chosen(self) -> None:
         if self._profiles:
             self._fill_processes(None)
+        self._show_slicer_state()
 
     def _current_machine(self) -> slicer_profiles.SlicerProfile | None:
         wanted = self.machine_choice.currentData()
@@ -1960,6 +2006,35 @@ class PrintSettingsDialog(QDialog):
         self._show_slicer_state()
         return buttons
 
+    @staticmethod
+    def _machine_missing_line() -> str:
+        """Die eine Quelle für den fehlenden Drucker — Knopf und Wächter
+        in `_slice` sagen denselben Satz, sonst driften sie."""
+        return str(tr("Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen."))
+
+    @staticmethod
+    def _process_missing_line() -> str:
+        return str(tr("Dieser Slicer braucht auch ein Prozessprofil — bitte eines auswählen."))
+
+    def _profile_gap(self) -> str:
+        """Was der Profilwahl noch fehlt — leer, wenn das Slicen starten darf.
+
+        Nur die Orca-Familie verlangt Profile (`_start_profile_search`);
+        PrusaSlicer und CuraEngine kommen ohne aus. Solange die Suche läuft,
+        heißt die Antwort „wird durchgesehen" — kein Zustand ohne Erhebung,
+        und ein Knopf, der „bitte wählen" sagt, während die Liste noch gar
+        nicht da sein kann, schickt in eine leere Auswahl.
+        """
+        if not self._needs_profiles:
+            return ""
+        if self._profiles_pending:
+            return str(tr("Der Profilbestand wird durchgesehen …"))
+        if not str(self.machine_choice.currentData() or ""):
+            return self._machine_missing_line()
+        if not str(self.process_choice.currentData() or ""):
+            return self._process_missing_line()
+        return ""
+
     def _show_slicer_state(self) -> None:
         """Ob ein Slicer da ist — und wenn nicht, der Weg zu einem.
 
@@ -1977,7 +2052,6 @@ class PrintSettingsDialog(QDialog):
         """
         found = self._slicer_path
         state = activation.state()
-        self.slice_button.setEnabled(found is not None and state.unlocked)
         reason = ""
         if state.damaged:
             reason = damaged_line()
@@ -1985,6 +2059,16 @@ class PrintSettingsDialog(QDialog):
             reason = tr(
                 "Der Testzeitraum ist abgelaufen — das Slicen braucht einen Lizenzschlüssel."
             )
+        elif found is not None:
+            # Die dritte Hürde derselben Bauart: Ein Slicer der Orca-Familie
+            # ohne gewähltes Profil lehnt jeden Auftrag ab — das stand bisher
+            # erst nach dem Klick in der Statuszeile (Fund ce, 26.08.2026).
+            reason = self._profile_gap()
+        # Ein laufender Auftrag hält den Knopf zu, gleich was die drei
+        # Bedingungen sagen — sonst schaltete eine nachgereichte
+        # Profilantwort ihn mitten im Lauf wieder frei.
+        running = self._worker is not None
+        self.slice_button.setEnabled(found is not None and not reason and not running)
         self.slice_button.setToolTip(reason)
         self.slice_button.setStatusTip(reason)
         self.slice_button.setAccessibleDescription(reason)
@@ -2399,9 +2483,7 @@ class PrintSettingsDialog(QDialog):
         # wählen, und die Forderung war eine Wahl aus einer leeren Liste.
         if setup.flavour == "orca" and not setup.machine_profile:
             self._open_slicer_section()
-            self.state.setText(
-                tr("Dieser Slicer braucht ein Druckerprofil — bitte eines auswählen.")
-            )
+            self.state.setText(self._machine_missing_line())
             return
         # Das Prozessprofil ist genauso wenig verzichtbar, nur fiel es später
         # auf: die Orca-Familie nimmt kein Prozessprofil an, das nicht zum
@@ -2412,9 +2494,7 @@ class PrintSettingsDialog(QDialog):
         # Ursache.
         if setup.flavour == "orca" and not setup.base_process:
             self._open_slicer_section()
-            self.state.setText(
-                tr("Dieser Slicer braucht auch ein Prozessprofil — bitte eines auswählen.")
-            )
+            self.state.setText(self._process_missing_line())
             return
         self._remember_slicer_choice(require_machine=False)
 
@@ -2644,9 +2724,12 @@ class PrintSettingsDialog(QDialog):
     def _slice_finished(self) -> None:
         self.progress.setVisible(False)
         self.cancel_slice.setVisible(False)
-        self.slice_button.setEnabled(True)
         worker = self._worker
         self._worker = None
+        # Nicht blank freischalten: Der Knopf hat inzwischen drei Bedingungen
+        # (Slicer, Lizenz, Profilwahl), und die eine Stelle kennt sie alle —
+        # nach dem Austragen des Arbeiters, sonst hielte dessen Wache ihn zu.
+        self._show_slicer_state()
         if worker is not None:
             if worker.cancelled.is_cancelled:
                 self.state.setText(tr("Abgebrochen."))
