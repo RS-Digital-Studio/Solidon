@@ -1603,6 +1603,104 @@ def test_a_part_that_reaches_upwards_keeps_the_middle_of_the_bore(profile: Profi
     assert _widest_bore(mesh, 9.5) < 6.5, "die Tasche ist an die Oberfläche gewandert"
 
 
+def test_a_nut_trap_on_a_top_face_sinks_into_the_material(profile: Profile) -> None:
+    """Die Mutternfalle an einer Fläche baut ihre Tasche ins Material (§24.1).
+
+    Sie ist der einzige abtragende Baustein, der nach oben baut — die Mutter
+    sitzt im Material, nicht an der Oberfläche. An eine Bohrung gesetzt bleibt
+    sie deshalb in deren Mitte (:func:`test_a_part_that_reaches_upwards_keeps_
+    the_middle_of_the_bore`); an eine **Deckfläche** gesetzt stand sie vorher
+    vollständig über der Platte und trug nichts ab — ``boolean.without_effect``,
+    unverändertes Volumen. Jetzt wird sie entgegen der Normalen ins Material
+    gebaut, die Öffnung an der Fläche.
+
+    Gemessen wird an drei Dingen: der Befund darf nicht mehr kommen, das
+    Volumen muss sinken, und dicht unter der Deckfläche muss der Sechskant
+    stehen — ohne über die Fläche hinauszuwachsen.
+    """
+    project = new_project("centauri-carbon-2", "petg")
+    History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+    before = evaluate(project.document, profile, sources=ProjectSources(project))
+    plate_volume = before.scene.objects["obj_1"].mesh.raw.volume
+
+    History(project.document).apply(
+        "Mutternfalle",
+        [
+            OperationDraft(
+                op="insert_nut_trap",
+                inputs=("obj_1",),
+                params={"at_feature": "face_top", "size": "M6", "slide": 0.0, "screw_hole": False},
+            )
+        ],
+    )
+    result = evaluate(project.document, profile, sources=ProjectSources(project))
+
+    assert result.complete, [str(f.message) for f in result.scene.report.findings]
+    codes = [f.code for f in result.scene.report.findings]
+    assert "boolean.without_effect" not in codes, "die Tasche liegt neben dem Körper statt darin"
+    mesh = result.scene.objects["obj_1"].mesh
+    assert mesh.raw.volume < plate_volume - 1.0, "die Mutternfalle hat nichts abgetragen"
+    # Die Deckfläche liegt bei z = 10; die Tasche sitzt darunter, ihre Öffnung an ihr.
+    assert _widest_bore(mesh, 9.5) > 6.5, "dicht unter der Fläche fehlt die Tasche"
+    assert mesh.bounds.maximum[2] == pytest.approx(10.0, abs=0.02), (
+        "die Tasche wächst über die Fläche hinaus statt ins Material"
+    )
+
+
+def test_head_room_cuts_below_the_mouth_not_above_it(profile: Profile) -> None:
+    """Die Kopffreiheit trägt Material ab, und zwar unter der Fläche (§24.1).
+
+    ``head_room`` baute seinen Zylinder bei z = 0 nach +Z — über die Mündung,
+    in die Luft über der Fläche. Der Baustein ist abtragend und liegt unter
+    seiner Mündung; nach oben gebaut trug der Zylinder nichts ab, und der
+    versenkte Kopf stand vor. Jetzt liegt die zylindrische Aussparung in
+    Kopfbreite unter der Deckfläche, die Senkung um denselben Betrag tiefer.
+
+    Gemessen wird auf halber Kopffreiheit (1,5 mm unter der Fläche), wo der
+    alte Stand nichts abtrug: dort steht jetzt der Kopfdurchmesser, und die
+    Gegenprobe ohne Kopffreiheit zeigt an derselben Stelle nur die schmale
+    Senkung.
+    """
+
+    def bore_at(head_room: float, height: float) -> float:
+        project = new_project("centauri-carbon-2", "petg")
+        History(project.document).apply("Quader", [OperationDraft(op="create_box", params={})])
+        History(project.document).apply(
+            "Loch",
+            [
+                OperationDraft(
+                    op="insert_screw_hole",
+                    inputs=("obj_1",),
+                    params={
+                        "at_feature": "face_top",
+                        "size": "M4",
+                        "depth": 10.0,
+                        "countersink": True,
+                        "head_room": head_room,
+                    },
+                )
+            ],
+        )
+        result = evaluate(project.document, profile, sources=ProjectSources(project))
+        assert result.complete, [str(f.message) for f in result.scene.report.findings]
+        mesh = result.scene.objects["obj_1"].mesh
+        assert mesh.bounds.maximum[2] == pytest.approx(10.0, abs=0.02), (
+            "die Kopffreiheit steht über der Fläche vor statt sie zu versenken"
+        )
+        return _widest_bore(mesh, height)
+
+    countersink = float(standards.screw("M4").countersink)
+    with_room = bore_at(3.0, 8.5)
+    without_room = bore_at(0.0, 8.5)
+    assert with_room >= countersink - 0.1, (
+        f"die Kopffreiheit misst {with_room:.2f} mm, der Kopf braucht {countersink:.2f} mm"
+    )
+    assert without_room < with_room - 1.0, (
+        f"ohne Kopffreiheit ist das Loch dort {without_room:.2f} mm — die Aussparung "
+        "trägt nichts Neues ab"
+    )
+
+
 def test_every_play_field_defaults_to_the_profile() -> None:
     """Regel 7: `_part_values` füllt das Spiel nur bei **null** aus dem
     Materialprofil — jede andere Vorgabe ist eine feste Zahl, die die
@@ -2532,8 +2630,12 @@ def test_the_two_changed_parts_report_themselves_to_old_projects() -> None:
     # dem Einhänger sein älterer Eintrag; die Zunge wäre dabei stumm geblieben,
     # und die Gegenprobe hat genau das gezeigt: Der Test blieb grün, als ihr
     # Eintrag entwertet wurde. Gefragt wird deshalb gegen den Stand unmittelbar
-    # davor — dort spricht nur noch der jüngste Eintrag.
-    vorher = str(int(LIBRARY_VERSION) - 1)
+    # davor — dort spricht nur noch der jüngste Eintrag. Der Stand kommt aus der
+    # Version des Einhängers selbst, nicht aus ``LIBRARY_VERSION``: sobald ein
+    # späterer Baustein die Bibliothek weiterschiebt (die Kopffreiheit auf 9),
+    # ist der Zungen-Eintrag nicht mehr der jüngste der Bibliothek, wohl aber
+    # der des Einhängers.
+    vorher = str(int(PARTS.get("pegboard_hook").version) - 1)
     assert changed_since_library(vorher, ["pegboard_hook"]) == ("pegboard_hook",), (
         f"a project computed at library {vorher} is never told the hook grew a latch"
     )

@@ -451,8 +451,11 @@ def register_part(
 #: des Schlüssellochs wird wieder zum Durchgangsmaß addiert statt dagegen
 #: ausgetauscht, und das Merkmal des Einhängers liegt auf einer Fläche, die es
 #: gibt. Version 8: der Lochwand-Einhänger bekommt eine federnde Rastzunge
-#: (alles ``mounting.py``, 25.08.2026).
-LIBRARY_VERSION: Final = "8"
+#: (alles ``mounting.py``, 25.08.2026). Version 9: die Kopffreiheit des
+#: Schraubenlochs trägt jetzt Material ab statt in der Luft über der Fläche zu
+#: wachsen, und die Mutternfalle sinkt an einer Fläche ins Material statt
+#: darüber (beides ``fasteners.py``, 26.08.2026).
+LIBRARY_VERSION: Final = "9"
 
 #: Version 2 hat eine einzige Ursache, und die betrifft drei Bausteine: sie
 #: bauten über ihrem Ursprung statt darunter. Der Eintrag steht hier statt

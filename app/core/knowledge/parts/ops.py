@@ -402,14 +402,15 @@ def insert(ctx: OpContext, spec: PartSpec) -> OpResult:
     # Werkzeug reicht ohnehin über die Fläche hinaus.
     subtractive = cuts(spec, ctx.params)
     sink = 0.0 if subtractive else BOOLEAN_OVERLAP
-    placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up)
+    flip = subtractive and _builds_upward_on_a_face(source, ctx.params, built)
+    placed = _place(built, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
     body = as_mesh_data(source.mesh)
     kind: BooleanKind = "difference" if subtractive else "union"
     outcome = boolean(kind, [body, placed], quality=ctx.quality)
 
     features = dict(source.features)
     features.update(
-        _placed_features(produced, spec, ctx.params, anchor, sink, direction, spec.keeps_up)
+        _placed_features(produced, spec, ctx.params, anchor, sink, direction, spec.keeps_up, flip)
     )
 
     # Ein Baustein, der den Körper nicht getroffen hat, sagt das. Hier und
@@ -588,6 +589,13 @@ def _at_the_mouth(
     nicht eine Liste von Namen: Wer einen Baustein dazunimmt, der unter seiner
     Mündung liegt, bekommt die richtige Behandlung, ohne sie irgendwo
     einzutragen.
+
+    **An einer Fläche fängt das die Mutternfalle nicht ab.** Der Satz oben,
+    über eine Fläche sei der Handgriff immer richtig, galt nur für Bausteine,
+    die nach unten bauen: Deren Körper sinkt an der Deckfläche von selbst ins
+    Material. Ein nach oben bauender wächst dort in die Luft über der Fläche
+    und trägt nichts ab — das übernimmt :func:`_builds_upward_on_a_face` mit
+    einer Spiegelung, nicht diese Funktion.
     """
     if feature.kind != "hole" or direction is None or built is None:
         return point
@@ -602,6 +610,32 @@ def _at_the_mouth(
         point[1] + direction[1] * reach,
         point[2] + direction[2] * reach,
     )
+
+
+def _builds_upward_on_a_face(source: SceneObject, params: Any, built: MeshData) -> bool:
+    """Ob ein abtragender Baustein an einer Fläche nach oben in die Luft bauen
+    würde — dann wird er in Z gespiegelt (§24.1).
+
+    Ein abtragender Baustein liegt unter seiner Mündung: An eine Deckfläche
+    gesetzt sinkt sein Körper ins Material, weil er nach -Z baut. Die
+    Mutternfalle ist die Ausnahme — ihre Tasche wächst nach +Z, weil die Mutter
+    im Material sitzt (:func:`_at_the_mouth`). An eine **Fläche** gesetzt stünde
+    sie damit vollständig über deren Oberfläche und trüge nichts ab: gemessen
+    an einer Deckfläche kam ``boolean.without_effect`` zurück, das Volumen der
+    Platte blieb unverändert.
+
+    Erkannt wird das am gebauten Körper und nicht an einer Namensliste, wie bei
+    der Mündung: Reicht er über die Mündung hinaus (``bounds.maximum[2]`` über
+    dem Überlappungsmaß) und sitzt er an einer Fläche, wird er in Z gespiegelt.
+    Danach liegt seine Öffnung an der Fläche und die Tasche darunter im Material
+    — genau wie bei jedem anderen abtragenden Baustein. An einer Bohrung
+    geschieht nichts: Dort hält ``_at_the_mouth`` die Tasche schon in der Mitte.
+    """
+    name = str(getattr(params, "at_feature", "") or "")
+    feature = source.features.get(name) if name else None
+    if feature is None or feature.kind != "face":
+        return False
+    return float(built.bounds.maximum[2]) > BOOLEAN_OVERLAP + EPS_GEOM
 
 
 def _direction_of(feature: Feature) -> Vec3 | None:
@@ -630,6 +664,7 @@ def _place(
     sink: float = 0.0,
     direction: Vec3 | None = None,
     keeps_up: bool = False,
+    flip: bool = False,
 ) -> MeshData:
     """Der Baustein an seinem Platz.
 
@@ -643,7 +678,7 @@ def _place(
     """
     from app.core.geom.transform import apply
 
-    return apply(mesh, _matrix(params, anchor, sink, direction, keeps_up))
+    return apply(mesh, _matrix(params, anchor, sink, direction, keeps_up, flip))
 
 
 def _placed_features(
@@ -654,6 +689,7 @@ def _placed_features(
     sink: float = 0.0,
     direction: Vec3 | None = None,
     keeps_up: bool = False,
+    flip: bool = False,
 ) -> dict[str, Feature]:
     """Die Merkmale des Bausteins, mitbewegt und so benannt, dass sie nicht
     kollidieren können.
@@ -664,7 +700,7 @@ def _placed_features(
     """
     from app.core.perceive.matching import moved_features
 
-    matrix = _matrix(params, anchor, sink, direction, keeps_up)
+    matrix = _matrix(params, anchor, sink, direction, keeps_up, flip)
     moved = moved_features(dict(produced.features), matrix)
     return {
         f"{spec.name}_{name}": dataclasses.replace(feature, id=f"{spec.name}_{name}")
@@ -765,6 +801,7 @@ def _matrix(
     sink: float = 0.0,
     direction: Vec3 | None = None,
     keeps_up: bool = False,
+    flip: bool = False,
 ) -> Any:
     """Einsenken, drehen, verschieben — als eine Matrix.
 
@@ -777,6 +814,12 @@ def _matrix(
     Das Einsenken bleibt vor allen Drehungen: Es geschieht im eigenen System
     des Bausteins, wo -Z in den Träger hineingeht, gleich wohin er danach
     gelegt wird.
+
+    ``flip`` spiegelt den Baustein zuallererst an seiner XY-Ebene — für einen
+    abtragenden Baustein, der nach oben baut und an eine Fläche gesetzt sonst in
+    die Luft darüber wüchse (:func:`_builds_upward_on_a_face`). Die Spiegelung
+    geschieht ebenfalls im eigenen System, vor dem Einsenken und Drehen, damit
+    die Fläche danach die gespiegelte Öffnung auf sich zu legt.
     """
     import numpy as np
 
@@ -785,6 +828,16 @@ def _matrix(
     axis = getattr(params, "axis", "z")
     angle = float(getattr(params, "angle", 0.0))
     matrix = np.eye(4)
+    if flip:
+        mirror = np.eye(4)
+        mirror[2, 2] = -1.0
+        # Nach der Spiegelung reicht die Öffnung ein Hundertstel über die
+        # Mündung hinaus. Sonst fiele die Öffnungsfläche mit der Trägerfläche
+        # zusammen — der klassische Weg, eine boolesche Operation zu brechen
+        # (§39). Ein aufsitzender Baustein bekommt das über ``sink``, ein
+        # abtragender reicht sonst von selbst hinaus; nur dieser gespiegelte
+        # endet genau an der Mündung und braucht den Überstand eigens.
+        matrix = translation((0.0, 0.0, BOOLEAN_OVERLAP)) @ mirror @ matrix
     if sink:
         matrix = translation((0.0, 0.0, -sink)) @ matrix
     if direction is not None:

@@ -85,6 +85,25 @@ INSERT_LEAD_IS_ITS_OWN_SIZE = PartChange(
 )
 
 
+HEAD_ROOM_CUTS_DOWNWARD = PartChange(
+    version="9",
+    date="2026-08-26",
+    reason=(
+        "Die Kopffreiheit baute ihren Zylinder bei z = 0 nach +Z — über die "
+        "Mündung, in die Luft über der Fläche (§24.1). Der Baustein ist "
+        "abtragend und liegt unter seiner Mündung; nach oben gebaut trug der "
+        "Zylinder nichts ab, und der versenkte Kopf stand vor."
+    ),
+    effect=(
+        "Bei ``head_room`` über null wird jetzt Material abgetragen: eine "
+        "zylindrische Aussparung in Kopfbreite von der Mündung abwärts, und die "
+        "Senkung rückt um denselben Betrag tiefer. Wer die Kopffreiheit bisher "
+        "gesetzt hat, bekam sie wirkungslos — der Kopf saß auf der Fläche statt "
+        "darunter. Bei ``head_room`` auf null (der Vorgabe) ändert sich nichts."
+    ),
+)
+
+
 @op_params
 class ScrewHoleParams(BaseParams):
     size: str = param(
@@ -129,7 +148,7 @@ class ScrewHoleParams(BaseParams):
         "mit 90-Grad-Senkung "
         "und Kopffreiheit. Maße aus der Normteiltabelle."
     ),
-    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION],
+    changes=[FIRST_RELEASE, FACE_GIVES_DIRECTION, HEAD_ROOM_CUTS_DOWNWARD],
 )
 def screw_hole(raw: BaseParams) -> PartResult:
     params = cast(ScrewHoleParams, raw)
@@ -148,18 +167,29 @@ def screw_hole(raw: BaseParams) -> PartResult:
         )
     ]
 
+    # Die Kopffreiheit versenkt den Kopf: über der Senkung steht eine
+    # zylindrische Aussparung in Kopfbreite (§24.1, „über der Senkung“), und die
+    # Senkung rückt um denselben Betrag tiefer. Beides liegt **unter** der
+    # Mündung — vorher wuchs der Zylinder bei z = 0 nach +Z in die Luft über der
+    # Fläche und trug nichts ab. Ohne Kopffreiheit ist ``top`` null und alles
+    # bleibt, wo es war.
+    top = -params.head_room
+
     if params.countersink:
         # Eine 90-Grad-Senkung ist so tief, wie der Kopf breit ist, halbiert.
         depth = (screw.countersink - screw.clearance) / 2.0
         sink = shapes.cone(screw.clearance, screw.countersink, depth)
-        parts.append(shapes.moved(sink, (0.0, 0.0, -depth)))
+        parts.append(shapes.moved(sink, (0.0, 0.0, top - depth)))
         features.append(
-            bore("countersink_1", screw.countersink, (0.0, 0.0, -depth / 2.0), depth=depth)
+            bore("countersink_1", screw.countersink, (0.0, 0.0, top - depth / 2.0), depth=depth)
         )
 
     if params.head_room > 0.0:
-        room = shapes.cylinder(screw.countersink, params.head_room + shapes.OVERLAP)
-        parts.append(room)
+        # Von der Mündung (mit einem Hundertstel Überstand) bis über die Senkung
+        # hinab, damit der Zylinder mit ihr zusammenhängt statt einen Spalt zu
+        # lassen.
+        room = shapes.cylinder(screw.countersink, params.head_room + 2.0 * shapes.OVERLAP)
+        parts.append(shapes.moved(room, (0.0, 0.0, top - shapes.OVERLAP)))
 
     return result(union(*parts), *features)
 
@@ -307,6 +337,25 @@ def heatset_insert(raw: BaseParams) -> PartResult:
 # --- nut trap -----------------------------------------------------------------------
 
 
+NUT_TRAP_SINKS_ON_A_FACE = PartChange(
+    version="9",
+    date="2026-08-26",
+    reason=(
+        "An eine Fläche gesetzt baute die Mutternfalle ihre Tasche nach oben in "
+        "die Luft über der Fläche und trug nichts ab (§24.1). Sie ist der "
+        "einzige abtragende Baustein, der nach oben baut — an einer Bohrung "
+        "richtig behandelt, an einer Fläche nicht."
+    ),
+    effect=(
+        "Über eine Fläche gesetzt wird die Tasche jetzt entgegen der Normalen "
+        "ins Material gebaut, mit der Öffnung an der Fläche. Wer eine "
+        "Mutternfalle an eine Deckfläche gesetzt hat, bekam vorher eine "
+        "unveränderte Platte samt Hinweis „nichts abgetragen“; an einer Bohrung "
+        "ändert sich nichts, dort saß sie schon in der Mitte."
+    ),
+)
+
+
 @op_params
 class NutTrapParams(BaseParams):
     size: str = param(
@@ -367,7 +416,13 @@ class NutTrapParams(BaseParams):
         "Gewinde leichte Lasten; für tragende Verschraubungen ist eine Einpressbuchse "
         "richtig."
     ),
-    changes=[FIRST_RELEASE, PLAY_FROM_PROFILE, FACE_GIVES_DIRECTION, NUT_HEIGHT_FROM_ISO],
+    changes=[
+        FIRST_RELEASE,
+        PLAY_FROM_PROFILE,
+        FACE_GIVES_DIRECTION,
+        NUT_HEIGHT_FROM_ISO,
+        NUT_TRAP_SINKS_ON_A_FACE,
+    ],
 )
 def nut_trap(raw: BaseParams) -> PartResult:
     params = cast(NutTrapParams, raw)
