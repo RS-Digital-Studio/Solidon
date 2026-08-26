@@ -242,7 +242,16 @@ def remember(text: str) -> Activation:
     global _cached
     licence = parse(text)  # wirft, wenn er nicht passt — abgelegt wird nur Geprüftes
     store.write_key(text)
-    _cached = Activation(licence=licence)
+    # **Die Integritätsprüfung gehört auch hierher (H4).** Der Zustand wird aus
+    # der eben geprüften Lizenz gesetzt, und dabei fiel ``damaged`` heraus: Wer
+    # eine Grenzdatei veränderte und danach seinen gültigen Schlüssel eintippte,
+    # hob die Sperre für die ganze Sitzung auf — dieselbe Hintertür, die
+    # :func:`_determine` schließt, nur durch die andere Tür. Die einzige Hürde
+    # davor war der graue Prüfknopf im Dialog, und die Oberfläche ist nie die
+    # Hürde (``kern.md``). Der Schlüssel wird trotzdem gelesen und abgelegt:
+    # Erkannt heißt nicht freigeschaltet, und der zahlende Kunde soll nach der
+    # Reparatur nicht noch einmal tippen.
+    _cached = Activation(licence=licence, damaged=not integrity.intact())
     return _cached
 
 

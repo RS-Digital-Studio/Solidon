@@ -401,3 +401,46 @@ def test_a_valid_key_does_not_open_a_damaged_installation(
     assert not state.unlocked, "erkannt heißt nicht freigeschaltet (H4)"
     with pytest.raises(InstallationDamaged):
         activation.require(activation.EXPORT)
+
+
+def test_typing_a_key_does_not_repair_a_damaged_installation(
+    fresh_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Test darüber prüft den **abgelegten** Schlüssel — dieser den frisch
+    **eingetippten**, und das war die offene Tür.
+
+    ``remember`` setzt den Zustand aus der eben geprüften Lizenz, statt ihn
+    über ``state()`` neu zu ermitteln; das ist richtig und begründet — es läse
+    die Datei ein zweites Mal und rechnete dieselbe Signaturprüfung noch
+    einmal. Dabei fiel aber ``damaged`` heraus: Wer eine Grenzdatei veränderte
+    und danach seinen gültigen Schlüssel eintippte, hob die Sperre für die
+    ganze Sitzung auf. Dieselbe Hintertür, die der Test darüber schließt, nur
+    durch die andere Tür — und die Oberfläche war die einzige Hürde davor
+    (der Prüfknopf ist bei ``damaged`` grau), was ``kern.md`` ausdrücklich
+    nicht gelten lässt: Die Oberfläche graut nur vorher aus, sie ist nie die
+    Hürde.
+    """
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 8, 6),
+        order="A-1234",
+        holder="kaeufer@beispiel.de",
+    )
+    monkeypatch.setattr(key, "PUBLIC_KEY", public_key(TEST_SEED))
+    text = make_key(TEST_SEED, licence)
+
+    target = fresh_state / "licence.manifest"
+    files = integrity.boundary_hashes()
+    files["core/scene/history.py"] = "0" * 64
+    _write_manifest(target, files)
+    _expect_manifest(monkeypatch, target)
+    activation.forget_cache()
+
+    state = activation.remember(text)
+
+    assert state.licence is not None, "der Schlüssel ist gültig und wird gelesen"
+    assert not state.unlocked, "ein eingetippter Schlüssel hebt die Sperre nicht auf"
+    with pytest.raises(InstallationDamaged):
+        activation.require(activation.CHANGE)
+    with pytest.raises(InstallationDamaged):
+        activation.require(activation.EXPORT)

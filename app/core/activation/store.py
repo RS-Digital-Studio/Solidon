@@ -232,6 +232,27 @@ def trial_days_left(today: date | None = None) -> int:
         _write_trial(now, now)
         return TRIAL_DAYS
     first_run, last_seen = stored
+    # **Auch der erste Start kann falsch datiert sein**, und dagegen hilft der
+    # Horizont darunter nicht: Er misst ``last_seen`` gegen ``first_run``, und
+    # bei einem falschen Erststart stehen beide auf demselben falschen Tag.
+    # Gemessen ging es in beide Richtungen schief — eine Uhr in der Zukunft
+    # ließ ``used`` auf null einfrieren und den Testlauf **nie** ablaufen (14
+    # Tage in 2026, 14 in 2027, 14 in 2030), eine Uhr in der Vergangenheit nahm
+    # dem ehrlichen Kunden mit leerer BIOS-Batterie den ganzen Testlauf,
+    # ebenfalls dauerhaft.
+    #
+    # Beide Deckel hat der Demo-Zweig seit je (:data:`DEMO_FROM` und der
+    # Stichtag); hier fehlten sie — derselbe Fehler an der Nachbarstelle.
+    # Vor dem Auslieferungstag gab es nichts zu starten, und ein erster Start
+    # jenseits der Uhr ist keiner.
+    # Gemessen wird am **Horizont**, nicht an der Uhr: ``min(first_run, now)``
+    # war der erste Entwurf und nahm dem ehrlichen Kunden seinen Resttag,
+    # sobald seine Uhr zurücksprang — sie ist ja genau die Größe, der hier
+    # nicht zu trauen ist. Ein Jahr Abstand ist dagegen keine Uhr mehr, die
+    # ungenau geht, sondern eine, die nie gestellt wurde.
+    if first_run > now + timedelta(days=CLOCK_HORIZON_DAYS):
+        _log.warning("trial marker holds an implausible first run, correcting: %s", first_run)
+        first_run = now
     # Ein Tag jenseits des Horizonts ist keine verstrichene Zeit, sondern eine
     # leere BIOS-Batterie. Er wird verworfen statt festgeschrieben — sonst
     # kostet ein einziger Start mit falscher Uhr den ganzen Testlauf, und zwar
@@ -244,7 +265,10 @@ def trial_days_left(today: date | None = None) -> int:
     # Die Uhr darf vorgehen, aber nicht zurück: sonst verlängert ein
     # zurückgedrehtes Systemdatum die Frist beliebig.
     effective = max(now, last_seen)
-    if effective != stored[1]:
+    # Auch ein berichtigter erster Start wird festgehalten: Bliebe er in der
+    # Datei stehen, käme derselbe unmögliche Tag bei jedem Start zurück, und
+    # die Prüfung darüber liefe für immer gegen denselben falschen Wert.
+    if effective != stored[1] or first_run != stored[0]:
         _write_trial(first_run, effective)
     used = (effective - first_run).days
     return max(0, TRIAL_DAYS - used)

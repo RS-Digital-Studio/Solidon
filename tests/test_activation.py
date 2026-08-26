@@ -321,6 +321,25 @@ def test_a_wildly_wrong_clock_does_not_burn_the_trial(own_config: Path) -> None:
     assert store.trial_days_left(start + timedelta(days=1)) == store.TRIAL_DAYS - 1
 
 
+def test_a_first_run_in_the_future_does_not_make_the_trial_endless(own_config: Path) -> None:
+    """Der Zwilling des Uhrentests darüber — dort war der **erste** Start
+    richtig datiert, hier nicht.
+
+    Ist schon der erste Start falsch datiert, hilft der Horizont nichts: Er
+    misst ``last_seen`` gegen ``first_run``, und beide standen auf demselben
+    falschen Tag. ``used`` blieb damit null, und der Testlauf lief **nie** ab —
+    gemessen: 14 Tage im Jahr 2026, 14 im Jahr 2027, 14 im Jahr 2030.
+    """
+    store.trial_days_left(date(2099, 1, 1))
+
+    assert store.trial_days_left(date(2026, 8, 26)) == store.TRIAL_DAYS, (
+        "der ehrliche Kunde bekommt seinen Testlauf — ab jetzt gezählt"
+    )
+    assert store.trial_days_left(date(2026, 9, 26)) == 0, (
+        "und er läuft ab: ein Monat später ist er vorbei"
+    )
+
+
 def test_a_plausible_gap_still_blocks_the_clock_going_back(own_config: Path) -> None:
     """Der Deckel darf den Rückwärtsschutz nicht aushebeln: wer Solidon nach
     Monaten wieder öffnet, bekommt seine Frist nicht zurück."""
