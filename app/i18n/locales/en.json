@@ -717,7 +717,7 @@
   "Die Einstellungen passen zu Teil, Material und Drucker.": "The settings suit the part, the material and the printer.",
   "Die Enden laufen über diese Länge auf Halsbreite zu, damit sich die Feder einschieben lässt statt an der ersten Kante zu klemmen.": "Over this length the ends taper to the width of the neck, so the tongue slides in instead of jamming on the first edge.",
   "Die Erzeugung hat ihr Zeitlimit erreicht.": "The generation ran into its time limit.",
-  "Die Farbe für Vorschau und Übergabe an den Slicer. Am Druck selbst ändert sie nichts.": "The colour for the preview and for the handover to the slicer. It changes nothing about the print itself.",
+  "Die Farbe für Vorschau und Übergabe an den Slicer — am Druck ändert sie nichts. Sie gilt dem ganzen Teil: Mehrfarbig wird es über Bemalen unter der Ansicht, je bemalter Bereich ein Materialslot mit eigenem Filament.": "The colour for the preview and for the handover to the slicer — it changes nothing about the print itself. It applies to the whole part: several colours come from Paint below the view, and each painted area becomes a material slot with its own filament.",
   "Die Farbe ist die der Ansicht. Gedruckt wird, was im Slot eingelegt ist.": "The colour is the one shown here. What gets printed is what is loaded in the slot.",
   "Die Farbe wird als #RRGGBB angegeben.": "The colour is given as #RRGGBB.",
   "Die Farben wurden auf die eingelegten Filamente umgerechnet.": "The colours were reduced to the filaments loaded.",

@@ -717,7 +717,7 @@
   "Die Einstellungen passen zu Teil, Material und Drucker.": "Los ajustes de impresión corresponden a la pieza, el material y la impresora.",
   "Die Enden laufen über diese Länge auf Halsbreite zu, damit sich die Feder einschieben lässt statt an der ersten Kante zu klemmen.": "En esta longitud los extremos se estrechan hasta el ancho del cuello, para que la lengüeta entre deslizando en vez de atascarse en el primer canto.",
   "Die Erzeugung hat ihr Zeitlimit erreicht.": "La generación alcanzó su límite de tiempo.",
-  "Die Farbe für Vorschau und Übergabe an den Slicer. Am Druck selbst ändert sie nichts.": "El color para la vista previa y para el traspaso al Slicer. En la impresión misma no cambia nada.",
+  "Die Farbe für Vorschau und Übergabe an den Slicer — am Druck ändert sie nichts. Sie gilt dem ganzen Teil: Mehrfarbig wird es über Bemalen unter der Ansicht, je bemalter Bereich ein Materialslot mit eigenem Filament.": "El color para la vista previa y para la entrega al slicer: no cambia nada en la impresión. Se aplica a toda la pieza; para varios colores está Pintar debajo de la vista, y cada zona pintada se convierte en una ranura de material con su propio filamento.",
   "Die Farbe ist die der Ansicht. Gedruckt wird, was im Slot eingelegt ist.": "El color es el de la vista. Se imprime lo que esté cargado en el slot.",
   "Die Farbe wird als #RRGGBB angegeben.": "El color se indica como #RRGGBB.",
   "Die Farben wurden auf die eingelegten Filamente umgerechnet.": "Los colores fueron convertidos a los filamentos cargados.",

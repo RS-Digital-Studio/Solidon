@@ -717,7 +717,7 @@
   "Die Einstellungen passen zu Teil, Material und Drucker.": "Les réglages conviennent à la pièce, au matériau et à l'imprimante.",
   "Die Enden laufen über diese Länge auf Halsbreite zu, damit sich die Feder einschieben lässt statt an der ersten Kante zu klemmen.": "Sur cette longueur, les extrémités se rétrécissent à la largeur du col, pour que la languette se glisse au lieu de coincer sur la première arête.",
   "Die Erzeugung hat ihr Zeitlimit erreicht.": "La génération a atteint sa limite de temps.",
-  "Die Farbe für Vorschau und Übergabe an den Slicer. Am Druck selbst ändert sie nichts.": "La couleur pour l'aperçu et pour la transmission au Slicer. Elle ne change rien à l'impression elle-même.",
+  "Die Farbe für Vorschau und Übergabe an den Slicer — am Druck ändert sie nichts. Sie gilt dem ganzen Teil: Mehrfarbig wird es über Bemalen unter der Ansicht, je bemalter Bereich ein Materialslot mit eigenem Filament.": "La couleur pour l'aperçu et pour la transmission au slicer — elle ne change rien à l'impression. Elle vaut pour toute la pièce : plusieurs couleurs viennent de Peindre sous la vue, et chaque zone peinte devient un emplacement de matériau avec son propre filament.",
   "Die Farbe ist die der Ansicht. Gedruckt wird, was im Slot eingelegt ist.": "La couleur est celle de l’affichage. Ce qui s’imprime est ce qui est chargé dans l’emplacement.",
   "Die Farbe wird als #RRGGBB angegeben.": "La couleur s'indique sous la forme #RRGGBB.",
   "Die Farben wurden auf die eingelegten Filamente umgerechnet.": "Les couleurs ont été ramenées aux filaments chargés.",
