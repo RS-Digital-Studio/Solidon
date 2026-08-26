@@ -212,10 +212,13 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     "duplicate_object": ("kopieren", "klonen", "zweites teil"),
     "delete_object": ("loeschen", "wegwerfen", "rauswerfen"),
     "load": ("oeffnen", "importieren", "stl", "datei"),
-    # „Bemalen" ist der Pinsel, „Slot zuweisen" das ganze Teil. Wer *färben*
-    # tippt, meint fast immer das Zweite — der Pinsel heißt woanders anmalen.
-    "assign_slot": ("faerben", "einfaerben", "farbe zuweisen"),
-    "paint_slot": ("anmalen", "pinseln"),
+    # Beide heißen seit dem Filament-Umbau „färben" und stehen im Menü
+    # nebeneinander; die Suchwörter trennen sie nach dem, was der Kunde
+    # meint — das ganze Teil oder die eine Fläche. „Pinseln" und „anmalen"
+    # sind geblieben: Wer sie tippt, sucht das, was der Pinsel einmal tat,
+    # und findet jetzt die Füllung.
+    "assign_slot": ("faerben", "einfaerben", "farbe zuweisen", "ganzes teil"),
+    "paint_slot": ("anmalen", "pinseln", "faerben", "flaeche einfaerben"),
     # Ein Logo ist ein Bild, und ein Bild wird hier zu einer Höhe. Beide Wörter
     # stehen im Kopf dessen, der es aufbringen will, und keines im Titel.
     "displace_image": ("logo", "foto", "bild aufbringen"),

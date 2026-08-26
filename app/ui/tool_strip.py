@@ -1,11 +1,13 @@
 """Die Werkzeugzeile unter dem Viewport (Bauplan §2.4, §2.5).
 
 Vorher lagen sieben Leisten dauerhaft unter dem Modell — Schnitt, Messen,
-Bewegen, Analyse, Schichten, Explosion, Bemalen —, zusammen gut vierzig
+Bewegen, Analyse, Schichten, Explosion und das Bemalen, das es seit dem
+Filament-Umbau (26.08.2026) nicht mehr gibt —, zusammen gut vierzig
 Steuerelemente in vier Reihen. Keines davon tat etwas, solange niemand es
 anfasste; sie kosteten nur Platz und Aufmerksamkeit. Wer die Anwendung zum
 ersten Mal öffnete, las *Bemalen · Slot · Radius · Kantenwinkel*, bevor er
-wusste, was eine Operation ist.
+wusste, was eine Operation ist. Die Zeile trägt heute sieben Umschalter, und
+gefärbt wird über das Kontextmenü an der Fläche.
 
 Jetzt eine Zeile Umschalter, und darunter erscheint genau die Leiste des
 Werkzeugs, das gerade gewählt ist. Im Ruhezustand ist keines gewählt: dann
@@ -300,8 +302,8 @@ class ToolStrip(QWidget):
         # Meldung blieb unten alles auf den einunddreißig Pixeln der
         # Knopfreihe stehen, während die Leiste darunter neunzig verlangte:
         # Regler, Felder und Knöpfe lagen über den Umschaltern. Betroffen war
-        # **jedes** der sieben Werkzeuge — Schnitt, Messen, Bewegen, Analyse,
-        # Schichten, Explosion, Bemalen.
+        # **jedes** Werkzeug der Zeile — Schnitt, Messen, Bewegen, Analyse,
+        # Schichten, Explosion, Trennen.
         # Erst rechnen, dann melden: ``sizeHint`` liefert sonst noch den Wert
         # von vorhin, und wer daraufhin platziert, setzt die alte Höhe. Genau
         # das war zu sehen — beim ersten Öffnen eines Werkzeugs bekam die
@@ -351,8 +353,8 @@ class ToolStrip(QWidget):
         Gebraucht wird das für die leere Szene. Die Menüs graut ``_update_actions``
         vorbildlich aus — im selben Zustand sind alle vierunddreißig Einträge
         unter *Ändern* stumpf —, und diese Zeile bot weiter Messen, Bewegen,
-        Analyse, Schichten und Bemalen an. „Bemalen" auf einer leeren Szene
-        ist ein Pinsel für nichts.
+        Analyse, Schichten und Trennen an. Ein Werkzeug auf einer leeren
+        Szene ist ein Griff ins Nichts.
 
         Ein offenes Werkzeug wird dabei geschlossen: Was nicht mehr geht,
         bleibt nicht offen stehen.

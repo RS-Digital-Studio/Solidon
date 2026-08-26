@@ -848,8 +848,8 @@ FIELDS: tuple[Field, ...] = (
         front=True,
         note=_(
             "Die Farbe für Vorschau und Übergabe an den Slicer — am Druck ändert sie nichts. "
-            "Sie gilt dem ganzen Teil: Mehrfarbig wird es über Bemalen unter der Ansicht, je "
-            "bemalter Bereich ein Materialslot mit eigenem Filament."
+            "Sie gilt dem ganzen Teil: Mehrfarbig wird es über *Fläche färben* im Menü an "
+            "der Fläche, je gefärbter Bereich ein Filament."
         ),
     ),
     Field(
