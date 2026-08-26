@@ -721,7 +721,7 @@
   "Die Fläche dieser Zeichenebene ist nicht mehr da — projizieren geht hier nicht.": "The face of this drawing plane is gone — projecting is not possible here.",
   "Die Fläche hat sich dabei kaum verschoben.": "The surface barely moved.",
   "Die Fläche hat sich dabei spürbar verschoben — Passungen neu prüfen.": "The surface moved noticeably — check the fits again.",
-  "Die Fläche wurde bemalt.": "The face was painted.",
+  "Die Fläche wurde gefärbt.": "The face has been coloured.",
   "Die Fläche wurde nicht gefunden — vielleicht hat ein früherer Schritt sie verändert. Wählen Sie sie neu, oder färben Sie das ganze Teil.": "The face was not found — an earlier step may have changed it. Pick it again, or colour the whole part.",
   "Die Fläche wurde zwischen ihren Facetten interpoliert.": "The surface was interpolated between its facets.",
   "Die Form ist dabei unverändert geblieben.": "The shape stayed unchanged.",

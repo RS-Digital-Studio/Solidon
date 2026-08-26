@@ -202,7 +202,7 @@ def paint_slot(ctx: OpContext) -> OpResult:
             Finding(
                 code="colour.painted",
                 severity="info",
-                message=_("Die Fläche wurde bemalt."),
+                message=_("Die Fläche wurde gefärbt."),
                 object_id=source.id,
                 values={"faces": covered, "slot": params.slot},
             )
