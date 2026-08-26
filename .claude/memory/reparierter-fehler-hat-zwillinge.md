@@ -8,8 +8,8 @@ metadata:
   modified: 2026-08-25T13:08:25.694Z
 ---
 
-**Der Gesamtreview vom 25.08.2026 (Bericht:
-`.claude/.state/gesamtreview-2026-08-25/BEFUNDE.md`, ~180 Befunde, ~30 hoch)
+**Der Gesamtreview vom 25.08.2026 (~180 Befunde, ~30 hoch; der Bericht
+liegt seit ff7eaaae nur noch in der Git-History)
 zeigte ein tragendes Muster: Ein reparierter Fehler hat unreparierte
 Zwillinge.** Fünf der schwersten Befunde waren exakt der Fehler, der an einer
 Nachbarstelle schon einmal behoben und dort sogar im Docstring dokumentiert

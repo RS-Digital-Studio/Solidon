@@ -6,9 +6,9 @@ einmal kontrolliert wurde** — und alle Funde zu beheben, egal wie klein.
 Randbedingung: die Demo soll auf der Webseite bereitstehen.
 
 Diese Datei sammelt, was **nicht** behoben ist, und warum. Was behoben ist,
-steht in den Commits und in
-`.claude/.state/oberflaechen-durchsicht-2026-08-19/BEHOBEN.md` — dort mit
-Vorher-Messung, Nachher-Messung und dem Ergebnis der Gegenprobe.
+steht in den Commits. Der eigene Bericht dazu, mit Vorher-Messung,
+Nachher-Messung und dem Ergebnis jeder Gegenprobe, lag unter
+`.claude/.state/` und liegt seit ff7eaaae nur noch in der Git-History.
 
 ## Der Stand in Zahlen
 
@@ -150,10 +150,9 @@ Von den 19 Gebieten der Durchsicht liegen elf als Rohfunde vor. Nie gelaufen:
 Wie sie gefahren werden, steht hier bewusst nicht mehr.
 
 > **Berichtigt am 22.08.2026, zweimal am selben Tag.** Dieser Absatz nannte zwei
-> Workflow-Skripte unter
-> `.claude/.state/oberflaechen-durchsicht-2026-08-19/workflow-skripte/` samt
-> einem fertigen Auftragstext daneben, und beides als *den* Weg, wie es
-> weitergeht.
+> Workflow-Skripte aus dem Arbeitsstand der Durchsicht (seit ff7eaaae nur
+> noch in der Git-History) samt einem fertigen Auftragstext daneben, und
+> beides als *den* Weg, wie es weitergeht.
 >
 > **Robert hat entschieden, dass die Workflow-Skripte wegfallen.** Damit ist auch
 > der Auftragstext hinfällig, jedenfalls in seinem Kern: Er bestand aus der

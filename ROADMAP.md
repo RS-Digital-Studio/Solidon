@@ -3375,7 +3375,8 @@ Ollama, Browsermessungen), Zahlen, die ein Anbieter nicht herausgibt
 (SindriCADs Downloadzahlen, Patreon-Stände, Alibre- und nTop-Preise), und die
 Frage, ob ein erzeugtes 3D-Modell unter die Kennzeichnungspflicht des AI Act
 fällt. Eine ehrliche Lücke ist wertvoller als eine plausible Zahl — die
-Vorarbeit dazu liegt in `.claude/.state/konzept-durchsicht-2026-08-19/`.
+Vorarbeit dazu lag im Arbeitsstand der Konzeptdurchsicht vom 19.08.2026 und
+liegt seit ff7eaaae nur noch in der Git-History.
 
 **Eine Lehre für die nächste Durchsicht.** Eine Recherche, die aus „steht
 nicht in der Dokumentation" auf „gibt es nicht" schließt, ist keine. Der
