@@ -25,6 +25,12 @@ Patch an einem Menüeintrag bringt darum nichts. Was die vier Dateien selbst
 schützt, ist das signierte Manifest aus :mod:`integrity` (H4) — es wird beim
 ersten Zustandsabruf geprüft.
 
+**Ein gebrochenes Manifest sperrt, aber es heißt nicht „abgelaufen".** Der
+Zustand trägt dafür :attr:`Activation.damaged`, und der abgelegte Schlüssel
+wird auch dann gelesen: Wer bezahlt hat, ist erkannt und bekommt den Weg zur
+Neuinstallation statt einer Kaufaufforderung (Regel 17). Freigeschaltet wird
+davon nichts — das wäre die Hintertür, die H4 gerade zumacht.
+
 Es gibt **keine Hintertür**: keine Umgebungsvariable, keinen Schalter, keine
 Freigabedatei. Die Suite setzt den Zustand über eine Fixture, die dieses Modul
 patcht — ein eingebauter Umschalter wäre genau das, was ein Angreifer sucht.
@@ -39,7 +45,7 @@ from typing import Final
 from app.core.activation import integrity, store
 from app.core.activation.key import Licence, LicenceKeyError, parse
 from app.core.activation.store import TRIAL_DAYS, read_key
-from app.core.errors import LicenceRequired
+from app.core.errors import InstallationDamaged, LicenceRequired
 from app.core.log import get_logger
 
 _log = get_logger(__name__)
@@ -51,6 +57,7 @@ __all__ = [
     "SLICER",
     "TRIAL_DAYS",
     "Activation",
+    "InstallationDamaged",
     "Licence",
     "LicenceKeyError",
     "LicenceRequired",
@@ -80,6 +87,18 @@ class Activation:
     days_left: int = 0
     """Resttage des Testlaufs oder der Demo. Ohne Belang, sobald eine Lizenz
     vorliegt."""
+    damaged: bool = False
+    """Ob das Manifest gebrochen ist (H4) — die Auslieferung ist nicht die,
+    die der Bau signiert hat.
+
+    **Ein eigener Zustand, und zwar aus Kundensicht.** Er sperrt wie ein
+    abgelaufener Testlauf, aber er heißt nicht so: Wer bezahlt hat, bekommt
+    hier keine Kaufaufforderung, sondern den Weg zur Neuinstallation. Damit
+    :attr:`licence` in diesem Fall überhaupt etwas enthalten kann, liest
+    :func:`_determine` den Schlüssel auch bei gebrochenem Manifest — er
+    schaltet nichts frei (siehe :attr:`unlocked`), er sagt nur, wer da vor dem
+    Fenster sitzt.
+    """
     deadline: date | None = None
     """Letzter Tag einer befristeten Demo, sonst ``None``.
 
@@ -90,16 +109,28 @@ class Activation:
 
     @property
     def unlocked(self) -> bool:
-        """Ob die schreibenden Funktionen offenstehen."""
-        return self.licence is not None or self.days_left > 0
+        """Ob die schreibenden Funktionen offenstehen.
+
+        ``damaged`` schlägt jeden Schlüssel — sonst wäre aus der freundlicheren
+        Meldung ein Weg an H4 vorbei geworden: Wer eine Grenzdatei ändert,
+        legte einfach einen gültigen Schlüssel daneben.
+        """
+        return not self.damaged and (self.licence is not None or self.days_left > 0)
 
     @property
     def in_trial(self) -> bool:
-        return self.licence is None and self.days_left > 0
+        return not self.damaged and self.licence is None and self.days_left > 0
 
     @property
     def expired(self) -> bool:
-        return self.licence is None and self.days_left <= 0
+        """Ob der Testlauf herum ist — und nur das.
+
+        Eine beschädigte Installation ist nicht „abgelaufen", auch wenn sie
+        genauso sperrt. Die beiden Zustände auseinanderzuhalten ist der ganze
+        Sinn von :attr:`damaged`; wer sie hier wieder zusammenwirft, bekommt
+        die Kaufaufforderung an anderer Stelle zurück.
+        """
+        return not self.damaged and self.licence is None and self.days_left <= 0
 
     @property
     def in_demo(self) -> bool:
@@ -148,21 +179,36 @@ def forget_cache() -> None:
 
 
 def _determine() -> Activation:
-    if not integrity.intact():
-        # H4: Eine veränderte Grenzdatei nimmt der Freischaltung die
-        # Grundlage. Gesperrt wie ein abgelaufener Testlauf — nicht
-        # abgestürzt, und der ehrliche Nutzer sieht diesen Zweig nie.
-        return Activation()
+    # **Der Schlüssel wird immer gelesen, auch bei gebrochenem Manifest.**
+    # Vorher stand die Integritätsprüfung davor und kehrte sofort mit einem
+    # leeren Zustand zurück: Ein zahlender Kunde, dessen Installation ein
+    # Virenscanner angefasst hatte, las „Der Testzeitraum ist abgelaufen" und
+    # bekam *Solidon kaufen* angeboten — für etwas, das er besitzt. Gelesen
+    # heißt hier nicht freigeschaltet; ``Activation.unlocked`` sperrt bei
+    # ``damaged`` unabhängig von der Lizenz (H4).
+    licence: Licence | None = None
     stored = read_key()
     if stored is not None:
         try:
-            return Activation(licence=parse(stored))
+            licence = parse(stored)
         except LicenceKeyError as problem:
             # Ein abgelegter Schlüssel, der nicht mehr passt: nach einem
             # Hauptversionswechsel der normale Fall. Der Testlauf entscheidet
             # dann weiter, und der Dialog holt sich den Grund über
             # stored_problem().
             _log.info("stored licence key not accepted: %s", problem.detail)
+
+    if not integrity.intact():
+        # H4: Eine veränderte Grenzdatei nimmt der Freischaltung die
+        # Grundlage. Gesperrt wie ein abgelaufener Testlauf — nicht
+        # abgestürzt, und der ehrliche Nutzer sieht diesen Zweig nie. Die
+        # Frist wird hier nicht gezählt: ``store.days_left`` schreibt den
+        # Marker fort, und eine beschädigte Installation soll niemandem
+        # Testtage verbrauchen.
+        _log.warning("licence manifest broken — the writing side stays closed")
+        return Activation(licence=licence, damaged=True)
+    if licence is not None:
+        return Activation(licence=licence)
     return Activation(days_left=store.days_left(), deadline=store.DEMO_UNTIL)
 
 
@@ -213,11 +259,20 @@ def forget_key() -> bool:
 
 
 def require(action: str) -> None:
-    """Lässt durch oder wirft :class:`LicenceRequired`.
+    """Lässt durch oder wirft — :class:`InstallationDamaged` oder
+    :class:`LicenceRequired`.
 
     Die eine Funktion, die alle vier Grenzstellen aufrufen. Sie gibt nichts
     zurück: ein Rückgabewert wäre ein Wahrheitswert, den eine Stelle
     versehentlich ignoriert.
+
+    **Zwei Absagen, weil es zwei Lagen sind** (Regel 17). Gesperrt wird in
+    beiden gleich; was sich unterscheidet, ist der Weg hinaus. Eine gebrochene
+    Auslieferung wird nicht besser, wenn man einen Schlüssel kauft — sie wird
+    besser, wenn man Solidon neu installiert.
     """
-    if not state().unlocked:
+    current = state()
+    if current.damaged:
+        raise InstallationDamaged(action=action)
+    if not current.unlocked:
         raise LicenceRequired(action=action)

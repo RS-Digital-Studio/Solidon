@@ -559,6 +559,51 @@ class LicenceRequired(AppError):
         Grenze Leute tatsächlich anstoßen."""
 
 
+class InstallationDamaged(AppError):
+    """Eine Programmdatei stimmt nicht mit der signierten Auslieferung überein.
+
+    **Der Unterschied zu :class:`LicenceRequired` ist der Unterschied zwischen
+    zwei Kunden.** Bricht das Manifest (H4), ist die schreibende Seite zu — das
+    bleibt so, denn eine veränderte Grenzdatei nimmt der Freischaltung die
+    Grundlage. Gemeldet wurde dabei aber „Der Testzeitraum ist abgelaufen" mit
+    dem Vorschlag *Solidon kaufen*, und das bekam auch, wer längst bezahlt
+    hatte: Sein gültiger Schlüssel wurde gar nicht erst gelesen. Ein
+    Virenscanner in Quarantäne, ein halbes Update oder ein Plattenfehler
+    reichen dafür — der Satz war dann in beide Richtungen falsch, und der
+    einzige angebotene Weg führte in den Verkauf statt zur Reparatur.
+
+    Also ein eigener Zustand mit eigenen Wegen: neu installieren, oder den
+    Support fragen. Beide sind verdrahtet (``open_download_page``,
+    ``report_error``) — ein Rat ohne Knopf wäre hier besonders bitter, weil
+    niemand von selbst darauf käme, dass die Dateien und nicht die Lizenz das
+    Problem sind.
+    """
+
+    default_title: ClassVar[TranslatableText] = _("Die Installation von Solidon ist beschädigt.")
+    default_suggestions: ClassVar[tuple[Action, ...]] = (
+        OPEN_DOWNLOAD_PAGE,
+        REPORT_ERROR,
+        CANCEL,
+    )
+
+    def __init__(
+        self,
+        action: str = "",
+        detail: TranslatableText | str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        if detail is None:
+            detail = _(
+                "Eine Programmdatei stimmt nicht mit der Auslieferung überein. "
+                "Installieren Sie Solidon neu; hilft das nicht, wenden Sie sich an den Support."
+            )
+        super().__init__(detail=detail, **_with_values(kwargs, action=action))
+        self.action = action
+        """Was versucht wurde — dieselben vier Namen wie bei
+        :class:`LicenceRequired`, damit das Protokoll beide Fälle nebeneinander
+        auswerten kann."""
+
+
 # --- Intern --------------------------------------------------------------------
 
 

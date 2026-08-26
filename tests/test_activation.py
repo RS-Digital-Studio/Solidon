@@ -21,8 +21,8 @@ from pathlib import Path
 import pytest
 
 from app.core import activation
-from app.core.activation import ed25519, key, store
-from app.core.errors import LicenceRequired
+from app.core.activation import ed25519, integrity, key, store
+from app.core.errors import InstallationDamaged, LicenceRequired
 from tools.make_licence_keys import make_key, public_key, sign
 
 # RFC 8032, §7.1 — (privater Schlüssel, öffentlicher Schlüssel, Nachricht, Signatur)
@@ -604,6 +604,48 @@ def test_an_unreadable_key_file_does_not_break_the_state(own_config: Path) -> No
     store.key_path().write_bytes(b"\xff\xfe kein gueltiges UTF-8")
     assert store.read_key() is None
     assert activation.state().in_trial
+
+
+def test_a_damaged_installation_does_not_ask_the_paying_customer_to_buy(
+    own_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der teuerste Satz im ganzen Paket, an den falschen Kunden gerichtet.
+
+    Bricht das Manifest (H4) — Virenscanner in Quarantäne, halbes Update,
+    Plattenfehler —, war der Zustand bis zum 26.08.2026 schlicht ``Activation()``:
+    Der abgelegte Schlüssel wurde nicht einmal gelesen, und wer bezahlt hatte,
+    las „Der Testzeitraum ist abgelaufen" über dem Knopf *Solidon kaufen*.
+
+    Gesperrt bleibt die schreibende Seite, das ist H4 und wird hier
+    mitgemessen. Was sich ändert, ist die Auskunft: Der Kunde wird erkannt, der
+    Zustand heißt ``damaged`` statt ``expired``, und die Wege heißen
+    Neuinstallation und Support (Regel 17).
+
+    Die Installation gilt hier als beschädigt, weil ein Manifest erwartet wird
+    und keines daliegt — derselbe Zweig wie eine veränderte Grenzdatei, nur
+    ohne eine Datei anfassen zu müssen.
+    """
+    monkeypatch.setattr(key, "PUBLIC_KEY", TEST_PUBLIC)
+    store.write_key(make_key(TEST_SEED, a_licence()))
+    monkeypatch.setattr(integrity, "MANIFEST_PUBLIC_KEY", TEST_PUBLIC)
+    monkeypatch.setattr(integrity, "manifest_path", lambda: own_config / "fehlt.manifest")
+    activation.forget_cache()
+
+    state = activation.state()
+    assert state.damaged
+    assert state.licence is not None, "der zahlende Kunde wird erkannt"
+    assert state.licence.holder == "kaeufer@beispiel.de"
+    assert not state.unlocked, "erkannt heißt nicht freigeschaltet (H4)"
+    assert not state.expired, "es ist nicht abgelaufen, es ist beschädigt"
+    assert not state.over, "die Anwendung startet weiter — lesen bleibt offen"
+
+    with pytest.raises(InstallationDamaged) as raised:
+        activation.require(activation.CHANGE)
+    offered = {action.id for action in raised.value.suggestions}
+    assert "buy_licence" not in offered, "er hat bezahlt — ihn zum Kauf zu schicken ist falsch"
+    assert "enter_licence_key" not in offered, "sein Schlüssel liegt vor und ist gültig"
+    assert {"open_download_page", "report_error"} <= offered, "neu installieren oder Support"
+    assert raised.value.detail is not None, "Regel 17: der Grund gehört dazu"
 
 
 def test_a_read_only_profile_still_unlocks_the_session(

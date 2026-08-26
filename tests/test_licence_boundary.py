@@ -32,7 +32,7 @@ from app.core.activation import integrity, key, store
 from app.core.agent.session import AgentSession
 from app.core.backends.llm import Reply
 from app.core.backends.scripted import ScriptedBackend
-from app.core.errors import ExternalToolError, LicenceRequired
+from app.core.errors import ExternalToolError, InstallationDamaged, LicenceRequired
 from app.core.export.handover import SlicerSetup, slice_model
 from app.core.export.writer import plan_export, write_assembly, write_plan
 from app.core.geom.mesh import as_mesh_data, read_mesh
@@ -44,7 +44,7 @@ from app.core.scene.evaluate import evaluate
 from app.core.scene.project import Project, ProjectSources, load, new_project, save
 from app.core.slice.analysis import cross_section
 from app.core.types import PrintSettings, Profile, SceneObject, Source
-from tools.make_licence_keys import public_key, sign
+from tools.make_licence_keys import make_key, public_key, sign
 
 MESHES = Path(__file__).parent / "data" / "meshes"
 
@@ -309,14 +309,29 @@ def test_an_intact_manifest_changes_nothing(
 def test_a_changed_boundary_file_locks_the_writing_side(
     fresh_state: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """H4 in einem Satz: ein Patch an einer der vier Dateien fällt auf."""
+    """H4 in einem Satz: ein Patch an einer der vier Dateien fällt auf.
+
+    **Die Zusicherung hat sich am 26.08.2026 geändert, und zwar in dem Teil,
+    der dem Kunden gilt.** Hier stand ``state().expired`` und
+    ``raises(LicenceRequired)`` — gemessen wurde damit, dass eine beschädigte
+    Installation sich als *abgelaufener Testzeitraum* meldet und *Solidon
+    kaufen* vorschlägt. Das traf auch den, der längst bezahlt hatte: Sein
+    Schlüssel wurde bei gebrochenem Manifest gar nicht erst gelesen.
+
+    Gesperrt bleibt sie trotzdem — das ist der unveränderte Teil und wird hier
+    weiter gemessen (``not unlocked``). Neu ist nur, wie sie heißt und welchen
+    Weg sie anbietet: ein eigener Zustand mit Neuinstallation und Support.
+    """
     files = integrity.boundary_hashes()
     files["core/scene/history.py"] = "0" * 64
     target = fresh_state / "licence.manifest"
     _write_manifest(target, files)
     _expect_manifest(monkeypatch, target)
-    assert activation.state().expired
-    with pytest.raises(LicenceRequired):
+    state = activation.state()
+    assert state.damaged
+    assert not state.unlocked, "H4 unverändert: die schreibende Seite bleibt zu"
+    assert not state.expired, "abgelaufen ist es nicht — es ist beschädigt"
+    with pytest.raises(InstallationDamaged):
         activation.require(activation.CHANGE)
 
 
@@ -326,7 +341,9 @@ def test_a_missing_manifest_locks_when_one_is_expected(
     """Das Manifest zu löschen darf die Prüfung nicht abschalten — sonst wäre
     sie ein Aufkleber."""
     _expect_manifest(monkeypatch, fresh_state / "licence.manifest")
-    assert activation.state().expired
+    state = activation.state()
+    assert state.damaged
+    assert not state.unlocked
 
 
 def test_a_manifest_signed_by_someone_else_locks(
@@ -338,4 +355,49 @@ def test_a_manifest_signed_by_someone_else_locks(
     target = fresh_state / "licence.manifest"
     _write_manifest(target, integrity.boundary_hashes(), seed=other)
     _expect_manifest(monkeypatch, target)
-    assert activation.state().expired
+    state = activation.state()
+    assert state.damaged
+    assert not state.unlocked
+
+
+def test_a_valid_key_does_not_open_a_damaged_installation(
+    fresh_state: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der Schlüssel wird gelesen — freischalten darf er hier nichts.
+
+    Das ist die Kehrseite der freundlicheren Meldung und die gefährlichere
+    Hälfte: Wäre ``damaged`` nur ein anderer Text und der Schlüssel zählte
+    weiter, hätte H4 eine Hintertür bekommen — Grenzdatei patchen, gültigen
+    Schlüssel danebenlegen, fertig.
+
+    Beide Richtungen in einem Test, weil erst der Vergleich etwas aussagt:
+    mit intaktem Manifest schaltet derselbe Schlüssel dieselbe Handlung frei.
+    """
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 8, 6),
+        order="A-1234",
+        holder="kaeufer@beispiel.de",
+    )
+    monkeypatch.setattr(key, "PUBLIC_KEY", public_key(TEST_SEED))
+    store.write_key(make_key(TEST_SEED, licence))
+    target = fresh_state / "licence.manifest"
+
+    # Richtung eins: unversehrt — der Schlüssel wirkt wie eh und je.
+    _write_manifest(target, integrity.boundary_hashes())
+    _expect_manifest(monkeypatch, target)
+    activation.forget_cache()
+    assert activation.state().unlocked
+    activation.require(activation.CHANGE)
+
+    # Richtung zwei: dieselbe Ablage, eine geänderte Grenzdatei.
+    files = integrity.boundary_hashes()
+    files["core/export/writer.py"] = "0" * 64
+    _write_manifest(target, files)
+    activation.forget_cache()
+    state = activation.state()
+
+    assert state.licence is not None, "der zahlende Kunde wird erkannt"
+    assert not state.unlocked, "erkannt heißt nicht freigeschaltet (H4)"
+    with pytest.raises(InstallationDamaged):
+        activation.require(activation.EXPORT)
