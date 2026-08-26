@@ -102,10 +102,30 @@ noch N Tage" und den zwei Knöpfen aus D. Die Frist läuft über dieselbe
 gehärtete Marker-Mechanik (signiert, zwei Orte). Ein Kauf ist damit nie
 schlechter als kein Kauf, und die Aktivierung bleibt trotzdem keine Formsache.
 
+**Und sie läuft je Schlüssel genau einmal** (Fund der Durchsicht vom
+26.08.2026): „14 Tage ab Eintragen" ohne diesen Zusatz wäre erneuerbar —
+Schlüssel entfernen, neu eintragen, neue 14 Tage, und der Teiler gäbe fünf
+Kollegen je einen ewigen Vorrat an Fristen, ohne dass je ein Platz des
+Limits verbraucht würde. Der Marker trägt deshalb den Schlüssel-Hash und
+den **ersten** Eintragungstag; ein erneutes Eintragen desselben Schlüssels
+setzt nichts zurück, auf keiner Maschine ein zweites Mal. Wer die Frist
+reißt, hat den Offline-Weg — der ist die Antwort auf „dauerhaft ohne Netz",
+nicht eine nachwachsende Frist.
+
 **Bestandskunden-Migration.** Bereits verkaufte Schlüssel funktionieren
 offline weiter (die App kann `purchased_on`/`major` lesen): Schlüssel mit
 Kaufdatum vor dem Stichtag der Server-Einführung brauchen kein Zertifikat.
 Kein Bestandskunde wird nachträglich zur Aktivierung gezwungen.
+
+**Und der Stichtag muss vor dem Erzeugungstag des ersten Vorrats liegen**
+(Fund der Durchsicht vom 26.08.2026): `purchased_on` wird beim Signieren
+eingebrannt — ein Vorratsschlüssel trägt also den Tag seiner **Erzeugung**,
+nicht den seines Verkaufs. Läge der Stichtag danach, wäre jeder verkaufte
+Vorratsschlüssel formal ein Bestandsschlüssel, bräuchte nie ein Zertifikat,
+und das Limit griffe für den gesamten Verkauf nicht — der Server stünde
+umsonst da. `make_licence_keys.py --count` prüft deshalb beim Erzeugen
+eines Vorrats, dass der eingebrannte Tag **nach** dem Stichtag liegt, und
+verweigert sonst; dieselbe Prüfung gehört in `tests/test_licence_boundary.py`.
 
 **Vier Grenzdateien bleiben vier.** Die Zertifikatsprüfung gehört in
 `activation/` (im Cython-Prüfmodul), nicht in neue Grenzstellen.
@@ -244,6 +264,23 @@ unbezahlbar:
 - **Klein halten und nachfüllen** (Vorschlag: 50 Stück). Der Vorrat ist die
   eine Stelle, an der fertige Lizenzen auf dem Server liegen; seine Größe
   ist die Obergrenze des Diebstahlschadens (B3).
+
+**Und der leere Vorrat ist ein definierter Fall, kein Unfall** (Fund der
+Durchsicht vom 26.08.2026 — er tritt am wahrscheinlichsten am besten
+Verkaufstag ein, also genau dann, wenn er am teuersten ist). Drei Stufen:
+
+1. **Warnschwelle:** Fällt der Rest unter zehn, schickt `order.php` bei
+   jeder Zuteilung eine Mail an das Support-Postfach („Vorrat: noch N").
+   Nachfüllen ist damit der Normalfall, die Stufen darunter die Ausnahme.
+2. **Leer:** `order.php` beantwortet den Webhook trotzdem mit `ok` — der
+   Anbieter darf den Kauf nicht als gescheitert werten oder erstatten —,
+   legt die Transaktions-ID als **offene Zuteilung** in die Vorratstabelle
+   und mailt Robert sofort. Der Kunde bekommt die Kaufmail in der Fassung
+   „Ihr Schlüssel folgt in Kürze" statt gar keiner Post.
+3. **Nachgefüllt:** Ein kleines Werkzeug (`tools/fill_pool.py`, nach dem
+   Muster der übrigen) lädt den neuen Vorrat und stößt für jede offene
+   Zuteilung die normale Auslieferungsmail an — dieselbe Reihenfolge, in
+   der die Käufe kamen.
 
 **Die Kette, die einen Kunden findet, ohne dass die App ihn kennt:** Der
 Schlüssel nennt die POOL-Kennung; die Serverdatenbank verbindet sie mit der
@@ -422,7 +459,14 @@ fehlt, wenn sie fehlt.**
   vorläufige Freischaltung aus Teil A vierzehn Tage weiter. Ein Ausfall
   ist damit „diese Woche beheben", nie „heute Nacht" — es gibt keine
   Rufbereitschaft, und das ist eine Eigenschaft des Entwurfs, keine
-  Nachlässigkeit.
+  Nachlässigkeit. **Genau genommen sind es zwei Stufen** (Fund der
+  Durchsicht vom 26.08.2026): Die vorläufige Freischaltung trägt nur, wer
+  schon einen **Schlüssel** hat — fällt der Server aus, bevor `order.php`
+  zugeteilt hat, hat der Käufer nichts, das trägt. Diese Stufe fangen der
+  Anbieter (Webhooks werden über Stunden wiederholt, das ist bei Paddle
+  die zugesagte Bauart) und der Erwartungssatz auf dessen
+  Bestätigungsseite („Ihr Schlüssel kommt per E-Mail") ab — nicht die
+  App, die von dem Kauf noch nichts wissen kann.
 - **Monitoring:** passiv und von außen. Ein `health.php`, das „ok" sagt,
   angefragt von einem externen Wächter oder einer wöchentlichen Handprobe
   (`tools/check_activation.py`, B8). Die Anwendung selbst überwacht nichts
@@ -629,8 +673,13 @@ Fläche, an der der Kunden-Ausweis anliegt, bleiben diese drei.)
 **Der Schlüssel ist der Ausweis, und einen zweiten gibt es nicht.** Kein
 Konto, kein Passwort, keine Sitzung — das ist die Entscheidung aus Teil D
 („kein Konto, keine Website-Verwaltung"), und sie hat eine Sicherheitsfolge:
-Wer den Schlüssel hat, kann alles, was der Besitzer kann, einschließlich
-fremde Rechner deaktivieren.
+Wer den Schlüssel kennt, kann alles, was der Käufer kann — allerdings nur
+**innerhalb dieses einen Schlüssels**: die Rechner sehen und abmelden, die
+unter genau ihm aktiviert sind. An die Aktivierungen eines anderen
+Schlüssels kommt niemand, und wer seinen Schlüssel für sich behält, dessen
+Rechner kann kein Fremder anfassen. Betroffen ist allein, wer ihn
+weitergegeben hat — dann können die Mitwisser einander (und ihn)
+hinauswerfen.
 
 **Das ist bewertet und angenommen** — Teil D fragt ausdrücklich danach. Ein
 geteilter Schlüssel führt dazu, dass die Beteiligten sich reihum gegenseitig
@@ -770,7 +819,15 @@ Damit es niemand später als Lücke meldet:
 - **Ein Ausfall des Servers verhindert neue Aktivierungen.** Kein laufender
   Kunde verliert etwas (die Zusage aus dem Rahmen oben), aber wer am
   Ausfalltag kauft, wartet — abgefedert durch die vorläufige Freischaltung aus
-  Teil A, und das ist der zweite Grund für sie neben dem Kein-Netz-Fall.
+  Teil A (sofern der Schlüssel schon zugeteilt ist — die Zuteilungsstufe
+  fängt der Anbieter ab, B6), und das ist der zweite Grund für sie neben dem
+  Kein-Netz-Fall.
+- **Ein geklontes Plattenabbild teilt sich einen Platz.** Wer eine Maschine
+  samt Profil auf N Rechner spiegelt, spiegelt die Zufalls-ID mit — alle N
+  laufen unter einem Zertifikat, und der Server sieht eine Maschine. Das ist
+  der Nachbar des Knackers (C1): Aufwand jenseits des Teilers, und jede
+  Abwehr hieße Hardware-Fingerabdruck, den Teil A aus gutem Grund ablehnt.
+  Angenommen.
 
 ## Teil D — Bedienung (3d-druck-43, ausgearbeitet)
 
