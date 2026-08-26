@@ -336,7 +336,7 @@ def two_colour_sign() -> Project:
             OperationDraft(
                 op="label_text",
                 inputs=("obj_1",),
-                params={"text": "WERKSTATT", "size": 10.0, "depth": 0.8, "z": 3.0, "slot": 1},
+                params={"text": "Solidon3D", "size": 10.0, "depth": 0.8, "z": 3.0, "slot": 1},
             )
         ],
     )
@@ -358,7 +358,7 @@ def two_colour_sign() -> Project:
             OperationDraft(
                 op="create_label",
                 params={
-                    "text": "1979",
+                    "text": "2026",
                     "size": 12.0,
                     "depth": 2.0,
                     "y": -40.0,

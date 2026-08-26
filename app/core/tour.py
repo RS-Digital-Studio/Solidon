@@ -346,6 +346,7 @@ TOURS: Final[tuple[Tour, ...]] = (
                 ),
             ),
             TourStep(
+                shows="history",
                 text=_(
                     "Doppelklick auf *Weich verschmelzen* und den Übergang auf 8 "
                     "stellen: Der Hals wird dicker, ohne dass irgendetwas neu gebaut "
@@ -408,6 +409,7 @@ TOURS: Final[tuple[Tour, ...]] = (
                 )
             ),
             TourStep(
+                shows="parameters",
                 text=_(
                     "Ändern Sie links den Parameter Wandstärke — etwa auf 10. Boden und "
                     "Bausteine folgen; die Buchse sitzt weiter bündig."
@@ -444,16 +446,22 @@ TOURS: Final[tuple[Tour, ...]] = (
                     "schreiben Sie Ihren eigenen Text. Die Schrift bleibt im zweiten "
                     "Materialslot."
                 ),
-                done=_op_text_changed("label_text", "text", "WERKSTATT"),
+                done=_op_text_changed("label_text", "text", "Solidon3D"),
             ),
             TourStep(
+                # **Ohne die Jahreszahl im Satz.** Sie stand hier wörtlich und
+                # war damit an den Inhalt des Beispiels gebunden: Wer ihn
+                # ändert, macht den Tourtext falsch und braucht fünf neue
+                # Übersetzungen dazu. Der Satz zeigt jetzt auf die Sache und
+                # nicht auf den Wortlaut.
                 text=_(
-                    "Die Lettern „1979“ daneben sind der zweite Weg: ein eigener "
+                    "Die Lettern daneben sind der zweite Weg: ein eigener "
                     "Körper. Für Drucker mit einem Werkzeug — gedruckt und "
                     "aufgeklebt, oder mit Filamentwechsel von Hand."
                 )
             ),
             TourStep(
+                shows="history",
                 text=_(
                     "Auf der Rückseite sitzt eine Schlüsselloch-Aufhängung. "
                     "Verschieben Sie sie: Doppelklick auf „Aufhängung“, dann die "
@@ -491,6 +499,12 @@ TOURS: Final[tuple[Tour, ...]] = (
                 )
             ),
             TourStep(
+                # **Wo doppelgeklickt werden soll, wird gezeigt.** Dieser
+                # Schritt war der einzige im ganzen Bestand, der zum Verlauf
+                # schickt, ohne ihn aufblinken zu lassen — und damit die
+                # einzige Tour ohne jeden Bereichsverweis. Jede andere Stelle
+                # mit „Doppelklick im Verlauf" trägt ihn.
+                shows="history",
                 text=_(
                     "Die Platte ordnet ein eigener Schritt an: öffnen Sie "
                     "„Anordnen“ mit einem Doppelklick und ändern Sie den Abstand — "
@@ -556,8 +570,22 @@ TOURS: Final[tuple[Tour, ...]] = (
             ),
         ),
         closing=_(
-            "Für eigene Teile macht das Bearbeiten → Automatisch teilen in einem "
-            "Zug: Trennebene suchen, schneiden, verstiften."
+            # **Drei Wege, und der erste hat eine Bedingung.** Hier stand
+            # allein *Automatisch teilen*, dazu im falschen Menü — der Eintrag
+            # trägt die Kategorie ``prepare`` und ist mit ihr nach
+            # *Vorbereiten* umgezogen, der Satz blieb bei *Bearbeiten* zurück.
+            #
+            # Schwerer wog der Inhalt: *Automatisch teilen* zerschneidet ein
+            # Teil, **das nicht auf das Bett passt** (so steht es an seinem
+            # eigenen Menüeintrag). Diese Tour teilt aber, um Material zu
+            # sparen — wer ihrem Schlusssatz folgte, griff zu einer Funktion,
+            # die seinen Fall gar nicht meint, und die beiden Wege, auf denen
+            # er die Naht selbst legt, standen nirgends.
+            "Passt ein Teil nicht auf das Bett, sucht Vorbereiten → Automatisch "
+            "teilen die Trennebene selbst. Soll die Naht woanders liegen, legen "
+            "Sie sie mit Vorbereiten → Teilen an eine Ebene — oder ziehen sie mit "
+            "Vorbereiten → An gezeichneter Linie trennen dorthin, wo Sie sie haben "
+            "wollen."
         ),
     ),
     Tour(

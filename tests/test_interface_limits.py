@@ -16,6 +16,7 @@ wächst, weil niemand hinsah.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from pathlib import Path
 
@@ -1311,3 +1312,113 @@ def test_a_part_of_the_users_own_never_reaches_the_menu_bar(
         if release is not None:
             release(window)
         window.deleteLater()
+
+
+#: Ein Menüweg, wie ihn Handbuch, Tour und Website schreiben: „Bearbeiten →
+#: Varianten erzeugen". Vor dem Pfeil ein einzelnes großgeschriebenes Wort,
+#: dahinter der Eintrag bis zum ersten Satzzeichen.
+MENU_PATH = re.compile(r"([A-ZÄÖÜ][a-zäöüß]+)\s*→\s*([A-ZÄÖÜ][^.,;:—<»\"\n]{2,40})")
+
+#: Wo Menüwege stehen. Nicht die erzeugten Seiten — die kommen aus `manual.py`
+#: und würden denselben Fehler ein zweites Mal melden.
+PATH_SOURCES = (
+    Path(__file__).parent.parent / "app" / "core" / "manual.py",
+    Path(__file__).parent.parent / "app" / "core" / "tour.py",
+    Path(__file__).parent.parent / "website" / "index.html",
+    Path(__file__).parent.parent / "website" / "funktionen.html",
+)
+
+
+def _menu_titles_and_entries(menu: QMenu) -> list[str]:
+    """Jeder Eintrag eines Menüs, **samt den Titeln der Untermenüs**.
+
+    **Nicht mit `_menu_entries` weiter oben zusammenlegen** — die beiden
+    unterscheiden sich in genau den zwei Punkten, auf die es je hier und dort
+    ankommt, und der Versuch hat schon einmal einen Test gekippt:
+
+    * `_menu_entries` überspringt Untermenü-Titel und liefert den Text
+      **unverändert**, mit `&` und Auslassungspunkten. Das braucht
+      `test_a_variant_group_stands_once_and_offers_its_kinds`: Es sucht
+      „Aus Skizze erzeugen …" wörtlich, also mitsamt den Punkten.
+    * Diese hier nimmt die Titel **mit** (ein Menüweg kann auf eine
+      Zwischenebene zeigen) und putzt `&` und Punkte weg, weil ein Text
+      „Bausteine → Kalibrierung" schreibt und nicht „Kalibrierung …".
+
+    Beim Anlegen hieß diese Funktion ebenfalls `_menu_entries` und verdeckte
+    damit die ältere — der Variantentest wurde rot, und die Ursache lag drei
+    Bildschirmseiten entfernt in einer Datei, die niemand im Verdacht hatte.
+    """
+    found: list[str] = []
+    for action in menu.actions():
+        text = action.text().replace("&", "").replace("…", "").strip()
+        below = action.menu()
+        if below is not None:
+            found.append(text)
+            found.extend(_menu_titles_and_entries(below))
+        elif text:
+            found.append(text)
+    return found
+
+
+def test_every_menu_path_in_the_texts_leads_somewhere(window: MainWindow) -> None:
+    """Was Handbuch, Tour und Website als Weg nennen, muss es geben.
+
+    **Drei Wege zeigten am 26.08.2026 ins falsche Menü**, alle drei in Texten,
+    die dem Kunden das Suchen abnehmen sollen: „Ändern → Varianten erzeugen"
+    (der Eintrag hängt an *Bearbeiten*), „Bausteine → Toleranz-Testkörper" (seit
+    der Zwischenebene *Bausteine → Kalibrierung → …*) und „Bearbeiten →
+    Automatisch teilen" (Kategorie ``prepare``, also *Vorbereiten*). Gefunden
+    hat sie kein Test, sondern eine Durchsicht — und der dritte erst, nachdem
+    zwei behoben waren.
+
+    Verglichen wird gegen das **gebaute** Menü und nicht gegen eine Liste
+    daneben: Eine Zwischenebene, die jemand einzieht, verschiebt jeden Weg
+    darunter, und eine Liste altert genau dann still mit.
+
+    Der Eintrag darf im Text länger stehen als im Menü („Automatisch teilen in
+    einem Zug"), deshalb wird von vorn verglichen. Wege, deren erstes Wort kein
+    Menü der Leiste ist — „Rechtsklick → Bohrung setzen" —, meint der Text
+    nicht als Menüweg; sie fallen heraus.
+    """
+    menus = {
+        action.text().replace("&", "").strip(): _menu_titles_and_entries(menu)
+        for action in window.menuBar().actions()
+        if (menu := action.menu()) is not None
+    }
+    assert menus, "die Menüleiste ist leer — dann prüft dieser Test nichts"
+
+    checked = 0
+    wrong: list[str] = []
+    for source in PATH_SOURCES:
+        if not source.is_file():
+            continue
+        seen: set[tuple[str, str]] = set()
+        for match in MENU_PATH.finditer(source.read_text(encoding="utf-8")):
+            menu_name = match.group(1).strip()
+            entry = match.group(2).strip().rstrip(" *_`\"'")
+            if (menu_name, entry) in seen or menu_name not in menus:
+                continue
+            seen.add((menu_name, entry))
+            checked += 1
+            if not any(
+                entry.lower().startswith(known.lower()) or known.lower().startswith(entry.lower())
+                for known in menus[menu_name]
+                if known
+            ):
+                elsewhere = [
+                    name
+                    for name, entries in menus.items()
+                    if any(
+                        entry.lower().startswith(known.lower())
+                        or known.lower().startswith(entry.lower())
+                        for known in entries
+                        if known
+                    )
+                ]
+                wrong.append(
+                    f"{source.name}: „{menu_name} → {entry}“ — "
+                    + (f"steht in {elsewhere}" if elsewhere else "nirgends im Menü")
+                )
+
+    assert checked >= 10, f"nur {checked} Menüwege gefunden — das Muster greift nicht mehr"
+    assert not wrong, "Menüwege, die ins Leere zeigen:\n" + "\n".join(wrong)
