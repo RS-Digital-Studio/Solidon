@@ -1,10 +1,13 @@
 # Konzept: Aktivierungsserver
 
-> **Stand: ENTWURF, 26.08.2026 — in Ausarbeitung durch alle vier Sitzungen.**
+> **Stand: ENTWURF, 26.08.2026 — alle vier Teile ausgearbeitet, Abnahme offen.**
 > Entschieden von Robert ist das *Ob* und die Reihenfolge; offen ist das *Wie*.
-> Dieses Dokument sammelt die Ausarbeitung; verbindlich wird davon nichts,
-> bevor es Robert abgenommen und der Bauplan (§8/§36) nachgezogen ist.
-> Gebaut wird **nicht vor 0.2.0**.
+> Teil A (Kern), C (Sicherheit) und D (Bedienung) stammen aus den Sitzungen
+> 46, ce und 43; Teil B (Server, Kauf, Recht) ist am 26.08.2026 nachgezogen,
+> mit den Anbieter-Fähigkeiten am selben Tag gegen deren Unterlagen geprüft.
+> Verbindlich wird davon nichts, bevor es Robert abgenommen und der Bauplan
+> (§8/§36) nachgezogen ist. Gebaut wird **nicht vor 0.2.0** — 0.2.0 ist am
+> 26.08.2026 erschienen; die Reihenfolge der Bauschritte steht in B7.
 
 ## Die Entscheidungen, von denen dieses Konzept ausgeht
 
@@ -45,8 +48,12 @@ der auszuarbeiten ist:
   signierte Antwort zurück). Ohne diesen Weg bräche §2 wirklich.
 - **Fällt der Server aus, verliert kein Kunde etwas.** Eine einmal erteilte
   Aktivierung gilt lokal weiter; der Server wird nur für *neue* Aktivierungen
-  gebraucht. Was passiert, wenn es die Firma nicht mehr gibt, gehört
-  beantwortet (Notfall-Freischaltung als signierte Datei auf der Website?).
+  gebraucht. Für den Fall, dass es die Firma nicht mehr gibt, wird eine
+  signierte Dauer-Freischaltung **vorbereitet, aber nicht ausgeliefert** —
+  solange die Firma da ist, existiert sie nur offline, im Ernstfall kommt sie
+  auf die Website. Warum sie nie vorab hinterlegt werden darf, begründet C6:
+  Eine Datei, die auf jeder Maschine schaltet, wäre der Generalschlüssel, den
+  der Offline-Weg gerade vermeidet (offene Frage 4, Roberts Ja/Nein steht aus).
 
 ## Teil A — Kern-Integration (3d-druck-46, ausgearbeitet)
 
@@ -114,15 +121,383 @@ baut denselben Fehler noch einmal — dann mit einem Netzaufruf dazwischen.
 Gefragt wird nach dem **Ergebnis** (ist die Operation entstanden?), nicht
 nach dem Grund.
 
-## Teil B — Server, Kauffluss, Recht (3d-druck-a2, offen)
+## Teil B — Server, Kauffluss, Recht (ausgearbeitet 26.08.2026)
 
-Fragen: Was kann das netcup-Hosting (PHP-Version, sodium/ed25519, MySQL/
-SQLite, TLS, Rate-Limits)? Wie kommt heute der Schlüssel zum Kunden
-(Kauffluss/Paddle → E-Mail?), und wo klinkt sich die Aktivierung ein?
-DSGVO: welche Daten liegen beim Aktivieren an (Schlüssel-Hash, Zufalls-ID,
-Zeitstempel, IP im Log?), Datenschutzerklärung/EULA-Erweiterung, AVV mit
-netcup? Betrieb: Backup der Aktivierungsdatenbank, Monitoring, Verhalten
-bei Ausfall, wer spielt Updates ein?
+### B1 — Was auf dem Server heute steht, und was das für die Bauart heißt
+
+Die Website liegt auf netcup-Webhosting (Plesk), Dokumentenstamm
+`solidon3d.de/httpdocs`. Das ist Shared Hosting: **kein eigener Prozess, kein
+Daemon, keine Warteschlange** — was dort läuft, ist PHP hinter dem Webserver,
+und genau das läuft dort nachweislich seit dem 20.08.2026:
+`api/support.php` nimmt die Rückmeldungen an, `dl/count.php` zählt die
+Downloads. TLS liegt an (Let's Encrypt), hochgeladen wird über FTPS
+(`tools/upload_website.py`, Zugang in `.webserver.json`).
+
+**`support.php` ist die Vorlage, nicht nur ein Nachbar.** Eine Datei je
+Endpunkt, PHP-Standardmittel, kein Composer, kein Framework; das Geheimnis
+(dort das Postfach, hier der Server-Signierschlüssel) liegt auf dem Server
+und reist nie in der Anwendung mit; jede Antwort ist JSON mit `ok` oder
+einem benannten Grund — Regel 17 endet nicht an der Netzgrenze, der Client
+übersetzt die Gründe in die Handlungsvorschläge aus D2.
+
+Drei Dinge muss das Hosting können, und alle drei sind **festzustellen, nicht
+anzunehmen** (B7):
+
+- **ed25519.** Der Server prüft Lizenzschlüssel und signiert
+  Aktivierungszertifikate — beides kann die PHP-Erweiterung `sodium`
+  (`sodium_crypto_sign_verify_detached` / `sodium_crypto_sign_detached`),
+  die seit PHP 7.2 zum Kern gehört. Ob das konkrete Plesk sie geladen hat,
+  sagt eine Wegwerf-Prüfdatei; falls nicht, bietet Plesk die Erweiterungen
+  je Domain zur Auswahl an.
+- **Speicher.** SQLite über PDO, als **eine Datei außerhalb des
+  Dokumentenstamms** (der FTPS-Zugang sieht `solidon3d.de/`, `httpdocs/`
+  liegt darunter — daneben ist Platz, den HTTP nie erreicht). Gegen MariaDB
+  spricht nicht das Können, sondern der Bedarf: Die Last sind einzelne
+  POSTs, ein Backup ist eine Dateikopie, und es gibt kein
+  Datenbankpasswort, das im PHP-Code läge. Ein `BEGIN IMMEDIATE` als
+  Schreibschloss reicht bei dieser Last.
+- **Post hinaus.** Die Kaufmail (B2) geht über denselben Weg wie die
+  Support-Mail: eigene Absenderdomain, SPF beachtet. Die offenen
+  DNS-Punkte (DMARC, TXT im CCP — ROADMAP) werden damit Teil dieses
+  Vorhabens: Eine Kaufmail im Spam-Ordner ist ein Support-Fall je Kauf.
+
+Was die Praxis über diesen Server weiß (gemessen von a2, 26.08.2026): Die
+FTPS-Verbindung reißt bei langen Übertragungen, rund 1,8 MB/s. Für den
+Betrieb der Endpunkte ist das unerheblich — einzelne kleine POSTs —, für die
+Erwartung an Verfügbarkeit ist es ein Argument mehr für das, was C3 ohnehin
+verlangt: Der Server darf nie Betriebsvoraussetzung sein. Und
+`.webserver.json` nennt heute eine **IP statt eines Hostnamens**, womit der
+Zertifikatsname beim Hochladen ungeprüft bleibt — für Website-Dateien eine
+Warnung, für das Deployment eines Endpunkts, der Schlüssel entgegennimmt,
+ein Sperrgrund. Der Eintrag wird vor dem ersten Upload umgestellt (B7).
+
+Damit hält das Projekt künftig **drei Schlüsselpaare**, und die Aufteilung
+ist die tragende Sicherheitsentscheidung aus Teil A/C2, hier nur
+vervollständigt:
+
+| Paar | privat liegt | signiert | Werkzeug |
+|---|---|---|---|
+| Lizenz-Hauptschlüssel | offline bei Robert (Passwortmanager + Papier) | Lizenzschlüssel, Widerrufsliste (C3) | `tools/make_licence_keys.py` |
+| Release-Schlüssel | offline bei Robert | `website/version.json` | `tools/sign_version.py` |
+| Server-Aktivierungsschlüssel | **auf dem Server**, außerhalb `httpdocs` | nur Aktivierungszertifikate | neu, nach dem Muster von `sign_version.py` |
+
+Nur das dritte Paar liegt auf dem Server, und sein Diebstahl ist der von C2
+bewertete und von C3 widerrufbare Fall. Die beiden Offline-Paare betreten
+den Server nie.
+
+### B2 — Der Kauffluss: Zahlungsanbieter, Schlüsselvorrat, Auslieferung
+
+**Die Rollenentscheidung steht und wird hier nicht neu getroffen**
+(`konzept-veroeffentlichung-1.0.md` §2 D): verkauft wird über einen Merchant
+of Record. Der MoR ist rechtlich selbst der Verkäufer — er schuldet und
+meldet die Umsatzsteuer im Land des Käufers, stellt die Rechnung, trägt
+Widerrufsbelehrung und Betrugsprüfung im Checkout. Robert liefert den
+Schlüssel und die Software, sonst nichts.
+
+**Was sich seit jenem Konzept geändert hat, ist am 26.08.2026 nachgeprüft:
+den Weg „Vorrat beim Anbieter hinterlegen, keine eigene Infrastruktur" gibt
+es bei den zwei empfohlenen Anbietern nicht mehr.** Paddles „License List"
+(Vorrat als Textdatei, Paddle liefert je Kauf einen aus) ist ausdrücklich
+nur **Paddle Classic**; Neuanmeldungen laufen auf Paddle Billing, und dort
+heißt Fulfillment: Paddle ruft nach dem Kauf eine Adresse des Verkäufers
+auf (`transaction.completed`-Webhook), und der Verkäufer liefert selbst.
+Lemon Squeezy wiederum erzeugt Lizenzschlüssel **nur selbst** — beliebige
+Zeichenketten aus seinem Generator, die keine ed25519-Signatur tragen und in
+Solidon nichts freischalten; einen eigenen Vorrat hochladen sieht die
+Unterlage nicht vor. Die Folge ist keine Verlegenheit, sondern eine
+Vereinfachung des Gesamtbilds: **Der Kauf braucht denselben kleinen
+PHP-Endpunkt, den die Aktivierung ohnehin bringt.** Ein Vorhaben, eine
+Bauart, ein Betrieb — der Kauf-Webhook ist der vierte Endpunkt neben den
+dreien aus C4.
+
+Der Fluss, wenn einer zahlt:
+
+1. **Checkout beim MoR** (Kaufknopf auf der Website führt dorthin; Preis,
+   Steuer, Rechnung, Widerruf sind seine Sache).
+2. **Der MoR ruft `order.php`** mit den Bestelldaten. Der Endpunkt prüft
+   zuerst die **Webhook-Signatur des Anbieters** (HMAC mit einem Geheimnis,
+   das wie das Postfach-Passwort nur auf dem Server liegt) — ein POST ohne
+   gültige Signatur ist Lärm und wird ohne Wirkung beantwortet.
+3. **Zuteilung aus dem Vorrat, idempotent.** Der Server nimmt den nächsten
+   unverbrauchten Schlüssel aus der Vorratstabelle und verknüpft ihn mit der
+   Transaktions-ID des MoR. Webhooks kommen doppelt — dieselbe
+   Transaktions-ID bekommt denselben Schlüssel wieder, nie einen zweiten;
+   ein Zähler, der je Zustellung verbraucht, verschenkt den Vorrat.
+4. **Auslieferung.** Eine E-Mail vom eigenen Postfach (Muster `support.php`:
+   Schlüssel, Downloadlink, Einlöseanleitung in drei Sätzen, Supportadresse)
+   und — wo der Anbieter es hergibt — der Schlüssel zusätzlich auf dessen
+   Bestätigungsseite. Der eigene Versand ist der Weg, der „Schlüssel
+   erneut senden" später möglich macht, ohne den Anbieter zu fragen.
+5. **Eintragen beim Kunden** läuft dann den Weg aus D1: lokale Prüfung,
+   Aktivierung, Zertifikat.
+
+**Der Vorrat entsteht offline und bleibt offline nachgehalten.**
+`tools/make_licence_keys.py --count` erzeugt ihn mit dem Hauptschlüssel;
+jeder Vorratsschlüssel lautet auf niemanden (`holder` leer) und trägt eine
+POOL-Bestellkennung. Zwei Pflichten dazu, beide billig und beide später
+unbezahlbar:
+
+- **Jeder erzeugte Vorrat wird vollständig offline archiviert** (beim
+  Hauptschlüssel: Passwortmanager oder verschlüsselte Ablage). Das Werkzeug
+  druckt die Schlüssel nur — wer sie nicht ablegt, kann „ich habe meinen
+  Schlüssel verloren" nie beantworten.
+- **Klein halten und nachfüllen** (Vorschlag: 50 Stück). Der Vorrat ist die
+  eine Stelle, an der fertige Lizenzen auf dem Server liegen; seine Größe
+  ist die Obergrenze des Diebstahlschadens (B3).
+
+**Die Kette, die einen Kunden findet, ohne dass die App ihn kennt:** Der
+Schlüssel nennt die POOL-Kennung; die Serverdatenbank verbindet sie mit der
+Transaktions-ID; das MoR-Dashboard verbindet die Transaktion mit dem Käufer.
+Erst alle drei zusammen machen aus einem anonymen Schlüssel einen Menschen —
+und die Kette existiert nur bei Robert und beim MoR, nie in der Anwendung,
+nie im Zertifikat (der Geist von C4). Der Freischaltdialog zeigt bei leerem
+`holder` entsprechend „Freigeschaltet (Bestellung POOL-…)" statt
+„Freigeschaltet für …" — ein Satz in Teil D, der mit leerem Namen leben
+können muss.
+
+**Personalisierte Schlüssel bleiben der Sonderweg**, nicht der Normalfall:
+Auf Anfrage (Firmenkauf, Ersatz) stellt Robert mit `--order`/`--holder`
+einen Schlüssel aus, der den Namen trägt — das ist zugleich der
+Übergangsweg „Verkauf auf Anfrage", falls der Verkauf vor dem Webhook
+starten soll (offene Frage 10).
+
+### B3 — Die Endpunkte, der Speicher, und wo B von C4 abweicht
+
+Fünf PHP-Dateien unter `httpdocs/api/`, alle POST, alle JSON, alle nach der
+Bauart von `support.php`:
+
+| Datei | Wer ruft | Tut |
+|---|---|---|
+| `activate.php` | die App, am Knopf (D1) | C4: prüft Schlüssel, zählt, stellt Zertifikat aus |
+| `deactivate.php` | die App, am Knopf (D3) | C4: gibt den Platz der genannten Maschine frei |
+| `list.php` | die App, im Limit-Fall (D2) | C4: nennt die eigenen Aktivierungen |
+| `order.php` | **nur der MoR** | B2: teilt einen Vorratsschlüssel zu, versendet |
+| `offline.php` | die Website-Seite des Offline-Wegs | C6: nimmt den angezeigten Code, gibt die signierte Antwort |
+
+`offline.php` ist kein zweiter Aktivierungspfad, sondern **dasselbe
+`activate` in anderer Verpackung** (C6: gleiche Zufalls-ID, gleiches Limit,
+gleiche Zählung): Eine kleine Seite auf der Website nimmt den Code entgegen,
+den die App anzeigt, und gibt die signierte Antwort zum Abtippen oder als
+Datei zurück. Der E-Mail-Weg läuft über das Support-Postfach auf denselben
+Endpunkt — am Anfang trägt Robert den Code von Hand ein; ein Automat dafür
+lohnt erst, wenn es den Fall öfter als ein paarmal im Monat gibt.
+
+**Vier Tabellen in einer SQLite-Datei** außerhalb des Dokumentenstamms:
+
+- `activations` — Schlüssel-Hash, Zufalls-ID, Rechnername, Ausstellungstag,
+  Weg (`online`/`offline`). Genau das, was C4 erlaubt, und nichts weiter.
+- `pool` — POOL-Kennung, Schlüssel (bis zur Zuteilung), Transaktions-ID und
+  Zuteilungstag (ab ihr). **Nach der Zuteilung wird der Klartext durch
+  seinen Hash ersetzt** — „Schlüssel verloren" beantwortet das
+  Offline-Archiv (B2), nicht die Datenbank.
+- `blocked` — Schlüssel-Hash, Grund, seit wann. Die Sofort-Sperre aus B4.
+- `rate` — Schlüssel-Hash, Tag, Zähler. Die fünf aus C5.
+
+**Die eine benannte Abweichung von C4:** „kein Klartext-Schlüssel (nur ein
+Hash)" gilt der Aktivierungsdatenbank, und dort gilt es uneingeschränkt.
+Die Vorratstabelle hält unverbrauchte Schlüssel im Klartext — anders kann
+der Server nicht ausliefern, und der Hauptschlüssel, der es anders lösen
+könnte, darf nicht dorthin (C2). Der Schaden eines Einbruchs ist damit
+nicht mehr nur „ein gültiger Schlüssel verliert seine Bindung" (C2),
+sondern zusätzlich „bis zu N fertige Lizenzen werden gestohlen". Er bleibt
+gedeckelt und **exakt heilbar**: N ist klein (B2), jeder Vorratsschlüssel
+ist an seiner POOL-Kennung identifizierbar, und die Widerrufsliste (B4)
+nimmt genau die gestohlenen zurück, ohne einen verkauften zu berühren.
+Erfinden kann der Einbrecher weiterhin nichts.
+
+**`activate` ist idempotent je Maschine:** Dieselbe Kombination aus
+Schlüssel-Hash und Zufalls-ID belegt keinen zweiten Platz, sondern stellt
+das Zertifikat neu aus. Eine Neuinstallation auf derselben Maschine (Profil
+bleibt, ID bleibt) kostet damit nichts — der Nachbarfall zum Replay aus C5,
+und wie der: folgenlos durch Bauart, nicht durch Abwehr.
+
+**Das Zertifikat** füllt der Server, sein Format entscheidet Teil A
+(Prüfung offline im Cython-Prüfmodul): Schlüssel-Hash, Zufalls-ID,
+Ausstellungstag, signiert mit dem Server-Schlüsselpaar. Der öffentliche
+Lizenz-Hauptschlüssel steht dafür auch im PHP — er ist öffentlich, das darf
+er; der Server prüft die Signatur eines eingereichten Schlüssels, **bevor**
+er zählt oder antwortet (C5).
+
+### B4 — Erstattung und Widerruf, Ende zu Ende
+
+Zwei Ebenen, mit Absicht getrennt, weil sie verschieden schnell und
+verschieden mächtig sind:
+
+1. **Die Sperrtabelle auf dem Server wirkt sofort und braucht kein
+   Geheimnis.** Ein Eintrag in `blocked` beendet jede *neue* Aktivierung
+   dieses Schlüssels — der D2-Fall „Schlüssel widerrufen", mit Grund und
+   Bestellnummer im Fehlertext. Meldet der MoR eine Erstattung über den
+   Webhook, kann `order.php` den Eintrag selbst setzen; meldet er sie nur im
+   Dashboard, setzt ihn Robert. Beides ist derselbe Eintrag.
+2. **Die Widerrufsliste erreicht Bestandsinstallationen** — signiert mit dem
+   **Hauptschlüssel**, offline (C3: der Server darf seine eigene Sperrung
+   nicht aufheben können). Sie liegt als eigene Datei neben `version.json`
+   und wird im selben, vom Kunden ausgelösten und abschaltbaren
+   Update-Vorgang mitgelesen — **kein neuer Auslöser**, derselbe eine; die
+   Telemetrie-Grenze zählt Auslöser, nicht Dateien. Das Werkzeug dazu
+   (`tools/make_revocations.py`) folgt `tools/sign_version.py` bis in die
+   Gewohnheiten: Gegenlesen sofort nach dem Schreiben, `--check` vor dem
+   Hochladen, und `upload_website.py` verweigert eine Liste ohne gültige
+   Unterschrift.
+
+Der Ablauf bei einer Erstattung, als geübter Vorgang und nicht als Notfall
+(dieselbe Doktrin wie der Schlüsselwechsel in C3): Erstattung kommt an →
+`blocked` sofort (Minuten, automatisch oder von Hand) → bei Gelegenheit,
+gesammelt und ohne Eile, die Widerrufsliste fortschreiben, offline
+signieren, hochladen. Die Liste transportiert **nur Widerrufe, nie
+Pflichten** (C3) — sie trägt Schlüssel-Hashes und, für den Serverfall aus
+C3, Server-Schlüssel mit Datum.
+
+Und die ehrliche Grenze, einmal mehr: Wer erstattet **und** die
+Update-Prüfung abschaltet, behält eine laufende Kopie (C8). Der Verlust ist
+genau ein zurückgezahlter Kaufpreis; jede Maßnahme dagegen hieße Heartbeat
+und bräche §2. Angenommen.
+
+### B5 — Datenschutz und Rechtstexte
+
+**Rollen:** Der MoR ist für die Kaufdaten (Name, E-Mail, Zahlung, Rechnung)
+eigener Verantwortlicher — sie entstehen bei ihm und bleiben bei ihm. Für
+die Aktivierungsdaten ist Robert Verantwortlicher und netcup
+Auftragsverarbeiter: **der AVV mit netcup wird im CCP abgeschlossen** — das
+ist derselbe offene ROADMAP-Punkt, der für das Support-Postfach ohnehin
+ansteht; ein Vorgang deckt beide Zwecke.
+
+**Was beim Aktivieren anfällt, vollständig:** Schlüssel-Hash (Pseudonym),
+Zufalls-ID (Pseudonym ohne Hardwarebezug, Teil A), Rechnername (vom Kunden
+vergeben; neutral vorbelegt nach D3, **und der Dialog sagt dazu, dass
+dieser Name zum Server reist** — wer „Papas Laptop" schreibt, tut es
+sehend), Ausstellungstag, Weg. IP-Adressen nur in den Serverlogs innerhalb
+der Log-Rotation — deren Aufbewahrung wird in Plesk geprüft, kurz
+eingestellt und die Zahl in die Datenschutzerklärung geschrieben (B7);
+damit wird C4s „keine IP über die Log-Rotation hinaus" eine geprüfte
+Einstellung statt eines Satzes. Personenbezug entsteht erst über die Kette
+aus B2, und die liegt nicht auf dem Server.
+
+**Rechtsgrundlage** ist die Vertragserfüllung (Art. 6 Abs. 1 lit. b DSGVO —
+die Aktivierung setzt die gekaufte Lizenzbindung um; der Offline-Weg steht
+dem Kunden ohne Netz offen). Zu ändern sind:
+
+- **Datenschutzerklärung:** neuer Abschnitt „Freischaltung" — was gesendet
+  wird, wohin, wie lange es liegt, dass Deaktivieren den Eintrag löscht,
+  der Offline-Weg als Alternative. Der Satz „sendet von sich aus keine
+  Daten" bleibt wahr und bleibt stehen — die Aktivierung löst der Kunde
+  aus; die Präzisierung des §2-Satzes regelt D4.
+- **EULA:** Klausel zur Aktivierung — Maschinenlimit, Selbst-Deaktivierung,
+  Widerruf bei Erstattung. Der Erzeugungsweg hat eine bekannte Falle:
+  `EULA.md` ist die Quelle, `tools/make_legal.py` schreibt
+  `website/eula.html` **und** `packaging/eula.txt`, und die zweite Hälfte
+  reist im Installer — **beide erzeugten Fassungen werden mitcommittet**
+  (am 26.08.2026 einmal vergessen, hat einen Release-Tag gekostet).
+- **Löschung und Auskunft:** `deactivate` löscht den Aktivierungseintrag;
+  ein Auskunfts- oder Löschbegehren wird über die Bestellnummer
+  zugeordnet. Aufbewahrungsfristen für Kaufbelege liegen beim MoR, nicht
+  bei Robert.
+
+> ⚠️ Wie im Veröffentlichungskonzept: nach bestem Wissen, keine
+> Rechtsberatung. Datenschutzerklärung und EULA-Klausel gehören vor dem
+> Verkaufsstart einmal vor fachliche Augen — zusammen mit den dort schon
+> genannten Punkten, ein Termin für alles.
+
+### B6 — Betrieb: Backup, Ausfall, Monitoring, Updates
+
+**Die Verlustrechnung zuerst, weil sie alles Weitere entspannt:** Die
+Aktivierungsdatenbank ist **Betriebsbestand, kein Vertragsbestand**. Geht
+sie verloren, gilt jedes ausgestellte Zertifikat lokal weiter (der Rahmen
+oben) — es vergisst nur der Zähler, Limits sind vorübergehend großzügiger,
+kein Kunde verliert etwas. Wirklich sichern muss das Backup nur die
+Vorrats- und Zuteilungstabelle, und deren Quellen liegen ohnehin offline
+(Archiv bei Robert, Dashboard beim MoR). Ein Totalverlust ist damit ein
+ärgerlicher Nachmittag, keine Katastrophe — diese Eigenschaft ist gebaut,
+nicht gehofft, und sie soll beim Bauen erhalten bleiben: **nie einen
+Zustand einführen, den nur die Serverdatenbank kennt und der einem Kunden
+fehlt, wenn sie fehlt.**
+
+- **Backup:** eine geplante Aufgabe in Plesk kopiert die SQLite-Datei
+  täglich datiert (sieben Stände vorgehalten), dazu das Plesk-Backup des
+  Pakets. **Einmal vor dem Verkaufsstart wird eine Kopie wirklich
+  zurückgespielt** — ein Backup, das nie einen Restore gesehen hat, ist
+  eine Vermutung.
+- **Ausfall:** Neue Aktivierungen warten, laufende Kunden merken nichts,
+  und der Kunde mit frisch gekauftem Schlüssel arbeitet über die
+  vorläufige Freischaltung aus Teil A vierzehn Tage weiter. Ein Ausfall
+  ist damit „diese Woche beheben", nie „heute Nacht" — es gibt keine
+  Rufbereitschaft, und das ist eine Eigenschaft des Entwurfs, keine
+  Nachlässigkeit.
+- **Monitoring:** passiv und von außen. Ein `health.php`, das „ok" sagt,
+  angefragt von einem externen Wächter oder einer wöchentlichen Handprobe
+  (`tools/check_activation.py`, B8). Die Anwendung selbst überwacht nichts
+  — sie hat keinen Anlass, und die Telemetrie-Grenze gilt.
+- **Updates einspielen:** dieselbe Pipeline wie die Website —
+  `upload_website.py` über FTPS, davor `php -l` je Datei (B8), und der
+  Hostname-Eintrag aus B1 ist Voraussetzung, nicht Empfehlung. Wer
+  `order.php` oder `activate.php` ändert, spielt vorher die lokale
+  Gegenstelle durch (B8) — die Produktion ist kein Testsystem.
+
+### B7 — Servervorbereitungen: was vor dem ersten Bauschritt liegt
+
+Acht Schritte, jeder mit Prüfkriterium; keiner hängt an der Abnahme dieses
+Konzepts, und die ersten sechs kosten zusammen einen Nachmittag:
+
+1. **AVV mit netcup** im CCP abschließen. *Geprüft: das bestätigte Dokument
+   liegt in Roberts Unterlagen.* (Deckt zugleich den offenen
+   ROADMAP-Punkt fürs Support-Postfach.)
+2. **PHP-Fähigkeiten feststellen:** Wegwerfdatei `phpcheck.php` hochladen —
+   PHP-Version, `extension_loaded('sodium')`, PDO-Treiberliste — ansehen,
+   löschen. *Geprüft: Version ≥ 8, sodium geladen, `pdo_sqlite` da; sonst
+   in Plesk je Domain nachstellen, bevor irgendetwas gebaut wird.*
+3. **Ablageort außerhalb des Dokumentenstamms** anlegen
+   (`solidon3d.de/appdata/`). *Geprüft: per FTPS beschreibbar, und die
+   entsprechende URL antwortet mit 403/404 — nachgefragt, nicht
+   angenommen.*
+4. **Server-Schlüsselpaar erzeugen** (Werkzeug nach dem Muster von
+   `sign_version.py --new-keypair`); privater Teil als Datei in den
+   Ablageort, öffentlicher in die App (Teil A) und ins Repository.
+   *Geprüft: eine Probesignatur vom Server verifiziert lokal gegen den
+   eingecheckten öffentlichen Teil.*
+5. **`.webserver.json` auf den Hostnamen umstellen** (B1). *Geprüft: das
+   Upload-Werkzeug warnt nicht mehr.*
+6. **Log-Rotation und IP-Aufbewahrung** in Plesk prüfen, kurz stellen,
+   Zahl notieren. *Geprüft: die Zahl steht, und sie steht später in der
+   Datenschutzerklärung (B5).*
+7. **MoR-Konto anlegen** — Nachweise, Bankverbindung, Steuerangaben dauern
+   Tage bis Wochen, also früh (Veröffentlichungskonzept V5 sagt dasselbe).
+   Webhook-Ziel `order.php` eintragen, das Webhook-Geheimnis erzeugen und
+   nur auf dem Server ablegen. *Geprüft: ein Sandbox-Kauf des Anbieters
+   erreicht `order.php` mit gültiger Signatur.*
+8. **Postausgang für die Kaufmail:** SPF/DMARC-Einträge im CCP setzen
+   (offener ROADMAP-Punkt). *Geprüft: eine Testmail an ein fremdes
+   Postfach (Gmail/Outlook) landet im Posteingang, nicht im Spam.*
+
+### B8 — Prüfbarkeit der Serverseite (Anschluss an C7)
+
+C7 regelt die App-Seite (kein Netz in der Suite, Doppelgänger mit echter
+API-Oberfläche, Anschlusstests). Die Serverseite hat seit `support.php` ein
+gemessenes Muster, und es wird übernommen:
+
+- **`php -l` je Datei vor jedem Upload** — und die lokale Gegenstelle:
+  PHP 8.4 liegt auf der Maschine (winget), `php -S 127.0.0.1` fährt die
+  echten Endpunktdateien, die mbstring-Falle (`extension_dir` neben der
+  `php.exe` ableiten) ist bekannt und in `tests/test_support.py` gelöst.
+- **`tests/test_activation_server.py`** nach genau diesem Muster: ohne
+  lokales PHP übersprungen (die CI merkt davon nichts, wie heute), sonst
+  der **echte Client gegen die echte PHP-Datei** — Signaturprüfung lehnt
+  einen verfälschten Schlüssel ab, das Limit liefert die Liste statt eines
+  Zertifikats, dieselbe Maschine belegt keinen zweiten Platz, ein
+  `blocked`-Schlüssel bekommt den Widerrufsfall, `offline.php` gibt
+  dieselbe Antwort wie `activate.php`. Ein Nachbau des Servers in Python
+  prüfte den Nachbau — deshalb die echte Datei, wie bei `support.php`.
+- **`tools/check_activation.py`** als Probe gegen die Produktion, nach dem
+  Muster von `tools/check_support.py`. Damit die Probe gefahrlos bleibt,
+  existiert **ein Prüfschlüssel, der nie verkauft wird und dauerhaft in
+  `blocked` steht**: Die Probe aktiviert ihn, erwartet den Widerrufsfall
+  und hat damit den ganzen Weg — TLS, PHP, Datenbank, Signatur — belegt,
+  ohne einen echten Platz zu belegen.
+- **Der Anschlusstest der ganzen Kette ist ein echter Kauf:** einmal mit
+  eigener Karte kaufen, die Mail empfangen, den gelieferten Schlüssel in
+  einem gebauten Paket einlösen, aktivieren, erstatten, und nachsehen,
+  dass der erstattete Schlüssel serverseitig gesperrt ist. Das deckt sich
+  mit der V5-Verifikation des Veröffentlichungskonzepts und ersetzt sie
+  nicht — es erweitert sie um die Aktivierung.
 
 ## Teil C — Sicherheitsarchitektur (3d-druck-ce, ausgearbeitet)
 
@@ -246,6 +621,11 @@ So wenig Fläche wie möglich. Drei Endpunkte, alle POST, alle über TLS:
 | `deactivate` | Schlüssel, Zufalls-ID der zu lösenden Maschine | Bestätigung | nicht ohne den Schlüssel arbeiten |
 | `list` | Schlüssel | Rechnernamen und Daten der eigenen Aktivierungen | keine fremden Schlüssel sichtbar machen |
 
+(Teil B zählt fünf Dateien: `order` spricht ausschließlich mit dem
+Zahlungsanbieter und nimmt nie einen Kundenschlüssel entgegen (B2), und
+`offline` ist dasselbe `activate` in anderer Verpackung (B3, C6). Die
+Fläche, an der der Kunden-Ausweis anliegt, bleiben diese drei.)
+
 **Der Schlüssel ist der Ausweis, und einen zweiten gibt es nicht.** Kein
 Konto, kein Passwort, keine Sitzung — das ist die Entscheidung aus Teil D
 („kein Konto, keine Website-Verwaltung"), und sie hat eine Sicherheitsfolge:
@@ -264,6 +644,13 @@ hierher:** keine IP über die Log-Rotation hinaus, kein Hardware-Merkmal, kein
 Klartext-Schlüssel (nur ein Hash), keine Dateinamen, keine Projektdaten. Ein
 Einbrecher soll in der Datenbank nichts finden, was über „dieser anonyme
 Schlüssel läuft auf drei anonymen Maschinen" hinausgeht.
+
+**Eine benannte Abweichung gibt es, und sie steht mit ihrer Deckelung in
+B3:** Die Vorratstabelle des Kaufflusses hält *unverbrauchte* Schlüssel im
+Klartext, weil der Server sonst nicht ausliefern kann und der Hauptschlüssel
+nicht dorthin darf. Der zusätzliche Einbruchsschaden ist auf die
+Vorratsgröße gedeckelt und über die POOL-Kennungen exakt widerrufbar; für
+die Aktivierungsdaten selbst gilt der Absatz darüber uneingeschränkt.
 
 ### C5 — Replay, Ratenbegrenzung, und der Fall, der keiner ist
 
@@ -490,7 +877,7 @@ Update-Prüfung, die Sie selbst auslösen."
 | `app/core/activation/store.py` Docstring | „dass Solidon ohne Netz und ohne Konto läuft" | präzisieren, Begründung der Hürde bleibt |
 | `website/index.html` (4×: meta, og, JSON-LD, Kacheln) | „ohne Konto, ohne Abo", „ohne Telemetrie" | **bleibt wahr, bleibt stehen** — die Startseite verspricht kein „ohne Netz" |
 | Trial-/Demo-Texte im `ActivationDialog` | „… brauchen einen Schlüssel" | bleibt wahr (Schlüssel schließt Aktivierung ein); Handbuchseite „Freischalten" erklärt den Schritt |
-| EULA / Datenschutzerklärung | — | Teil B (a2): Aktivierungsdaten benennen |
+| EULA / Datenschutzerklärung | — | Teil B (B5): Aktivierungsdaten benennen; beide erzeugten EULA-Fassungen mitcommitten |
 
 Dazu eine neue Handbuchseite „Freischalten und Umziehen": Aktivieren,
 Offline-Weg Schritt für Schritt, Rechner wechseln, was bei Serverausfall gilt
@@ -515,11 +902,12 @@ Schlüssel; (3) der Konstruktor des Dialogs macht keinen Netzaufruf
    Ausnahmen gelöst.
 2. Trial lokal lassen oder serverseitig registrieren (Vorschlag: lokal).
 3. Bestandsschlüssel-Stichtag.
-4. Notfallplan „Firma weg" (signierte Dauer-Freischaltung hinterlegen?).
-   **Teil C6 schärft die Frage:** Eine Datei, die auf jeder Maschine
-   schaltet, ist genau die Hintertür, die der Offline-Weg vermeidet —
-   beides zusammen geht nicht. Vorschlag: vorbereiten, aber nicht
-   ausliefern; im Ernstfall kommt sie auf die Website.
+4. Notfallplan „Firma weg" — **inhaltlich durch C6 beantwortet, es fehlt
+   nur noch Roberts Ja/Nein:** Die Dauer-Freischaltung wird vorbereitet,
+   aber nicht ausgeliefert; solange die Firma da ist, existiert sie nur
+   offline, im Ernstfall kommt sie auf die Website. (Vorab hinterlegen
+   ginge nicht — eine Datei, die auf jeder Maschine schaltet, wäre der
+   Generalschlüssel, den der Offline-Weg gerade vermeidet.)
 5. Rechnername beim Aktivieren (Vorschlag: ja, neutral vorbelegt und frei
    änderbar — sonst ist die Limit-Liste drei Datumszeilen ohne Auskunft).
 6. *Schlüssel entfernen* und *Deaktivieren* als **ein** Knopf (Vorschlag:
@@ -530,3 +918,18 @@ Schlüssel; (3) der Konstruktor des Dialogs macht keinen Netzaufruf
 8. Vorläufige Freischaltung ohne Zertifikat (Vorschlag: 14 Tage ab
    Eintragen, sichtbar als „Aktivierung ausstehend" — sonst sperrt der
    Kauf am letzten Testtag ohne Netz einen zahlenden Kunden; Teil A).
+9. Zahlungsanbieter (dieselbe offene Frage wie
+   `konzept-veroeffentlichung-1.0.md` §7, hier mit neuem Stand): Nach dem
+   Befund vom 26.08.2026 (B2) liefert kein empfohlener Anbieter einen
+   eigenen Schlüsselvorrat mehr nativ aus — der Kauf braucht den
+   Webhook-Endpunkt in jedem Fall. Vorschlag: **Paddle Billing** mit
+   `order.php`; die Gebührensätze holt, wer entscheidet, am Tag der
+   Entscheidung.
+10. Startreihenfolge des Verkaufs: erst Kauf-Webhook und Aktivierungsserver
+    fertig, dann Verkaufsstart (Vorschlag — beides ist eine Endpunktfamilie,
+    B2) — oder eine Übergangsphase „Verkauf auf Anfrage" mit von Hand
+    ausgestellten, personalisierten Schlüsseln.
+11. Auslieferungsweg des Schlüssels (B2): eigene Kaufmail vom eigenen
+    Postfach, zusätzlich Anzeige auf der Bestätigungsseite des Anbieters,
+    wo möglich (Vorschlag: beides — die eigene Mail macht „Schlüssel
+    erneut senden" unabhängig vom Anbieter).
