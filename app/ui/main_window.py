@@ -174,6 +174,7 @@ from app.ui.dialogs import (
     CalibrationDialog,
     KeyDialog,
     ParameterDialog,
+    StepValuesDialog,
     confirm_discard,
     confirm_unsaved,
     damaged_line,
@@ -7135,6 +7136,7 @@ class MainWindow(QMainWindow):
             "place_on_bed": self._place_on_bed_after_error,
             "arrange_on_bed": self._arrange_after_error,
             "correct_input": self._correct_after_error,
+            "show_step_values": self._show_step_values,
             # Die andere Hälfte davon: Wo nicht ein Wert, sondern die
             # Auswahl nicht geht, hilft kein Dialog (§15.4).
             "change_selection": self._change_selection_after_error,
@@ -7174,12 +7176,12 @@ class MainWindow(QMainWindow):
                 if self._write_failure is not None
                 else {}
             ),
-            # **Der Draht, der fehlte.** ``install`` vergaben ``ScadUnavailable``
-            # und seit dieser Sitzung ``BRepUnavailable`` und jeder
-            # ``ExternalToolError`` — ohne Handler wurde daraus ein grauer Satz
-            # („OpenSCAD installieren …"), während der Dialog, der genau das
-            # kann, im Hilfe-Menü stand. Zwei Zeilen darunter hing er unter
-            # ``open_settings``, also unter einem Namen, den kein Knopf trug.
+            # **Der Draht, der fehlte.** ``install`` vergeben
+            # ``BRepUnavailable`` und jeder ``ExternalToolError`` — ohne
+            # Handler wurde daraus ein grauer Satz („… installieren"), während
+            # der Dialog, der genau das kann, im Hilfe-Menü stand. Zwei
+            # Zeilen darunter hing er unter ``open_settings``, also unter
+            # einem Namen, den kein Knopf trug.
             "install": lambda _error: self.action_install_extras(),
             # Und der heißt jetzt, was er tut: die Einstellungen. Bis hierhin
             # öffnete er die Liste der externen Programme, weil der Kern ihn
@@ -7271,6 +7273,31 @@ class MainWindow(QMainWindow):
             )
             return
         self.session.change_inputs(error.op_id, list(chosen))
+
+    def _show_step_values(self, error: AppError) -> None:
+        """Die rohen Werte eines Schritts zeigen, den diese Fassung nicht kennt.
+
+        **Der Gegenpart zu einem Befund, der sonst in eine Sackgasse führte.**
+        ``evaluate.unknown_operation`` sagt dem Kunden, seine Werte blieben
+        erhalten — und bis hierhin gab es keinen Weg, an sie heranzukommen: Der
+        Operationsdialog wird aus einem Registereintrag gebaut, den es für
+        diesen Schritt nicht gibt, und löschen kann der Verlauf ihn auch nicht.
+
+        Derselbe Handler bedient die Ausnahme aus ``History._spec_of``. Damit
+        endet die Reise — Datei öffnen, Befund lesen, Verlauf zeigen, Schritt
+        anklicken — bei der Arbeit des Kunden statt an einem Programmfehler.
+        """
+        if error.op_id is None:
+            # Wie bei ``_correct_after_error``: ``NEEDS_OP`` filtert das schon,
+            # das hier ist die Zusicherung für jeden anderen Aufrufer.
+            return
+        wanted = next(
+            (entry for entry in self.session.project.document.ops if entry.id == error.op_id),
+            None,
+        )
+        if wanted is None:
+            return
+        StepValuesDialog(wanted, self).exec()
 
     def _correct_after_error(self, error: AppError) -> None:
         """Den Schritt wieder öffnen, dessen Werte nicht gingen (§2.7, §2.1).

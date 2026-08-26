@@ -252,6 +252,40 @@ def evaluate(
 
     for position, operation in enumerate(operations):
         token.raise_if_cancelled()
+        if not source.has(operation.op):
+            # **Ein Name aus einer Datei ist kein Programmfehler.**
+            # ``Registry.get`` wirft ``InternalError``, und für einen Aufruf
+            # aus dem *Code* ist das richtig — dort ist ein unbekannter Name
+            # ein Tippfehler. Hier kommt er aus einem *Dokument*, und dann ist
+            # er ein Zustand, mit dem zu rechnen war: eine Operation, die es
+            # in dieser Fassung nicht (mehr) gibt.
+            #
+            # Gemessen am 26.08.2026 an einer Projektdatei aus 0.1.3 mit einem
+            # ``create_from_scad``-Schritt: „Im Programm ist ein unerwarteter
+            # Fehler aufgetreten", mitsamt dem Knopf für den Fehlerbericht —
+            # für eine Datei, die der Kunde selbst angelegt hatte. Ein
+            # Programmfehler darf nie wie ein Bedienfehler aussehen, und
+            # umgekehrt genauso wenig.
+            #
+            # Der Fall ist älter als der OpenSCAD-Ausbau und größer: Ein
+            # Rezept-Baustein aus einer fremden Bibliothek, den dieser Rechner
+            # nicht hat, kommt hier genauso an — nur ist er dann nicht
+            # *entfallen*, sondern *nie da gewesen*. Der Satz nennt deshalb
+            # keine Ursache, sondern den Zustand.
+            findings.append(
+                Finding(
+                    code="evaluate.unknown_operation",
+                    severity="error",
+                    message=_(
+                        "Diesen Schritt kann Solidon nicht rechnen. Seine Werte bleiben "
+                        "in der Datei erhalten; alles andere im Projekt rechnet weiter."
+                    ),
+                    op_id=operation.id,
+                    values={"operation": operation.op},
+                )
+            )
+            stopped_at = operation.id
+            break
         spec = source.get(operation.op)
         progress(position / total, str(spec.title))
 
@@ -1360,8 +1394,8 @@ def _finding_from(error: AppError, operation: Operation) -> Finding:
     die Sprache: ein ``TranslatableText`` wurde für jemanden geschrieben, eine
     blanke Zeichenkette ist die Notiz daneben. Ohne diese Unterscheidung stand
     im Bericht ``malformed target ''`` statt „Das Ziel muss ein Merkmal eines
-    Objekts benennen", und beim OpenSCAD-Aufruf eine halbe Seite roher
-    Programmausgabe — während der lesbare Satz beide Male in ``values``
+    Objekts benennen", und beim Aufruf eines fremden Programms eine halbe
+    Seite roher Ausgabe — während der lesbare Satz beide Male in ``values``
     versteckt lag.
     """
     values = {key: str(value) for key, value in error.values.items()}

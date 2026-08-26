@@ -24,7 +24,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 12
+FORMAT_VERSION: Final = 13
 
 
 @dataclass(frozen=True, slots=True)
@@ -212,6 +212,37 @@ def _add_edited_operations(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _scad_steps_stay_but_stop_computing(data: dict[str, Any]) -> dict[str, Any]:
+    """12 → 13: ``create_from_scad`` gibt es nicht mehr (OpenSCAD-Ausbau).
+
+    Bis Version 12 durfte eine Projektdatei einen Schritt tragen, der beim
+    Auswerten OpenSCAD startete und sein Programm im Parameter ``source``
+    führte. Am 26.08.2026 ist die Operation entfallen — was sie leistete, kann
+    der eigene Kern seit den Skizzen (§30.1).
+
+    **Umgeschrieben wird nichts, und das ist die Entscheidung.** Der Schritt
+    bleibt stehen, mitsamt seinem Quelltext. Zwei Gründe:
+
+    Erstens ist der Quelltext **Arbeit des Kunden**. Eine Migration, die ihn
+    wegwirft, nimmt ihm etwas, das er nirgends wiederbekommt; eine, die ihn
+    stehen lässt, kostet ihn einen Blick in den Schrittdialog und ein
+    Kopieren. Was Solidon nicht mehr rechnen kann, darf es trotzdem
+    aufbewahren.
+
+    Zweitens ist ein Schritt, der **anhält**, sichtbar — ein gelöschter ist
+    weg. Die Auswertung hält an dieser Stelle mit einem Befund an und sagt,
+    welcher Schritt es ist; ein Modell, dem klaglos ein Körper fehlt, schickt
+    jemanden auf die Suche nach einem Fehler, den es nicht gibt (Regel 21).
+
+    Die Version steigt trotzdem, und darin liegt die eigentliche Aussage: Eine
+    Datei ab v13 **kann** keinen ausführbaren Quelltext mehr tragen, weil es
+    keine Operation mehr gibt, die einen entgegennimmt. Das ist §32 in seiner
+    stärksten Form, und es steht nur dann in der Datei, wenn die Nummer es
+    sagt. Dieselbe Bauart wie Schritt 11 → 12, der auch nichts umrechnet.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -225,6 +256,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=9, to_version=10, apply=_add_translatable_params),
     Step(from_version=10, to_version=11, apply=_fold_split_plane_into_split_pinned),
     Step(from_version=11, to_version=12, apply=_add_edited_operations),
+    Step(from_version=12, to_version=13, apply=_scad_steps_stay_but_stop_computing),
 )
 
 

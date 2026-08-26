@@ -24,7 +24,13 @@ from dataclasses import dataclass, field
 from typing import Any, Final
 
 from app.core import activation, expressions
-from app.core.errors import CANCEL, CHANGE_SELECTION, ValidationError
+from app.core.errors import (
+    CANCEL,
+    CHANGE_SELECTION,
+    SHOW_STEP_VALUES,
+    UserError,
+    ValidationError,
+)
 from app.core.log import get_logger
 from app.core.registry import REGISTRY, VARIABLE, Registry
 from app.core.types import (
@@ -425,6 +431,40 @@ class History:
             changed = True
         return changed
 
+    def _spec_of(self, entry: Operation) -> Any:
+        """Der Registereintrag eines **bestehenden** Schritts — oder ein Satz.
+
+        **``Registry.get`` wirft ``InternalError``, und für einen Aufruf aus
+        dem Code ist das richtig.** Hier kommt der Name aber aus dem geladenen
+        Stapel, also aus einer Datei: eine Operation, die es in dieser Fassung
+        nicht (mehr) gibt. Das ist ein Zustand, mit dem zu rechnen war, und
+        kein Programmfehler.
+
+        Gefunden am 26.08.2026 als Zwilling desselben Fehlers in
+        ``scene/evaluate.py`` — und dieser hier ist der schwerere: Der Befund
+        von dort schickt den Kunden mit *Verlauf zeigen* genau hierher. Wer
+        den Schritt dann anklickt, um seine Werte zu sehen, bekäme einen
+        Programmfehler-Dialog. **Ein Handlungsvorschlag, der in einen
+        Programmfehler führt, ist schlimmer als gar keiner.**
+
+        Der Vorschlag daneben ist deshalb keine Vertröstung: Die Werte des
+        Schritts sind da — bei einer Datei aus 0.1.3 ist das der
+        OpenSCAD-Quelltext, den jemand geschrieben hat.
+        """
+        if not self._registry.has(entry.op):
+            raise UserError(
+                title=_("Diesen Schritt kann Solidon nicht ändern."),
+                detail=_(
+                    "Der Schritt ist in dieser Fassung nicht bekannt. Seine Werte "
+                    "bleiben erhalten; alles andere im Projekt lässt sich weiter "
+                    "ändern."
+                ),
+                values={"operation": entry.op},
+                op_id=entry.id,
+                suggestions=(SHOW_STEP_VALUES, CANCEL),
+            )
+        return self._registry.get(entry.op)
+
     def change_params(self, op_id: OpId, params: Mapping[str, Any]) -> Operation:
         """Gibt einer Operation des Stapels andere Parameter (§15.4, §11).
 
@@ -453,7 +493,7 @@ class History:
         # umkonstruierbar an einer geschlossenen Grenze vorbei.
         activation.require(activation.CHANGE)
         entry = self.operation(op_id)
-        spec = self._registry.get(entry.op)
+        spec = self._spec_of(entry)
         self._check_params(spec.name, spec.params.spec(), params)
 
         # Auch hier werden Kennungen vergeben — eine Operation mit variabler
@@ -505,7 +545,7 @@ class History:
         """
         activation.require(activation.CHANGE)  # schreibt ins Dokument (kern.md)
         entry = self.operation(op_id)
-        spec = self._registry.get(entry.op)
+        spec = self._spec_of(entry)
         # Die Objekte am Ende des Stapels: genau das, was der Nutzer im
         # Objektbaum vor sich hat, wenn er die Auswahl ändert.
         known = self._known_objects()

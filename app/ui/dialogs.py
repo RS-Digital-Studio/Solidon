@@ -48,7 +48,11 @@ from app.core.log import get_logger
 from app.i18n import format_decimal, tr
 from app.ui.labels import NumberSpin, deadline_date, value_line
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash, weak_slot
-from app.ui.style import set_level
+from app.ui.style import make_primary, set_level
+
+#: Ein Zeilenumbruch als Name — im Quelltext ist eine Escape-Folge hier
+#: schlechter lesbar als ein Wort.
+umbruch = chr(10)
 
 _log = get_logger(__name__)
 
@@ -1308,7 +1312,87 @@ def show_expired_demo(state: activation.Activation) -> None:
 #: (``MainWindow.edit_operation``). Ein Fehler ohne ``op_id`` — beim Lesen einer
 #: Datei, beim Schreiben eines Exports — hat keinen solchen Schritt, und ein
 #: Knopf, der nichts tut, ist schlimmer als keiner.
-NEEDS_OP: Final = frozenset({"correct_input"})
+#:
+#: *Werte ansehen* steht aus demselben Grund daneben: Es zeigt die Parameter
+#: **eines** Schritts, und ohne seine Kennung gibt es nichts zu zeigen.
+NEEDS_OP: Final = frozenset({"correct_input", "show_step_values"})
+
+
+class StepValuesDialog(QDialog):
+    """Die rohen Werte eines Schritts, den diese Fassung nicht rechnen kann.
+
+    **Der einzige Weg zu einer Arbeit, die sonst in der Datei eingeschlossen
+    wäre.** Eine Projektdatei aus einer früheren Fassung kann einen Schritt
+    tragen, den es hier nicht mehr gibt (§16.2) — bei einer Datei aus 0.1.3
+    ist das der OpenSCAD-Quelltext, den jemand geschrieben hat. Der Schritt
+    bleibt stehen und seine Werte mit ihm; rechnen lässt er sich nicht, und
+    öffnen auch nicht, denn der Operationsdialog wird aus einem
+    Registereintrag gebaut, den es nicht gibt.
+
+    Ohne diesen Dialog wäre der Prüfbericht eine Sackgasse: ein Befund, der
+    sagt „Ihre Werte bleiben erhalten", und kein Weg, an sie heranzukommen.
+
+    **Die Werte stehen roh da, mit Punkt statt Komma, und das ist Absicht.**
+    Sonst gilt in der Oberfläche das Gegenteil (``labels.localised``) — hier
+    aber ist der Text zum **Kopieren** gedacht: Er geht in ein anderes
+    Programm oder dient als Vorlage zum Nachbauen. Eine lokalisierte Zahl wäre
+    dort falsch, dieselbe Begründung wie bei ``measured_expression``.
+    """
+
+    def __init__(self, operation: Any, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(tr("Werte dieses Schritts"))
+        self.setMinimumSize(520, 360)
+
+        layout = QVBoxLayout(self)
+        hint = QLabel(
+            tr(
+                "Diesen Schritt kann Solidon nicht rechnen — seine Werte stehen "
+                "aber unverändert in der Datei. Sie lassen sich hier "
+                "herauskopieren."
+            ),
+            self,
+        )
+        hint.setWordWrap(True)
+        layout.addWidget(hint)
+        layout.addWidget(QLabel(str(operation.op), self))
+
+        self.text = QPlainTextEdit(self)
+        self.text.setReadOnly(True)
+        self.text.setPlainText(step_values_text(operation))
+        layout.addWidget(self.text, 1)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close, parent=self)
+        copy = buttons.addButton(tr("Kopieren"), QDialogButtonBox.ButtonRole.ActionRole)
+        make_primary(copy)
+        copy.clicked.connect(self._copy)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _copy(self) -> None:
+        from PySide6.QtGui import QGuiApplication
+
+        clipboard = QGuiApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setText(self.text.toPlainText())
+
+
+def step_values_text(operation: Any) -> str:
+    """Die Parameter eines Schritts als lesbarer Block.
+
+    Ein mehrzeiliger Wert — ein Quelltext, eine Skizze — bekommt seine eigenen
+    Zeilen; alles andere steht in einer. Ohne diese Unterscheidung stünde ein
+    ganzes Programm hinter einem Gleichheitszeichen auf einer einzigen Zeile.
+    """
+    lines: list[str] = []
+    for name, value in sorted(dict(operation.params).items()):
+        text = str(value)
+        if umbruch in text:
+            lines.append(f"{name}:")
+            lines.extend(f"    {line}" for line in text.splitlines())
+        else:
+            lines.append(f"{name} = {text}")
+    return umbruch.join(lines) if lines else tr("Dieser Schritt hat keine Werte.")
 
 
 def handlers_of(widget: QWidget | None) -> Mapping[str, Callable[[AppError], None]]:

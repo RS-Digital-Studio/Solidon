@@ -135,8 +135,8 @@ class _EvaluationWorker(Worker):
                 # bei jeder Auswertung. **Vor** der Auswertung wie der
                 # foreign-Hinweis darüber, aus demselben Grund: Der
                 # ``parts.scripted_recipe``-Satz ist die zweite Hälfte von
-                # §32, und er lief hier einst nach ``run_evaluation`` —
-                # OpenSCAD war dann längst gestartet, bevor der Satz
+                # §32, und er lief hier einst nach ``run_evaluation`` — das
+                # fremde Programm war dann längst gestartet, bevor der Satz
                 # überhaupt entstand. Gelesen wird ohnehin nur Dokument und
                 # Register, nichts aus dem Ergebnis.
                 session.pending_part_check = False

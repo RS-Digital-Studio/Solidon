@@ -36,6 +36,23 @@ CANCEL = Action("cancel", _("Abbrechen"))
 RETRY = Action("retry", _("Erneut versuchen"), primary=True)
 SHOW_DETAILS = Action("show_details", _("Details anzeigen"))
 CORRECT_INPUT = Action("correct_input", _("Eingabe korrigieren"), primary=True)
+#: Für einen Schritt, den diese Fassung nicht rechnen kann (§16.2).
+#:
+#: **Regel 17 verlangt eine Handlung, und lange gab es hier keine ehrliche.**
+#: ``CORRECT_INPUT`` ist falsch — es gibt keine Eingabe zu korrigieren, der
+#: Schritt selbst ist unbekannt. „Verlauf zeigen" ist sinnlos, wenn der Kunde
+#: gerade im Verlauf steht. „Schritt löschen" gibt es nicht: Die Verlaufs-API
+#: kann einen Schritt ändern und zurücknehmen, aber keinen aus der Mitte
+#: entfernen (§15.4). Und ``CANCEL`` ist ausdrücklich kein Rat.
+#:
+#: Was bleibt, ist das, was wirklich da ist: **die Werte des Schritts.** Ein
+#: Projekt aus einer früheren Fassung trägt sie unverändert weiter — bei einer
+#: Datei aus 0.1.3 ist das der OpenSCAD-Quelltext, den jemand geschrieben hat.
+#: Den herauszuholen ist eine echte Handlung: Er lässt sich anderswo benutzen
+#: oder mit den Skizzen-Ops nachbauen. Der Name nennt die **Werte** und nicht
+#: den Quelltext, weil derselbe Fall auch einen fehlenden Rezept-Baustein
+#: trifft, und der hat Parameter ohne Quelltext.
+SHOW_STEP_VALUES = Action("show_step_values", _("Werte ansehen"), primary=True)
 CHOOSE = Action("choose", _("Auswählen"), primary=True)
 #: Andere Objekte für einen Schritt wählen — im Objektbaum, nicht im Dialog.
 #:
@@ -65,9 +82,9 @@ ARRANGE_ON_BED = Action("arrange_on_bed", _("Auf dem Bett anordnen"), primary=Tr
 CHOOSE_PRINTER = Action("choose_printer", _("Anderes Druckerprofil wählen"))
 OPEN_SETTINGS = Action("open_settings", _("Einstellungen öffnen"), primary=True)
 #: Der Weg zu den zusätzlichen Programmen — wo sie liegen, und ein Knopf, der
-#: sie holt. Nicht ``OPEN_SETTINGS``: Ein fehlender Slicer, ein stilles ComfyUI
-#: und ein nicht installiertes OpenSCAD wurden alle mit „Einstellungen öffnen"
-#: beantwortet, und geöffnet wurde jedes Mal die Liste der externen Programme.
+#: sie holt. Nicht ``OPEN_SETTINGS``: Ein fehlender Slicer und ein stilles
+#: ComfyUI wurden beide mit „Einstellungen öffnen" beantwortet, und geöffnet
+#: wurde jedes Mal die Liste der externen Programme.
 #: Der Knopf trägt jetzt den Namen des Menüeintrags, unter dem er landet.
 INSTALL_MISSING = Action("install", _("Zusätzliche Programme …"), primary=True)
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
@@ -465,8 +482,8 @@ class OutOfBuildVolume(GeometryError):
 
 
 class ExternalToolError(AppError):
-    """OpenSCAD, Slicer, ComfyUI oder ein LLM hat nicht wie erwartet
-    geantwortet (§27, §28)."""
+    """Der Slicer, ComfyUI oder ein LLM hat nicht wie erwartet geantwortet
+    (§27, §28)."""
 
     default_title: ClassVar[TranslatableText] = _("Ein externes Programm hat nicht geantwortet.")
     default_suggestions: ClassVar[tuple[Action, ...]] = (INSTALL_MISSING, RETRY, CANCEL)
