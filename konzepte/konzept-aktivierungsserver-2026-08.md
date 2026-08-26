@@ -728,10 +728,18 @@ Server prüft die Signatur, bevor er zählt. Die Begrenzung ist gegen Lärm, nic
 gegen Kryptographie.
 
 **Das Aktivierungslimit** ist keine Sicherheits-, sondern eine
-Geschäftsentscheidung (offene Frage 1, Vorschlag drei Maschinen). Aus
-Sicherheitssicht ist nur eines wichtig: **Es muss sich vom Kunden selbst
-auflösen lassen** (Teil D3), sonst wird aus jedem defekten Laptop ein
-Support-Fall — und Support-Fälle werden mit Ausnahmen gelöst, und Ausnahmen
+Geschäftsentscheidung, und sie ist getroffen: **ein Rechner je Schlüssel**
+(Robert, 26.08.2026, `249fb878` — „einmal zugleich, nicht einmal im Leben").
+Aus Sicherheitssicht ändert die Zahl nichts; das Wander-Muster aus C4 trägt
+auch bei eins, es wandert nur schneller.
+
+**Was sich damit ändert, ist das Gewicht der Bedingung darunter.** Bei drei
+Maschinen war die Selbstbedienung Komfort — wer den zweiten Platz belegt hat,
+hat noch einen dritten. Bei eins ist sie die **einzige** Alternative zu einem
+Support-Fall: Jeder Gerätewechsel, jede neue Festplatte, jedes neu aufgesetzte
+System braucht sie. **Es muss sich vom Kunden selbst auflösen lassen**
+(Teil D3), sonst wird aus jedem defekten Laptop ein Support-Fall — und
+Support-Fälle werden mit Ausnahmen gelöst, und Ausnahmen
 sind der Weg, auf dem jede Grenze weich wird.
 
 ### C6 — Der Offline-Weg darf weniger
