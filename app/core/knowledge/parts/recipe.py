@@ -6,10 +6,15 @@ seiner Parameter**: eine Liste registrierter Operationen mit Werten, die
 Parameter, die der Kunde nach außen geben will, und die Merkmale, die der
 fertige Baustein verspricht. Kein Python, keine Funktion, nichts, was
 ausgeführt wird — seine Sicherheitslage ist die einer Projektdatei, nicht die
-einer fremden ``.py`` (Regel 13, Entscheidung vom 24.08.2026). Trägt ein
-Rezept einen ``create_from_scad``-Schritt, greift die Quelltextprüfung aus
-§32 bei der Auswertung wie überall sonst — hier wird nichts daran vorbei
-gebaut, weil hier derselbe Auswerter läuft wie für jede Projektdatei.
+einer fremden ``.py`` (Regel 13, Entscheidung vom 24.08.2026).
+
+**Und seit dem 26.08.2026 kann es auch keinen Quelltext mehr tragen.** Regel 13
+nannte dafür einen Fall: ``create_from_scad`` führte seinen Parameter ``source``
+als OpenSCAD-Programm aus, ein Rezept konnte diesen Schritt aufnehmen, und dann
+hing an ihm die Quelltextprüfung aus §32. Mit dem OpenSCAD-Ausbau ist die
+Operation entfallen; ein Rezept ist damit genau das, was der Absatz darüber
+verspricht, ohne Nebensatz. Die Ansage bleibt trotzdem eingebaut — warum, steht
+in :data:`app.core.scene.foreign.SCRIPTED_OPS`.
 
 **Der Dokument-Ausschnitt reist als Dokument.** Serialisiert wird er über
 ``scene.serialise`` — dieselben Funktionen, die die Projektdatei schreiben.
@@ -31,7 +36,9 @@ hinausläuft, wird beim Anlegen abgewiesen und nicht später halb gebaut
 
 ``to_scad()`` gibt es für Rezepte nicht, und das ist benannt statt umgangen
 (Konzept §18e): Für beliebige Operationen lässt sich kein OpenSCAD-Modul
-bilden.
+bilden. Das gilt unverändert — ``to_scad`` ist ein *Ausgabeformat* für
+Bausteine (:mod:`app.core.knowledge.parts.scad`) und war nie an das Programm
+OpenSCAD gebunden.
 """
 
 from __future__ import annotations
@@ -226,8 +233,8 @@ def build(
 
     Der Ausschnitt wird mit dem **Auswerter der Szene** gerechnet — derselbe
     Weg, denselben Regeln: Rückfallkette, ``auto:``-Toleranzen aus dem
-    Profil, Quelltextprüfung für OpenSCAD-Schritte. Ein zweiter Auswerter nur
-    für Rezepte wäre eine zweite Wahrheit.
+    Profil, Prüfungen nach jedem Schritt. Ein zweiter Auswerter nur für
+    Rezepte wäre eine zweite Wahrheit.
 
     Läuft der Ausschnitt nicht auf **genau einen** Körper hinaus, hält das
     hier an (Konzept §18a): Ein Baustein ist eine Funktion, ein Stapel ein
@@ -601,12 +608,14 @@ def load_all(
             recipe = from_data(json.loads(path.read_text(encoding="utf-8")))
             register(recipe, parts, registry)
             loaded.append(recipe.name)
-            # Regel 13 hält nur mit Regel 11 zusammen: Ein Rezept darf
-            # Quelltext tragen (``create_from_scad``), und dann muss der
-            # Nutzer es erfahren, **bevor** er den Baustein rechnen lässt —
+            # Regel 13 hält nur mit Regel 11 zusammen: Ein Rezept durfte
+            # Quelltext tragen (``create_from_scad``), und dann musste der
+            # Nutzer es erfahren, **bevor** er den Baustein rechnen ließ —
             # dieselbe Auskunft, die ``foreign.findings_for`` einer geöffneten
-            # Projektdatei gibt. Eine Datei im eigenen Ordner ist keine
-            # Entwarnung: Rezepte werden weitergegeben.
+            # Projektdatei gibt. Seit dem OpenSCAD-Ausbau antwortet sie
+            # überall mit „nichts"; die Frage bleibt gestellt, weil eine
+            # Datei im eigenen Ordner keine Entwarnung ist — Rezepte werden
+            # weitergegeben, und was heute nichts ausführt, kann es morgen.
             from app.core.scene.foreign import findings_for
 
             for warning in findings_for(recipe.document):
@@ -775,9 +784,10 @@ def adopt(
     Eine kaputte Datei ist ein Befund, kein Abbruch (Regel 17) — der Rest
     des Projekts öffnet.
 
-    **Und was mitkommt, wird angesagt.** Trägt der Ausschnitt einen
-    ``create_from_scad``-Schritt, gibt diese Funktion dieselbe Auskunft, die
+    **Und was mitkommt, wird angesagt.** Trüge der Ausschnitt einen Schritt,
+    der fremden Quelltext ausführt, gäbe diese Funktion dieselbe Auskunft, die
     ``load_all`` für den eigenen Ordner gibt (§32, Regel 11 und 13 zusammen).
+    Seit dem OpenSCAD-Ausbau gibt es keinen solchen Schritt mehr.
     Sie fehlte hier, und damit war der eine Weg blind, auf dem ein fremdes
     Rezept wirklich ankommt: Eine gemailte Projektdatei meldete
     ``parts.travelled`` und kein Wort über den Quelltext. Gemeldet wird in

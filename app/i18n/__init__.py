@@ -166,7 +166,7 @@ def sort_key(text: object) -> str:
 
     Menüs und Listen wurden bisher nach dem internen Namen sortiert — im Menü
     *Grundformen* stand deshalb „Quader, Exakter Quader, Exakter Zylinder,
-    Zylinder, OpenSCAD, Kugel", weil die englischen Bezeichner ``create_box``,
+    Zylinder, Kugel", weil die englischen Bezeichner ``create_box``,
     ``create_brep_box``, … in dieser Reihenfolge stehen. Der Nutzer liest die
     Titel und sucht darin.
     """

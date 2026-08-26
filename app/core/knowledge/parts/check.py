@@ -90,9 +90,9 @@ def check(document: Document, registry: PartRegistry | None = None) -> list[Find
             )
         )
 
-    # Regel 13 hält nur mit Regel 11 zusammen (§32): Ein Rezept darf
-    # OpenSCAD-Quelltext tragen, und dann erfährt es der Kunde, bevor er
-    # rechnen lässt — dieselbe Auskunft, die ``scene.foreign`` einer
+    # Regel 13 hält nur mit Regel 11 zusammen (§32): Ein Rezept durfte
+    # OpenSCAD-Quelltext tragen, und dann erfuhr es der Kunde, bevor er
+    # rechnen ließ — dieselbe Auskunft, die ``scene.foreign`` einer
     # Projektdatei über ihre eigenen Schritte gibt. Und dieselbe **Funktion**:
     # Sie sieht durch ein Rezept hindurch, das ein zweites einsetzt, und eine
     # eigene Fassung hier sah genau eine Ebene tief.

@@ -194,9 +194,6 @@ select = ["E", "F", "I", "N", "UP", "B", "SIM", "RUF", "A", "C4", "FURB", "ICN",
 # BackendUnavailable liest sich als Zustand, und ist einer — §33.1 legt die
 # Namen fest.
 "app/core/backends/llm.py" = ["N818"]
-# UnsafeSource und ScadUnavailable lesen sich ebenso als Zustand, beide sind
-# AppErrors.
-"app/core/backends/openscad.py" = ["N818"]
 # GenerationFailed sagt, was passiert ist — und das liest der Nutzer (§33.1).
 "app/core/backends/mesh.py" = ["N818"]
 # SendFailed steht in derselben Reihe: was passiert ist, nicht wie es heißt.

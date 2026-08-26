@@ -1,7 +1,7 @@
 """Fehlendes installieren, aus der Anwendung heraus (Bauplan §36, §38).
 
-Solidon kommt ohne OpenSCAD, ohne Slicer und ohne B-Rep-Kern — bei den ersten
-beiden aus Lizenzgründen, beim Rest wegen der Größe (§36). Das ist eine gute
+Solidon kommt ohne Slicer und ohne B-Rep-Kern — beim ersten aus
+Lizenzgründen, beim zweiten wegen der Größe (§36). Das ist eine gute
 Entscheidung und eine schlechte Erfahrung: wer eine Verrundung will, soll kein
 README lesen müssen, um herauszufinden, welches Paket zu installieren ist.
 
@@ -245,22 +245,6 @@ REQUIREMENTS: Final[tuple[Requirement, ...]] = (
         package="keyring",
         module="keyring",
         url="https://github.com/jaraco/keyring",
-    ),
-    Requirement(
-        id="openscad",
-        title="OpenSCAD",
-        what_for=_("Rückfallebene für Formen, für die es keinen Baustein gibt."),
-        kind="program",
-        winget="OpenSCAD.OpenSCAD",
-        # **Nicht ``openscad``, und das ist kein Tippfehler.** Homebrew hat das
-        # Cask der stabilen Version als „deprecated: fails_gatekeeper_check"
-        # geführt und zum 01.09.2026 abgeschaltet; ``openscad@snapshot`` ist die
-        # gepflegte Version und trägt dieselbe Anwendung. Eine Kennung mit
-        # Ablaufdatum einzubauen hieße, in zehn Tagen einen Fehlschlag
-        # auszuliefern.
-        brew=("--cask", "openscad@snapshot"),
-        flatpak="org.openscad.OpenSCAD",
-        url="https://openscad.org/downloads.html",
     ),
     Requirement(
         id="slicer",

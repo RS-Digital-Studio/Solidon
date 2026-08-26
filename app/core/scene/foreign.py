@@ -6,13 +6,17 @@ Beispiel, als Auftrag. Zwei Dinge darin sind mehr als Zahlen: **Quelltext**,
 der beim Auswerten ein fremdes Programm startet, und **Verweise nach außen**
 auf Dateien, die nicht im Container liegen.
 
-Beides ist erlaubt und beides ist geprüft — der OpenSCAD-Quelltext läuft nur
-nach :func:`app.core.backends.openscad.check_source`, und ein Pfad aus dem
-Container hinaus wird beim Lesen abgelehnt. Was §32 zusätzlich verlangt, ist
-das hier: dass jemand es **erfährt**, bevor er die Datei rechnen lässt. Eine
-geprüfte Ausführung ist immer noch eine Ausführung, und wer eine Datei aus
-einer E-Mail öffnet, soll nicht erst im Verlauf entdecken, dass darin ein
-Programm steckt.
+Ein Pfad aus dem Container hinaus wird beim Lesen abgelehnt. Was §32
+zusätzlich verlangt, ist das hier: dass jemand es **erfährt**, bevor er die
+Datei rechnen lässt — wer eine Datei aus einer E-Mail öffnet, soll nicht erst
+im Verlauf entdecken, was darin steckt.
+
+**Die erste Hälfte davon ist seit dem 26.08.2026 gegenstandslos, und das ist
+eine gute Nachricht.** Bis dahin durfte eine Projektdatei Quelltext tragen,
+der beim Auswerten OpenSCAD startete; geprüft war er (Regel 11), angesagt war
+er auch, aber eine geprüfte Ausführung ist immer noch eine Ausführung. Mit dem
+OpenSCAD-Ausbau ist die einzige Operation entfallen, die das tat. Die
+Maschinerie dafür bleibt trotzdem stehen — siehe :data:`SCRIPTED_OPS`.
 
 Der Hinweis ist ein Befund, kein Riegel: Solidon stellt sich nicht zwischen
 den Nutzer und seine eigene Datei (Regel 19). Er sagt, was drin ist und wo.
@@ -30,20 +34,38 @@ if TYPE_CHECKING:
 
 #: Operationen, die beim Auswerten ein fremdes Programm starten.
 #:
-#: Heute genau eine — dieselbe, die :mod:`app.core.agent.remote` aus demselben
-#: Grund von der Fernbedienung ausschließt. Kommt eine zweite dazu, gehört sie
-#: hierher; ``test_every_scripted_op_is_named`` hält die Liste an das Register
-#: gebunden, damit sie nicht still veraltet.
-SCRIPTED_OPS: frozenset[str] = frozenset({"create_from_scad"})
+#: **Heute keine, und das ist der Zweck dieser Zeile.** Bis zum 26.08.2026
+#: stand hier ``create_from_scad``; mit dem OpenSCAD-Ausbau ist sie entfallen,
+#: und damit hat eine Projektdatei keinen Weg mehr, etwas auszuführen.
+#:
+#: Eine leere Menge sieht nach totem Code aus, und die Versuchung ist, alles
+#: darunter mitzunehmen. Dagegen stehen drei Gründe. Erstens ist die Aussage
+#: eine über den **Bestand**, nicht über das **Format**: Ein Parameterwert ist
+#: eine Zeichenkette, und was einmal Quelltext war, kann es wieder werden —
+#: der Weg zurück ist eine Zeile im Register. Zweitens hängen drei Sperren
+#: daran (:func:`runs_foreign_source`), und sie neu zu erfinden kostet mehr,
+#: als sie stehen zu lassen. Drittens ist die Rekursion darunter teuer
+#: erarbeitet: Sie geht durch Rezepte hindurch, weil ein Rezept einen solchen
+#: Schritt tragen durfte und dann ``insert_<name>`` hieß.
+#:
+#: Was sich damit umkehrt, ist die **Prüfung**. Vorher hielt
+#: ``test_every_op_that_runs_openscad_is_named`` die Liste an das Register
+#: gebunden; heute sichert ``test_no_operation_runs_foreign_source`` zu, dass
+#: sie leer **bleibt**, und die Maschinerie darunter wird an einer Attrappe
+#: geprüft statt an einer echten Operation. Eine leere Menge prüft sonst
+#: nichts mehr und meldet trotzdem grün.
+SCRIPTED_OPS: frozenset[str] = frozenset()
 
 
 def runs_foreign_source(name: str, parts: PartRegistry | None = None) -> bool:
     """Ob diese Operation beim Auswerten fremden Quelltext ausführt (§32).
 
     **Gefragt wird, was eine Operation tut, nicht wie sie heißt.** Ein
-    **Rezept** darf seit dem 24.08.2026 einen ``create_from_scad``-Schritt
-    tragen (Regel 13), und es heißt dann ``insert_<name>`` — wer nur den Namen
-    vergleicht, sieht daran vorbei.
+    **Rezept** durfte einen ``create_from_scad``-Schritt tragen (Regel 13), und
+    es hieß dann ``insert_<name>`` — wer nur den Namen verglich, sah daran
+    vorbei. Seit dem OpenSCAD-Ausbau ist :data:`SCRIPTED_OPS` leer und die
+    Antwort überall ``False``; warum die Frage trotzdem gestellt wird, steht
+    dort.
 
     **Und die Frage geht beliebig tief.** ``recipe.capture`` nimmt beliebige
     registrierte Operationen auf, also auch ein ``insert_A``: Rezept B trägt

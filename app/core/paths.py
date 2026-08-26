@@ -57,8 +57,9 @@ def results_cache_dir() -> Path:
 
     Zwei Gründe, warum er nicht in :func:`user_cache_dir` selbst liegt.
 
-    **Er hat Nachbarn.** In derselben Wurzel wohnen die OpenSCAD-Sandbox, die
-    heruntergeladenen Update-Pakete und der Stil-Cache. Der Ergebnis-Cache
+    **Er hat Nachbarn.** In derselben Wurzel wohnen die Arbeitsordner der
+    externen Programme, die heruntergeladenen Update-Pakete und der
+    Stil-Cache. Der Ergebnis-Cache
     führt ein Budget und räumt auf, wenn es reißt — täte er das in der Wurzel,
     zählte er fremde Daten in sein Budget und löschte fremde Ordner, um es
     einzuhalten. Ein Update-Paket, das gerade geprüft werden soll, ist kein

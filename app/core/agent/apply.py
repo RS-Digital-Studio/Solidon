@@ -56,10 +56,14 @@ def auto_acceptable(proposal: Proposal, registry: Registry | None = None) -> boo
     unschädlich: sie reisen als ``DocumentChange``, ein Undo nimmt sie mit.
 
     **Die zweite Bedingung fragte nach dem Namen** und verglich mit
-    ``create_from_scad``. Ein Rezept mit einem solchen Schritt heißt
+    ``create_from_scad``. Ein Rezept mit einem solchen Schritt hieß
     ``insert_<name>`` (Regel 13) und kam damit hindurch — eingesetzt ohne
-    Rückfrage, mit einem OpenSCAD-Lauf darin. Gefragt wird jetzt, was die
+    Rückfrage, mit einem OpenSCAD-Lauf darin. Gefragt wird seither, was die
     Operation tut (:func:`~app.core.agent.tools.runs_foreign_source`).
+
+    Seit dem OpenSCAD-Ausbau am 26.08.2026 antwortet darauf keine Operation
+    mehr mit Ja. Die Bedingung bleibt die zweite von vieren: Sie kostet einen
+    Aufruf, und was sie zusichert, sichert sonst nichts zu.
     """
     source = registry or REGISTRY
     if proposal.empty or proposal.questions or proposal.stopped or proposal.undo_of:

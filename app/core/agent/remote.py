@@ -56,24 +56,26 @@ INTERNAL_ERROR: Final = -32603
 
 #: Werkzeuge, die nie fernbedienbar sind.
 #:
-#: ``create_from_scad`` nimmt ausführbaren Quelltext entgegen. Über eine offene
-#: Schnittstelle wäre das die Ausführung fremden Codes auf diesem Rechner —
-#: unabhängig davon, wie gründlich die Quelltextprüfung aus §32 ist, denn sie
-#: prüft, was der Nutzer selbst eingegeben hat. Die Operation bleibt im Menü;
-#: sie ist nur nicht fernsteuerbar.
-#:
 #: ``ask_user`` ist gesperrt, weil hier niemand zu fragen ist. Im Chat hält der
 #: Agent damit an und wartet auf eine Antwort aus dem Fenster (Leitprinzip 6);
 #: über die Leitung säße die Frage in einem Programm fest, das seinen eigenen
 #: Nutzer hat. Wer fern steuert, fragt ihn selbst — und tut es an der Stelle,
 #: an der er sitzt.
 #:
-#: **Diese Liste allein reicht nicht**, und das ist der Grund, warum
-#: :func:`refusal_for` daneben steht: Ein Rezept darf einen
-#: ``create_from_scad``-Schritt tragen (Regel 13) und heißt dann
-#: ``insert_<name>``. Ein Name in einer Liste erwischt das nicht — gefragt wird
-#: zusätzlich, was eine Operation **tut**.
-DENIED: Final[frozenset[str]] = frozenset({"create_from_scad", ASK_USER})
+#: **Hier stand bis zum 26.08.2026 auch ``create_from_scad``**, und mit ihm der
+#: eigentliche Grund für diese Liste: eine Operation, die ausführbaren
+#: Quelltext entgegennimmt. Sie ist mit dem OpenSCAD-Ausbau entfallen. Was
+#: übrig bleibt, hat mit Sicherheit nichts zu tun — es ist die eine Frage, die
+#: über eine Leitung niemand beantworten kann.
+#:
+#: **Die Frage daneben bleibt trotzdem stehen.** :func:`refusal_for` fragt
+#: zusätzlich, was eine Operation *tut* (``runs_foreign_source``), und heute
+#: antwortet keine mehr mit Ja. Das ist eine Zusage über den **Bestand** und
+#: keine über das **Format**: Ein Parameterwert ist eine Zeichenkette und kann
+#: Quelltext sein. Wer je wieder eine Operation baut, die ihn ausführt, findet
+#: die Sperre vor, statt sie zu vermissen — und das ist billiger, als sie ein
+#: zweites Mal zu erfinden.
+DENIED: Final[frozenset[str]] = frozenset({ASK_USER})
 
 #: Adressen, die als „dieser Rechner" gelten.
 _LOOPBACK: Final[frozenset[str]] = frozenset({"127.0.0.1", "::1", "::ffff:127.0.0.1"})
@@ -203,10 +205,13 @@ def refusal_for(name: str) -> TranslatableText | None:
     schickt jemanden auf die Suche nach einem Quelltext, den es nicht gibt
     (Regel 17).
 
-    Und die Frage nach dem Quelltext geht an die Wirkung, nicht an den Namen:
-    Ein Rezept mit einem ``create_from_scad``-Schritt heißt ``insert_<name>``
-    (Regel 13) und stand in keiner Liste — über die Leitung erreichbar und
-    ohne Rückfrage annehmbar.
+    Und die Frage nach dem Quelltext geht an die Wirkung, nicht an den Namen.
+    Das war einmal ein gefundener Fehler: Ein Rezept mit einem
+    ``create_from_scad``-Schritt hieß ``insert_<name>`` (Regel 13) und stand in
+    keiner Liste — über die Leitung erreichbar und ohne Rückfrage annehmbar.
+    Seit dem OpenSCAD-Ausbau führt keine Operation mehr fremden Quelltext aus,
+    also antwortet ``runs_foreign_source`` überall mit Nein. Der Zweig bleibt:
+    Er kostet einen Aufruf und hält eine Zusage, die sonst niemand hielte.
     """
     if name == ASK_USER:
         return _(

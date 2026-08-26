@@ -462,7 +462,7 @@ class Registry:
         Leere Kategorien fallen weg. Sortiert wird nach dem, was auf dem
         Menüeintrag steht, nicht nach dem internen Namen: unter *Grundformen*
         stand sonst „Quader, Exakter Quader, Exakter Zylinder, Zylinder,
-        OpenSCAD, Kugel", weil ``create_box``, ``create_brep_box``, … in dieser
+        Kugel", weil ``create_box``, ``create_brep_box``, … in dieser
         Reihenfolge stehen. Wer ein Menü aufklappt, sucht in den Titeln.
         """
         grouped: dict[str, list[OperationSpec]] = {name: [] for name in CATEGORIES}

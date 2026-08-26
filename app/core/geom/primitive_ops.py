@@ -1,4 +1,4 @@
-"""Primitive und OpenSCAD-Körper (Bauplan §25, Kategorie „Boolesch").
+"""Primitive (Bauplan §25, Kategorie „Boolesch").
 
 Säule A beginnt hier: ohne einen Weg, einen ersten Körper in eine leere Szene
 zu setzen, hat „bau mir eine Halterung" nichts, worauf es stehen könnte. Drei
@@ -6,9 +6,15 @@ Primitive genügen dafür — alles andere ist eine Boolesche Op daraus und ein
 Baustein aus der Bibliothek, und genau diese Reihenfolge verlangt die
 Regelsammlung (§39: Bausteine vor Primitiven).
 
-Der OpenSCAD-Körper ist die Rückfallebene (§24.1) und bleibt optional: der
-Quelltext wird vor dem Lauf geprüft (§32), und ohne Installation sagt die
-Operation das, statt auf halbem Weg zu scheitern.
+**Hier stand bis zum 26.08.2026 auch der OpenSCAD-Körper.** Er war die
+Rückfallebene aus §24.1, für Formen, die kein Baustein und kein Primitiv
+hergab. Seit die Skizzen im Haus sind (§30.1: extrudieren, aufziehen, drehen,
+ziehen, austragen), gibt es diese Formen nicht mehr — der Testfall, der einmal
+*der* OpenSCAD-Fall war, verbietet ihn seit P13 ausdrücklich. Was blieb, war
+die einzige Stelle im Programm, die fremden Quelltext ausführt, mitsamt der
+Prüfung aus §32, einer Installationshürde und einem Werkzeug im Auftrag des
+Agenten. Entfernt auf Entscheidung von Robert; `to_scad()` als *Ausgabe* eines
+Bausteins bleibt (`knowledge/parts/scad.py`), denn die braucht nichts davon.
 """
 
 from __future__ import annotations
@@ -17,10 +23,7 @@ from typing import cast
 
 import numpy as np
 
-from app.core.backends import openscad
-from app.core.errors import ValidationError
-from app.core.geom.mesh import MeshData, read_mesh
-from app.core.geom.repair import merge_vertices
+from app.core.geom.mesh import MeshData
 from app.core.geom.transform import apply, translation
 from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import SEGMENTS, box, cylinder
@@ -28,7 +31,6 @@ from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.types import (
     BaseParams,
     Feature,
-    Finding,
     OpContext,
     OpResult,
     SceneObject,
@@ -206,73 +208,6 @@ def create_sphere(ctx: OpContext) -> OpResult:
     body.apply_translation([0.0, 0.0, params.diameter / 2.0])
     mesh = MeshData.of(body)
     return OpResult(outputs=[_object(params.name or _("Kugel"), mesh, params.diameter)])
-
-
-@op_params
-class ScadParams(BaseParams):
-    source: str = param(
-        title=_("Quelltext"),
-        default="",
-        doc=_("OpenSCAD-Quelltext. Wird vor dem Lauf geprüft."),
-    )
-    name: str = param(
-        title=_("Name"),
-        default="",
-        placement="advanced",
-        doc=NAME_DOC,
-    )
-
-
-@register_op(
-    name="create_from_scad",
-    title=_("OpenSCAD-Teil anheften"),
-    category="primitive",
-    params=ScadParams,
-    consumes=0,
-    produces=1,
-    doc=_(
-        "Baut einen Körper aus OpenSCAD-Quelltext. Rückfallebene für Formen, für die "
-        "es keinen Baustein gibt — braucht eine Installation und wird vorher geprüft."
-    ),
-    caveat=_(
-        "Die letzte Wahl, nicht die erste. Was ein Baustein oder der exakte Kern kann, "
-        "wird nicht als Quelltext geschrieben — das Ergebnis ist genauer, bleibt im "
-        "Verlauf änderbar und braucht kein installiertes OpenSCAD."
-    ),
-)
-def create_from_scad(ctx: OpContext) -> OpResult:
-    """§24.1: die Rückfallebene. Die Prüfung aus §32 läuft, bevor irgendetwas
-    ausgeführt wird.
-    """
-    params = cast(ScadParams, ctx.params)
-    if not params.source.strip():
-        raise ValidationError(
-            field="source",
-            detail=_("Ohne Quelltext gibt es nichts anzulegen."),
-            constraint="empty",
-        )
-    result = openscad.render(params.source)
-    # OpenSCAD schreibt STL, und STL kennt keine gemeinsamen Punkte: jedes
-    # Dreieck bringt seine eigenen drei mit. Über ``load`` verschweißt die
-    # Eingangsstufe sie (§17.1) und sagt es; dieser Weg ging daran vorbei, und
-    # ein Ø-12-Zylinder kam als 252 lose Dreiecke in der Szene an. Bemerkt hat
-    # das erst die nächste boolesche Operation, die ihn retten musste.
-    mesh, removed = merge_vertices(read_mesh(result.stl, ".stl"))
-    # **Kein `_()` hier: „OpenSCAD" ist ein Eigenname.** Er heißt in jeder
-    # Sprache so, und ein Katalogeintrag, der ihn auf sich selbst abbildet,
-    # ist eine Zeile, die fünfmal gepflegt werden muss und nie etwas tut.
-    entry = _object(params.name or "OpenSCAD", mesh, float(mesh.bounds.size[2]))
-    findings = list(result.findings)
-    if removed:
-        findings.append(
-            Finding(
-                code="ingest.welded",
-                severity="info",
-                message=_("Doppelte Punkte wurden verschweißt."),
-                values={"removed": removed},
-            )
-        )
-    return OpResult(outputs=[entry], findings=findings)
 
 
 def _object(name: TranslatableText | str, mesh: MeshData, height: float) -> SceneObject:

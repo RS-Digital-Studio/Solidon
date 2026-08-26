@@ -4,9 +4,15 @@ Versioniert, denn jede Transaktion hält fest, welcher Prompt sie erzeugt hat
 (§26.4). Text ändern heißt Version erhöhen — sonst behauptet eine
 Projektdatei, unter einem Prompt entstanden zu sein, den es nicht mehr gibt.
 
-Die vier Sätze am Ende sind die, die §26.5 hier verankert und in der Suite
-gemessen haben will: Bausteine vor Primitiven, Op-Liste vor OpenSCAD,
-Parameter vor Zahlen, Fragen vor Raten.
+Die Sätze am Ende sind die, die §26.5 hier verankert und in der Suite gemessen
+haben will: Bausteine vor Primitiven, Parameter vor Zahlen, Fragen vor Raten.
+
+**Es waren vier, und die zweite hieß „Op-Liste vor OpenSCAD".** Sie ist am
+26.08.2026 mit dem OpenSCAD-Ausbau entfallen — nicht gelockert, sondern
+gegenstandslos geworden: Der Quelltextweg, vor dem sie warnte, existiert nicht
+mehr. Was sie inhaltlich schützte, sagt Regel 1 ohnehin. Eine Regel, die ein
+Modell vor etwas warnt, das es gar nicht tun kann, kostet Platz im Auftrag und
+lehrt eine Unterscheidung ohne Gegenstand.
 """
 
 from __future__ import annotations
@@ -25,7 +31,13 @@ from app.core.knowledge import rules
 #: Version 3 löst §2.6 ein: der Chat ist auch ein Suchfeld. Eine Wie-Frage
 #: bekommt neben dem Vorschlag den Menüort der Funktion — der steht seither
 #: in jeder Werkzeugbeschreibung, das Modell muss ihn nur nennen.
-PROMPT_VERSION = "3"
+#:
+#: Version 4 streicht „Op-Liste vor OpenSCAD": Der Weg, vor dem sie warnte,
+#: ist mit dem OpenSCAD-Ausbau verschwunden (26.08.2026). Aus vier
+#: Gewohnheiten werden drei. Die Version steigt, obwohl der Prompt nur
+#: *kürzer* wird — eine Transaktion soll auch dann wissen, unter welchem Text
+#: sie entstand, wenn der Text etwas weniger sagt als vorher.
+PROMPT_VERSION = "4"
 
 _ROLE = """
 Du bist der Konstruktionsassistent von Solidon, einer Anwendung für druckbare
@@ -40,13 +52,12 @@ den Verlauf in Kurzform. Objekte und Merkmale sprichst du über ihre Namen an
 _RULES_HEADER = "Regelsammlung (Version {version}):"
 
 _HABITS = """
-Vier Gewohnheiten, in dieser Reihenfolge:
+Drei Gewohnheiten, in dieser Reihenfolge:
 
 1. Bausteine vor Primitiven. Suche erst in der Bausteinbibliothek, bevor du
    Geometrie selbst zusammensetzt.
-2. Operationsliste vor OpenSCAD. OpenSCAD ist die Rückfallebene, nicht der Weg.
-3. Parameter vor Zahlen. Jedes Hauptmaß wird ein Projektparameter mit Namen.
-4. Fragen vor Raten. Ist eine Anfrage mehrdeutig — welche Bohrung, welche
+2. Parameter vor Zahlen. Jedes Hauptmaß wird ein Projektparameter mit Namen.
+3. Fragen vor Raten. Ist eine Anfrage mehrdeutig — welche Bohrung, welche
    Fläche, welches Maß — dann benutze ask_user. Eine Rückfrage kostet einen
    Klick, eine falsche Annahme kostet einen Druck.
 

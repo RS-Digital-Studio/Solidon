@@ -16,8 +16,18 @@
 # Versionen, damit es nicht zwei Wahrheiten gibt, an denen eine Messung
 # hängen könnte. Eine Übersetzung ändert keine Regel, deshalb bleibt die
 # Version, wo sie ist.
+#
+# Version 3 (26.08.2026) streicht zwei Regeln, ohne eine zu ersetzen:
+# „OpenSCAD-Auflösung" und „Eigener Kern vor OpenSCAD". Beide beschrieben den
+# Umgang mit einem Weg, den es seit dem OpenSCAD-Ausbau nicht mehr gibt — die
+# erste riet zu einer Einstellung in einem Programm, das gar nicht mehr
+# gerufen wird, die zweite wog den eigenen Kern gegen eine Alternative ab, die
+# weggefallen ist. Eine Regel, die vor etwas warnt, das niemand mehr tun kann,
+# ist nicht harmlos: Sie kostet Platz im Auftrag und lehrt eine Unterscheidung
+# ohne Gegenstand. Was „Eigener Kern vor OpenSCAD" inhaltlich schützte — nimm
+# das Genaue, nicht das Nachgebaute —, sagt „Bausteine vor Primitiven" weiter.
 
-version = "2"
+version = "3"
 
 [[rules]]
 id = "min_wall"
@@ -223,33 +233,6 @@ camada tenha de manter a medida."""
 applies_to = ["geometry"]
 
 [[rules]]
-id = "scad_fn"
-title = "OpenSCAD-Auflösung"
-text = """
-Bei OpenSCAD $fn zentral setzen. Pro Objekt gesetzt explodieren die
-Renderzeiten."""
-title_en = "OpenSCAD resolution"
-text_en = """
-Set $fn centrally in OpenSCAD. Set per object, render times explode."""
-title_es = "Resolución de OpenSCAD"
-text_es = """
-En OpenSCAD, fijar $fn de forma centralizada. Fijado por objeto, los tiempos
-de renderizado se disparan."""
-title_fr = "Résolution OpenSCAD"
-text_fr = """
-Dans OpenSCAD, régler $fn de façon centrale. Réglé par objet, les temps de
-rendu explosent."""
-title_it = "Risoluzione OpenSCAD"
-text_it = """
-In OpenSCAD impostare $fn centralmente. Impostato per oggetto, i tempi di
-rendering esplodono."""
-title_pt = "Resolução do OpenSCAD"
-text_pt = """
-No OpenSCAD, definir $fn centralmente. Definido por objeto, os tempos de
-renderização disparam."""
-applies_to = ["openscad"]
-
-[[rules]]
 id = "parts_first"
 title = "Bausteine vor Primitiven"
 text = """
@@ -275,50 +258,6 @@ title_pt = "Blocos antes de primitivas"
 text_pt = """
 Pesquisar primeiro na biblioteca de blocos, construir depois. Um bloco traz
 consigo as suas características, os seus limites e os seus testes."""
-applies_to = ["approach"]
-
-[[rules]]
-id = "exact_before_script"
-title = "Eigener Kern vor OpenSCAD"
-text = """
-Was der B-Rep-Kern kann, wird nicht als OpenSCAD-Quelltext geschrieben: exakte
-Quader und Zylinder, präzise Boolesche Operationen, Fasen und Verrundungen. Das
-Ergebnis ist genauer, bleibt im Verlauf änderbar und braucht kein installiertes
-Programm. OpenSCAD bleibt für Formen, für die es weder Baustein noch Kern gibt."""
-title_en = "Own kernel before OpenSCAD"
-text_en = """
-What the B-rep kernel can do is not written as OpenSCAD source: exact boxes and
-cylinders, precise boolean operations, chamfers and fillets. The result is more
-accurate, stays editable in the history and needs no installed program. OpenSCAD
-remains for shapes that have neither a part nor a kernel operation."""
-title_es = "El núcleo propio antes que OpenSCAD"
-text_es = """
-Lo que sabe hacer el núcleo B-Rep no se escribe como código OpenSCAD: prismas
-y cilindros exactos, operaciones booleanas precisas, chaflanes y redondeos.
-El resultado es más exacto, sigue siendo editable en el historial y no
-necesita ningún programa instalado. OpenSCAD queda para las formas que no
-tienen ni bloque ni operación del núcleo."""
-title_fr = "Le noyau maison avant OpenSCAD"
-text_fr = """
-Ce que sait faire le noyau B-Rep ne s'écrit pas en source OpenSCAD : pavés et
-cylindres exacts, opérations booléennes précises, chanfreins et congés. Le
-résultat est plus précis, reste modifiable dans l'historique et ne demande
-aucun programme installé. OpenSCAD reste pour les formes qui n'ont ni bloc ni
-opération du noyau."""
-title_it = "Il kernel proprio prima di OpenSCAD"
-text_it = """
-Quello che sa fare il kernel B-Rep non si scrive come sorgente OpenSCAD:
-parallelepipedi e cilindri esatti, operazioni booleane precise, smussi e
-raccordi. Il risultato è più preciso, resta modificabile nella cronologia e
-non richiede alcun programma installato. OpenSCAD resta per le forme che non
-hanno né blocco né operazione del kernel."""
-title_pt = "O núcleo próprio antes do OpenSCAD"
-text_pt = """
-O que o núcleo B-Rep sabe fazer não se escreve como código OpenSCAD:
-paralelepípedos e cilindros exatos, operações booleanas precisas, chanfros e
-boleados. O resultado é mais preciso, continua editável no histórico e não
-precisa de nenhum programa instalado. O OpenSCAD fica para as formas que não
-têm nem bloco nem operação do núcleo."""
 applies_to = ["approach"]
 
 [[rules]]
@@ -361,7 +300,7 @@ suite_before = ""
 suite_after = ""
 
 [[changes]]
-version = "2"
+version = "3"
 date = "2026-07-28"
 reason = """
 Regel exact_before_script ergänzt: seit P12 gibt es einen B-Rep-Kern, und was

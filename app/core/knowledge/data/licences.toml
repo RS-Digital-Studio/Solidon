@@ -7,8 +7,8 @@
 #
 # Die entscheidende Regel: kein GPL. PySide6 steht unter der LGPL und darf mit
 # einer geschlossenen Anwendung ausgeliefert werden, solange es dynamisch
-# gebunden bleibt. OpenSCAD und die Slicer stehen unter der GPL und werden
-# deshalb ausschließlich als extern installierte Programme aufgerufen, nie
+# gebunden bleibt. Die Slicer stehen unter der GPL und werden deshalb
+# ausschließlich als extern installierte Programme aufgerufen, nie
 # mitgeliefert.
 #
 # **Was extern läuft, steht trotzdem hier.** Die Prüfung unten sieht nur, was
@@ -16,7 +16,6 @@
 # aufruft, kommt darin nicht vor und wäre damit die einzige Abhängigkeit ohne
 # Aktenlage. Deshalb die Aufzählung, auch wenn kein Test sie liest:
 #
-#   OpenSCAD          GPL-3.0   extern aufgerufen (§32), nie mitgeliefert
 #   PrusaSlicer       AGPL-3.0  extern aufgerufen (§29), nie mitgeliefert
 #   OrcaSlicer        AGPL-3.0  dito
 #   CuraEngine        AGPL-3.0  dito

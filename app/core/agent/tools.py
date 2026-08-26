@@ -391,16 +391,18 @@ def runs_foreign_source(name: str) -> bool:
     **Gefragt wird, was eine Operation tut, nicht wie sie heißt.** Zwei
     Sperren verglichen den Namen mit ``create_from_scad`` — die
     Auto-Übernahme (:func:`~app.core.agent.apply.auto_acceptable`) und die
-    Fernbedienung (:mod:`~app.core.agent.remote`). Ein **Rezept** darf seit dem
-    24.08.2026 einen ``create_from_scad``-Schritt tragen (Regel 13), und es
-    heißt dann ``insert_<name>``: Beide Sperren sahen daran vorbei, die
-    Fernbedienung bot es an, und ein Vorschlag damit galt als eindeutig
-    umkehrbar und lief ohne Rückfrage.
+    Fernbedienung (:mod:`~app.core.agent.remote`). Ein **Rezept** durfte einen
+    ``create_from_scad``-Schritt tragen (Regel 13), und es hieß dann
+    ``insert_<name>``: Beide Sperren sahen daran vorbei, die Fernbedienung bot
+    es an, und ein Vorschlag damit galt als eindeutig umkehrbar und lief ohne
+    Rückfrage.
 
-    Regel 11 bleibt davon unberührt — der Quelltext wird vor jedem Lauf
-    geprüft. Regel 13 sagt aber, dass die zwei Regeln nur zusammen halten: Was
-    fremden Code startet, wird angesagt und nicht ferngesteuert, gleich unter
-    welchem Namen es im Register steht.
+    **Heute antwortet keine Operation mehr mit Ja.** Der OpenSCAD-Ausbau am
+    26.08.2026 hat die einzige entfernt, die fremden Quelltext ausführte, und
+    damit ist aus einer Prüfung eine Zusage geworden: Eine Projektdatei kann
+    nichts starten. Das gilt für den **Bestand**, nicht für das **Format** —
+    ein Parameterwert ist eine Zeichenkette, und was einmal Quelltext war,
+    kann es wieder werden. Die Frage bleibt deshalb an ihrer Stelle.
 
     Gerechnet wird die Frage **eine** Etage tiefer, in
     :func:`app.core.scene.foreign.runs_foreign_source`: dieselbe Antwort für

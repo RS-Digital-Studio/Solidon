@@ -1,9 +1,9 @@
 """Programme finden, die installiert sind, aber nicht im PATH stehen (§38).
 
 ``shutil.which`` beantwortet eine Frage — „steht das im PATH" — und unter
-Windows ist das fast nie dieselbe Frage wie „ist das installiert". OpenSCAD
-landet in ``Program Files`` und trägt nichts in den PATH ein; ein Slicer
-meldet sich unter *App Paths* an und trägt ebenfalls nichts ein. Wer nur den
+Windows ist das fast nie dieselbe Frage wie „ist das installiert". Das eine
+Programm landet in ``Program Files`` und trägt nichts in den PATH ein; das
+nächste meldet sich unter *App Paths* an und trägt ebenfalls nichts ein. Wer nur den
 PATH fragt, sagt jemandem, das Programm in seinem Startmenü sei nicht da —
 und bietet an, es ein zweites Mal zu installieren.
 
@@ -16,7 +16,7 @@ Ein Programm wird deshalb an fünf Stellen gesucht, die billigste zuerst:
 3. die Windows-Registry unter *App Paths*, wo Installationsprogramme ihre
    ausführbare Datei eintragen;
 4. die Startprogramme, die **Flatpak** exportiert — sie heißen wie die
-   Anwendung (``org.openscad.OpenSCAD``) und stehen ausdrücklich nicht im
+   Anwendung (``com.orcaslicer.OrcaSlicer``) und stehen ausdrücklich nicht im
    PATH;
 5. die üblichen Installationsordner, zwei Ebenen tief, unter macOS auch in
    ``Contents/MacOS`` — dort liegen die Dateien auch dann, wenn sich nichts
@@ -78,7 +78,7 @@ def parts_for(platform: str) -> tuple[str, ...]:
     Installationsordners liegt.
 
     ``Contents/MacOS`` ist der Grund, warum es diese Funktion gibt: Ein
-    Homebrew-Cask legt ``/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD``
+    Homebrew-Cask legt ``/Applications/OrcaSlicer.app/Contents/MacOS/OrcaSlicer``
     ab, und gesucht wurde bis hierhin nur direkt im Ordner und in ``bin``. Der
     Knopf installierte damit ein Programm, das die Liste danach weiter als
     „nicht gefunden" führte — die schlechteste aller Antworten, weil sie den
@@ -101,7 +101,7 @@ _PARTS: Final = parts_for(sys.platform)
 #: **Diese Verzeichnisse stehen nicht im PATH**, und das ist Absicht von
 #: Flatpak („we're not automatically overriding PATH"). Die Dateien darin heißen
 #: wie die Anwendung, also in umgekehrter Domainschreibweise:
-#: ``org.openscad.OpenSCAD``. Weder ``shutil.which("openscad")`` noch ein
+#: ``com.orcaslicer.OrcaSlicer``. Weder ``shutil.which("orcaslicer")`` noch ein
 #: Durchgang durch ``/opt`` und ``/usr/local`` findet das — nach einer
 #: Flatpak-Installation war das Programm für Solidon also nicht vorhanden.
 _FLATPAK_EXPORTS: Final = (
@@ -289,7 +289,8 @@ def _from_flatpak(names: tuple[str, ...]) -> Path | None:
     """Die Startprogramme, die Flatpak exportiert (siehe :data:`_FLATPAK_EXPORTS`).
 
     Verglichen wird das letzte Stück der Anwendungskennung:
-    ``org.openscad.OpenSCAD`` ist ``openscad``, und danach fragt der Aufrufer.
+    ``com.orcaslicer.OrcaSlicer`` ist ``orcaslicer``, und danach fragt der
+    Aufrufer.
     Das trägt auch für Anwendungen, die niemand hier eingetragen hat — ein
     selbst installiertes ``com.prusa3d.PrusaSlicer`` wird gefunden, weil sein
     letztes Stück derselbe Name ist.
@@ -330,17 +331,17 @@ def sandboxed(program: Path | str | None) -> bool:
 def workspace_for(program: Path | str | None, prefix: str) -> Iterator[Path]:
     """Ein Arbeitsordner, den *dieses* Programm auch lesen kann.
 
-    **Der Fall, der ohne das still scheitert.** OpenSCAD und die Slicer bekommen
-    eine Datei in einen temporären Ordner gelegt und werden darauf gerufen. Unter
+    **Der Fall, der ohne das still scheitert.** Die Slicer bekommen eine
+    Datei in einen temporären Ordner gelegt und werden darauf gerufen. Unter
     Linux legt ``tempfile`` nach ``/tmp`` — und ein Flatpak hat sein **eigenes**
     ``/tmp``. Der Aufruf käme also an, das Programm startete, und es fände die
     Datei nicht: „Can't open input file". Für den Nutzer sähe das aus wie ein
     Fehler von Solidon, unmittelbar nachdem er das Programm über einen Knopf
     installiert hat.
 
-    Nachgesehen, nicht angenommen: Die Flathub-Pakete von OpenSCAD und
-    OrcaSlicer geben beide ``--filesystem=home`` frei und sonst kein
-    Verzeichnis, in dem wir schreiben würden. Der Arbeitsordner liegt für sie
+    Nachgesehen, nicht angenommen: Das Flathub-Paket von OrcaSlicer gibt
+    ``--filesystem=home`` frei und sonst kein Verzeichnis, in dem wir schreiben
+    würden. Der Arbeitsordner liegt für sie
     deshalb im Nutzer-Cache — der liegt unter ``$HOME``, ist an derselben
     Stelle sichtbar wie hier, und darf jederzeit gelöscht werden (§38).
 
@@ -408,7 +409,7 @@ def _from_folders(names: tuple[str, ...]) -> Path | None:
     """Zwei Ebenen unter den üblichen Installationsordnern — kein rekursiver Lauf.
 
     Ein Installationsprogramm legt seine Dateien in einen eigenen Ordner; wie
-    der heißt, ist seine Sache (``ElegooSlicer``, ``OpenSCAD``, ``Ultimaker
+    der heißt, ist seine Sache (``ElegooSlicer``, ``OrcaSlicer``, ``Ultimaker
     Cura 5.7``). Deshalb wird jeder Ordner angesehen und die ausführbare Datei
     beim Namen gefragt — eine Handvoll ``is_file``-Aufrufe statt eines Laufs
     über eine ganze Festplatte.
@@ -520,7 +521,7 @@ def reachable(url: str, seconds: float = PROBE_SECONDS) -> bool:
 
     **Eine unbrauchbare Adresse ist „nicht erreichbar" und kein Absturz.** Was
     hier ankommt, hat jemand in ein Textfeld getippt, und dasselbe Feld meint
-    bei OpenSCAD einen Pfad und bei Ollama eine Adresse. Trägt jemand dort
+    beim Slicer einen Pfad und bei Ollama eine Adresse. Trägt jemand dort
     einen Windows-Pfad ein — am 24.08.2026 tat es ein Kunde mit seinem
     Modellordner —, dann liest ``urlparse`` alles hinter ``C:`` als Port und
     wirft beim Zugriff darauf ``ValueError``. Der fing hier niemand, und der

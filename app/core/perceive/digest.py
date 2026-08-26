@@ -451,13 +451,19 @@ def _stack_lines(document: Document) -> list[str]:
 def _op_call(operation: Operation) -> str:
     """``drill_hole(diameter=6, z=8)`` — die Op als lesbarer Aufruf.
 
-    **Die Werte kommen aus der Projektdatei, und einer davon ist Quelltext.**
-    ``create_from_scad`` trägt sein ganzes Programm im Parameter ``source``
-    (Regel 13) — mehrzeilig, beliebig lang, und bis hierhin lief es
-    ungefiltert in den Verlaufssatz. Damit schrieb ein Schritt so viele Zeilen
-    in den Steckbrief, wie sein Quelltext lang war, in derselben Form wie die
-    echten. :func:`as_value` macht daraus eine Zeile mit :data:`NAME_LIMIT`
-    Zeichen; wer den vollen Quelltext sehen will, liest ihn im Dokument.
+    **Die Werte kommen aus der Projektdatei, und einer davon kann sehr lang
+    sein.** Gefunden wurde es an ``create_from_scad``, das sein ganzes
+    OpenSCAD-Programm im Parameter ``source`` trug — mehrzeilig, beliebig lang,
+    und bis dahin lief es ungefiltert in den Verlaufssatz: Ein Schritt schrieb
+    so viele Zeilen in den Steckbrief, wie sein Quelltext lang war, in
+    derselben Form wie die echten.
+
+    Die Operation ist seit dem 26.08.2026 fort, der Fall nicht. Ein
+    **Sammelparameter** (``kind`` in ``sketch``, ``strokes``, ``armature``)
+    trägt genauso einen beliebig langen Text — eine Skizze als JSON, eine
+    Strichliste, ein Skelett. :func:`as_value` macht daraus eine Zeile mit
+    :data:`NAME_LIMIT` Zeichen; wer den vollen Wert sehen will, liest ihn im
+    Dokument.
     """
     shown: list[str] = []
     for key, value in operation.params.items():

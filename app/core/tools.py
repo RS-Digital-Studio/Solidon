@@ -1,13 +1,19 @@
 """Externe Programme (Bauplan §38, §37.2).
 
-OpenSCAD, der Slicer, Ollama und ComfyUI werden nicht mitgeliefert — sie werden
-konfiguriert. Das ist bei OpenSCAD und den Slicern eine Lizenzentscheidung
-(§36, beide GPL) und beim Rest eine Größenentscheidung, und es bedeutet, dass
-die Anwendung klar sagen können muss, welches davon da ist und welches nicht.
+Der Slicer, Ollama und ComfyUI werden nicht mitgeliefert — sie werden
+konfiguriert. Das ist beim Slicer eine Lizenzentscheidung (§36, GPL) und beim
+Rest eine Größenentscheidung, und es bedeutet, dass die Anwendung klar sagen
+können muss, welches davon da ist und welches nicht.
 
 Nichts davon ist Pflicht. Jedes ist eine Rückfallebene oder eine Zugabe, ein
-Rechner ohne alle vier läuft den ganzen Kernweg (§24.1). Die Erstinbetriebnahme
+Rechner ohne alle drei läuft den ganzen Kernweg (§24.1). Die Erstinbetriebnahme
 *zeigt* diese Liste — sie fordert sie nicht ein.
+
+**Es waren vier, und das vierte war OpenSCAD.** Am 26.08.2026 entfernt: Was es
+tragen sollte, war die Rückfallebene aus §24.1 für Formen ohne Baustein — und
+seit die Skizzen im Haus sind (§30.1), gibt es diese Formen nicht mehr. Ein
+Programm in dieser Liste, das nie gerufen wird, ist eine Aufforderung ohne
+Gegenwert: Der Kunde installiert 40 MB und merkt nichts davon.
 
 **Zwei Arten, zwei Fragen.** Ein Programm wird aufgerufen, es braucht also eine
 Datei; gesucht wird sie von :mod:`app.core.discover`, und zwar nicht nur im
@@ -27,7 +33,7 @@ from pathlib import Path
 from typing import Final, Literal
 
 from app.core import discover
-from app.core.backends import llm, mesh, openscad
+from app.core.backends import llm, mesh
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
 
@@ -111,12 +117,6 @@ SLICERS: Final = (
 )
 
 TOOLS: Final[tuple[ExternalTool, ...]] = (
-    ExternalTool(
-        id="openscad",
-        title="OpenSCAD",
-        what_for=_("Rückfallebene für Formen, für die es keinen Baustein gibt."),
-        executables=openscad.EXECUTABLES,
-    ),
     ExternalTool(
         id="slicer",
         title=_("Slicer"),

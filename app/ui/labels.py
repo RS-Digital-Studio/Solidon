@@ -12,9 +12,9 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
-from PySide6.QtCore import QLocale, Signal
+from PySide6.QtCore import QLocale, Qt, Signal
 from PySide6.QtGui import QColor, QValidator
-from PySide6.QtWidgets import QDoubleSpinBox, QWidget
+from PySide6.QtWidgets import QComboBox, QDoubleSpinBox, QWidget
 
 from app.core import figures
 from app.core.activation import Activation
@@ -559,6 +559,109 @@ _CHOICE_NAMES: dict[str, TranslatableText] = {
 }
 
 
+#: Was ein Auswahlwert **bewirkt** — der Satz zum Namen darüber.
+#:
+#: Der Name benennt, der Satz erklärt: „Würfelgitter" sagt einem Kunden nicht,
+#: wann er es wählen soll, und „Arachne" ist ein Eigenname ohne jede Auskunft.
+#: Roberts Auftrag vom 26.08.2026 („mit Hovereffekten arbeiten, damit man
+#: eher weiß was was eigentlich ist") landet für Auswahlwerte genau hier.
+#:
+#: Dieselben zwei Zusagen wie bei der Namenstabelle: **flach** — derselbe
+#: Schlüssel bedeutet überall dasselbe, sonst bekommt der Wert einen eigenen
+#: Schlüssel —, und **vollständig**: jeder benannte Wert trägt einen Satz,
+#: denn fünfzehn erklärte von siebenundsechzig wären schlimmer als keine
+#: (dieselbe Regel wie bei den note-Sätzen der Felder). Die Vollständigkeit
+#: hält ``tests/test_translations.py`` fest. Selbstnamen („M4", „mm", „z")
+#: stehen wie oben nicht drin — wo der Name die ganze Auskunft ist, wäre ein
+#: Satz Tapete.
+_CHOICE_NOTES: dict[str, TranslatableText] = {
+    "mouth": _("Die Position ist die Öffnung: Die Bohrung beginnt dort und geht ins Material."),
+    # ``centre`` gilt an drei Stellen — Bohranker, Bezugspunkt der Grundkörper,
+    # Fixpunkt von Drehen und Skalieren — und der Satz muss an allen dreien
+    # wahr sein (flache Tabelle, wie beim Namen darüber).
+    "centre": _("Die Mitte als Bezug — nach beiden Seiten geht es gleich weit."),
+    # Die acht Texturmuster — der Dialog zeigt die Kachel dazu, der Satz sagt,
+    # wofür das Muster taugt.
+    "rib": _("Parallele Rillen quer über die Fläche — griffig und schnell gedruckt."),
+    "wave": _("Weiche, wellenförmige Rillen — dekorativ und angenehm zu greifen."),
+    "knurl_straight": _("Gerade Riffelung wie an Werkzeuggriffen — Halt gegen Verdrehen."),
+    "knurl_diamond": _("Gekreuzte Riffelung mit Rautenmuster — der klassische rutschfeste Griff."),
+    "hexagon": _("Sechseckfelder wie eine Bienenwabe — gleichmäßig und technisch."),
+    "dimple": _("Kleine runde Vertiefungen — dezenter Halt ohne scharfe Kanten."),
+    "voronoi": _("Unregelmäßige Zellen wie gesprungenes Glas — organisch, jedes Teil einzigartig."),
+    "noise": _("Feines zufälliges Relief — kaschiert Schichtlinien und Fingerabdrücke."),
+    "none": _("Nichts davon — es kommt nichts hinzu."),
+    "xy": _("Jeder Zug wirkt gespiegelt auch jenseits der X- und der Y-Ebene."),
+    "xz": _("Jeder Zug wirkt gespiegelt auch jenseits der X- und der Z-Ebene."),
+    "yz": _("Jeder Zug wirkt gespiegelt auch jenseits der Y- und der Z-Ebene."),
+    "xyz": _("Jeder Zug wirkt gespiegelt zu allen drei Ebenen zugleich."),
+    "planar": _("Projiziert das Bild flach von oben — für Deckel und ebene Platten."),
+    "cylindrical": _("Wickelt das Bild um die Achse — für Becher, Rohre und runde Gehäuse."),
+    "spherical": _("Legt das Bild über eine Kugelform — für gewölbte Flächen."),
+    "face": _("Wirkt nur auf der gewählten Fläche statt auf dem ganzen Körper."),
+    "raised": _("Steht aus der Fläche hervor — gut lesbar, auch ohne Farbwechsel."),
+    "engraved": _("In die Fläche vertieft — bündig und unempfindlich."),
+    "flat": _("Wird flach aufgelegt, ohne sich der Form zu biegen."),
+    "cylinder": _("Läuft einmal rund um den Körper."),
+    "all": _("Alle zusammen — ohne Auswahl einer einzelnen."),
+    "top": _("Nur an der Oberseite."),
+    "bottom": _("Nur an der Unterseite."),
+    "side": _("An den Seitenflächen — Ober- und Unterseite bleiben frei."),
+    "horizontal": _("Waagerecht, parallel zum Druckbett."),
+    "vertical": _("Senkrecht, quer zum Druckbett."),
+    "linear": _("In gerader Reihe mit gleichem Abstand."),
+    "circular": _("Im Kreis um einen Mittelpunkt verteilt."),
+    "origin": _(
+        "Der Nullpunkt der Szene steht fest — ein Körper abseits davon ändert auch seinen Ort."
+    ),
+    "bed": _(
+        "Die Mitte der Aufstandsfläche steht fest — beim Skalieren bleibt das Teil auf dem Bett."
+    ),
+    "corner": _("Gemessen von der Ecke aus — die Maße wachsen in eine Richtung."),
+    "exact": _("Am echten Netz geprüft — genau, aber langsamer."),
+    "box": _("Nur die Hüllquader verglichen — schnell, meldet aber auch Beinahe-Berührungen."),
+    "pin": _("An diesem Teil entsteht der Stift."),
+    "bore": _("An diesem Teil entsteht die Bohrung."),
+    "foot": _("Der Fuß wird mitgedruckt."),
+    "pocket": _("Eine Tasche nimmt einen gekauften Gummifuß auf."),
+    "rectangle": _("Rechteckiger Umriss aus Länge und Breite."),
+    "circle": _("Runder Umriss aus dem Durchmesser."),
+    "polygon": _("Regelmäßiges Vieleck mit wählbarer Eckenzahl."),
+    "slot": _("Langloch mit runden Enden — für Schrauben, die Spiel brauchen."),
+    "round": _("Runder Stift — einfach und unempfindlich gegen Toleranzen."),
+    "hex": _("Sechskantstift — hält die Teile verdrehsicher."),
+    "dovetail": _(
+        "Schwalbenschwanz: die Teile schieben sich ein und halten quer zur Fuge ohne Kleber."
+    ),
+    "snap": _("Schnapper: rastet beim Zusammendrücken ein und hält von selbst."),
+    "honeycomb": _("Sechseckige Füllung — steif bei wenig Material, langsamer gedruckt."),
+    "cubic": _("Gekippte Würfel — in allen Richtungen gleichmäßig fest, ein guter Standard."),
+    "auto": _("Der passende Wert wird aus dem Zusammenhang bestimmt und zieht von selbst mit."),
+    "aligned": _("Die Naht liegt übereinander an einer Kante — dort fällt sie am wenigsten auf."),
+    "nearest": _("Die Naht liegt am jeweils nächsten Punkt — schnell, aber verstreut sichtbar."),
+    "random": _(
+        "Die Naht springt zufällig — keine durchgehende Linie, dafür überall kleine Punkte."
+    ),
+    "rear": _("Die Naht liegt gesammelt auf der Rückseite — die Schauseite bleibt frei."),
+    "classic": _("Wandbahnen mit fester Breite — vorhersehbar und bewährt."),
+    "arachne": _("Wandbahnen mit veränderlicher Breite — füllt dünne Stellen besser aus."),
+    "gyroid": _(
+        "Geschwungene Flächen, in alle Richtungen gleich fest — auch bei flexiblen Teilen beliebt."
+    ),
+    "grid": _("Gerade Kreuzlinien — schnell gedruckt, fest in zwei Richtungen."),
+    "lines": _("Parallele Bahnen, je Schicht gedreht — am schnellsten, am wenigsten fest."),
+    "triangles": _("Dreiecksraster — sehr steif in der Ebene."),
+    "tree": _("Äste wachsen um das Teil herum — sparsam und leicht zu entfernen."),
+    "everywhere": _("Stützen überall, auch auf dem Teil selbst."),
+    "build_plate": _("Stützen nur vom Druckbett aus — auf dem Teil selbst steht nichts."),
+    "skirt": _("Eine Linie ums Teil, ohne es zu berühren — spült die Düse und prüft die Haftung."),
+    "brim": _("Ein flacher Rand am Teil — mehr Haftfläche, nach dem Druck abzuziehen."),
+    "raft": _(
+        "Ein gedrucktes Floß unter dem Teil — beste Haftung, kostet Zeit und die Unterseite."
+    ),
+}
+
+
 #: Was hinter einem Wert-Schlüssel steht, in der Sprache des Nutzers.
 #:
 #: ``Finding.values`` und ``AppError.values`` tragen Zahlen, und ihre Schlüssel
@@ -612,7 +715,6 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "bones": _("Knochen"),
     "bore": _("Bohrung"),
     "brush": _("Pinsel"),
-    "bytes": _("Bytes"),
     "candidates": _("Kandidaten"),
     "cavities": _("Hohlräume"),
     "chain": _("Kette"),
@@ -719,7 +821,6 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "reason": _("Grund"),
     "room": _("Platz daneben"),
     "reference": _("Bezug"),
-    "refused": _("Abgelehnt"),
     "regions": _("Bereiche"),
     "removed": _("Entfernt"),
     "requested": _("Angefragt"),
@@ -1007,6 +1108,46 @@ def choice_label(value: str) -> str:
     if tube.inner > 0.0:
         return f"{tr('Schlauch')} {length(tube.outer, with_unit=False)} × {length(tube.inner)}"
     return f"{tr('Rundkabel')} Ø{length(tube.outer)}"
+
+
+def choice_note(value: str) -> str | None:
+    """Der Satz zu einem Auswahlwert — oder ``None``, wo der Name genügt.
+
+    Das Gegenstück zu ``choice_label``: der Name sagt, wie der Wert heißt,
+    der Satz sagt, was er bewirkt. ``None`` ist ein gültiges Ergebnis und
+    kein Loch — Selbstnamen wie „M4" oder „mm" erklären sich selbst, und ein
+    Tooltip, der den Namen wiederholt, wäre Tapete. Dass jeder **benannte**
+    Wert einen Satz trägt, hält ``tests/test_translations.py`` fest.
+    """
+    note = _CHOICE_NOTES.get(value)
+    if note is None:
+        return None
+    return str(note)
+
+
+def explain_choices(box: QComboBox) -> None:
+    """Hängt an jeden Eintrag einer Auswahl den Satz seines Werts.
+
+    Die Dialoge legen den rohen Schlüssel als ``itemData`` ab
+    (``addItem(choice_label(choice), choice)``) — genau dort wird er wieder
+    gelesen. Je Eintrag zwei Rollen, dieselbe Doktrin wie bei den Feldsätzen:
+    der Tooltip fürs Schweben über der offenen Liste, die
+    ``AccessibleDescriptionRole`` für den Bildschirmleser (Regel 18 — nicht
+    nur eine Kodierung). Einträge ohne Satz bleiben unangetastet; ein leerer
+    Tooltip ist besser als ein wiederholter Name.
+
+    Nach jeder Neubefüllung erneut aufrufen — ``clear()`` nimmt die Rollen
+    mit den Einträgen mit.
+    """
+    for index in range(box.count()):
+        value = box.itemData(index)
+        if not isinstance(value, str):
+            continue
+        note = choice_note(value)
+        if note is None:
+            continue
+        box.setItemData(index, note, Qt.ItemDataRole.ToolTipRole)
+        box.setItemData(index, note, Qt.ItemDataRole.AccessibleDescriptionRole)
 
 
 #: Wie eine Fläche heißt, deren Normale in diese Richtung zeigt. Die Reihenfolge

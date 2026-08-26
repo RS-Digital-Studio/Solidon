@@ -11,9 +11,10 @@ Anfahrwege, Start- und Endcode, die Eigenheiten einer Kinematik. Das steht in
 den Profilen, die der Slicer mitbringt, und genau dort bleibt es. Solidon
 setzt sein Profil darauf — es überschreibt, es ersetzt nicht.
 
-Ein Lauf ist abgesichert wie der OpenSCAD-Lauf (§32): feste Argumentliste,
-kein Shell, eigener Arbeitsordner, Zeitlimit. Der Unterschied ist, dass hier
-kein fremder Quelltext läuft, sondern ein Programm auf eine Datei zeigt.
+Ein Lauf ist abgesichert nach §32: feste Argumentliste, kein Shell, eigener
+Arbeitsordner, Zeitlimit. Hier läuft kein fremder Quelltext, sondern ein
+Programm zeigt auf eine Datei — seit dem OpenSCAD-Ausbau ist das der einzige
+Fall, den es in Solidon noch gibt.
 """
 
 from __future__ import annotations
@@ -1323,8 +1324,7 @@ def _run_slicer(
     ``subprocess.run`` wartete blind: Eine Zeitüberschreitung flog als roher
     ``TimeoutExpired`` aus dem Arbeits-Thread, der fing nur ``AppError`` —
     der Dialog stand dauerhaft auf „Der Slicer rechnet …" (Regel 17, §2.8).
-    Der Zwilling ``openscad.render`` behandelt denselben Fall längst. Und
-    abzubrechen gab es nichts: der Kindprozess lief, bis er fertig war,
+    Und abzubrechen gab es nichts: der Kindprozess lief, bis er fertig war,
     gleich was der Nutzer wollte.
     """
     try:
@@ -1547,8 +1547,8 @@ def slice_model(
         )
 
     started = time.perf_counter()
-    # Derselbe Grund wie beim OpenSCAD-Aufruf: Ein Slicer als Flatpak sieht
-    # unser ``/tmp`` nicht (``discover.workspace_for``).
+    # Ein Slicer als Flatpak sieht unser ``/tmp`` nicht
+    # (``discover.workspace_for``).
     with discover.workspace_for(setup.executable, "solidon-slice-") as workspace:
         config = write_config(settings, profile, setup, workspace, slots)
         # Aus demselben Grund wie die Modellpfade: der Slicer schreibt sonst
