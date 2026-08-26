@@ -24,7 +24,7 @@ from app.i18n import _
 _log = get_logger(__name__)
 
 #: Aktuelle Version von ``project.json``.
-FORMAT_VERSION: Final = 11
+FORMAT_VERSION: Final = 12
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,6 +195,23 @@ def _fold_split_plane_into_split_pinned(data: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _add_edited_operations(data: dict[str, Any]) -> dict[str, Any]:
+    """11 → 12: Eine Transaktion kann die Fassungen eines geänderten Schritts
+    tragen (``edited_ops`` in den Änderungsseiten, §15.4, §15.5).
+
+    Bis Version 11 schrieben die drei Änderungswege — Parameter, Eingänge,
+    Rechenkern — am Verlauf vorbei ins Dokument: Der alte Stand war nach dem
+    Speichern unwiederbringlich, und ein Undo traf einen anderen Schritt.
+
+    **Umzurechnen gibt es nichts, und das ist die eigentliche Aussage:** Eine
+    alte Datei hat solche Fassungen nicht, und keine zu haben heißt, dass es
+    dort nichts zurückzulegen gibt — die Änderungen von damals sind längst
+    die einzige Fassung ihrer Schritte. Dieselbe Entscheidung wie bei den
+    Vermerken in Schritt 9 → 10.
+    """
+    return data
+
+
 #: Alle bekannten Schritte, älteste zuerst.
 MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=1, to_version=2, apply=_add_chat),
@@ -207,6 +224,7 @@ MIGRATIONS: Final[tuple[Step, ...]] = (
     Step(from_version=8, to_version=9, apply=_add_feature_matches),
     Step(from_version=9, to_version=10, apply=_add_translatable_params),
     Step(from_version=10, to_version=11, apply=_fold_split_plane_into_split_pinned),
+    Step(from_version=11, to_version=12, apply=_add_edited_operations),
 )
 
 

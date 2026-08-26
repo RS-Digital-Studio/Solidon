@@ -250,6 +250,17 @@ def state_to_data(state: DocumentState) -> dict[str, Any]:
             "fits": None if state.fits is None else [fit_to_data(entry) for entry in state.fits],
             "printer": state.printer,
             "material": state.material,
+            # Seit v12: die Fassung eines nachträglich geänderten Schritts —
+            # beide Seiten reisen mit, sonst ist der alte Stand nach dem
+            # Speichern unwiederbringlich (§15.4, §15.5).
+            "edited_ops": (
+                None
+                if state.edited_ops is None
+                else {
+                    str(op_id): operation_to_data(version)
+                    for op_id, version in state.edited_ops.items()
+                }
+            ),
         }
     )
 
@@ -257,7 +268,13 @@ def state_to_data(state: DocumentState) -> dict[str, Any]:
 def state_from_data(data: dict[str, Any]) -> DocumentState:
     parameters = data.get("parameters")
     fits = data.get("fits")
+    edited = data.get("edited_ops")
     return DocumentState(
+        edited_ops=(
+            None
+            if edited is None
+            else {int(op_id): operation_from_data(version) for op_id, version in edited.items()}
+        ),
         parameters=(
             None
             if parameters is None

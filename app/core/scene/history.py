@@ -75,6 +75,17 @@ def restore(document: Document, state: DocumentState) -> None:
         document.printer = state.printer
     if state.material is not None:
         document.material = state.material
+    if state.edited_ops is not None:
+        # Der Schritt behält Kennung und Platz, nur seine Fassung wechselt
+        # (§15.4) — deshalb Tausch an Ort und Stelle, kein Entfernen und
+        # Anhängen. Eine Kennung, die es nicht mehr gibt, wird übergangen:
+        # Dann hat eine andere Transaktion den Schritt mitgenommen, und die
+        # Auswertung meldet, was ihr fehlt.
+        for op_id, version in state.edited_ops.items():
+            for index, entry in enumerate(document.ops):
+                if entry.id == op_id:
+                    document.ops[index] = version
+                    break
 
 
 #: Eine Änderung, die erst feststeht, wenn die Operationen geplant sind.
@@ -468,12 +479,9 @@ class History:
         else:
             outputs = entry.outputs
 
-        self._forget_undone()
         changed = dataclasses.replace(entry, params=dict(merged), outputs=tuple(outputs))
-        self.document.ops[self.document.ops.index(entry)] = changed
-        self._record_numbering()
         _log.info("changed parameters of op %s (%s)", op_id, entry.op)
-        return changed
+        return self._swap_operation(spec.title, entry, changed)
 
     def change_inputs(self, op_id: OpId, inputs: Sequence[ObjectId]) -> Operation:
         """Gibt einem Schritt andere Objekte, auf denen er arbeitet (§15.4).
@@ -520,11 +528,9 @@ class History:
                 suggestions=(CHANGE_SELECTION, CANCEL),
             )
 
-        self._forget_undone()
         changed = dataclasses.replace(entry, inputs=tuple(inputs))
-        self.document.ops[self.document.ops.index(entry)] = changed
         _log.info("changed inputs of op %s (%s) to %s", op_id, entry.op, list(inputs))
-        return changed
+        return self._swap_operation(spec.title, entry, changed)
 
     def change_kernel(self, op_id: OpId, op_name: str, params: Mapping[str, Any]) -> Operation:
         """Stellt einen Schritt auf seinen Zwilling um — denselben Schritt im
@@ -572,10 +578,45 @@ class History:
         # **Nicht** mit den alten verschmelzen, anders als ``change_params``:
         # Die beiden Schemata sind verschieden, und ein ``anchor`` aus dem
         # Netz-Quader wäre am exakten ein unbekannter Parameter.
-        self._forget_undone()
         changed = dataclasses.replace(entry, op=op_name, params=dict(params))
-        self.document.ops[self.document.ops.index(entry)] = changed
         _log.info("switched op %s from %s to %s", op_id, entry.op, op_name)
+        return self._swap_operation(spec.title, entry, changed)
+
+    def _swap_operation(
+        self, title: TranslatableText | str, entry: Operation, changed: Operation
+    ) -> Operation:
+        """Ersetzt einen Schritt als Transaktion mit beiden Fassungen (§15.5).
+
+        Die drei Änderungswege — Parameter, Eingänge, Rechenkern — schrieben
+        am Verlauf vorbei ins Dokument: Der alte Stand war unwiederbringlich
+        weg, und Strg+Z nahm stattdessen die letzte Transaktion, also einen
+        anderen Schritt (Gesamtreview-b, Bericht 01, Szene 5; kern.md: am
+        Dokument wird nie vorbei geschrieben). Jetzt trägt eine Transaktion
+        ohne eigene Operationen beide Fassungen (``DocumentState.edited_ops``),
+        und ``restore`` legt sie in beide Richtungen zurück — dieselbe
+        Mechanik wie für Parameter und Passungen, denn es ist dieselbe Zusage.
+
+        Der Verlauf wächst dabei um keinen Schritt (§15.4): Die Operation
+        behält Kennung und Platz, nur ihre Fassung wechselt. Was wächst, ist
+        die Liste der Transaktionen, und genau die trägt das Undo. Als Titel
+        steht der Titel des Schritts — die Transaktion **ist** seine neue
+        Fassung, kein eigener Text ohne Katalognachzug.
+        """
+        self._reseed()
+        self._forget_undone()
+        changes = DocumentChange(
+            before=DocumentState(edited_ops={entry.id: entry}),
+            after=DocumentState(edited_ops={entry.id: changed}),
+        )
+        transaction = Transaction(
+            id=f"t{next(self._next_transaction)}",
+            title=title,
+            ops=(),
+            changes=changes,
+        )
+        self.document.transactions.append(transaction)
+        self._record_numbering()
+        restore(self.document, changes.after)
         return changed
 
     def _later_users(self, op_id: OpId, objects: tuple[ObjectId, ...]) -> set[OpId]:

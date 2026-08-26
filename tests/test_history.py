@@ -326,6 +326,59 @@ def test_a_transaction_may_consist_of_changes_alone(history: History) -> None:
     assert history.can_undo
 
 
+def test_changing_params_is_a_transaction_and_undo_restores_them(history: History) -> None:
+    """Strg+Z traf einen anderen Schritt (Gesamtreview-b, Bericht 01, Szene 5).
+
+    ``change_params`` schrieb an jeder Transaktion vorbei ins Dokument: Der
+    alte Wert war unwiederbringlich weg, und ein Undo entfernte stattdessen
+    die letzte Transaktion — gemessen: die ganze Bohrung verschwand, der
+    geänderte Durchmesser blieb. Jetzt ist die Änderung selbst eine
+    Transaktion mit beiden Fassungen (kern.md: am Dokument wird nie vorbei
+    geschrieben), und der Verlauf wächst dabei um keinen Schritt (§15.4).
+    """
+    create(history)
+    op_id = history.operations[-1].id
+    before = len(history.document.transactions)
+
+    history.change_params(op_id, {"count": 7})
+
+    assert history.operations[-1].params["count"] == 7
+    assert len(history.document.transactions) == before + 1, "die Änderung ist eine Transaktion"
+    assert len(history.operations) == 1, "und der Verlauf wächst um keinen Schritt"
+
+    history.undo()
+    assert [entry.op for entry in history.operations] == ["make_object"], "der Schritt bleibt"
+    # Die Ur-Fassung trug keinen Wert — die Vorgabe lebt im Schema. Genau so
+    # muss sie zurückkommen: ein materialisiertes ``count`` wäre eine zweite,
+    # stillere Änderung.
+    assert "count" not in history.operations[-1].params, "das Undo stellt die Ur-Fassung her"
+
+    history.redo()
+    assert history.operations[-1].params["count"] == 7, "und das Redo die Änderung"
+
+
+def test_changed_inputs_and_their_undo_survive_saving(history: History, registry: Registry) -> None:
+    """Beide Fassungen reisen in der Datei mit (Format v12).
+
+    Der gemessene Kern des Fundes: Nach Ändern, Speichern und Öffnen war der
+    alte Stand nirgends mehr — kein Undo der Welt konnte ihn holen. Die
+    Transaktion trägt Vorher- und Nachher-Fassung des Schritts, also kann
+    eine frische ``History`` über der wiedergeöffneten Datei zurücknehmen.
+    """
+    first = create(history)
+    second = create(history)
+    history.apply(_("Umbenennen"), [OperationDraft(op="rename_object", inputs=(first,))])
+    op_id = history.operations[-1].id
+
+    history.change_inputs(op_id, [second])
+    assert history.operations[-1].inputs == (second,)
+
+    reloaded = document_from_data(document_to_data(history.document))
+    again = History(reloaded, registry)
+    again.undo()
+    assert again.operations[-1].inputs == (first,), "die Vorher-Fassung überlebt das Speichern"
+
+
 def test_undo_puts_a_changed_parameter_back(history: History) -> None:
     document = history.document
     document.parameters["width"] = _parameter("width", 84.0)

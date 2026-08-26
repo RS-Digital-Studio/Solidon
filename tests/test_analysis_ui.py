@@ -669,9 +669,17 @@ def test_the_menu_entry_opens_that_step(window: MainWindow) -> None:
     hört. Geprüft wird deshalb bis ans Ende: Der Dialog steht offen, er zeigt
     die Operation, die das Merkmal erzeugt hat, und er **ersetzt** ihren
     Schritt beim Übernehmen, statt einen zweiten anzulegen (§15.4).
+
+    „Kein zweiter Schritt" wird an der **Schrittliste** gemessen, nicht an
+    der Transaktionszahl: Die erste Fassung nagelte hier fest, dass die
+    Änderung keine Transaktion anlegt — und damit den Fehler, dass sie nicht
+    rücknehmbar war (Gesamtreview-b, Bericht 01, Szene 5; tests.md: „Prüft
+    dieser Test eine Zusage — oder den Ist-Zustand?"). Seit Format v12 IST
+    die Transaktion Teil der Zusage: eine dazu, der Stapel unverändert.
     """
     _insert_a_thread(window)
-    before = len(window.session.project.document.transactions)
+    steps_before = [entry.id for entry in window.session.project.document.ops]
+    transactions_before = len(window.session.project.document.transactions)
     menu = window.object_tree.context_menu()
     assert menu is not None
     for action in menu.actions():
@@ -685,8 +693,12 @@ def test_the_menu_entry_opens_that_step(window: MainWindow) -> None:
 
     dialog.accept()
     window.session.wait_for_idle()
-    assert len(window.session.project.document.transactions) == before, (
-        "derselbe Schritt, ersetzt — kein zweiter im Stapel"
+    document = window.session.project.document
+    assert [entry.id for entry in document.ops] == steps_before, (
+        "derselbe Schritt, ersetzt — kein zweiter im Stapel, keiner weg"
+    )
+    assert len(document.transactions) == transactions_before + 1, (
+        "und die Änderung ist rücknehmbar: genau eine Transaktion dazu (§15.5)"
     )
 
 

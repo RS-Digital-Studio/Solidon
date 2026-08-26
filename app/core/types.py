@@ -1078,6 +1078,15 @@ class DocumentState:
     fits: tuple[Fit, ...] | None = None
     printer: str | None = None
     material: str | None = None
+    edited_ops: Mapping[OpId, Operation] | None = None
+    """Je Schrittkennung die vollständige Fassung dieser Seite (§15.4, §15.5).
+
+    Für das nachträgliche Ändern eines Schritts — andere Parameter, andere
+    Eingänge, der Zwilling im anderen Rechenkern: Der Schritt behält Kennung
+    und Platz, nur seine Fassung wechselt, und die Transaktion trägt beide.
+    Ohne dieses Feld schrieben die drei Änderungswege am Verlauf vorbei, und
+    ein Strg+Z traf einen anderen Schritt, während der alte Wert
+    unwiederbringlich weg war. Seit Format v12 in der Datei."""
 
 
 @dataclass(frozen=True, slots=True)
