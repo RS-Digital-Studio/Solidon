@@ -133,6 +133,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Kleinreste: tote profile-Zweige, unbenutztes height | Was der Gesamtreview liegen ließ (25.08.2026) | niemanden — sie werfen nur beziehungsweise stören nicht; notiert, damit sie ein Kästchen haben |
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Handbuch-PDF ohne Bilder | Das Handbuch-PDF druckt seine Bilder nicht mit (26.08.2026) | eine Messung auf der Chromium-Seite: druckt `printToPdf` Rasterbilder aus `file://`, und trägt ein Gegenversuch mit `data:`-URIs |
+| Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | die Trennung, welche Felder an der Spule hängen und welche am Teil — danach Oberfläche und Übergabe je Extruder |
+| Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 
 ---
 
@@ -10455,3 +10457,26 @@ Bytes. Die Absicht stand im Kommentar, die Bedingung hat sie nie geprüft.
   Zeitfrage. Dazu gehört eine Erfolgsbedingung, die Bilder **verlässlich**
   zählt: Ein Grep auf `/Subtype /Image` liefert bei komprimierten Objektströmen
   auch über einem guten PDF null und taugt nur als Befund, nicht als Tor.
+
+## Was Robert am 26.08.2026 aufgetragen hat
+
+Zwei Aufträge aus dem Tag der 0.2.0-Veröffentlichung, beide von Robert selbst
+und beide noch nicht angefangen.
+
+- [ ] **Einstellungen je Filament.** Solidons eigene Felder — Temperaturen,
+  Kühlung — sollen sich **je Materialslot** übersteuern lassen, und die
+  Übergabe an den Slicer soll sie je Extruder mitgeben. Die Grenze ist dabei
+  die Sache selbst: übersteuerbar ist, was **an der Spule hängt** und sich
+  physikalisch von Filament zu Filament unterscheidet. Geometrie gehört nicht
+  dazu — Wandstärken und Schichthöhen sind Eigenschaften des Teils und nicht
+  des Materials, und ein Feld, das beides vermischt, macht aus einem
+  zweifarbigen Teil zwei verschiedene Teile.
+
+- [ ] **Am 15.10.2026 die Verkaufsbereitschaft prüfen.** Sind Finanzamt und
+  Merchant of Record bis dahin nicht durch, wird die Demo verlängert — und das
+  ist kein Serverschalter, sondern ein **Bau**: `DEMO_UNTIL` ist einkompiliert,
+  eine Verlängerung heißt also 0.2.1 mit allem, was dazugehört. Dazu kommt eine
+  Woche Vorlauf, damit der Update-Hinweis die Kunden erreicht, **bevor** die
+  Frist läuft. Wer den Termin verstreichen lässt, hat nicht eine Woche
+  Rückstand, sondern zwei — und dazwischen steht bei jedem Kunden eine
+  Anwendung, die sich abgelaufen meldet, obwohl niemand etwas kaufen konnte.
