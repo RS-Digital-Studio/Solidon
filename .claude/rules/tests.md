@@ -498,16 +498,35 @@ die Ursache: Mit den 67 neuen `tr()`-Quellen war `origin/main` rot, bis die
 Kataloge nachkamen — ein Fenster, das der Urheber der Kataloge nicht geöffnet
 hatte.
 
-**Der Handgriff dagegen kostet fünf Sekunden, und er ist ein Zweischritt:**
+**Der Handgriff dagegen kostet fünf Sekunden, und er hat drei Glieder:**
 
 1. **Die eigene Zahl ansagen, bevor man hinsieht** — „ich lösche zwei Zeilen,
-   füge keine ein".
-2. Dann `git diff HEAD --numstat -- <pfade>` dagegen halten.
+   füge keine ein". Dann `git diff HEAD --numstat -- <pfade>` dagegen halten.
+2. `git status --porcelain | grep "^ D"` — **gelöschte Dateien**.
+3. `git status --porcelain | grep "^??"` auf den eigenen Pfaden — **neue
+   Dateien**.
 
-Die Reihenfolge ist der ganze Punkt. Wer erst die Zahlen liest und danach
-überlegt, ob sie passen, nickt den Istwert ab; das ist dieselbe Figur wie der
-Sollwert aus dem Prüfling. Bei zwei gelöschten Zeilen schreit „145 insertions"
-schon beim Ansagen — dafür braucht es den Diff nicht einmal.
+Die Reihenfolge im ersten Glied ist der ganze Punkt. Wer erst die Zahlen liest
+und danach überlegt, ob sie passen, nickt den Istwert ab; das ist dieselbe
+Figur wie der Sollwert aus dem Prüfling. Bei zwei gelöschten Zeilen schreit
+„145 insertions" schon beim Ansagen — dafür braucht es den Diff nicht einmal.
+
+**Die Glieder 2 und 3 sind da, weil `--numstat` blind ist für alles, was nicht
+im Index steht.** `-o` nimmt den Stand **verfolgter** Dateien; eine gelöschte
+braucht `git add -u`, eine neue `git add`, und beide tauchen ohne das in
+keiner Zahl auf. Am 26.08.2026 beide Seiten an einem Tag:
+
+- Der OpenSCAD-Ausbau löschte `app/core/backends/openscad.py` und
+  `tests/test_openscad.py`. Die zweite stand in keiner Pfadliste — die Datei
+  blieb auf origin stehen, ihr Import griff nach dem entfernten Modul, und
+  **jeder CI-Lauf starb schon beim Einsammeln**. Der Paketbau hängt an der
+  Suite, also blockierte es den Release.
+- Auf der Neu-Seite dasselbe mit sechzig Handbuchbildern.
+
+**Und der Grund, warum kein lokaler Lauf dagegen sichert:** Der eigene
+Arbeitsbaum trägt die Löschung ja. Dort ist alles grün, und zwar zu Recht. Die
+einzige Stelle, an der es auffällt, ist ein Klon ohne diesen Baum — die CI.
+Deshalb sichert nur die Ansage, nicht das Fahren.
 
 Und das ist der eigentliche Punkt: Die Zahl **stand da**. Der Diff-Stat vor dem
 Commit nannte `app/ui/labels.py | 149 ++++-`, und gelesen wurde die
