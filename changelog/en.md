@@ -46,9 +46,6 @@ it into `website/version.json`.
 - The filament choice per material slot reaches the slicer. What was stored was the display text instead of the profile.
 - A modified project is no longer lost when you drag a file onto the start screen — you are asked first.
 - A chat proposal that takes steps back now says beforehand which ones go with it. And Cancel really cancels instead of computing on in the background.
-- A wrongly set clock no longer takes the demo with it: a computer whose date was in the future burned the period for good.
-- Anyone with a licence is no longer asked to buy when a program file is damaged, but learns what is really going on.
-- A project file from someone else says before the first computation if it brings source code for an external program — on every path and at any nesting depth.
 
 
 ## 0.1.5

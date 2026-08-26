@@ -46,9 +46,6 @@ schreibt ihn in `website/version.json`.
 - Die Filamentwahl je Materialslot kommt beim Slicer an. Gespeichert wurde bisher der Anzeigetext statt des Profils.
 - Ein geändertes Projekt geht nicht mehr verloren, wenn Sie eine Datei auf den Startbildschirm ziehen — es wird vorher gefragt.
 - Ein Vorschlag des Chats, der Schritte zurücknimmt, sagt vorher, welche mitgehen. Und Abbrechen bricht wirklich ab, statt im Hintergrund weiterzurechnen.
-- Eine falsch gestellte Uhr nimmt die Demo nicht mehr mit: Ein Rechner, dessen Datum in der Zukunft stand, verbrannte die Frist dauerhaft.
-- Wer eine Lizenz hat, wird bei einer beschädigten Programmdatei nicht mehr zum Kauf aufgefordert, sondern erfährt, was wirklich los ist.
-- Eine Projektdatei von jemand anderem sagt vor dem ersten Rechnen, wenn sie Quelltext für ein externes Programm mitbringt — auf jedem Weg und in jeder Verschachtelung.
 
 
 ## 0.1.5

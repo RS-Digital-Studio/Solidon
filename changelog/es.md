@@ -47,9 +47,6 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 - La elección de filamento por ranura de material llega al slicer. Antes se guardaba el texto mostrado en vez del perfil.
 - Un proyecto modificado ya no se pierde al arrastrar un archivo a la pantalla de inicio — se pregunta antes.
 - Una propuesta del chat que retira pasos dice de antemano cuáles se van con ella. Y Cancelar cancela de verdad, en vez de seguir calculando en segundo plano.
-- Un reloj mal ajustado ya no se lleva la demo: un ordenador con la fecha en el futuro quemaba el plazo para siempre.
-- Quien tiene licencia ya no recibe una invitación a comprar cuando un archivo del programa está dañado, sino que se entera de lo que pasa realmente.
-- Un archivo de proyecto de otra persona avisa antes del primer cálculo si trae código fuente para un programa externo — por cualquier vía y a cualquier profundidad.
 
 
 ## 0.1.5

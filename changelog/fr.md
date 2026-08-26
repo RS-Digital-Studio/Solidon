@@ -47,9 +47,6 @@ dans `website/version.json`.
 - Le choix de filament par emplacement de matériau parvient au trancheur. C'était le texte affiché qui était enregistré, pas le profil.
 - Un projet modifié n'est plus perdu quand vous glissez un fichier sur l'écran d'accueil — la question est posée avant.
 - Une proposition du chat qui retire des étapes dit d'avance lesquelles partent avec elle. Et Annuler annule vraiment au lieu de continuer à calculer en arrière-plan.
-- Une horloge mal réglée n'emporte plus la démo : un ordinateur daté dans le futur brûlait le délai définitivement.
-- Qui possède une licence n'est plus invité à acheter lorsqu'un fichier du programme est endommagé, mais apprend ce qui se passe vraiment.
-- Un fichier de projet venu d'ailleurs prévient avant le premier calcul s'il apporte du code source pour un programme externe — par tout chemin et à toute profondeur.
 
 
 ## 0.1.5

@@ -46,9 +46,6 @@ scrive in `website/version.json`.
 - La scelta del filamento per posto materiale arriva allo slicer. Finora veniva salvato il testo mostrato invece del profilo.
 - Un progetto modificato non va più perso quando trascini un file sulla schermata iniziale — prima viene chiesto.
 - Una proposta della chat che ritira dei passi dice prima quali se ne vanno con essa. E Annulla annulla davvero, invece di continuare a calcolare in sottofondo.
-- Un orologio impostato male non si porta più via la demo: un computer con la data nel futuro bruciava il termine per sempre.
-- Chi ha una licenza non viene più invitato ad acquistare quando un file del programma è danneggiato, ma scopre cosa succede davvero.
-- Un file di progetto di qualcun altro avvisa prima del primo calcolo se porta codice sorgente per un programma esterno — per ogni via e a ogni livello.
 
 
 ## 0.1.5
