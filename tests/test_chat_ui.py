@@ -260,6 +260,78 @@ def test_only_harmless_proposals_run_by_themselves(window: MainWindow) -> None:
     assert not agent_apply.auto_acceptable(undo), "eine Rücknahme bleibt eine Entscheidung"
 
 
+def test_a_stopped_turn_is_not_swallowed_by_the_empty_shortcut(window: MainWindow) -> None:
+    """Fund 20, zweite Hälfte: leer und angehalten ist kein Auskunftszug.
+
+    Die Leer-Abkürzung verwarf den Vorschlag sofort und zeigte nichts mehr —
+    bei einer Verweigerung blieb die Blase dazu leer, und der Kunde sah ein
+    Gespräch, das grundlos endete.
+    """
+    from app.core.agent.proposal import Proposal
+
+    refused = Proposal(request="x")
+    refused.stopped = "refused"
+    shown: list[object] = []
+    window.chat.show_proposal = lambda preview: shown.append(preview)  # type: ignore[method-assign]
+    preview = ProposalPreview(proposal=refused)
+
+    window._on_proposal(preview)
+
+    assert shown and shown[-1] is preview, "die angehaltene Antwort bleibt sichtbar"
+    assert window._proposal is preview, "und sie wartet auf die Entscheidung"
+
+
+def test_proposal_findings_reach_the_report(window: MainWindow) -> None:
+    """Fund 3: Die Befunde eines Zugs hatten keinen Anzeigeweg.
+
+    Verweigerung, Abschneiden und die Prüfungen nach jeder Op standen am
+    Vorschlag und nirgends im Fenster — der Prüfbericht ist ihr Ort, wie für
+    jeden anderen Befund.
+    """
+    from app.core.agent.proposal import Proposal
+    from app.core.types import Finding
+
+    told = Proposal(request="x")
+    told.findings.append(Finding(code="agent.refused", severity="warning", message="nein"))
+    caught: list[list[Finding]] = []
+    window.report.add_findings = lambda findings: caught.append(list(findings))  # type: ignore[method-assign]
+
+    window._on_proposal(ProposalPreview(proposal=told))
+
+    assert caught and caught[0][0].code == "agent.refused", "der Befund erreicht den Bericht"
+
+
+def test_a_failed_acceptance_shows_the_error_and_keeps_the_proposal(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fund 21: ``history_moved`` verpuffte auf stderr, der Klick blieb stumm.
+
+    Der Fehler trägt seine Handlung (§2.7) und gehört vor den Kunden; der
+    Vorschlag bleibt stehen — ihn wegzuräumen wäre die zweite stumme Folge
+    desselben Klicks, und Verwerfen geht weiterhin.
+    """
+    from app.core.agent.proposal import Proposal
+
+    preview = ProposalPreview(proposal=Proposal(request="x"))
+    window._proposal = preview
+
+    from app.core.errors import ValidationError
+
+    def refusing(_preview: object) -> object:
+        raise ValidationError("proposal", "der Stapel hat sich bewegt")
+
+    monkeypatch.setattr(window.session, "accept_proposal", refusing)
+    shown: list[object] = []
+    monkeypatch.setattr(
+        "app.ui.main_window.show_error", lambda error, *args, **kwargs: shown.append(error)
+    )
+
+    window._on_proposal_accepted()
+
+    assert shown, "der Fehler erreicht den Kunden"
+    assert window._proposal is preview, "der Vorschlag bleibt stehen"
+
+
 def test_an_answer_only_turn_needs_no_decision(window: MainWindow) -> None:
     """Regel 19 im Geist: ein reiner Auskunftszug bekommt keine
     Übernehmen/Verwerfen-Leiste über „Keine Änderung" — er wird sofort
