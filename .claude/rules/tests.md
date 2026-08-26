@@ -172,6 +172,41 @@ Blending 1,33 s, Skizzenlöser 0,21 s).
 
 Das ist der einzige Teil des Tors, dessen Rot nicht „nicht fertig" bedeutet.
 
+### Die Regel fängt Fremdlast — sie fängt keinen Wert, der um die Schwelle streut
+
+„Zweimal fahren" trennt Last von Code, weil Last kommt und geht: Schwankt die
+**Menge** der roten Tests, war es die Maschine. Ein einzelner Messwert, der um
+die Regressionsschwelle **streut**, erfüllt dieselbe Regel dagegen zuverlässig
+— er reißt in Serie und wird von selbst wieder grün, ohne dass sich eine Zeile
+geändert hätte. In der Ausgabe sieht beides identisch aus.
+
+Am 26.08.2026 an `orient_200` durchgespielt, fünf Messungen aus zwei
+Sitzungen, alle einzeln und unter dem Schloss:
+
+| | ms | gegen die Schwelle |
+|---|---|---|
+| ce | 18 958 · 19 568 | darüber |
+| a2 | 19 442 · 19 804 | darüber |
+| ce, Torlauf | grün | darunter |
+
+Bestmarke 15 151 ms, Schwelle also 18 939 ms. Vier Überschreitungen in Folge —
+nach der Regel oben eine Regression —, und der fünfte Lauf setzte `strikes`
+zurück. **Der Wert liegt nicht über der Schwelle, er liegt auf ihr.**
+
+Der Unterschied ist keine Nuance, weil er auf zwei verschiedene Suchen
+schickt: „stabil verschlechtert" heißt, jemand sucht eine Ursache im Code.
+„Streut über die Schwelle" heißt, jemand prüft die **Bestmarke** — stammt sie
+aus einem besonders ruhigen Lauf? Entschieden wird das durch eine Messreihe
+gegen einen **älteren Stand**, nicht durch einen weiteren Lauf gegen den
+heutigen.
+
+**Und zwei Läufe im selben Zeitfenster sind eine Messung.** Am selben Tag hat
+eine Sitzung `app_start` als Release-Blocker gemeldet (4154 und 4425 ms gegen
+3 s Ziel) — zwei Läufe kurz hintereinander, und ihre Übereinstimmung wurde für
+Bestätigung gehalten. Eine zweite Sitzung maß 2,46 und 2,57 s, ein späterer
+Solo-Lauf war grün. Was die Regel oben verlangt, ist nicht „zweimal", sondern
+**zweimal unter anderen Bedingungen**.
+
 ## Fremdlast macht auch funktionale Tests rot, nicht nur Messungen langsam
 
 Der Abschnitt oben handelt von Zeiten, und deshalb liest man ihn als Regel für
