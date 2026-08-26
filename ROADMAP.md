@@ -106,7 +106,12 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Zwei Pakete lösen den Deadlock noch nicht auf | Ein Deadlock, der keiner war — und sieben Pakete statt einem (23.08.2026) | einen **Verhaltenswechsel**, keinen Strukturfix — und deshalb je einen eigenen Schritt. `activation`: 223 Zeilen Code an der Lizenzgrenze im `__init__`, die Ladereihenfolge dort ändert man nicht, ohne die Grenze mitzuprüfen. `knowledge.parts`: dort **ist** der Import die Registrierung — die fünf Modulimporte füllen das Bausteinregister, und `bootstrap.load_operations` verlässt sich darauf; verzögert wären sie wirkungslos. Die anderen fünf Pakete sind seit dem 23.08. sauber, `tests/test_core_isolation.py` führt beide Namen mit Begründung |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 | Vier Stapel zeigen auf `session.py:1515` | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **Lebensdaueruntersuchung**, keinen `gc`-Schutz: Der Sammler ist an zwei Messungen zu verschiedenen Zeiten als Ursache ausgeschlossen. Und die vier Stapel sind ein Zeuge, viermal gefragt — `wait(50)` blockiert in C, der Rahmen steht dort ohnehin. Der Weg führt über die Aufräum-Fixture und trifft damit **jede** Fensterdatei |
-| Der Cache spart die Geometrie, nicht die Erkennung | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | zuerst eine **Messung**, wie viel der sechs Sekunden überhaupt auf `detect()` entfällt. `_with_features()` läuft nach jedem Operationsergebnis, auch nach einem Cache-Treffer, wo das Netz bitgleich ist — fünfzehn Läufe über denselben Körper. Der Umbau ist nicht trivial: Der Plattencache nimmt nur `MeshData`, und die Zuordnung hängt an den vorigen Merkmalen und an `operation.matches` (§15.7) |
+| Der Cache spart die Geometrie, nicht die Erkennung | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | **die Messung ist am 26.08.2026 gefahren, und sie hat die Vermutung widerlegt.** Nicht `detect()` kostet die Zeit (0,12 s), sondern `match()` — 101,6 s bei `weg3-generiert-aufbereiten`, quadratisch in der Merkmalszahl. Es waren auch nicht sechs Sekunden, sondern hundertzwei. Der Cache ist dabei unschuldig: Alle vier Einträge entstehen und treffen beim zweiten Lauf; `_with_features()` steht schlicht **außerhalb** der Abfrage (`evaluate.py:427`). Der Umbau bleibt nicht trivial (der Plattencache nimmt nur `MeshData`, die Zuordnung hängt an den vorigen Merkmalen und an `operation.matches`, §15.7) — **und er hilft dem ersten Öffnen beim Kunden gar nicht**, also genau dem Fall, um den es ging. Die Ursache der 102 s ist eigens behoben; was hier offen bleibt, ist der Cache über die Erkennung, und der lohnt nach dieser Messung am wenigsten |
+| `match()` ist quadratisch und läuft in reinem Python | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | eine **Vektorisierung** von `app/core/perceive/matching.py` — zwei Python-Schleifen über N² (Matrixaufbau Zeile 152, Rivalen-Scan Zeile 192). Gemessen: 100 Merkmale 0,08 s · 400 → 1,37 s · 1600 → 23,2 s · 3372 → 101,1 s. Erwartung 50–100×, die Ordnung bleibt quadratisch. Zwei Fallen: die Achsen-Vorzeichenregel (`"axis" in first.params`, richtungslos je Merkmal statt je Art) und `KIND_PENALTY`; `cost()` muss als Einzelpaar-Referenz stehen bleiben und der vektorisierte Aufbau elementweise dagegen geprüft werden. `tests/test_matching.py` trägt 35 Tests als Rückhalt. **Nicht dringend, seit die Merkmalsexplosion behoben ist** — es ist das Netz für den nächsten Fall, der viele Merkmale erzeugt |
+| `test_ui.py` stirbt bei zufälliger Testreihenfolge | Zwei Torläufe an einem Tag, beide an derselben Stelle (26.08.2026) | eine **Zuordnung zur Absturzfamilie**. Gemessen: mit `-p no:randomly` laufen alle 303 Tests durch (Exit 0), mit zufälliger Reihenfolge Zugriffsverletzung bei 23 % — beide Male in `panels.py` unter `_show_scene`, einmal `show_result`, einmal `show_document`. **Keine Regression**: Der Grundlagen-Torlauf vor allen Änderungen des Tages zeigte denselben Abbruch an derselben Stelle. Gehört zu den Signaturen A–C weiter oben; was fehlt, ist die Entscheidung, ob die Suite die Reihenfolge für diese Datei festnagelt oder die Ursache weiter verfolgt wird |
+| Die 56 Sekunden von `weg4-figur-formen` liegen in der Oberfläche | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | einen **Prüfstand im echten Fenster**. Im Kern kostet das Projekt 0,82 s (offscreen über `Session.open_project` gemessen); der Rest hängt an VTK und am Aktoraufbau und ist offscreen unsichtbar — siehe „Offscreen prüft nichts, was am Aktor hängt". Dasselbe gilt für rund 40 der 145 Sekunden von weg3 und 13 von `dose-mit-deckel` |
+| Alle anderen `detect_*` sind bei ungeschweißter Topologie blind | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | dieselbe Behandlung, die `detect_edge_loops` am 26.08. bekommen hat. Roh geladen liefert `detect` **null** Merkmale statt 10 (`plate_holes`), 9 (`post_with_fillet`), 1 (`torus_ring`) — die übrigen Erkenner fragen weiter das gespeicherte Netz statt der Geometrie |
+| `component_count` zählt jedes Dreieck als Komponente | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | einen eigenen Schritt: 796 statt 1 bei `plate_holes`, und die Quelle des `ingest.multiple_components` im Weg-3-Beispiel. Derselbe Artefakt wie bei den Kantenschleifen, andere Stelle — `face_components` hat viele Aufrufer, deshalb nicht nebenbei |
 | `decimated 992 to 992` — ein Schritt, der nichts tut | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | eine Erklärung. `decimate()` hat einen frühen Rücksprung für genau diesen Fall, und er greift nicht; es läuft eine echte `simplify_quadric_decimation` von 992 auf 992. Drei Aufrufer kommen infrage |
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
 | Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
@@ -10252,3 +10257,68 @@ Operation verweist. Vier Dinge sind bewusst liegen geblieben:
   `compensate_first_layer` — sie werfen nur) und das seit je unbenutzte
   `height` in `primitive_ops._object`.
 
+
+## Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026)
+
+Vor der Auslieferung von 0.2.0 wurden alle neun Beispiele im echten Fenster
+geöffnet und die Zeit bis zur fertigen Auswertung gemessen. Sieben lagen unter
+fünfzehn Sekunden. `weg3-generiert-aufbereiten` brauchte **145 Sekunden**,
+viermal reproduziert, auch ohne Fremdlast — und `weg4-figur-formen` 56.
+
+Der Befund ist behoben: Die Erkennung offener Kanten urteilte über die
+**gespeicherte** Topologie statt über die geometrische. Eine STL schreibt jedes
+Dreieck mit eigenen Ecken, also hat topologisch jede Kante keinen Partner —
+auch an einem rundum dichten Teil. Aus 3372 Dreiecken wurden 3372
+`edge_loop`-Merkmale, und die Zuordnung baute daraus eine 3372×3372-Matrix.
+Gemessen: **102,3 s vorher, 0,20 s nachher**, und die Zahl im Prüfbericht ging
+von 3372 auf die wahren **6**. Dieselbe Datei verschweißt geladen liefert jetzt
+dieselben 6 — vorher hing die Auskunft über das Teil davon ab, in welchem
+Format es ankam.
+
+Offen bleibt daraus:
+
+- [ ] **`match()` ist quadratisch und läuft in reinem Python.** Zwei Schleifen
+      über N² (`matching.py`, Matrixaufbau Zeile 152, Rivalen-Scan Zeile 192).
+      Gemessen: 100 Merkmale 0,08 s · 400 → 1,37 s · 1600 → 23,2 s · 3372 →
+      101,1 s. Eine Vektorisierung brächte 50–100×, die Ordnung bleibt
+      quadratisch. **Nicht dringend, seit die Merkmalsexplosion behoben ist** —
+      es ist das Netz für den nächsten Fall, der viele Merkmale erzeugt.
+- [ ] **`weg4-figur-formen` kostet 56 Sekunden, und keine davon liegt im
+      Kern.** Über `Session.open_project` offscreen gemessen sind es **0,82 s**;
+      der Rest liegt in der Oberfläche (VTK, Aktoraufbau) und ist offscreen
+      nicht messbar — siehe „Offscreen prüft nichts, was am Aktor hängt". Das
+      braucht einen Prüfstand im echten Fenster, nicht eine weitere Kernmessung.
+      Dasselbe gilt für rund 40 der 145 Sekunden von weg3 und 13 von
+      `dose-mit-deckel`.
+- [ ] **Alle anderen `detect_*` sind bei ungeschweißter Topologie blind.** Roh
+      geladen liefert `detect` **null** Merkmale statt 10 (`plate_holes`), 9
+      (`post_with_fillet`), 1 (`torus_ring`). Behoben ist bisher nur
+      `detect_edge_loops`; die übrigen fragen weiter das gespeicherte Netz.
+- [ ] **`component_count` zählt jedes Dreieck als Komponente** — 796 statt 1.
+      Derselbe Artefakt an anderer Stelle, und die Quelle des
+      `ingest.multiple_components` im Weg-3-Beispiel. `face_components` hat
+      viele Aufrufer, deshalb ein eigener Schritt.
+
+## Zwei Torläufe an einem Tag, beide an derselben Stelle (26.08.2026)
+
+`tests/test_ui.py` endet mit einer Zugriffsverletzung, sobald die Testreihenfolge
+zufällig ist. Mit `-p no:randomly` laufen alle 303 Tests durch (Exit 0), ohne
+den Schalter bricht es bei 23 % ab — beide Male in `panels.py` unter
+`_show_scene`, einmal in `show_result`, einmal in `show_document`.
+
+**Keine Regression:** Der Grundlagenlauf vor allen Änderungen des Tages zeigte
+denselben Abbruch an derselben Stelle. Der Fall gehört zu den Signaturen A–C
+weiter oben.
+
+Im selben Tor stand `test_analysis_ui.py` **19 Minuten** still, nachdem es „135
+passed in 141,65 s" gemeldet hatte — null Protokollzuwachs, 0,015 CPU-Sekunden.
+Er löste sich von selbst, bevor er beendet werden konnte. Das ist Signatur C,
+und die Zahl ist der Grund, warum sie hier steht: Ein Lauf, der zwanzig Minuten
+länger dauert als der davor, hat wahrscheinlich gestanden und nicht langsamer
+gerechnet — wer Läufe vergleicht, misst die Wanduhr mit.
+
+- [ ] **Eine Entscheidung, ob die Suite die Reihenfolge für diese Datei
+      festnagelt** (`-p no:randomly` je Datei) **oder die Ursache weiter
+      verfolgt wird.** Das Festnageln verdeckt einen echten Fehler; ihn zu
+      verfolgen kostet die Lebensdaueruntersuchung, die im Register unter
+      „Signatur C" steht.

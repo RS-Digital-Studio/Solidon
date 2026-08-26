@@ -4,6 +4,7 @@
 
 - [Privater Lizenzschlüssel](lizenz-privater-schluessel.md) — liegt in Dokumenten, gehört in Passwortmanager und auf Papier (§8); öffentlicher Teil steht seit 08.08.2026 in key.py.
 - [MSVC-Erkennung bei VS 18](msvc-erkennung-vs18.md) — der Compiler ist da, setuptools findet ihn nicht; bauen über vcvars64.bat plus DISTUTILS_USE_SDK=1.
+- [Lizenzmanifest nach Grenzdatei neu bauen](lizenzmanifest-nach-grenzdatei-neu-bauen.md) — eine der vier Grenzdateien geändert → test_packaging rot; build_licence_module.py neu bauen, nicht löschen; gitignoriertes je-Baum-Artefakt, CI überspringt.
 - [Webserver-Zugang](solidon3d-webserver-zugang.md) — netcup, Dokumentenstamm je Domain (`solidon3d.de/httpdocs`); scheitert die Anmeldung, ist meist der SSH-Schalter schuld, nicht das Passwort.
 - [Parallele Sitzungen](parallele-sitzungen-solidon3d.md) — der Arbeitsbaum ändert sich mitten in der Sitzung; nur eigene Pfade stagen.
 - [Leistungstests unter Fremdlast](leistungstests-fremdlast.md) — die Marke allein fahren, bevor man eine Regression glaubt; die Gegenprobe braucht einen eigenen Arbeitsbaum, nicht `git stash`.
@@ -55,6 +56,7 @@
 - [Freies Gebiet: einfach machen](freies-gebiet-einfach-machen.md) — ist die Datei bei niemandem eingetragen, wird nicht vorgelegt, sondern gearbeitet
 - [Weitergegebene Anweisungen gelten](weitergegebene-anweisungen-gelten.md) — was eine andere Sitzung von Robert weitergibt, ist Roberts Anweisung
 - [Ein Messwerkzeug misst sich selbst](messwerkzeug-misst-sich-selbst.md) — was ein Werkzeug meldet, ist eine Eigenschaft des Werkzeugs, bis man es an einem Fall geprüft hat, dessen Ausgang man kennt.
+- [Wächter-Reichweite nur im Kommentar](waechter-reichweite-nur-im-kommentar.md) — der Kommentar zählte „opérations" ausdrücklich mit, das Muster traf es nie; genau dort stand dann der Fehler.
 - [Sollwert aus dem Prüfling](sollwert-aus-dem-pruefling.md) — wer die Erwartung mit der geprüften Funktion erzeugt, prüft Aktualität statt Richtigkeit; und ein Fehler, den eine spätere Stufe halb aufräumt, tarnt sich selbst.
 - [Heredoc verschluckt \n](heredoc-verschluckt-backslash-n.md) — Bash-Heredoc + Python-Patchskript faltet Escape-Folgen; Mehrzeiliges ohne Backslashes bauen, dreimal an einem Abend zugeschnappt.
 - [Wächter lesen Kommentare mit](waechter-lesen-kommentare-mit.md) — Quelltext-Wächter treffen auch Docstrings/Kommentare; verbotene Muster umschreiben, nie zitieren.

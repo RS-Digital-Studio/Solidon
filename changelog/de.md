@@ -6,9 +6,9 @@ hier acht Zeilen, und die Auswahl ist die Arbeit. Ein Punkt gehört hierher,
 wenn jemand ihn beim Benutzen merkt.
 
 Also: keine Commit-Meldungen, keine Modulnamen, keine Paragraphen. „Der Balken
-verschwand, während die Anwendung noch vier Sekunden rechnete" ist ein guter
+verschwand, während die Anwendung noch vier Sekunden rechnete“ ist ein guter
 Commit und ein schlechter Punkt; „Der Fortschritt bleibt stehen, bis wirklich
-fertig gerechnet ist" sagt dasselbe für den, der davorsitzt.
+fertig gerechnet ist“ sagt dasselbe für den, der davorsitzt.
 
 Je Sprache eine Datei in diesem Ordner, wie bei den Katalogen — und alle tragen
 dieselben Punkte in derselben Reihenfolge (`tests/test_changelog.py`).
@@ -25,10 +25,10 @@ dass eine weitere Erhöhung eine Begründung braucht.
 
 **Und was nicht hineingehört, gleich wie kundenspürbar es ist:** eine
 geschlossene Sicherheits- oder Lizenzlücke. Der Satz „eine Uhr in der Zukunft
-verbrannte die Frist" erzählt jedem, der eine ältere Fassung hat, wo der Hebel
+verbrannte die Frist“ erzählt jedem, der eine ältere Fassung hat, wo der Hebel
 sitzt. Drei solche Punkte standen am 26.08.2026 schon im Abschnitt und sind
 wieder heraus (Entscheidung Robert). Wo ein Nutzen bleibt, der ohne den
-Mechanismus auskommt — „die Meldung nennt den wirklichen Grund" —, steht der
+Mechanismus auskommt — „die Meldung nennt den wirklichen Grund“ —, steht der
 Nutzen da und sonst nichts.
 
 ## 0.2.0
@@ -76,13 +76,13 @@ Nutzen da und sonst nichts.
 - Ein Übergang zwischen zwei Zeichnungen behält ihre Löcher, und eine Tasche auf einer Seitenwand schneidet in die Wand statt von oben.
 - Ein Umriss, der sich selbst kreuzt, wird an der Zeichnung gemeldet, statt einen Körper zu ergeben, der nicht dicht ist und trotzdem exportiert wird.
 - Eine Zeichnung mit Loch im Loch behält alle Ebenen, und Projizieren nimmt die Ebene, auf der Sie zeichnen — bisher fiel die dritte Ebene weg und der Schnitt kam von unten.
-- Nach „Fläche versetzen" lassen sich die Flächen des Teils wieder anklicken. Bisher blieb nichts übrig, worauf man zeichnen, bohren oder eine Passung setzen konnte.
+- Nach „Fläche versetzen“ lassen sich die Flächen des Teils wieder anklicken. Bisher blieb nichts übrig, worauf man zeichnen, bohren oder eine Passung setzen konnte.
 - Verschwindet die Fläche, bis zu der extrudiert wird, zeigt der Fehler auf dieses Feld und rät, eine andere zu wählen — statt auf die Zeichenebene.
 - Ein Klick auf eine Bohrung schlägt die Schraube vor, die wirklich hindurchgeht — und nennt den gemessenen Durchmesser dazu.
 - Große Dateien aus einem Slicer öffnen zügig, ohne dass das Fenster einfriert. Bisher las schon das bloße Zählen der Körper die ganze Datei in den Speicher.
-- Auch bei einer Baugruppe wirkt „Auf das Bett setzen" jetzt: Sie geht als Ganzes nach unten, die Teile behalten ihre Lage zueinander. Bisher geschah nichts, kommentarlos.
+- Auch bei einer Baugruppe wirkt „Auf das Bett setzen“ jetzt: Sie geht als Ganzes nach unten, die Teile behalten ihre Lage zueinander. Bisher geschah nichts, kommentarlos.
 - Zwei eingelesene Dateien gleichen Namens gehen nicht mehr verloren. Die zweite überschrieb bisher die erste, und das Projekt ließ sich danach nicht mehr öffnen.
-- Eine Adresse ohne Dateiendung sagt jetzt, dass dort eine Webseite steht und wo der Download-Knopf ist, statt „Format nicht erkannt".
+- Eine Adresse ohne Dateiendung sagt jetzt, dass dort eine Webseite steht und wo der Download-Knopf ist, statt „Format nicht erkannt“.
 - Die Filamentmenge aus einer G-Code-Datei stimmt wieder. Ein Befehl am Dateiende ließ alles davor anders rechnen und verdoppelte die Summe.
 - Beim Skalieren auf eine bestimmte Breite wurde eine Hilfslinie mitgemessen. Aus fünfzig Millimetern wurden fünf.
 - Beim Export überschrieben sich gleichnamige Teile: eine Datei, zwei Erfolgsmeldungen, ein Teil weg.
@@ -97,11 +97,11 @@ Nutzen da und sonst nichts.
 - Abbrechen verwirft auch den bereits eingereihten nächsten Lauf, und der Fortschrittsbalken verschwindet nicht mehr über einer Datei, die noch geschrieben wird.
 - Die im Installer gewählte Sprache gilt sofort, sonst die des Systems. Und eine im Fenster gewählte Sprache wirkt gleich, statt erst beim nächsten Start.
 - Ein Sprachwechsel wirkt jetzt im ganzen Fenster. Die Druckeinstellungen blieben bisher in der Sprache, in der die Anwendung gestartet war.
-- Die mitgelieferten Beispiele nennen ihre Maße in Ihrer Sprache. „Breite, Tiefe, Höhe" stand dort bisher deutsch, auch in einer englischen Oberfläche.
+- Die mitgelieferten Beispiele nennen ihre Maße in Ihrer Sprache. „Breite, Tiefe, Höhe“ stand dort bisher deutsch, auch in einer englischen Oberfläche.
 - Die Kommandozeile spricht die eingestellte Sprache. Sie gab bisher deutsche Hilfe und deutsche Fehlertexte aus, gleich was gewählt war.
 - Ein Drucker- oder Materialwechsel behält, was Sie selbst eingestellt haben. Bisher wurde der ganze Satz zurückgesetzt, ohne Ansage.
 - Die Filamentwahl je Materialslot kommt beim Slicer an. Gespeichert wurde bisher der Anzeigetext statt des Profils.
-- Bei „Speichern unter" wird jetzt die Projektendung angehängt. Eine als halter.stl gespeicherte Projektdatei war beim Öffnen ein unlesbares Fremdmodell.
+- Bei „Speichern unter“ wird jetzt die Projektendung angehängt. Eine als halter.stl gespeicherte Projektdatei war beim Öffnen ein unlesbares Fremdmodell.
 - Ein geändertes Projekt geht nicht mehr verloren, wenn Sie eine Datei auf den Startbildschirm ziehen — es wird vorher gefragt.
 - Ein Vorschlag des Chats, der Schritte zurücknimmt, sagt vorher, welche mitgehen. Und Abbrechen bricht wirklich ab, statt im Hintergrund weiterzurechnen.
 - Der Chat schafft wieder acht Schritte je Frage statt vier, und die Kostenzeile rechnet nicht mehr zu hoch.
@@ -168,11 +168,11 @@ Nutzen da und sonst nichts.
 
 ## 0.1.2
 
-- Getippte Kommazahlen werden überall richtig gelesen. „12,5" blieb zwölfeinhalb — vorher konnte daraus 125 werden, ohne Rückfrage und ohne Hinweis.
+- Getippte Kommazahlen werden überall richtig gelesen. „12,5“ blieb zwölfeinhalb — vorher konnte daraus 125 werden, ohne Rückfrage und ohne Hinweis.
 - Jedes der sechsundfünfzig Felder in den Druckeinstellungen sagt jetzt, was es bewirkt, wenn man es bewegt.
 - Druckzeit und Materialbedarf werden genauer geschätzt, vor allem bei ausgehöhlten Teilen.
 - Die Übergabe an den Slicer trifft die Platte. Bei CuraEngine lagen Teile daneben.
 - Beim Trennen mit Verstiftung sitzen die Gegenlöcher in der richtigen Hälfte.
 - Millimeter und Zoll gelten jetzt überall, wo eine Zahl steht — auch in den Werkzeugleisten und beim Bemalen.
 - Der Fortschritt bleibt stehen, bis wirklich fertig gerechnet ist, und das Fenster bleibt dabei bedienbar.
-- Alle Tastenkürzel stehen jetzt in einer Übersicht: im Hilfemenü unter „Tastenkürzel", oder mit einem Druck auf die Fragezeichentaste.
+- Alle Tastenkürzel stehen jetzt in einer Übersicht: im Hilfemenü unter „Tastenkürzel“, oder mit einem Druck auf die Fragezeichentaste.
