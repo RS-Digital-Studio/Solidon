@@ -108,9 +108,12 @@ Schlüssel entfernen, neu eintragen, neue 14 Tage, und der Teiler gäbe fünf
 Kollegen je einen ewigen Vorrat an Fristen, ohne dass je ein Platz des
 Limits verbraucht würde. Der Marker trägt deshalb den Schlüssel-Hash und
 den **ersten** Eintragungstag; ein erneutes Eintragen desselben Schlüssels
-setzt nichts zurück, auf keiner Maschine ein zweites Mal. Wer die Frist
-reißt, hat den Offline-Weg — der ist die Antwort auf „dauerhaft ohne Netz",
-nicht eine nachwachsende Frist.
+setzt auf dieser Maschine nichts zurück. Je **weiterer** Maschine gibt es
+die Frist höchstens einmal — mehr kann ein lokaler Marker nicht halten, und
+mehr muss er nicht: danach führt kein Weg am Limit vorbei (das
+Wander-Muster aus C4, angenommen). Wer die Frist reißt, hat den
+Offline-Weg — der ist die Antwort auf „dauerhaft ohne Netz", nicht eine
+nachwachsende Frist.
 
 **Bestandskunden-Migration.** Bereits verkaufte Schlüssel funktionieren
 offline weiter (die App kann `purchased_on`/`major` lesen): Schlüssel mit
@@ -952,11 +955,18 @@ Schlüssel; (3) der Konstruktor des Dialogs macht keinen Netzaufruf
 
 ## Offene Entscheidungen für Robert (nach der Ausarbeitung)
 
-1. Aktivierungslimit je Schlüssel (Vorschlag: 3 Maschinen, Deaktivieren
-   möglich). **Teil C5:** Aus Sicherheitssicht ist die Zahl gleichgültig —
-   tragend ist allein, dass der Kunde sie selbst auflösen kann. Ein Limit
-   ohne Selbstbedienung erzeugt Support-Fälle, und Support-Fälle werden mit
-   Ausnahmen gelöst.
+1. Aktivierungslimit je Schlüssel — **entschieden (Robert, 26.08.2026):
+   ein Rechner.** „Ein Schlüssel ist nur einmal aktivierbar" heißt dabei
+   **einmal zugleich, nicht einmal im Leben** — die Unterscheidung trägt
+   den ganzen Alltag: Neuinstallation auf derselben Maschine kostet nichts
+   (idempotent je Zufalls-ID, B3), und der Wechsel auf einen neuen Rechner
+   ist Selbstbedienung (D3: alten Platz deaktivieren, auch wenn der alte
+   Rechner tot ist — der Limit-Fluss am neuen zeigt ihn und gibt ihn
+   frei). **Teil C5 bleibt die Bedingung:** Ein Limit ohne Selbstbedienung
+   erzeugt Support-Fälle, und Support-Fälle werden mit Ausnahmen gelöst;
+   bei Limit 1 gilt das doppelt, weil jeder Zweitrechner (Werkstatt-PC
+   neben dem Laptop) eine zweite Lizenz ist — das ist die
+   Geschäftsentscheidung, und sie ist gefallen.
 2. Trial lokal lassen oder serverseitig registrieren (Vorschlag: lokal).
 3. Bestandsschlüssel-Stichtag.
 4. Notfallplan „Firma weg" — **inhaltlich durch C6 beantwortet, es fehlt
