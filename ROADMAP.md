@@ -89,6 +89,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
+| Ein nicht rechenbarer Schritt ist eine Sackgasse | OpenSCAD ist ausgebaut (26.08.2026) | eine **Anzeige der rohen Werte** und einen Weg, den Schritt loszuwerden. Er lässt sich weder öffnen (kein Registereintrag, kein Dialog) noch löschen (`History` kann nicht aus der Mitte entfernen, §15.4). Der Quelltext einer 0.1.3-Datei ist damit nur im ZIP erreichbar |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
 | Stegdicke und Kammertiefe sind nicht gemessen | Die Nutfeder, und zwei Fehler auf dem Weg dorthin (20.08.2026) | zwei Werte vom Messschieber an einer 2020er und einer 3030er Schiene; bis dahin stehen die gebräuchlichsten Katalogwerte da, und `note` nennt die Spanne |
 | Verrundung und Fase gehen auf einem Netz nicht — **Konzept liegt vor** | Neun heruntergeladene Modelle durch die ganze Kette (21.08.2026) | **eine Entscheidung von Robert über eine Phase**, nicht über einen Commit: `konzepte/konzept-flaechenrueckgewinnung-2026-08.md`. Flächenrückgewinnung aus dem Netz, fünf Schritte, drei offene Fragen im dritten. Dagegen: **neun von neun** heruntergeladenen Modellen laufen dagegen |
@@ -130,6 +131,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Rezepte rechnen ihren Hash bei jedem Start neu | Was der Gesamtreview liegen ließ (25.08.2026) | eine Gelegenheit — allein ist der Posten unmessbar klein. Die Startmarke ist seit dem 26.08.2026 entschieden und neu gesetzt; ihre Messung (`-X importtime`) zeigt: die Startzeit dominiert der Importblock trimesh/scipy/networkx, die Rezepte tauchen darin nicht auf |
 | Regel 17 endet an der Auswertungsgrenze | Was das Update-Review liegen ließ (26.08.2026) | eine Messung, welche Befund-Familien ohne tragende Handlung ankommen — FINDING_ACTIONS und die op.*-Familie decken einen Teil; fallgenaue Auswege wie split_model fallen in _finding_from | 
 | Kleinreste: tote profile-Zweige, unbenutztes height | Was der Gesamtreview liegen ließ (25.08.2026) | niemanden — sie werfen nur beziehungsweise stören nicht; notiert, damit sie ein Kästchen haben |
+| `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 
 ---
 
@@ -1091,7 +1093,9 @@ Beschlossen am 31.07.2026, Bauplan v10 (§30.1, §40): **die Veröffentlichung
 wartet auf diese Phase** — der Launch führt die Skizzen als Kernargument. Das
 Ziel dahinter: so wenig Fremdprogramme wie möglich; das fremde CAD vor dem
 Import ist der größte verbliebene Grund, Solidon zu verlassen. Der Slicer
-bleibt bewusst außen (§22.5), OpenSCAD bleibt Rückfallebene. Die
+bleibt bewusst außen (§22.5), OpenSCAD blieb Rückfallebene — bis es am
+26.08.2026 ganz entfiel, weil die Skizzen dieser Phase es überflüssig gemacht
+hatten. Die
 Veröffentlichungsreste aus P8 (Remote/CI, Zertifikat, Vertrieb, Betatest)
 laufen parallel und stehen weiter oben unter „Bewusst offen".
 
@@ -2181,8 +2185,8 @@ den Webserver und die Paketierung. Fünf Funde:
       Netzdichte deshalb überall außer auf Darwin; wer den STL-Export dort
       ernst nimmt, braucht einen anderen Weg als eine feinere Deflection.
 - [ ] **Auf einem fremden Rechner installieren** (ohne Python, ohne venv, ohne
-      OpenSCAD/Ollama/ComfyUI). Der Punkt, der erfahrungsgemäß mehr findet als
-      alle Tests.
+      Ollama/ComfyUI). Der Punkt, der erfahrungsgemäß mehr findet als alle
+      Tests.
 - [x] **Download-Kasten mit echter Datei und Prüfsumme** (20.08.2026), dazu der
       Satz zur SmartScreen-Warnung: die Demo geht unsigniert hinaus, weil Azure
       Trusted Signing Nachweise braucht, die keine acht Tage dauern. 0.9.1
@@ -9610,11 +9614,14 @@ Arbeitspakete, die Grenzen und die eine Entscheidung stehen dort.
   **Entschieden am 24.08.2026 (Robert): Ein Rezept darf in Projektdateien
   mitreisen.** Regel 13 schützt jetzt ausdrücklich vor *ausführbarem Code* und
   nicht vor Bausteinen an sich; §24.5 nennt die Unterscheidung. Drei Folgen
-  stehen im Konzept (Abschnitt 17.1): Die Quelltextprüfung aus §32 gilt
-  unverändert und trifft `create_from_scad` in einem Rezept wie überall sonst;
-  ein mitgereistes Rezept überschreibt **nie** einen gleichnamigen eigenen
-  Baustein, sondern wird umbenannt und als mitgereist gekennzeichnet; und die
-  Version eines Rezepts ist der Hash über seine Daten.
+  stehen im Konzept (Abschnitt 17.1), und die erste ist mit dem Ausbau von
+  OpenSCAD am 26.08.2026 **entfallen**: Sie band die Quelltextprüfung aus §32
+  an einen `create_from_scad`-Schritt im Rezept, und den gibt es nicht mehr —
+  §24.5 trägt seither die allgemeine Fassung, das Konzept nennt sie noch in
+  der alten. Es bleiben zwei: Ein mitgereistes Rezept überschreibt **nie**
+  einen gleichnamigen eigenen Baustein, sondern wird umbenannt und als
+  mitgereist gekennzeichnet; und die Version eines Rezepts ist der Hash über
+  seine Daten.
 
 - [x] **Behoben am 26.08.2026 mit `410bdb06`.** Der Verlauf nimmt Strg- und
   Umschalt-Klick, `HistoryPanel.selected_operations()` gibt die gewählten
@@ -10322,3 +10329,90 @@ gerechnet — wer Läufe vergleicht, misst die Wanduhr mit.
       verfolgt wird.** Das Festnageln verdeckt einen echten Fehler; ihn zu
       verfolgen kostet die Lebensdaueruntersuchung, die im Register unter
       „Signatur C" steht.
+
+## OpenSCAD ist ausgebaut (26.08.2026)
+
+Robert: „brauchen wir OpenSCAD überhaupt, machen wir das nicht über unsere
+App?" — die Prüfung am Code gab ihm recht. Das Programm hing an **einer**
+Operation (`create_from_scad`), deren eigener Hinweis sie „die letzte Wahl,
+nicht die erste" nannte; der Testfall, für den sie einmal *der* Weg war,
+verbietet sie seit §30.1 ausdrücklich („jetzt kann `sketch_loft` ihn im
+Haus"). In 39 Referenzanfragen kam sie nie vor, in keinem Beispielprojekt und
+in keiner Regel. Dem gegenüber standen 599 Zeilen Backend und die einzige
+Stelle, an der fremder Quelltext ausgeführt wurde.
+
+Entfernt sind Operation, Backend, Registereintrag und die Einträge in
+`discover`, `install`, `tools` und `foreign`; der Systemprompt steht auf
+Version 4 mit **drei** statt vier Gewohnheiten, die Regelsammlung auf Version
+3. `to_scad()` bleibt — es schreibt eine Datei und führt nichts aus.
+
+Alte Projektdateien öffnen weiter: Migration 12 → 13 lässt einen
+`create_from_scad`-Schritt stehen und hält die Auswertung an ihm an, statt sie
+abzubrechen. Der Rest der Szene rechnet, der Prüfbericht nennt den Schritt.
+Vorher gab dieselbe Datei einen **Programmfehler**-Dialog samt
+Fehlerbericht-Knopf — für etwas, das der Kunde selbst gebaut hatte.
+
+- [ ] **Ein Schritt, den diese Fassung nicht rechnen kann, ist eine
+      Sackgasse.** Der Kunde sieht ihn im Verlauf, kann ihn aber weder öffnen
+      (kein Registereintrag, also kein Dialog) noch löschen (`History` kennt
+      kein Entfernen aus der Mitte, §15.4 — spätere Operationen bauen auf
+      seinen Ausgaben auf). Seine Werte — bei einer Datei aus 0.1.3 sein
+      OpenSCAD-Programm — sind nur im ZIP zu erreichen. Fehlt: eine Anzeige
+      der rohen Werte und ein Weg, den Schritt loszuwerden. Der Befund trägt
+      deshalb heute nur `SHOW_HISTORY` als Handlung; ein Knopf, den niemand
+      bedienen kann, wäre schlechter als einer weniger.
+
+## Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026)
+
+`orient_200` misst die Orientierungssuche über 200 Kandidaten
+(`search(mesh, count=200, layer_height=0.4)` auf `plate_holes.stl`, also
+Schichtanalyse je Kandidat). Der Test riss in zwei Sitzungen viermal in Folge —
+und wurde danach in zwei vollständigen Torläufen von selbst wieder grün, was
+die Überschreitungszählung zurücksetzte.
+
+Sechs Messungen, alle unter dem Schloss, vier davon bei bestätigt ruhiger
+Maschine:
+
+| Lauf | Wert |
+|---|---|
+| Bestmarke (`tests/.performance.json`, `orient_200 → alone`) | 15 151 ms |
+| Regressionsschwelle (25 %) | 18 939 ms |
+| ce, unter Restlast | 18 958 ms |
+| ce, bei bestätigt 0 % CPU | 19 568 ms |
+| a2, allein | 19 442 ms |
+| a2, allein | 19 804 ms |
+| ce, vollständiger Torlauf | darunter — grün |
+| a2, vollständiger Torlauf | darunter — grün |
+
+**Der Wert liegt nicht über der Schwelle, er liegt auf ihr.** Darauf kommt es
+an: Vier Läufe darüber und zwei darunter bedeuten etwas anderes als eine
+stabile Verschlechterung. Wer den Punkt als „langsamer geworden" liest, sucht
+eine Ursache im Code; wer ihn richtig liest, prüft zuerst die Bestmarke.
+
+**§31 ist nicht gerissen.** Die Zusage lautet „unter 20 Sekunden", und das hält
+jede einzelne Messung. Was fehlt, ist Abstand — gut zwei Prozent statt
+fünfundzwanzig. Der Test wird deshalb sporadisch rot, ohne dass sich eine Zeile
+geändert hätte, und das ist der eigentliche Schaden: Ein Test, der ohne Anlass
+rot wird, verliert seine Aussagekraft.
+
+**Entschieden wird das nicht durch einen weiteren Lauf gegen den heutigen
+Stand**, sondern durch eine Messreihe gegen einen **älteren**. Sie trennt die
+zwei Möglichkeiten: Entweder stammt die Bestmarke aus einem besonders ruhigen
+Lauf und ist als Vergleichspunkt zu scharf, oder der Pfad ist tatsächlich
+langsamer geworden. Im Pfad liegen mehrere Commits der letzten Tage, darunter
+`202739ae` und `3c1b7306`.
+
+- [ ] **`orient_200` gegen einen älteren Stand messen.** Je fünf Läufe auf
+  einem Stand vor `202739ae` und auf dem heutigen, beide in einem eigenen
+  Arbeitsbaum und auf ruhiger Maschine. Liegen beide Reihen gleich, ist die
+  Bestmarke zu scharf und gehört ersetzt; liegt die alte tiefer, ist der Pfad
+  langsamer geworden und die Ursache steckt in den Commits dazwischen. Ein
+  weiterer Lauf gegen den heutigen Stand allein entscheidet nichts.
+
+**Ausgeschlossen ist die Marker-Härtung vom selben Tag** (`3ef11e6e`): gemessen
+kostet `trial_days_left` kalt 86 ms und warm unter 6 ms, und die
+Orientierungssuche ruft `activation` nicht. Die Werte lagen schon vor diesem
+Commit in derselben Höhe.
+
+Die allgemeine Lehre steht in `.claude/rules/tests.md` (`d7df8535`): Die
+Zweimal-Regel fängt Fremdlast, aber keinen Wert, der um die Schwelle streut.
