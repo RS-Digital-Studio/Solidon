@@ -103,6 +103,17 @@ Kein Bestandskunde wird nachträglich zur Aktivierung gezwungen.
 **Vier Grenzdateien bleiben vier.** Die Zertifikatsprüfung gehört in
 `activation/` (im Cython-Prüfmodul), nicht in neue Grenzstellen.
 
+**Warnschild für den Bauer: `Session.apply` meldet, es wirft nicht.** Es
+fängt jeden `AppError` und schickt ihn über `failed` an die Oberfläche — ein
+`try` um den Aufruf läuft ins Leere. Genau daran ist am 26.08.2026 ein
+Fixversuch gescheitert (die liegengebliebene Quelle nach abgelehntem Import,
+`1dbddbb4`): Der Aufrufer bekam keine Ausnahme, es entstand keine Operation,
+und von außen sah es aus wie „nichts passiert". Wer den Aktivierungspfad an
+die Sitzung anschließt und annimmt, eine Ablehnung komme als Ausnahme an,
+baut denselben Fehler noch einmal — dann mit einem Netzaufruf dazwischen.
+Gefragt wird nach dem **Ergebnis** (ist die Operation entstanden?), nicht
+nach dem Grund.
+
 ## Teil B — Server, Kauffluss, Recht (3d-druck-a2, offen)
 
 Fragen: Was kann das netcup-Hosting (PHP-Version, sodium/ed25519, MySQL/
