@@ -1949,6 +1949,40 @@ class PrintSettingsDialog(QDialog):
             ]
         )
 
+    def _profiles_for(self, slots: Sequence[MaterialSlot]) -> tuple[str, ...]:
+        """Die gewählten Filamentprofile in der Reihenfolge **dieser** Slots.
+
+        ``settings.slot_profiles`` ist positionsbezogen, und die Position
+        meint die Liste, die im Dialog **stand**, als der Kunde wählte. Die
+        Liste eines Laufs ist eine andere: Angezeigt wird die
+        Zusammenlegung der gewählten Platten, gedruckt wird Platte für
+        Platte, und jede legt für sich zusammen (`_plate_run`). Bei „Alle
+        Platten" mit Rot auf Platte 1 und Weiß+Rot auf Platte 2 standen
+        deshalb [Rot, Weiß] im Dialog und [Weiß, Rot] im Lauf der zweiten
+        Platte — gemessen bekam **Weiß das Rot-Profil**, und mit dem Profil
+        wandert die Temperatur (26.08.2026).
+
+        Übersetzt wird über die Identität des Slots — Name und Farbe, genau
+        der Schlüssel, über den auch ``threemf.merge_slots`` zusammenlegt.
+        Das Speicherformat bleibt, wie es ist: Was der Kunde einmal wählte,
+        gilt weiter je Position seiner Liste; nur die Zuordnung zum Lauf
+        fragt jetzt, **welcher Slot** gemeint war.
+        """
+        stored = self.settings.slot_profiles
+        shown = self._plate_slots()
+        if not shown:
+            # Ohne Anzeigeliste gibt es nichts zu übersetzen — dann gilt die
+            # Position, wie bisher. Ein leeres Ergebnis wäre schlechter als
+            # eine Zuordnung, die in genau diesem Fall schon immer stimmte:
+            # Wer keine Szene hat, hat auch keine zweite Reihenfolge.
+            return tuple(stored)
+        by_slot = {
+            (str(slot.name), slot.colour): stored[index]
+            for index, slot in enumerate(shown)
+            if index < len(stored) and stored[index]
+        }
+        return tuple(by_slot.get((str(slot.name), slot.colour), "") for slot in slots)
+
     def _slot_filament_chosen(self, position: int) -> None:
         """Die Wahl für einen Slot festhalten (§20).
 
@@ -2682,6 +2716,7 @@ class PrintSettingsDialog(QDialog):
                 for entry in on_plate
             ]
         )
+        chosen = self._profiles_for(slots)
         return PlateRun(
             plate=plate,
             model=written,
@@ -2689,7 +2724,7 @@ class PrintSettingsDialog(QDialog):
             # wurde sie schon immer, angekommen ist sie hier nie — alle Slots
             # slicten mit dem Basisfilament, und „druckt mit" war eine Zusage
             # ohne Deckung (§20).
-            slots=handover.with_slot_profiles(slots, self.settings.slot_profiles),
+            slots=handover.with_slot_profiles(slots, chosen),
             keep_arrangement=keep,
             findings=tuple(findings),
         )

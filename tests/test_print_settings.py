@@ -2721,6 +2721,54 @@ def test_without_a_slicer_the_dialog_offers_a_way_to_one(
     assert asked == [True]
 
 
+def test_a_slot_profile_follows_its_slot_across_plates(qt_app: object, tmp_path: Path) -> None:
+    """Das Profil gehört dem Filament, nicht der Zeilennummer (§20).
+
+    Angezeigt wird die Zusammenlegung der gewählten Platten, gedruckt wird
+    Platte für Platte, und jede legt für sich zusammen. Bei „Alle Platten"
+    mit Rot auf Platte 1 und Weiß+Rot auf Platte 2 stand deshalb
+    [Rot, Weiß] im Dialog und [Weiß, Rot] im Lauf der zweiten Platte —
+    positionsweise zugeordnet bekam **Weiß das Rot-Profil**, und mit dem
+    Profil wandert die Temperatur (Fund 26.08.2026, am Lauf gemessen).
+
+    Die Gegenprobe steht im Test mit drin: Positionsweise wäre die
+    Zuordnung vertauscht, und genau das darf sie nicht mehr sein.
+    """
+    from types import SimpleNamespace
+
+    import trimesh
+
+    from app.core.export import handover
+    from app.core.geom.mesh import MeshData
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.print_settings_dialog import PrintSettingsDialog
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    dialog = PrintSettingsDialog(Session(), UiSettings())
+
+    box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    rot = MaterialSlot(index=0, name="Rot")
+    weiss = MaterialSlot(index=0, name="Weiß")
+    erste = SceneObject(id="A", name="A", mesh=box, material_slots=[rot], plate=0)
+    zweite = SceneObject(id="B", name="B", mesh=box, material_slots=[weiss, rot], plate=1)
+    dialog.session.last_result = SimpleNamespace(
+        scene=SimpleNamespace(objects={"A": erste, "B": zweite})
+    )
+    # Was der Kunde bei „Alle Platten" sieht und zuordnet: Rot, dann Weiß.
+    assert [str(slot.name) for slot in dialog._plate_slots()] == ["Rot", "Weiß"]
+    dialog.settings = replace(dialog.settings, slot_profiles=("Rotes PLA", "Weißes PLA"))
+    setup = handover.SlicerSetup(executable=Path("elegoo-slicer.exe"), flavour="orca")
+
+    run = dialog._plate_run([erste, zweite], 1, tmp_path, "satz", setup)
+
+    gewählt = {str(slot.name): slot.material for slot in run.slots}
+    assert gewählt == {"Weiß": "Weißes PLA", "Rot": "Rotes PLA"}
+    assert [str(slot.name) for slot in run.slots] == ["Weiß", "Rot"], (
+        "die Reihenfolge des Laufs ist eine andere — daran hing der Fehler"
+    )
+
+
 def test_a_slicer_that_arrived_is_picked_up_without_reopening(
     qt_app: object, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
