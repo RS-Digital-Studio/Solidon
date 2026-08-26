@@ -110,6 +110,7 @@ sich, wenn nicht:
   kein Kunde den Punktpfad mehr, der Kern bleibt kompatibel. 30 zieht als
   Schritt 2 die Kernseite nach (`radius`/`x`/`y`/`z` an `paint_slot`,
   Migration, `format_version`) — **nicht `stroke_at`**, siehe Korrektur.
+- **Für 30, zur Kenntnis:** `at_feature` an `paint_slot` kam ohne
   `kind="feature"` an — daran hängen Dialog-Combo, Klick-Vorbelegung
   (`values_for`) und der Träger-Hash im Cache-Schlüssel, und
   `test_a_feature_parameter_is_declared_as_one` stand rot auf origin.
