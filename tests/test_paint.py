@@ -128,6 +128,45 @@ def test_the_slot_keeps_the_name_it_was_given(profile: Profile) -> None:
     assert [slot.name for slot in second.material_slots] == ["Rot"]
 
 
+def test_no_fallback_colour_can_be_mistaken_for_the_selection() -> None:
+    """Roberts Befund vom 26.08.2026, als Zusage: Die erste Bemalung, die je
+    ein Kunde sah, war ein Orange mit Kontrast 1,09 zur Auswahlfarbe — bemalt
+    und ausgewählt waren dasselbe Bild.
+
+    Die Leiter ist seitdem grau (Konzept Filamente); echte Farben kommen vom
+    Kunden. Geprüft werden die drei Abstände, an denen die alte Palette
+    scheiterte: zur Auswahl, zur Körperfarbe, und der Stufen untereinander —
+    zwei farblose Filamente, die gleich aussehen, zeigen ihr Teil erst im
+    Slicer zweifarbig.
+    """
+    from itertools import combinations
+
+    from app.ui.theme import SLOT_COLOURS, contrast_ratio
+    from app.ui.viewport import OBJECT_COLOUR
+
+    def spread(colour: str) -> int:
+        """Wie bunt eine Farbe ist: der Abstand ihres größten und kleinsten
+        Kanals. Null ist reines Grau, die Auswahlfarbe liegt bei 166."""
+        channels = [int(colour[index : index + 2], 16) for index in (1, 3, 5)]
+        return max(channels) - min(channels)
+
+    for colour in SLOT_COLOURS:
+        # Nicht über die Helligkeit gemessen, sondern über die Buntheit: Ein
+        # Grau und ein sattes Orange gleicher Helligkeit sind klar zu
+        # unterscheiden — der alte Fehler war gleicher Ton UND gleiche
+        # Helligkeit. Die Leiter bleibt unbunt, die Auswahl ist es nie.
+        assert spread(colour) <= 24, (
+            f"{colour} ist keine Graustufe mehr — bunt gehört dem Kunden und der Auswahl"
+        )
+        assert contrast_ratio(colour, OBJECT_COLOUR) >= 1.25, (
+            f"{colour} liegt zu nah an der Körperfarbe — Färben wäre unsichtbar"
+        )
+    for first, second in combinations(SLOT_COLOURS, 2):
+        assert contrast_ratio(first, second) >= 1.1, (
+            f"{first} und {second} sind im Bild nicht zu unterscheiden"
+        )
+
+
 # --- die Merkmal-Füllung (Konzept Filamente, 26.08.2026) --------------------------
 
 

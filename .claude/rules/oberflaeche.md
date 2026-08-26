@@ -1291,6 +1291,13 @@ genau der einen Methode, die benutzt wird.
 - **Dasselbe Problem bietet dieselben Handlungen**, gleich wer es meldet.
   „Nicht geschlossen" meldet der Kern beim Einlesen, beim Exportieren und nach
   jedem Zug des Agenten; zwei trugen ihre zwei Handlungen, der dritte nichts.
+  **Seit dem Filament-Konzept (26.08.2026) ist die Ersatzpalette eine
+  Grauleiter, keine Buntpalette mehr:** Okabe/Ito begann mit einem Orange,
+  das von der Auswahlfarbe nicht zu unterscheiden war (Kontrast 1,09) — die
+  allererste Bemalung sah aus wie eine Auswahl. Echte Farben kommen vom
+  Kunden (Farbwähler, Filamentkatalog); die Leiter zeigt nur den Zustand
+  davor, unbunt und je Stufe unterscheidbar
+  (`test_no_fallback_colour_can_be_mistaken_for_the_selection`).
   `FINDING_ACTIONS` (`app/ui/panels.py`) hält die Zuordnung, und
   `tests/test_value_labels.py` prüft die **Familie**: Befunde mit demselben
   Namen hinter dem Punkt melden dasselbe Problem, und trägt einer eine

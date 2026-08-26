@@ -258,20 +258,30 @@ def viewport_colours(theme: Theme) -> dict[str, str]:
 #: Zustand, den der Nutzer über „Slot zuweisen" auflöst, und eine geratene
 #: Zahl in der Projektdatei wäre eine Behauptung. Hier ist sie eine Anzeige.
 #:
-#: Genommen ist die Palette von Okabe und Ito — acht Farben, die auch bei den
-#: drei häufigen Farbsinnstörungen auseinander bleiben; Schwarz ist heraus, es
-#: liest sich auf dem dunklen Verlauf als Loch. Sieben Einträge für die Slots
-#: 1 bis 7: Slot 0 ist das unbemalte Teil und behält die Körperfarbe. Und die
-#: Farbe ist nie die einzige Auskunft (Regel 18) — die Pinselleiste nennt Name
-#: und Nummer daneben, der Prüfbericht und der Export nennen sie auch.
+#: **Eine Grauleiter, keine Buntpalette** (Entscheidung Robert, 26.08.2026 —
+#: Konzept Filamente). Hier stand Okabe/Ito, und ihr erster Eintrag war ein
+#: Orange (``#e69f00``), das von der Auswahlfarbe (``#f0a54a``) praktisch
+#: nicht zu unterscheiden war — Kontrast 1,09, und die allererste Bemalung,
+#: die je ein Kunde sah, sah aus wie eine Auswahl. Im Filament-Modell kommen
+#: echte Farben vom Kunden (Farbwähler, Katalog); was hier steht, ist nur noch
+#: der Stand **davor**: ein Filament, dem noch niemand eine Farbe gegeben hat,
+#: zeigt sich grau.
+#:
+#: Grau, aber nicht **ein** Grau: Zwei farblose Filamente müssen im Bild
+#: auseinander bleiben, sonst sieht der Kunde sein zweifarbiges Teil zum
+#: ersten Mal im Slicer — der dokumentierte alte Fehler dieser Tabelle. Die
+#: sieben Stufen sind deshalb eine Helligkeitsleiter: jedes Paar
+#: unterscheidbar, alle fern der Auswahlfarbe und der Körperfarbe
+#: (``#b9c4d0``), die häufigsten zwei maximal getrennt. Und die Farbe ist nie
+#: die einzige Auskunft (Regel 18) — die Leiste nennt Name und Nummer daneben.
 SLOT_COLOURS: Final = (
-    "#e69f00",  # Orange
-    "#56b4e9",  # Himmelblau
-    "#009e73",  # Blaugrün
-    "#f0e442",  # Gelb
-    "#0072b2",  # Blau
-    "#d55e00",  # Zinnoberrot
-    "#cc79a7",  # Purpur
+    "#8a9099",  # Mittelgrau — die erste Bemalung, deutlich unter der Körperhelligkeit
+    "#414650",  # Dunkelgrau — maximal getrennt von der ersten
+    "#6c727b",  # dazwischen
+    "#2e323a",  # Anthrazit
+    "#9da3ac",  # Hellgrau — noch klar unter der Körperfarbe
+    "#575c65",  # dunkles Schiefergrau
+    "#787e87",  # Steingrau
 )
 
 
