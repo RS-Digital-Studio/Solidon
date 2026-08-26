@@ -272,13 +272,27 @@ def evaluate(
             # nicht hat, kommt hier genauso an — nur ist er dann nicht
             # *entfallen*, sondern *nie da gewesen*. Der Satz nennt deshalb
             # keine Ursache, sondern den Zustand.
+            #
+            # **Und einen Weg — der fehlte bis zum 26.08.2026.** Der Satz sagte
+            # „alles andere im Projekt rechnet weiter", während zwei Zeilen
+            # tiefer ``break`` steht: Ab hier rechnet gar nichts mehr. Wer das
+            # las, suchte den Fehler bei sich und hatte keine Handhabe (Regel
+            # 17 verlangt einen Vorschlag, nicht nur einen Befund).
+            #
+            # Der Weg hinaus **gibt es**, er stand nur nirgends: ``can_undo``
+            # liest die Transaktionen aus dem Dokument, und die reisen in der
+            # Projektdatei mit — nach dem Öffnen ist Rückgängig also bedienbar.
+            # Hinter den Schritt zurückgehen, irgendetwas ändern, und §15.4
+            # verwirft ihn samt allem, was hinter ihm lag.
             findings.append(
                 Finding(
                     code="evaluate.unknown_operation",
                     severity="error",
                     message=_(
-                        "Diesen Schritt kann Solidon nicht rechnen. Seine Werte bleiben "
-                        "in der Datei erhalten; alles andere im Projekt rechnet weiter."
+                        "Diesen Schritt kann Solidon nicht rechnen — ab hier bleibt das "
+                        "Projekt stehen. Seine Werte gehen nicht verloren: Der Verlauf "
+                        "zeigt sie an. Um weiterzuarbeiten, im Verlauf hinter den "
+                        "Schritt zurückgehen; die nächste Änderung verwirft ihn."
                     ),
                     op_id=operation.id,
                     values={"operation": operation.op},
