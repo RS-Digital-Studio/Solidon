@@ -59,6 +59,25 @@ Filamentfarbe aus** (Orange überdeckt sie), sie ersetzt sie nicht.
 8. **Handbuch, Tour, Kataloge ×5** ziehen nach; die Sätze, die den Pinsel
    beschreiben, altern mit ihm (Verneinungssuche nach dem Ausbau).
 
+## Zulieferungen für den Kern (26.08.2026, weitergereicht von 27, Quelle de/d1)
+
+Beide gehören bedacht, **bevor** Katalog und Merkmal-Füllung gebaut sind —
+sie lösen sich im neuen Modell auf, wenn man sie mitdenkt, und zementieren
+sich, wenn nicht:
+
+- **Die Extruder-Zuordnung ist heute je Platte, nicht je Auftrag** (de,
+  belegt): `merge_slots` nummeriert nach dem ersten Auftreten, und
+  `write_assembly` ruft es **je Platte** — dieselbe Farbe landet in einem
+  Auftrag an verschiedenen Extrudern („Platte 1: Rot = E1; Platte 2:
+  Weiß = E1, Rot = E2"), bei vier Filamenten hieße das Umstecken mitten im
+  Auftrag. Mit benannten Katalog-Filamenten (Punkt 2) wird
+  „Filament → Extruder" eine Eigenschaft des **Auftrags**. Nachstellen:
+  zwei Platten, eine davon zweifarbig.
+- **`settings.slot_profiles` schlüsselt die Filamentwahl per Position**
+  (d1): Sobald Filamente Namen tragen, gehört der Schlüssel auf den Namen
+  (oder Name+Farbe) — sonst erbt ein Kunde nach dem Update stumm falsche
+  Zuordnungen.
+
 ## Aufteilung
 
 | Teil | Wer |
