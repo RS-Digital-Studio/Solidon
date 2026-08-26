@@ -7,7 +7,9 @@ Einstellungen" liegt der Rest, nach Gebieten sortiert (§2.4, gestufte Tiefe).
 Die Felder kommen aus :data:`FIELDS`, einer Tabelle: eine neue Einstellung im
 Kernmodell kostet hier eine Zeile und keinen Eingriff. Titel und Einheiten
 stehen bewusst hier und nicht im Kern — es sind Oberflächentexte, sie gehen
-durch ``tr()``, und der Kern kennt keine Beschriftungen.
+durch ``_()``, und der Kern kennt keine Beschriftungen. ``_()`` und nicht
+``tr()``, weil die Tabelle im Modulrumpf steht: Der Kommentar über ihr sagt,
+was das ausmacht.
 
 Was die Geometrie selbst verlangt, steht darunter als Liste mit Begründung
 (:mod:`app.core.slice.advise`). Übernommen wird auf Klick, nie von allein:
@@ -70,8 +72,8 @@ from app.core.types import (
     SettingAdvice,
     SliceResult,
 )
-from app.core.units import DEGREE_UNIT
-from app.i18n import tr
+from app.core.units import DEGREE_UNIT, is_close
+from app.i18n import TranslatableText, _, tr
 from app.ui.dialogs import show_error
 from app.ui.labels import NumberSpin, by_title, choice_label, colour_name, localised
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
@@ -91,7 +93,7 @@ class Field:
     vorn."""
 
     path: str
-    title: str
+    title: str | TranslatableText
     group: str
     kind: FieldKind = "float"
     unit: str = ""
@@ -105,7 +107,7 @@ class Field:
     """Anzeige geteilt durch Modellwert. Der Kern rechnet Anteile in 0…1, die
     Werkstatt spricht in Prozent — ein Feld mit ``[%]`` und einer 0,15 darin
     ist schlicht falsch beschriftet (§19.3)."""
-    note: str = ""
+    note: str | TranslatableText = ""
     """Was der Wert tut, und woran man ihn ändert — als Tooltip am Feld.
 
     **Der größte Dialog der Anwendung war der einzige ohne ein erklärendes
@@ -157,6 +159,32 @@ FIELD_WIDTH: Final[dict[str, int]] = {
 }
 
 
+#: Wann zwei Einstellungswerte als gleich gelten — feiner als jedes Feld
+#: anzeigt.
+#:
+#: Nicht ``EPS_GEOM`` (0,001 mm): Ein Flussverhältnis steht auf 0,98, eine
+#: Schichthöhe auf 0,08, und ein Anteil der Füllung auf 0,15 — dort wären
+#: tausendstel Schritte eine echte Änderung. Sechs Stellen liegen unter jeder
+#: Anzeige (höchstens drei Nachkommastellen) und über dem Rauschen, das beim
+#: Hin- und Herrechnen durch ``factor`` entsteht.
+EPS_SETTING: Final = 1e-6
+
+
+def _same_value(a: object, b: object) -> bool:
+    """Ob zwei Einstellungswerte dasselbe sagen.
+
+    Regel 6: Fließkomma nie mit ``==``. Die Felder tragen dreierlei — Zahlen,
+    Wahrheitswerte und Zeichenketten —, und ein Wahrheitswert ist in Python
+    eine Zahl: Ohne die Abfrage davor wäre ``True`` gleich ``1,0``, und ein
+    Haken, den jemand gesetzt hat, sähe aus wie eine unveränderte Eins.
+    """
+    if isinstance(a, bool) or isinstance(b, bool):
+        return a is b
+    if isinstance(a, int | float) and isinstance(b, int | float):
+        return is_close(float(a), float(b), EPS_SETTING)
+    return bool(a == b)
+
+
 def group_title(group: str) -> str:
     return {
         "layers": tr("Schichten"),
@@ -180,13 +208,25 @@ def group_title(group: str) -> str:
 # Die Gebietsregel nennt den Ort eindeutig — „Der Name steht in
 # ``_CHOICE_NAMES`` (``app/ui/labels.py``)" —, und ``tests/test_translations.py``
 # prüft jetzt beide Feldquellen gegen diese eine Tabelle.
+#
+# **Und jeder Text hier steht mit ``_()``, nicht mit ``tr()``.** Die Tabelle
+# ist ein Modulrumpf: ``tr()`` übersetzt sofort, also beim Import, in der
+# Sprache, die dann gerade gilt — und das ist beim Start noch keine.
+# ``main_window.py`` zieht dieses Modul auf Modulebene nach, ``app.py``
+# installiert die Sprache danach; ein Sprachwechsel zur Laufzeit
+# (``rebuild_for_language``) baut die Fenster neu und die Module nicht. Alle
+# sechsundfünfzig Titel und alle sechsundfünfzig Sätze blieben damit in der
+# Startsprache stehen — der größte Dialog der Anwendung, deutsch in einem
+# englischen Fenster. ``_()`` gibt einen ``TranslatableText``, der seine
+# Sprache erst beim ``str()`` sucht; aufgelöst wird in ``_label`` und
+# ``_editor``. Dieselbe Umstellung wie in ``settings_dialog``.
 
 
 FIELDS: tuple[Field, ...] = (
     # --- Schichten ---
     Field(
         "layers.layer_height",
-        tr("Schichthöhe"),
+        _("Schichthöhe"),
         "layers",
         unit="mm",
         minimum=0.02,
@@ -194,113 +234,113 @@ FIELDS: tuple[Field, ...] = (
         step=0.02,
         decimals=3,
         front=True,
-        note=tr(
+        note=_(
             "Wie dick jede Schicht ist. Weniger heißt feiner und länger: 0,2 mm ist der Alltag, "
             "0,12 mm für Sichtteile, 0,28 mm für Klötze."
         ),
     ),
     Field(
         "layers.first_layer_height",
-        tr("Erste Schicht"),
+        _("Erste Schicht"),
         "layers",
         unit="mm",
         minimum=0.02,
         maximum=1.2,
         step=0.02,
         decimals=3,
-        note=tr(
+        note=_(
             "Die erste Schicht darf dicker sein — sie füllt Unebenheiten der Platte aus und hält "
             "damit besser."
         ),
     ),
     Field(
         "layers.line_width",
-        tr("Linienbreite"),
+        _("Linienbreite"),
         "layers",
         unit="mm",
         minimum=0.1,
         maximum=2.0,
         step=0.02,
         decimals=3,
-        note=tr(
+        note=_(
             "Wie breit eine Bahn gelegt wird. Etwas mehr als der Düsendurchmesser ist normal: "
             "mehr trägt besser, weniger zeichnet feiner."
         ),
     ),
     Field(
         "layers.first_layer_line_width",
-        tr("Linienbreite erste Schicht"),
+        _("Linienbreite erste Schicht"),
         "layers",
         unit="mm",
         minimum=0.1,
         maximum=2.0,
         step=0.02,
         decimals=3,
-        note=tr("Breiter als die übrigen Bahnen — mehr Material auf dem Bett heißt mehr Haftung."),
+        note=_("Breiter als die übrigen Bahnen — mehr Material auf dem Bett heißt mehr Haftung."),
     ),
     # --- Wände ---
     Field(
         "shell.wall_count",
-        tr("Wände"),
+        _("Wände"),
         "shell",
         kind="int",
         minimum=1,
         maximum=20,
         front=True,
-        note=tr(
+        note=_(
             "Wie viele Bahnen die Außenhaut dick ist. Zwei halten die Form, drei oder vier tragen "
             "Last."
         ),
     ),
     Field(
         "shell.top_layers",
-        tr("Deckschichten"),
+        _("Deckschichten"),
         "shell",
         kind="int",
         minimum=0,
         maximum=50,
-        note=tr(
+        note=_(
             "Volle Schichten oben, damit die Füllung nicht durchscheint. Unter drei bleiben "
             "Löcher über den Zellen."
         ),
     ),
     Field(
         "shell.bottom_layers",
-        tr("Bodenschichten"),
+        _("Bodenschichten"),
         "shell",
         kind="int",
         minimum=0,
         maximum=50,
-        note=tr("Volle Schichten auf dem Bett. Sie bestimmen, wie glatt die Unterseite wird."),
+        note=_("Volle Schichten auf dem Bett. Sie bestimmen, wie glatt die Unterseite wird."),
     ),
     Field(
         "shell.outer_wall_first",
-        tr("Außenwand zuerst"),
+        _("Außenwand zuerst"),
         "shell",
         kind="bool",
-        note=tr(
+        note=_(
             "Legt die Außenbahn vor der Innenbahn. Das trifft Maße genauer und stützt Überhänge "
             "schlechter."
         ),
     ),
     Field(
         "shell.seam_position",
-        tr("Naht"),
+        _("Naht"),
         "shell",
         kind="enum",
         choices=("aligned", "nearest", "random", "rear"),
-        note=tr(
+        note=_(
             "Wo die Naht jeder Schicht sitzt — die Stelle, an der eine Bahn beginnt und endet. "
             "Ausgerichtet ergibt eine sichtbare Linie, zufällig verteilt sie sich."
         ),
     ),
     Field(
         "shell.wall_generator",
-        tr("Wandbahnen"),
+        _("Wandbahnen"),
         "shell",
         kind="enum",
         choices=("classic", "arachne"),
-        note=tr(
+        note=_(
             "Wie die Bahnen einer Wand verteilt werden. Arachne trifft schmale Stege, die auf "
             "keine ganze Bahnbreite passen; klassisch rechnet mit gleicher Breite und füllt den "
             "Rest."
@@ -308,20 +348,20 @@ FIELDS: tuple[Field, ...] = (
     ),
     Field(
         "shell.precise_outer_wall",
-        tr("Außenwand auf Sollmaß"),
+        _("Außenwand auf Sollmaß"),
         "shell",
         kind="bool",
-        note=tr(
+        note=_(
             "Rechnet die Außenwand auf ihr Sollmaß statt auf die Bahnmitte. Für Passungen "
             "richtig, sonst unnötig."
         ),
     ),
     Field(
         "shell.ironing",
-        tr("Oberfläche bügeln"),
+        _("Oberfläche bügeln"),
         "shell",
         kind="bool",
-        note=tr(
+        note=_(
             "Fährt die Oberseite ein zweites Mal ab und glättet sie mit wenig Material. Kostet "
             "Zeit und lohnt bei Sichtflächen."
         ),
@@ -329,7 +369,7 @@ FIELDS: tuple[Field, ...] = (
     # --- Füllung ---
     Field(
         "infill.density",
-        tr("Fülldichte"),
+        _("Fülldichte"),
         "infill",
         unit="%",
         minimum=0.0,
@@ -338,33 +378,33 @@ FIELDS: tuple[Field, ...] = (
         decimals=0,
         factor=100.0,
         front=True,
-        note=tr(
+        note=_(
             "Wie viel Material im Inneren steht. 15 % ist Alltag, 40 % für Belastung, 0 % ergibt "
             "einen hohlen Körper."
         ),
     ),
     Field(
         "infill.pattern",
-        tr("Füllmuster"),
+        _("Füllmuster"),
         "infill",
         kind="enum",
         choices=("grid", "gyroid", "honeycomb", "cubic", "lines", "triangles"),
         front=True,
-        note=tr(
+        note=_(
             "Wie die Füllung gelegt wird. Gyroid trägt in alle Richtungen gleich, Gitter ist "
             "schneller, Wabe liegt dazwischen."
         ),
     ),
     Field(
         "infill.angle",
-        tr("Füllwinkel"),
+        _("Füllwinkel"),
         "infill",
         unit=DEGREE_UNIT,
         minimum=0.0,
         maximum=180.0,
         step=5.0,
         decimals=1,
-        note=tr(
+        note=_(
             "Um wie viel die Füllung gedreht liegt. Bahnen längs der Belastung tragen mehr "
             "als querlaufende — bei einem Teil, das in eine bekannte Richtung belastet wird, "
             "lohnt das Drehen."
@@ -373,61 +413,61 @@ FIELDS: tuple[Field, ...] = (
     # --- Temperaturen ---
     Field(
         "temperature.nozzle",
-        tr("Düse"),
+        _("Düse"),
         "temperature",
         kind="int",
         unit="°C",
         minimum=0,
         maximum=400,
         front=True,
-        note=tr(
+        note=_(
             "Wie heiß die Düse ist. Zu kalt heißt schwache Schichtbindung, zu heiß bringt Fäden "
             "und weiche Überhänge."
         ),
     ),
     Field(
         "temperature.nozzle_first_layer",
-        tr("Düse, erste Schicht"),
+        _("Düse, erste Schicht"),
         "temperature",
         kind="int",
         unit="°C",
         minimum=0,
         maximum=400,
-        note=tr("Meist etwas heißer als der Rest: Die erste Schicht soll auf dem Bett kleben."),
+        note=_("Meist etwas heißer als der Rest: Die erste Schicht soll auf dem Bett kleben."),
     ),
     Field(
         "temperature.bed",
-        tr("Bett"),
+        _("Bett"),
         "temperature",
         kind="int",
         unit="°C",
         minimum=0,
         maximum=150,
         front=True,
-        note=tr(
+        note=_(
             "Wie warm das Bett ist. Es hält das Teil unten fest und verhindert, dass es sich "
             "an den Ecken hochzieht."
         ),
     ),
     Field(
         "temperature.bed_first_layer",
-        tr("Bett, erste Schicht"),
+        _("Bett, erste Schicht"),
         "temperature",
         kind="int",
         unit="°C",
         minimum=0,
         maximum=150,
-        note=tr("Für die erste Schicht darf das Bett wärmer sein als danach."),
+        note=_("Für die erste Schicht darf das Bett wärmer sein als danach."),
     ),
     Field(
         "temperature.chamber",
-        tr("Kammer"),
+        _("Kammer"),
         "temperature",
         kind="int",
         unit="°C",
         minimum=0,
         maximum=90,
-        note=tr(
+        note=_(
             "Temperatur im geschlossenen Bauraum — nur bei Druckern, die einen haben. ABS und ASA "
             "brauchen sie, PLA nicht."
         ),
@@ -435,7 +475,7 @@ FIELDS: tuple[Field, ...] = (
     # --- Kühlung ---
     Field(
         "cooling.fan_speed",
-        tr("Lüfter"),
+        _("Lüfter"),
         "cooling",
         unit="%",
         minimum=0.0,
@@ -443,14 +483,14 @@ FIELDS: tuple[Field, ...] = (
         step=5.0,
         decimals=0,
         factor=100.0,
-        note=tr(
+        note=_(
             "Wie stark der Lüfter läuft. Viel Kühlung gibt scharfe Kanten und schwächere "
             "Schichten; bei ABS deshalb wenig."
         ),
     ),
     Field(
         "cooling.bridge_fan_speed",
-        tr("Lüfter bei Brücken"),
+        _("Lüfter bei Brücken"),
         "cooling",
         unit="%",
         minimum=0.0,
@@ -458,33 +498,33 @@ FIELDS: tuple[Field, ...] = (
         step=5.0,
         decimals=0,
         factor=100.0,
-        note=tr(
+        note=_(
             "Über einer Brücke darf mehr gekühlt werden: Die Bahn hängt frei und soll schnell "
             "fest sein."
         ),
     ),
     Field(
         "cooling.disable_first_layers",
-        tr("Lüfter aus für Schichten"),
+        _("Lüfter aus für Schichten"),
         "cooling",
         kind="int",
         minimum=0,
         maximum=20,
-        note=tr(
+        note=_(
             "So viele Schichten bleiben ungekühlt. Der Lüfter würde die erste Schicht vom "
             "Bett lösen."
         ),
     ),
     Field(
         "cooling.minimum_layer_time",
-        tr("Mindestzeit je Schicht"),
+        _("Mindestzeit je Schicht"),
         "cooling",
         unit="s",
         minimum=0.0,
         maximum=120.0,
         step=1.0,
         decimals=0,
-        note=tr(
+        note=_(
             "Wie lange eine Schicht mindestens dauert. Bei kleinen Querschnitten bremst der "
             "Drucker, damit die vorige Schicht fest wird."
         ),
@@ -492,102 +532,102 @@ FIELDS: tuple[Field, ...] = (
     # --- Geschwindigkeit ---
     Field(
         "speed.outer_wall",
-        tr("Außenwand"),
+        _("Außenwand"),
         "speed",
         unit="mm/s",
         minimum=1.0,
         maximum=1000.0,
         step=5.0,
         decimals=1,
-        note=tr("Tempo der sichtbaren Außenbahn. Langsamer heißt glatter und maßgenauer."),
+        note=_("Tempo der sichtbaren Außenbahn. Langsamer heißt glatter und maßgenauer."),
     ),
     Field(
         "speed.inner_wall",
-        tr("Innenwand"),
+        _("Innenwand"),
         "speed",
         unit="mm/s",
         minimum=1.0,
         maximum=1000.0,
         step=5.0,
         decimals=1,
-        note=tr("Tempo der inneren Bahnen. Sie sieht niemand — hier darf es schneller sein."),
+        note=_("Tempo der inneren Bahnen. Sie sieht niemand — hier darf es schneller sein."),
     ),
     Field(
         "speed.infill",
-        tr("Füllung"),
+        _("Füllung"),
         "speed",
         unit="mm/s",
         minimum=1.0,
         maximum=1000.0,
         step=5.0,
         decimals=1,
-        note=tr("Tempo der Füllung. Nach oben begrenzt sie ohnehin der höchste Volumenstrom."),
+        note=_("Tempo der Füllung. Nach oben begrenzt sie ohnehin der höchste Volumenstrom."),
     ),
     Field(
         "speed.top_surface",
-        tr("Oberfläche"),
+        _("Oberfläche"),
         "speed",
         unit="mm/s",
         minimum=1.0,
         maximum=1000.0,
         step=5.0,
         decimals=1,
-        note=tr("Tempo der Deckschichten. Langsam macht die Oberseite gleichmäßig."),
+        note=_("Tempo der Deckschichten. Langsam macht die Oberseite gleichmäßig."),
     ),
     Field(
         "speed.first_layer",
-        tr("Erste Schicht"),
+        _("Erste Schicht"),
         "speed",
         unit="mm/s",
         minimum=1.0,
         maximum=1000.0,
         step=5.0,
         decimals=1,
-        note=tr("Tempo der ersten Schicht. Langsam heißt haften."),
+        note=_("Tempo der ersten Schicht. Langsam heißt haften."),
     ),
     Field(
         "speed.travel",
-        tr("Leerfahrt"),
+        _("Leerfahrt"),
         "speed",
         unit="mm/s",
         minimum=1.0,
         maximum=1000.0,
         step=10.0,
         decimals=0,
-        note=tr("Tempo ohne Material. Schnell spart Zeit und schüttelt den Drucker mehr."),
+        note=_("Tempo ohne Material. Schnell spart Zeit und schüttelt den Drucker mehr."),
     ),
     Field(
         "speed.bridge",
-        tr("Brücken"),
+        _("Brücken"),
         "speed",
         unit="mm/s",
         minimum=1.0,
         maximum=200.0,
         step=5.0,
         decimals=1,
-        note=tr("Tempo über einer Brücke. Zu langsam hängt durch, zu schnell reißt."),
+        note=_("Tempo über einer Brücke. Zu langsam hängt durch, zu schnell reißt."),
     ),
     Field(
         "speed.acceleration",
-        tr("Beschleunigung"),
+        _("Beschleunigung"),
         "speed",
         unit="mm/s²",
         minimum=100.0,
         maximum=30000.0,
         step=500.0,
         decimals=0,
-        note=tr("Wie hart der Drucker beschleunigt. Weniger heißt sauberere Ecken und mehr Zeit."),
+        note=_("Wie hart der Drucker beschleunigt. Weniger heißt sauberere Ecken und mehr Zeit."),
     ),
     Field(
         "speed.outer_wall_acceleration",
-        tr("Beschleunigung Außenwand"),
+        _("Beschleunigung Außenwand"),
         "speed",
         unit="mm/s²",
         minimum=100.0,
         maximum=30000.0,
         step=500.0,
         decimals=0,
-        note=tr(
+        note=_(
             "Beschleunigung nur für die Außenbahn. Hier lohnt es, weniger zu nehmen als überall "
             "sonst."
         ),
@@ -595,71 +635,69 @@ FIELDS: tuple[Field, ...] = (
     # --- Stützen ---
     Field(
         "support.style",
-        tr("Stützen"),
+        _("Stützen"),
         "support",
         kind="enum",
         choices=("none", "grid", "tree"),
         front=True,
-        note=tr(
+        note=_(
             "Ob und wie gestützt wird. Baum braucht weniger Material und lässt sich leichter "
             "abnehmen, Gitter trägt schwere Überhänge sicherer."
         ),
     ),
     Field(
         "support.placement",
-        tr("Stützen ansetzen"),
+        _("Stützen ansetzen"),
         "support",
         kind="enum",
         choices=("everywhere", "build_plate"),
-        note=tr(
+        note=_(
             "Wo Stützen ansetzen dürfen. Nur vom Bett lässt das Modell selbst unberührt; "
             "überall stützt auch mitten darauf und hinterlässt Spuren."
         ),
     ),
     Field(
         "support.threshold_angle",
-        tr("Ab Winkel"),
+        _("Ab Winkel"),
         "support",
         unit=DEGREE_UNIT,
         minimum=0.0,
         maximum=90.0,
         step=5.0,
         decimals=1,
-        note=tr(
+        note=_(
             "Ab welcher Neigung gestützt wird, gemessen zur Senkrechten. Was steiler steht, trägt "
             "sich selbst — wie steil, sagt der Überhangfächer."
         ),
     ),
     Field(
         "support.z_gap",
-        tr("Abstand nach oben"),
+        _("Abstand nach oben"),
         "support",
         unit="mm",
         minimum=0.0,
         maximum=2.0,
         step=0.05,
         decimals=2,
-        note=tr(
+        note=_(
             "Luft zwischen Stütze und Teil nach oben. Mehr heißt leichter abnehmen und rauere "
             "Fläche darüber."
         ),
     ),
     Field(
         "support.xy_gap",
-        tr("Abstand zur Seite"),
+        _("Abstand zur Seite"),
         "support",
         unit="mm",
         minimum=0.0,
         maximum=5.0,
         step=0.1,
         decimals=2,
-        note=tr(
-            "Luft zwischen Stütze und Teil zur Seite. Zu wenig verschweißt beides miteinander."
-        ),
+        note=_("Luft zwischen Stütze und Teil zur Seite. Zu wenig verschweißt beides miteinander."),
     ),
     Field(
         "support.density",
-        tr("Stützdichte"),
+        _("Stützdichte"),
         "support",
         unit="%",
         minimum=0.0,
@@ -667,27 +705,27 @@ FIELDS: tuple[Field, ...] = (
         step=5.0,
         decimals=0,
         factor=100.0,
-        note=tr("Wie dicht die Stütze steht. Dichter trägt mehr und ist schwerer abzunehmen."),
+        note=_("Wie dicht die Stütze steht. Dichter trägt mehr und ist schwerer abzunehmen."),
     ),
     Field(
         "support.interface_layers",
-        tr("Trennschichten"),
+        _("Trennschichten"),
         "support",
         kind="int",
         minimum=0,
         maximum=10,
-        note=tr(
+        note=_(
             "Dichte Schichten zwischen Stütze und Teil. Sie machen die gestützte Fläche glatter."
         ),
     ),
     # --- Haftung, Rückzug, Filament ---
     Field(
         "adhesion.kind",
-        tr("Druckbetthaftung"),
+        _("Druckbetthaftung"),
         "other",
         kind="enum",
         choices=("none", "skirt", "brim", "raft"),
-        note=tr(
+        note=_(
             "Was zusätzlich auf das Bett kommt, damit das Teil hält. Brim legt einen Rand an, "
             "Raft eine ganze Unterlage; Skirt berührt das Teil nicht und hält nur die Düse im "
             "Fluss."
@@ -695,174 +733,174 @@ FIELDS: tuple[Field, ...] = (
     ),
     Field(
         "adhesion.skirt_loops",
-        tr("Skirt-Runden"),
+        _("Skirt-Runden"),
         "other",
         kind="int",
         minimum=0,
         maximum=20,
-        note=tr("Wie viele Runden neben dem Teil gelegt werden, ohne es zu berühren."),
+        note=_("Wie viele Runden neben dem Teil gelegt werden, ohne es zu berühren."),
     ),
     Field(
         "adhesion.skirt_distance",
-        tr("Skirt-Abstand"),
+        _("Skirt-Abstand"),
         "other",
         unit="mm",
         minimum=0.0,
         maximum=50.0,
         step=0.5,
         decimals=1,
-        note=tr("Wie weit diese Runden vom Teil entfernt liegen."),
+        note=_("Wie weit diese Runden vom Teil entfernt liegen."),
     ),
     Field(
         "adhesion.brim_width",
-        tr("Brim-Breite"),
+        _("Brim-Breite"),
         "other",
         unit="mm",
         minimum=0.0,
         maximum=50.0,
         step=0.5,
         decimals=1,
-        note=tr(
+        note=_(
             "Wie breit der angelegte Rand ist. Mehr hält besser und muss hinterher abgeschnitten "
             "werden."
         ),
     ),
     Field(
         "adhesion.raft_layers",
-        tr("Raft-Schichten"),
+        _("Raft-Schichten"),
         "other",
         kind="int",
         minimum=0,
         maximum=20,
-        note=tr("Wie viele Schichten die Unterlage hat, auf der das Teil steht."),
+        note=_("Wie viele Schichten die Unterlage hat, auf der das Teil steht."),
     ),
     Field(
         "retraction.length",
-        tr("Rückzug"),
+        _("Rückzug"),
         "other",
         unit="mm",
         minimum=0.0,
         maximum=10.0,
         step=0.1,
         decimals=2,
-        note=tr(
+        note=_(
             "Wie weit das Filament zurückgezogen wird, bevor die Düse leer fährt. Das Mittel "
             "gegen Fäden."
         ),
     ),
     Field(
         "retraction.speed",
-        tr("Rückzugstempo"),
+        _("Rückzugstempo"),
         "other",
         unit="mm/s",
         minimum=1.0,
         maximum=200.0,
         step=5.0,
         decimals=0,
-        note=tr(
+        note=_(
             "Wie schnell zurückgezogen wird. Zu schnell mahlt das Antriebsrad ins Filament, zu "
             "langsam zieht Fäden."
         ),
     ),
     Field(
         "retraction.z_hop",
-        tr("Z-Sprung"),
+        _("Z-Sprung"),
         "other",
         unit="mm",
         minimum=0.0,
         maximum=5.0,
         step=0.05,
         decimals=2,
-        note=tr(
+        note=_(
             "Wie weit die Düse anhebt, bevor sie leer fährt. Sie stößt dann nicht an schon "
             "Gedrucktes."
         ),
     ),
     Field(
         "retraction.wipe",
-        tr("Abstreifen"),
+        _("Abstreifen"),
         "other",
         kind="bool",
-        note=tr("Wischt die Düse am Teil ab, bevor sie wegfährt. Weniger Nasen, etwas mehr Zeit."),
+        note=_("Wischt die Düse am Teil ab, bevor sie wegfährt. Weniger Nasen, etwas mehr Zeit."),
     ),
     Field(
         "retraction.avoid_crossing_walls",
-        tr("Wände nicht überfahren"),
+        _("Wände nicht überfahren"),
         "other",
         kind="bool",
-        note=tr(
+        note=_(
             "Führt Leerfahrten um Wände herum statt darüber. Weniger Narben auf der Oberfläche, "
             "längere Wege."
         ),
     ),
     Field(
         "filament.colour",
-        tr("Farbe"),
+        _("Farbe"),
         "other",
         kind="colour",
         front=True,
-        note=tr(
+        note=_(
             "Die Farbe für Vorschau und Übergabe an den Slicer. Am Druck selbst ändert sie nichts."
         ),
     ),
     Field(
         "filament.diameter",
-        tr("Filamentdurchmesser"),
+        _("Filamentdurchmesser"),
         "other",
         unit="mm",
         minimum=1.0,
         maximum=4.0,
         step=0.05,
         decimals=2,
-        note=tr("Der Durchmesser des Filaments, wie die Rolle ihn angibt — 1,75 mm oder 2,85 mm."),
+        note=_("Der Durchmesser des Filaments, wie die Rolle ihn angibt — 1,75 mm oder 2,85 mm."),
     ),
     Field(
         "filament.density",
-        tr("Dichte"),
+        _("Dichte"),
         "other",
         unit="g/cm³",
         minimum=0.5,
         maximum=3.0,
         step=0.01,
         decimals=2,
-        note=tr("Dichte des Materials. Daraus rechnet die Schätzung das Gewicht."),
+        note=_("Dichte des Materials. Daraus rechnet die Schätzung das Gewicht."),
     ),
     Field(
         "filament.flow_ratio",
-        tr("Flussfaktor"),
+        _("Flussfaktor"),
         "other",
         minimum=0.5,
         maximum=1.5,
         step=0.01,
         decimals=3,
-        note=tr(
+        note=_(
             "Feinkorrektur der Materialmenge. Über 1 legt mehr, darunter weniger — geändert wird "
             "das nach einem gemessenen Prüfwürfel."
         ),
     ),
     Field(
         "filament.max_flow",
-        tr("Höchster Volumenstrom"),
+        _("Höchster Volumenstrom"),
         "other",
         unit="mm³/s",
         minimum=0.5,
         maximum=60.0,
         step=0.5,
         decimals=1,
-        note=tr(
+        note=_(
             "Wie viel Material die Düse je Sekunde schafft. Diese Grenze bremst jedes Tempo, das "
             "mehr verlangt."
         ),
     ),
     Field(
         "filament.cost_per_kg",
-        tr("Preis je Kilogramm"),
+        _("Preis je Kilogramm"),
         "other",
         minimum=0.0,
         maximum=1000.0,
         step=1.0,
         decimals=2,
-        note=tr("Was ein Kilogramm kostet. Nur für die Kostenschätzung."),
+        note=_("Was ein Kilogramm kostet. Nur für die Kostenschätzung."),
     ),
 )
 
@@ -1255,13 +1293,72 @@ class PrintSettingsDialog(QDialog):
         Sofort statt beim Schließen: die Vorschläge in diesem Dialog hängen an
         Maschine und Material, und sie stehen lassen, während oben etwas
         anderes gewählt ist, wäre eine Anzeige, die nicht mehr stimmt.
+
+        **Was der Kunde selbst gesetzt hat, überlebt den Wechsel.** Hier stand
+        ein blankes ``resolve``, und das warf jeden übersteuerten und jeden
+        mitgebrachten Wert weg — gemessen: 62 % Füllung aus einer eingelesenen
+        3MF wurden beim Umstellen des Druckers wortlos zu 15 %. Ein Drucker
+        wechselt *Vorgaben*; eine Entscheidung ist keine Vorgabe.
+
+        Was eine Entscheidung ist, sagt der Vergleich mit den **alten**
+        Vorgaben: Wo der heutige Wert von dem abweicht, was das alte Profil
+        vorgeschlagen hätte, hat jemand Hand angelegt. Alles andere wird neu
+        aufgelöst — und das ist genau der Sinn des Wechsels.
+
+        Der Unterschied zu :meth:`_quality_changed` ist Absicht: Eine Stufe zu
+        wechseln *heißt*, alles neu vorgeben zu lassen; einen Drucker zu
+        wechseln heißt es nicht.
         """
+        # Vor dem Umschalten lesen: danach ist ``session.profile`` das neue.
+        old_defaults = print_settings.resolve(self.session.profile, self.settings.quality)
+        chosen = {
+            field.path: print_settings.read_path(self.settings, field.path)
+            for field in FIELDS
+            if not _same_value(
+                print_settings.read_path(self.settings, field.path),
+                print_settings.read_path(old_defaults, field.path),
+            )
+        }
+
         self.session.change_scene_profile(
             str(self.printer_choice.currentData()), str(self.material_choice.currentData())
         )
-        self.settings = print_settings.resolve(self.session.profile, self.settings.quality)
+        settings = self._resolved(self.settings.quality)
+        for path, value in chosen.items():
+            settings = print_settings.with_path(settings, path, value)
+        self.settings = settings
         self._load_into_editors()
         self._refresh_advice()
+
+    def _resolved(self, quality: Any) -> PrintSettings:
+        """Neu aufgelöste Vorgaben — mit der Slotbelegung von vorher.
+
+        **``resolve`` ist eine reine Funktion aus Profil und Stufe, und genau
+        ein Feld hat dort keine Quelle: ``slot_profiles``.** Nachgemessen: Ein
+        Satz durch „fein" und zurück nach „standard" ergibt Feld für Feld
+        wieder denselben — die Slotbelegung steht danach auf ``()`` und
+        bleibt es, gleich wie oft man zurückschaltet.
+
+        Das ist der Unterschied, auf den es ankommt. Für alles andere trägt
+        :meth:`_quality_changed` sein Argument zu Recht: Eine Stufe zu wechseln
+        *heißt*, sich neue Vorgaben geben zu lassen, und wer die alten
+        zurückwill, wählt die alte Stufe. Für die Slotbelegung stimmt dieser
+        Satz nicht — sie kommt von keiner Stufe zurück, weil sie von keiner
+        kam.
+
+        Und sie ist auch der Sache nach keine Druckeinstellung: Sie sagt,
+        **welche Spule auf welchem Materialslot des Modells liegt** (§20). Ob
+        die Schrift eines Gehäuses aus Weiß gedruckt wird, ändert sich nicht,
+        weil jemand von 0,2 auf 0,12 mm Schichthöhe geht.
+
+        Der Fehler war an beiden Stellen derselbe, und die zweite ist die
+        Stelle, an der die Übersteuerungen gerettet werden — dort fiel die
+        Slotbelegung durch dasselbe Loch.
+        """
+        return replace(
+            print_settings.resolve(self.session.profile, quality),
+            slot_profiles=self.settings.slot_profiles,
+        )
 
     def _build_front(self) -> QWidget:
         box = QGroupBox(tr("Das Wichtigste"), self)
@@ -1616,7 +1713,7 @@ class PrintSettingsDialog(QDialog):
             box.setEnabled(True)
             remembered = self.settings.slot_profiles
             name = remembered[position] if position < len(remembered) else ""
-            found = box.findText(name) if name else -1
+            found = self._filament_index(box, name)
             box.setCurrentIndex(found if found >= 0 else self.filament_choice.currentIndex())
 
     def _build_slot_rows(self, form: QFormLayout) -> None:
@@ -1646,6 +1743,48 @@ class PrintSettingsDialog(QDialog):
             if index < len(stored) and stored[index]:
                 box.setProperty("wanted", stored[index])
 
+    def _profile_name(self, path: object) -> str:
+        """Der Profilname zu einem Pfad aus einer Auswahlliste, oder leer.
+
+        Die Listen tragen den Pfad als Kennung (``addItem(titel, pfad)``); was
+        gespeichert und an den Slicer gereicht wird, ist der Name. Dazwischen
+        liegt genau dieses Nachschlagen — die Beschriftung taugt dafür nicht,
+        sie trägt einen übersetzten Zusatz.
+        """
+        if not path:
+            return ""
+        wanted = str(path)
+        for entry in self._profiles:
+            if str(entry.path) == wanted:
+                return entry.name
+        return ""
+
+    def _filament_index(self, box: QComboBox, name: str) -> int:
+        """Wo das gemerkte Filament in dieser Liste steht — oder ``-1``.
+
+        Drei Lesarten, in dieser Reihenfolge, und jede hat ihren Grund:
+
+        * **Der Name** ist das, was seit heute abgelegt wird. Er steht nicht in
+          der Liste (dort steht die Beschriftung), also führt der Weg über das
+          Profil zu seinem Pfad.
+        * **Der Pfad**, falls ein Projekt ihn trägt: ``slicer_base_filament``
+          merkt sich Pfade, und dieselbe Zeile liest beide Merker.
+        * **Die Beschriftung**, für alles, was vor der Behebung gespeichert
+          wurde. Ein Projekt mit „Generic PETG (eigenes)" darin soll seine Wahl
+          nicht verlieren, nur weil sie falsch abgelegt war — im deutschen
+          Fenster findet sie sich damit wieder, im englischen nicht mehr, und
+          das ist genau der Fehler, der behoben wurde.
+        """
+        if not name:
+            return -1
+        for entry in self._profiles:
+            if entry.name == name:
+                found = box.findData(str(entry.path))
+                if found >= 0:
+                    return found
+        found = box.findData(name)
+        return found if found >= 0 else box.findText(name)
+
     def _plate_slots(self) -> list[MaterialSlot]:
         """Die Materialslots der ersten Platte, zusammengelegt wie beim Export."""
         result = self.session.last_result
@@ -1670,11 +1809,22 @@ class PrintSettingsDialog(QDialog):
 
         Gespeichert wird der **Name**, nicht der Pfad: er reist mit dem Projekt
         und zeigt auf einem zweiten Rechner nicht ins Leere (Regel 12).
+
+        **Das versprach der Satz darüber, und abgelegt wurde etwas anderes:**
+        ``currentText()`` gibt die *Beschriftung*, und die trägt bei einem
+        selbst angelegten Profil den Zusatz „(eigenes)" — übersetzt. Im
+        englischen Fenster hieß dasselbe Profil damit „Generic PETG (own)", im
+        deutschen „Generic PETG (eigenes)", und der Slicer kennt keins von
+        beidem: Die Wahl kam nie an, und beim nächsten Öffnen fand die
+        Vorbelegung ihren eigenen Eintrag nicht wieder.
+
+        Der Name steht im Profil, und der Weg dorthin ist der Pfad in
+        ``currentData()`` — dieselbe Kennung, mit der die Liste gefüllt wurde.
         """
         if position >= len(self.slot_rows):
             return
         box = self.slot_rows[position][1]
-        chosen = box.currentText()
+        chosen = self._profile_name(box.currentData()) or box.currentText()
         names = list(self.settings.slot_profiles)
         names += [""] * (len(self.slot_rows) - len(names))
         names[position] = chosen
@@ -1843,11 +1993,19 @@ class PrintSettingsDialog(QDialog):
         ``QFormLayout.labelForField`` gibt es heraus — so macht es der
         Operationsdialog, der seine Zeilen als Zeichenketten anlegt. Beides
         geht; hier stand die Wahl für die Stelle, an der man es nicht vergisst.
+
+        **Und aufgelöst wird hier, nicht in der Tabelle.** ``field.title`` und
+        ``field.note`` sind träge Texte (:class:`TranslatableText`); ihr
+        ``str()`` steht an jeder Stelle, an der ein Text an Qt geht, damit er
+        die Sprache trägt, die beim **Bauen** des Dialogs gilt — und nicht die
+        vom Import.
         """
-        label = QLabel(f"{field.title} [{field.unit}]" if field.unit else field.title, self)
-        if field.note:
-            label.setToolTip(field.note)
-            label.setStatusTip(field.note)
+        title = str(field.title)
+        label = QLabel(f"{title} [{field.unit}]" if field.unit else title, self)
+        note = str(field.note)
+        if note:
+            label.setToolTip(note)
+            label.setStatusTip(note)
         return label
 
     def _editor(self, field: Field) -> QWidget:
@@ -1882,7 +2040,7 @@ class PrintSettingsDialog(QDialog):
             combo.currentIndexChanged.connect(self._editor_changed)
             editor = combo
         elif field.kind == "colour":
-            button = _ColourButton("#000000", self, note=field.note)
+            button = _ColourButton("#000000", self, note=str(field.note))
             button.changed.connect(self._editor_changed)
             editor = button
         else:
@@ -1904,13 +2062,14 @@ class PrintSettingsDialog(QDialog):
         # auf ihre Beschriftung. Der ``statusTip`` kommt dazu, weil ein
         # Bildschirmleser ihn vorliest und die Statuszeile ihn zeigt, ohne dass
         # jemand warten muss (Regel 18: nicht nur eine Kodierung).
-        if field.note:
+        note = str(field.note)
+        if note:
             # Wer schon einen genaueren Tooltip hat, behält ihn: Der Farbknopf
             # nennt darin den Wert und hängt den Satz selbst hinten an.
             if not editor.toolTip():
-                editor.setToolTip(field.note)
-            editor.setStatusTip(field.note)
-            editor.setAccessibleDescription(field.note)
+                editor.setToolTip(note)
+            editor.setStatusTip(note)
+            editor.setAccessibleDescription(note)
         self._fields[field.path] = field
         return editor
 
@@ -1968,11 +2127,20 @@ class PrintSettingsDialog(QDialog):
     def _quality_changed(self) -> None:
         """Die Stufe wechseln heißt: neu auflösen. Von Hand Geändertes geht
         dabei verloren — das ist der Sinn einer Stufe, und rücknehmbar ist es
-        über die Stufe, aus der man kam (Regel 19: keine Rückfrage)."""
+        über die Stufe, aus der man kam (Regel 19: keine Rückfrage).
+
+        **Bis auf die Slotbelegung**, und die ist keine Ausnahme von diesem
+        Satz, sondern fällt gar nicht unter ihn: Sie kommt von keiner Stufe
+        zurück, weil sie von keiner kam (:meth:`_resolved` misst es nach). Wer
+        „fein" wählte, hatte danach zwei Slots ohne Spule — und sah es nicht,
+        denn die zwei Auswahlfelder standen unverändert da, während das Modell
+        nichts mehr davon wusste. Beim Export lief die weiße Schrift dann mit
+        dem Filament der Platte.
+        """
         chosen = self.quality.currentData()
         if chosen is None:
             return
-        self.settings = print_settings.resolve(self.session.profile, chosen)
+        self.settings = self._resolved(chosen)
         self._load_into_editors()
         self._refresh_advice()
 
@@ -2085,7 +2253,7 @@ class PrintSettingsDialog(QDialog):
             becomes = self._shown(entry.path, entry.value)
             item = QTreeWidgetItem(
                 [
-                    f"{marker}{field.title if field else entry.path}",
+                    f"{marker}{str(field.title) if field else entry.path}",
                     f"{was} → {becomes}",
                     str(entry.reason),
                 ]

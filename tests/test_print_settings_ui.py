@@ -509,6 +509,70 @@ def test_the_explanation_arrives_at_the_field_and_at_its_label(
     assert beschriftungen >= 8, f"nur {beschriftungen} Beschriftungen gefunden"
 
 
+def test_a_dialog_built_after_a_language_change_speaks_that_language(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Sechsundfünfzig Felder standen deutsch in einem englischen Fenster.
+
+    ``FIELDS`` ist ein Modulrumpf, und ``tr()`` darin übersetzte **beim
+    Import** — also in der Sprache, die zu diesem Zeitpunkt galt, und beim
+    Start ist das noch keine. ``main_window.py`` zieht dieses Modul auf
+    Modulebene nach, ``install_language`` läuft danach; und ein Sprachwechsel
+    zur Laufzeit (``app.rebuild_for_language``) baut die **Fenster** neu auf,
+    nicht die Module. Der größte Dialog der Anwendung blieb damit in der
+    Startsprache.
+
+    **Beide Schritte, sonst misst der Test seinen eigenen Aufbau**:
+    ``install_language`` lädt den Katalog, ``set_language`` schaltet ihn
+    scharf. Wer nur den zweiten ruft, bekommt überall die Message-ID zurück —
+    also Deutsch — und hält den Rückfall für den Fehler.
+
+    ``source_text`` gibt die Message-ID (den deutschen Quelltext), ``tr`` die
+    Fassung in der jetzt gültigen Sprache: Damit braucht der Test keinen
+    einzigen englischen Satz als Literal und altert nicht mit dem Katalog.
+    """
+    from app.i18n import get_language, set_language, source_text, tr
+    from app.i18n.catalog import install_language
+
+    vorher = get_language()
+    try:
+        install_language("en")
+        set_language("en")
+
+        gewandert = 0
+        stehengeblieben = []
+        for field in FIELDS:
+            for teil, wert in (("Titel", field.title), ("Satz", field.note)):
+                deutsch = source_text(wert)
+                if not deutsch:
+                    continue
+                englisch = tr(deutsch)
+                if englisch != deutsch:
+                    gewandert += 1
+                if str(wert) != englisch:
+                    stehengeblieben.append(f"{field.path} ({teil}): {str(wert)!r}")
+        assert not stehengeblieben, "in der Startsprache hängengeblieben:\n" + "\n".join(
+            stehengeblieben
+        )
+        # Ohne diese Zusicherung wäre der Test auch dann grün, wenn der
+        # englische Katalog gar nicht angekommen ist: Dann ist jede
+        # Übersetzung gleich ihrer Message-ID, und die Schleife oben findet
+        # nichts (`tests.md`, „Ein Verbotstest über eine leere Menge").
+        assert gewandert >= 100, f"nur {gewandert} übersetzte Texte — kam der Katalog an?"
+
+        # Und am gebauten Fenster, nicht nur an der Tabelle: Der Dialog liest
+        # die Texte in ``_label`` und ``_editor``, und dort muss das ``str()``
+        # stehen.
+        gebaut = PrintSettingsDialog(session, UiSettings())
+        hoehe = next(f for f in FIELDS if f.path == "layers.layer_height")
+        texte = {label.text() for label in gebaut.findChildren(QLabel)}
+        assert f"{tr(source_text(hoehe.title))} [mm]" in texte
+        assert f"{source_text(hoehe.title)} [mm]" not in texte
+        assert gebaut._editors[hoehe.path].statusTip() == tr(source_text(hoehe.note))
+    finally:
+        set_language(vorher)
+
+
 def test_a_freshly_built_colour_row_carries_both(dialog: PrintSettingsDialog) -> None:
     """Am gebauten Dialog rettet ``_load_into_editors`` den Tooltip.
 
@@ -1320,6 +1384,172 @@ def test_a_second_slot_gets_its_own_choice(
     gemerkt = dialog.settings.slot_profiles
     assert len(gemerkt) == 2, "ein Eintrag je Slot"
     assert gemerkt[1] == "Haus PLA weiß", "der Name reist mit, nicht der Pfad"
+
+
+def test_a_slot_stores_the_profile_name_and_not_its_caption(
+    qt_app: QApplication, session: Session, monkeypatch
+) -> None:
+    """Gespeichert wurde die **Beschriftung**, und die ist übersetzt.
+
+    ``currentText()`` gibt bei einem selbst angelegten Profil „Haus PLA weiß
+    (eigenes)" — im englischen Fenster „(own)". Der Slicer kennt weder das eine
+    noch das andere: Die Slot-Wahl kam nie an, und beim nächsten Öffnen fand
+    die Vorbelegung ihren eigenen Eintrag nicht wieder.
+
+    **Der Test daneben konnte es nicht sehen**, und das ist der zweite Teil
+    des Befunds: Er legte den Eintrag mit ``addItem("Haus PLA weiß", pfad)``
+    an, also mit einer Beschriftung, die dem Namen gleicht. Zwei Wege, die
+    dasselbe zurückgeben, unterscheidet keine Zusicherung — hier wird der
+    Datensatz deshalb entzerrt, indem das Profil ein eigenes ist und seine
+    Beschriftung damit einen Zusatz trägt.
+    """
+    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self: _two_slots())
+    dialog = PrintSettingsDialog(session, UiSettings())
+    eigenes = _profile("Haus PLA weiß", "filament", from_user=True, filament_type="PLA")
+    dialog._profiles = [eigenes]
+
+    box = dialog.slot_rows[1][1]
+    box.addItem(eigenes.title("eigenes"), str(eigenes.path))
+    box.setCurrentIndex(box.count() - 1)
+    assert box.currentText() != eigenes.name, "sonst prüft der Test zwei gleiche Zahlen"
+
+    dialog._slot_filament_chosen(1)
+
+    assert dialog.settings.slot_profiles[1] == "Haus PLA weiß"
+    assert "(" not in dialog.settings.slot_profiles[1], "kein Anhang, den kein Slicer kennt"
+    # Und die Vorbelegung findet die Wahl wieder — ohne sie wäre der Name zwar
+    # richtig abgelegt und beim nächsten Öffnen trotzdem verloren.
+    assert dialog._filament_index(box, "Haus PLA weiß") == box.count() - 1
+
+
+def test_the_slot_assignment_outlives_a_quality_change(
+    qt_app: QApplication, session: Session, monkeypatch
+) -> None:
+    """Der Zwilling des Druckerwechsels, eine Stufe weiter.
+
+    ``_quality_changed`` löst neu auf, und das ist richtig: Eine Stufe zu
+    wechseln *heißt*, sich neue Vorgaben geben zu lassen. Die Slotbelegung
+    fällt nicht darunter — sie sagt, **welche Spule auf welchem Materialslot
+    des Modells liegt** (§20), und das ändert sich nicht, weil jemand von 0,2
+    auf 0,12 mm geht.
+
+    Der Beweis steht im Code und nicht in der Meinung: ``resolve`` ist eine
+    reine Funktion aus Profil und Stufe, und ``slot_profiles`` ist das einzige
+    Feld, für das sie keine Quelle hat. „Rücknehmbar über die Stufe, aus der
+    man kam" gilt deshalb für jeden anderen Wert und für diesen einen nicht —
+    er kommt von keiner Stufe zurück, weil er von keiner kam.
+
+    Schlimmer als der Verlust war, dass man ihn nicht sah: Die zwei
+    Auswahlfelder standen unverändert da, während das Modell nichts mehr von
+    ihnen wusste, und beim Export lief die weiße Schrift mit dem Filament der
+    Platte.
+
+    **Beide Hälften**, sonst wäre „es ändert sich nichts mehr" auch grün.
+    """
+    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self: _two_slots())
+    dialog = PrintSettingsDialog(session, UiSettings())
+    dialog.settings = replace(dialog.settings, slot_profiles=("Haus PETG", "Haus PLA weiß"))
+    assert dialog.settings.quality == "standard"
+    assert print_settings.read_path(dialog.settings, "layers.layer_height") == pytest.approx(0.2)
+
+    _select_quality(dialog, "fine")
+
+    assert dialog.settings.slot_profiles == ("Haus PETG", "Haus PLA weiß"), (
+        "die Spule je Slot ist keine Vorgabe der Stufe"
+    )
+    assert print_settings.read_path(dialog.settings, "layers.layer_height") == pytest.approx(
+        0.12
+    ), "und die Stufe wirkt weiterhin auf alles, was ihr gehört"
+
+
+def test_the_slot_assignment_outlives_a_printer_change(
+    qt_app: QApplication, session: Session, monkeypatch
+) -> None:
+    """Derselbe Verlust an der zweiten Stelle — der dritte Zwilling.
+
+    ``_scene_profile_changed`` rettet seit heute die übersteuerten Werte, und
+    zwar über die 56 Pfade aus ``FIELDS``. ``slot_profiles`` steht in keinem
+    Feld des Dialogs und fiel damit durch dasselbe Loch wie beim
+    Stufenwechsel: Die Rettung, die den Fehler behob, ließ genau diesen einen
+    Wert liegen.
+    """
+    monkeypatch.setattr(PrintSettingsDialog, "_plate_slots", lambda _self: _two_slots())
+    dialog = PrintSettingsDialog(session, UiSettings())
+    try:
+        _select_printer(dialog, "generic-220")
+        dialog.settings = replace(dialog.settings, slot_profiles=("Haus PETG", "Haus PLA weiß"))
+
+        _select_printer(dialog, "prusa-mini")
+
+        assert dialog.settings.slot_profiles == ("Haus PETG", "Haus PLA weiß")
+        assert print_settings.read_path(dialog.settings, "layers.line_width") == pytest.approx(
+            0.45
+        ), "und der Druckerwechsel wirkt weiterhin"
+    finally:
+        session.wait_for_idle()
+
+
+def _select_quality(dialog: PrintSettingsDialog, quality: str) -> None:
+    """Die Stufe über die Auswahl wechseln, wie ein Kunde es tut."""
+    index = dialog.quality.findData(quality)
+    assert index >= 0, quality
+    dialog.quality.setCurrentIndex(index)
+
+
+def test_a_different_printer_keeps_what_the_customer_set(
+    qt_app: QApplication, session: Session
+) -> None:
+    """Ein Druckerwechsel warf jeden eigenen Wert weg — wortlos.
+
+    ``_scene_profile_changed`` löste den ganzen Satz neu auf. Übersteuerte
+    Werte und mitgebrachte Werte (aus einer eingelesenen 3MF) waren damit fort:
+    62 % Füllung wurden beim Umstellen des Druckers zu 15 %, ohne Ansage und
+    ohne Undo — der Dialog ist kein Verlaufsschritt.
+
+    Ein Drucker wechselt **Vorgaben**. Was von der alten Vorgabe abweicht, ist
+    keine Vorgabe, sondern eine Entscheidung, und die bleibt. Beide Hälften
+    stehen hier: Ohne die zweite wäre „nichts ändert sich mehr" auch grün, und
+    das wäre der nächste Fehler.
+    """
+    dialog = PrintSettingsDialog(session, UiSettings())
+    try:
+        _select_printer(dialog, "generic-220")
+        assert print_settings.read_path(dialog.settings, "layers.line_width") == pytest.approx(0.42)
+
+        fuellung = dialog._editors["infill.density"]
+        assert isinstance(fuellung, QDoubleSpinBox)
+        fuellung.setValue(62.0)  # das Feld zeigt Prozent, das Modell 0…1
+        assert print_settings.read_path(dialog.settings, "infill.density") == pytest.approx(0.62)
+
+        _select_printer(dialog, "prusa-mini")
+
+        assert print_settings.read_path(dialog.settings, "infill.density") == pytest.approx(0.62), (
+            "die eigene Entscheidung überlebt den Wechsel"
+        )
+        assert print_settings.read_path(dialog.settings, "layers.line_width") == pytest.approx(
+            0.45
+        ), "und die unangetastete Vorgabe folgt der neuen Düse"
+        assert dialog._editors["infill.density"].value() == pytest.approx(62.0), (
+            "auch im Feld, nicht nur im Modell"
+        )
+    finally:
+        # **Der Druckerwechsel wertet neu aus, und zwar nebenher.** Ein
+        # Arbeiter, der den Test überlebt, nimmt beim Abbau den Prozess mit —
+        # der Lauf riss danach in ``_no_worker_outlives_its_window``, mit
+        # „passed" davor und Exit 139 dahinter (siehe ``Session.wait_for_idle``).
+        session.wait_for_idle()
+
+
+def _select_printer(dialog: PrintSettingsDialog, printer_id: str) -> None:
+    """Den Drucker über die Auswahl wechseln, wie ein Kunde es tut.
+
+    Über den Index und nicht über ``_scene_profile_changed``: Am Signal hängt
+    die halbe Zusicherung, und ein Test, der die Methode selbst ruft, prüft
+    den Weg nicht (`.claude/rules/tests.md`, „Am Weg vorbei").
+    """
+    index = dialog.printer_choice.findData(printer_id)
+    assert index >= 0, printer_id
+    dialog.printer_choice.setCurrentIndex(index)
 
 
 def test_the_slot_choice_survives_the_project_file(tmp_path: Path) -> None:

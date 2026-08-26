@@ -2505,6 +2505,40 @@ def test_cancelling_the_question_keeps_the_window_open(window: MainWindow, monke
     assert window.close(), "mit Verwerfen geht es dann"
 
 
+def test_dropping_a_model_on_the_start_screen_asks_before_replacing(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """*Datei → Neu* verwirft bewusst nichts — das Einfügen danach tat es.
+
+    Der Startbildschirm über einem geänderten Projekt ist eine Ansicht, kein
+    Verwerfen: Das Projekt bleibt offen. Ein Modell zu ziehen oder
+    einzufügen rief dann ``start_new`` ohne jede Frage — Dokument samt
+    Verlauf ersetzt, Undo holte nichts zurück (Gesamtreview-b, Bericht 08,
+    Fund 1). Jetzt kommt dieselbe Frage wie beim Öffnen einer ``.p3d``.
+    """
+    import app.ui.main_window as module
+
+    window.open_path(MESHES / "cube_clean.stl")
+    window.session.wait_for_idle()
+    assert window.session.modified
+    window.action_new()
+    ops_before = [entry.op for entry in window.session.project.document.ops]
+
+    monkeypatch.setattr(module, "confirm_unsaved", lambda title, parent: "cancel")
+    window.open_path(MESHES / "plate_holes.stl")
+
+    assert [entry.op for entry in window.session.project.document.ops] == ops_before, (
+        "Abbrechen lässt das Projekt, wie es war"
+    )
+
+    monkeypatch.setattr(module, "confirm_unsaved", lambda title, parent: "discard")
+    window.open_path(MESHES / "plate_holes.stl")
+    window.session.wait_for_idle()
+    assert [entry.op for entry in window.session.project.document.ops] == ["load"], (
+        "Verwerfen beginnt das neue Projekt"
+    )
+
+
 # --- Einstellungen an einem Ort (§19.3, §38) ------------------------------------
 
 
@@ -3560,6 +3594,109 @@ def test_the_parameter_dialog_offers_bounds(qt_app: QApplication) -> None:
 
     dialog.maximum_field.setText("abc")
     assert dialog.validation_problem() is not None, "keine Zahl ist keine Grenze"
+
+
+def test_a_limit_that_is_set_can_be_changed_again(session: Session) -> None:
+    """Grenzen waren anlegbar und nie änderbar (§2.1: keine Sackgassen).
+
+    Die Parameterleiste liest ``minimum``/``maximum`` nur als Spinbox-Grenzen
+    und bietet nichts zum Bearbeiten; der einzige Dialog dazu weist einen
+    vorhandenen Namen ab. Wer eine Obergrenze auf 100 gesetzt hatte und später
+    150 brauchte, fand ein Feld, das ohne ein Wort klemmt, und keinen dritten
+    Weg.
+
+    Rücknehmbar muss es sein, weil es eine Dokumentänderung ist (§15.5) — ein
+    Undo stellt die alte Grenze her und nicht bloß den alten Wert.
+    """
+    session.add_parameter(Parameter(name="breite", value=40.0, maximum=100.0, title="Breite"))
+
+    weiter = dataclasses.replace(session.project.document.parameters["breite"], maximum=150.0)
+    assert session.edit_parameter("breite", weiter)
+
+    stand = session.project.document.parameters["breite"]
+    assert stand.maximum == pytest.approx(150.0)
+    assert stand.value == pytest.approx(40.0), "die Zahl bleibt, die Grenze wandert"
+    assert stand.title == "Breite", "der Titel überlebt die Änderung"
+
+    session.undo()
+    assert session.project.document.parameters["breite"].maximum == pytest.approx(100.0)
+
+
+def test_changing_a_limit_to_the_same_value_writes_no_transaction(session: Session) -> None:
+    """Ein Undo, das nichts zurücknimmt, ist ein Undo, das der Kunde verliert.
+
+    Wer den Dialog öffnet und mit *Übernehmen* schließt, ohne etwas zu ändern,
+    darf keine Zeile im Verlauf erzeugen — sonst kostet ihn der nächste
+    Strg+Z einen Schritt, den er nicht gemacht hat.
+    """
+    session.add_parameter(Parameter(name="breite", value=40.0, maximum=100.0))
+    vorher = len(session.history.transactions)
+
+    gleich = dataclasses.replace(session.project.document.parameters["breite"])
+
+    assert not session.edit_parameter("breite", gleich)
+    assert len(session.history.transactions) == vorher
+
+
+def test_the_parameter_dialog_edits_what_is_there(qt_app: QApplication) -> None:
+    """Derselbe Dialog ändert, was er angelegt hat — vorbelegt und ohne Absage.
+
+    Zwei Dinge, die beide fehlten: Die Felder standen leer da (ein
+    Änderungsdialog, der nichts zeigt, verlangt vom Kunden, sich zu erinnern),
+    und der eigene Name fiel unter „Diesen Namen gibt es schon".
+
+    Der Name selbst bleibt stehen: Er ist der Schlüssel, unter dem jeder
+    Ausdruck das Maß nennt (``@breite``), und ihn hier umzuschreiben hieße,
+    alle diese Verweise mitzuziehen.
+    """
+    from app.ui.dialogs import ParameterDialog
+
+    bestand = {"breite": Parameter(name="breite", value=40.0, unit="mm", maximum=100.0)}
+    dialog = ParameterDialog(bestand, existing=bestand["breite"])
+
+    assert dialog.name_field.text() == "breite"
+    assert dialog.name_field.isReadOnly(), "der Schlüssel wechselt hier nicht"
+    assert dialog.name_field.toolTip(), "und sagt warum"
+    assert dialog.value_field.value() == pytest.approx(40.0)
+    assert dialog.maximum_field.text() == "100"
+    assert dialog.minimum_field.text() == "", "keine Grenze bleibt keine Grenze"
+    assert dialog.validation_problem() is None, "der eigene Name ist kein vergebener"
+
+    dialog.maximum_field.setText("150")
+    assert dialog.parameter().maximum == pytest.approx(150.0)
+
+
+def test_the_parameter_bar_offers_the_way_to_the_limits(qt_app: QApplication) -> None:
+    """Der Weg dorthin: Rechtsklick auf die Zeile, ein Eintrag.
+
+    Geprüft am gebauten Menü und über das Auslösen des Eintrags, nicht am
+    Aufruf dahinter: Ohne die Verbindung wäre der Eintrag ein Knopf, der
+    nichts tut. ``exec`` bliebe stehen — deshalb gibt ``context_menu`` das
+    Menü heraus, wie es der Objektbaum daneben tut.
+    """
+    from app.core.types import Document
+    from app.ui.panels import ParameterPanel
+
+    panel = ParameterPanel()
+    document = Document(format_version=1, app_version="0.0.1")
+    document.parameters["breite"] = Parameter(name="breite", value=40.0, maximum=100.0)
+    panel.show_document(document)
+    panel.resize(320, 200)
+    panel.layout().activate()
+
+    editor = panel._editors["breite"]
+    assert panel.parameter_at(editor.geometry().center()) == "breite"
+
+    gerufen: list[str] = []
+    panel.limitsRequested.connect(gerufen.append)
+    menu = panel.context_menu(editor.geometry().center())
+    assert menu is not None
+    aktionen = menu.actions()
+    assert len(aktionen) == 1, [a.text() for a in aktionen]
+    aktionen[0].trigger()
+    assert gerufen == ["breite"], "der Eintrag nennt seine Zeile"
+
+    assert panel.context_menu(QPoint(-5, -5)) is None, "kein Menü, wo keine Zeile steht"
 
 
 def test_the_catalog_button_says_what_it_does(qt_app: QApplication) -> None:
@@ -5838,6 +5975,106 @@ def test_the_about_dialog_names_the_activation_state(
     assert "A-77" in texts
 
 
+def test_a_damaged_installation_is_not_called_unlocked(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """„Freigeschaltet für kaeufer@…" über einem Fenster, das nichts freigibt.
+
+    Seit ``Activation.damaged`` (H4) wird der Schlüssel auch bei gebrochenem
+    Manifest gelesen — der zahlende Kunde soll erkannt werden statt eine
+    Kaufaufforderung zu bekommen. Beide Anzeigen fragten aber weiter nur nach
+    ``licence is not None`` und meldeten deshalb genau das Gegenteil des
+    Zustands: freigeschaltet, während jede Änderung gesperrt ist. Den wahren
+    Grund erfuhr der Kunde erst beim ersten Änderungsversuch — Regel 17 an der
+    Anzeige.
+
+    Der Wortlaut kommt aus ``InstallationDamaged`` und wird nicht zweimal
+    erfunden: Es ist derselbe Satz, den derselbe Kunde gleich darauf zu lesen
+    bekommt.
+    """
+    from datetime import date
+
+    from PySide6.QtWidgets import QLabel
+
+    from app.core import activation
+    from app.core.activation import key
+    from app.core.errors import InstallationDamaged
+    from app.ui.dialogs import AboutDialog, ActivationDialog
+
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 8, 6),
+        order="A-77",
+        holder="kaeufer@beispiel.de",
+    )
+    monkeypatch.setattr(activation, "_cached", activation.Activation(licence=licence, damaged=True))
+    erwartet = str(InstallationDamaged().detail)
+
+    dialog = ActivationDialog()
+    gezeigt = dialog.state_label.text()
+    assert erwartet in gezeigt, f"der Grund fehlt: {gezeigt!r}"
+    assert "Freigeschaltet" not in gezeigt, f"und das Gegenteil steht nicht da: {gezeigt!r}"
+    assert "kaeufer@beispiel.de" not in gezeigt, "erkannt heißt hier nicht freigeschaltet"
+
+    about = AboutDialog()
+    texte = " ".join(label.text() for label in about.findChildren(QLabel))
+    assert erwartet in texte, "und im Über-Dialog steht dieselbe Auskunft"
+    assert "Lizenziert für" not in texte
+
+
+def test_a_damaged_installation_greys_out_what_cannot_work(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der falsche Satz war behoben, die toten Knöpfe standen noch da.
+
+    ``damaged`` schlägt jeden Schlüssel (``Activation.unlocked``): *Eintragen*
+    schaltet nichts frei. Und *Solidon kaufen* führt in beiden Lagen an die
+    falsche Stelle — wer bezahlt hat, soll nicht noch einmal kaufen, und wer
+    nicht bezahlt hat, bekommt mit einem Kauf trotzdem keine heile
+    Installation. Zwei Knöpfe, die nichts bewirken können, sind zwei
+    Sackgassen (§2.1).
+
+    *Schlüssel entfernen* bleibt bedienbar: Es tut, was es sagt.
+
+    Regel 18 — grau ist eine Farbe. Der Grund steht im Tooltip, in der
+    ``accessibleDescription`` für den Bildschirmleser und sichtbar in der Zeile
+    darüber; und er ist derselbe Satz wie dort, nicht ein zweiter Wortlaut.
+    """
+    from datetime import date
+
+    from app.core import activation
+    from app.core.activation import key
+    from app.core.errors import InstallationDamaged
+    from app.ui.dialogs import ActivationDialog
+
+    licence = key.Licence(
+        major=key.current_major(),
+        purchased_on=date(2026, 8, 6),
+        order="A-77",
+        holder="kaeufer@beispiel.de",
+    )
+    grund = str(InstallationDamaged().detail)
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(licence=licence))
+    heil = ActivationDialog()
+    heil.field.setPlainText("SOLIDON3D-1-EGAL")
+    assert heil.check_button.isEnabled(), "ohne Schaden trägt der Knopf ein"
+    assert heil.buy_button.isEnabled()
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(licence=licence, damaged=True))
+    kaputt = ActivationDialog()
+    kaputt.field.setPlainText("SOLIDON3D-1-EGAL")
+
+    assert not kaputt.check_button.isEnabled(), "ein Schlüssel schaltet hier nichts frei"
+    assert not kaputt.buy_button.isEnabled(), "und ein Kauf repariert keine Datei"
+    assert kaputt.forget_button.isEnabled(), "entfernen tut, was es sagt"
+
+    for knopf in (kaputt.check_button, kaputt.buy_button):
+        assert grund in knopf.toolTip(), f"ohne Grund grau: {knopf.text()!r}"
+        assert grund in knopf.accessibleDescription(), "Regel 18: nicht nur die Farbe"
+    assert grund in kaputt.state_label.text(), "und sichtbar, nicht nur im Zeigen"
+
+
 def test_the_activation_dialog_accepts_a_valid_key(
     qt_app: QApplication, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -5909,6 +6146,33 @@ def test_the_first_run_dialog_mentions_the_trial_in_one_sentence(
     dialog = FirstRunDialog(UiSettings())
     assert "14" in dialog.greeting.text()
     assert "frei" in dialog.greeting.text()
+
+
+def test_the_first_run_dialog_promises_no_free_days_on_a_damaged_install(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Der dritte Zwilling — dieselbe Auskunft, die dritte Stelle.
+
+    „Die ersten 14 Tage ist alles frei" stand hier unabhängig vom Zustand.
+    Gemessen bei gebrochenem Manifest (H4): ``unlocked`` ist ``False``, jede
+    Änderung wird abgesagt — und das ist der **erste** Satz, den ein neuer
+    Kunde liest. Ein Virenscanner in Quarantäne reicht dafür.
+
+    Derselbe Wortlaut wie im Freischalt- und im Über-Dialog, aus derselben
+    Quelle (``InstallationDamaged``): Ein vierter eigener Satz wäre eine vierte
+    Gelegenheit, auseinanderzulaufen.
+    """
+    from app.core import activation
+    from app.core.errors import InstallationDamaged
+    from app.ui.first_run import FirstRunDialog
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(damaged=True))
+
+    dialog = FirstRunDialog(UiSettings())
+
+    text = dialog.greeting.text()
+    assert str(InstallationDamaged().detail) in text, text
+    assert "14" not in text, f"kein Versprechen über freie Tage: {text!r}"
 
 
 # --- Modell aus dem Netz (§16.3) ------------------------------------------------

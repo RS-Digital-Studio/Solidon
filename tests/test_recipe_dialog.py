@@ -109,6 +109,88 @@ def test_the_dialog_offers_a_row_for_every_parameter(qt_app: QApplication) -> No
         dialog.deleteLater()
 
 
+def test_a_derived_value_is_not_released_behind_the_back(qt_app: QApplication) -> None:
+    """Ein abgeleiteter Wert war vorgehakt und verlor still seine Formel.
+
+    Der Kern ersetzt beim Bauen Wert **und** Ausdruck (``_with_values``), und
+    das ist dort richtig: Ein überlebender Ausdruck machte aus dem Feld im
+    Bausteindialog eine Attrappe. Falsch war, dass niemand gefragt wurde. Ein
+    Weg-2-Projekt mit ``breite = 40`` und ``hoehe = =@breite/2`` wurde damit zu
+    einem Baustein mit zwei unabhängigen Feldern: „Breite" auf 60 ließ „Höhe"
+    auf 20 stehen statt auf 30, ohne ein Wort.
+
+    Verboten ist es nicht — die Bindung zu lösen ist ein zulässiger Wunsch.
+    Die Zeile geht nur ohne Haken auf und sagt daneben, was ein Haken dort
+    bedeutet.
+    """
+    document = replace(
+        _document(),
+        parameters={
+            "breite": Parameter(name="breite", value=40.0, unit="mm", title="Breite"),
+            "hoehe": Parameter(
+                name="hoehe", value=20.0, unit="mm", title="Höhe", expression="=@breite/2"
+            ),
+        },
+    )
+    dialog = RecipeDialog(document, {}, (1,), (_feature("hole_1"),), None)  # type: ignore[arg-type]
+    try:
+        rows = {row.name: row for row in dialog._params}
+
+        assert rows["breite"].take.isChecked(), "ein freier Wert bleibt vorgehakt"
+        assert not rows["hoehe"].take.isChecked(), "ein abgeleiteter nicht"
+
+        satz = rows["hoehe"].take.toolTip()
+        assert "@breite" in satz, f"der Satz nennt die Formel: {satz!r}"
+        assert "Formel" in satz, f"und was ein Haken mit ihr macht: {satz!r}"
+        # Regel 18: nicht nur das fehlende Häkchen — der Satz steht sichtbar
+        # da und wird vorgelesen.
+        assert rows["hoehe"].hint is not None
+        assert rows["hoehe"].hint.text() == satz
+        assert rows["hoehe"].take.accessibleDescription() == satz
+        assert rows["breite"].hint is None, "wo nichts abgeleitet ist, steht kein Satz"
+
+        # Und was der Kern bekommt, folgt dem Haken: der abgeleitete Wert ist
+        # nicht dabei, solange niemand ihn angehakt hat.
+        freigegeben = {row.name for row in dialog._params if row.take.isChecked()}
+        assert freigegeben == {"breite"}
+
+        rows["hoehe"].take.setChecked(True)
+        freigegeben = {row.name for row in dialog._params if row.take.isChecked()}
+        assert freigegeben == {"breite", "hoehe"}, "wer will, darf — er weiß jetzt nur, was"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
+def test_all_derived_says_what_to_do_instead_of_calling_the_part_rigid(
+    qt_app: QApplication,
+) -> None:
+    """Trägt jeder Wert einen Ausdruck, ist keine Zeile vorgehakt.
+
+    „Geben Sie mindestens ein Maß frei — sonst ist das Teil starr" ließe den
+    Kunden dann nach einem Haken suchen, den er längst sieht: Er sieht drei,
+    und keiner ist gesetzt. Der Satz muss sagen, warum.
+    """
+    document = replace(
+        _document(),
+        parameters={
+            "hoehe": Parameter(name="hoehe", value=20.0, expression="=@breite/2"),
+            "tiefe": Parameter(name="tiefe", value=10.0, expression="=@breite/4"),
+        },
+    )
+    dialog = RecipeDialog(document, {}, (1,), (_feature("hole_1"),), None)  # type: ignore[arg-type]
+    try:
+        dialog.title.setText("Halter")
+
+        assert not dialog._save.isEnabled()
+        grund = dialog._save.toolTip()
+        assert "gerechnet" in grund, f"der Grund nennt die Lage: {grund!r}"
+        assert "starr" not in grund, f"und schickt nicht auf die falsche Suche: {grund!r}"
+    finally:
+        dialog.release()
+        dialog.deleteLater()
+
+
 def test_what_the_dialog_hands_to_the_core(qt_app: QApplication) -> None:
     """Die Naht zu E2: genau die Felder, die ``ExposedParam`` verlangt."""
     dialog = _dialog(qt_app, (_feature("hole_1"),))
@@ -903,6 +985,46 @@ def test_the_unit_is_chosen_not_typed(qt_app: QApplication) -> None:
     finally:
         dialog.release()
         dialog.deleteLater()
+
+
+def test_the_unit_list_follows_a_language_change(qt_app: QApplication) -> None:
+    """``UNITS`` steht im Modulrumpf, und ``tr()`` dort übersetzt beim Import.
+
+    Beim Import gilt noch keine Sprache: Die drei Einträge blieben deutsch,
+    auch nachdem ``app.rebuild_for_language`` das Fenster neu gebaut hatte —
+    denn neu gebaut werden Fenster, nicht Module. ``_()`` gibt einen trägen
+    Text, der seine Sprache erst beim ``str()`` sucht, und ``addItem`` ruft
+    dieses ``str()`` beim Bauen der Zeile.
+
+    **Beide Schritte**: ``install_language`` lädt den Katalog,
+    ``set_language`` schaltet ihn scharf. Wer nur den zweiten ruft, bekommt
+    die Message-ID zurück — also Deutsch — und misst seinen eigenen Aufbau.
+    """
+    from app.i18n import get_language, set_language, source_text, tr
+    from app.i18n.catalog import install_language
+    from app.ui.recipe_dialog import UNITS
+
+    vorher = get_language()
+    try:
+        install_language("en")
+        set_language("en")
+
+        englisch = [tr(source_text(label)) for _code, label in UNITS]
+        deutsch = [source_text(label) for _code, label in UNITS]
+        # Zusicherung gegen die leere Menge: Ohne angekommenen Katalog wäre
+        # jede „Übersetzung" ihre eigene Message-ID, und alles unten grün.
+        assert englisch != deutsch, "kam der englische Katalog an?"
+
+        dialog = RecipeDialog(_document(), {}, (1,), (_feature("hole_1"),), None)  # type: ignore[arg-type]
+        try:
+            box = dialog._params[0].unit
+            gezeigt = [box.itemText(index) for index in range(box.count())]
+            assert gezeigt == englisch, f"in der Startsprache hängengeblieben: {gezeigt}"
+        finally:
+            dialog.release()
+            dialog.deleteLater()
+    finally:
+        set_language(vorher)
 
 
 def test_the_window_says_when_the_range_check_did_not_pass(qt_app: QApplication) -> None:

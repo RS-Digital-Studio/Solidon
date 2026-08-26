@@ -667,6 +667,53 @@ class Session(QObject):
         self.evaluate_async()
         return True
 
+    def edit_parameter(self, name: str, parameter: Parameter, origin: Origin | None = None) -> bool:
+        """Grenzen, Einheit, Titel und Ausdruck eines vorhandenen Maßes (§13,
+        §15.5).
+
+        :meth:`change_parameter` dreht die **Zahl**, das hier schreibt die
+        **Beschreibung** neu. Ohne diesen Weg waren Grenzen anlegbar und nie
+        änderbar: Wer eine Obergrenze auf 100 gesetzt hatte und später 150
+        brauchte, fand ein Feld, das ohne Erklärung klemmt, und einen Dialog,
+        der „Diesen Namen gibt es schon" sagt (§2.1: keine Sackgassen).
+
+        **Der Name ist der Schlüssel und wechselt hier nicht.** Ein anderer
+        wäre nicht dieselbe Zeile, sondern ein zweites Maß neben dem alten —
+        und jeder Ausdruck, der ``@name`` nennt, zeigte danach ins Leere.
+        Umbenennen ist eine eigene Handlung; sie gibt es noch nicht.
+
+        Wie jede Dokumentänderung reist sie als ``DocumentChange``, ist also
+        rücknehmbar und zählt als Änderung. ``origin`` und Rückgabewert: siehe
+        :meth:`add_fit`.
+        """
+        parameters = self.project.document.parameters
+        existing = parameters.get(name)
+        if existing is None or parameter.name != name:
+            return False
+        if parameter == existing:
+            # Nichts geändert heißt keine Zeile im Verlauf: Ein Undo, das
+            # nichts zurücknimmt, ist ein Undo, das der Kunde verliert.
+            return False
+        try:
+            if parameter.expression:
+                # Ein Ausdruck, der sich selbst oder im Kreis liest, kommt
+                # nicht ins Dokument — dieselbe Prüfung wie beim Anlegen, und
+                # hier ist sie schärfer: Der Parameter steht schon darin, also
+                # kann er sich jetzt selbst nennen.
+                expressions.resolution_order({**parameters, name: parameter})
+            self.history.apply(
+                f"{tr('Parameter')} {name}",
+                changes=change_for(self.project.document, parameters={name: parameter}),
+                origin=origin or Origin(by="user"),
+            )
+        except AppError as error:
+            self.failed.emit(error)
+            return False
+        self._dirty = True
+        self.projectChanged.emit()
+        self.evaluate_async()
+        return True
+
     def change_scene_profile(
         self, printer: str, material: str, origin: Origin | None = None
     ) -> bool:

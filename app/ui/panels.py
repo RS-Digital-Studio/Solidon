@@ -1475,6 +1475,15 @@ class ParameterPanel(QWidget):
     parameterEdited = Signal(str, float)
     addRequested = Signal()
     """Der Nutzer will ein Maß benennen — das Fenster öffnet den Dialog."""
+    limitsRequested = Signal(str)
+    """Grenzen, Einheit oder Ausdruck eines vorhandenen Maßes ändern.
+
+    Trägt den **Namen** des Parameters. Grenzen waren anlegbar und nie
+    änderbar: Die Leiste liest ``minimum``/``maximum`` als Spinbox-Grenzen,
+    und wer eine Obergrenze zu eng gesetzt hatte, fand ein Feld, das ohne ein
+    Wort klemmt — *Parameter anlegen …* wies den Namen ab, und ein dritter Weg
+    fehlte (§2.1: keine Sackgassen).
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -1487,6 +1496,15 @@ class ParameterPanel(QWidget):
         fit_wrapped(self._empty)
         self._form.addRow(self._empty)
         self._editors: dict[str, QDoubleSpinBox] = {}
+        self._rows: dict[QWidget, str] = {}
+        """Welches Widget zu welchem Parameter gehört — für das Kontextmenü.
+
+        Beide Hälften der Zeile stehen darin: Wer mit rechts auf die
+        Beschriftung zeigt, meint dieselbe Zeile wie der, der auf das Feld
+        zeigt.
+        """
+        self.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._on_context_menu)
         # §2.3: das Anlegen war ein Agentenwerkzeug und sonst nichts — wer
         # ohne Sprachmodell arbeitet, brauchte einen Weg mit der Maus.
         self.add_button = QPushButton(tr("Parameter anlegen …"), self)
@@ -1511,10 +1529,71 @@ class ParameterPanel(QWidget):
         self.setMinimumHeight(self._outer.sizeHint().height())
         self.updateGeometry()
 
+    def parameter_at(self, position: QPoint) -> str | None:
+        """Welcher Parameter an dieser Stelle steht — oder ``None``.
+
+        ``childAt`` gibt das **tiefste** Kind zurück, und eine ``NumberSpin``
+        hat ein eigenes Eingabefeld darin: Ohne den Gang nach oben trifft ein
+        Rechtsklick mitten in die Zahl niemanden.
+        """
+        widget: QWidget | None = self.childAt(position)
+        while widget is not None and widget is not self:
+            name = self._rows.get(widget)
+            if name is not None:
+                return name
+            widget = widget.parentWidget()
+        return None
+
+    def context_menu(self, position: QPoint) -> QMenu | None:
+        """Das Menü zur Zeile an dieser Stelle — oder ``None``, wo keine steht.
+
+        Vom Öffnen getrennt, wie beim Objektbaum daneben: ``exec`` blockiert,
+        und wer einen Eintrag prüfen will, braucht das Menü und nicht das
+        Fenster darüber.
+
+        Kein Menü auf leerer Fläche: Ein Kontextmenü mit einem einzigen
+        ausgegrauten Eintrag sagt nur, dass man danebengeklickt hat, und das
+        weiß man schon.
+        """
+        name = self.parameter_at(position)
+        if name is None:
+            return None
+        menu = QMenu(self)
+        # Ein Menü zeigt Hinweise nur, wenn man es ihm sagt — sonst kommt der
+        # Satz an und Qt zeigt ihn nie.
+        menu.setToolTipsVisible(True)
+        entry = menu.addAction(tr("Grenzen ändern …"))
+        note = tr("Untergrenze, Obergrenze, Einheit und Ausdruck dieses Maßes — rücknehmbar.")
+        entry.setToolTip(note)
+        entry.setStatusTip(note)
+        entry.triggered.connect(lambda _checked=False, key=name: self.limitsRequested.emit(key))
+        return menu
+
+    def _on_context_menu(self, position: QPoint) -> None:
+        menu = self.context_menu(position)
+        if menu is not None:
+            menu.exec(self.mapToGlobal(position))
+
+    def _remember_row(self, name: str, field: QWidget) -> None:
+        """Beide Hälften der Zeile dem Parameter zuordnen.
+
+        Die Beschriftung baut ``addRow`` selbst aus der Zeichenkette;
+        ``labelForField`` gibt sie heraus — dieselbe Stelle, an der auch der
+        Operationsdialog seine Beschriftung wiederfindet.
+        """
+        self._rows[field] = name
+        label = self._form.labelForField(field)
+        if label is not None:
+            self._rows[label] = name
+
     def show_document(self, document: Document) -> None:
         while self._form.rowCount():
             self._form.removeRow(0)
         self._editors.clear()
+        # **Vor dem Neuaufbau leeren, nicht danach.** ``removeRow`` löscht die
+        # Widgets der alten Zeilen; ein Eintrag, der auf ein totes C++-Objekt
+        # zeigt, beantwortet den nächsten Rechtsklick mit einem Absturz.
+        self._rows.clear()
 
         if not document.parameters:
             self._empty = QLabel(_empty_parameters_text(), self)
@@ -1531,6 +1610,10 @@ class ParameterPanel(QWidget):
                 label = QLabel(f"{localised(f'{parameter.value:.2f}')} {parameter.unit}", self)
                 label.setToolTip(parameter.expression)
                 self._form.addRow(f"{parameter.title or name}", label)
+                # Auch die abgeleitete Zeile: Ihr Ausdruck ist genau das, was
+                # man an ihr ändern will, und bearbeiten lässt sie sich sonst
+                # nirgends.
+                self._remember_row(name, label)
                 continue
             editor = NumberSpin(self)
             editor.setDecimals(2)
@@ -1544,6 +1627,7 @@ class ParameterPanel(QWidget):
             )
             self._editors[name] = editor
             self._form.addRow(f"{parameter.title or name}", editor)
+            self._remember_row(name, editor)
         self._fit()
 
 

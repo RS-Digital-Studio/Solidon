@@ -35,7 +35,14 @@ from PySide6.QtWidgets import (
 from app.branding import APP_NAME, APP_VERSION, COPYRIGHT, SUPPORT_ADDRESS, WEBSITE_URL
 from app.core import activation, expressions, tools
 from app.core.backends import keys, llm
-from app.core.errors import CANCEL, REPORT_ERROR, SHOW_DETAILS, Action, AppError
+from app.core.errors import (
+    CANCEL,
+    REPORT_ERROR,
+    SHOW_DETAILS,
+    Action,
+    AppError,
+    InstallationDamaged,
+)
 from app.core.knowledge import calibration, licences, profiles
 from app.core.log import get_logger
 from app.i18n import format_decimal, tr
@@ -181,12 +188,28 @@ class CalibrationDialog(QDialog):
 
 
 class ParameterDialog(QDialog):
-    """Ein Projektmaß von Hand anlegen (Bauplan §13, §2.3).
+    """Ein Projektmaß von Hand anlegen **oder ändern** (Bauplan §13, §2.3).
 
     Anlegen konnte bisher nur der Agent über sein Werkzeug. §2.3 verspricht
     aber, dass ohne KI alles außer dem Chat funktioniert — und Weg 2 lebt von
     benannten Maßen. Die Leiste ändert Werte; das hier ist das Gegenstück,
     das den Namen vergibt.
+
+    **Und derselbe Dialog ändert, was er angelegt hat.** Grenzen waren
+    anlegbar und nie änderbar: Die Leiste liest ``minimum``/``maximum`` als
+    Spinbox-Grenzen und bietet nichts zum Bearbeiten an, und ein zweiter Anlauf
+    über *Parameter anlegen …* endete an „Diesen Namen gibt es schon". Wer eine
+    Obergrenze auf 100 gesetzt hatte und später 150 brauchte, saß fest: Das
+    Feld klemmte ohne Erklärung, und einen dritten Weg gab es nicht — eine
+    Sackgasse (§2.1). Aufgerufen wird die Änderung aus dem Kontextmenü der
+    Zeile in der Parameterleiste; zurück ins Dokument geht sie als
+    Transaktion, also rücknehmbar (§15.5).
+
+    **Der Name bleibt beim Ändern stehen.** Er ist der Schlüssel, unter dem
+    jeder Ausdruck und jede Operation ihn nennt (``@breite``); ihn hier
+    umzuschreiben, hieße, all diese Verweise mitzuziehen — das ist eine eigene
+    Handlung und nicht die, um die es hier geht. Abgelehnt wird er trotzdem
+    nicht mehr: Der eigene Name ist beim Ändern kein vergebener.
 
     Geprüft wird inline, nicht modal: ein Fehlerdialog auf einem Dialog ist
     eine Sackgasse mit Vorgeschichte. Trägt das Ausdrucksfeld etwas, gehört
@@ -197,11 +220,16 @@ class ParameterDialog(QDialog):
         self,
         parameters: Mapping[str, Any],
         parent: QWidget | None = None,
+        existing: Any | None = None,
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Parameter anlegen"))
+        self._editing = existing is not None
+        self.setWindowTitle(tr("Parameter ändern") if self._editing else tr("Parameter anlegen"))
         self.setMinimumWidth(420)
-        self._existing = set(parameters)
+        # Der eigene Name ist beim Ändern kein vergebener — sonst weist der
+        # Dialog genau den Parameter ab, den er gerade bearbeitet.
+        self._existing = set(parameters) - ({existing.name} if existing is not None else set())
+        self._title = existing.title if existing is not None else None
         try:
             self._values: dict[str, float] = dict(expressions.resolve(parameters))
         except AppError:
@@ -244,6 +272,29 @@ class ParameterDialog(QDialog):
             weak_slot(self, ParameterDialog._expression_typed, forward=True)
         )
 
+        if existing is not None:
+            # Vorbelegt mit dem heutigen Stand — ein Änderungsdialog, der leer
+            # aufgeht, verlangt vom Kunden, sich zu erinnern, was dasteht.
+            # ``localised`` bleibt hier draußen: Die zwei Grenzfelder nehmen
+            # Punkt und Komma an, und was hier hineingeschrieben wird, liest
+            # ``_bounds`` gleich wieder.
+            self.name_field.setText(str(existing.name))
+            self.name_field.setReadOnly(True)
+            self.name_field.setToolTip(
+                tr(
+                    "Der Name ist der Schlüssel, mit dem Ausdrücke und "
+                    "Operationen auf das Maß zeigen (@name). Zum Umbenennen "
+                    "legen Sie ein neues Maß an."
+                )
+            )
+            self.value_field.setValue(float(existing.value))
+            self.unit_field.setText(str(existing.unit or ""))
+            if existing.minimum is not None:
+                self.minimum_field.setText(f"{float(existing.minimum):g}")
+            if existing.maximum is not None:
+                self.maximum_field.setText(f"{float(existing.maximum):g}")
+            self.expression_field.setText(str(existing.expression or ""))
+
         form = QFormLayout()
         form.addRow(tr("Name"), self.name_field)
         form.addRow(tr("Wert"), self.value_field)
@@ -262,7 +313,7 @@ class ParameterDialog(QDialog):
         ok = buttons.button(QDialogButtonBox.StandardButton.Ok)
         if ok is not None:
             # Der Knopf sagt, was er tut — wie in jedem Operationsdialog.
-            ok.setText(tr("Anlegen"))
+            ok.setText(tr("Übernehmen") if self._editing else tr("Anlegen"))
         buttons.accepted.connect(self._accept)
         buttons.rejected.connect(self.reject)
 
@@ -340,8 +391,15 @@ class ParameterDialog(QDialog):
         self.accept()
 
     def parameter(self) -> Any:
-        """Was angelegt werden soll — erst nach einem angenommenen Dialog
-        sinnvoll."""
+        """Was angelegt oder übernommen werden soll — erst nach einem
+        angenommenen Dialog sinnvoll.
+
+        **Der Titel reist mit, obwohl der Dialog ihn nicht fragt.** Er kommt
+        aus dem Agentenwerkzeug und beschriftet die Zeile in der
+        Parameterleiste; ihn beim Ändern der Grenzen fallen zu lassen, hieße,
+        dass eine Obergrenze von 150 nebenbei „Breite" wieder in „breite"
+        verwandelt.
+        """
         from app.core.types import Parameter
 
         expression = self.expression_field.text().strip() or None
@@ -350,6 +408,7 @@ class ParameterDialog(QDialog):
             name=self.name_field.text().strip(),
             value=self._value if expression else self.value_field.value(),
             unit=self.unit_field.text().strip() or "mm",
+            title=self._title,
             minimum=low,
             maximum=high,
             expression=expression,
@@ -1060,7 +1119,16 @@ class ActivationDialog(QDialog):
 
     def _show_state(self) -> None:
         state = activation.state()
-        if state.licence is not None:
+        if state.damaged:
+            # **Die beschädigte Installation kommt vor dem Schlüssel.** Sie
+            # liest ihn nämlich (``Activation.damaged`` sagt, warum), und wer
+            # bezahlt hat, sah deshalb „Freigeschaltet für kaeufer@…" in einem
+            # Fenster, dessen schreibende Seite zu ist — den wahren Grund
+            # erfuhr er beim ersten Änderungsversuch. Das ist Regel 17 an der
+            # Anzeige: Der Zustand nennt sich selbst, nicht erst die Absage.
+            self.state_label.setText(damaged_line())
+            set_level(self.state_label, "warning")
+        elif state.licence is not None:
             self.state_label.setText(
                 tr("Freigeschaltet für {holder} (Bestellung {order}).").format(
                     holder=state.licence.holder or tr("diesen Rechner"),
@@ -1113,17 +1181,43 @@ class ActivationDialog(QDialog):
             set_level(self.state_label, "warning")
 
     def _follow_field(self) -> None:
-        """„Eintragen" kann nur, wenn etwas im Feld steht.
+        """„Eintragen" kann nur, wenn etwas im Feld steht — und wenn es hilft.
 
         Der Grund steht am Knopf, nicht erst hinterher: Ein Dialog, der sich auf
         einen Klick hin wortlos schließt, hat die Frage nicht beantwortet,
         sondern weggeräumt.
+
+        **Bei gebrochenem Manifest (H4) können beide Knöpfe nichts.**
+        ``damaged`` schlägt jeden Schlüssel (``Activation.unlocked``), also
+        schaltet *Eintragen* nichts frei — und *Solidon kaufen* schickt in
+        beiden Lagen an die falsche Stelle: Wer bezahlt hat, soll nicht noch
+        einmal kaufen, und wer nicht bezahlt hat, bekommt mit einem Kauf
+        trotzdem keine heile Installation. Zwei Knöpfe, die nichts bewirken
+        können, sind zwei Sackgassen; grau mit Grund ist die Regel dieses
+        Hauses.
+
+        *Schlüssel entfernen* bleibt bedienbar — es tut, was es sagt, und
+        hängt nicht an der Freischaltung.
+
+        Der Grund ist derselbe Satz wie in der Zeile darüber
+        (:func:`damaged_line`, Quelle ist ``InstallationDamaged``), und er
+        steht dreifach da: sichtbar im ``state_label``, im Tooltip und über
+        ``accessibleDescription`` für den, der den Bildschirm nicht liest.
+        Grau allein wäre eine Aussage über die Farbe (Regel 18).
         """
+        damaged = activation.state().damaged
         filled = bool(self.field.toPlainText().strip())
-        self.check_button.setEnabled(filled)
+        self.check_button.setEnabled(filled and not damaged)
+        self.buy_button.setEnabled(not damaged)
+        locked = damaged_line() if damaged else ""
         self.check_button.setToolTip(
-            "" if filled else str(tr("Fügen Sie den Schlüssel aus der Bestellmail ein."))
+            locked
+            or ("" if filled else str(tr("Fügen Sie den Schlüssel aus der Bestellmail ein.")))
         )
+        self.buy_button.setToolTip(locked)
+        for button in (self.check_button, self.buy_button):
+            button.setStatusTip(button.toolTip())
+            button.setAccessibleDescription(button.toolTip())
 
     def _remember(self) -> None:
         text = self.field.toPlainText().strip()
@@ -1416,9 +1510,38 @@ class AboutDialog(QDialog):
         layout.addWidget(buttons)
 
 
+def damaged_line() -> str:
+    """Was eine beschädigte Installation (H4) über sich sagt — an einer Stelle.
+
+    **Der Wortlaut kommt aus dem Kern und wird hier nicht zum zweiten Mal
+    erfunden.** :class:`InstallationDamaged` trägt Titel und Grund samt der
+    beiden Wege (neu installieren, sonst Support); zwei Formulierungen
+    derselben Auskunft wären zwei Gelegenheiten, auseinanderzulaufen — und die
+    Meldung ist der Satz, den derselbe Kunde beim ersten Änderungsversuch
+    ohnehin zu lesen bekommt.
+
+    Ein *Satz*, keine Handlungsvorschläge: Der Freischaltdialog hat seine
+    eigene Knopfleiste, und die Fassung mit Knöpfen zeigt ``report_error``,
+    wenn eine gesperrte Funktion wirklich angefasst wird.
+
+    **Öffentlich, weil es vier Leser gibt**: die Zeile im Freischaltdialog, der
+    Grund an seinen zwei gesperrten Knöpfen, der Über-Dialog und die
+    Ersteinrichtung — die versprach sonst „Die ersten 14 Tage ist alles frei"
+    an eine Installation, die schon in der ersten Sekunde nichts freigibt.
+    """
+    problem = InstallationDamaged()
+    return f"{problem.title} {problem.detail}"
+
+
 def _licence_line() -> str:
     """Der Freischaltzustand als ein Satz — für den Über-Dialog (H2)."""
     state = activation.state()
+    if state.damaged:
+        # Dieselbe Auskunft wie im Freischaltdialog, und aus demselben Grund
+        # zuerst: Der Schlüssel wird auch bei gebrochenem Manifest gelesen,
+        # also stand hier „Lizenziert für …" über einer Installation, die
+        # nichts freischaltet.
+        return damaged_line()
     if state.licence is not None:
         return tr("Lizenziert für {holder} (Bestellung {order}).").format(
             holder=state.licence.holder or tr("diesen Rechner"),

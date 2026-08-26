@@ -52,7 +52,7 @@ from app.core.knowledge.parts import GROUPS, PARTS
 from app.core.knowledge.parts import recipe as recipes
 from app.core.log import get_logger
 from app.core.types import Document, Feature, Profile
-from app.i18n import tr
+from app.i18n import TranslatableText, _, tr
 from app.ui.labels import NumberSpin, feature_label, localised
 from app.ui.leash import Worker, WorkerLeash
 from app.ui.style import TIGHT, make_primary
@@ -164,10 +164,19 @@ class _CheckWorker(Worker):
 #: Umgerechnet wird ausschließlich ``mm`` (§19.3); alles andere ist eine
 #: Beschriftung. Mehr Auswahl wäre keine: „cm" gäbe es im Kern nicht, es sähe
 #: nur so aus.
-UNITS: Final = (
-    ("mm", tr("mm — Länge")),
-    ("grad", tr("Grad — Winkel")),
-    ("", tr("ohne Einheit")),
+#:
+#: **``_()`` und nicht ``tr()``, weil diese Tabelle im Modulrumpf steht.**
+#: ``tr()`` übersetzt sofort, und „sofort" heißt hier: beim Import, in der
+#: Sprache, die dann gerade gilt — beim Start ist das noch keine. Ein
+#: Sprachwechsel zur Laufzeit (``app.rebuild_for_language``) baut die Fenster
+#: neu auf, nicht die Module: Die drei Einträge blieben danach deutsch in
+#: einem englischen Dialog. Dieselbe Falle wie in ``settings_dialog`` und aus
+#: demselben Grund behoben; ``_()`` gibt einen ``TranslatableText``, der seine
+#: Sprache erst beim ``str()`` sucht.
+UNITS: Final[tuple[tuple[str, TranslatableText], ...]] = (
+    ("mm", _("mm — Länge")),
+    ("grad", _("Grad — Winkel")),
+    ("", _("ohne Einheit")),
 )
 
 
@@ -182,8 +191,41 @@ class _ParamRow:
         # gerade eingerichtet wird, steht nirgends. Sichtbar wurde das erst am
         # gerenderten Dialog; die Felder waren einzeln alle richtig.
         self.take = QCheckBox(str(parameter.name), parent)
-        self.take.setChecked(True)
+        self.derived = str(parameter.expression or "")
+        """Der Ausdruck des Projektparameters, oder leer.
+
+        **Eine abgeleitete Zeile geht ohne Haken auf.** Der Kern schneidet die
+        Formel weg, sobald der Wert von außen kommt (``recipe._with_values``,
+        und dort ist das richtig) — vorgehakt hieß also: Ein Projekt mit
+        ``breite = 40`` und ``hoehe = =@breite/2`` wurde zu einem Baustein mit
+        zwei unabhängigen Feldern, und „Breite" auf 60 ließ „Höhe" auf 20
+        stehen statt auf 30. Ohne ein Wort. Die Parameterleiste hält sich an
+        die Gegenregel — abgeleitete Werte werden gezeigt, nicht bearbeitet,
+        der Ausdruck besitzt sie —, und dieser Dialog gab sie zum Bearbeiten
+        frei, ohne zu fragen.
+
+        Verboten ist es nicht: Die Bindung zu lösen ist ein zulässiger Wunsch.
+        Es ist nur eine Entscheidung, und die trifft der Kunde.
+        """
+        self.take.setChecked(not self.derived)
         self.take.setAccessibleName(tr("Diesen Wert freigeben"))
+
+        self.hint: QLabel | None = None
+        if self.derived:
+            note = str(
+                tr(
+                    "Wird aus {expression} gerechnet. Freigegeben verliert dieser "
+                    "Wert seine Formel: Der Baustein bekommt dafür ein eigenes Feld, "
+                    "das sich nicht mehr von selbst mitzieht."
+                ).format(expression=self.derived)
+            )
+            self.hint = QLabel(note, parent)
+            self.hint.setWordWrap(True)
+            # Regel 18: nicht nur die fehlende Marke im Kästchen — der Satz
+            # steht sichtbar da, hängt am Haken und wird vorgelesen.
+            self.take.setToolTip(note)
+            self.take.setStatusTip(note)
+            self.take.setAccessibleDescription(note)
 
         self.title = QLineEdit(str(parameter.title or parameter.name), parent)
         self.title.setAccessibleName(tr("Beschriftung"))
@@ -508,9 +550,20 @@ class RecipeDialog(QDialog):
             strip.addRow(tr("Vorgabe:"), row.default)
             strip.addRow(tr("Steht:"), row.placement)
             strip.addRow(tr("Beschreibung:"), row.doc)
+            if row.hint is not None:
+                # **Über der Zeile und außerhalb von ``line``.** Der Satz
+                # erklärt, warum der Haken fehlt — säße er im Block, den der
+                # Haken abschaltet, wäre er ausgegraut, solange er gebraucht
+                # wird, und lesbar erst, wenn er erledigt ist.
+                row.hint.setParent(box)
+                form.addRow(row.hint)
             form.addRow(row.take, line)
             row.take.toggled.connect(line.setEnabled)
             row.take.toggled.connect(self._update_enabled)
+            # Der Block folgt dem Haken von Anfang an: Eine abgeleitete Zeile
+            # geht ohne Haken auf, und ein bedienbarer Block darunter verspräche
+            # eine Wirkung, die er nicht hat.
+            line.setEnabled(row.take.isChecked())
             # **Der Knopf muss mitbekommen, was er prüft.** Bis hierher hörte
             # er nur auf den Haken; die Grenzen prüft er seit heute mit, und
             # eine Prüfung, die den Wert nicht mitbekommt, spricht über den
@@ -630,6 +683,18 @@ class RecipeDialog(QDialog):
         if not self.title.text().strip():
             return str(tr("Der Baustein braucht einen Namen."))
         if not adjustable:
+            if self._params and all(row.derived for row in self._params):
+                # **Der häufige Fall seit der Umstellung.** Trägt jeder
+                # Parameter des Ausschnitts einen Ausdruck, ist keine Zeile
+                # vorgehakt — und „sonst ist das Teil starr" ließe den Kunden
+                # nach einem Haken suchen, den er längst sieht.
+                return str(
+                    tr(
+                        "Jeder Wert hier wird aus einem anderen gerechnet. Haken Sie "
+                        "den an, der einstellbar sein soll — er verliert dabei seine "
+                        "Formel."
+                    )
+                )
             return str(tr("Geben Sie mindestens ein Maß frei — sonst ist das Teil starr."))
         if not ordered:
             return str(

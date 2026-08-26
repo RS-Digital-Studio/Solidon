@@ -1463,6 +1463,7 @@ class MainWindow(QMainWindow):
         self.object_tree.isolateRequested.connect(self._on_isolate)
         self.parameters.parameterEdited.connect(self._on_parameter_edited)
         self.parameters.addRequested.connect(self.action_add_parameter)
+        self.parameters.limitsRequested.connect(self.action_edit_parameter)
         self.right.setVisible(self.settings.right_panel_visible)
 
     def _build_status_bar(self) -> None:
@@ -2924,6 +2925,16 @@ class MainWindow(QMainWindow):
         """
         if path.suffix.lower() == PROJECT_SUFFIX and not self._may_discard():
             return
+        # Vom Startbildschirm aus ersetzt ein Modell das offene Projekt — und
+        # die Frage danach gehört VOR den Wartezeiger, wie bei der .p3d oben:
+        # ein Fenster, das fragt und zugleich „bitte warten" zeigt, sagt
+        # zweierlei (§2.8).
+        starting_fresh = (
+            path.suffix.lower() != PROJECT_SUFFIX
+            and self.stack.currentWidget() is self.start_screen
+        )
+        if starting_fresh and not self._may_discard():
+            return
         try:
             with waiting():
                 if path.suffix.lower() == PROJECT_SUFFIX:
@@ -2935,7 +2946,7 @@ class MainWindow(QMainWindow):
                     self.settings.remember(path)
                     save_settings(self.settings)
                 else:
-                    if self.stack.currentWidget() is self.start_screen:
+                    if starting_fresh:
                         self.session.start_new(self.settings.printer, self.settings.material)
                     self.session.import_model(path)
             if path.suffix.lower() == PROJECT_SUFFIX:
@@ -3019,9 +3030,16 @@ class MainWindow(QMainWindow):
         name, _filter = QFileDialog.getOpenFileName(self, tr("Modell einfügen"), "", model_filter())
         if not name:
             return
+        starting_fresh = self.stack.currentWidget() is self.start_screen
+        # Der Anfang ersetzt das offene Projekt — dieselbe Frage wie in
+        # ``open_path``, und aus demselben Grund vor dem Wartezeiger: Ohne
+        # sie verschwanden Dokument und Verlauf wortlos, und Undo holte
+        # nichts zurück (Gesamtreview-b, Bericht 08, Fund 1).
+        if starting_fresh and not self._may_discard():
+            return
         try:
             with waiting():
-                if self.stack.currentWidget() is self.start_screen:
+                if starting_fresh:
                     # Vom Startbildschirm aus ist Einfügen ein Anfang, kein
                     # Nachtrag: ein frisches Projekt mit Drucker und Material
                     # aus den Einstellungen, wie es open_path beim Ablegen
@@ -3118,6 +3136,13 @@ class MainWindow(QMainWindow):
         """
         self._end_download()
         if self.stack.currentWidget() is self.start_screen:
+            # Dieselbe Frage wie in ``open_path`` und ``action_import``: Der
+            # Anfang ersetzt das offene Projekt. Hier NACH dem Download —
+            # die Datei ist schon da, verworfen wird nur die Sendung, nie
+            # stumm die Arbeit.
+            if not self._may_discard():
+                self.announce(tr("Der Download wurde verworfen — das Projekt bleibt."))
+                return
             self.session.start_new(self.settings.printer, self.settings.material)
         self.session.import_payload(
             fetched.name,
@@ -7404,6 +7429,27 @@ class MainWindow(QMainWindow):
         if dialog.exec() != ParameterDialog.DialogCode.Accepted:
             return
         self.session.add_parameter(dialog.parameter())
+
+    def action_edit_parameter(self, name: str) -> None:
+        """§13: die Grenzen eines vorhandenen Maßes ändern — derselbe Dialog.
+
+        Der Weg dorthin ist das Kontextmenü an der Zeile der Parameterleiste.
+        Ohne ihn waren Grenzen anlegbar und nie änderbar: Die Leiste liest
+        ``minimum``/``maximum`` nur als Spinbox-Grenzen, und *Parameter
+        anlegen …* wies den vorhandenen Namen ab — das Feld klemmte, und der
+        einzige Dialog dazu sagte „Diesen Namen gibt es schon" (§2.1).
+
+        Keine Rückfrage: Die Änderung ist eine Transaktion und rücknehmbar
+        (Regel 19).
+        """
+        parameters = self.session.project.document.parameters
+        existing = parameters.get(name)
+        if existing is None:
+            return
+        dialog = ParameterDialog(parameters, self, existing=existing)
+        if dialog.exec() != ParameterDialog.DialogCode.Accepted:
+            return
+        self.session.edit_parameter(name, dialog.parameter())
 
     def _on_parameter_edited(self, name: str, value: float) -> None:
         """An einer Zahl zu drehen ist eine Transaktion, dann eine frische

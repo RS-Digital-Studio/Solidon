@@ -152,8 +152,22 @@ class FirstRunDialog(QDialog):
         # Ersteinrichtung fragt nach keinem Schlüssel — das wäre eine Hürde
         # vor dem ersten Blick (Konzept V4b). In der Demo steht dort der
         # Stichtag, aus demselben Grund in einem Satz.
+        #
+        # **Und eine beschädigte Installation verspricht keine freien Tage**
+        # (H4). Der Satz stand hier unabhängig vom Zustand: „Die ersten 14 Tage
+        # ist alles frei", während ``unlocked`` schon in der ersten Sekunde
+        # falsch war und jede Änderung absagte. Ein Virenscanner in Quarantäne
+        # reicht dafür, und dann ist das der erste Satz, den ein neuer Kunde
+        # liest. Der Wortlaut kommt aus derselben Quelle wie im Freischalt- und
+        # im Über-Dialog (``InstallationDamaged``) — hier lokal geholt, weil
+        # ``app.ui.dialogs`` ``app.core.scene`` nachzieht und dieser Dialog beim
+        # Start gefragt wird.
         state = activation.state()
-        if state.in_demo:
+        if state.damaged:
+            from app.ui.dialogs import damaged_line
+
+            terms = damaged_line()
+        elif state.in_demo:
             terms = tr(
                 "Diese Demo läuft vollständig und ohne Schlüssel bis zum {date}; "
                 "danach lässt sie sich nicht mehr starten. Ihre Projekte bleiben "
