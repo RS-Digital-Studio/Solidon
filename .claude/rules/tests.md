@@ -474,6 +474,68 @@ Es kostet Millisekunden, fasst keine Datei an, und der einzige Verlust ist ein
 Staging — das in diesem Verfahren ohnehin niemand benutzt, weil `git commit -o`
 an ihm vorbeigeht.
 
+### `-o` nimmt den Dateistand, nicht deine Hunks
+
+**Der private Index schützt gemeinsame Dateien nicht.** Er hält fremde
+**Dateien** heraus — nicht den fremden Stand einer **gemeinsamen**. Das gehört
+ausdrücklich hierher, weil er sonst in falscher Sicherheit wiegt: `git commit
+-o -- <pfad>` committet die Datei, wie sie im Baum liegt, samt allem, was eine
+andere Sitzung darin ungespeichert stehen hat. Genauer: `git
+commit -o -- <pfad>` committet die Datei, wie sie im Baum liegt, samt allem,
+was eine andere Sitzung darin ungespeichert stehen hat.
+
+Am 26.08.2026 in **beide** Richtungen zugeschnappt, innerhalb einer Stunde:
+
+| Commit | nahm mit |
+|---|---|
+| `bc92469a` (OpenSCAD-Ausbau) | 145 Zeilen `_CHOICE_NOTES` aus `labels.py`, die 43 gerade schrieb |
+| `2b48f288` (Ausdrucksfeld) | den `FINDING_ACTIONS`-Eintrag in `panels.py`, den ce gerade geschrieben hatte |
+
+Kein inhaltlicher Schaden — HEAD war beide Male in sich stimmig. Der Schaden
+ist die **Zurechnung**: Wer später fragt, warum eine Tabelle mit 67 Sätzen im
+OpenSCAD-Commit steht, findet keine Antwort. Und die Folge kann teurer sein als
+die Ursache: Mit den 67 neuen `tr()`-Quellen war `origin/main` rot, bis die
+Kataloge nachkamen — ein Fenster, das der Urheber der Kataloge nicht geöffnet
+hatte.
+
+**Der Handgriff dagegen kostet fünf Sekunden, und er ist ein Zweischritt:**
+
+1. **Die eigene Zahl ansagen, bevor man hinsieht** — „ich lösche zwei Zeilen,
+   füge keine ein".
+2. Dann `git diff HEAD --numstat -- <pfade>` dagegen halten.
+
+Die Reihenfolge ist der ganze Punkt. Wer erst die Zahlen liest und danach
+überlegt, ob sie passen, nickt den Istwert ab; das ist dieselbe Figur wie der
+Sollwert aus dem Prüfling. Bei zwei gelöschten Zeilen schreit „145 insertions"
+schon beim Ansagen — dafür braucht es den Diff nicht einmal.
+
+Und das ist der eigentliche Punkt: Die Zahl **stand da**. Der Diff-Stat vor dem
+Commit nannte `app/ui/labels.py | 149 ++++-`, und gelesen wurde die
+Dateiliste — welche Dateien mitgehen —, nicht die Spalte daneben. Dieselbe
+Figur wie überall in dieser Datei: Man misst, was leicht zu greifen ist, und
+nicht, was gemeint war.
+
+**Und wenn es doch passiert ist: Die History bleibt stehen.** Ein Rewrite
+kostet mehr, als er heilt. Drei Schritte, in dieser Reihenfolge:
+
+1. **Zuerst prüfen, ob eine *halbe* Einheit hinausgeritten ist** — das ist das
+   Dringende, nicht die Zurechnung. Am 26.08.2026 ging die `_CHOICE_NOTES`-
+   Tabelle mit 67 neuen `tr()`-Quellen hinaus, ihre Kataloge blieben liegen:
+   `origin/main` war rot, bis sie nachkamen, und der Urheber der Kataloge hatte
+   das Fenster nicht geöffnet. Bei einem früheren Fall (`e65f1539`) blieb
+   `loading.py` zurück und brach fremde Klone. **Die fehlende Hälfte schlägt
+   die falsche Zurechnung an Dringlichkeit.**
+2. **Den Besitzer sofort benachrichtigen** — er weiß am schnellsten, was zu
+   seiner Einheit noch fehlt.
+3. **Die Zurechnung im eigenen Folge-Commit geradeziehen**, im Meldungstext.
+   Wer später fragt, warum eine Tabelle mit 67 Sätzen im OpenSCAD-Commit steht,
+   findet die Antwort dann eine Stelle weiter.
+
+**Wo mehrere an derselben Datei schreiben, hilft nur Reihenfolge statt
+Gleichzeitigkeit** — sagen, wann man hineingeht, melden, wenn man heraus ist.
+Ein eigener Arbeitsbaum (`claude --worktree <name>`) ist die vollständige
+Antwort; er kostet aber jedes Mal einen Umzug.
+
 **Die zweite Spalte von `git status --short` lügt mit.** Das ist die Form, in
 der einem der veraltete Index zuerst begegnet, und sie führt in die falsche
 Richtung: Wer direkt nach einem privaten Commit `MM` an seinen eigenen Dateien

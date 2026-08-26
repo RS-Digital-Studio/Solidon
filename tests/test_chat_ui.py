@@ -1293,3 +1293,37 @@ def test_a_single_question_does_not_claim_the_full_height(qt_app: QApplication) 
     )
     assert field.verticalScrollBar().maximum() == 0, "sie passt und braucht keinen Balken"
     panel.deleteLater()
+
+
+def test_a_damaged_installation_does_not_offer_a_key_that_would_not_help(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """H4: ``damaged`` schlägt jeden Schlüssel — dann führt *Freischalten* in
+    einen Dialog, in dem beide Schaltflächen grau sind.
+
+    Zwei Dinge hingen daran, und beide waren falsch: Der Hinweis sagte einem
+    zahlenden Kunden, ihm fehle ein Lizenzschlüssel, den er hat; und der Knopf
+    daneben bot ihm einen Weg an, der nichts ausrichtet. Ein Knopf, der in eine
+    Sackgasse führt, ist schlechter als keiner.
+
+    Geprüft an beiden Lagen — der abgelaufene Testlauf behält Satz **und**
+    Knopf, denn dort hilft ein Schlüssel wirklich. Gefunden von 3d-druck-46.
+    """
+    from app.core import activation
+
+    panel = ChatPanel()
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(damaged=True))
+    panel.set_locked(True)
+    beschaedigt = panel.hint.text()
+    knopf_beschaedigt = panel.unlock.isVisibleTo(panel)
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
+    panel.set_locked(True)
+    abgelaufen = panel.hint.text()
+    knopf_abgelaufen = panel.unlock.isVisibleTo(panel)
+
+    assert "Testzeitraum" not in beschaedigt, "wer bezahlt hat, wird nicht nach dem gefragt"
+    assert not knopf_beschaedigt, "und bekommt keinen Knopf in eine Sackgasse"
+    assert "Testzeitraum" in abgelaufen, "der abgelaufene Testlauf behält seinen Satz"
+    assert knopf_abgelaufen, "und seinen Knopf — dort hilft ein Schlüssel wirklich"

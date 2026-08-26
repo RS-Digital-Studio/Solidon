@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from app.core import activation
 from app.core.agent.context import is_discarded
 from app.core.types import ChatEntry, Document
 from app.i18n import TranslatableText, _, tr
@@ -308,12 +309,30 @@ class ChatPanel(QWidget):
         Wird nach :meth:`set_available` gerufen und überschreibt dessen
         Hinweis; beim Entsperren stellt der nächste ``set_available``-Lauf
         ihn wieder her.
+
+        **Zwei Lagen, zwei Sätze — und der Knopf gehört nur zu einer.** Hier
+        stand ein fester Satz über den abgelaufenen Testzeitraum, abgeleitet
+        aus ``not unlocked``; das verlangt aber auch ``not damaged``, und
+        damit las ein zahlender Kunde mit beschädigter Installation, ihm
+        fehle ein Schlüssel, den er hat.
+
+        Schlimmer war der Knopf daneben: *Freischalten* führt in einen
+        Dialog, in dem bei beschädigter Installation beide Schaltflächen grau
+        sind (``damaged`` schlägt jeden Schlüssel — sonst wäre die
+        freundlichere Meldung ein Weg an H4 vorbei). Ein Knopf, der in eine
+        Sackgasse führt, ist schlechter als keiner; er bleibt deshalb weg,
+        wo er nichts ausrichtet. Gefunden von 3d-druck-46 im Lizenz-Audit.
         """
+        from app.ui.dialogs import damaged_line
+
+        state = activation.state()
         self._locked = locked
-        self.unlock.setVisible(locked)
+        self.unlock.setVisible(locked and not state.damaged)
         if locked:
             self.hint.setText(
-                tr("Der Testzeitraum ist abgelaufen — der Chat braucht einen Lizenzschlüssel.")
+                damaged_line()
+                if state.damaged
+                else tr("Der Testzeitraum ist abgelaufen — der Chat braucht einen Lizenzschlüssel.")
             )
             self.setup.setVisible(False)
         self._update_enabled()

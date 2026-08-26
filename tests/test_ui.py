@@ -7718,3 +7718,64 @@ def test_saving_a_part_takes_the_whole_stack_by_id_not_by_position(window: MainW
     assert katalog.show_parts not in verbunden, (
         "der Rezeptname darf nie als Suchtext im Katalog landen"
     )
+
+
+def test_a_paying_customer_is_not_told_the_trial_ran_out(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Zwei Lagen sperren, und sie heißen nicht gleich (§33.1, H4).
+
+    ``unlocked`` verlangt ``not damaged``, sperrt also auch einen zahlenden
+    Kunden, dessen Installation gebrochen ist. Der Sperrtext leitete sich
+    daraus ab und behauptete „Der Testzeitraum ist abgelaufen — dafür braucht
+    Solidon einen Lizenzschlüssel" — bei jemandem, der einen hat, und während
+    die Statuszeile im selben Fenster „Die Installation ist beschädigt" sagte.
+
+    Geprüft an **beiden** Lagen, denn eine allein sagt nichts: Der abgelaufene
+    Testlauf muss weiter seinen eigenen Satz bekommen. Gefunden von
+    3d-druck-46 im Lizenz-Audit.
+    """
+    from app.core import activation
+    from app.ui.dialogs import damaged_line
+
+    aktion = next(iter(window._op_actions.values()))
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(damaged=True))
+    window._lock_hint(aktion, True)
+    beschaedigt = aktion.statusTip()
+
+    monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=0))
+    aktion.setProperty("tip_before_lock", None)
+    window._lock_hint(aktion, True)
+    abgelaufen = aktion.statusTip()
+
+    assert damaged_line() in beschaedigt, "die beschädigte Installation sagt, was sie ist"
+    assert "Testzeitraum" not in beschaedigt, (
+        "wer bezahlt hat, wird nicht nach einem Schlüssel gefragt, den er hat"
+    )
+    assert "Testzeitraum" in abgelaufen, "und der abgelaufene Testlauf behält seinen Satz"
+    assert beschaedigt != abgelaufen
+
+
+def test_the_status_line_speaks_on_the_day_the_trial_ends(
+    window: MainWindow, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ausgerechnet am Tag null schwieg sie.
+
+    ``in_trial`` verlangt ``days_left > 0``, also fiel bei genau null keine
+    Verzweigung mehr zu: zehn Tage unsichtbar (richtig), zwei Tage sichtbar,
+    **null Tage unsichtbar** — an dem Tag, an dem alles grau wird, stand die
+    Erklärung nur noch in Tooltips. ``expired`` gab es die ganze Zeit; gefragt
+    hat es niemand.
+    """
+    from app.core import activation
+
+    def zeile(tage: int) -> str:
+        monkeypatch.setattr(activation, "_cached", activation.Activation(days_left=tage))
+        window._trial_status_line()
+        return window.trial_line.text()
+
+    assert not zeile(10), "zehn Tage sind kein Anlass, jemanden anzusprechen"
+    assert zeile(2), "kurz davor schon"
+    assert zeile(0), "und am Tag, an dem es zu ist, erst recht"
+    assert "abgelaufen" in zeile(0)

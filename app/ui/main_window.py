@@ -2772,14 +2772,33 @@ class MainWindow(QMainWindow):
         Der Grund steht dort, wo der Eintrag ihn **vor** dem Klick zeigt:
         Statusleiste und Tooltip (§2 C). Der ursprüngliche Satz reist als
         Qt-Property mit, weil er je Eintrag ein anderer ist.
+
+        **Welcher Grund es ist, wird gefragt und nicht angenommen.** Hier stand
+        ein fester Satz über den abgelaufenen Testzeitraum, abgeleitet aus
+        ``not unlocked`` — und ``unlocked`` verlangt auch ``not damaged``.
+        Damit las ein **zahlender** Kunde mit beschädigter Installation „dafür
+        braucht Solidon einen Lizenzschlüssel", während die Statuszeile im
+        selben Fenster „Die Installation ist beschädigt" sagte: zwei
+        Auskünfte, und die am Menüeintrag war falsch.
+
+        Die beiden Lagen auseinanderzuhalten ist der ganze Sinn von
+        ``damaged`` (:attr:`app.core.activation.Activation.expired` sagt es im
+        Docstring). Der Wortlaut kommt aus derselben Quelle wie dort —
+        :func:`~app.ui.dialogs.damaged_line`, gespeist aus
+        ``InstallationDamaged`` im Kern. Gefunden von 3d-druck-46 im
+        Lizenz-Audit; dieselbe Form baut ``print_settings_dialog`` am
+        Slicen-Knopf.
         """
         stored = action.property("tip_before_lock")
         if locked:
             if stored is None:
                 action.setProperty("tip_before_lock", action.statusTip())
+            state = activation.state()
             reason = self._with_name(
                 action,
-                tr(
+                damaged_line()
+                if state.damaged
+                else tr(
                     "Der Testzeitraum ist abgelaufen — dafür braucht Solidon einen "
                     "Lizenzschlüssel (Hilfe → Solidon freischalten …)."
                 ),
@@ -2826,6 +2845,15 @@ class MainWindow(QMainWindow):
             message = tr("Testzeitraum: noch {days} Tage — Hilfe → Solidon freischalten …").format(
                 days=state.days_left
             )
+        elif state.expired:
+            # **Ausgerechnet am Tag, an dem alles grau wird, schwieg die
+            # Zeile.** ``in_trial`` verlangt ``days_left > 0``, also fiel bei
+            # genau null keine Verzweigung mehr zu: 10 Tage unsichtbar
+            # (richtig), 2 Tage sichtbar, 0 Tage unsichtbar. Die Erklärung
+            # stand dann nur noch in Tooltips — und der Docstring darüber
+            # begründet die Dauerzeile damit, dass niemand überrascht werden
+            # darf. ``expired`` gab es die ganze Zeit; gefragt hat es niemand.
+            message = tr("Der Testzeitraum ist abgelaufen — Hilfe → Solidon freischalten …")
         self.trial_line.setText(message)
         self.trial_line.setVisible(bool(message))
         self._trial_message = message
