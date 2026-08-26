@@ -508,6 +508,11 @@ Konzepts, und die ersten sechs kosten zusammen einen Nachmittag:
    Datenschutzerklärung (B5).*
 7. **MoR-Konto anlegen** — Nachweise, Bankverbindung, Steuerangaben dauern
    Tage bis Wochen, also früh (Veröffentlichungskonzept V5 sagt dasselbe).
+   **Vorbedingung, die außerhalb des Projekts läuft** (Robert, 26.08.2026):
+   Gewerbeanmeldung und Steuernummer vom Finanzamt — ohne sie schaltet der
+   Anbieter die Auszahlung nicht frei; die USt-IdNr. für die Abrechnung mit
+   dem Auslandsanbieter mit dem Fragebogen gleich mitbeantragen. Beides
+   liegt an; der Bau wartet darauf nicht, nur der Verkaufsstart.
    Webhook-Ziel `order.php` eintragen, das Webhook-Geheimnis erzeugen und
    nur auf dem Server ablegen. *Geprüft: ein Sandbox-Kauf des Anbieters
    erreicht `order.php` mit gültiger Signatur.*
