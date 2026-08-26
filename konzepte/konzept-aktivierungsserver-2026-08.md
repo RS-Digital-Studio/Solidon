@@ -927,6 +927,16 @@ als kein Kauf.
   reihum den Vorbesitzer raus), bewertet Teil C — aus Bediensicht ist genau
   dieses Wandern das akzeptierte Verhalten eines geteilten Schlüssels, denn
   es nervt beide Beteiligten, ohne einen ehrlichen Kunden je zu treffen.
+- **Und hinter der Selbstbedienung steht der Support als letzte Stufe**
+  (Frage Robert, 26.08.2026). Gebraucht wird er nur, wenn Schlüssel **und**
+  Rechner weg sind — der Schlüssel ist ja der Ausweis für alles andere.
+  Dann: Bestellnummer aus der Kaufmail oder vom Zahlungsanbieter → Robert
+  findet den Schlüssel über die B2-Kette im Offline-Archiv → sendet ihn
+  erneut → der Kunde deaktiviert selbst. Zusätzlich kann Robert jeden Platz
+  von Hand freigeben (ein Eintrag in der Serverdatenbank) — das bleibt
+  bewusst der Ausnahmeweg und wird nicht beworben: C5 warnt zu Recht, dass
+  Grenzen über Support-Ausnahmen weich werden, und die Selbstbedienung
+  soll der Weg bleiben, den jeder zuerst findet.
 - **Bestandskunden sehen von allem nichts** (Teil A): Schlüssel vor dem
   Stichtag aktivieren nicht, ihr Dialog verhält sich wie heute.
 
