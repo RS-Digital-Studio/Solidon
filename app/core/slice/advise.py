@@ -128,6 +128,14 @@ BED_STEP: Final = 5
 #: bevor die oberen liegen — und weit unter dem, was der Antrieb aushält.
 CHAMBER_FOR_WARPING: Final = 50
 
+#: Schmaler als dieser Anteil des Düsendurchmessers wird keine Bahn — enger
+#: gequetscht reißt die Spur ab, statt dünner zu werden. Die Bahnbreiten-Regel
+#: senkt bis zu dieser Grenze, der Befund ``settings.wall_below_nozzle``
+#: übernimmt darunter. **Eine Zahl für beide Stellen**: Zwei Schwellen für
+#: dieselbe Frage ließen dazwischen einen Bereich, in dem beide Antworten
+#: falsch sind.
+NARROW_LINE_SHARE: Final = 0.85
+
 
 def advise(
     settings: PrintSettings,
@@ -578,11 +586,17 @@ def _from_geometry(
         )
 
     minimum = 2.0 * settings.layers.line_width
-    if thin is not None and thin < minimum:
+    least = NARROW_LINE_SHARE * profile.printer.nozzle_diameter
+    if thin is not None and least <= thin < minimum:
+        # Unterhalb von ``least`` schwiege dieser Vorschlag besser: Auch die
+        # schmalste Bahn dieser Düse verlöre die Stelle, und ein Vorschlag,
+        # der nichts behebt, ist keiner. Dort übernimmt der Befund
+        # ``settings.wall_below_nozzle`` (``warnings_for``) — kleinere Düse
+        # oder breitere Wand, beides entscheidet der Nutzer, kein Wert.
         advice.append(
             SettingAdvice(
                 path="layers.line_width",
-                value=round(max(thin / 2.0, profile.printer.nozzle_diameter * 0.85), 3),
+                value=round(max(thin / 2.0, least), 3),
                 was=settings.layers.line_width,
                 reason=_(
                     "Die dünnste Stelle ist schmaler als zwei Linien breit. Mit der "
@@ -884,6 +898,34 @@ def warnings_for(
                 },
             )
         )
+
+    if result is not None:
+        least = NARROW_LINE_SHARE * profile.printer.nozzle_diameter
+        thin = narrowest_measured(result)
+        if thin is not None and thin < least:
+            # Das Gegenstück zur Bahnbreiten-Regel in ``_from_geometry``: Was
+            # schmaler ist als jede Bahn dieser Düse, behebt kein Wert mehr —
+            # nach der Doktrin also ein Befund. Beide Auswege stehen im Satz
+            # (Regel 17): die kleinere Düse gehört danach ins Druckerprofil,
+            # sonst rechnet alles Weitere mit der falschen.
+            findings.append(
+                Finding(
+                    code="settings.wall_below_nozzle",
+                    severity="warning",
+                    message=_(
+                        "Die dünnste Stelle ist schmaler als jede Bahn, die diese "
+                        "Düse legen kann — sie fällt im Druck weg, gleich welche "
+                        "Einstellung. Eine kleinere Düse druckt sie (danach den "
+                        "Durchmesser im Druckerprofil nachziehen), oder die Stelle "
+                        "wird mindestens auf eine Bahnbreite verbreitert."
+                    ),
+                    values={
+                        "width_mm": thin,
+                        "nozzle_mm": profile.printer.nozzle_diameter,
+                        "least_mm": least,
+                    },
+                )
+            )
 
     findings += _from_spans(result)
     return findings

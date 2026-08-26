@@ -2750,3 +2750,47 @@ def test_a_slicer_that_arrived_is_picked_up_without_reopening(
 
     assert dialog.slice_button.isEnabled(), "jetzt gibt es einen"
     assert dialog.setup_button.isHidden(), "und nichts mehr zu holen"
+
+
+def test_a_wall_below_one_nozzle_line_becomes_a_finding_not_a_suggestion() -> None:
+    """Unter einer schmalsten Bahn der Düse behebt keine Einstellung mehr etwas.
+
+    Die Bahnbreiten-Regel senkt höchstens bis ``NARROW_LINE_SHARE`` mal
+    Düsendurchmesser — darunter blieb bisher ein Vorschlag stehen, der die
+    Stelle weiter wegfallen ließ, und der eigentliche Ausweg (kleinere Düse
+    oder breitere Wand) stand nirgends. Nach der Doktrin aus
+    ``schichtanalyse.md`` gehört dorthin ein Befund: Was kein Wert behebt,
+    wird ein Finding (Roberts Auftrag vom 26.08.2026, „Düse als Empfehlung").
+    """
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    least = advise.NARROW_LINE_SHARE * profile.printer.nozzle_diameter
+    result = _layers(500.0, 500.0, 500.0, min_width=least * 0.8)
+
+    findings = advise.warnings_for(settings, profile, result)
+    hits = [entry for entry in findings if entry.code == "settings.wall_below_nozzle"]
+
+    assert hits, "eine Wand unter einer Bahnbreite gehört gesagt"
+    assert hits[0].severity == "warning"
+    assert hits[0].values["nozzle_mm"] == pytest.approx(profile.printer.nozzle_diameter)
+    assert hits[0].values["width_mm"] == pytest.approx(least * 0.8)
+    assert hits[0].values["least_mm"] == pytest.approx(least)
+    assert hits[0].source == "internal"
+
+    # Und der Vorschlag daneben verschwindet: Eine Bahnbreite, die die Stelle
+    # trotzdem verliert, ist kein Vorschlag (dieselbe Doktrin, andere Hälfte).
+    entries = advise.advise(settings, profile, result)
+    assert not [entry for entry in entries if entry.path == "layers.line_width"], (
+        "unter der Düsengrenze darf keine Bahnbreite mehr vorgeschlagen werden"
+    )
+
+
+def test_a_wall_the_nozzle_can_print_is_not_that_finding() -> None:
+    """Die Gegenrichtung, sonst warnte der Bericht an jedem gesunden Teil."""
+    profile = profiles.make_profile("centauri-carbon-2", "petg")
+    settings = print_settings.resolve(profile)
+    least = advise.NARROW_LINE_SHARE * profile.printer.nozzle_diameter
+    result = _layers(500.0, 500.0, 500.0, min_width=least * 1.5)
+
+    codes = {entry.code for entry in advise.warnings_for(settings, profile, result)}
+    assert "settings.wall_below_nozzle" not in codes
