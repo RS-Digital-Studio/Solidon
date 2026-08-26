@@ -15,6 +15,40 @@ carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
 
+## 0.2.0
+
+- Your own building blocks without a line of code: pick steps from the history and put them into the catalogue as a block — with your own fields, a preview and a checked value range.
+- A block you built travels inside the project file. Whoever opens it can insert your part without having to install anything.
+- Six new blocks in the catalogue: pegboard hook, wall bracket, corner brace, foot, cable clip and hinge eye.
+- The pegboard hook now holds even when someone lifts the part while taking things off — a springy tongue latches behind the board. Switchable, if you take the part off often.
+- A selected face counts: hole, block and sketch go where you pointed. Every operation on a face used to cost two clicks.
+- While drawing, the grid shows what snapping follows, the grid step can be typed, dimensions sit at the pointer, and the bar says which face you are drawing on.
+- Several steps in the history can be selected at once.
+- The limits of a dimension can be changed afterwards — until now, what you entered when creating it was final.
+- The material estimate for supports was off by a large factor: it computed the area beneath the overhang instead of the column below it.
+- Countersinking only worked in one direction per axis. Clicked from the wrong side it removed nothing and said nothing.
+- On stepped parts, hole and plug worked into thin air: the direction came from the bounding box instead of the material at that spot.
+- A through plug filled only half the bore — and left the gap all around it by which the bore had been widened for the material.
+- Lattice fill placed struts beside the part instead of inside its cavity.
+- A thread in a clicked bore cut only its lower half. The same applied to the heat-set insert.
+- The nut trap and the head clearance of the screw hole removed nothing: both built above the face instead of below it.
+- A part thinner than one printed layer is no longer stood on its edge.
+- Auto split counts the pin overhang towards the bed limit and leaves behind no fits pointing at places that are gone.
+- A pocket from a drawing with a hole keeps the hole. Until now it milled the island away.
+- Clicking a bore now suggests the screw that really passes through — and names the measured diameter along with it.
+- A file from a slicer arrived with duplicated bodies: a part with seventeen objects was read seventeen times, with twice the volume and twice the print time.
+- Scaling to a given width measured a construction line as well. Fifty millimetres became five.
+- On export, parts with the same name overwrote each other: one file, two success messages, one part gone.
+- A language change now takes effect throughout the window. The print settings used to stay in the language the application started in.
+- Changing printer or material keeps what you set yourself. Until now the whole set was reset without notice.
+- The filament choice per material slot reaches the slicer. What was stored was the display text instead of the profile.
+- A modified project is no longer lost when you drag a file onto the start screen — you are asked first.
+- A chat proposal that takes steps back now says beforehand which ones go with it. And Cancel really cancels instead of computing on in the background.
+- A wrongly set clock no longer takes the demo with it: a computer whose date was in the future burned the period for good.
+- Anyone with a licence is no longer asked to buy when a program file is damaged, but learns what is really going on.
+- A project file from someone else says before the first computation if it brings source code for an external program — on every path and at any nesting depth.
+
+
 ## 0.1.5
 
 - Sketching now happens in the view itself: the drawing surface lies over the model instead of replacing it, and a click in the view sets a point on the sketch plane.

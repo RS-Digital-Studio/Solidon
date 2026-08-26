@@ -15,6 +15,40 @@ gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
 
+## 0.2.0
+
+- Blocchi propri senza una riga di codice: scegli dei passi nella cronologia e mettili nel catalogo come blocco — con campi propri, anteprima e intervallo di valori verificato.
+- Un blocco costruito da te viaggia dentro il file di progetto. Chi lo apre può inserire il tuo pezzo senza dover installare nulla.
+- Sei nuovi blocchi nel catalogo: gancio per pannello forato, supporto a parete, squadretta, piedino, clip per cavi e occhiello di cerniera.
+- Il gancio per pannello ora tiene anche se qualcuno solleva il pezzo togliendo qualcosa — una linguetta elastica scatta dietro il pannello. Disattivabile se togli spesso il pezzo.
+- Una faccia selezionata conta: foro, blocco e schizzo vanno dove hai puntato. Prima ogni operazione su una faccia costava due clic.
+- Mentre disegni, la griglia mostra a cosa si aggancia, il passo si può digitare, le quote stanno accanto al puntatore e la barra dice su quale faccia stai disegnando.
+- Nella cronologia si possono selezionare più passi insieme.
+- I limiti di una quota si possono cambiare in seguito — finora valeva per sempre quello che era stato inserito alla creazione.
+- La stima di materiale per i supporti era sbagliata di molto: calcolava la superficie sotto lo sbalzo invece della colonna sottostante.
+- La svasatura funzionava in un solo verso per asse. Cliccata dal lato sbagliato non toglieva nulla e non diceva nulla.
+- Su pezzi a gradini, foro e tappo lavoravano nel vuoto: la direzione veniva dal parallelepipedo di ingombro invece che dal materiale in quel punto.
+- Un tappo passante riempiva solo metà del foro — e lasciava tutt'intorno la luce di cui il foro era stato allargato per il materiale.
+- Il riempimento a reticolo metteva le barre accanto al pezzo invece che nella sua cavità.
+- Una filettatura in un foro cliccato tagliava solo la metà inferiore. Lo stesso valeva per la boccola a caldo.
+- L'alloggiamento del dado e lo spazio per la testa della vite non toglievano nulla: entrambi costruivano sopra la faccia invece che sotto.
+- Un pezzo più sottile di uno strato di stampa non viene più messo in piedi.
+- La divisione automatica conta la sporgenza della spina nel limite del piatto e non lascia accoppiamenti che puntano a posti scomparsi.
+- Una tasca da un disegno con foro conserva il foro. Finora fresava via anche l'isola.
+- Un clic su un foro propone ora la vite che ci passa davvero — e indica il diametro misurato.
+- Un file da uno slicer arrivava con corpi doppi: un pezzo con diciassette oggetti veniva letto diciassette volte, con volume e tempo di stampa doppi.
+- Scalando a una larghezza data veniva misurata anche una linea di costruzione. Da cinquanta millimetri ne uscivano cinque.
+- All'esportazione, pezzi con lo stesso nome si sovrascrivevano: un file, due messaggi di riuscita, un pezzo perso.
+- Un cambio di lingua ha effetto in tutta la finestra. Le impostazioni di stampa restavano nella lingua di avvio.
+- Un cambio di stampante o materiale conserva ciò che hai impostato. Finora l'intero insieme veniva azzerato senza dire nulla.
+- La scelta del filamento per posto materiale arriva allo slicer. Finora veniva salvato il testo mostrato invece del profilo.
+- Un progetto modificato non va più perso quando trascini un file sulla schermata iniziale — prima viene chiesto.
+- Una proposta della chat che ritira dei passi dice prima quali se ne vanno con essa. E Annulla annulla davvero, invece di continuare a calcolare in sottofondo.
+- Un orologio impostato male non si porta più via la demo: un computer con la data nel futuro bruciava il termine per sempre.
+- Chi ha una licenza non viene più invitato ad acquistare quando un file del programma è danneggiato, ma scopre cosa succede davvero.
+- Un file di progetto di qualcun altro avvisa prima del primo calcolo se porta codice sorgente per un programma esterno — per ogni via e a ogni livello.
+
+
 ## 0.1.5
 
 - Ora si disegna nella vista stessa: la superficie di disegno si posa sul modello invece di sostituirlo, e un clic nella vista colloca un punto sul piano dello schizzo.

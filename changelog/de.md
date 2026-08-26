@@ -15,6 +15,40 @@ dieselben Punkte in derselben Reihenfolge (`tests/test_changelog.py`).
 `tools/make_download.py` holt daraus den Abschnitt der aktuellen Version und
 schreibt ihn in `website/version.json`.
 
+## 0.2.0
+
+- Eigene Bausteine ohne eine Zeile Code: Wählen Sie Schritte im Verlauf aus und legen Sie sie als Baustein in den Katalog — mit eigenen Feldern, Vorschaubild und geprüftem Wertebereich.
+- Ein selbst gebauter Baustein reist in der Projektdatei mit. Wer sie öffnet, kann Ihr Teil einsetzen, ohne dass bei ihm etwas installiert sein muss.
+- Sechs neue Bausteine im Katalog: Lochwand-Einhänger, Wandhalter, Eckwinkel, Standfuß, Kabelclip und Scharnierauge.
+- Der Lochwand-Einhänger hält jetzt auch, wenn jemand das Teil beim Abnehmen anhebt — eine federnde Zunge rastet hinter der Platte ein. Abschaltbar, wenn Sie das Teil oft abnehmen.
+- Eine gewählte Fläche zählt: Bohrung, Baustein und Skizze kommen dorthin, wo Sie hingezeigt haben. Vorher kostete jede Operation an einer Fläche zwei Klicks.
+- Beim Zeichnen zeigt das Raster, wonach gefangen wird, die Rasterweite lässt sich eintippen, Maße stehen am Zeiger, und die Leiste sagt, auf welcher Fläche Sie zeichnen.
+- Im Verlauf lassen sich mehrere Schritte auf einmal auswählen.
+- Die Grenzen eines Maßes lassen sich nachträglich ändern — bisher galt, was beim Anlegen eingetragen wurde, für immer.
+- Die Materialschätzung für Stützen war um ein Vielfaches daneben: Gerechnet wurde die Fläche unter dem Überhang statt der Säule darunter.
+- Senken traf je Achse nur eine Richtung. Von der falschen Seite angeklickt trug es nichts ab und sagte nichts.
+- An gestuften Teilen bohrten und stopften Bohrung und Stopfen in die Luft: Die Richtung kam aus dem Hüllquader statt aus dem Material an der Stelle.
+- Ein durchgehender Stopfen füllte nur die halbe Bohrung — und ließ ringsum den Spalt stehen, um den die Bohrung für das Material aufgeweitet worden war.
+- Gitter füllen setzte Stäbe neben das Teil statt in seinen Hohlraum.
+- Ein Gewinde in einer angeklickten Bohrung schnitt nur deren untere Hälfte. Dasselbe traf die Einpressbuchse.
+- Die Mutternfalle und die Kopffreiheit des Schraubenlochs trugen nichts ab: Beide bauten über der Fläche statt darunter.
+- Ein Teil, das dünner ist als eine Druckschicht, wird nicht mehr hochkant gestellt.
+- Automatisch teilen rechnet den Stiftüberstand zur Bettgrenze und lässt keine Passungen zurück, die auf verschwundene Stellen zeigen.
+- Eine Tasche aus einer Zeichnung mit Loch behält das Loch. Bisher fräste sie die Insel mit weg.
+- Ein Klick auf eine Bohrung schlägt die Schraube vor, die wirklich hindurchgeht — und nennt den gemessenen Durchmesser dazu.
+- Eine Datei aus einem Slicer kam mit doppelten Körpern an: Ein Teil mit siebzehn Objekten wurde siebzehnmal gelesen, mit doppeltem Volumen und doppelter Druckzeit.
+- Beim Skalieren auf eine bestimmte Breite wurde eine Hilfslinie mitgemessen. Aus fünfzig Millimetern wurden fünf.
+- Beim Export überschrieben sich gleichnamige Teile: eine Datei, zwei Erfolgsmeldungen, ein Teil weg.
+- Ein Sprachwechsel wirkt jetzt im ganzen Fenster. Die Druckeinstellungen blieben bisher in der Sprache, in der die Anwendung gestartet war.
+- Ein Drucker- oder Materialwechsel behält, was Sie selbst eingestellt haben. Bisher wurde der ganze Satz zurückgesetzt, ohne Ansage.
+- Die Filamentwahl je Materialslot kommt beim Slicer an. Gespeichert wurde bisher der Anzeigetext statt des Profils.
+- Ein geändertes Projekt geht nicht mehr verloren, wenn Sie eine Datei auf den Startbildschirm ziehen — es wird vorher gefragt.
+- Ein Vorschlag des Chats, der Schritte zurücknimmt, sagt vorher, welche mitgehen. Und Abbrechen bricht wirklich ab, statt im Hintergrund weiterzurechnen.
+- Eine falsch gestellte Uhr nimmt die Demo nicht mehr mit: Ein Rechner, dessen Datum in der Zukunft stand, verbrannte die Frist dauerhaft.
+- Wer eine Lizenz hat, wird bei einer beschädigten Programmdatei nicht mehr zum Kauf aufgefordert, sondern erfährt, was wirklich los ist.
+- Eine Projektdatei von jemand anderem sagt vor dem ersten Rechnen, wenn sie Quelltext für ein externes Programm mitbringt — auf jedem Weg und in jeder Verschachtelung.
+
+
 ## 0.1.5
 
 - Skizziert wird jetzt in der Ansicht selbst: Die Zeichenfläche legt sich über das Modell, statt es zu ersetzen, und ein Klick in die Ansicht setzt einen Punkt auf der Skizzenebene.

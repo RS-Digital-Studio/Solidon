@@ -16,6 +16,40 @@ los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
 
+## 0.2.0
+
+- Bloques propios sin una línea de código: seleccione pasos del historial y colóquelos en el catálogo como bloque — con campos propios, vista previa y rango de valores comprobado.
+- Un bloque creado por usted viaja dentro del archivo de proyecto. Quien lo abra puede insertar su pieza sin tener que instalar nada.
+- Seis bloques nuevos en el catálogo: gancho para panel perforado, soporte de pared, escuadra, pie, clip para cables y ojal de bisagra.
+- El gancho para panel aguanta ahora aunque alguien levante la pieza al retirar algo — una lengüeta elástica encaja detrás del panel. Desactivable si retira la pieza a menudo.
+- Una cara seleccionada cuenta: taladro, bloque y boceto van adonde usted señaló. Antes cada operación sobre una cara costaba dos clics.
+- Al dibujar, la retícula muestra a qué se ajusta, el paso se puede escribir, las medidas están junto al puntero y la barra dice sobre qué cara dibuja.
+- En el historial se pueden seleccionar varios pasos a la vez.
+- Los límites de una medida se pueden cambiar después — hasta ahora valía para siempre lo que se introdujo al crearla.
+- La estimación de material para soportes estaba equivocada por un factor grande: calculaba la superficie bajo el saliente en vez de la columna debajo.
+- El avellanado solo funcionaba en un sentido por eje. Seleccionado desde el lado equivocado no quitaba nada y no decía nada.
+- En piezas escalonadas, taladro y tapón trabajaban en el aire: la dirección venía de la caja envolvente en vez del material en ese punto.
+- Un tapón pasante rellenaba solo la mitad del taladro — y dejaba alrededor la holgura con la que el taladro se había ensanchado para el material.
+- El relleno de rejilla colocaba barras junto a la pieza en vez de dentro de su hueco.
+- Una rosca en un taladro seleccionado cortaba solo su mitad inferior. Lo mismo ocurría con la bucha de inserción.
+- El alojamiento de tuerca y el hueco para la cabeza del tornillo no quitaban nada: ambos construían sobre la cara en vez de debajo.
+- Una pieza más delgada que una capa impresa ya no se pone de canto.
+- La división automática cuenta el saliente del pasador para el límite de la mesa y no deja ajustes que apunten a sitios desaparecidos.
+- Una cavidad hecha desde un dibujo con agujero conserva el agujero. Hasta ahora fresaba también la isla.
+- Al hacer clic en un taladro se propone el tornillo que realmente pasa por él — y se indica el diámetro medido.
+- Un archivo de un slicer llegaba con cuerpos duplicados: una pieza con diecisiete objetos se leía diecisiete veces, con el doble de volumen y el doble de tiempo de impresión.
+- Al escalar a una anchura dada se medía también una línea auxiliar. De cincuenta milímetros salían cinco.
+- Al exportar, piezas con el mismo nombre se sobrescribían: un archivo, dos mensajes de éxito, una pieza perdida.
+- Un cambio de idioma surte efecto en toda la ventana. Los ajustes de impresión se quedaban en el idioma con el que se inició la aplicación.
+- Un cambio de impresora o material conserva lo que usted ajustó. Hasta ahora se restablecía todo el conjunto sin avisar.
+- La elección de filamento por ranura de material llega al slicer. Antes se guardaba el texto mostrado en vez del perfil.
+- Un proyecto modificado ya no se pierde al arrastrar un archivo a la pantalla de inicio — se pregunta antes.
+- Una propuesta del chat que retira pasos dice de antemano cuáles se van con ella. Y Cancelar cancela de verdad, en vez de seguir calculando en segundo plano.
+- Un reloj mal ajustado ya no se lleva la demo: un ordenador con la fecha en el futuro quemaba el plazo para siempre.
+- Quien tiene licencia ya no recibe una invitación a comprar cuando un archivo del programa está dañado, sino que se entera de lo que pasa realmente.
+- Un archivo de proyecto de otra persona avisa antes del primer cálculo si trae código fuente para un programa externo — por cualquier vía y a cualquier profundidad.
+
+
 ## 0.1.5
 
 - Ahora se dibuja en la propia vista: la superficie de dibujo se coloca sobre el modelo en lugar de sustituirlo, y un clic en la vista sitúa un punto en el plano del boceto.

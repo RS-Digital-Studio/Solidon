@@ -116,7 +116,13 @@ CHUNK_BYTES: Final = 256 * 1024
 #: Wie viele Punkte aus dem Changelog gezeigt werden. Die Datei kommt von einem
 #: Server; acht Zeilen sind eine Auswahl, achtzig sind eine Liste, und eine Liste
 #: liest niemand vor einem Update.
-MAX_CHANGES: Final = 20
+#:
+#: Die Zahl stand auf zwanzig und ist zu 0.2.0 gestiegen (Entscheidung Robert,
+#: 26.08.2026): Ein Update, das eigene Bausteine, sechs neue Katalogteile und
+#: eine Reihe falsch gerechneter Geometrien mitbringt, hat mehr zu sagen als
+#: ein Wartungsschritt. Die Grenze bleibt eine Grenze — sie fängt den Server,
+#: der achthundert Zeilen schickt, und das Fenster rollt für den Rest.
+MAX_CHANGES: Final = 40
 
 #: Wie ein Paketschlüssel in der Versionsdatei heißt. Die Architektur steht nur
 #: dort, wo es zwei gibt: Auf einem Mac startet ein für arm64 gebautes Programm

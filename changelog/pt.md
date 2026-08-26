@@ -15,6 +15,40 @@ mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
 
+## 0.2.0
+
+- Blocos próprios sem uma linha de código: escolha passos no histórico e coloque-os no catálogo como bloco — com campos próprios, pré-visualização e intervalo de valores verificado.
+- Um bloco construído por si viaja dentro do ficheiro de projeto. Quem o abrir pode inserir a sua peça sem ter de instalar nada.
+- Seis blocos novos no catálogo: gancho para painel perfurado, suporte de parede, esquadro, pé, clipe de cabos e olhal de dobradiça.
+- O gancho para painel agora aguenta mesmo que alguém levante a peça ao tirar algo — uma lingueta elástica encaixa atrás do painel. Desativável se tirar a peça muitas vezes.
+- Uma face selecionada conta: furo, bloco e esboço vão para onde apontou. Antes cada operação numa face custava dois cliques.
+- Ao desenhar, a grelha mostra ao que o ajuste obedece, o passo pode ser escrito, as medidas ficam junto ao ponteiro e a barra diz em que face está a desenhar.
+- No histórico é possível selecionar vários passos de uma vez.
+- Os limites de uma medida podem ser alterados depois — até agora valia para sempre o que foi introduzido ao criá-la.
+- A estimativa de material para suportes estava errada por um fator grande: calculava a área sob a saliência em vez da coluna por baixo.
+- O escareamento só funcionava num sentido por eixo. Clicado do lado errado não tirava nada e não dizia nada.
+- Em peças escalonadas, furo e tampão trabalhavam no ar: a direção vinha da caixa envolvente em vez do material naquele sítio.
+- Um tampão passante enchia apenas metade do furo — e deixava à volta a folga com que o furo tinha sido alargado para o material.
+- O enchimento em grelha punha barras ao lado da peça em vez de dentro da sua cavidade.
+- Uma rosca num furo clicado cortava só a metade de baixo. O mesmo acontecia com a bucha de inserção a quente.
+- O alojamento de porca e a folga para a cabeça do parafuso não tiravam nada: ambos construíam por cima da face em vez de por baixo.
+- Uma peça mais fina do que uma camada impressa já não é posta ao alto.
+- A divisão automática conta a saliência do pino para o limite da mesa e não deixa ajustes a apontar para sítios que desapareceram.
+- Uma cavidade feita a partir de um desenho com furo mantém o furo. Até agora fresava também a ilha.
+- Um clique num furo propõe agora o parafuso que realmente passa por ele — e indica o diâmetro medido.
+- Um ficheiro de um slicer chegava com corpos duplicados: uma peça com dezassete objetos era lida dezassete vezes, com o dobro do volume e do tempo de impressão.
+- Ao escalar para uma largura dada media-se também uma linha auxiliar. De cinquenta milímetros saíam cinco.
+- Na exportação, peças com o mesmo nome sobrepunham-se: um ficheiro, duas mensagens de sucesso, uma peça perdida.
+- Uma mudança de idioma passa a valer em toda a janela. As definições de impressão ficavam no idioma com que a aplicação arrancou.
+- Uma mudança de impressora ou material mantém o que definiu. Até agora todo o conjunto era reposto sem aviso.
+- A escolha de filamento por ranhura de material chega ao slicer. Era guardado o texto mostrado em vez do perfil.
+- Um projeto alterado já não se perde quando arrasta um ficheiro para o ecrã inicial — é perguntado antes.
+- Uma proposta do chat que retira passos diz antes quais vão com ela. E Cancelar cancela mesmo, em vez de continuar a calcular em segundo plano.
+- Um relógio mal acertado já não leva a demo consigo: um computador com a data no futuro queimava o prazo definitivamente.
+- Quem tem licença já não é convidado a comprar quando um ficheiro do programa está danificado, mas fica a saber o que se passa mesmo.
+- Um ficheiro de projeto de outra pessoa avisa antes do primeiro cálculo se traz código-fonte para um programa externo — por qualquer via e a qualquer profundidade.
+
+
 ## 0.1.5
 
 - O desenho passa a acontecer na própria vista: a superfície de desenho coloca-se sobre o modelo em vez de o substituir, e um clique coloca um ponto no plano do esboço.
