@@ -8,6 +8,7 @@
   "90-Grad-Senkung für einen Senkkopf. Aus für Zylinderkopf und Linsenkopf.": "Escareamento de 90 graus para cabeça escareada. Desligado para cabeça cilíndrica e cabeça abaulada.",
   "@name setzt einen Projektparameter ein.": "@nome insere um parâmetro do projeto.",
   "Ab Winkel": "A partir do ângulo",
+  "Ab diesem Winkel hält der Pinsel an. 180 Grad heißt: über alles hinweg.": "A partir deste ângulo, o pincel para. 180 graus significa: por cima de tudo.",
   "Ab wann zwei Teile als zu nah gelten. Null meldet nur echte Überschneidungen; ein Wert darüber meldet auch knappe Stellen.": "A partir de quando duas peças contam como próximas demais. Zero comunica apenas sobreposições reais; um valor acima disso comunica também os pontos apertados.",
   "Ab welchem Winkel eine Kante scharf bleibt. Niedriger rundet mehr ab; über neunzig verliert auch ein Quader seine Ecken.": "A partir de que ângulo uma aresta se mantém viva. Mais baixo arredonda mais; acima de noventa até um paralelepípedo perde os cantos.",
   "Ab welcher Neigung gestützt wird, gemessen zur Senkrechten. Was steiler steht, trägt sich selbst — wie steil, sagt der Überhangfächer.": "A partir de que inclinação se suporta, medida em relação à vertical. O que está mais a pique suporta-se a si mesmo — quanto, di-lo o leque de saliências.",

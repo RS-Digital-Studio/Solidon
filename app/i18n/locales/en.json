@@ -8,6 +8,7 @@
   "90-Grad-Senkung für einen Senkkopf. Aus für Zylinderkopf und Linsenkopf.": "A 90-degree countersink for a flat head. Off for cap and button heads.",
   "@name setzt einen Projektparameter ein.": "@name inserts a project parameter.",
   "Ab Winkel": "From angle",
+  "Ab diesem Winkel hält der Pinsel an. 180 Grad heißt: über alles hinweg.": "The brush stops at this angle. 180 degrees means: over everything.",
   "Ab wann zwei Teile als zu nah gelten. Null meldet nur echte Überschneidungen; ein Wert darüber meldet auch knappe Stellen.": "When two parts count as too close. Zero reports real overlaps only; anything above also reports tight spots.",
   "Ab welchem Winkel eine Kante scharf bleibt. Niedriger rundet mehr ab; über neunzig verliert auch ein Quader seine Ecken.": "From which angle an edge stays sharp. Lower rounds off more; above ninety even a box loses its corners.",
   "Ab welcher Neigung gestützt wird, gemessen zur Senkrechten. Was steiler steht, trägt sich selbst — wie steil, sagt der Überhangfächer.": "From which inclination support is built, measured against the vertical. Whatever stands steeper carries itself — how steep, the overhang fan says.",

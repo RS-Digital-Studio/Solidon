@@ -8,6 +8,7 @@
   "90-Grad-Senkung für einen Senkkopf. Aus für Zylinderkopf und Linsenkopf.": "Fraisure à 90 degrés pour une tête fraisée. Désactivé pour les têtes cylindriques et bombées.",
   "@name setzt einen Projektparameter ein.": "@nom insère un paramètre de projet.",
   "Ab Winkel": "À partir de l'angle",
+  "Ab diesem Winkel hält der Pinsel an. 180 Grad heißt: über alles hinweg.": "Le pinceau s'arrête à partir de cet angle. 180 degrés signifie : par-dessus tout.",
   "Ab wann zwei Teile als zu nah gelten. Null meldet nur echte Überschneidungen; ein Wert darüber meldet auch knappe Stellen.": "À partir de quand deux pièces comptent comme trop proches. Zéro ne signale que les vrais chevauchements ; une valeur au-dessus signale aussi les passages justes.",
   "Ab welchem Winkel eine Kante scharf bleibt. Niedriger rundet mehr ab; über neunzig verliert auch ein Quader seine Ecken.": "À partir de quel angle une arête reste vive. Plus bas arrondit davantage ; au-delà de quatre-vingt-dix, même un pavé perd ses coins.",
   "Ab welcher Neigung gestützt wird, gemessen zur Senkrechten. Was steiler steht, trägt sich selbst — wie steil, sagt der Überhangfächer.": "À partir de quelle inclinaison on soutient, mesurée par rapport à la verticale. Ce qui est plus droit se porte tout seul — jusqu'où, l'éventail de surplombs le dit.",

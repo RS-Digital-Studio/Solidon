@@ -8,6 +8,7 @@
   "90-Grad-Senkung für einen Senkkopf. Aus für Zylinderkopf und Linsenkopf.": "Svasatura a 90 gradi per una testa svasata. Disattivata per testa cilindrica e testa bombata.",
   "@name setzt einen Projektparameter ein.": "@nome inserisce un parametro di progetto.",
   "Ab Winkel": "Da angolo",
+  "Ab diesem Winkel hält der Pinsel an. 180 Grad heißt: über alles hinweg.": "Da questo angolo in poi il pennello si ferma. 180 gradi significa: sopra tutto.",
   "Ab wann zwei Teile als zu nah gelten. Null meldet nur echte Überschneidungen; ein Wert darüber meldet auch knappe Stellen.": "Da quando due pezzi contano come troppo vicini. Zero segnala solo le sovrapposizioni vere; un valore superiore segnala anche i punti stretti.",
   "Ab welchem Winkel eine Kante scharf bleibt. Niedriger rundet mehr ab; über neunzig verliert auch ein Quader seine Ecken.": "Da quale angolo uno spigolo resta vivo. Più basso arrotonda di più; oltre novanta anche un parallelepipedo perde i suoi spigoli.",
   "Ab welcher Neigung gestützt wird, gemessen zur Senkrechten. Was steiler steht, trägt sich selbst — wie steil, sagt der Überhangfächer.": "Da quale inclinazione si sostiene, misurata rispetto alla verticale. Ciò che sta più ripido si porta da sé — quanto, lo dice il ventaglio degli sbalzi.",
