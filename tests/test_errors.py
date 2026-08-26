@@ -33,9 +33,8 @@ def _import_every_core_module() -> None:
     """Zieht jedes Modul unter ``app.core`` einmal herein.
 
     ``AppError.__subclasses__()`` kennt nur die Klassen, deren Modul schon
-    importiert ist — und das waren beim Sammeln dieser Datei genau fünfzehn von
-    fünfundzwanzig. Zehn Ausnahmen lebten in Modulen, die erst der Betrieb lädt
-    (``UnsafeSource`` aus der Quelltextprüfung, ``LicenceKeyError``,
+    importiert ist — und das war beim Sammeln dieser Datei nur ein Teil. Etliche
+    Ausnahmen leben in Modulen, die erst der Betrieb lädt (``LicenceKeyError``,
     ``BackendUnavailable`` und die anderen Backend-Fehler): Sie liefen nie durch
     die Prüfung auf einen Handlungsvorschlag, und ob sie *dieser* Lauf zufällig
     doch sah, hing an der Importreihenfolge der übrigen Testdateien — ein
@@ -61,8 +60,13 @@ def all_error_classes() -> list[type[AppError]]:
         stack.extend(current.__subclasses__())
     # Erhobene Menge (Ladevorgang): Bleibt ein Modul stumm liegen, schrumpft sie,
     # ohne dass ein Test rot wird — parametrisiert über eine kürzere Liste ist
-    # jeder Einzelfall weiter grün. Die Bodenzusicherung fängt genau das.
-    assert len(found) >= 25, (
+    # jeder Einzelfall weiter grün. Die Bodenzusicherung fängt genau das. Sie
+    # steht bewusst *unter* der wahren Zahl (rund zwei Dutzend), nicht auf ihr:
+    # ein unvollständiger Import kollabiert auf die ~15 eager geladenen Klassen,
+    # das fängt die 20 — ein legitimes Hinzufügen oder Entfernen einer Klasse
+    # (etwa der OpenSCAD-Fehler mit ihrem Backend) bricht sie dagegen nicht. Eine
+    # Zahl auf dem Ist-Stand wäre bei jeder Registeränderung rot.
+    assert len(found) >= 20, (
         f"zu wenige Fehlerklassen gesammelt ({len(found)}) — Import unvollständig?"
     )
     return found
@@ -390,18 +394,20 @@ def test_missing_software_offers_the_install_list_and_not_a_bug_report() -> None
     „Abbrechen" zurück, und einem Dialog, dem sonst nichts bleibt, legt
     ``dialogs.offered_actions`` den Fehlerbericht bei — wer also eine
     Verrundung ohne OpenCASCADE versuchte, wurde gebeten, einen Fehler zu
-    melden. ``ScadUnavailable`` schlug ``install`` vor, und weil das Fenster
-    dafür keinen Handler führte, wurde daraus ein grauer Satz statt eines
-    Knopfs.
+    melden. Eine fehlende Zusatzkomponente schlägt stattdessen ``install`` vor.
 
-    Geprüft wird beides an derselben Stelle: die Kennung am Fehler und der
-    Handler im Fenster. Ein Vorschlag ohne Gegenstück ist kein Vorschlag.
+    Geprüft an mehreren, damit es nicht an einer Klasse hängt: OpenCASCADE, ein
+    Slicer, ComfyUI. Die Kennung am Fehler sagt „installieren", nicht „melden" —
+    ein Vorschlag ohne Gegenstück ist keiner.
     """
-    from app.core.backends.openscad import ScadUnavailable
     from app.core.brep.kernel import BRepUnavailable
     from app.core.errors import INSTALL_MISSING, ExternalToolError
 
-    for problem in (BRepUnavailable(), ScadUnavailable(), ExternalToolError(tool="ComfyUI")):
+    for problem in (
+        BRepUnavailable(),
+        ExternalToolError(tool="PrusaSlicer"),
+        ExternalToolError(tool="ComfyUI"),
+    ):
         ids = {action.id for action in problem.suggestions}
         assert INSTALL_MISSING.id in ids, (
             f"{type(problem).__name__}: der Weg zur Installation fehlt"
