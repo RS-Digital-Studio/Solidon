@@ -30,8 +30,10 @@ Weiterentwicklung einstellen, und es endet nicht mit einer neuen Hauptversion.
 -------------------------
 
 Die Lizenz ist an Sie als Person gebunden, nicht an ein Gerät. Sie dürfen
-Solidon3D auf allen Geräten installieren und benutzen, die Sie selbst nutzen —
-Arbeitsplatz, Notebook, Werkstattrechner.
+Solidon3D auf allen Geräten installieren, die Sie selbst nutzen —
+Arbeitsplatz, Notebook, Werkstattrechner. Freigeschaltet ist dabei ein
+Rechner zugleich; den Wechsel nehmen Sie jederzeit selbst vor, ohne uns zu
+fragen und ohne Wartezeit.
 
 Was nicht erlaubt ist: dass mehrere Personen mit einer Lizenz arbeiten.
 Für jede weitere Person, die die Software benutzt, wird eine weitere Lizenz
