@@ -88,6 +88,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | eine andere **Bauart** — alle sieben Griffe an `MakePipeShell` sind gemessen und widerlegt (20.08.), und ein Rotationskörper schraubt nicht |
 | Der eine übersprungene Test | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | VTKs Zustand über mehrere Fenster hinweg |
 | P16.10 — die Regel in der Sammlung | P16 — Organische Modellierung | eine Entscheidung; sie kostet zwei Agenten-Suite-Läufe und Geld |
+| Zeichenwerkzeuge zweimal benannt | Was die Zwillingsdurchsicht in der Oberfläche liegen ließ (27.08.2026) | nichts — die Namen stimmen bis auf zwei; offen ist die Bauart, die einen neuen Schlüssel still fallen lässt |
+| Thema und Navigation zweimal beschriftet | Was die Zwillingsdurchsicht in der Oberfläche liegen ließ (27.08.2026) | nichts — beide sagen erkennbar dasselbe; es ist Pflegeaufwand, kein Fehler |
 | Der Absturz in einer einzelnen Datei | Ein Umgebungsartefakt, das keines war (14.08.2026) | einen ruhigen Baum und mehr als dreißig Läufe — dreißig am 20.08. blieben sauber, aber `panels.py` ist seit dem Fund fünfmal geändert worden |
 | Ein nicht rechenbarer Schritt ist eine Sackgasse | OpenSCAD ist ausgebaut (26.08.2026) | eine **Anzeige der rohen Werte** und einen Weg, den Schritt loszuwerden. Er lässt sich weder öffnen (kein Registereintrag, kein Dialog) noch löschen (`History` kann nicht aus der Mitte entfernen, §15.4). Der Quelltext einer 0.1.3-Datei ist damit nur im ZIP erreichbar |
 | Die Suite gegen Sonnet 5 | Die Konzepte nachrecherchiert (19.08.2026) | zwei Läufe über den Schlüssel des Nutzers; bis dahin ist die Quote eine Annahme |
@@ -136,7 +138,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 | Die Boolesche Zugabe ist 0,05 mm und 0,01 mm | Dieselbe Zugabe, zwei Zahlen (27.08.2026) | zwei Messungen: ab welcher Zugabe die Rückfallkette über den Korpus auf Stufe 2 fällt, und wie viel eine Gravur gegenüber ihrer Solltiefe zu viel abträgt. Alle übrigen fünf Zwillingsfamilien des Kerns sind seit `57200cb9` zusammengelegt, ein Wächter hält sie |
-| Drei Körper gewählt, zwei verrechnet | Die Auswahl wird gekürzt und niemand sagt es (27.08.2026) | eine Entscheidung: Meldung, Sperre oder bewusst still |
 
 ---
 
@@ -10542,7 +10543,7 @@ stehen, weil er keine Aufräumarbeit ist, sondern eine Messung verlangt.
 Gefunden beim Durchsehen der Zwillingspaare, aber es ist keiner: Der Fall
 betrifft beide Kerne gleich.
 
-- [ ] **Wer drei Körper auswählt und „Abziehen“ klickt, bekommt zwei verrechnet
+- [x] **Wer drei Körper auswählt und „Abziehen“ klickt, bekommt zwei verrechnet
   und keinen Hinweis auf den dritten.** `inputs_for` in
   `app/ui/main_window.py:646` schneidet die Auswahl auf das zu, was die
   Operation deklariert — `tuple(selected[: spec.consumes])`. Für Vereinigen,
@@ -10557,8 +10558,54 @@ betrifft beide Kerne gleich.
   geklickt hat. Nach Roberts Maßstab — muss der Kunde raten, ist es falsch —
   fehlt hier eine Zeile.
 
-  Drei Wege stehen offen: ein Befund nach der Operation („der dritte Körper
-  blieb unberührt“), eine Sperre im Menü wie bei zu wenigen Objekten (dort hält
-  das Fenster bereits an), oder die bewusste Entscheidung, dass die
-  Klickreihenfolge Antwort genug ist. Der erste Weg ist der billigste und
-  ändert nichts an der Bedienung.
+  Drei Wege standen offen: ein Befund nach der Operation, eine Sperre im Menü,
+  oder die bewusste Entscheidung, dass die Klickreihenfolge Antwort genug ist.
+
+  **Es war ein vierter (`8ac1438b`, 27.08.2026): Die Anwendung schweigt gar
+  nicht.** Der Hinweis steht seit je im Dialog — `_works_on` baut ihn,
+  `OperationDialog` zeigt ihn, und bei drei gewählten Körpern und einer
+  Zwei-Körper-Operation stand dort „Angewendet wird auf die 2 zuerst gewählten
+  von 3". Gemessen, nicht gelesen: Aus dem Code sieht das Kürzen tatsächlich
+  stumm aus, weil die Auskunft eine Ebene höher entsteht.
+
+  Was fehlte, lag feiner. Bei **einem** Eingang nannte der Satz den Körper beim
+  Namen, bei zweien nicht — und damit musste der Kunde seine eigene
+  Klickreihenfolge erinnern, ausgerechnet dort, wo sie zählt: Die Booleschen
+  sagen zu, dass „das zuerst angeklickte mit seinem Namen und Material bleibt".
+  Jetzt steht dort „Angewendet wird auf Klotz und Stift — die 2 zuerst
+  gewählten von 3".
+
+## Was die Zwillingsdurchsicht in der Oberfläche liegen ließ (27.08.2026)
+
+Robert hat gefragt, warum es so viele Zwillinge gibt und ob wir sie brauchen.
+Die Antwort auf die vier `MENU_TWINS` steht weiter unten; hier stehen die
+Funde derselben Durchsicht, die **keine** Rechenkern-Paare sind, sondern
+Auskünfte, die an mehr als einer Stelle hergeleitet werden.
+
+Sieben davon liefen bereits auseinander und sind behoben (Volumen im Chat,
+Kürzel der Ansichtsleiste, Kantenwinkel, Menügrenze, Befundzeile gegen
+Tooltip, Druckdauer, Körperfarbe im hellen Thema). Zwei bleiben offen, weil
+sie heute **noch** dasselbe sagen — sie sind Schuld, kein Fehler.
+
+- [ ] **Zeichenwerkzeuge heißen in der Kürzelübersicht anders als am Knopf.**
+  `shortcuts_window._drawing_keys` führt eine eigene `titles`-Tabelle;
+  `sketch_editor` beschriftet seine Knöpfe daneben. Zwei Namen weichen heute
+  ab (`fit`: „Alles einpassen" gegen „Einpassen", `rectangle` mit und ohne
+  Maßangabe), der Rest stimmt.
+
+  Der eigentliche Schaden ist die Bauart: `titles.get(name)` lässt einen
+  unbekannten Schlüssel **stillschweigend fallen**. Ein neues `TOOL_KEYS`-
+  Werkzeug verschwindet damit aus der Übersicht, ohne dass etwas rot wird —
+  `tests/test_interface_limits.py` deckt nur `WINDOW_KEYS` ab, weil die
+  Zeichentasten am `SketchPanel` hängen und nicht am Fenster.
+
+- [ ] **Thema und Navigationsschema haben zwei Vokabulare.** Das Ansichtsmenü
+  sagt „Dunkles Thema" und „Navigation: Cura", der Einstellungsdialog „Dunkel"
+  und „Wie in Cura — links wählt, rechts dreht". Sechs Schlüssel, zwölf Texte,
+  zwölfmal fünf Kataloge — und einer der beiden Sätze für `slicer` wurde
+  einmal berichtigt, der andere nicht.
+
+  Beide nennen erkennbar dasselbe (in beiden steht „Cura"), deshalb ist es
+  kein Fehler und steht hier unten. Es ist Pflegeaufwand: Beide Orte sind
+  zugleich der Ort, an dem der Kunde das Schema *lernt*, und der Nächste, der
+  einen der zwölf Texte schärft, schärft ihn an einer Stelle.
