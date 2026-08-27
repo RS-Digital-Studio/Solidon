@@ -57,20 +57,46 @@ def test_the_edge_is_drawn_wider_than_the_accent(qt_app: QApplication) -> None:
 
 
 def test_the_hotspot_sits_where_the_shape_points(qt_app: QApplication) -> None:
-    """Beim Fadenkreuz ist der gemeinte Punkt die Mitte, beim Pfeil die Spitze
-    oben links. Ein Zeiger, der danebenliegt, misst falsch."""
+    """Der Griffpunkt liegt da, wo die Zeichnung hinzeigt — auf den Anteil genau.
+
+    **Dieser Test war zu locker und hat den Fehler durchgelassen**, den ein
+    Kunde am 27.08.2026 meldete: „klickt nicht an der Spitze sondern in der
+    Mitte des Symbols." Er verglich den Griffpunkt mit
+    ``deviceIndependentSize()`` — also mit der *logischen* Größe — und der Code
+    setzte ihn in genau denselben logischen Punkten. Zwei Zahlen aus derselben
+    Annahme stimmten miteinander überein, während die Zeichnung darunter
+    doppelt so viele Pixel hatte: Die Pfeilspitze kam bei 7,8 % der Breite an,
+    wo sie bei 15,6 % liegt.
+
+    **Ein Test, der dieselbe Annahme benutzt wie sein Prüfling, findet keinen
+    gemeinsamen Irrtum.** Gemessen wird deshalb gegen die **Pixmap in Pixeln**
+    und gegen den Anteil aus :data:`cursors.SHAPES` — beides Zahlen, die der
+    Code nicht selbst gewählt hat.
+    """
     widget = QWidget()
-    measure = cursors.cursor("measure", widget)
-    select = cursors.cursor("select", widget)
 
-    size = measure.pixmap().deviceIndependentSize()
-    middle = measure.hotSpot()
-    assert abs(middle.x() - size.width() / 2) <= 1.5
-    assert abs(middle.y() - size.height() / 2) <= 1.5
+    for role in ("select", "feature", "measure", "sculpt"):
+        drawn = cursors.cursor(role, widget)
+        pixmap = drawn.pixmap()
+        spot = drawn.hotSpot()
+        wanted_x, wanted_y = cursors.SHAPES[role][1]
 
-    tip = select.hotSpot()
-    assert tip.x() < size.width() / 2
-    assert tip.y() < size.height() / 2
+        # Ein Pixel Toleranz je Achse: der Punkt wird gerundet.
+        tolerance = 1.0 / pixmap.width()
+        assert abs(spot.x() / pixmap.width() - wanted_x / 32.0) <= tolerance, (
+            f"{role}: Griffpunkt liegt bei {spot.x() / pixmap.width():.3f} der Breite, "
+            f"gezeichnet ist er bei {wanted_x / 32.0:.3f}"
+        )
+        assert abs(spot.y() / pixmap.height() - wanted_y / 32.0) <= tolerance, (
+            f"{role}: Griffpunkt liegt bei {spot.y() / pixmap.height():.3f} der Höhe, "
+            f"gezeichnet ist er bei {wanted_y / 32.0:.3f}"
+        )
+
+    # Und die Aussage, um die es geht: Fadenkreuz mittig, Pfeil an der Spitze.
+    middle = cursors.cursor("measure", widget)
+    assert abs(middle.hotSpot().x() / middle.pixmap().width() - 0.5) <= 0.02
+    tip = cursors.cursor("select", widget)
+    assert tip.hotSpot().x() / tip.pixmap().width() < 0.25, "die Spitze sitzt links oben"
 
 
 def test_the_same_role_is_built_once(qt_app: QApplication) -> None:
