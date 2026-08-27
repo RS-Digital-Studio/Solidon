@@ -131,7 +131,11 @@ def test_slots_survive_the_decimation_of_an_unwelded_body() -> None:
     )
     upper = tuple(int(centre[2] > 0.0) for centre in loose.triangles_center)
     two_tone = MeshData(raw=loose, slots=upper)
-    assert two_tone.component_count == two_tone.triangle_count, "die Suppe ist keine Suppe"
+    # Gefragt wird die Speicherform und nicht das Teil: Die Komponentenzählung
+    # sagt seit dem 27.08.2026 richtig **1** — eine Kugel ist ein Teil, gleich
+    # wie sie abgelegt ist. Was dieser Test braucht, ist die Zusicherung, dass
+    # keine Kante zwei Dreiecke verbindet; daran zieht die Dezimierung.
+    assert len(loose.face_adjacency) == 0, "die Suppe ist keine Suppe"
 
     reduced = decimate(two_tone, 5_000)
 
