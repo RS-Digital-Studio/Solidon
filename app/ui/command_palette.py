@@ -138,15 +138,26 @@ def rank(entry: PaletteEntry, query: str) -> int:
         return 0
     title = fold(str(entry.title))
     name = fold(str(entry.name))
-    if all(part in title for part in parts):
+    in_title = all(part in title for part in parts)
+    in_synonyms = all(part in synonyms_for(str(entry.name)) for part in parts)
+    # **Titel *und* Synonym schlägt Titel allein.** Solange nur eine Operation
+    # „Bemalen" hieß, war „färben" eindeutig. Seit beide das Wort im Titel
+    # tragen („Teil färben", „Fläche färben"), bekamen beide denselben Rang,
+    # und bei Gleichstand entschied die Reihenfolge im Register — der Kunde
+    # bekam die Fläche, wo er das Teil meinte. Das Synonym ist die bewusste
+    # Zuordnung und bricht den Gleichstand; ohne diese Stufe bliebe es
+    # wirkungslos, sobald das Wort auch im Titel steht.
+    if in_title and in_synonyms:
         return 0
-    if all(part in name for part in parts):
+    if in_title:
         return 1
-    if all(part in synonyms_for(str(entry.name)) for part in parts):
+    if all(part in name for part in parts):
         return 2
-    if all(stem_of(part) in title for part in parts if len(part) >= STEM_LENGTH):
+    if in_synonyms:
         return 3
-    return 4
+    if all(stem_of(part) in title for part in parts if len(part) >= STEM_LENGTH):
+        return 4
+    return 5
 
 
 #: Wörter, die ein Kunde tippt, und die Operationen, die er damit meint.
@@ -218,7 +229,17 @@ SYNONYMS: Final[dict[str, tuple[str, ...]]] = {
     # sind geblieben: Wer sie tippt, sucht das, was der Pinsel einmal tat,
     # und findet jetzt die Füllung.
     "assign_slot": ("faerben", "einfaerben", "farbe zuweisen", "ganzes teil"),
-    "paint_slot": ("anmalen", "pinseln", "faerben", "flaeche einfaerben"),
+    # **Ohne jedes „faerben", auch nicht in einem längeren Wort.** Seit der
+    # Umbenennung tragen beide Titel das Wort („Teil färben", „Fläche
+    # färben"), also entscheidet es nichts mehr — und als Synonym stand es
+    # zusätzlich an beiden. Wer „färben" tippte, bekam die Fläche, weil bei
+    # Gleichstand die Reihenfolge im Register zählt.
+    #
+    # Gestrichen wurde deshalb auch „flaeche einfaerben": Gesucht wird per
+    # Teilzeichenkette, und darin **steckt** „faerben". Ein Synonym, das das
+    # gesuchte Wort enthält, ohne es zu meinen, wirkt wie eines, das es meint.
+    # Das Wort allein gehört dem Teil; die Fläche findet, wer „flaeche" tippt.
+    "paint_slot": ("anmalen", "pinseln", "flaeche"),
     # Ein Logo ist ein Bild, und ein Bild wird hier zu einer Höhe. Beide Wörter
     # stehen im Kopf dessen, der es aufbringen will, und keines im Titel.
     "displace_image": ("logo", "foto", "bild aufbringen"),

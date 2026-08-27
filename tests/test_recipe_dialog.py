@@ -959,9 +959,15 @@ def test_the_unit_is_chosen_not_typed(qt_app: QApplication) -> None:
     Eine unbekannte Einheit des Projektparameters wird trotzdem nicht still
     umgedeutet, sondern steht als eigener Eintrag da (Regel 21).
     """
+    from app.core.units import DEGREE_UNIT
     from app.ui.recipe_dialog import UNITS
 
-    assert [code for code, _ in UNITS] == ["mm", "grad", ""], (
+    # Gefragt wird der Kern, nicht eine zweite Schreibweise daneben. Hier stand
+    # ``"grad"`` ausgeschrieben — und behauptete in derselben Zeile, die
+    # Auswahl bilde den Kern ab, während der seit dem 20.08.2026 ``"°"``
+    # führt. Der Test hat die Abweichung nicht gefunden, er hat sie
+    # festgehalten.
+    assert [code for code, _ in UNITS] == ["mm", DEGREE_UNIT, ""], (
         "die Auswahl bildet ab, was der Kern unterscheidet"
     )
 

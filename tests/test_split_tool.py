@@ -517,4 +517,9 @@ def test_no_shortcut_of_the_window_is_handed_out_twice(window: MainWindow) -> No
 
     doubled = {key: sorted(names) for key, names in taken.items() if len(names) > 1}
     assert not doubled, f"doppelt vergeben: {doubled}"
-    assert {f"Alt+{index}" for index in range(1, 9)} <= set(taken)
+    # Die Zusage ist „jedes Werkzeug der Zeile hat sein eigenes Kürzel", nicht
+    # „es sind acht". Ausgeschrieben war die Zahl, und mit dem Ausbau des
+    # Pinsels wurden es sieben — der Test fiel, obwohl nichts kaputt war. Die
+    # Zahl kommt deshalb aus der Leiste, gegen die sie etwas behauptet.
+    wanted = {f"Alt+{index}" for index in range(1, len(window.tools._buttons) + 1)}
+    assert wanted <= set(taken), f"ohne Kürzel: {sorted(wanted - set(taken))}"

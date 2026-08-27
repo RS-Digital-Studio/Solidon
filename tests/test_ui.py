@@ -7114,9 +7114,17 @@ def test_a_finding_names_a_body_a_later_step_has_replaced(qt_app: QApplication) 
             )
         ],
     )
+    # Ein Werkzeug, das die Dose im Abziehen verbraucht. Der Deckel taugt dafür
+    # seit ``keeps_inputs`` nicht mehr: Er setzt die Dose fort und legt den
+    # Deckel daneben — die Kennung bleibt, und der Fall wäre verfehlt.
     history.apply(
-        "Deckel",
-        [OperationDraft(op="create_lid", inputs=(document.ops[-1].outputs[0],), params={})],
+        "Werkzeug",
+        [OperationDraft(op="create_cylinder", params={"diameter": 20.0, "name": "Werkzeug"})],
+    )
+    tool = document.ops[-1].outputs[0]
+    history.apply(
+        "Abziehen",
+        [OperationDraft(op="subtract_objects", inputs=(tool, "obj_1"), params={})],
     )
 
     profile = profiles.make_profile("centauri-carbon-2", "petg")
@@ -7124,7 +7132,7 @@ def test_a_finding_names_a_body_a_later_step_has_replaced(qt_app: QApplication) 
 
     stale = [f for f in result.scene.report.findings if f.object_id == "obj_1"]
     assert stale, "kein Befund zeigt mehr auf den verbrauchten Körper — Fall verfehlt"
-    assert "obj_1" not in result.scene.objects, "obj_1 lebt noch — der Deckel hat ihn nicht ersetzt"
+    assert "obj_1" not in result.scene.objects, "obj_1 lebt noch — das Abziehen hat ihn verbraucht"
 
     panel = ReportPanel()
     try:
