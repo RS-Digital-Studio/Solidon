@@ -540,6 +540,29 @@ nav.lang a.cta:hover {
   overflow: hidden;
 }
 
+/* **Antippen öffnet das Bild.** Ein Bildschirmfoto von 1400 px steht auf
+   einem 375er Schirm 327 px breit — 23 Prozent, und eine Beschriftung, die
+   im Original 14 px hoch war, ist dort noch 3,3. Das lässt sich nicht
+   wegregeln: Die Bühne misst dort bereits 341 bis 353 px, ein Ausbruch aus
+   dem Textrahmen brächte 29 Bildpunkte und aus 3,3 px Schrift 3,6.
+
+   Der Verweis zeigt auf dieselbe Datei, der Browser zoomt von selbst — kein
+   JavaScript, keine Lightbox. Der Weg ist von `235d7050` übernommen, wo er
+   fürs Handbuch gebaut wurde; die Entscheidung, es dabei zu belassen und
+   keine eigenen Handyfassungen zu zeichnen, ist Roberts (27.08.2026).
+
+   Am Bildschirm ändert sich dadurch nichts: kein Unterstrich, keine
+   Linkfarbe, und `display: block` verhindert die Zeilenlücke, die ein
+   Inline-Element unter einem Bild hinterlässt. Der Zeiger sagt es
+   stattdessen — `zoom-in` ist die eine Stelle, an der ein Wort überflüssig
+   ist, weil das Zeichen selbst die Handlung nennt. */
+.stage a {
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  cursor: zoom-in;
+}
+
 /* Die Fensterleiste macht aus einem Bildausschnitt ein Programm. Drei
    Kreise sind dekorativ und deshalb ohne Text — die Bedeutung des Bildes
    steht in seinem alt-Text. */
