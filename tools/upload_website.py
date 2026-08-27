@@ -326,6 +326,74 @@ def hold_back_version(session: ftplib.FTP_TLS, root: str, files: list[Path]) -> 
     return [path for path in files if path.name != "version.json"]
 
 
+def verify_downloads() -> int:
+    """Ruft jede versprochene Datei ab — über HTTP, wie ein Kunde.
+
+    **Lokal gegen lokal sagt nichts darüber, was oben liegt.** Am 23.08.2026
+    (0.1.3) zeigten die Seiten in sechs Sprachen auf vier gelöschte Dateien,
+    am 27.08.2026 (0.2.1) versprach ``version.json`` drei Pakete, die noch
+    nicht hochgeladen waren. Beide Male waren alle lokalen Prüfungen grün, und
+    beide Male hätte ein Abruf es in zehn Sekunden gesagt.
+
+    Gefragt werden **beide** Quellen. ``version.json`` führt die Pakete der
+    Update-Prüfung — Windows und die beiden Macs —, und wer nur sie liest,
+    übersieht die Linux-Datei: Sie steht mit Absicht nicht darin
+    (``updates.py``), im Download-Kasten aber schon.
+
+    Geprüft wird auch die **Größe**: Ein abgebrochener Upload hinterlässt eine
+    Datei, die es gibt und die nicht vollständig ist. HTTP 200 allein ist
+    keine Auskunft darüber, ob jemand das Paket entpacken kann.
+    """
+    promised: set[str] = set()
+
+    version_file = LOCAL_ROOT / "version.json"
+    if version_file.is_file():
+        promised |= promised_files(json.loads(version_file.read_text(encoding="utf-8")))
+
+    for page in LOCAL_ROOT.glob("*/index.html"):
+        promised.update(_LINKED.findall(page.read_text(encoding="utf-8", errors="ignore")))
+    start = LOCAL_ROOT / "index.html"
+    if start.is_file():
+        promised.update(_LINKED.findall(start.read_text(encoding="utf-8", errors="ignore")))
+
+    if not promised:
+        print("Weder version.json noch die Startseiten versprechen ein Paket.")
+        return 0
+
+    base = str(read_access().get("public", "https://solidon3d.de/")).rstrip("/")
+    print(f"{len(promised)} versprochene Datei(en) gegen {base}")
+
+    broken: list[str] = []
+    for name in sorted(promised):
+        local = LOCAL_ROOT / "dl" / name
+        expected = local.stat().st_size if local.is_file() else 0
+        request = urllib.request.Request(f"{base}/dl/{name}", method="HEAD")
+        try:
+            with urllib.request.urlopen(request, timeout=30) as answer:
+                length = int(answer.headers.get("Content-Length") or 0)
+            if expected and length != expected:
+                print(f"  GRÖSSE  {name}: oben {length}, hier {expected}")
+                broken.append(name)
+            else:
+                print(f"  ok      {name}  {length / 1e6:.0f} MB")
+        except urllib.error.HTTPError as problem:
+            print(f"  HTTP {problem.code}  {name}")
+            broken.append(name)
+        except OSError as problem:
+            print(f"  nicht erreichbar  {name}: {problem}")
+            broken.append(name)
+
+    if broken:
+        print(f"\n{len(broken)} Datei(en) nicht in Ordnung — der Kunde bekommt dafür einen Fehler.")
+        return 1
+    print("\nAlles, was versprochen wird, liegt oben und ist vollständig.")
+    return 0
+
+
+#: Woran eine Seite eine Paketdatei nennt — im Kasten und hinter dem Zähler.
+_LINKED = re.compile(r"(?:dl/|f=)(Solidon3D-[^\"'<> ]+)")
+
+
 def remote_name(path: Path) -> str:
     """Der Pfad auf dem Server, abgeleitet aus dem lokalen."""
     return path.resolve().relative_to(LOCAL_ROOT).as_posix()
@@ -538,6 +606,13 @@ def main() -> int:
         help="zusammen mit --alte-pakete: die gezeigten Dateien wirklich löschen",
     )
     parser.add_argument(
+        "--nachpruefen",
+        dest="verify",
+        action="store_true",
+        help="jede Datei abrufen, die version.json und die Startseiten versprechen "
+        "— gegen den Server, nicht gegen die Platte",
+    )
+    parser.add_argument(
         "--vorlage",
         dest="template",
         action="store_true",
@@ -547,6 +622,10 @@ def main() -> int:
 
     if arguments.template:
         return write_template()
+
+    if arguments.verify:
+        # Braucht kein FTP: gefragt wird über HTTP, wie ein Kunde fragt.
+        return verify_downloads()
 
     if arguments.since:
         files = files_since(arguments.since)
@@ -558,8 +637,8 @@ def main() -> int:
         files = [path.resolve() for path in arguments.files]
     if not files and not arguments.missing and not arguments.prune:
         print(
-            "Nichts zu tun. Dateien nennen, --geaendert, --seit, --fehlend "
-            "oder --alte-pakete benutzen."
+            "Nichts zu tun. Dateien nennen, --geaendert, --seit, --fehlend, "
+            "--alte-pakete oder --nachpruefen benutzen."
         )
         return 1
 

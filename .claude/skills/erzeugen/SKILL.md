@@ -76,12 +76,55 @@ gh run watch <lauf-id> --exit-status                    # Suite, dann Paket
 gh run download <lauf-id> -D dist/ci                    # vier Artefakte
 ```
 
-Die Artefakte heißen `solidon3d-setup-windows`, `solidon3d-linux` (tar.gz und
-AppImage), `solidon3d-macos-X64` und `solidon3d-macos-ARM64`, jedes mit seiner
-`.sha256`. Von dort geht es weiter wie unten: `make_download.py` mit den
-Paketen, dann `stamp_assets.py`, dann hochladen — und **erst danach**
-`--alte-pakete` aufräumen, sonst zeigen Seiten und Update-Prüfung auf Dateien,
-die es nicht mehr gibt. Das Werkzeug sagt es selbst, wenn man es zu früh ruft.
+Die Artefakte heißen `solidon3d-setup-windows`, `solidon3d-linux`,
+`solidon3d-macos-X64` und `solidon3d-macos-ARM64`, jedes mit seiner `.sha256`.
+
+**Acht Dateien kommen an, vier gehen hinaus.** Linux baut drei (Archiv,
+AppImage, Flatpak), macOS zwei je Architektur. Angeboten wird eine je
+Zielsystem, und zwar diese:
+
+| Zielsystem | Datei |
+|---|---|
+| Windows | `Solidon3D-Setup-<version>.exe` |
+| Linux | `Solidon3D-<version>-x86_64.flatpak` |
+| macOS (Apple Silicon) | `Solidon3D-<version>-macos-arm64.pkg` |
+| macOS (Intel) | `Solidon3D-<version>-macos-x86_64.pkg` |
+
+`make_download.py` weist seit dem 27.08.2026 alles andere ab (`DELIVERED`) —
+davor stand die Liste nirgends außer in der Gewohnheit dessen, der die Dateien
+aufzählte, und an dem Tag gingen alle acht in den Kasten. Die Startseiten
+verwiesen danach in sechs Sprachen auf vier Dateien, die nie hochgeladen
+werden.
+
+Der Ablauf danach, und die Reihenfolge ist keine Empfehlung:
+
+```
+python tools/make_download.py website/dl/<die vier>     # Kasten + version.json
+python tools/sign_version.py --private <schlüsseldatei>  # sonst verwirft jede Installation sie
+python tools/stamp_assets.py                             # immer als Letztes vor dem Upload
+python tools/upload_website.py website/dl/<jedes Paket einzeln>
+python tools/upload_website.py --fehlend                 # Seiten und version.json
+python tools/upload_website.py --alte-pakete --wirklich  # erst ganz zum Schluss
+```
+
+**Die Pakete gehen einzeln und zuerst.** `--fehlend` nimmt `dl/` bewusst aus
+(`wanted()` — Pakete gehen einmal hoch, nicht bei jedem Abgleich), lädt aber
+`version.json` mit, und die zeigt genau dorthin: Am 27.08.2026 versprach die
+Seite minutenlang Fassung 0.2.1, und alle drei Pakete gaben 404. `version.json`
+wartet seither von selbst, bis ihre Pakete oben liegen — verlass dich trotzdem
+nicht darauf, sondern lade sie vorher.
+
+Einzeln, weil mehrere am Stück die Verbindung reißen, und der Pfad beginnt mit
+`website/` — `dl/…` allein sucht das Werkzeug im Repository-Stamm und endet
+mit „Gibt es nicht". Wer das im Hintergrund startet, liest die **Ausgabedatei**
+und nicht die Abschlussmeldung: Sie meldet den Status der Hülle, und der war
+an dem Tag dreimal 0 über einem Upload, der gar nicht stattgefunden hat.
+
+**Zum Schluss gegen den Server messen, nicht gegen die Platte.** Lokal ist
+nach einem Release immer alles stimmig; falsch ist, was oben liegt. Ein
+`HEAD`-Abruf auf jede Datei, die `version.json` **und** die Startseiten
+versprechen, kostet zehn Sekunden und ist die einzige Prüfung, die den Fehler
+von 0.1.3 und 0.2.1 gesehen hätte.
 
 ---
 
