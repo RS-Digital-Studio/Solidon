@@ -10341,6 +10341,33 @@ und braucht einen Umbau statt eines Tests.
   Klassen; es berührt `types.Finding`, `scene/evaluate._finding_from` und
   `ui/panels.actions_for`.
 
+  **Nachtrag vom selben Abend: Zehn ist die Obergrenze, nicht die Zahl.** Die
+  Tabelle oben zählt, welche Klasse Auswege *hätte*, die über
+  `CORRECT_INPUT`/`CANCEL` hinausgehen. Sie sagt nicht, ob die Klasse je in
+  einer Operation fliegt — und nur dann verliert sie etwas. d1 hat es für
+  `ExternalToolError` am Aufrufgraphen gemessen: `slice_model` hat genau einen
+  Aufrufer, den Druckdialog, und dort landet der Fehler im Fehlerdialog, wo
+  seine Auswege ankommen. Diese Klasse ist nicht betroffen.
+
+  Für die übrigen neun habe ich zwei Näherungen gemessen, und **beide sind die
+  falsche Frage**:
+
+  | Frage | Antwort |
+  |---|---|
+  | Wird die Klasse in einer Datei mit `@register_op` geworfen? | **3** von 10 (`GeometryError`, `InternalError`, `NotManifoldError`) |
+  | Ist die werfende Datei aus einer Operationsdatei über Importe erreichbar? | **9** von 10 (nur `OutOfBuildVolume` wird nirgends geworfen) |
+
+  Die erste ist zu eng: `geom/boolean.py` trägt kein `@register_op` und wirft
+  `BooleanFailedError` aus jeder Booleschen Operation heraus. Die zweite ist
+  zu weit: `export/handover.py` ist über Importe erreichbar, wird aber nur aus
+  dem Dialog gerufen. **Die Wahrheit liegt zwischen drei und neun, und für
+  jede einzelne Klasse entscheidet die Aufrufkette, nicht der Importgraph.**
+
+  Wer den Fix baut, braucht diese Aufteilung nicht: Ein `suggestions`-Feld am
+  `Finding` trägt alle Fälle, ohne dass jemand sie zählt. Wer dagegen
+  Familien-Einträge in `FINDING_ACTIONS` ergänzen will, muss genau wissen,
+  welche Kombination vorkommt — und das ist der zweite Grund gegen diesen Weg.
+
   Gefunden beim Testlücken-Schließen am 26.08.2026, belegt an
   `scene/ops.py:361`.
 
