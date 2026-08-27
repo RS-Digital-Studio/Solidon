@@ -285,7 +285,10 @@ def test_every_picture_states_the_size_it_actually_has(page: str) -> None:
         re.DOTALL,
     ):
         path, stated = match.group(1), (int(match.group(2)), int(match.group(3)))
-        picture = source.parent / path
+        # Der Inhaltsstempel (`tools/stamp_assets.py`) gehört zur Adresse, nicht
+        # zum Dateinamen: `bilder/x.png?v=a8bf1166` liegt auf der Platte als
+        # `bilder/x.png`. Ohne das Abschneiden fällt jede gestempelte Seite.
+        picture = source.parent / path.split("?", 1)[0]
         if picture.suffix == ".svg":
             # Gezeichnetes hat keine Pixel, nur einen Zeichenbereich.
             box = re.search(
@@ -482,7 +485,12 @@ def test_the_page_loads_nothing_from_outside(page: str) -> None:
         # fremden Rechner mit dem Protokoll der Seite. ``//cdn.example.com/x.js``
         # sah wie ein eigener Pfad aus und bestand die Prüfung; das ``(?!/)``
         # ist der ganze Unterschied.
-        allowed = 'type="application/ld+json"' in tag or re.search(r'src="/(?!/)[^"]*\.js"', tag)
+        # Der ``?v=…``-Teil ist der Inhaltsstempel aus ``tools/stamp_assets.py``
+        # und gehört zur eigenen Adresse. Ohne ihn im Muster wäre jeder
+        # gestempelte Verweis „von außen" — 36 Seiten fielen so auf einmal.
+        allowed = 'type="application/ld+json"' in tag or re.search(
+            r'src="/(?!/)[^"]*\.js(\?v=[0-9a-f]{8})?"', tag
+        )
         assert allowed, f"{page} bindet ein Skript ein, das nicht von hier kommt: {tag}"
     assert 'src="http' not in text
     assert 'href="http' not in text.replace('href="https://solidon3d.de', "")
@@ -608,7 +616,11 @@ def test_every_page_with_a_countdown_loads_the_script_that_runs_it() -> None:
         if "data-countdown" not in text:
             continue
         name = page.relative_to(WEBSITE).as_posix()
-        assert 'src="/site.js"' in text, f"{name} trägt einen Zähler, bindet aber site.js nicht ein"
+        # Mit oder ohne Inhaltsstempel (`tools/stamp_assets.py`) — gefragt ist,
+        # ob die Datei eingebunden ist, nicht unter welcher Fassung.
+        assert re.search(r'src="/site\.js(\?v=[0-9a-f]{8})?"', text), (
+            f"{name} trägt einen Zähler, bindet aber site.js nicht ein"
+        )
 
 
 # --------------------------------------------------------------------------
@@ -808,6 +820,47 @@ def test_the_download_box_can_switch_from_waiting_to_loading(page: str) -> None:
     schluss = text[text.index('<div class="closing">') :]
     assert "data-release-href" not in schluss.split("</div>")[0], (
         f"{page}: der Kontaktweg im Schlussabschnitt würde zum Ladeknopf"
+    )
+
+
+def test_every_reference_carries_the_stamp_of_the_file_it_points_at() -> None:
+    """Jeder Verweis auf eine eigene Datei trägt deren aktuellen Inhaltsstempel.
+
+    Am 27.08.2026 gemeldet: „Ohne STRG+F5 sehe ich noch die alten Bilder auf
+    der Webseite." Der Server war dabei richtig eingestellt — er sendet
+    ``Cache-Control: no-cache`` für Seiten **und** Bilder, gemessen an der
+    laufenden Website. Ein Header wirkt aber nur auf die Antwort, die er
+    begleitet: Zwischen dem 20. und dem 25.08. lieferte derselbe Server Bilder
+    mit ``max-age=604800``, und wer in jener Woche einmal da war, hält sie bis
+    zu sieben Tage für frisch und fragt gar nicht erst nach.
+
+    Dreimal wurde das an den Headern behoben (18.08., 20.08., 25.08.) und kam
+    dreimal wieder. Ein **anderer Verweis** ist die eine Auskunft, die jeden
+    Cache erreicht — was unter ``bilder/x.png?v=a8bf1166`` angefragt wird, kann
+    kein Eintrag unter ``bilder/x.png`` beantworten.
+
+    Dieser Test ist die Stelle, an der das eingelöst wird. Er wird rot, sobald
+    eine Datei sich ändert oder eine Seite neu erzeugt wird, ohne dass
+    ``python tools/stamp_assets.py`` danach gelaufen ist — und das ist keine
+    Schikane, sondern genau die Erinnerung, die viermal gefehlt hat.
+    """
+    import tools.stamp_assets as stamp
+
+    stale: list[str] = []
+    for page in sorted(WEBSITE.rglob("*.html")):
+        text = page.read_text(encoding="utf-8")
+        for _, reference, existing, _ in stamp.LINK.findall(text):
+            target = stamp.target_of(page, reference)
+            if not target.is_file():
+                continue  # Ein Verweis ins Leere ist ein anderer Fund
+            wanted = f"?v={stamp.stamp_of(target)}"
+            if existing != wanted:
+                name = page.relative_to(WEBSITE).as_posix()
+                stale.append(f"{name} → {reference}{existing or ' (ohne Stempel)'}")
+
+    assert not stale, (
+        f"{len(stale)} Verweise tragen einen veralteten oder keinen Stempel — "
+        "`python tools/stamp_assets.py` zieht sie nach:\n" + "\n".join(stale[:12])
     )
 
 

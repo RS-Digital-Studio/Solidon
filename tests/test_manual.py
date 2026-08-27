@@ -120,7 +120,9 @@ def test_every_figure_of_the_website_page_is_there(language: str) -> None:
     sources = re.findall(r'<img src="([^"]+)"', html)
 
     assert sources, "eine Handbuchseite ohne eine einzige Abbildung ist keine"
-    missing = [name for name in sources if not (folder / name).is_file()]
+    # Der Inhaltsstempel (`tools/stamp_assets.py`) hängt an der Adresse, nicht
+    # am Dateinamen: `de/report.png?v=a8bf1166` liegt als `de/report.png` da.
+    missing = [name for name in sources if not (folder / name.split("?", 1)[0]).is_file()]
     assert not missing, f"{WEBSITE_PAGES[language].name} verweist ins Leere:\n" + "\n".join(missing)
 
 

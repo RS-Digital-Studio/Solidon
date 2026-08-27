@@ -27,6 +27,7 @@ Reihenfolge und Fallen stehen unter der Liste — sie sind kein Beiwerk.
 .venv\Scripts\python.exe tools/setup_comfyui.py                 # ComfyUI für Weg 3 einrichten: Knoten, TripoSG, 7,5 GB Gewichte
 .venv\Scripts\python.exe tools/build_slice_core.py              # Konturverkettung übersetzen (optional, 1,34× auf die Schichtanalyse)
 .venv\Scripts\python.exe tools/check_support.py                 # kommt eine Rückmeldung wirklich an? schickt eine echte Sendung
+.venv\Scripts\python.exe tools/stamp_assets.py                  # Inhaltsstempel an jeden Verweis — **immer als Letztes vor dem Upload**
 .venv\Scripts\python.exe tools/upload_website.py --seit <commit> # Website hochladen (FTPS); Zugang in .webserver.json, nicht im Repository
 python tools/check_env.py                                       # stimmen die Versionen? läuft auch ohne .venv
 python tools/check_env.py --install                             # sie stimmen machen (braucht Netz)
@@ -91,6 +92,22 @@ dieselben Fenster ein zweites Mal auf, kleiner, und schneidet aus dem Katalog
 ein Band aus zwei Gruppen. Die Reihenfolge ist `make_figures` →
 `make_web_images` → `make_manual`; die `<img>`-Maße der von Hand gepflegten
 Seiten müssen danach den echten Dateien entsprechen.
+
+**Und `stamp_assets.py` läuft als Letztes, nach jedem Erzeuger.** Es hängt
+jedem Verweis den Inhaltsstempel seiner Datei an (`style.css?v=3f332ace`) —
+und jeder Erzeuger, der HTML schreibt, wirft die Stempel seiner Seiten wieder
+weg. Wer danach hochlädt, liefert Seiten aus, die auf `bilder/x.png` zeigen,
+und ein Browser mit einem alten Eintrag dafür fragt nicht nach.
+
+Das ist kein theoretischer Fall: Am 27.08.2026 meldete Robert „Ohne STRG+F5
+sehe ich noch die alten Bilder", und der Server war dabei richtig eingestellt
+— `no-cache` für Seiten *und* Bilder, gemessen an der laufenden Website. Ein
+Header erreicht eben nur die Antwort, die er begleitet, und nicht einen
+Eintrag, der seit der Woche vom 20. bis 25.08. mit `max-age=604800` im
+Browser liegt. Dreimal wurde das an den Headern behoben und kam dreimal
+wieder; `tests/test_website.py::test_every_reference_carries_the_stamp_of_the_
+file_it_points_at` macht daraus jetzt einen roten Lauf statt einer
+Erinnerung.
 
 **Die Bilderläufe sterben an der fünften oder sechsten Sprache — und nehmen
 die übrigen mit.** Am 23.08.2026 beim Lauf für 0.1.3 gemessen: Der Prozess endete
