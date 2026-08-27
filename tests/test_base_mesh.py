@@ -28,6 +28,8 @@ eigenem Konzept, nicht als Anhängsel.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 import trimesh
@@ -35,6 +37,8 @@ import trimesh
 from app.core.geom.blend import blend_bodies
 from app.core.geom.mesh import MeshData
 from app.core.geom.mesh_ops import edge_lengths, uniform
+
+MESHES = Path(__file__).parent / "data" / "meshes"
 
 #: Wie viele Schritte eine Grundfigur höchstens kosten darf. Darüber ist der
 #: Weg über Primitive keiner mehr — dann klickt man länger, als ein Käfig
@@ -150,3 +154,36 @@ def test_the_figure_changes_by_changing_a_number() -> None:
     assert long.volume > short.volume
     assert long.bounds.size[0] > short.bounds.size[0]
     assert short.is_watertight and long.is_watertight
+
+
+@pytest.mark.parametrize(("name", "loose"), [("plate_holes.stl", 796), ("cube_clean.stl", 12)])
+def test_a_part_in_one_piece_counts_as_one_however_it_arrives(name: str, loose: int) -> None:
+    """Die Komponentenzahl beschreibt das Teil, nicht die Datei.
+
+    Derselbe Fund wie bei der Merkmalserkennung, eine Ebene tiefer:
+    ``face_components`` fragte die Flächen-Nachbarschaft, und eine
+    ungeschweißte STL hat gar keine — jedes Dreieck wurde damit zu einer
+    eigenen Komponente. Gemessen 796 an einer Platte aus einem Stück und 12 an
+    einem Würfel.
+
+    Der Kunde bekam das zu lesen: ``_count_components`` meldet ab zwei Stücken
+    ``ingest.multiple_components`` — „Das Modell besteht aus mehreren Teilen",
+    mit 796 daneben. Und die Zahl bleibt nicht bei der Auskunft:
+    ``repair`` streicht Komponenten unter :data:`SMALL_COMPONENT_SHARE` der
+    größten, und was dabei als „größte" gilt, war hier ein **einzelnes
+    Dreieck**.
+
+    Geprüft wird gegen die gemessenen Altwerte, damit der Test nicht nur sagt
+    „ist eins", sondern auch, dass er den Fall trifft, der schiefging: Wären es
+    schon vorher zwei gewesen, hätte die Zusicherung nichts bewiesen.
+    """
+    path = MESHES / name
+    unwelded = MeshData.of(trimesh.load(path, process=False, force="mesh"))
+    welded = MeshData.of(trimesh.load(path, process=True, force="mesh"))
+
+    assert len(unwelded.raw.face_adjacency) == 0, (
+        f"{name}: der Fall setzt eine Datei ohne gemeinsame Ecken voraus"
+    )
+    assert len(unwelded.raw.faces) == loose, f"{name}: {loose} Dreiecke, so viele wären es einzeln"
+    assert unwelded.component_count == 1, f"{name}: roh geladen zerfällt das Teil"
+    assert welded.component_count == 1, f"{name}: verschweißt ohnehin"

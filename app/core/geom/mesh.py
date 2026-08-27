@@ -24,7 +24,7 @@ import trimesh
 from app.core.errors import CANCEL, CHOOSE, PROGRAMMING_ERRORS, GeometryError, ValidationError
 from app.core.log import get_logger
 from app.core.types import BoundingBox, Mesh
-from app.core.units import EPS_GEOM
+from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
 from app.i18n import _
 
 _log = get_logger(__name__)
@@ -157,6 +157,25 @@ def as_mesh_data(mesh: Mesh) -> MeshData:
     )
 
 
+def fully_stitched(mesh: trimesh.Trimesh) -> bool:
+    """Hat schon jede Kante ihren Partner? Dann ist am Ort nichts mehr zu holen.
+
+    Drei Kanten je Dreieck, jede von zwei Dreiecken geteilt — ein geschlossenes,
+    zusammengeführtes Netz hat also ``3F/2`` Nachbarschaften. Wer die erreicht,
+    kann durch Zusammenlegen keine Verbindung dazugewinnen.
+
+    Die Frage kostet nichts: ``face_adjacency`` braucht ohnehin jeder, der hier
+    vorbeikommt, und ``trimesh`` legt sie am Körper ab. Das ist der Unterschied
+    zu einer Abkürzung, die selbst rechnet, was sie abkürzen soll.
+
+    **Wozu sie da ist**, steht in einer Zahl: Das Zusammenlegen der Ecken einer
+    Kugel mit 327 680 Dreiecken kostet kalt rund 160 ms und findet nichts. Ohne
+    diese Zeile lag die Merkmalserkennung dort bei 733 ms gegen 571 vorher —
+    achtundzwanzig Prozent für eine Antwort, die schon dastand.
+    """
+    return len(mesh.faces) > 0 and 2 * len(mesh.face_adjacency) >= 3 * len(mesh.faces)
+
+
 def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
     """Zusammenhängende Komponenten als Dreiecksindizes.
 
@@ -164,15 +183,60 @@ def face_components(mesh: trimesh.Trimesh) -> list[np.ndarray]:
     Splitten baut Teilnetze und versucht, sie zu reparieren — das ist
     langsamer und zugleich eine Entscheidung, die die Eingangsstufe noch gar
     nicht getroffen hat (§17.1 Schritt 5).
+
+    **Gefragt wird nach dem Teil, nicht nach der Speicherform.** Eine STL kennt
+    keine gemeinsamen Ecken; ungeschweißt geladen hat ein solches Netz gar
+    keine Flächen-Nachbarschaft, und dann ist jedes Dreieck seine eigene
+    Komponente. Gemessen: 796 statt 1 an ``plate_holes.stl``, 12 statt 1 am
+    Würfel. Der Prüfbericht schrieb daraufhin „Das Modell besteht aus mehreren
+    Teilen" mit 796 daneben, an einem Teil, das aus einem Stück ist.
+
+    Gezählt wird deshalb über die **Vereinigung** beider Lesarten: benachbart
+    ist, was eine Kante teilt — nach den gespeicherten Eckennummern *oder* nach
+    dem Ort. Das ist der Teil, der nicht selbstverständlich ist, und er hat
+    einen gemessenen Anlass: Über den Ort **allein** zerfiel ein
+    verrundeter Blend-Körper mit Radius 12 in fünf Stücke. Dort liegen zwei
+    Ecken 88 Nanometer auseinander; sie auf denselben Ort zu legen macht aus
+    einem Dreieck ein entartetes, das keine Kante mehr teilt — und wenn es eine
+    Brücke war, reißt der Graph an einer Stelle, an der nichts fehlt.
+
+    Zusammenführen darf Verbindungen **hinzufügen** und nie welche wegnehmen.
+    Die Vereinigung sichert genau das zu, und die Gegenprobe steht daneben:
+    Zwei Würfel mit fünf Millimetern Abstand bleiben zwei.
+
+    Das Netz des Aufrufers wird dabei nicht angefasst — umnummeriert wird eine
+    Kopie der Flächentabelle, die Dreiecke behalten ihren Platz, und die
+    Rückgabe zeigt auf dieselben Dreiecke wie vorher. Die Toleranz ist dieselbe
+    wie bei ``repair.merge_vertices`` und ``perceive.features``:
+    ``trimesh.scale`` ist die Diagonale des Hüllquaders, also derselbe Wert wie
+    ``MeshData.bounds.diagonal`` (nachgemessen, auf die letzte Stelle gleich).
     """
     count = len(mesh.faces)
     if count == 0:
         return []
     return list(
         trimesh.graph.connected_components(
-            mesh.face_adjacency, nodes=np.arange(count), engine="scipy"
+            _adjacency_by_place(mesh), nodes=np.arange(count), engine="scipy"
         )
     )
+
+
+def _adjacency_by_place(mesh: trimesh.Trimesh) -> np.ndarray:
+    """Nachbarschaften nach gespeicherten Nummern **und** nach Ort.
+
+    Die zweite Hälfte ist die, die eine ungeschweißte Datei überhaupt erst
+    zusammenhängen lässt; die erste die, ohne die ein zusammengelegter Ort eine
+    bestehende Verbindung kosten könnte. Beide zusammen sind die Frage, die
+    gemeint ist — der Grund steht bei :func:`face_components`.
+    """
+    stored = np.asarray(mesh.face_adjacency, dtype=np.int64).reshape(-1, 2)
+    if fully_stitched(mesh):
+        return stored
+    digits = weld_digits(weld_tolerance(float(mesh.scale)))
+    _, place = trimesh.grouping.unique_rows(np.asarray(mesh.vertices, dtype=float), digits=digits)
+    faces = np.asarray(place, dtype=np.int64)[np.asarray(mesh.faces, dtype=np.int64)]
+    welded = np.asarray(trimesh.graph.face_adjacency(faces=faces), dtype=np.int64).reshape(-1, 2)
+    return np.vstack([stored, welded])
 
 
 def on_surface(
