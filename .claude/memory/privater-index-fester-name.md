@@ -65,6 +65,24 @@ und [[messung-traegt-nur-am-ort-ihrer-messung]].
   landet dort als Pfadname. Entweder Optionen davor, oder ganz ohne `-o`
   committen und den privaten Index für sich sprechen lassen.
 
+**Und das Aufräumen läuft in einer eigenen Shell, nicht im selben Befehl.**
+Am 27.08.2026 endete ein privater Commit so:
+`git reset -- ROADMAP.md; rm -f .git/index-privat; git status`. Alle drei in
+**einer** Zeile, und `GIT_INDEX_FILE` war noch gesetzt. Die Folgen waren beide
+falsch und beide unauffällig:
+
+* Das `git reset` traf den **privaten** Index, nicht den gemeinsamen — der
+  gemeinsame blieb also auf dem Stand vor dem Commit stehen, genau der Zustand,
+  gegen den es half ([[geteilter-index-haelt-alten-stand]]).
+* Und das `git status` danach las einen Index, den `rm` gerade gelöscht hatte.
+  Ein fehlender Index ist ein leerer, also meldete es **rund tausend Dateien als
+  `D `** — ein Bild, das aussieht wie eine Katastrophe und keine ist.
+
+Der zweite Punkt ist der gefährlichere, weil er zum Handeln verleitet: Wer
+darauf „repariert", fasst einen Baum an, der unversehrt ist. Die Probe kostet
+eine Zeile — `unset GIT_INDEX_FILE`, dann `git status` noch einmal. Steht dort
+nichts, war nichts.
+
 **Die Reparatur ist ein Schritt nach vorn, kein Revert:** Index mit
 `git read-tree <commit-davor>` füllen, die eigenen Pfade dazulegen, committen.
 Der Arbeitsbaum ist dabei nie betroffen — die Dateien liegen unversehrt auf
