@@ -150,9 +150,47 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
     return data_class
 
 
+#: Arten, deren Wert im Kern eine **Zahl** ist.
+#:
+#: ``filament`` steht hier und nicht bei den Texten: Die Nummer eines
+#: Materialslots ist im Kern eine Zahl wie zuvor, der Filamentwähler mit
+#: Farbfeld und Namen ist eine Sache der Oberfläche (:data:`ParamKind`).
+NUMBER_KINDS: Final[frozenset[str]] = frozenset({"float", "int", "filament"})
+
+#: Arten, deren Wert eine **Zeichenkette** ist — Namen, Kennungen, und die
+#: Sammelparameter, die ihren Inhalt als JSON-Text tragen (§30.1).
+TEXT_KINDS: Final[frozenset[str]] = frozenset(
+    {
+        "str",
+        "enum",
+        "object",
+        "feature",
+        "part",
+        "source",
+        "image",
+        "sketch",
+        "strokes",
+        "armature",
+    }
+)
+
+
 def _coerce(spec: ParamSpec, value: Any) -> Any:
     """Prüft einen Wert gegen seinen Schemaeintrag und gibt ihn in Kernform
     zurück.
+
+    **Die Art entscheidet, und sie muss eingeordnet sein.** Hier stand einmal
+    „bool, dann float/int, alles Übrige ist Text" — und damit machte eine neue
+    Art jedes Feld still zum Textfeld: ``slot`` bekam ``kind="filament"``
+    (richtig, die Oberfläche soll dort den Wähler zeigen) und lehnte seitdem
+    Zahlen ab. „Bei Auswahl eines Filaments kommt die Meldung Text wird
+    erwartet" (Robert, 27.08.2026). Die stille Hälfte war schlimmer als die
+    Meldung: Ein Feld im Textzweig hat keine Grenzen mehr, also wäre auch Slot
+    99 durchgegangen.
+
+    Wer eine neue Art einführt, trägt sie in :data:`NUMBER_KINDS` oder
+    :data:`TEXT_KINDS` ein; ``test_every_parameter_kind_is_sorted_into_a_check``
+    hält beide Mengen vollständig.
     """
     if spec.kind == "bool":
         if not isinstance(value, bool):
@@ -164,7 +202,7 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
             )
         return value
 
-    if spec.kind in ("float", "int"):
+    if spec.kind in NUMBER_KINDS:
         if isinstance(value, bool) or not isinstance(value, int | float):
             raise ValidationError(
                 field=spec.name,
@@ -172,7 +210,7 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
                 value=value,
                 constraint="type",
             )
-        if spec.kind == "int" and not float(value).is_integer():
+        if spec.kind != "float" and not float(value).is_integer():
             raise ValidationError(
                 field=spec.name,
                 detail=_("Hier wird eine ganze Zahl erwartet."),
@@ -197,6 +235,15 @@ def _coerce(spec: ParamSpec, value: Any) -> Any:
                 values={"maximum": spec.maximum},
             )
         return number
+
+    if spec.kind not in TEXT_KINDS:
+        # Kein Rückfall auf „dann eben Text": Genau der hat dem Filamentfeld
+        # seine Zahl abgelehnt und seine Grenzen genommen, ohne dass jemand es
+        # merkte. Eine unbekannte Art ist ein Fehler im Programm und sagt das.
+        raise InternalError(
+            detail=f"parameter kind {spec.kind!r} is in neither NUMBER_KINDS nor TEXT_KINDS",
+            values={"parameter": spec.name, "kind": spec.kind},
+        )
 
     # **Ein übersetzbarer Text ist ein Text** (§4.1). Ein `TranslatableText`
     # kommt dort an, wo die Operation den Parameter als Message-ID vermerkt hat

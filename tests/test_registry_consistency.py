@@ -755,3 +755,74 @@ def test_the_purity_check_would_notice() -> None:
     assert not _reads_from_outside([_probe_is_clean], here), (
         "die Prüfung meldet eine saubere Funktion — so wird sie abgeschaltet"
     )
+
+
+# --- Jede Parameterart wird geprüft, und zwar als das, was sie ist ----------------
+
+
+def test_every_parameter_kind_is_sorted_into_a_check() -> None:
+    """Ein ``kind``, den ``_coerce`` nicht kennt, machte jedes Feld still zum
+    Textfeld — samt Verlust seiner Grenzen.
+
+    Gefunden hat es Robert am 27.08.2026 an der Oberfläche: „Bei Auswahl eines
+    Filaments kommt die Meldung Text wird erwartet." Die Ursache lag zwei
+    Ebenen tiefer. ``_coerce`` verzweigte über ``bool``, dann ``float``/``int``
+    — und alles Übrige fiel in den Textzweig. ``slot`` ist ein ganzzahliges
+    Feld mit Grenzen 0 bis 7; sobald es ``kind="filament"`` trug (richtig, die
+    Oberfläche soll dort den Wähler zeigen), lehnte die Prüfung die Zahl ab.
+
+    **Und die stille Hälfte war die schlimmere:** ``{"slot": "Rot"}`` wurde
+    *angenommen*. Ein Feld im Textzweig hat keine Ober- und Untergrenze mehr,
+    also wäre auch Slot 99 durchgegangen — ohne Meldung, bis der Slicer nach
+    hundert Filamenten fragt.
+
+    Deshalb wird hier nicht ein ``kind`` nachgetragen, sondern die Lücke
+    geschlossen: Jede Art steht in genau einer der beiden Mengen, und wer eine
+    neue einführt, ordnet sie ein — oder dieser Lauf ist rot und sagt, welche
+    fehlt. Dieselbe Bauart wie ``_RANGE_CONSTRAINTS``/``_NOT_A_RANGE`` bei den
+    Beschränkungen.
+    """
+    from typing import get_args
+
+    from app.core.registry import params as params_module
+    from app.core.types import ParamKind
+
+    known = set(get_args(ParamKind))
+    assert len(known) > 10, "zu wenige Arten gefunden — die Aufzählung ist nicht die gemeinte"
+
+    sorted_out = params_module.NUMBER_KINDS | params_module.TEXT_KINDS | {"bool"}
+    missing = known - sorted_out
+    assert not missing, (
+        "Diese Parameterarten kennt keine der beiden Mengen — trag sie in "
+        "``params.NUMBER_KINDS`` ein, wenn der Kern eine Zahl bekommt, sonst in "
+        f"``params.TEXT_KINDS``: {sorted(missing)}"
+    )
+
+    invented = sorted_out - known - {"bool"}
+    assert not invented, f"Diese Arten gibt es in ``ParamKind`` nicht: {sorted(invented)}"
+
+    both = params_module.NUMBER_KINDS & params_module.TEXT_KINDS
+    assert not both, f"Zahl und Text zugleich geht nicht: {sorted(both)}"
+
+
+def test_a_filament_parameter_takes_a_number_and_keeps_its_bounds() -> None:
+    """Der Fall, an dem es aufgefallen ist — als Zusage.
+
+    Die Nummer eines Materialslots ist im Kern eine Zahl wie zuvor; der
+    Filamentwähler ist eine Sache der Oberfläche. Beide Richtungen gehören
+    geprüft: Die Zahl kommt an, und der Text nicht — denn genau dieser
+    Textzweig hatte die Grenzen des Feldes verschluckt.
+    """
+    from app.core.errors import ValidationError
+    from app.core.registry.params import validate
+
+    spec = REGISTRY.get("paint_slot")
+
+    taken = validate(spec.params, {"slot": 1, "at_feature": "face_1"})
+    assert taken.slot == 1
+
+    with pytest.raises(ValidationError):
+        validate(spec.params, {"slot": "Rot", "at_feature": "face_1"})
+
+    with pytest.raises(ValidationError):
+        validate(spec.params, {"slot": 99, "at_feature": "face_1"})
