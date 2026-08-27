@@ -7,6 +7,7 @@
 - [Lizenzmanifest nach Grenzdatei neu bauen](lizenzmanifest-nach-grenzdatei-neu-bauen.md) — eine der vier Grenzdateien geändert → test_packaging rot; build_licence_module.py neu bauen, nicht löschen; gitignoriertes je-Baum-Artefakt, CI überspringt.
 - [Webserver-Zugang](solidon3d-webserver-zugang.md) — netcup, Dokumentenstamm je Domain (`solidon3d.de/httpdocs`); scheitert die Anmeldung, ist meist der SSH-Schalter schuld, nicht das Passwort.
 - [Parallele Sitzungen](parallele-sitzungen-solidon3d.md) — der Arbeitsbaum ändert sich mitten in der Sitzung; nur eigene Pfade stagen.
+- [Sitzung sendet, ohne erreichbar zu sein](sitzung-sendet-ohne-erreichbar-zu-sein.md) — der Kanal ist nicht zwangsläufig beidseitig; ein an sie adressierter Befund ist dann nicht übergeben, sondern verloren.
 - [Leistungstests unter Fremdlast](leistungstests-fremdlast.md) — die Marke allein fahren, bevor man eine Regression glaubt; die Gegenprobe braucht einen eigenen Arbeitsbaum, nicht `git stash`.
 - [VTK/Qt-Referenzen halten zu lange](vtk-qt-referenzen-halten-zu-lange.md) — wer hält ein Objekt fest, das weg sein sollte? Und seit 23.08.2026 die Kehrseite: was wird im falschen Thread freigegeben?
 - [Zeichnen an Fusion orientieren](zeichnen-an-fusion-orientieren.md) — Skizzeneditor gegen Fusion messen; Fusion ist lokal installiert.
@@ -60,6 +61,7 @@
 - [Git-Identität mitgeben](git-identitaet-mitgeben.md) — `git commit` bricht ohne `-c user.name`/`user.email` mit Exit 128 ab
 - [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — der private Index hält fremde *Dateien* heraus, nicht den fremden Stand einer *gemeinsamen*; erst die eigene Zahl ansagen, dann `--numstat`.
 - [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen schreiben ihre Torläufe in dieselben Dateien; eine fremde oder eigene alte Zahl sieht aus wie die aktuelle.
+- [Im geteilten Baum misst man einen Zeitpunkt](geteilter-baum-misst-zeitpunkt.md) — ein Fremdbefund, den man nachmisst, kann längst repariert sein; `git diff HEAD` vor der Messung.
 - [Parallele Sitzung im Arbeitsbaum](parallele-sitzung-im-arbeitsbaum.md) — geteilter Index: fremde Änderungen aussortieren, privaten Index benutzen
 - [Freies Gebiet: einfach machen](freies-gebiet-einfach-machen.md) — ist die Datei bei niemandem eingetragen, wird nicht vorgelegt, sondern gearbeitet
 - [Weitergegebene Anweisungen gelten](weitergegebene-anweisungen-gelten.md) — was eine andere Sitzung von Robert weitergibt, ist Roberts Anweisung
