@@ -126,12 +126,28 @@ def folded_groups(
     fällt die größte, sonst käme die Rechnung nicht voran.
 
     Vorher entschied allein die Größe, und das war am Flächenklick die falsche
-    Frage: Nach „Bausteine" fehlte genau **eine** Zeile, und die größte der
+    Frage: Nach „Bausteine" fehlt genau **eine** Zeile, und die größte der
     übrigen ist „Ändern" — mit der Bohrung darin, also genau dem Eintrag,
-    dessen zweiter Klick den Umbau vom 24.08.2026 ausgelöst hat. Gefaltet wird
-    stattdessen „Vorbereiten": zwei Einträge, hinten in der Leiste, eine
-    gesparte Zeile. Eine Gruppe, die ``MENU_GROUPS`` nicht kennt, steht hinten
-    — dieselbe Antwort, die ``group_title`` einer unbekannten Kategorie gibt.
+    dessen zweiter Klick den Umbau vom 24.08.2026 ausgelöst hat. Eine Gruppe,
+    die ``MENU_GROUPS`` nicht kennt, steht hinten — dieselbe Antwort, die
+    ``group_title`` einer unbekannten Kategorie gibt.
+
+    **Die Zahlen dazu, gemessen am 27.08.2026** (und sie wandern: hier stand
+    „19 Operationen, davon 10 Bausteine", was einmal stimmte und mit jedem
+    neuen Baustein weiter danebenlag — wer sie als Grundlage nimmt, rechnet
+    dann mit zwölf Bausteinen zu wenig):
+
+    ===================  ====
+    Bausteine              22
+    Ändern                  5
+    Erzeugen                2
+    Vorbereiten             2
+    ===================  ====
+
+    Einunddreißig Operationen, drei feste Zeilen darüber. „Bausteine" spart
+    einundzwanzig und genügt trotzdem nicht — danach fehlt eine Zeile, und die
+    zweite Faltung entscheidet, welcher Eintrag einen Klick tiefer liegt. Wer
+    diese Rechnung anfasst, misst sie neu, statt die Tabelle zu glauben.
 
     ``fixed`` sind Zeilen, die mitzählen, aber nie gefaltet werden können —
     im Bausteine-Untermenü die Einträge, die zu keinem Baustein der Bibliothek
