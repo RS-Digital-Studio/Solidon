@@ -78,7 +78,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Sichtbarkeit | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | keine Entwicklungsaufgabe — bleibt bewusst stehen |
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
-| SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
+| SKÅDIS-Plattendicke unbelegt — **vier der fünf Werte sind gemessen** | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine Messung der Plattendicke. Schlitz, Höhe und Raster sind am 27.08.2026 an einer echten Platte bestätigt; die Dicke ist der einzige Wert ohne Zeichnung, und die Nasentiefe hängt an ihr |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben — **ein Weg ist gebaut, die Bestätigung fehlt** | Die Demo bis 30.10.2026 (12.08.2026) | einen Lauf auf einem Mac. Seit `d96308bb` wird ein offenes Netz aus geschlossener Form vernäht statt feiner vernetzt (T-Kreuzung, nicht Loch); ob der dortige Riss einer ist, lässt sich hier nicht erzeugen |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
@@ -9567,7 +9567,7 @@ Das Konzept liegt in `konzepte/konzept-befestigungssysteme-2026-08.md` und
 nennt acht Arbeitspakete, die Abnahmekriterien und das, was ausdrücklich nicht
 gebaut wird. Hier stehen die zwei Punkte, die es zu Arbeit machen.
 
-- [ ] **Der Einhänger für Lochwände** als Baustein `pegboard_hook` in der
+- [x] **Der Einhänger für Lochwände** als Baustein `pegboard_hook` in der
   Gruppe „Befestigung", mit dem Raster als neuer Tabellenart in
   `standards.toml`. Vorher steht das Messen: Die Lochung einer SKÅDIS-Platte
   ist nirgends belastbar dokumentiert — `dimensions.com` nennt nur die
@@ -9576,6 +9576,28 @@ gebaut wird. Hier stehen die zwei Punkte, die es zu Arbeit machen.
   Millimeter danebenliegt, geht in kein Loch von fünf. Also wird an einer
   echten Platte gemessen, bevor eine Zeile entsteht, und der Wert kommt mit
   Datum und Herkunft in die Tabelle (§24.2).
+
+  **Gemessen am 27.08.2026** (Alexander Schneider, Messschieber, eine Platte;
+  weitere angekündigt): Schlitzbreite 4,9–5,1, Schlitzhöhe 14,9–15,1, über
+  zwei benachbarte Schlitze außen 45,0. Die 45,0 sind Raster plus eine
+  Schlitzbreite und bestätigen die hinterlegten 40,00 — von drei möglichen
+  Deutungen trifft nur diese das Rastermaß, die anderen ergäben 45,0 oder
+  50,0.
+
+  **Kein Nennwert war zu korrigieren, und das war nicht der Ertrag.** Neu ist
+  die **Streuung von ±0,1 mm**, und die hat keine Zeichnung. Sie ist genau der
+  Grund, aus dem der Zapfen sein Spiel aus dem Materialprofil bezieht: im
+  engsten gemessenen Schlitz bleiben unter PETG 0,15 mm Luft, unter PLA 0,10.
+  `test_the_hook_still_fits_the_narrowest_slot_that_was_measured` hält das für
+  vier Materialien fest und misst gegen die **untere** Grenze, denn nur sie
+  kann klemmen; nimmt man dem Zapfen sein Spiel, fallen alle vier
+  (`7ace4b14`).
+
+  **Offen bleibt allein die Plattendicke** — ausgerechnet die einzige der fünf
+  Zahlen, die nie belegt war („approximate; the exact decimal is unverified")
+  und aus der etwas folgt: Die Nasentiefe des Einhängers ist zwei Drittel
+  davon. Die vier gemessenen Werte standen schon auf der Zeichnung, dieser
+  nicht.
 
 - [x] **Additive Bausteine erscheinen am Flächenklick** (`074e5d0` und
   `73cc2f6`, 24.08.2026). Der Befund von damals lautete:
