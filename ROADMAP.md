@@ -118,7 +118,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
 | Offscreen prüft nichts, was am Aktor hängt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine **Messstelle**, die im echten Fenster läuft, und eine Entscheidung, welche Zusagen dort geprüft werden müssen. `Viewport.show_scene` kehrt bei `self.plotter is None` vor dem Aktor-Aufbau zurück (`app/ui/viewport.py:1948`), und `tests/conftest.py` setzt `QT_QPA_PLATFORM=offscreen` für die ganze Suite — jede Zusage über Aktoren, Farben, Kamerastellung oder Bildinhalt ist dort grün über einer leeren Menge. Belegt am 24.08.: `_actors` war vor **und** nach einer Operation `{}`; mit sichtbarem Fenster wanderten dieselben Aktoren von (-10..10) auf (-104..-84, 84..104, 0..20) |
 | Ein Prüfstand, der beim Fehlschlag modal stehen bleibt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine Entscheidung, ob ein Prüfstand `report_error` abschalten darf. Ein Fehler öffnet dort einen modalen Dialog: Der Hauptthread stand, die Timer feuerten nicht mehr, und von außen war es von einem Hänger nicht zu unterscheiden — der Traceback lag still unter `%LOCALAPPDATA%\RS Digital\Solidon3D\reports\bericht-<zeitstempel>\bericht.txt` |
-| 81 weitere Texte stehen mehrfach wortgleich im Quelltext | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Die vier Fälle in `app/ui/main_window.py` sind am 24.08.2026 erledigt (`791a1576`); übrig sind Vorkommen, die meist zwei- bis dreimal in derselben Datei stehen |
+| 43 Texte stehen wortgleich in mehreren Dateien | Fünf Doppelungen, und eine hatte schon Folgen (24.08.2026) | niemanden — der Rest ist klein und lohnt keinen eigenen Durchgang. Die vier Fälle in `app/ui/main_window.py` sind am 24.08.2026 erledigt (`791a1576`); übrig sind Vorkommen, die meist zwei- bis dreimal in derselben Datei stehen |
 | Elf von dreizehn Eventfiltern werden nie abbestellt | Was niemand las, und was zweimal dastand (24.08.2026) | **nichts mehr — das Muster steht, es fehlt die Arbeit.** Der erste reproduzierbare Fall ist am 24.08.2026 gefallen und behoben (`e0540a1`, `overlay.py`): Nicht das *Filterobjekt* stirbt, sondern das *überwachte*, und der Filter läuft in den Abbau hinein. Abbestellen bei `QEvent.Type.Destroy` — vier von sechs Läufen rot ohne, null von sechs mit. Einer von dreizehn ist damit erledigt |
 | Zwei Downloadgrößen stehen im Text statt in der Message-ID | Was niemand las, und was zweimal dastand (24.08.2026) | fünf Übersetzungen für zwei Sätze. `NEEDED_GIGABYTES` macht es richtig (`.format(noetig=…)`), `BACKGROUND_MEGABYTES` und `WEIGHT_GIGABYTES` nicht — die Zahl ist in die Message-ID getippt. Ein Test hält beide Stellen seit `77ad37cb` zusammen; der saubere Weg braucht Übersetzer |
 | Die Versicherung trägt die Rechtsformentscheidung und steht in keiner Liste | Die Haftungsgrundlagen des Fördermodells nachkontrolliert (24.08.2026) | ein Angebot. `konzept-foerdermodell.md` §5 begründet das Einzelunternehmen unter anderem mit einer Berufshaftpflicht — die in §11 und §13 nicht vorkommt. Gebraucht wird eine **Produkthaftpflicht mit Software-Einschluss**, nicht die übliche Vermögensschadendeckung: Richtlinie (EU) 2024/2853 macht Software ausdrücklich zum Produkt, Umsetzungsfrist 09.12.2026, und der Verkaufsstart liegt danach |
@@ -8920,15 +8920,41 @@ Was offen bleibt:
       `require_positive` und ändert, was der Nutzer als Überschrift liest;
       deshalb hier und nicht im Commit von heute.
 
-- [ ] **85 weitere Texte stehen mehrfach wortgleich im Quelltext.** Gemessen
-      über `app/`: 87 Texte über 25 Zeichen kommen mehr als einmal vor, zwei
-      davon sind oben behoben. Der Rest ist kleiner (meist zwei- bis dreimal,
-      oft in derselben Datei) und lohnt keinen eigenen Durchgang — aber vier
-      Fälle in `app/ui/main_window.py` sind es wert, wenn dort ohnehin jemand
-      arbeitet: „Bitte zuerst ein Objekt auswählen." (4×, Zeilen 2990, 4042,
-      4294, 4978) und „Dafür braucht es einen Körper in der Szene." (4×, Zeilen
-      2219, 2249, 2429, 2435). Vier Stellen, die denselben Satz sagen, sind vier
-      Stellen, an denen er sich ändern kann.
+- [ ] **43 Texte stehen mehrfach wortgleich im Quelltext, quer über Dateien.**
+      Neu gemessen am 27.08.2026 über einen AST-Lauf durch `app/`, der die
+      Argumente von `_()` und `tr()` ab 25 Zeichen sammelt: 1997 Texte
+      insgesamt, 94 davon mehr als einmal. **Die Aufteilung ist der eigentliche
+      Befund**, nicht die Summe: 50 stehen mehrfach in *derselben* Datei — das
+      sind Zweige derselben Funktion, wer den einen ändert, sieht den anderen.
+      44 standen quer über Dateien, und nur die laufen auseinander, weil
+      niemand die andere Stelle sieht. Einer davon ist zusammengelegt (siehe
+      unten), bleiben 43.
+
+      Die beiden Fälle, die dieser Punkt bis heute namentlich nannte, sind
+      längst behoben: „Bitte zuerst ein Objekt auswählen." und „Dafür braucht
+      es einen Körper in der Szene." stehen je **einmal** in
+      `app/ui/main_window.py` (Zeilen 268/269). Der Punkt führte sie noch als
+      viermal — und trug seine eigene Zahl in drei Fassungen: 81 im Register,
+      85 in der Überschrift, 87 im Fließtext.
+
+      **Zusammengelegt (ca9a5e33):** „Dabei ist etwas schiefgegangen, womit hier
+      niemand gerechnet hat." — der Satz, den vier Dialoge sagen, wenn ein
+      Arbeiter im Hintergrund abstürzt (ComfyUI einrichten, Modell prüfen,
+      Erzeugen, Installieren). Er steht jetzt als `UNEXPECTED_CRASH` in
+      `app/ui/labels.py`, dem Modul, dessen Docstring genau das verspricht:
+      kurze Texte, auf die sich mehrere Teile der Oberfläche einigen müssen.
+
+      **Was die 43 wirklich kosten, und warum sie nicht oben stehen:** Läuft
+      eine der Stellen auseinander, entstehen zwei Katalogschlüssel, und der
+      neue ist unübersetzt — das meldet `tests/test_translations.py` beim
+      nächsten Lauf. Der Kunde sieht also keinen falschen Text, sondern
+      höchstens einen deutschen in einer fremden Sprache, und das Tor hält es
+      auf. Es ist Wartungsaufwand, kein Kundenschaden. Wer in einer der Dateien
+      ohnehin arbeitet, nimmt seinen Fall mit; ein eigener Durchgang über alle
+      43 lohnt nicht. Das Messskript steht in der Sitzung vom 27.08.2026 und
+      ist in zwanzig Zeilen wieder gebaut: `ast.walk` über `app/`, Aufrufe von
+      `_`/`tr` mit reinem Zeichenkettenargument, nach Text gruppieren, die mit
+      mehr als einer Datei behalten.
 
 ---
 
