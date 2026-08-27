@@ -870,3 +870,135 @@ def test_without_a_printer_there_is_no_wall_verdict(profile: Profile) -> None:
     assert below_printable_wall(0.1, None) is None
     # Die Gegenprobe: mit Drucker gibt es sehr wohl ein Urteil.
     assert below_printable_wall(0.1, profile) is not None
+
+
+# --- Was die Tessellierung hinterlässt ------------------------------------------
+
+
+def _with_a_t_junction() -> MeshData:
+    """Zwei Dreiecke, deren gemeinsame Kante nur eines von ihnen kennt.
+
+    Der Defekt aus dem Eiffelturm-Fund, im Kleinen: Die lange Kante des einen
+    Dreiecks wurde beim Bau des Nachbarn von einem Punkt geteilt, und der
+    anderen Seite hat es nie jemand gesagt. Kein Loch — die Flächen liegen
+    lückenlos aneinander —, und trotzdem melden beide Seiten offene Kanten.
+    """
+    import numpy as np
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+
+    punkte = np.array(
+        [
+            [0.0, 0.0, 0.0],  # 0
+            [2.0, 0.0, 0.0],  # 1
+            [1.0, 1.0, 0.0],  # 2  Spitze oben
+            [1.0, 0.0, 0.0],  # 3  sitzt auf der Kante 0-1
+            [1.0, -1.0, 0.0],  # 4 Spitze unten
+        ],
+        dtype=float,
+    )
+    # Oben ein ungeteiltes Dreieck über 0-1, unten zwei, die den Punkt 3 kennen.
+    dreiecke = np.array([[0, 1, 2], [0, 3, 4], [3, 1, 4]], dtype=np.int64)
+    return MeshData.of(trimesh.Trimesh(vertices=punkte, faces=dreiecke, process=False))
+
+
+def test_the_stitcher_closes_a_seam_the_hole_filler_cannot() -> None:
+    """Der Riss an der Flanke ist eine T-Kreuzung, kein Loch.
+
+    Der Fall ist macOS: Ein Gewindebolzen ist dort als **Form** in Ordnung —
+    geschlossen, ein Stück, richtiges Volumen, STEP trägt ihn —, aber seine
+    Vernetzung ritzt an der Flanke. `_finely_meshed` half nicht, weil es
+    ausschließlich versucht, feiner zu vernetzen; repariert wurde nie.
+
+    Warum **Vernähen** und nicht Füllen: Gemessen an einem M6-Netz mit einem
+    echten Loch lässt `repair.fill_holes` es offen und rührt kein Dreieck an —
+    zu Recht, denn ein Dreieck über kollinearen Punkten hat keine Fläche. Was
+    hier fehlt, ist kein Material, sondern ein Punkt, den die Nachbarfläche
+    nicht kennt.
+
+    Der echte Riss lässt sich auf dieser Plattform nicht erzeugen (unter
+    Windows ist jede Größe dicht), also bekommt der Vernäher den Defekt
+    vorgesetzt, den der Befund beschreibt.
+    """
+    from app.core.geom.repair import open_edge_count, stitch_t_junctions
+
+    kaputt = _with_a_t_junction()
+    vorher = open_edge_count(kaputt)
+    assert vorher > 0, "der Prüfling muss offene Kanten haben, sonst prüft nichts"
+
+    geheilt, naehte = stitch_t_junctions(kaputt)
+
+    assert naehte > 0, "die T-Kreuzung muss gefunden werden"
+    assert open_edge_count(geheilt) < vorher
+
+
+def test_a_repair_that_makes_it_worse_is_dropped() -> None:
+    """Drei Nähte heißen nicht drei geschlossene Kanten.
+
+    Beim Bauen gemessen und beinahe übersehen: An einem Netz, dessen Ränder
+    gar keine T-Kreuzungen sind — ein absichtlich zerlegter Würfel —, findet
+    der Vernäher trotzdem drei Nähte und hinterlässt **18 offene Kanten statt
+    15**. Er teilt Flächen an Punkten, die dort zufällig aufsitzen.
+
+    Die Zahl der Nähte ist damit kein Erfolgsmaß. `_stitched` vergleicht
+    deshalb die offenen Kanten und gibt das Original zurück, wenn es nicht
+    besser wurde: Eine Reparatur, die verschlimmert, ist keine.
+    """
+    import trimesh
+
+    from app.core.brep.kernel import _stitched
+    from app.core.geom.mesh import MeshData
+    from app.core.geom.repair import open_edge_count
+
+    box = trimesh.creation.box(extents=(10.0, 10.0, 10.0))
+    fein = box.subdivide()
+    zerlegt = MeshData.of(
+        trimesh.util.concatenate(
+            [
+                trimesh.Trimesh(vertices=fein.vertices, faces=fein.faces[:6], process=False),
+                trimesh.Trimesh(vertices=box.vertices, faces=box.faces[3:], process=False),
+            ]
+        )
+    )
+    assert not zerlegt.is_watertight
+
+    ergebnis = _stitched(zerlegt)
+
+    assert ergebnis is zerlegt, "verschlimmerte Reparatur muss verworfen werden"
+    assert open_edge_count(ergebnis) == open_edge_count(zerlegt)
+
+
+def test_a_closed_mesh_never_reaches_the_stitcher(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Der Normalfall kostet die Frage, nicht die Arbeit.
+
+    `is_watertight` sind 0,1 ms an einem Netz mit 13 744 Dreiecken, das
+    Vernähen 2,6 ms. Die Abkürzung lohnt also — aber sie ist **nur** eine
+    Abkürzung: Auch ohne sie käme dasselbe Netz heraus, weil der Vernäher an
+    einem dichten Netz nichts findet.
+
+    Deshalb prüft dieser Test nicht das Ergebnis, sondern ob der teure Weg
+    überhaupt betreten wird. Der erste Anlauf verglich die Objektidentität und
+    blieb grün, als die Bedingung ausgeschaltet war — er prüfte eine Zusage,
+    die auch ohne sie gilt.
+    """
+    import trimesh
+
+    from app.core.brep import kernel
+    from app.core.geom import repair
+    from app.core.geom.mesh import MeshData
+
+    gerufen: list[int] = []
+    echt = repair.stitch_t_junctions
+
+    def zaehlend(mesh: MeshData) -> tuple[MeshData, int]:
+        gerufen.append(1)
+        return echt(mesh)
+
+    monkeypatch.setattr(repair, "stitch_t_junctions", zaehlend)
+
+    dicht = MeshData.of(trimesh.creation.box(extents=(4.0, 4.0, 4.0)))
+    assert dicht.is_watertight
+
+    assert kernel._stitched(dicht) is dicht
+    assert not gerufen, "ein dichtes Netz darf den Vernäher nicht kosten"

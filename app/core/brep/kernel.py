@@ -401,4 +401,68 @@ def tessellate(shape: Any, deflection: float = DEFLECTION) -> MeshData:
         process=True,
     )
     _log.info("tessellated a B-Rep body into %d triangles", len(body.faces))
-    return MeshData.of(body)
+    return _stitched(MeshData.of(body))
+
+
+def _stitched(mesh: MeshData) -> MeshData:
+    """Ein Netz, das aus einer geschlossenen Form kommt, soll geschlossen sein.
+
+    **Der Fall ist macOS, und der Weg dorthin war eine Sackgasse.** Ein
+    Gewindebolzen ist dort als *Form* in Ordnung — geschlossen, ein Stück,
+    richtiges Volumen, STEP trägt ihn —, aber seine Vernetzung ritzt an der
+    Flanke: M6 mit einem Millimeter Steigung blieb undicht, auch nachdem
+    ``_finely_meshed`` die Feinheit dreimal halbiert hatte. Unter Windows und
+    Linux war jede Größe dicht. Der Registereintrag sagte deshalb, es warte
+    auf eine neue OCCT-Version.
+
+    Das stimmte für den eingeschlagenen Weg und nicht für alle: Versucht wurde
+    ausschließlich, **feiner** zu vernetzen. Repariert wurde nie — obwohl
+    genau dieser Defekt seit dem Eiffelturm-Fund einen eigenen Namen hat.
+
+    **Vernäht, nicht gefüllt.** Ein Riss an einer Flanke ist keine fehlende
+    Wand, sondern eine T-Kreuzung: Zwei Flächen stoßen an derselben Kante
+    zusammen und werden verschieden fein unterteilt; ein Punkt sitzt dann auf
+    einer Kante, die nichts von ihm weiß. ``trimesh.repair.fill_holes`` lehnt
+    das zu Recht ab — gemessen an einem M6-Netz mit einem echten Loch bleibt
+    es offen und rührt kein Dreieck an. ``stitch_t_junctions`` gibt der
+    Nachbarfläche den fehlenden Punkt: keine neue Geometrie, keine verschobene
+    Oberfläche.
+
+    **Der Normalfall kostet 0,1 ms.** So teuer ist die Frage
+    ``is_watertight`` an einem Netz mit 13 744 Dreiecken; das Vernähen selbst
+    (2,6 ms) läuft nur, wenn die Antwort nein lautet. Ein dichtes Netz geht
+    unverändert durch — auch das ist gemessen und keine Annahme.
+
+    Bleibt es danach offen, kommt es trotzdem heraus. Der Körper ist gut, und
+    ein Befund über ein grobes Netz ist besser als eine Absage über einen
+    gelungenen Körper (§30).
+    """
+    if mesh.is_watertight:
+        return mesh
+    # Der Import steht hier und nicht oben: ``geom.repair`` zieht trimesh und
+    # scipy, und der B-Rep-Kern wird auch von Wegen berührt, die kein Netz
+    # anfassen.
+    from app.core.geom.repair import open_edge_count, stitch_t_junctions
+
+    before = open_edge_count(mesh)
+    stitched, seams = stitch_t_junctions(mesh)
+    if not seams:
+        return mesh
+
+    # **Übernommen wird nur, was besser ist.** Das Vernähen sucht Punkte, die
+    # auf fremden Kanten sitzen, und teilt die Nachbarfläche daran — an einem
+    # Netz, dessen Ränder gar keine T-Kreuzungen sind, entstehen dabei mehr
+    # offene Kanten statt weniger. Gemessen an einem absichtlich zerlegten
+    # Würfel: 15 offene Kanten hinein, 18 heraus, drei „Nähte". Die Zahl der
+    # Nähte allein sagt also nicht, dass es geholfen hat.
+    after = open_edge_count(stitched)
+    if after >= before:
+        _log.info("stitching would not close this mesh (%d -> %d edges), keeping it", before, after)
+        return mesh
+    _log.info(
+        "tessellation left %d T-junction seams, stitched them (%d -> %d open edges)",
+        seams,
+        before,
+        after,
+    )
+    return stitched
