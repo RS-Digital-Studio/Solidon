@@ -1,9 +1,9 @@
 # Novità
 
 Questo file è ciò che compare nella finestra di aggiornamento, e nient'altro.
-**Non** è un elenco delle modifiche: di 97 commit fra 0.1.1 e 0.1.2 restano
-otto righe, e sceglierle è il lavoro. Un punto va qui se qualcuno se ne accorge
-usando il programma.
+**Non** è un elenco delle modifiche ma una scelta, e scegliere è il lavoro. Un
+punto va qui se qualcuno se ne accorge usando il programma. Quanti siano lo
+decide la versione, non un numero.
 
 Quindi: niente messaggi di commit, niente nomi di moduli, niente numeri di
 paragrafo. «La barra spariva mentre l'applicazione calcolava ancora per quattro
@@ -14,6 +14,79 @@ Un file per lingua in questa cartella, come per i cataloghi, e tutti portano
 gli stessi punti nello stesso ordine (`tests/test_changelog.py`).
 `tools/make_download.py` ne prende la sezione della versione corrente e la
 scrive in `website/version.json`.
+
+## 0.2.1
+
+
+### Colori e filamento
+
+- Colori facce e pezzi con due gesti invece che con un pennello: un clic colora una faccia, un clic l'intero pezzo. Se un passo precedente cambia le misure, il colore le segue.
+- Un clic sulla faccia superiore colora la faccia superiore: il confine viene dal riconoscimento, senza raggio e senza mirare.
+- Il filamento si sceglie per nome e colore — «PETG rosso» invece di un numero. Anche la chat lo capisce.
+- Venti bobine sullo scaffale sono venti filamenti nella scelta. Quattro bobine dello stesso materiale in quattro colori sono quattro voci, non una.
+- Il colore di un filamento e le sue temperature ora stanno insieme. Prima l'impostazione del rosso poteva finire sul filamento bianco.
+- Lo stesso colore riceve lo stesso ugello, anche sul secondo piatto.
+- Nella vista compare il colore vero del filamento. Un filamento senza colore proprio è grigio, e la selezione resta riconoscibile.
+- Colorare sta ora dove si cerca il colore; prima era sotto «Preparare».
+- Il campo «Colore del pezzo» mostrava nel tema chiaro un colore diverso da quello della vista accanto.
+- Chi scriveva «PETG» otteneva «Questo profilo di materiale non è noto». Ora il campo è un elenco con i nomi che esistono davvero.
+- La preselezione «— nessuno —» veniva rifiutata alla conferma. Ora c'è un valore che la finestra accetta.
+- Il selettore di colore mostrava rosso, e dopo la deselezione il pezzo era grigio.
+
+### Blocchi
+
+- Una cerniera a perno che esce dalla stampante già mobile. Niente da montare, niente da inserire: la stampante lascia aperto il gioco.
+- Un blocco può essere fatto di più pezzi se dice prima quanti. Anche la prova sull'intervallo lo verifica.
+- Mettere il perno nel foro non funzionava, benché entrambi gli elementi ci fossero. Ora sì.
+
+### Stampa e slicer
+
+- Nello slicing scegli quali piatti partono. Chi voleva affettare il piatto 2 riceveva tre file e le bobine del piatto 1.
+- Solidon scrive ora anche il profilo di macchina e di processo per lo slicer, invece di rimandare al suo fondo. Sette impostazioni stavano nel file, centotrentasei sono arrivate allo slicer.
+- Il codice di avvio viene dal profilo di stampante del produttore invece di essere scritto a mano.
+- Ciò che non depone più un cordolo lo dice l'ugello: le pareti troppo sottili stanno nel rapporto come rilievo, non come proposta.
+- Il limite inferiore dello spessore di parete viene dal profilo di materiale. Lì stavano due numeri fissi, ed erano sbagliati entrambi: sulla Centauri sono 0,84 mm.
+- Il pulsante per affettare invitava al clic benché tre frasi dopo non seguisse nulla.
+- Un file G-code con estensione .nc si apriva, ma nella finestra di apertura non si trovava.
+
+### Cosa Solidon vede nel modello
+
+- Nei file importati Solidon riconosce ora fori e tasche anche quando la mesh non è saldata. Prima lì non trovava nulla.
+- Il rapporto segnala «più pezzi» solo quando ce ne sono. Una piastra di un pezzo solo contava come 796.
+- Lo stesso file non viene più esaminato quindici volte. Questo risparmia i secondi che prima passavano all'apertura.
+- Quando la semplificazione non arriva dove richiesto, Solidon lo dice. Finora restavano 992 triangoli dove ne erano voluti 400, senza una parola.
+- Lo stesso avviso compare una volta nel rapporto, non di nuovo dopo ogni passo.
+- Due corpi nello stesso punto sembravano uno, e nessuno lo diceva.
+- Dopo l'unione un elemento puntava a un foro diverso da prima.
+
+### Chat e agente
+
+- Mentre l'agente lavora, la chat mostra quale passo è in corso e con quale strumento. Prima taceva fino a un minuto.
+- L'elenco dei modelli locali dice per ciascuno con quanta affidabilità chiama gli strumenti e quanto tempo impiega. Un modello che si limita a scriverne ora si riconosce.
+- Se cade il collegamento con il modello linguistico locale, Solidon lo dice — e propone una via invece di annunciare un errore di programma.
+- Lo stesso vale se cade il collegamento con il servizio di immagini.
+- La chat nomina anche le piccole variazioni di volume. Un foro eseguito si annunciava come «+0,00 cm³» e la proposta sembrava senza effetto.
+
+### Vista e uso
+
+- L'albero degli oggetti nomina perni e filetti, con diametro e passo.
+- Un passo che crea due corpi compare nell'albero con due righe; prima ce n'era una.
+- Se selezioni più corpi di quanti ne prenda un'operazione, ora vedi quali vengono usati.
+- La stampa mostrava lo stesso tempo in due punti in modo diverso: «10 h 5 min» in basso, «605 min» nella finestra.
+- Numeri e unità si leggono ovunque uguali: una riga e il suo stesso suggerimento nominavano lo stesso volume in modo diverso, e in pollici per niente.
+- Una misura accetta un'espressione in ogni campo numerico; il manuale mostra ora anche il pulsante.
+- La griglia dell'editor di schizzi mostrava il passo del momento in cui vi si entrava.
+- Due campi di testo si annunciavano come facoltativi e non lo erano mai stati.
+
+### Corretto
+
+- Duplicare dava all'originale un nuovo identificativo, e il corpo spariva dalla vista.
+- Un corpo esatto di cui un foro non lasciava nulla restava nell'albero come oggetto vuoto e si poteva salvare.
+- La vista delle differenze e le mappe di analisi tacevano sui corpi esatti.
+- Un tipo di campo sconosciuto trasformava in silenzio ogni campo in uno di testo.
+- Una finestra si lasciava confermare, metteva un passo nella cronologia — e nell'immagine non cambiava nulla.
+- Ruotare di zero gradi passava in silenzio invece di dire che non succede nulla.
+- La finestra delle novità mostrava settantacinque punti come un muro. Ora sono raggruppati, e l'annuncio arriva nella tua lingua.
 
 ## 0.2.0
 

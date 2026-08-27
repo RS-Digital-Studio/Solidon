@@ -1,9 +1,9 @@
 # What's new
 
 This file is what the update window shows, and nothing else. It is **not** a
-list of changes: of 97 commits between 0.1.1 and 0.1.2, eight lines are left,
-and choosing them is the work. A point belongs here if someone notices it
-while using the program.
+list of changes but a selection, and choosing is the work. A point belongs here
+if someone notices it while using the program. How many there are is decided by
+the release, not by a number.
 
 So: no commit messages, no module names, no section numbers. "The bar vanished
 while the application was still computing for four seconds" is a good commit
@@ -14,6 +14,79 @@ One file per language in this folder, as with the catalogues — and all of them
 carry the same points in the same order (`tests/test_changelog.py`).
 `tools/make_download.py` takes the section for the current version and writes
 it into `website/version.json`.
+
+## 0.2.1
+
+
+### Colours and filament
+
+- You colour faces and parts with two gestures instead of a brush: one click colours a face, one click the whole part. If an earlier step changes the dimensions, the colour moves with them.
+- A click on the top face colours the top face — the boundary comes from detection, without a radius and without aiming.
+- You pick the filament by name and colour — “PETG red” instead of a number. The chat understands it too.
+- Twenty spools on the shelf are twenty filaments in the picker. Four spools of the same material in four colours are four entries, not one.
+- A filament's colour and its temperatures now belong together. Before, the setting for red could end up on the white filament.
+- The same colour gets the same nozzle — on the second plate as well.
+- The viewport shows the real filament colour. A filament without its own colour is grey, and the selection stays recognisable.
+- Colouring now sits where you look for colour — before it was filed under “Prepare”.
+- The field “Colour of the part” showed a different colour than the view beside it in the light theme.
+- Typing “PETG” answered “This material profile is unknown”. The field is now a list of the names that really exist.
+- The preselection “— none —” was rejected when you confirmed. Now it holds a value the dialog accepts.
+- The colour picker showed red, and after deselecting, the part was grey.
+
+### Building blocks
+
+- A barrel hinge that comes off the printer already moving. Nothing to assemble, nothing to insert — the printer leaves the gap open.
+- A building block may consist of several parts if it says beforehand how many. The range check tests that too.
+- Placing the pin into the hole did not work, although both features were there. Now it does.
+
+### Printing and slicer
+
+- When slicing you choose which plates go along. Anyone who wanted to slice plate 2 used to get three files and the spools of plate 1.
+- Solidon now writes out machine and process profile for the slicer instead of pointing at its stock. Seven settings were in the file, one hundred and thirty-six went to the slicer.
+- The start G-code comes from the manufacturer's printer profile instead of being written by hand.
+- What no longer lays a bead is said by the nozzle: walls that are too thin stand in the report as a finding, not as a suggestion.
+- The lower limit for wall thickness comes from the material profile. Two fixed numbers stood there, and both were wrong — on the Centauri it is 0.84 mm.
+- The slice button invited a click although nothing followed three sentences later.
+- A G-code file with the extension .nc could be opened but not found in the open dialog.
+
+### What Solidon sees in the model
+
+- In imported files Solidon now finds bores and pockets even when the mesh is unwelded. Before, detection found nothing there.
+- The report says “several parts” only when there are several. A plate made in one piece counted as 796 parts.
+- The same file is no longer examined fifteen times. That saves the seconds that used to pass while opening.
+- When simplifying does not get as far as asked, Solidon says so. Until now 992 triangles stayed where 400 were wanted, without a word.
+- The same note appears once in the report, not again after every step.
+- Two bodies in the same place looked like one, and nobody said so.
+- After a union, a feature pointed at a different hole than before.
+
+### Chat and agent
+
+- While the agent works, the chat shows which step is running and which tool. Before, it was silent for up to a minute.
+- The list of local models says for each one how reliably it calls tools and how long it takes. A model that only writes about them is now recognisable as such.
+- If the connection to the local language model breaks, Solidon says so — and offers a way on instead of reporting a program error.
+- The same goes for a broken connection to the image service.
+- The chat now names small changes in volume too. A drilled bore used to report “+0.00 cm³”, and the proposal looked as if nothing had happened.
+
+### View and operation
+
+- The object tree names pins and threads, with diameter and pitch.
+- A step that creates two bodies stands in the tree with two lines — before there was one.
+- If you select more bodies than an operation takes, you now see which ones are used.
+- Printing showed the same time differently in two places — “10 h 5 min” below, “605 min” in the dialog.
+- Numbers and units read the same everywhere: a line and its own tooltip named the same volume differently, and in inches not at all.
+- A dimension can take an expression at every number field — the manual now shows the button too.
+- The grid in the sketch editor showed the spacing from the moment you entered it.
+- Two text fields reported themselves as optional and never were.
+
+### Fixed
+
+- Duplicating gave the original a new identifier, and the body vanished from the view.
+- An exact body that a bore left nothing of stood in the tree as an empty object and could be saved.
+- The difference view and the analysis maps stayed silent on exact bodies.
+- An unknown kind of field silently turned every field into a text box.
+- A dialog could be confirmed, put a step into the history — and nothing changed in the view.
+- Rotating by zero degrees ran through silently instead of saying that nothing happens.
+- The what's-new window showed seventy-five points as a wall. They are grouped now, and the announcement comes in your language.
 
 ## 0.2.0
 

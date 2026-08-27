@@ -1,9 +1,9 @@
 # Novidades
 
 Este ficheiro é o que aparece na janela de atualização, e nada mais. **Não** é
-uma lista de alterações: de 97 commits entre a 0.1.1 e a 0.1.2 sobram oito
-linhas, e escolhê-las é o trabalho. Um ponto pertence aqui se alguém der por
-ele ao usar o programa.
+uma lista de alterações mas uma seleção, e escolher é o trabalho. Um ponto
+pertence aqui se alguém der por ele ao usar o programa. Quantos sejam decide-o
+a versão, não um número.
 
 Portanto: nada de mensagens de commit, de nomes de módulos ou de números de
 secção. «A barra desaparecia enquanto a aplicação ainda calculava durante
@@ -14,6 +14,79 @@ Um ficheiro por idioma nesta pasta, tal como nos catálogos, e todos levam os
 mesmos pontos pela mesma ordem (`tests/test_changelog.py`).
 `tools/make_download.py` retira daqui a secção da versão atual e escreve-a em
 `website/version.json`.
+
+## 0.2.1
+
+
+### Cores e filamento
+
+- Pinta faces e peças com dois gestos em vez de um pincel: um clique pinta uma face, um clique a peça inteira. Se um passo anterior mudar as medidas, a cor acompanha.
+- Um clique na face de cima pinta a face de cima: o limite vem do reconhecimento, sem raio e sem apontar.
+- O filamento escolhe-se por nome e cor — «PETG vermelho» em vez de um número. O chat também percebe.
+- Vinte bobinas na estante são vinte filamentos na escolha. Quatro bobinas do mesmo material em quatro cores são quatro entradas, não uma.
+- A cor de um filamento e as suas temperaturas passam a andar juntas. Antes, a definição do vermelho podia ir parar ao filamento branco.
+- A mesma cor recebe o mesmo bico, também na segunda placa.
+- Na vista aparece a cor verdadeira do filamento. Um filamento sem cor própria é cinzento, e a seleção continua a reconhecer-se.
+- Pintar está agora onde se procura a cor; antes estava em «Preparar».
+- O campo «Cor da peça» mostrava no tema claro uma cor diferente da vista ao lado.
+- Quem escrevia «PETG» recebia «Este perfil de material não é conhecido». Agora o campo é uma lista com os nomes que existem mesmo.
+- A pré-seleção «— nenhum —» era recusada ao confirmar. Agora há ali um valor que a caixa aceita.
+- O seletor de cor mostrava vermelho, e depois de desmarcar a peça ficava cinzenta.
+
+### Blocos
+
+- Uma dobradiça de pino que sai da impressora já móvel. Nada para montar, nada para inserir: a impressora deixa a folga aberta.
+- Um bloco pode ser feito de várias peças se disser antes de quantas. O teste de intervalo verifica-o também.
+- Pôr o pino no furo não funcionava, embora ambos os elementos lá estivessem. Agora sim.
+
+### Impressão e slicer
+
+- Ao fatiar escolhe que placas seguem. Quem queria fatiar a placa 2 recebia três ficheiros e as bobinas da placa 1.
+- O Solidon escreve agora também o perfil de máquina e de processo para o slicer, em vez de remeter para o seu acervo. Sete definições estavam no ficheiro, cento e trinta e seis chegaram ao slicer.
+- O código de arranque vem do perfil de impressora do fabricante em vez de ser escrito à mão.
+- O que já não deposita um cordão di-lo o bico: paredes demasiado finas ficam no relatório como constatação, não como proposta.
+- O limite inferior da espessura de parede vem do perfil de material. Ali estavam dois números fixos, e ambos estavam errados: na Centauri são 0,84 mm.
+- O botão de fatiar convidava ao clique embora três frases depois nada se seguisse.
+- Um ficheiro de código G com a extensão .nc abria-se, mas não se encontrava na caixa de abertura.
+
+### O que o Solidon vê no modelo
+
+- Em ficheiros importados o Solidon reconhece agora furos e bolsas mesmo quando a malha não está soldada. Antes não encontrava nada aí.
+- O relatório indica «várias peças» só quando as há. Uma placa de uma só peça contava como 796.
+- O mesmo ficheiro já não é examinado quinze vezes. Isso poupa os segundos que antes passavam ao abrir.
+- Quando a simplificação não chega ao pedido, o Solidon diz. Até agora ficavam 992 triângulos onde se queriam 400, sem uma palavra.
+- O mesmo aviso aparece uma vez no relatório, não outra vez após cada passo.
+- Dois corpos no mesmo sítio pareciam um, e ninguém o dizia.
+- Depois de unir, um elemento apontava para outro furo diferente do anterior.
+
+### Chat e agente
+
+- Enquanto o agente trabalha, o chat mostra que passo corre e com que ferramenta. Antes ficava calado até um minuto.
+- A lista de modelos locais diz de cada um com que fiabilidade chama ferramentas e quanto tempo demora. Um modelo que só escreve sobre elas passa a ser reconhecível.
+- Se a ligação ao modelo de linguagem local cair, o Solidon di-lo — e aponta um caminho em vez de anunciar um erro de programa.
+- O mesmo vale se cair a ligação ao serviço de imagens.
+- O chat nomeia também as pequenas variações de volume. Um furo feito anunciava-se como «+0,00 cm³» e a proposta parecia não ter efeito.
+
+### Vista e utilização
+
+- A árvore de objetos nomeia pinos e roscas, com diâmetro e passo.
+- Um passo que cria dois corpos aparece na árvore com duas linhas; antes havia uma.
+- Se selecionar mais corpos do que uma operação leva, vê agora quais são usados.
+- Imprimir mostrava o mesmo tempo de forma diferente em dois sítios: «10 h 5 min» em baixo, «605 min» na caixa.
+- Números e unidades leem-se iguais em toda a parte: uma linha e a sua própria dica nomeavam o mesmo volume de forma diferente, e em polegadas nada.
+- Uma medida aceita uma expressão em cada campo numérico; o manual mostra agora também o botão.
+- A grelha do editor de esboços mostrava o passo do momento em que se entrava.
+- Dois campos de texto anunciavam-se como opcionais e nunca o foram.
+
+### Corrigido
+
+- Duplicar dava ao original um novo identificador, e o corpo desaparecia da vista.
+- Um corpo exato de que um furo não deixava nada ficava na árvore como objeto vazio e podia ser guardado.
+- A vista de diferenças e os mapas de análise ficavam calados nos corpos exatos.
+- Um tipo de campo desconhecido transformava em silêncio qualquer campo num de texto.
+- Uma caixa deixava-se confirmar, punha um passo no histórico — e na imagem nada mudava.
+- Rodar zero graus passava em silêncio em vez de dizer que nada acontece.
+- A janela de novidades mostrava setenta e cinco pontos como um muro. Agora estão agrupados, e o aviso chega na sua língua.
 
 ## 0.2.0
 

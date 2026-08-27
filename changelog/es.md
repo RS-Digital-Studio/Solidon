@@ -1,9 +1,9 @@
 # Novedades
 
 Este archivo es lo que aparece en la ventana de actualización, y nada más.
-**No** es una lista de cambios: de 97 commits entre 0.1.1 y 0.1.2 quedan ocho
-líneas, y elegirlas es el trabajo. Un punto pertenece aquí si alguien lo nota
-al usar el programa.
+**No** es una lista de cambios, sino una selección, y elegir es el trabajo. Un
+punto pertenece aquí si alguien lo nota al usar el programa. Cuántos sean lo
+decide la versión, no una cifra.
 
 Por tanto: ni mensajes de commit, ni nombres de módulos, ni números de
 apartado. «La barra desaparecía mientras la aplicación seguía calculando
@@ -15,6 +15,79 @@ Un archivo por idioma en esta carpeta, como en los catálogos, y todos llevan
 los mismos puntos en el mismo orden (`tests/test_changelog.py`).
 `tools/make_download.py` toma el apartado de la versión actual y lo escribe en
 `website/version.json`.
+
+## 0.2.1
+
+
+### Colores y filamento
+
+- Colorea caras y piezas con dos gestos en lugar de un pincel: un clic colorea una cara, un clic la pieza entera. Si un paso anterior cambia las medidas, el color se mueve con ellas.
+- Un clic en la cara superior colorea la cara superior: el límite viene de la detección, sin radio y sin apuntar.
+- El filamento se elige por nombre y color: «PETG rojo» en vez de un número. El chat también lo entiende.
+- Veinte bobinas en la estantería son veinte filamentos en la selección. Cuatro bobinas del mismo material en cuatro colores son cuatro entradas, no una.
+- El color de un filamento y sus temperaturas ahora van juntos. Antes, el ajuste del rojo podía acabar en el filamento blanco.
+- El mismo color recibe la misma boquilla, también en la segunda bandeja.
+- En el visor se ve el color real del filamento. Un filamento sin color propio es gris, y la selección sigue siendo reconocible.
+- Colorear está ahora donde se busca el color; antes estaba bajo «Preparar».
+- El campo «Color de la pieza» mostraba en el tema claro un color distinto al de la vista de al lado.
+- Quien escribía «PETG» recibía «Este perfil de material no se conoce». Ahora el campo es una lista con los nombres que existen de verdad.
+- La preselección «— ninguno —» se rechazaba al aceptar. Ahora hay allí un valor que el diálogo admite.
+- El selector de color mostraba rojo, y tras deseleccionar la pieza quedaba gris.
+
+### Bloques
+
+- Una bisagra de pasador que sale de la impresora ya móvil. Nada que montar, nada que insertar: la impresora deja la holgura abierta.
+- Un bloque puede constar de varias piezas si dice antes de cuántas. La prueba de rango lo comprueba también.
+- Poner el pasador en el agujero no funcionaba, aunque ambos elementos estaban ahí. Ahora sí.
+
+### Impresión y slicer
+
+- Al cortar elige qué bandejas van. Quien quería cortar la bandeja 2 recibía tres archivos y las bobinas de la bandeja 1.
+- Solidon escribe ahora también el perfil de máquina y de proceso para el slicer, en vez de remitir a su propio fondo. Siete ajustes había en el archivo, ciento treinta y seis llegaron al slicer.
+- El código de arranque viene del perfil de impresora del fabricante en vez de escribirse a mano.
+- Lo que ya no deposita un cordón lo dice la boquilla: las paredes demasiado finas figuran en el informe como hallazgo, no como propuesta.
+- El límite inferior del grosor de pared viene del perfil de material. Allí había dos números fijos, y ambos eran falsos: en la Centauri son 0,84 mm.
+- El botón de cortar invitaba a hacer clic aunque tres frases después no seguía nada.
+- Un archivo de código G con la extensión .nc se podía abrir, pero no encontrar en el diálogo de apertura.
+
+### Lo que Solidon ve en el modelo
+
+- En archivos importados Solidon reconoce ahora agujeros y bolsillos también cuando la malla no está soldada. Antes no encontraba nada allí.
+- El informe indica «varias piezas» solo cuando las hay. Una placa de una sola pieza contaba como 796.
+- El mismo archivo ya no se examina quince veces. Eso ahorra los segundos que antes pasaban al abrir.
+- Cuando la simplificación no llega hasta donde se pidió, Solidon lo dice. Hasta ahora quedaban 992 triángulos donde se querían 400, sin una palabra.
+- El mismo aviso aparece una vez en el informe, no de nuevo tras cada paso.
+- Dos cuerpos en el mismo sitio parecían uno, y nadie lo decía.
+- Tras unir, un elemento apuntaba a otro agujero distinto del anterior.
+
+### Chat y agente
+
+- Mientras el agente trabaja, el chat muestra qué paso corre y con qué herramienta. Antes callaba hasta un minuto.
+- La lista de modelos locales dice de cada uno con qué fiabilidad llama a las herramientas y cuánto tarda. Un modelo que solo escribe sobre ellas se reconoce ahora como tal.
+- Si se corta la conexión con el modelo de lenguaje local, Solidon lo dice — y ofrece un camino en vez de anunciar un error de programa.
+- Lo mismo vale si se corta la conexión con el servicio de imágenes.
+- El chat nombra también los cambios pequeños de volumen. Un agujero hecho se anunciaba como «+0,00 cm³» y la propuesta parecía no haber hecho nada.
+
+### Vista y manejo
+
+- El árbol de objetos nombra pasadores y roscas, con diámetro y paso.
+- Un paso que crea dos cuerpos figura con dos líneas en el árbol; antes había una.
+- Si selecciona más cuerpos de los que toma una operación, ahora ve cuáles se usan.
+- Imprimir mostraba el mismo tiempo distinto en dos sitios: «10 h 5 min» abajo, «605 min» en el diálogo.
+- Números y unidades se leen igual en todas partes: una línea y su propia ayuda emergente nombraban el mismo volumen de forma distinta, y en pulgadas nada.
+- Una medida admite una expresión en cada campo numérico; el manual muestra ahora también el botón.
+- La rejilla del editor de bocetos mostraba la distancia del momento en que se entraba.
+- Dos campos de texto se anunciaban como opcionales y nunca lo fueron.
+
+### Corregido
+
+- Duplicar daba al original un identificador nuevo, y el cuerpo desaparecía de la vista.
+- Un cuerpo exacto del que un agujero no dejaba nada quedaba en el árbol como objeto vacío y podía guardarse.
+- La vista de diferencias y los mapas de análisis callaban ante los cuerpos exactos.
+- Un tipo de campo desconocido convertía en silencio cualquier campo en uno de texto.
+- Un diálogo se dejaba aceptar, ponía un paso en el historial, y en la vista no cambiaba nada.
+- Girar cero grados pasaba en silencio en vez de decir que no ocurre nada.
+- La ventana de novedades mostraba setenta y cinco puntos como un muro. Ahora están agrupados, y el aviso llega en su idioma.
 
 ## 0.2.0
 

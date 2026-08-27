@@ -1,9 +1,9 @@
 # Nouveautés
 
 Ce fichier est ce qu'affiche la fenêtre de mise à jour, et rien d'autre. Ce
-n'est **pas** une liste des modifications : sur 97 commits entre 0.1.1 et
-0.1.2, il reste huit lignes, et les choisir est le travail. Un point a sa
-place ici si quelqu'un le remarque en utilisant le programme.
+n'est **pas** une liste des modifications mais une sélection, et choisir est le
+travail. Un point a sa place ici si quelqu'un le remarque en utilisant le
+programme. Combien il y en a, c'est la version qui le décide, pas un nombre.
 
 Donc : pas de messages de commit, pas de noms de modules, pas de numéros de
 paragraphe. « La barre disparaissait alors que l'application calculait encore
@@ -15,6 +15,79 @@ Un fichier par langue dans ce dossier, comme pour les catalogues, et tous
 portent les mêmes points dans le même ordre (`tests/test_changelog.py`).
 `tools/make_download.py` en tire la section de la version courante et l'écrit
 dans `website/version.json`.
+
+## 0.2.1
+
+
+### Couleurs et filament
+
+- Vous colorez faces et pièces avec deux gestes au lieu d'un pinceau : un clic colore une face, un clic la pièce entière. Si une étape antérieure change les cotes, la couleur suit.
+- Un clic sur la face du dessus colore la face du dessus — la limite vient de la détection, sans rayon et sans viser.
+- Le filament se choisit par nom et couleur — « PETG rouge » au lieu d'un numéro. Le chat le comprend aussi.
+- Vingt bobines sur l'étagère font vingt filaments dans le choix. Quatre bobines du même matériau en quatre couleurs font quatre entrées, pas une.
+- La couleur d'un filament et ses températures vont maintenant ensemble. Avant, le réglage du rouge pouvait atterrir sur le filament blanc.
+- La même couleur reçoit la même buse — sur le deuxième plateau aussi.
+- La vue montre la vraie couleur du filament. Un filament sans couleur propre est gris, et la sélection reste reconnaissable.
+- Colorer se trouve désormais là où l'on cherche la couleur — avant, c'était rangé sous « Préparer ».
+- Le champ « Couleur de la pièce » affichait en thème clair une autre couleur que la vue à côté.
+- Taper « PETG » donnait « Ce profil de matériau est inconnu ». Le champ est maintenant une liste des noms qui existent vraiment.
+- La présélection « — aucun — » était refusée à la validation. Il y a maintenant une valeur que la boîte de dialogue accepte.
+- Le sélecteur de couleur montrait du rouge, et après désélection la pièce était grise.
+
+### Blocs
+
+- Une charnière à axe qui sort de l'imprimante déjà mobile. Rien à assembler, rien à insérer : l'imprimante laisse le jeu ouvert.
+- Un bloc peut être fait de plusieurs pièces s'il dit d'avance combien. Le test de plage le vérifie aussi.
+- Poser l'axe dans le trou ne marchait pas, bien que les deux éléments soient là. Maintenant si.
+
+### Impression et trancheur
+
+- Au tranchage, vous choisissez quels plateaux partent. Qui voulait trancher le plateau 2 recevait trois fichiers et les bobines du plateau 1.
+- Solidon écrit maintenant le profil de machine et de processus pour le trancheur, au lieu de renvoyer à son fonds. Sept réglages figuraient dans le fichier, cent trente-six sont partis au trancheur.
+- Le code de démarrage vient du profil d'imprimante du fabricant au lieu d'être écrit à la main.
+- Ce qui ne dépose plus de cordon, la buse le dit : les parois trop minces figurent au rapport comme constat, pas comme proposition.
+- La limite basse d'épaisseur de paroi vient du profil de matériau. Deux nombres fixes s'y trouvaient, et tous deux étaient faux — sur la Centauri, c'est 0,84 mm.
+- Le bouton de tranchage invitait au clic alors que rien ne suivait trois phrases plus loin.
+- Un fichier G-code portant l'extension .nc s'ouvrait, mais restait introuvable dans la boîte d'ouverture.
+
+### Ce que Solidon voit dans le modèle
+
+- Dans les fichiers importés, Solidon reconnaît maintenant perçages et poches même quand le maillage n'est pas soudé. Avant, la détection n'y trouvait rien.
+- Le rapport signale « plusieurs pièces » seulement quand il y en a. Une plaque d'un seul tenant comptait pour 796.
+- Le même fichier n'est plus examiné quinze fois. Cela épargne les secondes qui passaient à l'ouverture.
+- Quand la simplification ne va pas aussi loin que demandé, Solidon le dit. Jusqu'ici 992 triangles restaient là où 400 étaient voulus, sans un mot.
+- Le même avis figure une fois dans le rapport, pas à nouveau après chaque étape.
+- Deux corps au même endroit ressemblaient à un seul, et personne ne le disait.
+- Après une union, un élément pointait vers un autre trou qu'avant.
+
+### Chat et agent
+
+- Pendant que l'agent travaille, le chat indique quelle étape tourne et quel outil. Avant, il se taisait jusqu'à une minute.
+- La liste des modèles locaux dit pour chacun avec quelle fiabilité il appelle les outils et combien de temps il met. Un modèle qui se contente d'en parler se reconnaît désormais.
+- Si la liaison avec le modèle de langue local se rompt, Solidon le dit — et propose une suite au lieu d'annoncer une erreur de programme.
+- Il en va de même si la liaison avec le service d'images se rompt.
+- Le chat nomme aussi les petites variations de volume. Un perçage posé s'annonçait « +0,00 cm³ », et la proposition semblait sans effet.
+
+### Vue et maniement
+
+- L'arbre des objets nomme tenons et filetages, avec diamètre et pas.
+- Une étape qui crée deux corps figure dans l'arbre avec deux lignes — avant il y en avait une.
+- Si vous sélectionnez plus de corps qu'une opération n'en prend, vous voyez maintenant lesquels sont utilisés.
+- L'impression affichait la même durée différemment à deux endroits : « 10 h 5 min » en bas, « 605 min » dans la boîte de dialogue.
+- Nombres et unités se lisent partout pareil : une ligne et sa propre infobulle nommaient le même volume différemment, et en pouces pas du tout.
+- Une cote accepte une expression dans chaque champ numérique — le manuel montre maintenant aussi le bouton.
+- La grille de l'éditeur d'esquisse montrait l'écart du moment où l'on y entrait.
+- Deux champs de texte se déclaraient facultatifs et ne l'étaient jamais.
+
+### Corrigé
+
+- Dupliquer donnait à l'original un nouvel identifiant, et le corps disparaissait de la vue.
+- Un corps exact dont un perçage ne laissait rien restait dans l'arbre comme objet vide et pouvait être enregistré.
+- La vue des différences et les cartes d'analyse restaient muettes sur les corps exacts.
+- Un type de champ inconnu transformait en silence chaque champ en champ de texte.
+- Une boîte de dialogue se validait, posait une étape dans l'historique — et rien ne changeait à l'image.
+- Tourner de zéro degré passait en silence au lieu de dire que rien ne se produit.
+- La fenêtre des nouveautés montrait soixante-quinze points comme un mur. Ils sont groupés maintenant, et l'annonce arrive dans votre langue.
 
 ## 0.2.0
 
