@@ -279,10 +279,10 @@ def test_a_filament_without_a_colour_is_never_shown_blank(qt_app: QApplication) 
     Ein leeres Kästchen sagt „keine Farbe", und das ist hier nie der Fall
     (Robert, 27.08.2026).
     """
-    from app.ui.filament_picker import UNPAINTED_COLOUR, shown_colour
+    from app.ui.filament_picker import shown_colour, unpainted_colour
     from app.ui.theme import slot_colour
 
-    assert shown_colour(0) == UNPAINTED_COLOUR, "Slot 0 ist das Teil, und das ist grau"
+    assert shown_colour(0) == unpainted_colour(), "Slot 0 ist das Teil, und das ist grau"
     assert shown_colour(1) == slot_colour(1), "die Grauleiter, bevor jemand wählt"
     assert shown_colour(1, (1.0, 0.0, 0.0)) == "#ff0000", "eine eigene Farbe schlägt beides"
     assert all(shown_colour(index) for index in range(8)), "keiner bleibt leer"
@@ -332,3 +332,30 @@ def test_a_body_without_a_slot_still_shows_up(qt_app: QApplication, tmp_path, mo
 
     zeilen = [panel.list.item(index).text() for index in range(panel.list.count())]
     assert any("Ohne Filament" in zeile and "1 Körper" in zeile for zeile in zeilen), zeilen
+
+
+def test_the_unpainted_swatch_follows_the_theme() -> None:
+    """Das Feld „Ohne Filament — Farbe des Teils" zeigt die Farbe des Teils.
+
+    Es zeigte sie im dunklen Thema und im hellen nicht: Die Farbe kam fest aus
+    dem dunklen Satz, mit der Begründung, ein Feld von vierzehn Bildpunkten
+    trage den Unterschied nicht. Gemessen sind es ``#7d8894`` gegen
+    ``#b9c4d0`` — zwei klar unterscheidbare Grautöne, und die Beschriftung
+    daneben verspricht genau diese eine Farbe.
+
+    Der Fall, in dem eine zutreffend klingende Begründung eine Messung ersetzt
+    hat, die niemand gemacht hatte.
+    """
+    from app.ui import theme
+    from app.ui.filament_picker import unpainted_colour
+
+    was = theme.current_theme()
+    try:
+        for name in ("dark", "light"):
+            theme._ACTIVE = name  # type: ignore[assignment]
+            assert unpainted_colour() == theme.viewport_colours(name)["object"], name
+        # Und die Gegenprobe: die beiden Themen sagen wirklich Verschiedenes,
+        # sonst prüfte der Test über einer Gleichheit, die nichts kostet.
+        assert theme.viewport_colours("dark")["object"] != theme.viewport_colours("light")["object"]
+    finally:
+        theme._ACTIVE = was

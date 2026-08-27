@@ -208,6 +208,28 @@ def build_palette(theme: Theme) -> QPalette:
     return palette
 
 
+#: Welches Thema gerade gilt. Gesetzt von :func:`apply_theme`, gelesen von
+#: allem, was eine Themenfarbe braucht, ohne ein Widget zu sein.
+#:
+#: **Ohne diesen Zustand blieb eine Farbe im hellen Thema falsch.** Der
+#: Filamentwähler zeigt für „Ohne Filament" die Körperfarbe — er holte sie
+#: fest aus dem dunklen Satz, mit der Begründung, ein Feld von vierzehn
+#: Bildpunkten trage den Unterschied nicht. Gemessen sind es ``#7d8894``
+#: gegen ``#b9c4d0``: zwei klar unterscheidbare Grautöne, und das Feld
+#: verspricht in seiner Beschriftung „Farbe des Teils".
+#:
+#: Dieselbe Bauart wie die Anzeigeeinheit (``labels.display_unit``) und aus
+#: demselben Grund: Wer die Farbe braucht, ist oft kein Widget und hat keinen
+#: Weg zum Fenster — sie durch jeden Operationsdialog zu reichen, wäre der
+#: teurere Weg zu derselben Auskunft.
+_ACTIVE: Theme = "dark"
+
+
+def current_theme() -> Theme:
+    """Das Thema, das gerade gilt."""
+    return _ACTIVE
+
+
 def apply_theme(application: QApplication, theme: Theme) -> None:
     """Schaltet die ganze Anwendung um. Wirkt sofort.
 
@@ -218,6 +240,8 @@ def apply_theme(application: QApplication, theme: Theme) -> None:
     from app.ui.cursors import apply_default_cursor
     from app.ui.style import apply_style
 
+    global _ACTIVE
+    _ACTIVE = theme
     application.setStyle("Fusion")
     application.setPalette(build_palette(theme))
     apply_style(application, theme)

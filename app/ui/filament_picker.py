@@ -51,7 +51,7 @@ from app.core.knowledge import filaments
 from app.core.types import MaterialSlot
 from app.i18n import tr
 from app.ui.style import TIGHT, set_level
-from app.ui.theme import slot_colour, viewport_colours
+from app.ui.theme import current_theme, slot_colour, viewport_colours
 
 #: Kantenlänge des Farbfelds vor einem Eintrag, in Bildpunkten.
 #:
@@ -67,11 +67,20 @@ NEW_FILAMENT = -1
 #:
 #: Aus dem Thema geholt und nicht danebengeschrieben: Es ist die Farbe, die
 #: ein Körper in der Ansicht ohnehin trägt (``viewport_colours(...)["object"]``,
-#: dieselbe Quelle wie ``Viewport.set_theme``). Genommen wird die des dunklen
-#: Themas, weil ein Farbfeld von vierzehn Bildpunkten den Unterschied zum
-#: hellen nicht trägt — beide sind dasselbe Grau in zwei Helligkeiten — und
-#: eine Themenverdrahtung durch jeden Operationsdialog dafür zu teuer wäre.
-UNPAINTED_COLOUR = viewport_colours("dark")["object"]
+#: dieselbe Quelle wie ``Viewport.set_theme``).
+#:
+#: **Aus dem geltenden Thema, nicht fest aus dem dunklen.** Hier stand die
+#: dunkle Farbe mit der Begründung, ein Farbfeld von vierzehn Bildpunkten
+#: trage den Unterschied nicht. Gemessen sind es ``#7d8894`` im Viewport gegen
+#: ``#b9c4d0`` im Wähler — zwei klar unterscheidbare Grautöne, und das Feld
+#: verspricht daneben „Ohne Filament — Farbe des Teils". Es zeigte im hellen
+#: Thema nicht die Farbe des Teils. Eine zutreffend klingende Begründung, die
+#: niemand nachgemessen hatte.
+
+
+def unpainted_colour() -> str:
+    """Die Körperfarbe des geltenden Themas."""
+    return viewport_colours(current_theme())["object"]
 
 
 def hex_of(colour: tuple[float, float, float] | None) -> str:
@@ -110,7 +119,7 @@ def shown_colour(index: int, colour: tuple[float, float, float] | None = None) -
     own = hex_of(colour)
     if own:
         return own
-    return slot_colour(index) or UNPAINTED_COLOUR
+    return slot_colour(index) or unpainted_colour()
 
 
 def swatch(colour: str | None) -> QIcon:
@@ -408,7 +417,7 @@ class FilamentPanel(QWidget):
         for entry in objects:
             slots = getattr(entry, "material_slots", ()) or ()
             if not slots:
-                key = (str(tr("Ohne Filament — Farbe des Teils")), UNPAINTED_COLOUR)
+                key = (str(tr("Ohne Filament — Farbe des Teils")), unpainted_colour())
                 used[key] = used.get(key, 0) + 1
                 continue
             for slot in slots:
