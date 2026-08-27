@@ -69,16 +69,30 @@ datas = [
 datas += collect_data_files("trimesh")
 datas += collect_data_files("pyvista")
 
-# **Die Paketbeschreibung von manifold3d.** Ein Fehlerbericht nennt die Fassung
-# jeder tragenden Bibliothek, und ``report.environment`` fragt zuerst das Modul
-# (``__version__``) und erst dann die Metadaten. Fünf der sechs Pakete tragen
-# ihre Fassung am Modul; ``manifold3d`` tut es nicht, und ohne die ``.dist-info``
-# stand im Bericht eines Kunden vom 27.08.2026 schlicht ein Strich.
+# **Die Paketbeschreibungen von manifold3d und trimesh.** Ein Fehlerbericht
+# nennt die Fassung jeder tragenden Bibliothek, und ``report.environment`` fragt
+# zuerst das Modul (``__version__``) und erst dann die Metadaten. Ohne die
+# ``.dist-info`` stand im Bericht eines Kunden vom 27.08.2026 schlicht ein
+# Strich — die reisen in einem PyInstaller-Bau nicht von selbst mit.
+#
+# **Zwei der sechs kommen ohne diese Zeilen nicht durch**, und der zweite ist
+# der unauffälligere: ``manifold3d`` hat gar kein ``__version__``, und
+# ``trimesh.__version__`` ist selbst ein Metadatenaufruf — ``version.py`` ruft
+# ``importlib.metadata.version("trimesh")`` und gibt ohne sie ``None`` zurück.
+#
+# Hier stand bis zum 27.08.2026, ``trimesh`` und ``numpy`` bekämen ihre
+# Metadaten nebenbei, weil ``collect_data_files`` sie mitnehme. **Gemessen ist
+# das falsch:** ``collect_data_files("trimesh")`` liefert 24 Einträge und
+# ``collect_data_files("numpy")`` 495, davon **null** mit ``dist-info`` — die
+# Funktion sammelt ausschließlich Dateien *innerhalb* des Paketverzeichnisses.
+# ``numpy`` steht trotzdem im Bericht, aber aus einem anderen Grund: Es trägt
+# sein ``__version__`` wirklich selbst.
 #
 # Ein Fehlerbericht, der „nicht installiert" sagt, wo eine Bibliothek läuft, ist
 # schlimmer als einer ohne die Zeile: Er schickt die Diagnose an eine Stelle, an
 # der nichts ist. Ein paar Kilobyte gegen eine falsche Fährte.
 datas += copy_metadata("manifold3d")
+datas += copy_metadata("trimesh")
 
 # **Qts eigene Sprachkataloge.** Die Standardknöpfe beschriftet Qt aus
 # ``qtbase_<sprache>.qm``, nicht aus unserem Katalog; ``install_qt_translations``

@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from app.branding import DISTRIBUTION_NAME
 from app.core.knowledge import licences
 
 NOTICE_FILE = Path(__file__).parent.parent / "THIRD-PARTY-NOTICES.md"
@@ -132,3 +133,54 @@ def test_the_shipped_workflows_name_no_gpl_node() -> None:
         kinds = {str(entry.get("class_type")) for entry in graph.values()}
         for kind, why in refused.items():
             assert kind not in kinds, f"{name}.json uses {kind} - {why}"
+
+
+def test_the_notices_survive_a_build_without_own_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Im gebauten Paket ist Solidon keine installierte Distribution.
+
+    ``runtime_packages`` fragt ``importlib.metadata`` nach der **eigenen**
+    Distribution, und die gibt es in keinem PyInstaller-Bau — die Ausnahme riss
+    durch ``notices()`` bis in den Über-Dialog, der stattdessen einen
+    Ersatzsatz zeigte. Damit stand die Liste der Fremdbestandteile in der
+    Entwicklung **immer** und im ausgelieferten Paket **nie** da; PySide6 steht
+    unter LGPL, und §36 verlangt sie.
+
+    Geprüft wird die Bedingung, die im Bau herrscht: nur die eigenen Metadaten
+    fehlen, alles andere ist da.
+    """
+    echt = licences.metadata.distribution
+
+    def ohne_eigene(name: str) -> object:
+        if licences.normalise(name) == licences.normalise(DISTRIBUTION_NAME):
+            raise licences.metadata.PackageNotFoundError(name)
+        return echt(name)
+
+    monkeypatch.setattr(licences.metadata, "distribution", ohne_eigene)
+    text = licences.notices()
+
+    assert "PySide6" in text, "die LGPL-Zusage fehlt im Paket"
+    assert text.startswith("| Paket | Lizenz |"), text[:60]
+    assert all(line.startswith("|") for line in text.splitlines()), (
+        "die Erklärung aus dem Kopf der Beilage gehört nicht in den Dialog"
+    )
+
+
+def test_the_notice_file_travels_where_the_fallback_looks_for_it() -> None:
+    """Und sie liegt da, wo der Rückfall sie sucht — in beiden Lagen.
+
+    ``NOTICE_FILE`` rechnet vom Modul aus nach oben. In der Entwicklung ist
+    das der Projektstamm, im Bau ``<_MEIPASS>``, wohin die Spec sie legt
+    (Ziel ``"."``). Beide Male derselbe Ausdruck, und das ist der Grund, warum
+    er hier prüfbar ist: Ein Pfad, der nur im gebauten Paket stimmt, wird
+    nirgends geprüft.
+    """
+    assert licences.NOTICE_FILE.is_file(), licences.NOTICE_FILE
+    assert licences.NOTICE_FILE.name == "THIRD-PARTY-NOTICES.md"
+    assert licences.NOTICE_FILE == NOTICE_FILE, "zwei Wege zu derselben Datei"
+
+    spec = (Path(__file__).parent.parent / "packaging" / "solidon3d.spec").read_text(
+        encoding="utf-8"
+    )
+    assert '"THIRD-PARTY-NOTICES.md"), "."' in spec, "die Spec legt sie woandershin"

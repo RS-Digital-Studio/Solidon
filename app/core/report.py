@@ -85,18 +85,26 @@ def _version_of(name: str) -> str:
         manifold3d: - · scipy: - · shapely: - · PySide6: -
 
     Vier von sechs als „nicht installiert" — bei einem Programm, das ohne
-    PySide6 kein Fenster öffnet. `trimesh` und `numpy` standen nur da, weil
-    die Spec ihre Datendateien ausdrücklich einsammelt und die Metadaten
-    dabei mitkommen.
+    PySide6 kein Fenster öffnet. `numpy` stand da, weil es sein `__version__`
+    wirklich selbst trägt.
 
     Das ist die gefährlichste Sorte Fehler in einem Fehlerbericht: **Er sagt
     nicht „unbekannt", er sagt etwas Falsches.** Wer damit eine Diagnose
     beginnt, sucht an einer Stelle, an der nichts ist — genau das ist beim
     Lesen dieses Berichts passiert.
 
-    Fünf der sechs Pakete tragen ihre Fassung als ``__version__`` am Modul,
-    und das überlebt jeden Bau. ``manifold3d`` hat keine; dort bleibt es beim
-    Metadatenweg, und in einem Bau ohne sie beim ehrlichen Strich.
+    Vier der sechs Pakete tragen ihre Fassung als ``__version__`` am Modul,
+    und das überlebt jeden Bau. Zwei tun es nicht, und der zweite ist der
+    unauffälligere: ``manifold3d`` hat gar kein ``__version__``, und
+    ``trimesh.__version__`` **ist** ein Metadatenaufruf — ``trimesh/version.py``
+    ruft ``importlib.metadata.version("trimesh")`` und liefert ohne sie
+    ``None``. Für beide nimmt die Spec die ``.dist-info`` ausdrücklich mit
+    (``copy_metadata``); fehlt sie doch, bleibt es beim ehrlichen Strich.
+
+    Hier stand bis zum 27.08.2026, ``trimesh`` und ``numpy`` bekämen ihre
+    Metadaten nebenbei über ``collect_data_files``. Gemessen ist das falsch —
+    die Funktion sammelt nur Dateien *innerhalb* des Paketverzeichnisses, und
+    von 24 beziehungsweise 495 Einträgen trägt keiner eine ``dist-info``.
     """
     import importlib
     import importlib.metadata as metadata

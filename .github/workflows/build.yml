@@ -302,7 +302,13 @@ jobs:
         # Derselbe Satz wie in der Suite: was geprüft wurde, wird paketiert.
         run: |
           python -m pip install -c constraints.txt -e ".[geom,ui,agent,brep]"
-          python -m pip install pyinstaller
+          # Auch hier die Constraints, und hier besonders: `constraints.txt`
+          # nagelt `pyinstaller` und `pyinstaller-hooks-contrib` fest, und
+          # gerade dessen Hooks entscheiden, welche Metadaten und Datendateien
+          # ins Paket wandern. Ein Bauwerkzeug von morgen kann anderes
+          # einpacken als das von heute, ohne dass sich eine Zeile Code ändert
+          # — das war die einzige ungepinnte Installationszeile des Workflows.
+          python -m pip install -c constraints.txt pyinstaller
 
       - name: Beispielprojekte erzeugen
         env:

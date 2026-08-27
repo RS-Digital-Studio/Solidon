@@ -495,16 +495,24 @@ def test_a_report_names_the_versions_even_without_package_metadata() -> None:
     Vier von sechs als „nicht installiert", bei einem Programm, das ohne
     PySide6 kein Fenster öffnet. ``importlib.metadata`` liest die
     ``.dist-info``-Ordner, und die reisen in einem PyInstaller-Bau nicht mit;
-    ``trimesh`` und ``numpy`` standen nur da, weil die Spec ihre Datendateien
-    einsammelt und die Metadaten dabei mitkommen.
+    ``numpy`` stand da, weil es sein ``__version__`` wirklich selbst trägt.
 
     **Ein Fehlerbericht, der „nicht installiert" sagt, wo eine Bibliothek
     läuft, ist schlimmer als einer ohne die Zeile:** Er schickt die Diagnose an
     eine Stelle, an der nichts ist. Genau das ist beim Lesen dieses Berichts
     passiert.
 
-    Gefragt wird deshalb zuerst das **Modul** — fünf der sechs tragen ihre
+    Gefragt wird deshalb zuerst das **Modul** — vier der sechs tragen ihre
     Fassung als ``__version__``, und das überlebt jeden Bau.
+
+    **Was dieser Test nicht misst, und warum daneben ein zweiter steht:** Er
+    nimmt ``metadata.version`` weg, *nachdem* die Suite ``trimesh`` längst
+    importiert hat; dann steht ``trimesh.__version__`` schon auf seinem Wert.
+    Im Bau wird es ohne Metadaten importiert und ist dann ``None`` — dieselbe
+    Funktion, nur die Reihenfolge getauscht. Deshalb steht ``trimesh`` unten
+    nicht in ``named``, und deshalb prüft
+    :func:`test_the_spec_carries_metadata_for_what_has_no_own_version` die
+    andere Hälfte.
     """
     import importlib.metadata as metadata
 
@@ -519,6 +527,40 @@ def test_a_report_names_the_versions_even_without_package_metadata() -> None:
     named = {name: entry[name] for name in ("scipy", "shapely", "PySide6", "numpy")}
     assert all(value != "-" for value in named.values()), (
         f"ohne .dist-info bleibt die Fassung am Modul lesbar: {named}"
+    )
+
+
+#: Die Pakete aus dem Fehlerbericht, die ihre Fassung **nicht** selbst tragen.
+#:
+#: ``manifold3d`` hat gar kein ``__version__``; ``trimesh`` hat eines, aber es
+#: ist selbst ein Metadatenaufruf (``trimesh/version.py`` ruft
+#: ``importlib.metadata.version("trimesh")``) und liefert ohne ``.dist-info``
+#: ``None``. Beide brauchen deshalb ``copy_metadata`` in der Spec.
+#:
+#: Nachmessen lässt sich die Liste so: ``python -c "import <paket>;
+#: print(<paket>.__version__)"`` gegen einen Lauf, in dem
+#: ``importlib.metadata.version`` wirft.
+NEEDS_METADATA = ("manifold3d", "trimesh")
+
+
+def test_the_spec_carries_metadata_for_what_has_no_own_version() -> None:
+    """Wessen Fassung nicht am Modul steht, dessen ``.dist-info`` reist mit.
+
+    Die Zusicherung darüber prüft, dass der Modulweg trägt; diese hier prüft
+    die andere Hälfte — dass für die zwei, bei denen er es nicht tut, der
+    Metadatenweg im Bau überhaupt offen ist.
+
+    Hier stand bis zum 27.08.2026 die Annahme, ``collect_data_files`` nehme
+    die Metadaten nebenbei mit. **Gemessen ist das falsch:** Von 24 Einträgen
+    für ``trimesh`` und 495 für ``numpy`` trägt keiner eine ``dist-info`` —
+    die Funktion sammelt nur Dateien *innerhalb* des Paketverzeichnisses.
+    """
+    spec = (Path(__file__).parent.parent / "packaging" / "solidon3d.spec").read_text(
+        encoding="utf-8"
+    )
+    missing = [name for name in NEEDS_METADATA if f'copy_metadata("{name}")' not in spec]
+    assert not missing, (
+        f"diese Pakete tragen ihre Fassung nicht selbst und bekommen im Bau einen Strich: {missing}"
     )
 
 

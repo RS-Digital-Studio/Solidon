@@ -25,6 +25,18 @@ _log = get_logger(__name__)
 
 _DATA_FILE: Final = Path(__file__).parent / "data" / "licences.toml"
 
+#: Die Lizenzbeilage, wie sie neben der Anwendung liegt.
+#:
+#: **Im gebauten Paket ist sie die einzige Quelle.** `runtime_packages` fragt
+#: `importlib.metadata` nach der eigenen Distribution, und die gibt es dort
+#: unter keinen Umständen: Die Anwendung ist kein installiertes Paket.
+#: `packaging/solidon3d.spec` legt die Datei deshalb neben das `app`-Paket, und
+#: `tests/test_licences.py` hält sie aktuell — gelesen hat sie bis zum
+#: 27.08.2026 niemand. Der Über-Dialog zeigte im Paket also **nie** eine
+#: Fremdlizenz, sondern immer den Ersatzsatz aus `dialogs.py`; PySide6 steht
+#: unter LGPL, und §36 verlangt die Liste.
+NOTICE_FILE: Final = Path(__file__).parents[3] / "THIRD-PARTY-NOTICES.md"
+
 #: Die Extras, deren Abhängigkeiten in der ausgelieferten Anwendung landen.
 #: Dieselbe Liste wie im Bau-Workflow (``.[geom,ui,agent,brep]``) — hier
 #: standen nur zwei der vier, und acht Pakete reisten ungeprüft und ohne
@@ -215,6 +227,26 @@ def check(extras: Iterable[str] = RUNTIME_EXTRAS) -> list[Violation]:
     return violations
 
 
+def _notices_from_file() -> str | None:
+    """Die Tabelle aus der mitgereisten Beilage — ``None``, wenn keine da ist.
+
+    Gelesen wird ab der Kopfzeile der Tabelle: Die Datei trägt darüber eine
+    Erklärung, wie sie erzeugt wird, und die gehört nicht in den Dialog.
+    """
+    try:
+        text = NOTICE_FILE.read_text(encoding="utf-8")
+    except OSError as problem:
+        _log.warning("no licence notice next to the application: %s", problem)
+        return None
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if line.startswith("| Paket |"):
+            table = [entry for entry in lines[index:] if entry.startswith("|")]
+            return "\n".join(table) + "\n" if len(table) > 2 else None
+    _log.warning("the licence notice carries no table: %s", NOTICE_FILE)
+    return None
+
+
 def notices(extras: Iterable[str] = RUNTIME_EXTRAS) -> str:
     """Die Liste für den Über-Dialog und die Drittanbieter-Hinweise (§36,
     §37.2).
@@ -225,7 +257,17 @@ def notices(extras: Iterable[str] = RUNTIME_EXTRAS) -> str:
     # Was hier installiert ist, **und** was auf einer anderen Plattform
     # dazukommt: Die Datei reist mit jedem Paket, und ein Hinweis, der nur die
     # Pakete des Baurechners nennt, fehlt auf allen anderen.
-    found = dict(runtime_packages(extras))
+    try:
+        found = dict(runtime_packages(extras))
+    except metadata.PackageNotFoundError:
+        # Im gebauten Paket ist die Anwendung keine installierte Distribution.
+        # Dann steht die Liste in der Beilage, die neben ihr liegt — sonst
+        # sieht der Kunde an dieser Stelle einen Ersatzsatz statt der
+        # Lizenzhinweise, die BSD, MIT und LGPL verlangen.
+        from_file = _notices_from_file()
+        if from_file is None:
+            raise
+        return from_file
     for package, licence in PLATFORM_PACKAGES.items():
         found.setdefault(package, licence)
     for package, licence in sorted(found.items()):
