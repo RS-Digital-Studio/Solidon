@@ -831,3 +831,25 @@ def document() -> Document:
 
 def make_object(object_id: str = "obj_1", name: str = "Teil", **kwargs: object) -> SceneObject:
     return SceneObject(id=object_id, name=name, mesh=FakeMesh(**kwargs))  # type: ignore[arg-type]
+
+
+@pytest.fixture(autouse=True)
+def _the_pointer_size_of_this_machine_stays_out_of_it() -> Iterator[None]:
+    """Die Zeigergröße des Entwicklerrechners gehört nicht ins Ergebnis (§38).
+
+    Dieselbe Begründung wie bei den Nutzerverzeichnissen und den gefundenen
+    Fremdprogrammen, nur eine Ebene weiter: Seit dem 27.08.2026 liest
+    ``cursors.system_size`` die **echte** Systemeinstellung — unter Windows aus
+    der Registry, unter macOS über ``defaults``, unter Linux aus
+    ``XCURSOR_SIZE``. Eine Maschine, auf der jemand seine Zeiger auf 48
+    gestellt hat, sähe damit etwas anderes als der Bauserver, und der gemerkte
+    Wert überlebte zusätzlich jeden Test.
+
+    Geleert wird nur, wenn das Modul überhaupt geladen ist: Für die
+    allermeisten Tests wäre ein Import von ``app.ui.cursors`` das Laden von Qt
+    ohne jeden Anlass.
+    """
+    yield
+    module = sys.modules.get("app.ui.cursors")
+    if module is not None:
+        module.forget()

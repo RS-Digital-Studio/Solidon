@@ -142,25 +142,118 @@ def test_a_drawn_cursor_follows_the_size_the_system_was_told(
     ``styleHints()`` kennt nur ``cursorFlashTime``.
     """
     widget = QWidget()
+    # Gemessen wird als Linux-Rechner, weil ``XCURSOR_SIZE`` dort die Quelle
+    # ist. Windows und macOS haben ihre eigenen, und die stehen unten.
+    monkeypatch.setattr(cursors.sys, "platform", "linux")
 
-    monkeypatch.setenv("XCURSOR_SIZE", "24")
-    assert cursors._size_for(widget) == 24, "die Einstellung des Nutzers gewinnt"
+    def with_size(named: str | None) -> int:
+        if named is None:
+            monkeypatch.delenv("XCURSOR_SIZE", raising=False)
+        else:
+            monkeypatch.setenv("XCURSOR_SIZE", named)
+        cursors.forget()
+        return cursors._size_for(widget)
+
+    assert with_size("24") == 24, "die Einstellung des Nutzers gewinnt"
 
     # Der Deckel bleibt: Windows lehnt zu große Zeiger ab und zeigt dann keinen.
-    monkeypatch.setenv("XCURSOR_SIZE", "96")
-    assert cursors._size_for(widget) == cursors.MAX_SIZE
+    assert with_size("96") == cursors.MAX_SIZE
 
+    from_font = int(widget.fontMetrics().height() * cursors.SCALE)
     # Was keine Zahl ist, ist keine Antwort — dann gilt die Zeilenhöhe wie bisher.
     for unusable in ("0", "", "gross", "24px"):
-        monkeypatch.setenv("XCURSOR_SIZE", unusable)
-        assert cursors._size_for(widget) == int(widget.fontMetrics().height() * cursors.SCALE), (
+        assert with_size(unusable) == from_font, (
             f"{unusable!r} ist keine Größe und darf keine erfinden"
         )
 
+    assert with_size(None) == from_font, "ohne Systemangabe bleibt es bei der Zeilenhöhe"
+
+
+def test_every_platform_is_asked_where_it_keeps_the_pointer_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Windows und macOS führen dieselbe Einstellung, nur woanders.
+
+    Die Behebung des Kundenberichts fragte am 27.08.2026 nur ``XCURSOR_SIZE``
+    und blieb damit auf halbem Weg stehen: Wer unter Windows die Zeigergröße
+    hochstellt oder unter macOS den Faktor, hat genauso **alle** Zeiger
+    gemeint. Auf beiden blieb es bei der Zeilenhöhe — also bei derselben
+    Rechnung, die dem Kunden einen Zeiger von 60 Punkten beschert hat.
+
+    macOS führt keine Pixelzahl, sondern einen Faktor zwischen 1,0 und 4,0.
+    Ein Nutzer, der ihn auf 2 stellt, will 64.
+    """
+    monkeypatch.setattr(cursors, "_from_windows_registry", lambda: 48)
+    cursors.forget()
+    assert cursors.system_size("win32") == 48, "die Registry ist Windows' Antwort"
+
+    class Answer:
+        returncode = 0
+        stdout = "2\n"
+
+    monkeypatch.setattr(cursors.subprocess, "run", lambda *a, **k: Answer())
+    cursors.forget()
+    assert cursors.system_size("darwin") == 2 * cursors.BASE_SIZE, "der Faktor mal die Basis"
+
+    monkeypatch.setenv("XCURSOR_SIZE", "24")
+    cursors.forget()
+    assert cursors.system_size("linux") == 24
+
+
+def test_a_platform_that_says_nothing_says_nothing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Und wo keine Einstellung steht, wird keine erfunden.
+
+    Der Schlüssel fehlt, solange niemand ihn verstellt hat — unter Windows
+    genauso wie unter macOS, wo ``defaults`` dann mit einem Fehlercode endet.
+    Das ist keine Störung, sondern die Antwort „Normalgröße", und dann gilt
+    weiter die Zeilenhöhe.
+    """
+
+    class Missing:
+        returncode = 1
+        stdout = ""
+
+    monkeypatch.setattr(cursors.subprocess, "run", lambda *a, **k: Missing())
     monkeypatch.delenv("XCURSOR_SIZE", raising=False)
-    assert cursors._size_for(widget) == int(widget.fontMetrics().height() * cursors.SCALE), (
-        "ohne Systemangabe bleibt es bei der Zeilenhöhe — Windows und macOS nennen keine"
-    )
+    cursors.forget()
+    assert cursors.system_size("darwin") == 0
+
+    # Ein Prozessaufruf, den es gar nicht gibt, ist genauso eine Nicht-Antwort.
+    def missing_program(*args: object, **kwargs: object) -> object:
+        raise FileNotFoundError("defaults")
+
+    monkeypatch.setattr(cursors.subprocess, "run", missing_program)
+    cursors.forget()
+    assert cursors.system_size("darwin") == 0
+
+
+def test_the_system_is_asked_once_and_forgotten_on_demand(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Einmal fragen, bis jemand ``forget`` ruft.
+
+    Auf macOS kostet die Auskunft einen Prozessaufruf; ihn bei jedem Zeigerbau
+    zu wiederholen hieße, die Oberfläche für eine Zahl anzuhalten, die sich im
+    Betrieb praktisch nie ändert. Nach ``forget`` — Themen- oder
+    Schriftwechsel — wird wieder gefragt, sonst bliebe eine inzwischen
+    geänderte Einstellung ungesehen.
+    """
+    calls: list[int] = []
+
+    def counted() -> int:
+        calls.append(1)
+        return 40
+
+    monkeypatch.setattr(cursors, "_from_windows_registry", counted)
+    cursors.forget()
+
+    assert cursors.system_size("win32") == 40
+    assert cursors.system_size("win32") == 40
+    assert len(calls) == 1, "zweimal gefragt, obwohl einmal genügt"
+
+    cursors.forget()
+    assert cursors.system_size("win32") == 40
+    assert len(calls) == 2, "nach forget wird wieder gefragt"
 
 
 # --- der Anschluss im Viewport ------------------------------------------------

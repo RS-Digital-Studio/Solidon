@@ -40,6 +40,9 @@ Szene, nicht an den Zeiger.
 from __future__ import annotations
 
 import os
+import subprocess
+import sys
+from importlib import import_module
 from typing import Final
 
 from PySide6.QtCore import QByteArray, QPoint, QSize, Qt
@@ -198,8 +201,14 @@ def known() -> tuple[str, ...]:
 
 
 def forget() -> None:
-    """Den Vorrat leeren — nach einem Themen- oder Schriftwechsel."""
+    """Den Vorrat leeren — nach einem Themen- oder Schriftwechsel.
+
+    Die gemerkte Systemgröße geht mit: Sie ist einmal erfragt, und wer die
+    Zeiger neu bauen lässt, soll auch eine inzwischen geänderte Einstellung
+    bekommen.
+    """
     _CACHE.clear()
+    _SYSTEM_SIZE.clear()
 
 
 def svg_source(role: str) -> str:
@@ -224,13 +233,112 @@ def _colours() -> tuple[str, str]:
     return dark["highlight"], dark["highlight_text"]
 
 
+#: Was das System zuletzt als Zeigergröße genannt hat — einmal gefragt.
+#:
+#: Auf macOS kostet die Auskunft einen Prozessaufruf; ihn bei jedem Zeigerbau
+#: zu wiederholen hieße, die Oberfläche für eine Zahl anzuhalten, die sich im
+#: Betrieb praktisch nie ändert. :func:`forget` leert ihn mit.
+_SYSTEM_SIZE: dict[str, int] = {}
+
+#: Wie groß ein Zeiger ohne jede Einstellung ist. Windows nennt diese Zahl in
+#: ``CursorBaseSize`` selbst, macOS rechnet seinen Faktor darauf.
+BASE_SIZE: Final = 32
+
+
+def _from_windows_registry() -> int:
+    """``HKCU\\Control Panel\\Cursors\\CursorBaseSize`` — 0, wenn nichts dasteht.
+
+    Windows schreibt hier, was der Nutzer unter „Zeigergröße" gewählt hat: 32
+    ist der Normalwert, der Regler geht bis 256. Der Schlüssel fehlt, solange
+    niemand ihn verstellt hat — dann gilt die Zeilenhöhe wie bisher.
+    """
+    # Geholt wird das Modul über ``import_module`` und nicht mit ``import``,
+    # und der Grund ist nicht Geschmack: ``winreg`` gibt es auf zwei von drei
+    # Plattformen nicht, und typeshed führt seine Namen als Windows-only.
+    # ``mypy --platform linux`` meldet daraufhin drei ``attr-defined`` an
+    # Code, der dort nie läuft — und drei ``type: ignore`` wären genau die
+    # Sorte Rauschen, die man beim nächsten Mal nicht mehr liest.
+    try:
+        winreg = import_module("winreg")
+    except ImportError:  # pragma: no cover - nur auf Windows vorhanden
+        return 0
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Control Panel\Cursors") as key:
+            value, _kind = winreg.QueryValueEx(key, "CursorBaseSize")
+    except OSError:
+        return 0
+    return int(value) if isinstance(value, int) else 0
+
+
+def _from_macos_defaults() -> int:
+    """``mouseDriverCursorSize`` mal :data:`BASE_SIZE` — 0, wenn nichts dasteht.
+
+    macOS führt keine Pixelgröße, sondern einen **Faktor** zwischen 1,0 und
+    4,0 („Zeigergröße" in der Bedienungshilfe). Ein Nutzer, der ihn auf 2
+    stellt, will Zeiger von 64 — auch unsere.
+
+    Der Schlüssel fehlt, solange niemand ihn verstellt hat; ``defaults`` endet
+    dann mit einem Fehlercode, und das ist keine Störung, sondern die Antwort
+    „Normalgröße".
+    """
+    try:
+        answer = subprocess.run(
+            ["defaults", "read", "com.apple.universalaccess", "mouseDriverCursorSize"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            timeout=2.0,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return 0
+    if answer.returncode != 0:
+        return 0
+    try:
+        factor = float(answer.stdout.strip())
+    except ValueError:
+        return 0
+    return round(BASE_SIZE * factor) if factor > 0 else 0
+
+
+def system_size(platform: str) -> int:
+    """Was das Betriebssystem als Zeigergröße nennt — 0, wenn es nichts sagt.
+
+    **Die Plattform kommt als Parameter**, aus demselben Grund wie bei
+    :func:`app.core.discover.parts_for`: Ein Zweig, den nur ein Mac sehen kann,
+    wird nirgends geprüft. Und ``mypy`` prüft die Plattform, auf der es läuft —
+    eine Kette aus ``sys.platform``-Vergleichen ist auf zwei von drei Maschinen
+    tot und wird dort gemeldet.
+
+    Bis zum 27.08.2026 fragte nur Linux (``XCURSOR_SIZE``). Das war die
+    Behebung des Kundenberichts und blieb auf halbem Weg stehen: Wer unter
+    Windows die Zeigergröße hochstellt oder unter macOS den Faktor, hat damit
+    genauso alle Zeiger gemeint. Auf beiden blieb es bei der Zeilenhöhe, also
+    bei derselben Rechnung, die dem Kunden einen Zeiger von 60 Punkten
+    beschert hat — nur unbemerkt, weil dort selten jemand die Schrift so weit
+    hochstellt.
+    """
+    if platform in _SYSTEM_SIZE:
+        return _SYSTEM_SIZE[platform]
+    if platform == "win32":
+        size = _from_windows_registry()
+    elif platform == "darwin":
+        size = _from_macos_defaults()
+    else:
+        named = os.environ.get("XCURSOR_SIZE", "").strip()
+        size = int(named) if named.isdigit() else 0
+    _SYSTEM_SIZE[platform] = size
+    return size
+
+
 def _size_for(widget: QWidget) -> int:
     """Wie groß ein eigener Zeiger wird — und wer das entscheidet.
 
-    **Erste Quelle ist die Systemeinstellung.** Auf Linux steht sie in
-    ``XCURSOR_SIZE``; GNOME, KDE und die Wayland-Compositoren setzen sie aus
-    dem, was der Nutzer in den Einstellungen gewählt hat. Wer seine Zeiger auf
-    24 stellt, meint alle Zeiger, auch unsere.
+    **Erste Quelle ist die Systemeinstellung**, und zwar auf allen drei
+    Plattformen (:func:`system_size`): ``XCURSOR_SIZE`` unter Linux,
+    ``CursorBaseSize`` in der Windows-Registry, ``mouseDriverCursorSize`` als
+    Faktor auf macOS. Wer seine Zeiger auf 24 stellt, meint alle Zeiger, auch
+    unsere.
 
     **Zweite Quelle ist die Zeilenhöhe**, und sie war bis zum 27.08.2026 die
     einzige. Das ist auf Windows und macOS unauffällig geblieben und auf Linux
@@ -247,9 +355,9 @@ def _size_for(widget: QWidget) -> int:
 
     Qt hilft dabei nicht — ``styleHints()`` kennt nur ``cursorFlashTime``.
     """
-    system = os.environ.get("XCURSOR_SIZE", "").strip()
-    if system.isdigit() and int(system) > 0:
-        return max(min(int(system), MAX_SIZE), 16)
+    system = system_size(sys.platform)
+    if system > 0:
+        return max(min(system, MAX_SIZE), 16)
     height = widget.fontMetrics().height() if widget is not None else 16
     return max(min(int(height * SCALE), MAX_SIZE), 16)
 
