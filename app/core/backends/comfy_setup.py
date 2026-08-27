@@ -36,6 +36,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import IO, Final
 
+from app.core import discover
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
 
@@ -137,13 +138,35 @@ PACKAGES: Final = (
 #: Wahl steht in seiner eigenen Aufstellung: :func:`_from_desktop` liest sie
 #: und schlägt deshalb auch dann an, wenn der Nutzer beim Installieren einen
 #: anderen Ort angegeben hat.
-GUESSES: Final = (
-    Path("F:/AI/ComfyUI_windows_portable/ComfyUI"),
-    Path("D:/AI/ComfyUI_windows_portable/ComfyUI"),
-    Path("C:/ComfyUI_windows_portable/ComfyUI"),
-    Path.home() / "ComfyUI",
-    Path.home() / "Documents" / "ComfyUI",
-)
+def guesses_for(platform: str) -> tuple[Path, ...]:
+    """Wo ComfyUI auf dieser Plattform erfahrungsgemäß liegt.
+
+    Eine Funktion und keine Liste mit ``if sys.platform``, aus demselben Grund
+    wie :func:`app.core.discover.parts_for`: Die Zuordnung ist damit von
+    **jeder** Maschine aus prüfbar. Eine Liste, deren Linux-Pfade nur unter
+    Linux zu sehen sind, wird nirgends geprüft.
+
+    Die drei Laufwerkspfade waren bis zum 27.08.2026 die ganze Liste — auf
+    Linux und macOS ist ``Path("F:/AI/...")`` ein *relativer* Pfad namens
+    „F:", also blieben dort zwei Rateorte übrig. ``~/comfy/ComfyUI`` fehlte
+    dabei ganz, und das ist der Ort, an den ``comfy-cli`` von sich aus
+    installiert.
+    """
+    home = Path.home()
+    common = (home / "comfy" / "ComfyUI", home / "ComfyUI", home / "Documents" / "ComfyUI")
+    if platform == "win32":
+        return (
+            Path("F:/AI/ComfyUI_windows_portable/ComfyUI"),
+            Path("D:/AI/ComfyUI_windows_portable/ComfyUI"),
+            Path("C:/ComfyUI_windows_portable/ComfyUI"),
+            *common,
+        )
+    if platform == "darwin":
+        return (*common, home / "Applications" / "ComfyUI", Path("/Applications/ComfyUI"))
+    return (*common, home / ".local" / "share" / "ComfyUI", Path("/opt/ComfyUI"))
+
+
+GUESSES: Final = guesses_for(sys.platform)
 
 #: Wo ComfyUI Desktop notiert, was es wohin installiert hat. Ein Eintrag je
 #: Installation, und ``installPath`` ist der Ordner **über** dem eigentlichen
@@ -407,13 +430,19 @@ def _run(
     _log.info("comfy setup: %s", command[0])
     lines: list[str] = []
     deadline = time.monotonic() + STEP_TIMEOUT_SECONDS
+    # **Die Einrichtung läuft auf dem Rechner, nicht im Sandkasten.** ComfyUI
+    # liegt dort, ``git`` liegt dort, und das Python, mit dem installiert wird,
+    # auch. Ohne ``on_host`` endet die Einrichtung in einem Flatpak an „git
+    # fehlt" — auf einem Rechner, auf dem git installiert ist.
+    launched = discover.on_host(list(command))
     try:
         with subprocess.Popen(
-            command,
+            launched,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             stdin=subprocess.DEVNULL,
             text=True,
+            encoding="utf-8",
             errors="replace",
             bufsize=1,
         ) as process:
@@ -504,7 +533,11 @@ def fetch_triposg(
     """Den TripoSG-Quelltext neben die Knoten holen."""
     if (target / "triposg").is_dir():
         return
-    if shutil.which("git") is None:
+    # Gefragt wird über ``discover``, nicht über ``shutil.which``: Im Flatpak
+    # liegt git auf dem Rechner, und ``which`` sieht nur den Sandkasten. Die
+    # Meldung darunter schickte den Kunden sonst zu einer Installation, die er
+    # längst hat.
+    if discover.find_program("git", ("git",)) is None:
         raise SetupFailed(
             str(
                 _(

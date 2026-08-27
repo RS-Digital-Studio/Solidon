@@ -20,11 +20,13 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Literal
 
+from app.core import discover
 from app.core.export.slicer_keys import (
     SlicerFlavour,
     has_readable_profiles,
@@ -92,9 +94,45 @@ def install_root(executable: Path) -> Path | None:
     """
     for folder in (executable.parent, *executable.parents):
         for candidate in (folder / "resources" / "profiles", folder / "share" / "cura"):
-            if candidate.is_dir():
+            # Gefragt wird über ``discover``: Läuft Solidon in einem Flatpak,
+            # ist ``executable`` ein Host-Pfad, und ``is_dir()`` darauf sagt
+            # zuverlässig nein. Für Cura hängt daran ``-j <definition>``, und
+            # ohne die startet CuraEngine gar nicht.
+            if discover.is_dir_on_host(candidate):
                 return candidate
     return None
+
+
+def _config_home() -> str:
+    """Wo dieses System die Konfiguration fremder Programme ablegt.
+
+    **Drei Quellen für drei Plattformen, und eine fehlte.** Hier standen
+    ``APPDATA`` und ``XDG_CONFIG_HOME`` mit ``~/.config`` als Rückfall. Auf
+    macOS ist keine der beiden Variablen gesetzt und ``~/.config`` gibt es
+    typischerweise nicht — die Funktion gab dort **immer** eine leere Liste
+    zurück, und damit fand Solidon auf einem Mac nie ein selbst angelegtes
+    Profil. `chosen_machine()` lieferte ``""``, also genau die Auskunft, für
+    die diese Datei gebaut wurde: „Slicer gefunden" und im selben Fenster ein
+    Vorschlag aus dem Nichts.
+
+    Die Orca-Familie legt auf macOS unter ``~/Library/Application Support`` ab.
+
+    **Und in einem Flatpak zeigt ``XDG_CONFIG_HOME`` in den eigenen Sandkasten**
+    (``~/.var/app/<id>/config``). Dort liegen die Profile eines fremden Slicers
+    nie; gemeint ist das Konfigurationsverzeichnis des **Rechners**, und das
+    ist ``~/.config``, auch wenn die Variable etwas anderes sagt.
+    """
+    if sys.platform == "win32":
+        return os.environ.get("APPDATA", "")
+    if sys.platform == "darwin":
+        support = Path.home() / "Library" / "Application Support"
+        return str(support) if support.is_dir() else ""
+    # Linux: die Variable gilt — außer sie zeigt in unseren eigenen Sandkasten.
+    named = os.environ.get("XDG_CONFIG_HOME", "")
+    if named and not discover.in_flatpak():
+        return named
+    home = Path.home() / ".config"
+    return str(home) if home.is_dir() else ""
 
 
 def user_roots(flavour: SlicerFlavour, executable: Path) -> list[Path]:
@@ -106,10 +144,7 @@ def user_roots(flavour: SlicerFlavour, executable: Path) -> list[Path]:
     """
     if not has_user_profile_tree(flavour):
         return []
-    base = os.environ.get("APPDATA") or os.environ.get("XDG_CONFIG_HOME")
-    if not base:
-        home = Path.home() / ".config"
-        base = str(home) if home.is_dir() else ""
+    base = _config_home()
     if not base:
         return []
 

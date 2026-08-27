@@ -81,9 +81,20 @@ class Manager:
     platforms: tuple[str, ...] = ()
 
     def command(self, identifier: tuple[str, ...]) -> list[str]:
-        """Die Befehlszeile für diese Kennung."""
+        """Die Befehlszeile für diese Kennung.
+
+        **Der Paketmanager liegt auf dem Rechner, nie im Sandkasten.** In
+        einem Flatpak findet ``shutil.which("flatpak")`` nichts — dort gibt es
+        keinen —, und ohne ``on_host`` fiele die ganze Installationsspalte
+        weg: Auf Windows (winget) und macOS (brew) bietet Solidon an,
+        Fehlendes nachzuinstallieren, auf Linux nicht.
+
+        Im Flatpak bleibt der blanke Name stehen: ``which`` kann ihn hier
+        nicht auflösen, und ``flatpak-spawn --host`` löst ihn draußen selbst
+        auf.
+        """
         found = shutil.which(self.program) or self.program
-        return [found, *self.before, *identifier, *self.after]
+        return discover.on_host([found, *self.before, *identifier, *self.after])
 
 
 #: Die Kennung wird zur Adresse einer Referenzdatei. Ohne sie bräuchte Flatpak
@@ -598,6 +609,7 @@ def _stream(command: list[str], progress: ProgressFn) -> tuple[int, str]:
         stderr=subprocess.STDOUT,
         stdin=subprocess.DEVNULL,
         text=True,
+        encoding="utf-8",
         errors="replace",
         bufsize=1,
     ) as process:

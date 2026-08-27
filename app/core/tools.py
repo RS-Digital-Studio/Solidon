@@ -240,9 +240,15 @@ def start(tool: ExternalTool, wait_seconds: float = START_TIMEOUT_SECONDS) -> bo
     windows = sys.platform == "win32"
     no_window = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     detached = getattr(subprocess, "DETACHED_PROCESS", 0)
+    # **Auch dieser Start geht auf den Rechner, nicht in den Sandkasten.**
+    # ``program`` kommt aus ``discover.find_program`` und ist im Flatpak ein
+    # Host-Pfad; im Sandkasten gibt es ihn nicht. Ohne ``on_host`` endet der
+    # Knopf in einem ``OSError``, einer Protokollzeile und ``False`` — er tut
+    # sichtbar nichts, und daneben steht weiter „Antwortet nicht".
+    launched = discover.on_host([str(program), *tool.start_arguments])
     try:
         subprocess.Popen(
-            [str(program), *tool.start_arguments],
+            launched,
             stdin=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,

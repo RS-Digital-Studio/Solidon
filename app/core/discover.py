@@ -260,6 +260,13 @@ def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
         path = Path(chosen)
         if path.is_file():
             return path
+        # **Im Flatpak ist ein eingetragener Pfad ein Host-Pfad**, und
+        # ``is_file()`` darauf sagt zuverlässig nein. Ihn hier als verschwunden
+        # zu melden wäre dieselbe falsche Auskunft wie im Absatz darüber, nur
+        # unter anderem Vorzeichen: Der Nutzer hat den Pfad gerade eingetragen,
+        # und das Protokoll sagt ihm, er sei fort.
+        if in_flatpak():
+            return path
         # Ein gemerkter Pfad, den es nicht mehr gibt, ist schlimmer als keiner:
         # er hielte das Programm für „gefunden", während jeder Aufruf scheitert.
         # Einmal sagen, dann weitersuchen.
@@ -278,6 +285,7 @@ def find_program(tool_id: str, names: Iterable[str]) -> Path | None:
         _from_registry(candidates)
         or _from_flatpak(candidates)
         or _from_folders(candidates)
+        or _from_appimage(candidates)
         or _from_host(candidates)
     )
     _cache[tool_id] = found_path
@@ -364,6 +372,131 @@ def on_host(command: Sequence[str]) -> list[str]:
     return ["flatpak-spawn", "--host", *command]
 
 
+def is_dir_on_host(folder: Path) -> bool:
+    """Gibt es dieses Verzeichnis — auf dem Rechner, nicht im Sandkasten?
+
+    Außerhalb eines Flatpak ist das ``folder.is_dir()`` und sonst nichts.
+    Darin ist es die einzig richtige Frage: Ein Host-Pfad existiert im
+    Sandkasten nicht, und ``is_dir()`` darauf antwortet zuverlässig falsch.
+
+    **Woran das hing.** ``slicer_profiles.install_root`` sucht von der
+    Programmdatei aus nach oben nach ``resources/profiles`` — im Flatpak fand
+    es nie etwas, und für Cura fällt damit ``-j <definition>`` weg. CuraEngine
+    startet ohne Definition gar nicht: Die Übergabe war also auch nach dem
+    Start-Fix noch tot, nur eine Ebene später.
+
+    Ein Aufruf je Kandidat, und die Kandidatenliste ist kurz (der Pfad und
+    seine Eltern). Draußen kostet es nichts.
+    """
+    if not in_flatpak():
+        return folder.is_dir()
+    try:
+        answer = subprocess.run(
+            ["flatpak-spawn", "--host", "test", "-d", str(folder)],
+            capture_output=True,
+            timeout=5.0,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as problem:
+        _log.info("cannot ask the host about %s: %s", folder, problem)
+        return False
+    return answer.returncode == 0
+
+
+#: Wo ein AppImage üblicherweise liegt. Es gibt keinen vorgeschriebenen Ort —
+#: die Datei wird heruntergeladen, ausführbar gemacht und irgendwohin gelegt.
+#: Diese fünf sind die Orte, die die Anbieter selbst nennen und die die
+#: Integrationswerkzeuge (AppImageLauncher, Gear Lever) benutzen.
+_APPIMAGE_FOLDERS: Final = (
+    "~/Applications",
+    "~/.local/bin",
+    "~/bin",
+    "~/Downloads",
+    "/opt",
+)
+
+
+def _appimage_segments(stem: str) -> list[str]:
+    """Der Dateiname eines AppImage, an seinen Trennern zerlegt.
+
+    ``OrcaSlicer_Linux_V2.1.1`` wird zu ``orcaslicer linux v2 1 1``. Die
+    Trenner sind die Grenze, und deshalb geht das **nicht** über
+    :func:`plain_name`: Die entfernt sie, und danach ist ``orcaslicerlinux``
+    ein Wort.
+    """
+    plain = stem
+    for separator in ("-", "_", ".", "+"):
+        plain = plain.replace(separator, " ")
+    return [piece.lower() for piece in plain.split() if piece]
+
+
+def _matches_appimage(stem: str, wanted: frozenset[str]) -> bool:
+    """Ist ``stem`` ein AppImage eines der gesuchten Programme?
+
+    Ein AppImage trägt Version und Plattform im Namen —
+    ``PrusaSlicer-2.8.1+linux-x64-GTK3``, ``OrcaSlicer_Linux_V2.1.1``,
+    ``BambuStudio_ubuntu-24.04_v01.09`` —, also kann der Vergleich nicht auf
+    Gleichheit gehen. Er geht auf die **Segmente**: Der gesuchte Name muss eine
+    zusammenhängende Folge davon genau ausfüllen.
+
+    Das ist die Bedingung, die ``UltiMaker-Cura-5.7.0`` für „cura" gelten lässt
+    und ``GitHubDesktop`` für „git" nicht. Ohne sie fände die Suche nach ``git``
+    das GitHub-Programm, und der Aufrufer bekäme etwas, das er nie gemeint hat.
+
+    Die erste Fassung verglich über :func:`plain_name` und einen Blick auf das
+    nächste Zeichen. Sie fiel bei zwei von acht bekannten Namen um — genau
+    denen mit einem Unterstrich, weil ``plain_name`` ihn entfernt.
+    """
+    segments = _appimage_segments(stem)
+    for start in range(len(segments)):
+        joined = ""
+        for piece in segments[start:]:
+            joined += piece
+            if joined in wanted:
+                return True
+            if len(joined) > 40:
+                break
+    return False
+
+
+def _from_appimage(names: tuple[str, ...]) -> Path | None:
+    """AppImages in den üblichen Ablagen — **der häufigste Linux-Fall**.
+
+    PrusaSlicer, OrcaSlicer, Cura und BambuStudio liefern für Linux in erster
+    Linie ein AppImage aus. Es ist eine einzelne ausführbare Datei mit Version
+    im Namen, steht in keinem Paketverwalter und liegt an keinem verabredeten
+    Ort — die fünf Stufen davor suchen alle nach einem *exakten* Namen in einem
+    Installationsordner und treffen davon keine einzige.
+
+    Gefunden wird über den Anfang der nackten Form (:func:`plain_name`), und
+    die Datei muss **ausführbar** sein: Ein heruntergeladenes AppImage ohne
+    ``chmod +x`` ist keins, das man starten kann, und es als gefunden zu melden
+    hieße, den Fehler eine Stelle später und unverständlicher auftauchen zu
+    lassen.
+    """
+    if not sys.platform.startswith("linux"):
+        return None
+    wanted = frozenset(plain_name(name) for name in names)
+    for folder in _APPIMAGE_FOLDERS:
+        directory = Path(folder).expanduser()
+        try:
+            entries = sorted(directory.iterdir())
+        except OSError:
+            continue
+        for entry in entries:
+            if entry.suffix.lower() != ".appimage" or not entry.is_file():
+                continue
+            if not _matches_appimage(entry.stem, wanted):
+                continue
+            if not os.access(entry, os.X_OK):
+                # Die Auskunft, die dem Support die Frage erspart: Die Datei
+                # liegt da, sie ist nur nicht ausführbar.
+                _log.info("appimage found but not executable: %s", entry)
+                continue
+            return entry
+    return None
+
+
 def _from_host(names: tuple[str, ...]) -> Path | None:
     """Was der Rechner draußen im PATH hat — die sechste Suchstufe.
 
@@ -382,6 +515,7 @@ def _from_host(names: tuple[str, ...]) -> Path | None:
                 ["flatpak-spawn", "--host", "which", name],
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
                 timeout=5.0,
                 check=False,
             )

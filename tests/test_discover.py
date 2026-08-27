@@ -672,3 +672,96 @@ def test_the_host_is_asked_last_and_only_from_inside(monkeypatch: pytest.MonkeyP
 
     assert discover._from_host(("prusa-slicer",)) == Path("/usr/bin/prusa-slicer")
     assert calls == [["flatpak-spawn", "--host", "which", "prusa-slicer"]]
+
+
+def _appimage(folder: Path, name: str) -> Path:
+    """Ein AppImage, wie es nach dem Herunterladen daliegt."""
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / name
+    path.write_bytes(b"AI\x02ELF")
+    return path
+
+
+@pytest.mark.parametrize(
+    ("filename", "wanted", "found"),
+    [
+        ("PrusaSlicer-2.8.1+linux-x64-GTK3.AppImage", "prusa-slicer", True),
+        ("OrcaSlicer_Linux_V2.1.1.AppImage", "OrcaSlicer", True),
+        ("UltiMaker-Cura-5.7.0-linux-X64.AppImage", "cura", True),
+        ("BambuStudio_ubuntu-24.04_v01.09.AppImage", "bambu-studio", True),
+        ("Cura.AppImage", "cura", True),
+        # Der Fehlfang, gegen den die Segmentgrenze steht: Ohne sie faende
+        # die Suche nach „git" das GitHub-Programm.
+        ("GitHubDesktop.AppImage", "git", False),
+        ("CuraEngineTest.AppImage", "cura", False),
+        ("PrusaGcodeviewer-2.8.1.AppImage", "prusa-slicer", False),
+    ],
+)
+def test_an_appimage_is_found_by_its_segments(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    filename: str,
+    wanted: str,
+    found: bool,
+) -> None:
+    """AppImages tragen Version und Plattform im Namen — verglichen wird je Segment.
+
+    **Der haeufigste Linux-Fall.** PrusaSlicer, OrcaSlicer, Cura und
+    BambuStudio liefern fuer Linux in erster Linie ein AppImage aus; keine der
+    fuenf Stufen davor sucht etwas anderes als einen exakten Namen in einem
+    Installationsordner.
+
+    Die Faelle mit ``False`` sind die eigentliche Zusicherung: Eine Suche, die
+    zu viel findet, gibt dem Aufrufer ein Programm, das er nie gemeint hat.
+    """
+    monkeypatch.setattr(discover.sys, "platform", "linux")
+    monkeypatch.setattr(discover, "_APPIMAGE_FOLDERS", (str(tmp_path / "Applications"),))
+    path = _appimage(tmp_path / "Applications", filename)
+
+    result = discover._from_appimage((wanted,))
+    assert (result == path) is found, f"{filename} fuer {wanted}: {result}"
+
+
+def test_an_appimage_without_the_executable_bit_is_not_a_find(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Ohne ``chmod +x`` ist es kein Programm, das man starten kann.
+
+    Es als gefunden zu melden hiesse, den Fehler eine Stelle spaeter und
+    unverstaendlicher auftauchen zu lassen — „Permission denied" mitten in der
+    Uebergabe statt „nicht gefunden" in der Liste. Ins Protokoll geht es
+    trotzdem: Das ist die Auskunft, die dem Support die Rueckfrage erspart.
+    """
+    monkeypatch.setattr(discover.sys, "platform", "linux")
+    monkeypatch.setattr(discover, "_APPIMAGE_FOLDERS", (str(tmp_path / "Applications"),))
+    _appimage(tmp_path / "Applications", "PrusaSlicer-2.8.1.AppImage")
+    monkeypatch.setattr(discover.os, "access", lambda path, mode: False)
+
+    with caplog.at_level(logging.INFO):
+        assert discover._from_appimage(("prusa-slicer",)) is None
+    assert "not executable" in caplog.text
+
+
+def test_find_program_reaches_the_appimage_stage(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Und die Stufe haengt wirklich in der Kette.
+
+    Die Zusicherung darueber prueft die Stufe; diese hier prueft, dass
+    :func:`discover.find_program` sie **erreicht**. Eine Funktion, die richtig
+    rechnet und die niemand ruft, ist der teuerste aller gruenen Tests.
+    """
+    monkeypatch.setattr(discover.sys, "platform", "linux")
+    monkeypatch.setattr(discover, "_APPIMAGE_FOLDERS", (str(tmp_path / "Applications"),))
+    monkeypatch.setattr(discover.shutil, "which", lambda name: None)
+    monkeypatch.setattr(discover, "_load", dict)
+    monkeypatch.setattr(discover, "_install_roots", tuple)
+    monkeypatch.setattr(discover, "_FLATPAK_EXPORTS", ())
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    discover.forget_cache()
+    path = _appimage(tmp_path / "Applications", "OrcaSlicer_Linux_V2.1.1.AppImage")
+
+    # Nicht ``discover.find_program`` — das ist in der Suite die Attrappe aus
+    # ``conftest``, die nur zurückgibt, was ausdrücklich gesetzt wurde. Genau
+    # sie würde diesen Test grün machen, ohne die Kette je zu betreten.
+    assert discover.unpatched_find_program("orcaslicer", ("OrcaSlicer", "orca-slicer")) == path
