@@ -52,6 +52,8 @@
 
 - [Gemessene Frage ist nicht die gestellte](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene Frage; drei Fehlschlüsse an einem Abend, einer davon rot auf origin.
 - [Messung trägt nur am Ort ihrer Messung](messung-traegt-nur-am-ort-ihrer-messung.md) — drei gefallene Befunde an einem Tag; beim dritten war die Messung echt und galt nur woanders.
+- [Vier Torläufe, ein Stand](vier-torlaeufe-ein-stand.md) — mypy lief vor dem vorletzten Commit, die Suite nach dem letzten; 4246 grüne Tests sehen einen Reexport nie.
+- [Beleg stand im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — bevor man eine Wissenslücke behauptet, sucht man über py/md/toml, nicht nur Markdown; Regeln stehen auch im eingecheckten Hook, und der injiziert sie oben in den eigenen Kontext.
 
 ## Haltung
 - [Reparierter Fehler hat Zwillinge](reparierter-fehler-hat-zwillinge.md) — nach jedem Fix die Geschwister suchen; fünf der schwersten Review-Befunde vom 25.08.2026 waren bereits behobene Fehler an Nachbarstellen.
@@ -65,6 +67,7 @@
 - [Benannte Falle schützt nicht](benannte-falle-schuetzt-nicht.md) — ein Modul, das eine Gefahr richtig beschreibt, fällt trotzdem hinein; der Satz liest sich als Beleg und verhindert die Prüfung.
 - [mypy prüft die laufende Plattform](mypy-prueft-die-laufende-plattform.md) — Windows-Tor und Linux-CI sehen verschiedene Fehler; ein grüner Bau sagt nichts über den lokalen Lauf.
 - [Patchskript schneidet Fremdes weg](patchskript-schneidet-fremdes-weg.md) — „ab Marke bis Ende" ersetzen löscht, was die Nachbarsitzung dort einfügte; `--stat` sieht aus wie Umformatierung.
+- [Geteilter Index hält alten Stand](geteilter-index-haelt-alten-stand.md) — fünf Dateien als `MM`, alle fünf identisch mit HEAD; ein Index, der zurückliegt, sieht aus wie fremde laufende Arbeit und committet sie als gelöscht.
 - [Privater Index: fester Name](privater-index-fester-name.md) — `$$` im `GIT_INDEX_FILE` zeigt im nächsten Aufruf ins Leere; ein fehlender Index ist ein leerer, und der committet 1175 Dateien als gelöscht.
 - [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — der private Index hält fremde *Dateien* heraus, nicht den fremden Stand einer *gemeinsamen*; erst die eigene Zahl ansagen, dann `--numstat`.
 - [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen schreiben ihre Torläufe in dieselben Dateien; eine fremde oder eigene alte Zahl sieht aus wie die aktuelle.
@@ -74,6 +77,7 @@
 - [Weitergegebene Anweisungen gelten](weitergegebene-anweisungen-gelten.md) — was eine andere Sitzung von Robert weitergibt, ist Roberts Anweisung
 - [Ein Messwerkzeug misst sich selbst](messwerkzeug-misst-sich-selbst.md) — was ein Werkzeug meldet, ist eine Eigenschaft des Werkzeugs, bis man es an einem Fall geprüft hat, dessen Ausgang man kennt.
 - [Wächter-Reichweite nur im Kommentar](waechter-reichweite-nur-im-kommentar.md) — der Kommentar zählte „opérations" ausdrücklich mit, das Muster traf es nie; genau dort stand dann der Fehler.
+- [Fünf Tests, eine Lage](fuenf-tests-eine-lage.md) — fünf Sollwert-Tests quer zur Achse sind ein Test; der Normalfall einer Funktion ist oft die Lage, in der der Fehlerterm wegfällt, und der exakte Treffer ist der einzige konstruktionsfreie Sollwert.
 - [Sollwert aus dem Prüfling](sollwert-aus-dem-pruefling.md) — wer die Erwartung mit der geprüften Funktion erzeugt, prüft Aktualität statt Richtigkeit; und ein Fehler, den eine spätere Stufe halb aufräumt, tarnt sich selbst.
 - [Heredoc verschluckt \n](heredoc-verschluckt-backslash-n.md) — Bash-Heredoc + Python-Patchskript faltet Escape-Folgen; Mehrzeiliges ohne Backslashes bauen, dreimal an einem Abend zugeschnappt.
 - [Heredoc kann Umlaute](heredoc-kann-umlaute.md) — aus Angst vor Quoting ASCII zu schreiben bricht die Sprachregel; gemessen überträgt es sie sauber, und die Verallgemeinerung war die eigentliche Falle.
