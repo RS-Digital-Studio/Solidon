@@ -755,3 +755,98 @@ def test_a_corner_fillet_leaves_no_degenerate_triangles() -> None:
     assert solid.volume == pytest.approx(mesh.volume, rel=1e-3), (
         "das Weglassen darf am Körper nichts ändern"
     )
+
+
+# --- was der Netz-Zwilling meldete und dieser nicht ------------------------------
+
+
+def test_a_bore_that_swallows_the_body_is_refused(profile: Profile) -> None:
+    """Ein Körper, der nichts ist, kommt nicht als Erfolg zurück.
+
+    **Der schwerste Zwillingsbefund vom 27.08.2026.** OCCT rechnet sauber
+    durch, wenn das Werkzeug den Körper vollständig deckt, und gibt eine leere
+    Form zurück: null Volumen, null Flächen, nicht wasserdicht. Bis dahin ging
+    die als Ergebnis durch — im Objektbaum stand danach ein Objekt mit Namen,
+    das man anklicken, umbenennen und **speichern** konnte, und der Prüfbericht
+    sagte kein Wort; gemeldet hätte es erst der Export.
+
+    Der Netz-Zwilling wirft an derselben Stelle seit je, und zwar mit genau
+    diesem Satz — er ist deshalb geteilt (``boolean.NOTHING_LEFT_*``) und nicht
+    ein zweites Mal geschrieben. ``without_effect`` fängt den Fall nicht: Es
+    prüft auf *nichts abgetragen*, hier wurde *alles* abgetragen.
+    """
+    from app.core.errors import GeometryError
+    from app.core.geom.boolean import NOTHING_LEFT_TITLE
+
+    body = run("create_brep_box", None, profile, width=40.0, depth=30.0, height=20.0).outputs[0]
+
+    with pytest.raises(GeometryError) as caught:
+        run("drill_brep_hole", body, profile, diameter=50.0)
+
+    assert str(caught.value.title) == str(NOTHING_LEFT_TITLE)
+    assert caught.value.suggestions, "ein Fehler ohne Weg nach vorn ist unfertig (Regel 17)"
+
+
+def test_a_bore_over_the_edge_says_so_in_the_exact_kernel_too(profile: Profile) -> None:
+    """Dieselbe Warnung wie im Netz — sie fehlte nur, weil die Signatur ein
+    ``MeshData`` verlangte.
+
+    Gemessen waren sechs von sechs Fällen still, bei geometrisch identischem
+    Ergebnis (Abweichung unter 0,005 %). Die Prüfung liest nichts als den
+    Hüllquader, und den trägt ``Solid`` auch; sie fragt jetzt nach einem
+    Protokoll, wie ``without_effect`` es mit ``HasVolume`` vormacht.
+    """
+    body = run("create_brep_box", None, profile, width=40.0, depth=30.0, height=20.0).outputs[0]
+
+    over = run("drill_brep_hole", body, profile, diameter=10.0, x=18.0)
+    inside = run("drill_brep_hole", body, profile, diameter=10.0, x=0.0)
+
+    assert "bore.over_the_edge" in {entry.code for entry in over.findings}
+    # Die Gegenprobe: eine Bohrung im Material warnt nicht, sonst warnt jede.
+    assert "bore.over_the_edge" not in {entry.code for entry in inside.findings}
+
+
+def test_the_exact_shell_reports_what_the_mesh_twin_reports(profile: Profile) -> None:
+    """*Exakt aushöhlen* gab in keinem einzigen Fall einen Befund zurück.
+
+    Dreizehn Wandstärken gemessen, von 0,2 bis 50: Bei 15 mm kam ein Körper mit
+    Nullspalt zurück — unverändertes Volumen und nicht mehr wasserdicht —,
+    zwischen 16 und 50 passierte fast immer gar nichts, und gesagt wurde nie
+    etwas. OCCT gibt bei zu großem negativem Offset die Eingangsform zurück,
+    ohne zu werfen. Der Netz-Zwilling kennt für dieselbe Lage fünf Codes.
+
+    Beide Befunde kommen aus derselben Fabrik wie beim Zwilling — sonst wäre
+    hier der nächste Zwilling entstanden, statt einen zu beseitigen.
+    """
+    body = run("create_brep_box", None, profile, width=40.0, depth=30.0, height=20.0).outputs[0]
+
+    hopeless = run("shell_exact", body, profile, wall=15.0)
+    unprintable = run("shell_exact", body, profile, wall=0.3)
+    sound = run("shell_exact", body, profile, wall=2.0)
+
+    assert "hollow.too_thin" in {entry.code for entry in hopeless.findings}
+    assert "hollow.wall_below_nozzle" in {entry.code for entry in unprintable.findings}
+    # Und die Gegenprobe, ohne die eine Warnung nichts wert ist: der brauchbare
+    # Fall bleibt still.
+    assert not sound.findings, [entry.code for entry in sound.findings]
+
+
+def test_the_printable_wall_comes_from_the_profile_not_from_a_number(profile: Profile) -> None:
+    """Die Grenze ist zwei Extrusionsbreiten — je Drucker eine andere Zahl.
+
+    Im Schema stand ``minimum=0.4`` am Netz und ``0.2`` am exakten Kern. Die
+    Abweichung fiel auf; der eigentliche Fund ist, dass auch die 0,4 nur
+    zufällig stimmt — für eine 0,4er Düse. Ein Schema-Minimum kann das nicht
+    leisten, es steht zur Deklarationszeit fest und das Profil kommt mit dem
+    Auftrag (§39, Regel 7).
+    """
+    from app.core.geom.hollow import below_printable_wall
+
+    least = profile.minimum_wall_thickness
+    assert least > 0.4, (
+        f"dieser Drucker muss über der alten Schemazahl liegen, sonst prüft der "
+        f"Test nichts: {least}"
+    )
+
+    assert below_printable_wall(least - 0.1, profile) is not None
+    assert below_printable_wall(least + 0.1, profile) is None
