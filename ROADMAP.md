@@ -127,9 +127,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
-| Der Ziehgriff fehlt — „nach oben ziehen" ist noch Tippen | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **VTK-Interaktion**, nicht Rechenzeit: Eine Extrusion kostet warm 1,8 ms, die Vorschau steht seit `5ccdfbaf`. Was fehlt, ist ein Zustand „ich ziehe gerade eine Höhe" im Viewport — heute wird aus einem Klick im Skizzenmodus ein `sketchPointPicked`, Drücken/Ziehen/Loslassen gibt es dort nicht. In der Querschau ist die Geste frei: dort sieht man die Ebene von der Kante und kann ohnehin nicht zeichnen |
-| „12 Freiheitsgrade sind noch frei" sagt einem Anfänger nichts | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | einen **Satz neben die Zahl**, der sie in eine Handlung übersetzt. Die Zahl selbst bleibt — für den Könner ist sie richtig. Dieselbe Frage bei den zehn Bedingungsknöpfen und der Bedingungsliste rechts |
-| Den Skizzenmodus gegen Fusion messen | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | eine **Messung in Klicks**: Rechteck zeichnen, extrudieren, Tasche schneiden, verrunden — dort gegen denselben Weg hier. Fusion ist lokal installiert. Ohne diese Zahl ist jede weitere Verbesserung eine Vermutung |
+| Die Fusion-Spalte der Klickmessung fehlt | Der Skizzenmodus für Anwender ohne CAD-Kenntnis (27.08.2026) | **einen Lauf in Fusion an Maus und Tastatur.** Die Solidon-Spalte ist gemessen (27.08.2026, am gebauten Fenster: 3 / 6 / 6 / 9 / 4 Klicks, Tabelle im Abschnitt); die Fusion-Spalte ist es nicht, und aus dem Kopf geschrieben wäre sie eine Vermutung mit Zahlen. Fusion ist lokal installiert, lief aber nicht, und ein Lauf greift nach Roberts Maus, während er auf demselben Bildschirm arbeitet — das Protokoll steht im Abschnitt, es dauert keine zehn Minuten |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Geraet. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** - von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung. Die erste Vermutung (fehlende Qt-Plugins im Paket) ist **widerlegt**: PyInstaller sammelt `platforminputcontexts` und die drei `wayland-*`-Gruppen nachweislich mit (`_modules_info.py`). Was fehlte, war die Auskunft — der nächste Bericht nennt `xdg_session_type`, `qt_qpa_platform` und `qt_im_module` (`b21f8766`) |
 | Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
@@ -10643,6 +10641,32 @@ und die Zahl ist der Grund, warum sie hier steht: Ein Lauf, der zwanzig Minuten
 länger dauert als der davor, hat wahrscheinlich gestanden und nicht langsamer
 gerechnet — wer Läufe vergleicht, misst die Wanduhr mit.
 
+**Sechste Beobachtung, dieselbe Sitzung, wenige Stunden später:** Diesmal
+`tests/test_ui.py`, Exit 139 nach vier Tests — und die Stelle ist eine **neue**:
+`session.py:119` im Konstruktor unter `evaluate_async` ← `apply` ←
+`import_payload` ← `import_model`, ausgelöst aus `_with_two_objects`
+(`test_ui.py:1150`). Derselbe Helfer wie in der vierten Beobachtung, aber nicht
+`panels.py` und nicht `op_dialog.py`. Drei Wiederholungen unmittelbar danach:
+**307 passed, Exit 0**, dreimal; dazu zwei grüne Läufe derselben Datei früher am
+selben Tag. Fünf von sechs grün. Die Liste der Stellen ist damit auf drei
+gewachsen (`panels.py`, `op_dialog.py`, `session.py`) und der Helfer auf zwei
+Beobachtungen — **das ist die brauchbarere Spur als der Ort**: Was sich
+wiederholt, ist nicht die Zeile, sondern der Test, der zwei Modelle einliest.
+
+**Fünfte Beobachtung am 27.08.2026 (Skizzenmodus-Sitzung):** Diesmal traf es
+allein `tests/test_operation_ui.py`, im geteilten Lauf unter dem Schloss, mit
+Exit 139 — Zugriffsverletzung **während** eines Tests und nicht beim Abbau
+(`test_the_caveat_reaches_every_surface_that_offers_the_operation`, Stapel über
+`op_dialog.py:197`, den QCompleter der fx-Hilfe). Dieselbe Zeile, die die
+dritte Beobachtung schon nannte. Sieben Wiederholungen derselben Datei, vier
+mit zufälliger und drei mit der Reihenfolge des Skripts (`-m "not
+performance"`): **sieben von sieben grün**, je 67 passed. Die Änderungen der
+Sitzung berühren `op_dialog.py` nicht, und der Importsatz dieses Prozesses ist
+unverändert — `app.ui.main_window` zieht `viewport` und `sketch_editor` seit je
+gemeinsam herein, die neue Importkante zwischen den beiden fügt dort kein Modul
+hinzu. Das ist keine Zuschreibung an die Familie, sondern die Gegenprobe: Die
+Signatur stand hier schon, bevor die Sitzung anfing.
+
 - [ ] **Eine Entscheidung, ob die Suite die Reihenfolge für diese Datei
       festnagelt** (`-p no:randomly` je Datei) **oder die Ursache weiter
       verfolgt wird.** Das Festnageln verdeckt einen echten Fehler; ihn zu
@@ -11523,28 +11547,84 @@ erstellen, ausschneiden usw, vergleiche cad software dafür zb fusion."
 | Wie kommt man heute zur Operation? | „Fertig" → `SketchUseDialog` mit fünf Arten → `run_operation`. Der Gedanke stimmt schon: gefragt wird **nach** dem Zeichnen, mit der Zeichnung vor Augen |
 | Wie läuft die Vorschau? | `dialog.valuesChanged` → 300-ms-Timer → `session.preview_async` → `show_difference`. Die 300 ms sind für teure Operationen da |
 
+**Zwei der drei offenen Punkte sind gebaut, und der dritte ist halb
+gemessen.**
+
+- [x] **Der Ziehgriff zieht jetzt.** In der Querschau — Blick und Zeichenebene
+      auseinander, also genau dort, wo man ohnehin nicht zeichnen kann — wird
+      aus einem Zug am Umriss eine Höhe. `axis_hit` (Kern) rechnet aus dem
+      Sichtstrahl die Stelle der größten Annäherung an die Aufzugsachse durch
+      den gegriffenen Punkt; `pull_cage` legt die Drahtform in die Szene, die
+      dabei wächst; `DragValueBar` zeigt die Zahl **am Zeiger** und nimmt eine
+      getippte an; beim Loslassen geht `sketch_extrude` mit Skizze **und** Höhe
+      auf. Gefahren wird das über denselben Rückruf wie der Körperzug
+      (`on_body_drag`, vier Schritte) — eine zweite Klickschwelle daneben war
+      der Fehler, den der Körperzug schon einmal hatte.
+
+      Drei Entscheidungen dabei, die man sonst nachfragen müsste. Der Griff ist
+      **der Umriss selbst**, gemessen in Bildpunkten gegen seine projizierten
+      Strecken und so weit reichend wie die Fangmarke groß ist — was man sieht,
+      kann man greifen. Angeboten wird er über einen **Zustand** (Querschau)
+      und nicht über ein Winkelmaß: Zwei Schwellen für dieselbe Frage lassen
+      immer einen Bereich, in dem beide Antworten falsch sind. Und die Grenzen
+      der Höhe kommen **aus dem Schema** der Operation, damit die Zahl am
+      Zeiger dieselbe ist, die der Dialog danach annimmt.
+- [x] **Die Zahl hat jetzt einen Satz daneben** (`outline_advice`). Drei Lagen,
+      drei Folgen: „Erst ein geschlossener Umriss wird ein Körper" — „Daraus
+      wird ein Körper; Maße legen fest, was nicht mehr wackeln soll" — „Daraus
+      wird ein Körper, und die Form kann nicht mehr wackeln." Die Zahl bleibt
+      stehen, denn für den Könner ist sie richtig. Dieselbe Behandlung haben
+      die zehn Bedingungsknöpfe bekommen: `_does_phrase` sagt, was eine
+      Bedingung **bewirkt** („legt eine Linie glatt an einen Kreis oder Bogen
+      an"), und steht am Knopf, im Kontextmenü, in der Meldung nach einem
+      Kürzel und an jedem Eintrag der Bedingungsliste — vier Stellen, eine
+      Quelle. `_needs_phrase` sagte bis dahin nur, was ausgewählt sein muss;
+      das ist die Bedienung und nicht die Sache.
+
+**Die Klickmessung, Solidon-Spalte** — gemessen am gebauten Fenster
+(27.08.2026), jeder Schritt wirklich ausgeführt bis zum Ergebnis:
+
+| Aufgabe | Solidon | Fusion |
+|---|---|---|
+| Rechteck 40 × 20, bemaßt | **3** — Zeichnen, Grundform, Rechteck 40 × 20 | offen |
+| Rechteck extrudieren, über *Fertig* | **6** — dazu Fertig, Weiter, Übernehmen | offen |
+| Rechteck extrudieren, über den Ziehgriff | **6** — dazu Ebenenwahl, Ziehen, Übernehmen | offen |
+| Tasche schneiden (auf einem exakten Körper) | **9** — Körper, Fläche, Zeichnen, Grundform, Rechteck, Fertig, *Tasche* wählen, Weiter, Übernehmen | offen |
+| Verrunden | **4** — Körper, Ändern, Verrunden, Übernehmen | offen |
+
+**Der Ziehgriff spart dabei keinen einzigen Klick**, und das ist die
+überraschendste Zahl der Messung: sechs gegen sechs. Was er einbringt, ist
+nicht der kürzere Weg, sondern dass die Höhe **gesehen** statt geraten wird —
+wer 15 mm zieht, hat keine Zahl getippt und trotzdem eine. Wer den Weg kürzen
+will, sieht die Messung anders an: Von den fünf Aufgaben tragen `sketch_extrude`,
+`sketch_pocket` und `fillet_edges` **kein Kürzel**, und bei der Tasche kosten
+zwei der neun Klicks allein die Frage „Was soll daraus werden?", in der die
+Tasche an vierter Stelle steht.
+
 Offen:
 
-- [ ] **Der Ziehgriff fehlt — „nach oben ziehen" ist noch Tippen.** Robert
-      will in der Seitenansicht am Umriss ziehen und den Körper wachsen sehen;
-      heute tippt er eine Höhe und sieht das Ergebnis (seit `5ccdfbaf`). Der
-      Unterschied ist die Geste. Technisch frei — die Rechnung kostet 1,8 ms —,
-      aber es ist VTK-Interaktion: Drücken, Ziehen und Loslassen gehen heute
-      nicht in den Skizzenmodus, dort entsteht aus einem Klick ein
-      `sketchPointPicked`. Wartet auf: einen Zustand „ich ziehe gerade eine
-      Höhe" im Viewport, die Zahl am Zeiger und die Übergabe an
-      `sketch_extrude` beim Loslassen. **In der Querschau ist die Geste frei**
-      — dort sieht man die Ebene von der Kante und kann ohnehin nicht sinnvoll
-      zeichnen.
-- [ ] **„Geschlossen · 12 Freiheitsgrade sind noch frei" sagt einem Anfänger
-      nichts.** Weder ob das gut oder schlecht ist, noch was zu tun wäre. Die
-      Zahl ist für den Könner richtig und gehört nicht weg; was fehlt, ist der
-      Satz daneben, der sie in eine Handlung übersetzt. Dieselbe Frage stellt
-      sich bei den zehn Bedingungsknöpfen und der Bedingungsliste rechts
-      („Abstand 1,50 mm — Kreis 1", „Fest — Kreis 1 Mitte").
-- [ ] **Gegen Fusion messen, nicht gegen den eigenen Eindruck.** Fusion ist
-      lokal installiert (`.claude/memory/zeichnen-an-fusion-orientieren.md`).
-      Was dort in wie vielen Klicks geht — Rechteck zeichnen, extrudieren,
-      Tasche schneiden, Verrundung — gegen denselben Weg hier, und die
-      Differenz ist die Arbeitsliste. Ohne diese Messung ist jede weitere
-      Verbesserung eine Vermutung.
+- [ ] **Die Fusion-Spalte fehlt, und aus dem Kopf geschrieben wäre sie eine
+      Vermutung mit Zahlen.** Fusion ist lokal installiert
+      (`.claude/memory/zeichnen-an-fusion-orientieren.md`,
+      `%LOCALAPPDATA%\Autodesk\webdeploy\production\…\Fusion360.exe`), lief
+      am 27.08.2026 aber nicht — und ein Lauf greift nach Maus und Tastatur des
+      Rechners, an dem Robert gerade arbeitet. Aus dieser Sitzung ist Fusion
+      nicht fernsteuerbar: Die Browser-Werkzeuge fassen nur Webseiten an, und
+      seine Oberfläche liegt als kompiliertes QML vor — eine Ribbon-Definition,
+      die man auszählen könnte, gibt es auf der Platte nicht (gesucht:
+      `Fusion/Toolbar` trägt nur `.dll` und `.qmltypes`).
+
+      **Das Protokoll, damit die Messung reproduzierbar ist** — je Aufgabe von
+      einem leeren Entwurf aus, gezählt wird jeder Klick, den die Hand tut,
+      Tippen zählt gesondert:
+
+      1. *Rechteck 40 × 20, bemaßt:* Skizze erstellen, Ebene wählen, Rechteck,
+         zwei Ecken, Maße eintippen, Skizze beenden.
+      2. *Extrudieren:* aus derselben Skizze heraus, Höhe 15 mm — einmal über
+         den Dialog, einmal über den Ziehpfeil am Profil.
+      3. *Tasche schneiden:* auf der Deckfläche des Körpers eine zweite Skizze,
+         Rechteck, Extrusion mit Operation „Ausschneiden", Tiefe 5 mm.
+      4. *Verrunden:* eine Kante wählen, Verrundung, Radius 2 mm.
+
+      Die Differenz je Zeile ist die Arbeitsliste; die Zeile mit der größten
+      Differenz kommt zuerst.

@@ -162,6 +162,22 @@ Test, der nur `_cursor_role` prüft, wäre auch dann grün, wenn im Fenster nie
 ein Zeiger ankommt. `tests/test_cursors.py` hält deshalb eine Attrappe mit
 genau der einen Methode, die benutzt wird.
 
+## Was im Skizzenmodus in dieser Datei steht
+
+`viewport.py` trägt einen guten Teil des Skizzenmodus, und **seine Regeln
+stehen nicht hier**, sondern in `zeichenflaeche.md` — dort, wo der Rest des
+Editors steht. Die Datei lädt mit `sketch_editor.py` und nicht mit dieser; wer
+eines der folgenden Stücke anfasst, liest sie zusätzlich:
+
+| Was | Wo die Regel steht |
+|---|---|
+| `sketch_grid`, `grid_step_for`, `pixels_per_mm`, `LEAST_VIEW_PIXELS` | Raster und Maßstab |
+| `show_sketch_cursor`, `sketch_cursor`, `CURSOR_PIXELS` | die Fangmarke und ihre 6,9 ms |
+| `set_sketching`, `_sketch_hit`, `sketch_screen_at` | wohin ein Klick fällt |
+| `set_sketch_pull`, `pull_cage`, `pulled_height`, `polyline_distance` | der Ziehgriff der Querschau |
+| `MEASURE_GAP`, `DragValueBar.anchor` | die Zahl am Zeiger |
+| `apply_wheel_zoom`, `view_on_plane`, `cameraMoved` | Zoom und Schwenk auf einer Ebene |
+
 ## Die Ansicht
 
 ### Die Auswahl hat eine Tiefe, und der Klick wandert durch sie

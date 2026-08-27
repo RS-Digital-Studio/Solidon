@@ -292,6 +292,160 @@ beabsichtigt. In der Zeile steht „Noch offen" oder „Geschlossen", und dahint
 die Freiheitsgrade — keine der beiden Fragen beantwortet die andere: ein
 bestimmtes Rechteck kann offen sein, ein geschlossenes darf wackeln.
 
+**In der Querschau zieht man am Umriss, und der Körper wächst mit**
+(`Viewport.set_sketch_pull`, `axis_hit`, `pull_cage`). Robert am 27.08.2026:
+„schön wäre auch dass wenn ich in der skizze was in der draufsicht zeichne und
+dann in die Seitenansicht oder vorderansicht gehe sie nach oben ziehen kann."
+Vorher tippte man eine Höhe und sah das Ergebnis; der Unterschied ist die
+Geste.
+
+**Angeboten wird sie genau dort, wo nicht gezeichnet wird** — in der Querschau,
+also wenn `view_plane` und `sketch.plane` auseinandergehen. Das ist ein
+**Zustand** und keine Schwelle, und das ist Absicht: Ein Winkelmaß „wie sehr
+von der Kante" läge neben der Prüfung, mit der `ray_hit` seine Stelle findet,
+und zwischen zwei Schwellen für dieselbe Frage liegt immer ein Bereich, in dem
+beide Antworten falsch sind. In der Draufsicht bliebe die Geste dem Zeichnen im
+Weg: Ein Druck auf eine Umrisskante wäre dort mal ein Punkt, mal ein Zug.
+
+Sechs Dinge hängen daran:
+
+* **Die Frage stellt das Fenster, die Geste kennt die Ansicht**
+  (`MainWindow._sketch_pull_offer`). Drei Antworten: `"ready"`, ein Grund, oder
+  leer. Ein **Grund** kommt nur, wo die Geste gemeint war und nicht ging —
+  sonst stünde bei jedem Druck irgendwo im Bild ein Satz über eine Handlung,
+  die niemand versucht hat. Er geht über `sketchPullBlocked` an `announce`
+  (Regel 17: ein Griff, der stumm nichts tut, sagt nicht einmal, dass etwas
+  nicht ging).
+* **Und dieselbe Quelle schreibt den Satz in die Leiste.** Ohne ihn findet die
+  Geste niemand: Der Umriss sieht von der Kante aus wie ein Strich. Zwei Texte
+  aus zwei Quellen wären zwei Gelegenheiten, einander zu widersprechen.
+* **Der Griff ist der Umriss selbst**, nicht ein eigener Anfasser. Gemessen
+  wird in Bildpunkten gegen die **Strecken** der projizierten Kurven
+  (`polyline_distance`) und nicht gegen ihre Ecken — dieselbe Unterscheidung wie
+  bei der Merkmalssuche, die gegen die Dreiecke misst. Er reicht so weit, wie
+  die Fangmarke groß ist (`CURSOR_PIXELS`): Was man sieht, kann man greifen,
+  und eine zweite Zahl daneben wäre ein Bereich, in dem die Marke steht und der
+  Griff nicht hält. Konstruktionsgeometrie zählt nicht mit — an ihr entsteht
+  kein Körper.
+* **Dieselbe Zustandsmaschine wie der Körperzug** (`on_body_drag` mit
+  `ready`/`start`/`move`/`end`, Weiche in `_weak_callbacks`). Eine zweite wäre
+  eine zweite Klickschwelle, und das Loch zwischen zwei Schwellen hatte der
+  Körperzug schon einmal. Nur der Rückweg ist ein anderer: `_end_drag` schickt
+  den Ziehgriff durch `_end_pull` und **nicht** durch `set_navigation` — das
+  baute den Interaktionsstil mitten in der Geste neu auf, und das Loslassen
+  käme bei einem Stil an, der von seinem Drücken nichts weiß.
+* **Was wächst, ist eine Drahtform und keine Fläche** (`pull_cage`). Eine echte
+  Vorschau ginge über `session.preview_async`, also über einen Arbeiter-Thread
+  und einen Neuaufbau der Aktoren; allein das Neuzeichnen der Skizze kostet
+  gemessen 7,8 ms, und bei sechzig Mausereignissen in der Sekunde ist das der
+  Qt-Hauptthread. Die Sprossen sind gedeckelt (`MOST_PULL_RIBS`): Bei einem
+  Kreis mit vierundsechzig Punkten wären es vierundsechzig Striche, und das ist
+  eine Wand und keine Drahtform.
+* **Angeboten wird nur, was auch geht** (`pull_height_at` in
+  `sketch_pull_ready`). Der Zustand oben sagt, ob Ziehen *gemeint* ist; diese
+  Frage sagt, ob es *möglich* ist — von dieser Blickrichtung aus überhaupt eine
+  Höhe ablesbar. Das sind zwei Fragen und nicht zwei Schwellen für eine:
+  gefragt wird `axis_hit` selbst, also dieselbe Prüfung, die der Zug danach
+  benutzt. Sie fehlte, und der Fall, der sie erzwang, ist eine Skizze auf einer
+  **angeklickten Fläche**: Dort hat der Blick nie denselben Namen wie die
+  Zeichenebene, das Angebot stand also immer — und bei frontaler Ansicht gab
+  `axis_hit` nichts zurück. Der Griff nahm die linke Taste und tat stumm
+  nichts.
+
+  **Und derselbe Ort wird zweimal gefragt** (`pull_base_at`): Eine
+  Bereitschaft, die eine andere Stelle prüft als der Zug danach nimmt, ist
+  keine.
+
+  **Was das ausdrücklich nicht abdeckt:** Wer sich mit der Maus in die
+  Kantensicht *dreht*, ohne die Ebenenwahl anzufassen, bekommt den Griff
+  weiterhin nicht — `view_plane` folgt dem Auswahlfeld und den Ziffern 1 bis 3,
+  nicht dem Drehzug. Das ist die Grenze und kein Rest: Dort ist Zeichnen die
+  erklärte Absicht, ein Klick setzt weiter Punkte, und ein Griff daneben wäre
+  genau die Überlappung, die der Zustand vermeidet. Versprochen wird die Geste
+  nur in der Querschau, und dort gilt sie.
+* **Die Grenze steht an einer Stelle, und die heißt `_pull_takes`.**
+  Gefragt vom Loslassen und von der Eingabetaste, über die Höhe, die auch
+  angewandt würde. Vorher stand die Untergrenze an zwei Stellen und die
+  Obergrenze an keiner:
+  Eine getippte Höhe von 4000 mm ging bei einem Höchstwert von 1000 durch, und
+  der Dialog klemmte sie danach kommentarlos.
+
+  **Beim Tippen wird abgelehnt, beim Ziehen geklemmt**, und das ist kein
+  Widerspruch: Wer zieht, meint eine Bewegung, und die darf am Anschlag stehen
+  bleiben; wer tippt, meint genau diese Zahl, und sie stillschweigend zu ändern
+  wäre die Antwort auf eine andere Frage. Die abgelehnte bleibt im Feld
+  markiert stehen — dieselbe Zusage, die `_apply_typed` für alle Zugarten gibt.
+* **Ein Zug in die falsche Richtung sagt es, statt einen Splitter zu bauen.**
+  `pulled_height` hebt ein negatives Maß auf die Untergrenze, und danach sieht
+  ein Zug nach unten aus wie ein sehr kurzer nach oben: Die Operation ging glatt
+  durch und legte einen Körper von 0,1 mm an. Entschieden wird deshalb gegen das
+  **ungeklemmte** Maß (`_pull_raw`), und beim Loslassen kommt ein Satz statt
+  eines Körpers (Regel 17).
+
+  **Und zwar nur gegen die Untergrenze.** Die vollständige Prüfung stand hier
+  einen Anlauf lang und lehnte damit zwei richtige Fälle ab: Ein Zug bis zum
+  **Anschlag** hat ein rohes Maß über der Obergrenze und ist trotzdem gemeint —
+  die Leiste zeigt den geklemmten Wert, und der ist die Zusage. Und wer nach
+  einem Fehlzug eine Zahl **tippt**, hat die Frage nach der Richtung
+  beantwortet: `_apply_typed` löscht `_pull_raw`, sonst wäre der Griff per
+  Tastatur nicht mehr zu retten. Die Richtung hat eine Grenze, die Anwendung
+  hat zwei — wer beide Fragen mit derselben Prüfung beantwortet, beantwortet
+  eine davon falsch.
+* **Die Höhe ist gefangen und geklemmt** (`pulled_height`). Gefangen auf das
+  Raster, das im Bild steht — eine aufgezogene Höhe soll eine runde Zahl sein,
+  und ein Zug, der zwischen zwei Rasterpunkten nichts ändert, zeichnet nicht.
+  Geklemmt auf die Grenzen **aus dem Schema** (`main_window.pull_limits`), denn
+  eine Zahl, die der Griff zeigt und der Dialog danach ablehnt, ist eine
+  gebrochene Zusage. Wer sie hier abschreibt, hat die zweite Wahrheit gebaut.
+
+**Und der Griff ist ohne Attrappe nicht prüfbar** (`gripping` in
+`tests/test_viewport_decisions.py`). Offscreen gibt es keinen Plotter, also
+gibt `_display_of` nichts, `grip_reach` unendlich und `sketch_pull_ready`
+**immer** `False` — auch mit gesetztem Angebot. Der erste Test darüber
+behauptete „ohne Frage kein Griff" und wäre auch bei einem Griff grün geblieben,
+der jede Frage übergeht; `sketchPullBlocked` kam in der ganzen Suite nicht ein
+einziges Mal vor. Ersetzt werden genau die drei Methoden, die einen Plotter
+brauchen — Reichweite im Bild, Ort auf der Ebene, Maß entlang der Achse —, alles
+davor und danach ist echt. Das ist das Muster aus `ansicht.md`, und
+`test_cursors.py` macht es vor.
+
+**Und die Zahl steht am Zeiger, nicht am Fensterrand** (`DragValueBar.anchor`).
+Dieselbe Entscheidung wie beim Maßfeld der Zeichenfläche, mit demselben
+`MEASURE_GAP` — es wohnt seit dem Ziehgriff in `viewport.py`, weil zwei Felder
+daran hängen und eine Zahl an zwei Stellen driftet. Bei den Griffen von §18.11
+bleibt das Feld oben mittig: Dort zieht man an einem Gizmo, den man ansieht,
+und ein Feld unter dem Zeiger verdeckte gerade ihn.
+
+**Der Umriss trägt seine Nummern auch im Konflikt.** Der Hinweis an einem
+Eintrag der Bedingungsliste nennt Art, Maß, Ort, Wirkung — und darunter die
+rohen Punktnummern, weil danach sucht, wer eine Bedingung aus einer Meldung des
+Lösers wiederfinden will. Der Konfliktzweig überschrieb den Hinweis vollständig
+und nahm sie mit; ein Konflikt **ist** diese Meldung, also ist es der Fall, für
+den die Nummern da sind.
+
+**Der Zug kostet dabei keinen Klick weniger.** Gemessen am gebauten Fenster,
+27.08.2026: Rechteck zeichnen und extrudieren sind über *Fertig* sechs Klicks
+und über den Ziehgriff auch sechs. Was er einbringt, ist nicht die Zahl der
+Klicks, sondern dass die Höhe **gesehen** statt geraten wird — wer 15 mm zieht,
+hat keine Zahl getippt und trotzdem eine.
+
+**Und der Umriss beantwortet auch, was seine Kennzahl bedeutet**
+(`outline_advice`). „Geschlossen · 12 Freiheitsgrade sind noch frei" sagt einem
+Anfänger nichts — weder ob das gut oder schlecht ist, noch was zu tun wäre. Die
+Zahl bleibt stehen, denn für den Könner ist sie richtig und die einzige
+Auskunft darüber, wie weit eine Skizze bestimmt ist; dahinter steht ein Satz,
+der sie in eine **Folge** übersetzt. Drei Lagen, drei Sätze, und der Umriss
+gewinnt vor den Freiheitsgraden: Ohne ihn scheitert jede der fünf
+Erzeugungsarten, mit ihm ist ein freier Freiheitsgrad höchstens eine
+Ungenauigkeit.
+
+**Dasselbe gilt für die zehn Bedingungsknöpfe** (`_does_phrase`). `_needs_phrase`
+sagt, was ausgewählt sein muss; das ist die Bedienung und nicht die Sache.
+„Tangential" ist ein Wort, das jeder aus einem CAD kennt und niemand sonst, und
+wer es nicht kennt, wusste danach, was er anklicken muss, und immer noch nicht,
+wozu. Der Satz steht am Knopf, im Kontextmenü, in der Meldung nach einem Kürzel
+**und** an jedem Eintrag der Bedingungsliste — vier Stellen, eine Quelle.
+
 **Verschieben ist ein eigener Griff, kein Punkt-für-Punkt.** `edit.move`
 schiebt die Auswahl an Ort und Stelle — verschoben, nicht kopiert wie
 `offset` und `mirror` daneben, also behalten die Elemente ihren Platz in der
