@@ -40,7 +40,7 @@ from app.core.backends.mesh import ComfyBackend, GeneratedMesh, MeshBackend
 from app.core.errors import CANCEL, AppError, OperationCancelled
 from app.core.log import get_logger
 from app.i18n import tr
-from app.ui.labels import localised
+from app.ui.labels import volume
 from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 
@@ -524,7 +524,10 @@ class GenerateDialog(QDialog):
             closed = tr("geschlossen") if mesh.is_watertight else tr("offen")
             item = QListWidgetItem(
                 f"{index}. {mesh.triangle_count} {tr('Dreiecke')} · "
-                + localised(f"{mesh.volume / 1000.0:.1f} cm³")
+                # Dieselbe Quelle wie Steckbrief und Chat (labels.volume):
+                # feste Kubikzentimeter meldeten kleine Körper als „0,0 cm³"
+                # und blieben in Zoll stehen.
+                + volume(mesh.volume)
                 + f" · {closed}"
             )
             self.attempts.addItem(item)

@@ -35,7 +35,7 @@ from app.core import activation
 from app.core.agent.context import is_discarded
 from app.core.types import ChatEntry, Document
 from app.i18n import TranslatableText, _, tr
-from app.ui.labels import localised
+from app.ui.labels import volume
 from app.ui.leash import weak_slot
 from app.ui.style import NORMAL, set_level
 
@@ -616,12 +616,14 @@ def describe(preview: Any) -> str:
 
     difference = getattr(preview, "difference", None)
     if difference is not None and difference.changed:
-        parts.append(
-            localised(
-                f"+{difference.added_volume / 1000.0:.2f} cm³ / "
-                f"-{difference.removed_volume / 1000.0:.2f} cm³"
-            )
-        )
+        # **Über ``labels.volume``, nicht von Hand.** Zwei Stellen schrieben
+        # hier Kubikzentimeter mit fester Stellenzahl — und ``Difference``
+        # meldet eine Änderung schon ab 0,001 mm³. Eine gesetzte M3-Bohrung,
+        # eine Fase, ein Versatz kamen damit als „+0,00 cm³ / -0,00 cm³" an:
+        # Der Vorschlag sah folgenlos aus und war es nicht. Dazu blieben die
+        # Kubikzentimeter stehen, wenn die Anzeige auf Zoll steht, während
+        # jede Länge daneben umschaltet.
+        parts.append(f"+{volume(difference.added_volume)} / -{volume(difference.removed_volume)}")
     return "\n".join([" · ".join(parts) or tr("Keine Änderung"), *_warnings(proposal)])
 
 

@@ -763,9 +763,12 @@ def test_the_chat_line_follows_the_language(qt_app: object) -> None:
     before = QLocale()
     try:
         QLocale.setDefault(QLocale("de"))
-        assert "+1,25 cm³" in describe(preview)
+        # Die Zusage ist das Dezimaltrennzeichen der Sprache, nicht die
+        # Stellenzahl: Die Schreibweise kommt seit dem Zusammenlegen aus
+        # ``labels.volume`` und ist damit dieselbe wie im Steckbrief.
+        assert "+1,2 cm³" in describe(preview)
         QLocale.setDefault(QLocale("en"))
-        assert "+1.25 cm³" in describe(preview)
+        assert "+1.2 cm³" in describe(preview)
     finally:
         QLocale.setDefault(before)
 

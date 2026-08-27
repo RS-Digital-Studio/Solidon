@@ -17,6 +17,7 @@ from collections.abc import Callable, Sequence
 from typing import Any, Final, Literal, NamedTuple, cast
 
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, Signal
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -40,6 +41,7 @@ from app.core.geom.transform import (
     snap_to_step,
 )
 from app.core.log import get_logger
+from app.core.perceive.features import CURVATURE_LIMIT
 from app.core.perceive.maps import AnalysisMap
 from app.core.scene import EvaluationResult
 from app.core.sketch.planes import image_normal, ray_hit, to_world
@@ -475,7 +477,14 @@ SSAO_BIAS = 0.01
 #: gilt. Dreißig Grad lässt die Facetten eines fein aufgelösten Zylinders in
 #: Ruhe — die liegen bei zweihundert Segmenten unter zwei Grad — und nimmt
 #: jede Fase mit, denn eine Fase unter dreißig Grad ist keine mehr.
-FEATURE_EDGE_ANGLE = 30.0
+#:
+#: **Aus dem Kern, nicht als eigene Zahl.** Dieselben dreißig Grad standen an
+#: drei Stellen: hier, in der Merkmalserkennung und in der Analysekarte. Was
+#: der Viewport zeichnet, ist die Kante, an der der Nutzer klickt, um eine
+#: Fläche zu wählen — sagt die Darstellung dreißig Grad und die Erkennung
+#: eines Tages fünfunddreißig, wählt der Klick etwas anderes aus, als die
+#: Kante zeigt. Die Zahl gehört der Erkennung; hier wird sie nur gezeichnet.
+FEATURE_EDGE_ANGLE = CURVATURE_LIMIT
 
 #: Strichstärke der Körperkanten. Bei 1,0 verschwanden sie neben der
 #: Umgebungsverdeckung; die Farbe ist je Thema auf Kontrast 4,5 gegen den
@@ -1390,7 +1399,15 @@ class ViewBar(QFrame):
             # Der zugängliche Name trägt das Wort, das der Knopf nicht zeigt —
             # ohne ihn hätte ein Screenreader hier sieben namenlose Schaltflächen.
             button.setAccessibleName(long)
-            button.setToolTip(f"{long} ({shortcut})")
+            # **Die Taste, wie sie auf der Tastatur heißt.** Hier stand der
+            # rohe Deklarationstext, also „Ctrl+0" — während das Ansichtsmenü
+            # daneben dasselbe Kürzel als echtes ``QAction`` führt und Qt es
+            # als „Strg+0" schreibt. Der Knopf versprach eine Taste, die es auf
+            # einer deutschen Tastatur nicht gibt, und zwar an allen sieben.
+            # Denselben Fehler hat ``shortcuts_window._native`` schon einmal
+            # behoben — dieser Zwilling wurde damals nicht gesucht.
+            native = QKeySequence(shortcut).toString(QKeySequence.SequenceFormat.NativeText)
+            button.setToolTip(f"{long} ({native})")
             button.setAutoRaise(True)
             # **Kein Lambda mit Vorgabeargument.** Es fängt ``self`` in seiner
             # Zelle, hängt an einem Knopf, der ``self`` gehört, und schließt

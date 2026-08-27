@@ -53,6 +53,7 @@ from app.core.errors import (
 )
 from app.core.log import get_logger
 from app.core.registry import MENU_GROUPS, REGISTRY
+from app.core.registry.surfaces import MAX_MENU_ROWS as _MAX_MENU_ROWS
 from app.core.scene import EvaluationResult
 from app.core.types import Document, Feature, Finding, ObjectId
 from app.core.units import LengthUnit
@@ -88,7 +89,11 @@ SEVERITY_MARKER = {name: entry.symbol for name, entry in SEVERITY_ENCODING.items
 #: gruppiert. Dieselbe Zahl, die ``MAX_SUBMENU_ENTRIES`` in
 #: ``tests/test_interface_limits.py`` der Menüleiste zieht, und aus demselben
 #: Grund: darüber liest niemand mehr, er sucht.
-MAX_MENU_ROWS = 12
+# **Aus dem Kern, nicht als eigene Zahl.** Dieselbe Grenze aus §35 steht in
+# ``registry/surfaces.py``, und dort gehört sie hin: Sie beschreibt, was ein
+# Menü tragen kann, und der Kern baut die Menüstruktur. Zwei Zahlen für eine
+# Grenze sind zwei Stellen, an denen jemand die eine erhöht.
+MAX_MENU_ROWS = _MAX_MENU_ROWS
 
 #: Datenrolle einer Verlaufszeile: **alle** Operationen, die sie umfasst, als
 #: Tupel. Neben ``UserRole``, das die *eine* Operation zum Öffnen trägt und

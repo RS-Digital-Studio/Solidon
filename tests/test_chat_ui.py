@@ -563,12 +563,12 @@ def test_the_summary_names_what_would_change(qt_app: QApplication) -> None:
         text = describe(ProposalPreview(proposal=proposal, difference=difference))
 
         assert "Operation" in text
-        assert "+2,00 cm³" in text
-        assert "-0,50 cm³" in text
+        assert "+2,0 cm³" in text
+        assert "-500 mm³" in text
 
         QLocale.setDefault(QLocale("en"))
         english = describe(ProposalPreview(proposal=proposal, difference=difference))
-        assert "+2.00 cm³" in english
+        assert "+2.0 cm³" in english
     finally:
         QLocale.setDefault(before)
 
