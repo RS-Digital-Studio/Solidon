@@ -7833,3 +7833,28 @@ def test_switching_back_to_the_mesh_says_what_it_costs(window: MainWindow) -> No
     )
     # Gegenprobe zwei: Wer den Haken **setzt**, nimmt niemandem etwas weg.
     assert window._twin_toggle_hint("Grundsatz.", box_step, exact_now=False) == "Grundsatz."
+
+
+def test_the_dialog_names_both_bodies_a_boolean_will_take() -> None:
+    """Bei zwei Eingängen nennt der Satz sie beim Namen.
+
+    Der Hinweis gab es seit je — er sagte aber nur „die 2 zuerst gewählten von
+    3", und damit musste der Kunde seine eigene Klickreihenfolge erinnern.
+    Ausgerechnet dort zählt sie am meisten: Die Booleschen sagen zu, dass „das
+    zuerst angeklickte mit seinem Namen und Material bleibt" — welches das ist,
+    ließ der Satz offen.
+
+    Gegen die Funktion und nicht gegen ein gebautes Fenster, weil hier die
+    Formulierung geprüft wird und nicht der Weg dorthin; den prüft
+    ``test_a_dialog_says_which_body_it_works_on`` eine Ebene höher.
+    """
+    from app.ui.main_window import _works_on
+
+    two_of_three = _works_on(["Klotz", "Stift", "Deckel"], 3, 2)
+
+    assert "Klotz" in two_of_three and "Stift" in two_of_three
+    assert "Deckel" not in two_of_three, "der dritte wird nicht verrechnet und nicht genannt"
+
+    # Die Gegenprobe: Wer genau so viel wählt, wie die Operation nimmt, braucht
+    # keine Erklärung — sonst stünde der Satz bei jeder zweiten Operation.
+    assert _works_on(["Klotz", "Stift"], 2, 2) == ""

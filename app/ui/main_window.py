@@ -743,7 +743,7 @@ def _needs_objects(count: int) -> str:
     return tr("Diese Operation braucht zwei Objekte. Das zweite dazu mit Strg und Klick.")
 
 
-def _works_on(name: str, chosen: int, takes: int) -> str:
+def _works_on(names: Sequence[str], chosen: int, takes: int) -> str:
     """Woran die Operation arbeitet, wenn mehr gewählt ist als sie nimmt.
 
     Eine Operation nimmt so viele Körper, wie sie deklariert, und zwar in
@@ -752,16 +752,23 @@ def _works_on(name: str, chosen: int, takes: int) -> str:
     stand kein Wort dazu. Das ist kein Raten (Regel 21): die Regel steht nur
     nirgends, wo sie jemand liest.
 
+    **Und sie nennt die Körper beim Namen, auch wenn es mehrere sind.** Bei
+    einem Eingang stand der Name hier seit je; bei zweien hieß es nur „die 2
+    zuerst gewählten von 3", und damit musste der Kunde seine eigene
+    Klickreihenfolge erinnern. Ausgerechnet dort zählt sie am meisten: Die
+    Booleschen sagen zu, dass „das zuerst angeklickte mit seinem Namen und
+    Material bleibt" — welches das ist, war die Frage, die der Satz offenließ.
+
     Leer, wo es nichts zu sagen gibt — und das ist der Normalfall.
     """
-    if takes <= 0 or chosen <= takes or not name:
+    if takes <= 0 or chosen <= takes or not any(names):
         return ""
     if takes == 1:
         return tr("Angewendet wird auf {name} — der zuerst gewählte von {count}.").format(
-            name=name, count=chosen
+            name=names[0], count=chosen
         )
-    return tr("Angewendet wird auf die {takes} zuerst gewählten von {count}.").format(
-        takes=takes, count=chosen
+    return tr("Angewendet wird auf {names} — die {takes} zuerst gewählten von {count}.").format(
+        names=tr(" und ").join(names[:takes]), takes=takes, count=chosen
     )
 
 
@@ -6196,7 +6203,11 @@ class MainWindow(QMainWindow):
         # Was der Dialog über seinen Bezug sagt — leer, solange genau so viel
         # gewählt ist, wie die Operation nimmt.
         note = (
-            _works_on(self._object_names().get(inputs[0], ""), len(chosen), spec.consumes)
+            _works_on(
+                [self._object_names().get(entry, "") for entry in inputs],
+                len(chosen),
+                spec.consumes,
+            )
             if inputs and not spec.takes_whole_scene
             else ""
         )
