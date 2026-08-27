@@ -129,9 +129,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 | Die Boolesche Zugabe ist 0,05 mm und 0,01 mm | Dieselbe Zugabe, zwei Zahlen (27.08.2026) | zwei Messungen: ab welcher Zugabe die Rückfallkette über den Korpus auf Stufe 2 fällt, und wie viel eine Gravur gegenüber ihrer Solltiefe zu viel abträgt. Alle übrigen fünf Zwillingsfamilien des Kerns sind seit `57200cb9` zusammengelegt, ein Wächter hält sie |
-| Die 8-GB-Karte in den Systemvoraussetzungen ist nie gemessen worden | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Rechner mit einer 8-GB-Karte, oder die Entscheidung, die Zeile als Erfahrungswert zu kennzeichnen statt als Anforderung. Die Messangabe daneben ist am 27.08. berichtigt (`00156df3`), diese nicht — eine ungemessene Zahl durch eine andere zu ersetzen gewinnt nichts |
 | `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
-| Vier Datumsangaben werden am 31.10.2026 still falsch | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung, was am 31.10. auf der Seite stehen soll — erst danach lässt sich prüfen, ob es dort steht. Die Umschaltung des Download-Kastens hat einen Test, diese Sätze nicht |
 | Die EULA beschränkt auf einen Rechner, der Code tut es nicht | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung über den Aktivierungsserver. Beide Texte hängen daran und sind nicht einzeln zu berichtigen: Heute falsch ist die EULA (ein Rechner zugleich, ohne jede Gerätebindung im Code), falsch wird die Verkaufsseite (alle deine Rechner) in dem Moment, in dem die Beschränkung gebaut wird |
 | AGB § 2 beschreibt vierzehn Tage, die für die Demo nicht gelten | Was die Website-Durchsicht liegen ließ (27.08.2026) | die fachliche Prüfung der Rechtstexte — die EULA steht auf Fassung 1.2 vom 24.08., die AGB auf 1.0 vom 8.8.; die Demo ist in einer nachgezogen und in der anderen nicht |
 
@@ -11095,15 +11093,20 @@ steht, ist kein festgehaltener Fund.
   auf derselben Seite. Der Unterschied ist, dass die Unterseiten kein solches
   Ersatzziel haben.
 
-- [ ] **„Eine Grafikkarte mit 8 GB Speicher" ist nie gemessen worden.** Die
+- [x] **„Eine Grafikkarte mit 8 GB Speicher" ist nie gemessen worden.** Die
   Systemvoraussetzungen nennen sie als Mindestanforderung fürs Generieren. Die
   Gewichte allein sind 7,5 GB, und gelaufen ist der Weg hier nur auf einer
   RTX 4080 mit 16. Die Messangabe daneben ist am 27.08. berichtigt worden
   (`00156df3`) — diese hier nicht, weil eine ungemessene Zahl durch eine
   andere ungemessene zu ersetzen nichts gewinnt.
 
-  Wartet auf einen Rechner mit einer 8-GB-Karte oder auf die Entscheidung, die
-  Zeile als Erfahrungswert zu kennzeichnen statt als Anforderung.
+  **Gestrichen am 27.08.2026** (`fe51f282`, Entscheidung Robert): nicht als
+  Erfahrungswert gekennzeichnet, sondern weg — „keine Angabe ist
+  besser als eine falsche“. An ihre Stelle tritt die Formulierung, die
+  im Fließtext derselben Seite schon stand („eine kräftige
+  Grafikkarte“), in jeder Sprache bereits übersetzt. Damit sagen Absatz
+  und Tabelle zum ersten Mal dasselbe; vorher nannte der eine keine Zahl und
+  die andere eine.
 
 - [ ] **`PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102.**
   `llm.py` nennt 19 249 Token für Systemprompt und kompakten Werkzeugsatz, und
@@ -11117,14 +11120,29 @@ steht, ist kein festgehaltener Fund.
   den kompakten fährt, und eine Schätzung gegen eine Messung gestellt. Wartet
   auf einen Ollama-Lauf, der `prompt_eval_count` abliest.
 
-- [ ] **Vier Datumsangaben werden am 31.10.2026 still falsch.** „Die Demo
+- [x] **Vier Datumsangaben werden am 31.10.2026 still falsch.** „Die Demo
   läuft bis zum 30. Oktober" steht auf der Startseite in sechs Sprachen an
   mehreren Stellen, dazu eine FAQ-Frage „Was passiert am 30. Oktober?" und der
   Einführungspreis bis 31.01.2027. Die Umschaltung des Download-Kastens hat
   einen Test, diese Sätze nicht.
 
-  Wartet auf die Entscheidung, was am 31.10. auf der Seite stehen soll — erst
-  danach lässt sich prüfen, ob es dort steht.
+  **Gelöst am 27.08.2026** (`24c1323f`). Entscheidung Robert: „erst
+  später entscheiden“ — also bleibt die inhaltliche Frage offen, und
+  geprüft wird stattdessen, dass sie **rechtzeitig** ansteht.
+  `test_the_pages_do_not_promise_a_date_that_is_about_to_pass` wird fünf Tage
+  vor dem Stichtag rot: Vorlauf genug, um zu entscheiden und in sechs Sprachen
+  umzuschreiben.
+
+  Er hängt an `DEMO_UNTIL` und nicht an einem zweiten Datum — wird verlängert,
+  wandert die Erinnerung mit. **Nicht zu verwechseln mit dem Wecker in
+  `test_activation.py`**: Der fragt, ob die Demo noch läuft, und wird am 31.10.
+  rot; für die Website ist das der Tag zu spät.
+
+  Der erste Anlauf übersprang sich selbst. `conftest` setzt `DEMO_UNTIL` für
+  die ganze Suite auf `None` — sonst wäre sie ab dem Stichtag an Dutzenden
+  Stellen rot —, und der Test las den Modulwert statt der Fixture
+  `shipped_demo_until`. Er lief grün, ohne je etwas geprüft zu haben; verraten
+  hat ihn allein das „1 skipped“ in der Ausgabe.
 
 - [ ] **Die EULA beschränkt auf einen Rechner, der Code tut es nicht.**
   `eula.html` § 2 sagt „Freigeschaltet ist dabei ein Rechner zugleich; den
