@@ -723,27 +723,52 @@ def test_the_published_version_file_gets_through_the_read_that_bounds_it() -> No
     )
 
 
-def test_the_published_version_file_fits_the_room_the_format_reserves() -> None:
-    """Die Bytezahl daneben — sie benennt den Fall, den der Test darüber prüft.
+def test_the_read_limit_carries_what_the_format_may_write() -> None:
+    """Die Lesegrenze muss über dem liegen, was das eigene Format zulässt.
 
-    :data:`updates.MAX_ANSWER_BYTES` wird seit dem 27.08.2026 aus
-    :data:`updates.MAX_CHANGES`, :data:`updates.MAX_TEXT_LENGTH` und der Zahl
-    der Sprachen **abgeleitet**, statt als feste Zahl dazustehen. Damit kann
-    das Format nicht mehr mehr erzeugen, als der Client liest — die
-    Widersprüchlichkeit, an der es beim Kunden riss, ist strukturell weg.
+    Beim Kunden ist sie gerissen: „update check did not answer: version file is
+    too large" (Protokoll vom 27.08.2026, Vorgang S-20260826-72a4dd). Der
+    Kommentar an der Grenze sagte „Die Datei trägt drei kurze Felder" — richtig,
+    als er geschrieben wurde, und mit dem Changelog still falsch geworden:
+    ``changes`` ist ein Wörterbuch **je Sprache**, und bei 0.2.1 waren das 49
+    Punkte mal sechs, also 37 KB von 64.
 
-    Diese Prüfung bleibt trotzdem, denn die Ableitung deckt nur den Changelog.
-    Ein neues Feld in der Versionsdatei — eine längere Paketliste, ein
-    eingebetteter Text — wächst an ihr vorbei.
+    Zwei Grenzen entschieden dieselbe Frage und widersprachen sich —
+    ``MAX_CHANGES`` erlaubte hundert Punkte zu schreiben, die 64 KB ließen rund
+    neunundachtzig lesen. Dazwischen liegt der Bereich, in dem die Anwendung
+    eine Datei erzeugt, die sie selbst nicht mehr liest.
+
+    Das ist die teuerste Stelle für einen stillen Ausfall: Wer die Prüfung
+    verliert, erfährt von keiner neuen Fassung — auch nicht von der, die seinen
+    Absturz behebt.
     """
-    if not PUBLISHED_VERSION_FILE.exists():
-        pytest.skip("die Versionsdatei liegt nur im vollständigen Baum")
+    from app.i18n.catalog import available_languages
 
-    size = PUBLISHED_VERSION_FILE.stat().st_size
+    languages = len(available_languages())
+    assert languages >= 2, f"nur {languages} Sprache(n) gefunden — prüft das etwas?"
 
+    worst_case = updates.MAX_CHANGES * updates.MAX_TEXT_LENGTH * languages
+    assert worst_case < updates.MAX_ANSWER_BYTES, (
+        f"die Lesegrenze ({updates.MAX_ANSWER_BYTES}) liegt unter dem, was das Format "
+        f"schreiben darf ({worst_case}) — bei {languages} Sprachen"
+    )
+
+
+def test_the_shipped_version_file_is_read_without_complaint() -> None:
+    """Und die Probe an der Datei, die wirklich ausgeliefert wird.
+
+    Der Test darüber prüft die Rechnung, dieser den Bestand: Was auf dem Server
+    liegt, muss die Anwendung lesen können. Beides zusammen, weil eine richtige
+    Rechnung an einer Datei scheitern kann, die noch etwas anderes mitbringt —
+    die Ableitung deckt den Changelog, nicht ein neues Feld daneben.
+    """
+    published = Path(__file__).resolve().parent.parent / "website" / "version.json"
+    if not published.is_file():  # pragma: no cover — im Klon ohne Website
+        pytest.skip("keine ausgelieferte version.json im Baum")
+
+    size = published.stat().st_size
+    assert size > 1000, f"{size} Bytes — das ist keine Versionsdatei"
     assert size <= updates.MAX_ANSWER_BYTES, (
-        f"version.json ist {size} Bytes und damit über der Grenze von "
-        f"{updates.MAX_ANSWER_BYTES}, die der Client liest — jeder Update-Check "
-        f"schlägt ab jetzt still fehl. Was gewachsen ist, steht nicht im "
-        f"Changelog, sonst hätte die Ableitung es mitgezählt."
+        f"die ausgelieferte Datei wiegt {size / 1024:.1f} KB, gelesen werden "
+        f"{updates.MAX_ANSWER_BYTES / 1024:.1f} KB"
     )
