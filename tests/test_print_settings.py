@@ -12,7 +12,7 @@ import json
 import re
 from dataclasses import fields, replace
 from pathlib import Path
-from typing import get_args, get_type_hints
+from typing import Any, Final, get_args, get_type_hints
 
 import pytest
 
@@ -2912,3 +2912,123 @@ def test_what_can_be_opened_can_also_be_found() -> None:
         "die Oberfläche holt die Endungen aus dem Kern, statt sie zu wiederholen"
     )
     assert ".nc" in handover.GCODE_SUFFIXES, "und die längere der beiden Listen gewinnt"
+
+
+#: Feld/Slicer-Paare, bei denen eine Einstellung den Slicer **nicht** erreicht —
+#: und der Grund, warum das richtig ist.
+#:
+#: Gemessen am 27.08.2026 auf Roberts Architekturauftrag zu den Zwillingen. Die
+#: drei Slicer-Familien sind das teuerste Zwillingspaar des Projekts: 24
+#: Verzweigungen über `flavour`, und die Übersetzung lebt an **zwei** Orten —
+#: in `slicer_keys.TABLES` und in den Sonderfällen von `handover` (Haftung,
+#: Stützabstand, Cura-Ableitungen). Eine Lücke in der Tabelle ist deshalb noch
+#: kein Befund; erst die echte Ausgabe sagt es.
+#:
+#: Jeder Eintrag hier ist eine Zusage: *Dieses Feld erreicht diesen Slicer
+#: nicht, und das ist in Ordnung.* Wer einen hinzufügt, schreibt den Grund
+#: dazu — eine Ausnahmeliste ohne Gründe wird zur Halde.
+UNREACHED: Final[dict[tuple[str, str], str]] = {
+    ("shell.wall_generator", "cura"): (
+        "CuraEngine wählt den Wandgenerator nicht über einen Schalter: Arachne "
+        "ist seit 5.0 der einzige Weg, und die Klassik gibt es dort nicht mehr."
+    ),
+    ("shell.precise_outer_wall", "prusa"): (
+        "Die genaue Außenwand ist eine Eigenheit der Orca-Familie; PrusaSlicer "
+        "kennt keinen entsprechenden Schalter."
+    ),
+    ("shell.precise_outer_wall", "cura"): (
+        "Dasselbe für CuraEngine — dort heißt der nächste Verwandte "
+        "``outer_inset_first`` und meint die Reihenfolge, nicht das Maß."
+    ),
+    ("retraction.wipe", "cura"): (
+        "CuraEngine wischt nicht auf Anweisung, sondern über das Einzugsmuster; "
+        "ein eigener Schalter dafür existiert nicht."
+    ),
+    ("filament.density", "cura"): (
+        "Dichte und Preis dienen der Verbrauchsschätzung, und die rechnet "
+        "Solidon selbst aus dem G-Code (§22.5). CuraEngine nimmt sie nicht "
+        "entgegen; sie zum Slicer zu tragen brächte niemandem etwas."
+    ),
+    ("filament.cost_per_kg", "cura"): "Wie die Dichte darüber — Solidon rechnet, nicht der Slicer.",
+}
+
+
+def _read_path(settings: object, path: str) -> object:
+    obj: object = settings
+    for part in path.split("."):
+        obj = getattr(obj, part)
+    return obj
+
+
+def _with_value(settings: Any, path: str, value: object) -> Any:
+    group, _, name = path.partition(".")
+    return replace(settings, **{group: replace(getattr(settings, group), **{name: value})})
+
+
+def _another_value(current: object, choices: tuple[str, ...]) -> object | None:
+    """Ein anderer **gültiger** Wert — bei Auswahlfeldern aus ihren Werten.
+
+    Der erste Anlauf setzte überall dieselbe Zeichenkette, auch in
+    ``infill.pattern`` und ``support.placement``: Die Übersetzung fand den
+    Wert nicht, schrieb nichts, und die Messung meldete zehn taube Felder,
+    die keine waren. Ein Prüfstand, der ungültige Werte einsetzt, misst seine
+    eigene Untauglichkeit.
+    """
+    if choices:
+        other = [entry for entry in choices if entry != current]
+        return other[0] if other else None
+    if isinstance(current, bool):
+        return not current
+    if isinstance(current, (int, float)):
+        return type(current)(current + 1) if current < 90 else type(current)(current - 1)
+    return None
+
+
+def test_every_setting_reaches_every_slicer_or_stands_in_the_list() -> None:
+    """Ein Feld, das der Dialog anbietet, wirkt — oder es steht hier, warum nicht.
+
+    Der Kunde stellt 56 Werte ein und kann keinem ansehen, ob sein Slicer ihn
+    versteht. Bis heute fehlte die Zusicherung dazu ganz: ``support.density``
+    stand nur in der Cura-Tabelle und erreichte PrusaSlicer und die
+    Orca-Familie erst über eine Umrechnung, die jemand von Hand nachgetragen
+    hat — bemerkt hat es niemand, weil nichts danach fragte.
+
+    Gemessen wird an der **echten Ausgabe** (`values_for`), nicht an der
+    Tabelle: Die Übersetzung lebt an zwei Orten, und wer nur die Tabelle liest,
+    meldet sechs Lücken, die längst geschlossen sind. Geändert wird je Feld ein
+    gültiger Wert; ändert sich daraufhin kein einziger Schlüssel dieses
+    Slicers, kommt die Einstellung dort nicht an.
+    """
+    from app.ui.print_settings_dialog import FIELDS
+
+    profile = profiles.make_profile("centauri-carbon-2", "pla")
+    base = print_settings.resolve(profile)
+    unreached: list[tuple[str, str]] = []
+    for field in FIELDS:
+        current = _read_path(base, field.path)
+        value = _another_value(current, field.choices)
+        if value is None or value == current:
+            continue
+        # Haftungsabhängige Felder wirken nur unter ihrer Art — sonst misst
+        # man die Bedingung statt des Feldes.
+        start = base
+        art = {
+            "brim_width": "brim",
+            "raft_layers": "raft",
+            "skirt_loops": "skirt",
+            "skirt_distance": "skirt",
+        }.get(field.path.partition(".")[2] if field.path.startswith("adhesion.") else "")
+        if art:
+            start = _with_value(base, "adhesion.kind", art)
+        changed = _with_value(start, field.path, value)
+        for flavour in ("prusa", "orca", "cura"):
+            if handover.values_for(start, profile, flavour) == handover.values_for(
+                changed, profile, flavour
+            ):
+                unreached.append((field.path, flavour))
+
+    assert unreached, "keine Messung gelaufen — die Grundmenge ist leer"
+    neu = [pair for pair in unreached if pair not in UNREACHED]
+    weg = [pair for pair in UNREACHED if pair not in unreached]
+    assert not neu, "Einstellungen ohne Wirkung und ohne Begründung: " + str(sorted(neu))
+    assert not weg, "steht als unerreichbar in der Liste, wirkt aber: " + str(sorted(weg))
