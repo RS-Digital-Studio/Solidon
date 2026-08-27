@@ -1098,14 +1098,73 @@ def parse_parameter_count(text: str) -> float | None:
 #: allein hilft dabei nicht: Zwischen 5 und 9 GB Download liegt eine
 #: Entscheidung, und ob es Werkzeuge aufruft, ist die eigentliche Frage.
 OLLAMA_SUGGESTIONS: Final = (
-    ("qwen3:14b", 9.3, _("Bewährt: vier von fünf Werkzeugaufrufen. Braucht 16 GB Grafikspeicher.")),
+    (
+        "qwen3:14b",
+        9.3,
+        _(
+            "Bewährt: vier von fünf Werkzeugaufrufen, rund 15 Sekunden je Schritt. "
+            "Belegt 14 GB Grafikspeicher."
+        ),
+    ),
+    (
+        "gpt-oss:20b",
+        13.8,
+        _("Am schnellsten: rund 6 Sekunden je Schritt, trifft drei von fünf."),
+    ),
     ("qwen3:8b", 5.2, _("Kleiner und schneller, trifft seltener. Für kurze Anweisungen.")),
+    (
+        "qwen3:30b-a3b",
+        18.6,
+        _("Trifft wie das 14B, braucht aber die doppelte Zeit und den doppelten Platz."),
+    ),
     (
         "llama3.1:8b",
         4.9,
         _("Zwei von fünf Werkzeugaufrufen — nur, wenn die anderen nicht laufen."),
     ),
+    (
+        "qwen2.5-coder:14b",
+        9.0,
+        _(
+            "Ruft in dieser Messung kein einziges Werkzeug auf — trotz vierzehn "
+            "Milliarden Parametern."
+        ),
+    ),
+    (
+        "mistral-nemo:latest",
+        7.1,
+        _("Ruft keine Werkzeuge auf, sondern schreibt darüber. Für Solidon unbrauchbar."),
+    ),
 )
+
+
+#: Was zu einem installierten Modell danebensteht, wenn es in
+#: :data:`OLLAMA_SUGGESTIONS` bekannt ist.
+#:
+#: **Die Zahl entscheidet die Wahl, und sie stand nur bei den empfohlenen.**
+#: Ein Kunde mit drei installierten Modellen sah drei nackte Namen; dass
+#: ``mistral-nemo`` in dieser Messung null von fünf Aufrufen schaffte, war
+#: nirgends zu lesen. Ein Modell, das die Aufrufe als Fließtext ausgibt, sieht
+#: im Chat aus, als arbeite es — genau deshalb gibt es
+#: ``tools/check_local_model.py``, und genau deshalb gehört sein Ergebnis in
+#: die Auswahl und nicht nur in einen Docstring.
+def known_model_note(name: str) -> TranslatableText | None:
+    """Der Satz zu einem Modellnamen, oder ``None`` für ein unbekanntes.
+
+    Verglichen wird ohne Kennzeichnung: Ollama führt dasselbe Modell als
+    ``mistral-nemo`` und als ``mistral-nemo:latest``, und der Kunde hat es
+    einmal installiert, nicht zweimal.
+    """
+
+    def bare(entry: str) -> str:
+        return entry.removesuffix(":latest")
+
+    wanted = bare(name)
+    for entry, _gigabytes, note in OLLAMA_SUGGESTIONS:
+        if bare(entry) == wanted:
+            return note
+    return None
+
 
 #: Ein Download von mehreren Gigabyte. Die Grenze ist großzügig, weil eine
 #: langsame Leitung sonst mitten im Modell aufgibt.

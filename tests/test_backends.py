@@ -1296,3 +1296,30 @@ def test_the_speed_probe_goes_through_the_endpoint_like_everything_else() -> Non
 
     assert gesehen == ["http://127.0.0.1:11434/api/chat"]
     assert speed.tokens_per_second is not None, "gemessen, weil die Anfrage ankam"
+
+
+def test_an_installed_model_says_what_it_can_do() -> None:
+    """Auch das installierte Modell trägt seinen Satz, nicht nur das empfohlene.
+
+    In der Auswahl standen die installierten Modelle **ohne Zusatz** — „sie
+    sind einen Klick entfernt". Damit sah ein Modell, das Werkzeuge gar nicht
+    aufruft, aus wie ein gutes: Es schreibt die Aufrufe als Fließtext hin, und
+    im Chat sieht das aus, als arbeite es.
+    """
+    assert llm.known_model_note("qwen3:14b") is not None, "das Vorgabemodell ist bekannt"
+    assert llm.known_model_note("mistral-nemo:latest") is not None, "und das unbrauchbare"
+    assert llm.known_model_note("gibt-es-nicht:7b") is None, "ein fremdes bleibt ohne Satz"
+
+
+def test_the_note_does_not_hang_on_the_latest_tag() -> None:
+    """``mistral-nemo`` und ``mistral-nemo:latest`` sind dasselbe Modell.
+
+    Ollama meldet das installierte mit ``:latest``, getippt wird es ohne —
+    und beim ersten Anlauf schnitt der Vergleich den Tag nur an der **Anfrage**
+    ab. Solange der Eintrag ohne Tag dastand, ging das auf; seit er (zu Recht)
+    einen trägt, fand die umgekehrte Richtung nichts mehr.
+    """
+    ohne = llm.known_model_note("mistral-nemo")
+    mit = llm.known_model_note("mistral-nemo:latest")
+    assert ohne is not None and mit is not None
+    assert str(ohne) == str(mit), "derselbe Satz, egal wie der Name geschrieben steht"

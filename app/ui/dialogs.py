@@ -828,7 +828,13 @@ class KeyDialog(QDialog):
         chosen = self._chosen_model() if self.model_field.count() else llm.configured_ollama_model()
         self.model_field.clear()
         for name in here:
-            self.model_field.addItem(name, name)
+            # **Auch das installierte Modell sagt, was es kann.** Hier stand
+            # nur der Name — „sie sind einen Klick entfernt" —, und damit sah
+            # ein unbrauchbares Modell aus wie ein gutes. Wer ``mistral-nemo``
+            # liegen hat, soll lesen, dass es Werkzeuge nicht aufruft, bevor
+            # er einen Zug abwartet, der nichts tut.
+            note = llm.known_model_note(name)
+            self.model_field.addItem(f"{name} — {note}" if note else name, name)
         for name, gigabytes, what in llm.OLLAMA_SUGGESTIONS:
             if name in here:
                 continue
