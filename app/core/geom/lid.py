@@ -22,9 +22,8 @@ from typing import Any, cast
 import trimesh
 
 from app.core.errors import ValidationError
-from app.core.geom.boolean import boolean, deepest
+from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, deepest
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.geom.prepare import BOOLEAN_OVERLAP
 from app.core.knowledge.parts.build import face
 from app.core.knowledge.parts.shapes import RIDGE_END, RIDGE_SHARE, thread_body
 from app.core.knowledge.profiles import for_object

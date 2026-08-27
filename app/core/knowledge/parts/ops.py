@@ -24,9 +24,8 @@ import math
 from typing import Any
 
 from app.core.errors import Action, AppError
-from app.core.geom.boolean import BooleanKind, boolean, without_effect
+from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, boolean, without_effect
 from app.core.geom.mesh import MeshData, as_mesh_data
-from app.core.geom.prepare import BOOLEAN_OVERLAP
 from app.core.geom.transform import rotation, translation
 from app.core.knowledge.parts.registry import PARTS, PartRegistry, PartSpec
 from app.core.log import get_logger
