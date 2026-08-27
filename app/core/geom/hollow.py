@@ -31,6 +31,7 @@ from app.core.log import get_logger
 from app.core.types import (
     CancelToken,
     Finding,
+    Profile,
     ProgressFn,
     Quality,
     SolverInfo,
@@ -214,6 +215,38 @@ def hollow(
         vents=placed,
         findings=findings,
         solver=deepest(stages),
+    )
+
+
+def below_printable_wall(wall: float, profile: Profile) -> Finding | None:
+    """Ist die Wand dünner, als der Drucker sie legen kann?
+
+    **Beide Zwillinge trugen dafür eine Zahl, und beide waren falsch.** Im
+    Schema stand ``minimum=0.4`` am Netz und ``minimum=0.2`` am exakten Kern —
+    Zahlenkonstanten für eine Toleranz, also ein Verstoß gegen Regel 7 in
+    seiner reinsten Form. Aufgefallen ist es an der Abweichung; der eigentliche
+    Fund ist, dass auch die 0,4 nur **zufällig** stimmt, nämlich für eine
+    0,4er Düse. Gemessen am Centauri mit 0,42 mm Bahnbreite sind zwei
+    Extrusionsbreiten **0,84 mm** — die Schemagrenze ließ dort das Doppelte an
+    zu dünner Wand durch, ohne ein Wort.
+
+    Ein Schema-Minimum kann das nicht leisten: Es steht zur Deklarationszeit
+    fest, das Profil kommt erst mit dem Auftrag. Also fragt die Operation, und
+    zwar die Regel selbst (``Profile.minimum_wall_thickness``, §39) statt einer
+    Kopie davon.
+
+    Ein Befund und kein Fehler: Die Geometrie entsteht ja — sie ist nur nicht
+    druckbar, und das ist eine Aussage über den Drucker, nicht über den Körper.
+    Wer denselben Körper auf einer feineren Düse fährt, hat kein Problem.
+    """
+    least = profile.minimum_wall_thickness
+    if wall >= least - EPS_GEOM:
+        return None
+    return Finding(
+        code="hollow.wall_below_nozzle",
+        severity="warning",
+        message=_("Die Wand ist dünner, als der Drucker sie legen kann."),
+        values={"wall_mm": round(wall, 2), "least_mm": round(least, 2)},
     )
 
 

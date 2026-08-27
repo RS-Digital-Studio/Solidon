@@ -29,9 +29,10 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE, without_effect
-from app.core.geom.hollow import too_thin
-from app.core.geom.prepare import Axis, bore_diameter, over_the_edge
+from app.core.geom.hollow import below_printable_wall, too_thin
+from app.core.geom.prepare import bore_diameter, over_the_edge
 from app.core.geom.prepare_ops import DrillParams
+from app.core.geom.transform import Axis
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
 from app.core.units import DEGREE_UNIT, EPS_GEOM, format_length
@@ -330,6 +331,12 @@ def shell_exact(ctx: OpContext) -> OpResult:
     findings: list[Finding] = []
     if abs(solid.volume - body.volume) <= EPS_GEOM or not solid.is_watertight:
         findings.append(too_thin(params.wall))
+    # Dieselbe Frage wie beim Netz-Zwilling, aus derselben Quelle: Trägt der
+    # Drucker diese Wand? Im Schema stand hier ``minimum=0.2`` und dort 0.4 —
+    # zwei Zahlen für eine Regel, die im Profil steht (§39, Regel 7).
+    thin = below_printable_wall(params.wall, ctx.profile)
+    if thin is not None:
+        findings.append(thin)
     return OpResult(outputs=[_replaced(source, solid)], findings=findings)
 
 

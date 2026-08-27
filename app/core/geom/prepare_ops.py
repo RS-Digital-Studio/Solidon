@@ -16,7 +16,7 @@ import trimesh
 
 from app.core.errors import InternalError, ValidationError
 from app.core.geom.boolean import boolean
-from app.core.geom.hollow import VENT_DIAMETER, hollow
+from app.core.geom.hollow import VENT_DIAMETER, below_printable_wall, hollow
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.geom.ops import as_transform
 from app.core.geom.orient import orient_for_print, print_transform
@@ -432,7 +432,14 @@ class HollowParams(BaseParams):
         title=_("Wandstärke"),
         default=2.0,
         unit="mm",
-        minimum=0.4,
+        # **Die Zahl ist eine Rechengrenze, keine Toleranz mehr.** Hier stand
+        # 0,4 mit dem Satz „zwei Extrusionsbreiten sind das Minimum" daneben —
+        # und setzte ihn nicht um: Zwei Extrusionsbreiten sind am Centauri
+        # 0,84 mm, an einer 0,6er Düse 1,2. Die Regel trägt jetzt
+        # ``below_printable_wall`` gegen das Profil (§39, Regel 7); was hier
+        # steht, ist nur noch, was der Kern überhaupt rechnen kann, und dieselbe
+        # Zahl wie beim exakten Zwilling.
+        minimum=0.2,
         maximum=50.0,
         doc=_("Was stehen bleibt. Zwei Extrusionsbreiten sind das Minimum."),
     )
@@ -507,7 +514,15 @@ def hollow_object(ctx: OpContext) -> OpResult:
         # Netz. Verorten kann die Operation, und sie muss es: zwei ausgehöhlte
         # Körper meldeten zweimal denselben Satz, und im Bericht standen zwei
         # Zeilen, die aussahen wie ein Fehler in der Anwendung.
-        findings=[dataclasses.replace(entry, object_id=source.id) for entry in result.findings],
+        findings=[
+            dataclasses.replace(entry, object_id=source.id)
+            # **Die Druckbarkeit fragt das Profil, nicht das Schema.** Hier
+            # stand ``minimum=0.4`` — richtig für eine 0,4er Düse und für jede
+            # andere falsch: Am Centauri sind zwei Extrusionsbreiten 0,84 mm,
+            # die Grenze ließ dort das Doppelte an zu dünner Wand durch.
+            for entry in [*result.findings, below_printable_wall(params.wall, ctx.profile)]
+            if entry is not None
+        ],
     )
 
 
