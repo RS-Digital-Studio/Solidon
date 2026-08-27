@@ -142,8 +142,31 @@ function visitor_mark(string $salt): string
  * ``FILE_APPEND | LOCK_EX`` ist hier genug: Die Zeilen sind kurz, und zwei
  * gleichzeitige Aufrufe schreiben nacheinander statt ineinander.
  */
+/**
+ * Hat der Besucher gesagt, dass er nicht gezählt werden will?
+ *
+ * `site.js` fragt dasselbe im Browser und kehrt still um — aber **nur für
+ * Seitenaufrufe**. Ein Download ist ein blanker Verweis auf diese Datei und
+ * läuft an jedem JavaScript vorbei; gezählt wurde er deshalb immer, auch mit
+ * eingeschaltetem Signal. Die Datenschutzerklärung sagt im selben Absatz
+ * beides zu: dass ein Download über dieselbe Stelle läuft, und dass nicht
+ * gezählt wird, wer das Signal sendet. Eine der beiden Zusagen war unwahr.
+ *
+ * Die Frage steht hier und nicht an den beiden Aufrufstellen, damit ein
+ * dritter Zählweg sie nicht vergessen kann.
+ */
+function opted_out(): bool
+{
+    return ($_SERVER['HTTP_DNT'] ?? '') === '1'
+        || ($_SERVER['HTTP_SEC_GPC'] ?? '') === '1';
+}
+
 function record(string $kind, string $value): void
 {
+    if (opted_out()) {
+        return;  // Der Download läuft trotzdem — nur die Zeile entsteht nicht.
+    }
+
     $dir = store_dir();
     if (!@is_dir($dir)) {
         return;  // Kein Ablageort — dann eben keine Zahl. Ein Zähler hält nie den Betrieb an.

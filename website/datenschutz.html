@@ -88,17 +88,24 @@
 
     <h2>Die Anwendung Solidon3D</h2>
     <p>Solidon3D läuft vollständig lokal und sendet von sich aus keine Daten.
-    Drei Ausnahmen, alle drei unter Kontrolle des Nutzers:</p>
+    Vier Ausnahmen, alle vier unter Kontrolle des Nutzers:</p>
 
     <ul>
       <li><b>Update-Hinweis.</b> Beim Start fragt die Anwendung eine
       Versionsdatei auf dieser Website ab (<code>version.json</code>), um zu
-      erfahren, ob es eine neuere Fassung gibt. Übertragen wird dabei nichts
-      außer der technisch notwendigen Anfrage — kein Kennzeichen, keine
-      Angaben über Ihren Rechner. Gibt es eine neuere Fassung, erscheint ein
+      erfahren, ob es eine neuere Fassung gibt. Die Anfrage nennt dabei den
+      Programmnamen und die installierte Versionsnummer — mehr nicht: keine
+      Kennung, die Sie wiedererkennbar macht, und keine Angaben über Ihren
+      Rechner. Gibt es eine neuere Fassung, erscheint ein
       Hinweis; <b>geladen und installiert wird sie erst, wenn Sie es
       ausdrücklich bestätigen</b>. Abschaltbar unter „Bearbeiten →
       Einstellungen“.</li>
+      <li><b>Ein Modell aus dem Netz holen.</b> Wer einen Verweis auf eine
+      Modelldatei in das Fenster zieht — etwa von MakerWorld, Printables oder
+      Thingiverse —, lädt sie unmittelbar von dort. Der angefragte Server
+      erfährt dabei Ihre IP-Adresse und den Programmnamen, so wie er es bei
+      einem Aufruf über den Browser täte. Über uns läuft das nicht, und wir
+      erfahren davon nichts.</li>
       <li><b>KI-Chat mit eigenem Schlüssel.</b> Wer den Chat mit einem
       API-Schlüssel eines KI-Anbieters nutzt, sendet seine Chat-Eingaben an
       diesen Anbieter — nach dessen Datenschutzbestimmungen. Mit einem
@@ -107,8 +114,10 @@
       <li><b>Rückmeldung an den Support.</b> Über <i>Hilfe → Rückmeldung
       senden</i> lässt sich ein Vorschlag, ein Fehler oder eine Frage direkt
       aus der Anwendung an <a href="mailto:support@solidon3d.de">support@solidon3d.de</a>
-      schicken. Das geschieht ausschließlich auf Knopfdruck und nie von
-      selbst.</li>
+      schicken. Denselben Weg nimmt der kurze Fragebogen, den Solidon3D
+      während der Demo einmal anbietet — angeboten wird er von selbst,
+      gesendet wird er nur, wenn Sie ihn ausfüllen und abschicken. Beides
+      geschieht ausschließlich auf Knopfdruck und nie von selbst.</li>
     </ul>
 
     <p><b>Was bei einer Rückmeldung übertragen wird.</b> Immer: der
