@@ -10402,10 +10402,32 @@ Operation verweist. Vier Dinge sind bewusst liegen geblieben:
   nur geprüft zu werden. Bei einer Handvoll Rezepte unmessbar; wer die rote
   Startmarke (§31) angeht, nimmt diesen Posten mit.
 
-- [ ] **Kleinreste ohne Dringlichkeit.** Drei weitere unerreichbare
-  `ctx.profile is None`-Zweige (`create_lid`, `screw_lid`,
-  `compensate_first_layer` — sie werfen nur) und das seit je unbenutzte
-  `height` in `primitive_ops._object`.
+- [ ] **Kleinreste ohne Dringlichkeit.** Das seit je unbenutzte `height` in
+  `primitive_ops._object`.
+
+  **Die drei `ctx.profile is None`-Zweige, die hier standen, sind geprüft und
+  richtig** (27.08.2026) — sie bleiben, und zwar mit zwei verschiedenen
+  Fehlerklassen, was Absicht ist:
+
+  - `create_lid` und `screw_lid` werfen einen `ValidationError` mit
+    übersetztem Hinweis („Ohne Profil muss das Spiel angegeben werden"). Das
+    ist richtig, weil es einen Parameter gibt, den der Nutzer setzen kann:
+    `clearance` wird nur dann aus dem Profil geholt, wenn er leer ist.
+  - `compensate_first_layer` wirft einen `InternalError` mit englischer Notiz.
+    Auch das ist richtig, und zwar aus dem umgekehrten Grund: Das Profil geht
+    an `for_object(...)` und wird **immer** gebraucht, nicht nur ersatzweise.
+    Ein gesetzter `amount` hilft nicht. Der Zustand kann im Produkt nicht
+    eintreten — `scene.evaluate` verlangt `profile: Profile` ohne `None`, und
+    weder Oberfläche noch Kommandozeile rufen anders. Er entsteht nur im
+    Testharness (`tests/test_sketch_ops.py` baut den `OpContext` mit
+    `profile=None`), und für „das hätte nicht passieren dürfen" ist
+    `InternalError` die vorgesehene Klasse.
+
+  Der Anlass, das nachzumessen, war 27s Fund am selben Tag: `shell_exact`
+  bekam über denselben Harness ein `profile=None` und stolperte darüber. Die
+  Frage „darf ein Kontext ohne Profil überhaupt vorkommen" hat dort eine
+  andere Antwort als hier, und der Unterschied ist, ob die Operation das
+  Profil **ersatzweise** liest oder **immer** braucht.
 
 
 ## Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026)
