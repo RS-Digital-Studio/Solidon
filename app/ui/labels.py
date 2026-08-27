@@ -794,6 +794,7 @@ _VALUE_NAMES: dict[str, TranslatableText] = {
     "now": _("Jetzt"),
     "nozzle": _("Düse"),
     "object": _("Objekt"),
+    "objects": _("Objekte"),
     "op": _("Operation"),
     "open_edges": _("Offene Kanten"),
     "operation": _("Operation"),
@@ -1206,7 +1207,25 @@ def feature_name(feature_id: FeatureId, feature: Feature) -> str:
         return tr("Hohlkehle") if feature.params.get("recess") else tr("Verrundung")
     if feature.kind == "edge_loop":
         return tr("Offene Kante")
-    return feature_id
+    # **Und dieselbe Falle noch zweimal**, gefunden am 27.08.2026: Der
+    # Kommentar über der Verrundung beschreibt sie, aber wer sie dort
+    # schloss, hat die Zwillinge nicht gesucht. Im Objektbaum stand
+    # „thread_1" und „pin_1" — englische Kennungen in der Oberfläche,
+    # an ``tr()`` vorbei. Die Begriffe sind nicht neu erfunden, sondern
+    # aus dem Steckbrief übernommen (``perceive/digest.py``), der beide
+    # längst richtig benennt; zwei Namen für dieselbe Sache wären
+    # schlimmer als einer auf Englisch.
+    if feature.kind == "thread":
+        return tr("Innengewinde") if feature.params.get("internal") else tr("Außengewinde")
+    if feature.kind == "pin":
+        return tr("Zapfen")
+    # Seit alle neun Arten einen Namen haben, hält mypy diese Zeile für
+    # unerreichbar — und hat für den deklarierten Typ recht. Sie bleibt
+    # trotzdem: ``kind`` kommt aus einer Projektdatei, und eine ältere
+    # oder neuere Fassung kann eine Art tragen, die dieser Bestand nicht
+    # kennt. Dann ist die Kennung hässlich, aber besser als ein Absturz
+    # beim Öffnen.
+    return feature_id  # type: ignore[unreachable]
 
 
 def feature_measure(feature: Feature) -> str:

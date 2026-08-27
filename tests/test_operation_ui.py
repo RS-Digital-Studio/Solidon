@@ -1850,3 +1850,44 @@ def test_a_required_feature_offers_no_empty_choice(qt_app: QApplication) -> None
     ]
     assert len(optional) > 20, "die Ausnahme sind die drei, nicht die Regel"
     assert "insert_screw_hole" in optional, "ein Baustein ohne Merkmal geht an den Ursprung"
+
+
+def test_every_feature_kind_has_a_name_in_the_tree(qt_app: QApplication) -> None:
+    """Keine Merkmalsart darf im Baum ihre Kennung zeigen.
+
+    Der Fall ist dreimal aufgetreten und zweimal halb behoben worden: Erst
+    stand „face_2" im Objektbaum, dann „fillet_1", und am 27.08.2026 fanden
+    sich „thread_1" und „pin_1" — englische Kennungen in der Oberfläche, an
+    ``tr()`` vorbei. Der Kommentar über der Verrundung beschreibt die Falle
+    genau, aber wer sie dort schloss, hat die Zwillinge nicht gesucht.
+
+    **Deshalb prüft dieser Test die Art, nicht die Fälle.** Er zählt über
+    ``FeatureKind``; kommt eine Art dazu und niemand gibt ihr einen Namen,
+    fällt er, statt dass es ein Kunde im Baum liest. Genau das konnten die
+    bisherigen Tests nicht: Sie fragen, *ob* ein Merkmal da ist, nicht, *was*
+    dort steht.
+    """
+    import typing
+
+    from app.core.types import Feature, FeatureKind
+    from app.ui.labels import feature_name
+
+    arten = typing.get_args(FeatureKind)
+    assert len(arten) >= 9, "sonst prüft dieser Test nichts"
+
+    ohne_namen = []
+    for art in arten:
+        merkmal = Feature(
+            id=f"{art}_1",
+            kind=art,
+            provenance="detected",
+            params={"diameter": 8.0, "pitch": 1.25, "radius": 2.0},
+        )
+        name = feature_name(merkmal.id, merkmal)
+        # Die Kennung selbst ist die Rückfallebene — und genau das Versagen.
+        if name == merkmal.id or art in name:
+            ohne_namen.append(art)
+
+    assert not ohne_namen, "diese Arten zeigen im Baum ihre englische Kennung: " + ", ".join(
+        ohne_namen
+    )
