@@ -3782,3 +3782,101 @@ def test_a_camera_move_redraws_the_grid_in_the_scene(qt_app: QApplication) -> No
         window.close()
         window.deleteLater()
         qt_app.processEvents()
+
+
+def test_an_empty_sketch_still_changes_its_plane(qt_app: QApplication) -> None:
+    """Vor dem ersten Strich legt die Wahl die Ebene fest — wie in jedem CAD.
+
+    Das ist die Hälfte, die immer richtig war, und sie muss bleiben: Wer die
+    Ebene wählt, bevor er zeichnet, sagt damit, wo die Skizze liegen soll.
+    """
+    canvas = SketchCanvas()
+    assert not canvas.sketch.elements, "der Test setzt eine leere Skizze voraus"
+
+    canvas.set_plane("plane:yz")
+
+    assert canvas.sketch.plane == "plane:yz", "die leere Skizze zieht um"
+    assert canvas.view_plane == "plane:yz", "und die Kamera sieht dorthin"
+    assert canvas.view_note() == "", "beide sind dasselbe — nichts zu erklären"
+
+
+def test_a_drawn_sketch_stays_where_it_was_drawn(qt_app: QApplication) -> None:
+    """Der erste Strich nagelt die Ebene fest; danach dreht die Wahl die Ansicht.
+
+    **Robert hat es zweimal gemeldet** — am 24.08.2026 („bei draufsicht,
+    seitenansicht usw sieht man auch keinen unterschied") und am 27.08. wieder,
+    mit zwölf Kreisen, die in allen drei Ansichten an derselben
+    Bildschirmstelle standen.
+
+    Der Grund war nicht die Kamera, die schwenkt seit P4. Es war die Zeichnung:
+    Die 2D-Zahlen blieben, der Ort im Raum wanderte mit der Ebene — ein Punkt
+    bei (10 | 5) liegt in der Draufsicht bei (10, 5, 0) und in der
+    Vorderansicht bei (10, 0, 5). Weil die Kamera mitging, sah jede Ansicht
+    gleich aus, und die Frage „wo liegt das im Raum" blieb unbeantwortbar.
+    """
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+    assert canvas.sketch.plane == "plane:xy", "gezeichnet wird auf der Vorgabe"
+
+    canvas.set_plane("plane:yz")
+
+    assert canvas.sketch.plane == "plane:xy", "die Zeichnung bleibt, wo sie liegt"
+    assert canvas.view_plane == "plane:yz", "nur die Blickrichtung wechselt"
+    assert canvas.view_note(), "und ein Satz sagt, warum man jetzt die Kante sieht"
+
+
+def test_the_note_names_both_the_view_and_the_plane(qt_app: QApplication) -> None:
+    """Der Satz muss beide Seiten nennen, sonst erklärt er nichts.
+
+    „Sie sehen die Zeichnung von der Seite" allein ließe offen, wo weiter
+    gezeichnet wird — und genau das ist die Frage, die als Nächstes kommt.
+    """
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+    canvas.set_plane("plane:yz")
+
+    note = canvas.view_note()
+    assert "Seite" in note, f"die Blickrichtung fehlt: {note}"
+    assert "Draufsicht" in note, f"die Zeichenebene fehlt: {note}"
+
+
+def test_turning_the_view_writes_no_step(qt_app: QApplication) -> None:
+    """Drehen ist kein Bearbeiten — der Verlauf bleibt, wie er ist.
+
+    Zwei getrennte Signale, weil es zwei Sachen sind. Wer die Blickrichtung
+    über ``sketchChanged`` meldete, schriebe bei jedem Drehen einen Schritt
+    ins Dokument.
+    """
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+    before = canvas.sketch
+
+    changes: list[int] = []
+    views: list[str] = []
+    canvas.sketchChanged.connect(lambda: changes.append(1))
+    canvas.viewPlaneChanged.connect(views.append)
+    canvas.set_plane("plane:xz")
+
+    assert canvas.sketch is before, "die Skizze selbst ist unberührt"
+    assert changes == [], "kein Dokumentwechsel für einen Blickwechsel"
+    assert views == ["plane:xz"], f"aber die Ansicht meldet sich: {views}"
+
+
+def test_the_note_reaches_the_label_beside_the_plane_field(qt_app: QApplication) -> None:
+    """Gesetzt heißt nicht gezeigt — der Satz muss im Fenster stehen.
+
+    Ein Rückgabewert, den niemand anzeigt, ist so still wie kein Satz. Geprüft
+    wird deshalb am Beschriftungsfeld neben der Ebenenwahl, und über den Weg,
+    den auch der Nutzer nimmt: die Wahl im Feld, nicht die Methode dahinter.
+    """
+    panel = SketchPanel()
+    panel.canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+    before = panel.layer_note.text()
+
+    assert panel.choose_plane("plane:yz"), "die Grundebene steht immer zur Wahl"
+
+    after = panel.layer_note.text()
+    assert after != before, "der Satz neben der Ebenenwahl hat sich nicht gerührt"
+    assert "Seitenansicht" in after, f"die Blickrichtung fehlt: {after}"
+    assert "Draufsicht" in after, f"die Zeichenebene fehlt: {after}"
+    assert panel.canvas.sketch.plane == "plane:xy", "und gezeichnet wird weiter dort"

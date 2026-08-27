@@ -471,6 +471,13 @@ class SketchCanvas(QWidget):
 
     sketchChanged = Signal()
     selectionChanged = Signal()
+    viewPlaneChanged = Signal(str)
+    """Die Blickrichtung hat gewechselt, die Zeichenebene nicht.
+
+    Zwei getrennte Nachrichten, weil es zwei Sachen sind: ``sketchChanged``
+    heißt „das Dokument ist ein anderes", das hier heißt „dieselbe Zeichnung,
+    von woanders gesehen". Wer beides über ein Signal schickt, schreibt bei
+    jedem Drehen einen Schritt in den Verlauf."""
     viewFitted = Signal(float, float, float, float)
     """Mitte und Spannweite der Einpassung, in Millimetern der Zeichenebene.
 
@@ -501,6 +508,12 @@ class SketchCanvas(QWidget):
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
         self._params = dict(parameter_values or {})
         self.sketch: Sketch = EMPTY
+        self._view_plane: str = ""
+        """Wohin die Kamera sieht — leer heißt „auf die Zeichenebene".
+
+        Getrennt von ``sketch.plane``, seit der erste Strich die Ebene
+        festnagelt: Danach dreht der Wähler nur noch die Ansicht, damit man
+        sieht, **wo** die Zeichnung im Raum liegt (:meth:`set_plane`)."""
         self.solved: SolvedSketch | None = None
         self.conflict: str = ""
         self.outline: bool = False
@@ -802,14 +815,63 @@ class SketchCanvas(QWidget):
         self._apply(current)
 
     def set_plane(self, plane: str) -> None:
-        """Auf welcher Ebene die Skizze liegt (§30.1).
+        """Auf welcher Ebene die Skizze liegt — solange sie leer ist (§30.1).
 
-        Sie entscheidet, wohin extrudiert wird — nicht, wie gezeichnet wird:
-        die Zeichenfläche bleibt eine Fläche, und die zwei Achsen darauf
-        heißen je nach Ebene anders. Das steht in der Beschriftung, nicht in
-        einer gedrehten Ansicht.
+        **Der erste Strich nagelt die Ebene fest, danach dreht die Wahl nur
+        noch die Ansicht.** Vorher wechselte sie immer die Ebene, und das ist
+        an einer Zeichnung, die schon steht, etwas ganz anderes als an einer
+        leeren: Die 2D-Zahlen bleiben, der Ort im Raum wandert. Ein Punkt bei
+        (10 | 5) liegt in der Draufsicht bei (10, 5, 0) und in der
+        Vorderansicht bei (10, 0, 5) — die ganze Zeichnung kippt mit.
+
+        Weil die Kamera dabei mitschwenkt, sah **jede** Ansicht gleich aus,
+        und genau das hat Robert zweimal gemeldet: am 24.08.2026 („bei
+        draufsicht, seitenansicht usw sieht man auch keinen unterschied") und
+        am 27.08. wieder, mit zwölf Kreisen, die in allen drei Ansichten an
+        derselben Bildschirmstelle standen.
+
+        Wer eine Ebene wählt, **bevor** er zeichnet, legt sie fest — das ist
+        der Weg, den jedes CAD kennt. Wer danach eine andere wählt, will
+        sehen, wo seine Zeichnung im Raum liegt; ihm die Zeichnung
+        mitzudrehen beantwortet genau die Frage nicht, die er gestellt hat.
+
+        Die Zeichenfläche bleibt dabei die Ebene der Skizze: Ein Klick landet
+        weiter dort, wo gezeichnet wird, nicht dort, wo man hinsieht.
         """
+        if self.sketch.elements:
+            self.set_view_plane(plane)
+            return
+        self._view_plane = plane
         self._apply(replace(self.sketch, plane=plane))
+
+    def set_view_plane(self, plane: str) -> None:
+        """Nur die Blickrichtung — die Zeichnung bleibt, wo sie liegt."""
+        if plane == self._view_plane:
+            return
+        self._view_plane = plane
+        self.viewPlaneChanged.emit(plane)
+        self.statusChanged.emit(self.view_note())
+
+    @property
+    def view_plane(self) -> str:
+        """Wohin die Kamera sieht. Gleich der Zeichenebene, bis jemand sie
+        beim Zeichnen wechselt."""
+        return self._view_plane or self.sketch.plane
+
+    def view_note(self) -> str:
+        """Der Satz für die Zeile, wenn Blick und Zeichenebene auseinandergehen.
+
+        Ohne ihn wäre der Wechsel eine stille Überraschung: Die Zeichnung
+        bliebe liegen, und niemand sagte, warum sie plötzlich von der Kante zu
+        sehen ist.
+        """
+        if self.view_plane == self.sketch.plane:
+            return ""
+        return str(
+            tr(
+                "Sie sehen die Zeichnung aus der {view}. Gezeichnet wird weiter auf der {plane}."
+            ).format(view=plane_where(self.view_plane), plane=plane_where(self.sketch.plane))
+        )
 
     def outside_bed(self) -> bool:
         """Ob die Skizze über den Bauraum hinausragt.
@@ -2722,6 +2784,37 @@ VIEWPORT_LIST_HEIGHT = 96
 #: breit wie den längsten Eintrag, und das waren gemessene 612 Bildpunkte.
 PLANE_FIELD_CHARS = 20
 
+
+def plane_choices() -> tuple[tuple[str, str], ...]:
+    """Die drei Grundebenen, wie sie im Feld stehen.
+
+    Benannt nach dem, was man sieht — die Ebene steht in Klammern daneben und
+    ist die Angabe, die in der Projektdatei landet.
+    """
+    return (
+        ("plane:xy", tr("Draufsicht (XY) — liegend")),
+        ("plane:xz", tr("Vorderansicht (XZ) — stehend, von vorn")),
+        ("plane:yz", tr("Seitenansicht (YZ) — stehend, von der Seite")),
+    )
+
+
+def plane_where(plane: str) -> str:
+    """Der Name einer Ebene für einen Satz mitten im Text: „Draufsicht (XY)".
+
+    Ohne den Zusatz hinter dem Gedankenstrich — „Sie sehen die Zeichnung aus
+    der Draufsicht (XY) — liegend" ist kein Satz. Eine angeklickte Fläche hat
+    keinen der drei Namen und heißt dann so, wie sie ist.
+
+    **Kurze Richtungswörter wären hier falsch gewesen.** Der erste Entwurf
+    nahm „oben", „vorn" und „der Seite" — und die ersten zwei stehen längst im
+    Katalog, für die Bezugspunkte einer Operation. Ein neuer Text, der einen
+    vergebenen Schlüssel mitbenutzt, kapert dessen Übersetzung still: Wer
+    „vorn" eines Tages dort anders übersetzt, ändert unbemerkt diesen Satz mit.
+    """
+    full = dict(plane_choices()).get(plane, "")
+    return str(full).split(" — ")[0] if full else str(tr("der gewählten Fläche"))
+
+
 #: Wie breit ein Zahlenfeld der Werkzeugzeile höchstens wird.
 #:
 #: Ihr Bereich reicht bis ±1000 beziehungsweise 10 000, und danach rechnet Qt
@@ -2922,11 +3015,7 @@ class SketchPanel(QWidget):
         # vor der Zeichenfläche hat: sehe ich das Teil von oben oder von der
         # Seite? Die Ebene steht in Klammern daneben — sie ist die Angabe, die
         # in der Projektdatei landet.
-        for value, label in (
-            ("plane:xy", tr("Draufsicht (XY) — liegend")),
-            ("plane:xz", tr("Vorderansicht (XZ) — stehend, von vorn")),
-            ("plane:yz", tr("Seitenansicht (YZ) — stehend, von der Seite")),
-        ):
+        for value, label in plane_choices():
             key = PLANE_KEYS.get(value, "")
             self.plane_choice.addItem(f"{label}  ({key})" if key else str(label), userData=value)
         self.plane_choice.setToolTip(
@@ -2962,6 +3051,9 @@ class SketchPanel(QWidget):
         note_font.setItalic(True)
         self.layer_note.setFont(note_font)
         self.canvas.sketchChanged.connect(self._show_layer_note)
+        # Auch ein Blickwechsel ändert den Satz — er ist kein Dokumentwechsel
+        # und kommt deshalb über sein eigenes Signal.
+        self.canvas.viewPlaneChanged.connect(self._show_layer_note)
         plane_row.addWidget(self.layer_note, stretch=1)
 
         # Der Rasterfang, an derselben Zeile wie die Ebene: beides entscheidet
@@ -3530,8 +3622,16 @@ class SketchPanel(QWidget):
         self.canvas.set_plane(str(self.plane_choice.currentData()))
 
     def _show_layer_note(self) -> None:
-        """Der Satz über der Zeichenfläche, wenn sich die Skizze geändert hat."""
-        self.layer_note.setText(self.canvas.layer_note())
+        """Der Satz neben der Ebenenwahl.
+
+        **Zwei Sätze, und der überraschendere steht vorn.** Wie die Schichten
+        liegen, gilt der Zeichenebene und ändert sich selten; dass man gerade
+        von woanders hersieht, ist die Auskunft, nach der jemand in dem
+        Augenblick sucht, in dem seine Zeichnung plötzlich als Kante dasteht.
+        """
+        view = self.canvas.view_note()
+        layers = self.canvas.layer_note()
+        self.layer_note.setText(f"{view} {layers}".strip() if view else str(layers))
 
     def _offset_selected(self) -> None:
         """Das Gewählte um den eingestellten Abstand versetzen.

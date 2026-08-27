@@ -4647,8 +4647,11 @@ class MainWindow(QMainWindow):
         """
         frame = self._sketch_frame()
         self.viewport.set_sketching(frame)
-        if frame is not None:
-            self.viewport.view_on_plane(frame)
+        # Gezeichnet wird auf ``frame``, gesehen auf ``_view_frame`` — solange
+        # die Skizze leer ist, sind beide dasselbe.
+        looking = self._view_frame()
+        if looking is not None:
+            self.viewport.view_on_plane(looking)
         self._update_sketch_hint()
         self._redraw_sketch()
 
@@ -4727,6 +4730,19 @@ class MainWindow(QMainWindow):
         if panel is None:
             return None
         return self._plane_frame(panel.canvas.sketch.plane)
+
+    def _view_frame(self) -> PlaneFrame | None:
+        """Der Rahmen, auf den die Kamera sieht.
+
+        **Nicht dasselbe wie der oben, sobald etwas gezeichnet ist.** Wer
+        danach die Ebene wechselt, will sehen, wo seine Zeichnung im Raum
+        liegt — sie bleibt liegen, die Kamera geht woandershin. Ein Klick
+        landet weiter auf der Zeichenebene, denn dort wird gezeichnet.
+        """
+        panel = self._sketch_panel
+        if panel is None:
+            return None
+        return self._plane_frame(panel.canvas.view_plane)
 
     def _fit_sketch_view(self, x: float, y: float, span_x: float, span_y: float) -> None:
         """*Einpassen* im Skizzenmodus — die Ansicht folgt der Zeichenfläche.
