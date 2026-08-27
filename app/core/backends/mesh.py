@@ -306,6 +306,30 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
         raise GenerationFailed(
             detail=f"{error.code}: {error.read().decode('utf-8', errors='replace')[:300]}"
         ) from error
+    except ConnectionError as error:
+        # **Der Abbruch mitten in der Antwort**, und deshalb vor dem Fall
+        # darunter: urllib wickelt einen Verbindungsfehler beim
+        # *Aufbau* in ``URLError``, beim **Lesen** nicht — dort kommt
+        # ``ConnectionResetError`` nackt durch und wäre ein
+        # ``InternalError`` geworden: „Im Programm ist ein unerwarteter
+        # Fehler aufgetreten." Genau so traf es am 26.08.2026 einen
+        # Kunden beim Sprachmodell (S-20260826-1db075); hier ist
+        # derselbe Fehler an derselben Art von Stelle.
+        #
+        # Der Unterschied zum Satz darunter ist für den Kunden echt:
+        # Dort hat ComfyUI **nie angefangen**, hier hat es angefangen
+        # und mittendrin aufgelegt — typisch, wenn ein Modell den
+        # Speicher sprengt. „Läuft es?" wäre dann die falsche Frage.
+        raise GenerationFailed(
+            title=_("Die Mesh-Erzeugung wurde unterbrochen."),
+            detail=_(
+                "ComfyUI hat die Verbindung mitten in der Antwort beendet. "
+                "Meist fehlt Arbeitsspeicher: ein kleineres Modell wählen "
+                "oder das Bild verkleinern. Sein Protokoll nennt den Grund."
+            ),
+            values={"url": _origin(url), "reason": str(error)},
+            suggestions=(CANCEL,),
+        ) from error
     except urllib.error.URLError as error:
         # Hier endet der häufigste Fall überhaupt: ComfyUI läuft nicht mehr.
         # Ohne eigenen Satz stünde davon „[WinError 10061] Es konnte keine

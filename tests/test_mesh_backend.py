@@ -1728,3 +1728,35 @@ def test_the_node_check_can_be_cancelled_too(monkeypatch: pytest.MonkeyPatch) ->
     comfy_setup.nodes_load(Path("comfy"), Path("python"), Path("nodes"), cancelled=merker)
 
     assert gesehen == [merker]
+
+
+def test_a_dropped_connection_is_not_a_program_fault(monkeypatch: pytest.MonkeyPatch) -> None:
+    """ComfyUI legt mitten in der Antwort auf — und Solidon sagt, was hilft.
+
+    **Der Zwilling eines Kundenfehlers vom 26.08.2026** (S-20260826-1db075):
+    Dort war es Ollama, hier ist es ComfyUI, und die Lücke ist dieselbe.
+    ``fetch`` fing ``HTTPError``, ``URLError`` und kaputte Adressen; urllib
+    wickelt einen Verbindungsfehler beim **Aufbau** in ``URLError``, beim
+    **Lesen der Antwort** nicht. Dort kam ``ConnectionResetError`` nackt durch
+    und wurde zu „Im Programm ist ein unerwarteter Fehler aufgetreten."
+
+    Der eigene Satz lohnt sich, weil der Kunde etwas anderes tun muss als bei
+    „ComfyUI läuft nicht": Hier hat es angefangen und mittendrin aufgelegt —
+    meist, weil ein Modell den Speicher sprengt. „Läuft es?" wäre die falsche
+    Frage.
+    """
+    from app.core.backends import mesh
+
+    def abgerissen(request: object, timeout: float = 0.0) -> object:
+        raise ConnectionResetError(10054, "An existing connection was forcibly closed")
+
+    monkeypatch.setattr(mesh.urllib.request, "urlopen", abgerissen)
+
+    with pytest.raises(GenerationFailed) as gefangen:
+        mesh.fetch("http://127.0.0.1:8188/prompt", b"{}")
+
+    satz = str(gefangen.value.title)
+    assert "unerwartet" not in satz.lower(), "kein Programmfehler, sondern ein Fremdprogramm"
+    assert "unterbrochen" in satz.lower(), "und der Satz nennt, was geschah"
+    # Regel 17: nie ohne Weg. Der Grund steht daneben, nicht im Satz.
+    assert str(gefangen.value.detail)
