@@ -1375,3 +1375,44 @@ def test_two_rings_above_each_other_stay_two() -> None:
 
     assert len(found) == 2
     assert sorted(round(float(entry.params["centre"][2])) for entry in found) == [0, 8]
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    [("plate_holes.stl", 10), ("post_with_fillet.stl", 9), ("torus_ring.stl", 1)],
+)
+def test_detection_sees_the_same_part_whether_it_arrives_welded_or_not(
+    name: str, expected: int
+) -> None:
+    """Dieselbe Datei, zweimal geladen, muss dieselbe Auskunft geben.
+
+    Der Zwilling des Fundes vom 26.08.2026: ``detect_edge_loops`` fragte die
+    **gespeicherte** Topologie statt der geometrischen und meldete an einer
+    ungeschweißten STL eine offene Stelle je Dreieck. Das ist behoben — die
+    übrigen ``detect_*`` fragten weiter dasselbe Falsche, und dort fällt es
+    nicht als Übermaß auf, sondern als **Schweigen**: Roh geladen kam aus
+    ``detect`` gar nichts zurück, obwohl dieselbe Datei verschweißt zehn, neun
+    und ein Merkmal liefert.
+
+    Ein Übermaß sieht jeder, ein Schweigen niemand — der Kunde liest „keine
+    Merkmale erkannt" und hält es für eine Eigenschaft seines Teils. Und er hat
+    keine Möglichkeit, es zu bemerken: Ob eine Datei mit gemeinsamen Ecken
+    ankommt, entscheidet das Format, nicht er. ``generate.into_project`` lädt
+    aus gutem Grund ungeschweißt, also trifft es ausgerechnet Weg 3.
+
+    Geprüft wird auf **Gleichheit beider Wege** und nicht auf eine feste Zahl:
+    Was die Erkennung findet, darf sich mit ihr weiterentwickeln — dass die
+    Antwort vom Dateiformat abhängt, darf nie wieder passieren.
+    """
+    path = MESHES / name
+    welded = MeshData.of(trimesh.load(path, process=True, force="mesh"))
+    unwelded = MeshData.of(trimesh.load(path, process=False, force="mesh"))
+
+    from_welded = detect(welded)
+    from_unwelded = detect(unwelded)
+
+    assert len(from_welded) == expected, f"der verschweißte Weg ist der Bezug: {name}"
+    assert len(from_unwelded) == len(from_welded), (
+        f"{name}: roh {len(from_unwelded)} Merkmale, verschweißt {len(from_welded)} — "
+        "die Auskunft hängt am Dateiformat"
+    )

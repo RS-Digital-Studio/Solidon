@@ -26,6 +26,7 @@ import numpy as np
 import trimesh
 
 from app.core.geom.mesh import MeshData, face_components
+from app.core.geom.repair import merge_vertices
 from app.core.log import get_logger
 from app.core.types import Feature, FeatureId, Vec3
 from app.core.units import EPS_GEOM, weld_digits, weld_tolerance
@@ -356,6 +357,43 @@ DETECTABLE_KINDS: frozenset[str] = frozenset(
 )
 
 
+def _one_body(mesh: MeshData) -> MeshData:
+    """Dasselbe Teil, gefragt nach seiner Geometrie statt nach seiner Speicherform.
+
+    **Der Zwilling des Fundes vom 26.08.2026.** Eine STL kennt keine
+    gemeinsamen Ecken: Sie schreibt jedes Dreieck mit seinen eigenen drei
+    Punkten hin. Ungeschweißt geladen — ``generate.into_project`` tut das für
+    jedes erzeugte Modell — hat ein solches Netz **null** Nachbarschaften und
+    **null** Facetten, gemessen an ``plate_holes.stl``: 796 Dreiecke, 2 388
+    Ecken, 0 Nachbarschaften. Verschweißt sind es 392 Ecken und 1 194
+    Nachbarschaften.
+
+    Darauf baut jede Erkennung auf. ``detect_edge_loops`` hat den Fall für sich
+    gelöst und meldete danach die wahren sechs offenen Stellen statt 3 372; die
+    übrigen ``detect_*`` fragten weiter dasselbe Falsche — und dort fällt es
+    nicht als Übermaß auf, sondern als **Schweigen**: null Merkmale statt zehn,
+    neun und einem. Ein Übermaß sieht jeder, ein Schweigen niemand.
+
+    Zusammengelegt wird nur **rechnerisch**: Das Netz im Dokument bleibt, wie
+    es der Kunde geladen hat, und die Dreiecke behalten ihren Platz — daran
+    hängen die Merkmalsnummern (§21.3), und ein Merkmal, das nach dem Laden
+    anders heißt, zeigt ins Leere. Gemessen an ``plate_holes.stl``: 1 996 Ecken
+    zusammengelegt, 796 Dreiecke vorher wie nachher, alle an derselben Stelle.
+
+    Über dieselbe Toleranz wie ``repair.merge_vertices`` und
+    ``detect_edge_loops`` (``weld_tolerance`` an der Modelldiagonale) — zwei
+    Antworten auf „ist das dieselbe Ecke" wären zwei Topologien desselben
+    Körpers.
+
+    Was es kostet, ist die Frage danach: An einem bereits zusammengeführten
+    Netz mit 81 920 Dreiecken **19 ms**. Der Aufruf steht deshalb ohne
+    Bedingung — eine Abkürzung, die vorher prüft, ob sie nötig ist, prüft
+    dasselbe.
+    """
+    welded, gone = merge_vertices(mesh)
+    return welded if gone else mesh
+
+
 def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     """Alles, was dieses Modul erkennen kann, mit stabilen Namen.
 
@@ -374,6 +412,10 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     # kalt 210 ms braucht — ``trimesh`` legt Nachbarschaften und Facetten am
     # Körper ab, der zweite Durchgang fand sie also schon vor. Wer hier die
     # kalte Zahl verdoppelt, verspricht das Doppelte des Erreichbaren.
+    # **Erst das Teil, dann die Suche.** Ohne diese Zeile sieht alles
+    # Folgende an einer ungeschweißten Datei null Nachbarschaften und
+    # findet nichts — siehe :func:`_one_body`.
+    mesh = _one_body(mesh)
     fitted = _fitted(mesh)
     found: dict[FeatureId, Feature] = {}
     for feature in [
