@@ -1344,7 +1344,16 @@ class OperationDialog(QDialog):
             # Parameters versprach das Anklicken im Fenster; das Feld daneben
             # war leer und blieb es.
             combo = QComboBox(self)
-            combo.addItem(tr("— keines —"), "")
+            # Der leere Eintrag nur, wo leer auch gilt. Bei einer
+            # Operation, die ohne Merkmal ablehnt, stand er vorne und war
+            # damit **vorausgewählt**: Der Kunde las „— keines —" als „das
+            # ganze Teil", klickte Übernehmen und bekam „Zum Färben gehört
+            # eine Fläche." — eine Vorauswahl, die sicher scheitert
+            # (Robert, 27.08.2026). Von achtundzwanzig Merkmalsfeldern
+            # betrifft das drei; die übrigen kommen ohne Merkmal aus und
+            # behalten den Eintrag.
+            if not entry.required:
+                combo.addItem(tr("— keines —"), "")
             for identifier, label in self._features.items():
                 combo.addItem(label, identifier)
             if start:

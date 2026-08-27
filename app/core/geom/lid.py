@@ -347,6 +347,11 @@ class LidParams(BaseParams):
         title=_("An Fläche"),
         kind="feature",
         default="",
+        # Pflicht trotz Vorgabe: Der leere Wert ist die Vorbelegung, die
+        # der Klick füllt (§21.3), und keine gültige Wahl — ohne Merkmal
+        # lehnt die Operation ab. Stand das nicht hier, bot der Dialog
+        # „— keines —" als vorausgewählte Möglichkeit an.
+        required=True,
         doc=_(
             "Name einer erkannten Fläche, etwa face_1 — dann liegt die Öffnung in "
             "deren Ebene. Wird beim Anklicken im Fenster eingetragen."
@@ -563,6 +568,11 @@ class ScrewLidParams(BaseParams):
         title=_("An Fläche"),
         kind="feature",
         default="",
+        # Pflicht trotz Vorgabe: Der leere Wert ist die Vorbelegung, die
+        # der Klick füllt (§21.3), und keine gültige Wahl — ohne Merkmal
+        # lehnt die Operation ab. Stand das nicht hier, bot der Dialog
+        # „— keines —" als vorausgewählte Möglichkeit an.
+        required=True,
         doc=_(
             "Name einer erkannten Fläche, etwa face_1 — dann liegt die Öffnung in "
             "deren Ebene. Wird beim Anklicken im Fenster eingetragen."

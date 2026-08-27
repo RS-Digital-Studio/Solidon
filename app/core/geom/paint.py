@@ -92,6 +92,11 @@ class PaintParams(BaseParams):
         # und der Cache-Schlüssel der Auswertung dieses Feld erkennen — und
         # ``test_a_feature_parameter_is_declared_as_one`` hält sie fest.
         kind="feature",
+        # Pflicht trotz Vorgabe: Der leere Wert ist die Vorbelegung,
+        # die der Klick füllt (§21.3), keine gültige Wahl. Ohne diese
+        # Angabe bot der Dialog „— keines —" vorausgewählt an und die
+        # Operation lehnte es ab.
+        required=True,
         doc=_(
             "Die erkannte Fläche, die vollständig gefärbt wird — gesetzt vom Klick auf das Merkmal."
         ),

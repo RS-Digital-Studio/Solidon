@@ -1814,3 +1814,39 @@ def test_the_material_kind_is_known_to_the_agent_schema() -> None:
     spec = next(s for s in REGISTRY.all() if s.name == "set_material")
     schema = json_schema(spec.params)
     assert schema["properties"]["material"]["type"] == "string"
+
+
+def test_a_required_feature_offers_no_empty_choice(qt_app: QApplication) -> None:
+    """Keine Vorauswahl, die beim Übernehmen sicher abgelehnt wird.
+
+    Der Merkmalswähler stellte „— keines —" an die erste Stelle, also
+    **vorausgewählt** — auch bei Operationen, die ohne Merkmal ablehnen.
+    Robert las den Eintrag als „das ganze Teil", klickte Übernehmen und bekam
+    „Zum Färben gehört eine Fläche." (27.08.2026). Die naheliegendste Lesart,
+    und keine, der irgendwo widersprochen wurde.
+
+    Der Grund lag eine Ebene tiefer: ``required`` kam aus ``not has_default``,
+    und diese drei Felder tragen eine Vorgabe — den leeren Wert, den der Klick
+    einsetzt (§21.3). Eine Vorgabe macht ein Feld aber nicht optional.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.registry import REGISTRY
+
+    load_operations()
+
+    # Die drei Operationen, die ohne Merkmal ablehnen, sagen es jetzt.
+    for name in ("paint_slot", "create_lid", "screw_lid"):
+        spec = next(s for s in REGISTRY.all() if s.name == name)
+        feature = next(p for p in spec.params.spec() if str(p.kind) == "feature")
+        assert feature.required, f"{name} braucht sein Merkmal und muss das sagen"
+
+    # Und die übrigen kommen weiterhin ohne aus — der leere Eintrag bleibt
+    # dort richtig, sonst nähme man dem Kunden eine gültige Wahl.
+    optional = [
+        s.name
+        for s in REGISTRY.all()
+        for p in s.params.spec()
+        if str(p.kind) == "feature" and not p.required
+    ]
+    assert len(optional) > 20, "die Ausnahme sind die drei, nicht die Regel"
+    assert "insert_screw_hole" in optional, "ein Baustein ohne Merkmal geht an den Ursprung"

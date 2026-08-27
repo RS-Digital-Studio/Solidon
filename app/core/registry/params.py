@@ -65,6 +65,7 @@ def param(
     placement: ParamPlacement = "front",
     doc: TranslatableText | str | None = None,
     depends_on: tuple[str, tuple[str | bool, ...]] | None = None,
+    required: bool | None = None,
     subtractive_on: tuple[str | bool, ...] | None = None,
 ) -> Any:
     """Deklariert einen Parameter. Alles, was die Oberflächen brauchen, sitzt
@@ -87,6 +88,7 @@ def param(
             "placement": placement,
             "doc": doc,
             "depends_on": depends_on,
+            "required": required,
             "subtractive_on": subtractive_on,
         }
     }
@@ -129,13 +131,25 @@ def op_params[P: BaseParams](cls: type[P]) -> type[P]:
             )
         choices: tuple[str, ...] = metadata["choices"]
         has_default = entry.default is not MISSING
+        # **Eine Vorgabe macht ein Feld nicht optional.** Bis zum
+        # 27.08.2026 hiess es hier ``required = not has_default``, und
+        # das stimmte für fast alles — nicht aber für drei Operationen,
+        # die ein Merkmal *brauchen* und trotzdem ``default=""`` tragen,
+        # weil der Klick es einsetzt (§21.3). Der Dialog bot deshalb
+        # „— keines —" als **vorausgewählte** Möglichkeit an, und beim
+        # Übernehmen wurde sie abgelehnt: „Zum Färben gehört eine
+        # Fläche." Robert las den Eintrag als „das ganze Teil" — die
+        # naheliegendste Lesart, und keine, die irgendwo widersprochen
+        # wurde. Wer eine Vorgabe hat und trotzdem Pflicht ist, sagt es
+        # jetzt ausdrücklich.
+        declared = metadata["required"]
         specs.append(
             ParamSpec(
                 name=entry.name,
                 kind=_kind_of(entry.type, metadata["kind"], choices),
                 title=metadata["title"],
                 default=entry.default if has_default else None,
-                required=not has_default,
+                required=declared if declared is not None else not has_default,
                 unit=metadata["unit"],
                 minimum=metadata["minimum"],
                 maximum=metadata["maximum"],
