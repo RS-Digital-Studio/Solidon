@@ -10333,11 +10333,32 @@ Operation verweist. Vier Dinge sind bewusst liegen geblieben:
   Leistungslauf rot sieht, setzt die Marke in `tests/.performance.json`
   neu, statt die Rechnung zurückzudrehen.
 
-- [ ] **Das Schemabild des Skizzeneditors hinkt der Anwendung hinterher.**
-  `figures._sketch_editor` zeichnet die Werkzeugzeile nach, und 3d-druck-43
-  baut den Editor gerade um (D-Paket: Regionen, Flächenebenen, Trimmen).
-  Nachziehen lohnt erst, wenn das Ziel stillsteht — dann gegen den echten
-  Editor, nicht gegen die Erinnerung.
+- [ ] **Das Schemabild des Skizzeneditors zeigt weniger, als der Editor kann
+  — und die Frage ist, ob es das soll.** Am 27.08.2026 gegen den echten
+  Editor gemessen; das Ziel steht still, seit dem 26.08. ist an
+  `sketch_editor.py` nichts mehr geändert worden und die Sitzung, die umbaute,
+  ist weg.
+
+  **Ein echter Fehler war dabei und ist behoben** (23dbae7c): Der Kommentar
+  über der Werkzeugzeile rechnete mit „sechs von acht Werkzeugen" und nannte
+  zwei, die im Text statt im Bild stehen. Übergangen war ausgerechnet der
+  Punkt — er fehlt im Bild **und** fehlte in der Aufzählung dessen, was fehlt.
+  Im Handbuchtext daneben steht er mit seiner Taste, der Kunde erfährt also
+  von ihm.
+
+  **Was bleibt, ist eine Ermessensfrage und kein Fehler.** Gemessen zeigt das
+  Bild vier der sieben Zeichenwerkzeuge plus zwei Sammelknöpfe, und fünf der
+  zehn Bedingungsarten aus `sketch/solver._CONSTRAINT_TARGETS` (nicht:
+  senkrecht, parallel, symmetrisch, fest, Referenz). Für ein Schema ist beides
+  vertretbar — es soll zeigen, *wo* die Dinge liegen, nicht *welche* es gibt,
+  und die vollständigen Listen stehen im Handbuchtext daneben.
+
+  Die eine Stelle, an der das Bild wirklich hinter dem Editor liegt, ist die
+  **Ebenenzeile**: Sie nennt „Draufsicht (XY) — liegend", und der Editor kann
+  inzwischen auf einer Fläche des Modells zeichnen. Das ist die Stelle, an der
+  eine Flächenebene erschiene. Ob das Schema sie zeigen soll, ist eine
+  Entscheidung über das Bild und keine Nachpflege — deshalb steht der Punkt
+  weiter offen, aber mit einer Frage statt einer Vermutung.
 
 - [ ] **Rezepte rechnen ihren Hash bei jedem Start neu.** Die Fassung eines
   Rezepts ist der Hash über die kanonischen Daten (§24.4), und der entsteht
