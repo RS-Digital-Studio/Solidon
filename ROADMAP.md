@@ -135,6 +135,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Handbuch-PDF ohne Bilder | Das Handbuch-PDF druckt seine Bilder nicht mit (26.08.2026) | eine Messung auf der Chromium-Seite: druckt `printToPdf` Rasterbilder aus `file://`, und trägt ein Gegenversuch mit `data:`-URIs |
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
+| Die Boolesche Zugabe ist 0,05 mm und 0,01 mm | Dieselbe Zugabe, zwei Zahlen (27.08.2026) | zwei Messungen: ab welcher Zugabe die Rückfallkette über den Korpus auf Stufe 2 fällt, und wie viel eine Gravur gegenüber ihrer Solltiefe zu viel abträgt. Alle übrigen fünf Zwillingsfamilien des Kerns sind seit `57200cb9` zusammengelegt, ein Wächter hält sie |
 
 ---
 
@@ -10481,3 +10482,28 @@ und beide noch nicht angefangen.
   Frist läuft. Wer den Termin verstreichen lässt, hat nicht eine Woche
   Rückstand, sondern zwei — und dazwischen steht bei jedem Kunden eine
   Anwendung, die sich abgelaufen meldet, obwohl niemand etwas kaufen konnte.
+
+## Dieselbe Zugabe, zwei Zahlen (27.08.2026)
+
+Beim Zusammenlegen der Konstanten-Zwillinge (57200cb9) blieb einer bewusst
+stehen, weil er keine Aufräumarbeit ist, sondern eine Messung verlangt.
+
+- [ ] **Die Boolesche Zugabe ist 0,05 mm und 0,01 mm.** Wie weit ein
+  abziehendes Werkzeug über die Fläche hinausreichen soll, die es
+  durchschneidet — zusammenfallende Flächen sind der klassische Weg, eine
+  Boolesche Operation zu brechen (§39). `geom/boolean.BOOLEAN_OVERLAP` sagt
+  0,05, `knowledge/parts/shapes.OVERLAP` sagt 0,01, und beide Kommentare
+  begründen es mit demselben Satz.
+
+  Die Frage ist nicht, welche Zahl schöner ist, sondern **welche die kleinere
+  ist, die noch trägt**: Ist 0,01 zu knapp, scheitern Boolesche Operationen an
+  Bausteinen sporadisch — sporadisch, weil es von der Vernetzung des
+  Einzelfalls abhängt, und das ist die teuerste Sorte Fehler. Ist 0,05 mehr
+  als nötig, trägt jede Beschriftung und jede Textur 0,05 mm zu viel ab; bei
+  einer 0,2-mm-Gravur ist das ein Viertel.
+
+  Gemessen wird an beiden Enden: die Rückfallkette über den Korpus mit
+  abgesenkter Zugabe (ab wann greift Stufe 2), und die abgetragene Menge einer
+  Gravur gegen ihre Solltiefe. Danach eine Zahl an einer Stelle — bis dahin
+  hält der Kommentar in `boolean.py` die Abweichung sichtbar, statt sie
+  stillschweigend anzugleichen.
