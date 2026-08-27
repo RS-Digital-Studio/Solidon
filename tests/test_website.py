@@ -19,6 +19,7 @@ Version 84. Was im Text steht, wird darum über **alle** Seiten geprüft, auch
 
 from __future__ import annotations
 
+import json
 import re
 import struct
 import tomllib
@@ -807,6 +808,53 @@ def test_the_download_box_can_switch_from_waiting_to_loading(page: str) -> None:
     schluss = text[text.index('<div class="closing">') :]
     assert "data-release-href" not in schluss.split("</div>")[0], (
         f"{page}: der Kontaktweg im Schlussabschnitt würde zum Ladeknopf"
+    )
+
+
+@pytest.mark.parametrize("page", START_PAGES)
+def test_the_technical_requirements_name_the_sizes_the_packages_have(page: str) -> None:
+    """Die Größenspanne in den Systemvoraussetzungen gegen ``version.json``.
+
+    Sie stand am 27.08.2026 auf „zwischen 180 und 315 MB", in allen sechs
+    Sprachen — und die Pakete wogen 192, 274, 294 und 327. **Beide Enden
+    falsch, und zwar gegen den Download-Kasten derselben Seite**, der 192 und
+    327 anzeigt: Der Kasten wird von ``tools/make_download.py`` geschrieben,
+    die Tabellenzeile ist Handarbeit, und sie ist beim Sprung von 0.1.5 auf
+    0.2.0 stehen geblieben.
+
+    Geprüft wird gegen ``website/version.json``, weil ``website/dl/`` nicht im
+    Repository liegt (``.gitignore``) — die Datei daneben trägt dieselben
+    Bytes und reist mit. Solange sie keine Pakete führt, gibt es nichts zu
+    prüfen: vor einem Release ist der leere Zustand der richtige.
+
+    Gelesen wird die Zeile mit der installierten Größe, und aus ihr **alle**
+    Zahlen. Eine Regel auf „zwischen X und Y" träfe die sechs Sprachen nicht:
+    Französisch schreibt „entre 192 et 327&nbsp;Mo", Portugiesisch stellt den
+    Halbsatz um. Die Zahlen stehen in jeder Sprache gleich da.
+    """
+    packages = json.loads((WEBSITE / "version.json").read_text(encoding="utf-8")).get(
+        "packages", {}
+    )
+    sizes = [int(entry["size"]) for entry in packages.values() if entry.get("size")]
+    if not sizes:
+        pytest.skip("version.json führt noch keine Pakete — vor dem Release ist das richtig")
+
+    # Geteilt wie tools/make_download.py es tut: durch 1 000 000, nicht 1024².
+    kleinstes, groesstes = min(sizes) // 1_000_000, max(sizes) // 1_000_000
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+
+    zeile = next((z for z in text.splitlines() if "750" in z and "<td>" in z), None)
+    assert zeile, f"{page}: keine Zeile mit der installierten Größe gefunden"
+    # Die Zeile bricht im Quelltext um; die Spanne steht in der Fortsetzung.
+    zeilen = text.splitlines()
+    zeile = " ".join(zeilen[zeilen.index(zeile) : zeilen.index(zeile) + 2])
+
+    zahlen = {int(z) for z in re.findall(r"\b(\d{2,4})\b", zeile)} - {750}
+    assert kleinstes in zahlen, (
+        f"{page}: das kleinste Paket wiegt {kleinstes} MB, die Zeile nennt {sorted(zahlen)}"
+    )
+    assert groesstes in zahlen, (
+        f"{page}: das größte Paket wiegt {groesstes} MB, die Zeile nennt {sorted(zahlen)}"
     )
 
 
