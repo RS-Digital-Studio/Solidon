@@ -44,6 +44,7 @@ for _variable in (
 from app.core import discover
 from app.core.activation import store as activation_store
 from app.core.knowledge import profiles
+from app.core.perceive import features
 from app.core.types import BoundingBox, Document, Profile, SceneObject
 
 #: Der Stichtag der Demo, gesichert bevor die Fixture unten ihn wegnimmt.
@@ -225,6 +226,27 @@ def _machine_stays_out_of_it(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(discover, "unpatched_find_program", discover.find_program, raising=False)
     monkeypatch.setattr(discover, "find_program", only_what_was_set)
     discover.forget_cache()
+
+
+@pytest.fixture(autouse=True)
+def _remembered_features_stay_out_of_it() -> None:
+    """Kein Test erbt die Erkennung eines anderen.
+
+    ``perceive.features`` merkt sich Erkennungsergebnisse je Netz, damit
+    dieselbe Geometrie nicht nach jeder Operation neu untersucht wird — 65
+    Prozent der Erkennungszeit über die neun Beispiele lagen auf bitgleichen
+    Netzen. Der Cache lebt so lange wie der Prozess, und ein Testlauf ist ein
+    Prozess: Ohne diese Zeile hängt das Ergebnis eines Tests davon ab, welcher
+    vor ihm lief.
+
+    Aufgefallen ist es sofort und an der richtigen Stelle:
+    ``test_the_expensive_search_runs_once_per_detection`` zählt die Aufrufe der
+    teuren Suche und erwartet genau einen — bei gefülltem Cache lief sie null
+    mal. Der Test hat recht und bleibt, wie er ist; falsch war die fehlende
+    Isolation. Dieselbe Begründung wie bei ``discover.forget_cache()`` weiter
+    oben (§38).
+    """
+    features.forget_cache()
 
 
 @pytest.fixture(autouse=True)

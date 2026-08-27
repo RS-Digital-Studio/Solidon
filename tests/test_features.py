@@ -16,6 +16,8 @@ import trimesh
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.ingest.loader import normalise
 from app.core.perceive.features import (
+    _FEATURE_CACHE,
+    CACHE_LIMIT,
     CYLINDER_TOLERANCE,
     EDGE_LOOP_LIMIT,
     component_count,
@@ -29,6 +31,7 @@ from app.core.perceive.features import (
     detect_tori,
     fit_cylinder,
     fit_torus,
+    forget_cache,
 )
 
 MESHES = Path(__file__).parent / "data" / "meshes"
@@ -1415,4 +1418,76 @@ def test_detection_sees_the_same_part_whether_it_arrives_welded_or_not(
     assert len(from_unwelded) == len(from_welded), (
         f"{name}: roh {len(from_unwelded)} Merkmale, verschweißt {len(from_welded)} — "
         "die Auskunft hängt am Dateiformat"
+    )
+
+
+def test_the_same_mesh_is_not_examined_twice() -> None:
+    """Ein bitgleiches Netz kann keine anderen Merkmale haben.
+
+    Die Erkennung läuft nach **jeder** Operation, und das ist richtig (§21.2):
+    Sonst wäre ``hole_3`` in Schritt fünf ein anderes Loch als in Schritt vier.
+    Sie lief aber auch dann, wenn die Geometrie gar nicht gerechnet wurde —
+    nach einem Treffer im Plattencache. Gemessen an den neun Beispielprojekten,
+    je drei Auswertungen wie beim Öffnen: 11,65 s Erkennung, davon **7,52 s auf
+    bitgleichen Netzen**.
+
+    Geprüft wird beides, was ein Cache falsch machen kann: dass er antwortet
+    (sonst wäre er keiner) und dass er dasselbe antwortet (sonst wäre er
+    schlimmer als keiner).
+    """
+    forget_cache()
+    mesh = MeshData.of(trimesh.load(MESHES / "plate_holes.stl", process=False, force="mesh"))
+
+    first = detect(mesh)
+    assert first, "ohne erkannte Merkmale prüft der Test nichts"
+    second = detect(mesh)
+
+    assert second == first, "dasselbe Netz, andere Merkmale"
+    assert second is not first, "der Aufrufer darf sein Ergebnis behalten dürfen"
+
+    # Ein zweites Netz mit denselben Zahlen, aber eigenen Feldern: Der
+    # Schlüssel ist der Inhalt und nicht die Objektkennung — ``id()`` wird
+    # wiederverwendet, sobald ein Körper freigegeben ist.
+    twin = MeshData.of(trimesh.load(MESHES / "plate_holes.stl", process=False, force="mesh"))
+    assert detect(twin) == first, "gleicher Inhalt, gleiche Antwort"
+
+
+def test_a_changed_mesh_is_examined_again() -> None:
+    """Und die Gegenrichtung, ohne die der Test oben eine Falle wäre.
+
+    Ein Cache, der auf ein *verändertes* Netz die alte Antwort gibt, ist der
+    schlimmste Fall überhaupt: Der Kunde bohrt, und der Merkmalsbaum zeigt
+    weiter das Teil von vorher.
+    """
+    forget_cache()
+    body = trimesh.load(MESHES / "plate_holes.stl", process=False, force="mesh")
+    before = detect(MeshData.of(body))
+
+    moved = body.copy()
+    moved.apply_translation([0.0, 0.0, 7.0])
+    after = detect(MeshData.of(moved))
+
+    assert after, "das verschobene Teil hat dieselben Merkmale, nur woanders"
+    heights_before = sorted(
+        round(float(f.params["centre"][2]), 2) for f in before.values() if "centre" in f.params
+    )
+    heights_after = sorted(
+        round(float(f.params["centre"][2]), 2) for f in after.values() if "centre" in f.params
+    )
+    assert heights_before, "ohne Höhen misst der Vergleich nichts"
+    assert heights_after != heights_before, "das verschobene Netz bekam die alte Antwort"
+
+
+def test_the_cache_keeps_only_what_it_promises() -> None:
+    """Die Grenze hält, sonst wächst er über die Laufzeit eines Tages hinaus."""
+    forget_cache()
+    body = trimesh.load(MESHES / "cube_clean.stl", process=False, force="mesh")
+
+    for step in range(CACHE_LIMIT + 5):
+        moved = body.copy()
+        moved.apply_translation([float(step) * 3.0, 0.0, 0.0])
+        detect(MeshData.of(moved))
+
+    assert len(_FEATURE_CACHE) == CACHE_LIMIT, (
+        f"{len(_FEATURE_CACHE)} gemerkte Netze bei einer Grenze von {CACHE_LIMIT}"
     )

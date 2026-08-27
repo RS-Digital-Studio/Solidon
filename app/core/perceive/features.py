@@ -17,7 +17,9 @@ Merkmal, und der Steckbrief sagt, wie viele gefunden wurden.
 
 from __future__ import annotations
 
+import hashlib
 import math
+from collections import OrderedDict
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import NamedTuple
@@ -357,6 +359,55 @@ DETECTABLE_KINDS: frozenset[str] = frozenset(
 )
 
 
+#: Erkennungsergebnisse je Netz, solange der Prozess läuft.
+#:
+#: Die Erkennung läuft nach **jeder** Operation, und das ist richtig (§21.2):
+#: Sonst wäre ``hole_3`` in Schritt fünf ein anderes Loch als in Schritt vier.
+#: Falsch war nur, dass sie auch dann lief, wenn das Netz nachweislich dasselbe
+#: ist — nach einem Cache-Treffer nämlich, wo gar nichts gerechnet wurde.
+#:
+#: Gemessen an den neun Beispielprojekten, je drei Auswertungen wie beim
+#: Öffnen: **11,65 s Erkennung, davon 7,52 s auf bitgleichen Netzen** — 65
+#: Prozent. Bei „Aushöhlen und teilen" sind es 3,53 s von 5,28, bei „Dose mit
+#: Deckel" 2,88 von 3,88.
+#:
+#: **Was hier liegt, ist genau so weit gefasst, wie es sicher ist.**
+#: ``detect`` hängt an nichts als am Netz; die *Zuordnung* der Namen hängt
+#: dagegen an den vorigen Merkmalen und an ``operation.matches`` (§15.7), und
+#: die bleibt außen vor. Ein Cache, der auch sie überspränge, gäbe beim zweiten
+#: Öffnen andere Namen zurück als beim ersten — schlimmer als jede Wartezeit.
+_FEATURE_CACHE: OrderedDict[bytes, dict[FeatureId, Feature]] = OrderedDict()
+
+#: Wie viele Netze der Cache behält. Eine Auswertung sieht so viele Netze, wie
+#: sie Objekte hat; zweiunddreißig trägt jedes Beispielprojekt mit Abstand, und
+#: was darüber hinausgeht, ist ein Stapel, dessen Anfang niemand mehr ansieht.
+CACHE_LIMIT = 32
+
+
+def _mesh_key(mesh: MeshData) -> bytes:
+    """Der Fingerabdruck eines Netzes: Ecken und Dreiecke, sonst nichts.
+
+    Nicht die Objektkennung und nicht ``id()`` — ein freigegebenes Objekt gibt
+    seine Adresse wieder her, und der nächste Körper an derselben Stelle bekäme
+    fremde Merkmale. Die Slots gehören auch nicht dazu: Sie färben, sie ändern
+    keine Geometrie.
+
+    Kostet 1,4 bis 1,8 Prozent eines Erkennungslaufs (gemessen an 1 280 und
+    81 920 Dreiecken) — der Preis dafür, die Frage überhaupt stellen zu dürfen.
+    """
+    body = mesh.raw
+    return hashlib.blake2b(
+        np.ascontiguousarray(body.vertices, dtype=np.float64).tobytes()
+        + np.ascontiguousarray(body.faces, dtype=np.int64).tobytes(),
+        digest_size=16,
+    ).digest()
+
+
+def forget_cache() -> None:
+    """Vergisst die gemerkten Erkennungen — für Tests und Messungen."""
+    _FEATURE_CACHE.clear()
+
+
 def _one_body(mesh: MeshData) -> MeshData:
     """Dasselbe Teil, gefragt nach seiner Geometrie statt nach seiner Speicherform.
 
@@ -419,6 +470,19 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     # **Erst das Teil, dann die Suche.** Ohne diese Zeile sieht alles
     # Folgende an einer ungeschweißten Datei null Nachbarschaften und
     # findet nichts — siehe :func:`_one_body`.
+    # **Dasselbe Netz wird nicht zweimal untersucht.** Die Erkennung läuft nach
+    # jeder Operation, auch nach einem Cache-Treffer, wo die Geometrie gar
+    # nicht gerechnet wurde — und ein bitgleiches Netz kann keine anderen
+    # Merkmale haben. Der Grund und die Zahlen stehen bei :data:`_FEATURE_CACHE`.
+    key = _mesh_key(mesh)
+    remembered = _FEATURE_CACHE.get(key)
+    if remembered is not None:
+        _FEATURE_CACHE.move_to_end(key)
+        # Eine Kopie, weil der Aufrufer sein Ergebnis behalten darf. Die
+        # ``Feature``-Objekte selbst sind unveränderlich (``frozen=True``) und
+        # dürfen geteilt werden; die Zuordnung darüber hinein nicht.
+        return dict(remembered)
+
     mesh = _one_body(mesh)
     fitted = _fitted(mesh)
     found: dict[FeatureId, Feature] = {}
@@ -434,7 +498,10 @@ def detect(mesh: MeshData) -> dict[FeatureId, Feature]:
     ]:
         found[feature.id] = feature
     _log.info("detected %d features", len(found))
-    return found
+    _FEATURE_CACHE[key] = found
+    while len(_FEATURE_CACHE) > CACHE_LIMIT:
+        _FEATURE_CACHE.popitem(last=False)
+    return dict(found)
 
 
 # --- Bohrungen -------------------------------------------------------------------
