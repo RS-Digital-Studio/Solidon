@@ -77,7 +77,7 @@ def assign_slot(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=[
             dataclasses.replace(
-                source, mesh=painted, material_slots=_merged(source.material_slots, [slot])
+                source, mesh=painted, material_slots=merged_slots(source.material_slots, [slot])
             )
         ]
     )
@@ -181,14 +181,14 @@ def slots_from_texture(ctx: OpContext) -> OpResult:
     return OpResult(
         outputs=[
             dataclasses.replace(
-                source, mesh=mesh, material_slots=_merged(source.material_slots, slots)
+                source, mesh=mesh, material_slots=merged_slots(source.material_slots, slots)
             )
         ],
         findings=findings,
     )
 
 
-def _merged(existing: list[MaterialSlot], added: list[MaterialSlot]) -> list[MaterialSlot]:
+def merged_slots(existing: list[MaterialSlot], added: list[MaterialSlot]) -> list[MaterialSlot]:
     """Neue Zuweisungen gewinnen; Slots, die das Objekt schon kannte und
     weiter benutzt, bleiben.
     """

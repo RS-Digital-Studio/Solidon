@@ -268,3 +268,33 @@ def test_two_painted_slots_do_not_look_the_same(profile: Profile) -> None:
     assert len(set(colours)) == len(colours), "zwei bemalte Slots bekommen dieselbe Farbe"
     assert all(colour in SLOT_COLOURS for colour in colours)
     assert slot_colour(0) is None, "Slot 0 ist das unbemalte Teil und behält seine Farbe"
+
+
+def test_a_chosen_colour_wins_over_an_existing_slot() -> None:
+    """Wer eine Fläche färbt, hat gerade ein Filament gewählt (§20).
+
+    ``paint_slot`` legte den Slot mit ``setdefault`` an — damit gewann der
+    **Bestand**: Färbte man eine zweite Fläche in denselben Slot, blieb dessen
+    alter, oft leerer Eintrag stehen, und die eben gewählte Farbe verschwand.
+    Am laufenden Fenster sah das so aus: Der Wähler zeigte Rot, und nach dem
+    Abwählen war das Teil grau (Robert, 27.08.2026).
+
+    ``assign_slot`` nebenan tat es die ganze Zeit richtig; seine Funktion wird
+    jetzt geteilt statt verdoppelt.
+    """
+    from app.core.geom.colour_ops import merged_slots
+    from app.core.types import MaterialSlot
+
+    bestand = [MaterialSlot(index=1, name="", colour=None)]
+    gewaehlt = [MaterialSlot(index=1, name="Rot", colour=(0.8, 0.13, 0.13))]
+
+    ergebnis = merged_slots(bestand, gewaehlt)
+    assert ergebnis[0].colour == (0.8, 0.13, 0.13), "die Wahl gewinnt, nicht der Bestand"
+    assert ergebnis[0].name == "Rot"
+
+    # Und ein Slot, den dieser Schritt nicht anfasst, bleibt unberührt.
+    mit_zweitem = merged_slots(
+        [MaterialSlot(index=2, name="Weiß", colour=(1.0, 1.0, 1.0)), *bestand], gewaehlt
+    )
+    weiss = next(s for s in mit_zweitem if s.index == 2)
+    assert weiss.colour == (1.0, 1.0, 1.0), "fremde Filamente bleiben, wie sie waren"

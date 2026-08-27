@@ -20,7 +20,7 @@ import dataclasses
 from typing import cast
 
 from app.core.errors import ValidationError
-from app.core.geom.colour_ops import colour_from
+from app.core.geom.colour_ops import colour_from, merged_slots
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
@@ -181,21 +181,41 @@ def paint_slot(ctx: OpContext) -> OpResult:
             ],
         )
 
-    known = {entry.index: entry for entry in source.material_slots}
-    known.setdefault(
-        params.slot,
-        MaterialSlot(
-            index=params.slot,
-            name=params.name or f"{_('Slot').translate()} {params.slot}",
-            colour=colour_from(params.colour),
-        ),
+    # ``merged_slots`` und nicht ``setdefault``: Wer eine Fläche färbt,
+    # hat gerade ein Filament **gewählt**, und diese Wahl muss gewinnen.
+    # Mit ``setdefault`` gewann der Bestand — färbte man eine zweite
+    # Fläche in denselben Slot, blieb dessen alter (oft leerer) Eintrag
+    # stehen, und die eben gewählte Farbe verschwand: Das Teil blieb
+    # nach dem Abwählen grau, obwohl der Wähler Rot zeigte
+    # (Robert, 27.08.2026, am laufenden Fenster).
+    #
+    # ``assign_slot`` nebenan tat es die ganze Zeit richtig; die
+    # Funktion ist von dort und wird jetzt geteilt statt verdoppelt.
+    vorhanden = {entry.index: entry for entry in source.material_slots}.get(params.slot)
+    gewaehlt = colour_from(params.colour)
+    slots = merged_slots(
+        list(source.material_slots),
+        [
+            MaterialSlot(
+                index=params.slot,
+                # Was der Kunde diesmal nicht angibt, erbt vom Bestand:
+                # Ein zweiter Strich in dasselbe Filament soll dessen
+                # Namen nicht löschen.
+                name=params.name
+                or (vorhanden.name if vorhanden is not None else "")
+                or f"{_('Filament').translate()} {params.slot}",
+                colour=gewaehlt
+                if gewaehlt is not None
+                else (vorhanden.colour if vorhanden is not None else None),
+            )
+        ],
     )
     return OpResult(
         outputs=[
             dataclasses.replace(
                 source,
                 mesh=stroke.mesh,
-                material_slots=[known[index] for index in sorted(known)],
+                material_slots=slots,
             )
         ],
         findings=[
