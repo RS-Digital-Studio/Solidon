@@ -10630,8 +10630,13 @@ Bytes. Die Absicht stand im Kommentar, die Bedingung hat sie nie geprüft.
 
 ## Was Robert am 26.08.2026 aufgetragen hat
 
-Zwei Aufträge aus dem Tag der 0.2.0-Veröffentlichung, beide von Robert selbst
-und beide noch nicht angefangen.
+Zwei Aufträge aus dem Tag der 0.2.0-Veröffentlichung, beide von Robert selbst.
+**Der erste ist zur Hälfte gebaut** (Stand 27.08.2026): Modell und Übergabe an
+den Slicer stehen seit `1261935f` — `types.SlotOverride`,
+`PrintSettings.slot_overrides`, `handover.settings_for_slot` und
+`override_for`. Was fehlt, ist die Oberfläche: In `app/ui/` kommt keiner
+dieser Namen vor. Die Registerzeile oben sagt es genau so; dieser Satz hier
+führte beide noch als „nicht angefangen".
 
 - [ ] **Einstellungen je Filament.** Solidons eigene Felder — Temperaturen,
   Kühlung — sollen sich **je Materialslot** übersteuern lassen, und die
