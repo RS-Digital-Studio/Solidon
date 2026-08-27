@@ -130,6 +130,7 @@ PACKAGES: Final = (
     "antlr4-python3-runtime==4.9.3",
 )
 
+
 #: Wo ComfyUI erfahrungsgemäß liegt, wenn niemand etwas anderes sagt.
 #:
 #: Die tragbare Version entpackt der Nutzer selbst, also steht sie dort, wohin

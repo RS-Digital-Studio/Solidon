@@ -103,7 +103,7 @@ def install_root(executable: Path) -> Path | None:
     return None
 
 
-def _config_home() -> str:
+def config_home(platform: str) -> str:
     """Wo dieses System die Konfiguration fremder Programme ablegt.
 
     **Drei Quellen für drei Plattformen, und eine fehlte.** Hier standen
@@ -121,10 +121,20 @@ def _config_home() -> str:
     (``~/.var/app/<id>/config``). Dort liegen die Profile eines fremden Slicers
     nie; gemeint ist das Konfigurationsverzeichnis des **Rechners**, und das
     ist ``~/.config``, auch wenn die Variable etwas anderes sagt.
+
+    **Die Plattform kommt als Parameter, nicht aus ``sys.platform``** — aus
+    zwei Gründen, und der zweite ist der wichtigere. Erstens sieht ``mypy``
+    sonst auf Windows jeden Zweig darunter als tot an und meldet ihn; die CI
+    prüft unter Linux und findet das nie, also ist der Code auf drei Maschinen
+    rot und auf dem Bauserver grün. Zweitens — und deshalb steht dasselbe
+    Muster in :func:`app.core.discover.parts_for` und
+    :func:`app.core.backends.comfy_setup.guesses_for` — ist die Zuordnung so
+    von **jeder** Maschine aus prüfbar: Ein Zweig, den nur ein Mac sehen kann,
+    wird nirgends geprüft.
     """
-    if sys.platform == "win32":
+    if platform == "win32":
         return os.environ.get("APPDATA", "")
-    if sys.platform == "darwin":
+    if platform == "darwin":
         support = Path.home() / "Library" / "Application Support"
         return str(support) if support.is_dir() else ""
     # Linux: die Variable gilt — außer sie zeigt in unseren eigenen Sandkasten.
@@ -144,7 +154,7 @@ def user_roots(flavour: SlicerFlavour, executable: Path) -> list[Path]:
     """
     if not has_user_profile_tree(flavour):
         return []
-    base = _config_home()
+    base = config_home(sys.platform)
     if not base:
         return []
 
