@@ -881,9 +881,18 @@ def test_the_names_of_consumed_bodies_survive_a_cache_hit() -> None:
             )
         ],
     )
+    # Ein zweiter Körper, den das Abziehen wirklich verbraucht. Der Deckel
+    # taugt dafür seit ``keeps_inputs`` nicht mehr: Er setzt die Dose fort und
+    # legt den Deckel daneben, verbraucht also nichts — und ein Test über
+    # verbrauchte Körper, der keinen verbraucht, prüft nichts.
     history.apply(
-        "Deckel",
-        [OperationDraft(op="create_lid", inputs=(document.ops[-1].outputs[0],), params={})],
+        "Werkzeug",
+        [OperationDraft(op="create_cylinder", params={"diameter": 10.0, "name": "Werkzeug"})],
+    )
+    tool = document.ops[-1].outputs[0]
+    history.apply(
+        "Abziehen",
+        [OperationDraft(op="subtract_objects", inputs=("obj_1", tool), params={})],
     )
 
     profile = make_profile("centauri-carbon-2", "petg")
@@ -893,12 +902,12 @@ def test_the_names_of_consumed_bodies_survive_a_cache_hit() -> None:
     first = evaluate(document, profile, sources=sources, cache=cache)
     second = evaluate(document, profile, sources=sources, cache=cache)
 
-    assert "obj_1" not in second.scene.objects, "der Deckel hat obj_1 nicht ersetzt"
+    assert tool not in second.scene.objects, "das Werkzeug ist im Abziehen aufgegangen"
     assert dict(second.object_names) == dict(first.object_names), (
         f"der Cache-Lauf kennt andere Namen: {dict(second.object_names)} "
         f"statt {dict(first.object_names)}"
     )
-    assert second.object_names.get("obj_1") == "Dose", (
+    assert second.object_names.get(tool) == "Werkzeug", (
         f"der verbrauchte Körper hat seinen Namen verloren: {dict(second.object_names)}"
     )
 

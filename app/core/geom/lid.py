@@ -390,6 +390,7 @@ class LidParams(BaseParams):
     params=LidParams,
     consumes=1,
     produces=2,
+    keeps_inputs=1,
     applies_to=["face"],
     doc=_(
         "Erzeugt zu einer Öffnung einen passenden Deckel mit Kragen. Der Hohlraum "
@@ -608,6 +609,7 @@ class ScrewLidParams(BaseParams):
     params=ScrewLidParams,
     consumes=1,
     produces=2,
+    keeps_inputs=1,
     applies_to=["face"],
     doc=_(
         "Setzt einen Gewindehals auf die Öffnung und erzeugt den passenden "

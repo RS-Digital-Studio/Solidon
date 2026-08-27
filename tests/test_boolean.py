@@ -209,10 +209,12 @@ def test_a_boolean_operation_records_its_stage(document, profile) -> None:
     result = evaluate(document, profile, sources=ProjectSources(project))
 
     assert result.complete
-    # Zwei Körper hinein, einer heraus: das Ergebnis ist ein neues Objekt, die
-    # Eingaben sind verbraucht.
-    assert result.scene.objects["obj_3"].mesh.volume == pytest.approx(12000.0, rel=1e-6)
-    assert "obj_1" not in result.scene.objects
+    # Zwei Körper hinein, einer heraus — und der eine ist der **erste**: Das
+    # Vereinigen setzt fort, was der Nutzer zuerst angeklickt hat, mit seiner
+    # Kennung, seinem Namen und seinem Material (``keeps_inputs=1``). Der
+    # zweite ist verbraucht.
+    assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(12000.0, rel=1e-6)
+    assert "obj_2" not in result.scene.objects, "der zweite Körper ist aufgegangen"
 
     union_op = history.operations[-1]
     assert union_op.seed is not None, "a randomised operation carries a seed (§11.3)"
@@ -235,7 +237,7 @@ def test_subtracting_and_intersecting_run_as_operations(document, profile) -> No
     )
 
     result = evaluate(document, profile, sources=ProjectSources(project))
-    assert result.scene.objects["obj_3"].mesh.volume == pytest.approx(4000.0, rel=1e-6)
+    assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(4000.0, rel=1e-6)
     assert "obj_2" not in result.scene.objects, "both inputs were consumed"
 
 
@@ -252,7 +254,7 @@ def test_intersect_objects_runs_as_an_operation(document, profile) -> None:
 
     result = evaluate(document, profile, sources=ProjectSources(project))
     assert result.complete
-    assert result.scene.objects["obj_3"].mesh.volume == pytest.approx(4000.0, rel=1e-6)
+    assert result.scene.objects["obj_1"].mesh.volume == pytest.approx(4000.0, rel=1e-6)
 
 
 # --- Eine boolesche Op, die nichts bewirkt, sagt das (§2.7, operationen.md) ------
@@ -393,3 +395,76 @@ def test_a_cancelled_chain_stops_before_the_first_stage() -> None:
 
     with pytest.raises(OperationCancelled):
         boolean("union", [solid(), box(20.0, (10.0, 0.0, 0.0))], cancelled=signal)
+
+
+def test_a_boolean_keeps_the_feature_names_where_they_were(document, profile) -> None:
+    """Ein Bohrungsname zeigt nach dem Abziehen auf dieselbe Bohrung wie davor.
+
+    **Das war der teuerste Teil des Kennungsfehlers, und er ist kein
+    Anzeigefehler.** Die Merkmale des Vorgängers hängen an seiner
+    Eingangskennung; bekam der Ausgang eine frische, griff die Zuordnung ins
+    Leere und vergab die Namen neu — nach Lage sortiert. Eine Senkung oder ein
+    Gewinde, das an ``hole_1`` hängt, sitzt danach am falschen Loch, und
+    gemeldet wird nichts (§21.2).
+
+    **Der Aufbau muss die Sortierung kippen lassen, sonst prüft er nichts.**
+    Der erste Anlauf verschob das Werkzeug so, dass die Reihenfolge gleich
+    blieb — der Test war grün, auch ohne die Deklaration. Hier wandert das
+    Werkzeug von der einen Seite des gebohrten Lochs auf die andere: Ohne
+    ``keeps_inputs`` trägt danach ein anderes Loch den Namen ``hole_1``.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.i18n import _
+
+    load_operations()
+    history = History(document)
+    history.apply(
+        _("Platte"),
+        [OperationDraft(op="create_box", params={"width": 80.0, "depth": 80.0, "height": 10.0})],
+    )
+    history.apply(
+        _("Loch"),
+        [
+            OperationDraft(
+                op="drill_hole", inputs=("obj_1",), params={"diameter": 5.0, "x": 0.0, "y": 0.0}
+            )
+        ],
+    )
+    history.apply(_("Werkzeug"), [OperationDraft(op="create_cylinder", params={"diameter": 5.0})])
+    tool = document.ops[-1].outputs[0]
+    history.apply(
+        _("Setzen"),
+        [
+            OperationDraft(
+                op="translate_object",
+                inputs=(tool,),
+                params={"dx": -25.0, "dy": -25.0, "dz": -5.0},
+            )
+        ],
+    )
+    history.apply(
+        _("Abziehen"), [OperationDraft(op="subtract_objects", inputs=("obj_1", tool), params={})]
+    )
+
+    def holes() -> dict[str, tuple[float, float]]:
+        found: dict[str, tuple[float, float]] = {}
+        for entry in evaluate(document, profile).scene.objects.values():
+            for name, feature in entry.features.items():
+                centre = feature.params.get("centre") if feature.kind == "hole" else None
+                if centre:
+                    found[name] = (round(float(centre[0]), 1), round(float(centre[1]), 1))
+        return found
+
+    before = holes()
+    assert len(before) == 2, f"der Aufbau braucht zwei Bohrungen, hat aber {before}"
+    drilled = next(name for name, place in before.items() if place == (0.0, 0.0))
+
+    # Das Werkzeug wandert auf die andere Seite — die Sortierung kippt.
+    moved = next(entry for entry in history.operations if entry.op == "translate_object")
+    history.change_params(moved.id, {"dx": 25.0, "dy": 25.0, "dz": -5.0})
+    after = holes()
+
+    assert after[drilled] == (0.0, 0.0), (
+        f"{drilled} zeigt jetzt auf eine andere Bohrung: {before} -> {after}"
+    )

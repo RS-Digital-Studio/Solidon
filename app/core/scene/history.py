@@ -702,7 +702,18 @@ class History:
             return tuple(f"obj_{next(self._next_object)}" for _ in range(draft.produces or 1))
         if spec.produces == VARIABLE or (spec.produces == spec.consumes and draft.inputs):
             return tuple(draft.inputs)
-        return tuple(f"obj_{next(self._next_object)}" for _ in range(spec.produces))
+        # Wo eine Operation ihre ersten Ausgänge als **Fortsetzung** ihrer
+        # ersten Eingänge deklariert, behalten die ihre Kennung
+        # (``keeps_inputs``). Ohne das bekam der Körper, den der Nutzer beim
+        # Vereinigen zuerst angeklickt hatte, eine frische — obwohl der
+        # Registertext ihm zusagt, er bleibe „mit seinem Namen und Material".
+        # Teuer war daran nicht die tote Auswahl, sondern dass die Merkmale
+        # des Vorgängers an der alten Kennung hängen: Sie wurden neu vergeben,
+        # und ``hole_1`` zeigte danach auf ein anderes Loch (§21.2).
+        keep = min(int(getattr(spec, "keeps_inputs", 0)), len(draft.inputs), spec.produces)
+        kept = tuple(draft.inputs)[:keep]
+        fresh = (f"obj_{next(self._next_object)}" for _ in range(spec.produces - keep))
+        return kept + tuple(fresh)
 
     def _stated(self, spec: Any, draft: OperationDraft, field_name: str) -> int:
         """Die Ausgabezahl, die eine Operation in einen ihrer Parameter

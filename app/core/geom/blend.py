@@ -317,6 +317,7 @@ class BlendParams(BaseParams):
     params=BlendParams,
     consumes=2,
     produces=1,
+    keeps_inputs=1,
     doc=_(
         "Vereinigt zwei Körper mit einem fließenden Übergang statt einer scharfen Kehle. "
         "Für Griffe, Verstrebungen und alles, was gedruckt nicht an der Innenecke reißen soll."

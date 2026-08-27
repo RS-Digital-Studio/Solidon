@@ -501,6 +501,7 @@ def _boolean_op(ctx: OpContext, kind: BooleanKind, seed: int | None) -> OpResult
     params=BooleanParams,
     consumes=2,
     produces=1,
+    keeps_inputs=1,
     deterministic=False,
     # **Der Buchstabe kommt aus dem deutschen Titel.** So hält es der Bestand
     # seit je — *Bohrung setzen* auf Strg+B, *Drehen* auf Strg+R, *Verschieben*
@@ -530,6 +531,7 @@ def union_objects(ctx: OpContext) -> OpResult:
     params=BooleanParams,
     consumes=2,
     produces=1,
+    keeps_inputs=1,
     deterministic=False,
     shortcut="Ctrl+Shift+A",
     # **„Das erste" ist die Reihenfolge der Auswahl, und das stand nirgends.**
@@ -554,6 +556,7 @@ def subtract_objects(ctx: OpContext) -> OpResult:
     params=BooleanParams,
     consumes=2,
     produces=1,
+    keeps_inputs=1,
     deterministic=False,
     # „Schnittmenge" beginnt mit S wie das Speichern; X ist das Zeichen für den
     # Schnitt selbst und in jedem Mengendiagramm dasselbe.

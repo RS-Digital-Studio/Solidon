@@ -324,6 +324,31 @@ class OperationSpec:
     eine Operation, die eine Anzahl von Körpern erzeugt, sagen, wo diese Zahl
     steht. Duplizieren nennt seinen ``count``; alles andere lässt dieses Feld
     leer, und die Anzahl folgt aus :attr:`produces`."""
+    keeps_inputs: int = 0
+    """Wie viele der ersten Ausgänge **dieselben Körper** sind wie die ersten
+    Eingänge — Fortsetzungen, keine Neuschöpfungen.
+
+    Der Stapel vergibt Kennungen, bevor etwas läuft, und für eine Operation
+    mit festem :attr:`produces` weiß er nichts über die Zuordnung: Er vergab
+    für jeden Ausgang eine frische. Bei *Vereinigen* heißt das, dass der
+    Körper, den der Nutzer zuerst angeklickt hat, unter neuer Kennung
+    weiterlebt — obwohl der Registertext ihm zusagt, er bleibe „mit seinem
+    Namen und Material".
+
+    **Die Folge war nicht nur eine tote Auswahl, sondern ein Datenfehler.**
+    ``evaluate`` reicht die Merkmale des Vorgängers an seiner *Eingangs*-
+    kennung weiter; bei frischer Ausgabekennung greift das ins Leere, und die
+    Namen werden neu vergeben. Dieselbe physische Änderung ließ ``hole_1``
+    danach auf ein **anderes Loch** zeigen — eine Senkung oder ein Gewinde,
+    das daran hängt, sitzt am falschen Ort, ohne dass jemand etwas meldet
+    (§21.2).
+
+    Deklariert und nicht erraten, denn beides kommt vor: *Vereinigen*,
+    *Abziehen*, *Schneiden*, *Verschmelzen* und die beiden Deckel setzen ihren
+    ersten Eingang fort (``keeps_inputs=1``); *Teilen* zerlegt ihn in zwei
+    neue Hälften und lässt die Null stehen. Am Ergebnis erkennbar ist es
+    daran, dass der Ausgang Namen und Material des Eingangs trägt — geprüft
+    von ``tests/test_registry_consistency.py``."""
     touches_features: bool = False
     """Ob diese Operation Merkmale **einführt** — nicht nur weiterreicht.
 
@@ -506,6 +531,7 @@ def register_op(
     requires_kind: str = "",
     whole_scene: bool = False,
     produces_from: str | None = None,
+    keeps_inputs: int = 0,
     touches_features: bool = False,
     deterministic: bool = True,
     shortcut: str | None = None,
@@ -533,6 +559,7 @@ def register_op(
                 requires_kind=requires_kind,
                 whole_scene=whole_scene,
                 produces_from=produces_from,
+                keeps_inputs=keeps_inputs,
                 touches_features=touches_features,
                 deterministic=deterministic,
                 shortcut=shortcut,
