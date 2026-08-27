@@ -363,7 +363,7 @@ note = "Nut 8 wie 3030 — die Außenmaße unterscheiden sich, die Nut nicht"
 # Messschieber): Schlitzbreite 4,9 bis 5,1, Schlitzhöhe 14,9 bis 15,1, und über
 # zwei benachbarte Schlitze außen gemessen 45,0 — das ist Raster plus eine
 # Schlitzbreite und bestätigt die 40,00 auf den Zehntel. Die Nennmaße der
-# Zeichnung stimmen also; **neu ist die Streuung von ±0,1 mm**, die keine
+# Zeichnung stimmen also; **neu ist die Toleranz von ±0,1 mm**, die keine
 # Zeichnung hergibt. Sie ist der Grund, aus dem der Zapfen sein Spiel aus dem
 # Materialprofil bezieht und nicht knapp auf das Nennmaß gebaut wird: Im
 # engsten gemessenen Schlitz bleiben unter PETG 0,15 mm Luft, unter PLA 0,10.
@@ -387,7 +387,7 @@ slot_height = 15.0
 pitch = 40.0
 stagger = 20.0
 thickness = 5.0
-note = "IKEA SKÅDIS; Schlitz mit halbrunden Enden, zweite Lochschar um 20 mm versetzt. Nennmaße an einer echten Platte bestätigt, Streuung ±0,1 mm; Plattendicke unbelegt"
+note = "IKEA SKÅDIS; Schlitz mit halbrunden Enden, zweite Lochschar um 20 mm versetzt. Nennmaße an einer echten Platte bestätigt, Toleranz ±0,1 mm; Plattendicke unbelegt"
 
 # --- Schläuche und Rohre --------------------------------------------------------
 

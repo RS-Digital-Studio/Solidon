@@ -2867,7 +2867,7 @@ def test_a_printed_joint_needs_a_gap_the_printer_can_hold(profile: Profile) -> N
 #:
 #: Erste Messung am 27.08.2026 (Alexander Schneider): Schlitzbreite 4,9 bis
 #: 5,1 mm, Schlitzhöhe 14,9 bis 15,1 mm. Die **Nennmaße** der Tabelle sind
-#: damit bestätigt — neu ist die Streuung, die keine Zeichnung hergibt.
+#: damit bestätigt — neu ist die Toleranz, die keine Zeichnung hergibt.
 #:
 #: Hier steht die **untere** Grenze, denn nur sie kann klemmen. Wer die Zahl
 #: ändert, hat gemessen; wer sie ohne Messung ändert, verschiebt eine Zusage
@@ -2890,7 +2890,7 @@ def test_the_hook_still_fits_the_narrowest_slot_that_was_measured(material: str)
     dem, mit dem gerade jemand gedruckt hat. Am knappsten wird es bei PLA, das
     das kleinste Spiel führt: dort bleiben 0,10 mm.
 
-    Ohne diese Zusage wäre die Streuung eine Notiz in einer Tabelle, die
+    Ohne diese Zusage wäre die Toleranz eine Notiz in einer Tabelle, die
     niemand nachrechnet — und die erste Platte, die 0,05 mm enger ausfällt,
     fiele beim Kunden auf statt hier.
     """

@@ -9585,7 +9585,7 @@ gebaut wird. Hier stehen die zwei Punkte, die es zu Arbeit machen.
   50,0.
 
   **Kein Nennwert war zu korrigieren, und das war nicht der Ertrag.** Neu ist
-  die **Streuung von ±0,1 mm**, und die hat keine Zeichnung. Sie ist genau der
+  die **Toleranz von ±0,1 mm**, und die hat keine Zeichnung. Sie ist genau der
   Grund, aus dem der Zapfen sein Spiel aus dem Materialprofil bezieht: im
   engsten gemessenen Schlitz bleiben unter PETG 0,15 mm Luft, unter PLA 0,10.
   `test_the_hook_still_fits_the_narrowest_slot_that_was_measured` hält das für
