@@ -39,6 +39,15 @@ Daraus:
   stimmte die Beobachtung und nur der Schluss war falsch; wer beides
   zusammenzieht, kann den brauchbaren Teil nicht retten.
 
+**Dasselbe gibt es in der Zeit statt im Ort**, und es ist am selben Tag
+zweimal eingetreten. Eine Sitzung meldete „Tor grün" aus vier Läufen, die zu
+vier Zeitpunkten liefen — `mypy` vor dem vorletzten Commit, die Suite nach dem
+letzten; auf `origin/main` stand danach ein Fehler, den 4246 grüne Tests nicht
+sehen konnten. Und mein eigener Index-Fehler war dieselbe Figur: Die Prüfung
+war echt und galt für einen Index, den der Commit nicht benutzte. Wo die Zahl
+gilt, ist die eine Frage; **wann** sie galt, die andere.
+
 Verwandt: [[messwerkzeug-misst-sich-selbst]],
 [[gemessene-frage-ist-nicht-die-gestellte]],
-[[bekannte-familie-erklaert-nicht-den-ausloeser]].
+[[bekannte-familie-erklaert-nicht-den-ausloeser]],
+[[vier-torlaeufe-ein-stand]], [[privater-index-fester-name]].
