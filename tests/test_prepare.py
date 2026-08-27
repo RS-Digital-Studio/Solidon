@@ -1128,3 +1128,105 @@ def test_arranging_names_the_bodies_it_finds_touching(
     assert not isinstance(values["a"], int), f"{values['a']!r} ist ein Listenplatz, kein Name"
     assert not isinstance(values["b"], int)
     assert reported[0].object_id, "ein Klick auf die Zeile muss irgendwohin führen"
+
+
+def test_bodies_stacked_on_each_other_are_reported(profile: Profile) -> None:
+    """Zwei Körper an derselben Stelle sind im Bild einer.
+
+    Gemeldet wurde es als „das Objekt ist nicht zweimal da": Wer dupliziert,
+    bekommt die Kopie am Ort des Originals, und wer zweimal *Quader anlegen*
+    wählt, bekommt zwei Quader übereinander. Beides ist richtig — die
+    Stückzahl gehört in den Stapel, das Verteilen ans Anordnen (§25) —, nur
+    sagte es niemand, und der Klick sah aus wie verschluckt.
+    """
+    from app.core.scene.evaluate import check_bodies_in_one_place
+    from app.core.types import Scene, SceneObject
+
+    first = SceneObject(id="obj_1", name="Quader", mesh=cube())
+    second = SceneObject(id="obj_2", name="Quader (Kopie)", mesh=cube())
+    scene = Scene(objects={"obj_1": first, "obj_2": second}, profile=profile)
+
+    findings = check_bodies_in_one_place(scene)
+
+    assert findings, "zwei Körper an einem Ort sind ein Befund"
+    assert findings[0].code == "arrange.bodies_in_one_place"
+    assert findings[0].severity == "info", "nichts ging schief — es ist nur unsichtbar"
+    assert findings[0].values["count"] == 2
+    assert "Quader (Kopie)" in str(findings[0].values["objects"]), "die Zeile nennt die Körper"
+    assert findings[0].object_id == "obj_1", "ein Klick auf die Zeile muss irgendwohin führen"
+
+
+def test_bodies_in_the_same_spot_on_different_plates_are_fine(profile: Profile) -> None:
+    """Jede Druckplatte hat ihren eigenen Nullpunkt.
+
+    Die Gegenprobe, und ohne sie schlüge die Prüfung ausgerechnet nach dem
+    Anordnen an: ``arrange_bed`` setzt Platte 2 bewusst an dieselbe Stelle wie
+    Platte 1, weil beide einzeln gedruckt werden. Zwei Kopien auf zwei Platten
+    liegen im Modell aufeinander und sind trotzdem richtig verteilt.
+    """
+    from app.core.scene.evaluate import check_bodies_in_one_place
+    from app.core.types import Scene, SceneObject
+
+    first = SceneObject(id="obj_1", name="Quader", mesh=cube(), plate=0)
+    second = SceneObject(id="obj_2", name="Quader (Kopie)", mesh=cube(), plate=1)
+    scene = Scene(objects={"obj_1": first, "obj_2": second}, profile=profile)
+
+    findings = check_bodies_in_one_place(scene)
+
+    assert not findings, [entry.code for entry in findings]
+
+
+def test_two_alike_bodies_side_by_side_are_not_reported(profile: Profile) -> None:
+    """Zwei gleiche Körper nebeneinander sind der Normalfall, kein Befund.
+
+    Die Gegenprobe zur Ortsfrage: Gemeldet wird nicht, dass zwei Körper
+    gleich *sind*, sondern dass sie am selben Ort *liegen*. Genau dahin führt
+    das Anordnen — und wäre dieser Test rot, meldete der Prüfbericht jede
+    ordentlich verteilte Kleinserie als Problem.
+    """
+    from app.core.scene.evaluate import check_bodies_in_one_place
+    from app.core.types import Scene, SceneObject
+
+    first = SceneObject(id="obj_1", name="Quader", mesh=cube())
+    second = SceneObject(
+        id="obj_2", name="Quader daneben", mesh=apply(cube(), translation((60.0, 0.0, 0.0)))
+    )
+    scene = Scene(objects={"obj_1": first, "obj_2": second}, profile=profile)
+
+    findings = check_bodies_in_one_place(scene)
+
+    assert not findings, [entry.code for entry in findings]
+
+
+def test_duplicating_leads_into_the_stacked_state(profile: Profile) -> None:
+    """Der ganze Weg, auf dem der Kunde in die Lage gerät.
+
+    Die Prüfung darüber misst die Funktion; dieser Test misst, dass das
+    Duplizieren wirklich dorthin führt und die Auswertung es von selbst
+    bemerkt — ohne dass jemand *Kollisionen prüfen* aufruft. Gemeldet wurde
+    genau das: „wenn ich Objekt duplizieren anklicke, ist das Objekt nicht
+    zweimal da."
+
+    Mit echter Geometrie und über das echte Register, denn der Hash ist die
+    Grundlage der Prüfung: Eine Attrappe hat keinen, und ein Test mit ihr wäre
+    grün, ohne je einen Befund gesehen zu haben.
+    """
+    from app.core.bootstrap import load_operations
+    from app.core.scene import History, OperationDraft, evaluate
+    from app.core.types import Document
+
+    load_operations()
+    document = Document(format_version=1, app_version="0.0.1")
+    history = History(document)
+    history.apply("Quader", [OperationDraft(op="create_box", inputs=(), params={})])
+    history.apply(
+        "Duplizieren",
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={})],
+    )
+
+    result = evaluate(document, profile)
+
+    assert result.complete, "der Lauf muss bis zum Duplizieren kommen"
+    assert list(result.scene.objects) == ["obj_1", "obj_2"], "das Original behält seine Kennung"
+    codes = [entry.code for entry in result.scene.report.findings]
+    assert "arrange.bodies_in_one_place" in codes, codes

@@ -595,6 +595,16 @@ def evaluate(
         if placement:
             findings.extend(placement)
             scene = dataclasses.replace(scene, report=Report(tuple(findings)))
+    # Und aus demselben Grund noch eine Zeile weiter: zwei Körper, die genau
+    # aufeinander liegen, sind im Bild einer. Hier und nicht in den
+    # Operationen, weil erst der Endstand die Frage beantwortet — wer nach dem
+    # Duplizieren anordnet, hat sie längst getrennt, und ein Hinweis aus dem
+    # Duplizieren stünde dann als überholter Satz da (§17.3).
+    if stopped_at is None and len(objects) > 1:
+        stacked = check_bodies_in_one_place(scene)
+        if stacked:
+            findings.extend(stacked)
+            scene = dataclasses.replace(scene, report=Report(tuple(findings)))
     if stopped_at is not None:
         _log.warning(
             "evaluation stopped at op %s: %s", stopped_at, _why_it_stopped(findings, stopped_at)
@@ -1391,6 +1401,82 @@ def check_placement(scene: Scene) -> list[Finding]:
         [entry.mesh for entry in entries], profile, [entry.plate for entry in entries]
     )
     return named_for(findings, entries)
+
+
+def check_bodies_in_one_place(scene: Scene) -> list[Finding]:
+    """Liegen Körper genau übereinander, so dass man sie für einen hält?
+
+    **Der Fall, der es aufgedeckt hat, ist der häufigste überhaupt:** Wer
+    zweimal *Quader anlegen* wählt, bekommt zwei Quader an derselben Stelle
+    und sieht einen. Dasselbe beim Duplizieren — die Stückzahl gehört in den
+    Stapel, das Verteilen ans Anordnen (§25), und dazwischen liegt ein
+    Zustand, in dem das Bild weniger zeigt, als die Szene enthält. Gemeldet
+    wurde es als „das Objekt ist nicht zweimal da".
+
+    **Gefragt wird über Hüllquader und Volumen, nicht über den Objekt-Hash** —
+    und der erste Anlauf nahm den Hash, weil eine Messung ihn zu empfehlen
+    schien: Zwei angelegte Quader trugen denselben. Sie trugen ihn aber, weil
+    sie aus derselben Operation mit denselben Werten stammen; der Hash
+    beschreibt die **Herkunft** und nicht die Gestalt. Original und Kopie
+    haben deshalb verschiedene Hashes, obwohl sie Punkt auf Punkt liegen — und
+    genau der Fall, um den es geht, wäre durchgerutscht. Die Gegenprobe hatte
+    denselben Fehler: Ein verschobener Körper bekam einen anderen Hash, weil
+    eine Operation dazukam, nicht weil er woanders lag.
+
+    Der Hüllquader allein wäre zu grob (eine Kugel und ein Würfel derselben
+    Größe teilen sich einen), das Volumen allein auch (zwei gleich große
+    Körper an verschiedenen Orten). Zusammen sind sie scharf genug für einen
+    Hinweis und kosten nichts: Beide Zahlen liegen an jedem Körper bereit,
+    gleich ob Netz oder exakter Kern.
+
+    **Die Platte gehört in den Schlüssel**, sonst schlägt die Prüfung
+    ausgerechnet nach dem Anordnen an: Jede Druckplatte hat ihren eigenen
+    Nullpunkt, und ``arrange_bed`` setzt Platte 2 bewusst an dieselbe Stelle
+    wie Platte 1, weil beide einzeln gedruckt werden. Zwei Kopien auf zwei
+    Platten liegen im Modell aufeinander und sind trotzdem richtig verteilt.
+    """
+    if len(scene.objects) < 2:
+        return []
+    groups: dict[tuple[Any, ...], list[ObjectId]] = {}
+    for object_id, entry in scene.objects.items():
+        mesh = entry.mesh
+        bounds = getattr(mesh, "bounds", None)
+        volume = getattr(mesh, "volume", None)
+        if bounds is None or volume is None:
+            # Ein Körper, der seine Maße nicht nennt, wird nicht geraten.
+            continue
+        # Gerundet statt verglichen: Fließkomma nie mit ``==`` (Regel 6). Ein
+        # Tausendstel Millimeter ist feiner als jede Düse und gröber als das
+        # Rauschen einer Transformation.
+        groups.setdefault(
+            (
+                entry.plate,
+                tuple(round(float(value), 3) for value in bounds.minimum),
+                tuple(round(float(value), 3) for value in bounds.maximum),
+                round(float(volume), 3),
+            ),
+            [],
+        ).append(object_id)
+    findings: list[Finding] = []
+    for key, members in groups.items():
+        plate = int(key[0])
+        if len(members) < 2:
+            continue
+        names = [str(scene.objects[entry].name) for entry in members]
+        findings.append(
+            Finding(
+                code="arrange.bodies_in_one_place",
+                severity="info",
+                message=_("Mehrere Körper liegen genau übereinander."),
+                object_id=members[0],
+                values={
+                    "count": len(members),
+                    "objects": ", ".join(names),
+                    "plate": plate + 1,
+                },
+            )
+        )
+    return findings
 
 
 def _finding_from(error: AppError, operation: Operation) -> Finding:

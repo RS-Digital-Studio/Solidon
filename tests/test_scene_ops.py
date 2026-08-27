@@ -132,55 +132,6 @@ def test_the_original_keeps_the_id_it_had_before_the_copy(
     assert evaluate(document, profile, registry=registry).scene.objects["obj_1"].name == "Deckel"
 
 
-def test_duplicating_says_that_the_copy_lands_on_the_original(
-    document: Document, profile: Profile, registry: Registry
-) -> None:
-    """Ein Schritt, der etwas Unsichtbares tut, sagt es.
-
-    Die Kopie entsteht am Ort des Originals — die Stückzahl gehört in den
-    Stapel, das Verteilen ans Anordnen (§25). Für den Nutzer sieht das aus wie
-    ein Klick, der nichts bewirkt hat: ein Körper im Bild, wo zwei sein
-    sollten. Der Hinweis trägt *Auf dem Bett anordnen* als Handlung, damit der
-    zweite Halbschritt nicht erraten werden muss.
-    """
-    history = History(document, registry)
-    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
-    history.apply(_("Duplizieren"), [OperationDraft(op="duplicate_object", inputs=("obj_1",))])
-
-    result = evaluate(document, profile, registry=registry)
-
-    findings = result.scene.report.findings
-    assert findings, "the run has to produce findings at all, or this proves nothing"
-    hint = next((entry for entry in findings if entry.code == "arrange.copies_in_one_place"), None)
-    assert hint is not None, [entry.code for entry in findings]
-    assert hint.severity == "info", "nothing went wrong here — it is only invisible"
-
-
-def test_a_single_copy_is_no_reason_to_say_anything(
-    document: Document, profile: Profile, registry: Registry
-) -> None:
-    """Eine Stückzahl von eins legt nichts dazu, also überlagert auch nichts.
-
-    Die Gegenprobe zum Hinweis darüber: Er hängt an der Zahl der Ausgaben und
-    nicht daran, dass die Operation gelaufen ist.
-    """
-    history = History(document, registry)
-    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
-    history.apply(
-        _("Duplizieren"),
-        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 1})],
-    )
-
-    result = evaluate(document, profile, registry=registry)
-
-    # Ohne diese Zeile wäre der Test auch dann grün, wenn die Auswertung gar
-    # nicht bis zum Duplizieren gekommen wäre — ein Verbotstest über eine
-    # leere Menge besteht immer.
-    assert result.complete, "the run has to reach the duplicate step at all"
-    codes = [entry.code for entry in result.scene.report.findings]
-    assert "arrange.copies_in_one_place" not in codes, codes
-
-
 def test_the_copy_can_be_named(document: Document, profile: Profile, registry: Registry) -> None:
     history = History(document, registry)
     history.apply(_("Anlegen"), [OperationDraft(op="make_object")])

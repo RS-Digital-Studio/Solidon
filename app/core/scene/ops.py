@@ -16,7 +16,7 @@ from typing import Any, cast
 from app.core.errors import CORRECT_INPUT, SPLIT_MODEL, ValidationError
 from app.core.geom.mesh import as_mesh_data
 from app.core.registry import VARIABLE, op_params, param, register_op
-from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
+from app.core.types import BaseParams, OpContext, OpResult, SceneObject
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import TranslatableText, _, tr
 
@@ -130,26 +130,11 @@ def duplicate_object(ctx: OpContext) -> OpResult:
                 material_slots=list(source.material_slots),
             )
         )
-    findings: list[Finding] = []
-    if len(outputs) > 1:
-        # Die Kopie entsteht dort, wo das Original steht — verteilt wird
-        # nachher, und genau das sieht man nicht: Im Verlauf steht ein
-        # Schritt, im Objektbaum stehen zwei Zeilen, und im Bild liegt ein
-        # Körper. Wer das für einen fehlgeschlagenen Klick hält, klickt
-        # nochmal. Dieselbe Lücke wie bei ``boolean.without_effect``, nur
-        # umgekehrt: Dort tat ein Schritt nichts, hier tut er etwas
-        # Unsichtbares — und beide Male sucht der Nutzer den Fehler in der
-        # Geometrie statt in der Position.
-        findings.append(
-            Finding(
-                code="arrange.copies_in_one_place",
-                severity="info",
-                message=_("Die Kopien liegen am selben Ort wie das Original."),
-                object_id=source.id or None,
-                values={"count": len(outputs)},
-            )
-        )
-    return OpResult(outputs=outputs, findings=findings)
+    # Dass die Kopie auf dem Original landet, meldet nicht diese Operation,
+    # sondern die Auswertung am Endstand (``check_bodies_in_one_place``): Wer
+    # danach anordnet, hat sie längst getrennt, und ein Satz von hier stünde
+    # dann als überholte Warnung im Bericht.
+    return OpResult(outputs=outputs)
 
 
 def _copy_name(original: TranslatableText | str, chosen: str, index: int, count: int) -> str:

@@ -302,9 +302,12 @@ def housing() -> Project:
         [
             OperationDraft(
                 op="test_piece",
-                # Auf die Kopie, nicht auf das Original: duplicate_object
-                # verbraucht obj_1 und legt obj_2 (Original) und obj_3 (Kopie) an.
-                inputs=("obj_3",),
+                # Auf die Kopie, nicht auf das Original: ``duplicate_object``
+                # lässt den Eingang seine Kennung behalten und hängt die Kopie
+                # als ``obj_2`` daneben. (Bis zum 27.08.2026 vergab es auch für
+                # das Original eine frische Kennung — dann hieß die Kopie
+                # ``obj_3``, und das Original war weg.)
+                inputs=("obj_2",),
                 params={"size": 24.0, "x": -25.0, "y": -15.0, "z": 4.0},
             )
         ],
