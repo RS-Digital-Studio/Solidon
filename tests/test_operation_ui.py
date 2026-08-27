@@ -1902,3 +1902,70 @@ def test_every_feature_kind_has_a_name_in_the_tree(qt_app: QApplication) -> None
     assert not ohne_namen, "diese Arten zeigen im Baum ihre englische Kennung: " + ", ".join(
         ohne_namen
     )
+
+
+def test_a_twin_toggle_says_what_it_takes_away() -> None:
+    """Ein Umschalter, der Felder wegnimmt, nennt sie — vor dem Klick.
+
+    Die vier Zwillingspaare (``MENU_TWINS``) sind dieselbe Handlung in zwei
+    Rechenkernen, und der Haken im Dialog ist der Weg von einem zum anderen.
+    Nur sind sie nicht deckungsgleich: Beim Aushöhlen kann der Mesh-Kern vier
+    Dinge (Wand, offene Oberseite, Entlüftung, Lochdurchmesser), der exakte
+    eines. Wer den Haken setzt, verliert drei Felder — und der Hinweistext
+    zählte bis zum 27.08.2026 nur auf, was der exakte Kern **kann**.
+
+    Das ist dieselbe Regel wie bei ``caveat`` (`registry/surfaces.py`): Eine
+    Grenze steht dort, wo gewählt wird. Ein Umschalter, der eine Fähigkeit
+    nimmt, ohne es zu sagen, ist eine Absage nach dem Klick — und die verbietet
+    Regel 19.
+
+    Geprüft wird über die Parametermengen, nicht über eine gepflegte Liste:
+    Was ein Zwilling weniger kann, weiß das Register selbst. Verwandte Felder
+    zählen dabei als **eine** Fähigkeit — „Entlüftungen" und
+    „Entlüftungsdurchmesser" sind ein Können und nicht zwei, und ein Satz, der
+    jedes Unterfeld einzeln aufzählte, wäre kein Hinweis mehr, sondern eine
+    zweite Parameterliste.
+    """
+    from app.core import bootstrap
+    from app.core.registry.registry import MENU_TWINS, TWIN_TOGGLES
+
+    bootstrap.load_operations()
+    stumm = []
+    for exact, plain in MENU_TWINS.items():
+        if exact not in TWIN_TOGGLES:
+            continue
+        verloren = {entry.name for entry in REGISTRY.get(plain).params.spec()} - {
+            entry.name for entry in REGISTRY.get(exact).params.spec()
+        }
+        # ``anchor`` ist der eine Fall, der keine Fähigkeit ist: Der exakte
+        # Quader steht immer mittig, und das sagt sein Maßfeld selbst.
+        verloren -= {"anchor", "name"}
+        if not verloren:
+            continue
+        satz = str(TWIN_TOGGLES[exact][1]).lower()
+        fehlt = sorted(feld for feld in verloren if _stem_of(plain, feld) not in satz)
+        if fehlt:
+            stumm.append(f"{exact}: nimmt {sorted(verloren)}, verschweigt {fehlt}")
+
+    assert not stumm, (
+        "Umschalter, die etwas wegnehmen und schweigen:" + chr(10) + chr(10).join(stumm)
+    )
+
+
+def _stem_of(op: str, feld: str) -> str:
+    """Der Wortstamm, unter dem ein Feld im Fließtext auftaucht.
+
+    Der Kunde liest „Entlüftungen", nicht ``vents`` — gesucht wird also der
+    übersetzte Titel. Und zwar sein Stamm: „Entlüftungen" und
+    „Entlüftungsdurchmesser" beginnen beide mit „entlüftung", also deckt ein
+    Satz über die Entlüftung beide.
+
+    **Sechs Zeichen, und die Zahl ist gemessen.** Bei acht meldete der Test
+    den Zylinder: Sein Feld heißt „Segmente", der Umschaltertext spricht von
+    der „Segmentzahl" — dieselbe Sache, andere Beugung, und „segmente" steht
+    nicht in „segmentzahl". Sechs Zeichen (`segmen`) decken beide, und im
+    Umschaltertext eines Zwillings ist ein zufälliger Treffer auf sechs
+    Zeichen nicht zu befürchten.
+    """
+    titel = str(next(entry.title for entry in REGISTRY.get(op).params.spec() if entry.name == feld))
+    return titel.split()[0].rstrip(",.:").lower()[:6]

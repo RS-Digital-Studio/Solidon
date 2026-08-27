@@ -172,6 +172,8 @@ _HOLLOW_TOGGLE: Final[tuple[TranslatableText, TranslatableText]] = (
     _(
         "Höhlt im exakten Kern aus und lässt den Körper exakt — Fase, "
         "Verrundung, Formschräge und der STEP-Export bleiben danach möglich. "
+        "Dafür entfallen Oben öffnen und die Entlüftungen: Der exakte Kern "
+        "kennt nur die Wandstärke. "
         "Verlangt einen exakten Eingangskörper: an einem Netz ist der Haken "
         "gesperrt und nennt den Grund. Ohne ihn wird als Netz gerechnet, und "
         "der Körper ist danach ein Netz."
