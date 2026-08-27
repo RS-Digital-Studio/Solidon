@@ -133,7 +133,7 @@
       "name": "Ça tourne sur Mac ?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Oui, en versions séparées pour Apple Silicon et pour Intel — un paquet compilé pour arm64 ne démarre pas sur un Mac Intel, et cela concerne toute machine d'avant 2020. Il n'est pas encore signé chez Apple, et Gatekeeper refuse de lancer d'un double-clic une application non signée venue du web : un clic droit sur l'application, choisir « Ouvrir », et ensuite elle démarre comme n'importe quelle autre. La notarisation viendra dès que le compte Apple sera en place."
+        "text": "Oui, en versions séparées pour Apple Silicon et pour Intel — un paquet compilé pour arm64 ne démarre pas sur un Mac Intel, et cela concerne toute machine d'avant 2020. Il n'est pas encore notarié chez Apple, et macOS n'ouvre pas d'un double-clic un paquet d'installation sans cette vérification : il signale qu'il ne peut pas vérifier que le fichier est exempt de logiciel malveillant et propose « Placer dans la corbeille » comme premier bouton. Y choisir « Terminé », puis autoriser le paquet dans les Réglages Système, sous « Confidentialité et sécurité », avec « Ouvrir quand même ». La notarisation viendra dès que le compte Apple sera en place."
       }
     },
     {
@@ -673,10 +673,13 @@
       <table class="req">
         <tr><td>Système d'exploitation</td><td>Windows 10/11 (64 bits),
         macOS 12 ou plus récent, ou Linux — sur Mac, en versions séparées
-        pour Apple Silicon et Intel. La version Mac n'est pas encore signée
-        chez Apple&nbsp;: au premier lancement, un clic droit sur
-        l'application, choisir «&nbsp;Ouvrir&nbsp;», et ensuite elle démarre
-        comme n'importe quelle autre.</td></tr>
+        pour Apple Silicon et Intel. La version Mac n'est pas encore
+        notariée chez Apple&nbsp;: macOS n'ouvre pas le paquet
+        d'installation d'un double-clic. Dans l'avertissement, choisir
+        «&nbsp;Terminé&nbsp;» — et non «&nbsp;Placer dans la
+        corbeille&nbsp;» — puis autoriser le paquet dans les Réglages
+        Système, sous «&nbsp;Confidentialité et sécurité&nbsp;», avec
+        «&nbsp;Ouvrir quand même&nbsp;».</td></tr>
         <tr><td>Espace disque</td><td>environ 750&nbsp;Mo installés,
         téléchargement entre 194 et 328&nbsp;Mo selon le système</td></tr>
         <tr><td>Usage de base</td><td>8&nbsp;Go de RAM et une carte
@@ -792,12 +795,16 @@
           <summary>Ça tourne sur Mac&nbsp;?</summary>
           <p>Oui, en versions séparées pour Apple Silicon et pour Intel — un
           paquet compilé pour arm64 ne démarre pas sur un Mac Intel, et cela
-          concerne toute machine d'avant 2020. Il n'est pas encore signé
-          chez Apple, et Gatekeeper refuse de lancer d'un double-clic une
-          application non signée venue du web&nbsp;: un clic droit sur
-          l'application, choisir «&nbsp;Ouvrir&nbsp;», et ensuite elle
-          démarre comme n'importe quelle autre. La notarisation viendra dès
-          que le compte Apple sera en place.</p>
+          concerne toute machine d'avant 2020. Il n'est pas encore notarié
+          chez Apple, et macOS n'ouvre pas d'un double-clic un paquet
+          d'installation sans cette vérification&nbsp;: il signale qu'il ne
+          peut pas vérifier que le fichier est exempt de logiciel
+          malveillant et propose «&nbsp;Placer dans la corbeille&nbsp;»
+          comme premier bouton. Y choisir «&nbsp;Terminé&nbsp;», puis
+          autoriser le paquet dans les Réglages Système, sous
+          «&nbsp;Confidentialité et sécurité&nbsp;», avec «&nbsp;Ouvrir
+          quand même&nbsp;». La notarisation viendra dès que le compte Apple
+          sera en place.</p>
         </details>
         <details>
           <summary>Ça marche avec mon imprimante&nbsp;?</summary>

@@ -133,7 +133,7 @@
       "name": "Gira su un Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sì, per Apple Silicon e per Intel come versioni separate — un pacchetto compilato su arm64 non parte su un Mac Intel, e questo riguarda ogni macchina precedente al 2020. Non è ancora firmato presso Apple, e Gatekeeper non lascia avviare col doppio clic un'applicazione non firmata arrivata dalla rete: clicca una volta col tasto destro sull'applicazione e scegli «Apri», poi parte come qualsiasi altra. La notarizzazione arriva non appena l'account Apple è pronto."
+        "text": "Sì, per Apple Silicon e per Intel come versioni separate — un pacchetto compilato su arm64 non parte su un Mac Intel, e questo riguarda ogni macchina precedente al 2020. Notarizzato presso Apple non è ancora, e macOS non apre con un doppio clic un pacchetto di installazione senza questa verifica: segnala di non poter verificare che il file sia privo di malware e offre «Sposta nel Cestino» come primo pulsante. Lì scegli «Fine» e autorizza poi il pacchetto in Impostazioni di Sistema, in «Privacy e Sicurezza», con «Apri comunque». La notarizzazione arriva non appena l'account Apple è pronto."
       }
     },
     {
@@ -662,9 +662,11 @@
       <table class="req">
         <tr><td>Sistema operativo</td><td>Windows 10/11 (64 bit), macOS 12 o
         successivo, oppure Linux — sul Mac in versioni separate per Apple
-        Silicon e Intel. La versione Mac non è ancora firmata presso Apple:
-        al primo avvio clicca una volta col tasto destro sull'applicazione e
-        scegli «Apri», poi parte come qualsiasi altra.</td></tr>
+        Silicon e Intel. La versione Mac non è ancora notarizzata presso
+        Apple: macOS non apre il pacchetto di installazione con un doppio
+        clic. Nell'avviso scegli «Fine» — non «Sposta nel Cestino» — e
+        autorizza poi il pacchetto in Impostazioni di Sistema, in «Privacy e
+        Sicurezza», con «Apri comunque».</td></tr>
         <tr><td>Spazio su disco</td><td>circa 750 MB installata, download
         tra 194 e 328 MB a seconda del sistema</td></tr>
         <tr><td>Uso di base</td><td>8 GB di RAM e una grafica che
@@ -772,11 +774,13 @@
           <summary>Gira su un Mac?</summary>
           <p>Sì, per Apple Silicon e per Intel come versioni separate — un
           pacchetto compilato su arm64 non parte su un Mac Intel, e questo
-          riguarda ogni macchina precedente al 2020. Non è ancora firmato
-          presso Apple, e Gatekeeper non lascia avviare col doppio clic
-          un'applicazione non firmata arrivata dalla rete: clicca una volta
-          col tasto destro sull'applicazione e scegli «Apri», poi parte come
-          qualsiasi altra. La notarizzazione arriva non appena l'account
+          riguarda ogni macchina precedente al 2020. Notarizzato presso
+          Apple non è ancora, e macOS non apre con un doppio clic un
+          pacchetto di installazione senza questa verifica: segnala di non
+          poter verificare che il file sia privo di malware e offre «Sposta
+          nel Cestino» come primo pulsante. Lì scegli «Fine» e autorizza poi
+          il pacchetto in Impostazioni di Sistema, in «Privacy e Sicurezza»,
+          con «Apri comunque». La notarizzazione arriva non appena l'account
           Apple è pronto.</p>
         </details>
         <details>

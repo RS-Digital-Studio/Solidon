@@ -133,7 +133,7 @@
       "name": "Corre num Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sim, em versões separadas para Apple Silicon e para Intel — um pacote compilado em arm64 não arranca num Mac com Intel, e isso abrange qualquer máquina anterior a 2020. Assinado junto da Apple ainda não está, e o Gatekeeper não deixa arrancar com duplo clique uma aplicação não assinada vinda da rede: clicar uma vez com o botão direito do rato no programa e escolher «Abrir»; depois disso arranca como qualquer outra. A notarização vem assim que a conta Apple estiver de pé."
+        "text": "Sim, em versões separadas para Apple Silicon e para Intel — um pacote compilado em arm64 não arranca num Mac com Intel, e isso abrange qualquer máquina anterior a 2020. Notarizado junto da Apple ainda não está, e o macOS não abre com duplo clique um pacote de instalação sem essa verificação: avisa que não consegue verificar se o ficheiro está livre de software malicioso e oferece «Mover para o Lixo» como primeiro botão. Aí escolher «Concluído» e autorizar depois o pacote nas Definições do Sistema, em «Privacidade e Segurança», com «Abrir mesmo assim». A notarização vem assim que a conta Apple estiver de pé."
       }
     },
     {
@@ -667,10 +667,11 @@
       <table class="req">
         <tr><td>Sistema operativo</td><td>Windows 10/11 (64 bits), macOS 12
         ou mais recente, ou Linux — no Mac, em versões separadas para Apple
-        Silicon e Intel. A versão para Mac ainda não está assinada junto da
-        Apple: no primeiro arranque, clicar uma vez com o botão direito do
-        rato no programa e escolher «Abrir»; depois disso arranca como
-        qualquer outro.</td></tr>
+        Silicon e Intel. A versão para Mac ainda não está notarizada junto
+        da Apple: o macOS não abre o pacote de instalação com duplo clique.
+        No aviso, escolher «Concluído» — não «Mover para o Lixo» — e
+        autorizar depois o pacote nas Definições do Sistema, em «Privacidade
+        e Segurança», com «Abrir mesmo assim».</td></tr>
         <tr><td>Espaço em disco</td><td>cerca de 750 MB instalado,
         transferência entre 194 e 328 MB, conforme o sistema</td></tr>
         <tr><td>Uso básico</td><td>8 GB de RAM e uma gráfica que
@@ -780,12 +781,14 @@
           <summary>Corre num Mac?</summary>
           <p>Sim, em versões separadas para Apple Silicon e para Intel — um
           pacote compilado em arm64 não arranca num Mac com Intel, e isso
-          abrange qualquer máquina anterior a 2020. Assinado junto da Apple
-          ainda não está, e o Gatekeeper não deixa arrancar com duplo clique
-          uma aplicação não assinada vinda da rede: clicar uma vez com o
-          botão direito do rato no programa e escolher «Abrir»; depois disso
-          arranca como qualquer outra. A notarização vem assim que a conta
-          Apple estiver de pé.</p>
+          abrange qualquer máquina anterior a 2020. Notarizado junto da
+          Apple ainda não está, e o macOS não abre com duplo clique um
+          pacote de instalação sem essa verificação: avisa que não consegue
+          verificar se o ficheiro está livre de software malicioso e oferece
+          «Mover para o Lixo» como primeiro botão. Aí escolher «Concluído» e
+          autorizar depois o pacote nas Definições do Sistema, em
+          «Privacidade e Segurança», com «Abrir mesmo assim». A notarização
+          vem assim que a conta Apple estiver de pé.</p>
         </details>
         <details>
           <summary>Funciona com a minha impressora?</summary>

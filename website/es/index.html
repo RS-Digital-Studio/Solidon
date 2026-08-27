@@ -133,7 +133,7 @@
       "name": "¿Funciona en un Mac?",
       "acceptedAnswer": {
         "@type": "Answer",
-        "text": "Sí, para Apple Silicon y para Intel como versiones separadas — un paquete compilado en arm64 no arranca en un Mac con Intel, y eso afecta a todos los equipos anteriores a 2020. Aún no está firmado por Apple, y Gatekeeper no deja arrancar con doble clic una aplicación sin firmar bajada de la red: haz clic con el botón derecho en la aplicación una vez y elige «Abrir»; después arranca como cualquier otra. La notarización llegará en cuanto esté la cuenta de Apple."
+        "text": "Sí, para Apple Silicon y para Intel como versiones separadas — un paquete compilado en arm64 no arranca en un Mac con Intel, y eso afecta a todos los equipos anteriores a 2020. Notarizado por Apple aún no está, y macOS no abre con doble clic un paquete de instalación sin esa comprobación: avisa de que no puede verificar que el archivo esté libre de software malicioso y ofrece «Trasladar a la papelera» como primer botón. Elige ahí «Hecho» y autoriza después el paquete en Ajustes del Sistema, en «Privacidad y seguridad», con «Abrir igualmente». La notarización llegará en cuanto esté la cuenta de Apple."
       }
     },
     {
@@ -672,10 +672,11 @@
       <table class="req">
         <tr><td>Sistema operativo</td><td>Windows 10/11 (64 bits), macOS 12
         o más reciente, o Linux — en el Mac, por separado para Apple Silicon
-        y para Intel. La versión para Mac aún no está firmada por Apple: en
-        el primer arranque, haz clic con el botón derecho en la aplicación
-        una vez y elige «Abrir»; después arranca como cualquier
-        otra.</td></tr>
+        y para Intel. La versión para Mac aún no está notarizada por Apple:
+        macOS no abre el paquete de instalación con doble clic. En el aviso
+        elige «Hecho» —no «Trasladar a la papelera»— y autoriza después el
+        paquete en Ajustes del Sistema, en «Privacidad y seguridad», con
+        «Abrir igualmente».</td></tr>
         <tr><td>Espacio en disco</td><td>unos 750 MB instalada, descarga
         entre 194 y 328 MB según el sistema</td></tr>
         <tr><td>Uso básico</td><td>8 GB de RAM y una gráfica que
@@ -786,12 +787,14 @@
           <summary>¿Funciona en un Mac?</summary>
           <p>Sí, para Apple Silicon y para Intel como versiones separadas —
           un paquete compilado en arm64 no arranca en un Mac con Intel, y
-          eso afecta a todos los equipos anteriores a 2020. Aún no está
-          firmado por Apple, y Gatekeeper no deja arrancar con doble clic
-          una aplicación sin firmar bajada de la red: haz clic con el botón
-          derecho en la aplicación una vez y elige «Abrir»; después arranca
-          como cualquier otra. La notarización llegará en cuanto esté la
-          cuenta de Apple.</p>
+          eso afecta a todos los equipos anteriores a 2020. Notarizado por
+          Apple aún no está, y macOS no abre con doble clic un paquete de
+          instalación sin esa comprobación: avisa de que no puede verificar
+          que el archivo esté libre de software malicioso y ofrece
+          «Trasladar a la papelera» como primer botón. Elige ahí «Hecho» y
+          autoriza después el paquete en Ajustes del Sistema, en «Privacidad
+          y seguridad», con «Abrir igualmente». La notarización llegará en
+          cuanto esté la cuenta de Apple.</p>
         </details>
         <details>
           <summary>¿Funciona con mi impresora?</summary>
