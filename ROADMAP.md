@@ -128,8 +128,11 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
-| Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rueckmeldung desselben Kunden oder ein Linux-Geraet. Die zwei `--talk-name`-Zeilen fuer Fcitx sind ergaenzt (`b21f8766`) und sind die ueblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestaetigung offen** - von Windows aus nicht messbar |
-| Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rueckmeldung. Die erste Vermutung (fehlende Qt-Plugins im Paket) ist **widerlegt**: PyInstaller sammelt `platforminputcontexts` und die drei `wayland-*`-Gruppen nachweislich mit (`_modules_info.py`). Was fehlte, war die Auskunft - der naechste Bericht nennt `xdg_session_type`, `qt_qpa_platform` und `qt_im_module` (`b21f8766`) |
+| Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung desselben Kunden oder ein Linux-Geraet. Die zwei `--talk-name`-Zeilen für Fcitx sind ergänzt (`b21f8766`) und sind die üblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestätigung offen** - von Windows aus nicht messbar |
+| Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung. Die erste Vermutung (fehlende Qt-Plugins im Paket) ist **widerlegt**: PyInstaller sammelt `platforminputcontexts` und die drei `wayland-*`-Gruppen nachweislich mit (`_modules_info.py`). Was fehlte, war die Auskunft — der nächste Bericht nennt `xdg_session_type`, `qt_qpa_platform` und `qt_im_module` (`b21f8766`) |
+| Ob die Übergabe an den Slicer im Flatpak jetzt ankommt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rückmeldung oder ein Linux-Gerät. Vier Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind repariert (`ca18e5a8`, `8c38d193`); jeder Schritt ist einzeln geprüft, die **Kette als Ganzes** nicht — dazu braucht es zwei echte Flatpaks. **Gebaut, Bestätigung offen** |
+| CA-Zertifikate auf macOS | Der erste Kundenbericht aus dem Feld (27.08.2026) | ein echtes Mac-Paket. Auf Windows liest CPython den Systemspeicher, auf Linux `/etc/ssl/certs`; auf macOS zeigen OpenSSLs Vorgabepfade in die Python-Installation des **Bauservers**, und die reist nicht mit. Prüfung: *Hilfe → Nach Updates suchen* drücken |
+| Zwei Prüfungen in `test_packaging.py` halten weniger, als ihr Name sagt | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Entscheidung, ob sie umgebaut oder nur ihre Begründung berichtigt wird. Heute richten sie keinen Schaden an; die falsche Begründung schickt aber den nächsten Leser in die falsche Richtung |
 | `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
 | Die EULA beschränkt auf einen Rechner, der Code tut es nicht | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung über den Aktivierungsserver. Beide Texte hängen daran und sind nicht einzeln zu berichtigen: Heute falsch ist die EULA (ein Rechner zugleich, ohne jede Gerätebindung im Code), falsch wird die Verkaufsseite (alle deine Rechner) in dem Moment, in dem die Beschränkung gebaut wird |
 | AGB § 2 beschreibt vierzehn Tage, die für die Demo nicht gelten | Was die Website-Durchsicht liegen ließ (27.08.2026) | die fachliche Prüfung der Rechtstexte — die EULA steht auf Fassung 1.2 vom 24.08., die AGB auf 1.0 vom 8.8.; die Demo ist in einer nachgezogen und in der anderen nicht |
@@ -11343,3 +11346,119 @@ funktionieren“. Alle sechs sind behoben.
 Plattform galten und auf einer anderen nicht, und zwei waren Pruefungen, die
 dieselbe Annahme benutzten wie ihr Prueflung. Kein einziger davon war eine
 falsche Rechnung.
+
+
+### Die Nachsuche im selben Gebiet (27.08.2026)
+
+Robert: „schau erst nochmal gründlicher nach mehr fehler in dem Bereich".
+Acht weitere, und der erste wiegt schwerer als alle sechs des Berichts
+zusammen — er stand in der Behebung selbst.
+
+- [x] **Vier Startpfade endeten weiter im Sandkasten** (`ca18e5a8`).
+  `discover.on_host` gab es seit dem Vormittag, gerufen hat es nur die
+  Slicer-Übergabe. Ollama, die Paketmanager und der ComfyUI-Lauf starteten
+  weiter darin, wo es das Programm nicht gibt.
+
+- [x] **Und eine Ebene tiefer half der Fix nichts** (`ca18e5a8`).
+  `install_root` sucht die Cura-Definition mit `is_dir()`, und das sagt auf
+  einen Host-Pfad zuverlässig nein. Ohne `-j <definition>` startet CuraEngine
+  gar nicht: **Die Übergabe war auch nach dem Start-Fix noch tot, nur eine
+  Ebene später.**
+
+- [x] **AppImages wurden nie gefunden** (`ca18e5a8`) — der häufigste
+  Linux-Fall. PrusaSlicer, OrcaSlicer, Cura und BambuStudio liefern dort in
+  erster Linie eine einzelne Datei mit Version im Namen aus; alle fünf
+  Suchstufen davor suchen einen exakten Namen in einem Installationsordner.
+
+- [x] **macOS fand nie ein Slicer-Profil** (`ca18e5a8`). `XDG_CONFIG_HOME`
+  setzt dort niemand.
+
+- [x] **Die ComfyUI-Rateorte waren drei Laufwerkspfade** (`ca18e5a8`). Auf
+  Linux ist `Path("F:/AI/...")` ein relativer Pfad namens „F:".
+
+- [x] **Der Über-Dialog zeigte im Paket nie eine Fremdlizenz** (`07858c4e`).
+  `runtime_packages` fragt die **eigene** Distribution, und die gibt es in
+  keinem PyInstaller-Bau. PySide6 steht unter LGPL, §36 verlangt die Liste,
+  und die Datei, die sie enthält, reiste die ganze Zeit mit — gelesen hat sie
+  niemand.
+
+- [x] **Die Zeigergröße galt nur für Linux** (`93128dc6`). Die Behebung des
+  Berichts blieb auf halbem Weg stehen: Windows führt `CursorBaseSize` in der
+  Registry, macOS einen Faktor in der Bedienungshilfe.
+
+- [x] **Die Frage an das eigene Ollama ging an den Firmenproxy**
+  (`22937d42`). `proxy_bypass("localhost:11434")` ist `False` — gemessen. Das
+  Ergebnis wäre „Backend nicht erreichbar" für ein Programm, das läuft.
+
+- [x] **Zwei Sandkästen brauchen einen Ort, der in keinem liegt**
+  (`8c38d193`). Läuft Solidon selbst als Flatpak, ist sein Nutzer-Cache
+  `~/.var/app/<id>/cache`, und `--filesystem=home` nimmt `~/.var` aus.
+
+- [ ] **Ob die Übergabe an den Slicer im Flatpak jetzt ankommt.** Vier
+  Startpfade, die Suche nach der Cura-Definition und der Austauschordner sind
+  repariert (`ca18e5a8`, `8c38d193`), und jeder Schritt ist einzeln geprüft.
+  **Die Kette als Ganzes nicht** — dazu braucht es zwei echte Flatpaks, und
+  von Windows aus ist sie nicht messbar. Das ist der Punkt, an dem eine
+  Rückmeldung mehr wert wäre als jede weitere Durchsicht hier.
+
+**Die Lehre über allen, und sie ist eine andere als die des Berichts:**
+
+> **Ein Modul, das eine Falle richtig benennt, ist gegen sie nicht immun.**
+
+`discover.py` beschrieb die Flatpak-Falle für *fremde* Programme über
+zwanzig Zeilen genau — und zählte sich selbst nicht mit. `find_program`
+schrieb in seinen Docstring, eine falsche Auskunft sei teurer als keine, und
+meldete zwanzig Zeilen später einen eingetragenen Host-Pfad als
+verschwunden. `workspace_for` verhinderte den Fall „der Slicer sieht unser
+`/tmp` nicht" und lief in „der Slicer sieht unser `~/.var` nicht".
+
+Der Satz liest sich als Beleg, dass jemand nachgedacht hat — und **genau
+deshalb prüft die Stelle niemand ein zweites Mal.**
+
+**Und zweimal an einem Tag dieselbe Sache an Stellen, die nichts miteinander
+zu tun zu haben schienen:** Im Flatpak gilt die XDG-Variable nicht, gemeint
+ist der Rechner. Einmal für die Slicer-Profile, einmal für den
+Austauschordner.
+
+**Vier von fünf Gegenproben haben Tests bestätigt, eine hat einen Test
+verworfen** — und zwar meinen eigenen vom selben Vormittag: Er sicherte zu,
+dass der Arbeitsordner im `user_cache_dir()` liegt, also einen Ort statt der
+Sache, und hätte damit den Fehler festgeschrieben, den er verhindern sollte.
+
+### Was der Paketbau sonst noch anders macht (27.08.2026)
+
+Ein Agent hat Entwicklung gegen Bau gemessen — 15 Datenpfade, 6
+Metadaten-Aufrufstellen, 5 `sys.frozen`-Zweige, die 22 Bootstrap-Importe
+gegen 160 eingesammelte Module. Kein Fund, der das Programm am Starten
+hindert; die drei behobenen stehen oben und hier.
+
+- [x] **`trimesh` bekäme im nächsten Bericht wieder einen Strich**
+  (`07858c4e`). `trimesh.__version__` **ist** ein Metadatenaufruf und liefert
+  ohne `.dist-info` `None` — die Behebung „erst das Modul" trägt für vier der
+  sechs Pakete, für dieses nicht.
+
+- [x] **Die Begründung dafür stand an drei Stellen und war falsch**
+  (`07858c4e`). „`collect_data_files` nimmt die Metadaten nebenbei mit" —
+  nachgemessen: 24 Einträge für `trimesh`, 495 für `numpy`, davon **null**
+  mit `dist-info`. `numpy` steht im Bericht, weil es sein `__version__`
+  wirklich selbst trägt: ein richtiges Ergebnis mit falscher Begründung.
+
+- [x] **`pip install pyinstaller` war die einzige ungepinnte Installation**
+  (`07858c4e`), während `constraints.txt` `pyinstaller==6.22.2` festnagelt.
+  Gerade dessen Hooks entscheiden, was an Metadaten mitreist.
+
+- [ ] **CA-Zertifikate auf macOS** — neun Stellen sprechen HTTPS. Auf Windows
+  liest CPython den Systemspeicher, auf Linux `/etc/ssl/certs`; auf macOS
+  zeigen OpenSSLs Vorgabepfade in die Python-Installation des **Bauservers**,
+  und die reist nicht mit. Prüfbar nur an einem echten Mac-Paket: *Hilfe →
+  Nach Updates suchen* drücken. `certifi` ist ohnehin installiert, der
+  Rückfall wäre ein `ssl.create_default_context(cafile=certifi.where())`.
+
+- [ ] **Zwei Prüfungen halten weniger, als ihr Name sagt.**
+  `test_packaging.py:82` steht auf „Was nur in einer Funktion importiert
+  wird, sieht PyInstaller nicht" — gemessen falsch, `modulegraph` findet
+  Funktionsimporte. Schaden richtet es heute nicht an (die zwölf gelisteten
+  OCP-Module sind Redundanz), aber die Begründung schickt den nächsten Leser
+  in die falsche Richtung. Und `test_packaging.py:70` durchsucht nur `app/`
+  und vergleicht gegen das *Vorkommen einer Zeichenkette* in der Spec statt
+  gegen das Ziel im Bau: `changelog/` liegt außerhalb und wird nie gesehen.
