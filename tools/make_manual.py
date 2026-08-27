@@ -189,6 +189,22 @@ STYLE = """
       main > :not(figure) { max-width: none; }
       .no-print { display: none !important; }
 
+      /* **Ohne diese Zeile trägt das PDF kein einziges Bild.** Die
+         Abbildungen steigen am Bildschirm beim Lesen auf, und diese
+         Animation hängt an der Scroll-Position (``animation-timeline:
+         view()`` weiter oben). Gedruckt wird nicht gescrollt: Der
+         Fortschritt bleibt null, die Animation steht auf ihrem Anfangswert,
+         und der ist unsichtbar. Die Bilder laden dabei alle — 39 von 39 mit
+         ``naturalWidth > 0`` —, sie werden nur nicht gezeichnet.
+
+         Gemessen am 27.08.2026 durch Halbierung des Stylesheets: mit dieser
+         einen Regel null Rasterbilder im PDF, ohne sie vierunddreißig. Sechs
+         andere Vermutungen (Pfade, Ladezustand, ``display: none``,
+         Ruhezeit, fehlender Viewport, ``decode()``) waren zuvor gemessen
+         ausgeschlossen worden, und die Regel stand die ganze Zeit daneben —
+         sie versteckt nichts, sie animiert nur. */
+      main figure { animation: none !important; }
+
       /* Die dunkle Bühne bleibt am Bildschirm: gedruckt wäre sie eine
          Tonerfläche um jedes Bildschirmfoto. */
       figure.screenshot .stage { background: none; border: none; padding: 0;
