@@ -129,10 +129,8 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 | Die Boolesche Zugabe ist 0,05 mm und 0,01 mm | Dieselbe Zugabe, zwei Zahlen (27.08.2026) | zwei Messungen: ab welcher Zugabe die Rückfallkette über den Korpus auf Stufe 2 fällt, und wie viel eine Gravur gegenüber ihrer Solltiefe zu viel abträgt. Alle übrigen fünf Zwillingsfamilien des Kerns sind seit `57200cb9` zusammengelegt, ein Wächter hält sie |
-| Beide Aufmacher stehen zur Hälfte leer | Was die Website-Durchsicht liegen ließ (27.08.2026) | eine Abbildung je Seite — der Aufmacher entscheidet, ob weitergelesen wird, und `funktionen.html` verspricht in der Unterzeile ein Bild aus der laufenden Anwendung, das darüber fehlt |
 | Abbildungen mit Text sind auf dem Handy unlesbar | Was die Website-Durchsicht liegen ließ (27.08.2026) | eine Entscheidung über den Weg: eigene Handyfassungen, Antippen zum Vergrößern (so löst es das Handbuch seit `235d7050`), oder die Bildunterschrift an ihrer Stelle. Bei 390 px landen die Beschriftungen bei 5 bis 7 Bildpunkten — auch die vier Befundzeilen, um die es im Prüfbericht-Abschnitt geht |
 | Der Abschlussknopf führt zur E-Mail statt zur Demo | Was die Website-Durchsicht liegen ließ (27.08.2026) | eine Entscheidung von Robert über die Rangfolge — der Kontaktweg ist dort nicht falsch, aber der stärkste Knopf am Ende einer Verkaufsseite sollte der sein, den die Seite die ganze Zeit anbietet |
-| Auf dem Handy sind die Unterseiten eine Sackgasse | Was die Website-Durchsicht liegen ließ (27.08.2026) | ein Ersatzziel für `funktionen.html` und `ki-modelle.html`, die bei 390 px zwei Navigationsziele ausblenden und keines dafür anbieten. Auf der Startseite ist dasselbe **kein** Fehler: Dort führt der Demo-Knopf selbst auf `#preis` |
 | Die 8-GB-Karte in den Systemvoraussetzungen ist nie gemessen worden | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Rechner mit einer 8-GB-Karte, oder die Entscheidung, die Zeile als Erfahrungswert zu kennzeichnen statt als Anforderung. Die Messangabe daneben ist am 27.08. berichtigt (`00156df3`), diese nicht — eine ungemessene Zahl durch eine andere zu ersetzen gewinnt nichts |
 | `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
 | Vier Datumsangaben werden am 31.10.2026 still falsch | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung, was am 31.10. auf der Seite stehen soll — erst danach lässt sich prüfen, ob es dort steht. Die Umschaltung des Download-Kastens hat einen Test, diese Sätze nicht |
@@ -10971,7 +10969,7 @@ am 25.08.2026 schon einmal gefunden und in einem Durchsichtsbericht als
 Rechtstext zwei Tage länger falsch da. Ein Fund, der nur in einem Bericht
 steht, ist kein festgehaltener Fund.
 
-- [ ] **Beide Aufmacher stehen zur Hälfte leer.** `funktionen.html` und
+- [x] **Beide Aufmacher stehen zur Hälfte leer.** `funktionen.html` und
   `ki-modelle.html` beginnen mit einer Überschrift links, zwei bis drei Zeilen
   darunter und nichts rechts. Bei `funktionen.html` verspricht die Unterzeile
   wörtlich „Jede Funktion mit einem Bild aus der laufenden Anwendung" — und
@@ -11034,7 +11032,7 @@ steht, ist kein festgehaltener Fund.
   war es auch; falsch war der Schluss daraus, und beide Male hätte eine
   einzige Messung ihn verhindert.
 
-- [ ] **Auf dem Handy sind die Unterseiten eine Sackgasse.** `funktionen.html`
+- [x] **Auf dem Handy sind die Unterseiten eine Sackgasse.** `funktionen.html`
   blendet bei 390 px „Vier Wege" und „KI-Modelle" aus (`hide-small`,
   `hide-tiny`), es gibt kein Ersatzmenü, und die Fußzeile führt beide nicht.
   Vom Handy aus kommt man von dort nur über den Umweg Startseite hin.
