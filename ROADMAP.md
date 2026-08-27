@@ -136,6 +136,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 | Die Boolesche Zugabe ist 0,05 mm und 0,01 mm | Dieselbe Zugabe, zwei Zahlen (27.08.2026) | zwei Messungen: ab welcher Zugabe die Rückfallkette über den Korpus auf Stufe 2 fällt, und wie viel eine Gravur gegenüber ihrer Solltiefe zu viel abträgt. Alle übrigen fünf Zwillingsfamilien des Kerns sind seit `57200cb9` zusammengelegt, ein Wächter hält sie |
+| Drei Körper gewählt, zwei verrechnet | Die Auswahl wird gekürzt und niemand sagt es (27.08.2026) | eine Entscheidung: Meldung, Sperre oder bewusst still |
 
 ---
 
@@ -10507,3 +10508,31 @@ stehen, weil er keine Aufräumarbeit ist, sondern eine Messung verlangt.
   Gravur gegen ihre Solltiefe. Danach eine Zahl an einer Stelle — bis dahin
   hält der Kommentar in `boolean.py` die Abweichung sichtbar, statt sie
   stillschweigend anzugleichen.
+
+---
+
+## Die Auswahl wird gekürzt und niemand sagt es (27.08.2026)
+
+Gefunden beim Durchsehen der Zwillingspaare, aber es ist keiner: Der Fall
+betrifft beide Kerne gleich.
+
+- [ ] **Wer drei Körper auswählt und „Abziehen“ klickt, bekommt zwei verrechnet
+  und keinen Hinweis auf den dritten.** `inputs_for` in
+  `app/ui/main_window.py:646` schneidet die Auswahl auf das zu, was die
+  Operation deklariert — `tuple(selected[: spec.consumes])`. Für Vereinigen,
+  Abziehen und Schnittmenge sind das zwei. Der dritte Körper bleibt unverändert
+  in der Szene stehen: richtig gerechnet, nur ungefragt.
+
+  `tests/test_whole_scene_ops.py:122` hält das Verhalten ausdrücklich fest —
+  drei Objekte hinein, die ersten beiden heraus. Es ist also gewollt und kein
+  Versehen. Die offene Frage ist nicht, ob gekürzt wird, sondern **ob der Kunde
+  es erfährt**: Er sieht einen Körper, der übrig blieb, und kann nicht
+  unterscheiden, ob die Operation ihn übergangen hat oder ob er selbst falsch
+  geklickt hat. Nach Roberts Maßstab — muss der Kunde raten, ist es falsch —
+  fehlt hier eine Zeile.
+
+  Drei Wege stehen offen: ein Befund nach der Operation („der dritte Körper
+  blieb unberührt“), eine Sperre im Menü wie bei zu wenigen Objekten (dort hält
+  das Fenster bereits an), oder die bewusste Entscheidung, dass die
+  Klickreihenfolge Antwort genug ist. Der erste Weg ist der billigste und
+  ändert nichts an der Bedienung.
