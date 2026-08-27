@@ -25,7 +25,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final, Literal
 
-from app.core.export.slicer_keys import SlicerFlavour
+from app.core.export.slicer_keys import (
+    SlicerFlavour,
+    has_readable_profiles,
+    has_user_profile_tree,
+)
 from app.core.log import get_logger
 from app.core.types import PrinterProfile
 
@@ -100,7 +104,7 @@ def user_roots(flavour: SlicerFlavour, executable: Path) -> list[Path]:
     ab. Der Programmname ist der der ausführbaren Datei, ohne Bindestriche —
     ``elegoo-slicer.exe`` schreibt nach ``ElegooSlicer``.
     """
-    if flavour != "orca":
+    if not has_user_profile_tree(flavour):
         return []
     base = os.environ.get("APPDATA") or os.environ.get("XDG_CONFIG_HOME")
     if not base:
@@ -135,7 +139,7 @@ def chosen_machine(flavour: SlicerFlavour, executable: Path) -> str:
     Leer heißt: nicht herauszufinden. Dann bleibt es bei der Vorgabe — eine
     falsche Vorauswahl sieht aus wie eine Entscheidung (§29).
     """
-    if flavour != "orca":
+    if not has_user_profile_tree(flavour):
         return ""
     for root in user_roots(flavour, executable):
         # ``user/<Konto>`` — die Konfiguration liegt eine Ebene darüber.
@@ -278,7 +282,7 @@ def find_profiles(
     PrusaSlicer-``.ini`` läuft eigenständig, sobald Düse und Bettform darin
     stehen, und die schreibt Solidon selbst (§29).
     """
-    if flavour == "prusa":
+    if not has_readable_profiles(flavour):
         return []
     wanted = frozenset(kinds)
 

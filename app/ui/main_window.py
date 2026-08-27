@@ -7256,6 +7256,18 @@ class MainWindow(QMainWindow):
             # einen größeren Drucker hat, ist damit einen Klick entfernt statt
             # gezwungen, sein Teil zu verkleinern.
             "choose_printer": lambda _error: self.action_print_settings(),
+            # **Sechsmal angeboten, nie ausgeführt.** Wenn der Slicer fehlt,
+            # abbricht oder seine Kommandozeile unbekannt ist, schlägt die
+            # Übergabe vor, nur zu exportieren und selbst zu slicen — an sechs
+            # Stellen. Einen Draht hatte der Rat nie: Er wurde inline als
+            # ``Action(id="export_only", …)`` gebaut, und ``test_every_offered_
+            # error_action_does_something`` sieht nur die Konstanten aus
+            # ``errors``. Aufgefallen ist es erst, als die sechs zu
+            # ``EXPORT_ONLY`` zusammengelegt wurden — der Wächter stand die
+            # ganze Zeit daneben und konnte nicht hinsehen.
+            # ``action_export`` ist genau die Antwort: Es schreibt die Körper
+            # als Datei, ohne einen Slicer zu brauchen (§29).
+            "export_only": lambda _error: self.action_export(),
             # Eine Projektdatei aus einer neueren Version sagt „Ein Update
             # öffnet sie" — und der Weg dorthin steht im Hilfe-Menü.
             "check_updates": lambda _error: self.action_check_updates(),

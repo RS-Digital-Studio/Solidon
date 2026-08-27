@@ -25,7 +25,11 @@ import trimesh
 from app.core import activation
 from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
 from app.core.export import threemf
-from app.core.export.slicer_keys import SlicerFlavour, wants_bed_coordinates
+from app.core.export.slicer_keys import (
+    SlicerFlavour,
+    reads_assembly_file,
+    wants_bed_coordinates,
+)
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.prepare import check_build_volume
 from app.core.log import get_logger
@@ -766,7 +770,7 @@ def write_assembly(
     width, depth, _height = profile.printer.build_volume
     bed = (width, depth) if place_on_bed and wants_bed_coordinates(flavour) else None
 
-    if flavour == "cura":
+    if not reads_assembly_file(flavour):
         target = _written(
             directory / (safe_name(project_name, "projekt") + ".stl"),
             _cura_assembly(chosen, bed),

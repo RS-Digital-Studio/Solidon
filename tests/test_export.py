@@ -14,7 +14,7 @@ import pytest
 import trimesh
 
 from app.core.errors import FileWriteError, NeedsSolidError, ValidationError
-from app.core.export import handover, threemf
+from app.core.export import handover, slicer_keys, threemf
 from app.core.export.handover import with_slot_profiles
 from app.core.export.slicer_keys import SlicerFlavour, wants_bed_coordinates
 from app.core.export.writer import (
@@ -995,6 +995,44 @@ def test_only_the_orca_family_wants_bed_coordinates(tmp_path: Path, profile: Pro
     )
     text = zipfile.ZipFile(BytesIO(orca.read_bytes())).read(threemf.MODEL_PATH).decode("utf-8")
     assert 'transform="1 0 0 0 1 0 0 0 1 128 128 0"' in text
+
+
+def test_every_flavour_answers_every_property() -> None:
+    """Jede Familie hat zu jeder Eigenschaft eine Antwort — und sie steht hier.
+
+    Die Prädikate in ``slicer_keys`` sind der eine Ort, an dem einer
+    Slicer-Familie eine Eigenschaft zugeordnet wird. Diese Tabelle ist ihr
+    Gegenstück im Test: Sie schreibt den Bestand fest, damit ein Prädikat sich
+    nicht unbemerkt umdreht, und sie ist die Liste, die jemand ausfüllen muss,
+    der eine vierte Familie einführt.
+
+    Der Bestand ist ausdrücklich **kein** Muster: Sechs der sieben Zeilen
+    trennen die Orca-Familie von den anderen beiden, und wer daraus „Orca kann
+    alles" liest, hat die Ursache verwechselt. Sie kann es, weil sie ihre
+    Profile als Dateien führt, die Solidon lesen kann; Cura führt seine
+    Einstellungen ausschließlich auf der Kommandozeile, und PrusaSlicer legt
+    keine Profile ab, die eine Auswahl trügen.
+
+    Gegenprobe gefahren: Jedes der sieben Prädikate einmal auf ``True``
+    festgenagelt, jedes Mal wird diese Tabelle rot.
+    """
+    expected: dict[str, dict[SlicerFlavour, bool]] = {
+        "wants_bed_coordinates": {"prusa": False, "orca": True, "cura": False},
+        "has_user_profile_tree": {"prusa": False, "orca": True, "cura": False},
+        "has_filament_profiles": {"prusa": False, "orca": True, "cura": False},
+        "reads_settings_from_project_file": {"prusa": False, "orca": True, "cura": False},
+        "names_its_own_output": {"prusa": False, "orca": True, "cura": False},
+        "has_readable_profiles": {"prusa": False, "orca": True, "cura": True},
+        "reads_assembly_file": {"prusa": True, "orca": True, "cura": False},
+    }
+    flavours = set(get_args(SlicerFlavour))
+    assert len(flavours) >= 3, f"zu wenige Familien gefunden: {flavours}"
+
+    for name, answers in expected.items():
+        assert set(answers) == flavours, f"{name}: Tabelle und Literal weichen ab"
+        predicate = getattr(slicer_keys, name)
+        for flavour, wanted in answers.items():
+            assert predicate(flavour) is wanted, f"{name}({flavour})"
 
 
 def test_the_bed_box_asks_the_same_source_as_the_handover(profile: Profile) -> None:

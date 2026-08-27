@@ -754,3 +754,124 @@ def wants_bed_coordinates(flavour: SlicerFlavour) -> bool:
     in „All objects are outside of the print volume".
     """
     return flavour == "orca"
+
+
+# --- Was eine Familie kann, und was sie von uns braucht -------------------------
+#
+# Die Prädikate hier unten sind der **eine Ort**, an dem eine Eigenschaft einer
+# Slicer-Familie zugeordnet wird. Sie stehen hier und nicht als Vergleich an
+# ihrer Verwendungsstelle, weil ein Vergleich gegen den Namen die Eigenschaft
+# nur im Kommentar nennt — und Kommentare wandern nicht mit, wenn eine vierte
+# Familie dazukommt.
+#
+# Gemessen am 27.08.2026: 26 Verzweigungen nach Familie in ``app/`` und
+# ``tools/``, elf davon gegen ``"orca"``, und jede meinte etwas anderes. Was
+# hier **nicht** hingehört, sind die Dreiwege-Fälle — ``write_config`` schreibt
+# INI, JSON oder gar nichts, ``_command`` baut drei verschiedene
+# Kommandozeilen. Die haben keine gemeinsame Eigenschaft, die man benennen
+# könnte, sondern drei verschiedene Formate; ein Prädikat davor wäre ein Name
+# ohne Aussage.
+#
+# Der Familienschnitt selbst trägt: ``FLAVOUR_BY_NAME`` bildet ElegooSlicer,
+# Bambu Studio und SuperSlicer auf die drei ab, und am echten ElegooSlicer
+# gemessen findet Solidon damit 3887 Profile und den richtigen Drucker. Wer
+# hier eine vierte Familie einführen will, sollte zuerst nachsehen, ob es
+# nicht eine dieser Eigenschaften ist, die er eigentlich meint.
+
+
+def has_user_profile_tree(flavour: SlicerFlavour) -> bool:
+    """Legt dieser Slicer die selbst angelegten Profile unter seinem Namen ab?
+
+    Die Orca-Familie tut es: ``%APPDATA%/<Programmname>/user/<Konto>``, und der
+    Programmname ist der der ausführbaren Datei ohne Trenner — ``elegoo-slicer.exe``
+    schreibt nach ``ElegooSlicer``. Daran hängen zwei Auskünfte, die Solidon
+    sonst nirgends bekommt: welche Profile der Nutzer selbst angelegt hat und
+    welche Maschine er zuletzt eingestellt hatte.
+
+    PrusaSlicer und Cura haben so einen Baum nicht (oder keinen, den Solidon
+    liest) — dort bleibt es bei der Vorgabe, und das ist richtig: Eine falsche
+    Vorauswahl sieht aus wie eine Entscheidung (§29).
+    """
+    return flavour == "orca"
+
+
+def has_filament_profiles(flavour: SlicerFlavour) -> bool:
+    """Kennt dieser Slicer das Filament als eigenes Profil, je Spule?
+
+    Nur die Orca-Familie. Für sie *ist* ein Materialslot ein Filament — zwei
+    Farben sind zwei Spulen, und die fahren verschieden: eigene Temperatur,
+    eigener Fluss, eigene Trocknung. Daran hängt beides, was Solidon dazu
+    sagen kann: der Abgleich gegen das hinterlegte Profil (§22.5) und die
+    Meldung, dass Werte je Spule bei den anderen beiden gar nicht ankommen.
+
+    PrusaSlicer und Cura führen das Material als Teil des Prozesses. Ein Wert
+    je Spule ist dort kein Fehler des Nutzers — der Slicer kann es nicht —,
+    aber eine Auskunft schon (Regel 17).
+    """
+    return flavour == "orca"
+
+
+def reads_settings_from_project_file(flavour: SlicerFlavour) -> bool:
+    """Nimmt dieser Slicer seine Einstellungen aus der übergebenen Datei?
+
+    Die Orca-Familie liest eine Beilage in der 3MF
+    (``Metadata/project_settings.config``, JSON). PrusaSlicer liest zwar auch
+    eine (``Metadata/Slic3r_PE.config``), aber beim *Lauf* bekommt es seine
+    Werte über ``--load``; Cura bekommt sie ausschließlich über die
+    Kommandozeile, denn seine 3MF-Seite sitzt im Fenster und nicht in der
+    Rechenmaschine dahinter.
+
+    Nicht zu verwechseln mit dem, was eine **exportierte** Datei mitträgt:
+    Eine 3MF soll man drucken können, ohne sie einzurichten, und dafür legt
+    ``writer`` beiden Familien ihre Beilage bei (siehe `.claude/rules/dateiformat.md`).
+    Hier geht es um den Weg, auf dem der Slicer beim Slicen selbst liest.
+    """
+    return flavour == "orca"
+
+
+def names_its_own_output(flavour: SlicerFlavour) -> bool:
+    """Bestimmt der Slicer den Namen der Druckdatei selbst?
+
+    Die Orca-Familie tut es und lässt sich nicht hineinreden; für sie gilt
+    deshalb die jüngste Datei im Zielordner. Prusa und Cura schreiben dorthin,
+    wohin die Kommandozeile zeigt, und dann ist der Name der, den Solidon
+    vergeben hat.
+    """
+    return flavour == "orca"
+
+
+def has_readable_profiles(flavour: SlicerFlavour) -> bool:
+    """Gibt es Profildateien, die Solidon lesen und anbieten kann?
+
+    Für ``prusa`` nicht, und das ist kein Mangel: Eine PrusaSlicer-``.ini``
+    läuft eigenständig, sobald Düse und Bettform darin stehen, und die
+    schreibt Solidon selbst (§29). Es gibt dort also nichts auszuwählen.
+    """
+    return flavour != "prusa"
+
+
+def reads_assembly_file(flavour: SlicerFlavour) -> bool:
+    """Liest dieser Slicer eine 3MF-Baugruppe — mit Namen und Materialslots?
+
+    ``CuraEngine`` nicht. Die 3MF-Seite von Cura sitzt in seinem Fenster, nicht
+    in der Rechenmaschine dahinter, und ein übergebenes 3MF endete dort in „Der
+    Slicer hat keine Druckdatei geschrieben", ohne dass irgendwo stand, warum.
+    Es bekommt ein STL mit allen Teilen der Platte; Namen und Materialslots
+    liest es ohnehin nicht, und seine Einstellungen kommen über die
+    Kommandozeile.
+    """
+    return flavour != "cura"
+
+
+def has_key_definitions(flavour: SlicerFlavour) -> bool:
+    """Liegt neben dem Programm eine Datei, die jeden gültigen Schlüssel nennt?
+
+    Nur bei Cura (``fdmprinter.def.json``), und sie ist dort die einzige
+    Gegenprobe, die es gibt: CuraEngine schreibt seine wirksame Konfiguration
+    **nicht** in den G-Code — null von 47 Schlüsseln —, während Prusa und Orca
+    sie vollständig hineinschreiben und sich damit selbst prüfen lassen
+    (:func:`verify`). In genau dieser Lücke saß ``outer_inset_first``: ein Name
+    aus Cura 4, in Cura 5 verworfen, ohne Fehler und ohne Warnung — null von
+    fünfzig Lagen begannen außen, obwohl der Wert geschrieben war.
+    """
+    return flavour == "cura"

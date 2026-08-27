@@ -45,7 +45,14 @@ from app.core.errors import (
     OperationCancelled,
 )
 from app.core.export import slicer_keys, slicer_profiles
-from app.core.export.slicer_keys import SlicerFlavour, wants_bed_coordinates
+from app.core.export.slicer_keys import (
+    SlicerFlavour,
+    has_filament_profiles,
+    has_key_definitions,
+    names_its_own_output,
+    reads_settings_from_project_file,
+    wants_bed_coordinates,
+)
 from app.core.knowledge.print_settings import read_path, with_path
 from app.core.log import get_logger
 from app.core.slice import gcode
@@ -688,7 +695,7 @@ def unreachable_overrides(settings: PrintSettings, setup: SlicerSetup) -> list[F
     nicht — der Slicer kann nicht mehr —, aber eine Auskunft schon
     (Regel 17: mit Handlungsvorschlag, nicht mit „fehlgeschlagen").
     """
-    if setup.flavour == "orca":
+    if has_filament_profiles(setup.flavour):
         return []
     affected = [
         position
@@ -852,9 +859,8 @@ def project_settings(
     das Format sie, und ein blanker String kommt in der Oberfläche als leeres
     Feld an.
     """
-    if setup.flavour != "orca":
-        # Nur diese Familie liest Einstellungen aus der 3MF. Cura bekommt sie
-        # über die Kommandozeile, PrusaSlicer über seine INI.
+    if not reads_settings_from_project_file(setup.flavour):
+        # Cura bekommt sie über die Kommandozeile, PrusaSlicer über seine INI.
         return {}
 
     split = by_section(settings, setup.flavour)
@@ -1211,7 +1217,7 @@ def profile_differences(settings: PrintSettings, setup: SlicerSetup) -> list[Fin
     Entscheidung des Nutzers. Wer den Hinweis liest, kann ihr widersprechen —
     und genau das soll er können (§2.7).
     """
-    if setup.flavour != "orca" or not setup.base_filament:
+    if not has_filament_profiles(setup.flavour) or not setup.base_filament:
         return []
     # Über ``profile_file``, nicht über ``Path(...).is_file()`` — dasselbe
     # Muster wie in ``_orca_filament``, und derselbe Grund: hierher kommt
@@ -1277,7 +1283,7 @@ def unknown_keys(settings: PrintSettings, profile: Profile, setup: SlicerSetup) 
     Liegt die Datei nicht da, wird nichts behauptet: dann läuft der Slicer aus
     einem Paket, dessen Aufbau Solidon nicht kennt.
     """
-    if setup.flavour != "cura":
+    if not has_key_definitions(setup.flavour):
         return []
     known: set[str] = set()
     for name in ("fdmprinter.def.json", "fdmextruder.def.json"):
@@ -1782,7 +1788,7 @@ def slice_model(
         )
         # Der Name, den wir selbst genannt haben — die Orca-Familie benennt
         # selbst, für sie bleibt es bei der jüngsten Datei.
-        produced = _find_gcode(target, "" if setup.flavour == "orca" else OUTPUT_NAME)
+        produced = _find_gcode(target, "" if names_its_own_output(setup.flavour) else OUTPUT_NAME)
         if produced is None:
             # Beide Ströme: die Orca-Familie protokolliert auf stdout und
             # lässt stderr leer. Nur stderr zu zeigen hieße, einen Fehler
