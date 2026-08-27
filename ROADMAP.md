@@ -129,7 +129,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Regel 17 endet an der Auswertungsgrenze | Was das Update-Review liegen ließ (26.08.2026) | eine Messung, welche Befund-Familien ohne tragende Handlung ankommen — FINDING_ACTIONS und die op.*-Familie decken einen Teil; fallgenaue Auswege wie split_model fallen in _finding_from | 
 | Kleinreste: tote profile-Zweige, unbenutztes height | Was der Gesamtreview liegen ließ (25.08.2026) | niemanden — sie werfen nur beziehungsweise stören nicht; notiert, damit sie ein Kästchen haben |
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
-| Handbuch-PDF ohne Bilder | Das Handbuch-PDF druckt seine Bilder nicht mit (26.08.2026) | eine Messung auf der Chromium-Seite: druckt `printToPdf` Rasterbilder aus `file://`, und trägt ein Gegenversuch mit `data:`-URIs |
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 | Die Boolesche Zugabe ist 0,05 mm und 0,01 mm | Dieselbe Zugabe, zwei Zahlen (27.08.2026) | zwei Messungen: ab welcher Zugabe die Rückfallkette über den Korpus auf Stufe 2 fällt, und wie viel eine Gravur gegenüber ihrer Solltiefe zu viel abträgt. Alle übrigen fünf Zwillingsfamilien des Kerns sind seit `57200cb9` zusammengelegt, ein Wächter hält sie |
@@ -10639,13 +10638,57 @@ Druckanläufe, der zweite mit mehr Ruhezeit — er läuft nie. `attempt` gilt al
 gelungen, sobald `printToPdf` Bytes liefert, und ein PDF ohne Bilder ist auch
 Bytes. Die Absicht stand im Kommentar, die Bedingung hat sie nie geprüft.
 
-- [ ] **Bilder im Handbuch-PDF.** Die sechs Vermutungen oben sind gemessen
-  ausgeschlossen; offen sind die Chromium-Seite (druckt `printToPdf` in dieser
-  Fassung Rasterbilder aus `file://` überhaupt?) und ein Gegenversuch mit
-  eingebetteten `data:`-URIs — trägt der, ist es eine Herkunftsfrage und keine
-  Zeitfrage. Dazu gehört eine Erfolgsbedingung, die Bilder **verlässlich**
-  zählt: Ein Grep auf `/Subtype /Image` liefert bei komprimierten Objektströmen
-  auch über einem guten PDF null und taugt nur als Befund, nicht als Tor.
+- [x] **Bilder im Handbuch-PDF** — gefunden und behoben am 27.08.2026
+  (`24967dfc`). **Es war keine der sechs ausgeschlossenen Vermutungen und
+  auch keine der zwei offenen.** Die Abbildungen steigen am Bildschirm beim
+  Lesen ein Stück auf, und diese Animation hängt an der Scroll-Position:
+
+      @supports (animation-timeline: view()) {
+        @media (prefers-reduced-motion: no-preference) {
+          main figure { animation: rise linear both;
+                        animation-timeline: view(); }
+        }
+      }
+
+  Gedruckt wird nicht gescrollt. Der Fortschritt bleibt null, die Animation
+  steht auf ihrem Anfangswert, und der ist unsichtbar. **Deshalb hat jede
+  Prüfung auf den Ladezustand die Seite für gesund erklärt** — die Bilder
+  luden ja alle, 39 von 39 mit `naturalWidth > 0`. Sie wurden nur nie
+  gezeichnet. Und deshalb griff auch die Prüfung auf `display: none` daneben:
+  Die Regel versteckt nichts, sie animiert nur.
+
+  Der Fix steht im `@media print`-Block von `tools/make_manual.py`:
+  `main figure { animation: none !important; }`
+
+  **Gemessen an derselben Seite**, gleicher Lauf, nur das Stylesheet
+  verändert:
+
+  | Fassung | PDF | Rasterbilder |
+  |---|---|---|
+  | Original | 703 KB | 0 |
+  | ohne diese eine Regel | 4116 KB | 18 |
+  | ohne Stylesheet ganz | 3711 KB | 18 |
+
+  Gefunden durch **Halbierung des Stylesheets**, nachdem Raten dreimal
+  danebenlag (`loading="lazy"`, `@media print` als Ganzes, die
+  `max-height`-Regeln — alle drei einzeln getestet, alle drei folgenlos).
+  Vorher war der Mechanismus vollständig entlastet worden: PNG und SVG, aus
+  `file://` wie aus `data:`, 8 KB bis 1,3 MB, ein Bild bis neununddreißig,
+  Unterordner, Ruhezeit 400 ms wie 1200 ms — in jedem dieser Fälle trägt
+  `printToPdf` das Bild mit.
+
+  **Zur Erfolgsbedingung, die der Punkt verlangt hat:** Ein Grep auf
+  `/Subtype /Image` findet auch über einem **guten** PDF null, sobald das Bild
+  ein SVG ist — SVG wird als Vektorgrafik eingebettet, nicht als Rasterbild.
+  Das Handbuch bindet 8 PNG und 31 SVG ein; wer nur den Grep zählt, hält ein
+  gesundes PDF für kaputt. Tauglich ist er nur zusammen mit der Dateigröße
+  gegen eine Grundlinie **mit demselben Text** (die eingebetteten Schriften
+  wiegen schwerer als ein kleines Bild und drehen den Vergleich sonst um).
+
+  **Offen bleibt ein Handgriff:** Die Seiten müssen einmal mit
+  `tools/make_manual.py` neu erzeugt werden, damit der Fix in
+  `website/handbuch.html` und den fünf Übersetzungen ankommt. Solange das
+  nicht geschehen ist, tragen die PDFs in `Releases/` weiter keine Bilder.
 
 ## Was Robert am 26.08.2026 aufgetragen hat
 
