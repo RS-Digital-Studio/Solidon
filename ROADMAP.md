@@ -11793,6 +11793,44 @@ Drei Wege, mit Kosten. Keiner ist gebaut, und keiner sollte ohne Entscheidung
 gebaut werden — §2.5 legt das Fensterschema fest, und
 `tests/test_interface_limits.py` kodiert die Zahlen.
 
+**Nachtrag am 27.08.2026: Ein Stück von A war kein Umbau, sondern ein
+Fehler.** Die Regel „gefaltet wird, weil es sein muss, nicht weil es ordentlich
+aussieht" stand seit dem 24.08.2026 fest und war für das **Kontextmenü**
+geprüft. Die Menüleiste hatte sie nie bekommen — und schlimmer: Ihre Zählung
+(`group_is_flat`) zählte Einträge mit, die das Menü nie zeigt. *Erzeugen* zeigt
+**11** Zeilen, gezählt wurden **14**, die Grenze liegt bei zwölf. Die drei
+Fehlenden sind die übrigen Mitglieder der Variantengruppe, die unter einem
+Sammeleintrag stehen.
+
+Gebaut ist deshalb:
+
+- [x] **`menu_rows_of` zählt, was zu sehen ist**, und `group_is_flat` fragt
+      sie. *Erzeugen* ist damit flach: **drei Klicks sind zwei geworden**, für
+      jede Erzeugungs-Operation, im Menü, das Weg 2 trägt.
+- [x] **Der Gruppenname bleibt sichtbar, auch flach** (`addSection` statt
+      `addSeparator`). Vorher hielt ein nackter Trennstrich die Kategorien
+      auseinander und benannte sie nicht; man erfuhr den Namen nur, wenn ein
+      Untermenü ihn trug — also genau dann, wenn der Weg einen Klick länger
+      war. Das ist die Fusion-Eigenschaft, die Robert genannt hat, und sie
+      kostet keine Zeile: Eine Überschrift ist ein Trennstrich mit Text und
+      zählt in der Grenze nicht mit. Bei einer einzigen Kategorie bleibt sie
+      weg, sonst hieße sie wie das Menü darüber.
+- [x] **Vier Tests dazu**, drei davon mit Mutationsprobe gegen die alte
+      Zählung (alle drei fallen). Der vierte ist die Menüleisten-Fassung des
+      Kontextmenü-Tests, die fehlte.
+
+Gemessen danach: *Erzeugen* 11 Zeilen ohne Untermenü mit vier Überschriften,
+*Vorbereiten* 10 mit zwei, *Objekt* und *Bausteine* ohne überflüssige
+Überschrift. `menu_path` folgt von selbst — „Erzeugen → Quader anlegen" statt
+„Erzeugen → Grundformen → Quader anlegen" —, weil Handbuch, Agent und Leiste
+dieselbe Funktion fragen.
+
+**Was von A offen bleibt**, und es ist der schwierigere Teil: *Ändern* (33
+flach), *Bausteine* (26) und *Ansicht* (23) passen nicht in die Zwölf. Für sie
+ist Flachziehen die falsche Antwort — die Bausteine gehören in den Katalog mit
+Bildern (§2.6 sagt das ausdrücklich), die Ansicht in die Ansicht, und *Ändern*
+bräuchte eine Aufteilung, die keine Zwischenebene ist. Das ist B und C.
+
 **A — Nur die Tiefe kürzen, Schema unberührt.** Untermenüs auflösen, wo eine
 Kategorie in die Zwölf-Zeilen-Grenze passt: *Erzeugen* und *Ändern* tragen
 zusammen 11 Untermenüs, und die meisten Kategorien haben weniger als zwölf

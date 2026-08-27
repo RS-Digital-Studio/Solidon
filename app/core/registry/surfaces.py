@@ -15,7 +15,7 @@ darstellt.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Container
+from collections.abc import Callable, Collection, Container
 from dataclasses import dataclass
 from typing import Any, Final
 
@@ -27,10 +27,12 @@ from app.core.registry.registry import (
     MENU_TWINS,
     REGISTRY,
     TWIN_TOGGLES,
+    VARIANT_GROUPS,
     MenuSection,
     OperationSpec,
     Registry,
     group_title,
+    variant_members,
 )
 from app.core.types import ParamSpec
 from app.i18n import TranslatableText, _, format_decimal, sort_key
@@ -85,6 +87,21 @@ def group_is_flat(category: str, registry: Registry | None = None) -> bool:
     sind der Ersatz für die Namen der Untermenüs, die wegfallen, und wer sie
     mitzählte, bestrafte das Flachziehen für seine eigene Wirkung.
 
+    **Und Variantengruppen zählen als eine Zeile, nicht als ihre Mitglieder.**
+    Das war der Fehler, und er kostete genau ein Menü: *Erzeugen* zeigt **11**
+    Einträge, gezählt wurden **14**, und die Grenze liegt bei zwölf — die
+    Zwischenebene entstand also für drei Operationen, die das Menü gar nicht
+    zeigt (``sketch_revolve``, ``sketch_sweep``, ``sketch_loft`` stehen unter
+    dem Sammeleintrag). Damit kostete jede Erzeugungs-Operation einen dritten
+    Klick, und zwar in dem Menü, das Weg 2 trägt.
+
+    Gemessen am 27.08.2026 beim Vergleich mit Fusion, wo dieselbe Handlung
+    einen Klick kostet. Die Regel selbst stand schon da — „gefaltet wird, weil
+    es sein muss, nicht weil es ordentlich aussieht" (``folded_groups``); was
+    fehlte, war eine Zählung, die zählt, was zu sehen ist. Derselbe Fehler wie
+    ein Sollwert, der aus dem Prüfling kommt: Die Zahl war plausibel und
+    beschrieb etwas anderes als die Frage.
+
     **Eine Gruppe mit einer einzigen besetzten Kategorie ist immer flach**,
     gleich wie lang sie ist — ihre Zwischenebene hieße genauso wie das Menü
     darüber („Bausteine → Bausteine → Deckel erzeugen"). Das ist keine
@@ -105,10 +122,30 @@ def group_is_flat(category: str, registry: Registry | None = None) -> bool:
     populated = {spec.category for spec in source.all()}
     if len([name for name in in_group if name in populated]) <= 1:
         return True
-    entries = sum(
-        1 for spec in source.all() if spec.category in in_group and spec.name not in MENU_TWINS
-    )
-    return entries <= MAX_MENU_ROWS
+    return menu_rows_of(in_group, source) <= MAX_MENU_ROWS
+
+
+def menu_rows_of(categories: Collection[str], registry: Registry | None = None) -> int:
+    """Wie viele Zeilen diese Kategorien flach in einem Menü belegen.
+
+    Die eine Zählung für die Frage „passt das ohne Zwischenebene", und sie
+    zählt, **was zu sehen ist**: Zwillinge aus ``MENU_TWINS`` haben keinen
+    Eintrag, und die Mitglieder einer Variantengruppe teilen einen — vier
+    Skizzen-Operationen sind eine Zeile.
+
+    Als eigene Funktion, damit sie prüfbar ist, ohne ein Fenster zu bauen: Ein
+    Test über ``group_is_flat`` sieht nur ja oder nein und könnte die Zahl
+    dahinter nicht gegen die des gebauten Menüs halten.
+    """
+    source = registry or REGISTRY
+    inside = [spec for spec in source.all() if spec.category in categories]
+    names = {spec.name for spec in inside if spec.name not in MENU_TWINS}
+    members = variant_members()
+    rows = len(names - members)
+    # Je Variantengruppe, die hier überhaupt vertreten ist, genau eine Zeile
+    # für den Sammeleintrag.
+    rows += sum(1 for group in VARIANT_GROUPS if any(name in names for name in group.members))
+    return rows
 
 
 def menu_path(spec: OperationSpec, registry: Registry | None = None) -> str:

@@ -1765,18 +1765,36 @@ class MainWindow(QMainWindow):
             groups[str(title)] = group
             self._workspace_menus.append(group)
             flat = group_is_flat(present[0].category)
-            for index, section in enumerate(present):
+            for section in present:
                 # Eine Gruppe aus einer Kategorie braucht kein Untermenü — es
                 # hieße genauso wie das Menü darüber. Und eine Gruppe, die
                 # ganz hineinpasst, braucht auch keines: dann ist die
                 # Zwischenebene ein Klick für nichts (siehe
                 # ``_fits_without_submenus``).
                 target = group
-                if flat and index:
-                    # Der Trennstrich hält die Kategorien auseinander, wo der
-                    # Name des Untermenüs sie nicht mehr benennt. Er zählt in
-                    # der Zeilengrenze nicht mit — genau dafür ist er da.
-                    group.addSeparator()
+                if flat and len(present) > 1:
+                    # **Die Kategorie behält ihren Namen, auch flach.** Hier
+                    # stand ein nackter Trennstrich ab der zweiten Kategorie;
+                    # er hielt sie auseinander und **benannte** sie nicht. Der
+                    # Vergleich mit Fusion hat das sichtbar gemacht
+                    # (27.08.2026): Dort steht der Gruppenname dauernd im Band
+                    # („ERSTELLEN", „ÄNDERN"), bei uns erfuhr man ihn nur, wenn
+                    # eine Zwischenebene ihn trug — also genau dann, wenn der
+                    # Weg einen Klick länger war.
+                    #
+                    # ``addSection`` ist ein Trennstrich **mit** Beschriftung
+                    # und zählt in der Zeilengrenze deshalb weiterhin nicht mit
+                    # (``isSeparator()`` bleibt wahr, siehe
+                    # ``tests/test_interface_limits.py``). Auch vor der ersten
+                    # Kategorie: Ein Menü, dessen zweite Gruppe eine
+                    # Überschrift hat und dessen erste nicht, liest sich, als
+                    # gehörte der Anfang zu keiner.
+                    #
+                    # **Bei einer einzigen Kategorie bleibt sie weg** — dieselbe
+                    # Begründung, mit der ``group_is_flat`` dort nie ein
+                    # Untermenü zieht: Die Überschrift wäre ein zweiter Name
+                    # für dasselbe Menü („Bausteine → Bausteine").
+                    group.addSection(str(section.title))
                 if not flat and len(present) > 1:
                     # Mit dem Fenster als Elternteil erzeugt, nicht über
                     # ``addMenu(titel)``: sonst hält nichts auf der Python-Seite

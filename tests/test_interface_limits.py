@@ -1469,3 +1469,153 @@ def test_every_menu_path_in_the_texts_leads_somewhere(window: MainWindow) -> Non
 
     assert checked >= 10, f"nur {checked} Menüwege gefunden — das Muster greift nicht mehr"
     assert not wrong, "Menüwege, die ins Leere zeigen:\n" + "\n".join(wrong)
+
+
+# --- Gezählt wird, was zu sehen ist (27.08.2026) ------------------------------
+
+
+def test_the_row_count_counts_what_the_menu_shows() -> None:
+    """Eine Zwischenebene für Einträge, die das Menü nie zeigt, ist ein Klick
+    für nichts.
+
+    ``group_is_flat`` zog *Erzeugen* ein Untermenü ein, weil es **14** Einträge
+    zählte; gezeigt werden **11**, und die Grenze liegt bei zwölf. Die drei
+    Fehlenden sind die übrigen Mitglieder der Variantengruppe — sie stehen
+    unter dem Sammeleintrag und haben keine eigene Zeile. Damit kostete jede
+    Erzeugungs-Operation einen dritten Klick, und zwar im Menü, das Weg 2
+    trägt.
+
+    Geprüft wird die Rechnung gegen die **Regel**, nicht gegen die heutige Zahl:
+    Die Zeilenzahl einer Gruppe ist die Zahl ihrer Namen minus der
+    Variantenmitglieder plus einer Zeile je vertretener Gruppe. Ohne Qt, damit
+    kein Fenster dafür entsteht.
+    """
+    from app.core.registry import MENU_GROUPS, MENU_TWINS, REGISTRY, VARIANT_GROUPS
+    from app.core.registry.registry import variant_members
+    from app.core.registry.surfaces import menu_rows_of
+
+    members = variant_members()
+    for _title, categories in MENU_GROUPS:
+        names = {
+            spec.name
+            for spec in REGISTRY.all()
+            if spec.category in categories and spec.name not in MENU_TWINS
+        }
+        if not names:
+            continue
+        expected = len(names - members) + sum(
+            1 for group in VARIANT_GROUPS if any(name in names for name in group.members)
+        )
+        assert menu_rows_of(categories) == expected, (
+            f"{categories}: gezählt {menu_rows_of(categories)}, gezeigt {expected}"
+        )
+
+
+def test_a_variant_group_costs_one_row_and_not_its_members() -> None:
+    """Die Gegenprobe an der Gruppe, die den Fehler ausgelöst hat.
+
+    Ohne sie wäre der Test darüber auch grün, wenn *keine* Variantengruppe
+    existierte — er prüft dann eine Formel über eine leere Menge.
+
+    **Und die erste Fassung dieses Tests rechnete falsch**, was ihn nützlicher
+    macht als seine Behauptung: Sie erwartete, dass die Kategorie *Skizze* eine
+    Zeile beiträgt, weil ihre vier Wege zusammengelegt sind. Tatsächlich sind es
+    zwei — `sketch_pocket` steht **nicht** in der Gruppe und behält seine Zeile.
+    Wer über eine Zusammenlegung rechnet, zählt die Nichtmitglieder mit.
+    """
+    from app.core.registry import MENU_GROUPS, REGISTRY, VARIANT_GROUPS
+    from app.core.registry.surfaces import menu_rows_of
+
+    group = VARIANT_GROUPS[0]
+    assert len(group.members) > 1, "eine Gruppe aus einem Mitglied prüft hier nichts"
+    categories = next(cats for _title, cats in MENU_GROUPS if "sketch" in cats)
+
+    im_menü = {spec.name for spec in REGISTRY.all() if spec.category == "sketch"}
+    mitglieder = im_menü & set(group.members)
+    assert len(mitglieder) == len(group.members), "die Gruppe liegt nicht ganz in einer Kategorie"
+
+    ohne = menu_rows_of([name for name in categories if name != "sketch"])
+    beitrag = menu_rows_of(categories) - ohne
+
+    assert beitrag == len(im_menü - mitglieder) + 1, (
+        f"Skizze trägt {beitrag} Zeilen: erwartet je Nichtmitglied eine "
+        f"({len(im_menü - mitglieder)}) plus eine für den Sammeleintrag"
+    )
+    assert beitrag < len(im_menü), (
+        "die Zusammenlegung spart keine Zeile — dann zählt die Rechnung die Mitglieder einzeln"
+    )
+
+
+def test_no_menu_is_folded_that_would_have_fitted(window: MainWindow) -> None:
+    """Gefaltet wird, weil es sein muss — auch in der Menüleiste.
+
+    Die Regel stand seit dem 24.08.2026 fest und war für das **Kontextmenü**
+    geprüft (:func:`test_a_group_of_one_never_becomes_a_submenu`); die
+    Menüleiste hatte keinen Test dafür und faltete *Erzeugen* ohne Not.
+
+    Gezählt wird am gebauten Fenster: Ein Menü ohne Untermenü zeigt seine
+    Einträge selbst, und wenn diese Zahl in die Grenze passt, darf kein
+    Untermenü darin stehen.
+    """
+    from app.core.registry.surfaces import MAX_MENU_ROWS
+
+    for action in window.menuBar().actions():
+        menu = action.menu()
+        if menu is None:
+            continue
+        rows = [entry for entry in menu.actions() if not entry.isSeparator()]
+        submenus = [entry for entry in rows if entry.menu() is not None]
+        if not submenus:
+            continue
+        flat = (
+            len(rows)
+            - len(submenus)
+            + sum(
+                len([e for e in entry.menu().actions() if not e.isSeparator()])
+                for entry in submenus
+            )
+        )
+        assert flat > MAX_MENU_ROWS, (
+            f"{action.text()}: flach wären es {flat} Zeilen, die Grenze ist "
+            f"{MAX_MENU_ROWS} — das Untermenü kostet einen Klick und spart nichts"
+        )
+
+
+def test_a_flat_group_keeps_the_names_of_its_categories(window: MainWindow) -> None:
+    """Der Gruppenname bleibt sichtbar, auch ohne Zwischenebene.
+
+    Vorher hielt ein nackter Trennstrich die Kategorien auseinander und
+    **benannte** sie nicht — man erfuhr den Namen nur, wenn ein Untermenü ihn
+    trug, also genau dann, wenn der Weg einen Klick länger war. Der Vergleich
+    mit Fusion hat das sichtbar gemacht (27.08.2026): Dort steht der
+    Gruppenname dauernd im Band.
+
+    Eine Überschrift ist ein Trennstrich mit Text und zählt in der
+    Zeilengrenze deshalb nicht mit — das prüft der Test gleich mit, denn sonst
+    wäre die Beschriftung ein Verstoß gegen die Grenze, die sie einhalten soll.
+    """
+    from app.core.registry import MENU_GROUPS, REGISTRY
+    from app.core.registry.surfaces import MAX_MENU_ROWS, group_is_flat
+
+    populated = {spec.category for spec in REGISTRY.all()}
+    geprüft = 0
+    for title, categories in MENU_GROUPS:
+        present = [name for name in categories if name in populated]
+        if len(present) < 2 or not group_is_flat(present[0]):
+            continue
+        menu = next(
+            entry.menu()
+            for entry in window.menuBar().actions()
+            if entry.menu() is not None and entry.text() == str(title)
+        )
+        headings = [
+            entry.text() for entry in menu.actions() if entry.isSeparator() and entry.text()
+        ]
+        assert len(headings) == len(present), (
+            f"{title}: {len(headings)} Überschriften für {len(present)} Kategorien"
+        )
+        rows = sum(1 for entry in menu.actions() if not entry.isSeparator())
+        assert rows <= MAX_MENU_ROWS, f"{title}: {rows} Zeilen über der Grenze"
+        geprüft += 1
+
+    assert geprüft, "keine flache Gruppe mit mehreren Kategorien — dann prüft dieser Test nichts"
