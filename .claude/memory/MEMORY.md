@@ -64,7 +64,6 @@
 - [Git-Identität mitgeben](git-identitaet-mitgeben.md) — `git commit` bricht ohne `-c user.name`/`user.email` mit Exit 128 ab
 - [Privater Index: fester Name](privater-index-fester-name.md) — `$$` im `GIT_INDEX_FILE` zeigt im nächsten Aufruf ins Leere; ein fehlender Index ist ein leerer, und der committet 1175 Dateien als gelöscht.
 - [`-o` nimmt den Dateistand](commit-o-nimmt-den-dateistand.md) — der private Index hält fremde *Dateien* heraus, nicht den fremden Stand einer *gemeinsamen*; erst die eigene Zahl ansagen, dann `--numstat`.
-- [Die Indexdatei braucht den Sitzungsnamen](index-datei-braucht-den-sitzungsnamen.md) — `$$` zeigt je Bash-Aufruf woanders hin, und ein fehlender Index heißt beim Committen „alles gelöscht": 1175 Dateien in zwei Minuten.
 - [$TEMP ist maschinenweit](temp-dateien-sind-maschinenweit.md) — alle Sitzungen schreiben ihre Torläufe in dieselben Dateien; eine fremde oder eigene alte Zahl sieht aus wie die aktuelle.
 - [Im geteilten Baum misst man einen Zeitpunkt](geteilter-baum-misst-zeitpunkt.md) — ein Fremdbefund, den man nachmisst, kann längst repariert sein; `git diff HEAD` vor der Messung.
 - [Parallele Sitzung im Arbeitsbaum](parallele-sitzung-im-arbeitsbaum.md) — geteilter Index: fremde Änderungen aussortieren, privaten Index benutzen
