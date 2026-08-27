@@ -26,8 +26,9 @@ from shapely.geometry import Polygon as ShapelyPolygon
 
 from app.core.errors import CANCEL, Action, UserError
 from app.core.geom.mesh import MeshData, as_mesh_data
+from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
 from app.core.log import get_logger
-from app.core.perceive.features import pair_radii
+from app.core.perceive.features import CURVATURE_LIMIT, pair_radii
 from app.core.slice.analysis import cross_sections, slice_body
 from app.core.types import (
     CancelToken,
@@ -60,10 +61,6 @@ MAP_LIMIT_TRIANGLES = 120_000
 #: genug, dass ein Kartenwechsel sofort wirkt, grob genug, dass die Frage
 #: selbst nicht ins Gewicht fällt.
 CANCEL_EVERY = 512
-
-#: Alles Steilere braucht Stützen — die Linie, die die Regelsammlung
-#: zieht (§39).
-OVERHANG_LIMIT_DEGREES = 45.0
 
 #: Wie weit über der Mindestwandstärke die Skala der Wandstärkenkarte endet.
 #: Fünf mal zwei Extrusionsbreiten sind das Zehnfache einer Bahn — darüber
@@ -475,12 +472,6 @@ def defect_map(mesh: MeshData) -> AnalysisMap:
 # --- Krümmung -------------------------------------------------------------------
 
 
-#: Ab welchem Winkel zwischen zwei Dreiecken keine Rundung mehr gemessen wird,
-#: sondern eine Kante dasteht — dieselbe Schwelle, an der die Fleckenbildung
-#: trennt (``CURVATURE_LIMIT`` in :mod:`app.core.perceive.features`).
-EDGE_ANGLE = 30.0
-
-
 def curvature_map(mesh: MeshData, features: dict[FeatureId, Feature] | None = None) -> AnalysisMap:
     """Der Radius, mit dem ein Dreieck gekrümmt ist — in Millimetern.
 
@@ -514,7 +505,7 @@ def curvature_map(mesh: MeshData, features: dict[FeatureId, Feature] | None = No
 
     sharp: set[int] = set()
     for (first, second), radius, angle in zip(pairs, radii, degrees, strict=True):
-        if angle >= EDGE_ANGLE:
+        if angle >= CURVATURE_LIMIT:
             # **Eine Kante geht nicht in den Wert ein, sie wird markiert.** Sie
             # sagt nichts darüber, wie die Fläche gekrümmt ist, auf der das
             # Dreieck liegt — sie sagt, dass daneben eine andere anfängt. Der

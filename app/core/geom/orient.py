@@ -19,13 +19,10 @@ import trimesh
 
 from app.core.geom.mesh import MeshData
 from app.core.geom.transform import apply, translation
+from app.core.knowledge.rules import OVERHANG_LIMIT_DEGREES
 from app.core.types import Finding, Vec3
 from app.core.units import EPS_GEOM
 from app.i18n import _
-
-#: Flächen, die steiler als das gegen die Platte stehen, brauchen
-#: Stützen (§39, §18.4).
-OVERHANG_LIMIT_DEGREES = 45.0
 
 #: Wie viele Kandidatenrichtungen über die sechs Achsrichtungen hinaus
 #: angesehen werden.

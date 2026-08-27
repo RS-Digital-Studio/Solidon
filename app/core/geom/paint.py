@@ -24,14 +24,10 @@ from app.core.geom.colour_ops import colour_from, merged_slots
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, Finding, MaterialSlot, OpContext, OpResult
+from app.core.types import MAX_SLOTS, BaseParams, Finding, MaterialSlot, OpContext, OpResult
 from app.i18n import _
 
 _log = get_logger(__name__)
-
-#: Wie viele Filamente eine Slotnummer benennen darf (§20, wie bei den
-#: Farb-Operationen).
-MAX_SLOTS = 8
 
 
 @dataclasses.dataclass(frozen=True, slots=True)

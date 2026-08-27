@@ -337,12 +337,6 @@ def check_printable(pattern: str, pitch: float, depth: float, printer: PrinterPr
 # --- die Operation (Bauplan §25, Kategorie „Oberfläche") -------------------------
 
 
-#: Wie weit die Prägung in den Körper hineinreicht, damit die Vereinigung eine
-#: gemeinsame Fläche hat statt einer Berührung. Dieselbe Zahl und derselbe
-#: Grund wie bei der Beschriftung.
-OVERLAP: Final = 0.05
-
-
 @op_params
 class TextureParams(BaseParams):
     pattern: str = param(
@@ -566,7 +560,7 @@ def apply_texture(ctx: OpContext) -> OpResult:
     """
     import dataclasses
 
-    from app.core.geom.boolean import BooleanKind, boolean, without_effect
+    from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, boolean, without_effect
     from app.core.geom.label_ops import label_solid, place
     from app.core.geom.mesh import as_mesh_data
     from app.core.geom.transform import apply, translation
@@ -597,7 +591,7 @@ def apply_texture(ctx: OpContext) -> OpResult:
         )
 
     source = ctx.inputs[0]
-    body = label_solid(shapes, params.depth + OVERLAP)
+    body = label_solid(shapes, params.depth + BOOLEAN_OVERLAP)
     if body is None:
         raise ValidationError(
             "pattern",
@@ -609,7 +603,7 @@ def apply_texture(ctx: OpContext) -> OpResult:
     # Erhaben steht die Tiefe über der Fläche, nur die Überlappung reicht
     # hinein; vertieft andersherum — sonst nähme der Schnitt die Überlappung
     # weg und ließe das Muster als Kratzer zurück.
-    lift = -OVERLAP if params.mode == "raised" else -params.depth
+    lift = -BOOLEAN_OVERLAP if params.mode == "raised" else -params.depth
     if params.wrap == "cylinder":
         # Ein gebogenes Prisma behält seinen **ebenen** Boden: die Sehne unter
         # dem Bogen. In der Mitte des Elements steht der Boden damit über der

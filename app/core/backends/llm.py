@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar, Final, Literal, Protocol
 
 from app.core.backends import keys
-from app.core.discover import UNUSABLE_ADDRESS
+from app.core.discover import PROBE_SECONDS, UNUSABLE_ADDRESS
 from app.core.errors import CANCEL, OPEN_SETTINGS, RETRY, AppError, ExternalToolError
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
@@ -57,11 +57,6 @@ TIMEOUT_SECONDS = 120.0
 #: AMD-Grafik sind 7,8 Token je Sekunde gemessen worden; wer dort rechnet,
 #: soll ein Ergebnis bekommen und keine Absage.
 LOCAL_TIMEOUT_SECONDS = 600.0
-
-#: Wie lange die Prüfung „läuft ein lokales Modell" dauern darf. Sie passiert,
-#: während das Fenster gebaut wird, muss also vorbei sein, bevor es jemand
-#: bemerkt.
-PROBE_SECONDS = 0.25
 
 
 @dataclass(frozen=True, slots=True)

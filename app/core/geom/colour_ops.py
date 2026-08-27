@@ -18,15 +18,10 @@ from app.core.geom.mesh import as_mesh_data
 from app.core.geom.texture import to_slots
 from app.core.log import get_logger
 from app.core.registry import op_params, param, register_op
-from app.core.types import BaseParams, Finding, MaterialSlot, OpContext, OpResult
+from app.core.types import MAX_SLOTS, BaseParams, Finding, MaterialSlot, OpContext, OpResult
 from app.i18n import _
 
 _log = get_logger(__name__)
-
-#: Wie viele Filamente die Operationen benennen lassen. Mehr als acht ist
-#: keine Maschine, die jemand besitzt, und jedes einzelne ist ein
-#: Handwechsel oder ein AMS-Slot, den jemand füllen muss.
-MAX_SLOTS = 8
 
 _HEX = re.compile(r"^#?([0-9a-fA-F]{6})$")
 

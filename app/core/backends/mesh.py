@@ -77,7 +77,7 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any, Final, Protocol
 
-from app.core.discover import BROKEN_ADDRESS, UNUSABLE_ADDRESS
+from app.core.discover import BROKEN_ADDRESS, PROBE_SECONDS, UNUSABLE_ADDRESS
 from app.core.errors import CANCEL, INSTALL_MISSING, Action, AppError, OperationCancelled
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.log import get_logger
@@ -98,10 +98,6 @@ POLL_SECONDS = 1.0
 #: falsch beantwortet — nicht den langsamen Rechner, dafür ist
 #: :data:`TIMEOUT_SECONDS` da.
 STUCK_SECONDS = 3600.0
-
-#: Wie lange die Prüfung „läuft ComfyUI" dauern darf. Derselbe Grund wie beim
-#: Modell-Test: sie passiert, während ein Fenster gebaut wird.
-PROBE_SECONDS = 0.25
 
 DEFAULT_COMFY_URL = "http://127.0.0.1:8188"
 

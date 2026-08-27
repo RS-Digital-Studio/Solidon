@@ -26,6 +26,7 @@ import trimesh
 
 from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData, face_components
+from app.core.geom.repair import SMALL_COMPONENT_SHARE
 from app.core.log import get_logger
 from app.core.perceive.maps import MAP_LIMIT_TRIANGLES
 from app.core.scene.evaluate import FEATURE_LIMIT_TRIANGLES
@@ -66,9 +67,6 @@ CANDIDATE_UNITS: Final[tuple[LengthUnit, ...]] = ("mm", "cm", "in", "m")
 #: das ist keine Vermutung über die Datei, sondern die einzige Lesart, die
 #: nichts hinzudichtet.
 MEASURED_UNIT: Final[LengthUnit] = "mm"
-
-#: Eine Komponente unter diesem Anteil der größten zählt als loses Fragment.
-SMALL_COMPONENT_SHARE: Final = 0.001
 
 
 @dataclass(frozen=True, slots=True)

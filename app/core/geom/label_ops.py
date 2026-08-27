@@ -25,12 +25,20 @@ import trimesh
 
 from app.core.errors import ValidationError
 from app.core.geom.attributes import with_slot
-from app.core.geom.boolean import BooleanKind, boolean, without_effect
+from app.core.geom.boolean import BOOLEAN_OVERLAP, BooleanKind, boolean, without_effect
 from app.core.geom.mesh import MeshData, as_mesh_data, concatenated
 from app.core.geom.transform import apply, rotation, translation
 from app.core.log import get_logger
 from app.core.registry import NAME_DOC, op_params, param, register_op
-from app.core.types import BaseParams, MaterialSlot, OpContext, OpResult, SceneObject, Vec3
+from app.core.types import (
+    MAX_SLOTS,
+    BaseParams,
+    MaterialSlot,
+    OpContext,
+    OpResult,
+    SceneObject,
+    Vec3,
+)
 from app.core.units import DEGREE_UNIT, EPS_GEOM
 from app.i18n import _
 
@@ -55,17 +63,8 @@ _FACING_MORE = _("Weitere Achse der Richtung — siehe Normale X.")
 _SIZE = _("Höhe der Großbuchstaben. Unter drei Millimetern verliert der Druck die Form.")
 _FONT = _("DejaVu liegt bei, damit ein Projekt auf jedem Rechner gleich aussieht.")
 
-#: Wie weit eine erhabene Beschriftung in den Körper reicht, und eine
-#: gravierte über ihren Boden hinaus. Ohne das fallen die zwei Flächen
-#: zusammen, und die Boolesche Op scheitert (§39).
-OVERLAP = 0.05
-
 #: Darunter sind die Buchstaben dünner als eine Düse und drucken als Schmierer.
 MIN_SIZE = 3.0
-
-#: Wie viele Filamente eine Slotnummer benennen darf (§20, wie bei den
-#: Farb-Operationen).
-MAX_SLOTS = 8
 
 
 def outlines(text: str, size: float, font: str = FONTS[0]) -> list[Any]:
@@ -242,7 +241,7 @@ def label_text(ctx: OpContext) -> OpResult:
         )
 
     mode = cast(Placement, params.mode)
-    depth = params.depth + OVERLAP
+    depth = params.depth + BOOLEAN_OVERLAP
     body = label_solid(shapes, depth)
     if body is None:
         raise ValidationError(
@@ -260,7 +259,7 @@ def label_text(ctx: OpContext) -> OpResult:
     # hinein, nur die Überlappung steht über — sonst nimmt der Schnitt die
     # Überlappung weg und lässt die Buchstaben als Kratzer zurück.
     middle = body.bounds.centre
-    lift = -OVERLAP if mode == "raised" else -params.depth
+    lift = -BOOLEAN_OVERLAP if mode == "raised" else -params.depth
     body = apply(body, translation((-middle[0], -middle[1], lift)))
 
     placed = place(

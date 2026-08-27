@@ -26,6 +26,7 @@ from shapely.ops import unary_union
 
 from app.core.errors import ValidationError
 from app.core.geom.mesh import MeshData
+from app.core.knowledge.rules import OVERHANG_ANGLE_FACTOR
 from app.core.log import get_logger
 from app.core.types import LayerInfo, Polygon, SliceResult
 from app.core.units import EPS_GEOM
@@ -53,12 +54,6 @@ else:
 
 #: Der kleinste Überhang, der nicht bloß Vernetzungsrauschen ist.
 OVERHANG_MARGIN = 0.05
-
-#: Eine Schicht darf um eine Schichthöhe seitlich wachsen und bleibt
-#: druckbar — das sind genau 45 Grad, der Winkel, an dem die Regelsammlung die
-#: Linie zieht (§39, §18.4).
-#: Nur was weiter reicht, zählt als Überhang.
-OVERHANG_ANGLE_FACTOR = 1.0
 
 #: Schritte der binären Suche nach der kleinsten Strukturbreite. Sechs
 #: Halbierungen einer ohnehin engen Klammer lassen unter zwei Prozent übrig.

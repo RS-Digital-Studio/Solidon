@@ -260,6 +260,21 @@ class Feature:
     ins Leere führt, ist schlechter als keiner (§21.2)."""
 
 
+#: Wie viele Filamente die Operationen benennen lassen (§20).
+#:
+#: Mehr als acht ist keine Maschine, die jemand besitzt, und jedes einzelne
+#: ist ein Handwechsel oder ein AMS-Slot, den jemand füllen muss.
+#:
+#: **Die Zahl stand dreimal im Code** — in ``colour_ops``, ``label_ops`` und
+#: ``paint``, jedes Mal mit dem Kommentar „wie bei den Farb-Operationen"
+#: daneben. Ein Verweis auf die Kopie ist keine geteilte Sache: Wer die Grenze
+#: eines Tages ändert, ändert sie an einer Stelle, und zwei Operationen
+#: erlauben danach etwas anderes als die dritte. Sie wohnt deshalb hier, bei
+#: dem Ding, über das sie eine Aussage macht (Robert, 27.08.2026 — „wir wollen
+#: überall eine saubere Architektur").
+MAX_SLOTS = 8
+
+
 @dataclass(frozen=True, slots=True)
 class MaterialSlot:
     """Ein Filamentslot eines Objekts (§20)."""

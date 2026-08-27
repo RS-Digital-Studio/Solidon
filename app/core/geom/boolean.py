@@ -63,6 +63,23 @@ JITTER_AMPLITUDE = 1e-4
 #: Kantenlänge des Voxelrasters in Stufe 4, relativ zur Modelldiagonale.
 VOXEL_PITCH_RELATIVE = 0.004
 
+#: Wie weit ein abziehendes Werkzeug über die Fläche hinausreichen soll, die es
+#: durchschneidet.
+#:
+#: Zusammenfallende Flächen sind der klassische Weg, eine Boolesche Operation
+#: zu brechen (§39) — also reicht das Werkzeug ein Stück darüber hinaus, weit
+#: unter dem, was ein Drucker auflöst. Die Zahl gehört deshalb hierher, zu der
+#: Rechnung, die sie braucht: Sie stand in der Beschriftung und in der Textur
+#: je einmal, und der Kommentar der zweiten sagte „dieselbe Zahl und derselbe
+#: Grund wie bei der Beschriftung" — ein Verweis auf die Kopie, der beim
+#: nächsten Anfassen nicht mitwandert (27.08.2026).
+#:
+#: Die Bausteinbibliothek führt weiterhin ihre eigenen 0,01 mm
+#: (``knowledge/parts/shapes.py``) — dieselbe Frage, eine andere Antwort. Was
+#: davon richtig ist, ist eine Messung und keine Aufräumarbeit; solange sie
+#: aussteht, bleibt die Abweichung sichtbar statt stillschweigend angeglichen.
+BOOLEAN_OVERLAP = 0.05
+
 
 @dataclass(slots=True)
 class BooleanOutcome:

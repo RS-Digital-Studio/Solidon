@@ -13,6 +13,7 @@ sich entfernen lassen, ohne Code anzufassen.
 
 from __future__ import annotations
 
+import math
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,6 +24,26 @@ from app.core.log import get_logger
 _log = get_logger(__name__)
 
 _DATA_FILE: Final = Path(__file__).parent / "data" / "rules.toml"
+
+#: Steiler als das gegen die Platte, und es braucht Stützen (§39, §18.4).
+#:
+#: **Die Linie stand dreimal im Code, und einmal davon in anderer Gestalt.**
+#: Die Orientierungssuche und die Analysekarte führten je eigene 45 Grad; die
+#: Schichtanalyse dieselbe Entscheidung als Faktor 1.0, mit dem Satz „das sind
+#: genau 45 Grad" im Kommentar daneben. Drei Stellen, die dieselbe Frage
+#: beantworten, sind nur so lange einig, wie niemand eine davon anfasst — und
+#: wer eine Winkelgrenze ändert, sucht nach Winkeln, nicht nach Faktoren.
+#: Danach hätte die Orientierungssuche eine Lage empfohlen, die die
+#: Schichtanalyse am selben Teil als Überhang meldet.
+#:
+#: Sie wohnt hier, weil §39 sie zieht: die Regelsammlung ist die Stelle, an
+#: der Druckwissen steht (Robert, 27.08.2026).
+OVERHANG_LIMIT_DEGREES: Final = 45.0
+
+#: Wie weit eine Schicht seitlich wachsen darf, in Schichthöhen — dieselbe
+#: Linie wie darüber, nur wie die Schichtanalyse sie braucht. Abgeleitet und
+#: nicht abgeschrieben: Wer den Winkel ändert, ändert beides.
+OVERHANG_ANGLE_FACTOR: Final = math.tan(math.radians(OVERHANG_LIMIT_DEGREES))
 
 _rules: RuleSet | None = None
 
