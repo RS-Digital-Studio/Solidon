@@ -389,3 +389,73 @@ def height_to(start: PlaneFrame, target: PlaneFrame) -> float:
             ],
         )
     return height
+
+
+def axis_hit(frame: PlaneFrame, base: Point2, origin: Vec3, direction: Vec3) -> float | None:
+    """Wie hoch über der Zeichenebene ein Sichtstrahl ihre Aufzugsachse trifft.
+
+    Das Gegenstück zu :func:`ray_hit`, für den **Ziehgriff** (§30.1): Dort
+    wird eine Stelle auf der Ebene gesucht, hier eine Höhe über ihr. Die Achse
+    läuft durch ``base`` entlang ``frame.normal`` — also entlang genau der
+    Richtung, in die :func:`app.core.brep.profiles.extrude` aufzieht. Der
+    Rückgabewert ist deshalb unmittelbar die Höhe der Operation, mit Vorzeichen.
+
+    Getroffen wird eine Gerade selten; gesucht ist die Stelle der **größten
+    Annäherung** von Achse und Strahl. Ein Schnitt mit einer Hilfsebene wäre
+    der naheliegendere Weg und der schlechtere: Welche Ebene das sein müsste,
+    hängt an der Kameradrehung, und in der Querschau — dort, wo gezogen wird —
+    steht die Zeichenebene selbst beinahe parallel zum Blick.
+
+    ``direction`` muss nicht normiert sein: Sie kommt als Schritt von der
+    nahen zur fernen Ebene und ist hunderte Millimeter lang.
+
+    Nichts kommt zurück, wenn der Strahl (beinahe) **entlang** der Achse
+    läuft — dann liegt sie als Punkt im Bild, und keine Mausbewegung könnte
+    eine Höhe bedeuten. Geprüft wird der Sinus des Winkels zwischen beiden und
+    gegen dieselbe Schwelle wie in :func:`ray_hit`: Dort fällt der Blick aus,
+    der die Ebene streift, hier der, der auf sie zeigt. Dieselbe Zahl auf die
+    Gegenfrage — nicht eine zweite Schwelle daneben.
+    """
+    span = _length(direction)
+    if span < _PARALLEL:
+        return None
+    # Kosinus zwischen Strahl und Achse; die Normale ist normiert
+    # (:func:`frame_of`), die Richtung nicht.
+    along = _dot(direction, frame.normal) / span
+    # ``1 - cos²`` kann bei einem Kosinus knapp über eins negativ werden — das
+    # ist Fließkomma, kein Fall. ``max`` fängt es ab, statt ``sqrt`` zu
+    # überlassen, was es damit tut.
+    sideways = math.sqrt(max(1.0 - along * along, 0.0))
+    if sideways < _PARALLEL_ENOUGH:
+        return None
+    anchor = to_world(frame, base)
+    gap = (
+        anchor[0] - origin[0],
+        anchor[1] - origin[1],
+        anchor[2] - origin[2],
+    )
+    # Die Kleinste-Quadrate-Lösung für den Abstand zweier Geraden, in zwei
+    # Schritten: erst der Parameter auf dem **Strahl**, dann der auf der Achse.
+    #
+    # Mit ``w = anchor - origin``, ``n`` der Normalen und ``d`` der Richtung
+    # verschwinden beide Ableitungen bei
+    #
+    #     s = (w·d - (w·n)(n·d)) / (|d|² sin²)
+    #     t = s (n·d) - (w·n)
+    #
+    # und ``|d|² sin²`` ist genau die Größe, die oben schon geprüft ist.
+    #
+    # **Auf das Vorzeichen des Zählers kommt es an, und es fällt fast nie
+    # auf.** Eine erste Fassung rechnete ``(cross_dot·axis_dot - ray_dot)``,
+    # also ``-s``, und gab damit ``t`` um ``2 s (n·d)`` verschoben zurück. Der
+    # Fehlerterm verschwindet bei ``n·d = 0`` — also bei jedem Blick genau quer
+    # zur Aufzugsachse, und das ist der Normalfall der Querschau, an dem man so
+    # eine Funktion prüft. Gemessen an einem Strahl, der die Achse in
+    # ``(0, 0, 10)`` **exakt trifft**: 90 statt 10 (gefunden von der
+    # Review-Sitzung, 27.08.2026). Der exakte Treffer ist deshalb der Testfall,
+    # der hier zählt — sein Sollwert steht ohne Rechnung fest.
+    axis_dot = _dot(gap, frame.normal)
+    ray_dot = _dot(gap, direction)
+    cross_dot = _dot(frame.normal, direction)
+    reach = (ray_dot - cross_dot * axis_dot) / (span * span * sideways * sideways)
+    return reach * cross_dot - axis_dot

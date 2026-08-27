@@ -12,6 +12,7 @@ from app.core.brep.kernel import available as brep_available
 from app.core.errors import AppError, SketchConflictError, ValidationError
 from app.core.sketch import solve_sketch
 from app.core.sketch.planes import (
+    axis_hit,
     frame_for_plane,
     frame_of,
     image_normal,
@@ -845,6 +846,143 @@ def test_a_ray_hits_a_tilted_plane_where_to_world_would_put_it() -> None:
     start = tuple(target[axis] + 250.0 * frame.normal[axis] for axis in range(3))
     direction = tuple(-frame.normal[axis] for axis in range(3))
     assert ray_hit(frame, start, direction) == pytest.approx((11.0, -6.5))
+
+
+# --- Die Achse, an der der Ziehgriff hängt (§30.1) ---------------------------
+
+
+def test_a_sideways_look_reads_the_height_off_the_axis() -> None:
+    """Der Fall, für den ``axis_hit`` gebaut ist: die Querschau.
+
+    Gezeichnet ist auf XY, gesehen wird von vorn — der Blick läuft waagerecht
+    an der Ebene vorbei, zwanzig Millimeter über ihr. Genau diese zwanzig soll
+    der Ziehgriff als Höhe zeigen.
+    """
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    assert axis_hit(frame, (0.0, 0.0), (0.0, -100.0, 20.0), (0.0, 200.0, 0.0)) == pytest.approx(
+        20.0
+    )
+
+
+def test_the_axis_runs_through_the_grip_and_not_through_the_origin() -> None:
+    """Gezogen wird dort, wo die Hand ist.
+
+    Die Achse läuft durch den gegriffenen Punkt. Liefe sie durch den Ursprung
+    der Skizze, hinge die Zahl am Zeiger an einem Ort, den niemand angefasst
+    hat — bei einem Umriss weit neben dem Ursprung wäre sie sichtbar falsch.
+    """
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    # Der Strahl trifft die Achse über (30 | 0) auf Höhe 7,5.
+    reach = axis_hit(frame, (30.0, 0.0), (30.0, -100.0, 7.5), (0.0, 200.0, 0.0))
+    assert reach == pytest.approx(7.5)
+
+
+def test_a_ray_that_meets_the_axis_reads_the_height_of_the_meeting_point() -> None:
+    """Der Testfall, der hier wirklich zählt — und der zuerst fehlte.
+
+    Trifft der Strahl die Aufzugsachse **exakt**, steht der Sollwert ohne
+    Rechnung fest: Es ist die Höhe des Durchtritts. Jeder andere Fall braucht
+    eine Herleitung, und eine Herleitung kann denselben Fehler haben wie der
+    Prüfling.
+
+    **Und genau dieser Fall hat einen Vorzeichenfehler gefangen**
+    (Review-Sitzung, 27.08.2026): Die erste Fassung gab hier 90 statt 10
+    zurück. Sichtbar war das in keinem der fünf Sollwert-Tests daneben, denn
+    alle blickten quer zur Achse — dort ist ``n·d`` null und der Fehlerterm
+    ``2 s (n·d)`` verschwindet. Der Strahl hier läuft schräg: von vorn unten
+    nach hinten oben, durch ``(0 | 0 | 10)``.
+    """
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    assert axis_hit(frame, (0.0, 0.0), (0.0, -100.0, 50.0), (0.0, 100.0, -40.0)) == (
+        pytest.approx(10.0)
+    )
+
+
+def test_a_slanted_look_reads_the_closest_approach_and_not_a_shifted_one() -> None:
+    """Und ein Strahl, der die Achse **verfehlt**, mit nachrechenbarem Sollwert.
+
+    Von ``(10 | 5 | 0)`` in Richtung ``(-1 | 0 | 1)``: Bei Schrittweite zehn
+    steht der Strahl auf ``(0 | 5 | 10)``, also fünf Millimeter neben der Achse
+    und auf deren Höhe zehn. Näher kommt er nicht — das ist die Stelle, die der
+    Ziehgriff meint, und die Zahl daran ist zehn.
+
+    Zwei Tests und nicht einer: Der exakte Treffer darüber prüft die Formel, der
+    Fehlschuss hier prüft, dass sie auch dann noch das Lot fällt.
+    """
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    assert axis_hit(frame, (0.0, 0.0), (10.0, 5.0, 0.0), (-1.0, 0.0, 1.0)) == (pytest.approx(10.0))
+
+
+def test_the_length_of_the_ray_does_not_change_the_height() -> None:
+    """Dieselbe Zusage wie bei ``ray_hit``: Die Richtung kommt unnormiert.
+
+    Sie ist der Schritt von der nahen zur fernen Ebene und damit hunderte
+    Millimeter lang. Käme eine andere Höhe heraus als bei Einheitslänge, hinge
+    der Ziehgriff an der Tiefe des Sichtvolumens.
+
+    **Dieser Test allein sieht ein falsches Vorzeichen nicht.** Er vergleicht
+    zwei Läufe gegeneinander, und der Fehlerterm ``2 s (n·d)`` ist von der Länge
+    unabhängig — er steckt in beiden gleich. Wer die Formel prüfen will, prüft
+    sie gegen einen **Sollwert**; die beiden Tests darüber tun das.
+    """
+    frame = tilted_frame()
+    short = axis_hit(frame, (4.0, -2.0), (60.0, 20.0, 55.0), (-0.6, 0.0, -0.8))
+    long = axis_hit(frame, (4.0, -2.0), (60.0, 20.0, 55.0), (-600.0, 0.0, -800.0))
+    assert short is not None
+    assert long == pytest.approx(short)
+
+
+def test_a_look_along_the_axis_reads_no_height() -> None:
+    """Und die Gegenfrage zu ``ray_hit``: der Blick **auf** die Ebene.
+
+    Von oben senkrecht auf die Zeichnung gesehen liegt die Aufzugsachse als
+    Punkt im Bild — keine Mausbewegung könnte dort eine Höhe bedeuten. Genau
+    dieser Fall ist der, in dem ``ray_hit`` seine Stelle findet: Die beiden
+    Prüfungen sind komplementär, und dieselbe Schwelle entscheidet sie.
+    """
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    assert ray_hit(frame, (3.0, -4.0, 60.0), (0.0, 0.0, -1.0)) is not None
+    assert axis_hit(frame, (3.0, -4.0), (3.0, -4.0, 60.0), (0.0, 0.0, -1.0)) is None
+
+
+def test_the_height_is_signed_and_follows_the_extrusion_direction() -> None:
+    """Nach oben positiv, nach unten negativ — und „oben" ist die Normale.
+
+    Das ist die Zusage, an der die Übergabe hängt: ``profiles.extrude`` zieht
+    entlang ``frame.normal`` auf, also ist der Rückgabewert unmittelbar die
+    Höhe der Operation. Ein Vorzeichenfehler hier baute den Körper auf der
+    falschen Seite der Zeichnung.
+    """
+    frame = frame_of((0.0, 0.0, 1.0), (0.0, 0.0, 0.0))
+    above = axis_hit(frame, (0.0, 0.0), (0.0, -100.0, 12.0), (0.0, 200.0, 0.0))
+    below = axis_hit(frame, (0.0, 0.0), (0.0, -100.0, -12.0), (0.0, 200.0, 0.0))
+    assert above == pytest.approx(12.0)
+    assert below == pytest.approx(-12.0)
+
+
+def test_a_tilted_plane_measures_its_height_along_its_own_normal() -> None:
+    """Auf einer schrägen Fläche ist „hoch" nicht Welt-Z.
+
+    Die Gegenprobe über ``to_world``: Ein Punkt der Ebene, um eine bekannte
+    Strecke entlang ihrer Normalen verschoben, und ein Strahl quer darauf. Was
+    ``axis_hit`` zurückgibt, muss genau diese Strecke sein — sonst zieht der
+    Griff auf einer angeklickten Fläche eine Höhe in eine andere Richtung, als
+    die Operation sie später aufzieht.
+    """
+    frame = tilted_frame()
+    base = (8.0, -3.0)
+    lifted = tuple(to_world(frame, base)[axis] + 15.0 * frame.normal[axis] for axis in range(3))
+    across = frame.x_axis
+    start = tuple(lifted[axis] - 200.0 * across[axis] for axis in range(3))
+    reach = axis_hit(frame, base, start, across)
+    assert reach == pytest.approx(15.0)
+
+    # **Und noch einmal schräg**, damit der Fall nicht wieder in der Lücke
+    # liegt: ``across`` steht quer zur Normalen, dort ist ``n·d`` null. Ein
+    # Strahl, der die Achse trotzdem exakt trifft, muss dieselbe Höhe geben.
+    slanted = tuple(across[axis] + 0.5 * frame.normal[axis] for axis in range(3))
+    start = tuple(lifted[axis] - 200.0 * slanted[axis] for axis in range(3))
+    assert axis_hit(frame, base, start, slanted) == pytest.approx(15.0)
 
 
 # --- Die Skizze als Kurve im Raum (§30.1, P2) --------------------------------

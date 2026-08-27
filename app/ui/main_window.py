@@ -719,6 +719,36 @@ def _sketch_param(op_name: str) -> str:
     )
 
 
+#: Die Operation, in die der Ziehgriff der Querschau mündet (§30.1).
+#:
+#: Er zieht eine **Höhe** aus einem Umriss, und das ist genau das, was
+#: ``sketch_extrude`` tut. Dieselbe Vorwahl, die auch der Dialog bei „Fertig"
+#: trifft (``op_dialog.DEFAULT_SKETCH_USE``) — der Griff ist die kurze Hand
+#: für den häufigsten der fünf Wege, nicht ein sechster.
+PULL_OP = "sketch_extrude"
+
+#: Wie der Höhenparameter dieser Operation heißt.
+PULL_FIELD = "height"
+
+
+def pull_limits() -> tuple[float, float]:
+    """Unter- und Obergrenze der gezogenen Höhe — **aus dem Schema**.
+
+    Gefragt statt abgeschrieben, aus demselben Grund wie bei
+    :func:`_sketch_param`: Eine zweite Zahl in der Ansicht fiele erst auf, wenn
+    der Dialog einen Wert ablehnt, den der Griff gerade gezeigt hat. Fehlt eine
+    Grenze im Schema, kommt null zurück — die Ansicht klemmt dann nicht, und
+    das ist richtiger als eine erfundene Grenze.
+    """
+    for entry in REGISTRY.get(PULL_OP).params.spec():
+        if entry.name == PULL_FIELD:
+            return (float(entry.minimum or 0.0), float(entry.maximum or 0.0))
+    raise InternalError(
+        detail=f"{PULL_OP!r} has no {PULL_FIELD!r} parameter",
+        values={"op": PULL_OP},
+    )
+
+
 #: Was im Herkunftsvermerk einer ferngesteuerten Transaktion als Modell
 #: steht. „user" und „agent" sind die einzigen Urheber, die das Format
 #: kennt (§26.4); ein dritter kostete eine Migration, und für die Frage
@@ -1058,6 +1088,8 @@ class MainWindow(QMainWindow):
         self.viewport.sketchPointPicked.connect(self._on_sketch_point)
         self.viewport.sketchMenuAt.connect(self._on_sketch_menu)
         self.viewport.sketchPointHovered.connect(self._on_sketch_hover)
+        self.viewport.sketchPulled.connect(self._on_sketch_pulled)
+        self.viewport.sketchPullBlocked.connect(self.announce)
         self.viewport.faceDragged.connect(self._on_face_dragged)
         self.viewport.scaleDragged.connect(self._on_scale_dragged)
         self.viewport.featurePicked.connect(self._on_feature_picked)
@@ -4540,6 +4572,11 @@ class MainWindow(QMainWindow):
         self.viewport.set_sketch_entry(
             panel.canvas.pending_measure, panel.canvas.begin_measure_entry
         )
+        # **Der Ziehgriff der Querschau** (§30.1): Sobald Blick und
+        # Zeichenebene auseinandergehen, wird aus einem Zug am Umriss eine
+        # Höhe. Die Grenzen kommen aus dem Schema, damit die Zahl am Zeiger
+        # dieselbe ist, die der Dialog danach annimmt.
+        self.viewport.set_sketch_pull(self._sketch_pull_offer, pull_limits())
         # **Die Bedingungen ziehen in die rechte Spalte, als eigener Reiter.**
         # Gemessen nahm die Leiste sonst 334 von 900 Bildpunkten — 37 Prozent
         # des Fensters —, und gezeichnet wurde zur Hälfte dahinter.
@@ -4676,6 +4713,56 @@ class MainWindow(QMainWindow):
         """
         self.viewport.show_sketch_cursor((x, y))
 
+    def _sketch_pull_offer(self) -> str:
+        """Ob am Umriss gerade eine Höhe gezogen werden darf (§30.1).
+
+        Robert am 27.08.2026: „schön wäre auch dass wenn ich in der skizze was
+        in der draufsicht zeichne und dann in die Seitenansicht oder
+        vorderansicht gehe sie nach oben ziehen kann." Genau dieser Zustand ist
+        die Bedingung — **die Querschau**, also Blick und Zeichenebene
+        auseinander (``view_plane`` gegen ``sketch.plane``). Dort sieht man die
+        Ebene von der Kante, dort kann man ohnehin nicht sinnvoll zeichnen, und
+        dort ist die Geste damit frei. In der Draufsicht bliebe sie dem
+        Zeichnen im Weg: Ein Druck auf eine Umrisskante wäre dort mal ein
+        Punkt, mal ein Zug.
+
+        Drei Antworten, wie :meth:`Viewport.set_sketch_pull` sie erwartet.
+        Ein **Grund** statt einer leeren Zeichenkette kommt nur, wo die Geste
+        gemeint war und nicht ging — sonst stünde bei jedem Druck irgendwo im
+        Bild ein Satz über eine Handlung, die niemand versucht hat.
+        """
+        panel = self._sketch_panel
+        if panel is None:
+            return ""
+        if panel.canvas.view_plane == panel.canvas.sketch.plane:
+            return ""
+        if self._sketch_target and self._sketch_target != PULL_OP:
+            # Wer den Modus für *Grundform drehen* betreten hat, meint keine
+            # Höhe. Der Griff gehört zu ``sketch_extrude``; ihn dort anzubieten
+            # hieße, die gewählte Operation stillschweigend zu tauschen.
+            return str(
+                tr(
+                    "Der Ziehgriff zieht eine Höhe auf — bei {op} entscheidet das der Dialog."
+                ).format(op=str(REGISTRY.get(self._sketch_target).title))
+            )
+        if not panel.canvas.outline:
+            return str(tr("Zum Aufziehen fehlt der geschlossene Umriss."))
+        return "ready"
+
+    def _on_sketch_pulled(self, height: float) -> None:
+        """Am Umriss ist eine Höhe gezogen worden — daraus wird ein Körper.
+
+        Der Zug endet als **Operation** und nicht als Zustand (Regel 2): Der
+        Modus wird verlassen wie bei „Fertig", und ``sketch_extrude`` bekommt
+        die Zeichnung und die Höhe. Der Dialog geht dabei auf wie immer — wer
+        nachrechnen oder eine andere Zahl setzen will, tut es dort, und der
+        Verlauf trägt einen Schritt und nicht zwei.
+        """
+        if self._sketch_panel is None:
+            return
+        self._sketch_target = PULL_OP
+        self.finish_sketch(keep=True, given={PULL_FIELD: float(height)})
+
     def _on_sketch_hover(self, point: object) -> None:
         """Der Zeiger steht auf der Ebene — die Vorschau zieht nach."""
         panel = self._sketch_panel
@@ -4722,7 +4809,23 @@ class MainWindow(QMainWindow):
                 "dann fragt Solidon, was daraus wird."
             )
         )
-        self._sketch_hint.setText(source.format(place=place))
+        # **In der Querschau steht hier die Geste**, und zwar aus derselben
+        # Quelle, die sie auch erlaubt (:meth:`_sketch_pull_offer`) — sonst
+        # verspricht der Satz etwas, was der Griff nicht hält. Ohne ihn findet
+        # ihn niemand: Der Umriss sieht von der Kante aus wie ein Strich, und
+        # dass man daran ziehen kann, sagt allein der Mauszeiger, wenn man
+        # schon darüber ist.
+        #
+        # Eingesetzt wird **vor** dem Anhängen: Ein Grund, der selbst eine
+        # geschweifte Klammer trägt, ließe ``format`` sonst über einen Text
+        # laufen, der keine Vorlage mehr ist.
+        line = source.format(place=place)
+        offer = self._sketch_pull_offer()
+        if offer == "ready":
+            line = f"{line} {tr('Am Umriss ziehen zieht daraus einen Körper auf.')}"
+        elif offer:
+            line = f"{line} {offer}"
+        self._sketch_hint.setText(line)
 
     def _sketch_frame(self) -> PlaneFrame | None:
         """Der Rahmen der Ebene, auf der gerade gezeichnet wird."""
@@ -4809,10 +4912,26 @@ class MainWindow(QMainWindow):
         if panel.snap_is_pinned():
             step = panel.snap_step.value_mm()
         self.viewport.show_sketch(kurven, frame, step, SKETCH_GRID_REACH)
+        # **Und die Zeile über der Leiste altert nicht mit der Zeichnung.** Sie
+        # nennt neben der Ebene auch, ob der Ziehgriff gerade gilt, und das
+        # hängt am geschlossenen Umriss. Gerufen wurde sie nur beim Betreten
+        # und beim Ebenenwechsel: Wer in der Querschau ein Rechteck hatte und
+        # eine lose Linie dazuzeichnete, las weiter „Am Umriss ziehen", während
+        # das Angebot schon „fehlt der geschlossene Umriss" sagte — zwei
+        # Aussagen über denselben Zustand (gefunden von der Review-Sitzung,
+        # 27.08.2026). Hier, weil ``_redraw_sketch`` an ``sketchChanged`` und
+        # an ``cameraMoved`` hängt und damit jede Änderung sieht; die Zeile
+        # kostet nur Text und kein Bild.
+        self._update_sketch_hint()
 
-    def finish_sketch(self, keep: bool = True) -> None:
+    def finish_sketch(self, keep: bool = True, *, given: dict[str, Any] | None = None) -> None:
         """Den Modus verlassen. Mit ``keep`` öffnet die Operation auf der
         gezeichneten Skizze, sonst wird sie verworfen.
+
+        ``given`` sind Werte, die schon beantwortet sind, wenn der Dialog
+        aufgeht. Der Ziehgriff ist der eine Fall: Er hat die Höhe gezogen, und
+        sie im Dialog wieder auf die Vorgabe zu stellen hieße, die Geste
+        wegzuwerfen (:meth:`_on_sketch_pulled`).
         """
         panel = self._sketch_panel
         target = self._sketch_target
@@ -4838,6 +4957,10 @@ class MainWindow(QMainWindow):
         # stirbt: Die Ansicht hielte sonst Rückrufe auf einen toten Canvas,
         # und das Feld bliebe als Waise über dem Bild stehen.
         self.viewport.set_sketch_entry(None, None)
+        # Aus demselben Grund wie die Zeile darüber: ``_sketch_pull_offer`` ist
+        # eine gebundene Methode dieses Fensters und liest das Panel, das
+        # gleich stirbt.
+        self.viewport.set_sketch_pull(None)
         panel.canvas.reclaim_measure_field()
         panel.sketchChanged.disconnect(self._redraw_sketch)
         self.viewport.cameraMoved.disconnect(self._redraw_sketch)
@@ -4869,7 +4992,9 @@ class MainWindow(QMainWindow):
         self._update_actions()
         if keep and text:
             if target:
-                self.run_operation(REGISTRY.get(target), given={_sketch_param(target): text})
+                values: dict[str, Any] = {_sketch_param(target): text}
+                values.update(given or {})
+                self.run_operation(REGISTRY.get(target), given=values)
             else:
                 # Freies Zeichnen (Weg 2): erst jetzt fällt die Entscheidung,
                 # was aus der Skizze wird — mit der fertigen Zeichnung vor

@@ -65,6 +65,7 @@ from app.ui import cursors, icons
 from app.ui.labels import LengthSpin, length, localised
 from app.ui.leash import weak_slot
 from app.ui.palette import ROLES, text_colour
+from app.ui.viewport import MEASURE_GAP
 
 #: Was eine widersprüchliche Bedingung in der Liste anschreibt.
 #:
@@ -1066,13 +1067,44 @@ class SketchCanvas(QWidget):
         # keine die andere beantwortet — ein bestimmtes Rechteck kann offen
         # sein, ein geschlossenes darf wackeln.
         state = tr("Geschlossen") if self.outline else tr("Noch offen")
+        # **Und dahinter der Satz, der die Zahl in eine Handlung übersetzt.**
+        # „12 Freiheitsgrade sind noch frei" sagt einem Anfänger nichts — weder
+        # ob das gut oder schlecht ist, noch was zu tun wäre. Die Zahl bleibt
+        # trotzdem stehen: Für den Könner ist sie genau richtig, und sie ist
+        # die einzige Auskunft darüber, wie weit eine Skizze bestimmt ist.
+        # Gemeldet am 27.08.2026 als Teil von „mach den Skizzenmodus perfekt
+        # zum leichten Zeichnen für Anwender ohne große CAD-Kenntnisse".
+        advice = self.outline_advice()
         if self.solved.free_dof == 0:
-            return tr("{state} · bestimmt — alle Freiheitsgrade sind vergeben.").format(state=state)
+            return tr("{state} · bestimmt — alle Freiheitsgrade sind vergeben. {advice}").format(
+                state=state, advice=advice
+            )
         if self.solved.free_dof == 1:
-            return tr("{state} · ein Freiheitsgrad ist noch frei.").format(state=state)
-        return tr("{state} · {count} Freiheitsgrade sind noch frei.").format(
-            state=state, count=self.solved.free_dof
+            return tr("{state} · ein Freiheitsgrad ist noch frei. {advice}").format(
+                state=state, advice=advice
+            )
+        return tr("{state} · {count} Freiheitsgrade sind noch frei. {advice}").format(
+            state=state, count=self.solved.free_dof, advice=advice
         )
+
+    def outline_advice(self) -> str:
+        """Was der Zustand der Zeichnung für den nächsten Schritt bedeutet.
+
+        Drei Sätze für die drei Lagen, in denen eine Zeichnung stehen kann, und
+        jeder nennt eine **Folge** statt einer Kennzahl. Der Umriss steht dabei
+        vor den Freiheitsgraden, weil er die härtere Bedingung ist: Ohne ihn
+        scheitert jede der fünf Erzeugungsarten (:func:`regions_of`), mit ihm
+        ist ein freier Freiheitsgrad höchstens eine Ungenauigkeit.
+
+        Getrennt von :meth:`status_text`, damit die Sätze auch dort gelesen
+        werden können, wo die Zeile nicht hinreicht — und damit ein Test sie
+        einzeln prüfen kann, ohne die Zahl mitzulesen.
+        """
+        if not self.outline:
+            return str(tr("Erst ein geschlossener Umriss wird ein Körper."))
+        if self.solved is not None and self.solved.free_dof == 0:
+            return str(tr("Daraus wird ein Körper, und die Form kann nicht mehr wackeln."))
+        return str(tr("Daraus wird ein Körper; Maße legen fest, was nicht mehr wackeln soll."))
 
     def selection_hint(self) -> str:
         """Was ausgewählt ist — und wie das Zweite dazukommt.
@@ -2105,10 +2137,21 @@ class SketchCanvas(QWidget):
                 # Halbsatz kommt aus derselben Quelle wie dort — drei
                 # Formulierungen derselben Bedingung wären drei Gelegenheiten,
                 # auseinanderzulaufen.
-                if not enabled:
+                if enabled:
+                    # Was der Eintrag bewirkt — dieselbe Auskunft wie am Knopf
+                    # in der Leiste. Ein Menü aus zehn Fachwörtern ist für den
+                    # Zielnutzer von §2 kein Angebot.
                     action.setToolTip(
-                        tr("{name} — dazu {what} auswählen.").format(
-                            name=_constraint_label(kind), what=_needs_phrase(kind)
+                        tr("{name} — {does}.").format(
+                            name=_constraint_label(kind), does=_does_phrase(kind)
+                        )
+                    )
+                else:
+                    action.setToolTip(
+                        tr("{name} — {does}. Dazu {what} auswählen.").format(
+                            name=_constraint_label(kind),
+                            does=_does_phrase(kind),
+                            what=_needs_phrase(kind),
                         )
                     )
                 action.triggered.connect(lambda _checked=False, chosen=kind: request(chosen))
@@ -2741,6 +2784,38 @@ def _needs_phrase(kind: SketchConstraintKind) -> str:
     }[kind]
 
 
+def _does_phrase(kind: SketchConstraintKind) -> str:
+    """Was die Bedingung **bewirkt** — als Halbsatz, für den Anfänger.
+
+    Die zweite Hälfte der Auskunft, die :func:`_needs_phrase` schon gibt: Der
+    Halbsatz dort sagt, was ausgewählt sein muss, dieser sagt, was danach
+    gilt. „Tangential" ist ein Wort, das jeder aus einem CAD kennt und niemand
+    sonst — zehn Knöpfe mit zehn Fachwörtern sind für den Zielnutzer von §2
+    („Anwender ohne große CAD-Kenntnisse") zehn Rätsel.
+
+    Er steht am Knopf, im Kontextmenü und an jedem Eintrag der Bedingungsliste
+    — dieselbe Quelle an drei Stellen, denn drei Formulierungen wären drei
+    Gelegenheiten, auseinanderzulaufen. Dass zu jeder Bedingung einer
+    existiert, prüft der Test.
+
+    In der Gegenwart und aus Sicht der Geometrie, nicht als Anweisung: Der Satz
+    steht auch an einer Bedingung, die schon gilt, und „wählen Sie zwei Punkte"
+    wäre dort falsch.
+    """
+    return {
+        "distance": tr("hält zwei Punkte auf einem festen Abstand"),
+        "coincident": tr("legt zwei Punkte genau aufeinander"),
+        "horizontal": tr("legt eine Linie waagerecht"),
+        "vertical": tr("stellt eine Linie senkrecht"),
+        "parallel": tr("hält zwei Linien parallel zueinander"),
+        "perpendicular": tr("stellt zwei Linien im rechten Winkel zueinander"),
+        "tangent": tr("legt eine Linie glatt an einen Kreis oder Bogen an"),
+        "symmetric": tr("spiegelt zwei Punkte an einer Linie"),
+        "fixed": tr("nagelt einen Punkt fest, damit die Skizze nicht wandert"),
+        "reference": tr("misst einen Abstand, ohne ihn festzulegen"),
+    }[kind]
+
+
 #: Die Zeichenkürzel, wie Fusion sie belegt (E16). Wer aus einem CAD kommt,
 #: hat sie in den Fingern, und wer nicht, lernt sie an den Knöpfen — dort
 #: steht jedes neben seinem Werkzeug (§19.2).
@@ -2821,14 +2896,6 @@ def plane_where(plane: str) -> str:
 #: die bevorzugte Breite: 199 Bildpunkte je Feld, für Werte, die im Regelfall
 #: „2,00 mm" heißen. Zwei solche Felder stehen in der Werkzeugzeile.
 TOOLBAR_FIELD_WIDTH = 120
-
-#: Wie weit das Maßfeld vom Zeiger wegsteht, in Bildpunkten.
-#:
-#: Nicht null: Läge es unter dem Zeiger, finge es die Mausbewegungen ab, und
-#: die Linie bliebe beim Ziehen stehen. Nicht viel mehr: Der Sinn des ganzen
-#: Umbaus ist, dass Zahl und Zeichenspitze in **einem** Blick liegen — was
-#: weiter weg steht, ist wieder die Werkzeugzeile, nur an anderer Stelle.
-MEASURE_GAP = 14
 
 #: Wie viele Bedingungsknöpfe *mindestens* in eine Zeile kommen.
 #:
@@ -3241,8 +3308,15 @@ class SketchPanel(QWidget):
             # Der Hinweis nennt die Auswahl, nicht noch einmal den Namen: der
             # steht auf dem Knopf. Ein grauer Knopf, dessen Hinweis nur seine
             # Beschriftung wiederholt, sagt nichts über den Grund.
+            #
+            # **Und davor, was der Knopf bewirkt** (:func:`_does_phrase`).
+            # „Tangential — dazu eine Linie und einen Kreis auswählen" erklärt
+            # die Bedienung und nicht die Sache: Wer das Wort nicht kennt, weiß
+            # danach, was er anklicken muss, und immer noch nicht, wozu.
             constraint_button.setToolTip(
-                tr("{name} — dazu {what} auswählen.").format(name=label, what=_needs_phrase(kind))
+                tr("{name} — {does}. Dazu {what} auswählen.").format(
+                    name=label, does=_does_phrase(kind), what=_needs_phrase(kind)
+                )
             )
             constraint_button.clicked.connect(weak_slot(self, SketchPanel.request_constraint, kind))
             self._constraint_buttons[kind] = constraint_button
@@ -3745,8 +3819,13 @@ class SketchPanel(QWidget):
             # kein Ton, keine Zeile, und woran es lag, stand nirgends. Ein
             # Weg, der gerade nicht geht, nennt seine Bedingung (Regel 17).
             self.canvas.statusChanged.emit(
-                tr("{name}: dazu erst {what} auswählen.").format(
-                    name=_constraint_label(kind), what=_needs_phrase(kind)
+                # Beide Halbsätze, wie am Knopf: Wer „D" drückt und nichts
+                # passendes ausgewählt hat, ist meist derjenige, der auch nicht
+                # weiß, was die Bedingung tut.
+                tr("{name}: {does}. Dazu erst {what} auswählen.").format(
+                    name=_constraint_label(kind),
+                    does=_does_phrase(kind),
+                    what=_needs_phrase(kind),
                 )
             )
             return
@@ -3798,11 +3877,23 @@ class SketchPanel(QWidget):
                 text = f"{CONFLICT_MARKER} {text}"
             item = QListWidgetItem(text)
             item.setData(Qt.ItemDataRole.UserRole, entry.targets)
-            item.setToolTip(f"{text}  ({numbers})")
+            # **Was der Eintrag bedeutet, steht im Hinweis** — dieselbe Quelle
+            # wie am Knopf. „Abstand 1,50 mm — Kreis 1" nennt Art, Maß und Ort
+            # und sagt einem Anfänger trotzdem nicht, was die Zeile bewirkt.
+            # Die rohen Nummern bleiben darunter: Wer eine Bedingung aus einer
+            # Fehlermeldung des Lösers sucht, sucht nach ihnen.
+            item.setToolTip(f"{text}\n{_does_phrase(entry.kind)}.\n({numbers})")
             if index in conflict:
                 item.setForeground(QColor(text_colour("warning", self._surface())))
+                # **Die Nummern bleiben auch hier**, und das ist der Fall, für
+                # den sie da sind: Wer eine Bedingung aus einer Meldung des
+                # Lösers sucht, sucht nach ihnen — und eine Meldung des Lösers
+                # ist genau, was ein Konflikt ist. Der Zweig überschrieb den
+                # Hinweis vollständig und nahm sie mit (gefunden von der
+                # Review-Sitzung, 27.08.2026).
                 item.setToolTip(
                     tr("Diese Bedingung widerspricht einer anderen. Entf entfernt sie.")
+                    + f"\n{_does_phrase(entry.kind)}.\n({numbers})"
                 )
             self.constraint_list.addItem(item)
 

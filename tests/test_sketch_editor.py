@@ -3880,3 +3880,330 @@ def test_the_note_reaches_the_label_beside_the_plane_field(qt_app: QApplication)
     assert "Seitenansicht" in after, f"die Blickrichtung fehlt: {after}"
     assert "Draufsicht" in after, f"die Zeichenebene fehlt: {after}"
     assert panel.canvas.sketch.plane == "plane:xy", "und gezeichnet wird weiter dort"
+
+
+# --- Was die Zahl bedeutet, und was ein Knopf tut ----------------------------
+
+
+def test_the_line_translates_its_number_into_a_consequence(qt_app: QApplication) -> None:
+    """„12 Freiheitsgrade sind noch frei" sagt einem Anfänger nichts.
+
+    Weder ob das gut oder schlecht ist, noch was zu tun wäre. Die Zahl bleibt
+    stehen — für den Könner ist sie richtig —, und dahinter steht ein Satz, der
+    sie in eine Folge übersetzt. Gemeldet am 27.08.2026 als Teil von „mach den
+    Skizzenmodus perfekt zum leichten Zeichnen für Anwender ohne große
+    CAD-Kenntnisse".
+    """
+    canvas = SketchCanvas()
+    canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+
+    line = canvas.status_text()
+    assert "Freiheitsgrade" in line or "Freiheitsgrad" in line, "die Zahl bleibt: " + line
+    assert canvas.outline_advice() in line, "und der Satz steht dahinter: " + line
+    assert "Körper" in canvas.outline_advice(), canvas.outline_advice()
+
+
+def test_an_open_outline_says_what_is_missing(qt_app: QApplication) -> None:
+    """Der Umriss ist die härtere Bedingung, also nennt der Satz ihn.
+
+    Ohne geschlossenen Umriss scheitert jede der fünf Erzeugungsarten; ein
+    Satz über Maße wäre dort ein Rat zur falschen Sache.
+    """
+    canvas = SketchCanvas()
+    canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+
+    said = canvas.outline_advice()
+    assert "geschlossen" in said, said
+    assert said in canvas.status_text()
+
+
+def test_a_determined_outline_says_that_nothing_moves_any_more(qt_app: QApplication) -> None:
+    """Drei Lagen, drei Sätze — und der dritte ist nicht der zweite.
+
+    Ohne die Unterscheidung stünde „Maße legen fest, was nicht mehr wackeln
+    soll" auch an einer Skizze, in der nichts mehr wackelt: ein Rat zu einer
+    Handlung, die schon getan ist.
+    """
+    # Gezeichnet: geschlossen, aber ohne Maße — vier Linien, deren Ecken sich
+    # nur berühren.
+    drawn = SketchCanvas()
+    for start, end in (
+        ((0.0, 0.0), (30.0, 0.0)),
+        ((30.0, 0.0), (30.0, 20.0)),
+        ((30.0, 20.0), (0.0, 20.0)),
+        ((0.0, 20.0), (0.0, 0.0)),
+    ):
+        drawn.add_element("line", (start, end))
+    assert drawn.outline, "vier Linien im Ring sind geschlossen"
+    assert drawn.solved is not None and drawn.solved.free_dof > 0, "und sie wackeln noch"
+
+    # Eingefügt: eine Grundform bringt ihre Maße mit und ist bestimmt.
+    inserted = SketchCanvas()
+    inserted.insert_shape(shapes.rectangle(40.0, 20.0))
+    assert inserted.solved is not None and inserted.solved.free_dof == 0
+
+    assert drawn.outline_advice() != inserted.outline_advice(), (
+        "ein bestimmter Umriss sagt etwas anderes als ein wackelnder"
+    )
+    assert "Maße legen fest" in drawn.outline_advice(), drawn.outline_advice()
+    assert "nicht mehr wackeln" in inserted.outline_advice(), inserted.outline_advice()
+
+
+def test_every_constraint_says_what_it_does(qt_app: QApplication) -> None:
+    """Zu jeder Bedingung gehört ein Satz über ihre Wirkung.
+
+    Die Gegenprobe zu ``_needs_phrase``: Der sagt, was ausgewählt sein muss,
+    dieser sagt, was danach gilt. „Tangential" ist ein Wort, das jeder aus
+    einem CAD kennt und niemand sonst.
+    """
+    from app.ui.sketch_editor import _NEEDS, _does_phrase
+
+    said = {kind: _does_phrase(kind) for kind in _NEEDS}
+    for kind, phrase in said.items():
+        assert phrase, kind
+        assert phrase != _constraint_label(kind), f"{kind} wiederholt nur seinen Namen"
+    assert len(set(said.values())) == len(said), "zehn Bedingungen, zehn verschiedene Sätze"
+
+
+def test_the_constraint_buttons_carry_both_halves(qt_app: QApplication) -> None:
+    """Am Knopf steht, was er bewirkt **und** was ihm fehlt.
+
+    Vorher stand dort nur die zweite Hälfte: Wer das Wort nicht kennt, wusste
+    danach, was er anklicken muss, und immer noch nicht, wozu.
+    """
+    from app.ui.sketch_editor import _does_phrase, _needs_phrase
+
+    panel = SketchPanel("", {})
+    button = panel._constraint_buttons["tangent"]
+    hint = button.toolTip()
+
+    assert _does_phrase("tangent") in hint, hint
+    assert _needs_phrase("tangent") in hint, hint
+
+
+def test_the_constraint_list_explains_each_entry(qt_app: QApplication) -> None:
+    """„Abstand 1,50 mm — Kreis 1" nennt Art, Maß und Ort, nicht die Wirkung.
+
+    Der Hinweis trägt sie nach, aus derselben Quelle wie der Knopf — und die
+    rohen Nummern bleiben darunter, denn wer eine Bedingung aus einer Meldung
+    des Lösers sucht, sucht nach ihnen.
+    """
+    from app.ui.sketch_editor import _does_phrase
+
+    panel = SketchPanel("", {})
+    panel.canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+    panel.canvas.add_constraint("horizontal", (0, 1))
+    panel._refresh_constraints()
+
+    assert panel.constraint_list.count() == 1
+    hint = panel.constraint_list.item(0).toolTip()
+    assert _does_phrase("horizontal") in hint, hint
+    assert "(0, 1)" in hint, hint
+
+
+# --- Der Ziehgriff der Querschau (§30.1) -------------------------------------
+
+
+def test_the_grip_is_offered_only_when_the_plane_is_seen_edge_on(qt_app: QApplication) -> None:
+    """Robert am 27.08.2026: in der Draufsicht zeichnen, in der Seitenansicht
+    nach oben ziehen.
+
+    Genau dieser Zustand ist die Bedingung. In der Draufsicht bliebe die Geste
+    dem Zeichnen im Weg: Ein Druck auf eine Umrisskante wäre dort mal ein
+    Punkt, mal ein Zug.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+
+        assert window._sketch_pull_offer() == "", "auf der Zeichenebene wird gezeichnet"
+
+        panel.choose_plane("plane:xz")
+        assert panel.canvas.view_plane != panel.canvas.sketch.plane, "die Querschau steht"
+        assert window._sketch_pull_offer() == "ready"
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+def test_an_open_outline_blocks_the_grip_with_a_reason(qt_app: QApplication) -> None:
+    """Ein Griff, der stumm nichts tut, sagt nicht einmal, dass etwas nicht
+    ging (Regel 17).
+
+    Der Grund kommt aus derselben Quelle, die die Geste auch erlaubt — sonst
+    verspricht der Satz in der Leiste etwas, was der Griff nicht hält.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.add_element("line", ((0.0, 0.0), (30.0, 0.0)))
+        panel.choose_plane("plane:xz")
+
+        said = window._sketch_pull_offer()
+        assert said not in ("", "ready"), said
+        assert "Umriss" in said, said
+        assert said in window._sketch_hint.text(), "und er steht in der Leiste"
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+def test_another_sketch_operation_keeps_its_own_dialog(qt_app: QApplication) -> None:
+    """Wer den Modus für *Grundform drehen* betreten hat, meint keine Höhe.
+
+    Der Griff gehört zu ``sketch_extrude``; ihn dort anzubieten hieße, die
+    gewählte Operation stillschweigend zu tauschen.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("sketch_revolve")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        panel.choose_plane("plane:xz")
+
+        said = window._sketch_pull_offer()
+        assert said != "ready", said
+        assert str(REGISTRY.get("sketch_revolve").title) in said, said
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+def test_the_bar_says_how_the_grip_works_once_it_is_available(qt_app: QApplication) -> None:
+    """Ohne den Satz findet die Geste niemand.
+
+    In der Querschau sieht der Umriss aus wie ein Strich, und dass man daran
+    ziehen kann, sagt sonst allein der Mauszeiger — wenn man schon darüber ist.
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        before = window._sketch_hint.text()
+        assert "Am Umriss ziehen" not in before, before
+
+        panel.choose_plane("plane:xz")
+        after = window._sketch_hint.text()
+        # **Gegen den ganzen Satz und nicht gegen „ziehen".** Der Grund, der
+        # statt der Geste dasteht, heißt „Zum **Auf**ziehen fehlt der
+        # geschlossene Umriss" und trägt dasselbe Wort: Mit einem Angebot, das
+        # nie „ready" liefert, blieb der Test grün (gefunden von der
+        # Review-Sitzung, 27.08.2026).
+        assert "Am Umriss ziehen" in after, after
+        assert "Zeichenebene" in after, "die Ebene bleibt in der Zeile stehen"
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
+
+
+def test_a_pulled_height_reaches_the_operation(qt_app: QApplication) -> None:
+    """Der Zug endet als Operation mit **beiden** Werten.
+
+    Die Skizze und die gezogene Höhe: Wer die Höhe im Dialog auf ihre Vorgabe
+    zurückstellte, hätte die Geste weggeworfen und den Nutzer die Zahl zweimal
+    angeben lassen.
+    """
+    from app.core.registry import OperationSpec
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    asked: list[tuple[str, dict[str, object]]] = []
+
+    def note(spec: OperationSpec, given: dict[str, object] | None = None, **_rest: object) -> None:
+        asked.append((spec.name, dict(given or {})))
+
+    try:
+        window.run_operation = note
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        panel.choose_plane("plane:xz")
+
+        window._on_sketch_pulled(17.5)
+
+        assert len(asked) == 1, f"gemessen {asked}"
+        name, given = asked[0]
+        assert name == "sketch_extrude"
+        assert given["height"] == pytest.approx(17.5)
+        assert given["sketch"], "und die Zeichnung reist mit"
+    finally:
+        window.close()
+        window.deleteLater()
+
+
+def test_the_height_limits_come_from_the_schema(qt_app: QApplication) -> None:
+    """Die Grenzen der Ansicht sind die der Operation.
+
+    Abgeschrieben wären sie eine zweite Wahrheit, und die fiele erst auf, wenn
+    der Dialog eine Zahl ablehnt, die der Griff gerade gezeigt hat.
+    """
+    from app.ui.main_window import PULL_FIELD, PULL_OP, pull_limits
+
+    entry = next(item for item in REGISTRY.get(PULL_OP).params.spec() if item.name == PULL_FIELD)
+    assert pull_limits() == (entry.minimum, entry.maximum)
+
+
+def test_the_bar_line_follows_the_drawing_and_does_not_age(qt_app: QApplication) -> None:
+    """Die Zeile über der Leiste darf nichts versprechen, was nicht mehr gilt.
+
+    Gerufen wurde sie nur beim Betreten und beim Ebenenwechsel. Wer in der
+    Querschau ein Rechteck hatte und eine lose Linie dazuzeichnete, las weiter
+    „Am Umriss ziehen", während das Angebot schon „fehlt der geschlossene
+    Umriss" sagte — zwei Aussagen über denselben Zustand (gefunden von der
+    Review-Sitzung, 27.08.2026).
+    """
+    from app.ui.main_window import MainWindow
+    from app.ui.session import Session
+    from app.ui.settings import UiSettings
+
+    window = MainWindow(Session(), UiSettings())
+    try:
+        window.start_sketch("")
+        panel = window._sketch_panel
+        assert panel is not None
+        panel.canvas.insert_shape(shapes.rectangle(40.0, 20.0))
+        panel.choose_plane("plane:xz")
+        assert "Am Umriss ziehen" in window._sketch_hint.text(), window._sketch_hint.text()
+
+        # Eine lose Linie öffnet den Umriss — ab jetzt geht die Geste nicht.
+        panel.canvas.add_element("line", ((60.0, 60.0), (80.0, 70.0)))
+        assert not panel.canvas.outline, "der Umriss ist jetzt offen"
+
+        after = window._sketch_hint.text()
+        assert "Am Umriss ziehen" not in after, after
+        assert window._sketch_pull_offer() in after, after
+    finally:
+        window.finish_sketch(keep=False)
+        window.close()
+        window.deleteLater()
