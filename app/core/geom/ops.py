@@ -65,6 +65,33 @@ class TranslateParams(BaseParams):
     )
 
 
+def _stood_still(matrix: object) -> list[Finding]:
+    """Eine Transformation, die den Körper stehen lässt, sagt es.
+
+    **Der Fall ist die Vorgabe des Dialogs, nicht ein Randfall.** *Skalieren*
+    öffnet mit Faktor 1,0, *Verschieben* mit 0/0/0 — wer den Dialog aufmacht
+    und übernimmt, bekommt einen Schritt im Verlauf und ein Bild, das sich
+    nicht bewegt hat. Im Verlauf steht etwas, im Viewport nichts, und der
+    Nutzer sucht den Fehler in der Geometrie statt in seiner Eingabe.
+
+    Dieselbe Lücke, die ``boolean.without_effect`` bei den Schnitten schließt
+    (siehe dort, „Eine Operation, die nichts bewirkt hat, sagt das"). Gefragt
+    wird an der Matrix und nicht am Ergebnisnetz: Sie ist die Absicht, und ein
+    Vergleich zweier Netze wäre teurer und ungenauer.
+    """
+    import numpy as np
+
+    if not np.allclose(np.asarray(matrix, dtype=float), np.eye(4), atol=EPS_GEOM):
+        return []
+    return [
+        Finding(
+            code="transform.without_effect",
+            severity="info",
+            message=_("Der Körper steht danach genau dort, wo er stand."),
+        )
+    ]
+
+
 @register_op(
     name="translate_object",
     title=_("Verschieben"),
@@ -81,7 +108,9 @@ def translate_object(ctx: OpContext) -> OpResult:
     matrix = translation((params.dx, params.dy, params.dz))
     moved = apply(as_mesh_data(source.mesh), matrix)
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=moved)], transform=as_transform(matrix)
+        outputs=[dataclasses.replace(source, mesh=moved)],
+        transform=as_transform(matrix),
+        findings=_stood_still(matrix),
     )
 
 
@@ -207,7 +236,9 @@ def scale_object(ctx: OpContext) -> OpResult:
     matrix = scaling(factors, pivot)
     scaled = apply(as_mesh_data(source.mesh), matrix)
     return OpResult(
-        outputs=[dataclasses.replace(source, mesh=scaled)], transform=as_transform(matrix)
+        outputs=[dataclasses.replace(source, mesh=scaled)],
+        transform=as_transform(matrix),
+        findings=_stood_still(matrix),
     )
 
 

@@ -21,6 +21,7 @@ from app.core.brep import edit, profiles, step
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
 from app.core.errors import InternalError, NeedsSolidError, ValidationError
+from app.core.geom.boolean import without_effect
 from app.core.geom.prepare import bore_diameter
 from app.core.geom.prepare_ops import DrillParams
 from app.core.registry import NAME_DOC, op_params, param, register_op
@@ -448,6 +449,15 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
         anchor=cast(Literal["mouth", "centre"], params.anchor),
     )
     findings: list[Finding] = []
+    # **Wer Boolesches rechnet, fragt danach — ohne Ausnahme.** Der
+    # Netz-Zwilling meldete eine Bohrung, die den Körper verfehlt; dieser hier
+    # schwieg, obwohl er dieselbe Differenz rechnet. Gemessen an einem exakten
+    # Quader mit einer Bohrung weit daneben: Volumen vorher wie nachher, keine
+    # Zeile im Bericht. ``Solid`` trägt sein ``volume``, also braucht es dafür
+    # keine Vernetzung.
+    nothing = without_effect(body, solid, "difference", ctx.profile)
+    if nothing is not None:
+        findings.append(nothing)
     if params.compensate and abs(cut - params.diameter) > EPS_GEOM:
         findings.append(
             Finding(
