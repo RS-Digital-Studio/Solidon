@@ -109,8 +109,8 @@ wieder; `tests/test_website.py::test_every_reference_carries_the_stamp_of_the_
 file_it_points_at` macht daraus jetzt einen roten Lauf statt einer
 Erinnerung.
 
-**Die Bilderläufe sterben an der fünften oder sechsten Sprache — und nehmen
-die übrigen mit.** Am 23.08.2026 beim Lauf für 0.1.3 gemessen: Der Prozess endete
+**Die Bilderläufe sterben mitten in der Reihe — und nehmen die übrigen
+Sprachen mit.** Am 23.08.2026 beim Lauf für 0.1.3 gemessen: Der Prozess endete
 mit `0xc0000374` (Heap-Korruption), **nachdem** fünf Sprachen fertig waren.
 Die vier portugiesischen Bilder blieben dabei drei Tage alt stehen, und
 **nichts hat das gesagt** — kein Protokolleintrag, keine Fehlermeldung, eine
@@ -129,17 +129,29 @@ Das Mittel ist dasselbe wie bei der Suite: **weniger Fenster je Prozess.**
 Gemessen läuft ein Lauf mit einer einzelnen Sprache sauber durch:
 
 ```
-.venv\Scripts\python.exe tools/make_figures.py    de en es fr
+.venv\Scripts\python.exe tools/make_figures.py    de en
+.venv\Scripts\python.exe tools/make_figures.py    es fr
 .venv\Scripts\python.exe tools/make_figures.py    it pt
-.venv\Scripts\python.exe tools/make_web_images.py de en es fr it
-.venv\Scripts\python.exe tools/make_web_images.py pt
+.venv\Scripts\python.exe tools/make_web_images.py de
+.venv\Scripts\python.exe tools/make_web_images.py en
+... und so fort, eine Sprache je Aufruf
 ```
 
-**Beide Werkzeuge trifft es, an verschiedenen Stellen:** `make_figures.py`
-brach am 23.08.2026 nach **vier** Sprachen ab und ließ `it` und `pt` mit den
-Bildern des vorigen Laufs stehen — die zeigten dann noch die alten
-Übersetzungen. `make_web_images.py` brach nach **fünf** ab. Einzeln gefahren
-läuft jede Sprache sauber durch (Exit 0, gemessen).
+**Beide Werkzeuge trifft es, und die Zahl davor ist keine Eigenschaft des
+Werkzeugs.** Hier stand, `make_figures.py` breche nach vier Sprachen ab und
+`make_web_images.py` nach fünf — beides am 23.08.2026 gemessen und beides am
+27.08.2026 nicht mehr wahr: `make_web_images.py` starb da **zweimal
+hintereinander nach der ersten Sprache**, und `make_figures.py` kam in
+Zweiergruppen ohne einen einzigen Abriss durch.
+
+Das ist keine Verschlechterung, sondern dasselbe Bild aus einem anderen
+Winkel: Ein kaputter Heap reißt, wenn genug Speicher zerfallen ist, und wie
+viel das ist, hängt an dem, was sonst auf der Maschine läuft. **Eine Zahl aus
+einem früheren Lauf sagt deshalb nichts über den nächsten.** Wer sich auf sie
+verlässt, hält vier frische und zwei alte Sprachen für sechs frische — genau
+der Fall vom 27.08., und aufgefallen ist er allein an den Zeitstempeln.
+
+Sicher ist nur: **eine Sprache je Aufruf**, und danach hinsehen.
 
 Das Werkzeug nimmt seine Sprachen aus `sys.argv[1:]`; ohne Argument macht es
 alle sechs. **Nach jedem Lauf die Zeitstempel prüfen** — vier Dateien je
