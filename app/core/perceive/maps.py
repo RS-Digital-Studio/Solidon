@@ -25,7 +25,7 @@ from shapely.geometry import Point
 from shapely.geometry import Polygon as ShapelyPolygon
 
 from app.core.errors import CANCEL, Action, UserError
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.perceive.features import pair_radii
 from app.core.slice.analysis import cross_sections, slice_body
@@ -214,10 +214,22 @@ def build(
 
 
 def _mesh_of(entry: SceneObject) -> MeshData:
-    mesh = entry.mesh
-    if not isinstance(mesh, MeshData):  # pragma: no cover - heute nur ein Kern
-        raise TypeError("analysis maps need the trimesh backed mesh")
-    return mesh
+    """Die Dreiecke des Körpers — auch wenn er exakt ist.
+
+    Hier stand ``raise TypeError("analysis maps need the trimesh backed
+    mesh")``, mit dem Kommentar „heute nur ein Kern" daneben. Der Satz war
+    richtig, als er geschrieben wurde, und ist mit dem B-Rep-Kern still falsch
+    geworden: Ein STEP-Import ist ein exakter Körper, und wer an ihm eine
+    Analysekarte wählte, bekam einen **Programmfehler** samt Fehlerbericht —
+    für eine gewöhnliche Handlung (Robert, 27.08.2026, Absturzbericht
+    S-20260826-594f0f).
+
+    Der Weg von B-Rep zu Mesh steht jederzeit offen (§30): Die Karten rechnen
+    auf der Tessellation, wie jede Mesh-Operation an einem exakten Körper.
+    ``as_mesh_data`` weist einen Körper, der wirklich keiner der beiden Kerne
+    ist, mit einer lesbaren Meldung ab — nicht mit einem ``TypeError``.
+    """
+    return as_mesh_data(entry.mesh)
 
 
 # --- Das Voxelfeld, auf dem beide Abstandskarten leben --------------------------

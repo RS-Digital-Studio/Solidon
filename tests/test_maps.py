@@ -591,3 +591,33 @@ def test_every_radius_entry_finds_its_parameter() -> None:
         f"nur {checked} Einträge am Korpus geprüft — ohne die Merkmale prüft dieser "
         "Test seine eigene leere Menge"
     )
+
+
+def test_an_analysis_map_works_on_an_exact_body(profile: Profile) -> None:
+    """Roberts Absturzbericht vom 27.08.2026: „analysis maps need the trimesh
+    backed mesh", als InternalError mit Fehlerbericht-Knopf.
+
+    Ein STEP-Import ist ein **exakter** Körper (§30), und die Analysekarten
+    rechnen auf Dreiecken. ``_mesh_of`` lehnte deshalb alles ab, was kein
+    ``MeshData`` ist — mit einem ``TypeError`` und dem Kommentar „heute nur ein
+    Kern" daneben. Der Satz war richtig, als er geschrieben wurde; seit dem
+    zweiten Kern ist er still falsch, und der Kunde bekam für eine gewöhnliche
+    Handlung einen Programmfehler.
+
+    Der Weg von B-Rep zu Mesh steht jederzeit offen (``as_mesh_data`` über
+    ``to_mesh``) — die Karte rechnet also auf der Tessellation, wie jede
+    Mesh-Operation an einem exakten Körper.
+    """
+    from app.core.brep.kernel import Solid, available
+
+    if not available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+
+    shape = BRepPrimAPI_MakeBox(20.0, 20.0, 5.0).Shape()
+    exact = SceneObject(id="obj_1", name="shim", mesh=Solid(shape))
+
+    for kind in ("curvature", "overhang", "wall"):
+        card = maps.build(kind, exact, profile=profile)
+        assert card.values is not None, f"die Karte {kind!r} rechnet auch am exakten Körper"
