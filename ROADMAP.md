@@ -129,6 +129,16 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 | Die Boolesche Zugabe ist 0,05 mm und 0,01 mm | Dieselbe Zugabe, zwei Zahlen (27.08.2026) | zwei Messungen: ab welcher Zugabe die Rückfallkette über den Korpus auf Stufe 2 fällt, und wie viel eine Gravur gegenüber ihrer Solltiefe zu viel abträgt. Alle übrigen fünf Zwillingsfamilien des Kerns sind seit `57200cb9` zusammengelegt, ein Wächter hält sie |
+| Beide Aufmacher stehen zur Hälfte leer | Was die Website-Durchsicht liegen ließ (27.08.2026) | eine Abbildung je Seite — der Aufmacher entscheidet, ob weitergelesen wird, und `funktionen.html` verspricht in der Unterzeile ein Bild aus der laufenden Anwendung, das darüber fehlt |
+| Abbildungen mit Text sind auf dem Handy unlesbar | Was die Website-Durchsicht liegen ließ (27.08.2026) | eine Entscheidung über den Weg: eigene Handyfassungen, Antippen zum Vergrößern (so löst es das Handbuch seit `235d7050`), oder die Bildunterschrift an ihrer Stelle. Bei 390 px landen die Beschriftungen bei 5 bis 7 Bildpunkten — auch die vier Befundzeilen, um die es im Prüfbericht-Abschnitt geht |
+| Der Abschlussknopf führt zur E-Mail statt zur Demo | Was die Website-Durchsicht liegen ließ (27.08.2026) | eine Entscheidung von Robert über die Rangfolge — der Kontaktweg ist dort nicht falsch, aber der stärkste Knopf am Ende einer Verkaufsseite sollte der sein, den die Seite die ganze Zeit anbietet |
+| Zwei Tabellen auf `ki-modelle.html` brechen auf halber Breite ab | Was die Website-Durchsicht liegen ließ (27.08.2026) | nichts als eine Regel — gemessen 736 px Tabelle unter 1176 px Text, und die rechte Seitenkante franst dadurch aus |
+| Auf dem Handy sind die Unterseiten eine Sackgasse | Was die Website-Durchsicht liegen ließ (27.08.2026) | ein Ersatzziel für `funktionen.html` und `ki-modelle.html`, die bei 390 px zwei Navigationsziele ausblenden und keines dafür anbieten. Auf der Startseite ist dasselbe **kein** Fehler: Dort führt der Demo-Knopf selbst auf `#preis` |
+| Die 8-GB-Karte in den Systemvoraussetzungen ist nie gemessen worden | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Rechner mit einer 8-GB-Karte, oder die Entscheidung, die Zeile als Erfahrungswert zu kennzeichnen statt als Anforderung. Die Messangabe daneben ist am 27.08. berichtigt (`00156df3`), diese nicht — eine ungemessene Zahl durch eine andere zu ersetzen gewinnt nichts |
+| `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
+| Vier Datumsangaben werden am 31.10.2026 still falsch | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung, was am 31.10. auf der Seite stehen soll — erst danach lässt sich prüfen, ob es dort steht. Die Umschaltung des Download-Kastens hat einen Test, diese Sätze nicht |
+| Die EULA beschränkt auf einen Rechner, der Code tut es nicht | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung über den Aktivierungsserver. Beide Texte hängen daran und sind nicht einzeln zu berichtigen: Heute falsch ist die EULA (ein Rechner zugleich, ohne jede Gerätebindung im Code), falsch wird die Verkaufsseite (alle deine Rechner) in dem Moment, in dem die Beschränkung gebaut wird |
+| AGB § 2 beschreibt vierzehn Tage, die für die Demo nicht gelten | Was die Website-Durchsicht liegen ließ (27.08.2026) | die fachliche Prüfung der Rechtstexte — die EULA steht auf Fassung 1.2 vom 24.08., die AGB auf 1.0 vom 8.8.; die Demo ist in einer nachgezogen und in der anderen nicht |
 
 ---
 
@@ -10939,3 +10949,129 @@ das Prädikat zwei Dateien weiter (`0040f0fc`).
   Nicht für jede Einzelstelle ein Prädikat — die drei Format-Zweige in
   `write_config` (INI, JSON, Kommandozeile) sind echte Dreiwege-Fälle und
   bleiben, wie sie sind.
+
+---
+
+## Was die Website-Durchsicht liegen ließ (27.08.2026)
+
+Robert hat aufgetragen: „kontrollieren die webseite und das Handbuch ob alles
+leicht verständlich, bei Sinn mit Bildern leicht erklärt ist und auch alles
+wirklich auf dem neusten Stand ist, und ob noch etwas weiter optimiert werden
+kann davon — wir wollen eine hoch innovative moderne app sein und kein 0815
+Eindruck machen." Das Handbuch hat eine Nachbarsitzung genommen; hier steht,
+was an der Website offen blieb.
+
+Behoben und committet sind die messbaren Funde: die Handybreite (`ead6f96d`),
+drei falsche Zahlen samt Wächter (`4a2ff103`), drei Zusagen der
+Datenschutzerklärung gegen den Code (`04317c75`) und die Kartenangabe der
+Messwerte (`00156df3`).
+
+**Die Lehre des Tages steht über allen Punkten hier:** Der User-Agent-Fund war
+am 25.08.2026 schon einmal gefunden und in einem Durchsichtsbericht als
+„VERIFIZIERT" notiert worden. Ins Register kam er nie, und deshalb stand der
+Rechtstext zwei Tage länger falsch da. Ein Fund, der nur in einem Bericht
+steht, ist kein festgehaltener Fund.
+
+- [ ] **Beide Aufmacher stehen zur Hälfte leer.** `funktionen.html` und
+  `ki-modelle.html` beginnen mit einer Überschrift links, zwei bis drei Zeilen
+  darunter und nichts rechts. Bei `funktionen.html` verspricht die Unterzeile
+  wörtlich „Jede Funktion mit einem Bild aus der laufenden Anwendung" — und
+  genau darüber steht keines. Auf `ki-modelle.html` läuft die Seite über
+  2400 px reinen Text und zwei Tabellen, bevor das erste Bild kommt.
+
+  **Das ist der teuerste Einzelpunkt der Durchsicht**, weil der Aufmacher
+  entscheidet, ob weitergelesen wird. Die Startseite macht es richtig vor: Sie
+  trägt das Anwendungsfenster rechts neben dem Text.
+
+- [ ] **Jede Abbildung mit eingebettetem Text ist auf dem Handy unlesbar.**
+  Sie skalieren gleichmäßig herunter statt umzubrechen; bei 390 px landen die
+  Beschriftungen bei 5 bis 7 Bildpunkten. Am schwersten wiegt der
+  Prüfbericht-Ausschnitt auf `funktionen.html`: Das Bild trägt die vier
+  Befundzeilen, um die es im ganzen Abschnitt geht, und keine ist zu
+  entziffern. Ebenso Bausteinkatalog, Bohrdialog, Schichtanalyse.
+
+  Wartet auf eine Entscheidung über den Weg: eigene Handyfassungen der
+  Abbildungen (teuer, aber lesbar), Antippen zum Vergrößern (die
+  Nachbarsitzung hat das für die Handbuchbilder gerade so gelöst — `<a>` um
+  das Bild, kein JavaScript), oder die textlastigen Abbildungen auf dem Handy
+  durch ihre Bildunterschrift ersetzen.
+
+- [ ] **Der Abschlussknopf der Startseite führt zu einer E-Mail, nicht zur
+  Demo.** Unter „Das nächste Teil, das passt" steht als Hauptknopf
+  `support@solidon3d.de`, daneben „Erst das Handbuch lesen". Wer bis dorthin
+  gescrollt hat, ist überzeugt und will laden — der stärkste Knopf am Ende
+  einer Verkaufsseite sollte der sein, den die Seite die ganze Zeit anbietet.
+
+  Wartet auf eine Entscheidung von Robert: Der Kontaktweg ist dort nicht
+  falsch, nur die Rangfolge ist es. Ein „Demo laden" als Hauptknopf und der
+  Support daneben wäre die Umkehrung.
+
+- [ ] **Die zwei Tabellen auf `ki-modelle.html` brechen auf halber Breite ab.**
+  Gemessen bei 1440 px: Überschriften und Absätze laufen über 1176 px, beide
+  Tabellen nur über 736. Rechts neben dem wichtigsten Inhalt der Seite — dem
+  Vergleich Generator gegen Solidon3D — stehen 440 px leer, und die rechte
+  Kante der Seite franst aus.
+
+- [ ] **Auf dem Handy sind die Unterseiten eine Sackgasse.** `funktionen.html`
+  blendet bei 390 px „Vier Wege" und „KI-Modelle" aus (`hide-small`,
+  `hide-tiny`), es gibt kein Ersatzmenü, und die Fußzeile führt beide nicht.
+  Vom Handy aus kommt man von dort nur über den Umweg Startseite hin.
+
+  **Auf der Startseite ist dasselbe kein Fehler** und bleibt: Dort führt der
+  Demo-Knopf selbst auf `#preis`, und „Funktionen" steht als eigener Abschnitt
+  auf derselben Seite. Der Unterschied ist, dass die Unterseiten kein solches
+  Ersatzziel haben.
+
+- [ ] **„Eine Grafikkarte mit 8 GB Speicher" ist nie gemessen worden.** Die
+  Systemvoraussetzungen nennen sie als Mindestanforderung fürs Generieren. Die
+  Gewichte allein sind 7,5 GB, und gelaufen ist der Weg hier nur auf einer
+  RTX 4080 mit 16. Die Messangabe daneben ist am 27.08. berichtigt worden
+  (`00156df3`) — diese hier nicht, weil eine ungemessene Zahl durch eine
+  andere ungemessene zu ersetzen nichts gewinnt.
+
+  Wartet auf einen Rechner mit einer 8-GB-Karte oder auf die Entscheidung, die
+  Zeile als Erfahrungswert zu kennzeichnen statt als Anforderung.
+
+- [ ] **`PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102.**
+  `llm.py` nennt 19 249 Token für Systemprompt und kompakten Werkzeugsatz, und
+  daraus folgen die „41 Minuten", die auf `ki-modelle.html` stehen (19 249 /
+  7,8 = 41,1). Der Kommentar dort sagt selbst: „wer sie ändert, misst
+  `prompt_eval_count` nach." Seither ist die Liste um ein Fünftel gewachsen.
+
+  **Kein Fehlbefund der Seite**, und der Weg dorthin ist die eigentliche
+  Lehre: Eine Durchsicht meldete die Zahl als grob falsch (76 bis 102 Minuten)
+  — sie hatte den **vollen** Werkzeugsatz gerechnet, während der Ollama-Weg
+  den kompakten fährt, und eine Schätzung gegen eine Messung gestellt. Wartet
+  auf einen Ollama-Lauf, der `prompt_eval_count` abliest.
+
+- [ ] **Vier Datumsangaben werden am 31.10.2026 still falsch.** „Die Demo
+  läuft bis zum 30. Oktober" steht auf der Startseite in sechs Sprachen an
+  mehreren Stellen, dazu eine FAQ-Frage „Was passiert am 30. Oktober?" und der
+  Einführungspreis bis 31.01.2027. Die Umschaltung des Download-Kastens hat
+  einen Test, diese Sätze nicht.
+
+  Wartet auf die Entscheidung, was am 31.10. auf der Seite stehen soll — erst
+  danach lässt sich prüfen, ob es dort steht.
+
+- [ ] **Die EULA beschränkt auf einen Rechner, der Code tut es nicht.**
+  `eula.html` § 2 sagt „Freigeschaltet ist dabei ein Rechner zugleich; den
+  Wechsel nehmen Sie jederzeit selbst vor" — in `app/core/activation/` gibt es
+  keine Gerätebindung: `Licence` trägt drei Felder (`major`, `order`,
+  `holder`), `activation.state` nur `first_run|last_seen` mit HMAC. Kein
+  Maschinenkennzeichen, keine Zählung.
+
+  Die Verkaufsseite übernimmt den ersten Halbsatz („Eine Lizenz, alle deine
+  Rechner") und lässt den einschränkenden weg. Heute falsch ist damit die
+  EULA; falsch wird die Verkaufsseite in dem Moment, in dem die Beschränkung
+  gebaut wird — und ein Aktivierungsserver ist entschieden
+  (`.claude/rules/kern.md`). Wartet auf diese Entscheidung, weil beide Texte
+  von ihr abhängen und nicht einzeln zu berichtigen sind.
+
+- [ ] **AGB § 2 beschreibt vierzehn Tage, die für die Demo nicht gelten.**
+  „läuft vierzehn Tage ohne Einschränkung, bevor ein Schlüssel gebraucht wird"
+  — `TRIAL_DAYS = 14` gilt laut EULA § 4 ausdrücklich der Vollversion 1.x;
+  was heute unter `/dl/` liegt, ist die Demo mit `DEMO_UNTIL = 2026-10-30`.
+  Entschärft durch § 1 („Solange nur die Demo-Version angeboten wird, greifen
+  sie nicht"), aber nicht behoben: Die EULA steht auf Fassung 1.2 vom
+  24.08.2026, die AGB auf 1.0 vom 8.8. — die Demo ist in einer nachgezogen
+  und in der anderen nicht.
