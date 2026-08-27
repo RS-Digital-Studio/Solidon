@@ -92,10 +92,93 @@ def test_duplicating_yields_original_and_copy(
 
     result = evaluate(document, profile, registry=registry)
 
-    assert list(result.scene.objects) == ["obj_2", "obj_3"]
-    assert result.scene.objects["obj_2"].name == "Halterung"
-    assert result.scene.objects["obj_3"].name.startswith("Halterung (")
-    assert result.scene.objects["obj_3"].created_by == 2
+    assert list(result.scene.objects) == ["obj_1", "obj_2"]
+    assert result.scene.objects["obj_1"].name == "Halterung"
+    assert result.scene.objects["obj_2"].name.startswith("Halterung (")
+    assert result.scene.objects["obj_2"].created_by == 2
+
+
+def test_the_original_keeps_the_id_it_had_before_the_copy(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Das Duplizieren legt etwas dazu — es tauscht nicht aus.
+
+    Der Stapel vergab für jeden Ausgang einer Operation mit ``produces_from``
+    eine frische Kennung, auch für den Eingang, den die Operation unverändert
+    zurückgibt. Die Auswertung räumte ihn daraufhin weg, weil er nicht mehr
+    unter den Ausgaben stand: Aus ``obj_1`` wurden ``obj_2`` und ``obj_3``.
+
+    Für den Nutzer hieß das, dass seine Auswahl das Duplizieren nicht
+    überlebte — der nächste Schritt auf denselben Körper endete in „Der
+    gewählte Körper ist nicht mehr da", und zwar für einen Körper, der
+    unverändert vor ihm stand.
+    """
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    before = evaluate(document, profile, registry=registry).scene.objects["obj_1"]
+
+    history.apply(_("Duplizieren"), [OperationDraft(op="duplicate_object", inputs=("obj_1",))])
+    result = evaluate(document, profile, registry=registry)
+
+    assert "obj_1" in result.scene.objects, "the body the user had selected is still there"
+    assert result.scene.objects["obj_1"].mesh == before.mesh
+
+    # Und der Beweis, dass die Kennung trägt: eine Operation auf dieselbe
+    # Auswahl wird angenommen, statt sie als verschwunden zurückzuweisen.
+    history.apply(
+        _("Umbenennen"),
+        [OperationDraft(op="rename_object", inputs=("obj_1",), params={"name": "Deckel"})],
+    )
+    assert evaluate(document, profile, registry=registry).scene.objects["obj_1"].name == "Deckel"
+
+
+def test_duplicating_says_that_the_copy_lands_on_the_original(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Ein Schritt, der etwas Unsichtbares tut, sagt es.
+
+    Die Kopie entsteht am Ort des Originals — die Stückzahl gehört in den
+    Stapel, das Verteilen ans Anordnen (§25). Für den Nutzer sieht das aus wie
+    ein Klick, der nichts bewirkt hat: ein Körper im Bild, wo zwei sein
+    sollten. Der Hinweis trägt *Auf dem Bett anordnen* als Handlung, damit der
+    zweite Halbschritt nicht erraten werden muss.
+    """
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(_("Duplizieren"), [OperationDraft(op="duplicate_object", inputs=("obj_1",))])
+
+    result = evaluate(document, profile, registry=registry)
+
+    findings = result.scene.report.findings
+    assert findings, "the run has to produce findings at all, or this proves nothing"
+    hint = next((entry for entry in findings if entry.code == "arrange.copies_in_one_place"), None)
+    assert hint is not None, [entry.code for entry in findings]
+    assert hint.severity == "info", "nothing went wrong here — it is only invisible"
+
+
+def test_a_single_copy_is_no_reason_to_say_anything(
+    document: Document, profile: Profile, registry: Registry
+) -> None:
+    """Eine Stückzahl von eins legt nichts dazu, also überlagert auch nichts.
+
+    Die Gegenprobe zum Hinweis darüber: Er hängt an der Zahl der Ausgaben und
+    nicht daran, dass die Operation gelaufen ist.
+    """
+    history = History(document, registry)
+    history.apply(_("Anlegen"), [OperationDraft(op="make_object")])
+    history.apply(
+        _("Duplizieren"),
+        [OperationDraft(op="duplicate_object", inputs=("obj_1",), params={"count": 1})],
+    )
+
+    result = evaluate(document, profile, registry=registry)
+
+    # Ohne diese Zeile wäre der Test auch dann grün, wenn die Auswertung gar
+    # nicht bis zum Duplizieren gekommen wäre — ein Verbotstest über eine
+    # leere Menge besteht immer.
+    assert result.complete, "the run has to reach the duplicate step at all"
+    codes = [entry.code for entry in result.scene.report.findings]
+    assert "arrange.copies_in_one_place" not in codes, codes
 
 
 def test_the_copy_can_be_named(document: Document, profile: Profile, registry: Registry) -> None:
@@ -107,7 +190,7 @@ def test_the_copy_can_be_named(document: Document, profile: Profile, registry: R
     )
 
     result = evaluate(document, profile, registry=registry)
-    assert result.scene.objects["obj_3"].name == "Zweites Teil"
+    assert result.scene.objects["obj_2"].name == "Zweites Teil"
 
 
 def test_the_copy_carries_its_own_feature_table(
@@ -118,8 +201,8 @@ def test_the_copy_carries_its_own_feature_table(
     history.apply(_("Duplizieren"), [OperationDraft(op="duplicate_object", inputs=("obj_1",))])
 
     result = evaluate(document, profile, registry=registry)
-    original = result.scene.objects["obj_2"]
-    copy = result.scene.objects["obj_3"]
+    original = result.scene.objects["obj_1"]
+    copy = result.scene.objects["obj_2"]
     assert original.features is not copy.features
     assert original.material_slots is not copy.material_slots
 

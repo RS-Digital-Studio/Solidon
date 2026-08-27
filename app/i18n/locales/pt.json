@@ -747,6 +747,7 @@
   "Die Knochen, an denen der Körper hängt. Sie werden gesetzt, nicht getippt — dieses Feld zeigt nur, was dabei entstanden ist.": "Os ossos de que o corpo pende. São colocados, não escritos — este campo mostra apenas o que daí resultou.",
   "Die Knoten fehlen in dieser Installation von Solidon.": "Os nós faltam nesta instalação do Solidon.",
   "Die Knoten liegen an ihrem Platz, ComfyUI kann sie aber nicht laden. Meist fehlt ein Paket in ComfyUIs eigener Umgebung — was genau, steht darunter. Ein zweiter Lauf der Einrichtung zieht es nach; bleibt es dabei, gehört die Zeile in eine Rückmeldung an den Support.": "Os nós estão no lugar, mas o ComfyUI não consegue carregá-los. Costuma faltar um pacote no ambiente próprio do ComfyUI — qual, está abaixo. Uma segunda execução da configuração acrescenta-o; se continuar assim, essa linha pertence a uma mensagem ao suporte.",
+  "Die Kopien liegen am selben Ort wie das Original.": "As cópias ficam no mesmo lugar que o original.",
   "Die Körper als STL, 3MF, OBJ, PLY oder STEP schreiben — mit der Prüfung aus dem Bericht davor.": "Escrever os corpos como STL, 3MF, OBJ, PLY ou STEP — com a verificação do relatório antes disso.",
   "Die Körper berühren sich nicht und liegen weiter auseinander als der Übergang breit ist — sie sind nebeneinander geblieben, nicht verbunden.": "Os corpos não se tocam e estão mais afastados do que a transição é larga — ficaram lado a lado, não unidos.",
   "Die Körper einzeln verschmelzen.": "Fundir os corpos um a um.",

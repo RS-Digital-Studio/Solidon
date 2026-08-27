@@ -306,6 +306,13 @@ FINDING_ACTIONS: dict[str, tuple[Action, ...]] = {
     # dort soll ein Klick genau das tun, was er sagt.
     "arrange.above_bed": (PLACE_ON_BED, ARRANGE_ON_BED),
     "arrange.off_the_plate": (ARRANGE_ON_BED,),
+    # Duplizieren legt die Kopie dorthin, wo das Original steht — die
+    # Stückzahl gehört in den Stapel, das Verteilen ans Anordnen (§25). Nur
+    # sieht der Nutzer davon nichts: ein Körper im Bild, zwei Zeilen im Baum.
+    # *Auf dem Bett anordnen* ist hier keine Reparatur, sondern der zweite
+    # Halbschritt, den die Operation bewusst nicht selbst tut — und ohne
+    # diesen Knopf muss man ihn kennen, um ihn zu finden.
+    "arrange.copies_in_one_place": (ARRANGE_ON_BED,),
     # Derselbe Sachverhalt, nur eine Stufe später gemessen: nicht die Szene
     # ragt hinaus, sondern die **Druckdatei**, die der Slicer daraus gemacht
     # hat (``gcode.printed_extent``). CuraEngine prüft seinen Bauraum nicht.

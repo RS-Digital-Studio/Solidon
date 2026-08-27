@@ -747,6 +747,7 @@
   "Die Knochen, an denen der Körper hängt. Sie werden gesetzt, nicht getippt — dieses Feld zeigt nur, was dabei entstanden ist.": "The bones the body hangs on. They are placed, not typed — this field only shows what came of it.",
   "Die Knoten fehlen in dieser Installation von Solidon.": "The nodes are missing from this installation of Solidon.",
   "Die Knoten liegen an ihrem Platz, ComfyUI kann sie aber nicht laden. Meist fehlt ein Paket in ComfyUIs eigener Umgebung — was genau, steht darunter. Ein zweiter Lauf der Einrichtung zieht es nach; bleibt es dabei, gehört die Zeile in eine Rückmeldung an den Support.": "The nodes are in place, but ComfyUI cannot load them. Usually a package is missing in ComfyUI’s own environment — which one is written below. A second run of the setup adds it; if it stays that way, that line belongs in a message to support.",
+  "Die Kopien liegen am selben Ort wie das Original.": "The copies lie in the same place as the original.",
   "Die Körper als STL, 3MF, OBJ, PLY oder STEP schreiben — mit der Prüfung aus dem Bericht davor.": "Write the bodies as STL, 3MF, OBJ, PLY or STEP — checked by the report beforehand.",
   "Die Körper berühren sich nicht und liegen weiter auseinander als der Übergang breit ist — sie sind nebeneinander geblieben, nicht verbunden.": "The bodies do not touch and lie further apart than the transition is wide — they stayed side by side rather than joining.",
   "Die Körper einzeln verschmelzen.": "Blend the bodies one pair at a time.",

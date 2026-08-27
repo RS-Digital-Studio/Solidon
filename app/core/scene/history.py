@@ -672,10 +672,20 @@ class History:
         """Gleiche Anzahl rein wie raus heißt: die Objekte bleiben sie selbst;
         sonst neue IDs."""
         if spec.produces == VARIABLE and spec.produces_from:
-            return tuple(
-                f"obj_{next(self._next_object)}"
-                for _ in range(self._stated(spec, draft, spec.produces_from))
-            )
+            # Die Eingänge bleiben sie selbst, neu sind nur die Ausgänge
+            # darüber hinaus. Beide Operationen dieser Art — *Objekt
+            # duplizieren* und *Kopien in Reihe oder Kreis* — geben an erster
+            # Stelle ihr unverändertes Original zurück; wer auch dafür eine
+            # frische Kennung vergibt, lässt die Auswertung den Eingang
+            # wegräumen, denn der steht dann nicht mehr unter den Ausgaben.
+            # Der Nutzer sah daraufhin nicht zwei Körper, sondern einen, und
+            # jede weitere Handlung auf seine Auswahl endete in „Der gewählte
+            # Körper ist nicht mehr da" — dieselbe Kennung, die er angeklickt
+            # hatte, gab es nach dem Duplizieren nicht mehr.
+            stated = self._stated(spec, draft, spec.produces_from)
+            kept = tuple(draft.inputs)[:stated]
+            fresh = (f"obj_{next(self._next_object)}" for _ in range(stated - len(kept)))
+            return kept + tuple(fresh)
         if spec.produces == VARIABLE and not draft.inputs:
             if spec.takes_whole_scene:
                 # Anordnen und Kollisionsprüfung nehmen die ganze Szene und

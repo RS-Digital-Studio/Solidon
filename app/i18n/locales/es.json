@@ -747,6 +747,7 @@
   "Die Knochen, an denen der Körper hängt. Sie werden gesetzt, nicht getippt — dieses Feld zeigt nur, was dabei entstanden ist.": "Los huesos de los que cuelga el cuerpo. Se colocan, no se escriben: este campo solo muestra lo que ha salido.",
   "Die Knoten fehlen in dieser Installation von Solidon.": "Los nodos faltan en esta instalación de Solidon.",
   "Die Knoten liegen an ihrem Platz, ComfyUI kann sie aber nicht laden. Meist fehlt ein Paket in ComfyUIs eigener Umgebung — was genau, steht darunter. Ein zweiter Lauf der Einrichtung zieht es nach; bleibt es dabei, gehört die Zeile in eine Rückmeldung an den Support.": "Los nodos están en su lugar, pero ComfyUI no puede cargarlos. Casi siempre falta un paquete en el propio entorno de ComfyUI; cuál, está debajo. Una segunda ejecución de la configuración lo añade; si sigue igual, esa línea debe ir en un mensaje al soporte.",
+  "Die Kopien liegen am selben Ort wie das Original.": "Las copias quedan en el mismo lugar que el original.",
   "Die Körper als STL, 3MF, OBJ, PLY oder STEP schreiben — mit der Prüfung aus dem Bericht davor.": "Escribir los cuerpos como STL, 3MF, OBJ, PLY o STEP — con la comprobación del informe previo.",
   "Die Körper berühren sich nicht und liegen weiter auseinander als der Übergang breit ist — sie sind nebeneinander geblieben, nicht verbunden.": "Los cuerpos no se tocan y están más separados de lo que la transición es ancha: han quedado uno al lado del otro, no unidos.",
   "Die Körper einzeln verschmelzen.": "Fusionar los cuerpos de uno en uno.",
