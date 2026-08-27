@@ -53,6 +53,7 @@
 - [Gemessene Frage ist nicht die gestellte](gemessene-frage-ist-nicht-die-gestellte.md) — jede Suche antwortet auf ihre eigene Frage; drei Fehlschlüsse an einem Abend, einer davon rot auf origin.
 - [Messung trägt nur am Ort ihrer Messung](messung-traegt-nur-am-ort-ihrer-messung.md) — drei gefallene Befunde an einem Tag; beim dritten war die Messung echt und galt nur woanders.
 - [Vier Torläufe, ein Stand](vier-torlaeufe-ein-stand.md) — mypy lief vor dem vorletzten Commit, die Suite nach dem letzten; 4246 grüne Tests sehen einen Reexport nie.
+- [Prognose ohne geprüfte Voraussetzung](prognose-ohne-gepruefte-voraussetzung.md) — „das heilt sich später von selbst" setzt jemanden voraus, der heilen kann; die Urheber-Sitzung war seit zwei Stunden beendet.
 - [Beleg stand im eigenen Kontext](beleg-stand-im-eigenen-kontext.md) — bevor man eine Wissenslücke behauptet, sucht man über py/md/toml, nicht nur Markdown; Regeln stehen auch im eingecheckten Hook, und der injiziert sie oben in den eigenen Kontext.
 
 ## Haltung
