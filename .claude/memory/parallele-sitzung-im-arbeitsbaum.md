@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: feedback
   originSessionId: 69995218-868b-4121-bed5-89d6c8688900
-  modified: 2026-08-23T22:07:41.273Z
+  modified: 2026-08-26T18:33:46.591Z
 ---
 
 Am 21.08.2026 lief eine zweite Claude-Sitzung parallel im selben Arbeitsbaum
@@ -56,7 +56,14 @@ danach lässt sich grep-en. Dann:
   dem Interpreter des Hauptbaums und `cwd` im Worktree; `tools/run_suite_isolated.py`
   geht dort nicht, es sucht `.venv` relativ.
 - **Rote Tests zuordnen:** dieselben Tests am Commit *vor* dem eigenen fahren.
-  War es dort schon rot, gehört es der anderen Sitzung.
+  War es dort schon rot, gehört es der anderen Sitzung. **Und das gilt auch,
+  wenn eine bekannte Absturzfamilie die bequeme Erklärung liefert** — die
+  Familie erklärt den *Mechanismus*, nicht den *Auslöser*. Am 26.08.2026
+  drei 139er als „wandernde VTK-Mine, kein Verdacht gegen den Commit"
+  zugeschrieben; ces Gegenprobe (Stand davor: 73 passed, danach: rot 3/3)
+  zeigte, dass seine zwei neuen Tests die Zusammensetzung gekippt hatten.
+  Die Familien-Diagnose stimmte, die Freisprechung nicht — und nur die
+  Gegenprobe trennt beides, für zwei Minuten Arbeitsbaum-Lauf.
 - **Abstürze ohne Ausgabe sind meist keine Funde.** Exit `-1073740791`
   (0xC0000409) oder „cannot get C stack" nach „N passed" ist der bekannte
   Absturz beim Herunterfahren (offener Punkt in `ROADMAP.md`). Dieselbe Datei
@@ -203,3 +210,50 @@ Bedingung**, nicht ein Detail am Rande: Ohne sie stagt derselbe Befehl echte
 
 Robert entscheidet, was mit fremden Änderungen passiert — nicht selbst
 mitcommitten und nicht wegwerfen. Siehe [[git-identitaet-mitgeben]].
+
+**Nachtrag 26.08.2026 — `-o` schützt nur vor dem Index, nicht vor dem Baum:**
+`git commit -o -- <datei>` committet den ganzen **Dateistand des Baums**,
+nicht die eigenen Zeilen. e65f1539 (Sitzung a2) nahm so die uncommittete
+Schleier-Arbeit einer anderen Sitzung in `main_window.py` mit — und ließ
+deren zweite Hälfte (`loading.py` mit den neuen Signalen) zurück: Der
+gepushte HEAD baute daraufhin auf jeder anderen Maschine **kein Fenster
+mehr**, und keiner der lokalen Torläufe sah es, weil der Baum die fehlende
+Hälfte trug. Aufgefallen erst, als die bestohlene Sitzung ihre eigenen
+Hunks im `git diff` vermisste.
+
+**How to apply:** Vor einem Pfad-Commit in einer Datei, die auf einem
+fremden Claim steht: `git diff -- <datei>` lesen und fremde Hunks dem
+Besitzer zuordnen — sind welche da, erst absprechen (er committet zuerst,
+oder man nimmt seine Hunks mit **Ansage** mit). Und nach jedem fremden
+Commit in eigenen Dateien prüfen, ob die eigene Arbeit noch im Diff steht:
+Fehlt sie dort, ist sie in dessen Commit — dann sofort die zugehörigen
+Hälften (Signale, Tests, Gegenstücke) nachcommitten, bevor HEAD auf einer
+anderen Maschine läuft.
+
+**Zweiter Doppelfall am 26.08.2026, und die Zahl stand jedes Mal in der
+eigenen Ausgabe:** bc92469a (ce, wollte 2 Zeilen aus `labels.py` löschen)
+zeigte im eigenen `--stat` „145 insertions" — die 141 Zeilen einer fremden,
+uncommitteten Satztabelle ritten mit, und der Push öffnete ein
+Übersetzungs-Rot auf origin. Spiegelbildlich hatte 2b48f288 (46) zuvor ces
+uncommitteten `panels.py`-Eintrag mitgenommen. Der private Index schützt
+davor **nicht** — er hält fremde *Dateien* heraus, nicht den fremden Stand
+einer *gemeinsamen* Datei.
+
+**Der Handgriff mit Zahl:** Vor dem Commit die eigene Erwartung ansagen
+(„2 Löschungen, 0 Einfügungen"), **dann** `git diff HEAD --numstat -- <pfade>`
+lesen und vergleichen — in dieser Reihenfolge, sonst prüft man den Istwert
+gegen sich selbst ([[sollwert-aus-dem-pruefling]]).
+
+**Und numstat ist blind für alles, was nicht im Index steht.** Ein `-o`-Commit
+nimmt nur verfolgte Dateien der Pfadliste: eine **gelöschte** Datei bleibt
+liegen (`git add -u` fehlt), eine **neue** auch (`git add` fehlt) — und beides
+sieht lokal richtig aus, weil der eigene Baum den Sollzustand trägt. Gemerkt
+wird es erst in einem Klon ohne diesen Baum: der CI. Am 26.08.2026 zweimal an
+einem Tag (ces liegengebliebene test_openscad-Löschung riss jede CI-Suite
+beim Einsammeln; a2s 60 neue Handbuchbilder fehlten im Handbuch-Commit).
+Zur Ansage gehören deshalb drei Glieder: numstat, `git status --porcelain |
+grep "^ D"` (Löschungen), `grep "^??"` auf den eigenen Pfaden (Neues). Und wenn es passiert
+ist: Zurechnung im Meldungstext des eigenen Folge-Commits geradeziehen
+(History bleibt stehen), die Besitzerin sofort benachrichtigen, und prüfen,
+ob der Ritt eine *halbe* Einheit hinausgetragen hat — die fehlende Hälfte
+ist dann das Dringende, nicht die Zurechnung.

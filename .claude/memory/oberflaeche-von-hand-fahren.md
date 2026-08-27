@@ -21,7 +21,8 @@ Vorkehrungen. Ohne sie hängt der Lauf oder fotografiert leere Kästchen.
   `confirm_unsaved` „Abbrechen", und das Öffnen findet nie statt), die
   Wiederherstellungsfrage und `closeEvent`. Operationsdialoge laufen dagegen
   **nicht** über `exec()`, sondern nicht-modal: sie hängen an
-  `window._op_dialog` und werden über `accept()` bestätigt.
+  `window._op_dialog`. Bestätigt wird **über den Knopf**, nicht über
+  `accept()` — siehe unten.
 - **Screenshot vor dem Bestätigen.** Ein Operationsdialog trägt
   `WA_DeleteOnClose`; nach `accept()` ist sein C++-Objekt fort.
 
@@ -114,6 +115,33 @@ Am 20.08.2026 zwei Fallen, die beide wie ein Absturz aussehen und keiner sind:
 - **Ein echtes `QContextMenuEvent` hat kein `position()`.** Wer eines baut, um
   ein Kontextmenü zu prüfen, prüft den Typfehler statt das Menü; eine Attrappe
   mit `position()` und `globalPosition()` reicht und ist ehrlicher.
+
+
+**Ein Prüfstand, der den echten Startweg abkürzt, misst sich selbst.** Am
+25.08.2026 zwei Fehlalarme an einem Nachmittag, beide aus dieser Wurzel, und
+beide sahen aus wie Fehler der Anwendung:
+
+- **Den Knopf klicken, nicht `accept()` rufen.** Der Bausteinweg schien tot:
+  Modell geladen, Objekt gewählt, Katalog, Dialog steht sauber da, bestätigt —
+  und im Stapel stand danach nur `load`. Mit
+  `box.button(QDialogButtonBox.StandardButton.Ok).click()` statt
+  `widget.accept()` setzt dieselbe Operation zweimal hintereinander sauber.
+  Der Grund ist **nicht isoliert**: `run_operation` hängt an
+  `dialog.finished`, und `accept()` löst das aus; der Aufbau hatte eine
+  verschachtelte Wartezeit im Timer-Callback. Was bleibt, ist die praktische
+  Regel — der Klick geht, und er ist ohnehin der Weg, den ein Kunde nimmt.
+- **`install_qt_translations(app, "de")` gehört in jeden Prüfstand.** Ohne sie
+  steht auf jedem zweiten Dialog „Cancel" statt „Abbrechen" — Qt beschriftet
+  seine Standardknöpfe aus dem eigenen Katalog. Auf einem Bildschirmfoto sieht
+  das aus wie ein Regel-20-Verstoß und ist keiner: `app/ui/app.py` lädt den
+  Katalog beim echten Start, `qtbase_de.qm` liegt in der `.venv`, und
+  `packaging/solidon3d.spec:93` nimmt ihn ins Paket mit. Wer `QApplication([])`
+  von Hand baut, überspringt genau diesen Schritt.
+
+Beide Male war die Anwendung in Ordnung und der Prüfstand nicht. Die Probe
+darauf ist billig: **Fällt der Befund, sobald der Prüfstand einen Schritt des
+echten Starts nachholt, war es der Prüfstand.** Siehe
+[[messwerkzeug-misst-sich-selbst]].
 
 Siehe auch [[parallele-sitzungen-solidon3d]] und
 [[native-bibliotheken-speicher]].

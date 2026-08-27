@@ -1,8 +1,11 @@
 ---
 name: commit-o-nimmt-den-dateistand
-description: Der private Index hält fremde Dateien heraus, nicht den fremden Stand einer gemeinsamen — und die Zahl steht im eigenen Diff-Stat.
-metadata:
+description: "Der private Index hält fremde Dateien heraus, nicht den fremden Stand einer gemeinsamen — und die Zahl steht im eigenen Diff-Stat."
+metadata: 
+  node_type: memory
   type: feedback
+  originSessionId: 33442ae8-b3cf-4eef-bce4-cf827af80603
+  modified: 2026-08-26T22:45:52.550Z
 ---
 
 `git commit -o -- <pfad>` committet die Datei, **wie sie im Baum liegt** — samt
@@ -24,6 +27,23 @@ ist der ganze Punkt: **erst die eigene Zahl ansagen** („ich lösche zwei
 Zeilen, füge keine ein"), **dann** `git diff HEAD --numstat -- <pfade>`
 dagegenhalten. Wer erst die Zahlen liest, nickt den Istwert ab. Bei zwei
 gelöschten Zeilen schreit „145 insertions" schon beim Ansagen.
+
+Und die Ansage zählt **Zeilen, nicht Dateien** — dasselbe gilt für
+`git add <pfad>` auf privatem Index, das denselben Dateistand nimmt. Am
+26.08.2026 ein drittes Mal zugeschnappt (`9869a090`): Die Kontrolle prüfte
+„genau 1 Datei" und war erfüllt, während in derselben Datei 60 fremde
+Zeilen lagen; die zu große Zahl bekam die bequeme Falscherklärung („der
+Formatter war's"). Wenn der Istwert von der Ansage abweicht, ist die
+Erklärung zu **belegen** (Diff ansehen), nicht zu erraten.
+
+**Und die Kehrseite des Auswegs: Wer am Dateistand vorbei committet, zieht
+den Arbeitsbaum nach.** `git hash-object -w` plus `update-index --cacheinfo`
+schreibt eine Fassung in den Index, die es im Baum nie gab — richtig, um
+fremde Zwischenstände draußen zu halten, und die Datei im Baum trägt danach
+weiter den alten Inhalt. Am 26.08.2026 zugeschnappt: Ein so committetes
+Löschen (`845e87a2`, toter Katalogschlüssel) kam beim nächsten Schreiben in
+dieselbe Datei zurück, weil das Skript den **Baum** las. Gefangen hat es die
+Ansage — vier Einfügungen statt der angesagten drei —, nicht der Zufall.
 
 Ist es passiert: History stehen lassen. Zuerst prüfen, ob eine halbe Einheit
 hinausgeritten ist — das ist dringender als die Zurechnung —, dann den
