@@ -1002,7 +1002,7 @@ def _parameter_field(theme: Theme) -> str:
     colours = canvas.colours
     canvas.background()
 
-    for oben, titel, wert, aktiv, satz in (
+    for top, title, value, active, text in (
         (
             28,
             _("Aus: eine Zahl"),
@@ -1018,37 +1018,37 @@ def _parameter_field(theme: Theme) -> str:
             _("Der Wert folgt dem Parameter, auch wenn der sich ändert."),
         ),
     ):
-        canvas.label(20, oben, str(titel), size=11, bold=True, colour=colours.muted)
+        canvas.label(20, top, str(title), size=11, bold=True, colour=colours.muted)
 
         # Das Zahlenfeld. Der Rahmen ist derselbe wie in der Anwendung: ein
         # Kasten mit Text links und den Drehknöpfen am rechten Rand.
-        canvas.box(20, oben + 12, 168, 30, stroke=colours.muted, fill=colours.paper)
-        canvas.label(32, oben + 32, wert, size=12)
-        if not aktiv:
-            canvas.label(178, oben + 26, "▲", anchor="end", size=8, colour=colours.muted)
-            canvas.label(178, oben + 38, "▼", anchor="end", size=8, colour=colours.muted)
+        canvas.box(20, top + 12, 168, 30, stroke=colours.muted, fill=colours.paper)
+        canvas.label(32, top + 32, value, size=12)
+        if not active:
+            canvas.label(178, top + 26, "▲", anchor="end", size=8, colour=colours.muted)
+            canvas.label(178, top + 38, "▼", anchor="end", size=8, colour=colours.muted)
 
         # Der Knopf. Gefüllt heißt eingeschaltet — dazu die zweite Kodierung,
         # die Regel 18 verlangt: der Rahmen wird kräftiger, nicht nur bunter.
         canvas.box(
             196,
-            oben + 12,
+            top + 12,
             36,
             30,
-            stroke=colours.accent if aktiv else colours.muted,
-            fill=colours.fill if aktiv else colours.paper,
-            weight=2.0 if aktiv else 1.4,
+            stroke=colours.accent if active else colours.muted,
+            fill=colours.fill if active else colours.paper,
+            weight=2.0 if active else 1.4,
         )
         canvas.label(
             214,
-            oben + 32,
+            top + 32,
             "fx",
             anchor="middle",
             size=12,
-            bold=aktiv,
-            colour=colours.accent if aktiv else colours.muted,
+            bold=active,
+            colour=colours.accent if active else colours.muted,
         )
-        canvas.caption(248, oben + 32, str(satz))
+        canvas.caption(248, top + 32, str(text))
 
     # Was dabei herauskommt — die Rechnung, die der Text beschreibt.
     canvas.line(20, 196, 600, 196, stroke=colours.muted, dashed=True)
