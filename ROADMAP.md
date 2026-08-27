@@ -132,7 +132,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Beide Aufmacher stehen zur Hälfte leer | Was die Website-Durchsicht liegen ließ (27.08.2026) | eine Abbildung je Seite — der Aufmacher entscheidet, ob weitergelesen wird, und `funktionen.html` verspricht in der Unterzeile ein Bild aus der laufenden Anwendung, das darüber fehlt |
 | Abbildungen mit Text sind auf dem Handy unlesbar | Was die Website-Durchsicht liegen ließ (27.08.2026) | eine Entscheidung über den Weg: eigene Handyfassungen, Antippen zum Vergrößern (so löst es das Handbuch seit `235d7050`), oder die Bildunterschrift an ihrer Stelle. Bei 390 px landen die Beschriftungen bei 5 bis 7 Bildpunkten — auch die vier Befundzeilen, um die es im Prüfbericht-Abschnitt geht |
 | Der Abschlussknopf führt zur E-Mail statt zur Demo | Was die Website-Durchsicht liegen ließ (27.08.2026) | eine Entscheidung von Robert über die Rangfolge — der Kontaktweg ist dort nicht falsch, aber der stärkste Knopf am Ende einer Verkaufsseite sollte der sein, den die Seite die ganze Zeit anbietet |
-| Zwei Tabellen auf `ki-modelle.html` brechen auf halber Breite ab | Was die Website-Durchsicht liegen ließ (27.08.2026) | nichts als eine Regel — gemessen 736 px Tabelle unter 1176 px Text, und die rechte Seitenkante franst dadurch aus |
 | Auf dem Handy sind die Unterseiten eine Sackgasse | Was die Website-Durchsicht liegen ließ (27.08.2026) | ein Ersatzziel für `funktionen.html` und `ki-modelle.html`, die bei 390 px zwei Navigationsziele ausblenden und keines dafür anbieten. Auf der Startseite ist dasselbe **kein** Fehler: Dort führt der Demo-Knopf selbst auf `#preis` |
 | Die 8-GB-Karte in den Systemvoraussetzungen ist nie gemessen worden | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Rechner mit einer 8-GB-Karte, oder die Entscheidung, die Zeile als Erfahrungswert zu kennzeichnen statt als Anforderung. Die Messangabe daneben ist am 27.08. berichtigt (`00156df3`), diese nicht — eine ungemessene Zahl durch eine andere zu ersetzen gewinnt nichts |
 | `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
@@ -11006,11 +11005,34 @@ steht, ist kein festgehaltener Fund.
   falsch, nur die Rangfolge ist es. Ein „Demo laden" als Hauptknopf und der
   Support daneben wäre die Umkehrung.
 
-- [ ] **Die zwei Tabellen auf `ki-modelle.html` brechen auf halber Breite ab.**
-  Gemessen bei 1440 px: Überschriften und Absätze laufen über 1176 px, beide
-  Tabellen nur über 736. Rechts neben dem wichtigsten Inhalt der Seite — dem
-  Vergleich Generator gegen Solidon3D — stehen 440 px leer, und die rechte
-  Kante der Seite franst aus.
+- [x] **Die zwei Tabellen auf `ki-modelle.html` brechen auf halber Breite ab
+  — geprüft und verworfen.** Der Befund stimmte in seiner Zahl und in seinem
+  Schluss nicht: Ja, die Tabellen messen 736 px unter 1176 px Text. Aber sie
+  brauchen die Breite nicht, sondern haben schon zu viel davon.
+
+  Gemessen wurde die erste Spalte gegen ihren längsten Eintrag, ohne Umbruch:
+
+  | | Spalte 1 hat | braucht |
+  |---|---|---|
+  | Vergleichstabelle (3 Spalten, 11 Zeilen) | 464 px | **316 px** |
+  | Zeitentabelle (2 Spalten, 6 Zeilen) | 592 px | **286 px** |
+
+  Die übrigen Spalten stehen fest auf 8,5 rem. Eine Verbreiterung auf 1176 px
+  gäbe der ersten Spalte 904 px für 316 px Text — das Auge müsste vom Namen
+  links bis zum Häkchen rechts über eine halbe Bildschirmbreite wandern, und
+  genau daran verliert man in einer Vergleichstabelle die Zeile. `max-width:
+  46rem` ist deshalb richtig, auch ohne Begründung im Kommentar daneben.
+
+  **Was am Befund stimmte, war der Eindruck** — 440 px Weißraum rechts neben
+  dem Kerninhalt sehen nach Versehen aus. Das ist eine Frage der Anordnung
+  (zentrieren, oder den Raum mit etwas füllen, das dorthin gehört) und keine
+  der Tabellenbreite. Wer ihn aufnimmt, fängt nicht bei `max-width` an.
+
+  **Und es ist der zweite Agentenbefund des Tages, der einer Messung nicht
+  standhält** — nach den „41 Minuten", bei denen der volle statt des kompakten
+  Werkzeugsatzes gerechnet wurde. Beide Male klang die Beobachtung richtig und
+  war es auch; falsch war der Schluss daraus, und beide Male hätte eine
+  einzige Messung ihn verhindert.
 
 - [ ] **Auf dem Handy sind die Unterseiten eine Sackgasse.** `funktionen.html`
   blendet bei 390 px „Vier Wege" und „KI-Modelle" aus (`hide-small`,
