@@ -152,3 +152,54 @@ def test_an_exact_body_shows_its_difference_too() -> None:
 
     assert "obj_1" in result.entries, "auch ein exakter Körper zeigt, was sich geändert hat"
     assert result.entries["obj_1"].added_volume > 0.0
+
+
+def test_a_body_that_did_not_exist_before_is_shown_as_added() -> None:
+    """Ein neu erzeugter Körper ist die Differenz — die ganze.
+
+    **Gemessen an der Live-Vorschau, und dort fällt es beim Kunden auf:** Wer
+    eine Skizze extrudiert, einen Quader anlegt oder einen Zylinder erzeugt,
+    tippt eine Höhe und sieht nichts. Der Dialog rechnet die Vorschau, die
+    Ansicht zeichnet ``entries`` — und ein neuer Körper stand allein in
+    ``created``, ohne Geometrie daneben.
+
+    Das trifft **jede erzeugende Operation**, also genau den Anfang von Weg 2:
+    neu konstruieren. Robert hat danach gefragt („in die Seitenansicht gehen
+    und nach oben ziehen") — was fehlte, war nicht der Griff, sondern das Bild.
+
+    Und die zweite Hälfte ist die Zahl: ``added_volume`` meldete null, während
+    achttausend Kubikmillimeter entstanden. Eine Differenz, die ihr eigenes
+    Ergebnis nicht mitzählt, ist als Auskunft falsch, nicht nur als Bild leer.
+    """
+    before = Scene(objects={})
+    body = cube(20.0)
+    after = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Teil", mesh=body)})
+
+    difference = compare_scenes(before, after)
+
+    assert difference.created == ("obj_1",), "die Liste der Neuen bleibt, wie sie war"
+    assert "obj_1" in difference.entries, "und er steht jetzt auch als Geometrie da"
+    entry = difference.entries["obj_1"]
+    assert entry.added is not None, "sein Netz ist das Hinzugekommene"
+    assert entry.added_volume == pytest.approx(8000.0, rel=1e-6), "der ganze Körper"
+    assert entry.removed_volume == 0.0, "weggenommen wurde nichts"
+    assert difference.added_volume == pytest.approx(8000.0, rel=1e-6)
+
+
+def test_a_body_that_vanished_is_shown_as_removed() -> None:
+    """Die Gegenrichtung, damit die Auskunft in beide Richtungen stimmt.
+
+    Ein gelöschter Körper ist genauso eine Differenz wie ein neuer — und ohne
+    diesen Fall bliebe die Hälfte der Zusage unbewiesen.
+    """
+    body = cube(20.0)
+    before = Scene(objects={"obj_1": SceneObject(id="obj_1", name="Teil", mesh=body)})
+    after = Scene(objects={})
+
+    difference = compare_scenes(before, after)
+
+    assert difference.deleted == ("obj_1",)
+    assert "obj_1" in difference.entries, "auch das Verschwundene hat Geometrie"
+    entry = difference.entries["obj_1"]
+    assert entry.removed_volume == pytest.approx(8000.0, rel=1e-6)
+    assert entry.added_volume == 0.0

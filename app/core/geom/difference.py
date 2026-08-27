@@ -19,7 +19,7 @@ from app.core.errors import PROGRAMMING_ERRORS, GeometryError
 from app.core.geom.boolean import boolean
 from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
-from app.core.types import Finding, ObjectId, Quality, Scene, SolverInfo
+from app.core.types import Finding, ObjectId, Quality, Scene, SceneObject, SolverInfo
 from app.core.units import EPS_GEOM
 from app.i18n import _
 
@@ -101,6 +101,15 @@ def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -
     result.created = tuple(name for name in after.objects if name not in before.objects)
     result.deleted = tuple(name for name in before.objects if name not in after.objects)
 
+    for object_id in result.created:
+        difference = _whole_body(after.objects[object_id], object_id, added=True)
+        if difference is not None:
+            result.entries[object_id] = difference
+    for object_id in result.deleted:
+        difference = _whole_body(before.objects[object_id], object_id, added=False)
+        if difference is not None:
+            result.entries[object_id] = difference
+
     for object_id, entry in after.objects.items():
         earlier = before.objects.get(object_id)
         if earlier is None:
@@ -126,6 +135,50 @@ def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -
         difference.object_id = object_id
         result.entries[object_id] = difference
     return result
+
+
+def _whole_body(entry: SceneObject, object_id: str, *, added: bool) -> Difference | None:
+    """Ein Körper, der ganz erschienen oder ganz verschwunden ist.
+
+    **Die Differenz eines neuen Körpers ist er selbst.** Hier stand nichts —
+    ein Objekt ohne Vorgänger wurde übersprungen, und damit blieb die
+    Differenzansicht bei jeder **erzeugenden** Operation leer: Skizze
+    extrudieren, Quader anlegen, Zylinder erzeugen. Wer eine Höhe eintippt,
+    sah nichts, bis er anwendete, und das trifft genau den Anfang von Weg 2
+    (§2.2, neu konstruieren).
+
+    Gefunden über die Live-Vorschau des Operationsdialogs (§18.7): Sie rechnet
+    seit je richtig, und die Ansicht zeichnet ``entries`` — nur stand der neue
+    Körper allein in ``created``, ohne Geometrie daneben. Zwei Listen für eine
+    Sache, und die gezeichnete war die leere (27.08.2026, Roberts Frage nach
+    dem Hochziehen in der Seitenansicht).
+
+    Die Zahl hing mit daran: ``added_volume`` meldete null, während
+    achttausend Kubikmillimeter entstanden. Eine Differenz, die ihr eigenes
+    Ergebnis nicht mitzählt, ist als Auskunft falsch und nicht bloß als Bild
+    leer.
+
+    ``created`` und ``deleted`` bleiben, wie sie waren: Sie sagen, **dass** es
+    einen Körper mehr oder weniger gibt, und das ist eine andere Auskunft als
+    seine Geometrie — der Chat schreibt sie in Worte, die Ansicht zeichnet sie
+    nicht.
+    """
+    try:
+        mesh = as_mesh_data(entry.mesh)
+    except GeometryError:
+        # Dieselbe Haltung wie beim Vergleich zweier Körper: Was keine
+        # Dreiecke hat, fehlt in der Ansicht, statt den Zug abzubrechen.
+        return None
+    volume = max(mesh.volume, 0.0)
+    if volume < NOISE_VOLUME:
+        return None
+    return Difference(
+        object_id=object_id,
+        added=mesh if added else None,
+        removed=None if added else mesh,
+        added_volume=volume if added else 0.0,
+        removed_volume=0.0 if added else volume,
+    )
 
 
 def _same_bounds(first: MeshData, second: MeshData) -> bool:
