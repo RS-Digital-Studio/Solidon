@@ -445,6 +445,44 @@ def test_a_report_carries_the_versions() -> None:
     assert "trimesh" in entry
 
 
+def test_a_report_names_the_versions_even_without_package_metadata() -> None:
+    """Im gebauten Paket gibt es keine ``.dist-info`` — die Fassung trotzdem.
+
+    Im Bericht eines Kunden vom 27.08.2026 stand:
+
+        trimesh: 5.0.0 · numpy: 2.5.2
+        manifold3d: - · scipy: - · shapely: - · PySide6: -
+
+    Vier von sechs als „nicht installiert", bei einem Programm, das ohne
+    PySide6 kein Fenster öffnet. ``importlib.metadata`` liest die
+    ``.dist-info``-Ordner, und die reisen in einem PyInstaller-Bau nicht mit;
+    ``trimesh`` und ``numpy`` standen nur da, weil die Spec ihre Datendateien
+    einsammelt und die Metadaten dabei mitkommen.
+
+    **Ein Fehlerbericht, der „nicht installiert" sagt, wo eine Bibliothek
+    läuft, ist schlimmer als einer ohne die Zeile:** Er schickt die Diagnose an
+    eine Stelle, an der nichts ist. Genau das ist beim Lesen dieses Berichts
+    passiert.
+
+    Gefragt wird deshalb zuerst das **Modul** — fünf der sechs tragen ihre
+    Fassung als ``__version__``, und das überlebt jeden Bau.
+    """
+    import importlib.metadata as metadata
+
+    def no_metadata(name: str) -> str:
+        raise metadata.PackageNotFoundError(name)
+
+    with mock.patch.object(metadata, "version", no_metadata):
+        entry = reports.environment()
+
+    # ``manifold3d`` hat kein ``__version__``; für es nimmt die Spec die
+    # Metadaten ausdrücklich mit (``copy_metadata``), hier fehlen sie.
+    named = {name: entry[name] for name in ("scipy", "shapely", "PySide6", "numpy")}
+    assert all(value != "-" for value in named.values()), (
+        f"ohne .dist-info bleibt die Fassung am Modul lesbar: {named}"
+    )
+
+
 def test_a_report_without_the_project_says_nothing_about_geometry() -> None:
     report = reports.ErrorReport(summary="x", detail="y")
 

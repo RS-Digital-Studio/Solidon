@@ -21,6 +21,7 @@ import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
 
 from app.branding import APP_NAME, APP_VERSION
 from app.core.log import get_logger, log_path
@@ -68,17 +69,57 @@ class ErrorReport:
         return self.include_project
 
 
+#: Die Bibliotheken, deren Fassung ein Bericht nennt. Reihenfolge wie im Text.
+REPORTED_PACKAGES: Final = ("trimesh", "manifold3d", "numpy", "scipy", "shapely", "PySide6")
+
+
+def _version_of(name: str) -> str:
+    """Die Fassung eines Pakets — erst am Modul, dann an seinen Metadaten.
+
+    **Die Reihenfolge ist der ganze Punkt.** Hier stand nur
+    ``importlib.metadata.version``, und das liest die ``.dist-info``-Ordner
+    neben dem Paket. Die reisen in einem PyInstaller-Bau **nicht** mit: Im
+    Bericht eines Kunden vom 27.08.2026 stand
+
+        trimesh: 5.0.0 · numpy: 2.5.2
+        manifold3d: - · scipy: - · shapely: - · PySide6: -
+
+    Vier von sechs als „nicht installiert" — bei einem Programm, das ohne
+    PySide6 kein Fenster öffnet. `trimesh` und `numpy` standen nur da, weil
+    die Spec ihre Datendateien ausdrücklich einsammelt und die Metadaten
+    dabei mitkommen.
+
+    Das ist die gefährlichste Sorte Fehler in einem Fehlerbericht: **Er sagt
+    nicht „unbekannt", er sagt etwas Falsches.** Wer damit eine Diagnose
+    beginnt, sucht an einer Stelle, an der nichts ist — genau das ist beim
+    Lesen dieses Berichts passiert.
+
+    Fünf der sechs Pakete tragen ihre Fassung als ``__version__`` am Modul,
+    und das überlebt jeden Bau. ``manifold3d`` hat keine; dort bleibt es beim
+    Metadatenweg, und in einem Bau ohne sie beim ehrlichen Strich.
+    """
+    import importlib
+    import importlib.metadata as metadata
+
+    try:
+        module = importlib.import_module(name)
+    except Exception:  # pragma: no cover - ein fehlendes Paket ist der Normalfall dieses Zweigs
+        module = None
+    if module is not None:
+        runtime = getattr(module, "__version__", "")
+        if isinstance(runtime, str) and runtime:
+            return runtime
+
+    try:
+        return metadata.version(name)
+    except Exception:  # pragma: no cover - hängt an der Installation
+        return "-"
+
+
 def environment() -> dict[str, str]:
     """Versionsdaten — was ein Bericht braucht, um überhaupt reproduzierbar
     zu sein."""
-    import importlib.metadata as metadata
-
-    versions: dict[str, str] = {}
-    for name in ("trimesh", "manifold3d", "numpy", "scipy", "shapely", "PySide6"):
-        try:
-            versions[name] = metadata.version(name)
-        except metadata.PackageNotFoundError:  # pragma: no cover - hängt an der Installation
-            versions[name] = "-"
+    versions = {name: _version_of(name) for name in REPORTED_PACKAGES}
 
     return {
         "app": f"{APP_NAME} {APP_VERSION}",

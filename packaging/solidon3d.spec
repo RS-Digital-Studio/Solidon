@@ -13,7 +13,7 @@
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules, copy_metadata
 
 ROOT = Path(SPECPATH).resolve().parent
 
@@ -68,6 +68,17 @@ datas = [
 # trimesh und pyvista lesen beim Import eigene Datendateien.
 datas += collect_data_files("trimesh")
 datas += collect_data_files("pyvista")
+
+# **Die Paketbeschreibung von manifold3d.** Ein Fehlerbericht nennt die Fassung
+# jeder tragenden Bibliothek, und ``report.environment`` fragt zuerst das Modul
+# (``__version__``) und erst dann die Metadaten. Fünf der sechs Pakete tragen
+# ihre Fassung am Modul; ``manifold3d`` tut es nicht, und ohne die ``.dist-info``
+# stand im Bericht eines Kunden vom 27.08.2026 schlicht ein Strich.
+#
+# Ein Fehlerbericht, der „nicht installiert" sagt, wo eine Bibliothek läuft, ist
+# schlimmer als einer ohne die Zeile: Er schickt die Diagnose an eine Stelle, an
+# der nichts ist. Ein paar Kilobyte gegen eine falsche Fährte.
+datas += copy_metadata("manifold3d")
 
 # **Qts eigene Sprachkataloge.** Die Standardknöpfe beschriftet Qt aus
 # ``qtbase_<sprache>.qm``, nicht aus unserem Katalog; ``install_qt_translations``
