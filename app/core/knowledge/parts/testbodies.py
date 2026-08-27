@@ -26,6 +26,7 @@ from typing import cast
 import numpy as np
 import trimesh
 
+from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
@@ -130,8 +131,8 @@ def fit_ladder(raw: BaseParams) -> PartResult:
             )
         )
 
-        hole = shapes.cylinder(params.diameter + play, base_height + 2.0 * shapes.OVERLAP)
-        cutters.append(shapes.moved(hole, (x, spacing * 0.6, -shapes.OVERLAP)))
+        hole = shapes.cylinder(params.diameter + play, base_height + 2.0 * BOOLEAN_OVERLAP)
+        cutters.append(shapes.moved(hole, (x, spacing * 0.6, -BOOLEAN_OVERLAP)))
         features.append(
             bore(
                 f"bore_{index + 1}",
@@ -296,7 +297,9 @@ def overhang_fan(raw: BaseParams) -> PartResult:
         reach = params.length * math.cos(angle)
         rise = params.length * math.sin(angle)
         bodies.append(
-            shapes.moved(_ramp(params.width, reach, rise), (x, start, base_height - shapes.OVERLAP))
+            shapes.moved(
+                _ramp(params.width, reach, rise), (x, start, base_height - BOOLEAN_OVERLAP)
+            )
         )
 
     body = union(*bodies)
@@ -347,7 +350,7 @@ def _label(text: str, position: tuple[float, float, float]) -> MeshData:
     count = max(1, round(float(text.replace(",", ".")) * 100) % 10 or 10)
     bars = []
     for index in range(count):
-        bar = shapes.box(0.8, 3.0, LABEL_DEPTH + shapes.OVERLAP)
+        bar = shapes.box(0.8, 3.0, LABEL_DEPTH + BOOLEAN_OVERLAP)
         bars.append(
             shapes.moved(bar, (position[0] + index * 1.4 - count * 0.7, position[1], position[2]))
         )

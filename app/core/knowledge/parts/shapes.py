@@ -33,11 +33,6 @@ RIDGE_SHARE = 0.55
 #: rechnet das ab, sonst durchbricht der Gang die Wand dahinter.
 RIDGE_END = 0.8
 
-#: Wie weit eine abgezogene Form über die Fläche hinausreicht, die sie
-#: durchschneidet. Die Regelsammlung verlangt es (§39): zusammenfallende
-#: Flächen sind der klassische Weg, eine Boolesche Operation zu brechen.
-OVERLAP = 0.01
-
 #: Zusatztiefe einer Aufnahme über das hinaus, was in ihr steckt — damit zwei
 #: Hälften auf ihrer Naht schließen und nicht auf dem Ende des Verbinders.
 #:

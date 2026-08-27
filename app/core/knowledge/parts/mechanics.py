@@ -16,6 +16,7 @@ from __future__ import annotations
 import math
 from typing import Final, cast
 
+from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge.parts import shapes
 from app.core.knowledge.parts.build import bore, face, pin, result, subtract, union
@@ -262,7 +263,7 @@ def living_hinge(raw: BaseParams) -> PartResult:
     length = 2.0 * params.leaf + params.gap
 
     plate = shapes.box(params.width, length, params.thickness)
-    groove = shapes.box(params.width + 2.0 * shapes.OVERLAP, params.gap, params.thickness)
+    groove = shapes.box(params.width + 2.0 * BOOLEAN_OVERLAP, params.gap, params.thickness)
     groove = shapes.moved(groove, (0.0, 0.0, params.film))
 
     body = subtract(plate, groove)
@@ -611,8 +612,8 @@ def snap_connector(raw: BaseParams) -> PartResult:
 
     if is_pin:
         arm = shapes.moved(shapes.box(width, thickness, params.length), (0.0, arm_centre, 0.0))
-        tip = shapes.wedge(width, hook + shapes.OVERLAP, run)
-        tip = shapes.moved(tip, (0.0, arm_centre + thickness / 2.0 - shapes.OVERLAP, catch))
+        tip = shapes.wedge(width, hook + BOOLEAN_OVERLAP, run)
+        tip = shapes.moved(tip, (0.0, arm_centre + thickness / 2.0 - BOOLEAN_OVERLAP, catch))
         body = union(arm, tip)
         return result(
             body,
@@ -646,7 +647,7 @@ def snap_connector(raw: BaseParams) -> PartResult:
     # damit nichts, und `tests/test_split_line.py` hat es gemessen. Gebaut wird
     # deshalb von der Mündung nach unten, Stück für Stück.
     slot = shapes.moved(shapes.box(width + params.play, across, depth), (0.0, 0.0, -depth))
-    lip = shapes.box(width + params.play + 2.0 * shapes.OVERLAP, hook, catch)
+    lip = shapes.box(width + params.play + 2.0 * BOOLEAN_OVERLAP, hook, catch)
     lip = shapes.moved(lip, (0.0, across / 2.0 - hook / 2.0, -catch))
     body = subtract(slot, lip)
     return result(
@@ -662,7 +663,7 @@ def snap_connector(raw: BaseParams) -> PartResult:
 
 def _ring(diameter: float, chamfer: float):  # type: ignore[no-untyped-def]
     """Das Material, das eine Fase von der Oberkante eines Zylinders nimmt."""
-    outer = shapes.cylinder(diameter + 2.0 * shapes.OVERLAP, chamfer + shapes.OVERLAP)
+    outer = shapes.cylinder(diameter + 2.0 * BOOLEAN_OVERLAP, chamfer + BOOLEAN_OVERLAP)
     inner = shapes.cone(diameter, diameter - 2.0 * chamfer, chamfer)
     return subtract(outer, inner)
 
@@ -773,7 +774,7 @@ def hinge_eye(raw: BaseParams) -> PartResult:
     body = subtract(
         body,
         shapes.moved(
-            lying(bore_width, params.width + 2.0 * shapes.OVERLAP),
+            lying(bore_width, params.width + 2.0 * BOOLEAN_OVERLAP),
             (0.0, params.reach, outer / 2.0),
         ),
     )
@@ -899,7 +900,7 @@ def barrel_hinge(raw: BaseParams) -> PartResult:
     params = cast(BarrelHingeParams, raw)
 
     outer = params.pin + 2.0 * params.wall
-    gap = max(params.play, shapes.OVERLAP)
+    gap = max(params.play, BOOLEAN_OVERLAP)
     # Die Lücke liegt in der Mitte: Jede Lasche bekommt die Hälfte der Breite
     # abzüglich des halben Spalts.
     half = (params.width - gap) / 2.0
@@ -930,7 +931,9 @@ def barrel_hinge(raw: BaseParams) -> PartResult:
     right = union(
         lying(outer, half, (params.width - half) / 2.0), lug(half, (params.width - half) / 2.0)
     )
-    right = subtract(right, lying(params.pin + 2.0 * gap, params.width + 2.0 * shapes.OVERLAP, 0.0))
+    right = subtract(
+        right, lying(params.pin + 2.0 * gap, params.width + 2.0 * BOOLEAN_OVERLAP, 0.0)
+    )
 
     return result(
         union(left, right),

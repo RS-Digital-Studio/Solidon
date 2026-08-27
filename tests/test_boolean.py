@@ -468,3 +468,69 @@ def test_a_boolean_keeps_the_feature_names_where_they_were(document, profile) ->
     assert after[drilled] == (0.0, 0.0), (
         f"{drilled} zeigt jetzt auf eine andere Bohrung: {before} -> {after}"
     )
+
+
+@pytest.mark.parametrize("overlap", [0.05, 0.01, 0.001, 0.0])
+def test_coplanar_faces_survive_every_overlap(overlap: float) -> None:
+    """Die Zugabe schützt vor einem Bruch, den dieser Kern nicht mehr hat.
+
+    ``BOOLEAN_OVERLAP`` stand an drei Stellen mit zwei Werten — zuletzt sogar
+    zweimal unter demselben Namen (``geom/boolean.py`` 0,05,
+    ``geom/prepare.py`` 0,01), beide importiert. Damit hing es am Importpfad,
+    welche Zugabe eine Operation bekam.
+
+    Die Messung hat die Frage verschoben: nicht „welcher Wert ist richtig",
+    sondern „wirkt der Wert überhaupt". Drei koplanare Lagen, jede mit vier
+    Zugaben bis hinunter zu **null** — alle über Stufe 1, alle wasserdicht,
+    alle mit exaktem Volumen. ``manifold3d`` ist feste Abhängigkeit und rechnet
+    zusammenfallende Flächen robust.
+
+    Der Test hält diese Aussage fest, damit die eine Zahl nicht wieder zu
+    zweien wird: Wer sie ändert, ändert nichts an der Rechnung — und wer sie
+    verdoppelt, hat keinen Grund dafür.
+    """
+    plate = MeshData.of(trimesh.creation.box(extents=[40, 30, 10]))
+
+    through = trimesh.creation.box(extents=[10, 10, 10 + overlap])
+    through.apply_translation([0, 0, overlap / 2])
+    on_top = trimesh.creation.box(extents=[8, 8, 4 + overlap])
+    on_top.apply_translation([0, 0, 5 + (4 - overlap) / 2])
+    at_the_side = trimesh.creation.box(extents=[10 + overlap, 8, 4])
+    at_the_side.apply_translation([20 - (10 - overlap) / 2, 0, 0])
+
+    for kind, tool, expected in (
+        ("difference", through, 11000.0),
+        ("union", on_top, 12256.0),
+        ("difference", at_the_side, 11680.0),
+    ):
+        outcome = boolean(kind, [plate, MeshData.of(tool)], quality="fine")
+        assert outcome.solver.strategy == "direct", (
+            f"{kind} mit {overlap} mm Zugabe fiel auf {outcome.solver.strategy} zurück"
+        )
+        assert outcome.mesh.is_watertight, f"{kind} mit {overlap} mm ließ ein offenes Netz"
+        assert outcome.mesh.volume == pytest.approx(expected, abs=0.5), (
+            f"{kind} mit {overlap} mm: {outcome.mesh.volume:.1f} statt {expected}"
+        )
+
+
+def test_the_overlap_is_one_number_for_the_whole_core() -> None:
+    """Wer die Zugabe braucht, importiert sie — er schreibt sie nicht ab.
+
+    Drei Stellen trugen sie einmal, und zwei davon unter demselben Namen mit
+    verschiedenen Zahlen. Am Namen sah man den Unterschied nicht; am Ergebnis
+    auch nicht, denn die Zugabe liegt außerhalb des Materials. Genau deshalb
+    wäre es unbemerkt geblieben.
+    """
+    import ast
+    from pathlib import Path as _Path
+
+    core = _Path(__file__).resolve().parent.parent / "app" / "core"
+    defined: list[str] = []
+    for path in sorted(core.rglob("*.py")):
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            names = [t.id for t in getattr(node, "targets", []) if isinstance(t, ast.Name)]
+            if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                names = [node.target.id]
+            if any(name in ("BOOLEAN_OVERLAP", "OVERLAP") for name in names):
+                defined.append(path.name)
+    assert defined == ["boolean.py"], f"die Zugabe steht an {len(defined)} Stellen: {defined}"

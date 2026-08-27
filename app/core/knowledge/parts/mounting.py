@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Final, cast
 
 from app.core.errors import ValidationError
+from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
@@ -269,7 +270,7 @@ def magnet_pocket(raw: BaseParams) -> PartResult:
         # sonst risse dieser Zylinder die Verengung wieder auf.
         parts.append(
             shapes.moved(
-                shapes.cylinder(narrow if lip_height else diameter, shapes.OVERLAP),
+                shapes.cylinder(narrow if lip_height else diameter, BOOLEAN_OVERLAP),
                 (0.0, 0.0, mouth),
             )
         )
@@ -360,9 +361,9 @@ def wall_mount(raw: BaseParams) -> PartResult:
     for index in range(1, params.holes + 1):
         x = -params.width / 2.0 + spacing * index
         z = params.height * 0.75
-        hole = shapes.cylinder(screw.clearance, params.thickness + 2.0 * shapes.OVERLAP)
+        hole = shapes.cylinder(screw.clearance, params.thickness + 2.0 * BOOLEAN_OVERLAP)
         hole = shapes.turned(hole, -90.0, (1.0, 0.0, 0.0))
-        hole = shapes.moved(hole, (x, params.thickness / 2.0 + shapes.OVERLAP, z))
+        hole = shapes.moved(hole, (x, params.thickness / 2.0 + BOOLEAN_OVERLAP, z))
         body = subtract(body, hole)
         features.append(
             bore(
@@ -509,9 +510,9 @@ def keyhole(raw: BaseParams) -> PartResult:
 
     # Der Schlitz, in den der Schaft gleitet, ganz hindurch.
     shaft = falling(
-        screw.clearance, screw.clearance + params.drop, params.depth + 2.0 * shapes.OVERLAP
+        screw.clearance, screw.clearance + params.drop, params.depth + 2.0 * BOOLEAN_OVERLAP
     )
-    shaft = shapes.moved(shaft, (0.0, drop, -params.depth - shapes.OVERLAP))
+    shaft = shapes.moved(shaft, (0.0, drop, -params.depth - BOOLEAN_OVERLAP))
 
     body = union(pocket, shaft)
     return result(
@@ -990,7 +991,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # der Lochwand. Sie beginnt um OVERLAP früher, damit keine Fläche genau
         # auf einer anderen liegt (§39).
         catch = shapes.turned(shapes.slot(width, shank + nose, lip), 90.0)
-        parts.append(shapes.moved(catch, (x, y, through - shapes.OVERLAP)))
+        parts.append(shapes.moved(catch, (x, y, through - BOOLEAN_OVERLAP)))
         # **Das Merkmal liegt auf der Rückseite der Nase**, und das ist die
         # einzige Fläche des Hakens, die es dort wirklich gibt. Vorher stand es
         # auf der Höhe der Plattenrückseite mitten im Zapfen — gemessen zu 99 %
@@ -1001,7 +1002,7 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
             face(
                 f"hook_{index + 1}",
                 _slot_area(width, shank + nose),
-                (x, y, through - shapes.OVERLAP + lip),
+                (x, y, through - BOOLEAN_OVERLAP + lip),
                 (0.0, 0.0, 1.0),
             )
         )
@@ -1038,9 +1039,9 @@ def pegboard_hook(raw: BaseParams) -> PartResult:
         # und nach hinten auslaufen. Eine Drehung um X hätte die Höhe mit
         # umgelegt und die Schräge an das falsche Ende gebracht.
         barb = shapes.turned(
-            shapes.wedge(tongue.width, tongue.step + shapes.OVERLAP, tongue.run), 180.0
+            shapes.wedge(tongue.width, tongue.step + BOOLEAN_OVERLAP, tongue.run), 180.0
         )
-        parts.append(shapes.moved(barb, (x, crest + shapes.OVERLAP, tongue.lock)))
+        parts.append(shapes.moved(barb, (x, crest + BOOLEAN_OVERLAP, tongue.lock)))
         features.append(
             face(
                 f"latch_{index + 1}",
@@ -1199,23 +1200,23 @@ def foot(raw: BaseParams) -> PartResult:
         # Gummifuß sich fangen lässt; darunter hat der Sitz den vollen
         # Durchmesser, sonst passt der Fuß nicht hinein, für den er gedacht ist.
         mouth = shapes.cone(wide, wide + 2.0 * chamfer, chamfer)
-        shaft = shapes.cylinder(wide, params.height - chamfer + shapes.OVERLAP)
+        shaft = shapes.cylinder(wide, params.height - chamfer + BOOLEAN_OVERLAP)
         # Ein Haar über die Fläche hinaus, wie bei jedem anderen abziehenden
         # Baustein: Zwei Volumen, die sich nur in einer Fläche berühren, sind
         # der Fall, an dem eine Boolesche Operation bricht (§39). Die Tasche
         # endete als einzige exakt auf z = 0 — gemessen ohne Schaden, aber der
         # Fall tritt nicht bei jedem Netz auf, und darauf beruht die Regel.
-        rim = shapes.cylinder(wide + 2.0 * chamfer, 2.0 * shapes.OVERLAP)
+        rim = shapes.cylinder(wide + 2.0 * chamfer, 2.0 * BOOLEAN_OVERLAP)
         body = union(
             shapes.moved(mouth, (0.0, 0.0, -chamfer)),
             shapes.moved(shaft, (0.0, 0.0, -params.height)),
-            shapes.moved(rim, (0.0, 0.0, -shapes.OVERLAP)),
+            shapes.moved(rim, (0.0, 0.0, -BOOLEAN_OVERLAP)),
         )
         marker = bore("foot_1", wide, (0.0, 0.0, -params.height / 2.0), depth=params.height)
     else:
         # Der Fuß: Die Säule steht am Teil, die Verjüngung am Boden — dort
         # quetscht der Elefantenfuß ins Leere.
-        column = shapes.cylinder(wide, params.height - chamfer + shapes.OVERLAP)
+        column = shapes.cylinder(wide, params.height - chamfer + BOOLEAN_OVERLAP)
         taper = shapes.cone(wide, narrow, chamfer)
         body = union(column, shapes.moved(taper, (0.0, 0.0, params.height - chamfer)))
         # Die Standfläche ist die äußerste, nicht die am Teil: Sie berührt den

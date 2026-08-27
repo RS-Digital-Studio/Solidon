@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import cast
 
+from app.core.geom.boolean import BOOLEAN_OVERLAP
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
@@ -315,8 +316,8 @@ def cable_gland(raw: BaseParams) -> PartResult:
     # Der Ursprung ist die Mündung auf der Außenseite, das Loch geht nach unten
     # durch die Wand (§24.1). Vorher wuchs es nach oben — wer die angeklickte
     # Fläche als Position übernahm, bekam ein Loch in der Luft darüber.
-    through = shapes.cylinder(diameter, params.wall + 2.0 * shapes.OVERLAP)
-    through = shapes.moved(through, (0.0, 0.0, -params.wall - shapes.OVERLAP))
+    through = shapes.cylinder(diameter, params.wall + 2.0 * BOOLEAN_OVERLAP)
+    through = shapes.moved(through, (0.0, 0.0, -params.wall - BOOLEAN_OVERLAP))
     parts = [through]
     features = [
         bore("bore_1", diameter, (0.0, 0.0, -params.wall / 2.0), depth=params.wall, through=True)
@@ -435,7 +436,7 @@ def profile_tongue(raw: BaseParams) -> PartResult:
     # also wächst dadurch keine Außenkante — es verschwindet nur die
     # zusammenfallende Fläche zwischen beiden, an der eine Boolesche Operation
     # bricht.
-    neck = shapes.box(neck_width, params.length, neck_height + shapes.OVERLAP)
+    neck = shapes.box(neck_width, params.length, neck_height + BOOLEAN_OVERLAP)
     head = shapes.tapered_bar(head_width, neck_width, params.length, head_height, lead_in)
     body = union(neck, shapes.moved(head, (0.0, 0.0, neck_height)))
 
@@ -557,12 +558,12 @@ def cable_clip(raw: BaseParams) -> PartResult:
 
     ring = subtract(
         shapes.moved(lying(outer, params.width), (0.0, 0.0, centre)),
-        shapes.moved(lying(inner, params.width + 2.0 * shapes.OVERLAP), (0.0, 0.0, centre)),
+        shapes.moved(lying(inner, params.width + 2.0 * BOOLEAN_OVERLAP), (0.0, 0.0, centre)),
     )
     # Der Schnitt beginnt in der Ringmitte und geht nach oben hinaus: Was
     # darunter liegt, trägt das Kabel, was darüber lag, ist die Öffnung.
     mouth = shapes.moved(
-        shapes.box(gap, params.width + 2.0 * shapes.OVERLAP, outer),
+        shapes.box(gap, params.width + 2.0 * BOOLEAN_OVERLAP, outer),
         (0.0, 0.0, centre),
     )
     body = union(

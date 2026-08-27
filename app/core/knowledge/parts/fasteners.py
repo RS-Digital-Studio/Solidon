@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from app.core.geom.boolean import boolean
+from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean
 from app.core.geom.mesh import MeshData
 from app.core.knowledge import standards
 from app.core.knowledge.parts import shapes
@@ -154,7 +154,7 @@ def screw_hole(raw: BaseParams) -> PartResult:
     params = cast(ScrewHoleParams, raw)
     screw = standards.screw(params.size)
 
-    shaft = shapes.cylinder(screw.clearance, params.depth + shapes.OVERLAP)
+    shaft = shapes.cylinder(screw.clearance, params.depth + BOOLEAN_OVERLAP)
     shaft = shapes.moved(shaft, (0.0, 0.0, -params.depth))
     parts = [shaft]
     features = [
@@ -188,8 +188,8 @@ def screw_hole(raw: BaseParams) -> PartResult:
         # Von der Mündung (mit einem Hundertstel Überstand) bis über die Senkung
         # hinab, damit der Zylinder mit ihr zusammenhängt statt einen Spalt zu
         # lassen.
-        room = shapes.cylinder(screw.countersink, params.head_room + 2.0 * shapes.OVERLAP)
-        parts.append(shapes.moved(room, (0.0, 0.0, top - shapes.OVERLAP)))
+        room = shapes.cylinder(screw.countersink, params.head_room + 2.0 * BOOLEAN_OVERLAP)
+        parts.append(shapes.moved(room, (0.0, 0.0, top - BOOLEAN_OVERLAP)))
 
     return result(union(*parts), *features)
 
@@ -308,7 +308,7 @@ def heatset_insert(raw: BaseParams) -> PartResult:
     entry = standards.insert(params.size)
     depth = entry.length + params.extra_depth
 
-    shaft = shapes.cylinder(entry.hole, depth + shapes.OVERLAP)
+    shaft = shapes.cylinder(entry.hole, depth + BOOLEAN_OVERLAP)
     shaft = shapes.moved(shaft, (0.0, 0.0, -depth))
     parts = [shaft]
     features = [

@@ -23,7 +23,7 @@ import numpy as np
 import trimesh
 
 from app.core.errors import PROGRAMMING_ERRORS
-from app.core.geom.boolean import boolean, shared_volume, without_effect
+from app.core.geom.boolean import BOOLEAN_OVERLAP, boolean, shared_volume, without_effect
 from app.core.geom.mesh import MeshData, concatenated, on_surface, ray_hit_distances
 from app.core.geom.section import SectionPlane, cut
 from app.core.geom.transform import Axis, translation
@@ -41,9 +41,6 @@ from app.core.types import (
 )
 from app.core.units import EPS_DISPLAY, EPS_GEOM, format_length, format_volume
 from app.i18n import TranslatableText, _
-
-#: §39: Boolesche Ops überlappen immer leicht, nie teilen sie exakt eine Fläche.
-BOOLEAN_OVERLAP = 0.01
 
 #: Segmente, aus denen ein Bohrzylinder gebaut wird. Fein genug, dass das
 #: gedruckte Loch rund ist, grob genug, um die Dreieckszahl nicht zu sprengen.

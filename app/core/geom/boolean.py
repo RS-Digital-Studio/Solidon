@@ -68,17 +68,38 @@ VOXEL_PITCH_RELATIVE = 0.004
 #:
 #: Zusammenfallende Flächen sind der klassische Weg, eine Boolesche Operation
 #: zu brechen (§39) — also reicht das Werkzeug ein Stück darüber hinaus, weit
-#: unter dem, was ein Drucker auflöst. Die Zahl gehört deshalb hierher, zu der
-#: Rechnung, die sie braucht: Sie stand in der Beschriftung und in der Textur
-#: je einmal, und der Kommentar der zweiten sagte „dieselbe Zahl und derselbe
-#: Grund wie bei der Beschriftung" — ein Verweis auf die Kopie, der beim
-#: nächsten Anfassen nicht mitwandert (27.08.2026).
+#: unter dem, was ein Drucker auflöst.
 #:
-#: Die Bausteinbibliothek führt weiterhin ihre eigenen 0,01 mm
-#: (``knowledge/parts/shapes.py``) — dieselbe Frage, eine andere Antwort. Was
-#: davon richtig ist, ist eine Messung und keine Aufräumarbeit; solange sie
-#: aussteht, bleibt die Abweichung sichtbar statt stillschweigend angeglichen.
-BOOLEAN_OVERLAP = 0.05
+#: **Die Zahl stand an drei Stellen mit zwei Werten**, zuletzt sogar zweimal
+#: unter diesem Namen: 0,05 hier, 0,01 in ``geom/prepare.py``, 0,01 als
+#: ``OVERLAP`` in ``knowledge/parts/shapes.py``. Damit hing es am Importpfad,
+#: welche Zugabe eine Operation bekam.
+#:
+#: **Gemessen am 27.08.2026, und die Messung hat die Frage verschoben.** Nicht
+#: „welcher Wert ist richtig", sondern „wirkt der Wert überhaupt":
+#:
+#: * Neun koplanare Lagen — Tasche bis zur Unterseite, Aufsatz auf der
+#:   Oberseite, Tasche an der Seitenwand, je mit 0,05, 0,01 und **0,0** —
+#:   liefen alle über Stufe 1 (``direct``), alle wasserdicht, alle mit exaktem
+#:   Volumen. Kein einziger Rückfall.
+#: * Eine Gravur von 0,2 mm trug bei 0,05, 0,01, 0,001 und 0,0 dieselben
+#:   2,6221 mm³ ab. Die Zugabe liegt außerhalb des Materials: Das Werkzeug wird
+#:   um sie länger **und** um sie angehoben.
+#:
+#: ``manifold3d`` ist feste Abhängigkeit (``constraints.txt``) und rechnet
+#: koplanare Flächen robust — der Bruch, gegen den diese Zahl einmal gebaut
+#: wurde, gehört zu einem Kern, den es hier nicht mehr gibt. Sie bleibt
+#: trotzdem: Die Rückfallkette hat Stufen unterhalb von ``manifold3d``, und
+#: eine Zugabe, die nachweislich nichts kostet, ist billiger als die Frage, ob
+#: eine davon sie doch braucht.
+#:
+#: **Der kleinere Wert gewinnt, weil er gebunden ist.** In
+#: ``knowledge/parts/ops.py`` ist dieselbe Zahl die Schwelle, an der ein
+#: Baustein als „baut nach oben" statt „trägt ab" gilt — sie muss den
+#: Einsinkbetrag knapp überdecken, den derselbe Wert erzeugt. 0,05 hätte diese
+#: Entscheidung verschoben; 0,01 ist dort seit je in Gebrauch und anderswo
+#: nachweislich gleichwertig.
+BOOLEAN_OVERLAP = 0.01
 
 
 @dataclass(slots=True)
