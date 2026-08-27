@@ -669,8 +669,25 @@ class History:
         }
 
     def _outputs_for(self, spec: Any, draft: OperationDraft) -> tuple[ObjectId, ...]:
-        """Gleiche Anzahl rein wie raus heißt: die Objekte bleiben sie selbst;
-        sonst neue IDs."""
+        """Welche Kennungen ein Schritt zurückgibt — drei Regeln, nicht zwei.
+
+        Gleiche Anzahl rein wie raus heißt: die Objekte bleiben sie selbst.
+        Ungleiche Anzahl heißt **nicht** zwangsläufig frische Kennungen: Wo
+        eine Operation ``keeps_inputs`` deklariert, behalten ihre ersten
+        Ausgänge die Kennung der ersten Eingänge, und nur der Rest ist neu.
+        Erst ohne diese Angabe wird alles frisch vergeben.
+
+        Der Satz hat hier bis zum 27.08.2026 gefehlt, und er hat gefehlt, als
+        er gebraucht wurde: ``way_four`` in ``make_examples.py`` rechnete
+        nach ``blend_union`` (zwei rein, eins raus) mit einer frischen
+        Kennung und verwies auf ``obj_3`` — die gab es nie, denn die sechs
+        Operationen mit ``keeps_inputs`` heben die Wasserlinie nicht. Der
+        Paketbau von 0.2.1 scheiterte daran auf allen vier Plattformen.
+
+        Die Begründung für ``keeps_inputs`` steht unten am Zweig, der sie
+        umsetzt; hier steht, **dass** es sie gibt — denn wer diese Frage hat,
+        liest zuerst den Docstring.
+        """
         if spec.produces == VARIABLE and spec.produces_from:
             # Die Eingänge bleiben sie selbst, neu sind nur die Ausgänge
             # darüber hinaus. Beide Operationen dieser Art — *Objekt
