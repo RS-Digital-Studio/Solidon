@@ -112,6 +112,13 @@ STYLE = """
        also braucht die Bühne keinen eigenen Abstand nach oben. */
     figure.screenshot .stage { margin: 0; }
 
+    /* Der Verweis um ein Bildschirmfoto ist ein Weg, keine Verzierung: keine
+       Unterstreichung, keine Linkfarbe, kein Rahmen. Er traegt den Alt-Text
+       des Bildes als Beschriftung, ein Bildschirmleser sagt also, wohin er
+       fuehrt. */
+    figure.screenshot .stage a { display: block; text-decoration: none;
+                                 color: inherit; }
+
     /* Die Abbildungen steigen beim Lesen ein Stück auf — dieselbe Geste wie
        auf der Startseite, hinter demselben ``@supports``: wo der Browser die
        Zeitachse nicht kennt, steht alles vollständig da. */
@@ -747,7 +754,20 @@ def _staged(match: re.Match[str]) -> str:
     source = re.search(r'src="([^"]+)"', attributes)
     size = _picture_size(source.group(1)) if source else None
     limit = f' style="max-width: calc({size[0]}px + 1.1rem + 2px)"' if size else ""
-    return f'<figure class="screenshot"{limit}><div class="stage"><img {attributes}></div>'
+    # **Antippen oeffnet das Bild.** Auf einem 375er Schirm steht ein
+    # Bildschirmfoto von 2560 px Breite 300 px breit, und darauf ist nichts
+    # mehr zu lesen — gemessen am Startbildschirm, dessen Alt-Text drei Dinge
+    # nennt, die man nicht sieht. Ein Verweis auf die Datei selbst braucht
+    # kein JavaScript und keine eigene Bedienung: Der Browser zeigt das Bild
+    # in voller Groesse und zoomt von selbst.
+    #
+    # Nur wo die Quelle lesbar ist — ein Verweis ins Leere waere schlimmer als
+    # keiner.
+    if source:
+        bild = f'<a href="{source.group(1)}"><img {attributes}></a>'
+    else:
+        bild = f"<img {attributes}>"
+    return f'<figure class="screenshot"{limit}><div class="stage">{bild}</div>'
 
 
 def page_html(language: str, prefix: str) -> str:
