@@ -79,7 +79,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
-| Elf Verzweigungen fragen den Slicer-Namen, wo sie eine Eigenschaft meinen | Der Slicer-Name stand da, wo eine Eigenschaft gemeint war (27.08.2026) | nichts — **die Messung ist fertig** (26 Verzweigungen, der Familienschnitt trägt, am echten ElegooSlicer geprüft). Es fehlt die Arbeit: benannte Prädikate neben `wants_bed_coordinates`, dort wo der Kommentar die Eigenschaft schon nennt |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
@@ -10898,7 +10897,7 @@ Behoben ist bisher der eine Fall, in dem beide Formen **nebeneinander**
 standen: `bed_box` verglich den Namen und meinte damit wörtlich dasselbe wie
 das Prädikat zwei Dateien weiter (`0040f0fc`).
 
-- [ ] Die verbleibenden Namensvergleiche auf benannte Prädikate stellen, dort
+- [x] Die verbleibenden Namensvergleiche auf benannte Prädikate stellen, dort
   wo die Eigenschaft im Kommentar schon benannt ist. **Kein Fehlverhalten** —
   heute sagen alle Stellen dasselbe, weil alle drei Programme derselben
   Familie zugeordnet sind. Der Preis fällt an, wenn ein Fork in einer der elf
