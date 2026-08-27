@@ -533,6 +533,40 @@ die Ursache: Mit den 67 neuen `tr()`-Quellen war `origin/main` rot, bis die
 Kataloge nachkamen — ein Fenster, das der Urheber der Kataloge nicht geöffnet
 hatte.
 
+#### Und die Rettung, die man dagegen baut, wirkt mit `-o` nicht
+
+Der naheliegende Ausweg ist, den Stand selbst zu bauen: die Datei aus `HEAD`
+holen, die eigene Zeile hineinsetzen, mit `git hash-object -w` einen Blob
+schreiben und ihn mit `git update-index --cacheinfo` in den privaten Index
+legen. Das ist richtig gedacht und **wirkungslos, solange `-o` dabeisteht**:
+`--only` heißt „nimm den aktuellen Stand genau dieser Pfade", und der aktuelle
+Stand ist die Datei auf der Platte. Der hineingelegte Blob wird überschrieben,
+bevor er etwas nützt.
+
+Am 27.08.2026 dreimal hintereinander so gemacht, jedes Mal mit gebautem Blob,
+jedes Mal ging die fremde Zeile mit:
+
+    git show b304f04a --numstat -- app/i18n/locales/it.json
+    1  1                    <- angesagt war 0/1
+    git show aaad3d94 --numstat -- .claude/memory/MEMORY.md
+    2  0                    <- angesagt war 1/0
+
+**Und die Kontrolle davor konnte es nicht sehen, weil sie das Falsche maß.**
+`git diff --cached HEAD --numstat` lief jedes Mal und nannte jedes Mal genau
+die angesagte Zahl. Sie stimmte auch — **für den Index.** Committet wurde der
+Baum. Dieselbe Denkfigur wie zwei Abschnitte weiter unten, nur eine Ebene
+tiefer: Eine Prüfung, die gegen die eigene Annahme läuft, bestätigt sie.
+
+Zwei Sätze, die daraus folgen:
+
+* **Blob und `-o` schließen sich aus.** Wer den Index gezielt bestückt,
+  committet **ohne** `-o` — nach `git read-tree HEAD` steht darin genau HEAD
+  plus die eigene Änderung, und `git commit` nimmt den Index als Baum. `-o`
+  ist die Krücke für den Fall, dass man *keinen* privaten Index hat.
+* **Die einzige Prüfung, die etwas taugt, ist die nach dem Commit:**
+  `git show <commit> --numstat`. Alles davor prüft eine Absicht, nicht ein
+  Ergebnis.
+
 **Der Handgriff dagegen kostet fünf Sekunden, und er hat drei Glieder:**
 
 1. **Die eigene Zahl ansagen, bevor man hinsieht** — „ich lösche zwei Zeilen,
