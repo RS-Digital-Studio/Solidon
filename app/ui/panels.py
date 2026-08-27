@@ -8,7 +8,7 @@ Regel 2).
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import Any, Final, cast
 
 from PySide6.QtCore import QByteArray, QPoint, QSize, Qt, QTimer, Signal
@@ -98,7 +98,12 @@ MAX_MENU_ROWS = 12
 OPS_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 
 
-def folded_groups(sizes: dict[str, int], limit: int = MAX_MENU_ROWS, fixed: int = 0) -> list[str]:
+def folded_groups(
+    sizes: dict[str, int],
+    limit: int = MAX_MENU_ROWS,
+    fixed: int = 0,
+    keep: Collection[str] = (),
+) -> list[str]:
     """Welche Gruppen ein Untermenü bekommen, damit das Menü in die Grenze passt.
 
     Reine Rechnung über Namen und Anzahlen — **kein Qt**, und deshalb ohne ein
@@ -132,6 +137,18 @@ def folded_groups(sizes: dict[str, int], limit: int = MAX_MENU_ROWS, fixed: int 
     im Bausteine-Untermenü die Einträge, die zu keinem Baustein der Bibliothek
     gehören und deshalb keine Gruppe haben.
 
+    ``keep`` sind Gruppen, die **zuletzt** gefaltet werden, weil sie eine
+    Geste tragen, für die man überhaupt auf das Merkmal zeigt. Der Rang aus
+    ``MENU_GROUPS`` ordnet von häufig nach vorbereitend und war deshalb bis
+    zum 27.08.2026 die ganze Antwort — bis das Färben in „Vorbereiten"
+    landete, also ganz hinten. Am Flächenklick fehlt nach den Bausteinen
+    genau **eine** Zeile, und die Rechnung nahm sie sich dort: Gemessen am
+    gebauten Fenster stand „Fläche färben" danach im Untermenü, unter einem
+    Wort, unter dem niemand Farbe sucht. Entscheidung Robert: Die häufige
+    Geste bleibt oben, das Seltenere wandert. Wer die Gruppen bestimmt, ist
+    :func:`groups_to_keep` — über die **Kategorie** und nicht über den
+    Titel, denn der ist übersetzt.
+
     **Und die einzige Gruppe wird nie gefaltet**, gleich wie lang sie ist.
     Bliebe sonst ein Menü, das aus einem einzigen Untermenü besteht: ein Klick
     für alles, und die Zwischenebene hieße, wonach man ohnehin schon geklickt
@@ -150,14 +167,46 @@ def folded_groups(sizes: dict[str, int], limit: int = MAX_MENU_ROWS, fixed: int 
         missing = rows - limit
         enough = [title for title, count in foldable.items() if count - 1 >= missing]
         if enough:
-            # Die hinterste, die allein genügt; bei gleichem Platz die größere,
-            # und ganz zuletzt der Name, damit die Antwort eindeutig bleibt.
-            title = min(enough, key=lambda name: (-_menu_rank(name), -foldable[name], name))
+            # Erst die Ungeschützten, dann die hinterste, die allein genügt;
+            # bei gleichem Platz die größere, und ganz zuletzt der Name, damit
+            # die Antwort eindeutig bleibt.
+            title = min(
+                enough,
+                key=lambda name: (name in keep, -_menu_rank(name), -foldable[name], name),
+            )
         else:
-            title = min(foldable, key=lambda name: (-foldable[name], name))
+            title = min(foldable, key=lambda name: (name in keep, -foldable[name], name))
         folded.append(title)
         rows -= foldable.pop(title) - 1
     return folded
+
+
+#: Kategorien, deren Gruppe am Merkmal sichtbar bleibt.
+#:
+#: Nicht der Gruppentitel, sondern die **Kategorie** des Registereintrags: Der
+#: Titel ist übersetzt, und eine Liste deutscher Wörter träfe im englischen
+#: Fenster nichts. Hier steht ``colour``, weil das Färben die Geste ist, für
+#: die man auf eine Fläche zeigt (Entscheidung Robert, 27.08.2026) — wer eine
+#: weitere aufnimmt, nimmt damit in Kauf, dass etwas anderes wandert.
+#:
+#: ``holes`` steht daneben, weil es schon einmal geschützt war: Der Umbau vom
+#: 24.08.2026 hat die Faltung eigens umgestellt, damit die Bohrung nicht im
+#: Untermenü landet — sie ist die häufigste Geste an einer fremden Fläche
+#: überhaupt. Diese Zusage stand nur im Rang von ``MENU_GROUPS`` und wäre mit
+#: dem Schutz des Färbens verloren gegangen: Dann hätte die Rechnung sich
+#: „Ändern" genommen, und die Bohrung wäre gewandert. Was einmal ausdrücklich
+#: entschieden wurde, gehört ausdrücklich hierher und nicht in eine Ordnung,
+#: die jemand für einen anderen Zweck sortiert.
+KEEP_VISIBLE: Final = ("colour", "holes")
+
+
+def groups_to_keep(entries: Sequence[Any]) -> set[str]:
+    """Die Gruppentitel, die sichtbar bleiben sollen (:data:`KEEP_VISIBLE`)."""
+    return {
+        str(group_title(str(spec.category)))
+        for spec in entries
+        if str(spec.category) in KEEP_VISIBLE
+    }
 
 
 def _menu_rank(title: str) -> int:
@@ -1312,7 +1361,11 @@ class ObjectTree(QWidget):
         # danach immer noch zu lang ist. Dann ist das Menü eben lang; ein
         # Aufklappen, das nichts bündelt, macht es nicht kürzer, sondern nur
         # tiefer.
-        folded = folded_groups({title: len(found) for title, found in groups.items()}, fixed=fixed)
+        folded = folded_groups(
+            {title: len(found) for title, found in groups.items()},
+            fixed=fixed,
+            keep=groups_to_keep(entries),
+        )
 
         direct = [spec for spec in entries if group_title(str(spec.category)) not in folded]
         for spec in direct:

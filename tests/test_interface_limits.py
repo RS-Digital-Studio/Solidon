@@ -195,6 +195,24 @@ def test_a_group_of_one_never_becomes_a_submenu() -> None:
         "einem Eintrag — dann bleibt das Menü lieber lang"
     )
 
+    # **Die häufige Geste bleibt oben** (Entscheidung Robert, 27.08.2026).
+    # Am echten Flächenklick sind es 22 Bausteine, und nach ihnen fehlt genau
+    # eine Zeile. Die Rechnung nahm dafür die hinterste Gruppe — seit dem
+    # Filament-Umbau liegt dort „Fläche färben", also die Geste, für die man
+    # überhaupt auf eine Fläche zeigt. Gemessen am gebauten Fenster stand sie
+    # danach unter „Vorbereiten", zusammen mit dem Prüfstück: zehn sichtbare
+    # Zeilen, und Farbe in keiner davon.
+    echt = {"Bausteine": 22, "Ändern": 5, "Erzeugen": 2, "Vorbereiten": 2}
+    gefaltet = folded_groups(echt, fixed=3, keep={"Vorbereiten", "Ändern"})
+    assert "Vorbereiten" not in gefaltet, (
+        "die Gruppe mit dem Färben darin bleibt sichtbar — sie trägt die "
+        "häufige Geste, und ein Untermenü kostet sie einen Klick"
+    )
+    assert "Bausteine" in gefaltet, "die zweiundzwanzig bleiben gefaltet"
+    assert "Ändern" not in gefaltet, (
+        "und die Bohrung bleibt oben — dafür wurde die Faltung am 24.08. umgebaut"
+    )
+
     allein = {"Bausteine": 17}
     assert folded_groups(allein) == [], (
         "die einzige Gruppe wird nie gefaltet — sonst besteht das Menü aus einem "
@@ -236,15 +254,18 @@ def context_rows(kind: str) -> tuple[int, list[str]]:
     ganzen Datei hebt (gemessen am 24.08.2026).
     """
     from app.core.registry.surfaces import group_title
-    from app.ui.panels import folded_groups
+    from app.ui.panels import folded_groups, groups_to_keep
 
     sizes: dict[str, int] = {}
-    for spec in REGISTRY.all():
-        if kind in (spec.applies_to or ()):
-            title = group_title(str(spec.category))
-            sizes[title] = sizes.get(title, 0) + 1
+    offered = [spec for spec in REGISTRY.all() if kind in (spec.applies_to or ())]
+    for spec in offered:
+        title = group_title(str(spec.category))
+        sizes[title] = sizes.get(title, 0) + 1
 
-    folded = folded_groups(sizes, fixed=FIXED_CONTEXT_ROWS)
+    # **Mit dem Schutz gerechnet, den auch die Anwendung mitgibt.** Ohne ihn
+    # prüfte diese Datei eine Menülage, die es im Fenster nicht gibt — und
+    # genau daran hängt die Zusage, dass Färben und Bohrung oben bleiben.
+    folded = folded_groups(sizes, fixed=FIXED_CONTEXT_ROWS, keep=groups_to_keep(offered))
     rows = sum(count for title, count in sizes.items() if title not in folded) + len(folded)
     return rows, folded
 
@@ -271,10 +292,15 @@ def test_the_context_menu_stays_within_its_rows() -> None:
 
     Die Ausnahme ist am 25.08.2026 aufgelöst worden, und zwar an der Stelle,
     an der sie entstand: ``folded_groups`` faltet nicht mehr die größte Gruppe,
-    sondern die hinterste, die allein genügt. Am Flächenklick ist das
-    „Vorbereiten" — zwei Einträge, eine gesparte Zeile, zwölf statt dreizehn,
-    und „Ändern" steht weiter offen. Kein Eintrag ist dabei tiefer gerutscht,
-    der vorher oben stand.
+    sondern die hinterste, die allein genügt.
+
+    **Am 27.08.2026 hat dieselbe Rechnung dann das Färben verschluckt** — es
+    war mit dem Filament-Umbau nach „Vorbereiten" gekommen, also genau in die
+    Gruppe, die als hinterste fällt. Gemessen am gebauten Fenster: zehn
+    sichtbare Zeilen, Farbe in keiner. Seither nennt ``KEEP_VISIBLE`` die
+    Kategorien, deren Gruppe stehen bleibt (``colour`` und ``holes``), und
+    gefaltet wird stattdessen „Erzeugen". Kein Eintrag ist dabei tiefer
+    gerutscht, für den jemand auf eine Fläche zeigt.
     """
     from app.ui.panels import MAX_MENU_ROWS
 
