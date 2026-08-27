@@ -68,7 +68,7 @@ from urllib.parse import urlparse
 
 from app.core import errors
 from app.core.log import get_logger
-from app.core.paths import ensure_dir, user_cache_dir, user_config_dir
+from app.core.paths import APP_NAME, ensure_dir, user_cache_dir, user_config_dir
 from app.i18n import TranslatableText, _
 
 _log = get_logger(__name__)
@@ -550,6 +550,35 @@ def sandboxed(program: Path | str | None) -> bool:
     return any(Path(folder).expanduser().as_posix() in text for folder in _FLATPAK_EXPORTS)
 
 
+def exchange_dir() -> Path:
+    """Wo ein Arbeitsordner liegt, den ein **fremder** Sandkasten lesen kann.
+
+    Draußen ist das der Nutzer-Cache und sonst nichts. Läuft Solidon selbst in
+    einem Flatpak, ist es das nicht: Flatpak setzt ``XDG_CACHE_HOME`` auf
+    ``~/.var/app/<unsere-id>/cache``, und ``--filesystem=home`` — das, was die
+    Slicer-Pakete freigeben — nimmt ``~/.var`` ausdrücklich **aus**. Flatpak
+    blendet die App-Verzeichnisse gegeneinander aus, damit keine App der
+    anderen in die Daten greift.
+
+    Die Folge wäre genau der Fehler, den :func:`workspace_for` verhindern soll,
+    nur eine Ebene weiter: Der Ordner liegt in ``$HOME``, der Slicer darf
+    ``$HOME`` lesen, und die Datei ist trotzdem unsichtbar. „Can't open input
+    file", unmittelbar nach einer Installation über einen Knopf.
+
+    ``$HOME`` selbst ist im Flatpak das **echte** Home, sobald die App
+    Home-Zugriff hat (ohne ihn setzt Flatpak es auf ``~/.var/app/<id>``); unser
+    Manifest gibt ``--filesystem=home``. Der Austauschordner liegt deshalb
+    unter ``~/.cache`` — an derselben Stelle, an der ihn ein Programm ohne
+    Sandkasten auch fände, und löschbar wie jeder Cache (§38).
+
+    Dasselbe Muster wie in :func:`app.core.export.slicer_profiles.config_home`:
+    **Im Flatpak gilt die XDG-Variable nicht, gemeint ist der Rechner.**
+    """
+    if not in_flatpak():
+        return user_cache_dir() / "sandbox"
+    return Path.home() / ".cache" / f"{APP_NAME}-exchange"
+
+
 @contextmanager
 def workspace_for(program: Path | str | None, prefix: str) -> Iterator[Path]:
     """Ein Arbeitsordner, den *dieses* Programm auch lesen kann.
@@ -564,9 +593,10 @@ def workspace_for(program: Path | str | None, prefix: str) -> Iterator[Path]:
 
     Nachgesehen, nicht angenommen: Das Flathub-Paket von OrcaSlicer gibt
     ``--filesystem=home`` frei und sonst kein Verzeichnis, in dem wir schreiben
-    würden. Der Arbeitsordner liegt für sie
-    deshalb im Nutzer-Cache — der liegt unter ``$HOME``, ist an derselben
-    Stelle sichtbar wie hier, und darf jederzeit gelöscht werden (§38).
+    würden. Der Arbeitsordner liegt für sie deshalb unter ``$HOME`` und darf
+    jederzeit gelöscht werden (§38); **wo genau**, entscheidet
+    :func:`exchange_dir` — und das ist nicht dieselbe Antwort, wenn Solidon
+    selbst ein Flatpak ist.
 
     Für jedes andere Programm bleibt es beim Systemtemp: Er wird zuverlässig
     aufgeräumt, auch wenn Solidon dabei abstürzt.
@@ -586,11 +616,12 @@ def workspace_for(program: Path | str | None, prefix: str) -> Iterator[Path]:
         with keeper as directory:
             yield Path(directory)
         return
+    shared = exchange_dir()
     try:
-        home = ensure_dir(user_cache_dir() / "sandbox")
+        home = ensure_dir(shared)
         directory = tempfile.mkdtemp(prefix=prefix, dir=home)
     except OSError as problem:
-        raise _workspace_error(str(user_cache_dir() / "sandbox"), problem) from problem
+        raise _workspace_error(str(shared), problem) from problem
     try:
         yield Path(directory)
     finally:

@@ -636,16 +636,22 @@ def test_the_workspace_leaves_tmp_when_we_are_the_sandbox(
     Arbeitsordner gehört unter ``$HOME``, wo beide hinsehen können. Ohne das
     bekäme ein Host-Slicer einen Pfad, den es für ihn nicht gibt — „Can't open
     input file", unmittelbar nach einem Klick auf *An den Slicer übergeben*.
-    """
-    from app.core import paths
 
+    **Hier stand ``user_cache_dir() in workspace``, und das war zu kurz
+    gedacht.** Im Flatpak *ist* der Nutzer-Cache ``~/.var/app/<id>/cache``, und
+    genau den nimmt ``--filesystem=home`` aus. Die Zusicherung galt einem Ort
+    statt der Sache; sie hätte den Fehler, den sie verhindern soll,
+    festgeschrieben. Geprüft wird deshalb, was der fremde Sandkasten sehen
+    kann — unter ``$HOME`` und nicht in einem App-Verzeichnis.
+    """
     monkeypatch.setattr(discover, "in_flatpak", lambda: True)
     # Ein gewöhnliches Programm auf dem Rechner, kein Flatpak-Wrapper.
     assert discover.sandboxed(Path("/usr/bin/prusa-slicer")), (
         "wenn wir der Sandkasten sind, zählt das Zielprogramm nicht mehr"
     )
     with discover.workspace_for(Path("/usr/bin/prusa-slicer"), "probe-") as workspace:
-        assert str(paths.user_cache_dir()) in str(workspace)
+        assert Path.home() in workspace.parents, f"außerhalb von $HOME: {workspace}"
+        assert ".var" not in workspace.parts, f"im eigenen App-Verzeichnis: {workspace}"
 
 
 def test_the_host_is_asked_last_and_only_from_inside(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -830,3 +836,58 @@ def test_what_counts_as_this_machine() -> None:
         "http://127x.de",
     ):
         assert not discover.is_local_address(remote), remote
+
+
+def test_two_sandboxes_need_a_place_that_is_in_neither(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Läuft Solidon selbst als Flatpak, liegt sein Cache im eigenen Sandkasten.
+
+    ``workspace_for`` legt den Arbeitsordner in den Nutzer-Cache, weil die
+    Slicer-Pakete ``--filesystem=home`` freigeben. Das trägt genau so lange,
+    wie **wir** kein Flatpak sind: Dann setzt Flatpak ``XDG_CACHE_HOME`` auf
+    ``~/.var/app/<unsere-id>/cache``, und ``--filesystem=home`` nimmt ``~/.var``
+    ausdrücklich aus — Flatpak blendet die App-Verzeichnisse gegeneinander aus.
+
+    Die Folge wäre derselbe Fehler, den die Funktion verhindern soll, nur eine
+    Ebene weiter: Der Ordner liegt in ``$HOME``, der Slicer darf ``$HOME``
+    lesen, und die Datei ist trotzdem unsichtbar.
+    """
+    home = tmp_path / "home" / "rober"
+    home.mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(Path, "home", classmethod(lambda cls: home))
+
+    # Wie Flatpak es setzt: der Cache zeigt in unser eigenes App-Verzeichnis.
+    sandbox_cache = home / ".var" / "app" / "de.rsdigital.solidon3d" / "cache"
+    monkeypatch.setattr(discover, "user_cache_dir", lambda: sandbox_cache)
+
+    monkeypatch.setattr(discover, "in_flatpak", lambda: False)
+    outside = discover.exchange_dir()
+    assert outside == sandbox_cache / "sandbox", "draußen bleibt es der Nutzer-Cache"
+
+    monkeypatch.setattr(discover, "in_flatpak", lambda: True)
+    inside = discover.exchange_dir()
+    assert ".var" not in inside.parts, f"liegt im eigenen Sandkasten: {inside}"
+    assert home in inside.parents, f"ein fremdes Flatpak sieht nur $HOME: {inside}"
+
+
+def test_the_workspace_of_a_sandboxed_program_lands_where_it_can_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Und der Arbeitsordner entsteht wirklich dort.
+
+    Die Zusicherung darüber prüft die Antwort, diese hier prüft, dass
+    :func:`discover.workspace_for` sie **benutzt** — sonst rechnete eine
+    richtige Funktion ins Leere.
+    """
+    shared = tmp_path / "austausch"
+    monkeypatch.setattr(discover, "exchange_dir", lambda: shared)
+    monkeypatch.setattr(discover, "sandboxed", lambda program: True)
+
+    with discover.workspace_for("/usr/bin/orca-slicer", "solidon-") as folder:
+        assert folder.is_dir()
+        assert folder.parent == shared, f"nicht im Austauschordner: {folder}"
+        (folder / "platte.3mf").write_text("x")
+
+    assert not folder.exists(), "der Ordner wird hinterher geräumt"
