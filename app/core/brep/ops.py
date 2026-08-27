@@ -20,9 +20,17 @@ from typing import Literal, cast
 from app.core.brep import edit, profiles, step
 from app.core.brep.features import features_of
 from app.core.brep.kernel import Solid, require
-from app.core.errors import InternalError, NeedsSolidError, ValidationError
-from app.core.geom.boolean import without_effect
-from app.core.geom.prepare import bore_diameter
+from app.core.errors import (
+    CANCEL,
+    CORRECT_INPUT,
+    GeometryError,
+    InternalError,
+    NeedsSolidError,
+    ValidationError,
+)
+from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE, without_effect
+from app.core.geom.hollow import too_thin
+from app.core.geom.prepare import Axis, bore_diameter, over_the_edge
 from app.core.geom.prepare_ops import DrillParams
 from app.core.registry import NAME_DOC, op_params, param, register_op
 from app.core.types import BaseParams, Finding, OpContext, OpResult, SceneObject
@@ -296,12 +304,33 @@ class ShellParams(BaseParams):
         "Oberseite offen — ein Kasten aus einem Quader, in einem Schritt. Für "
         "geschlossenes Aushöhlen mit Entlüftung gibt es die Netz-Operation."
     ),
+    # Der Entlüftungshinweis der Netz-Operation gilt hier nicht: Die Oberseite
+    # bleibt offen, es entsteht kein eingeschlossener Hohlraum. Der zweite Satz
+    # gilt sehr wohl — wie dünn die Wand wird, entscheidet die Wandstärke und
+    # nicht der Rechenkern.
+    caveat=_(
+        "Nicht bei Teilen, die Kräfte aufnehmen — eine dünne Hülle bricht anders "
+        "als ein gefüllter Körper."
+    ),
 )
 def shell_exact(ctx: OpContext) -> OpResult:
     params = cast(ShellParams, ctx.params)
     source, body = _brep_input(ctx)
     solid = profiles.shell_open_top(body, params.wall)
-    return OpResult(outputs=[_replaced(source, solid)])
+    # **Der Zwilling meldete fünf Dinge, dieser keines.** Gemessen über
+    # dreizehn Wandstärken an einem Quader 40x30x20: Bei 15 mm kam ein Körper
+    # mit Nullspalt zurück — unverändertes Volumen und nicht mehr wasserdicht
+    # —, zwischen 16 und 50 passierte in fast allen Fällen gar nichts, und
+    # gesagt wurde nie etwas. OCCT gibt bei zu großem negativem Offset die
+    # Eingangsform zurück, ohne zu werfen; ein einziger Wert (20 mm) landete
+    # überhaupt in einer Ausnahme.
+    #
+    # Derselbe Befund wie im Netz und aus derselben Quelle (``hollow.too_thin``):
+    # Für den Kunden ist es dieselbe Auskunft, gleich woran der Kern es merkt.
+    findings: list[Finding] = []
+    if abs(solid.volume - body.volume) <= EPS_GEOM or not solid.is_watertight:
+        findings.append(too_thin(params.wall))
+    return OpResult(outputs=[_replaced(source, solid)], findings=findings)
 
 
 @op_params
@@ -448,6 +477,24 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
         depth=params.depth,
         anchor=cast(Literal["mouth", "centre"], params.anchor),
     )
+    # **Und zuerst: ist überhaupt noch ein Körper da?** Ein Werkzeug, das den
+    # Körper vollständig deckt, lässt OCCT sauber durchrechnen und nichts
+    # übrig — null Volumen, null Flächen, nicht wasserdicht. Bis zum
+    # 27.08.2026 kam das als Erfolg zurück: Im Objektbaum stand ein Objekt mit
+    # Namen, das man anklicken, umbenennen und **speichern** konnte, und der
+    # Prüfbericht sagte kein Wort. Gemeldet hätte es erst der Export.
+    #
+    # Der Netz-Zwilling wirft an dieser Stelle seit je, mit genau diesem Satz
+    # (``boolean.py``, Ende der Rückfallkette) — er ist deshalb von dort
+    # geteilt und nicht ein zweites Mal geschrieben. ``without_effect``
+    # darunter fängt den Fall nicht: Es prüft auf *nichts abgetragen*, hier
+    # wurde *alles* abgetragen.
+    if solid.volume <= EPS_GEOM or solid.face_count == 0:
+        raise GeometryError(
+            title=NOTHING_LEFT_TITLE,
+            detail=NOTHING_LEFT_DETAIL,
+            suggestions=(CORRECT_INPUT, CANCEL),
+        )
     findings: list[Finding] = []
     # **Wer Boolesches rechnet, fragt danach — ohne Ausnahme.** Der
     # Netz-Zwilling meldete eine Bohrung, die den Körper verfehlt; dieser hier
@@ -458,6 +505,21 @@ def drill_brep_hole(ctx: OpContext) -> OpResult:
     nothing = without_effect(body, solid, "difference", ctx.profile)
     if nothing is not None:
         findings.append(nothing)
+    # **Und der Fall dazwischen**, der laut Docstring von ``over_the_edge`` der
+    # gefährlichere ist: Es wird etwas abgetragen, also schweigt jede Prüfung,
+    # und heraus kommt eine Bohrung mit offener Flanke. Gemessen fehlte er dem
+    # exakten Zwilling in sechs von sechs Fällen, bei geometrisch identischem
+    # Ergebnis — nicht weil der Kern ihn nicht könnte, sondern weil die
+    # Signatur ein ``MeshData`` verlangte. Sie fragt jetzt nach dem, was sie
+    # wirklich braucht, und ``Solid`` trägt seinen Hüllquader.
+    findings.extend(
+        over_the_edge(
+            body,
+            (params.x, params.y, params.z),
+            cast(Axis, params.axis),
+            cut,
+        )
+    )
     if params.compensate and abs(cut - params.diameter) > EPS_GEOM:
         findings.append(
             Finding(

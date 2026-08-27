@@ -17,7 +17,7 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, Protocol
 
 import numpy as np
 import trimesh
@@ -72,7 +72,21 @@ def bore_diameter(nominal: float, profile: Profile, compensate: bool) -> float:
     return nominal + resolve_tolerance("auto:", "thread", profile)
 
 
-def _over_the_edge(mesh: MeshData, position: Vec3, axis: Axis, diameter: float) -> list[Finding]:
+class HasBounds(Protocol):
+    """Was :func:`over_the_edge` von einem Körper braucht — und mehr nicht.
+
+    Dasselbe Muster wie ``HasVolume`` bei ``without_effect``: ``MeshData`` und
+    der exakte ``Solid`` haben nichts gemeinsam außer diesem Wert, und für die
+    Frage „ragt die Bohrung hinaus" genügt er beiden. Die Prüfung lag deshalb
+    nur am Netz-Zwilling — nicht weil der exakte Kern sie nicht könnte,
+    sondern weil die Signatur ein ``MeshData`` verlangte.
+    """
+
+    @property
+    def bounds(self) -> BoundingBox: ...
+
+
+def over_the_edge(mesh: HasBounds, position: Vec3, axis: Axis, diameter: float) -> list[Finding]:
     """Ragt die Bohrung seitlich über den Körper hinaus?
 
     „Nichts abgetragen" gibt es seit je (:func:`without_effect`); dies ist der
@@ -160,7 +174,7 @@ def drill(
     nothing = without_effect(mesh, outcome.mesh, "difference", profile)
     if nothing is not None:
         findings.append(nothing)
-    findings.extend(_over_the_edge(mesh, position, axis, cut_diameter))
+    findings.extend(over_the_edge(mesh, position, axis, cut_diameter))
     if compensate and abs(cut_diameter - diameter) > EPS_GEOM:
         findings.append(
             Finding(

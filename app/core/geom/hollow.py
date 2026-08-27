@@ -112,14 +112,7 @@ def hollow(
     if cavity is None or cavity.triangle_count == 0:
         return HollowResult(
             mesh=mesh,
-            findings=[
-                Finding(
-                    code="hollow.too_thin",
-                    severity="warning",
-                    message=_("Für diese Wandstärke bleibt kein Hohlraum übrig."),
-                    values={"wall_mm": round(wall, 2)},
-                )
-            ],
+            findings=[too_thin(wall)],
         )
 
     before = mesh.volume
@@ -221,6 +214,25 @@ def hollow(
         vents=placed,
         findings=findings,
         solver=deepest(stages),
+    )
+
+
+def too_thin(wall: float) -> Finding:
+    """Für diese Wandstärke bleibt kein Hohlraum übrig.
+
+    Geteilt, weil **beide Kerne** denselben Fall haben: Das Netz merkt es am
+    leeren Hohlraumnetz, der exakte am unveränderten Volumen — und für den
+    Kunden ist es dieselbe Auskunft. Bis zum 27.08.2026 hatte nur das Netz sie;
+    ``shell_exact`` gab in keinem einzigen von dreizehn gemessenen
+    Wandstärkenfällen einen Befund zurück, obwohl von 15 bis 50 Millimetern
+    nur ein einziger Wert überhaupt etwas bewirkt. Zwei wörtliche Kopien des
+    Satzes wären zwei Stellen, an denen er auseinanderläuft.
+    """
+    return Finding(
+        code="hollow.too_thin",
+        severity="warning",
+        message=_("Für diese Wandstärke bleibt kein Hohlraum übrig."),
+        values={"wall_mm": round(wall, 2)},
     )
 
 

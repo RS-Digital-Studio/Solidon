@@ -22,7 +22,7 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from typing import Literal, Protocol
+from typing import Final, Literal, Protocol
 
 import numpy as np
 import trimesh
@@ -184,11 +184,8 @@ def boolean(
             # ist leer, weil das Werkzeug den Körper deckt. Wer nur den Titel
             # liest, sucht einen Netzfehler; die Antwort liegt bei den Maßen, und
             # genau dorthin schicken die Vorschläge.
-            title=_("Es bleibt kein Körper übrig."),
-            detail=_(
-                "Von dem Körper bleibt nichts übrig — das Werkzeug deckt ihn "
-                "vollständig ab. Prüfen Sie Maß und Lage."
-            ),
+            title=NOTHING_LEFT_TITLE,
+            detail=NOTHING_LEFT_DETAIL,
             suggestions=(CORRECT_INPUT, CANCEL),
             attempted=tuple(attempted),
             seed=seed,
@@ -423,6 +420,27 @@ def deepest(infos: Iterable[SolverInfo | None]) -> SolverInfo | None:
     worst = max(known, key=lambda entry: FULL_CHAIN.index(entry.strategy))
     attempted = [stage for stage in FULL_CHAIN if any(stage in e.attempted for e in known)]
     return dataclasses.replace(worst, attempted=tuple(attempted))
+
+
+#: Titel und Grund, wenn eine boolesche Rechnung sauber durchläuft und **nichts
+#: übrig lässt** — das Werkzeug deckt den Körper vollständig ab.
+#:
+#: Geteilt, weil zwei Kerne denselben Fall haben und ihn verschieden werfen
+#: müssen: Das Netz kommt über die Rückfallkette hierher und trägt die
+#: versuchten Stufen mit, der exakte Kern rechnet einmal und hat keine. Der
+#: **Satz** ist derselbe, und zwei wörtliche Kopien wären zwei Stellen, an
+#: denen er beim nächsten Nachbessern auseinanderläuft — dieselbe Begründung
+#: wie beim Umschaltertext der Zwillinge (``_EXACT_TOGGLE`` im Register).
+#:
+#: Der exakte Zwilling hatte den Fall bis zum 27.08.2026 gar nicht: Er gab
+#: einen Körper mit null Volumen, null Flächen und ``is_watertight=False``
+#: zurück und meldete nichts. Im Objektbaum stand danach ein Objekt mit Namen,
+#: das man anklicken, umbenennen und speichern konnte — und das nichts war.
+NOTHING_LEFT_TITLE: Final = _("Es bleibt kein Körper übrig.")
+NOTHING_LEFT_DETAIL: Final = _(
+    "Von dem Körper bleibt nichts übrig — das Werkzeug deckt ihn "
+    "vollständig ab. Prüfen Sie Maß und Lage."
+)
 
 
 def without_effect(
