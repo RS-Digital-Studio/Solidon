@@ -129,7 +129,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 | Die Boolesche Zugabe ist 0,05 mm und 0,01 mm | Dieselbe Zugabe, zwei Zahlen (27.08.2026) | zwei Messungen: ab welcher Zugabe die Rückfallkette über den Korpus auf Stufe 2 fällt, und wie viel eine Gravur gegenüber ihrer Solltiefe zu viel abträgt. Alle übrigen fünf Zwillingsfamilien des Kerns sind seit `57200cb9` zusammengelegt, ein Wächter hält sie |
-| Beide Aufmacher stehen zur Hälfte leer — **die zehn Übersetzungen fehlen noch** | Was die Website-Durchsicht liegen ließ (27.08.2026) | ein Bild, das es noch nicht gibt: ein KI-Modell **in der laufenden Anwendung** statt freigestellt auf Weiß (Entscheidung Robert, 27.08.2026). Der Weg dorthin ist Weg 3 selbst. Die zwei deutschen Seiten tragen den Aufmacher seit `5f502c8d` |
 | Die 8-GB-Karte in den Systemvoraussetzungen ist nie gemessen worden | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Rechner mit einer 8-GB-Karte, oder die Entscheidung, die Zeile als Erfahrungswert zu kennzeichnen statt als Anforderung. Die Messangabe daneben ist am 27.08. berichtigt (`00156df3`), diese nicht — eine ungemessene Zahl durch eine andere zu ersetzen gewinnt nichts |
 | `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
 | Vier Datumsangaben werden am 31.10.2026 still falsch | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung, was am 31.10. auf der Seite stehen soll — erst danach lässt sich prüfen, ob es dort steht. Die Umschaltung des Download-Kastens hat einen Test, diese Sätze nicht |
@@ -10968,7 +10967,7 @@ am 25.08.2026 schon einmal gefunden und in einem Durchsichtsbericht als
 Rechtstext zwei Tage länger falsch da. Ein Fund, der nur in einem Bericht
 steht, ist kein festgehaltener Fund.
 
-- [~] **Beide Aufmacher stehen zur Hälfte leer.** `funktionen.html` und
+- [x] **Beide Aufmacher stehen zur Hälfte leer.** `funktionen.html` und
   `ki-modelle.html` beginnen mit einer Überschrift links, zwei bis drei Zeilen
   darunter und nichts rechts. Bei `funktionen.html` verspricht die Unterzeile
   wörtlich „Jede Funktion mit einem Bild aus der laufenden Anwendung" — und
@@ -11002,6 +11001,16 @@ steht, ist kein festgehaltener Fund.
   Weg 3 selbst, und ihn zu fahren ist die zweite Hälfte des Auftrags — eine
   Abbildung aus der laufenden Anwendung entsteht nur, wenn der Weg für einen
   Kunden wirklich läuft.
+
+  **Erledigt am 27.08.2026** (`fdb957b3`, `bb1bd0cc`). Alle zwölf Seiten
+  tragen den Aufmacher; gezählt wird über alle zwölf, und der Einbau
+  bricht ab, wenn es weniger sind. Das Motiv der KI-Seiten ist über
+  Weg 3 entstanden — erzeugt, auf Maß gebracht, aufs Bett gesetzt — und
+  das Modell liegt als `tools/data/generated-owl.glb` im Repository,
+  damit das Bild ohne ComfyUI in jeder Sprache neu entsteht. Was das
+  wert ist, zeigte sich eine Stunde später: Der dreifache Hinweis im
+  Prüfbericht wurde behoben (`c5ade5f1`), ein Lauf, und alle sechs
+  Belege stimmten wieder.
 
 - [x] **Jede Abbildung mit eingebettetem Text ist auf dem Handy unlesbar.**
   Sie skalieren gleichmäßig herunter statt umzubrechen; bei 390 px landen die
