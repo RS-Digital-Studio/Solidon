@@ -221,7 +221,7 @@ Dialoge.
 
 ## Checkliste: Regelsammlung ändern
 
-1. Eintrag unter `core/knowledge/rules/` mit Datum und Anlass
+1. Eintrag in `core/knowledge/data/rules.toml` mit Datum und Anlass
 2. Version erhöhen
 3. Agenten-Suite vorher und nachher, beide Ergebnisse festhalten
 4. Verschlechtert sich die Quote, wird die Regel zurückgenommen — nicht
@@ -254,6 +254,7 @@ Dialoge.
 | Lizenzen | Abhängigkeiten gegen Freigabeliste |
 | Hauptwege | die vier Wege aus Bauplan §2.2 Ende zu Ende |
 | Anschluss | was nur an einer Stelle eingelöst wird, wird an dieser Stelle geprüft — nicht „der Cache kann es", sondern „die Anwendung tut es" |
+| Doku-Karte | jedes Verzeichnis mit Code trägt eine `CLAUDE.md`, jeder §-Verweis darin trifft |
 | Agenten-Suite | 39 Referenzanfragen |
 
 ---
