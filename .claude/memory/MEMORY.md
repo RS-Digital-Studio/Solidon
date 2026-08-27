@@ -33,13 +33,14 @@
 - [Zwei Läufe nach jeder Code-Änderung](zwei-laeufe-nach-jeder-code-aenderung.md) — `test_language_rules` und `ruff check .` **ohne Pfadangabe**; dreimal an einem Tag daran gescheitert, dass die Datei grün war und der Bestand rot.
 - [Git: push und pull selbst](git-push-pull-selbststaendig.md) — ohne Rückfrage, aber erst nach grüner Suite; Merge statt Rebase.
 - [Version vor jedem Bau erhöhen](version-vor-jedem-bau-erhoehen.md) — nicht fragen; tools/bump_version.py fasst beide Stellen an, vor dem Prüfmodul.
-- [Download-Kasten: vier Pakete](download-kasten-vier-pakete.md) — der Baulauf liefert acht, angeboten werden vier; die Vorfassung wird vom Server gelöscht.
+- [Download-Kasten: vier Pakete](download-kasten-vier-pakete.md) — der Baulauf liefert acht, angeboten werden vier (Linux ist das Flatpak); dazu die Reihenfolge des Veröffentlichens und `--nachpruefen` am Ende.
 - [Website-Upload großer Dateien](website-upload-grosse-dateien.md) — ~1,8 MB/s, und mehrere Pakete am Stück reißen die Verbindung; ein halbes Paket sieht ganz aus.
 - [Gesetzt heißt nicht gezeigt](text-gesetzt-heisst-nicht-gezeigt.md) — QMenu verschluckt Tooltips; ein Test über den Wert eines Hinweises sagt nichts über seine Sichtbarkeit.
 - [Qt lügt vor dem Anzeigen](qt-luegt-vor-dem-anzeigen.md) — setExpanded, isVisible und hasFocus antworten falsch, solange nichts angezeigt ist; der Test bleibt grün gegen einen Zweig, der nie läuft.
 - [Signal passt an den falschen Slot](signal-passt-an-den-falschen-slot.md) — Qt verbindet, was von der Stelligkeit her passt; ein Name, der als Suchtext ankommt, läuft fehlerfrei falsch — nur das Bildschirmfoto sah es.
 - [Zwei Schwellen, eine Frage](zwei-schwellen-eine-frage.md) — entscheiden zwei Konstanten dasselbe, liegt dazwischen ein Bereich, in dem beide Antworten falsch sind; besonders bei zwei Einheiten.
 - [Eine Kette endet am letzten Glied](eine-kette-endet-am-letzten-glied.md) — durchgereicht ist nicht gerufen, und eine zutreffende Begründung im Docstring kann eine Testlücke decken.
+- [Roh gegen gerendert vergleichen](roh-gegen-gerendert-vergleichen.md) — wer Quelltext in fertigem HTML sucht, prüft die Maskierung mit; der Test verwarf richtige Texte und schwieg zu falschen.
 - [Texte altern mit ihrer Grenze](texte-altern-mit-ihrer-grenze.md) — wer eine Fähigkeit hinzufügt, sucht die Sätze, die ihre Abwesenheit versprochen haben; sie stehen selten in derselben Datei.
 - [Verweis auf Nichtexistierendes](verweis-auf-nichtexistierendes.md) — „dafür ist der Schraubdom da" — den gab es nie; ein leerer Verweis liest sich so glatt wie ein gültiger, und das Register hätte in einer Sekunde geantwortet.
 - [Was die Suite nicht findet](was-die-suite-nicht-findet.md) — sechs Fehler an einem Tag, sechs verschiedene Finder, kein einziger davon pytest; ansehen, mutieren, durchfahren.
@@ -71,6 +72,7 @@
 - [Wächter-Reichweite nur im Kommentar](waechter-reichweite-nur-im-kommentar.md) — der Kommentar zählte „opérations" ausdrücklich mit, das Muster traf es nie; genau dort stand dann der Fehler.
 - [Sollwert aus dem Prüfling](sollwert-aus-dem-pruefling.md) — wer die Erwartung mit der geprüften Funktion erzeugt, prüft Aktualität statt Richtigkeit; und ein Fehler, den eine spätere Stufe halb aufräumt, tarnt sich selbst.
 - [Heredoc verschluckt \n](heredoc-verschluckt-backslash-n.md) — Bash-Heredoc + Python-Patchskript faltet Escape-Folgen; Mehrzeiliges ohne Backslashes bauen, dreimal an einem Abend zugeschnappt.
+- [Heredoc kann Umlaute](heredoc-kann-umlaute.md) — aus Angst vor Quoting ASCII zu schreiben bricht die Sprachregel; gemessen überträgt es sie sauber, und die Verallgemeinerung war die eigentliche Falle.
 - [Wächter lesen Kommentare mit](waechter-lesen-kommentare-mit.md) — Quelltext-Wächter treffen auch Docstrings/Kommentare; verbotene Muster umschreiben, nie zitieren.
 - [Erinnerungen liegen im Repository](erinnerungen-liegen-im-repository.md) — .claude/memory ist die Quelle; neue Maschine: `python tools/link_memory.py`
 - [Merkmalsmehrdeutigkeit: erledigt](merkmalsmehrdeutigkeit-entwurf.md) — §15.7 ist seit eb77658 gebaut und angeschlossen; die Notiz führte ihn zwei Tage zu lange als offen.
