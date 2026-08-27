@@ -1881,12 +1881,13 @@ def test_every_feature_kind_has_a_name_in_the_tree(qt_app: QApplication) -> None
     import typing
 
     from app.core.types import Feature, FeatureKind
-    from app.ui.labels import feature_name
+    from app.ui.labels import feature_measure, feature_name
 
     arten = typing.get_args(FeatureKind)
     assert len(arten) >= 9, "sonst prüft dieser Test nichts"
 
     ohne_namen = []
+    ohne_mass = []
     for art in arten:
         merkmal = Feature(
             id=f"{art}_1",
@@ -1898,7 +1899,13 @@ def test_every_feature_kind_has_a_name_in_the_tree(qt_app: QApplication) -> None
         # Die Kennung selbst ist die Rückfallebene — und genau das Versagen.
         if name == merkmal.id or art in name:
             ohne_namen.append(art)
+        # **Der Zwilling zwei Funktionen weiter**, beim ersten Mal
+        # übersehen: Der Objektbaum hat zwei Spalten, und repariert wurde
+        # eine. Zapfen und Gewinde trugen ihren Namen und daneben nichts.
+        if not feature_measure(merkmal):
+            ohne_mass.append(art)
 
+    assert not ohne_mass, "diese Arten zeigen im Baum kein Maß: " + ", ".join(ohne_mass)
     assert not ohne_namen, "diese Arten zeigen im Baum ihre englische Kennung: " + ", ".join(
         ohne_namen
     )

@@ -1269,6 +1269,19 @@ def feature_measure(feature: Feature) -> str:
         if more:
             return f"{more} {tr('weitere offene Stellen')}"
         return f"{params.get('open_edges', 0)} {tr('offene Kanten')}"
+    # **Der Zwilling zwei Funktionen weiter oben.** Dort bekamen Zapfen
+    # und Gewinde am 27.08.2026 ihren Namen; hier blieb die Spalte
+    # daneben leer, und niemandem fiel es auf — der Objektbaum hat zwei
+    # Spalten, und repariert wurde eine. Die Maße stehen wie die Namen
+    # im Steckbrief: der Zapfen mit seinem Durchmesser, das Gewinde mit
+    # Durchmesser und Steigung, denn die macht es aus (Ø6 mit 1,0 ist
+    # M6, Ø6 mit 0,75 ist M6 fein).
+    if feature.kind == "pin":
+        return f"Ø{length(float(params.get('diameter', 0.0)))}"
+    if feature.kind == "thread":
+        steigung = float(params.get("pitch", 0.0))
+        durchmesser = length(float(params.get("diameter", 0.0)))
+        return f"Ø{durchmesser} × {length(steigung)}" if steigung else f"Ø{durchmesser}"
     return ""
 
 
