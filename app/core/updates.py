@@ -98,6 +98,22 @@ MAX_ANSWER_BYTES: Final = 64 * 1024
 #: und was dort steht, kommt von einem Server — nicht aus diesem Programm.
 MAX_FIELD_LENGTH: Final = 200
 
+#: Wie lang ein **Fließtext** werden darf: der Hinweis über der Punkteliste und
+#: die Punkte selbst.
+#:
+#: **Nicht** :data:`MAX_FIELD_LENGTH`. Deren 200 Zeichen sind für eine
+#: Statuszeile gedacht, und der Hinweis ist ein Absatz in einem Dialog mit
+#: Rollbereich. Bei 0.2.1 riss ihn **jede der sechs Sprachfassungen** — 214 bis
+#: 237 Zeichen —, und gekappt wurde mitten im Wort: „Die Demo bleibt
+#: vollständig und oh". Ein Satz, der so endet, sieht aus wie ein Fehler des
+#: Programms, und er ist einer.
+#:
+#: 800 ist keine runde Zahl aus Bequemlichkeit, sondern die Rechnung gegen
+#: :data:`MAX_ANSWER_BYTES`: Selbst 100 Punkte à 800 Zeichen bleiben unter den
+#: 64 KB, die überhaupt gelesen werden. Die Schranke gegen einen bösen Server
+#: bleibt also, sie sitzt nur nicht mehr mitten im Satz.
+MAX_TEXT_LENGTH: Final = 800
+
 #: Wie lange das Holen des Pakets an einer einzelnen Leseoperation hängen darf.
 #: Nicht zu verwechseln mit :data:`TIMEOUT_SECONDS`: Die Abfrage soll den Start
 #: nicht aufhalten, ein Download von 180 MB dauert bei jeder Leitung länger als
@@ -330,7 +346,7 @@ def check(url: str = VERSION_URL, fetch: Transport | None = None) -> Release | N
 
 
 def _notes(raw: object) -> dict[str, str]:
-    """Der Hinweistext je Sprache, gestutzt auf das, was hineinpasst.
+    """Der Hinweistext je Sprache, gestutzt auf :data:`MAX_TEXT_LENGTH`.
 
     Dieselbe Vorsicht wie bei :func:`_changes`: Was keine Zeichenkette ist,
     fällt weg; was zu lang ist, wird gekürzt. Eine Obergrenze für die Zahl der
@@ -341,12 +357,12 @@ def _notes(raw: object) -> dict[str, str]:
     found: dict[str, str] = {}
     for key, value in raw.items():
         if isinstance(value, str) and value.strip():
-            found[str(key)[:16]] = _field(value)
+            found[str(key)[:16]] = _text(value)
     return found
 
 
 def _changes(raw: object) -> dict[str, tuple[str, ...]]:
-    """Der Changelog aus der Antwort, gestutzt auf das, was hineinpasst.
+    """Der Changelog aus der Antwort, gestutzt auf :data:`MAX_TEXT_LENGTH`.
 
     Dieselbe Vorsicht wie bei jedem anderen Feld: Der Text kommt von einem
     Server und landet in einem Fenster. Was keine Liste von Zeichenketten ist,
@@ -360,7 +376,7 @@ def _changes(raw: object) -> dict[str, tuple[str, ...]]:
         if not isinstance(value, list):
             continue
         points = tuple(
-            _field(entry)
+            _text(entry)
             for entry in value[:MAX_CHANGES]
             if isinstance(entry, str) and entry.strip()
         )
@@ -422,6 +438,28 @@ def _as_size(value: object) -> int:
 def _field(value: object) -> str:
     """Ein Feld aus der Antwort, gestutzt auf das, was hineinpasst."""
     return str(value if value is not None else "").strip()[:MAX_FIELD_LENGTH]
+
+
+def _text(value: object) -> str:
+    """Ein Fließtext aus der Antwort — großzügiger gestutzt, und sichtbar.
+
+    Zwei Unterschiede zu :func:`_field`, beide aus demselben Fall gelernt:
+
+    * Die Grenze ist :data:`MAX_TEXT_LENGTH`, nicht die der Statuszeile.
+    * **Gekürzt wird an einer Wortgrenze und mit einem Auslassungszeichen.**
+      Wo etwas fehlt, soll es zu sehen sein; ein Satz, der lautlos mitten im
+      Wort endet, sieht aus wie ein Programmfehler statt wie eine Schranke.
+    """
+    text = str(value if value is not None else "").strip()
+    if len(text) <= MAX_TEXT_LENGTH:
+        return text
+    gestutzt = text[:MAX_TEXT_LENGTH]
+    # Bis zum letzten Leerzeichen zurück, aber nicht beliebig weit: Ein Text
+    # ohne jedes Leerzeichen bekommt sonst gar nichts zu sehen.
+    luecke = gestutzt.rfind(" ")
+    if luecke > MAX_TEXT_LENGTH // 2:
+        gestutzt = gestutzt[:luecke]
+    return gestutzt.rstrip(" ,;:.") + "…"
 
 
 def _get(url: str, headers: dict[str, str], _payload: dict[str, Any]) -> dict[str, Any]:

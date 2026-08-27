@@ -198,8 +198,56 @@ def test_a_note_cannot_flood_the_window_in_any_language() -> None:
     )
 
     assert release is not None
-    assert len(release.note("de")) <= updates.MAX_FIELD_LENGTH
-    assert len(release.note("en")) <= updates.MAX_FIELD_LENGTH
+    assert len(release.note("de")) <= updates.MAX_TEXT_LENGTH + 1
+    assert len(release.note("en")) <= updates.MAX_TEXT_LENGTH + 1
+
+
+def test_a_note_of_normal_length_arrives_whole() -> None:
+    """Ein Absatz ist kein Feld — er darf nicht auf Statuszeilenlänge fallen.
+
+    Der Hinweis über der Punkteliste ging bis 0.2.1 durch ``MAX_FIELD_LENGTH``
+    (200 Zeichen, für die **Statusleiste** gedacht) und wurde dort mitten im
+    Wort gekappt. Im Fenster stand „Die Demo bleibt vollständig und oh" — in
+    **allen sechs** Sprachen, denn alle sechs Fassungen lagen zwischen 214 und
+    237 Zeichen. Ein Satz, der so endet, sieht aus wie ein Programmfehler, und
+    er war einer.
+
+    Geprüft wird mit der echten Länge des Falls, nicht mit einer runden Zahl:
+    240 Zeichen sind das, was ein Ankündigungsabsatz wirklich braucht.
+    """
+    satz = (
+        "Das bisher größte Update. Neu ist vor allem: Aus Schritten im Verlauf wird "
+        "ein eigener Baustein, den Sie wie jeden anderen einsetzen und mit dem Projekt "
+        "weitergeben. Die Demo bleibt vollständig und ohne Schlüssel, bis zum 30.10.2026."
+    )
+    assert len(satz) > updates.MAX_FIELD_LENGTH, "der Fall muss die alte Grenze reißen"
+
+    release = updates.check(
+        fetch=answering({"version": "99.0.0", "notes_by_language": {"de": satz}})
+    )
+
+    assert release is not None
+    assert release.note("de") == satz
+
+
+def test_a_text_that_is_really_too_long_says_that_it_was_cut() -> None:
+    """Wo gekürzt wird, soll es zu sehen sein — und nicht mitten im Wort.
+
+    Die Schranke gegen einen Server, der Romane schickt, bleibt. Sie endet nur
+    nicht mehr stumm: Gekürzt wird an einer Wortgrenze, und ein
+    Auslassungszeichen sagt, dass etwas fehlt. Ohne das ist eine Schranke von
+    einem Fehler nicht zu unterscheiden.
+    """
+    lang = " ".join(["Wort"] * 4000)
+    release = updates.check(
+        fetch=answering({"version": "99.0.0", "notes_by_language": {"de": lang}})
+    )
+
+    assert release is not None
+    note = release.note("de")
+    assert len(note) <= updates.MAX_TEXT_LENGTH + 1
+    assert note.endswith("…"), note[-40:]
+    assert not note.endswith("Wo…"), "an der Wortgrenze getrennt, nicht im Wort"
 
 
 # --- Die Pakete in der Versionsdatei --------------------------------------------
