@@ -1314,3 +1314,66 @@ def test_every_download_link_names_the_current_version(page: Path) -> None:
         f"version.json nennt {veroeffentlicht}, und die alten Pakete werden beim "
         "Veröffentlichen vom Server gelöscht — die Verweise gingen ins Leere."
     )
+
+
+#: Wie viele Tage vor dem Demo-Ende die Website ihre Datumssätze braucht.
+#:
+#: Fünf Tage sind kein runder Wert, sondern der Abstand, in dem sich beides
+#: noch ausgeht: die Entscheidung treffen (verlängern oder verkaufen), die
+#: Sätze in sechs Sprachen umschreiben und hochladen. Wer am 30. merkt, dass
+#: die Seite den 30. verspricht, hat keinen Tag mehr.
+DECISION_LEAD_DAYS = 5
+
+
+def test_the_pages_do_not_promise_a_date_that_is_about_to_pass(
+    shipped_demo_until: object,
+) -> None:
+    """Erinnert rechtzeitig daran, dass vier Datumssätze eine Entscheidung brauchen.
+
+    „Die Demo läuft bis zum 30. Oktober 2026" steht auf den Startseiten in
+    sechs Sprachen an mehreren Stellen, dazu die Frage „Was passiert am
+    30. Oktober?" und der Einführungspreis bis 31.01.2027. Am 31. Oktober
+    werden diese Sätze **still** falsch: Sie sehen aus wie vorher, und niemand
+    bekommt eine Meldung.
+
+    **Nicht zu verwechseln mit dem Wecker in ``test_activation.py``**
+    (``test_the_shipped_deadline_has_not_passed``). Der fragt, ob die
+    ausgelieferte Demo noch läuft, und wird am **31.10.** rot — für die
+    Website ist das der Tag zu spät. Dieser hier fragt, ob noch Zeit bleibt,
+    die Sätze zu ändern, und schlägt fünf Tage vorher an. Zwei Fragen, zwei
+    Tests, dieselbe Quelle.
+
+    Prüfbar ist der Inhalt der Sätze heute **nicht**: Was dort ab dem 31.
+    stehen soll, hängt an einer offenen Entscheidung (Robert, 27.08.2026:
+    „erst später entscheiden"). Prüfbar ist nur, dass die Entscheidung
+    rechtzeitig ansteht.
+
+    **Er hängt an ``DEMO_UNTIL`` und nicht an einer zweiten Zahl.** Wird die
+    Demo verlängert, verschiebt sich die Erinnerung von selbst mit; ein hier
+    eingetragenes Datum wäre der Zwilling, den die Frist überlebt.
+
+    Der echte Stichtag kommt über ``shipped_demo_until`` und nicht aus dem
+    Modul: ``conftest`` setzt ``DEMO_UNTIL`` für die ganze Suite auf ``None``,
+    sonst wäre sie ab dem Stichtag an Dutzenden Stellen rot. Ohne die Fixture
+    übersprang dieser Test sich selbst — grün, und ohne je etwas geprüft zu
+    haben.
+    """
+    from datetime import date, timedelta
+
+    if shipped_demo_until is None:
+        pytest.skip("Verkaufsversion ohne Stichtag — es gibt keinen Tag, an dem die Sätze kippen")
+
+    assert isinstance(shipped_demo_until, date)
+    faellig = shipped_demo_until - timedelta(days=DECISION_LEAD_DAYS)
+    heute = date.today()
+    assert heute < faellig, (
+        f"Die Demo endet am {shipped_demo_until:%d.%m.%Y}, heute ist der "
+        f"{heute:%d.%m.%Y}. "
+        "Vier Datumsangaben auf den Startseiten werden danach still falsch: der "
+        "Satz „läuft bis zum 30. Oktober“ (sechs Sprachen, mehrere Stellen), die "
+        "FAQ-Frage „Was passiert am 30. Oktober?“ und der Einführungspreis bis "
+        "31.01.2027. "
+        "Entweder die Sätze umschreiben auf das, was ab dem Ende gilt — oder "
+        "DEMO_UNTIL in app/core/activation/store.py verschieben, wenn die Demo "
+        "verlängert wird. Dann wandert diese Erinnerung mit."
+    )
