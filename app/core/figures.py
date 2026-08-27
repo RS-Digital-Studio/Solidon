@@ -985,6 +985,82 @@ def _geometry_available() -> bool:
 
 # --- der Katalog ---------------------------------------------------------------------
 
+
+def _parameter_field(theme: Theme) -> str:
+    """Der ``fx``-Knopf neben einem Zahlenfeld, in beiden Zuständen.
+
+    Das Kapitel „Parameter und Ausdrücke" erklärt in Worten, was ein Bild in
+    einem Blick zeigt: dass neben jedem Maß ein Knopf steht, der das Feld
+    umschaltet. Wer den Knopf nie gesehen hat, sucht ihn nach dieser
+    Beschreibung trotzdem — er ist zwei Zeichen breit und steht am Rand.
+
+    Gezeichnet statt aufgenommen, aus demselben Grund wie beim Fenster: Die
+    Beschriftung bleibt Text und damit übersetzt, und ein Bildschirmfoto
+    veraltet mit dem nächsten Symbolsatz.
+    """
+    canvas = Canvas(620, 232, theme)
+    colours = canvas.colours
+    canvas.background()
+
+    for oben, titel, wert, aktiv, satz in (
+        (
+            28,
+            _("Aus: eine Zahl"),
+            "70,00 mm",
+            False,
+            _("Drehknöpfe, Grenzen und Einheit — wie jedes andere Maß."),
+        ),
+        (
+            124,
+            _("An: ein Ausdruck"),
+            "=@breite/2",
+            True,
+            _("Der Wert folgt dem Parameter, auch wenn der sich ändert."),
+        ),
+    ):
+        canvas.label(20, oben, str(titel), size=11, bold=True, colour=colours.muted)
+
+        # Das Zahlenfeld. Der Rahmen ist derselbe wie in der Anwendung: ein
+        # Kasten mit Text links und den Drehknöpfen am rechten Rand.
+        canvas.box(20, oben + 12, 168, 30, stroke=colours.muted, fill=colours.paper)
+        canvas.label(32, oben + 32, wert, size=12)
+        if not aktiv:
+            canvas.label(178, oben + 26, "▲", anchor="end", size=8, colour=colours.muted)
+            canvas.label(178, oben + 38, "▼", anchor="end", size=8, colour=colours.muted)
+
+        # Der Knopf. Gefüllt heißt eingeschaltet — dazu die zweite Kodierung,
+        # die Regel 18 verlangt: der Rahmen wird kräftiger, nicht nur bunter.
+        canvas.box(
+            196,
+            oben + 12,
+            36,
+            30,
+            stroke=colours.accent if aktiv else colours.muted,
+            fill=colours.fill if aktiv else colours.paper,
+            weight=2.0 if aktiv else 1.4,
+        )
+        canvas.label(
+            214,
+            oben + 32,
+            "fx",
+            anchor="middle",
+            size=12,
+            bold=aktiv,
+            colour=colours.accent if aktiv else colours.muted,
+        )
+        canvas.caption(248, oben + 32, str(satz))
+
+    # Was dabei herauskommt — die Rechnung, die der Text beschreibt.
+    canvas.line(20, 196, 600, 196, stroke=colours.muted, dashed=True)
+    canvas.label(
+        20,
+        216,
+        str(_("Bei breite = 70 mm steht im Feld 35,00 mm — gerechnet, nicht getippt.")),
+        size=11,
+    )
+    return canvas.svg()
+
+
 FIGURES: Final[tuple[Figure, ...]] = (
     Figure(
         key="window",
@@ -1055,6 +1131,21 @@ FIGURES: Final[tuple[Figure, ...]] = (
             "beim nächsten Zug."
         ),
         build=_sketch_editor,
+    ),
+    Figure(
+        key="parameter-field",
+        alt=_(
+            "Zweimal dasselbe Zahlenfeld nebeneinander. Oben steht darin „70,00 mm“ "
+            "mit Drehknöpfen am Rand, daneben ein blasser Knopf „fx“. Unten steht im "
+            "Feld der Ausdruck „=@breite/2“, und der Knopf „fx“ ist eingeschaltet — "
+            "kräftiger Rahmen, farbige Schrift. Darunter die Rechnung: bei einer "
+            "Breite von 70 mm zeigt das Feld 35,00 mm."
+        ),
+        caption=_(
+            "Derselbe Knopf steht neben jedem Maß. Eingeschaltet nimmt das Feld einen "
+            "Ausdruck statt einer Zahl."
+        ),
+        build=_parameter_field,
     ),
     Figure(
         key="sketch-uses",

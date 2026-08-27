@@ -620,6 +620,7 @@ INTRODUCTION: Final[tuple[Page, ...]] = (
             "Ausdruck, das Klammeraffen-Zeichen verweist auf einen Parameter. "
             "Tippen Sie `@`, schlägt das Feld die Namen Ihrer Parameter vor, "
             "und darunter steht, was erlaubt ist.\n\n"
+            "![](figure:parameter-field)\n\n"
             "**Der Name im Ausdruck ist nicht immer der, der in der Liste "
             "steht.** Ein Parameter hat einen Namen, unter dem er angelegt "
             "wurde, und eine Beschriftung, die übersetzt sein kann — in der "
