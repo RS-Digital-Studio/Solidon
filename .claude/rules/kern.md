@@ -159,10 +159,67 @@ Zweimal danebengegangen, beide Fälle stehen in `app/core/discover.py`:
 Und die dritte Aufgabe kommt bei Sandboxen dazu: **Ein Flatpak hat sein
 eigenes `/tmp`.** Ein Arbeitsordner aus `tempfile` ist für es unsichtbar; der
 Aufruf kommt an, und das Programm findet die Datei nicht. `workspace_for` legt
-ihn für eingesperrte Programme in den Nutzer-Cache, weil die Pakete
+ihn für eingesperrte Programme unter `$HOME`, weil die Pakete
 `--filesystem=home` freigeben — **nachgelesen im Flathub-Manifest**, nicht
 angenommen. Wer ein weiteres Programm dazunimmt, sieht dort nach, welche
 Verzeichnisse es überhaupt lesen darf.
+
+### Und die vierte: Wir sind selbst einer
+
+Die drei Absätze oben sprechen über **fremde** Sandkästen. Sie waren
+vollständig, genau und blind für den Fall, der am 27.08.2026 aufgeschlagen
+ist: Solidon wird als Flatpak ausgeliefert. Von innen sieht der Rechner anders
+aus, und zwar an mehr Stellen, als eine Aufzählung vermuten lässt:
+
+| Was von innen anders ist | Folge, wenn man es nicht weiß |
+|---|---|
+| Der PATH und die Installationsordner des Rechners fehlen | Kein Slicer wird gefunden, obwohl einer läuft |
+| `subprocess` startet **im** Sandkasten | Das Programm gibt es dort nicht — `on_host` legt `flatpak-spawn --host` davor |
+| `is_dir()`/`is_file()` auf einen Host-Pfad sagt nein | `install_root` fand keine Cura-Definition, und ohne `-j` startet CuraEngine gar nicht |
+| `XDG_CONFIG_HOME` zeigt in den eigenen Sandkasten | Die Profile eines fremden Slicers liegen nie dort |
+| `XDG_CACHE_HOME` auch — und `--filesystem=home` nimmt `~/.var` **aus** | Der Austauschordner liegt in `$HOME` und ist für den Slicer trotzdem unsichtbar |
+
+Zwei Sätze für alles davon:
+
+* **Wer einen neuen Startpfad baut, legt `discover.on_host` davor** — vier
+  Stellen liefen ohne ihn weiter, nachdem die fünfte repariert war.
+* **Im Flatpak gilt die XDG-Variable nicht, gemeint ist der Rechner.**
+  `config_home` und `exchange_dir` sagen beide genau das, und sie sind an
+  einem Tag unabhängig voneinander entstanden.
+
+Der Grund, warum das lange stehen konnte, gehört dazu, weil er
+wiederkommt:
+
+> **Ein Modul, das eine Falle richtig benennt, ist gegen sie nicht immun.**
+
+`discover.py` beschrieb die Flatpak-Falle über zwanzig Zeilen und zählte sich
+selbst nicht mit. `find_program` schrieb in seinen Docstring, eine falsche
+Auskunft sei teurer als keine, und meldete zwanzig Zeilen später einen
+eingetragenen Host-Pfad als verschwunden. Der Satz liest sich als Beleg, dass
+jemand nachgedacht hat — und genau deshalb prüft die Stelle niemand ein
+zweites Mal. Siehe `.claude/memory/benannte-falle-schuetzt-nicht.md`.
+
+### Was auf einer Plattform gilt, ist keine Zusage
+
+Dieselbe Durchsicht hat fünf Stellen gefunden, an denen Linux oder macOS
+weniger konnten als Windows — Zeigergröße, Slicer-Profile, ComfyUI-Rateorte,
+AppImages, die Zeichenkodierung von Prozessausgaben. Keine war eine
+Entscheidung; alle fünf waren dort entstanden, wo entwickelt wird.
+
+**Eine Plattformkette gehört deshalb in eine Funktion mit der Plattform als
+Parameter**, nicht als `sys.platform` in den Rumpf. `parts_for`,
+`guesses_for`, `config_home` und `cursors.system_size` machen es so, und der
+Grund ist nicht Stil:
+
+* Ein Zweig, den nur ein Mac sehen kann, **wird nirgends geprüft**.
+* `mypy` prüft die Plattform, auf der es läuft. Eine Kette aus
+  `sys.platform`-Vergleichen ist auf zwei von drei Maschinen tot und wird
+  dort als `unreachable` gemeldet — die Linux-CI sieht das nie. Am 27.08.2026
+  war ein Commit auf drei Windows-Maschinen rot und auf dem Bauserver grün.
+
+Wer eine solche Funktion schreibt, prüft mit
+`mypy --platform linux|darwin|win32` nach; das kostet drei Läufe und fängt
+genau den Fall, den ein grüner CI-Lauf nicht zurückholt.
 
 Und wo ein Programm **mehr als Installation** braucht, ist das eine Eigenschaft
 der Sache und kein Sonderfall der Oberfläche: `Requirement.follow_up` benennt
