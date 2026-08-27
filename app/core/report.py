@@ -116,6 +116,35 @@ def _version_of(name: str) -> str:
         return "-"
 
 
+#: Was die Fenstersitzung eines Linux-Rechners beschreibt. Auf Windows und
+#: macOS ist nichts davon gesetzt, und dann steht die Zeile auch nicht da.
+#:
+#: **Warum sie überhaupt dasteht.** Simon Wenger meldete am 27.08.2026: „Es
+#: war schwierig Solidon3D zum Laufen zu bringen. Es waren viele tweaks nötig,
+#: wie auf x11 umschalten und weitere. Bis jetzt geht einiges nicht. So muss
+#: ich z.B. diesen Text in einer anderen Anwendung schreiben und nach Solidon3D
+#: copypasten." Sein Bericht enthielt alles über unsere Bibliotheken und nichts
+#: über die Sitzung, in der das passierte — kein Wort darüber, ob Qt auf
+#: Wayland oder über XWayland lief und welches Eingabemodul dabei aktiv war.
+#:
+#: Vier Variablen, die genau das beantworten, und keine davon kostet mehr als
+#: einen Blick ins Environment. Der Kern liest sie selbst statt Qt zu fragen —
+#: hier gibt es kein Qt (§8), und ``QT_QPA_PLATFORM`` sagt ohnehin, was der
+#: Nutzer erzwungen hat, während Qt nur meldet, was daraus wurde.
+SESSION_KEYS: Final = ("XDG_SESSION_TYPE", "QT_QPA_PLATFORM", "QT_IM_MODULE", "XCURSOR_SIZE")
+
+
+def _session() -> dict[str, str]:
+    """Wie die Fenstersitzung eingerichtet ist — nur, was wirklich dasteht."""
+    import os
+
+    found = {key.lower(): os.environ.get(key, "").strip() for key in SESSION_KEYS}
+    if os.environ.get("WAYLAND_DISPLAY"):
+        found.setdefault("xdg_session_type", "")
+        found["xdg_session_type"] = found["xdg_session_type"] or "wayland (erkannt)"
+    return {key: value for key, value in found.items() if value}
+
+
 def environment() -> dict[str, str]:
     """Versionsdaten — was ein Bericht braucht, um überhaupt reproduzierbar
     zu sein."""
@@ -126,6 +155,7 @@ def environment() -> dict[str, str]:
         "python": sys.version.split()[0],
         "platform": f"{platform.system()} {platform.release()}",
         "language": get_language(),
+        **_session(),
         **versions,
     }
 

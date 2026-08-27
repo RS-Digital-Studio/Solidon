@@ -13,6 +13,8 @@ finish-args:
   - --device=dri
   - --filesystem=home
   - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.fcitx.Fcitx5
+  - --talk-name=org.freedesktop.portal.Fcitx
 modules:
   - name: solidon3d
     buildsystem: simple

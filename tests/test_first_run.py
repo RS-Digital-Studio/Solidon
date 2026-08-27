@@ -445,6 +445,45 @@ def test_a_report_carries_the_versions() -> None:
     assert "trimesh" in entry
 
 
+def test_a_report_describes_the_window_session_where_there_is_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Auf Linux gehört in den Bericht, wie die Fenstersitzung eingerichtet ist.
+
+    Simon Wenger meldete am 27.08.2026: „Es waren viele tweaks nötig, wie auf
+    x11 umschalten … So muss ich diesen Text in einer anderen Anwendung
+    schreiben und nach Solidon3D copypasten." Sein Bericht enthielt jede
+    Bibliotheksfassung und **nichts** über die Sitzung, in der das geschah —
+    kein Wort darüber, ob Qt auf Wayland oder über XWayland lief und welches
+    Eingabemodul aktiv war. Beides erklärt genau die zwei Punkte, die er
+    nennt, und beides steht in vier Umgebungsvariablen.
+
+    Auf Windows und macOS ist keine davon gesetzt; dann bleibt die Zeile weg,
+    statt einen Strich zu zeigen.
+    """
+    for key in (*reports.SESSION_KEYS, "WAYLAND_DISPLAY"):
+        monkeypatch.delenv(key, raising=False)
+    assert not any(key.lower() in reports.environment() for key in reports.SESSION_KEYS), (
+        "wo nichts gesetzt ist, steht auch nichts"
+    )
+
+    monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+    monkeypatch.setenv("QT_QPA_PLATFORM", "xcb")
+    monkeypatch.setenv("QT_IM_MODULE", "ibus")
+    entry = reports.environment()
+
+    assert entry["xdg_session_type"] == "wayland"
+    assert entry["qt_qpa_platform"] == "xcb", (
+        "dass jemand auf X11 umgeschaltet hat, ist die Auskunft"
+    )
+    assert entry["qt_im_module"] == "ibus"
+
+    # Und wenn nur der Wayland-Anschluss dasteht, ist auch das eine Antwort.
+    monkeypatch.delenv("XDG_SESSION_TYPE")
+    monkeypatch.setenv("WAYLAND_DISPLAY", "wayland-0")
+    assert "wayland" in reports.environment()["xdg_session_type"]
+
+
 def test_a_report_names_the_versions_even_without_package_metadata() -> None:
     """Im gebauten Paket gibt es keine ``.dist-info`` — die Fassung trotzdem.
 

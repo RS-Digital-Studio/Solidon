@@ -404,6 +404,18 @@ def flatpak_manifest() -> str:
     * ``--share=network`` — Rückmeldung an den Support, Aktualisierungsprüfung,
       Chat gegen einen Dienst und das Holen eines Modells aus dem Netz. Siehe
       unten.
+    * ``--talk-name=org.fcitx.Fcitx5`` und ``--talk-name=org.freedesktop.portal.Fcitx``
+      — die Eingabemethode. Derselbe Kunde meldete: „So muss ich diesen Text in
+      einer anderen Anwendung schreiben und nach Solidon3D copypasten." Eine
+      Eingabemethode spricht über den Sitzungsbus, und dieses Manifest gibt
+      **gezielten** Zugriff statt des ganzen Busses — was nicht genannt ist,
+      ist nicht erreichbar. Ohne diese Zeilen bleibt jedes Textfeld stumm, und
+      zwar nur im Flatpak.
+
+      **Ungeprüft**, und das gehört dazu: Von Windows aus lässt sich das nicht
+      messen. Die beiden Namen sind die üblichen aus Flathub-Manifesten für
+      Qt-Anwendungen; ob sie bei diesem Kunden reichen, sagt erst ein Lauf auf
+      seinem System. IBus liegt im Runtime und braucht keine eigene Zeile.
 
     **Netzzugang: seit dem 27.08.2026 drin, und die Kehrtwende hat einen
     Anlass.** Hier stand vorher das Gegenteil, mit einer Begründung, die
@@ -438,6 +450,8 @@ def flatpak_manifest() -> str:
             "--device=dri",
             "--filesystem=home",
             "--talk-name=org.freedesktop.secrets",
+            "--talk-name=org.fcitx.Fcitx5",
+            "--talk-name=org.freedesktop.portal.Fcitx",
         )
     )
     return (
