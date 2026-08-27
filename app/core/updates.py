@@ -86,13 +86,6 @@ SIGNATURE_FIELD: Final = "signature"
 #: auf sie.
 TIMEOUT_SECONDS: Final = 4.0
 
-#: Wie viel von der Antwort überhaupt gelesen wird.
-#:
-#: Das Zeitlimit deckelt die einzelne Socket-Operation, nicht die Menge: eine
-#: Gegenstelle, die zügig und endlos liefert, füllte sonst beim Start den
-#: Arbeitsspeicher. Die Datei trägt drei kurze Felder; alles darüber ist keine
-#: Versionsdatei mehr.
-MAX_ANSWER_BYTES: Final = 64 * 1024
 
 #: Wie lang die einzelnen Felder werden dürfen. Sie landen in der Statusleiste,
 #: und was dort steht, kommt von einem Server — nicht aus diesem Programm.
@@ -108,10 +101,18 @@ MAX_FIELD_LENGTH: Final = 200
 #: vollständig und oh". Ein Satz, der so endet, sieht aus wie ein Fehler des
 #: Programms, und er ist einer.
 #:
-#: 800 ist keine runde Zahl aus Bequemlichkeit, sondern die Rechnung gegen
-#: :data:`MAX_ANSWER_BYTES`: Selbst 100 Punkte à 800 Zeichen bleiben unter den
-#: 64 KB, die überhaupt gelesen werden. Die Schranke gegen einen bösen Server
-#: bleibt also, sie sitzt nur nicht mehr mitten im Satz.
+#: 800 ist keine runde Zahl aus Bequemlichkeit: Es ist die Länge, ab der ein
+#: Absatz in einem Rollbereich lang genug ist, ohne dass ein Server ihn als
+#: Textwüste missbrauchen kann.
+#:
+#: **Hier stand einmal eine Rechnung, und sie war falsch:** „Selbst 100 Punkte
+#: à 800 Zeichen bleiben unter den 64 KB, die überhaupt gelesen werden."
+#: Nachgerechnet sind hundert mal achthundert schon 78 KB — für **eine**
+#: Sprache, und ``changes`` trägt jede. Der Satz bestätigte die Grenze, die er
+#: prüfen
+#: sollte, und beim Kunden riss sie (siehe :data:`MAX_ANSWER_BYTES`). Die
+#: Lesegrenze wird deshalb aus diesen Werten **abgeleitet**, nicht an ihnen
+#: gemessen — die Abhängigkeit läuft in eine Richtung.
 MAX_TEXT_LENGTH: Final = 800
 
 #: Wie lange das Holen des Pakets an einer einzelnen Leseoperation hängen darf.
@@ -146,6 +147,53 @@ CHUNK_BYTES: Final = 256 * 1024
 #: Wer **diese** Grenze anfasst, prüft dagegen weiterhin, ob das Fenster den
 #: Zuwachs verträgt; sie gehört der Anzeige und nicht der Auswahl.
 MAX_CHANGES: Final = 100
+
+
+def _room_for_the_version_file() -> int:
+    """Was die Versionsdatei im schlimmsten erlaubten Fall wiegen darf.
+
+    Hundert Punkte à achthundert Zeichen — mehr lässt das eigene Format nicht
+    zu — in **jeder** eingecheckten Sprache, dazu noch einmal so viel Luft für
+    Kopffelder, Paketliste, Unterschrift und die Anführungszeichen des Formats.
+
+    Die Sprachzahl kommt aus dem Verzeichnis, weil eine weitere Sprache eine
+    Datei ist und sonst nichts (``AGENTS.md``): Wer eine hinzufügt, soll nicht
+    auch noch hier nachrechnen müssen. Der Import steht in der Funktion, damit
+    das Modul ohne Katalogverzeichnis ladbar bleibt.
+    """
+    from app.i18n.catalog import available_languages
+
+    return 2 * MAX_CHANGES * MAX_TEXT_LENGTH * max(len(available_languages()), 1)
+
+
+#: Wie viel von der Antwort überhaupt gelesen wird.
+#:
+#: Das Zeitlimit deckelt die einzelne Socket-Operation, nicht die Menge: eine
+#: Gegenstelle, die zügig und endlos liefert, füllte sonst beim Start den
+#: Arbeitsspeicher.
+#:
+#: **Hier stand „Die Datei trägt drei kurze Felder" und 64 KB daneben.** Der
+#: Satz war richtig, als er geschrieben wurde, und ist mit dem Changelog still
+#: falsch geworden: ``changes`` ist ein Wörterbuch **je Sprache**, und das sind
+#: bei 0.2.1 schon 49 Punkte mal sechs — 37 KB, also 58 Prozent der alten
+#: Grenze, und 88 Prozent davon allein für den Changelog.
+#:
+#: Beim Kunden ist sie gerissen: „update check did not answer: version file is
+#: too large" (Protokoll vom 27.08.2026, Vorgang S-20260826-72a4dd). Das ist
+#: die teuerste Stelle für einen Ausfall — wer die Prüfung verliert, erfährt
+#: von keiner neuen Fassung mehr, auch nicht von der, die seinen Absturz
+#: behebt.
+#:
+#: **Zwei Grenzen entschieden dieselbe Frage und widersprachen sich:**
+#: :data:`MAX_CHANGES` erlaubt hundert Punkte zu schreiben, die 64 KB ließen
+#: rund neunundachtzig lesen. Dazwischen liegt der Bereich, in dem das Programm
+#: eine Datei erzeugt, die es selbst nicht mehr liest. Die Rechnung im
+#: Kommentar an :data:`MAX_TEXT_LENGTH` bestätigte das Gegenteil — sie zählte
+#: eine Sprache statt sechs, und selbst für die eine kam sie auf 78 KB.
+#:
+#: Abgeleitet statt geraten. Die Schranke gegen eine endlos liefernde
+#: Gegenstelle bleibt, sie sitzt nur nicht mehr unterhalb der eigenen Zusagen.
+MAX_ANSWER_BYTES: Final = _room_for_the_version_file()
 
 #: Wie ein Paketschlüssel in der Versionsdatei heißt. Die Architektur steht nur
 #: dort, wo es zwei gibt: Auf einem Mac startet ein für arm64 gebautes Programm
