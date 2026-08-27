@@ -794,6 +794,154 @@ def test_a_decimation_below_the_limit_settles_the_warning() -> None:
     assert [entry.code for entry in kept] == ["mesh.deviation"]
 
 
+def test_the_report_of_a_real_run_carries_each_sentence_once(
+    document: Document, profile: Profile
+) -> None:
+    """Und die Anwendung tut es auch, nicht nur die Funktion.
+
+    Die drei Tests darunter rufen ``_without_repeats`` direkt auf und bleiben
+    grün, wenn niemand sie in die Auswertung einhängt — gemessen: Ich habe die
+    Zeile aus ``evaluate`` entfernt, und alle drei liefen weiter durch. Das ist
+    die Testart „Anschluss" aus `AGENTS.md`: Was an genau einer Stelle
+    eingelöst wird, wird an dieser Stelle geprüft.
+
+    Zwei Operationen melden denselben Befund über denselben Körper, so wie es
+    ein Modell über der Erkennungsgrenze bei jedem Schritt tut.
+    """
+    own = Registry()
+
+    @register_op(
+        name="always_complains",
+        title=_("Meldet immer"),
+        category="scene",
+        params=EmptyParams,
+        consumes=0,
+        produces=1,
+        doc=_("Testversion."),
+        registry=own,
+    )
+    def first(ctx: OpContext) -> OpResult:
+        return OpResult(
+            outputs=[SceneObject(id="", name="Teil", mesh=_mesh(10.0))],
+            findings=[Finding(code="test.always", severity="info", message=_("Immer."))],
+        )
+
+    @register_op(
+        name="complains_again",
+        title=_("Meldet nochmal"),
+        category="scene",
+        params=EmptyParams,
+        consumes=1,
+        produces=1,
+        doc=_("Testversion."),
+        registry=own,
+    )
+    def again(ctx: OpContext) -> OpResult:
+        return OpResult(
+            outputs=[ctx.inputs[0]],
+            findings=[
+                Finding(
+                    code="test.always",
+                    severity="info",
+                    message=_("Immer."),
+                    object_id=ctx.inputs[0].id,
+                )
+            ],
+        )
+
+    history = History(document, own)
+    history.apply(_("Anlegen"), [OperationDraft(op="always_complains")])
+    body = document.ops[0].outputs[0]
+    history.apply(_("Nochmal"), [OperationDraft(op="complains_again", inputs=(body,))])
+    result = evaluate(document, profile, registry=own)
+
+    same = [entry for entry in result.scene.report.findings if entry.code == "test.always"]
+    assert len(same) == 1, (
+        f"zweimal derselbe Satz über denselben Körper, einer bleibt: "
+        f"{[(e.op_id, e.object_id) for e in same]}"
+    )
+    assert same[0].op_id == 2, "der letzte beschreibt den heutigen Zustand"
+
+
+def test_the_same_sentence_about_the_same_body_stands_once() -> None:
+    """Dreimal derselbe Satz sind für den Kunden drei Probleme.
+
+    Gemessen am 27.08.2026 an einem erzeugten Modell mit 221 138 Dreiecken:
+    Nach dem Einlesen stand „Für die Merkmalserkennung ist dieses Modell zu
+    groß." einmal da, nach *Auf Maß bringen* und *Auf das Bett setzen*
+    dreimal. Keine der beiden Operationen rührt die Dreieckszahl an — es ist
+    dreimal dieselbe Zahl über denselben Körper.
+
+    Behalten wird der **letzte**: Ein Prüfbericht beschreibt den Zustand, in
+    dem die Szene jetzt ist, und der steht am Ende der Kette.
+    """
+    from app.core.scene.evaluate import _without_repeats
+
+    kept = _without_repeats(
+        [
+            _finding("perceive.too_large", "info", 1),
+            _finding("perceive.too_large", "info", 2),
+            _finding("perceive.too_large", "info", 3),
+        ]
+    )
+
+    assert len(kept) == 1, f"drei gleiche Sätze, einer bleibt: {[e.op_id for e in kept]}"
+    assert kept[0].op_id == 3, "der letzte beschreibt den heutigen Zustand"
+
+
+def test_two_bodies_keep_their_own_sentence() -> None:
+    """Und zwei Körper mit demselben Problem sind zwei Probleme.
+
+    Die Gegenprobe zum Test darüber: Ohne sie ließe sich das Entdoppeln auch
+    dadurch bestehen, dass es je Code nur eine Zeile durchlässt — und dann
+    verschwände die Warnung an dem Körper, den niemand angesehen hat.
+    """
+    from app.core.scene.evaluate import _without_repeats
+
+    kept = _without_repeats(
+        [
+            _finding("perceive.too_large", "info", 1, object_id="obj_1"),
+            _finding("perceive.too_large", "info", 1, object_id="obj_2"),
+        ]
+    )
+
+    assert {entry.object_id for entry in kept} == {"obj_1", "obj_2"}
+
+
+def test_a_changed_number_is_a_changed_sentence() -> None:
+    """Ändert sich der Wert, sagen die beiden Befunde Verschiedenes.
+
+    Der Fall ist der, in dem eine Dezimierung ihr Ziel nicht erreicht:
+    ``SETTLED_BY`` hebt dort bewusst nichts auf, und zwei verschiedene
+    Dreieckszahlen sind zwei verschiedene Aussagen. Wer nur nach dem Code
+    entdoppelt, verliert die zweite und behauptet einen Zustand von vorhin.
+    """
+    from app.core.scene.evaluate import _without_repeats
+
+    kept = _without_repeats(
+        [
+            Finding(
+                code="perceive.too_large",
+                severity="info",
+                message="zu groß",
+                op_id=1,
+                object_id="obj_1",
+                values={"triangles": 900_000},
+            ),
+            Finding(
+                code="perceive.too_large",
+                severity="info",
+                message="zu groß",
+                op_id=2,
+                object_id="obj_1",
+                values={"triangles": 400_000},
+            ),
+        ]
+    )
+
+    assert [entry.values["triangles"] for entry in kept] == [900_000, 400_000]
+
+
 def test_an_earlier_repair_does_not_settle_a_later_import() -> None:
     """**Später** ist die ganze Bedingung.
 

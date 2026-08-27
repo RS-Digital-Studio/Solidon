@@ -609,7 +609,10 @@ def evaluate(
         _log.warning(
             "evaluation stopped at op %s: %s", stopped_at, _why_it_stopped(findings, stopped_at)
         )
-    settled = _without_settled(findings)
+    # Erst heilen, dann entdoppeln: Was ein späterer Schritt aufgehoben hat,
+    # soll gar nicht erst in den Vergleich — sonst überlebte von zwei
+    # geheilten Befunden der letzte die Streichung nicht und der erste doch.
+    settled = _without_repeats(_without_settled(findings))
     if len(settled) != len(findings):
         scene = dataclasses.replace(scene, report=Report(tuple(settled)))
     return EvaluationResult(
@@ -709,6 +712,47 @@ def _without_settled(findings: Sequence[Finding]) -> list[Finding]:
             continue
         kept.append(entry)
     return kept
+
+
+def _without_repeats(findings: Sequence[Finding]) -> list[Finding]:
+    """Dieselbe Aussage über denselben Körper steht einmal da, nicht dreimal.
+
+    Die Auswertung misst **nach jeder Operation** — das ist richtig, denn nur
+    so steht nach einer Reparatur ein frischer Befund da. Es hat aber eine
+    Kehrseite: Was eine Operation nicht ändert, wird nach jeder erneut
+    gemeldet. Gemessen am 27.08.2026 an einem erzeugten Modell mit 221 138
+    Dreiecken, nach Einlesen, *Auf Maß bringen* und *Auf das Bett setzen*:
+
+        Für die Merkmalserkennung ist dieses Modell zu groß. — eule
+        Für die Merkmalserkennung ist dieses Modell zu groß. — eule
+        Für die Merkmalserkennung ist dieses Modell zu groß. — eule
+
+    Der Kunde liest drei Probleme und hat eines. Weder *Auf Maß bringen* noch
+    *Auf das Bett setzen* rührt die Dreieckszahl an, also ist es dreimal
+    dieselbe Zahl über denselben Körper.
+
+    **Verglichen wird alles außer der Schrittnummer** — Code, Körper, Schwere
+    und die Werte. Ändert eine Operation die Zahl, sagen die beiden Befunde
+    Verschiedenes und bleiben beide stehen; das ist der Fall, in dem eine
+    Dezimierung das Ziel nicht erreicht hat und `SETTLED_BY` bewusst nichts
+    aufhebt. Behalten wird der **letzte**: Ein Prüfbericht beschreibt den
+    Zustand, in dem die Szene jetzt ist, und der steht am Ende der Kette.
+
+    Die Reihenfolge der übrigen Befunde bleibt, wie sie war — der Bericht
+    liest sich entlang des Verlaufs, und ein Umsortieren wäre eine zweite
+    Änderung in derselben Zeile.
+    """
+    last: dict[tuple[Any, ...], int] = {}
+    for index, entry in enumerate(findings):
+        key = (
+            entry.code,
+            entry.object_id,
+            entry.severity,
+            tuple(sorted((entry.values or {}).items(), key=str)),
+        )
+        last[key] = index
+    keep = set(last.values())
+    return [entry for index, entry in enumerate(findings) if index in keep]
 
 
 def _same_size(first: BoundingBox, second: BoundingBox) -> bool:
