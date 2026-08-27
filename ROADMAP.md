@@ -129,8 +129,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
 | Die Boolesche Zugabe ist 0,05 mm und 0,01 mm | Dieselbe Zugabe, zwei Zahlen (27.08.2026) | zwei Messungen: ab welcher Zugabe die Rückfallkette über den Korpus auf Stufe 2 fällt, und wie viel eine Gravur gegenüber ihrer Solltiefe zu viel abträgt. Alle übrigen fünf Zwillingsfamilien des Kerns sind seit `57200cb9` zusammengelegt, ein Wächter hält sie |
-| Abbildungen mit Text sind auf dem Handy unlesbar | Was die Website-Durchsicht liegen ließ (27.08.2026) | eine Entscheidung über den Weg: eigene Handyfassungen, Antippen zum Vergrößern (so löst es das Handbuch seit `235d7050`), oder die Bildunterschrift an ihrer Stelle. Bei 390 px landen die Beschriftungen bei 5 bis 7 Bildpunkten — auch die vier Befundzeilen, um die es im Prüfbericht-Abschnitt geht |
-| Der Abschlussknopf führt zur E-Mail statt zur Demo | Was die Website-Durchsicht liegen ließ (27.08.2026) | eine Entscheidung von Robert über die Rangfolge — der Kontaktweg ist dort nicht falsch, aber der stärkste Knopf am Ende einer Verkaufsseite sollte der sein, den die Seite die ganze Zeit anbietet |
+| Beide Aufmacher stehen zur Hälfte leer — **die zehn Übersetzungen fehlen noch** | Was die Website-Durchsicht liegen ließ (27.08.2026) | ein Bild, das es noch nicht gibt: ein KI-Modell **in der laufenden Anwendung** statt freigestellt auf Weiß (Entscheidung Robert, 27.08.2026). Der Weg dorthin ist Weg 3 selbst. Die zwei deutschen Seiten tragen den Aufmacher seit `5f502c8d` |
 | Die 8-GB-Karte in den Systemvoraussetzungen ist nie gemessen worden | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Rechner mit einer 8-GB-Karte, oder die Entscheidung, die Zeile als Erfahrungswert zu kennzeichnen statt als Anforderung. Die Messangabe daneben ist am 27.08. berichtigt (`00156df3`), diese nicht — eine ungemessene Zahl durch eine andere zu ersetzen gewinnt nichts |
 | `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
 | Vier Datumsangaben werden am 31.10.2026 still falsch | Was die Website-Durchsicht liegen ließ (27.08.2026) | die Entscheidung, was am 31.10. auf der Seite stehen soll — erst danach lässt sich prüfen, ob es dort steht. Die Umschaltung des Download-Kastens hat einen Test, diese Sätze nicht |
@@ -10969,7 +10968,7 @@ am 25.08.2026 schon einmal gefunden und in einem Durchsichtsbericht als
 Rechtstext zwei Tage länger falsch da. Ein Fund, der nur in einem Bericht
 steht, ist kein festgehaltener Fund.
 
-- [x] **Beide Aufmacher stehen zur Hälfte leer.** `funktionen.html` und
+- [~] **Beide Aufmacher stehen zur Hälfte leer.** `funktionen.html` und
   `ki-modelle.html` beginnen mit einer Überschrift links, zwei bis drei Zeilen
   darunter und nichts rechts. Bei `funktionen.html` verspricht die Unterzeile
   wörtlich „Jede Funktion mit einem Bild aus der laufenden Anwendung" — und
@@ -10980,28 +10979,73 @@ steht, ist kein festgehaltener Fund.
   entscheidet, ob weitergelesen wird. Die Startseite macht es richtig vor: Sie
   trägt das Anwendungsfenster rechts neben dem Text.
 
-- [ ] **Jede Abbildung mit eingebettetem Text ist auf dem Handy unlesbar.**
+  **Halb erledigt, und das steht hier statt eines Hakens** (`5f502c8d`):
+  Die beiden **deutschen** Seiten tragen den Aufmacher, die **zehn
+  Übersetzungen nicht** — dort steht weiter `h1` mit `p.sub` und nichts
+  rechts daneben. Der Commit hat alle zwölf Dateien angefasst, aber nur mit
+  den Fußzeilen aus dem Handy-Punkt; der Aufmacher blieb bei den zweien, an
+  denen er gebaut wurde. Ein Kunde auf `/en/features.html` sieht unverändert
+  genau das, was dieser Punkt beschreibt.
+
+  Gefunden hat es die Nachbarsitzung, weil sie `class="hero"` über **alle
+  zwölf** Dateien gezählt hat statt über die zwei, die geändert worden waren.
+  Die Lehre ist billiger als der Fehler: **Wer eine Seite in sechs Sprachen
+  pflegt, zählt nach der Änderung über alle sechs** — der eigene Diff zeigt,
+  was man angefasst hat, nie was fehlt.
+
+  **Und der Rest wartet auf ein Bild, das es noch nicht gibt** (Entscheidung
+  Robert, 27.08.2026): Kein vorhandenes Motiv wird recycelt — der Aufmacher
+  von `ki-modelle.html` soll ein KI-Modell **in der laufenden Anwendung**
+  zeigen, nicht freigestellt auf Weiß wie die sechs Tonrenderings. Das löst
+  zugleich eine Doppelung, die sonst bliebe: `weg-2-schnitt.webp` stünde
+  zweimal auf derselben Seite, 1500 px auseinander. Der Weg zu dem Bild ist
+  Weg 3 selbst, und ihn zu fahren ist die zweite Hälfte des Auftrags — eine
+  Abbildung aus der laufenden Anwendung entsteht nur, wenn der Weg für einen
+  Kunden wirklich läuft.
+
+- [x] **Jede Abbildung mit eingebettetem Text ist auf dem Handy unlesbar.**
   Sie skalieren gleichmäßig herunter statt umzubrechen; bei 390 px landen die
   Beschriftungen bei 5 bis 7 Bildpunkten. Am schwersten wiegt der
   Prüfbericht-Ausschnitt auf `funktionen.html`: Das Bild trägt die vier
   Befundzeilen, um die es im ganzen Abschnitt geht, und keine ist zu
   entziffern. Ebenso Bausteinkatalog, Bohrdialog, Schichtanalyse.
 
-  Wartet auf eine Entscheidung über den Weg: eigene Handyfassungen der
-  Abbildungen (teuer, aber lesbar), Antippen zum Vergrößern (die
-  Nachbarsitzung hat das für die Handbuchbilder gerade so gelöst — `<a>` um
-  das Bild, kein JavaScript), oder die textlastigen Abbildungen auf dem Handy
-  durch ihre Bildunterschrift ersetzen.
+  **Entschieden von Robert am 27.08.2026: nur Antippen**, keine eigenen
+  Handyfassungen. Umgesetzt in `2beeeeed` — 50 Bildschirmfotos über achtzehn
+  Verkaufsseiten tragen einen Verweis auf sich selbst, der Weg von `235d7050`
+  (kein JavaScript, keine Lightbox, der Browser zoomt selbst). Dazu `.stage a`
+  in `style.css`: `display: block`, kein Unterstrich, keine Linkfarbe,
+  `cursor: zoom-in`.
 
-- [ ] **Der Abschlussknopf der Startseite führt zu einer E-Mail, nicht zur
-  Demo.** Unter „Das nächste Teil, das passt" steht als Hauptknopf
-  `support@solidon3d.de`, daneben „Erst das Handbuch lesen". Wer bis dorthin
-  gescrollt hat, ist überzeugt und will laden — der stärkste Knopf am Ende
-  einer Verkaufsseite sollte der sein, den die Seite die ganze Zeit anbietet.
+  **Ein Zwischenschritt war meiner und falsch, und er steht hier, weil er
+  sich fast durchgesetzt hätte.** Ich hatte zwei Sitzungen geschrieben, eine
+  Regel, die `figure` aus dem Textrahmen ausbrechen lässt, bringe „40 bis 80
+  Bildpunkte, ohne dass ein Bild neu entsteht" — von der Startseite
+  übertragen, wo ich es gemessen hatte, auf die Funktionsseite, wo ich es
+  nicht gemessen hatte. Die Bühne misst dort schon 341 bis 353 px bei 375 px
+  Fenster; der Ausbruch brächte 29 Bildpunkte und aus 3,3 px Schrift 3,6.
+  Beide Sitzungen hätten es übernommen, ohne nachzurechnen.
 
-  Wartet auf eine Entscheidung von Robert: Der Kontaktweg ist dort nicht
-  falsch, nur die Rangfolge ist es. Ein „Demo laden" als Hauptknopf und der
-  Support daneben wäre die Umkehrung.
+  **Was offen bleibt und bewusst so entschieden ist:** Der Leser muss tippen,
+  auch beim Prüfbericht, dessen vier Befundzeilen der Abschnitt daneben
+  bespricht. Ein Ausschnitt wäre dort ohne jede Handlung lesbar gewesen; die
+  Entscheidung lautet, dass das den Bilderlauf nicht wert ist.
+
+- [x] **Der Abschlussknopf der Startseite führt zu einer E-Mail, nicht zur
+  Demo.** Unter „Das nächste Teil, das passt" stand als Hauptknopf
+  `support@solidon3d.de`. Wer bis dorthin gescrollt hat, ist überzeugt und
+  will laden.
+
+  **Entschieden von Robert am 27.08.2026: Demo als Hauptknopf**, Support
+  daneben als zweiter. Umgesetzt in `2beeeeed`, in allen sechs Sprachen — mit
+  den Beschriftungen, die auf den Funktionsseiten derselben Sprache schon
+  standen („To the demo", „A la demo", „Vers la démo", „Alla demo", „Para a
+  demo"). Neu formuliert wurde nichts. Das Handbuch bleibt als dritter Knopf
+  stehen: Es wegzunehmen war nicht Teil der Entscheidung.
+
+  **Der Fund saß nur auf den sechs Startseiten** — `funktionen.html` und
+  `ki-modelle.html` trugen seit je „Zur Demo" als Hauptknopf. Falsch war also
+  ausgerechnet die Seite, auf der die meisten ankommen.
 
 - [x] **Die zwei Tabellen auf `ki-modelle.html` brechen auf halber Breite ab
   — geprüft und verworfen.** Der Befund stimmte in seiner Zahl und in seinem
