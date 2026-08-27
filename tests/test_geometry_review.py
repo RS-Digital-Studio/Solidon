@@ -34,7 +34,6 @@ from app.core.geom.lattice import _cavity_bounds
 from app.core.geom.measure import ray_distances
 from app.core.geom.mesh import MeshData
 from app.core.geom.orient import orient_for_print, print_transform
-from app.core.geom.paint import brush
 from app.core.geom.prepare import countersink, drill, open_sides, plug
 from app.core.geom.primitive_ops import top_face_of
 from app.core.geom.repair import fill_holes, open_edge_count, repair
@@ -232,55 +231,21 @@ def test_a_countersink_typed_onto_the_surface_stays_where_it_was(profile: Profil
 
 
 # --- C-3/C-4: der Pinsel maß gegen Dreiecks-Schwerpunkte ------------------------
-
-
-def test_the_brush_hits_the_middle_of_a_large_face() -> None:
-    """Ein Klick in die Mitte, und genau dort fand der Pinsel nichts.
-
-    Die Deckfläche besteht aus zwei Dreiecken von 60 auf 40 Millimeter; ihre
-    Schwerpunkte liegen gut zwanzig Millimeter von der Mitte entfernt. Mit
-    einem Radius von zehn meldete die Operation „keine Fläche zu treffen" —
-    bei der naheliegendsten Geste überhaupt.
-    """
-    stroke = brush(plate(), (0.0, 0.0, 10.0), radius=10.0, slot=1)
-
-    assert stroke.painted == 2, "beide Dreiecke der Deckfläche"
-
-
-def test_the_brush_radius_is_measured_to_the_face_not_to_its_centroid() -> None:
-    """Auch der Umfang: ein feines Netz zeigt, dass der Radius wirklich
-    begrenzt."""
-    fine = MeshData.of(trimesh.creation.box(extents=(60.0, 40.0, 10.0)).subdivide().subdivide())
-
-    small = brush(fine, (0.0, 0.0, 5.0), radius=4.0, slot=1).painted
-    large = brush(fine, (0.0, 0.0, 5.0), radius=12.0, slot=1).painted
-
-    assert 0 < small < large
-
-
-def test_painting_slot_zero_into_the_void_is_not_a_success(profile: Profile) -> None:
-    """Slot 0 meldete immer Erfolg.
-
-    Gezählt wurde der **Bestand** des Zielslots, und ein Netz ohne Slots gilt
-    ganz als Slot 0: Ein Klick fünfhundert Millimeter neben dem Teil bekam
-    „bemalt, zwölf Flächen".
-    """
-    entry = SceneObject(id="obj_1", name="Platte", mesh=plate())
-
-    result = run("paint_slot", entry, profile, slot=0, radius=0.5, x=500.0, y=500.0, z=500.0)
-
-    assert [finding.code for finding in result.findings] == ["colour.nothing_painted"]
-    assert result.outputs[0] is entry
-
-
-def test_the_painted_count_is_the_stroke_not_the_stock(profile: Profile) -> None:
-    """Die Zahl im Befund ist der Strich."""
-    entry = SceneObject(id="obj_1", name="Platte", mesh=plate())
-
-    result = run("paint_slot", entry, profile, slot=0, radius=10.0, z=10.0)
-
-    finding = next(entry for entry in result.findings if entry.code == "colour.painted")
-    assert finding.values["faces"] == 2, "die zwei Dreiecke der Deckfläche, nicht alle zwölf"
+#
+# **Der Gegenstand ist ausgebaut.** Vier Tests standen hier — zwei am
+# Radius-Pinsel (``brush``), zwei an ``paint_slot`` mit Punkt und Radius.
+# Seit dem Filament-Umbau färbt die Operation eine erkannte Fläche
+# vollständig (``fill_feature``, Parameter ``slot`` und ``at_feature``);
+# einen Radius gibt es nicht mehr, und ``brush`` auch nicht — die Datei
+# brach deshalb schon beim Einsammeln ab und nahm die übrigen
+# Durchsichtsbefunde mit.
+#
+# Die zwei Zusagen, die den Ausbau überlebt haben, stehen in
+# ``tests/test_paint.py`` in der Form der neuen Operation: „nichts gefärbt
+# ist kein Erfolg" (``test_a_feature_without_triangles_says_so``,
+# ``test_an_unknown_feature_stops_with_advice``) und „die Zahl im Befund
+# ist der Strich" (``test_filling_a_feature_paints_exactly_its_triangles``).
+# Was hier stand, war der Weg dorthin und ist mit ihm gegangen.
 
 
 # --- C-5: Ausrichten drehte, ohne die Drehung zu melden -------------------------
