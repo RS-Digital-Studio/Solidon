@@ -128,7 +128,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `orient_200` streut über die Regressionsschwelle | Der Leistungstest riss viermal und wurde von selbst wieder grün (26.08.2026) | eine Messreihe gegen einen älteren Stand — sie entscheidet, ob die Bestmarke zu scharf ist oder der Pfad langsamer wurde |
 | Einstellungen je Filament | Was Robert am 26.08.2026 aufgetragen hat | **die Oberfläche, sonst nichts** — Modell und Übergabe stehen seit `1261935f`. Die Trennung war bereits gebaut (`by_section`: 38 Prozess-, 19 Filamentfelder); `SlotOverride` übersteuert je Slot Temperaturen, Kühlung, Rückzug und Materialkennwerte, die Übergabe schreibt je Extruder seine Werte, und die Projektdatei trägt sie. Wo der Kunde sie einstellt, gehört an den Filamentwähler aus `konzept-filamente-2026-08.md` und liegt bei der Sitzung, die ihn baut. Prusa und Cura nehmen nur einen Satz — das meldet `unreachable_overrides` mit dem Weg zu einem Slicer, der es kann |
 | Verkaufsbereitschaft zum 15.10.2026 | Was Robert am 26.08.2026 aufgetragen hat | Finanzamt und Merchant of Record; sonst ein Bau 0.2.1 mit verlängertem `DEMO_UNTIL`, eine Woche vor der Frist |
-| Die Boolesche Zugabe ist 0,05 mm und 0,01 mm | Dieselbe Zugabe, zwei Zahlen (27.08.2026) | zwei Messungen: ab welcher Zugabe die Rückfallkette über den Korpus auf Stufe 2 fällt, und wie viel eine Gravur gegenüber ihrer Solltiefe zu viel abträgt. Alle übrigen fünf Zwillingsfamilien des Kerns sind seit `57200cb9` zusammengelegt, ein Wächter hält sie |
 | Ob die Eingabemethode im Flatpak jetzt erreichbar ist | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rueckmeldung desselben Kunden oder ein Linux-Geraet. Die zwei `--talk-name`-Zeilen fuer Fcitx sind ergaenzt (`b21f8766`) und sind die ueblichen aus Flathub-Manifesten; IBus liegt im Runtime. **Gebaut, Bestaetigung offen** - von Windows aus nicht messbar |
 | Ob der Start auf Wayland jetzt ohne Umwege geht | Der erste Kundenbericht aus dem Feld (27.08.2026) | eine Rueckmeldung. Die erste Vermutung (fehlende Qt-Plugins im Paket) ist **widerlegt**: PyInstaller sammelt `platforminputcontexts` und die drei `wayland-*`-Gruppen nachweislich mit (`_modules_info.py`). Was fehlte, war die Auskunft - der naechste Bericht nennt `xdg_session_type`, `qt_qpa_platform` und `qt_im_module` (`b21f8766`) |
 | `PROMPT_TOKENS` ist bei 85 Werkzeugen gemessen, heute sind es 102 | Was die Website-Durchsicht liegen ließ (27.08.2026) | einen Ollama-Lauf, der `prompt_eval_count` abliest. **Kein Fehlbefund der Seite** — eine Durchsicht meldete die 41 Minuten als grob falsch und hatte den vollen statt den kompakten Werkzeugsatz gerechnet, also eine Schätzung gegen eine Messung gestellt |
@@ -10825,7 +10824,7 @@ führte beide noch als „nicht angefangen".
 Beim Zusammenlegen der Konstanten-Zwillinge (57200cb9) blieb einer bewusst
 stehen, weil er keine Aufräumarbeit ist, sondern eine Messung verlangt.
 
-- [ ] **Die Boolesche Zugabe ist 0,05 mm und 0,01 mm.** Wie weit ein
+- [x] **Die Boolesche Zugabe ist 0,05 mm und 0,01 mm.** Wie weit ein
   abziehendes Werkzeug über die Fläche hinausreichen soll, die es
   durchschneidet — zusammenfallende Flächen sind der klassische Weg, eine
   Boolesche Operation zu brechen (§39). `geom/boolean.BOOLEAN_OVERLAP` sagt
@@ -10860,10 +10859,29 @@ stehen, weil er keine Aufräumarbeit ist, sondern eine Messung verlangt.
   BOOLEAN_OVERLAP` gibt 0,01. Wer den Namen liest, sieht den Unterschied
   nicht.
 
-  Angeglichen wird trotzdem nichts, bevor gemessen ist — eine Zahl zu wählen,
-  weil sie öfter vorkommt, wäre dieselbe Vermutung wie vorher. Was **sofort**
-  gehört: verschiedene Namen für verschiedene Zahlen, damit niemand die
-  falsche importiert, ohne es zu merken.
+  **Gemessen und geschlossen am 27.08.2026 (`1594fd8c`).** Die Messung hat die
+  Frage verschoben: nicht „welcher Wert ist richtig", sondern „wirkt der Wert
+  überhaupt".
+
+      neun koplanare Lagen x {0,05 | 0,01 | 0,0}   alle direct, alle dicht,
+                                                   alle exakt, kein Rückfall
+      Gravur 0,2 mm  x {0,05 | 0,01 | 0,001 | 0,0} alle 2,6221 mm3 Abtrag
+
+  `manifold3d` ist feste Abhängigkeit und rechnet zusammenfallende Flächen
+  robust; der Bruch, gegen den die Zahl gebaut wurde, gehört zu einem Kern,
+  den es hier nicht mehr gibt. Und die Zugabe liegt außerhalb des Materials —
+  das Werkzeug wird um sie länger **und** um sie angehoben. Damit ist auch die
+  Sorge widerlegt, die diesen Punkt aufgemacht hat: 0,05 trägt bei einer
+  0,2-mm-Gravur nichts zu viel ab.
+
+  Eine Zahl, 0,01, in `geom/boolean.py`. Der kleinere gewinnt, weil er
+  gebunden ist: In `knowledge/parts/ops.py` ist dieselbe Zahl die Schwelle,
+  an der ein Baustein als „baut nach oben" statt „trägt ab" gilt, und sie muss
+  den Einsinkbetrag knapp überdecken, den derselbe Wert erzeugt.
+
+  Behalten wird sie trotzdem — die Rückfallkette hat Stufen unterhalb von
+  `manifold3d`, und eine Zugabe, die nachweislich nichts kostet, ist billiger
+  als die Frage, ob eine davon sie doch braucht.
 
 ---
 
