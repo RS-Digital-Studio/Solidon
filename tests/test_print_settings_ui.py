@@ -1066,11 +1066,18 @@ def test_every_plate_keeps_its_own_print_file(dialog: PrintSettingsDialog, tmp_p
 
     assert dialog._gcode == [entry.gcode_path for entry in outcomes]
     # Zwanzig Minuten und zwanzig Gramm, nicht zehn: gedruckt wird zweimal.
-    # Das Komma ist keine Schreibweise dieses Tests, sondern die der
-    # Anzeigesprache — die Zeile geht durch ``localised``, und ``conftest``
-    # steht auf Deutsch.
-    assert "20 min" in dialog.state.text()
-    assert "20,0 g" in dialog.state.text()
+    #
+    # **Gegen ``facts`` und nicht gegen eine ausgeschriebene Schreibweise.**
+    # Hier stand „20,0 g" mit einer Begründung daneben, die das Komma als
+    # Sache der Anzeigesprache erklärte — richtig, und trotzdem hat der Test
+    # damit die *Stellenzahl* mitgenagelt, die er nicht meinte. Seit der
+    # Dialog dieselbe Quelle benutzt wie die Statuszeile, schreibt er „20 g":
+    # Über zehn Gramm ist bei einer Schätzung die Nachkommastelle keine
+    # Aussage. Die Zusage ist die Zahl, nicht ihre Form.
+    from app.ui.facts import duration, mass
+
+    assert duration(2 * 600.0) in dialog.state.text()
+    assert mass(2 * 10.0) in dialog.state.text()
     assert "2" in dialog.state.text()
 
 

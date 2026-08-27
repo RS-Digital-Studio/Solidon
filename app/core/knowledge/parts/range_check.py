@@ -19,6 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Final
 
+from app.core.knowledge.parts.ops import PLAY_FIELD
 from app.core.types import BaseParams, CancelToken, PartResult, Profile, ProgressFn
 from app.core.units import EPS_DISPLAY
 from app.i18n import _
@@ -96,12 +97,6 @@ class _Silent:
 #: Wie viele Eckpunkte die Spaltmessung abtastet. Der engste Spalt liegt bei
 #: einem gedruckten Gelenk auf einer Fläche und nicht auf einer Ecke, also
 #: genügt eine Stichprobe — und der Bereichstest fährt viele Ecken.
-#: Der Parameter, in dem ein Baustein sein Spiel führt — derselbe Name wie
-#: in ``parts/ops.py`` (``PLAY_FIELD``). Hier als eigene Zeichenkette und
-#: nicht als Import, weil ``ops`` den Bereichstest kennt und nicht
-#: umgekehrt; der Test darunter hält die beiden zusammen.
-PLAY_FIELD: Final = "play"
-
 GAP_SAMPLE: Final = 200
 
 
