@@ -401,12 +401,32 @@ def flatpak_manifest() -> str:
       Speichern-Pfad darüber läuft, und das ist ein eigener Schritt.
     * ``--talk-name=org.freedesktop.secrets`` — der Schlüssel des Agenten liegt
       im Schlüsselbund (§26) und nicht in der Projektdatei.
+    * ``--share=network`` — Rückmeldung an den Support, Aktualisierungsprüfung,
+      Chat gegen einen Dienst und das Holen eines Modells aus dem Netz. Siehe
+      unten.
 
-    **Kein Netzzugang.** Ohne ihn fällt die Aktualisierungsprüfung aus und der
-    Chat bleibt auf ein lokales Modell beschränkt — beides ist abschaltbar und
-    ohnehin so vorgesehen, und ohne Netz gibt es kein Konto, keine Telemetrie
-    und keine Frage danach. Wer den Chat gegen einen Dienst fahren will,
-    bekommt die Berechtigung über die Software-Verwaltung dazu.
+    **Netzzugang: seit dem 27.08.2026 drin, und die Kehrtwende hat einen
+    Anlass.** Hier stand vorher das Gegenteil, mit einer Begründung, die
+    plausibel klang: Ohne Netz gebe es kein Konto, keine Telemetrie und keine
+    Frage danach.
+
+    Ein Kunde auf CachyOS hat gezeigt, was das kostet. Sein Fehlerbericht kam
+    per Hand über Robert, mit dem Satz „Ich kann den Bericht aus der App nicht
+    senden: urlopen error" — im Protokoll steht der Grund zweiundzwanzigmal:
+    ``[Errno -3] Temporärer Fehler bei der Namensauflösung``, bei jedem Start
+    für die Aktualisierungsprüfung und einmal für die Sendung. Was für uns eine
+    saubere Sandbox war, war für ihn eine Anwendung, deren Knöpfe nicht
+    funktionieren.
+
+    **Und die Zusage hing nie an der Sandbox.** Sie hängt an der Bauart:
+    ``support.send()`` hat genau einen Aufrufer, und der sitzt an einem Knopf —
+    ``tests/test_support.py`` zählt ihn. Auf Windows und macOS gibt es keine
+    Sandbox, und dort gilt dieselbe Zusage seit je. Eine Grenze, die nur auf
+    einer der drei Plattformen steht, ist keine Zusage, sondern ein
+    Unterschied — und der Kunde erlebt ihn als Fehler.
+
+    Entscheidung Robert, 27.08.2026: „jede plattform sollte das gleiche haben
+    und alles funktionieren."
     """
     permissions = "\n".join(
         f"  - {entry}"
@@ -414,6 +434,7 @@ def flatpak_manifest() -> str:
             "--socket=wayland",
             "--socket=fallback-x11",
             "--share=ipc",
+            "--share=network",
             "--device=dri",
             "--filesystem=home",
             "--talk-name=org.freedesktop.secrets",

@@ -385,13 +385,26 @@ def test_the_desktop_entry_carries_what_a_launcher_needs() -> None:
     assert entry["Categories"].endswith(";")
 
 
-def test_the_flatpak_manifest_stays_inside_its_sandbox() -> None:
-    """Jede Berechtigung hat einen Grund, und Netz gehört nicht dazu.
+def test_every_platform_can_do_the_same_things() -> None:
+    """Jede Berechtigung hat einen Grund, und Netz gehört seit dem 27.08.2026 dazu.
 
-    ``--share=network`` wäre die bequemste Zeile und die falsche: Ohne Netz gibt
-    es kein Konto, keine Telemetrie und keine Frage danach — das ist die Zusage,
-    mit der die Anwendung antritt (§2.1). Wer den Chat gegen einen Dienst fahren
-    will, bekommt die Berechtigung über die Software-Verwaltung dazu.
+    **Hier stand das Gegenteil**, mit einer Begründung, die plausibel klang:
+    Ohne Netz gebe es kein Konto, keine Telemetrie und keine Frage danach.
+
+    Ein Kunde auf CachyOS hat gezeigt, was das kostet. Sein Fehlerbericht kam
+    per Hand, weil die Anwendung ihn nicht senden konnte — im Protokoll steht
+    ``[Errno -3] Temporärer Fehler bei der Namensauflösung``, bei jedem Start
+    für die Aktualisierungsprüfung und einmal für die Sendung. Was für uns eine
+    saubere Sandbox war, war für ihn eine Anwendung, deren Knöpfe nicht gehen.
+
+    **Die Zusage hing nie an der Sandbox**, sondern an der Bauart:
+    ``support.send()`` hat genau einen Aufrufer, und der sitzt an einem Knopf —
+    ``test_support.py`` zählt ihn. Windows und macOS haben keine Sandbox und
+    dieselbe Zusage. Eine Grenze, die nur auf einer der drei Plattformen steht,
+    ist keine Zusage, sondern ein Unterschied.
+
+    Entscheidung Robert, 27.08.2026: „jede plattform sollte das gleiche haben
+    und alles funktionieren."
     """
     from app.branding import APP_ID
     from tools import make_linux_packages as tool
@@ -399,7 +412,10 @@ def test_the_flatpak_manifest_stays_inside_its_sandbox() -> None:
     manifest = tool.flatpak_manifest()
 
     assert f"id: {APP_ID}" in manifest
-    assert "--share=network" not in manifest, "das Paket verspricht, ohne Netz zu laufen"
+    assert "--share=network" in manifest, (
+        "ohne Netz kann der Kunde weder eine Rückmeldung senden noch nach "
+        "Aktualisierungen sehen — auf Windows und macOS kann er beides"
+    )
     # Der Viewport rechnet mit OpenGL, und der Schlüssel des Agenten liegt im
     # Schlüsselbund — beides braucht seine Zeile.
     assert "--device=dri" in manifest

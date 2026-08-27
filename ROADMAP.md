@@ -636,12 +636,30 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
         die Beschreibung, `project_license` für das Programm. Sie zu verwechseln
         heißt, sich versehentlich zu verschenken — der Test prüft es.
 
-      **Kein Netzzugang im Flatpak.** `--share=network` wäre die bequemste Zeile
-      und die falsche: Ohne Netz gibt es kein Konto, keine Telemetrie und keine
-      Frage danach, und genau das ist die Zusage aus §2.1. Was drin ist, hat je
-      einen Grund — Wayland und X11 für die Oberfläche, `dri` für den Viewport
-      (§18), `home` für die Modelle, `org.freedesktop.secrets` für den Schlüssel
-      des Agenten (§26).
+      **Netzzugang im Flatpak — seit dem 27.08.2026, und die Kehrtwende hat
+      einen Anlass.** Hier stand das Gegenteil: `--share=network` sei die
+      bequemste Zeile und die falsche, denn ohne Netz gebe es kein Konto, keine
+      Telemetrie und keine Frage danach.
+
+      Ein Kunde auf CachyOS hat gezeigt, was das kostet. Sein Fehlerbericht kam
+      **per Hand** über Robert, mit dem Satz „Ich kann den Bericht aus der App
+      nicht senden: urlopen error"; im Protokoll steht der Grund bei jedem
+      Start — `[Errno -3] Temporärer Fehler bei der Namensauflösung`, einmal
+      für die Aktualisierungsprüfung und einmal für die Sendung. Was für uns
+      eine saubere Sandbox war, war für ihn eine Anwendung, deren Knöpfe nicht
+      funktionieren.
+
+      **Und die Zusage hing nie an der Sandbox.** Sie hängt an der Bauart:
+      `support.send()` hat genau einen Aufrufer, und der sitzt an einem Knopf
+      (`tests/test_support.py` zählt ihn). Windows und macOS haben keine
+      Sandbox und dieselbe Zusage seit je. Eine Grenze, die nur auf einer der
+      drei Plattformen steht, ist keine Zusage, sondern ein Unterschied — und
+      der Kunde erlebt ihn als Fehler. Entscheidung Robert: „jede plattform
+      sollte das gleiche haben und alles funktionieren."
+
+      Was sonst drin ist, hat je einen Grund — Wayland und X11 für die
+      Oberfläche, `dri` für den Viewport (§18), `home` für die Modelle,
+      `org.freedesktop.secrets` für den Schlüssel des Agenten (§26).
 
       Zwei Stolpersteine sind vorweggenommen, weil sie sonst als Fehlermeldung
       ohne Absender erschienen wären: `appimagetool` ist selbst ein AppImage und
