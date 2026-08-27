@@ -704,6 +704,42 @@ def test_a_pull_without_a_server_blames_the_server(monkeypatch: pytest.MonkeyPat
     assert "läuft es noch" in str(problem)
 
 
+def test_a_dropped_connection_is_not_a_program_fault(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ein Verbindungsabbruch ist ein Fremdprogramm-Fehler, kein Absturz.
+
+    **Gemeldet von einem Kunden mit 0.1.5** (Vorgang S-20260826-1db075), auf
+    Englisch und knapp: „Try to use Ollama, after many attempts, the program
+    crashed." Im Bericht stand:
+
+        An unexpected error occurred in the application.
+        ConnectionResetError: [WinError 10054] An existing connection was
+        forcibly closed by the remote host
+
+    Das ist **der Zwilling** des Zeitlimits im Test darunter, und die Ursache
+    ist dieselbe Lücke in ``post_json``: Beim Verbindungsaufbau wickelt urllib
+    einen Abbruch in ``URLError``; beim **Lesen der Antwort** kommt der nackte
+    ``ConnectionResetError`` durch. Ollama macht die Verbindung genau dort zu,
+    wenn ihm ein Modell zu groß wird oder der Dienst neu startet — nach
+    „vielen Versuchen" ist das der wahrscheinlichste Ausgang.
+
+    Gefangen wird ``ConnectionError`` und nicht nur die eine Klasse: Abbruch
+    (``Reset``), Abbruch durch die eigene Seite (``Aborted``), verweigerte
+    Annahme (``Refused``) und die geschlossene Gegenstelle (``BrokenPipe``)
+    sind für den Kunden dieselbe Lage und verdienen denselben Satz.
+    """
+    for klasse in (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+
+        def abgerissen(request: Any, timeout: float = 0.0, fehler: type = klasse) -> Any:
+            raise fehler(10054, "An existing connection was forcibly closed")
+
+        monkeypatch.setattr(llm.urllib.request, "urlopen", abgerissen)
+        with pytest.raises(llm.BackendUnavailable) as gefangen:
+            llm.post_json("http://127.0.0.1:11434/api/chat", {}, {})
+
+        # Regel 17: nie „unerwarteter Fehler", immer ein Satz, der weiterführt.
+        assert "unerwartet" not in str(gefangen.value.title).lower(), klasse.__name__
+
+
 def test_a_slow_local_model_is_not_a_program_fault(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ein Zeitlimit ist ein Fremdprogramm-Fehler, kein Absturz.
 

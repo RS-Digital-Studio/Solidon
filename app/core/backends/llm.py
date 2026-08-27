@@ -278,6 +278,22 @@ def post_json(
         # ein unerwarteter Fehler aufgetreten" plus die Bitte um einen
         # Fehlerbericht — für ein Modell, das schlicht länger rechnet.
         raise BackendTooSlow(seconds=timeout) from error
+    except ConnectionError as error:
+        # **Der Zwilling der Zeile darüber**, und aus demselben Grund:
+        # Beim Verbindungsaufbau wickelt urllib einen Abbruch in
+        # ``URLError``, beim Lesen der Antwort nicht. Ollama macht die
+        # Verbindung genau dort zu, wenn ihm ein Modell zu groß wird
+        # oder der Dienst neu startet.
+        #
+        # Gemeldet von einem Kunden mit 0.1.5 (S-20260826-1db075): „Try
+        # to use Ollama, after many attempts, the program crashed" —
+        # und im Bericht „An unexpected error occurred in the
+        # application. ConnectionResetError: [WinError 10054]".
+        #
+        # ``ConnectionError`` und nicht die eine Klasse: Abbruch,
+        # verweigerte Annahme und geschlossene Gegenstelle sind für den
+        # Kunden dieselbe Lage und verdienen denselben Satz.
+        raise BackendUnavailable(detail=str(error)) from error
 
 
 def _as_object(raw: bytes, url: str) -> dict[str, Any]:
