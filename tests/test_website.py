@@ -975,6 +975,49 @@ def test_every_reference_carries_the_stamp_of_the_file_it_points_at() -> None:
 
 
 @pytest.mark.parametrize("page", START_PAGES)
+def test_the_release_run_writes_the_size_span_itself(page: str) -> None:
+    """Und der Erzeuger trägt sie nach, statt dass jemand sie tippt.
+
+    Der Wächter darunter fängt eine veraltete Spanne — aber er fängt sie erst,
+    wenn ein Release schon gebaut ist, und dann steht jemand vor einem roten
+    Lauf und ändert zwei Zahlen von Hand. Genau so ist sie beim Sprung von
+    0.1.5 auf 0.2.0 stehen geblieben.
+
+    ``write_size_span`` ersetzt die **Zahlen**, nicht den Satz: Die sechs
+    Sprachen formulieren ihn verschieden, und in jeder stehen genau drei
+    Zahlen in der Zeile — die installierte Größe und die beiden Enden. Die 750
+    bleibt stehen, weil sie sich mit keinem Release ändert.
+
+    Geprüft mit erfundenen Paketgrößen, damit der Test unabhängig davon ist,
+    was gerade unter ``dl/`` liegt.
+    """
+    import types
+
+    import tools.make_download as make_download
+
+    class FakePackage:
+        def __init__(self, megabytes: int) -> None:
+            self.path = types.SimpleNamespace(
+                stat=lambda size=megabytes * 1_000_000: types.SimpleNamespace(st_size=size)
+            )
+
+    text = (WEBSITE / page).read_text(encoding="utf-8")
+    fresh = make_download.write_size_span(
+        text, [FakePackage(size) for size in (205, 288, 340)], page
+    )
+
+    row = next(
+        line
+        for index, line in enumerate(fresh.splitlines())
+        if "750" in line and "<td>" in line
+        for line in [" ".join(fresh.splitlines()[index : index + 2])]
+    )
+    numbers = [n for n in re.findall(r"\b\d{2,4}\b", row) if n != "750"]
+    assert numbers == ["205", "340"], f"{page}: die Spanne wurde nicht gesetzt — {numbers}"
+    assert "750" in row, f"{page}: die installierte Größe darf nicht mitwandern"
+
+
+@pytest.mark.parametrize("page", START_PAGES)
 def test_the_technical_requirements_name_the_sizes_the_packages_have(page: str) -> None:
     """Die Größenspanne in den Systemvoraussetzungen gegen ``version.json``.
 

@@ -459,6 +459,51 @@ def missing_note(packages: list[Package], language: str) -> str:
     )
 
 
+#: Die Zeile der Systemvoraussetzungen, die die Downloadgröße nennt. Erkannt
+#: an der installierten Größe — die steht in jeder Sprache als ``750`` da und
+#: ändert sich nicht mit einem Release.
+SIZE_ROW = re.compile(r"(<tr><td>[^<]*</td><td>[^<]*\b750\b.*?</td></tr>)", re.DOTALL)
+
+
+def write_size_span(text: str, packages: list[Package], page: str) -> str:
+    """Trägt die Spanne der Paketgrößen in die Systemvoraussetzungen nach.
+
+    **Sie stand am 27.08.2026 auf „zwischen 180 und 315 MB", während die
+    Pakete 192 und 327 wogen** — und zwar gegen den Download-Kasten derselben
+    Seite, den diese Datei schreibt. Der Kasten wurde erzeugt, die Tabellenzeile
+    war Handarbeit, und sie ist beim Sprung von 0.1.5 auf 0.2.0 stehen
+    geblieben. Ein Wächter fängt das seither
+    (``test_the_technical_requirements_name_the_sizes_the_packages_have``);
+    hier wird es gar nicht erst falsch.
+
+    **Ersetzt werden die Zahlen, nicht der Satz.** Die sechs Sprachen
+    formulieren ihn verschieden — „zwischen 192 und 327 MB", „between 192 and
+    327 MB", „entre 192 et 327&nbsp;Mo" —, und in jeder stehen genau drei
+    Zahlen in der Zeile: die installierte Größe und die beiden Enden der
+    Spanne. Die 750 bleibt, die anderen beiden werden getauscht.
+    """
+    sizes = sorted(package.path.stat().st_size // 1_000_000 for package in packages)
+    if not sizes:
+        return text
+    smallest, largest = str(sizes[0]), str(sizes[-1])
+
+    row = SIZE_ROW.search(text)
+    if not row:
+        raise SystemExit(f"{page}: die Zeile mit der installierten Größe fehlt.")
+
+    numbers = [n for n in re.findall(r"\b\d{2,4}\b", row.group(1)) if n != "750"]
+    if len(numbers) != 2:
+        raise SystemExit(
+            f"{page}: in der Größenzeile stehen {len(numbers)} Zahlen neben der 750, "
+            "erwartet sind zwei — die Spanne lässt sich nicht sicher zuordnen."
+        )
+
+    fresh = row.group(1)
+    for old, new in zip(numbers, (smallest, largest), strict=True):
+        fresh = re.sub(rf"\b{old}\b", new, fresh, count=1)
+    return text.replace(row.group(1), fresh, 1)
+
+
 def write_pages(packages: list[Package]) -> None:
     pattern = re.compile(
         r'(<div class="dateien" data-files data-release-show hidden>)(.*?)(</div>)', re.DOTALL
@@ -472,6 +517,7 @@ def write_pages(packages: list[Package]) -> None:
         )
         if count != 1:
             raise SystemExit(f"{page}: der Dateikasten fehlt oder sieht anders aus.")
+        updated = write_size_span(updated, packages, page)
         p.write_text(updated, encoding="utf-8")
         print(f"  {page}")
 
