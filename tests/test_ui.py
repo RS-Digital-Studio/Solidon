@@ -5221,19 +5221,24 @@ def test_a_finding_writes_its_numbers_with_their_unit(qt_app: QApplication) -> N
     aufruft — stand ausschließlich im Tooltip.
     """
     from app.core.types import Finding
+    from app.ui import labels
     from app.ui.panels import _line_for
 
+    values = {"wall_mm": 2.0, "removed_cm3": 14.3}
     line = _line_for(
-        Finding(
-            code="hollow.done",
-            severity="info",
-            message="Ausgehöhlt.",
-            values={"wall_mm": 2.0, "removed_cm3": 14.3},
-        )
+        Finding(code="hollow.done", severity="info", message="Ausgehöhlt.", values=values)
     )
 
-    assert "2.0 mm" in line or "2,0 mm" in line, line
-    assert "14.3 cm³" in line or "14,3 cm³" in line, line
+    # **Gegen ``value_text`` und nicht gegen eine ausgeschriebene Stellenzahl.**
+    # Hier stand „2,0 mm" — die Zusage ist aber, dass die Zahl ihre Einheit
+    # trägt, und wie viele Nachkommastellen sie dabei hat, ist der Ist-Zustand.
+    # Der Test fiel deshalb bei `3deb8910`, das Zeile und Tooltip auf dieselbe
+    # Quelle stellte: Die Zeile schreibt seither „2,00 mm", wie der Tooltip es
+    # immer schon tat. Gebrochen war nicht die Zusage, sondern eine Angabe
+    # daneben — und ein Test, der die mitnagelt, blockiert genau die
+    # Vereinheitlichung, für die er zeugen sollte.
+    for key, value in values.items():
+        assert labels.value_text(key, value) in line, f"{key}: {line}"
 
 
 def test_the_arrangement_spacing_knows_the_plate_adhesion(window: MainWindow) -> None:
