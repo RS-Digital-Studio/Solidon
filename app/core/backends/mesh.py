@@ -77,7 +77,7 @@ from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any, Final, Protocol
 
-from app.core.discover import BROKEN_ADDRESS, PROBE_SECONDS, UNUSABLE_ADDRESS
+from app.core.discover import BROKEN_ADDRESS, PROBE_SECONDS, UNUSABLE_ADDRESS, opener_for
 from app.core.errors import CANCEL, INSTALL_MISSING, Action, AppError, OperationCancelled
 from app.core.geom.mesh import MeshData, read_mesh
 from app.core.log import get_logger
@@ -296,7 +296,7 @@ def fetch(url: str, body: bytes | None = None, headers: dict[str, str] | None = 
     """Eine Anfrage, Bytes zurück. POST, wenn es einen Rumpf gibt, sonst GET."""
     request = urllib.request.Request(url, data=body, headers=headers or {})
     try:
-        with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as answer:
+        with opener_for(url).open(request, timeout=TIMEOUT_SECONDS) as answer:
             return bytes(answer.read())
     except urllib.error.HTTPError as error:
         raise GenerationFailed(

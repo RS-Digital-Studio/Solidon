@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -56,6 +58,21 @@ def no_stored_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 # --- keys ------------------------------------------------------------------------
+
+
+def _opened_by(fake: object) -> Callable[[str], SimpleNamespace]:
+    """Lenkt ``opener_for`` auf eine Attrappe um.
+
+    Seit dem 27.08.2026 geht keine Anfrage mehr durch ``urlopen``, sondern
+    durch einen Öffner, den :func:`app.core.discover.opener_for` je nach
+    Adresse baut — für einen Dienst auf **diesem** Rechner ohne den
+    Firmenproxy, für alles andere mit. Gepatcht wird deshalb der Öffner und
+    nicht mehr ``urlopen``.
+
+    Dass die acht Tests bei der Umstellung rot wurden, ist der Beleg, dass sie
+    den echten Weg messen und nicht einen daneben.
+    """
+    return lambda url: SimpleNamespace(open=fake)
 
 
 def test_without_a_key_there_is_no_agent(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -651,7 +668,7 @@ def test_pulling_a_model_reports_a_real_share(monkeypatch: pytest.MonkeyPatch) -
             b'{"status":"success"}\n',
         ]
     )
-    monkeypatch.setattr(llm.urllib.request, "urlopen", server)
+    monkeypatch.setattr(llm, "opener_for", _opened_by(server))
     seen: list[tuple[str, float]] = []
 
     problem = llm.pull_model("qwen3:14b", progress=lambda step, share: seen.append((step, share)))
@@ -671,7 +688,7 @@ def test_a_pull_can_be_stopped_and_says_it_continues(monkeypatch: pytest.MonkeyP
     ist. Wer das nicht weiß, fängt von vorn an.
     """
     server = _PullServer([b'{"status":"pulling","total":10,"completed":1}\n'] * 5)
-    monkeypatch.setattr(llm.urllib.request, "urlopen", server)
+    monkeypatch.setattr(llm, "opener_for", _opened_by(server))
 
     problem = llm.pull_model("qwen3:14b", cancelled=lambda: True)
 
@@ -684,7 +701,7 @@ def test_a_pull_that_ollama_refuses_says_so(monkeypatch: pytest.MonkeyPatch) -> 
     als Download, der nie endet.
     """
     server = _PullServer([b'{"error":"pull model manifest: file does not exist"}\n'])
-    monkeypatch.setattr(llm.urllib.request, "urlopen", server)
+    monkeypatch.setattr(llm, "opener_for", _opened_by(server))
 
     problem = llm.pull_model("gibtesnicht:1b")
 
@@ -696,7 +713,7 @@ def test_a_pull_without_a_server_blames_the_server(monkeypatch: pytest.MonkeyPat
     def fail(request: Any, timeout: float = 0.0) -> Any:
         raise OSError("connection refused")
 
-    monkeypatch.setattr(llm.urllib.request, "urlopen", fail)
+    monkeypatch.setattr(llm, "opener_for", _opened_by(fail))
 
     problem = llm.pull_model("qwen3:14b")
 
@@ -732,7 +749,7 @@ def test_a_dropped_connection_is_not_a_program_fault(monkeypatch: pytest.MonkeyP
         def abgerissen(request: Any, timeout: float = 0.0, fehler: type = klasse) -> Any:
             raise fehler(10054, "An existing connection was forcibly closed")
 
-        monkeypatch.setattr(llm.urllib.request, "urlopen", abgerissen)
+        monkeypatch.setattr(llm, "opener_for", _opened_by(abgerissen))
         with pytest.raises(llm.BackendUnavailable) as gefangen:
             llm.post_json("http://127.0.0.1:11434/api/chat", {}, {})
 
@@ -765,7 +782,7 @@ def test_a_slow_local_model_is_not_a_program_fault(monkeypatch: pytest.MonkeyPat
     def zu_langsam(request: Any, timeout: float = 0.0) -> Any:
         raise TimeoutError("timed out")
 
-    monkeypatch.setattr(llm.urllib.request, "urlopen", zu_langsam)
+    monkeypatch.setattr(llm, "opener_for", _opened_by(zu_langsam))
 
     with pytest.raises(llm.BackendTooSlow) as gefangen:
         llm.post_json("http://127.0.0.1:11434/api/chat", {}, {})
@@ -861,7 +878,7 @@ def test_pulling_a_model_reaches_the_endpoint_from_a_bare_address(
     Protokoll standen vierzehn davon.
     """
     server = _PullServer([b'{"status":"success"}\n'])
-    monkeypatch.setattr(llm.urllib.request, "urlopen", server)
+    monkeypatch.setattr(llm, "opener_for", _opened_by(server))
 
     problem = llm.pull_model("qwen3:14b", url="http://127.0.0.1:11434")
 

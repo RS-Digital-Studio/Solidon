@@ -59,6 +59,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import urllib.request
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
 from pathlib import Path
@@ -731,6 +732,56 @@ def unusable_address(text: str) -> TranslatableText | None:
             "http://localhost:11434 — der Name des Rechners, dann der Port."
         )
     return None
+
+
+#: Rechnernamen, hinter denen dieser Rechner selbst steht.
+#:
+#: Alles darunter hinaus liest :func:`is_local_address` als Adressliteral —
+#: ``127.x.x.x`` und ``::1`` sind dieselbe Maschine, gleich wie sie
+#: geschrieben stehen.
+_LOCAL_NAMES: Final = frozenset({"localhost", "127.0.0.1", "::1", "0.0.0.0", ""})
+
+
+def is_local_address(url: str) -> bool:
+    """Zeigt diese Adresse auf diesen Rechner?"""
+    try:
+        host = (urlparse(url).hostname or "").strip().lower()
+    except ValueError:
+        return False
+    if host in _LOCAL_NAMES or host.endswith(".localhost"):
+        return True
+    # ``127.0.0.53`` ist so lokal wie ``127.0.0.1`` — das ganze /8 gehört
+    # diesem Rechner, und systemd-resolved sitzt tatsächlich dort.
+    return host.startswith("127.")
+
+
+def opener_for(url: str) -> urllib.request.OpenerDirector:
+    """Ein Öffner für diese Adresse — **ohne Proxy, wenn sie hierher zeigt**.
+
+    ``urlopen`` baut seinen Öffner aus :func:`urllib.request.getproxies`, und
+    das liest ``http_proxy``/``https_proxy`` und unter Windows und macOS die
+    Systemeinstellung. Für alles, was hinausgeht, ist das genau richtig: Ein
+    Nutzer hinter einem Firmenproxy erreicht die Update-Prüfung nur so.
+
+    **Für einen Dienst auf demselben Rechner ist es genau falsch.** Gemessen
+    am 27.08.2026 mit gesetztem ``http_proxy`` und ohne ``no_proxy``:
+
+        proxy_bypass("localhost:11434")   False
+        proxy_bypass("127.0.0.1:8188")    False
+
+    Die Abfrage an das eigene Ollama und der Auftrag an das eigene ComfyUI
+    gingen damit an den Firmenproxy, und der kennt keinen von beiden. Das
+    Ergebnis wäre „Backend nicht erreichbar" für ein Programm, das läuft —
+    dieselbe Sorte Auskunft wie „nicht gefunden" für ein installiertes
+    Programm, und aus demselben Grund die schlechteste: Sie lässt den Nutzer
+    an seiner eigenen Handlung zweifeln.
+
+    ``no_proxy=localhost`` zu setzen wäre die Aufgabe des Nutzers und ist die
+    Antwort, die niemand kennt, bevor er das Problem hat.
+    """
+    if is_local_address(url):
+        return urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    return urllib.request.build_opener()
 
 
 def service_url(tool_id: str, default: str) -> str:

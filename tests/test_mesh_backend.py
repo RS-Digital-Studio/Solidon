@@ -8,7 +8,9 @@ samt dem Nachfragen und den Platzhaltern im Workflow.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -89,6 +91,21 @@ class Comfy:
 
 def backend(server: Comfy) -> ComfyBackend:
     return ComfyBackend(transport=server, poll_seconds=0.0)
+
+
+def _opened_by(fake: object) -> Callable[[str], SimpleNamespace]:
+    """Lenkt ``opener_for`` auf eine Attrappe um.
+
+    Seit dem 27.08.2026 geht keine Anfrage mehr durch ``urlopen``, sondern
+    durch einen Öffner, den :func:`app.core.discover.opener_for` je nach
+    Adresse baut — für einen Dienst auf **diesem** Rechner ohne den
+    Firmenproxy, für alles andere mit. Gepatcht wird deshalb der Öffner und
+    nicht mehr ``urlopen``.
+
+    Dass die acht Tests bei der Umstellung rot wurden, ist der Beleg, dass sie
+    den echten Weg messen und nicht einen daneben.
+    """
+    return lambda url: SimpleNamespace(open=fake)
 
 
 def test_a_prompt_goes_through_the_shipped_workflow() -> None:
@@ -1750,7 +1767,7 @@ def test_a_dropped_connection_is_not_a_program_fault(monkeypatch: pytest.MonkeyP
     def abgerissen(request: object, timeout: float = 0.0) -> object:
         raise ConnectionResetError(10054, "An existing connection was forcibly closed")
 
-    monkeypatch.setattr(mesh.urllib.request, "urlopen", abgerissen)
+    monkeypatch.setattr(mesh, "opener_for", _opened_by(abgerissen))
 
     with pytest.raises(GenerationFailed) as gefangen:
         mesh.fetch("http://127.0.0.1:8188/prompt", b"{}")

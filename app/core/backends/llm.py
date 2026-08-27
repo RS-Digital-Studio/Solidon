@@ -28,7 +28,7 @@ from dataclasses import dataclass, field
 from typing import Any, ClassVar, Final, Literal, Protocol
 
 from app.core.backends import keys
-from app.core.discover import PROBE_SECONDS, UNUSABLE_ADDRESS
+from app.core.discover import PROBE_SECONDS, UNUSABLE_ADDRESS, opener_for
 from app.core.errors import CANCEL, OPEN_SETTINGS, RETRY, AppError, ExternalToolError
 from app.core.log import get_logger
 from app.i18n import TranslatableText, _
@@ -253,7 +253,7 @@ def post_json(
         url, data=body, headers={"Content-Type": "application/json", **headers}
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout) as answer:
+        with opener_for(url).open(request, timeout=timeout) as answer:
             return _as_object(answer.read(), url)
     except urllib.error.HTTPError as error:
         detail = error.read().decode("utf-8", errors="replace")[:500]
@@ -1068,7 +1068,7 @@ def _get_json(url: str) -> dict[str, Any]:
     """Ein GET, JSON heraus — das Gegenstück zu :func:`post_json` für die
     Modell-Liste von Ollama."""
     request = urllib.request.Request(url)
-    with urllib.request.urlopen(request, timeout=TAGS_TIMEOUT_SECONDS) as answer:
+    with opener_for(url).open(request, timeout=TAGS_TIMEOUT_SECONDS) as answer:
         return dict(json.loads(answer.read().decode("utf-8")))
 
 
@@ -1265,7 +1265,7 @@ def pull_model(
         request = urllib.request.Request(
             address, data=body, headers={"Content-Type": "application/json"}
         )
-        with urllib.request.urlopen(request, timeout=PULL_TIMEOUT_SECONDS) as answer:
+        with opener_for(address).open(request, timeout=PULL_TIMEOUT_SECONDS) as answer:
             for raw in answer:
                 if cancelled is not None and cancelled():
                     # Ollama räumt einen abgebrochenen Zug selbst auf und

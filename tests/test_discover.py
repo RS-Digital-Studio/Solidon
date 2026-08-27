@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import urllib.request
 from pathlib import Path
 
 import pytest
@@ -765,3 +766,67 @@ def test_find_program_reaches_the_appimage_stage(
     # ``conftest``, die nur zurückgibt, was ausdrücklich gesetzt wurde. Genau
     # sie würde diesen Test grün machen, ohne die Kette je zu betreten.
     assert discover.unpatched_find_program("orcaslicer", ("OrcaSlicer", "orca-slicer")) == path
+
+
+def test_a_service_on_this_machine_does_not_go_through_the_company_proxy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ollama und ComfyUI laufen hier — der Proxy kennt sie nicht.
+
+    ``urlopen`` baut seinen Öffner aus ``getproxies()``, und das liest
+    ``http_proxy`` und unter Windows und macOS die Systemeinstellung. Für die
+    Update-Prüfung ist das genau richtig; für einen Dienst auf demselben
+    Rechner genau falsch. Gemessen am 27.08.2026 mit gesetztem ``http_proxy``
+    und ohne ``no_proxy``::
+
+        proxy_bypass("localhost:11434")   False
+        proxy_bypass("127.0.0.1:8188")    False
+
+    Ergebnis wäre „Backend nicht erreichbar" für ein Programm, das läuft —
+    dieselbe Sorte Auskunft wie „nicht gefunden" für ein installiertes
+    Programm, und aus demselben Grund die schlechteste.
+    """
+    monkeypatch.setenv("http_proxy", "http://firma:8080")
+    monkeypatch.setenv("https_proxy", "http://firma:8080")
+    monkeypatch.delenv("no_proxy", raising=False)
+    monkeypatch.delenv("NO_PROXY", raising=False)
+
+    def proxies_of(url: str) -> dict[str, str]:
+        for handler in discover.opener_for(url).handlers:
+            if isinstance(handler, urllib.request.ProxyHandler):
+                return dict(handler.proxies)
+        return {}
+
+    for local in (
+        "http://localhost:11434/api/tags",
+        "http://127.0.0.1:8188/prompt",
+        "http://127.0.0.53:8080/x",
+        "http://[::1]:11434/api/tags",
+        "http://ollama.localhost/api/tags",
+    ):
+        assert proxies_of(local) == {}, f"{local} ging durch den Proxy"
+
+    # Und die Gegenrichtung: Wer hinter einem Firmenproxy sitzt, erreicht die
+    # Update-Prüfung nur durch ihn. Sie darf ihn also nicht verlieren.
+    outside = proxies_of("https://solidon3d.de/version.json")
+    assert outside, "der Proxy nach draußen muss bleiben"
+
+
+def test_what_counts_as_this_machine() -> None:
+    """Was lokal ist und was nur so aussieht.
+
+    Die Grenze ist eng gezogen: ``127.`` deckt das ganze /8, weil
+    systemd-resolved tatsächlich auf ``127.0.0.53`` sitzt. Ein Rechnername,
+    der bloß *anfängt* wie einer der lokalen, gehört nicht dazu — sonst
+    verlöre ``localhost.beispiel.de`` seinen Proxy, und das ist eine fremde
+    Maschine.
+    """
+    for local in ("http://localhost:1", "http://127.0.0.1", "http://[::1]:2", "http://x.localhost"):
+        assert discover.is_local_address(local), local
+    for remote in (
+        "https://solidon3d.de",
+        "http://localhost.beispiel.de",
+        "http://192.168.1.5:11434",
+        "http://127x.de",
+    ):
+        assert not discover.is_local_address(remote), remote
