@@ -26,6 +26,7 @@ import ftplib
 import io
 import ipaddress
 import json
+import re
 import ssl
 import subprocess
 import sys
@@ -256,6 +257,73 @@ def stale_packages(session: ftplib.FTP_TLS, root: str) -> tuple[list[str], str]:
             continue
         candidates.append(filename)
     return sorted(candidates), ""
+
+
+def hold_back_version(session: ftplib.FTP_TLS, root: str, files: list[Path]) -> list[Path]:
+    """Lädt ``version.json`` erst, wenn ihre Pakete oben liegen.
+
+    **Der Fall, der diese Funktion veranlasst hat**, ist derselbe wie bei
+    :func:`stale_packages`, nur von der anderen Seite. Dort wurden die alten
+    Pakete zu früh gelöscht; hier wird die neue Auskunft zu früh
+    veröffentlicht. Das Ergebnis ist beide Male ein 404 für jeden Kunden.
+
+    Am 27.08.2026 ist es mit 0.2.1 passiert, und zwar durch das Werkzeug
+    selbst: ``--fehlend`` nimmt ``dl/`` bewusst aus (:func:`wanted` — Pakete
+    gehen einmal hoch, nicht bei jedem Abgleich), lädt aber ``version.json``
+    mit, und die zeigt genau dorthin. Ein Lauf, alle Seiten neu, drei Pakete
+    versprochen, keines vorhanden.
+
+    **Zwei Mengen, zwei Härten.** ``version.json`` führt die Pakete der
+    Update-Automatik — Windows und die beiden Macs. Der Download-Kasten
+    derselben Seiten verspricht mehr: am 27.08.2026 acht gegen drei, und die
+    fünf übrigen (Linux, die macOS-Zips) fehlten oben genauso.
+
+    Die Auskunft wird deshalb **zurückgehalten**, die Seiten gehen mit einer
+    **Warnung** hoch. Der Unterschied liegt darin, wen es trifft: Ein Update
+    holt sich jede Installation von selbst, und eine Fassung, die dabei 404
+    gibt, hat der Kunde nicht gesucht. Einen Knopf im Kasten drückt jemand —
+    er sieht, dass nichts kommt, und die alte Seite mit den alten Paketen
+    wäre auch keine bessere Antwort, weil sie die neue Fassung verschweigt.
+    """
+    versprochen: set[str] = set()
+    payload: dict[str, Any] = {}
+    if any(path.name == "version.json" for path in files):
+        payload = json.loads((LOCAL_ROOT / "version.json").read_text(encoding="utf-8"))
+        versprochen |= promised_files(payload)
+
+    # Was die hochzuladenden Seiten selbst im Kasten anbieten.
+    im_kasten: set[str] = set()
+    for path in files:
+        if path.suffix != ".html":
+            continue
+        text = path.read_text(encoding="utf-8", errors="ignore")
+        im_kasten.update(re.findall(r"(?:dl/|f=)(Solidon3D-[^\"'<> ]+)", text))
+
+    if not versprochen and not im_kasten:
+        return files
+
+    oben = {name.split("/")[-1] for name in remote_index(session, f"/{root}/dl")}
+    fehlt_fuer_update = sorted(versprochen - oben)
+    fehlt_im_kasten = sorted(im_kasten - oben - set(fehlt_fuer_update))
+
+    if fehlt_im_kasten:
+        print(f"Achtung: {len(fehlt_im_kasten)} Paket(e) aus dem Download-Kasten fehlen oben.")
+        for name in fehlt_im_kasten:
+            print(f"  {name}")
+        print("  Die Seiten gehen trotzdem hoch — ein Klick darauf gibt bis dahin 404.")
+
+    if not fehlt_fuer_update:
+        return files
+
+    print(
+        f"version.json bleibt liegen: {len(fehlt_fuer_update)} Paket(e) der Update-Prüfung "
+        "fehlen oben."
+    )
+    for name in fehlt_fuer_update:
+        print(f"  {name}")
+    print("  Erst hochladen, dann version.json — sonst gibt jedes Update 404.")
+    print(f"  Zu tun: python tools/upload_website.py website/dl/{fehlt_fuer_update[0]}")
+    return [path for path in files if path.name != "version.json"]
 
 
 def remote_name(path: Path) -> str:
@@ -549,6 +617,7 @@ def main() -> int:
             if not files:
                 print("Der Server hat alles.")
                 return 0
+        files = hold_back_version(session, root, files)
         print(f"{len(files)} Datei(en) → {access['host']}:{root}")
         for path in files:
             upload(session, access, path)

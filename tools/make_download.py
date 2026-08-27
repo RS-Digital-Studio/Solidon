@@ -267,8 +267,86 @@ def variant_of(name: str, language: str) -> str:
     return " (" + ", ".join(marks) + ")"
 
 
+#: Was wirklich ausgeliefert wird: vier Dateien, eine je Zielsystem
+#: (Entscheidung Robert, 27.08.2026 — „insgesamt 4 Dateien wie die ganze Zeit
+#: schon und es auch immer sein wird").
+#:
+#: Der Baulauf wirft **acht** aus: Linux allein drei (Archiv, AppImage,
+#: Flatpak), macOS zwei je Architektur (Installationspaket und Archiv). Welche
+#: davon angeboten werden, stand bis hierher nirgends — es stand nur in der
+#: Gewohnheit dessen, der die Dateien beim Aufruf aufzählte.
+#:
+#: Am 27.08.2026 hat diese Lücke zugeschnappt: Beim Release von 0.2.1 gingen
+#: alle acht in den Kasten, und die Startseiten verwiesen in sechs Sprachen
+#: auf vier Dateien, die nie hochgeladen werden. Ein Klick darauf hätte 404
+#: gegeben, und keine Prüfung hätte es gesagt.
+DELIVERED: tuple[tuple[str, str, tuple[str, ...]], ...] = (
+    ("Windows", ".exe", ()),
+    ("Linux", ".flatpak", ()),
+    ("macOS (Apple Silicon)", ".pkg", ("arm64",)),
+    ("macOS (Intel)", ".pkg", ("x86_64", "x64", "intel")),
+)
+
+
+def delivery_slot(name: str) -> str:
+    """Welchen der vier Plätze eine Datei besetzt — oder nichts."""
+    lower = name.lower()
+    for label, suffix, marks in DELIVERED:
+        if not lower.endswith(suffix):
+            continue
+        if not marks or any(mark in lower for mark in marks):
+            return label
+    return ""
+
+
+def refuse_wrong_delivery(paths: list[Path]) -> None:
+    """Hält an, wenn die übergebenen Dateien nicht die vier Ausgelieferten sind.
+
+    Geprüft wird in **beide** Richtungen, und die zweite ist die wichtigere:
+    Eine Datei zu viel steht als toter Verweis auf der Seite, eine zu wenig
+    lässt ein ganzes Zielsystem ohne Download — und das fällt niemandem auf,
+    der die Seite auf seinem eigenen Rechner ansieht.
+
+    ``--alte-pakete`` prüft dieselbe Sache von der anderen Seite, aber erst
+    nach dem Hochladen und nur gegen ``version.json``. Diese Prüfung steht
+    davor und kostet nichts.
+    """
+    if not paths:
+        return
+
+    taken: dict[str, list[str]] = {}
+    unknown: list[str] = []
+    for path in paths:
+        slot = delivery_slot(path.name)
+        if not slot:
+            unknown.append(path.name)
+        else:
+            taken.setdefault(slot, []).append(path.name)
+
+    expected = [label for label, _suffix, _marks in DELIVERED]
+    missing = [label for label in expected if label not in taken]
+    twice = {label: names for label, names in taken.items() if len(names) > 1}
+
+    if not unknown and not missing and not twice:
+        return
+
+    lines = ["Das sind nicht die vier Dateien, die ausgeliefert werden."]
+    for name in sorted(unknown):
+        lines.append(f"  zu viel:  {name} — besetzt keinen der vier Plätze")
+    for label in missing:
+        suffix = next(s for lab, s, _ in DELIVERED if lab == label)
+        lines.append(f"  fehlt:    {label} ({suffix})")
+    for label, names in sorted(twice.items()):
+        lines.append(f"  zweimal:  {label} — {', '.join(sorted(names))}")
+    lines.append("")
+    lines.append("  Der Baulauf wirft acht Dateien aus, angeboten werden vier.")
+    lines.append("  Erwartet: " + ", ".join(f"{lab} {suf}" for lab, suf, _ in DELIVERED))
+    raise SystemExit("\n".join(lines))
+
+
 def read_packages(paths: list[Path]) -> list[Package]:
     """Kopieren, messen, Prüfsumme rechnen — in der Reihenfolge der Plattformen."""
+    refuse_wrong_delivery(paths)
     STORE.mkdir(parents=True, exist_ok=True)
     found: list[Package] = []
     seen: set[str] = set()

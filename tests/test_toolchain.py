@@ -861,3 +861,93 @@ def test_the_lock_notices_when_the_tree_moves_under_a_run(tmp_path: Path) -> Non
         )
     finally:
         os.utime(ziel, (vorher, vorher))
+
+
+def test_the_version_file_waits_for_its_packages(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``version.json`` geht erst hoch, wenn ihre Pakete oben liegen.
+
+    **Der Fall.** Am 27.08.2026 lud ``--fehlend`` beim Veröffentlichen von
+    0.2.1 sechs Startseiten und ``version.json`` hoch — und kein einziges
+    Paket. Das ist kein Versehen im Aufruf, sondern die Bauart des Werkzeugs:
+    :func:`wanted` nimmt ``dl/`` bewusst aus, weil Pakete einmal hochgehen und
+    nicht bei jedem Abgleich. Nur zeigt ``version.json`` genau dorthin.
+
+    Minutenlang versprach die Seite Fassung 0.2.1, und alle drei Pakete gaben
+    HTTP 404 — derselbe Zustand wie am 23.08.2026 bei 0.1.3, nur von der
+    anderen Seite verursacht: dort wurde zu früh gelöscht, hier zu früh
+    veröffentlicht.
+
+    **Gemessen wird an der Grenze**, also an :func:`remote_index`, das den
+    Serverstand liefert. Eine Attrappe des FTP-Objekts wäre nach dem Code
+    geformt, den sie prüfen soll — genau der Fehler, der am selben Tag den
+    Release-Lauf gekostet hat (``FakePackage`` mit ``path.stat()``).
+    """
+    import tools.upload_website as upload
+
+    version = upload.LOCAL_ROOT / "version.json"
+    versprochen = upload.promised_files(json.loads(version.read_text(encoding="utf-8")))
+    if not versprochen:
+        pytest.skip("version.json führt noch keine Pakete — vor dem Release richtig")
+
+    dateien = [version, upload.LOCAL_ROOT / "index.html"]
+
+    # Nichts oben: version.json bleibt liegen, die Seite geht trotzdem.
+    monkeypatch.setattr(upload, "remote_index", lambda *_: {})
+    rest = upload.hold_back_version(None, "httpdocs", list(dateien))
+    assert version not in rest, "version.json ging hoch, obwohl kein Paket oben liegt"
+    assert upload.LOCAL_ROOT / "index.html" in rest, "die Seiten sollen trotzdem hochgehen"
+
+    # Alles oben: sie geht mit.
+    monkeypatch.setattr(
+        upload, "remote_index", lambda *_: {f"dl/{name}": 1 for name in versprochen}
+    )
+    rest = upload.hold_back_version(None, "httpdocs", list(dateien))
+    assert version in rest, "version.json blieb liegen, obwohl alle Pakete oben sind"
+
+
+def test_only_the_four_delivered_files_go_into_the_box() -> None:
+    """Der Kasten nimmt vier Dateien — die, die auch hochgeladen werden.
+
+    **Der Fall.** Der Baulauf wirft acht aus: Linux drei (Archiv, AppImage,
+    Flatpak), macOS zwei je Architektur. Hochgeladen werden seit jeher vier,
+    eine je Zielsystem — nur stand das nirgends, sondern in der Gewohnheit
+    dessen, der die Dateien beim Aufruf aufzählte.
+
+    Am 27.08.2026 gingen beim Release von 0.2.1 alle acht in den Kasten. Die
+    Startseiten verwiesen danach in sechs Sprachen auf vier Dateien, die nie
+    hochgeladen werden; ein Klick darauf hätte 404 gegeben, und keine Prüfung
+    hätte etwas gesagt — ``--alte-pakete`` sieht nur ``version.json``, und die
+    führt ohnehin nur drei.
+
+    Geprüft wird in beide Richtungen. Die zweite wiegt schwerer: Eine Datei zu
+    viel ist ein toter Verweis, eine zu wenig lässt ein ganzes Zielsystem ohne
+    Download — und das sieht niemand, der die Seite auf seinem Rechner ansieht.
+    """
+    from tools.make_download import DELIVERED, refuse_wrong_delivery
+
+    vier = [
+        Path("Solidon3D-Setup-0.2.1.exe"),
+        Path("Solidon3D-0.2.1-x86_64.flatpak"),
+        Path("Solidon3D-0.2.1-macos-arm64.pkg"),
+        Path("Solidon3D-0.2.1-macos-x86_64.pkg"),
+    ]
+    assert len(vier) == len(DELIVERED), "die Probe deckt nicht jeden Platz ab"
+    refuse_wrong_delivery(vier)  # muss durchgehen
+
+    # Zu viel: die vier aus dem Baulauf, die nicht ausgeliefert werden.
+    for zu_viel in (
+        "Solidon3D-0.2.1-linux-x86_64.tar.gz",
+        "Solidon3D-0.2.1-x86_64.AppImage",
+        "Solidon3D-0.2.1-macos-arm64.zip",
+        "Solidon3D-0.2.1-macos-x86_64.zip",
+    ):
+        with pytest.raises(SystemExit) as fehler:
+            refuse_wrong_delivery([*vier, Path(zu_viel)])
+        assert zu_viel in str(fehler.value), f"{zu_viel} wird nicht benannt"
+
+    # Zu wenig: jeder Platz einzeln ausgelassen.
+    for ausgelassen in range(len(vier)):
+        rest = [p for i, p in enumerate(vier) if i != ausgelassen]
+        with pytest.raises(SystemExit) as fehler:
+            refuse_wrong_delivery(rest)
+        assert "fehlt" in str(fehler.value), f"Platz {ausgelassen} fehlt unbemerkt"
