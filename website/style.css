@@ -636,6 +636,22 @@ section h2 {
   margin: 0 0 0.5rem;
 }
 
+/* Eine Überschrift bricht dort um, wo die Zeile voll ist — und die letzte
+   trägt dann, was übrig blieb. Auf dem Handy stand „Das heruntergeladene
+   Teil passt nicht. Mach es passend." in drei Zeilen, deren dritte ein
+   einziges Wort führte: 120 Bildpunkte unter zwei vollen Zeilen.
+
+   `text-wrap: balance` verteilt die Wörter gleichmäßig auf die Zeilen, die
+   ohnehin gebraucht werden. Gemessen bei 390 px: weiter drei Zeilen, die
+   letzte aber 241 statt 120 Bildpunkte breit. Die Schrift zu verkleinern
+   half nicht — dieselben drei Zeilen, die letzte sogar kürzer (107 px).
+
+   Browser begrenzen das Verfahren von sich aus auf wenige Zeilen; auf einem
+   Fließtextabsatz täte es deshalb nichts, und dort ist es auch nicht
+   gemeint. Wo es fehlt, bricht die Überschrift wie bisher — ein Zuwachs,
+   kein Erfordernis. */
+:is(h1, h2, h3) { text-wrap: balance; }
+
 /* Eine Unterseite führt ihre Überschrift als h1 dort, wo die Startseite eine
    h2 hätte — eine Stufe größer, sonst gleich. Ohne diese Regel bliebe sie auf
    der Browservorgabe stehen: die gilt nur für `.hero h1` und `main.legal h1`. */
@@ -2127,3 +2143,50 @@ p.footnote {
    Ladeknöpfen stehen, obwohl er längst als versteckt markiert war: im DOM
    verschwunden, auf dem Schirm noch da. */
 [hidden] { display: none !important; }
+
+/* ── Auf dem Handy zählt jeder Bildpunkt Breite ────────────────────────── */
+
+/* Robert am 27.08.2026, mit einem Bild von seinem Gerät: „breiter kannst du
+   die Handyvariante machen, haben mehr Platz in der Breite". Gemessen bei
+   360 px Fensterbreite, je Kasten der Rand zwischen Text und Fensterkante:
+
+     .download    189 px Rand,  171 px Text — mehr Rand als Inhalt
+     td (Technik) 173 px Rand,  187 px Text
+     .honest      112 px Rand,  248 px Text
+     .price-card   98 px Rand,  262 px Text
+     .closing      90 px Rand,  270 px Text
+     .way          85 px Rand,  275 px Text
+     nur .wrap     40 px Rand,  320 px Text
+
+   Die Werte sind für die Desktopansicht richtig: 48 px in einem 1216 px
+   breiten Rahmen sind vier Prozent. Auf 360 px sind dieselben 48 px plus die
+   40 des Rahmens ein Viertel der Breite, und der Text bricht nach drei
+   Wörtern um. Sie schrumpfen deshalb hier — nicht weil enger schöner wäre,
+   sondern weil ein Innenabstand ein Anteil ist und keine Länge.
+
+   Der Block steht am Dateiende, weil `.price-card` (Z. 1092) und `.closing`
+   (Z. 1238) später kommen als die Breakpoints oben; bei gleicher Spezifität
+   gewinnt die letzte Regel, und weiter vorn hätte dieser Block nichts
+   bewirkt. */
+@media (max-width: 30rem) {
+  .wrap { padding: 0 0.9rem; }
+
+  .download { padding: 1rem; }
+  .price-card { padding: 1.1rem; }
+  .honest { padding: 1rem; }
+  .closing { padding: 2.5rem 1rem; }
+  .way { padding: 1.1rem 1rem 1rem; }
+  .faq details { padding: 0.9rem 1rem; }
+
+  /* Die Zeilenlänge des Aufmachers ist der zweite Hebel, und der größere:
+     Der Rand bringt gemessen ein Zeichen je Zeile, die Schriftgröße fünf.
+     1,2 rem sind 19,2 px — auf einem Gerät, das 320 px Text zeigt, sind das
+     30 Zeichen je Zeile. Lesbar wird es ab 45; ganz erreicht der Aufmacher
+     das auf einem Handy nie, aber 36 sind keine 30. */
+  .hero p.lead { font-size: 1.05rem; }
+
+  /* 20ch sind auf dem Handy schmaler als der Rahmen: Die Überschrift brach
+     in vier Zeilen, wo drei gereicht hätten. Die Grenze ist für breite
+     Schirme gedacht, wo eine Überschrift sonst über die halbe Seite läuft. */
+  .hero h1 { max-width: none; }
+}
