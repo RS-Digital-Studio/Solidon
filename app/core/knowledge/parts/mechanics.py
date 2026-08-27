@@ -35,6 +35,19 @@ FIRST_RELEASE = PartChange(
 SNAP_RATIO = 10.0
 
 
+#: Der Anlaufwinkel eines Schnapphakens, in Grad. Flacher rastet leichter
+#: ein, steiler hält fester.
+#:
+#: **Zwei Bausteine, eine Abwägung.** Der Schnapphaken lässt sie einstellen
+#: (:class:`SnapFitParams`), der Rundverbinder nicht — er hat keinen
+#: solchen Parameter. Die Zahl stand deshalb zweimal da, einmal als
+#: Vorgabe und einmal als Konstante, mit „derselbe Wert wie die Vorgabe"
+#: im Kommentar daneben. Ein Verweis wandert nicht mit: Wer die Vorgabe
+#: eines Tages nachjustiert, hätte den Verbinder zurückgelassen
+#: (27.08.2026).
+SNAP_LEAD_ANGLE: Final = 35.0
+
+
 @op_params
 class SnapFitParams(BaseParams):
     width: float = param(
@@ -74,7 +87,7 @@ class SnapFitParams(BaseParams):
     )
     lead_angle: float = param(
         title=_("Anlaufwinkel"),
-        default=35.0,
+        default=SNAP_LEAD_ANGLE,
         unit=DEGREE_UNIT,
         minimum=10.0,
         maximum=60.0,
@@ -434,11 +447,6 @@ def _profile(shape: str, diameter: float, length: float) -> MeshData:
         return shapes.dovetail(diameter / math.sqrt(2.0), length)
     return shapes.cylinder(diameter, length)
 
-
-#: Der Anlaufwinkel des Schnapphakens, in Grad. Derselbe Wert wie die Vorgabe
-#: von :class:`SnapFitParams` — flacher rastet leichter ein, steiler hält
-#: fester, und beides schon einmal abgewogen zu haben genügt.
-SNAP_LEAD_ANGLE: Final = 35.0
 
 #: Was eine 0,4er Düse als tragende Wand ablegen kann: zwei Außenwände. Ein
 #: Federarm darunter ist keiner — er ist eine Fahne, die beim ersten Einrasten

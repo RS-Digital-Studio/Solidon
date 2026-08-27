@@ -267,9 +267,17 @@ CONE_MIN_ANGLE = 5.0
 #: fast in einer Ebene, und Ebenen erkennt :func:`detect_faces`.
 CONE_MAX_ANGLE = 85.0
 
-#: Wie gut ein Fleck zum eingepassten Kegel passen muss. Dieselbe Schwelle wie
-#: beim Zylinder, weil es dieselbe Frage ist.
-CONE_TOLERANCE = 0.08
+#: Wie gut ein Fleck zum eingepassten Kegel passen muss.
+#:
+#: **Dieselbe Schwelle wie beim Zylinder, weil es dieselbe Frage ist** — und
+#: deshalb abgeleitet statt abgeschrieben. Der Satz stand hier schon, die
+#: Zahl daneben aber ein zweites Mal; wer den Zylinder eines Tages
+#: nachjustiert, hätte den Kegel zurückgelassen (27.08.2026).
+#:
+#: Dass beide zusammengehören, sagt der Code an dritter Stelle selbst: Der
+#: Kommentar an :data:`SPHERE_TOLERANCE` spricht von „der Schwelle von 0,08,
+#: die für Zylinder und Kegel gilt" — im Singular, für beide.
+CONE_TOLERANCE = CYLINDER_TOLERANCE
 
 #: Wie gut ein Fleck zur eingepassten Kugel oder zum Torus passen muss —
 #: **strenger als bei Zylinder und Kegel, und das ist gemessen.**
