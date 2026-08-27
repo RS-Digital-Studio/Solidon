@@ -51,6 +51,13 @@ und [[messung-traegt-nur-am-ort-ihrer-messung]].
   man es hält:** Es schützt gegen einen *veralteten* Index, nicht gegen einen
   *fehlenden* — den legt git kommentarlos leer an, und leer heißt beim
   Committen „alles gelöscht". Es gibt dabei keine Warnung.
+- **Nach dem Commit den gemeinsamen Index nachziehen:**
+  `git reset HEAD -- <die committeten Pfade>` (ohne `GIT_INDEX_FILE`). Der
+  private Index hat die neue Datei aufgenommen, der **gemeinsame** kennt sie
+  nicht — dort steht sie danach als `D` (gelöscht), obwohl sie in HEAD liegt
+  und auf der Platte. Am 27.08.2026 viermal hintereinander passiert, jedes Mal
+  nach einem sauberen Commit. Wer es stehen lässt, überreicht der nächsten
+  Sitzung eine vorbereitete Löschung.
 - **Danach `git show --stat HEAD` lesen**, nicht den Index davor. Die einzige
   Prüfung, die etwas taugt, ist die nach dem Commit
   ([[commit-o-nimmt-den-dateistand]]).
