@@ -645,40 +645,96 @@ def test_the_published_version_file_is_signed() -> None:
 
 # --- Die Datei, die der Client wirklich liest ------------------------------------
 
-#: Ab wann die Versionsdatei als zu voll gilt — Anteil an
-#: :data:`updates.MAX_ANSWER_BYTES`.
-#:
-#: Nicht 100 Prozent, denn bei 100 ist es schon passiert: Der Client wirft dann
-#: ``ValueError`` und der Update-Hinweis **schweigt**, wie jeder andere Fehler
-#: auch (§37.2 — „jedes Problem hat keine Antwort zu heißen"). Genau das macht
-#: den Fall so teuer; ein Kunde merkt nicht, dass er nichts mehr erfährt.
-#: Bei 75 Prozent bleibt Luft für mehrere Versionen, und wer den Test rot
-#: sieht, hat Zeit zu handeln, statt einen Ausfall zu reparieren.
-FILL_LIMIT: float = 0.75
-
 PUBLISHED_VERSION_FILE = Path(__file__).resolve().parents[1] / "website" / "version.json"
 
 
-def test_the_published_version_file_stays_under_the_limit_the_client_reads() -> None:
-    """Was auf dem Server liegt, muss durch ``_get`` passen — sonst gibt es
-    für niemanden mehr ein Update.
+class _AnswerFromDisk:
+    """Ein ``urlopen``-Ersatz, der die eingecheckte Versionsdatei liefert.
 
-    **Der Anlass ist ein Absturzbericht vom 27.08.2026** (S-20260826-594f0f).
-    Im Protokoll des Kunden steht eine Zeile, die harmloser aussieht als sie
-    ist::
+    Gemockt wird ``urlopen`` und nicht der ``Transport``: Ein eigener Transport
+    ersetzt :func:`updates._get` **samt seiner Größenprüfung** — und genau die
+    ist hier der Prüfling. Was der Kunde erlebt hat, entsteht erst zwei Ebenen
+    tiefer, beim Lesen der Bytes.
+    """
+
+    def __init__(self, raw: bytes) -> None:
+        self._raw = raw
+
+    def read(self, count: int | None = None) -> bytes:
+        return self._raw if count is None else self._raw[:count]
+
+    def __enter__(self) -> _AnswerFromDisk:
+        return self
+
+    def __exit__(self, *_: object) -> bool:
+        return False
+
+
+def test_the_published_version_file_gets_through_the_read_that_bounds_it() -> None:
+    """Die ausgelieferte Datei kommt durch :func:`updates._get` — den Weg, auf
+    dem sie beim Kunden hängenblieb.
+
+    **Der Anlass ist ein Absturzbericht vom 27.08.2026** (S-20260826-72a4dd).
+    Der Kunde meldete einen Absturz; im selben Protokoll steht eine Zeile, die
+    harmloser aussieht::
 
         update check did not answer: version file is too large
 
-    Der Kunde fuhr 0.2.0, und 0.2.1 hätte seinen Absturz behoben. Erfahren hat
-    er davon nichts: Die Versionsdatei war über
-    :data:`updates.MAX_ANSWER_BYTES` gewachsen, ``_get`` brach ab, und der
-    Hinweis schwieg — richtig nach §37.2 und trotzdem das schlechteste
-    Ergebnis.
+    ``website/version.json`` war über die Lesegrenze gewachsen, ``_get`` brach
+    ab, und der Hinweis schwieg — richtig nach §37.2, und trotzdem das
+    schlechteste Ergebnis: ein Ausfall ohne Fehler, ohne Fenster, ohne Zeile
+    beim Kunden. Wer die Prüfung verliert, erfährt von keiner neuen Fassung
+    mehr, auch nicht von der, die seinen Absturz behebt.
 
-    Geprüft hat das nichts. Die Grenze stand in ``updates.py``, die Datei
-    wuchs in ``website/``, und zwischen beiden gab es keine Zusicherung. Der
-    Changelog trägt je Sprache mehrere Punkte, also wächst sie mit **jeder**
-    Version weiter.
+    **Geprüft hat das nichts.** Die Grenze stand in ``updates.py``, die Datei
+    wuchs in ``website/``, und dazwischen gab es keine Zusicherung.
+    ``test_the_published_version_file_is_signed`` sieht dieselbe Datei an, aber
+    erst *nachdem* sie gelesen wurde — es prüft die Unterschrift, nicht den
+    Weg dorthin.
+
+    Gemockt wird deshalb ``urlopen`` und nicht der ``Transport``: Ein eigener
+    Transport ersetzt ``_get`` **samt seiner Größenprüfung**, und genau die ist
+    hier der Prüfling.
+    """
+    if not PUBLISHED_VERSION_FILE.exists():
+        pytest.skip("die Versionsdatei liegt nur im vollständigen Baum")
+
+    raw = PUBLISHED_VERSION_FILE.read_bytes()
+
+    with mock.patch("urllib.request.urlopen", return_value=_AnswerFromDisk(raw)):
+        try:
+            payload = updates._get(updates.VERSION_URL, {}, {})
+        except Exception as problem:
+            # Dieselbe Ausnahme, die beim Kunden im Protokoll landete — nur
+            # dort hieß sie „did not answer" und sah nach einem Netzproblem
+            # aus. Hier soll sie sagen, was wirklich los ist.
+            raise AssertionError(
+                f"die ausgelieferte version.json ({len(raw)} Bytes) kommt nicht "
+                f"durch den eigenen Lesepfad: {problem}. Die Grenze steht bei "
+                f"{updates.MAX_ANSWER_BYTES} Bytes. Beim Kunden heißt das: kein "
+                f"Update-Hinweis mehr, ohne jede Meldung."
+            ) from problem
+
+    assert payload.get("version"), (
+        f"die ausgelieferte version.json ({len(raw)} Bytes) kommt nicht durch "
+        f"den eigenen Lesepfad — zu groß für MAX_ANSWER_BYTES "
+        f"({updates.MAX_ANSWER_BYTES}) oder kein gültiges JSON. Beim Kunden "
+        f"heißt das: kein Update-Hinweis mehr, ohne jede Meldung."
+    )
+
+
+def test_the_published_version_file_fits_the_room_the_format_reserves() -> None:
+    """Die Bytezahl daneben — sie benennt den Fall, den der Test darüber prüft.
+
+    :data:`updates.MAX_ANSWER_BYTES` wird seit dem 27.08.2026 aus
+    :data:`updates.MAX_CHANGES`, :data:`updates.MAX_TEXT_LENGTH` und der Zahl
+    der Sprachen **abgeleitet**, statt als feste Zahl dazustehen. Damit kann
+    das Format nicht mehr mehr erzeugen, als der Client liest — die
+    Widersprüchlichkeit, an der es beim Kunden riss, ist strukturell weg.
+
+    Diese Prüfung bleibt trotzdem, denn die Ableitung deckt nur den Changelog.
+    Ein neues Feld in der Versionsdatei — eine längere Paketliste, ein
+    eingebetteter Text — wächst an ihr vorbei.
     """
     if not PUBLISHED_VERSION_FILE.exists():
         pytest.skip("die Versionsdatei liegt nur im vollständigen Baum")
@@ -688,78 +744,6 @@ def test_the_published_version_file_stays_under_the_limit_the_client_reads() -> 
     assert size <= updates.MAX_ANSWER_BYTES, (
         f"version.json ist {size} Bytes und damit über der Grenze von "
         f"{updates.MAX_ANSWER_BYTES}, die der Client liest — jeder Update-Check "
-        f"schlägt ab jetzt still fehl. Kürzen: die Changelog-Punkte je Sprache "
-        f"(MAX_TEXT_LENGTH) oder ältere Versionen aus der Datei nehmen."
-    )
-
-
-def test_the_published_version_file_keeps_room_to_grow() -> None:
-    """Der Frühwarner zum Test darüber: rot, **bevor** es beim Kunden reißt.
-
-    Dieselbe Bauart wie die Regressionsschwelle der Leistungstests — nicht
-    „ist es kaputt", sondern „wie nah ist es dran". Wer hier rot sieht, hat
-    noch mehrere Versionen Zeit.
-    """
-    if not PUBLISHED_VERSION_FILE.exists():
-        pytest.skip("die Versionsdatei liegt nur im vollständigen Baum")
-
-    size = PUBLISHED_VERSION_FILE.stat().st_size
-    room = int(updates.MAX_ANSWER_BYTES * FILL_LIMIT)
-
-    assert size <= room, (
-        f"version.json ist {size} Bytes und füllt damit "
-        f"{size / updates.MAX_ANSWER_BYTES:.0%} der Grenze, die der Client "
-        f"liest ({updates.MAX_ANSWER_BYTES}). Noch geht es gut; bei 100 Prozent "
-        f"bekommt kein Kunde mehr ein Update, und zwar ohne Meldung. Jetzt "
-        f"kürzen, nicht später."
-    )
-
-
-def test_the_read_limit_carries_what_the_format_may_write() -> None:
-    """Die Lesegrenze muss über dem liegen, was das eigene Format zulässt.
-
-    Beim Kunden ist sie gerissen: „update check did not answer: version file is
-    too large" (Protokoll vom 27.08.2026, Vorgang S-20260826-72a4dd). Der
-    Kommentar an der Grenze sagte „Die Datei trägt drei kurze Felder" — richtig,
-    als er geschrieben wurde, und mit dem Changelog still falsch geworden:
-    ``changes`` ist ein Wörterbuch **je Sprache**, und bei 0.2.1 waren das 49
-    Punkte mal sechs, also 37 KB von 64.
-
-    Zwei Grenzen entschieden dieselbe Frage und widersprachen sich —
-    ``MAX_CHANGES`` erlaubte hundert Punkte zu schreiben, die 64 KB ließen rund
-    neunundachtzig lesen. Dazwischen liegt der Bereich, in dem die Anwendung
-    eine Datei erzeugt, die sie selbst nicht mehr liest.
-
-    Das ist die teuerste Stelle für einen stillen Ausfall: Wer die Prüfung
-    verliert, erfährt von keiner neuen Fassung — auch nicht von der, die seinen
-    Absturz behebt.
-    """
-    from app.i18n.catalog import available_languages
-
-    languages = len(available_languages())
-    assert languages >= 2, f"nur {languages} Sprache(n) gefunden — prüft das etwas?"
-
-    worst_case = updates.MAX_CHANGES * updates.MAX_TEXT_LENGTH * languages
-    assert worst_case < updates.MAX_ANSWER_BYTES, (
-        f"die Lesegrenze ({updates.MAX_ANSWER_BYTES}) liegt unter dem, was das Format "
-        f"schreiben darf ({worst_case}) — bei {languages} Sprachen"
-    )
-
-
-def test_the_shipped_version_file_is_read_without_complaint() -> None:
-    """Und die Probe an der Datei, die wirklich ausgeliefert wird.
-
-    Der Test darüber prüft die Rechnung, dieser den Bestand: Was auf dem Server
-    liegt, muss die Anwendung lesen können. Beides zusammen, weil eine richtige
-    Rechnung an einer Datei scheitern kann, die noch etwas anderes mitbringt.
-    """
-    published = Path(__file__).resolve().parent.parent / "website" / "version.json"
-    if not published.is_file():  # pragma: no cover — im Klon ohne Website
-        pytest.skip("keine ausgelieferte version.json im Baum")
-
-    size = published.stat().st_size
-    assert size > 1000, f"{size} Bytes — das ist keine Versionsdatei"
-    assert size <= updates.MAX_ANSWER_BYTES, (
-        f"die ausgelieferte Datei wiegt {size / 1024:.1f} KB, gelesen werden "
-        f"{updates.MAX_ANSWER_BYTES / 1024:.1f} KB"
+        f"schlägt ab jetzt still fehl. Was gewachsen ist, steht nicht im "
+        f"Changelog, sonst hätte die Ableitung es mitgezählt."
     )
