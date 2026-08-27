@@ -63,9 +63,34 @@ LINK = re.compile(
 STAMP_LENGTH = 8
 
 
+#: Wo die Zeilenenden vor dem Hashen vereinheitlicht werden. Bilder und
+#: Schriften stehen nicht dabei: Dort wäre ein ``\r\n`` im Datenstrom keine
+#: Zeilenschaltung, sondern ein Wert, und Ersetzen zerstörte die Datei.
+TEXT_SUFFIXES = frozenset({".css", ".js", ".svg"})
+
+
 def stamp_of(path: Path) -> str:
-    """Die ersten acht Zeichen des SHA-256 über den Dateiinhalt."""
-    return hashlib.sha256(path.read_bytes()).hexdigest()[:STAMP_LENGTH]
+    """Die ersten acht Zeichen des SHA-256 über den Dateiinhalt.
+
+    **Zeilenenden werden vorher vereinheitlicht**, sonst hängt der Stempel
+    daran, wie git die Datei ausgecheckt hat. Gemessen am 27.08.2026:
+    ``style.css`` wiegt im Arbeitsbaum dieser Maschine 68 006 Bytes mit 2 215
+    CRLF und ergibt ``6c6561f6``; dieselbe Datei im Repository hat 65 791
+    Bytes ohne ein einziges CRLF und ergibt ``c1a16e11``.
+
+    Die Seiten trugen den ersten Wert. In einem frisch ausgecheckten Baum
+    stimmte damit **kein einziger** der 142 Textverweise, und der Wächter
+    daneben meldete sie alle als veraltet — im Hauptbaum blieb er grün, weil
+    er dieselben Bytes las wie das Werkzeug. Gefunden hat es eine
+    Nachbarsitzung, die in einem sauberen Arbeitsbaum maß.
+
+    Derselbe Fehler säße auf dem Server: Was dort liegt, hängt davon ab, aus
+    welchem Baum es hochgeladen wurde.
+    """
+    data = path.read_bytes()
+    if path.suffix.lower() in TEXT_SUFFIXES:
+        data = data.replace(b"\r\n", b"\n")
+    return hashlib.sha256(data).hexdigest()[:STAMP_LENGTH]
 
 
 def target_of(page: Path, reference: str) -> Path:
