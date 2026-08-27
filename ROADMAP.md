@@ -113,8 +113,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | `match()` ist quadratisch und läuft in reinem Python | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | eine **Vektorisierung** von `app/core/perceive/matching.py` — zwei Python-Schleifen über N² (Matrixaufbau Zeile 152, Rivalen-Scan Zeile 192). Gemessen: 100 Merkmale 0,08 s · 400 → 1,37 s · 1600 → 23,2 s · 3372 → 101,1 s. Erwartung 50–100×, die Ordnung bleibt quadratisch. Zwei Fallen: die Achsen-Vorzeichenregel (`"axis" in first.params`, richtungslos je Merkmal statt je Art) und `KIND_PENALTY`; `cost()` muss als Einzelpaar-Referenz stehen bleiben und der vektorisierte Aufbau elementweise dagegen geprüft werden. `tests/test_matching.py` trägt 35 Tests als Rückhalt. **Nicht dringend, seit die Merkmalsexplosion behoben ist** — es ist das Netz für den nächsten Fall, der viele Merkmale erzeugt |
 | `test_ui.py` stirbt bei zufälliger Testreihenfolge | Zwei Torläufe an einem Tag, beide an derselben Stelle (26.08.2026) | eine **Zuordnung zur Absturzfamilie**. Gemessen: mit `-p no:randomly` laufen alle 303 Tests durch (Exit 0), mit zufälliger Reihenfolge Zugriffsverletzung bei 23 % — beide Male in `panels.py` unter `_show_scene`, einmal `show_result`, einmal `show_document`. **Keine Regression**: Der Grundlagen-Torlauf vor allen Änderungen des Tages zeigte denselben Abbruch an derselben Stelle. Gehört zu den Signaturen A–C weiter oben; was fehlt, ist die Entscheidung, ob die Suite die Reihenfolge für diese Datei festnagelt oder die Ursache weiter verfolgt wird. **Dritte Beobachtung am 26.08.2026 (ce, Torlauf):** wieder bei 23 %, diesmal aber im `QCompleter`-Konstruktor (`op_dialog.py:197`, aus der fx-Hilfe `2b48f288`) statt in `panels.py` — die Position im Lauf ist stabil, die Stelle im Code nicht. Der betroffene Test allein: grün. Vollständige Wiederholung derselben Datei: 305 passed, Exit 0. Das ist die Auskunft, die zur Reihenfolge passt und gegen eine Regression spricht — der Torlauf davor am selben Tag kannte den Abbruch nicht, und die Änderungen dazwischen (Plattenwahl im Druckdialog) berühren weder `op_dialog` noch `panels` |
 | Die 56 Sekunden von `weg4-figur-formen` liegen in der Oberfläche | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | einen **Prüfstand im echten Fenster**. Im Kern kostet das Projekt 0,82 s (offscreen über `Session.open_project` gemessen); der Rest hängt an VTK und am Aktoraufbau und ist offscreen unsichtbar — siehe „Offscreen prüft nichts, was am Aktor hängt". Dasselbe gilt für rund 40 der 145 Sekunden von weg3 und 13 von `dose-mit-deckel` |
-| Alle anderen `detect_*` sind bei ungeschweißter Topologie blind | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | dieselbe Behandlung, die `detect_edge_loops` am 26.08. bekommen hat. Roh geladen liefert `detect` **null** Merkmale statt 10 (`plate_holes`), 9 (`post_with_fillet`), 1 (`torus_ring`) — die übrigen Erkenner fragen weiter das gespeicherte Netz statt der Geometrie |
-| `component_count` zählt jedes Dreieck als Komponente | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | einen eigenen Schritt: 796 statt 1 bei `plate_holes`, und die Quelle des `ingest.multiple_components` im Weg-3-Beispiel. Derselbe Artefakt wie bei den Kantenschleifen, andere Stelle — `face_components` hat viele Aufrufer, deshalb nicht nebenbei |
 | `decimated 992 to 992` — ein Schritt, der nichts tut | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | eine Erklärung. `decimate()` hat einen frühen Rücksprung für genau diesen Fall, und er greift nicht; es läuft eine echte `simplify_quadric_decimation` von 992 auf 992. Drei Aufrufer kommen infrage |
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
 | Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
@@ -10404,14 +10402,22 @@ Offen bleibt daraus:
       braucht einen Prüfstand im echten Fenster, nicht eine weitere Kernmessung.
       Dasselbe gilt für rund 40 der 145 Sekunden von weg3 und 13 von
       `dose-mit-deckel`.
-- [ ] **Alle anderen `detect_*` sind bei ungeschweißter Topologie blind.** Roh
-      geladen liefert `detect` **null** Merkmale statt 10 (`plate_holes`), 9
-      (`post_with_fillet`), 1 (`torus_ring`). Behoben ist bisher nur
-      `detect_edge_loops`; die übrigen fragen weiter das gespeicherte Netz.
-- [ ] **`component_count` zählt jedes Dreieck als Komponente** — 796 statt 1.
-      Derselbe Artefakt an anderer Stelle, und die Quelle des
-      `ingest.multiple_components` im Weg-3-Beispiel. `face_components` hat
-      viele Aufrufer, deshalb ein eigener Schritt.
+- [x] **Alle anderen `detect_*` sind bei ungeschweißter Topologie blind.** Roh
+      geladen lieferte `detect` **null** Merkmale statt 10 (`plate_holes`), 9
+      (`post_with_fillet`), 1 (`torus_ring`). Behoben am 27.08.2026 (`40bec613`):
+      `detect` führt die Ecken einmal rechnerisch zusammen, bevor irgendwer
+      sucht — dieselbe Toleranz wie `repair.merge_vertices`, das Netz im
+      Dokument bleibt unangetastet, die Dreiecke behalten ihren Platz. Der Test
+      prüft auf **Gleichheit beider Wege** statt auf feste Zahlen.
+- [x] **`component_count` zählt jedes Dreieck als Komponente** — 796 statt 1.
+      Behoben am 27.08.2026 (`c54a685a`): gezählt wird über die **Vereinigung**
+      beider Lesarten, gespeicherte Nummern *und* Ort. Über den Ort allein
+      zerfiel ein Blend-Körper mit Radius 12 in fünf Stücke — zwei Ecken 88 nm
+      auseinander, ein entartetes Dreieck, und der Graph reißt an einer Stelle,
+      an der nichts fehlt. Zusammenführen darf hinzufügen, nie wegnehmen.
+      `fully_stitched` schneidet die Frage ab, wo jede Kante schon ihren
+      Partner hat: ohne sie kostete die Erkennung 28 Prozent mehr für eine
+      Antwort, die schon dastand.
 
 ## Zwei Torläufe an einem Tag, beide an derselben Stelle (26.08.2026)
 
