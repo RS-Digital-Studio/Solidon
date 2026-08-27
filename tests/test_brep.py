@@ -826,9 +826,18 @@ def test_the_exact_shell_reports_what_the_mesh_twin_reports(profile: Profile) ->
 
     assert "hollow.too_thin" in {entry.code for entry in hopeless.findings}
     assert "hollow.wall_below_nozzle" in {entry.code for entry in unprintable.findings}
-    # Und die Gegenprobe, ohne die eine Warnung nichts wert ist: der brauchbare
-    # Fall bleibt still.
-    assert not sound.findings, [entry.code for entry in sound.findings]
+
+    # **Und der brauchbare Fall schweigt nicht — er berichtet.** Hier stand
+    # „bleibt still" als Gegenprobe, und das schrieb den letzten Unterschied
+    # zwischen den Zwillingen fest: Mit einer Wandstärke, die funktioniert,
+    # sagte der Netz-Zwilling ``hollow.done`` mit seinen Zahlen und der exakte
+    # gar nichts. Wie viel Material weg ist, ist der Grund, aus dem man
+    # aushöhlt. Was die Gegenprobe wirklich meint, ist „keine **Warnung**".
+    codes = {entry.code for entry in sound.findings}
+    assert codes == {"hollow.done"}, codes
+    assert all(entry.severity == "info" for entry in sound.findings)
+    fertig = next(entry for entry in sound.findings if entry.code == "hollow.done")
+    assert fertig.values["removed_cm3"] > 0.0, "ohne die Zahl ist die Meldung leer"
 
 
 def test_the_printable_wall_comes_from_the_profile_not_from_a_number(profile: Profile) -> None:
@@ -1002,3 +1011,55 @@ def test_a_closed_mesh_never_reaches_the_stitcher(monkeypatch: pytest.MonkeyPatc
 
     assert kernel._stitched(dicht) is dicht
     assert not gerufen, "ein dichtes Netz darf den Vernäher nicht kosten"
+
+
+def test_every_twin_pair_answers_the_same_question_the_same_way(profile: Profile) -> None:
+    """Vier Paare, dieselben Eingaben, dieselben Befunde.
+
+    Ein Zwilling ist dieselbe Handlung in zwei Rechenkernen, und der Kunde
+    wählt zwischen ihnen über einen Haken im selben Dialog. Er erwartet also
+    dasselbe Verhalten — und vor allem dieselben **Auskünfte**. Läuft ein Paar
+    auseinander, merkt es niemand: Beide Wege funktionieren, nur einer
+    schweigt.
+
+    Drei Unterschiede sind einzeln gemeldet und einzeln behoben worden
+    (`bore.over_the_edge`, der leere Körper beim zu großen Loch,
+    `hollow.too_thin`), und beim vierten Anlauf stellte sich heraus, dass noch
+    einer offen war: Mit einer Wandstärke, die *funktioniert*, meldete das Netz
+    `hollow.done` und der exakte Kern nichts. Einzeln gemeldete Fälle finden
+    den nächsten nicht — dieser Test fährt alle Paare gegeneinander.
+
+    Die Werte treffen absichtlich die Grenzen: ein Loch größer als der Körper,
+    eine Wand dicker als das halbe Teil. Dort trennt sich, wer etwas sagt und
+    wer schweigt.
+    """
+    from app.core.registry.registry import MENU_TWINS
+
+    assert len(MENU_TWINS) >= 4, f"zu wenige Paare gefunden: {MENU_TWINS}"
+
+    quader_exakt = run(
+        "create_brep_box", None, profile, width=40.0, depth=30.0, height=20.0
+    ).outputs[0]
+    quader_netz = run("create_box", None, profile, width=40.0, depth=30.0, height=20.0).outputs[0]
+
+    faelle: list[tuple[str, str, dict[str, object]]] = [
+        ("drill_brep_hole", "drill_hole", {"diameter": 6.0}),
+        ("drill_brep_hole", "drill_hole", {"diameter": 10.0, "x": 18.0}),
+        ("shell_exact", "hollow_object", {"wall": 2.0}),
+        ("shell_exact", "hollow_object", {"wall": 15.0}),
+    ]
+
+    abweichend: list[str] = []
+    for exakt, netz, werte in faelle:
+        assert MENU_TWINS.get(exakt) == netz, f"{exakt} ist nicht mehr mit {netz} gepaart"
+        codes_exakt = {entry.code for entry in run(exakt, quader_exakt, profile, **werte).findings}
+        codes_netz = {entry.code for entry in run(netz, quader_netz, profile, **werte).findings}
+        # Verglichen wird die **Menge** der Codes, nicht ihre Zahl: Der
+        # Netz-Zwilling darf zusätzlich über sein Raster sprechen, das der
+        # exakte Kern nicht hat. Was beide kennen, müssen beide sagen.
+        gemeinsam = codes_exakt | codes_netz
+        fehlt_exakt = {code for code in gemeinsam if code in codes_netz and code not in codes_exakt}
+        if fehlt_exakt & {"hollow.done", "hollow.too_thin", "bore.over_the_edge"}:
+            abweichend.append(f"{exakt} schweigt zu {sorted(fehlt_exakt)} bei {werte}")
+
+    assert not abweichend, abweichend

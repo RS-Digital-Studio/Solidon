@@ -29,7 +29,7 @@ from app.core.errors import (
     ValidationError,
 )
 from app.core.geom.boolean import NOTHING_LEFT_DETAIL, NOTHING_LEFT_TITLE, without_effect
-from app.core.geom.hollow import below_printable_wall, too_thin
+from app.core.geom.hollow import below_printable_wall, hollowed, too_thin
 from app.core.geom.prepare import bore_diameter, over_the_edge
 from app.core.geom.prepare_ops import DrillParams
 from app.core.geom.transform import Axis
@@ -331,6 +331,13 @@ def shell_exact(ctx: OpContext) -> OpResult:
     findings: list[Finding] = []
     if abs(solid.volume - body.volume) <= EPS_GEOM or not solid.is_watertight:
         findings.append(too_thin(params.wall))
+    else:
+        # **Und der Erfolgsfall, der als letzter auseinanderlief.** Nach dem
+        # Fix oben meldeten beide Kerne dieselben Warnungen; mit einer
+        # Wandstärke, die funktioniert, sagte das Netz ``hollow.done`` und
+        # dieser schwieg. Wie viel Material weg ist, ist der Grund, aus dem
+        # man aushöhlt — dieselbe Quelle wie beim Zwilling (``hollowed``).
+        findings.append(hollowed(params.wall, body.volume - solid.volume))
     # Dieselbe Frage wie beim Netz-Zwilling, aus derselben Quelle: Trägt der
     # Drucker diese Wand? Im Schema stand hier ``minimum=0.2`` und dort 0.4 —
     # zwei Zahlen für eine Regel, die im Profil steht (§39, Regel 7).

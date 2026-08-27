@@ -259,6 +259,33 @@ def below_printable_wall(wall: float, profile: Profile | None) -> Finding | None
     )
 
 
+def hollowed(wall: float, removed_mm3: float) -> Finding:
+    """Ausgehöhlt — und wie viel dabei herausgekommen ist.
+
+    Das Gegenstück zu :func:`too_thin`, und aus demselben Grund geteilt: Beide
+    Kerne haben den Fall, und für den Kunden ist es dieselbe Auskunft.
+
+    **Der Erfolgsfall war der letzte, in dem die Zwillinge auseinanderliefen.**
+    Nach dem Fix vom 27.08.2026 meldeten beide dieselben Warnungen; gefahren
+    mit einer Wandstärke, die *funktioniert*, sagte der Netz-Zwilling
+    ``hollow.done`` mit seinen Zahlen und der exakte schwieg. Gerade dort
+    zählt die Auskunft am meisten: Wie viel Material weg ist, ist der Grund,
+    aus dem man aushöhlt.
+
+    **Weniger Werte als der Netz-Zwilling, und das ist kein Mangel.** Dort
+    stehen zusätzlich ``eroded_mm``, ``tolerance_mm`` und ``vents`` — sie
+    beschreiben das Raster und die Entlüftungen, und beides hat der exakte
+    Kern nicht (siehe ``registry._HOLLOW_TOGGLE``). Eine Null dafür wäre eine
+    Aussage über etwas, das es nicht gibt.
+    """
+    return Finding(
+        code="hollow.done",
+        severity="info",
+        message=_("Ausgehöhlt."),
+        values={"wall_mm": round(wall, 2), "removed_cm3": round(removed_mm3 / 1000.0, 1)},
+    )
+
+
 def too_thin(wall: float) -> Finding:
     """Für diese Wandstärke bleibt kein Hohlraum übrig.
 
