@@ -3,9 +3,17 @@
 PySide6. Darf `app.core` benutzen, die Gegenrichtung ist verboten (§8). Die
 Oberfläche rechnet keine Geometrie und ändert keine — **sie ruft Ops auf.**
 
-Die Regeln dieses Gebiets stehen in `.claude/rules/oberflaeche.md`, der
-Skizzeneditor zusätzlich in `.claude/rules/zeichenflaeche.md`. Beide laden sich
-selbst. Hier steht die Karte.
+Die Regeln dieses Gebiets stehen in `.claude/rules/` und laden sich selbst —
+**vier Dateien, je nachdem, was man anfasst:**
+
+| Regeldatei | Lädt bei |
+|---|---|
+| `oberflaeche.md` | jeder Datei hier — Texte, Zahlen, Grenzen, Barrierefreiheit |
+| `ansicht.md` | `viewport.py`, `overlay.py`, `cursors.py` und den Leisten |
+| `wartezeit.md` | `session.py`, `loading.py`, `leash.py`, `splash.py`, `main_window.py` |
+| `zeichenflaeche.md` | `sketch_editor.py` |
+
+Hier steht die Karte, dort das Gesetz.
 
 ## Der Weg durch die Schicht
 

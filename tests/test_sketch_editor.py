@@ -2870,7 +2870,7 @@ def test_the_measure_field_moves_to_the_viewport_and_back(qt_app: QApplication) 
     deren Bild; zurückgeholt wird es, bevor das Panel stirbt.
 
     ``isVisibleTo`` statt ``isVisible`` — in einem nie gezeigten Fenster lügt
-    das zweite (siehe oberflaeche.md).
+    das zweite (siehe wartezeit.md).
     """
     from PySide6.QtCore import QPoint
     from PySide6.QtWidgets import QWidget

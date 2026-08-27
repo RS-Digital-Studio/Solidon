@@ -702,7 +702,7 @@ def test_the_pointer_promises_exactly_what_the_click_does(window: MainWindow) ->
     muss: Über einer Bohrung am noch nicht gewählten Teil steht der
     Auswahlzeiger, nach dem ersten Klick der Merkmalszeiger. Laufen die beiden
     auseinander, verspricht der Zeiger etwas, das nicht eintritt — die Falle,
-    vor der `.claude/rules/oberflaeche.md` bei ``_resting_role`` warnt.
+    vor der `.claude/rules/ansicht.md` bei ``_resting_role`` warnt.
     """
     viewport = window.viewport
     point = on_the_bore_wall(window)

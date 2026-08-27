@@ -239,7 +239,10 @@ Von oben nach unten:
 
 Dazu die Regeldateien, die quer dazu greifen: `kern.md` deckt ganz
 `app/core/**`, `operationen.md` zusätzlich `geom/`, `registry/` und `scene/`,
-`dateiformat.md` `ingest/`, `export/` und `scene/project*.py`.
+`dateiformat.md` `ingest/`, `export/` und `scene/project*.py`. In `app/ui/`
+sind es vier, nach dem, was man anfasst: `oberflaeche.md` immer, dazu
+`ansicht.md` beim Viewport, `wartezeit.md` bei allem, was rechnen lässt, und
+`zeichenflaeche.md` beim Skizzeneditor.
 
 **Wohin etwas gehört**, in einem Satz: Ändert sich der Code, ändert sich die
 Karte; ändert sich eine Entscheidung, ändert sich die Regel. Datums-Marker,

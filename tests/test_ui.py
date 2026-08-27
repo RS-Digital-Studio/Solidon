@@ -5311,7 +5311,7 @@ def test_the_cards_make_room_for_the_sketch_bar(window: MainWindow) -> None:
     **Gerechnet und nicht an den Karten gemessen.** In einem nie gezeigten
     Fenster ist ``height()`` null — bei beiden Karten, vorher wie nachher, und
     ein Vergleich zweier Nullen ist grün ohne Aussage
-    (`.claude/rules/oberflaeche.md`, „isVisible lügt in einem nie gezeigten
+    (`.claude/rules/wartezeit.md`, „isVisible lügt in einem nie gezeigten
     Fenster"). ``_bottom_room`` dagegen fragt den ``sizeHint``, und den gibt
     es auch ungezeigt.
     """
@@ -5426,7 +5426,7 @@ def test_no_worker_hands_its_field_to_a_blind_lambda() -> None:
 
     assert not culprits, (
         f"{culprits}: ein benannter Slot prüft die Identität seines Arbeiters, "
-        "ein Lambda trifft blind das Feld — siehe .claude/rules/oberflaeche.md"
+        "ein Lambda trifft blind das Feld — siehe .claude/rules/wartezeit.md"
     )
 
 
