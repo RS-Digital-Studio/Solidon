@@ -194,7 +194,11 @@ website/      öffentliche Seiten; handbuch.html und en/manual.html erzeugt
               bilder/ Schaustücke von Hand, beleg-*.png von tools/make_web_images.py
               dl/ die Pakete, von tools/make_download.py angelegt
 changelog/    was im Update-Fenster steht, je Sprache eine Datei — Auswahl
-              in Kundensprache, keine Liste der Änderungen
+              in Kundensprache, keine Liste der Änderungen. **Hier liegt keine
+              CLAUDE.md**, und zwar bewusst: Test und `make_download.py`
+              sammeln den Ordner über `glob("*.md")` und lesen jeden Stem als
+              Sprache. Eine Fremddatei wird dort zur Sprache „CLAUDE" — in der
+              Prüfung und in der ausgelieferten `version.json`
 3D Drucker/   physische Druckprojekte, eigene CLAUDE.md — kein Programmcode
               und **nicht** in diesem Repository: der Ordner hat sein eigenes
               `.git` und steht hier in `.gitignore`. Wer dort committet, tut
