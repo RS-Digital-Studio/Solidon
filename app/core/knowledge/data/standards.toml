@@ -359,6 +359,20 @@ note = "Nut 8 wie 3030 — die Außenmaße unterscheiden sich, die Nut nicht"
 # Wer eine Platte zur Hand hat, misst sie mit dem Messschieber und trägt sie
 # hier ein; alles andere ist erledigt.
 #
+# **An einer echten Platte nachgemessen** (27.08.2026, Alexander Schneider,
+# Messschieber): Schlitzbreite 4,9 bis 5,1, Schlitzhöhe 14,9 bis 15,1, und über
+# zwei benachbarte Schlitze außen gemessen 45,0 — das ist Raster plus eine
+# Schlitzbreite und bestätigt die 40,00 auf den Zehntel. Die Nennmaße der
+# Zeichnung stimmen also; **neu ist die Streuung von ±0,1 mm**, die keine
+# Zeichnung hergibt. Sie ist der Grund, aus dem der Zapfen sein Spiel aus dem
+# Materialprofil bezieht und nicht knapp auf das Nennmaß gebaut wird: Im
+# engsten gemessenen Schlitz bleiben unter PETG 0,15 mm Luft, unter PLA 0,10.
+# `tests/test_parts.py` hält das fest.
+#
+# **Die Plattendicke fehlt weiterhin.** Sie war die einzige der fünf Zahlen,
+# die eine Messung gebraucht hätte, und sie ist bei diesem Durchgang nicht
+# mitgekommen.
+#
 # **Beim Hersteller gesucht und nicht gefunden** (25.08.2026): IKEA
 # veröffentlicht die Lochung an keiner der vier offiziellen Stellen — Produkt-
 # seite US (003.208.03) und DE (00320803) nennen Breite und Höhe, die deutsche
@@ -373,7 +387,7 @@ slot_height = 15.0
 pitch = 40.0
 stagger = 20.0
 thickness = 5.0
-note = "IKEA SKÅDIS; Schlitz mit halbrunden Enden, zweite Lochschar um 20 mm versetzt"
+note = "IKEA SKÅDIS; Schlitz mit halbrunden Enden, zweite Lochschar um 20 mm versetzt. Nennmaße an einer echten Platte bestätigt, Streuung ±0,1 mm; Plattendicke unbelegt"
 
 # --- Schläuche und Rohre --------------------------------------------------------
 

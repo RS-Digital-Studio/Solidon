@@ -2861,3 +2861,73 @@ def test_a_printed_joint_needs_a_gap_the_printer_can_hold(profile: Profile) -> N
     tight = check(TooTight, built_too_tight, profile, bodies=2)
     assert not tight.passed, "ein Spalt von 0,05 mm verschweißt beim Drucken"
     assert "0.05" in tight.failures[0].reason
+
+
+#: Was ein Messschieber an einer echten SKÅDIS-Platte hergibt.
+#:
+#: Erste Messung am 27.08.2026 (Alexander Schneider): Schlitzbreite 4,9 bis
+#: 5,1 mm, Schlitzhöhe 14,9 bis 15,1 mm. Die **Nennmaße** der Tabelle sind
+#: damit bestätigt — neu ist die Streuung, die keine Zeichnung hergibt.
+#:
+#: Hier steht die **untere** Grenze, denn nur sie kann klemmen. Wer die Zahl
+#: ändert, hat gemessen; wer sie ohne Messung ändert, verschiebt eine Zusage
+#: ins Blaue.
+NARROWEST_MEASURED_SLOT = 4.9
+NARROWEST_MEASURED_SLOT_HEIGHT = 14.9
+
+
+@pytest.mark.parametrize("material", ["pla", "petg", "abs", "tpu-95a"])
+def test_the_hook_still_fits_the_narrowest_slot_that_was_measured(material: str) -> None:
+    """Ein Teil, das in neun von zehn Platten passt, ist kaputt.
+
+    Die Tabelle führt Nennmaße: 5,0 × 15,0. Eine echte Platte hält sie nicht
+    auf den Hundertstel — gemessen wurden 4,9 bis 5,1 und 14,9 bis 15,1. Für
+    den Einhänger zählt allein das **untere** Ende: Ein Zapfen, der genau
+    5,0 misst, geht in einen 4,9er Schlitz nicht hinein.
+
+    Getragen wird das vom Spiel aus dem Materialprofil (Regel 7), und dieser
+    Test hält fest, dass es dafür reicht — in **jedem** Material, nicht nur in
+    dem, mit dem gerade jemand gedruckt hat. Am knappsten wird es bei PLA, das
+    das kleinste Spiel führt: dort bleiben 0,10 mm.
+
+    Ohne diese Zusage wäre die Streuung eine Notiz in einer Tabelle, die
+    niemand nachrechnet — und die erste Platte, die 0,05 mm enger ausfällt,
+    fiele beim Kunden auf statt hier.
+    """
+    from app.core.knowledge import standards
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.profiles import material_profiles
+
+    board = standards.board("skadis")
+    spiel = material_profiles()[material].clearance
+
+    # Dieselbe Rechnung wie im Baustein; ``play`` kommt bei null aus dem
+    # Profil (``parts/ops.py``, ``PLAY_FIELD``).
+    zapfen = board.slot_width - spiel
+    nutzbar = board.slot_height - spiel
+
+    assert zapfen <= NARROWEST_MEASURED_SLOT, (
+        f"{material}: Zapfen {zapfen:.2f} mm passt nicht in den engsten "
+        f"gemessenen Schlitz ({NARROWEST_MEASURED_SLOT} mm)"
+    )
+    assert nutzbar <= NARROWEST_MEASURED_SLOT_HEIGHT, (
+        f"{material}: {nutzbar:.2f} mm Weg passt nicht in die engste "
+        f"gemessene Schlitzhöhe ({NARROWEST_MEASURED_SLOT_HEIGHT} mm)"
+    )
+
+    # Und die Gegenprobe zur Zusage selbst: Der Baustein baut wirklich mit
+    # diesem Maß, statt dass hier eine Formel neben ihm herrechnet.
+    #
+    # **Ein einzelner Haken, und nur seine Breite.** Zwei Haken stehen im
+    # Rasterabstand, ihr Hüllquader misst 44,75 mm — das ist 40 plus eine
+    # Zapfenbreite und sagt nichts über die Passung. Und gemessen wird X:
+    # In der Höhe ragt die federnde Rastzunge absichtlich über den Zapfen
+    # hinaus, sie liegt *vor* der Platte. Was durch den Schlitz muss, prüft
+    # der Test darüber (``goes_through_the_slot_and_catches_behind_it``).
+    spec = PARTS.get("pegboard_hook")
+    gebaut = spec.fn(spec.params(count=1, play=spiel))
+    breite = gebaut.mesh.bounds.size[0]
+    assert breite <= NARROWEST_MEASURED_SLOT + 1e-6, (
+        f"{material}: gebauter Zapfen ist {breite:.2f} mm breit und passt nicht "
+        f"in den engsten gemessenen Schlitz ({NARROWEST_MEASURED_SLOT} mm)"
+    )
