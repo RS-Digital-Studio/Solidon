@@ -627,9 +627,18 @@ def _sketch_editor(theme: Theme) -> str:
     colours = canvas.colours
     canvas.background()
 
-    # Die Werkzeugzeile. Sechs von acht Werkzeugen — Auswählen liegt auf Esc
-    # und Verlängern neben Trimmen; beide stehen im Text, nicht im Bild, sonst
-    # wird die Zeile zur Aufzählung.
+    # Die Werkzeugzeile — ein Schema, keine vollständige Liste. Nicht im Bild
+    # stehen Auswählen (Esc), Punkt (P) und Verlängern (neben Trimmen); sie
+    # stehen im Handbuchtext daneben, der alle Tasten nennt. Sonst würde die
+    # Zeile zur Aufzählung, und das Bild soll zeigen, wo die Werkzeuge liegen,
+    # nicht welche es gibt.
+    #
+    # Hier stand „Sechs von acht Werkzeugen" und darunter zwei Weggelassene.
+    # Die Rechnung ging nie auf: ``sketch_editor.TOOL_KEYS`` führt sieben
+    # Einträge, dazu kommen Verlängern und der Sammelknopf für Grundformen.
+    # Übergangen war ausgerechnet der Punkt — er fehlte im Bild **und** in der
+    # Aufzählung dessen, was fehlt. Deshalb steht hier keine Zahl mehr: Sie
+    # altert mit dem nächsten Werkzeug, die Aufzählung nicht.
     canvas.box(10, 10, 600, 32, fill=colours.fill)
     for index, (name, key) in enumerate(
         ((_("Linie"), "L"), (_("Kreis"), "C"), (_("Bogen"), "A"), (_("Spline"), "S"))
