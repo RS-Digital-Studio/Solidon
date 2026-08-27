@@ -460,9 +460,11 @@ def decimate_mesh(ctx: OpContext) -> OpResult:
     source = ctx.inputs[0]
     before = as_mesh_data(source.mesh)
     after = decimate(before, params.triangles)
+    findings = _deviation_findings(before, after, source.id)
+    findings.extend(_simplification_findings(before, after, params.triangles, source.id))
     return OpResult(
         outputs=[dataclasses.replace(source, mesh=after)],
-        findings=_deviation_findings(before, after, source.id),
+        findings=findings,
     )
 
 
@@ -789,6 +791,62 @@ def subdivide_surface(ctx: OpContext) -> OpResult:
         )
     )
     return OpResult(outputs=[dataclasses.replace(source, mesh=after)], findings=findings)
+
+
+#: Ab welchem Anteil des Ziels eine Vereinfachung als wirkungslos gilt.
+#:
+#: Nicht „exakt verfehlt": Die Quadrik-Dezimierung landet regelmäßig ein paar
+#: Dreiecke neben der Vorgabe, und daraus einen Befund zu machen hieße, bei
+#: jedem zweiten Lauf etwas zu melden. Gemeint ist der Fall, in dem sie **gar
+#: nichts** getan hat — gemessen an ``weg1-halterung-anpassen``: 992 Dreiecke
+#: hinein, 992 heraus, und zwar bei jedem Ziel von 900 bis 400.
+SIMPLIFY_MISSED = 0.95
+
+
+def _simplification_findings(
+    before: MeshData, after: MeshData, target: int, object_id: str
+) -> list[Finding]:
+    """Sagt es, wenn das Vereinfachen sein Ziel nicht erreicht hat.
+
+    **Der Kunde bekam bisher „Die Fläche hat sich dabei kaum verschoben."** Das
+    stimmt und ist vollkommen nebensächlich: Er hatte 400 Dreiecke verlangt und
+    992 bekommen, im Verlauf steht ein Schritt, und im Bild dasselbe Teil. Wer
+    das liest, sucht den Fehler bei sich.
+
+    Dass nichts passiert, ist dabei nicht einmal falsch. Gemessen an der
+    Halterung aus Weg 1: 992 Dreiecke, wasserdicht, eine Komponente, keine
+    entarteten Dreiecke, Euler-Zahl minus acht — ein CAD-Teil mit fünf
+    Durchbrüchen, das bereits minimal trianguliert ist. Jede Kante trennt dort
+    zwei Ebenen, und
+    eine solche Kante zusammenzuziehen hieße, die Form zu ändern. Dieselbe
+    Rechnung erreicht an Kugel und Quader jedes Ziel exakt; sie gibt hier auf,
+    weil es nichts zu holen gibt.
+
+    Gemeldet wird deshalb als Auskunft und nicht als Warnung — nichts ist
+    schiefgegangen, es gab nur nichts zu tun. Die Handlung dazu ist keine
+    Reparatur, sondern die Einordnung: Wer die Dreieckszahl senken will, muss
+    die Form vergröbern (Glätten) oder mit dem leben, was die Form kostet.
+    """
+    if after.triangle_count <= target or after.triangle_count > before.triangle_count:
+        return []
+    if after.triangle_count < before.triangle_count * SIMPLIFY_MISSED:
+        return []
+    return [
+        Finding(
+            code="mesh.not_simplified",
+            severity="info",
+            message=_(
+                "Das Netz ließ sich nicht weiter vereinfachen — es trägt die Form "
+                "schon mit den wenigsten Dreiecken."
+            ),
+            object_id=object_id,
+            values={
+                "target": target,
+                "before": before.triangle_count,
+                "after": after.triangle_count,
+            },
+        )
+    ]
 
 
 def _deviation_findings(before: MeshData, after: MeshData, object_id: str) -> list[Finding]:

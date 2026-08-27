@@ -23,6 +23,7 @@ from app.core.geom.mesh import MeshData, as_mesh_data, read_mesh
 from app.core.geom.prepare import compensate_elephant_foot, countersink, plug
 from app.core.ingest.loader import normalise
 from app.core.ingest.outline import extrude, is_outline
+from app.core.knowledge import profiles
 from app.core.registry import REGISTRY
 from app.core.scene.cancel import NeverCancelled
 from app.core.types import OpContext, Profile, Scene, SceneObject
@@ -906,3 +907,84 @@ def test_the_elephant_foot_follows_the_body_not_the_project(profile: Profile) ->
     )
 
     assert soft.outputs[0].mesh.volume < plain.outputs[0].mesh.volume, "TPU is pulled in further"
+
+
+def test_a_simplification_that_changed_nothing_says_so() -> None:
+    """Der Kunde verlangte 400 Dreiecke und bekam 992 — ohne ein Wort dazu.
+
+    Gemessen an ``weg1-halterung-anpassen``: 992 Dreiecke hinein, 992 heraus,
+    und zwar bei jedem Ziel von 900 bis 400. Das Netz ist dabei in Ordnung —
+    wasserdicht, eine Komponente, keine entarteten Dreiecke, Euler-Zahl minus
+    acht: ein CAD-Teil mit fünf Durchbrüchen, das bereits minimal trianguliert
+    ist. Jede Kante trennt dort zwei Ebenen, und eine solche zusammenzuziehen
+    hieße, die Form zu ändern; dieselbe Rechnung trifft an Kugel und Quader
+    jedes Ziel exakt.
+
+    Im Prüfbericht stand dazu „Die Fläche hat sich dabei kaum verschoben" —
+    zutreffend und vollkommen nebensächlich. Im Verlauf ein Schritt, im Bild
+    dasselbe Teil, und wer das liest, sucht den Fehler bei sich. Genau das
+    verbietet die Regel „Eine Operation, die nichts bewirkt hat, sagt das".
+    """
+    body = trimesh.creation.icosphere(subdivisions=4)
+    same = MeshData.of(body)
+
+    findings = mesh_ops._simplification_findings(same, same, 400, "obj_1")
+
+    assert [f.code for f in findings] == ["mesh.not_simplified"], (
+        f"ein Lauf ohne jede Wirkung blieb stumm: {[f.code for f in findings]}"
+    )
+    assert findings[0].values["target"] == 400
+    assert findings[0].values["after"] == same.triangle_count
+
+
+def test_a_simplification_that_worked_stays_quiet() -> None:
+    """Und die Gegenrichtung, ohne die der Test oben nichts wert wäre.
+
+    Ein Befund, der bei jedem Lauf erscheint, wird nach dem dritten Mal
+    übersehen — und nimmt die daneben mit. Gemeldet wird deshalb nur, wo
+    **gar nichts** geschah: Die Quadrik-Dezimierung landet regelmäßig ein paar
+    Dreiecke neben der Vorgabe, und das ist kein Befund, sondern das Verfahren.
+    """
+    body = trimesh.creation.icosphere(subdivisions=4)
+    before = MeshData.of(body)
+    after = mesh_ops.decimate(before, 1000)
+
+    assert after.triangle_count < before.triangle_count, "hier soll es gewirkt haben"
+    assert mesh_ops._simplification_findings(before, after, 1000, "obj_1") == []
+
+    # Und knapp daneben ist immer noch gewirkt.
+    knapp = mesh_ops.decimate(before, before.triangle_count - 2)
+    assert mesh_ops._simplification_findings(before, knapp, before.triangle_count - 2, "o") == []
+
+
+def test_the_operation_actually_asks(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Die Verdrahtung, nicht die Rechnung — der teurere der beiden Fehler.
+
+    Ein Befund, den niemand ruft, ist so still wie keiner. Geprüft wird
+    deshalb über die **Operation**, mit einer Vereinfachung, die nichts tut:
+    Genau so verhält sich der echte Fall, und genau so lässt er sich ohne ein
+    besonderes Netz nachstellen.
+    """
+    from app.core.registry import REGISTRY
+
+    monkeypatch.setattr(mesh_ops, "decimate", lambda mesh, target: mesh)
+    spec = REGISTRY.get("decimate_mesh")
+    body = MeshData.of(trimesh.creation.icosphere(subdivisions=4))
+    entry = SceneObject(id="obj_1", name="Kugel", mesh=body)
+    result = spec.fn(
+        OpContext(
+            scene=Scene(objects={entry.id: entry}),
+            inputs=[entry],
+            params=spec.params(triangles=400),
+            profile=profiles.make_profile("centauri-carbon-2", "petg"),
+            quality="fine",
+            seed=None,
+            progress=lambda fraction, text: None,
+            ask=lambda question, choices: choices[0],
+            cancelled=NeverCancelled(),
+        )
+    )
+
+    assert "mesh.not_simplified" in {f.code for f in result.findings}, (
+        f"die Operation fragt nicht danach: {sorted(f.code for f in result.findings)}"
+    )

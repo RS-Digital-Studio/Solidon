@@ -428,6 +428,7 @@
   "Das Netz ist beim Formen aufgegangen. Reparieren, bevor es boolesch weitergeht.": "La malla se ha abierto al modelar. Repárala antes de seguir con booleanas.",
   "Das Netz ist beim Unterteilen aufgegangen — es ist nicht mehr geschlossen. Reparieren, bevor es boolesch weitergeht.": "La malla se abrió al subdividirla — ya no está cerrada. Repararla antes de seguir con operaciones booleanas.",
   "Das Netz ist für diesen Pinsel zu grob — erst gleichmäßig vernetzen.": "La malla es demasiado basta para este pincel: remalla uniformemente primero.",
+  "Das Netz ließ sich nicht weiter vereinfachen — es trägt die Form schon mit den wenigsten Dreiecken.": "La malla no se pudo simplificar más: ya sostiene la forma con la menor cantidad de triángulos.",
   "Das Netz musste gleichmäßig geteilt werden, um geschlossen zu bleiben — es trägt jetzt deutlich mehr Dreiecke.": "La malla tuvo que subdividirse de forma uniforme para permanecer cerrada — ahora lleva bastantes más triángulos.",
   "Das Netz wurde feiner unterteilt; die Form ist unverändert.": "La malla se subdividió más fino; la forma no ha cambiado.",
   "Das Objekt hat keine Geometrie.": "El objeto no tiene geometría.",

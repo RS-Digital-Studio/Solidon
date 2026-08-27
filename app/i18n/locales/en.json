@@ -428,6 +428,7 @@
   "Das Netz ist beim Formen aufgegangen. Reparieren, bevor es boolesch weitergeht.": "The mesh opened up while sculpting. Repair it before going on with booleans.",
   "Das Netz ist beim Unterteilen aufgegangen — es ist nicht mehr geschlossen. Reparieren, bevor es boolesch weitergeht.": "The mesh came apart while being subdivided — it is no longer closed. Repair it before going on with boolean operations.",
   "Das Netz ist für diesen Pinsel zu grob — erst gleichmäßig vernetzen.": "The mesh is too coarse for this brush — even it out first.",
+  "Das Netz ließ sich nicht weiter vereinfachen — es trägt die Form schon mit den wenigsten Dreiecken.": "The mesh could not be simplified further — it already carries the shape with the fewest triangles.",
   "Das Netz musste gleichmäßig geteilt werden, um geschlossen zu bleiben — es trägt jetzt deutlich mehr Dreiecke.": "The mesh had to be subdivided evenly to stay closed — it now carries considerably more triangles.",
   "Das Netz wurde feiner unterteilt; die Form ist unverändert.": "The net was subdivided further; the shape is unchanged.",
   "Das Objekt hat keine Geometrie.": "The object has no geometry.",
