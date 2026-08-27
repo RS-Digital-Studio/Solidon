@@ -697,6 +697,36 @@ Duplikat-Sucher vom 24.08. fand `size_for_thread` — den Fall, den eine andere
 Sitzung eine Stunde vorher gemeldet hatte — und war damit brauchbar, bevor er
 etwas Neues meldete.
 
+## Ein eingechecktes Artefakt überlebt seinen Erzeuger
+
+`app/examples/*.p3d` liegen im Repository, und neun Tests fragen sie ab: Öffnen
+sie, rechnen sie, sind ihre Op-Kennungen eindeutig? Alle neun bleiben grün,
+wenn `tools/make_examples.py` aufhört zu laufen — die Dateien sind ja da.
+
+**Und es fährt sie fast nie jemand.** Das Werkzeug läuft im Paketier-Job, und
+der startet nur bei einem Tag. Zwischen zwei Veröffentlichungen ist es also
+ungeprüft, während alles, was es aufruft, sich weiterbewegt.
+
+Am 27.08.2026 lagen genau fünf Stunden dazwischen: Um 06:59 bekam
+`blend_union` ein `keeps_inputs` — richtig und nötig, sonst zeigt `hole_1`
+nach dem Vereinigen auf ein anderes Loch. Um 11:50 brach der Paketbau von
+0.2.1 auf allen vier Plattformen ab, weil `way_four` seither auf `obj_3`
+verwies und die Kennung nicht mehr entstand. Dazwischen war jeder Lauf grün,
+und die eingecheckten `.p3d` stammten noch aus der Zeit davor.
+
+Die Frage dazu ist eine eigene, weil keine andere in dieser Datei sie stellt:
+
+> **Prüfe ich das Ergebnis oder das, was es erzeugt — und wann läuft der
+> Erzeuger das nächste Mal?**
+
+Steht die Antwort auf „beim nächsten Release", gehört ein Test daneben, der
+ihn fährt. Der hier kostet ein Hundertstel: Die Bau-Funktionen stellen nur den
+Op-Stapel auf, und `History.apply` prüft die Kennungen dabei — gerechnet wird
+erst bei der Auswertung, die niemand anstößt.
+
+Dieselbe Frage lohnt bei jedem eingecheckten Erzeugnis: Bildschirmfotos,
+Handbuchseiten, Lizenzmanifest, Vorschaubilder.
+
 ## Prüft dieser Test eine Zusage — oder den Ist-Zustand?
 
 Ein Test kann einen Fehler **festschreiben**. Er ist dann grün, solange der
