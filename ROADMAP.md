@@ -81,6 +81,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
 | Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | nichts mehr — **§24.3 trägt die Ausnahme seit dem 25.08.2026** (Entscheidung Robert): Deklaration statt stiller Ausnahme. Es fehlt die Arbeit: Registerfeld, Druckspaltenprüfung im Bereichstest, das Bolzenscharnier als erster Nutzer |
+| Elf Verzweigungen fragen den Slicer-Namen, wo sie eine Eigenschaft meinen | Der Slicer-Name stand da, wo eine Eigenschaft gemeint war (27.08.2026) | nichts — **die Messung ist fertig** (26 Verzweigungen, der Familienschnitt trägt, am echten ElegooSlicer geprüft). Es fehlt die Arbeit: benannte Prädikate neben `wants_bed_coordinates`, dort wo der Kommentar die Eigenschaft schon nennt |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
 | Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
@@ -10634,3 +10635,57 @@ sie heute **noch** dasselbe sagen — sie sind Schuld, kein Fehler.
   kein Fehler und steht hier unten. Es ist Pflegeaufwand: Beide Orte sind
   zugleich der Ort, an dem der Kunde das Schema *lernt*, und der Nächste, der
   einen der zwölf Texte schärft, schärft ihn an einer Stelle.
+
+---
+
+## Der Slicer-Name stand da, wo eine Eigenschaft gemeint war (27.08.2026)
+
+Roberts Auftrag: „Die teureren Zwillinge sind unsichtbar: die drei
+Slicer-Familien. 24 Verzweigungen im Code, schauen ob wir das sauber
+hinbekommen."
+
+Gemessen sind es **26** — jede `if`, jeder bedingte Ausdruck und jedes
+Wörterbuch in `app/` und `tools/`, in dessen Test ein Familienname als
+Zeichenkette steht:
+
+| Datei | Verzweigungen |
+|---|---|
+| `app/core/export/handover.py` | 15 |
+| `app/ui/print_settings_dialog.py` | 4 |
+| `app/core/export/slicer_profiles.py` | 3 |
+| `app/core/export/slicer_keys.py` | 2 |
+| `app/core/export/writer.py` | 2 |
+
+**Der Schnitt selbst ist richtig, und das ist gemessen und nicht angenommen.**
+`slicer_keys.FLAVOUR_BY_NAME` bildet ElegooSlicer, Bambu Studio und
+SuperSlicer auf die drei Familien ab; gegen den echten ElegooSlicer gefahren
+findet Solidon 3887 Profile und erkennt Roberts Drucker als `Elegoo Centauri
+Carbon 2 0.4 nozzle`. Eine vierte Familie einzuführen wäre also falsch — die
+Abstraktion trägt.
+
+**Was nicht trägt, ist die Form der Frage.** Elf der Verzweigungen fragen
+`== "orca"` oder `!= "orca"`, und **jede meint eine andere Eigenschaft**. Der
+Kommentar daneben nennt sie jedes Mal, der Code prüft jedes Mal den Namen:
+
+- `handover.py:854` — „Nur diese Familie liest Einstellungen aus der 3MF"
+- `handover.py:1213` — führt eigene Filamentprofile
+- `handover.py:690` — kennt mehrere Materialslots
+- `slicer_profiles.py:103` und `:138` — hat einen Nutzerprofilbaum unter APPDATA
+
+**Die richtige Form kennt der Bestand:** `slicer_keys.wants_bed_coordinates`
+ist ein benanntes Prädikat mit Docstring. Genau eines gegen 26 Verzweigungen —
+jemand hat sie einmal gewählt und dann nicht fortgesetzt.
+
+Behoben ist bisher der eine Fall, in dem beide Formen **nebeneinander**
+standen: `bed_box` verglich den Namen und meinte damit wörtlich dasselbe wie
+das Prädikat zwei Dateien weiter (`0040f0fc`).
+
+- [ ] Die verbleibenden Namensvergleiche auf benannte Prädikate stellen, dort
+  wo die Eigenschaft im Kommentar schon benannt ist. **Kein Fehlverhalten** —
+  heute sagen alle Stellen dasselbe, weil alle drei Programme derselben
+  Familie zugeordnet sind. Der Preis fällt an, wenn ein Fork in einer der elf
+  Eigenschaften abweicht: Dann muss jemand elf Stellen finden und elf
+  Entscheidungen einzeln treffen, die nie einzeln sichtbar waren.
+  Nicht für jede Einzelstelle ein Prädikat — die drei Format-Zweige in
+  `write_config` (INI, JSON, Kommandozeile) sind echte Dreiwege-Fälle und
+  bleiben, wie sie sind.
