@@ -67,7 +67,14 @@ _log = get_logger(__name__)
 TIMEOUT_SECONDS: Final = 300.0
 
 #: Wonach im Ausgabeordner gesucht wird — die Slicer benennen selbst.
-GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g")
+#:
+#: **Dieselbe Liste, die der Öffnen-Dialog anbietet** (`ui.main_window`
+#: holt sie von hier). Sie stand dort ein zweites Mal und war um ``.nc``
+#: länger: Der Kunde durfte eine ``.nc`` also öffnen, aber wenn ein
+#: Slicer eine schrieb, fand Solidon sie im Ausgabeordner nicht und
+#: meldete „Der Slicer hat keine Druckdatei geschrieben." Zwei Stellen,
+#: dieselbe Frage, eine gepflegt — gefunden am 27.08.2026.
+GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g", ".nc")
 
 #: Wie die Druckdatei heißt, wo Solidon den Namen selbst nennt — PrusaSlicer
 #: über ``--output``, CuraEngine über ``-o``. Die Orca-Familie benennt selbst

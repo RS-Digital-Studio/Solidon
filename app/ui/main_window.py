@@ -88,6 +88,7 @@ from app.core.errors import (
     OperationCancelled,
     UserError,
 )
+from app.core.export.handover import GCODE_SUFFIXES as _CORE_GCODE_SUFFIXES
 from app.core.export.handover import SliceOutcome
 from app.core.export.writer import (
     ExportFormat,
@@ -304,7 +305,10 @@ MODEL_SUFFIXES: Final = (
     ".svg",
     ".dxf",
 )
-GCODE_SUFFIXES: Final = (".gcode", ".gco", ".g", ".nc")
+#: Die Endungen kommen aus dem Kern: Was der Dialog zum Öffnen anbietet,
+#: muss dieselbe Menge sein, die ``handover`` im Ausgabeordner sucht.
+#: Standen sie doppelt, liefen sie auseinander (27.08.2026).
+GCODE_SUFFIXES: Final = _CORE_GCODE_SUFFIXES
 
 #: Wie lange nach dem letzten Pinselzug gewartet wird, bevor die Wandstärke
 #: nachgerechnet wird (Entscheidung L). Bei jedem Zug zu rechnen hieße, den

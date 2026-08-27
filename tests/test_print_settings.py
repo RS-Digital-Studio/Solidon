@@ -2889,3 +2889,26 @@ def test_a_wall_the_nozzle_can_print_is_not_that_finding() -> None:
 
     codes = {entry.code for entry in advise.warnings_for(settings, profile, result)}
     assert "settings.wall_below_nozzle" not in codes
+
+
+def test_what_can_be_opened_can_also_be_found() -> None:
+    """Der Öffnen-Dialog und die Suche im Ausgabeordner meinen dieselbe Menge.
+
+    Die Endungen standen zweimal: im Kern (`handover`), der nach dem Lauf die
+    erzeugte Druckdatei sucht, und in der Oberfläche, die den Dateifilter
+    baut. Sie liefen auseinander — der Filter kannte `.nc`, die Suche nicht.
+    Ein Slicer, der eine `.nc` schreibt, wäre damit unauffindbar gewesen, und
+    der Kunde hätte „Der Slicer hat keine Druckdatei geschrieben." gelesen,
+    während die Datei danebenlag (gefunden am 27.08.2026).
+
+    Zwei Stellen, die dieselbe Frage beantworten, und nur eine wird gepflegt —
+    dasselbe Muster wie bei `setdefault` gegen `merged_slots` und bei den
+    beiden Parameterart-Tabellen. Der Test hält jetzt fest, dass es **eine**
+    Menge ist, nicht zwei gleiche.
+    """
+    from app.ui.main_window import GCODE_SUFFIXES as AUS_DER_OBERFLAECHE
+
+    assert AUS_DER_OBERFLAECHE is handover.GCODE_SUFFIXES, (
+        "die Oberfläche holt die Endungen aus dem Kern, statt sie zu wiederholen"
+    )
+    assert ".nc" in handover.GCODE_SUFFIXES, "und die längere der beiden Listen gewinnt"
