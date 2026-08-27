@@ -70,9 +70,9 @@ from app.ui.labels import (
     kind_requirement,
     length,
     localised,
-    localised_value,
     spoiled_the_exact_body,
     value_line,
+    value_text,
     volume,
 )
 from app.ui.overlay import LEFT_WIDTH
@@ -437,25 +437,31 @@ def origin_label(source: str) -> str:
 #: die für sich stehen. Sie steht **hier** und nicht im Kern: dort ist eine
 #: Zahl ein Wert, und wie sie geschrieben wird, entscheidet die Anzeige —
 #: dieselbe Trennung wie zwischen ``format_length`` und ``length``.
-_LINE_VALUES: dict[str, str] = {
-    "object": "",
+#: **Eine Auswahl, keine Einheitentabelle.** Bis zum 27.08.2026 stand hier je
+#: Schlüssel die Einheit, und damit entschied diese Tabelle ein zweites Mal,
+#: was ``labels._VALUE_UNITS`` für den Tooltip schon entschieden hatte — mit
+#: abweichendem Ergebnis und ohne die Umschaltung auf Zoll. Sie sagt jetzt nur
+#: noch, **welche** Werte in die Zeile kommen und in welcher Reihenfolge;
+#: **wie** sie geschrieben werden, sagt ``value_text``.
+_LINE_VALUES: tuple[str, ...] = (
+    "object",
     # „Ein Merkmal hat keinen Nachfolger mehr" — welches? Nach dem Einsetzen
     # eines Bausteins standen sechs wortgleiche Zeilen im Bericht, und nichts
     # daran war unterscheidbar; die Kennung stand längst im Befund, nur nie in
     # der Zeile. Derselbe Fund wie bei den zwei ausgehöhlten Klötzen darunter,
     # gefunden am 25.08.2026 bei der Verifikation im echten Fenster.
-    "feature": "",
-    "a": "",
-    "b": "",
-    "excess": "",
-    "shared": "",
+    "feature",
+    "a",
+    "b",
+    "excess",
+    "shared",
     # Aushöhlen sagte „Die Wandstärke stimmt im Rahmen des Rasters", ohne die
     # Wandstärke zu nennen — und wie viel Material dabei gespart wurde, also
     # die Frage, für die man die Operation überhaupt aufruft, stand nur im
     # Tooltip.
-    "wall_mm": "mm",
-    "removed_cm3": "cm³",
-}
+    "wall_mm",
+    "removed_cm3",
+)
 
 
 def _op_title(name: str) -> str:
@@ -523,9 +529,17 @@ def _line_for(finding: Finding, names: Mapping[str, str] | None = None) -> str:
         (
             f"{tr('Merkmal')} {finding.values[key]}"
             if key == "feature"
-            else f"{localised_value(finding.values[key])} {unit}".strip()
+            # **Dieselbe Quelle wie der Tooltip daneben**, und zwar seit der
+            # Messung vom 27.08.2026: Die Zeile trug ihre Einheit selbst und
+            # schrieb „1,2 mm · 3,456 cm³", während der Tooltip an demselben
+            # Eintrag „Wandstärke: 1,20 mm · Entfernt: 3,5 cm³" sagte — zwei
+            # Zahlen für denselben Wert, sichtbar in einem Blick. Und in Zoll
+            # blieb die Zeile bei Millimetern stehen, weil eine feste Einheit
+            # nicht umschalten kann. ``value_text`` beantwortet beides und
+            # lässt Pfade, Kennungen und Versionsnummern unangetastet.
+            else value_text(key, finding.values[key])
         )
-        for key, unit in _LINE_VALUES.items()
+        for key in _LINE_VALUES
         if key in finding.values
     ]
     if finding.object_id and "object" not in finding.values:

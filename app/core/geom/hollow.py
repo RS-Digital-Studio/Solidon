@@ -218,7 +218,7 @@ def hollow(
     )
 
 
-def below_printable_wall(wall: float, profile: Profile) -> Finding | None:
+def below_printable_wall(wall: float, profile: Profile | None) -> Finding | None:
     """Ist die Wand dünner, als der Drucker sie legen kann?
 
     **Beide Zwillinge trugen dafür eine Zahl, und beide waren falsch.** Im
@@ -239,6 +239,15 @@ def below_printable_wall(wall: float, profile: Profile) -> Finding | None:
     druckbar, und das ist eine Aussage über den Drucker, nicht über den Körper.
     Wer denselben Körper auf einer feineren Düse fährt, hat kein Problem.
     """
+    # **Ohne Drucker keine Aussage.** Dieselbe Regel wie bei
+    # ``boolean.without_effect`` nebenan („ein Aufrufer, der keinen Drucker
+    # kennt, soll keinen erfinden"): Die Grenze *ist* der Drucker, also gibt es
+    # sie ohne ihn nicht. Der Fall kommt vor — ein direkter Aufruf der
+    # Operation ohne Profil, wie ihn Tests und die Kommandozeile bauen —, und
+    # er wäre bis zum 27.08.2026 in einem AttributeError geendet: Die alte
+    # Zahlenkonstante brauchte kein Profil, diese Frage schon.
+    if profile is None:
+        return None
     least = profile.minimum_wall_thickness
     if wall >= least - EPS_GEOM:
         return None

@@ -1067,3 +1067,36 @@ def test_an_unknown_step_offers_the_way_to_its_values() -> None:
         "der Weg zu den Werten steht vorn, das Zeigen im Verlauf daneben"
     )
     assert offered[0].primary, "die Handlung, um die es geht, ist die Hauptsache"
+
+
+def test_a_finding_says_the_same_number_in_its_line_and_in_its_tooltip() -> None:
+    """Zeile und Tooltip desselben Eintrags dürfen nicht auseinandergehen.
+
+    Gemessen am 27.08.2026: Die Zeile schrieb „1,2 mm · 3,456 cm³", der
+    Tooltip an demselben ``QListWidgetItem`` „Wandstärke: 1,20 mm · Entfernt:
+    3,5 cm³" — zwei Zahlen für denselben Wert, sichtbar in einem Blick, ohne
+    dass man mehr tun müsste als hinzusehen und die Maus draufzuhalten. Der
+    Grund war eine zweite Einheitentabelle in ``panels``, die entschied, was
+    ``labels._VALUE_UNITS`` schon entschieden hatte.
+
+    **Und in Zoll war es keine Abweichung mehr, sondern falsch:** Eine feste
+    Einheit kann nicht umschalten, also blieb die Zeile bei Millimetern
+    stehen, während jede Länge daneben in Zoll stand.
+    """
+    from app.core.types import Finding
+    from app.ui import labels
+    from app.ui.panels import _line_for
+
+    finding = Finding(
+        code="hollow.done",
+        severity="info",
+        message="Ausgehöhlt.",
+        values={"wall_mm": 1.2, "removed_cm3": 3.456},
+    )
+
+    for unit in ("mm", "in"):
+        labels.set_display_unit(unit)
+        line = _line_for(finding)
+        for key, value in finding.values.items():
+            written = labels.value_text(key, value)
+            assert written in line, f"{unit}: {written!r} fehlt in der Zeile {line!r}"

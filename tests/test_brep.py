@@ -850,3 +850,23 @@ def test_the_printable_wall_comes_from_the_profile_not_from_a_number(profile: Pr
 
     assert below_printable_wall(least - 0.1, profile) is not None
     assert below_printable_wall(least + 0.1, profile) is None
+
+
+def test_without_a_printer_there_is_no_wall_verdict(profile: Profile) -> None:
+    """Ohne Drucker keine Aussage über die Wandstärke.
+
+    Der Fall kommt vor — ein direkter Aufruf der Operation ohne Profil, wie
+    ihn Tests und die Kommandozeile bauen. Die alte Zahlenkonstante brauchte
+    keinen Drucker, ``Profile.minimum_wall_thickness`` schon; ohne diesen
+    Zweig endete `shell_exact` dort in einem AttributeError. Gefunden von ce
+    im Torlauf, an `test_the_exact_shell_leaves_exactly_the_wall`.
+
+    Dieselbe Regel wie bei ``boolean.without_effect``: Die Grenze *ist* der
+    Drucker, also gibt es sie ohne ihn nicht — und ein Aufrufer, der keinen
+    kennt, soll keinen erfinden.
+    """
+    from app.core.geom.hollow import below_printable_wall
+
+    assert below_printable_wall(0.1, None) is None
+    # Die Gegenprobe: mit Drucker gibt es sehr wohl ein Urteil.
+    assert below_printable_wall(0.1, profile) is not None
