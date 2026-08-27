@@ -720,6 +720,7 @@
   "Die Erzeugung hat ihr Zeitlimit erreicht.": "La génération a atteint sa limite de temps.",
   "Die Farbe für Vorschau und Übergabe an den Slicer — am Druck ändert sie nichts. Sie gilt dem ganzen Teil: Mehrfarbig wird es über *Fläche färben* im Menü an der Fläche, je gefärbter Bereich ein Filament.": "La couleur pour l'aperçu et la remise au slicer — elle ne change rien à l'impression. Elle vaut pour toute la pièce : elle devient multicolore via *Colorer la face* dans le menu de la face, un filament par zone colorée.",
   "Die Farbe wird als #RRGGBB angegeben.": "La couleur s'indique sous la forme #RRGGBB.",
+  "Die Farbe, in der dieses Filament in der Ansicht steht.": "La couleur sous laquelle ce filament apparaît dans la vue.",
   "Die Farben wurden auf die eingelegten Filamente umgerechnet.": "Les couleurs ont été ramenées aux filaments chargés.",
   "Die Fläche dieser Zeichenebene ist nicht mehr da — projizieren geht hier nicht.": "La face de ce plan de dessin n'est plus là — impossible de projeter ici.",
   "Die Fläche hat sich dabei kaum verschoben.": "La surface ne s'est presque pas déplacée.",

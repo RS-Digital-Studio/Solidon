@@ -720,6 +720,7 @@
   "Die Erzeugung hat ihr Zeitlimit erreicht.": "The generation ran into its time limit.",
   "Die Farbe für Vorschau und Übergabe an den Slicer — am Druck ändert sie nichts. Sie gilt dem ganzen Teil: Mehrfarbig wird es über *Fläche färben* im Menü an der Fläche, je gefärbter Bereich ein Filament.": "The colour for preview and handover to the slicer — it changes nothing about the print. It applies to the whole part: it becomes multi-coloured via *Colour face* in the menu at the face, one filament per coloured area.",
   "Die Farbe wird als #RRGGBB angegeben.": "The colour is given as #RRGGBB.",
+  "Die Farbe, in der dieses Filament in der Ansicht steht.": "The colour this filament has in the view.",
   "Die Farben wurden auf die eingelegten Filamente umgerechnet.": "The colours were reduced to the filaments loaded.",
   "Die Fläche dieser Zeichenebene ist nicht mehr da — projizieren geht hier nicht.": "The face of this drawing plane is gone — projecting is not possible here.",
   "Die Fläche hat sich dabei kaum verschoben.": "The surface barely moved.",

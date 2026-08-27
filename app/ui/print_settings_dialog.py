@@ -75,6 +75,7 @@ from app.core.types import (
 from app.core.units import DEGREE_UNIT, is_close
 from app.i18n import TranslatableText, _, tr
 from app.ui.dialogs import damaged_line, show_error
+from app.ui.filament_picker import SWATCH_PIXELS, shown_colour, swatch
 from app.ui.labels import (
     NumberSpin,
     by_title,
@@ -87,7 +88,7 @@ from app.ui.leash import WAIT_TIMEOUT_MS, Worker, WorkerLeash
 from app.ui.panels import collapsible
 from app.ui.session import Session
 from app.ui.settings import UiSettings
-from app.ui.style import make_primary
+from app.ui.style import TIGHT, make_primary
 
 _log = get_logger(__name__)
 
@@ -1491,7 +1492,9 @@ class PrintSettingsDialog(QDialog):
         # Je Materialslot eine Zeile — aber nur, wenn es mehr als einen gibt.
         # Ein einfarbiges Teil hat eine Farbe und braucht keine Liste darüber;
         # die Zeile „Filament" oben ist dann die ganze Aussage (§2.4).
-        self.slot_rows: list[tuple[QLabel, QComboBox]] = []
+        self.slot_rows: list[tuple[QWidget, QComboBox]] = []
+        self._slot_names: list[str] = []
+        """Die Namen der Slot-Zeilen — die Quelle für Meldungen über sie."""
         self.slot_form = form
         self._build_slot_rows(form)
         self.profile_note = QLabel(tr("Der Profilbestand wird durchgesehen …"), self.slicer_inner)
@@ -1792,14 +1795,39 @@ class PrintSettingsDialog(QDialog):
         if len(slots) < 2:
             return
         stored = self.settings.slot_profiles
+        self._slot_names = []
         for index, slot in enumerate(slots):
             box = QComboBox(self.slicer_inner)
             box.setEnabled(bool(self._profiles))
             box.activated.connect(lambda _i, position=index: self._slot_filament_chosen(position))
-            caption = slot.name or tr("Slot {nummer}").replace("{nummer}", str(index + 1))
+            caption = str(slot.name or tr("Slot {nummer}").replace("{nummer}", str(index + 1)))
+            self._slot_names.append(caption)
             label = QLabel(f"   {caption}", self.slicer_inner)
-            form.addRow(label, box)
-            self.slot_rows.append((label, box))
+            # **Die Farbe steht daneben** — hier wird zugeordnet, welche Spule
+            # in welchen Extruder kommt, und ohne sie ist „Schrift" ein Wort
+            # ohne Bild. Dieselbe Kette wie im Filamentwähler und im Panel
+            # (``shown_colour``): eigene Farbe, sonst Grauleiter, für Slot 0
+            # die Farbe des Teils.
+            label.setToolTip(tr("Die Farbe, in der dieses Filament in der Ansicht steht."))
+            colour = QLabel(self.slicer_inner)
+            colour.setPixmap(
+                swatch(shown_colour(int(slot.index), slot.colour)).pixmap(
+                    SWATCH_PIXELS, SWATCH_PIXELS
+                )
+            )
+            row = QWidget(self.slicer_inner)
+            # Die Zeile ist jetzt zweiteilig (Farbfeld, Text). Ihr Name steht
+            # deshalb am Container: Ein Bildschirmleser findet die Zeile sonst
+            # nur als „Widget", und ein Farbfeld ohne Namen ist genau die
+            # Bedeutung allein über Farbe, die Regel 18 verbietet.
+            row.setAccessibleName(caption)
+            side = QHBoxLayout(row)
+            side.setContentsMargins(0, 0, 0, 0)
+            side.setSpacing(TIGHT)
+            side.addWidget(colour)
+            side.addWidget(label, 1)
+            form.addRow(row, box)
+            self.slot_rows.append((row, box))
             if index < len(stored) and stored[index]:
                 box.setProperty("wanted", stored[index])
 
@@ -2010,7 +2038,11 @@ class PrintSettingsDialog(QDialog):
         self.settings = replace(self.settings, slot_profiles=tuple(names))
         self.state.setText(
             tr("{slot} druckt mit {profil}.")
-            .replace("{slot}", self.slot_rows[position][0].text().strip())
+            # Aus den Daten und nicht aus der Beschriftung: Die Zeile trägt
+            # jetzt ein Farbfeld neben dem Text, ist also ein Container ohne
+            # ``text()`` — und die Anzeige war ohnehin die falsche Quelle für
+            # eine Meldung (dieselbe Lehre wie bei ``currentText()`` darüber).
+            .replace("{slot}", self._slot_names[position])
             .replace("{profil}", chosen)
         )
 

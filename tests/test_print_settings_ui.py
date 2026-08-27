@@ -1476,8 +1476,11 @@ def test_a_second_slot_gets_its_own_choice(
     dialog = PrintSettingsDialog(session, UiSettings())
 
     assert len(dialog.slot_rows) == 2, "je Slot eine Zeile"
-    assert "Gehäuse" in dialog.slot_rows[0][0].text()
-    assert "Schrift" in dialog.slot_rows[1][0].text()
+    # Der Name steht am zugänglichen Namen der Zeile und nicht in einem
+    # ``text()``: Die Zeile trägt seit dem Farbfeld zwei Teile, und ein
+    # Bildschirmleser braucht den Namen ohnehin am Container.
+    assert "Gehäuse" in dialog.slot_rows[0][0].accessibleName()
+    assert "Schrift" in dialog.slot_rows[1][0].accessibleName()
 
     box = dialog.slot_rows[1][1]
     box.addItem("Haus PLA weiß", str(tmp_path / "pla.json"))
