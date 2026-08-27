@@ -73,8 +73,8 @@ def entries(menu_bar: QMenuBar | None, window: QWidget | None = None) -> list[tu
     **Aber die Menüleiste ist es auch nicht allein**, und hier stand genau diese
     Annahme: „dort landet jede Aktion, die ein Mensch findet". Nachgezählt am
     gebauten Fenster waren es 36 Menütasten gegen 49 belegte — es fehlten die
-    acht Werkzeugtasten ``Alt+1`` bis ``Alt+8``, die fünf freien Fenstertasten
-    und der ganze Zeichensatz. Ausgerechnet die acht, von denen ein Kommentar in
+    Werkzeugtasten auf ``Alt`` und einer Ziffer, die fünf freien Fenstertasten
+    und der ganze Zeichensatz. Ausgerechnet sie, von denen ein Kommentar in
     ``main_window`` sagt: „Welche Zahl zu welchem Werkzeug gehört, steht im
     Tooltip des Knopfes **und in der Kürzelübersicht**."
 
