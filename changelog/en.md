@@ -5,9 +5,9 @@ list of changes but a selection, and choosing is the work. A point belongs here
 if someone notices it while using the program. How many there are is decided by
 the release, not by a number.
 
-So: no commit messages, no module names, no section numbers. "The bar vanished
-while the application was still computing for four seconds" is a good commit
-and a poor entry; "Progress now stays until the computation is really done"
+So: no commit messages, no module names, no section numbers. “The bar vanished
+while the application was still computing for four seconds” is a good commit
+and a poor entry; “Progress now stays until the computation is really done”
 says the same thing to the person sitting in front of it.
 
 One file per language in this folder, as with the catalogues — and all of them
@@ -142,7 +142,7 @@ it into `website/version.json`.
 - Bridge width now measures the stretch that is really spanned freely. A cable duct used to report the width of its bounding box and got the wrong advice.
 - A part thinner than one printed layer is no longer stood on its edge.
 - Auto split counts the pin overhang towards the bed limit and leaves behind no fits pointing at places that are gone.
-- Assemblies now respond to "Place on the bed" too: they move down as a whole, the parts keeping their positions relative to each other. Until now nothing happened, without a word.
+- Assemblies now respond to “Place on the bed” too: they move down as a whole, the parts keeping their positions relative to each other. Until now nothing happened, without a word.
 - The filament amount read from a G-code file is correct again. A command at the end of the file made everything before it compute differently and doubled the total.
 - Changing printer or material keeps what you set yourself. Until now the whole set was reset without notice.
 - The filament choice per material slot reaches the slicer. What was stored was the display text instead of the profile.
@@ -150,7 +150,7 @@ it into `website/version.json`.
 ### View and controls
 - A selected face counts: hole, block and sketch go where you pointed. Every operation on a face used to cost two clicks.
 - Clicking a bore now suggests the screw that really passes through — and names the measured diameter along with it.
-- After "Offset face" the part's faces can be clicked again. Until now nothing was left to draw on, drill into or set a fit against.
+- After “Offset face” the part's faces can be clicked again. Until now nothing was left to draw on, drill into or set a fit against.
 - A loading indicator appears immediately when opening a project. Until now the middle of the window stayed black for seconds or showed the start screen — it looked like a crash.
 - A click in the view now only hits what you actually see — no hidden part and none from another plate. And after a visit to Move mode, edge lines no longer show through every face.
 - The axis views from Ctrl+0 to Ctrl+6 frame the model again, instead of taking the print plate and build volume into the picture too.
@@ -161,9 +161,9 @@ it into `website/version.json`.
 
 ### Files and export
 - Two imported files with the same name are no longer lost. The second used to overwrite the first, and the project could no longer be opened afterwards.
-- An address without a file extension now says a web page sits there and where the download button is, instead of "Format not recognised".
+- An address without a file extension now says a web page sits there and where the download button is, instead of “Format not recognised”.
 - On export, parts with the same name overwrote each other: one file, two success messages, one part gone.
-- The project extension is now appended by "Save as". A project saved as holder.stl used to be an unreadable foreign model when opened.
+- The project extension is now appended by “Save as”. A project saved as holder.stl used to be an unreadable foreign model when opened.
 - A modified project is no longer lost when you drag a file onto the start screen — you are asked first.
 
 ### Speed and stability
@@ -176,7 +176,7 @@ it into `website/version.json`.
 ### Languages
 - The language chosen in the installer applies immediately, otherwise the system's does. And a language chosen in the window takes effect right away, instead of only at the next start.
 - A language change now takes effect throughout the window. The print settings used to stay in the language the application started in.
-- The bundled examples now name their dimensions in your language. "Breite, Tiefe, Höhe" used to stand there in German, even in an English interface.
+- The bundled examples now name their dimensions in your language. “Breite, Tiefe, Höhe” used to stand there in German, even in an English interface.
 - The command line now speaks the language you set. Until now it gave German help and German error texts, whatever was chosen.
 
 ### Chat and support
@@ -248,11 +248,11 @@ it into `website/version.json`.
 
 ## 0.1.2
 
-- Typed decimal numbers are read correctly everywhere. "12.5" stays twelve and a half — before, it could turn into 125, with no question and no warning.
+- Typed decimal numbers are read correctly everywhere. “12.5” stays twelve and a half — before, it could turn into 125, with no question and no warning.
 - Every one of the fifty-six fields in the print settings now says what it does when you move it.
 - Print time and material use are estimated more accurately, above all for hollowed parts.
 - The handover to the slicer lands on the plate. With CuraEngine, parts ended up beside it.
 - When splitting with pins, the matching holes now sit in the correct half.
 - Millimetres and inches now apply wherever a number appears — including the tool bars and painting.
 - Progress stays until the computation is really done, and the window remains usable throughout.
-- Every keyboard shortcut is now in one overview: in the Help menu under "Keyboard shortcuts", or by pressing the question mark key.
+- Every keyboard shortcut is now in one overview: in the Help menu under “Keyboard shortcuts”, or by pressing the question mark key.

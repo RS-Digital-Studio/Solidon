@@ -164,3 +164,32 @@ def test_the_folder_holds_no_stray_language() -> None:
     assert files <= set(available_languages()), (
         f"ohne Katalog: {files - set(available_languages())}"
     )
+
+
+@pytest.mark.parametrize("language", sorted(available_languages()))
+def test_no_language_uses_a_straight_quotation_mark(language: str) -> None:
+    """Ein gerades ``"`` ist in keiner der sechs Sprachen die richtige Wahl.
+
+    Deutsch setzt „…“, Englisch “…”, die drei romanischen «…» oder “…” — und
+    am 27.08.2026 standen trotzdem zwölf gerade in ``de.md`` und achtzehn in
+    ``en.md``, mitten zwischen den typografischen. Aufgefallen sind sie an
+    einem Test, der etwas ganz anderes prüfte: Ein gerades ``"`` wird in HTML
+    zu ``&quot;`` maskiert, ein typografisches nicht, und daran zerbrach der
+    Textvergleich im Neuerungen-Fenster.
+
+    Dieser Weg ist mit dem Entmaskieren dort verschwunden — er war ohnehin
+    ein Zufallsfund und kein Wächter. Der hier ist einer.
+
+    **Apostrophe fallen ausdrücklich nicht darunter.** Der gerade ist der
+    Bestand: 189 in ``fr.md`` gegen 55 typografische, 9 zu 0 in ``en.md``.
+    Eine Massenänderung daran gewönne nichts und bräche jede offene Arbeit
+    an denselben Zeilen.
+    """
+    text = (CHANGELOG / f"{language}.md").read_text(encoding="utf-8")
+
+    getroffen = [nummer for nummer, zeile in enumerate(text.splitlines(), 1) if '"' in zeile]
+
+    assert not getroffen, (
+        f"changelog/{language}.md: gerades Anführungszeichen in Zeile(n) "
+        f"{', '.join(str(n) for n in getroffen)}"
+    )

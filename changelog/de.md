@@ -5,8 +5,8 @@ Diese Datei ist das, was im Update-Fenster steht — und sonst nichts. Sie ist
 Arbeit. Ein Punkt gehört hierher, wenn jemand ihn beim Benutzen merkt.
 
 **Wie viele es sind, entscheidet die Fassung und nicht eine Zahl.** Hier stand
-eine — „acht Zeilen", gewachsen an einem Wartungsschritt zwischen 0.1.1 und
-0.1.2 — und sie wurde gelesen wie ein Sollwert: 0.2.0 galt als „Ausnahme" mit
+eine — „acht Zeilen“, gewachsen an einem Wartungsschritt zwischen 0.1.1 und
+0.1.2 — und sie wurde gelesen wie ein Sollwert: 0.2.0 galt als „Ausnahme“ mit
 75 Punkten, und beim nächsten Abschnitt setzte der Schreiber wieder bei acht
 an und strich, was er darüber hinaus gefunden hatte. Ein halbes Jahr Arbeit und
 ein Wartungsschritt haben nicht gleich viel zu sagen. Gestrichen wird, was der
@@ -47,15 +47,15 @@ Nutzen da und sonst nichts.
 
 - Flächen und Teile färben Sie mit zwei Gesten statt mit einem Pinsel: Ein Klick färbt eine Fläche, ein Klick das ganze Teil. Ändert ein früherer Schritt die Maße, wandert die Farbe mit.
 - Ein Klick auf die Oberseite färbt die Oberseite — die Grenze der Fläche kommt aus der Erkennung, ohne Radius und ohne Zielen.
-- Das Filament wählen Sie mit Namen und Farbe — „PETG Rot" statt einer Nummer. Auch der Chat versteht das.
+- Das Filament wählen Sie mit Namen und Farbe — „PETG Rot“ statt einer Nummer. Auch der Chat versteht das.
 - Zwanzig Spulen im Regal sind zwanzig Filamente in der Vorwahl. Vier Spulen desselben Materials in vier Farben sind vier Einträge, nicht einer.
 - Die Farbe eines Filaments und seine Temperaturen gehören jetzt zusammen. Vorher konnte die Einstellung von Rot auf dem weißen Filament landen.
 - Dieselbe Farbe bekommt dieselbe Düse — auch auf der zweiten Platte.
 - Im Viewport steht die echte Filamentfarbe. Ein Filament ohne eigene Farbe ist grau, und die Auswahl bleibt daran erkennbar.
-- Färben steht jetzt dort, wo man Farbe sucht — vorher lag es unter „Vorbereiten".
-- Das Feld „Farbe des Teils" zeigte im hellen Thema eine andere Farbe als die Ansicht daneben.
-- Wer „PETG" tippte, bekam „Dieses Materialprofil ist nicht bekannt". Das Feld ist jetzt eine Auswahl mit den Namen, die es wirklich gibt.
-- Die Vorauswahl „— keines —" wurde beim Übernehmen abgelehnt. Jetzt steht dort ein Wert, den der Dialog auch annimmt.
+- Färben steht jetzt dort, wo man Farbe sucht — vorher lag es unter „Vorbereiten“.
+- Das Feld „Farbe des Teils“ zeigte im hellen Thema eine andere Farbe als die Ansicht daneben.
+- Wer „PETG“ tippte, bekam „Dieses Materialprofil ist nicht bekannt“. Das Feld ist jetzt eine Auswahl mit den Namen, die es wirklich gibt.
+- Die Vorauswahl „— keines —“ wurde beim Übernehmen abgelehnt. Jetzt steht dort ein Wert, den der Dialog auch annimmt.
 - Der Farbwähler zeigte Rot, und nach dem Abwählen war das Teil grau.
 
 ### Bausteine
@@ -77,7 +77,7 @@ Nutzen da und sonst nichts.
 ### Was Solidon am Modell sieht
 
 - An eingelesenen Dateien erkennt Solidon jetzt auch dann Bohrungen und Taschen, wenn das Netz ungeschweißt ist. Vorher fand die Erkennung dort nichts.
-- Der Prüfbericht meldet „mehrere Teile" nur noch, wenn es welche sind. Eine Platte aus einem Stück galt bisher als 796 Teile.
+- Der Prüfbericht meldet „mehrere Teile“ nur noch, wenn es welche sind. Eine Platte aus einem Stück galt bisher als 796 Teile.
 - Dieselbe Datei wird nicht mehr fünfzehnmal untersucht. Das spart die Sekunden, die vorher beim Öffnen vergingen.
 - Wenn das Vereinfachen nicht so weit kommt wie gewünscht, sagt Solidon es. Bisher blieben 992 Dreiecke stehen, wo 400 gefordert waren, ohne ein Wort.
 - Derselbe Hinweis steht einmal im Prüfbericht, nicht nach jedem Schritt erneut.
@@ -90,14 +90,14 @@ Nutzen da und sonst nichts.
 - Die Liste der lokalen Modelle sagt bei jedem, wie zuverlässig es Werkzeuge aufruft und wie lange es braucht. Ein Modell, das nur darüber schreibt, ist jetzt als solches erkennbar.
 - Bricht die Verbindung zum lokalen Sprachmodell ab, sagt Solidon das — und nennt einen Weg weiter, statt einen Programmfehler zu melden.
 - Dasselbe gilt, wenn die Verbindung zum Bilddienst abbricht.
-- Der Chat nennt auch kleine Volumenänderungen. Eine gesetzte Bohrung meldete sich bisher als „+0,00 cm³", und der Vorschlag sah folgenlos aus.
+- Der Chat nennt auch kleine Volumenänderungen. Eine gesetzte Bohrung meldete sich bisher als „+0,00 cm³“, und der Vorschlag sah folgenlos aus.
 
 ### Ansicht und Bedienung
 
 - Der Objektbaum nennt Zapfen und Gewinde beim Namen, mit Durchmesser und Steigung.
 - Ein Schritt, der zwei Körper erzeugt, steht mit zwei Zeilen im Baum — vorher stand dort einer.
 - Wer mehr Körper auswählt, als eine Operation nimmt, sieht jetzt, welche verrechnet werden.
-- Drucken zeigte dieselbe Zeit an zwei Stellen verschieden — „10 h 5 min" unten, „605 min" im Dialog.
+- Drucken zeigte dieselbe Zeit an zwei Stellen verschieden — „10 h 5 min“ unten, „605 min“ im Dialog.
 - Zahlen und Einheiten stehen überall gleich: Eine Zeile und ihr eigener Tooltip nannten dasselbe Volumen verschieden, und in Zoll gar nichts.
 - Ein Maß mit einem Ausdruck lässt sich an jedem Zahlenfeld einschalten — das Handbuch zeigt den Knopf jetzt auch.
 - Das Raster im Skizzeneditor zeigte die Weite von dem Moment, in dem man ihn betrat.

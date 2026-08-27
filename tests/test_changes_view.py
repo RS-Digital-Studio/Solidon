@@ -11,12 +11,14 @@ Geprüft wird deshalb beides: dass der Kern den Verlauf **aus dem Paket** liest
 
 from __future__ import annotations
 
+import html
 from pathlib import Path
 
 import pytest
 
 from app.branding import APP_VERSION
 from app.core import changes
+from app.i18n.catalog import available_languages
 
 # --- der Kern -------------------------------------------------------------------------
 
@@ -73,15 +75,28 @@ pytest.importorskip("PySide6")
 from app.ui.changes_dialog import ChangesDialog, history_html  # noqa: E402
 
 
-def test_the_dialog_shows_every_version() -> None:
-    entries = changes.history("de")
+@pytest.mark.parametrize("language", sorted(available_languages()))
+def test_the_dialog_shows_every_version(language: str) -> None:
+    """Jede Sprache, nicht nur die Quelle — und gegen den entmaskierten Text.
 
-    text = history_html(entries)
+    Zwei Dinge, die der Test bis zum 27.08.2026 nicht konnte. Er las allein
+    ``de``, und er verglich den rohen Punkt gegen fertiges HTML. Dort steht
+    ein Apostroph aber als ``&#x27;`` und ein gerades Anführungszeichen als
+    ``&quot;`` — richtig so, denn beides sind Sonderzeichen, und der
+    Nachbartest unten besteht für ``<`` ausdrücklich darauf.
+
+    Der rohe Vergleich hätte damit jeden französischen Punkt mit ``l'…``
+    verworfen, und davon gibt es 189. Gefragt ist, ob der Punkt im Fenster
+    ankommt, nicht wie er unterwegs geschrieben wird — also entmaskieren.
+    """
+    entries = changes.history(language)
+
+    text = html.unescape(history_html(entries))
 
     for entry in entries:
         assert entry.version in text, entry.version
         for point in entry.points:
-            assert point[:30] in text, point[:30]
+            assert point[:30] in text, f"{language}: {point[:30]}"
 
 
 def test_the_running_version_is_marked() -> None:
