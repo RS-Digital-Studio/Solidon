@@ -564,7 +564,15 @@ def _finely_meshed(rod: Solid, fineness: float) -> Solid:
     Also wird nachgesehen und höchstens zweimal halbiert. Der Körper selbst
     ist zu diesem Zeitpunkt längst geprüft (:func:`_is_sound_rod` fragt die
     Topologie); hier geht es allein um die Dreiecke, aus denen STL und
-    Schichtanalyse entstehen. Bleibt das Netz auch dann offen, kommt der
+    Schichtanalyse entstehen.
+
+    **Es ist der zweite von zwei Griffen, nicht der einzige.** Seit dem
+    27.08.2026 vernäht die Tessellierung selbst, was sich vernähen lässt
+    (``kernel._stitched``): Ein Riss an der Flanke ist meist eine T-Kreuzung,
+    und dagegen hilft kein feineres Netz. Was hier ankommt, ist also bereits
+    vernäht — halbiert wird nur noch, wenn auch das nicht gereicht hat. Wer
+    eine der beiden Stellen ändert, sollte die andere kennen: Sie verfolgen
+    dasselbe Ziel mit verschiedenen Mitteln. Bleibt das Netz auch dann offen, kommt der
     Bolzen trotzdem heraus — er trägt STEP und jede weitere Operation, und ein
     Befund über ein grobes Netz ist besser als eine Absage über einen
     gelungenen Körper.

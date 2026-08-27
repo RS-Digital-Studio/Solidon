@@ -455,6 +455,12 @@ def _stitched(mesh: MeshData) -> MeshData:
     # offene Kanten statt weniger. Gemessen an einem absichtlich zerlegten
     # Würfel: 15 offene Kanten hinein, 18 heraus, drei „Nähte". Die Zahl der
     # Nähte allein sagt also nicht, dass es geholfen hat.
+    #
+    # **Dieselbe Regel steht in der Eingangsstufe**, dort für das Verschweißen
+    # (``ingest/loader.py``, „eine Reparatur, die etwas kaputt macht, wird
+    # nicht angewendet"). Sie ist unabhängig zweimal gefunden worden — hier
+    # steht der Verweis, damit die dritte Stelle sie nicht ein drittes Mal
+    # finden muss.
     after = open_edge_count(stitched)
     if after >= before:
         _log.info("stitching would not close this mesh (%d -> %d edges), keeping it", before, after)
