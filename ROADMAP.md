@@ -106,11 +106,9 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | Zwei Pakete lösen den Deadlock noch nicht auf | Ein Deadlock, der keiner war — und sieben Pakete statt einem (23.08.2026) | einen **Verhaltenswechsel**, keinen Strukturfix — und deshalb je einen eigenen Schritt. `activation`: 223 Zeilen Code an der Lizenzgrenze im `__init__`, die Ladereihenfolge dort ändert man nicht, ohne die Grenze mitzuprüfen. `knowledge.parts`: dort **ist** der Import die Registrierung — die fünf Modulimporte füllen das Bausteinregister, und `bootstrap.load_operations` verlässt sich darauf; verzögert wären sie wirkungslos. Die anderen fünf Pakete sind seit dem 23.08. sauber, `tests/test_core_isolation.py` führt beide Namen mit Begründung |
 | `3D Drucker/` liegt nur auf einer Maschine | Vier Wege von Hand, während die Suite grün war (23.08.2026) | eine Entscheidung von Robert: eigenes `.git`, **kein Remote**, 458 MB, 83 nicht committete Dateien. Kein Entwicklungsthema, sondern ein Datenthema — fällt die Platte aus, ist die Arbeit an den Druckprojekten weg |
 | Vier Stapel zeigen auf `session.py:1515` | Was ein Kunde beim Öffnen der Beispiele sieht (23.08.2026) | eine **Lebensdaueruntersuchung**, keinen `gc`-Schutz: Der Sammler ist an zwei Messungen zu verschiedenen Zeiten als Ursache ausgeschlossen. Und die vier Stapel sind ein Zeuge, viermal gefragt — `wait(50)` blockiert in C, der Rahmen steht dort ohnehin. Der Weg führt über die Aufräum-Fixture und trifft damit **jede** Fensterdatei |
-| Der Cache spart die Geometrie, nicht die Erkennung | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | **die Messung ist am 26.08.2026 gefahren, und sie hat die Vermutung widerlegt.** Nicht `detect()` kostet die Zeit (0,12 s), sondern `match()` — 101,6 s bei `weg3-generiert-aufbereiten`, quadratisch in der Merkmalszahl. Es waren auch nicht sechs Sekunden, sondern hundertzwei. Der Cache ist dabei unschuldig: Alle vier Einträge entstehen und treffen beim zweiten Lauf; `_with_features()` steht schlicht **außerhalb** der Abfrage (`evaluate.py:427`). Der Umbau bleibt nicht trivial (der Plattencache nimmt nur `MeshData`, die Zuordnung hängt an den vorigen Merkmalen und an `operation.matches`, §15.7) — **und er hilft dem ersten Öffnen beim Kunden gar nicht**, also genau dem Fall, um den es ging. Die Ursache der 102 s ist eigens behoben; was hier offen bleibt, ist der Cache über die Erkennung, und der lohnt nach dieser Messung am wenigsten |
 | `match()` ist quadratisch und läuft in reinem Python | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | eine **Vektorisierung** von `app/core/perceive/matching.py` — zwei Python-Schleifen über N² (Matrixaufbau Zeile 152, Rivalen-Scan Zeile 192). Gemessen: 100 Merkmale 0,08 s · 400 → 1,37 s · 1600 → 23,2 s · 3372 → 101,1 s. Erwartung 50–100×, die Ordnung bleibt quadratisch. Zwei Fallen: die Achsen-Vorzeichenregel (`"axis" in first.params`, richtungslos je Merkmal statt je Art) und `KIND_PENALTY`; `cost()` muss als Einzelpaar-Referenz stehen bleiben und der vektorisierte Aufbau elementweise dagegen geprüft werden. `tests/test_matching.py` trägt 35 Tests als Rückhalt. **Nicht dringend, seit die Merkmalsexplosion behoben ist** — es ist das Netz für den nächsten Fall, der viele Merkmale erzeugt |
 | `test_ui.py` stirbt bei zufälliger Testreihenfolge | Zwei Torläufe an einem Tag, beide an derselben Stelle (26.08.2026) | eine **Zuordnung zur Absturzfamilie**. Gemessen: mit `-p no:randomly` laufen alle 303 Tests durch (Exit 0), mit zufälliger Reihenfolge Zugriffsverletzung bei 23 % — beide Male in `panels.py` unter `_show_scene`, einmal `show_result`, einmal `show_document`. **Keine Regression**: Der Grundlagen-Torlauf vor allen Änderungen des Tages zeigte denselben Abbruch an derselben Stelle. Gehört zu den Signaturen A–C weiter oben; was fehlt, ist die Entscheidung, ob die Suite die Reihenfolge für diese Datei festnagelt oder die Ursache weiter verfolgt wird. **Dritte Beobachtung am 26.08.2026 (ce, Torlauf):** wieder bei 23 %, diesmal aber im `QCompleter`-Konstruktor (`op_dialog.py:197`, aus der fx-Hilfe `2b48f288`) statt in `panels.py` — die Position im Lauf ist stabil, die Stelle im Code nicht. Der betroffene Test allein: grün. Vollständige Wiederholung derselben Datei: 305 passed, Exit 0. Das ist die Auskunft, die zur Reihenfolge passt und gegen eine Regression spricht — der Torlauf davor am selben Tag kannte den Abbruch nicht, und die Änderungen dazwischen (Plattenwahl im Druckdialog) berühren weder `op_dialog` noch `panels` |
 | Die 56 Sekunden von `weg4-figur-formen` liegen in der Oberfläche | Ein Beispielprojekt, das zweieinhalb Minuten lud (26.08.2026) | einen **Prüfstand im echten Fenster**. Im Kern kostet das Projekt 0,82 s (offscreen über `Session.open_project` gemessen); der Rest hängt an VTK und am Aktoraufbau und ist offscreen unsichtbar — siehe „Offscreen prüft nichts, was am Aktor hängt". Dasselbe gilt für rund 40 der 145 Sekunden von weg3 und 13 von `dose-mit-deckel` |
-| `decimated 992 to 992` — ein Schritt, der nichts tut | Sechs Sekunden schwarzes Fenster, und ein Kunde, der es für einen Absturz hielt (23.08.2026) | eine Erklärung. `decimate()` hat einen frühen Rücksprung für genau diesen Fall, und er greift nicht; es läuft eine echte `simplify_quadric_decimation` von 992 auf 992. Drei Aufrufer kommen infrage |
 | Entwurfsvermerk auf den Rechtstexten | Was erst am Verkaufsstart fällig wird (24.08.2026) | die fachliche Prüfung. Eine Zeile in `tools/make_legal.py:236` und ein Neuerzeugen — die drei HTML-Dateien von Hand zu ändern hielte bis zum nächsten Lauf |
 | Impressum ohne USt-IdNr. oder Steuernummer | Was erst am Verkaufsstart fällig wird (24.08.2026) | die Gewerbeanmeldung. §5 TMG verlangt sie, sobald es sie gibt; bis dahin nicht nachholbar |
 | Offscreen prüft nichts, was am Aktor hängt | Ein Knopf, der einen Schritt legte und nichts bewegte (24.08.2026) | eine **Messstelle**, die im echten Fenster läuft, und eine Entscheidung, welche Zusagen dort geprüft werden müssen. `Viewport.show_scene` kehrt bei `self.plotter is None` vor dem Aktor-Aufbau zurück (`app/ui/viewport.py:1948`), und `tests/conftest.py` setzt `QT_QPA_PLATFORM=offscreen` für die ganze Suite — jede Zusage über Aktoren, Farben, Kamerastellung oder Bildinhalt ist dort grün über einer leeren Menge. Belegt am 24.08.: `_actors` war vor **und** nach einer Operation `{}`; mit sichtbarem Fenster wanderten dieselben Aktoren von (-10..10) auf (-104..-84, 84..104, 0..20) |
@@ -8530,7 +8528,7 @@ das wie abgestürzt aussieht.
       schwarzen Fläche in der Mitte liegt. **Gehört b8** (Panels und
       Ansichtsaufbau).
 
-- [ ] **Der Cache spart die Geometrie, nicht die Erkennung.** Im selben Lauf
+- [x] **Der Cache spart die Geometrie, nicht die Erkennung.** Im selben Lauf
       lief `detect()` **fünfzehnmal** über denselben Körper.
 
       Die Zahl ist erklärbar und trotzdem ein Befund: `_with_features()` läuft
@@ -8559,7 +8557,27 @@ das wie abgestürzt aussieht.
       Zu messen ist zuerst, **wie viel von den sechs Sekunden überhaupt die
       Erkennung ist**. Ohne diese Zahl ist jeder Umbau hier eine Vermutung.
 
-- [ ] **`decimated 992 to 992 triangles`, dreimal im selben Lauf.** Ein
+      **Gemessen und gebaut am 27.08.2026 (`e5816209`).** Über die neun
+      Beispielprojekte, je drei Auswertungen wie beim Öffnen: 11,65 s
+      Erkennung, davon **7,52 s auf bitgleichen Netzen** — 65 Prozent.
+      Gebaut, gemessen: 58,06 s auf 50,20 s, bei „Aushöhlen und teilen" 8,90
+      auf 5,33.
+
+      **Das widerspricht der Einschätzung in der Registerzeile, und zwar
+      begründet.** Dort stand „hilft dem ersten Öffnen beim Kunden gar
+      nicht" — richtig für einen *Platten*cache, der zwischen zwei Sitzungen
+      trägt. Die Wiederholungen liegen aber **innerhalb eines
+      Öffnungsvorgangs**: Weg 1 wertet dreimal aus, und drei von vier
+      `detect`-Aufrufen sehen dabei dasselbe Netz. Ein Cache im Prozess greift
+      genau dort, und er greift beim ersten Öffnen so gut wie beim zweiten.
+
+      Der Umbau ist außerdem enger ausgefallen als hier befürchtet: Die
+      Zuordnung, die an den vorigen Merkmalen und an `operation.matches`
+      hängt, bleibt außen vor — `detect` selbst hängt an nichts als am Netz,
+      und nur das liegt im Cache. Was die Zeile über `match()` sagt, gilt
+      unverändert und steht als eigener Punkt weiter oben.
+
+- [x] **`decimated 992 to 992 triangles`, dreimal im selben Lauf.** Ein
       Vereinfachungsschritt, der nichts entfernt und trotzdem läuft.
 
       `decimate()` hat für genau diesen Fall einen frühen Rücksprung
@@ -8568,9 +8586,24 @@ das wie abgestürzt aussieht.
       eine echte `simplify_quadric_decimation`, die bei 992 Dreiecken anfängt
       und bei 992 aufhört. Entweder liegt das Ziel darunter und das Verfahren
       erreicht es nicht, oder `_welded_for_simplify` gibt etwas anderes zurück,
-      als der Aufrufer erwartet. **Ungeklärt**; die drei Aufrufer sind
-      `examples.py` (Vorschau, Ziel 1500), `drawing.py` und die Operation
-      selbst.
+      als der Aufrufer erwartet.
+
+      **Geklärt und behoben am 27.08.2026 (`f06b4c40`) — beide Vermutungen
+      waren falsch.** Das Netz ist sauber verschweißt (1488 Nachbarschaften
+      bei 992 Dreiecken, also genau drei Halbe je Dreieck), wasserdicht, eine
+      Komponente, keine entarteten Dreiecke. `simplify_quadric_decimation`
+      erreicht kein einziges Ziel von 900 bis 400, auch direkt gerufen und
+      ohne Zusatzdaten; dieselbe Rechnung trifft an Kugel und Quader jedes
+      Ziel exakt. Die Euler-Zahl sagt warum: minus acht, also Genus fünf — ein
+      CAD-Teil mit fünf Durchbrüchen, das bereits minimal trianguliert ist.
+      Jede Kante trennt zwei Ebenen, und eine solche zusammenzuziehen hieße,
+      die Form zu ändern.
+
+      Die Vereinfachung verhält sich damit **richtig**; falsch war, dass sie
+      schweigt. Der Kunde las „Die Fläche hat sich dabei kaum verschoben" —
+      zutreffend und vollkommen nebensächlich. Jetzt sagt sie es
+      (`mesh.not_simplified`), als Auskunft und nicht als Warnung, und nur wo
+      gar nichts geschah.
 
 ---
 
