@@ -1558,7 +1558,16 @@ def _run_slicer(
                             id="export_only",
                             label=_("Nur exportieren und selbst slicen."),
                         ),
-                        Action(id="retry", label=_("Erneut versuchen.")),
+                        # ``RETRY`` und keine eigene Fassung: Der Katalog
+                        # schlüsselt nach dem deutschen Text, und der Punkt am
+                        # Ende hatte daraus einen zweiten Eintrag in fünf
+                        # Sprachen gemacht — bereits auseinandergelaufen
+                        # (it „Riprova." gegen „Prova di nuovo.", pt „Tentar
+                        # novamente." gegen „Tentar de novo."). Derselbe Knopf
+                        # trug zwei Beschriftungen, je nachdem welcher
+                        # Fehlerpfad ihn erzeugte. Zwölf Zeilen weiter unten
+                        # steht die zentrale Fassung längst richtig.
+                        RETRY,
                     ),
                 ) from None
             continue
