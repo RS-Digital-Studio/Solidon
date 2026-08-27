@@ -34,6 +34,7 @@ from app.core.errors import (
     ARRANGE_ON_BED,
     CANCEL,
     CHANGE_SELECTION,
+    EXPORT_ONLY,
     INSTALL_MISSING,
     OPEN_SETTINGS,
     RETRY,
@@ -184,7 +185,7 @@ def detect(executable: Path | str) -> SlicerSetup:
             detail=_("Solidon kennt die Kommandozeile dieses Programms nicht."),
             suggestions=(
                 Action(id="choose_slicer", label=_("Einen anderen Slicer auswählen.")),
-                Action(id="export_only", label=_("Nur exportieren und selbst slicen.")),
+                EXPORT_ONLY,
             ),
         )
     return SlicerSetup(executable=path, flavour=flavour)
@@ -1536,7 +1537,7 @@ def _run_slicer(
             values={"reason": str(problem)},
             suggestions=(
                 INSTALL_MISSING,
-                Action(id="export_only", label=_("Nur exportieren und selbst slicen.")),
+                EXPORT_ONLY,
             ),
         ) from problem
     deadline = time.monotonic() + timeout
@@ -1554,10 +1555,7 @@ def _run_slicer(
                     detail=_("Der Slicer hat das Zeitlimit überschritten."),
                     values={"seconds": int(timeout)},
                     suggestions=(
-                        Action(
-                            id="export_only",
-                            label=_("Nur exportieren und selbst slicen."),
-                        ),
+                        EXPORT_ONLY,
                         # ``RETRY`` und keine eigene Fassung: Der Katalog
                         # schlüsselt nach dem deutschen Text, und der Punkt am
                         # Ende hatte daraus einen zweiten Eintrag in fünf
@@ -1753,7 +1751,7 @@ def slice_model(
         raise ExternalToolError(
             tool=setup.name,
             detail=_("Der eingestellte Slicer liegt nicht mehr an seinem Pfad."),
-            suggestions=(INSTALL_MISSING, Action(id="export_only", label=_("Nur exportieren."))),
+            suggestions=(INSTALL_MISSING, EXPORT_ONLY),
         )
 
     started = time.perf_counter()
@@ -1810,7 +1808,7 @@ def slice_model(
                 suggestions=(
                     Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
                     Action(id="check_profile", label=_("Maschinenprofil prüfen.")),
-                    Action(id="export_only", label=_("Nur exportieren und selbst slicen.")),
+                    EXPORT_ONLY,
                 ),
             )
 
@@ -1833,7 +1831,7 @@ def slice_model(
                 suggestions=(
                     Action(id="check_profile", label=_("Maschinenprofil prüfen.")),
                     Action(id="show_output", label=_("Ausgabe des Slicers ansehen.")),
-                    Action(id="export_only", label=_("Nur exportieren und selbst slicen.")),
+                    EXPORT_ONLY,
                 ),
             )
         metrics = gcode.parse(payload)

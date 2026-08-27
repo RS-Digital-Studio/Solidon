@@ -87,6 +87,13 @@ OPEN_SETTINGS = Action("open_settings", _("Einstellungen öffnen"), primary=True
 #: wurde jedes Mal die Liste der externen Programme.
 #: Der Knopf trägt jetzt den Namen des Menüeintrags, unter dem er landet.
 INSTALL_MISSING = Action("install", _("Zusätzliche Programme …"), primary=True)
+#: Der Ausweg, wenn der Slicer nicht kann oder nicht da ist: Solidon schreibt
+#: die Datei, geslict wird von Hand. Sechsmal in der Übergabe gebaut, und
+#: einmal davon als „Nur exportieren." — derselbe Knopf mit einer zweiten
+#: Beschriftung, die sich in fünf Sprachen unabhängig weiterentwickelt hätte.
+#: Der Satz nennt beide Hälften, weil die erste allein nicht sagt, was danach
+#: zu tun ist.
+EXPORT_ONLY = Action("export_only", _("Nur exportieren und selbst slicen."))
 REPORT_ERROR = Action("report_error", _("Fehlerbericht erstellen"), primary=True)
 CHECK_UPDATES = Action("check_updates", _("Nach einer neuen Version sehen"), primary=True)
 #: Der Ausweg, wenn das Paket nicht kommt oder sich nicht starten lässt: der
