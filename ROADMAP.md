@@ -80,7 +80,7 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
-| Ein Gewinde auf macOS kann als STL Löcher haben | Die Demo bis 30.10.2026 (12.08.2026) | eine OCCT-Version, die den helikalen Gang dort am Kern schließt |
+| Ein Gewinde auf macOS kann als STL Löcher haben — **ein Weg ist gebaut, die Bestätigung fehlt** | Die Demo bis 30.10.2026 (12.08.2026) | einen Lauf auf einem Mac. Seit `d96308bb` wird ein offenes Netz aus geschlossener Form vernäht statt feiner vernetzt (T-Kreuzung, nicht Loch); ob der dortige Riss einer ist, lässt sich hier nicht erzeugen |
 | Auf einem fremden Rechner installieren | Die Demo bis 30.10.2026 (12.08.2026) | einen fremden Rechner — die Dateien liegen seit dem 20.08. |
 | Die Warnung beim Zeichnen über den Bauraumrand hinaus | P13.1 — Der Skizzeneditor zieht in den Viewport | eine Stelle im Viewport-Modus, an der der Satz stehen kann — der Rand selbst ist seit dem 24.08. wieder da |
 | Den helikalen Gang überall schließen | Die Durchsicht vom 13.08.2026 — Auswahl und Zeichnen | eine andere **Bauart** — alle sieben Griffe an `MakePipeShell` sind gemessen und widerlegt (20.08.), und ein Rotationskörper schraubt nicht |
@@ -2194,14 +2194,34 @@ den Webserver und die Paketierung. Fünf Funde:
       Protokoll. **Das ist eine Lücke, keine Lösung** — wer eine Ansicht
       ändert, fährt `pytest tests/test_*_ui.py` lokal, bevor er pusht. Sie
       schließt sich, sobald die Runner GL bekommen oder VTK ohne auskommt.
-- [ ] **Ein Gewinde auf macOS kann als STL Löcher haben** (20.08.2026). Der
+- [~] **Ein Gewinde auf macOS kann als STL Löcher haben** (20.08.2026). Der
       Körper ist dort in Ordnung — geschlossen, ein Stück, richtiges Volumen,
       und STEP wie jede weitere Operation tragen ihn. Nur seine Vernetzung
       ritzt an der Flanke: M6 mit einem Millimeter Steigung bleibt undicht,
       auch nachdem `_finely_meshed` die Feinheit dreimal halbiert hat. Unter
       Windows und Linux sind alle Größen dicht. Der Test verlangt die
-      Netzdichte deshalb überall außer auf Darwin; wer den STL-Export dort
-      ernst nimmt, braucht einen anderen Weg als eine feinere Deflection.
+      Netzdichte deshalb überall außer auf Darwin.
+
+      **Ein anderer Weg ist gebaut** (27.08.2026, `d96308bb`): `tessellate`
+      gibt sein Netz durch `_stitched`, und ist es offen, obwohl die Form
+      geschlossen ist, wird **vernäht** statt feiner vernetzt. Ein Riss an
+      einer Flanke ist keine fehlende Wand, sondern eine T-Kreuzung — zwei
+      Flächen an derselben Kante, verschieden fein unterteilt. Gemessen an
+      einem M6-Netz mit einem echten Loch lässt `repair.fill_holes` es offen
+      und rührt kein Dreieck an; `stitch_t_junctions` ist für genau diesen
+      Defekt gebaut.
+
+      Beim Bauen fiel ein zweiter Fund an, der den ersten rettet: Der Vernäher
+      meldet auch dort Nähte, wo keine T-Kreuzungen sind, und hinterlässt an
+      einem zerlegten Würfel 18 offene Kanten statt 15. Übernommen wird
+      deshalb nur, was die Zahl der offenen Kanten senkt.
+
+      **Offen bleibt die Frage, die nur ein Mac beantwortet:** ob der dortige
+      Riss wirklich eine T-Kreuzung ist. Unter Windows ist jede Größe dicht,
+      der Fall lässt sich hier nicht erzeugen. Belegt ist, dass der Weg den
+      beschriebenen Defekt schließt und nichts verschlimmern kann; ob er den
+      Fall trifft, sagt der erste Lauf dort. Ein Testbericht von einem Mac
+      steht für die nächsten Tage an (Alexander Schneider, Buchprojekt).
 - [ ] **Auf einem fremden Rechner installieren** (ohne Python, ohne venv, ohne
       Ollama/ComfyUI). Der Punkt, der erfahrungsgemäß mehr findet als alle
       Tests.
