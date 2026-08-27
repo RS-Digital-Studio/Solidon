@@ -2567,6 +2567,7 @@
   "Solidon {new} ist da — Sie haben {old}.": "Solidon {new} is out — you have {old}.",
   "Sonst noch etwas": "Anything else",
   "Spalt": "Gap",
+  "Spalt {gap} mm — der Drucker legt {least} mm": "gap {gap} mm — the printer lays {least} mm",
   "Spannt einen Körper zwischen der Grundform und ihrer verkleinerten Kopie in der Höhe auf — Pyramidenstumpf, Kegelstumpf, Trichter.": "Spans a body between the base shape and its scaled copy at height — truncated pyramid, truncated cone, funnel.",
   "Spannweite": "Span",
   "Speichern": "Save",

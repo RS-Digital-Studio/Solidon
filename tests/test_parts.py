@@ -2823,3 +2823,41 @@ def test_a_part_may_declare_how_many_bodies_it_prints_as(profile: Profile) -> No
     undeclared = check(TwoPartParams, two_bodies, profile)
     assert not undeclared.passed
     assert "2 Teile statt 1" in undeclared.failures[0].reason
+
+
+def test_a_printed_joint_needs_a_gap_the_printer_can_hold(profile: Profile) -> None:
+    """Bei einem print-in-place-Teil ist der Spalt die ganze Sache.
+
+    Zu eng verschweißt beim Drucken, und aus zwei Körpern wird einer — davon
+    sähe der Bereichstest nichts, weil er die Geometrie **vor** dem Drucker
+    prüft. Gemessen wird deshalb der engste Abstand zwischen den Teilen, gegen
+    das kalibrierte Material und nie gegen eine Zahl im Code (Regel 7).
+
+    Die Toleranz ist `EPS_DISPLAY` und nicht `EPS_GEOM`: eine Fertigungsfrage,
+    kein Rechenvergleich. Ein facettierter Zylinder zeigt seine Sehne und nicht
+    den Bogen, der gemessene Spalt fällt also um Bruchteile kleiner aus —
+    0,2499 bei eingestellten 0,25. Mit dem Rechenepsilon meldete die Prüfung
+    ein Scharnier, das genau richtig gebaut war.
+    """
+    from app.core.knowledge.parts import PARTS
+    from app.core.knowledge.parts.range_check import check
+    from app.core.registry import op_params, param
+    from app.core.types import BaseParams
+
+    hinge = PARTS.get("barrel_hinge")
+
+    # So, wie der Kunde es bekommt: `play` bleibt null, der Bereichstest setzt
+    # den Profilwert ein — wie `insert_part` es tut.
+    assert check(hinge.params, hinge.fn, profile, bodies=hinge.bodies).passed
+
+    @op_params
+    class TooTight(BaseParams):
+        pin: float = param(title="Bolzen", default=4.0, unit="mm", minimum=3.0, maximum=5.0)
+
+    def built_too_tight(values: BaseParams) -> Any:
+        """Dasselbe Scharnier, aber mit einem Spiel, das nicht aus dem Profil kommt."""
+        return hinge.fn(hinge.params(pin=values.pin, play=0.05))
+
+    tight = check(TooTight, built_too_tight, profile, bodies=2)
+    assert not tight.passed, "ein Spalt von 0,05 mm verschweißt beim Drucken"
+    assert "0.05" in tight.failures[0].reason
