@@ -592,7 +592,18 @@ class MeshCodec:
 
     suffix = ".npz"
 
+    def stores(self, mesh: Mesh) -> bool:
+        """Nur Netze. Ein exakter Körper (§30) wird neu gerechnet statt gelegt.
+
+        Die Frage gibt es, damit der Aufrufer den Normalfall nicht am
+        geworfenen ``TypeError`` erkennen muss — der bedeutet dort auch einen
+        Programmfehler, und beide sahen gleich aus.
+        """
+        return isinstance(mesh, MeshData)
+
     def dumps(self, mesh: Mesh) -> bytes:
+        # Bleibt: Wer ohne zu fragen ablegt, hat einen Programmfehler, und der
+        # soll auffallen. ``stores`` ist die Frage, das hier die Zusicherung.
         if not isinstance(mesh, MeshData):
             raise TypeError("the disk cache can only store MeshData")
         return mesh.to_bytes()

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
+import logging
 import os
 import time
 from pathlib import Path
@@ -20,6 +22,9 @@ class FakeCodec:
     """Steht für die Geometrieschicht, die den echten später liefert."""
 
     suffix = ".json"
+
+    def stores(self, mesh: Mesh) -> bool:
+        return True
 
     def dumps(self, mesh: Mesh) -> bytes:
         source = mesh  # type: ignore[assignment]
@@ -1026,3 +1031,67 @@ def test_the_key_reads_the_up_to_target_and_the_sketch_plane() -> None:
         "wandert die Trägerfläche der Skizze, kippt der Schlüssel"
     )
     assert base["#up_to"] == moved["#up_to"], "und die zwei Träger bleiben getrennte Einträge"
+
+
+class _RefusingCodec(FakeCodec):
+    """Ein Codec, der diesen einen Körper nicht ablegen mag — wie der echte
+    einen exakten Körper (§30)."""
+
+    def stores(self, mesh: Mesh) -> bool:
+        return False
+
+
+def test_a_body_the_codec_will_not_store_is_no_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Der gewollte Fall darf nicht aussehen wie der ungewollte.
+
+    ``put`` fing bis zum 27.08.2026 einen ``TypeError`` und schrieb
+    ``could not write cache entry`` — für **zwei** Ursachen, die Gegenteiliges
+    meinen: ein B-Rep-Ergebnis, das absichtlich neu gerechnet wird (§30), und
+    ein Wert im Payload, den ``json.dumps`` nicht kennt. Der zweite ist ein
+    Fehler und hat zweimal Tage gekostet, weil die Zeile im Protokoll dieselbe
+    war. Im Kundenprotokoll vom 27.08.2026 (S-20260826-72a4dd) steht sie
+    ebenfalls, hinter einem STEP-Import — dort war sie harmlos, und das sah man
+    ihr nicht an.
+
+    Seitdem fragt ``put`` vorher (``codec.stores``). Der gewollte Fall erreicht
+    den Fehlerpfad nicht mehr, und die Warnung ist wieder eine.
+    """
+    disk = DiskCache(codec=_RefusingCodec(), directory=tmp_path)
+
+    with caplog.at_level(logging.DEBUG, logger="app.core.scene.cache"):
+        disk.put("key", CachedResult(objects=(make_object("obj_1", triangles=42),)))
+
+    assert disk.get("key") is None, "abgelehnt heißt: nichts liegt da"
+    warnungen = [record for record in caplog.records if record.levelno >= logging.WARNING]
+    assert not warnungen, (
+        "ein Körper, den der Codec bewusst nicht ablegt, ist Normalbetrieb — "
+        f"keine Warnung: {[record.getMessage() for record in warnungen]}"
+    )
+    assert caplog.records, "und trotzdem nachlesbar, warum nichts gecacht wurde"
+
+
+def test_a_payload_the_json_writer_cannot_take_stays_a_warning(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Die Gegenprobe: Der **ungewollte** Fall bleibt eine Warnung.
+
+    Sonst hätte die Trennung oben den Fehler mitgenommen, den sie sichtbar
+    machen soll — ein Eintrag, der still wegfällt, während das Projekt bei
+    jedem Öffnen den ganzen Stapel neu rechnet.
+    """
+    disk = DiskCache(codec=FakeCodec(), directory=tmp_path)
+    entry = make_object("obj_1", triangles=42)
+    # Ein Wert, den ``json.dumps`` nicht kennt — dieselbe Sorte wie die zwei
+    # ``TranslatableText`` von 23. und 26.08.2026, nur ohne deren Reparatur.
+    broken = dataclasses.replace(entry, material=object())  # type: ignore[arg-type]
+
+    with caplog.at_level(logging.DEBUG, logger="app.core.scene.cache"):
+        disk.put("key", CachedResult(objects=(broken,)))
+
+    assert disk.get("key") is None
+    assert [record for record in caplog.records if record.levelno >= logging.WARNING], (
+        "ein Payload, den der JSON-Schreiber nicht nimmt, ist ein Fehler und "
+        "muss als Warnung stehen bleiben"
+    )

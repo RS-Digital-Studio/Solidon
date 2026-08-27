@@ -78,6 +78,18 @@ class MeshCodec(Protocol):
     @property
     def suffix(self) -> str: ...
 
+    def stores(self, mesh: Mesh) -> bool:
+        """Ob dieser Körper überhaupt auf die Platte gehört.
+
+        **Gefragt wird, statt es am Fehler zu merken.** ``dumps`` wirft bei
+        einem Körper der falschen Sorte, und dieser Wurf sah bis zum
+        27.08.2026 genauso aus wie ein Programmfehler im Payload — beide
+        landeten als ``TypeError`` in derselben Warnung. Der eine ist
+        Normalbetrieb (§30), der andere hat zweimal Tage gekostet. Wer vorher
+        fragt, muss sie hinterher nicht auseinanderhalten.
+        """
+        ...
+
     def dumps(self, mesh: Mesh) -> bytes: ...
 
     def loads(self, data: bytes) -> Mesh: ...
@@ -463,6 +475,20 @@ class DiskCache:
         return CachedResult(objects=objects, findings=findings, solver=solver, transform=transform)
 
     def put(self, key: str, result: CachedResult) -> None:
+        # **Der gewollte Fall kommt gar nicht erst in den Fehlerpfad** (§30):
+        # Ein B-Rep-Ergebnis wird neu gerechnet statt gecacht, denn den Cache
+        # gibt es für teure Boolesche Arbeit auf großen Netzen, und eine
+        # Verrundung auf einem exakten Körper sind Millisekunden. Das ist
+        # Normalbetrieb und keine Warnung wert — bis hierher war es beides
+        # zugleich, siehe der Kommentar am ``except`` weiter unten.
+        keeps = [entry for entry in result.objects if not self.codec.stores(entry.mesh)]
+        if keeps:
+            _log.info(
+                "not caching %s: %d object(s) are not mesh backed — recomputed instead (§30)",
+                key,
+                len(keeps),
+            )
+            return
         folder = ensure_dir(self._folder(key))
         entries: list[dict[str, Any]] = []
         try:
@@ -494,24 +520,23 @@ class DiskCache:
                 payload["transform"] = [list(row) for row in result.transform]
             (folder / "objects.json").write_text(json.dumps(payload), encoding="utf-8")
         except (OSError, TypeError) as problem:
-            # ``TypeError`` hat hier **zwei** Ursachen, und die zweite hat
-            # zweimal Tage gekostet, weil dieser Kommentar nur die erste nannte:
+            # ``TypeError`` hatte hier **zwei** Ursachen, und die zweite hat
+            # zweimal Tage gekostet, weil sie wie die erste aussah:
             #
             # 1. Ein Körper, den der Codec nicht ablegen kann — ein
-            #    B-Rep-Ergebnis (§30). Das ist gewollt: Die werden neu gerechnet
-            #    statt gecacht, denn den Cache gibt es für teure Boolesche Arbeit
-            #    auf großen Netzen, und eine Verrundung auf einem exakten Körper
-            #    sind Millisekunden.
+            #    B-Rep-Ergebnis (§30). Das war gewollt und trotzdem eine
+            #    Warnung. **Seit dem 27.08.2026 fragt ``put`` vorher**
+            #    (``codec.stores``) und kommt hier nicht mehr an.
             # 2. Ein Wert im Payload, den ``json.dumps`` nicht kennt — bisher
             #    zweimal ein :class:`TranslatableText`, erst im Objektnamen
             #    (23.08.2026), dann im Namen eines Materialslots (26.08.2026).
             #    Das ist **nicht** gewollt: Der Eintrag fällt still weg, und das
             #    Projekt rechnet bei jedem Öffnen den ganzen Stapel neu.
             #
-            # Wer die Zeile im Protokoll liest, prüft deshalb beides — sie
-            # sehen gleich aus und meinen Gegenteiliges. ``_name_to_data``
-            # deckt die zwei bekannten Stellen ab; eine dritte wäre ein
-            # weiteres Feld dieses Payloads.
+            # Was hier ankommt, meint deshalb nur noch den zweiten Fall — die
+            # Warnung ist wieder eine. ``_name_to_data`` deckt die zwei
+            # bekannten Stellen ab; eine dritte wäre ein weiteres Feld dieses
+            # Payloads.
             _log.warning("could not write cache entry %s: %s", key, problem)
             shutil.rmtree(folder, ignore_errors=True)
             return
