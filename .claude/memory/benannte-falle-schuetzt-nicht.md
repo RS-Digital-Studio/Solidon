@@ -29,6 +29,18 @@ Vier Fälle am 27.08.2026, alle in Code, der die Sache ausdrücklich erklärte:
   gleich aussehen und Gegenteiliges meinen — und ließ sie beisammen. Der
   zweite Fall hat danach noch zweimal Tage gekostet.
 
+**Und der fünfte Fall ist diese Erinnerung selbst.** Am selben Tag hatte ich
+in `CLAUDE.md` notiert, dass `ruff format` Python-Blöcke **innerhalb** von
+Markdown mitformatiert und ein ausgerichteter Kommentar darin das Tor rot
+macht. Die Notiz nebenan (`mypy-prueft-die-laufende-plattform`) bekam einen
+als `python` ausgezeichneten Block mit genau so einem Kommentar — und machte
+das Tor rot. Gefunden hat es 27, nicht ich; die Datei war Sekunden alt.
+
+Der Satz oben wäre beinahe selbst hineingefallen: Er trug das Muster erst
+wörtlich, mit drei Backticks am Zeilenanfang, und das **ist** ein Blockstart.
+Ein verbotenes Muster wird umschrieben, nicht zitiert
+([[waechter-lesen-kommentare-mit]]).
+
 **Why:** Prosa und Prüfung sind zwei Dinge. Der Satz beschreibt, was gelten
 soll; ob es gilt, weiß nur eine Messung. Verwandt mit
 [[sollwert-aus-dem-pruefling]] — dort erzeugt der Prüfling die Erwartung, hier

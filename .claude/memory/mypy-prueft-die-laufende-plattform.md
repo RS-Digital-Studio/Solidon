@@ -14,7 +14,7 @@ Maschine ihre eigene: die drei Arbeitsrechner Windows, die CI Linux.
 **Beide Richtungen sind möglich, und eine ist am 27.08.2026 eingetreten.**
 `ca18e5a8` brachte in `export/slicer_profiles.py` eine Kette:
 
-```python
+```text
 if sys.platform == "win32":
     return os.environ.get("APPDATA", "")
 if sys.platform == "darwin":          # <- Zeile 127
