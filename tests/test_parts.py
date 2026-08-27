@@ -54,13 +54,13 @@ def corners(spec: PartSpec) -> list[dict[str, Any]]:
 
 
 def test_the_library_has_the_first_set_from_the_plan() -> None:
-    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung, dazu sieben.
+    """§24.1 nennt dreizehn Bausteine für die erste Auslieferung, dazu acht.
 
     Die Kalibrierkörper aus §28.3 sind auch Bausteine, gehören aber nicht zu
     diesem Satz — sie sind Werkzeuge für den Drucker, nicht für das Modell, und
     sie haben ihre eigene Gruppe im Katalog.
 
-    **Sechs stehen nicht in der Erstbestückung**, und alle sechs sind eine Ansage
+    **Acht stehen nicht in der Erstbestückung**, und alle acht sind eine Ansage
     und kein Versehen. Wer die Zahl hier ändert, ändert die Bibliothek, und das soll
     auffallen.
 
@@ -101,16 +101,21 @@ def test_the_library_has_the_first_set_from_the_plan() -> None:
     Doppelbaustein, sondern dieselbe Form zweimal gelesen (``subtractive_on``,
     wie beim Passstift).
 
-    ``hinge_eye`` kam am 25.08.2026 dazu und ist der letzte der Liste. Das
-    Filmscharnier **biegt**, dieses hier **dreht** — zwei Augen und ein
-    Passstift ergeben ein Gelenk, das hält. Ein Scharnier, das schon beim
-    Drucken beweglich ist, wäre etwas anderes und ist keiner: Es bestünde aus
-    zwei Teilen, und ein Baustein muss einer sein. Die Frage dahinter steht im
-    Register.
+    ``hinge_eye`` kam am 25.08.2026 dazu. Das Filmscharnier **biegt**, dieses
+    hier **dreht** — zwei Augen und ein Passstift ergeben ein Gelenk, das hält.
+
+    ``barrel_hinge`` kam am 27.08.2026 dazu und ist das Scharnier, das das Auge
+    damals nicht sein durfte: eines, das schon beim Drucken beweglich ist. Es
+    besteht aus zwei Teilen, und bis dahin musste ein Baustein einer sein —
+    nicht laut Bauplan, sondern laut Test. §24.3 trägt die Ausnahme seit dem
+    25.08.2026 als **Deklaration** (Entscheidung Robert): Wer mehrere Körper
+    baut, sagt wie viele, und dann prüft der Bereichstest die gebaute Zahl
+    gegen die erklärte. Unerklärtes Zerfallen bleibt rot. Er ist der erste
+    Nutzer von ``bodies`` und damit der Beleg, dass die Deklaration trägt.
     """
     building = [spec for spec in PARTS.all() if spec.group != "calibration"]
 
-    assert len(building) == 20
+    assert len(building) == 21
     assert len([spec for spec in PARTS.all() if spec.group == "calibration"]) == 3
 
 

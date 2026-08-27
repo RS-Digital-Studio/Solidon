@@ -795,3 +795,153 @@ def hinge_eye(raw: BaseParams) -> PartResult:
             through=True,
         ),
     )
+
+
+BARREL_HINGE_ADDED = PartChange(
+    version="1",
+    date="2026-08-27",
+    reason="Bolzenscharnier — das erste erklärt mehrteilige Teil (§24.3).",
+)
+
+
+@op_params
+class BarrelHingeParams(BaseParams):
+    pin: float = param(
+        title=_("Bolzen"),
+        default=4.0,
+        unit="mm",
+        minimum=2.0,
+        maximum=20.0,
+        doc=_("Durchmesser der Achse. Sie wird mitgedruckt und nicht eingesteckt."),
+    )
+    width: float = param(
+        title=_("Breite"),
+        default=24.0,
+        unit="mm",
+        minimum=8.0,
+        maximum=120.0,
+        doc=_("Gesamtbreite über beide Laschen, längs der Achse gemessen."),
+    )
+    reach: float = param(
+        title=_("Ausladung"),
+        default=12.0,
+        unit="mm",
+        minimum=4.0,
+        maximum=60.0,
+        doc=_("Wie weit jede Lasche von der Achse wegsteht — der Hebel des Gelenks."),
+    )
+    wall: float = param(
+        title=_("Wandstärke"),
+        default=2.5,
+        unit="mm",
+        minimum=1.0,
+        maximum=15.0,
+        doc=_("Material rings um den Bolzen. Zu dünn reißt beim ersten Zug auf."),
+    )
+    play: float = param(
+        title=_("Spiel"),
+        default=0.0,
+        unit="mm",
+        minimum=0.0,
+        maximum=2.0,
+        placement="advanced",
+        doc=AUTO_FROM_PROFILE_DOC,
+    )
+
+
+@register_part(
+    name="barrel_hinge",
+    title=_("Bolzenscharnier"),
+    group="mechanics",
+    params=BarrelHingeParams,
+    # **Der erste Baustein, der zwei Körper erklärt** (§24.3, Entscheidung
+    # Robert vom 25.08.2026). Er ist der Anlass, aus dem die Frage überhaupt
+    # gestellt wurde: Ein Scharnier, das schon beim Drucken beweglich ist,
+    # besteht aus zwei Teilen, und der Bereichstest verlangte einen.
+    bodies=2,
+    features=["hinge"],
+    doc=_(
+        "Ein Scharnier, das aus dem Drucker schon beweglich kommt: zwei Laschen "
+        "um einen mitgedruckten Bolzen, dazwischen der Druckspalt. Nichts "
+        "zusammenzusetzen, nichts einzustecken."
+    ),
+    caveat=_(
+        "Der Spalt entscheidet: Zu eng verschweißt beim Drucken, zu weit "
+        "schlackert. Er kommt aus dem kalibrierten Material — wer das Material "
+        "wechselt, druckt ein Prüfstück, bevor er zwanzig Scharniere druckt."
+    ),
+    changes=[BARREL_HINGE_ADDED],
+)
+def barrel_hinge(raw: BaseParams) -> PartResult:
+    """Zwei Laschen um einen mitgedruckten Bolzen, Achse parallel zur Fläche.
+
+    **Der Baustein, an dem §24.3 aufgemacht wurde.** Bis zum 25.08.2026
+    verlangte der Bereichstest genau einen Körper, und ein print-in-place-
+    Scharnier hat zwei — das ging nicht zusammen. Gebaut wurde deshalb erst das
+    halbe Scharnier (``hinge_eye``): ein Auge, und wer ein Gelenk wollte, nahm
+    zwei davon und einen Passstift. Nützlich, aber nicht dasselbe: Ein
+    Bolzenscharnier kommt fertig aus dem Drucker.
+
+    **Die Bauart ist die einfachste, die trägt.** Die linke Lasche trägt den
+    Bolzen angeformt; die rechte hat eine Bohrung darum, die um das Spiel
+    weiter ist. Getrennt sind sie durch denselben Spalt, axial wie radial —
+    zwei Körper, die einander nicht berühren und sich deshalb drehen können.
+
+    Ein Kranz aus drei Augen (außen zwei, innen eines) hielte seitliche Kräfte
+    besser aus, braucht aber zwei Spalte statt einem und damit die doppelte
+    Genauigkeit vom Drucker. Das ist der nächste Schritt, wenn dieser trägt.
+
+    **Das Spiel ist der ganze Baustein.** Es kommt aus dem Materialprofil
+    (``play`` bleibt auf null, ``insert_part`` füllt es) — eine Zahl im Code
+    wäre für PLA richtig und für TPU falsch, und das Scharnier ist genau der
+    Fall, in dem das den Unterschied zwischen beweglich und verschweißt macht.
+    """
+    params = cast(BarrelHingeParams, raw)
+
+    outer = params.pin + 2.0 * params.wall
+    gap = max(params.play, shapes.OVERLAP)
+    # Die Lücke liegt in der Mitte: Jede Lasche bekommt die Hälfte der Breite
+    # abzüglich des halben Spalts.
+    half = (params.width - gap) / 2.0
+
+    def lying(diameter: float, length: float, x: float) -> MeshData:
+        """Ein Zylinder mit der Achse in X — die Drehachse des Scharniers."""
+        upright = shapes.cylinder(diameter, length)
+        centred = shapes.moved(upright, (0.0, 0.0, -length / 2.0))
+        turned = shapes.turned(centred, 90.0, (0.0, 1.0, 0.0))
+        return shapes.moved(turned, (x, params.reach, outer / 2.0))
+
+    def lug(length: float, x: float) -> MeshData:
+        """Die Lasche unter einem Auge, bis in dessen Mitte hinein.
+
+        Bis in die Mitte, nicht bis an den Rand: Zwei Körper, die sich nur
+        berühren, sind der Fall, an dem eine Boolesche Operation bricht (§39).
+        """
+        body = shapes.box(length, params.reach, outer)
+        return shapes.moved(body, (x, params.reach / 2.0, 0.0))
+
+    # Links: Lasche und Auge, dazu der Bolzen über die volle Breite.
+    left = union(
+        lying(outer, half, -(params.width - half) / 2.0), lug(half, -(params.width - half) / 2.0)
+    )
+    left = union(left, lying(params.pin, params.width, 0.0))
+
+    # Rechts: Lasche und Auge, aus dem der Bolzen samt Spiel wieder heraus muss.
+    right = union(
+        lying(outer, half, (params.width - half) / 2.0), lug(half, (params.width - half) / 2.0)
+    )
+    right = subtract(right, lying(params.pin + 2.0 * gap, params.width + 2.0 * shapes.OVERLAP, 0.0))
+
+    return result(
+        union(left, right),
+        # Die Drehachse als Bohrung benannt, wie beim Scharnierauge: Wer etwas
+        # daran ausrichtet, meint die Achse und nicht die Lasche.
+        bore(
+            "hinge_1",
+            params.pin,
+            (0.0, params.reach, outer / 2.0),
+            depth=params.width,
+            axis=(1.0, 0.0, 0.0),
+            through=True,
+        ),
+    )
