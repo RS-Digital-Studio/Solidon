@@ -92,12 +92,49 @@ def test_forget_lets_a_theme_change_through(qt_app: QApplication) -> None:
 
 def test_system_shapes_stay_system_shapes(qt_app: QApplication) -> None:
     """Wo das System eine bekannte Form hat, wird sie benutzt: Sie folgt der
-    eingestellten Zeigergröße, unsere täte das nicht."""
+    eingestellten Zeigergröße, unsere folgt ihr seit dem 27.08.2026 auch."""
     widget = QWidget()
     assert cursors.cursor("panning", widget).shape() == Qt.CursorShape.ClosedHandCursor
     assert cursors.cursor("move", widget).shape() == Qt.CursorShape.SizeAllCursor
     for role in cursors.SYSTEM:
         assert role not in cursors.SHAPES, f"{role} wäre zweimal beschrieben"
+
+
+def test_a_drawn_cursor_follows_the_size_the_system_was_told(
+    qt_app: QApplication, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Wer seine Zeiger auf 24 stellt, meint alle Zeiger — auch unsere.
+
+    Ein Kunde auf CachyOS mit GNOME meldete am 27.08.2026: „Der Cursor ist
+    SEHR gross und viel zu ungenau." Bis dahin hing die Größe allein an der
+    **Zeilenhöhe** der Anwendung, und die wächst mit der Textskalierung: bei
+    30 Punkten Zeilenhöhe ein Zeiger von 60, wo Systemzeiger 24 bis 32 messen.
+    Wer die Schrift größer stellt, hat damit nichts über seine Zeiger gesagt.
+
+    ``XCURSOR_SIZE`` ist die Stelle, an der Linux die Antwort hinterlegt —
+    GNOME, KDE und die Wayland-Compositoren setzen sie. Qt hilft nicht:
+    ``styleHints()`` kennt nur ``cursorFlashTime``.
+    """
+    widget = QWidget()
+
+    monkeypatch.setenv("XCURSOR_SIZE", "24")
+    assert cursors._size_for(widget) == 24, "die Einstellung des Nutzers gewinnt"
+
+    # Der Deckel bleibt: Windows lehnt zu große Zeiger ab und zeigt dann keinen.
+    monkeypatch.setenv("XCURSOR_SIZE", "96")
+    assert cursors._size_for(widget) == cursors.MAX_SIZE
+
+    # Was keine Zahl ist, ist keine Antwort — dann gilt die Zeilenhöhe wie bisher.
+    for unusable in ("0", "", "gross", "24px"):
+        monkeypatch.setenv("XCURSOR_SIZE", unusable)
+        assert cursors._size_for(widget) == int(widget.fontMetrics().height() * cursors.SCALE), (
+            f"{unusable!r} ist keine Größe und darf keine erfinden"
+        )
+
+    monkeypatch.delenv("XCURSOR_SIZE", raising=False)
+    assert cursors._size_for(widget) == int(widget.fontMetrics().height() * cursors.SCALE), (
+        "ohne Systemangabe bleibt es bei der Zeilenhöhe — Windows und macOS nennen keine"
+    )
 
 
 # --- der Anschluss im Viewport ------------------------------------------------

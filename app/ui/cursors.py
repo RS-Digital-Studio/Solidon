@@ -19,8 +19,16 @@ Zwei Regeln halten das brauchbar:
   und wäre ohne Kontur verschwunden. Denselben Grund hat jeder Systemzeiger
   der Welt einen weißen oder schwarzen Saum.
 
-Die Größe hängt an der Zeilenhöhe wie bei :mod:`app.ui.icons` und nicht an
-festen Pixeln — wer die Anzeige skaliert, bekommt einen mitwachsenden Zeiger.
+**Die Größe kommt zuerst vom System.** Auf Linux steht sie in
+``XCURSOR_SIZE``, und wer seine Zeiger dort auf 24 stellt, meint alle Zeiger
+— auch unsere. Nennt das System keine (Windows, macOS), gilt wie bisher die
+Zeilenhöhe mal :data:`SCALE`, so wie bei :mod:`app.ui.icons`.
+
+Diese Reihenfolge ist seit dem 27.08.2026 so herum, und der Anlass war ein
+Kunde: „Der Cursor ist SEHR gross und viel zu ungenau." Auf einem Schirm mit
+großer Textskalierung ergab die Bindung an die Schrift Zeiger von sechzig
+Punkten, wo Systemzeiger vierundzwanzig bis zweiunddreißig messen — wer die
+Schrift vergrößert, hat damit nichts über seine Zeiger gesagt.
 
 **Was hier bewusst nicht steht: der Pinselkreis.** Der Radius des Pinsels ist
 ein Maß in Millimetern (§20). Ein Mauszeiger hat eine feste Pixelgröße und
@@ -31,6 +39,7 @@ Szene, nicht an den Zeiger.
 
 from __future__ import annotations
 
+import os
 from typing import Final
 
 from PySide6.QtCore import QByteArray, QPoint, QSize, Qt
@@ -216,6 +225,31 @@ def _colours() -> tuple[str, str]:
 
 
 def _size_for(widget: QWidget) -> int:
+    """Wie groß ein eigener Zeiger wird — und wer das entscheidet.
+
+    **Erste Quelle ist die Systemeinstellung.** Auf Linux steht sie in
+    ``XCURSOR_SIZE``; GNOME, KDE und die Wayland-Compositoren setzen sie aus
+    dem, was der Nutzer in den Einstellungen gewählt hat. Wer seine Zeiger auf
+    24 stellt, meint alle Zeiger, auch unsere.
+
+    **Zweite Quelle ist die Zeilenhöhe**, und sie war bis zum 27.08.2026 die
+    einzige. Das ist auf Windows und macOS unauffällig geblieben und auf Linux
+    nicht: Ein Kunde auf CachyOS mit GNOME meldete „Der Cursor ist SEHR gross
+    und viel zu ungenau". Gerechnet ergibt die Bindung an die Schrift bei einer
+    Zeilenhöhe von 30 Punkten einen Zeiger von **60** — Systemzeiger sind 24
+    bis 32, und wer die Textgröße hochstellt, hat damit nichts über seine
+    Zeiger gesagt.
+
+    Die Regel dahinter stand längst in ``.claude/rules/ansicht.md``, nur als
+    Feststellung statt als Lösung: Eine Systemform „folgt der eingestellten
+    Zeigergröße, unsere täte das nicht". Jetzt tut sie es, wo das System sie
+    nennt.
+
+    Qt hilft dabei nicht — ``styleHints()`` kennt nur ``cursorFlashTime``.
+    """
+    system = os.environ.get("XCURSOR_SIZE", "").strip()
+    if system.isdigit() and int(system) > 0:
+        return max(min(int(system), MAX_SIZE), 16)
     height = widget.fontMetrics().height() if widget is not None else 16
     return max(min(int(height * SCALE), MAX_SIZE), 16)
 
