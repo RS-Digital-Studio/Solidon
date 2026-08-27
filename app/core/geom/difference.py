@@ -15,9 +15,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from app.core.errors import PROGRAMMING_ERRORS
+from app.core.errors import PROGRAMMING_ERRORS, GeometryError
 from app.core.geom.boolean import boolean
-from app.core.geom.mesh import MeshData
+from app.core.geom.mesh import MeshData, as_mesh_data
 from app.core.log import get_logger
 from app.core.types import Finding, ObjectId, Quality, Scene, SolverInfo
 from app.core.units import EPS_GEOM
@@ -105,8 +105,20 @@ def compare_scenes(before: Scene, after: Scene, *, quality: Quality = "draft") -
         earlier = before.objects.get(object_id)
         if earlier is None:
             continue
-        first, second = earlier.mesh, entry.mesh
-        if not isinstance(first, MeshData) or not isinstance(second, MeshData):
+        # **Auch ein exakter Körper zeigt, was sich geändert hat.** Hier stand
+        # ein stilles ``continue`` für alles, was kein ``MeshData`` ist — ein
+        # STEP-Import also, und jeder Körper aus dem exakten Kern. Kein
+        # Absturz und keine Meldung: Die Differenzansicht blieb nach einer
+        # Änderung daran einfach leer, obwohl §18.7 sie verspricht. Derselbe
+        # Zwilling wie beim Absturz der Analysekarten (27.08.2026), nur still
+        # — und still ist schwerer zu finden. Der Weg von B-Rep zu Mesh steht
+        # jederzeit offen (§30); verglichen wird auf der Tessellation.
+        try:
+            first, second = as_mesh_data(earlier.mesh), as_mesh_data(entry.mesh)
+        except GeometryError:
+            # Ein Körper, der keiner der beiden Kerne ist, hat keine Dreiecke
+            # zum Vergleichen. Die Differenz ist eine Auskunft und keine
+            # Zusage — sie fehlt dann, statt den Zug abzubrechen.
             continue
         if abs(first.volume - second.volume) < NOISE_VOLUME and _same_bounds(first, second):
             continue

@@ -120,3 +120,35 @@ def test_a_scene_that_did_not_change_says_so() -> None:
     after = scene_with(obj_1=plate())
 
     assert not compare_scenes(before, after).changed
+
+
+def test_an_exact_body_shows_its_difference_too() -> None:
+    """Der Zwilling des Analysekarten-Absturzes (27.08.2026), nur still.
+
+    ``compare_scenes`` übersprang jeden Körper, der kein ``MeshData`` ist —
+    ein STEP-Import also, und alles aus dem exakten Kern. Kein Absturz, keine
+    Meldung: Die Differenzansicht blieb nach jeder Änderung an einem exakten
+    Körper einfach leer, und §18.7 verspricht genau sie. Wer sich fragt, was
+    ein Schritt getan hat, bekam bei der einen Körperart eine Antwort und bei
+    der anderen nichts, ohne zu erfahren, warum.
+
+    Dieselbe Auflösung wie dort: Der Weg von B-Rep zu Mesh steht jederzeit
+    offen (§30), verglichen wird auf der Tessellation.
+    """
+    from app.core.brep.kernel import Solid, available
+
+    if not available():
+        pytest.skip("OpenCASCADE is an optional dependency")
+
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+
+    def scene_of(mesh: object) -> Scene:
+        return Scene(objects={"obj_1": SceneObject(id="obj_1", name="Teil", mesh=mesh)})
+
+    before = scene_of(Solid(BRepPrimAPI_MakeBox(20.0, 20.0, 20.0).Shape()))
+    after = scene_of(Solid(BRepPrimAPI_MakeBox(30.0, 30.0, 30.0).Shape()))
+
+    result = compare_scenes(before, after)
+
+    assert "obj_1" in result.entries, "auch ein exakter Körper zeigt, was sich geändert hat"
+    assert result.entries["obj_1"].added_volume > 0.0
