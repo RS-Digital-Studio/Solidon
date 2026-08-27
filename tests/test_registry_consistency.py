@@ -826,3 +826,26 @@ def test_a_filament_parameter_takes_a_number_and_keeps_its_bounds() -> None:
 
     with pytest.raises(ValidationError):
         validate(spec.params, {"slot": 99, "at_feature": "face_1"})
+
+
+def test_the_slot_limit_is_one_number_not_three() -> None:
+    """``MAX_SLOTS`` stand dreimal im Code, mit derselben Zahl und dem
+    Kommentar „wie bei den Farb-Operationen" daneben — ein Verweis auf die
+    Kopie statt geteilter Sache.
+
+    Das ist die Bauart, aus der Zwillinge entstehen (Robert, 27.08.2026):
+    Wer die Grenze eines Tages ändert, ändert sie an einer Stelle, und zwei
+    Operationen erlauben danach etwas anderes als die dritte. Der Kunde sieht
+    davon nichts, bis eine Farbe im Slicer fehlt.
+
+    Geprüft wird nicht der Quelltext, sondern die **Wirkung**: Jedes Feld, das
+    ein Filament benennt, hat dieselbe Obergrenze.
+    """
+    limits = {
+        (op.name, entry.name): entry.maximum
+        for op in REGISTRY.all()
+        for entry in op.params.spec()
+        if entry.kind == "filament"
+    }
+    assert len(limits) >= 3, f"zu wenige Filamentfelder gefunden ({len(limits)}) — prüft das etwas?"
+    assert len(set(limits.values())) == 1, f"verschiedene Obergrenzen für dasselbe: {limits}"
