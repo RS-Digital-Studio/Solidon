@@ -100,6 +100,7 @@ def check(
     progress: ProgressFn | None = None,
     cancelled: CancelToken | None = None,
     joined_by_host: bool = False,
+    bodies: int = 1,
 ) -> RangeReport:
     """Fährt die Ecken und sagt je Ecke, was nicht hielt.
 
@@ -111,6 +112,15 @@ def check(
     tadellos ist (§24.5 verlangt, dass ein gebrochener Bericht dort steht).
     Die übrigen drei Prüfungen gelten unverändert: Ein Baustein darf auch
     mehrteilig weder undicht noch leer noch zu dünn sein.
+
+    ``bodies`` ist der **andere** mehrteilige Fall (§24.3, Entscheidung Robert
+    vom 25.08.2026): print-in-place — ein Scharnier, das schon beim Drucken
+    beweglich ist. Hier hält kein Träger die Teile zusammen, sie sollen
+    getrennt bleiben. Geprüft wird deshalb nicht *ob* der Baustein zerfällt,
+    sondern **ob er in so viele Teile zerfällt, wie er erklärt hat**: Zwei
+    statt zwei ist die Zusage, drei statt zwei ist ein Fehler wie jeder andere.
+    Unerklärtes Zerfallen bleibt damit rot — die Prüfung wird nicht schwächer,
+    sondern genauer.
 
     ``build`` ist, was aus Werten einen Körper macht — für ein Rezept die
     Auswertung, für eine ``.py`` ihre Funktion. Die vier Prüfungen sind die
@@ -148,8 +158,20 @@ def check(
             failures.append(RangeFailure(dict(values), str(_("nicht wasserdicht"))))
         elif mesh.volume <= 0.0:
             failures.append(RangeFailure(dict(values), str(_("kein Volumen"))))
-        elif mesh.component_count != 1 and not joined_by_host:
-            failures.append(RangeFailure(dict(values), str(_("zerfällt in Teile"))))
+        elif not joined_by_host and mesh.component_count != max(bodies, 1):
+            # **Die erklärte Zahl, nicht die Eins.** Wer nichts deklariert,
+            # bekommt ``bodies=1`` und damit genau die alte Prüfung; wer zwei
+            # erklärt, muss zwei bauen — auch das ist eine Zusage, die brechen
+            # kann, und ein Scharnier, das in drei Teile fällt, ist genauso
+            # kaputt wie eine Rastnase, die in zwei fällt.
+            failures.append(
+                RangeFailure(
+                    dict(values),
+                    str(_("zerfällt in {found} Teile statt {declared}")).format(
+                        found=mesh.component_count, declared=max(bodies, 1)
+                    ),
+                )
+            )
         elif min(mesh.bounds.size) <= profile.minimum_wall_thickness / 4.0:
             failures.append(RangeFailure(dict(values), str(_("dünner als druckbar"))))
         checked += 1

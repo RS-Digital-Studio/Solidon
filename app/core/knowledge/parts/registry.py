@@ -160,6 +160,30 @@ class PartSpec:
     zusammen.
     """
 
+    bodies: int = 1
+    """Wie viele Körper dieser Baustein **erklärt** hervorbringt (§24.3).
+
+    Print-in-place: Ein Scharnier, das schon beim Drucken beweglich ist,
+    besteht aus zwei Teilen, die sich gegeneinander bewegen. Der Bereichstest
+    verlangte `component_count == 1` — beides zusammen geht nicht, und die
+    Einteiligkeit steht nicht im Bauplan: §24.3 nennt wasserdicht,
+    Mindestwandstärke, keine Selbstdurchdringung, benannte Merkmale. Der Test
+    hatte sie hinzugefügt, aus gutem Anlass (die Rastnase zerfiel, weil sie
+    die Fläche nur berührte). Gemeint war „zerfällt nicht **versehentlich**".
+
+    **Entschieden am 25.08.2026 (Robert): Deklaration statt stiller
+    Ausnahme.** Wer mehrere Körper baut, sagt wie viele — dann prüft der
+    Bereichstest die Zahl gegen die Deklaration und die Spalte zwischen den
+    Teilen gegen das Materialprofil. Unerklärtes Zerfallen bleibt rot, und
+    genau das ist der Unterschied zu einer Ausnahme im Test: Die Prüfung wird
+    nicht schwächer, sie wird genauer.
+
+    **Nicht zu verwechseln mit** :attr:`joined_by_host`. Dort hält der
+    *Träger* die Teile zusammen — zwei Zapfen sind am Teil, an das sie kommen,
+    einer. Hier sollen die Teile getrennt bleiben und sich bewegen; das hält
+    kein Träger zusammen, und die Spalte dazwischen ist der Sinn der Sache.
+    """
+
     keeps_up: bool = False
     """Wahr für einen Baustein, der ein **Oben** hat, das die Schwerkraft meint.
 
@@ -407,6 +431,7 @@ def register_part(
     at_face: bool = True,
     keeps_up: bool = False,
     joined_by_host: bool = False,
+    bodies: int = 1,
     features: Iterable[str] = (),
     doc: TranslatableText | str = "",
     caveat: TranslatableText | str = "",
@@ -438,6 +463,7 @@ def register_part(
                 subtractive=subtractive,
                 at_hole=at_hole,
                 at_hole_values=at_hole_values,
+                bodies=bodies,
                 at_face=at_face,
                 keeps_up=keeps_up,
                 joined_by_host=joined_by_host,

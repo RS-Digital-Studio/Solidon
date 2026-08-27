@@ -157,7 +157,14 @@ def test_a_part_holds_over_its_whole_range(spec: PartSpec, profile: Profile) -> 
         assert mesh.is_watertight, f"{spec.name} {values} is not watertight"
         assert mesh.volume > 0.0, f"{spec.name} {values} has no volume"
         if not spec.joined_by_host:
-            assert mesh.component_count == 1, f"{spec.name} {values} falls apart"
+            # Die **erklärte** Zahl, nicht die Eins (§24.3, Entscheidung Robert
+            # vom 25.08.2026). Wer nichts deklariert, hat ``bodies=1`` und
+            # damit genau die alte Prüfung; wer zwei erklärt, muss zwei bauen.
+            # Unerklärtes Zerfallen bleibt rot — das ist der Unterschied
+            # zwischen einer Deklaration und einer Ausnahme im Test.
+            assert mesh.component_count == spec.bodies, (
+                f"{spec.name} {values}: {mesh.component_count} Teile statt {spec.bodies}"
+            )
         assert min(mesh.bounds.size) > minimum_wall / 4.0, (
             f"{spec.name} {values} is thinner than a printer can make"
         )
@@ -2767,3 +2774,47 @@ def test_the_keyhole_head_falls_through_with_a_profile(size: str, profile: Profi
         "no longer goes through"
     )
     assert weite == pytest.approx(screw.head + HEAD_CLEARANCE + profile.material.clearance)
+
+
+def test_a_part_may_declare_how_many_bodies_it_prints_as(profile: Profile) -> None:
+    """Print-in-place: mehrere Körper, aber nur so viele wie erklärt (§24.3).
+
+    Ein Scharnier, das schon beim Drucken beweglich ist, besteht aus zwei
+    Teilen. Der Bereichstest verlangte `component_count == 1` — und die
+    Einteiligkeit steht nicht im Bauplan: §24.3 nennt wasserdicht,
+    Mindestwandstärke, keine Selbstdurchdringung, benannte Merkmale. Der Test
+    hatte sie hinzugefügt, aus gutem Anlass (die Rastnase zerfiel, weil sie
+    die Fläche nur berührte). Gemeint war „zerfällt nicht **versehentlich**".
+
+    Entschieden am 25.08.2026 (Robert): Deklaration statt stiller Ausnahme.
+    Der Unterschied ist der ganze Punkt — die Prüfung wird nicht schwächer,
+    sondern genauer: Zwei statt zwei ist die Zusage, drei statt zwei fällt.
+    """
+    from types import SimpleNamespace
+
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.knowledge.parts.range_check import check
+    from app.core.registry import op_params, param
+    from app.core.types import BaseParams
+
+    @op_params
+    class TwoPartParams(BaseParams):
+        size: float = param(title="Maß", default=10.0, unit="mm", minimum=8.0, maximum=12.0)
+
+    def two_bodies(values: BaseParams) -> Any:
+        """Zwei getrennte Würfel — ein Gelenk im Kleinen."""
+        left = trimesh.creation.box(extents=(4.0, 4.0, 4.0))
+        right = trimesh.creation.box(extents=(4.0, 4.0, 4.0))
+        right.apply_translation((10.0, 0.0, 0.0))
+        return SimpleNamespace(mesh=MeshData.of(trimesh.util.concatenate([left, right])))
+
+    declared = check(TwoPartParams, two_bodies, profile, bodies=2)
+    assert declared.passed, [entry.reason for entry in declared.failures]
+
+    # Die Gegenprobe, und sie ist der Punkt: Ohne Deklaration ist derselbe
+    # Baustein ein Fehler — unerklärtes Zerfallen bleibt rot.
+    undeclared = check(TwoPartParams, two_bodies, profile)
+    assert not undeclared.passed
+    assert "2 Teile statt 1" in undeclared.failures[0].reason
