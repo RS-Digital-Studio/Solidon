@@ -395,3 +395,49 @@ def test_no_example_greets_the_customer_with_a_warning(profile: Profile) -> None
         "Ausnahmen für Beispiele, die es nicht gibt — sie werden nie gelesen: "
         + ", ".join(erfunden)
     )
+
+
+def test_every_example_can_still_be_built() -> None:
+    """Nicht die eingecheckte Datei prüfen, sondern das Werkzeug, das sie macht.
+
+    Die Tests darüber lesen ``app/examples/*.p3d``. Das sind Artefakte: Sie
+    liegen im Repository und bleiben gültig, auch wenn ihr Erzeuger längst
+    nicht mehr läuft. ``tools/make_examples.py`` läuft nur im Paketier-Job,
+    und der nur bei einem Tag — zwischen zwei Veröffentlichungen fährt es
+    also niemand.
+
+    Am 27.08.2026 hat das eine Fassung gekostet. Um 06:59 bekam
+    ``blend_union`` ein ``keeps_inputs``, weil die Merkmale des Vorgängers an
+    der alten Kennung hängen und ``hole_1`` nach dem Vereinigen sonst auf ein
+    anderes Loch zeigt — richtig und nötig. Nur rechnete ``way_four`` danach
+    mit einer frischen Kennung weiter und verwies auf ``obj_3``: zwei rein,
+    eins heraus, und die Wasserlinie war trotzdem stehengeblieben. Bemerkt
+    hat es niemand, bis der Paketbau von 0.2.1 auf allen vier Plattformen an
+    derselben Zeile abbrach.
+
+    Der Test kostet ein Hundertstel: Die Bau-Funktionen stellen nur den
+    Stapel auf, und ``History.apply`` prüft die Kennungen dabei — gerechnet
+    wird erst bei der Auswertung, die hier niemand anstößt.
+    """
+    from tools import make_examples
+
+    gebaut = {
+        "way_one": make_examples.way_one,
+        "way_two": make_examples.way_two,
+        "way_three": make_examples.way_three,
+        "way_four": make_examples.way_four,
+        "housing": make_examples.housing,
+        "two_colour_sign": make_examples.two_colour_sign,
+        "calibration_plate": make_examples.calibration_plate,
+        "hollow_and_split": make_examples.hollow_and_split,
+        "box_with_lid": make_examples.box_with_lid,
+    }
+
+    gescheitert: list[str] = []
+    for name, funktion in gebaut.items():
+        try:
+            funktion()
+        except Exception as problem:  # jede Ausnahme ist hier ein Befund
+            gescheitert.append(f"{name}: {type(problem).__name__}: {problem}")
+
+    assert not gescheitert, "Beispiele lassen sich nicht mehr bauen:\n" + "\n".join(gescheitert)
