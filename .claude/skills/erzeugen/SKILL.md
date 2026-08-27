@@ -58,11 +58,39 @@ das stimmt erst, wenn die Pakete oben liegen — sie wird zuletzt hochgeladen.
 Erhöht wird **vor** dem Prüfmodul und dem Bau. Danach trägt der Bau eine
 Nummer, die es schon gab, und `make_installer.py` merkt davon nichts.
 
-**Ausgeliefert wird aus einem eigenen Arbeitsbaum, nicht aus diesem.** Ein
-Paketierlauf dauert eine Viertelstunde, und arbeitet in der Zeit jemand am
-Repository, packt er dessen halbfertigen Stand mit ein — `make_installer.py`
-merkt es und verweigert („Der Bau ist älter als app/"), aber dann fängt man
-von vorn an. Der Weg ohne dieses Rennen:
+**Die Pakete baut die CI, nicht diese Maschine** (Entscheidung Robert,
+27.08.2026). Der Grund ist nicht Bequemlichkeit, sondern Reichweite: Hier
+entsteht ein Windows-Paket, dort entstehen vier — Windows, Linux und zwei
+Macs, denn ein auf Apple Silicon gebautes Paket startet auf keinem Intel-Mac,
+und das betrifft jedes Gerät vor 2020.
+
+Ausgelöst wird der Job **nur von einem Tag oder einem Handstart**
+(`workflow_dispatch`); ein gewöhnlicher Push lässt ihn aus, und er hängt an
+`needs: suite` — aus einem roten Lauf entsteht kein Paket. Ein GitHub-Release
+legt er nicht an, den Schritt hat der Workflow nicht: Der Tag baut, und
+veröffentlicht wird erst, wenn `version.json` oben liegt.
+
+```
+git tag -a v0.2.1 -F -   &&  git push origin v0.2.1     # baut alle vier
+gh run watch <lauf-id> --exit-status                    # Suite, dann Paket
+gh run download <lauf-id> -D dist/ci                    # vier Artefakte
+```
+
+Die Artefakte heißen `solidon3d-setup-windows`, `solidon3d-linux` (tar.gz und
+AppImage), `solidon3d-macos-X64` und `solidon3d-macos-ARM64`, jedes mit seiner
+`.sha256`. Von dort geht es weiter wie unten: `make_download.py` mit den
+Paketen, dann `stamp_assets.py`, dann hochladen — und **erst danach**
+`--alte-pakete` aufräumen, sonst zeigen Seiten und Update-Prüfung auf Dateien,
+die es nicht mehr gibt. Das Werkzeug sagt es selbst, wenn man es zu früh ruft.
+
+---
+
+**Lokal bauen bleibt möglich** — für eine Probe, oder wenn die CI nicht kann.
+Dann aus einem eigenen Arbeitsbaum, nicht aus diesem: Ein Paketierlauf dauert
+eine Viertelstunde, und arbeitet in der Zeit jemand am Repository, packt er
+dessen halbfertigen Stand mit ein — `make_installer.py` merkt es und
+verweigert („Der Bau ist älter als app/"), aber dann fängt man von vorn an.
+Der Weg ohne dieses Rennen:
 
 ```
 git worktree add ../solidon-release HEAD
@@ -76,6 +104,15 @@ den Bau: Es signiert die vier Grenzdateien aus §2 C, und wer danach eine davon
 ändert, liefert ein Paket aus, das startet und in dem nichts geht. Seit dem
 20.08.2026 vergleicht `make_installer.py` die Prüfsummen und bricht ab; davor
 fiel es erst im Protokoll einer Testinstallation auf.
+
+Zwei Dinge fehlen der Maschine dabei gern, und beide melden sich schlecht:
+`pyinstaller --version` endete am 27.08.2026 in einem Traceback über
+`ModuleNotFoundError: No module named 'altgraph'` — PyInstaller selbst war
+da (6.22.2), eine seiner Abhängigkeiten war es nicht. Das ist der bekannte
+Fall, dass die `.venv` einzelne Dateien verliert; `pip install altgraph`
+genügte. Inno Setup 6 lag an dem Tag gar nicht auf der Maschine, `ISCC.exe`
+war unter beiden Programmordnern nicht zu finden. Beides fällt erst
+mitten im Bau auf, wenn man es nicht vorher prüft.
 
 `make_figures.py`, `make_web_images.py` und `make_manual.py` laufen **nicht**
 offscreen und dürfen es nicht: unter
