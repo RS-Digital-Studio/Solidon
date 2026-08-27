@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QColorDialog,
@@ -37,14 +37,20 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QFormLayout,
+    QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMenu,
     QPushButton,
+    QVBoxLayout,
     QWidget,
 )
 
 from app.core.knowledge import filaments
 from app.core.types import MaterialSlot
 from app.i18n import tr
+from app.ui.style import TIGHT, set_level
 from app.ui.theme import slot_colour
 
 #: Kantenlänge des Farbfelds vor einem Eintrag, in Bildpunkten.
@@ -92,18 +98,25 @@ def swatch(colour: str | None) -> QIcon:
 
 
 class NewFilamentDialog(QDialog):
-    """Name und Farbe eines neuen Filaments — mehr ist ein Filament nicht."""
+    """Name und Farbe eines neuen Filaments — mehr ist ein Filament nicht.
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    Mit ``name``/``colour`` derselbe Dialog fürs **Ändern**: Ein Filament ist
+    sein Name (:func:`filaments.remember` überschreibt die Farbe eines
+    vorhandenen), also ist „Farbe ändern" dasselbe Formular mit ausgefüllten
+    Feldern und nicht ein zweites daneben.
+    """
+
+    def __init__(self, parent: QWidget | None = None, name: str = "", colour: str = "") -> None:
         super().__init__(parent)
-        self.setWindowTitle(tr("Neues Filament"))
+        self.setWindowTitle(tr("Filament ändern") if name else tr("Neues Filament"))
         layout = QFormLayout(self)
 
         self.name = QLineEdit(self)
         self.name.setPlaceholderText(tr("etwa „PETG Rot“"))
+        self.name.setText(name)
         layout.addRow(tr("Name"), self.name)
 
-        self._colour = "#808080"
+        self._colour = colour or "#808080"
         self.colour = QPushButton(self)
         self.colour.setIcon(swatch(self._colour))
         self.colour.setText(self._colour)
@@ -283,3 +296,192 @@ class FilamentField(QComboBox):
 #: als Slot bekommen.
 _NAME_ROLE = int(Qt.ItemDataRole.UserRole) + 1
 _COLOUR_ROLE = int(Qt.ItemDataRole.UserRole) + 2
+
+
+class FilamentPanel(QWidget):
+    """Die Filamente auf einen Blick: was das Projekt trägt, was im Regal liegt.
+
+    Die Frage, die dieses Panel beantwortet, hat Robert am 27.08.2026 gestellt
+    — „wo wähle ich die Filamente und Farben aus?" — und sie war berechtigt:
+    Beide Antworten standen in Dialogen. Das Filamentfeld
+    (:class:`FilamentField`) zeigt Farbe und Name, aber nur solange eine
+    Operation offen ist; die Filamentprofile des Slicers stehen in den
+    Druckeinstellungen, zugeklappt und erst ab zwei Slots. Wer wissen wollte,
+    welche Spulen ein Projekt überhaupt braucht, fand es nirgends.
+
+    **Zwei Hälften, und die Trennung ist die eigentliche Entscheidung:**
+
+    * **Im Projekt** — was die Körper tragen, mit Farbe, Name und der Zahl
+      der Körper. Reine Anzeige. Ein Filament des Projekts *hier* zu ändern
+      hieße, Geometrie außerhalb einer Operation anzufassen (Regel 2); der
+      Weg dorthin ist das Kontextmenü am Merkmal, und der Hinweis unter der
+      Liste sagt es.
+    * **Im Regal** — die Vorwahl (:mod:`app.core.knowledge.filaments`), also
+      die Spulen, die wirklich dastehen. Sie gehört keinem Projekt, hängt an
+      keinem Körper und ist deshalb hier vollständig bedienbar: anlegen,
+      Farbe oder Name ändern, herausnehmen.
+
+    Was im Regal steht, steht in jedem Filamentfeld zur Wahl — das Panel ist
+    damit die Stelle, an der man den Vorrat pflegt, und nicht ein zweiter Weg
+    zum selben Dialog.
+    """
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.list = QListWidget(self)
+        self.list.setAccessibleName(tr("Filamente"))
+        self.list.itemDoubleClicked.connect(self._on_activated)
+        self.list.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.list.customContextMenuRequested.connect(self._on_context_menu)
+
+        self.hint = QLabel(self)
+        self.hint.setWordWrap(True)
+        set_level(self.hint, "caption")
+
+        self.add_button = QPushButton(tr("Filament anlegen …"), self)
+        self.add_button.clicked.connect(self._add)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(TIGHT, TIGHT, TIGHT, TIGHT)
+        layout.setSpacing(TIGHT)
+        layout.addWidget(self.list, 1)
+        layout.addWidget(self.hint)
+        layout.addWidget(self.add_button)
+
+        self._used: tuple[tuple[str, str, int], ...] = ()
+        """Was das Projekt trägt: Name, Farbe, Zahl der Körper."""
+        self.show_scene(())
+
+    def show_scene(self, objects: Sequence[object]) -> None:
+        """Trägt ein, welche Filamente die Körper der Szene benutzen.
+
+        Zusammengelegt über Name **und** Farbe — derselbe Schlüssel, über den
+        auch der Export die Extruder bildet (``threemf.merge_slots``). Zwei
+        Körper in derselben Farbe sind eine Spule, nicht zwei.
+        """
+        used: dict[tuple[str, str], int] = {}
+        for entry in objects:
+            for slot in getattr(entry, "material_slots", ()) or ():
+                key = (str(slot.name), hex_of(slot.colour))
+                used[key] = used.get(key, 0) + 1
+        self._used = tuple((name, colour, count) for (name, colour), count in sorted(used.items()))
+        self._fill()
+
+    def _fill(self) -> None:
+        """Beide Hälften neu schreiben — Überschrift, Zeilen, Hinweis."""
+        self.list.clear()
+        if self._used:
+            self._heading(tr("Im Projekt"))
+            for name, colour, count in self._used:
+                item = QListWidgetItem(swatch(colour), self._used_label(name, count))
+                item.setFlags(Qt.ItemFlag.ItemIsEnabled)
+                item.setToolTip(
+                    tr("Geändert wird die Farbe eines Körpers über das Kontextmenü am Merkmal.")
+                )
+                self.list.addItem(item)
+
+        self._heading(tr("Im Regal"))
+        entries = filaments.catalogue()
+        for entry in entries:
+            item = QListWidgetItem(swatch(entry.colour), str(entry.name))
+            item.setData(_NAME_ROLE, entry.name)
+            item.setData(_COLOUR_ROLE, entry.colour)
+            item.setToolTip(tr("Doppelklick ändert Name und Farbe."))
+            self.list.addItem(item)
+
+        if entries:
+            self.hint.setText(tr("Was hier steht, steht beim Färben zur Wahl."))
+        else:
+            # Regel 17 auch ohne Fehler: Ein leeres Regal ist kein Mangel,
+            # aber ohne einen Satz sieht es aus wie ein kaputtes Panel.
+            self.hint.setText(
+                tr("Noch keine Spulen eingetragen. Was Sie anlegen, steht beim Färben zur Wahl.")
+            )
+
+    def _heading(self, text: str) -> None:
+        """Eine Überschrift in der Liste — anwählbar ist sie nicht.
+
+        Zwei Listen übereinander wären zwei Rollbereiche in einem Panel, das
+        selten mehr als acht Zeilen hat; eine Liste mit zwei Überschriften ist
+        dieselbe Auskunft ohne den zweiten Balken.
+        """
+        item = QListWidgetItem(text)
+        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        font = item.font()
+        font.setBold(True)
+        item.setFont(font)
+        self.list.addItem(item)
+
+    @staticmethod
+    def _used_label(name: str, count: int) -> str:
+        """„PETG Rot — 2 Körper", und im Singular ohne die Eins."""
+        if count == 1:
+            return f"{name} — {tr('1 Körper')}"
+        return f"{name} — {tr('{count} Körper').replace('{count}', str(count))}"
+
+    def _chosen(self) -> tuple[str, str] | None:
+        """Name und Farbe der gewählten Regalzeile, oder nichts.
+
+        Gefragt wird über die Zeilennummer und nicht über ``currentItem()``:
+        Die Stubs geben dort ein Element ohne ``None`` zurück, obwohl es bei
+        leerer Liste keines gibt — eine Prüfung darauf hielte mypy für
+        unerreichbar. ``currentRow() < 0`` sagt dasselbe und ist wahr.
+        """
+        row = self.list.currentRow()
+        if row < 0:
+            return None
+        item = self.list.item(row)
+        name = item.data(_NAME_ROLE)
+        if not name:
+            return None
+        return str(name), str(item.data(_COLOUR_ROLE) or "")
+
+    def _add(self) -> None:
+        dialog = NewFilamentDialog(self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        name, colour = dialog.filament()
+        if not name:
+            return
+        filaments.remember(name, colour)
+        self._fill()
+
+    def _on_activated(self, item: QListWidgetItem) -> None:
+        if item.data(_NAME_ROLE):
+            self._edit()
+
+    def _edit(self) -> None:
+        chosen = self._chosen()
+        if chosen is None:
+            return
+        name, colour = chosen
+        dialog = NewFilamentDialog(self, name=name, colour=colour)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        neu, neue_farbe = dialog.filament()
+        if not neu:
+            return
+        # Ein Filament ist sein Name: Wer ihn ändert, legt kein zweites an —
+        # der alte Eintrag geht, der neue kommt.
+        if neu != name:
+            filaments.forget(name)
+        filaments.remember(neu, neue_farbe)
+        self._fill()
+
+    def _remove(self) -> None:
+        chosen = self._chosen()
+        if chosen is None:
+            return
+        # Keine Rückfrage (Regel 19): Das Regal ist eine Vorwahl, kein
+        # Dokument — was hier fehlt, legt man in zwei Klicks wieder an, und
+        # kein Projekt verliert dabei etwas.
+        filaments.forget(chosen[0])
+        self._fill()
+
+    def _on_context_menu(self, where: QPoint) -> None:
+        if self._chosen() is None:
+            return
+        menu = QMenu(self)
+        menu.addAction(tr("Ändern …"), self._edit)
+        menu.addAction(tr("Aus dem Regal nehmen"), self._remove)
+        menu.exec(self.list.viewport().mapToGlobal(where))

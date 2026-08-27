@@ -12,6 +12,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
 from app.core.knowledge import filaments
@@ -150,3 +151,119 @@ def test_a_cancelled_new_filament_leaves_a_usable_value(
 
     assert field.currentData() != NEW_FILAMENT, "der Abbruch lässt keinen Unwert stehen"
     assert isinstance(field.currentData(), int)
+
+
+def test_the_panel_shows_what_the_project_uses_and_what_lies_in_the_rack(
+    qt_app: QApplication, tmp_path, monkeypatch
+) -> None:
+    """Beide Hälften, und je Filament eine Zeile.
+
+    Die Frage, die das Panel beantwortet, hieß „wo wähle ich die Filamente
+    und Farben aus?" — beide Antworten standen bis dahin in Dialogen. Oben,
+    was die Körper tragen (Anzeige, mit der Zahl der Körper); unten das
+    Regal, also die Vorwahl, die in jedem Filamentfeld zur Wahl steht.
+
+    Zusammengelegt wird über Name **und** Farbe, wie beim Export: Zwei Körper
+    in derselben Farbe sind eine Spule und nicht zwei.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.knowledge import filaments
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    filaments.remember("PETG Rot", "#c0392b")
+    filaments.remember("PLA Schwarz", "#1c1c1c")
+
+    box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    schwarz = MaterialSlot(index=0, name="PLA Schwarz", colour=(0.11, 0.11, 0.11))
+    rot = MaterialSlot(index=1, name="PETG Rot", colour=(0.75, 0.22, 0.17))
+    panel = FilamentPanel()
+    panel.show_scene(
+        [
+            SceneObject(id="A", name="A", mesh=box, material_slots=[schwarz, rot]),
+            SceneObject(id="B", name="B", mesh=box, material_slots=[schwarz]),
+        ]
+    )
+
+    zeilen = [panel.list.item(index).text() for index in range(panel.list.count())]
+    assert "PLA Schwarz — 2 Körper" in zeilen, f"zwei Körper tragen es: {zeilen}"
+    assert "PETG Rot — 1 Körper" in zeilen, f"einer trägt es: {zeilen}"
+    assert zeilen.count("PETG Rot") == 1, "das Regal nennt es einmal, ohne Zählung"
+
+
+def test_a_used_filament_is_not_a_button(qt_app: QApplication, tmp_path, monkeypatch) -> None:
+    """Die Projekthälfte ist Anzeige — Ändern wäre Geometrie ohne Operation.
+
+    Ein Filament am Körper zu ändern heißt, den Slot eines Körpers zu ändern,
+    und das gehört einer Operation (Regel 2). Die Zeile ist deshalb nicht
+    anwählbar, und ihr Hinweis sagt, wo es geht. Das Regal darunter hat
+    keinen Körper unter sich und ist voll bedienbar.
+    """
+    import trimesh
+
+    from app.core.geom.mesh import MeshData
+    from app.core.knowledge import filaments
+    from app.core.types import MaterialSlot, SceneObject
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    filaments.remember("PETG Rot", "#c0392b")
+    box = MeshData.of(trimesh.creation.box(extents=(10.0, 10.0, 10.0)))
+    panel = FilamentPanel()
+    panel.show_scene(
+        [
+            SceneObject(
+                id="A",
+                name="A",
+                mesh=box,
+                material_slots=[MaterialSlot(index=1, name="PETG Rot", colour=(0.75, 0.22, 0.17))],
+            )
+        ]
+    )
+
+    benutzt = next(
+        panel.list.item(index)
+        for index in range(panel.list.count())
+        if "Körper" in panel.list.item(index).text()
+    )
+    regal = next(
+        panel.list.item(index)
+        for index in range(panel.list.count())
+        if panel.list.item(index).text() == "PETG Rot"
+    )
+
+    assert not benutzt.flags() & Qt.ItemFlag.ItemIsSelectable, "die Anzeige ist kein Knopf"
+    assert regal.flags() & Qt.ItemFlag.ItemIsSelectable, "das Regal lässt sich bedienen"
+    assert "Kontextmenü" in benutzt.toolTip(), "und sagt, wo es geht"
+
+
+def test_the_rack_is_written_through(qt_app: QApplication, tmp_path, monkeypatch) -> None:
+    """Was das Panel am Regal ändert, steht im Katalog — und umgekehrt.
+
+    Der Katalog ist die Vorwahl aller Projekte; das Panel ist nur die Stelle,
+    an der man sie pflegt. Ein Panel, das seine eigene Liste führte, wäre
+    beim nächsten Öffnen eine zweite Wahrheit.
+    """
+    from app.core.knowledge import filaments
+    from app.ui.filament_picker import FilamentPanel
+
+    monkeypatch.setattr(filaments, "catalogue_path", lambda: tmp_path / "filaments.json")
+    filaments.remember("PLA Weiß", "#f2f2f0")
+    panel = FilamentPanel()
+    panel.show_scene([])
+    row = next(
+        index for index in range(panel.list.count()) if panel.list.item(index).text() == "PLA Weiß"
+    )
+    panel.list.setCurrentRow(row)
+
+    panel._remove()
+
+    assert [entry.name for entry in filaments.catalogue()] == [], (
+        "aus dem Katalog, nicht nur aus der Liste"
+    )
+    assert not any(
+        panel.list.item(index).text() == "PLA Weiß" for index in range(panel.list.count())
+    )

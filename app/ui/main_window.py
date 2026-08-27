@@ -184,6 +184,7 @@ from app.ui.dialogs import (
 )
 from app.ui.explode_bar import ExplodeBar
 from app.ui.facts import PrintFacts
+from app.ui.filament_picker import FilamentPanel
 from app.ui.generate_dialog import IMAGE_SUFFIXES, GenerateDialog, image_filter
 from app.ui.header import HeaderBar, header_stylesheet
 from app.ui.icons import icon, icon_name_for
@@ -1010,6 +1011,7 @@ class MainWindow(QMainWindow):
         self.history_panel = HistoryPanel(self)
         self.history_panel.operationActivated.connect(self.edit_operation)
         self.history_panel.bakeRequested.connect(self.bake_sculpt)
+        self.filaments = FilamentPanel(self)
 
         # Ohne Streckfaktoren: die Karte ist so hoch wie ihr Inhalt, nicht so
         # hoch wie die Spalte. Ein Objektbaum mit einer Zeile soll eine Zeile
@@ -1025,6 +1027,10 @@ class MainWindow(QMainWindow):
         left_layout.addWidget(collapsible(tr("Objekte"), self.object_tree))
         left_layout.addWidget(collapsible(tr("Parameter"), self.parameters))
         left_layout.addWidget(collapsible(tr("Verlauf"), self.history_panel))
+        # Zugeklappt: Die drei darüber beantworten Fragen, die beim Bauen
+        # jeden Schritt begleiten; welche Spulen im Regal liegen, fragt man
+        # einmal am Anfang und einmal vor dem Drucken (§2.4).
+        left_layout.addWidget(collapsible(tr("Filamente"), self.filaments, open_now=False))
         left_layout.addStretch(1)
 
         self.viewport = Viewport(self)
@@ -6887,6 +6893,7 @@ class MainWindow(QMainWindow):
         # es auf den Bauraum ein statt auf das Teil.
         self._seen_objects = bool(result.scene.objects)
         self.object_tree.show_scene(result, self.session.project.document)
+        self.filaments.show_scene(list(result.scene.objects.values()))
         plates = {entry.plate for entry in result.scene.objects.values()}
         # Der Plattenwähler sitzt in der Kopfzeile und nicht mehr in der
         # Explodier-Leiste: Wer eine einzelne Platte ansehen wollte, suchte ihn
