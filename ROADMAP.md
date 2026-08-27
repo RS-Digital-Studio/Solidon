@@ -79,7 +79,6 @@ der Weg, den beide Sitzungen kurz zuvor für falsch gehalten hatten.
 | macOS ausliefern | Gegen das Wettbewerbsfeld gehalten (11.08.2026) | Apple-Zertifikat und Notarisierung; der Paketierschritt steht |
 | DMARC fehlt | Die Demo bis 30.10.2026 (12.08.2026) | einen TXT-Eintrag im CCP |
 | SKÅDIS-Einhänger als Baustein | Ein Haken für eine Lochplatte, deren Maße niemand kennt (24.08.2026) | eine echte Lochplatte zum Nachmessen — ohne die fünf Werte steht alles Weitere (`konzepte/konzept-befestigungssysteme-2026-08.md` §5) |
-| Eigene Teile ohne Python in den Katalog | Ein eigener Baustein verlangt, dass der Kunde Python schreibt (24.08.2026) | **nichts mehr — die Entscheidung ist gefallen.** Robert hat am 24.08.2026 entschieden, dass ein Rezept in Projektdateien mitreisen darf; Regel 13 und §24.5 sind nachgezogen. Es fehlt die Arbeit: sechs Pakete, E1 bis E6 im Konzept |
 | Erklärt mehrteilige Bausteine — print-in-place | Ein Baustein muss ein Körper sein, ein Gelenk sind zwei (25.08.2026) | nichts mehr — **§24.3 trägt die Ausnahme seit dem 25.08.2026** (Entscheidung Robert): Deklaration statt stiller Ausnahme. Es fehlt die Arbeit: Registerfeld, Druckspaltenprüfung im Bereichstest, das Bolzenscharnier als erster Nutzer |
 | Elf Verzweigungen fragen den Slicer-Namen, wo sie eine Eigenschaft meinen | Der Slicer-Name stand da, wo eine Eigenschaft gemeint war (27.08.2026) | nichts — **die Messung ist fertig** (26 Verzweigungen, der Familienschnitt trägt, am echten ElegooSlicer geprüft). Es fehlt die Arbeit: benannte Prädikate neben `wants_bed_coordinates`, dort wo der Kommentar die Eigenschaft schon nennt |
 | VTK stirbt in der CI, und die Fenstertests laufen dort nicht mehr | Die Demo bis 30.10.2026 (12.08.2026) | Runner mit GL oder ein VTK, das ohne auskommt; bis dahin prüft die Fenster, wer einen Bildschirm hat |
@@ -9663,7 +9662,7 @@ Teil II: Ein eigener Baustein ist ein **Rezept** — ein Ausschnitt des Stapels
 plus die Beschreibung seiner Parameter, gespeichert als Daten. Sechs
 Arbeitspakete, die Grenzen und die eine Entscheidung stehen dort.
 
-- [ ] **Eigene Teile aus der Anwendung heraus in den Katalog**, mit Titel,
+- [x] **Eigene Teile aus der Anwendung heraus in den Katalog**, mit Titel,
   Einheit, Grenzen, Vorgabe und Beschreibung je Parameter — dieselben Angaben
   wie ein eingebauter Baustein, an derselben Stelle im Dialog. Dazu gehört,
   dass der Bereichstest aus §24.3 in die Anwendung wandert: „Ein Baustein ohne
@@ -9736,6 +9735,34 @@ Arbeitspakete, die Grenzen und die eine Entscheidung stehen dort.
   seit die Zwillinge zusammengelegt sind. Sie fiel nur niemandem auf, solange
   es zwei Fälle waren statt zwanzig.
 
+
+**Gebaut, und zwar vollständig — gemessen am 27.08.2026, nicht gelesen.** Das
+Konzept führt in Teil II sechs Arbeitspakete, und eine Sitzung wollte sie
+gerade unter drei Sitzungen aufteilen. Alle sechs stehen bereits:
+
+| Paket | Beleg im Code |
+|---|---|
+| E1 Katalog statt Menü | `main_window.py` baut das Menü mit `menu_tree(skip=bootstrap.user_operations())`; der Kommentar dort nennt „Konzept Befestigungssysteme E1" wörtlich |
+| E2 Rezeptformat | `parts/recipe.py`: `FORMAT_VERSION`, `fingerprint` — der Hash **ist** die Version (§24.4), und das Rezept reist über die Migrationen des Dokuments |
+| E3 Bereichstest in der Anwendung | `parts/range_check.py` hat `corners()`; `tests/test_parts.py` ist nur noch ein Adapter darauf, mit „Eine Regel, ein Ort" im Docstring |
+| E4 „Als Baustein speichern" | `app/ui/recipe_dialog.py` `RecipeDialog`, `main_window._save_as_part`; 32 + 34 Tests |
+| E5 Rezept auswerten | `recipe.py` `build()`, `built()`, `build_with_profile()` — der `PartFn`-Ersatz |
+| E6 Der Durchlauf | `tests/test_recipes.py::test_the_whole_way_from_an_imported_model_to_a_reused_and_changed_part`, mit den Schritten 4 bis 7 einzeln benannt |
+
+Und es ist nicht bloß vorhanden, sondern **angeschlossen und geprüft**:
+`tests/test_interface_limits.py` prüft das gebaute **Fenster** statt der
+Funktion darunter — mit „Durchgereicht ist nicht gerufen" im Docstring und
+einer Gegenprobe, weil der erste Anlauf grün gegen eine leere Menge war.
+`tests/test_catalog_ui.py` prüft, dass ein eigener Baustein im Katalog als
+solcher gekennzeichnet ist. Die Parameterangaben aus dem Kästchen oben —
+Titel, Einheit, Grenzen, Vorgabe, Beschreibung — setzt `recipe.py` beim Bauen
+des Schemas alle fünf.
+
+**Der Grund, warum es hier zwei Tage zu lange offen stand**, ist der, vor dem
+`CLAUDE.md` warnt: Die Konzepte tragen Statustabellen, und die altern. Von
+zwölf Punkten, die sie am 22.08.2026 als offen führten, waren sieben behoben;
+hier waren es sechs von sechs. Wer ein Arbeitspaket aus einem Konzept nimmt,
+misst zuerst — zehn Minuten `grep` gegen eine Nacht Doppelarbeit.
 ---
 
 ## Zehn von zehn Fenstern überlebten ihr Loslassen (24.08.2026)
